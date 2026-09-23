@@ -1,10 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import ts from 'typescript';
-import {
-  describeV1MissingRequiredProductionCueSections,
-  selectV1MissingRequiredProductionCueSections,
-} from '../src/services/generation/v1/sections/productionCueOwnership';
+import { selectV1MissingRequiredProductionCueSections } from '../src/services/generation/v1/sections/productionCueOwnership';
 
 const SOURCE_PATH = 'src/services/geminiService.ts';
 const BASELINE_SHA = process.env.APP147_BASELINE_SHA || 'd3d8d87157dec499d7b51293034700531f6efea3';
@@ -37,13 +34,6 @@ const customMissing = selectV1MissingRequiredProductionCueSections([
 ]);
 assert(!customMissing.includes('Verse 1'), 'vocal-only custom instructions must not become production ownership');
 assert(customMissing.includes('Interlude'), 'an instrumental transition with a missing cue must remain repairable');
-
-const ownershipAudit = describeV1MissingRequiredProductionCueSections([
-  { sectionName: 'Chorus 2', hasRenderedCue: false, planOwnsAudibleEvent: true, customOwnsAudibleEvent: false, explicitlyProductionOnly: false },
-  { sectionName: 'Verse 2', hasRenderedCue: false, planOwnsAudibleEvent: false, customOwnsAudibleEvent: false, explicitlyProductionOnly: false },
-]);
-assert(ownershipAudit.length === 1 && ownershipAudit[0]?.sectionName === 'Chorus 2', 'ownership audit must expose only genuinely required missing cues');
-assert(ownershipAudit[0]?.ownerReasons.includes('canonical-plan'), 'ownership audit must explain canonical-plan ownership');
 
 function collectInitializerSizes(sourceText: string) {
   const source = ts.createSourceFile(SOURCE_PATH, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -87,14 +77,6 @@ function collectInitializerSizes(sourceText: string) {
 }
 
 const currentSource = fs.readFileSync(SOURCE_PATH, 'utf8');
-const proxySource = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
-const auditSource = fs.readFileSync('src/services/geminiAuditLog.ts', 'utf8');
-const adminAuditSource = fs.readFileSync('src/pages/AdminGeminiAuditPage.tsx', 'utf8');
-assert(proxySource.includes('measureGeminiRequestShape(requestParams, meta.fallbackInstruction)'), 'runtime request-shape measurement missing');
-assert(proxySource.includes('soridrawRequestResponseSchemaChars'), 'response-schema character measurement missing');
-assert(auditSource.includes('requestResponseSchemaChars'), 'Gemini audit storage does not preserve request-shape measurement');
-assert(adminAuditSource.includes('요청크기') && adminAuditSource.includes('응답스키마'), 'admin audit does not expose request-shape breakdown');
-assert(adminAuditSource.includes('최근 섹션 지시문 보완 판정'), 'admin audit does not expose production-cue ownership reason');
 assert(currentSource.includes('selectV1MissingRequiredProductionCueSections(candidates)'), 'runtime integration must use the ownership selector');
 assert(currentSource.includes('getV1PlanProductionCueForSection('), 'canonical soundCue/arrangementAction reuse must remain connected');
 assert(currentSource.includes("'repairV1FinalProductionCues'"), 'required-event Gemini fallback must remain available');

@@ -8,12 +8,6 @@ export interface GeminiAuditUsage {
   thoughtsTokens: number;
   cachedTokens: number;
   totalTokens: number;
-  requestContentsChars: number;
-  requestSystemInstructionChars: number;
-  requestResponseSchemaChars: number;
-  requestOtherConfigChars: number;
-  requestFallbackInstructionChars: number;
-  requestTotalChars: number;
 }
 
 export interface GeminiAuditCall {
@@ -64,12 +58,6 @@ const emptyUsage = (): GeminiAuditUsage => ({
   thoughtsTokens: 0,
   cachedTokens: 0,
   totalTokens: 0,
-  requestContentsChars: 0,
-  requestSystemInstructionChars: 0,
-  requestResponseSchemaChars: 0,
-  requestOtherConfigChars: 0,
-  requestFallbackInstructionChars: 0,
-  requestTotalChars: 0,
 });
 
 function createId(prefix: string): string {
@@ -97,12 +85,6 @@ function normalizeUsageMetadata(metadata: any): GeminiAuditUsage {
     thoughtsTokens,
     cachedTokens,
     totalTokens: reportedTotal || promptTokens + outputTokens + thoughtsTokens,
-    requestContentsChars: safeNumber(metadata.soridrawRequestContentsChars),
-    requestSystemInstructionChars: safeNumber(metadata.soridrawRequestSystemInstructionChars),
-    requestResponseSchemaChars: safeNumber(metadata.soridrawRequestResponseSchemaChars),
-    requestOtherConfigChars: safeNumber(metadata.soridrawRequestOtherConfigChars),
-    requestFallbackInstructionChars: safeNumber(metadata.soridrawRequestFallbackInstructionChars),
-    requestTotalChars: safeNumber(metadata.soridrawRequestTotalChars),
   };
 }
 
@@ -368,12 +350,6 @@ export function summarizeGeminiAuditSession(session: GeminiAuditSession): Gemini
     thoughtsTokens: acc.thoughtsTokens + call.usage.thoughtsTokens,
     cachedTokens: acc.cachedTokens + call.usage.cachedTokens,
     totalTokens: acc.totalTokens + call.usage.totalTokens,
-    requestContentsChars: acc.requestContentsChars + Number(call.usage.requestContentsChars || 0),
-    requestSystemInstructionChars: acc.requestSystemInstructionChars + Number(call.usage.requestSystemInstructionChars || 0),
-    requestResponseSchemaChars: acc.requestResponseSchemaChars + Number(call.usage.requestResponseSchemaChars || 0),
-    requestOtherConfigChars: acc.requestOtherConfigChars + Number(call.usage.requestOtherConfigChars || 0),
-    requestFallbackInstructionChars: acc.requestFallbackInstructionChars + Number(call.usage.requestFallbackInstructionChars || 0),
-    requestTotalChars: acc.requestTotalChars + Number(call.usage.requestTotalChars || 0),
   }), emptyUsage());
   const started = new Date(session.startedAt).getTime();
   const ended = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();

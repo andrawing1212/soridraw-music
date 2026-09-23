@@ -197,59 +197,6 @@ function normalizeModelRequest(params: any): any {
   return next;
 }
 
-type GeminiRequestShapeAudit = {
-  contentsChars: number;
-  systemInstructionChars: number;
-  responseSchemaChars: number;
-  otherConfigChars: number;
-  fallbackInstructionChars: number;
-  totalChars: number;
-};
-
-function serializedCharLength(value: unknown): number {
-  if (value === undefined || value === null) return 0;
-  if (typeof value === 'string') return value.length;
-  try {
-    return JSON.stringify(value).length;
-  } catch {
-    return 0;
-  }
-}
-
-function measureGeminiRequestShape(requestParams: any, fallbackInstruction: unknown): GeminiRequestShapeAudit {
-  const config = requestParams?.config && typeof requestParams.config === 'object'
-    ? requestParams.config
-    : {};
-  const remainingConfig = { ...config };
-  delete remainingConfig.systemInstruction;
-  delete remainingConfig.responseSchema;
-  const contentsChars = serializedCharLength(requestParams?.contents);
-  const systemInstructionChars = serializedCharLength(config.systemInstruction);
-  const responseSchemaChars = serializedCharLength(config.responseSchema);
-  const otherConfigChars = serializedCharLength(remainingConfig);
-  const fallbackInstructionChars = serializedCharLength(fallbackInstruction);
-  return {
-    contentsChars,
-    systemInstructionChars,
-    responseSchemaChars,
-    otherConfigChars,
-    fallbackInstructionChars,
-    totalChars: contentsChars + systemInstructionChars + responseSchemaChars + otherConfigChars + fallbackInstructionChars,
-  };
-}
-
-function attachGeminiRequestShapeToUsage(metadata: any, shape: GeminiRequestShapeAudit): any {
-  return {
-    ...(metadata && typeof metadata === 'object' ? metadata : {}),
-    soridrawRequestContentsChars: shape.contentsChars,
-    soridrawRequestSystemInstructionChars: shape.systemInstructionChars,
-    soridrawRequestResponseSchemaChars: shape.responseSchemaChars,
-    soridrawRequestOtherConfigChars: shape.otherConfigChars,
-    soridrawRequestFallbackInstructionChars: shape.fallbackInstructionChars,
-    soridrawRequestTotalChars: shape.totalChars,
-  };
-}
-
 function normalizeRequestedModelChain(meta: any, requestParams: any): string[] {
   const requested = Array.isArray(meta?.modelChain)
     ? meta.modelChain.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 5)
@@ -381,7 +328,6 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   const sessionId = String(meta.sessionId || '').trim();
   const serverSessionId = String(meta.serverSessionId || sessionId).trim();
   const context = String(meta.context || 'Gemini 호출').trim();
-  const requestShape = measureGeminiRequestShape(requestParams, meta.fallbackInstruction);
   const requestedModelChain = normalizeRequestedModelChain(meta, requestParams);
   const preFilteredCooldownSkips = getPreFilteredCooldownSkips(context, requestedModelChain);
   const resolvedModelChain = resolveLatencyModelChain(meta, requestParams);
@@ -422,10 +368,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   console.info(`[SORIDRAW App Check] server status: ${appCheckStatus}`);
 
   const payload = await response.json().catch(() => null);
-  const serverAttempts = (Array.isArray(payload?.attempts) ? payload.attempts : []).map((attempt: any) => ({
-    ...attempt,
-    usageMetadata: attachGeminiRequestShapeToUsage(attempt?.usageMetadata, requestShape),
-  }));
+  const serverAttempts = Array.isArray(payload?.attempts) ? payload.attempts : [];
   const modelSkips = dedupeModelSkips([
     ...localModelSkips,
     ...getServerCooldownSkips(payload, context, modelChain, serverAttempts),
@@ -444,7 +387,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   return {
     text: typeof payload.text === 'string' ? payload.text : '',
-    usageMetadata: attachGeminiRequestShapeToUsage(payload.usageMetadata, requestShape),
+    usageMetadata: payload.usageMetadata || undefined,
     modelVersion: payload.modelVersion || undefined,
     responseId: payload.responseId || undefined,
     promptFeedback: payload.promptFeedback || undefined,

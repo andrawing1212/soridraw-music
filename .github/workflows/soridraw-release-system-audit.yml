@@ -54,6 +54,7 @@ jobs:
           node scripts/verify-shared-d1-release-system.mjs
           npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
           node scripts/verify-hard-ban-fallback.cjs
+          node scripts/verify-154-cross-account-like-sync.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

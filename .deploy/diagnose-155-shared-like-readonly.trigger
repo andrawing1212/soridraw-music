@@ -1,7 +1,5 @@
-requested_at=2026-09-24T02:34:00+09:00
-requested_by=compare_live_preview_worker_identity
+requested_at=2026-09-24T02:45:00+09:00
+requested_by=post_worker_restore_cross_account_like_verification
 target=preview
-purpose=read_only_compare_active_worker_to_repo_canonical
-no_write=true
-no_migration=true
-no_deploy=true
+purpose=verify_live_worker_identity_and_public_shared_like_counts_after_restore
+read_only=true

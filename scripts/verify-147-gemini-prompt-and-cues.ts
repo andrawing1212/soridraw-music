@@ -99,7 +99,7 @@ assert(compactSystemChars > 0 && compactSystemChars <= 36_000, `main V1 systemIn
   'arrangementSectionPlanInstruction',
   'sectionCueOutputInstruction',
 ].forEach((owner) => {
-  const count = currentSource.split(`${${owner}}`).length - 1;
+  const count = currentSource.split('${' + owner + '}').length - 1;
   assert(count === 1, `${owner} must be injected exactly once in the main V1 prompt; got ${count}`);
 });
 assert(currentSource.includes('Final productionPrompt is English-only and keeps exactly [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement]'), 'five-line production contract summary must remain');

@@ -1,5 +1,24 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EJ. PREVIEW app148 — Music Note Suno 썸네일 수정 Hosting 배포 완료 (2026-09-23 KST)
+
+**사용자 승인/배포 결과**
+- 사용자 명시적 요청 `배포까지 해줘`에 따라 PREVIEW Hosting만 배포.
+- app148 최종 Hosting Run `35857460912` / job `107169269013` SUCCESS.
+- locked source commit `6fab9fc859304049ee832ab2889c37c0dadcde16`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=148`, `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS` (main/production refs와 test.soridraw.com, soridraw.com index unchanged).
+- URL: `https://preview.soridraw.com/`.
+- Release Audit Run `35850755112` SUCCESS; TypeScript/Build/verify-031 PASS. Hosting Run TypeScript/Build도 재통과.
+- 변경 내용은 섹션 `0EI` 기록: 디테일 Suno URL 저장/삭제/메인 선택 후 Music Note 목록 카드의 Suno 이미지 메타데이터만 즉시 갱신. 상세 hydration 값도 재사용.
+- Firebase Functions / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 이동·변환·일괄수정 없음. 서버 읽기/쓰기 경로 추가 없음.
+
+**실사용 미검증**
+- 사용자 모바일/PC 실사용 확인 전. 등록 직후 목록 이미지, 상세 닫기, 1/2순위 교체, URL 제거, 페이지 재진입, 다른 기기 동기화의 실제 화면 결과는 아직 PASS로 보고하지 않는다.
+- 다음 단계: 사용자가 PREVIEW에서 기존 사례와 새 URL 하나를 시험하여 화면을 확인한다. 문제가 남으면 R2/catalog delta를 진단하되 전체 상세읽기/캐시 세대 초기화 없이 원인 분리.
+- 뮤직노트 실사용 확인 이후 보류된 app147 Gemini Folk Rock의 section-repair 추가 호출/33k 입력 토큰 문제로 복귀.
+
+
 ## 0EI. app148 PREVIEW 후보 — Music Note Suno URL 연결 뒤 목록 썸네일 누락 수정 (2026-09-23 KST)
 
 **사용자 제보와 확인**

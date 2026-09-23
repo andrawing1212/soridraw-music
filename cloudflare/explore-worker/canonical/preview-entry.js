@@ -462,11 +462,16 @@ async function repairVerifiedSharedLikeSnapshots156(env) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (typeof baseWorker?.scheduled === 'function') {
-      await baseWorker.scheduled(controller, env, ctx);
+    // A temporary PREVIEW cron is the sole authorized repair trigger. Never
+    // put an R2 HEAD or canonical D1 read on routine like-batch alarms.
+    if (controller?.cron === '* * * * *') {
+      const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
+      if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
+      return;
     }
-    const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
-    if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
+    if (typeof baseWorker?.scheduled === 'function') {
+      return baseWorker.scheduled(controller, env, ctx);
+    }
   },
 
   async fetch(request, env, ctx) {

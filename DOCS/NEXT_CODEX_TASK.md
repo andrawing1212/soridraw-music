@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app151 복구 유지 + Gemini 150k systemInstruction 코드측 원인 분석
+
+- 현재 PREVIEW app151. app150 진단 runtime은 제거했고 app149 Gemini 생성 runtime을 복원함.
+- PREVIEW Hosting Run `35875369499` SUCCESS / locked `4d2c20e1f346a8f875899edfdb845859f235ec67` / exact build 151 PASS / TEST·PRODUCTION unchanged.
+- 사용자 app150 측정으로 최초 생성 요청 전체 약 150,872~152,355 chars, systemInstruction 약 146,458~147,941 chars가 확인됨. contents 220, responseSchema 3,374, 기타 config 39, fallback 781 수준.
+- 다음 단계는 **추가 실사용 생성이 아니라 코드측 owner 분석**이다.
+- 목표: systemInstruction 조립 블록을 실제 삽입 순서와 조건으로 분해해 중복·동일 의미 반복·비활성 모드까지 항상 포함되는 블록을 찾는다.
+- 보호: 5단 작곡 프롬프트, 직접입력 우선순위, Situation, 가사 밀도, 언어혼합, section performance cue, hard-ban, 사용자 lyric draft, 모델 fallback/timeout은 원인 확인 전 변경 금지.
+- 축소 후보는 먼저 source fixture에서 최종 request 의미/필수 계약 parity 검증을 통과해야 하며, 정상 기능을 제거해 토큰만 줄이는 방식 금지.
+- Functions/Worker/D1/Firestore/사용자 데이터 변경 금지. PREVIEW source-only 분석/구현 후 감사, 그 다음 Hosting만 배포.
+- TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app150 PREVIEW 실사용 측정
 
 - app150 PREVIEW Hosting 배포 완료.

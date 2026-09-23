@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EO. app150 실사용 전곡 생성 실패 → app151 즉시 복구 (2026-09-23 KST)
+
+**app150 실사용 결과**
+- 사용자 연속 생성 3회 모두 실패. 최초 생성 logical request가 각 2~5 physical attempts까지 갔으나 성공 0.
+- 확인된 요청크기 예: 전체 약 **150,872~152,355 chars**, 그중 **systemInstruction 약 146,458~147,941 chars**. contents 220 chars, responseSchema 3,374 chars, 기타 config 39 chars, fallback 781 chars.
+- 3.8/3.7은 다수 요청에서 즉시 일시적 unavailable/overload, 3.5/3.5-lite는 20초 timeout 또는 unavailable, 3.6도 장시간 후 실패 사례 확인.
+- app150은 진단 계측만 추가했지만, 사용자 관점에서 업데이트 직후 생성 전부 실패했으므로 해당 PREVIEW 상태를 유지하지 않는다.
+
+**원인 분리 확인**
+- app149 → app150의 `geminiProxyClient.ts` exact diff를 재검사한 결과, 실제 Firebase Function에 보내는 `requestParams`/model chain/timeout 문자열은 변경하지 않았고 요청크기 계산과 응답 usageMetadata 로컬 표시만 추가했다.
+- `productionCueOwnership.ts` 변경도 missing section을 같은 판정식으로 계산한 뒤 localStorage 진단을 기록하는 추가였으며 최초 생성 요청 경로를 바꾸지 않았다.
+- 따라서 app150 진단 코드가 150k 요청을 새로 만든 것은 아니며, 기존 생성 프롬프트가 실전에서 약 146~148k chars의 systemInstruction을 만들고 있었다는 사실이 이번 측정으로 확인됨.
+- 다만 provider 혼잡과 큰 입력이 동시에 존재할 수 있으므로, 단일 원인으로 단정하지 않고 이후 코드 측 owner 분석 후 축소한다.
+
+**app151 복구**
+- 정상 기능 우선 원칙에 따라 app150 진단 runtime/UI를 제거하고, app149의 Gemini 생성 runtime을 현재 preview에 forward recovery로 복원.
+- 복구 commit `4d2c20e1f346a8f875899edfdb845859f235ec67`.
+- Firebase PREVIEW App Release Run `35875369499` / job `107229769497` **SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=151`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- app149 Music Note Suno 썸네일 수정은 유지. Firebase Functions / Worker / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+
+**다음**
+- 사용자를 반복 생성 테스트에 투입하지 않는다.
+- 확보한 150~152k / system 146~148k 측정값을 기준으로 코드에서 systemInstruction owner block의 중복/과잉을 먼저 분석한다.
+- 5단 프롬프트, 가사 밀도, 언어혼합, section performance cue, 모델 fallback 등 정상 품질 기능을 임의 삭제하지 않는다.
+- 실제 축소안은 기존 출력 품질/요청 의미 parity verifier를 만든 뒤 별도 PREVIEW 후보로 검증한다.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0EN. PREVIEW app150 — Gemini 요청크기/섹션 보완 진단 Hosting 배포 완료 (2026-09-23 KST)
 
 **배포**

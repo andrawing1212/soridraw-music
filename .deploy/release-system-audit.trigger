@@ -1,7 +1,7 @@
-requested_at=2026-09-24T01:47:00+09:00
-requested_by=cross_account_like_sync_revalidation_fix
+requested_at=2026-09-24T01:53:00+09:00
+requested_by=app154_cross_account_like_sync_full_audit
 target=preview
-purpose=make_shared_feed_revision_gate_account_aware_without_new_d1_reads
+purpose=verify_account_switch_revalidates_shared_public_like_counts_without_new_d1_reads
 expected_app_version=154
 gemini_frozen=true
 worker_redeploy=false

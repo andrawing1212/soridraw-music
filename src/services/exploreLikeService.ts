@@ -44,6 +44,8 @@ const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
 // 161: legacy v114 R2 may be truncated even below 2,000 after later unlikes.
 // This marker means the current R2 revision was observed but is NOT complete.
 const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baseline:161';
+// One bounded, account-scoped recovery attempt for legacy incomplete metadata.
+const EXPLORE_LIKE_REPAIR_ATTEMPTED_182 = 'soridraw:explore:like-metadata-repair-attempted:182';
 // App127: when the legacy shared R2 bundle is incomplete, a bounded /v1/me/likes
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
@@ -601,11 +603,13 @@ const startLikeSignal127 = (uid: string) => {
 // account, not once per song/card/tab. No continuous timer or global Feed reload.
 onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
 
-const requestPersonalLikeBaseline127 = async (user: User): Promise<ExploreLikeBaselineSnapshot161> => {
+const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = false): Promise<ExploreLikeBaselineSnapshot161> => {
   const headers = await buildAuthHeaders(user);
   const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot', {
     method: 'GET',
-    headers,
+    headers: repairPartial182
+      ? { ...headers, 'X-Soridraw-Repair-Partial-Likes': '182' }
+      : headers,
   });
   recordCloudflareResponse(response, '/v1/me/social-snapshot');
   if (!response.ok) throw new Error('Personal like snapshot unavailable: HTTP ' + response.status);
@@ -639,16 +643,21 @@ const requestPersonalLikeBaseline127 = async (user: User): Promise<ExploreLikeBa
 // ordinary entry. The server may use its existing recovery path if R2 is absent.
 const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const uid = user.uid;
+  // Preserve healthy local-first behavior. Only a previously partial account
+  // receives ONE extra account-scoped metadata verification after deployment.
+  const partial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1';
+  const attempted182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) === '1';
   if (!uid || baselineCompleted127.has(uid) ||
       readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' ||
-      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1') return;
+      (partial182 && attempted182)) return;
   const inflight = baselineInFlight127.get(uid);
   if (inflight) return inflight;
   const task = (async () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const versionAtStart = readSeenLikeSignal127(uid);
       const repairAtStart = readRepairTarget127(uid);
-      const snapshot161 = await requestPersonalLikeBaseline127(user);
+      const repairPartial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) !== '1';
+      const snapshot161 = await requestPersonalLikeBaseline127(user, repairPartial182);
       const likedIds = snapshot161.likedTrackIds;
       if (readSeenLikeSignal127(uid) !== versionAtStart ||
           readRepairTarget127(uid) !== repairAtStart) {
@@ -656,6 +665,12 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
         // never accept an older response over the user's latest signal.
         if (attempt === 0) continue;
         throw new Error('Personal like signal advanced during baseline; retry on next entry');
+      }
+      // Never retry a successful bounded D1 check on ordinary navigation or
+      // later app updates. If new pending likes settle, the R2 revision signal
+      // drives the normal next refresh, without another recovery scan.
+      if (repairPartial182) {
+        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '1');
       }
 
       // Reader-first 161: an old v114 object is useful only as a cache hint.

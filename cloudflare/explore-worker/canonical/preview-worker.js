@@ -23885,6 +23885,71 @@ async function handleMyLikedTracks052(request, env, cors) {
   } }, 200, cors);
 }
 
+// SORIDRAW_PERSONAL_LIKE_EXACT_CANONICAL_CHECK_182_20260924
+// Authenticated, opt-in, ONE-ACCOUNT metadata repair. Never assume the larger
+// client count is correct, or turn a possibly truncated legacy catalog exact.
+// If the canonical public-liked set and R2 set differ, preserve BOTH stores and
+// return a diagnostic status; no migration or user-data overwrite.
+async function repairPartialPersonalLikeMetadata182(env, uid) {
+  const bucket = env?.PROFILE_MEDIA;
+  if (!bucket || !env?.DB || !uid) return 'unavailable';
+  const key = exploreSharedLikesKey061(uid);
+  const object = await bucket.get(key);
+  if (!object) return 'missing';
+  let previous = null;
+  try { previous = JSON.parse(await object.text()); } catch { return 'invalid'; }
+  const state = normalizeSharedLikesState161(previous, uid);
+  if (!state) return 'invalid';
+  if (state.exact) return 'already-exact';
+  const candidate = previous.likedTrackIds;
+  if (!Array.isArray(candidate) || candidate.length > 2000 ||
+      candidate.some(id => !String(id || '').trim() || String(id).length > 512) ||
+      new Set(candidate).size !== candidate.length) return 'unverifiable';
+
+  // A pending desired-state mutation is not canonical yet. Never certify a
+  // snapshot against D1 while a queued change for this account is unsettled.
+  const queued = await env.DB.prepare(
+    'SELECT ' +
+    '(SELECT COUNT(*) FROM explore_like_batches_069 WHERE user_uid=?) AS q069, ' +
+    '(SELECT COUNT(*) FROM explore_like_user_queue_075 q ' +
+      'CROSS JOIN explore_like_user_queue_state_075 s ' +
+      'WHERE q.user_uid=? AND ' +
+      '(q.updated_at>s.processed_at OR ' +
+       '(q.updated_at=s.processed_at AND q.user_uid>s.processed_uid))) AS q075'
+  ).bind(uid, uid).first();
+  if (!queued || Number(queued.q069 || 0) || Number(queued.q075 || 0)) return 'pending';
+
+  // The original canonical personal catalog contains only public, published
+  // relations. LIMIT+1 refuses to certify a truncated (2000-entry) result.
+  const raw = await env.DB.prepare(
+    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id ' +
+    "WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' " +
+    'ORDER BY l.created_at DESC LIMIT 2001'
+  ).bind(uid).all();
+  if (!Array.isArray(raw?.results) || raw.results.length > 2000) return 'unverifiable';
+  const actual = raw.results.map(row => String(row?.track_id || '').trim());
+  if (actual.some(id => !id) || new Set(actual).size !== actual.length) return 'unverifiable';
+  const expected = new Set(actual);
+  if (candidate.length !== actual.length ||
+      candidate.some(id => !expected.has(id))) return 'canonical-mismatch';
+
+  // This corrects metadata ONLY when both independent sources agree exactly.
+  // Do not modify likedTrackIds, pending intent, ordering, or D1 relations.
+  const next = {
+    ...previous,
+    canonicalComplete156: true,
+    canonicalSource156: 'verified-single-user-d1-182',
+    exactLikeCount156: actual.length,
+    updatedAt: Date.now(),
+  };
+  const saved = await bucket.put(key, JSON.stringify(next), {
+    onlyIf: { etagMatches: object.etag },
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { ...(object.customMetadata || {}), metadataRepair: '182' },
+  });
+  return saved ? 'metadata-repaired' : 'concurrent-change';
+}
+
 async function handleMySocialSnapshot042(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let [likeState, followingUids] = await Promise.all([
@@ -23907,6 +23972,16 @@ async function handleMySocialSnapshot042(request, env, cors) {
     return json({ ok: false, error: 'SOCIAL_SNAPSHOT_UNAVAILABLE' }, 503, cors);
   }
 
+  // Only a deliberate account-scoped recovery attempt may consult canonical
+  // D1. Normal social snapshot, healthy cache, and revision HEAD remain R0.
+  let likesRepairStatus182 = 'not-requested';
+  if (request.headers.get('X-Soridraw-Repair-Partial-Likes') === '182' && !likeState.exact) {
+    likesRepairStatus182 = await repairPartialPersonalLikeMetadata182(env, authContext.uid);
+    if (likesRepairStatus182 === 'metadata-repaired') {
+      likeState = await readSharedLikesState161(env, authContext.uid);
+    }
+  }
+
   return json({
     ok: true,
     data: {
@@ -23915,6 +23990,7 @@ async function handleMySocialSnapshot042(request, env, cors) {
       likesComplete: likeState.exact,
       exactLikeCount: likeState.exact ? likeState.exactLikeCount : null,
       likesSnapshotSource: likeState.source,
+      likesRepairStatus182,
       followingUids: [...followingUids],
       source: 'r2-social-042',
       updatedAt: Date.now(),

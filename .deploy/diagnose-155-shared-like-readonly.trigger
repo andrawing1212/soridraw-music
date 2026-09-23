@@ -1,0 +1,7 @@
+requested_at=2026-09-24T02:18:00+09:00
+requested_by=user_cross_account_public_like_zero
+target=preview
+purpose=read_only_trace_q069_canonical_derived_shared_feed
+no_write=true
+no_migration=true
+no_deploy=true

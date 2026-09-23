@@ -1,0 +1,131 @@
+name: Diagnose 155 Shared Like Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/diagnose-155-shared-like-readonly.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read-only D1 queue and public-count state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name FROM sqlite_schema
+            WHERE type='table' AND name LIKE 'explore_like%'
+            ORDER BY name;
+            SELECT 'processor' AS kind,id,lease_until,
+              CASE WHEN COALESCE(owner,'')='' THEN 0 ELSE 1 END AS owner_set
+            FROM explore_like_processor_035 WHERE id=1;
+            SELECT 'q069' AS kind,COUNT(*) AS rows,
+              COALESCE(SUM(mutation_count),0) AS mutations,
+              COALESCE(MIN(created_at),0) AS oldest_at,
+              COALESCE(MAX(created_at),0) AS newest_at
+            FROM explore_like_batches_069;
+          " --json > "$RUNNER_TEMP/base.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              t.title,
+              COALESCE(s.like_count,0) AS canonical_count,
+              COALESCE(d.likes,-1) AS derived_count,
+              (SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,
+              COALESCE(s.updated_at,0) AS count_updated_at
+            FROM tracks t
+            LEFT JOIN track_stats s ON s.track_id=t.id
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.is_public=1 AND t.status='published'
+              AND (
+                t.title LIKE '%Leaving One Step Open%' OR
+                t.title LIKE '%Left Unsaid%' OR
+                t.title LIKE '%Through the Night%' OR
+                t.title LIKE '%Just Stay Here Awhile%'
+              )
+            ORDER BY t.title;
+          " --json > "$RUNNER_TEMP/counts.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            WITH expanded AS (
+              SELECT b.batch_id,b.created_at,
+                TRIM(CAST(json_extract(j.value,'$.trackId') AS TEXT)) AS track_id,
+                CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+              FROM explore_like_batches_069 b, json_each(b.mutations_json) j
+              WHERE json_type(j.value,'$.trackId')='text'
+            )
+            SELECT e.created_at,t.title,e.desired_liked,
+              COALESCE(s.like_count,0) AS canonical_count,
+              (SELECT COUNT(*) FROM likes l WHERE l.track_id=e.track_id) AS relation_count
+            FROM expanded e
+            LEFT JOIN tracks t ON t.id=e.track_id
+            LEFT JOIN track_stats s ON s.track_id=e.track_id
+            ORDER BY e.created_at DESC
+            LIMIT 20;
+          " --json > "$RUNNER_TEMP/pending.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const rows=(name)=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name,'utf8')).flatMap(x=>x.results||[]);
+          const now=Date.now();
+          console.log('=== SHARED LIKE READONLY DIAG ===');
+          for(const x of rows('base.json')){
+            if(x.kind==='processor') console.log('PROCESSOR lease_remaining_s='+Math.max(0,Math.floor((Number(x.lease_until||0)-now)/1000))+' owner_set='+Number(x.owner_set||0));
+            if(x.kind==='q069'){
+              const oldest=Number(x.oldest_at||0), newest=Number(x.newest_at||0);
+              console.log('Q069 rows='+Number(x.rows||0)+' mutations='+Number(x.mutations||0)+' oldest_age_s='+(oldest?Math.max(0,Math.floor((now-oldest)/1000)):0)+' newest_age_s='+(newest?Math.max(0,Math.floor((now-newest)/1000)):0));
+            }
+          }
+          for(const x of rows('counts.json')) console.log('D1 title='+JSON.stringify(String(x.title||''))+' canonical='+Number(x.canonical_count||0)+' relation='+Number(x.relation_count||0)+' derived='+Number(x.derived_count??-1));
+          const pending=rows('pending.json');
+          if(!pending.length) console.log('PENDING069 none');
+          for(const x of pending) console.log('PENDING069 age_s='+Math.max(0,Math.floor((now-Number(x.created_at||0))/1000))+' title='+JSON.stringify(String(x.title||''))+' desired='+Number(x.desired_liked||0)+' canonical='+Number(x.canonical_count||0)+' relation='+Number(x.relation_count||0));
+          console.log('D1_READ_ONLY=PASS');
+          NODE
+
+      - name: Read public shared Feed only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=40" > "$RUNNER_TEMP/feed.json"
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=popular&limit=40" > "$RUNNER_TEMP/popular.json"
+          node <<'NODE'
+          const fs=require('fs');
+          for(const name of ['feed','popular']){
+            const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name+'.json','utf8'));
+            const items=p?.data?.items||[];
+            for(const x of items){
+              const title=String(x.title||'');
+              if(/Leaving One Step Open|Left Unsaid|Through the Night|Just Stay Here Awhile/.test(title)){
+                console.log('SHARED_'+name.toUpperCase()+' title='+JSON.stringify(title)+' count='+Number(x.likeCount??x.like_count??x.stats?.likeCount??0));
+              }
+            }
+          }
+          console.log('PUBLIC_SHARED_FEED_READ=PASS');
+          NODE

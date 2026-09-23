@@ -55,7 +55,8 @@ assert.doesNotMatch(toggleWriter, /patchExplorePublicProfileFirstViewTrack/);
 assert.match(toggleWriter, /patchExploreLikedTrackCachedCount091/);
 assert.match(toggleWriter, /setTracks\(patchOptimisticCount120\)/);
 assert.doesNotMatch(page, /getExploreLikeDisplayCount091/);
-assert.match(page, /track=\{track\}/);
-assert.match(page, /liked=\{Boolean\(likedTrackIds\[track\.id\]\)\}/);
+// App129+ sends the atomic normalized heart/count pair to the card.
+assert.match(page, /track=\{displayTrack129\}/);
+assert.match(page, /liked=\{pair129\.liked\}/);
 
 console.log('PASS 117: public likeCount is shared-server authority only; account cache can affect heart membership/revision grace, never the public count.');

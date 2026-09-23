@@ -43,7 +43,18 @@ if (!page.includes('applyProfileFirstView(refreshedProfile, refreshedRows, true)
   fail('only revalidated public-profile payload should become authoritative');
 }
 if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');
-if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) fail('persistent liked-card cache is not reconciled');
+if (appVersion >= 155) {
+  // 155: account-private liked cards retain the actor overlay. Persisting that
+  // provisional count to a PUBLIC cache would leak it across signed-in accounts.
+  if (!/patchExploreLikedTrackCachedCount091\(\s*activeUid, track\.id, countByTrackId\.get\(track\.id\) \?\? track\.likeCount,\s*\)/.test(page)) {
+    fail('155 actor-local liked-card cache is not reconciled');
+  }
+  if (!/sharedTracks\.forEach\(\(track\) => \{\s*patchExploreFeedSessionCachesRow\(track\.id, \{ likeCount: track\.likeCount \}\)/.test(page)) {
+    fail('155 shared public Feed cache must use server count, not actor overlay');
+  }
+} else if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) {
+  fail('persistent liked-card cache is not reconciled');
+}
 if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*(?:exploreFeedLastRevisionCheckAt126\.set\((?:revisionCheckKey154|requestUrl), Date\.now\(\)\);\s*)?\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
 if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
 

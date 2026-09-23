@@ -1,5 +1,46 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0ES. PREVIEW app153 — 금지어 통합 교정 fallback 퇴행 원복 배포 완료 (2026-09-24 KST)
+
+**문제**
+- app152 실사용에서 최초 곡 생성 자체는 gemini-3.6-flash 40.2s / input 24,734 / output 3,115 / total 27,849 tokens로 성공.
+- 그러나 후처리 `rewriteLyricHardBanCards`가 gemini-3.5-flash-lite 단일 모델에서 정확히 20.0s timeout으로 실패하여 전체 생성 파이프라인 기준 완전 성공이 아니었음.
+- commit `2e14663ac57703c3def3a856ca2c5110aab36105`에서 금지어 줄/카드 교정을 `gemini-3.5-flash-lite` 단일 1회로 강제한 2줄 변경이 퇴행 원인으로 확인됨.
+- 저장소의 기존 정상 기준(840차)과 달리 shared fallback이 사라진 상태였음.
+
+**최소 복구**
+- commit `e3310809525c6d2f8f88494c2a0c601be3b56354`.
+- `rewriteLyricHardBanLines/SecondPass`: 단일 lite 고정을 제거하고 shared Gemini fallback 진입 모델로 복원.
+- `rewriteLyricHardBanCards`: explicit `['gemini-3.5-flash-lite']` override 제거하여 기존 shared fallback chain 복원.
+- 금지어 판정, 수정 대상 줄, 5 physical calls 상한, 최초 곡 생성 모델 순서, 5단 productionPrompt, 가사/언어/섹션 규칙은 변경하지 않음.
+- Function 코드는 이번 app153에서 추가 변경/재배포하지 않음. app152에서 배포한 PREVIEW Gemini Function(3.6 initial timeout 120s)은 그대로 유지.
+
+**검증**
+- Release System Audit Run `35886284795` SUCCESS.
+- `HARD_BAN_SHARED_FALLBACK=PASS`.
+- TypeScript PASS / Build PASS.
+- `APP147_GEMINI_PROMPT_AND_CUE_AUDIT=PASS`.
+- `VERIFY_031_MUSIC_NOTE_DETAIL_BATCHED_DRAFT=PASS`.
+- `LIKE_SOURCE_AND_ISOLATED_REGRESSION=PASS`.
+- TEST/PRODUCTION Worker dry-run / shared D1 read-only audit PASS.
+
+**PREVIEW 배포**
+- Firebase PREVIEW App Release Run `35887028650` / job `107269682225` SUCCESS.
+- locked source `3f8d5a0f4fa432b7b29076494602d0c0749de6e9`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=153`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Hosting only. Worker / Functions / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+
+**다음 실사용 게이트**
+- PREVIEW app153에서 일반 V1 곡 1곡만 생성.
+- 완전 성공 판정은 최초 곡 생성 성공 + 금지어/언어/섹션 후처리까지 모두 성공했을 때만 인정.
+- 금지어가 실제로 없는 곡이면 추가 호출이 없어도 정상.
+- 금지어 교정이 발생한 곡에서는 한 모델 timeout 후 shared fallback으로 이어지는지 확인.
+- 반복 생성으로 provider quota를 소모하지 않는다.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0ER. app152 0-token 실패 원인 확정 — 3.6 강제 timeout 복구 및 PREVIEW Function 배포 (2026-09-24 KST)
 
 **실사용 근거**

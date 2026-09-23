@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app153 PREVIEW 완전 성공 1곡 검증
+
+- app153 PREVIEW Hosting 배포 완료.
+- Release Audit `35886284795` SUCCESS.
+- Hosting Run `35887028650` SUCCESS / locked source `3f8d5a0f4fa432b7b29076494602d0c0749de6e9`.
+- app version 153 / exact build PASS / TEST·PRODUCTION unchanged PASS.
+- app152에서 원인 확인된 3.6 initial timeout은 120s 유지.
+- app153에서 commit `2e14663...`의 hard-ban single-lite pinning 2줄을 원복하여 shared fallback을 복원.
+- 다음은 PREVIEW 일반 V1 1곡만 생성.
+- 성공 판정은 최초 생성 + 모든 후처리 완료까지 전부 성공일 때만 인정.
+- 실패 시 해당 한 세션의 context/model/status만 보고 원인 분리. 무작정 추가 timeout/프롬프트/모델 구조 변경 금지.
+- TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app152 + 3.6 initial timeout 120s 실사용 1곡 확인
 
 - 원인 확정: 3.6/3.5/3.5-lite 실패시간 45/20/20s가 SORIDRAW bounded timeout과 정확히 일치.

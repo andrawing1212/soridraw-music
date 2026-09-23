@@ -1,12 +1,8 @@
-requested_at=2026-09-24T03:20:00+09:00
-requested_by=app155_public_count_cache_isolation_audit
+requested_at=2026-09-24T03:43:00+09:00
+requested_by=app156_verified_shared_r2_repair_audit
 target=preview
-purpose=verify_server_only_shared_count_cache_and_account_local_optimistic_count
+purpose=validate_scheduled_only_four_track_canonical_to_shared_r2_CAS
 expected_app_version=155
-required_verifier=scripts/verify-117-explore-public-count-cache-separation.mjs
-required_verifier_2=scripts/verify-154-cross-account-like-sync.mjs
-gemini_frozen=true
-worker_redeploy=false
-functions_redeploy=false
+required_verifier=scripts/verify-156-shared-like-snapshot-repair.mjs
 no_user_data_migration=true
 no_deploy=true

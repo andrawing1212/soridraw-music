@@ -1,7 +1,7 @@
-requested_at=2026-09-24T03:43:00+09:00
-requested_by=app156_verified_shared_r2_repair_audit
+requested_at=2026-09-24T03:46:00+09:00
+requested_by=app156_final_worker_release_gate_audit
 target=preview
-purpose=validate_scheduled_only_four_track_canonical_to_shared_r2_CAS
+purpose=verify_one_time_cas_shared_r2_repair_and_pinned_preview_release
 expected_app_version=155
 required_verifier=scripts/verify-156-shared-like-snapshot-repair.mjs
 no_user_data_migration=true

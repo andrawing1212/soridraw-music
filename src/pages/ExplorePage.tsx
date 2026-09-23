@@ -418,10 +418,8 @@ export default function ExplorePage() {
           const patched = patchRemotePair129(previous);
           return pair129.liked ? patched : patched.filter((track) => track.id !== detail.trackId);
         });
-        patchExploreFeedSessionCachesRow(detail.trackId, { likeCount: pair129.likeCount });
-        if (detail.ownerUid) {
-          patchExplorePublicProfileFirstViewTrack(detail.ownerUid, detail.trackId, { likeCount: pair129.likeCount });
-        }
+        // A same-account RTDB acknowledgement is NOT a shared public publication.
+        // Keep its count on the active UI and this account's liked-card cache only.
         patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
       }
 
@@ -1056,8 +1054,8 @@ export default function ExplorePage() {
         const rest = patched.filter((item) => item.id !== track.id);
         return [optimisticTrack, ...rest];
       });
-      patchExploreFeedSessionCachesRow(track.id, { likeCount: result.likeCount });
-      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
+      // Optimistic count is account-private until the Worker publishes the
+      // canonical shared count. Never contaminate public persistent caches.
       patchExploreLikedTrackCachedCount091(user.uid, track.id, result.likeCount);
       rememberExploreLikedTrack(user.uid, optimisticTrack as unknown as Record<string, unknown>, result.liked);
     } catch (reason) {

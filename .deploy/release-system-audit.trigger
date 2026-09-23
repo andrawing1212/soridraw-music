@@ -1,8 +1,10 @@
-requested_at=2026-09-24T01:04:00+09:00
-requested_by=app153_hard_ban_shared_fallback_restore
+requested_at=2026-09-24T01:47:00+09:00
+requested_by=cross_account_like_sync_revalidation_fix
 target=preview
-purpose=restore_pre_regression_shared_gemini_fallback_for_hard_ban_correction
-regression_commit=2e14663ac57703c3def3a856ca2c5110aab36105
-restore_commit=e3310809525c6d2f8f88494c2a0c601be3b56354
-expected_app_version=153
+purpose=make_shared_feed_revision_gate_account_aware_without_new_d1_reads
+expected_app_version=154
+gemini_frozen=true
+worker_redeploy=false
+functions_redeploy=false
+no_user_data_migration=true
 no_deploy=true

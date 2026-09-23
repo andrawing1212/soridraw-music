@@ -92,6 +92,12 @@ const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
 // Rendering cached rows must never reset this clock: otherwise opening Explore
 // hides a cross-device unlike behind a fresh two-minute delay.
 const exploreFeedLastRevisionCheckAt126 = new Map<string, number>();
+// SORIDRAW_EXPLORE_CROSS_ACCOUNT_SHARED_FEED_REVALIDATION_154_20260924
+// Public Feed data is shared, but a revision-check timestamp must never leak
+// across signed-in accounts in the same browser/tab. Otherwise account B can
+// inherit account A's recent gate and keep an older public like count.
+const exploreFeedRevisionCheckKey154 = (uid: string | null | undefined, requestUrl: string) =>
+  `${String(uid || 'guest').trim() || 'guest'}::${requestUrl}`;
 const shouldRevalidateExploreFeedOnEntry126 = (
   feedRequest: boolean,
   explicitRevision: boolean,
@@ -503,6 +509,7 @@ export default function ExplorePage() {
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
     const feedRequest = isExploreFeedRequest(requestUrl);
+    const revisionCheckKey154 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -527,7 +534,7 @@ export default function ExplorePage() {
       if (!response.ok) throw new Error(`revision HTTP ${response.status}`);
       const payload = await response.json() as ExploreFeedRevisionResponse;
       const revision = safeText(payload?.data?.revision) || null;
-      if (revision) exploreFeedLastRevisionCheckAt126.set(requestUrl, Date.now());
+      if (revision) exploreFeedLastRevisionCheckAt126.set(revisionCheckKey154, Date.now());
       return revision;
     };
 
@@ -569,7 +576,7 @@ export default function ExplorePage() {
         syncSharedPublicCountsToLocal110(normalizedTracks);
         // Mark only after the current snapshot is applied to Feed and loaded cards.
         markExploreSharedLikeCacheRepair124(requestUrl);
-        exploreFeedLastRevisionCheckAt126.set(requestUrl, Date.now());
+        exploreFeedLastRevisionCheckAt126.set(revisionCheckKey154, Date.now());
       }
     };
 
@@ -606,7 +613,7 @@ export default function ExplorePage() {
       }
 
       const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
-      const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(requestUrl) || 0;
+      const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey154) || 0;
       const shouldRevalidate = shouldRevalidateExploreFeedOnEntry126(
         feedRequest,
         revalidateRequested,
@@ -678,7 +685,7 @@ export default function ExplorePage() {
     })();
 
     return () => controller.abort();
-  }, [requestUrl, feedRevisionSignal]);
+  }, [requestUrl, feedRevisionSignal, user?.uid]);
 
   useEffect(() => {
     if (!isExploreFeedRequest(requestUrl) || profileUid) return;

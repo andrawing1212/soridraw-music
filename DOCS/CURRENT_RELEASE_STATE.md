@@ -1,5 +1,37 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EM. app149 사용자 실사용 PASS + app150 Gemini 진단 후보 완료 (2026-09-23 KST)
+
+**app149 실사용**
+- 사용자 확인: Music Note Suno URL 목록 썸네일 / 저장 / 앱 재접속 유지 문제 **PASS**.
+- app149 PREVIEW Hosting 상태 유지. Music Note 썸네일 작업은 종료하고 Gemini 지연/33k 입력 진단으로 복귀.
+
+**app150 source-only 진단 변경**
+- 목표는 생성 품질이나 모델 정책을 바로 바꾸지 않고, app147 실사용에서 남은 두 질문을 실제 다음 생성 1회로 판별하는 것:
+  1. 최초 호출 입력 약 33k token의 실제 큰 구성요소가 무엇인지.
+  2. `repairV1FinalProductionCues`가 발생할 때 어떤 section이 어떤 소유권 근거 때문에 required로 판정됐는지.
+- `src/services/geminiProxyClient.ts`: 실제 Function 전송 직전 요청에서 **contents / systemInstruction / responseSchema / 기타 config / fallback instruction / 총 문자수**를 계산한다. 원문은 저장하지 않는다.
+- `src/services/geminiAuditLog.ts`: 위 문자수만 기존 로컬 Gemini audit usage에 저장한다. prompt/가사 원문 저장 없음.
+- `src/pages/AdminGeminiAuditPage.tsx`: 기존 관리자 Gemini 호출 카드에 요청크기 문자수 breakdown 표시. normal user UI 비변경.
+- `src/services/generation/v1/sections/productionCueOwnership.ts`: 실제 missing required production cue가 있을 때 sectionName + `canonical-plan / custom-production / production-only` 소유 근거만 로컬 audit에 기록. 가사/프롬프트/사용자 원문 저장 없음.
+- 관리자 화면에 최근 섹션 지시문 보완 판정을 표시해, 다음 Folk/일반 곡에서 보완 호출이 정당한지 판별 가능.
+- generation prompt, response schema, 모델 5단 chain, timeout/cooldown, section cue 판정 자체, hard-ban, 언어혼합, 가사 밀도, UI 생성 결과는 **변경하지 않음**.
+- `public/app-version.json`: 후보 150.
+
+**검증**
+- 첫 audit에서 신규 usage 필드가 session summary reducer에 빠진 TypeScript 오류를 발견했고 즉시 수정. 해당 실패 후보는 배포하지 않음.
+- 최종 Release System Audit Run `35871794547` / job `107217464842` SUCCESS.
+- TypeScript PASS / Build PASS / `APP147_GEMINI_PROMPT_AND_CUE_AUDIT=PASS` / `VERIFY_031_MUSIC_NOTE_DETAIL_BATCHED_DRAFT=PASS` / like regression PASS / TEST+PRODUCTION Worker dry-run PASS / shared D1 read-only preflight PASS.
+- Firebase Functions / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+- **app150 미배포**. 실제 PREVIEW는 app149. 사용자 배포 요청 전 Hosting 변경 금지.
+
+**다음 실사용 목적**
+- app150 PREVIEW 배포 후 일반 V1 곡 1~3개 생성.
+- 관리자 Gemini 기록에서 최초 호출의 `요청크기: 내용 / 시스템 / 응답스키마 / 기타설정 / fallback`을 확인해 33k token의 주 원인을 확정.
+- `섹션 지시문 보완`이 발생하면 같은 화면의 최근 소유권 판정에서 section과 required 이유를 확인.
+- 측정 결과가 나온 뒤에만 실제 prompt/schema 축소 또는 production-cue 조건 수정. 품질 규칙 추측 삭제 금지.
+
+
 ## 0EM. app149 사용자 실사용 PASS → Gemini 33k/섹션 보완 진단 재개 (2026-09-23 KST)
 
 **사용자 확인**

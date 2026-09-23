@@ -1755,6 +1755,40 @@ export default function FavoritesPage({
   const scheduleFavoriteDetailFlush = () => {
   };
 
+  // Keep the Music Note row's small Suno media summary in sync with Detail & Edit.
+  // Detail edits remain IndexedDB-drafted and are still sent to Firestore only on the
+  // existing page-exit/manual flush; reflecting a cover in the row must not create a write.
+  const syncFavoriteSunoCardMedia = (songId: string, source: Record<string, any> | null | undefined) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !source) return;
+    const mediaKeys = [
+      'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
+      'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+      'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+      'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+    ];
+    const mediaPatch: Record<string, any> = {};
+    for (const key of mediaKeys) {
+      if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+        mediaPatch[key] = source[key];
+      }
+    }
+    if (Object.keys(mediaPatch).length === 0) return;
+
+    const current = favoritesStore.getFavorites();
+    let changed = false;
+    const next = current.map((item: any) => {
+      if (String(item?.id || item?.firestoreId || '') !== safeSongId) return item;
+      const hasChanged = Object.keys(mediaPatch).some((key) => (
+        JSON.stringify(item[key] ?? null) !== JSON.stringify(mediaPatch[key] ?? null)
+      ));
+      if (!hasChanged) return item;
+      changed = true;
+      return { ...item, ...mediaPatch };
+    });
+    if (changed) favoritesStore.setFavorites(next);
+  };
+
   const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
@@ -1778,6 +1812,8 @@ export default function FavoritesPage({
     });
 
     if (Object.keys(updates).length === 0) {
+      // A reverted URL edit must also restore the row's cached cover and play target.
+      if (baselineEntry?.songId === safeSongId) syncFavoriteSunoCardMedia(safeSongId, baselineEntry.data);
       favoriteDetailPendingPatchRef.current = null;
       setFavoriteDetailSaveStatus(favoriteDetailFlushInFlightRef.current ? 'saving' : 'idle');
       clearFavoriteDetailFlushTimer();
@@ -1791,6 +1827,8 @@ export default function FavoritesPage({
       return;
     }
 
+    // Paint the chosen Suno cover in the list as soon as the local draft is accepted.
+    syncFavoriteSunoCardMedia(safeSongId, patch);
     const pending: MusicNoteDetailPendingPatch = {
       songId: safeSongId,
       baseVersion,
@@ -5626,6 +5664,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     setSelectedSong(nextSong);
+    // A catalog row can predate its detailed Suno metadata. Reuse the detail we just
+    // loaded rather than fetching every list item or waiting for another server read.
+    if (sourceId) syncFavoriteSunoCardMedia(sourceId, nextSong);
   };
 
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {

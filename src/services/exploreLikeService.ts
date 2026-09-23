@@ -1223,6 +1223,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
         body: JSON.stringify({
           mutations: batchEntries.map((pending) => ({
             trackId: pending.trackId,
+            ownerUid: pending.ownerUid,
             liked: pending.desiredLiked,
             baseLiked: pending.baseLiked,
             mutationAt: pending.updatedAt,

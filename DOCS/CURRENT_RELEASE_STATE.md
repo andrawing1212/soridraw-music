@@ -5,7 +5,7 @@
 **사용자 제보와 확인**
 - 27.49초 모바일 영상: Music Note 곡 목록의 `[Microhouse] 선 넘어 달리기 | Step Beyond` 카드에는 기본 음표만 나타남. 같은 곡의 Detail & Edit에는 Suno URL 1/2 커버 이미지가 정상 표시. 디테일 종료 후 목록도 기존 음표로 남음.
 - 코드 원인: Detail URL 저장은 `queueFavoriteDetailPatch`에서 `selectedSong`과 IndexedDB draft만 즉시 바꾸고, 목록의 `favoritesStore`에는 최신 `sunoLinks / mainSunoIndex / sunoCoverUrl` 등이 전달되지 않음. 목록은 기존 summary 캐시를 렌더링.
-- 정상 로컬 우선 60초/페이지 이탈 묶음 서버 저장을 유지하며 화면 정보만 동기화한다.
+- 정상 로컬 우선 IndexedDB draft + 기존 페이지 이탈/명시적 동기화 묶음 서버 저장을 유지하며 화면 정보만 동기화한다.
 
 **변경**
 - `src/pages/FavoritesPage.tsx`: URL 추가/제거/1순위 교체가 IndexedDB draft에 반영되면 카드의 최소 Suno media 필드만 기존 `favoritesStore`에서 즉시 갱신한다. URL 편집 되돌림 시 기준 카드 미디어를 복구한다. 기존 상세 열기에서 이미 로드한 cover URL도 목록에 재사용해 오래된 summary로 인한 음표 표시를 줄인다.

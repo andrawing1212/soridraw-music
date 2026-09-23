@@ -229,4 +229,58 @@ jobs:
           echo 'LIKE_AGGREGATE_FIXED_CRON_DISABLED=PASS'
           echo 'DURABLE_OBJECT_EVENT_SCHEDULER_DEPLOY=PASS'
           echo 'TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'
+
+          # 156 is an explicitly approved, one-time, four-track derived R2 repair.
+          # A temporary PREVIEW-only cron wakes the existing scheduled handler,
+          # then the original (empty) cron configuration is restored. No user
+          # record, schema, TEST or PRODUCTION environment is modified here.
+          if grep -Fq 'repair_shared_like_snapshot_156=true' .deploy/preview-worker-release.trigger; then
+            test "$(cat "$RUNNER_TEMP/preview-crons-before.json")" = '[]'
+            marker_key="soridraw-profile-media/internal/explore/repair-v156/verified-first-page.json"
+            marker_file="$RUNNER_TEMP/like156-repair-marker.json"
+            printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/repair156-cron.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/repair156-cron.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
+              | jq -e '.success == true' >/dev/null
+            echo '156_PREVIEW_TEMP_CRON=ENABLED'
+            repaired=0
+            for attempt in 1 2 3; do
+              sleep 75
+              if node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote >/dev/null 2>&1; then
+                if node - "$marker_file" <<'NODE'
+          const fs=require('fs');
+          const marker=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(marker.schemaVersion!==1||marker.tracks!==4)process.exit(1);
+          console.log('156_R2_REPAIR_MARKER=PASS');
+          NODE
+                then repaired=1; break; fi
+              fi
+              echo "156_REPAIR_WAIT_ATTEMPT=$attempt"
+            done
+            printf '[]' > "$RUNNER_TEMP/repair156-original-cron.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/repair156-original-cron.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
+              | jq -e '.success == true' >/dev/null
+            echo '156_PREVIEW_CRON_RESTORED=PASS'
+            test "$repaired" = 1
+            for sort in latest popular; do
+              curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" \
+                "${PREVIEW_BASE}/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/repair156-$sort.json"
+              SORT="$sort" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair156-'+process.env.SORT+'.json','utf8'));
+          if(p?.ok!==true)throw Error('156 shared R2 not available');
+          for(const name of ['Leaving One Step Open','Left Unsaid','Through the Night','Just Stay Here Awhile']){
+            const x=(p?.data?.items||[]).filter(x=>String(x?.title||'').includes(name));
+            if(x.length!==1||Number(x[0].likeCount??x[0].stats?.likeCount??0)!==1)throw Error('156 shared R2 canonical count mismatch: '+name);
+          }
+          console.log('156_PUBLIC_SHARED_R2_'+process.env.SORT.toUpperCase()+'=PASS');
+          NODE
+            done
+            echo '156_BOUNDED_SHARED_R2_REPAIR=PASS'
+          fi
           trap - EXIT

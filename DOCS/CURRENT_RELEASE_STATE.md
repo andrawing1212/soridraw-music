@@ -1,5 +1,25 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EW. PREVIEW app155 source — 개인 좋아요 숫자의 공용 캐시 오염 경로 차단 (2026-09-24 KST)
+
+**실사용 증상**: 같은 공개곡의 public likeCount가 PC Edge / 모바일 다른 계정 / PC Chrome에서 각각 달라 보임. 기존 069 queue는 앞선 작업에서 drain되어 shared latest/popular 확인 4곡은 1로 복구된 상태이나, 장래 좋아요/해제 후 다시 불일치할 위험은 별도로 존재.
+
+**코드에서 확인한 원인**: `src/pages/ExplorePage.tsx`에서 로컬 optimistic click, 동일 UID RTDB changed-track 수신, shared Feed revalidation의 account overlay가 공용 Feed / 공개프로필 persistent cache에 provisional likeCount를 덮어쓰는 경로가 있었음. 계정 전환 후 이 공용 캐시를 다른 사용자가 재사용할 수 있어, 공개 수치의 권위가 공유 R2가 아닌 특정 계정의 임시 값으로 흔들릴 수 있었음.
+
+**이번 수정** (`preview`, 최종 소스 commit `9ec45d026be84b6bd17124553ac881e02cfb1930`):
+- 공용 Feed / 공개프로필 persistent cache는 서버에서 받은 `sharedTracks`의 원래 likeCount만 저장.
+- local optimistic click과 동일 계정 remote notification은 active UI / 개인 liked-card cache만 갱신하고 공용 persistent cache를 덮어쓰지 않음.
+- 기존 개인 membership, 30초 batch, RTDB same-UID signal, 1분 shared aggregate, Worker/D1/W1 queue와 UI/CSS는 비변경.
+- `scripts/verify-117-explore-public-count-cache-separation.mjs` 기존 회귀 검사에 이 3개 경로에 대한 guard 추가.
+- `public/app-version.json` 154→155: 기존 버전별 1회 bounded first-page shared R2 recovery 경로를 이용하여 이전에 오염된 154 캐시를 복구. D1 전체 읽기/전체 데이터 재생성은 추가하지 않음.
+
+**현재 확인**: GitHub source에서 8개 targeted 정적 검토 PASS. 실제 Node verifier / TypeScript / Build / GitHub Release Audit / Firebase PREVIEW 배포 / PC·모바일 교차 계정 실제 검증은 **미실시**. Push 직후 기존 `diagnose-069-live-like.yml` 자동 workflow는 이전 HEAD에서도 동일하게 실패해 왔으며 이번 수정의 빌드 PASS 증거로 쓰지 않음.
+
+**배포 상태**: 앱 PREVIEW Hosting은 여전히 154. 이번 155는 **GitHub source only, 미배포**. PREVIEW Worker 기존 `33b4de33-73c5-44b2-bf87-e550545fa13a` 유지. TEST / PRODUCTION / Functions / Rules / D1 / 사용자 데이터 비변경.
+
+**다음 게이트**: 고정 commit 대상으로 기존 117 + 154 + like/Music Note regression, TypeScript/Build, independent audit를 먼저 실행. 그 후 Firebase PREVIEW Hosting app155만 배포하고 exact build 확인. 서로 다른 계정·브라우저/PC·모바일에서 1곡 좋아요→server shared aggregate→해제 반복, 추천/최신/인기/프로필 숫자 확인. **타계정 active idle에 자동 즉시 전달은 현재 event push가 없으므로 보장하지 않음**; entry/focus/interaction에서 bounded shared revision revalidation. 이 요건을 즉시 delivery로 해석해야 하면 10만 명 규모 fanout 비용/운영 결정을 먼저 별도 보고해야 함. TEST/PRODUCTION 승격 금지.
+
+
 ## 0EV. PREVIEW 좋아요 타계정 동기화 — stale 069 queue 정리 + Worker 복구 완료 (2026-09-24 KST)
 
 **사용자 실사용 증상**

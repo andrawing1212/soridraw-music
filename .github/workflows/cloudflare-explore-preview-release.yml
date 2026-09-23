@@ -235,7 +235,7 @@ jobs:
           # A temporary PREVIEW-only cron wakes the existing scheduled handler,
           # then the original (empty) cron configuration is restored. No user
           # record, schema, TEST or PRODUCTION environment is modified here.
-          if grep -Fq 'repair_shared_like_snapshot_156=true' .deploy/preview-worker-release.trigger; then
+          if grep -Fq 'repair_shared_like_snapshot_156=true' "$GITHUB_WORKSPACE/.deploy/preview-worker-release.trigger"; then
             test "$(cat "$RUNNER_TEMP/preview-crons-before.json")" = '[]'
             marker_key="soridraw-profile-media/internal/explore/repair-v156/verified-first-page.json"
             marker_file="$RUNNER_TEMP/like156-repair-marker.json"

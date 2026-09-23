@@ -1,7 +1,7 @@
-requested_at=2026-09-24T00:00:00+09:00
-requested_by=app152_gemini_prompt_compaction_audit_retry
+requested_at=2026-09-24T00:04:00+09:00
+requested_by=app152_gemini_prompt_compaction_exact_main_measurement
 target=preview
-purpose=verify_compact_v1_system_instruction_after_verifier_syntax_fix
+purpose=verify_largest_main_v1_system_instruction_compaction
+expected_system_instruction_source_chars_min=20000
 expected_system_instruction_source_chars_max=36000
-preserve_story_hook_section_density_language_vocal_contracts=true
 no_deploy=true

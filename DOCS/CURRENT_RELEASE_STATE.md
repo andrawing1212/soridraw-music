@@ -1,5 +1,43 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0ET. app153 최초 생성 fallback 시간 복구 + PREVIEW Function 배포 완료 (2026-09-24 KST)
+
+**사용자 실사용 실패 근거**
+- app153 첫 생성 실패 세션에서 3.8/3.7은 daily quota cooldown skip.
+- 3.6은 약 1분 6초 뒤 provider unavailable로 실패했으며 90~120s local timeout 경계가 아니었음.
+- 뒤 3.5 / 3.5-lite가 각각 정확히 20.0s에서 `GEMINI_ATTEMPT_TIMEOUT`으로 종료.
+- 다음 세션에서는 이 timeout들이 `model_response_timeout` cooldown으로 남아 fallback 실효성이 사라짐.
+- 따라서 app153 hard-ban 복구와 별개로, 최초 곡 생성 fallback 3.5/3.5-lite의 20s bounded timeout이 정상 대형 곡 생성의 백업 역할을 막는 별도 문제로 확정.
+
+**최소 수정**
+- source commit `07a2832b351949489fa701369ff89d765ce02988`.
+- initial song bounded timeouts:
+  - 3.6: 120s → 90s
+  - 3.5: 20s → 60s
+  - 3.5-lite: 20s → 60s
+- Gemini Function request timeout: 180s → 330s.
+- 모델 순서 / 5 physical attempts / low-thinking / daily quota skip / prompt / lyric / 5단 / hard-ban / language mix 규칙 변경 없음.
+- 목적은 실제 성공이 40.2s였던 대형 곡 요청에서 20s fallback 자가중단을 제거하면서 전체 체인이 Function 상한 안에서 완료될 시간을 확보하는 것.
+
+**검증 / 배포**
+- Source Audit Run `35888411533` SUCCESS.
+- 최초 deploy Run `35888411519`은 제품 코드가 아니라 배포 workflow에 남은 구형 `3.5=20s` assertion 때문에 배포 전 자동 중단. PREVIEW runtime 비변경.
+- verifier 갱신 후 PREVIEW Gemini Function Tune Run `35888544983` / job `107274857366` SUCCESS.
+- `PREVIEW_GEMINI_FALLBACK_TIMEOUTS=PASS`.
+- `PREVIEW_GEMINI_CHAIN_ORDER_UNCHANGED=PASS`.
+- `PREVIEW_GEMINI_DAILY_QUOTA_SKIP=PASS`.
+- `PREVIEW_GEMINI_FUNCTION_UPDATED=PASS`.
+- `SHARED_GEMINI_FUNCTION_UNCHANGED=PASS`.
+- `PREVIEW_GEMINI_CORS=PASS`.
+- Hosting app은 app153 유지. Worker / D1 / Firestore / Rules / 사용자 데이터 변경 없음.
+
+**다음**
+- 사용자는 현재 cooldown이 만료된 뒤 PREVIEW V1 곡 1곡만 생성.
+- 완전 성공 판정은 최초 생성 + 후처리 전체 성공일 때만 인정.
+- 3.6 transient unavailable 시 3.5/3.5-lite가 20초에 잘리지 않고 실제 fallback으로 동작하는지 확인.
+- 실패 시 이번 한 세션만 분석하고 추가 구조 변경 금지.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0ES. PREVIEW app153 — 금지어 통합 교정 fallback 퇴행 원복 배포 완료 (2026-09-24 KST)
 
 **문제**

@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app153 + fallback 60s 실사용 완전 성공 1곡 확인
+
+- PREVIEW Gemini Function Tune Run `35888544983` SUCCESS.
+- 3.6=90s / 3.5=60s / 3.5-lite=60s / Function=330s.
+- 모델 순서/5회 상한/low-thinking/daily quota skip/가사·5단·hard-ban 계약 유지.
+- shared TEST/PRODUCTION Gemini Function unchanged PASS.
+- 다음은 cooldown 만료 후 PREVIEW V1 1곡만 생성.
+- 성공 판정은 최초 생성 + 모든 후처리까지 전부 성공일 때만 인정.
+- 실패 시 해당 한 세션만 분석. TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app153 PREVIEW 완전 성공 1곡 검증
 
 - app153 PREVIEW Hosting 배포 완료.

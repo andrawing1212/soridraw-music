@@ -183,6 +183,20 @@ jobs:
           ]) console.log('ACTIVE_MARKER '+marker+'='+(src.includes(marker)?'YES':'NO'));
           NODE
 
+      - name: Inspect public normal Feed source vs shared first-page R2 without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            curl -fsS -D "$RUNNER_TEMP/normal-$sort.head" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40" -o /dev/null
+            curl -fsS -D "$RUNNER_TEMP/r2only-$sort.head" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" -o /dev/null
+            for mode in normal r2only; do
+              echo "SOURCE_HEADERS sort=$sort mode=$mode"
+              grep -iE '^x-soridraw-(d1-read|d1-write|r2-a|r2-b|feed-revision|feed-snapshot|feed-cache|source|cf-worker):' "$RUNNER_TEMP/$mode-$sort.head" | sed 's/\r$//' || true
+            done
+          done
+          echo 'NORMAL_VS_SHARED_SNAPSHOT_HEADERS=PASS'
+
       - name: Compare revision and revision-keyed first-page R2 against direct R2
         shell: bash
         run: |

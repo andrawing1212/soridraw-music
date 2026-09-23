@@ -1,9 +1,8 @@
-requested_at=2026-09-24T04:19:00+09:00
-requested_by=app156_scheduler_guard_verifier_reaudit
+requested_at=2026-09-24T04:38:00+09:00
+requested_by=app181_personal_r2_exact_count_coherence_audit
 target=preview
-purpose=verify_156_one_time_canonical_4track_R2_CAS_repair_and_preserved_worker
+purpose=verify_5_to_10_to_5_personal_R2_exact_metadata_and_existing_like_release
 expected_app_version=155
-required_verifier=scripts/verify-156-shared-like-snapshot-repair.mjs
-cron_repair_wait_bounded_18_minutes=true
+required_verifier=scripts/verify-181-personal-r2-exact-mutation.mjs
 no_user_data_migration=true
 no_deploy=true

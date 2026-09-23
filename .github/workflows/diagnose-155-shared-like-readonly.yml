@@ -169,6 +169,7 @@ jobs:
           const main=modules.find(x=>x?.name===(v?.main_module||modules[0]?.name))||modules[0];
           if(!main?.content_base64) throw new Error('active Worker source unavailable');
           const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+          const allSrc=modules.map(m=>m?.content_base64?Buffer.from(m.content_base64,'base64').toString('utf8'):'').join('\n');
           const sha=crypto.createHash('sha256').update(src).digest('hex');
           const expected=fs.readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
           console.log('ACTIVE_WORKER_VERSION='+String(v?.id||v?.version_id||'unknown'));
@@ -180,7 +181,7 @@ jobs:
             'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916',
             'SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919',
             'SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918',
-          ]) console.log('ACTIVE_MARKER '+marker+'='+(src.includes(marker)?'YES':'NO'));
+          ]) console.log('ACTIVE_MARKER '+marker+'='+(allSrc.includes(marker)?'YES':'NO'));
           NODE
 
       - name: Inspect public normal Feed source vs shared first-page R2 without writes

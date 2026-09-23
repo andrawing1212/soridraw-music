@@ -1789,6 +1789,33 @@ export default function FavoritesPage({
     if (changed) favoritesStore.setFavorites(next);
   };
 
+  // A full R2 catalog can arrive after a local URL edit and replace the row with
+  // an older server summary. Overlay only this device's durable, compatible Suno
+  // draft after each list source update; never fetch per-song details on list entry.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid || isMusicNoteSharedView || !Array.isArray(favorites) || favorites.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      if (favoriteDetailDraftPersistInFlightRef.current) {
+        await favoriteDetailDraftPersistInFlightRef.current;
+      }
+      const drafts = await listMusicNoteDetailDrafts(uid);
+      if (cancelled || drafts.length === 0) return;
+      const byId = new Map(favoritesStore.getFavorites().map((song: any) => [String(song?.id || ''), song]));
+      for (const draft of drafts) {
+        if (cancelled || String(user?.uid || '') !== uid) return;
+        const song = byId.get(draft.sourceId);
+        if (!song || !draft.updates) continue;
+        const sourceVersion = getMusicNoteDetailSourceVersion(song);
+        const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
+        if (!compatible) continue;
+        syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);
+      }
+    })().catch((error) => console.warn('Music Note pending Suno card overlay unavailable.', error));
+    return () => { cancelled = true; };
+  }, [user?.uid, favorites, isMusicNoteSharedView]);
+
   const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;

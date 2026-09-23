@@ -1,5 +1,27 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EM. app149 사용자 실사용 PASS → Gemini 33k/섹션 보완 진단 재개 (2026-09-23 KST)
+
+**사용자 확인**
+- app149 Music Note Suno URL 썸네일: 저장 후 목록 표시 + 앱 재접속 후 유지까지 사용자 실사용 PASS.
+- 따라서 Music Note 썸네일 이슈를 종료하고 보류한 Gemini 생성 비용/지연 작업으로 복귀한다.
+- app149 PREVIEW 배포 Run `35864856848` SUCCESS / exact build 149 PASS / TEST·PRODUCTION 비변경 상태 유지.
+
+**다음 Gemini 작업을 위한 현재 코드 확인**
+- 현재 `src/services/geminiService.ts`의 V1 최초 생성 `systemInstruction` 템플릿 자체가 source 기준 약 **59,945 chars**이며, 여기에 다수의 동적 instruction block이 실제 런타임 문자열로 확장된다.
+- app147 사용자 실사용 최초 성공 입력은 약 32.9k~33.8k tokens. 기존 app147 source initializer audit 15,761 chars만으로는 실제 provider 입력을 설명할 수 없었다.
+- 최초 생성 요청은 `systemInstruction + contents + responseSchema`를 함께 전송하므로, 실제 전송 직전 각 구성요소의 런타임 길이를 계측해야 안전한 축소 판단이 가능하다.
+- 현재 관리자 Gemini 기록은 provider의 prompt/output/thought/total token과 호출 시간/모델은 보이지만, 어떤 instruction block이 입력량을 차지했는지는 기록하지 않는다.
+- `repairV1FinalProductionCues`도 unresolved section 이름은 내부에서 계산하지만, 왜 그 section이 required였는지(`planOwnsAudibleEvent / customOwnsAudibleEvent / explicitlyProductionOnly`)가 관리자 기록에 남지 않아 Folk Rock 1건의 보완 호출 정당성을 화면만으로 판단할 수 없다.
+
+**다음 단계 원칙**
+- 먼저 진단 가능성을 만든다. 품질 규칙 삭제/모델 순서/timeout/5회 상한 변경은 이번 단계 금지.
+- 관리자 전용 로컬 audit에 **길이/구성 통계만** 기록하고 raw prompt/가사/사용자 입력을 저장하지 않는다.
+- 실제 Gemini 호출 추가 없음, Firebase/Firestore/D1/R2 read/write 추가 없음.
+- 이 진단 결과로 가장 큰 중복/과잉 block을 확인한 다음 별도 commit에서 실제 prompt 축소를 한다.
+- 구현은 Codex Medium/High 범위. 배포는 구현·독립 감사 후 별도 판단.
+
+
 ## 0EL. PREVIEW app149 — Music Note 재접속 썸네일 보완 Hosting 배포 완료 (2026-09-23 KST)
 
 **배포**

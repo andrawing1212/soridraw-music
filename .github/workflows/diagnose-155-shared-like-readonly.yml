@@ -152,6 +152,37 @@ jobs:
           fi
           echo 'CUTOVER_GUARDS_READ_ONLY=PASS'
 
+      - name: Read active PREVIEW Worker identity only
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker="soridraw-explore-preview"
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json'             "$base/workers/scripts/$worker/deployments" > "$RUNNER_TEMP/deployments.json"
+          version="$(jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id' "$RUNNER_TEMP/deployments.json")"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json'             "$base/workers/workers/$worker/versions/$version?include=modules" > "$RUNNER_TEMP/version.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/version.json','utf8'));
+          const v=p?.result??p;
+          const modules=Array.isArray(v?.modules)?v.modules:[];
+          const main=modules.find(x=>x?.name===(v?.main_module||modules[0]?.name))||modules[0];
+          if(!main?.content_base64) throw new Error('active Worker source unavailable');
+          const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+          const sha=crypto.createHash('sha256').update(src).digest('hex');
+          const expected=fs.readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
+          console.log('ACTIVE_WORKER_VERSION='+String(v?.id||v?.version_id||'unknown'));
+          console.log('ACTIVE_WORKER_SHA='+sha);
+          console.log('REPO_CANONICAL_SHA='+expected);
+          console.log('ACTIVE_EQUALS_REPO_CANONICAL='+(sha===expected?'YES':'NO'));
+          for(const marker of [
+            'SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922',
+            'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916',
+            'SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919',
+            'SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918',
+          ]) console.log('ACTIVE_MARKER '+marker+'='+(src.includes(marker)?'YES':'NO'));
+          NODE
+
       - name: Read public shared Feed only
         shell: bash
         run: |

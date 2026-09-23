@@ -1,8 +1,10 @@
-requested_at=2026-09-24T01:53:00+09:00
-requested_by=app154_cross_account_like_sync_full_audit
+requested_at=2026-09-24T03:20:00+09:00
+requested_by=app155_public_count_cache_isolation_audit
 target=preview
-purpose=verify_account_switch_revalidates_shared_public_like_counts_without_new_d1_reads
-expected_app_version=154
+purpose=verify_server_only_shared_count_cache_and_account_local_optimistic_count
+expected_app_version=155
+required_verifier=scripts/verify-117-explore-public-count-cache-separation.mjs
+required_verifier_2=scripts/verify-154-cross-account-like-sync.mjs
 gemini_frozen=true
 worker_redeploy=false
 functions_redeploy=false

@@ -1,7 +1,7 @@
-requested_at=2026-09-24T02:29:00+09:00
-requested_by=isolate_like_cutover_marker
+requested_at=2026-09-24T02:34:00+09:00
+requested_by=compare_live_preview_worker_identity
 target=preview
-purpose=read_only_check_174_table_and_162_r2_marker
+purpose=read_only_compare_active_worker_to_repo_canonical
 no_write=true
 no_migration=true
 no_deploy=true

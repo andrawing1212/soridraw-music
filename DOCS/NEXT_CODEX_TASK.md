@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 182 배포 후 — 개인 좋아요 10/5 실제 원본 검증 및 모든 계정 PC·모바일 새 변경 동기화
+
+- PREVIEW app156 (Firebase Run `35913791497`) / Worker182 version `e426448c-ce5a-4a75-a798-97e3f9f52a81` (Run `35913674952`) 배포 완료; Audit `35913406306` PASS.
+- 기존 불완전 개인 R2는 authenticated one-time repair query로 **canonical UID의 공개 liked ID set과 완전히 같을 때만** exact metadata를 수정. 다른 경우는 `canonical-mismatch`이고 자동으로 어느 한쪽을 덮어쓰지 않음. 사용자 모바일 10/PC 5가 실제로 일치했는지 아직 검증하지 않음.
+- 다음 안전 게이트: 기기별 미전송 outbox/accepted pending 보존; 같은 UID의 server canonical 개인 relation, 개인 R2 catalog, 각각 PC/mobile UI 후보 ID를 비교(민감한 UID/곡목록을 public CI에 출력 금지). 차집합의 상태가 확정되기 전 user data 재작성 금지.
+- 미래 신규 좋아요/해제는 queue→settlement→personal R2 exact + RTDB same UID→shared first-page R2 + 공개프로필→각 사용자 revision→실제 PC/mobile UI를 한 곡당 추적. 기존 156 4곡 일회성 R2 repair를 새 변경 해결의 근거로 삼지 말 것.
+- 사용자 명시 합격 기준은 A 본인 PC/mobile 개인 하트·내 좋아요 일치, 모든 다른 계정 PC/mobile 같은 공개 카운트, B도 행동하면 역방향, 좋아요↔해제 반복/동시 변경/장시간 열린 탭/재진입/업데이트 후 일치. 30초 batch, changed-only, W1-W2/unchanged D1 R0 보호.
+- 실사용 교차 계정·기기 검증 전엔 **전체 완료 처리 금지**, TEST/PRODUCTION 금지. 새 글로벌 push를 무단 추가하지 말고 적극적인 실시간 전달 요구와 10만 사용자 비용의 절충은 먼저 보고.
+
+
 ## 현재 진행 — app181 PREVIEW 후보 배포 완료, 전체 PC·모바일 동기화 실사용 FAIL/미검증
 
 - PREVIEW Worker source commit `153aaccdcd758a65db7312ae5e85db60c140f38b`: exact personal shared R2 catalog의 수를 `syncExploreLikeR2AfterBatch074` CAS에서 같이 수정, incomplete/corrupt catalog는 보존. `verify-181-personal-r2-exact-mutation.mjs` 5→10→5, partial guard, stale ACK PASS.

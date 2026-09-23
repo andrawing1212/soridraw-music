@@ -1,6 +1,6 @@
-requested_at=2026-09-24T03:35:00+09:00
-requested_by=app155_normal_feed_vs_r2_head_probe
+requested_at=2026-09-24T03:40:00+09:00
+requested_by=app155_active_worker_all_modules_marker_check
 target=preview
-purpose=read_only_normal_feed_source_headers_vs_shared_r2_snapshot
+purpose=verify_active_shared_feed_like_publication_patch_and_stale_r2
 read_only=true
 no_mutation=true

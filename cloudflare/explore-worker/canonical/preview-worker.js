@@ -23975,7 +23975,7 @@ async function handleMySocialSnapshot042(request, env, cors) {
   // Only a deliberate account-scoped recovery attempt may consult canonical
   // D1. Normal social snapshot, healthy cache, and revision HEAD remain R0.
   let likesRepairStatus182 = 'not-requested';
-  if (request.headers.get('X-Soridraw-Repair-Partial-Likes') === '182' && !likeState.exact) {
+  if (new URL(request.url).searchParams.get('__soridraw_personal_repair') === '182' && !likeState.exact) {
     likesRepairStatus182 = await repairPartialPersonalLikeMetadata182(env, authContext.uid);
     if (likesRepairStatus182 === 'metadata-repaired') {
       likeState = await readSharedLikesState161(env, authContext.uid);

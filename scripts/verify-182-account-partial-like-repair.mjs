@@ -12,14 +12,14 @@ const helper = worker.slice(helperStart, helperEnd + 2);
 const endpointStart = worker.indexOf('async function handleMySocialSnapshot042(');
 const endpointEnd = worker.indexOf('\n}\n', endpointStart);
 const endpoint = worker.slice(endpointStart, endpointEnd);
-assert.match(endpoint, /request\.headers\.get\('X-Soridraw-Repair-Partial-Likes'\) === '182'/);
+assert.match(endpoint, /searchParams\.get\('__soridraw_personal_repair'\) === '182'/);
 assert.match(endpoint, /!likeState\.exact/);
 assert.match(endpoint, /likesRepairStatus182 = await repairPartialPersonalLikeMetadata182/);
 assert.match(endpoint, /likeState = await readSharedLikesState161/);
 assert.match(client, /const EXPLORE_LIKE_REPAIR_ATTEMPTED_182/);
 assert.match(client, /partial182 && attempted182/);
 assert.match(client, /requestPersonalLikeBaseline127\(user, repairPartial182\)/);
-assert.match(client, /'X-Soridraw-Repair-Partial-Likes': '182'/);
+assert.match(client, /recoveryQuery182 = repairPartial182 \? '\?__soridraw_personal_repair=182' : ''/);
 assert.doesNotMatch(helper, /DELETE FROM|UPDATE likes|INSERT INTO likes|UPDATE track_stats/i);
 
 const context = {

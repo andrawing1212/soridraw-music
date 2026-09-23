@@ -605,11 +605,10 @@ onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
 
 const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = false): Promise<ExploreLikeBaselineSnapshot161> => {
   const headers = await buildAuthHeaders(user);
-  const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot', {
+  const recoveryQuery182 = repairPartial182 ? '?__soridraw_personal_repair=182' : '';
+  const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot' + recoveryQuery182, {
     method: 'GET',
-    headers: repairPartial182
-      ? { ...headers, 'X-Soridraw-Repair-Partial-Likes': '182' }
-      : headers,
+    headers,
   });
   recordCloudflareResponse(response, '/v1/me/social-snapshot');
   if (!response.ok) throw new Error('Personal like snapshot unavailable: HTTP ' + response.status);

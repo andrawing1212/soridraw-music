@@ -19,7 +19,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -247,8 +247,13 @@ jobs:
               | jq -e '.success == true' >/dev/null
             echo '156_PREVIEW_TEMP_CRON=ENABLED'
             repaired=0
-            for attempt in 1 2 3; do
-              sleep 75
+            # Cloudflare documents that cron configuration changes can take up to
+            # 15 minutes to propagate. The previous 3x75s window rolled the Worker
+            # back before the temporary cron could run, leaving shared R2 at zero.
+            # Bound waiting to 18 minutes, verify marker and the actual shared R2
+            # before clearing the cron, then fail closed if it did not converge.
+            for attempt in $(seq 1 24); do
+              sleep 45
               if node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote >/dev/null 2>&1; then
                 if node - "$marker_file" <<'NODE'
           const fs=require('fs');

@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 진행 — app181 PREVIEW 후보 배포 완료, 전체 PC·모바일 동기화 실사용 FAIL/미검증
+
+- PREVIEW Worker source commit `153aaccdcd758a65db7312ae5e85db60c140f38b`: exact personal shared R2 catalog의 수를 `syncExploreLikeR2AfterBatch074` CAS에서 같이 수정, incomplete/corrupt catalog는 보존. `verify-181-personal-r2-exact-mutation.mjs` 5→10→5, partial guard, stale ACK PASS.
+- Audit `35911382038` SUCCESS; Worker Release `35911669741` SUCCESS, active `5008c2a4-17fa-4f3d-a745-04897ee79ba3`, Hosting app155 유지. TEST/PRODUCTION 그대로.
+- 추가 release guard `75965bb7993ba2b3d9d2fa9c3eab2ae59710017e`: 156 일회성 repair flag는 triggering commit에서만 읽음. 이번 릴리스에서는 구버전 flag 때문에 임시 cron 켜졌다가 정상 원복됨.
+- **남은 핵심**: 동일 사용자 모바일 10 vs PC 5는 canonical 개인 likes 관계/개인 R2/exactCount 및 두 기기의 local outbox/pending 차이가 확인되지 않아 해결이라고 판정할 수 없음. 사용자 데이터 임의 삭제·덮어쓰기·전역 백필 금지. 두 기기의 실제 미전송 변경 보호.
+- 다른 계정의 새 좋아요/해제 후 shared R2 snapshot latest/popular/profile이 실제로 갱신되는지, 실패가 조용히 무시된 채 stale R2로 남는 경로가 있는지 수정·재현 검증. 4곡 일회성 보정 반복 금지. 100k 사용자 무변경 D1 R0, 행동 W1~W2 유지.
+- **최종 통과**: A PC+모바일 → A 두 기기의 개인 하트/내 좋아요가 일치하고 B/C의 PC+모바일 같은 곡 공용 likeCount 일치. B/C 각자도 좋아요/해제 후 대칭 결과. 장시간 열린 화면, 재접속, 앱 업데이트와 네트워크 실패를 포함하여 실사용 반복 검증. 이 게이트 PASS 이전 TEST/PRODUCTION 금지, PREVIEW 후보 배포를 전체 해결 완료라 보고 금지.
+
+
 ## 최우선 / 사용자 승인 합격선 — 모든 계정 × PC·모바일 좋아요 완전 일치 (2026-09-24 KST)
 
 사용자 최신 실사용: **동일 계정 모바일 내 좋아요 10곡, PC 5곡**. 기존 app155/Worker156에서 확인된 4곡 공개 카운트 1 복구는 이 문제의 해결이 아님. 임의 숫자/개인 카탈로그를 서버에 덮어쓰거나 강제 초기화하지 말 것.

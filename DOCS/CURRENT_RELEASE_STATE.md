@@ -13,9 +13,9 @@
 - `scripts/verify-117-explore-public-count-cache-separation.mjs` 기존 회귀 검사에 이 3개 경로에 대한 guard 추가.
 - `public/app-version.json` 154→155: 기존 버전별 1회 bounded first-page shared R2 recovery 경로를 이용하여 이전에 오염된 154 캐시를 복구. D1 전체 읽기/전체 데이터 재생성은 추가하지 않음.
 
-**현재 확인**: GitHub source에서 8개 targeted 정적 검토 PASS. 기존 117 verifier의 App155 분리 검사 및 현재 atomic card assertion을 최신 GitHub source로 실행한 결과 PASS(동등 JS 실행 환경). GitHub Actions/Node CI 정식 실행, TypeScript, Build, Release Audit, Firebase PREVIEW 배포, PC·모바일 교차 계정 실제 검증은 **미실시**. 테스트 정리 commit `a66e812bd161b84442ce288392b4b78b183a5681`. Push 직후 기존 `diagnose-069-live-like.yml` 자동 workflow는 이전 HEAD에서도 동일하게 실패해 왔으며 이번 수정의 빌드 PASS 증거로 쓰지 않음.
+**검증**: 기존 117 verifier의 App155 공용/개인 캐시 분리 검사 및 현재 atomic card assertion PASS. Release System Audit Run `35901617762` SUCCESS: TypeScript / Build / Static release verification(117 + 154 포함) / Like candidate regression / Music Note / read-only shared D1 preflight PASS. 격리 synthetic 원격 D1 과금 측정은 해당 audit에서 SKIPPED. PC·모바일 서로 다른 계정의 좋아요/해제 반복 실사용 검증은 **미실시**. 테스트 정리 commit `a66e812bd161b84442ce288392b4b78b183a5681`. Push 직후 기존 `diagnose-069-live-like.yml` 자동 workflow는 이전 HEAD에서도 동일하게 실패해 왔으며 이번 수정의 빌드 PASS 증거로 쓰지 않음.
 
-**배포 상태**: 앱 PREVIEW Hosting은 여전히 154. 이번 155는 **GitHub source only, 미배포**. PREVIEW Worker 기존 `33b4de33-73c5-44b2-bf87-e550545fa13a` 유지. TEST / PRODUCTION / Functions / Rules / D1 / 사용자 데이터 비변경.
+**배포 상태**: Firebase PREVIEW app155 Hosting-only release Run `35901871632` / job `107319825956` SUCCESS. locked source `f400203bf8205adc7f2a3d53c7d632537e9acd4e`; `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=155`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. `https://preview.soridraw.com/` 실배포 155. PREVIEW Worker 기존 `33b4de33-73c5-44b2-bf87-e550545fa13a` 유지. TEST / PRODUCTION / Functions / Rules / D1 / 사용자 데이터 비변경.
 
 **다음 게이트**: 고정 commit 대상으로 기존 117 + 154 + like/Music Note regression, TypeScript/Build, independent audit를 먼저 실행. 그 후 Firebase PREVIEW Hosting app155만 배포하고 exact build 확인. 서로 다른 계정·브라우저/PC·모바일에서 1곡 좋아요→server shared aggregate→해제 반복, 추천/최신/인기/프로필 숫자 확인. **타계정 active idle에 자동 즉시 전달은 현재 event push가 없으므로 보장하지 않음**; entry/focus/interaction에서 bounded shared revision revalidation. 이 요건을 즉시 delivery로 해석해야 하면 10만 명 규모 fanout 비용/운영 결정을 먼저 별도 보고해야 함. TEST/PRODUCTION 승격 금지.
 

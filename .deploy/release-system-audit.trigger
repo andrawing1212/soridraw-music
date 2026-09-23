@@ -1,9 +1,8 @@
-requested_at=2026-09-24T03:53:00+09:00
-requested_by=app156_worker_release_preflight_regression_fix_audit
+requested_at=2026-09-24T04:00:00+09:00
+requested_by=app156_worker_repair_release_absolute_trigger_audit
 target=preview
-purpose=verify_110_117_156_public_count_contract_before_worker_release
+purpose=verify_fixed_release_trigger_path_before_one_time_cron_and_CAS
 expected_app_version=155
-required_verifier=scripts/verify-110-explore-liked-public-count.mjs
-required_verifier2=scripts/verify-156-shared-like-snapshot-repair.mjs
+required_verifier=scripts/verify-156-shared-like-snapshot-repair.mjs
 no_user_data_migration=true
 no_deploy=true

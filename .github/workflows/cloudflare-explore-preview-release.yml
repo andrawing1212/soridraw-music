@@ -19,7 +19,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -87,6 +87,7 @@ jobs:
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-105-explore-like-1min.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
             node scripts/verify-103-explore-like-event-batch.mjs
+            node scripts/verify-156-shared-like-snapshot-repair.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 

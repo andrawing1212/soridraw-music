@@ -61,7 +61,13 @@ function collectInitializerSizes(sourceText: string) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const name = node.name.text;
       const text = node.initializer.getText(source);
-      if (wanted.has(name) && sizes[name] === undefined) sizes[name] = text.length;
+      if (wanted.has(name)) {
+        if (name === 'systemInstruction') {
+          sizes[name] = Math.max(Number(sizes[name] || 0), text.length);
+        } else if (sizes[name] === undefined) {
+          sizes[name] = text.length;
+        }
+      }
       if (wanted.has(name) && text.length >= 160) {
         const normalized = text.replace(/\s+/g, ' ').trim();
         exactInitializers.set(normalized, [...(exactInitializers.get(normalized) || []), name]);
@@ -88,7 +94,7 @@ const baselineSource = execFileSync('git', ['show', `${BASELINE_SHA}:${SOURCE_PA
 const before = collectInitializerSizes(baselineSource);
 const after = collectInitializerSizes(currentSource);
 const compactSystemChars = Number(after.sizes.systemInstruction || 0);
-assert(compactSystemChars > 0 && compactSystemChars <= 36_000, `main V1 systemInstruction source must stay compact (<=36000 chars), got ${compactSystemChars}`);
+assert(compactSystemChars >= 20_000 && compactSystemChars <= 36_000, `main V1 systemInstruction source must stay within the compact contract (20000..36000 chars), got ${compactSystemChars}`);
 [
   'sectionPerformancePlanOutputInstruction',
   'v1SectionSlotContractInstruction',

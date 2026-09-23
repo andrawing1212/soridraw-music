@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EX. PREVIEW 공유 좋아요 0 표시 실제 원인 규명 및 app156 R2 복구 배포 (2026-09-24 KST)
+
+**원인 확정**: 앱 155의 두 브라우저 숫자 0 증상은 개인 하트 문제와 달리, PREVIEW canonical D1 + 일반 `/v1/feed`는 확인 4곡 모두 likeCount=1인데 **실제 클라이언트가 읽는 first-page shared R2 snapshot (direct / revision-keyed latest, popular)에는 모두 0이 남아 있었기 때문**. 기존 069 queue=0이고 canonical relation=1, derived=1. 읽기전용 Diagnose Run `35905492085`에서 source discrepancy 재현. 클라이언트 캐시만 반복 초기화해도 고칠 수 없는 서버 파생 스냅샷 문제.
+
+**복구 구현**: canonical Worker entry의 `repairVerifiedSharedLikeSnapshots156`: 이미 확인된 4개 제목을 shared latest R2에서 정확히 각 1곡으로 식별 → 공유 D1의 실제 `track_stats.like_count`를 ID 4개만 단일 SELECT → shared latest/popular에 해당 곡의 likeCount / stats.likeCount만 conditional ETag(CAS)로 갱신 → 양쪽 성공 시 1회 marker. 다른 트랙/프로필/개인 카탈로그/원본 사용자 데이터 변경 없음. marker 완료 후 재실행은 1회 R2 HEAD로 빠르게 종료. 일반 좋아요 aggregate DO alarm은 cron과 구별하여 기존 예약 기능 보존.
+
+**첫 배포 실패와 원인**: Run `35904914811`은 임시 cron 3×75초 대기 내 marker가 나오지 않아 기존 Worker `e35bcc57-e29a-4575-99cc-ee64b83cb46d`로 자동 롤백함. Cloudflare cron 설정 전파까지 최대 약 15분을 고려해 PREVIEW 전용 기존 Worker Release의 최대 대기만 24×45초(18분), timeout 25분으로 수정; 정적 검사 `verify-156-shared-like-snapshot-repair.mjs`를 실제 scheduled return 형태에 맞춰 재검증.
+
+**최종 감사**: `preview` source `de15974b127f31dd5d277f05a205ca9eeca86504`, Release System Audit Run `35908413058` SUCCESS. TypeScript/Build/Like+Music Note/156 bounded CAS regression/read-only D1 preflight PASS. 원격 synthetic 비용 측정 SKIPPED.
+
+**PREVIEW Worker 배포**: Run `35908607512` / job `107342469022` SUCCESS. pinned Worker source `de15974b127f31dd5d277f05a205ca9eeca86504`, active Worker version `e4c8d394-a5c5-43b9-bf52-fc9513184089`; old `e35bcc57-e29a-4575-99cc-ee64b83cb46d`. `156_R2_REPAIR_MARKER=PASS`, `156_PREVIEW_CRON_RESTORED=PASS`, `156_PUBLIC_SHARED_R2_LATEST=PASS`, `156_PUBLIC_SHARED_R2_POPULAR=PASS`, `WARM_REVISION_R0_W0=PASS`, `TEST_PRODUCTION_WORKERS_UNCHANGED=PASS`. Fixed cron is again disabled; existing DO event scheduler remains active. Hosting app155 unchanged; Firebase/Functions/Rules/TEST/PRODUCTION/canonical user data unchanged.
+
+**배포 후 독립 읽기전용 실측**: Run `35909223575` SUCCESS: 4곡 D1 canonical/relation/derived 모두 1, 069 queue=0, standard latest/popular Feed 모두 1, **client direct shared R2 latest/popular 및 revision-keyed shared R2 latest/popular 모두 1 (match=true)**. 기존 에지/기기에서 오래된 데이터를 보유했다면 변경된 R2 ETag에 대한 정상 client revision 확인 후 수렴 예정.
+
+**남은 검증/제약**: PREVIEW PC Chrome/Edge와 모바일의 각 계정으로 신규 좋아요→30초 batch→1분 aggregate→공용 R2 숫자→해제 역방향 반복의 실사용 테스트는 미실시. 한 번의 4곡 복구와 백엔드 읽기전용 parity를 **미래 모든 좋아요 실시간 보장**으로 확대 주장 금지. 타계정 오래 열린 비활성 탭에 새 실시간 push는 없음(현재 focus/visibility/interaction 제한된 revision 재확인). 추후 불일치 시 069 queue/ D1 canonical/ R2 direct + keyed 4단계의 동일 곡 비교 후 변경 항목만 수정. TEST/PRODUCTION 승격 금지.
+
+
 ## 0EW. PREVIEW app155 source — 개인 좋아요 숫자의 공용 캐시 오염 경로 차단 (2026-09-24 KST)
 
 **실사용 증상**: 같은 공개곡의 public likeCount가 PC Edge / 모바일 다른 계정 / PC Chrome에서 각각 달라 보임. 기존 069 queue는 앞선 작업에서 drain되어 shared latest/popular 확인 4곡은 1로 복구된 상태이나, 장래 좋아요/해제 후 다시 불일치할 위험은 별도로 존재.

@@ -1,6 +1,6 @@
-requested_at=2026-09-24T03:28:00+09:00
-requested_by=app155_two_browser_all_zero_live_mismatch
+requested_at=2026-09-24T03:30:00+09:00
+requested_by=app155_public_feed_zero_snapshot_revision_probe
 target=preview
-purpose=read_only_compare_D1_canonical_069_queue_shared_latest_popular_worker_identity
+purpose=compare_canonical_shared_direct_r2_vs_revision_keyed_r2_latest_popular
 read_only=true
 no_mutation=true

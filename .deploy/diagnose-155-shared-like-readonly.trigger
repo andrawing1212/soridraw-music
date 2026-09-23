@@ -1,6 +1,6 @@
-requested_at=2026-09-24T03:32:00+09:00
-requested_by=app155_public_snapshot_strict_4_track_probe
+requested_at=2026-09-24T03:35:00+09:00
+requested_by=app155_normal_feed_vs_r2_head_probe
 target=preview
-purpose=compare_direct_r2_and_revision_keyed_4_known_titles_counts_strict
+purpose=read_only_normal_feed_source_headers_vs_shared_r2_snapshot
 read_only=true
 no_mutation=true

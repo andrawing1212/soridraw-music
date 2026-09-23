@@ -109,6 +109,49 @@ jobs:
           console.log('D1_READ_ONLY=PASS');
           NODE
 
+      - name: Read cutover guards only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT id,phase,updated_at FROM explore_like_cutover_control_174 WHERE id=1;
+          " --json > "$RUNNER_TEMP/cutover174.json"
+
+          set +e
+          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/like-cutover-v162/active.json" --remote --file "$RUNNER_TEMP/cutover162.json" >/tmp/r2-get.out 2>/tmp/r2-get.err
+          code=$?
+          set -e
+          echo "CUTOVER162_R2_GET_CODE=$code"
+          if [ "$code" = 0 ] && [ -s "$RUNNER_TEMP/cutover162.json" ]; then
+            node <<'NODE'
+          const fs=require('fs');
+          const v=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cutover162.json','utf8'));
+          console.log('CUTOVER162 schemaVersion='+Number(v.schemaVersion||0)
+            +' relationMode='+String(v.relationMode||'')
+            +' legacyRelationWritersFrozen='+Boolean(v.legacyRelationWritersFrozen)
+            +' legacyCountWritersFrozen='+Boolean(v.legacyCountWritersFrozen)
+            +' allEnvironmentReadersReady='+Boolean(v.allEnvironmentReadersReady)
+            +' allEnvironmentWritersReady='+Boolean(v.allEnvironmentWritersReady)
+            +' ownerProtocol='+String(v.ownerProtocol||''));
+          const q=v?.preCutoverProof172?.legacyQueueRows||v?.preCutoverProof164?.legacyQueueRows||{};
+          console.log('CUTOVER162_PROOF_QUEUES q035='+String(q['035']??'na')+' q066='+String(q['066']??'na')+' q069='+String(q['069']??'na')+' q075='+String(q['075']??'na'));
+          NODE
+          else
+            echo "CUTOVER162 unavailable"
+            cat /tmp/r2-get.err || true
+          fi
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cutover174.json','utf8')).flatMap(x=>x.results||[]);
+          const x=r[0]||{};
+          console.log('CUTOVER174 phase='+String(x.phase||'missing')+' updated_at='+String(x.updated_at||0));
+          console.log('CUTOVER_GUARDS_READ_ONLY=PASS');
+          NODE
+
       - name: Read public shared Feed only
         shell: bash
         run: |

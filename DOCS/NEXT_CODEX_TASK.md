@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app149 Suno 썸네일 모바일/PC 재접속 실사용 검증
+
+- PREVIEW Hosting `35864856848` SUCCESS, exact build 149 PASS, locked `337c2b0e6e9ca72d518607310ee90e75dc3dc225`, TEST/PRODUCTION unchanged.
+- 사용자 기존 URL 곡 선택 → 필요 시 Suno URL 재저장 → 목록 커버 → PWA/브라우저 종료 후 재접속 → 목록 커버 지속 확인.
+- URL 두 개의 1순위 전환/삭제 및 PC/모바일 확인.
+- app148에서 이미 서버에 URL은 저장됐지만 R2 catalog가 누락한 기존 곡은 app149에서 한 번 재저장해 정합화될 가능성이 있으며, 사용자가 실제 확인하기 전 PASS로 간주하지 않는다.
+- 오류 재현 시 뮤직노트 원본 1곡과 해당 곡 R2 Catalog summary의 media/revision만 비교하고 전체 재생성/백필/대량 데이터 읽기 금지.
+- 문제가 해결될 때까지 Gemini 최적화 작업 보류, 명시적인 PRODUCTION 배포 승인 없음.
+
+
 ## 최우선 — app149 Music Note Suno 썸네일 재접속 확인
 
 - 사용자 app148 실사용 FAIL: 상세 커버는 정상, 저장 직후 목록 커버 일시 표시, 앱 재접속 후 목록 음표 복귀.

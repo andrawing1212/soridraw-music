@@ -48,6 +48,16 @@ const queue = block('  const queueFavoriteDetailPatch = (songId: string', '\n\n 
 assert(queue.includes('writeMusicNoteDetailDraft(user.uid'), 'pending changes are not persisted to IndexedDB');
 assert(queue.includes('Object.keys(updates).length === 0'), 'net-zero edits do not collapse to zero writes');
 assert(!queue.includes('patchMusicNoteDetailCache({'), 'pre-flush detail cache is mutated asynchronously');
+assert(queue.includes('syncFavoriteSunoCardMedia(safeSongId, patch);'), 'Suno URL draft does not update its Music Note list cover');
+assert(queue.includes('syncFavoriteSunoCardMedia(safeSongId, baselineEntry.data)'), 'reverting Suno URL does not restore list cover');
+
+const cardSync = block('  const syncFavoriteSunoCardMedia = (songId: string', '\n\n  const queueFavoriteDetailPatch');
+assert(cardSync.includes("'sunoLinks'") && cardSync.includes("'sunoCoverUrl'") && cardSync.includes("'mainSunoIndex'"), 'Suno list preview must preserve both URLs and chosen cover');
+assert(cardSync.includes('favoritesStore.setFavorites(next);'), 'Suno list preview does not notify the existing local-first store');
+assert(!cardSync.includes('updateFavorite(') && !cardSync.includes('getDoc('), 'Suno list preview must not add Firestore reads/writes');
+
+const detailOpen = block('  const openFavoriteDetail = async', '\n\n  const executeFavoriteMenuAction');
+assert(detailOpen.includes('syncFavoriteSunoCardMedia(sourceId, nextSong);'), 'a hydrated existing Suno cover is not reused for its list row');
 
 const flush = block('  const flushFavoriteDetailPendingPatch = async', '\n\n  const scheduleFavoriteDetailFlush');
 assert(flush.includes('await updateFavorite(pending.songId, pending.updates);'), 'single batched Firestore flush missing');

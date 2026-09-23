@@ -1,3 +1,8 @@
-requested_at=2026-09-22T09:13:00Z
-purpose=apply_only_already_accepted_069_intents_then_rebuild_only_affected_exact_personal_catalogs
+requested_at=2026-09-24T02:39:00+09:00
+requested_by=restore_preview_like_worker_after_cross_account_sync_failure
+target=preview
+purpose=settle_bounded_stale_069_like_queue_before_verified_worker_restore
+expected_pending_max=20
+expected_mutations_max=100
 preview_only=true
+test_production_unchanged_required=true

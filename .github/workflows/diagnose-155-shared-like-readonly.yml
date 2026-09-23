@@ -204,8 +204,8 @@ jobs:
           const revision=JSON.parse(fs.readFileSync(path+'revision-'+sort+'.json'))?.data?.revision||'';
           const selected=rows=>Object.fromEntries((rows||[]).filter(x=>/Leaving One Step Open|Left Unsaid|Through the Night|Just Stay Here Awhile/.test(String(x.title||''))).map(x=>[x.title,Number(x.likeCount??x.stats?.likeCount??0)]));
           const d=selected(direct?.data?.items),k=selected(keyed?.data?.items);
-          console.log('PUBLIC_SNAPSHOT_'+sort.toUpperCase()+' revisionPresent='+Boolean(revision)+' direct='+JSON.stringify(d)+' keyed='+JSON.stringify(k)+' match='+JSON.stringify(d)===JSON.stringify(k));
-          if(direct?.ok!==true||keyed?.ok!==true||JSON.stringify(d)!==JSON.stringify(k)) throw Error('R2 first-page direct vs revision-keyed mismatch');
+          console.log('PUBLIC_SNAPSHOT_'+sort.toUpperCase()+' revisionPresent='+Boolean(revision)+' direct='+JSON.stringify(d)+' keyed='+JSON.stringify(k)+' match='+(JSON.stringify(d)===JSON.stringify(k)));
+          if(direct?.ok!==true||keyed?.ok!==true||Object.keys(d).length!==4||Object.keys(k).length!==4||JSON.stringify(d)!==JSON.stringify(k)) throw Error('R2 first-page direct vs revision-keyed count mismatch');
           NODE
           done
           echo 'REVISION_KEYED_SHARED_R2_PARITY=PASS'

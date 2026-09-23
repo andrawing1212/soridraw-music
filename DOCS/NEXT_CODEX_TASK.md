@@ -1,5 +1,20 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app150 PREVIEW 실사용 측정
+
+- app150 PREVIEW Hosting 배포 완료.
+- Hosting Run `35873749101` SUCCESS / locked source `001861da3c1d1bd919ae15018ef431c574b84998`.
+- remote `app-version.json=150`, exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 이번 단계에서는 코드 추가 수정 금지. 먼저 일반 V1 곡 1~3개를 실제 생성해 관리자 Gemini 기록을 수집한다.
+- 확인할 값:
+  1. 최초 성공 호출의 요청크기 breakdown: contents / systemInstruction / responseSchema / 기타설정 / fallback / total chars.
+  2. provider promptTokens / 처리시간 / 모델.
+  3. `repairV1FinalProductionCues` 발생 여부.
+  4. 발생 시 sectionName + ownership reason(canonical-plan / custom-production / production-only).
+- 측정 전 prompt/schema 축소, 모델 순서/timeout 변경, fallback 제거, 가사/언어혼합/5단 프롬프트/section performance cue 변경 금지.
+- 사용자 실사용 결과를 받은 뒤 Codex High로 실제 최적화 범위를 확정한다.
+- TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app150 Gemini 요청크기/섹션 보완 실사용 진단
 
 - app149 Music Note Suno 썸네일 재접속 문제: 사용자 실사용 PASS.

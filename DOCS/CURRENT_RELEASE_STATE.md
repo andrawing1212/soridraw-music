@@ -1,5 +1,29 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EN. PREVIEW app150 — Gemini 요청크기/섹션 보완 진단 Hosting 배포 완료 (2026-09-23 KST)
+
+**배포**
+- 사용자 작업 이어가기 지시에 따라 app150 PREVIEW Hosting 배포 진행.
+- Firebase PREVIEW App Release Run `35873749101` / job `107224216398` **SUCCESS**.
+- locked source commit `001861da3c1d1bd919ae15018ef431c574b84998`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=150`, `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`. main / production 및 TEST / PRODUCTION Hosting 비변경.
+- 배포 전 Release System Audit Run `35871794547` SUCCESS: TypeScript / Build / Gemini 진단 verifier / Music Note / like regression PASS.
+- Firebase Functions / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+
+**이번 app150의 성격**
+- 일반 사용자 생성 규칙, 5단 프롬프트, 모델 fallback 순서, 가사 품질, 언어혼합, 섹션 태그 판정 자체는 변경하지 않음.
+- 관리자 로컬 Gemini 기록에 실제 전송 직전 요청크기 breakdown(contents / systemInstruction / responseSchema / 기타 config / fallback / total chars)만 추가.
+- production cue 보완이 발생할 때 sectionName과 required ownership reason(canonical-plan / custom-production / production-only)만 추가 기록.
+- raw prompt / 가사 / 사용자 입력은 저장하지 않음. 서버 read/write 추가 없음.
+
+**다음 실사용 측정**
+1. PREVIEW에서 일반 V1 곡 1~3개 생성.
+2. 관리자 Gemini 기록의 최초 호출 `요청크기` 항목에서 가장 큰 구성요소 확인.
+3. `섹션 지시문 보완` 호출이 생기면 같은 기록의 section / ownership reason 확인.
+4. 실제 측정값을 확보한 뒤에만 33k 입력 축소 또는 production-cue 조건 수정. 정상 품질 규칙 추측 삭제 금지.
+5. TEST / PRODUCTION 승격 금지. 현재 단계는 PREVIEW 실사용 진단.
+
 ## 0EM. app149 사용자 실사용 PASS + app150 Gemini 진단 후보 완료 (2026-09-23 KST)
 
 **app149 실사용**

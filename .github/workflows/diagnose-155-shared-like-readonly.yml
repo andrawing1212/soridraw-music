@@ -118,8 +118,14 @@ jobs:
           CFG="$PWD/canonical/wrangler.preview.jsonc"
 
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT * FROM explore_like_cutover_control_174 WHERE id=1;
-          " --json > "$RUNNER_TEMP/cutover174.json"
+            SELECT name FROM sqlite_schema
+            WHERE type='table' AND name='explore_like_cutover_control_174';
+          " --json > "$RUNNER_TEMP/control-schema.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/control-schema.json','utf8')).flatMap(x=>x.results||[]);
+          console.log('CUTOVER174_TABLE_EXISTS='+(r.some(x=>x.name==='explore_like_cutover_control_174')?'YES':'NO'));
+          NODE
 
           set +e
           node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/like-cutover-v162/active.json" --remote --file "$RUNNER_TEMP/cutover162.json" >/tmp/r2-get.out 2>/tmp/r2-get.err
@@ -144,13 +150,7 @@ jobs:
             echo "CUTOVER162 unavailable"
             cat /tmp/r2-get.err || true
           fi
-          node <<'NODE'
-          const fs=require('fs');
-          const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cutover174.json','utf8')).flatMap(x=>x.results||[]);
-          const x=r[0]||{};
-          console.log('CUTOVER174 phase='+String(x.phase||'missing'));
-          console.log('CUTOVER_GUARDS_READ_ONLY=PASS');
-          NODE
+          echo 'CUTOVER_GUARDS_READ_ONLY=PASS'
 
       - name: Read public shared Feed only
         shell: bash

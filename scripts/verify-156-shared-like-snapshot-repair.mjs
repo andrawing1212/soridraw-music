@@ -19,7 +19,9 @@ for (const required of [
 assert.match(entry.slice(end, end + 520), /await baseWorker\.scheduled\(controller, env, ctx\)/);
 assert.match(entry.slice(end, end + 520), /await repairVerifiedSharedLikeSnapshots156\(env\)/);
 assert.doesNotMatch(source, /UPDATE |DELETE |INSERT |\.run\(/);
-assert.doesNotMatch(entry.slice(end), /repairVerifiedSharedLikeSnapshots156\(env\).*async fetch/s);
+const fetchBlock = entry.slice(entry.indexOf('  async fetch(request, env, ctx) {', end));
+assert.ok(fetchBlock.startsWith('  async fetch(request, env, ctx) {'));
+assert.doesNotMatch(fetchBlock, /repairVerifiedSharedLikeSnapshots156/);
 
 // Execute the exact helper with isolated fake R2 and D1 bindings.
 const ctx = {

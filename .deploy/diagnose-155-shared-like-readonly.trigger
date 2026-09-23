@@ -1,6 +1,6 @@
-requested_at=2026-09-24T04:08:00+09:00
-requested_by=app156_cron_repair_rollback_post_readonly
-target=preview
-purpose=read_only_confirm_4_public_R2_counts_after_failed_marker_gate
+requested_at=2026-09-24T04:26:00+09:00
+requested_by=app156_after_verified_shared_R2_repair
+purpose=verify_canonical_vs_direct_and_revision_keyed_shared_snapshot_four_tracks
 read_only=true
-no_mutation=true
+no_user_mutation=true
+release_run=35908607512

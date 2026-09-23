@@ -499,10 +499,16 @@ export default function ExplorePage() {
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
-    effectiveSharedTracks.forEach((track) => {
+    // SORIDRAW_EXPLORE_PUBLIC_COUNT_CACHE_WRITE_SEPARATION_155_20260924
+    // The actor's optimistic/locked count belongs only to that actor's UI and
+    // personal liked cards. Never persist it into shared Feed/public-profile
+    // caches where the next signed-in account would inherit a provisional count.
+    sharedTracks.forEach((track) => {
       patchExploreFeedSessionCachesRow(track.id, { likeCount: track.likeCount });
       if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
-      if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+      if (activeUid) patchExploreLikedTrackCachedCount091(
+        activeUid, track.id, countByTrackId.get(track.id) ?? track.likeCount,
+      );
     });
   };
 

@@ -1,5 +1,32 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0ER. app152 0-token 실패 원인 확정 — 3.6 강제 timeout 복구 및 PREVIEW Function 배포 (2026-09-24 KST)
+
+**실사용 근거**
+- 최신 실패 세션에서 3.8은 free-tier daily quota 20회 초과로 1.8s 즉시 실패, 3.7은 daily quota cooldown으로 skip.
+- 이어진 3.6/3.5/3.5-lite는 각각 정확히 45.0s / 20.0s / 20.0s에 종료.
+- 코드의 `GEMINI_BOUNDED_ATTEMPT_TIMEOUT_MS` 값과 정확히 일치하므로 세 fallback은 provider 명시 실패가 아니라 SORIDRAW 자체 AbortSignal timeout으로 종료된 것임을 확정.
+- 역사 commit 848에서 약 34K 대형 곡 요청의 latency waste를 줄이기 위해 3.6=45s 등 bounded timeout을 도입했고, 이후 큰 곡 생성에도 이 제한이 남아 있었음.
+
+**최소 복구**
+- 복잡한 구조 변경 없이 최초 곡 생성용 3.6 timeout만 **45s → 120s**로 확대.
+- 3.8/3.7 quota handling, 3.5=20s, 3.5-lite=20s, 5 physical attempts 상한, Interactions fallback route, prompt/lyrics/5단 계약은 그대로 유지.
+- Firebase Function 전체 timeout 180s이므로 3.6에 충분한 완료 시간을 주면서 뒤 fallback 여유도 남김.
+
+**검증 / 배포**
+- source commit `d910ab98fd56a38cddd01fc2a57075eb4bb8f3c5`.
+- Source Audit Run `35885073940` SUCCESS: Functions build + 3.6=120s + fallback route + 5-attempt ceiling PASS.
+- PREVIEW Gemini Function Tune Run `35885073991` SUCCESS.
+- PREVIEW Function update / shared TEST·PRODUCTION Function unchanged / runtime / CORS 검증 PASS.
+- Hosting app은 app152 그대로. Worker / D1 / Firestore / Rules / 사용자 데이터 변경 없음.
+
+**다음**
+- PREVIEW 일반 V1 1곡만 재생성.
+- 3.6가 45.0s에 잘리는 현상이 사라지고 45s 이후 계속 처리되거나 성공하면 원인/복구 검증 PASS.
+- 성공 시 provider promptTokens/처리시간/출력 품질 확인.
+- 실패 시 반복 생성 금지; 이번에는 3.6 실제 provider status 또는 120s 경계만 기준으로 다음 원인 분리.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0EQ. app152 실사용 3곡 실패 → PREVIEW Gemini Function fallback API 통일 배포 (2026-09-24 KST)
 
 **사용자 실사용**

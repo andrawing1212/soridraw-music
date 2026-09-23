@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app152 + 3.6 initial timeout 120s 실사용 1곡 확인
+
+- 원인 확정: 3.6/3.5/3.5-lite 실패시간 45/20/20s가 SORIDRAW bounded timeout과 정확히 일치.
+- 3.6 initial song timeout만 45s → 120s로 확대.
+- Source Audit `35885073940` SUCCESS.
+- PREVIEW Gemini Function Tune `35885073991` SUCCESS.
+- shared TEST/PRODUCTION Gemini Function unchanged PASS.
+- 다음은 PREVIEW 일반 V1 1곡만 생성.
+- 45s 이후에도 3.6가 계속 처리되거나 성공하는지 확인. 성공 시 token/time/output 품질 확인.
+- 실패 시 반복 호출 금지. prompt 추가 축소/구조 변경 금지.
+- TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app152 + PREVIEW Gemini Function unified Interactions 실사용 1곡 확인
 
 - app152 Hosting은 유지.

@@ -1,6 +1,6 @@
-requested_at=2026-09-24T03:40:00+09:00
-requested_by=app155_active_worker_all_modules_marker_check
+requested_at=2026-09-24T04:08:00+09:00
+requested_by=app156_cron_repair_rollback_post_readonly
 target=preview
-purpose=verify_active_shared_feed_like_publication_patch_and_stale_r2
+purpose=read_only_confirm_4_public_R2_counts_after_failed_marker_gate
 read_only=true
 no_mutation=true

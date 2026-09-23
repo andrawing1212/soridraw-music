@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EI. app148 PREVIEW 후보 — Music Note Suno URL 연결 뒤 목록 썸네일 누락 수정 (2026-09-23 KST)
+
+**사용자 제보와 확인**
+- 27.49초 모바일 영상: Music Note 곡 목록의 `[Microhouse] 선 넘어 달리기 | Step Beyond` 카드에는 기본 음표만 나타남. 같은 곡의 Detail & Edit에는 Suno URL 1/2 커버 이미지가 정상 표시. 디테일 종료 후 목록도 기존 음표로 남음.
+- 코드 원인: Detail URL 저장은 `queueFavoriteDetailPatch`에서 `selectedSong`과 IndexedDB draft만 즉시 바꾸고, 목록의 `favoritesStore`에는 최신 `sunoLinks / mainSunoIndex / sunoCoverUrl` 등이 전달되지 않음. 목록은 기존 summary 캐시를 렌더링.
+- 정상 로컬 우선 60초/페이지 이탈 묶음 서버 저장을 유지하며 화면 정보만 동기화한다.
+
+**변경**
+- `src/pages/FavoritesPage.tsx`: URL 추가/제거/1순위 교체가 IndexedDB draft에 반영되면 카드의 최소 Suno media 필드만 기존 `favoritesStore`에서 즉시 갱신한다. URL 편집 되돌림 시 기준 카드 미디어를 복구한다. 기존 상세 열기에서 이미 로드한 cover URL도 목록에 재사용해 오래된 summary로 인한 음표 표시를 줄인다.
+- 새 서버 read/write, 전체 목록 재조회, 전체 이미지 프리패치, 새로운 캐시 세대, Firestore/R2/D1 구조 변경 없음. 정상 목록 UI 크기·위치·스타일·좋아요/잠금/공개·1순위 재생·2개 URL 지원 비변경.
+- `scripts/verify-031-music-note-detail-batched-draft.mjs`에 URL 저장/되돌림/상세 hydration의 카드 갱신 검사 추가.
+- `.github/workflows/soridraw-release-system-audit.yml`의 기존 isolated regression 단계에서 verify-031 실행 추가. 별도 새 워크플로 없음.
+- `public/app-version.json` 후보 버전 148.
+- 실제 코드 commit `bc7b0a3d198938c846d33b20e708ccb0c83fd02a`. 기존 기준 HEAD `f81e63997b21992994a232589753dd9818bb728e`. audit request HEAD `dd687354e59d4ad8de0342cde121dc605bf1d2a4`.
+
+**검증**
+- Release System Audit Run `35850755112`, job `107147594457` SUCCESS.
+- TypeScript PASS, Build PASS, verify-031 `VERIFY_031_MUSIC_NOTE_DETAIL_BATCHED_DRAFT=PASS`.
+- 기존 static audit / like regression / TEST+PRODUCTION Worker dry-run / shared D1 read-only preflight PASS. isolated synthetic D1 billing SKIPPED.
+- 실제 PREVIEW Hosting **아직 app147**. app148은 **코드/검사 완료, 미배포, 모바일 실사용 검증 전**.
+- Firebase Functions / Worker / Rules / Firestore / D1 / 사용자 데이터 / TEST / PRODUCTION 변경 없음.
+
+**다음**
+1. 명시적 PREVIEW 배포 지시 시 검증된 app148 `preview` HEAD 고정 후 Firebase Hosting만 배포하고 exact build 확인.
+2. 등록 → 목록에서 즉시 썸네일, 상세 닫기, 2개 URL 1순위 교체, URL 제거, 페이지 이동/재진입, PC/모바일를 실제 확인한다.
+3. 목록에 새로 추가된 미디어가 없는 다른 기기에서도 등록 이후 서버 동기화 때 동일하게 보이는지 확인한다. 실패하면 R2 catalog delta 정합성을 별도 감사한다. 목록 진입 시 전곡 Firestore 조회 금지.
+4. 이 항목이 실사용에서 통과하면 보류된 app147 Gemini Folk Rock 후속 보완/33k prompt 원인 진단으로 복귀한다.
+
+
 ## 0EH. app147 사용자 PREVIEW 3곡 생성 진단 수신 — 보완 호출 1/3, 최초 입력 33k 유지 (2026-09-23 KST)
 
 **사용자 제공 화면 (2026-09-23 오후 07:33~07:35 KST 표시)**

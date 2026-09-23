@@ -1,8 +1,9 @@
-requested_at=2026-09-24T04:00:00+09:00
-requested_by=app156_worker_repair_release_absolute_trigger_audit
+requested_at=2026-09-24T04:14:00+09:00
+requested_by=app156_cloudflare_cron_propagation_window_audit
 target=preview
-purpose=verify_fixed_release_trigger_path_before_one_time_cron_and_CAS
+purpose=verify_156_one_time_canonical_4track_R2_CAS_repair_and_preserved_worker
 expected_app_version=155
 required_verifier=scripts/verify-156-shared-like-snapshot-repair.mjs
+cron_repair_wait_bounded_18_minutes=true
 no_user_data_migration=true
 no_deploy=true

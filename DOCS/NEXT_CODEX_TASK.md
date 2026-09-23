@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app154 타계정 public likeCount 재확인
+
+- app154 Hosting 유지.
+- stale 069 queue bounded settlement Run `35897425530` SUCCESS: 8 batches / 26 mutations / 1 user, queue=0.
+- PREVIEW Worker restore Run `35897572807` SUCCESS.
+- PREVIEW Worker version `33b4de33-73c5-44b2-bf87-e550545fa13a`.
+- revision HEAD warm path D1 R0/W0 PASS / event scheduler PASS / TEST·PRODUCTION Worker unchanged.
+- post-deploy read-only Run `35897701370` SUCCESS: shared latest/popular Feed 확인 대상 4곡 public likeCount=1, q069=0.
+- 다음은 타계정에서 Explore 재진입 1회 후 숫자 1 표시 확인.
+- filled heart는 타계정에서 비어 있어야 정상.
+- 숫자가 0이면 새 좋아요 클릭 금지. client session cache/revision 적용만 추적.
+- Gemini 동결 / TEST·PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app154 타계정 공용 좋아요 실사용 확인
 
 - PREVIEW app154 배포 완료.

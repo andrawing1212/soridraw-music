@@ -1,5 +1,51 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EV. PREVIEW 좋아요 타계정 동기화 — stale 069 queue 정리 + Worker 복구 완료 (2026-09-24 KST)
+
+**사용자 실사용 증상**
+- 본계정 Explore에서는 공개곡 likeCount=1.
+- 타계정 Explore에서는 같은 공개곡 likeCount=0.
+- app154 클라이언트의 계정 전환 revision 재검증만으로는 해결되지 않았음.
+
+**읽기전용 서버 진단**
+- Diagnose 155 Shared Like Readonly Run `35895291030` SUCCESS.
+- shared latest/popular Feed에는 확인 대상 4곡 모두 public likeCount=1이 이미 존재.
+- D1 canonical은 일부 트랙만 settled 상태였고, `explore_like_batches_069`에 오래된 pending queue가 남아 있었음.
+- Worker release transition guard에서 pending069=8을 감지하여 PREVIEW Worker 교체를 자동 중단함. 데이터 유실 방지 guard 정상 작동.
+
+**bounded queue settlement**
+- Repair PREVIEW 069 Like Queue Run `35897425530` SUCCESS.
+- preflight: pending batches=8 / mutations=26 / affected users=1.
+- 기존 accepted desired-state mutations만 canonical D1에 원자적으로 settlement.
+- `QUEUE_069_DRAINED=PASS`, post pending069=0.
+- affected user 1명의 personal shared R2 like catalog만 canonical exact 상태로 재생성.
+- 전체 사용자 백필/전체 데이터 변환 없음.
+
+**PREVIEW Worker 복구 배포**
+- SORIDRAW PREVIEW Explore Worker Release Run `35897572807` / job `107305217200` SUCCESS.
+- pre-deploy pending069=0.
+- PREVIEW Worker version: `33b4de33-73c5-44b2-bf87-e550545fa13a`.
+- Feed smoke PASS / Profile smoke PASS.
+- like batch route 존재 확인(unauthenticated smoke 401 정상), like revision route 존재 확인(401 정상).
+- revision HEAD-only PASS / warm revision D1 R0/W0 PASS.
+- fixed cron disabled PASS / Durable Object event scheduler deploy PASS.
+- TEST / PRODUCTION Worker unchanged PASS.
+- Firebase Hosting은 app154 그대로. Functions / Firestore / Rules 비변경.
+
+**배포 후 읽기전용 확인**
+- Diagnose 155 Run `35897701370` SUCCESS.
+- q069 rows=0 / mutations=0.
+- shared latest/popular Feed에서 확인 대상 4곡 모두 public likeCount=1 확인.
+- 기존 Diagnose 155의 `ACTIVE_EQUALS_REPO_CANONICAL` 및 marker NO 출력은 Cloudflare active version의 main module 하나만 검사하는 진단 방식 한계가 있으므로 Worker 배포 성공 판정에 사용하지 않는다. 실제 release Run의 exact source/preflight/smoke와 public Feed 결과를 기준으로 판단.
+
+**다음 실사용 게이트**
+1. 타계정에서 Explore를 다른 페이지로 갔다가 다시 진입하거나 앱을 새로 열어 app154 account-aware revision check를 한 번 실행.
+2. 확인 대상 공개곡의 public likeCount가 1로 보이는지 확인.
+3. filled heart는 계정별 개인 membership이므로 타계정에서는 비어 있는 것이 정상.
+4. 숫자가 여전히 0이면 새 좋아요를 누르지 말고 해당 화면만 캡처. 다음은 클라이언트 session cache/revision 적용 경로만 추적.
+- Gemini 작업은 동결.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0EU. PREVIEW app154 — 타계정 공용 좋아요 revision 재검증 수정 배포 완료 (2026-09-24 KST)
 
 **사용자 증상**

@@ -1,5 +1,16 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app155 공용 좋아요 cache separation 검증 및 안전 배포
+
+- Source only 최종 기능 commit `9ec45d026be84b6bd17124553ac881e02cfb1930`; 이후 release-state 문서 commit `af068bddb4169e5b87c0d497894aab5305d2092c`.
+- `ExplorePage.tsx`의 shared/public persistent cache에는 shared server-confirmed likeCount만 기록하고 optimistic/RTDB same-account 수치는 현재 UI/개인 liked cache에만 기록하도록 3경로 변경.
+- 기존 `verify-117-explore-public-count-cache-separation.mjs`에 이 구분을 검사하는 155 회귀 guard 추가. version=155로 이전 154 persistent count 오염 1회 bounded R2 snapshot 복구 예정.
+- Node verifier 실제 실행 → TypeScript → Build → like regression / Music Note regression → independent audit. 하나라도 실패하면 수정 후 다시 고정.
+- 검사 성공 후에만 PREVIEW Firebase Hosting app155 배포. Worker 재배포·D1 migration·사용자 원본 데이터 변경 금지.
+- exact preview build, TEST/PRODUCTION 비변경 확인. 사용자 실기기 A/B 계정 + Edge/Chrome/mobile 좋아요/해제 후 서버 확정 수치·하트 상태 확인. 이 실사용 검증 전에는 해결 완료 주장 금지.
+- 현재 Github source only / PREVIEW Hosting app154 유지. TEST·PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app154 타계정 public likeCount 재확인
 
 - app154 Hosting 유지.

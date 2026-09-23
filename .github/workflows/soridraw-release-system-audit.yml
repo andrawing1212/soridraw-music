@@ -58,6 +58,7 @@ jobs:
           node scripts/verify-117-explore-public-count-cache-separation.mjs
           node scripts/verify-110-explore-liked-public-count.mjs
           node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-181-personal-r2-exact-mutation.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

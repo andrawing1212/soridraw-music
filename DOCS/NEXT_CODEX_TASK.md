@@ -1,5 +1,20 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app150 Gemini 요청크기/섹션 보완 실사용 진단
+
+- app149 Music Note Suno 썸네일 재접속 문제: 사용자 실사용 PASS.
+- app150 source-only 진단 후보 완료, 실제 PREVIEW Hosting은 app149.
+- final audit Run `35871794547` SUCCESS: TypeScript / Build / APP147 Gemini verifier / Music Note verify-031 / like regression PASS.
+- app150은 생성 규칙을 줄이거나 fallback 정책을 바꾸지 않는다. 관리자 로컬 진단만 추가:
+  - 최초/후속 Gemini call의 contents/systemInstruction/responseSchema/other config/fallback/total char 수.
+  - required production cue 누락 발생 시 sectionName과 ownership reason(canonical-plan/custom-production/production-only).
+- prompt/lyrics 원문은 기록하지 않는다. 서버 DB read/write 추가 없음.
+- 사용자 명시적 PREVIEW 배포 요청 전 배포 금지.
+- 배포 후 1~3곡 생성 결과를 보고 33k 입력의 실제 주 원인과 `repairV1FinalProductionCues` 호출 정당성을 확정한다.
+- 그 다음에만 Codex High로 실제 최적화를 수행한다. 품질/5단 prompt/언어혼합/가사 밀도/section performance cue/모델 chain 보호.
+- TEST/PRODUCTION 승격 금지.
+
+
 ## 최우선 — app150 Gemini 실제 입력 구성 계측 + section repair 소유권 진단
 
 ### 기준

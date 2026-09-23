@@ -68,7 +68,7 @@ jobs:
           if (!src.includes('"gemini-3.5-flash": 60_000')) throw new Error('3.5 initial timeout is not 60s');
           if (!src.includes('"gemini-3.5-flash-lite": 60_000')) throw new Error('3.5-lite initial timeout is not 60s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout is not 330s');
-          if (!src.includes('"gemini-3.5-flash": 20_000')) throw new Error('3.5 initial timeout is not 20s');
+          if (!src.includes('"gemini-3.5-flash": 60_000')) throw new Error('3.5 initial timeout is not 60s');
           if (!src.includes('daily_quota_exhausted')) throw new Error('daily quota reason missing');
           if (!src.includes('getGeminiDailyQuotaCooldownMs')) throw new Error('Pacific reset cooldown helper missing');
           const lyricBrief = fs.readFileSync('../src/services/lyricStoryBrief.ts', 'utf8');
@@ -84,7 +84,7 @@ jobs:
           }
           console.log('PREVIEW_GEMINI_INITIAL_FLASH_LOW_THINKING=PASS');
           console.log('PREVIEW_GEMINI_CHAIN_ORDER_UNCHANGED=PASS');
-          console.log('PREVIEW_GEMINI_35_TIMEOUT_20S=PASS');
+          console.log('PREVIEW_GEMINI_FALLBACK_TIMEOUTS=PASS');
           console.log('PREVIEW_GEMINI_DAILY_QUOTA_SKIP=PASS');
           console.log('PREVIEW_GEMINI_PROMPT_DUPLICATE_REMOVAL=PASS');
           NODE

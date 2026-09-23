@@ -1,5 +1,39 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EP. PREVIEW app152 — Gemini 메인 V1 systemInstruction 중복 압축 배포 완료 (2026-09-24 KST)
+
+**배경**
+- app150 실사용에서 최초 생성 요청이 전체 약 150,872~152,355 chars, 그중 systemInstruction 약 146,458~147,941 chars로 확인됐고 3회 연속 생성 실패가 발생했다.
+- app151에서 app149 Gemini runtime으로 즉시 복구한 뒤, 사용자 추가 실사용을 반복시키지 않고 코드측 owner 분석으로 진행했다.
+
+**app152 변경**
+- 메인 V1 systemInstruction의 장문 중복 설명을 압축했다. 전용 owner가 이미 책임지는 Story Context / Hook Blueprint / Section Performance Plan / Section Slot Contract / Section Blueprint / lyric density / Arrangement Plan / section cue / language mix / multi-vocal identity 규칙 자체는 제거하지 않았다.
+- 제목 장문 예시, 반복되는 멀티보컬 파트분배 예시, 중복된 5단 productionPrompt 설명, 반복 가사 문체 설명을 간결한 계약으로 축약.
+- 메인 systemInstruction TypeScript initializer source 크기: **59,918 → 24,771 chars (-35,147 / -58.7%)**.
+- 이 수치는 source initializer 기준이다. 실제 provider promptTokens/runtime payload 감소량은 다음 PREVIEW 실사용 1회 전까지 확정 주장하지 않는다.
+- app version 152.
+
+**검증**
+- 정확한 메인 systemInstruction을 잡도록 verifier를 수정한 뒤 Release System Audit Run `35878475721` **SUCCESS**.
+- audit log: beforeSystemInstructionSourceChars=59,918 / after=24,771 / `APP147_GEMINI_PROMPT_AND_CUE_AUDIT=PASS`.
+- TypeScript PASS / Build PASS / `VERIFY_031_MUSIC_NOTE_DETAIL_BATCHED_DRAFT=PASS` / like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS / shared D1 read-only preflight PASS.
+- Firebase Functions / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+
+**PREVIEW 배포**
+- Firebase PREVIEW Hosting Run `35878798592` / job `107241573504`: 모든 release steps SUCCESS.
+- locked source `3260ea781702d9c73ba0e3f4fb1126e084991e46`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=152`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 실제 PREVIEW는 app152.
+- Worker / Functions 재배포 없음.
+
+**다음 실사용 게이트**
+- PREVIEW 업데이트 후 일반 V1 곡 **1곡만 먼저 생성**한다.
+- 1차 합격: 생성 성공 + 기존 5단 productionPrompt / 가사 / section performance cue 정상.
+- 속도와 provider prompt token은 성공 결과가 나온 뒤 비교한다.
+- 실패 시 무작정 재시도하지 않고 해당 1회 audit/error만 기준으로 다음 원인을 분리한다.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0EO. app150 실사용 전곡 생성 실패 → app151 즉시 복구 (2026-09-23 KST)
 
 **app150 실사용 결과**

@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app152 PREVIEW 실사용 1곡 검증
+
+- PREVIEW app152 Hosting 배포 완료.
+- Release Audit `35878475721` SUCCESS.
+- Hosting Run `35878798592` / job `107241573504` release steps SUCCESS.
+- locked source `3260ea781702d9c73ba0e3f4fb1126e084991e46`, remote app-version 152, exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 메인 V1 systemInstruction source initializer: 59,918 → 24,771 chars(-58.7%).
+- 다음은 일반 V1 곡 1곡만 실사용 생성. 성공 여부와 5단 productionPrompt / 가사 / 섹션 퍼포먼스 큐 정상성을 먼저 본다.
+- 성공하면 처리시간/입력토큰을 app150의 약 33k 및 실패 사례와 비교한다.
+- 실패하면 동일 세션의 모델별 오류/timeout만 보고 원인을 분리하며, 반복 생성으로 provider를 계속 두드리지 않는다.
+- Functions/Worker/D1/Firestore/사용자 데이터 변경 금지. TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app151 복구 유지 + Gemini 150k systemInstruction 코드측 원인 분석
 
 - 현재 PREVIEW app151. app150 진단 runtime은 제거했고 app149 Gemini 생성 runtime을 복원함.

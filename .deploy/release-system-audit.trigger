@@ -1,5 +1,5 @@
-requested_at=2026-09-24T04:14:00+09:00
-requested_by=app156_cloudflare_cron_propagation_window_audit
+requested_at=2026-09-24T04:19:00+09:00
+requested_by=app156_scheduler_guard_verifier_reaudit
 target=preview
 purpose=verify_156_one_time_canonical_4track_R2_CAS_repair_and_preserved_worker
 expected_app_version=155

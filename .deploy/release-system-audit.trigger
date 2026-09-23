@@ -1,1 +1,7 @@
-release_system_audit=2026-09-23-app150-gemini-request-shape-cue-ownership-r3
+requested_at=2026-09-23T23:56:00+09:00
+requested_by=app152_gemini_prompt_compaction_audit
+target=preview
+purpose=compact_redundant_main_v1_system_instruction_while_preserving_dedicated_owner_contracts
+expected_system_instruction_source_chars_max=36000
+preserve_story_hook_section_density_language_vocal_contracts=true
+no_deploy=true

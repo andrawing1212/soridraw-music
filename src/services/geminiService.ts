@@ -36841,72 +36841,15 @@ ${recentTitleAntiRepeatInstruction}
 ${recentLyricAntiRepeatInstruction}
 
 
-SITUATION NUANCE VARIATION RULE (MANDATORY):
-- Before writing lyrics, preserve the active Situation inside the resolved Story Context.
-- Variation may choose a different viewpoint, emotional emphasis, opening owner, hook owner, interruption timing, section ownership, or order of revelation only when that option already belongs to the Situation.
-- Do not invent a concrete detail, flaw, relationship, place, event, or ending merely to make the attempt different.
-- Identical Situation text may produce a different musical and sectional interpretation, but its central meaning must remain unchanged.
+SITUATION / STORY / VOCAL PRIORITY (MANDATORY):
+- Preserve the resolved Story Context. Active Situation is the primary scenario when present; Theme is fallback story material. Variation may change viewpoint, emphasis, hook owner, or section ownership, but must not invent a new relationship, place, object, event, conflict, or ending.
+- Keep the selected root genre coherent. Blend secondary influences into one production identity; do not turn Mood, Sound, vocal technique, tempo, hook, or arrangement terms into story topics.
+- [Vocals] is a concise real-singer direction. For multi-vocal songs, preserve the exact gender + letter + role anchors resolved by the vocal system. For solo songs, keep one vocalist and do not invent duet/group identities.
+- Lyric section tags must start with the structural section name. Sung multi-vocal tags reuse the exact declared anchor first, then one short local performance cue. Solo tags use only the changing local performance cue. Real instrument/ambience/effect cues stay on separate square-bracket lines.
+- Final productionPrompt is English-only and keeps exactly [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement], then [Audio quality improved to masterpiece]. Keep Genre identity clear, selected Sound anchors protected, Mood distributed by role, and Arrangement concrete rather than generic.
+- Custom structure order is exact. Do not replace it with a default pop form. Resolve conflicts by custom structure first, then USER FREE-TEXT DIRECTOR NOTE, then explicit UI selections, while keeping one coherent song.
 
-GENRE COHERENCE RULE (MANDATORY):
-- The final song must still be coherent as one concept, not a loose list of tags.
-- When the note defines a genre, use that genre as the core blueprint.
-- When the note contains multiple influences, blend them into one clear production identity.
-- Do NOT turn mood into a different genre unless the free-text note clearly asks for that genre.
-- Do NOT ignore explicit free-text words such as city pop, Korean traditional fusion, slow tempo, autumn, night, love, couple, historical battle, refreshing feel, rap, no rap, short song, long song, or female/male vocal.
-
-SITUATION / THEME SEPARATION RULE (MANDATORY):
-- Situation is the primary scenario key when provided: relationship, conflict, place, attitude, development, and ending tone.
-- Theme is only a fallback story helper when Situation is not provided.
-- Final [Vocals] must prioritize a natural vocal/duet feel first and be written as a short singer-directing sentence, not a comma tag list. Do not force Korean by default; add Korean/Japanese/Latin or another cultural vocal identity only when the selected genre or lyric language clearly calls for it. Keep the selected tone compact, then describe attitude/delivery naturally.
-- Do not copy user-provided speaker style, attitude, development, or detail words directly into [Vocals] as raw keywords. Rewrite them into a producer-style sentence that sounds like directing a real singer.
-- [Vocals] must read as a human character direction: attitude + vocal feel + persona role. Example: bright female vocals with sarcastic but slightly hurt delivery (MZ Employee).
-- Do not over-specify genre-default vocals or mood-default phrases; let the model interpret genre and mood naturally unless the user selected Style/Sound or Situation details.
-- Style and Sound selections must be reflected in the opening track sentence and [Production]. Mood selections must color the opening sentence as part of the music/story pitch. Do not output raw comma lists for Mood.
-- [Production] must communicate the playing/production feel, not just dump tags. Rewrite sound and arrangement items into a compact performance sentence such as "walking bass and soft synth stabs with subtle shifts and smooth sectional contrast."
-- Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
-- Do NOT turn technical instructions into the title or lyrical topic.
-- Keep the final production prompt dense rather than over-compressed: aim for about 650-750 characters when many selections are active, excluding the fixed audio-quality line. Remove duplicate wording first; do not cut off genre identity, story scene, production movement, tempo, hook behavior, or vocal roles.
-- Good [Vocals] style for Situation: 2-character vocal split: Employee with bright female vocal, sarcastic but slightly hurt delivery. Boss with dry male vocal, nagging pressure. Keep each character separated. Good group style: 4 female vocal split: Main Vocal (...), Lead Vocal (...), Low Rap Vocal (...), Whisper Vocal (...). Bad style: Female group vocals, pop, sad.
-- For group lyric tags, NEVER use mechanical labels like Member 1/2 or Rap Vocal 1/2. Reuse only the exact gender + letter + role anchor from [Vocals] and add one local performance cue after it.
-- Keep gender, A/B/C/D identity, and Main/Lead/Sub/Rap role in every multi-vocal anchor, including same-gender groups, so the prompt and lyrics stay identical.
-- Keep lyric tags compact: [Section: Male A Main, one local performance cue]. Keep the exact declared anchor and use at most one short local cue after it. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
-- LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
-- Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
-- In Situation/character lyrics, lyric tags must use one structural section plus the exact matching gender + letter + role anchor and a short local cue. Never output Korean speaker labels in brackets, malformed empty labels, or a bare acoustic label without a section name.
-- Every sung tag must include a section name before the colon. Bad: [Airy Female Vocal: empty]. Good: [Outro: Airy Female Vocal, empty].
 ${buildV1LyricWritingStyleInstruction(params)}
-- Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
-- Use composite lyric tags for multi-vocal sung sections: [Section: exact matching Male A Main / Female B Lead anchor, current local performance cue]. Anchor first, performance second. Do not substitute a prewritten tone phrase.
-- If the selected structure says Rap Section, keep the exact label Rap Section. In multi-vocal songs, add the resolved vocal anchor and a current-song local rap cue; in solo songs, do not repeat the global vocal identity.
-- In group songs, [Together] is not the default singer. Use [Together] only for one short shared hook or the final hook unless the user explicitly asks for full-group singing.
-- For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
-- Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
-- Every lyric block must belong to a structural section tag. In custom structures, preserve the selected section name exactly; multi-vocal sections reuse the exact resolved Vocal anchors, while instrumental blocks remain section-only and production events stay on separate cue lines. In parallel monologue, keep Hook/Chorus owned by one main voice with at most one short interruption from the other.
-- If Gemini starts a sung block with a bare acoustic/vocal tag, attach that cue to the nearest required structural section from the active blueprint instead of inventing a new section name.
-- Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
-- Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
-- Final production prompt format is locked to this 5-line structure plus the fixed quality line:
-  [Genre] {short natural genre identity: core genre + 1–2 strongest identity keywords/groove/era/texture, not a raw comma list}
-  [Instruments] {Gemini-composed instrument, texture, and playing-style cues from genre + mood + theme/situation + selected core sound}
-  [Atmosphere] {scene, air, emotional temperature, and selected spatial texture}
-  [Vocals] {sentence-style acoustic vocal direction with emotion, breath, and phrasing; no artist names, but include the referenced vocal traits when the user gave an artist/group reference}
-  [Arrangement] {tempo only when selected, genre-specific rhythm/groove, emotional development, section movement, and transition behavior}
-  [Audio quality improved to masterpiece]
-- Do not collapse this back into [Track] / [Production]. Keep [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] separated.
-- Never output any separator-* value. Separator rows are UI-only and must be ignored.
-- Genre line must be a short natural identity sentence, not a raw keyword dump. Keep the selected core genre clear, then add only the main groove/era/texture that explains how the genre should move. Do not use filler wording like influence/core/fused/based/rooted unless it is part of a meaningful genre identity such as Korean gugak-based Pansori fusion.
-- Era texture selections such as 2010s Idol Pop, 2010s EDM Pop, 90s R&B Warmth, 2000s Y2K Pop, 80s Retro Synth, and 2020s Hyperpop are secondary production colors only. They must not replace the main genre, must not force idol/EDM as the main style, and must not expand into group/idol-vocal instructions unless the vocal menu explicitly selected that.
-- Mood/theme words should not be dumped into [Genre] as a list. However, the 1–2 strongest identity keywords that define the song's first impression may be integrated into [Genre] as natural genre adjectives; put all detailed emotion/story words in [Atmosphere] or [Arrangement].
-- Groove/rhythm/pulse/hook/transition terms belong in [Arrangement], not [Instruments].
-- If multiple hook or chorus style keywords are selected, merge them into one natural phrase such as minimalist phrase-led hook or catchy singalong chorus; do not repeat hook/chorus words.
-- Arrangement must not be a generic function-word list. Avoid bare phrases like stable structure, warm structure, harmonic support, smooth, effortless, clear sectional contrast unless they are tied to a concrete genre movement. Write how the song moves: e.g. slow janggu pulse with weighted vocal pauses, danceable Nu-Disco groove with soft chorus lift, warm live-band groove with brass lifts.
-- Preserve vocal emotion and spatial texture: [Vocals] must include emotional delivery, not only technique; [Atmosphere] must include selected space/ambience cues when present.
-- If the vocal UI mode is solo or exactly one vocalist is selected, [Vocals] must stay a single solo vocalist. Band, K-band, Buzz-inspired, rock band, and band-ballad references may affect instruments/arrangement, but must NOT create group/duo/split/main-rap-harmony vocal roles.
-- LYRIC LINE BREAK RULE (MANDATORY): section tags must be standalone lines, then lyrics must start on the next line. Never write [Section : cue] lyric on one line. Do not output paragraph-style lyric blocks. Split every long Korean line into short singable phrase lines so rhythm is visible.
-- LYRIC COMPLETION RULE (MANDATORY): Never end the lyric at [Stop], [Break], [Drop], or [Build-up]. A transition cut must be followed by a compact payoff such as [Bridge], [Chorus 1] or [Final Hook], and [Outro]. If the front half becomes dense, shorten earlier lines rather than dropping the final payoff.
-- LYRIC-SONG DROP RULE: For songs with lyrics, a Drop in the required structure is a possible vocal hook/release section, not an automatic instrumental gap. Do not output repeated empty Drop blocks. Give a Drop 2-4 concise hook/release lyric lines when it carries the song's payoff; keep it lyric-free only when the user explicitly requested instrumental/no-vocal/BGM behavior or when another adjacent hook already carries the full payoff.
-- LYRIC DENSITY SAFETY RULE: Do not satisfy this by counting lines only. Short lines, fragments, pauses, and one-word hooks are allowed when they work musically, but the full lyric must still have enough meaningful sung content: concrete scene/detail, character action, repeated desire, and emotional movement. Do not make every line long; instead expand underdeveloped sections with usable song content.
-- In compact experimental structures, Intro may be instrumental/ambient and lyric-free, but content-bearing sections must not become empty or mostly tag-only. Do not use fixed line quotas; distribute lyric mass by the current tempo, melodic space, Story Context, and each section's relative function. Outro must close the thought without a dangling unfinished phrase.
 
 ${buildUserPrimaryStoryLockInstruction(params)}
 
@@ -36915,12 +36858,8 @@ ${TECHNICAL_DIRECTION_LYRICS_GUARD}${selectedKeywordLiteralLyricGuard ? `
 ${selectedKeywordLiteralLyricGuard}` : ''}
 
 IMPORTANT:
-- Do not use real artist names by default. Exception: if the user explicitly wrote an artist/group reference in direct input, preserve it only in [Genre] as “-style” or “-inspired” and also translate it into musical traits; do not place artist names in [Vocals] or lyrics.
-- Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
-- Treat the final production prompt below as a locked music-production blueprint, not a loose reference. For lyric story content, direct input, active Situation, and selected Theme remain higher priority than generic prompt summaries. Selected Mood is an expression-color layer only, not a story source.
-- Resolve conflicts by priority: custom song structure if selected, then USER FREE-TEXT DIRECTOR NOTE, then explicit UI selections, while keeping one coherent song concept.
-- Keep the final result musically coherent as one song concept, not a loose list of tags.
-
+- User-provided artist/group references may remain only as a -style/-inspired Genre reference plus musical traits; do not put artist names in [Vocals] or lyrics.
+- Treat the locked final production prompt as the music blueprint. Direct input, Situation, Theme, lyric draft, and the dedicated Story Context contract remain the lyric-story authority.
 ROOT GENRE:
 ${genrePromptCore || (detailLayer ? "Infer the root genre from the USER FREE-TEXT DIRECTOR NOTE." : "Choose an appropriate mainstream-friendly root genre if none is given.")}
 
@@ -37021,36 +36960,13 @@ ${requestedLanguageInstruction}
 ${rapModeInstruction}
 
 FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
-- Return productionPrompt as the final 6-line Suno production prompt.
-- Never output two production prompts in one response. Do not write a one-line prompt containing multiple labels and then repeat the labels again below.
-- GENRE FIRST-IMPRESSION RULE: [Genre] is not just a plain genre name. Keep it concise and genre-like, but include 1–2 core identity keywords from the selected mood/theme/direct input when they define the song’s first impression. Do not turn [Genre] into a long keyword list. Move detailed emotional/story words into [Atmosphere] and movement/flow words into [Arrangement].
-- GLOBAL MOOD DISTRIBUTION RULE: Selected Mood must not be compressed into only 1–2 fixed words before [Genre]. Synthesize the mood combination into one global feeling and distribute it across [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] by role. Genre receives mood-colored identity, Instruments receive texture/weight/air, Atmosphere receives emotional design, Vocals receive delivery/distance/emotional pressure, and Arrangement receives section motion/density/pacing. Keep all lines concise and do not repeat the same mood adjective everywhere.
-- USER ARTIST/GROUP REFERENCE RULE: If the user directly mentions an artist or group in the direct input, preserve that reference in [Genre] as “-style” or “-inspired”, and also translate it into musical traits such as energy, vocal attitude, era, groove, arrangement color, emotional tone, and when relevant vocal technique. Do not remove the artist/group reference when it was explicitly written by the user. Do not rely on the name alone; include trait cues so less globally recognized Korean references still work.
+- Return exactly one productionPrompt with the fixed 6-line order: [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement], [Audio quality improved to masterpiece]. No duplicate prompt and no extra production lines.
+- Build all five musical lanes from the same Story Context and selected inputs. [Genre] owns root identity; [Instruments] owns playable sound/texture; [Atmosphere] owns scene/emotional air; [Vocals] owns singer delivery; [Arrangement] owns tempo/groove/section movement/final payoff.
+- Preserve directly selected Sound anchors. Adapt non-selected supporting instruments to Genre + Mood + Situation/Theme instead of copying a generic skeleton.
+- Mood is distributed by role rather than repeated as the same adjective in every lane. Situation must remain understandable through Atmosphere and Arrangement, not only Vocals.
+- Do not expose analysis labels, hidden priority rules, scene-plan language, or internal implementation terms.
+- Dedicated Instrumental BGM/background-only genres remain instrumental only: no vocal, humming, choir, or vocal samples; use sparse background-friendly movement appropriate to the selected BGM type.
 - INSTRUMENTAL BGM NATURAL REINTERPRETATION RULE: ${buildInstrumentalBgmGeminiReinterpretationRule()}
-- If the selected genre is Lo-Fi Study, Nature Ambience, Cafe BGM, Healing Piano, Ambient, Minimalism, Piano Solo, String Ensemble, or another dedicated Instrumental BGM/background-only choice, force instrumental-only mode. [Vocals] must be exactly: Instrumental only, no vocals, no humming. Do not add female/male vocal, humming, wordless airy texture, breathy phrasing, sighs, chant, choir, or hook-vocal language.
-- For dedicated Instrumental BGM/background-only choices, put the removal cue directly into the final prompt without overloading it: [Instruments] should include no vocal samples and a small number of quiet ambience/texture/instrument cues. Lo-Fi Study and Cafe BGM may use a very sparse muted/brushed rhythm if it supports background flow; Piano/Solo/String/Nature/Ambient BGM should be drumless/no beat. [Arrangement] should include instrumental only, no vocals, no humming, plus the correct BGM flow type.
-- For Nature Ambience, prefer environmental ambience and soft pads over musical drums or many instruments. For Lo-Fi Study, prefer tape hiss, room tone, soft keys, and optional very sparse brushed lo-fi drums. For Cafe BGM, allow very sparse brushed rhythm only when useful. For Healing Piano, Piano Solo, and String Ensemble, avoid drums/percussion by default.
-- For dedicated Instrumental BGM/background-only choices, [Atmosphere] must describe space, environment, time, room tone, or background air. Do not create a singer/speaker emotional story.
-- For dedicated Instrumental BGM/background-only choices, [Arrangement] must describe loopable background flow, ambient swells, soft transitions, and non-distracting texture, not hook release or sung phrasing. Use concise constraints like drumless and percussion-free instead of a long no-kick/no-snare/no-hihat list.
-- Use this exact label order and no extra lines:
-  [Genre]
-  [Instruments]
-  [Atmosphere]
-  [Vocals]
-  [Arrangement]
-  [Audio quality improved to masterpiece]
-- Build productionPrompt after deciding the lyric concept. It must follow the active Situation, user's direct theme, direct mood, USER FREE-TEXT DIRECTOR NOTE, selected keywords, vocal setup, and section flow.
-- Build [Instruments] after deciding the same concept. Recompose the instrument palette so genre + mood + situation/theme feel connected, while preserving user-selected sound anchors and only true instrument/genre-style sound accents. Do not move space texture, transition, hook, cinematic-scene, or groove/rhythm folders into [Instruments].
-- Do not copy the local skeleton's [Instruments] line verbatim just because one Sound item is selected. Use the selected Sound item as a protected anchor only. Then reinterpret every other non-selected instrument through the selected mood/theme/situation/direct note, replace duplicated defaults, and add missing companion roles so the final line feels Gemini-composed from genre + mood.
-- Directly selected sounds must survive; non-selected default instruments should adapt their playing method and texture to the mood. Example logic: selected saxophone stays, while piano/drums/bass/pad become lonely, dreamy, warm, cold, sparse, brushed, muted, airy, bright, dark, or room-based depending on the selected mood and scene.
-- Use LOCKED FINAL PRODUCTION PROMPT only as a musical skeleton for genre, sound, vocal delivery, and arrangement. Do not copy weak or generic Atmosphere wording if the active Situation, user's direct input, or lyrics clearly define a better scene.
-- If a Situation is active, [Atmosphere] must summarize the situation's relationship/conflict/setting/tone as a natural scene sentence, and [Arrangement] must summarize the situation's development, dialogue ownership, speech contrast, and emotional turn through the selected section flow. Do not leave the Situation only in [Vocals].
-- For an active Situation, [Atmosphere] should be understandable even if [Vocals] is hidden: the listener should still know what kind of scene/conflict is happening.
-- For an active Situation, [Arrangement] should be understandable even if [Vocals] is hidden: the listener should still know how the dialogue or monologue unfolds across sections.
-- [Atmosphere] must be a natural scene/emotion sentence. Do not output internal phrases such as direct user-specified, exact topic, free-text direction, direct-story, concrete personal scene, or user-described scene.
-- [Arrangement] must be a natural music-flow sentence. Do not output internal phrases such as matching the free-text direction, matching the character arc, or direct-story section movement.
-- Do not invent a new story that is absent from the active Situation, user's direct input, selected Theme/Mood, or generated lyrics.
-- Do not expose analysis, scene plans, priority rules, or hidden notes.
 
 ${buildGenerationEngineOutputInstruction(params)}
 
@@ -37068,150 +36984,13 @@ ${isGenerationEngineV2(params) ? '' : '  "storyAtmosphere": "Concise natural-Eng
 }
 
 TITLE RULES (CRITICAL):
-
-
-- Generate title(s) ONLY in the selected lyric language(s).
-- If two title languages are selected, they MUST be independent titles, NOT direct translations of each other.
-- They should share the same vibe, theme, and genre of the song.
-- Avoid feeling like a literal translation; they should sound natural in their respective languages.
-- Tone should match (e.g., both sophisticated, both playful, both dark).
-- The title must contain ONLY the song title itself.
-- DO NOT include genre, style, production terms, era, nationality, or descriptors.
-- DO NOT include words taken from STYLE such as: "Traditional Korean Fusion", "Gugak-pop", "New Jack Swing", "City Pop", "K-pop", "J-pop", "ballad pacing", "global pop approach", etc.
-- DO NOT include words taken from STYLE such as: "K-pop", "City Pop", etc.
-- If the user described a concrete listening scene such as studying in a reading room/library, the title should reflect that quiet everyday scene, not a random unrelated emotional phrase.
-- The genre label will be attached later by the app, so return the title body only.
-- Format must follow the selected title language rule above.
-- Do NOT use technical direction words as the title concept unless the user explicitly made them the story theme.
-- Examples of forbidden title concepts when they are only instructions: offbeat, half-beat, slow tempo, hook, vocal tone, high-note restraint, 엇박자, 느린템포, 고음자제, 중독성 후렴, 보컬톤.
-
-
-[REALISTIC TITLE RULES]
-- The title must feel like a real phrase, not a keyword combination.
-- Avoid cliché poetic titles (echo, warmth, shadow, etc. combinations).
-- Prefer:
-  - a line from the song
-  - a specific moment
-  - a phrase that sounds like something someone would actually say
-- Avoid stacking abstract emotional nouns.
-- Natural phrasing is more important than poetic wording.
-
-
-[HIT TITLE RULES]
-
-- Titles should be short, memorable, and easy to say.
-- Prefer 2–5 words for English titles.
-- Prefer 3–10 syllables for Korean titles.
-- The title should feel like something someone would actually say or remember.
-- Avoid complex or overly poetic phrasing.
-
----
-
-[TITLE STYLE]
-
-Prefer titles that:
-- sound like a real sentence fragment
-- feel like a moment or a thought
-- could be used in conversation
-
-Examples:
-- "We Didn’t Say Goodbye"
-- "Call Me Back"
-- "I Thought You Knew"
-
-Korean examples:
-- "조금 더 있다가 가"
-- "말 안 해도 알 줄 알았어"
-- "그날 이후로"
-- "아직 그대로야"
-
----
-
-[AVOID THESE PATTERNS]
-
-- Avoid abstract noun stacking:
-  (e.g. "Echo of Warmth", "Shadow of Memory")
-
-- Avoid single vague poetic words:
-  (e.g. "Velvet", "Echo", "Warmth")
-
-- Avoid titles that sound like generated keywords.
-
----
-
-[STRUCTURE VARIATION]
-
-- Titles can be:
-  - a short sentence
-  - a phrase
-  - a question
-  - a line someone might say
-
----
-
-[FINAL CHECK]
-
-- If the title sounds like a real song name someone would remember → OK
-- If it sounds like AI-generated poetry → rewrite
-
-[KOREAN TITLE STYLE]
-
-- Korean titles should feel like natural spoken phrases.
-- Prefer everyday language over poetic wording.
-- Avoid overly literary or abstract expressions.
-- Titles should sound like something someone might actually say.
-
-Examples:
-- "조금만 더 있다가 가"
-- "그때 말 안 했잖아"
-- "아직 그대로야"
-- "오늘은 그냥 가"
-
-[KOREAN NUANCE TITLE RULES]
-
-- Korean titles should NOT feel like fully completed sentences.
-- Avoid combining two complete phrases into one title.
-- Prefer slightly incomplete, open-ended expressions.
-
-- Good titles often feel like:
-  - something left unsaid
-  - a thought that trails off
-  - a phrase that implies more context
-
-- It is often better to remove one part of a sentence than to keep everything.
-
----
-
-[NUANCE CONTROL]
-
-- If a title feels too complete, shorten it.
-- Reduce unnecessary words.
-- Avoid "A + B" combined sentence structures.
-
-Examples:
-
-Too complete:
-- 오늘따라 운이 좋았어
-→ Better:
-- 오늘따라
-- 운이 좋았던 날
-
-Too combined:
-- 아직 여길 못 떠나
-→ Better:
-- 아직 여길
-- 못 떠나서
-
-Too explanatory:
-- 그냥 늘 있던 곳에
-→ Better:
-- 늘 있던 곳에
-- 그냥 거기
-
-Natural:
-- 비어있는 옆자리 (OK)
-- 그날 이후로 (GOOD)
-- 아직 그대로야 (GOOD)
+- Generate title(s) only in the selected lyric language(s). With two title languages, create independent natural titles that share the same song identity; do not translate one title literally into the other.
+- Return only the title body. Genre/style/production/era/nationality labels are attached elsewhere and must not appear in the title.
+- Ground the title in the current Story Context, direct input, Situation, Theme, or a memorable lyric phrase. A concrete user-described scene must not be replaced by an unrelated generic emotion.
+- Never turn technical direction words such as tempo, offbeat, hook, vocal tone, instrument names, or production terms into the title unless the user explicitly made them the story topic.
+- Prefer a short, memorable, spoken-feeling phrase over abstract noun stacking or AI-poetic wording. Avoid generic formulas such as Echo/Warmth/Shadow/Memory combinations.
+- English titles should usually be compact and easy to say. Korean titles should sound like natural everyday Korean and may be slightly open-ended rather than over-explained.
+- If a title reads like an instruction, keyword list, complete explanation, or decorative abstract poem, rewrite it into a believable song title.
 
 ${
   params.isNoLyrics
@@ -37225,186 +37004,46 @@ ${sectionCueMusicalVarietyInstruction}
 
 ${arrangementSectionPlanInstruction}
 
-[ANTI-TEMPLATE RULE]
-- Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
-- First choose ONE fresh emphasis inside the resolved Story Context: viewpoint, sentence attitude, emotional phase, hook function, section ownership, or order of development. Do not require a new place, object, action, conflict, or ending.
-- Variation must happen BETWEEN songs, not inside one song. Do not scatter multiple unrelated narratives in one lyric.
-- If an earlier generation used a similar image or detail, choose another expression only when it naturally belongs to the same Story Context. Never import a replacement detail merely for novelty.
-- Do not use a fixed duet template. The singer who owns Verse, Pre-Chorus, Chorus, Bridge, and Outro must change according to genre and situation.
-- If the previous section was A→B, the next lyrical section should not automatically repeat A→B. Change ownership, interruption timing, solo focus, or hook function.
-- The goal is a different dramatic song design, not only different words.
-- The same keywords may keep the same characters and mood, but the vocal part distribution must vary: who opens, who owns the hook, who interrupts, who disappears, who returns, and whether the chorus is solo/together/echo/call-response should not be fixed.
-
-[LYRIC TAGGING RULES]
+[ANTI-TEMPLATE / LYRIC TAG RULES]
+- Same inputs may produce a sibling interpretation, but variation must stay inside the same Story Context. Change emphasis, viewpoint, hook function, section ownership, or timing rather than inventing unrelated details.
 ${multiVocalLyricTagAnchorInstruction}
-- Keep all tags short. Tags guide singing; they are not prose.
-- Never put a full story/situation sentence or the full [Arrangement] sentence inside a section tag. Reduce it to 1–2 local execution cues for that section.
-- A section tag body should contain the exact gender + letter + role anchor first and usually only one short performance cue after it. Real sound/instrument/effect cues belong on the next square-bracket line.
-- Returning sections must describe their changed behavior instead of reusing the same cue. The final Chorus/Hook should execute the final payoff from [Arrangement].
-- MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
-- If there are two or more actual vocalists, every sung section should use one composite bracket tag with the exact matching anchor from [Vocals], such as [Section: Male A Main, short style]. Never use an anchor absent from [Vocals].
-- If [Vocals] defines A/B/C/D identities, lyric tags must reuse the exact matching gender + letter + role anchors for sung sections, including D or later voices when active. Do not remove the role, replace the identity with a tone label, or change gender. Use [Chorus 1: All Voices, ...] only for real shared moments.
-- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag with an exact declared anchor, such as [Rap Section 1: Male D Rap, dry delivery].
-- Solo songs: do NOT repeat the vocalist identity in section tags. Keep only the changing performance and local movement, such as register, breath, phrasing, exposure, restraint, ornament, intensity, or release. Keep a rap label only for an actual Rap Section.
-- Solo section tags should normally contain one performance cue and, when the section truly changes, one local contrast cue. Do not fill both slots with synonyms.
-- Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
-- Use parentheses only for genuinely intended short vocal gestures, reactions, or brief sung ad-libs. Do not seed every Intro or Outro with a generic hum. Human vocal sounds must never be placed in [sound effect]. Environmental SFX, instrument textures, ambience, noise, and point sounds must be standalone square-bracket cue lines directly under the relevant section tag, not parentheses. Never write a vague descriptive pseudo-SFX in parentheses.
-- Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
-- Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
-- Duo/group vocal + two targets: use composite Suno tags with exact gender + letter + role anchors. UI story roles are story context only; final tags use forms such as [Verse 1: Male A Main, dry delivery] or [Chorus 1: Female B Lead, pleading hook]. Do NOT output Korean role labels or generic [Main Vocal] / [Airy Vocal] tags.
-- If Target A/B speech style or attitude is provided, it is mandatory: reflect it in both the [Vocals] line concept and the lyric speaker tags.
-- User-provided style/attitude text is source material, not final wording. Interpret it into natural character behavior and short singable tags.
-- Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical, with no more than 2 short cues after the colon.
-- NEVER write speaker names in parentheses such as (40대 엄마), (10대 아들), (상사), (직원). Parentheses are ONLY for ad-libs, breath, SFX, inner thoughts, or short reactions.
-- For sung sections, prefer composite tags because Suno follows them better: [Section: exact singer anchor, short cue]. Do not split section and singer into separate tags unless the section is instrumental or purely SFX. If an Intro is vocal/humming, keep it as one composite tag such as [Intro: Male A Main, hum].
-- Correct multi-speaker format uses the exact A/B identities and roles from [Vocals], for example a Verse owned by Male A Main followed later by a section owned by Female B Lead. Do not copy a preset tone or emotion phrase from an example.
-- Chorus ownership is flexible, but arrangement wording controls it. Do not split one Chorus into many 1-2 line Chorus fragments just to change singers. Use one combined Chorus tag for shared hooks, or one short Chorus Response tag only when it is musically necessary. If the arrangement is parallel monologue / 평행 독백형 / one-sided monologue, the chorus should be owned by one acoustic voice, not A/B line-by-line dialogue. The other voice may appear only as one short parenthetical aside/ad-lib if needed. Use call-response choruses only when call-response is explicitly selected.
-- Do NOT use "Mixed Vocal Duo". Shared singing labels are allowed only in final shared sections or explicit group moments: [Chorus 1: All Voices, ...], [Final Hook: All Voices, ...], [Chorus 1: All Female Voices, ...], or [Chorus 1: All Male Voices, ...]. Do not use All Voices in Verse, Pre-Chorus, Bridge, or Breakdown; keep those owned by one acoustic voice label.
-Use the resolved A/B/C/D ownership from [Vocals] through exact matching gender + letter + role anchors. A shared Chorus or Final Chorus may use All Voices only when the current arrangement truly calls for a shared payoff; do not copy a preset cue phrase.
-- For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use acoustic composite tags only where that voice actually owns or interrupts that part.
-- Do NOT default every chorus to A/B/A/B dialogue. In parallel monologue, use one exact defined owner such as [Chorus 1: Male A Main, led hook] or [Chorus 1: Female B Lead, led hook]. [Chorus 1: call-response hook] is allowed only when the arrangement explicitly says call-response.
-- When a section is call-response, keep each role block short, usually 2-4 lines. When a section is solo-led, one speaker may own the full section with only short interruptions or ad-libs from the other.
-- Avoid blended vocals when Arrangement says separated dialogue or call-response.
-- In custom structures, do not drop section labels in Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro when they contain lyrics.
-- In custom structures, do not drop the vocal/acoustic role inside Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro composite tags when they contain lyrics.
-- One line must not contain two speaker tags. Split them into separate lines/blocks.
-- Use the A→B pattern ONLY for sections explicitly chosen as call-response. Other sections may be A-only, B-only, Together-only, echo-style, interruption-style, or one speaker with the other appearing only as an ad-lib.
-- Avoid long tag explanations; keep tags short and musical.
+- Keep section tags short and musical. Every sung tag starts with the exact structural section name; multi-vocal tags then use the exact declared gender + letter + role anchor and one local performance cue. Solo tags do not repeat the global singer identity.
+- [] is for structural/performance/production cues. () is only for intentional short ad-libs, reactions, breath, or inner-thought gestures. Never place story-role names in parentheses or use Korean speaker labels as bracket identities.
+- Instrument, ambience, texture, effect, and point-sound directions belong on separate square-bracket cue lines next to the relevant section, not inside singer identity text.
+- Multi-speaker does not mean line-by-line A/B alternation. A section may be solo-led, interrupted, echo-led, relay, shared, or true call-response only when the current arrangement calls for it.
+- Situation target A/B are story roles, not automatic singer count. Actual singer count/gender/identity always follows the Vocal configuration.
+- Keep custom section names and order exact. Do not split one Chorus into tiny fragments merely to change singer ownership.
 ${shouldUseMixedLyrics
-  ? '- EXPLICIT LANGUAGE MIX OVERRIDE: follow the binding APP-DECIDED LANGUAGE PASSAGE PLAN. Do not apply a global 10% English cap and do not reduce target-language passages to ad-libs.'
-  : '- Keep English around 10% or less, mostly as short ad-libs or rhythm points.'}
+  ? '- EXPLICIT LANGUAGE MIX OVERRIDE: follow the binding APP-DECIDED LANGUAGE PASSAGE PLAN. Target-language passages are full lyrical content, not ad-libs.'
+  : '- Keep English around 10% or less unless the selected language mode says otherwise; use it mainly as short ad-libs or rhythmic points.'}
 ${buildExtraTechniqueLyricTagInstruction(params)}
-- UI mode words such as 사회풍자형, 평행 독백형, 대화형, 콜앤리스폰스형, 보컬감정, or 연출 톤 are internal controls. Never write those words directly in the lyric body; express them through character behavior and concrete details.
+- UI mode/control words are internal controls and must not leak into lyric body text.
 
 ${sectionCueOutputInstruction}
 
 [PART OWNERSHIP / SONG ARCHITECTURE RULES]
-- CRITICAL: Multi-speaker does NOT mean every section must be a back-and-forth dialogue. First decide the part ownership of the song, then place speaker tags only where needed.
-- This is NOT just dialogue alternation. Decide who owns each musical part differently for each song.
-- Before writing lyrics, silently choose ONE section ownership map based on Genre + Situation version + development feeling. Do NOT show the map.
-- Never reuse the same ownership formula across all genres. A ballad, city pop, funk, rap, trot, EDM, and gugak fusion song must distribute vocal parts differently.
-- The selected genre must affect part ownership:
-  - Ballad/R&B: one voice may own emotional verses; the other appears as memory, answer, or late confession.
-  - City pop/Funk: hook and chorus may be stylish call-response, but they can also be one-speaker hooks with short echo/ad-lib replies; verses can be solo monologue, interruption, or trade.
-  - Rap/Hip-hop: Rap Section can be a battle, relay, or one-sided rant; do not force polite A/B alternation.
-  - Trot/Gugak/Fusion: one role can narrate or command while the other answers with traditional/formal phrasing.
-  - EDM/Drop: Drop can be ad-lib/hook-driven, but if lyrics appear, keep role identity in short bursts.
-- Possible section ownership maps:
-  1) A-led pursuit: A owns Verse; B cuts in at Hook; Chorus becomes a chase.
-  2) B-led complaint: B owns Verse; A answers later; Bridge exposes A's weakness.
-  3) Interruption map: one role begins each section, the other interrupts after 1-2 lines.
-  4) Trade/negotiation map: A and B exchange short offers/refusals; one section becomes a solo complaint.
-  5) Parallel monologue map: A and B get separate short monologues, then clash in Hook or Chorus.
-  6) Reversal map: the confident role loses control in Bridge, Breakdown, or Chorus.
-  7) Unresolved map: no reconciliation; keep emotional distance through the Outro.
-  8) Chorus-takeover map: the chorus is owned mostly by one role, while the other only interrupts with short lines/ad-libs.
-  9) Echo map: one role sings full lines while the other echoes, corrects, or undercuts them.
-- Do NOT always use: Verse A→B, Pre-Chorus softening, Chorus A/B/A/B, Bridge reconciliation, Chorus resolution.
-- Do NOT make every lyrical section contain both speakers. Some sections may be A-only, B-only, echo-only, or Together-only if it fits the map.
-- Bridge must not always be empathy or reconciliation. It can be interruption, reveal, refusal, reversal, silence, parallel monologue, or comic failure.
-- Chorus must not always resolve the conflict. It can stay comic, bitter, awkward, one-sided, or unresolved if the Situation version supports it.
-- Custom structures: preserve the user's section order, but assign a different owner/function to each section. Do not repeat the same A/B block order in Verse, Pre-Chorus, Chorus, and Bridge.
-- Chorus/Hook must not always be balanced call-response. It can be A-dominant, B-dominant, echo style, one-line interruptions, full Together hook, solo emotional hook, or short punchline hook depending on the chosen map.
-- Across generations with the same keywords, vary chorus ownership: female-only, male-only, together, A-led with B ad-libs, B-led with A interruptions, echo/correction, call-response, rap relay, or refrain-only are all valid.
-- Never assume the chorus should be one sentence from A then one sentence from B repeatedly.
+- Decide one song-like ownership map from Genre + Situation + vocal setup; do not use a fixed dialogue template.
+- Multi-vocal sections may be A-led, B-led, solo monologue, interruption, echo/correction, relay, shared payoff, or call-response. Do not require both singers in every section.
+- Chorus/Hook chooses the function that best serves the song. True call-response is only one option and must not become the default for every repeated hook.
+- Bridge is a real turn, not automatic reconciliation. It may reveal, refuse, reverse, pause, interrupt, or stay unresolved when supported by the Story Context.
+- Genre may influence ownership style, but never override explicit user structure, Situation, or vocal identities.
+- Custom structure keeps the exact user order while varying local ownership/function inside those slots.
+- Across sibling generations, vary ownership/emphasis without making the song structurally random or changing its central meaning.
 
-[STRICT PART DIVERSITY RULES]
-- CRITICAL: Do not design the song as a dialogue template. Design it as a song with changing part ownership.
-- A multi-speaker song can have many valid part architectures. Use only ONE or TWO dialogue-heavy sections unless the user explicitly asked for full musical-theater dialogue.
-- At least two lyrical sections should be owned mostly by one speaker, by Together, or by echo/ad-lib structure instead of balanced A/B exchange.
-- The chorus must choose ONE function, not the same A/B line-trading every time:
-  1) A solo hook, B only ad-libs
-  2) B solo hook, A only interrupts once
-  3) Together hook only
-  4) A hook + B echo/correction
-  5) B hook + A spoken undercut
-  6) Rap relay hook
-  7) Refrain-only hook with no speaker split
-  8) True call-response hook
-- Do not use true call-response in more than one major hook section unless the selected development feeling specifically asks for it.
-- Vary section ownership across the whole song. Examples of valid distributions:
-  A) Verse=A solo, Pre-Chorus=Together, Chorus=B solo hook, Verse=B solo, Bridge=A interruption, Chorus=Together.
-  B) Verse=B solo, Hook=A short cut-in, Chorus=Together, Verse=A solo, Bridge=parallel monologue, Chorus=B solo.
-  C) Verse=A interrupted by B, Pre-Chorus=A solo, Chorus=A-led with B ad-libs, Verse=B rant, Bridge=unresolved silence, Outro=A punchline.
-  D) Verse=parallel monologues, Chorus=refrain-only, Verse=rap relay, Bridge=late reveal, Chorus=echo/correction.
-- Do not make Verse sections, Pre-Chorus, Chorus, and Bridge all contain both speakers.
-- Do not make both characters appear in the same order in every section.
-- If the song has a genre with strong vocal conventions, follow that genre's part logic before dialogue symmetry: ballad can be solo emotional hook, funk can be ad-lib undercut, rap can be relay/battle, trot can be one main singer with spoken replies, EDM can use refrain/drop fragments.
-- The goal is varied but song-like structures, not random section collage. Same selected keywords can create different part ownership each generation, but the section order must still feel musically intentional.
-
-[PRONUNCIATION DESIGN]
-- Write lyrics as singable spoken language, not prose.
-- Chorus and high-emotion lines should prefer open vowels and fewer heavy final consonants.
-- Rap/groove sections should use short rhythmic phrases and crisp consonant energy.
-- Do not intentionally misspell Korean to force pronunciation.
+[PRONUNCIATION / LYRIC STYLE]
+- Write singable spoken language rather than prose. Hooks/high-emotion lines may use simpler open phrasing; rap/groove sections may use shorter rhythmic phrases. Never misspell Korean merely to force pronunciation.
 ${shouldUseMixedLyrics
-  ? '- In explicit language-mix mode, target-language passages are full lyrical content according to the binding section plan, not merely English ad-libs or punchline tokens.'
-  : '- Use short English ad-libs as breath or punchline points only.'}
-
-[LYRIC STYLE SYSTEM]
-
-Write lyrics that feel like they were written by a real person, not an AI.
-
-[CORE RULES]
-- Do NOT write like a poem generator.
-- Avoid overused abstract words unless absolutely necessary.
-- Do NOT stack emotional nouns (e.g. echo, warmth, shadow, light, darkness).
-- Keywords (theme, mood) must NOT be directly repeated as words.
-
-[WRITING STYLE]
-- Use specific moments when the Story Context naturally contains them. When the source is broader, express its progression through speech, behavior, changing pressure, or recurring thought without forcing one visual scene.
-- Show feeling through the forms already available in the Story Context: actions, speech, silence, relationship tension, time flow, memory, or image.
-- Use small relatable details only when they naturally belong to the source. Do not invent a place or object to satisfy a detail checklist.
-- Write like a person living through or recalling the Story Context, not explaining a concept.
-- Slight imperfection is okay — natural > perfect.
-
-[LANGUAGE STYLE]
-- Use natural, conversational phrasing.
-- Avoid overly dramatic or artificial expressions.
-- Mix short and long lines naturally.
-- Do NOT repeat the same structure every line.
-
-[EMOTION EXPRESSION]
-- Replace flat emotion explanation with natural speech, behavior, timing, relationship pressure, or imagery that already belongs to the Story Context.
-- Do not add an unrelated object or setting solely to make the emotion look concrete.
-
-[KEYWORD USAGE RULE]
-- Theme and mood should guide the situation, not appear as direct words.
-- If a keyword-like word is used, use it only once and naturally.
-- Never build the whole lyric around a single abstract word.
-
-[TECHNICAL INSTRUCTION LEAKAGE GUARD]
-- Do NOT write lyrics or titles about performance/production instructions.
-- Do NOT use “엇박자”, “느린템포”, “슬로우 모션”, “고음자제”, “중독성 후렴”, “여자보이스”, “독특한 목소리”, or similar instruction words as lyric phrases unless the user explicitly made them the story topic.
-- If the prompt contains offbeat/syncopated vocal phrasing, realize it through rhythm and delivery only.
-- If the prompt contains slow tempo, realize it through pacing and arrangement only; do not write “slow motion” or “slow tempo” as a lyric image.
-- If the prompt contains addictive chorus/hook, make the chorus memorable without literally singing about hooks or choruses.
-- If the prompt contains vocal gender/tone/limits, apply them to singer direction only.
-
-- If lyricDraft exists, it must be treated as the primary lyrical source.
-- The generated lyrics should preserve the user’s draft as much as possible.
-- Only expand, refine, and restructure where necessary.
-- Do not ignore lyricDraft.
-- Do not rewrite it with a completely new lyric idea.
-- The lyrics should follow the selected theme(s) and explicit narrative details provided by the user.
-- If no explicit theme exists, create a simple coherent Story Context without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
-- Themes define the situation, scene, or story.
-- Moods define only the emotional tone or feeling around that story.
-- The lyrics must clearly reflect the exact arrangement and section order provided above.
-- If custom structure mode is selected, keep the exact custom section order, but apply the Situation to every lyrical section.
-- For custom Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, and Outro sections, keep the characters, relationship, speech style, and conflict active.
-- Do not let custom Chorus/Hook/Rap sections become generic slogan lyrics. They must still sound like the selected Situation.
-- For duo/group Situation songs, custom Chorus/Hook/Rap Section sections must keep role identity, but they must NOT always use call-response. They can be solo-led, echo-led, together-led, interruption-led, relay, or call-response depending on the chosen ownership map.
-- Instrumental and Interlude sections may be mostly musical. Break and Stop must not contain lyric lines. In lyric songs, Drop is not automatically a musical gap; it may be hook-driven and can carry compact sung lines tied to the same Situation.
-- If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role without replacing the story.
-- For multi-speaker songs, do not give Verse sections, Bridge, and Chorus the same speaker order. Rotate section ownership naturally.
-- A chorus can be led by one speaker with the other interrupting, not always equal A/B alternation.
-- A verse can be mostly one speaker if the other interrupts briefly; this is different from a full duet block.
-- Respect the selected lyricsLength strictly.
-- Respect the selected song structure strictly.
-- In DEFAULT/ADAPTIVE mode, respect the adaptive blueprint you choose at the start and keep the section order coherent.
-- Do not drift longer than the requested lyric size.
-- Do not invent a new structure that conflicts with the locked blueprint.`
+  ? '- In explicit language-mix mode, follow the binding language-passage plan for full target-language passages.'
+  : '- Use short English ad-libs or rhythmic points only when natural.'}
+- Write like a real person living through the Story Context: natural, conversational, specific when the source supports specificity, and not overloaded with decorative abstract nouns.
+- Show emotion through speech, action, silence, relationship pressure, timing, memory, or images already supported by the Story Context. Do not invent a prop or place just to look concrete.
+- Theme/Situation/direct input/lyricDraft own story content. Mood and production controls only shape expression and music; they are not lyric topics.
+- If lyricDraft exists, preserve it as the primary lyrical source and refine/expand only where needed. Do not replace it with a different story.
+- Respect the active lyric-length mode, exact section blueprint, and custom structure order. Content-bearing sections must contain meaningful sung substance; instrumental/Break/Stop behavior follows the section contract.
+- Repeated Chorus/Hook sections keep hook identity while allowing the section engine's planned evolution. Do not restart the story in Outro or end on an unfinished transition.
+- Do not expose internal control words, prompt labels, technical production terms, or hidden planning language in titles or lyric body lines.
+`
+}
 }
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 `.trim();

@@ -87,6 +87,24 @@ const baselineSource = execFileSync('git', ['show', `${BASELINE_SHA}:${SOURCE_PA
 });
 const before = collectInitializerSizes(baselineSource);
 const after = collectInitializerSizes(currentSource);
+const compactSystemChars = Number(after.sizes.systemInstruction || 0);
+assert(compactSystemChars > 0 && compactSystemChars <= 36_000, `main V1 systemInstruction source must stay compact (<=36000 chars), got ${compactSystemChars}`);
+[
+  'sectionPerformancePlanOutputInstruction',
+  'v1SectionSlotContractInstruction',
+  'styleIntentSingleSourceInstruction',
+  'hookBlueprintOutputInstruction',
+  'storyContextInstruction',
+  'lyricDensityInstruction',
+  'arrangementSectionPlanInstruction',
+  'sectionCueOutputInstruction',
+].forEach((owner) => {
+  const count = currentSource.split(`${${owner}}`).length - 1;
+  assert(count === 1, `${owner} must be injected exactly once in the main V1 prompt; got ${count}`);
+});
+assert(currentSource.includes('Final productionPrompt is English-only and keeps exactly [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement]'), 'five-line production contract summary must remain');
+assert(currentSource.includes('Theme/Situation/direct input/lyricDraft own story content'), 'lyric story-source ownership must remain');
+assert(currentSource.includes('If lyricDraft exists, preserve it as the primary lyrical source'), 'lyric draft preservation must remain');
 
 const report = {
   baseline: BASELINE_SHA,

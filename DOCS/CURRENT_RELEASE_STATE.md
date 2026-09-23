@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EY. app181 개인 좋아요 5↔10 exact catalog metadata 수정 PREVIEW 후보 배포 — 전체 실사용 게이트 미통과 (2026-09-24 KST)
+
+**사용자 직접 지정 합격 기준**: 동일 계정 본인 PC/모바일의 좋아요 하트 및 내 좋아요 곡 목록 일치. 모든 계정의 PC/모바일에는 같은 공개곡 공용 likeCount가 같아야 하며, 각자의 개인 하트는 실제 본인 membership대로 표시. A/B 각자 좋아요↔해제↔재좋아요 반복, 추천/최신/인기/프로필/내 좋아요, 재접속/업데이트/장시간 열려 있는 기기까지 확인. 모바일 10 vs PC 5의 **실제 canonical 정답 아직 미확인**; 사용자 원본/개인 캐시 임의 덮어쓰기·초기화 금지. 특정 4곡 R2 복구는 전체 합격 아님.
+
+**추가 발견·소스 수정**: Worker `syncExploreLikeR2AfterBatch074`가 이미 완전 검증된 개인 R2 목록의 `likedTrackIds`를 CAS로 변경할 때 `exactLikeCount156`는 이전 숫자에 남김. 5→10이면 다른 기기 reader `normalizeSharedLikesState161`가 exact 불일치로 해당 catalog를 partial 취급할 수 있음. 완전 검증된 기존 catalog(`canonicalComplete156=true`, provenance, 정확한 count/중복 없음)에서만 새 exact count를 `liked.size`로 같은 CAS에 반영. legacy partial/corrupt는 **절대 exact로 승격 안 함**, older ACK 우선순위 및 W1 queue 그대로. Worker 원본, 074 patch, canonical SHA256 및 회귀 검사 `scripts/verify-181-personal-r2-exact-mutation.mjs` 변경. source commit `153aaccdcd758a65db7312ae5e85db60c140f38b`.
+
+**검증/배포**: Audit Run `35911382038` SUCCESS: TypeScript, Build, like/Music Note regression, executable 181 5→10→5 + partial + stale ACK PASS, Worker canonical SHA256 PASS, read-only D1 preflight PASS. Worker-only PREVIEW release Run `35911669741` / job `107352762668` SUCCESS, active `5008c2a4-17fa-4f3d-a745-04897ee79ba3`; Feed/Profile smoke PASS, warm revision D1 R0/W0 PASS, TEST/PRODUCTION Worker unchanged PASS. Firebase Hosting app155 변경 없음. 실제 사용자 원본/D1 schema 변경 없음.
+
+**릴리스 가드 후속 수정**: `35911669741`의 pinned source trigger에는 예전 `repair_shared_like_snapshot_156=true`가 남아서 일회성 cron이 재활성화되었으나, 기존 marker PASS 후 cron 원복 PASS; 공유 R2 latest/popular 역시 PASS, 사용자 원본 변경 없음. 원인은 Worker release workflow가 triggering commit이 아닌 pinned product source의 오래된 trigger flag를 읽기 때문. 실제 triggering commit의 trigger 내용만 읽도록 workflow 소스 수정 `75965bb7993ba2b3d9d2fa9c3eab2ae59710017e`; 향후 릴리스에서 156 cron 비의도 반복 금지.
+
+**남은 필수 게이트 (FAIL/미검증)**: 사용자의 실제 모바일 10 vs PC 5 각각에 남은 pending outbox / accepted R2 / D1 canonical과 특정 곡 차집합의 일치 **미검증**. 개인 R2 exact metadata의 미래 변경 회귀가 고쳐졌다는 것은 실사용 동기화 완성의 충분조건이 아님. 타계정 공유 R2 publication의 새 좋아요/해제 자동 수렴 및 active idle 타계정 즉시 반영도 **미검증**. 실제 사용자 PC·모바일 및 타계정 테스트 전 해결 완료 판단 금지. TEST/PRODUCTION 승격 금지.
+
+
 ## 0EX. PREVIEW 공유 좋아요 0 표시 실제 원인 규명 및 app156 R2 복구 배포 (2026-09-24 KST)
 
 **원인 확정**: 앱 155의 두 브라우저 숫자 0 증상은 개인 하트 문제와 달리, PREVIEW canonical D1 + 일반 `/v1/feed`는 확인 4곡 모두 likeCount=1인데 **실제 클라이언트가 읽는 first-page shared R2 snapshot (direct / revision-keyed latest, popular)에는 모두 0이 남아 있었기 때문**. 기존 069 queue=0이고 canonical relation=1, derived=1. 읽기전용 Diagnose Run `35905492085`에서 source discrepancy 재현. 클라이언트 캐시만 반복 초기화해도 고칠 수 없는 서버 파생 스냅샷 문제.

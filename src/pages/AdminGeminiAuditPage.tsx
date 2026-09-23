@@ -19,6 +19,11 @@ import {
   type GeminiAuditModelSkip,
   type GeminiAuditSession,
 } from '../services/geminiAuditLog';
+import {
+  getV1ProductionCueOwnershipAudits,
+  V1_PRODUCTION_CUE_OWNERSHIP_AUDIT_EVENT,
+  type V1ProductionCueOwnershipAuditItem,
+} from '../services/generation/v1/sections/productionCueOwnership';
 
 const CONTEXT_LABELS: Record<string, string> = {
   generateSong: '최초 곡 생성',
@@ -48,6 +53,12 @@ function contextLabel(context: string): string {
   const clean = String(context || '').trim();
   if (clean.startsWith('languageMixLockedWholeRewrite')) return '언어 혼합 가사 재작성';
   return CONTEXT_LABELS[clean] || clean || 'Gemini 호출';
+}
+
+function productionCueOwnerReasonText(reason: V1ProductionCueOwnershipAuditItem['ownerReasons'][number]): string {
+  if (reason === 'canonical-plan') return '곡 설계에 실제 사운드 이벤트 있음';
+  if (reason === 'custom-production') return '사용자 섹션에 악기/효과 지시 있음';
+  return '연주·브레이크 등 프로덕션 전용 섹션';
 }
 
 function numberText(value: number): string {
@@ -188,16 +199,22 @@ function statusBadge(session: GeminiAuditSession) {
 
 export default function AdminGeminiAuditPage() {
   const [sessions, setSessions] = useState<GeminiAuditSession[]>(() => getGeminiAuditSessions());
+  const [cueOwnershipAudits, setCueOwnershipAudits] = useState(() => getV1ProductionCueOwnershipAudits());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const refresh = () => setSessions(getGeminiAuditSessions());
+  const refresh = () => {
+    setSessions(getGeminiAuditSessions());
+    setCueOwnershipAudits(getV1ProductionCueOwnershipAudits());
+  };
 
   useEffect(() => {
     const handleUpdate = () => refresh();
     window.addEventListener(GEMINI_AUDIT_EVENT, handleUpdate);
+    window.addEventListener(V1_PRODUCTION_CUE_OWNERSHIP_AUDIT_EVENT, handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener(GEMINI_AUDIT_EVENT, handleUpdate);
+      window.removeEventListener(V1_PRODUCTION_CUE_OWNERSHIP_AUDIT_EVENT, handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, []);
@@ -250,6 +267,27 @@ export default function AdminGeminiAuditPage() {
         현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
         곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 5회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 추가 호출됩니다.
       </div>
+
+      {cueOwnershipAudits.length > 0 && (
+        <div className="rounded-2xl border border-brand-orange/15 bg-brand-orange/[0.045] px-4 py-3">
+          <div className="text-xs font-black text-[var(--text-primary)]">최근 섹션 지시문 보완 판정</div>
+          <div className="mt-2 space-y-1.5">
+            {cueOwnershipAudits.slice(0, 4).map((audit) => (
+              <div key={`${audit.createdAt}-${audit.signature}`} className="rounded-xl bg-btn-bg px-3 py-2 text-[10px] leading-4 text-[var(--text-secondary)]">
+                <div className="font-bold">{dateText(audit.createdAt)}{audit.repeatCount > 1 ? ` · 동일 판정 ${audit.repeatCount}회` : ''}</div>
+                {audit.missing.map((item) => (
+                  <div key={item.sectionName} className="mt-0.5">
+                    <span className="font-black text-brand-orange">{item.sectionName}</span>
+                    {' · '}
+                    {item.ownerReasons.map(productionCueOwnerReasonText).join(' + ')}
+                    {' · 렌더링된 사운드 지시 없음'}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
@@ -393,6 +431,18 @@ export default function AdminGeminiAuditPage() {
                             {call.usage.cachedTokens > 0 && <span>캐시 {numberText(call.usage.cachedTokens)}</span>}
                             <span>전체 {numberText(call.usage.totalTokens)}</span>
                           </div>
+                          {call.usage.requestTotalChars > 0 && (
+                            <div className="mt-2 rounded-lg bg-black/10 px-2.5 py-2 text-[10px] leading-4 text-[var(--text-secondary)]">
+                              요청크기 {numberText(call.usage.requestTotalChars)}자
+                              {' · '}내용 {numberText(call.usage.requestContentsChars)}
+                              {' · '}시스템 {numberText(call.usage.requestSystemInstructionChars)}
+                              {' · '}응답스키마 {numberText(call.usage.requestResponseSchemaChars)}
+                              {' · '}기타설정 {numberText(call.usage.requestOtherConfigChars)}
+                              {call.usage.requestFallbackInstructionChars > 0 && (
+                                <> {' · '}fallback {numberText(call.usage.requestFallbackInstructionChars)}</>
+                              )}
+                            </div>
+                          )}
                           {call.errorMessage && (
                             <p className="mt-2 break-words text-[10px] leading-4 text-red-300/80">{geminiErrorText(call.errorMessage)}</p>
                           )}

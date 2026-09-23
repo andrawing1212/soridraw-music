@@ -29,14 +29,14 @@ assert.match(page, /syncSharedPublicCountsToLocal110/);
 // written into persistent Feed and public-profile caches. Optimistic and
 // same-account RTDB counts remain UI/account-local, even across sign-out.
 const sharedStart = page.indexOf('const syncSharedPublicCountsToLocal110 =');
-const sharedEnd = page.indexOf('\\n  useEffect(', sharedStart);
+const sharedEnd = page.indexOf('\n  useEffect(', sharedStart);
 assert.ok(sharedStart >= 0 && sharedEnd > sharedStart);
 const sharedWriter = page.slice(sharedStart, sharedEnd);
-assert.match(sharedWriter, /sharedTracks\\.forEach\\(\\(track\\) =>/);
-assert.doesNotMatch(sharedWriter, /effectiveSharedTracks\\.forEach/);
-assert.match(sharedWriter, /patchExploreFeedSessionCachesRow\\(track\\.id, \\{ likeCount: track\\.likeCount \\}\\)/);
-assert.match(sharedWriter, /patchExplorePublicProfileFirstViewTrack\\(track\\.ownerUid, track\\.id, \\{ likeCount: track\\.likeCount \\}\\)/);
-assert.match(sharedWriter, /patchExploreLikedTrackCachedCount091\\(\\s*activeUid, track\\.id, countByTrackId\\.get\\(track\\.id\\) \\?\\? track\\.likeCount/);
+assert.match(sharedWriter, /sharedTracks\.forEach\(\(track\) =>/);
+assert.doesNotMatch(sharedWriter, /effectiveSharedTracks\.forEach/);
+assert.match(sharedWriter, /patchExploreFeedSessionCachesRow\(track\.id, \{ likeCount: track\.likeCount \}\)/);
+assert.match(sharedWriter, /patchExplorePublicProfileFirstViewTrack\(track\.ownerUid, track\.id, \{ likeCount: track\.likeCount \}\)/);
+assert.match(sharedWriter, /patchExploreLikedTrackCachedCount091\(\s*activeUid, track\.id, countByTrackId\.get\(track\.id\) \?\? track\.likeCount/);
 
 const remoteStart = page.indexOf('const onRemote = (detail:');
 const remoteEnd = page.indexOf('const onGap = (event:', remoteStart);
@@ -53,7 +53,7 @@ const toggleWriter = page.slice(toggleStart, toggleEnd);
 assert.doesNotMatch(toggleWriter, /patchExploreFeedSessionCachesRow/);
 assert.doesNotMatch(toggleWriter, /patchExplorePublicProfileFirstViewTrack/);
 assert.match(toggleWriter, /patchExploreLikedTrackCachedCount091/);
-assert.match(toggleWriter, /setTracks\\(patchOptimisticCount120\\)/);
+assert.match(toggleWriter, /setTracks\(patchOptimisticCount120\)/);
 assert.doesNotMatch(page, /getExploreLikeDisplayCount091/);
 assert.match(page, /track=\{track\}/);
 assert.match(page, /liked=\{Boolean\(likedTrackIds\[track\.id\]\)\}/);

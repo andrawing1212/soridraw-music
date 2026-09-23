@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app152 + PREVIEW Gemini Function unified Interactions 실사용 1곡 확인
+
+- app152 Hosting은 유지.
+- PREVIEW Gemini Function Tune Run `35882735701` SUCCESS.
+- initial chain `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite`의 서버 호출 경로를 모두 Interactions API로 통일.
+- 5회 상한 / bounded timeout / daily quota cooldown / 프롬프트·가사·섹션 계약 변경 없음.
+- shared TEST/PRODUCTION `generateGeminiContent` unchanged PASS.
+- 사용자 직전 3곡은 모두 0-token 실패였고, 3.7은 free-tier daily quota exhaustion으로 확인됨.
+- 다음은 PREVIEW 일반 V1 1곡만 재검증.
+- 성공하면 provider promptTokens/처리시간/모델/5단 productionPrompt/가사/section cue를 확인.
+- 실패하면 반복 호출 금지. 동일 세션의 per-model status와 quota reset/account tier/provider availability만 분리 분석.
+- prompt 추가 축소 금지. TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app152 PREVIEW 실사용 1곡 검증
 
 - PREVIEW app152 Hosting 배포 완료.

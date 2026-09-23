@@ -1,5 +1,48 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EQ. app152 실사용 3곡 실패 → PREVIEW Gemini Function fallback API 통일 배포 (2026-09-24 KST)
+
+**사용자 실사용**
+- app152 PREVIEW에서 일반 V1 곡 3곡 생성 시도, 3곡 모두 실패.
+- 첫 곡 세션: 총 4 physical attempts / 33.0s / provider usage 0 tokens.
+  - gemini-3.8-flash: 약 0.85s 후 upstream unavailable.
+  - gemini-3.7-flash: 무료 등급 일일 요청 한도 소진 cooldown으로 사전 skip.
+  - gemini-3.6-flash: 약 0.23s 후 upstream unavailable.
+  - gemini-3.5-flash: 약 2.7s 후 upstream unavailable.
+  - gemini-3.5-flash-lite: 20s bounded timeout.
+- 뒤의 두 곡도 1-call 세션으로 각각 약 22.0s / 2.5s에 실패. 기존 cooldown 때문에 앞선 실패 모델들이 반복 호출되지 않은 결과로 판단.
+- 모든 실패가 input/output/thought total 0 tokens이므로 app152의 24.7k source compaction 자체의 provider 처리 결과는 아직 측정할 수 없음.
+
+**원인 분리**
+- Google 현재 공식 문서 기준 gemini-3.8/3.7/3.6/3.5/3.5-lite는 지원 모델이며 Interactions API 지원 대상.
+- 사용자 세션에서 3.7은 실제 free-tier daily quota exhaustion으로 확인됨.
+- 기존 PREVIEW Function은 3.8/3.7만 Interactions API, 3.6/3.5/3.5-lite fallback은 legacy generateContent API를 사용하고 있었음.
+- 한 모델 quota만으로 전체 실패를 단정하지 않고, 0-token unavailable fallback 경로를 줄이기 위해 initial five-model chain을 동일 Interactions API로 통일.
+
+**구현 / 검증**
+- source commit `04c68097c91a9cd9f7d1a5a96ded731cfb98e84b`.
+- 변경:
+  - `functions/src/index.ts`: initial chain 3.8/3.7/3.6/3.5/3.5-lite 모두 `callGeminiInteraction`.
+  - `functions/scripts/build-secured-index.cjs`: generated runtime에도 동일 route + 기존 per-model bounded timeout 보존.
+  - 새 no-deploy source audit workflow 추가.
+- Source Audit Run `35882653272` SUCCESS: Functions Build / unified Interactions route / 5-attempt ceiling / daily quota guard / bounded timeout PASS.
+- 모델 순서, physical call max 5, prompt/lyrics/5단 구조, Firestore schema/user data 변경 없음.
+
+**PREVIEW Function 배포**
+- deployment commit `b94684a49fb410994c1bf8ea2e3f54fd1e76123f`.
+- PREVIEW Gemini Function Tune Run `35882735701` / job `107255022564` SUCCESS.
+- `PREVIEW_GEMINI_FUNCTION_UPDATED=PASS`.
+- `SHARED_GEMINI_FUNCTION_UNCHANGED=PASS` — TEST/PRODUCTION shared Gemini Function 비변경.
+- `PREVIEW_RUNTIME=nodejs22`, `PREVIEW_GEMINI_CORS=PASS`.
+- Firebase deploy artifact cleanup policy warning은 기존 알려진 warning이며 Function update 자체는 성공.
+- Hosting app은 app152 그대로. Worker / D1 / Firestore / Rules / 사용자 데이터 변경 없음.
+
+**다음**
+- provider free-tier daily quota/capacity 영향이 남아 있을 수 있으므로, 사용자에게 반복 생성 요구 금지.
+- PREVIEW에서 일반 V1 1곡만 재검증. 성공 시 provider promptTokens와 처리시간을 app150 33k 사례와 비교.
+- 동일 0-token 실패면 prompt를 더 줄이지 말고 quota/reset/account tier 및 provider availability를 원인으로 분리.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0EP. PREVIEW app152 — Gemini 메인 V1 systemInstruction 중복 압축 배포 완료 (2026-09-24 KST)
 
 **배경**

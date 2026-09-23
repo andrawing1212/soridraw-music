@@ -349,4 +349,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(securedPath, source, 'utf8');
-console.log('Applied SORIDRAW 145 Gemini policy: daily-quota skip + 3.5 20s ceiling + low-thinking + Retry-After + in-flight.');
+console.log('Applied SORIDRAW Gemini policy: daily-quota skip + bounded fallback timing + low-thinking + Retry-After + in-flight.');

@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app147 실사용 3곡 결과에 따른 선택적 진단 (구현/배포 전)
+
+- latest user field test details are in `DOCS/CURRENT_RELEASE_STATE.md` section 0EH.
+- PREVIEW Hosting app147 remains deployed; 3 songs all completed, but latency 45.8~76 s and initial request input ~33k tokens persists.
+- Melodic Rap 2 calls: no section repair; 3.8 timeout 35 s, 3.7 success 33.9 s.
+- Folk Rock 5 calls: 3.7/3.6 busy, 3.5 timeout 20 s, 3.5-lite initial success 8.7 s, `repairV1FinalProductionCues` via 3.5 success 10.6 s. The missing/required production section is **not yet identified**.
+- Heavy Metal 4 calls: 3.7/3.5 busy, 3.5-lite initial success 9.9 s; independent hard-ban correction 3.5-lite 961 ms. No section repair.
+
+**분석/검증 단계**
+1. `repairV1FinalSectionAndCueIntegrity`의 Folk Rock 사례에서 required section, canonical plan/sibling/renderer cue 존재 여부를 먼저 확인할 수 있는 read-only/개발 전용 진단 범위를 설계한다. 외부 실제 가사나 민감 원본은 로그하지 않는다.
+2. canonical audible event가 정당하게 누락되었다면 기존 Gemini fallback을 보호한다. optional blank 오분류일 때만 최소 수정과 회귀 테스트를 제시한다.
+3. 최초 요청의 실제 전송 직전 payload를 구성 블록별로 문자수/예상 token을 계측한다. 정적 TS initializer source 길이 15,761 chars는 실제 33k provider input token과 동일하지 않다. 출력 스키마 및 전달 context 포함 여부 검토.
+4. 3.8/3.7/3.6/3.5 timeout/혼잡은 provider 상태의 영향과 로컬 routing policy를 구분한다. 모델 순서/timeout/최대 physical call 수를 성급히 바꾸지 않는다.
+5. sung section performance cue / instrumental/custom/언어혼합/금지어 교정/전체 곡 생성 정상성 및 UI/데이터/TEST/PRODUCTION 보호.
+6. 사용자의 별도 진행 지시 전에는 추가 런타임 수정·배포를 실행하지 않는다. Codex 구현을 시작하면 `preview`와 최신 HEAD를 다시 확인하고 독립 감사 후 PREVIEW 검증.
+
+
 ## 현재 최우선 — app147 PREVIEW 실사용 확인
 
 현재 PREVIEW:

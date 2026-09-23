@@ -1,5 +1,16 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — Music Note Suno 연결 썸네일 app148 실사용 확인
+
+- PREVIEW source-only 후보 app148, 실제 Hosting app147.
+- 코드 commit `bc7b0a3d198938c846d33b20e708ccb0c83fd02a`.
+- audit Run `35850755112` SUCCESS, TypeScript/Build/verify-031 PASS.
+- 수정은 상세 URL 편집의 local-first draft를 Music Note 카드의 최소 Suno 메타데이터에 즉시 미러링하는 것. 저장 일정/서버 비용 변경 없음.
+- 다음 지시는 사용자의 PREVIEW 배포 승인 및 실기기 검증을 우선한다.
+- 검증: URL 1 등록 → 목록 즉시 아트워크, URL 2 등록/1순위 교체, 삭제, 상세 종료, 모바일/PC 및 재진입. 미반영이면 catalog delta / 캐시 동기화 별도 확인. 전곡 상세 조회 도입 금지.
+- 해당 작업의 사용성 확인을 마친 후에만 app147 Gemini latency / Folk Rock repair / 33k prompt-size 진단 재개.
+
+
 ## 현재 최우선 — app147 실사용 3곡 결과에 따른 선택적 진단 (구현/배포 전)
 
 - latest user field test details are in `DOCS/CURRENT_RELEASE_STATE.md` section 0EH.

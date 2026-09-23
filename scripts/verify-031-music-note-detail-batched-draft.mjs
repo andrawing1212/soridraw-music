@@ -59,6 +59,19 @@ assert(!cardSync.includes('updateFavorite(') && !cardSync.includes('getDoc('), '
 const detailOpen = block('  const openFavoriteDetail = async', '\n\n  const executeFavoriteMenuAction');
 assert(detailOpen.includes('syncFavoriteSunoCardMedia(sourceId, nextSong);'), 'a hydrated existing Suno cover is not reused for its list row');
 
+const draftOverlay = block('  // A full R2 catalog can arrive after a local URL edit', '\n\n  const queueFavoriteDetailPatch');
+assert(draftOverlay.includes('listMusicNoteDetailDrafts(uid)'), 'a reload does not recover local Suno media drafts');
+assert(draftOverlay.includes('getMusicNoteDetailSourceVersion(song)'), 'local draft compatibility is not checked');
+assert(draftOverlay.includes('sourceVersion <= draft.baseVersion'), 'a stale local draft could override newer server media');
+assert(draftOverlay.includes('syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);'), 'incoming catalog summary hides the unflushed Suno cover');
+assert(!draftOverlay.includes('getDoc(') && !draftOverlay.includes('updateFavorite('), 'list draft overlay must stay local-only');
+
+const coordinator = fs.readFileSync('src/lib/pageSyncCoordinator.ts', 'utf8');
+const handlerFlush = coordinator.indexOf('for (const handler of pending.handlers) jobs.push(Promise.resolve(handler.flush()));');
+const catalogFlush = coordinator.indexOf('await flushPendingCatalogPublishes(uid);');
+assert(handlerFlush >= 0 && catalogFlush > handlerFlush, 'catalog delta can publish before Music Note Firestore draft flush');
+assert(coordinator.includes('if (!failed && getPendingCatalogPublishCount(uid) > 0)'), 'catalog must be checked after mutation success, not only at page-exit entry');
+
 const flush = block('  const flushFavoriteDetailPendingPatch = async', '\n\n  const scheduleFavoriteDetailFlush');
 assert(flush.includes('await updateFavorite(pending.songId, pending.updates);'), 'single batched Firestore flush missing');
 assert(flush.includes('await patchMusicNoteDetailCache({'), 'detail cache is not updated after successful flush');

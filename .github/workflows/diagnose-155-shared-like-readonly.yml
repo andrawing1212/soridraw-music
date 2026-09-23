@@ -118,7 +118,7 @@ jobs:
           CFG="$PWD/canonical/wrangler.preview.jsonc"
 
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT id,phase,updated_at FROM explore_like_cutover_control_174 WHERE id=1;
+            SELECT * FROM explore_like_cutover_control_174 WHERE id=1;
           " --json > "$RUNNER_TEMP/cutover174.json"
 
           set +e
@@ -148,7 +148,7 @@ jobs:
           const fs=require('fs');
           const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cutover174.json','utf8')).flatMap(x=>x.results||[]);
           const x=r[0]||{};
-          console.log('CUTOVER174 phase='+String(x.phase||'missing')+' updated_at='+String(x.updated_at||0));
+          console.log('CUTOVER174 phase='+String(x.phase||'missing'));
           console.log('CUTOVER_GUARDS_READ_ONLY=PASS');
           NODE
 

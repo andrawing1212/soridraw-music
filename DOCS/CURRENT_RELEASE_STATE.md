@@ -1,5 +1,26 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EH. app147 사용자 PREVIEW 3곡 생성 진단 수신 — 보완 호출 1/3, 최초 입력 33k 유지 (2026-09-23 KST)
+
+**사용자 제공 화면 (2026-09-23 오후 07:33~07:35 KST 표시)**
+1. Melodic Rap `아직 그대로 남아`: 완료, 호출 2회, 35,591 tokens(입력 32,931/출력 2,660), 전체 1분 16초. `gemini-3.8-flash` 최초 생성 35.0초 timeout 실패 → `gemini-3.7-flash` 33.9초 성공. 섹션 지시문 보완 호출 없음.
+2. Folk Rock `거울을 볼 때마다`: 완료, 호출 5회, 36,590 tokens(입력 33,804/출력 2,671/추론 115), 전체 1분 1초. 3.8 in-flight skip, 3.7 8.7초 busy 실패, 3.6 5.6초 busy 실패, 3.5 20.0초 timeout 실패, 3.5-lite 8.7초 최초 생성 성공 → `섹션 지시문 보완` 3.5 10.6초 성공(입력 374/출력 42/추론 115, 531 total).
+3. Heavy Metal `발걸음마다 남아`: 완료, 호출 4회, 38,063 tokens(입력 34,810/출력 3,253), 전체 45.8초. 3.8 timeout cooldown skip, 3.6 busy cooldown skip, 3.7 14.3초 실패, 3.5 15.2초 실패, 3.5-lite 9.9초 최초 생성 성공 → `금지어 통합 교정` 3.5-lite 961ms 성공(입력 1,047/출력 127, 1,174 total). 섹션 지시문 보완 호출 없음.
+
+**판정 및 범위**
+- 해당 3곡에서는 섹션 production-cue 보완 호출이 1/3곡에서 남았다. 이는 app147이 모든 보완을 제거한 것이 아니라 `required audible production event`만 보완하도록 바꾼 설계와 양립한다. Folk Rock 결과의 실제 섹션/plan ownership이 보이지 않아 이번 호출이 정당한지 또는 오분류인지 판정 불가.
+- 3곡 모두 생성 완료. 그러나 처리시간 45.8~76초로 여전히 길다. 주요 지연은 최초 생성 모델의 실패/timeout 및 재시도; Folk 보완 10.6초도 추가 지연.
+- 최초 성공 입력은 32,931 / 33,430 / 33,763 tokens로 약 33k이며, 원래 목표인 34k 컨텍스트 감소는 아직 달성하지 못했다. prompt 자체는 app147에서 변경하지 않았으므로 예상 범위.
+- Heavy Metal의 금지어 교정은 기존 app146 계약대로 3.5-lite 단일 호출/961ms로 정상 동작.
+- 해당 화면만으로 후속 Gemini 보완 호출의 `missingSections`, canonical plan `soundCue`, 실제 렌더링 cue 품질은 보이지 않는다. 합격/불합격 단정 금지.
+
+**다음 작업**
+- 먼저 Folk Rock 1건에서 실제 required section 및 canonical/renderer/sibling cue 미충족 근거를 진단으로 확인한다. 보완 호출을 무조건 삭제하지 않는다.
+- 최초 요청 payload 구성별 **실제 전송 직전 문자열 크기**와 provider 사용량을 상관 비교해 33k 원인을 좁힌다. 정적 initializer 문자수만으로 실제 prompt-size 증명 금지.
+- 품질/가창 cue/언어 혼합/5단 prompt/모델 5단 fallback/사용자 원본 및 정상 UI 보호.
+- 변경이 필요하면 Codex High preview → 독립 감사 → PREVIEW 실사용의 새 작업으로 분리한다. 이번 기록은 문서만 변경하며 배포 없음.
+
+
 ## 0EG. PREVIEW app147 — production-cue ownership 정합화 배포 완료 / 실사용 확인 대기 (2026-09-23 KST)
 
 **코드/감사**

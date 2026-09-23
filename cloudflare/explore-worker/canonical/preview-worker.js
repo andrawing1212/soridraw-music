@@ -22397,9 +22397,22 @@ async function syncExploreLikeR2AfterBatch074(env, uid, results, acceptedAt, bat
       : { ok: true, unchanged: true };
     if (Object.keys(order).length > EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074) return { ok: false, repairNeeded: true, reason: 'shared_r2_order_capacity_requires_canonical_rebuild' };
     if (liked.size > 2000) return { ok: false, repairNeeded: true, reason: 'shared_r2_capacity_requires_canonical_rebuild' };
+    // SORIDRAW_PERSONAL_LIKE_EXACT_COUNT_COHERENCE_181_20260924
+    // Once an account's R2 catalog has an exact baseline, its accepted
+    // desired-state CAS must update the corresponding exact count atomically.
+    // Leaving exactLikeCount156 at the old value silently downgrades a 5-to-10
+    // catalog to a partial hint and prevents the other device from converging.
+    // A legacy partial catalog must NEVER be promoted to exact by this path.
+    const previousIds = previous.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean);
+    const previousExact = previous.canonicalComplete156 === true &&
+      Boolean(String(previous.canonicalSource156 || '').trim()) &&
+      Number.isSafeInteger(previous.exactLikeCount156) &&
+      previous.exactLikeCount156 === previousIds.length &&
+      new Set(previousIds).size === previousIds.length;
     const body = {
       ...previous, schemaVersion: 1, uid: String(uid || ''),
       likedTrackIds: [...liked], lastLikeOrders074: order, updatedAt: Date.now(),
+      ...(previousExact ? { exactLikeCount156: liked.size } : {}),
     };
     const stored = await bucket.put(key, JSON.stringify(body), {
       onlyIf: { etagMatches: object.etag },

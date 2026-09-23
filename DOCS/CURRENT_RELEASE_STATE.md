@@ -1,5 +1,20 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EZ. PREVIEW app156 / Worker182 — 기존 불완전 개인 좋아요 목록 안전 확인 (2026-09-24 KST)
+
+**배경**: 동일 계정 PC 5곡 vs 모바일 10곡. 기존 181 수정은 *앞으로* accepted 개인 R2 목록을 CAS 갱신할 때 exactLikeCount156를 함께 변경하지만, **과거에 이미 mismatch된 개인 R2 기록을 고치지는 못함**. 어느 숫자가 원본 정답인지는 실사용 기기 및 인증 계정의 canonical 직접 대조 전에는 알 수 없음.
+
+**182 수정** (`preview`, 기능 commit `0598cb9e7fbe4a3e3de0164bbe7b2539310cf8df`, CORS-safe query follow-up `107424064ddacb88e37ce5c71f4ea27e74e71485`):
+- `src/services/exploreLikeService.ts`: 오래된 partial marker를 가진 계정은 기존 조기 종료 대신 **계정별 1회만** 기존 social snapshot을 재요청하며 인증된 복구 query 적용. 완전한 건강 캐시 재방문은 기존 local-first 경로 유지. 미전송 outbox/accepted pending이 원본보다 우선, 덮어쓰지 않음.
+- Worker `repairPartialPersonalLikeMetadata182`: 계정별 인증 요청에서만 실행. 이미 완전한 catalog면 D1 R0. partial인 경우 해당 UID의 069/075 queue pending 여부 확인 후 canonical `likes` 공개곡 최대 2001 제한 조회; **R2 곡 ID와 canonical 곡 ID가 정확히 동일**하고 최대 2000 이하일 때만 기존 R2의 `canonicalComplete156` 및 `exactLikeCount156` 메타데이터를 ETag CAS로 교정. 곡 IDs, D1 관계, 원본 사용자 데이터 미변경. 다르면 `canonical-mismatch`로 수정 중단 — PC 5/mobile 10 중 임의 숫자로 통합 금지.
+- `X-...` 새 헤더는 CORS preflight 위험으로 배제, 기존 인증만 쓰는 URL의 한정 query `?__soridraw_personal_repair=182` 사용. 기존 Worker/Functions/Rules/UI/CSS/TEST/PRODUCTION 미변경.
+- `scripts/verify-182-account-partial-like-repair.mjs`: canonical IDs 일치 시 metadata-only, 불일치/queue pending/CAS race에서 no overwrite, healthy D1 R0, client 1회 요청 검사.
+
+**검증**: Release System Audit Run `35913406306` SUCCESS (TypeScript/Build/static/like regression/Worker SHA + 182 executable mock; remote synthetic billing skipped). PREVIEW Worker release Run `35913674952` / job `107359598187` SUCCESS: pinned source `1765909757aa64b1036bc85cc0689965335cd13e`, active `e426448c-ce5a-4a75-a798-97e3f9f52a81`, preflight pending069=0, Feed/Profile PASS, warm revision D1 R0/W0 PASS, fixed cron disabled, TEST/PRODUCTION Worker unchanged. Firebase PREVIEW app156 Hosting-only Run `35913791497` / job `107360004721` SUCCESS: exact build app156 PASS, TEST/PRODUCTION unchanged PASS.
+
+**반드시 아직 FAIL/미검증**: 사용자의 실제 PC 5/mobile 10이 동일 UID이고 어떤 곡이 로컬 미전송/서버 canonical인지 **본인 기기/인증 서버 실측 없음**. 그 5곡의 R2와 canonical이 불일치하면 안전 장치가 그대로 멈추므로 app156으로 무조건 10으로 수렴한다고 주장 불가. 타계정 모든 PC/모바일에서 신규 좋아요·해제 변경분이 활성 화면에 실시간 전달되는지 역시 미검증, 전역 push는 여전히 없음. **사용자 요청의 전체 합격선 미달**: TEST/PRODUCTION 승격 금지, 완료 보고 금지. 다음은 사용자의 실제 기기와 서버에서 동의된 변경 항목만 비교하고 새 변경을 양방향 실사용 검증. 안전하게 확인할 수 없는 것은 덮어쓰지 않는다.
+
+
 ## 0EY. app181 개인 좋아요 5↔10 exact catalog metadata 수정 PREVIEW 후보 배포 — 전체 실사용 게이트 미통과 (2026-09-24 KST)
 
 **사용자 직접 지정 합격 기준**: 동일 계정 본인 PC/모바일의 좋아요 하트 및 내 좋아요 곡 목록 일치. 모든 계정의 PC/모바일에는 같은 공개곡 공용 likeCount가 같아야 하며, 각자의 개인 하트는 실제 본인 membership대로 표시. A/B 각자 좋아요↔해제↔재좋아요 반복, 추천/최신/인기/프로필/내 좋아요, 재접속/업데이트/장시간 열려 있는 기기까지 확인. 모바일 10 vs PC 5의 **실제 canonical 정답 아직 미확인**; 사용자 원본/개인 캐시 임의 덮어쓰기·초기화 금지. 특정 4곡 R2 복구는 전체 합격 아님.

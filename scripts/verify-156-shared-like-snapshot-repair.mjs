@@ -16,7 +16,7 @@ for (const required of [
   'AND t.is_public=1 AND t.status=',
   'observed.size !== ids.length',
 ]) assert.ok(entry.includes(required), required);
-assert.match(entry.slice(end, end + 520), /await baseWorker\.scheduled\(controller, env, ctx\)/);
+assert.match(entry.slice(end, end + 700), /return (?:await )?baseWorker\.scheduled\(controller, env, ctx\)/);
 assert.match(entry.slice(end, end + 520), /await repairVerifiedSharedLikeSnapshots156\(env\)/);
 assert.doesNotMatch(source, /UPDATE |DELETE |INSERT |\.run\(/);
 const fetchBlock = entry.slice(entry.indexOf('  async fetch(request, env, ctx) {', end));

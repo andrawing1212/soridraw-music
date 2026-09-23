@@ -91,7 +91,7 @@ function patchGeminiBoundedLatencyPolicy() {
 const GEMINI_BOUNDED_ATTEMPT_TIMEOUT_MS: Record<string, number> = {
   "gemini-3.8-flash": 35_000,
   "gemini-3.7-flash": 55_000,
-  "gemini-3.6-flash": 45_000,
+  "gemini-3.6-flash": 120_000,
   "gemini-3.5-flash": 20_000,
   "gemini-3.5-flash-lite": 20_000,
   "gemini-3.1-flash-lite": 15_000,

@@ -64,6 +64,7 @@ jobs:
           for (const token of must) {
             if (!src.includes(token)) throw new Error('Missing low-thinking contract: ' + token);
           }
+          if (!src.includes('"gemini-3.6-flash": 120_000')) throw new Error('3.6 initial timeout is not 120s');
           if (!src.includes('"gemini-3.5-flash": 20_000')) throw new Error('3.5 initial timeout is not 20s');
           if (!src.includes('daily_quota_exhausted')) throw new Error('daily quota reason missing');
           if (!src.includes('getGeminiDailyQuotaCooldownMs')) throw new Error('Pacific reset cooldown helper missing');

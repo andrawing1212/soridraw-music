@@ -2358,7 +2358,7 @@ const generateGeminiContentHandler = async (req: any, res: any) => {
         }
         const complete = !payload.nextPageToken;
         const available = new Set(payload.models
-          .map((item: any) => String(item?.name || "").replace(/^models\\//, ""))
+          .map((item: any) => String(item?.name || "").replace("models/", ""))
           .filter(Boolean));
         res.status(200).json({
           ok: true,

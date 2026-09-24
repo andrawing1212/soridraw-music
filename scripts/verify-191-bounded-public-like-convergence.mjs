@@ -96,7 +96,7 @@ assert.equal(writes,wrote);
 assert.equal(d1Writes,0);
 assert.match(entry,/await baseWorker\.scheduled\([\s\S]*?await repairSharedPublicLikeCounts191\(this\.env\)/);
 assert.match(entry,/await repairSharedPublicLikeCounts191\(env, \{ oneTime: true \}\)/);
-assert.match(releaseWorkflow,/repair_shared_like_snapshot_191=true[\s\S]*wrangler\.js" dev[\s\S]*--remote[\s\S]*--test-scheduled/);
+assert.match(releaseWorkflow,/repair_shared_like_snapshot_191=true[\s\S]*wrangler\.js\s+dev[\s\S]*--remote[\s\S]*--test-scheduled/);
 assert.match(releaseWorkflow,/cdn-cgi\/local\/scheduled\?cron=\*\+\*\+\*\+\*\+\*/);
 assert.doesNotMatch(releaseWorkflow,/repair191-cron\.json|191_PREVIEW_TEMP_CRON=ENABLED/);
 console.log('191_CANONICAL_VS_SHARED_6_OF_40_REPAIRED=PASS');

@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app165 PREVIEW Hosting 배포 완료; Social Snapshot 첫 R45 실제 사유 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0GG` 우선. 사용자의 배포 요청으로 PREVIEW app165 Hosting Run `36044641285` SUCCESS, exact release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b`, exact build/version 165 PASS; final Audit `36044402895` SUCCESS (TypeScript/Build/APP189·197·198/기존 like 회귀). RTDB rules SKIPPED, Worker195/Functions/공유 원본/TEST/PRODUCTION 변경 없음.
+- **진단 배포와 비용 절감 완료 혼동 금지.** app165의 유일한 동작상 차이는 기존 관리자 진단 lastOutcome에서 최초 snapshot 요청 사유를 `PERSONAL REPAIR 182`, `PERSONAL SETTLEMENT 189`, `PERSONAL BASELINE`, `SOCIAL CACHE MISS`로 구분한다는 것. 첫 R45 자체는 app164 실측이며 app165에서 감소했다고 검증된 바 없음.
+- 사용자 실사용: 기기 캐시 삭제/새 곡 생성 없이 업데이트 후 Explore, 관리자 진단의 `/v1/me/social-snapshot` 마지막 결과·D1 R/W 확인. 자연 발생한 최초 응답의 reason 없으면 원인 단정 금지. 그 뒤 진단 초기화하고 Explore 재진입으로 R0/W0 확인. 좋아요 하트/숫자·PC↔모바일 정상 유지 확인.
+- R45가 다시 발생한 경우에만 기록된 사유와 1계정 비식별 최소 metadata 기준 원인별 읽기 범위를 분석. 182 partial 복구 및 189 미정산 검증을 막연하게 제거하지 않고, R2 exact/guard/버전 정합성 증명 후 최소 변경 설계. 반복적인 R45 또는 변경 없는 업데이트 대규모 읽기가 입증되면 별도 국소 수정 후보/회귀/preview-only 재배포. W3+ 좋아요 mutation, 기존 곡 하트, cross-device 이상이면 승격 차단.
+- TEST/main 승격은 사용자 테스트배포 요청과 종합 검증 이후, PRODUCTION은 별도 명확 승인 이후에만 허용. 정상인 app164 첫 좋아요 및 Worker195 보호.
+
 ## 최신 2026-09-25 — Social Snapshot 최초 R45 읽기 식별용 진단 감사 통과, 비용 감소 미검증/미배포
 
 - `CURRENT_RELEASE_STATE.md 0GF` 우선. 이미 정상인 app164 첫 좋아요 및 app160/Worker195 PC↔모바일·타계정 좋아요 보호. 사용자 첫 진입 Social Snapshot 2 queries / R45 / W0와 재진입 R0는 실사용 사실. 첫 R45 요청의 구체 query mode와 유저 R2 exact 여부는 미확인.

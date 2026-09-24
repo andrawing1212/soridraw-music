@@ -8,7 +8,13 @@ const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 
 if (Number.isFinite(Number(version.version)) && Number(version.version) >= 105) {
-  assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
+  if (wrangler.vars?.SORIDRAW_ONETIME_PUBLIC_LIKE_REPAIR_191 === '1') {
+    assert.deepEqual(wrangler.triggers, { crons: ['* * * * *'] },
+      '191 one-time recovery permits exactly one temporary preview cron');
+    assert.match(entry, /await repairSharedPublicLikeCounts191\(env, \{ oneTime: true \}\)/);
+  } else {
+    assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
+  }
   assert.deepEqual(wrangler.durable_objects?.bindings, [
     { name: 'EXPLORE_LIKE_BATCH_SCHEDULER', class_name: 'ExploreLikeBatchScheduler103' },
   ]);
@@ -72,7 +78,13 @@ assert.match(scheduleHelper, /await scheduleExploreLikeAggregate103\(env\)/);
 assert.match(scheduleHelper, /LIKE_BATCH_SCHEDULER_UNAVAILABLE/);
 assert.match(scheduleHelper, /status: 503/);
 
-assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
+if (wrangler.vars?.SORIDRAW_ONETIME_PUBLIC_LIKE_REPAIR_191 === '1') {
+    assert.deepEqual(wrangler.triggers, { crons: ['* * * * *'] },
+      '191 one-time recovery permits exactly one temporary preview cron');
+    assert.match(entry, /await repairSharedPublicLikeCounts191\(env, \{ oneTime: true \}\)/);
+  } else {
+    assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
+  }
 assert.deepEqual(wrangler.durable_objects?.bindings, [
   { name: 'EXPLORE_LIKE_BATCH_SCHEDULER', class_name: 'ExploreLikeBatchScheduler103' },
 ]);

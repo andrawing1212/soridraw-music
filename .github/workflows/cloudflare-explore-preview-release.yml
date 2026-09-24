@@ -89,6 +89,7 @@ jobs:
             node scripts/verify-103-explore-like-event-batch.mjs
             node scripts/verify-156-shared-like-snapshot-repair.mjs
             node scripts/verify-191-bounded-public-like-convergence.mjs
+            node scripts/verify-192-cross-account-public-like-live.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 

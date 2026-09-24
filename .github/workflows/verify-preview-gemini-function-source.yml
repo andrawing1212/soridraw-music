@@ -6,6 +6,9 @@ on:
     paths:
       - 'functions/src/index.ts'
       - 'functions/scripts/build-secured-index.cjs'
+      - 'functions/scripts/apply-gemini-latency.cjs'
+      - 'functions/src/geminiInteractionSse.ts'
+      - 'functions/scripts/test-gemini-interaction-sse.cjs'
       - '.github/workflows/verify-preview-gemini-function-source.yml'
 
 permissions:
@@ -55,6 +58,11 @@ jobs:
           if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial song timeout must be 90s');
           if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial song timeout must be 75s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout must be 330s');
+          if (!src.includes('const geminiTotalDeadlineMs = Date.now() + 300_000;')) throw new Error('Gemini total deadline missing');
+          if (!src.includes('Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs)')) throw new Error('Gemini fallback budget clamp missing');
+          if (!src.includes('consumeGeminiInteractionSse(upstream, model)')) throw new Error('SSE parser not connected');
+          if (!src.includes('store: false,') || !src.includes('stream: true,')) throw new Error('store=false streaming not enabled');
+          if (src.includes('background: true,')) throw new Error('Forbidden Gemini background data-retention change');
           const proxy = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
           const initial = proxy.match(/const INITIAL_SONG_MODEL_CHAIN = \[([\s\S]*?)\] as const;/);
           if (!initial) throw new Error('Initial song model chain missing');

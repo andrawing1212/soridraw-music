@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FD. Issue #112 2단계 후보 — 신규 공용 likeCount R2 실패의 durable 재수렴 (2026-09-24 KST)
+
+**확정 원인 1개**: 069 queue settlement가 canonical D1을 성공시키고 queue row를 삭제한 뒤 `patchSharedFeedLikeCounts065`의 shared R2 GET/PUT가 일시 실패하면, 기존 wrapper는 오류를 로그로만 남겼다. 다음 scheduler 실행은 queue가 비어 `changedItems=[]`가 되어 같은 곡을 다시 전달하지 않으므로 synthetic `canonical=1 / shared=0`이 영구 잔류할 수 있었다.
+
+**최소 수정 후보 (Worker 190, 미배포)**:
+- aggregate가 만든 변경 곡 ID/owner/final likeCount만 shared R2 retry ledger에 CAS 병합한 뒤 latest/popular/track-card/profile targeted patch를 실행한다.
+- 한 실행에서 최대 3회만 재시도하고, 실패하면 ledger를 보존한다. 다음 idle scheduler 실행도 D1을 읽거나 쓰지 않고 ledger만 재처리하여 성공 후 삭제한다. 좋아요와 해제 모두 같은 changed-item 경로다.
+- 실행형 synthetic 검사는 신규 좋아요에서 canonical=1/shared=0 실패를 재현하고, queue가 없는 다음 실행에서 shared=1 수렴, 해제 0 수렴, retry 경로 D1 R0를 production runtime 함수로 검증한다.
+- 30초 client batch, 069 W1 intake 및 기존 settlement W1~W2, 개인 하트/내 좋아요, UI/CSS, Music Note, schema, 사용자 원본은 변경하지 않았다. 전체 Feed/profile rebuild, 사용자별 polling, push/FCM/WebSocket은 추가하지 않았다.
+
+**제약/승격 금지**: 소스 후보일 뿐 merge/deploy하지 않았다. 글로벌 push가 없으므로 다른 사용자의 완전히 비활성인 오래 열린 탭에 즉시 표시를 강제하지 않는다. 기존 activity/focus/revision gate가 열릴 때 shared 정답을 가져오는 구조는 유지된다. 실제 A/B/C 계정 × PC/mobile 좋아요↔해제↔재좋아요 검증 전 전체 해결로 판정하지 않으며 TEST/PRODUCTION 승격 금지.
+
+
 ## 0FC. app157 / Worker189 PREVIEW 배포 완료 — 개인 좋아요 과거 guard 복구 후보 (2026-09-24 KST)
 
 **승인·범위**: 사용자 지시에 따라 PR #111 `294036e963704a1007cfde36108a3f4640a57c7f`을 `preview`에 merge `50ad5fab1b7516cc6ba7102cd1832ba0790885be`. 이미 앱156에 남은 개인 unresolved false guard가 서버 최신 좋아요를 가리는 경로만 한정 수정. 코드 병합 후 audit 필수 항목에 실행형 `verify-189-personal-like-settled-guard-release.mjs` 추가(커밋 `50cc95feae38d101e4f84a054fff91a69a1fecaf`). `preview` 전체 감사 `35972104509` SUCCESS / 고정 소스 `ffd16793b9c81f4f13dbd0762f76d73ffa7a735d`.

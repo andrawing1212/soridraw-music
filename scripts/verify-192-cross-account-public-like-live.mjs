@@ -26,6 +26,8 @@ assert.doesNotMatch(signalAuthority, /likeCount/);
 assert.match(signalAuthority, /trackId/);
 assert.match(signalAuthority, /ownerUid/);
 assert.match(signalAuthority, /at:/);
+assert.match(signalAuthority, /row\?\.at/);
+assert.match(signalAuthority, /Math\.min\(Math\.floor\(now\), Math\.floor\(Number\(row\.at\)\)\)/);
 
 // Public signal is emitted only after the accepted W1 batch path, and failure to
 // notify cannot replay the canonical mutation.
@@ -36,7 +38,7 @@ const flush = like.slice(flushStart, flushEnd);
 assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(flush, /await requestExploreLike\(user, '\/v1\/me\/likes\/batch'/);
 assert.match(flush, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
-assert.match(flush, /await publishExplorePublicLikeInvalidation192\(uid, acceptedForSignal127\)/);
+assert.match(flush, /publishExplorePublicLikeInvalidation192\([\s\S]*acceptedForSignal127\.map\(\(row\) => \(\{ \.\.\.row, at: acknowledgedAt \}\)\)/);
 assert.ok(
   flush.indexOf('persistLikeOutbox(uid, latest);') <
   flush.indexOf('publishExplorePublicLikeInvalidation192(uid, acceptedForSignal127)'),

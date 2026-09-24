@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FG. app158 이후 독립 원인 재현 — stale personal baseline invalidation (2026-09-24 KST)
+
+**배포 상태: 후보만 수정 / 미배포.** `preview` 기준 `b84484dd5b81aa9a55eda08efddd65a98dc633cb`; 수정 `45857de98cd21fe7e468661b13c685119942d87a` (`exploreLikeService.ts`), 실행형 regression `a9a6c8e79bbe4e4bf1047b75bcbdbba03dd011bc` 및 가드 `16c9f3925652fac08986d25133064cb06a437033`. Audit `35979633390` SUCCESS (TypeScript/Build/실제 production 함수 실행 검증/현재 배포 경로 무변경). 이번 변경은 app158 후보 내부 수정으로, 아직 Hosting/Worker에 적용되지 않았다.
+
+**확정 원인**: 개인 R2 revision이 바뀌면 `checkExplorePersonalLikeRevision127`가 먼저 `invalidateExplorePersonalLikeBaseline127`에서 이전 complete/partial marker를 지우고 `ensurePersonalLikeBaseline127(user, revision)`을 부른다. app158의 `verifySettlement189` 조건은 *이미 지워진* marker를 요구해, 오래된 `snapshotPending=false`가 있어도 신선한 canonical proof가 생략되었다. 새 조건은 실제 관찰된 R2 revision이 주어졌고 unresolved guard가 남은 UID에만 **해당 revision별 최대 1회** 확인을 허용한다. 정상 캐시 D1 R0, 현재 outbox 우선, pending/mismatch/race 시 보호. 새 데이터 구조/백필/반복 타이머 없음.
+
+**현재 구분**: 특정 guard 경로의 합성 5→10 테스트 통과 != 사용자 실제 D1/R2·PC/mobile 10 일치. 다른 계정 공유 숫자 경로도 미해결: 현재 Worker189의 075 처리에서는 D1 성공 후 R2 projection에 `Promise.allSettled`/catch가 존재하고 실패해도 queue 진행이 완료되며, 재시도용 작업은 별도로 보장되지 않는다. 1분 aggregate + 클라이언트의 활동 기반 2분 revision gate로 다른 계정 열린 화면의 즉시 전달도 보장되지 않는다. 사용자 원본 검증 없는 무분별한 재배포를 막고, 작은 서버-side bounded proof/재시도 설계 및 교차 계정 실증이 확인되기 전 전체 완료 선언 금지. TEST/PRODUCTION 변경 금지.
+
+
 ## 0FF. app158 PREVIEW 배포 — 개인 좋아요 stale-guard 재확인 간소화 (2026-09-24 KST)
 
 **배포 상태: PREVIEW 완료.** 기준 `b5a54bcee693c5282b5ff04e6e7b5e3c1ed4ca1f`; 변경 `src/services/exploreLikeService.ts` `7fff2ffe702d92d19356f1b107d08a793b6380ff`, 실행 검증 `scripts/verify-189-personal-like-settled-guard-release.mjs` `a5bb6dbf3a4f3e1c0f21215f4393daee22578a2d`, `src/pages/ExplorePage.tsx` `561f7fd2f4beedaf31c9591e135d01eb51d1cc30`, `public/app-version.json` `539a0af86239c1a9309590c76c40986b7ef29999`. 최종 감사 소스/Run `1fdd191325a87dac47adc07bab3d94f84c5d8f28` / `35978411056` SUCCESS; 배포 trigger `d14259c31f9bb36f38a9d0412fc95994decb3455`, Hosting Run `35978612769` SUCCESS, app-version 158, exact PREVIEW build PASS, TEST/PRODUCTION 불변 PASS. Worker189 유지. URL `https://preview.soridraw.com/`.

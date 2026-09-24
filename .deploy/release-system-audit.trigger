@@ -1,9 +1,8 @@
-requested_at=2026-09-24T16:52:00+09:00
-requested_by=user_approved_app157_personal_like_settlement_preview
+requested_at=2026-09-24T17:32:00+09:00
+requested_by=user_minimal_like_card_parity_fix
 target=preview
-purpose=verify_fresh_canonical_personal_guard_release_before_preview_deploy
+purpose=verify_app190_liked_card_index_and_fresh_catalog_without_backend_changes
 expected_app_version=157
-required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs
-locked_feature_sha=50ad5fab1b7516cc6ba7102cd1832ba0790885be
+required_verifier=scripts/verify-190-like-card-authority.mjs
 no_user_data_migration=true
 no_deploy=true

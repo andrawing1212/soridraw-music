@@ -54,6 +54,7 @@ const createHarness = ({ markers = {}, unresolved = {}, outbox = {}, responses =
       Object.assign(unresolved, value);
     },
     readLikeOutbox: () => outbox,
+    readCurrentPersonalLikeRevision130: uid => storage.get('revision:' + uid) || '',
     readSeenLikeSignal127: () => signal,
     readRepairTarget127: () => 0,
     getLikedStateCache: () => cache,
@@ -94,6 +95,24 @@ assert.deepEqual(repaired.unresolved, {}, 'fresh proof releases historical guard
 assert.equal([...repaired.cache.values()].filter(Boolean).length, 10, 'production cache path converges 5 to 10');
 await repaired.ensure({ uid });
 assert.equal(repaired.fetchCount(), 1, 'UID-scoped marker/in-memory completion prevents repeat read');
+
+// A previous one-time failed attempt must not permanently trap an old false
+// guard after the private R2 revision advances. Never reread the same revision.
+const changedRevision = createHarness({
+  markers: { [key('baseline127')]: '1', [key('settlement189')]: '1', ['revision:' + uid]: 'r2-after-queue' },
+  unresolved: stale(), responses: [snapshot(true)],
+});
+await changedRevision.ensure({ uid }, 'r2-after-queue');
+assert.equal(changedRevision.fetchCount(), 1, 'new private revision admits one fresh canonical proof');
+assert.deepEqual(changedRevision.unresolved, {}, 'settled next revision clears the previous false guards');
+await changedRevision.ensure({ uid }, 'r2-after-queue');
+assert.equal(changedRevision.fetchCount(), 1, 'same private revision cannot repeat canonical read');
+const alreadyCheckedRevision = createHarness({
+  markers: { [key('baseline127')]: '1', [key('settlement189')]: 'revision:r2-after-queue', ['revision:' + uid]: 'r2-after-queue' },
+  unresolved: stale(),
+});
+await alreadyCheckedRevision.ensure({ uid }, 'r2-after-queue');
+assert.equal(alreadyCheckedRevision.fetchCount(), 0, 'already failed same revision stays bounded');
 
 const partial = createHarness({
   markers: { [key('partial')]: '1', [key('repair182')]: '1' },
@@ -189,3 +208,5 @@ console.log('APP189_FRESH_PROOF_AND_LIVE_OUTBOX=PASS');
 console.log('APP189_ACCEPTED_PREAGGREGATE_AND_RACE_FAIL_CLOSED=PASS');
 console.log('APP189_HEALTHY_CACHE_D1_R0=PASS');
 console.log('APP189_WORKER_QUEUE_SET_ETAG_RACE_GUARDS=PASS');
+
+console.log('APP189_CHANGED_PRIVATE_REVISION_BOUNDED_SETTLEMENT_RETRY=PASS');

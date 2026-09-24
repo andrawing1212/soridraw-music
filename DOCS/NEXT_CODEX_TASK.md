@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app157 / Worker189 PREVIEW 배포 이후 실사용 검증 및 공용 좋아요 별도 작업
+
+- PR #111 source `294036e963704a1007cfde36108a3f4640a57c7f` → preview merge `50ad5fab1b7516cc6ba7102cd1832ba0790885be`; Audit `35972104509` SUCCESS; PREVIEW Worker `35972368855` SUCCESS active `e23e73a1-89af-40f6-ae66-dc4ae2458c30`; Firebase Hosting `35972504441` SUCCESS exact app157 PASS. Current state `DOCS/CURRENT_RELEASE_STATE.md 0FC` 기준. TEST/PRODUCTION untouched.
+- 1단계 코드 변경은 기존 app156 사용자 개인 stale guard를 **당일 fresh canonical/R2 일치·queue empty·ETag 불변** 증거와 live outbox 보호 하에서만 풀 수 있음. 실제 사용자 본인의 PC 5/mobile 10은 아직 서버 정답 및 각 기기 미전송을 읽기전용 비교하지 않았으므로 전체 해결 완료라고 하지 않는다.
+- 다음 최소 단위 (별도 Codex): 좋아요/해제 신규 1건의 queue→D1 canonical→personal R2→shared latest/popular/profile R2→타계정 PC/mobile client revision→UI 경로를 증명. 이전 156 4곡 보정과 189 개인 수정 재실행 금지. 최근 정상 클라이언트, 30초 batch, W1~W2, unchanged D1 R0 보호. 다른 사용자 개인 filled heart는 독립 유지하며 모두에게는 공용 likeCount만 동기화. 읽기 실패·장시간 열린 탭·재진입 포함.
+- **최종 게이트**: A 본인 PC/mobile 개인 하트 및 내 좋아요 목록 같고 B/C 각각 PC/mobile 공용 숫자 동일, B/C 역방향 누름·해제, 재진입/앱업데이트·장시간 열린 화면에서도 일치. PC/mobile 실사용 결과 없으면 미검증. PROD/TEST 승격 불가. 강제 사용자 데이터 덮어쓰기/전체 migration/backfill 금지.
+
+
 ## 최신 182 배포 후 — 개인 좋아요 10/5 실제 원본 검증 및 모든 계정 PC·모바일 새 변경 동기화
 
 - PREVIEW app156 (Firebase Run `35913791497`) / Worker182 version `e426448c-ce5a-4a75-a798-97e3f9f52a81` (Run `35913674952`) 배포 완료; Audit `35913406306` PASS.

@@ -1,5 +1,21 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FJ. app159 + Worker192 PREVIEW 배포 — 교차 계정 공개 좋아요 숫자 변경분 동기화 (2026-09-24 KST)
+
+**현재 실제 PREVIEW**: 앱 app159, Hosting/RTDB Run `36001464002` SUCCESS / `PREVIEW_APP_VERSION=159` / exact build PASS / shared RTDB rules exact match PASS. Cloudflare Worker192 Run `36000021648` SUCCESS / active version `d6c6e3db-207f-4d60-969f-eae6a0fd2126`. 최종 Release System Audit `36001252527` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION code/Hosting/Worker 비변경 PASS. Functions/Firestore rules/D1 schema/user-data migration 없음.
+
+**이번에 해결한 범위**:
+- A가 좋아요/해제를 하면 A 화면의 개인 filled-heart는 기존 local-first/같은 UID 신호를 유지한다. 다른 계정 B/C의 개인 하트는 절대 A 상태를 상속하지 않는다.
+- 30초 client batch가 W1 queue에 정상 접수된 뒤, Worker192의 event-driven DO가 약 5초 후 변경분을 처리한다. 공개 Feed/latest/popular/profile/track-card는 **변경된 곡만** shared R2에 맞춘다.
+- A의 batch ACK 후 RTDB `publicSync/exploreLike`에는 count가 아니라 **변경된 trackId/ownerUid/시각만** 최대 50개까지 신호로 보낸다. B/C는 현재 화면에 보이는 변경 곡만 `/v1/public-like-cards`에서 shared R2 카드로 확인하고 public `likeCount`만 갱신한다. endpoint는 D1 R0/W0, retry 최대 4회, idle polling 0.
+- RTDB rules는 인증 사용자만 read, writer의 `actorUid===auth.uid`, row key 0~49, 허용 필드만 검증. Firebase CLI의 shared-instance metadata 제약을 피하고 기존 093에서 검증된 official RTDB REST rules PUT 경로로 배포했으며 실제 remote rules와 `database.rules.json` exact match 확인.
+- Worker192 배포 과정에서 기존 canonical generated Worker에 남아 있던 escaped newline 때문에 scheduled aggregate의 `owner` 선언이 주석 처리되는 latent bug를 실제 `ReferenceError: owner is not defined`로 확인하여 수정/repin/regression 추가. 최종 배포 전 pending069=0 확인 후 Worker192 유지.
+
+**실제 서버 검증**: Audit `36001252527`에서 latest 37곡 overlap `COUNT_MISMATCH=0`, popular 37곡 overlap `COUNT_MISMATCH=0`, D1 canonical↔derived mismatch `0`, shared R2 canonical mismatch `0/74`. Worker release smoke에서 public changed-card 3개 반환 PASS, 해당 route D1 R0/W0, Feed/Profile smoke, warm revision R0/W0, TEST/PRODUCTION Worker unchanged PASS.
+
+**현재 합격선 / 남은 실사용**: 서버 공개 숫자 원본/공유 R2는 일치하고 cross-account 변경 전달 코드는 PREVIEW 배포 완료. 최종 사용자 합격은 실제 기기에서 A PC↔모바일 개인 하트/내 좋아요가 같고, A가 누른 뒤 B/C PC↔모바일의 **공개 숫자만** 같은 값으로 수렴하며 B/C 개인 하트는 본인 행동대로 유지되는지 확인해야 한다. 정상 설계상 타계정 공개 숫자는 클릭 즉시가 아니라 기존 30초 묶음 저장 + 약 5초 shared settle 이후 변경 곡만 반영된다. 좋아요/해제 양방향, 장시간 열린 화면, 페이지 이동 없이 수렴, 재접속까지 실사용 전 TEST 승격 금지. `.github/workflows/diagnose-069-live-like.yml` push별 FAILURE는 기존 별도 진단 workflow 이슈이며 Release Audit/Worker/App gate와 분리한다.
+
+
 ## 0FI. 좋아요 공유 숫자 6곡 실데이터 수복 + Worker191/app158 PREVIEW 배포 완료 (2026-09-24 KST)
 
 **현재 실제 PREVIEW**: 앱 app158 Hosting Run `35987409727` SUCCESS / exact build PASS / `PREVIEW_APP_VERSION=158`; Cloudflare Worker191 Run `35987221833` SUCCESS / active version `5bacea12-59a2-41ce-91ed-9fc7cb2e36bb`. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Worker/Hosting 비변경 PASS.

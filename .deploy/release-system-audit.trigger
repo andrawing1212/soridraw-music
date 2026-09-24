@@ -1,9 +1,9 @@
-requested_at=2026-09-24T20:35:00+09:00
+requested_at=2026-09-24T20:48:00+09:00
 requested_by=user_continue_like_sync
 target=preview
-purpose=diagnose_pending069_drain_failure_before_worker192
+purpose=validate_scheduled_like_owner_scope_fix_and_worker192_live_sync
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=b6c26d479bc661b34519006f402a1009235dfb01
+locked_feature_sha=f18c0f76a520e82e58d248ff91337ca684b5e555
 no_user_data_migration=true
 no_deploy=true

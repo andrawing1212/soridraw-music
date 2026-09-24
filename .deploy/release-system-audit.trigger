@@ -1,8 +1,9 @@
-requested_at=2026-09-24T19:02:00+09:00
-requested_by=inspect_failed_supervised_repair_run
+requested_at=2026-09-24T19:12:00+09:00
+requested_by=user_continue_like_fix
 target=preview
-purpose=readonly_active_worker_marker_and_current_shared_canonical_drift
+purpose=validate_worker191_direct_remote_scheduled_repair_no_cron_propagation
 expected_app_version=158
-locked_feature_sha=5aeb4adaa89a23c951e5655e8f83907268b68bb1
+required_verifier=scripts/verify-191-bounded-public-like-convergence.mjs
+locked_feature_sha=4df4a37150300c9f38378b519ce10513c4b7d0d6
 no_user_data_migration=true
 no_deploy=true

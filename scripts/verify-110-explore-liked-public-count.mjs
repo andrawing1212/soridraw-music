@@ -75,7 +75,11 @@ if (appVersion >= 121) {
   fail('viewer activity revision gate missing');
 }
 
-if (!entry.includes('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000')) {
+if (appVersion >= 159) {
+  if (!entry.includes('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 * 1000')) {
+    fail('159 live shared aggregate five-second settle contract changed');
+  }
+} else if (!entry.includes('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000')) {
   fail('one-minute shared aggregate contract changed');
 }
 
@@ -83,5 +87,5 @@ console.log('110_LIKED_PUBLIC_COUNT_LOCAL_SYNC=PASS');
 console.log(appVersion >= 126 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_STALE_ENTRY_REVISION' : appVersion >= 123 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_ZERO_READ' : 'SOURCE=SERVER_CONFIRMED_SHARED_FEED_PROFILE_PAYLOAD');
 console.log('REVISION_CONFIRMED_REPAIR=ENABLED');
 console.log('LIKED_CACHE_APP_VERSION_COUPLED=NO');
-console.log('SHARED_AGGREGATE=ONE_MINUTE');
+console.log(appVersion >= 159 ? 'SHARED_AGGREGATE=FIVE_SECONDS_AFTER_W1' : 'SHARED_AGGREGATE=ONE_MINUTE');
 console.log('NO_UI_CSS_CHANGE=true');

@@ -19,6 +19,7 @@ import {
   type GeminiAuditModelSkip,
   type GeminiAuditSession,
 } from '../services/geminiAuditLog';
+import { readPreviewGeminiModelAvailability, type GeminiModelAvailabilityResult } from '../services/geminiProxyClient';
 
 const CONTEXT_LABELS: Record<string, string> = {
   generateSong: '최초 곡 생성',
@@ -189,6 +190,23 @@ function statusBadge(session: GeminiAuditSession) {
 export default function AdminGeminiAuditPage() {
   const [sessions, setSessions] = useState<GeminiAuditSession[]>(() => getGeminiAuditSessions());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modelAvailability, setModelAvailability] = useState<GeminiModelAvailabilityResult | null>(null);
+  const [modelAvailabilityError, setModelAvailabilityError] = useState('');
+  const [checkingModels, setCheckingModels] = useState(false);
+
+  const checkModels = async () => {
+    if (checkingModels) return;
+    setCheckingModels(true);
+    setModelAvailability(null);
+    setModelAvailabilityError('');
+    try {
+      setModelAvailability(await readPreviewGeminiModelAvailability());
+    } catch (error) {
+      setModelAvailabilityError(error instanceof Error ? error.message : '모델 목록을 확인하지 못했습니다.');
+    } finally {
+      setCheckingModels(false);
+    }
+  };
 
   const refresh = () => setSessions(getGeminiAuditSessions());
 
@@ -231,6 +249,13 @@ export default function AdminGeminiAuditPage() {
       actions={(
         <div className="flex items-center gap-2">
           <button
+            onClick={checkModels}
+            disabled={checkingModels}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-btn-border bg-btn-bg px-3 text-xs font-black text-[var(--text-secondary)] transition hover:bg-btn-hover hover:text-[var(--text-primary)] disabled:cursor-wait disabled:opacity-50"
+          >
+            <Cpu className="h-3.5 w-3.5" /> {checkingModels ? '목록 확인 중' : '모델 목록 확인'}
+          </button>
+          <button
             onClick={refresh}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-btn-border bg-btn-bg px-3 text-xs font-black text-[var(--text-secondary)] transition hover:bg-btn-hover hover:text-[var(--text-primary)]"
           >
@@ -250,6 +275,26 @@ export default function AdminGeminiAuditPage() {
         현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
         곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 5회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 추가 호출됩니다.
       </div>
+
+      {(modelAvailability || modelAvailabilityError) && (
+        <div className="rounded-2xl border border-btn-border bg-[var(--bg-secondary)] px-4 py-3 text-xs leading-6 text-[var(--text-secondary)]">
+          {modelAvailabilityError ? (
+            <p className="text-red-400">{modelAvailabilityError}</p>
+          ) : (
+            <>
+              <strong className="text-[var(--text-primary)]">현재 API 키의 모델 목록 (생성 요청 없음)</strong>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {modelAvailability?.models.map((row) => (
+                  <span key={row.model}>{row.model}: {row.listed === true ? '목록에 있음' : row.listed === false ? '목록에 없음' : '확인 보류'}</span>
+                ))}
+              </div>
+              <p className="mt-1">목록에 있다는 사실은 실제 생성 성공이나 서버 가용성을 보장하지 않습니다.
+                {!modelAvailability?.complete ? ' 전체 목록이 여러 페이지여서 일부 항목은 확인 보류입니다.' : ''}
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[

@@ -398,6 +398,41 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   };
 }
 
+export type GeminiModelAvailabilityResult = {
+  complete: boolean;
+  models: Array<{ model: string; listed: boolean | null }>;
+};
+
+export async function readPreviewGeminiModelAvailability(): Promise<GeminiModelAvailabilityResult> {
+  if (resolveGeminiFunctionName() !== PREVIEW_GEMINI_FUNCTION_NAME) {
+    throw new Error('모델 목록 검사는 PREVIEW에서만 사용할 수 있습니다.');
+  }
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('로그인이 필요합니다.');
+  const idToken = await user.getIdToken();
+  const appCheckToken = await getFirebaseAppCheckToken();
+  const response = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/${PREVIEW_GEMINI_FUNCTION_NAME}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
+    },
+    body: JSON.stringify({ diagnostic: 'model-availability' }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok || !Array.isArray(payload.models)) {
+    throw new Error(`모델 목록 확인 실패: ${String(payload?.code || response.status)}`);
+  }
+  return {
+    complete: Boolean(payload.complete),
+    models: payload.models.map((item: any) => ({
+      model: String(item?.model || ''),
+      listed: typeof item?.listed === 'boolean' ? item.listed : null,
+    })).filter((item: { model: string }) => Boolean(item.model)),
+  };
+}
+
 export function createGeminiServerProxy(): GoogleGenAI {
   return {
     models: {

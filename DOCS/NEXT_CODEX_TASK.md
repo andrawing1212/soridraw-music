@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 신규 공개곡 첫 좋아요 차단: 코드 최소 수정 전 원인 확인
+
+- `CURRENT_RELEASE_STATE.md 0GA` 최우선. 사용자 영상의 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`에서 하트가 변하지 않고 `좋아요 상태를 확인하고 있어요` 안내. 기존 공개곡은 정상. 제품 수정/재배포 전.
+- 읽기전용 소스 근거: `ExplorePage.tsx:1144-1154` 클릭 시 `readExploreTrackLikeMembership127 === undefined`면 차단. `exploreLikeService.ts:1516-1560`은 이미 로컬 카탈로그 ready 시 신규 visible ID `missing=[]`로 두어 negative membership 기록 안 함. `:335-350`은 캐시 미포함 ID의 undefined를 반환. UI false vs 서비스 undefined 불일치. 실제 계정 캐시/서버 원본 미열람, 다른 원인 동반 가능성은 별도 분리.
+- 사용자 최소 수정 승인을 받은 뒤 Codex High/preview 한정으로 새 곡의 미좋아요 initial-state seed만 보강. 완전한 개인 snapshot일 때만 `false` 확정, 부분/미확인 snapshot이면 해당 ID에 한정한 private 검증. 기존 liked true, outbox, unsettled, cross-device 최신 신호 우선. UI, 기존곡 좋아요, 30초 queue/W1, Worker195/RTDB/D1/R2, Music Note, Gemini, 최근곡 app163 보호.
+- 합격: 신규곡 0→1→0 UI/서버 수렴, 기존곡 1→0→1, 새 계정/부분 snapshot, 같은 UID PC↔모바일, 서로 다른 계정 공개 숫자, 정상 재방문 D1 R0/W0, 신규곡 하나 때문에 전체 개인 좋아요/Feed read 금지, W3+ FAIL. TS/Build/관련 like 회귀 및 Work 독립검증 후 PREVIEW만 배포; 실제 사용 확인 전 TEST/PROD 불가. 승인 전에는 코드/배포 금지.
+
 ## 최신 2026-09-25 — 사용자 app163 휴대폰 최근 생성곡 표시 확인, 동기화 추가 수정 보류
 
 - `CURRENT_RELEASE_STATE.md 0FZ` 우선: 사용자가 기존 PC→휴대폰 누락 후 현재 휴대폰의 최근 생성곡 표시를 직접 확인. **표시 증상 PASS**. app163 추가 재수정이나 원본 복구를 추정으로 실행하지 않는다.

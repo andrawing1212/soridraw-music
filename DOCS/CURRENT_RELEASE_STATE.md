@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FD. app157 소스 보완 — 개인 좋아요 곡 카드 일치 최소 수정 (2026-09-24 KST)
+
+**작업 branch / 기준**: `preview`, 기준 `0339c3a99dba78c7ad5b97746c1146a6634cf11d`. 수정 commit `2f32cf68cb59f55606766b611cff09939cd1e25d` / `debefe4fd6c4fd3661bd46bcbb07ced9cad7183b`. Audit 고정 후보 HEAD `86eb3e4a176f27fc7ad5534fcc518260967197c0`, Release System Audit Run `35975707446` **SUCCESS** (TypeScript/Build/static like regression/190 실행형 회귀 PASS, isolated remote synthetic billing skipped). app 버전은 여전히 157이고 **이번 변경은 소스에만 반영, 미배포**.
+
+**정확한 수정**: `src/services/exploreLikeService.ts`에서 수신한 계정별 좋아요 신호의 하트 값이 이미 같더라도 로컬 '내 좋아요' 카드 색인을 같은 membership으로 맞춘다. `src/services/exploreLikedTracksService.ts`는 인증된 완전한 개인 목록으로 정합화할 때 과거의 '카드 없음' 힌트를 지워, 다시 확인된 좋아요 ID의 누락된 카드만 요청할 수 있게 한다. `scripts/verify-190-like-card-authority.mjs` 실행 검증: 5곡 카드+10곡 검증된 ID → 빠진 5곡만 수신→10곡 표시, 따뜻한 재진입 추가 요청 0, 로컬 미전송 해제 우선 보호. 감사 Workflow에 실행형 검증 추가. 다른 기능의 UI/CSS·30초 묶음·Worker/W1·Functions/Rules·D1/R2 schema·사용자 원본 변경 없음.
+
+**남은 게이트**: 사용자의 실제 동일 UID PC 5↔모바일 10 및 현재 미전송 outbox/서버 canonical의 합치 여부는 실사용 **미검증**. 다른 계정 B/C의 공개 likeCount 실시간 변경 전달은 본 수정 범위 밖이며 여전히 별도 검증/수정 필요. **PREVIEW 배포 전**, TEST/PRODUCTION 승격 금지. W1~W2 신규 실제 mutation 계측 미실시(회귀 감사의 isolated remote synthetic billing도 skipped). 기존 app157/Worker189 배포 상태는 유지하며 사용자 데이터 강제 덮어쓰기·전체 백필 금지. 다음 작업은 개인 실기기 결과 및 타계정 public changed-track end-to-end 검증으로 분리한다.
+
+
 ## 0FC. app157 / Worker189 PREVIEW 배포 완료 — 개인 좋아요 과거 guard 복구 후보 (2026-09-24 KST)
 
 **승인·범위**: 사용자 지시에 따라 PR #111 `294036e963704a1007cfde36108a3f4640a57c7f`을 `preview`에 merge `50ad5fab1b7516cc6ba7102cd1832ba0790885be`. 이미 앱156에 남은 개인 unresolved false guard가 서버 최신 좋아요를 가리는 경로만 한정 수정. 코드 병합 후 audit 필수 항목에 실행형 `verify-189-personal-like-settled-guard-release.mjs` 추가(커밋 `50cc95feae38d101e4f84a054fff91a69a1fecaf`). `preview` 전체 감사 `35972104509` SUCCESS / 고정 소스 `ffd16793b9c81f4f13dbd0762f76d73ffa7a735d`.

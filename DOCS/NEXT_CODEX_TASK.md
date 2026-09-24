@@ -1,5 +1,14 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — Worker191/app158 PREVIEW 배포 완료, 서버 shared likeCount 6→0 확인
+
+- 현재 기준은 `CURRENT_RELEASE_STATE.md 0FI`. Worker release Run `35987221833` SUCCESS / active `5bacea12-59a2-41ce-91ed-9fc7cb2e36bb`; app Hosting Run `35987409727` SUCCESS / app158 exact build PASS. TEST/PRODUCTION 비변경.
+- 실제 shared public count는 배포 직전 latest/popular 각각 37 overlap 중 6 mismatch였고, one-time bounded 191 repair 후 둘 다 `MISMATCH=0`. D1 canonical↔derived mismatch 0. 사용자 원본 D1 변경 없음.
+- 개인 stale baseline 순서 버그 수정도 app158에 포함. 다음 우선순위는 **코드 추가 전 실사용**: 같은 계정 PC↔모바일에서 신규 좋아요/해제 후 하트와 '내 좋아요' 목록 일치, 다른 계정에서 공개 숫자 일치, 페이지 이동 없이 activity/revision 경로가 허용된 시간 안에 수렴하는지 확인.
+- 실사용에서 불일치가 재현되면 정확한 한 곡만 queue→canonical→personal R2→shared R2→client revision→UI 순서로 추적. full Feed/전체 likes 재조회, 사용자 원본 덮어쓰기, 새 글로벌 listener 금지. unchanged D1 R0와 W1~W2 mutation 합격선 유지.
+- TEST 승격 금지: 실제 PC/mobile×교차계정 좋아요/해제 검증이 먼저. PRODUCTION은 사용자 명확 승인 전 금지.
+
+
 ## 최신 2026-09-24 — 실제 오류 재현 1건 수정·감사 PASS, 공유 숫자 경로 검증 전 미배포
 
 - 최신 `CURRENT_RELEASE_STATE.md 0FG`. app158 PREVIEW Run `35978612769`은 계속 현재 실제 배포본. `preview` 후보 `45857de98cd21fe7e468661b13c685119942d87a`: 개인 R2 revision 변경 직후 이전 baseline marker가 제거되는 순서 때문에, 개인 stale guard 해결용 fresh proof가 아예 시작하지 않았던 경로 수정. 실행형 회귀 `verify-189-personal-like-settled-guard-release.mjs`에서 marker 제거 후 5→10, 무변경 재진입 추가 D1 0 증명. Audit `35979633390` SUCCESS; **배포 미실시**.

@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FE. app157 개인 좋아요 카드 일치 보완 PREVIEW Hosting 배포 완료 (2026-09-24 KST)
+
+**배포**: 사용자의 수정→PREVIEW 배포 한 묶음 지시에 따라 소스 변경/감사/Hosting 배포를 완료했다. Audit `35975707446` SUCCESS, 코드 감사 기준 `86eb3e4a176f27fc7ad5534fcc518260967197c0`, 앱 릴리스 trigger `c1a6d885c362c0cee7b21a36df8733eebfd36e8b`, Firebase Hosting-only Run `35976334811` **SUCCESS**. 릴리스 안의 TypeScript, Build, `PREVIEW_EXACT_BUILD`, `TEST_PRODUCTION_UNCHANGED` 전부 PASS. URL `https://preview.soridraw.com/`; 앱 버전은 157 그대로이며 변경 코드는 개인 좋아요 카드 색인 190이다.
+
+**변경/비변경**: `src/services/exploreLikeService.ts` 수신한 유효한 개인 좋아요 신호의 카드 색인을 하트와 일치. `src/services/exploreLikedTracksService.ts` 인증된 완전한 개인 목록 수신 시 오래된 카드 없음 힌트 제거, 누락 카드만 요청. 신규 regression `scripts/verify-190-like-card-authority.mjs` PASS. Worker189 유지, Functions/Rules/D1/R2 원본/UI/CSS/30초 묶음/W1 intake/TEST/PRODUCTION 불변. 사용자 데이터 이동/덮어쓰기 없음.
+
+**남은 미검증**: 인증된 사용자 실제 PC/모바일 5↔10 원본 일치 및 B/C 교차계정 공개 likeCount 전파 실사용 미검증. 원격 합성 D1 mutation W1~W2 비용 계측 이번 감사에서 skipped. 사용자 계정 불일치가 남아있으면 원본과 현재 기기별 outbox 읽기전용 확인 후 특정 경로만 수정한다. 전체 해결·TEST/PRODUCTION 승격 금지.
+
+
 ## 0FD. app157 소스 보완 — 개인 좋아요 곡 카드 일치 최소 수정 (2026-09-24 KST)
 
 **작업 branch / 기준**: `preview`, 기준 `0339c3a99dba78c7ad5b97746c1146a6634cf11d`. 수정 commit `2f32cf68cb59f55606766b611cff09939cd1e25d` / `debefe4fd6c4fd3661bd46bcbb07ced9cad7183b`. Audit 고정 후보 HEAD `86eb3e4a176f27fc7ad5534fcc518260967197c0`, Release System Audit Run `35975707446` **SUCCESS** (TypeScript/Build/static like regression/190 실행형 회귀 PASS, isolated remote synthetic billing skipped). app 버전은 여전히 157이고 **이번 변경은 소스에만 반영, 미배포**.

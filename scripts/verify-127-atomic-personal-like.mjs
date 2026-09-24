@@ -36,10 +36,12 @@ assert.match(service, /EXPLORE_LIKE_TARGETED_VERIFIED_130/);
 assert.match(service, /readCurrentPersonalLikeRevision130/);
 assert.match(service, /targetedVerifiedRevisionByUid130/);
 
-assert.match(service, /const localCatalogReady127 = baselineReady127 \|\| (?:hasLikedStateStorage127|hasLocalLikeCatalog135)\(user\.uid\)/,
-  'persisted personal catalog must be the zero-read authority on normal entry');
-assert.match(service, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/,
-  'cached Explore entry must not issue targeted D1 membership reads');
+assert.match(service, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/,
+  'verified complete catalog must remain zero-read authority on normal entry');
+assert.match(service, /const missing = baselineReady127 \? \[\] : normalized\.filter/,
+  'verified complete Explore entry must not issue targeted D1 membership reads');
+assert.match(service, /return !cache\.has\(trackId\);/,
+  'partial catalog may verify only previously unknown visible IDs');
 assert.match(service, /Legacy partial R2 is a positive catalog hint/,
   'partial legacy R2 may merge positive catalog hints without forcing page-entry D1 scans');
 assert.doesNotMatch(service, /currentRevision && !partial161/,
@@ -89,8 +91,9 @@ const getter = service.slice(service.indexOf('export const getExploreLikedTrackI
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const verified127 = readTargetedVerifiedLikeTracks127\(user\.uid\)/);
 assert.match(getter, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
-assert.match(getter, /const localCatalogReady127 = baselineReady127 \|\| (?:hasLikedStateStorage127|hasLocalLikeCatalog135)\(user\.uid\)/);
-assert.match(getter, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/);
+assert.match(getter, /if \(baselineReady127\) \{[\s\S]*?cache\.set\(trackId, false\);[\s\S]*?persistLikedStateCache\(user\.uid, cache\);/);
+assert.match(getter, /const missing = baselineReady127 \? \[\] : normalized\.filter/);
+assert.match(getter, /return !cache\.has\(trackId\);/);
 assert.match(getter, /readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\(user\.uid\)/);

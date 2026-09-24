@@ -318,6 +318,44 @@ jobs:
           done
           echo 'D1_WRITE_MIGRATION_SEED=NONE'
 
+      - name: Diagnose current shared public like counts (bounded read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT d.id,COALESCE(s.like_count,0) AS canonical_count,d.likes AS derived_count FROM explore_derived_tracks d INDEXED BY idx_explore_rank_latest LEFT JOIN track_stats s ON s.track_id=d.id WHERE d.active=1 ORDER BY d.published_at DESC,d.id DESC LIMIT 40" --json > "$RUNNER_TEMP/like-parity-current.json"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path=process.env.RUNNER_TEMP + '/like-parity-current.json';
+          const d=JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x=>x?.results||[]);
+          const byId=new Map(d.map(r=>[String(r.id),r]));
+          const base='https://soridraw-explore-preview.andrawing1212.workers.dev';
+          let compared=0, mismatched=0, canonicalDerivedMismatch=0;
+          for (const row of d) if (Number(row.canonical_count)!==Number(row.derived_count)) canonicalDerivedMismatch++;
+          for (const sort of ['latest','popular']) {
+            const url=base+'/v1/feed?sort='+sort+'&limit=40&__soridraw_r2_only=108';
+            const response=await fetch(url,{headers:{Accept:'application/json'}});
+            if (!response.ok) throw Error('Public '+sort+' snapshot HTTP '+response.status);
+            const payload=await response.json();
+            if (!Array.isArray(payload?.data?.items)) throw Error('Public '+sort+' snapshot malformed');
+            let overlap=0, bad=0;
+            for (const item of payload.data.items) {
+              const expected=byId.get(String(item?.id||item?.trackId||''));
+              if (!expected) continue;
+              overlap++;
+              const count=Number(item?.likeCount??item?.stats?.likeCount??0);
+              if (count!==Number(expected.canonical_count)) bad++;
+            }
+            compared+=overlap;
+            mismatched+=bad;
+            console.log('PUBLIC_'+sort.toUpperCase()+'_CANONICAL_OVERLAP='+overlap+' COUNT_MISMATCH='+bad);
+          }
+          console.log('D1_CANONICAL_DERIVED_MISMATCH_TOP40='+canonicalDerivedMismatch);
+          console.log('PUBLIC_R2_CANONICAL_MISMATCH_TOTAL='+mismatched+' SAMPLED='+compared);
+          console.log('PUBLIC_LIKE_PARITY_READ_ONLY=PASS');
+          NODE
+
       - name: 164 shared cutover readiness report is read-only
         shell: bash
         run: |

@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app158 PREVIEW 배포 완료 / 실제 사용자 정합성 및 교차 계정 공용 숫자 미해결
+
+- app158 개인 좋아요 코드 `7fff2ffe702d92d19356f1b107d08a793b6380ff`, 회귀검증 `a5bb6dbf3a4f3e1c0f21215f4393daee22578a2d`, 앱 버전 `539a0af86239c1a9309590c76c40986b7ef29999`. Audit `35978411056` SUCCESS; PREVIEW Hosting `35978612769` SUCCESS, exact build PASS, TEST/PRODUCTION 불변. `CURRENT_RELEASE_STATE.md 0FF`를 실제 기준으로 사용. 기존 다음 단락의 'app157 미배포' 기록은 과거 상태다.
+- 과거 단일 마커가 fresh canonical settlement 실패 후 개인 unresolved false guard를 영구 차단한 경우, 실제 **개인 R2 revision이 확인되었을 때 해당 revision당 1회만** 읽기전용 fresh D1 canonical/R2/queue/ETag 증명을 요청하도록 보완. 성공 시 outbox 없는 오래된 guard만 해제. 전체 캐시 삭제·서버 원본 변경·대규모 검증 없음. 변경 없는 정상 사용 D1 R0 보호.
+- **남은 우선순위**: 실제 A 계정의 서버 canonical/R2와 PC/mobile outbox/표시 차이를 읽기전용 대조(개인 ID 로그 출력/무단 원본수정 금지). 이어 B/C 공개 likeCount의 실제 changed-track publication→shared R2/revision→client UI 경로 확인; 2분 activity gate/1분 edge/Worker aggregate로 장시간 열린 화면이 즉시 갱신되지 않는 것과 공유 원본 숫자가 잘못된 것을 구별. 확인 없이 새 RTDB 전역 listener·주기적 D1 조회·Feed 전체 재생성 추가 금지.
+- 전체 PC/mobile × A/B/C 실사용, 좋아요 해제, W1~W2 비용 확인 전 TEST/PRODUCTION 승격 금지. 사용자 지시상 안전한 수정은 감사 성공 후 PREVIEW 배포까지 한 단위로 진행한다.
+
+
 ## 최신 2026-09-24 — app157 개인 좋아요 카드 색인 최소 보완 감사 PASS, 아직 미배포
 
 - Source diff `2f32cf68cb59f55606766b611cff09939cd1e25d` + `debefe4fd6c4fd3661bd46bcbb07ced9cad7183b`: 서버가 인증한 완전한 개인 좋아요 ID 세트가 이전의 '곡 카드 없음' 캐시에 가려지지 않게 하고, 동일 계정 원격 신호는 이미 하트가 같아도 '내 좋아요' 카드 색인을 동일 membership으로 정렬. 기존 저장/Worker/UI 전부 비변경.

@@ -43,8 +43,9 @@ assert.doesNotMatch(enqueue, /JOIN likes/);
 
 assert.match(client, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(client, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
-assert.match(client, /const localCatalogReady127 = baselineReady127 \|\| hasLocalLikeCatalog135\(user\.uid\)/);
-assert.match(client, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/);
+assert.match(client, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
+assert.match(client, /const missing = baselineReady127 \? \[\] : normalized\.filter/);
+assert.match(client, /return !cache\.has\(trackId\);/);
 assert.match(client, /Page\/profile navigation itself must never create a server read\/write/);
 
 console.log('FINAL_LIKE_W1_QUEUE_INTAKE=PASS');

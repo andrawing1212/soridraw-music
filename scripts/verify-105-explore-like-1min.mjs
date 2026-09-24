@@ -22,7 +22,8 @@ if (appVersion >= 159) {
     assert.match(worker, /EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194/);
     assert.match(worker, /await this\.ctx\.storage\.deleteAlarm\(\)\.catch/);
     assert.match(worker, /await waitExploreLikeDelay194\(scheduledAt - Date\.now\(\)\)/);
-    assert.match(worker, /const pending = await this\.runAggregate194\(\)/);
+    assert.match(worker, /await this\.runAggregate194\(\);/);
+    assert.match(worker, /const pending = await this\.finalizeAggregate195\(\);/);
     assert.match(worker, /EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 \* 1000/);
     assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924/);
     assert.match(worker, /async finalizeAggregate195\(\)/);

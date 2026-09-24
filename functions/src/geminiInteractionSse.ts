@@ -121,8 +121,14 @@ export async function consumeGeminiInteractionSse(
         throw streamError("Gemini stream exceeds safety limit", "GEMINI_STREAM_TOO_LARGE", 502);
       }
       feed(decoder.decode(value, { stream: true }));
+      // The completion event carries final usage; waiting for transport close
+      // after it can waste the entire remaining timeout.
+      if (completed) {
+        await reader.cancel().catch(() => {});
+        break;
+      }
     }
-    feed(decoder.decode());
+    if (!completed) feed(decoder.decode());
     if (buffer) feed("\n");
     if (pendingData.length || pendingEvent) emit();
     if (!completed || !text.trim()) {

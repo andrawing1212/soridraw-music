@@ -306,7 +306,9 @@ replaceOnce(
   `      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
         const attemptModel = runtimeServerModelChain[index];
         if (index > 0) {`,
-  `      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
+  `      // Reserve cleanup headroom under the 330s Function hard limit.
+      const geminiTotalDeadlineMs = Date.now() + 300_000;
+      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
         const attemptModel = runtimeServerModelChain[index];
         const coordinateInFlight = latencyPolicy === "bounded-v1"
           && runtimeServerModelChain.length > 1
@@ -338,7 +340,20 @@ replaceOnce(
           continue;
         }
         const attemptStartedAt = Date.now();
-        const attemptTimeoutMs = getGeminiAttemptTimeoutMs(latencyPolicy, context, attemptModel);
+        const policyTimeoutMs = getGeminiAttemptTimeoutMs(latencyPolicy, context, attemptModel);
+        const remainingBudgetMs = latencyPolicy === "bounded-v1"
+          ? geminiTotalDeadlineMs - Date.now() - 10_000
+          : policyTimeoutMs;
+        if (latencyPolicy === "bounded-v1" && remainingBudgetMs < 10_000) {
+          releaseGeminiServerModelInFlight(uid, attemptModel, inFlightOwner);
+          const budgetError = new Error("Gemini total generation time budget exhausted");
+          (budgetError as any).status = 504;
+          (budgetError as any).code = "GEMINI_TOTAL_BUDGET";
+          throw budgetError;
+        }
+        const attemptTimeoutMs = latencyPolicy === "bounded-v1"
+          ? Math.max(1, Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs))
+          : policyTimeoutMs;
         try {
           let response;
           try {

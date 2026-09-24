@@ -36,6 +36,8 @@ for(const marker of [
   'recentSongsSaveInFlightRef.current > 0',
   'SORIDRAW_RECENT_GENERATION_UNCONFIRMED_LOCAL_196_20260925',
   'hasUnconfirmedSongMissingFromServer(user.uid, firestoreSongs)',
+  'legacyUnconfirmedSong',
+  'createdAt > documentVersion && createdAt > readRecentSongsLocalVersion(user.uid)',
   'acknowledgeRecentGeneratedSongs(user.uid, updatedSongs)',
   'markRecentGeneratedUnconfirmed(user.uid, generatedResults)',
   "recentSongTextWritePendingRef.current?.uid === user.uid",

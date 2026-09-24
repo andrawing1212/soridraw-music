@@ -11107,7 +11107,24 @@ const unlockAllFavorites = async () => {
           if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid) return;
 
           const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
+          const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
           const currentCache = loadRecentSongsCache(user.uid);
+          const confirmedSongIds = new Set(firestoreSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+          const legacyUnconfirmedSong = (currentCache?.history || []).some((song: any) => {
+            const songId = getLiveSoridrawSongId(song);
+            const createdAt = Number(song?.createdAt || 0);
+            // Protect results created by pre-163 clients, before local
+            // unsynced-ID tracking existed, if the authoritative snapshot is
+            // demonstrably older than both the song and the device's last
+            // acknowledged document version.
+            return Boolean(songId && createdAt > 0
+              && createdAt > documentVersion && createdAt > readRecentSongsLocalVersion(user.uid)
+              && !confirmedSongIds.has(songId));
+          });
+          if (legacyUnconfirmedSong) {
+            console.warn('Recent generated song newer than canonical snapshot; preserving original local cache.');
+            return;
+          }
           if (hasUnconfirmedSongMissingFromServer(user.uid, firestoreSongs)) {
             // The PC may have generated a song before its async server write
             // failed. An older canonical snapshot must not erase that only copy.
@@ -11122,7 +11139,6 @@ const unlockAllFavorites = async () => {
             return;
           }
 
-          const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
           const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
           const preferredIndex = preservedIndex ?? currentCache?.historyIndex ?? 0;
           const nextIndex = firestoreSongs.length ? preferredIndex : -1;

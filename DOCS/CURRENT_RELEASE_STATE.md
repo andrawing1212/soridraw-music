@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GF. 최초 Social Snapshot R45 식별용 진단 최소 수정 — PREVIEW 소스 후보, 미배포 (2026-09-25 KST)
+
+**사용자 지시**: 업데이트 직후 개인 Social Snapshot D1 최초 R45를 수정하되 이미 정상화된 app164 좋아요/PC↔모바일/타계정 숫자를 보호. 첫 요청 1회에 D1 query 2/rows_read 45/W0, 동일 기기 페이지 왕복 R0/W0를 실제 화면으로 확인. URL query·계정별 R2 exact/미정산 guard는 최초 화면에서 알 수 없으므로 182·189·일반 follow init 중 하나를 사실로 확정하거나 원본 조회를 일괄 삭제하지 않음. 앱 버전 변경 자체로 이 45행이 재생되는지 또한 미확인.
+
+**실제 코드 변경(아직 배포 전)**: `src/services/exploreLikeService.ts`의 기존 `recordCloudflareResponse` **한 호출에만** 기존 관리자 lastOutcome 문자열을 `FULL 200 · PERSONAL REPAIR 182` / `PERSONAL SETTLEMENT 189` / `PERSONAL BASELINE`로 분류. `src/services/exploreSocialSnapshotService.ts`는 팔로우 snapshot 캐시 미스 시 `SOCIAL CACHE MISS`로 분류. 계정 UID/트랙/실제 좋아요 목록/응답 body 로깅 없음, 경로 집계 키와 헤더의 R/W 계측 그대로, 네트워크 호출 추가 없음. `scripts/verify-198-social-snapshot-diagnostic-reason.mjs`는 실제 요청 함수로 세 경로·HTTP 실패·Follow 캐시 미스 구분과 UID 비노출 검증; Release System Audit에 등록. 좋아요 state/캐시/invalidation/queue/Worker195/RTDB/공유 원본/UI/CSS/현재 app164 버전 변경 없음.
+
+**고정 검사**: 제품 변경 commit `d3e42bf692a396cfc0a5556b6d0f595d5b63ae1a`, Follow 진단 `a33243da2562fec2284b96dd609e36b32164f3c1`, 신규 검증 `1254bcac3757c6b3f11cdf1e6492457956054a18`, audit 등록 `91567c23610b24800ef5d922954488b22880a6a5`, 감사-only trigger `671536cf2f68bfd32a6cf249df74e782d3e36263`. Release System Audit Run `36043776336` SUCCESS: TypeScript/Build, 기존 좋아요 APP197/APP189, APP198 진단/비노출 및 Worker dry-run, D1 read-only, branch 보호 PASS. 원격 mutation 물리 W1~W2 별도 SKIPPED/미측정.
+
+**배포/비용 판정**: 이 결과는 **진단 원인 표시 준비 PASS**일 뿐 최초 R45 비용 자체의 감소/원인 규명 PASS가 아니다. 실사용 실제 요청의 query/metadata가 없어 안전한 서버 조회 생략 근거 없음. Firebase Hosting/Worker/Functions 배포 없음, PREVIEW 실제 앱은 여전히 app164 release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`; TEST/PRODUCTION 비변경, 사용자 원본 데이터 직접 변경 없음. 다음은 최초 읽기 재현 시 관리자 lastOutcome과 query mode만 확인 → 해당 원인별 R0 가능한지 별도 결정 → 기존 좋아요 완전 회귀 후 필요하면 PREVIEW만 배포. 진단만 내려고 앱 업데이트를 강제해 45행을 재유발하는 작업은 먼저 비용·가치 판단 후 사용자 안내.
+
 ## 0GE. app164 업데이트 직후 `/v1/me/social-snapshot` 최초 D1 R45 / 재진입 R0 — 경로 검토 및 비용 회귀 고정 (2026-09-25 KST)
 
 **사용자 실제 계측**: 관리자 진단에서 첫 진입 `/v1/me/social-snapshot` LOCAL 0 · Worker 1, D1 read query 2 · rows_read 45 · W0; 화면의 다른 경로를 합치면 Worker 11, D1 총 R45/W0. 진단 초기화 후 페이지 왕복의 별도 스크린샷: `/v1/me/social-snapshot` 요청 없음, `/v1/public-like-cards` Worker 2 R0/W0, `/v1/me/music-note-publications-revision` Worker 1 R0/W0, D1 합계 R0/W0. 따라서 **동일 기기의 정상 재진입 반복 D1 read는 이번 사례에서 재현되지 않음**. 첫 요청의 45행은 실제 발생한 비용으로 취급하고 삭제/무시하지 않음.

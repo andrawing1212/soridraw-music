@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FF. app158 PREVIEW 배포 — 개인 좋아요 stale-guard 재확인 간소화 (2026-09-24 KST)
+
+**배포 상태: PREVIEW 완료.** 기준 `b5a54bcee693c5282b5ff04e6e7b5e3c1ed4ca1f`; 변경 `src/services/exploreLikeService.ts` `7fff2ffe702d92d19356f1b107d08a793b6380ff`, 실행 검증 `scripts/verify-189-personal-like-settled-guard-release.mjs` `a5bb6dbf3a4f3e1c0f21215f4393daee22578a2d`, `src/pages/ExplorePage.tsx` `561f7fd2f4beedaf31c9591e135d01eb51d1cc30`, `public/app-version.json` `539a0af86239c1a9309590c76c40986b7ef29999`. 최종 감사 소스/Run `1fdd191325a87dac47adc07bab3d94f84c5d8f28` / `35978411056` SUCCESS; 배포 trigger `d14259c31f9bb36f38a9d0412fc95994decb3455`, Hosting Run `35978612769` SUCCESS, app-version 158, exact PREVIEW build PASS, TEST/PRODUCTION 불변 PASS. Worker189 유지. URL `https://preview.soridraw.com/`.
+
+**수정한 실제 경로**: 과거 app189 글로벌 복구 시도 마커 `'1'`가 실패 후 영원히 재확인을 막던 부분을, 유효한 개인 R2 revision별 최대 1회 fresh canonical proof로 바꾼다. 우선순위는 현재 outbox→인증된 fresh canonical proof→이미 받은 개인 R2. queue pending/경합/ID mismatch에서 fail closed, 무작정 guard 삭제 금지. 정상 캐시는 추가 D1 확인 0. 공유 Feed 일회성 수복 marker에서 앱 버전 결합 제거하여 향후 버전 변경만으로 R2 Feed 재읽지 않는다. 기존 실시간 app141, 30초 묶음, W1-W2, Functions/Rules/UI/공유 사용자 데이터 변경 없음.
+
+**확인**: TypeScript/Build/static tests/개인 좋아요 5→10 합성/재방문 읽기 제한 PASS. **실제 A 계정 서버 canonical/R2 및 PC·모바일 개인 10곡 일치는 미검증. B/C의 공개 숫자 실시간 통지도 여전히 미구현/미검증**이므로 전체 좋아요 정상화 완료로 선언 금지. 다음 작업은 공유 likeCount 변경 1곡 publication/revision과 다른 계정 실기기 검증, 근거 확인 후 최소 수정. 사용자 원본 강제수정·전체 조회·TEST/PRODUCTION 승격 금지.
+
+
 ## 0FE. app157 개인 좋아요 카드 일치 보완 PREVIEW Hosting 배포 완료 (2026-09-24 KST)
 
 **배포**: 사용자의 수정→PREVIEW 배포 한 묶음 지시에 따라 소스 변경/감사/Hosting 배포를 완료했다. Audit `35975707446` SUCCESS, 코드 감사 기준 `86eb3e4a176f27fc7ad5534fcc518260967197c0`, 앱 릴리스 trigger `c1a6d885c362c0cee7b21a36df8733eebfd36e8b`, Firebase Hosting-only Run `35976334811` **SUCCESS**. 릴리스 안의 TypeScript, Build, `PREVIEW_EXACT_BUILD`, `TEST_PRODUCTION_UNCHANGED` 전부 PASS. URL `https://preview.soridraw.com/`; 앱 버전은 157 그대로이며 변경 코드는 개인 좋아요 카드 색인 190이다.

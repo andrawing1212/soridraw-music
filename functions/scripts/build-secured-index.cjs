@@ -120,7 +120,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
   replaceFirst(
     'Gemini interaction timeout signal',
     '      body: JSON.stringify(body),\n    },\n  );\n  if (!upstream.ok) {',
-    '      body: JSON.stringify(body),\n      ...(attemptTimeoutMs ? { signal: AbortSignal.timeout(attemptTimeoutMs) } : {}),\n    },\n  );\n  const payload = await upstream.json().catch(() => null);',
+    '      body: JSON.stringify(body),\n      ...(attemptTimeoutMs ? { signal: AbortSignal.timeout(attemptTimeoutMs) } : {}),\n    },\n  );\n  if (!upstream.ok) {',
   );
 
   replaceOnce(

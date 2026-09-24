@@ -84,13 +84,10 @@ jobs:
             exit 0
           fi
 
-          npx --yes firebase-tools@latest deploy \
-            --only database \
-            --project "$SHARED_DATA_PROJECT" \
-            --config firebase.json \
-            --non-interactive
-          echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
-
+          # Use the same proven official REST rule path as the earlier 093 release.
+          # firebase-tools first asks the Firebase Management API for instance
+          # metadata, which this shared-data service account does not need for a
+          # direct authenticated rules PUT.
           python3 -m pip install --quiet google-auth requests
           python3 - <<'PY'
           import os
@@ -111,9 +108,33 @@ jobs:
           if not creds.token:
               raise SystemExit('RTDB OAuth token unavailable')
           Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          print('RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS')
           PY
+
           token="$(cat "$RUNNER_TEMP/rtdb-access-token")"
-          curl -fsS --max-time 30 "${RTDB_RULES_URL}?access_token=${token}" > "$RUNNER_TEMP/rtdb-rules-after.json"
+          auth_url="${RTDB_RULES_URL}?access_token=${token}"
+
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-before.json" -w '%{http_code}' "$auth_url")"
+          if [ "$code" != '200' ]; then
+            echo "RTDB_RULES_READ_HTTP=$code"
+            cat "$RUNNER_TEMP/rtdb-rules-before.json" || true
+            exit 1
+          fi
+          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
+
+          code="$(curl -sS --max-time 30 -X PUT \
+            -H 'Content-Type: application/json' \
+            --data-binary @database.rules.json \
+            -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
+          if [ "$code" != '200' ]; then
+            echo "RTDB_RULES_PUT_HTTP=$code"
+            cat "$RUNNER_TEMP/rtdb-rules-put.json" || true
+            exit 1
+          fi
+          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
+
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -124,6 +145,7 @@ jobs:
           print('SHARED_RTDB_RULES_EXACT_MATCH=PASS')
           PY
           rm -f "$RUNNER_TEMP/rtdb-access-token"
+          echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
           echo 'NO_USER_DATA_MIGRATION=true'
 
       - name: Deploy PREVIEW Hosting only

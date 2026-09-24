@@ -1519,11 +1519,27 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, user.uid)) === '1';
   const beforeOutbox127 = readLikeOutbox(user.uid);
   const beforeUnresolved127 = readSnapshotPending127(user.uid);
-  const localCatalogReady127 = baselineReady127 || hasLocalLikeCatalog135(user.uid);
-  const missing = localCatalogReady127 ? [] : normalized.filter((trackId) => {
+  // A verified complete personal snapshot proves that an unseen, unguarded
+  // track is not liked. Record ONLY that new ID as false so the first click
+  // uses the same durable authority as every existing track. Never replace a
+  // known heart, an unsent click, or an accepted cross-device intention.
+  if (baselineReady127) {
+    let seeded = false;
+    for (const trackId of normalized) {
+      if (cache.has(trackId) || beforeOutbox127[trackId] ||
+          Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) continue;
+      cache.set(trackId, false);
+      seeded = true;
+    }
+    if (seeded) persistLikedStateCache(user.uid, cache);
+  }
+  // A partial or unconfirmed snapshot cannot prove absence. Verify only
+  // unknown visible IDs once via the existing bounded private endpoint,
+  // even when this device already has a partial local catalog.
+  const missing = baselineReady127 ? [] : normalized.filter((trackId) => {
     if (beforeOutbox127[trackId] ||
         Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) return false;
-    return !cache.has(trackId) || !verified127.has(trackId);
+    return !cache.has(trackId);
   });
   if (missing.length) {
     const query = new URLSearchParams({ trackIds: missing.join(',') });

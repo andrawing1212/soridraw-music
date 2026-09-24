@@ -23950,6 +23950,47 @@ async function repairPartialPersonalLikeMetadata182(env, uid) {
   return saved ? 'metadata-repaired' : 'concurrent-change';
 }
 
+// SORIDRAW_PERSONAL_LIKE_FRESH_SETTLEMENT_189_20260924
+// Read-only, opt-in proof for one affected account. Persistent provenance is
+// deliberately ignored: only two empty-queue observations surrounding a
+// bounded canonical/R2 set comparison, plus an unchanged R2 ETag, can pass.
+async function verifyFreshPersonalLikeSettlement189(env, uid) {
+  const bucket = env?.PROFILE_MEDIA;
+  if (!bucket || !env?.DB || !uid) return null;
+  const key = exploreSharedLikesKey061(uid);
+  const object = await bucket.get(key);
+  if (!object?.etag) return null;
+  let raw = null;
+  try { raw = JSON.parse(await object.text()); } catch { return null; }
+  const state = normalizeSharedLikesState161(raw, uid);
+  if (!state?.exact || state.likedIds.size > 2000) return null;
+
+  const readPending = async () => env.DB.prepare(
+    'SELECT ' +
+    '(SELECT COUNT(*) FROM explore_like_batches_069 WHERE user_uid=?) AS q069, ' +
+    '(SELECT COUNT(*) FROM explore_like_user_queue_075 q ' +
+      'CROSS JOIN explore_like_user_queue_state_075 s ' +
+      'WHERE q.user_uid=? AND (q.updated_at>s.processed_at OR ' +
+      '(q.updated_at=s.processed_at AND q.user_uid>s.processed_uid))) AS q075'
+  ).bind(uid, uid).first();
+  const queueEmpty = row => Boolean(row) && Number(row.q069 || 0) === 0 && Number(row.q075 || 0) === 0;
+  if (!queueEmpty(await readPending())) return null;
+
+  const canonical = await env.DB.prepare(
+    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id ' +
+    "WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' " +
+    'ORDER BY l.created_at DESC LIMIT 2001'
+  ).bind(uid).all();
+  if (!Array.isArray(canonical?.results) || canonical.results.length > 2000) return null;
+  const ids = canonical.results.map(row => String(row?.track_id || '').trim());
+  if (ids.some(id => !id) || new Set(ids).size !== ids.length || ids.length !== state.likedIds.size ||
+      ids.some(id => !state.likedIds.has(id))) return null;
+
+  if (!queueEmpty(await readPending())) return null;
+  const current = await bucket.head(key);
+  return Boolean(current?.etag) && current.etag === object.etag ? state : null;
+}
+
 async function handleMySocialSnapshot042(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let [likeState, followingUids] = await Promise.all([
@@ -23981,6 +24022,13 @@ async function handleMySocialSnapshot042(request, env, cors) {
       likeState = await readSharedLikesState161(env, authContext.uid);
     }
   }
+  let freshCanonicalSettlement = false;
+  if (new URL(request.url).searchParams.get('__soridraw_personal_settlement') === '189') {
+    const settledLikeState189 = await verifyFreshPersonalLikeSettlement189(env, authContext.uid);
+    freshCanonicalSettlement = Boolean(settledLikeState189);
+    // Return the exact object whose ETag participated in the proof.
+    if (settledLikeState189) likeState = settledLikeState189;
+  }
 
   return json({
     ok: true,
@@ -23991,6 +24039,7 @@ async function handleMySocialSnapshot042(request, env, cors) {
       exactLikeCount: likeState.exact ? likeState.exactLikeCount : null,
       likesSnapshotSource: likeState.source,
       likesRepairStatus182,
+      freshCanonicalSettlement,
       followingUids: [...followingUids],
       source: 'r2-social-042',
       updatedAt: Date.now(),

@@ -46,6 +46,10 @@ const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
 const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baseline:161';
 // One bounded, account-scoped recovery attempt for legacy incomplete metadata.
 const EXPLORE_LIKE_REPAIR_ATTEMPTED_182 = 'soridraw:explore:like-metadata-repair-attempted:182';
+// 189: existing app156 devices may already have completed the older migration
+// gate while retaining historical accepted-but-unsettled guards. Only those
+// devices get one authenticated, UID-scoped settlement check.
+const EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189 = 'soridraw:explore:like-settlement-attempted:189';
 // App127: when the legacy shared R2 bundle is incomplete, a bounded /v1/me/likes
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
@@ -105,7 +109,7 @@ type ExploreLikeBaselineSnapshot161 = {
   likedTrackIds: string[];
   complete: boolean;
   exactLikeCount: number | null;
-  canonicalSettled: boolean;
+  freshCanonicalSettlement: boolean;
 };
 
 type ExploreLikeSyncEventDetail = {
@@ -604,10 +608,16 @@ const startLikeSignal127 = (uid: string) => {
 // account, not once per song/card/tab. No continuous timer or global Feed reload.
 onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
 
-const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = false): Promise<ExploreLikeBaselineSnapshot161> => {
+const requestPersonalLikeBaseline127 = async (
+  user: User,
+  repairPartial182 = false,
+  verifySettlement189 = false,
+): Promise<ExploreLikeBaselineSnapshot161> => {
   const headers = await buildAuthHeaders(user);
-  const recoveryQuery182 = repairPartial182 ? '?__soridraw_personal_repair=182' : '';
-  const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot' + recoveryQuery182, {
+  const recoveryQuery = repairPartial182
+    ? '?__soridraw_personal_repair=182'
+    : verifySettlement189 ? '?__soridraw_personal_settlement=189' : '';
+  const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot' + recoveryQuery, {
     method: 'GET',
     headers,
   });
@@ -620,6 +630,7 @@ const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = fal
       likesComplete?: unknown;
       exactLikeCount?: unknown;
       likesSnapshotSource?: unknown;
+      freshCanonicalSettlement?: unknown;
     };
   };
   if (payload?.ok !== true || !Array.isArray(payload?.data?.likedTrackIds)) {
@@ -636,11 +647,10 @@ const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = fal
     likedTrackIds,
     complete,
     exactLikeCount: complete ? exactLikeCount : null,
-    // Only app182's queue-empty D1 comparison proves that this account-wide
-    // snapshot is settled canonical state. Ordinary exact R2 catalogs can still
-    // contain an accepted, pre-aggregate mutation and must not release guards.
-    canonicalSettled: complete &&
-      String(payload.data.likesSnapshotSource || '') === 'verified-single-user-d1-182',
+    // Persistent R2 provenance is never settlement evidence. Only this
+    // authenticated response's fresh queue/canonical/ETag check can release a
+    // historical guard.
+    freshCanonicalSettlement: complete && payload.data.freshCanonicalSettlement === true,
   };
 }
 
@@ -649,24 +659,40 @@ const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = fal
 // ordinary entry. The server may use its existing recovery path if R2 is absent.
 const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const uid = user.uid;
+  if (!uid) return;
   // Preserve healthy local-first behavior. Only a previously partial account
   // receives ONE extra account-scoped metadata verification after deployment.
   const partial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1';
   const attempted182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) === '1';
-  if (!uid || baselineCompleted127.has(uid) ||
-      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' ||
-      (partial182 && attempted182)) return;
+  const baseline127 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+  const hasUnresolvedGuards189 = Object.keys(readSnapshotPending127(uid)).length > 0;
+  const settlementAttempted189 = readLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid),
+  ) === '1';
+  const verifySettlement189 = hasUnresolvedGuards189 && !settlementAttempted189 &&
+    (baseline127 || (partial182 && attempted182));
+  if (!verifySettlement189 && (baselineCompleted127.has(uid) || baseline127 ||
+      (partial182 && attempted182))) return;
   const inflight = baselineInFlight127.get(uid);
   if (inflight) return inflight;
   const task = (async () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const versionAtStart = readSeenLikeSignal127(uid);
       const repairAtStart = readRepairTarget127(uid);
-      const repairPartial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) !== '1';
-      const snapshot161 = await requestPersonalLikeBaseline127(user, repairPartial182);
+      const repairPartial182 = !verifySettlement189 &&
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) !== '1';
+      if (verifySettlement189) {
+        // Mark before the request: failure remains fail-closed and cannot turn
+        // ordinary navigation into an unbounded canonical-read retry loop.
+        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid), '1');
+      }
+      const snapshot161 = await requestPersonalLikeBaseline127(user, repairPartial182, verifySettlement189);
       const likedIds = snapshot161.likedTrackIds;
       if (readSeenLikeSignal127(uid) !== versionAtStart ||
           readRepairTarget127(uid) !== repairAtStart) {
+        if (verifySettlement189) {
+          throw new Error('Personal like signal advanced during settlement check; preserving guards');
+        }
         // Concurrent device mutation: reread the small per-user R2 snapshot,
         // never accept an older response over the user's latest signal.
         if (attempt === 0) continue;
@@ -711,12 +737,12 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       const outbox = readLikeOutbox(uid);
       const unresolved = readSnapshotPending127(uid);
       // SORIDRAW_PERSONAL_LIKE_SETTLED_GUARD_RELEASE_189_20260924
-      // app182's source is emitted only after queue-empty canonical D1 and R2 IDs
-      // agree exactly. Historical accepted-but-unsettled guards can otherwise
+      // A fresh app189 response is emitted only after queue-empty canonical D1
+      // and R2 IDs agree exactly. Historical accepted-but-unsettled guards can otherwise
       // override that proof forever (for example, PC 5 while R2/mobile are 10).
       // Preserve every current outbox intention; ordinary exact R2 snapshots do
       // not have this authority and keep the existing guard behavior.
-      if (snapshot161.canonicalSettled) {
+      if (snapshot161.freshCanonicalSettlement) {
         for (const id of Object.keys(unresolved)) {
           if (!outbox[id]) delete unresolved[id];
         }

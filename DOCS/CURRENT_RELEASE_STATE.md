@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FB. PR #111 app157 보완 — fresh canonical settlement만 과거 guard 해제 (2026-09-24 KST)
+
+리뷰 P1 2건/P2 1건만 보완했다. app156에서 이미 `BASELINE=1`이거나 `PARTIAL=1 + REPAIR_ATTEMPTED_182=1`인 기기도 UID별 unresolved guard가 실제 존재할 때에만 189 복구 경로에 1회 진입한다. 189 시도 marker는 요청 전에 기록하므로 실패·재방문·앱 업데이트가 canonical 재읽기 loop를 만들지 않으며, unresolved guard가 없는 정상 캐시는 기존 조기 종료를 유지해 D1 R0이다.
+
+R2에 지속되는 `likesSnapshotSource`/`canonicalSource156`는 더 이상 guard 삭제 권한이 없다. 인증된 현재 189 요청에서만 Worker가 (1) 069/075 queue empty, (2) 최대 2001 bounded canonical 공개 likes와 exact R2 ID set 완전 일치, (3) queue 재확인, (4) R2 ETag 불변을 모두 확인하고 `freshCanonicalSettlement=true`를 반환한다. mismatch/pending/초과/corrupt/ETag race는 false로 닫히며 R2/D1 원본을 쓰지 않는다. 클라이언트도 현재 signal/repair target이 바뀌면 결과 적용 전에 중단하고, 현재 outbox track의 guard와 미전송 의도를 보존한다.
+
+`verify-189`는 production `requestPersonalLikeBaseline127`/`ensurePersonalLikeBaseline127` 구현을 직접 compile·실행하여 app156 두 marker 상태의 5→10 cache 반영, UID 1회 진입, persistent provenance/accepted-pre-aggregate 거부, live outbox 보존, signal race fail-closed, healthy cache D1 R0를 검사한다. Worker canonical owner와 SHA manifest만 함께 갱신했다. UI/CSS, 타계정 공용 숫자, mutation W1/W1-W2 경로, schema, 사용자 데이터는 변경하지 않았다. 배포/merge/TEST/PRODUCTION 승격은 하지 않으며 PREVIEW 실제 기기 5→10은 여전히 미검증이다.
+
 ## 0FA. app157 source 후보 — canonical-settled 개인 좋아요가 과거 pending guard에 가려지는 원인 수정 (2026-09-24 KST)
 
 **이번 1단계에서 재현·확정한 원인 1개**: 개인 shared R2/D1이 10곡으로 정확히 일치해 app182가 `verified-single-user-d1-182` complete snapshot을 반환해도, PC 로컬의 과거 `explore-like-snapshot-pending:127` false 5개가 exact catalog보다 우선했다. 이 guard는 기존 코드에서 해제 경로가 없어 서버/R2 10곡과 모바일 10곡인 상태에서도 PC는 5곡을 계속 표시할 수 있었다. 합성 회귀검사에서 canonical 10 + stale false guard 5 → visible 5를 재현했다. 실제 사용자 UID·곡 ID·원본 데이터는 읽거나 출력하지 않았다.

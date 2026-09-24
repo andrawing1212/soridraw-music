@@ -57,12 +57,6 @@
     "head_sampling_rate": 1
   },
   "vars": {
-    "SORIDRAW_R2_CATALOG_V1": "1",
-    "SORIDRAW_ONETIME_PUBLIC_LIKE_REPAIR_191": "1"
-  },
-  "triggers": {
-    "crons": [
-      "* * * * *"
-    ]
+    "SORIDRAW_R2_CATALOG_V1": "1"
   }
 }

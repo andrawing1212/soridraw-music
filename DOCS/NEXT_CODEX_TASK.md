@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 최근 생성곡 PC→휴대폰 누락 우선 원인 분리 (Gemini 영어 제목 다음)
+
+- `CURRENT_RELEASE_STATE.md 0FV`: 사용자 PC에서 만든 곡이 폰 최근 생성곡에 보이지 않는다고 보고. **cross-device FAIL**, TEST 승격 금지. 원본이 존재하는지 미검증이므로 “캐시 문제 확정”, “Firestore 저장 실패 확정”, “새 곡 유실” 단정 금지.
+- 읽기 전용으로 동일 계정/환경, `user_recent_songs/{uid}.songs[]`의 해당 곡 1개와 `syncVersion`, `users/{uid}.syncVersions.recentSongs`, RTDB `userSync/{uid}/recentSongs` 버전, 폰 프로필 캐시/로컬 버전/화면을 시간순으로 대조. 대량읽기 금지.
+- 코드상 후보: 935의 recentSongs 이벤트는 `detail.version`을 확인하지만 fetch 여부는 `readUserProfileCache(uid)`의 원격 버전만 사용. RTDB 신호가 프로필보다 먼저 도착하면 누락 가능. 저장 문서에 최신 곡이 있을 때만 구체적인 bounded invalidation 수정 검토.
+- 원본 없으면 PC 저장 경로만 조사. **PC 캐시 삭제·로그아웃·새 곡 재생성·전체 캐시 강제 무효화·사용자 데이터 백필/덮어쓰기 금지**. 정상 캐시/변경 없음 서버 읽기 0 목표 및 Music Note 60초 묶음 저장 유지.
+- 좋아요 전체 동결, Worker195/Explore 비변경. PREVIEW 원인 검사/최소 수정/감사 후 사용자 PC↔모바일 재검증. 현재 새 코드·배포 없음.
+
 ## 최신 2026-09-25 — 가사 언어 추가 영어 제목 누락, 추가 생성 지연 조사
 
 - app162 첫 V1 1곡 생성 자체는 0FT에서 PASS. 그러나 사용자가 후속 ‘가사 언어 추가’ → 영어를 실행했을 때 1분 이상 소요 및 **영어 카드 제목이 영어로 표시되지 않음**을 보고했다. `CURRENT_RELEASE_STATE.md 0FU` 참조.

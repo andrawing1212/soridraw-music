@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FV. PREVIEW app162 최근 생성곡 PC → 모바일 누락 — 저장/변경신호/수신 캐시 미분리, 릴리스 차단 (2026-09-25 KST)
+
+**사용자 직접 제보**: PC에서 새 곡을 생성한 뒤 휴대폰의 최근 생성곡을 확인했지만 해당 곡이 없다. 아직 동일 계정·동일 PREVIEW 주소 확인, Firestore 원본 `user_recent_songs/{uid}.songs[]` 해당 곡 포함 여부, PC 로컬 캐시/모바일 로컬 캐시, `users/{uid}.syncVersions.recentSongs` 및 RTDB `userSync/{uid}/recentSongs` 발행 상태, 모바일 최종 수신 시각은 실제로 검사되지 않았다. **서버 저장 실패/변경 신호 누락/모바일 수신 게이트/환경·계정 차이를 현재 확정 불가**. 사용자 원본을 캐시라고 가정해 지우지 않는다.
+
+**읽기 전용 코드상 위험 후보**:
+- 기존 `.deploy/apply-935-recent-version-sync-only.py`가 구성한 `runRecentSongsServerSyncIfNeeded`는 저장된 프로필의 `syncVersions.recentSongs`와 휴대폰 로컬 버전을 비교해 `remoteVersion > localVersion`일 때만 `getDocFromServer(user_recent_songs/{uid})` 수행. 이 방식은 변경 없는 재진입 서버 읽기 0을 위해 필요.
+- `src/services/userDomainSyncService.ts`는 uid별 RTDB `userSync/{uid}/recentSongs`의 version을 앱 이벤트로 전달. 935의 소비자는 이벤트 `detail.version`을 로컬 버전과 비교하지만 실제 fetch 판단은 *별도* `readUserProfileCache(uid)`의 remoteVersion에서 다시 계산한다. RTDB 신호가 프로필 캐시 반영보다 먼저 오거나 프로필 신호가 실패/누락된 경우, **새 이벤트가 있어도 이전 프로필 값으로 읽기를 건너뛸 가능성**이 있다. 이것이 이번 사용자 케이스의 원인인지는 실시간 증거 전 확정하지 않는다.
+- `persistRecentSongsDocument`는 원본 최근곡 문서를 먼저 저장하고 users 버전 신호를 나중에 쓰며, 그 signal 실패는 경고 후 계속 진행한다. 원본 저장 자체가 실패했는지 먼저 분리해야 한다. 편집/확인의 경우 일부 경로는 PC 로컬 캐시만 업데이트할 수 있으므로 새 곡 생성과 후속 텍스트 편집을 혼동하지 않는다.
+
+**안전 검사 순서**:
+1. 동일 uid/preview 앱 주소 판정(비밀값 기록 금지). PC에서 새 곡 존재 유지, 로컬 저장소/캐시 삭제·로그아웃·곡 재생성 금지.
+2. Firestore **해당 uid의 최근곡 문서 1개만** 읽기 전용 확인: 새 곡 ID/생성시간의 존재, 문서 `syncVersion` 및 `users/{uid}.syncVersions.recentSongs`의 숫자 비교. 전체 favorites/Feed/사용자 컬렉션 조회 금지.
+3. 원본 존재 시 모바일 저장된 recentSongs local version, 프로필 캐시 version, RTDB 마지막 신호 version 및 이벤트 전달 여부를 비교. 버전이 변경된 경우에만 한 번 읽어 해당 새 곡을 기존 목록과 안전하게 병합하는 최소 수정. 원본 부재라면 PC 실제 생성 저장(또는 retry/outbox) 단계만 조사하여 정상 저장 보호; 앱 재진입 write/강제 백필 금지.
+4. 서로 다른 환경(Hosting 코드)은 구분하되 공유 원본을 복사하지 않는다. PC·모바일 결과 일치 후에만 PASS.
+
+**현재 상태**: app162 Hosting Run `36026936663`, PREVIEW Gemini Function `36026587156` 배포 완료 상태 유지. 실사용 최근곡 cross-device FAIL로 기능 전체 완료 및 TEST 승격 차단. 좋아요 app160/Worker195 사용자 확인 동결 유지. 이번에는 문서 기록만; 코드/배포/사용자 데이터 변경 없음.
+
 ## 0FU. app162 후속 ‘가사 언어 추가’ 실사용 — 영어 카드 제목 미번역 / 약 1분 이상 소요 (2026-09-25 KST)
 
 **사용자 추가 피드백**: 기존 한국어 제목 곡의 ‘가사 언어 추가’에서 영어를 선택했다. 추가 가사 생성에 1분 조금 넘게 걸렸고, 영어용 결과에 **영어 제목이 나오지 않았다**. ‘처음 곡 생성’은 0FT의 1곡 성공을 유지하나 **후속 언어 추가의 제목·속도까지 PASS라고 처리하면 안 된다**.

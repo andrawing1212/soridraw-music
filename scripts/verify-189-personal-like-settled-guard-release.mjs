@@ -107,6 +107,22 @@ assert.equal(changedRevision.fetchCount(), 1, 'new private revision admits one f
 assert.deepEqual(changedRevision.unresolved, {}, 'settled next revision clears the previous false guards');
 await changedRevision.ensure({ uid }, 'r2-after-queue');
 assert.equal(changedRevision.fetchCount(), 1, 'same private revision cannot repeat canonical read');
+// Regression: revision check invalidates BASELINE=1 BEFORE calling ensure.
+// App158 passed the revision but still required the now-cleared baseline marker,
+// so it silently accepted the stale false guards without requesting proof.
+const invalidatedBaseline = createHarness({
+  markers: { [key('settlement189')]: '1', ['revision:' + uid]: 'r2-after-queue' },
+  unresolved: stale(), responses: [snapshot(true)],
+});
+await invalidatedBaseline.ensure({ uid }, 'r2-after-queue');
+assert.equal(invalidatedBaseline.fetchCount(), 1,
+  'revision-invalidated baseline must still request the bounded canonical proof');
+assert.deepEqual(invalidatedBaseline.unresolved, {},
+  'revision-invalidated complete canonical proof removes stale false guards');
+assert.equal([...invalidatedBaseline.cache.values()].filter(Boolean).length, 10);
+await invalidatedBaseline.ensure({ uid }, 'r2-after-queue');
+assert.equal(invalidatedBaseline.fetchCount(), 1, 'unchanged private revision cannot recheck D1');
+
 const alreadyCheckedRevision = createHarness({
   markers: { [key('baseline127')]: '1', [key('settlement189')]: 'revision:r2-after-queue', ['revision:' + uid]: 'r2-after-queue' },
   unresolved: stale(),
@@ -210,3 +226,5 @@ console.log('APP189_HEALTHY_CACHE_D1_R0=PASS');
 console.log('APP189_WORKER_QUEUE_SET_ETAG_RACE_GUARDS=PASS');
 
 console.log('APP189_CHANGED_PRIVATE_REVISION_BOUNDED_SETTLEMENT_RETRY=PASS');
+
+console.log('APP189_INVALIDATED_BASELINE_REVISION_RECOVERY=PASS');

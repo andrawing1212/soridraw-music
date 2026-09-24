@@ -23,6 +23,10 @@ const MUSIC_NOTE_DEVICE_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_REMOTE_VERSION_BASE = 'soridraw_music_note_remote_sync_version_v1';
 const MUSIC_NOTE_LOCAL_VERSION_BASE = 'soridraw_music_note_local_sync_version_v1';
 const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
+// Separate RTDB delivery timestamps from the authoritative Firestore document
+// version. Persist both signal and acknowledgement across Studio navigation.
+const RECENT_PENDING_SIGNAL_BASE = 'soridraw_recent_songs_pending_signal_v3';
+const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_signal_v3';
 const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
@@ -63,6 +67,22 @@ const writeLocalNumberMax = (key: string, value: number): void => {
   } catch {}
 };
 
+export const readRecentSongsPendingSignalVersion = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_PENDING_SIGNAL_BASE, uid));
+
+export const readRecentSongsAcknowledgedSignalVersion = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_ACKNOWLEDGED_SIGNAL_BASE, uid));
+
+export const rememberRecentSongsPendingSignalVersion = (uid: string, version: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_PENDING_SIGNAL_BASE, uid), version);
+};
+
+export const acknowledgeRecentSongsSignalVersion = (uid: string, version: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_ACKNOWLEDGED_SIGNAL_BASE, uid), version);
+};
+
 const resultDocumentId = (result: unknown): string => {
   if (!result || typeof result !== 'object') return '';
   return String((result as { id?: unknown }).id || '').trim();
@@ -81,8 +101,10 @@ const buildSignal = (
   const uniqueIds = [...new Set(rawIds)];
   const now = Date.now();
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
+  const persistedRecentVersion = kind === 'recentSongs' && typeof result === 'number'
+    && Number.isFinite(result) && result > 0 ? Math.floor(result) : 0;
   return {
-    version: now,
+    version: persistedRecentVersion || now,
     at: now,
     originDeviceId: getDeviceId(kind),
     operation: String(context.operation || '').slice(0, 48),
@@ -99,6 +121,7 @@ const publishSignal = async (
   const uid = String(context.uid || '').trim();
   if (!uid) return;
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
+  if (kind === 'recentSongs' && result == null) return; // Mutation epoch skip is not a write.
   await set(ref(realtimeDb, `userSync/${uid}/${kind}`), buildSignal(context, result));
 };
 
@@ -146,6 +169,9 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     // Advance the local gate so the existing event consumer does not reread that
     // same document on the device that just wrote it.
     writeLocalNumberMax(scopedVersionKey(RECENT_LOCAL_VERSION_BASE, uid), signal.version);
+    acknowledgeRecentSongsSignalVersion(uid, signal.version);
+  } else {
+    rememberRecentSongsPendingSignalVersion(uid, signal.version);
   }
   window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_EVENT, {
     detail: { uid, version: signal.version },

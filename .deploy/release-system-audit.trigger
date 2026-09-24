@@ -1,8 +1,9 @@
-requested_at=2026-09-24T05:15:00+09:00
-requested_by=app182_auth_query_no_custom_header_reaudit
+requested_at=2026-09-24T16:52:00+09:00
+requested_by=user_approved_app157_personal_like_settlement_preview
 target=preview
-purpose=verify_one_time_partial_like_repair_without_cors_preflight
-expected_app_version=156
-required_verifier=scripts/verify-182-account-partial-like-repair.mjs
+purpose=verify_fresh_canonical_personal_guard_release_before_preview_deploy
+expected_app_version=157
+required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs
+locked_feature_sha=50ad5fab1b7516cc6ba7102cd1832ba0790885be
 no_user_data_migration=true
 no_deploy=true

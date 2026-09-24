@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — 실제 오류 재현 1건 수정·감사 PASS, 공유 숫자 경로 검증 전 미배포
+
+- 최신 `CURRENT_RELEASE_STATE.md 0FG`. app158 PREVIEW Run `35978612769`은 계속 현재 실제 배포본. `preview` 후보 `45857de98cd21fe7e468661b13c685119942d87a`: 개인 R2 revision 변경 직후 이전 baseline marker가 제거되는 순서 때문에, 개인 stale guard 해결용 fresh proof가 아예 시작하지 않았던 경로 수정. 실행형 회귀 `verify-189-personal-like-settled-guard-release.mjs`에서 marker 제거 후 5→10, 무변경 재진입 추가 D1 0 증명. Audit `35979633390` SUCCESS; **배포 미실시**.
+- **다음 분리된 원인**: Worker189 `processExploreLikeUserQueueWave075`은 canonical D1 batch 후 개인/공개 R2 patch의 실패를 `Promise.allSettled`/catch로 억제하면서 queue cursor를 소비한다. 따라서 공유 숫자가 옛 값에 머물러도 후속 자동 수복이 보장되지 않는다. D1 원본/정확한 변경 트랙만 기준으로 read-only 진단 후, 실패한 파생 변경 **한 항목만** 안전하게 재발행하는 기존 경로가 있는지 먼저 검토. 원인 확인 전 full Feed 재생성/전체 likes scan/new global listener/사용자 데이터 재작성 금지.
+- 공개 likeCount는 현재 1분 aggregate + UI 2분 활동 기반 revision이라 다른 계정 장시간 열린 탭 즉시 갱신은 설계상 미지원. 합격선(모든 계정 PC·모바일 동일한 숫자)을 충족하는 전파 간격·비용을 판단해 별도 최소 설계. 개인 하트는 계정 간 섞지 않는다.
+- 수정 후 TS/Build/정밀 실행형 테스트/실제 PC·모바일×타계정/비용 W1~W2, unchanged R0를 확인하고 PREVIEW 배포까지 한 단위로 진행. TEST/PRODUCTION 승격 보류.
+
+
 ## 최신 2026-09-24 — app158 PREVIEW 배포 완료 / 실제 사용자 정합성 및 교차 계정 공용 숫자 미해결
 
 - app158 개인 좋아요 코드 `7fff2ffe702d92d19356f1b107d08a793b6380ff`, 회귀검증 `a5bb6dbf3a4f3e1c0f21215f4393daee22578a2d`, 앱 버전 `539a0af86239c1a9309590c76c40986b7ef29999`. Audit `35978411056` SUCCESS; PREVIEW Hosting `35978612769` SUCCESS, exact build PASS, TEST/PRODUCTION 불변. `CURRENT_RELEASE_STATE.md 0FF`를 실제 기준으로 사용. 기존 다음 단락의 'app157 미배포' 기록은 과거 상태다.

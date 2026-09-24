@@ -65,6 +65,7 @@ jobs:
           node scripts/verify-182-account-partial-like-repair.mjs
           node scripts/verify-189-personal-like-settled-guard-release.mjs
           node scripts/verify-190-like-card-authority.mjs
+          node scripts/verify-197-new-public-track-like.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

@@ -55,6 +55,23 @@ test("SSE: provider error never returns partial lyrics or private message", asyn
     e => e.code === "gateway_timeout" && e.status === 503 && !e.message.includes("SENSITIVE"));
 });
 
+test("SSE: broken transport after partial text is rejected", async () => {
+  let reads = 0;
+  const broken = new Response(new ReadableStream({
+    pull(controller) {
+      if (reads++ === 0) controller.enqueue(encoder.encode(start + text));
+      else controller.error(new Error("transport disconnected"));
+    },
+  }), { headers: { "content-type": "text/event-stream" } });
+  await assert.rejects(consumeGeminiInteractionSse(broken, "gemini-3.6-flash"), /transport disconnected/);
+});
+
+test("SSE: completed event is sufficient without a transport [DONE] marker", async () => {
+  const result = await consumeGeminiInteractionSse(makeResponse(start + text + complete), "gemini-3.6-flash");
+  assert.equal(result.text, "가사 🎵");
+  assert.equal(result.usage.total_tokens, 12);
+});
+
 test("SSE: invalid JSON and wrong content-type fail closed", async () => {
   await assert.rejects(consumeGeminiInteractionSse(makeResponse("event: step.delta\ndata: {invalid}\n\n"), "gemini-3.6-flash"),
     e => e.code === "GEMINI_STREAM_INVALID");

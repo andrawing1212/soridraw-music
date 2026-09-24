@@ -1,5 +1,19 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FR. app161 V1 실사용 FAIL — 3분49초·전 모델 실패, 60초 연결 마감과 데이터 보관 선택지 발견 (2026-09-25 KST)
+
+**사용자 보고 (09.25 오전 12:16:26 KST 세션)**: PREVIEW app161 초기 곡 생성 총 3분49초 / 5 physical attempts / 관리자 화면 usage input/output/thought/total 전부 0 / 최종 HTTP 503 GEMINI_UPSTREAM_UNAVAILABLE. 3.6=1분02초 “일시 unavailable”, 3.5=1분30초 “시간 초과 중단”, 3.5-lite=1분06초 “일시 unavailable”, 3.7=1.0초 unavailable, 3.8=1.1초 unavailable. **사용자에게 재생성 요청 금지**. 초기 곡 생성 미완료, 후처리 미도달. app161 장시간 확대는 실사용에서 FAIL. 자동 테스트 PASS와 실생성 PASS를 혼동하지 않는다.
+
+**기존 수정 평가**: 3.5의 90초는 로컬 제한과 일치. 3.6·lite의 약 60초대는 120/75초 로컬 제한 전에 provider가 503을 보낸 케이스로, 시간만 늘린 수정은 유효한 해결책이 아님. 최초 3.6의 40.2초 과거 성공은 전체 성공의 증거가 아니었다. 3.8/3.7은 현재 해당 키/세션에서 1초 503. 모델 ID 자체는 공식 Gemini model catalog에 존재하지만 **사용자의 해당 API 프로젝트에서 실제 이용 가능한지 검증되지 않음**.
+
+**공식 문서로 새로 찾은 원인 후보**:
+- Google Gemini Interactions 표준 HTTP는 일반적으로 약 60초에 닫힐 수 있고, 장시간 요청은 `background=true` + interaction ID 상태 조회를 안내한다. 현재 SORIDRAW `functions/src/index.ts`의 `callGeminiInteraction`은 `store:false`로 단일 동기 `POST /v1beta/interactions`만 호출한다. 3.6·lite 약 60초의 503이 이 연결 마감과 관련 있는지 *강력한 후보*이나, 사용자 요청의 원시 provider status/headers가 없으므로 100% 단정 금지.
+- **중요 데이터 보관 충돌**: Google 공식 Interactions overview에 따르면 `store=false`는 `background=true`와 호환 불가. background로 바꾸면 모델 요청/응답의 Google 서버 보관 (무료 1일 / 유료 55일; 유료 설정에서 7/14/28/55일 단축 가능) 동작이 변한다. 현 `store:false`를 몰래 제거하거나 `background:true`를 켜지 말 것. 사용자 승인과 정보보호·비용 검토 필요.
+- `503`은 provider 일시 과부하/불가, `429`는 quota 별도. background로 바꿔도 실제 용량 부족/계정 접근 불가까지 해결되는 것은 아니다.
+
+**다음 개발**: 추가 실사용 생성 전에 한 번의 **비생성·읽기전용** 진단으로 (a) 실제 Gemini 응답 status/details·timeout vs HTTP 연결 마감, (b) 사용자 키 소속 프로젝트의 모델 이용권한과 한도, (c) `store:false` 보존 가능한 스트리밍/기존 `generateContent` 장시간 대응과 background 저장 동의 모델을 비교. 프롬프트/개인 API 키/UID의 공개 로깅 금지. 유효한 모델+보관 정책을 확정하고 최소 코드를 새 후보로 감사→PREVIEW 1곡 검증. **현재 Gemini 수정·배포 없음**. 좋아요 app160/Worker195 동결, TEST/PROD 변경 금지.
+
+공식 근거: https://ai.google.dev/gemini-api/docs/background-execution 및 https://ai.google.dev/gemini-api/docs/interactions-overview 및 https://ai.google.dev/gemini-api/docs/troubleshooting .
 ## 0FQ. Gemini app161 + PREVIEW Function 배포 완료 — 최초 생성 우선순위/시간 변경, 실사용 검증 대기 (2026-09-25 KST)
 
 **실제 기준**: `preview` 기능 소스 `3587d81e957bb18702037811668c5d83c6c7c17c`, 최종 verifier `576963c772198068964c863d37c1c2251c950fff`, PREVIEW Function 릴리스 트리거 `78bb600ecc5246b115189556190adff061aae7a4`, Hosting 트리거 `0e5bdac4792954cb194b19907c063c702bf71e79`. 이 섹션의 문서 저장 commit은 제품 코드와 다른 기록용 SHA이다.

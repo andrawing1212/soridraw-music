@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app161 곡 생성 FAIL: timeout 추가 확대 중단, 연결/모델/보관정책 검증
+
+- `CURRENT_RELEASE_STATE.md 0FR` 최우선. 사용자 app161 1곡 실사용 3분49초 0 usage 및 5모델 전부 실패. 3.6 62초 503, 3.5 90초 self-timeout, lite 66초 503, 3.7/3.8 1초 503. **app161 설정 변경 성공으로 보고 금지**, 새로운 재생성 요구 금지.
+- Google 공식 문서에 따르면 Interactions 단일 HTTP 연결은 대략 60초에 닫힐 수 있으며 장시간 작업은 background ID 조회 권장. 현재 PREVIEW `store:false` 동기 POST. **background=true와 store=false는 호환 불가**: 무단 요청/응답 보관 전환 금지 (무료 1일·유료 기본 55일). provider 503이 실제 용량 문제일 가능성도 여전.
+- 다음은 사용자 입력/결제/개인 정보 노출 없는 읽기전용 확인: 오류 status/details, 정확한 live revision과 실제 API key 프로젝트의 모델 접근/쿼터; 그 뒤 store=false 유지 가능한 장시간 스트리밍/generateContent vs background 저장 승인의 안전·비용 비교. 자료 없으면 추정하지 말 것.
+- 수정하려면 우선 사용자에게 기존 store=false와 background의 보관 충돌을 보고하고 정책 승인. 그 전에는 background 코드 변경/배포 금지. 단순 모델 순서·timeout만 다시 바꾸지 말 것. 좋아요 실행 코드/Worker195/Rules/RTDB/D1/R2 전면 동결.
+- 사용자 요청 없는 TEST/PRODUCTION 승격 금지. 현재 app161 Hosting/Preview Function 배포본은 **실사용 곡 생성 FAIL**.
+
 ## 최신 2026-09-25 — app161 + PREVIEW Gemini Function 적용 완료, V1 1곡 최종 실사용 검증
 
 - `CURRENT_RELEASE_STATE.md 0FQ`: app161 Hosting Run `36018252541` SUCCESS / exact build PASS; PREVIEW Gemini Function Run `36017885707` SUCCESS / shared TEST·PRODUCTION Function 비변경. Source Audit `36017422013`, Release System Audit `36017538500` SUCCESS.

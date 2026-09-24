@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FP. Gemini initial V1 모델 순서·응답 시간 PREVIEW 후보 app161 (2026-09-25 KST)
+
+**사용자 승인**: 2026-09-24 제공된 5-call, 전부 0 usage 실패를 바탕으로 제안한 두 설정 변경을 적용해 PREVIEW에서 검증. 다른 기능/좋아요 완전 동결. `preview` 기능 기준 시작 `5b95b2095123e7b513fdd74eb7230e2fa42be899`.
+
+**후보 최소 diff**:
+- `src/services/geminiProxyClient.ts` initial song 체인만 `3.6 → 3.5 → 3.5-lite → 3.7 → 3.8`로 순서 변경. languageMix / fast repair / 기존 5 physical call ceiling/쿨다운 그대로.
+- `functions/scripts/build-secured-index.cjs` initial timeout만 `3.6=120s / 3.5=90s / 3.5-lite=75s`. `3.7=55s, 3.8=35s`, 별도 fast repair timeout, Function 전체 330s 동일.
+- `public/app-version.json` app161. 기존 `verify-preview-gemini-function-source.yml` assertion 변경된 값에 맞게 정정.
+
+**제약**: 사용자의 실제 3.6 60초 timeout은 기존 설정 90초와 다르므로 provider deadline 여부가 확정되지 않았고, 503 overload는 앱 설정만으로 보장해 해결할 수 없다. 최악 5개 시도 상한 합계(120+90+75+55+35=375s)는 Function 330s보다 크므로 후순위 모델이 전체 실행 제한에 못 미칠 수 있다. 실제 1곡 성공 전 “해결” 선언 금지. quota, 프롬프트/5단/금지어 품질 기준/개인 좋아요 로직 비변경.
+
+**진행 게이트**: 새 verifier + TypeScript/Build + Function source audit + Release System Audit PASS 후 PREVIEW Function/Hosting만 고정 배포. 실제 원격 revision/app161 및 TEST/PROD 비변경 확인. 지금은 **코드 후보만**, 배포/실기기 미검증.
+
 ## 0FO. Gemini PREVIEW V1 실제 1곡 재현 FAIL — 최초 생성 전부 0 token, provider 503 및 60초 timeout (2026-09-24 KST)
 
 **사용자 제공 관리자 화면 / 실행시각**: 2026-09-24 23:38:53 KST, 일반 V1 곡 생성, 총 2분 53초, 추가 호출 4회 / 총 5 physical attempts. **입력 0, 출력 0, 추론 0, 전체 0** 표시는 현재 감사 화면이 수집한 usage 기준이며 실제 미청구를 뜻하지는 않음. 최초 생성 5회 모두 FAIL, 후처리·금지어 판정 단계까지 가지 못함.

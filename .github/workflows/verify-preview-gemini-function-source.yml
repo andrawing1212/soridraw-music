@@ -50,9 +50,9 @@ jobs:
           if (!src.includes(route)) throw new Error('Unified Interactions fallback route missing');
           if (!src.includes('return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);')) throw new Error('Interactions timeout-preserving call missing');
           if (!src.includes('const GEMINI_MAX_REQUESTS_PER_SESSION = 5;')) throw new Error('5-attempt ceiling changed');
-          if (!src.includes('"gemini-3.6-flash": 90_000')) throw new Error('3.6 initial song timeout must be 90s');
-          if (!src.includes('"gemini-3.5-flash": 60_000')) throw new Error('3.5 initial song timeout must be 60s');
-          if (!src.includes('"gemini-3.5-flash-lite": 60_000')) throw new Error('3.5-lite initial song timeout must be 60s');
+          if (!src.includes('"gemini-3.6-flash": 120_000')) throw new Error('3.6 initial song timeout must be 120s');
+          if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial song timeout must be 90s');
+          if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial song timeout must be 75s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout must be 330s');
           for (const model of ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite']) {
             if (!src.includes(model)) throw new Error('Model missing: ' + model);

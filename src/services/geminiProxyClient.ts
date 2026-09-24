@@ -22,11 +22,11 @@ const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
 const SORIDRAW_887_LATENCY_FASTPATH = true;
 const SORIDRAW_888_SPLIT_LANGUAGE_MIX_ROUTE = true;
 const INITIAL_SONG_MODEL_CHAIN = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash',
 ] as const;
 const LANGUAGE_MIX_MODEL_CHAIN = [
   'gemini-3.7-flash',

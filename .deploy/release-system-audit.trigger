@@ -1,10 +1,10 @@
-requested_at=2026-09-24T23:08:00+09:00
-requested_by=user_cross_account_like_real_device_fail
+requested_at=2026-09-25T00:02:00+09:00
+requested_by=user_approved_gemini_v1_initial_chain_timeout_trial
 target=preview
-purpose=retest_worker195_after_release_preflight_verifier_alignment
-expected_app_version=160
-required_verifier=scripts/verify-105-explore-like-1min.mjs,scripts/verify-192-cross-account-public-like-live.mjs
-previous_release_run=36009834733
-previous_release_failure=verifier_only_no_deploy
+purpose=audit_app161_gemini_initial_fallback_before_deploy
+expected_app_version=161
+required_verifier=verify-preview-gemini-function-source,verify-147-gemini-prompt-and-cues,verify-hard-ban-fallback,like-regression
+gemini_shared_function_unchanged=true
+like_feature_frozen=true
 no_user_data_migration=true
 no_deploy=true

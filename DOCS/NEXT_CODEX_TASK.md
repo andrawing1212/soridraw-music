@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — Gemini app161 후보 적용 후 감사·PREVIEW 배포·1곡 검증
+
+- 사용자 승인된 설정: initial `3.6→3.5→3.5-lite→3.7→3.8`, initial timeout `3.6=120s, 3.5=90s, lite=75s`, Function 330s/5회 ceiling/후처리 품질 보존. `CURRENT_RELEASE_STATE.md 0FP` 참조.
+- 신규 후보 변경 경로는 `geminiProxyClient.ts`, `functions/scripts/build-secured-index.cjs`, `public/app-version.json`, 기존 Function source verifier 및 문서뿐. 모든 좋아요 코드/Worker/RTDB/R2/D1/Rules 비변경.
+- 반드시 감사 먼저: source verifier, TS/Build, Function build, Gemini/좋아요 회귀, TEST/PROD dry-run. 감사 후 별도 PREVIEW Function Tune Workflow verifier assertion을 새 설정으로 갱신한 **고정 배포 경로**를 실행하며 shared Function unchanged 확인. app161 Hosting은 고정 trigger로 배포 후 exact build 확인.
+- `3.6` 실제 60s는 기존 90s self-timeout과 다르므로 신설 120s 설정으로도 provider deadline 문제가 남을 수 있다. 503은 사용량/가용성 외부 요인. 330s overall ceiling까지 긴 연쇄 요청이 갈 수 있으니 실제 1곡 생성부터 검증.
+- 이후에도 정상 좋아요 동결, TEST/PROD 승격 금지. 반복 생성 금지.
+
 ## 최신 2026-09-24 — Gemini 일반 V1 1곡 FAIL 재현, 503 대 self-timeout 정확히 분리
 
 - 현재 실사용 근거: `CURRENT_RELEASE_STATE.md 0FO`. 사용자 2026-09-24 23:38:53 KST, 최초 곡 5모델 전부 실패 / 2분53초 / 감사 화면 usage 0. 3.8 1.2초 일시 unavailable, 3.7 1초 일시 unavailable, 3.6 60초 timeout, 3.5 60초 timeout, lite 10.7초 일시 unavailable로 최종 HTTP 503. **가사/금지어/5단 품질 검사에 도달하지 않았다.**

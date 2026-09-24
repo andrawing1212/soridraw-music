@@ -1,5 +1,14 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — Astra 원인분석 검증 완료, 최근곡 두 갈래 안전 복구 계획
+
+- `CURRENT_RELEASE_STATE.md 0FW` 우선. Astra가 소스 모의 실행으로 **RTDB 신호 버전 미사용 + in-flight 후속 신호 누락 + background 저장 실패 swallow**를 증명, ChatGPT가 실제 preview GitHub 소스에서 관련 분기를 재확인했다. 단 해당 새 곡의 서버 저장 존재 여부는 미확인.
+- **첫 단계 read-only**: 동일 UID/preview 판정 후 Firestore 최근곡 원본 doc 1개와 프로필 doc 1개, RTDB recentSongs 신호 1개만 비교. 해당 곡 ID/createdAt과 3종 버전만 기록. 비밀키·UID·가사 원문 공개/전체 조회 금지. 실데이터 직접 접근이 현재 없으면 사용자 원본이 있다는 가정 없이 중단·보고.
+- **원본 존재 branch**: `App.tsx`의 신호 버전을 profile cache와 별도로 pending으로 보존하고 새로운 신호는 bounded server verification 트리거로 사용. 서버 문서 적용/epoch 보호 성공 후에만 문서 버전 확인 완료. in-flight 도착 신호는 완료 후 확인, 동일 신호는 0 read. `userDomainSyncService.ts`의 recentSongs 한정에서 실제 저장 결과 버전과 새 timestamp의 의미를 분리하고 과거 신호 호환. 다른 domain 분기 절대 변경하지 말 것.
+- **원본 부재 branch**: `saveRecentSongsBatch`의 save fail과 mutation epoch skip을 정상 성공으로 삼키지 않고, 기존 PC 로컬 결과 보존·안전한 재시도 설계. 기존 user data overwrite/전체 merge/deleted song resurrection 금지. Gemini 재생성 금지.
+- **검증**: local/profile=100, RTDB=200 → 1 read; 조회 중 300 → 완료 후 재확인; 같은 200 재전달 → 0 read; 저장 실패/epoch 변경/페이지 이탈·재진입/서버 데이터 미포함 시 캐시 안전; app TypeScript/Build/116 cache verifier/PC↔mobile; 정상 warm R0/W0.
+- 독립 감사 전 TEST 배포 금지. 사용자 승인 없이 production, 공유 데이터 migration/백필 금지. 현재 좋아요 동결·Gemini app162 성공 경로 보호.
+
 ## 최신 2026-09-25 — 최근 생성곡 PC→휴대폰 누락 우선 원인 분리 (Gemini 영어 제목 다음)
 
 - `CURRENT_RELEASE_STATE.md 0FV`: 사용자 PC에서 만든 곡이 폰 최근 생성곡에 보이지 않는다고 보고. **cross-device FAIL**, TEST 승격 금지. 원본이 존재하는지 미검증이므로 “캐시 문제 확정”, “Firestore 저장 실패 확정”, “새 곡 유실” 단정 금지.

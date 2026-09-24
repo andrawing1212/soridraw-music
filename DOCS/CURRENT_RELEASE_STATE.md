@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FW. Astra 독립분석 + GitHub 재대조: 최근곡 신호 누락 경로 확인, 실제 곡 원본은 미확인 (2026-09-25 KST)
+
+**입력**: 사용자가 Astra의 commit `b90ec19b7a84045c22b1552aa639d2e541901cb8` 정밀 분석 및 모의 실행 결과를 전달했다. ChatGPT가 동일 preview GitHub 소스의 `App.tsx` / `userDomainSyncService.ts` / `v1MutationBoundary.ts`를 재검토했다. 코드 결함이 확인된 것과 **사용자 해당 곡이 서버에 있는지**는 별개다. 해당 계정의 실제 Firestore/RTDB는 아직 읽지 못했다.
+
+**확인된 코드 결함**:
+1. `App.tsx:11074-11079`는 RTDB detail.version을 로컬 버전과 비교하지만 `runRecentSongsServerSyncIfNeeded`에 전달하지 않는다. 함수 내부 `11025-11029`는 오래된 profile cache의 remoteVersion만 사용하므로 `local=profile 100`, RTDB 200 상황에서 변경된 서버 문서를 0회 읽는 결함. `9202-9298` 캐시 우선 루트 프로필 재검증은 최대 24h일 수 있어 결함이 지속될 수 있다.
+2. 읽기 중 추가 RTDB 버전이 와도 `recentSongsSessionReadInFlightUids`에서 무시하고, 응답 완료 시 마지막 pending 버전 재확인이 없다. 원격 변경 300 누락 가능.
+3. `App.tsx:12729-12754`: Gemini 완료를 화면에 먼저 보여주고 최근곡 저장은 background fire-and-forget. `11896-11898` 저장 실패 catch가 오류를 삼켜 save chain이 resolve할 수 있어 **생성 성공 표시만으로 서버 원본을 증명할 수 없다**.
+4. `persistRecentSongsDocument:369-390`은 최근곡 원본과 프로필 syncVersion을 별도 쓰기로 처리하며 프로필 발행 실패는 경고만 기록한다. RTDB `userDomainSyncService.ts`는 저장 결과 version 대신 새 `Date.now()`를 사용하고 `v1MutationBoundary.ts`의 post-success hook은 비동기로 실패를 삼킨다. 서로 다른 clock/version domain을 그대로 섞거나 신호 버전을 문서에 직접 확인 완료로 기록하면 **영구 누락 위험**.
+
+**최소 복구 설계 게이트**:
+- 실제 동일 UID 기준 `user_recent_songs/{uid}` 문서 1개, `users/{uid}` 1개, 해당 `userSync/{uid}/recentSongs` 1개만 안전한 읽기 전용 확인. 곡 ID/createdAt 존재, 문서 syncVersion, 프로필 syncVersion, RTDB version 비교. UID/API key/가사 원문을 채팅/CI/로그에 노출하거나 전체 컬렉션 scan 금지. 현재 connector로 실데이터 직접 조회 불가: 데이터 존재를 추정으로 채우지 않는다.
+- 원본 존재 시 `App.tsx`에 신호 최신 버전의 pending 상태를 보관하고, root profile cache보다 선도착한 신호도 1회 bounded remote verify로 처리. **실제 문서/캐시 반영과 로컬 미저장 mutation epoch 확인 성공 후에만 해당 문서 버전 확인 완료**. 조회 중 추가 신호가 도착했다면 완료 후 재확인. RTDB 시각과 document syncVersion이 다를 수 있으므로 수신 시각을 곧바로 로컬 확인 완료 버전으로 쓰지 않는다. `/studio` 이탈 중에도 최신 신호를 보존. 변경 없음 재진입 Firestore R0/W0.
+- 원본 부재면 PC 생성 저장 실패/스킵/경합을 구분해 기존 PC 로컬 곡을 보호하고 서버 저장의 실패를 삼키지 않도록 별도 검토. Gemini 재생성/원본 덮어쓰기 금지. 프리뷰에서 생성 완료의 UI와 저장 성공은 서로 다른 상태임을 유지할 수 있다.
+- 버전 발행을 한 기준으로 통일하거나 원본+프로필 쓰기 배치화는 데이터·비용 영향 확인 후 별도 단계로 검토. 원본 전체 교체·백필·강제 migration 금지.
+- **좋아요 app160/Worker195 완전 동결**; Gemini app162 SSE 성공 경로, Music Note 60초 저장 및 UI 보호. TEST/PRODUCTION 승격 불가. 이번 커밋은 문서만 갱신했고 사용자 데이터/실제 배포/제품 코드 변경 없음.
+
 ## 0FV. PREVIEW app162 최근 생성곡 PC → 모바일 누락 — 저장/변경신호/수신 캐시 미분리, 릴리스 차단 (2026-09-25 KST)
 
 **사용자 직접 제보**: PC에서 새 곡을 생성한 뒤 휴대폰의 최근 생성곡을 확인했지만 해당 곡이 없다. 아직 동일 계정·동일 PREVIEW 주소 확인, Firestore 원본 `user_recent_songs/{uid}.songs[]` 해당 곡 포함 여부, PC 로컬 캐시/모바일 로컬 캐시, `users/{uid}.syncVersions.recentSongs` 및 RTDB `userSync/{uid}/recentSongs` 발행 상태, 모바일 최종 수신 시각은 실제로 검사되지 않았다. **서버 저장 실패/변경 신호 누락/모바일 수신 게이트/환경·계정 차이를 현재 확정 불가**. 사용자 원본을 캐시라고 가정해 지우지 않는다.

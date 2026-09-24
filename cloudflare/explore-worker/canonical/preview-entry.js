@@ -709,6 +709,20 @@ async function repairVerifiedSharedLikeSnapshots156(env) {
 
 export default {
   async scheduled(controller, env, ctx) {
+    // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
+    // Release-only escape hatch for a queue row accepted by the previous Worker
+    // but left without a live alarm. No production cron uses this label.
+    // Settle that already-accepted user action, then repair only the bounded
+    // public first-page derived R2 projection before a Worker version swap.
+    if (controller?.cron === 'soridraw-preview-pending-like-drain-192') {
+      if (typeof baseWorker?.scheduled !== 'function') {
+        throw new Error('[192] canonical like aggregate handler unavailable');
+      }
+      await baseWorker.scheduled(controller, env, ctx);
+      await repairSharedPublicLikeCounts191(env);
+      return;
+    }
+
     // A temporary PREVIEW cron is the sole authorized repair trigger. Never
     // put an R2 HEAD or canonical D1 read on routine like-batch alarms.
     if (controller?.cron === '* * * * *') {

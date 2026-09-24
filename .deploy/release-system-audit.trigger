@@ -1,9 +1,9 @@
-requested_at=2026-09-24T19:36:00+09:00
-requested_by=user_continue_like_fix
+requested_at=2026-09-24T19:55:00+09:00
+requested_by=user_cross_account_public_like_live_sync
 target=preview
-purpose=retest_worker191_scheduled_route_fallback_verifier
-expected_app_version=158
-required_verifier=scripts/verify-191-bounded-public-like-convergence.mjs
-locked_feature_sha=c5be6a383b35a61fb1490cade1a9e222d0849350
+purpose=app159_worker192_cross_account_public_like_count_live_convergence
+expected_app_version=159
+required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
+locked_feature_sha=f4d85b5b15f859c62039fd2ddd971419caa8a243
 no_user_data_migration=true
 no_deploy=true

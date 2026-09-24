@@ -6,6 +6,7 @@ import {
   rememberRecentSongsPendingSignalVersion,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 
@@ -11042,9 +11043,13 @@ const unlockAllFavorites = async () => {
       const localVersion = readRecentSongsLocalVersion(user.uid);
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
-      const needsServerRead = !latestCache
-        || remoteVersion > localVersion
-        || pendingSignalVersion > acknowledgedSignalVersion;
+      const needsServerRead = needsRecentSongsServerRead({
+        hasLocalCache: Boolean(latestCache),
+        profileVersion: remoteVersion,
+        localDocumentVersion: localVersion,
+        pendingSignalVersion,
+        acknowledgedSignalVersion,
+      });
 
       if (!needsServerRead) {
         recentSongsSessionVerifiedUids.add(user.uid);
@@ -11113,10 +11118,11 @@ const unlockAllFavorites = async () => {
             window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
               detail: { uid: user.uid, version: newestSignalVersion, resumeAfterRead: true },
             }));
-          } else if (
-            newestSignalVersion > readSignalVersion
-            && newestSignalVersion > readRecentSongsAcknowledgedSignalVersion(user.uid)
-          ) {
+          } else if (needsRecentSongsSignalRecheck({
+            newestSignalVersion,
+            signalVersionAtRead: readSignalVersion,
+            acknowledgedSignalVersion: readRecentSongsAcknowledgedSignalVersion(user.uid),
+          })) {
             // Exactly one bounded follow-up for a new signal that arrived
             // during this read; never poll while nothing changed.
             queueMicrotask(runRecentSongsServerSyncIfNeeded);

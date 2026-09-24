@@ -125,8 +125,11 @@ assert.doesNotMatch(page192Start >= 0 ? page.slice(page192Start, page192End) : '
 // PREVIEW app release can deploy the additive shared RTDB rule and verifies the
 // exact live rule document; TEST/PRODUCTION Hosting remain protected separately.
 assert.match(appRelease, /deploy_shared_rtdb_rules=true/);
-assert.match(appRelease, /--only database/);
+assert.match(appRelease, /RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS/);
+assert.match(appRelease, /-X PUT/);
+assert.match(appRelease, /--data-binary @database\.rules\.json/);
 assert.match(appRelease, /SHARED_RTDB_RULES_EXACT_MATCH=PASS/);
+assert.doesNotMatch(appRelease, /--only database/);
 
 console.log('192_PUBLIC_LIKE_SIGNAL_CHANGED_TRACK_ONLY=PASS');
 console.log('192_RECEIVER_PERSONAL_HEART_UNTOUCHED=PASS');

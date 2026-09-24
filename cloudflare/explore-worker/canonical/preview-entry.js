@@ -629,10 +629,10 @@ export default {
     // A temporary PREVIEW cron is the sole authorized repair trigger. Never
     // put an R2 HEAD or canonical D1 read on routine like-batch alarms.
     if (controller?.cron === '* * * * *') {
-      const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
-      if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
       const repair191 = await repairSharedPublicLikeCounts191(env, { oneTime: true });
       if (repair191?.changedTracks) console.log('[SORIDRAW 191] bounded public like repair:', JSON.stringify(repair191));
+      const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
+      if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
       return;
     }
     if (typeof baseWorker?.scheduled === 'function') {

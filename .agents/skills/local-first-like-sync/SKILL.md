@@ -11,7 +11,7 @@ Explicit user instructions always override this skill.
 
 ## SORIDRAW current verified freeze — MUST READ FIRST
 
-As of 2026-09-24 KST, the user directly verified **all likes/unlikes, same-account PC↔mobile, and cross-account public likeCount delivery** on PREVIEW app160 + Worker195, and explicitly instructed: **do not touch the like feature while it works**. This supersedes the historic app141-only baseline. Read `references/soridraw-app160-worker195-frozen.md` and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW work that may affect likes.
+As of 2026-09-25 KST, the user confirmed the **newly published track first-like defect resolved on PREVIEW app164 + Worker195**. The previous PREVIEW app160 + Worker195 verification of existing likes/unlikes, same-account PC↔mobile and cross-account public likeCount remains the protected historical baseline. **Do not touch any working like function unless a concrete new defect is reported and the user explicitly authorizes the exact change.** Read `references/soridraw-app164-worker195-frozen.md`, `references/soridraw-app160-worker195-frozen.md`, and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW like-related work. The app141 baseline remains historical receiver-order guidance. The user's app164 confirmation does not independently prove every new-device/cross-account case or live physical D1 billing.
 
 **Default for SORIDRAW: protect-only, NO code changes and NO like deployment.** Do not refactor, optimize, replace, or quietly alter likes in client/Worker/RTDB/R2/D1/Rules/cache/notifications/UI. An unrelated change to a common file must preserve all like code paths and pass a targeted regression. A concrete new defect/security issue plus explicit user instruction is required to reopen; never infer permission from a generic optimization request. TEST/PRODUCTION promotion is a separate explicit release request; preserve the same verified features and do not copy user data.
 
@@ -48,6 +48,14 @@ For a known track/item:
 - do not reread the whole personal collection on ordinary page entry or re-entry.
 
 A new device, missing catalog, damaged cache, or explicitly detected revision gap may use a bounded recovery path. Keep recovery separate from the normal path.
+
+## 3A. Newly published track: first-like initialization (SORIDRAW app164 protected behavior)
+
+- A visible new track may be absent from the device's known personal membership map. **Display-empty is not by itself verified unliked**; do not leave the click authority `undefined` merely because the existing personal catalog is ready.
+- When a **verified complete** personal snapshot exists, preserve all known true/false, outbox and accepted-but-unsettled remote guards; persist `false` only for that previously unseen, unguarded visible track ID. Never reset/rebuild the entire catalog.
+- When a snapshot is **partial or unconfirmed**, absence is not proof of `false`. Verify only unknown visible IDs with the existing bounded private `/v1/me/likes?trackIds=...` endpoint, then persist their exact membership. Do not trigger a whole-account/Feed membership scan.
+- Warm re-entry with an unchanged verified state must not redo the read or local cache write. Keep personal filled-heart state separate from public likeCount.
+- Preserve the protected regression `scripts/verify-197-new-public-track-like.mjs` and the existing full like regression set. See `references/soridraw-app164-worker195-frozen.md` for source SHA, user-observed scope and remaining cost limits.
 
 ## 4. Mutation rule
 

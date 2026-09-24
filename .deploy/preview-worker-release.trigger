@@ -1,10 +1,10 @@
-requested_at=2026-09-24T19:20:00+09:00
+requested_at=2026-09-24T19:27:00+09:00
 requested_by=user_continue_like_fix
-product_code_target=bc4f962fc87f8782b72ff416a3204ba39896449e
-release_source_target=191_direct_remote_scheduled_repair
+product_code_target=6b8aff9564ea9e046373e6b0bd48b9cc29f20dfd
+release_source_target=191_direct_remote_scheduled_repair_ready
 release_purpose=repair_six_shared_public_like_mismatches_and_keep_future_batch_recovery
 required_verifier=scripts/verify-191-bounded-public-like-convergence.mjs
-audit_run=35986106783
+audit_run=35986528995
 audit_status=SUCCESS
 repair_shared_like_snapshot_156=false
 repair_shared_like_snapshot_191=true

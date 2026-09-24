@@ -204,10 +204,18 @@ jobs:
                 drained=1
                 break
               fi
+              echo "PRE_DEPLOY_PENDING_069_DRAIN_RESPONSE_BEGIN"
+              cat "$RUNNER_TEMP/pending069-drain-response.txt" || true
+              echo "PRE_DEPLOY_PENDING_069_DRAIN_RESPONSE_END"
             done
             kill "$drain_pid" >/dev/null 2>&1 || true
             wait "$drain_pid" >/dev/null 2>&1 || true
-            test "$drained" = 1
+            if [ "$drained" != 1 ]; then
+              echo "PRE_DEPLOY_PENDING_069_DRAIN_DEV_LOG_BEGIN"
+              cat "$drain_log" || true
+              echo "PRE_DEPLOY_PENDING_069_DRAIN_DEV_LOG_END"
+              false
+            fi
 
             node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-after-drain.json"
             pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-after-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"

@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GG. PREVIEW app165 개인 Social Snapshot 최초 비용 사유 진단 배포 완료 (2026-09-25 KST)
+
+**사용자 승인/목표**: "완료되면 배포까지 진행해줘" 요청에 따라 기존 앱/Worker195 좋아요 기능을 보호하고, 업데이트 후 최초 `/v1/me/social-snapshot` D1 R45 사유를 구분하는 app165 진단 후보를 PREVIEW로 배포. app164 신규곡 첫 좋아요 사용자 PASS 및 이전 app160 좋아요 양방향/타계정 숫자 보호.
+
+**고정 버전/검사**: 이전 app164 exact release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`. app165 변경은 `src/services/exploreLikeService.ts`의 기존 개인 snapshot 요청 진단 결과 문구, `src/services/exploreSocialSnapshotService.ts`의 follow 캐시 미스 진단 문구, `public/app-version.json: 165`, 신규 `scripts/verify-198-social-snapshot-diagnostic-reason.mjs`와 Audit 등록, 관련 문서/트리거. 좋아요 알고리즘/로컬 캐시·동기화·UI 구조·Worker/Functions/Rules/공유 원본 변경 없음. 최종 출시 전 Audit Run `36044402895` SUCCESS (TypeScript/Build, APP189·APP197·APP198 및 기존 like·Gemini·recent-song 회귀, Worker dry-run, D1 SELECT-only preflight).
+
+**실제 배포**: PREVIEW Hosting Run `36044641285` SUCCESS. `LOCKED_PREVIEW_SHA=0b6b677721af888d4efe34b67bd91ce0945cf47b`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=165`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`; Worker195 재배포 없음; Functions·D1/R2/Firestore 사용자 원본 데이터/스키마/규칙 비변경. 앱 URL `https://preview.soridraw.com/`.
+
+**비용과 실제 검증 구분**: app164 첫 진입 R45(2 queries/W0) 및 이후 재진입 R0/W0는 사용자 실측. app165는 요청의 관리자 lastOutcome을 `PERSONAL REPAIR 182` / `PERSONAL SETTLEMENT 189` / `PERSONAL BASELINE` / `SOCIAL CACHE MISS`로 **분류해 보여주는 진단 개선**일 뿐 서버 read를 생략하거나 R45→R0을 해결한 배포가 아님. app165 설치 후 동일 최초 요청의 사유가 실제로 무엇인지, 정상 캐시 재진입 R0, PC↔모바일/타계정 하트/숫자는 사용자 실사용 검증 전. 캐시 삭제·재공개·강제 재생성으로 인위적으로 R45를 유발하지 말 것. 문제가 자연 재현되면 진단의 마지막 결과 문구와 R/W만 보고 안전한 최소 조치 여부 결정; 정확한 정보 없이 기존 복구 기능 제거 금지. TEST/PRODUCTION 승격 불가/미승인.
+
 ## 0GF. 최초 Social Snapshot R45 식별용 진단 최소 수정 — PREVIEW 소스 후보, 미배포 (2026-09-25 KST)
 
 **사용자 지시**: 업데이트 직후 개인 Social Snapshot D1 최초 R45를 수정하되 이미 정상화된 app164 좋아요/PC↔모바일/타계정 숫자를 보호. 첫 요청 1회에 D1 query 2/rows_read 45/W0, 동일 기기 페이지 왕복 R0/W0를 실제 화면으로 확인. URL query·계정별 R2 exact/미정산 guard는 최초 화면에서 알 수 없으므로 182·189·일반 follow init 중 하나를 사실로 확정하거나 원본 조회를 일괄 삭제하지 않음. 앱 버전 변경 자체로 이 45행이 재생되는지 또한 미확인.

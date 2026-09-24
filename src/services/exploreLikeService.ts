@@ -624,7 +624,15 @@ const requestPersonalLikeBaseline127 = async (
     method: 'GET',
     headers,
   });
-  recordCloudflareResponse(response, '/v1/me/social-snapshot');
+  // Admin diagnostic only: label the already-counted request without exposing
+  // UID/track IDs or changing its URL, cache, R2/D1 reads, or settlement logic.
+  // A single R45 counter cannot identify which recovery path ran otherwise.
+  const snapshotReason198 = repairPartial182
+    ? 'PERSONAL REPAIR 182'
+    : verifySettlement189 ? 'PERSONAL SETTLEMENT 189' : 'PERSONAL BASELINE';
+  recordCloudflareResponse(response, '/v1/me/social-snapshot', {
+    outcome: `${response.ok ? `FULL ${response.status}` : `HTTP ${response.status}`} · ${snapshotReason198}`,
+  });
   if (!response.ok) throw new Error('Personal like snapshot unavailable: HTTP ' + response.status);
   const payload = await response.json() as {
     ok?: boolean;

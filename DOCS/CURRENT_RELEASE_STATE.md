@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FY. PREVIEW app163 Hosting 배포 완료 — 최근 생성곡 PC↔모바일 신호 보호, 실데이터 검증 전 (2026-09-25 KST)
+
+**실제 제품 상태**: app163 Firebase PREVIEW Hosting Run `36037269105` SUCCESS / exact release SHA `8e285966975d410e2e3797d77ff031945b7cbf7a` / `PREVIEW_APP_VERSION=163` / `PREVIEW_EXACT_BUILD=PASS`. 고정 제품 소스/최종 감사 기준 `fe74f006bd3c90793f45830a0f4ee019d738cfe8`, 최종 Release System Audit Run `36036971353` SUCCESS (TypeScript/Build, `RECENT_SONGS_196_*` 모의/정적 회귀, 기존 좋아요·Gemini 감사, Worker TEST/PROD dry-run, shared D1 read-only). 이전 후보 Audit `36036423431` SUCCESS 후 pre-163 PC 로컬 미저장 안전 가드를 추가하여 재감사함.
+
+**수정 적용**: UID별 recentSongs RTDB 신호 버전과 Firestore 원본 문서 버전을 구별, 신규 저장 신호는 가능한 원본 `syncVersion` 사용, 수신 pending/ack를 페이지 밖에서도 보존. 프로필 캐시 버전이 뒤처져도 변경 신호가 들어오면 원본 1문서를 bounded 조회하며 **실제 최신 서버 결과의 로컬 캐시 저장 후에만 신호 확인**. 조회 중 새 신호 재확인, 로컬 미저장 편집·진행 중 생성 저장 보호. 새 곡은 PC UID별 로컬에 먼저 보관하며 서버 저장 실패 시 알림. 원본보다 새로 만들어진 pre-163 로컬 곡과 163 이후 unconfirmed song ID는 오래된 서버 응답에 덮어쓰지 않는다. 전체 사용자/컬렉션 조회·전체 백필·반복 polling 없음.
+
+**배포 영향**: Hosting only, shared RTDB rules deploy SKIPPED. Gemini PREVIEW Function `36026587156`, Cloudflare Worker195 `11d8455c-c266-4e88-9cf6-7549d3f5be92`, 좋아요 실행 코드/RTDB 규칙/Firestore schema/Functions 비변경. TEST/PRODUCTION Hosting 및 branch unchanged PASS. 사용자 원본 데이터의 직접 읽기/쓰기/대량변환/복사 없음.
+
+**실사용 게이트 (PASS 아님)**: 해당 기존 PC 생성곡의 실제 `user_recent_songs/{uid}.songs[]` 포함 여부를 읽지 못했다. 이 곡이 서버에 있었다면 모바일에서 새로운 신호 확인/원본 fetch로 표시되어야 하나, 실제 스마트폰 확인 전이며 **기존 곡 자동 복구 완료를 보장하지 않는다**. 원본에 없으면 모바일 코드만으로 데이터를 만들어낼 수 없다. PC 원본 로컬 곡과 캐시 유지, 동일 UID·PREVIEW 모바일 확인 후 문제가 남으면 안전한 계정별 원본 1문서 / 프로필 1문서 / RTDB 신호 1개만 읽기 전용 비교. 사용자 재생성/전체 캐시 초기화 금지.
+
+**비용 경계**: unit gate에서 정상 캐시/확인된 신호 재진입 판정 R0/W0, 새 신호 R1/W0. 기존 timestamp 기반 구형 신호가 도착한 일부 기기는 최초 한 번 읽을 가능성이 있어 실제 비용/대규모 영향은 미검증. 이번 작업 완료는 **배포 완료**, PC↔모바일 실사용/실비용 완료가 아니다. TEST/PRODUCTION 승격 금지.
+
 ## 0FX. 최근 생성곡 PC↔모바일 동기화 PREVIEW app163 후보 — 신호·로컬 안전 수정, 실기기/원본 미검증 (2026-09-25 KST)
 
 **사용자 시간 제보**: 2026-09-25 KST 01시 이후부터 이번 누락이 나타난 것으로 보임. GitHub `src/App.tsx`의 이전 마지막 제품 코드 변경은 2026-09-16, `app162` Hosting Run `36026936663` 완료 2026-09-25 약 01:24 KST, 첫 V1 생성 성공 기록 약 01:31 KST. **기존 recent sync 코드가 app162 배포에서 직접 바뀐 증거는 없음**. 실제로 그때 새 곡을 생성하며 기존 저장·수신 결함이 처음 드러났을 수 있다. 그 시각의 실제 Firestore user doc/RTDB trace는 미확인.

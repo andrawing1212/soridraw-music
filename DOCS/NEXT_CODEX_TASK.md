@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app163 PREVIEW 배포 완료, 기존 누락곡 PC·모바일 실사용 확인
+
+- `CURRENT_RELEASE_STATE.md 0FY` 기준. app163 PREVIEW Hosting `36037269105` SUCCESS/exact build, 최종 Audit `36036971353` SUCCESS. 고정 소스 `fe74f006bd3c90793f45830a0f4ee019d738cfe8`; release commit `8e285966975d410e2e3797d77ff031945b7cbf7a`.
+- **사용자 실사용 1차**: PC 원본 생성곡/로컬 캐시는 그대로 유지. 같은 계정의 휴대폰에서 PREVIEW app163 접속 후 최근 생성곡에 그 기존 곡이 자동 도착하는지 확인. 다른 페이지 왕복/새로고침 없이도 신호 변경 후 갱신되는지 확인. PC의 기존 곡이 사라지거나 서버 저장 실패 알림이 나오는지도 관찰.
+- 아직 실데이터 원본 미확인. 계속 누락이면 계정의 `user_recent_songs/{uid}` 1문서, `users/{uid}` 1문서, RTDB `userSync/{uid}/recentSongs` 1신호만 안전하게 read-only 대조. 곡 ID/날짜·버전만, UID/API key/가사 원문 출력 금지. 원본 부재라면 PC 로컬을 유지하고 곡 재생성 없이 사용자가 확인하는 복구 경로를 별도 설계. 임의 대량 복원/기존 삭제곡 부활/캐시 전체초기화 금지.
+- 구형 신호 최초 1회 추가 읽기 가능성은 대규모 서버 비용 게이트로 남음. 현재 mocked R0/R1 판정 통과이지 실사용 PC/mobile/cost 실측 PASS가 아님.
+- 좋아요 app160/Worker195 동결, Gemini app162 완료된 streaming Function 그대로 보호, TEST/PRODUCTION 승격 금지.
+
 ## 최신 2026-09-25 — 최근 생성곡 app163 후보 검사·PREVIEW 실사용 게이트
 
 - 기준 `CURRENT_RELEASE_STATE.md 0FX`. 사용자 01시 이후 문제 시작 제보는 타임라인 참고. app162 배포는 01:24 KST 완료, 생성 성공 01:31, 기존 `App.tsx` 마지막 변경은 09/16. **app162가 recent 코드 자체를 바꾼 것은 아님**.

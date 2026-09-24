@@ -11,7 +11,7 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const appRelease = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
 const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
 
-assert.equal(String(version.version), '160');
+assert.ok(Number(version.version) >= 160, 'verified app160 public like behavior must remain protected on later releases');
 
 // One bounded RTDB invalidation bus for active Explore screens. It never carries
 // a public count or another account's personal heart as authority.

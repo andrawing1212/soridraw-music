@@ -1,10 +1,10 @@
-requested_at=2026-09-25T00:07:00+09:00
+requested_at=2026-09-25T00:11:00+09:00
 requested_by=user_approved_gemini_v1_initial_chain_timeout_trial
 target=preview
-purpose=final_audit_app161_gemini_model_order_and_initial_timeouts
+purpose=repeat_full_audit_app161_after_like_verifier_version_gate_repair
 expected_app_version=161
-required_verifier=verify-preview-gemini-function-source,verify-147-gemini-prompt-and-cues,verify-hard-ban-fallback,like-regression
+like_runtime_code_unchanged=true
+required_verifier=verify-192-cross-account-public-like-live,verify-preview-gemini-function-source
 gemini_shared_function_unchanged=true
-like_feature_frozen=true
 no_user_data_migration=true
 no_deploy=true

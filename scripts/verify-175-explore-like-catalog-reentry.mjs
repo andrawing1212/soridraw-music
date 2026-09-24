@@ -11,7 +11,9 @@ need("const hasLocalLikeCatalog135 =", '135 local catalog readiness helper');
 need("const needsRepair = gap || readRepairTarget127(uid) > 0;", 'gap repair flag');
 need("requestRepair127(uid, signal.version);", 'gap repair request');
 need("markLocalLikeCatalogReady135(uid);\n  markSeenLikeSignal127(uid, signal.version);", 'remote delta catalog persist');
-need("const localCatalogReady127 = baselineReady127 || hasLocalLikeCatalog135(user.uid);", 'page-return local catalog authority');
+need("const missing = baselineReady127 ? [] : normalized.filter", 'verified complete catalog must remain local-first');
+need("return !cache.has(trackId);", 'partial catalog may verify only an unknown visible ID');
+need("cache.set(trackId, false);", 'complete catalog initializes only a new negative ID');
 need("markLocalLikeCatalogReady135(user.uid);", 'one-time bootstrap promotion');
 
 const gapStart = source.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;');
@@ -38,9 +40,9 @@ if (invalidateBlock.includes('clearTargetedVerifiedLikeTracks127(uid)')) {
   throw new Error('revision invalidation still erases device catalog proof');
 }
 
-const missingStart = source.indexOf('const missing = localCatalogReady127 ? [] : normalized.filter');
+const missingStart = source.indexOf('const missing = baselineReady127 ? [] : normalized.filter');
 if (missingStart < 0) throw new Error('normal-path D1 fallback guard missing');
 
 console.log('APP135_CROSS_DEVICE_SIGNAL_APPLIES_BEFORE_REPAIR=PASS');
 console.log('APP135_PAGE_RETURN_LOCAL_CATALOG_AUTHORITY=PASS');
-console.log('APP135_NORMAL_CACHED_DEVICE_D1_MEMBERSHIP_FALLBACK_BLOCKED=PASS');
+console.log('APP135_VERIFIED_COMPLETE_CATALOG_D1_R0_AND_PARTIAL_TARGETED=PASS');

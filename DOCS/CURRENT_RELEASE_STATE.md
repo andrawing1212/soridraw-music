@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GD. 사용자 app164 신규 공개곡 좋아요 해결 확인·스킬 기준 갱신 (2026-09-25 KST)
+
+**사용자 실사용 확인**: PREVIEW app164 배포 후 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`의 최초 좋아요 차단에 대해 "좋아. 이건 해결했어"라고 사용자 직접 보고. 해당 신규곡의 앞서 재현된 클릭 차단은 **실사용 문제 해결 PASS**. 기존 app160 + Worker195에 대한 사용자 과거 실기기 확인(개인 하트/좋아요 해제/PC↔모바일/타계정 공개 숫자)도 보호 기준 그대로 유지. 이번 확인만으로 다른 모든 신규곡·새 기기/양방향·물리 D1 행쓰기 비용을 새로 PASS 처리하지 않음.
+
+**변경 범위**: 요청에 따라 코드/배포를 다시 수정하는 대신 `.agents/skills/local-first-like-sync/SKILL.md`에 app164 신규 ID 최초 판정 규칙과 정상 좋아요 protect-only 원칙을 기록하고 `references/soridraw-app164-worker195-frozen.md` 생성, `references/cost-regression-checklist.md`와 `AGENTS.md` 시작 기준 갱신. app160 참조 문서는 역사적 보호 증거로 보존. app164의 기존 완전 카탈로그는 새 ID만 false 로컬 저장, 부분/미확인 카탈로그는 해당 ID만 한정 확인, 기존 true/false/outbox/미정산 신호·공용 숫자 보호. 검증 `scripts/verify-197-new-public-track-like.mjs` 유지.
+
+**기존 릴리스 고정**: PREVIEW app164 Firebase Hosting `36040776352` SUCCESS, exact release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`, 최종 Audit `36040506539` SUCCESS. 이번 스킬/문서 작업은 **제품 소스·Hosting·Worker195·RTDB Rules·Functions·공유 사용자 원본·TEST·PRODUCTION 비변경**. 정상 기능 임의 최적화/재작업 금지. TEST 승격은 별도 명시 요청과 전체 출시 검증 필요. 원격 실제 D1 W1~W2 계측은 아직 미검증.
+
 ## 0GC. PREVIEW app164 신규 공개곡 최초 좋아요 수정 Hosting 배포 완료 — 실기기 검증 전 (2026-09-25 KST)
 
 **릴리스**: 사용자가 다른 좋아요 기능을 무조건 보호하고 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`의 신규곡 첫 좋아요만 수정하도록 승인. preview 제품 변경 `src/services/exploreLikeService.ts`만 (신규 ID 초기 상태 로컬 기록/partial 상태에서 누락 ID 한정 검증); `public/app-version.json=164`. 제품 코드 기준 `e151d033e59a5959c0bc876c86dab577ab3847dc`, 최종 감사 source `75f40622a25b881b5d0b55f0233885df98bc2655`, 최종 PREVIEW 릴리스 SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`. Release System Audit `36040506539` SUCCESS (TypeScript/Build, 신규 APP197 및 기존 like·Gemini·recent-song 회귀, Worker TEST/PRODUCTION dry-run, shared D1 read-only, 보호 branch 검사). 앞선 `36039567013`/`36040041556`은 구형 정적 회귀검사가 신규곡 예외를 허용하지 않아 FAIL; `verify-127`/`175`/`178`의 조건을 complete 정상 R0 및 partial unknown 1곡 한정으로 정정 후 최종 PASS. 신규 `scripts/verify-197-new-public-track-like.mjs` 추가, 기존 Audit workflow에는 해당 verifier 1줄만 등록.

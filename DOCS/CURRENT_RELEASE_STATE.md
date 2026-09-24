@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FA. app157 source 후보 — canonical-settled 개인 좋아요가 과거 pending guard에 가려지는 원인 수정 (2026-09-24 KST)
+
+**이번 1단계에서 재현·확정한 원인 1개**: 개인 shared R2/D1이 10곡으로 정확히 일치해 app182가 `verified-single-user-d1-182` complete snapshot을 반환해도, PC 로컬의 과거 `explore-like-snapshot-pending:127` false 5개가 exact catalog보다 우선했다. 이 guard는 기존 코드에서 해제 경로가 없어 서버/R2 10곡과 모바일 10곡인 상태에서도 PC는 5곡을 계속 표시할 수 있었다. 합성 회귀검사에서 canonical 10 + stale false guard 5 → visible 5를 재현했다. 실제 사용자 UID·곡 ID·원본 데이터는 읽거나 출력하지 않았다.
+
+**최소 수정**:
+- `src/services/exploreLikeService.ts`: queue가 비어 있고 canonical D1/R2 ID가 완전 일치할 때만 app182가 기록하는 source를 `canonicalSettled` 증거로 인식한다. 이 증거를 받은 exact baseline에서 현재 outbox가 없는 과거 accepted-but-unsettled guard만 제거하고 canonical catalog로 수렴한다.
+- 아직 전송되지 않은 현재 outbox는 계속 최우선이며 그 track의 guard도 보존한다. 일반 exact/pre-aggregate R2는 guard 해제 권한이 없다.
+- `scripts/verify-189-personal-like-settled-guard-release.mjs`: 10→5 재현, canonical-settled 10 복구, live outbox 보호, 일반 exact R2 보호를 자동 검증한다.
+- app version source는 **157**. UI/CSS, Worker, Firebase Functions/Rules, D1/R2 schema 및 사용자 원본 데이터는 변경하지 않았다. 배포하지 않았고 TEST/PRODUCTION도 변경하지 않았다.
+
+**아직 미검증/승격 제한**: 실제 동일 UID의 PC/모바일에서 5→10 수렴은 PREVIEW 배포 전이므로 미검증이다. 이 수정은 타계정 public likeCount 문제나 전체 구조를 다루지 않는다. 전체 Issue 합격으로 간주하지 않으며 TEST/PRODUCTION 승격 금지.
+
+
 ## 0EZ. PREVIEW app156 / Worker182 — 기존 불완전 개인 좋아요 목록 안전 확인 (2026-09-24 KST)
 
 **배경**: 동일 계정 PC 5곡 vs 모바일 10곡. 기존 181 수정은 *앞으로* accepted 개인 R2 목록을 CAS 갱신할 때 exactLikeCount156를 함께 변경하지만, **과거에 이미 mismatch된 개인 R2 기록을 고치지는 못함**. 어느 숫자가 원본 정답인지는 실사용 기기 및 인증 계정의 canonical 직접 대조 전에는 알 수 없음.

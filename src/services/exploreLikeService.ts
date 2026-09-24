@@ -105,6 +105,7 @@ type ExploreLikeBaselineSnapshot161 = {
   likedTrackIds: string[];
   complete: boolean;
   exactLikeCount: number | null;
+  canonicalSettled: boolean;
 };
 
 type ExploreLikeSyncEventDetail = {
@@ -618,6 +619,7 @@ const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = fal
       likedTrackIds?: unknown;
       likesComplete?: unknown;
       exactLikeCount?: unknown;
+      likesSnapshotSource?: unknown;
     };
   };
   if (payload?.ok !== true || !Array.isArray(payload?.data?.likedTrackIds)) {
@@ -634,6 +636,11 @@ const requestPersonalLikeBaseline127 = async (user: User, repairPartial182 = fal
     likedTrackIds,
     complete,
     exactLikeCount: complete ? exactLikeCount : null,
+    // Only app182's queue-empty D1 comparison proves that this account-wide
+    // snapshot is settled canonical state. Ordinary exact R2 catalogs can still
+    // contain an accepted, pre-aggregate mutation and must not release guards.
+    canonicalSettled: complete &&
+      String(payload.data.likesSnapshotSource || '') === 'verified-single-user-d1-182',
   };
 }
 
@@ -703,6 +710,18 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       const confirmed = new Set(likedIds);
       const outbox = readLikeOutbox(uid);
       const unresolved = readSnapshotPending127(uid);
+      // SORIDRAW_PERSONAL_LIKE_SETTLED_GUARD_RELEASE_189_20260924
+      // app182's source is emitted only after queue-empty canonical D1 and R2 IDs
+      // agree exactly. Historical accepted-but-unsettled guards can otherwise
+      // override that proof forever (for example, PC 5 while R2/mobile are 10).
+      // Preserve every current outbox intention; ordinary exact R2 snapshots do
+      // not have this authority and keep the existing guard behavior.
+      if (snapshot161.canonicalSettled) {
+        for (const id of Object.keys(unresolved)) {
+          if (!outbox[id]) delete unresolved[id];
+        }
+        writeSnapshotPending127(uid, unresolved);
+      }
       const cache = getLikedStateCache(uid);
       const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(unresolved), ...Object.keys(outbox)]);
       let changed = false;

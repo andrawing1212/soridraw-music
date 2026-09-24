@@ -344,6 +344,9 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       cron: 'event-like-batch-1m-105',
       type: 'scheduled',
     }, this.env, this.ctx);
+    // One bounded recovery check per actual changed-data alarm, never per user
+    // or page view. Throws on R2 failure so the existing DO alarm retries.
+    await repairSharedPublicLikeCounts191(this.env);
 
     // Normal windows drain completely and stop here. Under an unusually large
     // burst, only one indexed row is checked; if work remains, schedule one more
@@ -358,6 +361,167 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       }
     }
   }
+}
+
+// SORIDRAW_BOUNDED_CANONICAL_PUBLIC_LIKE_CONVERGENCE_191_20260924
+// The old 075 path can consume a D1 queue despite a failed shared R2 projection.
+// Repair only the 40 already-published first-page cards per sort, once per actual
+// batch alarm (plus the explicitly gated one-time historic repair). D1 is never
+// consulted by ordinary GET, page entry, revision checks, or an app update.
+const PUBLIC_LIKE_REPAIR_MARKER_191 = 'internal/explore/repair-v191/bounded-first40.json';
+const PUBLIC_LIKE_CARD_KEY_191 = (trackId) =>
+  `internal/explore/shared-track-card-v115/${encodeURIComponent(trackId)}.json`;
+const PUBLIC_LIKE_PROFILE_KEY_191 = (uid) =>
+  `internal/explore/shared-profile-v113/${encodeURIComponent(uid)}.json`;
+
+async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
+  const shared = env?.PROFILE_MEDIA;
+  if (!shared || !env?.DB) throw new Error('[191] shared R2 or canonical D1 binding unavailable');
+  if (oneTime && await shared.head(PUBLIC_LIKE_REPAIR_MARKER_191)) {
+    return { alreadyRepaired: true, changedTracks: 0 };
+  }
+
+  const snapshots = new Map();
+  const candidateIds = new Set();
+  for (const sort of ['latest', 'popular']) {
+    const key = sharedFeedR2Key112(sort);
+    const object = await shared.get(key);
+    if (!object) throw new Error('[191] missing shared Feed: ' + sort);
+    const bundle = JSON.parse(await object.text());
+    const items = bundle?.payload?.data?.items;
+    if (!Array.isArray(items) || items.length > 40) {
+      throw new Error('[191] invalid bounded shared Feed: ' + sort);
+    }
+    for (const row of items) {
+      const id = String(row?.id || row?.trackId || '').trim();
+      if (id) candidateIds.add(id);
+    }
+    snapshots.set(sort, { key, object, bundle });
+  }
+  if (candidateIds.size > 80) throw new Error('[191] too many first-page ids');
+  const ids = [...candidateIds];
+  const canonical = new Map();
+  if (ids.length) {
+    const sql = 'SELECT t.id,t.owner_uid,COALESCE(s.like_count,0) AS like_count ' +
+      'FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id ' +
+      `WHERE t.id IN (${ids.map(() => '?').join(',')}) ` +
+      "AND t.is_public=1 AND t.status='published'";
+    const result = await env.DB.prepare(sql).bind(...ids).all();
+    for (const row of result?.results || []) {
+      const id = String(row?.id || '').trim();
+      const count = Number(row?.like_count);
+      if (!id || !Number.isSafeInteger(count) || count < 0) throw new Error('[191] invalid canonical count');
+      canonical.set(id, { count, ownerUid: String(row?.owner_uid || '').trim() });
+    }
+  }
+  // A disappeared/private track is not a license to replace the whole public Feed.
+  // Fail closed and let the existing publication path handle the visibility change.
+  if (canonical.size !== ids.length) throw new Error('[191] canonical public membership changed during repair');
+
+  const changed = new Map();
+  for (const [sort, snapshot] of snapshots) {
+    let complete = false;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const object = attempt === 0 ? snapshot.object : await shared.get(snapshot.key);
+      if (!object) throw new Error('[191] shared Feed disappeared: ' + sort);
+      const bundle = attempt === 0 ? snapshot.bundle : JSON.parse(await object.text());
+      const data = bundle?.payload?.data;
+      if (!Array.isArray(data?.items) || data.items.length > 40) throw new Error('[191] invalid concurrent Feed');
+      let dirty = false;
+      const items = data.items.map(item => {
+        const id = String(item?.id || item?.trackId || '').trim();
+        const expected = canonical.get(id);
+        if (!expected) throw new Error('[191] Feed membership raced: ' + sort);
+        const count = Number(item?.likeCount ?? item?.stats?.likeCount ?? 0);
+        const nested = item?.stats && typeof item.stats === 'object'
+          ? Number(item.stats.likeCount ?? expected.count) : expected.count;
+        if (count === expected.count && nested === expected.count) return item;
+        dirty = true;
+        changed.set(id, expected);
+        return { ...item, likeCount: expected.count,
+          ...(item?.stats && typeof item.stats === 'object'
+            ? { stats: { ...item.stats, likeCount: expected.count } } : {}) };
+      });
+      if (!dirty) { complete = true; break; }
+      const now = Date.now();
+      const saved = await shared.put(snapshot.key, JSON.stringify({
+        ...bundle, updatedAt: now,
+        payload: { ...bundle.payload, data: { ...data, items } },
+      }), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: { ...(object.customMetadata || {}), targetedLikeRepair: '191',
+          mirroredAt: String(now) },
+      });
+      if (saved) { complete = true; break; }
+    }
+    if (!complete) throw new Error('[191] shared Feed CAS contention: ' + sort);
+  }
+
+  // Update only corresponding profile and track-card projections. If a CAS
+  // fails, the alarm retries; canonical user data is never written here.
+  for (const [id, state] of changed) {
+    const cardKey = PUBLIC_LIKE_CARD_KEY_191(id);
+    const profileKey = state.ownerUid ? PUBLIC_LIKE_PROFILE_KEY_191(state.ownerUid) : '';
+    for (const [key, kind] of [[cardKey, 'card'], ...(profileKey ? [[profileKey, 'profile']] : [])]) {
+      let complete = false;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const object = await shared.get(key);
+        if (!object) { complete = true; break; } // cold cache remains cold
+        const bundle = JSON.parse(await object.text());
+        let next = null;
+        if (kind === 'card') {
+          if (String(bundle?.card?.id || bundle?.card?.trackId || '') !== id) {
+            throw new Error('[191] shared card identity mismatch');
+          }
+          const card = bundle.card;
+          const count = Number(card?.likeCount ?? card?.stats?.likeCount ?? 0);
+          if (count === state.count && (!card?.stats || Number(card.stats.likeCount) === state.count)) {
+            complete = true; break;
+          }
+          next = { ...bundle, updatedAt: Date.now(),
+            card: { ...card, likeCount: state.count,
+              ...(card.stats ? { stats: { ...card.stats, likeCount: state.count } } : {}) } };
+        } else {
+          const data = bundle?.body?.data;
+          if (!Array.isArray(data?.items)) throw new Error('[191] invalid shared profile');
+          let dirty = false;
+          const items = data.items.map(item => {
+            if (String(item?.id || item?.trackId || '') !== id) return item;
+            if (Number(item?.likeCount ?? item?.stats?.likeCount ?? 0) === state.count) return item;
+            dirty = true;
+            return { ...item, likeCount: state.count,
+              ...(item?.stats ? { stats: { ...item.stats, likeCount: state.count } } : {}) };
+          });
+          if (!dirty) { complete = true; break; }
+          const revision = Math.max(Number(bundle.revision || 0), Number(data.revision || 0)) + 1;
+          next = { ...bundle, revision, updatedAt: Date.now(),
+            body: { ...bundle.body, data: { ...data, items, revision } } };
+        }
+        const now = Date.now();
+        const saved = await shared.put(key, JSON.stringify(next), {
+          onlyIf: { etagMatches: object.etag },
+          httpMetadata: { contentType: 'application/json; charset=utf-8' },
+          customMetadata: { ...(object.customMetadata || {}), targetedLikeRepair: '191',
+            updatedAt: String(now) },
+        });
+        if (saved) { complete = true; break; }
+      }
+      if (!complete) throw new Error('[191] derived CAS contention: ' + kind);
+    }
+  }
+
+  if (oneTime) {
+    const marker = await shared.put(PUBLIC_LIKE_REPAIR_MARKER_191,
+      JSON.stringify({ schemaVersion: 1, repairedAt: Date.now(), changedTracks: changed.size }), {
+        onlyIf: { etagDoesNotMatch: '*' },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      });
+    if (!marker && !(await shared.head(PUBLIC_LIKE_REPAIR_MARKER_191))) {
+      throw new Error('[191] one-time repair marker not saved');
+    }
+  }
+  return { changedTracks: changed.size, sampled: ids.length, oneTime };
 }
 
 // SORIDRAW_VERIFIED_SHARED_LIKE_SNAPSHOT_REPAIR_156_20260924
@@ -467,6 +631,8 @@ export default {
     if (controller?.cron === '* * * * *') {
       const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
       if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
+      const repair191 = await repairSharedPublicLikeCounts191(env, { oneTime: true });
+      if (repair191?.changedTracks) console.log('[SORIDRAW 191] bounded public like repair:', JSON.stringify(repair191));
       return;
     }
     if (typeof baseWorker?.scheduled === 'function') {

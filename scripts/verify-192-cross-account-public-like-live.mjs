@@ -82,6 +82,12 @@ assert.match(worker192, /X-SORIDRAW-D1-Write', '0'/);
 assert.match(workerRelease, /\/v1\/public-like-cards\?trackIds=/);
 assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_ITEMS=PASS/);
 assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_D1_R0_W0=PASS/);
+assert.match(entry, /SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924/);
+assert.match(entry, /controller\?\.cron === 'soridraw-preview-pending-like-drain-192'[\s\S]*await baseWorker\.scheduled[\s\S]*await repairSharedPublicLikeCounts191\(env\)/);
+assert.match(workerRelease, /PRE_DEPLOY_PENDING_069_DRAIN=START/);
+assert.match(workerRelease, /PRE_DEPLOY_PENDING_069_AFTER_DRAIN=\$pending069/);
+assert.match(workerRelease, /PRE_DEPLOY_PENDING_069_DRAIN=PASS/);
+assert.doesNotMatch(workerRelease, /wrangler\.preview\.jsonc[\s\S]{0,200}triggers\s*:/);
 
 // Shared rules expose only this small authenticated invalidation node. A writer
 // must identify itself; counts are deliberately absent from the signal schema.

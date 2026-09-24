@@ -1,5 +1,16 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app159 / Worker192 PREVIEW 배포 완료, 다음은 실제 교차 계정·기기 좋아요 검증
+
+- 기준은 `CURRENT_RELEASE_STATE.md 0FJ`. Worker192 Run `36000021648` SUCCESS / active `d6c6e3db-207f-4d60-969f-eae6a0fd2126`; app159 + shared RTDB rules Run `36001464002` SUCCESS / exact build / remote rules exact match / TEST·PRODUCTION unchanged. Audit `36001252527` SUCCESS.
+- 서버 공개 likeCount는 latest 37/37, popular 37/37 canonical과 일치하고 D1 canonical↔derived mismatch 0. 변경 곡 cross-account 전달은 RTDB invalidation(trackId only) → 약 5초 shared settle → exact changed-card shared R2 read(D1 R0/W0) → B/C public count patch. idle polling 0, retry 최대 4, 전체 Feed 재조회 없음.
+- 개인 하트는 계정별 독립. A의 filled heart를 B/C에 복사하면 FAIL. 동일 UID PC/mobile은 기존 개인 live signal + outbox 우선 규칙을 유지. app159은 공개 count 경로에서 `setLikedTrackIds`를 호출하지 않음.
+- **다음 작업은 코드 추가보다 실제 PREVIEW 검증 우선**: A PC/모바일 동시 접속 → 좋아요 1건/해제 1건 → A 두 기기 개인 하트/내 좋아요 일치, B/C PC/모바일 공개 숫자 같은 값, B/C 개인 하트 변화 없음. 페이지 이동 없이 기존 30초 batch + shared settle 뒤 자동 반영 확인. B/C가 직접 좋아요/해제해 역방향도 동일 확인.
+- 실사용에서 실패하면 해당 한 곡만 client outbox → W1 queue → canonical D1 → shared R2 card/profile/feed → RTDB invalidation → receiver changed-card 순서로 추적. 전체 likes scan/full Feed 재생성/주기 polling/사용자 원본 강제수정 금지. unchanged D1 R0와 W1~W2 비용 기준 보호.
+- TEST 승격은 위 실제 PC/mobile×교차계정 좋아요/해제 PASS 후에만. PRODUCTION은 사용자 명확 승인 전 금지.
+- 별도 유지보수: `.github/workflows/diagnose-069-live-like.yml`은 push마다 즉시 FAILURE가 계속되므로 좋아요 실사용 합격 후 독립적으로 원인 정리. 릴리스 gate 성공 여부와 혼동 금지.
+
+
 ## 최신 2026-09-24 — Worker191/app158 PREVIEW 배포 완료, 서버 shared likeCount 6→0 확인
 
 - 현재 기준은 `CURRENT_RELEASE_STATE.md 0FI`. Worker release Run `35987221833` SUCCESS / active `5bacea12-59a2-41ce-91ed-9fc7cb2e36bb`; app Hosting Run `35987409727` SUCCESS / app158 exact build PASS. TEST/PRODUCTION 비변경.

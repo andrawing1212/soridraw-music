@@ -6,6 +6,7 @@ const publicSync = readFileSync('src/services/explorePublicLikeSyncService.ts', 
 const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
+const canonicalWorker = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const appRelease = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
 const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
@@ -29,6 +30,19 @@ assert.match(signalAuthority, /ownerUid/);
 assert.match(signalAuthority, /at:/);
 assert.match(signalAuthority, /row\?\.at/);
 assert.match(signalAuthority, /Math\.min\(Math\.floor\(now\), Math\.floor\(Number\(row\.at\)\)\)/);
+
+
+// Scheduled aggregation must be executable. A historical materialization wrote
+// literal "\\n" text after a line comment, commenting out the owner declaration
+// and crashing every queue drain with "ReferenceError: owner is not defined".
+assert.match(
+  canonicalWorker,
+  /pending work\.\n  \/\/ Idle cron remains free[\s\S]{0,180}await assertLegacyLikeWriterOpen163\(env, 'scheduled-like-aggregate'\);\n\n  const owner = 'like042_'/,
+);
+assert.doesNotMatch(
+  canonicalWorker,
+  /pending work\.\\n  \/\/ Idle cron remains free[\s\S]{0,220}const owner = 'like042_'/,
+);
 
 // Public signal is emitted only after the accepted W1 batch path, and failure to
 // notify cannot replay the canonical mutation.
@@ -115,3 +129,4 @@ console.log('192_CHANGED_CARD_R2_ONLY_D1_R0W0=PASS');
 console.log('192_CLIENT_BATCH_30S_SERVER_PUBLIC_SETTLE_5S=PASS');
 console.log('192_PUBLIC_LIKE_RETRY_BOUNDED_4=PASS');
 console.log('192_IDLE_POLLING=0');
+console.log('192_SCHEDULED_AGGREGATE_OWNER_SCOPE=PASS');

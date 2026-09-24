@@ -167,6 +167,28 @@ const healthy = createHarness({ markers: { [key('baseline127')]: '1' }, unresolv
 await healthy.ensure({ uid });
 assert.equal(healthy.fetchCount(), 0, 'healthy completed cache remains D1 R0');
 
+// App164 cost regression: a legacy PARTIAL marker may require one bounded
+// authenticated recovery after a user-data change. Once it is confirmed,
+// reopening Explore or upgrading the app must not reread that user's D1 rows.
+const firstPartialRepair = createHarness({
+  markers: { [key('partial')]: '1' }, unresolved: {}, responses: [snapshot(true)],
+});
+await firstPartialRepair.ensure({ uid });
+assert.equal(firstPartialRepair.fetchCount(), 1, 'legacy partial metadata permits one bounded recovery');
+assert.equal(firstPartialRepair.storage.get(key('repair182')), '1',
+  'one-time repair guard must persist independently of the app version');
+assert.equal(firstPartialRepair.storage.get(key('baseline127')), '1',
+  'complete recovered snapshot becomes the durable local catalog');
+const afterAppUpdate = createHarness({
+  markers: Object.fromEntries(firstPartialRepair.storage), unresolved: {},
+});
+await afterAppUpdate.ensure({ uid });
+assert.equal(afterAppUpdate.fetchCount(), 0,
+  'same account after app update must use completed local catalog, D1 R0');
+await afterAppUpdate.ensure({ uid });
+assert.equal(afterAppUpdate.fetchCount(), 0, 'normal page revisit must stay D1 R0');
+
+
 assert.match(source, /invalidateExplorePersonalLikeBaseline127\(uid\);\s*await ensurePersonalLikeBaseline127\(user, revision\);/,
   'changed revision must pass proof token through invalidation');
 assert.match(source, /freshCanonicalSettlement: complete && payload\.data\.freshCanonicalSettlement === true/);
@@ -225,6 +247,7 @@ console.log('APP189_APP156_MARKERS_ONE_TIME_ENTRY=PASS');
 console.log('APP189_FRESH_PROOF_AND_LIVE_OUTBOX=PASS');
 console.log('APP189_ACCEPTED_PREAGGREGATE_AND_RACE_FAIL_CLOSED=PASS');
 console.log('APP189_HEALTHY_CACHE_D1_R0=PASS');
+console.log('APP164_ONE_TIME_PARTIAL_REPAIR_THEN_APP_UPDATE_D1_R0=PASS');
 console.log('APP189_WORKER_QUEUE_SET_ETAG_RACE_GUARDS=PASS');
 
 console.log('APP189_CHANGED_PRIVATE_REVISION_BOUNDED_SETTLEMENT_RETRY=PASS');

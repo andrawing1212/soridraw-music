@@ -1,4 +1,10 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import {
+  acknowledgeRecentSongsSignalVersion,
+  readRecentSongsAcknowledgedSignalVersion,
+  readRecentSongsPendingSignalVersion,
+  rememberRecentSongsPendingSignalVersion,
+} from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -6513,7 +6519,10 @@ function App() {
           cachedAt: Date.now(),
         })
       );
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const applyRecentSongsState = (songs: SongResult[], options?: { preferredIndex?: number | null; latestBatchId?: string | null }) => {
@@ -7680,6 +7689,7 @@ function App() {
   const generationQueueRef = useRef<StudioGenerationQueueTask[]>([]);
   const generationRunningTasksRef = useRef<Map<string, StudioGenerationQueueTask>>(new Map());
   const recentSongSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const recentSongsSaveInFlightRef = useRef(0);
   const resultAreaRef = useRef<HTMLDivElement | null>(null);
   const MAX_STUDIO_GENERATION_QUEUE_JOBS = 5;
   const MAX_CONCURRENT_STUDIO_GENERATIONS = 2;
@@ -11019,63 +11029,119 @@ const unlockAllFavorites = async () => {
     const ref = doc(db, "user_recent_songs", user.uid);
     let cancelledRecentSongsRead = false;
 
+    // SORIDRAW_RECENT_SONGS_SIGNAL_ACK_196_20260925
+    // The RTDB event and the canonical document can use different clocks on
+    // older clients. The event is an invalidation token, never a document
+    // syncVersion. Acknowledge only after applying and caching a server read.
     const runRecentSongsServerSyncIfNeeded = () => {
       if (cancelledRecentSongsRead) return;
 
+      const latestCache = loadRecentSongsCache(user.uid);
       const cachedProfile = readUserProfileCache(user.uid);
       const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0);
       const localVersion = readRecentSongsLocalVersion(user.uid);
-      const hasLocalState = Boolean(cached);
-      const needsServerRead = !hasLocalState || remoteVersion > localVersion;
+      const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
+      const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
+      const needsServerRead = !latestCache
+        || remoteVersion > localVersion
+        || pendingSignalVersion > acknowledgedSignalVersion;
 
       if (!needsServerRead) {
         recentSongsSessionVerifiedUids.add(user.uid);
         markCacheDiagnostic('recentSongs', 'CACHE', 0, 0);
         return;
       }
+      // In-flight local mutations and locally saved text edits must never be
+      // overwritten by an older remote snapshot.
+      if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid) return;
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
+      const readSignalVersion = pendingSignalVersion;
 
       void getDocFromServer(ref)
         .then((snap) => {
-          recentSongsSessionReadInFlightUids.delete(user.uid);
-          if (cancelledRecentSongsRead) return;
+          if (cancelledRecentSongsRead || snap.metadata.fromCache) return;
           if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
-          recentSongsSessionVerifiedUids.add(user.uid);
+          if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid) return;
+
+          const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
+          const currentCache = loadRecentSongsCache(user.uid);
+          // A PC-generated song can be visible locally before its background
+          // save reaches Firestore. Preserve it if there is no canonical doc.
+          if (!snap.exists() && Array.isArray(currentCache?.history) && currentCache.history.length > 0) {
+            console.warn('Recent songs server document missing; preserving local cache.');
+            return;
+          }
+
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
-          const verifiedVersion = Math.max(remoteVersion, localVersion, documentVersion);
-          if (verifiedVersion > 0) writeRecentSongsLocalVersion(user.uid, verifiedVersion);
-        markCacheDiagnostic('recentSongs', snap.metadata.fromCache ? 'CACHE' : 'SYNC', snap.metadata.fromCache ? 0 : 1);
-        const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
-        preserveHistoryIndexOnNextSnapshotRef.current = null;
+          const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
+          const preferredIndex = preservedIndex ?? currentCache?.historyIndex ?? 0;
+          const nextIndex = firestoreSongs.length ? preferredIndex : -1;
+          const latestBatchId = (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
+          const cachedSuccessfully = saveRecentSongsCache(user.uid, {
+            history: firestoreSongs,
+            historyIndex: nextIndex,
+            latestGenerationBatchId: latestBatchId,
+          });
 
-        const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
-        const preferredIndex = preservedIndex ?? cached?.historyIndex ?? 0;
+          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
+          applyRecentSongsState(firestoreSongs, { preferredIndex: nextIndex, latestBatchId });
+          recentSongsReadyToCacheRef.current = true;
+          recentSongsSessionVerifiedUids.add(user.uid);
 
-        applyRecentSongsState(firestoreSongs, {
-          preferredIndex: firestoreSongs.length ? preferredIndex : -1,
-          latestBatchId: (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
-        });
-
-        recentSongsReadyToCacheRef.current = true;
+          if (cachedSuccessfully && readSignalVersion > 0) {
+            acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion);
+          }
         })
         .catch((error) => {
-          recentSongsSessionReadInFlightUids.delete(user.uid);
           if (cancelledRecentSongsRead) return;
-        // If Firestore fails, keep the account-scoped local cache as a temporary fallback.
-        recentSongsReadyToCacheRef.current = cachedHistory.length > 0;
-        if (cachedHistory.length === 0) {
-          console.error('Failed to subscribe recent songs:', error);
-        }
+          // Keep the last local cache and unacknowledged signal for retry.
+          recentSongsReadyToCacheRef.current = Boolean(loadRecentSongsCache(user.uid));
+          if (!recentSongsReadyToCacheRef.current) {
+            console.error('Failed to subscribe recent songs:', error);
+          }
+        })
+        .finally(() => {
+          recentSongsSessionReadInFlightUids.delete(user.uid);
+          const newestSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
+          if (cancelledRecentSongsRead) {
+            // An effect mounted while this read was in flight must get a chance
+            // to verify even if the old page was already unmounted.
+            window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+              detail: { uid: user.uid, version: newestSignalVersion, resumeAfterRead: true },
+            }));
+          } else if (
+            newestSignalVersion > readSignalVersion
+            && newestSignalVersion > readRecentSongsAcknowledgedSignalVersion(user.uid)
+          ) {
+            // Exactly one bounded follow-up for a new signal that arrived
+            // during this read; never poll while nothing changed.
+            queueMicrotask(runRecentSongsServerSyncIfNeeded);
+          }
         });
     };
 
     const handleRecentSongsVersionSignal = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; version?: number }>).detail;
+      const detail = (event as CustomEvent<{ uid?: string; version?: number; resumeAfterRead?: boolean }>).detail;
       if (!detail || detail.uid !== user.uid) return;
+      if (detail.resumeAfterRead === true) {
+        runRecentSongsServerSyncIfNeeded();
+        return;
+      }
       const signaledVersion = Number(detail.version || 0);
-      if (signaledVersion <= readRecentSongsLocalVersion(user.uid)) return;
+      if (!Number.isFinite(signaledVersion) || signaledVersion <= 0) return;
+      if (signaledVersion > readRecentSongsLocalVersion(user.uid)) {
+        // Profile-cache notification can arrive independently of the RTDB
+        // callback; keep its evidence until a canonical read is cached.
+        rememberRecentSongsPendingSignalVersion(user.uid, signaledVersion);
+      }
+      if (
+        signaledVersion <= readRecentSongsLocalVersion(user.uid)
+        && readRecentSongsPendingSignalVersion(user.uid) <= readRecentSongsAcknowledgedSignalVersion(user.uid)
+      ) return;
       runRecentSongsServerSyncIfNeeded();
     };
 

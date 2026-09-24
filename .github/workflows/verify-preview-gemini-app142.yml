@@ -64,11 +64,16 @@ jobs:
           for (const token of must) {
             if (!src.includes(token)) throw new Error('Missing low-thinking contract: ' + token);
           }
-          if (!src.includes('"gemini-3.6-flash": 90_000')) throw new Error('3.6 initial timeout is not 90s');
-          if (!src.includes('"gemini-3.5-flash": 60_000')) throw new Error('3.5 initial timeout is not 60s');
-          if (!src.includes('"gemini-3.5-flash-lite": 60_000')) throw new Error('3.5-lite initial timeout is not 60s');
+          if (!src.includes('"gemini-3.6-flash": 120_000')) throw new Error('3.6 initial timeout is not 120s');
+          if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial timeout is not 90s');
+          if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial timeout is not 75s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout is not 330s');
-          if (!src.includes('"gemini-3.5-flash": 60_000')) throw new Error('3.5 initial timeout is not 60s');
+          const proxy = fs.readFileSync('../src/services/geminiProxyClient.ts', 'utf8');
+          const chain = proxy.match(/const INITIAL_SONG_MODEL_CHAIN = \[([\s\S]*?)\] as const;/);
+          if (!chain) throw new Error('Initial song model chain missing');
+          const actual = [...chain[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+          const approved = ['gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'];
+          if (JSON.stringify(actual) !== JSON.stringify(approved)) throw new Error('Initial song model order mismatch');
           if (!src.includes('daily_quota_exhausted')) throw new Error('daily quota reason missing');
           if (!src.includes('getGeminiDailyQuotaCooldownMs')) throw new Error('Pacific reset cooldown helper missing');
           const lyricBrief = fs.readFileSync('../src/services/lyricStoryBrief.ts', 'utf8');
@@ -83,7 +88,7 @@ jobs:
             throw new Error('client daily quota persistence contract missing');
           }
           console.log('PREVIEW_GEMINI_INITIAL_FLASH_LOW_THINKING=PASS');
-          console.log('PREVIEW_GEMINI_CHAIN_ORDER_UNCHANGED=PASS');
+          console.log('PREVIEW_GEMINI_APPROVED_INITIAL_MODEL_ORDER=PASS');
           console.log('PREVIEW_GEMINI_FALLBACK_TIMEOUTS=PASS');
           console.log('PREVIEW_GEMINI_DAILY_QUOTA_SKIP=PASS');
           console.log('PREVIEW_GEMINI_PROMPT_DUPLICATE_REMOVAL=PASS');

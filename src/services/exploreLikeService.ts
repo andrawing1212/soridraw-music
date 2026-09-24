@@ -677,7 +677,7 @@ const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 =
     scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid),
   ) === settlementMarker189;
   const verifySettlement189 = hasUnresolvedGuards189 && !settlementAttempted189 &&
-    (baseline127 || (partial182 && attempted182));
+    (baseline127 || (partial182 && attempted182) || Boolean(observedR2Revision189));
   if (!verifySettlement189 && (baselineCompleted127.has(uid) || baseline127 ||
       (partial182 && attempted182))) return;
   const inflight = baselineInFlight127.get(uid);

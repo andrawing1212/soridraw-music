@@ -11933,6 +11933,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
   const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
   const recentMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
+  let savedCanonically = false;
   const saveOperation = async () => {
     try {
       const ref = doc(db, "user_recent_songs", user.uid);
@@ -11953,6 +11954,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
     );
     if (!persistedVersion) return;
+    savedCanonically = true;
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
@@ -11961,15 +11963,28 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       });
     } catch (e) {
       console.error("Failed to save recent songs:", e);
+      // The PC result is locally cached; never report a failed server write
+      // as a successful cross-device sync.
+      throw e;
     }
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
   // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
   // A multi-song generation is persisted with one read + one write instead of one pair per song.
+  recentSongsSaveInFlightRef.current += 1;
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
-  await chainedSave;
+  try {
+    await chainedSave;
+  } finally {
+    recentSongsSaveInFlightRef.current = Math.max(0, recentSongsSaveInFlightRef.current - 1);
+    if (savedCanonically && recentSongsSaveInFlightRef.current === 0) {
+      window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+        detail: { uid: user.uid, version: readRecentSongsPendingSignalVersion(user.uid), resumeAfterRead: true },
+      }));
+    }
+  }
 };
 
 const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
@@ -12792,6 +12807,19 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         setGenerationModelNotice(`생성 모델 ${usedModelLabel}${fallbackNotice}`);
       }
 
+      // Keep the freshly generated result in the UID-scoped local cache
+      // before starting its separate background server save.
+      if (user) {
+        const existingLocal = loadRecentSongsCache(user.uid)?.history || [];
+        const localHistory = [...generatedResults, ...existingLocal].slice(0, 10);
+        if (!saveRecentSongsCache(user.uid, {
+          history: localHistory,
+          historyIndex: 0,
+          latestGenerationBatchId: generationBatchId,
+        })) {
+          console.warn('Completed song could not be cached locally before server save.');
+        }
+      }
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
@@ -12811,6 +12839,7 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         }
       })().catch((error) => {
         console.error('Failed to persist completed generation in background:', error);
+        showToast('곡은 PC 화면에 있지만 최근 생성곡 서버 저장에 실패했습니다. PC 캐시를 지우지 말고 연결을 확인해 주세요.');
       });
 
       return {

@@ -385,6 +385,7 @@ export default function ExplorePage() {
   // another account's personal filled-heart state.
   const publicLikeVisibleTracksRef192 = useRef<Map<string, string>>(new Map());
   const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  const publicLikeRefreshAttemptsRef192 = useRef<Map<string, number>>(new Map());
   const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
@@ -427,6 +428,7 @@ export default function ExplorePage() {
             if (!card || card.updatedAt < row.at) continue;
             settled.set(row.trackId, card.likeCount);
             publicLikePendingRowsRef192.current.delete(row.trackId);
+            publicLikeRefreshAttemptsRef192.current.delete(row.trackId);
             const ownerUid = card.ownerUid || row.ownerUid;
             patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });
             if (ownerUid) {
@@ -449,6 +451,15 @@ export default function ExplorePage() {
 
         // Bounded retry only while an actual changed-track signal is unresolved.
         // No idle timer and no D1 read are introduced.
+        for (const [trackId] of publicLikePendingRowsRef192.current) {
+          const attempts = (publicLikeRefreshAttemptsRef192.current.get(trackId) || 0) + 1;
+          if (attempts >= 4) {
+            publicLikePendingRowsRef192.current.delete(trackId);
+            publicLikeRefreshAttemptsRef192.current.delete(trackId);
+          } else {
+            publicLikeRefreshAttemptsRef192.current.set(trackId, attempts);
+          }
+        }
         if (!cancelled && publicLikePendingRowsRef192.current.size) {
           scheduleRefresh192(5_000);
         }
@@ -465,6 +476,7 @@ export default function ExplorePage() {
         const previous = publicLikePendingRowsRef192.current.get(row.trackId);
         if (!previous || row.at >= previous.at) {
           publicLikePendingRowsRef192.current.set(row.trackId, row);
+          publicLikeRefreshAttemptsRef192.current.set(row.trackId, 0);
         }
       }
       if (!relevant) return;
@@ -479,6 +491,7 @@ export default function ExplorePage() {
       cancelled = true;
       unsubscribe();
       publicLikePendingRowsRef192.current.clear();
+      publicLikeRefreshAttemptsRef192.current.clear();
       if (publicLikeRefreshTimerRef192.current != null) {
         window.clearTimeout(publicLikeRefreshTimerRef192.current);
         publicLikeRefreshTimerRef192.current = null;

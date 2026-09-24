@@ -1262,17 +1262,6 @@ const geminiSystemInstructionToText = (value: any): string => {
   return "";
 };
 
-const extractGeminiInteractionText = (payload: any): string => {
-  if (typeof payload?.output_text === "string") return payload.output_text;
-  if (!Array.isArray(payload?.steps)) return "";
-  return payload.steps
-    .filter((step: any) => step?.type === "model_output")
-    .flatMap((step: any) => Array.isArray(step?.content) ? step.content : [])
-    .filter((item: any) => item?.type === "text")
-    .map((item: any) => String(item?.text || ""))
-    .join("");
-};
-
 const parseGeminiRetryAfterMs = (headerValue: string | null, message: unknown): number => {
   const header = String(headerValue || "").trim();
   if (header) {

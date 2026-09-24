@@ -316,7 +316,7 @@ jobs:
             }
             ready=0
             for attempt in $(seq 1 30); do
-              if curl -fsS "http://127.0.0.1:8791/" -o /dev/null >/dev/null 2>&1; then
+              if curl -sS "http://127.0.0.1:8791/" -o /dev/null >/dev/null 2>&1; then
                 ready=1
                 break
               fi
@@ -326,7 +326,11 @@ jobs:
               fi
               sleep 1
             done
-            test "$ready" = 1
+            if [ "$ready" != 1 ]; then
+              cat "$dev_log" || true
+              cleanup_191_dev
+              false
+            fi
             curl -fsS --max-time 120               "http://127.0.0.1:8791/cdn-cgi/local/scheduled?cron=*+*+*+*+*"               -o "$RUNNER_TEMP/like191-scheduled-response.txt"
             cleanup_191_dev
             dev_pid=0

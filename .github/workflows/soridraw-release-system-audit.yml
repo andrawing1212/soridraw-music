@@ -58,6 +58,7 @@ jobs:
           node scripts/verify-117-explore-public-count-cache-separation.mjs
           node scripts/verify-110-explore-liked-public-count.mjs
           node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
           node scripts/verify-181-personal-r2-exact-mutation.mjs
           node scripts/verify-182-account-partial-like-repair.mjs
           node scripts/verify-189-personal-like-settled-guard-release.mjs

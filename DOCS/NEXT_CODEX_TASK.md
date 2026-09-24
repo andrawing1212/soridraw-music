@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 최초 Social Snapshot D1 R45 원인 후보 감사 완료, app164 좋아요 유지
+
+- `CURRENT_RELEASE_STATE.md 0GE` 우선. 사용자 첫 방문 `/v1/me/social-snapshot` Worker1/D1 쿼리 2/행 R45/W0, 진단 초기화 후 재진입 개인 snapshot 호출 없음/전체 D1 R0/W0 직접 관찰. 최초 R45는 실제 비용이며 정상화 사례로 삭제하지 않는다.
+- app163→164 diff에서 snapshot/Worker 변경 없음. 최초 조회 원인 후보는 개인 부분 카탈로그 182 1회 검증, 미정산 guard 새 revision 189 검증, 팔로우 snapshot 캐시 미존재 등. 원인 식별에 필요한 원 URL query/개인 R2 exact/guard 상태는 이번 화면만으로 확인할 수 없음. 단정 금지.
+- 프로덕션 함수를 실행하는 `scripts/verify-189-personal-like-settled-guard-release.mjs`에 one-time partial repair 후 새 실행 컨텍스트/앱 업데이트 R0 확인 추가. Audit Run `36043099473` SUCCESS, TS/Build/like(APP197 포함)·Worker dry-run/D1 read-only PASS. 제품 코드/Worker/Functions/UI/Rules/사용자 데이터 **비변경**, 추가 배포 없음.
+- 신규 실제 오류 또는 첫 방문 R45의 반복·대규모 문제 증거 없으면 app164 좋아요 동결 유지. 재현된다면 해당 요청의 query mode와 1계정의 metadata만 비식별·읽기전용 확인한 뒤 필요성/비용을 판단. 보호성 복구 자체 삭제 금지. 정상 캐시 D1 R0/W0와 기존 좋아요 PC↔모바일·공개 숫자 우선.
+- 명확한 다음 사용자 요청 없으면 별도 `CURRENT_RELEASE_STATE.md 0FU` 영어 가사 제목/생성 지연 이슈를 독립 진단. TEST/PRODUCTION 승격은 별도 승인 필요.
+
 ## 최신 2026-09-25 — app164 신규 공개곡 첫 좋아요 실사용 해결 확인·스킬 업데이트, 추가 코드 작업 없음
 
 - `CURRENT_RELEASE_STATE.md 0GD` 및 `.agents/skills/local-first-like-sync/SKILL.md`·`references/soridraw-app164-worker195-frozen.md` 기준. 사용자 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)` 좋아요 차단 해결 확인. app164 PREVIEW Hosting `36040776352`, exact release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`, Audit `36040506539` 성공 유지.

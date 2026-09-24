@@ -659,7 +659,7 @@ const requestPersonalLikeBaseline127 = async (
 // One-time per user migration from older local liked-state to the already
 // materialized per-user R2 bundle. Never clear device data, never scan D1 on
 // ordinary entry. The server may use its existing recovery path if R2 is absent.
-const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
+const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 = ''): Promise<void> => {
   const uid = user.uid;
   if (!uid) return;
   // Preserve healthy local-first behavior. Only a previously partial account
@@ -668,9 +668,14 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const attempted182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) === '1';
   const baseline127 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
   const hasUnresolvedGuards189 = Object.keys(readSnapshotPending127(uid)).length > 0;
+  // One bounded fresh settlement proof per *observed personal R2 revision*.
+  // The old global '1' marker permanently blocked a later, settled revision
+  // after an earlier queue/race failure. Healthy accounts never enter this path.
+  const revision189 = String(observedR2Revision189 || readCurrentPersonalLikeRevision130(uid)).trim();
+  const settlementMarker189 = revision189 ? `revision:${revision189}` : '1';
   const settlementAttempted189 = readLikeLocal127(
     scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid),
-  ) === '1';
+  ) === settlementMarker189;
   const verifySettlement189 = hasUnresolvedGuards189 && !settlementAttempted189 &&
     (baseline127 || (partial182 && attempted182));
   if (!verifySettlement189 && (baselineCompleted127.has(uid) || baseline127 ||
@@ -686,7 +691,7 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       if (verifySettlement189) {
         // Mark before the request: failure remains fail-closed and cannot turn
         // ordinary navigation into an unbounded canonical-read retry loop.
-        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid), '1');
+        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid), settlementMarker189);
       }
       const snapshot161 = await requestPersonalLikeBaseline127(user, repairPartial182, verifySettlement189);
       const likedIds = snapshot161.likedTrackIds;
@@ -820,7 +825,7 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
       const previous = readLikeLocal127(key);
       if (previous !== revision) {
         invalidateExplorePersonalLikeBaseline127(uid);
-        await ensurePersonalLikeBaseline127(user);
+        await ensurePersonalLikeBaseline127(user, revision);
         if (auth.currentUser?.uid !== uid) return;
         // A failed snapshot never advances this marker. The next focus/entry
         // retries the exact same revision without hiding a stale heart.

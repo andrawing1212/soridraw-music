@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FI. 좋아요 공유 숫자 6곡 실데이터 수복 + Worker191/app158 PREVIEW 배포 완료 (2026-09-24 KST)
+
+**현재 실제 PREVIEW**: 앱 app158 Hosting Run `35987409727` SUCCESS / exact build PASS / `PREVIEW_APP_VERSION=158`; Cloudflare Worker191 Run `35987221833` SUCCESS / active version `5bacea12-59a2-41ce-91ed-9fc7cb2e36bb`. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Worker/Hosting 비변경 PASS.
+
+**실제 서버에서 확인·수정된 문제**: read-only 진단에서 canonical D1↔derived mismatch는 0이었지만 shared R2 latest 37 overlap 중 6곡, popular 37 overlap 중 동일 6곡의 공개 likeCount가 canonical과 달랐다. Worker191은 기존 075 경로의 파생 R2 쓰기 실패가 queue cursor 소비 뒤 영구 잔류할 수 있는 문제를 방어하기 위해 actual changed-data Durable Object alarm 뒤 bounded first-page canonical 검증/수복을 수행한다. 과거 6곡은 one-time remote scheduled 실행으로 **marker changed=6**, 실제 latest `MISMATCH=0`, popular `MISMATCH=0` 확인 후 release 성공. canonical user D1 쓰기/스키마 변경/백필/전체 likes scan 없음; 수정 대상은 shared R2 파생 snapshot/card/profile뿐이다.
+
+**개인 좋아요 클라이언트 보완도 배포**: `src/services/exploreLikeService.ts`의 revision 변경 직후 baseline marker가 먼저 지워져 stale `snapshotPending=false` 해제용 fresh proof가 시작되지 않던 순서 버그를 수정한 후보가 이번 app158 Hosting에 포함됨. 관찰된 개인 R2 revision + unresolved guard가 있을 때 해당 revision당 최대 1회 fresh canonical proof만 허용하며 현재 outbox 우선, 정상 캐시 D1 R0 유지. 합성 5→10 및 warm 재진입 추가 read 0 회귀 PASS.
+
+**남은 검증**: 실제 동일 UID PC↔모바일 개인 filled-heart/내 좋아요 목록과 신규 좋아요·해제 실시간 수렴은 사용자 실기기 최종 검증 전. B/C 다른 계정의 공개 숫자는 현재 shared R2 canonical parity 0까지 서버에서 확인했지만, 장시간 열린 화면의 2분 activity/revision 전달 UX는 별도 실사용 확인 필요. 이 검증 전 TEST/PRODUCTION 승격 금지. `.github/workflows/diagnose-069-live-like.yml`의 push별 진단 실패는 별도 미해결 진단 workflow 이슈이며 이번 release gate(Audit/Worker/App)는 SUCCESS.
+
+
 ## 0FH. Worker191 배포 시도 자동 롤백 / 실제 공유 좋아요 불일치 6곡 유지 (2026-09-24 KST)
 
 **현재 실제 PREVIEW**: 앱 app158, Worker189 `e23e73a1-89af-40f6-ae66-dc4ae2458c30`. Worker191 release Run `35982523348`은 새 Worker 배포와 기본 Feed/Profile smoke까지 PASS했지만, PREVIEW 임시 cron으로 실행하려던 one-time 191 repair가 24회 대기 동안 실행되지 않아 release gate FAIL. Workflow가 즉시 Worker189로 자동 rollback했고 임시 cron도 원상복구. TEST/PRODUCTION 비변경.

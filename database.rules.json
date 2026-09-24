@@ -150,7 +150,7 @@
       "exploreLike": {
         ".read": "auth != null",
         ".write": "auth != null && newData.child('actorUid').val() === auth.uid",
-        ".validate": "newData.hasChildren(['version','at','actorUid','rows']) && newData.child('rows').numChildren() <= 50",
+        ".validate": "newData.hasChildren(['version','at','actorUid','rows'])",
         "version": {
           ".validate": "newData.isNumber() && newData.val() > 0"
         },

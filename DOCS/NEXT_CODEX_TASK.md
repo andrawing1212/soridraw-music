@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app161 + PREVIEW Gemini Function 적용 완료, V1 1곡 최종 실사용 검증
+
+- `CURRENT_RELEASE_STATE.md 0FQ`: app161 Hosting Run `36018252541` SUCCESS / exact build PASS; PREVIEW Gemini Function Run `36017885707` SUCCESS / shared TEST·PRODUCTION Function 비변경. Source Audit `36017422013`, Release System Audit `36017538500` SUCCESS.
+- 적용: 초기 모델 `3.6→3.5→3.5-lite→3.7→3.8`; 초기 제한 `120/90/75`초. Function 전체 330초와 5-call ceiling, 후처리 품질·프롬프트·가사·언어·금지어, 좋아요 실행 기능/Worker195 모두 보호.
+- **다음**: 인증된 PREVIEW에서 일반 V1 1곡만 생성. 관리자 화면에서 최초 모델, 각 status/duration/usage, 후처리 완료 여부, 최종 5단 작곡 명령·가사 출력 여부 확인. 503, provider deadline, self-timeout을 구별하고 후순위 330s 전체 상한 확인. 다시 실패하면 해당 1세션 근거로 최소 수정; 무작정 추가 생성/한도 확대 금지.
+- TEST/PRODUCTION 승격 금지. `.github/workflows/diagnose-069-live-like.yml` 별도 push failure는 기존 진단 workflow debt; 정상 좋아요 실행 코드를 변경하지 않는다.
+
 ## 최신 2026-09-25 — Gemini app161 후보 적용 후 감사·PREVIEW 배포·1곡 검증
 
 - 사용자 승인된 설정: initial `3.6→3.5→3.5-lite→3.7→3.8`, initial timeout `3.6=120s, 3.5=90s, lite=75s`, Function 330s/5회 ceiling/후처리 품질 보존. `CURRENT_RELEASE_STATE.md 0FP` 참조.

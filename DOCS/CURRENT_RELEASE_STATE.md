@@ -1,5 +1,20 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FQ. Gemini app161 + PREVIEW Function 배포 완료 — 최초 생성 우선순위/시간 변경, 실사용 검증 대기 (2026-09-25 KST)
+
+**실제 기준**: `preview` 기능 소스 `3587d81e957bb18702037811668c5d83c6c7c17c`, 최종 verifier `576963c772198068964c863d37c1c2251c950fff`, PREVIEW Function 릴리스 트리거 `78bb600ecc5246b115189556190adff061aae7a4`, Hosting 트리거 `0e5bdac4792954cb194b19907c063c702bf71e79`. 이 섹션의 문서 저장 commit은 제품 코드와 다른 기록용 SHA이다.
+
+**사용자 승인 적용**: 초기 일반 V1 곡 생성 모델 순서를 `3.6→3.5→3.5-lite→3.7→3.8`로 변경하고, 초기 `3.6=120초, 3.5=90초, 3.5-lite=75초`로 늘림. 3.7=55초, 3.8=35초, Function 전체 330초, 총 5 physical calls, daily quota, low-thinking, fast repair의 별도 제한, 5단·가사·금지어·언어·섹션 규칙 변경 없음. `public/app-version.json=161` 외 UI/좋아요 실행 코드/Worker/RTDB/D1/R2/Rules 비변경. `scripts/verify-192-cross-account-public-like-live.mjs`의 정확히 160 버전 고정 검사만 161 이후에도 검증하도록 완화; 실제 좋아요 경로 수정 없음.
+
+**감사·배포**:
+- Gemini Function Source Audit `36017422013` SUCCESS (Functions Build / 새 initial model order / timeout / Interactions route / 5회 상한).
+- Release System Audit `36017538500` SUCCESS (TypeScript, Build, Gemini prompt/cue·hard-ban, 좋아요·Music Note 등 회귀, TEST/PRODUCTION Worker dry-run, shared D1 read-only). 초기 Audit 2건은 앱 버전 161을 `160`으로만 확인하는 과거 좋아요 테스트 문구 때문에 static 단계 FAIL했으나 좋아요 실행 코드는 비변경이고 테스트 버전 조건 정정 후 최종 PASS.
+- Firebase PREVIEW Gemini Function Tune `36017885707` SUCCESS: 변경 Function 업데이트, nodejs22, CORS PASS, shared TEST/PRODUCTION `generateGeminiContent` unchanged PASS. Firebase artifact cleanup policy 경고는 존재했으나 Function ACTIVE/업데이트 검증 완료.
+- Firebase PREVIEW app161 Hosting Run `36018252541` SUCCESS: TypeScript, Build, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=161`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`; shared RTDB rules deploy SKIPPED.
+- Cloudflare Worker195 active `11d8455c-c266-4e88-9cf6-7549d3f5be92` 유지. Functions 중 PREVIEW Gemini만 변경. 사용자 원본 마이그레이션/복사/재작성 없음.
+
+**실사용 게이트**: 1회 일반 V1 곡 생성의 초기 본문 → 후처리 → 최종 작곡 명령/가사 완전 성공은 **미검증**. 기존 3.6 약 60s 실패는 provider deadline인지 과거 실제 deployment 차이인지 확정 안 됐으며, Google 503 가용성 문제는 앱 설정만으로 해결 보장 불가. 총 이론적 개별 timeout 합계 375s가 Function 330s를 넘으므로 후순위 모델 시간 확보가 보장되지 않는다. 먼저 app161 실제 1곡 결과/관리자 Gemini 기록으로만 판단; 반복 생성 금지. 좋아요 기능 동결 유지. TEST/PRODUCTION 승격 금지.
+
 ## 0FP. Gemini initial V1 모델 순서·응답 시간 PREVIEW 후보 app161 (2026-09-25 KST)
 
 **사용자 승인**: 2026-09-24 제공된 5-call, 전부 0 usage 실패를 바탕으로 제안한 두 설정 변경을 적용해 PREVIEW에서 검증. 다른 기능/좋아요 완전 동결. `preview` 기능 기준 시작 `5b95b2095123e7b513fdd74eb7230e2fa42be899`.

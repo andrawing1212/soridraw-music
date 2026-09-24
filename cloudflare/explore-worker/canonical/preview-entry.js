@@ -15,15 +15,17 @@ import baseWorker from './preview-worker.js';
 // reconnects are one tiny R2 HEAD (or edge hit) and D1 R0/W0.
 //
 // 103: the fixed 10-minute cron was replaced by one shared Durable Object alarm.
-// 105 PREVIEW test cadence: a successful non-empty like batch schedules exactly
-// one alarm one minute later. More batches joining the same window do not move
-// the deadline. No likes means no alarm and no periodic aggregate execution.
+// 192: the existing client already batches likes for 30 seconds. Once that W1
+// batch is accepted, settle the shared public projection five seconds later so
+// another account's event-driven changed-card refresh does not wait a full minute.
+// More batches joining the same window do not move the deadline. No likes means
+// no alarm and no periodic aggregate execution.
 //
 // 108: first-page Feed cache recovery reads the already-materialized R2 snapshot
 // directly. It never opens D1. The R2 ETag/revision is part of the edge key, so
 // many clients recovering the same snapshot share one edge body without polling.
 const REVISION_HEAD_CACHE_SECONDS_077 = 60;
-const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000;
+const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 * 1000;
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
 const EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103 = 'shared-like-batch';
 const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
@@ -276,6 +278,87 @@ async function handleFeedR2Snapshot108(request, env) {
   return new Response(body, {
     status: 200,
     headers: feedSnapshotHeaders108(request, actualRevision, selected.source, selected.r2ClassB),
+  });
+}
+
+// SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924
+// Event-driven public-count delivery reads only the exact changed-track shared
+// R2 cards. It never opens D1 and never trusts the RTDB invalidation as count data.
+const PUBLIC_LIKE_CARD_ROUTE_192 = '/v1/public-like-cards';
+const PUBLIC_LIKE_CARD_MAX_192 = 50;
+const publicLikeCardKey192 = (trackId) =>
+  `internal/explore/shared-track-card-v115/${encodeURIComponent(String(trackId || '').trim())}.json`;
+
+function publicLikeCardHeaders192(request, r2Reads = 0) {
+  const headers = new Headers(revisionCors036(request));
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('X-SORIDRAW-CF-Diagnostics', '192');
+  headers.set('X-SORIDRAW-CF-Worker', '1');
+  headers.set('X-SORIDRAW-D1-Read', '0');
+  headers.set('X-SORIDRAW-D1-Write', '0');
+  headers.set('X-SORIDRAW-D1-Read-Queries', '0');
+  headers.set('X-SORIDRAW-D1-Write-Queries', '0');
+  headers.set('X-SORIDRAW-D1-Other-Queries', '0');
+  headers.set('X-SORIDRAW-R2-A', '0');
+  headers.set('X-SORIDRAW-R2-B', String(Math.max(0, Number(r2Reads || 0))));
+  headers.set('Access-Control-Expose-Headers', [
+    'X-SORIDRAW-CF-Diagnostics',
+    'X-SORIDRAW-CF-Worker',
+    'X-SORIDRAW-D1-Read',
+    'X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-D1-Read-Queries',
+    'X-SORIDRAW-D1-Write-Queries',
+    'X-SORIDRAW-D1-Other-Queries',
+    'X-SORIDRAW-R2-A',
+    'X-SORIDRAW-R2-B',
+  ].join(', '));
+  return headers;
+}
+
+async function handlePublicLikeCards192(request, env) {
+  const url = new URL(request.url);
+  const raw = String(url.searchParams.get('trackIds') || '');
+  const rawIds = raw.split(',').map((value) => value.trim()).filter(Boolean);
+  const ids = [...new Set(rawIds)];
+  if (!ids.length || ids.length > PUBLIC_LIKE_CARD_MAX_192 ||
+      ids.some((id) => id.length > 512)) {
+    return new Response(JSON.stringify({ ok: false, error: 'Invalid changed-track request' }), {
+      status: 400,
+      headers: publicLikeCardHeaders192(request, 0),
+    });
+  }
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) {
+    return new Response(JSON.stringify({ ok: false, error: 'Shared public cache unavailable' }), {
+      status: 503,
+      headers: publicLikeCardHeaders192(request, 0),
+    });
+  }
+
+  const items = [];
+  await Promise.all(ids.map(async (trackId) => {
+    let object = null;
+    try { object = await bucket.get(publicLikeCardKey192(trackId)); } catch {}
+    if (!object) return;
+    let bundle = null;
+    try { bundle = JSON.parse(await object.text()); } catch {}
+    const card = bundle?.card;
+    const id = String(card?.id || card?.trackId || '').trim();
+    if (Number(bundle?.schemaVersion || 0) !== 1 || id !== trackId) return;
+    const count = Number(card?.likeCount ?? card?.stats?.likeCount ?? 0);
+    if (!Number.isFinite(count) || count < 0) return;
+    items.push({
+      trackId: id,
+      ownerUid: String(card?.ownerUid || card?.owner_uid || '').trim(),
+      likeCount: Math.floor(count),
+      updatedAt: Math.max(0, Math.floor(Number(bundle?.updatedAt || object?.customMetadata?.updatedAt || 0))),
+    });
+  }));
+
+  return new Response(JSON.stringify({ ok: true, data: { items } }), {
+    status: 200,
+    headers: publicLikeCardHeaders192(request, ids.length),
   });
 }
 
@@ -651,6 +734,9 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/v1/feed-revision') {
       return handleFeedRevisionHeadOnly077(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === PUBLIC_LIKE_CARD_ROUTE_192) {
+      return handlePublicLikeCards192(request, env);
     }
     const response = await baseWorker.fetch(request, env, ctx);
     return ensureQueuedLikeBatchScheduled103(request, env, response);

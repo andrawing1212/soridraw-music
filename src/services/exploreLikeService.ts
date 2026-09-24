@@ -536,9 +536,11 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     if (pending[item.trackId]) continue;
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
-      patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
       changed = true;
     }
+    // The personal liked-card index must follow the same accepted membership
+    // even if this device already painted the correct heart from its local cache.
+    patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
     // The same accepted state must remain visible even on partial legacy R2
     // accounts, where a targeted D1 read can still lag behind the intake queue.
     // It is not an extra write to the shared user database.

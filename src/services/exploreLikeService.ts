@@ -8,6 +8,7 @@ import {
   seedExploreLikedTrackCandidates129,
 } from './exploreLikedTracksService';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
@@ -1423,6 +1424,21 @@ flushPendingLikes = async (user: User): Promise<void> => {
             ...firstAccepted,
             message: '좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.',
           });
+        }
+      }
+
+      // 192: after the durable W1 batch is accepted, wake only active Explore
+      // screens through one bounded global invalidation signal. It carries no
+      // personal heart and no trusted count. Other accounts wait for the
+      // changed-track shared R2 card and then paint its settled public count.
+      if (acceptedForSignal127.length) {
+        try {
+          await publishExplorePublicLikeInvalidation192(uid, acceptedForSignal127);
+        } catch (publicSignalError) {
+          // Public live delivery is an optimization over the existing revision
+          // convergence path. Never replay an accepted D1 mutation because this
+          // tiny invalidation notification failed.
+          console.warn('[192] Public like invalidation deferred:', publicSignalError);
         }
       }
     } catch (reason) {

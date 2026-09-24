@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FC. app157 / Worker189 PREVIEW 배포 완료 — 개인 좋아요 과거 guard 복구 후보 (2026-09-24 KST)
+
+**승인·범위**: 사용자 지시에 따라 PR #111 `294036e963704a1007cfde36108a3f4640a57c7f`을 `preview`에 merge `50ad5fab1b7516cc6ba7102cd1832ba0790885be`. 이미 앱156에 남은 개인 unresolved false guard가 서버 최신 좋아요를 가리는 경로만 한정 수정. 코드 병합 후 audit 필수 항목에 실행형 `verify-189-personal-like-settled-guard-release.mjs` 추가(커밋 `50cc95feae38d101e4f84a054fff91a69a1fecaf`). `preview` 전체 감사 `35972104509` SUCCESS / 고정 소스 `ffd16793b9c81f4f13dbd0762f76d73ffa7a735d`.
+
+**PREVIEW Worker**: release `35972368855` job `107544798097` SUCCESS, active version `e23e73a1-89af-40f6-ae66-dc4ae2458c30`. `CANONICAL_WORKER_SHA256=2ce64ffad58c9bb18aebc54b8a54533dbf109ecf460df57210387623025774df`, predeploy pending069=0, schema/seed/preflight/Feed/Profile smoke PASS, warm revision D1 R0/W0 PASS, fixed cron disabled, TEST/PRODUCTION Worker unchanged PASS. Worker 변경은 계정별 인증 요청의 **읽기전용 fresh settlement 판정**뿐이며 D1 원본·R2 개인 ID 쓰기·Functions/Rules 변경 없음. `156` 임시 cron 미사용.
+
+**PREVIEW 앱**: Firebase Hosting-only release `35972504441` job `107545244491` SUCCESS / release triggering commit `ad92825feff014f02bc76010287ead765ffdfb7e`; `PREVIEW_APP_VERSION=157`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`; `https://preview.soridraw.com/`. TypeScript/Build, 필수 like/Music Note 회귀 및 189 실제 baseline 모의 테스트는 감사에서 PASS. UI/CSS·30초 묶음·기존 W1 intake/W1~W2 mutation route 변경 없음. 원격 신규 좋아요 행동의 실제 W1~W2 요금 계측은 **미실시**.
+
+**중요 미검증**: 실제 사용자 PC 5 ↔ 모바일 10의 서버 정답, 기존 미전송 outbox 및 각 기기 로컬 상태는 본인 기기 인증 대조 **미실시**. 189는 동일 UID R2 exact 및 D1 canonical ID 완전 일치, queue empty, ETag 불변일 때만 오래된 guard를 제거한다. 서버 ID mismatch/pending/경합/일시 오류 시 fail-closed이며, UID별 1회 시도 후 자동 반복 D1 read를 하지 않아 추가 진단이 필요할 수 있다. 타계정 PC/모바일의 **새 좋아요·해제** 공개 수치 전달 및 오래 열린 탭 자동 갱신은 수정/검증하지 않았다. 4곡 과거 count 복구를 향후 전체 정합성 증거로 사용하지 말 것. **사용자가 지정한 모든 계정×PC/모바일 최종 합격은 여전히 미검증; TEST/PRODUCTION 승격 금지**. 다음 단위는 app157 실사용 PC/모바일 확인 후, 타계정 공개 likeCount 변경분 전달 경로를 독립 점검. 사용자 원본 데이터 삭제/덮어쓰기/전체 백필 금지.
+
+
 ## 0FB. PR #111 app157 보완 — fresh canonical settlement만 과거 guard 해제 (2026-09-24 KST)
 
 리뷰 P1 2건/P2 1건만 보완했다. app156에서 이미 `BASELINE=1`이거나 `PARTIAL=1 + REPAIR_ATTEMPTED_182=1`인 기기도 UID별 unresolved guard가 실제 존재할 때에만 189 복구 경로에 1회 진입한다. 189 시도 marker는 요청 전에 기록하므로 실패·재방문·앱 업데이트가 canonical 재읽기 loop를 만들지 않으며, unresolved guard가 없는 정상 캐시는 기존 조기 종료를 유지해 D1 R0이다.

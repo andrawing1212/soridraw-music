@@ -1,6 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import { consumeGeminiInteractionSse } from "./geminiInteractionSse";
 import {
   buildLibraryOversizeFallbackMarker,
   buildRebuiltLibraryBundle,
@@ -1376,6 +1377,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     input: geminiTextContentToInteractionInput(requestPayload?.contents),
     generation_config: generationConfig,
     store: false,
+    stream: true,
   };
   if (systemInstruction) body.system_instruction = systemInstruction;
   if (responseMimeType || responseSchema) {
@@ -1392,13 +1394,14 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "text/event-stream",
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify(body),
     },
   );
-  const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
+    const payload = await upstream.json().catch(() => null);
     const error = new Error(String(payload?.error?.message || `Gemini interaction failed (${upstream.status})`));
     const upstreamReason = Array.isArray(payload?.error?.details)
       ? String(payload.error.details.find((detail: any) => typeof detail?.reason === "string")?.reason || "")
@@ -1410,8 +1413,9 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     throw error;
   }
 
-  const text = extractGeminiInteractionText(payload);
-  const usage = payload?.usage || {};
+  const completed = await consumeGeminiInteractionSse(upstream, model);
+  const text = completed.text;
+  const usage = completed.usage;
   return {
     candidates: [{ content: { role: "model", parts: [{ text }] } }],
     usageMetadata: {
@@ -1423,8 +1427,8 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
       cachedContentTokenCount: Number(usage.total_cached_tokens || 0) || undefined,
       totalTokenCount: Number(usage.total_tokens || 0) || undefined,
     },
-    modelVersion: String(payload?.model || model),
-    responseId: String(payload?.id || "") || undefined,
+    modelVersion: completed.model,
+    responseId: completed.responseId,
   };
 };
 

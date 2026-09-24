@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app162 / Gemini SSE PREVIEW 배포 완료, 모델 목록 1회 검사 후 실사용 1곡
+
+- `CURRENT_RELEASE_STATE.md 0FS`가 최우선. 현재 app162 PREVIEW Hosting Run `36026936663` SUCCESS/exact build, PREVIEW Gemini Function Run `36026587156` SUCCESS/shared Function unchanged, SSE source Audit `36026405886`, full Audit `36026316178` SUCCESS. 좋아요 app160/Worker195 정상기준 보호.
+- `store:false + stream:true`로 기존 동기 JSON 대신 SSE 수신. model_output만 연결하고 completed+usage 필수, 300s total budget/330s hard limit, 기존 5회 ceiling/품질 계약 유지. 모의 SSE 9 PASS.
+- **이제 먼저** 사용자 관리자 Gemini 호출 기록 화면의 ‘모델 목록 확인’을 딱 한 번 눌러 현재 등록 API 키의 5모델 목록 등재 여부를 확인. 이는 실시간 용량/429 quota/실제 생성 성공 판정이 아니다. API 키/UID/프롬프트 요청 금지, 원문 응답 로그 금지. 현재 실제 진단 클릭 기록 없음.
+- 목록에 해당 모델이 있음이 확인되면 PREVIEW 일반 V1 실제 1곡만 생성해 처음 본문·후처리·가사/섹션/5단 최종 결과 검증. 실패 시 한 세션만 추적하고 503 vs SSE 오류 vs budget vs provider latency를 구분. 모델 순서/시간을 다시 무작정 바꾸지 않는다.
+- CODE/TEST/PRODUCTION/shared user data 추가 변경 금지, 정상 좋아요 동결. 별도 `diagnose-069-live-like.yml` 실패는 릴리스 감사와 무관하며 Gemini 검증을 위해 좋아요를 다시 수정하지 않는다.
+
 ## 최신 2026-09-25 — app161 곡 생성 FAIL: timeout 추가 확대 중단, 연결/모델/보관정책 검증
 
 - `CURRENT_RELEASE_STATE.md 0FR` 최우선. 사용자 app161 1곡 실사용 3분49초 0 usage 및 5모델 전부 실패. 3.6 62초 503, 3.5 90초 self-timeout, lite 66초 503, 3.7/3.8 1초 503. **app161 설정 변경 성공으로 보고 금지**, 새로운 재생성 요구 금지.

@@ -1,5 +1,29 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FS. Gemini app162 / store=false SSE + 인증 모델 목록 진단 PREVIEW 배포 완료 — 실제 사용자 확인 전 (2026-09-25 KST)
+
+**목표와 사용자 승인**: app161에서 최초 Gemini V1 1곡이 3분49초/5회/0 usage로 실패했고, 사용자 2026-09-25 00:57 KST 승인에 따라 기존 동기 Interactions 60s 연결 회귀 후보를 검증/수정. 좋아요 기능 전체 동결 유지. API 키·프롬프트 원문 로그 없음.
+
+**소스 후보 및 결과**:
+- `functions/src/index.ts`: 원래 `POST /v1beta/interactions` 동기 JSON의 `store:false`를 **그대로 보존**하며 `stream:true` SSE로 변경. Google 공식 event 계약에 맞춘 `functions/src/geminiInteractionSse.ts` 수신기에서 model_output text delta만 연결하고 `interaction.completed` 확인 후에만 결과와 최종 usage를 반환. 중간 단절/오류/빈 본문/과도한 길이는 성공으로 처리하지 않는다. `background:true` 미사용.
+- `functions/scripts/apply-gemini-latency.cjs`: 기존 Function hard timeout 330s 아래에서 300s 총 요청 budget + 10s headroom과 모델별 남은 budget clamp 적용. 5 physical call ceiling 유지. 3.6/3.5/Lite 기존 승인값 120/90/75s, 후처리 품질/가사/언어/섹션/5단 규칙 변화 없음.
+- `functions/src/index.ts`에 기존 Auth/AppCheck 및 admin/master 확인을 거쳐, 사용자의 서버 저장 API 키로 Google `models.list`만 GET하는 **읽기 전용** diagnostic branch 추가. 기존 `src/pages/AdminGeminiAuditPage.tsx` 헤더에 ‘모델 목록 확인’ 버튼 1개 추가, `geminiProxyClient.ts`는 해당 버튼 동작에서만 PREVIEW Function 호출. key/uid/raw provider 목록·프롬프트 응답 출력 금지, 고정된 5모델의 목록 등재 여부만 반환. 모델 목록에 있어도 실시간 가용성·일일 한도·생성 성공은 보장되지 않음.
+- `public/app-version.json=162`. 기존 좋아요 서비스/Worker195/RTDB/Rules/D1/R2/Music Note/UI 일반 영역은 비변경. 관리자 Gemini 감사 페이지 버튼만 요청 범위 내 추가.
+
+**자동 검증**: Gemini SSE 한국어 UTF8 분할·완전 종료·usage·중간 오류·미완료·스트림 단절·잘못된 JSON·대형 프레임·store=false/background 불변 모의 9/9 PASS (`36025274261`). Gemini Function Source Audit `36026405886` SUCCESS (Functions TypeScript/build 및 모델 진단 경로). Release System Audit `36026316178` SUCCESS (app TypeScript/Build, 기존 Gemini 규칙·좋아요 등 회귀, TEST/PROD read-only·dry-run). 첫 소스 Audit 실패는 TS unused helper 및 잘못된 regex와 진단 verifier 변수 중복을 각 최소 수정하고 최종 PASS.
+
+**실제 PREVIEW 배포**:
+- PREVIEW Gemini Function 릴리스 `36026587156` SUCCESS: store=false SSE/300s budget/readonly models.list source checks/모의 9 PASS, active Function updated PASS, nodejs22, CORS PASS, shared `generateGeminiContent` unchanged PASS. 중간 SSE 단독 선행 PREVIEW Function 배포 `36025630447` SUCCESS.
+- app162 Firebase PREVIEW Hosting `36026936663` SUCCESS: exact SHA `b0454c28ba12ad3b233292c3e467b52037d11383`, TypeScript/Build, `PREVIEW_APP_VERSION=162`, exact build PASS, TEST/PRODUCTION unchanged PASS, shared RTDB rules deploy SKIPPED.
+- 최종 제품 source는 `9755c7b62cb01e60696d2542b6495084f575ec0d` (이후 release-trigger SHA와 문서 SHA 구별). Cloudflare Worker195 `11d8455c-c266-4e88-9cf6-7549d3f5be92` 불변. 사용자 원본 migration/backfill/데이터 변경 없음.
+
+**남은 최종 게이트**:
+1. **아직 사용자의 인증 모델 목록 조회 실행 기록 없음**: 기존 관리자 Gemini 호출 기록 화면 → ‘모델 목록 확인’ **한 번** 클릭 → 표시되는 모델 5개의 ‘목록에 있음/없음/확인 보류’ 또는 오류 코드 확인. 이 요청은 생성 토큰 0, Auth/AppCheck·서버 키 보호. 계정의 실제 모델 가용성 조회를 수행했다고 보고하지 않는다.
+2. 그 결과를 보고 이용 가능 모델이 적절할 경우에만 PREVIEW 일반 V1 1곡을 1회 검증. 최초 본문→금지어/언어/섹션→최종 5단 작곡 명령 및 1000자 제한 PASS 전까지 **곡 생성 해결 완료라고 말하지 않는다**. 실제 60초대 503이 streaming으로 사라지는지도 미확인. 추가 호출 반복 금지.
+3. TEST/PRODUCTION 승격·좋아요 수정 금지. 진단 workflow의 별도 push 실패는 기존 maintenance debt; 릴리스 감사와 분리.
+
+공식 근거: https://ai.google.dev/gemini-api/docs/streaming 및 https://ai.google.dev/api/models 및 https://ai.google.dev/gemini-api/docs/background-execution .
+
 ## 0FR. app161 V1 실사용 FAIL — 3분49초·전 모델 실패, 60초 연결 마감과 데이터 보관 선택지 발견 (2026-09-25 KST)
 
 **사용자 보고 (09.25 오전 12:16:26 KST 세션)**: PREVIEW app161 초기 곡 생성 총 3분49초 / 5 physical attempts / 관리자 화면 usage input/output/thought/total 전부 0 / 최종 HTTP 503 GEMINI_UPSTREAM_UNAVAILABLE. 3.6=1분02초 “일시 unavailable”, 3.5=1분30초 “시간 초과 중단”, 3.5-lite=1분06초 “일시 unavailable”, 3.7=1.0초 unavailable, 3.8=1.1초 unavailable. **사용자에게 재생성 요청 금지**. 초기 곡 생성 미완료, 후처리 미도달. app161 장시간 확대는 실사용에서 FAIL. 자동 테스트 PASS와 실생성 PASS를 혼동하지 않는다.

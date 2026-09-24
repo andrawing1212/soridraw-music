@@ -155,73 +155,19 @@ jobs:
           }
           trap restore_previous EXIT
 
-          # Transition guard: do not remove the old 10-minute cron while a 069
-          # batch is already waiting under the old Worker. Retry release after the
-          # old cron drains it instead of risking an unscheduled orphan row.
+          # 192 transition: the currently deployed Worker has a confirmed
+          # scheduled-aggregate crash (escaped newline commented out its owner
+          # declaration). Do not try to execute that broken runtime to drain an
+          # accepted 069 row. Deploy the audited fixed Worker first, then wake it
+          # with one temporary PREVIEW cron and require the queue to reach zero.
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
           pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-before-deploy.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
           echo "PRE_DEPLOY_PENDING_069=$pending069"
+          test "$pending069" -le 50
+          needs_pending_drain=0
           if [ "$pending069" != 0 ]; then
-            echo "PRE_DEPLOY_PENDING_069_DRAIN=START count=$pending069"
-            test "$pending069" -le 50
-            drain_log="$RUNNER_TEMP/pending069-drain-192.log"
-            (
-              cd canonical
-              node ../node_modules/wrangler/bin/wrangler.js dev \
-                --remote \
-                --test-scheduled \
-                --config wrangler.preview.jsonc \
-                --ip 127.0.0.1 \
-                --port 8792 \
-                --log-level error \
-                --show-interactive-dev-session=false
-            ) >"$drain_log" 2>&1 &
-            drain_pid=$!
-            drain_ready=0
-            for attempt in $(seq 1 30); do
-              if curl -sS "http://127.0.0.1:8792/" -o /dev/null >/dev/null 2>&1; then
-                drain_ready=1
-                break
-              fi
-              if ! kill -0 "$drain_pid" >/dev/null 2>&1; then
-                cat "$drain_log" || true
-                break
-              fi
-              sleep 1
-            done
-            if [ "$drain_ready" != 1 ]; then
-              kill "$drain_pid" >/dev/null 2>&1 || true
-              wait "$drain_pid" >/dev/null 2>&1 || true
-              false
-            fi
-
-            drained=0
-            for scheduled_path in /__scheduled /cdn-cgi/handler/scheduled /cdn-cgi/local/scheduled; do
-              code="$(curl -sS --max-time 120 -o "$RUNNER_TEMP/pending069-drain-response.txt" -w '%{http_code}' \
-                "http://127.0.0.1:8792${scheduled_path}?cron=soridraw-preview-pending-like-drain-192" || true)"
-              echo "PRE_DEPLOY_PENDING_069_DRAIN_PATH=${scheduled_path} HTTP=${code}"
-              if [ "${code#2}" != "${code}" ]; then
-                drained=1
-                break
-              fi
-              echo "PRE_DEPLOY_PENDING_069_DRAIN_RESPONSE_BEGIN"
-              cat "$RUNNER_TEMP/pending069-drain-response.txt" || true
-              echo "PRE_DEPLOY_PENDING_069_DRAIN_RESPONSE_END"
-            done
-            kill "$drain_pid" >/dev/null 2>&1 || true
-            wait "$drain_pid" >/dev/null 2>&1 || true
-            if [ "$drained" != 1 ]; then
-              echo "PRE_DEPLOY_PENDING_069_DRAIN_DEV_LOG_BEGIN"
-              cat "$drain_log" || true
-              echo "PRE_DEPLOY_PENDING_069_DRAIN_DEV_LOG_END"
-              false
-            fi
-
-            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-after-drain.json"
-            pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-after-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
-            echo "PRE_DEPLOY_PENDING_069_AFTER_DRAIN=$pending069"
-            test "$pending069" = 0
-            echo 'PRE_DEPLOY_PENDING_069_DRAIN=PASS'
+            needs_pending_drain=1
+            echo "POST_DEPLOY_PENDING_069_DRAIN_REQUIRED=$pending069"
           fi
 
           (
@@ -229,6 +175,29 @@ jobs:
             node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc
           )
           deployed=1
+
+          if [ "$needs_pending_drain" = 1 ]; then
+            echo 'POST_DEPLOY_PENDING_069_DRAIN=START'
+            printf '[{"cron":"*/1 * * * *"}]' > "$RUNNER_TEMP/preview-temp-drain-cron-192.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/preview-temp-drain-cron-192.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
+            echo 'POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED'
+
+            drained=0
+            for attempt in $(seq 1 36); do
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-postdeploy-drain.json"
+              current_pending="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-postdeploy-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
+              echo "POST_DEPLOY_PENDING_069_ATTEMPT=$attempt COUNT=$current_pending"
+              if [ "$current_pending" = 0 ]; then
+                drained=1
+                break
+              fi
+              sleep 10
+            done
+            test "$drained" = 1
+            echo 'POST_DEPLOY_PENDING_069_DRAIN=PASS'
+          fi
 
           # Wrangler does not delete a previously configured cron merely because the
           # new config omits triggers. 103 intentionally has no fixed like cron, so

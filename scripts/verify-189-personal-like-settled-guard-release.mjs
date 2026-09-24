@@ -167,6 +167,8 @@ const healthy = createHarness({ markers: { [key('baseline127')]: '1' }, unresolv
 await healthy.ensure({ uid });
 assert.equal(healthy.fetchCount(), 0, 'healthy completed cache remains D1 R0');
 
+assert.match(source, /invalidateExplorePersonalLikeBaseline127\(uid\);\s*await ensurePersonalLikeBaseline127\(user, revision\);/,
+  'changed revision must pass proof token through invalidation');
 assert.match(source, /freshCanonicalSettlement: complete && payload\.data\.freshCanonicalSettlement === true/);
 assert.doesNotMatch(source, /canonicalSettled:[\s\S]{0,120}likesSnapshotSource/);
 assert.match(worker, /verifyFreshPersonalLikeSettlement189[\s\S]*await readPending\(\)[\s\S]*SELECT l\.track_id[\s\S]*await readPending\(\)[\s\S]*bucket\.head\(key\)/);

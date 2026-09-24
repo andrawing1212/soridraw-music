@@ -38,6 +38,7 @@ jobs:
           cd functions
           npm ci --no-audit --no-fund
           npm run build
+          npm run test:gemini-sse
 
       - name: Verify Gemini fallback route contract
         shell: bash

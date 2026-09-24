@@ -10,7 +10,8 @@
     "logs": "firebase functions:log",
     "inventory:readonly": "node scripts/inventory-readonly.cjs",
     "test:library-bundle": "node scripts/test-library-bundle-freshness.cjs",
-    "test:music-note-structure-sync": "node scripts/test-music-note-structure-sync.cjs"
+    "test:music-note-structure-sync": "node scripts/test-music-note-structure-sync.cjs",
+    "test:gemini-sse": "node --test scripts/test-gemini-interaction-sse.cjs"
   },
   "engines": {
     "node": "22"

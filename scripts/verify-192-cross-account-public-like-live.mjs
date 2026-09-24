@@ -115,7 +115,7 @@ assert.equal(publicRule?.['.read'], 'auth != null');
 assert.match(String(publicRule?.['.write'] || ''), /actorUid.*auth\.uid/);
 assert.match(String(publicRule?.['.validate'] || ''), /hasChildren\(\['version','at','actorUid','rows'\]\)/);
 assert.match(String(publicRule?.rows?.$index?.['.validate'] || ''), /\^\(0\|\[1-9\]\|\[1-4\]\[0-9\]\)\$/);
-assert.equal(publicRule?.rows?.$other?.['.validate'], false);
+assert.equal(publicRule?.rows?.$index?.$other?.['.validate'], false);
 assert.equal(publicRule?.rows?.$index?.likeCount, undefined);
 assert.match(String(publicRule?.rows?.$index?.trackId?.['.validate'] || ''), /length <= 512/);
 

@@ -161,7 +161,60 @@ jobs:
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
           pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-before-deploy.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
           echo "PRE_DEPLOY_PENDING_069=$pending069"
-          test "$pending069" = 0
+          if [ "$pending069" != 0 ]; then
+            echo "PRE_DEPLOY_PENDING_069_DRAIN=START count=$pending069"
+            test "$pending069" -le 50
+            drain_log="$RUNNER_TEMP/pending069-drain-192.log"
+            (
+              cd canonical
+              node ../node_modules/wrangler/bin/wrangler.js dev \
+                --remote \
+                --test-scheduled \
+                --config wrangler.preview.jsonc \
+                --ip 127.0.0.1 \
+                --port 8792 \
+                --log-level error \
+                --show-interactive-dev-session=false
+            ) >"$drain_log" 2>&1 &
+            drain_pid=$!
+            drain_ready=0
+            for attempt in $(seq 1 30); do
+              if curl -sS "http://127.0.0.1:8792/" -o /dev/null >/dev/null 2>&1; then
+                drain_ready=1
+                break
+              fi
+              if ! kill -0 "$drain_pid" >/dev/null 2>&1; then
+                cat "$drain_log" || true
+                break
+              fi
+              sleep 1
+            done
+            if [ "$drain_ready" != 1 ]; then
+              kill "$drain_pid" >/dev/null 2>&1 || true
+              wait "$drain_pid" >/dev/null 2>&1 || true
+              false
+            fi
+
+            drained=0
+            for scheduled_path in /__scheduled /cdn-cgi/handler/scheduled /cdn-cgi/local/scheduled; do
+              code="$(curl -sS --max-time 120 -o "$RUNNER_TEMP/pending069-drain-response.txt" -w '%{http_code}' \
+                "http://127.0.0.1:8792${scheduled_path}?cron=soridraw-preview-pending-like-drain-192" || true)"
+              echo "PRE_DEPLOY_PENDING_069_DRAIN_PATH=${scheduled_path} HTTP=${code}"
+              if [ "${code#2}" != "${code}" ]; then
+                drained=1
+                break
+              fi
+            done
+            kill "$drain_pid" >/dev/null 2>&1 || true
+            wait "$drain_pid" >/dev/null 2>&1 || true
+            test "$drained" = 1
+
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-after-drain.json"
+            pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-after-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
+            echo "PRE_DEPLOY_PENDING_069_AFTER_DRAIN=$pending069"
+            test "$pending069" = 0
+            echo 'PRE_DEPLOY_PENDING_069_DRAIN=PASS'
+          fi
 
           (
             cd canonical

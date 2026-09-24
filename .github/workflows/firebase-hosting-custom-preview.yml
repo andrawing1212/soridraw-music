@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 12
     env:
       FIREBASE_PROJECT: soridraw
+      SHARED_DATA_PROJECT: soridraw-app-866a5
+      RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
       PREVIEW_URL: https://preview.soridraw.com/
       TEST_URL: https://test.soridraw.com/
       PRODUCTION_URL: https://soridraw.com/
@@ -71,6 +73,58 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy shared RTDB rules when release requests public like live sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
+          if ! curl -fsSL "$trigger_url" | grep -Fxq 'deploy_shared_rtdb_rules=true'; then
+            echo 'SHARED_RTDB_RULES_DEPLOY=SKIPPED'
+            exit 0
+          fi
+
+          npx --yes firebase-tools@latest deploy \
+            --only database \
+            --project "$SHARED_DATA_PROJECT" \
+            --config firebase.json \
+            --non-interactive
+          echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
+
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('service-account credential file missing')
+          creds = service_account.Credentials.from_service_account_file(
+              path,
+              scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ],
+          )
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('RTDB OAuth token unavailable')
+          Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          PY
+          token="$(cat "$RUNNER_TEMP/rtdb-access-token")"
+          curl -fsS --max-time 30 "${RTDB_RULES_URL}?access_token=${token}" > "$RUNNER_TEMP/rtdb-rules-after.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          local = json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+          remote = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-after.json').read_text(encoding='utf-8'))
+          if remote != local:
+              raise SystemExit('RTDB deployed rules do not match approved source')
+          print('SHARED_RTDB_RULES_EXACT_MATCH=PASS')
+          PY
+          rm -f "$RUNNER_TEMP/rtdb-access-token"
+          echo 'NO_USER_DATA_MIGRATION=true'
 
       - name: Deploy PREVIEW Hosting only
         shell: bash

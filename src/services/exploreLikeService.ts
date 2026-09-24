@@ -1433,7 +1433,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // changed-track shared R2 card and then paint its settled public count.
       if (acceptedForSignal127.length) {
         try {
-          await publishExplorePublicLikeInvalidation192(uid, acceptedForSignal127);
+          await publishExplorePublicLikeInvalidation192(
+            uid,
+            acceptedForSignal127.map((row) => ({ ...row, at: acknowledgedAt })),
+          );
         } catch (publicSignalError) {
           // Public live delivery is an optimization over the existing revision
           // convergence path. Never replay an accepted D1 mutation because this

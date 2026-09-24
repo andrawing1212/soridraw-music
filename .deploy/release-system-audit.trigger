@@ -1,11 +1,9 @@
-requested_at=2026-09-24T20:22:00+09:00
-requested_by=user_cross_account_public_like_live_sync
+requested_at=2026-09-24T20:35:00+09:00
+requested_by=user_continue_like_sync
 target=preview
-purpose=app159_worker192_pending_queue_drain_final_audit_v2
+purpose=diagnose_pending069_drain_failure_before_worker192
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=e34512fe98eb592c7ae0e32e48b91a06eccacb49
-live_worker192_changed_card_smoke_required=true
-pending069_release_drain_guard_required=true
+locked_feature_sha=b6c26d479bc661b34519006f402a1009235dfb01
 no_user_data_migration=true
 no_deploy=true

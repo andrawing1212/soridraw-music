@@ -29,31 +29,46 @@ class Bucket {
 
 let changes = [];
 let failures = 0;
+let canonicalLikeCount = 0;
+let sharedLikeCount = 0;
+let profileLikeCount = 0;
 const api = new Function('processExploreLikeBatches035Core065', 'patchSharedFeedLikeCounts065', 'patchExploreVisibleProfiles056',
   runtime + '\nreturn { processExploreLikeBatches035, EXPLORE_PUBLIC_LIKE_RETRY_KEY_190 };')(
   async () => changes.length ? { changedTracks: 1, publicProjectionDetail: { changedItems: changes } } : { skipped: true, reason: 'idle' },
-  async (_env, rows) => { if (failures-- > 0) throw new Error('synthetic R2 outage'); return { rows: rows.length, changedFeeds: 2 }; },
-  async () => 1,
+  async (_env, rows) => {
+    if (failures > 0) { failures -= 1; throw new Error('synthetic R2 outage'); }
+    sharedLikeCount = rows.at(-1)?.likeCount;
+    return { rows: rows.length, changedFeeds: 2 };
+  },
+  async (_env, rows) => { profileLikeCount = rows.at(-1)?.likeCount; return 1; },
 );
 const bucket = new Bucket();
 const env = { PROFILE_MEDIA: bucket, DB: new Proxy({}, { get() { throw new Error('D1 must stay R0 in retry publication'); } }) };
 
 changes = [{ trackId: 'synthetic-issue-112', ownerUid: 'owner-a', likeCount: 1 }];
+canonicalLikeCount = 1;
 failures = 3;
 const failed = await api.processExploreLikeBatches035(env, 1);
 assert.equal(failed.sharedLikeRetry190.deferred, true);
 assert.ok(await bucket.get(api.EXPLORE_PUBLIC_LIKE_RETRY_KEY_190), 'canonical=1/shared=0 failure must remain durable');
+assert.equal(canonicalLikeCount, 1);
+assert.equal(sharedLikeCount, 0, 'synthetic outage must reproduce canonical=1/shared=0');
 
 changes = [];
 failures = 0;
 const retried = await api.processExploreLikeBatches035(env, 2);
 assert.equal(retried.sharedLikeRetry190.drained, true, 'idle follow-up must converge the saved changed row');
 assert.equal(await bucket.get(api.EXPLORE_PUBLIC_LIKE_RETRY_KEY_190), null);
+assert.equal(sharedLikeCount, 1, 'idle retry must publish the canonical final count');
+assert.equal(profileLikeCount, 1, 'idle retry must patch the public profile projection');
 
 changes = [{ trackId: 'synthetic-issue-112', ownerUid: 'owner-a', likeCount: 0 }];
+canonicalLikeCount = 0;
 const unlike = await api.processExploreLikeBatches035(env, 3);
 assert.equal(unlike.sharedLikeRetry190.drained, true, 'unlike must use the same changed-only path');
 assert.equal(await bucket.get(api.EXPLORE_PUBLIC_LIKE_RETRY_KEY_190), null);
+assert.equal(sharedLikeCount, 0);
+assert.equal(profileLikeCount, 0);
 
 assert.doesNotMatch(runtime, /env\?*\.DB|env\.DB|\.prepare\s*\(|\.batch\s*\(/);
 assert.match(runtime, /EXPLORE_PUBLIC_LIKE_RETRY_LIMIT_190 = 3/);

@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — Gemini V1 장애 재개, 사용자 1곡 실사용 결과만 먼저 판정
+
+- 사용자 2026-09-24 최신 지시: 좋아요는 정상 실기기 검증 후 **동결**. 새로운 우선 작업은 Gemini 곡 생성 미완료 장애다. `CURRENT_RELEASE_STATE.md 0FN`을 확인할 것.
+- 가장 마지막 PREVIEW Gemini Function Tune `35888544983` SUCCESS: 최초 생성 3.6=90초, 3.5/3.5-lite=60초, Function 전체 330초. app153 hard-ban shared fallback 복구는 Hosting `35887028650` SUCCESS, 현 앱 app160에도 포함된 릴리스 역사. 이후 Gemini **완전 생성 1곡 실사용 PASS 기록 없음**.
+- 한 번에 일반 V1 1곡만 사용자 인증 계정으로 생성, 관리자 기존 Gemini 기록의 session별 모델/상태/시간/입출력 토큰, 후처리 금지어/언어/섹션, 최종 5단 productionPrompt를 확인. 0-token quota/provider error와 local timeout을 구분. 무조건 5회 반복 생성 금지.
+- 실패 시 해당 1세션 로그 기준으로 최초 응답/후처리 중 실제 실패 위치만 정밀 수정 검토. 성공 시 코드를 바꾸지 말고 기준 기록. 정상 좋아요 코드/배포 절대 변경 금지.
+- 이 단계에서는 코드/Functions/Hosting 배포, 사용자 데이터 원본 변경, TEST/PRODUCTION 승격 없음.
+
 ## 최신 2026-09-24 — 좋아요 전체 실기기 PASS, 기능 수정 동결
 
 - 사용자 직접 확인: app160 + Worker195 PREVIEW에서 동일 계정 PC↔모바일, 타계정 A↔B 공개 숫자, 좋아요/해제 양방향이 모두 정상. **좋아요 기능에 더는 손대지 말라는 명시 지시가 최우선**.

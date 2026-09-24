@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FN. Gemini V1 곡 생성 미완료 작업 재개 — 좋아요 동결 유지 (2026-09-24 KST)
+
+**사용자 최신 지시**: 좋아요 app160/Worker195 전체 정상 실기기 PASS 이후 좋아요 코드/서비스 동결 유지. 중단됐던 Gemini 곡 생성 장애를 다시 우선 작업으로 재개. 좋아요 관련 코드/Worker/RTDB/D1/R2/UI/Rules 수정 금지. 이 항목은 조사·실사용 검증 재개 기록이며 Gemini 코드 변경/배포 승인이 아니다.
+
+**확인된 마지막 실제 Gemini 릴리스**: app153에서 금지어 후처리의 `gemini-3.5-flash-lite` 단일 모델 강제를 원복하여 shared fallback 복구, Hosting Run `35887028650` SUCCESS. PREVIEW Function Tune Run `35888544983` SUCCESS / `PREVIEW_GEMINI_FUNCTION_UPDATED` PASS / `SHARED_GEMINI_FUNCTION_UNCHANGED` PASS / PREVIEW CORS PASS. 현재 PREVIEW Hosting app160은 이후 좋아요 작업으로 배포됐으나 Gemini 기능이 실사용 완전 성공했다는 근거는 없다.
+
+**마지막 확정 실패**: 처음 Gemini V1 본문이 3.6에서 40.2초 만에 생성된 적은 있지만 금지어 후처리가 lite 모델 20초 timeout으로 실패했다. 다른 세션에서는 3.8/3.7 daily quota cooldown skip, 3.6 약 66초 뒤 provider unavailable, 3.5/3.5-lite 각각 20초 앱 자체 timeout으로 실패. 따라서 최초 성공 ≠ 전체 생성 성공. 이때 3.5 계열 20초 self-abort를 보완한 PREVIEW Function 최신 설정은 3.6=90s, 3.5=60s, 3.5-lite=60s, Function=330s. 모델 순서/총 5 physical attempts/low-thinking/daily quota cooldown/5단 prompt/가사·금지어·언어·섹션 규칙은 그대로.
+
+**다음 정확한 검증 1단위**: 사용자의 인증된 PREVIEW 계정에서 **일반 V1 1곡만** 생성. 관리자 기존 Gemini 기록으로 (1) initial model/실제 provider status/초 단위 elapsed/input-output token, (2) hard-ban/언어/섹션 후처리 결과, (3) 최종 5단 productionPrompt·가사·section cue 정상 여부, (4) 진짜 완전 성공 여부를 대조한다. 성공이면 별도 수정 없이 안정화 기준 기록. 실패면 해당 한 세션의 실제 provider quota/unavailable vs 앱 timeout vs 후처리 실패 구간만 읽기전용 진단. 반복 생성·timeout 무작정 확대·모델 순서/프롬프트 임의 변경·좋아요 재수정 금지. TEST/PRODUCTION 미승격 유지.
+
 ## 0FM. 사용자 실기기 PASS — 좋아요 기능 보호·수정 동결 (2026-09-24 KST)
 
 **현재 최우선 사용자 지시**: app160 + Worker195 PREVIEW에서 같은 계정 PC↔모바일 및 서로 다른 계정 A↔B의 좋아요/해제, 공개 숫자, 계정별 하트가 **모두 정상 동작함을 사용자가 직접 확인했다.** “이젠 이상이 없다면 절대 좋아요 기능에 손을 대지마.” 따라서 **좋아요 기능은 동결(FROZEN)**. 별도 실제 오류 재현·보안 사고·사용자의 명확한 수정 지시가 없으면 좋아요 관련 클라이언트·Worker·RTDB·D1·R2·캐시·리비전·동기화·배치·타이머·UI를 수정하거나 배포하지 않는다. 다른 기능의 리팩터링/비용 최적화 명목으로 좋아요 경로를 변경하는 것도 금지. 우연히 공통 파일이 변경되어도 좋아요 동작 동일성을 검증하고, 영향이 있으면 중단한다.

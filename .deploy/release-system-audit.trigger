@@ -1,9 +1,9 @@
-requested_at=2026-09-25T03:19:00+09:00
+requested_at=2026-09-25T03:24:00+09:00
 requested_by=user_new_public_track_like_approval
-source_before_trigger=441d90f49cfb1b568415fdb6497237c29960d68b
+source_before_trigger=0140520da8402b49b193c7465175dfe0c1d45e64
 target=preview
-purpose=rerun_audit_app163_new_public_like_and_update_outdated_static_contracts
-previous_audit=36039567013
+purpose=rerun_audit_app163_new_like_complete_vs_unknown_partial
+previous_audit=36040041556
 expected_app_version=163
 required_verifier=scripts/verify-197-new-public-track-like.mjs,typescript,build,existing_like_regression
 like_existing_paths_frozen=true

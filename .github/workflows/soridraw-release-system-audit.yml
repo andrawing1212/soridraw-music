@@ -356,6 +356,23 @@ jobs:
           console.log('PUBLIC_R2_CANONICAL_MISMATCH_TOTAL='+mismatched+' SAMPLED='+compared);
           console.log('PUBLIC_LIKE_PARITY_READ_ONLY=PASS');
           NODE
+          node --input-type=module <<'NODE'
+          const api='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+
+            '/workers/scripts/soridraw-explore-preview/deployments';
+          const response=await fetch(api,{headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+          const result=await response.json();
+          if(!response.ok||result.success!==true)throw Error('Cloudflare active version read failed');
+          const versions=result?.result?.deployments?.[0]?.versions||[];
+          const active=[...versions].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];
+          if(!active||Number(active.percentage||0)<99.99)throw Error('No single active PREVIEW Worker');
+          console.log('PREVIEW_ACTIVE_WORKER='+active.version_id);
+          NODE
+          marker="soridraw-profile-media/internal/explore/repair-v191/bounded-first40.json"
+          if node "$WRANGLER" r2 object get "$marker" --file "$RUNNER_TEMP/like191-marker-current.json" --remote >/dev/null 2>&1; then
+            node -e "const r=require(process.env.RUNNER_TEMP+'/like191-marker-current.json');console.log('191_LIVE_R2_REPAIR_MARKER=SET changed='+Number(r.changedTracks||0))"
+          else
+            echo '191_LIVE_R2_REPAIR_MARKER=ABSENT'
+          fi
 
       - name: 164 shared cutover readiness report is read-only
         shell: bash

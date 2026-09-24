@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 사용자 app163 휴대폰 최근 생성곡 표시 확인, 동기화 추가 수정 보류
+
+- `CURRENT_RELEASE_STATE.md 0FZ` 우선: 사용자가 기존 PC→휴대폰 누락 후 현재 휴대폰의 최근 생성곡 표시를 직접 확인. **표시 증상 PASS**. app163 추가 재수정이나 원본 복구를 추정으로 실행하지 않는다.
+- 아직 새 곡의 페이지 왕복/새로고침 없는 자동 반영, 실제 정상 캐시 R0/W0, 구형 신호 최초 1회 조회는 미검증. 사용자 추가 제보가 있거나 필요 시 해당 곡·계정에만 제한된 read-only 진단; 전체 캐시 삭제/데이터 재생성/반복 Gemini 호출 금지.
+- 다음 별도 범위: `CURRENT_RELEASE_STATE.md 0FU`의 추가 영어 가사 카드 영어 제목 누락 및 약 1분 이상의 대기 원인부터 읽기 전용 확인. 원곡 한국어 제목·원본 가사·기존 Gemini 생성/좋아요 동결 보호. 추가 호출·코드 변경·배포는 원인과 범위 검증 후 별도 진행.
+- PREVIEW app163 유지, TEST/PRODUCTION 승격 금지. 사용자 원본 직접 변경 없음.
+
 ## 최신 2026-09-25 — app163 PREVIEW 배포 완료, 기존 누락곡 PC·모바일 실사용 확인
 
 - `CURRENT_RELEASE_STATE.md 0FY` 기준. app163 PREVIEW Hosting `36037269105` SUCCESS/exact build, 최종 Audit `36036971353` SUCCESS. 고정 소스 `fe74f006bd3c90793f45830a0f4ee019d738cfe8`; release commit `8e285966975d410e2e3797d77ff031945b7cbf7a`.

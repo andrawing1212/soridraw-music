@@ -2325,6 +2325,62 @@ const generateGeminiContentHandler = async (req: any, res: any) => {
       return;
     }
 
+    // SORIDRAW_GEMINI_READONLY_MODEL_AVAILABILITY_162
+    // Explicit, authenticated admin action only. No generation or guard write.
+    // Return fixed booleans, never user API keys, raw model listings, or prompts.
+    if (req.body?.diagnostic === "model-availability") {
+      try {
+        const db = admin.firestore();
+        const account = await db.collection("users").doc(uid).get();
+        const role = String(account.data()?.role || "").toLowerCase();
+        if (role !== "admin" && role !== "master") {
+          res.status(403).json({ ok: false, code: "GEMINI_MODEL_DIAG_ADMIN_ONLY" });
+          return;
+        }
+        const keySnap = await db.collection("user_api_keys").doc(uid).get();
+        const userApiKey = String(keySnap.data()?.googleGeminiApiKey || "").trim();
+        if (!userApiKey) {
+          res.status(404).json({ ok: false, code: "GEMINI_KEY_NOT_FOUND" });
+          return;
+        }
+        const upstream = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+          { headers: { "x-goog-api-key": userApiKey }, signal: AbortSignal.timeout(12_000) },
+        );
+        if (!upstream.ok) {
+          res.status(502).json({ ok: false, code: "GEMINI_MODEL_DIAG_UPSTREAM", providerStatus: upstream.status });
+          return;
+        }
+        const payload = await upstream.json().catch(() => null);
+        if (!payload || !Array.isArray(payload.models)) {
+          res.status(502).json({ ok: false, code: "GEMINI_MODEL_DIAG_INVALID" });
+          return;
+        }
+        const complete = !payload.nextPageToken;
+        const available = new Set(payload.models
+          .map((item: any) => String(item?.name || "").replace(/^models\\//, ""))
+          .filter(Boolean));
+        res.status(200).json({
+          ok: true,
+          complete,
+          models: [
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+          ].map((model) => ({
+            model,
+            listed: available.has(model) ? true : (complete ? false : null),
+          })),
+        });
+      } catch (error) {
+        const isTimeout = (error as any)?.name === "TimeoutError" || (error as any)?.name === "AbortError";
+        res.status(502).json({ ok: false, code: isTimeout ? "GEMINI_MODEL_DIAG_TIMEOUT" : "GEMINI_MODEL_DIAG_NETWORK" });
+      }
+      return;
+    }
+
     const requestPayload = req.body?.request;
     const model = String(requestPayload?.model || "").trim();
     const sessionId = String(req.body?.sessionId || "").trim();

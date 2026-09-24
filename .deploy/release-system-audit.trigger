@@ -1,9 +1,9 @@
-requested_at=2026-09-24T21:50:00+09:00
+requested_at=2026-09-24T21:53:00+09:00
 requested_by=user_continue_like_sync
 target=preview
-purpose=validate_app159_rtdb_supported_rules_and_live_like_sync
+purpose=retest_app159_supported_rtdb_rules_after_verifier_fix
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=0a2c67c2cd59dbf9bbb3e8e620e46fbf36309fbf
+locked_feature_sha=20620583eda570611056b47036675d2e60859b9f
 no_user_data_migration=true
 no_deploy=true

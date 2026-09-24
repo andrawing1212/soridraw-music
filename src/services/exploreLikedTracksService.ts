@@ -273,9 +273,11 @@ export const reconcileExploreLikedTrackCollectionSnapshot127 = (
     if (liked) next.add(trackId); else next.delete(trackId);
   });
   cache.canonicalLikedTrackIds = [...next];
-  cache.unavailable = Object.fromEntries(
-    Object.entries(cache.unavailable).filter(([id]) => next.has(id)),
-  );
+  // A fresh, authenticated complete membership set supersedes old missing-card
+  // hints. Keep the card bodies, but let newly confirmed liked IDs fetch their
+  // missing cards once when My Likes opens; an old unavailable flag must not
+  // permanently hide a real liked song.
+  cache.unavailable = {};
   writeCache(normalizedUid, cache);
 };
 

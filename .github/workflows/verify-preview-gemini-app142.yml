@@ -65,6 +65,8 @@ jobs:
             'Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs)',
             'store: false,',
             'stream: true,',
+            'SORIDRAW_GEMINI_READONLY_MODEL_AVAILABILITY_162',
+            'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',
             'export const generateGeminiContentPreview = onRequest',
           ];
           for (const token of must) {
@@ -94,6 +96,7 @@ jobs:
             throw new Error('client daily quota persistence contract missing');
           }
           if (src.includes('background: true,')) throw new Error('Forbidden background storage change');
+          console.log('PREVIEW_GEMINI_ADMIN_MODELS_LIST_READONLY=PASS');
           console.log('PREVIEW_GEMINI_STORE_FALSE_SSE=PASS');
           console.log('PREVIEW_GEMINI_300S_TOTAL_BUDGET=PASS');
           console.log('PREVIEW_GEMINI_INITIAL_FLASH_LOW_THINKING=PASS');

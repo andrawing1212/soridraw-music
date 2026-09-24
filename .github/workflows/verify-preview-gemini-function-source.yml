@@ -54,6 +54,16 @@ jobs:
           if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial song timeout must be 90s');
           if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial song timeout must be 75s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout must be 330s');
+          const proxy = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
+          const initial = proxy.match(/const INITIAL_SONG_MODEL_CHAIN = \[([\s\S]*?)\] as const;/);
+          if (!initial) throw new Error('Initial song model chain missing');
+          const actualChain = [...initial[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+          const approvedChain = ['gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'];
+          if (JSON.stringify(actualChain) !== JSON.stringify(approvedChain)) throw new Error('Approved initial song model order changed');
+          const contextGuard = proxy.includes("if (isInitialSongGenerationContext(context) && requested.length > 1)")
+            && proxy.includes("INITIAL_SONG_MODEL_CHAIN.filter((model) => !getGeminiModelCooldown(model))");
+          if (!contextGuard) throw new Error('Initial song fallback context routing changed');
+          console.log('PREVIEW_GEMINI_APPROVED_INITIAL_MODEL_ORDER=PASS');
           for (const model of ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite']) {
             if (!src.includes(model)) throw new Error('Model missing: ' + model);
           }

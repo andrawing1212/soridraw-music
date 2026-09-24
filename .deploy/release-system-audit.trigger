@@ -1,7 +1,7 @@
-requested_at=2026-09-25T00:02:00+09:00
+requested_at=2026-09-25T00:07:00+09:00
 requested_by=user_approved_gemini_v1_initial_chain_timeout_trial
 target=preview
-purpose=audit_app161_gemini_initial_fallback_before_deploy
+purpose=final_audit_app161_gemini_model_order_and_initial_timeouts
 expected_app_version=161
 required_verifier=verify-preview-gemini-function-source,verify-147-gemini-prompt-and-cues,verify-hard-ban-fallback,like-regression
 gemini_shared_function_unchanged=true

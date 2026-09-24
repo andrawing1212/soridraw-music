@@ -1,9 +1,9 @@
-requested_at=2026-09-24T18:44:00+09:00
+requested_at=2026-09-24T18:51:00+09:00
 requested_by=user_full_like_fix_then_preview_deploy
 target=preview
-purpose=191_temporary_one_time_derived_cache_repair
+purpose=191_final_stable_worker_and_supervised_repair_release_gate
 expected_app_version=158
 required_verifier=scripts/verify-191-bounded-public-like-convergence.mjs
-locked_feature_sha=f49d513992ea389605e354b34fc9d2fa408345a7
+locked_feature_sha=f6991e9deaef4d637122578d1b7327ada1bc071e
 no_user_data_migration=true
 no_deploy=true

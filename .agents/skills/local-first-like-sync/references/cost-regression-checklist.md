@@ -1,6 +1,6 @@
 # Cost and regression checklist
 
-> **Current SORIDRAW freeze:** PREVIEW app160 + Worker195 likes verified by user 2026-09-24. Do not run a like-feature edit/optimization merely to satisfy this checklist. Apply it only to an explicitly approved like change or to validate that unrelated changes did **not** affect likes. See `soridraw-app160-worker195-frozen.md`.
+> **Current SORIDRAW freeze:** PREVIEW app164 + Worker195 newly published track first-like fix confirmed resolved by the user 2026-09-25; existing app160 + Worker195 personal/cross-device/public-count behavior remains the historical verified baseline. Protect both. Do not edit/optimize a working like feature merely to satisfy this checklist. See `soridraw-app164-worker195-frozen.md` and `soridraw-app160-worker195-frozen.md`. Physical D1 W1–W2 cost of the new interaction remains unmeasured.
 
 Use the smallest applicable subset, but do not skip a check merely because the code diff is small.
 
@@ -16,6 +16,15 @@ Use the smallest applicable subset, but do not skip a check merely because the c
 - A newer unresolved local click is not overwritten by an older remote acknowledgement.
 - A remote accepted state is durable before the UI subscriber rereads it.
 - Async hydration started before a new click cannot overwrite the newer interaction.
+
+## Newly published track checks (app164)
+
+- On a verified complete personal snapshot, an unseen new visible track ID is initialized as unliked **only if** no known membership, pending click, or accepted-but-unsettled guard exists.
+- An incomplete/unknown snapshot does **not** infer unliked from absence: confirm only missing visible track IDs using the bounded private endpoint.
+- The first like/unlike must not be blocked by a UI false versus membership undefined mismatch.
+- Existing true/false hearts, pending outbox, cross-device accepted state, and public count are unchanged by new-track initialization.
+- Once verified, unchanged return reads 0 and performs no redundant local persistence. No whole-account, whole-Feed, or per-card repeated D1 membership scan.
+- `scripts/verify-197-new-public-track-like.mjs` and prior like regressions remain required for future related changes.
 
 ## Cost checks
 

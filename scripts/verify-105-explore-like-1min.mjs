@@ -17,6 +17,14 @@ assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916/);
 if (appVersion >= 159) {
   assert.match(worker, /SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924/);
   assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 \* 1000;/);
+  if (appVersion >= 160) {
+    assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_ACTIVE_RECOVERY_194_20260924/);
+    assert.match(worker, /EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194/);
+    assert.match(worker, /await this\.ctx\.storage\.deleteAlarm\(\)\.catch/);
+    assert.match(worker, /await waitExploreLikeDelay194\(scheduledAt - Date\.now\(\)\)/);
+    assert.match(worker, /const pending = await this\.runAggregate194\(\)/);
+    assert.match(worker, /EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 \* 1000/);
+  }
 } else {
   assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000;/);
 }
@@ -64,6 +72,7 @@ console.log(appVersion >= 120 ? 'ACTOR_BATCH_IDLE=30_SECONDS' : 'CLIENT_EVENT_WI
 console.log(appVersion >= 121 ? 'VIEWER_ACTIVITY_GATE=120_SECONDS' : 'VIEWER_REFRESH=LEGACY_105');
 console.log('REVISION_CACHE_TTL=1MIN');
 console.log('IDLE_PERIODIC_CRON=0');
+if (appVersion >= 160) console.log('194_ACTIVE_EVENT_SCHEDULER_STALE_ALARM_RECOVERY=PASS');
 console.log('DO_CLASS_MIGRATION=NONE');
 console.log('NO_D1_SCHEMA_MIGRATION=true');
 console.log('NO_UI_CSS_CHANGE=true');

@@ -1,8 +1,10 @@
-requested_at=2026-09-24T22:10:00+09:00
+requested_at=2026-09-24T22:31:00+09:00
 requested_by=user_cross_account_like_real_device_fail
 target=preview
-purpose=audit_app160_worker193_cross_account_public_like_real_device_fix
+purpose=audit_worker194_active_event_scheduler_after_live_pending069_evidence
 expected_app_version=160
-required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
+required_verifier=scripts/verify-105-explore-like-1min.mjs,scripts/verify-192-cross-account-public-like-live.mjs
+observed_previous_release_pending069=3
+observed_previous_event_scheduler_failed_to_drain=true
 no_user_data_migration=true
 no_deploy=true

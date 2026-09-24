@@ -88,6 +88,7 @@ assert.doesNotMatch(page.slice(page192Start, page192End), /setLikedTrackIds\(/);
 // projection wakes five seconds after W1 acceptance.
 assert.match(entry, /SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924/);
 assert.match(entry, /SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924/);
+assert.match(entry, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_ACTIVE_RECOVERY_194_20260924/);
 assert.match(entry, /publicSignalAcceptedAt/);
 assert.match(entry, /attachPublicLikeAcceptedAt193/);
 assert.match(entry, /PUBLIC_LIKE_CARD_MAX_192 = 50/);
@@ -152,3 +153,4 @@ console.log('192_ORPHAN_QUEUE_POSTDEPLOY_DRAIN=PASS');
 console.log('193_PUBLIC_SIGNAL_SERVER_CLOCK=PASS');
 console.log('193_MERGED_ACTOR_ROWS_NOT_DROPPED=PASS');
 console.log('193_RTDB_ARRAY_OBJECT_COMPAT=PASS');
+console.log('194_STALE_ALARM_CANNOT_BLOCK_FUTURE_BATCH=PASS');

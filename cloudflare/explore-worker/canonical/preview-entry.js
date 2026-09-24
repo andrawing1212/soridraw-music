@@ -398,50 +398,103 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response) {
   }
 }
 
+// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_ACTIVE_RECOVERY_194_20260924
+const EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194 = 'active-scheduled-at-194';
+const EXPLORE_LIKE_ACTIVE_GRACE_MS_194 = 20 * 1000;
+const EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 * 1000;
+const waitExploreLikeDelay194 = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
 export class ExploreLikeBatchScheduler103 extends DurableObject {
+  async runAggregate194() {
+    if (typeof baseWorker?.scheduled !== 'function') {
+      throw new Error('Canonical Explore like aggregate handler unavailable');
+    }
+
+    await baseWorker.scheduled({
+      scheduledTime: Date.now(),
+      cron: 'event-like-batch-1m-105',
+      type: 'scheduled',
+    }, this.env, this.ctx);
+    // One bounded recovery check per actual changed-data window, never per user
+    // or page view. Canonical mutation stays authoritative; this only repairs
+    // the bounded public R2 projections for the changed window.
+    await repairSharedPublicLikeCounts191(this.env);
+
+    return await this.env.DB.prepare(
+      'SELECT batch_id FROM explore_like_batches_069 ORDER BY created_at ASC, batch_id ASC LIMIT 1',
+    ).first();
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     if (request.method !== 'POST' || url.pathname !== '/schedule') {
       return new Response('Not found', { status: 404 });
     }
 
-    const currentAlarm = await this.ctx.storage.getAlarm();
-    if (currentAlarm != null) {
-      return Response.json({ ok: true, scheduledAt: currentAlarm, newlyScheduled: false });
+    const now = Date.now();
+    const activeAt = Number(await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194) || 0);
+    if (
+      Number.isFinite(activeAt)
+      && activeAt > 0
+      && activeAt >= now - EXPLORE_LIKE_ACTIVE_GRACE_MS_194
+    ) {
+      return Response.json({ ok: true, scheduledAt: activeAt, newlyScheduled: false, activeRecovery194: true });
     }
 
+    // An old failed alarm must never poison every future like batch. Worker192
+    // could leave accepted 069 rows waiting while all new requests merely saw
+    // an existing alarm. A new active window takes ownership, clears any stale
+    // alarm and keeps one fallback alarm only until this window settles.
+    await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
+    await this.ctx.storage.deleteAlarm().catch(() => {});
+
     const scheduledAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
-    await this.ctx.storage.setAlarm(scheduledAt);
-    return Response.json({ ok: true, scheduledAt, newlyScheduled: true });
+    await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, scheduledAt);
+    await this.ctx.storage.setAlarm(
+      scheduledAt + EXPLORE_LIKE_ALARM_FALLBACK_MS_194,
+    );
+
+    // Keep the first scheduling request alive for the five-second coalescing
+    // window, then execute the existing set-based aggregate directly in this
+    // single Durable Object. Other requests in the same window return above and
+    // are drained by this run. This preserves event-driven batching and adds no
+    // periodic D1 polling or per-viewer server work.
+    await waitExploreLikeDelay194(scheduledAt - Date.now());
+    try {
+      const pending = await this.runAggregate194();
+      await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
+      await this.ctx.storage.deleteAlarm().catch(() => {});
+      if (pending) {
+        // Extremely large bursts get one more ordinary event window. The next
+        // accepted batch can also take over if this alarm ever becomes stale.
+        const nextAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
+        await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
+        await this.ctx.storage.setAlarm(nextAt);
+      }
+      return Response.json({ ok: true, scheduledAt, newlyScheduled: true, settled: !pending, activeRecovery194: true });
+    } catch (error) {
+      // Keep the fallback alarm. If Cloudflare delays or loses that retry, the
+      // active marker ages out and the next real batch takes over instead of
+      // trusting a stale alarm forever.
+      console.warn('[SORIDRAW 194] active like aggregate deferred to alarm fallback:', String(error?.message || error || 'unknown'));
+      throw error;
+    }
   }
 
   async alarm() {
-    if (typeof baseWorker?.scheduled !== 'function') {
-      throw new Error('Canonical Explore like aggregate handler unavailable');
-    }
-
-    // Durable Object alarms are at-least-once. The existing aggregate lease and
-    // desired-state canonical mutation make a retry safe if an execution fails.
-    await baseWorker.scheduled({
-      scheduledTime: Date.now(),
-      cron: 'event-like-batch-1m-105',
-      type: 'scheduled',
-    }, this.env, this.ctx);
-    // One bounded recovery check per actual changed-data alarm, never per user
-    // or page view. Throws on R2 failure so the existing DO alarm retries.
-    await repairSharedPublicLikeCounts191(this.env);
-
-    // Normal windows drain completely and stop here. Under an unusually large
-    // burst, only one indexed row is checked; if work remains, schedule one more
-    // one-minute window. A concurrently scheduled alarm is never pushed later.
-    const pending = await this.env.DB.prepare(
-      'SELECT batch_id FROM explore_like_batches_069 ORDER BY created_at ASC, batch_id ASC LIMIT 1',
-    ).first();
-    if (pending) {
-      const currentAlarm = await this.ctx.storage.getAlarm();
-      if (currentAlarm == null) {
-        await this.ctx.storage.setAlarm(Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105);
+    try {
+      const pending = await this.runAggregate194();
+      await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
+      if (pending) {
+        const nextAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
+        await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
+        await this.ctx.storage.setAlarm(nextAt);
       }
+    } catch (error) {
+      // Durable Object alarms are at-least-once. Preserve the active marker for
+      // the short grace window; the next real batch can recover afterwards.
+      console.warn('[SORIDRAW 194] alarm retry failed:', String(error?.message || error || 'unknown'));
+      throw error;
     }
   }
 }

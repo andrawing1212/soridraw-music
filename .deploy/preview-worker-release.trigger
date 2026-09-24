@@ -1,11 +1,13 @@
-requested_at=2026-09-24T23:05:00+09:00
+requested_at=2026-09-24T23:12:00+09:00
 requested_by=user_cross_account_like_real_device_fail
-product_code_target=29f0def57c0fca962596d9be2d3d46f9d4b2d061
-release_source_target=195_close_join_race
+product_code_target=90701f73f22736ec4bd12faa0921d39e091abc11
+release_source_target=195_close_join_race_verified
 release_purpose=deploy_worker195_close_event_scheduler_join_race_for_cross_account_public_like
 required_verifier=scripts/verify-105-explore-like-1min.mjs,scripts/verify-192-cross-account-public-like-live.mjs
-audit_run=36009606851
+audit_run=36009942860
 audit_status=SUCCESS
+previous_release_run=36009834733
+previous_release_failure=verifier_only_no_deploy
 repair_shared_like_snapshot_156=false
 repair_shared_like_snapshot_191=false
 canonical_user_data_write=false

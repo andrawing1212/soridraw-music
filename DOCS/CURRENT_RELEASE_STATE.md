@@ -1,5 +1,11 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FZ. 사용자 실기기 확인 — app163 휴대폰 최근 생성곡 표시 PASS (2026-09-25 KST)
+
+**사용자 확인**: PREVIEW app163 배포 후 사용자가 "지금은 휴대폰에 최근 생성곡이 보여"라고 직접 보고. 기존 PC→휴대폰 누락 증상 중 **휴대폰 최근 생성곡 표시**는 실사용 관측 PASS로 갱신한다. PC 원본에 대한 삭제·재생성·캐시 초기화 없이 현재 표시된다는 관찰 결과이며, 실데이터 원본의 문서별 비교를 수행한 것은 아니다.
+
+**아직 미검증**: 새 곡 생성 직후 다른 페이지 왕복/새로고침 없이 자동 표시되는지, 이후 추가 곡·동시 편집, 업데이트/재진입의 실제 Firestore R0/W0 및 구형 신호 1회 조회 영향은 별도 확인 필요. 이번 성공을 전체 실시간 동기화·대규모 비용 PASS로 확대하지 않는다. app163 소스/배포 유지, 추가 동기화 패치·사용자 데이터 복구·TEST/PRODUCTION 승격 불필요/미승인. 다음은 불필요한 API 생성 없이 기존 화면/정상 캐시 기준 비용을 살피고, 별도 확인된 영어 가사 추가 카드 영어 제목 누락·생성 시간(0FU)을 독립 작업으로 다룬다. 좋아요 app160/Worker195와 Gemini app162 생성 성공 경로는 동결 보호.
+
 ## 0FY. PREVIEW app163 Hosting 배포 완료 — 최근 생성곡 PC↔모바일 신호 보호, 실데이터 검증 전 (2026-09-25 KST)
 
 **실제 제품 상태**: app163 Firebase PREVIEW Hosting Run `36037269105` SUCCESS / exact release SHA `8e285966975d410e2e3797d77ff031945b7cbf7a` / `PREVIEW_APP_VERSION=163` / `PREVIEW_EXACT_BUILD=PASS`. 고정 제품 소스/최종 감사 기준 `fe74f006bd3c90793f45830a0f4ee019d738cfe8`, 최종 Release System Audit Run `36036971353` SUCCESS (TypeScript/Build, `RECENT_SONGS_196_*` 모의/정적 회귀, 기존 좋아요·Gemini 감사, Worker TEST/PROD dry-run, shared D1 read-only). 이전 후보 Audit `36036423431` SUCCESS 후 pre-163 PC 로컬 미저장 안전 가드를 추가하여 재감사함.

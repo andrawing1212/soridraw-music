@@ -1,9 +1,10 @@
-requested_at=2026-09-24T19:55:00+09:00
+requested_at=2026-09-24T20:03:00+09:00
 requested_by=user_cross_account_public_like_live_sync
 target=preview
-purpose=app159_worker192_cross_account_public_like_count_live_convergence
+purpose=app159_worker192_final_cross_account_public_like_live_audit
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=f4d85b5b15f859c62039fd2ddd971419caa8a243
+locked_feature_sha=816ff190b0c97a613b01f940477f6af34984c411
+live_worker192_changed_card_smoke_required=true
 no_user_data_migration=true
 no_deploy=true

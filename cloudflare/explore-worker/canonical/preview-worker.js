@@ -23062,7 +23062,11 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
     return idle;
   }
 
-  // 163 runs only after read-only queue preflight proves actual pending work.\n  // Idle cron remains free of this shared R2 marker read.\n  await assertLegacyLikeWriterOpen163(env, 'scheduled-like-aggregate');\n\n  const owner = 'like042_' + now + '_' + crypto.randomUUID();
+  // 163 runs only after read-only queue preflight proves actual pending work.
+  // Idle cron remains free of this shared R2 marker read.
+  await assertLegacyLikeWriterOpen163(env, 'scheduled-like-aggregate');
+
+  const owner = 'like042_' + now + '_' + crypto.randomUUID();
   const acquired = await acquireExploreLikeProcessor035(env, owner, now);
   if (!acquired) return { skipped: true, reason: 'lease' };
   const totals = {

@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FH. Worker191 배포 시도 자동 롤백 / 실제 공유 좋아요 불일치 6곡 유지 (2026-09-24 KST)
+
+**현재 실제 PREVIEW**: 앱 app158, Worker189 `e23e73a1-89af-40f6-ae66-dc4ae2458c30`. Worker191 release Run `35982523348`은 새 Worker 배포와 기본 Feed/Profile smoke까지 PASS했지만, PREVIEW 임시 cron으로 실행하려던 one-time 191 repair가 24회 대기 동안 실행되지 않아 release gate FAIL. Workflow가 즉시 Worker189로 자동 rollback했고 임시 cron도 원상복구. TEST/PRODUCTION 비변경.
+
+**현재 실제 데이터 진단**: 최신 감사 Run `35984604276` SUCCESS. bounded read-only 비교 결과 D1 canonical vs derived mismatch `0`; shared R2는 latest 37 overlap 중 6 mismatch, popular 37 overlap 중 6 mismatch (동일 6곡의 두 projection). 191 합성 실행 검증은 6/40 수복, latest/popular/profile/card CAS, transient retry, warm D1 R0/R2 W0 전부 PASS했지만 **실제 R2 one-time repair marker는 ABSENT**이고 실제 공유 R2 불일치는 그대로. 따라서 문제 해결/배포 완료로 취급 금지.
+
+**다음 작업**: cron 전파 지연에 의존하지 않는 안전한 PREVIEW 전용 191 one-time 실행 경로를 사용/구현하고, 실행 직후 같은 read-only parity 검사에서 latest/popular mismatch 0 확인 후에만 Worker191을 유지. 개인 stale-baseline 후보 수정도 아직 미배포. 사용자 원본 D1 변경/백필/전체 likes scan 금지, TEST/PRODUCTION 승격 금지.
+
+
 ## 0FG. app158 이후 독립 원인 재현 — stale personal baseline invalidation (2026-09-24 KST)
 
 **배포 상태: 후보만 수정 / 미배포.** `preview` 기준 `b84484dd5b81aa9a55eda08efddd65a98dc633cb`; 수정 `45857de98cd21fe7e468661b13c685119942d87a` (`exploreLikeService.ts`), 실행형 regression `a9a6c8e79bbe4e4bf1047b75bcbdbba03dd011bc` 및 가드 `16c9f3925652fac08986d25133064cb06a437033`. Audit `35979633390` SUCCESS (TypeScript/Build/실제 production 함수 실행 검증/현재 배포 경로 무변경). 이번 변경은 app158 후보 내부 수정으로, 아직 Hosting/Worker에 적용되지 않았다.

@@ -1,9 +1,9 @@
-requested_at=2026-09-24T20:48:00+09:00
+requested_at=2026-09-24T21:00:00+09:00
 requested_by=user_continue_like_sync
 target=preview
-purpose=validate_scheduled_like_owner_scope_fix_and_worker192_live_sync
+purpose=validate_postdeploy_orphan_queue_drain_with_fixed_worker192
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=f18c0f76a520e82e58d248ff91337ca684b5e555
+locked_feature_sha=298e27b81941b2de1d57bd50c4116c78ff88ae99
 no_user_data_migration=true
 no_deploy=true

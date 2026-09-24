@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GE. app164 업데이트 직후 `/v1/me/social-snapshot` 최초 D1 R45 / 재진입 R0 — 경로 검토 및 비용 회귀 고정 (2026-09-25 KST)
+
+**사용자 실제 계측**: 관리자 진단에서 첫 진입 `/v1/me/social-snapshot` LOCAL 0 · Worker 1, D1 read query 2 · rows_read 45 · W0; 화면의 다른 경로를 합치면 Worker 11, D1 총 R45/W0. 진단 초기화 후 페이지 왕복의 별도 스크린샷: `/v1/me/social-snapshot` 요청 없음, `/v1/public-like-cards` Worker 2 R0/W0, `/v1/me/music-note-publications-revision` Worker 1 R0/W0, D1 합계 R0/W0. 따라서 **동일 기기의 정상 재진입 반복 D1 read는 이번 사례에서 재현되지 않음**. 첫 요청의 45행은 실제 발생한 비용으로 취급하고 삭제/무시하지 않음.
+
+**GitHub 정적 경로 검토**: app163 exact release `8e285966975d410e2e3797d77ff031945b7cbf7a` → app164 exact release `c6d580b65349071d67d17c11fa7fd83afc5b98f9` 간 제품 변경은 신규곡 첫 좋아요 초기화 `src/services/exploreLikeService.ts`와 app version 164뿐. `requestPersonalLikeBaseline127`, `ensurePersonalLikeBaseline127`, `exploreSocialSnapshotService.ts`, Worker195는 미수정. 원본 `social-snapshot`은 (a) 개인 좋아요 R2가 partial인 경우 최초 1회 `__soridraw_personal_repair=182`에 의해 queue 확인 + bounded canonical likes 최대 2001개 확인, (b) 과거 미정산 guard의 새 revision인 경우 `__soridraw_personal_settlement=189`에 의해 제한된 새 settlement 검증, (c) 팔로우 개인 snapshot 캐시 미존재 시 일반 snapshot 초기화 등에서도 호출될 수 있음. **화면은 URL query / 해당 사용자 R2 exact metadata / 현재 outbox / 실제 D1 query별 rows를 기록하지 않아 첫 R45의 단일 정확한 원인을 결정할 수 없음.** R2 캐시 불일치 또는 1회 복구는 유력한 설명이지 확정된 사용자 데이터 진단이 아님. 정상 로컬 캐시만으로 원본이 안전하다고 가정해 복구 검사 자체를 삭제하면 기존 하트가 역전될 위험 있음.
+
+**이번 작업/검증**: 제품 코드·Worker·Firebase·Rules·D1 사용자 원본·UI **비변경**. `scripts/verify-189-personal-like-settled-guard-release.mjs`에 실제 프로덕션 `ensurePersonalLikeBaseline127` 실행 기반으로 최초 partial repair 1회 → 내구 baseline/repair marker 저장 → 새 실행 컨텍스트/앱 업데이트/동일 재진입 D1 R0 시나리오 추가. Commit `0892fce2b9478712ca192984b78a843c361a3f66`; audit-only trigger `bf39843fc4defbf8b1144904e47405eb54d0731f`; Release System Audit Run `36043099473` SUCCESS (TypeScript, Build, 기존 like/APP197 및 신규 APP164 one-time repair 회귀, Worker TEST/PRODUCTION dry-run, D1 read-only audit, branch 보호). `APP164_ONE_TIME_PARTIAL_REPAIR_THEN_APP_UPDATE_D1_R0=PASS`. 실제 유저 전체 인구/새 기기의 1회 R45 반복 가능성은 미측정.
+
+**판정/다음**: 이번 재진입 증거로 **현재 app164 좋아요 정상 기능 재수정/배포 불필요**. 첫 방문에 R45를 없애려면 실제 계정의 정확한 URL query 및 R2 exact/guard 상태가 먼저 확인되어야 하며, 오류가 없는 보호성 복구를 제거해서 R0 수치만 맞추지 않는다. 비슷한 최초 원격 read가 여러 새 기기·업데이트에서 재발하면 사용자 동의 후 개인정보 비노출의 제한된 진단을 진행; 앱 업데이트 자체로 전체 조회가 늘어나는 구조라면 별도 개선. TEST/PRODUCTION 승격 승인 없으며 변경 없음.
+
 ## 0GD. 사용자 app164 신규 공개곡 좋아요 해결 확인·스킬 기준 갱신 (2026-09-25 KST)
 
 **사용자 실사용 확인**: PREVIEW app164 배포 후 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`의 최초 좋아요 차단에 대해 "좋아. 이건 해결했어"라고 사용자 직접 보고. 해당 신규곡의 앞서 재현된 클릭 차단은 **실사용 문제 해결 PASS**. 기존 app160 + Worker195에 대한 사용자 과거 실기기 확인(개인 하트/좋아요 해제/PC↔모바일/타계정 공개 숫자)도 보호 기준 그대로 유지. 이번 확인만으로 다른 모든 신규곡·새 기기/양방향·물리 D1 행쓰기 비용을 새로 PASS 처리하지 않음.

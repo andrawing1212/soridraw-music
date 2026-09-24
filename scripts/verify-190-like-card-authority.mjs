@@ -14,7 +14,7 @@ const extract = (start, end) => {
 const implementation = [
   extract('export const reconcileExploreLikedTrackCollectionSnapshot127 =', 'export const getExploreLikedTrackCollectionIds ='),
   extract('export const getExploreLikedTracks =', '\n};\n') + '\n};',
-].join('\n');
+].join('\n').replaceAll('export const ', 'const ');
 const compiled = (await transform(implementation, { loader: 'ts', format: 'cjs', target: 'es2022' })).code;
 
 const ids = Array.from({ length: 10 }, (_, i) => 'track-' + (i + 1));

@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app157 개인 좋아요 카드 색인 최소 보완 감사 PASS, 아직 미배포
+
+- Source diff `2f32cf68cb59f55606766b611cff09939cd1e25d` + `debefe4fd6c4fd3661bd46bcbb07ced9cad7183b`: 서버가 인증한 완전한 개인 좋아요 ID 세트가 이전의 '곡 카드 없음' 캐시에 가려지지 않게 하고, 동일 계정 원격 신호는 이미 하트가 같아도 '내 좋아요' 카드 색인을 동일 membership으로 정렬. 기존 저장/Worker/UI 전부 비변경.
+- `scripts/verify-190-like-card-authority.mjs` 감사 게이트 추가; Audit `35975707446` SUCCESS (TS/Build/like regression, missing 5만 카드 수신 + warm R0). 고정 검사 소스 `86eb3e4a176f27fc7ad5534fcc518260967197c0`. 상태 기록은 `CURRENT_RELEASE_STATE.md 0FD`.
+- **아직 PREVIEW 배포하지 않았음**. 별도 PREVIEW 릴리스 및 PC/모바일 실사용은 미검증. A 개인 10곡을 서버 원본과 대조하기 전 전체 완료 선언 금지.
+- 다음 소규모 작업: B/C 다른 계정의 **공용** `likeCount`에 대해 새 변경 1곡의 queue→canonical→shared R2/revision→추천/최신/인기/프로필 client 경로를 확인. A 개인 하트만 B/C에 전파 금지. 기존 app141 실시간 개인 동기화·30초 묶음·W1~W2·R0 유지. 미해결 원인이 특정되지 않으면 새 캐시/보정 레이어를 추가하지 말 것. 실기기 및 비용 미측정이면 TEST/PRODUCTION 승격 금지.
+
+
 ## 최신 2026-09-24 — app157 / Worker189 PREVIEW 배포 이후 실사용 검증 및 공용 좋아요 별도 작업
 
 - PR #111 source `294036e963704a1007cfde36108a3f4640a57c7f` → preview merge `50ad5fab1b7516cc6ba7102cd1832ba0790885be`; Audit `35972104509` SUCCESS; PREVIEW Worker `35972368855` SUCCESS active `e23e73a1-89af-40f6-ae66-dc4ae2458c30`; Firebase Hosting `35972504441` SUCCESS exact app157 PASS. Current state `DOCS/CURRENT_RELEASE_STATE.md 0FC` 기준. TEST/PRODUCTION untouched.

@@ -1,10 +1,8 @@
-requested_at=2026-09-24T18:11:00+09:00
-requested_by=user_fix_like_consistency_before_deploy
+requested_at=2026-09-24T18:24:00+09:00
+requested_by=like_parity_live_readonly_diagnosis
 target=preview
-purpose=verify_reproducible_invalidated_baseline_stale_guard_bug_before_release
+purpose=compare_bounded_shared_public_r2_vs_d1_canonical_no_private_data
 expected_app_version=158
-required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs
-required_verifier2=scripts/verify-190-like-card-authority.mjs
-locked_feature_sha=16c9f3925652fac08986d25133064cb06a437033
+locked_feature_sha=bff051402c6dfb5461b7d80d3fc336b4c705b5e1
 no_user_data_migration=true
 no_deploy=true

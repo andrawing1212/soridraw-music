@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FO. Gemini PREVIEW V1 실제 1곡 재현 FAIL — 최초 생성 전부 0 token, provider 503 및 60초 timeout (2026-09-24 KST)
+
+**사용자 제공 관리자 화면 / 실행시각**: 2026-09-24 23:38:53 KST, 일반 V1 곡 생성, 총 2분 53초, 추가 호출 4회 / 총 5 physical attempts. **입력 0, 출력 0, 추론 0, 전체 0** 표시는 현재 감사 화면이 수집한 usage 기준이며 실제 미청구를 뜻하지는 않음. 최초 생성 5회 모두 FAIL, 후처리·금지어 판정 단계까지 가지 못함.
+
+| 순서 | 모델 | 관리자 화면 시간 | 결과 |
+|---|---|---:|---|
+| 1 | gemini-3.8-flash | 1.2초 | “현재 요청이 몰려 일시적으로 사용할 수 없습니다” (503 계열) |
+| 2 | gemini-3.7-flash | 1.0초 | 동일 임시 unavailable |
+| 3 | gemini-3.6-flash | 1분 0초 | “응답 시간이 초과되어 요청이 중단되었습니다” |
+| 4 | gemini-3.5-flash | 1분 0초 | 동일 timeout |
+| 5 | gemini-3.5-flash-lite | 10.7초 | 임시 unavailable, 최종 HTTP 503 `GEMINI_UPSTREAM_UNAVAILABLE` |
+
+**중요 원인 구분**: 이것은 가사·5단·금지어 품질 기준에 걸린 게 아니다. **모델로부터 생성 본문을 한 번도 받지 못했다.** Google 공식 2026-09 현재 Interactions API는 위 5개 모델 ID를 지원. 공식 API 에러 문서의 503은 용량 부족/일시 장애, 504는 마감시간 초과이며 429는 quota 별도. 이 화면의 마지막 503을 일일 한도라고 단정하지 말 것. 기존 사용 기록에 3.7 quota exhaustion이 있었으나 이번 세션 첫 두 건은 ‘일시 unavailable’ 화면임.
+
+**정밀 추가 확인 필요**: GitHub 현재 `functions/scripts/build-secured-index.cjs`가 생성하는 PREVIEW Function policy는 `3.6=90_000` / `3.5=60_000` / `3.5-lite=60_000`, Function `timeoutSeconds=330`. 그런데 실사용 3.6의 표시 시간이 약 **60초**이므로, 이것이 Google provider 60s deadline인지, 실행된 Functions revision의 실제 timeout 정책과 코드가 다른지, 감사 UI 시간 반올림인지 **아직 확인 불가**. 3.5=60초는 현재 자체 timeout과 일치. `functions/src/index.ts`는 생성기 이전 원본이므로 timeout 상수를 포함하지 않으며, `securedIndex.ts`는 build-time 생성. 해당 파일만 보고 “제한 없음”이라고 오판 금지.
+
+**다음 수정 조건**: 먼저 기존 인증 세션의 원본 statusCode/code/errorName/retryAfterMs/attempt duration 및 Function active revision을 안전하게 대조. 사용자 API 키·UID·프롬프트를 로그에 공개하지 않는다. 실제 실패가 Google 503이면 대기·과도하지 않은 bounded retry와 사용 가능한 모델 선택을, self-abort면 해당 최소 제한만 조정. 프롬프트·품질·언어·섹션·금지어 계약 약화는 이번 오류 해결책 아님. 5 attempts/Function 330s/정상 좋아요 동결 보호. 같은 곡 무작정 재생성 금지. **이번에는 진단 기록만, 코드·Function 배포 없음**.
+
 ## 0FN. Gemini V1 곡 생성 미완료 작업 재개 — 좋아요 동결 유지 (2026-09-24 KST)
 
 **사용자 최신 지시**: 좋아요 app160/Worker195 전체 정상 실기기 PASS 이후 좋아요 코드/서비스 동결 유지. 중단됐던 Gemini 곡 생성 장애를 다시 우선 작업으로 재개. 좋아요 관련 코드/Worker/RTDB/D1/R2/UI/Rules 수정 금지. 이 항목은 조사·실사용 검증 재개 기록이며 Gemini 코드 변경/배포 승인이 아니다.

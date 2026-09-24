@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — Gemini 일반 V1 1곡 FAIL 재현, 503 대 self-timeout 정확히 분리
+
+- 현재 실사용 근거: `CURRENT_RELEASE_STATE.md 0FO`. 사용자 2026-09-24 23:38:53 KST, 최초 곡 5모델 전부 실패 / 2분53초 / 감사 화면 usage 0. 3.8 1.2초 일시 unavailable, 3.7 1초 일시 unavailable, 3.6 60초 timeout, 3.5 60초 timeout, lite 10.7초 일시 unavailable로 최종 HTTP 503. **가사/금지어/5단 품질 검사에 도달하지 않았다.**
+- GitHub build-time `functions/scripts/build-secured-index.cjs`의 정책은 3.6=90s, 3.5=60s, lite=60s / Function=330s. 실제 3.6 화면 60s의 불일치는 원인을 확인하기 전 90s→120s 무조건 확대하거나 “로컬 timeout 확정”이라고 말하지 않는다.
+- 다음 최소 조사: (1) 해당 단일 인증 세션에서 원래 upstream status/code/abort name/초 단위 duration, serverAttempts별 `GEMINI_ATTEMPT_TIMEOUT` 구분; (2) active PREVIEW Function revision·실제 deployed policy 비교; (3) 해당 API 프로젝트 모델 사용 등급/이용 가능 상태 (비밀 키·UID 출력 금지). 실제 503과 quota 429를 분리.
+- 원인 확인 뒤에만 범위 제한된 해결안을 제출하고, 기존 song output 품질 계약/5단 prompt/가사/금지어·언어·섹션 규칙/좋아요 동결을 보존. provider unavailable이면 무작정 timeout만 늘리거나 같은 요청을 반복하지 않는다. 공유 TEST/PROD Function 미변경.
+- 이번 단계에서는 코드 변경·배포 없음. 추가 생성으로 API quota 소모하지 않는다.
+
 ## 최신 2026-09-24 — Gemini V1 장애 재개, 사용자 1곡 실사용 결과만 먼저 판정
 
 - 사용자 2026-09-24 최신 지시: 좋아요는 정상 실기기 검증 후 **동결**. 새로운 우선 작업은 Gemini 곡 생성 미완료 장애다. `CURRENT_RELEASE_STATE.md 0FN`을 확인할 것.

@@ -419,10 +419,40 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // or page view. Canonical mutation stays authoritative; this only repairs
     // the bounded public R2 projections for the changed window.
     await repairSharedPublicLikeCounts191(this.env);
+  }
 
-    return await this.env.DB.prepare(
+  // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924
+  async finalizeAggregate195() {
+    // Remove this window's ownership BEFORE the final indexed queue check.
+    // A batch that joined while runAggregate194 was finishing either:
+    // 1) arrived before this delete and therefore already exists in 069 when
+    //    the query below runs, or
+    // 2) arrives after this delete and becomes the next active owner itself.
+    // This closes the tiny "pending=false -> joined batch -> marker delete"
+    // orphan window that could otherwise recreate the cross-account stall.
+    await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
+
+    const pending = await this.env.DB.prepare(
       'SELECT batch_id FROM explore_like_batches_069 ORDER BY created_at ASC, batch_id ASC LIMIT 1',
     ).first();
+    if (!pending) {
+      await this.ctx.storage.deleteAlarm().catch(() => {});
+      return null;
+    }
+
+    // A new request may already have claimed the next window after the marker
+    // delete. Never push its deadline later or create a second owner.
+    const now = Date.now();
+    const claimedAt = Number(await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194) || 0);
+    if (Number.isFinite(claimedAt) && claimedAt > 0 &&
+        claimedAt >= now - EXPLORE_LIKE_ACTIVE_GRACE_MS_194) {
+      return pending;
+    }
+
+    const nextAt = now + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
+    await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
+    await this.ctx.storage.setAlarm(nextAt);
+    return pending;
   }
 
   async fetch(request) {
@@ -461,16 +491,8 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // periodic D1 polling or per-viewer server work.
     await waitExploreLikeDelay194(scheduledAt - Date.now());
     try {
-      const pending = await this.runAggregate194();
-      await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
-      await this.ctx.storage.deleteAlarm().catch(() => {});
-      if (pending) {
-        // Extremely large bursts get one more ordinary event window. The next
-        // accepted batch can also take over if this alarm ever becomes stale.
-        const nextAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
-        await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
-        await this.ctx.storage.setAlarm(nextAt);
-      }
+      await this.runAggregate194();
+      const pending = await this.finalizeAggregate195();
       return Response.json({ ok: true, scheduledAt, newlyScheduled: true, settled: !pending, activeRecovery194: true });
     } catch (error) {
       // Keep the fallback alarm. If Cloudflare delays or loses that retry, the
@@ -483,13 +505,8 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async alarm() {
     try {
-      const pending = await this.runAggregate194();
-      await this.ctx.storage.delete(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194).catch(() => {});
-      if (pending) {
-        const nextAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
-        await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
-        await this.ctx.storage.setAlarm(nextAt);
-      }
+      await this.runAggregate194();
+      await this.finalizeAggregate195();
     } catch (error) {
       // Durable Object alarms are at-least-once. Preserve the active marker for
       // the short grace window; the next real batch can recover afterwards.

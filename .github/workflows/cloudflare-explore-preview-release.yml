@@ -331,9 +331,18 @@ jobs:
               cleanup_191_dev
               false
             fi
-            curl -fsS --max-time 120               "http://127.0.0.1:8791/cdn-cgi/local/scheduled?cron=*+*+*+*+*"               -o "$RUNNER_TEMP/like191-scheduled-response.txt"
+            scheduled191=0
+            for scheduled_path in /__scheduled /cdn-cgi/handler/scheduled /cdn-cgi/local/scheduled; do
+              code="$(curl -sS --max-time 120 -o "$RUNNER_TEMP/like191-scheduled-response.txt" -w '%{http_code}'                 "http://127.0.0.1:8791${scheduled_path}?cron=*+*+*+*+*" || true)"
+              echo "191_REMOTE_SCHEDULED_PATH=${scheduled_path} HTTP=${code}"
+              if [ "${code#2}" != "${code}" ]; then
+                scheduled191=1
+                break
+              fi
+            done
             cleanup_191_dev
             dev_pid=0
+            test "$scheduled191" = 1
             echo '191_REMOTE_SCHEDULED_EXECUTION=PASS'
 
             node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote

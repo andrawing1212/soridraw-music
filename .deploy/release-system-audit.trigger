@@ -1,8 +1,10 @@
-requested_at=2026-09-24T18:24:00+09:00
-requested_by=like_parity_live_readonly_diagnosis
+requested_at=2026-09-24T18:32:00+09:00
+requested_by=user_explicit_full_like_fix
 target=preview
-purpose=compare_bounded_shared_public_r2_vs_d1_canonical_no_private_data
+purpose=191_bounded_public_like_repair_regression_existing_6_mismatches
 expected_app_version=158
-locked_feature_sha=bff051402c6dfb5461b7d80d3fc336b4c705b5e1
+required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs
+required_verifier2=scripts/verify-191-bounded-public-like-convergence.mjs
+locked_feature_sha=a93dc059f594481e8dd58cc71acd8de1758b1039
 no_user_data_migration=true
 no_deploy=true

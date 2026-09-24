@@ -123,8 +123,8 @@ const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
 // mixed counts (for example mobile 0/1/0/0 while PC was 1/1/1/1) can legitimately
 // keep rendering that last-known cache. Repair that known legacy state exactly once
 // per Feed sort by reading the current shared R2 snapshot directly (D1 R0/W0).
-// The marker is scoped to the released app version: the first Explore visit after each
-// update checks the current shared R2 snapshot once per sort. Unchanged revisits R0/W0.
+// The marker persists across app updates. A code release by itself cannot
+// trigger another shared Feed data read; real revisions use the existing check.
 const EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX = 'soridraw:explore:shared-like-cache-repair:124';
 
 // SORIDRAW_EXPLORE_UPDATE_FIRST_SHARED_CONVERGENCE_125_20260920
@@ -133,9 +133,9 @@ const exploreSharedLikeCacheRepairKey124 = (feedUrl: string) => {
   try {
     const parsed = new URL(feedUrl);
     const sort = parsed.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
-    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:${__SORIDRAW_APP_VERSION__}:${sort}`;
+    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:${sort}`;
   } catch {
-    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:${__SORIDRAW_APP_VERSION__}:latest`;
+    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:latest`;
   }
 };
 

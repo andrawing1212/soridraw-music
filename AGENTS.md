@@ -14,7 +14,7 @@
 
 ## 기능별 스킬
 - 좋아요/해제, 개인 좋아요 카탈로그, PC↔모바일 동기화, Explore 좋아요 비용 최적화 작업 전에는 반드시 `.agents/skills/local-first-like-sync/SKILL.md`를 읽는다.
-- SORIDRAW 작업에서는 해당 스킬의 `references/soridraw-app141-baseline.md`를 현재 검증된 정상 기준으로 사용한다.
+- **현재 좋아요 동결 기준은 `references/soridraw-app160-worker195-frozen.md`** (사용자 2026-09-24 실기기 전체 정상 확인). `references/soridraw-app141-baseline.md`는 본인 PC↔모바일 수신 저장 순서의 역사적 기준이다. 정상인 좋아요 기능은 사용자 별도 명시 수정 지시/실제 오류 없이 절대 변경하지 않는다.
 - 비용/캐시/동기화 변경이면 `references/cost-regression-checklist.md`도 함께 읽는다.
 - 이 스킬은 정상 기능을 비용 때문에 삭제하거나 약화하는 근거로 사용할 수 없다. 현재 사용자 지시와 `CURRENT_RELEASE_STATE.md`가 항상 우선한다.
 

@@ -1,5 +1,7 @@
 # SORIDRAW app141 verified like baseline
 
+> **Current release update (2026-09-24):** app141 remains the historical verified same-account receiver ordering reference, **not the current deployed PREVIEW version**. User now confirms app160 + Worker195 full same-account and cross-account behavior. The highest-priority protective freeze is documented in `soridraw-app160-worker195-frozen.md` and `DOCS/CURRENT_RELEASE_STATE.md 0FM`. Do not change a healthy like feature.
+
 This file is the SORIDRAW-specific profile for the portable `local-first-like-sync` skill.
 
 ## Verified functional baseline

@@ -9,6 +9,12 @@ Use this skill when building or modifying a like, favorite, reaction, bookmark, 
 
 Explicit user instructions always override this skill.
 
+## SORIDRAW current verified freeze — MUST READ FIRST
+
+As of 2026-09-24 KST, the user directly verified **all likes/unlikes, same-account PC↔mobile, and cross-account public likeCount delivery** on PREVIEW app160 + Worker195, and explicitly instructed: **do not touch the like feature while it works**. This supersedes the historic app141-only baseline. Read `references/soridraw-app160-worker195-frozen.md` and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW work that may affect likes.
+
+**Default for SORIDRAW: protect-only, NO code changes and NO like deployment.** Do not refactor, optimize, replace, or quietly alter likes in client/Worker/RTDB/R2/D1/Rules/cache/notifications/UI. An unrelated change to a common file must preserve all like code paths and pass a targeted regression. A concrete new defect/security issue plus explicit user instruction is required to reopen; never infer permission from a generic optimization request. TEST/PRODUCTION promotion is a separate explicit release request; preserve the same verified features and do not copy user data.
+
 ## 1. Choose the mode first
 
 If the repository is `andrawing1212/soridraw-music`, or the user explicitly says SORIDRAW, use **SORIDRAW mode** and read `references/soridraw-app141-baseline.md` before changing code.

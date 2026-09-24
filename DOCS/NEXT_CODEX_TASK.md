@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — 좋아요 전체 실기기 PASS, 기능 수정 동결
+
+- 사용자 직접 확인: app160 + Worker195 PREVIEW에서 동일 계정 PC↔모바일, 타계정 A↔B 공개 숫자, 좋아요/해제 양방향이 모두 정상. **좋아요 기능에 더는 손대지 말라는 명시 지시가 최우선**.
+- 보호 기준: `CURRENT_RELEASE_STATE.md 0FM`, `.agents/skills/local-first-like-sync/SKILL.md`, `references/soridraw-app160-worker195-frozen.md`. 정상이고 별도 수정 지시 없으면 좋아요 코드/배치/동기화/RTDB/D1/R2/Worker/캐시/개인 하트/UI/Rules를 수정·최적화·재배포하지 않는다. 다른 기능 수정 시에도 좋아요 경로 diff 또는 회귀가 있으면 중단.
+- 고정 PREVIEW: app160 Hosting `36004777915` SUCCESS, Worker195 `36010156194` SUCCESS, active `11d8455c-c266-4e88-9cf6-7549d3f5be92`. Audit `36009942860` SUCCESS. 실제 변경곡 card D1 R0/W0와 warm revision R0/W0 확인; 신규 행동 mutation W1~W2 원격 물리비용 측정은 SKIPPED.
+- 다음은 **좋아요 재작업이 아니라 다른 명시 작업**. 사용자가 TEST 배포를 요청하면 현재 PREVIEW 기능 전체를 검증한 뒤 동일 코드로 main/TEST에 승격하고 테스트한다. PRODUCTION은 별도 명확 승인 전 금지. 데이터 이동/덮어쓰기 금지.
+- `.github/workflows/diagnose-069-live-like.yml`의 push별 별도 FAILURE는 기존 진단 workflow 문제. 이 문제를 핑계로 정상인 좋아요 기능을 재수정하지 않는다. 진단 Workflow 자체 보수도 다른 작업과 분리한다.
+
 ## 최신 2026-09-24 — app160 / Worker195 배포 완료, 이제 실제 타계정 자동반영만 검증
 
 - 기준은 `CURRENT_RELEASE_STATE.md 0FL`. app160 Hosting `36004777915` SUCCESS. Worker195 `36010156194` SUCCESS / active `11d8455c-c266-4e88-9cf6-7549d3f5be92`. 최종 Audit `36009942860` SUCCESS.

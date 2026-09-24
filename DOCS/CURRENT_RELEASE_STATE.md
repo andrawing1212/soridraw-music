@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FM. 사용자 실기기 PASS — 좋아요 기능 보호·수정 동결 (2026-09-24 KST)
+
+**현재 최우선 사용자 지시**: app160 + Worker195 PREVIEW에서 같은 계정 PC↔모바일 및 서로 다른 계정 A↔B의 좋아요/해제, 공개 숫자, 계정별 하트가 **모두 정상 동작함을 사용자가 직접 확인했다.** “이젠 이상이 없다면 절대 좋아요 기능에 손을 대지마.” 따라서 **좋아요 기능은 동결(FROZEN)**. 별도 실제 오류 재현·보안 사고·사용자의 명확한 수정 지시가 없으면 좋아요 관련 클라이언트·Worker·RTDB·D1·R2·캐시·리비전·동기화·배치·타이머·UI를 수정하거나 배포하지 않는다. 다른 기능의 리팩터링/비용 최적화 명목으로 좋아요 경로를 변경하는 것도 금지. 우연히 공통 파일이 변경되어도 좋아요 동작 동일성을 검증하고, 영향이 있으면 중단한다.
+
+**고정된 PREVIEW 릴리스**: app160 Hosting Run `36004777915` SUCCESS / exact build PASS. Worker195 Run `36010156194` SUCCESS, active version `11d8455c-c266-4e88-9cf6-7549d3f5be92`; 최종 Audit `36009942860` SUCCESS. 제품 코드 핵심 커밋: app160 `2dfc167668a7640a16e97fe582960d224aab5d25`, Worker194 `071d82bbad1c9b0bc35ca459a15965b103a84c5c`, Worker195 `29f0def57c0fca962596d9be2d3d46f9d4b2d061` + verifier `90701f73f22736ec4bd12faa0921d39e091abc11`. 이 기록 이후 문서-only 커밋이 있을 수 있으니 앱 기준과 GitHub HEAD를 혼동하지 않는다.
+
+**반드시 보호할 실제 동작**: 클릭 즉시 자기 하트 표시, 30초 trailing batch, 로컬 outbox, 본인 PC↔모바일 동기화 및 내 좋아요 일치, A의 변경에 따른 B의 공개 숫자 자동 갱신(페이지 이동/새로고침 불필요), B 개인 하트 독립, 좋아요/해제 양방향, 변경된 곡만 재확인. 이벤트가 이미 접수된 뒤 Worker가 약 5초 window에서 처리하며 오래된 alarm/timing race 복구. 정상 재진입 원본 D1 R0 목표 / public changed-card 3곡 route 실제 D1 R0/W0 PASS. 일반 업데이트/이동으로 전체 데이터 재조회·전체 Feed 재생성 금지.
+
+**검증 경계**: 위 전체 실기기 PASS는 사용자의 직접 확인이며 자동화된 다계정 E2E로 대체·증명된 것은 아니다. 실제 신규 W1~W2 mutation 물리 비용 계측은 마지막 Audit에서 SKIPPED였으므로 수치 PASS라고 쓰지 않는다. TEST/PRODUCTION 릴리스는 아직 자동 승격되지 않았고 **별도 요청**이 있어야 하며, 승격 시 검증된 좋아요 코드/Worker/Rules의 동일 동작을 포함해야 한다. 사용자 데이터 원본 복사·변환 없음.
+
+**영구 재사용 기준**: `.agents/skills/local-first-like-sync/SKILL.md`와 `references/soridraw-app160-worker195-frozen.md` (app141은 같은 계정 개인 동기화의 역사적 검증 기준). 동결 해제는 오류의 구체적 증거 + 사용자 승인 + 범위 고정 + 독립 회귀 + PREVIEW 실기기 재검증 순서로만 가능. 이 스킬은 보존 문서이지 자동 배포 명령이 아니다.
+
 ## 0FL. app160 + Worker195 PREVIEW — stale queue + 교차계정 전달 race 방어까지 배포 완료 (2026-09-24 KST)
 
 **현재 실제 PREVIEW**: app160 Hosting Run `36004777915` SUCCESS / exact build PASS. Worker195 Release Run `36010156194` SUCCESS / active version `11d8455c-c266-4e88-9cf6-7549d3f5be92`. Worker195 최종 Audit `36009942860` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Worker unchanged PASS. Functions/Firestore rules/D1 schema/user-data migration 없음.

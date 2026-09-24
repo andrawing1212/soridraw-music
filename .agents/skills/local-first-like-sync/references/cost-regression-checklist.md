@@ -1,5 +1,7 @@
 # Cost and regression checklist
 
+> **Current SORIDRAW freeze:** PREVIEW app160 + Worker195 likes verified by user 2026-09-24. Do not run a like-feature edit/optimization merely to satisfy this checklist. Apply it only to an explicitly approved like change or to validate that unrelated changes did **not** affect likes. See `soridraw-app160-worker195-frozen.md`.
+
 Use the smallest applicable subset, but do not skip a check merely because the code diff is small.
 
 ## Functional checks

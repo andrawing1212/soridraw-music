@@ -1,10 +1,10 @@
-requested_at=2026-09-24T17:56:00+09:00
-requested_by=user_explicit_fix_and_preview_deploy
+requested_at=2026-09-24T18:11:00+09:00
+requested_by=user_fix_like_consistency_before_deploy
 target=preview
-purpose=app158_private_revision_bounded_settlement_recovery_and_shared_cache_update_zero_read
+purpose=verify_reproducible_invalidated_baseline_stale_guard_bug_before_release
 expected_app_version=158
 required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs
 required_verifier2=scripts/verify-190-like-card-authority.mjs
-locked_feature_sha=539a0af86239c1a9309590c76c40986b7ef29999
+locked_feature_sha=16c9f3925652fac08986d25133064cb06a437033
 no_user_data_migration=true
 no_deploy=true

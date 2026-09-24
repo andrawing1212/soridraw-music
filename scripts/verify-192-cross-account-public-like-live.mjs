@@ -33,7 +33,7 @@ const flushStart = like.indexOf('flushPendingLikes = async');
 const flushEnd = like.indexOf('// App 120 deliberately ignores', flushStart);
 assert.ok(flushStart >= 0 && flushEnd > flushStart);
 const flush = like.slice(flushStart, flushEnd);
-assert.match(flush, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000|EXPLORE_LIKE_IDLE_FLUSH_MS_120/);
+assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(flush, /await requestExploreLike\(user, '\/v1\/me\/likes\/batch'/);
 assert.match(flush, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
 assert.match(flush, /await publishExplorePublicLikeInvalidation192\(uid, acceptedForSignal127\)/);

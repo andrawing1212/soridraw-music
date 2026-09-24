@@ -63,7 +63,7 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
 export const mergeExplorePublicLikeSignal192 = (
   current: unknown,
   actorUid: string,
-  changedRows: Array<{ trackId: string; ownerUid?: string }>,
+  changedRows: Array<{ trackId: string; ownerUid?: string; at?: number }>,
   now = Date.now(),
 ): ExplorePublicLikeSignal192 | null => {
   const uid = normalizeId192(actorUid, 128);
@@ -72,7 +72,11 @@ export const mergeExplorePublicLikeSignal192 = (
     .map((row) => ({
       trackId: normalizeId192(row?.trackId),
       ownerUid: normalizeId192(row?.ownerUid, 128),
-      at: Math.floor(now),
+      // This timestamp is the durable W1 acceptance boundary, not RTDB publish
+      // time. The shared R2 card may settle before this RTDB write completes.
+      at: Number.isSafeInteger(Number(row?.at)) && Number(row?.at) > 0
+        ? Math.min(Math.floor(now), Math.floor(Number(row.at)))
+        : Math.floor(now),
     }))
     .filter((row) => row.trackId);
   if (!incoming.length) return null;
@@ -94,13 +98,16 @@ export const mergeExplorePublicLikeSignal192 = (
 
 export const publishExplorePublicLikeInvalidation192 = async (
   actorUid: string,
-  rows: Array<{ trackId: string; ownerUid?: string }>,
+  rows: Array<{ trackId: string; ownerUid?: string; at?: number }>,
 ): Promise<void> => {
   const uid = normalizeId192(actorUid, 128);
   const normalized = rows
     .map((row) => ({
       trackId: normalizeId192(row?.trackId),
       ownerUid: normalizeId192(row?.ownerUid, 128),
+      at: Number.isSafeInteger(Number(row?.at)) && Number(row?.at) > 0
+        ? Math.floor(Number(row.at))
+        : Date.now(),
     }))
     .filter((row) => row.trackId)
     .slice(0, PUBLIC_LIKE_SIGNAL_MAX_192);

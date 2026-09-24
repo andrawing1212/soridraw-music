@@ -8,6 +8,7 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const appRelease = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
+const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
 
 assert.equal(String(version.version), '159');
 
@@ -41,7 +42,7 @@ assert.match(flush, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal
 assert.match(flush, /publishExplorePublicLikeInvalidation192\([\s\S]*acceptedForSignal127\.map\(\(row\) => \(\{ \.\.\.row, at: acknowledgedAt \}\)\)/);
 assert.ok(
   flush.indexOf('persistLikeOutbox(uid, latest);') <
-  flush.indexOf('publishExplorePublicLikeInvalidation192(uid, acceptedForSignal127)'),
+  flush.indexOf('publishExplorePublicLikeInvalidation192('),
   'public invalidation must follow durable local ACK handling',
 );
 assert.match(flush, /Never replay an accepted D1 mutation/);
@@ -78,6 +79,9 @@ assert.match(worker192, /bucket\.get\(/);
 assert.doesNotMatch(worker192, /env\?\.DB|env\.DB|\.prepare\s*\(/);
 assert.match(worker192, /X-SORIDRAW-D1-Read', '0'/);
 assert.match(worker192, /X-SORIDRAW-D1-Write', '0'/);
+assert.match(workerRelease, /\/v1\/public-like-cards\?trackIds=/);
+assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_ITEMS=PASS/);
+assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_D1_R0_W0=PASS/);
 
 // Shared rules expose only this small authenticated invalidation node. A writer
 // must identify itself; counts are deliberately absent from the signal schema.

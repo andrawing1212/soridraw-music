@@ -1,10 +1,10 @@
-requested_at=2026-09-24T20:18:00+09:00
+requested_at=2026-09-24T20:22:00+09:00
 requested_by=user_cross_account_public_like_live_sync
 target=preview
-purpose=app159_worker192_audit_with_safe_pending_queue_drain
+purpose=app159_worker192_pending_queue_drain_final_audit_v2
 expected_app_version=159
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
-locked_feature_sha=9ac02f8c778a77c792f3fa7b4ac500305d7205fd
+locked_feature_sha=e34512fe98eb592c7ae0e32e48b91a06eccacb49
 live_worker192_changed_card_smoke_required=true
 pending069_release_drain_guard_required=true
 no_user_data_migration=true

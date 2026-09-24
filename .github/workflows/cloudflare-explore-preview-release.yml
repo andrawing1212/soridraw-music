@@ -184,6 +184,33 @@ jobs:
           test -n "$owner"
           profile_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
           test "$profile_code" = 200
+
+          # 192: prove the deployed public changed-card endpoint uses the exact
+          # already-published Feed IDs and returns no canonical D1 usage.
+          like192_ids="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const ids=(p?.data?.items||[]).map(x=>String(x?.id||x?.trackId||'').trim()).filter(Boolean).slice(0,3);if(!ids.length)process.exit(1);process.stdout.write(ids.join(','))")"
+          like192_query="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$like192_ids")"
+          curl --retry 3 --retry-delay 1 -fsS \
+            -D "$RUNNER_TEMP/like192-headers.txt" \
+            -o "$RUNNER_TEMP/like192.json" \
+            -H "Origin: ${PREVIEW_ORIGIN}" \
+            "${PREVIEW_BASE}/v1/public-like-cards?trackIds=${like192_query}"
+          LIKE192_IDS="$like192_ids" node <<'NODE'
+          const fs=require('fs');
+          const expected=new Set(String(process.env.LIKE192_IDS||'').split(',').filter(Boolean));
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/like192.json','utf8'));
+          const items=Array.isArray(payload?.data?.items)?payload.data.items:[];
+          if(payload?.ok!==true||items.length!==expected.size)throw Error('192 changed-card smoke missing items');
+          for(const item of items){
+            const id=String(item?.trackId||'');
+            if(!expected.has(id)||!Number.isSafeInteger(Number(item?.likeCount))||Number(item.likeCount)<0) {
+              throw Error('192 changed-card smoke invalid item');
+            }
+          }
+          console.log('PUBLIC_LIKE_CARD_192_ITEMS=PASS count='+items.length);
+          NODE
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/like192-headers.txt"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/like192-headers.txt"
+          echo 'PUBLIC_LIKE_CARD_192_D1_R0_W0=PASS'
           batch_code="$(curl -sS -o "$RUNNER_TEMP/batch.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "Origin: ${PREVIEW_ORIGIN}" --data '{"mutations":[]}' "${PREVIEW_BASE}/v1/me/likes/batch")"
           test "$batch_code" != 404
           test "$batch_code" -ge 400

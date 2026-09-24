@@ -1,7 +1,7 @@
-requested_at=2026-09-24T20:14:00+09:00
+requested_at=2026-09-24T20:07:00+09:00
 requested_by=user_cross_account_public_like_live_sync
 product_code_target=8c63fdb6a04505cc30f4d89ae33f471a56a14f06
-release_source_target=192_cross_account_public_like_live
+release_source_target=192_cross_account_public_like_live_retry_after_queue_drain
 release_purpose=deploy_changed_track_public_count_live_delivery_and_5s_shared_settlement
 required_verifier=scripts/verify-192-cross-account-public-like-live.mjs
 audit_run=35990723331

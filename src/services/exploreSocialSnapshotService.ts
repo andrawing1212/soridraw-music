@@ -105,7 +105,12 @@ export const getExplorePersonalSocialSnapshot = async (
       method: 'GET',
       headers,
     });
-    recordCloudflareResponse(response, SOCIAL_SNAPSHOT_PATH);
+    // Only a missing local follow/social snapshot reaches this request. Unlike
+    // private like recovery 182/189, this call must be distinguishable in the
+    // admin cost meter without emitting UID or personal follow/like membership.
+    recordCloudflareResponse(response, SOCIAL_SNAPSHOT_PATH, {
+      outcome: `${response.ok ? `FULL ${response.status}` : `HTTP ${response.status}`} · SOCIAL CACHE MISS`,
+    });
     let payload: any = null;
     try { payload = await response.json(); } catch { payload = null; }
     if (!response.ok) {

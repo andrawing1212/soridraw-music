@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — Social Snapshot 최초 R45 읽기 식별용 진단 감사 통과, 비용 감소 미검증/미배포
+
+- `CURRENT_RELEASE_STATE.md 0GF` 우선. 이미 정상인 app164 첫 좋아요 및 app160/Worker195 PC↔모바일·타계정 좋아요 보호. 사용자 첫 진입 Social Snapshot 2 queries / R45 / W0와 재진입 R0는 실사용 사실. 첫 R45 요청의 구체 query mode와 유저 R2 exact 여부는 미확인.
+- preview 소스 후보: `exploreLikeService.ts`에 개인 snapshot 세 경로(182/189/일반) 관리자 lastOutcome 레이블, `exploreSocialSnapshotService.ts`에 follow cache miss 레이블만 추가. `scripts/verify-198-social-snapshot-diagnostic-reason.mjs` 신규 및 기존 Audit 등록. **데이터·서버 쿼리·인증·캐시·동기화/좋아요 mutation/UI 구조 변경 없음**. Audit `36043776336` SUCCESS (TS/Build/APP189/197/198·기존 회귀·D1 read-only). 앱 버전은 164 그대로, PREVIEW Hosting은 기존 app164, 새 코드 미배포.
+- 이 진단은 R45 원인을 나중에 분류할 방법이지 비용 45→0 수정 완료가 아니다. 원인 비확정 상태에서 부분 R2/guard의 보호성 canonical 검증을 생략하거나 false로 추측하는 최적화 금지.
+- 정확히 동일 최초 현상이 다시 발생하면 개인 정보 노출 없이 lastOutcome 분류와 한 계정 최소 metadata만 대조. `PERSONAL REPAIR 182`는 R2 exact metadata 불완전 확인, `PERSONAL SETTLEMENT 189`는 이전 미정산 guard, `SOCIAL CACHE MISS`는 개인 follow snapshot 초기화. 각 원인별로 데이터 정합성을 증명한 경우에만 R0 가능성 설계·검증. 임의 캐시 삭제/전체 사용자 read/임의 Worker 재배포 금지.
+- PREVIEW 배포는 사용자 요청/출시 기준 충족 후 고정 source·감사·exact build. TEST/PRODUCTION 별도 승인 전 승격 금지. 제품 코드 diff/배포 현황을 혼동하지 않는다.
+
 ## 최신 2026-09-25 — 최초 Social Snapshot D1 R45 원인 후보 감사 완료, app164 좋아요 유지
 
 - `CURRENT_RELEASE_STATE.md 0GE` 우선. 사용자 첫 방문 `/v1/me/social-snapshot` Worker1/D1 쿼리 2/행 R45/W0, 진단 초기화 후 재진입 개인 snapshot 호출 없음/전체 D1 R0/W0 직접 관찰. 최초 R45는 실제 비용이며 정상화 사례로 삭제하지 않는다.

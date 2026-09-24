@@ -354,6 +354,42 @@ const writeRecentSongsLocalVersion = (uid: string, version: number) => {
   } catch {}
 };
 
+// SORIDRAW_RECENT_GENERATION_UNCONFIRMED_LOCAL_196_20260925
+// Only IDs of newly generated, not-yet-confirmed songs. Never recover deleted
+// tracks by merging a full cached catalog into an older remote snapshot.
+const RECENT_UNCONFIRMED_SONGS_KEY_BASE = 'soridraw_recent_unconfirmed_generated_v1';
+const recentUnconfirmedKey = (uid: string) => `${RECENT_UNCONFIRMED_SONGS_KEY_BASE}_${uid}`;
+const readRecentUnconfirmedGeneratedIds = (uid: string): string[] => {
+  if (!uid || typeof localStorage === 'undefined') return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(recentUnconfirmedKey(uid)) || '[]');
+    return Array.isArray(raw)
+      ? raw.filter((value: unknown): value is string => typeof value === 'string' && isSoridrawSongId(value)).slice(0, 10)
+      : [];
+  } catch { return []; }
+};
+const markRecentGeneratedUnconfirmed = (uid: string, songs: any[]): void => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  const ids = songs.map((song) => getLiveSoridrawSongId(song)).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return;
+  try {
+    localStorage.setItem(recentUnconfirmedKey(uid), JSON.stringify([...new Set([...ids, ...readRecentUnconfirmedGeneratedIds(uid)])].slice(0, 10)));
+  } catch { console.warn('Recent generated song sync marker could not be stored.'); }
+};
+const hasUnconfirmedSongMissingFromServer = (uid: string, serverSongs: any[]): boolean => {
+  const confirmed = new Set(serverSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+  return readRecentUnconfirmedGeneratedIds(uid).some((id) => !confirmed.has(id));
+};
+const acknowledgeRecentGeneratedSongs = (uid: string, persistedSongs: any[]): void => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  const confirmed = new Set(persistedSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+  const remaining = readRecentUnconfirmedGeneratedIds(uid).filter((id) => !confirmed.has(id));
+  try {
+    if (remaining.length > 0) localStorage.setItem(recentUnconfirmedKey(uid), JSON.stringify(remaining));
+    else localStorage.removeItem(recentUnconfirmedKey(uid));
+  } catch {}
+};
+
 const persistRecentSongsDocument = async (
   ref: any,
   songs: any[],
@@ -11072,6 +11108,13 @@ const unlockAllFavorites = async () => {
 
           const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
           const currentCache = loadRecentSongsCache(user.uid);
+          if (hasUnconfirmedSongMissingFromServer(user.uid, firestoreSongs)) {
+            // The PC may have generated a song before its async server write
+            // failed. An older canonical snapshot must not erase that only copy.
+            console.warn('Unconfirmed recent song preserved locally; server is still missing it.');
+            return;
+          }
+          acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
           // A PC-generated song can be visible locally before its background
           // save reaches Firestore. Preserve it if there is no canonical doc.
           if (!snap.exists() && Array.isArray(currentCache?.history) && currentCache.history.length > 0) {
@@ -11960,6 +12003,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
     );
     if (!persistedVersion) return;
+    acknowledgeRecentGeneratedSongs(user.uid, updatedSongs);
     savedCanonically = true;
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
@@ -12816,6 +12860,8 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
       // Keep the freshly generated result in the UID-scoped local cache
       // before starting its separate background server save.
       if (user) {
+        generatedResults.forEach((song) => ensureLiveSoridrawSongId(song));
+        markRecentGeneratedUnconfirmed(user.uid, generatedResults);
         const existingLocal = loadRecentSongsCache(user.uid)?.history || [];
         const localHistory = [...generatedResults, ...existingLocal].slice(0, 10);
         if (!saveRecentSongsCache(user.uid, {

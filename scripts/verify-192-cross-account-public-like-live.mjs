@@ -11,7 +11,7 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const appRelease = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
 const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
 
-assert.equal(String(version.version), '159');
+assert.equal(String(version.version), '160');
 
 // One bounded RTDB invalidation bus for active Explore screens. It never carries
 // a public count or another account's personal heart as authority.
@@ -20,6 +20,9 @@ assert.match(publicSync, /PUBLIC_LIKE_SIGNAL_PATH_192 = 'publicSync\/exploreLike
 assert.match(publicSync, /PUBLIC_LIKE_SIGNAL_MAX_192 = 50/);
 assert.match(publicSync, /runTransaction\(/);
 assert.match(publicSync, /subscribeExplorePublicLikeInvalidation192/);
+assert.match(publicSync, /Object\.values\(rawRowsValue as Record<string, unknown>\)/);
+assert.doesNotMatch(publicSync, /signal\.actorUid === auth\.currentUser\?\.uid/);
+assert.match(publicSync, /const freshRows = signal\.rows\.filter/);
 const mergeStart = publicSync.indexOf('export const mergeExplorePublicLikeSignal192');
 const fetchStart = publicSync.indexOf('export const fetchExplorePublicLikeCards192');
 assert.ok(mergeStart >= 0 && fetchStart > mergeStart);
@@ -53,7 +56,9 @@ const flush = like.slice(flushStart, flushEnd);
 assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(flush, /await requestExploreLike\(user, '\/v1\/me\/likes\/batch'/);
 assert.match(flush, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
-assert.match(flush, /publishExplorePublicLikeInvalidation192\([\s\S]*acceptedForSignal127\.map\(\(row\) => \(\{ \.\.\.row, at: acknowledgedAt \}\)\)/);
+assert.match(flush, /publicSignalAcceptedAt192/);
+assert.match(flush, /payload\?\.data\?\.publicSignalAcceptedAt/);
+assert.match(flush, /publishExplorePublicLikeInvalidation192\([\s\S]*acceptedForSignal127\.map\(\(row\) => \(\{ \.\.\.row, at: publicSignalAcceptedAt192 \}\)\)/);
 assert.ok(
   flush.indexOf('persistLikeOutbox(uid, latest);') <
   flush.indexOf('publishExplorePublicLikeInvalidation192('),
@@ -82,6 +87,9 @@ assert.doesNotMatch(page.slice(page192Start, page192End), /setLikedTrackIds\(/);
 // poll it. Existing 30-second client batching remains intact while shared public
 // projection wakes five seconds after W1 acceptance.
 assert.match(entry, /SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924/);
+assert.match(entry, /SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924/);
+assert.match(entry, /publicSignalAcceptedAt/);
+assert.match(entry, /attachPublicLikeAcceptedAt193/);
 assert.match(entry, /PUBLIC_LIKE_CARD_MAX_192 = 50/);
 assert.match(entry, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 \* 1000/);
 const workerStart = entry.indexOf('// SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924');
@@ -141,3 +149,6 @@ console.log('192_PUBLIC_LIKE_RETRY_BOUNDED_4=PASS');
 console.log('192_IDLE_POLLING=0');
 console.log('192_SCHEDULED_AGGREGATE_OWNER_SCOPE=PASS');
 console.log('192_ORPHAN_QUEUE_POSTDEPLOY_DRAIN=PASS');
+console.log('193_PUBLIC_SIGNAL_SERVER_CLOCK=PASS');
+console.log('193_MERGED_ACTOR_ROWS_NOT_DROPPED=PASS');
+console.log('193_RTDB_ARRAY_OBJECT_COMPAT=PASS');

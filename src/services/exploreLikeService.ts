@@ -1328,6 +1328,11 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const snapshotPending127 = readSnapshotPending127(uid);
       const displayLocks = readLikeDisplayLocks(uid);
       const acknowledgedAt = Date.now();
+      const serverAcceptedAt192 = Number(payload?.data?.publicSignalAcceptedAt);
+      const publicSignalAcceptedAt192 =
+        Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
+          ? Math.floor(serverAcceptedAt192)
+          : acknowledgedAt;
       const acceptedForSignal127: ExploreLikeAcceptedRow127[] = [];
 
       for (const pending of batchEntries) {
@@ -1435,7 +1440,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
         try {
           await publishExplorePublicLikeInvalidation192(
             uid,
-            acceptedForSignal127.map((row) => ({ ...row, at: acknowledgedAt })),
+            acceptedForSignal127.map((row) => ({ ...row, at: publicSignalAcceptedAt192 })),
           );
         } catch (publicSignalError) {
           // Public live delivery is an optimization over the existing revision

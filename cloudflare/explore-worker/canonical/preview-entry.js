@@ -707,6 +707,41 @@ async function repairVerifiedSharedLikeSnapshots156(env) {
   return { repaired: true, rows: ids.length, results };
 }
 
+// SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924
+// Cross-account freshness must compare timestamps from the same clock domain.
+// The browser previously published its local Date.now(), then compared it with
+// Cloudflare/R2 updatedAt. A skewed device clock could reject the settled card
+// on every retry. Add the Worker ACK time to the already-successful batch
+// response; this is response metadata only and adds no D1/R2/user-data work.
+async function attachPublicLikeAcceptedAt193(request, response, acceptedAt) {
+  const url = new URL(request.url);
+  if (
+    request.method !== 'POST'
+    || url.pathname !== EXPLORE_LIKE_BATCH_ROUTE_103
+    || !response?.ok
+  ) return response;
+
+  let payload = null;
+  try { payload = await response.clone().json(); } catch { return response; }
+  if (!payload || payload.ok !== true || !payload.data || typeof payload.data !== 'object') {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Length');
+  return new Response(JSON.stringify({
+    ...payload,
+    data: {
+      ...payload.data,
+      publicSignalAcceptedAt: Math.max(1, Math.floor(Number(acceptedAt || Date.now()))),
+    },
+  }), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -753,6 +788,8 @@ export default {
       return handlePublicLikeCards192(request, env);
     }
     const response = await baseWorker.fetch(request, env, ctx);
-    return ensureQueuedLikeBatchScheduled103(request, env, response);
+    const publicLikeAcceptedAt193 = Date.now();
+    const scheduledResponse = await ensureQueuedLikeBatchScheduled103(request, env, response);
+    return attachPublicLikeAcceptedAt193(request, scheduledResponse, publicLikeAcceptedAt193);
   },
 };

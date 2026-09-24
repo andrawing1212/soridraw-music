@@ -1,6 +1,6 @@
 import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'firebase/database';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
-import { auth, realtimeDb } from '../firebase';
+import { realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 // SORIDRAW_EXPLORE_PUBLIC_LIKE_LIVE_SYNC_192_20260924
@@ -41,7 +41,15 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
   const version = Math.floor(Number(value.version || 0));
   const at = Math.floor(Number(value.at || 0));
   const actorUid = normalizeId192(value.actorUid, 128);
-  const rawRows = Array.isArray(value.rows) ? value.rows : [];
+  const rawRowsValue = value.rows;
+  // Firebase RTDB may materialize numeric child keys as either a dense array
+  // or an object. Accept both so a valid public invalidation is never dropped
+  // just because of the SDK's array/object reconstruction choice.
+  const rawRows = Array.isArray(rawRowsValue)
+    ? rawRowsValue
+    : rawRowsValue && typeof rawRowsValue === 'object'
+      ? Object.values(rawRowsValue as Record<string, unknown>)
+      : [];
   if (!Number.isSafeInteger(version) || version <= 0 ||
       !Number.isSafeInteger(at) || at <= 0 || !actorUid) return null;
   const rows = rawRows
@@ -124,6 +132,7 @@ export const subscribeExplorePublicLikeInvalidation192 = (
   listener: (signal: ExplorePublicLikeSignal192) => void,
 ): Unsubscribe => {
   let lastVersion = 0;
+  const seenTrackAt = new Map<string, number>();
   return onValue(
     databaseRef(realtimeDb, PUBLIC_LIKE_SIGNAL_PATH_192),
     (snapshot) => {
@@ -131,8 +140,26 @@ export const subscribeExplorePublicLikeInvalidation192 = (
       if (!signal || signal.version <= lastVersion) return;
       lastVersion = signal.version;
       if (Date.now() - signal.at > PUBLIC_LIKE_SIGNAL_RETENTION_MS_192) return;
-      if (signal.actorUid === auth.currentUser?.uid) return;
-      listener(signal);
+
+      // 193: publicSync/exploreLike is one merged changed-track bus. actorUid
+      // identifies only the latest writer, while rows can still contain changes
+      // from other accounts. Ignoring the whole payload when actorUid===me can
+      // therefore hide another account's retained row. Public rows never alter
+      // personal filled-heart membership, so process unseen rows regardless of
+      // the latest writer and dedupe each track by its accepted-at token.
+      const freshRows = signal.rows.filter((row) => {
+        const previousAt = seenTrackAt.get(row.trackId) || 0;
+        if (row.at <= previousAt) return false;
+        seenTrackAt.set(row.trackId, row.at);
+        while (seenTrackAt.size > PUBLIC_LIKE_SIGNAL_MAX_192 * 2) {
+          const oldest = seenTrackAt.keys().next().value as string | undefined;
+          if (!oldest) break;
+          seenTrackAt.delete(oldest);
+        }
+        return true;
+      });
+      if (!freshRows.length) return;
+      listener({ ...signal, rows: freshRows });
     },
     (error) => console.warn('[192] Public like invalidation unavailable; normal revision path remains active:', error),
   );

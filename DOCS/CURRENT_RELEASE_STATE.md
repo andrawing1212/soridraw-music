@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GA. 새로 공개한 곡 1개 좋아요 차단 — 영상·PREVIEW 소스 원인 경로 확인, 수정 전 (2026-09-25 KST)
+
+**사용자 실제 제보와 영상**: 기존 공개곡 좋아요는 정상. 새 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`이 Explore 첫 카드에 보이지만 좋아요 시 `좋아요 상태를 확인하고 있어요. 잠시 후 다시 시도해주세요.` 알림, 하트·숫자 변경 없음. 사용자 첨부 약 12초 화면에서 동일 현상을 확인. 해당 곡의 실제 D1 원본/개인 R2 좋아요 또는 모든 신규곡 재현 여부는 직접 측정하지 않았으므로 일반화 금지.
+
+**정적 소스 원인 경로(수정 가설 강함)**: `src/pages/ExplorePage.tsx`의 `toggleLike`는 `readExploreTrackLikeMembership127(uid,trackId)`가 `undefined`이면 클릭을 차단하고 위 문구 출력(line 1144-1154). 카드 UI는 `getExploreLikedTrackIds` 결과에서 `false` 표시할 수 있지만 실제 서비스 membership 캐시가 새 곡 ID를 포함하지 않으면 `undefined`가 유지됨. `src/services/exploreLikeService.ts`의 `getExploreLikedTrackIds`는 기존 로컬 카탈로그 ready인 계정에서 `missing=[]`로 두고 새로 등장한 ID의 false를 기입하지 않음(line 1516-1560). `readExploreTrackLikeMembership127`은 완전한 baseline이 있더라도 `cache.get(id)`를 그대로 반환(line 335-350). 기존 ID는 동작하나 신규 ID만 표시 false/클릭 undefined 불일치가 발생할 수 있음. app160→app163 관련 ExplorePage/like service diff 없음; app160/Worker195 동결 상태 자체에서 드러난 신규곡 누락 경계 가능성. 실제 계정 캐시를 읽지 못했으므로 단일 실기기 사례의 최종 데이터 원인 단정 금지.
+
+**다음 최소 수정 방향 (아직 실행·배포하지 않음)**: 개인 전체 snapshot이 실제 `complete=true`로 확인된 경우, 새 표시 곡 ID가 미포함이면 기존 좋아요 목록·pending/outbox를 보호하면서 해당 곡의 **미좋아요 false만 메모리/내구 캐시에 기록**해 UI와 클릭 판단을 일치시킨다. 부분 snapshot/미확인 계정은 absent=false 추론 금지; 해당 ID만 기존 `/v1/me/likes?trackIds=...` 한정 확인 후 확정. 30초 배치, W1 queue, 기존곡 하트/공개 숫자, RTDB, Worker195, D1/R2 스키마/캐시 전체는 변경 금지. 다음 후보에서 신규 ID first-like/unlike, 기존 ID, 부분 catalog, PC↔mobile, 업데이트·재진입 R0/W0, 배포 전 TS/Build/회귀를 검증. 사용자 수정 승인 및 감사 전까지 제품 코드/배포 없음, TEST/PRODUCTION 승격 금지. app163 최근곡 실사용 표시 PASS는 별도 유지.
+
 ## 0FZ. 사용자 실기기 확인 — app163 휴대폰 최근 생성곡 표시 PASS (2026-09-25 KST)
 
 **사용자 확인**: PREVIEW app163 배포 후 사용자가 "지금은 휴대폰에 최근 생성곡이 보여"라고 직접 보고. 기존 PC→휴대폰 누락 증상 중 **휴대폰 최근 생성곡 표시**는 실사용 관측 PASS로 갱신한다. PC 원본에 대한 삭제·재생성·캐시 초기화 없이 현재 표시된다는 관찰 결과이며, 실데이터 원본의 문서별 비교를 수행한 것은 아니다.

@@ -1,5 +1,20 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FX. 최근 생성곡 PC↔모바일 동기화 PREVIEW app163 후보 — 신호·로컬 안전 수정, 실기기/원본 미검증 (2026-09-25 KST)
+
+**사용자 시간 제보**: 2026-09-25 KST 01시 이후부터 이번 누락이 나타난 것으로 보임. GitHub `src/App.tsx`의 이전 마지막 제품 코드 변경은 2026-09-16, `app162` Hosting Run `36026936663` 완료 2026-09-25 약 01:24 KST, 첫 V1 생성 성공 기록 약 01:31 KST. **기존 recent sync 코드가 app162 배포에서 직접 바뀐 증거는 없음**. 실제로 그때 새 곡을 생성하며 기존 저장·수신 결함이 처음 드러났을 수 있다. 그 시각의 실제 Firestore user doc/RTDB trace는 미확인.
+
+**수정 대상 (PREVIEW 소스 후보, 앱 코드만)**:
+- `src/services/userDomainSyncService.ts`: recentSongs만 원본 write가 반환한 `syncVersion`을 RTDB signal version으로 우선 사용(기존 Date.now timestamp는 구형 신호 호환). UID별 RTDB 신호의 pending/ack를 기기 로컬에 각각 저장하여 /studio 밖에서 받은 변경도 보존한다. 본인 기기의 저장된 최신 신호는 local ack. null (mutation epoch skip)일 때 recent signal 발행 금지. Music Note/좋아요 경로 변경 없음.
+- `src/App.tsx`: 최근곡 진입 시 로컬 캐시와 프로필 버전뿐 아니라 **확인되지 않은 RTDB 신호**를 확인. 서버 최근곡 문서 **한 번만** 읽고 현재 로컬 미저장 편집/생성 중인 서버 저장을 보호하며, 실제 Firestore 결과를 로컬 캐시에 저장한 다음에만 수신 token 확인 처리. 조회 중 더 새 신호가 오면 완료 후 bounded 후속 확인. 페이지를 떠나도 신호 보존. 오래된 원본 조회가 PC의 아직 저장 미확인 새 곡을 덮지 않도록 신규 생성 ID는 로컬에 보관하고 성공적으로 canonical 문서에 포함된 뒤만 해제.
+- 새 곡 생성 완료 직후 서버 저장 전에 현재 UID 로컬 캐시를 먼저 보관. `saveRecentSongsBatch` 오류는 더 이상 정상 resolve하지 않으며 PC 화면에서 서버 저장 실패를 알린다. 새 곡 재생성/원본 강제 backfill 없음. 저장 실패 자동 반복 재시도 없음.
+- `src/lib/recentSongsSyncGate.ts`의 순수 버전 판정 및 `scripts/verify-196-recent-song-sync.ts`의 100/100/200, in-flight 200→300, 동일 signal R0 테스트 추가. `public/app-version.json=163` 후보. Audit-only workflow에 해당 verifier 1줄 등록.
+
+**한계/안전 게이트**:
+- 현재 실제 사용자 계정 원본 `user_recent_songs/{uid}`의 기존 누락 곡은 **조회하지 못함**. 이 수정이 그 곡의 자동 복구를 보장한다고 보고하지 않는다. PC 원본 로컬 캐시/기존 곡 ID 유지, 사용자 데이터 migration/delete/백필 없음.
+- 구형 RTDB timestamp가 원본 문서 버전과 약간 달라 업데이트 직후 일부 계정에서는 **최초 한 번** 원본 문서 읽기가 추가될 가능성. 변경 없는 재진입 및 이미 확인된 신호는 R0/W0 목표. 이 비용/대량 업데이트 위험을 사전 감사에서 평가하고 무의미한 전체 조회로 확장하지 않는다.
+- app163 배포 전 TypeScript/Build/새 verifier/전체 감사 PASS 필요. 현재 **코드 후보이며 PREVIEW 실기기/PC↔모바일 미검증**, TEST/PRODUCTION 승격 금지. 좋아요 app160/Worker195 및 Gemini app162 정상 생성 경로/Functions/Worker 완전 비변경.
+
 ## 0FW. Astra 독립분석 + GitHub 재대조: 최근곡 신호 누락 경로 확인, 실제 곡 원본은 미확인 (2026-09-25 KST)
 
 **입력**: 사용자가 Astra의 commit `b90ec19b7a84045c22b1552aa639d2e541901cb8` 정밀 분석 및 모의 실행 결과를 전달했다. ChatGPT가 동일 preview GitHub 소스의 `App.tsx` / `userDomainSyncService.ts` / `v1MutationBoundary.ts`를 재검토했다. 코드 결함이 확인된 것과 **사용자 해당 곡이 서버에 있는지**는 별개다. 해당 계정의 실제 Firestore/RTDB는 아직 읽지 못했다.

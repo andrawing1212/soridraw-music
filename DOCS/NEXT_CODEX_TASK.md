@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 최근 생성곡 app163 후보 검사·PREVIEW 실사용 게이트
+
+- 기준 `CURRENT_RELEASE_STATE.md 0FX`. 사용자 01시 이후 문제 시작 제보는 타임라인 참고. app162 배포는 01:24 KST 완료, 생성 성공 01:31, 기존 `App.tsx` 마지막 변경은 09/16. **app162가 recent 코드 자체를 바꾼 것은 아님**.
+- `preview` App/ recentSongs domain service/순수 버전 gate 최소 수정, app163 후보. local=profile100/RTDB200 → 1 read, read200 중 새300 → 후속 1회, ack 후 동일200 → 0 read. PC 로컬 신곡은 서버 저장 완료 전 보호하고 서버 저장 실패를 화면에 안내. URL/nav/개인 캐시 보호.
+- 배포 전 필수: `npx tsx scripts/verify-196-recent-song-sync.ts`, TypeScript, Build, full release audit / 기존 like·Gemini regression. 실제 원본 Firestore/RTDB는 현재 미조회, 복구 완료 선언 불가. 정상 재진입 R0/W0·무변경 서버 write0, 앱 업데이트 유발 reads 검토.
+- 사전 검사 PASS 및 데이터 손실 위험 없을 경우 고정 PREVIEW Hosting만 배포, app163 exact build/TEST·PRODUCTION 비변경 확인 후 사용자 PC↔모바일 기존 누락 곡 재검증. DATA migration/Functions/Worker 배포 금지. 좋아요 동결, Gemini SSE 불변.
+
 ## 최신 2026-09-25 — Astra 원인분석 검증 완료, 최근곡 두 갈래 안전 복구 계획
 
 - `CURRENT_RELEASE_STATE.md 0FW` 우선. Astra가 소스 모의 실행으로 **RTDB 신호 버전 미사용 + in-flight 후속 신호 누락 + background 저장 실패 swallow**를 증명, ChatGPT가 실제 preview GitHub 소스에서 관련 분기를 재확인했다. 단 해당 새 곡의 서버 저장 존재 여부는 미확인.

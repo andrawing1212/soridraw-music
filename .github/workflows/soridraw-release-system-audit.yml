@@ -53,6 +53,7 @@ jobs:
           node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
           npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
+          npx tsx scripts/verify-196-recent-song-sync.ts
           node scripts/verify-hard-ban-fallback.cjs
           node scripts/verify-154-cross-account-like-sync.mjs
           node scripts/verify-117-explore-public-count-cache-separation.mjs

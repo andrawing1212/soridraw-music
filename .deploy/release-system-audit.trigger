@@ -1,8 +1,9 @@
-requested_at=2026-09-25T02:38:00+09:00
-requested_by=user_recent_songs_pc_mobile_sync_after_1am
+requested_at=2026-09-25T02:50:00+09:00
+requested_by=user_recent_song_pc_mobile_after_1am
 target=preview
-purpose=audit_app163_recent_signal_and_unconfirmed_local_generated_song_guard
+purpose=final_audit_app163_recent_signal_and_legacy_local_data_guard
 expected_app_version=163
+previous_audit=36036423431
 required_verifier=scripts/verify-196-recent-song-sync.ts,typescript,build,like_regression
 like_feature_frozen=true
 gemini_function_unchanged=true

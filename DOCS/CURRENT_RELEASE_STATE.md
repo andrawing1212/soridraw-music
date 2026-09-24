@@ -10,6 +10,8 @@
 - 새 곡 생성 완료 직후 서버 저장 전에 현재 UID 로컬 캐시를 먼저 보관. `saveRecentSongsBatch` 오류는 더 이상 정상 resolve하지 않으며 PC 화면에서 서버 저장 실패를 알린다. 새 곡 재생성/원본 강제 backfill 없음. 저장 실패 자동 반복 재시도 없음.
 - `src/lib/recentSongsSyncGate.ts`의 순수 버전 판정 및 `scripts/verify-196-recent-song-sync.ts`의 100/100/200, in-flight 200→300, 동일 signal R0 테스트 추가. `public/app-version.json=163` 후보. Audit-only workflow에 해당 verifier 1줄 등록.
 
+**배포 전 추가 안전 보정**: 기존 app162 PC 생성곡에는 새 미저장 ID marker가 없을 수 있으므로, 로컬 최신 곡의 `createdAt`이 장치의 마지막 확인 문서 버전 및 서버 문서 버전보다 명백히 새롭고 그 곡 ID가 서버에 없으면 **PC 원본 로컬을 유지하고 수신 ACK를 미룸**. 이는 누락 곡을 강제 서버 저장하거나 삭제된 곡을 자동 복원하지 않으며, 실제 서버 상태 확인 전 무작정 덮어쓰지 않기 위한 제한된 보호책이다. 후보 `236f7cfc93ce8bd5569ce5f8c6008b5c5787123e`에서 추가. 앞선 Release System Audit `36036423431`은 이전 후보 PASS였으므로 이 추가 변경의 최종 Audit을 재실행한다.
+
 **한계/안전 게이트**:
 - 현재 실제 사용자 계정 원본 `user_recent_songs/{uid}`의 기존 누락 곡은 **조회하지 못함**. 이 수정이 그 곡의 자동 복구를 보장한다고 보고하지 않는다. PC 원본 로컬 캐시/기존 곡 ID 유지, 사용자 데이터 migration/delete/백필 없음.
 - 구형 RTDB timestamp가 원본 문서 버전과 약간 달라 업데이트 직후 일부 계정에서는 **최초 한 번** 원본 문서 읽기가 추가될 가능성. 변경 없는 재진입 및 이미 확인된 신호는 R0/W0 목표. 이 비용/대량 업데이트 위험을 사전 감사에서 평가하고 무의미한 전체 조회로 확장하지 않는다.

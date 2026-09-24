@@ -10,9 +10,16 @@ const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const appVersion = Number(version.version);
 assert.ok(Number.isFinite(appVersion) && appVersion >= 105, `105 one-minute contract incompatible with app ${version.version}`);
 
-// Shared publication remains one event-driven alarm one minute after accepted intake.
+// Shared publication remains event-driven with no fixed cron. App159 keeps the
+// protected 30-second client batch, then shortens only the post-accept shared
+// projection delay so a cross-account changed-track signal can converge quickly.
 assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916/);
-assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000;/);
+if (appVersion >= 159) {
+  assert.match(worker, /SORIDRAW_EXPLORE_PUBLIC_LIKE_CARD_READ_192_20260924/);
+  assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 \* 1000;/);
+} else {
+  assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000;/);
+}
 assert.match(worker, /cron: 'event-like-batch-1m-105'/);
 assert.match(worker, /ExploreLikeBatchScheduler103 extends DurableObject/);
 assert.doesNotMatch(worker, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 \* 60 \* 1000/);
@@ -52,7 +59,7 @@ assert.match(revision, /feed-revision-response\.v3:/);
 assert.doesNotMatch(revision, /const REVISION_CACHE_TTL_MS = 5 \* 60 \* 1000;/);
 
 console.log('105_EXPLORE_LIKE_1MIN=PASS');
-console.log('SERVER_AGGREGATE_WINDOW=1MIN_EVENT_DRIVEN');
+console.log(appVersion >= 159 ? 'SERVER_AGGREGATE_WINDOW=5SEC_AFTER_W1_EVENT' : 'SERVER_AGGREGATE_WINDOW=1MIN_EVENT_DRIVEN');
 console.log(appVersion >= 120 ? 'ACTOR_BATCH_IDLE=30_SECONDS' : 'CLIENT_EVENT_WINDOW=1MIN');
 console.log(appVersion >= 121 ? 'VIEWER_ACTIVITY_GATE=120_SECONDS' : 'VIEWER_REFRESH=LEGACY_105');
 console.log('REVISION_CACHE_TTL=1MIN');

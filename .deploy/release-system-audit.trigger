@@ -1,9 +1,9 @@
-requested_at=2026-09-25T04:01:00+09:00
-requested_by=user_first_entry_social_snapshot_cost_fix
-source_before_trigger=91567c23610b24800ef5d922954488b22880a6a5
+requested_at=2026-09-25T04:07:00+09:00
+requested_by=user_finish_and_deploy_preview_snapshot_reason
+source_before_trigger=6002e11393c6e12218030c4bc669ac1e0f803ec5
 target=preview
-purpose=audit_app164_snapshot_reason_attribution_only_no_change_to_server_queries
-expected_app_version=164
+purpose=final_audit_app165_only_diagnostic_attribution
+expected_app_version=165
 required_verifier=scripts/verify-198-social-snapshot-diagnostic-reason.mjs,scripts/verify-189-personal-like-settled-guard-release.mjs,scripts/verify-197-new-public-track-like.mjs,typescript,build
 existing_like_mutation_paths_frozen=true
 worker195_unchanged=true

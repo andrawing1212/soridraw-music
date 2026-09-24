@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — 신규 공개곡 최초 좋아요 국소 수정 완료, Audit 최종 결과 대기
+
+- `CURRENT_RELEASE_STATE.md 0GB` 최우선. 사용자 다른 좋아요 절대 보호 승인에 따라 preview 제품 후보 `467ba77241555dbe24e6648900268c0a03427026`에만 최소 수정; 현재 preview의 제품 소스 동일. `src/services/exploreLikeService.ts` 신규 ID 최초 좋아요 상태: complete baseline이면 missing ID false 로컬 기록, partial/미확인이면 누락 ID만 bounded 검증. 기존 liked/pending/unsettled 우선.
+- 회귀 `scripts/verify-197-new-public-track-like.mjs` / audit 등록, audit-only trigger `1f4a5dd37a6d5db78259c8b68182b043fde2c0bf` 실행 요청. **실제 GitHub Audit 완료·결과, TypeScript/Build/Test는 아직 확인 못함**. 별도 확인 전 PASS/배포 보고 금지.
+- 다음: CI Run 확인. FAIL이면 원인 한정 수정하고 재감사, PASS면 변경파일 범위/좋아요 기존 기능/비용/데이터 독립 검증. 기존 Worker195, RTDB 규칙, Firebase 사용자 원본, 최근곡 app163, Gemini, UI/CSS 비변경 확인. 사용자 별도 배포 요청 전 PREVIEW 제품 배포 없음; TEST/PRODUCTION 금지.
+- PREVIEW 배포 및 실사용 시 신규곡 0→1→0, 기존곡 하트/숫자, 같은 UID PC↔모바일, 다른 계정 공개숫자, 무변경 재진입 R0/W0, W1~W2 물리비용 검증. 미확인 항목은 미검증 유지.
+
 ## 최신 2026-09-25 — 신규 공개곡 첫 좋아요 차단: 코드 최소 수정 전 원인 확인
 
 - `CURRENT_RELEASE_STATE.md 0GA` 최우선. 사용자 영상의 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`에서 하트가 변하지 않고 `좋아요 상태를 확인하고 있어요` 안내. 기존 공개곡은 정상. 제품 수정/재배포 전.

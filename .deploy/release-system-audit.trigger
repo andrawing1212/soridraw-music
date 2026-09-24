@@ -1,9 +1,9 @@
-requested_at=2026-09-24T19:31:00+09:00
+requested_at=2026-09-24T19:36:00+09:00
 requested_by=user_continue_like_fix
 target=preview
-purpose=verify_worker191_remote_scheduled_route_fallback
+purpose=retest_worker191_scheduled_route_fallback_verifier
 expected_app_version=158
 required_verifier=scripts/verify-191-bounded-public-like-convergence.mjs
-locked_feature_sha=cb11b93c4e5645cf9be77a42258709b2c1765057
+locked_feature_sha=c5be6a383b35a61fb1490cade1a9e222d0849350
 no_user_data_migration=true
 no_deploy=true

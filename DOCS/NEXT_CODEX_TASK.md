@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app164 신규 공개곡 첫 좋아요 실사용 해결 확인·스킬 업데이트, 추가 코드 작업 없음
+
+- `CURRENT_RELEASE_STATE.md 0GD` 및 `.agents/skills/local-first-like-sync/SKILL.md`·`references/soridraw-app164-worker195-frozen.md` 기준. 사용자 신규 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)` 좋아요 차단 해결 확인. app164 PREVIEW Hosting `36040776352`, exact release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`, Audit `36040506539` 성공 유지.
+- **좋아요 정상 기능 재수정 금지.** app164 신규곡 최초 상태/기존 app160 + Worker195 개인 하트·좋아요 해제·같은 계정 PC↔모바일·타계정 공개 숫자·30초 batch/W1/RTDB 캐시 보호. 사용자의 새 구체 오류와 명확한 수정 지시 없이는 코드/배포/진단을 열지 않는다.
+- 이번 요청은 좋아요 스킬·참조·회귀 체크리스트·AGENTS·현재 상태 기록 갱신만. 제품 코드/Functions/Worker/Rules/D1/R2/Firestore 사용자 원본, TEST/PRODUCTION 변경 없음. 새 PC/모바일 전체 매트릭스 및 D1 실제 mutation W1~W2 물리비용은 별도 측정 전, 자동 PASS로 간주 금지.
+- 이후 별도 명시 작업이 없다면 `CURRENT_RELEASE_STATE.md 0FU`의 추가 영어 가사 카드 영어 제목 누락·느린 생성 분석을 읽기 전용으로 검토. 기존 곡 생성/Gemini 성공 경로·정상 좋아요 동결 유지. TEST/PRODUCTION은 명시 승인 전 승격 금지.
+
 ## 최신 2026-09-25 — app164 PREVIEW 배포 완료; 신규 공개곡 첫 좋아요 실기기 확인
 
 - `CURRENT_RELEASE_STATE.md 0GC` 우선. app164 PREVIEW Hosting `36040776352` SUCCESS, exact build PASS, release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`. 전체 감사 `36040506539` SUCCESS, TypeScript/Build/APP197·기존 like 회귀 PASS. Worker195, RTDB Rules, Functions, TEST/PRODUCTION 비변경.

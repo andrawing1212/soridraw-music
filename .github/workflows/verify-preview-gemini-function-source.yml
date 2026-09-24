@@ -58,6 +58,13 @@ jobs:
           if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial song timeout must be 90s');
           if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial song timeout must be 75s');
           if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout must be 330s');
+          if (!src.includes('SORIDRAW_GEMINI_READONLY_MODEL_AVAILABILITY_162')) throw new Error('Read-only model diagnostic missing');
+          if (!src.includes('db.collection("user_api_keys").doc(uid).get()')) throw new Error('User-scoped key retrieval missing');
+          if (!src.includes('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000')) throw new Error('Non-generating models.list route missing');
+          const adminAudit = fs.readFileSync('src/pages/AdminGeminiAuditPage.tsx', 'utf8');
+          if (!adminAudit.includes('readPreviewGeminiModelAvailability')) throw new Error('Existing admin audit model check missing');
+          const proxy = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
+          if (!proxy.includes("body: JSON.stringify({ diagnostic: 'model-availability' })")) throw new Error('Read-only diagnostic client missing');
           if (!src.includes('const geminiTotalDeadlineMs = Date.now() + 300_000;')) throw new Error('Gemini total deadline missing');
           if (!src.includes('Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs)')) throw new Error('Gemini fallback budget clamp missing');
           if (!src.includes('consumeGeminiInteractionSse(upstream, model)')) throw new Error('SSE parser not connected');

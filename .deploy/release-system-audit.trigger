@@ -1,8 +1,8 @@
-requested_at=2026-09-25T01:14:00+09:00
+requested_at=2026-09-25T01:30:00+09:00
 requested_by=user_gemini_sse_preview_work
 target=preview
-purpose=audit_gemini_store_false_sse_parser_and_300s_bounded_fallback
-expected_app_version=161
+purpose=audit_app162_gemini_nonstored_sse_and_admin_models_list
+expected_app_version=162
 required_verifier=gemini_sse_mock,gemini_function_source,verify-147-gemini-prompt-and-cues,verify-hard-ban-fallback,like_regression
 shared_gemini_function_unchanged=true
 likes_frozen=true

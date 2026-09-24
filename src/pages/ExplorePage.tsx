@@ -41,6 +41,11 @@ import {
 } from '../services/exploreLikedTracksService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
+  fetchExplorePublicLikeCards192,
+  subscribeExplorePublicLikeInvalidation192,
+  type ExplorePublicLikeSignalRow192,
+} from '../services/explorePublicLikeSyncService';
+import {
   getExploreFollowState,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
@@ -376,12 +381,110 @@ export default function ExplorePage() {
   const feedRevisionActivityAtRef = useRef(0);
   const feedRevisionRequestedUrlRef = useRef('');
   const likeInteractionVersionRef090 = useRef(0);
+  // 192: a single Explore-level public-count listener. It never changes
+  // another account's personal filled-heart state.
+  const publicLikeVisibleTracksRef192 = useRef<Map<string, string>>(new Map());
+  const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
     likeHydrationKeyRef.current = '';
     setLikedTrackIds({});
   }), []);
+
+  // Keep a render-current index without resubscribing the RTDB listener whenever
+  // React replaces a Feed/Profile array.
+  publicLikeVisibleTracksRef192.current = new Map(
+    [...tracks, ...profileTracks, ...profileLikedTracks]
+      .filter((track) => Boolean(track?.id))
+      .map((track) => [track.id, track.ownerUid || '']),
+  );
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    let cancelled = false;
+    const scheduleRefresh192 = (delayMs: number) => {
+      if (publicLikeRefreshTimerRef192.current != null) return;
+      publicLikeRefreshTimerRef192.current = window.setTimeout(async () => {
+        publicLikeRefreshTimerRef192.current = null;
+        if (cancelled) return;
+        const pending = [...publicLikePendingRowsRef192.current.values()];
+        if (!pending.length) return;
+
+        const ids = pending.map((row) => row.trackId);
+        try {
+          const cards = await fetchExplorePublicLikeCards192(ids);
+          if (cancelled) return;
+          const cardById = new Map(cards.map((card) => [card.trackId, card]));
+          const settled = new Map<string, number>();
+
+          for (const row of pending) {
+            const card = cardById.get(row.trackId);
+            // The invalidation is sent when W1 is accepted. Only an R2 card
+            // written at/after that signal can be trusted as the new public count.
+            if (!card || card.updatedAt < row.at) continue;
+            settled.set(row.trackId, card.likeCount);
+            publicLikePendingRowsRef192.current.delete(row.trackId);
+            const ownerUid = card.ownerUid || row.ownerUid;
+            patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });
+            if (ownerUid) {
+              patchExplorePublicProfileFirstViewTrack(ownerUid, row.trackId, { likeCount: card.likeCount });
+            }
+            patchExploreLikedTrackCachedCount091(user.uid, row.trackId, card.likeCount);
+          }
+
+          if (settled.size) {
+            const patchPublicCounts192 = (previous: ExploreTrack[]) => previous.map((track) => (
+              settled.has(track.id) ? { ...track, likeCount: settled.get(track.id)! } : track
+            ));
+            setTracks(patchPublicCounts192);
+            setProfileTracks(patchPublicCounts192);
+            setProfileLikedTracks(patchPublicCounts192);
+          }
+        } catch (reason) {
+          console.warn('[192] Changed-track public like refresh deferred:', reason);
+        }
+
+        // Bounded retry only while an actual changed-track signal is unresolved.
+        // No idle timer and no D1 read are introduced.
+        if (!cancelled && publicLikePendingRowsRef192.current.size) {
+          scheduleRefresh192(5_000);
+        }
+      }, Math.max(0, delayMs));
+    };
+
+    const unsubscribe = subscribeExplorePublicLikeInvalidation192((signal) => {
+      if (cancelled) return;
+      const visible = publicLikeVisibleTracksRef192.current;
+      let relevant = false;
+      for (const row of signal.rows) {
+        if (!visible.has(row.trackId)) continue;
+        relevant = true;
+        const previous = publicLikePendingRowsRef192.current.get(row.trackId);
+        if (!previous || row.at >= previous.at) {
+          publicLikePendingRowsRef192.current.set(row.trackId, row);
+        }
+      }
+      if (!relevant) return;
+
+      // Worker192 settles the already 30-second-batched W1 queue five seconds
+      // after acceptance. Wait slightly longer, then read only the changed R2 cards.
+      const firstDelay = Math.max(0, signal.at + 7_000 - Date.now());
+      scheduleRefresh192(firstDelay);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      publicLikePendingRowsRef192.current.clear();
+      if (publicLikeRefreshTimerRef192.current != null) {
+        window.clearTimeout(publicLikeRefreshTimerRef192.current);
+        publicLikeRefreshTimerRef192.current = null;
+      }
+    };
+  }, [user?.uid]);
 
   // SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920
   // The same account-owned boolean drives every Heart in Feed/Profile/Liked.

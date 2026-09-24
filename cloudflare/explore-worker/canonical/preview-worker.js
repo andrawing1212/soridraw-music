@@ -23277,7 +23277,7 @@ async function drainPublicLikeRetry190(env) {
       const result = await patchSharedFeedLikeCounts065(env, pending.rows);
       await patchExploreVisibleProfiles056(env, pending.rows);
       await bucket.delete(EXPLORE_PUBLIC_LIKE_RETRY_KEY_190);
-      if (true) return { drained: true, rows: pending.rows.length, result };
+      return { drained: true, rows: pending.rows.length, result };
     } catch (error) {
       if (attempt + 1 >= EXPLORE_PUBLIC_LIKE_RETRY_LIMIT_190) {
         return { drained: false, rows: pending.rows.length, deferred: true, error: String(error?.message || error || 'unknown') };

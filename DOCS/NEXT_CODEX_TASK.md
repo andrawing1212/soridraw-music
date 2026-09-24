@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app164 PREVIEW 배포 완료; 신규 공개곡 첫 좋아요 실기기 확인
+
+- `CURRENT_RELEASE_STATE.md 0GC` 우선. app164 PREVIEW Hosting `36040776352` SUCCESS, exact build PASS, release SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`. 전체 감사 `36040506539` SUCCESS, TypeScript/Build/APP197·기존 like 회귀 PASS. Worker195, RTDB Rules, Functions, TEST/PRODUCTION 비변경.
+- **사용자 실기기 검증**: 동일 PREVIEW 계정으로 새 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)` 최초 좋아요→30초 처리 후 숫자/PC↔모바일 확인→해제; 기존 정상 공개곡 1곡도 하트/숫자 변함없는지 확인. 개인 캐시 삭제·기존 곡 재공개·새로운 Gemini 생성 금지.
+- 실기기 실패 시: 신규 곡의 로컬 membership false/true, outbox, 개인 R2 snapshot complete, 서버 원본의 해당 track 관계만 제한 조회. 타계정/전체곡 scan 금지. 정상 기능 전체 재작업 금지.
+- 정상 캐시 재방문 R0/W0, 새 ID partial 1곡 한정 검증, 신규 원격 W1~W2 실제 물리비용은 별도 측정 전이므로 실사용/비용 최종 PASS 주장 금지. W3+ 또는 기존곡/교차기기 회귀면 TEST 승격 차단.
+- 사용자 TEST 요청 전 main 승격 금지. PRODUCTION 명확 승인 전 배포 금지. 다른 기능 변경은 독립 작업으로 분리.
+
 ## 최신 2026-09-25 — 신규 공개곡 최초 좋아요 국소 수정 완료, Audit 최종 결과 대기
 
 - `CURRENT_RELEASE_STATE.md 0GB` 최우선. 사용자 다른 좋아요 절대 보호 승인에 따라 preview 제품 후보 `467ba77241555dbe24e6648900268c0a03427026`에만 최소 수정; 현재 preview의 제품 소스 동일. `src/services/exploreLikeService.ts` 신규 ID 최초 좋아요 상태: complete baseline이면 missing ID false 로컬 기록, partial/미확인이면 누락 ID만 bounded 검증. 기존 liked/pending/unsettled 우선.

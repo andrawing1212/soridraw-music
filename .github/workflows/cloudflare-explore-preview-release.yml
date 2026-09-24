@@ -295,42 +295,50 @@ jobs:
             echo '156_BOUNDED_SHARED_R2_REPAIR=PASS'
           fi
 
-          # 191: explicitly requested one-time repair of proven shared public like
-          # drift. Reuses the established preview-only temporary cron with an
-          # R2 marker and finally-restored schedules. Never mutates canonical D1.
+          # 191: one-time repair of proven shared public like drift.
+          # Do not depend on a newly-created production cron propagating in time.
+          # Wrangler remote dev runs this exact scheduled handler once against the
+          # same remote D1/R2 bindings, then exits. Canonical D1 stays read-only.
           if curl -fsSL "$request_trigger_url" | grep -Fxq 'repair_shared_like_snapshot_191=true'; then
             test "$(cat "$RUNNER_TEMP/preview-crons-before.json")" = '[]'
             marker_key="soridraw-profile-media/internal/explore/repair-v191/bounded-first40.json"
             marker_file="$RUNNER_TEMP/like191-repair-marker.json"
-            printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/repair191-cron.json"
-            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              --data-binary @"$RUNNER_TEMP/repair191-cron.json" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
-              | jq -e '.success == true' >/dev/null
-            echo '191_PREVIEW_TEMP_CRON=ENABLED'
-            repaired=0
-            for attempt in $(seq 1 24); do
-              sleep 45
-              if node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote >/dev/null 2>&1; then
-                if node - "$marker_file" <<'NODE'
+            rm -f "$marker_file"
+            dev_log="$RUNNER_TEMP/like191-remote-dev.log"
+            (
+              cd canonical
+              node ../node_modules/wrangler/bin/wrangler.js dev                 --remote                 --test-scheduled                 --config wrangler.preview.jsonc                 --ip 127.0.0.1                 --port 8791                 --log-level error                 --show-interactive-dev-session=false
+            ) >"$dev_log" 2>&1 &
+            dev_pid=$!
+            cleanup_191_dev() {
+              kill "$dev_pid" >/dev/null 2>&1 || true
+              wait "$dev_pid" >/dev/null 2>&1 || true
+            }
+            ready=0
+            for attempt in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:8791/" -o /dev/null >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              if ! kill -0 "$dev_pid" >/dev/null 2>&1; then
+                cat "$dev_log" || true
+                break
+              fi
+              sleep 1
+            done
+            test "$ready" = 1
+            curl -fsS --max-time 120               "http://127.0.0.1:8791/cdn-cgi/local/scheduled?cron=*+*+*+*+*"               -o "$RUNNER_TEMP/like191-scheduled-response.txt"
+            cleanup_191_dev
+            dev_pid=0
+            echo '191_REMOTE_SCHEDULED_EXECUTION=PASS'
+
+            node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote
+            node - "$marker_file" <<'NODE'
           const fs=require('fs');
           const marker=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
           if(marker.schemaVersion!==1||!Number.isSafeInteger(marker.changedTracks)||marker.changedTracks<0||marker.changedTracks>80)process.exit(1);
           console.log('191_R2_REPAIR_MARKER=PASS changed='+marker.changedTracks);
           NODE
-                then repaired=1; break; fi
-              fi
-              echo "191_REPAIR_WAIT_ATTEMPT=$attempt"
-            done
-            printf '[]' > "$RUNNER_TEMP/repair191-original-cron.json"
-            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              --data-binary @"$RUNNER_TEMP/repair191-original-cron.json" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
-              | jq -e '.success == true' >/dev/null
-            echo '191_PREVIEW_CRON_RESTORED=PASS'
-            test "$repaired" = 1
             node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT d.id,COALESCE(s.like_count,0) AS canonical_count FROM explore_derived_tracks d INDEXED BY idx_explore_rank_latest LEFT JOIN track_stats s ON s.track_id=d.id WHERE d.active=1 ORDER BY d.published_at DESC,d.id DESC LIMIT 40" --json > "$RUNNER_TEMP/like191-canonical.json"
             node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -338,8 +346,8 @@ jobs:
           const byId=new Map(rows.map(x=>[String(x.id),Number(x.canonical_count)]));
           let sampled=0,bad=0;
           for(const sort of ['latest','popular']) {
-            const url=process.env.PREVIEW_BASE+'/v1/feed?sort='+sort+'&limit=40&__soridraw_r2_only=108';
-            const response=await fetch(url,{headers:{Origin:process.env.PREVIEW_ORIGIN}});
+            const url=process.env.PREVIEW_BASE+'/v1/feed?sort='+sort+'&limit=40&__soridraw_r2_only=108&__repair191_verify='+Date.now();
+            const response=await fetch(url,{headers:{Origin:process.env.PREVIEW_ORIGIN,'Cache-Control':'no-cache'}});
             if(!response.ok)throw Error('191 '+sort+' HTTP '+response.status);
             const payload=await response.json();
             if(!Array.isArray(payload?.data?.items))throw Error('191 '+sort+' malformed');

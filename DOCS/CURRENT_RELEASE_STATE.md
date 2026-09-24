@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GC. PREVIEW app164 신규 공개곡 최초 좋아요 수정 Hosting 배포 완료 — 실기기 검증 전 (2026-09-25 KST)
+
+**릴리스**: 사용자가 다른 좋아요 기능을 무조건 보호하고 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`의 신규곡 첫 좋아요만 수정하도록 승인. preview 제품 변경 `src/services/exploreLikeService.ts`만 (신규 ID 초기 상태 로컬 기록/partial 상태에서 누락 ID 한정 검증); `public/app-version.json=164`. 제품 코드 기준 `e151d033e59a5959c0bc876c86dab577ab3847dc`, 최종 감사 source `75f40622a25b881b5d0b55f0233885df98bc2655`, 최종 PREVIEW 릴리스 SHA `c6d580b65349071d67d17c11fa7fd83afc5b98f9`. Release System Audit `36040506539` SUCCESS (TypeScript/Build, 신규 APP197 및 기존 like·Gemini·recent-song 회귀, Worker TEST/PRODUCTION dry-run, shared D1 read-only, 보호 branch 검사). 앞선 `36039567013`/`36040041556`은 구형 정적 회귀검사가 신규곡 예외를 허용하지 않아 FAIL; `verify-127`/`175`/`178`의 조건을 complete 정상 R0 및 partial unknown 1곡 한정으로 정정 후 최종 PASS. 신규 `scripts/verify-197-new-public-track-like.mjs` 추가, 기존 Audit workflow에는 해당 verifier 1줄만 등록.
+
+**실제 배포**: Firebase PREVIEW Hosting Run `36040776352` SUCCESS. `LOCKED_PREVIEW_SHA=c6d580b65349071d67d17c11fa7fd83afc5b98f9`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=164`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. shared RTDB rules `SKIPPED`; Worker195/Cloudflare, Functions/Gemini, Firestore/D1/R2 원본·스키마·Rules 비변경. 사용자 데이터 migration/backfill/복사/삭제 없음. 최근곡 app163 정상 표시 및 기존곡 좋아요·30초 로컬 batch/PC↔모바일/다른 계정 공개숫자 코드는 비변경.
+
+**남은 검증**: 실제 새 곡 첫 클릭 0→1→0, 기존 공개곡 하트 및 PC↔모바일/타계정 공개 숫자, 새 기기·partial catalog 및 물리 D1 `rows_written W1~W2` 아직 실사용 측정 전. 자동검사 APP197 complete 첫 상태/기존 하트·outbox/partial targeted/warm R0 PASS이며 물리 원격 비용 검증으로 확대 해석 금지. 사용자 PREVIEW 실사용 전 TEST/PRODUCTION 승격 금지. 동일 곡 새로 공개/비공개 반복·캐시 삭제·곡 재생성은 요구하지 않음. 실제 문제가 남으면 해당 곡의 개인 상태와 changed-track만 읽기 전용 확인하고 정상 기능을 다시 개편하지 않음.
+
 ## 0GB. 신규 공개곡 최초 좋아요 국소 수정 commit / 감사 실행 요청 — 배포 전 (2026-09-25 KST)
 
 **사용자 승인**: 다른 좋아요 기능 무조건 보호하며 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)` 신규 공개곡 최초 클릭 차단만 수정. 고정 기준 `preview` 시작 `1c671e994c1a89843cd25f2ce9e04ad452745205`. 제품 수정 commit `467ba77241555dbe24e6648900268c0a03427026`, 회귀 테스트 `9f6ed82280660285773c4f39b3f7a1e9ab5c0292`, 기존 Release System Audit에 테스트 등록 `2229b7b47281b18139212289ec4db736cdb310aa`. 감사-only trigger `1f4a5dd37a6d5db78259c8b68182b043fde2c0bf` (no_deploy=true).

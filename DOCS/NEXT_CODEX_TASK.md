@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app162 사용자 1곡 생성 완료 PASS, 모델별 오류는 잔존: 정상 경로 우선 보호
+
+- `CURRENT_RELEASE_STATE.md 0FT` 기준. 사용자 제공 관리자 화면: `[Classic City Pop] 어린 새벽에 닿을 때` **완료**, 전체 1분17초, 3회 호출. 3.6 4.1초 `Gemini stream reported an error`, 3.5 20.9초 provider 503, 3.5-lite 46.6초 **성공** / input 25,946 + output 2,891 + thoughts 2,344 = total 31,181 token. 사용자가 모델 목록 5개 모두 등재 확인.
+- app162 `store:false + stream:true`, SSE parser completed-event/usage, 300s request budget, UI audit model list 정상 성공 기록. 앞의 2모델 실패 및 별도 사용량·물리 과금 여부 미검증. 출력물 본문/최종 가사·언어·금지어·섹션·5단 productionPrompt의 각각 상세 확인은 아직 없음.
+- **즉시 추가 코드 수정·모델 순서 조정·추가 API 호출 금지**: 실제 1곡 성공 경로가 확인됐으므로 현재 PREVIEW를 보존. 사용자 결과물에서 문제가 드러날 때만 해당 원인 최소 수정. 오류시 3.6 SSE provider event의 code와 3.5의 503을 구별해 한 세션만 비밀정보 없이 진단.
+- 현재 PREVIEW app162 Hosting `36026936663` SUCCESS, Gemini Function `36026587156` SUCCESS. TEST/PRODUCTION 비변경, Worker195 및 좋아요 동결.
+- 다음 선택: 생성된 최종 결과의 가사·5단 명령·섹션·금지어·언어 품질을 확인해 실제 완성 기준 PASS 여부 결정. 사용자 TEST 승격 요청 전 임의 승격/재배포 없음.
+
 ## 최신 2026-09-25 — app162 / Gemini SSE PREVIEW 배포 완료, 모델 목록 1회 검사 후 실사용 1곡
 
 - `CURRENT_RELEASE_STATE.md 0FS`가 최우선. 현재 app162 PREVIEW Hosting Run `36026936663` SUCCESS/exact build, PREVIEW Gemini Function Run `36026587156` SUCCESS/shared Function unchanged, SSE source Audit `36026405886`, full Audit `36026316178` SUCCESS. 좋아요 app160/Worker195 정상기준 보호.

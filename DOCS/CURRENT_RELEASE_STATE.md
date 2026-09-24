@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GB. 신규 공개곡 최초 좋아요 국소 수정 commit / 감사 실행 요청 — 배포 전 (2026-09-25 KST)
+
+**사용자 승인**: 다른 좋아요 기능 무조건 보호하며 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)` 신규 공개곡 최초 클릭 차단만 수정. 고정 기준 `preview` 시작 `1c671e994c1a89843cd25f2ce9e04ad452745205`. 제품 수정 commit `467ba77241555dbe24e6648900268c0a03427026`, 회귀 테스트 `9f6ed82280660285773c4f39b3f7a1e9ab5c0292`, 기존 Release System Audit에 테스트 등록 `2229b7b47281b18139212289ec4db736cdb310aa`. 감사-only trigger `1f4a5dd37a6d5db78259c8b68182b043fde2c0bf` (no_deploy=true).
+
+**수정 범위**: `src/services/exploreLikeService.ts`의 신규 visible ID 초기 판정 부분만 수정. 기존 검증된 **complete** 개인 좋아요 snapshot이 있는 계정은 기존 하트/미전송 outbox/수신 미정산 상태를 우선 보존하고 **캐시에 없던 해당 ID만 false 1회 로컬 기록**. complete가 아닌 partial/미확인 계정은 absent=false 추정 대신 **누락된 visible ID만** 기존 제한된 `/v1/me/likes?trackIds` 경로로 검증해 지속 저장. 로컬 캐시 정상 재방문 추가 read/write 없음 목표. `ExplorePage.tsx`, 공용 숫자, 30초 batch/W1 queue, Worker195, RTDB 규칙, D1/R2/Firestore 원본, Gemini, 최근곡 app163 및 UI/CSS **변경 없음**.
+
+**검사·게이트**: 실제 production 함수 두 개를 추출해 실행하는 `scripts/verify-197-new-public-track-like.mjs` 추가, complete 신규 false/기존 true·false/미전송·수신 가드/partial targeted/warm R0 검증. 기존 Release System Audit에 한 줄 등록하고 감사-only trigger 실행 요청. **현재 CI 최종 결과/실사용 PC·모바일/물리 D1 비용은 미확인**이므로 TypeScript/Build/Test PASS 및 배포 완료로 보고 금지. 다음은 GitHub Audit 결과 확인 → FAIL이면 수정/승격 중단 → PASS면 독립 감사 및 필요한 경우에만 사용자 PREVIEW 배포 요청. TEST/PRODUCTION 변경·배포 금지. 사용자 데이터 원본 변경 없음.
+
 ## 0GA. 새로 공개한 곡 1개 좋아요 차단 — 영상·PREVIEW 소스 원인 경로 확인, 수정 전 (2026-09-25 KST)
 
 **사용자 실제 제보와 영상**: 기존 공개곡 좋아요는 정상. 새 공개곡 `[Melodic Rap] 한 정거장 일찍(한 단어 훅)`이 Explore 첫 카드에 보이지만 좋아요 시 `좋아요 상태를 확인하고 있어요. 잠시 후 다시 시도해주세요.` 알림, 하트·숫자 변경 없음. 사용자 첨부 약 12초 화면에서 동일 현상을 확인. 해당 곡의 실제 D1 원본/개인 R2 좋아요 또는 모든 신규곡 재현 여부는 직접 측정하지 않았으므로 일반화 금지.

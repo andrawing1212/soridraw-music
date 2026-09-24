@@ -1,11 +1,11 @@
-requested_at=2026-09-25T03:44:00+09:00
-requested_by=user_app164_first_entry_d1_read_45_analysis
-source_before_trigger=0892fce2b9478712ca192984b78a843c361a3f66
+requested_at=2026-09-25T04:01:00+09:00
+requested_by=user_first_entry_social_snapshot_cost_fix
+source_before_trigger=91567c23610b24800ef5d922954488b22880a6a5
 target=preview
-purpose=readonly_audit_app164_social_snapshot_one_time_repair_and_revisit_r0
+purpose=audit_app164_snapshot_reason_attribution_only_no_change_to_server_queries
 expected_app_version=164
-required_verifier=scripts/verify-189-personal-like-settled-guard-release.mjs,typescript,build,like_regression
-app_like_code_unchanged=true
+required_verifier=scripts/verify-198-social-snapshot-diagnostic-reason.mjs,scripts/verify-189-personal-like-settled-guard-release.mjs,scripts/verify-197-new-public-track-like.mjs,typescript,build
+existing_like_mutation_paths_frozen=true
 worker195_unchanged=true
 no_user_data_migration=true
 no_deploy=true

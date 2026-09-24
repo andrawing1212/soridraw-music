@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FL. app160 + Worker195 PREVIEW — stale queue + 교차계정 전달 race 방어까지 배포 완료 (2026-09-24 KST)
+
+**현재 실제 PREVIEW**: app160 Hosting Run `36004777915` SUCCESS / exact build PASS. Worker195 Release Run `36010156194` SUCCESS / active version `11d8455c-c266-4e88-9cf6-7549d3f5be92`. Worker195 최종 Audit `36009942860` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Worker unchanged PASS. Functions/Firestore rules/D1 schema/user-data migration 없음.
+
+**Worker194 이후 추가로 막은 race**:
+- Worker194는 stale Durable Object alarm이 새 좋아요 batch를 영구 대기시키는 실제 문제를 수정했다.
+- 그 후 코드 검토에서, aggregate가 끝난 직후 `pending=false`를 확인한 다음 active marker를 지우는 아주 짧은 구간에 새 batch가 합류하면 그 batch가 다음 window를 예약하지 못할 수 있는 join race가 남아 있음을 확인했다.
+- Worker195는 현재 window의 active marker를 먼저 해제한 뒤 indexed `069 LIMIT 1` pending 확인을 수행한다. marker 해제 전 들어온 batch는 최종 pending query에 포함되고, marker 해제 후 들어온 batch는 스스로 다음 active owner가 된다. 이미 새 owner가 잡혔으면 기존 window가 그 deadline을 덮어쓰지 않는다.
+- 이 수정은 fixed polling/전체 Feed 재조회/사용자 데이터 재작성 없이 event-driven changed-data 경로만 건드린다.
+
+**실제 릴리스 결과**:
+- 첫 Worker195 배포 시도 Run `36009834733`은 오래된 verifier 문구가 새 scheduler 구조를 못 알아봐 **preflight에서만 FAIL**, Worker 배포 자체는 시작되지 않음. verifier만 현재 구조에 맞춘 뒤 Audit `36009942860` SUCCESS.
+- 최종 Worker195 release predeploy `pending069=0`.
+- Feed smoke PASS / Profile smoke PASS.
+- public changed-card 실제 3곡 PASS / D1 R0 W0.
+- warm revision D1 R0 W0.
+- fixed cron clear PASS / event scheduler deploy PASS.
+- TEST/PRODUCTION Worker unchanged PASS.
+- 최종 active PREVIEW Worker version `11d8455c-c266-4e88-9cf6-7549d3f5be92`.
+
+**현재 사용자 실사용 기대**:
+- 같은 계정 PC↔모바일 개인 하트는 기존 개인 동기화 경로.
+- 다른 계정은 개인 하트를 공유하지 않고 **공개 숫자만** 변경.
+- 마지막 클릭 후 기존 30초 client 묶음 + 약 5초 Worker window를 거쳐, 페이지 이동/새로고침 없이 다른 계정 열린 Explore에서 같은 곡 공개 숫자가 수렴해야 한다.
+- app160의 server-clock invalidation, RTDB array/object decode, merged bus row 보존과 Worker195 queue scheduler가 함께 적용된 상태다.
+
+**남은 최종 게이트**: 실제 A/B 다른 계정 PC·모바일에서 좋아요→해제→역방향 좋아요를 반복하여 숫자가 자동 수렴하고 각 계정 하트는 독립인지 사용자 실기기 확인이 필요하다. 이 결과 전에는 “전체 해결 완료” 또는 TEST 승격으로 처리하지 않는다.
+
 ## 0FK. app160 + Worker194 PREVIEW 배포 — 교차 계정 좋아요 실시간 전달의 실제 대기열 정체 원인 수정 (2026-09-24 KST)
 
 **현재 실제 PREVIEW**: app160 Firebase Hosting Run `36004777915` SUCCESS / `PREVIEW_APP_VERSION=160` / exact build PASS. Cloudflare Worker194 Run `36009078881` SUCCESS / active version `554dbf4d-aa0b-4c2e-b3f2-a120d3019fda`. Worker194 source audit Run `36006077948` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Hosting/Worker unchanged PASS. Functions/Firestore rules/shared D1 schema/user-data migration 없음.

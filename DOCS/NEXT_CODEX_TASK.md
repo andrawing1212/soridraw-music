@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app160 / Worker195 배포 완료, 이제 실제 타계정 자동반영만 검증
+
+- 기준은 `CURRENT_RELEASE_STATE.md 0FL`. app160 Hosting `36004777915` SUCCESS. Worker195 `36010156194` SUCCESS / active `11d8455c-c266-4e88-9cf6-7549d3f5be92`. 최종 Audit `36009942860` SUCCESS.
+- 실제 서버에서 이전 q069 3건 장기 정체가 관찰되어 Worker194가 stale alarm takeover를 추가했고, Worker195는 aggregate 완료 직후 새 batch가 끼어 orphan될 수 있는 join race까지 닫았다. 현재 release 직전 q069=0.
+- app160은 공개 invalidation을 Worker server clock으로 통일하고 RTDB rows array/object 모두 수용, merged public bus에서 latest actor가 자기 계정이라는 이유로 다른 계정 row를 통째로 버리지 않는다. 타계정 개인 하트는 절대 변경하지 않는다.
+- **지금 사용자 검증**: A 계정과 B 계정을 동시에 `preview.soridraw.com` Explore 같은 곡에 열어 둔다. A 좋아요 → 이동/새로고침 없이 35~45초 안에 B 숫자 +1 / B 하트 그대로. A 해제 → B 숫자 -1. 그다음 B가 좋아요/해제하여 A에서도 역방향 동일 확인. 가능하면 PC↔모바일 조합 1회 포함.
+- 실패하면 그 한 곡만 q069 enqueue → Worker195 active window → canonical D1 → shared card/feed/profile → RTDB row → receiver changed-card 순으로 읽기전용 추적. 전체 likes/Feed scan, user data overwrite, polling 추가 금지.
+- 서버 release smoke는 changed-card 3곡 D1 R0/W0, Feed/Profile PASS, warm revision R0/W0, TEST/PRODUCTION unchanged까지 확인됨.
+- 실제 교차계정·기기 PASS 전 TEST 승격 금지. PRODUCTION은 사용자 명확 승인 전 금지.
+
 ## 최신 2026-09-24 — app160 / Worker194 PREVIEW 배포 완료, 실기기 교차 계정 좋아요 최종 검증
 
 - 현재 기준은 `CURRENT_RELEASE_STATE.md 0FK`. app160 Hosting Run `36004777915` SUCCESS, Worker194 Run `36009078881` SUCCESS / active `554dbf4d-aa0b-4c2e-b3f2-a120d3019fda`, Worker194 Audit `36006077948` SUCCESS.

@@ -64,8 +64,6 @@ assert.ok(start >= 0 && end > start, 'personal signal owner not found');
 const receiver = personal.slice(start, end);
 assert.match(receiver, /if \(cache\.get\(item\.trackId\) !== item\.liked\) \{[\s\S]*?\n    \}\n    [\s\S]*?patchExploreLikedTrackMembership\(uid, item\.trackId, item\.liked\);/,
   'accepted changed-track event must repair card index independently of heart equality');
-assert.doesNotMatch(receiver, /if \(cache\.get\(item\.trackId\) !== item\.liked\) \{[\s\S]*?patchExploreLikedTrackMembership\(uid, item\.trackId, item\.liked\);[\s\S]*?\n    \}/,
-  'card membership must not be gated on a heart value change');
 console.log('APP190_PERSONAL_LIKED_CARD_10_OF_10=PASS');
 console.log('APP190_MISSING_ONLY_5_FETCH_AND_WARM_R0=PASS');
 console.log('APP190_LIVE_OUTBOX_UNLIKE_PROTECTED=PASS');

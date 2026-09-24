@@ -1,5 +1,16 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-24 — app160 / Worker194 PREVIEW 배포 완료, 실기기 교차 계정 좋아요 최종 검증
+
+- 현재 기준은 `CURRENT_RELEASE_STATE.md 0FK`. app160 Hosting Run `36004777915` SUCCESS, Worker194 Run `36009078881` SUCCESS / active `554dbf4d-aa0b-4c2e-b3f2-a120d3019fda`, Worker194 Audit `36006077948` SUCCESS.
+- 이번 작업에서 **실제 서버 증거**가 나왔다: 이전 Worker193 release 직전 q069 pending=3, 임시 cron 이후 23회 동안 그대로였고 24번째에 0. 즉 코드 존재 여부가 아니라 event scheduler가 stale alarm을 믿고 새 accepted batch를 제때 처리하지 않는 경로가 실제 있었다. Worker194는 새 batch가 stale alarm을 takeover하고 active request가 5초 coalescing 뒤 aggregate를 직접 수행하며 fallback alarm만 보조로 남긴다.
+- app160은 cross-account public invalidation timestamp를 device clock이 아닌 Worker acceptance clock으로 통일하고, RTDB rows array/object 양형을 모두 decode하며, merged bus의 latest actorUid가 현재 계정과 같다는 이유로 다른 계정 rows까지 버리지 않는다. 개인 filled-heart는 전혀 공유하지 않는다.
+- release smoke: predeploy pending069=0, changed-card 3곡 PASS / D1 R0 W0, Feed/Profile PASS, warm revision R0/W0, fixed cron 0, TEST/PRODUCTION unchanged.
+- **다음은 코드 추가보다 실제 PREVIEW 실사용 검증**: A와 B 다른 계정을 동시에 열어 같은 공개곡을 본다. A가 좋아요 1회 → 페이지 이동/새로고침 없이 약 35~45초 내 B의 공개 숫자만 +1, B 하트는 그대로인지 확인. 이어 A 해제 → 같은 방식으로 -1. 다음에는 B가 좋아요/해제해서 A 화면이 역방향으로 동일하게 반응해야 한다. PC↔모바일 조합도 한 번씩 확인.
+- 실패하면 즉시 전체 구조를 다시 바꾸지 말고 **그 한 곡** 기준으로 q069 enqueue 시각 → Worker194 active scheduler → canonical D1 → shared card updatedAt → RTDB row at/version → receiver fetch 결과를 순서대로 읽기전용 추적한다. full Feed rebuild, 전체 likes scan, 반복 polling, 사용자 원본 overwrite 금지.
+- 실사용 PASS 전 TEST 승격 금지. PRODUCTION은 별도 명확 승인 전 금지.
+- 별도 `.github/workflows/diagnose-069-live-like.yml` push failure는 여전히 maintenance debt이며 product release gate와 분리한다.
+
 ## 최신 2026-09-24 — app159 / Worker192 PREVIEW 배포 완료, 다음은 실제 교차 계정·기기 좋아요 검증
 
 - 기준은 `CURRENT_RELEASE_STATE.md 0FJ`. Worker192 Run `36000021648` SUCCESS / active `d6c6e3db-207f-4d60-969f-eae6a0fd2126`; app159 + shared RTDB rules Run `36001464002` SUCCESS / exact build / remote rules exact match / TEST·PRODUCTION unchanged. Audit `36001252527` SUCCESS.

@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0FK. app160 + Worker194 PREVIEW 배포 — 교차 계정 좋아요 실시간 전달의 실제 대기열 정체 원인 수정 (2026-09-24 KST)
+
+**현재 실제 PREVIEW**: app160 Firebase Hosting Run `36004777915` SUCCESS / `PREVIEW_APP_VERSION=160` / exact build PASS. Cloudflare Worker194 Run `36009078881` SUCCESS / active version `554dbf4d-aa0b-4c2e-b3f2-a120d3019fda`. Worker194 source audit Run `36006077948` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION Hosting/Worker unchanged PASS. Functions/Firestore rules/shared D1 schema/user-data migration 없음.
+
+**이번 실증에서 확인된 실제 문제**:
+- app159/Worker192 소스의 정적 검증은 PASS였지만, 후속 Worker193 release Run `36004778161`에서 배포 직전 `explore_like_batches_069`에 실제 pending 3건이 남아 있었다.
+- 새 Worker 배포 뒤 임시 1분 cron으로 기존 queue를 깨웠을 때 1~23회 확인 동안 계속 3건이었고, 24번째 확인에서야 0이 됐다. 즉 사용자 클릭이 W1 queue에 접수된 뒤 event-driven Durable Object가 실제로 제때 drain하지 못하는 경우가 있었고, 이는 “다른 계정이 서로 반응하지 않는다”는 실사용 증상과 직접 연결되는 서버 측 증거다.
+- Worker194는 기존 alarm이 남아 있다는 이유만으로 새 batch가 영구적으로 그 alarm을 신뢰하지 않도록 했다. 실제 새 batch 요청이 들어오면 짧은 active marker만 인정하고, 오래된 marker/alarm은 정리한 뒤 5초 coalescing window를 현재 Durable Object 요청이 직접 실행한다. fallback alarm은 실패 시에만 남으며, 이후 실제 새 batch가 다시 takeover할 수 있다. fixed periodic cron은 여전히 0.
+- app160은 공개 like invalidation의 시각을 브라우저 `Date.now()`가 아니라 Worker가 batch를 정상 접수한 서버 시각으로 전달한다. 따라서 PC/모바일 기기 시계 오차 때문에 receiver가 R2 card를 “아직 오래된 값”으로 오판해 최대 retry 후 포기하는 경로를 제거했다.
+- RTDB `publicSync/exploreLike`의 `rows`는 SDK가 array 또는 numeric-key object로 복원해도 둘 다 읽는다. 또한 하나의 merged public bus에서 마지막 writer의 `actorUid`가 현재 계정과 같더라도 다른 계정의 row가 함께 남아 있을 수 있으므로 payload 전체를 버리지 않고 track별 accepted-at token으로 중복만 제거한다. 이 공개 신호는 개인 filled-heart를 변경하지 않는다.
+
+**배포 검증**:
+- Worker194 release predeploy pending069=0.
+- Feed smoke PASS / Profile smoke PASS.
+- `/v1/public-like-cards` 실제 3곡 반환 PASS, D1 R0/W0 PASS.
+- warm `feed-revision` D1 R0/W0 PASS.
+- event scheduler 배포 PASS, fixed cron clear PASS.
+- TEST/PRODUCTION Worker unchanged PASS.
+- app160 TypeScript/Build/Hosting exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 이전 Worker193 배포에서 stale queue 3건은 canonical scheduled path로 drain되어 0이 된 상태이며 사용자 원본을 강제 재작성하지 않았다.
+
+**현재 최종 게이트**: 서버에서 확인 가능한 두 개의 구체적 실패 원인(대기열 stale alarm, 기기간 clock-domain freshness)과 merged RTDB row 유실 가능성을 수정·배포했다. 그러나 실제 A/B 다른 계정 PC·모바일에서 새 좋아요/해제 후 페이지 이동 없이 공개 숫자가 수렴하는지는 **사용자 실기기 검증 전**이다. 정상 기대 시간은 마지막 클릭 후 기존 client 30초 idle batch + Worker active 5초 window 정도다. B의 개인 하트는 B가 직접 누르지 않았다면 변하면 안 된다. 이 검증 전 TEST 승격 금지.
+
 ## 0FJ. app159 + Worker192 PREVIEW 배포 — 교차 계정 공개 좋아요 숫자 변경분 동기화 (2026-09-24 KST)
 
 **현재 실제 PREVIEW**: 앱 app159, Hosting/RTDB Run `36001464002` SUCCESS / `PREVIEW_APP_VERSION=159` / exact build PASS / shared RTDB rules exact match PASS. Cloudflare Worker192 Run `36000021648` SUCCESS / active version `d6c6e3db-207f-4d60-969f-eae6a0fd2126`. 최종 Release System Audit `36001252527` SUCCESS. URL `https://preview.soridraw.com/`. TEST/PRODUCTION code/Hosting/Worker 비변경 PASS. Functions/Firestore rules/D1 schema/user-data migration 없음.

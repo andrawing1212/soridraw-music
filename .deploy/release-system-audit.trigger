@@ -1,9 +1,9 @@
-requested_at=2026-09-25T18:08:00+09:00
-requested_by=user_admin_gemini_mobile_compact_ui
-source_before_trigger=38df73bc252ca5b490a5080b8e5fc3d42407ff6d
+requested_at=2026-09-25T18:12:00+09:00
+requested_by=user_admin_gemini_compact_ui_deploy
+source_before_trigger=cdebf1a610c2ac327e2894532d2b1275f734fe6a
 target=preview
-purpose=audit_admin_gemini_mobile_header_compact_only
-expected_app_version=166
+purpose=final_audit_app167_admin_gemini_compact_mobile_ui
+expected_app_version=167
 required_verifier=scripts/verify-200-admin-gemini-mobile-header.mjs,typescript,build,existing_regression
 ui_only=true
 backend_unchanged=true

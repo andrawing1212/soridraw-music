@@ -15443,80 +15443,99 @@ __name222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015
 __name2222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
 __name22222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
 function buildMusicNoteShareBundle015(note) {
-  const applied = note?.appliedKeywords && typeof note.appliedKeywords === "object" && !Array.isArray(note.appliedKeywords) ? note.appliedKeywords : {};
+  // SORIDRAW_PUBLIC_NEXT_SONG_COMMAND_PARITY_204_20260926
+  const applied = note?.appliedKeywords && typeof note.appliedKeywords === 'object' && !Array.isArray(note.appliedKeywords)
+    ? note.appliedKeywords
+    : {};
   const preferredGenres = Array.isArray(applied.subGenre) && applied.subGenre.length ? applied.subGenre : applied.genre;
   const pointSounds = [
     ...shareList015(applied.pointSound),
-    ...shareList015(applied.pointSounds)
+    ...shareList015(applied.pointSounds),
   ];
   const selectedKeywords = {
     genres: shareList015(preferredGenres),
     styles: shareList015(applied.style),
     sounds: shareList015([...shareList015(applied.instrumentSound), ...pointSounds]),
     moods: shareList015(applied.mood),
-    themes: shareList015(applied.theme)
+    themes: shareList015(applied.theme),
   };
+
   const nextSong = {};
   const arrayFields = [
-    "genre",
-    "subGenre",
-    "subGenreIds",
-    "mood",
-    "theme",
-    "style",
-    "instrumentSound",
-    "pointSounds",
-    "lyricLanguages",
-    "titleLanguages",
-    "languageMixTargetLanguages",
-    "instrumentTags"
+    'genre',
+    'subGenre',
+    'subGenreIds',
+    'mood',
+    'theme',
+    'style',
+    'instrumentSound',
+    'pointSounds',
+    'lyricLanguages',
+    'titleLanguages',
+    'languageMixTargetLanguages',
+    'instrumentTags',
   ];
   for (const key of arrayFields) {
     const value = shareList015(applied[key]);
     if (value.length) nextSong[key] = value;
   }
+
   const stringFields = [
-    "pointSound",
-    "customGenreInput",
-    "customMoodInput",
-    "customThemeInput",
-    "customStyleInput",
-    "customSoundInput",
-    "tempo",
-    "vocalType",
-    "vocalTone",
-    "lyricsLength",
-    "songStructure",
-    "drumStyle"
+    'pointSound',
+    'customGenreInput',
+    'customMoodInput',
+    'customThemeInput',
+    'customStyleInput',
+    'customSoundInput',
+    'tempo',
+    'vocalType',
+    'vocalTone',
+    'lyricsLength',
+    'songStructure',
+    'drumStyle',
+    'rapMode',
+    'lyricWritingStyle',
+    'tempoSource',
   ];
   for (const key of stringFields) {
-    const value = shareText015(applied[key], key.startsWith("custom") ? 500 : 240);
+    const value = shareText015(applied[key], key.startsWith('custom') ? 500 : 240);
     if (value) nextSong[key] = value;
   }
+
+  const userInput = shareText015(
+    applied.userInput ?? note?.userInput ?? note?.commandInput ?? note?.directInput ?? note?.customPrompt,
+    4000,
+  );
+  if (userInput) nextSong.userInput = userInput;
+
   const scalarFields = [
-    "kpopMode",
-    "citypopMode",
-    "isKoreanEnglishMix",
-    "englishMixRatio",
-    "languageMixRatio",
-    "maleCount",
-    "femaleCount",
-    "rapEnabled",
-    "isBallad",
-    "isNoLyrics",
-    "includeLyrics",
-    "instrumentalBgmMode"
+    'kpopMode',
+    'citypopMode',
+    'isKoreanEnglishMix',
+    'englishMixRatio',
+    'languageMixRatio',
+    'maleCount',
+    'femaleCount',
+    'rapEnabled',
+    'isBallad',
+    'isNoLyrics',
+    'includeLyrics',
+    'instrumentalBgmMode',
+    'isRandomTempo',
   ];
   for (const key of scalarFields) {
     const value = applied[key];
-    if (typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)) nextSong[key] = value;
+    if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) nextSong[key] = value;
   }
-  for (const key of ["tempoConfig", "vocal", "customStructure", "sectionCueOptions", "situation"]) {
+
+  for (const key of ['tempoConfig', 'vocal', 'customStructure', 'sectionCueOptions', 'situation']) {
     const value = shareSafeValue015(applied[key]);
-    if (value && (typeof value !== "object" || Array.isArray(value) || Object.keys(value).length)) nextSong[key] = value;
+    if (value && (typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length)) nextSong[key] = value;
   }
+
   const situationSummary = shareText015(applied.situationSummary ?? note?.situationSummary, 600);
   if (situationSummary) nextSong.situationSummary = situationSummary;
+
   let bundle = { schemaVersion: SORIDRAW_PUBLIC_SHARE_SCHEMA_015, selectedKeywords, nextSong };
   let payloadJson = JSON.stringify(bundle);
   if (payloadJson.length > SORIDRAW_PUBLIC_SHARE_MAX_JSON_015) {
@@ -15532,12 +15551,37 @@ function buildMusicNoteShareBundle015(note) {
         style: nextSong.style || [],
         instrumentSound: nextSong.instrumentSound || [],
         pointSounds: nextSong.pointSounds || [],
-        tempo: nextSong.tempo || "",
-        vocalType: nextSong.vocalType || "",
-        vocalTone: nextSong.vocalTone || "",
-        lyricsLength: nextSong.lyricsLength || "",
-        songStructure: nextSong.songStructure || ""
-      }
+        tempo: nextSong.tempo || '',
+        vocalType: nextSong.vocalType || '',
+        vocalTone: nextSong.vocalTone || '',
+        lyricsLength: nextSong.lyricsLength || '',
+        songStructure: nextSong.songStructure || '',
+        userInput: nextSong.userInput || '',
+        customGenreInput: nextSong.customGenreInput || '',
+        customMoodInput: nextSong.customMoodInput || '',
+        customThemeInput: nextSong.customThemeInput || '',
+        customStyleInput: nextSong.customStyleInput || '',
+        customSoundInput: nextSong.customSoundInput || '',
+        situationSummary: nextSong.situationSummary || '',
+        lyricLanguages: nextSong.lyricLanguages || [],
+        titleLanguages: nextSong.titleLanguages || [],
+        languageMixTargetLanguages: nextSong.languageMixTargetLanguages || [],
+        isKoreanEnglishMix: Boolean(nextSong.isKoreanEnglishMix),
+        englishMixRatio: nextSong.englishMixRatio ?? 10,
+        languageMixRatio: nextSong.languageMixRatio ?? nextSong.englishMixRatio ?? 10,
+        kpopMode: nextSong.kpopMode ?? 0,
+        citypopMode: nextSong.citypopMode ?? 0,
+        maleCount: nextSong.maleCount ?? 0,
+        femaleCount: nextSong.femaleCount ?? 0,
+        rapEnabled: Boolean(nextSong.rapEnabled),
+        rapMode: nextSong.rapMode || '',
+        lyricWritingStyle: nextSong.lyricWritingStyle || '',
+        tempoSource: nextSong.tempoSource || '',
+        isRandomTempo: Boolean(nextSong.isRandomTempo),
+        isNoLyrics: Boolean(nextSong.isNoLyrics),
+        includeLyrics: nextSong.includeLyrics !== false,
+        instrumentalBgmMode: Boolean(nextSong.instrumentalBgmMode),
+      },
     };
     payloadJson = JSON.stringify(bundle);
   }

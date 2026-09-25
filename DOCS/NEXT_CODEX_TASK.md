@@ -1,3 +1,14 @@
+## 최신 2026-09-26 — app178 PREVIEW 배포 완료, 오른쪽 rail 가독성 + Library 연동 크레딧 확인
+
+- `CURRENT_RELEASE_STATE.md 0GY` 최우선.
+- PREVIEW app178 Firebase Hosting Run `36167329008` SUCCESS, deployed SHA `4c04bf5c926fb53000926ab9abba5b45be5d9fc4`, TypeScript/Build/exact build/version 178 PASS, TEST/PRODUCTION unchanged PASS.
+- 오른쪽 Studio rail의 폭/위치/스크롤은 유지하고 Generation / Recent Songs / Music API / Selected Keywords 텍스트만 확대.
+- 최근곡 제목/시간, 캐시 진단, 생성 상태/설명, 지표, 버튼, 키워드/카운트까지 가독성 확대. 기능/백엔드 경로 변경 없음.
+- `StudioRightRail.showMusicApiCredits`는 기존 raw `menuVisibility.library`를 그대로 사용. Library=숨김일 때만 `MUSIC API / 남은 크레딧` section 미렌더, 전체공개/관리자만은 기존 표시.
+- 새 서버 read/write, Worker/Functions/Rules/D1/Firestore/user data 변경 없음.
+- 다음은 사용자 실사용에서 오른쪽 rail 폰트 크기와 Library 숨김/표시 3상태만 확인. 이상이 있으면 right rail typography/visibility만 국소 수정하고 분할 엔진/최근곡/Library 데이터 경로는 건드리지 않는다.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app175 PREVIEW 배포 완료, Library 숨김/Music API + 관리자 설정 유지 실사용 확인
 
 - `CURRENT_RELEASE_STATE.md 0GW` 최우선.

@@ -94,6 +94,8 @@
 .soridraw-explore-more-primary button,.soridraw-explore-more-rows button,.soridraw-explore-more-folder-head button,.soridraw-explore-more-folder-list button{border:0!important;outline:0!important;box-shadow:none!important;cursor:pointer}
 .soridraw-explore-more-primary button{display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:76px;padding:10px 6px;border-radius:15px;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86);font-size:11px;font-weight:800}
 .soridraw-explore-more-primary button:hover:not(:disabled){background:rgba(255,255,255,.095)!important;color:#fff}
+.soridraw-explore-more-primary button.is-active{background:rgba(255,255,255,.11)!important;color:#fff}
+.soridraw-explore-more-primary button.is-active svg{fill:currentColor;stroke:currentColor}
 .soridraw-explore-more-primary button:disabled{opacity:.48;cursor:wait}
 .soridraw-explore-more-primary svg{width:20px;height:20px}
 
@@ -108,7 +110,8 @@
 
 .soridraw-explore-more-folder-head{display:grid;grid-template-columns:36px 1fr 36px;align-items:center;min-height:42px;margin-bottom:8px}
 .soridraw-explore-more-folder-head button{display:grid;place-items:center;width:34px;height:34px;padding:0;border-radius:10px;background:transparent!important;color:rgba(255,255,255,.76)}
-.soridraw-explore-more-folder-head button:hover{background:rgba(255,255,255,.06)!important;color:#fff}
+.soridraw-explore-more-folder-head button:hover:not(:disabled){background:rgba(255,255,255,.06)!important;color:#fff}
+.soridraw-explore-more-folder-head button:disabled{opacity:.45;cursor:wait}
 .soridraw-explore-more-folder-head button svg{width:19px;height:19px}
 .soridraw-explore-more-folder-head strong{grid-column:2;text-align:center;color:rgba(255,255,255,.94);font-size:14px;font-weight:850}
 .soridraw-explore-more-folder-list{display:grid;gap:4px}
@@ -138,6 +141,7 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-more-track span,:root[data-soridraw-theme="light"] .soridraw-explore-more-rows small{color:rgba(25,25,28,.46)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-primary button{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.82)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-primary button:hover:not(:disabled){background:rgba(20,20,24,.09)!important;color:#111}
+:root[data-soridraw-theme="light"] .soridraw-explore-more-primary button.is-active{background:rgba(216,75,88,.1)!important;color:#d84b58}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows{border-top-color:rgba(20,20,24,.08)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button,:root[data-soridraw-theme="light"] .soridraw-explore-more-folder-list button{color:rgba(20,20,22,.82)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button:hover:not(:disabled),:root[data-soridraw-theme="light"] .soridraw-explore-more-folder-list button:hover:not(:disabled),:root[data-soridraw-theme="light"] .soridraw-explore-more-folder-head button:hover{background:rgba(20,20,24,.055)!important}

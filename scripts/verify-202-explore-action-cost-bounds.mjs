@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const worker = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const actionService = readFileSync('src/services/exploreTrackActionService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
-const playlistService = readFileSync('src/services/playlistService.ts', 'utf8');
+const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 
 function functionRange(source, name) {
   const needles = [`async function ${name}(`, `function ${name}(`];
@@ -72,21 +72,26 @@ assert.doesNotMatch(dislikeBody, /\bfetch\s*\(/, 'dislike must not add a server 
 assert.match(page, /let nextSong = track\.shareBundle\?\.nextSong/, 'next-song apply must use feed/share cache first');
 assert.match(page, /if \(!nextSong \|\| Object\.keys\(nextSong\)\.length === 0\) \{\s*const source = await getExploreTrackApplySource/s,
   'server apply-source read must be fallback-only');
-assert.match(page, /if \(user\.uid === track\.ownerUid\)[\s\S]*?else \{[\s\S]*?getExploreTrackSaveAccess/s,
-  'owner folder save must avoid the follower permission read while other users are checked');
+assert.match(page, /if \(user\.uid !== track\.ownerUid\)[\s\S]*?getExploreTrackSaveAccess/s,
+  'owner shared-note save must avoid the follower permission read while other users are checked');
+assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/,
+  'Explore must not re-enter the experimental Library path');
 
-const insertStart = playlistService.indexOf('const resolvePlaylistInsertOrder');
-const insertEnd = playlistService.indexOf('export const getPrimaryNormalPlaylist', insertStart);
-assert.ok(insertStart >= 0 && insertEnd > insertStart, 'bounded playlist insert helper must exist');
-const insertOrder = playlistService.slice(insertStart, insertEnd);
-assert.match(insertOrder, /where\('sourceId', '==', sourceId\), limit\(8\)/,
-  'playlist duplicate detection must stay bounded');
-assert.match(insertOrder, /orderBy\('order', 'desc'\), limit\(1\)/,
-  'playlist order lookup must stay one-row bounded');
-assert.doesNotMatch(insertOrder, /getDocs\(itemsRef\)/,
-  'playlist insert must never scan the whole destination folder');
+assert.match(sharedNoteService, /readCachedStructure\(uid\)/, 'shared-note folder lookup must use the existing Music Note local structure cache first');
+assert.match(sharedNoteService, /getDoc\(doc\(db, 'user_structures', uid\)\)/,
+  'shared-note folder cache miss must use one bounded structure document read');
+assert.doesNotMatch(sharedNoteService, /getDocs\(|collectionGroup\(/,
+  'shared-note action must never scan a Firestore collection');
+assert.match(sharedNoteService, /setDoc\(doc\(db, 'favorites', documentId\), payload, \{ merge: true \}\)/,
+  'shared-note save must write one deterministic Music Note document');
+assert.match(sharedNoteService, /operation: 'shared-note-save'/,
+  'shared-note save must stay inside the existing Music Note mutation boundary');
+assert.match(sharedNoteService, /documentIds: \[documentId\]/,
+  'shared-note mutation must identify only the changed document');
 
 console.log('APP202_EXPLORE_ACTION_WORKER_ROUTES=PASS');
 console.log('APP202_EXPLORE_ACTION_READ_BOUNDS=PASS');
 console.log('APP202_EXPLORE_DISLIKE_ZERO_SERVER_WRITE=PASS');
-console.log('APP202_PLAYLIST_INSERT_BOUNDED=PASS');
+console.log('APP202_SHARED_NOTE_CACHE_FIRST=PASS');
+console.log('APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS');
+console.log('APP202_LIBRARY_PATH_UNUSED=PASS');

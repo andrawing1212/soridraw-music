@@ -145,21 +145,23 @@ function RecentSongScrollableCopy({ title, genre, time }: RecentSongScrollableCo
   };
 
   return (
-    <span
-      ref={scrollRef}
-      className={`soridraw-studio-dashboard-song-copy ${isDragging ? 'is-dragging' : ''}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={finishPointerDrag}
-      onPointerCancel={finishPointerDrag}
-      onClickCapture={handleClickCapture}
-      onWheel={handleWheel}
-    >
+    <span className="soridraw-studio-dashboard-song-copy">
       <span className="soridraw-studio-dashboard-song-meta">
         <small>[{genre}]</small>
         <small>{time}</small>
       </span>
-      <strong>{title}</strong>
+      <span
+        ref={scrollRef}
+        className={`soridraw-studio-dashboard-song-title-scroll ${isDragging ? 'is-dragging' : ''}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointerDrag}
+        onPointerCancel={finishPointerDrag}
+        onClickCapture={handleClickCapture}
+        onWheel={handleWheel}
+      >
+        <strong>{title}</strong>
+      </span>
     </span>
   );
 }

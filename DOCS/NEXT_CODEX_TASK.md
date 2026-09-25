@@ -1,3 +1,13 @@
+## 최신 2026-09-25 — app168 Explore 액션 시트 배포 직전 잠금 후보
+
+- `CURRENT_RELEASE_STATE.md 0GN` 최우선. 사용자 요청대로 **PREVIEW 배포 전 단계까지 완료**, 실제 Hosting 배포는 아직 하지 않음.
+- 앱 버전 `168`, 최종 감사/배포 잠금 후보 SHA `04f5de2e4b84758776809fbcd5ee1d0a961c0ab3`. 최종 Release System Audit Run `36139084888` SUCCESS. TypeScript/Build/APP201/APP202/기존 like regression/Worker dry-run/shared D1 read-only PASS.
+- 구현 범위: Explore 카드 `···` → 하단 액션 시트(`폴더에 추가 / 좋아요 / 공유 / 다음곡에 적용 / 싫어요`). 기존 좋아요 mutation, Music Note, Gemini, 최근곡, Worker195, Functions, 사용자 데이터는 수정하지 않음.
+- 비용 기준: next-song은 기존 Feed shareBundle cache-first라 정상 데이터면 서버 read 0, fallback은 해당 곡 bounded read. 타인 폴더 저장 권한은 track 1 + follow 1 bounded lookup, 싫어요는 기기 localStorage만 사용해 서버 read/write 0. 페이지 진입/앱 업데이트 자체로 새 액션 API 호출 없음.
+- 실제 PREVIEW는 여전히 app167 Hosting Run `36117132227` / release SHA `cc6dfccfedf3a5b0fae041f3d65d905dc4cf385c`. main/prod 비변경.
+- **다음 사용자 지시가 PREVIEW 배포라면** 제품 코드를 다시 수정하거나 버전을 다시 올리지 말고 잠금 SHA `04f5de2e4b84758776809fbcd5ee1d0a961c0ab3`를 Firebase PREVIEW Hosting에 배포 → exact build/app168 → TEST/PRODUCTION unchanged 확인. Worker/Functions/Rules 배포 불필요.
+- 배포 후 사용자 실사용 확인: PC/모바일 `···` 시트, 기존 좋아요 상태/동기화, 공유, 다음곡 Studio 적용, 본인/팔로우 허용곡 폴더 저장, 싫어요가 추천에서만 제외되는지. 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 별도 명확 승인 필요.
+
 # SORIDRAW NEXT CODEX TASK
 
 ## 최신 2026-09-25 — app167 관리자 Gemini 호출 기록 모바일 UI 배포 완료, 실사용 확인 대기

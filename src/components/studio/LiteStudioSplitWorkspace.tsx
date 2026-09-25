@@ -508,7 +508,8 @@ export default function LiteStudioSplitWorkspace({
 
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
-    if (!layout || window.innerWidth < 1100) {
+    const createVertical = workspaceViewRef.current === 'create';
+    if (!layout || window.innerWidth < 1100 || createVertical) {
       if (layout) {
         delete layout.dataset.scrollIsolated;
         layout.style.removeProperty('--soridraw-studio-isolated-height');
@@ -1316,6 +1317,26 @@ export default function LiteStudioSplitWorkspace({
         : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
+    const createVertical = workspaceViewRef.current === 'create';
+    if (createVertical) {
+      // 206: Classic parity. Both existing panes consume the same center-column
+      // width and stack vertically. This keeps responsive consumers on the true
+      // full width instead of the old synthetic 50/50 split width.
+      const fullWidth = metricsRef.current.width;
+      syncPaneModes(fullWidth, fullWidth, { rootSync: true, hysteresisPx: 0 });
+      if (!nativeWindowResize) {
+        broadcastLitePaneResponsiveWidths(fullWidth, fullWidth, true, { rootSync: true, hysteresisPx: 0 });
+      }
+      const rightEdge = metricsRef.current.left + fullWidth;
+      commitRootMeasurements(fullWidth, rightEdge);
+      if (!nativeWindowResize) {
+        readExternalControls();
+        syncExternalGeometry(fullWidth, rightEdge);
+        clearLiveExternalGeometry();
+      }
+      return;
+    }
+
     const nextProfile = getSplitProfile();
     if (splitProfileRef.current !== nextProfile) {
       splitProfileRef.current = nextProfile;
@@ -1343,7 +1364,7 @@ export default function LiteStudioSplitWorkspace({
       syncExternalGeometry(builderWidth, splitterLeft);
       clearLiveExternalGeometry();
     }
-  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost, syncPaneModes]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -2030,8 +2051,10 @@ export default function LiteStudioSplitWorkspace({
       return;
     }
     if (workspaceView === 'create') {
+      // 206: Split Create now follows Classic's vertical composition:
+      // full Builder first, then the existing Recent/result pane below it.
       setIsBuilderCollapsed(false);
-      setIsResultCollapsed(true);
+      setIsResultCollapsed(false);
       return;
     }
     if (workspaceView) {
@@ -2259,7 +2282,7 @@ export default function LiteStudioSplitWorkspace({
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
         data-v2-drag-perf-mode={v2DragPerfMode}
-        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${workspaceView === 'create' ? ' is-create-vertical' : ''}${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}
@@ -2290,9 +2313,9 @@ export default function LiteStudioSplitWorkspace({
         </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
+      {viewMode === 'split' && workspaceView !== 'create' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>
   );
 }

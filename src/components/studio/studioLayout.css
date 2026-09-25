@@ -15224,6 +15224,23 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     padding-bottom: 96px !important;
   }
 
+  /* 1022 — Split Create reuses the real Result pane, but its empty split
+   * masthead still reserved the normal 84px pane-header slot above the first
+   * generated-song card. Classic has no visible masthead in this transition.
+   * Collapse only this empty Result masthead so the divider-to-card breathing
+   * room matches Classic Dark without touching Recent/Music Note/Library. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-pane-masthead-host {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
   /* Same selected-keyword location as Classic: immediately below command. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-split-workspace.is-create-vertical

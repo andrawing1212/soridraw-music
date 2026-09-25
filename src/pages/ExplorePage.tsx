@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Forward, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Search, Share2, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Forward, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Search, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';

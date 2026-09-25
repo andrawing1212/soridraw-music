@@ -56,6 +56,8 @@ import {
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
 import {
+  buildExploreLegacyApplyKeywords,
+  getExploreOwnMusicNoteApplyKeywords,
   getExploreTrackApplySource,
   getExploreTrackSaveAccess,
   markExploreTrackDisliked,
@@ -1372,17 +1374,42 @@ export default function ExplorePage() {
     }
     setMoreActionBusy('apply');
     try {
-      let nextSong = track.shareBundle?.nextSong && typeof track.shareBundle.nextSong === 'object'
-        ? track.shareBundle.nextSong
+      let nextSong: Record<string, unknown> | null = track.shareBundle?.nextSong && typeof track.shareBundle.nextSong === 'object'
+        ? { ...track.shareBundle.nextSong }
         : null;
+
+      // Existing public rows were created before the command-window field was
+      // included in the public share bundle. For the owner's own Music Note,
+      // recover that one source document only when the user actually taps Apply.
+      // getDoc remains cache-first, so a warm local document can still be R0.
+      if (
+        user.uid === track.ownerUid
+        && track.sourceType === 'music_note'
+        && track.sourceId
+        && (!nextSong || !String((nextSong as any).userInput || '').trim())
+      ) {
+        const ownSource = await getExploreOwnMusicNoteApplyKeywords(user, track.sourceId);
+        if (ownSource) nextSong = { ...(nextSong || {}), ...ownSource };
+      }
+
+      // Legacy public bundles can still have the five public keyword groups even
+      // when the full nextSong object is absent. Use those locally before asking
+      // the Worker, keeping the common fallback D1-free.
+      if (!nextSong || Object.keys(nextSong).length === 0) {
+        nextSong = buildExploreLegacyApplyKeywords({
+          shareBundle: track.shareBundle || null,
+        });
+      }
+
       if (!nextSong || Object.keys(nextSong).length === 0) {
         const source = await getExploreTrackApplySource(user, track.id);
         nextSong = source?.nextSong && typeof source.nextSong === 'object'
-          ? source.nextSong
+          ? { ...source.nextSong }
           : source?.shareBundle?.nextSong && typeof source.shareBundle.nextSong === 'object'
-            ? source.shareBundle.nextSong
-            : null;
+            ? { ...source.shareBundle.nextSong }
+            : buildExploreLegacyApplyKeywords(source);
       }
+
       if (!nextSong || Object.keys(nextSong).length === 0) {
         throw new Error('이 곡은 적용할 설정 정보가 없어요.');
       }

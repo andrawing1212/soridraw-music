@@ -11,7 +11,6 @@ const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_ADMIN_SCOPE = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import {
-  DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
   getNavigationMenuAccessMode,
   normalizeNavigationVisibilitySettings,
@@ -136,9 +135,12 @@ export default function AdminAppSettingsPage() {
       } catch (error) {
         console.error('Failed to load app settings:', error);
         if (isMounted) {
-          setSavedSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
-          setDraftSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
-          setMessage('설정값을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
+          // Never replace the administrator's last explicit state with app defaults
+          // merely because an update/session could not reach Firestore.
+          const preservedSettings = readStoredNavigationVisibilitySettings();
+          setSavedSettings(preservedSettings);
+          setDraftSettings(preservedSettings);
+          setMessage('서버 설정을 확인하지 못해 이 기기에 저장된 마지막 관리자 설정을 유지합니다.');
         }
       } finally {
         if (isMounted) setIsLoading(false);

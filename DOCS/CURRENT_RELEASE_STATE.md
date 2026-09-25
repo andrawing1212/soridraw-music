@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GJ. PREVIEW app166 V1 Rap AUTO 중립화 배포 완료 (2026-09-25 KST)
+
+**사용자 승인/목표**: 사용자가 "배포까지 진행해"라고 명시 승인. V1 Classic Rap AUTO가 Rap Section 미사용을 이유로 최종 [Arrangement]에 `no rap`을 강제로 남기지 않도록 수정한 검증 완료본을 PREVIEW에 배포. AUTO는 중립, OFF는 랩 금지, ON은 기존 랩 적용, 사용자가 직접 "랩 없이/no rap"라고 지시한 경우는 AUTO에서도 보존.
+
+**최종 검사**: app166 version commit `15dfb4ee2825fdea989882ff1b5f13abcf6f62e8`, final audit source `6d9335794a466ee74e3c8307db388d672430e87b`. Release System Audit Run `36114071894` SUCCESS: TypeScript PASS, Build PASS, APP199 `RAP AUTO neutral / direct no-rap / OFF / ON` PASS, 기존 좋아요/진단/release-system 및 Worker TEST/PRODUCTION dry-run PASS.
+
+**실제 배포**: Firebase PREVIEW Hosting Run `36114262826` SUCCESS. exact release SHA `1fe21cd23152c3752c65ffe4e2e329751501c84b`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=166`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. Shared RTDB rules `SKIPPED`; Worker195/Functions/Rules/D1/R2/Firestore 사용자 원본 데이터 비변경. 배포 대상 URL `https://preview.soridraw.com/`.
+
+**제품 변경 범위**: `src/services/geminiService.ts` + `src/services/generation/v1/rules/sectionArrangementRoles.ts`만 실행 로직 변경. AUTO에서 Gemini가 자체 생성한 rap-ban(`no rap`, `without rap`, `rap-free`)을 final producer-map에서 제거하되, 직접 사용자 금지 지시가 있으면 보존. OFF의 deterministic `no rap`, ON의 `rap section`, Stable/Custom 구조, Vocal UI/App 상태/저장 데이터 구조는 유지. V2는 수정하지 않음.
+
+**실사용 확인 대기**: PREVIEW app166에서 Rap AUTO + 래퍼 역할 없음 + G-Funk/힙합 가능 장르 생성 시 최종 스타일 프롬프트에 자동 `no rap`이 없어야 함. OFF는 `no rap` 유지, ON은 기존 랩 적용. 동일 조건에서 Stable 구조는 그대로 유지. 사용자 실사용 확인 전 TEST/main 승격 금지, PRODUCTION 별도 명확 승인 필요.
+
 ## 0GI. V1 Rap AUTO 중립화 — 비의도 `no rap` 제거, OFF/직접지시/ON 보호 (2026-09-25 KST)
 
 **사용자 의도**: 보컬의 랩 모드가 AUTO일 때 Rap Section이 선택되지 않았다는 이유만으로 최종 스타일 프롬프트 [Arrangement]에 `no rap`이 강제로 들어가면 안 됨. AUTO는 랩 허용/금지 어느 쪽도 강제하지 않는 중립 모드로 사용. OFF는 랩 금지, ON은 랩 적용, 사용자가 직접 "랩 없이/no rap"라고 지시한 경우는 AUTO에서도 그 직접 지시를 존중.

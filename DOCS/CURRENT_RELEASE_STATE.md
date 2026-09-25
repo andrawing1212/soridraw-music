@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GX. PREVIEW app177 분할 곡 만들기 선택 키워드 아래 결과 시작 여백 다크모드 일치 (2026-09-26 KST)
+
+**사용자 확인/요청**:
+- 분할모드 곡 만들기에서 선택 키워드 아래 가로선과 첫 생성 결과 카드 사이 여백이 일반 다크모드보다 크게 보임.
+- 일반 다크모드의 간격을 기준으로 분할모드만 동일하게 축소.
+
+**원인/수정**:
+- app174 세로 구조에서 기존 Result pane을 그대로 재사용하면서, 곡 만들기에는 내용이 없는 Result masthead 84px 슬롯도 함께 남아 있었음.
+- `studioLayout.css`에서 **Studio Black + 곡 만들기 세로 모드 + isolated workspace**에 한해 빈 `.soridraw-studio-result-pane-masthead-host`만 collapse.
+- 선택 키워드 자체 padding 12px/가로선, 일반 Classic Dark, Recent/Music Note/Library, 분할 엔진/반응형/백엔드 동작은 변경하지 않음.
+
+**commit / 배포**:
+- spacing 수정: `05af8ea0730a7b1da3f7827a5b66e9f7d2a0118f`
+- app177 version: `8c413b55a3aa176d818f847c5cdc088616a452f0`
+- PREVIEW release trigger / locked SHA: `cb77fd8916c31142d588130eae41c97932213f58`
+- Firebase PREVIEW Hosting Run `36165504873` **SUCCESS**.
+- TypeScript PASS / Build PASS / Firebase Hosting deploy PASS / `PREVIEW_APP_VERSION=177` / `PREVIEW_EXACT_BUILD=PASS`.
+- Shared RTDB Rules SKIPPED. Worker / Functions / Rules / 사용자 데이터 변경 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+**현재 판정**: PREVIEW app177 배포 완료. 사용자가 `preview.soridraw.com`에서 분할모드 곡 만들기 → 선택 키워드 가로선 아래 첫 생성 결과 카드 시작 간격이 일반 다크모드와 같아졌는지 실사용 시각 확인. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
+
 ## 0GW. PREVIEW app175 라이브러리 숨김 연동 Music API 메뉴 + 관리자 설정 업데이트 유지 (2026-09-26 KST)
 
 **사용자 요청**:

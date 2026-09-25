@@ -1,3 +1,14 @@
+## 최신 2026-09-26 — app181 PREVIEW 배포 완료, 오른쪽 최근곡 메타 고정/가시폭 확인
+
+- `CURRENT_RELEASE_STATE.md 0HA` 최우선.
+- PREVIEW app181 Firebase Hosting Run `36169548430` SUCCESS, deployed SHA `6651978c79a0a73a680a4197ceaa053ab273f91f`, TypeScript/Build/exact build/version 181 PASS, TEST/PRODUCTION unchanged PASS.
+- 오른쪽 Recent Songs는 `[장르] 생성시간` 고정 메타 + 제목 전용 가로 drag/scroll 구조.
+- 장르/시간 gap 4px. 제목을 좌우 이동해도 메타는 움직이지 않음.
+- Recent Songs 목록만 카드 좌우 공간을 6px 더 사용하고 row 좌우 padding 3px / icon-text gap 5px로 조정해 glyph는 더 왼쪽, chevron은 더 오른쪽, 제목 가시 폭은 증가.
+- 오른쪽 rail 전체 폭/위치, 최근곡 클릭, 즐겨찾기/새곡 상태, 캐시/백엔드/데이터는 변경 없음.
+- 다음은 사용자 실사용 시각 검증만 진행. 이상이 있으면 Recent Songs row spacing/title scroll만 국소 수정하고 rail 폭/분할 엔진/데이터 경로는 건드리지 않는다.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app178 PREVIEW 배포 완료, 오른쪽 rail 가독성 + Library 연동 크레딧 확인
 
 - `CURRENT_RELEASE_STATE.md 0GY` 최우선.

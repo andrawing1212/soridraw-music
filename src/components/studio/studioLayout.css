@@ -15118,6 +15118,13 @@ body > .soridraw-live-keywords-fixed {
   pointer-events: none !important;
 }
 
+/* 1021 — Classic Dark only: match the split Create breathing room under
+ * selected keyword chips. Light and Studio Black are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-builder-live-keywords {
+  padding-bottom: 12px !important;
+}
+
 /* 1016 — Classic mobile keyword spacing, light divider and softer light chips. */
 @media (max-width: 767px) {
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root

@@ -1,3 +1,16 @@
+## 최신 2026-09-26 — app174 PREVIEW 배포 완료, 분할 곡 만들기 세로 구성 실사용 확인
+
+- CURRENT_RELEASE_STATE.md 0GV 최우선.
+- app173의 별도 카드형 최근 생성곡 목록은 사용자 의도와 달라 제거 완료.
+- app174는 분할모드 곡 만들기에서 새 목록을 만들지 않고 **기존 Result/최근 생성곡 영역 자체를 Builder 아래로 세로 배치**한다.
+- 순서 기준: 곡 만들기 Builder → 기존 명령창 아래 선택 키워드 → 기존 최근 생성곡/생성 결과.
+- 선택 키워드는 기존 Classic inline 위치를 재사용하고 Create에서 고정 portal 중복을 제거.
+- 곡 만들기에서는 divider/pane collapse control을 숨기되, 최근 생성곡·뮤직노트·라이브러리 작업공간의 기존 좌우 분할은 그대로 유지.
+- Final Audit Run 36159274642 SUCCESS. APP206 4종 / TypeScript / Build / 기존 Like regression / TEST·PRODUCTION dry-run / shared D1 read-only PASS.
+- PREVIEW Hosting Run 36159567687 SUCCESS, release SHA 90a8256fd705382d410cc883c278f87544a79cbb, PREVIEW_APP_VERSION=174, exact build PASS, TEST/PRODUCTION unchanged PASS.
+- Worker/Functions/Rules/D1/Firestore/사용자 원본 데이터 변경 없음. 새 서버 read/write 없음.
+- 다음은 사용자 실사용에서 세로 순서와 기존 최근 생성곡 UI가 그대로 보이는지 확인. 문제가 있으면 이 세로 레이아웃만 국소 수정하고 기존 최근 생성곡 컴포넌트/기능/캐시 경로는 재작성 금지.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
 ## 최신 2026-09-26 — app173 PREVIEW 배포 완료, 분할 곡 만들기 하단 UI 실사용 확인
 
 - `CURRENT_RELEASE_STATE.md 0GU` 최우선. PREVIEW app173 Firebase Hosting Run `36157490130` SUCCESS, exact release SHA `7da5692fa2344cfe11bcc8cd9f31cfa0688e2023`, version 173/exact build PASS, TEST/PRODUCTION unchanged PASS.

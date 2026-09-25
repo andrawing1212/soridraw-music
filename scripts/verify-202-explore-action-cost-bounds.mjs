@@ -69,9 +69,14 @@ const dislikeBody = actionService.slice(dislikeStart);
 assert.match(dislikeBody, /window\.localStorage\.setItem/, 'dislike must persist locally');
 assert.doesNotMatch(dislikeBody, /\bfetch\s*\(/, 'dislike must not add a server call');
 
-assert.match(page, /let nextSong = track\.shareBundle\?\.nextSong/, 'next-song apply must use feed/share cache first');
-assert.match(page, /if \(!nextSong \|\| Object\.keys\(nextSong\)\.length === 0\) \{\s*const source = await getExploreTrackApplySource/s,
-  'server apply-source read must be fallback-only');
+const feedNextSongIndex = page.indexOf('track.shareBundle?.nextSong');
+const localLegacyFallbackIndex = page.indexOf('buildExploreLegacyApplyKeywords({');
+const workerApplyFallbackIndex = page.indexOf('const source = await getExploreTrackApplySource(user, track.id)');
+assert.ok(feedNextSongIndex >= 0, 'next-song apply must inspect the feed/share cache first');
+assert.ok(localLegacyFallbackIndex > feedNextSongIndex,
+  'legacy public keyword fallback must run only after checking the feed/share nextSong cache');
+assert.ok(workerApplyFallbackIndex > localLegacyFallbackIndex,
+  'server apply-source read must remain after both cache and local public-keyword fallbacks');
 assert.match(page, /if \(user\.uid !== track\.ownerUid\)[\s\S]*?getExploreTrackSaveAccess/s,
   'owner shared-note save must avoid the follower permission read while other users are checked');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/,

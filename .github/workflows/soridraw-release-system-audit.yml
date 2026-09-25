@@ -67,6 +67,7 @@ jobs:
           node scripts/verify-190-like-card-authority.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-198-social-snapshot-diagnostic-reason.mjs
+          node scripts/verify-199-rap-auto-neutral.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

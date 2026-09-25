@@ -1,5 +1,61 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HB. PREVIEW app182 Gemini 소형 후처리 호출 효율화 — 같은 곡 실패/느린 모델 재호출 방지 (2026-09-26 KST)
+
+**사용자 실사용 근거**:
+- app181에서 한 곡 성공 세션이 총 2분 11초 / 물리 Gemini 호출 5회.
+- 최초 생성: `gemini-3.6-flash` 8.0s stream 오류 → `gemini-3.5-flash` 45.7s 성공.
+- 금지어 통합 교정: `gemini-3.7-flash` 35.0s timeout → `gemini-3.5-flash` 0.792s 503 → `gemini-3.5-flash-lite` 33.4s 성공.
+- 즉 최종 결과는 성공했지만 같은 곡 안에서 이미 느렸거나 실패한 경로를 후처리가 다시 탐색해 호출 수·Function 체류시간·가드 비용이 불필요하게 늘어나는 패턴 확인.
+
+**app182 최소 수정**:
+- 최초 곡 생성 체인 `3.6 → 3.5 → 3.5-lite → 3.7 → 3.8`은 **변경 없음**. 프롬프트/가사/5단/금지어 규칙/품질 판정 변경 없음.
+- 작은 후처리만 별도 효율 경로 사용: `repairV1FinalProductionCues`, `rewriteLyricHardBanCards`, `rewriteLyricHardBanLines`, `rewriteLyricHardBanLinesSecondPass`, `repairSelectedLanguageCard`.
+- 작은 후처리 기본 후보는 기존 fast repair 계열 `3.5 → 3.5-lite → 3.1-lite`.
+- 같은 곡에서 **직전 실패한 모델은 후처리에서 재호출하지 않음**. explicit 503 cooldown뿐 아니라 stream 오류처럼 모델 cooldown으로 확정하기 어려운 실패도 같은 곡 세션 안에서는 중복 재시험하지 않음.
+- 같은 곡에서 **성공했지만 30초 이상 걸린 모델은 작은 후처리에서 우선 생략**하고 더 가벼운 후보로 진행. 모든 후보가 제외되는 경우에는 기능 보호를 위해 원래 후보를 복구.
+- 같은 곡에서 빠르게 성공한 모델이 작은 후처리 후보에도 있으면 그 모델을 우선할 수 있도록 세션 건강 상태를 20분 메모리 TTL로 보관.
+- 이 상태는 브라우저 세션용 메모리이며 새 Firestore/D1/API 상태 저장 없음. 사용자 데이터/스키마 변경 없음.
+- Google 공식 지침의 transient 429/503 재시도 원칙은 유지하되, SORIDRAW는 동일 곡의 짧은 후처리에서 이미 나쁜 것으로 관측된 모델을 즉시 다시 두드리지 않아 인터랙티브 지연을 줄이는 방향.
+
+**마지막 사용자 세션에 app182 규칙을 대입한 기대값 (실측 아님)**:
+- 최초 3.6 실패 + 3.5 성공은 그대로.
+- 3.5는 45.7s slow-success로 기록되므로 후처리 첫 후보에서 생략.
+- 금지어 교정은 3.7의 35s timeout과 3.5의 503 재호출 없이 `3.5-lite`부터 시작 가능.
+- 동일 provider 상태가 반복된다는 가정에서 물리 호출 **5회 → 약 3회**, 총 2분11초에서 약 35초 이상 대기 제거 가능. 실제 Gemini 가용성에 따라 결과는 달라질 수 있으므로 실사용 1곡 검증 필요.
+
+**검증**:
+- 첫 Audit Run `36173215105`은 새 로직의 TS union 배열 타입 2건으로 FAIL, 기능/배포 전 중단.
+- 타입만 최소 수정 후 후보 Audit Run `36173411132` **SUCCESS**.
+- app182 최종 Audit Run `36173669413` **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- `APP208_GEMINI_INITIAL_CHAIN_UNCHANGED=PASS`.
+- `APP208_GEMINI_SMALL_REPAIR_CHAIN=PASS`.
+- `APP208_GEMINI_SESSION_FAILURE_SKIP=PASS`.
+- `APP208_GEMINI_SLOW_SUCCESS_SKIP=PASS`.
+- `APP208_GEMINI_NO_NEW_SERVER_IO=PASS`.
+- 기존 Like 회귀 / TEST·PRODUCTION Worker dry-run / shared D1 read-only PASS.
+
+**commit / 배포**:
+- 제품 코드: `20172d8ef947aa5291a0cf56a60fa4a4c988337e` + TS 보정 `587fd8f4813f30be0fc643553f59d261baf50f4c`.
+- 회귀 verifier: `scripts/verify-208-gemini-adaptive-repair-routing.mjs`.
+- app182 version: `018f96438808910cc944122279e67d7a81a03ff5`.
+- deployed locked SHA: `056f3e06be069db2f72d75d8ea24075a1c3e2fe7`.
+- Firebase PREVIEW Hosting Run `36173906888` **SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=182` / `PREVIEW_EXACT_BUILD=PASS`.
+- Shared RTDB Rules SKIPPED.
+- Worker / Gemini Function / 다른 Functions / Rules 비변경.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**비용/안정성 판정**:
+- 이번 단계는 **불필요한 후처리 물리 호출 수와 대기시간을 줄이는 1차 최적화**이며, Gemini provider 자체의 503을 제거한다고 주장하지 않는다.
+- 초기 생성 prompt/token 크기 자체는 품질 보호를 위해 이번에 줄이지 않음. 실제 app182 1곡 결과를 본 뒤 필요하면 2단계로 중복 context/token만 별도 분석.
+- Google 공식 2026 가격 기준 3.5 Flash-Lite는 3.5 Flash보다 토큰 단가가 낮으므로, 이미 느린 3.5를 작은 후처리에서 건너뛰어 Lite가 먼저 선택되는 세션은 비용 측면에도 유리할 수 있음. 실제 비용은 각 계정 tier/청구 정책과 provider 실패 과금 여부에 따라 달라짐.
+
+**현재 판정**: PREVIEW app182 배포 완료 / 코드·자동감사 PASS / **실사용 생성시간·호출수 검증 전**. 다음은 PREVIEW에서 일반 V1 1곡을 1회 생성하고 관리자 Gemini 호출 기록으로 (1) 총 물리 호출 수, (2) 최초 성공 모델, (3) 후처리 모델 순서, (4) 총 처리시간, (5) 총 token을 이전 5회/2분11초 기준과 비교. 새 오류 없으면 모델 순서/프롬프트를 추가 변경하지 않는다. TEST/main 승격 전, PRODUCTION 비변경.
+
+
 ## 0HA. PREVIEW app181 오른쪽 최근 생성곡 메타 고정 + 좌우 공간 확장 (2026-09-26 KST)
 
 **사용자 요청**:

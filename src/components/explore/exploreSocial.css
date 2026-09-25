@@ -101,7 +101,7 @@
 
 .soridraw-explore-more-primary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding-bottom:14px}
 .soridraw-explore-more-primary button,.soridraw-explore-more-rows button,.soridraw-explore-more-folder-head button,.soridraw-explore-more-folder-list button{border:0!important;outline:0!important;box-shadow:none!important;cursor:pointer}
-.soridraw-explore-more-primary button{display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:76px;padding:10px 6px;border-radius:15px;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86);font-size:11px;font-weight:800}
+.soridraw-explore-more-primary button{display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:76px;padding:10px 6px;border-radius:15px;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86);font-size:12px;font-weight:800;white-space:nowrap}
 .soridraw-explore-more-primary button:hover:not(:disabled){background:rgba(255,255,255,.095)!important;color:#fff}
 .soridraw-explore-more-primary button.is-active{background:rgba(255,255,255,.11)!important;color:#fff}
 .soridraw-explore-more-primary button.is-active svg{fill:currentColor;stroke:currentColor}
@@ -119,7 +119,7 @@
 .soridraw-explore-more-rows button:disabled,.soridraw-explore-more-rows button.is-disabled{opacity:.48}
 .soridraw-explore-more-rows button>svg{width:20px;height:20px;min-width:20px}
 .soridraw-explore-more-rows button>span{display:flex;min-width:0;flex-direction:column;gap:3px}
-.soridraw-explore-more-rows strong{font-size:13px;font-weight:830}
+.soridraw-explore-more-rows strong{font-size:14px;font-weight:830;line-height:1.25;white-space:nowrap}
 .soridraw-explore-more-rows small{color:rgba(235,235,240,.43);font-size:10px;font-weight:650;line-height:1.35}
 
 .soridraw-explore-more-folder-head{display:grid;grid-template-columns:36px 1fr 36px;align-items:center;min-height:42px;margin-bottom:8px}

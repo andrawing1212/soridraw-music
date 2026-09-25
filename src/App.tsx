@@ -17613,6 +17613,106 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               })}
             </div>
           </div>
+
+          {/* 205: Split Create keeps its full-width Builder, but mirrors Classic's
+              below-command glance area with the already-loaded selections and
+              recent 10 songs. This is render-only: no new read/listener/write. */}
+          {isStudioBlackActionMode && !isStudioCompactMobileLayout && studioWorkspaceView === 'create' && (
+            <div
+              className="soridraw-studio-create-inline-overview mt-4 md:mt-5 space-y-4 pb-2"
+              data-studio-create-inline-overview="true"
+            >
+              <div
+                className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start"
+                role="region"
+                aria-label="곡 만들기 선택된 키워드"
+              >
+                {liveSelectedKeywordItems.map((item) => {
+                  const chipClassName = cn(
+                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                    getAppliedSelectionKeywordChipClass(item.type)
+                  );
+                  return (
+                    <span key={`create-inline-${item.type}-${item.id}`} className={chipClassName}>
+                      {item.label}
+                      <button
+                        type="button"
+                        onClick={() => removeLiveSelectedKeyword(item)}
+                        aria-label={`${item.label} 선택 해제`}
+                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="w-[18px] h-[18px]" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+
+              <section
+                className="rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4 md:p-5 shadow-[0_14px_36px_rgba(0,0,0,0.18)]"
+                aria-label="곡 만들기 최근 생성곡"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black tracking-[0.16em] text-[var(--text-secondary)]">RECENT SONGS</p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <h3 className="text-sm font-black text-[var(--text-primary)]">최근 생성곡</h3>
+                      <CacheDiagnosticBadge domain="recentSongs" />
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs font-bold text-[var(--text-secondary)]">{Math.min(history.length, 10)} / 10</span>
+                </div>
+
+                {history.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    {history.slice(0, 10).map((song, index) => {
+                      const title = formatUnifiedTitle(song) || `생성곡 ${index + 1}`;
+                      const isUnread = isStudioDashboardSongUnread(song);
+                      const isFavorited = isSongFavorited(song);
+                      return (
+                        <button
+                          key={`studio-create-inline-song-${String((song as any)?.soridrawSongId || (song as any)?.id || (song as any)?.createdAt || index)}`}
+                          type="button"
+                          onClick={() => {
+                            selectStudioWorkspaceView('recent');
+                            openStudioDashboardSong(song, index);
+                          }}
+                          className={cn(
+                            "group flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                            historyIndex === index
+                              ? "border-[#FFB400]/45 bg-[#FFB400]/[0.08]"
+                              : "border-[var(--border-color)] bg-black/[0.08] hover:bg-[var(--hover-bg)]"
+                          )}
+                        >
+                          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/15 text-[var(--text-secondary)]">
+                            {isUnread ? (
+                              <span className="h-2.5 w-2.5 rounded-full bg-[#FFB400]" aria-label="확인하지 않은 새 생성곡" />
+                            ) : isFavorited ? (
+                              <Heart className="h-4 w-4 fill-[#e3a13a] text-[#e3a13a]" aria-label="뮤직노트 저장곡" />
+                            ) : (
+                              <Music className="h-4 w-4" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <strong className="block truncate text-xs font-black text-[var(--text-primary)]">{title}</strong>
+                            <small className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--text-secondary)]">
+                              {formatStudioDashboardTime((song as any)?.updatedAt || (song as any)?.createdAt)}
+                            </small>
+                          </span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-secondary)] transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex min-h-[72px] items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border-color)] text-xs font-bold text-[var(--text-secondary)]">
+                    <Music className="h-4 w-4" />
+                    <span>아직 생성된 곡이 없습니다.</span>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>

@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GM. Explore 카드 더보기 하단 액션 시트 — 구현/감사 완료, PREVIEW 미배포 (2026-09-25 KST)
+
+**사용자 의도**: Explore 곡 카드 우측 외부열기 아이콘 자리를 `···` 더보기로 바꾸고, 누르면 화면 아래에서 올라오는 액션 시트로 기존 기능을 모아 제공. 구성은 `폴더에 추가 / 좋아요 / 공유 / 다음곡에 적용 / 싫어요`. 새 서버 구조를 만들기보다 기존 저장·좋아요·공유·다음곡 적용 경로를 재사용하고 정상 좋아요 기능은 변경하지 않음.
+
+**구현**:
+- `src/services/exploreTrackActionService.ts`: 기존 공개곡 apply/save-access 경로용 bounded helper 추가. 싫어요는 계정별 localStorage 선호값으로만 저장해 새 D1/Firestore write를 만들지 않음.
+- `src/pages/ExplorePage.tsx`: 카드 우측 `MoreHorizontal` 버튼, 하단 액션 시트, 폴더 선택, 기존 `toggleLike` 재사용, Web Share/clipboard 공유, 기존 `pendingAppliedKeywords` handoff를 이용한 다음곡 적용, 추천 탭에서만 싫어요 곡 숨김 추가. 최신/인기/검색 결과에는 싫어요 필터를 강제하지 않음.
+- `src/components/explore/exploreSocial.css`: 기존 카드/좋아요 레이아웃은 유지하고 더보기 버튼·하단 시트·폴더 목록·다크/라이트/모바일 스타일만 추가.
+- `scripts/verify-201-explore-track-action-sheet.mjs` 추가 및 Release System Audit 등록.
+
+**커밋 흐름**: 기능 기반 `a5abed45` → `6fe8de74` → `074f7a91` → `c4d77830`; UI CSS `7195d2df`; APP201 `db29e158`; Audit 등록 `7f133684`; Audit trigger `015c1c91`.
+
+**검증**: Release System Audit Run `36137709448` SUCCESS. TypeScript PASS, Build PASS, Static release-system verification + APP201 PASS, 기존 like candidate regression PASS, TEST/PRODUCTION Worker dry-run PASS, shared D1 preflight/read-only audits PASS. isolated synthetic D1 billing 단계는 조건상 SKIPPED. 사용자 원본 데이터/Worker195/Functions/Rules/D1 schema/RTDB rules 변경 없음.
+
+**배포 상태**: PREVIEW Hosting **미배포**. 현재 실제 PREVIEW 앱은 app167 release SHA `cc6dfccfedf3a5b0fae041f3d65d905dc4cf385c` 유지. 이번 액션 시트는 `preview` 소스 후보로만 존재. 사용자가 PREVIEW 배포를 요청하면 앱 버전 bump → final Audit → Firebase PREVIEW Hosting exact-build 확인 순서로 진행. TEST/PRODUCTION 승격 없음.
+
+**실사용 합격선**: PC/모바일에서 카드 우측 `···` → 하단 시트가 정상 표시되고, 좋아요는 기존 상태/동기화 그대로 유지, 공유 정상, 다음곡 적용은 기존 Studio apply handoff로 이동, 폴더 저장은 기존 playlist 경로 사용, 싫어요는 추천 탭에서만 해당 곡을 숨기며 서버 write를 추가하지 않아야 함.
+
 ## 0GL. PREVIEW app167 관리자 Gemini 호출 기록 모바일 UI 정리 배포 완료 (2026-09-25 KST)
 
 **사용자 요청**: 관리자 `Gemini 호출 기록` 화면에서 긴 설명 문구를 제거하고, 제목과 우측 액션 버튼이 같은 가로 줄에서 폭을 빼앗아 모바일 제목이 세로로 깨지는 문제를 수정. 기능·버튼 동작·감사 데이터 로직은 보호.

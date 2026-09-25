@@ -6,13 +6,16 @@ const actionService = readFileSync('src/services/exploreTrackActionService.ts', 
 const socialCss = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 
 assert.match(page, /className="soridraw-explore-more-button"/, 'Explore cards must expose the compact more button');
-assert.match(page, /<MoreHorizontal aria-hidden="true" \/>/, 'more button must use the ellipsis icon');
+assert.match(page, /<EllipsisVertical aria-hidden="true" \/>/, 'more button must use the vertical ellipsis icon');
+assert.match(page, /className="soridraw-explore-card-quick-actions"/, 'cards must keep compact quick actions under the song');
+assert.match(page, /onApplyNext=\{applyExploreTrackToNextSong\}/, 'card next-song icon must reuse the same apply action');
+assert.match(page, /onShare=\{shareExploreTrack\}/, 'card share icon must reuse the same share action');
 assert.match(page, /const renderMoreSheet = \(\) =>/, 'Explore must render the bottom action sheet');
 assert.match(page, /onPointerDown=\{\(\) => \{\s*if \(!actionBusy\) closeMoreSheet\(\);/s, 'backdrop close must be pointer-safe and blocked while an action is busy');
 assert.match(page, /document\.body\.style\.overflow = 'hidden'/, 'open action sheet must lock background scrolling');
 assert.match(page, /event\.key !== 'Escape' \|\| moreActionBusy !== null/, 'Escape must not dismiss the sheet while an action is busy');
 assert.match(page, /aria-pressed=\{liked\}/, 'sheet like action must expose its active state');
-assert.match(page, />폴더에 추가</, 'folder action must remain in the sheet');
+assert.match(page, />공유 노트에 추가</, 'shared-note action must remain in the sheet');
 assert.match(page, />좋아요</, 'like action must remain in the sheet');
 assert.match(page, />공유</, 'share action must remain in the sheet');
 assert.match(page, /<strong>다음곡에 적용<\/strong>/, 'next-song apply action must remain in the sheet');
@@ -21,7 +24,8 @@ assert.match(page, /<strong>싫어요<\/strong>/, 'dislike action must remain in
 assert.match(page, /sessionStorage\.setItem\('pendingAppliedKeywords'/, 'next-song apply must reuse the existing pending keyword handoff');
 assert.match(page, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/, 'next-song apply backup handoff must remain');
 assert.match(page, /navigate\('\/studio\?applyPending=1'\)/, 'next-song apply must route through the existing studio apply path');
-assert.match(page, /await addPlaylistItem\(/, 'folder action must reuse existing playlist storage');
+assert.match(page, /await saveExploreTrackToSharedNote\(user, track, folder\)/, 'shared-note action must use the Music Note shared-note path');
+assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/, 'Explore action sheet must not use Library playlist storage');
 assert.match(page, /await toggleLike\(moreTrack\)/, 'sheet like action must reuse existing like behavior');
 assert.match(page, /className="soridraw-explore-cover-button"/, 'existing cover open path must remain available after replacing the card-side icon');
 assert.match(page, /onClick=\{openSuno\}/, 'existing cover click must still open the public audio target');
@@ -44,7 +48,12 @@ for (const className of [
 }
 
 assert.match(socialCss, /soridraw-explore-more-primary button\.is-active/, 'liked state must be visible inside the action sheet');
+assert.match(socialCss, /soridraw-explore-quick-apply\.is-available/, 'available next-song quick action must be visually emphasized');
+assert.match(socialCss, /soridraw-explore-more-rows button\.is-available/, 'available next-song sheet action must be visually emphasized');
+assert.match(socialCss, /soridraw-explore-more-button\{[^}]*border-radius:50%/s, 'vertical more button must have a visible circular control');
 
 console.log('APP201_EXPLORE_MORE_ACTION_SHEET=PASS');
 console.log('APP201_EXPLORE_EXISTING_ACTION_REUSE=PASS');
 console.log('APP201_EXPLORE_DISLIKE_LOCAL_RECOMMENDATION_ONLY=PASS');
+console.log('APP201_EXPLORE_QUICK_ACTION_GUIDE_PARITY=PASS');
+console.log('APP201_EXPLORE_SHARED_NOTE_LABEL=PASS');

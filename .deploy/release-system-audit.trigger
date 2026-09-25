@@ -1,9 +1,9 @@
-app182_gemini_adaptive_repair_efficiency_audit_retry=2026-09-26T03:28:00+09:00
-source_head=587fd8f4813f30be0fc643553f59d261baf50f4c
+app182_gemini_adaptive_repair_efficiency_final_audit=2026-09-26T03:31:00+09:00
+source_head=018f96438808910cc944122279e67d7a81a03ff5
+candidate_audit=36173411132
 deploy=false
-scope=gemini_small_repair_session_health_routing
-previous_audit=36173215105
-previous_failure=typescript_union_array_typing_only
+scope=gemini_small_repair_session_health_routing_app182
+app_version=182
 initial_song_chain_unchanged=true
 small_repair_chain=gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
 same_song_failed_model_skip=true

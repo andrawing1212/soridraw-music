@@ -1072,7 +1072,8 @@ export default function FavoritesPage({
   onLoadMoreFavorites,
   onServerSearchFavorites,
   onManualSyncFavorites,
-  onLogin
+  onLogin,
+  showMusicApiGeneration = true,
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void | Promise<void>; 
@@ -1092,6 +1093,7 @@ export default function FavoritesPage({
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
   onLogin?: () => void;
+  showMusicApiGeneration?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
@@ -8954,6 +8956,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   )}
                 </section>
 
+                {showMusicApiGeneration && (
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-4 md:p-5">
                   <button
                     type="button"
@@ -9034,6 +9037,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     )}
                   </AnimatePresence>
                 </section>
+                )}
               </div>
             </motion.div>
           </div>
@@ -9042,7 +9046,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </StudioCenterModalPortal>
 
       <AnimatePresence>
-        {showFavoriteMusicApiModal && selectedSong && (
+        {showMusicApiGeneration && showFavoriteMusicApiModal && selectedSong && (
           <MusicApiGenerateModal
             variant="musicApi"
             hasApiKey={hasFavoriteSunoApiKey}

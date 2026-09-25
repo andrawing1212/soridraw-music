@@ -1,5 +1,53 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GU. PREVIEW app173 분할모드 곡 만들기 — 하단 선택 키워드 + 최근 생성곡 10곡 추가 배포 완료 (2026-09-26 KST)
+
+**직전 확인**: 사용자가 app172 Explore 공개곡 `다음곡에 적용`의 명령창/설정 복구를 실사용 확인하고 "통과" 판정. app172 경로는 정상 기준으로 고정하고 새 오류 없으면 재수정하지 않는다.
+
+**사용자 요청**:
+- Studio Black 분할모드의 `곡 만들기`에서 명령창 아래가 비어 있어, 다크/클래식 모드처럼 바로 아래에서 선택된 키워드와 최근 생성곡을 함께 보고 싶음.
+- 우측 메뉴의 `선택된 키워드`는 그대로 유지하되 시선 이동을 줄이기 위해 명령창 아래에도 같은 선택 키워드를 표시.
+- 그 아래에 현재 최근 생성곡 최대 10곡을 표시.
+- 다른 기능/분할 동작/디자인/백엔드는 그대로 보호.
+
+**구현 범위**:
+- `src/App.tsx`의 기존 Builder 하단에 **Studio Black + 곡 만들기 + PC/태블릿 분할 상태에서만** inline overview 추가.
+- 선택 키워드는 기존 `liveSelectedKeywordItems`를 그대로 렌더하고 기존 `removeLiveSelectedKeyword`를 재사용. 우측 `StudioRightRail` 선택 키워드는 제거/변경하지 않음.
+- 최근 생성곡은 이미 메모리에 있는 기존 `history.slice(0, 10)`만 사용. 새 Firestore/D1/API 조회, listener, write 없음.
+- 최근곡을 누르면 기존 `selectStudioWorkspaceView('recent') + openStudioDashboardSong(song, index)` 경로를 재사용.
+- 1100px 미만 Compact 모바일에서는 이 새 블록을 렌더하지 않아 기존 Builder+Result 단일 모바일 구성과 중복되지 않음.
+- 분할 엔진, 분할바, 좌우 레일, 생성바, Gemini, Music Note, Library, 좋아요, Explore, Functions/Worker/Rules는 비변경.
+
+**변경/검증 commit**:
+- 제품 코드: `bcb03b8bde6d965d8fc7f79e4a3bbf37b405c847`
+- APP205 verifier: `99c76d64b7057435d0b8bf27800df4fea45fd1e2`
+- Release Audit 등록: `4c78c95600219ef8ca07edbe710f055d46ce52c9`
+- app173 version: `2fd5db1e01615269ec47a70e76bdf57f93ce1382`
+- final audit trigger: `a52f9b981699e9630cc4e58a3deb251c86b2bd56`
+
+**검증**:
+- Release System Audit Run `36157261895` **SUCCESS**.
+- TypeScript PASS / Build PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS / branch guard PASS.
+- `APP205_SPLIT_CREATE_INLINE_KEYWORDS=PASS`
+- `APP205_SPLIT_CREATE_RECENT_10=PASS`
+- `APP205_COMPACT_MOBILE_NO_DUPLICATE=PASS`
+- `APP205_RENDER_ONLY_ZERO_SERVER_IO=PASS`
+- 새 하단 표시 자체의 추가 서버 read/write: **0** (기존 메모리 state 재사용).
+
+**PREVIEW 배포**:
+- Firebase Hosting Run `36157490130` **SUCCESS**.
+- exact release SHA: `7da5692fa2344cfe11bcc8cd9f31cfa0688e2023`.
+- `PREVIEW_APP_VERSION=173`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- Shared RTDB Rules: `SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules / D1 schema / Firestore schema / 사용자 원본 데이터: **변경 없음**.
+- 주소: `https://preview.soridraw.com/`.
+
+**현재 판정**: 코드/자동검증/PREVIEW 배포 완료. 남은 것은 사용자 PC/태블릿 실사용에서 (1) 명령창 아래 선택 키워드 위치/간격, (2) 최근 생성곡 최대 10곡 표시, (3) 최근곡 클릭 시 기존 Recent 화면 정상 이동을 시각 확인하는 것. Compact 모바일은 정적 가드로 중복 방지 PASS이나 이번 작업의 실제 모바일 시각 검증은 **미검증**. TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
+
 ## 0GT. PREVIEW app172 Explore 공개곡 다음곡 적용 설정·명령창 복구 배포 완료 (2026-09-26 KST)
 
 **사용자 실사용 오류**: Music Note 안의 `다음곡에 적용`은 정상인데, Explore에 공개된 곡에서 `다음곡에 적용`을 누르면 선택 키워드는 일부 돌아와도 원래 명령창(`userInput`)이 비거나, 오래된 공개곡은 적용 정보가 거의 없는 것처럼 보이는 문제.

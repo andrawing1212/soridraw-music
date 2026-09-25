@@ -71,6 +71,7 @@ jobs:
           node scripts/verify-200-admin-gemini-mobile-header.mjs
           node scripts/verify-201-explore-track-action-sheet.mjs
           node scripts/verify-202-explore-action-cost-bounds.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

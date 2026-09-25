@@ -15504,3 +15504,37 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     white-space: nowrap !important;
   }
 }
+
+
+/* 1026 — Widen Recent Songs copy area inside the fixed right rail.
+ * Keep the 292px rail itself unchanged. Let only the Recent Songs rows use a
+ * little more of the card's side space: heart/music glyph moves left, chevron
+ * moves right, and the text starts closer to the glyph. Metadata remains fixed;
+ * only the title row keeps horizontal drag from 1025. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-list {
+    margin-left: -6px !important;
+    margin-right: -6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song {
+    gap: 5px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    gap: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song
+  > svg:last-child {
+    flex: 0 0 auto !important;
+    margin-left: 1px !important;
+    margin-right: 0 !important;
+  }
+}

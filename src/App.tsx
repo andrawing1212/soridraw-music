@@ -2952,6 +2952,7 @@ function HistoryRouteWrapper({
   lockAllFavorites,
   user,
   handleLogin,
+  showMusicApiGeneration = true,
 }: any) {
   const favorites = useFavorites();
   const location = useLocation();
@@ -2984,6 +2985,7 @@ function HistoryRouteWrapper({
       onLoadMoreFavorites={loadMoreFavorites}
       onServerSearchFavorites={searchFavoritesOnServer}
       onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
+      showMusicApiGeneration={showMusicApiGeneration}
       toggleFavorite={toggleFavorite}
       updateFavorite={updateFavorite}
       clearAllFavorites={clearAllFavorites}
@@ -17640,6 +17642,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               lockAllFavorites={lockAllFavorites}
                               user={user || auth.currentUser}
                               handleLogin={handleLogin}
+
+                              showMusicApiGeneration={menuVisibility.library}
                             />
                           </Suspense>
                         ) : (
@@ -19015,6 +19019,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
                 )}
+                  {menuVisibility.library && (
                   <div className="soridraw-result-music-api-card mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
                     <button
                       type="button"
@@ -19073,6 +19078,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     )}
                   </div>
+                  )}
               </div>
             </div>
           )}
@@ -19174,6 +19180,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       lockAllFavorites={lockAllFavorites}
                       user={user || auth.currentUser}
                       handleLogin={handleLogin}
+
+                      showMusicApiGeneration={menuVisibility.library}
                     />
                   </Suspense>
                 </StudioPageFrame>
@@ -19193,6 +19201,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     lockAllFavorites={lockAllFavorites}
                     user={null}
                     handleLogin={handleLogin}
+
+                    showMusicApiGeneration={menuVisibility.library}
                   />
                 </Suspense>
               )

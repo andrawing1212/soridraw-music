@@ -1,3 +1,11 @@
+## 최신 2026-09-25 — app168 PREVIEW 배포 완료, 사용자 실사용 검증 대기
+
+- `CURRENT_RELEASE_STATE.md 0GO` 최우선. PREVIEW app168 Firebase Hosting Run `36140039077` SUCCESS, exact release SHA `7d0770699171899fa551fdcb82eb1f3946e94f8e`, exact build/version 168 PASS, TEST/PRODUCTION unchanged PASS.
+- Shared RTDB rules SKIPPED. Worker195/Functions/Rules/D1/Firestore 사용자 원본 데이터 비변경. 새 배포가 필요한 백엔드 없음.
+- 사용자 실사용 검증만 진행: PC/모바일 카드 `···` → 액션 시트, 좋아요 기존 상태/동기화, 공유, 다음곡 적용, 폴더 추가, 싫어요 추천 제외, 모바일 배경 스크롤/중복 클릭 차단.
+- 문제 발생 시 정상 좋아요/Worker195 전체를 다시 수정하지 말고 **해당 액션 하나만** 원인 한정 수정. 비용 기준은 app168 APP202 유지: 다음곡 cache-first, save-access bounded 2 reads, dislike server 0, playlist 전체 scan 금지.
+- 사용자 통과 전 TEST/main 승격 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app168 Explore 액션 시트 배포 직전 잠금 후보
 
 - `CURRENT_RELEASE_STATE.md 0GN` 최우선. 사용자 요청대로 **PREVIEW 배포 전 단계까지 완료**, 실제 Hosting 배포는 아직 하지 않음.

@@ -76,13 +76,14 @@
 /* Explore card more menu + bottom action sheet. Keep existing card/like layout unchanged. */
 .soridraw-explore-card-quick-actions{display:inline-flex;align-items:center;gap:4px;margin-left:auto}
 .soridraw-explore-quick-action,.soridraw-explore-more-button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0!important;outline:0!important;border-radius:50%;box-shadow:none!important;cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease}
-.soridraw-explore-quick-action{background:transparent!important;color:rgba(235,235,240,.4)}
-.soridraw-explore-quick-action:hover:not(:disabled){background:rgba(255,255,255,.07)!important;color:rgba(255,255,255,.92)}
+.soridraw-explore-quick-action{background:rgba(255,255,255,.07)!important;color:rgba(245,245,247,.6)}
+.soridraw-explore-quick-action:hover:not(:disabled){background:rgba(255,255,255,.13)!important;color:#fff}
 .soridraw-explore-quick-action:active:not(:disabled),.soridraw-explore-more-button:active{transform:scale(.92)}
 .soridraw-explore-quick-action:disabled{cursor:default;opacity:.26}
 .soridraw-explore-quick-action svg,.soridraw-explore-more-button svg{width:15px;height:15px}
-.soridraw-explore-quick-apply.is-available{background:rgba(255,180,0,.085)!important;color:#ffb400}
-.soridraw-explore-quick-apply.is-available:hover{background:rgba(255,180,0,.16)!important;color:#ffc533}
+.soridraw-explore-quick-apply.is-available{background:rgba(255,255,255,.07)!important;color:#ff7a9d}
+.soridraw-explore-quick-apply.is-available:hover{background:rgba(255,255,255,.13)!important;color:#ff9ab5}
+.soridraw-explore-share-icon{transform:scaleX(-1);transform-origin:center}
 .soridraw-explore-more-button{background:rgba(255,255,255,.07)!important;color:rgba(245,245,247,.68)}
 .soridraw-explore-more-button:hover{background:rgba(255,255,255,.13)!important;color:#fff}
 
@@ -110,9 +111,11 @@
 .soridraw-explore-more-rows{display:grid;gap:2px;padding:7px 0 0;border-top:1px solid rgba(255,255,255,.07)}
 .soridraw-explore-more-rows button{display:flex;align-items:center;gap:13px;width:100%;min-height:60px;padding:10px 8px;border-radius:13px;background:transparent!important;color:rgba(255,255,255,.84);text-align:left}
 .soridraw-explore-more-rows button:hover:not(:disabled){background:rgba(255,255,255,.05)!important}
-.soridraw-explore-more-rows button.is-available{background:rgba(255,180,0,.075)!important;color:#ffc23b}
-.soridraw-explore-more-rows button.is-available:hover:not(:disabled){background:rgba(255,180,0,.13)!important;color:#ffd064}
-.soridraw-explore-more-rows button.is-available small{color:rgba(255,205,96,.62)}
+.soridraw-explore-more-rows button.is-available{background:transparent!important;color:rgba(255,255,255,.84)}
+.soridraw-explore-more-rows button.is-available:hover:not(:disabled){background:rgba(255,255,255,.05)!important;color:rgba(255,255,255,.92)}
+.soridraw-explore-more-rows button.is-available>svg{color:rgba(255,255,255,.72)}
+.soridraw-explore-more-rows button.is-available strong{color:#ff7a9d}
+.soridraw-explore-more-rows button.is-available small{color:rgba(235,235,240,.43)}
 .soridraw-explore-more-rows button:disabled,.soridraw-explore-more-rows button.is-disabled{opacity:.48}
 .soridraw-explore-more-rows button>svg{width:20px;height:20px;min-width:20px}
 .soridraw-explore-more-rows button>span{display:flex;min-width:0;flex-direction:column;gap:3px}
@@ -142,10 +145,10 @@
 .soridraw-explore-more-primary button{min-height:72px}
 }
 
-:root[data-soridraw-theme="light"] .soridraw-explore-quick-action{color:rgba(25,25,28,.44)}
-:root[data-soridraw-theme="light"] .soridraw-explore-quick-action:hover:not(:disabled){background:rgba(20,20,24,.065)!important;color:#171719}
-:root[data-soridraw-theme="light"] .soridraw-explore-quick-apply.is-available{background:rgba(184,124,0,.09)!important;color:#b87c00}
-:root[data-soridraw-theme="light"] .soridraw-explore-quick-apply.is-available:hover{background:rgba(184,124,0,.15)!important;color:#966500}
+:root[data-soridraw-theme="light"] .soridraw-explore-quick-action{background:rgba(20,20,24,.07)!important;color:rgba(25,25,28,.52)}
+:root[data-soridraw-theme="light"] .soridraw-explore-quick-action:hover:not(:disabled){background:rgba(20,20,24,.12)!important;color:#171719}
+:root[data-soridraw-theme="light"] .soridraw-explore-quick-apply.is-available{background:rgba(20,20,24,.07)!important;color:#dc5277}
+:root[data-soridraw-theme="light"] .soridraw-explore-quick-apply.is-available:hover{background:rgba(20,20,24,.12)!important;color:#c53e64}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-button{background:rgba(20,20,24,.07)!important;color:rgba(25,25,28,.58)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-button:hover{background:rgba(20,20,24,.12)!important;color:#171719}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-backdrop{background:rgba(17,17,19,.28)}
@@ -162,5 +165,7 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button:hover:not(:disabled),:root[data-soridraw-theme="light"] .soridraw-explore-more-folder-list button:hover:not(:disabled),:root[data-soridraw-theme="light"] .soridraw-explore-more-folder-head button:hover{background:rgba(20,20,24,.055)!important}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-folder-head button{color:rgba(20,20,22,.72)}
 
-:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available{background:rgba(184,124,0,.08)!important;color:#a36d00}
-:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available:hover:not(:disabled){background:rgba(184,124,0,.14)!important;color:#855a00}
+:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available{background:transparent!important;color:rgba(20,20,22,.82)}
+:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available:hover:not(:disabled){background:rgba(20,20,24,.055)!important;color:#171719}
+:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available>svg{color:rgba(20,20,22,.66)}
+:root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available strong{color:#d94d74}

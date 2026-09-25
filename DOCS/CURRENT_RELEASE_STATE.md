@@ -1,5 +1,47 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GN. app168 Explore 더보기 액션 시트 — 배포 직전 잠금 후보, 최종 Audit PASS (2026-09-25 KST)
+
+**사용자 지시**: 실제 PREVIEW 배포는 하지 않고 배포 직전 단계까지 완성. 기존 정상 좋아요/Explore/뮤직노트/Gemini/최근 생성곡은 보호하고, Explore 곡 카드의 `···` 하단 액션 시트만 완성·검증.
+
+**잠금 후보**:
+- 앱 버전: `168`
+- 제품 version commit: `1434f80bc65148a0ff2b078bb703ef3d89159513`
+- 최종 Audit source/배포 후보 SHA: `04f5de2e4b84758776809fbcd5ee1d0a961c0ab3`
+- 기준 정상 소스: app167 후속 docs HEAD `58f5cde6dd49c3e86dace0307be443e4514ae9b4`
+- 실제 Hosting은 아직 app167 release SHA `cc6dfccfedf3a5b0fae041f3d65d905dc4cf385c`.
+
+**최종 기능 범위**:
+- 카드 우측 액션을 `···` 더보기로 변경하되 기존 커버 클릭/Suno 열기 경로는 유지.
+- 화면 아래 액션 시트: `폴더에 추가 / 좋아요 / 공유 / 다음곡에 적용 / 싫어요`.
+- 좋아요는 기존 `toggleLike` 경로 그대로 재사용하며 시트에서도 현재 liked 상태를 표시. 좋아요 서비스/Worker mutation은 수정하지 않음.
+- 다음곡 적용은 Feed의 기존 `shareBundle.nextSong`을 먼저 사용해 정상 캐시에서는 추가 서버 read 0. 번들이 없을 때만 기존 Worker `/v1/tracks/:id/apply-source`의 해당 곡 bounded read를 사용하고 기존 `pendingAppliedKeywords` Studio handoff를 재사용.
+- 폴더 저장은 본인 곡은 서버 권한 확인 없이 기존 Library 저장 경로 사용. 타인 곡은 기존 Worker `/save-access`에서 해당 곡 1건 + 팔로우 관계 1건만 확인. 실제 저장은 기존 `addPlaylistItem` bounded duplicate/order lookup과 기존 Library cache patch를 재사용.
+- 싫어요는 계정별 기기 localStorage 선호값이며 추천 탭에서만 숨김. D1/Firestore write 및 서버 호출 0. 최신/인기/검색/공개프로필 원본은 삭제하거나 변경하지 않음.
+- 새 시트는 모바일 배경 스크롤 잠금, ESC 닫기, action busy 중 닫기/중복 실행 차단, 다크/라이트 스타일 포함.
+
+**비용/백엔드 검증**:
+- Worker195 및 canonical Worker 소스 **비변경/재배포 없음**. 필요한 `apply-source`, `save-access` 경로는 현재 canonical Worker에 이미 존재.
+- APP202에서 apply-source는 공개 track `LIMIT 1` + share bundle 우선, 구형 bundle fallback의 tag lookup만 허용; write 없음.
+- save-access는 track `LIMIT 1` + follow `LIMIT 1` 정확히 2개 bounded D1 lookup; write 없음.
+- 싫어요 서버 write/read 0. 폴더 item 추가는 실제 사용자 저장 행동 때만 기존 Firestore Library 경로를 사용하며 전체 폴더 scan 금지(`sourceId limit(8)` + tail `limit(1)`).
+- 페이지 진입/업데이트만으로 이번 기능이 새 API 요청이나 데이터 write를 만들지 않음.
+
+**검증**:
+- 강화 후보 Audit Run `36138839124` SUCCESS: TypeScript PASS, Build PASS, APP201/APP202 PASS, 기존 like regression PASS, Worker dry-run/D1 read-only PASS.
+- app168 최종 Audit Run `36139084888` SUCCESS: TypeScript, Build, APP201/APP202, 기존 좋아요 회귀, TEST/PRODUCTION Worker dry-run, shared D1 read-only/preflight, branch ref guard 모두 PASS. synthetic D1 billing 단계는 조건상 SKIPPED.
+- APP201: 하단 시트/기존 액션 재사용/추천 전용 싫어요/모바일 interaction guard PASS.
+- APP202: Worker route 존재/읽기 bounded/싫어요 zero server write/playlist insert bounded PASS.
+- canonical Worker expected SHA = actual SHA PASS.
+
+**환경 비변경 확인**:
+- PREVIEW App Release 최신 Run은 기존 app167 `36117132227`이며 이번 작업 이후 새 Hosting 배포 없음.
+- `main` = `f7fc25d5452b3313efa3cca53c180c5494cc9837` 비변경.
+- `production` = `e994340f3c4f6ac97f444f1ddf13053d3faffa71` 비변경.
+- Functions/RTDB Rules/Firestore schema/D1 schema/R2/사용자 원본 데이터 변경 없음.
+
+**배포 전 남은 것**: 코드 수정 없음. 사용자가 PREVIEW 배포를 지시하면 새 기능 수정이나 버전 재증가 없이 **잠금 SHA `04f5de2e4b84758776809fbcd5ee1d0a961c0ab3`**를 Firebase PREVIEW Hosting에 배포하고 exact build/app168/TEST·PRODUCTION 비변경을 확인한다. 그 뒤 PC/모바일 실사용에서 `···` 시트 표시, 좋아요, 공유, 다음곡 적용, 폴더 추가, 싫어요 추천 제외만 확인. 실제 화면/실계정 액션은 배포 전이라 현재 **실사용 검증 전**.
+
 ## 0GM. Explore 카드 더보기 하단 액션 시트 — 구현/감사 완료, PREVIEW 미배포 (2026-09-25 KST)
 
 **사용자 의도**: Explore 곡 카드 우측 외부열기 아이콘 자리를 `···` 더보기로 바꾸고, 누르면 화면 아래에서 올라오는 액션 시트로 기존 기능을 모아 제공. 구성은 `폴더에 추가 / 좋아요 / 공유 / 다음곡에 적용 / 싫어요`. 새 서버 구조를 만들기보다 기존 저장·좋아요·공유·다음곡 적용 경로를 재사용하고 정상 좋아요 기능은 변경하지 않음.

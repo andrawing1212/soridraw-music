@@ -245,9 +245,10 @@ export default function AdminGeminiAuditPage() {
   return (
     <AdminPageLayout
       title="Gemini 호출 기록"
-      description="일반 사용자에게는 보이지 않는 관리자용 호출·토큰 감사 화면입니다."
+      stackActionsOnMobile
+      keepTitleOnOneLine
       actions={(
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={checkModels}
             disabled={checkingModels}
@@ -271,11 +272,6 @@ export default function AdminGeminiAuditPage() {
         </div>
       )}
     >
-      <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-xs leading-5 text-amber-100/75">
-        현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
-        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 5회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 추가 호출됩니다.
-      </div>
-
       {(modelAvailability || modelAvailabilityError) && (
         <div className="rounded-2xl border border-btn-border bg-[var(--bg-secondary)] px-4 py-3 text-xs leading-6 text-[var(--text-secondary)]">
           {modelAvailabilityError ? (

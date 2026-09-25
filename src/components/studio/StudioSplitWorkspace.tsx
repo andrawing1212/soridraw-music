@@ -579,6 +579,7 @@ export default function StudioSplitWorkspace({
 
     const root = document.documentElement;
     const shouldIsolate = isStudioBlack()
+      && workspaceView !== 'create'
       && window.innerWidth >= WIDE_DESKTOP_ISOLATION_BREAKPOINT;
 
     // 461: the split mastheads are now real children of their own pane scrollers.
@@ -635,7 +636,7 @@ export default function StudioSplitWorkspace({
       layout.style.setProperty('--soridraw-studio-isolated-height', `${nextHeight}px`);
       layout.style.height = `${nextHeight}px`;
     }
-  }, [isStudioBlack]);
+  }, [isStudioBlack, workspaceView]);
 
   const resolvePaneMode = useCallback((
     pane: HTMLElement,
@@ -1036,6 +1037,14 @@ export default function StudioSplitWorkspace({
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
+    if (workspaceView === 'create') {
+      const fullWidth = metricsRef.current.width;
+      commitRootMeasurements(fullWidth, metricsRef.current.left + fullWidth);
+      clearExternalMeasurements();
+      scheduleFooterBoundaryRefresh();
+      return;
+    }
+
     const nextProfile = getSplitProfile();
     const profileChanged = splitProfileRef.current !== nextProfile;
     const requestedPercent = profileChanged
@@ -1061,7 +1070,7 @@ export default function StudioSplitWorkspace({
     // writes and no geometry hand-off race at the Compact breakpoint.
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds, workspaceView]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;
@@ -1652,8 +1661,9 @@ export default function StudioSplitWorkspace({
     // single full-width workspace, while every lower WORKSPACE item starts
     // from a clean two-pane split even if either pane was previously folded.
     if (workspaceView === 'create') {
+      // 206: Split Create follows the Classic vertical flow.
       setIsBuilderCollapsed(false);
-      setIsResultCollapsed(true);
+      setIsResultCollapsed(false);
       return;
     }
 
@@ -1706,7 +1716,7 @@ export default function StudioSplitWorkspace({
       <div
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
-        className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        className={`soridraw-studio-split-workspace${workspaceView === 'create' ? ' is-create-vertical' : ''}${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
       >
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
@@ -1720,9 +1730,9 @@ export default function StudioSplitWorkspace({
         </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl)}
     </>
   );
 }

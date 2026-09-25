@@ -508,8 +508,7 @@ export default function LiteStudioSplitWorkspace({
 
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
-    const createVertical = workspaceViewRef.current === 'create';
-    if (!layout || window.innerWidth < 1100 || createVertical) {
+    if (!layout || window.innerWidth < 1100) {
       if (layout) {
         delete layout.dataset.scrollIsolated;
         layout.style.removeProperty('--soridraw-studio-isolated-height');

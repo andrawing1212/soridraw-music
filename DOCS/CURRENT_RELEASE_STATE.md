@@ -1,5 +1,40 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GQ. PREVIEW app169 Explore 빠른 액션 + 공유 노트 배포 완료 (2026-09-25 KST)
+
+**사용자 지시**: 수정 후 검증에 문제가 없으면 PREVIEW 배포까지 한 흐름으로 완료. app169을 Firebase PREVIEW Hosting에 배포.
+
+**배포 결과**:
+- Firebase PREVIEW Hosting Run: `36145255522` **SUCCESS**
+- exact release SHA: `c0ad855216f9a5c90e3988e57a2719ca62d49558`
+- `PREVIEW_APP_VERSION=169`
+- `PREVIEW_EXACT_BUILD=PASS`
+- `TEST_PRODUCTION_UNCHANGED=PASS`
+- Shared RTDB Rules: `SKIPPED`
+- Worker195 / Functions / Rules / D1 schema / Firestore schema / 사용자 원본 데이터: **변경 없음**
+- 배포 주소: `https://preview.soridraw.com/`
+
+**app169 내용**:
+- Explore 카드 아래: 좋아요 → 다음곡 적용 → 공유 → 세로 원형 `⋮`.
+- 다음곡 적용 가능곡은 카드/더보기 시트 모두 노란 계열 강조.
+- 더보기 시트의 큰 안내형 액션 유지.
+- `폴더에 추가` 제거, `공유 노트에 추가`로 변경.
+- Explore의 Library playlist 저장 경로 제거. 기존 Music Note sharedNote 폴더/공유노트 의미를 재사용.
+- 공유 노트 폴더는 Music Note 구조 로컬 캐시 우선, stale/miss 시 `user_structures/{uid}` 1문서 bounded read.
+- 실제 공유 노트 저장은 결정적 `favorites` 1문서 merge + 기존 `shared-note-save` mutation boundary.
+- 기존 좋아요/공유/다음곡 적용/싫어요 기능은 보호.
+
+**검증 근거**:
+- app169 final Audit Run `36144800979` SUCCESS.
+- TypeScript PASS / Build PASS / APP201 / APP202 / 기존 Like regression PASS.
+- `APP201_EXPLORE_QUICK_ACTION_GUIDE_PARITY=PASS`
+- `APP201_EXPLORE_SHARED_NOTE_LABEL=PASS`
+- `APP202_SHARED_NOTE_CACHE_FIRST=PASS`
+- `APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS`
+- `APP202_LIBRARY_PATH_UNUSED=PASS`
+
+**현재 판정**: PREVIEW 배포 완료 / 자동검증 PASS / PC·모바일 실사용 검증 대기. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 0GP. app169 Explore 빠른 액션 + Music Note 공유 노트 연결 — 배포 전 최종 후보 (2026-09-25 KST)
 
 **사용자 지시**: Library는 현재 실험단계로 잠그고 Explore 저장의 메인을 Music Note로 사용. 카드 아래 작은 빠른 액션과 더보기 안의 큰 안내형 액션을 동시에 유지. 카드의 더보기는 세로형 `⋮` + 원형 버튼으로 변경하고, 좋아요 오른쪽에 `다음곡에 적용 / 공유 / 더보기` 아이콘을 배치. 다음곡 적용 가능 상태는 노란 계열로 강조.

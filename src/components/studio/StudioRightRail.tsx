@@ -237,7 +237,7 @@ export default function StudioRightRail({
 
         <section className="soridraw-studio-dashboard-card">
           <div className="soridraw-studio-dashboard-heading">
-            <div><p>RECENT SONGS</p><h2>최근 생성곡</h2><CacheDiagnosticBadge domain="recentSongs" /></div>
+            <div><p>RECENT SONGS</p><h2>최근 생성곡</h2><CacheDiagnosticBadge domain="recentSongs" className="soridraw-studio-dashboard-cache-badge" /></div>
             <button
               type="button"
               className="soridraw-studio-dashboard-text-button"

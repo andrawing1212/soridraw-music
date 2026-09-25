@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, Compass, ExternalLink, FolderPlus, Heart, Loader2, MoreHorizontal, Music2, Pencil, Pin, Search, Share2, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Forward, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Search, Share2, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -54,14 +54,17 @@ import {
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
-import { addPlaylistItem, ensureDefaultPlaylists, getPlaylistsByType } from '../services/playlistService';
 import {
   getExploreTrackApplySource,
   getExploreTrackSaveAccess,
   markExploreTrackDisliked,
   readExploreDislikedTrackIds,
-  type ExploreTrackSaveAccess,
 } from '../services/exploreTrackActionService';
+import {
+  getExploreSharedNoteFolders,
+  saveExploreTrackToSharedNote,
+  type ExploreSharedNoteFolder,
+} from '../services/exploreSharedNoteService';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
@@ -289,6 +292,8 @@ function ExploreTrackCard({
   likeBusy,
   onToggleLike,
   onOpenProfile,
+  onApplyNext,
+  onShare,
   onOpenMore,
 }: {
   track: ExploreTrack;
@@ -296,6 +301,8 @@ function ExploreTrackCard({
   likeBusy: boolean;
   onToggleLike: (track: ExploreTrack) => void;
   onOpenProfile: (track: ExploreTrack) => void;
+  onApplyNext: (track: ExploreTrack) => void;
+  onShare: (track: ExploreTrack) => void;
   onOpenMore: (track: ExploreTrack) => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -374,15 +381,36 @@ function ExploreTrackCard({
           {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
           <span>{formatCount(track.likeCount)}</span>
         </button>
-        <button
-          type="button"
-          className="soridraw-explore-more-button"
-          onClick={() => onOpenMore(track)}
-          aria-label="곡 더보기"
-          title="더보기"
-        >
-          <MoreHorizontal aria-hidden="true" />
-        </button>
+        <div className="soridraw-explore-card-quick-actions" aria-label="곡 빠른 작업">
+          <button
+            type="button"
+            className={`soridraw-explore-quick-action soridraw-explore-quick-apply${track.allowNextSongApply ? ' is-available' : ''}`}
+            onClick={() => onApplyNext(track)}
+            disabled={!track.allowNextSongApply}
+            aria-label={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+            title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+          >
+            <WandSparkles aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="soridraw-explore-quick-action"
+            onClick={() => onShare(track)}
+            aria-label="공유"
+            title="공유"
+          >
+            <Forward aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="soridraw-explore-more-button"
+            onClick={() => onOpenMore(track)}
+            aria-label="곡 더보기"
+            title="더보기"
+          >
+            <EllipsisVertical aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -419,9 +447,8 @@ export default function ExplorePage() {
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
   const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
-  const [moreActionBusy, setMoreActionBusy] = useState<'folder' | 'apply' | null>(null);
-  const [folderChoices, setFolderChoices] = useState<Array<{ id?: string; title: string }>>([]);
-  const [folderSaveSource, setFolderSaveSource] = useState<ExploreTrackSaveAccess['saveSource'] | null>(null);
+  const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | null>(null);
+  const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
   const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
@@ -452,7 +479,6 @@ export default function ExplorePage() {
     setMoreTrack(null);
     setMoreSheetMode('actions');
     setFolderChoices([]);
-    setFolderSaveSource(null);
   }, [profileUid]);
 
   useEffect(() => {
@@ -464,8 +490,7 @@ export default function ExplorePage() {
       setMoreTrack(null);
       setMoreSheetMode('actions');
       setFolderChoices([]);
-      setFolderSaveSource(null);
-    };
+      };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -1294,7 +1319,6 @@ export default function ExplorePage() {
     setMoreTrack(null);
     setMoreSheetMode('actions');
     setFolderChoices([]);
-    setFolderSaveSource(null);
     setMoreActionBusy(null);
   };
 
@@ -1367,107 +1391,47 @@ export default function ExplorePage() {
     }
   };
 
-  const openExploreFolderPicker = async (track: ExploreTrack) => {
+  const openExploreSharedNotePicker = async (track: ExploreTrack) => {
     if (!user) {
-      setSocialNotice('폴더 추가는 로그인 후 사용할 수 있어요.');
+      setSocialNotice('공유 노트 추가는 로그인 후 사용할 수 있어요.');
       return;
     }
-    setMoreActionBusy('folder');
+    setMoreActionBusy('sharedNote');
     try {
-      let saveSource: NonNullable<ExploreTrackSaveAccess['saveSource']>;
-      if (user.uid === track.ownerUid) {
-        saveSource = {
-          sourceType: 'shared_track',
-          exploreTrackId: track.id,
-          originalSourceType: track.sourceType || undefined,
-          originalSourceId: track.sourceId || undefined,
-          sourceSubTrackKey: track.sourceSubTrackKey || '',
-          sourceSubTrackIndex: track.sourceSubTrackIndex ?? null,
-          sourceSubTrackId: track.sourceSubTrackId || null,
-          title: track.title,
-          coverUrl: track.coverUrl || '',
-          sunoUrlPrimary: track.sunoUrlPrimary || '',
-          sunoUrlSecondary: null,
-        };
-      } else {
+      if (user.uid !== track.ownerUid) {
         if (!track.allowFollowerSave) {
-          throw new Error('공개자가 이 곡의 폴더 저장을 허용하지 않았어요.');
+          throw new Error('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
         }
         const access = await getExploreTrackSaveAccess(user, track.id);
-        if (!access.allowed || !access.saveSource) {
+        if (!access.allowed) {
           throw new Error(access.permissionEnabled
-            ? '팔로우한 아티스트의 저장 허용곡만 폴더에 추가할 수 있어요.'
-            : '공개자가 이 곡의 폴더 저장을 허용하지 않았어요.');
+            ? '팔로우한 아티스트의 저장 허용곡만 공유 노트에 추가할 수 있어요.'
+            : '공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
         }
-        saveSource = access.saveSource;
       }
 
-      let playlists = await getPlaylistsByType(user.uid, 'normal');
-      if (!playlists.length) {
-        playlists = (await ensureDefaultPlaylists(user.uid)).filter((playlist) => playlist.type === 'normal');
-      }
-      const valid = playlists.filter((playlist) => Boolean(playlist.id));
-      if (!valid.length) throw new Error('추가할 폴더가 없어요.');
-
-      setFolderSaveSource(saveSource);
-      setFolderChoices(valid.map((playlist) => ({ id: playlist.id, title: playlist.title })));
+      const folders = await getExploreSharedNoteFolders(user);
+      if (!folders.length) throw new Error('공유 노트 폴더를 확인하지 못했어요.');
+      setFolderChoices(folders);
       setMoreSheetMode('folders');
     } catch (reason) {
-      console.error('Explore folder picker failed:', reason);
-      setSocialNotice(reason instanceof Error ? reason.message : '폴더를 불러오지 못했어요.');
+      console.error('Explore shared note picker failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '공유 노트를 불러오지 못했어요.');
     } finally {
       setMoreActionBusy(null);
     }
   };
 
-  const saveExploreTrackToFolder = async (track: ExploreTrack, playlist: { id?: string; title: string }) => {
-    if (!user || !playlist.id || !folderSaveSource) return;
-    setMoreActionBusy('folder');
+  const saveExploreTrackToSharedNoteFolder = async (track: ExploreTrack, folder: ExploreSharedNoteFolder) => {
+    if (!user) return;
+    setMoreActionBusy('sharedNote');
     try {
-      const nextSong = track.shareBundle?.nextSong && typeof track.shareBundle.nextSong === 'object'
-        ? track.shareBundle.nextSong
-        : null;
-      const selectedKeywords = track.shareBundle?.selectedKeywords && typeof track.shareBundle.selectedKeywords === 'object'
-        ? track.shareBundle.selectedKeywords
-        : null;
-      const genres = Array.isArray(selectedKeywords?.genres)
-        ? selectedKeywords!.genres.map((value) => String(value || '').trim()).filter(Boolean)
-        : [];
-      await addPlaylistItem(user.uid, playlist.id, {
-        sourceType: 'shared_track',
-        sourceId: folderSaveSource.exploreTrackId || track.id,
-        sourceSubTrackId: folderSaveSource.sourceSubTrackId || track.sourceSubTrackId || null,
-        sourceSubTrackIndex: folderSaveSource.sourceSubTrackIndex ?? track.sourceSubTrackIndex ?? null,
-        ownerUid: track.ownerUid,
-        creatorDisplayId: track.ownerHandle || track.displayName || null,
-        ownerNickname: track.displayName || null,
-        creatorNickname: track.displayName || null,
-        ownerEmail: null,
-        creatorEmail: null,
-        title: folderSaveSource.title || track.title,
-        audioUrl: folderSaveSource.sunoUrlPrimary || track.sunoUrlPrimary || null,
-        imageUrl: folderSaveSource.coverUrl || track.coverUrl || null,
-        duration: track.durationSeconds ?? null,
-        genreLabels: genres,
-        appliedKeywords: nextSong as Record<string, any> | null,
-        prompt: track.prompt || null,
-        style: track.style || null,
-        lyrics: track.lyrics || null,
-        lyricsText: track.lyrics || null,
-        requestPayload: nextSong as Record<string, any> | null,
-        colorTag: null,
-        likeCount: track.likeCount,
-        order: 0,
-        isUnavailable: false,
-        unavailableReason: null,
-      });
-      setSocialNotice(`'${playlist.title}'에 추가했어요.`);
+      await saveExploreTrackToSharedNote(user, track, folder);
+      setSocialNotice(`공유 노트 · '${folder.title}'에 추가했어요.`);
       closeMoreSheet();
     } catch (reason) {
-      console.error('Explore folder save failed:', reason);
-      setSocialNotice(reason instanceof Error && reason.message === 'DUPLICATE'
-        ? '이미 이 폴더에 있는 곡이에요.'
-        : reason instanceof Error ? reason.message : '폴더 추가에 실패했어요.');
+      console.error('Explore shared note save failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '공유 노트 추가에 실패했어요.');
     } finally {
       setMoreActionBusy(null);
     }
@@ -1506,7 +1470,7 @@ export default function ExplorePage() {
           className="soridraw-explore-more-sheet"
           role="dialog"
           aria-modal="true"
-          aria-label={moreSheetMode === 'folders' ? '폴더에 추가' : `${moreTrack.title} 더보기`}
+          aria-label={moreSheetMode === 'folders' ? '공유 노트에 추가' : `${moreTrack.title} 더보기`}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="soridraw-explore-more-handle" aria-hidden="true" />
@@ -1516,19 +1480,19 @@ export default function ExplorePage() {
                 <button type="button" disabled={actionBusy} onClick={() => setMoreSheetMode('actions')} aria-label="더보기로 돌아가기">
                   <ChevronLeft aria-hidden="true" />
                 </button>
-                <strong>폴더에 추가</strong>
+                <strong>공유 노트에 추가</strong>
               </div>
               <div className="soridraw-explore-more-folder-list">
-                {folderChoices.map((playlist) => (
+                {folderChoices.map((folder) => (
                   <button
-                    key={playlist.id || playlist.title}
+                    key={folder.id}
                     type="button"
-                    disabled={moreActionBusy === 'folder'}
-                    onClick={() => saveExploreTrackToFolder(moreTrack, playlist)}
+                    disabled={moreActionBusy === 'sharedNote'}
+                    onClick={() => saveExploreTrackToSharedNoteFolder(moreTrack, folder)}
                   >
-                    <FolderPlus aria-hidden="true" />
-                    <span>{playlist.title}</span>
-                    {moreActionBusy === 'folder' && <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />}
+                    <NotebookTabs aria-hidden="true" />
+                    <span>{folder.title}</span>
+                    {moreActionBusy === 'sharedNote' && <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />}
                   </button>
                 ))}
               </div>
@@ -1546,9 +1510,9 @@ export default function ExplorePage() {
               </div>
 
               <div className="soridraw-explore-more-primary">
-                <button type="button" disabled={actionBusy} onClick={() => openExploreFolderPicker(moreTrack)}>
-                  {moreActionBusy === 'folder' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <FolderPlus aria-hidden="true" />}
-                  <span>폴더에 추가</span>
+                <button type="button" disabled={actionBusy} onClick={() => openExploreSharedNotePicker(moreTrack)}>
+                  {moreActionBusy === 'sharedNote' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <NotebookTabs aria-hidden="true" />}
+                  <span>공유 노트에 추가</span>
                 </button>
                 <button
                   type="button"
@@ -1564,7 +1528,7 @@ export default function ExplorePage() {
                   <span>좋아요</span>
                 </button>
                 <button type="button" disabled={actionBusy} onClick={() => shareExploreTrack(moreTrack)}>
-                  <Share2 aria-hidden="true" />
+                  <Forward aria-hidden="true" />
                   <span>공유</span>
                 </button>
               </div>
@@ -1573,7 +1537,7 @@ export default function ExplorePage() {
                 <button
                   type="button"
                   disabled={actionBusy}
-                  className={!moreTrack.allowNextSongApply ? 'is-disabled' : undefined}
+                  className={moreTrack.allowNextSongApply ? 'is-available' : 'is-disabled'}
                   onClick={() => applyExploreTrackToNextSong(moreTrack)}
                 >
                   {moreActionBusy === 'apply' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <WandSparkles aria-hidden="true" />}
@@ -1613,12 +1577,13 @@ export default function ExplorePage() {
             likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
             onToggleLike={toggleLike}
             onOpenProfile={openProfile}
+            onApplyNext={applyExploreTrackToNextSong}
+            onShare={shareExploreTrack}
             onOpenMore={(selectedTrack) => {
               setMoreTrack(selectedTrack);
               setMoreSheetMode('actions');
               setFolderChoices([]);
-              setFolderSaveSource(null);
-            }}
+                      }}
           />
         );
       })}

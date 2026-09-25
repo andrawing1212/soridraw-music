@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GK. 사용자 app166 Rap AUTO 실사용 PASS — 동결 (2026-09-25 KST)
+
+**사용자 확인**: PREVIEW app166에서 V1 Rap AUTO 중립화 수정에 대해 사용자가 "통과했어"라고 직접 확인. 따라서 AUTO + 래퍼 역할 없음 조건에서 AI가 임의의 `no rap`/동등 rap-ban을 최종 [Arrangement]에 남기던 문제는 **실사용 해결 PASS**로 확정.
+
+**보호 기준**: AUTO는 랩을 강제하지도 금지하지도 않는 중립 모드. OFF는 `no rap` 유지, ON은 기존 랩 적용, 사용자가 직접 "랩 없이/no rap"라고 지시한 경우는 AUTO에서도 보존. Stable/Custom 구조, Vocal UI, 저장 데이터 구조, V2, Worker195, Functions, 사용자 원본 데이터는 비변경. 별도 오류가 없으면 이 V1 Rap AUTO 경로 추가 수정 금지.
+
+**배포 기준**: PREVIEW app166 Hosting Run `36114262826` SUCCESS, exact release SHA `1fe21cd23152c3752c65ffe4e2e329751501c84b`, final Audit `36114071894` SUCCESS 유지. TEST/main 및 PRODUCTION은 아직 승격되지 않음.
+
 ## 0GJ. PREVIEW app166 V1 Rap AUTO 중립화 배포 완료 (2026-09-25 KST)
 
 **사용자 승인/목표**: 사용자가 "배포까지 진행해"라고 명시 승인. V1 Classic Rap AUTO가 Rap Section 미사용을 이유로 최종 [Arrangement]에 `no rap`을 강제로 남기지 않도록 수정한 검증 완료본을 PREVIEW에 배포. AUTO는 중립, OFF는 랩 금지, ON은 기존 랩 적용, 사용자가 직접 "랩 없이/no rap"라고 지시한 경우는 AUTO에서도 보존.

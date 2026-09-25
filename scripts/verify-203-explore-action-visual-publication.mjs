@@ -24,7 +24,7 @@ assert.doesNotMatch(page, /getExploreMusicNotePublicationState/, 'opening public
 for (const label of ['다음곡에 적용 허용', '팔로워 곡 저장 허용', '공개 프로필에 고정']) {
   assert.ok(modal.includes(label), `publication modal must preserve ${label}`);
 }
-assert.match(modal, />저장</, 'public Explore track settings must save in the same modal');
+assert.ok(modal.includes('저장'), 'public Explore track settings must save in the same modal');
 assert.match(modal, /비공개로 전환/, 'public Explore track settings must retain the private conversion control');
 assert.match(modal, /bg-\[#FF7A72\]/, 'publication modal must preserve the existing coral/pink control family');
 

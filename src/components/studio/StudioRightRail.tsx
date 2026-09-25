@@ -168,6 +168,7 @@ type StudioRightRailProps = {
   selectedIndex: number;
   remainingCredits: number | null;
   creditsUpdatedAt?: unknown;
+  showMusicApiCredits: boolean;
   selectedKeywords: SelectedKeyword[];
   onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
@@ -187,6 +188,7 @@ export default function StudioRightRail({
   selectedIndex,
   remainingCredits,
   creditsUpdatedAt,
+  showMusicApiCredits,
   selectedKeywords,
   onRemoveSelectedKeyword,
   formatTime,
@@ -279,18 +281,20 @@ export default function StudioRightRail({
           </div>
         </section>
 
-        <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
-          <div className="soridraw-studio-dashboard-heading compact">
-            <div><p>MUSIC API</p><h2>남은 크레딧</h2></div>
-            <Activity className="h-5 w-5" />
-          </div>
-          <div className="soridraw-studio-dashboard-credit-value">
-            <strong>{remainingCredits === null ? '—' : remainingCredits.toLocaleString()}</strong><span>credits</span>
-          </div>
-          <div className="soridraw-studio-dashboard-credit-footer">
-            <small>{formatTime(creditsUpdatedAt)}</small><button type="button" onClick={onOpenApiSettings}>설정</button>
-          </div>
-        </section>
+        {showMusicApiCredits && (
+          <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
+            <div className="soridraw-studio-dashboard-heading compact">
+              <div><p>MUSIC API</p><h2>남은 크레딧</h2></div>
+              <Activity className="h-5 w-5" />
+            </div>
+            <div className="soridraw-studio-dashboard-credit-value">
+              <strong>{remainingCredits === null ? '—' : remainingCredits.toLocaleString()}</strong><span>credits</span>
+            </div>
+            <div className="soridraw-studio-dashboard-credit-footer">
+              <small>{formatTime(creditsUpdatedAt)}</small><button type="button" onClick={onOpenApiSettings}>설정</button>
+            </div>
+          </section>
+        )}
 
         <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-keywords-card">
           <div className="soridraw-studio-dashboard-heading compact">

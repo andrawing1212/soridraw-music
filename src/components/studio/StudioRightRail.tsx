@@ -16,10 +16,11 @@ type SelectedKeyword = {
 
 type RecentSongScrollableCopyProps = {
   title: string;
+  genre: string;
   time: string;
 };
 
-function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps) {
+function RecentSongScrollableCopy({ title, genre, time }: RecentSongScrollableCopyProps) {
   const scrollRef = React.useRef<HTMLSpanElement>(null);
   const resetTimerRef = React.useRef<number | null>(null);
   const dragRef = React.useRef({
@@ -154,8 +155,11 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
       onClickCapture={handleClickCapture}
       onWheel={handleWheel}
     >
+      <span className="soridraw-studio-dashboard-song-meta">
+        <small>[{genre}]</small>
+        <small>{time}</small>
+      </span>
       <strong>{title}</strong>
-      <small>{time}</small>
     </span>
   );
 }
@@ -173,6 +177,7 @@ type StudioRightRailProps = {
   onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
   formatSongTitle: (song: RecentSong) => string;
+  formatSongGenre: (song: RecentSong) => string;
   onOpenGenerationOptions: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
   isSongUnread: (song: RecentSong) => boolean;
@@ -193,6 +198,7 @@ export default function StudioRightRail({
   onRemoveSelectedKeyword,
   formatTime,
   formatSongTitle,
+  formatSongGenre,
   onOpenGenerationOptions,
   onOpenSong,
   isSongUnread,
@@ -270,6 +276,7 @@ export default function StudioRightRail({
                   </span>
                   <RecentSongScrollableCopy
                     title={formatSongTitle(song) || `생성곡 ${index + 1}`}
+                    genre={formatSongGenre(song) || 'Song'}
                     time={formatTime(song.updatedAt || song.createdAt)}
                   />
                   <ChevronRight className="h-4 w-4" />

@@ -1,3 +1,11 @@
+## 최신 2026-09-25 — app171 PREVIEW 배포 완료, 더보기 텍스트 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0GS` 최우선. PREVIEW app171 Firebase Hosting Run `36150400530` SUCCESS, exact release SHA `36f72d8de93c8ddeacfa2e0188b18b3cc2c115da`, app171 exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 더보기 시트 텍스트 기준: 상단 3버튼 12px no-wrap, 단독 행 메인 라벨 14px no-wrap, 설명문 10px 유지.
+- app170의 아이콘/핑크 강조/공개설정/공유노트/좋아요 경로는 변경 없음.
+- 다음은 사용자 PC·모바일 시각 확인만 반영. 새 구체 오류 없으면 기능 로직 수정 금지.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app170 PREVIEW 배포 완료, Explore 액션/공개설정 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0GR` 최우선. PREVIEW app170 Firebase Hosting Run `36149125409` SUCCESS, exact release SHA `aee4034be5a14abfe0378a3e9b954d80c8add3b1`, exact build/version 170 PASS, TEST/PRODUCTION unchanged PASS.

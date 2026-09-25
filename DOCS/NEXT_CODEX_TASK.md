@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app166 Rap AUTO 사용자 실사용 PASS, 해당 경로 동결
+
+- `CURRENT_RELEASE_STATE.md 0GK` 우선. 사용자가 PREVIEW app166 Rap AUTO 중립화 결과를 실사용 PASS로 확인.
+- AUTO는 중립, OFF는 `no rap`, ON은 기존 랩 적용, 사용자 직접 no-rap 지시는 AUTO에서도 보존. 이 기준을 정상 동작으로 고정하고 새 구체 오류가 없으면 관련 V1 랩 엔진을 다시 수정하지 않는다.
+- PREVIEW app166 Hosting Run `36114262826`, exact release SHA `1fe21cd23152c3752c65ffe4e2e329751501c84b`, final Audit `36114071894` SUCCESS 유지.
+- 다음 작업은 사용자의 별도 지시를 따른다. TEST/main 승격은 명시적 테스트배포 요청 전 금지, PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app166 PREVIEW 배포 완료, Rap AUTO 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0GJ` 우선. PREVIEW app166 Hosting Run `36114262826` SUCCESS, exact release SHA `1fe21cd23152c3752c65ffe4e2e329751501c84b`, final Audit `36114071894` SUCCESS. TypeScript/Build/APP199 PASS, TEST/PRODUCTION 비변경, RTDB rules SKIPPED, Worker195/Functions/사용자 원본 비변경.

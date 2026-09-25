@@ -1,3 +1,18 @@
+## 최신 2026-09-26 — app175 PREVIEW 배포 완료, Library 숨김/Music API + 관리자 설정 유지 실사용 확인
+
+- `CURRENT_RELEASE_STATE.md 0GW` 최우선.
+- PREVIEW app175 Firebase Hosting Run `36162378407` SUCCESS, deployed SHA `dde9215898ac3fee0dcd6eb6a24c6a41c28eec1a`, exact build/version 175 PASS, TEST/PRODUCTION unchanged PASS.
+- Library 앱설정의 raw `menuVisibility.library`만 Music API 생성 UI gate로 사용. `숨김=false`일 때만 두 UI를 숨기고, `전체공개/관리자만`은 기존대로 표시.
+- 대상 2곳: Studio 최근 생성곡/Result 맨 아래 Music API 카드, Music Note 디테일 팝업 맨 아래 Music API 생성 섹션+모달.
+- 관리자 Navigation 설정과 Cache Diagnostics ON/OFF는 stable persistent localStorage mirror를 추가해 앱 업데이트/저장키 버전 변경 fallback에서도 마지막 상태 유지.
+- Admin Settings 서버 읽기 실패 시 앱 기본값으로 reset 금지. 마지막 local persisted state 유지.
+- 앱 업데이트 경로에서 localStorage.clear 또는 protected admin preference remove 금지. APP207가 감사에서 강제.
+- Final Audit Run `36162135602` SUCCESS: TypeScript/Build/APP207/기존 Like 회귀/Worker dry-run/shared D1 read-only/branch guard PASS.
+- Worker/Functions/Rules/D1/Firestore schema/사용자 원본 데이터 변경 없음. 새 서버 read/write 없음.
+- 사용자 확인: (1) Library=숨김 → 두 Music API 메뉴 모두 숨김, (2) Library=전체공개 또는 관리자만 → 두 메뉴 표시, (3) Cache Diagnostics=OFF + Library=숨김 상태로 다음 앱 업데이트 적용 후 동일 상태 유지.
+- 이번 변경으로 다른 Studio/Recent/Music Note 기능을 수정하지 않는다. 이상이 있으면 해당 gate/persistence 경로만 국소 수정.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app174 PREVIEW 배포 완료, 분할 곡 만들기 세로 구성 실사용 확인
 
 - CURRENT_RELEASE_STATE.md 0GV 최우선.

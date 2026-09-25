@@ -1,3 +1,16 @@
+## 최신 2026-09-25 — app169 Explore 빠른 액션 + 공유 노트 후보, PREVIEW 배포 전
+
+- `CURRENT_RELEASE_STATE.md 0GP` 최우선. app169 제품 후보 구현/감사 완료, 실제 Hosting은 아직 app168.
+- 카드 아래 최종 액션: 기존 좋아요+숫자 → 노란 강조 가능한 다음곡 적용 아이콘 → Forward 공유 아이콘 → 원형 세로 `⋮`. 작은 아이콘은 hover 원형 배경/명도 강조, 텍스트 없음.
+- 더보기 시트는 접근성/가이드 역할로 큰 액션을 그대로 유지: `공유 노트에 추가 / 좋아요 / 공유 / 다음곡에 적용 / 싫어요`. 적용 가능곡의 다음곡 버튼은 큰 시트에서도 노란 강조.
+- Explore의 Library 저장 경로는 제거. `공유 노트에 추가`는 기존 Music Note sharedNote 폴더 구조와 `favorites` shared_music_note 문서 의미를 재사용.
+- 비용: sharedNote 폴더는 Music Note 구조 로컬 캐시 우선, 최신이면 read 0; stale/miss 때 `user_structures/{uid}` 1문서 read. 실제 저장 클릭은 결정적 favorites 문서 1개 merge + 기존 Music Note mutation boundary. 타인 곡 권한 확인은 기존 Worker track 1 + follow 1 bounded read, 본인 곡은 생략. Library scan 0.
+- app169 final Audit Run `36144800979` SUCCESS. TypeScript/Build/APP201/APP202/기존 like regression/Worker dry-run/shared D1 read-only PASS.
+- 제품 version commit `86843229793896f1b5ec0e01d8f9c176a7e757f0`, final audit source `4a7be79efe7189e97c8b3942de0f4afae9b71c9a`. 이후 commit은 상태 문서만.
+- 실제 PREVIEW는 app168 Hosting Run `36140039077` / release SHA `7d0770699171899fa551fdcb82eb1f3946e94f8e`.
+- 사용자 PREVIEW 배포 요청 전에는 배포하지 않는다. 배포 요청 시 Hosting only → app169 exact build → TEST/PRODUCTION unchanged 확인. Worker/Functions/Rules 재배포 없음.
+- 배포 후 실사용은 PC/모바일의 작은 아이콘 배치·hover, 적용 가능 노란 강조, 원형 세로 `⋮`, 더보기 중복 메뉴, Shared Note 폴더 선택/저장만 집중 확인. 정상 좋아요 경로는 새 오류 없으면 수정 금지.
+
 ## 최신 2026-09-25 — app168 PREVIEW 배포 완료, 사용자 실사용 검증 대기
 
 - `CURRENT_RELEASE_STATE.md 0GO` 최우선. PREVIEW app168 Firebase Hosting Run `36140039077` SUCCESS, exact release SHA `7d0770699171899fa551fdcb82eb1f3946e94f8e`, exact build/version 168 PASS, TEST/PRODUCTION unchanged PASS.

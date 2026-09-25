@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GI. V1 Rap AUTO 중립화 — 비의도 `no rap` 제거, OFF/직접지시/ON 보호 (2026-09-25 KST)
+
+**사용자 의도**: 보컬의 랩 모드가 AUTO일 때 Rap Section이 선택되지 않았다는 이유만으로 최종 스타일 프롬프트 [Arrangement]에 `no rap`이 강제로 들어가면 안 됨. AUTO는 랩 허용/금지 어느 쪽도 강제하지 않는 중립 모드로 사용. OFF는 랩 금지, ON은 랩 적용, 사용자가 직접 "랩 없이/no rap"라고 지시한 경우는 AUTO에서도 그 직접 지시를 존중.
+
+**원인 확인**: V1 Classic은 OFF일 때만 코드가 `no rap`을 직접 추가하고 ON일 때만 `rap section`을 직접 추가하는 기존 경계가 이미 존재. 그러나 AUTO에서는 Gemini가 Blueprint에 Rap Section이 없는 결과를 해석해 `no rap`을 생성할 수 있었고, `sectionArrangementRoles.ts`의 protected constraint가 그 문구를 중요 지시로 보존해 최종 [Arrangement]까지 남길 수 있었음. 사용자가 본 G-Funk 예시의 랜덤처럼 보이는 현상과 일치.
+
+**수정**: `src/services/generation/v1/rules/sectionArrangementRoles.ts`에서 final producer-map context에 `rapMode`와 `preserveNoRapConstraint`를 추가. AUTO + 사용자 직접 금지 지시 없음이면 Gemini가 만든 `no rap` / `without rap` / `rap-free` 등 rap-ban 문구만 producer-map 후보/보호 지시에서 제거. `src/services/geminiService.ts`는 AUTO 지시를 "중립, Blueprint/래퍼 역할/직접 요청을 따르되 rap-ban을 만들지 말 것"으로 명시하고 두 V1 최종 Arrangement 경계에 rap mode와 직접 no-rap 요청 여부를 전달. OFF의 결정적 `no rap` 추가, ON의 `rap section` 추가, 사용자 직접 no-rap 요청, Stable/Custom 구조 규칙, UI/저장 형식은 비변경. V2는 이번 작업 범위에서 수정하지 않음.
+
+**검증**: 제품 commits `caf7ac1f2c2d81f91aaed1d1e1c24af6ef8dc35f`, `27c39a3fe0db78c4dc149f9057ee2fbc98f81475`; 신규 회귀 `scripts/verify-199-rap-auto-neutral.mjs` commit `94fdd53512b0a379c7c17fd97ac54fd0ceaeb207`, Audit 등록 `ceff0245576bd737c19a63de91d73a599682a41d`, audit trigger `83396e9f432dd6afddc2b81e9aff5a0cb0c7b4a9`. Release System Audit Run `36113654643` SUCCESS: TypeScript PASS, Build PASS, APP199 AUTO neutral/direct-no-rap/OFF/ON PASS, 기존 APP197/198 및 release-system/Worker dry-run PASS.
+
+**배포 상태**: 아직 PREVIEW Hosting **미배포**. 실제 배포 앱은 app165 release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b` 유지. 앱 버전 bump 없음. Worker195/Functions/Rules/공유 사용자 데이터/TEST/PRODUCTION 비변경. PREVIEW 배포 요청 전에는 소스 후보만 유지.
+
 ## 0GH. 사용자 app165 실사용 1차 확인 — 현재 이상 없음 (2026-09-25 KST)
 
 **사용자 확인**: PREVIEW app165 사용 후 "일단 이상없어보여"라고 직접 보고. 현재 기준으로 신규 공개곡 좋아요, 기존 좋아요, Explore 진입/재진입 및 app165 진단 변경에서 눈에 띄는 회귀는 관찰되지 않음. 이 평가는 **1차 실사용 이상 없음**으로 기록하며, 최초 Social Snapshot D1 R45의 실제 원인 또는 app165에서의 비용 감소를 증명한 것은 아님.

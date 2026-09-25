@@ -1,3 +1,11 @@
+## 최신 2026-09-25 — app169 PREVIEW 배포 완료, 실사용 검증 대기
+
+- `CURRENT_RELEASE_STATE.md 0GQ` 최우선. Firebase PREVIEW Hosting Run `36145255522` SUCCESS, exact release SHA `c0ad855216f9a5c90e3988e57a2719ca62d49558`, app169 exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 사용자 운영 기준: 수정 후 검증 PASS면 별도 중간 정지 없이 PREVIEW 배포까지 완료. 단 TEST/PRODUCTION 승격은 기존 승인 규칙 유지.
+- 실사용 확인: PC/모바일 카드 작은 아이콘 배치·hover, 적용 가능 노란 강조, 공유 화살표, 원형 세로 `⋮`, 더보기 큰 메뉴 중복 가이드, `공유 노트에 추가` 폴더 선택/저장.
+- Library 저장 경로는 Explore에서 사용 금지. Music Note sharedNote 경로를 기준으로 유지.
+- 정상 좋아요 경로는 새 구체 오류가 없으면 수정 금지. Worker195/Functions/Rules/D1/Firestore schema/사용자 데이터 비변경.
+
 ## 최신 2026-09-25 — app169 Explore 빠른 액션 + 공유 노트 후보, PREVIEW 배포 전
 
 - `CURRENT_RELEASE_STATE.md 0GP` 최우선. app169 제품 후보 구현/감사 완료, 실제 Hosting은 아직 app168.

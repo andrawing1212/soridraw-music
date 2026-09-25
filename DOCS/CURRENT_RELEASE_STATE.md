@@ -1,5 +1,38 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HA. PREVIEW app181 오른쪽 최근 생성곡 메타 고정 + 좌우 공간 확장 (2026-09-26 KST)
+
+**사용자 요청**:
+- `[장르] 생성시간`은 왼쪽에서 붙여서 바로 보여야 하고, 제목을 좌우 드래그해도 장르/시간은 움직이지 않아야 함.
+- 최근곡 왼쪽의 하트/음표는 더 왼쪽, 오른쪽 `>`는 더 오른쪽으로 보내 한 번에 보이는 제목 글자 수를 늘림.
+- 하트/음표와 장르·제목 텍스트 사이 간격도 조금 축소.
+
+**구현**:
+- 최근곡 copy를 `고정 메타([장르] 시간)` + `제목 전용 가로 스크롤`로 분리.
+- 기존 마우스 드래그/휠 가로 이동 이벤트는 제목 전용 scroller로 이동. 메타는 고정.
+- 장르와 생성시간 사이 gap을 4px로 줄여 시간 확인을 위해 좌우 이동할 필요가 없게 함.
+- 오른쪽 rail 폭 292px 자체는 변경하지 않고 Recent Songs 목록만 card 안쪽 여백을 좌우 6px 더 활용.
+- row 좌우 padding을 3px, icon/text 기본 gap을 5px로 줄여 왼쪽 glyph와 오른쪽 chevron을 바깥쪽으로 이동.
+- 클릭으로 곡 열기, 즐겨찾기/새 곡 표시, 캐시, 데이터 구조, 생성시간 포맷은 변경 없음.
+- 서버 read/write 추가 없음. Worker / Functions / Rules / 사용자 데이터 변경 없음.
+
+**주요 commit**:
+- 메타 고정 + 제목 전용 scroll: `a6e1ebc352b095771c9e0a47a5c7212ec52772e4`, `79563789d14df28d8b3a5c96099c9890bf3d3dc1`
+- row 좌우 공간 확장: `a77be39ec04f08661802d4136a54339fbf2804fc`
+- app181 version: `abbe76b47a25026f685a120dd206591868e4d993`
+- deployed locked SHA: `6651978c79a0a73a680a4197ceaa053ab273f91f`
+
+**PREVIEW 배포**:
+- Firebase Hosting Run `36169548430` **SUCCESS**.
+- TypeScript PASS / Build PASS / `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=181` / `PREVIEW_EXACT_BUILD=PASS`.
+- Shared RTDB Rules SKIPPED.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**현재 판정**: PREVIEW app181 배포 완료. 사용자 실사용에서 (1) 장르 바로 오른쪽에 생성시간 고정, (2) 제목만 좌우 드래그, (3) 하트/음표와 텍스트 간격 축소, (4) chevron이 더 오른쪽에 위치해 제목 가시 폭이 늘었는지 확인. TEST/main 승격 전, PRODUCTION 비변경.
+
+
 ## 0GZ. PREVIEW app179 오른쪽 최근 생성곡 표기 순서 정리 (2026-09-26 KST)
 
 **사용자 요청**:

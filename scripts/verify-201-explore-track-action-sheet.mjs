@@ -8,6 +8,10 @@ const socialCss = readFileSync('src/components/explore/exploreSocial.css', 'utf8
 assert.match(page, /className="soridraw-explore-more-button"/, 'Explore cards must expose the compact more button');
 assert.match(page, /<MoreHorizontal aria-hidden="true" \/>/, 'more button must use the ellipsis icon');
 assert.match(page, /const renderMoreSheet = \(\) =>/, 'Explore must render the bottom action sheet');
+assert.match(page, /onPointerDown=\{\(\) => \{\s*if \(!actionBusy\) closeMoreSheet\(\);/s, 'backdrop close must be pointer-safe and blocked while an action is busy');
+assert.match(page, /document\.body\.style\.overflow = 'hidden'/, 'open action sheet must lock background scrolling');
+assert.match(page, /event\.key !== 'Escape' \|\| moreActionBusy !== null/, 'Escape must not dismiss the sheet while an action is busy');
+assert.match(page, /aria-pressed=\{liked\}/, 'sheet like action must expose its active state');
 assert.match(page, />폴더에 추가</, 'folder action must remain in the sheet');
 assert.match(page, />좋아요</, 'like action must remain in the sheet');
 assert.match(page, />공유</, 'share action must remain in the sheet');
@@ -19,6 +23,8 @@ assert.match(page, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/, 'nex
 assert.match(page, /navigate\('\/studio\?applyPending=1'\)/, 'next-song apply must route through the existing studio apply path');
 assert.match(page, /await addPlaylistItem\(/, 'folder action must reuse existing playlist storage');
 assert.match(page, /await toggleLike\(moreTrack\)/, 'sheet like action must reuse existing like behavior');
+assert.match(page, /className="soridraw-explore-cover-button"/, 'existing cover open path must remain available after replacing the card-side icon');
+assert.match(page, /onClick=\{openSuno\}/, 'existing cover click must still open the public audio target');
 assert.match(page, /navigator\.share/, 'share action must reuse the browser share path');
 
 assert.match(page, /markExploreTrackDisliked\(user\.uid, track\.id\)/, 'dislike must persist as a user-scoped local preference');
@@ -36,6 +42,8 @@ for (const className of [
 ]) {
   assert.ok(socialCss.includes('.' + className), className + ' styling must exist');
 }
+
+assert.match(socialCss, /soridraw-explore-more-primary button\.is-active/, 'liked state must be visible inside the action sheet');
 
 console.log('APP201_EXPLORE_MORE_ACTION_SHEET=PASS');
 console.log('APP201_EXPLORE_EXISTING_ACTION_REUSE=PASS');

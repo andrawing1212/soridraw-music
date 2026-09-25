@@ -1,5 +1,11 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GH. 사용자 app165 실사용 1차 확인 — 현재 이상 없음 (2026-09-25 KST)
+
+**사용자 확인**: PREVIEW app165 사용 후 "일단 이상없어보여"라고 직접 보고. 현재 기준으로 신규 공개곡 좋아요, 기존 좋아요, Explore 진입/재진입 및 app165 진단 변경에서 눈에 띄는 회귀는 관찰되지 않음. 이 평가는 **1차 실사용 이상 없음**으로 기록하며, 최초 Social Snapshot D1 R45의 실제 원인 또는 app165에서의 비용 감소를 증명한 것은 아님.
+
+**현재 유지**: app165 PREVIEW Hosting Run `36044641285` / exact release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b` 유지. Worker195, RTDB Rules, Functions, 공유 D1/R2/Firestore 사용자 원본, TEST/PRODUCTION 비변경. 정상 좋아요 경로 추가 수정·재배포 금지. 이후 동일 R45가 자연 재현될 때만 app165 관리자 lastOutcome 분류와 R/W를 근거로 해당 원인만 최소 수정 검토.
+
 ## 0GG. PREVIEW app165 개인 Social Snapshot 최초 비용 사유 진단 배포 완료 (2026-09-25 KST)
 
 **사용자 승인/목표**: "완료되면 배포까지 진행해줘" 요청에 따라 기존 앱/Worker195 좋아요 기능을 보호하고, 업데이트 후 최초 `/v1/me/social-snapshot` D1 R45 사유를 구분하는 app165 진단 후보를 PREVIEW로 배포. app164 신규곡 첫 좋아요 사용자 PASS 및 이전 app160 좋아요 양방향/타계정 숫자 보호.

@@ -1,3 +1,16 @@
+## 최신 2026-09-26 — app173 PREVIEW 배포 완료, 분할 곡 만들기 하단 UI 실사용 확인
+
+- `CURRENT_RELEASE_STATE.md 0GU` 최우선. PREVIEW app173 Firebase Hosting Run `36157490130` SUCCESS, exact release SHA `7da5692fa2344cfe11bcc8cd9f31cfa0688e2023`, version 173/exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 사용자가 app172 공개곡 다음곡 적용을 실사용 PASS로 확인. app172 명령창/설정 복구 경로는 동결 유지.
+- app173 추가 범위는 **분할모드 곡 만들기 Builder 하단**뿐: 기존 명령창 아래에 현재 선택 키워드 + 최근 생성곡 최대 10곡을 다크/클래식과 같은 정보 흐름으로 추가.
+- 우측 선택 키워드 대시보드는 그대로 유지. 하단 키워드는 기존 `liveSelectedKeywordItems`와 제거 action을 재사용.
+- 최근곡은 기존 메모리 `history.slice(0, 10)`만 사용하며 표시 때문에 서버 read/listener/write를 추가하지 않는다. 클릭은 기존 Recent workspace/open-song 경로 재사용.
+- `isStudioBlackActionMode && !isStudioCompactMobileLayout && studioWorkspaceView === 'create'`로 한정. Compact 모바일은 새 블록을 중복 렌더하지 않는다.
+- Final Audit Run `36157261895` SUCCESS: TypeScript/Build/APP205/기존 Like 회귀/Worker dry-run/shared D1 read-only/branch guard PASS.
+- 사용자 확인 항목: PC/태블릿 분할 `곡 만들기`에서 명령창 아래 선택 키워드가 자연스러운 위치에 보이는지, 바로 아래 최근 생성곡이 최대 10곡 보이는지, 최근곡 클릭이 기존 Recent 화면으로 정상 이동하는지. 위치/간격 이상이 있으면 이 새 블록 CSS/마크업만 국소 수정하고 분할 엔진/생성바/우측 레일/백엔드는 건드리지 않는다.
+- 모바일 실제 시각은 미검증. 정적 중복 방지 PASS 상태이므로 사용자 제보 없이는 compact mobile 구조를 변경하지 않는다.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app172 PREVIEW 배포 완료, 공개곡 다음곡 적용 실사용 확인
 
 - `CURRENT_RELEASE_STATE.md 0GT` 최우선. PREVIEW app172 Hosting Run `36155524302` SUCCESS, exact release SHA `cbd25719c3871dbe146d5729333c0045266747c3`, version 172/exact build PASS.

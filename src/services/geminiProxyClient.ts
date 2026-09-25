@@ -290,7 +290,7 @@ function resolveAdaptiveSmallRepair(
 ): { modelChain: string[]; skips: GeminiProxyModelSkip[] } | null {
   if (!isSmallRepairContext(context)) return null;
 
-  const base = requested.length > 1
+  const base: string[] = requested.length > 1
     ? FAST_REPAIR_MODEL_CHAIN.filter((model) => requested.includes(model))
     : [FAST_REPAIR_MODEL_CHAIN[0]].filter((model) => requested.length === 0 || requested.includes(model));
   if (!base.length) return null;
@@ -303,7 +303,7 @@ function resolveAdaptiveSmallRepair(
       .map(([model]) => model),
   );
 
-  let healthy = base.filter((model) => !failedModels.has(model) && !slowModels.has(model));
+  let healthy: string[] = base.filter((model) => !failedModels.has(model) && !slowModels.has(model));
   if (!healthy.length) healthy = base.filter((model) => !failedModels.has(model));
   if (!healthy.length) healthy = [...base];
 

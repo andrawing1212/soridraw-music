@@ -1,3 +1,10 @@
-app173_split_create_inline_overview_final_audit=2026-09-25T15:52:00Z
-source_head=2fd5db1e01615269ec47a70e76bdf57f93ce1382
+app174_split_create_classic_vertical_final_audit=2026-09-26T01:12:00+09:00
+source_head=7dc571c098fe0758e2bb86fb3ec5f12089701c77
 deploy=false
+scope=split_create_vertical_classic_parity
+rejected_app173_custom_overview_removed=true
+existing_result_pane_reused=true
+existing_inline_keywords_reused=true
+no_duplicate_recent_list=true
+no_backend_change=true
+preview_only=true

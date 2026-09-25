@@ -1603,6 +1603,7 @@ export default function ExplorePage() {
   if (profileUid) {
     return (
       <main className="soridraw-explore-page">
+        {renderMoreSheet()}
         <section className="soridraw-explore-profile-toolbar">
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
@@ -1739,6 +1740,7 @@ export default function ExplorePage() {
 
   return (
     <main className="soridraw-explore-page">
+      {renderMoreSheet()}
       {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
       <section className="soridraw-explore-head">
         <div>
@@ -1804,15 +1806,24 @@ export default function ExplorePage() {
         <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 곡을 불러오는 중</div>
       ) : error ? (
         <div className="soridraw-explore-state">{error}</div>
-      ) : tracks.length === 0 ? (
-        <div className="soridraw-explore-state soridraw-explore-state--empty">
-          <Compass aria-hidden="true" />
-          <strong>{submittedQuery ? '검색 결과가 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
-          <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
-        </div>
+      ) : visibleFeedTracks.length === 0 ? (
+        <>
+          <div className="soridraw-explore-state soridraw-explore-state--empty">
+            <Compass aria-hidden="true" />
+            <strong>{submittedQuery ? '검색 결과가 없어요.' : sort === 'recommended' && tracks.length > 0 ? '현재 추천할 곡이 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
+            <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : sort === 'recommended' && tracks.length > 0 ? '싫어요한 곡은 추천에서 제외됩니다.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
+          </div>
+          {!submittedQuery && feedNextCursor && (
+            <div className="soridraw-explore-load-more">
+              <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>
+                {loadingMore ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 불러오는 중</> : '더 보기'}
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <>
-          {renderTrackGrid(tracks, 'Explore 곡 목록')}
+          {renderTrackGrid(visibleFeedTracks, 'Explore 곡 목록')}
           {!submittedQuery && feedNextCursor && (
             <div className="soridraw-explore-load-more">
               <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>

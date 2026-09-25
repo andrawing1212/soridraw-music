@@ -1114,6 +1114,13 @@ function getRapModeFromParams(params: Pick<GenerateSongParams, 'vocal'>): RapMod
   return getRapModeFromVocal(params.vocal);
 }
 
+function hasExplicitNoRapDirectorRequest(
+  params: Pick<GenerateSongParams, 'userInput'>,
+): boolean {
+  return /\b(?:no|without|avoid(?:ing)?|exclude(?:d|ing)?|remove(?:d|ing)?)\s+(?:any\s+)?(?:rap|rapping|rapper)\b|\brap[-\s]?free\b|랩(?:은|을|도)?\s*(?:없이|빼|제외|금지|없게|하지\s*마)|래퍼(?:는|를|도)?\s*(?:없이|제외)/i
+    .test(String(params.userInput || ''));
+}
+
 function buildRapModeInstruction(params: Pick<GenerateSongParams, 'vocal' | 'songStructure' | 'customStructure'>): string {
   const mode = getRapModeFromParams(params);
   if (mode === 'off') {
@@ -1128,7 +1135,7 @@ function buildRapModeInstruction(params: Pick<GenerateSongParams, 'vocal' | 'son
     }
     return "RAP MODE: ON. Follow the V1 Section Blueprint exactly. Non-rap songs use one real Rap Section in a musically suitable second-act position; rap-dominant songs may use the blueprint's repeated Rap Sections. Do not move Rap Section to a different position. Add 'rap section' to final [Arrangement].";
   }
-  return 'RAP MODE: AUTO. Include Rap Section only when the V1 Section Blueprint contains it because the genre, selected rapper role, custom structure, or direct instruction supports rap. Do not invent or relocate Rap Section outside the blueprint.';
+  return 'RAP MODE: AUTO. Follow the resolved V1 Section Blueprint and selected rapper role/direct instruction without forcing either rap or a rap ban. Include Rap Section only when the blueprint contains it. If the blueprint has no Rap Section, do NOT add "no rap", "without rap", "rap-free", or any equivalent rap-ban wording to final [Arrangement] unless the user explicitly requested rap to be prohibited. Do not invent or relocate Rap Section outside the blueprint.';
 }
 
 type GenerateSongInput =
@@ -4965,7 +4972,7 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
     ? "Rap: include rap section."
     : rapMode === "off"
       ? "Rap: no rap."
-      : "Rap: auto by genre.";
+      : "Rap: AUTO is neutral; follow the resolved section blueprint and selected rapper role/direct instruction without adding a rap ban.";
 
   let toneRule = "";
   if (vocal.tonePrompt) {
@@ -20778,6 +20785,8 @@ function enforceV1FinalProducerDirectionMapPrompt(prompt: string, params: Genera
     atmosphere: map.atmosphere,
     vocalMode,
     isInstrumental: Boolean(params.isNoLyrics),
+    rapMode: getRapModeFromParams(params),
+    preserveNoRapConstraint: hasExplicitNoRapDirectorRequest(params),
   });
 
   const lines = [
@@ -20838,6 +20847,8 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
       atmosphere: map.atmosphere,
       vocalMode,
       isInstrumental: Boolean(validationParams.isNoLyrics),
+      rapMode: getRapModeFromParams(validationParams),
+      preserveNoRapConstraint: hasExplicitNoRapDirectorRequest(validationParams),
     });
   }
 

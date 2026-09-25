@@ -1272,6 +1272,306 @@ export default function ExplorePage() {
     }
   };
 
+  const closeMoreSheet = () => {
+    setMoreTrack(null);
+    setMoreSheetMode('actions');
+    setFolderChoices([]);
+    setFolderSaveSource(null);
+    setMoreActionBusy(null);
+  };
+
+  const shareExploreTrack = async (track: ExploreTrack) => {
+    const shareUrl = safeText(track.openUrl || track.sunoUrlPrimary);
+    if (!shareUrl) {
+      setSocialNotice('공유할 공개 링크가 없어요.');
+      return;
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: track.title,
+          text: `${track.displayName} · ${track.title}`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setSocialNotice('공유 링크를 복사했어요.');
+      }
+      closeMoreSheet();
+    } catch (reason) {
+      if (reason instanceof Error && reason.name === 'AbortError') return;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setSocialNotice('공유 링크를 복사했어요.');
+        closeMoreSheet();
+      } catch {
+        setSocialNotice('공유 링크를 복사하지 못했어요.');
+      }
+    }
+  };
+
+  const applyExploreTrackToNextSong = async (track: ExploreTrack) => {
+    if (!user) {
+      setSocialNotice('다음곡 적용은 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    if (!track.allowNextSongApply) {
+      setSocialNotice('이 곡은 다음곡 적용이 허용되지 않았어요.');
+      return;
+    }
+    setMoreActionBusy('apply');
+    try {
+      let nextSong = track.shareBundle?.nextSong && typeof track.shareBundle.nextSong === 'object'
+        ? track.shareBundle.nextSong
+        : null;
+      if (!nextSong || Object.keys(nextSong).length === 0) {
+        const source = await getExploreTrackApplySource(user, track.id);
+        nextSong = source?.nextSong && typeof source.nextSong === 'object'
+          ? source.nextSong
+          : source?.shareBundle?.nextSong && typeof source.shareBundle.nextSong === 'object'
+            ? source.shareBundle.nextSong
+            : null;
+      }
+      if (!nextSong || Object.keys(nextSong).length === 0) {
+        throw new Error('이 곡은 적용할 설정 정보가 없어요.');
+      }
+      const serialized = JSON.stringify(nextSong);
+      sessionStorage.setItem('pendingAppliedKeywords', serialized);
+      localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
+      await flushExploreLikeBoundary094();
+      closeMoreSheet();
+      navigate('/studio?applyPending=1');
+    } catch (reason) {
+      console.error('Explore next-song apply failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '다음곡 적용에 실패했어요.');
+    } finally {
+      setMoreActionBusy(null);
+    }
+  };
+
+  const openExploreFolderPicker = async (track: ExploreTrack) => {
+    if (!user) {
+      setSocialNotice('폴더 추가는 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    setMoreActionBusy('folder');
+    try {
+      let saveSource: NonNullable<ExploreTrackSaveAccess['saveSource']>;
+      if (user.uid === track.ownerUid) {
+        saveSource = {
+          sourceType: 'shared_track',
+          exploreTrackId: track.id,
+          originalSourceType: track.sourceType || undefined,
+          originalSourceId: track.sourceId || undefined,
+          sourceSubTrackKey: track.sourceSubTrackKey || '',
+          sourceSubTrackIndex: track.sourceSubTrackIndex ?? null,
+          sourceSubTrackId: track.sourceSubTrackId || null,
+          title: track.title,
+          coverUrl: track.coverUrl || '',
+          sunoUrlPrimary: track.sunoUrlPrimary || '',
+          sunoUrlSecondary: null,
+        };
+      } else {
+        if (!track.allowFollowerSave) {
+          throw new Error('공개자가 이 곡의 폴더 저장을 허용하지 않았어요.');
+        }
+        const access = await getExploreTrackSaveAccess(user, track.id);
+        if (!access.allowed || !access.saveSource) {
+          throw new Error(access.permissionEnabled
+            ? '팔로우한 아티스트의 저장 허용곡만 폴더에 추가할 수 있어요.'
+            : '공개자가 이 곡의 폴더 저장을 허용하지 않았어요.');
+        }
+        saveSource = access.saveSource;
+      }
+
+      let playlists = await getPlaylistsByType(user.uid, 'normal');
+      if (!playlists.length) {
+        playlists = (await ensureDefaultPlaylists(user.uid)).filter((playlist) => playlist.type === 'normal');
+      }
+      const valid = playlists.filter((playlist) => Boolean(playlist.id));
+      if (!valid.length) throw new Error('추가할 폴더가 없어요.');
+
+      setFolderSaveSource(saveSource);
+      setFolderChoices(valid.map((playlist) => ({ id: playlist.id, title: playlist.title })));
+      setMoreSheetMode('folders');
+    } catch (reason) {
+      console.error('Explore folder picker failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '폴더를 불러오지 못했어요.');
+    } finally {
+      setMoreActionBusy(null);
+    }
+  };
+
+  const saveExploreTrackToFolder = async (track: ExploreTrack, playlist: { id?: string; title: string }) => {
+    if (!user || !playlist.id || !folderSaveSource) return;
+    setMoreActionBusy('folder');
+    try {
+      const nextSong = track.shareBundle?.nextSong && typeof track.shareBundle.nextSong === 'object'
+        ? track.shareBundle.nextSong
+        : null;
+      const selectedKeywords = track.shareBundle?.selectedKeywords && typeof track.shareBundle.selectedKeywords === 'object'
+        ? track.shareBundle.selectedKeywords
+        : null;
+      const genres = Array.isArray(selectedKeywords?.genres)
+        ? selectedKeywords!.genres.map((value) => String(value || '').trim()).filter(Boolean)
+        : [];
+      await addPlaylistItem(user.uid, playlist.id, {
+        sourceType: 'shared_track',
+        sourceId: folderSaveSource.exploreTrackId || track.id,
+        sourceSubTrackId: folderSaveSource.sourceSubTrackId || track.sourceSubTrackId || null,
+        sourceSubTrackIndex: folderSaveSource.sourceSubTrackIndex ?? track.sourceSubTrackIndex ?? null,
+        ownerUid: track.ownerUid,
+        creatorDisplayId: track.ownerHandle || track.displayName || null,
+        ownerNickname: track.displayName || null,
+        creatorNickname: track.displayName || null,
+        ownerEmail: null,
+        creatorEmail: null,
+        title: folderSaveSource.title || track.title,
+        audioUrl: folderSaveSource.sunoUrlPrimary || track.sunoUrlPrimary || null,
+        imageUrl: folderSaveSource.coverUrl || track.coverUrl || null,
+        duration: track.durationSeconds ?? null,
+        genreLabels: genres,
+        appliedKeywords: nextSong as Record<string, any> | null,
+        prompt: track.prompt || null,
+        style: track.style || null,
+        lyrics: track.lyrics || null,
+        lyricsText: track.lyrics || null,
+        requestPayload: nextSong as Record<string, any> | null,
+        colorTag: null,
+        likeCount: track.likeCount,
+        order: 0,
+        isUnavailable: false,
+        unavailableReason: null,
+      });
+      setSocialNotice(`'${playlist.title}'에 추가했어요.`);
+      closeMoreSheet();
+    } catch (reason) {
+      console.error('Explore folder save failed:', reason);
+      setSocialNotice(reason instanceof Error && reason.message === 'DUPLICATE'
+        ? '이미 이 폴더에 있는 곡이에요.'
+        : reason instanceof Error ? reason.message : '폴더 추가에 실패했어요.');
+    } finally {
+      setMoreActionBusy(null);
+    }
+  };
+
+  const dislikeExploreTrack = (track: ExploreTrack) => {
+    if (!user) {
+      setSocialNotice('싫어요는 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    markExploreTrackDisliked(user.uid, track.id);
+    setDislikedTrackIds((previous) => new Set([...previous, track.id]));
+    setSocialNotice('추천에서 제외했어요.');
+    closeMoreSheet();
+  };
+
+  const visibleFeedTracks = sort === 'recommended' && !submittedQuery
+    ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
+    : tracks;
+
+  const renderMoreSheet = () => {
+    if (!moreTrack) return null;
+    const liked = likedTrackIds[moreTrack.id] === true;
+    const likeBusy = likeBusyTrackId === moreTrack.id || (Boolean(user) && likedTrackIds[moreTrack.id] === undefined);
+    const actionBusy = moreActionBusy !== null;
+
+    return (
+      <div className="soridraw-explore-more-backdrop" role="presentation" onMouseDown={closeMoreSheet}>
+        <section
+          className="soridraw-explore-more-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label={moreSheetMode === 'folders' ? '폴더에 추가' : `${moreTrack.title} 더보기`}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="soridraw-explore-more-handle" aria-hidden="true" />
+          {moreSheetMode === 'folders' ? (
+            <>
+              <div className="soridraw-explore-more-folder-head">
+                <button type="button" onClick={() => setMoreSheetMode('actions')} aria-label="더보기로 돌아가기">
+                  <ChevronLeft aria-hidden="true" />
+                </button>
+                <strong>폴더에 추가</strong>
+              </div>
+              <div className="soridraw-explore-more-folder-list">
+                {folderChoices.map((playlist) => (
+                  <button
+                    key={playlist.id || playlist.title}
+                    type="button"
+                    disabled={moreActionBusy === 'folder'}
+                    onClick={() => saveExploreTrackToFolder(moreTrack, playlist)}
+                  >
+                    <FolderPlus aria-hidden="true" />
+                    <span>{playlist.title}</span>
+                    {moreActionBusy === 'folder' && <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="soridraw-explore-more-track">
+                <div className="soridraw-explore-more-cover" aria-hidden="true">
+                  {moreTrack.coverUrl ? <img src={moreTrack.coverUrl} alt="" referrerPolicy="no-referrer" /> : <Music2 />}
+                </div>
+                <div>
+                  <strong>{moreTrack.title}</strong>
+                  <span>{moreTrack.displayName}</span>
+                </div>
+              </div>
+
+              <div className="soridraw-explore-more-primary">
+                <button type="button" disabled={actionBusy} onClick={() => openExploreFolderPicker(moreTrack)}>
+                  {moreActionBusy === 'folder' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <FolderPlus aria-hidden="true" />}
+                  <span>폴더에 추가</span>
+                </button>
+                <button
+                  type="button"
+                  className={liked ? 'is-active' : undefined}
+                  disabled={likeBusy || actionBusy}
+                  onClick={async () => {
+                    await toggleLike(moreTrack);
+                    closeMoreSheet();
+                  }}
+                >
+                  {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+                  <span>좋아요</span>
+                </button>
+                <button type="button" disabled={actionBusy} onClick={() => shareExploreTrack(moreTrack)}>
+                  <Share2 aria-hidden="true" />
+                  <span>공유</span>
+                </button>
+              </div>
+
+              <div className="soridraw-explore-more-rows">
+                <button
+                  type="button"
+                  disabled={moreActionBusy === 'apply'}
+                  className={!moreTrack.allowNextSongApply ? 'is-disabled' : undefined}
+                  onClick={() => applyExploreTrackToNextSong(moreTrack)}
+                >
+                  {moreActionBusy === 'apply' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <WandSparkles aria-hidden="true" />}
+                  <span>
+                    <strong>다음곡에 적용</strong>
+                    {!moreTrack.allowNextSongApply && <small>공개자가 사용을 허용하지 않았어요.</small>}
+                  </span>
+                </button>
+                <button type="button" disabled={actionBusy} onClick={() => dislikeExploreTrack(moreTrack)}>
+                  <ThumbsDown aria-hidden="true" />
+                  <span>
+                    <strong>싫어요</strong>
+                    <small>추천에서 이 곡을 제외합니다.</small>
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    );
+  };
+
   const renderTrackGrid = (items: ExploreTrack[], label: string) => (
     <section className="soridraw-explore-grid" aria-label={label}>
       {items.map((track) => {

@@ -1,5 +1,52 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GV. PREVIEW app174 분할모드 곡 만들기 — 다크/클래식 세로 흐름으로 기존 최근 생성곡 재사용 배포 완료 (2026-09-26 KST)
+
+**사용자 정정**:
+- app173에서 새 카드형 최근 생성곡 목록을 별도로 만든 것은 오답.
+- 원하는 구조는 다크/클래식 모드처럼 **곡 만들기 → 명령창 아래 선택 키워드 → 기존 최근 생성곡/생성 결과 영역이 같은 세로 흐름으로 이어지는 방식**.
+- 새 목록이 아니라 분할모드에 이미 존재하는 실제 Result/최근 생성곡 영역을 곡 만들기 아래로 그대로 이어 붙이는 구조.
+
+**app174 수정**:
+- app173의 임시 custom recent-song overview 완전 제거.
+- 곡 만들기에서는 Builder와 기존 Result pane을 둘 다 유지하고 좌우 분할이 아니라 위→아래 세로 배치.
+- 곡 만들기에서는 분할선/좌우 pane 접기 버튼을 숨김. 최근 생성곡/뮤직노트/라이브러리 등 기존 분할 작업공간은 종전 좌우 분할 유지.
+- 선택 키워드는 새 UI가 아니라 기존 Classic inline 위치(soridraw-builder-live-keywords)를 재사용. Create에서는 Studio Black 고정 키워드 portal 중복 표시 안 함.
+- 최근 생성곡/생성 결과는 새 목록이 아니라 기존 Result pane 자체를 그대로 재사용하므로 기존 표시·재생·곡 열기·상태·캐시 경로 보존.
+- 새 서버 read/listener/write 없음. Worker/Functions/Rules/D1/Firestore 사용자 원본 데이터 변경 없음.
+
+**주요 commit**:
+- app173 오답 custom overview 제거: e43330c1a5ce47ba17d7cf4811f10d921a3ed9f2
+- Lite split Create 세로 구조: 7693d0756c2f5b47afb57890ab13a11b5e2a0e36, 12ff413cdbb07973fbde841ae7ab5710cf0868fe
+- Legacy parity: 9fb45a2d92f49edad2c5f8d942ed6ff692944acb, 9ae3fa12003b59e5f08caf9622d366d8c35afb40
+- 세로 CSS: ad91552dc9c9992d5e03babf1a5ff4717a4d9376
+- APP206 verifier: a5ad9427da9f6113987e66d6e04664850ed0d2b2
+- Audit 등록: 933b534f4634556d745ebd6ef9b3a961e35361e6
+- app173 verifier 제거: 7f764ac6aede22650b533cd7e05d53bdb1e5e478
+- app174 version: 7dc571c098fe0758e2bb86fb3ec5f12089701c77
+- final audit trigger: d88b44491a9b3b6fc2ca20e6f121fab032b2cfc1
+
+**최종 검증**:
+- Release System Audit Run 36159274642 **SUCCESS**.
+- TypeScript PASS / Build PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS / branch guard PASS.
+- APP206_SPLIT_CREATE_USES_REAL_RESULT_PANE=PASS
+- APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS
+- APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS
+- APP206_NO_DUPLICATE_RECENT_LIST=PASS
+
+**PREVIEW 배포**:
+- Firebase Hosting Run 36159567687 **SUCCESS**.
+- release SHA: 90a8256fd705382d410cc883c278f87544a79cbb.
+- PREVIEW_APP_VERSION=174.
+- PREVIEW_EXACT_BUILD=PASS.
+- FIREBASE_PREVIEW_DEPLOY=PASS.
+- Shared RTDB Rules: SKIPPED.
+- TEST_PRODUCTION_UNCHANGED=PASS.
+- Worker / Functions / Rules / D1 schema / Firestore schema / 사용자 데이터 migration: 변경 없음.
+- 주소: https://preview.soridraw.com/.
+
+**현재 판정**: 자동검증 및 PREVIEW 배포 완료. 남은 것은 사용자 실사용에서 분할모드 → 곡 만들기가 실제로 Builder → 선택 키워드 → 기존 최근 생성곡/생성 결과 순서의 세로 흐름으로 보이는지 시각 확인하는 것. 이 확인 전 TEST/main 승격 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 0GU. PREVIEW app173 분할모드 곡 만들기 — 하단 선택 키워드 + 최근 생성곡 10곡 추가 배포 완료 (2026-09-26 KST)
 
 **직전 확인**: 사용자가 app172 Explore 공개곡 `다음곡에 적용`의 명령창/설정 복구를 실사용 확인하고 "통과" 판정. app172 경로는 정상 기준으로 고정하고 새 오류 없으면 재수정하지 않는다.

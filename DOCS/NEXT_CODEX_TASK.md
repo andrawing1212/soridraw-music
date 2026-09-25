@@ -1,3 +1,17 @@
+## 최신 2026-09-26 — app182 PREVIEW 배포 완료, Gemini 호출 효율 실사용 1곡 검증
+
+- `CURRENT_RELEASE_STATE.md 0HB` 최우선.
+- PREVIEW app182 Hosting Run `36173906888` SUCCESS, deployed SHA `056f3e06be069db2f72d75d8ea24075a1c3e2fe7`, TypeScript/Build/version 182/exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 최초 곡 생성 체인/프롬프트/가사/5단/금지어 품질 규칙은 변경 없음.
+- 작은 후처리 5 context만 adaptive route: 같은 곡에서 실패한 모델 재호출 금지, 30초 이상 걸린 성공 모델 우선 생략, 빠른 성공 모델은 후보에 있으면 우선 가능.
+- 작은 후처리 후보는 `3.5 → 3.5-lite → 3.1-lite`; 모든 후보가 제외되면 기능 보호를 위해 원래 후보 복구.
+- 서버에 새 상태를 저장하지 않고 20분 탭 메모리만 사용. Firestore/D1/Worker/Functions/user data read/write 추가 없음.
+- APP208 + Release System Audit `36173411132`, final Audit `36173669413` SUCCESS.
+- 다음은 PREVIEW 일반 V1 1곡 **1회만** 생성해 관리자 Gemini 기록에서 총 호출수/처리시간/모델 순서/token을 app181 실사용 기준 5회·2분11초와 비교. provider 503 자체를 해결했다고 가정하지 않는다.
+- 실사용 결과가 좋아도 바로 프롬프트 압축/모델 순서 대수술로 확장하지 않는다. 초기 26K대 prompt 비용은 별도 2단계 분석에서 품질 불변 근거가 있을 때만 다룬다.
+- 사용자 제보 없는 좋아요 app164/Worker195, 최근곡 동기화, 분할 UI, Music Note 60초 저장은 수정 금지.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app181 PREVIEW 배포 완료, 오른쪽 최근곡 메타 고정/가시폭 확인
 
 - `CURRENT_RELEASE_STATE.md 0HA` 최우선.

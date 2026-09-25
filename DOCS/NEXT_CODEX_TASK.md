@@ -1,3 +1,15 @@
+## 최신 2026-09-26 — app172 PREVIEW 배포 완료, 공개곡 다음곡 적용 실사용 확인
+
+- `CURRENT_RELEASE_STATE.md 0GT` 최우선. PREVIEW app172 Hosting Run `36155524302` SUCCESS, exact release SHA `cbd25719c3871dbe146d5729333c0045266747c3`, version 172/exact build PASS.
+- PREVIEW Worker Run `36155391649` SUCCESS, active version `93a6d6a1-6db4-4140-aea7-e9c59192f8ad`. TEST/PRODUCTION Worker 비변경.
+- 최종 Audit Run `36155109826` SUCCESS: TypeScript/Build/APP204/APP202/기존 like 회귀/Worker dry-run/shared D1 read-only/branch guard PASS.
+- 수정 목표: Explore 공개곡의 `다음곡에 적용`이 Music Note 직접 적용과 같은 의미의 사용자 설정을 복원. 새 공개곡은 original `userInput`과 필요한 generation controls를 public nextSong에 처음부터 포함.
+- 기존 본인 공개 Music Note 곡의 public bundle에 command가 빠졌다면 **버튼 클릭 순간에만** 원본 `favorites/{sourceId}` 1문서를 cache-first로 읽어 복구. 페이지 진입 read 추가 금지, collection scan 금지.
+- legacy 공개곡은 공개 selected keywords를 먼저 로컬 복구하고 그래도 자료가 없을 때만 bounded Worker apply-source. generated prompt를 original command로 대신 넣지 않는다.
+- 정상 좋아요/Worker 동기화/공유노트/Music Note 저장/UI는 새 구체 오류 없으면 수정 금지.
+- 사용자 실사용 확인: (1) 이전에 키워드는 복원되지만 명령창이 비었던 **본인 공개곡** → 명령창까지 복원, (2) 오래된 공개곡 → 보존된 범위의 설정 정상 복원, (3) 이후 새로 공개하는 곡 → 첫 공개부터 명령창+설정이 같이 적용. 실패 시 해당 곡의 공개 bundle/source 한 건만 좁혀 확인.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app171 PREVIEW 배포 완료, 더보기 텍스트 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0GS` 최우선. PREVIEW app171 Firebase Hosting Run `36150400530` SUCCESS, exact release SHA `36f72d8de93c8ddeacfa2e0188b18b3cc2c115da`, app171 exact build PASS, TEST/PRODUCTION unchanged PASS.

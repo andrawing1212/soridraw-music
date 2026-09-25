@@ -1,5 +1,61 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GP. app169 Explore 빠른 액션 + Music Note 공유 노트 연결 — 배포 전 최종 후보 (2026-09-25 KST)
+
+**사용자 지시**: Library는 현재 실험단계로 잠그고 Explore 저장의 메인을 Music Note로 사용. 카드 아래 작은 빠른 액션과 더보기 안의 큰 안내형 액션을 동시에 유지. 카드의 더보기는 세로형 `⋮` + 원형 버튼으로 변경하고, 좋아요 오른쪽에 `다음곡에 적용 / 공유 / 더보기` 아이콘을 배치. 다음곡 적용 가능 상태는 노란 계열로 강조.
+
+**UI 최종 구조**:
+- 카드 아래: 기존 `좋아요+숫자` → `다음곡 적용`(WandSparkles) → `공유`(Forward 화살표) → `⋮` 순서.
+- 작은 액션은 텍스트 없이 아이콘만 표시. hover 시 원형 배경과 아이콘 명도가 올라가며 title/aria-label로 기능명 제공.
+- 더보기 `⋮`는 항상 옅은 원형 배경이 보이고 hover 시 더 강조.
+- `다음곡에 적용`은 공개자가 허용한 곡만 활성화되고 노란색/골드 배경·아이콘으로 강조. 미허용곡은 비활성.
+- 더보기 하단 시트는 접근성/가이드 역할로 기존 큰 UI 유지:
+  `공유 노트에 추가 / 좋아요 / 공유` + `다음곡에 적용` + `싫어요`.
+  다음곡 적용 가능 시 큰 메뉴도 노란 강조.
+- 기존 카드 커버 클릭/Suno 열기, 좋아요 UI/숫자, 프로필 이동은 비변경.
+
+**Library 제거 및 Shared Note 연결**:
+- app168의 잘못된 `폴더에 추가 → user_playlists(type normal)` 경로를 Explore에서 완전히 제거.
+- 문구를 `공유 노트에 추가`로 변경.
+- 기존 Music Note의 `sharedNote` 폴더 구조를 그대로 사용: `user_structures/{uid}.musicNoteFolders.sharedNote` / 호환 `sharedNoteFolders`.
+- 폴더 목록은 기존 Music Note 구조 로컬 캐시 `soridraw_music_note_structure_cache_v1_{uid}`를 먼저 사용. 프로필의 `syncVersions.musicNoteStructure`보다 캐시가 최신이면 서버 read 0. 캐시가 없거나 오래됐을 때만 `user_structures/{uid}` 단일 문서 1회 읽기.
+- 실제 저장은 기존 Music Note 공유 노트 의미와 동일한 `favorites` 문서로 저장: `isSharedMusicNote=true`, `sharedReadOnly=true`, `sourceType=shared_music_note`, `sharedNoteFolderId/title`, 원곡/Explore ID 및 곡 메타데이터 포함.
+- Explore track + 사용자 조합으로 결정적인 문서 ID를 사용해 같은 곡 반복 저장 시 중복 문서를 늘리지 않고 동일 문서를 merge.
+- 저장은 기존 `runV1MutationBoundary(domain=musicNote, operation=shared-note-save)`를 통과하며 실제 사용자 저장 클릭 때만 1개 문서 변경.
+- 타인 곡은 기존 Worker `/v1/tracks/:id/save-access`에서 저장 허용 + 팔로우 여부를 해당 track 1건/follow 1건으로만 확인. 본인 곡은 이 D1 권한 조회 생략.
+- Library `addPlaylistItem/getPlaylistsByType/ensureDefaultPlaylists` 호출은 Explore에서 0.
+
+**기존 정상 기능 보호**:
+- 좋아요 서비스/Worker195/30초 batch/PC↔모바일 좋아요 동기화 비변경.
+- 공유는 기존 브라우저 share/clipboard 경로 재사용.
+- 다음곡 적용은 기존 Feed `shareBundle.nextSong` cache-first. 데이터가 있으면 추가 서버 read 0, 없을 때만 기존 bounded `apply-source` 해당 곡 조회.
+- 싫어요는 기존 계정별 localStorage 추천 제외 방식 유지, 서버 read/write 0.
+- Music Note 본체의 기존 공유 노트 UI/폴더 이동/60초 상세 저장 동작은 수정하지 않음.
+- Worker/Functions/Rules/D1 schema/Firestore schema/사용자 데이터 migration 없음.
+
+**검증/커밋**:
+- Shared Note 서비스: `1dc7e7e85af39a28d73c726b603045fefd5d55f5`
+- 카드/더보기 기능: `480b4120c8e2883138cab108eb99b2bad8162892`
+- UI 스타일: `e00a492ec5b3453c7ec7ffe4db4b664467624763`
+- 정리: `a320230ca5f8ca9db399d64973637957924c78b7`
+- APP201/APP202 갱신: `4185f6ae66105ba87735ec284c13e04ebdd31007`, `b07bbdac3a4a9ca78b01d4f3a755e3d276b77789`
+- 1차 강화 Audit Run `36144456677` SUCCESS.
+- app169 version commit `86843229793896f1b5ec0e01d8f9c176a7e757f0`.
+- app169 final Audit source `4a7be79efe7189e97c8b3942de0f4afae9b71c9a`, Run `36144800979` **SUCCESS**.
+- TypeScript PASS / Build PASS / Static regression PASS / 기존 Like regression PASS / Worker TEST·PRODUCTION dry-run PASS / shared D1 read-only preflight PASS / branch guard PASS.
+- `APP201_EXPLORE_QUICK_ACTION_GUIDE_PARITY=PASS`
+- `APP201_EXPLORE_SHARED_NOTE_LABEL=PASS`
+- `APP202_SHARED_NOTE_CACHE_FIRST=PASS`
+- `APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS`
+- `APP202_LIBRARY_PATH_UNUSED=PASS`
+
+**배포 상태**:
+- GitHub preview 소스 앱 버전: **169**
+- app169은 **PREVIEW Hosting 미배포**.
+- 실제 `preview.soridraw.com`은 app168 Firebase Run `36140039077`, release SHA `7d0770699171899fa551fdcb82eb1f3946e94f8e` 유지.
+- TEST/main, PRODUCTION 비변경.
+- 사용자가 PREVIEW 배포를 명시하면 app169 현재 후보를 Hosting에만 배포하고 exact build/version/TEST·PRODUCTION 비변경 확인. Worker/Functions/Rules 재배포 불필요.
+
 ## 0GO. PREVIEW app168 Explore 더보기 액션 시트 배포 완료 (2026-09-25 KST)
 
 **사용자 승인/목표**: 사용자가 "배포 해봐. 보고 판단하자."고 명시 승인하여 검증 완료 app168 Explore 액션 시트 후보를 PREVIEW에만 배포. TEST/PRODUCTION 승격 없음.

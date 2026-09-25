@@ -1,5 +1,48 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GT. PREVIEW app172 Explore 공개곡 다음곡 적용 설정·명령창 복구 배포 완료 (2026-09-26 KST)
+
+**사용자 실사용 오류**: Music Note 안의 `다음곡에 적용`은 정상인데, Explore에 공개된 곡에서 `다음곡에 적용`을 누르면 선택 키워드는 일부 돌아와도 원래 명령창(`userInput`)이 비거나, 오래된 공개곡은 적용 정보가 거의 없는 것처럼 보이는 문제.
+
+**원인**:
+- 기존 공개 `nextSong` 묶음에서 원래 명령창 `userInput`과 일부 사용자 생성 설정이 빠져 있었다.
+- 오래됐거나 불완전한 공개곡은 `nextSong` 묶음 자체가 없어 기존 Worker fallback이 공개 태그 중심으로만 복구했다.
+- 생성 결과 prompt를 원래 사용자 명령으로 대체하면 안 되므로, 원본 command와 생성 prompt를 분리해 복구해야 했다.
+
+**수정**:
+- 앞으로 공개되는 Music Note 곡의 public `nextSong`에 원래 `userInput`과 `rapMode / lyricWritingStyle / tempoSource / isRandomTempo` 등 다음곡에 필요한 사용자 설정을 함께 보존.
+- 완성된 가사 본문은 다음곡 명령에 복사하지 않음.
+- 기존 **본인 공개 Music Note 곡**에서 공개 묶음에 명령이 빠져 있으면, 사용자가 실제로 `다음곡에 적용`을 누르는 순간에만 원본 `favorites/{sourceId}` 1문서를 cache-first로 확인해 빠진 명령/설정을 복구. 페이지 진입 때문에 새 서버 read를 만들지 않음.
+- 공개 묶음에 전체 nextSong이 없으면 먼저 현재 공개 키워드(장르/스타일/분위기/주제/사운드)를 로컬에서 복구하고, 그것도 없을 때만 기존 bounded Worker `apply-source`를 최종 fallback으로 사용.
+- Studio의 기존 `pendingAppliedKeywords → userInput` 복원 경로는 유지.
+- 정상 좋아요, 공유 노트, Music Note 60초 저장, UI/CSS, Functions/Rules, 사용자 원본 데이터 구조는 비변경.
+
+**검증**:
+- 최종 Release System Audit Run `36155109826` **SUCCESS**.
+- TypeScript PASS / Build PASS / APP204 PASS / APP202 비용 경계 PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS / branch guard PASS.
+- APP204는 공개 bundle의 original command 보존, 기존 본인곡 1문서 복구, legacy tag fallback, Studio command restore, generated prompt를 command로 오인하지 않는 것을 검사.
+
+**PREVIEW Worker 배포**:
+- Run `36155391649` **SUCCESS**.
+- canonical SHA256 `b67a928f6fa6397c36bb3b6df98a14a8103ba4c7197203022b1831011b8c17ec`.
+- active PREVIEW Worker version: `93a6d6a1-6db4-4140-aea7-e9c59192f8ad`.
+- Feed/Profile smoke PASS, public-like card D1 R0/W0 PASS, warm revision R0/W0 PASS.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` / PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` **비변경 PASS**.
+
+**Firebase PREVIEW 배포**:
+- Hosting Run `36155524302` **SUCCESS**.
+- exact release SHA: `cbd25719c3871dbe146d5729333c0045266747c3`.
+- `PREVIEW_APP_VERSION=172`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- Shared RTDB Rules: `SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Functions / Rules / D1 schema / Firestore schema / 사용자 원본 데이터 migration: **변경 없음**.
+- 주소: `https://preview.soridraw.com/`.
+
+**현재 판정**: app172 코드·감사·PREVIEW Worker·PREVIEW Hosting 배포까지 완료. 남은 것은 사용자 실사용에서 **(1) 기존 본인 공개곡의 명령창까지 복원, (2) 오래된 공개곡의 가능한 설정 복원, (3) 이후 새 공개곡은 처음부터 명령창+설정 포함** 여부 확인. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
+
 ## 0GS. PREVIEW app171 Explore 더보기 텍스트 가독성 조정 배포 완료 (2026-09-25 KST)
 
 **사용자 지시**: app170 더보기 시트의 폰트가 작아 보여 전체 텍스트를 약간 키우고, 특히 `다음곡에 적용 / 공개 설정 / 싫어요` 같은 단독 행 메뉴는 위쪽 3개 버튼보다 약간 더 크게. 줄바꿈은 생기지 않게 유지. 기능/배치/간격은 비변경.

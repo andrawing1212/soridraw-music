@@ -579,7 +579,6 @@ export default function StudioSplitWorkspace({
 
     const root = document.documentElement;
     const shouldIsolate = isStudioBlack()
-      && workspaceView !== 'create'
       && window.innerWidth >= WIDE_DESKTOP_ISOLATION_BREAKPOINT;
 
     // 461: the split mastheads are now real children of their own pane scrollers.
@@ -636,7 +635,7 @@ export default function StudioSplitWorkspace({
       layout.style.setProperty('--soridraw-studio-isolated-height', `${nextHeight}px`);
       layout.style.height = `${nextHeight}px`;
     }
-  }, [isStudioBlack, workspaceView]);
+  }, [isStudioBlack]);
 
   const resolvePaneMode = useCallback((
     pane: HTMLElement,

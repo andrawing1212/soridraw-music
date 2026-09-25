@@ -6,9 +6,9 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, Compass, ExternalLink, FolderPlus, Heart, Loader2, MoreHorizontal, Music2, Pencil, Pin, Search, Share2, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
@@ -54,6 +54,14 @@ import {
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
+import { addPlaylistItem, ensureDefaultPlaylists, getPlaylistsByType } from '../services/playlistService';
+import {
+  getExploreTrackApplySource,
+  getExploreTrackSaveAccess,
+  markExploreTrackDisliked,
+  readExploreDislikedTrackIds,
+  type ExploreTrackSaveAccess,
+} from '../services/exploreTrackActionService';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
@@ -68,6 +76,22 @@ type ExploreTrack = {
   coverUrl?: string | null;
   sunoUrlPrimary?: string | null;
   openUrl?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  sourceSubTrackKey?: string | null;
+  sourceSubTrackIndex?: number | null;
+  sourceSubTrackId?: string | null;
+  durationSeconds?: number | null;
+  style?: string | null;
+  prompt?: string | null;
+  lyrics?: string | null;
+  allowNextSongApply: boolean;
+  allowFollowerSave: boolean;
+  shareBundle?: {
+    schemaVersion?: number;
+    selectedKeywords?: Record<string, unknown>;
+    nextSong?: Record<string, unknown> | null;
+  } | null;
   likeCount: number;
   publishedAt: number;
   profilePinned: boolean;
@@ -213,6 +237,24 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   coverUrl: safeText(row.coverUrl) || null,
   sunoUrlPrimary: safeText(row.sunoUrlPrimary) || null,
   openUrl: safeText(row.openUrl) || null,
+  sourceType: safeText(row.sourceType ?? row.source_type) || null,
+  sourceId: safeText(row.sourceId ?? row.source_id) || null,
+  sourceSubTrackKey: safeText(row.sourceSubTrackKey ?? row.source_subtrack_key) || null,
+  sourceSubTrackIndex: Number.isFinite(Number(row.sourceSubTrackIndex ?? row.source_subtrack_index))
+    ? Number(row.sourceSubTrackIndex ?? row.source_subtrack_index)
+    : null,
+  sourceSubTrackId: safeText(row.sourceSubTrackId ?? row.source_subtrack_id) || null,
+  durationSeconds: Number.isFinite(Number(row.durationSeconds ?? row.duration_seconds))
+    ? Number(row.durationSeconds ?? row.duration_seconds)
+    : null,
+  style: safeText(row.style) || null,
+  prompt: safeText(row.prompt) || null,
+  lyrics: safeText(row.lyrics) || null,
+  allowNextSongApply: Boolean(row.allowNextSongApply ?? row.allow_next_song_apply),
+  allowFollowerSave: Boolean(row.allowFollowerSave ?? row.allow_follower_save),
+  shareBundle: row.shareBundle && typeof row.shareBundle === 'object' && !Array.isArray(row.shareBundle)
+    ? row.shareBundle as ExploreTrack['shareBundle']
+    : null,
   likeCount: readNestedCount(row, 'likeCount'),
   publishedAt: safeCount(row.publishedAt ?? row.published_at),
   profilePinned: Boolean(row.profilePinned ?? row.profile_pinned ?? (row.options as Record<string, unknown> | undefined)?.profilePinned),
@@ -247,12 +289,14 @@ function ExploreTrackCard({
   likeBusy,
   onToggleLike,
   onOpenProfile,
+  onOpenMore,
 }: {
   track: ExploreTrack;
   liked: boolean;
   likeBusy: boolean;
   onToggleLike: (track: ExploreTrack) => void;
   onOpenProfile: (track: ExploreTrack) => void;
+  onOpenMore: (track: ExploreTrack) => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const openUrl = isOpenableUrl(track.openUrl)
@@ -332,13 +376,12 @@ function ExploreTrackCard({
         </button>
         <button
           type="button"
-          className="soridraw-explore-open-button"
-          onClick={openSuno}
-          disabled={!openUrl}
-          aria-label="Suno에서 열기"
-          title={openUrl ? 'Suno에서 열기' : 'Suno 링크 없음'}
+          className="soridraw-explore-more-button"
+          onClick={() => onOpenMore(track)}
+          aria-label="곡 더보기"
+          title="더보기"
         >
-          <ExternalLink aria-hidden="true" />
+          <MoreHorizontal aria-hidden="true" />
         </button>
       </div>
     </article>
@@ -346,6 +389,7 @@ function ExploreTrackCard({
 }
 
 export default function ExplorePage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -373,6 +417,12 @@ export default function ExplorePage() {
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
+  const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
+  const [moreActionBusy, setMoreActionBusy] = useState<'folder' | 'apply' | null>(null);
+  const [folderChoices, setFolderChoices] = useState<Array<{ id?: string; title: string }>>([]);
+  const [folderSaveSource, setFolderSaveSource] = useState<ExploreTrackSaveAccess['saveSource'] | null>(null);
+  const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
   const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
@@ -393,6 +443,17 @@ export default function ExplorePage() {
     likeHydrationKeyRef.current = '';
     setLikedTrackIds({});
   }), []);
+
+  useEffect(() => {
+    setDislikedTrackIds(user?.uid ? readExploreDislikedTrackIds(user.uid) : new Set());
+  }, [user?.uid]);
+
+  useEffect(() => {
+    setMoreTrack(null);
+    setMoreSheetMode('actions');
+    setFolderChoices([]);
+    setFolderSaveSource(null);
+  }, [profileUid]);
 
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.
@@ -1227,6 +1288,12 @@ export default function ExplorePage() {
             likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
             onToggleLike={toggleLike}
             onOpenProfile={openProfile}
+            onOpenMore={(selectedTrack) => {
+              setMoreTrack(selectedTrack);
+              setMoreSheetMode('actions');
+              setFolderChoices([]);
+              setFolderSaveSource(null);
+            }}
           />
         );
       })}

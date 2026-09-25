@@ -1,5 +1,31 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GZ. PREVIEW app179 오른쪽 최근 생성곡 표기 순서 정리 (2026-09-26 KST)
+
+**사용자 요청**:
+- 오른쪽 rail 최근 생성곡을 `[장르] 생성시간` / `제목` 두 줄 구조로 표시.
+- 장르와 생성시간은 현재 생성시간과 같은 작은 크기와 어두운 색을 사용.
+- 제목은 기존처럼 더 크고 밝게 유지.
+
+**구현**:
+- `StudioRightRail` 최근곡 copy에 `genre`를 별도 전달하고 첫 줄 metadata row로 분리.
+- App의 기존 `formatTitleWithoutGenre`를 제목에 재사용해 제목에서 `[장르]`를 제거.
+- 장르는 기존 `getResolvedGenre || getSubGenre || 'Song'` 기준을 그대로 사용.
+- 생성시간 포맷/최근곡 클릭/즐겨찾기/스크롤/캐시/데이터 구조는 변경 없음.
+- 첫 줄의 장르·시간은 동일한 10px / 기존 time 색 `#66666f`; 제목은 기존 밝은 톤 유지.
+
+**commit / 배포**:
+- UI/format: `c479930434aedba07fc86d8e10137bf290a97c55`, `bb92c88b4bdb873d659732e2780a5322f9375f2e`, `48f4d33df3df31fac71b0ecda7e0d140a06aa321`
+- app179: `71bf5368544c86ee4ed79ea37f212c047bda1c23`
+- deployed locked SHA: `100675221a6034cdaafc5b18664d6ef7da7fb159`
+- Firebase PREVIEW Hosting Run `36168475227` SUCCESS.
+- TypeScript PASS / Build PASS / Hosting PASS / `PREVIEW_APP_VERSION=179` / `PREVIEW_EXACT_BUILD=PASS`.
+- Shared RTDB Rules SKIPPED. Worker / Functions / Rules / 사용자 데이터 변경 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+**현재 판정**: PREVIEW app179 배포 완료. 사용자 실사용에서 최근 생성곡 각 행이 `[장르] 시간` 위, 제목 아래로 보이는지 시각 확인. TEST/main 승격 전, PRODUCTION 비변경.
+
+
 ## 0GY. PREVIEW app178 분할 오른쪽 메뉴 글자 확대 + Library 숨김 시 남은 크레딧 숨김 (2026-09-26 KST)
 
 **사용자 요청**:

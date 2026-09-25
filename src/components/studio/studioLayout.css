@@ -15425,3 +15425,82 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     color: #dedee2 !important;
   }
 }
+
+
+/* 1025 — Recent Songs fixed metadata + title-only horizontal drag.
+ * [genre] and generation time stay together at the left edge and never move.
+ * Only the title row owns horizontal overflow/drag, so long bilingual titles
+ * can still be inspected without pushing metadata off-screen. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy {
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+    cursor: default !important;
+    user-select: auto !important;
+    touch-action: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 7px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta small {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0 !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+    cursor: grab !important;
+    user-select: none !important;
+    touch-action: pan-y !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll.is-dragging {
+    cursor: grabbing !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll strong {
+    display: block !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+}

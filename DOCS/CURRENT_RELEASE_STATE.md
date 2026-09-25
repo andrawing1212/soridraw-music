@@ -1,5 +1,39 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GY. PREVIEW app178 분할 오른쪽 메뉴 글자 확대 + Library 숨김 시 남은 크레딧 숨김 (2026-09-26 KST)
+
+**사용자 요청**:
+- 분할화면 오른쪽 메뉴의 전체 글자가 너무 작아 보여 읽기 쉬운 크기로 확대.
+- 관리자 앱 설정에서 Library 메뉴를 `숨김`으로 설정한 경우 오른쪽 메뉴의 `MUSIC API / 남은 크레딧` 영역도 함께 숨김.
+- Library가 `전체공개` 또는 `관리자만`이면 남은 크레딧 영역은 기존대로 표시.
+
+**구현**:
+- 오른쪽 rail 폭/위치/스크롤 구조는 그대로 유지하고 Generation / Recent Songs / Music API / Selected Keywords의 텍스트만 단계적으로 확대.
+- 최근 생성곡 제목/시간, 캐시 진단, 생성 상태/설명, 지표, 버튼, 선택 키워드와 카운트 등 오른쪽 rail 가독성을 함께 조정.
+- `StudioRightRail`에 `showMusicApiCredits` 표시값을 추가하고 기존 관리자 메뉴 설정의 raw `menuVisibility.library`를 그대로 전달.
+- 새 설정/새 서버 조회 없이 기존 Library 표시 기준 하나만 재사용. `menuVisibility.library=false`일 때만 남은 크레딧 section 미렌더.
+- Worker / Functions / Rules / Firestore / D1 / 사용자 원본 데이터 변경 없음. 새 read/write 없음.
+
+**주요 commit**:
+- Library 연동 credit gate: `9acecf1e9cc0ec4699caedc4b98498d9c4faf2ae`, `22bf51371c1ba0d9ed7ed9767160ebe528728099`
+- 오른쪽 rail 캐시 진단 class: `9f89e857ae695bc459c69dbc4ec7076b7136856b`
+- 오른쪽 rail 폰트 확대: `2a6e70dbd815eee49aaffae993d33cebab14fd97`
+- app178 version: `ec280c0068445078739ea213fc50cb2d9329589c`
+- release trigger / deployed locked SHA: `4c04bf5c926fb53000926ab9abba5b45be5d9fc4`
+
+**PREVIEW 배포**:
+- Firebase Hosting Run `36167329008` **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=178`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- Shared RTDB Rules: SKIPPED.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**현재 판정**: PREVIEW app178 배포 완료. 사용자 실사용에서 (1) 오른쪽 메뉴 전체 폰트 가독성, (2) Library=숨김 → 남은 크레딧 영역 없음, (3) Library=전체공개/관리자만 → 남은 크레딧 영역 표시를 확인. PC 실제 시각 검증 전. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
+
 ## 0GX. PREVIEW app177 분할 곡 만들기 선택 키워드 아래 결과 시작 여백 다크모드 일치 (2026-09-26 KST)
 
 **사용자 확인/요청**:

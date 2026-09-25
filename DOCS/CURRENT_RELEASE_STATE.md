@@ -1,5 +1,58 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GR. PREVIEW app170 Explore 액션 아이콘 정리 + 본인곡 공개 설정 배포 완료 (2026-09-25 KST)
+
+**사용자 지시**: app169 실사용 후 Explore 카드의 빠른 액션 UI를 정리하고 더보기 안에 본인곡 전용 `공개 설정`을 추가. 검증 PASS 시 PREVIEW까지 자동 배포.
+
+**UI 변경**:
+- 카드 아래 `다음곡에 적용` 아이콘을 기존 마법봉에서 Studio 버튼과 같은 순환 화살표(`RefreshCw`)로 변경.
+- 활성 가능한 다음곡 아이콘 색은 골드/갈색에서 **핑크 `#ff7a9d` 계열**로 변경.
+- 다음곡/공유/더보기 빠른 버튼은 모두 같은 중립 회색 원형 배경으로 통일. 다음곡은 버튼 배경을 별도 착색하지 않고 아이콘만 핑크 강조.
+- 공유 아이콘은 단순 Forward에서 곡선형 공유 화살표(`Reply` 반전)로 변경.
+- 더보기 시트의 `다음곡에 적용`은 행 전체 배경색을 제거하고 **텍스트만 핑크 강조**. 아이콘/행 배경은 다른 메뉴와 동일 톤 유지.
+
+**공개 설정 추가**:
+- 더보기 시트에 `공개 설정` 행 추가.
+- 현재 로그인 UID = 곡 ownerUid인 **본인곡만 활성**, 타인 곡은 비활성 + 안내 문구 표시.
+- 본인곡에서 누르면 기존 Music Note 공개 설정과 동일한 구성의 모달 표시:
+  - 다음곡에 적용 허용
+  - 팔로워 곡 저장 허용
+  - 공개 프로필에 고정
+  - 저장
+  - 비공개로 전환(2단계 확인)
+- 공개 설정창을 여는 것 자체는 현재 카드에 이미 있는 옵션값을 사용하므로 **추가 서버 read 0**.
+- 저장은 기존 `setExploreTrackPublicationOptions` local-first publication outbox 경로 재사용.
+- 비공개 전환은 기존 `setExploreTrackVisibility` 경로 재사용. 현재 Explore 화면에서는 즉시 해당 카드 제거.
+- 기존 페이지 이탈 batch sync 정책을 그대로 사용하며 새 즉시 반복 write 구조를 만들지 않음.
+
+**기존 기능 보호**:
+- 좋아요 서비스/Worker195/PC↔모바일 동기화 비변경.
+- 공유 노트 저장 구조(app169) 비변경.
+- Worker/Functions/Rules/D1 schema/Firestore schema/사용자 원본 데이터 migration 없음.
+- Library 경로는 계속 Explore에서 사용하지 않음.
+
+**검증**:
+- app170 final Audit 1차 Run `36148684401`: TypeScript/Build PASS, 제품 문제 없음. 새 APP203의 `저장` 문자열 검사식만 과도하게 엄격해 Static 단계 FAIL.
+- 검사식만 수정 후 final Audit Run `36148886168` **SUCCESS**.
+- TypeScript PASS / Build PASS / APP201 / APP202 / APP203 / 기존 Like regression / Worker TEST·PRODUCTION dry-run / shared D1 read-only / branch guard PASS.
+- `APP203_EXPLORE_STUDIO_APPLY_ICON=PASS`
+- `APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS`
+- `APP203_EXPLORE_PINK_TEXT_ONLY_GUIDE=PASS`
+- `APP203_EXPLORE_OWNER_PUBLICATION_SETTINGS=PASS`
+- `APP203_EXPLORE_PUBLICATION_OPEN_R0=PASS`
+
+**배포 결과**:
+- Firebase PREVIEW Hosting Run: `36149125409` **SUCCESS**
+- exact release SHA: `aee4034be5a14abfe0378a3e9b954d80c8add3b1`
+- `PREVIEW_APP_VERSION=170`
+- `PREVIEW_EXACT_BUILD=PASS`
+- `TEST_PRODUCTION_UNCHANGED=PASS`
+- Shared RTDB Rules: `SKIPPED`
+- Worker195 / Functions / Rules 재배포 없음
+- 주소: `https://preview.soridraw.com/`
+
+**현재 판정**: PREVIEW app170 배포 완료 / 자동검증 PASS / 사용자 PC·모바일 실사용 확인 대기. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 0GQ. PREVIEW app169 Explore 빠른 액션 + 공유 노트 배포 완료 (2026-09-25 KST)
 
 **사용자 지시**: 수정 후 검증에 문제가 없으면 PREVIEW 배포까지 한 흐름으로 완료. app169을 Firebase PREVIEW Hosting에 배포.

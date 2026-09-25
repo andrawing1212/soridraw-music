@@ -1,5 +1,38 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GO. PREVIEW app168 Explore 더보기 액션 시트 배포 완료 (2026-09-25 KST)
+
+**사용자 승인/목표**: 사용자가 "배포 해봐. 보고 판단하자."고 명시 승인하여 검증 완료 app168 Explore 액션 시트 후보를 PREVIEW에만 배포. TEST/PRODUCTION 승격 없음.
+
+**배포 결과**:
+- Firebase PREVIEW Hosting Run: `36140039077` **SUCCESS**
+- exact release SHA: `7d0770699171899fa551fdcb82eb1f3946e94f8e`
+- `FIREBASE_PREVIEW_DEPLOY=PASS`
+- `PREVIEW_APP_VERSION=168`
+- `PREVIEW_EXACT_BUILD=PASS`
+- `TEST_PRODUCTION_UNCHANGED=PASS`
+- Shared RTDB Rules: `SKIPPED`
+- Worker195 / Functions / Rules / D1 schema / Firestore schema / 사용자 원본 데이터: **변경 없음**
+- 배포 주소: `https://preview.soridraw.com/`
+
+**출시 전 검증 근거**:
+- app168 final Audit Run `36139084888` SUCCESS.
+- TypeScript PASS, Build PASS, APP201(액션 시트/기존 액션 재사용/추천 전용 싫어요/interaction guard) PASS.
+- APP202(기존 Worker apply-source/save-access route 존재, bounded D1 read, 싫어요 server write 0, playlist insert bounded) PASS.
+- 기존 좋아요 전체 회귀, TEST/PRODUCTION Worker dry-run, shared D1 read-only/preflight PASS.
+- canonical Worker expected SHA = actual SHA PASS.
+
+**실사용 확인 항목**:
+1. PC/모바일 Explore 카드 우측 `···`가 정상 표시되고 누르면 하단 액션 시트가 올라오는지.
+2. 기존 좋아요 하트/숫자/PC↔모바일 동기화가 app167 정상 기준 그대로인지.
+3. `공유`가 공개 오디오 링크를 정상 공유/복사하는지.
+4. `다음곡에 적용` 허용곡에서 Studio로 이동해 기존 설정이 적용되고, 미허용곡은 차단되는지.
+5. `폴더에 추가`가 본인곡 또는 팔로우+저장허용 곡에서 기존 Library 폴더로 정상 저장되는지.
+6. `싫어요`는 추천 탭에서만 해당 곡을 숨기고 최신/인기/검색/공개프로필/원본 데이터에는 영향이 없는지.
+7. 모바일 시트에서 배경 스크롤이 잠기고, 처리 중 중복 클릭/시트 닫힘이 발생하지 않는지.
+
+**현재 판정**: PREVIEW 배포 완료 / 자동검증 PASS / **사용자 PC·모바일 실사용 검증 대기**. 실사용 확인 전 TEST/main 승격 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 0GN. app168 Explore 더보기 액션 시트 — 배포 직전 잠금 후보, 최종 Audit PASS (2026-09-25 KST)
 
 **사용자 지시**: 실제 PREVIEW 배포는 하지 않고 배포 직전 단계까지 완성. 기존 정상 좋아요/Explore/뮤직노트/Gemini/최근 생성곡은 보호하고, Explore 곡 카드의 `···` 하단 액션 시트만 완성·검증.

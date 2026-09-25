@@ -73,7 +73,7 @@ jobs:
           node scripts/verify-202-explore-action-cost-bounds.mjs
           node scripts/verify-203-explore-action-visual-publication.mjs
           node scripts/verify-204-explore-next-song-parity.mjs
-          node scripts/verify-205-studio-split-create-inline-overview.mjs
+          node scripts/verify-206-studio-split-create-classic-vertical.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

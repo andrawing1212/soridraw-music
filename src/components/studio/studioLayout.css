@@ -15392,3 +15392,36 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     font-size: 10.5px !important;
   }
 }
+
+
+/* 1024 — Recent Songs right-rail two-line hierarchy.
+ * Keep the current time typography/color as the metadata source of truth:
+ * first line = [genre] + generation time, second line = title.
+ * The existing horizontal drag/scroll owner remains the same copy container. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    display: flex !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    align-items: center !important;
+    gap: 7px !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta small {
+    color: #66666f !important;
+    -webkit-text-fill-color: currentColor !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy strong {
+    color: #dedee2 !important;
+  }
+}

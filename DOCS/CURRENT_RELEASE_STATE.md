@@ -1,5 +1,61 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GW. PREVIEW app175 라이브러리 숨김 연동 Music API 메뉴 + 관리자 설정 업데이트 유지 (2026-09-26 KST)
+
+**사용자 요청**:
+- 관리자 앱 설정에서 라이브러리를 `숨김`으로 설정했을 때만 다음 2개 Music API 생성 UI를 함께 숨김:
+  1. Studio 최근 생성곡/생성 결과 가장 아래 `Music API 생성`
+  2. Music Note 디테일 팝업 가장 아래 `Music API 생성`
+- 라이브러리가 `전체공개` 또는 `관리자만`이면 기존 Music API 생성 UI 유지.
+- 앱 업데이트 때문에 관리자 앱 설정이 기본값으로 되돌아가면 안 됨. 예: 라이브러리 숨김, 캐시 진단 OFF는 업데이트 뒤에도 그대로 유지.
+
+**구현**:
+- Studio Result의 기존 Music API 카드 자체를 raw `menuVisibility.library`로 조건부 표시. 새 UI/새 API 경로 없음.
+- Music Note는 App의 같은 raw Library visibility를 `showMusicApiGeneration`으로 전달해 디테일 Music API 섹션과 생성 모달을 함께 차단.
+- `관리자만`은 `menuVisibility.library=true`이므로 숨기지 않음. 오직 앱 설정의 `숨김`만 두 UI를 숨김.
+- 관리자 내비게이션 설정을 기존 versioned localStorage + 새 stable unversioned mirror `soridraw_admin_navigation_visibility_persistent`에 동시 보존. 향후 저장키 버전 변경 때도 마지막 명시 설정 fallback 가능.
+- 캐시 진단 ON/OFF 및 owner도 stable persistent mirror에 동시 보존.
+- 관리자 설정 Firestore 조회 실패 시 기본값으로 리셋하지 않고 기기에 남은 마지막 설정을 유지.
+- 앱 업데이트 알림/재로드 경로는 localStorage 전체삭제 및 위 protected admin preference 삭제를 하지 않도록 APP207로 고정.
+- Worker / Functions / RTDB Rules / Firestore schema / D1 / 사용자 원본 데이터 변경 없음. 새 서버 read/write 없음.
+
+**주요 commit**:
+- 관리자 내비게이션 설정 영구 mirror: `c058a070561cd0d5998b5b4703f42ece7e709c6c`
+- 캐시 진단 설정 영구 mirror: `c6f67c974034bb7bed9d8e18387995689dc52981`
+- Studio Music API Library gate: `4b8a03aed9358b9e10257dffb696a8dd735ad28e`
+- Music Note 디테일 Music API Library gate: `3398a99f11f93f5d5ba49b9a911de4686df36909`
+- 관리자 설정 load failure 기본값 reset 제거: `7a0cc1372c69f9688497c722abc9cf7bdb2da467`
+- APP207 verifier: `9029fa34e1d1aa67ca3fa59ce1359c4b046a2243`
+- Audit 등록: `217632a8a394ffb663a5f12348141c4ef7505ad5`
+- app175 version: `7fd4845207eb8ff9b6202d7fdebc55a9d7173e61`
+- final audit trigger: `bcc18979948ad192c3330528be70bdd089387106`
+
+**검증**:
+- Release System Audit Run `36162135602` **SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS / branch guard PASS.
+- `APP207_LIBRARY_HIDDEN_GATES_RECENT_MUSIC_API=PASS`
+- `APP207_LIBRARY_HIDDEN_GATES_MUSIC_NOTE_DETAIL_API=PASS`
+- `APP207_ADMIN_SETTINGS_PERSIST_ACROSS_APP_UPDATE=PASS`
+- `APP207_UPDATE_FLOW_DOES_NOT_RESET_ADMIN_PREFERENCES=PASS`
+
+**PREVIEW 배포**:
+- Firebase Hosting Run `36162378407` **SUCCESS**.
+- deployed/locked SHA: `dde9215898ac3fee0dcd6eb6a24c6a41c28eec1a`.
+- `PREVIEW_APP_VERSION=175`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- Shared RTDB Rules: `SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**비용/데이터 판정**:
+- 메뉴 표시 조건과 localStorage persistent mirror만 추가. 페이지 진입/업데이트 때문에 새 Firestore/D1 read/write를 추가하지 않음.
+- 관리자 메뉴 설정 저장 자체는 기존 Firestore 1회 저장 구조 유지.
+- 사용자 데이터 migration/삭제/백필 없음.
+
+**현재 판정**: 자동검증 및 PREVIEW 배포 완료. 사용자 실사용에서 (1) 라이브러리 숨김 → 두 Music API 생성 메뉴 모두 없음, (2) 라이브러리 전체공개/관리자만 → 두 메뉴 기존대로 존재, (3) 캐시 진단 OFF/라이브러리 숨김 상태에서 다음 앱 업데이트 후 상태 유지 여부만 확인. PC/모바일 실제 시각은 사용자 실사용 검증 전. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
+
 ## 0GV. PREVIEW app174 분할모드 곡 만들기 — 다크/클래식 세로 흐름으로 기존 최근 생성곡 재사용 배포 완료 (2026-09-26 KST)
 
 **사용자 정정**:

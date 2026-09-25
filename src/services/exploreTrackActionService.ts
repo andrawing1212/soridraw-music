@@ -1,7 +1,8 @@
 import type { User } from 'firebase/auth';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
-import { getFirebaseAppCheckToken } from '../firebase';
+import { db, getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { doc, getDoc } from '../lib/firestoreMeasured';
 
 export type ExploreTrackApplySource = {
   trackId: string;
@@ -36,6 +37,78 @@ export type ExploreTrackSaveAccess = {
     sunoUrlPrimary?: string;
     sunoUrlSecondary?: string | null;
   } | null;
+};
+
+
+const normalizeStringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  const single = String(value || '').trim();
+  return single ? [single] : [];
+};
+
+export const buildExploreLegacyApplyKeywords = (
+  source?: Partial<ExploreTrackApplySource> | null,
+): Record<string, unknown> | null => {
+  if (!source) return null;
+  const selected = source.shareBundle?.selectedKeywords && typeof source.shareBundle.selectedKeywords === 'object'
+    ? source.shareBundle.selectedKeywords
+    : {};
+  const tags = Array.isArray(source.tags) ? source.tags : [];
+  const byKind = (kind: string) => tags
+    .filter((tag) => String(tag?.kind || '').trim() === kind)
+    .map((tag) => String(tag?.value || '').trim())
+    .filter(Boolean);
+
+  const genre = normalizeStringList((selected as any).genres);
+  const style = normalizeStringList((selected as any).styles);
+  const mood = normalizeStringList((selected as any).moods);
+  const theme = normalizeStringList((selected as any).themes);
+  const sound = normalizeStringList((selected as any).sounds);
+
+  const fallback = {
+    subGenre: genre.length ? genre : byKind('genre'),
+    style: style.length ? style : byKind('style'),
+    mood: mood.length ? mood : byKind('mood'),
+    theme: theme.length ? theme : byKind('theme'),
+    instrumentSound: sound.length ? sound : byKind('sound'),
+  };
+  const compact = Object.fromEntries(
+    Object.entries(fallback).filter(([, value]) => Array.isArray(value) && value.length > 0),
+  );
+  return Object.keys(compact).length ? compact : null;
+};
+
+export const getExploreOwnMusicNoteApplyKeywords = async (
+  user: User,
+  sourceId: string,
+): Promise<Record<string, unknown> | null> => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!user?.uid || !normalizedSourceId) return null;
+
+  const snapshot = await getDoc(doc(db, 'favorites', normalizedSourceId));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() as Record<string, any>;
+  const ownerUid = String(data?.uid || data?.ownerUid || '').trim();
+  if (ownerUid && ownerUid !== user.uid) return null;
+
+  const rawApplied = data?.appliedKeywords && typeof data.appliedKeywords === 'object' && !Array.isArray(data.appliedKeywords)
+    ? data.appliedKeywords
+    : data?.requestPayload?.appliedKeywords && typeof data.requestPayload.appliedKeywords === 'object'
+      ? data.requestPayload.appliedKeywords
+      : null;
+  if (!rawApplied) return null;
+
+  const nextSong: Record<string, unknown> = { ...rawApplied };
+  const userInput = String(
+    (rawApplied as any).userInput
+    || data?.userInput
+    || data?.commandInput
+    || data?.directInput
+    || data?.customPrompt
+    || '',
+  ).trim();
+  if (userInput) nextSong.userInput = userInput;
+  return Object.keys(nextSong).length ? nextSong : null;
 };
 
 const buildAuthHeaders = async (user: User) => {

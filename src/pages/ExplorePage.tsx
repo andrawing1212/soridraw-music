@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Forward, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Search, ThumbsDown, UserCheck, UserPlus, WandSparkles, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -54,6 +54,7 @@ import {
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
+import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
 import {
   getExploreTrackApplySource,
   getExploreTrackSaveAccess,
@@ -65,6 +66,11 @@ import {
   saveExploreTrackToSharedNote,
   type ExploreSharedNoteFolder,
 } from '../services/exploreSharedNoteService';
+import {
+  setExploreTrackPublicationOptions,
+  setExploreTrackVisibility,
+  type ExplorePublicationOptions,
+} from '../services/explorePublicationService';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
@@ -390,7 +396,7 @@ function ExploreTrackCard({
             aria-label={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
             title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
           >
-            <WandSparkles aria-hidden="true" />
+            <RefreshCw aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -399,7 +405,7 @@ function ExploreTrackCard({
             aria-label="공유"
             title="공유"
           >
-            <Forward aria-hidden="true" />
+            <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -449,6 +455,9 @@ export default function ExplorePage() {
   const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
   const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | null>(null);
   const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
+  const [publicationSettings, setPublicationSettings] = useState<{ track: ExploreTrack; options: ExplorePublicationOptions } | null>(null);
+  const [publicationSettingsBusy, setPublicationSettingsBusy] = useState(false);
+  const [publicationPrivateConfirm, setPublicationPrivateConfirm] = useState(false);
   const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
@@ -1391,6 +1400,84 @@ export default function ExplorePage() {
     }
   };
 
+  const patchExplorePublicationOptions = (track: ExploreTrack, options: ExplorePublicationOptions) => {
+    const patch = {
+      allowNextSongApply: options.allowNextSongApply,
+      allowFollowerSave: options.allowFollowerSave,
+      profilePinned: options.profilePinned,
+    };
+    setTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
+    setProfileTracks((previous) => previous
+      .map((item) => item.id === track.id ? { ...item, ...patch } : item)
+      .sort(comparePublicProfileTracks));
+    setProfileLikedTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
+    patchExploreFeedSessionCachesRow(track.id, patch);
+    if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, patch);
+  };
+
+  const openExplorePublicationSettings = (track: ExploreTrack) => {
+    if (!user || user.uid !== track.ownerUid) return;
+    setPublicationSettings({
+      track,
+      options: {
+        allowNextSongApply: Boolean(track.allowNextSongApply),
+        allowFollowerSave: Boolean(track.allowFollowerSave),
+        profilePinned: Boolean(track.profilePinned),
+      },
+    });
+    setPublicationPrivateConfirm(false);
+    closeMoreSheet();
+  };
+
+  const toggleExplorePublicationSetting = (key: keyof ExplorePublicationOptions) => {
+    if (publicationSettingsBusy) return;
+    setPublicationSettings((current) => current
+      ? { ...current, options: { ...current.options, [key]: !current.options[key] } }
+      : current);
+    setPublicationPrivateConfirm(false);
+  };
+
+  const saveExplorePublicationSettings = async () => {
+    if (!user || !publicationSettings || user.uid !== publicationSettings.track.ownerUid || publicationSettingsBusy) return;
+    setPublicationSettingsBusy(true);
+    try {
+      const saved = await setExploreTrackPublicationOptions(user, publicationSettings.track.id, publicationSettings.options);
+      patchExplorePublicationOptions(publicationSettings.track, saved);
+      setSocialNotice('공개 설정을 저장했어요.');
+      setPublicationSettings(null);
+      setPublicationPrivateConfirm(false);
+    } catch (reason) {
+      console.error('Explore publication settings save failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '공개 설정 저장에 실패했어요.');
+    } finally {
+      setPublicationSettingsBusy(false);
+    }
+  };
+
+  const makeExploreTrackPrivate = async () => {
+    if (!user || !publicationSettings || user.uid !== publicationSettings.track.ownerUid || publicationSettingsBusy) return;
+    if (!publicationPrivateConfirm) {
+      setPublicationPrivateConfirm(true);
+      return;
+    }
+    setPublicationSettingsBusy(true);
+    try {
+      const track = publicationSettings.track;
+      await setExploreTrackVisibility(user, track.id, false, publicationSettings.options);
+      setTracks((previous) => previous.filter((item) => item.id !== track.id));
+      setProfileTracks((previous) => previous.filter((item) => item.id !== track.id));
+      setProfileLikedTracks((previous) => previous.filter((item) => item.id !== track.id));
+      setSocialNotice('비공개로 전환했어요.');
+      setPublicationSettings(null);
+      setPublicationPrivateConfirm(false);
+    } catch (reason) {
+      console.error('Explore publication private switch failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '비공개 전환에 실패했어요.');
+    } finally {
+      setPublicationSettingsBusy(false);
+    }
+  };
+
   const openExploreSharedNotePicker = async (track: ExploreTrack) => {
     if (!user) {
       setSocialNotice('공유 노트 추가는 로그인 후 사용할 수 있어요.');
@@ -1528,7 +1615,7 @@ export default function ExplorePage() {
                   <span>좋아요</span>
                 </button>
                 <button type="button" disabled={actionBusy} onClick={() => shareExploreTrack(moreTrack)}>
-                  <Forward aria-hidden="true" />
+                  <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
                   <span>공유</span>
                 </button>
               </div>
@@ -1540,10 +1627,22 @@ export default function ExplorePage() {
                   className={moreTrack.allowNextSongApply ? 'is-available' : 'is-disabled'}
                   onClick={() => applyExploreTrackToNextSong(moreTrack)}
                 >
-                  {moreActionBusy === 'apply' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <WandSparkles aria-hidden="true" />}
+                  {moreActionBusy === 'apply' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
                   <span>
                     <strong>다음곡에 적용</strong>
                     {!moreTrack.allowNextSongApply && <small>공개자가 사용을 허용하지 않았어요.</small>}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy || !user || user.uid !== moreTrack.ownerUid}
+                  className={!user || user.uid !== moreTrack.ownerUid ? 'is-disabled' : undefined}
+                  onClick={() => openExplorePublicationSettings(moreTrack)}
+                >
+                  <Settings aria-hidden="true" />
+                  <span>
+                    <strong>공개 설정</strong>
+                    {(!user || user.uid !== moreTrack.ownerUid) && <small>본인 곡에서만 변경할 수 있어요.</small>}
                   </span>
                 </button>
                 <button type="button" disabled={actionBusy} onClick={() => dislikeExploreTrack(moreTrack)}>
@@ -1560,6 +1659,23 @@ export default function ExplorePage() {
       </div>
     );
   };
+
+  const renderPublicationSettingsModal = () => publicationSettings ? (
+    <ExplorePublicationSettingsModal
+      title={publicationSettings.track.title}
+      options={publicationSettings.options}
+      busy={publicationSettingsBusy}
+      privateConfirm={publicationPrivateConfirm}
+      onToggle={toggleExplorePublicationSetting}
+      onSave={() => void saveExplorePublicationSettings()}
+      onPrivate={() => void makeExploreTrackPrivate()}
+      onClose={() => {
+        if (publicationSettingsBusy) return;
+        setPublicationSettings(null);
+        setPublicationPrivateConfirm(false);
+      }}
+    />
+  ) : null;
 
   const renderTrackGrid = (items: ExploreTrack[], label: string) => (
     <section className="soridraw-explore-grid" aria-label={label}>
@@ -1594,6 +1710,7 @@ export default function ExplorePage() {
     return (
       <main className="soridraw-explore-page">
         {renderMoreSheet()}
+        {renderPublicationSettingsModal()}
         <section className="soridraw-explore-profile-toolbar">
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
@@ -1731,6 +1848,7 @@ export default function ExplorePage() {
   return (
     <main className="soridraw-explore-page">
       {renderMoreSheet()}
+      {renderPublicationSettingsModal()}
       {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
       <section className="soridraw-explore-head">
         <div>

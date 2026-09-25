@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GL. PREVIEW app167 관리자 Gemini 호출 기록 모바일 UI 정리 배포 완료 (2026-09-25 KST)
+
+**사용자 요청**: 관리자 `Gemini 호출 기록` 화면에서 긴 설명 문구를 제거하고, 제목과 우측 액션 버튼이 같은 가로 줄에서 폭을 빼앗아 모바일 제목이 세로로 깨지는 문제를 수정. 기능·버튼 동작·감사 데이터 로직은 보호.
+
+**제품 변경**:
+- `src/pages/AdminGeminiAuditPage.tsx`: 제목 아래 관리자 설명 제거, 긴 amber 안내 박스 제거, 액션 버튼을 모바일에서 안전하게 wrap하도록 변경. 기존 모델 목록 확인/새로고침/기록 삭제 기능 유지.
+- `src/components/AdminPageLayout.tsx`: `stackActionsOnMobile`, `keepTitleOnOneLine` opt-in props 추가. Gemini 감사 화면만 모바일에서 홈+제목을 먼저 한 줄로 확보하고 액션을 다음 줄로 배치. 기본값 false라 다른 관리자 화면은 기존 헤더 레이아웃 유지.
+- 신규 회귀 `scripts/verify-200-admin-gemini-mobile-header.mjs` 및 기존 Release System Audit 등록.
+
+**검증/배포**: UI 후보 Audit Run `36116708138` SUCCESS. app167 final Audit Run `36116933721` SUCCESS: TypeScript, Build, APP200(모바일 제목 가로/긴 설명 제거/다른 관리자 기본 유지) 및 기존 release regression PASS. Firebase PREVIEW Hosting Run `36117132227` SUCCESS. exact release SHA `cc6dfccfedf3a5b0fae041f3d65d905dc4cf385c`, `PREVIEW_APP_VERSION=167`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. Shared RTDB rules SKIPPED; Worker195/Functions/Rules/Firestore/D1/R2 사용자 데이터 비변경.
+
+**실사용 확인 대기**: 모바일 관리자 Gemini 호출 기록에서 제목이 세로 글자처럼 깨지지 않고, 홈+제목 아래에 3개 액션 버튼이 배치되며, 불필요한 긴 설명 박스가 없어야 함. PC 화면의 기존 기능/버튼은 유지. 사용자 확인 전 해당 UI 추가 수정 금지. TEST/PRODUCTION 승격 없음.
+
 ## 0GK. 사용자 app166 Rap AUTO 실사용 PASS — 동결 (2026-09-25 KST)
 
 **사용자 확인**: PREVIEW app166에서 V1 Rap AUTO 중립화 수정에 대해 사용자가 "통과했어"라고 직접 확인. 따라서 AUTO + 래퍼 역할 없음 조건에서 AI가 임의의 `no rap`/동등 rap-ban을 최종 [Arrangement]에 남기던 문제는 **실사용 해결 PASS**로 확정.

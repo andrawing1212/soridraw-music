@@ -1,5 +1,12 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app165 사용자 1차 실사용 이상 없음, 좋아요/비용 경로 동결 유지
+
+- `CURRENT_RELEASE_STATE.md 0GH` 우선. 사용자 app165 사용 후 현재 이상 없음 보고. 신규곡 첫 좋아요와 기존 좋아요 정상 경로를 추가 수정하지 않는다.
+- 최초 Social Snapshot R45 원인은 아직 미확정이며 app165 비용 감소도 미검증. 동일 현상이 자연 재현될 때만 관리자 lastOutcome(`PERSONAL REPAIR 182` / `PERSONAL SETTLEMENT 189` / `PERSONAL BASELINE` / `SOCIAL CACHE MISS`)과 R/W 수치를 기준으로 원인 한정 조사.
+- 현재 PREVIEW app165 release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b` 유지. Worker195/RTDB/Functions/공유 사용자 원본/TEST/PRODUCTION 변경 금지. 캐시 삭제·강제 재생성으로 진단 재현을 만들지 않는다.
+- 다음 작업은 사용자의 별도 지시를 따른다. TEST 승격은 명시적인 테스트배포 요청 전 금지, PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app165 PREVIEW Hosting 배포 완료; Social Snapshot 첫 R45 실제 사유 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0GG` 우선. 사용자의 배포 요청으로 PREVIEW app165 Hosting Run `36044641285` SUCCESS, exact release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b`, exact build/version 165 PASS; final Audit `36044402895` SUCCESS (TypeScript/Build/APP189·197·198/기존 like 회귀). RTDB rules SKIPPED, Worker195/Functions/공유 원본/TEST/PRODUCTION 변경 없음.

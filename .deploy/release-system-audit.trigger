@@ -1,13 +1,2 @@
-requested_at=2026-09-25T18:12:00+09:00
-requested_by=user_admin_gemini_compact_ui_deploy
-source_before_trigger=cdebf1a610c2ac327e2894532d2b1275f734fe6a
-target=preview
-purpose=final_audit_app167_admin_gemini_compact_mobile_ui
-expected_app_version=167
-required_verifier=scripts/verify-200-admin-gemini-mobile-header.mjs,typescript,build,existing_regression
-ui_only=true
-backend_unchanged=true
-worker195_unchanged=true
-functions_unchanged=true
-no_user_data_migration=true
-no_deploy=true
+explore_action_sheet_201=2026-09-25T12:54:48.249Z
+source_head=7f1336845a3a4f630344fa630a8a890cbd53b22a

@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — V1 Rap AUTO 중립화 구현/감사 완료, PREVIEW 배포 전
+
+- `CURRENT_RELEASE_STATE.md 0GI` 및 `docs/SORIDRAW_ENGINE_MAP.md §5` 기준. 사용자 의도: AUTO는 랩을 강제하지도 금지하지도 않음. Rap Section이 없다는 이유로 `no rap`을 최종 [Arrangement]에 만들거나 보존하지 않는다. OFF는 `no rap`, ON은 기존 rap section, 사용자 직접 no-rap 지시는 AUTO에서도 보존.
+- 구현은 V1 Classic의 두 파일만: `sectionArrangementRoles.ts` final producer-map 경계에서 AUTO의 비의도 rap-ban 문구 제거, `geminiService.ts`에서 AUTO 지시 명확화 + rapMode/direct-no-rap context 전달. Stable/Custom/보컬 UI/App 상태/저장 구조/V2/Worker/Functions/데이터는 비변경.
+- 회귀 `scripts/verify-199-rap-auto-neutral.mjs` 등록. Release System Audit `36113654643` SUCCESS: TS/Build/APP199 및 기존 회귀 PASS. 제품 소스 commits `caf7ac1f...` + `27c39a3f...`; audit trigger `83396e9f...`.
+- 실제 PREVIEW 앱은 아직 app165 release SHA `0b6b677721af888d4efe34b67bd91ce0945cf47b`. **새 수정은 미배포**. 사용자 배포 요청 시 version bump → final audit → Firebase PREVIEW Hosting exact-build 확인 순서로 진행. TEST/PRODUCTION은 별도 승인 전 변경 금지.
+- 배포 후 실사용 합격선: AUTO + 래퍼 역할 없음 + 랩 가능 장르(G-Funk/hip-hop 계열 포함)에서 `no rap`이 프롬프트에 자동 출현하지 않음; AUTO + 래퍼 역할/직접 랩 요청은 Blueprint 규칙대로 랩 허용; OFF는 `no rap`; ON은 기존 랩 적용; Stable exact structure 유지.
+
 ## 최신 2026-09-25 — app165 사용자 1차 실사용 이상 없음, 좋아요/비용 경로 동결 유지
 
 - `CURRENT_RELEASE_STATE.md 0GH` 우선. 사용자 app165 사용 후 현재 이상 없음 보고. 신규곡 첫 좋아요와 기존 좋아요 정상 경로를 추가 수정하지 않는다.

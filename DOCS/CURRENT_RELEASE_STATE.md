@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0GS. PREVIEW app171 Explore 더보기 텍스트 가독성 조정 배포 완료 (2026-09-25 KST)
+
+**사용자 지시**: app170 더보기 시트의 폰트가 작아 보여 전체 텍스트를 약간 키우고, 특히 `다음곡에 적용 / 공개 설정 / 싫어요` 같은 단독 행 메뉴는 위쪽 3개 버튼보다 약간 더 크게. 줄바꿈은 생기지 않게 유지. 기능/배치/간격은 비변경.
+
+**변경**:
+- 상단 3개 큰 버튼(`공유 노트에 추가 / 좋아요 / 공유`) 라벨: `11px → 12px`.
+- 단독 행 메인 라벨(`다음곡에 적용 / 공개 설정 / 싫어요`): `13px → 14px`.
+- 상단 버튼과 단독 행 메인 라벨에 `white-space: nowrap` 적용.
+- 설명문(`공개자가 사용을 허용하지 않았어요`, `본인 곡에서만 변경할 수 있어요`, `추천에서 이 곡을 제외합니다`)은 기존 10px 유지.
+- 색상/아이콘/버튼 크기/간격/동작은 app170 기준 그대로 유지.
+
+**검증**:
+- app171 final Audit Run `36150156001` **SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS / 기존 Like regression PASS / Worker TEST·PRODUCTION dry-run PASS / shared D1 read-only PASS / branch guard PASS.
+- `APP203_EXPLORE_MORE_TEXT_READABILITY=PASS`
+- 기존 app170 아이콘/공개설정 가드도 계속 PASS.
+
+**배포 결과**:
+- Firebase PREVIEW Hosting Run: `36150400530` **SUCCESS**
+- exact release SHA: `36f72d8de93c8ddeacfa2e0188b18b3cc2c115da`
+- `PREVIEW_APP_VERSION=171`
+- `PREVIEW_EXACT_BUILD=PASS`
+- `TEST_PRODUCTION_UNCHANGED=PASS`
+- Shared RTDB Rules: `SKIPPED`
+- Worker195 / Functions / Rules / D1 schema / Firestore schema / 사용자 원본 데이터: **변경 없음**
+- 주소: `https://preview.soridraw.com/`
+
+**현재 판정**: PREVIEW app171 배포 완료 / 자동검증 PASS / 사용자 실사용 확인 대기. TEST/main 승격은 별도 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 0GR. PREVIEW app170 Explore 액션 아이콘 정리 + 본인곡 공개 설정 배포 완료 (2026-09-25 KST)
 
 **사용자 지시**: app169 실사용 후 Explore 카드의 빠른 액션 UI를 정리하고 더보기 안에 본인곡 전용 `공개 설정`을 추가. 검증 PASS 시 PREVIEW까지 자동 배포.

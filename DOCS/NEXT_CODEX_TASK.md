@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app166 PREVIEW 배포 완료, Rap AUTO 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0GJ` 우선. PREVIEW app166 Hosting Run `36114262826` SUCCESS, exact release SHA `1fe21cd23152c3752c65ffe4e2e329751501c84b`, final Audit `36114071894` SUCCESS. TypeScript/Build/APP199 PASS, TEST/PRODUCTION 비변경, RTDB rules SKIPPED, Worker195/Functions/사용자 원본 비변경.
+- 실사용 합격선: AUTO + 래퍼 역할 없음 + G-Funk/hip-hop 계열에서도 최종 [Arrangement]에 자동 `no rap`/동등 rap-ban이 없어야 함. AUTO + 래퍼 역할 또는 직접 랩 요청은 Blueprint 규칙대로 허용. OFF는 `no rap`, ON은 기존 랩 적용. Stable exact structure 유지.
+- 사용자 직접 "랩 없이/no rap" 지시는 AUTO에서도 보존하는 것이 정상. 이 직접 지시와 AI가 임의 생성한 rap-ban을 혼동하지 않는다.
+- app166 사용자 확인 전 같은 랩 엔진 추가 수정 금지. 이상이 재현되면 생성 결과의 `appliedKeywords.rapMode`, 보컬 역할, 사용자 직접 입력, 최종 [Arrangement]만 최소 대조하고 다른 프롬프트 엔진/가사/UI를 임의 변경하지 않는다.
+- TEST/main 승격은 별도 테스트배포 요청 이후, PRODUCTION은 별도 명확 승인 이후에만 진행.
+
 ## 최신 2026-09-25 — V1 Rap AUTO 중립화 구현/감사 완료, PREVIEW 배포 전
 
 - `CURRENT_RELEASE_STATE.md 0GI` 및 `docs/SORIDRAW_ENGINE_MAP.md §5` 기준. 사용자 의도: AUTO는 랩을 강제하지도 금지하지도 않음. Rap Section이 없다는 이유로 `no rap`을 최종 [Arrangement]에 만들거나 보존하지 않는다. OFF는 `no rap`, ON은 기존 rap section, 사용자 직접 no-rap 지시는 AUTO에서도 보존.

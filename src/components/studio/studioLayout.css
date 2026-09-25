@@ -15156,3 +15156,112 @@ body > .soridraw-live-keywords-fixed {
     background-color: rgb(35 58 44 / 0.70) !important;
   }
 }
+
+
+/* 1020 — Split Create exact Classic vertical composition.
+ * "곡 만들기" keeps the existing full Builder, then the EXISTING generated
+ * Result/Recent content continues directly below it in one vertical scroll.
+ * This does not build a second recent-song list. Recent workspace itself keeps
+ * the approved two-pane splitter. Compact mobile keeps its existing component. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"] {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: var(--soridraw-studio-isolated-height, 720px) !important;
+    min-height: 0 !important;
+    max-height: var(--soridraw-studio-isolated-height, 720px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: auto !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: #626266 transparent !important;
+    contain: layout paint style !important;
+    isolation: isolate !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    contain: none !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    padding-top: 0 !important;
+    padding-bottom: 96px !important;
+  }
+
+  /* Same selected-keyword location as Classic: immediately below command. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical
+  .soridraw-builder-live-keywords {
+    display: block !important;
+    padding-bottom: 12px !important;
+    border-bottom: 2px solid #4f3b1c !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar {
+    width: 4px !important;
+    height: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-thumb {
+    min-height: 28px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #626266 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-thumb:hover {
+    background: #77777b !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  /* Preserve the approved one-pane Create content width while the real Result
+   * continues below it. Both halves share the same visual horizontal guide. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  > * {
+    width: min(calc(100% - 84px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}

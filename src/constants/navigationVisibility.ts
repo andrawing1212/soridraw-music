@@ -1,4 +1,5 @@
 export const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_visibility_v3';
+export const ADMIN_NAVIGATION_VISIBILITY_PERSISTENT_STORAGE_KEY = 'soridraw_admin_navigation_visibility_persistent';
 export const LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_visibility_v2';
 export const LEGACY_LIBRARY_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
 export const LEGACY_LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
@@ -95,6 +96,7 @@ export const normalizeNavigationVisibilitySettings = (
 export const readStoredNavigationVisibilitySettings = (): NavigationVisibilitySettings => {
   try {
     const raw = localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY)
+      || localStorage.getItem(ADMIN_NAVIGATION_VISIBILITY_PERSISTENT_STORAGE_KEY)
       || localStorage.getItem(LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY);
     if (raw) {
       return normalizeNavigationVisibilitySettings(JSON.parse(raw));
@@ -120,6 +122,9 @@ export const readStoredNavigationVisibilitySettings = (): NavigationVisibilitySe
 export const writeStoredNavigationVisibilitySettings = (settings: NavigationVisibilitySettings) => {
   try {
     localStorage.setItem(NAVIGATION_VISIBILITY_STORAGE_KEY, JSON.stringify(settings));
+    // Stable, unversioned admin preference mirror. App version/storage-schema
+    // updates must not reset the last explicitly saved administrator state.
+    localStorage.setItem(ADMIN_NAVIGATION_VISIBILITY_PERSISTENT_STORAGE_KEY, JSON.stringify(settings));
     localStorage.setItem(LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY, JSON.stringify({
       menuVisibility: settings.menuVisibility,
       sunoLibraryMenuAdminOnly: settings.menuAdminOnly.library,

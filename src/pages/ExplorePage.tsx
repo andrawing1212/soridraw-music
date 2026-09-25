@@ -455,6 +455,24 @@ export default function ExplorePage() {
     setFolderSaveSource(null);
   }, [profileUid]);
 
+  useEffect(() => {
+    if (!moreTrack || typeof document === 'undefined') return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || moreActionBusy !== null) return;
+      setMoreTrack(null);
+      setMoreSheetMode('actions');
+      setFolderChoices([]);
+      setFolderSaveSource(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [moreTrack, moreActionBusy]);
+
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.
   publicLikeVisibleTracksRef192.current = new Map(
@@ -1477,19 +1495,25 @@ export default function ExplorePage() {
     const actionBusy = moreActionBusy !== null;
 
     return (
-      <div className="soridraw-explore-more-backdrop" role="presentation" onMouseDown={closeMoreSheet}>
+      <div
+        className="soridraw-explore-more-backdrop"
+        role="presentation"
+        onPointerDown={() => {
+          if (!actionBusy) closeMoreSheet();
+        }}
+      >
         <section
           className="soridraw-explore-more-sheet"
           role="dialog"
           aria-modal="true"
           aria-label={moreSheetMode === 'folders' ? '폴더에 추가' : `${moreTrack.title} 더보기`}
-          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="soridraw-explore-more-handle" aria-hidden="true" />
           {moreSheetMode === 'folders' ? (
             <>
               <div className="soridraw-explore-more-folder-head">
-                <button type="button" onClick={() => setMoreSheetMode('actions')} aria-label="더보기로 돌아가기">
+                <button type="button" disabled={actionBusy} onClick={() => setMoreSheetMode('actions')} aria-label="더보기로 돌아가기">
                   <ChevronLeft aria-hidden="true" />
                 </button>
                 <strong>폴더에 추가</strong>
@@ -1529,6 +1553,7 @@ export default function ExplorePage() {
                 <button
                   type="button"
                   className={liked ? 'is-active' : undefined}
+                  aria-pressed={liked}
                   disabled={likeBusy || actionBusy}
                   onClick={async () => {
                     await toggleLike(moreTrack);
@@ -1547,7 +1572,7 @@ export default function ExplorePage() {
               <div className="soridraw-explore-more-rows">
                 <button
                   type="button"
-                  disabled={moreActionBusy === 'apply'}
+                  disabled={actionBusy}
                   className={!moreTrack.allowNextSongApply ? 'is-disabled' : undefined}
                   onClick={() => applyExploreTrackToNextSong(moreTrack)}
                 >

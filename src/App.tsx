@@ -15800,6 +15800,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
   };
 
+  const formatStudioDashboardGenre = (song: SongResult) =>
+    getResolvedGenre(song) || getSubGenre(song) || 'Song';
+
 
   const getStudioSongGenerationBatchId = (song: SongResult | null | undefined) =>
     String((song?.appliedKeywords as any)?.generationBatchId || '');
@@ -16381,7 +16384,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 selectedKeywords={liveSelectedKeywordItems}
                 onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                 formatTime={formatStudioDashboardTime}
-                formatSongTitle={formatUnifiedTitle}
+                formatSongTitle={formatTitleWithoutGenre}
+                formatSongGenre={formatStudioDashboardGenre}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={(song, index) => {
                   selectStudioWorkspaceView('recent');
@@ -19154,7 +19158,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       selectedKeywords={liveSelectedKeywordItems}
                       onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                       formatTime={formatStudioDashboardTime}
-                      formatSongTitle={formatUnifiedTitle}
+                      formatSongTitle={formatTitleWithoutGenre}
+                      formatSongGenre={formatStudioDashboardGenre}
                       onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                       onOpenSong={(song, index) => {
                         selectStudioWorkspaceView('recent');

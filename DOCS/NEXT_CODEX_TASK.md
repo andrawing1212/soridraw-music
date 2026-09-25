@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 2026-09-25 — app167 관리자 Gemini 호출 기록 모바일 UI 배포 완료, 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0GL` 우선. PREVIEW app167 Hosting Run `36117132227` SUCCESS, exact release SHA `cc6dfccfedf3a5b0fae041f3d65d905dc4cf385c`, final Audit `36116933721` SUCCESS.
+- 사용자 요청 범위만 변경: Gemini 감사 화면의 긴 설명 제거, 모바일 홈+제목 우선 한 줄 확보, 액션 버튼 다음 줄/안전 wrap. 다른 관리자 화면은 opt-in 기본 false로 기존 헤더 유지.
+- 실사용 합격선: 모바일에서 `Gemini 호출 기록` 제목이 세로 글자처럼 깨지지 않음, 설명 박스 제거, 모델 목록 확인/새로고침/기록 삭제 버튼 정상. PC/기타 관리자 화면 비회귀.
+- Worker195/Functions/RTDB Rules/Firestore/D1/R2 사용자 원본/TEST/PRODUCTION 비변경. 사용자 확인 전 이 UI 추가 수정 금지.
+- 다음 작업은 사용자 별도 지시를 따른다. TEST/main 승격은 명시적 테스트배포 요청 전 금지, PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app166 Rap AUTO 사용자 실사용 PASS, 해당 경로 동결
 
 - `CURRENT_RELEASE_STATE.md 0GK` 우선. 사용자가 PREVIEW app166 Rap AUTO 중립화 결과를 실사용 PASS로 확인.

@@ -1,3 +1,15 @@
+## 최신 2026-09-25 — app170 PREVIEW 배포 완료, Explore 액션/공개설정 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0GR` 최우선. PREVIEW app170 Firebase Hosting Run `36149125409` SUCCESS, exact release SHA `aee4034be5a14abfe0378a3e9b954d80c8add3b1`, exact build/version 170 PASS, TEST/PRODUCTION unchanged PASS.
+- 카드 빠른 액션 최종 기준: 좋아요+숫자 → 다음곡 적용(Studio와 같은 순환 화살표, 활성 시 아이콘만 핑크) → 곡선형 공유 화살표 → 원형 세로 `⋮`. 세 버튼 배경은 동일한 중립 원형.
+- 더보기의 다음곡 적용은 버튼 전체 착색 금지. 활성 가능 시 텍스트만 핑크 강조.
+- 더보기 `공개 설정`: 본인곡만 활성. 타인곡 비활성. 열기 자체 서버 read 0. 기존 publication local-first/outbox 경로를 재사용.
+- 공개 설정 모달은 Music Note 기존 기준과 동일하게 다음곡 적용 허용 / 팔로워 곡 저장 허용 / 공개 프로필 고정 / 저장 / 비공개 전환 제공.
+- app170 final Audit Run `36148886168` SUCCESS. APP203 포함 TypeScript/Build/기존 like 회귀/Worker dry-run/shared D1 read-only PASS.
+- Library는 Explore에서 계속 사용하지 않으며 공유 노트는 Music Note sharedNote 경로 유지.
+- 다음은 사용자 PC/모바일 실사용 결과만 반영. 정상 좋아요/Worker195/공유노트 구조는 새 구체 오류 없으면 수정 금지.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-25 — app169 PREVIEW 배포 완료, 실사용 검증 대기
 
 - `CURRENT_RELEASE_STATE.md 0GQ` 최우선. Firebase PREVIEW Hosting Run `36145255522` SUCCESS, exact release SHA `c0ad855216f9a5c90e3988e57a2719ca62d49558`, app169 exact build PASS, TEST/PRODUCTION unchanged PASS.

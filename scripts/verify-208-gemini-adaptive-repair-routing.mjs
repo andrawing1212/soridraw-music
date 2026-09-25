@@ -46,7 +46,7 @@ for (const token of [
   'function resolveAdaptiveSmallRepair(',
   'recordSessionModelOutcomes(sessionId, serverAttempts);',
   "outcome.status === 'failed'",
-  'same-song slow-success',
+  "'slow_success'",
   '같은 곡에서 직전 실패한 모델 재호출 생략',
   '같은 곡에서 30초 이상 걸린 성공 모델 재호출 생략',
   'adaptiveRepair?.modelChain || resolveLatencyModelChain(meta, requestParams)',

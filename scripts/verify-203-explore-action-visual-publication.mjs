@@ -13,6 +13,8 @@ assert.match(css, /\.soridraw-explore-quick-action\{[^}]*background:rgba\(255,25
 assert.match(css, /\.soridraw-explore-quick-apply\.is-available\{[^}]*background:rgba\(255,255,255,\.07\)!important;[^}]*color:#ff7a9d/s, 'available next-song action must keep the neutral circle and emphasize only the pink icon');
 assert.match(css, /\.soridraw-explore-more-rows button\.is-available\{[^}]*background:transparent!important/s, 'large next-song row must not receive a colored button background');
 assert.match(css, /\.soridraw-explore-more-rows button\.is-available strong\{color:#ff7a9d\}/, 'large next-song row must emphasize its text in pink');
+assert.match(css, /\.soridraw-explore-more-primary button\{[^}]*font-size:12px[^}]*white-space:nowrap/s, 'top guide buttons must use slightly larger no-wrap labels');
+assert.match(css, /\.soridraw-explore-more-rows strong\{[^}]*font-size:14px[^}]*white-space:nowrap/s, 'standalone guide rows must be slightly larger and no-wrap');
 
 assert.match(page, /<strong>공개 설정<\/strong>/, 'Explore more sheet must include publication settings');
 assert.match(page, /disabled=\{actionBusy \|\| !user \|\| user\.uid !== moreTrack\.ownerUid\}/, 'publication settings must be disabled for non-owner tracks');
@@ -33,3 +35,4 @@ console.log('APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS');
 console.log('APP203_EXPLORE_PINK_TEXT_ONLY_GUIDE=PASS');
 console.log('APP203_EXPLORE_OWNER_PUBLICATION_SETTINGS=PASS');
 console.log('APP203_EXPLORE_PUBLICATION_OPEN_R0=PASS');
+console.log('APP203_EXPLORE_MORE_TEXT_READABILITY=PASS');

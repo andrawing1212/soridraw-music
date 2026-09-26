@@ -63,4 +63,19 @@ jobs:
           const pub=rows.filter(x=>Number(x.is_public)===1&&String(x.status)==='published');
           console.log(JSON.stringify({total:rows.length,publicCount:pub.length,public:pub.map(x=>({id:x.id,title:x.title,sourceId:x.source_id,publishedAt:x.published_at,updatedAt:x.updated_at}))},null,2));
           NODE
+          echo '=== LOCAL/SHARED PROFILE R2 ==='
+          LOCAL_KEY="soridraw-profile-media-preview/internal/explore/profile-first-view-v1/$OWNER_UID.json"
+          SHARED_KEY="soridraw-profile-media/internal/explore/shared-profile-v113/$OWNER_UID.json"
+          npx --yes wrangler@4.102.0 r2 object get "$LOCAL_KEY" --remote --file "$RUNNER_TEMP/local-profile.json"
+          npx --yes wrangler@4.102.0 r2 object get "$SHARED_KEY" --remote --file "$RUNNER_TEMP/shared-profile.json"
+          node - "$RUNNER_TEMP/local-profile.json" "$RUNNER_TEMP/shared-profile.json" <<'NODE'
+          const fs=require('fs');
+          const summarize=(p)=>{
+            const b=JSON.parse(fs.readFileSync(p,'utf8'));
+            const d=b?.body?.data||b?.data||{};
+            const items=Array.isArray(d.items)?d.items:[];
+            return {revision:b?.revision??d?.revision??null,trackCount:d?.profile?.trackCount??d?.profile?.track_count??null,itemCount:items.length,items:items.map(x=>({id:x.id||x.trackId||null,title:x.title||null}))};
+          };
+          console.log(JSON.stringify({local:summarize(process.argv[2]),shared:summarize(process.argv[3])},null,2));
+          NODE
           echo 'READ_ONLY_D1_WRITE=0'

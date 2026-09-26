@@ -1,5 +1,5 @@
-publication_shared_profile_parity_audit=2026-09-27T03:47:00+09:00
-source_head=25e0c7aae169175150b1fe6335342b0b9f8bafaf
+publication_shared_profile_parity_audit=2026-09-27T03:53:00+09:00
+source_head=6e8c5f02388efb13b2134a7319be175da55fe5d9
 deploy=false
 scope=publication_profile_projection_only
 canonical_authority=d1_tracks_is_public_and_published
@@ -13,3 +13,4 @@ ui_unchanged=true
 no_user_data_migration=true
 preview_only=true
 test_production_unchanged_required=true
+release_preflight_verifiers_current=true

@@ -18,8 +18,8 @@ assert.match(endpoint, /likesRepairStatus182 = await repairPartialPersonalLikeMe
 assert.match(endpoint, /likeState = await readSharedLikesState161/);
 assert.match(client, /const EXPLORE_LIKE_REPAIR_ATTEMPTED_182/);
 assert.match(client, /partial182 && attempted182/);
-assert.match(client, /requestPersonalLikeBaseline127\(user, repairPartial182, verifySettlement189\)/);
-assert.match(client, /repairPartial182\s*\? '\?__soridraw_personal_repair=182'/);
+assert.match(client, /requestPersonalLikeBaseline127\([\s\S]*user,[\s\S]*repairPartial182,[\s\S]*verifySettlement189,[\s\S]*settlementTrackIds190,[\s\S]*\)/);
+assert.match(client, /if \(repairPartial182\) recoveryParams\.set\('__soridraw_personal_repair', '182'\)/);
 assert.doesNotMatch(helper, /DELETE FROM|UPDATE likes|INSERT INTO likes|UPDATE track_stats/i);
 
 const context = {

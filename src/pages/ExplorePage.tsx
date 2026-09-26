@@ -294,6 +294,18 @@ const formatCount = (value: number) => {
   return String(value);
 };
 
+const getExploreCardDisplayTitle = (value: string) => {
+  const raw = safeText(value, '제목 없는 곡');
+  const genreMatch = raw.match(/^\s*(\[[^\]\r\n]{1,80}\])\s*(.*)$/);
+  const genre = genreMatch?.[1] || '';
+  const titleSource = (genreMatch?.[2] ?? raw).trim();
+  const title = titleSource
+    .replace(/^[‘’“”'"]+/, '')
+    .replace(/[‘’“”'"]+$/, '')
+    .trim() || '제목 없는 곡';
+  return { genre, title };
+};
+
 function ExploreTrackCard({
   track,
   liked,
@@ -324,6 +336,7 @@ function ExploreTrackCard({
     if (!openUrl) return;
     window.open(openUrl, '_blank', 'noopener,noreferrer');
   };
+  const cardDisplayTitle = getExploreCardDisplayTitle(track.title);
 
   return (
     <article className="soridraw-explore-card">
@@ -362,7 +375,10 @@ function ExploreTrackCard({
       </button>
 
       <div className="soridraw-explore-card-copy">
-        <h3 title={track.title}>{track.title}</h3>
+        {cardDisplayTitle.genre && (
+          <div className="soridraw-explore-card-genre">{cardDisplayTitle.genre}</div>
+        )}
+        <h3 title={cardDisplayTitle.title}>{cardDisplayTitle.title}</h3>
         <button
           type="button"
           className="soridraw-explore-creator"

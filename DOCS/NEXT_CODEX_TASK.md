@@ -1,3 +1,19 @@
+## 최신 2026-09-27 — app190 PREVIEW PC cross-device 공개상태 reload 수렴 배포 완료, 사용자 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0HO` 최우선.
+- 모바일은 정상, PC만 이전 공개 Feed/profile cache가 남고 브라우저 reload도 1분 local gate 때문에 즉시 서버 revision을 확인하지 못하던 문제를 수정.
+- 제품 commit `0b0e35513d53023e9c7c7e54780005e8c744b988`.
+- Feed: 일반 navigation의 1분 cache는 그대로 두고, **명시적 browser reload 최초 1회만** cached feed-revision을 우회해 작은 revision check 수행.
+- Profile: 일반 warm revisit의 60초 gate 유지, **browser reload 최초 1회만** conditional shared-R2/edge revalidation 강제.
+- cache schema bump 없음, 전체 Feed/Profile cache 삭제 없음, D1/Firestore user data read/write/migration 추가 없음.
+- verifier `scripts/verify-211-cross-device-publication-refresh.mjs` 추가.
+- Audit Run `36261937077` SUCCESS.
+- PREVIEW app190 Hosting Run `36262078273` SUCCESS, release SHA `9116d2bcf0981ab55e35f1fe34663c572c5a9138`, exact build/version 190 PASS.
+- Worker/Functions/Rules 비변경, TEST/PRODUCTION unchanged PASS.
+- 다음 사용자 테스트: 모바일에서 공개/비공개 변경 → PC Explore에서 새로고침 1회 → Feed와 공개프로필 목록 즉시 수렴 확인.
+- 실패 시 해당 track/PC local cache만 bounded 추적. 좋아요/app164 frozen path, Worker canonical, Music Note 60초 저장은 수정 금지.
+
+
 ## 최신 2026-09-27 — app189 PREVIEW 공개/비공개 기준 단일화 배포 완료, 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0HN` 최우선.

@@ -1,5 +1,56 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HO. PREVIEW app190 PC cross-device 공개상태 새로고침 수렴 수정 (2026-09-27 KST)
+
+**사용자 실측**:
+- 모바일에서는 공개/비공개 결과가 Explore Feed와 공개프로필에 정상 반영.
+- PC에서는 이전 공개 Feed 캐시가 남아 공개프로필과 Feed가 불일치했고, 브라우저 새로고침 직후에도 즉시 수렴하지 않는 현상 확인.
+
+**원인**:
+- 서버 canonical/shared R2는 app189 기준으로 정상인데 PC 브라우저가 두 개의 장기 로컬 gate를 동시에 유지.
+- Feed revision 응답은 `exploreRevisionRequestCache.ts`에서 1분 동안 localStorage에 유지되어 브라우저 reload도 같은 revision을 재사용할 수 있었음.
+- 공개프로필 first-view는 `validatedAt` 60초 gate를 persistent cache에 저장하여 reload 직후에도 conditional shared-R2 revalidation을 생략할 수 있었음.
+- 따라서 별도 캐시를 가진 모바일은 정상인데, 기존 PC cache만 최대 1분 동안 이전 공개상태를 계속 표시할 수 있었음.
+
+**app190 수정**:
+- 제품 commit `0b0e35513d53023e9c7c7e54780005e8c744b988`.
+- `src/services/exploreRevisionRequestCache.ts`:
+  - 일반 페이지 이동은 기존 1분 local revision cache 그대로 유지.
+  - **사용자가 브라우저를 명시적으로 reload한 경우에만** sort별 최초 revision 요청 1회가 local cached revision을 우회.
+  - Feed 전체 캐시를 지우지 않고 작은 `/v1/feed-revision` 확인만 서버/edge로 전달.
+- `src/services/exploreProfileFirstViewService.ts`:
+  - 일반 재방문은 기존 local-first 60초 gate 유지.
+  - 브라우저 reload인 경우 해당 profile 최초 1회만 60초 gate를 우회해 conditional shared-R2/edge revalidation 수행.
+  - transient 실패 시 마지막 정상 profile cache 유지.
+- Feed schema `3`, Profile schema `6` 그대로. 앱 업데이트만으로 전체 캐시 무효화/전체 Feed read를 만들지 않음.
+- 좋아요, 공개 mutation, Music Note 60초 저장, UI/CSS, Worker/Functions/Rules 비변경.
+
+**검증 / PREVIEW 배포**:
+- regression verifier 추가: `scripts/verify-211-cross-device-publication-refresh.mjs`.
+- Release System Audit Run `36261937077` SUCCESS.
+- TypeScript PASS / Build PASS / verifier 211 PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run / shared D1 read-only audit PASS.
+- app version `190`.
+- version commit `0648bed7349ff97b5877795bf6b2c68ce7ceec02`.
+- release SHA `9116d2bcf0981ab55e35f1fe34663c572c5a9138`.
+- Firebase PREVIEW Hosting Run `36262078273` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=190`, `PREVIEW_EXACT_BUILD=PASS`.
+- shared RTDB Rules SKIPPED / Worker·Functions 변경 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**비용 / 데이터 안전**:
+- 사용자 데이터 변경 0, D1/Firestore migration/backfill 0.
+- 정상 warm navigation/revisit 비용 구조는 그대로.
+- 명시적인 browser reload 때만 작은 revision/conditional profile 확인을 1회 허용하며 canonical D1 read/write는 추가하지 않음.
+- 전체 Feed/Profile 강제 삭제나 cache schema bump 없음.
+
+**다음 실사용 확인**:
+1. 모바일에서 본인 곡 공개 또는 비공개 1회.
+2. PC에서 Explore가 이전 상태라면 브라우저 새로고침 1회.
+3. 새로고침 직후 Explore Feed와 공개프로필이 같은 공개곡 목록으로 수렴하는지 확인.
+4. PC에서 직접 공개/비공개 시에는 기존 app189 local targeted patch가 즉시 반영되는지도 함께 확인.
+5. 이상이 남으면 해당 track/PC cache만 bounded 추적. 좋아요/Worker canonical/전체 cache 구조는 건드리지 않는다.
+
 ## 0HN. PREVIEW app189 공개/비공개 기준 단일화 + 공개프로필 parity 복구 완료 (2026-09-27 KST)
 
 **사용자 요청 / 고정 기준**:

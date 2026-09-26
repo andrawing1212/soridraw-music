@@ -1,4 +1,5 @@
 name: SORIDRAW 191 Publication Profile Build
+# rerun_after_verify113=2026-09-27T03:45:00+09:00
 
 on:
   push:

@@ -1,10 +1,11 @@
-explore_genre_metadata_fallback_audit=2026-09-26T22:08:00+09:00
-source_head=1a0bee00add3f09db4efd7e101eae5edfcb8f930
+explore_creator_action_spacing_audit=2026-09-26T22:26:00+09:00
+source_head=1feef6b342439455a28ca35f9b676d1060c1351d
 deploy=false
-scope=explore_card_genre_display_only
-genre_priority=title_prefix_then_primary_genre_then_share_bundle_selected_genres
-music_note_canonical_data_unchanged=true
-track_title_unchanged=true
+scope=explore_card_css_only
+creator_avatar_px=22
+creator_action_top_padding_px=4
+creator_name_size_unchanged=true
+genre_title_layout_unchanged=true
 like_logic_unchanged=true
 no_server_io=true
 no_user_data_change=true

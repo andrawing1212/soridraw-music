@@ -1,3 +1,21 @@
+## 최신 2026-09-27 — app189 PREVIEW 공개/비공개 기준 단일화 배포 완료, 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0HN` 최우선.
+- 공개상태 authority는 D1 `tracks.is_public=1 AND status='published'` 하나만 사용.
+- Music Note와 Explore `... > 공개 설정`은 동일 `explorePublicationService` 경로에서 mutation 직후 즉시 server flush/confirmed state까지 완료.
+- publication mutation 성공 시 local profile R2를 해당 UID의 shared profile R2로 targeted mirror. 전체 Feed/전체 profile rebuild 및 owner-wide D1 scan 없음.
+- 수정 전 read-only 감사: canonical 총 30 / 공개 1 / 비공개 29, shared profile 20 mismatch 확인.
+- 기존 stale profile projection은 현재 계정에 한해 bounded repair 완료. Run `36256280239` SUCCESS, D1 W0, canonical user data unchanged, shared/local profile parity count=1 PASS.
+- 제품 client commit `47cbc3b1ec16ccbfd71b06310c780f634104c358`.
+- Worker product commit `4c0168f090ae38dee62bc03cade963f43fa8ffb1`; replay patch commit `d267579c7f485258ab319d950aa703a9ae2a139c`.
+- final Audit Run `36256030601` SUCCESS: TypeScript/Build/Like regression/TEST·PRODUCTION dry-run/shared D1 read-only PASS.
+- PREVIEW Worker Run `36256171288` SUCCESS, active version `ebb182bd-921f-4945-88a7-3788eb38ac58`.
+- PREVIEW app189 Hosting Run `36256356574` SUCCESS, exact build/version 189 PASS, TEST/PRODUCTION unchanged.
+- post-repair diagnostic Run `36256539809`은 temp workflow 파일 준비 오류로 FAIL한 tooling-only 결과이며 제품 판단에 사용 금지.
+- 다음은 사용자 실사용만: (1) Music Note 공개→Explore+공개프로필 표시, (2) 비공개→양쪽 즉시 제거, (3) Explore 더보기 공개설정에서도 동일 결과.
+- 실패 시 해당 track 하나만 bounded 확인. 전체 백필/전체 재생성/좋아요 변경 금지.
+- PC/모바일 실기기 검증 전. TEST/main 승격 전, PRODUCTION 비변경.
+
 ## 최신 2026-09-26 — 퇴근길의 상상 장르 누락 PREVIEW 복구 완료, 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0HM` 최우선.

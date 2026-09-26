@@ -91,6 +91,7 @@ jobs:
             node scripts/verify-191-bounded-public-like-convergence.mjs
             node scripts/verify-192-cross-account-public-like-live.mjs
             node scripts/verify-204-explore-next-song-parity.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 

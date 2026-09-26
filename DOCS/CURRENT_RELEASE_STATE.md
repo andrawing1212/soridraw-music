@@ -1,5 +1,37 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HH. PREVIEW 후보 — Explore 카드 장르/제목/게시자 표시 정리 (2026-09-26 KST)
+
+**사용자 요청**:
+- Explore 카드 제목에 포함되어 보이던 바깥쪽 작은따옴표/큰따옴표 표시는 숨김.
+- 제목 앞의 `[장르]`를 제목에서 분리해 제목 위에 더 작은 글자로 표시.
+- 게시자 프로필 사진과 이름은 현재보다 약간 크게 표시.
+- 카드 기능/좋아요/검색/백엔드 동작은 변경하지 않음.
+
+**구현**:
+- `src/pages/ExplorePage.tsx`: 카드 렌더링 시에만 제목을 표시용으로 분리. 선두 `[장르]`가 있으면 그대로 추출해 별도 줄에 표시하고, 나머지 제목의 바깥쪽 `' "` 및 curly quote만 제거. 저장된 track title 원본은 변경하지 않음.
+- `src/components/explore/explore.css`: 장르 라벨 11px(모바일 10px), 제목 아래가 아닌 **제목 위**에 배치. 게시자 이름 12px→13px, avatar 20px→23px, gap/margin만 소폭 확대.
+- Light theme에도 장르 보조색만 기존 creator와 같은 계열로 적용.
+- 새 서버 API/Firestore/D1/R2 read-write 없음. 사용자 데이터/스키마/좋아요 경로 비변경.
+
+**변경 commit**:
+- 카드 title/genre 분리: `b0438b5b9757c165ffca2558eca99e5467a5d4cf`.
+- 카드 메타 CSS: `88332e283d54903a236d0d9647fe8ec1b7c2766a`.
+- 최종 Audit trigger/candidate head: `8c9f2ac4c3a41976421e1bceafacd15da7373c68`.
+
+**검증**:
+- Release System Audit Run `36242181518` SUCCESS.
+- TypeScript PASS / Build PASS.
+- 기존 Like 회귀 PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 preflight/read-only 및 branch guard PASS.
+- 배포 없음. 실제 PREVIEW는 계속 app184 / Hosting Run `36240696538` / deployed SHA `17d33ab8cefb68359edbe5d12c9aeca5e2036a67`.
+- Worker/Functions/Rules/사용자 데이터 비변경.
+
+**다음**:
+- 사용자 PREVIEW 배포 요청 시 이 후보를 다음 앱 버전으로 Hosting only 배포하고 실제 모바일/PC에서 장르 위치, 제목 따옴표 제거, 게시자 크기만 확인.
+- TEST/main 승격 전. PRODUCTION 비변경.
+
 ## 0HG. PREVIEW app184 PERSONAL SETTLEMENT 행읽기 국소화 배포 완료 (2026-09-26 KST)
 
 **사용자 실측 / 원인**:

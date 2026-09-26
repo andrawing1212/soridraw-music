@@ -1,3 +1,22 @@
+## 최신 2026-09-27 — PC 공개프로필 ↔ Explore 공개곡 parity 근본 수정/복구 완료, 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0HP` 최우선.
+- read-only 진단으로 canonical D1 공개곡 2 + Explore Feed 2는 일치하지만 shared public-profile만 stale 1곡임을 확정.
+- 사용자 공개상태 원본은 정상이며 기존 공개곡 2곡 그대로 유지.
+- Worker patch 091: publication profile delta 시 shared public-profile R2 한 객체를 직접 CAS patch. local profile 존재 여부에 의존하지 않음.
+- owner-wide D1 scan / 전체 profile rebuild / 전체 Feed rebuild 없음.
+- canonical worker commit `25e0c7aae169175150b1fe6335342b0b9f8bafaf`, SHA256 `0c757410bf0d5c3ca4d2e10a2d6e369dbed13d099f7d29e34b16d12ba13e4c80`.
+- Audit Run `36263833075` SUCCESS.
+- PREVIEW Worker Release Run `36264560008` SUCCESS, active version `1426a087-9973-4b72-ba06-1904901a8693`, Feed/Profile smoke PASS, TEST/PRODUCTION unchanged.
+- 기존 stale shared profile은 대상 UID 한 객체만 bounded repair. Run `36264652374` SUCCESS.
+- repair 후 실제 PREVIEW public-profile endpoint `count=2`, canonical exact IDs parity PASS.
+- D1 write 0 / Firestore write 0 / user origin data unchanged.
+- app190 Hosting은 그대로. UI/좋아요/Music Note 저장/다른 정상 기능 비변경.
+- 다음은 사용자 PC 실사용에서 공개프로필 2곡 + Explore Feed 동일 2곡 확인.
+- 실패 시 해당 profile/track만 bounded 추적. 좋아요/전체 cache/전체 데이터는 수정 금지.
+- TEST/main 승격 및 PRODUCTION 승격 금지(별도 명시 승인 필요).
+
+
 ## 최신 2026-09-27 — app190 PREVIEW PC cross-device 공개상태 reload 수렴 배포 완료, 사용자 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0HO` 최우선.

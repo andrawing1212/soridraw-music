@@ -1,5 +1,77 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HP. PREVIEW PC 공개프로필 ↔ Explore 공개곡 parity 근본 수정 완료 (2026-09-27 KST)
+
+**사용자 실측**:
+- 모바일 공개프로필은 기존 공개곡 2곡을 정상 표시.
+- PC 공개프로필은 브라우저 새로고침/앱 재오픈 후에도 오래된 1곡만 표시.
+- 사용자는 기존 공개곡 2곡을 그대로 유지했고, 추가 공개/비공개 동작은 하지 않음.
+- 다른 정상 기능은 그대로 유지하고 이 문제만 수정 요청.
+
+**read-only 원인 확정**:
+- 대상 UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`.
+- Run `36263118631`에서 write 없이 실제 상태 대조:
+  - canonical D1 Music Note: 총 30, 공개 **2**.
+  - Explore shared latest Feed: 해당 사용자 공개곡 **2**, canonical과 exact ID 일치.
+  - shared public-profile endpoint: `trackCount=1`, item 1개, revision 218의 과거 stale 곡.
+- 즉 app190 PC local cache가 최종 원인이 아니었고, **shared public-profile 파생 R2 자체가 stale**한 것이 원인.
+- canonical D1 / Feed는 정상. 사용자 원본 공개상태 변경 필요 없음.
+
+**Worker 근본 수정**:
+- 신규 patch: `cloudflare/explore-worker/patches/091-publication-shared-profile-parity.mjs`.
+- publication batch/single에서 profile delta가 생길 때 local profile 존재 여부에 의존하지 않고 해당 UID의 shared profile R2 한 객체를 직접 CAS 방식으로 patch.
+- 한 곡 공개/비공개/공개옵션 변경에 해당 track delta + trackCount/revision만 갱신.
+- owner-wide D1 scan, 전체 profile rebuild, 전체 Feed rebuild 없음.
+- canonical like count 071 경로와 기존 좋아요 로직은 그대로 유지.
+- verifier: `scripts/verify-212-publication-shared-profile-parity.mjs`.
+- app190의 reload force arg 때문에 오래된 exact-string verifier 107/113만 호출형식 호환 수정. 제품 동작 변경 없음.
+
+**canonical Worker / 검증**:
+- canonical source commit: `25e0c7aae169175150b1fe6335342b0b9f8bafaf`.
+- canonical SHA256: `0c757410bf0d5c3ca4d2e10a2d6e369dbed13d099f7d29e34b16d12ba13e4c80`.
+- canonical build Run `36263615006` SUCCESS.
+- verifier 212 PASS / 082 PASS / 083 PASS / 084 PASS / 113 shared-profile parity PASS.
+- 최종 Release System Audit Run `36263833075` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS.
+
+**PREVIEW Worker 배포**:
+- Worker Release Run `36264560008` SUCCESS.
+- active PREVIEW Worker version `1426a087-9973-4b72-ba06-1904901a8693`.
+- `PREVIEW_RELEASE_PREFLIGHT=PASS`.
+- Feed smoke PASS / Profile smoke PASS.
+- TEST / PRODUCTION Workers unchanged PASS.
+- Firebase Hosting은 app190 그대로. 이번 근본 수정은 Worker only.
+
+**기존 stale public-profile 1회 bounded 복구**:
+- 신규 코드 배포만으로는 사용자가 새 공개/비공개 동작을 하지 않았기 때문에 과거 stale shared profile 1건은 자동으로 바뀌지 않음.
+- 사용자 확인 범위 그대로, 해당 UID의 shared public-profile R2 **한 객체만** 현재 canonical/Feed의 공개 2곡으로 복구.
+- Repair Run `36264652374` SUCCESS.
+- repair 전: 1곡, 과거 `오백 번째 빨간불`.
+- canonical public count=2 / Feed owner count=2 exact parity 확인 후 shared profile만 revision 218 → 219로 교체.
+- D1 write 0 / Firestore write 0 / 사용자 원본 데이터 변경 없음.
+- 30초 profile Edge TTL 이후 실제 PREVIEW endpoint:
+  - `LIVE_PUBLIC_PROFILE_COUNT=2`
+  - `LIVE_PUBLIC_PROFILE_PARITY=PASS`
+- 기존 공개곡 2곡의 공개상태는 변경하지 않음.
+
+**비용 / 정상 기능 보호**:
+- 공개상태 원본 D1 변경 없음.
+- 새 mutation 경로는 shared profile R2 한 객체의 bounded CAS patch만 추가.
+- 전체 사용자/전체 곡 조회, 백필, 전체 profile/Feed 재생성 없음.
+- 좋아요, Music Note 60초 묶음 저장, Gemini, UI/CSS, Library 등 비변경.
+- 앱 업데이트/페이지 진입만으로 추가 D1 read/write 없음.
+
+**정리**:
+- 진단/빌드/복구용 일회성 temp workflow 3개 삭제 완료.
+- app190 유지.
+- TEST/main 및 PRODUCTION 비변경.
+
+**다음 실사용 확인**:
+- PC에서 `preview.soridraw.com` 공개프로필 새로고침 또는 재진입.
+- 공개곡 탭이 모바일과 동일한 **2곡**인지 확인.
+- Explore Feed와 공개프로필이 동일한 2곡인지 확인.
+- 이후 공개/비공개 1곡을 바꿀 때 Feed+공개프로필이 함께 변하는지는 다음 실제 mutation에서 확인. 이상 시 해당 track 하나만 bounded 추적하고 좋아요/다른 정상 기능은 건드리지 않는다.
+
 ## 0HO. PREVIEW app190 PC cross-device 공개상태 새로고침 수렴 수정 (2026-09-27 KST)
 
 **사용자 실측**:

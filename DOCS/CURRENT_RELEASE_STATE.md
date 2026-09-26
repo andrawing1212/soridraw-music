@@ -1,5 +1,43 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HJ. PREVIEW app186 Explore 제목 확대 + 게시자 간격 축소 배포 완료 (2026-09-26 KST)
+
+**사용자 요청**:
+- 게시자 사진/이름 줄이 제목과 너무 떨어져 보여 장르↔제목처럼 더 붙여 표시.
+- 카드 제목을 현재보다 조금 더 크게 표시.
+- app185에서 확정한 장르 분리/따옴표 제거/게시자 크기는 유지.
+
+**수정**:
+- `src/components/explore/explore.css`만 변경.
+- 카드 제목: desktop `14px → 16px`, mobile `13px → 15px`.
+- 제목↔게시자 줄 간격: `margin-top 8px → 3px`.
+- 게시자 이름 `13px`, avatar `23px`는 app185 값 그대로 유지.
+- 카드 이미지/그리드/좋아요/다음곡 적용/공유/더보기/검색/데이터 로직 비변경.
+- 새 서버 read/write 없음. 사용자 데이터/스키마/Worker/Functions/Rules 비변경.
+
+**commit / 검증**:
+- 제품 commit: `9d1e5f15523f7a499cb95887ea76e29744d6316b`.
+- Audit trigger head: `110135552ce3bfbc51718e4e1a9e4e5aec009589`.
+- Release System Audit Run `36243675530` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 Like 회귀 PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS.
+
+**PREVIEW 배포**:
+- app version `186`.
+- version commit `456d6a8fdacf565c47d5213238c86a7b0d11b695`.
+- locked release SHA `bb384f7d5d506678f945b5a6ab6c7f5c91937e0f`.
+- Firebase PREVIEW Hosting Run `36243796905` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=186`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**다음**:
+- 사용자 모바일/PC 시각 확인. 필요 시 제목 크기/게시자 간격만 국소 조정.
+- 정상 Explore 좋아요/Worker195/app184 settlement 비용 수정은 건드리지 않는다.
+- TEST/main 승격 전. PRODUCTION 비변경.
+
 ## 0HI. PREVIEW app185 Explore 카드 메타 표시 배포 완료 (2026-09-26 KST)
 
 **사용자 요청 / 운영 기준**:

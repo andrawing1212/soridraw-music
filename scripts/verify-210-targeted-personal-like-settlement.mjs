@@ -4,7 +4,7 @@ const workerPath = process.env.SORIDRAW_GENERATED_WORKER
   || 'cloudflare/explore-worker/canonical/preview-worker.js';
 const worker = fs.readFileSync(workerPath, 'utf8');
 const like = fs.readFileSync('src/services/exploreLikeService.ts', 'utf8');
-const manifest = JSON.parse(fs.readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
+const patch = fs.readFileSync('cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs', 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -26,8 +26,8 @@ function functionText(source, name) {
 }
 
 assert(
-  manifest.patches.includes('090-targeted-personal-like-settlement.mjs'),
-  '090 Worker patch is not registered in release-patches.json',
+  patch.includes('SORIDRAW_TARGETED_PERSONAL_LIKE_SETTLEMENT_190_20260926'),
+  '090 targeted settlement patch source is missing',
 );
 assert(
   worker.includes('SORIDRAW_TARGETED_PERSONAL_LIKE_SETTLEMENT_190_20260926'),

@@ -1,5 +1,53 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HM. PREVIEW 퇴근길의 상상 장르 누락 완전 복구 (2026-09-26 KST)
+
+**사용자 실측**:
+- Music Note 원본 `퇴근길의 상상`에는 `Jazz Ballad` 장르가 정상인데 Explore 카드에서 이 곡만 장르가 비어 보임.
+
+**확인된 원인**:
+- Firestore 원본 `favorites/ivofUOnezAJvhmN3uXo4`: title=`퇴근길의 상상`, genre=`Jazz Ballad` 정상.
+- 해당 Explore canonical track `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4`만 legacy 공개 데이터로 남아 `primary_genre=NULL`, share schema 0 상태였음.
+- app187의 UI fallback만으로는 서버 공개 row와 shared R2에 장르 메타가 전혀 없는 이 1곡을 복구할 수 없었음.
+- 추가로 기존 Worker 직렬화가 canonical `primary_genre`를 public card의 `primaryGenre`로 내보내지 않던 누락을 확인.
+
+**코드 수정 / Worker 배포**:
+- `cloudflare/explore-worker/canonical/preview-worker.js`: `mapTrackRow`에 `primaryGenre: row.primary_genre || null` 추가.
+- 제품 commit `511353d0fb4cfeda17174572654e22ce0580925d`.
+- canonical source lock commit `665b940f54cf153d8486d40609ba76b5ceeca9f3`.
+- Release System Audit Run `36246428324` SUCCESS.
+- PREVIEW Worker Release Run `36246541900` SUCCESS.
+- locked source `665b940f54cf153d8486d40609ba76b5ceeca9f3`.
+- active PREVIEW Worker version `c77017af-5cac-4274-b424-616885a24ea3`.
+- Feed/Profile smoke PASS, TEST/PRODUCTION Workers unchanged PASS.
+
+**정확한 1곡 canonical 복구**:
+- 사용자 승인 범위에서 대상 1곡만 bounded repair.
+- canonical D1 `primary_genre`를 Firestore 원본과 대조 후 `Jazz Ballad`로 복구.
+- `explore_derived_tracks.row_json.primary_genre`도 trigger로 동일하게 복구.
+- 전체 백필/전체 곡 스캔/사용자 원본 덮어쓰기 없음.
+- 이후 검증 Run에서 canonical/derived 모두 `Jazz Ballad` PASS.
+
+**shared R2 최종 복구**:
+- 기존 shared Feed R2는 cursor 232의 오래된 card가 남아 있어 canonical 복구만으로는 즉시 화면에 반영되지 않았음.
+- `.github/workflows/temp-188-genre-shared-r2-repair.yml`에서 정확한 track ID 하나만 대상으로 shared latest/popular/profile/track-card projection의 `primaryGenre`를 수정.
+- Run `36249067564` SUCCESS.
+- `CANONICAL_D1_GENRE=PASS`, `DERIVED_D1_GENRE=PASS`, 해당 Run의 D1 write 0.
+- `LATEST_R2_PATCH=PASS`, `POPULAR_R2_PATCH=PASS`, `PROFILE_R2_PATCH=PASS`, `CARD_R2_PATCH=PASS`.
+- edge TTL 이후 실제 PREVIEW R2 endpoint 확인:
+  - `PREVIEW_LATEST_GENRE=PASS`
+  - `PREVIEW_POPULAR_GENRE=PASS`
+  - `TARGET_GENRE_REPAIR_COMPLETE=PASS`
+
+**현재 릴리스 상태**:
+- Firebase Hosting은 app188 유지. Hosting 재배포 불필요 — 클라이언트는 이미 `primaryGenre` 표시 가능.
+- PREVIEW Worker는 위 새 version으로 배포됨.
+- TEST/PRODUCTION 비변경.
+- Firestore 사용자 원본 변경 없음.
+- D1 변경은 승인된 대상 공개곡 1행의 누락 `primary_genre` 복구만 수행.
+- shared R2 변경도 동일 target card 하나의 파생 표시값만 복구.
+- 사용자가 `preview.soridraw.com` Explore에서 `퇴근길의 상상` 위에 `[Jazz Ballad]`가 보이는지만 실사용 확인.
+
 ## 0HL. PREVIEW app188 Explore 게시자/액션 간격 미세조정 배포 완료 (2026-09-26 KST)
 
 **사용자 요청**:

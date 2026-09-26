@@ -20887,6 +20887,12 @@ async function patchExploreProfileR2Publication043(...args) {
     } catch (error) {
       console.warn('[SORIDRAW 046] profile R2 repair marker failed:', String(error?.message || error || 'unknown'));
     }
+  } else if (uid) {
+    try {
+      await mirrorExploreLocalProfile060(env, uid);
+    } catch (error) {
+      console.warn('[SORIDRAW publication] shared profile targeted mirror deferred:', String(error?.message || error || 'unknown'));
+    }
   }
   return result;
 }

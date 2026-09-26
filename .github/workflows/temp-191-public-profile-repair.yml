@@ -1,0 +1,103 @@
+name: SORIDRAW 191 Public Profile Repair
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-191-public-profile-repair.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repair exact shared public-profile projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://soridraw-explore-preview.andrawing1212.workers.dev'
+          ORIGIN='https://preview.soridraw.com'
+          OWNER_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
+          SHARED_KEY="soridraw-profile-media/internal/explore/shared-profile-v113/$OWNER_UID.json"
+          CFG="$GITHUB_WORKSPACE/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+
+          # Canonical read-only guard: exactly the two user-confirmed public tracks.
+          npx --yes wrangler@4.102.0 d1 execute DB --remote --config "$CFG" --command             "SELECT id,title FROM tracks WHERE owner_uid='$OWNER_UID' AND source_type='music_note' AND is_public=1 AND status='published' ORDER BY id"             --json > "$RUNNER_TEMP/canonical.json"
+
+          curl -fsS -H "Origin: $ORIGIN"             "$BASE/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108&__repair191=$(date +%s)"             -o "$RUNNER_TEMP/feed.json"
+
+          npx --yes wrangler@4.102.0 r2 object get "$SHARED_KEY" --remote --file "$RUNNER_TEMP/profile-before.json"
+
+          node - "$RUNNER_TEMP/canonical.json" "$RUNNER_TEMP/feed.json" "$RUNNER_TEMP/profile-before.json" "$RUNNER_TEMP/profile-after.json" "$OWNER_UID" <<'NODE'
+          const fs=require('fs');
+          const [canonicalPath,feedPath,beforePath,afterPath,uid]=process.argv.slice(2);
+          const canonical=JSON.parse(fs.readFileSync(canonicalPath,'utf8')).flatMap(x=>x.results||[]);
+          const feed=JSON.parse(fs.readFileSync(feedPath,'utf8'));
+          const before=JSON.parse(fs.readFileSync(beforePath,'utf8'));
+          const expected=new Set(canonical.map(x=>String(x.id||'')).filter(Boolean));
+          if(expected.size!==2) throw new Error('Canonical public-track guard expected exactly 2, got '+expected.size);
+          const all=Array.isArray(feed?.data?.items)?feed.data.items:[];
+          const owner=all.filter(x=>String(x.ownerUid||x.owner_uid||'')===uid && expected.has(String(x.id||x.trackId||'')));
+          const got=new Set(owner.map(x=>String(x.id||x.trackId||'')));
+          if(owner.length!==2||got.size!==2||[...expected].some(id=>!got.has(id))) {
+            throw new Error('Feed/canonical parity guard failed');
+          }
+          const data=before?.body?.data;
+          if(!data?.profile) throw new Error('Shared profile bundle invalid');
+          const oldItems=Array.isArray(data.items)?data.items:[];
+          const oldIds=oldItems.map(x=>String(x.id||x.trackId||'')).filter(Boolean);
+          const revision=Math.max(1,Number(before.revision||data.revision||0)+1);
+          const now=Date.now();
+          const nextData={
+            ...data,
+            profile:{...data.profile,trackCount:2},
+            items:owner,
+            revision,
+            updatedAt:now,
+          };
+          const next={...before,revision,updatedAt:now,body:{...before.body,data:nextData}};
+          fs.writeFileSync(afterPath,JSON.stringify(next));
+          console.log('CANONICAL_PUBLIC_COUNT=2');
+          console.log('FEED_OWNER_COUNT=2');
+          console.log('PROFILE_BEFORE_COUNT='+oldItems.length);
+          console.log('PROFILE_BEFORE_IDS='+oldIds.join(','));
+          console.log('PROFILE_REPAIR_IDS='+[...expected].sort().join(','));
+          console.log('PROFILE_REPAIR_REVISION='+revision);
+          NODE
+
+          # Only one derived shared-profile object is replaced. No D1/Firestore write.
+          npx --yes wrangler@4.102.0 r2 object put "$SHARED_KEY" --remote             --file "$RUNNER_TEMP/profile-after.json"             --content-type 'application/json; charset=utf-8'
+          echo 'SHARED_PROFILE_R2_REPAIR=PASS'
+          echo 'D1_WRITE=0'
+          echo 'FIRESTORE_WRITE=0'
+          echo 'USER_ORIGIN_DATA_CHANGED=false'
+
+          # The existing positive Edge entry is bounded to 30s. Wait for it to expire,
+          # then verify the live first-view endpoint converges to the same exact two IDs.
+          sleep 35
+          curl -fsS -D "$RUNNER_TEMP/live.headers" -H "Origin: $ORIGIN"             "$BASE/v1/profiles/soridraw/first-view?limit=50&__verify191=$(date +%s)"             -o "$RUNNER_TEMP/live.json"
+          node - "$RUNNER_TEMP/canonical.json" "$RUNNER_TEMP/live.json" <<'NODE'
+          const fs=require('fs');
+          const canonical=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).flatMap(x=>x.results||[]);
+          const expected=new Set(canonical.map(x=>String(x.id||'')).filter(Boolean));
+          const p=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const d=p?.data||{};
+          const items=Array.isArray(d.items)?d.items:Array.isArray(d.snapshot?.items)?d.snapshot.items:[];
+          const got=new Set(items.map(x=>String(x.id||x.trackId||'')).filter(Boolean));
+          const count=Number(d?.profile?.trackCount??d?.profile?.track_count??-1);
+          if(count!==2||items.length!==2||got.size!==2||[...expected].some(id=>!got.has(id))) {
+            throw new Error('Live public profile parity failed');
+          }
+          console.log('LIVE_PUBLIC_PROFILE_COUNT=2');
+          console.log('LIVE_PUBLIC_PROFILE_PARITY=PASS');
+          NODE

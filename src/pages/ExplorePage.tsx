@@ -94,6 +94,7 @@ type ExploreTrack = {
   sourceSubTrackId?: string | null;
   durationSeconds?: number | null;
   style?: string | null;
+  primaryGenre?: string | null;
   prompt?: string | null;
   lyrics?: string | null;
   allowNextSongApply: boolean;
@@ -259,6 +260,7 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
     ? Number(row.durationSeconds ?? row.duration_seconds)
     : null,
   style: safeText(row.style) || null,
+  primaryGenre: safeText(row.primaryGenre ?? row.primary_genre) || null,
   prompt: safeText(row.prompt) || null,
   lyrics: safeText(row.lyrics) || null,
   allowNextSongApply: Boolean(row.allowNextSongApply ?? row.allow_next_song_apply),
@@ -294,10 +296,20 @@ const formatCount = (value: number) => {
   return String(value);
 };
 
-const getExploreCardDisplayTitle = (value: string) => {
-  const raw = safeText(value, '제목 없는 곡');
+const getExploreCardDisplayTitle = (track: ExploreTrack) => {
+  const raw = safeText(track.title, '제목 없는 곡');
   const genreMatch = raw.match(/^\s*(\[[^\]\r\n]{1,80}\])\s*(.*)$/);
-  const genre = genreMatch?.[1] || '';
+  const titleGenre = genreMatch?.[1] || '';
+  const selectedKeywords = track.shareBundle?.selectedKeywords;
+  const selectedGenres = selectedKeywords && typeof selectedKeywords === 'object'
+    ? (selectedKeywords as Record<string, unknown>).genres
+    : null;
+  const selectedGenre = Array.isArray(selectedGenres)
+    ? safeText(selectedGenres.find((value) => safeText(value)))
+    : safeText(selectedGenres);
+  const fallbackGenre = safeText(track.primaryGenre) || selectedGenre;
+  const normalizedFallbackGenre = fallbackGenre.replace(/^\[|\]$/g, '').trim();
+  const genre = titleGenre || (normalizedFallbackGenre ? `[${normalizedFallbackGenre}]` : '');
   const titleSource = (genreMatch?.[2] ?? raw).trim();
   const title = titleSource
     .replace(/^[‘’“”'"]+/, '')
@@ -336,7 +348,7 @@ function ExploreTrackCard({
     if (!openUrl) return;
     window.open(openUrl, '_blank', 'noopener,noreferrer');
   };
-  const cardDisplayTitle = getExploreCardDisplayTitle(track.title);
+  const cardDisplayTitle = getExploreCardDisplayTitle(track);
 
   return (
     <article className="soridraw-explore-card">

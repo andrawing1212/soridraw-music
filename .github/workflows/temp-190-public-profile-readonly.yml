@@ -23,6 +23,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+        working-directory: cloudflare/explore-worker
       - name: Inspect PREVIEW canonical and public projections read-only
         shell: bash
         run: |
@@ -53,7 +55,7 @@ jobs:
           console.log(JSON.stringify({totalFeedItems:items.length,ownerCount:owner.length,ownerItems:owner.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null}))},null,2));
           NODE
 
-          WRANGLER="$GITHUB_WORKSPACE/node_modules/wrangler/bin/wrangler.js"
+          WRANGLER="$GITHUB_WORKSPACE/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           CFG="$GITHUB_WORKSPACE/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT id,title,is_public,status,source_id,published_at,updated_at FROM tracks WHERE owner_uid='$OWNER_UID' AND source_type='music_note' ORDER BY updated_at DESC"             --json > "$RUNNER_TEMP/canonical.json"
           echo '=== CANONICAL D1 MUSIC NOTE PUBLICATION ==='

@@ -1,5 +1,41 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HL. PREVIEW app188 Explore 게시자/액션 간격 미세조정 배포 완료 (2026-09-26 KST)
+
+**사용자 요청**:
+- Explore 카드에서 게시자 줄과 좋아요/다음곡 적용/공유/더보기 액션 줄 사이 간격을 아주 조금 더 줄임.
+- 게시자 프로필 사진을 22px로 조정.
+- 장르/제목/게시자 이름 크기 및 기능은 그대로 유지.
+
+**수정**:
+- `src/components/explore/explore.css`만 변경.
+- 게시자 avatar: `23px → 22px` (desktop/mobile 동일).
+- 액션 줄 상단 padding: `6px → 4px`로 2px만 축소.
+- 게시자 이름 13px, 제목 desktop 16px/mobile 15px, 장르 위치/크기, 좋아요/다음곡 적용/공유/더보기 기능은 비변경.
+- 새 서버 read/write 없음. 사용자 데이터/스키마/Worker/Functions/Rules 비변경.
+
+**commit / 검증**:
+- 제품 commit: `1feef6b342439455a28ca35f9b676d1060c1351d`.
+- Audit trigger head: `6609ae6ec753a417515c2d2821c017b9ab89dd9e`.
+- Release System Audit Run `36245154425` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 Like 회귀 PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS.
+
+**PREVIEW 배포**:
+- app version `188`.
+- version commit `2fc3e14982dfcc93c81f097de917a5b367b0c16c`.
+- locked release SHA `6f96deee253d3ed28dd698b528758792393184ed`.
+- Firebase PREVIEW Hosting Run `36245325996` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=188`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**다음**:
+- 모바일/PC에서 게시자↔액션 간격과 22px avatar만 시각 확인.
+- 이상 시 해당 CSS 값만 국소 조정하고 Explore 데이터/좋아요/Worker/backend는 건드리지 않는다.
+
 ## 0HK. PREVIEW app187 Explore 장르 메타데이터 fallback 배포 완료 (2026-09-26 KST)
 
 **사용자 실측 / 원인**:

@@ -106,5 +106,23 @@ replaceOnce(
   ].join('\n'),
   'profile wrapper'
 );
+
+replaceOnce(
+  "  }\n  return result;\n}\n\nasync function handleMusicNotePublicationSingleWrite016",
+  [
+    "  } else if (uid) {",
+    "    try {",
+    "      await mirrorExploreLocalProfile060(env, uid);",
+    "    } catch (error) {",
+    "      console.warn('[SORIDRAW publication] shared profile targeted mirror deferred:', String(error?.message || error || 'unknown'));",
+    "    }",
+    "  }",
+    "  return result;",
+    "}",
+    "",
+    "async function handleMusicNotePublicationSingleWrite016",
+  ].join("\n"),
+  'shared profile targeted mirror'
+);
 writeFileSync(path, source, 'utf8');
 console.log('[071] key-only D1 canonical like read on actual publication, no read on app update/page navigation.');

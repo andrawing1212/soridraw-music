@@ -1,0 +1,165 @@
+name: SORIDRAW 188 Shared Genre Cache Repair
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-188-genre-shared-r2-repair.yml'
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      TARGET_ID: music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4
+      TARGET_UID: rcZ2GZrBndOZzT8C635eiNBjYIJ2
+      TARGET_TITLE: 퇴근길의 상상
+      TARGET_GENRE: Jazz Ballad
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Verify canonical D1 and derived row are already repaired
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/canonical/wrangler.preview.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            SELECT t.id,t.title,t.primary_genre,t.is_public,t.status,
+                   json_extract(d.row_json,'$.primary_genre') AS derived_primary_genre
+            FROM tracks t
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.id='${TARGET_ID}'
+            LIMIT 1;
+          " --json > "$RUNNER_TEMP/canonical.json"
+          node <<'NODE'
+          const rows=require(process.env.RUNNER_TEMP+'/canonical.json').flatMap(x=>x.results||[]);
+          if(rows.length!==1) throw new Error('Target canonical row missing');
+          const x=rows[0];
+          if(String(x.title||'')!==process.env.TARGET_TITLE) throw new Error('Target title mismatch');
+          if(String(x.primary_genre||'')!==process.env.TARGET_GENRE) throw new Error('Canonical genre not repaired');
+          if(String(x.derived_primary_genre||'')!==process.env.TARGET_GENRE) throw new Error('Derived genre not repaired');
+          if(Number(x.is_public)!==1||String(x.status)!=='published') throw new Error('Target is not public/published');
+          console.log('CANONICAL_D1_GENRE=PASS');
+          console.log('DERIVED_D1_GENRE=PASS');
+          console.log('D1_WRITE_THIS_RUN=0');
+          NODE
+      - name: Patch only the exact shared R2 card projections
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          bucket="soridraw-profile-media"
+          patch_object() {
+            kind="$1"; key="$2"; required="$3"
+            file="$RUNNER_TEMP/${kind}.json"
+            if ! node "$W" r2 object get "$bucket/$key" --file "$file" --remote >/dev/null 2>&1; then
+              if [ "$required" = 1 ]; then echo "missing required R2 object: $kind" >&2; exit 1; fi
+              echo "${kind^^}_R2=MISSING_SKIP"
+              return
+            fi
+            cp "$file" "$file.before"
+            KIND="$kind" FILE="$file" node <<'NODE'
+          const fs=require('fs');
+          const kind=process.env.KIND;
+          const file=process.env.FILE;
+          const id=process.env.TARGET_ID;
+          const title=process.env.TARGET_TITLE;
+          const genre=process.env.TARGET_GENRE;
+          const p=JSON.parse(fs.readFileSync(file,'utf8'));
+          let found=0, changed=0;
+          const patch=(item)=>{
+            if(String(item?.id||item?.trackId||'')!==id) return item;
+            found++;
+            if(String(item?.title||'')!==title) throw new Error(kind+': target title mismatch');
+            if(String(item?.primaryGenre||'')===genre) return item;
+            changed++;
+            return {...item, primaryGenre:genre};
+          };
+          if(kind==='latest'||kind==='popular'){
+            const data=p?.payload?.data;
+            if(!Array.isArray(data?.items)) throw new Error(kind+': invalid feed object');
+            p.payload={...p.payload,data:{...data,items:data.items.map(patch)}};
+          } else if(kind==='profile'){
+            const data=p?.body?.data;
+            if(!Array.isArray(data?.items)) throw new Error('profile: invalid object');
+            p.body={...p.body,data:{...data,items:data.items.map(patch)}};
+            if(changed){
+              const revision=Math.max(Number(p.revision||0),Number(data.revision||0))+1;
+              p.revision=revision;
+              p.body.data.revision=revision;
+            }
+          } else if(kind==='card'){
+            if(p?.card && String(p.card?.id||p.card?.trackId||'')===id) p.card=patch(p.card);
+          } else throw new Error('unknown kind '+kind);
+          if((kind==='latest'||kind==='popular') && found!==1) throw new Error(kind+': expected exactly one target, got '+found);
+          if(found>1) throw new Error(kind+': duplicate target');
+          if(changed){
+            p.updatedAt=Date.now();
+            fs.writeFileSync(file,JSON.stringify(p));
+            fs.writeFileSync(file+'.changed','1');
+          }
+          console.log(kind.toUpperCase()+'_FOUND='+found+' CHANGED='+changed);
+          NODE
+            if [ -f "$file.changed" ]; then
+              node "$W" r2 object put "$bucket/$key" --file "$file" --remote >/dev/null
+              echo "${kind^^}_R2_PATCH=PASS"
+            else
+              echo "${kind^^}_R2_PATCH=ALREADY_CURRENT"
+            fi
+          }
+          patch_object latest  "internal/explore/shared-feed-v112/latest-40.json"  1
+          patch_object popular "internal/explore/shared-feed-v112/popular-40.json" 1
+          patch_object profile "internal/explore/shared-profile-v113/${TARGET_UID}.json" 0
+          patch_object card    "internal/explore/shared-track-card-v115/${TARGET_ID}.json" 0
+      - name: Verify shared R2 exact target only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          bucket="soridraw-profile-media"
+          for sort in latest popular; do
+            file="$RUNNER_TEMP/verify-$sort.json"
+            node "$W" r2 object get "$bucket/internal/explore/shared-feed-v112/$sort-40.json" --file "$file" --remote >/dev/null
+            SORT="$sort" FILE="$file" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.FILE,'utf8'));
+          const items=p?.payload?.data?.items||[];
+          const rows=items.filter(x=>String(x?.id||x?.trackId||'')===process.env.TARGET_ID);
+          if(rows.length!==1) throw new Error(process.env.SORT+': target count '+rows.length);
+          if(String(rows[0].primaryGenre||'')!==process.env.TARGET_GENRE) throw new Error(process.env.SORT+': genre not repaired');
+          console.log('SHARED_'+process.env.SORT.toUpperCase()+'_GENRE=PASS');
+          NODE
+          done
+      - name: Verify deployed PREVIEW snapshot after edge TTL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 65
+          stamp="${GITHUB_RUN_ID}"
+          for sort in latest popular; do
+            curl -fsS -H "Origin: ${PREVIEW_ORIGIN}"               "${PREVIEW_BASE}/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108&__genre188=$stamp"               > "$RUNNER_TEMP/live-$sort.json"
+            SORT="$sort" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/live-'+process.env.SORT+'.json','utf8'));
+          const rows=(p?.data?.items||[]).filter(x=>String(x?.id||x?.trackId||'')===process.env.TARGET_ID);
+          if(rows.length!==1) throw new Error(process.env.SORT+': live target count '+rows.length);
+          if(String(rows[0].primaryGenre||'')!==process.env.TARGET_GENRE) throw new Error(process.env.SORT+': live primaryGenre missing');
+          console.log('PREVIEW_'+process.env.SORT.toUpperCase()+'_GENRE=PASS');
+          NODE
+          done
+          echo 'TARGET_GENRE_REPAIR_COMPLETE=PASS'

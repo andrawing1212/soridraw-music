@@ -1,0 +1,143 @@
+name: SORIDRAW 189 Publication Profile Repair
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-189-publication-profile-repair.yml'
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TARGET_UID: rcZ2GZrBndOZzT8C635eiNBjYIJ2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read canonical publication state and R2 projections
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/canonical/wrangler.preview.jsonc"
+          B="soridraw-profile-media"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            SELECT id,title,profile_pinned,published_at
+            FROM tracks
+            WHERE owner_uid='${TARGET_UID}'
+              AND source_type='music_note'
+              AND is_public=1
+              AND status='published'
+            ORDER BY profile_pinned DESC,published_at DESC,id DESC;
+          " --json > "$RUNNER_TEMP/public.json"
+          for spec in             "latest:internal/explore/shared-feed-v112/latest-40.json"             "popular:internal/explore/shared-feed-v112/popular-40.json"             "shared:internal/explore/shared-profile-v113/${TARGET_UID}.json"             "local:internal/explore/profile-first-view-v1/${TARGET_UID}.json"
+          do
+            name="${spec%%:*}"; key="${spec#*:}"
+            if node "$W" r2 object get "$B/$key" --file "$RUNNER_TEMP/$name.json" --remote >/dev/null 2>&1; then
+              echo "R2_${name^^}=FOUND"
+            else
+              echo "R2_${name^^}=MISSING"
+              echo '{}' > "$RUNNER_TEMP/$name.json"
+            fi
+          done
+          echo 'D1_WRITE=0'
+      - name: Repair only this account profile projections
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          B="soridraw-profile-media"
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node <<'NODE'
+          const fs=require('fs');
+          const tmp=process.env.RUNNER_TEMP;
+          const uid=process.env.TARGET_UID;
+          const canonical=require(tmp+'/public.json').flatMap(x=>x.results||[]);
+          const publicIds=canonical.map(x=>String(x.id));
+          const publicSet=new Set(publicIds);
+          const read=n=>JSON.parse(fs.readFileSync(tmp+'/'+n+'.json','utf8'));
+          const latest=read('latest')?.payload?.data?.items||[];
+          const popular=read('popular')?.payload?.data?.items||[];
+          const shared=read('shared');
+          const local=read('local');
+          const byId=new Map();
+          for(const src of [latest,popular,shared?.body?.data?.items||[],local?.body?.data?.items||[]]){
+            for(const item of src){
+              const id=String(item?.id||item?.trackId||'');
+              if(id&&publicSet.has(id)&&!byId.has(id)) byId.set(id,item);
+            }
+          }
+          const missing=publicIds.filter(id=>!byId.has(id));
+          if(missing.length) throw new Error('Missing public cards for bounded repair: '+missing.join(','));
+          const items=publicIds.map(id=>byId.get(id));
+          const base=(shared?.body?.data?.profile ? shared : local);
+          if(!base?.body?.data?.profile) throw new Error('No valid profile base bundle');
+          const previousRevision=Math.max(Number(shared?.revision||shared?.body?.data?.revision||0),Number(local?.revision||local?.body?.data?.revision||0));
+          const revision=previousRevision+1;
+          const now=Date.now();
+          const next={
+            ...base,
+            uid,
+            revision,
+            updatedAt:now,
+            body:{
+              ...base.body,
+              data:{
+                ...base.body.data,
+                profile:{...base.body.data.profile,trackCount:items.length},
+                items,
+                revision,
+                updatedAt:now,
+              }
+            },
+            publicationParityRepair189:true,
+          };
+          fs.writeFileSync(tmp+'/repaired.json',JSON.stringify(next));
+          console.log('CANONICAL_PUBLIC='+publicIds.length);
+          console.log('REPAIR_ITEMS='+items.length);
+          console.log('REPAIR_REVISION='+revision);
+          NODE
+          node "$W" r2 object put "$B/internal/explore/shared-profile-v113/${TARGET_UID}.json" --file "$RUNNER_TEMP/repaired.json" --remote >/dev/null
+          node "$W" r2 object put "$B/internal/explore/profile-first-view-v1/${TARGET_UID}.json" --file "$RUNNER_TEMP/repaired.json" --remote >/dev/null
+          echo 'SHARED_PROFILE_REPAIR=PASS'
+          echo 'LOCAL_PROFILE_REPAIR=PASS'
+      - name: Verify exact parity
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          B="soridraw-profile-media"
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          for name in shared local; do
+            if [ "$name" = shared ]; then key="internal/explore/shared-profile-v113/${TARGET_UID}.json"; else key="internal/explore/profile-first-view-v1/${TARGET_UID}.json"; fi
+            node "$W" r2 object get "$B/$key" --file "$RUNNER_TEMP/verify-$name.json" --remote >/dev/null
+          done
+          node <<'NODE'
+          const fs=require('fs');
+          const canonical=require(process.env.RUNNER_TEMP+'/public.json').flatMap(x=>x.results||[]).map(x=>String(x.id));
+          const expected=new Set(canonical);
+          for(const name of ['shared','local']){
+            const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/verify-'+name+'.json','utf8'));
+            const items=p?.body?.data?.items||[];
+            const ids=items.map(x=>String(x?.id||x?.trackId||''));
+            if(ids.length!==expected.size) throw new Error(name+': count mismatch '+ids.length+'!='+expected.size);
+            if(ids.some(id=>!expected.has(id))) throw new Error(name+': stale private item remains');
+            for(const id of expected) if(!ids.includes(id)) throw new Error(name+': public item missing '+id);
+            const count=Number(p?.body?.data?.profile?.trackCount??-1);
+            if(count!==expected.size) throw new Error(name+': trackCount mismatch '+count);
+            console.log(name.toUpperCase()+'_PROFILE_PARITY=PASS count='+count);
+          }
+          console.log('PUBLICATION_PROFILE_REPAIR_COMPLETE=PASS');
+          console.log('USER_CANONICAL_DATA_CHANGED=NO');
+          NODE

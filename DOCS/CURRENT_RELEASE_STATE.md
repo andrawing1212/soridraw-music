@@ -1,5 +1,59 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HG. PREVIEW app184 PERSONAL SETTLEMENT 행읽기 국소화 배포 완료 (2026-09-26 KST)
+
+**사용자 실측 / 원인**:
+- Explore에서 간헐적으로 `/v1/me/social-snapshot`이 `D1 query 2 / rows_read 49 / W0`를 발생.
+- 관리자 lastOutcome이 `FULL 200 · PERSONAL SETTLEMENT 189`로 확인되어, 일반 Feed 재조회나 단순 앱 업데이트 자체가 아니라 **과거 accepted-but-unsettled 좋아요 guard의 정산 확인 경로**가 원인으로 좁혀짐.
+- 기존 189 경로는 해당 guard가 몇 곡뿐이어도 사용자의 전체 좋아요 canonical 목록을 최대 2001행까지 대조할 수 있어, 현재 계정의 좋아요 수만큼 행읽기가 발생할 수 있었음.
+- 앱 업데이트는 직접 원인이 아니며, unresolved guard가 있고 새 personal R2 revision을 관찰한 시점에 1회 정산 증명이 필요할 때 이 경로가 실행될 수 있음.
+
+**app184 최소 수정**:
+- 클라이언트는 unresolved guard track ID만 `trackIds`로 settlement 요청에 전달. 1~200개까지만 bounded.
+- PREVIEW Worker는 queue empty 확인 + 기존 R2 ETag 보호는 그대로 유지하면서, 전달된 track ID의 canonical membership만 D1에서 확인.
+- 새 app184 경로에서는 전체 좋아요 catalog scan을 제거.
+- 200개 초과 pathological legacy guard 또는 app183 이하 구버전 클라이언트는 기능 안전을 위해 기존 full proof fallback 유지.
+- 검증에 참여한 guard만 해제하며 요청 중 새로 생긴 guard는 건드리지 않음.
+- 좋아요 즉시 UI, 30초 batching, W1 intake, PC↔모바일 동기화, 공개 likeCount, 신규곡 첫 좋아요 보호는 변경 없음.
+- 사용자 데이터 migration / schema write / D1 원본 변경 없음.
+
+**검증**:
+- 최종 Release System Audit Run `36237621670` SUCCESS.
+- TypeScript PASS / Build PASS.
+- `APP210_SETTLEMENT_TARGETED_D1=PASS`.
+- `APP210_SETTLEMENT_WHOLE_SCAN_REMOVED_FROM_NEW_PATH=PASS`.
+- `APP210_SETTLEMENT_QUEUE_ETAG_GUARD=PASS`.
+- `APP210_OLD_CLIENT_BACKWARD_COMPAT=PASS`.
+- `APP210_NORMAL_REENTRY_R0_CONTRACT=PASS`.
+- `APP210_LIKE_BATCHING_UNCHANGED=PASS`.
+- 기존 APP192/197 및 좋아요 회귀 PASS.
+
+**PREVIEW Worker 배포**:
+- Run `36237742723` SUCCESS.
+- locked source `9f223d4ab8ffb9f324e33b15eb12899ce9fb1f28`.
+- PREVIEW Worker active version `d57a6478-f98c-4f0a-ae77-6f2b91016602`.
+- PREVIEW Feed/Profile smoke PASS / warm revision R0/W0 PASS / public-like-card D1 R0/W0 PASS.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+
+**PREVIEW app184 Hosting 배포**:
+- Run `36240696538` SUCCESS.
+- deployed locked SHA `17d33ab8cefb68359edbe5d12c9aeca5e2036a67`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=184`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+**비용 판정 / 다음 실사용**:
+- 사진의 R49 원인은 수정 대상이 맞았고, app184부터 같은 settlement 확인이 발생해도 전체 좋아요 목록이 아니라 unresolved guard 수에 비례하는 작은 확인으로 제한됨.
+- 정상 warm 재진입은 기존대로 D1 R0 목표.
+- 실제 계정에서 다음 자연 발생 settlement의 물리 rows_read는 아직 사용자 실측 전. 강제로 캐시 삭제/guard 재생성하지 말고 자연 발생 시 `PERSONAL SETTLEMENT 189 TARGETED N`과 R/W만 확인.
+- 새 구체 좋아요 오류가 없으면 정상 app164/Worker195 계열 기능은 추가 수정하지 않는다.
+- TEST/main 승격 전. PRODUCTION 비변경.
+
 ## 0HF. PREVIEW app183 검색 UX 배포 완료 (2026-09-26 KST)
 
 **사용자 승인**:

@@ -64,6 +64,7 @@
 **진단 주의**:
 - post-repair 임시 진단 Run `36256539809`은 제품 실패가 아니라 진단 Workflow 자체의 `profile-local.json` 파일 준비 누락으로 FAIL. 제품 검증 근거로 사용하지 않음.
 - 실제 복구 parity는 별도 repair Run `36256280239`에서 local/shared 모두 exact PASS로 확인됨.
+- 이번 진단/복구에 사용한 일회성 `temp-188/189` Workflow 4개는 결과 기록 후 저장소에서 삭제 완료. 제품 코드/배포본에는 영향 없음.
 
 **다음 실사용 확인**:
 - Music Note에서 1곡 공개 → Explore + 공개프로필에 같은 곡이 나타나는지.

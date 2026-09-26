@@ -101,6 +101,37 @@ jobs:
           console.log('SINGLE_TRACK_D1_REPAIR=PASS');
           console.log('D1_TARGET_ROWS_WRITTEN_MAX=1');
           NODE
+      - name: Emit one exact derived change signal
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/canonical/wrangler.preview.jsonc"
+          T="music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4"
+          U="rcZ2GZrBndOZzT8C635eiNBjYIJ2"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            UPDATE explore_derived_state SET seq=seq+1 WHERE id=1;
+            INSERT INTO explore_derived_changes(scope,kind,id,seq)
+            VALUES('feed','track','$T',(SELECT seq FROM explore_derived_state WHERE id=1))
+            ON CONFLICT(scope,kind,id) DO UPDATE SET seq=excluded.seq;
+            UPDATE explore_derived_state SET seq=seq+1 WHERE id=1;
+            INSERT INTO explore_derived_changes(scope,kind,id,seq)
+            VALUES('profile:'||'$U','track','$T',(SELECT seq FROM explore_derived_state WHERE id=1))
+            ON CONFLICT(scope,kind,id) DO UPDATE SET seq=excluded.seq;
+          " --json > "$RUNNER_TEMP/signal.json"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            SELECT scope,seq FROM explore_derived_changes
+            WHERE id='$T'
+            ORDER BY scope;
+          " --json > "$RUNNER_TEMP/signal-verify.json"
+          node <<'NODE'
+          const rows=require(process.env.RUNNER_TEMP+'/signal-verify.json').flatMap(x=>x.results||[]);
+          const feed=rows.find(x=>x.scope==='feed');
+          const profile=rows.find(x=>String(x.scope||'').startsWith('profile:'));
+          if(!feed||!profile||Number(feed.seq)<=232||Number(profile.seq)<=232)throw new Error('Exact derived signal did not advance');
+          console.log('TARGETED_DERIVED_SIGNAL=PASS feedSeq='+feed.seq+' profileSeq='+profile.seq);
+          NODE
       - name: Converge existing PREVIEW derived caches
         shell: bash
         run: |

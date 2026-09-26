@@ -24,6 +24,7 @@
 - `main` = 검증 완료 후 TEST 승격 기준.
 - PRODUCTION은 사용자의 명확한 정식배포 승인 없이는 절대 승격하지 않는다.
 - GitHub push만으로 배포 완료라고 말하지 않는다.
+- 사용자가 수정 요청을 하면, 검증이 통과하고 안전하게 PREVIEW 배포 가능한 작업은 별도 재승인을 기다리지 말고 같은 작업 안에서 PREVIEW 배포까지 완료한다. 단 TEST/PRODUCTION 승격은 기존 명시 승인 규칙을 그대로 따른다.
 - PREVIEW/TEST/PRODUCTION은 **기능 코드와 실행 환경을 분리**한다.
 - SORIDRAW의 현재 운영 의도는 **사용자 데이터는 3개 앱에서 공유**하는 것이다. 기능만 PREVIEW → TEST → PRODUCTION 순으로 승격한다.
 - Explore의 사용자 원본 데이터는 공유 Canonical 저장소를 기준으로 하고, 환경별 파생 캐시/진단/속도제한은 분리한다.

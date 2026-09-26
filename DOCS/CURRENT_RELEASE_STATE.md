@@ -1,5 +1,38 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HI. PREVIEW app185 Explore 카드 메타 표시 배포 완료 (2026-09-26 KST)
+
+**사용자 요청 / 운영 기준**:
+- Explore 카드에서 제목 양끝의 따옴표를 숨기고, 선두 `[장르]`를 제목 위 작은 글자로 분리.
+- 게시자 프로필 사진과 이름을 기존보다 약간 크게 표시.
+- 앞으로 사용자의 **수정 요청은 검증 PASS 후 안전하면 PREVIEW 배포까지 같은 작업 안에서 완료**. TEST/PRODUCTION 승격은 기존 명시 승인 규칙 유지.
+
+**구현 / 검증**:
+- `src/pages/ExplorePage.tsx`: 카드 표시 단계에서만 선두 `[장르]`를 분리하고 제목의 바깥 따옴표만 제거. 저장된 제목 원본/검색 데이터는 변경하지 않음.
+- `src/components/explore/explore.css`: 장르 11px(모바일 10px), 제목 위 배치. 게시자 이름 13px, avatar 23px.
+- 제품 commits: `b0438b5b9757c165ffca2558eca99e5467a5d4cf`, `88332e283d54903a236d0d9647fe8ec1b7c2766a`.
+- Release System Audit Run `36242181518` SUCCESS. TypeScript/Build/기존 Like 회귀/TEST·PRODUCTION Worker dry-run/shared D1 read-only PASS.
+- 새 서버 read/write, 사용자 데이터, Worker/Functions/Rules 변경 없음.
+
+**PREVIEW 배포**:
+- app version `185`.
+- version commit `caa210f98a6294434b6ed44b7f77b6d29b0756a2`.
+- release trigger / locked SHA `898883db0e49576173f114b1a41ca23b69ee076b`.
+- Firebase PREVIEW Hosting Run `36242755900` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=185`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**실사용 확인**:
+- 모바일/PC에서 장르가 제목 위 작은 줄로 보이는지.
+- 제목 바깥 따옴표가 사라졌는지.
+- 게시자 사진/이름이 약간 커졌는지.
+- 카드 이미지/좋아요/다음곡 적용/공유/더보기는 기존 동작 유지.
+- 이상이 있으면 카드 표시/CSS만 국소 수정하고 좋아요/Worker/backend는 건드리지 않는다.
+
 ## 0HH. PREVIEW 후보 — Explore 카드 장르/제목/게시자 표시 정리 (2026-09-26 KST)
 
 **사용자 요청**:

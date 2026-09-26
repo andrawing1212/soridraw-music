@@ -71,7 +71,7 @@ if (shared113) {
   if (!profile.includes('PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113 = 60_000')) fail('113 bounded revalidation window missing');
   if (!profile.includes('profileRevalidationInflight113')) fail('113 revalidation dedupe missing');
   if (!profile.includes('requestMaterializedFirstView(normalizedRef, cached.revision)')) fail('113 conditional shared revision check missing');
-  if (!warmBranch.includes('revalidateCachedProfile113(normalizedRef, cached, options)')) fail('warm branch does not schedule shared revalidation');
+  if (!warmBranch.includes('revalidateCachedProfile113(normalizedRef, cached, options')) fail('warm branch does not schedule shared revalidation');
   if (!warmBranch.includes('return cached')) fail('warm profile must render local snapshot immediately');
   if (warmBranch.indexOf('revalidateCachedProfile113') > warmBranch.indexOf('return cached')) fail('revalidation must be scheduled before immediate local return');
   if (!profile.includes("materialized.kind === 'not-modified'")) fail('304/no-change path missing');

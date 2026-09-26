@@ -1,5 +1,51 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HE. PREVIEW 후보 — Music Note / Library 검색 X + 페이지 왕복 유지 + 모바일 확장 유지 (2026-09-26 KST)
+
+**사용자 요청**:
+- Music Note와 Library 검색창에 입력값이 있을 때 오른쪽 `X` 삭제 버튼 추가.
+- `X`를 누르지 않고 다른 페이지를 다녀와도 검색어를 유지.
+- 모바일에서 검색 버튼을 누르면 검색창을 기존보다 더 길게 오른쪽으로 확장.
+- 검색어가 남아 있으면 다른 페이지를 다녀와도 확장 상태 유지.
+- `X`를 누르거나, 검색어가 비어 있는 상태에서 다른 곳을 누르면 다시 42px 검색 버튼 상태로 축소.
+
+**구현**:
+- Music Note `searchQuery`를 tab/session 범위 `sessionStorage`에 저장/복원.
+- Library는 workspace 검색어와 playlist 검색어를 각각 독립 session key로 저장/복원.
+- 서버/Firestore/D1 저장 없음. 페이지 이동 유지만 위한 브라우저 UI 상태.
+- 두 검색창 모두 값이 있을 때 오른쪽 `X` 버튼 표시. `X` 클릭 시 현재 검색어를 지우고 input/button focus를 해제해 모바일 compact 상태로 즉시 복귀.
+- 모바일 검색 slot에 `is-search-active` / `has-search-value` 상태를 연결.
+- standalone mobile에서 active 검색 폭을 기존 42px/약 145px focus 기준보다 넓은 `flex 1.6 1 190px`, 최소 약 180px(좁은 기기에서는 viewport에 맞춤), 최대 `min(260px, 68vw)`로 확장.
+- 검색어가 있으면 blur/페이지 왕복 후에도 active class로 텍스트/폭 유지. 검색어가 없고 blur되면 기존 compact 42px 상태로 복귀.
+- Music Note 서버 보조검색 정책(Enter + local miss 때만), Library 필터/색상/playlist 동작은 변경 없음.
+- Music Note 60초 묶음 저장, 좋아요, Explore, Gemini, Worker/Functions/Rules/사용자 데이터 변경 없음.
+
+**변경 commit**:
+- Music Note: `bdd45c9ab0859dbfff7e8e4a69093108b4543fc1`
+- Library: `c81ee5205817840ccadb1ea23eea4117ccfcf2b3`
+- 모바일 search CSS: `d7953b744c548f276e04973d520621a9cbbb6e78`
+- APP209 verifier: `84a735405e69721eee1a452cca30e2ddfa7013fb`
+- Audit gate 등록: `1986a2e3b71ed63ce7dc5ba9fd425502add1a49d`
+- candidate audit trigger/head: `f29cf9d8066a270481bf7767ea450777e7cd7972`
+
+**검증**:
+- Release System Audit Run `36215674344` **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- `APP209_MUSIC_NOTE_SEARCH_CLEAR=PASS`.
+- `APP209_LIBRARY_SEARCH_CLEAR=PASS`.
+- `APP209_SEARCH_SESSION_PERSISTENCE=PASS`.
+- `APP209_MOBILE_ACTIVE_WIDTH_PERSISTENCE=PASS`.
+- `APP209_SEARCH_NO_SERVER_IO=PASS`.
+- 기존 Like 회귀 / TEST·PRODUCTION Worker dry-run / shared D1 read-only / branch guard PASS.
+
+**현재 상태**:
+- PREVIEW 코드 후보 완료, **아직 Firebase PREVIEW Hosting 배포 전**.
+- app version은 배포 전이므로 현재 배포본 app182 유지.
+- 사용자 데이터 변경 없음 / 새 서버 read-write 없음.
+- 다음은 PREVIEW 배포 요청 시 app183으로 version bump → Hosting only 배포 → 모바일 Music Note/Library 실사용 확인.
+- TEST/main 승격 전, PRODUCTION 비변경.
+
+
 ## 0HD. app182 추가 실사용 3곡 — 4연속 성공, 평균 1.75호출 / 52.4초 (2026-09-26 KST)
 
 **추가 사용자 실사용 3곡**:

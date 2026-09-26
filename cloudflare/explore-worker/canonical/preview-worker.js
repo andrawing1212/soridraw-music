@@ -23999,10 +23999,11 @@ async function repairPartialPersonalLikeMetadata182(env, uid) {
 }
 
 // SORIDRAW_PERSONAL_LIKE_FRESH_SETTLEMENT_189_20260924
+// SORIDRAW_TARGETED_PERSONAL_LIKE_SETTLEMENT_190_20260926
 // Read-only, opt-in proof for one affected account. Persistent provenance is
 // deliberately ignored: only two empty-queue observations surrounding a
 // bounded canonical/R2 set comparison, plus an unchanged R2 ETag, can pass.
-async function verifyFreshPersonalLikeSettlement189(env, uid) {
+async function verifyFreshPersonalLikeSettlement189(env, uid, targetedTrackIds190 = []) {
   const bucket = env?.PROFILE_MEDIA;
   if (!bucket || !env?.DB || !uid) return null;
   const key = exploreSharedLikesKey061(uid);
@@ -24012,6 +24013,13 @@ async function verifyFreshPersonalLikeSettlement189(env, uid) {
   try { raw = JSON.parse(await object.text()); } catch { return null; }
   const state = normalizeSharedLikesState161(raw, uid);
   if (!state?.exact || state.likedIds.size > 2000) return null;
+
+  const requested190 = [...new Set(
+    (Array.isArray(targetedTrackIds190) ? targetedTrackIds190 : [])
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  )].slice(0, 200);
+  if (requested190.some(id => id.length > 512)) return null;
 
   const readPending = async () => env.DB.prepare(
     'SELECT ' +
@@ -24024,15 +24032,28 @@ async function verifyFreshPersonalLikeSettlement189(env, uid) {
   const queueEmpty = row => Boolean(row) && Number(row.q069 || 0) === 0 && Number(row.q075 || 0) === 0;
   if (!queueEmpty(await readPending())) return null;
 
-  const canonical = await env.DB.prepare(
-    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id ' +
-    "WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' " +
-    'ORDER BY l.created_at DESC LIMIT 2001'
-  ).bind(uid).all();
-  if (!Array.isArray(canonical?.results) || canonical.results.length > 2000) return null;
-  const ids = canonical.results.map(row => String(row?.track_id || '').trim());
-  if (ids.some(id => !id) || new Set(ids).size !== ids.length || ids.length !== state.likedIds.size ||
-      ids.some(id => !state.likedIds.has(id))) return null;
+  if (requested190.length) {
+    // App184/190: D1 work is proportional only to historical unresolved guards.
+    // readBoundedEffectiveLikeMemberships162 also respects the currently armed
+    // relation mode (legacy / overlay157 / d1only171), so this stays compatible
+    // with the frozen like writer architecture.
+    const canonical190 = await readBoundedEffectiveLikeMemberships162(env, uid, requested190);
+    if (!canonical190?.likedIds || requested190.some(
+      id => canonical190.likedIds.has(id) !== state.likedIds.has(id)
+    )) return null;
+  } else {
+    // Backward compatibility for already-deployed clients that do not send a
+    // targeted set. Keep the old one-shot full proof unchanged.
+    const canonical = await env.DB.prepare(
+      'SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id ' +
+      "WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' " +
+      'ORDER BY l.created_at DESC LIMIT 2001'
+    ).bind(uid).all();
+    if (!Array.isArray(canonical?.results) || canonical.results.length > 2000) return null;
+    const ids = canonical.results.map(row => String(row?.track_id || '').trim());
+    if (ids.some(id => !id) || new Set(ids).size !== ids.length || ids.length !== state.likedIds.size ||
+        ids.some(id => !state.likedIds.has(id))) return null;
+  }
 
   if (!queueEmpty(await readPending())) return null;
   const current = await bucket.head(key);
@@ -24072,7 +24093,24 @@ async function handleMySocialSnapshot042(request, env, cors) {
   }
   let freshCanonicalSettlement = false;
   if (new URL(request.url).searchParams.get('__soridraw_personal_settlement') === '189') {
-    const settledLikeState189 = await verifyFreshPersonalLikeSettlement189(env, authContext.uid);
+    const settlementUrl190 = new URL(request.url);
+    const rawTrackIds190 = settlementUrl190.searchParams.get('trackIds');
+    const rawParts190 = rawTrackIds190 === null
+      ? []
+      : rawTrackIds190.split(',').map(value => value.trim()).filter(Boolean);
+    if (rawTrackIds190 !== null && (
+      rawParts190.length === 0 ||
+      rawParts190.length > 200 ||
+      rawParts190.some(id => id.length > 512)
+    )) {
+      throwApi('INVALID_SETTLEMENT_SCOPE', '좋아요 확인 범위가 올바르지 않습니다.', 400);
+    }
+    const targetedTrackIds190 = [...new Set(rawParts190)];
+    const settledLikeState189 = await verifyFreshPersonalLikeSettlement189(
+      env,
+      authContext.uid,
+      targetedTrackIds190,
+    );
     freshCanonicalSettlement = Boolean(settledLikeState189);
     // Return the exact object whose ETag participated in the proof.
     if (settledLikeState189) likeState = settledLikeState189;

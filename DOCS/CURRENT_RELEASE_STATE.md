@@ -1,5 +1,40 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HF. PREVIEW app183 검색 UX 배포 완료 (2026-09-26 KST)
+
+**사용자 승인**:
+- Music Note / Library 검색 UX 후보를 PREVIEW까지 계속 진행해 배포 완료.
+
+**배포 내용**:
+- Music Note와 Library 검색창에 값이 있을 때 오른쪽 `X` 삭제 버튼 표시.
+- `X`를 누르지 않고 페이지를 왕복하면 검색어를 sessionStorage에서 복원.
+- Library workspace 검색과 playlist 검색은 서로 독립 유지.
+- 모바일 검색은 focus 또는 검색어가 남아 있을 때 기존보다 길게 확장하고, 페이지 왕복 후에도 검색어가 있으면 확장 상태 유지.
+- `X` 클릭 시 검색어 삭제 + focus 해제로 compact 검색 버튼 상태로 즉시 복귀.
+- 검색어가 비어 있는 상태에서 blur되면 기존 42px compact 상태 복귀.
+- 서버/Firestore/D1 read-write 추가 없음. Music Note 60초 저장, 좋아요, Explore, Gemini, Worker/Functions/Rules 비변경.
+
+**검증 / 배포**:
+- 구현 감사 Run `36215674344` SUCCESS.
+- app183 version bump commit: `f099b1be97e5600459bdf1b5753f6e9d021e41b6`.
+- PREVIEW 배포 locked SHA: `4c9594b037ac9429ef155e26d534bd379a54b7e7`.
+- Firebase PREVIEW Hosting Run `36231414682` SUCCESS.
+- TypeScript PASS / Build PASS.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=183`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+**현재 상태 / 다음 확인**:
+- PREVIEW app183 배포 완료.
+- 사용자 실사용으로 모바일 Music Note / Library 각각 (1) 검색창 확장 폭, (2) 검색어 입력 후 다른 페이지 왕복 유지, (3) X 즉시 삭제/축소, (4) 빈 검색 blur 축소, (5) Library workspace/playlist 검색 독립 유지만 확인.
+- 새 구체 오류가 없으면 정상 기능은 추가 수정하지 않는다.
+- TEST/main 승격 전. PRODUCTION 비변경.
+
 ## 0HE. PREVIEW 후보 — Music Note / Library 검색 X + 페이지 왕복 유지 + 모바일 확장 유지 (2026-09-26 KST)
 
 **사용자 요청**:

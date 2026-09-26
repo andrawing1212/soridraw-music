@@ -23,8 +23,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm ci --no-audit --no-fund
-        working-directory: cloudflare/explore-worker
       - name: Inspect PREVIEW canonical and public projections read-only
         shell: bash
         run: |

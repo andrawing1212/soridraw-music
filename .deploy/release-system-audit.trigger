@@ -1,7 +1,9 @@
-app184_targeted_personal_like_settlement_audit=2026-09-26T20:01:00+09:00
-source_head=15272de6050ff2e7b87a68d02ed1b3070df77234
+app184_targeted_personal_like_settlement_audit_retry=2026-09-26T20:04:00+09:00
+source_head=46e08026698a84b0db10d12bf4af78d6d7131c42
 deploy=false
 scope=explore_personal_settlement_unresolved_track_only
+previous_audit=36237370127
+previous_failure=legacy_verifier_shape_only
 app_version=184
 old_client_full_settlement_compat=true
 new_client_targeted_settlement=true

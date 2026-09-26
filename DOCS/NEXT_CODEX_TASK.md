@@ -1,3 +1,18 @@
+## 최신 2026-09-26 — Music Note / Library 검색 UX 후보 감사 완료, PREVIEW 배포 전
+
+- `CURRENT_RELEASE_STATE.md 0HE` 최우선.
+- Music Note + Library 검색창에 값이 있을 때 오른쪽 X 삭제 버튼 추가.
+- 검색어는 sessionStorage 기반 UI 상태로만 보존하여 다른 페이지 왕복 후 복원. 서버/Firestore/D1 read-write 추가 없음.
+- Library workspace/playlist 검색어는 각각 독립 보존.
+- 모바일 검색은 focus 또는 검색어 존재 시 `is-search-active`로 기존보다 길게 확장하고, 검색어가 남아 있으면 page 왕복 후에도 길어진 상태 유지.
+- X 클릭은 검색어 삭제 + focus 해제로 즉시 compact 상태 복귀. 빈 검색창은 다른 곳 클릭(blur) 시 기존 42px 상태 복귀.
+- Release System Audit Run `36215674344` SUCCESS. TypeScript/Build/APP209/기존 Like 회귀/Worker dry-run/shared D1 read-only PASS.
+- 현재 preview 후보 HEAD는 문서 갱신 commit까지 포함해 최신 확인 필요. 제품 기준 candidate audit head는 `f29cf9d8066a270481bf7767ea450777e7cd7972`.
+- **아직 Hosting 배포 전**. app182 배포본 유지. 사용자 명시 PREVIEW 배포 요청 시 app183 bump + Hosting only 배포.
+- 다음 실사용 확인: 모바일 Music Note/Library 각각 (1) 검색 버튼 확장 폭, (2) 입력 후 타 페이지 왕복 유지, (3) X 즉시 삭제/축소, (4) 빈 검색 blur 축소, (5) Library workspace/playlist 검색 독립 유지.
+- Music Note 60초 저장/좋아요/Gemini/Explore/Worker/Functions는 이번 범위에서 수정 금지.
+- TEST/main 승격은 명시적 테스트배포 요청 전 금지. PRODUCTION은 별도 명확 승인 필요.
+
 ## 최신 2026-09-26 — app182 PREVIEW 배포 완료, Gemini 호출 효율 실사용 1곡 검증
 
 - `CURRENT_RELEASE_STATE.md 0HB` 최우선.

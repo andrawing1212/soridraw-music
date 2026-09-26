@@ -31,6 +31,7 @@ const createHarness = ({ markers = {}, unresolved = {}, outbox = {}, responses =
   const responseQueue = [...responses];
   const context = {
     EXPLORE_API_BASE: 'https://preview.invalid',
+    URLSearchParams,
     buildAuthHeaders: async () => ({}),
     recordCloudflareResponse: () => {},
     fetch: async (url) => {

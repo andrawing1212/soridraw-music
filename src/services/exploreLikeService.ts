@@ -615,11 +615,21 @@ const requestPersonalLikeBaseline127 = async (
   user: User,
   repairPartial182 = false,
   verifySettlement189 = false,
+  settlementTrackIds190: string[] = [],
 ): Promise<ExploreLikeBaselineSnapshot161> => {
   const headers = await buildAuthHeaders(user);
-  const recoveryQuery = repairPartial182
-    ? '?__soridraw_personal_repair=182'
-    : verifySettlement189 ? '?__soridraw_personal_settlement=189' : '';
+  const targetedSettlementIds190 = verifySettlement189
+    ? [...new Set(settlementTrackIds190.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 200)
+    : [];
+  const recoveryParams = new URLSearchParams();
+  if (repairPartial182) recoveryParams.set('__soridraw_personal_repair', '182');
+  else if (verifySettlement189) {
+    recoveryParams.set('__soridraw_personal_settlement', '189');
+    if (targetedSettlementIds190.length) {
+      recoveryParams.set('trackIds', targetedSettlementIds190.join(','));
+    }
+  }
+  const recoveryQuery = recoveryParams.size ? `?${recoveryParams.toString()}` : '';
   const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot' + recoveryQuery, {
     method: 'GET',
     headers,
@@ -629,7 +639,11 @@ const requestPersonalLikeBaseline127 = async (
   // A single R45 counter cannot identify which recovery path ran otherwise.
   const snapshotReason198 = repairPartial182
     ? 'PERSONAL REPAIR 182'
-    : verifySettlement189 ? 'PERSONAL SETTLEMENT 189' : 'PERSONAL BASELINE';
+    : verifySettlement189
+      ? (targetedSettlementIds190.length
+        ? `PERSONAL SETTLEMENT 189 TARGETED ${targetedSettlementIds190.length}`
+        : 'PERSONAL SETTLEMENT 189')
+      : 'PERSONAL BASELINE';
   recordCloudflareResponse(response, '/v1/me/social-snapshot', {
     outcome: `${response.ok ? `FULL ${response.status}` : `HTTP ${response.status}`} · ${snapshotReason198}`,
   });
@@ -676,7 +690,15 @@ const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 =
   const partial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1';
   const attempted182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid)) === '1';
   const baseline127 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
-  const hasUnresolvedGuards189 = Object.keys(readSnapshotPending127(uid)).length > 0;
+  const unresolvedGuardIds190 = Object.keys(readSnapshotPending127(uid));
+  const hasUnresolvedGuards189 = unresolvedGuardIds190.length > 0;
+  // App184 cost fix: the settlement proof is about the handful of historical
+  // accepted-but-unsettled tracks, not the user's entire liked catalog. Keep a
+  // bounded targeted set; pathological >200 legacy guards retain the old
+  // one-shot full proof rather than weakening correctness.
+  const settlementTrackIds190 = unresolvedGuardIds190.length > 0 && unresolvedGuardIds190.length <= 200
+    ? unresolvedGuardIds190
+    : [];
   // One bounded fresh settlement proof per *observed personal R2 revision*.
   // The old global '1' marker permanently blocked a later, settled revision
   // after an earlier queue/race failure. Healthy accounts never enter this path.
@@ -702,7 +724,12 @@ const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 =
         // ordinary navigation into an unbounded canonical-read retry loop.
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid), settlementMarker189);
       }
-      const snapshot161 = await requestPersonalLikeBaseline127(user, repairPartial182, verifySettlement189);
+      const snapshot161 = await requestPersonalLikeBaseline127(
+        user,
+        repairPartial182,
+        verifySettlement189,
+        settlementTrackIds190,
+      );
       const likedIds = snapshot161.likedTrackIds;
       if (readSeenLikeSignal127(uid) !== versionAtStart ||
           readRepairTarget127(uid) !== repairAtStart) {
@@ -759,7 +786,13 @@ const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 =
       // Preserve every current outbox intention; ordinary exact R2 snapshots do
       // not have this authority and keep the existing guard behavior.
       if (snapshot161.freshCanonicalSettlement) {
-        for (const id of Object.keys(unresolved)) {
+        const releaseIds190 = settlementTrackIds190.length
+          ? settlementTrackIds190
+          : Object.keys(unresolved);
+        // A targeted proof may release only the exact guards that participated
+        // in that proof. A new guard created while the request was in flight
+        // must stay protected until its own revision is verified.
+        for (const id of releaseIds190) {
           if (!outbox[id]) delete unresolved[id];
         }
         writeSnapshotPending127(uid, unresolved);

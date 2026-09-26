@@ -142,7 +142,7 @@ for (const required of [
   'revalidateCachedProfile113',
   'requestMaterializedFirstView(normalizedRef, cached.revision)',
   "materialized.kind === 'not-modified'",
-  'revalidateCachedProfile113(normalizedRef, cached, options)',
+  'revalidateCachedProfile113(normalizedRef, cached, options',
 ]) {
   if (!client.includes(required)) fail(`client missing ${required}`);
 }

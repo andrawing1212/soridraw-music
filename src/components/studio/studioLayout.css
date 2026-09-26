@@ -15538,3 +15538,65 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     margin-right: 0 !important;
   }
 }
+
+
+/* 1027 — Music Note / Library persistent mobile search.
+ * Search text is UI-only session state: no server read/write is added.
+ * On standalone mobile pages the compact 42px search button grows farther to
+ * the right while focused or while a query exists, and stays expanded after
+ * page navigation until the query is explicitly cleared. */
+.soridraw-responsive-search-clear {
+  color: var(--text-secondary) !important;
+}
+
+@media (max-width: 660px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot {
+    transition: width 140ms ease, flex-basis 140ms ease, max-width 140ms ease !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    flex: 1.6 1 190px !important;
+    width: auto !important;
+    min-width: min(180px, calc(100vw - 150px)) !important;
+    max-width: min(260px, 68vw) !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-icon {
+    left: 16px !important;
+    right: auto !important;
+    transform: none !important;
+    justify-content: center !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-input {
+    padding-left: 40px !important;
+    padding-right: 9px !important;
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: currentColor !important;
+    caret-color: currentColor !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active.has-search-value
+  .soridraw-responsive-search-input {
+    padding-right: 40px !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-clear {
+    display: flex !important;
+  }
+}

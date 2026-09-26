@@ -25,6 +25,47 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
+      - name: Authenticate Firestore read-only
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Read-only Firestore inspect exact Music Note source
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          admin.initializeApp({projectId:'soridraw-app-866a5'});
+          const db=admin.firestore();
+          const sourceId='ivofUOnezAJvhmN3uXo4';
+          (async()=>{
+            const snap=await db.collection('favorites').doc(sourceId).get();
+            if(!snap.exists) {
+              console.log(JSON.stringify({exists:false,source:'favorites/direct'}));
+              return;
+            }
+            const x=snap.data()||{};
+            const a=x.appliedKeywords&&typeof x.appliedKeywords==='object'?x.appliedKeywords:{};
+            const pick=(v)=>Array.isArray(v)?v.map(String):v==null?null:String(v);
+            console.log(JSON.stringify({
+              exists:true,
+              source:'favorites/direct',
+              title:String(x.title||''),
+              genre:pick(x.genre),
+              appliedGenre:pick(a.genre),
+              appliedSubGenre:pick(a.subGenre),
+              firestoreWrites:0,
+              firestoreDeletes:0
+            }));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
       - name: Read-only D1 inspect target track
         shell: bash
         run: |

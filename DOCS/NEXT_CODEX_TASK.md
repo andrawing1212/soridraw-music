@@ -1,3 +1,14 @@
+## 최신 2026-09-26 — app188 PREVIEW Explore 게시자/액션 간격 배포 완료, 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0HL` 최우선.
+- Explore 카드 게시자 avatar 23px→22px.
+- 게시자 줄과 액션 줄 사이 공간은 액션 상단 padding 6px→4px로 2px만 축소.
+- 제목/장르/게시자 이름 크기와 좋아요/다음곡 적용/공유/더보기 기능은 그대로.
+- 제품 commit `1feef6b342439455a28ca35f9b676d1060c1351d`; Audit Run `36245154425` SUCCESS.
+- PREVIEW app188 Hosting Run `36245325996` SUCCESS, locked SHA `6f96deee253d3ed28dd698b528758792393184ed`, exact build/version 188 PASS, TEST/PRODUCTION unchanged.
+- Worker/Functions/Rules/사용자 데이터/새 서버 read-write 없음.
+- 다음은 모바일/PC에서 간격과 avatar 크기만 시각 확인. 이상 시 Explore CSS만 국소 수정.
+
 ## 최신 2026-09-26 — Music Note / Library 검색 UX 후보 감사 완료, PREVIEW 배포 전
 
 - `CURRENT_RELEASE_STATE.md 0HE` 최우선.

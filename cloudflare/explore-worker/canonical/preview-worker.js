@@ -20867,6 +20867,71 @@ async function patchExploreProfileR2Publication043Core046(...args) {
   }
 }
 
+// SORIDRAW_PUBLICATION_SHARED_PROFILE_PARITY_091_20260927
+async function patchExploreSharedProfilePublication091(env, uid, change) {
+  const normalizedUid = String(uid || '').trim();
+  const trackId = String(change?.trackId || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalizedUid || !trackId || !bucket) return { ok: false, skipped: true };
+
+  const key = exploreSharedProfileR2Key060(normalizedUid);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const object = await bucket.get(key);
+    if (!object) return { ok: false, repairNeeded: true, reason: 'shared_profile_missing' };
+
+    let bundle;
+    try { bundle = JSON.parse(await object.text()); } catch { bundle = null; }
+    if (!validExploreProfileR2Bundle020(bundle)) {
+      return { ok: false, repairNeeded: true, reason: 'shared_profile_invalid' };
+    }
+
+    const previousData = bundle.body.data;
+    const previousItems = Array.isArray(previousData.items) ? previousData.items : [];
+    let items = previousItems.filter((item) => getProfileTrackId019(item) !== trackId);
+
+    if (!change?.remove) {
+      const previous = previousItems.find((item) => getProfileTrackId019(item) === trackId) || {};
+      const nextItem = change?.item
+        ? {
+            ...previous,
+            ...change.item,
+            stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}), likeCount: change.item.likeCount },
+            likeCount: change.item.likeCount,
+          }
+        : { ...previous, ...(change?.patch || {}) };
+      items.push(nextItem);
+    }
+
+    items = sortProfileTracks019(items).slice(0, PUBLIC_PROFILE_FIRST_VIEW_LIMIT);
+    const previousCount = Math.max(0, Number(previousData.profile?.trackCount ?? previousData.profile?.track_count ?? 0));
+    const nextCount = Math.max(0, previousCount + Number(change?.trackCountDelta || 0));
+    const nextRevision = Math.max(1, Number(bundle.revision || previousData.revision || 0) + 1);
+    const now = Date.now();
+    const nextData = {
+      ...previousData,
+      profile: { ...previousData.profile, trackCount: nextCount },
+      items,
+      revision: nextRevision,
+      updatedAt: now,
+    };
+    const nextBundle = {
+      ...bundle,
+      revision: nextRevision,
+      updatedAt: now,
+      body: { ...bundle.body, data: nextData },
+    };
+
+    const saved = await bucket.put(key, JSON.stringify(nextBundle), {
+      onlyIf: { etagMatches: object.etag },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { soridrawSharedProfile: '113', mirroredAt: String(now), publicationParity: '091' },
+    });
+    if (saved) return { ok: true, revision: nextRevision };
+  }
+
+  return { ok: false, repairNeeded: true, reason: 'shared_profile_conflict' };
+}
+
 async function patchExploreProfileR2Publication043(...args) {
   const change = args[2];
   if (change?.item) {
@@ -20880,6 +20945,14 @@ async function patchExploreProfileR2Publication043(...args) {
   }
   const [env, uid] = args;
   const result = await patchExploreProfileR2Publication043Core046(...args);
+  try {
+    const sharedParity091 = await patchExploreSharedProfilePublication091(env, uid, args[2]);
+    if (sharedParity091?.ok === false && !sharedParity091?.skipped) {
+      console.warn('[SORIDRAW 091] shared publication profile parity deferred:', String(sharedParity091?.reason || 'unknown'));
+    }
+  } catch (error) {
+    console.warn('[SORIDRAW 091] shared publication profile parity failed:', String(error?.message || error || 'unknown'));
+  }
   if (result?.ok === false || result?.repairNeeded) {
     try {
       const bucket = exploreCacheBucket031(env);

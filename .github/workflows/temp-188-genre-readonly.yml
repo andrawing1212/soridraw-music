@@ -1,0 +1,84 @@
+name: SORIDRAW 188 Genre Readonly Audit
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-188-genre-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read-only D1 inspect target track
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              t.id,
+              t.title,
+              t.source_type,
+              t.source_id,
+              t.primary_genre,
+              t.style,
+              t.share_schema_version,
+              json_extract(t.share_payload_json,'$.selectedKeywords.genres[0]') AS share_genre_0,
+              json_extract(t.share_payload_json,'$.selectedKeywords.genres') AS share_genres,
+              t.published_at,
+              t.updated_at,
+              json_extract(d.row_json,'$.primary_genre') AS derived_primary_genre,
+              json_extract(d.row_json,'$.primaryGenre') AS derived_primaryGenre,
+              json_extract(d.row_json,'$.shareBundle.selectedKeywords.genres[0]') AS derived_share_genre_0,
+              json_extract(d.row_json,'$.title') AS derived_title
+            FROM tracks t
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.title='퇴근길의 상상'
+               OR t.title LIKE '%퇴근길의 상상%'
+            ORDER BY t.updated_at DESC
+            LIMIT 10;
+          " --json
+      - name: Read-only fresh PREVIEW feed/search inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in             "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__genre188=${GITHUB_RUN_ID}"             "${PREVIEW_BASE}/v1/feed?sort=popular&limit=40&__genre188=${GITHUB_RUN_ID}"             "${PREVIEW_BASE}/v1/search?q=%ED%87%B4%EA%B7%BC%EA%B8%B8%EC%9D%98%20%EC%83%81%EC%83%81&__genre188=${GITHUB_RUN_ID}"
+          do
+            echo "URL=$url"
+            curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "$url" > "$RUNNER_TEMP/genre188.json"
+            node <<'NODE'
+          const p=require(process.env.RUNNER_TEMP+'/genre188.json');
+          for(const row of p?.data?.items||[]) {
+            const title=String(row?.title||'');
+            if(title.includes('퇴근길의 상상')) {
+              console.log(JSON.stringify({
+                id:row.id,
+                title,
+                primaryGenre:row.primaryGenre ?? null,
+                primary_genre:row.primary_genre ?? null,
+                shareBundleGenres:row?.shareBundle?.selectedKeywords?.genres ?? null,
+                style:row.style ?? null,
+                sourceType:row.sourceType ?? row.source_type ?? null
+              }));
+            }
+          }
+          NODE
+          done

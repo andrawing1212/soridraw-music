@@ -1,0 +1,66 @@
+name: SORIDRAW 188 Genre Cache Debug
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-188-genre-cache-debug.yml'
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Inspect D1 cursor and exact change
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/canonical/wrangler.preview.jsonc"
+          T="music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            SELECT id,seq,seeded FROM explore_derived_state WHERE id=1;
+            SELECT scope,kind,id,seq FROM explore_derived_changes WHERE id='$T' ORDER BY seq;
+            SELECT id,json_extract(row_json,'$.primary_genre') AS derived_genre FROM explore_derived_tracks WHERE id='$T';
+          " --json
+      - name: Inspect local and shared R2 exact card
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          T="music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4"
+          for spec in             "soridraw-explore-preview-cache/internal/explore/feed-v1/latest-40.json:local-latest"             "soridraw-profile-media/internal/explore/shared-feed-v112/latest-40.json:shared-latest"             "soridraw-explore-preview-cache/internal/explore/feed-v1/popular-40.json:local-popular"             "soridraw-profile-media/internal/explore/shared-feed-v112/popular-40.json:shared-popular"
+          do
+            key="${spec%%:*}"; name="${spec##*:}"; file="$RUNNER_TEMP/$name.json"
+            if node "$W" r2 object get "$key" --file "$file" --remote >/dev/null 2>&1; then
+              NAME="$name" TARGET="$T" FILE="$file" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.FILE,'utf8'));
+          const x=(p?.payload?.data?.items||[]).find(v=>String(v?.id||v?.trackId||'')===process.env.TARGET);
+          console.log(JSON.stringify({
+            name:process.env.NAME,
+            cursor:p?.derived032?.cursor??null,
+            updatedAt:p?.updatedAt??null,
+            found:Boolean(x),
+            title:x?.title??null,
+            primaryGenre:x?.primaryGenre??null,
+            primary_genre:x?.primary_genre??null
+          }));
+          NODE
+            else
+              echo "{\"name\":\"$name\",\"missing\":true}"
+            fi
+          done

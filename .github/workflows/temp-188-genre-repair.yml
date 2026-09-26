@@ -105,6 +105,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # derived-head edge cache is intentionally 10s; wait once so the new
+          # single-row change sequence is visible before rebuilding the R2 snapshots.
+          sleep 12
           stamp="${GITHUB_RUN_ID}"
           curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__genre_repair=$stamp" > "$RUNNER_TEMP/latest.json"
           curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=popular&limit=40&__genre_repair=$stamp" > "$RUNNER_TEMP/popular.json"

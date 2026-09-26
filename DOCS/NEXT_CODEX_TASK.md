@@ -1,3 +1,19 @@
+## 최신 2026-09-26 — 퇴근길의 상상 장르 누락 PREVIEW 복구 완료, 실사용 확인 대기
+
+- `CURRENT_RELEASE_STATE.md 0HM` 최우선.
+- 원인: Firestore Music Note 원본은 `genre=Jazz Ballad` 정상인데, 해당 legacy Explore canonical row만 `primary_genre=NULL`/share schema 0이었고 shared R2에도 오래된 null card가 남아 있었음.
+- Worker public card serialization에 `primaryGenre` 누락도 수정.
+- Worker product commit `511353d0fb4cfeda17174572654e22ce0580925d`, source lock `665b940f54cf153d8486d40609ba76b5ceeca9f3`.
+- Audit Run `36246428324` SUCCESS.
+- PREVIEW Worker Release Run `36246541900` SUCCESS, active version `c77017af-5cac-4274-b424-616885a24ea3`, TEST/PRODUCTION Workers unchanged.
+- 대상 exact track 1행만 `primary_genre=Jazz Ballad`로 복구. 전체 백필/대량변환 없음.
+- shared latest/popular/profile/track-card도 같은 exact card만 bounded repair.
+- final shared repair Run `36249067564` SUCCESS: canonical/derived PASS, latest/popular/profile/card R2 patch PASS, 실제 PREVIEW latest/popular R2에서 `Jazz Ballad` PASS.
+- Firebase Hosting은 app188 그대로. 클라이언트 코드는 이미 primaryGenre 표시 지원하므로 불필요한 Hosting 재배포 없음.
+- 다음은 사용자 화면에서 `퇴근길의 상상` 위에 `[Jazz Ballad]`가 보이는지만 확인.
+- 정상 Explore 좋아요/app184 settlement/다른 곡 데이터는 수정 금지.
+- TEST/main 및 PRODUCTION 승격은 별도 명시 승인 필요.
+
 ## 최신 2026-09-26 — app188 PREVIEW Explore 게시자/액션 간격 배포 완료, 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0HL` 최우선.

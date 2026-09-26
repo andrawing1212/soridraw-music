@@ -1,0 +1,94 @@
+name: SORIDRAW 188 Publication Parity Readonly
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-188-publication-parity-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TARGET_UID: rcZ2GZrBndOZzT8C635eiNBjYIJ2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read canonical D1 publication state
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/canonical/wrangler.preview.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "
+            SELECT id,source_id,title,is_public,status,profile_pinned,published_at,updated_at
+            FROM tracks
+            WHERE owner_uid='${TARGET_UID}' AND source_type='music_note'
+            ORDER BY published_at DESC,id DESC;
+          " --json > "$RUNNER_TEMP/canonical.json"
+          node <<'NODE'
+          const rows=require(process.env.RUNNER_TEMP+'/canonical.json').flatMap(x=>x.results||[]);
+          const pub=rows.filter(x=>Number(x.is_public)===1&&String(x.status)==='published');
+          const priv=rows.filter(x=>!(Number(x.is_public)===1&&String(x.status)==='published'));
+          console.log('CANONICAL_TOTAL='+rows.length);
+          console.log('CANONICAL_PUBLIC='+pub.length);
+          console.log('CANONICAL_PRIVATE='+priv.length);
+          for(const x of rows) console.log(JSON.stringify({id:x.id,title:x.title,canonical:Number(x.is_public)===1&&String(x.status)==='published'?'public':'private',pinned:Number(x.profile_pinned)===1}));
+          NODE
+      - name: Read shared Feed/Profile/publication R2 only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          B="soridraw-profile-media"
+          for spec in             "feed-latest:internal/explore/shared-feed-v112/latest-40.json"             "feed-popular:internal/explore/shared-feed-v112/popular-40.json"             "profile:internal/explore/shared-profile-v113/${TARGET_UID}.json"             "publication:derived/music-note-publications/v1/${TARGET_UID}.json"
+          do
+            name="${spec%%:*}"; key="${spec#*:}"
+            if node "$W" r2 object get "$B/$key" --file "$RUNNER_TEMP/$name.json" --remote >/dev/null 2>&1; then
+              echo "R2_OBJECT_${name^^}=FOUND"
+            else
+              echo "R2_OBJECT_${name^^}=MISSING"
+              echo '{}' > "$RUNNER_TEMP/$name.json"
+            fi
+          done
+      - name: Compare canonical against shared projections
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const canonical=require(process.env.RUNNER_TEMP+'/canonical.json').flatMap(x=>x.results||[]);
+          const own=canonical.map(x=>({id:String(x.id),sourceId:String(x.source_id||''),title:String(x.title||''),pub:Number(x.is_public)===1&&String(x.status)==='published'}));
+          const read=n=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+n+'.json','utf8'));
+          const latest=read('feed-latest')?.payload?.data?.items||[];
+          const popular=read('feed-popular')?.payload?.data?.items||[];
+          const profileBundle=read('profile');
+          const profile=profileBundle?.body?.data?.items||[];
+          const states=read('publication')?.states||{};
+          const ids=a=>new Set(a.map(x=>String(x?.id||x?.trackId||'')));
+          const latestIds=ids(latest), popularIds=ids(popular), profileIds=ids(profile);
+          let mismatch=0;
+          for(const x of own){
+            const feedLatest=latestIds.has(x.id), feedPopular=popularIds.has(x.id), prof=profileIds.has(x.id);
+            const st=states[x.sourceId]?.status||'missing';
+            const stalePrivate=x.pub===false&&(feedLatest||feedPopular||prof||st==='public');
+            const missingPublic=x.pub===true&&(st!=='public'||!prof);
+            if(stalePrivate||missingPublic) mismatch++;
+            console.log(JSON.stringify({title:x.title,canonical:x.pub?'public':'private',publicationR2:st,sharedLatest:feedLatest,sharedPopular:feedPopular,sharedProfile:prof,stalePrivate,missingPublic}));
+          }
+          console.log('PARITY_MISMATCH_COUNT='+mismatch);
+          console.log('D1_WRITE=0');
+          console.log('R2_WRITE=0');
+          NODE

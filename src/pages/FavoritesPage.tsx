@@ -502,6 +502,27 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const MUSIC_NOTE_SEARCH_SESSION_KEY = 'soridraw:music-note:search:v1';
+
+const readMusicNoteSearchSession = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.sessionStorage.getItem(MUSIC_NOTE_SEARCH_SESSION_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeMusicNoteSearchSession = (value: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value) window.sessionStorage.setItem(MUSIC_NOTE_SEARCH_SESSION_KEY, value);
+    else window.sessionStorage.removeItem(MUSIC_NOTE_SEARCH_SESSION_KEY);
+  } catch {
+    // Search persistence is best-effort UI state only.
+  }
+};
+
 const mergeMusicNoteSearchSource = (base: any[], extra: any[]) => {
   if (!extra || extra.length === 0) return base || [];
   const map = new Map<string, any>();
@@ -1143,8 +1164,9 @@ export default function FavoritesPage({
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(readMusicNoteSearchSession);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const musicNoteSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
   const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
@@ -5956,6 +5978,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   };
 
   useEffect(() => {
+    writeMusicNoteSearchSession(searchQuery);
     if (!searchQuery.trim()) {
       setServerSearchFavorites([]);
       setIsServerSearchLoading(false);
@@ -6619,12 +6642,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+          <div className={cn(
+            "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",
+            (isSearchFocused || Boolean(searchQuery)) && "is-search-active",
+            Boolean(searchQuery) && "has-search-value",
+          )}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
             <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF7A72] transition-colors" />
             </div>
             <input
+              ref={musicNoteSearchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -6636,8 +6664,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               }}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all"
+              className={cn(
+                "soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all",
+                searchQuery ? "pr-11" : "pr-4",
+              )}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#FF9A94]"
+                aria-label="검색어 지우기"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  setSearchQuery('');
+                  setIsSearchFocused(false);
+                  musicNoteSearchInputRef.current?.blur();
+                  event.currentTarget.blur();
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
             {!searchQuery && !isSearchFocused && (
               <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                 <div className="text-sm text-white/40 whitespace-nowrap">제목이나 키워드로 검색해보세요...</div>

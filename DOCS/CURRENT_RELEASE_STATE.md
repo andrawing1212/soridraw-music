@@ -1,5 +1,47 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HK. PREVIEW app187 Explore 장르 메타데이터 fallback 배포 완료 (2026-09-26 KST)
+
+**사용자 실측 / 원인**:
+- Music Note에서 `[Jazz Ballad]`로 정상 표시되는 `퇴근길의 상상`이 Explore 카드에서는 장르 없이 제목만 표시되는 사례 확인.
+- app185 카드 정리 때 Explore 표시 로직이 **제목 문자열 선두에 실제 `[장르]`가 들어 있는 경우만** 장르를 분리해 보여주도록 되어 있었음.
+- Music Note의 장르는 제목 문자열이 아니라 `appliedKeywords`/공개 share bundle의 `selectedKeywords.genres` 및 canonical `primary_genre` 메타데이터에도 존재하므로, 제목 자체에 `[장르]`가 없는 공개곡은 장르 정보가 있어도 카드에서 빠질 수 있었음.
+- 따라서 데이터 손실이 아니라 **Explore 표시 기준이 제목 문자열 하나만 보던 UI bug**로 판단.
+
+**수정**:
+- `src/pages/ExplorePage.tsx`만 수정.
+- 카드 장르 우선순위:
+  1. 제목 자체의 선두 `[장르]` (legacy 표시 호환)
+  2. 공개곡 `primaryGenre / primary_genre`
+  3. 기존 공개 share bundle `selectedKeywords.genres[0]`
+- fallback 장르는 대괄호를 한 번만 정규화해 `[Jazz Ballad]` 형식으로 표시.
+- 제목 원본/공개 데이터/검색 데이터는 변경하지 않음.
+- 서버 요청 추가 없음. Firestore/D1/R2 read-write 추가 없음.
+- 좋아요/다음곡 적용/공유/더보기/프로필/카드 CSS는 비변경.
+
+**commit / 검증**:
+- 제품 commit: `1a0bee00add3f09db4efd7e101eae5edfcb8f930`.
+- Audit trigger head: `8ca24a68728870bc6129e9513d5c142947589554`.
+- Release System Audit Run `36244112749` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 Like 회귀 PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS.
+
+**PREVIEW 배포**:
+- app version `187`.
+- version commit `a4f9ea1df04a301fcb19096007fb11cb4c6f19d1`.
+- locked release SHA `b3021579b18ab6da637d8ed9e6a8d89b9ff604fc`.
+- Firebase PREVIEW Hosting Run `36244241324` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=187`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**실사용 / legacy 주의**:
+- app187은 **이미 공개 데이터에 장르 메타데이터가 있는 곡**을 추가 서버 읽기 없이 바로 표시한다.
+- 만약 app187에서도 특정 아주 오래된 공개곡만 장르가 계속 비어 있다면 그 곡의 legacy public row 자체에 genre/share metadata가 없는 경우일 수 있음. 그 경우 전체 백필 금지, 해당 곡들만 bounded 확인 후 사용자 승인 범위에서 선택적 repair 판단.
+- 정상 좋아요/Worker/app184 settlement 비용 수정은 건드리지 않는다.
+
 ## 0HJ. PREVIEW app186 Explore 제목 확대 + 게시자 간격 축소 배포 완료 (2026-09-26 KST)
 
 **사용자 요청**:

@@ -1,5 +1,76 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0HN. PREVIEW app189 공개/비공개 기준 단일화 + 공개프로필 parity 복구 완료 (2026-09-27 KST)
+
+**사용자 요청 / 고정 기준**:
+- 다른 정상 기능은 유지하고 공개/비공개만 수정.
+- Music Note에서 변경하든 Explore 카드 `... > 공개 설정`에서 변경하든 **완전히 같은 공개상태 기능**으로 동작해야 함.
+- 공개상태의 유일한 canonical 기준은 D1 `tracks` 한 행:
+  - `is_public=1 AND status='published'` → 공개.
+  - 그 외 → 비공개.
+- Explore Feed / 공개프로필 / 기기 캐시는 canonical을 빠르게 보여주는 파생 상태일 뿐 별도 기준이 아님.
+
+**수정 전 bounded read-only 감사**:
+- 현재 계정 Music Note publication canonical: 총 30행, 공개 1 / 비공개 29.
+- publication-state R2 및 shared latest/popular Feed는 canonical과 일치.
+- shared 공개프로필 R2만 오래된 상태가 남아 총 20건 불일치:
+  - 비공개 canonical 곡 19개가 profile projection에 잔존.
+  - 현재 공개 canonical 곡 1개가 profile projection에서 누락.
+- 최초 read-only 진단 Run `36253908216` SUCCESS, D1/R2 write 0.
+
+**app189 클라이언트 수정**:
+- `src/services/explorePublicationService.ts`만 공개상태 commit 방식 변경.
+- 제품 commit `47cbc3b1ec16ccbfd71b06310c780f634104c358`.
+- `publishMusicNoteToExplore`, `setExploreTrackVisibility`, `setExploreTrackPublicationOptions`는 기존 공통 service를 그대로 사용하되, 사용자 동작 후 durable outbox를 즉시 `flushPendingExplorePublicationsForPageExit()`로 서버에 확정하고 confirmed state를 반환.
+- 따라서 Music Note 공개/비공개/설정과 Explore `... > 공개 설정`이 동일한 service + 동일한 canonical mutation 흐름을 사용.
+- page-exit/startup outbox는 실패 복구용으로 그대로 유지. 변경 없음 상태에서 추가 서버 작업 없음.
+- 좋아요, Music Note 60초 묶음 저장, 공유노트, 다음곡 적용, UI/CSS는 비변경.
+
+**Worker 공개프로필 수렴 수정**:
+- publication mutation으로 local profile R2가 성공적으로 한 곡 갱신된 직후 같은 UID의 shared profile R2만 targeted mirror.
+- 전체 공개프로필/전체 Feed 재생성 또는 D1 owner-wide scan 추가 없음.
+- canonical Worker product commit `4c0168f090ae38dee62bc03cade963f43fa8ffb1`.
+- replay/source patch `cloudflare/explore-worker/patches/071-publication-canonical-like-parity.mjs`도 동일 동작 보존, commit `d267579c7f485258ab319d950aa703a9ae2a139c`.
+- canonical SHA256 `924e49efad6aa0be118100bb75cc6497216a2ca37cb090c701c9c2615eed5627`.
+
+**검증 / PREVIEW Worker 배포**:
+- Release System Audit Run `36256030601` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 Like regression PASS / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only preflight PASS.
+- PREVIEW Worker Release Run `36256171288` SUCCESS.
+- locked source `8bc2126378750c2f54fb199bf84d623ec58c8ab2`.
+- active PREVIEW Worker version `ebb182bd-921f-4945-88a7-3788eb38ac58`.
+- Feed smoke PASS / Profile smoke PASS / TEST·PRODUCTION Workers unchanged PASS.
+
+**기존 꼬인 공개프로필 bounded 복구**:
+- 과거 stale projection은 현재 계정의 profile projection만 canonical 공개목록 기준으로 1회 복구.
+- Run `36256280239` SUCCESS.
+- D1 write 0 / canonical 사용자 데이터 변경 없음.
+- canonical public 1 → repair items 1.
+- shared profile parity PASS count=1.
+- local profile parity PASS count=1.
+- 전체 사용자/전체 곡 백필 없음.
+
+**PREVIEW 앱 배포**:
+- app version `189`.
+- version commit `bf0300aa42e83b81fecf97439237142984f7b499`.
+- release SHA `05c66c92e73254673d52149c9e331ca77bd10672`.
+- Firebase PREVIEW Hosting Run `36256356574` SUCCESS.
+- TypeScript PASS / Build PASS / `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=189` / `PREVIEW_EXACT_BUILD=PASS`.
+- RTDB Rules SKIPPED / Functions 변경 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+**진단 주의**:
+- post-repair 임시 진단 Run `36256539809`은 제품 실패가 아니라 진단 Workflow 자체의 `profile-local.json` 파일 준비 누락으로 FAIL. 제품 검증 근거로 사용하지 않음.
+- 실제 복구 parity는 별도 repair Run `36256280239`에서 local/shared 모두 exact PASS로 확인됨.
+
+**다음 실사용 확인**:
+- Music Note에서 1곡 공개 → Explore + 공개프로필에 같은 곡이 나타나는지.
+- 같은 곡 비공개 → Explore + 공개프로필 양쪽에서 사라지는지.
+- Explore `... > 공개 설정`에서도 같은 공개/비공개 결과가 나는지.
+- PC/모바일 실기기 결과는 사용자 확인 전. 새 이상이 있으면 해당 track 하나만 bounded 추적하고 좋아요/다른 정상 기능은 건드리지 않는다.
+
 ## 0HM. PREVIEW 퇴근길의 상상 장르 누락 완전 복구 (2026-09-26 KST)
 
 **사용자 실측**:

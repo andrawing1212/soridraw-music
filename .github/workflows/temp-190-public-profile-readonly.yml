@@ -12,17 +12,26 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
     steps:
-      - name: Inspect PREVIEW public profile and feed read-only
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Inspect PREVIEW canonical and public projections read-only
         shell: bash
         run: |
           set -euo pipefail
           BASE='https://soridraw-explore-preview.andrawing1212.workers.dev'
           ORIGIN='https://preview.soridraw.com'
-          curl -fsS -D "$RUNNER_TEMP/profile.headers" -H "Origin: $ORIGIN"             "$BASE/v1/profiles/soridraw/first-view?limit=50"             -o "$RUNNER_TEMP/profile.json"
-          echo '=== PROFILE HEADERS ==='
-          grep -Ei '^(HTTP/|x-soridraw-profile-revision:|x-soridraw-profile-edge-cache:|x-soridraw-d1-read:|x-soridraw-d1-write:)' "$RUNNER_TEMP/profile.headers" || true
+          UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
+
+          curl -fsS -D "$RUNNER_TEMP/profile.headers" -H "Origin: $ORIGIN"             "$BASE/v1/profiles/soridraw/first-view?limit=50&__diag190=$(date +%s)"             -o "$RUNNER_TEMP/profile.json"
           echo '=== PROFILE SUMMARY ==='
           node - "$RUNNER_TEMP/profile.json" <<'NODE'
           const fs=require('fs');
@@ -30,30 +39,30 @@ jobs:
           const d=p?.data||{};
           const profile=d.profile||d.snapshot?.profile||{};
           const items=Array.isArray(d.items)?d.items:Array.isArray(d.tracks?.items)?d.tracks.items:Array.isArray(d.snapshot?.items)?d.snapshot.items:[];
-          console.log(JSON.stringify({
-            ok:p?.ok,
-            uid:profile.uid||null,
-            handle:profile.handle||null,
-            trackCount:profile.trackCount??profile.track_count??null,
-            revision:d.revision??d.snapshot?.revision??null,
-            itemCount:items.length,
-            items:items.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null,publishedAt:x.publishedAt||x.published_at||null}))
-          },null,2));
+          console.log(JSON.stringify({trackCount:profile.trackCount??profile.track_count??null,revision:d.revision??d.snapshot?.revision??null,itemCount:items.length,items:items.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null}))},null,2));
           NODE
 
-          curl -fsS -D "$RUNNER_TEMP/feed.headers" -H "Origin: $ORIGIN"             "$BASE/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108"             -o "$RUNNER_TEMP/feed.json"
-          echo '=== FEED HEADERS ==='
-          grep -Ei '^(HTTP/|x-soridraw-feed-revision:|x-soridraw-feed-snapshot:|x-soridraw-d1-read:|x-soridraw-d1-write:)' "$RUNNER_TEMP/feed.headers" || true
-          echo '=== OWNER FEED ITEMS ==='
-          node - "$RUNNER_TEMP/feed.json" <<'NODE'
+          curl -fsS -D "$RUNNER_TEMP/feed.headers" -H "Origin: $ORIGIN"             "$BASE/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108&__diag190=$(date +%s)"             -o "$RUNNER_TEMP/feed.json"
+          echo '=== FEED OWNER UID SUMMARY ==='
+          node - "$RUNNER_TEMP/feed.json" "$UID" <<'NODE'
           const fs=require('fs');
           const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const uid=process.argv[3];
           const items=Array.isArray(p?.data?.items)?p.data.items:[];
-          const owner=items.filter(x=>String(x.ownerHandle||x.owner_handle||'').replace(/^@+/,'').toLowerCase()==='soridraw');
-          console.log(JSON.stringify({
-            totalFeedItems:items.length,
-            ownerCount:owner.length,
-            ownerItems:owner.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null,publishedAt:x.publishedAt||x.published_at||null}))
-          },null,2));
+          const owner=items.filter(x=>String(x.ownerUid||x.owner_uid||'')===uid);
+          console.log(JSON.stringify({totalFeedItems:items.length,ownerCount:owner.length,ownerItems:owner.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null}))},null,2));
           NODE
-          echo 'READ_ONLY=PASS'
+
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT id,title,is_public,status,source_id,published_at,updated_at FROM tracks WHERE owner_uid='$UID' AND source_type='music_note' ORDER BY updated_at DESC"             --json > "$RUNNER_TEMP/canonical.json"
+          echo '=== CANONICAL D1 MUSIC NOTE PUBLICATION ==='
+          node - "$RUNNER_TEMP/canonical.json" <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const rows=r.flatMap(x=>x.results||[]);
+          const pub=rows.filter(x=>Number(x.is_public)===1&&String(x.status)==='published');
+          console.log(JSON.stringify({total:rows.length,publicCount:pub.length,public:pub.map(x=>({id:x.id,title:x.title,sourceId:x.source_id,publishedAt:x.published_at,updatedAt:x.updated_at}))},null,2));
+          NODE
+          echo 'READ_ONLY_D1_WRITE=0'

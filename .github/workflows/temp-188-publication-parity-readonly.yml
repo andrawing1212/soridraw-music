@@ -76,17 +76,19 @@ jobs:
           const popular=read('feed-popular')?.payload?.data?.items||[];
           const profileBundle=read('profile');
           const profile=profileBundle?.body?.data?.items||[];
+          const localProfileBundle=read('profile-local');
+          const localProfile=localProfileBundle?.body?.data?.items||[];
           const states=read('publication')?.states||{};
           const ids=a=>new Set(a.map(x=>String(x?.id||x?.trackId||'')));
-          const latestIds=ids(latest), popularIds=ids(popular), profileIds=ids(profile);
+          const latestIds=ids(latest), popularIds=ids(popular), profileIds=ids(profile), localProfileIds=ids(localProfile);
           let mismatch=0;
           for(const x of own){
-            const feedLatest=latestIds.has(x.id), feedPopular=popularIds.has(x.id), prof=profileIds.has(x.id);
+            const feedLatest=latestIds.has(x.id), feedPopular=popularIds.has(x.id), prof=profileIds.has(x.id), localProf=localProfileIds.has(x.id);
             const st=states[x.sourceId]?.status||'missing';
             const stalePrivate=x.pub===false&&(feedLatest||feedPopular||prof||st==='public');
             const missingPublic=x.pub===true&&(st!=='public'||!prof);
             if(stalePrivate||missingPublic) mismatch++;
-            console.log(JSON.stringify({title:x.title,canonical:x.pub?'public':'private',publicationR2:st,sharedLatest:feedLatest,sharedPopular:feedPopular,sharedProfile:prof,stalePrivate,missingPublic}));
+            console.log(JSON.stringify({title:x.title,canonical:x.pub?'public':'private',publicationR2:st,sharedLatest:feedLatest,sharedPopular:feedPopular,sharedProfile:prof,localProfile:localProf,stalePrivate,missingPublic}));
           }
           console.log('PARITY_MISMATCH_COUNT='+mismatch);
           console.log('D1_WRITE=0');

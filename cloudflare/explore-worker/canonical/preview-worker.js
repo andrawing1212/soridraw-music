@@ -1598,6 +1598,7 @@ function mapTrackRow(row) {
     durationSeconds: row.duration_seconds === null || row.duration_seconds === void 0 ? null : Number(row.duration_seconds),
     lyrics: row.lyrics || null,
     style: row.style || null,
+    primaryGenre: row.primary_genre || null,
     sunoUrlPrimary: row.suno_url_primary || "",
     sunoUrlSecondary: row.suno_url_secondary || null,
     openUrl: row.suno_url_primary || "",

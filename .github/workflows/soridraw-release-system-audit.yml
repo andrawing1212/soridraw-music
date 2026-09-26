@@ -77,6 +77,7 @@ jobs:
           node scripts/verify-207-library-music-api-admin-persistence.mjs
           node scripts/verify-208-gemini-adaptive-repair-routing.mjs
           node scripts/verify-209-search-persistence-mobile.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
@@ -92,6 +93,7 @@ jobs:
           node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
           node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
           node --check cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs
+          node --check cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs
           node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
           node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"

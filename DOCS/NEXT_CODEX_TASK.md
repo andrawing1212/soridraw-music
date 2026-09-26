@@ -12,6 +12,7 @@
 - PREVIEW Worker Run `36256171288` SUCCESS, active version `ebb182bd-921f-4945-88a7-3788eb38ac58`.
 - PREVIEW app189 Hosting Run `36256356574` SUCCESS, exact build/version 189 PASS, TEST/PRODUCTION unchanged.
 - post-repair diagnostic Run `36256539809`은 temp workflow 파일 준비 오류로 FAIL한 tooling-only 결과이며 제품 판단에 사용 금지.
+- 이번 작업의 일회성 temp 진단/복구 Workflow 4개는 완료 후 삭제됨. 다음 작업에서 재사용/누적 금지.
 - 다음은 사용자 실사용만: (1) Music Note 공개→Explore+공개프로필 표시, (2) 비공개→양쪽 즉시 제거, (3) Explore 더보기 공개설정에서도 동일 결과.
 - 실패 시 해당 track 하나만 bounded 확인. 전체 백필/전체 재생성/좋아요 변경 금지.
 - PC/모바일 실기기 검증 전. TEST/main 승격 전, PRODUCTION 비변경.

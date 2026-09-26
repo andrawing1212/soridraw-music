@@ -538,12 +538,15 @@ export const publishMusicNoteToExplore = async (
     ...DEFAULT_PUBLICATION_OPTIONS,
   }, trackId, false);
   const normalizedOptions = normalizePublicationOptions(options);
-  return queuePublicationMutation(user.uid, normalizedSourceId, current, {
+  const optimistic = queuePublicationMutation(user.uid, normalizedSourceId, current, {
     status: 'public',
     trackId,
     registered: current.registered,
     ...normalizedOptions,
   });
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[normalizedSourceId];
+  return confirmed ? { ...confirmed } : optimistic;
 };
 
 export const setExploreTrackVisibility = async (
@@ -562,12 +565,15 @@ export const setExploreTrackVisibility = async (
     allowFollowerSave: found.state.allowFollowerSave,
     profilePinned: found.state.profilePinned,
   };
-  return queuePublicationMutation(user.uid, found.sourceId, found.state, {
+  const optimistic = queuePublicationMutation(user.uid, found.sourceId, found.state, {
     ...found.state,
     status: isPublic ? 'public' : 'private',
     trackId: normalizedTrackId,
     ...requestedOptions,
   });
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[found.sourceId];
+  return confirmed ? { ...confirmed } : optimistic;
 };
 
 export const setExploreTrackPublicationOptions = async (
@@ -586,7 +592,13 @@ export const setExploreTrackPublicationOptions = async (
     ...normalizedOptions,
     trackId: normalizedTrackId,
   });
-  return normalizedOptions;
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[found.sourceId];
+  return confirmed ? {
+    allowNextSongApply: confirmed.allowNextSongApply,
+    allowFollowerSave: confirmed.allowFollowerSave,
+    profilePinned: confirmed.profilePinned,
+  } : normalizedOptions;
 };
 
 export const flushPendingExplorePublicationsForPageExit = async (user: User): Promise<void> => {

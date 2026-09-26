@@ -29,7 +29,7 @@ jobs:
           set -euo pipefail
           BASE='https://soridraw-explore-preview.andrawing1212.workers.dev'
           ORIGIN='https://preview.soridraw.com'
-          UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
+          OWNER_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
 
           curl -fsS -D "$RUNNER_TEMP/profile.headers" -H "Origin: $ORIGIN"             "$BASE/v1/profiles/soridraw/first-view?limit=50&__diag190=$(date +%s)"             -o "$RUNNER_TEMP/profile.json"
           echo '=== PROFILE SUMMARY ==='
@@ -44,7 +44,7 @@ jobs:
 
           curl -fsS -D "$RUNNER_TEMP/feed.headers" -H "Origin: $ORIGIN"             "$BASE/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108&__diag190=$(date +%s)"             -o "$RUNNER_TEMP/feed.json"
           echo '=== FEED OWNER UID SUMMARY ==='
-          node - "$RUNNER_TEMP/feed.json" "$UID" <<'NODE'
+          node - "$RUNNER_TEMP/feed.json" "$OWNER_UID" <<'NODE'
           const fs=require('fs');
           const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
           const uid=process.argv[3];
@@ -56,7 +56,7 @@ jobs:
           cd cloudflare/explore-worker
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT id,title,is_public,status,source_id,published_at,updated_at FROM tracks WHERE owner_uid='$UID' AND source_type='music_note' ORDER BY updated_at DESC"             --json > "$RUNNER_TEMP/canonical.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT id,title,is_public,status,source_id,published_at,updated_at FROM tracks WHERE owner_uid='$OWNER_UID' AND source_type='music_note' ORDER BY updated_at DESC"             --json > "$RUNNER_TEMP/canonical.json"
           echo '=== CANONICAL D1 MUSIC NOTE PUBLICATION ==='
           node - "$RUNNER_TEMP/canonical.json" <<'NODE'
           const fs=require('fs');

@@ -1,0 +1,127 @@
+name: SORIDRAW 188 Single Genre Repair
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-188-genre-repair.yml'
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Authenticate authoritative Music Note source
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Verify exact source genre before any write
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          admin.initializeApp({projectId:'soridraw-app-866a5'});
+          const db=admin.firestore();
+          (async()=>{
+            const snap=await db.collection('favorites').doc('ivofUOnezAJvhmN3uXo4').get();
+            if(!snap.exists) throw new Error('Exact Music Note source missing');
+            const x=snap.data()||{};
+            if(String(x.title||'').trim()!=='퇴근길의 상상') throw new Error('Source title mismatch');
+            if(String(x.genre||'').trim()!=='Jazz Ballad') throw new Error('Authoritative genre mismatch');
+            console.log('AUTHORITATIVE_MUSIC_NOTE_GENRE=Jazz Ballad');
+            console.log('FIRESTORE_WRITE=0');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Repair exactly one canonical public row
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          TARGET="music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_ivofUOnezAJvhmN3uXo4"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT id,title,primary_genre,source_id
+            FROM tracks
+            WHERE id='$TARGET'
+              AND source_id='ivofUOnezAJvhmN3uXo4'
+            LIMIT 1;
+          " --json > "$RUNNER_TEMP/before.json"
+          node <<'NODE'
+          const r=require(process.env.RUNNER_TEMP+'/before.json').flatMap(x=>x.results||[]);
+          if(r.length!==1)throw new Error('Target public row missing/ambiguous');
+          const x=r[0];
+          if(String(x.title||'')!=='퇴근길의 상상')throw new Error('Target title mismatch');
+          const g=String(x.primary_genre||'').trim();
+          if(g && g!=='Jazz Ballad')throw new Error('Refusing to overwrite nonempty genre: '+g);
+          console.log('TARGET_BEFORE_GENRE='+(g||'NULL'));
+          NODE
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            UPDATE tracks
+            SET primary_genre='Jazz Ballad'
+            WHERE id='$TARGET'
+              AND source_id='ivofUOnezAJvhmN3uXo4'
+              AND title='퇴근길의 상상'
+              AND (primary_genre IS NULL OR TRIM(primary_genre)='');
+          " --json > "$RUNNER_TEMP/write.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT t.id,t.title,t.primary_genre,
+                   json_extract(d.row_json,'$.primary_genre') AS derived_primary_genre
+            FROM tracks t
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.id='$TARGET'
+            LIMIT 1;
+          " --json > "$RUNNER_TEMP/after.json"
+          node <<'NODE'
+          const r=require(process.env.RUNNER_TEMP+'/after.json').flatMap(x=>x.results||[]);
+          if(r.length!==1)throw new Error('Target verify missing');
+          const x=r[0];
+          if(String(x.primary_genre)!=='Jazz Ballad')throw new Error('Canonical genre repair failed');
+          if(String(x.derived_primary_genre)!=='Jazz Ballad')throw new Error('Derived genre trigger failed');
+          console.log('SINGLE_TRACK_D1_REPAIR=PASS');
+          console.log('D1_TARGET_ROWS_WRITTEN_MAX=1');
+          NODE
+      - name: Converge existing PREVIEW derived caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="${GITHUB_RUN_ID}"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__genre_repair=$stamp" > "$RUNNER_TEMP/latest.json"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=popular&limit=40&__genre_repair=$stamp" > "$RUNNER_TEMP/popular.json"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/rcZ2GZrBndOZzT8C635eiNBjYIJ2/first-view?limit=50&__genre_repair=$stamp" > "$RUNNER_TEMP/profile.json"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108&__genre_repair=$stamp" > "$RUNNER_TEMP/shared-latest.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const title='퇴근길의 상상';
+          for(const name of ['latest','shared-latest']){
+            const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name+'.json','utf8'));
+            const x=(p?.data?.items||[]).find(v=>String(v?.title||'')===title);
+            if(!x)throw new Error(name+': target missing');
+            if(String(x.primaryGenre||x.primary_genre||'')!=='Jazz Ballad')throw new Error(name+': primaryGenre not converged');
+            console.log(name.toUpperCase()+'_PRIMARY_GENRE=PASS');
+          }
+          const profile=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/profile.json','utf8'));
+          const px=(profile?.data?.items||[]).find(v=>String(v?.title||'')===title);
+          if(px && String(px.primaryGenre||px.primary_genre||'')!=='Jazz Ballad')throw new Error('profile genre not converged');
+          console.log('TARGETED_CACHE_CONVERGENCE=PASS');
+          NODE

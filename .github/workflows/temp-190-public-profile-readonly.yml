@@ -53,9 +53,8 @@ jobs:
           console.log(JSON.stringify({totalFeedItems:items.length,ownerCount:owner.length,ownerItems:owner.map(x=>({id:x.id||x.trackId||null,title:x.title||null,ownerUid:x.ownerUid||x.owner_uid||null}))},null,2));
           NODE
 
-          cd cloudflare/explore-worker
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          WRANGLER="$GITHUB_WORKSPACE/node_modules/wrangler/bin/wrangler.js"
+          CFG="$GITHUB_WORKSPACE/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT id,title,is_public,status,source_id,published_at,updated_at FROM tracks WHERE owner_uid='$OWNER_UID' AND source_type='music_note' ORDER BY updated_at DESC"             --json > "$RUNNER_TEMP/canonical.json"
           echo '=== CANONICAL D1 MUSIC NOTE PUBLICATION ==='
           node - "$RUNNER_TEMP/canonical.json" <<'NODE'

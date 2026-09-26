@@ -36,6 +36,28 @@ import {
   writeLibraryPlaylistListCache,
 } from '../lib/libraryPlaylistCache';
 
+const LIBRARY_WORKSPACE_SEARCH_SESSION_KEY = 'soridraw:library:workspace-search:v1';
+const LIBRARY_PLAYLIST_SEARCH_SESSION_KEY = 'soridraw:library:playlist-search:v1';
+
+const readLibrarySearchSession = (key: string): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.sessionStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeLibrarySearchSession = (key: string, value: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value) window.sessionStorage.setItem(key, value);
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Search persistence is best-effort UI state only.
+  }
+};
+
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
@@ -797,7 +819,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
-  const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
+  const [playlistSearchTerm, setPlaylistSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY));
   const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
@@ -1116,9 +1138,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, []);
 
   // UI States
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY));
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const librarySearchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    writeLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY, searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    writeLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY, playlistSearchTerm);
+  }, [playlistSearchTerm]);
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
@@ -6079,27 +6110,49 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const renderLibraryTopControls = () => {
     if (isSharedView) return null;
     const isWorkspaceMode = libraryViewMode === 'workspace';
+    const activeSearchTerm = isWorkspaceMode ? searchTerm : playlistSearchTerm;
+    const clearActiveLibrarySearch = () => {
+      if (isWorkspaceMode) setSearchTerm('');
+      else setPlaylistSearchTerm('');
+      setIsLibrarySearchFocused(false);
+      librarySearchInputRef.current?.blur();
+    };
 
     return (
       <>
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+          <div className={`soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2${isLibrarySearchFocused || activeSearchTerm ? ' is-search-active' : ''}${activeSearchTerm ? ' has-search-value' : ''}`}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
                 <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#A98BFF] transition-colors" />
               </div>
               <input
+                ref={librarySearchInputRef}
                 type="text"
-                value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
+                value={activeSearchTerm}
                 onChange={(e) => {
                   if (isWorkspaceMode) setSearchTerm(e.target.value);
                   else setPlaylistSearchTerm(e.target.value);
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="soridraw-responsive-search-input w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]"
+                className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
               />
-              {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
+              {activeSearchTerm && (
+                <button
+                  type="button"
+                  className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#C9BAFF]"
+                  aria-label="검색어 지우기"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    clearActiveLibrarySearch();
+                    event.currentTarget.blur();
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {!activeSearchTerm && !isLibrarySearchFocused && (
                 <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                   <div className="text-sm text-white/40 whitespace-nowrap">
                     {isWorkspaceMode ? '음악 제목이나 스타일 검색...' : '음악 제목이나 제작자 검색...'}

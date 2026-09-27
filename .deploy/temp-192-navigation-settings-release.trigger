@@ -5,3 +5,6 @@ product_commit=a6a030a3067faca3cf662af69372563d83ed7b3e
 app_version=192
 scope=navigation_visibility_sync_only
 preview_only=true
+
+retry=1
+retry_reason=java21_rules_preflight_only

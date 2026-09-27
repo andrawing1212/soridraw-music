@@ -1,0 +1,135 @@
+name: TEMP 193 Explore Publisher Avatar Repair
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-193-explore-publisher-avatar-repair.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      API_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Preflight exact affected profile
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT uid,handle,
+              CASE WHEN avatar_url LIKE '%googleusercontent.com%' OR avatar_url LIKE '%ggpht.com%' THEN 'google'
+                   WHEN COALESCE(avatar_url,'')='' THEN 'empty' ELSE 'custom' END AS canonical_avatar_kind,
+              CASE WHEN json_extract(d.row_json,'$.avatar_url') LIKE '%googleusercontent.com%' OR json_extract(d.row_json,'$.avatar_url') LIKE '%ggpht.com%' THEN 'google'
+                   WHEN COALESCE(json_extract(d.row_json,'$.avatar_url'),'')='' THEN 'empty' ELSE 'custom' END AS derived_avatar_kind
+            FROM public_profiles p
+            LEFT JOIN explore_derived_profiles d USING(uid)
+            WHERE handle='soridraw' AND is_public=1;
+          " --json > "$RUNNER_TEMP/preflight.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preflight.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          if(rows.length!==1) throw new Error('Expected exactly one public @soridraw profile, got '+rows.length);
+          if(rows[0].canonical_avatar_kind!=='custom' || rows[0].derived_avatar_kind!=='custom') {
+            throw new Error('Canonical/derived profile avatar is not the expected custom profile image');
+          }
+          console.log('AVATAR_REPAIR_PREFLIGHT=PASS canonical=custom derived=custom target_count=1');
+          NODE
+      - name: Emit one bounded derived Feed profile change signal
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            UPDATE explore_derived_state
+            SET seq = seq + 1
+            WHERE id = 1;
+
+            INSERT INTO explore_derived_changes(scope,kind,id,seq)
+            SELECT 'feed','profile',uid,(SELECT seq FROM explore_derived_state WHERE id=1)
+            FROM public_profiles
+            WHERE handle='soridraw' AND is_public=1
+            ON CONFLICT(scope,kind,id) DO UPDATE SET seq=excluded.seq;
+          " --json > "$RUNNER_TEMP/repair.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair.json','utf8'));
+          const changes=raw.reduce((n,x)=>n+Number(x?.meta?.changes||0),0);
+          console.log('AVATAR_REPAIR_D1_ROWS_WRITTEN='+changes);
+          if(changes!==2) throw new Error('Expected exactly W2 bounded derived repair, got W'+changes);
+          NODE
+      - name: Consume signal into PREVIEW latest and popular caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$API_BASE/v1/feed?sort=latest&limit=40" -H 'Accept: application/json' > "$RUNNER_TEMP/latest.json"
+          curl -fsS "$API_BASE/v1/feed?sort=popular&limit=40" -H 'Accept: application/json' > "$RUNNER_TEMP/popular.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const clean=s=>String(s||'').trim();
+          const kind=u=>{const v=clean(u).toLowerCase();return !v?'empty':(v.includes('googleusercontent.com')||v.includes('ggpht.com'))?'google':'custom'};
+          for(const sort of ['latest','popular']){
+            const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+sort+'.json','utf8'));
+            const items=payload?.data?.items || payload?.payload?.data?.items || [];
+            const target=items.filter(x=>clean(x.ownerHandle||x.owner_handle).replace(/^@+/,'')==='soridraw');
+            if(!target.length) throw new Error(sort+': @soridraw not present in bounded first page');
+            const bad=target.filter(x=>kind(x.ownerAvatarUrl||x.avatarUrl||x.owner_avatar_url)!=='custom');
+            console.log(sort.toUpperCase()+'_SORIDRAW_TRACKS='+target.length+' custom='+String(target.length-bad.length)+' wrong='+bad.length);
+            if(bad.length) throw new Error(sort+': stale Google/non-custom publisher avatar remains');
+          }
+          console.log('PREVIEW_FEED_AVATAR_REPAIR=PASS');
+          NODE
+      - name: Verify all visible owners match public profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$API_BASE/v1/feed?sort=latest&limit=40" -H 'Accept: application/json' > "$RUNNER_TEMP/latest-post.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const base=process.env.API_BASE;
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest-post.json','utf8'));
+          const items=payload?.data?.items || payload?.payload?.data?.items || [];
+          const clean=s=>String(s||'').trim();
+          const owners=new Map();
+          for(const item of items){
+            const uid=clean(item.ownerUid||item.owner_uid);
+            if(!uid || owners.has(uid)) continue;
+            owners.set(uid,{uid,feedAvatar:clean(item.ownerAvatarUrl||item.avatarUrl||item.owner_avatar_url)});
+          }
+          (async()=>{
+            let mismatch=0;
+            for(const row of owners.values()){
+              const res=await fetch(base+'/v1/profiles/'+encodeURIComponent(row.uid)+'/first-view?limit=1',{headers:{Accept:'application/json'}});
+              const j=await res.json();
+              const p=j?.data?.profile||j?.data?.snapshot?.profile||{};
+              const profileAvatar=clean(p.avatarUrl||p.avatar_url);
+              if(row.feedAvatar!==profileAvatar) mismatch++;
+            }
+            console.log('VISIBLE_OWNER_COUNT='+owners.size);
+            console.log('VISIBLE_OWNER_AVATAR_MISMATCH_COUNT='+mismatch);
+            if(mismatch) throw new Error('Feed/profile avatar mismatch remains: '+mismatch);
+            console.log('VISIBLE_OWNER_AVATAR_PARITY=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

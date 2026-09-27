@@ -5,6 +5,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/temp-216-global-profile-avatar-audit.yml'
+      - 'scripts/verify-216-global-profile-avatar-authority.mjs'
 
 permissions:
   contents: read

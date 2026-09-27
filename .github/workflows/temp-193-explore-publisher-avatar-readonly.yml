@@ -65,6 +65,20 @@ jobs:
             FROM public_profiles p
             LEFT JOIN explore_derived_profiles d ON d.uid=p.uid
             WHERE p.is_public=1;
+
+            SELECT name, sql
+            FROM sqlite_schema
+            WHERE type='trigger'
+              AND name IN ('explore032_profile_update','explore032_derived_profile_update','explore032_derived_profile_feed')
+            ORDER BY name;
+
+            SELECT scope,kind,id,seq
+            FROM explore_derived_changes
+            WHERE id=(SELECT uid FROM public_profiles WHERE handle='soridraw' LIMIT 1)
+              AND kind='profile'
+            ORDER BY scope;
+
+            SELECT seq,seeded FROM explore_derived_state WHERE id=1;
           " --json > "$RUNNER_TEMP/avatar-d1.json"
           node <<'NODE'
           const fs=require('fs');
@@ -72,6 +86,10 @@ jobs:
           const sets=raw.map(x=>x.results||[]);
           console.log('PUBLIC_PROFILE_ROWS='+JSON.stringify(sets[0]||[]));
           console.log('PROFILE_AVATAR_SUMMARY='+JSON.stringify((sets[1]||[])[0]||{}));
+          const triggers=(sets[2]||[]).map(r=>({name:r.name,avatar_feed_signal:/avatar_url/.test(String(r.sql||'')) && /'feed'/.test(String(r.sql||'')),profile_signal:/profile:/.test(String(r.sql||''))}));
+          console.log('PROFILE_TRIGGER_SUMMARY='+JSON.stringify(triggers));
+          console.log('SORIDRAW_PROFILE_EVENTS='+JSON.stringify(sets[3]||[]));
+          console.log('DERIVED_STATE='+JSON.stringify((sets[4]||[])[0]||{}));
           console.log('REMOTE_D1_WRITES=0');
           NODE
       - name: Compare live feed avatars with live public profiles

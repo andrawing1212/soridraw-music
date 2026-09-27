@@ -1,3 +1,15 @@
+## 다음 우선 확인 · 관리자 상단 메뉴 공통설정 전파/Explore route gate (2026-09-27 KST)
+
+- app191 Explore 더보기 캐시 실사용: **PASS**.
+- read-only 감사에서 상단 메뉴 설정의 두 gap 확인:
+  - navigation visibility local cache가 무기한 fresh라 다른 사용자/기기의 기존 cache에 관리자 변경이 자동 전파되지 않음.
+  - `/explore` route만 `canAccessNavigationMenu('explore')` 직접 URL gate가 누락.
+- 사용자 승인 없이 아직 수정/배포하지 않음.
+- 수정한다면 Firestore onSnapshot/polling/앱 시작 반복 read는 금지. 기존 비용 목표를 유지하면서 작은 변경 신호 + 변경 시 1회 설정 갱신만 허용.
+- 다른 정상 메뉴/권한/UI/좋아요/Explore Feed/Music Note 저장 로직 비변경.
+- 이후 예정: 추천/최신/인기 탭 UI 수정.
+
+
 ## 다음 작업 기준 · app191 Explore 더 보기 캐시 실사용 확인 후 UI 작업 (2026-09-27 KST)
 
 현재 PREVIEW:

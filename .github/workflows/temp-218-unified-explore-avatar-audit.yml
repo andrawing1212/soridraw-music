@@ -5,6 +5,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/temp-218-unified-explore-avatar-audit.yml'
+      - 'scripts/verify-215-explore-profile-owner-card-sync.mjs'
 
 permissions:
   contents: read

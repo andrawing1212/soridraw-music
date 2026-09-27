@@ -54,7 +54,7 @@ jobs:
             throw new Error('Canonical/derived profile avatar is not the expected custom profile image');
           }
           console.log('AVATAR_REPAIR_PREFLIGHT=PASS canonical=custom derived=custom target_count=1');
-          fs.appendFileSync(process.env.GITHUB_ENV, 'TARGET_UID='+rows[0].uid+'\\n');
+          fs.appendFileSync(process.env.GITHUB_ENV, 'TARGET_UID='+rows[0].uid+String.fromCharCode(10));
           NODE
       - name: Check whether repair is still needed
         shell: bash
@@ -71,7 +71,7 @@ jobs:
           const isCustom=u=>{const v=clean(u).toLowerCase(); return Boolean(v) && !v.includes('googleusercontent.com') && !v.includes('ggpht.com')};
           const bad=target.filter(x=>!isCustom(x.ownerAvatarUrl||x.avatarUrl||x.owner_avatar_url));
           const needed=bad.length ? '1' : '0';
-          fs.appendFileSync(process.env.GITHUB_ENV, 'NEEDS_REPAIR='+needed+'\\n');
+          fs.appendFileSync(process.env.GITHUB_ENV, 'NEEDS_REPAIR='+needed+String.fromCharCode(10));
           console.log('AVATAR_REPAIR_NEEDED='+needed+' target_tracks='+target.length+' wrong='+bad.length);
           NODE
       - name: Emit one bounded derived Feed profile change signal

@@ -1751,17 +1751,28 @@ export default function ExplorePage() {
     />
   ) : null;
 
-  const renderTrackGrid = (items: ExploreTrack[], label: string) => (
+  const renderTrackGrid = (
+    items: ExploreTrack[],
+    label: string,
+    ownerProfileAuthority: ExplorePublicProfile | null = null,
+  ) => (
     <section className="soridraw-explore-grid" aria-label={label}>
       {items.map((track) => {
-        const liked129 = likedTrackIds[track.id] === true;
-        const pair129 = normalizeExploreLikeDisplayPair129(liked129, track.likeCount);
-        const displayTrack129 = pair129.likeCount === track.likeCount
-          ? track
-          : { ...track, likeCount: pair129.likeCount };
+        // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
+        // On a public-profile page, the already-loaded profile is the display
+        // authority for that owner's cards. This fixes stale per-track avatar
+        // snapshots without any new server read/write or cache invalidation.
+        const authorityTrack217 = ownerProfileAuthority
+          ? patchExploreTrackOwnerProfile215(track, ownerProfileAuthority)
+          : track;
+        const liked129 = likedTrackIds[authorityTrack217.id] === true;
+        const pair129 = normalizeExploreLikeDisplayPair129(liked129, authorityTrack217.likeCount);
+        const displayTrack129 = pair129.likeCount === authorityTrack217.likeCount
+          ? authorityTrack217
+          : { ...authorityTrack217, likeCount: pair129.likeCount };
         return (
           <ExploreTrackCard
-            key={track.id}
+            key={authorityTrack217.id}
             track={displayTrack129}
             liked={pair129.liked}
             likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
@@ -1918,7 +1929,7 @@ export default function ExplorePage() {
                   <strong>아직 좋아요한 곡이 없어요.</strong>
                 </div>
               ) : (
-                renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`)
+                renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`, profile)
               )
             ) : profileTracks.length === 0 ? (
               <div className="soridraw-explore-state soridraw-explore-state--empty">
@@ -1930,7 +1941,7 @@ export default function ExplorePage() {
                 {profileTracks.some((track) => track.profilePinned) && (
                   <div className="soridraw-explore-profile-section-label"><Pin aria-hidden="true" /> 고정된 공개곡</div>
                 )}
-                {renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`)}
+                {renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`, profile)}
               </>
             )}
           </>

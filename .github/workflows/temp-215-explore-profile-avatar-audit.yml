@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-          fetch-depth: 1
+          fetch-depth: 8
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(node -e "process.stdout.write(String(require('./public/app-version.json').version || ''))")" = "193"
-          git diff --exit-code HEAD~4 -- cloudflare/explore-worker functions firestore.rules database.rules.json || {
+          git diff --exit-code ef5b4b054e5455aff7b6f1b7001912f8e60fc797 HEAD -- cloudflare/explore-worker functions firestore.rules database.rules.json || {
             echo 'BACKEND_SCOPE_CHANGED=true'
             exit 1
           }

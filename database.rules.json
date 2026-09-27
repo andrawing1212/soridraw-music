@@ -183,6 +183,71 @@
       },
       "$other": {
         ".validate": false
+      },
+      "navigationVisibility": {
+        ".read": "auth != null",
+        ".write": false,
+        "revision": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "menuVisibility": {
+          "home": {
+            ".validate": "newData.isBoolean()"
+          },
+          "explore": {
+            ".validate": "newData.isBoolean()"
+          },
+          "studio": {
+            ".validate": "newData.isBoolean()"
+          },
+          "musicNote": {
+            ".validate": "newData.isBoolean()"
+          },
+          "library": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lab": {
+            ".validate": "newData.isBoolean()"
+          },
+          "myPage": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "menuAdminOnly": {
+          "home": {
+            ".validate": "newData.isBoolean()"
+          },
+          "explore": {
+            ".validate": "newData.isBoolean()"
+          },
+          "studio": {
+            ".validate": "newData.isBoolean()"
+          },
+          "musicNote": {
+            ".validate": "newData.isBoolean()"
+          },
+          "library": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lab": {
+            ".validate": "newData.isBoolean()"
+          },
+          "myPage": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   }

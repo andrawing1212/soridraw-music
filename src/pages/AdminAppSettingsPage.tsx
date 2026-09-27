@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
-import { auth, db } from '../firebase';
+import { auth, db, functions, httpsCallable } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';
 import { readCacheDiagnosticsEnabled, readCacheDiagnosticsGloballyEnabled, readCacheDiagnosticsOwnerUid, setCacheDiagnosticsEnabled } from '../lib/cacheDiagnostics';
@@ -210,14 +210,10 @@ export default function AdminAppSettingsPage() {
     setMessage('');
 
     try {
-      await setDoc(
-        NAVIGATION_VISIBILITY_DOC,
-        {
-          ...getNavigationFirestorePayload(draftSettings),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      const saveNavigationVisibility = httpsCallable(functions, 'adminSetNavigationVisibility');
+      await saveNavigationVisibility({
+        settings: getNavigationFirestorePayload(draftSettings),
+      });
       setSavedSettings(draftSettings);
       writeStoredNavigationVisibilitySettings(draftSettings);
       writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, draftSettings);

@@ -783,6 +783,7 @@ import {
   type NavigationVisibilitySettings,
   writeStoredNavigationVisibilitySettings,
 } from './constants/navigationVisibility';
+import { subscribeNavigationVisibilitySync } from './services/navigationVisibilitySyncService';
 import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 import {
@@ -6058,6 +6059,29 @@ function App() {
     };
   }, []);
 
+  // SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
+  // Existing local cache stays the zero-read bootstrap. Signed-in members also
+  // receive one tiny shared RTDB settings mirror so an admin change converges
+  // without polling or a Firestore read on app start/route change.
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeNavigationVisibilitySync(
+      (payload) => {
+        if (!payload) return;
+        const nextSettings = normalizeNavigationVisibilitySettings(
+          payload.settings,
+          readStoredNavigationVisibilitySettings(),
+        );
+        setNavigationVisibilitySettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
+      },
+      (error) => {
+        console.warn('Navigation visibility RTDB sync unavailable. Keeping last local cache:', error);
+      },
+    );
+  }, [user?.uid]);
+
   const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
     try {
       const saved = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE)) || '');
@@ -8784,6 +8808,7 @@ const toggleCycleVariantSelection = (
   }, [isAdminUser, menuAdminOnly, menuVisibility]);
   const menuVisibilityForCurrentUser = useMemo<NavigationMenuVisibility>(() => ({
     home: menuVisibility.home && (!menuAdminOnly.home || isAdminMenuUser),
+    explore: (menuVisibility.explore ?? true) && (!(menuAdminOnly.explore ?? false) || isAdminMenuUser),
     studio: menuVisibility.studio && (!menuAdminOnly.studio || isAdminMenuUser),
     musicNote: menuVisibility.musicNote && (!menuAdminOnly.musicNote || isAdminMenuUser),
     library: menuVisibility.library && (!menuAdminOnly.library || isAdminMenuUser),
@@ -8793,6 +8818,7 @@ const toggleCycleVariantSelection = (
   const navigationFallbackPath = useMemo(() => {
     const accessibleVisibility: NavigationMenuVisibility = {
       home: menuVisibility.home && !menuAdminOnly.home,
+      explore: (menuVisibility.explore ?? true) && !(menuAdminOnly.explore ?? false),
       studio: menuVisibility.studio && !menuAdminOnly.studio,
       musicNote: menuVisibility.musicNote && !menuAdminOnly.musicNote,
       library: menuVisibility.library && !menuAdminOnly.library,
@@ -16342,7 +16368,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
           )
         } />
-        <Route path="/explore" element={<ExploreShellLazy />} />
+        <Route path="/explore" element={
+          canAccessNavigationMenu('explore') ? (
+            <ExploreShellLazy />
+          ) : (
+            <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
+          )
+        } />
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
           <StudioPageFrame

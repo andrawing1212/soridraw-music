@@ -705,6 +705,61 @@ export const getAdminPresence = onCall(
   }
 );
 
+// SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
+const NAVIGATION_VISIBILITY_KEYS_214 = [
+  "home",
+  "explore",
+  "studio",
+  "musicNote",
+  "library",
+  "lab",
+  "myPage",
+] as const;
+
+const parseNavigationVisibilityMap214 = (raw: unknown, label: string) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new HttpsError("invalid-argument", label + " 설정이 올바르지 않습니다.");
+  }
+  const source = raw as Record<string, unknown>;
+  const parsed: Record<string, boolean> = {};
+  NAVIGATION_VISIBILITY_KEYS_214.forEach((key) => {
+    if (typeof source[key] !== "boolean") {
+      throw new HttpsError("invalid-argument", label + "." + key + " 값이 필요합니다.");
+    }
+    parsed[key] = source[key] === true;
+  });
+  return parsed;
+};
+
+export const adminSetNavigationVisibility = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db } = await requireAdminCaller(request, "appSettings");
+    const rawSettings = request.data?.settings;
+    const menuVisibility = parseNavigationVisibilityMap214(rawSettings?.menuVisibility, "menuVisibility");
+    const menuAdminOnly = parseNavigationVisibilityMap214(rawSettings?.menuAdminOnly, "menuAdminOnly");
+    const now = Date.now();
+    const revision = now.toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+    await db.collection("app_settings").doc("navigation_visibility").set({
+      menuVisibility,
+      menuAdminOnly,
+      showSunoLibraryMenu: menuVisibility.library,
+      sunoLibraryMenuAdminOnly: menuAdminOnly.library,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await admin.database().ref("publicSync/navigationVisibility").set({
+      revision,
+      updatedAt: now,
+      menuVisibility,
+      menuAdminOnly,
+    });
+
+    return { ok: true, revision, updatedAt: now };
+  }
+);
+
 export const adminSignalUserControlRevision = onCall(
   { region: "us-central1" },
   async (request) => {

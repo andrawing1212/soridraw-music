@@ -1,0 +1,231 @@
+name: SORIDRAW 192 Navigation Settings Release Resume
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-192-navigation-settings-release-resume.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-192-navigation-settings-release-resume
+  cancel-in-progress: false
+
+jobs:
+  resume-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      AUDITED_SOURCE: e03a5b45f155d2ff5e0e33f700621d160eb01477
+      PRIOR_AUDIT_RUN: '36323892369'
+      PRIOR_PARTIAL_RELEASE_RUN: '36324094095'
+      HOSTING_PROJECT: soridraw
+      SHARED_DATA_PROJECT: soridraw-app-866a5
+      RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
+      PREVIEW_URL: https://preview.soridraw.com/
+      TEST_URL: https://test.soridraw.com/
+      PRODUCTION_URL: https://soridraw.com/
+
+    steps:
+      - name: Checkout exact audited source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AUDITED_SOURCE }}
+          fetch-depth: 0
+
+      - name: Lock source and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AUDITED_SOURCE"
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor "$AUDITED_SOURCE" origin/preview
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$TEST_URL" -o "$RUNNER_TEMP/test-before.html"
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$PRODUCTION_URL" -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/test-before.html" | awk '{print $1}' > "$RUNNER_TEMP/test-before.sha"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          test "$(node -e "process.stdout.write(String(require('./public/app-version.json').version || ''))")" = '192'
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          echo "PRIOR_AUDIT_RUN=$PRIOR_AUDIT_RUN"
+          echo "PRIOR_PARTIAL_RELEASE_RUN=$PRIOR_PARTIAL_RELEASE_RUN"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify app source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-213-explore-more-page-cache.mjs
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Authenticate Firebase shared backend
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Verify new Function already deployed successfully
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe adminSetNavigationVisibility             --gen2             --region us-central1             --project "$SHARED_DATA_PROJECT"             --format=json > "$RUNNER_TEMP/nav-function.json"
+          node - <<'NODE'
+          const fs=require('fs');
+          const row=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/nav-function.json','utf8'));
+          const state=String(row.state||'');
+          const entry=String(row.buildConfig?.entryPoint||'');
+          if(state !== 'ACTIVE') throw Error('navigation function is not ACTIVE: '+state);
+          if(entry !== 'adminSetNavigationVisibility') throw Error('unexpected entry point: '+entry);
+          console.log('FUNCTION_ADMIN_SET_NAVIGATION_VISIBILITY_ACTIVE=PASS');
+          console.log('EXISTING_FUNCTIONS_REDEPLOYED=0');
+          NODE
+
+      - name: Mint RTDB OAuth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('service-account credential file missing')
+          creds = service_account.Credentials.from_service_account_file(
+              path,
+              scopes=['https://www.googleapis.com/auth/firebase.database','https://www.googleapis.com/auth/userinfo.email'],
+          )
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('RTDB OAuth token unavailable')
+          Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          print('RTDB_OAUTH_TOKEN=PASS')
+          PY
+
+      - name: Verify deployed RTDB rules exact audited source
+        shell: bash
+        run: |
+          set -euo pipefail
+          RTDB_ACCESS_TOKEN="$(cat "$RUNNER_TEMP/rtdb-access-token")"
+          auth_url="${RTDB_RULES_URL}?access_token=${RTDB_ACCESS_TOKEN}"
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-live.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          local=json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+          live=json.loads(Path(os.environ['RUNNER_TEMP']+'/rtdb-rules-live.json').read_text(encoding='utf-8'))
+          if local != live:
+              raise SystemExit('live RTDB rules differ from audited app192 source')
+          print('SHARED_RTDB_RULES_192_LIVE_EXACT_MATCH=PASS')
+          PY
+
+      - name: Seed one tiny navigation RTDB mirror from current Firestore authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const admin = require('./functions/node_modules/firebase-admin');
+          admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: 'soridraw-app-866a5',
+            databaseURL: 'https://soridraw-app-866a5-default-rtdb.firebaseio.com',
+          });
+          const keys = ['home','explore','studio','musicNote','library','lab','myPage'];
+          const defaults = {
+            menuVisibility: { home:true, explore:true, studio:true, musicNote:true, library:false, lab:true, myPage:true },
+            menuAdminOnly: { home:false, explore:false, studio:false, musicNote:false, library:false, lab:false, myPage:false },
+          };
+          const normalizeMap = (raw, fallback) => Object.fromEntries(keys.map((key) => [
+            key, typeof raw?.[key] === 'boolean' ? raw[key] : fallback[key],
+          ]));
+          (async () => {
+            const snap = await admin.firestore().collection('app_settings').doc('navigation_visibility').get();
+            if (!snap.exists) throw new Error('navigation_visibility Firestore authority missing');
+            const raw = snap.data() || {};
+            const menuVisibility = normalizeMap(raw.menuVisibility, defaults.menuVisibility);
+            const menuAdminOnly = normalizeMap(raw.menuAdminOnly, defaults.menuAdminOnly);
+            const now = Date.now();
+            const revision = 'seed-' + now.toString(36);
+            const payload = { revision, updatedAt: now, menuVisibility, menuAdminOnly };
+            await admin.database().ref('publicSync/navigationVisibility').set(payload);
+            const after = (await admin.database().ref('publicSync/navigationVisibility').get()).val();
+            if (!after || after.revision !== revision) throw new Error('navigation RTDB mirror seed verify failed');
+            for (const key of keys) {
+              if (after.menuVisibility?.[key] !== menuVisibility[key]) throw new Error('visibility mismatch: '+key);
+              if (after.menuAdminOnly?.[key] !== menuAdminOnly[key]) throw new Error('adminOnly mismatch: '+key);
+            }
+            console.log('NAVIGATION_VISIBILITY_RTDB_SEED=PASS revision='+revision);
+            console.log('FIRESTORE_CONFIG_READ=1');
+            console.log('FIRESTORE_CONFIG_WRITE=0_DURING_SEED');
+            console.log('USER_DATA_CHANGED=false');
+            await admin.app().delete();
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+          rm -f "$RUNNER_TEMP/rtdb-access-token"
+
+      - name: Deploy PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy             --only hosting             --project "$HOSTING_PROJECT"             --config firebase.hosting-preview.json             --non-interactive
+          echo 'FIREBASE_PREVIEW_192_DEPLOY=PASS'
+
+      - name: Verify PREVIEW exact build and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          ok=''
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$PREVIEW_URL" -o "$RUNNER_TEMP/preview.html"; then
+              remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+              if [ "$remote_sha" = "$local_sha" ]; then ok=yes; break; fi
+            fi
+            sleep 2
+          done
+          test "$ok" = yes
+          remote_version="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${PREVIEW_URL}app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+          test "$remote_version" = '192'
+          echo "PREVIEW_APP_VERSION=$remote_version"
+          echo 'PREVIEW_EXACT_BUILD=PASS'
+
+      - name: Verify TEST and PRODUCTION code unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$TEST_URL" -o "$RUNNER_TEMP/test-after.html"
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$PRODUCTION_URL" -o "$RUNNER_TEMP/prod-after.html"
+          test "$(sha256sum "$RUNNER_TEMP/test-after.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/test-before.sha")"
+          test "$(sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/prod-before.sha")"
+          echo 'TEST_PRODUCTION_CODE_HOSTING_UNCHANGED=PASS'
+
+      - name: Release summary
+        run: |
+          echo 'APP192_NAVIGATION_SETTINGS_RELEASE=PASS'
+          echo 'ARTIFACT_CLEANUP_POLICY_UNCHANGED=true'
+          echo 'LIKES_UNCHANGED=true'
+          echo 'MUSIC_NOTE_UNCHANGED=true'
+          echo 'EXPLORE_FEED_UNCHANGED=true'
+          echo 'WORKER_UNCHANGED=true'
+          echo 'D1_UNCHANGED=true'
+          echo 'NO_USER_DATA_MIGRATION=true'

@@ -1,3 +1,60 @@
+## 0HQ. PREVIEW app191 · Explore `더 보기` 재조회 로컬 캐시 적용 (2026-09-27 KST)
+
+상태: **PREVIEW 배포 완료 / 실제 모바일·PC 비용 패널 재현 확인 대기**
+
+기준:
+- 구현 시작 기준 PREVIEW HEAD: `1824f0abcea9293cf8eef01e9794a0a466b12e56`
+- 제품 코드 완료 기준: `580401461b9960b8313e8731c9f1ae84d3cdbf2f`
+- app191 version commit: `241bfab86780c700ea051a86712b8ee1c0a807c9`
+- 최종 release-system audit source: `47dc0960653948ced0aaedc2a3732efefb34c47a`
+- Audit Run: **36301191752 SUCCESS**
+- PREVIEW Hosting release commit: `0c7f0d9b1a67f30be0a008ea04859bf15336608b`
+- PREVIEW App Release Run: **36301310221 SUCCESS**
+- 실제 PREVIEW app version: **191**
+- `preview.soridraw.com` exact build: **PASS**
+- TEST / PRODUCTION unchanged: **PASS**
+
+이번 변경:
+- 기존 Explore 첫 페이지 / 추천·최신·인기 데이터 구조는 변경하지 않았다.
+- 사용자가 처음 `더 보기`를 눌러 아직 보지 않은 cursor page를 요청할 때는 기존과 동일하게 **bounded D1 조회**를 허용한다.
+- 성공한 `더 보기` 응답은 브라우저 CacheStorage + 메모리에 저장한다.
+- 같은 기기에서 같은 cursor page를 다시 열면, 현재 first-page revision이 같고 안전 유효시간 안이면 **서버 요청 없이 로컬 캐시를 재사용**한다.
+- 로컬 재사용 응답은 진단 기준 **Worker 0 / D1 R0 / W0 / R2 0**을 목표로 한다.
+- 캐시는 최대 **12 page**, 유효시간 **120초**로 제한했다.
+  - 이유: Explore 공개곡은 타 사용자 공개/비공개·좋아요로 계속 바뀌는 공유 데이터이므로 Music Note처럼 장기 전체 catalog를 기기에 고정하면 stale 위험이 생긴다.
+  - 120초는 현재 Explore viewer revision gate와 같은 범위라 기존 freshness 수준을 악화시키지 않기 위한 안전 상한이다.
+- 본인 공개/비공개/공개설정 mutation이 성공하면 해당 기기의 `더 보기` page cache 전체를 즉시 무효화한다.
+- 전체 Feed catalog 다운로드, 전체 Feed 재생성, D1 scan, 주기 polling, 새 RTDB listener는 추가하지 않았다.
+
+보호 범위:
+- 좋아요 로직 변경 없음.
+- Music Note 60초 묶음 저장 변경 없음.
+- 공개/비공개 canonical D1 → Feed/Profile 구조 변경 없음.
+- Explore UI/CSS/탭 디자인 변경 없음.
+- Firebase Rules / Functions / Cloudflare Worker 변경 없음.
+- 사용자 원본 데이터 / D1 schema / Firestore 데이터 변경 없음.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- verifier `213_EXPLORE_MORE_PAGE_CACHE=PASS`.
+- 기존 Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- PREVIEW Hosting exact build PASS.
+- Shared RTDB Rules deploy: SKIPPED.
+- TEST / PRODUCTION 비변경 PASS.
+
+실사용 확인 방법:
+1. 진단 초기화 후 Explore에서 처음 `더 보기` → 기존처럼 bounded D1 read가 1회 발생하는 것이 정상.
+2. 2분 안에 다른 페이지로 갔다가 같은 Explore 정렬로 돌아와 다시 같은 `더 보기` page 진입 → **D1 R0 / Worker 0 목표**.
+3. 공개/비공개 후에는 정확성을 위해 cache가 폐기되므로 다음 `더 보기`는 다시 bounded server read가 발생하는 것이 정상.
+
+다음:
+- 사용자 모바일/PC에서 위 1~2번 비용 패널 확인.
+- 통과 후 요청대로 추천 / 최신 / 인기 탭 UI 수정 범위를 별도 작업으로 진행.
+- TEST 승격은 사용자 명시 요청 전 금지.
+
+
 # SORIDRAW CURRENT RELEASE STATE
 
 ## 0HP. PREVIEW PC 공개프로필 ↔ Explore 공개곡 parity 근본 수정 완료 (2026-09-27 KST)

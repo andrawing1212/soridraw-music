@@ -1,3 +1,29 @@
+## 다음 작업 기준 · app191 Explore 더 보기 캐시 실사용 확인 후 UI 작업 (2026-09-27 KST)
+
+현재 PREVIEW:
+- app version: **191**
+- 제품 코드 기준: `580401461b9960b8313e8731c9f1ae84d3cdbf2f`
+- Audit Run: **36301191752 SUCCESS**
+- PREVIEW Hosting Run: **36301310221 SUCCESS**
+- 실제 `preview.soridraw.com` exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+지금 확인할 것:
+- 첫 `더 보기`: 기존 bounded D1 read 허용.
+- 120초 안에 같은 cursor page 재진입: **LOCAL cache / Worker 0 / D1 R0 / W0 목표**.
+- 공개/비공개 mutation 후에는 정확성을 위해 더보기 캐시가 무효화되어 다음 요청은 다시 bounded read가 정상.
+- 모바일/PC 동일 경로.
+
+보호:
+- 좋아요, 공개/비공개 canonical 구조, Music Note 60초 저장, Explore UI/CSS는 이번 작업에서 변경하지 않는다.
+- Worker / Functions / Rules / D1 schema / 사용자 원본 데이터 변경 금지.
+- TEST/PRODUCTION 승격은 사용자 명시 요청 전 금지.
+
+실사용 통과 후 다음 후보:
+- 사용자가 요청한 추천 / 최신 / 인기 탭 UI 정리.
+- UI 수정은 현재 비용 경로와 캐시 동작을 건드리지 않는 범위로 진행.
+
+
 ## 최신 2026-09-27 — PC 공개프로필 ↔ Explore 공개곡 parity 근본 수정/복구 완료, 실사용 확인 대기
 
 - `CURRENT_RELEASE_STATE.md 0HP` 최우선.

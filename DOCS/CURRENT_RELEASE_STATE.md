@@ -1,3 +1,83 @@
+## 0HU. PREVIEW app194 · 앱 전체 프로필 사진 authority 통일 완료 (2026-09-28 KST)
+
+상태: **요구사항 재정의 / 기존 계정 정합화 / 코드 수정 / 감사 / PREVIEW 배포 완료 · 사용자 실화면 확인 대기**
+
+사용자 확정 기준:
+- Google 로그인 계정에 사진이 있으면 기본 프로필 사진으로 사용.
+- SORIDRAW 공개프로필에 별도 프로필 사진을 등록하면 **SORIDRAW 공개프로필 사진이 Google 사진보다 우선**.
+- 따라서 같은 사용자의 상단 계정칩 / Studio·Explore 왼쪽 rail / 마이페이지 / Explore 게시자 카드 / 공개프로필은 같은 effective avatar를 사용.
+- 현재 Master `@soridraw`는 공개프로필 astronaut 사진이 등록되어 있으므로 앱 전체에서 astronaut 사진이 정답.
+
+기준:
+- 작업 시작 기준 PREVIEW 문서 HEAD: `f2966a6ba8777b5b4b2c4d16bb0251b7dd7016a3`.
+- global avatar authority service: `src/services/profileAvatarAuthority.ts`.
+- 제품 코드 최종 기준: `95c0c8b5db1ace85807ef774f610c96ce259804c` 계열.
+- app194 version commit: `fa2cb9fccfc0a09a5b13c5bdc2d7bc2b2628ded0`.
+- 기존 공개프로필 Firebase Auth 정합화 Run: **36330458671 SUCCESS**.
+- 최종 제품 감사 Run: **36330676202 SUCCESS**.
+- PREVIEW release commit: `706eeb02c3fa43b083a5ae666962a34e50702c5c`.
+- PREVIEW Hosting Run: **36330817827 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app194 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+새 authority:
+1. 명시적으로 등록한 SORIDRAW 공개프로필 사진.
+2. 없으면 Google provider 사진.
+3. 둘 다 없으면 기존 Firebase Auth 사진 / 기본 fallback.
+- Google-hosted 사진을 공개프로필에 과거 호환값으로 가지고 있더라도 현재 Google provider 사진이 있으면 Google provider를 기본으로 사용.
+- 별도 SORIDRAW 사진이 생기면 Firebase Auth의 effective `photoURL`도 그 사진으로 맞춰 기존 앱 UI가 추가 서버 조회 없이 같은 값을 재사용.
+
+이번 수정:
+- 공개프로필 저장 완료 시 effective avatar를 즉시 Firebase Auth 프로필에도 반영.
+- 본인 공개프로필을 이미 불러온 경우 그 데이터를 재사용해 authority를 self-heal; 별도 D1/Firestore read 추가 없음.
+- 같은 탭에서는 작은 local event로 즉시:
+  - 상단 계정칩
+  - Studio/Explore 왼쪽 rail
+  - 마이페이지
+  를 새 사진으로 갱신.
+- 상단 계정 identity local cache도 새 사진으로 갱신하여 다음 로컬 복원 시 예전 Google 사진이 먼저 뜨지 않도록 함.
+- app193의 Explore 게시자 카드 / Feed local cache / public-profile first-view cache targeted patch도 유지.
+
+기존 사용자 정합화:
+- shared D1 `public_profiles` 전체 현재 행은 **3개**만 bounded read.
+- 3개 모두 별도 SORIDRAW 공개프로필 custom avatar가 존재함을 확인.
+- Firebase Auth top-level `photoURL`을 공개프로필 authority와 비교해 **불일치 3개만 Auth profile W3**로 정합화.
+- 검증용 Firebase Auth read 6, Firestore R0/W0, D1 W0.
+- 콘텐츠 데이터 / Music Note / Library / Explore 곡 / 좋아요 데이터 변경 없음.
+- 전체 사용자 scan / Firestore scan / D1 backfill / schema migration 없음.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- `216_GLOBAL_PROFILE_AVATAR_AUTHORITY=PASS`.
+- public profile > Google 우선순위 PASS.
+- Google 기본 fallback PASS.
+- top nav / left rail / MyPage same-session sync PASS.
+- app193 `215_PROFILE_OWNER_CARD_SYNC` PASS.
+- 기존 Like 190 / 192 / 197 regression PASS.
+- backend code scope unchanged PASS.
+- app update/page entry용 새 Firestore/D1 read 0.
+- PREVIEW Hosting exact build/version 194 PASS.
+- Worker / Functions / Rules / RTDB Rules 비변경.
+- TEST / PRODUCTION unchanged PASS.
+- TEMP 216 진단·정합화·감사 workflow 모두 삭제 완료.
+
+비용:
+- 앱 업데이트 때문에 Firestore/D1 read를 추가하지 않음.
+- 일반 페이지 이동/재진입 때문에 avatar server read를 추가하지 않음.
+- 공개프로필 사진을 실제로 바꿀 때만 Firebase Auth profile write가 필요하며, 값이 같으면 write하지 않음.
+- 기존 3계정 정합화는 이번 1회 작업으로 종료.
+
+남은 확인:
+1. app194 적용 후 상단 오른쪽 계정칩이 astronaut인지.
+2. Explore/Studio 왼쪽 rail도 astronaut인지.
+3. 공개프로필 / Explore 게시자 카드 / 마이페이지도 모두 같은 astronaut인지.
+4. 다른 Google 사용자도 SORIDRAW 공개프로필 사진이 없으면 Google 사진, 등록 후에는 SORIDRAW 사진으로 바뀌는지.
+- 실기기 시각 확인 전이며 이상 시 avatar 표시 경로만 좁혀 수정한다.
+
+TEST/main 승격 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0HT. PREVIEW app193 · Explore 게시자 프로필 사진 기준 통일 완료 (2026-09-28 KST)
 
 상태: **원인 확인 / 현재 데이터 복구 / 재발 방지 수정 / 감사 / PREVIEW 배포 완료 · 사용자 실화면 확인만 대기**

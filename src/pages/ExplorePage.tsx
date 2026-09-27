@@ -295,6 +295,30 @@ const patchExploreTrackOwnerProfile215 = (
   avatarUrl: nextProfile.avatarUrl || null,
 } : track;
 
+// SORIDRAW_EXPLORE_CARD_AVATAR_UNIFIED_218_20260928
+// One display resolver is shared by Explore Feed and public-profile grids.
+// - Public-profile page: the loaded public profile is authoritative.
+// - Feed/search/recommended/latest/popular: the signed-in owner's effective
+//   Firebase Auth photoURL is authoritative for that owner's own cards.
+//   app194 keeps that photoURL aligned to SORIDRAW public-profile > Google.
+// - Other owners keep the server-projected public-profile avatar already on track.
+// This adds no request and does not touch like/publication logic.
+const applyExploreCardAvatarAuthority218 = (
+  track: ExploreTrack,
+  currentUser: User | null,
+  ownerProfileAuthority: ExplorePublicProfile | null,
+): ExploreTrack => {
+  if (ownerProfileAuthority && track.ownerUid === ownerProfileAuthority.uid) {
+    return patchExploreTrackOwnerProfile215(track, ownerProfileAuthority);
+  }
+  if (currentUser?.uid && track.ownerUid === currentUser.uid && currentUser.photoURL) {
+    return track.avatarUrl === currentUser.photoURL
+      ? track
+      : { ...track, avatarUrl: currentUser.photoURL };
+  }
+  return track;
+};
+
 const isOpenableUrl = (value?: string | null) => {
   if (!value) return false;
   try {
@@ -1762,9 +1786,11 @@ export default function ExplorePage() {
         // On a public-profile page, the already-loaded profile is the display
         // authority for that owner's cards. This fixes stale per-track avatar
         // snapshots without any new server read/write or cache invalidation.
-        const authorityTrack217 = ownerProfileAuthority
-          ? patchExploreTrackOwnerProfile215(track, ownerProfileAuthority)
-          : track;
+        const authorityTrack217 = applyExploreCardAvatarAuthority218(
+          track,
+          user,
+          ownerProfileAuthority,
+        );
         const liked129 = likedTrackIds[authorityTrack217.id] === true;
         const pair129 = normalizeExploreLikeDisplayPair129(liked129, authorityTrack217.likeCount);
         const displayTrack129 = pair129.likeCount === authorityTrack217.likeCount

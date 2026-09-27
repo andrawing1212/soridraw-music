@@ -98,12 +98,19 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
-      - name: Deploy only new navigation callable
+      - name: Verify deployed navigation callable
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy             --project "$SHARED_DATA_PROJECT"             --config firebase.json             --only functions:adminSetNavigationVisibility             --non-interactive
-          echo 'FUNCTION_ADMIN_SET_NAVIGATION_VISIBILITY_DEPLOY=PASS'
+          gcloud functions describe adminSetNavigationVisibility --gen2 --region us-central1 --project "$SHARED_DATA_PROJECT" --format=json > "$RUNNER_TEMP/admin-navigation-function.json"
+          node - <<'NODE'
+          const fs = require('fs');
+          const row = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/admin-navigation-function.json','utf8'));
+          if (String(row?.buildConfig?.entryPoint || '') !== 'adminSetNavigationVisibility') throw new Error('deployed navigation callable entryPoint mismatch');
+          const state = String(row?.state || '');
+          if (state && state !== 'ACTIVE') throw new Error('deployed navigation callable not active: ' + state);
+          console.log('FUNCTION_ADMIN_SET_NAVIGATION_VISIBILITY_DEPLOY=PASS');
+          NODE
 
       - name: Deploy shared RTDB rules exact source
         shell: bash

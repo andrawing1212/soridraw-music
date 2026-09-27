@@ -1,3 +1,33 @@
+## 2026-09-28 — app196 공개프로필 + Explore Feed avatar 공통 확인
+
+현재 PREVIEW:
+- app196.
+- 제품 commit `5b29438f8449ad4be4f0cdf019decbb0073aa122`.
+- live parity Run `36332286972` SUCCESS: latest/popular Feed ↔ public profile avatar mismatch 0.
+- Audit Run `36332498660` SUCCESS.
+- release source `1b9e1f610d5de104f167cd509aa8235aea636681`.
+- Hosting Run `36332606501` SUCCESS.
+- exact build/version 196 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 공개프로필의 공개곡 카드 4개 작은 게시자 사진 = astronaut.
+2. Explore 추천/최신/인기에서 같은 SORiDRAW 곡 카드 게시자 사진 = astronaut.
+3. 상단/왼쪽 rail/마이페이지/큰 공개프로필 사진은 app194 정상 상태 유지.
+
+구조 기준:
+- 공개프로필과 Feed 카드 avatar는 이제 같은 client resolver를 사용.
+- 공개프로필 custom photo > Google fallback 규칙 유지.
+- 서버 Feed 최신/인기 projection 자체도 현재 public profile과 일치.
+- 추가 서버 read/write로 해결하지 않는다.
+
+보호:
+- 좋아요 / 공개·비공개 / Music Note / Worker / Functions / Rules / UI·CSS 비변경.
+
+통과 후 다음 작업 진행.
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 2026-09-28 — app195 공개곡 카드 avatar 실사용 확인
 
 현재 PREVIEW:

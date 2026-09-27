@@ -33,6 +33,7 @@ import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
 import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
 import { MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled, writeMenuHelpTipsEnabled } from '../lib/menuHelpPreference';
+import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../services/profileAvatarAuthority';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -237,15 +238,31 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
  const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
  const [menuHelpTipsEnabled, setMenuHelpTipsEnabled] = useState(() => readMenuHelpTipsEnabled());
+ const [effectiveAvatarUrl, setEffectiveAvatarUrl] = useState(() => auth.currentUser?.photoURL || '');
 
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
  setUser(currentUser);
+ setEffectiveAvatarUrl(currentUser?.photoURL || '');
  setIsApiRegistered(getLocalApiStatus(currentUser?.uid));
  setRemainingCredits(getRemainingCredits(currentUser?.uid));
  });
  return () => unsubscribe();
  }, []);
+
+ useEffect(() => {
+   if (!user?.uid) {
+     setEffectiveAvatarUrl('');
+     return;
+   }
+   const handleAvatarAuthority = (event: Event) => {
+     const detail = (event as CustomEvent<{ uid?: string; url?: string }>).detail;
+     if (!detail || detail.uid !== user.uid) return;
+     setEffectiveAvatarUrl(String(detail.url || ''));
+   };
+   window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+   return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+ }, [user?.uid]);
 
  useEffect(() => {
  if (!user?.uid) {
@@ -506,7 +523,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
  <div className="flex items-start justify-between gap-4">
  <div className="flex items-center gap-4 min-w-0">
- <img src={user.photoURL || 'https://picsum.photos/seed/soridraw-user/160/160'} alt="profile" referrerPolicy="no-referrer" className="h-16 w-16 rounded-3xl object-cover shadow-xl" />
+ <img src={effectiveAvatarUrl || 'https://picsum.photos/seed/soridraw-user/160/160'} alt="profile" referrerPolicy="no-referrer" className="h-16 w-16 rounded-3xl object-cover shadow-xl" />
  <div className="min-w-0 flex-1">
  <div className="flex flex-wrap items-center gap-2">
  {isEditingNickname ? (

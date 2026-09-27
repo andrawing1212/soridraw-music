@@ -22,6 +22,10 @@ requireText(page, 'const authorityTrack217 = ownerProfileAuthority', 'profile ca
 requireText(page, 'patchExploreTrackOwnerProfile215(track, ownerProfileAuthority)', 'profile card local authority patch');
 requireText(page, 'renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`, profile)', 'public profile grid uses profile authority');
 requireText(page, 'renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`, profile)', 'liked grid preserves profile authority for own tracks');
+requireText(page, 'SORIDRAW_EXPLORE_CARD_AVATAR_UNIFIED_218_20260928', '218 unified card avatar marker');
+requireText(page, 'applyExploreCardAvatarAuthority218', 'shared feed/profile avatar resolver');
+requireText(page, 'track.ownerUid === currentUser.uid && currentUser.photoURL', 'signed-in owner feed avatar authority');
+requireText(page, 'track.ownerUid === ownerProfileAuthority.uid', 'public-profile card avatar authority');
 
 const markerStart = page.indexOf('SORIDRAW_EXPLORE_PROFILE_OWNER_CARD_SYNC_215_20260928');
 const helperEnd = page.indexOf('const isOpenableUrl', markerStart);
@@ -37,6 +41,14 @@ if (onSavedStart < 0 || onSavedEnd < 0) throw new Error('Could not isolate profi
 const onSavedBlock = page.slice(onSavedStart, onSavedEnd);
 if (/\b(fetch|requestAuthed|requestPublic)\s*\(/.test(onSavedBlock)) {
   throw new Error('Profile save repaint must not add a network request');
+}
+
+const marker218Start = page.indexOf('SORIDRAW_EXPLORE_CARD_AVATAR_UNIFIED_218_20260928');
+const marker218End = page.indexOf('const isOpenableUrl', marker218Start);
+if (marker218Start < 0 || marker218End < 0) throw new Error('Could not isolate 218 unified avatar resolver');
+const avatarResolver218 = page.slice(marker218Start, marker218End);
+if (/\b(fetch|requestAuthed|requestPublic|getExplorePublicProfile|getExplorePublicProfileTracks)\s*\(/.test(avatarResolver218)) {
+  throw new Error('218 unified card avatar resolver must remain local-only');
 }
 
 const marker217Start = page.indexOf('SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928');
@@ -63,3 +75,5 @@ console.log('SERVER_IO_ADDED=0');
 console.log('SHARED_FEED_AVATAR_SIGNAL_GUARD=PASS');
 console.log('217_PUBLIC_PROFILE_CARD_AVATAR_AUTHORITY=PASS');
 console.log('217_SERVER_IO_ADDED=0');
+console.log('218_FEED_PROFILE_CARD_AVATAR_UNIFIED=PASS');
+console.log('218_SERVER_IO_ADDED=0');

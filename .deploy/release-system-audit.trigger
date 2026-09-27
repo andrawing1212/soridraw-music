@@ -1,5 +1,6 @@
-explore_more_page_cache_audit=2026-09-27T15:30:00+09:00
-source_head=580401461b9960b8313e8731c9f1ae84d3cdbf2f
+explore_more_page_cache_audit=2026-09-27T15:35:00+09:00
+source_head=241bfab86780c700ea051a86712b8ee1c0a807c9
+app_version=191
 deploy=false
 scope=explore_cursor_page_local_cache_only
 first_unseen_more=bounded_d1

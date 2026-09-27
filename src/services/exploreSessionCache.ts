@@ -13,6 +13,143 @@ import {
 const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 3;
 const EXPLORE_FEED_SOURCE_TYPE = 'explore_feed';
 
+  
+// SORIDRAW_EXPLORE_MORE_PAGE_CACHE_213_20260927
+// Explicit cursor pages are user-demand reads. Cache a small bounded set locally so
+// reopening the same already-viewed page does not spend D1 again. Shared public
+// data can change underneath a cursor page, so reuse is intentionally capped to
+// the existing two-minute Explore viewer freshness window.
+const EXPLORE_MORE_PAGE_CACHE_NAME_213 = 'soridraw-explore-more-pages-v1';
+const EXPLORE_MORE_PAGE_CACHE_TTL_MS_213 = 2 * 60 * 1000;
+const EXPLORE_MORE_PAGE_CACHE_MAX_ENTRIES_213 = 12;
+
+type ExploreMorePageCacheEntry213 = {
+  schemaVersion: 1;
+  cachedAt: number;
+  expiresAt: number;
+  baseRevision: string;
+  rows: Array<Record<string, unknown>>;
+  nextCursor: string | null;
+};
+
+const exploreMorePageMemoryCache213 = new Map<string, ExploreMorePageCacheEntry213>();
+
+const isExploreMorePageUrl213 = (url: string) => {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.pathname === '/v1/feed'
+      && Boolean(parsed.searchParams.get('cursor'))
+      && Number(parsed.searchParams.get('limit') || 40) === 40;
+  } catch {
+    return false;
+  }
+};
+
+const cloneMorePageEntry213 = (entry: ExploreMorePageCacheEntry213): ExploreMorePageCacheEntry213 => ({
+  ...entry,
+  rows: cloneRows(entry.rows),
+});
+
+const isValidMorePageEntry213 = (
+  value: unknown,
+  expectedRevision: string,
+): value is ExploreMorePageCacheEntry213 => {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as ExploreMorePageCacheEntry213;
+  return entry.schemaVersion === 1
+    && Number.isFinite(entry.cachedAt)
+    && Number.isFinite(entry.expiresAt)
+    && entry.expiresAt > Date.now()
+    && entry.baseRevision === expectedRevision
+    && Array.isArray(entry.rows)
+    && entry.rows.length <= 40
+    && (entry.nextCursor === null || typeof entry.nextCursor === 'string');
+};
+
+const pruneExploreMorePageCache213 = async (cache: Cache) => {
+  try {
+    const keys = await cache.keys();
+    const overflow = Math.max(0, keys.length - EXPLORE_MORE_PAGE_CACHE_MAX_ENTRIES_213);
+    for (let index = 0; index < overflow; index += 1) {
+      exploreMorePageMemoryCache213.delete(keys[index].url);
+      await cache.delete(keys[index]);
+    }
+  } catch {
+    // Browser cache is best-effort only.
+  }
+};
+
+export const readExploreMorePageCache213 = async (
+  url: string,
+  expectedRevision: string | null,
+): Promise<{ rows: Array<Record<string, unknown>>; nextCursor: string | null } | null> => {
+  const revision = String(expectedRevision || '').trim();
+  if (!revision || !isExploreMorePageUrl213(url)) return null;
+
+  const memory = exploreMorePageMemoryCache213.get(url);
+  if (memory) {
+    if (isValidMorePageEntry213(memory, revision)) {
+      const cloned = cloneMorePageEntry213(memory);
+      return { rows: cloned.rows, nextCursor: cloned.nextCursor };
+    }
+    exploreMorePageMemoryCache213.delete(url);
+  }
+
+  if (typeof caches === 'undefined') return null;
+  try {
+    const cache = await caches.open(EXPLORE_MORE_PAGE_CACHE_NAME_213);
+    const response = await cache.match(url);
+    if (!response) return null;
+    const parsed = await response.json() as ExploreMorePageCacheEntry213;
+    if (!isValidMorePageEntry213(parsed, revision)) {
+      await cache.delete(url);
+      return null;
+    }
+    exploreMorePageMemoryCache213.set(url, parsed);
+    const cloned = cloneMorePageEntry213(parsed);
+    return { rows: cloned.rows, nextCursor: cloned.nextCursor };
+  } catch {
+    return null;
+  }
+};
+
+export const writeExploreMorePageCache213 = async (
+  url: string,
+  baseRevision: string | null,
+  rows: Array<Record<string, unknown>>,
+  nextCursor: string | null,
+): Promise<void> => {
+  const revision = String(baseRevision || '').trim();
+  if (!revision || !isExploreMorePageUrl213(url) || !Array.isArray(rows) || rows.length > 40) return;
+  const now = Date.now();
+  const entry: ExploreMorePageCacheEntry213 = {
+    schemaVersion: 1,
+    cachedAt: now,
+    expiresAt: now + EXPLORE_MORE_PAGE_CACHE_TTL_MS_213,
+    baseRevision: revision,
+    rows: cloneRows(rows),
+    nextCursor: nextCursor ? String(nextCursor) : null,
+  };
+  exploreMorePageMemoryCache213.set(url, entry);
+  if (typeof caches === 'undefined') return;
+  try {
+    const cache = await caches.open(EXPLORE_MORE_PAGE_CACHE_NAME_213);
+    await cache.put(url, new Response(JSON.stringify(entry), {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    }));
+    await pruneExploreMorePageCache213(cache);
+  } catch {
+    // Local page reuse is an optimization; the normal bounded D1 path remains available.
+  }
+};
+
+export const invalidateExploreMorePageCache213 = () => {
+  exploreMorePageMemoryCache213.clear();
+  if (typeof caches !== 'undefined') {
+    void caches.delete(EXPLORE_MORE_PAGE_CACHE_NAME_213).catch(() => undefined);
+  }
+};
+
 type ExploreFeedCacheData = {
   rows: Array<Record<string, unknown>>;
 };

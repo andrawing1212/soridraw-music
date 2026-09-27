@@ -9,6 +9,7 @@ import {
 } from '../lib/soridrawPersistentCache';
 import {
   invalidateExploreFeedSessionCache,
+  invalidateExploreMorePageCache213,
   patchExploreFeedSessionCachesRow,
   removeExploreFeedSessionCacheRow,
   upsertExploreFeedSessionCacheRow,
@@ -629,6 +630,7 @@ profilePinned: pending.desiredState.profilePinned,
   const latestOutbox = readPublicationOutbox(uid);
   const states = readPublicationStateCache(uid) || {};
   let failed = false;
+  let invalidateMorePages213 = false;
 
   for (const pending of entries) {
     const row: any = resultBySource.get(pending.sourceId);
@@ -659,6 +661,7 @@ profilePinned: pending.desiredState.profilePinned,
       delete latestOutbox[pending.sourceId];
     }
     states[pending.sourceId] = { ...visibleState };
+    invalidateMorePages213 = true;
 
     if (visibleState.status === 'private') {
       removeExploreFeedSessionCacheRow(visibleState.trackId);
@@ -668,6 +671,8 @@ profilePinned: pending.desiredState.profilePinned,
       upsertExplorePublicProfileFirstViewTrack(uid, row.snapshotItem as Record<string, unknown>);
     }
   }
+
+  if (invalidateMorePages213) invalidateExploreMorePageCache213();
 
   persistPublicationOutbox(uid, latestOutbox);
   const revision = String(payload?.data?.revision || '').trim();

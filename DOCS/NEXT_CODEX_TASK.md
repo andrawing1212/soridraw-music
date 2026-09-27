@@ -1,3 +1,33 @@
+## 다음 작업 기준 · app192 관리자 메뉴 동기화 실사용 확인 → Explore 탭 UI (2026-09-27 KST)
+
+현재 PREVIEW:
+- app version **192**.
+- 제품 commit `a6a030a3067faca3cf662af69372563d83ed7b3e`.
+- Audit Run **36323892369 SUCCESS**.
+- 최초 release Run `36324094095`은 신규 Function 생성은 성공했으나 Firebase CLI의 Artifact cleanup policy 후처리 요구로 exit 1; Hosting 전 중단.
+- cleanup policy를 건드리지 않고 안전 재개 Run **36324350280 SUCCESS**.
+- `adminSetNavigationVisibility` ACTIVE, 기존 Functions 재배포 0.
+- shared RTDB navigation rules exact match PASS + current Firestore authority 기준 mirror seed PASS.
+- PREVIEW Hosting app192 / exact build PASS.
+- TEST / PRODUCTION code+Hosting unchanged PASS.
+
+사용자 실사용 확인:
+- 관리자에서 메뉴 하나 `숨김` → 이미 로그인된 다른 일반 사용자 PC/모바일에서 자동으로 메뉴가 사라지는지.
+- 해당 direct URL도 차단되는지. Explore는 `/explore` 직접주소 확인.
+- 다시 `전체공개` → 다른 기기에서 자동 복구되는지.
+- 정상 캐시 사용자의 Firestore navigation read는 0 목표. 이 기능 때문에 페이지 이동 Firestore read를 추가하면 안 됨.
+
+보호:
+- Like / Explore Feed / 공개·비공개 / 공개프로필 / Music Note 60초 저장 / UI·CSS 비변경.
+- Worker / D1 / schema / 사용자 원본 데이터 비변경.
+- 새 navigation RTDB payload 외 다른 RTDB path 변경 금지.
+- TEST/PRODUCTION 승격은 사용자 명시 승인 전 금지.
+
+통과 후:
+- 사용자 요청대로 추천 / 최신 / 인기 탭 UI 수정.
+- UI 수정은 현재 비용/캐시/좋아요/공개상태 경로를 건드리지 않는 범위로 진행.
+
+
 ## 다음 우선 확인 · 관리자 상단 메뉴 공통설정 전파/Explore route gate (2026-09-27 KST)
 
 - app191 Explore 더보기 캐시 실사용: **PASS**.

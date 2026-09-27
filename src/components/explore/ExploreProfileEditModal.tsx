@@ -10,6 +10,7 @@ import {
   type ExplorePublicProfile,
 } from '../../services/exploreSocialService';
 import { suggestExploreProfileGenres } from '../../services/exploreProfileGenreSuggestionService';
+import { syncSoridrawProfileAvatarAuthority } from '../../services/profileAvatarAuthority';
 import ExploreImageCropModal from './ExploreImageCropModal';
 
 type Props = {
@@ -157,6 +158,11 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       if (backgroundBlob) await uploadExploreProfileMedia(user, 'background', backgroundBlob);
       if (avatarBlob) await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
       const refreshed = await getExplorePublicProfile(user.uid);
+      try {
+        await syncSoridrawProfileAvatarAuthority(user, refreshed.avatarUrl);
+      } catch (avatarSyncError) {
+        console.warn('SORIDRAW profile avatar authority sync failed; public profile save remains valid.', avatarSyncError);
+      }
       onSaved(refreshed);
       onClose();
     } catch (reason) {

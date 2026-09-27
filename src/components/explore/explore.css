@@ -91,7 +91,7 @@
 /* SORIDRAW_EXPLORE_NO_MASTHEAD_DIVIDER_219_20260928
    Explore Feed and public-profile views intentionally omit the shared workspace masthead line.
    Other workspace pages keep the canonical divider unchanged. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame[data-workspace-view="explore"]>.soridraw-studio-masthead-divider{display:none!important;right:0!important}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-page-frame[data-workspace-view="explore"]>.soridraw-studio-masthead-divider{display:none!important;right:0!important}
 }
 @media (max-width:1099px){.soridraw-explore-page{padding:86px 20px 54px}.soridraw-explore-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 15px}}
 @media (max-width:720px){

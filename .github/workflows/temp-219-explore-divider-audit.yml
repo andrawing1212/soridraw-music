@@ -1,0 +1,42 @@
+name: TEMP 219 Explore Divider Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-219-explore-divider-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Explore-only divider guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'SORIDRAW_EXPLORE_NO_MASTHEAD_DIVIDER_219_20260928' src/components/explore/explore.css
+          grep -F '.soridraw-studio-page-frame[data-workspace-view="explore"]>.soridraw-studio-masthead-divider{display:none!important;right:0!important}' src/components/explore/explore.css
+          git diff --exit-code 3cf5d36e3002ac59b6217d3963453b4eef62da54 HEAD -- src/components/studio/studioLayout.css src/pages/ExplorePage.tsx cloudflare/explore-worker functions firestore.rules database.rules.json
+          echo 'EXPLORE_FEED_AND_PROFILE_DIVIDER_HIDDEN=true'
+          echo 'OTHER_PAGE_DIVIDER_CODE_CHANGED=false'
+          echo 'UI_SCOPE=explore_only'
+          echo 'SERVER_IO_CHANGED=false'
+          echo 'AUDIT_219=PASS'

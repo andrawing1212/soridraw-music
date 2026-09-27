@@ -53,6 +53,7 @@ import {
   type ExploreFollowState,
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
+import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
 import {
@@ -1032,6 +1033,10 @@ export default function ExplorePage() {
       if (authoritative) syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
       setProfileTracks(displayTracks);
+      if (user?.uid === nextProfile.uid) {
+        void syncSoridrawProfileAvatarAuthority(user, nextProfile.avatarUrl)
+          .catch((avatarSyncError) => console.warn('Explore own profile avatar authority sync failed.', avatarSyncError));
+      }
     };
 
     getExplorePublicProfileFirstView(profileUid, {

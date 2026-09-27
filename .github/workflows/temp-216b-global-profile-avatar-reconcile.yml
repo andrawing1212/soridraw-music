@@ -1,0 +1,130 @@
+name: TEMP 216B Global Profile Avatar Reconcile
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-216b-global-profile-avatar-reconcile.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read bounded public-profile avatar authorities
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT uid, handle, avatar_url
+            FROM public_profiles
+            WHERE COALESCE(uid,'') <> ''
+            ORDER BY uid;
+          " --json > "$RUNNER_TEMP/public-profiles.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/public-profiles.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          if(rows.length > 100) throw new Error('Safety stop: public profile reconciliation exceeds 100 rows');
+          for(const row of rows){
+            if(!String(row.uid||'').trim()) throw new Error('Profile row without uid');
+            const u=String(row.avatar_url||'').trim();
+            if(u && !/^https:\/\//i.test(u)) throw new Error('Non-HTTPS profile avatar encountered');
+          }
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/avatar-authorities.json', JSON.stringify(rows));
+          console.log('PUBLIC_PROFILE_AUTHORITY_ROWS='+rows.length);
+          console.log('D1_WRITE=0');
+          NODE
+      - name: Authenticate shared Firebase Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - name: Reconcile Firebase Auth display photo
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { applicationDefault, initializeApp } from 'firebase-admin/app';
+          import { getAuth } from 'firebase-admin/auth';
+
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/avatar-authorities.json','utf8'));
+          const app=initializeApp({ credential: applicationDefault(), projectId:'soridraw-app-866a5' });
+          const auth=getAuth(app);
+          const clean=v=>String(v||'').trim();
+          const isGoogle=u=>{
+            const raw=clean(u);
+            if(!raw) return false;
+            try{
+              const h=new URL(raw).hostname.toLowerCase();
+              return h==='googleusercontent.com'||h.endsWith('.googleusercontent.com')||h==='ggpht.com'||h.endsWith('.ggpht.com');
+            }catch{return false}
+          };
+
+          let reads=0, writes=0, customAuthorities=0, googleFallbacks=0, unchanged=0;
+          for(const row of rows){
+            const uid=clean(row.uid);
+            const publicAvatar=clean(row.avatar_url);
+            const record=await auth.getUser(uid);
+            reads++;
+            const google=record.providerData.find(p=>p.providerId==='google.com');
+            const googlePhoto=clean(google?.photoURL);
+            const explicitPublic=publicAvatar && !isGoogle(publicAvatar) ? publicAvatar : '';
+            const target=explicitPublic || googlePhoto || publicAvatar || clean(record.photoURL);
+            const source=explicitPublic ? 'public-profile' : googlePhoto ? 'google' : publicAvatar ? 'public-profile-compat' : clean(record.photoURL) ? 'auth' : 'none';
+            if(source==='public-profile') customAuthorities++;
+            if(source==='google') googleFallbacks++;
+            if(clean(record.photoURL)!==target){
+              await auth.updateUser(uid,{photoURL:target||null});
+              writes++;
+            } else {
+              unchanged++;
+            }
+          }
+
+          for(const row of rows){
+            const uid=clean(row.uid);
+            const publicAvatar=clean(row.avatar_url);
+            const record=await auth.getUser(uid);
+            reads++;
+            const google=record.providerData.find(p=>p.providerId==='google.com');
+            const googlePhoto=clean(google?.photoURL);
+            const explicitPublic=publicAvatar && !isGoogle(publicAvatar) ? publicAvatar : '';
+            const expected=explicitPublic || googlePhoto || publicAvatar || clean(record.photoURL);
+            if(clean(record.photoURL)!==expected) throw new Error('Firebase Auth avatar parity failed for '+uid);
+          }
+
+          console.log('AUTH_PROFILE_READS='+reads);
+          console.log('AUTH_PROFILE_WRITES='+writes);
+          console.log('CUSTOM_PUBLIC_PROFILE_AUTHORITIES='+customAuthorities);
+          console.log('GOOGLE_FALLBACK_AUTHORITIES='+googleFallbacks);
+          console.log('UNCHANGED_AUTHORITIES='+unchanged);
+          console.log('GLOBAL_AVATAR_AUTHORITY_RECONCILE=PASS');
+          console.log('FIRESTORE_READS=0');
+          console.log('FIRESTORE_WRITES=0');
+          console.log('D1_WRITES=0');
+          console.log('USER_DATA_CONTENT_MIGRATION=false');
+          NODE

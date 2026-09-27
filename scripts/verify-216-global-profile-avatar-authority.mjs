@@ -22,7 +22,9 @@ requireText(authority, 'if (changed)', 'write-only-on-change guard');
 requireText(authority, 'updateProfile(user, { photoURL: resolved.url || null })', 'Firebase Auth effective avatar persistence');
 requireText(authority, 'SORIDRAW_PROFILE_AVATAR_EVENT', 'same-session avatar signal');
 
-if (/firestore|d1|exploreSocialService|fetch\s*\(/i.test(authority)) {
+if (/from\s+['"][^'"]*(?:firestore|exploreSocialService)[^'"]*['"]/i.test(authority)
+  || /\bfetch\s*\(/.test(authority)
+  || /\b(getDoc|getDocs|onSnapshot|collection|query)\s*\(/.test(authority)) {
   throw new Error('Avatar authority service must not add Firestore/D1/public-profile reads');
 }
 

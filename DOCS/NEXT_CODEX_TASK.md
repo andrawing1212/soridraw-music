@@ -1,3 +1,27 @@
+## 2026-09-28 — app197 Explore 상단 가로줄 실화면 확인
+
+현재 PREVIEW:
+- app197.
+- 제품 수정 commit `8a809b0093348d48ff78912ccf367c8ce592da34`.
+- 감사 Run `36333858877` SUCCESS.
+- release source `7f5c9863f284b640046ffc503c02ea482ce1ef33`.
+- Hosting Run `36334092858` SUCCESS.
+- `preview.soridraw.com` exact build/version 197 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. Explore 피드 상단 가로줄이 없어졌는지.
+2. Explore 공개프로필 상단 가로줄이 없어졌는지.
+3. Music Note / Library / Studio 등 다른 페이지의 가로줄은 기존대로 유지되는지.
+
+보호:
+- Explore 외 다른 UI/CSS 수정 금지.
+- 좋아요 / 프로필 / 공개·비공개 / Music Note / Worker / Functions / Rules / 데이터 구조 비변경.
+
+통과 후 사용자 다음 요청 진행.
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 2026-09-28 — app196 공개프로필 + Explore Feed avatar 공통 확인
 
 현재 PREVIEW:

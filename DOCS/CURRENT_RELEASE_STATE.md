@@ -1,3 +1,34 @@
+## 0HR. app191 실사용 통과 + 관리자 상단 메뉴 이용설정 read-only 감사 (2026-09-27 KST)
+
+상태:
+- 사용자 실사용 기준 app191 Explore `더 보기` 캐시 작업 **통과**.
+- 추가 코드/배포 없이 현재 관리자 `앱 설정 > 상단 메뉴·페이지 이용 설정` 동작을 read-only로 감사.
+
+확인된 정상 부분:
+- 관리자 저장은 `app_settings/navigation_visibility` 한 문서에 merge 저장.
+- Firestore Rules상 해당 설정 문서는 일반 앱 사용자가 read 가능하고, write는 `appSettings` 관리자 권한만 허용.
+- 상단 메뉴는 공통 `menuVisibility/menuAdminOnly` 설정으로 필터링.
+- 일반 회원은 Home / Studio / Music Note / Library / My Page / Lab 직접 URL 진입 시 `canAccessNavigationMenu` gate로 차단.
+- Admin 계정은 숨김/관리자 전용 페이지 직접 접근 가능하도록 별도 예외 유지.
+
+발견된 문제:
+1. **다른 기기/다른 사용자의 기존 캐시에 관리자 변경이 자동 전파되지 않음.**
+   - `FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility = Infinity`.
+   - App bootstrap은 navigation cache가 있으면 `cached.isFresh`가 항상 true라 Firestore를 다시 확인하지 않고 return.
+   - 관리자 저장 후 발생하는 `soridraw:navigation-visibility-updated`는 같은 브라우저 window의 로컬 이벤트뿐.
+   - 따라서 캐시가 없는 새 기기는 현재 Firestore 설정을 1회 읽지만, 이미 캐시를 가진 다른 사용자/기기는 예전 메뉴 상태를 계속 유지할 수 있음.
+2. **Explore 직접 URL gate 누락.**
+   - 현재 route는 `<Route path="/explore" element={<ExploreShellLazy />} />`로 직접 mount되어 `canAccessNavigationMenu('explore')` 검사를 하지 않음.
+   - 따라서 Explore를 `숨김` 또는 `관리자만`으로 바꿔도 일반 회원의 상단 메뉴에서는 사라지지만 `/explore` 직접 주소는 열릴 수 있음.
+   - 나머지 주요 페이지는 route gate가 존재.
+
+결론:
+- 현재 관리자 메뉴 설정은 **같은 브라우저의 메뉴 표시/저장 자체는 작동하지만, 전 사용자 공통 이용설정으로는 100% 신뢰할 수 없는 상태**.
+- 사용자 질문인 “다른 사용자도 숨김 시 정상적으로 안 보이는가”에 대한 답은 **현재는 보장 불가**.
+- 수정 시 비용 원칙: 전체 Firestore 반복 read/onSnapshot 금지. 작은 config revision/invalidation 신호 + 변경 시에만 설정 문서 1회 갱신하는 방식으로 설계 필요.
+- 아직 제품 코드 수정/배포 없음.
+
+
 ## 0HQ. PREVIEW app191 · Explore `더 보기` 재조회 로컬 캐시 적용 (2026-09-27 KST)
 
 상태: **PREVIEW 배포 완료 / 실제 모바일·PC 비용 패널 재현 확인 대기**

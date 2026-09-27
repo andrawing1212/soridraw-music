@@ -11,3 +11,6 @@ retry_reason=java21_rules_preflight_only
 
 retry=2
 retry_reason=function_live_cleanup_policy_warning_only
+
+retry=3
+retry_reason=rtdb_rules_cli_instance_lookup_failed_use_proven_rest

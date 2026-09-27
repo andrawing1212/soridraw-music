@@ -54,8 +54,28 @@ jobs:
             throw new Error('Canonical/derived profile avatar is not the expected custom profile image');
           }
           console.log('AVATAR_REPAIR_PREFLIGHT=PASS canonical=custom derived=custom target_count=1');
+          fs.appendFileSync(process.env.GITHUB_ENV, 'TARGET_UID='+rows[0].uid+'\\n');
+          NODE
+      - name: Check whether repair is still needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$API_BASE/v1/feed?sort=latest&limit=40" -H 'Accept: application/json' > "$RUNNER_TEMP/latest-before.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest-before.json','utf8'));
+          const items=payload?.data?.items || payload?.payload?.data?.items || [];
+          const clean=s=>String(s||'').trim();
+          const target=items.filter(x=>clean(x.ownerUid||x.owner_uid)===process.env.TARGET_UID);
+          if(!target.length) throw new Error('Target owner not present in bounded latest first page');
+          const isCustom=u=>{const v=clean(u).toLowerCase(); return Boolean(v) && !v.includes('googleusercontent.com') && !v.includes('ggpht.com')};
+          const bad=target.filter(x=>!isCustom(x.ownerAvatarUrl||x.avatarUrl||x.owner_avatar_url));
+          const needed=bad.length ? '1' : '0';
+          fs.appendFileSync(process.env.GITHUB_ENV, 'NEEDS_REPAIR='+needed+'\\n');
+          console.log('AVATAR_REPAIR_NEEDED='+needed+' target_tracks='+target.length+' wrong='+bad.length);
           NODE
       - name: Emit one bounded derived Feed profile change signal
+        if: env.NEEDS_REPAIR == '1'
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -93,8 +113,8 @@ jobs:
           for(const sort of ['latest','popular']){
             const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+sort+'.json','utf8'));
             const items=payload?.data?.items || payload?.payload?.data?.items || [];
-            const target=items.filter(x=>clean(x.ownerHandle||x.owner_handle).replace(/^@+/,'')==='soridraw');
-            if(!target.length) throw new Error(sort+': @soridraw not present in bounded first page');
+            const target=items.filter(x=>clean(x.ownerUid||x.owner_uid)===process.env.TARGET_UID);
+            if(!target.length) throw new Error(sort+': target owner not present in bounded first page');
             const bad=target.filter(x=>kind(x.ownerAvatarUrl||x.avatarUrl||x.owner_avatar_url)!=='custom');
             console.log(sort.toUpperCase()+'_SORIDRAW_TRACKS='+target.length+' custom='+String(target.length-bad.length)+' wrong='+bad.length);
             if(bad.length) throw new Error(sort+': stale Google/non-custom publisher avatar remains');

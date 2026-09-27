@@ -280,6 +280,20 @@ const comparePublicProfileTracks = (a: ExploreTrack, b: ExploreTrack) => {
   return b.id.localeCompare(a.id);
 };
 
+// SORIDRAW_EXPLORE_PROFILE_OWNER_CARD_SYNC_215_20260928
+// A saved public-profile avatar/name must immediately repaint every already-loaded
+// card owned by that profile. This is local-only; the Worker/D1 profile change
+// signal remains the cross-device authority and no extra server read/write is added.
+const patchExploreTrackOwnerProfile215 = (
+  track: ExploreTrack,
+  nextProfile: ExplorePublicProfile,
+): ExploreTrack => track.ownerUid === nextProfile.uid ? {
+  ...track,
+  ownerHandle: nextProfile.handle,
+  displayName: nextProfile.nickname,
+  avatarUrl: nextProfile.avatarUrl || null,
+} : track;
+
 const isOpenableUrl = (value?: string | null) => {
   if (!value) return false;
   try {
@@ -1841,6 +1855,26 @@ export default function ExplorePage() {
                 onClose={() => setProfileEditOpen(false)}
                 onSaved={(nextProfile) => {
                   setProfile(nextProfile);
+
+                  const ownerCardPatch = {
+                    ownerHandle: nextProfile.handle,
+                    ownerNickname: nextProfile.nickname,
+                    ownerAvatarUrl: nextProfile.avatarUrl,
+                  };
+                  const ownerTrackIds = new Set(
+                    [...tracks, ...profileTracks, ...profileLikedTracks]
+                      .filter((track) => track.ownerUid === nextProfile.uid && Boolean(track.id))
+                      .map((track) => track.id),
+                  );
+
+                  setTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  setProfileTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  setProfileLikedTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  ownerTrackIds.forEach((trackId) => {
+                    patchExploreFeedSessionCachesRow(trackId, ownerCardPatch);
+                    patchExplorePublicProfileFirstViewTrack(nextProfile.uid, trackId, ownerCardPatch);
+                  });
+
                   rememberExplorePublicProfileFirstViewProfile(nextProfile);
                   if (nextProfile.handle) setSearchParams({ profile: `@${nextProfile.handle}` }, { replace: true });
                 }}

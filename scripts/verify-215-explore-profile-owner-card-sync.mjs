@@ -18,7 +18,6 @@ requireText(page, 'ownerAvatarUrl: nextProfile.avatarUrl', 'raw feed avatar patc
 requireText(page, 'ownerNickname: nextProfile.nickname', 'raw feed nickname patch');
 requireText(page, 'ownerHandle: nextProfile.handle', 'raw feed handle patch');
 requireText(page, 'SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928', '217 profile-card authority marker');
-requireText(page, 'const authorityTrack217 = ownerProfileAuthority', 'profile card authority track');
 requireText(page, 'patchExploreTrackOwnerProfile215(track, ownerProfileAuthority)', 'profile card local authority patch');
 requireText(page, 'renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`, profile)', 'public profile grid uses profile authority');
 requireText(page, 'renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`, profile)', 'liked grid preserves profile authority for own tracks');

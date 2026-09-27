@@ -20,6 +20,7 @@ import {
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from '../../services/themePreferences';
+import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
 
 export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 
@@ -83,6 +84,20 @@ export default function StudioLeftRail({
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
   const [railTooltip, setRailTooltip] = useState<RailTooltip | null>(null);
+  const [effectiveProfilePhotoURL, setEffectiveProfilePhotoURL] = useState(profilePhotoURL);
+
+  useEffect(() => {
+    setEffectiveProfilePhotoURL(profilePhotoURL);
+  }, [profilePhotoURL]);
+
+  useEffect(() => {
+    const handleAvatarAuthority = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string }>).detail;
+      setEffectiveProfilePhotoURL(String(detail?.url || ''));
+    };
+    window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+    return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+  }, []);
 
   const closeProfileMenu = useCallback(() => {
     setIsProfileMenuOpen(false);
@@ -317,8 +332,8 @@ export default function StudioLeftRail({
             onClickCapture={hideRailTooltip}
           >
             <span className="soridraw-studio-rail-profile-avatar" aria-hidden="true">
-              {profilePhotoURL ? (
-                <img src={profilePhotoURL} alt="" referrerPolicy="no-referrer" />
+              {effectiveProfilePhotoURL ? (
+                <img src={effectiveProfilePhotoURL} alt="" referrerPolicy="no-referrer" />
               ) : (
                 <span>{profileInitial}</span>
               )}

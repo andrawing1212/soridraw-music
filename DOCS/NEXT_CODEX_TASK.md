@@ -1,3 +1,29 @@
+## 2026-09-28 — app194 전역 프로필 사진 authority 실사용 확인
+
+현재 제품 작업은 완료 상태. 사용자 실화면 확인 전 avatar 외 범위 수정 금지.
+
+기준:
+- PREVIEW app194.
+- release source `706eeb02c3fa43b083a5ae666962a34e50702c5c`.
+- Hosting Run `36330817827` SUCCESS.
+- global avatar rule: SORIDRAW 공개프로필 custom photo > Google provider photo > Auth fallback.
+- 기존 public profile 3계정 Firebase Auth photoURL 정합화 완료: Run `36330458671` SUCCESS, W3.
+- Firestore/D1 content write 0, Worker/Functions/Rules 비변경.
+
+사용자 확인:
+1. 상단 오른쪽 계정칩.
+2. Studio/Explore 왼쪽 rail.
+3. 마이페이지.
+4. Explore 게시자 카드.
+5. 공개프로필.
+현재 Master `@soridraw`는 위 모든 위치가 astronaut 사진이면 PASS.
+
+이상이 있으면 해당 표시 경로만 수정하고 좋아요/공개·비공개/Music Note 저장/비용 구조는 건드리지 않는다.
+
+통과 후 기존 예정 작업인 추천 / 최신 / 인기 탭 UI 수정으로 진행.
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 필요.
+
+
 ## 2026-09-28 — app193 게시자 프로필 사진 수정 후 다음 작업
 
 현재 제품 작업은 완료 상태. 새 코드 수정 전에 사용자 실화면 확인을 기다린다.

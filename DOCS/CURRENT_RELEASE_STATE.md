@@ -1,3 +1,59 @@
+## 0HV. PREVIEW app195 · 공개프로필의 공개곡 카드 프로필 사진만 정정 완료 (2026-09-28 KST)
+
+상태: **사용자 실화면 지적 반영 / 최소 수정 / 감사 / PREVIEW 배포 완료 · 재확인 대기**
+
+사용자 확인 결과:
+- app194에서 상단 계정칩 / 왼쪽 rail / 공개프로필 큰 사진 등은 정상.
+- 공개프로필 아래의 **공개곡 카드 게시자 작은 사진만** 이전 사진이 남아 있었음.
+- 사용자 지시: 다른 정상 부분은 유지하고 이 카드 사진만 수정.
+
+원인:
+- 공개프로필 자체에는 최신 avatar가 이미 정상 로드되어 있었지만, 공개곡 카드가 각 track snapshot의 오래된 `avatarUrl`을 그대로 렌더링하고 있었음.
+- 서버/원본 데이터 문제로 확대하지 않고 화면에 이미 로드된 공개프로필 값을 카드 표시 authority로 재사용하는 것으로 해결.
+
+수정:
+- `src/pages/ExplorePage.tsx` 한 기능 경로만 수정.
+- 공개프로필 페이지의 공개곡 grid를 그릴 때:
+  - `track.ownerUid === profile.uid`인 카드만
+  - 이미 로드된 `profile.avatarUrl / nickname / handle`을 표시값으로 덮어씀.
+- Feed 일반 화면 카드 경로는 변경하지 않음.
+- 상단 계정칩 / Studio·Explore rail / 마이페이지 / global avatar authority는 변경하지 않음.
+- 좋아요 / 공개·비공개 / Music Note / 카드 액션 / 레이아웃·CSS 비변경.
+- 새 fetch / Firestore read/write / D1 read/write / Worker request 없음.
+- 사용자 데이터/캐시 migration 없음.
+
+기준:
+- 작업 시작 HEAD: `a2a14d02edfcdd8f8d56790903919d64cc3893e6`.
+- 제품 수정 commit: `5a3be6344aad9c8c61b50a542c648ee2fc44d4db`.
+- verifier commit: `c398db40a611ed9b84844f5a9975ac6baad13904`.
+- app195 version commit: `e8bbf7ca7e4e4ce33a9c70376bf7db7403c9fd83`.
+- Audit Run: **36331214522 SUCCESS**.
+- TEMP 217 audit workflow 삭제 commit: `cef1a221fddf43b9362f6d4bebd5334a1e62fc27`.
+- PREVIEW release source: `634031ac6f34ed8f21039494b3c32b7e2de1960e`.
+- PREVIEW Hosting Run: **36331327554 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app195 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- `215_PROFILE_OWNER_CARD_SYNC=PASS`.
+- `217_PUBLIC_PROFILE_CARD_AVATAR_AUTHORITY=PASS`.
+- app194 global avatar authority verifier PASS.
+- 기존 Like 190 / 192 / 197 regression PASS.
+- backend scope unchanged PASS.
+- Firestore R0/W0 추가, D1 R0/W0 추가, Worker request 추가 0.
+- RTDB rules deploy SKIPPED.
+- Worker / Functions / Rules 비변경.
+
+사용자 재확인:
+- 공개프로필에서 공개곡 4개의 작은 게시자 사진이 큰 공개프로필 사진과 같은 astronaut 사진이면 PASS.
+- 다른 정상 화면은 app194 그대로여야 함.
+- 실패 시 공개곡 카드 표시 경로만 다시 추적하며 다른 기능은 건드리지 않는다.
+
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 0HU. PREVIEW app194 · 앱 전체 프로필 사진 authority 통일 완료 (2026-09-28 KST)
 
 상태: **요구사항 재정의 / 기존 계정 정합화 / 코드 수정 / 감사 / PREVIEW 배포 완료 · 사용자 실화면 확인 대기**

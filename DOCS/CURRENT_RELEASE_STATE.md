@@ -1,3 +1,68 @@
+## 0HW. PREVIEW app196 · 공개프로필 + Explore Feed 카드 avatar 공통 authority 통합 완료 (2026-09-28 KST)
+
+상태: **사용자 지적 반영 / 원인 분리 확인 / 공통 표시 경로 통합 / 감사 / PREVIEW 배포 완료 · 실사용 재확인 대기**
+
+사용자 지적:
+- app195에서 공개프로필 공개곡 카드는 수정했지만 Explore 일반 Feed 카드는 같은 수정 경로를 타지 않아 예전 사진이 남을 수 있었음.
+- 사용자 요구: 공개프로필과 Explore Feed를 따로 고치지 말고 같은 프로필 사진 기준으로 함께 맞출 것.
+
+원인:
+- 공개프로필 grid와 일반 Feed grid는 같은 카드 컴포넌트를 쓰지만, 카드에 넘겨지는 track avatar의 출처가 달랐음.
+- 공개프로필은 최신 `profile.avatarUrl`을 이미 알고 있었고, Feed는 기기 로컬에 남아 있는 오래된 track snapshot의 `avatarUrl`을 그대로 표시할 수 있었음.
+- 실제 PREVIEW 서버는 read-only 검사 결과 latest / popular 모두 Feed owner avatar ↔ public profile avatar mismatch **0건**. 즉 현재 서버 원본/R2는 정상이고 남은 문제는 오래된 클라이언트 track snapshot 표시 경로였음.
+
+통합 수정:
+- `src/pages/ExplorePage.tsx`의 카드 avatar 표시를 하나의 공통 resolver로 통합.
+- 공개프로필 카드:
+  - 이미 로드된 SORIDRAW 공개프로필 사진이 authority.
+- Explore 추천/최신/인기/검색 Feed에서 로그인한 본인 곡:
+  - app194에서 이미 `SORIDRAW 공개프로필 > Google` 규칙으로 맞춘 Firebase Auth effective photoURL을 authority로 사용.
+  - 따라서 오래된 Feed track cache의 avatar가 남아 있어도 화면에는 현재 SORIDRAW 프로필 사진이 표시됨.
+- 다른 사용자의 Feed 카드:
+  - 서버가 이미 public profile projection을 반영한 owner avatar를 사용.
+- 별도 profile fetch / per-card fetch / D1 read / Firestore read 추가 없음.
+
+기준:
+- 작업 시작 HEAD: `c6fdb77a3b9a739ccd08297b65b5a2f60f40976a`.
+- 제품 commit: `5b29438f8449ad4be4f0cdf019decbb0073aa122`.
+- verifier 수정: `218e3003606cfb5efb993b83a39ee0f5ae1b9ed0`, `d53faf6bafffca193c71a606664db4ced4c73a62`.
+- app196 version commit: `0d584f289262f2906d1f51227ca41f669b6f602a`.
+- live read-only parity Run: **36332286972 SUCCESS**.
+  - latest mismatch 0.
+  - popular mismatch 0.
+  - 공개 owner 3명 모두 Feed ↔ profile avatar match.
+- 최종 Audit Run: **36332498660 SUCCESS**.
+- release source: `1b9e1f610d5de104f167cd509aa8235aea636681`.
+- PREVIEW Hosting Run: **36332606501 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app196 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- `218_FEED_PROFILE_CARD_AVATAR_UNIFIED=PASS`.
+- global avatar authority verifier PASS.
+- Like 190 / 192 / 197 regression PASS.
+- live latest/popular Feed ↔ profile avatar parity PASS.
+- backend code unchanged.
+- Firestore R0/W0 추가.
+- D1 R0/W0 추가.
+- Worker request 추가 0.
+- 사용자 데이터 변경 없음.
+- Worker / Functions / Rules / RTDB Rules 비변경.
+- TEMP 218 진단/감사 workflow 삭제 완료.
+
+보호:
+- app194에서 정상인 상단 계정칩 / 왼쪽 rail / 마이페이지 / 공개프로필 큰 사진 유지.
+- 좋아요 / 공개·비공개 / Music Note 60초 저장 / UI 위치·크기·간격 비변경.
+
+사용자 확인:
+- app196에서 공개프로필 공개곡 카드 4개와 Explore Feed의 동일 4곡 게시자 사진이 모두 astronaut로 표시되면 PASS.
+- 이상 시 avatar 공통 resolver/local cache 표시만 추적하고 정상 기능은 건드리지 않는다.
+
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 0HV. PREVIEW app195 · 공개프로필의 공개곡 카드 프로필 사진만 정정 완료 (2026-09-28 KST)
 
 상태: **사용자 실화면 지적 반영 / 최소 수정 / 감사 / PREVIEW 배포 완료 · 재확인 대기**

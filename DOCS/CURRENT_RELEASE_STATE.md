@@ -1,3 +1,45 @@
+## 0HZ. Studio 분할바 현재 동작 스킬 고정 완료 (2026-09-28 KST)
+
+상태: **현재 PREVIEW 분할 동작을 개발 스킬로 문서화 / 제품 코드·배포 비변경**
+
+사용자 요청:
+- 현재 분할모드 Studio에 적용된 분할바의 작동 방식을 재사용 가능한 스킬로 고정.
+- GPT에도 보관할 수 있도록 동일 스킬 ZIP 제공.
+
+추가:
+- `.agents/skills/studio-split-behavior/SKILL.md`.
+- `.agents/skills/studio-split-behavior/references/soridraw-app198-split-frozen.md`.
+- `.agents/skills/studio-split-behavior/references/split-validation-matrix.md`.
+- `AGENTS.md`에 분할바/분할모드/Studio Black pane resize/PC·태블릿 경계/생성바 split tracking/분할 성능 작업 전 해당 스킬 필수 확인 규칙 연결.
+
+고정한 핵심:
+- Lite V2 / Pure Pane Hybrid 현재 생산 경로 보호.
+- `pointermove → 최신 clientX 저장 → requestAnimationFrame 1회 → 같은 실제 pane/divider 경계 적용`.
+- 드래그 중 per-frame React state / DOM 재측정 / ResizeObserver 재측정 / 전역 root 동기화 금지.
+- Builder 660px mobile, 820px compact, content 1080px PC·tablet 및 현재 Result 경계 계약 보호.
+- 생성바/최소폭 접기버튼/세로 스크롤 보존/pointer-up 1회 정합화 포함.
+- 현재 16px hit area + 1px divider, hover 밝기만 변경하는 시각 계약 보호.
+- PC/태블릿/Galaxy Tab/경계 왕복/최소폭/scroll/pointer-up/page round-trip 검증 매트릭스 포함.
+
+기준:
+- 스킬 commit: `963955f67a788e7c314c76ff7af2126d79bbf4a3`.
+- 기준 split source blobs는 스킬 reference에 고정.
+- 현재 app198 Hosting/제품 코드는 변경하지 않음.
+- Firebase / Functions / Cloudflare / Rules / 사용자 데이터 변경 없음.
+- 서버 read/write 변화 없음.
+- TEST / PRODUCTION 비변경.
+
+검증:
+- 새 스킬 파일 3개 + AGENTS 연결만 변경.
+- `src/` 제품 코드 변경 0.
+- TypeScript / Build: **SKIPPED (문서·스킬 전용 변경, 제품 코드 비변경)**.
+- PREVIEW 재배포: **불필요 / 미실행**.
+
+보호:
+- 이 스킬은 현재 정상 분할 동작의 비교·수정 기준이며, 재발 증거/사용자 지시 없이 분할 엔진을 리팩터링하거나 대체하는 근거가 아님.
+- app198 및 현재 정상 기능은 그대로 유지.
+
+
 ## 0HY. PREVIEW app198 · Explore 가로줄 실제 원인(우선순위) 수정 완료 (2026-09-28 KST)
 
 상태: **사용자 영상으로 app197 미해결 확인 / CSS 우선순위 원인 수정 / 감사 / PREVIEW 재배포 완료 / app198 실화면 사용자 PASS**

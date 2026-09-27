@@ -1,3 +1,76 @@
+## 0HT. PREVIEW app193 · Explore 게시자 프로필 사진 기준 통일 완료 (2026-09-28 KST)
+
+상태: **원인 확인 / 현재 데이터 복구 / 재발 방지 수정 / 감사 / PREVIEW 배포 완료 · 사용자 실화면 확인만 대기**
+
+기준:
+- 작업 시작 PREVIEW HEAD: `ef5b4b054e5455aff7b6f1b7001912f8e60fc797`.
+- 제품 코드 commit: `b31b9bae97ae653386d033e72ca669873ffb0df5`.
+- verifier commit 계열: `54642383613db56dad903c2482a150ae08952e56` → 최종 verifier 수정 포함.
+- app193 version commit: `2b8462bdc37a7e95d23e01571cd281766b884a68`.
+- 최종 감사 Run: **36329021922 SUCCESS**.
+- PREVIEW release source/commit: `484c514dc2a0138a69d2417149fd96f80e391fe1`.
+- PREVIEW Hosting Run: **36329114664 SUCCESS**.
+- 실제 `preview.soridraw.com` app version: **193**, exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+실제 원인 / 범위:
+- 공유 canonical 공개프로필과 derived profile에는 이미 SORiDRAW의 **공개프로필용 커스텀 사진**이 정상 저장돼 있었음.
+- 하지만 Explore Feed의 기존 snapshot/cache 한 곳에만 과거 **Google 계정 사진**이 남아 게시자 avatar가 잘못 표시되고 있었음.
+- 공개 사용자 3명 전체를 read-only 비교:
+  - `@andy.j`: 정상.
+  - `@soulforcemusic`: 정상.
+  - `@soridraw`: 최초 확인 시 Feed만 mismatch 1건.
+- 즉 Google Auth 사진을 공개프로필 정답으로 쓰는 구조가 아니라, **SORiDRAW 공개프로필 사진이 authority**이고 Feed cache 한 곳만 오래된 상태였던 문제.
+
+이번 복구:
+- 대상 SORiDRAW profile의 canonical/derived profile 값은 수정하지 않음.
+- 오래된 Feed profile 변경 신호만 exact target 1개에 대해 bounded resignal.
+- 복구 비용: derived state W1 + 해당 Feed profile signal W1 = **W2**.
+- 전체 Feed 재생성 / 전체 사용자 scan / backfill / migration / 사용자 원본 덮어쓰기 없음.
+- 복구 후 latest / popular의 SORiDRAW 공개곡 4곡 모두 custom avatar PASS.
+- visible public owner 3명 Feed ↔ public profile avatar mismatch **0건 PASS**.
+
+재발 방지 client 수정:
+- 공개프로필 저장 직후 같은 기기에 이미 떠 있는 본인 공개곡 카드의:
+  - 게시자 사진
+  - 닉네임
+  - handle
+  를 즉시 공개프로필 값으로 맞춤.
+- 이미 로드된 Explore Feed local cache와 공개프로필 first-view local cache도 해당 **본인 track ID들만** patch.
+- 새 fetch / D1 read / Firestore read / server write 없음.
+- 다른 기기/다른 사용자는 기존 Worker/D1 profile-change → Feed revision 경로를 계속 사용.
+- UI 위치/크기/간격/좋아요/공개·비공개/Music Note 저장 로직은 변경 없음.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- `215_PROFILE_OWNER_CARD_SYNC=PASS`.
+- `verify-190-like-card-authority` PASS.
+- `verify-192-cross-account-public-like-live` PASS.
+- `verify-197-new-public-track-like` PASS.
+- backend scope changed=false.
+- user data migration=false.
+- PREVIEW Hosting exact build/version 193 PASS.
+- RTDB rules deploy SKIPPED.
+- Worker / Functions / Rules 비변경.
+- 이번 일회성 TEMP 193/215 진단·복구·감사 workflow는 모두 삭제 완료.
+
+비용:
+- 정상 화면 진입/재진입 비용 구조 변경 없음.
+- 프로필 저장 직후 추가 server IO **0**.
+- 현재 데이터 복구는 1회 exact W2로 종료.
+- 전체 공개곡 수/사용자 수에 비례하는 작업 없음.
+
+남은 확인:
+- 사용자 PC/모바일에서 Explore Feed의 SORiDRAW 게시자 사진이 공개프로필 사진과 동일하게 보이는지만 실화면 확인.
+- 이후 프로필 사진을 다시 변경할 경우, 같은 기기에서는 저장 직후 카드가 즉시 바뀌고 다른 기기는 기존 revision 수렴 경로로 따라오는지 확인 가능.
+- 실패 시 전체 데이터/좋아요/Worker를 건드리지 말고 해당 owner/profile card 경로만 bounded 추적.
+
+다음:
+- 이 화면 확인이 통과하면 기존 예정대로 추천 / 최신 / 인기 탭 UI 수정으로 진행.
+- TEST/main 승격 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0HS. PREVIEW app192 · 관리자 상단 메뉴 전 사용자 동기화 + Explore 직접주소 차단 완료 (2026-09-27 KST)
 
 상태: **수정 / 감사 / PREVIEW 배포 완료 · 사용자 다중기기 실사용 확인 대기**

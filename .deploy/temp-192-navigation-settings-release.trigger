@@ -1,0 +1,7 @@
+requested_at=2026-09-27T22:58:00+09:00
+audited_source=e03a5b45f155d2ff5e0e33f700621d160eb01477
+audited_run=36323892369
+product_commit=a6a030a3067faca3cf662af69372563d83ed7b3e
+app_version=192
+scope=navigation_visibility_sync_only
+preview_only=true

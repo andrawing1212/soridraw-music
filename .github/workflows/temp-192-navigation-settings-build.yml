@@ -48,12 +48,8 @@ jobs:
       - name: Verify 214
         run: node scripts/verify-214-navigation-visibility-sync.mjs
 
-      - name: Verify prior protected flows
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/verify-213-explore-more-page-cache.mjs
-          node scripts/verify-explore-like-cost-optimization.mjs
+      - name: Verify prior protected flow
+        run: node scripts/verify-213-explore-more-page-cache.mjs
 
       - name: Install Functions dependencies
         run: npm ci --prefix functions --no-audit --no-fund

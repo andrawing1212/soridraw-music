@@ -1,0 +1,12 @@
+requested_at=2026-09-27T23:00:00+09:00
+audited_source=e03a5b45f155d2ff5e0e33f700621d160eb01477
+prior_audit_run=36323892369
+prior_partial_release_run=36324094095
+reason=function_created_successfully_cli_failed_cleanup_policy
+do_not_redeploy_function=true
+do_not_change_artifact_cleanup_policy=true
+verify_function_active_then_continue=true
+deploy_preview_hosting=true
+seed_navigation_signal=true
+preview_only=true
+test_production_code_unchanged_required=true

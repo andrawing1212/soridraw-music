@@ -1,3 +1,83 @@
+## 0HS. PREVIEW app192 · 관리자 상단 메뉴 전 사용자 동기화 + Explore 직접주소 차단 완료 (2026-09-27 KST)
+
+상태: **수정 / 감사 / PREVIEW 배포 완료 · 사용자 다중기기 실사용 확인 대기**
+
+기준:
+- app191 실사용 Explore 더보기 cache: 사용자 PASS.
+- 관리자 메뉴 read-only 감사 기준 commit: `ced3a579ffe2e57806fd6a08a6a772da226c6ce2`.
+- app192 제품 commit: `a6a030a3067faca3cf662af69372563d83ed7b3e`.
+- 최종 audited source: `e03a5b45f155d2ff5e0e33f700621d160eb01477`.
+- Release System Audit Run: **36323892369 SUCCESS**.
+- 최초 release Run `36324094095`:
+  - RTDB rules exact deploy PASS.
+  - 신규 Function `adminSetNavigationVisibility` 실제 create SUCCESS.
+  - Firebase CLI가 함수 배포 후 기존 Artifact Registry cleanup policy 설정을 요구하며 exit 1.
+  - 앱 Hosting/RTDB seed는 그 시점에 실행되지 않아 완료로 처리하지 않음.
+  - cleanup policy를 임의 변경하거나 `--force`하지 않음.
+- 안전 재개 Run: **36324350280 SUCCESS**.
+  - 기존 생성 Function ACTIVE 확인 후 **재배포 0**.
+  - RTDB rules audited source exact match PASS.
+  - 현재 Firestore 메뉴 설정 1문서 read-only 1회로 RTDB mirror seed PASS.
+  - PREVIEW Hosting app192 배포 PASS.
+  - `preview.soridraw.com` exact build / version 192 PASS.
+  - TEST / PRODUCTION code + Hosting unchanged PASS.
+
+이번 수정:
+- 기존 `app_settings/navigation_visibility` Firestore 문서는 관리자 설정의 authority로 계속 유지.
+- 기존 무기한 로컬 cache도 유지하여 앱 시작/페이지 이동 때문에 Firestore 설정을 반복 읽지 않음.
+- signed-in 사용자는 기존 Firebase RTDB 연결에서 `publicSync/navigationVisibility`의 **7개 메뉴 boolean + revision만 담긴 작은 공용 설정 payload**를 구독.
+- 관리자가 메뉴 설정을 저장하면 신규 callable `adminSetNavigationVisibility`가:
+  1. Firestore authority 설정 **W1**.
+  2. RTDB 작은 mirror **W1**.
+  로 한 번에 확정.
+- 다른 로그인 기기는 Firestore를 다시 읽지 않고 RTDB 작은 payload만 받아 로컬 cache와 화면 상태를 갱신.
+- 주기 polling / Firestore `onSnapshot` / 페이지 이동 read / 전체 사용자 broadcast payload / 곡 데이터 전송 없음.
+- 캐시가 없는 새 기기는 기존처럼 필요 시 Firestore 설정 1회 bootstrap이 가능.
+- `/explore`도 Home/Studio/Music Note/Library/Lab/MyPage와 동일하게 `canAccessNavigationMenu('explore')` route gate 적용.
+  - `숨김` / `관리자만` 상태에서 일반 회원 직접 URL 진입 차단.
+  - Admin은 기존 정책대로 접근 가능.
+- fallback/navigation map에도 Explore를 동일 규칙으로 포함.
+
+비용:
+- 정상 캐시 사용자 앱 시작/업데이트/페이지 이동: navigation Firestore read **0 목표 유지**.
+- 관리자 설정 변경 때만: Firestore **W1** + 아주 작은 RTDB **W1**.
+- 일반 사용자에게는 RTDB tiny settings payload만 전달; D1/Worker/Explore Feed/Profile read/write 없음.
+- 배포 seed: Firestore config R1 / W0 + RTDB derived mirror W1, 사용자 원본 데이터 변경 없음.
+- 데이터 migration/backfill 없음.
+
+보호 범위 / 비변경:
+- Explore 좋아요 로직 비변경.
+- Explore Feed / 공개프로필 / 공개·비공개 canonical 경로 비변경.
+- Music Note 60초 묶음 저장 비변경.
+- UI/CSS/레이아웃 비변경.
+- Cloudflare Worker 비변경; PREVIEW Worker active version `1426a087-9973-4b72-ba06-1904901a8693` 유지.
+- D1/schema 비변경.
+- 기존 Firebase Functions 재배포 0; **신규 Function 1개만 additive 생성**.
+- RTDB Rules는 공유 backend에 `publicSync/navigationVisibility` read-only-for-client 경로만 additive 추가.
+- 사용자 원본 데이터 변경 없음.
+- Artifact Registry cleanup policy 비변경.
+
+검증:
+- app TypeScript PASS / Build PASS.
+- Functions TypeScript/build PASS.
+- verifier `214_NAVIGATION_VISIBILITY_SYNC=PASS`.
+- `EXPLORE_DIRECT_ROUTE_GATE=PASS`.
+- app191 `213_EXPLORE_MORE_PAGE_CACHE=PASS`.
+- 기존 Like isolated regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 audit SELECT-only PASS.
+- 실제 PREVIEW exact build/version 192 PASS.
+
+다음 실사용:
+1. 관리자에서 테스트 대상 메뉴 하나를 `숨김`으로 저장.
+2. 이미 로그인되어 있던 다른 PC/모바일 일반 사용자에서 새로고침 없이 메뉴가 사라지는지 확인.
+3. 해당 메뉴 직접 주소 진입이 차단되는지 확인. 특히 `/explore`.
+4. 다시 `전체공개`로 돌렸을 때 다른 기기에서 다시 나타나는지 확인.
+5. 통과 후 사용자 요청대로 추천 / 최신 / 인기 탭 UI 수정으로 진행.
+
+TEST/main 승격 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0HR. app191 실사용 통과 + 관리자 상단 메뉴 이용설정 read-only 감사 (2026-09-27 KST)
 
 상태:

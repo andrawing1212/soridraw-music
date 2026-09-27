@@ -1,3 +1,28 @@
+## 2026-09-28 — app193 게시자 프로필 사진 수정 후 다음 작업
+
+현재 제품 작업은 완료 상태. 새 코드 수정 전에 사용자 실화면 확인을 기다린다.
+
+기준:
+- PREVIEW app193.
+- release source `484c514dc2a0138a69d2417149fd96f80e391fe1`.
+- Hosting Run `36329114664` SUCCESS.
+- SORiDRAW Feed ↔ 공개프로필 avatar mismatch 0.
+- 다른 공개 사용자 2명도 정상.
+- profile save 직후 same-session owner card/local cache targeted patch 적용.
+- 좋아요 / 공개·비공개 / Music Note 60초 저장 / Worker canonical 경로는 보호.
+
+사용자 확인:
+1. PC Explore Feed의 SORiDRAW 게시자 사진이 공개프로필 사진과 동일한지.
+2. 모바일도 동일한지.
+3. 이상 없으면 이 작업 종료.
+
+그 다음 예정 작업:
+- 사용자가 이전에 요청한 추천 / 최신 / 인기 탭 UI 수정.
+- 구체 UI 수정 전 현재 탭 기능/비용 경로는 건드리지 않는다.
+
+TEST/main 및 PRODUCTION 승격 금지 — 사용자 별도 명시 승인 필요.
+
+
 ## 다음 작업 기준 · app192 메뉴 설정 실사용 확인 후 Explore 탭 UI (2026-09-27 KST)
 
 현재 PREVIEW:

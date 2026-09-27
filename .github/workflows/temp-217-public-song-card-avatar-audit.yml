@@ -1,0 +1,49 @@
+name: TEMP 217 Public Song Card Avatar Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-217-public-song-card-avatar-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 30
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Public card avatar authority
+        run: node scripts/verify-215-explore-profile-owner-card-sync.mjs
+      - name: Global avatar authority
+        run: node scripts/verify-216-global-profile-avatar-authority.mjs
+      - name: Frozen like regressions
+        run: |
+          node scripts/verify-190-like-card-authority.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+      - name: Scope guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -e "process.stdout.write(String(require('./public/app-version.json').version || ''))")" = "195"
+          git diff --exit-code a2a14d02edfcdd8f8d56790903919d64cc3893e6 HEAD -- cloudflare/explore-worker functions firestore.rules database.rules.json
+          echo 'BACKEND_CODE_CHANGED=false'
+          echo 'USER_DATA_CHANGED=false'
+          echo 'PUBLIC_CARD_ONLY_FIX=true'
+          echo 'AUDIT_217=PASS'

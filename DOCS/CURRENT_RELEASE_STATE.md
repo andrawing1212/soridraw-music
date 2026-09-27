@@ -1,3 +1,55 @@
+## 0HX. PREVIEW app197 · Explore 상단 가로줄 제거 완료 (2026-09-28 KST)
+
+상태: **사용자 요청 반영 / Explore 전용 CSS 최소 수정 / 감사 / PREVIEW 배포 완료 · 실화면 확인 대기**
+
+사용자 요청:
+- Explore 피드 상단의 가로줄 제거.
+- Explore 공개프로필 상단의 가로줄 제거.
+- 다른 페이지의 동일한 가로줄은 유지.
+- 위치/간격/기타 UI는 변경하지 않음.
+
+수정:
+- `src/components/explore/explore.css` 한 파일만 제품 수정.
+- Explore workspace 전용 selector:
+  - `.soridraw-studio-page-frame[data-workspace-view="explore"] > .soridraw-studio-masthead-divider`
+  만 `display:none!important` 처리.
+- 공용 `studioLayout.css`의 masthead divider 규칙은 변경하지 않음.
+- 따라서 Music Note / Library / Studio 등 다른 workspace 페이지는 기존 가로줄 유지.
+- Feed와 공개프로필은 동일 Explore workspace 안에서 렌더링되므로 둘 다 동일하게 제거됨.
+
+기준:
+- 작업 시작 PREVIEW HEAD: `3cf5d36e3002ac59b6217d3963453b4eef62da54`.
+- 제품 수정 commit: `8a809b0093348d48ff78912ccf367c8ce592da34`.
+- 감사 Run: **36333858877 SUCCESS**.
+- app197 version commit: `54c84125e8ddfd42fa9ed58917ee7afb3cc5a23d`.
+- PREVIEW release source: `7f5c9863f284b640046ffc503c02ea482ce1ef33`.
+- PREVIEW Hosting Run: **36334092858 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app197 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- Explore 전용 divider selector 존재 PASS.
+- 다른 page divider code changed=false.
+- backend code changed=false.
+- Firestore/D1/Worker/Functions/Rules 변경 없음.
+- RTDB rules deploy SKIPPED.
+- 사용자 데이터 변경 없음.
+
+비용:
+- CSS 표시 변경만 수행.
+- 서버 read/write 추가 0.
+- 앱 업데이트/페이지 진입 데이터 비용 변화 없음.
+
+사용자 확인:
+- Explore Feed 상단 가로줄 없음.
+- Explore 공개프로필 상단 가로줄 없음.
+- 다른 페이지 가로줄은 기존대로 유지.
+
+TEST/main 승격 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0HW. PREVIEW app196 · 공개프로필 + Explore Feed 카드 avatar 공통 authority 통합 완료 (2026-09-28 KST)
 
 상태: **사용자 지적 반영 / 원인 분리 확인 / 공통 표시 경로 통합 / 감사 / PREVIEW 배포 완료 · 실사용 재확인 대기**

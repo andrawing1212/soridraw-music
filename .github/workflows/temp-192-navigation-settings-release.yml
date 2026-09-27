@@ -114,10 +114,48 @@ jobs:
 
       - name: Deploy shared RTDB rules exact source
         shell: bash
+        env:
+          RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy             --project "$SHARED_DATA_PROJECT"             --config firebase.json             --only database             --non-interactive
-          echo 'SHARED_RTDB_RULES_192_DEPLOY=PASS'
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('service-account credential file missing')
+          creds = service_account.Credentials.from_service_account_file(
+              path,
+              scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ],
+          )
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('RTDB OAuth token unavailable')
+          Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          print('RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS')
+          PY
+          token="$(cat "$RUNNER_TEMP/rtdb-access-token")"
+          auth_url="${RTDB_RULES_URL}?access_token=${token}"
+          code="$(curl -sS --max-time 30 -X PUT -H 'Content-Type: application/json' --data-binary @database.rules.json -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          local = json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+          remote = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-after.json').read_text(encoding='utf-8'))
+          if local != remote:
+              raise SystemExit('RTDB deployed rules do not match source')
+          print('SHARED_RTDB_RULES_192_DEPLOY=PASS')
+          PY
+          rm -f "$RUNNER_TEMP/rtdb-access-token"
 
       - name: Seed tiny RTDB mirror from current Firestore authority
         shell: bash

@@ -1,3 +1,41 @@
+## 0HY. PREVIEW app198 · Explore 가로줄 실제 원인(우선순위) 수정 완료 (2026-09-28 KST)
+
+상태: **사용자 영상으로 app197 미해결 확인 / CSS 우선순위 원인 수정 / 감사 / PREVIEW 재배포 완료 · 실화면 재확인 대기**
+
+사용자 영상 확인:
+- app197에서도 Explore Feed / 공개프로필 상단 가로줄이 그대로 보였음.
+- 이전 수정은 대상 요소는 맞았지만 Explore override selector가 canonical Studio divider selector보다 약해서 `display:block!important`에 밀렸음.
+
+수정:
+- 제품 파일은 계속 `src/components/explore/explore.css` 한 곳만 수정.
+- canonical selector 체인과 동일한 상위 경로를 사용하고 `[data-workspace-view="explore"]` 조건을 추가해 specificity를 더 높임.
+- Explore에서만 `.soridraw-studio-masthead-divider { display:none!important; }`.
+- 공용 `studioLayout.css`는 변경하지 않음.
+- 다른 페이지 가로줄 / 위치 / 간격 / 기능 비변경.
+
+기준:
+- 제품 fix commit: `cb32cb637d05968741ee72ce561056aedbc00510`.
+- 감사 Run: **36334556580 SUCCESS**.
+- app198 version commit: `2125a4bbc09b805df0280cb4e3c8bde07a19d6f6`.
+- release source: `1f9018b287a8cd1d07f7b255e243c2a042f6d7c4`.
+- PREVIEW Hosting Run: **36334670982 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app198 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- Explore-only high-specificity selector PASS.
+- canonical Studio divider code unchanged.
+- 다른 page divider code unchanged.
+- backend / Firebase data / Cloudflare / Functions / Rules 변경 없음.
+- RTDB rules deploy SKIPPED.
+- 서버 IO 변화 없음.
+
+사용자 확인:
+- app198에서 Explore Feed와 공개프로필 상단을 가로지르던 선이 실제로 사라지는지 확인.
+- 다른 페이지 가로줄은 기존 상태 유지.
+
 ## 0HX. PREVIEW app197 · Explore 상단 가로줄 제거 완료 (2026-09-28 KST)
 
 상태: **사용자 요청 반영 / Explore 전용 CSS 최소 수정 / 감사 / PREVIEW 배포 완료 · 실화면 확인 대기**

@@ -8,3 +8,6 @@ preview_only=true
 
 retry=1
 retry_reason=java21_rules_preflight_only
+
+retry=2
+retry_reason=function_live_cleanup_policy_warning_only

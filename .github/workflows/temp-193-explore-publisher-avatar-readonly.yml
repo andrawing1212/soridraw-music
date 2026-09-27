@@ -1,0 +1,134 @@
+name: TEMP 193 Explore Publisher Avatar Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-193-explore-publisher-avatar-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      API_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Compare canonical and derived profile avatars
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              p.uid,
+              p.handle,
+              p.nickname,
+              CASE
+                WHEN p.avatar_url LIKE '%googleusercontent.com%' OR p.avatar_url LIKE '%ggpht.com%' THEN 'google'
+                WHEN p.avatar_url IS NULL OR p.avatar_url='' THEN 'empty'
+                ELSE 'custom'
+              END AS canonical_avatar_kind,
+              CASE
+                WHEN json_extract(d.row_json,'$.avatar_url') LIKE '%googleusercontent.com%' OR json_extract(d.row_json,'$.avatar_url') LIKE '%ggpht.com%' THEN 'google'
+                WHEN COALESCE(json_extract(d.row_json,'$.avatar_url'),'')='' THEN 'empty'
+                ELSE 'custom'
+              END AS derived_avatar_kind,
+              CASE WHEN COALESCE(p.avatar_url,'')=COALESCE(json_extract(d.row_json,'$.avatar_url'),'') THEN 1 ELSE 0 END AS canonical_derived_match,
+              (SELECT COUNT(*) FROM tracks t WHERE t.owner_uid=p.uid AND t.is_public=1 AND t.status='published') AS public_tracks
+            FROM public_profiles p
+            LEFT JOIN explore_derived_profiles d ON d.uid=p.uid
+            WHERE p.is_public=1
+            ORDER BY p.handle,p.uid;
+
+            SELECT
+              COUNT(*) AS public_profile_count,
+              SUM(CASE WHEN COALESCE(p.avatar_url,'')<>COALESCE(json_extract(d.row_json,'$.avatar_url'),'') THEN 1 ELSE 0 END) AS derived_avatar_mismatch_count,
+              SUM(CASE WHEN p.avatar_url LIKE '%googleusercontent.com%' OR p.avatar_url LIKE '%ggpht.com%' THEN 1 ELSE 0 END) AS canonical_google_avatar_count,
+              SUM(CASE WHEN json_extract(d.row_json,'$.avatar_url') LIKE '%googleusercontent.com%' OR json_extract(d.row_json,'$.avatar_url') LIKE '%ggpht.com%' THEN 1 ELSE 0 END) AS derived_google_avatar_count
+            FROM public_profiles p
+            LEFT JOIN explore_derived_profiles d ON d.uid=p.uid
+            WHERE p.is_public=1;
+          " --json > "$RUNNER_TEMP/avatar-d1.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/avatar-d1.json','utf8'));
+          const sets=raw.map(x=>x.results||[]);
+          console.log('PUBLIC_PROFILE_ROWS='+JSON.stringify(sets[0]||[]));
+          console.log('PROFILE_AVATAR_SUMMARY='+JSON.stringify((sets[1]||[])[0]||{}));
+          console.log('REMOTE_D1_WRITES=0');
+          NODE
+      - name: Compare live feed avatars with live public profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$API_BASE/v1/feed?sort=latest&limit=40" -H 'Accept: application/json' > "$RUNNER_TEMP/latest.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const base=process.env.API_BASE;
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
+          const items=payload?.data?.items || payload?.payload?.data?.items || [];
+          const clean=s=>String(s||'').trim();
+          const avatarKind=u=>{
+            const v=clean(u).toLowerCase();
+            if(!v) return 'empty';
+            if(v.includes('googleusercontent.com')||v.includes('ggpht.com')) return 'google';
+            return 'custom';
+          };
+          const owners=new Map();
+          for(const item of items){
+            const uid=clean(item.ownerUid||item.owner_uid);
+            if(!uid) continue;
+            const row=owners.get(uid)||{
+              uid,
+              handle:clean(item.ownerHandle||item.owner_handle),
+              nickname:clean(item.ownerNickname||item.displayName||item.ownerDisplayName),
+              feedAvatar:clean(item.ownerAvatarUrl||item.avatarUrl||item.owner_avatar_url),
+              tracks:0
+            };
+            row.tracks++;
+            if(!row.feedAvatar) row.feedAvatar=clean(item.ownerAvatarUrl||item.avatarUrl||item.owner_avatar_url);
+            owners.set(uid,row);
+          }
+          (async()=>{
+            const out=[];
+            for(const row of owners.values()){
+              const res=await fetch(base+'/v1/profiles/'+encodeURIComponent(row.uid)+'/first-view?limit=1',{headers:{Accept:'application/json'}});
+              let p={}; try { const j=await res.json(); p=j?.data?.profile||j?.data?.snapshot?.profile||{}; } catch {}
+              const profileAvatar=clean(p.avatarUrl||p.avatar_url);
+              out.push({
+                uid:row.uid,
+                handle:clean(p.handle)||row.handle,
+                nickname:clean(p.nickname)||row.nickname,
+                tracks:row.tracks,
+                feedAvatarKind:avatarKind(row.feedAvatar),
+                profileAvatarKind:avatarKind(profileAvatar),
+                feedProfileMatch:row.feedAvatar===profileAvatar,
+                feedAvatarHost:(()=>{try{return new URL(row.feedAvatar).host}catch{return row.feedAvatar?'non-url':''}})(),
+                profileAvatarHost:(()=>{try{return new URL(profileAvatar).host}catch{return profileAvatar?'non-url':''}})(),
+                profileStatus:res.status
+              });
+            }
+            console.log('LIVE_OWNER_AVATAR_ROWS='+JSON.stringify(out));
+            console.log('LIVE_OWNER_AVATAR_MISMATCH_COUNT='+out.filter(x=>!x.feedProfileMatch).length);
+            console.log('LIVE_OWNER_COUNT='+out.length);
+            console.log('READ_ONLY=true');
+            console.log('NO_DEPLOY=true');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

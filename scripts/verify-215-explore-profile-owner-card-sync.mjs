@@ -17,6 +17,11 @@ requireText(page, 'patchExplorePublicProfileFirstViewTrack(nextProfile.uid, trac
 requireText(page, 'ownerAvatarUrl: nextProfile.avatarUrl', 'raw feed avatar patch');
 requireText(page, 'ownerNickname: nextProfile.nickname', 'raw feed nickname patch');
 requireText(page, 'ownerHandle: nextProfile.handle', 'raw feed handle patch');
+requireText(page, 'SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928', '217 profile-card authority marker');
+requireText(page, 'const authorityTrack217 = ownerProfileAuthority', 'profile card authority track');
+requireText(page, 'patchExploreTrackOwnerProfile215(track, ownerProfileAuthority)', 'profile card local authority patch');
+requireText(page, 'renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`, profile)', 'public profile grid uses profile authority');
+requireText(page, 'renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`, profile)', 'liked grid preserves profile authority for own tracks');
 
 const markerStart = page.indexOf('SORIDRAW_EXPLORE_PROFILE_OWNER_CARD_SYNC_215_20260928');
 const helperEnd = page.indexOf('const isOpenableUrl', markerStart);
@@ -34,6 +39,14 @@ if (/\b(fetch|requestAuthed|requestPublic)\s*\(/.test(onSavedBlock)) {
   throw new Error('Profile save repaint must not add a network request');
 }
 
+const marker217Start = page.indexOf('SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928');
+const marker217End = page.indexOf('if (profileUid)', marker217Start);
+if (marker217Start < 0 || marker217End < 0) throw new Error('Could not isolate 217 render authority block');
+const renderAuthority217 = page.slice(marker217Start, marker217End);
+if (/\b(fetch|requestAuthed|requestPublic|getExplorePublicProfile|getExplorePublicProfileTracks)\s*\(/.test(renderAuthority217)) {
+  throw new Error('217 public-card repaint must remain local-only and add no server call');
+}
+
 const triggerMatch = migration.match(/CREATE TRIGGER IF NOT EXISTS explore032_derived_profile_feed[\s\S]*?END;/);
 if (!triggerMatch) throw new Error('Missing shared derived profile->feed trigger');
 const trigger = triggerMatch[0];
@@ -48,3 +61,5 @@ console.log('LOCAL_REPAINT=true');
 console.log('LOCAL_CACHE_PATCH=true');
 console.log('SERVER_IO_ADDED=0');
 console.log('SHARED_FEED_AVATAR_SIGNAL_GUARD=PASS');
+console.log('217_PUBLIC_PROFILE_CARD_AVATAR_AUTHORITY=PASS');
+console.log('217_SERVER_IO_ADDED=0');

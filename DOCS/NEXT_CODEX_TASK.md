@@ -1,3 +1,27 @@
+## 2026-09-28 — app195 공개곡 카드 avatar 실사용 확인
+
+현재 PREVIEW:
+- app195.
+- 제품 수정: `5a3be6344aad9c8c61b50a542c648ee2fc44d4db`.
+- Audit Run `36331214522` SUCCESS.
+- release source `634031ac6f34ed8f21039494b3c32b7e2de1960e`.
+- Hosting Run `36331327554` SUCCESS.
+- `preview.soridraw.com` exact build/version 195 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인할 것:
+- 공개프로필의 공개곡 카드에 보이는 작은 게시자 사진 4개가 공개프로필 큰 사진과 동일한지.
+- 현재 Master `@soridraw`는 모두 astronaut 사진이면 PASS.
+
+보호:
+- app194에서 정상 확인된 상단 계정칩 / 왼쪽 rail / 마이페이지 / 공개프로필 큰 사진은 수정 금지.
+- Feed 일반 카드 / 좋아요 / 공개·비공개 / Music Note / Worker / Functions / Rules / UI·CSS 비변경.
+- 서버 IO를 추가해서 해결하지 않는다.
+
+통과 후 사용자 요청에 따라 다음 작업 진행.
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 2026-09-28 — app194 전역 프로필 사진 authority 실사용 확인
 
 현재 제품 작업은 완료 상태. 사용자 실화면 확인 전 avatar 외 범위 수정 금지.

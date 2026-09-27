@@ -13,6 +13,20 @@ export type SoridrawProfileAvatarSource = 'public-profile' | 'google' | 'auth' |
 
 const clean = (value: unknown) => String(value || '').trim();
 
+export const isSoridrawGoogleAvatarUrl = (value: unknown): boolean => {
+  const raw = clean(value);
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === 'googleusercontent.com'
+      || host.endsWith('.googleusercontent.com')
+      || host === 'ggpht.com'
+      || host.endsWith('.ggpht.com');
+  } catch {
+    return false;
+  }
+};
+
 export const getSoridrawGoogleAvatarUrl = (user: User | null | undefined): string => {
   if (!user) return '';
   const google = user.providerData.find((entry) => entry.providerId === 'google.com');
@@ -24,10 +38,17 @@ export const resolveSoridrawProfileAvatar = (
   publicProfileAvatarUrl?: string | null,
 ): { url: string; source: SoridrawProfileAvatarSource } => {
   const publicUrl = clean(publicProfileAvatarUrl);
-  if (publicUrl) return { url: publicUrl, source: 'public-profile' };
+  const explicitSoridrawAvatar = publicUrl && !isSoridrawGoogleAvatarUrl(publicUrl)
+    ? publicUrl
+    : '';
+  if (explicitSoridrawAvatar) return { url: explicitSoridrawAvatar, source: 'public-profile' };
 
   const googleUrl = getSoridrawGoogleAvatarUrl(user);
   if (googleUrl) return { url: googleUrl, source: 'google' };
+
+  // Compatibility fallback for an older public profile that only retained a
+  // Google-hosted avatar but whose provider metadata is temporarily unavailable.
+  if (publicUrl) return { url: publicUrl, source: 'public-profile' };
 
   const authUrl = clean(user?.photoURL);
   if (authUrl) return { url: authUrl, source: 'auth' };

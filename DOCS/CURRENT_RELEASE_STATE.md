@@ -22,7 +22,7 @@
 - PC/태블릿/Galaxy Tab/경계 왕복/최소폭/scroll/pointer-up/page round-trip 검증 매트릭스 포함.
 
 기준:
-- 스킬 commit: `963955f67a788e7c314c76ff7af2126d79bbf4a3`.
+- 최종 스킬 commit: `c9cc139ef568435d239c228a422955d6d4954f3b` (초기 추가 후 Markdown 정규화 포함).
 - 기준 split source blobs는 스킬 reference에 고정.
 - 현재 app198 Hosting/제품 코드는 변경하지 않음.
 - Firebase / Functions / Cloudflare / Rules / 사용자 데이터 변경 없음.

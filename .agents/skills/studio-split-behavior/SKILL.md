@@ -16,9 +16,9 @@ The current visual reference is the user's 2026-09-28 KST split-mode video plus 
 Important:
 - PREVIEW is currently app198, but the app198 product change was Explore divider CSS, not a split-engine rewrite.
 - Therefore the split baseline is defined by the **current source blobs**, not by the app number alone.
-- Read \`references/soridraw-app198-split-frozen.md\` before changing any split behavior.
-- Read \`references/split-validation-matrix.md\` before declaring a split change complete.
-- Read current \`DOCS/CURRENT_RELEASE_STATE.md\` before any SORIDRAW work.
+- Read `references/soridraw-app198-split-frozen.md` before changing any split behavior.
+- Read `references/split-validation-matrix.md` before declaring a split change complete.
+- Read current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW work.
 
 Default posture: **protect the current behavior.** Do not refactor, simplify, replace, or "clean up" the split engine without a concrete split defect or an explicit user request.
 
@@ -26,12 +26,12 @@ Default posture: **protect the current behavior.** Do not refactor, simplify, re
 
 Before changing split behavior, inspect these current PREVIEW files in this order:
 
-1. \`src/components/studio/LiteStudioSplitWorkspace.tsx\`
-2. \`src/components/studio/StudioSplitEngineWorkspace.tsx\`
-3. \`src/components/studio/liteSplitWorkspace.css\`
-4. \`src/components/studio/studioLayout.css\`
-5. \`src/App.tsx\` when engine/runtime-profile selection or page routing is involved.
-6. \`src/components/studio/splitPerfDiagnostics.ts\` only when diagnostics or performance measurement is involved.
+1. `src/components/studio/LiteStudioSplitWorkspace.tsx`
+2. `src/components/studio/StudioSplitEngineWorkspace.tsx`
+3. `src/components/studio/liteSplitWorkspace.css`
+4. `src/components/studio/studioLayout.css`
+5. `src/App.tsx` when engine/runtime-profile selection or page routing is involved.
+6. `src/components/studio/splitPerfDiagnostics.ts` only when diagnostics or performance measurement is involved.
 
 Do not begin from an old ZIP, old chat, or old split PDF when current GitHub differs. Historical documents explain intent; current PREVIEW code owns the actual implementation.
 
@@ -56,8 +56,8 @@ Protect all of these:
 Current Lite V2 CSS behavior:
 - hit area: 16px;
 - visible line: 1px;
-- cursor: \`ew-resize\`;
-- \`touch-action: none\`;
+- cursor: `ew-resize`;
+- `touch-action: none`;
 - hover/active drag changes brightness only;
 - no click-time thickness, length, position, radius, scale, or transform change.
 
@@ -67,9 +67,9 @@ Do not make a fake compositor-only line that moves ahead of the real panes.
 
 Current split routing:
 - Lite V2 is the normal production engine.
-- \`StudioSplitEngineWorkspace\` defaults \`v2DragPerfMode\` to \`pure-pane-hybrid\`.
+- `StudioSplitEngineWorkspace` defaults `v2DragPerfMode` to `pure-pane-hybrid`.
 - Legacy remains a comparison/rollback diagnostic path, not the first place to implement production fixes.
-- When compact mobile routing is active in split view, \`StudioCompactMobileWorkspace\` is used instead of mounting the split engine.
+- When compact mobile routing is active in split view, `StudioCompactMobileWorkspace` is used instead of mounting the split engine.
 
 External viewport rules:
 - split engine territory starts at 1100px;
@@ -118,16 +118,16 @@ Do not move these one-time reads into pointermove.
 
 The hot path is intentionally tiny:
 
-\`pointermove -> store latest clientX -> one requestAnimationFrame -> apply latest position\`
+`pointermove -> store latest clientX -> one requestAnimationFrame -> apply latest position`
 
 Rules:
 - only the latest X matters;
 - one scheduled rAF per frame;
 - stale intermediate pointer positions are discarded;
-- no per-move React \`setState\`;
-- no new \`getBoundingClientRect()\`;
-- no new \`ResizeObserver\` measurement;
-- no per-move \`matchMedia\` / capability query;
+- no per-move React `setState`;
+- no new `getBoundingClientRect()`;
+- no new `ResizeObserver` measurement;
+- no per-move `matchMedia` / capability query;
 - no full-root measurement loop.
 
 ### Live frame
@@ -166,7 +166,7 @@ A horizontal drag must not move the user's vertical reading position.
 Current intent:
 - if a pane is at the top, it stays at the top;
 - if a pane is at the bottom, it stays at the bottom;
-- if it is in the middle, preserve the same \`scrollTop\`;
+- if it is in the middle, preserve the same `scrollTop`;
 - re-apply once after release if needed;
 - do not perform per-frame card scanning to achieve this.
 
@@ -200,7 +200,7 @@ Protect the current low-cost path:
 
 The ordinary user path must not start PERF observers or benchmark instrumentation. Manual diagnostic capture is explicit and one-shot.
 
-Do not restore the legacy global \`soridraw-split-dragging\` behavior. Lite V2 uses its narrower \`soridraw-lite-split-dragging\` marker so old app-wide selectors do not force thousands of nodes through style matching.
+Do not restore the legacy global `soridraw-split-dragging` behavior. Lite V2 uses its narrower `soridraw-lite-split-dragging` marker so old app-wide selectors do not force thousands of nodes through style matching.
 
 ## 10. Hard prohibitions
 
@@ -242,7 +242,7 @@ If the same approach fails repeatedly, stop adding patches and re-evaluate owner
 
 ## 12. Required validation
 
-Use \`references/split-validation-matrix.md\`.
+Use `references/split-validation-matrix.md`.
 
 At minimum:
 - fast left-right drag;

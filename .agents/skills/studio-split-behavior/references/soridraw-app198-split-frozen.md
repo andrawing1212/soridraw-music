@@ -5,7 +5,7 @@
 This reference freezes the current **split behavior**, not the unrelated app198 Explore divider change.
 
 - Current PREVIEW app: 198.
-- app198 release source: \`1f9018b287a8cd1d07f7b255e243c2a042f6d7c4\`.
+- app198 release source: `1f9018b287a8cd1d07f7b255e243c2a042f6d7c4`.
 - The user supplied a 2026-09-28 KST video as the visual reference for how the Studio split bar currently behaves.
 - The current request is to preserve that behavior as a reusable development skill.
 - This is a protection/reference document, not an instruction to redeploy or rewrite the split engine.
@@ -16,24 +16,24 @@ These PREVIEW blob SHAs define the source baseline used to write this skill:
 
 | File | Blob SHA | Role |
 |---|---|---|
-| \`src/App.tsx\` | \`abe4628b96e1baef19b3d6439d643c14b2451b27\` | engine/runtime profile selection and app integration |
-| \`src/components/studio/LiteStudioSplitWorkspace.tsx\` | \`a6e1b19f8325afc882989d79ec25d51377ec9584\` | Lite V2 drag lifecycle, geometry, responsive boundaries, scroll, collapse controls, generation bar |
-| \`src/components/studio/StudioSplitEngineWorkspace.tsx\` | \`d85f11cafb08d94c99eec1212e42096e0d79622a\` | Lite / Legacy / Compact Mobile routing |
-| \`src/components/studio/liteSplitWorkspace.css\` | \`ae686386fdc7fc7cd440ba86834eaa27e20e7fbf\` | Lite V2 divider skin, drag isolation, list containment |
-| \`src/components/studio/studioLayout.css\` | \`c3696d28668a8099df246cf25838508ce84b7e84\` | Studio Black shared layout, pane-responsive UI, tablet fast-path, visual contracts |
-| \`src/components/studio/splitPerfDiagnostics.ts\` | \`49282b29ba6b193fe0db9cc31f8518f56bc32ab1\` | MASTER-only performance diagnostics |
+| `src/App.tsx` | `abe4628b96e1baef19b3d6439d643c14b2451b27` | engine/runtime profile selection and app integration |
+| `src/components/studio/LiteStudioSplitWorkspace.tsx` | `a6e1b19f8325afc882989d79ec25d51377ec9584` | Lite V2 drag lifecycle, geometry, responsive boundaries, scroll, collapse controls, generation bar |
+| `src/components/studio/StudioSplitEngineWorkspace.tsx` | `d85f11cafb08d94c99eec1212e42096e0d79622a` | Lite / Legacy / Compact Mobile routing |
+| `src/components/studio/liteSplitWorkspace.css` | `ae686386fdc7fc7cd440ba86834eaa27e20e7fbf` | Lite V2 divider skin, drag isolation, list containment |
+| `src/components/studio/studioLayout.css` | `c3696d28668a8099df246cf25838508ce84b7e84` | Studio Black shared layout, pane-responsive UI, tablet fast-path, visual contracts |
+| `src/components/studio/splitPerfDiagnostics.ts` | `49282b29ba6b193fe0db9cc31f8518f56bc32ab1` | MASTER-only performance diagnostics |
 
 If any SHA changes, inspect the diff before assuming this frozen description is still exact.
 
 ## Current engine contract
 
-\`StudioSplitEngineWorkspace\` currently:
+`StudioSplitEngineWorkspace` currently:
 - defaults to Lite when the caller selects Lite;
-- defaults \`v2DragPerfMode\` to \`pure-pane-hybrid\`;
-- routes split view to \`StudioCompactMobileWorkspace\` when compact mobile mode is active;
+- defaults `v2DragPerfMode` to `pure-pane-hybrid`;
+- routes split view to `StudioCompactMobileWorkspace` when compact mobile mode is active;
 - keeps Legacy as an explicit alternate path.
 
-The current production drag design in \`LiteStudioSplitWorkspace\` is **Pure Pane Hybrid**:
+The current production drag design in `LiteStudioSplitWorkspace` is **Pure Pane Hybrid**:
 - real pane geometry and the real divider share one rAF frame;
 - expensive root/global synchronization is not performed for every pixel;
 - responsive composition work is limited to visible boundary changes that must happen live;
@@ -71,7 +71,7 @@ It captures scroll-lock state, disables competing resting observers, sets pointe
 
 ### Move
 
-Pointermove itself stores \`clientX\` and schedules one rAF.
+Pointermove itself stores `clientX` and schedules one rAF.
 
 The rAF flush:
 1. consumes the newest X;
@@ -120,28 +120,28 @@ Horizontal split drag does not own vertical scrolling.
 The engine records each pane as:
 - top,
 - bottom,
-- or a middle \`scrollTop\`.
+- or a middle `scrollTop`.
 
 After drag it preserves that same meaning. Repeated horizontal drags must not slowly push Library/Music Note downward or make them oscillate vertically.
 
 ## Divider visual invariant
 
-From \`liteSplitWorkspace.css\`:
+From `liteSplitWorkspace.css`:
 - actual pointer hit width is 16px;
 - visual line is 1px;
 - line extends the split workspace height;
 - hover/drag only raises line brightness;
 - no transform/scale/radius/width animation is used;
-- cursor remains \`ew-resize\`.
+- cursor remains `ew-resize`.
 
 The current visual baseline should not be replaced by a thicker, shorter, colored, or animated divider unless the user asks for a design change.
 
 ## Long-list performance invariant
 
 During active Lite drag, current CSS can use:
-- \`content-visibility:auto\`;
+- `content-visibility:auto`;
 - intrinsic-size hints;
-- \`contain: layout style paint\`;
+- `contain: layout style paint`;
 - transition/animation suppression on specified heavy rows/cards.
 
 This is intended to reduce off-screen work while keeping visible responsive layout real.

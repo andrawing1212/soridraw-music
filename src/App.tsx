@@ -3797,7 +3797,12 @@ function Navigation({
     const handleAvatarAuthority = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string; url?: string }>).detail;
       if (!detail || !user?.uid || detail.uid !== user.uid) return;
-      setAuthoritativePhotoURL216(String(detail.url || ''));
+      const nextPhotoURL = String(detail.url || '');
+      setAuthoritativePhotoURL216(nextPhotoURL);
+      writeCachedHeaderIdentity({
+        ...getHeaderIdentityFromUser(user),
+        photoURL: nextPhotoURL,
+      });
     };
     window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
     return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);

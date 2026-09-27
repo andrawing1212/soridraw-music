@@ -144,6 +144,7 @@ import {
   writeSeenUserControlRevision,
 } from './services/userControlRevisionService';
 import { observeExploreLikeAccountSyncSignal } from './services/exploreLikeService';
+import { SORIDRAW_PROFILE_AVATAR_EVENT } from './services/profileAvatarAuthority';
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
@@ -3789,11 +3790,27 @@ function Navigation({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
-  const headerIdentity = user
+  const [authoritativePhotoURL216, setAuthoritativePhotoURL216] = useState('');
+
+  useEffect(() => {
+    setAuthoritativePhotoURL216('');
+    const handleAvatarAuthority = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; url?: string }>).detail;
+      if (!detail || !user?.uid || detail.uid !== user.uid) return;
+      setAuthoritativePhotoURL216(String(detail.url || ''));
+    };
+    window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+    return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+  }, [user?.uid]);
+
+  const baseHeaderIdentity216 = user
     ? getHeaderIdentityFromUser(user)
     : !isAuthReady
       ? cachedHeaderIdentity
       : null;
+  const headerIdentity = baseHeaderIdentity216 && authoritativePhotoURL216
+    ? { ...baseHeaderIdentity216, photoURL: authoritativePhotoURL216 }
+    : baseHeaderIdentity216;
   const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
   const isActivePath = (path: string) => {
     if (path === '/') return location.pathname === '/';

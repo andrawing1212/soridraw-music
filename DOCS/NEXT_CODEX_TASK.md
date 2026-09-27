@@ -1,3 +1,26 @@
+## 다음 작업 기준 · app192 메뉴 설정 실사용 확인 후 Explore 탭 UI (2026-09-27 KST)
+
+현재 PREVIEW:
+- app **192**
+- 제품 commit `a6a030a3067faca3cf662af69372563d83ed7b3e`
+- Audit Run **36323892369 SUCCESS**
+- 최종 PREVIEW Release Run **36326740832 SUCCESS**
+- 신규 Function `adminSetNavigationVisibility` ACTIVE.
+- shared RTDB `publicSync/navigationVisibility` Rules + live mirror PASS.
+- `preview.soridraw.com` exact build/version 192 PASS.
+- TEST / PRODUCTION code+Hosting unchanged.
+
+다음 실사용:
+- 관리자에서 메뉴 1개 숨김 → 다른 로그인 사용자 기기에서 새로고침 없이 사라짐 확인.
+- 직접 URL 차단 확인. Explore `/explore` 포함.
+- 전체공개 복원 시 메뉴 자동 복구 확인.
+- 이상 시 navigation 설정 경로만 수정하고 좋아요/Explore Feed/공개상태/Music Note/UI는 건드리지 않는다.
+
+실사용 통과 후:
+- 사용자 요청대로 추천 / 최신 / 인기 탭 UI 수정 범위를 별도 작업으로 진행.
+- TEST 승격은 사용자 명시 요청 전 금지.
+
+
 ## 다음 작업 기준 · app192 관리자 메뉴 동기화 실사용 확인 → Explore 탭 UI (2026-09-27 KST)
 
 현재 PREVIEW:

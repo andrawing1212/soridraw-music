@@ -1,22 +1,32 @@
-## 2026-09-28 — app197 Explore 상단 가로줄 실화면 확인
+## 2026-09-28 — app198 Explore 상단 가로줄 실화면 재확인
 
 현재 PREVIEW:
-- app197.
-- 제품 수정 commit `8a809b0093348d48ff78912ccf367c8ce592da34`.
-- 감사 Run `36333858877` SUCCESS.
-- release source `7f5c9863f284b640046ffc503c02ea482ce1ef33`.
-- Hosting Run `36334092858` SUCCESS.
-- `preview.soridraw.com` exact build/version 197 PASS.
+- app198.
+- app197 실화면에서 Explore Feed / 공개프로필 상단 가로줄이 그대로 보여 미해결 확인.
+- 원인: Explore 전용 `display:none!important` selector가 canonical Studio divider의 `display:block!important` selector보다 specificity가 낮았음.
+- 제품 fix commit `cb32cb637d05968741ee72ce561056aedbc00510`.
+- 감사 Run `36334556580` SUCCESS.
+- app198 version commit `2125a4bbc09b805df0280cb4e3c8bde07a19d6f6`.
+- release source `1f9018b287a8cd1d07f7b255e243c2a042f6d7c4`.
+- Hosting Run `36334670982` SUCCESS.
+- `preview.soridraw.com` exact build/version 198 PASS.
 - TEST / PRODUCTION unchanged.
 
-확인:
-1. Explore 피드 상단 가로줄이 없어졌는지.
+현재 수정:
+- `src/components/explore/explore.css`만 제품 변경.
+- canonical selector 체인보다 강한 Explore 전용 selector로
+  `.soridraw-studio-masthead-divider { display:none!important; }`를 적용.
+- 공용 `studioLayout.css` 및 다른 page divider 규칙은 변경하지 않음.
+
+지금 확인할 것:
+1. Explore Feed 상단 가로줄이 없어졌는지.
 2. Explore 공개프로필 상단 가로줄이 없어졌는지.
 3. Music Note / Library / Studio 등 다른 페이지의 가로줄은 기존대로 유지되는지.
 
 보호:
 - Explore 외 다른 UI/CSS 수정 금지.
 - 좋아요 / 프로필 / 공개·비공개 / Music Note / Worker / Functions / Rules / 데이터 구조 비변경.
+- app198에서도 선이 남으면 다른 영역을 건드리지 말고 실제 렌더된 divider의 selector/element만 다시 bounded 추적.
 
 통과 후 사용자 다음 요청 진행.
 TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.

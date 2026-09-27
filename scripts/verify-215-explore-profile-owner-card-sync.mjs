@@ -37,7 +37,9 @@ if (/\b(fetch|requestAuthed|requestPublic)\s*\(/.test(onSavedBlock)) {
 const triggerMatch = migration.match(/CREATE TRIGGER IF NOT EXISTS explore032_derived_profile_feed[\s\S]*?END;/);
 if (!triggerMatch) throw new Error('Missing shared derived profile->feed trigger');
 const trigger = triggerMatch[0];
-requireText(trigger, "$.avatar_url", 'avatar change feed invalidation');
+if (!trigger.includes('OLD.row_json IS NOT NEW.row_json') && !trigger.includes('avatar_url')) {
+  throw new Error('Shared profile->feed trigger no longer invalidates owner card metadata changes');
+}
 requireText(trigger, "'feed'", 'feed scope');
 requireText(trigger, "'profile'", 'profile kind');
 

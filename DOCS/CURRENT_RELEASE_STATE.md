@@ -1,3 +1,53 @@
+## 0IP. PREVIEW app213 · Recent 왼쪽 Sori Studio 폭 소폭 축소 (2026-09-29 KST)
+
+상태: **app212 사용자 실화면 확인 반영 / 곡 만들기 스크롤바 정상 기준 보호 / Recent 왼쪽 Sori Studio만 소폭 축소 / 감사 PASS / PREVIEW app213 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 확인:
+- app212의 곡 만들기(Create) 우측 세로 스크롤바는 정상 위치로 복귀 확인.
+- 남은 조정은 Recent 메뉴 안 왼쪽 Sori Studio 가로폭이 약간 넓다는 점 하나.
+
+app213 수정:
+- 제품 commit: `75a2f2b2df0250cb0667247457393d237b7f61e2`.
+- verifier commit: `a25eca96dd0465ccafc74ecc35a14a74825966da`.
+- Audit verified HEAD: `59b13dbc878232cf9e607761d28e52de044190a0`.
+- Recent 왼쪽 Builder의 기존 실제 width owner는 그대로 유지.
+- 총 gutter만 **36px → 48px**로 소폭 증가하여 Sori Studio 표시 폭을 아주 조금 축소함.
+- 좌우 기준으로는 약 **18px → 24px** 여백으로 각각 6px씩만 증가.
+- Create scrollbar correction(1032), Create 내용 폭/위치, Recent 오른쪽 result, split shell, scrollbar, splitter, responsive rule 전부 비변경.
+- Music Note / Library / 모바일 / Classic / backend / user data 비변경.
+
+검증:
+- Audit Run **36473722199 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP213_RECENT_BUILDER_REFINED_GUTTER=PASS`.
+- Create scrollbar regression 보호 PASS.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **213**.
+- version commit: `ca0a46474955f38dd031a94a1109c0ca3921e3e9`.
+- release SHA: `60023792fd39e7deed4e971bbe81aad4c17cd88b`.
+- Firebase PREVIEW Hosting Run: **36473972014 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=213`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. Recent 메뉴 안 왼쪽 Sori Studio가 app212보다 아주 조금만 좁아졌는지.
+2. 곡 만들기(Create)의 우측 스크롤바가 정상 위치 그대로 유지되는지.
+3. 다른 정상 UI가 그대로인지.
+
+보호:
+- 다음 미세조정이 필요하면 Recent 1031의 `48px` 값만 조정.
+- Create 1032 및 다른 화면은 사용자 확인 정상 기준으로 고정.
+
 ## 0IO. PREVIEW app212 · Recent 왼쪽 여백 축소 + 곡 만들기 스크롤바 우측 경계 정렬 (2026-09-29 KST)
 
 상태: **app211 실화면 피드백 반영 / Recent 왼쪽 여백 84→36px 축소 / Create 스크롤바 18px 우측 경계 복구 / 감사 PASS / PREVIEW app212 배포 완료 / 사용자 실화면 확인 대기**

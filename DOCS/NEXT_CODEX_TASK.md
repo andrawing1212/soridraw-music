@@ -1,3 +1,26 @@
+## 2026-09-29 — app206 분할 좌우 여백 실사용 확인
+
+현재 PREVIEW:
+- app206.
+- 제품 commit `e6593b158c43f6f742411fb0bf62ebf85bd63d67`.
+- Audit Run `36462684857` SUCCESS.
+- release SHA `c9d2877aef5c85c59a9afb66b227aabe2c6205c0`.
+- Hosting Run `36462976524` SUCCESS.
+- exact build/version 206 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 최근 생성곡 좌우 여백이 뮤직노트와 비슷한 호흡으로 보이는지.
+2. Sori Studio 전체 폭이 너무 좁아지지 않고 조금만 안쪽으로 들어왔는지.
+3. 분할바 드래그/접기·펼침/PC·태블릿 전환 회귀 없음.
+4. Music Note / Library / 모바일 / Classic 화면 비변경.
+
+보호:
+- 이후 추가 조정도 간격값만 최소 수정.
+- splitter geometry / responsive breakpoint / backend / 사용자 데이터 비변경.
+- TEST/PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-29 — app205 왼쪽 rail 계정 메뉴 실사용 확인
 
 현재 PREVIEW:

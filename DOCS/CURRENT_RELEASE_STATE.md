@@ -1,3 +1,48 @@
+## 0II. PREVIEW app206 · 분할 최근 생성곡/Sori Studio 좌우 여백 조정 완료 (2026-09-29 KST)
+
+상태: **사용자 요청 반영 / 간격만 수정 / 감사 PASS / PREVIEW app206 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- 분할모드 최근 생성곡이 분할바/양쪽 가장자리에 너무 붙어 보이는 느낌을 완화.
+- Sori Studio도 좌우 폭을 약간 줄여 뮤직노트처럼 여유 있게 보이도록 조정.
+- 다른 UI/기능은 건드리지 않음.
+
+수정:
+- 제품 commit: `e6593b158c43f6f742411fb0bf62ebf85bd63d67`.
+- 최근 생성곡 정상 분할 상태의 result content에 좌/우 **12px** 내부 여백 추가.
+- Sori Studio Create:
+  - 1100~1599px: 좌/우 내부 여백 각각 **12px** 추가.
+  - 1600px 이상: 기존 약 42px/side 가이드를 **56px/side**로 소폭 확대.
+- 뮤직노트/라이브러리 간격 자체는 변경하지 않음.
+- 분할바 위치/폭 계산, pane mode, drag 성능 경로, 모바일, Classic Dark/Light 비변경.
+
+검증:
+- Audit Run **36462684857 SUCCESS**.
+- TypeScript PASS / Build PASS.
+- `APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS`.
+- Like regression 및 공유 D1 read-only 검사 PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **206**.
+- version commit: `af7bf3ec9f975086f728f69c9fffc92893ad47ff`.
+- release SHA: `c9d2877aef5c85c59a9afb66b227aabe2c6205c0`.
+- Firebase PREVIEW Hosting Run: **36462976524 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=206`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. 최근 생성곡 카드가 분할바와 양쪽 경계에서 조금 더 여유 있게 보이는지.
+2. Sori Studio 제목/카드 전체가 좌우로 약간 안쪽에 들어와 답답함이 줄었는지.
+3. 뮤직노트/라이브러리/분할바/모바일 등 기존 정상 UI에 변화가 없는지.
+
+
 ## 0IH. PREVIEW app205 · 왼쪽 rail 계정 메뉴 최소화 배포 완료 (2026-09-29 KST)
 
 상태: **사용자 요청 반영 / 감사 PASS / PREVIEW app205 배포 완료 / 실화면 확인 대기**

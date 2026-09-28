@@ -1,3 +1,43 @@
+## 0IK. PREVIEW app208 · Sori Studio 간격 소유자 교정 완료 (2026-09-29 KST)
+
+상태: **사용자 피드백 반영 / 잘못 잡은 child-width 방식 제거 / 실제 pane 좌우 padding만 수정 / 감사 PASS / PREVIEW app208 배포 완료 / 실화면 확인 대기**
+
+원인:
+- app206~207에서 Sori Studio 간격을 direct child의 `width` 값으로 줄였는데, 기존 wide-screen composition과 겹쳐 실제 화면에서는 변화가 거의 보이지 않을 수 있었음.
+- 사용자 사진 기준으로 이 방식은 실제 원하는 바깥 여백 소유자를 건드리지 못한 것으로 판단.
+
+수정:
+- 제품 commit: `99ea161293404f423d7d48652eaefb762ebaa18a`.
+- app206에서 좋아졌다고 확인된 최근 생성곡 12px 여백은 그대로 유지.
+- Sori Studio Create의 이전 child-width 보정(`calc(100% - 48px)`, 1600+ `calc(100% - 112px)`) 제거.
+- 실제 Create pane 자체에 좌/우 **36px padding**을 부여.
+- 카드 내부 크기/간격/높이, 제목, 분할바, pane 비율, 반응형 경계, 모바일, Music Note, Library 비변경.
+
+검증:
+- Audit Run **36465184865 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP207_CREATE_PANE_GUTTER_OWNER=PASS`.
+- `APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS`.
+- Backend/user data 변경 없음.
+
+PREVIEW 배포:
+- app version: **208**.
+- version commit: `5eb4e70f3bc8505c03fa42d775cab88718b18b9d`.
+- release SHA: `63cdfc7785b2de2a93f4ccfd5a2f935c9b35909d`.
+- Firebase PREVIEW Hosting Run: **36465508461 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=208`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+실화면 확인:
+1. Sori Studio 카드 묶음 전체가 좌우에서 확실히 안쪽으로 36px 들어왔는지.
+2. 최근 생성곡 app206 결과는 그대로인지.
+3. 다른 UI/분할 동작 변화가 없는지.
+
+
 ## 0IJ. PREVIEW app207 · Sori Studio 좌우 여백 2차 확대 완료 (2026-09-29 KST)
 
 상태: **사용자 실화면 피드백 반영 / Sori Studio 간격만 재조정 / 감사 PASS / PREVIEW app207 배포 완료 / 실화면 확인 대기**

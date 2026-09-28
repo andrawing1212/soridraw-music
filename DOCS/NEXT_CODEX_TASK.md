@@ -1,3 +1,24 @@
+## 2026-09-29 — app208 Sori Studio 실제 pane 여백 확인
+
+현재 PREVIEW:
+- app208.
+- 제품 commit `99ea161293404f423d7d48652eaefb762ebaa18a`.
+- Audit Run `36465184865` SUCCESS.
+- release SHA `63cdfc7785b2de2a93f4ccfd5a2f935c9b35909d`.
+- Hosting Run `36465508461` SUCCESS.
+- exact build/version 208 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. Sori Studio 전체가 실제 pane 기준 좌우 36px 안쪽으로 들어왔는지.
+2. 최근 생성곡은 이전 정상 결과 유지.
+3. 카드 내부/분할바/반응형/Music Note/Library/모바일 회귀 없음.
+
+보호:
+- 추가 조정이 필요하면 Create pane padding 숫자만 미세 조정.
+- 그 외 UI/기능/데이터 경로 변경 금지.
+
+
 ## 2026-09-29 — app207 Sori Studio 좌우 여백 2차 확인
 
 현재 PREVIEW:

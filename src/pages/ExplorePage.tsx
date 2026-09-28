@@ -335,6 +335,40 @@ const formatCount = (value: number) => {
   return String(value);
 };
 
+// SORIDRAW_EXPLORE_TITLE_DISPLAY_218_20260928
+// Published titles may arrive as quoted single-language titles or quoted
+// bilingual pairs such as '한국어' | 'English'. Keep the stored title intact
+// and normalize only the Explore card display.
+const stripExploreTitleWrapperQuotes218 = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const pairs: Array<[string, string]> = [
+    ["'", "'"],
+    ['"', '"'],
+    ['‘', '’'],
+    ['“', '”'],
+  ];
+  for (const [open, close] of pairs) {
+    if (
+      trimmed.length > open.length + close.length
+      && trimmed.startsWith(open)
+      && trimmed.endsWith(close)
+    ) {
+      return trimmed.slice(open.length, trimmed.length - close.length).trim();
+    }
+  }
+  return trimmed
+    .replace(/^[‘’“”'"]+/, '')
+    .replace(/[‘’“”'"]+$/, '')
+    .trim();
+};
+
+const normalizeExploreDisplayTitle218 = (value: string) => value
+  .split(/\s*[|│]\s*/)
+  .map(stripExploreTitleWrapperQuotes218)
+  .filter(Boolean)
+  .join('|');
+
 const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   const raw = safeText(track.title, '제목 없는 곡');
   const genreMatch = raw.match(/^\s*(\[[^\]\r\n]{1,80}\])\s*(.*)$/);
@@ -350,10 +384,7 @@ const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   const normalizedFallbackGenre = fallbackGenre.replace(/^\[|\]$/g, '').trim();
   const genre = titleGenre || (normalizedFallbackGenre ? `[${normalizedFallbackGenre}]` : '');
   const titleSource = (genreMatch?.[2] ?? raw).trim();
-  const title = titleSource
-    .replace(/^[‘’“”'"]+/, '')
-    .replace(/[‘’“”'"]+$/, '')
-    .trim() || '제목 없는 곡';
+  const title = normalizeExploreDisplayTitle218(titleSource) || '제목 없는 곡';
   return { genre, title };
 };
 

@@ -83,6 +83,7 @@ jobs:
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs
           node scripts/verify-217-cache-live-update-reset.mjs
+          node scripts/verify-218-explore-title-display.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

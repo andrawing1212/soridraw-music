@@ -1,3 +1,68 @@
+## 0IA. PREVIEW app199 CACHE LIVE 정리 + 업데이트 진단창 분리 완료 (2026-09-28 KST)
+
+상태: **원인 확인 / CACHE LIVE 기능·표시 정리 / 최종 감사 PASS / PREVIEW app199 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 요청:
+- 평상시는 정상인데 앱 업데이트 후 CACHE LIVE에 이전 Social Snapshot D1 수치가 남아 새 읽기처럼 보이는 혼동을 정리.
+- 다른 정상 기능은 건드리지 않고 CACHE LIVE를 보기 쉽고 기능적으로 안전하게 수정.
+
+확인된 원인:
+- 앱 업데이트 적용은 `window.location.reload()`이고 실제 product cache를 지우지 않음.
+- CACHE LIVE의 Cloudflare/D1/SDK/catalog/page-sync 진단값은 `sessionStorage` 기반이라 같은 탭 reload 뒤 이전 진단 누적이 남을 수 있었음.
+- `/v1/me/social-snapshot` product cache key/schema는 app198에서 변경되지 않았고 update가 이를 삭제하는 코드도 없음.
+- 따라서 업데이트 직후 보이던 기존 R21이 새 요청인지 이전 진단 누적인지 화면만으로 혼동될 수 있었음.
+
+수정:
+- 제품 코드 commit: `73c433f64ce412a1544da16310361f8d3174daf1`.
+- 실제 앱 버전이 올라간 첫 실행에서 **진단용 sessionStorage key만** 자동 초기화.
+- Local First 제품 캐시, 로그인, 좋아요, 팔로우, Music Note/Library 데이터, outbox/draft 등은 초기화하지 않음.
+- CACHE LIVE 상단에 `이번 실행 진단 · 업데이트 적용 시 자동 초기화` 표시.
+- Cloudflare 누적을 `이번 실행` 기준으로 명시.
+- `/v1/me/social-snapshot` 표시명을 `개인 소셜 스냅샷`으로 정리.
+- 실제 Firestore Cloud Monitoring 값은 `실제 서버 지표 · 오늘 / 최근 10분`으로 별도 구분.
+- 상단 버튼을 `서버 ↻ / 초기화 / 접기`로 정리.
+- 수동 `초기화`가 기존에 빠뜨리던 PAGE SYNC 진단까지 함께 0으로 초기화하도록 수정.
+- 서버 지표 새로고침은 실제 서버 지표만 갱신하며 이번 실행 진단 초기화와 분리.
+
+검증:
+- 신규 verifier `scripts/verify-217-cache-live-update-reset.mjs`.
+- Release System Audit 최초 2회는 기존 verifier의 오래된 exact-string/app192 고정 때문에 FAIL:
+  - Run `36416013981`: verify-214가 app192 exact version 고정.
+  - Run `36416264581`: verify-127가 app196+ avatar authority 변수명을 반영하지 못한 오래된 regex.
+- 제품 코드 오류가 아니며 두 verifier만 현재 유효 범위로 최소 보정.
+- 최종 Audit Run `36416514198` **SUCCESS**.
+- TypeScript PASS / Build PASS / static verification PASS / Like isolated regression PASS / Worker dry-run / shared D1 read-only PASS.
+- app217 verifier PASS: update reset diagnostic-session-only / manual PAGE SYNC reset / current-run-vs-server label separation.
+
+PREVIEW 배포:
+- app version: **199**.
+- version commit: `10540a60fe0d81596adf5ef5b75740df2a5e3fd2`.
+- locked release SHA: `0506bf31c1c13a7885b092f227a0eafc14d5aa03`.
+- Firebase PREVIEW Hosting Run: **36416783773 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=199`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+비용 / 데이터 영향:
+- 새 Firestore read/write 0.
+- 새 D1 read/write 0.
+- 새 Worker request 0.
+- Worker / Functions / Rules / D1 schema 비변경.
+- 사용자 원본 데이터 변경/삭제/백필/migration 없음.
+- 기존 Social Snapshot / 좋아요 / 공개·비공개 / Music Note 저장 기능 비변경.
+
+사용자 실화면 확인:
+1. app199 업데이트 적용 직후 CACHE LIVE의 **이번 실행 진단**이 이전 앱 수치를 이어받지 않고 새로 시작하는지.
+2. `개인 소셜 스냅샷`이 실제 새 호출이 있을 때만 이번 실행 상세에 나타나는지.
+3. 상단 `초기화`를 누르면 Browser SDK / Cloudflare / PAGE SYNC / Catalog 진단이 함께 0 기준으로 돌아가는지.
+4. `서버 ↻`는 Firestore 오늘/최근 10분 실제 서버 지표만 새로고침하는지.
+
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0HZ. Studio 분할바 현재 동작 스킬 고정 완료 (2026-09-28 KST)
 
 상태: **현재 PREVIEW 분할 동작을 개발 스킬로 문서화 / 제품 코드·배포 비변경**

@@ -60,11 +60,13 @@ for (const required of [
   assert.ok(css.includes(required), `missing vertical Classic-parity CSS token: ${required}`);
 }
 
-// 1030/1031/1032: Recent result spacing stays frozen. The real Recent
-// Builder direct content uses a refined 48px total gutter. Create releases
-// only the inherited 18px RIGHT main gutter and returns it inside the vertical
-// scroll shell, so the native scrollbar reaches the right-rail divider without
-// changing the visible content width.
+// 1030/1031/1032: Recent result spacing stays frozen. Every split-bar
+// workspace (Recent / Music Note / Library) uses the same Builder direct-content
+// width owner. App213 had 24px per side; add exactly the approved 12px
+// result-side divider gap => 36px per side / 72px total. Create releases only
+// the inherited 18px RIGHT main gutter and returns it inside the vertical scroll
+// shell, so the native scrollbar reaches the right-rail divider without changing
+// the visible content width.
 assert.match(
   css,
   /data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-studio-result-content \{[\s\S]*?padding-left: 12px !important;[\s\S]*?padding-right: 12px !important;/,
@@ -72,8 +74,8 @@ assert.match(
 );
 assert.match(
   css,
-  /\/\* 1031 — Split Recent left Builder Sori Studio width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?> :is\([\s\S]*?\.soridraw-studio-builder-pane-masthead-host,[\s\S]*?:not\(\.soridraw-studio-pane-masthead-host\)[\s\S]*?\) \{[\s\S]*?width: min\(calc\(100% - 48px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
-  'Recent Builder masthead and direct content must use the refined 48px total gutter',
+  /\/\* 1031 — Split Builder common Sori Studio width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?data-soridraw-lite-workspace="music-note"[\s\S]*?data-soridraw-lite-workspace="library"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?> :is\([\s\S]*?\.soridraw-studio-builder-pane-masthead-host,[\s\S]*?:not\(\.soridraw-studio-pane-masthead-host\)[\s\S]*?\) \{[\s\S]*?width: min\(calc\(100% - 72px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
+  'Recent, Music Note and Library must share the same 72px total Builder gutter',
 );
 assert.match(
   css,
@@ -113,7 +115,8 @@ console.log('APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS');
 console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
-console.log('APP213_RECENT_BUILDER_REFINED_GUTTER=PASS');
+console.log('APP214_SPLIT_BUILDER_COMMON_GUTTER=PASS');
+console.log('APP214_RECENT_MUSICNOTE_LIBRARY_PARITY=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

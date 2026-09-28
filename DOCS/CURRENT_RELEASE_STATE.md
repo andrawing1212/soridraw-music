@@ -1,3 +1,62 @@
+## 0IB. PREVIEW app200 · Explore 제목 따옴표/구분자 표시 정리 완료 (2026-09-28 KST)
+
+상태: **사용자 화면 확인 / Explore 카드 제목 표시만 최소 수정 / 최종 감사 PASS / PREVIEW app200 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- 현재 공개곡 카드 제목이 `한글제목' | '외국어제목`처럼 중간 따옴표가 남아 보이는 문제 수정.
+- 이중언어 제목은 `한글제목|외국어제목`으로 표시.
+- 단독 언어 제목도 `'제목'`이 아니라 `제목`만 표시.
+- 다른 UI/기능은 건드리지 않음.
+
+수정:
+- 제품 파일: `src/pages/ExplorePage.tsx` 한 곳.
+- 저장된 원본 title 값은 수정하지 않고 **Explore 카드 표시 단계에서만** 정규화.
+- `'`, `"`, `‘ ’`, `“ ”`로 감싼 각 언어 제목의 바깥 따옴표만 제거.
+- `|` 또는 `│` 구분자는 화면에서 `|` 하나로 통일하고 좌우 공백 없이 표시.
+- 예:
+  - `'한글제목' | 'Foreign Title'` → `한글제목|Foreign Title`.
+  - `'제목'` → `제목`.
+  - `Don't Stop` 같은 제목 내부 apostrophe는 유지.
+- 기존 장르 줄 `[K-New Jack Swing]`, 카드 위치/크기/줄임표/좋아요/버튼은 변경하지 않음.
+- Feed / 추천 / 최신 / 인기 / 검색 / 공개프로필이 같은 Explore 카드 표시 함수를 사용하므로 같은 표시 규칙 적용.
+
+기준:
+- 제품 commit: `30dfe92e74414e5da66fd148b6f1ebebfd168771`.
+- verifier: `scripts/verify-218-explore-title-display.mjs`.
+- Audit Run: **36435743493 SUCCESS**.
+- app200 version commit: `99205c2c2d69b021b0346b11b3f6c59d80055867`.
+- locked release SHA: `a32306d6b92f0e59469b2d7432ffe814a1488642`.
+- Firebase PREVIEW Hosting Run: **36436054767 SUCCESS**.
+- 실제 `preview.soridraw.com`: **app200 / exact build PASS**.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- `218_EXPLORE_BILINGUAL_TITLE_QUOTES_REMOVED=PASS`.
+- `218_EXPLORE_TITLE_SEPARATOR_COMPACT=PASS`.
+- `218_EXPLORE_SINGLE_TITLE_QUOTES_REMOVED=PASS`.
+- `218_EXPLORE_RAW_TITLE_DATA_UNCHANGED=PASS`.
+- Like isolated regression PASS.
+- Worker / shared D1 감사 PASS.
+- RTDB rules deploy SKIPPED.
+
+비용 / 데이터:
+- Firestore read/write 추가 0.
+- D1 read/write 추가 0.
+- Worker request 추가 0.
+- 사용자 원본 제목 데이터 변경 0.
+- Worker / Functions / Rules / schema 변경 없음.
+
+사용자 실화면 확인:
+1. 이중언어 곡: `한글제목|외국어제목`.
+2. 단독언어 곡: `제목`.
+3. 장르 표시와 카드 레이아웃은 기존 그대로.
+4. 추천 / 최신 / 인기 / 공개프로필 카드 모두 같은 제목 표시.
+
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0IA. PREVIEW app199 CACHE LIVE 정리 + 업데이트 진단창 분리 완료 (2026-09-28 KST)
 
 상태: **원인 확인 / CACHE LIVE 기능·표시 정리 / 최종 감사 PASS / PREVIEW app199 배포 완료 / 사용자 실화면 확인 대기**

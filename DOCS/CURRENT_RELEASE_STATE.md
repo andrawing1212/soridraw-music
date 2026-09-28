@@ -1,3 +1,51 @@
+## 0IR. PREVIEW app215 · 분할 화면 검정 바깥 여백 축소 교정 (2026-09-29 KST)
+
+상태: **app214 방향 오류 교정 / 카드 폭 축소가 아니라 검정 바깥 여백 감소 / Recent·Music Note·Library 공통 / Create 정상 스크롤바 보호 / 감사 PASS / PREVIEW app215 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 교정:
+- app214는 왼쪽 콘텐츠를 더 좁혀 검정 여백을 오히려 늘린 잘못된 방향이었음.
+- 실제 요청은 분할선 옆 **검정색 바깥 여백을 줄이는 것**.
+- app213의 좌우 24px black gutter에서 오른쪽 결과-divider 기준 12px만큼 **빼야** 했음.
+
+app215 수정:
+- 제품 commit: `20f44d312ada0dafa0f0ed094e47f6055f868001`.
+- verifier commit: `ad7d50fd0240ff164d11d37f4fb978d5d44b2743`.
+- Audit verified HEAD: `19c76d83e88b87dd54ead03547180a3d3d363aed`.
+- split Builder 공통 gutter를 app214의 72px에서 **24px total / 좌우 12px**로 크게 줄여 콘텐츠를 넓히고 검정 바깥 여백을 줄임.
+- Recent / Music Note / Library에 동일 적용.
+- Create는 제외. app212에서 사용자 정상 확인된 Create 우측 scrollbar correction 유지.
+- result pane / divider / scroll shell / responsive breakpoint / mobile / Classic / backend / user data 비변경.
+
+검증:
+- Audit Run **36476539692 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP215_SPLIT_BLACK_GUTTER_REDUCED=PASS`.
+- `APP215_RECENT_MUSICNOTE_LIBRARY_PARITY=PASS`.
+- Create scrollbar regression 보호 PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **215**.
+- version commit: `67b9412ab40698a9076bd1350b160e42cdab01e4`.
+- release SHA: `f1f26f1e329d4e6879fc625c2abd97e0d8c39d20`.
+- Firebase PREVIEW Hosting Run: **36476811246 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=215`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+
+실화면 확인:
+1. Recent / Music Note / Library 왼쪽 화면의 검정 바깥 여백이 app214보다 확실히 줄었는지.
+2. 콘텐츠 자체는 넓어지고 divider/right result pane은 그대로인지.
+3. Create 우측 scrollbar가 정상 위치 그대로인지.
+
+보호:
+- 추가 조정은 split common black gutter 값만 수정.
+- Create / divider / result pane / backend 수정 금지.
+
 ## 0IQ. PREVIEW app214 · 분할 화면 왼쪽 Sori Studio 공통 폭 정렬 (2026-09-29 KST)
 
 상태: **사용자 실화면 기준 재정의 / 오른쪽 결과-분할선 12px 간격을 증분 기준으로 사용 / Recent·Music Note·Library 공통 적용 / Create 정상 스크롤바 보호 / 감사 PASS / PREVIEW app214 배포 완료 / 사용자 실화면 확인 대기**

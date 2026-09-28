@@ -1,3 +1,43 @@
+## 0IC. PREVIEW app201 · Explore 이중언어 제목 구분자 공백 적용 완료 (2026-09-28 KST)
+
+상태: **사용자 요청 반영 / 제목 표시 한 줄 최소 수정 / 감사 PASS / PREVIEW app201 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- `한글제목|외국어제목` → `한글제목 | 외국어제목`으로 표시.
+- 단독 언어 제목은 기존처럼 따옴표 없이 유지.
+- 다른 기능/UI는 건드리지 않음.
+
+수정:
+- 제품 파일: `src/pages/ExplorePage.tsx`.
+- Explore 제목 표시 helper의 구분자만 `|` → ` | `로 변경.
+- 원본 title 데이터, 장르 줄, 카드 레이아웃, 줄임표, 좋아요/공유/더보기 로직 비변경.
+- 단독언어 제목은 그대로 `제목`.
+
+기준:
+- 제품 commit: `d57d232295ae26cb3806e13db33f667c78ce3cec`.
+- Audit Run: **36441371904 SUCCESS**.
+- app201 version commit: `b3ffc19c4296c106f14a3081c123eccf3aa74f26`.
+- locked release SHA: `1c617201f5ba96b44795462b9046b0c4b98c3b0a`.
+- PREVIEW Hosting Run: **36441712032 SUCCESS**.
+- `preview.soridraw.com` app201 / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+검증:
+- TypeScript PASS.
+- Build PASS.
+- 218 title verifier PASS.
+- 기존 Like isolated regression PASS.
+- RTDB rules deploy SKIPPED.
+- Firestore/D1/Worker 추가 비용 0.
+- 사용자 데이터 변경 없음.
+
+사용자 확인:
+- 이중언어: `한글제목 | 외국어제목`.
+- 단독언어: `제목`.
+
+TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 0IB. PREVIEW app200 · Explore 제목 따옴표/구분자 표시 정리 완료 (2026-09-28 KST)
 
 상태: **사용자 화면 확인 / Explore 카드 제목 표시만 최소 수정 / 최종 감사 PASS / PREVIEW app200 배포 완료 / 실화면 확인 대기**

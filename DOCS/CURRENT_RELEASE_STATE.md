@@ -1,3 +1,32 @@
+## 0IW. app217 실화면 FAIL · 장르 접기 로컬 fast-path 수정 (2026-09-29 KST)
+
+상태: **사용자 영상 기준 app217 FAIL / 최근 생성곡 정상 / Music Note·Library에서 장르 '접기'만 느림 / app218 후보 코드+verifier 반영 / Audit 전**
+
+사용자 실화면 판정:
+- PREVIEW app217의 장르 전용 180ms 제거 → 공통 220ms 변경만으로는 문제가 해결되지 않았음.
+- 같은 화면/동작에서 **최근 생성곡은 정상**, **Music Note / Library에서만 장르를 접을 때 버벅임**이 남음.
+- 장르를 펼치는 동작은 문제 핵심이 아니며, **접기 경로만** 분리해서 수정해야 함.
+- 따라서 app217의 원인 판단(transition duration 차이)은 최종 원인이 아니었던 것으로 정정.
+
+재확인:
+- 장르 펼침 상태는 829차부터 GenreHierarchySelector 내부 로컬 state가 소유하므로 일반 클릭에서 App 전체 state 변경은 없음.
+- 그러나 handleExpandableToggle은 접기에서도 클릭 직전 getBoundingClientRect()를 실행하고, 두 번의 requestAnimationFrame 뒤 다시 layout을 읽어 scroll anchor를 보정하는 과거 경로가 남아 있었음.
+- 이 scroll-anchor 보정은 원래 펼침 안정화용이며, **접기에서는 필요하지 않음**. Music Note / Library처럼 오른쪽 결과 DOM이 큰 화면에서 불필요한 layout 동기화가 더 비싸질 수 있는 구조였음.
+
+app218 후보 수정:
+- 제품 commit: `d018ee0e86dde10ada41d7b8bb56a4db42e64151`.
+- verifier commit: `1d50ceb12e28f49279ecb77a323db2ef53e75ec1`.
+- 장르가 이미 펼쳐져 있어 **접는 클릭**이면 로컬 state만 즉시 토글하고 바로 종료.
+- 접기에서는 closest/getBoundingClientRect → double-rAF → scrollBy 경로를 타지 않음.
+- **펼치기 쪽 기존 scroll-anchor 보정은 그대로 유지**.
+- app217의 공통 220ms ease-out, 장르 높이 측정, 카드 디자인/위치/크기, split geometry, Recent, Style/Sound/Mood/Theme는 비변경.
+- Firebase / Firestore / Functions / Worker / Rules / 사용자 데이터 변경 없음.
+
+검증 계획:
+- APP218_GENRE_COLLAPSE_LOCAL_FAST_PATH 정적 검증 추가.
+- TypeScript / Build / release audit 후 PASS일 때만 app218 PREVIEW Hosting 배포.
+- 실화면 최종 기준: Recent 정상 유지 + Music Note/Library 접기 지연 제거 + 펼치기/스크롤 위치 회귀 없음.
+
 ## 0IV. PREVIEW app217 · 장르 접기 공통 모션 배포 완료 (2026-09-29 KST)
 
 상태: **장르 전용 180ms 제거 / 5개 키워드 메뉴 공통 220ms ease-out / Audit PASS / PREVIEW app217 배포 완료 / 사용자 실화면 확인 대기**

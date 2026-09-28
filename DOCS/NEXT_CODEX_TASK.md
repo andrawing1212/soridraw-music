@@ -1,3 +1,29 @@
+## 2026-09-29 — app212 Recent 작은 여백 + Create 스크롤바 경계 확인
+
+현재 PREVIEW:
+- app212.
+- 제품 commit `44edc1d58a552d2000165233843cab32ce679060`.
+- verifier commit `f17944ddaa4ce387ddd96b908e26e0c1c418ef7d`.
+- Audit Run `36472030354` SUCCESS.
+- release SHA `c08cc53e6928f249f20bb7e84b0387348c3c0fc8`.
+- Hosting Run `36472316088` SUCCESS.
+- exact build/version 212 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- Recent 왼쪽 Sori Studio 총 gutter: 84px → **36px**.
+- Create의 Studio main 오른쪽 18px 바깥 gutter를 해제.
+- 같은 18px을 Create scroll shell 내부에 반환하여 내용 폭은 보호하고 스크롤바만 오른쪽 rail 세로선으로 이동.
+
+확인:
+1. Recent 왼쪽 여백이 과하지 않은지.
+2. Create 세로 스크롤바가 오른쪽 rail 구분선에 붙었는지.
+3. Create 내용 폭/위치 및 다른 UI가 그대로인지.
+
+보호:
+- 다음 수정이 필요하면 Recent 36px 값 또는 Create 18px scrollbar edge owner만 조정.
+- 다른 기능/레이아웃/backend 변경 금지.
+
 ## 2026-09-29 — app211 Recent 왼쪽 Sori Studio 실제 폭 확인
 
 현재 PREVIEW:

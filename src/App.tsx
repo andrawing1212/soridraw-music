@@ -123,6 +123,7 @@ import {
   Activity,
   PenTool,
   Palette,
+  CreditCard,
   FlaskConical,
   AlertTriangle
 } from 'lucide-react';
@@ -4167,37 +4168,59 @@ function Navigation({
                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    className="soridraw-profile-menu absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                    className="soridraw-profile-menu soridraw-account-menu-surface absolute right-5 top-[68px] z-[90] w-56 max-h-[calc(100vh-84px)] overflow-y-auto"
                   >
-                    <div className="border-b border-white/10 px-3 py-2.5">
-                      <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
-                      <p className="truncate text-xs text-white/45">{user.email || ''}</p>
+                    <div className="soridraw-account-menu-header">
+                      <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+                      <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
                     {[
-                      { label: '내 프로필', path: '/my-page' },
-                      { label: '설정', path: '/my-page?tab=settings' },
-                      { label: '요금제', path: '/my-page?tab=plan' },
-                      { label: '결제 관리', path: '/my-page?tab=billing' },
-                    ].map((item) => (
-                      <button key={item.label} type="button" onClick={() => { navigate(item.path); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/72 transition-all hover:bg-[#ffb400]/10 hover:text-[#ffb400]">{item.label}</button>
-                    ))}
-                    <div className="my-1 border-t border-white/10" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                      { label: '내 프로필', path: '/my-page', icon: UserIcon },
+                      { label: '설정', path: '/my-page?tab=settings', icon: Settings },
+                      { label: '요금제', path: '/my-page?tab=plan', icon: Tag },
+                      { label: '결제 관리', path: '/my-page?tab=billing', icon: CreditCard },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => { navigate(item.path); setIsProfileOpen(false); }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Icon aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    <div className="soridraw-account-menu-divider" />
+                    <p className="soridraw-account-menu-section-label">디자인 모드</p>
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#ffb400]/10"
+                      className="soridraw-theme-cycle-button soridraw-account-menu-mode"
                     >
-                      <Palette className="h-5 w-5 shrink-0 text-[#ffb400]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-black text-white/82">모드 변경</span>
-                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      <Palette aria-hidden="true" />
+                      <span className="soridraw-account-menu-mode-copy">
+                        <strong>모드 변경</strong>
+                        <small>{displayModeCycleText}</small>
                       </span>
-                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#ffb400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
-                    <div className="my-1 border-t border-white/10" />
-                    <button type="button" disabled className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/30">고객지원 · 준비중</button>
-                    <button type="button" onClick={() => { handleLogout(); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-black text-[#ffb400] transition-all hover:bg-[#ffb400]/10">로그아웃</button>
+                    <div className="soridraw-account-menu-divider" />
+                    <button type="button" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
+                      <Info aria-hidden="true" />
+                      <span>고객지원 · 준비중</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { handleLogout(); setIsProfileOpen(false); }}
+                      className="soridraw-account-menu-row soridraw-account-menu-logout"
+                    >
+                      <LogOut aria-hidden="true" />
+                      <span>로그아웃</span>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -4309,9 +4332,9 @@ function Navigation({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
                     transition={{ duration: 0.16 }}
-                    className="soridraw-profile-menu absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#181818]/96 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                    className="soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto"
                   >
-                    <div className="border-b border-white/10 px-3 py-2.5">
+                    <div className="soridraw-account-menu-header">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FFB400]">계정 메뉴</p>
                       <p className="mt-1 truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
                       <p className="truncate text-[11px] text-white/42">{user.email || ''}</p>

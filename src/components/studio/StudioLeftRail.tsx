@@ -13,9 +13,16 @@ import {
   PenTool,
   Search,
   Settings,
+  User,
+  BadgeDollarSign,
+  CreditCard,
+  LifeBuoy,
+  Palette,
+  LogOut,
 } from 'lucide-react';
 import {
   applySoridrawDisplayMode,
+  getSoridrawDisplayModeLabel,
   isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
@@ -54,7 +61,7 @@ type RailTooltip = {
   left: number;
 };
 
-const PROFILE_MENU_WIDTH = 200;
+const PROFILE_MENU_WIDTH = 224;
 const PROFILE_MENU_GAP = 8;
 
 // SORIDRAW_NAV_PERMISSION_RAIL_953
@@ -220,48 +227,66 @@ export default function StudioLeftRail({
           style={{ top: menuPosition.top, left: menuPosition.left }}
           onMouseLeave={() => setIsThemeMenuOpen(false)}
         >
-          <div className="soridraw-studio-profile-menu" role="menu" aria-label="개인 메뉴">
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onProfile)}>
+          <div className="soridraw-studio-profile-menu soridraw-account-menu-surface" role="menu" aria-label="개인 메뉴">
+            <div className="soridraw-account-menu-header">
+              <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+              <p className="soridraw-account-menu-name">{profileName || 'SORiDRAW'}</p>
+              {profileEmail && <p className="soridraw-account-menu-email">{profileEmail}</p>}
+            </div>
+
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onProfile)}>
+              <User aria-hidden="true" />
               <span>내 프로필</span>
             </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onSettings)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onSettings)}>
+              <Settings aria-hidden="true" />
               <span>설정</span>
             </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onPlan)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onPlan)}>
+              <BadgeDollarSign aria-hidden="true" />
               <span>요금제</span>
             </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onBilling)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onBilling)}>
+              <CreditCard aria-hidden="true" />
               <span>결제 관리</span>
             </button>
 
-            <div className="soridraw-studio-profile-menu-divider" aria-hidden="true" />
+            <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />
+            <p className="soridraw-account-menu-section-label">디자인 모드</p>
 
             <button
               type="button"
               role="menuitem"
               aria-haspopup="menu"
               aria-expanded={isThemeMenuOpen}
-              className={isThemeMenuOpen ? 'is-submenu-open' : undefined}
+              className={`soridraw-account-menu-mode${isThemeMenuOpen ? ' is-submenu-open' : ''}`}
               onMouseEnter={() => setIsThemeMenuOpen(true)}
               onClick={() => setIsThemeMenuOpen((current) => !current)}
             >
-              <span>테마</span>
-              <ChevronRight aria-hidden="true" />
+              <Palette aria-hidden="true" />
+              <span className="soridraw-account-menu-mode-copy">
+                <strong>모드 변경</strong>
+                <small>다크 · 라이트 · 분할</small>
+              </span>
+              <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
             </button>
 
-            <div className="soridraw-studio-profile-menu-divider" aria-hidden="true" />
+            <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />
 
-            <button type="button" role="menuitem" disabled>
+            <button type="button" role="menuitem" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
+              <LifeBuoy aria-hidden="true" />
               <span>고객지원 · 준비중</span>
             </button>
             <button
               type="button"
               role="menuitem"
+              className="soridraw-account-menu-row soridraw-account-menu-logout"
               onClick={() => {
                 closeProfileMenu();
                 void onLogout();
               }}
             >
+              <LogOut aria-hidden="true" />
               <span>로그아웃</span>
             </button>
           </div>

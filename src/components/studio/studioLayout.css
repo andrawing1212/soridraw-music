@@ -15600,3 +15600,69 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     display: flex !important;
   }
 }
+
+
+/* SORIDRAW_STUDIO_ACCOUNT_MENU_PARITY_219_20260929
+ * Match the split left-rail account popup to the canonical mobile account menu.
+ * Split geometry/divider/panes are untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface {
+    width: 224px !important;
+    min-width: 224px !important;
+    padding: 8px !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    border-radius: 18px !important;
+    background: rgba(36,36,38,.98) !important;
+    background-color: rgba(36,36,38,.98) !important;
+    box-shadow: 0 16px 38px rgba(0,0,0,.42) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button {
+    min-height: 40px !important;
+    height: 40px !important;
+    gap: 12px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    color: rgba(255,255,255,.78) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button.soridraw-account-menu-mode {
+    height: 52px !important;
+    min-height: 52px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button > svg {
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    flex-basis: 19px !important;
+    color: rgba(255,255,255,.48) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button.soridraw-account-menu-mode > svg {
+    color: #ffb400 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > .soridraw-account-menu-divider {
+    width: calc(100% - 8px) !important;
+    margin: 5px 4px !important;
+    background: rgba(255,255,255,.10) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-theme-menu {
+    border-radius: 14px !important;
+    background: rgba(36,36,38,.98) !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.36) !important;
+  }
+}

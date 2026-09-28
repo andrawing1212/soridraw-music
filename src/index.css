@@ -5135,3 +5135,257 @@ html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
     --soridraw-musicnote-state-bg: #303034;
   }
 }
+
+
+/* SORIDRAW_ACCOUNT_MENU_PARITY_219_20260929
+ * One account-menu visual language for the canonical mobile popup and the
+ * desktop top-right popup. Existing actions/routes stay unchanged. */
+.soridraw-account-menu-surface {
+  width: 224px !important;
+  min-width: 224px !important;
+  padding: 8px !important;
+  overflow-x: hidden !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  border-radius: 18px !important;
+  background: rgba(36,36,38,.98) !important;
+  background-color: rgba(36,36,38,.98) !important;
+  background-image: none !important;
+  color: #f1f1f3 !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.42) !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-header {
+  padding: 10px 12px 11px !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-kicker {
+  margin: 0 !important;
+  color: #ffb400 !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  letter-spacing: .08em !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-name {
+  margin: 5px 0 0 !important;
+  overflow: hidden !important;
+  color: #f3f3f5 !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-email {
+  margin: 2px 0 0 !important;
+  overflow: hidden !important;
+  color: rgba(255,255,255,.40) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-row,
+.soridraw-account-menu-surface .soridraw-account-menu-mode {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: rgba(255,255,255,.78) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  text-align: left !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-row:hover,
+.soridraw-account-menu-surface .soridraw-account-menu-row:focus-visible,
+.soridraw-account-menu-surface .soridraw-account-menu-mode:hover,
+.soridraw-account-menu-surface .soridraw-account-menu-mode:focus-visible,
+.soridraw-account-menu-surface .soridraw-account-menu-mode.is-submenu-open {
+  background: rgba(255,180,0,.10) !important;
+  color: #ffcf5c !important;
+  outline: none !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-row > svg,
+.soridraw-account-menu-surface .soridraw-account-menu-mode > svg {
+  width: 19px !important;
+  height: 19px !important;
+  min-width: 19px !important;
+  flex: 0 0 19px !important;
+  color: rgba(255,255,255,.48) !important;
+  stroke: currentColor !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode {
+  min-height: 52px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode > svg {
+  color: #ffb400 !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > strong,
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > small {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > strong {
+  color: rgba(255,255,255,.82) !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > small {
+  margin-top: 2px !important;
+  color: rgba(255,255,255,.38) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.soridraw-account-menu-surface .soridraw-theme-current-label {
+  flex: 0 0 auto !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,.06) !important;
+  color: #ffb400 !important;
+  padding: 5px 8px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-divider {
+  width: calc(100% - 8px) !important;
+  height: 1px !important;
+  margin: 5px 4px !important;
+  border: 0 !important;
+  background: rgba(255,255,255,.10) !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-section-label {
+  margin: 0 !important;
+  padding: 4px 12px 2px !important;
+  color: rgba(255,255,255,.34) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  letter-spacing: .04em !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-muted {
+  color: rgba(255,255,255,.34) !important;
+  cursor: default !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-muted:hover {
+  background: transparent !important;
+  color: rgba(255,255,255,.34) !important;
+}
+
+.soridraw-account-menu-surface .soridraw-account-menu-logout {
+  color: rgba(255,255,255,.72) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface {
+  border-color: rgba(58,52,45,.10) !important;
+  background: rgba(238,235,231,.99) !important;
+  background-color: rgba(238,235,231,.99) !important;
+  color: #342f2a !important;
+  box-shadow: 0 16px 38px rgba(58,52,45,.14) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-header {
+  border-bottom-color: rgba(58,52,45,.12) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-kicker {
+  color: #766f67 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-name {
+  color: #292521 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-email,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-section-label {
+  color: #8b847c !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-row,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-mode {
+  color: #4b453f !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-row > svg {
+  color: #6f6861 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-row:hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-row:focus-visible,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-mode:hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-mode:focus-visible {
+  background: rgba(255,180,0,.10) !important;
+  color: #8c5600 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > strong {
+  color: #413b35 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-mode-copy > small {
+  color: #8b847c !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-divider {
+  background: rgba(58,52,45,.12) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-muted {
+  color: #9a938b !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-account-menu-surface .soridraw-account-menu-logout {
+  color: #4f4943 !important;
+}

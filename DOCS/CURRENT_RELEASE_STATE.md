@@ -1,3 +1,64 @@
+## 0IS. PREVIEW app216 · 생성바 컴팩트 전환 시점 지연 (2026-09-29 KST)
+
+상태: **app215 사용자 통과 기준 보호 / 생성바 디자인 전환만 조정 / 기존 Builder Compact 경계 820px 재사용 / 감사 PASS / PREVIEW app216 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 지시:
+- 1번의 PC형 생성바(접기 화살표 + 무작위/전체초기화 텍스트 포함)를 기존 3번 지점보다 더 오래 유지.
+- 2번의 간단 3버튼 생성바로 바뀌는 시점을 4번 지점까지 늦출 것.
+- app215에서 통과한 검정 여백 / 곡 만들기 스크롤바 / 분할 UI는 유지.
+
+원인:
+- 기존 793 규칙이 Studio Black에서 1599px viewport 또는 Builder content tablet(<=1080px) 단계부터 생성바를 컴팩트 3버튼 형태로 강제했음.
+- 실제 Builder에는 이미 별도의 Compact 시점 **820px**이 존재했지만 생성바는 그 경계를 사용하지 않았음.
+
+app216 수정:
+- Lite engine commit: `37114d56ae43b4443a69275992c39ec7b30081df`.
+- Legacy engine commit: `91299e9101925ea41e03c4704b7e6968dadbf86a`.
+- CSS product commit: `8c9b1958941d64a491a6144f2bce1acf2c5968bd`.
+- verifier commit: `ab6e12f178f7dd8cdac0de3a614a75f9f4554284`.
+- Audit verified HEAD: `c68b77e717cb8fed440e3dc3a2b83a8a8a48482d`.
+- 새 breakpoint를 만들지 않고 기존 Builder Compact 경계 **<=820px**을 생성바 디자인 전환 기준으로 재사용.
+- Builder >820px: 1번 PC형 생성바 유지(접기 화살표, 무작위/전체초기화 텍스트, 90px 높이/큰 생성 버튼).
+- Builder <=820px: 2번 컴팩트 3버튼 생성바로 전환.
+- Builder mobile 660px / content 660·1080px / 외부 split 1100px 기준은 그대로.
+- split engine은 `data-soridraw-builder-action-compact`를 **경계가 실제 바뀔 때만** 갱신. 매 픽셀 React state/추가 측정 없음.
+- app215 Recent/Music Note/Library 검정 여백 24px total, Create scrollbar edge, divider/result geometry 비변경.
+- <1100 실제 모바일 경로와 Classic 비변경.
+
+검증:
+- 첫 Audit Run 36478723293은 제품 오류가 아니라 새 verifier의 정규식이 CSS를 과도하게 묶어 검사해 Static verification FAIL. verifier만 수정 후 재감사.
+- 최종 Audit Run **36478899216 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP216_GENERATE_BAR_COMPACT_AT_BUILDER_820=PASS`.
+- `APP216_GENERATE_BAR_FULL_UNTIL_COMPACT=PASS`.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **216**.
+- version commit: `18cf2da41ec0076434b073e1e30940c365a09329`.
+- release SHA: `3bc57669f202c14dd4513b74cb5d937619584dd2`.
+- Firebase PREVIEW Hosting Run: **36479207606 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=216`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. 3번 정도의 폭에서도 1번 PC형 생성바가 계속 유지되는지.
+2. 4번 정도까지 좁아졌을 때만 2번 3버튼 생성바로 바뀌는지.
+3. 분할바를 왕복 드래그할 때 820px 경계에서 즉시 양방향 전환되는지.
+4. app215에서 통과한 Recent/Music Note/Library 검정 여백과 Create scrollbar가 그대로인지.
+
+보호:
+- 생성바 디자인 전환은 기존 Builder Compact 820px 경계 하나를 기준으로 관리.
+- 다음 미세 조정이 필요해도 split geometry / 카드 / 검정 여백 / Create scrollbar / backend는 건드리지 않음.
+
 ## 0IR. PREVIEW app215 · 분할 화면 검정 바깥 여백 축소 교정 (2026-09-29 KST)
 
 상태: **app214 방향 오류 교정 / 카드 폭 축소가 아니라 검정 바깥 여백 감소 / Recent·Music Note·Library 공통 / Create 정상 스크롤바 보호 / 감사 PASS / PREVIEW app215 배포 완료 / 사용자 실화면 확인 대기**

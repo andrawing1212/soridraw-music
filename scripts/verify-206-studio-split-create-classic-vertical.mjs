@@ -150,6 +150,18 @@ console.log('APP215_SPLIT_BLACK_GUTTER_REDUCED=PASS');
 console.log('APP215_RECENT_MUSICNOTE_LIBRARY_PARITY=PASS');
 console.log('APP216_GENERATE_BAR_COMPACT_AT_BUILDER_820=PASS');
 console.log('APP216_GENERATE_BAR_FULL_UNTIL_COMPACT=PASS');
+
+assert.match(
+  css,
+  /\.soridraw-keyword-expand-motion \{[\s\S]*?transition-duration: 220ms;[\s\S]*?transition-timing-function: ease-out;/,
+  'all keyword menus must keep the shared 220ms ease-out motion',
+);
+assert.doesNotMatch(
+  css,
+  /\[data-studio-menu="genre"\] \.soridraw-keyword-expand-motion \{[\s\S]*?transition-duration:/,
+  'Genre must not have a separate transition duration',
+);
+console.log('APP217_GENRE_SHARED_COLLAPSE_TIMING=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

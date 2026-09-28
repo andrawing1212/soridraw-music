@@ -1,3 +1,25 @@
+## 2026-09-28 — app201 Explore 제목 구분자 공백 실사용 확인
+
+현재 PREVIEW:
+- app201.
+- 제품 commit `d57d232295ae26cb3806e13db33f667c78ce3cec`.
+- Audit Run `36441371904` SUCCESS.
+- release SHA `1c617201f5ba96b44795462b9046b0c4b98c3b0a`.
+- Hosting Run `36441712032` SUCCESS.
+- `preview.soridraw.com` exact build/version 201 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 이중언어 제목이 `한글제목 | 외국어제목`으로 보이는지.
+2. 단독언어 제목은 `제목`만 보이는지.
+3. 장르/카드/좋아요/공유/더보기 기존 상태 유지.
+
+보호:
+- 원본 title 데이터 및 백엔드 비변경.
+- 제목 표시 helper 외 수정 금지.
+- TEST/main 및 PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-28 — app200 Explore 제목 표시 실사용 확인
 
 현재 PREVIEW:

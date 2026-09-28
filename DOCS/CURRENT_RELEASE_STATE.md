@@ -1,3 +1,33 @@
+## 0IU. 장르 접기 버벅임 원인 확인 · 공통 모션으로 복구 (2026-09-29 KST)
+
+상태: **영상 확인 / 원인 확인 / 코드 수정 완료 / Audit PASS / 배포 전**
+
+사용자 증상:
+- 장르 메뉴만 펼친 뒤 접을 때 다른 스타일/사운드/분위기/주제보다 순간적으로 버벅여 보임.
+
+원인:
+- 장르는 `GenreHierarchySelector.tsx`라는 별도 컴포넌트를 사용하지만, 높이 측정 자체는 이미 다른 메뉴와 같은 `useStableContentHeight` 공통 경로를 사용 중이었음.
+- 실제 차이는 CSS에 남아 있던 **장르 전용 180ms transition override**.
+- 스타일/사운드/분위기/주제는 공통 `220ms ease-out`, 장르만 과거 체감 보정 때문에 180ms로 더 빠르게 닫혀 현재 분할 레이아웃에서 끊겨 보이는 차이가 생김.
+
+수정:
+- 제품 commit: `f08d104a3048e130ea622634155c8e23d30a87ee`.
+- verifier commit: `90d18e778e6a8cf82bc90bf056af2808b4eac2e6`.
+- Audit verified HEAD: `02c7fbdac08939362e38266311bef1099b2b91c2`.
+- 장르 전용 `180ms` override 제거.
+- 장르도 다른 4개 메뉴와 동일한 `soridraw-keyword-expand-motion`의 **220ms ease-out**을 그대로 사용.
+- 장르 로컬 펼침 state, 높이 측정, 모달, 선택 데이터, 카드 크기/위치, split geometry, app216 생성바 전환 시점 모두 비변경.
+
+검증:
+- Audit Run `36480693317` SUCCESS.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP217_GENRE_SHARED_COLLAPSE_TIMING=PASS`.
+- backend/user data 변경 없음.
+
+배포:
+- **배포 전**. 현재 실제 PREVIEW 배포본은 app216 그대로.
+- 사용자가 배포를 요청하면 app217로 PREVIEW Hosting만 승격.
+
 ## 0IT. PREVIEW app216 생성바 전환 시점 — 사용자 실화면 PASS (2026-09-29 KST)
 
 - 사용자 실화면 확인 결과: **통과**.

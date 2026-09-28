@@ -367,7 +367,7 @@ const normalizeExploreDisplayTitle218 = (value: string) => value
   .split(/\s*[|│]\s*/)
   .map(stripExploreTitleWrapperQuotes218)
   .filter(Boolean)
-  .join('|');
+  .join(' | ');
 
 const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   const raw = safeText(track.title, '제목 없는 곡');

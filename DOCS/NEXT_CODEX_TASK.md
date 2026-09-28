@@ -1,3 +1,27 @@
+## 2026-09-29 — app216 생성바 전환 시점 실화면 확인
+
+현재 PREVIEW:
+- app216.
+- CSS product commit `8c9b1958941d64a491a6144f2bce1acf2c5968bd`.
+- final verifier `ab6e12f178f7dd8cdac0de3a614a75f9f4554284`.
+- Audit Run `36478899216` SUCCESS.
+- release SHA `3bc57669f202c14dd4513b74cb5d937619584dd2`.
+- Hosting Run `36479207606` SUCCESS.
+- exact build/version 216 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- PC형 생성바를 Builder **820px 초과 구간까지 유지**.
+- Builder **820px 이하에서만** 컴팩트 3버튼 생성바로 전환.
+- 기존 1080px content-tablet 시점에서는 생성바 디자인을 바꾸지 않음.
+- app215 정상 UI / backend 비변경.
+
+확인:
+1. 사용자 3번 지점에서 PC형 생성바 유지.
+2. 사용자 4번 지점 부근에서 컴팩트 생성바 전환.
+3. 좌우 드래그 왕복 시 같은 경계에서 즉시 복귀.
+4. app215 검정 여백 / Create scrollbar 정상 유지.
+
 ## 2026-09-29 — app215 split 검정 바깥 여백 확인
 
 현재 PREVIEW:

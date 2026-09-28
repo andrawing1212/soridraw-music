@@ -1,3 +1,57 @@
+## 0IN. PREVIEW app211 · 최근 생성곡 왼쪽 Sori Studio 실제 폭 소유자 교정 (2026-09-29 KST)
+
+상태: **app210 실화면 FAIL 인정 / selector 소유자 재확인 / Recent 왼쪽 Builder의 실제 direct content + masthead만 폭 조정 / scrollbar shell 비변경 / 감사 PASS / PREVIEW app211 배포 완료 / 사용자 실화면 확인 대기**
+
+app210 실화면 판정:
+- 사용자 제공 사진 재확인 결과 app210은 정상 적용으로 볼 수 없었음.
+- Recent 왼쪽 Sori Studio 카드가 여전히 pane 경계에 거의 붙어 있었고, 눈에 띄는 폭 축소가 없었음.
+- 원인은 app210 CSS가 `.soridraw-studio-builder-pane .soridraw-studio-main`을 대상으로 했지만, 실제 Recent split DOM에서 `.soridraw-studio-main`은 Builder pane의 descendant가 아니어서 selector가 사실상 적용되지 않았기 때문.
+- 반면 Create/fullscreen 스크롤바는 app210에서 app209의 잘못된 outer padding을 제거해 원래 edge 위치로 복구된 상태였음.
+
+app211 수정:
+- 제품 commit: `397a99209dc726d5390c57c0a0a7b7f143c8a8a7`.
+- verifier commit: `ccf96aa66bc63818f376ef8a9d51650d118c6b10`.
+- Audit verified HEAD: `c8f31c701a2146a214aaeeab38f0a8dbf4ae6f38`.
+- 실제 Recent 왼쪽 Builder pane의 direct visual children인 masthead host와 실제 Builder content direct child 두 요소에만 기존 wide Create 기준과 같은 **총 84px 좌우 gutter**를 적용.
+- 적용값: `width: min(calc(100% - 84px), 1500px)`, 좌우 auto margin.
+- Builder pane 자체 width/padding/overflow는 건드리지 않아 **세로 스크롤바와 분할 경계는 pane edge에 그대로 유지**.
+- Recent 오른쪽 result 12px gutter는 app206 기준 그대로.
+- Create/fullscreen, Music Note, Library, 모바일, Classic, splitter geometry, responsive breakpoint, backend/user data 비변경.
+
+검증:
+- Audit Run **36470664449 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP211_RECENT_BUILDER_DIRECT_CONTENT_WIDTH=PASS`.
+- `APP211_RECENT_BUILDER_MASTHEAD_WIDTH=PASS`.
+- `APP211_SCROLL_SHELL_EDGE_UNCHANGED=PASS`.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **211**.
+- version commit: `3fccbce7a300e7b6b75de17af1fd318958c319e5`.
+- release SHA: `c3d6fb8f57d74dd92e5f0e0ade1806e3aaac6426`.
+- Firebase PREVIEW Hosting Run: **36470912706 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=211`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. Recent 메뉴의 왼쪽 Sori Studio 제목/검색과 카드 전체가 **같은 좌우 가이드로 확실히 안쪽**에 들어왔는지.
+2. Recent 왼쪽 pane의 세로 스크롤바는 분할선 바로 옆 원래 edge 위치를 유지하는지.
+3. Create/fullscreen 스크롤바는 app210에서 복구된 edge 위치 그대로인지.
+4. 다른 정상 UI는 그대로인지.
+
+보호:
+- 이후 추가 미세조정이 필요하면 1031의 `84px` 총 gutter 값만 조정.
+- Builder pane/scroll shell 자체, Create main, splitter, responsive threshold는 건드리지 않음.
+
 ## 0IM. PREVIEW app210 · 최근 생성곡 왼쪽 Sori Studio 폭 소유자 교정 완료 (2026-09-29 KST)
 
 상태: **사용자 실화면 지적 반영 / 잘못 건드린 Create 바깥 여백 원복 / 최근 생성곡 왼쪽 Builder의 Sori Studio 내용 폭만 조정 / 감사 PASS / PREVIEW app210 배포 완료 / 실화면 확인 대기**

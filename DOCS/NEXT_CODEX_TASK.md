@@ -1,3 +1,30 @@
+## 2026-09-29 — app203 계정 메뉴 실사용 확인
+
+현재 PREVIEW:
+- app203.
+- 제품 commit `d651a37ab8385b7227bf6ca03a0d4425c4ade75d`.
+- Audit Run `36455797012` SUCCESS.
+- release SHA `10506cef14b9e40c5ec62ebb4d4457c9e7bd1455`.
+- Hosting Run `36456114327` SUCCESS.
+- `preview.soridraw.com` exact build/version 203 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 모든 계정 메뉴 핵심 순서가 `MY 페이지 / 공개 프로필 / 설정`인지.
+2. 공개 프로필 → 현재 로그인 UID의 Explore 공개프로필 직접 이동.
+3. 계정 팝업에서 요금제/결제 관리 제거.
+4. 다크/모바일/분할 동일 구조, 라이트는 동일 구조 + 밝은 palette.
+5. 권한이 있는 계정의 관리자메뉴 및 기존 모드 변경/로그아웃 정상.
+6. Split divider/pane/rail collapse 회귀 없음.
+
+보호:
+- 마이페이지 내부 요금/결제 기능 자체는 삭제 금지. 이번 요청은 계정 팝업 노출 제거만 해당.
+- 공개 프로필 이동을 위해 별도 서버 lookup 추가 금지. 현재 UID direct route 유지.
+- 좋아요 / 공개·비공개 / Feed / Music Note / Library / Worker / Functions / Rules / 사용자 데이터 비변경.
+- Split engine geometry/performance path 비변경.
+- TEST/main 및 PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-29 — app202 계정 메뉴 디자인 공통화 실사용 확인
 
 현재 PREVIEW:

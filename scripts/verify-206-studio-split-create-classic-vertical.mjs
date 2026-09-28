@@ -60,9 +60,9 @@ for (const required of [
   assert.ok(css.includes(required), `missing vertical Classic-parity CSS token: ${required}`);
 }
 
-// 1030/1031: keep Recent result spacing frozen, and narrow only the
-// Sori Studio content inside Recent's left Builder pane. The Builder pane itself
-// remains the scroll/geometry owner so its scrollbar and divider edge do not move.
+// 1030/1031: keep Recent result spacing frozen. The real Recent Builder
+// scroll shell stays full width; only its two direct visual children (masthead +
+// Builder content) reuse the approved 84px total Create guide.
 assert.match(
   css,
   /data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-studio-result-content \{[\s\S]*?padding-left: 12px !important;[\s\S]*?padding-right: 12px !important;/,
@@ -70,14 +70,14 @@ assert.match(
 );
 assert.match(
   css,
-  /\/\* 1031 — Split Recent builder Sori Studio horizontal width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?\.soridraw-studio-main \{[\s\S]*?width: calc\(100% - 36px\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
-  'Recent left Builder Sori Studio content frame must own the requested width reduction',
+  /\/\* 1031 — Split Recent left Builder Sori Studio width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?> :is\([\s\S]*?\.soridraw-studio-builder-pane-masthead-host,[\s\S]*?:not\(\.soridraw-studio-pane-masthead-host\)[\s\S]*?\) \{[\s\S]*?width: min\(calc\(100% - 84px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
+  'Recent Builder masthead and real direct content must share the approved 84px centered guide',
 );
 const spacingPatch = css.slice(css.indexOf('/* 1030 — Split Recent horizontal breathing room.'));
 assert.doesNotMatch(
   spacingPatch,
   /data-soridraw-studio-workspace-view="create"[\s\S]*?\.soridraw-studio-main[\s\S]*?padding-(?:left|right): 36px !important;/,
-  'Create/fullscreen Studio main must be restored and left untouched',
+  'Create/fullscreen Studio main must stay restored and untouched',
 );
 assert.doesNotMatch(
   spacingPatch,
@@ -91,8 +91,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   spacingPatch,
-  /width: calc\(100% - 48px\)|width: min\(calc\(100% - 112px\)/,
-  'rejected Create child-width workaround must stay removed',
+  /\.soridraw-studio-builder-pane[\s\S]*?\.soridraw-studio-main \{[\s\S]*?width: calc\(100% - 36px\)/,
+  'failed app210 descendant selector must be removed',
 );
 
 // This UI reuse must not add a new backend path.
@@ -106,6 +106,7 @@ console.log('APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS');
 console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
-console.log('APP210_RECENT_BUILDER_STUDIO_WIDTH=PASS');
-console.log('APP210_CREATE_SCROLL_SHELL_RESTORED=PASS');
+console.log('APP211_RECENT_BUILDER_DIRECT_CONTENT_WIDTH=PASS');
+console.log('APP211_RECENT_BUILDER_MASTHEAD_WIDTH=PASS');
+console.log('APP211_SCROLL_SHELL_EDGE_UNCHANGED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

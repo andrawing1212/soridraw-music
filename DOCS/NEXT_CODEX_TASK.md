@@ -1,3 +1,29 @@
+## 2026-09-28 — app200 Explore 제목 표시 실사용 확인
+
+현재 PREVIEW:
+- app200.
+- 제품 commit `30dfe92e74414e5da66fd148b6f1ebebfd168771`.
+- Audit Run `36435743493` SUCCESS.
+- release SHA `a32306d6b92f0e59469b2d7432ffe814a1488642`.
+- Hosting Run `36436054767` SUCCESS.
+- `preview.soridraw.com` exact build/version 200 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. `'한글제목' | '외국어제목'` 형태의 원본이 카드에서는 `한글제목|외국어제목`으로 보이는지.
+2. `'제목'` 원본은 `제목`으로 보이는지.
+3. 제목 내부 apostrophe는 유지되는지.
+4. 장르 줄 / 카드 높이 / 줄임표 / 좋아요 / 공유 / 더보기는 기존 그대로인지.
+5. 추천 / 최신 / 인기 / 공개프로필 동일 표시인지.
+
+보호:
+- 원본 title 데이터 수정 금지.
+- 좋아요 / 공개·비공개 / 프로필 / Music Note / Library / Worker / Functions / Rules 비변경.
+- 제목 표시 외 CSS/레이아웃 변경 금지.
+- 이상이 있으면 `getExploreCardDisplayTitle` 표시 경로만 국소 수정.
+- TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 2026-09-28 — app199 CACHE LIVE 실사용 확인
 
 현재 PREVIEW:

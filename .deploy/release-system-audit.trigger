@@ -1,10 +1,11 @@
-genre_shared_collapse_timing_audit=2026-09-29T05:39:00+09:00
-source_head=90d18e778e6a8cf82bc90bf056af2808b4eac2e6
-app_version=216
+genre_collapse_local_fast_path_audit=2026-09-29T06:10:00+09:00
+source_head=8c6d6ee5f9433bc66d125d8270044b313ad48a82
+app_version=217
 deploy=false
-scope=genre_collapse_timing_only
-genre_file_separate=true
-genre_special_duration_removed=true
+scope=genre_collapse_close_path_only
+collapse_fast_path_before_layout_read=true
+collapse_scroll_anchor_reconciliation_skipped=true
+expand_scroll_anchor_reconciliation_unchanged=true
 shared_keyword_transition=220ms
 shared_keyword_easing=ease-out
 genre_height_measurement_unchanged=true

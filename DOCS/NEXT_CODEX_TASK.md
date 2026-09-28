@@ -1,3 +1,24 @@
+## 2026-09-29 — app209 Sori Studio outer main 여백 확인
+
+현재 PREVIEW:
+- app209.
+- CSS 제품 commit `1a9da9b5a691144fd23b6d96bf40e4ee35545415`.
+- Audit Run `36467140103` SUCCESS.
+- release SHA `903c1df9efffbe70587bdefd2fe47bb140e00b83`.
+- Hosting Run `36467416857` SUCCESS.
+- exact build/version 209 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. Create에서 `soridraw-studio-main`의 좌우 36px가 실제로 보이는지.
+2. Sori Studio 타이틀/카드 전체 시작선과 끝선이 함께 안쪽으로 이동했는지.
+3. Recent / Music Note / Library / splitter / mobile 비변경.
+
+보호:
+- 추가 조정이 필요하면 Create outer main의 padding 값만 조정.
+- inner cards/panes/split engine/backend/user data 수정 금지.
+
+
 ## 2026-09-29 — app208 Sori Studio 실제 pane 여백 확인
 
 현재 PREVIEW:

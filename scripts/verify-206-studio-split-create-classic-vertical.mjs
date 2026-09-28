@@ -102,6 +102,37 @@ assert.doesNotMatch(
   'failed app210 descendant selector must stay removed',
 );
 
+// 1033: Generate-bar visual compaction is delayed to the existing Builder
+// Compact boundary (<=820px), without changing pane/content responsive bands.
+for (const [name, source] of [['lite', lite], ['legacy', legacy]]) {
+  assert.match(
+    source,
+    /const BUILDER_COMPACT_MAX = 820;/,
+    `${name}: Builder Compact boundary must remain 820px`,
+  );
+  assert.match(
+    source,
+    /soridrawBuilderActionCompact/,
+    `${name}: must publish the threshold-only Generate-bar compact marker`,
+  );
+}
+assert.match(
+  css,
+  /\/\* 1033 — Delay split Generate-bar compact design to the Builder Compact band\.[\s\S]*?data-soridraw-builder-action-compact="true"[\s\S]*?height: 69px !important;/,
+  '1033 must own the delayed compact three-button visual at the Builder Compact boundary',
+);
+assert.match(
+  css,
+  /data-soridraw-theme="studio-black":not\(\[data-soridraw-builder-action-compact="true"\]\)[\s\S]*?soridraw-action-side-label[\s\S]*?display: block !important;[\s\S]*?font-size: 34px !important;/,
+  '1033 must keep the full arrow/text Generate bar above the Compact boundary',
+);
+const generationBarBreakpointPatch = css.slice(css.indexOf('/* 1033 — Delay split Generate-bar compact design'));
+assert.doesNotMatch(
+  generationBarBreakpointPatch,
+  /soridraw-studio-splitter|grid-template-columns|data-pane-mode|soridraw-studio-result-content|soridraw-studio-builder-pane/,
+  'Generate-bar breakpoint patch must not alter split/card/result geometry',
+);
+
 // This UI reuse must not add a new backend path.
 const changedSurface = [lite, legacy, css].join('\n');
 for (const forbidden of ['getDoc(', 'getDocs(', 'onSnapshot(', 'setDoc(', 'updateDoc(', 'addDoc(', 'fetch(']) {
@@ -115,6 +146,8 @@ console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
 console.log('APP215_SPLIT_BLACK_GUTTER_REDUCED=PASS');
 console.log('APP215_RECENT_MUSICNOTE_LIBRARY_PARITY=PASS');
+console.log('APP216_GENERATE_BAR_COMPACT_AT_BUILDER_820=PASS');
+console.log('APP216_GENERATE_BAR_FULL_UNTIL_COMPACT=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

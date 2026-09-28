@@ -9,6 +9,7 @@ const studioCss = fs.readFileSync('src/components/studio/studioLayout.css', 'utf
 assert.match(css, /SORIDRAW_ACCOUNT_MENU_PARITY_219_20260929/);
 assert.match(studioCss, /SORIDRAW_STUDIO_ACCOUNT_MENU_PARITY_219_20260929/);
 
+// Canonical top/mobile account menus keep their current visual language and mode control.
 assert.match(app, /soridraw-profile-menu soridraw-account-menu-surface absolute right-5 top-\[68px\]/);
 assert.match(app, /soridraw-account-menu-kicker">계정 메뉴/);
 assert.match(app, /label: 'MY 페이지'[\s\S]*icon: UserIcon/);
@@ -18,18 +19,19 @@ assert.match(app, /soridraw-account-menu-mode/);
 assert.match(app, /soridraw-account-menu-logout/);
 assert.match(app, /soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full/);
 
+// Split left rail keeps the same surface/position, but its menu is intentionally minimal.
 assert.match(rail, /const PROFILE_MENU_WIDTH = 224/);
 assert.match(rail, /soridraw-studio-profile-menu soridraw-account-menu-surface/);
 assert.match(rail, /soridraw-account-menu-kicker">계정 메뉴/);
-for (const label of ['MY 페이지','공개 프로필','설정','고객지원 · 준비중','로그아웃']) {
+for (const label of ['MY 페이지','공개 프로필','설정','로그아웃']) {
   assert.ok(rail.includes(label), 'rail action lost: ' + label);
 }
-assert.match(rail, /getSoridrawDisplayModeLabel\(displayMode\)/);
+for (const removed of ['관리자메뉴','디자인 모드','고객지원 · 준비중']) {
+  assert.ok(!rail.includes(removed), 'rail-only item must be removed: ' + removed);
+}
 assert.match(rail, /const preferredLeft = rect\.right \+ PROFILE_MENU_GAP/);
-assert.match(rail, /onClick=\{\(\) => setDisplayMode\(cycleSoridrawDisplayMode\(\)\)\}/);
-assert.doesNotMatch(rail, /setIsThemeMenuOpen/);
-assert.doesNotMatch(rail, /isThemeMenuOpen/);
-assert.doesNotMatch(rail, /soridraw-studio-profile-theme-menu/);
+assert.doesNotMatch(rail, /cycleSoridrawDisplayMode|getSoridrawDisplayModeLabel/);
+assert.doesNotMatch(rail, /setIsThemeMenuOpen|isThemeMenuOpen|soridraw-studio-profile-theme-menu/);
 
 assert.match(css, /width: 224px !important/);
 assert.match(css, /border-radius: 18px !important/);

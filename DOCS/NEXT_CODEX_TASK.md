@@ -1,3 +1,30 @@
+## 2026-09-29 — app214 분할 Builder 공통 폭 실화면 확인
+
+현재 PREVIEW:
+- app214.
+- 제품 commit `dd04abd7770538cbce7c5cec3ec112189092baa7`.
+- verifier commit `aacb9b9025243ca411a11b4b9aa224114575ef53`.
+- Audit Run `36475431369` SUCCESS.
+- release SHA `d5eda4381f59ad05486c7420180e4aa80e339710`.
+- Hosting Run `36475687256` SUCCESS.
+- exact build/version 214 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- split Builder Sori Studio common gutter: **총 72px / 좌우 36px**.
+- app213보다 좌우 각각 12px 추가 inset.
+- Recent / Music Note / Library 공통 적용.
+- Create는 제외하고 app212 정상 scrollbar 위치 보호.
+
+확인:
+1. Recent / Music Note / Library 왼쪽 Sori Studio 폭이 동일한지.
+2. 원하는 만큼만 좁아졌는지.
+3. Create scrollbar / divider / right result pane이 그대로인지.
+
+보호:
+- 추가 조정은 공통 72px 값 하나만.
+- Create / divider / result pane / backend 수정 금지.
+
 ## 2026-09-29 — app213 Recent 왼쪽 Sori Studio 미세 폭 확인
 
 현재 PREVIEW:

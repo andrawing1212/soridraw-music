@@ -1,3 +1,34 @@
+## 2026-09-28 — app199 CACHE LIVE 실사용 확인
+
+현재 PREVIEW:
+- app199.
+- 제품 commit `73c433f64ce412a1544da16310361f8d3174daf1`.
+- 최종 Audit Run `36416514198` SUCCESS.
+- locked release SHA `0506bf31c1c13a7885b092f227a0eafc14d5aa03`.
+- Hosting Run `36416783773` SUCCESS.
+- `preview.soridraw.com` exact build/version 199 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- 실제 app version upgrade 첫 실행에 진단용 sessionStorage만 자동 초기화.
+- 제품 cache/local user data는 유지.
+- CACHE LIVE를 `이번 실행 진단`과 `실제 서버 지표`로 명확히 구분.
+- Social Snapshot은 `개인 소셜 스냅샷` 표시.
+- 상단 `서버 ↻ / 초기화 / 접기` 정리.
+- 수동 초기화에 PAGE SYNC 포함.
+
+사용자 확인:
+1. app199 적용 직후 이전 앱의 Cloudflare/D1 진단 수치가 남지 않는지.
+2. 실제 새 요청이 없으면 개인 소셜 스냅샷 R값이 새로 생기지 않는지.
+3. 상단 초기화가 이번 실행 진단을 모두 0 기준으로 만드는지.
+4. 서버 ↻가 실제 Firestore 서버 지표만 갱신하는지.
+
+보호:
+- 좋아요 / 팔로우 / Social Snapshot product cache / Explore Feed / 공개프로필 / 공개·비공개 / Music Note / Library / Worker / Functions / Rules / 사용자 데이터 수정 금지.
+- CACHE LIVE 실사용 이상이 있으면 진단 UI/진단 저장소만 국소 수정.
+- TEST/main 및 PRODUCTION 승격은 별도 명시 승인 전 금지.
+
+
 ## 2026-09-28 — app198 Explore 상단 가로줄 실사용 PASS / 다음 요청 대기
 
 완료:

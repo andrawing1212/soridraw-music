@@ -15731,3 +15731,202 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     box-sizing: border-box !important;
   }
 }
+
+/* 1033 — Delay split Generate-bar compact design to the Builder Compact band.
+ * User reference: keep the full bar from screenshot 1 through the former
+ * screenshot-3 width, and switch to the three-button bar only around the
+ * screenshot-4 width. Reuse the existing Builder Compact boundary (<=820px)
+ * instead of the broader 1080px content-tablet / 1599px viewport bands.
+ *
+ * The split engine publishes data-soridraw-builder-action-compact only when
+ * that discrete boundary changes. This block changes Generate-bar composition
+ * only; its live X/width tracking, split geometry, Create scrollbar, cards,
+ * Recent/Music Note/Library content and mobile <1100 behavior stay unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"]) {
+    --soridraw-action-control-height: 90px;
+    --soridraw-action-row-gap: 12px;
+    --soridraw-action-row-padding: 10px;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 18px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 12px !important;
+    padding: 10px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel
+  > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: flex !important;
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    min-width: 48px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: block !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    box-sizing: border-box !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 90px !important;
+    min-height: 90px !important;
+    max-height: 90px !important;
+    padding-inline: 24px !important;
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    display: block !important;
+    flex: 1 1 240px !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 90px !important;
+    min-height: 90px !important;
+    max-height: 90px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 12px !important;
+    font-size: 34px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(
+    .soridraw-action-collapse,
+    .soridraw-action-generate-button,
+    .soridraw-action-random > button,
+    .soridraw-action-reset > button
+  ) > svg {
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"] {
+    --soridraw-action-control-height: 69px;
+    --soridraw-action-row-gap: 8px;
+    --soridraw-action-row-padding: 8px;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel
+  > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    box-sizing: border-box !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding: 0 !important;
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 8px !important;
+    font-size: 25px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(
+    .soridraw-action-generate-button,
+    .soridraw-action-random > button,
+    .soridraw-action-reset > button
+  ) > svg {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 auto !important;
+  }
+}
+

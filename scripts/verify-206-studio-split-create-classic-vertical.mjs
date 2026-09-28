@@ -60,26 +60,27 @@ for (const required of [
   assert.ok(css.includes(required), `missing vertical Classic-parity CSS token: ${required}`);
 }
 
-// 1030: only horizontal gutters change. Split engine geometry and mobile stay untouched.
+// 1030/1031: Recent stays frozen; Create spacing is owned by the actual pane.
 assert.match(
   css,
   /data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-studio-result-content \{[\s\S]*?padding-left: 12px !important;[\s\S]*?padding-right: 12px !important;/,
-  'Recent split result must gain only the requested 12px inner horizontal gutter',
+  'Recent split result must keep the approved 12px inner horizontal gutter',
 );
 assert.match(
   css,
-  /data-soridraw-lite-workspace="create"[\s\S]*?is-create-vertical[\s\S]*?width: calc\(100% - 48px\) !important;/,
-  'Create split must gain the clearer 24px-per-side inner gutter below 1600px',
+  /\/\* 1031 — Sori Studio Create horizontal gutter, applied at the pane owner\.[\s\S]*?\.soridraw-studio-split-workspace\.is-create-vertical\[data-scroll-isolated="true"\][\s\S]*?> :is\(\.soridraw-studio-builder-pane, \.soridraw-studio-result-pane\) \{[\s\S]*?padding-left: 36px !important;[\s\S]*?padding-right: 36px !important;/,
+  'Create split panes must own the visible 36px horizontal gutters',
 );
-assert.match(
-  css,
-  /@media \(min-width: 1600px\)[\s\S]*?data-soridraw-lite-workspace="create"[\s\S]*?width: min\(calc\(100% - 112px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;/,
-  'Create large-screen gutter must widen only slightly from 42px to 56px per side',
+const spacingPatch = css.slice(css.indexOf('/* 1030 — Split Recent horizontal breathing room.'));
+assert.doesNotMatch(
+  spacingPatch,
+  /soridraw-studio-splitter|grid-template-columns|--soridraw-studio-builder-width|data-pane-mode|@media \(max-width: 1099px\)/,
+  'spacing patch must not touch divider geometry, pane modes or mobile',
 );
 assert.doesNotMatch(
-  css.slice(css.indexOf('/* 1030 — Split Recent/Create horizontal breathing room.')),
-  /soridraw-studio-splitter|grid-template-columns|--soridraw-studio-builder-width|data-pane-mode|@media \(max-width: 1099px\)/,
-  '1030 gutter patch must not touch divider geometry, pane modes or mobile',
+  spacingPatch,
+  /width: calc\(100% - 48px\)|width: min\(calc\(100% - 112px\)/,
+  'rejected child-width Create spacing workaround must be removed',
 );
 
 // This UI reuse must not add a new backend path.
@@ -94,4 +95,5 @@ console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
 console.log('APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS');
+console.log('APP207_CREATE_PANE_GUTTER_OWNER=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

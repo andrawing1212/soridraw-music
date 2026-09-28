@@ -68,8 +68,13 @@ assert.match(
 );
 assert.match(
   css,
-  /\/\* 1031 — Sori Studio Create horizontal gutter, applied at the pane owner\.[\s\S]*?\.soridraw-studio-split-workspace\.is-create-vertical\[data-scroll-isolated="true"\][\s\S]*?> :is\(\.soridraw-studio-builder-pane, \.soridraw-studio-result-pane\) \{[\s\S]*?padding-left: 36px !important;[\s\S]*?padding-right: 36px !important;/,
-  'Create split panes must own the visible 36px horizontal gutters',
+  /data-soridraw-studio-workspace-view="create"[\s\S]*?\.soridraw-studio-main \{[\s\S]*?padding-left: 36px !important;[\s\S]*?padding-right: 36px !important;/,
+  'Create outer Studio main frame must own the visible 36px horizontal gutters',
+);
+assert.doesNotMatch(
+  css.slice(css.indexOf('/* 1031 — Sori Studio Create horizontal gutter')),
+  /> :is\(\.soridraw-studio-builder-pane, \.soridraw-studio-result-pane\)[\s\S]*?padding-left:/,
+  'Create gutter must not be patched on inner panes anymore',
 );
 const spacingPatch = css.slice(css.indexOf('/* 1030 — Split Recent horizontal breathing room.'));
 assert.doesNotMatch(
@@ -95,5 +100,5 @@ console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
 console.log('APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS');
-console.log('APP207_CREATE_PANE_GUTTER_OWNER=PASS');
+console.log('APP208_CREATE_MAIN_GUTTER_OWNER=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

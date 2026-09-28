@@ -1,3 +1,13 @@
+## 0IT. PREVIEW app216 생성바 전환 시점 — 사용자 실화면 PASS (2026-09-29 KST)
+
+- 사용자 실화면 확인 결과: **통과**.
+- 3번 지점에서는 PC형 큰 생성바 유지, 4번 지점 부근에서 컴팩트 3버튼 생성바로 전환되는 현재 app216 동작을 승인 기준으로 고정.
+- 기준 PREVIEW release SHA: `3bc57669f202c14dd4513b74cb5d937619584dd2`.
+- Firebase PREVIEW Hosting Run: `36479207606` SUCCESS.
+- app version: `216`.
+- TEST / PRODUCTION 비변경.
+- 이 생성바 전환 시점은 이후 다른 UI 수정 때문에 임의로 되돌리지 말 것.
+
 ## 0IS. PREVIEW app216 · 생성바 컴팩트 전환 시점 지연 (2026-09-29 KST)
 
 상태: **app215 사용자 통과 기준 보호 / 생성바 디자인 전환만 조정 / 기존 Builder Compact 경계 820px 재사용 / 감사 PASS / PREVIEW app216 배포 완료 / 사용자 실화면 확인 대기**

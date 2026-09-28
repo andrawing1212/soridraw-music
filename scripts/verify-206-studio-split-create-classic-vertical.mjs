@@ -5,6 +5,7 @@ const app = readFileSync('src/App.tsx', 'utf8');
 const lite = readFileSync('src/components/studio/LiteStudioSplitWorkspace.tsx', 'utf8');
 const legacy = readFileSync('src/components/studio/StudioSplitWorkspace.tsx', 'utf8');
 const css = readFileSync('src/components/studio/studioLayout.css', 'utf8');
+const genre = readFileSync('src/components/GenreHierarchySelector.tsx', 'utf8');
 
 // The rejected app173 custom recent-song card list must be gone.
 assert.ok(!app.includes('data-studio-create-inline-overview="true"'), 'custom duplicate recent-song list must be removed');
@@ -162,6 +163,26 @@ assert.doesNotMatch(
   'Genre must not have a separate transition duration',
 );
 console.log('APP217_GENRE_SHARED_COLLAPSE_TIMING=PASS');
+
+const genreToggleStart = genre.indexOf('function handleExpandableToggle(');
+const genreToggleEnd = genre.indexOf('\ntype ModalStep', genreToggleStart);
+assert.ok(genreToggleStart >= 0 && genreToggleEnd > genreToggleStart, 'Genre toggle handler must remain discoverable');
+const genreToggle = genre.slice(genreToggleStart, genreToggleEnd);
+const collapseFastPath = genreToggle.indexOf('if (isExpanded) {');
+const firstLayoutRead = genreToggle.indexOf("getBoundingClientRect()");
+assert.ok(collapseFastPath >= 0, 'Genre collapse must have an explicit fast path');
+assert.ok(firstLayoutRead < 0 || collapseFastPath < firstLayoutRead, 'Genre collapse fast path must run before any synchronous layout read');
+assert.match(
+  genreToggle,
+  /if \(isExpanded\) \{[\s\S]*?onToggleExpand\?\.\(\);[\s\S]*?return;[\s\S]*?\}/,
+  'Genre collapse must toggle locally and return before scroll-anchor reconciliation',
+);
+assert.match(
+  genreToggle,
+  /const section = event\.currentTarget\.closest\('\[data-expand-section\]'\)[\s\S]*?window\.requestAnimationFrame/,
+  'Genre expansion must retain the existing scroll-anchor reconciliation path',
+);
+console.log('APP218_GENRE_COLLAPSE_LOCAL_FAST_PATH=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

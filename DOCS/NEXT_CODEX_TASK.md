@@ -1,3 +1,28 @@
+## 2026-09-29 — app204 계정 메뉴 후속 실사용 확인
+
+현재 PREVIEW:
+- app204.
+- 제품 commit `df4c4d30d0a8e3aa186d4b15137e6ba1d3b943ae`.
+- Audit Run `36458259292` SUCCESS.
+- release SHA `ae779e1ae214eaf2ed160d5f3fb7552ed9aad040`.
+- Hosting Run `36458567924` SUCCESS.
+- `preview.soridraw.com` exact build/version 204 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 모든 계정 메뉴 surface가 불투명인지.
+2. 분할 왼쪽 계정 메뉴가 rail 아래가 아니라 rail 오른쪽에 열리는지.
+3. 분할 왼쪽 `모드 변경`이 별도 submenu 없이 클릭마다 공통 모드 순환인지.
+4. app203의 `MY 페이지 / 공개 프로필 / 설정` 및 관리자메뉴/로그아웃 기능 유지.
+5. split divider/pane/rail collapse 회귀 없음.
+
+보호:
+- 계정 메뉴 surface/위치/모드 클릭 동작 외 UI 수정 금지.
+- Split engine geometry/performance path 수정 금지.
+- 좋아요 / 공개·비공개 / Explore 데이터 / Music Note / Library / Worker / Functions / Rules / 사용자 데이터 비변경.
+- TEST/main 및 PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-29 — app203 계정 메뉴 실사용 확인
 
 현재 PREVIEW:

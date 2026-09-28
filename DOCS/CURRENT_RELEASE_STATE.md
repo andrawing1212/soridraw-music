@@ -1,3 +1,63 @@
+## 0IF. PREVIEW app204 · 계정 메뉴 불투명/왼쪽 rail 위치/모드 순환 수정 완료 (2026-09-29 KST)
+
+상태: **사용자 화면 피드백 반영 / 감사 PASS / PREVIEW app204 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- 방금 통일한 계정 메뉴가 반투명하게 보이는 부분을 불투명으로 변경.
+- 분할모드 왼쪽 사용자 계정 메뉴가 왼쪽 rail 위를 가리지 않고 rail 오른쪽에서 열리도록 변경.
+- 분할모드 왼쪽 계정 메뉴의 `모드 변경`은 별도 선택 창을 열지 않고 상단 계정 메뉴처럼 누를 때마다 다크 → 라이트 → 분할 순환.
+
+수정:
+- 제품 commit: `df4c4d30d0a8e3aa186d4b15137e6ba1d3b943ae`.
+- `soridraw-account-menu-surface` 다크 배경을 완전 불투명 `#242426`으로 변경하고 blur 제거.
+- 라이트 계정 메뉴도 동일 geometry의 완전 불투명 `#eeebe7` surface로 변경.
+- Studio Black 왼쪽 rail 계정 메뉴 override도 완전 불투명 `#242426`으로 통일.
+- 왼쪽 rail 메뉴 위치 기준을 프로필 버튼 아래가 아니라 `프로필 버튼 오른쪽 + 8px`로 변경.
+- 세로 위치는 프로필 버튼 상단 기준이며 화면 밖으로 나가지 않도록 viewport 안에서만 보정.
+- 왼쪽 rail의 별도 모드 선택 submenu 제거.
+- `cycleSoridrawDisplayMode()`를 사용해 모드 변경 버튼 1회 클릭마다 기존 공통 순환 규칙을 그대로 사용.
+- split divider / pane / drag / rail collapse geometry와 성능 경로는 변경하지 않음.
+
+검증:
+- Audit Run **36458259292 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `219_ACCOUNT_MENU_OPAQUE=PASS`.
+- `219_LEFT_RAIL_RIGHT_SIDE_POSITION=PASS`.
+- `219_LEFT_RAIL_MODE_CYCLE=PASS`.
+- Like isolated regression PASS.
+- 공유 D1 검사는 read-only PASS.
+- Audit 자체 배포 0.
+
+PREVIEW 배포:
+- app version: **204**.
+- version commit: `9559aed2bd31df1860d95dd183673cee01c3bb4f`.
+- locked release SHA: `ae779e1ae214eaf2ed160d5f3fb7552ed9aad040`.
+- Firebase PREVIEW Hosting Run: **36458567924 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=204`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+비용 / 데이터 영향:
+- Firestore read/write 추가 0.
+- D1 read/write 추가 0.
+- Worker request 추가 0.
+- Worker / Functions / Rules / schema 변경 없음.
+- 사용자 데이터 변경 없음.
+
+사용자 실화면 확인:
+1. 상단/모바일/분할 계정 메뉴가 뒤 화면이 비치지 않는 완전 불투명인지.
+2. 분할 왼쪽 프로필 클릭 시 계정 메뉴가 왼쪽 rail을 덮지 않고 바로 오른쪽에 뜨는지.
+3. 분할 왼쪽 `모드 변경` 클릭 시 별도 선택창 없이 공통 모드가 바로 순환하는지.
+4. 기존 `MY 페이지 / 공개 프로필 / 설정`, 관리자메뉴, 로그아웃이 그대로 정상인지.
+5. 분할바/좌측 rail 접기·펼침 등 기존 정상 동작에 회귀가 없는지.
+
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0IE. PREVIEW app203 · 계정 메뉴 MY 페이지/공개 프로필 구조 통일 완료 (2026-09-29 KST)
 
 상태: **사용자 요청 반영 / 전 모드 계정 메뉴 핵심 레이아웃 통일 / 감사 PASS / PREVIEW app203 배포 완료 / 실화면 확인 대기**

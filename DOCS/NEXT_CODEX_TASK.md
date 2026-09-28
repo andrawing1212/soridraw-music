@@ -1,3 +1,28 @@
+## 2026-09-29 — app213 Recent 왼쪽 Sori Studio 미세 폭 확인
+
+현재 PREVIEW:
+- app213.
+- 제품 commit `75a2f2b2df0250cb0667247457393d237b7f61e2`.
+- verifier commit `a25eca96dd0465ccafc74ecc35a14a74825966da`.
+- Audit Run `36473722199` SUCCESS.
+- release SHA `60023792fd39e7deed4e971bbe81aad4c17cd88b`.
+- Hosting Run `36473972014` SUCCESS.
+- exact build/version 213 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- Recent 왼쪽 Sori Studio 총 gutter만 **36px → 48px**.
+- 좌우 약 6px씩만 더 안쪽으로 조정.
+- app212에서 정상 확인된 Create 우측 스크롤바 위치는 그대로 보호.
+
+확인:
+1. Recent 왼쪽 폭이 원하는 정도로 아주 조금 줄었는지.
+2. Create scrollbar 및 다른 UI가 그대로인지.
+
+보호:
+- 추가 조정은 Recent 48px 값 하나만.
+- Create scrollbar / splitter / 다른 페이지 / backend 수정 금지.
+
 ## 2026-09-29 — app212 Recent 작은 여백 + Create 스크롤바 경계 확인
 
 현재 PREVIEW:

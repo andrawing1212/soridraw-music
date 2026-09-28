@@ -61,7 +61,7 @@ for (const required of [
 }
 
 // 1030/1031/1032: Recent result spacing stays frozen. The real Recent
-// Builder direct content uses only a small 36px total gutter. Create releases
+// Builder direct content uses a refined 48px total gutter. Create releases
 // only the inherited 18px RIGHT main gutter and returns it inside the vertical
 // scroll shell, so the native scrollbar reaches the right-rail divider without
 // changing the visible content width.
@@ -72,8 +72,8 @@ assert.match(
 );
 assert.match(
   css,
-  /\/\* 1031 — Split Recent left Builder Sori Studio width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?> :is\([\s\S]*?\.soridraw-studio-builder-pane-masthead-host,[\s\S]*?:not\(\.soridraw-studio-pane-masthead-host\)[\s\S]*?\) \{[\s\S]*?width: min\(calc\(100% - 36px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
-  'Recent Builder masthead and direct content must use the small 36px total gutter',
+  /\/\* 1031 — Split Recent left Builder Sori Studio width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?> :is\([\s\S]*?\.soridraw-studio-builder-pane-masthead-host,[\s\S]*?:not\(\.soridraw-studio-pane-masthead-host\)[\s\S]*?\) \{[\s\S]*?width: min\(calc\(100% - 48px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
+  'Recent Builder masthead and direct content must use the refined 48px total gutter',
 );
 assert.match(
   css,
@@ -113,7 +113,7 @@ console.log('APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS');
 console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
-console.log('APP212_RECENT_BUILDER_SMALL_GUTTER=PASS');
+console.log('APP213_RECENT_BUILDER_REFINED_GUTTER=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

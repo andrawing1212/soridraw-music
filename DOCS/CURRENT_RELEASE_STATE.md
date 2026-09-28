@@ -1,3 +1,47 @@
+## 0IJ. PREVIEW app207 · Sori Studio 좌우 여백 2차 확대 완료 (2026-09-29 KST)
+
+상태: **사용자 실화면 피드백 반영 / Sori Studio 간격만 재조정 / 감사 PASS / PREVIEW app207 배포 완료 / 실화면 확인 대기**
+
+사용자 피드백:
+- app206에서 최근 생성곡은 개선 체감 확인.
+- Sori Studio는 1100~1599px 구간에서 좌우 여백 증가가 눈에 잘 띄지 않음.
+- 최근 생성곡 등 정상인 부분은 유지하고 Sori Studio만 조금 더 안쪽으로 조정 요청.
+
+수정:
+- 제품 commit: `ef961573eac1650e62f3397c6590fe7891c01fbb`.
+- **최근 생성곡 app206 여백은 그대로 유지**.
+- Sori Studio Create 1100~1599px의 내부 좌우 여백을 기존 12px/side → **24px/side**로 확대.
+- 1600px 이상은 app206의 **56px/side** 기준 유지.
+- 카드 크기/높이/간격, 제목 위치, 분할바, pane 반응형, 모바일, Classic Dark/Light는 비변경.
+
+검증:
+- Audit Run **36463938398 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS`.
+- Like regression PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **207**.
+- version commit: `fd943240ccf6ad83972a9223ebb8d114809a1bec`.
+- release SHA: `5781a0c7f73f153fde363ce4be81d6967d4c9db7`.
+- Firebase PREVIEW Hosting Run: **36464231317 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=207`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. 1100~1599px Sori Studio에서 카드 전체가 이전보다 명확하게 안쪽으로 들어왔는지.
+2. 최근 생성곡 app206 여백이 그대로 유지되는지.
+3. 분할바/뮤직노트/라이브러리/모바일 등 기존 정상 UI에 변화가 없는지.
+
+
 ## 0II. PREVIEW app206 · 분할 최근 생성곡/Sori Studio 좌우 여백 조정 완료 (2026-09-29 KST)
 
 상태: **사용자 요청 반영 / 간격만 수정 / 감사 PASS / PREVIEW app206 배포 완료 / 실화면 확인 대기**

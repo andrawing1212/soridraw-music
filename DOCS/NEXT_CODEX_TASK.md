@@ -1,3 +1,25 @@
+## 2026-09-29 — app207 Sori Studio 좌우 여백 2차 확인
+
+현재 PREVIEW:
+- app207.
+- 제품 commit `ef961573eac1650e62f3397c6590fe7891c01fbb`.
+- Audit Run `36463938398` SUCCESS.
+- release SHA `5781a0c7f73f153fde363ce4be81d6967d4c9db7`.
+- Hosting Run `36464231317` SUCCESS.
+- exact build/version 207 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 1100~1599px Sori Studio 좌우 여백이 24px/side로 체감되는지.
+2. 최근 생성곡의 app206 결과는 그대로인지.
+3. 카드/제목/분할바/반응형/모바일 회귀 없음.
+
+보호:
+- 추가 조정이 필요해도 Sori Studio Create의 좌우 간격값만 수정.
+- Recent / Music Note / Library / splitter geometry / backend / 사용자 데이터 비변경.
+- TEST/PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-29 — app206 분할 좌우 여백 실사용 확인
 
 현재 PREVIEW:

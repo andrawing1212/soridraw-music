@@ -1,3 +1,59 @@
+## 0IQ. PREVIEW app214 · 분할 화면 왼쪽 Sori Studio 공통 폭 정렬 (2026-09-29 KST)
+
+상태: **사용자 실화면 기준 재정의 / 오른쪽 결과-분할선 12px 간격을 증분 기준으로 사용 / Recent·Music Note·Library 공통 적용 / Create 정상 스크롤바 보호 / 감사 PASS / PREVIEW app214 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 지시:
+- app213 Recent 왼쪽 Sori Studio가 아직 조금 넓음.
+- 오른쪽 결과 패널과 분할선 사이에 이미 보이는 간격만큼 정확히 한 단계 더 줄일 것.
+- Recent만 따로 하지 말고 **분할바가 적용된 Recent / Music Note / Library에 공통 적용**.
+- app212에서 정상 복귀한 곡 만들기(Create) 우측 스크롤바는 유지.
+
+app214 수정:
+- 제품 commit: `dd04abd7770538cbce7c5cec3ec112189092baa7`.
+- verifier commit: `aacb9b9025243ca411a11b4b9aa224114575ef53`.
+- Audit verified HEAD: `b644532eac107799d88510214b2f0ad73a599cb2`.
+- 기존 app213의 왼쪽 Builder total gutter 48px(좌우 24px)에서, 오른쪽 Recent 결과의 승인된 divider-side inner gap **12px을 좌우 각각 한 단계 더 추가**.
+- 최종 공통 Builder gutter: **총 72px / 좌우 36px**.
+- 적용 workspace: `recent`, `music-note`, `library`.
+- 동일한 masthead + direct content width owner를 세 workspace가 공유하도록 통합.
+- Create workspace는 공통 규칙에서 명시적으로 제외. app212의 Create scrollbar edge correction(1032)은 그대로 유지.
+- result pane 폭/패딩, divider 좌표, scroll shell, responsive breakpoint, mobile, Classic, backend/user data 비변경.
+
+검증:
+- Audit Run **36475431369 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP214_SPLIT_BUILDER_COMMON_GUTTER=PASS`.
+- `APP214_RECENT_MUSICNOTE_LIBRARY_PARITY=PASS`.
+- Create scrollbar regression 보호 PASS.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **214**.
+- version commit: `78754dffdf7a575462a959b71736a3e5b73cd236`.
+- release SHA: `d5eda4381f59ad05486c7420180e4aa80e339710`.
+- Firebase PREVIEW Hosting Run: **36475687256 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=214`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. Recent 왼쪽 Sori Studio가 app213보다 오른쪽 결과-divider gap 한 단계만큼 더 좁아졌는지.
+2. Music Note / Library도 같은 왼쪽 Sori Studio 폭을 쓰는지.
+3. Create 우측 세로 스크롤바가 정상 위치 그대로인지.
+4. divider/right result pane/다른 정상 UI가 그대로인지.
+
+보호:
+- 이제 split Builder 폭은 Recent / Music Note / Library 공통 owner로 관리.
+- 추가 조정이 필요하면 공통 72px 값 하나만 조정.
+- Create 1032 / divider / result pane / backend는 건드리지 않음.
+
 ## 0IP. PREVIEW app213 · Recent 왼쪽 Sori Studio 폭 소폭 축소 (2026-09-29 KST)
 
 상태: **app212 사용자 실화면 확인 반영 / 곡 만들기 스크롤바 정상 기준 보호 / Recent 왼쪽 Sori Studio만 소폭 축소 / 감사 PASS / PREVIEW app213 배포 완료 / 사용자 실화면 확인 대기**

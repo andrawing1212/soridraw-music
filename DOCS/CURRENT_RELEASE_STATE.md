@@ -1,3 +1,75 @@
+## 0ID. PREVIEW app202 · 프로필 계정 메뉴 모바일 디자인 공통화 완료 (2026-09-29 KST)
+
+상태: **사용자 제공 PC/모바일 화면 기준 / 상단 우측 + 분할 왼쪽 계정 메뉴 디자인 공통화 / 감사 PASS / PREVIEW app202 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- 프로필 사진 클릭 시 상단 메뉴 오른쪽 위 계정 메뉴와 분할모드 왼쪽 메뉴의 계정 메뉴를 모바일 계정 메뉴 디자인과 동일한 시각 언어로 통일.
+- 라이트 모드는 모바일과 동일한 구조·간격·모양을 유지하고 색만 밝게 적용.
+- 기존 기능은 모두 유지.
+
+수정:
+- 제품 commit: `4cfb46a8f6265804a19cf07431f93d9ae54f43b3`.
+- 상단 우측 데스크톱 계정 메뉴:
+  - 모바일 기준 224px 폭 / 18px 라운드 / 헤더 / 아이콘 행 / 구분선 / 디자인 모드 행 / 로그아웃 구조로 통일.
+  - 기존 `내 프로필 / 설정 / 요금제 / 결제 관리 / 고객지원 · 준비중 / 로그아웃` 동작 유지.
+- 분할모드 왼쪽 프로필 메뉴:
+  - 같은 224px 계정 메뉴 표면·헤더·아이콘·행 간격·라운드·그림자 적용.
+  - 기존 테마 submenu 기능은 유지하면서 보이는 트리거만 모바일식 `모드 변경 + 현재 모드 badge`로 통일.
+- 모바일 기존 계정 메뉴는 기능 구조를 변경하지 않고 공통 surface/header 디자인 class만 연결.
+- 다크: 모바일 기준 중성 짙은 회색.
+- 라이트: 동일 geometry에 warm 밝은 회색/아이보리 팔레트만 적용.
+- Split divider/pane/drag/rail collapse geometry는 변경하지 않음.
+
+변경 파일:
+- `src/App.tsx`
+- `src/components/studio/StudioLeftRail.tsx`
+- `src/index.css`
+- `src/components/studio/studioLayout.css`
+- `scripts/verify-219-account-menu-visual-parity.mjs`
+- release audit workflow verifier 연결.
+
+검증:
+- Audit Run **36453452454 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `219_TOP_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS`.
+- `219_LEFT_RAIL_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS`.
+- `219_DARK_LIGHT_ACCOUNT_SURFACE_PARITY=PASS`.
+- `219_ACCOUNT_ACTIONS_PRESERVED=PASS`.
+- `219_BACKEND_AND_DATA_PATHS_UNCHANGED=PASS`.
+- Like isolated regression PASS.
+- shared D1 static/read-only audit PASS.
+
+PREVIEW 배포:
+- app version: **202**.
+- version commit: `abc5f09602e1964e0c707564533e2a958edab58d`.
+- locked release SHA: `0702da5f2c16631270269e2024afcdf157518833`.
+- Firebase PREVIEW Hosting Run: **36453841725 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=202`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+비용 / 데이터 영향:
+- Firestore read/write 추가 0.
+- D1 read/write 추가 0.
+- Worker request 추가 0.
+- Worker / Functions / Rules / schema 변경 없음.
+- 사용자 데이터 변경 없음.
+
+사용자 실화면 확인:
+1. PC 다크 상단 우측 프로필 메뉴가 모바일 계정 메뉴와 같은 디자인인지.
+2. 분할모드 왼쪽 프로필 메뉴도 같은 디자인인지.
+3. 라이트 모드는 구조·간격은 동일하고 색만 밝게 보이는지.
+4. 내 프로필 / 설정 / 요금제 / 결제 관리 / 모드 변경 / 로그아웃 등 기존 기능이 그대로 동작하는지.
+5. 모바일 기존 메뉴 디자인/기능에 회귀가 없는지.
+6. 분할바/좌측 메뉴 접기·펼침/분할 geometry가 기존 정상 상태인지.
+
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0IC. PREVIEW app201 · Explore 이중언어 제목 구분자 공백 적용 완료 (2026-09-28 KST)
 
 상태: **사용자 요청 반영 / 제목 표시 한 줄 최소 수정 / 감사 PASS / PREVIEW app201 배포 완료 / 실화면 확인 대기**

@@ -13,18 +13,9 @@ import {
   Search,
   Settings,
   User,
-  Users,
   Compass,
-  LifeBuoy,
-  Palette,
   LogOut,
 } from 'lucide-react';
-import {
-  cycleSoridrawDisplayMode,
-  getSoridrawDisplayModeLabel,
-  readSoridrawDisplayMode,
-  type SoridrawDisplayMode,
-} from '../../services/themePreferences';
 import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
 
 export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
@@ -76,8 +67,6 @@ export default function StudioLeftRail({
   onProfile,
   onPublicProfile,
   onSettings,
-  onAdmin,
-  showAdmin = false,
   onLogout,
   profileName,
   profileEmail = '',
@@ -87,7 +76,6 @@ export default function StudioLeftRail({
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
   const [railTooltip, setRailTooltip] = useState<RailTooltip | null>(null);
   const [effectiveProfilePhotoURL, setEffectiveProfilePhotoURL] = useState(profilePhotoURL);
@@ -155,16 +143,6 @@ export default function StudioLeftRail({
   }, [isProfileMenuOpen, updateMenuPosition]);
 
   useEffect(() => {
-    const refreshDisplayMode = () => setDisplayMode(readSoridrawDisplayMode());
-    window.addEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
-    window.addEventListener('storage', refreshDisplayMode);
-    return () => {
-      window.removeEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
-      window.removeEventListener('storage', refreshDisplayMode);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!isProfileMenuOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
@@ -228,12 +206,6 @@ export default function StudioLeftRail({
               {profileEmail && <p className="soridraw-account-menu-email">{profileEmail}</p>}
             </div>
 
-            {showAdmin && onAdmin && (
-              <button type="button" role="menuitem" className="soridraw-account-menu-row" onClick={() => runMenuAction(onAdmin)}>
-                <Users aria-hidden="true" />
-                <span>관리자메뉴</span>
-              </button>
-            )}
             <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onProfile)}>
               <User aria-hidden="true" />
               <span>MY 페이지</span>
@@ -248,28 +220,6 @@ export default function StudioLeftRail({
             </button>
 
             <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />
-            <p className="soridraw-account-menu-section-label">디자인 모드</p>
-
-            <button
-              type="button"
-              role="menuitem"
-              className="soridraw-account-menu-mode"
-              onClick={() => setDisplayMode(cycleSoridrawDisplayMode())}
-            >
-              <Palette aria-hidden="true" />
-              <span className="soridraw-account-menu-mode-copy">
-                <strong>모드 변경</strong>
-                <small>다크 · 라이트 · 분할</small>
-              </span>
-              <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
-            </button>
-
-            <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />
-
-            <button type="button" role="menuitem" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
-              <LifeBuoy aria-hidden="true" />
-              <span>고객지원 · 준비중</span>
-            </button>
             <button
               type="button"
               role="menuitem"

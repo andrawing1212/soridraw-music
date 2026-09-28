@@ -34,13 +34,15 @@ assert.doesNotMatch(app, /onPlan=\{\(\) => navigate\('\/my-page\?tab=plan'\)\}/)
 assert.doesNotMatch(app, /onBilling=\{\(\) => navigate\('\/my-page\?tab=billing'\)\}/);
 
 assert.match(app, /<ExploreShellLazy isAdminUser=\{isAdminUser\} \/>/);
-assert.match(rail, /showAdmin = false/);
-assert.match(rail, /관리자메뉴/);
+assert.doesNotMatch(rail, /관리자메뉴/);
+assert.doesNotMatch(rail, /디자인 모드/);
+assert.doesNotMatch(rail, /고객지원 · 준비중/);
 assert.match(app, /관리자메뉴/);
 
 console.log('220_MY_PAGE_LABEL=PASS');
 console.log('220_PUBLIC_PROFILE_DIRECT_UID_ROUTE=PASS');
 console.log('220_PLAN_BILLING_ROWS_REMOVED=PASS');
 console.log('220_ACCOUNT_MENU_CORE_LAYOUT_ALL_MODES=PASS');
+console.log('220_LEFT_RAIL_ADMIN_DESIGN_SUPPORT_REMOVED=PASS');
 console.log('220_LIGHT_PALETTE_CONTRACT_REUSED=PASS');
 console.log('220_NO_NEW_SERVER_LOOKUP=PASS');

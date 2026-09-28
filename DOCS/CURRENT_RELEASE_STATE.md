@@ -1,3 +1,56 @@
+## 0IM. PREVIEW app210 · 최근 생성곡 왼쪽 Sori Studio 폭 소유자 교정 완료 (2026-09-29 KST)
+
+상태: **사용자 실화면 지적 반영 / 잘못 건드린 Create 바깥 여백 원복 / 최근 생성곡 왼쪽 Builder의 Sori Studio 내용 폭만 조정 / 감사 PASS / PREVIEW app210 배포 완료 / 실화면 확인 대기**
+
+사용자 지적과 원인:
+- 실제 수정 대상은 일반 Create 화면이 아니라 **분할화면 왼쪽 메뉴에서 최근 생성곡을 연 상태의 왼쪽 Sori Studio 화면**이었음.
+- app208~209는 Create pane / Create outer main을 잘못 소유자로 잡아 Sori Studio 폭 변화는 거의 없고, 오히려 별도 Create 화면의 우측 스크롤 레일이 안쪽으로 밀리는 회귀를 만들었음.
+- 현재 정상 split 구조에서 스크롤바는 Builder pane 바깥 scroll shell이 소유하므로, 그 shell 자체를 이동시키면 안 됨. 내용만 안쪽으로 줄여야 함.
+
+수정:
+- 제품 commit: `0cb5722224b280e9e0b0836cc7c5b857ed9f4dff`.
+- verifier commit: `aa9ae4ca1fff8ac3dbe4ab53fa32a5947a52133c`.
+- Audit trigger/final verified HEAD: `4ad18428b64eb9554a0a400c0d570eb02b310e37`.
+- 기존 app209의 Create 전용 `.soridraw-studio-main { padding-left/right: 36px }` 보정을 제거하여 Create/fullscreen의 기존 스크롤 레일 위치를 복구.
+- **Recent workspace + 양쪽 pane 펼침 + 왼쪽 Builder 안의 `.soridraw-studio-main`에만** `width: calc(100% - 36px)` + 좌우 auto margin 적용.
+- 결과적으로 Sori Studio 내용 프레임만 좌우 각각 약 18px 더 안쪽으로 들어가고, Builder pane 자체/스크롤바/분할선 좌표는 그대로 유지.
+- app206에서 사용자 승인된 최근 생성곡 오른쪽 결과의 12px 좌우 여백은 그대로 유지.
+- 카드 내부 구조/높이/간격, 분할바 geometry, pane responsive mode, Music Note, Library, 모바일, Classic, backend 비변경.
+
+검증:
+- Audit Run **36469134782 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP210_RECENT_BUILDER_STUDIO_WIDTH=PASS`.
+- `APP210_CREATE_SCROLL_SHELL_RESTORED=PASS`.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **210**.
+- version commit: `b424933062b859f746a59981d0efaa2144ceb567`.
+- release SHA: `a4a59dd2ac6eb41740dd0f1bbd3ba4dc1cc6ad7a`.
+- Firebase PREVIEW Hosting Run: **36469430024 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=210`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. **최근 생성곡 메뉴 안의 왼쪽 Sori Studio** 카드/제목 묶음만 이전보다 좌우에서 조금 안쪽으로 들어왔는지.
+2. 그 화면의 우측 스크롤바/분할 경계는 기존 위치 그대로인지.
+3. 일반 Create 화면의 스크롤바가 app209처럼 안쪽으로 밀리지 않고 원래 위치로 복구됐는지.
+4. Music Note / Library / 모바일 / Classic 등 다른 정상 UI가 그대로인지.
+
+주의:
+- 이번 폭 값은 CSS/CI 기준 검증 완료지만 실제 체감 폭은 사용자 PREVIEW 실화면 확인 전.
+- 추가 미세 조정이 필요하면 **Recent 왼쪽 Builder의 inner Sori Studio width 값만** 조정하고 pane/scroll shell/Create를 다시 건드리지 않는다.
+
+
 ## 0IL. PREVIEW app209 · Sori Studio 실제 바깥 프레임 좌우 여백 수정 완료 (2026-09-29 KST)
 
 상태: **사용자 실화면 피드백 반영 / 이전 내부 pane 보정 제거 / 실제 outer main 간격만 수정 / 감사 PASS / PREVIEW app209 배포 완료 / 실화면 확인 대기**

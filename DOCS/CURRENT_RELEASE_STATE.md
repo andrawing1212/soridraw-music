@@ -1,3 +1,30 @@
+## 0IV. PREVIEW app217 · 장르 접기 공통 모션 배포 완료 (2026-09-29 KST)
+
+상태: **장르 전용 180ms 제거 / 5개 키워드 메뉴 공통 220ms ease-out / Audit PASS / PREVIEW app217 배포 완료 / 사용자 실화면 확인 대기**
+
+배포 기준:
+- 제품 commit: `f08d104a3048e130ea622634155c8e23d30a87ee`.
+- verifier commit: `90d18e778e6a8cf82bc90bf056af2808b4eac2e6`.
+- Audit verified HEAD: `02c7fbdac08939362e38266311bef1099b2b91c2`.
+- Audit Run: `36480693317` SUCCESS.
+- app version commit: `06d1e2e606d79bdf72b8cf81f8d3fff747e02a4a`.
+- release SHA: `b0c5570e7ba23a50a1fb57486d5d31488c6fd584`.
+
+PREVIEW 배포:
+- Firebase PREVIEW Hosting Run: `36481172026` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=217`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+- 장르 메뉴를 펼친 뒤 접을 때 스타일/사운드/분위기/주제와 같은 리듬으로 부드럽게 접히는지 확인.
+- app216에서 통과한 생성바 전환 시점, split 검정 여백, Create scrollbar는 보호.
+
 ## 0IU. 장르 접기 버벅임 원인 확인 · 공통 모션으로 복구 (2026-09-29 KST)
 
 상태: **영상 확인 / 원인 확인 / 코드 수정 완료 / Audit PASS / 배포 전**

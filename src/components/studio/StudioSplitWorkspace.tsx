@@ -271,6 +271,7 @@ export default function StudioSplitWorkspace({
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     delete root.dataset.soridrawBuilderMode;
+    delete root.dataset.soridrawBuilderActionCompact;
     delete root.dataset.soridrawResultMode;
     root.style.removeProperty('--soridraw-studio-builder-left');
     root.style.removeProperty('--soridraw-studio-builder-right');
@@ -985,6 +986,17 @@ export default function StudioSplitWorkspace({
     // a viewport-based breakpoint.
     if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
       root.dataset.soridrawBuilderMode = nextBuilderMode;
+    }
+    // 1033 — Keep the floating Generate bar's visual composition full until
+    // the Builder reaches its already-existing Compact band (<=820px). Mobile
+    // remains compact too. This publishes only at that discrete boundary.
+    const builderActionCompact = nextBuilderMode === 'mobile' || builderCompactActive;
+    if (builderActionCompact) {
+      if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+        root.dataset.soridrawBuilderActionCompact = 'true';
+      }
+    } else if (root.dataset.soridrawBuilderActionCompact) {
+      delete root.dataset.soridrawBuilderActionCompact;
     }
     if (root.dataset.soridrawResultMode !== nextResultMode) {
       root.dataset.soridrawResultMode = nextResultMode;

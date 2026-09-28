@@ -15682,14 +15682,19 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
-/* 1031 — Sori Studio Create horizontal gutter, owned by the real outer content frame.
- * Earlier child/pane adjustments were visually swallowed by the existing Create
- * composition. Only the outer Studio main frame moves inward while Create is active. */
+/* 1031 — Split Recent builder Sori Studio horizontal width.
+ * The requested target is the Sori Studio content inside the left Builder pane
+ * while Recent Songs is the active split workspace. Keep the Builder scroll shell
+ * at the pane edge so its scrollbar/divider geometry does not move; only narrow
+ * the inner Sori Studio content frame. Create/fullscreen/other workspaces stay unchanged. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"]
+  html[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="recent"]
   body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace:not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-builder-pane
   .soridraw-studio-main {
-    padding-left: 36px !important;
-    padding-right: 36px !important;
+    width: calc(100% - 36px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 }

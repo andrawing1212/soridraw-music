@@ -1,5 +1,5 @@
-generate_bar_delayed_compact_breakpoint_audit=2026-09-29T05:19:00+09:00
-source_head=b488bfc2a6950f829d34754479e23e12326790f1
+generate_bar_delayed_compact_breakpoint_audit=2026-09-29T05:24:00+09:00
+source_head=ab6e12f178f7dd8cdac0de3a614a75f9f4554284
 app_version=215
 deploy=false
 scope=split_generate_bar_visual_breakpoint_only
@@ -21,3 +21,4 @@ backend_unchanged=true
 user_data_unchanged=true
 preview_only=true
 test_production_unchanged_required=true
+verifier_retry=regex_fixed_only

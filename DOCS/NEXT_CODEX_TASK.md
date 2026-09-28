@@ -1,3 +1,32 @@
+## 2026-09-29 — app210 최근 생성곡 왼쪽 Sori Studio 폭 실화면 확인
+
+현재 PREVIEW:
+- app210.
+- 제품 commit `0cb5722224b280e9e0b0836cc7c5b857ed9f4dff`.
+- verifier commit `aa9ae4ca1fff8ac3dbe4ab53fa32a5947a52133c`.
+- Audit Run `36469134782` SUCCESS.
+- release SHA `a4a59dd2ac6eb41740dd0f1bbd3ba4dc1cc6ad7a`.
+- Hosting Run `36469430024` SUCCESS.
+- exact build/version 210 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 교정:
+- app209에서 잘못 적용한 Create outer main 36px padding 제거.
+- 실제 요청 화면인 **Recent workspace 왼쪽 Builder 내부 Sori Studio**에만 `width: calc(100% - 36px)`를 적용해 내용 프레임을 중앙에서 좁힘.
+- Builder pane/scroll shell/스크롤바/분할선은 이동시키지 않음.
+- Recent 오른쪽 결과 12px 여백은 app206 기준 그대로 보존.
+
+확인:
+1. 최근 생성곡을 연 분할화면 왼쪽 Sori Studio의 좌우 폭이 원하는 만큼 줄었는지.
+2. 같은 화면의 스크롤바/분할 경계가 바깥 원래 위치에 남아 있는지.
+3. 일반 Create 화면의 스크롤바가 원래 위치로 복구됐는지.
+4. 다른 화면/반응형/UI가 그대로인지.
+
+보호:
+- 추가 폭 조정은 이 Recent 왼쪽 Builder inner Sori Studio 규칙의 `36px` 값만 조정.
+- pane padding, Create main padding, splitter geometry, responsive breakpoint, Music Note, Library, 모바일, backend/user data 수정 금지.
+
+
 ## 2026-09-29 — app209 Sori Studio outer main 여백 확인
 
 현재 PREVIEW:

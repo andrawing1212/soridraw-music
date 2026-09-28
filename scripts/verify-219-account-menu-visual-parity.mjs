@@ -25,16 +25,24 @@ for (const label of ['MY 페이지','공개 프로필','설정','고객지원 ·
   assert.ok(rail.includes(label), 'rail action lost: ' + label);
 }
 assert.match(rail, /getSoridrawDisplayModeLabel\(displayMode\)/);
-assert.match(rail, /aria-haspopup="menu"/);
-assert.match(rail, /setIsThemeMenuOpen\(\(current\) => !current\)/);
+assert.match(rail, /const preferredLeft = rect\.right \+ PROFILE_MENU_GAP/);
+assert.match(rail, /onClick=\{\(\) => setDisplayMode\(cycleSoridrawDisplayMode\(\)\)\}/);
+assert.doesNotMatch(rail, /setIsThemeMenuOpen/);
+assert.doesNotMatch(rail, /isThemeMenuOpen/);
+assert.doesNotMatch(rail, /soridraw-studio-profile-theme-menu/);
 
 assert.match(css, /width: 224px !important/);
 assert.match(css, /border-radius: 18px !important/);
-assert.match(css, /background: rgba\(36,36,38,.98\) !important/);
-assert.match(css, /data-soridraw-color-mode="light"[\s\S]*background: rgba\(238,235,231,.99\) !important/);
+assert.match(css, /background: #242426 !important/);
+assert.match(css, /backdrop-filter: none !important/);
+assert.match(css, /data-soridraw-color-mode="light"[\s\S]*background: #eeebe7 !important/);
+assert.match(studioCss, /SORIDRAW_STUDIO_ACCOUNT_MENU_PARITY_219_20260929[\s\S]*background: #242426 !important/);
 
 console.log('219_TOP_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS');
 console.log('219_LEFT_RAIL_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS');
 console.log('219_DARK_LIGHT_ACCOUNT_SURFACE_PARITY=PASS');
+console.log('219_ACCOUNT_MENU_OPAQUE=PASS');
+console.log('219_LEFT_RAIL_RIGHT_SIDE_POSITION=PASS');
+console.log('219_LEFT_RAIL_MODE_CYCLE=PASS');
 console.log('219_ACCOUNT_MENU_VISUAL_STRUCTURE_PRESERVED=PASS');
 console.log('219_BACKEND_AND_DATA_PATHS_UNCHANGED=PASS');

@@ -5147,12 +5147,13 @@ html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
   overflow-x: hidden !important;
   border: 1px solid rgba(255,255,255,.08) !important;
   border-radius: 18px !important;
-  background: rgba(36,36,38,.98) !important;
-  background-color: rgba(36,36,38,.98) !important;
+  background: #242426 !important;
+  background-color: #242426 !important;
   background-image: none !important;
   color: #f1f1f3 !important;
   box-shadow: 0 16px 38px rgba(0,0,0,.42) !important;
-  backdrop-filter: blur(18px) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .soridraw-account-menu-surface .soridraw-account-menu-header {
@@ -5313,8 +5314,8 @@ html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .soridraw-account-menu-surface {
   border-color: rgba(58,52,45,.10) !important;
-  background: rgba(238,235,231,.99) !important;
-  background-color: rgba(238,235,231,.99) !important;
+  background: #eeebe7 !important;
+  background-color: #eeebe7 !important;
   color: #342f2a !important;
   box-shadow: 0 16px 38px rgba(58,52,45,.14) !important;
 }

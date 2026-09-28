@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import {
   Bell,
-  Check,
   ChevronDown,
   ChevronRight,
   Ellipsis,
@@ -21,9 +20,8 @@ import {
   LogOut,
 } from 'lucide-react';
 import {
-  applySoridrawDisplayMode,
+  cycleSoridrawDisplayMode,
   getSoridrawDisplayModeLabel,
-  isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from '../../services/themePreferences';
@@ -89,7 +87,6 @@ export default function StudioLeftRail({
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
   const [railTooltip, setRailTooltip] = useState<RailTooltip | null>(null);
@@ -110,7 +107,6 @@ export default function StudioLeftRail({
 
   const closeProfileMenu = useCallback(() => {
     setIsProfileMenuOpen(false);
-    setIsThemeMenuOpen(false);
   }, []);
 
   const showRailTooltip = useCallback((target: HTMLElement, label: string) => {
@@ -138,14 +134,17 @@ export default function StudioLeftRail({
 
     const rect = profileButton.getBoundingClientRect();
     const viewportPadding = 8;
-    const preferredLeft = rect.left;
+    const preferredLeft = rect.right + PROFILE_MENU_GAP;
     const left = Math.max(
       viewportPadding,
       Math.min(preferredLeft, window.innerWidth - PROFILE_MENU_WIDTH - viewportPadding),
     );
+    const menuHeight = menuRef.current?.getBoundingClientRect().height || 0;
+    const maxTop = Math.max(viewportPadding, window.innerHeight - menuHeight - viewportPadding);
+    const top = Math.max(viewportPadding, Math.min(rect.top, maxTop));
 
     setMenuPosition({
-      top: Math.round(rect.bottom + PROFILE_MENU_GAP),
+      top: Math.round(top),
       left: Math.round(left),
     });
   }, []);
@@ -215,19 +214,12 @@ export default function StudioLeftRail({
     action();
   };
 
-  const selectDisplayMode = (mode: SoridrawDisplayMode) => {
-    const appliedMode = applySoridrawDisplayMode(mode);
-    setDisplayMode(appliedMode);
-    closeProfileMenu();
-  };
-
   const profileMenu = isProfileMenuOpen && typeof document !== 'undefined'
     ? createPortal(
         <div
           ref={menuRef}
           className="soridraw-studio-profile-menu-portal"
           style={{ top: menuPosition.top, left: menuPosition.left }}
-          onMouseLeave={() => setIsThemeMenuOpen(false)}
         >
           <div className="soridraw-studio-profile-menu soridraw-account-menu-surface" role="menu" aria-label="개인 메뉴">
             <div className="soridraw-account-menu-header">
@@ -261,11 +253,8 @@ export default function StudioLeftRail({
             <button
               type="button"
               role="menuitem"
-              aria-haspopup="menu"
-              aria-expanded={isThemeMenuOpen}
-              className={`soridraw-account-menu-mode${isThemeMenuOpen ? ' is-submenu-open' : ''}`}
-              onMouseEnter={() => setIsThemeMenuOpen(true)}
-              onClick={() => setIsThemeMenuOpen((current) => !current)}
+              className="soridraw-account-menu-mode"
+              onClick={() => setDisplayMode(cycleSoridrawDisplayMode())}
             >
               <Palette aria-hidden="true" />
               <span className="soridraw-account-menu-mode-copy">
@@ -295,33 +284,6 @@ export default function StudioLeftRail({
             </button>
           </div>
 
-          {isThemeMenuOpen && (
-            <div
-              className="soridraw-studio-profile-theme-menu"
-              role="menu"
-              aria-label="테마 선택"
-              onMouseEnter={() => setIsThemeMenuOpen(true)}
-            >
-              {([
-                { mode: 'dark' as const, label: '다크' },
-                { mode: 'light' as const, label: '라이트' },
-                ...(!isSoridrawPhoneDevice()
-                  ? [{ mode: 'studio-black' as const, label: '분할' }]
-                  : []),
-              ]).map((item) => (
-                <button
-                  key={item.mode}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={displayMode === item.mode}
-                  onClick={() => selectDisplayMode(item.mode)}
-                >
-                  <span>{item.label}</span>
-                  {displayMode === item.mode && <Check aria-hidden="true" />}
-                </button>
-              ))}
-            </div>
-          )}
         </div>,
         document.body,
       )
@@ -351,7 +313,6 @@ export default function StudioLeftRail({
             onClick={() => {
               if (!isProfileMenuOpen) updateMenuPosition();
               setIsProfileMenuOpen((current) => !current);
-              setIsThemeMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={isProfileMenuOpen}

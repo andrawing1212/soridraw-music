@@ -15613,8 +15613,8 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     padding: 8px !important;
     border: 1px solid rgba(255,255,255,.08) !important;
     border-radius: 18px !important;
-    background: rgba(36,36,38,.98) !important;
-    background-color: rgba(36,36,38,.98) !important;
+    background: #242426 !important;
+    background-color: #242426 !important;
     box-shadow: 0 16px 38px rgba(0,0,0,.42) !important;
   }
 
@@ -15662,7 +15662,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
   .soridraw-studio-profile-theme-menu {
     border-radius: 14px !important;
-    background: rgba(36,36,38,.98) !important;
+    background: #242426 !important;
     box-shadow: 0 14px 34px rgba(0,0,0,.36) !important;
   }
 }

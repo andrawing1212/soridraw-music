@@ -15682,17 +15682,14 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
-/* 1031 — Sori Studio Create horizontal gutter, applied at the pane owner.
- * The earlier child-width patch could be visually neutralized by the existing
- * wide-screen composition. Padding the actual stacked Create panes guarantees
- * visible left/right breathing room without touching cards, splitter geometry,
- * responsive thresholds, mobile, or any data path. */
+/* 1031 — Sori Studio Create horizontal gutter, owned by the real outer content frame.
+ * Earlier child/pane adjustments were visually swallowed by the existing Create
+ * composition. Only the outer Studio main frame moves inward while Create is active. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"]
+  body #root .soridraw-app-root
+  .soridraw-studio-main {
     padding-left: 36px !important;
     padding-right: 36px !important;
-    box-sizing: border-box !important;
   }
 }

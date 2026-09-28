@@ -1,3 +1,56 @@
+## 0IO. PREVIEW app212 · Recent 왼쪽 여백 축소 + 곡 만들기 스크롤바 우측 경계 정렬 (2026-09-29 KST)
+
+상태: **app211 실화면 피드백 반영 / Recent 왼쪽 여백 84→36px 축소 / Create 스크롤바 18px 우측 경계 복구 / 감사 PASS / PREVIEW app212 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 실화면 피드백:
+- app211 Recent 왼쪽 Sori Studio는 실제 폭 소유자를 맞췄지만 총 84px gutter가 과해서 좌우 여백이 너무 넓었음.
+- 곡 만들기(Create) 화면의 세로 스크롤바는 여전히 오른쪽 rail 구분선보다 약 18px 안쪽에 있었음.
+
+app212 수정:
+- 제품 commit: `44edc1d58a552d2000165233843cab32ce679060`.
+- verifier commit: `f17944ddaa4ce387ddd96b908e26e0c1c418ef7d`.
+- Audit verified HEAD: `386b74f60d74986aa537f201d4ba04dd1775db89`.
+- Recent 왼쪽 Builder의 실제 masthead + direct content 소유자는 유지하고 총 gutter만 **84px → 36px(좌우 약 18px)** 로 축소.
+- Recent Builder pane 자체/스크롤바/분할선 geometry는 비변경.
+- Create는 기존 Studio main의 오른쪽 18px 예약 gutter만 해제하고, 같은 18px을 Create vertical scroll shell 내부 padding으로 반환.
+- 따라서 Create 내용 폭/위치는 유지하면서 **native 세로 스크롤바 경계만 오른쪽 rail 세로선까지 이동**하도록 구성.
+- Create 왼쪽 gutter, 카드 내부 구조, responsive 규칙, splitter, Music Note, Library, 모바일, Classic, backend/user data 비변경.
+
+검증:
+- Audit Run **36472030354 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP212_RECENT_BUILDER_SMALL_GUTTER=PASS`.
+- `APP212_CREATE_SCROLLBAR_EDGE=PASS`.
+- `APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS`.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **212**.
+- version commit: `946d2e375d460ffc74d81b4704d2c14e4b55aa48`.
+- release SHA: `c08cc53e6928f249f20bb7e84b0387348c3c0fc8`.
+- Firebase PREVIEW Hosting Run: **36472316088 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=212`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+실화면 확인:
+1. Recent 메뉴 왼쪽 Sori Studio 좌우 여백이 app211보다 확실히 줄고, 아주 작은 breathing room만 남는지.
+2. 곡 만들기(Create) 화면 세로 스크롤바가 오른쪽 메뉴의 세로 구분선 바로 왼쪽에 붙는지.
+3. Create 카드/타이틀 폭과 위치가 이전과 동일한지.
+4. 다른 정상 UI가 그대로인지.
+
+보호:
+- Recent 추가 미세조정은 1031의 `36px` 총 gutter 값만 조정.
+- Create scrollbar 추가 조정은 1032의 right-gutter ownership만 확인.
+- 카드/분할바/다른 페이지/백엔드는 건드리지 않음.
+
 ## 0IN. PREVIEW app211 · 최근 생성곡 왼쪽 Sori Studio 실제 폭 소유자 교정 (2026-09-29 KST)
 
 상태: **app210 실화면 FAIL 인정 / selector 소유자 재확인 / Recent 왼쪽 Builder의 실제 direct content + masthead만 폭 조정 / scrollbar shell 비변경 / 감사 PASS / PREVIEW app211 배포 완료 / 사용자 실화면 확인 대기**

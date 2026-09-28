@@ -1,11 +1,10 @@
-split_recent_create_gutter_audit=2026-09-29T03:06:00+09:00
-source_head=0b2e14fdf0fd32973afdd91bbfd83d1fe22c195c
-app_version=205
+split_create_gutter_followup_audit=2026-09-29T03:18:00+09:00
+source_head=029669cd7f5c50716d85590dc9e735241358e8ce
+app_version=206
 deploy=false
-scope=split_recent_and_create_horizontal_spacing_only
-recent_result_padding_left=12px
-recent_result_padding_right=12px
-create_1100_1599_inner_gutter_each_side=12px
+scope=split_create_horizontal_spacing_only
+recent_result_unchanged=true
+create_1100_1599_inner_gutter_each_side=24px
 create_1600_plus_inner_gutter_each_side=56px
 music_note_unchanged=true
 library_unchanged=true

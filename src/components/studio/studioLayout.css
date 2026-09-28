@@ -15688,7 +15688,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
   > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   > * {
-    width: calc(100% - 24px) !important;
+    width: calc(100% - 48px) !important;
     margin-left: auto !important;
     margin-right: auto !important;
     box-sizing: border-box !important;

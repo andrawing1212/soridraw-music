@@ -68,8 +68,8 @@ assert.match(
 );
 assert.match(
   css,
-  /data-soridraw-lite-workspace="create"[\s\S]*?is-create-vertical[\s\S]*?width: calc\(100% - 24px\) !important;/,
-  'Create split must gain the small 12px-per-side inner gutter below 1600px',
+  /data-soridraw-lite-workspace="create"[\s\S]*?is-create-vertical[\s\S]*?width: calc\(100% - 48px\) !important;/,
+  'Create split must gain the clearer 24px-per-side inner gutter below 1600px',
 );
 assert.match(
   css,

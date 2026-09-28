@@ -60,7 +60,9 @@ for (const required of [
   assert.ok(css.includes(required), `missing vertical Classic-parity CSS token: ${required}`);
 }
 
-// 1030/1031: Recent stays frozen; Create spacing is owned by the actual pane.
+// 1030/1031: keep Recent result spacing frozen, and narrow only the
+// Sori Studio content inside Recent's left Builder pane. The Builder pane itself
+// remains the scroll/geometry owner so its scrollbar and divider edge do not move.
 assert.match(
   css,
   /data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-studio-result-content \{[\s\S]*?padding-left: 12px !important;[\s\S]*?padding-right: 12px !important;/,
@@ -68,15 +70,20 @@ assert.match(
 );
 assert.match(
   css,
-  /data-soridraw-studio-workspace-view="create"[\s\S]*?\.soridraw-studio-main \{[\s\S]*?padding-left: 36px !important;[\s\S]*?padding-right: 36px !important;/,
-  'Create outer Studio main frame must own the visible 36px horizontal gutters',
-);
-assert.doesNotMatch(
-  css.slice(css.indexOf('/* 1031 — Sori Studio Create horizontal gutter')),
-  /> :is\(\.soridraw-studio-builder-pane, \.soridraw-studio-result-pane\)[\s\S]*?padding-left:/,
-  'Create gutter must not be patched on inner panes anymore',
+  /\/\* 1031 — Split Recent builder Sori Studio horizontal width\.[\s\S]*?data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-lite-studio-split-workspace:not\(\.is-builder-collapsed\):not\(\.is-result-collapsed\)[\s\S]*?> \.soridraw-studio-builder-pane[\s\S]*?\.soridraw-studio-main \{[\s\S]*?width: calc\(100% - 36px\) !important;[\s\S]*?margin-left: auto !important;[\s\S]*?margin-right: auto !important;/,
+  'Recent left Builder Sori Studio content frame must own the requested width reduction',
 );
 const spacingPatch = css.slice(css.indexOf('/* 1030 — Split Recent horizontal breathing room.'));
+assert.doesNotMatch(
+  spacingPatch,
+  /data-soridraw-studio-workspace-view="create"[\s\S]*?\.soridraw-studio-main[\s\S]*?padding-(?:left|right): 36px !important;/,
+  'Create/fullscreen Studio main must be restored and left untouched',
+);
+assert.doesNotMatch(
+  spacingPatch,
+  /> :is\(\.soridraw-studio-builder-pane, \.soridraw-studio-result-pane\)[\s\S]*?padding-left:/,
+  'spacing patch must not move pane scroll shells inward',
+);
 assert.doesNotMatch(
   spacingPatch,
   /soridraw-studio-splitter|grid-template-columns|--soridraw-studio-builder-width|data-pane-mode|@media \(max-width: 1099px\)/,
@@ -85,7 +92,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   spacingPatch,
   /width: calc\(100% - 48px\)|width: min\(calc\(100% - 112px\)/,
-  'rejected child-width Create spacing workaround must be removed',
+  'rejected Create child-width workaround must stay removed',
 );
 
 // This UI reuse must not add a new backend path.
@@ -99,6 +106,6 @@ console.log('APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS');
 console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
 console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
-console.log('APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS');
-console.log('APP208_CREATE_MAIN_GUTTER_OWNER=PASS');
+console.log('APP210_RECENT_BUILDER_STUDIO_WIDTH=PASS');
+console.log('APP210_CREATE_SCROLL_SHELL_RESTORED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

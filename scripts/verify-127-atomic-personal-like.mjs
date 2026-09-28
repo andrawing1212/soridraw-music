@@ -249,7 +249,7 @@ assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signa
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);
 assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCount\)/);
 assert.match(service, /normalizeExploreLikeDisplayPair129/);
-assert.match(page, /const pair129 = normalizeExploreLikeDisplayPair129\(liked129, track\.likeCount\)/);
+assert.match(page, /const pair129 = normalizeExploreLikeDisplayPair129\(liked129, (?:track|authorityTrack217)\.likeCount\)/);
 assert.match(page, /Heart \+ count are one accepted like atom/);
 assert.match(service, /readExploreTrackLikeMembership127\(uid, normalizedTrackId\) \?\? !liked/);
 assert.match(service, /const now = nextExploreLikeMutationAt127\(existing\?\.updatedAt \|\| 0, Date\.now\(\)\)/);

@@ -1,3 +1,46 @@
+## 0IL. PREVIEW app209 · Sori Studio 실제 바깥 프레임 좌우 여백 수정 완료 (2026-09-29 KST)
+
+상태: **사용자 실화면 피드백 반영 / 이전 내부 pane 보정 제거 / 실제 outer main 간격만 수정 / 감사 PASS / PREVIEW app209 배포 완료 / 실화면 확인 대기**
+
+원인 확인:
+- Sori Studio Create는 일반 분할 페이지보다 폭 소유자가 여러 겹이지만, 계산 자체가 어려운 문제는 아니었음.
+- app206~208에서 수정한 child/pane은 사용자가 실제로 보는 최외곽 좌우 경계의 최종 소유자가 아니어서 화면 변화가 거의 없었음.
+- 실제 Sori Studio 카드/타이틀 묶음의 바깥 폭은 `soridraw-studio-main`이 소유함.
+
+수정:
+- CSS 제품 commit: `1a9da9b5a691144fd23b6d96bf40e4ee35545415`.
+- verifier commit: `6b0ed5d56ff32b3177bffef250cc4c2be109192d`.
+- Audit trigger/final verified HEAD: `965ca3c5f28d270ff050c27e0d1420612fb29378`.
+- Create 상태에서만 `.soridraw-studio-main` 좌/우 padding을 **36px**로 고정.
+- app208의 inner pane padding 보정은 제거.
+- 최근 생성곡 app206 간격은 그대로 유지.
+- 카드 내부 구조/높이/간격, 분할바 geometry, pane responsive mode, Music Note, Library, 모바일, Classic, backend 비변경.
+
+검증:
+- Audit Run **36467140103 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- `APP208_CREATE_MAIN_GUTTER_OWNER=PASS`.
+- `APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS`.
+- `APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS`.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **209**.
+- version commit: `857a8207b42624a75175f1c0e0ef3dc3e506ebec`.
+- release SHA: `903c1df9efffbe70587bdefd2fe47bb140e00b83`.
+- Firebase PREVIEW Hosting Run: **36467416857 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=209`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+실화면 확인:
+1. Sori Studio 제목부터 카드 전체 묶음까지 좌우 바깥선이 이전보다 안쪽으로 들어왔는지.
+2. 최근 생성곡은 app206 상태 그대로인지.
+3. 다른 분할/반응형/UI가 그대로인지.
+
+
 ## 0IK. PREVIEW app208 · Sori Studio 간격 소유자 교정 완료 (2026-09-29 KST)
 
 상태: **사용자 피드백 반영 / 잘못 잡은 child-width 방식 제거 / 실제 pane 좌우 padding만 수정 / 감사 PASS / PREVIEW app208 배포 완료 / 실화면 확인 대기**

@@ -1,3 +1,30 @@
+## 2026-09-29 — app211 Recent 왼쪽 Sori Studio 실제 폭 확인
+
+현재 PREVIEW:
+- app211.
+- 제품 commit `397a99209dc726d5390c57c0a0a7b7f143c8a8a7`.
+- verifier commit `ccf96aa66bc63818f376ef8a9d51650d118c6b10`.
+- Audit Run `36470664449` SUCCESS.
+- release SHA `c3d6fb8f57d74dd92e5f0e0ade1806e3aaac6426`.
+- Hosting Run `36470912706` SUCCESS.
+- exact build/version 211 PASS.
+- TEST / PRODUCTION unchanged.
+
+중요:
+- app210은 실화면 기준 FAIL. `.soridraw-studio-main`을 Recent Builder 내부 소유자로 잘못 본 selector가 실제 DOM과 맞지 않아 눈에 띄는 폭 변화가 없었음.
+- app211은 **Recent Builder pane의 실제 direct masthead + direct content**를 대상으로 바꿈.
+- 총 84px 좌우 gutter를 중앙 정렬로 적용.
+- Builder pane 자체는 건드리지 않아 scrollbar/divider edge는 그대로 유지.
+
+확인:
+1. Recent 왼쪽 Sori Studio 제목/검색/카드가 동일한 좌우 가이드로 줄었는지.
+2. scrollbar가 분할 경계에 그대로 붙어 있는지.
+3. Create/fullscreen과 다른 페이지가 그대로인지.
+
+보호:
+- 추가 조정은 총 gutter `84px` 값만 변경.
+- pane/scroll shell/Create main/splitter/다른 페이지 수정 금지.
+
 ## 2026-09-29 — app210 최근 생성곡 왼쪽 Sori Studio 폭 실화면 확인
 
 현재 PREVIEW:

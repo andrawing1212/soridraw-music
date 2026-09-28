@@ -1,3 +1,38 @@
+## 0IG. PREVIEW 코드 · 왼쪽 rail 계정 메뉴 최소화 완료 / 배포 전 (2026-09-29 KST)
+
+상태: **사용자 요청 반영 / 감사 PASS / 아직 PREVIEW Hosting 재배포 전**
+
+사용자 요청:
+- 분할모드 왼쪽 메뉴의 사용자 더보기에서 `관리자메뉴` 제거.
+- `디자인 모드 / 모드 변경` 제거.
+- `고객지원 · 준비중` 제거.
+- `MY 페이지 / 공개 프로필 / 설정 / 로그아웃`은 유지.
+
+수정:
+- 제품 commit: `c30cd99078a2a3a2e6fc085a0bf4977261db3803`.
+- verifier 정리 commit: `06aab2ceca6edfcf2dc3c60363ee60c8d11774fc`.
+- 수정 범위: `src/components/studio/StudioLeftRail.tsx`의 왼쪽 rail 계정 팝업만.
+- 상단/모바일 계정 메뉴는 변경하지 않음.
+- app204에서 수정한 불투명 surface와 rail 오른쪽 popup 위치는 그대로 유지.
+- split divider / pane / drag / rail collapse geometry와 성능 경로는 변경하지 않음.
+
+검증:
+- Audit Run **36460283292 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static release-system verification PASS.
+- Like isolated regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 공유 D1 검사는 read-only PASS.
+- 사용자 데이터 변경 없음.
+
+배포:
+- 현재 실제 PREVIEW Hosting은 여전히 **app204** / release SHA `ae779e1ae214eaf2ed160d5f3fb7552ed9aad040`.
+- 이번 왼쪽 rail 메뉴 최소화 코드는 **아직 미배포**.
+- 사용자 배포 요청 전에는 Hosting 배포하지 않음.
+- TEST/main / PRODUCTION 변경 없음.
+
+
 ## 0IF. PREVIEW app204 · 계정 메뉴 불투명/왼쪽 rail 위치/모드 순환 수정 완료 (2026-09-29 KST)
 
 상태: **사용자 화면 피드백 반영 / 감사 PASS / PREVIEW app204 배포 완료 / 실화면 확인 대기**

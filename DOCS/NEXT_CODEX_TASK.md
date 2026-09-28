@@ -1,3 +1,27 @@
+## 2026-09-29 — 왼쪽 rail 계정 메뉴 최소화 배포 대기
+
+현재 코드:
+- preview 제품 commit `c30cd99078a2a3a2e6fc085a0bf4977261db3803`.
+- verifier/최종 HEAD `06aab2ceca6edfcf2dc3c60363ee60c8d11774fc`.
+- Audit Run `36460283292` SUCCESS.
+- 실제 PREVIEW Hosting은 아직 app204.
+
+배포 후 확인:
+1. 분할 왼쪽 프로필 메뉴에 `관리자메뉴` 없음.
+2. `디자인 모드 / 모드 변경` 없음.
+3. `고객지원 · 준비중` 없음.
+4. `MY 페이지 / 공개 프로필 / 설정 / 로그아웃` 정상.
+5. 메뉴 불투명/rail 오른쪽 위치 유지.
+6. 상단/모바일 계정 메뉴는 기존 구조 그대로.
+7. split divider/pane/rail collapse 회귀 없음.
+
+보호:
+- 상단/모바일 계정 메뉴 수정 금지.
+- Split engine geometry/performance 수정 금지.
+- 좋아요 / 공개·비공개 / Explore 데이터 / Music Note / Library / Worker / Functions / Rules / 사용자 데이터 비변경.
+- 배포는 사용자 요청 전 금지.
+
+
 ## 2026-09-29 — app204 계정 메뉴 후속 실사용 확인
 
 현재 PREVIEW:

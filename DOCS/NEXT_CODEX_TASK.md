@@ -1,3 +1,30 @@
+## 2026-09-29 — app202 계정 메뉴 디자인 공통화 실사용 확인
+
+현재 PREVIEW:
+- app202.
+- 제품 commit `4cfb46a8f6265804a19cf07431f93d9ae54f43b3`.
+- Audit Run `36453452454` SUCCESS.
+- release SHA `0702da5f2c16631270269e2024afcdf157518833`.
+- Hosting Run `36453841725` SUCCESS.
+- `preview.soridraw.com` exact build/version 202 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. PC 다크 상단 우측 계정 메뉴 = 모바일 기준 디자인.
+2. 분할모드 왼쪽 계정 메뉴 = 같은 디자인.
+3. 라이트 모드 = 같은 geometry + 밝은 palette.
+4. 기존 메뉴 동작 전부 유지.
+5. 모바일 기존 계정 메뉴 회귀 없음.
+6. Split divider/pane/rail collapse 동작 회귀 없음.
+
+보호:
+- 계정 메뉴 시각/표시 외 수정 금지.
+- 좋아요 / 공개·비공개 / Explore 데이터 / Music Note / Library / Worker / Functions / Rules / 사용자 데이터 비변경.
+- Split engine geometry/performance path 비변경.
+- 실화면 이상 시 해당 계정 메뉴 class/CSS만 국소 수정.
+- TEST/main 및 PRODUCTION 승격은 별도 승인 전 금지.
+
+
 ## 2026-09-28 — app201 Explore 제목 구분자 공백 실사용 확인
 
 현재 PREVIEW:

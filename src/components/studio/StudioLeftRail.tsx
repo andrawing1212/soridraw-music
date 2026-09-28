@@ -14,8 +14,8 @@ import {
   Search,
   Settings,
   User,
-  BadgeDollarSign,
-  CreditCard,
+  Users,
+  Compass,
   LifeBuoy,
   Palette,
   LogOut,
@@ -41,9 +41,10 @@ type StudioLeftRailProps = {
   onApiSettings: () => void;
   onLab: () => void;
   onProfile: () => void;
+  onPublicProfile: () => void;
   onSettings: () => void;
-  onPlan: () => void;
-  onBilling: () => void;
+  onAdmin?: () => void;
+  showAdmin?: boolean;
   onLogout: () => void | Promise<void>;
   profileName: string;
   profileEmail?: string;
@@ -75,9 +76,10 @@ export default function StudioLeftRail({
   onApiSettings,
   onLab,
   onProfile,
+  onPublicProfile,
   onSettings,
-  onPlan,
-  onBilling,
+  onAdmin,
+  showAdmin = false,
   onLogout,
   profileName,
   profileEmail = '',
@@ -234,21 +236,23 @@ export default function StudioLeftRail({
               {profileEmail && <p className="soridraw-account-menu-email">{profileEmail}</p>}
             </div>
 
+            {showAdmin && onAdmin && (
+              <button type="button" role="menuitem" className="soridraw-account-menu-row" onClick={() => runMenuAction(onAdmin)}>
+                <Users aria-hidden="true" />
+                <span>관리자메뉴</span>
+              </button>
+            )}
             <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onProfile)}>
               <User aria-hidden="true" />
-              <span>내 프로필</span>
+              <span>MY 페이지</span>
+            </button>
+            <button type="button" role="menuitem" data-soridraw-menu-access="explore" className="soridraw-account-menu-row" onClick={() => runMenuAction(onPublicProfile)}>
+              <Compass aria-hidden="true" />
+              <span>공개 프로필</span>
             </button>
             <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onSettings)}>
               <Settings aria-hidden="true" />
               <span>설정</span>
-            </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onPlan)}>
-              <BadgeDollarSign aria-hidden="true" />
-              <span>요금제</span>
-            </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onBilling)}>
-              <CreditCard aria-hidden="true" />
-              <span>결제 관리</span>
             </button>
 
             <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />

@@ -85,6 +85,7 @@ jobs:
           node scripts/verify-217-cache-live-update-reset.mjs
           node scripts/verify-218-explore-title-display.mjs
           node scripts/verify-219-account-menu-visual-parity.mjs
+          node scripts/verify-220-account-menu-content-parity.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

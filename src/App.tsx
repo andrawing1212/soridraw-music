@@ -123,7 +123,6 @@ import {
   Activity,
   PenTool,
   Palette,
-  CreditCard,
   FlaskConical,
   AlertTriangle
 } from 'lucide-react';
@@ -4175,11 +4174,20 @@ function Navigation({
                       <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
                       <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
+                    {isAdminUser && (
+                      <button
+                        type="button"
+                        onClick={() => { navigate('/admin/users'); setIsProfileOpen(false); }}
+                        className="soridraw-account-menu-row"
+                      >
+                        <Users aria-hidden="true" />
+                        <span>관리자메뉴</span>
+                      </button>
+                    )}
                     {[
-                      { label: '내 프로필', path: '/my-page', icon: UserIcon },
+                      { label: 'MY 페이지', path: '/my-page', icon: UserIcon },
+                      { label: '공개 프로필', path: `/explore?profile=${encodeURIComponent(user.uid)}`, icon: Compass },
                       { label: '설정', path: '/my-page?tab=settings', icon: Settings },
-                      { label: '요금제', path: '/my-page?tab=plan', icon: Tag },
-                      { label: '결제 관리', path: '/my-page?tab=billing', icon: CreditCard },
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
@@ -4335,9 +4343,9 @@ function Navigation({
                     className="soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto"
                   >
                     <div className="soridraw-account-menu-header">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FFB400]">계정 메뉴</p>
-                      <p className="mt-1 truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
-                      <p className="truncate text-[11px] text-white/42">{user.email || ''}</p>
+                      <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+                      <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
                     {isAdminUser && (
                       <button
@@ -4347,25 +4355,51 @@ function Navigation({
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="soridraw-account-menu-row"
                       >
-                        <Users className="h-5 w-5" />
-                        관리자메뉴
+                        <Users aria-hidden="true" />
+                        <span>관리자메뉴</span>
                       </button>
                     )}
                     {canShowMenu('myPage') && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigate('/my-page');
-                          setIsProfileOpen(false);
-                          setIsExpanded(false);
-                        }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
-                      >
-                        <UserIcon className="h-5 w-5" />
-                        마이페이지
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/my-page');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <UserIcon aria-hidden="true" />
+                          <span>MY 페이지</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Compass aria-hidden="true" />
+                          <span>공개 프로필</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/my-page?tab=settings');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Settings aria-hidden="true" />
+                          <span>설정</span>
+                        </button>
+                      </>
                     )}
                     {isRailLessNavigationViewport && canShowMenu('lab') && (
                       <button
@@ -4375,27 +4409,31 @@ function Navigation({
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="soridraw-account-menu-row"
                       >
-                        <FlaskConical className="h-5 w-5" />
-                        실험실
+                        <FlaskConical aria-hidden="true" />
+                        <span>실험실</span>
                       </button>
                     )}
-                    <div className="my-1 border-t border-white/10" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                    <div className="soridraw-account-menu-divider" />
+                    <p className="soridraw-account-menu-section-label">디자인 모드</p>
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#FFB400]/12"
+                      className="soridraw-theme-cycle-button soridraw-account-menu-mode"
                     >
-                      <Palette className="h-5 w-5 shrink-0 text-[#FFB400]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-black text-white/82">모드 변경</span>
-                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      <Palette aria-hidden="true" />
+                      <span className="soridraw-account-menu-mode-copy">
+                        <strong>모드 변경</strong>
+                        <small>{displayModeCycleText}</small>
                       </span>
-                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#FFB400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
-                    <div className="my-1 border-t border-white/10" />
+                    <div className="soridraw-account-menu-divider" />
+                    <button type="button" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
+                      <Info aria-hidden="true" />
+                      <span>고객지원 · 준비중</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -4405,10 +4443,10 @@ function Navigation({
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#FFB400] transition-all hover:bg-[#FFB400]/12"
+                      className="soridraw-account-menu-row soridraw-account-menu-logout"
                     >
-                      <LogOut className="h-5 w-5" />
-                      로그아웃
+                      <LogOut aria-hidden="true" />
+                      <span>로그아웃</span>
                     </button>
                   </motion.div>
                 )}
@@ -16415,7 +16453,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/explore" element={
           canAccessNavigationMenu('explore') ? (
-            <ExploreShellLazy />
+            <ExploreShellLazy isAdminUser={isAdminUser} />
           ) : (
             <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
           )
@@ -16439,9 +16477,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
                 onProfile={() => navigate('/my-page')}
+                onPublicProfile={() => {
+                  if (user?.uid) navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                }}
                 onSettings={() => navigate('/my-page?tab=settings')}
-                onPlan={() => navigate('/my-page?tab=plan')}
-                onBilling={() => navigate('/my-page?tab=billing')}
+                onAdmin={() => navigate('/admin/users')}
+                showAdmin={isAdminUser}
                 onLogout={handleLogout}
                 profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
                 profileEmail={user?.email || ''}
@@ -19213,10 +19254,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onApiSettings={() => navigate('/suno-api-settings')}
                       onLab={() => navigate('/lab')}
                       onProfile={() => navigate('/my-page')}
-                      onSettings={() => navigate('/my-page?tab=settings')}
-                      onPlan={() => navigate('/my-page?tab=plan')}
-                      onBilling={() => navigate('/my-page?tab=billing')}
-                      onLogout={handleLogout}
+                onPublicProfile={() => {
+                  if (user?.uid) navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                }}
+                onSettings={() => navigate('/my-page?tab=settings')}
+                onAdmin={() => navigate('/admin/users')}
+                showAdmin={isAdminUser}
+                onLogout={handleLogout}
                       profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
                       profileEmail={user?.email || ''}
                       profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}

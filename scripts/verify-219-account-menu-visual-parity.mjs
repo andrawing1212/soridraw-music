@@ -11,10 +11,9 @@ assert.match(studioCss, /SORIDRAW_STUDIO_ACCOUNT_MENU_PARITY_219_20260929/);
 
 assert.match(app, /soridraw-profile-menu soridraw-account-menu-surface absolute right-5 top-\[68px\]/);
 assert.match(app, /soridraw-account-menu-kicker">계정 메뉴/);
-assert.match(app, /label: '내 프로필'[\s\S]*icon: UserIcon/);
+assert.match(app, /label: 'MY 페이지'[\s\S]*icon: UserIcon/);
+assert.match(app, /label: '공개 프로필'[\s\S]*icon: Compass/);
 assert.match(app, /label: '설정'[\s\S]*icon: Settings/);
-assert.match(app, /label: '요금제'[\s\S]*icon: Tag/);
-assert.match(app, /label: '결제 관리'[\s\S]*icon: CreditCard/);
 assert.match(app, /soridraw-account-menu-mode/);
 assert.match(app, /soridraw-account-menu-logout/);
 assert.match(app, /soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full/);
@@ -22,7 +21,7 @@ assert.match(app, /soridraw-profile-menu soridraw-account-menu-surface absolute 
 assert.match(rail, /const PROFILE_MENU_WIDTH = 224/);
 assert.match(rail, /soridraw-studio-profile-menu soridraw-account-menu-surface/);
 assert.match(rail, /soridraw-account-menu-kicker">계정 메뉴/);
-for (const label of ['내 프로필','설정','요금제','결제 관리','고객지원 · 준비중','로그아웃']) {
+for (const label of ['MY 페이지','공개 프로필','설정','고객지원 · 준비중','로그아웃']) {
   assert.ok(rail.includes(label), 'rail action lost: ' + label);
 }
 assert.match(rail, /getSoridrawDisplayModeLabel\(displayMode\)/);
@@ -37,5 +36,5 @@ assert.match(css, /data-soridraw-color-mode="light"[\s\S]*background: rgba\(238,
 console.log('219_TOP_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS');
 console.log('219_LEFT_RAIL_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS');
 console.log('219_DARK_LIGHT_ACCOUNT_SURFACE_PARITY=PASS');
-console.log('219_ACCOUNT_ACTIONS_PRESERVED=PASS');
+console.log('219_ACCOUNT_MENU_VISUAL_STRUCTURE_PRESERVED=PASS');
 console.log('219_BACKEND_AND_DATA_PATHS_UNCHANGED=PASS');

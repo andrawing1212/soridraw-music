@@ -121,12 +121,14 @@ assert.match(
   /\/\* 1033 — Delay split Generate-bar compact design to the Builder Compact band\.[\s\S]*?data-soridraw-builder-action-compact="true"[\s\S]*?height: 69px !important;/,
   '1033 must own the delayed compact three-button visual at the Builder Compact boundary',
 );
-assert.match(
-  css,
-  /data-soridraw-theme="studio-black":not\(\[data-soridraw-builder-action-compact="true"\]\)[\s\S]*?soridraw-action-side-label[\s\S]*?display: block !important;[\s\S]*?font-size: 34px !important;/,
+const generationBarBreakpointPatch = css.slice(css.indexOf('/* 1033 — Delay split Generate-bar compact design'));
+assert.ok(
+  generationBarBreakpointPatch.includes('html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])')
+    && generationBarBreakpointPatch.includes('.soridraw-studio-action-bar--tracking .soridraw-action-side-label')
+    && generationBarBreakpointPatch.includes('display: block !important;')
+    && generationBarBreakpointPatch.includes('font-size: 34px !important;'),
   '1033 must keep the full arrow/text Generate bar above the Compact boundary',
 );
-const generationBarBreakpointPatch = css.slice(css.indexOf('/* 1033 — Delay split Generate-bar compact design'));
 assert.doesNotMatch(
   generationBarBreakpointPatch,
   /soridraw-studio-splitter|grid-template-columns|data-pane-mode|soridraw-studio-result-content|soridraw-studio-builder-pane/,

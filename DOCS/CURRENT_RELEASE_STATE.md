@@ -1,3 +1,40 @@
+## 0IH. PREVIEW app205 · 왼쪽 rail 계정 메뉴 최소화 배포 완료 (2026-09-29 KST)
+
+상태: **사용자 요청 반영 / 감사 PASS / PREVIEW app205 배포 완료 / 실화면 확인 대기**
+
+반영:
+- 분할모드 왼쪽 사용자 더보기에서 `관리자메뉴` 제거.
+- `디자인 모드 / 모드 변경` 제거.
+- `고객지원 · 준비중` 제거.
+- `MY 페이지 / 공개 프로필 / 설정 / 로그아웃` 유지.
+- 상단/모바일 계정 메뉴는 기존 구조 유지.
+- app204의 불투명 surface와 rail 오른쪽 popup 위치 유지.
+
+검증:
+- 제품 commit `c30cd99078a2a3a2e6fc085a0bf4977261db3803`.
+- verifier commit `06aab2ceca6edfcf2dc3c60363ee60c8d11774fc`.
+- Audit Run **36460283292 SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS.
+- Like regression PASS, 공유 D1 read-only 검사 PASS.
+- 사용자 데이터 변경 없음.
+
+PREVIEW 배포:
+- app version: **205**.
+- version commit: `ad08f6c25bc1d1a6c74380575fa0f5faf4b74367`.
+- release SHA: `ad5ccb41761a273e57704b94571e8a5281283c5e`.
+- Firebase PREVIEW Hosting Run: **36460751709 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=205`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+운영 지시:
+- 앞으로 사용자의 일반적인 **PREVIEW 수정 요청은 별도 배포 제외 지시가 없으면 수정 → 검증 → PREVIEW 배포까지 진행**.
+- TEST 승격 / PRODUCTION 승격 / 파괴적 데이터 변경은 기존 승인 규칙 유지.
+
+
 ## 0IG. PREVIEW 코드 · 왼쪽 rail 계정 메뉴 최소화 완료 / 배포 전 (2026-09-29 KST)
 
 상태: **사용자 요청 반영 / 감사 PASS / 아직 PREVIEW Hosting 재배포 전**

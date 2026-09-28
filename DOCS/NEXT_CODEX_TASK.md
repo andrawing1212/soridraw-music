@@ -1,3 +1,25 @@
+## 2026-09-29 — app205 왼쪽 rail 계정 메뉴 실사용 확인
+
+현재 PREVIEW:
+- app205.
+- Audit Run `36460283292` SUCCESS.
+- Hosting Run `36460751709` SUCCESS.
+- release SHA `ad5ccb41761a273e57704b94571e8a5281283c5e`.
+- exact build/version 205 PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 왼쪽 rail 사용자 더보기에는 `MY 페이지 / 공개 프로필 / 설정 / 로그아웃`만 표시.
+2. `관리자메뉴 / 디자인 모드 / 고객지원` 미표시.
+3. popup 불투명 및 rail 오른쪽 위치 유지.
+4. 상단/모바일 계정 메뉴는 기존 구조 유지.
+5. split divider/pane/rail collapse 회귀 없음.
+
+운영:
+- 이후 PREVIEW 수정 요청은 별도 제외 지시가 없으면 검증 후 PREVIEW 배포까지 진행.
+- TEST/PRODUCTION은 기존 승인 규칙 유지.
+
+
 ## 2026-09-29 — 왼쪽 rail 계정 메뉴 최소화 배포 대기
 
 현재 코드:

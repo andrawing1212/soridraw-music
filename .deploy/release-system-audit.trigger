@@ -1,9 +1,9 @@
-explore_title_display_218_audit=2026-09-28T23:25:00+09:00
-source_head=30dfe92e74414e5da66fd148b6f1ebebfd168771
-app_version=199
+explore_title_display_218_spacing_audit=2026-09-28T23:35:00+09:00
+source_head=d57d232295ae26cb3806e13db33f667c78ce3cec
+app_version=200
 deploy=false
-scope=explore_card_title_display_only
-bilingual_format=Korean|Foreign
+scope=explore_card_title_separator_spacing_only
+bilingual_format=Korean | Foreign
 single_language=no_wrapper_quotes
 raw_title_data_unchanged=true
 explore_card_only=true

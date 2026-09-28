@@ -1,8 +1,11 @@
-cache_live_217_audit=2026-09-28T20:05:00+09:00
-source_head=73c433f64ce412a1544da16310361f8d3174daf1
+cache_live_217_audit_retry=2026-09-28T20:35:00+09:00
+source_head=8655bdf31999103886621a2ed724b1a41588fc18
 app_version=198
 deploy=false
 scope=cache_live_current_run_reset_and_clarity
+previous_audit=36416013981
+previous_failure=stale_verify_214_exact_app192_only
+verifier_214_fix=audit_only_version_floor
 diagnostic_session_only=true
 update_reset=true
 manual_reset_page_sync=true

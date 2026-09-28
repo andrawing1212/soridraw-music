@@ -667,6 +667,20 @@ export default function LiteStudioSplitWorkspace({
       if (!skipBuilder && root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
         root.dataset.soridrawBuilderMode = modeRef.current.builder;
       }
+      if (!skipBuilder) {
+        // 1033 — Generate-bar visual breakpoint follows the Builder's existing
+        // Compact boundary, not the broader 1080px content-tablet band.
+        // This is a threshold-only root marker: no per-pixel state or geometry.
+        const actionCompact = modeRef.current.builder === 'mobile'
+          || builder.dataset.soridrawPaneCompact === 'true';
+        if (actionCompact) {
+          if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+            root.dataset.soridrawBuilderActionCompact = 'true';
+          }
+        } else if (root.dataset.soridrawBuilderActionCompact) {
+          delete root.dataset.soridrawBuilderActionCompact;
+        }
+      }
       if (!skipResult && root.dataset.soridrawResultMode !== modeRef.current.result) {
         root.dataset.soridrawResultMode = modeRef.current.result;
       }
@@ -1130,6 +1144,15 @@ export default function LiteStudioSplitWorkspace({
         if (builderContentMode && root.dataset.soridrawBuilderContentMode !== builderContentMode) {
           root.dataset.soridrawBuilderContentMode = builderContentMode;
         }
+        const builderActionCompact = modeRef.current.builder === 'mobile'
+          || builder.dataset.soridrawPaneCompact === 'true';
+        if (builderActionCompact) {
+          if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+            root.dataset.soridrawBuilderActionCompact = 'true';
+          }
+        } else if (root.dataset.soridrawBuilderActionCompact) {
+          delete root.dataset.soridrawBuilderActionCompact;
+        }
 
         dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
       }
@@ -1157,6 +1180,15 @@ export default function LiteStudioSplitWorkspace({
           }
           if (root.dataset.soridrawResultMode !== modeRef.current.result) {
             root.dataset.soridrawResultMode = modeRef.current.result;
+          }
+          const builderActionCompact = modeRef.current.builder === 'mobile'
+            || builder.dataset.soridrawPaneCompact === 'true';
+          if (builderActionCompact) {
+            if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+              root.dataset.soridrawBuilderActionCompact = 'true';
+            }
+          } else if (root.dataset.soridrawBuilderActionCompact) {
+            delete root.dataset.soridrawBuilderActionCompact;
           }
         }
       }
@@ -2169,6 +2201,7 @@ export default function LiteStudioSplitWorkspace({
       clearLiveExternalGeometry();
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
+      delete root.dataset.soridrawBuilderActionCompact;
       delete root.dataset.soridrawResultMode;
       delete root.dataset.soridrawBuilderContentMode;
       delete root.dataset.soridrawResultContentMode;

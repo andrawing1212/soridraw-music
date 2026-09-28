@@ -9,7 +9,7 @@ const rules = JSON.parse(fs.readFileSync('database.rules.json', 'utf8'));
 const cache = fs.readFileSync('src/lib/firestoreReadCache.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(version.version, '192');
+assert.ok(Number(version.version) >= 192, `navigation visibility sync requires app192+; got ${version.version}`);
 
 assert.match(service, /SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927/);
 assert.match(service, /publicSync\/navigationVisibility/);

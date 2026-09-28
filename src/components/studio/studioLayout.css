@@ -15682,12 +15682,18 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
-/* 1031 — Split Recent left Builder Sori Studio width.
- * Keep the same confirmed owner and only make a tiny visual refinement:
- * 48px total gutter (24px each side). Builder scroll shell, divider, Create
- * scrollbar correction, and every other workspace stay unchanged. */
+/* 1031 — Split Builder common Sori Studio width.
+ * User reference: use the already-approved 12px result-side divider gap as the
+ * next inset step from app213. App213 had 24px per side; add exactly 12px per
+ * side => 36px per side / 72px total. Apply the SAME rule to every split-bar
+ * workspace (Recent, Music Note, Library). Builder scroll shell, divider,
+ * result panes, Create scrollbar correction and mobile remain unchanged. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="recent"]
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-lite-workspace="recent"],
+    [data-soridraw-lite-workspace="music-note"],
+    [data-soridraw-lite-workspace="library"]
+  )
   body #root .soridraw-app-root
   .soridraw-lite-studio-split-workspace:not(.is-builder-collapsed):not(.is-result-collapsed)
   > .soridraw-studio-builder-pane
@@ -15695,7 +15701,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     .soridraw-studio-builder-pane-masthead-host,
     :not(.soridraw-studio-pane-masthead-host)
   ) {
-    width: min(calc(100% - 48px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    width: min(calc(100% - 72px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
     max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
     margin-left: auto !important;
     margin-right: auto !important;

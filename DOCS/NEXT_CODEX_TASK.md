@@ -1,3 +1,25 @@
+## 2026-09-29 — app215 split 검정 바깥 여백 확인
+
+현재 PREVIEW:
+- app215.
+- 제품 commit `20f44d312ada0dafa0f0ed094e47f6055f868001`.
+- verifier commit `ad7d50fd0240ff164d11d37f4fb978d5d44b2743`.
+- Audit Run `36476539692` SUCCESS.
+- release SHA `f1f26f1e329d4e6879fc625c2abd97e0d8c39d20`.
+- Hosting Run `36476811246` SUCCESS.
+- exact build/version 215 PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 변경:
+- split common black gutter를 **총 24px / 좌우 12px**로 축소.
+- Recent / Music Note / Library 공통.
+- Create scrollbar 정상 상태 보호.
+
+확인:
+1. 검정 바깥 여백이 줄었는지.
+2. 콘텐츠가 넓어졌는지.
+3. Create scrollbar / divider / right result pane이 그대로인지.
+
 ## 2026-09-29 — app214 분할 Builder 공통 폭 실화면 확인
 
 현재 PREVIEW:

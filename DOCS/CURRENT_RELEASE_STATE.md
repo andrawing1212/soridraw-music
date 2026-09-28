@@ -1,6 +1,6 @@
 ## 0IW. app217 실화면 FAIL · 장르 접기 로컬 fast-path 수정 (2026-09-29 KST)
 
-상태: **사용자 영상 기준 app217 FAIL / 최근 생성곡 정상 / Music Note·Library에서 장르 '접기'만 느림 / app218 후보 코드+verifier 반영 / Audit 전**
+상태: **사용자 영상 기준 app217 FAIL / 최근 생성곡 정상 / Music Note·Library에서 장르 '접기'만 느림 / app218 수정 완료 / Audit PASS / PREVIEW 배포 전**
 
 사용자 실화면 판정:
 - PREVIEW app217의 장르 전용 180ms 제거 → 공통 220ms 변경만으로는 문제가 해결되지 않았음.
@@ -24,7 +24,10 @@ app218 후보 수정:
 
 검증 계획:
 - APP218_GENRE_COLLAPSE_LOCAL_FAST_PATH 정적 검증 추가.
-- TypeScript / Build / release audit 후 PASS일 때만 app218 PREVIEW Hosting 배포.
+- Audit Run `36483232365` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS.
+- `APP218_GENRE_COLLAPSE_LOCAL_FAST_PATH=PASS`.
+- app version commit: `949c2c291f6581071737eea2f707fdb066f480ff` / app version `218`.
+- app218 PREVIEW Hosting 배포 전.
 - 실화면 최종 기준: Recent 정상 유지 + Music Note/Library 접기 지연 제거 + 펼치기/스크롤 위치 회귀 없음.
 
 ## 0IV. PREVIEW app217 · 장르 접기 공통 모션 배포 완료 (2026-09-29 KST)

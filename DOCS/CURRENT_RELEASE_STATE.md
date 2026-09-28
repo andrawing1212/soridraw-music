@@ -1,3 +1,90 @@
+## 0IE. PREVIEW app203 · 계정 메뉴 MY 페이지/공개 프로필 구조 통일 완료 (2026-09-29 KST)
+
+상태: **사용자 요청 반영 / 전 모드 계정 메뉴 핵심 레이아웃 통일 / 감사 PASS / PREVIEW app203 배포 완료 / 실화면 확인 대기**
+
+사용자 요청:
+- 계정 메뉴의 `내 프로필`을 `MY 페이지`로 변경.
+- `MY 페이지` 바로 아래에 `공개 프로필` 추가.
+- `공개 프로필` 클릭 시 로그인한 본인의 Explore 공개프로필로 바로 이동.
+- 계정 메뉴에서 `요금제`, `결제 관리` 제거.
+- PC 다크 / 모바일 / 분할 왼쪽 메뉴 모두 같은 핵심 레이아웃 적용.
+- 라이트는 동일 구조를 유지하고 밝은 팔레트만 사용.
+
+수정:
+- 제품 commit: `d651a37ab8385b7227bf6ca03a0d4425c4ade75d`.
+- 공통 핵심 순서:
+  - 권한이 있는 경우 기존 `관리자메뉴` 유지.
+  - `MY 페이지`.
+  - `공개 프로필`.
+  - `설정`.
+  - 디자인 모드 / 모드 변경.
+  - 고객지원 · 준비중.
+  - 로그아웃.
+- `공개 프로필`은 별도 사용자 검색/서버 조회 없이 현재 로그인 UID를 그대로 사용해 `/explore?profile=<uid>`로 이동.
+- Explore의 기존 public-profile route가 UID를 받아 처리하는 경로를 그대로 재사용.
+- 모바일에서 기존 공통 surface/header/row 디자인 class를 사용하도록 정리.
+- 분할 왼쪽 계정 메뉴도 같은 MY 페이지/공개 프로필/설정 순서로 변경.
+- `요금제`, `결제 관리`는 **계정 팝업에서만 제거**. 마이페이지 내부 기능/라우트 자체는 삭제하지 않음.
+- 관리자 접근은 기존 권한 사용자에게 유지하고 상단/분할 계정 메뉴에서도 동일하게 노출.
+- 기존 모바일의 조건부 실험실 접근은 기존 동작 보호를 위해 유지.
+- 라이트 모드 색상 규칙은 app202 공통 밝은 palette 그대로 재사용.
+- 분할바 / pane / drag / rail collapse geometry는 변경하지 않음.
+
+변경 파일:
+- `src/App.tsx`.
+- `src/components/studio/StudioLeftRail.tsx`.
+- `src/components/explore/ExploreShell.tsx`.
+- `scripts/verify-219-account-menu-visual-parity.mjs` 현재 메뉴 기준 보정.
+- `scripts/verify-220-account-menu-content-parity.mjs` 신규.
+- release audit workflow에 220 verifier 연결.
+
+검증:
+- Audit Run **36455797012 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `219_TOP_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS`.
+- `219_LEFT_RAIL_ACCOUNT_MENU_MOBILE_VISUAL_LANGUAGE=PASS`.
+- `219_DARK_LIGHT_ACCOUNT_SURFACE_PARITY=PASS`.
+- `220_MY_PAGE_LABEL=PASS`.
+- `220_PUBLIC_PROFILE_DIRECT_UID_ROUTE=PASS`.
+- `220_PLAN_BILLING_ROWS_REMOVED=PASS`.
+- `220_ACCOUNT_MENU_CORE_LAYOUT_ALL_MODES=PASS`.
+- `220_LIGHT_PALETTE_CONTRACT_REUSED=PASS`.
+- `220_NO_NEW_SERVER_LOOKUP=PASS`.
+- Like isolated regression PASS.
+- shared D1 static/read-only audit PASS.
+
+PREVIEW 배포:
+- app version: **203**.
+- version commit: `ae6ac5704c3e627bbc2b20f187d0f9a83652b74c`.
+- locked release SHA: `10506cef14b9e40c5ec62ebb4d4457c9e7bd1455`.
+- Firebase PREVIEW Hosting Run: **36456114327 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=203`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 주소: `https://preview.soridraw.com/`.
+
+비용 / 데이터 영향:
+- 공개프로필 메뉴 이동을 위한 추가 사용자 lookup 0.
+- Firestore read/write 추가 0.
+- D1 read/write 추가 0.
+- Worker request 추가 0.
+- Worker / Functions / Rules / schema 변경 없음.
+- 사용자 데이터 변경 없음.
+
+사용자 실화면 확인:
+1. PC/모바일/분할 계정 메뉴에서 `MY 페이지 → 공개 프로필 → 설정` 순서인지.
+2. `공개 프로필` 클릭 시 자신의 Explore 공개프로필로 바로 이동하는지.
+3. 계정 메뉴에 `요금제 / 결제 관리`가 더 이상 보이지 않는지.
+4. 라이트에서도 동일 배치이고 색만 밝은지.
+5. 관리자메뉴/모드 변경/로그아웃 등 기존 기능이 정상인지.
+6. 분할바/좌측 rail 동작이 기존 정상 상태인지.
+
+TEST/main 및 PRODUCTION 승격은 사용자 별도 명시 승인 전 금지.
+
+
 ## 0ID. PREVIEW app202 · 프로필 계정 메뉴 모바일 디자인 공통화 완료 (2026-09-29 KST)
 
 상태: **사용자 제공 PC/모바일 화면 기준 / 상단 우측 + 분할 왼쪽 계정 메뉴 디자인 공통화 / 감사 PASS / PREVIEW app202 배포 완료 / 실화면 확인 대기**

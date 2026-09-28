@@ -60,6 +60,28 @@ for (const required of [
   assert.ok(css.includes(required), `missing vertical Classic-parity CSS token: ${required}`);
 }
 
+// 1030: only horizontal gutters change. Split engine geometry and mobile stay untouched.
+assert.match(
+  css,
+  /data-soridraw-lite-workspace="recent"[\s\S]*?\.soridraw-studio-result-content \{[\s\S]*?padding-left: 12px !important;[\s\S]*?padding-right: 12px !important;/,
+  'Recent split result must gain only the requested 12px inner horizontal gutter',
+);
+assert.match(
+  css,
+  /data-soridraw-lite-workspace="create"[\s\S]*?is-create-vertical[\s\S]*?width: calc\(100% - 24px\) !important;/,
+  'Create split must gain the small 12px-per-side inner gutter below 1600px',
+);
+assert.match(
+  css,
+  /@media \(min-width: 1600px\)[\s\S]*?data-soridraw-lite-workspace="create"[\s\S]*?width: min\(calc\(100% - 112px\), var\(--soridraw-studio-full-pane-max-width, 1500px\)\) !important;/,
+  'Create large-screen gutter must widen only slightly from 42px to 56px per side',
+);
+assert.doesNotMatch(
+  css.slice(css.indexOf('/* 1030 — Split Recent/Create horizontal breathing room.')),
+  /soridraw-studio-splitter|grid-template-columns|--soridraw-studio-builder-width|data-pane-mode|@media \(max-width: 1099px\)/,
+  '1030 gutter patch must not touch divider geometry, pane modes or mobile',
+);
+
 // This UI reuse must not add a new backend path.
 const changedSurface = [lite, legacy, css].join('\n');
 for (const forbidden of ['getDoc(', 'getDocs(', 'onSnapshot(', 'setDoc(', 'updateDoc(', 'addDoc(', 'fetch(']) {
@@ -70,3 +92,6 @@ console.log('APP206_SPLIT_CREATE_USES_REAL_RESULT_PANE=PASS');
 console.log('APP206_SPLIT_CREATE_VERTICAL_CLASSIC_FLOW=PASS');
 console.log('APP206_INLINE_KEYWORDS_CLASSIC_POSITION=PASS');
 console.log('APP206_NO_DUPLICATE_RECENT_LIST=PASS');
+console.log('APP206_SPLIT_RECENT_HORIZONTAL_GUTTER=PASS');
+console.log('APP206_SPLIT_CREATE_HORIZONTAL_GUTTER=PASS');
+console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

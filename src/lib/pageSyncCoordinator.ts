@@ -76,6 +76,17 @@ export const readPageSyncDiagnostics = (): PageSyncDiagnosticState => {
   }
 };
 
+export const resetPageSyncDiagnostics = (): void => {
+  const next = { ...emptyDiagnostics(), updatedAt: Date.now() };
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.removeItem(PAGE_SYNC_DIAGNOSTICS_STORAGE_KEY); } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<PageSyncDiagnosticState>(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, { detail: next }));
+  }
+};
+
+
 const publishDiagnostics = (patch: Partial<PageSyncDiagnosticState>) => {
   const next = { ...readPageSyncDiagnostics(), ...patch, updatedAt: Date.now() };
   if (typeof sessionStorage !== 'undefined') {

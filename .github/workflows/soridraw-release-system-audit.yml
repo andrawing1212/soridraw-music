@@ -82,6 +82,7 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

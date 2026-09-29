@@ -17,9 +17,9 @@ assert.match(previewEntry244, /isPublicProfileRead244[\s\S]*?attachProfileSocial
 
 const canonicalWorker245 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const profile245Start = canonicalWorker245.indexOf('async function handleMyProfileUpdate(');
-const profile245End = canonicalWorker245.indexOf('\n}', profile245Start);
+const profile245End = canonicalWorker245.indexOf('\n__name(handleMyProfileUpdate', profile245Start);
 assert.ok(profile245Start >= 0 && profile245End > profile245Start, '245 profile handler missing');
-const profile245 = canonicalWorker245.slice(profile245Start, profile245End + 2);
+const profile245 = canonicalWorker245.slice(profile245Start, profile245End);
 assert.match(profile245, /const coreChanged =/);
 assert.match(profile245, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch, previousHandle\)/);
 assert.doesNotMatch(profile245, /readPublicProfileByUid\(/, '245 profile save must not post-read full profile + track count');
@@ -27,9 +27,9 @@ assert.doesNotMatch(profile245, /refreshOrPrebuildPublicProfileFirstView\(/, '24
 assert.doesNotMatch(profile245, /syncDerivedCache032\(/, '245 profile save must not run derived profile sync');
 assert.doesNotMatch(profile245, /refreshProfileSearchIndex\(env/, '245 profile save must not re-read profile for FTS');
 const counter245Start = canonicalWorker245.indexOf('async function patchExploreProfileR2Counters020(');
-const counter245End = canonicalWorker245.indexOf('\n}', counter245Start);
+const counter245End = canonicalWorker245.indexOf('\n__name(patchExploreProfileR2Counters020', counter245Start);
 assert.ok(counter245Start >= 0 && counter245End > counter245Start, '245 follow R2 counter patch missing');
-const counter245 = canonicalWorker245.slice(counter245Start, counter245End + 2);
+const counter245 = canonicalWorker245.slice(counter245Start, counter245End);
 assert.match(counter245, /patchPublicProfileBundle245\(env, uid, patch\)/);
 assert.doesNotMatch(counter245, /syncDerivedCache032|env\.DB/, 'follow counter cache patch must be R2-only');
 

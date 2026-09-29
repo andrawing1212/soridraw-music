@@ -52,6 +52,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     spotifyUrl: profile.socialLinks?.spotify || '',
     instagramUrl: profile.socialLinks?.instagram || '',
     tiktokUrl: profile.socialLinks?.tiktok || '',
+    youtubeUrl: profile.socialLinks?.youtube || '',
   }));
   const [genreInput, setGenreInput] = useState('');
   const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
@@ -259,6 +260,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
             ['spotifyUrl', 'Spotify', 'https://open.spotify.com/...'],
             ['instagramUrl', 'Instagram', 'https://www.instagram.com/...'],
             ['tiktokUrl', 'TikTok', 'https://www.tiktok.com/@...'],
+            ['youtubeUrl', 'YouTube', 'https://www.youtube.com/@...'],
           ] as const).map(([key, label, placeholder]) => (
             <div className="soridraw-explore-profile-social-input" key={key}>
               <Link2 aria-hidden="true" />

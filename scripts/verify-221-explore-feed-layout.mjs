@@ -274,6 +274,36 @@ assert.match(
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:38px;height:38px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:8px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:8px\}/,
   'mobile rail controls must sit above play/equalizer controls with the highest rail z-index',
 );
+assert.match(
+  page,
+  /EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242\s*=\s*500[\s\S]*?EXPLORE_MOBILE_PINNED_CONTROLS_TAP_SHOW_MS_242\s*=\s*2_000/,
+  'mobile pinned rail control visibility timings must be explicit at 0.5s idle hide and 2s tap reveal',
+);
+assert.match(
+  page,
+  /const isProfilePinnedRail242 = trackClassName\.includes\('soridraw-explore-recommend-track--profile-pinned'\)/,
+  'automatic rail control hiding must be limited to the public-profile pinned rail',
+);
+assert.match(
+  page,
+  /revealPinnedControls242\(\);[\s\S]*?handleRailPointerDown241/,
+  'touching the pinned card area must reveal controls without replacing existing gesture handling',
+);
+assert.match(
+  page,
+  /onScroll=\{\(\) => \{[\s\S]*?setMobilePinnedControlsVisible242\(true\)[\s\S]*?EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
+  'scrolling must reveal pinned controls and hide them 0.5s after motion stops while keeping rail alignment',
+);
+assert.match(
+  page,
+  /soridraw-explore-recommend-stage--profile-pinned[\s\S]*?is-mobile-controls-hidden/,
+  'pinned rail stage must expose a mobile hidden-control state',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-stage--profile-pinned\.is-mobile-controls-hidden \.soridraw-explore-recommend-edge\{opacity:0;visibility:hidden;pointer-events:none\}/,
+  'hidden mobile pinned controls must not cover or intercept the song card',
+);
 
 assert.match(
   page,
@@ -554,3 +584,7 @@ console.log('APP241_EXPLORE_SHORT_DRAG_ADVANCES_ONE_CARD=PASS');
 console.log('APP241_EXPLORE_LONG_SWIPE_NATIVE_MOMENTUM_PRESERVED=PASS');
 console.log('APP241_EXPLORE_PC_RAIL_BUTTONS_OUTSIDE=PASS');
 console.log('APP241_EXPLORE_MOBILE_RAIL_BUTTON_ZINDEX=PASS');
+
+console.log('APP242_EXPLORE_PINNED_CONTROLS_IDLE_HIDE=PASS');
+console.log('APP242_EXPLORE_PINNED_CONTROLS_TAP_REVEAL_TWO_SECONDS=PASS');
+console.log('APP242_EXPLORE_PINNED_CONTROLS_NO_CARD_OBSTRUCTION=PASS');

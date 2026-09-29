@@ -134,13 +134,19 @@
 
 @media (min-width:1800px){
 .soridraw-explore-grid--latest{grid-template-columns:repeat(8,minmax(0,1fr));gap:24px 14px}
+.soridraw-explore-page--profile .soridraw-explore-profile-public-list-234>.soridraw-explore-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:26px 16px}
+.soridraw-explore-recommend-track.soridraw-explore-recommend-track--profile-pinned{grid-auto-columns:calc((100% - 36px)/3);gap:18px}
 }
 @media (min-width:1600px) and (max-width:1799px){
 .soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 72px)/5);gap:18px}
+.soridraw-explore-page--profile .soridraw-explore-profile-public-list-234>.soridraw-explore-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:24px 16px}
+.soridraw-explore-recommend-track.soridraw-explore-recommend-track--profile-pinned{grid-auto-columns:calc((100% - 36px)/3);gap:18px}
 }
 @media (min-width:1100px) and (max-width:1599px){
 .soridraw-explore-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 54px)/4);gap:18px}
+.soridraw-explore-page--profile .soridraw-explore-profile-public-list-234>.soridraw-explore-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 15px}
+.soridraw-explore-recommend-track.soridraw-explore-recommend-track--profile-pinned{grid-auto-columns:calc((100% - 18px)/2);gap:18px}
 }
 @media (min-width:1100px){
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame[data-workspace-view="explore"]{--soridraw-studio-right-rail-width:0px!important;grid-template-columns:var(--soridraw-studio-left-rail-width,214px) minmax(0,1fr) 0!important}
@@ -159,6 +165,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-explore-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 15px}
 .soridraw-explore-recommend-feed{gap:34px}
 .soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 30px)/3);gap:15px}
+.soridraw-explore-page--profile .soridraw-explore-profile-public-list-234>.soridraw-explore-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 15px}
+.soridraw-explore-recommend-track.soridraw-explore-recommend-track--profile-pinned{grid-auto-columns:calc((100% - 15px)/2);gap:15px}
 }
 @media (max-width:720px){
 .soridraw-explore-top-navigation{grid-template-columns:1fr auto;padding:0 12px}.soridraw-explore-brand,.soridraw-explore-top-spacer{display:none}.soridraw-explore-top-navigation nav{grid-column:1/-1}.soridraw-explore-top-navigation .soridraw-top-nav-item{padding:0 10px;gap:6px;font-size:12px}.soridraw-explore-top-navigation .soridraw-top-nav-item svg{width:19px;height:19px}

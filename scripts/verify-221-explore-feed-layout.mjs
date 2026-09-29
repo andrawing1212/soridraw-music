@@ -119,8 +119,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*3_000/,
-  'mobile recommendation rail alignment must wait three seconds after scrolling stops',
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*2_000/,
+  'mobile recommendation rail alignment must wait two seconds after scrolling stops',
 );
 assert.match(
   page,
@@ -170,7 +170,7 @@ console.log('APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS');
 console.log('APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');
 
 
-assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*120_000/);
+assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*180_000/);
 assert.match(page, /EXPLORE_EQ_BUTTON_BAR_COUNT_225\s*=\s*5/);
 assert.match(page, /activeExplorePreviewTrackId224/);
 assert.match(page, /showExploreLinkVisual224/);
@@ -294,3 +294,5 @@ console.log('APP228_EXPLORE_MOBILE_NATIVE_MOMENTUM_BEFORE_ALIGNMENT=PASS');
 console.log('APP229_EXPLORE_MOBILE_VISIBLE_SHARE_SCORING=PASS');
 console.log('APP229_EXPLORE_MOBILE_CONTIGUOUS_THREE_CARD_WINDOW=PASS');
 console.log('APP229_EXPLORE_MOBILE_PARTIAL_SIDE_WEIGHTING=PASS');
+console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS=PASS');
+console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES=PASS');

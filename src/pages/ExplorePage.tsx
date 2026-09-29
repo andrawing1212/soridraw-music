@@ -730,6 +730,7 @@ function ExploreTrackCard({
   onShare,
   onOpenMore,
   variant = 'default',
+  showPublisher = true,
 }: {
   track: ExploreTrack;
   liked: boolean;
@@ -742,6 +743,7 @@ function ExploreTrackCard({
   onShare: (track: ExploreTrack) => void;
   onOpenMore: (track: ExploreTrack) => void;
   variant?: 'default' | 'profilePinnedBanner';
+  showPublisher?: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const openUrl = isOpenableUrl(track.openUrl)
@@ -853,18 +855,20 @@ function ExploreTrackCard({
         <h3 title={cardDisplayTitle.title}>
           {cardDisplayTitle.title}
         </h3>
-        <button
-          type="button"
-          className="soridraw-explore-creator"
-          onClick={() => onOpenProfile(track)}
-          disabled={!track.ownerUid}
-          title={track.ownerUid ? `${track.displayName} 공개 프로필` : track.displayName}
-        >
-          <span className="soridraw-explore-avatar" aria-hidden="true">
-            {track.avatarUrl ? <img src={track.avatarUrl} alt="" referrerPolicy="no-referrer" /> : track.displayName.charAt(0).toUpperCase()}
-          </span>
-          <span>{track.displayName}</span>
-        </button>
+        {showPublisher && (
+          <button
+            type="button"
+            className="soridraw-explore-creator"
+            onClick={() => onOpenProfile(track)}
+            disabled={!track.ownerUid}
+            title={track.ownerUid ? `${track.displayName} 공개 프로필` : track.displayName}
+          >
+            <span className="soridraw-explore-avatar" aria-hidden="true">
+              {track.avatarUrl ? <img src={track.avatarUrl} alt="" referrerPolicy="no-referrer" /> : track.displayName.charAt(0).toUpperCase()}
+            </span>
+            <span>{track.displayName}</span>
+          </button>
+        )}
       </div>
       )}
 
@@ -2238,6 +2242,7 @@ export default function ExplorePage() {
     track: ExploreTrack,
     ownerProfileAuthority: ExplorePublicProfile | null = null,
     variant: 'default' | 'profilePinnedBanner' = 'default',
+    showPublisher = true,
   ) => {
     // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
     // On a public-profile page, the already-loaded profile is the display
@@ -2267,6 +2272,7 @@ export default function ExplorePage() {
         onApplyNext={applyExploreTrackToNextSong}
         onShare={shareExploreTrack}
         variant={variant}
+        showPublisher={showPublisher}
         onOpenMore={(selectedTrack) => {
           setMoreTrack(selectedTrack);
           setMoreSheetMode('actions');
@@ -2282,12 +2288,13 @@ export default function ExplorePage() {
     ownerProfileAuthority: ExplorePublicProfile | null = null,
     density: 'default' | 'latest' = 'default',
     feed = false,
+    showPublisher = true,
   ) => (
     <section
       className={`soridraw-explore-grid${feed ? ' soridraw-explore-grid--feed' : ''}${density === 'latest' ? ' soridraw-explore-grid--latest' : ''}`}
       aria-label={label}
     >
-      {items.map((track) => renderTrackCard(track, ownerProfileAuthority))}
+      {items.map((track) => renderTrackCard(track, ownerProfileAuthority, 'default', showPublisher))}
     </section>
   );
 
@@ -2449,7 +2456,7 @@ export default function ExplorePage() {
                       trackClassName="soridraw-explore-recommend-track--profile-pinned"
                       mobileGroupSize={2}
                     >
-                      {profilePinnedTracks231.map((track) => renderTrackCard(track, profile, 'profilePinnedBanner'))}
+                      {profilePinnedTracks231.map((track) => renderTrackCard(track, profile, 'profilePinnedBanner', false))}
                     </ExploreRecommendationRail>
                   </div>
                 )}
@@ -2465,6 +2472,7 @@ export default function ExplorePage() {
                     profile,
                     'default',
                     true,
+                    false,
                   )}
                 </section>
               </>

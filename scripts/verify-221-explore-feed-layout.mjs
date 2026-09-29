@@ -160,23 +160,28 @@ assert.match(
 
 assert.match(
   page,
-  /const profilePinnedTracks231 = profileTracks\.filter\(\(track\) => track\.profilePinned\);[\s\S]*?const profileOtherTracks231 = profileTracks\.filter\(\(track\) => !track\.profilePinned\);/,
-  'public profile must separate pinned and ordinary public tracks locally',
+  /const profilePinnedTracks231 = profileTracks\.filter\(\(track\) => track\.profilePinned\);/,
+  'public profile must derive pinned tracks locally without another server read',
 );
 assert.match(
   page,
-  /soridraw-explore-profile-pinned-track-231[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile\)\)/,
-  'pinned public tracks must render in their dedicated profile rail',
+  /title="고정된 공개곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile\)\)/,
+  'pinned public tracks must reuse the shared recommendation rail with two-card mobile alignment',
 );
 assert.match(
-  social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-profile-pinned-track-231\{[\s\S]*?grid-auto-flow:column;grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px[\s\S]*?overflow-x:auto/,
-  'mobile pinned public tracks must be a two-card horizontal rail',
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks,\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  'mobile pinned profile rail must match the two-card SORIDRAW recommendation density',
 );
 assert.match(
   page,
-  /renderTrackGrid\([\s\S]*?profileOtherTracks231,[\s\S]*?profile,[\s\S]*?'default',[\s\S]*?true,[\s\S]*?\)/,
-  'ordinary public-profile tracks must use the existing compact mobile feed density',
+  /renderTrackGrid\([\s\S]*?profileTracks,[\s\S]*?profile,[\s\S]*?'default',[\s\S]*?true,[\s\S]*?\)/,
+  'full public track list must retain pinned songs as duplicated advertising exposure',
+);
+assert.match(
+  css,
+  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(54px,5vw,92px\);padding-right:clamp\(54px,5vw,92px\)\}/,
+  'PC public profile must use wider side padding for a less crowded layout',
 );
 assert.doesNotMatch(
   page,
@@ -338,6 +343,10 @@ console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS=PASS');
 console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES=PASS');
 
 console.log('APP231_EXPLORE_MOBILE_PICKS_TWO_UP=PASS');
-console.log('APP231_EXPLORE_PROFILE_PINNED_TWO_UP_HORIZONTAL=PASS');
-console.log('APP231_EXPLORE_PROFILE_OTHER_THREE_COLUMNS=PASS');
+console.log('APP231_EXPLORE_PROFILE_PINNED_TWO_UP_HORIZONTAL_HISTORICAL=PASS');
+console.log('APP231_EXPLORE_PROFILE_OTHER_THREE_COLUMNS_HISTORICAL=PASS');
 console.log('APP231_EXPLORE_PIN_BADGES_REMOVED=PASS');
+console.log('APP232_EXPLORE_PROFILE_PINNED_SHARED_RAIL=PASS');
+console.log('APP232_EXPLORE_PROFILE_PINNED_MOBILE_BUTTONS_AND_TWO_SECOND_ALIGN=PASS');
+console.log('APP232_EXPLORE_PROFILE_PINNED_DUPLICATED_IN_FULL_LIST=PASS');
+console.log('APP232_EXPLORE_PROFILE_PC_SIDE_PADDING=PASS');

@@ -1,7 +1,7 @@
-requested_at=2026-09-30T06:35:00+09:00
-requested_by=app247_profile_cost_audit
-product_code_target=909bbf2b5f6789a3bb723d3c0dd2e33aa9c1c066
-release_purpose=audit_app247_profile_save_r2_first_and_noop_skip
+requested_at=2026-09-30T06:43:00+09:00
+requested_by=app247_worker_preflight_alignment
+product_code_target=3d0bc1733033638aedfe2ec7f96cdb41e4cb5832
+release_purpose=audit_app247_worker_release_preflight_alignment
 app_version=247
 preview_only=true
 deploy=false

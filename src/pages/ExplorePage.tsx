@@ -495,7 +495,7 @@ const buildExploreRecommendationModel221 = (
   };
 };
 
-const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 2_000;
+const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 1_000;
 
 function ExploreRecommendationRail({
   title,

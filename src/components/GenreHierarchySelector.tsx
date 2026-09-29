@@ -69,16 +69,6 @@ function handleExpandableToggle(
 ) {
   event.preventDefault();
 
-  // app218 — Closing a top-row keyword card must stay on the local animation
-  // path. The old scroll-anchor compensation synchronously read layout before
-  // the toggle and again two frames later. That work is unnecessary while
-  // collapsing and becomes visibly expensive beside the large Music Note /
-  // Library result trees. Keep the existing expansion anchor behavior intact.
-  if (isExpanded) {
-    onToggleExpand?.();
-    return;
-  }
-
   const section = event.currentTarget.closest('[data-expand-section]') as HTMLElement | null;
   const beforeTop = section?.getBoundingClientRect().top ?? null;
 

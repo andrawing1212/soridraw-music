@@ -40,12 +40,29 @@
 .soridraw-explore-profile-section-label{display:flex;align-items:center;gap:7px;margin:0 0 16px;color:rgba(235,235,240,.52);font-size:12px;font-weight:800}
 .soridraw-explore-profile-section-label svg{width:14px;height:14px;color:#ffb400;fill:currentColor}
 .soridraw-explore-profile-pinned-rail-232{margin-bottom:34px}
+.soridraw-explore-pinned-banner-235{position:relative;width:100%;aspect-ratio:2.2/1;overflow:hidden;border-radius:18px;background:#171719;isolation:isolate}
+.soridraw-explore-pinned-banner-blur-235{position:absolute;z-index:0;right:-4%;top:-14%;width:68%;height:128%;object-fit:cover;filter:blur(24px) saturate(1.28) brightness(.72);transform:scale(1.14);opacity:.92}
+.soridraw-explore-pinned-banner-image-235{position:absolute;z-index:2;left:0;top:0;width:45.455%;height:100%;overflow:hidden;background:#0d0d0f}
+.soridraw-explore-pinned-banner-image-235>img{display:block;width:100%;height:100%;object-fit:cover}
+.soridraw-explore-pinned-banner-image-235 .soridraw-explore-cover-fallback{width:100%;height:100%}
+.soridraw-explore-pinned-banner-shade-235{position:absolute;z-index:1;inset:0;background:linear-gradient(90deg,rgba(8,8,10,0) 0%,rgba(8,8,10,.08) 39%,rgba(8,8,10,.56) 57%,rgba(8,8,10,.72) 100%)}
+.soridraw-explore-pinned-banner-copy-235{position:absolute;z-index:3;left:49%;right:5.5%;top:50%;display:flex;min-width:0;flex-direction:column;justify-content:center;transform:translateY(-50%);text-shadow:0 2px 12px rgba(0,0,0,.36)}
+.soridraw-explore-pinned-banner-copy-235>span{margin-bottom:6px;color:#ffbf24;font-size:9px;font-weight:900;letter-spacing:.12em}
+.soridraw-explore-pinned-banner-copy-235 h3{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(14px,1.1vw,20px);font-weight:900;letter-spacing:-.025em}
+.soridraw-explore-pinned-keywords-235{display:flex;align-items:center;gap:6px;margin-top:11px;overflow:hidden}
+.soridraw-explore-pinned-keywords-235 em{display:block;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(10,10,13,.34);color:rgba(255,255,255,.82);font-size:9px;font-style:normal;font-weight:800;backdrop-filter:blur(8px)}
 .soridraw-explore-profile-public-list-234{min-width:0}
 .soridraw-explore-profile-public-head-234{margin:0 0 16px}
 .soridraw-explore-profile-public-head-234 span{display:block;margin-bottom:5px;color:#ffb400;font-size:10px;font-weight:900;letter-spacing:.13em}
 .soridraw-explore-profile-public-head-234 h2{margin:0;color:rgba(255,255,255,.96);font-size:21px;font-weight:900;letter-spacing:-.025em}
 .soridraw-explore-profile-public-head-234 p{margin:5px 0 0;color:rgba(235,235,240,.44);font-size:11px;font-weight:650}
 @media (max-width:720px){
+.soridraw-explore-pinned-banner-235{border-radius:14px}
+.soridraw-explore-pinned-banner-copy-235{left:49%;right:4.5%}
+.soridraw-explore-pinned-banner-copy-235>span{display:none}
+.soridraw-explore-pinned-banner-copy-235 h3{font-size:12px}
+.soridraw-explore-pinned-keywords-235{gap:4px;margin-top:7px;flex-wrap:wrap;max-height:42px}
+.soridraw-explore-pinned-keywords-235 em{max-width:78px;padding:4px 6px;font-size:8px}
 .soridraw-explore-profile-public-head-234{margin-bottom:12px}
 .soridraw-explore-profile-public-head-234 h2{font-size:18px}
 .soridraw-explore-profile-public-head-234 p{display:none}

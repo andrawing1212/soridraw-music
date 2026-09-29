@@ -949,7 +949,10 @@ export default function GlobalPlayer() {
     };
   }, [showLyrics, currentTrack?.id, currentTrack?.url, audioRef]);
 
-  if (!currentTrack) return null;
+  // app222 — Explore card previews use the shared audio engine only. Their visual
+  // state lives on the Explore thumbnail, so suppress the floating GlobalPlayer
+  // chrome while that preview is active.
+  if (!currentTrack || currentTrack.parent?.__exploreCardPreview) return null;
 
   const shouldUseCoverImage = Boolean(currentTrack.imageUrl && !imageLoadFailed);
 

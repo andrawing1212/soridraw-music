@@ -78,6 +78,18 @@ jobs:
           node scripts/verify-explore-deploy-preflight.mjs
           echo 'APP245_PROFILE_FOLLOW_COST_BOUNDS=PASS'
 
+      - name: Verify existing profile negative-cache regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-111-explore-profile-negative-cache.mjs
+
+      - name: Verify existing derived-cache regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
         shell: bash

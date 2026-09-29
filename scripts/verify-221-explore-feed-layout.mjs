@@ -296,12 +296,32 @@ console.log('APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS');
 console.log('APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');
 
 
-assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*180_000/);
+assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*210_000/);
 assert.match(page, /EXPLORE_EQ_BUTTON_BAR_COUNT_225\s*=\s*5/);
 assert.match(page, /activeExplorePreviewTrackId224/);
 assert.match(page, /showExploreLinkVisual224/);
 assert.match(page, /setActiveExplorePreviewTrackId224\(track\.id\)/);
 assert.match(page, /window\.setTimeout\([\s\S]*?EXPLORE_PREVIEW_MAX_MS_222/);
+assert.match(
+  page,
+  /EXPLORE_PREVIEW_SESSION_KEY_237[\s\S]*?sessionStorage\.getItem[\s\S]*?sessionStorage\.setItem/,
+  'Explore equalizer visual state must persist locally across route unmount/remount without server IO',
+);
+assert.match(
+  page,
+  /expiresAt = Date\.now\(\) \+ EXPLORE_PREVIEW_MAX_MS_222[\s\S]*?writeExplorePreviewVisualState237\(\{ trackId: track\.id, expiresAt \}\)[\s\S]*?scheduleExplorePreviewVisualExpiry237\(track\.id, expiresAt\)/,
+  'Explore equalizer must persist the original absolute expiration when play is clicked',
+);
+assert.match(
+  page,
+  /const restored = readExplorePreviewVisualState237\(\);[\s\S]*?scheduleExplorePreviewVisualExpiry237\(restored\.trackId, restored\.expiresAt\)/,
+  'returning to Explore must restore the equalizer only for the remaining time',
+);
+assert.match(
+  page,
+  /return \(\) => \{[\s\S]*?clearExplorePreviewTimer224\(\);[\s\S]*?\};[\s\S]*?\}, \[\]\);/,
+  'leaving Explore must stop only the component timer and preserve the session expiration marker',
+);
 assert.match(page, /isPreviewing=\{activeExplorePreviewTrackId224 === track\.id\}/);
 assert.match(page, /onTogglePreview=\{showExploreLinkVisual224\}/);
 assert.match(page, /soridraw-explore-preview-trigger/);
@@ -420,7 +440,7 @@ console.log('APP229_EXPLORE_MOBILE_VISIBLE_SHARE_SCORING=PASS');
 console.log('APP229_EXPLORE_MOBILE_CONTIGUOUS_THREE_CARD_WINDOW=PASS');
 console.log('APP229_EXPLORE_MOBILE_PARTIAL_SIDE_WEIGHTING=PASS');
 console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS=PASS');
-console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES=PASS');
+console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES_HISTORICAL=PASS');
 
 console.log('APP231_EXPLORE_MOBILE_PICKS_TWO_UP=PASS');
 console.log('APP231_EXPLORE_PROFILE_PINNED_TWO_UP_HORIZONTAL_HISTORICAL=PASS');
@@ -446,3 +466,7 @@ console.log('APP236_EXPLORE_PINNED_PLAY_CONTROL_RECENTERED=PASS');
 
 console.log('APP236_EXPLORE_PUBLIC_PROFILE_PUBLISHER_HIDDEN=PASS');
 console.log('APP236_EXPLORE_LIKED_TRACK_PUBLISHER_PRESERVED=PASS');
+
+console.log('APP237_EXPLORE_EQUALIZER_THREE_MINUTES_THIRTY_SECONDS=PASS');
+console.log('APP237_EXPLORE_EQUALIZER_ROUTE_PERSISTENCE=PASS');
+console.log('APP237_EXPLORE_EQUALIZER_ABSOLUTE_EXPIRY_PRESERVED=PASS');

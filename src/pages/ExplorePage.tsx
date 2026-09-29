@@ -424,13 +424,18 @@ const getExplorePinnedKeywords235 = (track: ExploreTrack): string[] => {
   const selected = track.shareBundle?.selectedKeywords && typeof track.shareBundle.selectedKeywords === 'object'
     ? track.shareBundle.selectedKeywords as Record<string, unknown>
     : {};
+  const styleFallbacks = safeText(track.style)
+    .split(/[,/|·;]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
   const candidates = [
     readExploreRecommendationGenre221(track),
     ...readExplorePinnedKeywordList235(selected.moods).slice(0, 1),
     ...readExplorePinnedKeywordList235(selected.themes).slice(0, 1),
     ...readExplorePinnedKeywordList235(selected.styles).slice(0, 1),
     ...readExplorePinnedKeywordList235(selected.sounds).slice(0, 1),
-    safeText(track.style),
+    ...styleFallbacks,
   ].filter(Boolean);
 
   const seen = new Set<string>();

@@ -1,3 +1,19 @@
+## 2026-09-30 — app247 프로필 저장 비용 실측
+
+- app246 Audit Run `36632631152` SUCCESS.
+- app247는 warm 프로필 저장의 canonical D1 사전 SELECT 제거, 동일 R2 bundle 재조회 제거, no-op PATCH 제거, 동일 YouTube sidecar PUT 제거.
+- 사용자 데이터 migration 없음. shared D1 schema/trigger 변경 없음.
+- 배포 전 상태.
+- PREVIEW 배포 후 같은 계정에서 순서대로 측정:
+  1. 아무 값도 바꾸지 않고 저장
+  2. YouTube만 변경
+  3. 소개(bio)만 변경
+  4. 프로필 사진만 변경
+  5. 배경+프로필 사진 둘 다 변경
+- 목표: 1번은 프로필 저장 서버 mutation 0, 2번은 canonical D1 R0/W0, 3번은 warm-path 사전 D1 read 0. 이미지 경로는 전체 프로필 rebuild/검색 재생성 금지 유지.
+- 3~5번 physical rows_written 잔량은 기존 shared D1 trigger fan-out과 분리해서 기록.
+- TEST/main/PRODUCTION 변경 금지.
+
 ## 2026-09-30 — app244 공개프로필 소셜 링크 실사용 확인
 
 - 프로필 편집: Spotify / Instagram / TikTok + **YouTube**.

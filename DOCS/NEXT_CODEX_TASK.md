@@ -1,3 +1,18 @@
+## 2026-09-30 — Explore app243 rail 실사용 확인
+
+- PREVIEW source app version **243**.
+- 모바일 공개프로필 고정곡 자동 정렬: **0.2초**.
+- 다른 모바일 Explore rail 자동 정렬: 기존 **0.5초 유지**.
+- 좌우 버튼 직접 클릭: 현재 화면 카드 수만큼 이동.
+- short touch drag: 기존 **1곡 이동 유지**.
+- strong/long swipe: native momentum 유지.
+- app242 버튼 0.5초 자동 숨김 / 카드 터치 2초 표시 유지.
+- 추가 서버 read/write 0.
+- Audit trigger `a7b4e9387086291118c5baf881d99aee59374428`.
+- Hosting trigger `7bd232347c4a2ad9044c72caf128d13d6157103d`.
+- 현재 연결에서는 Actions push-run 및 실제 PREVIEW URL을 직접 조회할 수 없어 최종 배포 결과는 미확인.
+- 다음: Actions 확인 가능 시 PASS 고정 → PC/모바일 실제 버튼 page-step과 모바일 pinned 0.2초 체감 확인.
+
 ## 2026-09-30 — Explore app242 모바일 고정 곡 버튼 자동 숨김 확인
 
 - PREVIEW app242 배포 완료.

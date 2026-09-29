@@ -179,4 +179,3 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-avatar{background:linear-gradient(145deg,rgba(255,180,0,.18),rgba(20,20,24,.055));color:rgba(20,20,22,.68)}
 :root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-card small{color:rgba(25,25,28,.46)}
 :root[data-soridraw-theme="light"] .soridraw-explore-preview-trigger{background:rgba(20,20,22,.68)!important;color:#fff;border-color:rgba(255,255,255,.18)!important}
-:root[data-soridraw-theme="light"] .soridraw-explore-card.is-previewing .soridraw-explore-card-copy h3{color:#a96f00;text-shadow:none}

@@ -1,3 +1,63 @@
+## 0JJ. PREVIEW app231 · 모바일 추천 2곡 + 공개프로필 고정곡 가로레일/일반곡 3열 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 모바일 실기기 최종 확인 대기**
+
+사용자 지시:
+- 모바일 Explore의 **SORIDRAW 추천만** 기존 3곡 노출 → **2곡 노출**로 변경.
+- 장르별 추천 / 최신 / 인기 / 크리에이터 등 다른 모바일 밀도는 그대로 유지.
+- 공개프로필에서 공개 시 `공개프로필에 고정`으로 지정한 곡은 별도 구역으로 분리.
+- 고정곡은 모바일에서 **한 화면 2곡 + 좌우 가로 스크롤**.
+- 그 아래 일반 공개곡은 모바일에서 **3개씩 한 줄(3열)**로 표시.
+- 곡 카드 왼쪽 상단의 고정 핀 배지는 공통 Feed와 공개프로필 모두 제거.
+- 고정 여부 데이터 자체와 공개 설정 기능은 유지.
+
+app231 수정:
+- 제품 TSX commit: `f0406313ac9a248ba13a00d9177ae0cce586a176`.
+- Explore CSS commit: `c04ccbd9912d92bca1b10b9d357727e4f56d00f0`.
+- Social CSS commit: `b203d1e4032cae0c585b13d325d93105a3cb2757`.
+- verifier commit: `9581dfd265f74aa0d266e9bef6ea57b0db7a8021`.
+- version commit: `220a17ec531ee2d11fe357d0a380beba39fa5ecc`.
+- audit head: `903ad88abc6e227e394bbbc3c4489abb53a43340`.
+- release SHA: `d5f62d9731fcae0b27ec3600af23b0d343e8fb4a`.
+- app version: **231**.
+
+UI/동작:
+- SORIDRAW 추천 rail에 전용 class + 모바일 group size 2 적용.
+- 장르별 추천은 기존 3곡 group size 유지.
+- app229/230의 모바일 native momentum + 가시 비중 정렬 + 2초 지연은 유지되며, SORIDRAW 추천은 2곡 기준 / 장르 추천은 3곡 기준으로 각 rail에 맞게 계산.
+- 공개프로필은 로컬에서 `profilePinned` 기준으로 고정곡/일반곡을 분리하며 추가 서버 조회 없음.
+- 고정곡 rail은 모바일에서 2곡 너비, horizontal overflow + native momentum.
+- 일반 공개곡은 기존 Feed compact density를 재사용해 모바일 3열.
+- 내 프로필의 좋아요 곡 grid는 변경하지 않음.
+- 카드 공통 renderer에서 pin badge DOM을 제거하고 관련 CSS도 삭제. 섹션 제목의 `고정된 공개곡` 표시는 유지.
+
+검증:
+- Release System Audit Run **36588224747 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Explore layout/static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 preflight/read-only 점검 PASS.
+- Firebase PREVIEW Hosting Run **36588523044 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=231`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- Feed/공개프로필/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 및 재배포 없음.
+- 사용자 데이터 변경 없음.
+- `profilePinned` 데이터 의미/저장 방식은 그대로이며 UI 배치만 변경.
+
+다음:
+- 모바일 실기기에서 SORIDRAW 추천 2곡 노출, 장르별 추천 3곡 유지 확인.
+- 공개프로필에서 고정곡 2곡 가로 스크롤 + 일반 공개곡 3열 확인.
+- 공통 Feed/공개프로필 카드에서 왼쪽 상단 pin badge가 모두 사라졌는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JI. PREVIEW app230 · Explore 정렬 2초 + 이퀄라이저 표시 3분 (2026-09-29 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 확인 대기**

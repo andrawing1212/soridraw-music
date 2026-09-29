@@ -777,6 +777,154 @@ async function repairVerifiedSharedLikeSnapshots156(env) {
   return { repaired: true, rows: ids.length, results };
 }
 
+// SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930
+// YouTube is additive public-profile user data stored in the existing shared
+// PROFILE_MEDIA bucket. TEST/PRODUCTION code can ignore the object until promoted.
+// Reads use the Cache API first, so warm public-profile revisits add no D1 work and
+// normally no R2 body read.
+const PROFILE_SOCIAL_EXTRA_PREFIX_244 = 'internal/explore/profile-social-extra-v1';
+const PROFILE_SOCIAL_EXTRA_EDGE_SECONDS_244 = 60 * 60;
+
+const profileSocialExtraR2Key244 = (uid) => (
+  `${PROFILE_SOCIAL_EXTRA_PREFIX_244}/${encodeURIComponent(String(uid || '').trim())}.json`
+);
+
+const profileSocialExtraEdgeKey244 = (uid) => new Request(
+  `https://soridraw.internal/${profileSocialExtraR2Key244(uid)}`,
+  { method: 'GET' },
+);
+
+function normalizeProfileExternalUrl244(value) {
+  const raw = String(value || '').trim().slice(0, 500);
+  if (!raw) return '';
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function profileSocialExtraProfileRow244(payload) {
+  const data = payload?.data;
+  if (data?.profile && typeof data.profile === 'object') return data.profile;
+  if (data?.snapshot?.profile && typeof data.snapshot.profile === 'object') return data.snapshot.profile;
+  if (data?.uid && typeof data === 'object') return data;
+  return null;
+}
+
+async function readProfileSocialExtra244(env, uid) {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid || !env?.PROFILE_MEDIA) return { youtubeUrl: '' };
+  const edgeKey = profileSocialExtraEdgeKey244(normalizedUid);
+
+  try {
+    const hit = await caches.default.match(edgeKey);
+    if (hit) {
+      const cached = await hit.json();
+      return { youtubeUrl: normalizeProfileExternalUrl244(cached?.youtubeUrl) };
+    }
+  } catch {}
+
+  let stored = { youtubeUrl: '' };
+  try {
+    const object = await env.PROFILE_MEDIA.get(profileSocialExtraR2Key244(normalizedUid));
+    if (object) {
+      const parsed = JSON.parse(await object.text());
+      stored = { youtubeUrl: normalizeProfileExternalUrl244(parsed?.youtubeUrl) };
+    }
+  } catch (error) {
+    console.warn('[244] profile social extra read skipped:', String(error?.message || error || 'unknown'));
+  }
+
+  try {
+    await caches.default.put(edgeKey, new Response(JSON.stringify(stored), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': `public, max-age=${PROFILE_SOCIAL_EXTRA_EDGE_SECONDS_244}`,
+      },
+    }));
+  } catch {}
+  return stored;
+}
+
+async function writeProfileSocialExtra244(env, uid, youtubeUrl) {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid || !env?.PROFILE_MEDIA) {
+    throw new Error('shared PROFILE_MEDIA unavailable');
+  }
+  const payload = {
+    schemaVersion: 1,
+    uid: normalizedUid,
+    youtubeUrl: normalizeProfileExternalUrl244(youtubeUrl),
+    updatedAt: Date.now(),
+  };
+  await env.PROFILE_MEDIA.put(
+    profileSocialExtraR2Key244(normalizedUid),
+    JSON.stringify(payload),
+    {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { schemaVersion: '1', userData: 'profile-social-extra' },
+    },
+  );
+  try {
+    await caches.default.put(profileSocialExtraEdgeKey244(normalizedUid), new Response(JSON.stringify(payload), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': `public, max-age=${PROFILE_SOCIAL_EXTRA_EDGE_SECONDS_244}`,
+      },
+    }));
+  } catch {}
+  return payload;
+}
+
+async function attachProfileSocialExtra244(response, env, youtubeOverride) {
+  if (!response?.ok || response.status === 204 || response.status === 304) return response;
+  let payload = null;
+  try { payload = await response.clone().json(); } catch { return response; }
+  const profile = profileSocialExtraProfileRow244(payload);
+  const uid = String(profile?.uid || '').trim();
+  if (!profile || !uid) return response;
+
+  const extra = youtubeOverride === undefined
+    ? await readProfileSocialExtra244(env, uid)
+    : { youtubeUrl: normalizeProfileExternalUrl244(youtubeOverride) };
+  profile.socialLinks = {
+    ...(profile.socialLinks && typeof profile.socialLinks === 'object' ? profile.socialLinks : {}),
+    youtube: extra.youtubeUrl || '',
+  };
+
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Length');
+  headers.set('X-SORIDRAW-Profile-Social-Extra', '244');
+  const expose = new Set(
+    String(headers.get('Access-Control-Expose-Headers') || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+  expose.add('X-SORIDRAW-Profile-Social-Extra');
+  headers.set('Access-Control-Expose-Headers', Array.from(expose).join(', '));
+
+  return new Response(JSON.stringify(payload), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function profileSocialExtraSaveFailure244(response) {
+  const headers = new Headers(response?.headers || {});
+  headers.delete('Content-Length');
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  return new Response(JSON.stringify({
+    ok: false,
+    code: 'PROFILE_SOCIAL_EXTRA_SAVE_FAILED',
+    message: 'YouTube 링크를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
+  }), { status: 503, headers });
+}
+
 // SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924
 // Cross-account freshness must compare timestamps from the same clock domain.
 // The browser previously published its local Date.now(), then compared it with
@@ -857,7 +1005,41 @@ export default {
     if (request.method === 'GET' && url.pathname === PUBLIC_LIKE_CARD_ROUTE_192) {
       return handlePublicLikeCards192(request, env);
     }
-    const response = await baseWorker.fetch(request, env, ctx);
+    const isProfileUpdate244 = request.method === 'PATCH' && url.pathname === '/v1/me/profile';
+    const isPublicProfileRead244 = request.method === 'GET'
+      && /^\/v1\/profiles\/[^/]+(?:\/first-view)?$/.test(url.pathname);
+    const profileUpdateRequest244 = isProfileUpdate244 ? request.clone() : null;
+
+    let response = await baseWorker.fetch(request, env, ctx);
+
+    if (isProfileUpdate244 && response.ok) {
+      let requestBody = null;
+      try { requestBody = await profileUpdateRequest244?.json(); } catch {}
+      let responsePayload = null;
+      try { responsePayload = await response.clone().json(); } catch {}
+      const profile = profileSocialExtraProfileRow244(responsePayload);
+      const uid = String(profile?.uid || '').trim();
+      const hasYoutubeField = Boolean(
+        requestBody
+        && typeof requestBody === 'object'
+        && Object.prototype.hasOwnProperty.call(requestBody, 'youtubeUrl')
+      );
+
+      if (uid && hasYoutubeField) {
+        try {
+          const saved = await writeProfileSocialExtra244(env, uid, requestBody.youtubeUrl);
+          response = await attachProfileSocialExtra244(response, env, saved.youtubeUrl);
+        } catch (error) {
+          console.error('[244] YouTube profile link save failed:', String(error?.message || error || 'unknown'));
+          return profileSocialExtraSaveFailure244(response);
+        }
+      } else {
+        response = await attachProfileSocialExtra244(response, env);
+      }
+    } else if (isPublicProfileRead244) {
+      response = await attachProfileSocialExtra244(response, env);
+    }
+
     const publicLikeAcceptedAt193 = Date.now();
     const scheduledResponse = await ensureQueuedLikeBatchScheduled103(request, env, response);
     return attachPublicLikeAcceptedAt193(request, scheduledResponse, publicLikeAcceptedAt193);

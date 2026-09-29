@@ -68,9 +68,10 @@ jobs:
             'soridraw_shared_rev_public_profiles_au_051'
           ];
           for(const name of required) if(!by.get(name)) throw new Error('missing live trigger '+name);
-          if(!/LEFT JOIN profile_stats/i.test(by.get('explore032_profile_update'))) throw new Error('live profile update baseline unexpectedly changed');
-          if(!/OLD\.row_json IS NOT NEW\.row_json/i.test(by.get('explore032_derived_profile_update'))) throw new Error('live derived profile baseline unexpectedly changed');
-          if(!/avatar_url/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live feed profile baseline unexpectedly changed');
+          if(!/AFTER\s+UPDATE\s+OF/i.test(by.get('explore032_profile_update'))) throw new Error('live 249 profile update baseline missing');
+          if(/LEFT\s+JOIN\s+profile_stats/i.test(by.get('explore032_profile_update'))) throw new Error('live 249 profile update unexpectedly reverted');
+          if(!/AFTER\s+UPDATE\s+OF\s+followers\s*,\s*following/i.test(by.get('explore032_derived_profile_update'))) throw new Error('live 249 follower-only derived trigger missing');
+          if(!/WHEN\s+0/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live 249 inert feed trigger missing');
           if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert protection missing');
           if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update protection missing');
           const shared=by.get('soridraw_shared_rev_public_profiles_au_051')||'';

@@ -636,65 +636,65 @@ function ExploreTrackCard({
 
   return (
     <article className={`soridraw-explore-card${isPreviewing ? ' is-previewing' : ''}`}>
-      <div className={`soridraw-explore-cover-button${openUrl ? '' : ' is-open-disabled'}`}>
-        <span className="soridraw-explore-cover-shell">
-          {track.coverUrl && !imageFailed ? (
-            <img
-              src={track.coverUrl}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <span className="soridraw-explore-cover-fallback" aria-hidden="true">
-              <Music2 />
-            </span>
-          )}
-
-          <button
-            type="button"
-            className="soridraw-explore-cover-primary-hit"
-            onClick={openSuno}
-            disabled={!openUrl}
-            aria-label={openUrl ? `${track.title} Suno에서 열기` : `${track.title} 썸네일`}
-          />
-
-          {isPreviewing && (
-            <span className="soridraw-explore-preview-eq" aria-hidden="true">
-              <span className="soridraw-explore-preview-eq-glow" />
-              <span className="soridraw-explore-preview-eq-bars">
-                {Array.from({ length: EXPLORE_EQ_BAR_COUNT_222 }, (_, index) => (
-                  <i key={index} style={{ '--eq-index': index } as React.CSSProperties} />
-                ))}
+      <div className="soridraw-explore-cover-wrap">
+        <button
+          type="button"
+          className="soridraw-explore-cover-button"
+          onClick={openSuno}
+          disabled={!openUrl}
+          aria-label={openUrl ? `${track.title} Suno에서 열기` : `${track.title} 썸네일`}
+        >
+          <span className="soridraw-explore-cover-shell">
+            {track.coverUrl && !imageFailed ? (
+              <img
+                src={track.coverUrl}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <span className="soridraw-explore-cover-fallback" aria-hidden="true">
+                <Music2 />
               </span>
-            </span>
-          )}
+            )}
 
-          <button
-            type="button"
-            className="soridraw-explore-preview-trigger"
-            onClick={(event) => {
-              event.stopPropagation();
-              onTogglePreview(track);
-            }}
-            aria-label={isPreviewing ? `${cardDisplayTitle.title} 미리듣기 일시정지` : `${cardDisplayTitle.title} 미리듣기 재생`}
-            title={isPreviewing ? '미리듣기 일시정지' : '미리듣기 재생'}
-          >
-            {isPreviewing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          </button>
+            {isPreviewing && (
+              <span className="soridraw-explore-preview-eq" aria-hidden="true">
+                <span className="soridraw-explore-preview-eq-glow" />
+                <span className="soridraw-explore-preview-eq-bars">
+                  {Array.from({ length: EXPLORE_EQ_BAR_COUNT_222 }, (_, index) => (
+                    <i key={index} style={{ '--eq-index': index } as React.CSSProperties} />
+                  ))}
+                </span>
+              </span>
+            )}
 
-          {track.profilePinned && (
-            <span className="soridraw-explore-pin-badge" title="공개 프로필 고정" aria-label="공개 프로필 고정">
-              <Pin aria-hidden="true" />
-            </span>
-          )}
-          {openUrl && (
-            <span className="soridraw-explore-cover-open" aria-hidden="true">
-              <ExternalLink />
-            </span>
-          )}
-        </span>
+            {track.profilePinned && (
+              <span className="soridraw-explore-pin-badge" title="공개 프로필 고정" aria-label="공개 프로필 고정">
+                <Pin aria-hidden="true" />
+              </span>
+            )}
+            {openUrl && (
+              <span className="soridraw-explore-cover-open" aria-hidden="true">
+                <ExternalLink />
+              </span>
+            )}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="soridraw-explore-preview-trigger"
+          onClick={(event) => {
+            event.stopPropagation();
+            onTogglePreview(track);
+          }}
+          aria-label={isPreviewing ? `${cardDisplayTitle.title} 미리듣기 일시정지` : `${cardDisplayTitle.title} 미리듣기 재생`}
+          title={isPreviewing ? '미리듣기 일시정지' : '미리듣기 재생'}
+        >
+          {isPreviewing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+        </button>
       </div>
 
       <div className="soridraw-explore-card-copy">

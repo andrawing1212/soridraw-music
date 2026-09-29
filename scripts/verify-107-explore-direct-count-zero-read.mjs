@@ -23,7 +23,13 @@ const atomicPairCard129 =
   page.includes('const displayTrack129 = pair129.likeCount === track.likeCount') &&
   page.includes('track={displayTrack129}') &&
   page.includes('liked={pair129.liked}');
-if (!directSharedCard107 && !atomicPairCard129) {
+const atomicPairCard217 =
+  page.includes('const authorityTrack217 = applyExploreCardAvatarAuthority218(') &&
+  page.includes('const pair129 = normalizeExploreLikeDisplayPair129(liked129, authorityTrack217.likeCount);') &&
+  page.includes('const displayTrack129 = pair129.likeCount === authorityTrack217.likeCount') &&
+  page.includes('track={displayTrack129}') &&
+  page.includes('liked={pair129.liked}');
+if (!directSharedCard107 && !atomicPairCard129 && !atomicPairCard217) {
   fail('cards must render the shared payload or the single 0/1 atomic stale-display repair only');
 }
 if (/const displayTrack\s*=/.test(page)) fail('legacy account-scoped display track remains');

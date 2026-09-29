@@ -1,3 +1,22 @@
+## 2026-09-30 — app247 프로필 비용 2차 최적화
+
+사용자 실측으로 남은 비용 원인 확정:
+- no-op: D1 R0/W0 PASS.
+- YouTube only: canonical D1 R0/W0 PASS, R2 Class B 1 증가.
+- bio only: D1 query R0/W3, physical R12/W11.
+- avatar only: D1 query R0/W1, physical R12/W11, R2 A2/B1.
+- avatar+background: D1 query R0/W2, physical R21/W19, R2 A4/B2.
+
+다음 작업 순서:
+1. bio 저장의 `profile_search_fts` DELETE+INSERT 2회가 현재 요구 검색 범위에 정말 필요한지 확인하고, 불필요하면 warm bio-only W3 → W1 목표로 제거/축소.
+2. avatar+background 동시 저장을 한 요청/한 canonical profile UPDATE로 묶어 D1 trigger fan-out 2회 → 1회 목표.
+3. 위 코드 최적화 후 PREVIEW 재실측.
+4. 그래도 단일 profile UPDATE physical W가 크면 `cloudflare/explore-worker/candidates/076-derived-trigger-compaction-live033.sql`을 별도 shared-D1 schema-maintenance 후보로 진행.
+   - live 적용 전 exact trigger DDL/hash read-only 확인.
+   - rollback SQL 고정.
+   - TEST/PRODUCTION old reader compatibility 검증.
+   - DROP/CREATE TRIGGER 작업이므로 사용자 명시 승인 전 실행 금지.
+
 ## 2026-09-30 — app247 프로필 저장 비용 실측
 
 - **PREVIEW app247 배포 완료.**

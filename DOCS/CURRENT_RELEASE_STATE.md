@@ -1,6 +1,6 @@
 ## 0IX. app218 실화면 FAIL · 실제 분할 엔진 위치 확인 / Music Note·Library 장르 접기 병목 수정 (2026-09-29 KST)
 
-상태: **사용자 2개 영상 재확인 / app218 FAIL / 실제 Split Workspace 병목 확인 / app219 수정 완료 / Audit PASS / PREVIEW 배포 전**
+상태: **사용자 2개 영상 재확인 / app218 FAIL / 실제 Split Workspace 병목 확인 / app219 수정 완료 / Audit PASS / PREVIEW app219 배포 완료 / 사용자 실화면 확인 대기**
 
 영상 판정:
 - 첫 영상: Music Note / Library split 상태에서 장르 접기가 눈에 띄게 끊김.
@@ -32,7 +32,12 @@ app219 후보 수정:
 - Audit Run `36542639632` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS / Like regression PASS.
 - `APP219_SPLIT_MUSICNOTE_LIBRARY_GENRE_OBSERVER_OFF=PASS` / `APP219_RECENT_TOP_CARD_SYNC_PRESERVED=PASS`.
 - app version commit: `48eeabfceb3c27bf8465732931a249b455d1641a` / app version `219`.
-- PREVIEW app219 Hosting 배포 전.
+- PREVIEW release SHA: `ae4b7b4352ca6c080f7bde2bea3b52ca23d25016`.
+- Firebase PREVIEW Hosting Run: `36542907430` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=219` / `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED` / `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음. 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
 - 실화면 기준: Recent는 현재 속도 유지, Music Note/Library 장르 접기만 Recent와 같은 수준으로 부드러워져야 함.
 
 ## 0IW. app217 실화면 FAIL · 장르 접기 로컬 fast-path 수정 (2026-09-29 KST)

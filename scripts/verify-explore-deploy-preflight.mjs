@@ -3,6 +3,18 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { deployWithDerivedPreflight, requiredTables, requiredTriggers, requiredLike035Objects } from '../cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs';
 
+const previewEntry244 = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
+const social244Start = previewEntry244.indexOf('// SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930');
+const social244End = previewEntry244.indexOf('// SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924');
+assert.ok(social244Start >= 0 && social244End > social244Start, '244 profile social-extra block missing');
+const social244 = previewEntry244.slice(social244Start, social244End);
+assert.match(social244, /PROFILE_SOCIAL_EXTRA_PREFIX_244\s*=\s*'internal\/explore\/profile-social-extra-v1'/);
+assert.match(social244, /env\.PROFILE_MEDIA\.put/);
+assert.match(social244, /caches\.default\.match/);
+assert.doesNotMatch(social244, /env\.DB|\.prepare\(/, '244 must not add canonical D1 work');
+assert.match(previewEntry244, /Object\.prototype\.hasOwnProperty\.call\(requestBody, 'youtubeUrl'\)/);
+assert.match(previewEntry244, /isPublicProfileRead244[\s\S]*?attachProfileSocialExtra244/);
+
 if (process.argv.includes('--connections')) {
   const prepared=readFileSync('cloudflare/explore-worker/scripts/deploy-prepared.mjs','utf8');
   const productionGuardIndex=prepared.indexOf('if (isCloudflareNativeBuild && !allowProductionDeploy)');
@@ -64,5 +76,6 @@ if (process.argv.includes('--connections')) {
   exercise({processorId:0});console.log('PASS 6 missing 035 processor seed blocks deploy');
   for(let failAt=1;failAt<=4;failAt+=1)exercise({failAt});
   console.log('PASS 7 any D1 preflight SELECT failure blocks deploy');
+  console.log('PASS 8 profile social-extra 244 uses shared R2/cache only and never canonical D1');
   console.log('No real D1 query, SQL/seed write, Wrangler process or deployment executed');
 }

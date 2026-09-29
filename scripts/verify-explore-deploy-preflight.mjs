@@ -14,6 +14,8 @@ assert.match(social244, /caches\.default\.match/);
 assert.doesNotMatch(social244, /env\.DB|\.prepare\(/, '244 must not add canonical D1 work');
 assert.match(previewEntry244, /Object\.prototype\.hasOwnProperty\.call\(requestBody, 'youtubeUrl'\)/);
 assert.match(previewEntry244, /isPublicProfileRead244[\s\S]*?attachProfileSocialExtra244/);
+assert.match(previewEntry244, /SORIDRAW_PROFILE_SOCIAL_EXTRA_NOOP_247_20260930/);
+assert.match(previewEntry244, /currentExtra247\.youtubeUrl === nextYoutubeUrl247[\s\S]*?writeProfileSocialExtra244/);
 
 const canonicalWorker245 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const profile245Start = canonicalWorker245.indexOf('async function handleMyProfileUpdate(');
@@ -21,7 +23,7 @@ const profile245End = canonicalWorker245.indexOf('\n__name(handleMyProfileUpdate
 assert.ok(profile245Start >= 0 && profile245End > profile245Start, '245 profile handler missing');
 const profile245 = canonicalWorker245.slice(profile245Start, profile245End);
 assert.match(profile245, /const coreChanged =/);
-assert.match(profile245, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch, previousHandle\)/);
+assert.match(profile245, /patchPublicProfileBundle245\([\s\S]*?env,[\s\S]*?authContext\.uid,[\s\S]*?profilePatch,[\s\S]*?previousHandle/);
 assert.doesNotMatch(profile245, /readPublicProfileByUid\(/, '245 profile save must not post-read full profile + track count');
 assert.doesNotMatch(profile245, /refreshOrPrebuildPublicProfileFirstView\(/, '245 profile save must not rebuild first-view');
 assert.doesNotMatch(profile245, /syncDerivedCache032\(/, '245 profile save must not run derived profile sync');
@@ -60,6 +62,27 @@ assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930[\s
 const profileEdit246 = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
 assert.doesNotMatch(profileEdit246, /getExplorePublicProfile\(user\.uid\)/, '246 profile save must not re-read the just-saved public profile');
 assert.match(profileEdit246, /const saved = await updateExplorePublicProfile[\s\S]*?const refreshed: ExplorePublicProfile = \{[\s\S]*?backgroundUrl[\s\S]*?avatarUrl/);
+
+const profile247 = canonicalWorker245.slice(profile245Start, profile245End);
+assert.match(profile247, /SORIDRAW_PROFILE_SAVE_R2_FIRST_247_20260930/);
+assert.match(profile247, /readExploreSharedProfileByUid247\(env, authContext\.uid\)/);
+assert.ok(
+  profile247.indexOf('readExploreSharedProfileByUid247(env, authContext.uid)') < profile247.indexOf('readExistingD1247()'),
+  '247 warm profile save must resolve shared R2 before canonical D1 fallback',
+);
+assert.match(profile247, /if \(coreChanged\) \{[\s\S]*?UPDATE public_profiles/);
+assert.match(profile247, /existingBundle,[\s\S]*?\);/);
+assert.doesNotMatch(profile247, /readExisting245/);
+
+const patch247Start = canonicalWorker245.indexOf('async function patchPublicProfileBundle245(');
+const patch247End = canonicalWorker245.indexOf('\n__name(patchPublicProfileBundle245', patch247Start);
+const patch247 = canonicalWorker245.slice(patch247Start, patch247End);
+assert.match(patch247, /baselineBundle = null/);
+assert.match(patch247, /readExploreSharedProfileByUid247\(env, normalizedUid\)/);
+assert.doesNotMatch(patch247, /readExploreSharedProfile060\(env, normalizedUid\)/);
+
+assert.match(profileEdit246, /profileFieldsChanged247/);
+assert.match(profileEdit246, /profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile/);
 
 
 if (process.argv.includes('--connections')) {

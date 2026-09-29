@@ -461,6 +461,8 @@ const buildExploreRecommendationModel221 = (
   };
 };
 
+const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 3_000;
+
 function ExploreRecommendationRail({
   title,
   subtitle,
@@ -479,8 +481,70 @@ function ExploreRecommendationRail({
   children: React.ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const mobileAlignTimerRef228 = useRef<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isSongRail228 = !trackClassName.includes('soridraw-explore-recommend-track--creators');
+
+  const clearMobileAlignTimer228 = () => {
+    if (mobileAlignTimerRef228.current == null) return;
+    window.clearTimeout(mobileAlignTimerRef228.current);
+    mobileAlignTimerRef228.current = null;
+  };
+
+  const shouldAutoAlignMobileRail228 = () => (
+    isSongRail228
+    && window.innerWidth <= 720
+    && (
+      window.matchMedia('(hover: none)').matches
+      || window.matchMedia('(pointer: coarse)').matches
+    )
+  );
+
+  const alignMobileSongRail228 = () => {
+    mobileAlignTimerRef228.current = null;
+    const scroller = scrollerRef.current;
+    if (!scroller || !shouldAutoAlignMobileRail228()) return;
+
+    const track = scroller.firstElementChild as HTMLElement | null;
+    if (!track) return;
+    const cards = Array.from(track.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+    if (cards.length <= 3) return;
+
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    if (maxScrollLeft <= 1) return;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const candidates = cards
+      .filter((_, index) => index % 3 === 0)
+      .map((card) => Math.min(
+        maxScrollLeft,
+        Math.max(0, card.getBoundingClientRect().left - scrollerRect.left + scroller.scrollLeft),
+      ));
+    candidates.push(maxScrollLeft);
+
+    const current = scroller.scrollLeft;
+    const target = candidates.reduce(
+      (best, candidate) => (
+        Math.abs(candidate - current) < Math.abs(best - current) ? candidate : best
+      ),
+      candidates[0] ?? 0,
+    );
+
+    if (Math.abs(target - current) < 1) return;
+    scroller.scrollTo({ left: target, behavior: 'smooth' });
+  };
+
+  const scheduleMobileSongRailAlign228 = () => {
+    clearMobileAlignTimer228();
+    if (!shouldAutoAlignMobileRail228()) return;
+    mobileAlignTimerRef228.current = window.setTimeout(
+      alignMobileSongRail228,
+      EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228,
+    );
+  };
 
   const syncScrollButtons = () => {
     const scroller = scrollerRef.current;
@@ -497,6 +561,7 @@ function ExploreRecommendationRail({
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', handleResize);
+      clearMobileAlignTimer228();
     };
   }, [itemCount]);
 
@@ -532,7 +597,12 @@ function ExploreRecommendationRail({
         <div
           ref={scrollerRef}
           className="soridraw-explore-recommend-scroll"
-          onScroll={syncScrollButtons}
+          onPointerDown={clearMobileAlignTimer228}
+          onPointerUp={scheduleMobileSongRailAlign228}
+          onScroll={() => {
+            syncScrollButtons();
+            scheduleMobileSongRailAlign228();
+          }}
         >
           <div className={`soridraw-explore-recommend-track${trackClassName ? ` ${trackClassName}` : ''}`}>
             {children}

@@ -108,6 +108,37 @@ assert.match(
 );
 
 assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-grid--feed \.soridraw-explore-card-copy h3,[\s\S]*?font-size:13\.5px/,
+  'three-card mobile song surfaces must use the smaller title font',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-grid--feed \.soridraw-explore-creator,[\s\S]*?font-size:11\.5px/,
+  'three-card mobile song surfaces must use the smaller creator font',
+);
+assert.match(
+  page,
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*3_000/,
+  'mobile recommendation rail alignment must wait three seconds after scrolling stops',
+);
+assert.match(
+  page,
+  /filter\(\(_,[\s\S]*?index\) => index % 3 === 0\)/,
+  'mobile song rail alignment must use three-song group boundaries',
+);
+assert.match(
+  page,
+  /onPointerDown=\{clearMobileAlignTimer228\}[\s\S]*?onPointerUp=\{scheduleMobileSongRailAlign228\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
+  'touch interaction and native momentum scrolls must debounce the delayed alignment',
+);
+assert.match(
+  page,
+  /scroller\.scrollTo\(\{ left: target, behavior: 'smooth' \}\)/,
+  'delayed mobile alignment must settle smoothly onto the nearest three-song group',
+);
+
+assert.match(
   social,
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-like-button\{height:32px;gap:5px;font-size:12px\}/,
   'PC like action must be slightly larger',
@@ -247,3 +278,6 @@ console.log('APP227_EXPLORE_MOBILE_RECOMMENDED_THREE_SONGS=PASS');
 console.log('APP227_EXPLORE_MOBILE_LATEST_THREE_COLUMNS=PASS');
 console.log('APP227_EXPLORE_MOBILE_POPULAR_THREE_COLUMNS=PASS');
 console.log('APP227_EXPLORE_PROFILE_GRID_DENSITY_PROTECTED=PASS');
+console.log('APP228_EXPLORE_MOBILE_TITLE_CREATOR_FONT_REDUCED=PASS');
+console.log('APP228_EXPLORE_MOBILE_THREE_SECOND_GROUP_ALIGNMENT=PASS');
+console.log('APP228_EXPLORE_MOBILE_NATIVE_MOMENTUM_BEFORE_ALIGNMENT=PASS');

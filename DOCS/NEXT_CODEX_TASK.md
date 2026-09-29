@@ -1,3 +1,13 @@
+## 2026-09-29 — Explore app223 재생 실화면 확인
+
+- PREVIEW app223 배포 완료.
+- release SHA `e42856599a4424fc8d948685ebdb7e7524b5a11b`.
+- Audit `36555715893` SUCCESS / Hosting `36556008149` SUCCESS.
+- 실측 원인 수정: `suno.com/s/...` 공유 페이지 URL을 audio src로 사용하지 않음.
+- cover clip UUID → 현재 progressive M4A media URL로 재생.
+- 실제 재생 지속 / 다른 곡 전환 / 일시정지 / 120초 자동정지 확인.
+- TEST / PRODUCTION 비변경.
+
 ## 2026-09-29 — Explore app223 실제 음원 URL 연결 검증
 
 - app222 실화면 FAIL: Suno 공유 페이지 URL을 `<audio>`에 넣어 재생 실패.

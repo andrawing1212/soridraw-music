@@ -27,8 +27,9 @@ assert.match(page, /navigate\('\/studio\?applyPending=1'\)/, 'next-song apply mu
 assert.match(page, /await saveExploreTrackToSharedNote\(user, track, folder\)/, 'shared-note action must use the Music Note shared-note path');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/, 'Explore action sheet must not use Library playlist storage');
 assert.match(page, /await toggleLike\(moreTrack\)/, 'sheet like action must reuse existing like behavior');
-assert.match(page, /className="soridraw-explore-cover-button"/, 'existing cover open path must remain available after replacing the card-side icon');
-assert.match(page, /onClick=\{openSuno\}/, 'existing cover click must still open the public audio target');
+assert.match(page, /className="soridraw-explore-cover-button"/, 'cover artwork surface must remain available after the play-link refinement');
+assert.doesNotMatch(page, /className="soridraw-explore-cover-button"[\s\S]{0,220}?onClick=/, 'cover artwork must remain non-interactive in app225');
+assert.match(page, /className="soridraw-explore-preview-trigger"[\s\S]*?openSuno\(\)/, 'center play control must own the public Suno-link action');
 assert.match(page, /navigator\.share/, 'share action must reuse the browser share path');
 
 assert.match(page, /markExploreTrackDisliked\(user\.uid, track\.id\)/, 'dislike must persist as a user-scoped local preference');

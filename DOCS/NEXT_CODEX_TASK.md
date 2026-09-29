@@ -1,3 +1,19 @@
+## 2026-09-30 — Explore app241 rail 인터랙션 실사용 확인
+
+- PREVIEW app241 배포 완료.
+- release SHA `96102aa3ae986116e0e6cba6bc27a10442417ea6`.
+- Audit Run `36615605196` SUCCESS / Hosting Run `36615857831` SUCCESS.
+- PC 좌우 버튼: 이미지 바깥, 46px, 더 밝은 색.
+- 모바일 좌우 버튼: z-index 40, 재생/이퀄라이저보다 위.
+- 모바일 자동 정렬: **0.5초**.
+- 짧고 가벼운 drag: 정확히 이전/다음 한 곡.
+- 길거나 강한 swipe: 기존 native momentum scroll 유지.
+- 좌우 버튼 클릭: 실제 카드 위치 기준으로 정확히 인접 곡 이동.
+- app240 PC 공개프로필 여백, app239 grid/list, app237 equalizer persistence 유지.
+- 추가 서버 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: PC/모바일 실제 rail에서 버튼 위치, exact next/prev, short-drag vs long-swipe 분기 확인.
+
 ## 2026-09-30 — Explore app240 1초 정렬 + PC 공개프로필 여백 확인
 
 - PREVIEW app240 배포 완료.

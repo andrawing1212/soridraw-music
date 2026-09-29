@@ -5,19 +5,25 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 
-assert.match(page, /buildExploreRecommendationSections220/);
-assert.match(page, /title: 'SORIDRAW 추천'/);
-assert.match(page, /tracks: source\.slice\(0, 20\)/);
-assert.match(page, /bucket\.tracks\.slice\(0, 20\)/);
+assert.match(page, /buildExploreRecommendationModel221/);
+assert.match(page, /picks: source\.slice\(0, 20\)/);
+assert.match(page, /tracks: bucket\.tracks\.slice\(0, 20\)/);
+assert.match(page, /creators: \[\.\.\.creatorBuckets\.values\(\)\]\.slice\(0, 20\)/);
+assert.match(page, /title="SORIDRAW 추천"/);
+assert.match(page, /title="장르별 추천"/);
+assert.match(page, /recommendationModel221\.genres\.map/);
+assert.match(page, /setRecommendationGenreId221\(genre\.id\)/);
+assert.match(page, /title="좋아할 만한 크리에이터"/);
+assert.match(page, /ExploreCreatorCard221/);
 assert.match(page, /sort === 'recommended' && !submittedQuery/);
 assert.match(page, /ExploreRecommendationRail/);
 assert.match(page, /ChevronLeft/);
 assert.match(page, /ChevronRight/);
 assert.match(page, /scrollBy\(\{[\s\S]*?behavior: 'smooth'/);
 assert.doesNotMatch(
-  page.slice(page.indexOf('const buildExploreRecommendationSections220'), page.indexOf('function ExploreTrackCard')),
+  page.slice(page.indexOf('const buildExploreRecommendationModel221'), page.indexOf('function ExploreTrackCard')),
   /fetch\(|getDocs\(|onSnapshot\(|setDoc\(|updateDoc\(/,
-  'recommendation topic builder must remain local-only',
+  'recommendation builder must remain local-only',
 );
 
 assert.match(
@@ -29,6 +35,31 @@ assert.match(
   css,
   /\.soridraw-explore-recommend-track\{[\s\S]*?grid-auto-columns:calc\(\(100% - 84px\)\/7\)/,
   'recommendation rail must show 7 cards on the largest PC band',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-stage\{position:relative/,
+  'recommendation rail must provide an overlay stage for edge arrows',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-edge--left\{left:8px\}/,
+  'left arrow must overlay the left edge of the card rail',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-edge--right\{right:8px\}/,
+  'right arrow must overlay the right edge of the card rail',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-keywords\{[\s\S]*?overflow-x:auto/,
+  'genre folder buttons must stay inside one horizontally safe category toolbar',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-creator-avatar\{[\s\S]*?border-radius:50%/,
+  'creator recommendations must use circular profile artwork',
 );
 assert.match(
   css,
@@ -62,9 +93,12 @@ assert.match(
   'PC apply/share/more actions must be slightly larger',
 );
 
-console.log('APP220_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS');
-console.log('APP220_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS');
-console.log('APP220_EXPLORE_RECOMMENDED_TOPIC_CAP_20=PASS');
-console.log('APP220_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS');
-console.log('APP220_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS');
-console.log('APP220_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');
+console.log('APP221_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS');
+console.log('APP221_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS');
+console.log('APP221_EXPLORE_RAIL_EDGE_ARROWS=PASS');
+console.log('APP221_EXPLORE_GENRES_ONE_CATEGORY_SWITCHER=PASS');
+console.log('APP221_EXPLORE_GENRE_CAP_20=PASS');
+console.log('APP221_EXPLORE_CREATOR_RECOMMENDATIONS_CAP_20=PASS');
+console.log('APP221_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS');
+console.log('APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS');
+console.log('APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');

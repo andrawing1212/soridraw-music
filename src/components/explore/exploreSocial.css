@@ -87,6 +87,18 @@
 .soridraw-explore-more-button{background:rgba(255,255,255,.07)!important;color:rgba(245,245,247,.68)}
 .soridraw-explore-more-button:hover{background:rgba(255,255,255,.13)!important;color:#fff}
 
+/* app220 — Slightly larger PC card actions for the denser 8/7-column layouts.
+ * Mobile keeps the existing compact controls. */
+@media (min-width:1100px){
+.soridraw-explore-like-button{height:32px;gap:5px;font-size:12px}
+.soridraw-explore-card-actions .soridraw-explore-like-button svg:not(.soridraw-explore-spinner){width:17px;height:17px}
+.soridraw-explore-like-button .soridraw-explore-spinner{width:16px;height:16px}
+.soridraw-explore-card-quick-actions{gap:5px}
+.soridraw-explore-quick-action,.soridraw-explore-more-button{width:32px;height:32px}
+.soridraw-explore-card-actions .soridraw-explore-quick-action svg,
+.soridraw-explore-card-actions .soridraw-explore-more-button svg{width:17px;height:17px}
+}
+
 .soridraw-explore-more-backdrop{position:fixed;inset:0;z-index:180;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)}
 .soridraw-explore-more-sheet{width:min(520px,100%);max-height:min(78vh,720px);overflow:auto;padding:10px 18px calc(20px + env(safe-area-inset-bottom,0px));border-radius:24px 24px 0 0;background:#1a1a1d;box-shadow:0 -18px 52px rgba(0,0,0,.38);color:#f5f5f6}
 .soridraw-explore-more-handle{width:42px;height:4px;margin:0 auto 14px;border-radius:999px;background:rgba(255,255,255,.18)}

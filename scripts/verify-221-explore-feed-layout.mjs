@@ -124,8 +124,18 @@ assert.match(
 );
 assert.match(
   page,
-  /filter\(\(_,[\s\S]*?index\) => index % 3 === 0\)/,
-  'mobile song rail alignment must use three-song group boundaries',
+  /SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_229_20260929/,
+  'mobile song rail alignment must use visible-share scoring',
+);
+assert.match(
+  page,
+  /const visibleRatios = cards\.map\([\s\S]*?visibleWidth \/ Math\.max\(1, rect\.width\)/,
+  'mobile song rail alignment must calculate each visible card share',
+);
+assert.match(
+  page,
+  /for \(let startIndex = 0; startIndex <= cards\.length - 3; startIndex \+= 1\)[\s\S]*?visibleRatios\[startIndex\][\s\S]*?visibleRatios\[startIndex \+ 1\][\s\S]*?visibleRatios\[startIndex \+ 2\]/,
+  'mobile song rail alignment must score contiguous three-card windows',
 );
 assert.match(
   page,
@@ -281,3 +291,6 @@ console.log('APP227_EXPLORE_PROFILE_GRID_DENSITY_PROTECTED=PASS');
 console.log('APP228_EXPLORE_MOBILE_TITLE_CREATOR_FONT_REDUCED=PASS');
 console.log('APP228_EXPLORE_MOBILE_THREE_SECOND_GROUP_ALIGNMENT=PASS');
 console.log('APP228_EXPLORE_MOBILE_NATIVE_MOMENTUM_BEFORE_ALIGNMENT=PASS');
+console.log('APP229_EXPLORE_MOBILE_VISIBLE_SHARE_SCORING=PASS');
+console.log('APP229_EXPLORE_MOBILE_CONTIGUOUS_THREE_CARD_WINDOW=PASS');
+console.log('APP229_EXPLORE_MOBILE_PARTIAL_SIDE_WEIGHTING=PASS');

@@ -129,8 +129,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*1_000/,
-  'mobile recommendation rail alignment must wait one second after scrolling stops',
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*500/,
+  'mobile recommendation rail alignment must wait half a second after scrolling stops',
 );
 assert.match(
   page,
@@ -149,14 +149,30 @@ assert.match(
 );
 assert.match(
   page,
-  /onPointerDown=\{clearMobileAlignTimer228\}[\s\S]*?onPointerUp=\{scheduleMobileSongRailAlign228\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
-  'touch interaction and native momentum scrolls must debounce the delayed alignment',
+  /onPointerDown=\{handleRailPointerDown241\}[\s\S]*?onPointerUp=\{handleRailPointerUp241\}[\s\S]*?onPointerCancel=[\s\S]*?onClickCapture=\{handleRailClickCapture241\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
+  'mobile rail must distinguish controlled short drags while preserving native momentum and delayed alignment',
+);
+assert.match(
+  page,
+  /EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241\s*=\s*240[\s\S]*?EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241\s*=\s*8[\s\S]*?EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241\s*=\s*46/,
+  'short mobile drag thresholds must be explicit and bounded',
+);
+assert.match(
+  page,
+  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
+  'a short light drag must advance one card while longer or stronger motion keeps native scrolling',
 );
 assert.match(
   page,
   /scroller\.scrollTo\(\{ left: target, behavior: 'smooth' \}\)/,
   'delayed mobile alignment must settle smoothly onto the selected visible group',
 );
+assert.match(
+  page,
+  /const positions = cards\.map\(\(card\) => Math\.min\(maxScrollLeft, Math\.max\(0, card\.offsetLeft\)\)\)[\s\S]*?positions\.find\(\(position\) => position > current \+ epsilon\)[\s\S]*?\.reverse\(\)\.find\(\(position\) => position < current - epsilon\)/,
+  'rail arrow buttons must target exact adjacent card positions instead of a viewport percentage',
+);
+
 
 assert.match(
   page,
@@ -248,6 +264,17 @@ assert.match(
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(96px,10vw,192px\);padding-right:clamp\(96px,10vw,192px\)\}/,
   'PC public profile must use larger side gutters for a further narrowed content frame',
 );
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-edge\{[\s\S]*?z-index:24[\s\S]*?width:46px;height:46px[\s\S]*?background:rgba\(48,48,52,\.96\)[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-23px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-23px\}/,
+  'PC rail controls must be larger, brighter, and positioned outside the card images',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:38px;height:38px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:8px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:8px\}/,
+  'mobile rail controls must sit above play/equalizer controls with the highest rail z-index',
+);
+
 assert.match(
   page,
   /variant\?: 'default' \| 'profilePinnedBanner' \| 'profileList'/,
@@ -518,5 +545,12 @@ console.log('APP239_EXPLORE_PROFILE_GRID_LIST_TOGGLE=PASS');
 console.log('APP239_EXPLORE_PROFILE_LIST_ONE_SONG_PER_ROW=PASS');
 console.log('APP239_EXPLORE_PROFILE_LIST_ACTION_LAYOUT=PASS');
 
-console.log('APP240_EXPLORE_MOBILE_ALIGN_ONE_SECOND=PASS');
+console.log('APP240_EXPLORE_MOBILE_ALIGN_ONE_SECOND_HISTORICAL=PASS');
 console.log('APP240_EXPLORE_PROFILE_PC_GUTTERS_WIDER=PASS');
+
+console.log('APP241_EXPLORE_MOBILE_ALIGN_HALF_SECOND=PASS');
+console.log('APP241_EXPLORE_RAIL_BUTTON_EXACT_NEXT_CARD=PASS');
+console.log('APP241_EXPLORE_SHORT_DRAG_ADVANCES_ONE_CARD=PASS');
+console.log('APP241_EXPLORE_LONG_SWIPE_NATIVE_MOMENTUM_PRESERVED=PASS');
+console.log('APP241_EXPLORE_PC_RAIL_BUTTONS_OUTSIDE=PASS');
+console.log('APP241_EXPLORE_MOBILE_RAIL_BUTTON_ZINDEX=PASS');

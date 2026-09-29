@@ -1,7 +1,7 @@
-requested_at=2026-09-30T08:17:00+09:00
-requested_by=profile_trigger_compaction_post_migration_audit
-product_code_target=9e502806cfb35ce686eefeba763b14417db4ff7e
-release_purpose=audit_shared_d1_profile_trigger_compaction_249
+requested_at=2026-09-30T08:45:00+09:00
+requested_by=profile_shared_revision_retire_post_migration_audit
+product_code_target=15879c8dd8f7e5caf51f6105daec4ba434efbe91
+release_purpose=audit_shared_d1_profile_revision_retire_250
 app_version=248
 preview_only=true
 deploy=false

@@ -2373,13 +2373,20 @@ export default function ExplorePage() {
                     </ExploreRecommendationRail>
                   </div>
                 )}
-                {renderTrackGrid(
-                  profileTracks,
-                  `${profile.nickname} 공개곡`,
-                  profile,
-                  'default',
-                  true,
-                )}
+                <section className="soridraw-explore-profile-public-list-234" aria-label="전체 공개곡">
+                  <header className="soridraw-explore-profile-public-head-234">
+                    <span>PUBLIC</span>
+                    <h2>전체 공개곡</h2>
+                    <p>프로필에 공개한 모든 곡</p>
+                  </header>
+                  {renderTrackGrid(
+                    profileTracks,
+                    `${profile.nickname} 전체 공개곡`,
+                    profile,
+                    'default',
+                    true,
+                  )}
+                </section>
               </>
             )}
           </>

@@ -1,3 +1,50 @@
+## 0JT. PREVIEW app243 · 고정곡 0.2초 정렬 + 좌우 버튼 화면 단위 이동 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / focused static PASS / Release System Audit 트리거 실행 / Firebase PREVIEW Hosting 트리거 실행 / Actions 최종 결과·실주소 확인 대기**
+
+사용자 지시:
+- 모바일 공개프로필 고정 곡의 기존 0.5초 자동 정렬을 **0.2초**로 단축.
+- 공개프로필 포함 Explore의 좌우 스크롤 버튼을 직접 누르면 한 곡씩이 아니라 **현재 화면에 보이는 곡 수만큼** 이동.
+- 예: 화면 3곡이면 3곡, 2곡이면 2곡, 1곡이면 1곡.
+- 나머지 기존 기능은 유지.
+
+app243 수정:
+- 제품 commit: `ebd412c4b3ee32cebd7bb25e47d9741888ce5fae`.
+- verifier commit: `0b8d42cecfaacf8bdc6bdd5da0d0228acd329d27`.
+- version commit: `a7b2ee95120ed78d33a8f6104d4ccb8d7ba00ee6`.
+- audit trigger commit: `a7b4e9387086291118c5baf881d99aee59374428`.
+- PREVIEW Hosting trigger commit: `7bd232347c4a2ad9044c72caf128d13d6157103d`.
+- app version: **243**.
+
+UI/동작:
+- 모바일 공개프로필 고정곡 rail의 자동 정렬 대기만 500ms → **200ms**.
+- 다른 모바일 Explore song rail의 기존 500ms 정렬은 그대로 유지.
+- 좌/우 버튼 클릭은 현재 rail의 실제 카드 폭 + gap으로 화면에 들어오는 카드 수를 계산해 그 수만큼 이동.
+- PC 7곡이면 7곡, 모바일 장르 rail 3곡이면 3곡, 추천 2곡이면 2곡, 공개프로필 고정곡 1곡이면 1곡처럼 현재 레이아웃에 자동 대응.
+- app241의 짧은 touch drag 한 곡 이동은 그대로 **1곡** 유지.
+- 강한/긴 swipe native momentum, app242 버튼 자동 숨김 0.5초/탭 표시 2초, 버튼 위치/크기/z-index, 그리드/목록, 이퀄라이저 상태 유지 기능 모두 변경 없음.
+
+검증:
+- 소스 focused static check PASS: pinned 200ms / 일반 rail 500ms / 버튼 viewport step / short drag 1곡 유지 / smooth scroll / app242 hide/reveal timing 유지.
+- app242 release 기준 CSS 비변경 PASS.
+- 변경 범위: `src/pages/ExplorePage.tsx`, `scripts/verify-221-explore-feed-layout.mjs`, `public/app-version.json`, release trigger.
+- Release System Audit workflow는 `a7b4e938...`로 실행 요청.
+- Firebase PREVIEW Hosting workflow는 `7bd23234...`로 실행 요청.
+- 현재 연결에서 GitHub Actions push-run 목록/실제 preview.soridraw.com 응답을 직접 읽는 경로가 없어 최종 Run ID/결과는 **미확인**. 완료로 과장 보고 금지.
+
+비용/데이터:
+- UI 계산/timer만 변경.
+- Firestore / D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- Actions 결과 확인 가능 시 TypeScript / Build / static verifier / Hosting exact build / TEST·PRODUCTION 비변경을 확인.
+- 모바일 공개프로필 고정곡: 스크롤 후 0.2초 정렬 체감 확인.
+- 좌우 버튼: 현재 보이는 카드 수만큼 정확히 이동하는지 PC/모바일 확인.
+- 짧은 touch drag는 여전히 한 곡씩인지 확인.
+- TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JS. PREVIEW app242 · 모바일 고정 곡 좌우 버튼 자동 숨김/탭 표시 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 모바일 실사용 확인 대기**

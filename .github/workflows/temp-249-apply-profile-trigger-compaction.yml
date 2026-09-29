@@ -1,0 +1,145 @@
+name: TEMP 249 Apply Profile Trigger Compaction
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-249-apply-profile-trigger-compaction.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-249-profile-trigger-compaction
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Offline verified migration
+        run: python scripts/verify-249-profile-source-trigger-compaction.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Guard, migrate profile triggers only, verify, rollback on failure
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          MIG="$PWD/migrations/20260930_01_profile_source_trigger_compaction.sql"
+          test -f "$MIG"
+
+          query() {
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$1" --json
+          }
+
+          TARGETS="'explore032_profile_update','explore032_profile_delete','explore032_derived_profile_update','explore032_derived_profile_feed'"
+          PROTECTED="'explore032_derived_track_insert','explore079_music_note_derived_track_insert','explore032_derived_track_update','explore079_music_note_derived_track_update','soridraw_shared_rev_public_profiles_au_051'"
+
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGETS,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/before.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/before.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const by=new Map(rows.map(r=>[String(r.name||''),String(r.sql||'')]));
+          const targets=[
+            'explore032_profile_update','explore032_profile_delete',
+            'explore032_derived_profile_update','explore032_derived_profile_feed'
+          ];
+          const protectedNames=[
+            'explore032_derived_track_insert','explore079_music_note_derived_track_insert',
+            'explore032_derived_track_update','explore079_music_note_derived_track_update',
+            'soridraw_shared_rev_public_profiles_au_051'
+          ];
+          for(const name of [...targets,...protectedNames]) if(!by.get(name)) throw new Error('missing live trigger '+name);
+          if(!/LEFT JOIN profile_stats/i.test(by.get('explore032_profile_update'))) throw new Error('live profile-update baseline drift; migration blocked');
+          if(!/OLD\.row_json IS NOT NEW\.row_json/i.test(by.get('explore032_derived_profile_update'))) throw new Error('live derived-profile baseline drift; migration blocked');
+          if(!/avatar_url/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live profile-feed baseline drift; migration blocked');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert trigger missing; migration blocked');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update trigger missing; migration blocked');
+          if(!/explore_shared_revision/i.test(by.get('soridraw_shared_rev_public_profiles_au_051'))) throw new Error('shared revision compatibility trigger missing; migration blocked');
+
+          const q=(s)=>'"'+String(s).replaceAll('"','""')+'"';
+          const rollback=[
+            ...targets.map(n=>`DROP TRIGGER IF EXISTS ${q(n)};`),
+            ...targets.map(n=>String(by.get(n)).replace(/;?\s*$/,';')),
+          ].join('\n')+'\n';
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/rollback.sql',rollback);
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/protected.json',JSON.stringify(Object.fromEntries(protectedNames.map(n=>[n,by.get(n)]))));
+          console.log('249_LIVE_PREFLIGHT=PASS');
+          console.log('249_ROLLBACK_CAPTURE=PASS');
+          console.log('079_PROTECTED_BEFORE=PASS');
+          console.log('SHARED_REVISION_PROTECTED_BEFORE=PASS');
+          console.log('USER_DATA_READS=0');
+          NODE
+
+          migrated=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$migrated" = 1 ]; then
+              echo '249_VERIFY_FAILED_ROLLBACK=START'
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/rollback.sql" >/dev/null || true
+              echo '249_ROLLBACK=ATTEMPTED'
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$MIG"
+          migrated=1
+
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGETS,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/after.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/after.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const by=new Map(rows.map(r=>[String(r.name||''),String(r.sql||'')]));
+          const profile=by.get('explore032_profile_update')||'';
+          const derived=by.get('explore032_derived_profile_update')||'';
+          const feed=by.get('explore032_derived_profile_feed')||'';
+          const del=by.get('explore032_profile_delete')||'';
+
+          if(!/AFTER\s+UPDATE\s+OF/i.test(profile)) throw new Error('249 column-scoped profile trigger not active');
+          if(/LEFT\s+JOIN\s+profile_stats/i.test(profile)) throw new Error('249 profile trigger still reads profile_stats');
+          if(!/UPDATE\s+explore_derived_profiles/i.test(profile)) throw new Error('249 profile projection update missing');
+          if(!/VALUES\('profile:'\s*\|\|\s*NEW\.uid/i.test(profile)) throw new Error('249 profile journal missing');
+          if(!/SELECT\s+'feed'[^;]+WHERE[\s\S]*OLD\.avatar_url/i.test(profile)) throw new Error('249 targeted feed journal missing');
+          if(!/AFTER\s+UPDATE\s+OF\s+followers\s*,\s*following/i.test(derived)) throw new Error('249 follower-only derived trigger not active');
+          if(!/WHEN\s+0/i.test(feed)) throw new Error('249 legacy feed cascade not inert');
+          if(!/VALUES\('profile:'\s*\|\|\s*OLD\.uid/i.test(del) || !/VALUES\('feed'\s*,\s*'profile'/i.test(del)) throw new Error('249 delete compatibility journal missing');
+
+          const protectedBefore=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/protected.json','utf8'));
+          for(const [name,sql] of Object.entries(protectedBefore)) {
+            if((by.get(name)||'')!==sql) throw new Error('protected trigger changed: '+name);
+          }
+          console.log('249_PROFILE_SOURCE_TRIGGER=PASS');
+          console.log('249_DERIVED_PROFILE_FOLLOWER_ONLY=PASS');
+          console.log('249_FEED_CASCADE_INERT=PASS');
+          console.log('249_DELETE_COMPATIBILITY=PASS');
+          console.log('079_MUSIC_NOTE_TRIGGERS_UNCHANGED=PASS');
+          console.log('SHARED_REVISION_TRIGGER_UNCHANGED=PASS');
+          console.log('USER_DATA_ROWS_MUTATED=0');
+          console.log('249_SHARED_D1_TRIGGER_MIGRATION=PASS');
+          NODE
+
+          trap - EXIT

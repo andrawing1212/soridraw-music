@@ -1,3 +1,22 @@
+## 0IY. PREVIEW app219 · Music Note/Library 장르 접기 사용자 실화면 PASS (2026-09-29 KST)
+
+- 사용자 실화면 확인 결과: **통과**.
+- Recent는 기존 정상 속도 유지.
+- Music Note / Library의 장르 접기 버벅임이 해결되어 Recent와 같은 기준으로 정상 판정.
+- 최종 원인: 실제 split workspace의 장르 카드 ResizeObserver가 접기 애니메이션 동안 불필요한 cross-pane 높이 동기화를 반복하던 경로.
+- 해결: Music Note / Library split에서 해당 top-card observer를 연결하지 않고 stale `--soridraw-studio-top-card-height` 제거.
+- app218 공용 Genre fast-path 수정은 효과 없음으로 원복 완료.
+- 기준 PREVIEW release SHA: `ae4b7b4352ca6c080f7bde2bea3b52ca23d25016`.
+- Audit Run: `36542639632` SUCCESS.
+- Firebase PREVIEW Hosting Run: `36542907430` SUCCESS.
+- app version: `219` / exact build PASS.
+- TEST / PRODUCTION 비변경. Worker / Functions / Rules / 사용자 데이터 변경 없음.
+
+보호 기준:
+- Music Note / Library 장르 접기에서 top-card cross-pane observer를 다시 켜지 않음.
+- Recent의 현재 정상 동작과 top-card sync는 유지.
+- 장르 공통 220ms 모션, 분할바, 생성바, 카드 크기/위치, 백엔드는 정상 기준으로 보호.
+
 ## 0IX. app218 실화면 FAIL · 실제 분할 엔진 위치 확인 / Music Note·Library 장르 접기 병목 수정 (2026-09-29 KST)
 
 상태: **사용자 2개 영상 재확인 / app218 FAIL / 실제 Split Workspace 병목 확인 / app219 수정 완료 / Audit PASS / PREVIEW app219 배포 완료 / 사용자 실화면 확인 대기**

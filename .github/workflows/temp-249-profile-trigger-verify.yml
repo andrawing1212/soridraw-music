@@ -1,0 +1,81 @@
+name: TEMP 249 Profile Trigger Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-249-profile-trigger-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Offline profile trigger verification
+        run: python scripts/verify-249-profile-source-trigger-compaction.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read exact live trigger baseline only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name,sql FROM sqlite_schema
+            WHERE type='trigger' AND name IN (
+              'explore032_profile_update',
+              'explore032_profile_delete',
+              'explore032_derived_profile_update',
+              'explore032_derived_profile_feed',
+              'explore032_derived_track_insert',
+              'explore079_music_note_derived_track_insert',
+              'explore032_derived_track_update',
+              'explore079_music_note_derived_track_update',
+              'soridraw_shared_rev_public_profiles_au_051'
+            ) ORDER BY name;
+          " --json > "$RUNNER_TEMP/live-profile-triggers.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/live-profile-triggers.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const by=new Map(rows.map(r=>[String(r.name||''),String(r.sql||'')]));
+          const required=[
+            'explore032_profile_update','explore032_profile_delete',
+            'explore032_derived_profile_update','explore032_derived_profile_feed',
+            'explore032_derived_track_insert','explore079_music_note_derived_track_insert',
+            'explore032_derived_track_update','explore079_music_note_derived_track_update',
+            'soridraw_shared_rev_public_profiles_au_051'
+          ];
+          for(const name of required) if(!by.get(name)) throw new Error('missing live trigger '+name);
+          if(!/LEFT JOIN profile_stats/i.test(by.get('explore032_profile_update'))) throw new Error('live profile update baseline unexpectedly changed');
+          if(!/OLD\.row_json IS NOT NEW\.row_json/i.test(by.get('explore032_derived_profile_update'))) throw new Error('live derived profile baseline unexpectedly changed');
+          if(!/avatar_url/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live feed profile baseline unexpectedly changed');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert protection missing');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update protection missing');
+          if(!/explore_shared_revision/i.test(by.get('soridraw_shared_rev_public_profiles_au_051'))) throw new Error('shared revision compatibility trigger missing');
+          console.log('249_LIVE_PROFILE_TRIGGER_BASELINE=PASS');
+          console.log('079_MUSIC_NOTE_TRIGGER_PROTECTION=PASS');
+          console.log('SHARED_REVISION_COMPATIBILITY=PASS');
+          console.log('REMOTE_D1_WRITES=0');
+          NODE

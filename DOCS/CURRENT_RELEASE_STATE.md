@@ -1,3 +1,77 @@
+## 0KB. Shared D1 legacy profile global revision trigger 제거 (2026-09-30 KST)
+
+상태: **공유 D1 trigger-only 비용 절감 적용 완료 / 정상 기능 보호 PASS / 사용자 데이터 변경 0 / PREVIEW 재실측 대기**
+
+직전 app248 + 249 trigger 실측:
+- 소개(bio) only: query R0/W1, physical **R6/W9**.
+- 프로필 사진(avatar) only: query R0/W1, physical **R8/W10**.
+- 프로필 사진 + 배경: query R0/W1, physical **R8/W10**.
+- 249 source-compaction으로 read는 감소했지만 write 잔량이 남아 다음 비용 원인을 확인함.
+
+exact TEST/PRODUCTION 호환성 감사:
+- TEST app **124**, PRODUCTION app **117**의 실제 canonical Worker source를 직접 대조.
+- 두 환경 모두 `readSharedDataRevision031` 함수 정의는 남아 있으나 **호출 지점 0**.
+- Feed revision/동기화는 이미 `syncDerivedCache032 / syncDerivedFeeds032` derived cursor 경로 사용.
+- 공개프로필 변경 감지는 shared Profile R2 + profile 자체 revision 경로 사용.
+- 따라서 `public_profiles UPDATE -> explore_shared_revision(global)` 호환 trigger는 현재 TEST/PRODUCTION 런타임에서 소비되지 않는 dead compatibility write로 확인.
+
+적용:
+- 신규 migration:
+  - `cloudflare/explore-worker/migrations/20260930_02_profile_shared_revision_retire.sql`
+- 신규 verifier:
+  - `scripts/verify-250-profile-shared-revision-retire.mjs`
+- 제거한 trigger **1개만**:
+  - `soridraw_shared_rev_public_profiles_au_051`
+- `explore_shared_revision` table 자체와 track/좋아요/공개 관련 다른 trigger는 변경하지 않음.
+
+검증:
+- exact compatibility + live D1 read-only Verify Run `36646516982` **SUCCESS**.
+  - TEST_GLOBAL_SHARED_REVISION_CALLS=0
+  - PRODUCTION_GLOBAL_SHARED_REVISION_CALLS=0
+  - TEST/PRODUCTION Feed derived cursor PASS
+  - TEST/PRODUCTION shared Profile R2 PASS
+  - remote D1 writes 0
+- trigger-only Apply Run `36646618715` **SUCCESS**.
+  - rollback SQL 사전 캡처 PASS
+  - target trigger 제거 PASS
+  - global revision row 값 자체 unchanged PASS
+  - 249 profile triggers exact unchanged PASS
+  - Music Note 079 triggers exact unchanged PASS
+  - USER_DATA_ROWS_MUTATED=0
+  - main / production refs unchanged PASS
+  - DDL 실행 Cloudflare 보고: rows read 296 / rows written 0
+- post-migration Release System Audit Run `36646690814` **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - 전체 static/regression PASS
+  - TEST / PRODUCTION Worker dry-run PASS
+  - live shared D1 preflight PASS
+  - main / production refs unchanged PASS
+- 작업 종료 후 임시 workflow 2개 제거:
+  - `.github/workflows/temp-249-profile-trigger-verify.yml`
+  - `.github/workflows/temp-249-apply-profile-trigger-compaction.yml`
+
+보호:
+- app version **248 유지**.
+- PREVIEW Worker/Hosting 재배포 없음.
+- Firebase / Functions / Rules 변경 없음.
+- 공개/비공개, 좋아요/해제, 팔로우, Music Note 079, UI/CSS 변경 없음.
+- 사용자 canonical row / R2 사용자 미디어 / Firestore 사용자 데이터 변경 없음.
+- main / TEST / production / PRODUCTION 코드 승격 없음.
+
+다음 PREVIEW 실측:
+1. 소개(bio)만 변경.
+2. 프로필 사진만 변경.
+3. 프로필 사진 + 배경 변경.
+- query R0/W1 유지가 기준.
+- physical 총 R/W를 직전 **bio R6/W9, avatar R8/W10, dual R8/W10**과 비교.
+- 이 제거는 dead global revision write 하나만 없앤 것이므로, 실제 감소 폭은 Cloudflare physical row accounting으로 판단하며 미리 수치를 단정하지 않음.
+- write 잔량이 여전히 크면 다음 후보는 **profile scope journal / derived state의 중복 여부**를 현재 shared R2 직접 갱신 경로와 대조한 뒤 제거 가능 범위만 좁혀 검토.
+- 텍스트+이미지를 동시에 편집한 저장은 별도 후속으로 하나의 canonical Profile Save 명령으로 합치는 후보 유지.
+- 정상 기능 회귀가 확인되면 비용 절감보다 기능 보호를 우선해 즉시 중단/복구.
+
+제품/공유-D1 변경 기준 preview commit: `f5a1bd5d0e65cd001eebabb45a6a2d639838fc87`
+
 ## 0KA. Shared D1 profile trigger source-compaction 적용 (2026-09-30 KST)
 
 상태: **공유 D1 trigger-only 비용 절감 적용 완료 / 사용자 데이터 변경 0 / PREVIEW 실측 대기**

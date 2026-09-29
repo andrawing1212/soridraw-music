@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -578,7 +578,7 @@ function ExploreCreatorCard221({
 }
 
 const EXPLORE_PREVIEW_MAX_MS_222 = 120_000;
-const EXPLORE_EQ_BAR_COUNT_222 = 24;
+const EXPLORE_EQ_BUTTON_BAR_COUNT_225 = 5;
 
 function ExploreTrackCard({
   track,
@@ -619,13 +619,7 @@ function ExploreTrackCard({
   return (
     <article className={`soridraw-explore-card${isPreviewing ? ' is-previewing' : ''}`}>
       <div className="soridraw-explore-cover-wrap">
-        <button
-          type="button"
-          className="soridraw-explore-cover-button"
-          onClick={openSuno}
-          disabled={!openUrl}
-          aria-label={openUrl ? `${track.title} Suno에서 열기` : `${track.title} 썸네일`}
-        >
+        <div className="soridraw-explore-cover-button">
           <span className="soridraw-explore-cover-shell">
             {track.coverUrl && !imageFailed ? (
               <img
@@ -641,37 +635,22 @@ function ExploreTrackCard({
               </span>
             )}
 
-            {isPreviewing && (
-              <span className="soridraw-explore-preview-eq" aria-hidden="true">
-                <span className="soridraw-explore-preview-eq-glow" />
-                <span className="soridraw-explore-preview-eq-bars">
-                  {Array.from({ length: EXPLORE_EQ_BAR_COUNT_222 }, (_, index) => (
-                    <i key={index} style={{ '--eq-index': index } as React.CSSProperties} />
-                  ))}
-                </span>
-              </span>
-            )}
-
             {track.profilePinned && (
               <span className="soridraw-explore-pin-badge" title="공개 프로필 고정" aria-label="공개 프로필 고정">
                 <Pin aria-hidden="true" />
               </span>
             )}
-            {openUrl && (
-              <span className="soridraw-explore-cover-open" aria-hidden="true">
-                <ExternalLink />
-              </span>
-            )}
           </span>
-        </button>
+        </div>
 
         <button
           type="button"
           className="soridraw-explore-preview-trigger"
           onClick={(event) => {
             event.stopPropagation();
-            // app224 — this control is the same Suno link as the cover. SORIDRAW
-            // only paints the local equalizer/title feedback; it never streams audio.
+            // app225 — only the enlarged center control opens the Suno link.
+            // The cover itself is visual-only, and active feedback stays inside
+            // this control so it never looks like an in-app pause/play toggle.
             openSuno();
             onTogglePreview(track);
           }}
@@ -679,7 +658,15 @@ function ExploreTrackCard({
           aria-label={openUrl ? `${cardDisplayTitle.title} Suno에서 열기` : `${cardDisplayTitle.title} Suno 링크 없음`}
           title={openUrl ? 'Suno에서 열기' : 'Suno 링크 없음'}
         >
-          <Play aria-hidden="true" />
+          {isPreviewing ? (
+            <span className="soridraw-explore-preview-button-eq" aria-hidden="true">
+              {Array.from({ length: EXPLORE_EQ_BUTTON_BAR_COUNT_225 }, (_, index) => (
+                <i key={index} style={{ '--eq-index': index } as React.CSSProperties} />
+              ))}
+            </span>
+          ) : (
+            <Play aria-hidden="true" />
+          )}
         </button>
       </div>
 
@@ -687,10 +674,7 @@ function ExploreTrackCard({
         {cardDisplayTitle.genre && (
           <div className="soridraw-explore-card-genre">{cardDisplayTitle.genre}</div>
         )}
-        <h3
-          className={isPreviewing ? 'is-previewing' : undefined}
-          title={cardDisplayTitle.title}
-        >
+        <h3 title={cardDisplayTitle.title}>
           {cardDisplayTitle.title}
         </h3>
         <button

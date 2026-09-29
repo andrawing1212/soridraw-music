@@ -1,3 +1,18 @@
+## 2026-09-30 — Explore app242 모바일 고정 곡 버튼 자동 숨김 확인
+
+- PREVIEW app242 배포 완료.
+- release SHA `840a1b2dfa01c45c967f22d9d27cb07476e1a017`.
+- Audit Run `36617652986` SUCCESS / Hosting Run `36617941465` SUCCESS.
+- 모바일 공개프로필 고정 곡 rail만 좌우 버튼 자동 숨김 적용.
+- 움직임 없음: **0.5초 후 숨김**.
+- 카드 영역 터치: **2초간 표시**.
+- 스크롤 중 표시 → 스크롤 정지 후 0.5초 뒤 다시 숨김.
+- 숨김 상태는 pointer-events none이라 카드/재생 터치를 가리지 않음.
+- app241 0.5초 정렬 / short drag exact next / long swipe native / 버튼 exact next/prev / PC 바깥 버튼 유지.
+- 추가 서버 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일 실기기에서 버튼 숨김/표시 타이밍과 재생버튼 간섭 여부 확인.
+
 ## 2026-09-30 — Explore app241 rail 인터랙션 실사용 확인
 
 - PREVIEW app241 배포 완료.

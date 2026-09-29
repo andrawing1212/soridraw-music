@@ -4,6 +4,7 @@ import type { User } from 'firebase/auth';
 import {
   updateExplorePublicProfile,
   uploadExploreProfileMedia,
+  uploadExploreProfileMediaBatch,
   type ExploreProfileDraft,
   type ExploreProfileMediaKind,
   type ExplorePublicProfile,
@@ -176,12 +177,22 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       const saved = profileFieldsChanged247
         ? await updateExplorePublicProfile(user, normalizedDraft)
         : profile;
-      const backgroundUrl = backgroundBlob
-        ? await uploadExploreProfileMedia(user, 'background', backgroundBlob)
-        : saved.backgroundUrl;
-      const avatarUrl = avatarBlob
-        ? await uploadExploreProfileMedia(user, 'avatar', avatarBlob)
-        : saved.avatarUrl;
+
+      let backgroundUrl = saved.backgroundUrl;
+      let avatarUrl = saved.avatarUrl;
+      if (backgroundBlob && avatarBlob) {
+        // SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930
+        const media = await uploadExploreProfileMediaBatch(user, {
+          background: backgroundBlob,
+          avatar: avatarBlob,
+        });
+        backgroundUrl = media.backgroundUrl || backgroundUrl;
+        avatarUrl = media.avatarUrl || avatarUrl;
+      } else {
+        if (backgroundBlob) backgroundUrl = await uploadExploreProfileMedia(user, 'background', backgroundBlob);
+        if (avatarBlob) avatarUrl = await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
+      }
+
       const refreshed: ExplorePublicProfile = {
         ...saved,
         backgroundUrl: backgroundUrl || saved.backgroundUrl,

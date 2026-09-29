@@ -1,3 +1,51 @@
+## 0JX. PREVIEW app247 · 프로필 저장 실사용 비용 측정 결과 (2026-09-30 KST)
+
+상태: **app247 절감 일부 PASS / 남은 D1 trigger fan-out 비용 과다 확인 / 다음 구조 최적화 필요**
+
+사용자 실측 조건:
+- 같은 PREVIEW 계정.
+- 각 항목마다 진단 패널 초기화 후 1회 수행.
+- 순서: 변경 없음 → YouTube만 변경 → 소개(bio)만 변경 → 프로필 사진 1개 → 배경+프로필 사진 2개.
+
+실측:
+- 변경 없음: D1 read/write 0, 서버 mutation 0 — **PASS**.
+- YouTube만 변경: canonical D1 read/write 0 — **PASS**.
+  - R2 증가: Class A 0 / Class B 1.
+- 소개(bio)만 변경:
+  - `/v1/me/profile`
+  - D1 query R0 / W3
+  - 이번 실행 D1 physical total: **R12 / W11**
+  - 현재 Worker 코드상 원인: `public_profiles` UPDATE 1 + `profile_search_fts` DELETE/INSERT 2 + 기존 `explore032_profile_*` trigger fan-out.
+- 프로필 사진 1개:
+  - `/v1/me/profile-media/avatar`
+  - D1 query R0 / W1
+  - 이번 실행 D1 physical total: **R12 / W11**
+  - R2: Class A 2 / Class B 1
+  - 단일 canonical profile UPDATE 1회가 trigger/index fan-out으로 physical 비용 증폭됨.
+- 배경+프로필 사진 2개:
+  - avatar + background 요청 각각 D1 W1
+  - D1 query R0 / W2
+  - 이번 실행 D1 physical total: **R21 / W19**
+  - R2: Class A 4 / Class B 2
+  - 현재 두 이미지가 각각 별도 profile UPDATE를 실행하므로 trigger fan-out도 2회 발생.
+
+판정:
+- app247의 no-op / YouTube R2-only 경로는 목표 달성.
+- 남은 프로필 비용의 핵심은 **canonical D1 UPDATE 자체보다 기존 profile derived trigger/index 증폭**.
+- 소개 변경은 여기에 profile FTS 재작성 2회가 추가되어 불필요 비용이 더 큼.
+- 이미지 2개 동시 변경은 현재 동일 프로필 D1 UPDATE를 2번 실행하므로 묶음 저장 여지가 있음.
+- 사용자 데이터 전체 조회/재생성 문제는 아님. 현재 문제는 한 사용자 프로필 1회 변경이 내부 D1 row fan-out을 크게 만드는 구조.
+
+안전한 다음 수정 후보:
+1. 기존 검색 범위를 유지할 수 있는 범위에서 소개(bio) 변경 시 불필요한 profile FTS 재작성 제거/축소 검토.
+2. 배경+아바타 동시 변경 시 R2 객체 2개는 각각 저장하되 canonical `public_profiles` UPDATE는 1회로 묶는 media batch 경로 설계.
+3. shared D1의 `explore032_derived_profile_*` trigger compaction 후보 `076-derived-trigger-compaction-live033.sql`은 이미 offline 검증 파일이 있으나 DROP/CREATE TRIGGER가 포함된 schema-maintenance 작업이므로 **사용자 명시 승인 전 live 적용 금지**.
+4. 076 후보는 기존 테이블/데이터를 바꾸지 않고 trigger 4개만 교체하며, 기존 TEST/PRODUCTION reader contract를 유지하도록 설계되어 있음. 적용 전 live trigger exact DDL/hash read-only 재확인과 rollback SQL 고정 필요.
+
+보호:
+- 이 실측 기록 단계에서 코드/Worker/Hosting/Functions/Rules/D1 schema/사용자 데이터 변경 없음.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0JW. PREVIEW app247 · 프로필 저장 warm-path 추가 절감 · 배포 완료 (2026-09-30 KST)
 
 상태: **PREVIEW Hosting + Explore Worker 배포 완료 / 실사용 비용 측정 대기**

@@ -1,3 +1,34 @@
+## 2026-09-30 — profile trigger compaction 실측
+
+공유 D1 profile trigger source-compaction 적용 완료:
+- Verify Run `36643921713` SUCCESS.
+- Apply Run `36644010199` SUCCESS.
+- Post-migration Audit Run `36644121319` SUCCESS.
+- user data rows mutated 0.
+- Music Note 079 triggers unchanged.
+- shared revision compatibility trigger unchanged.
+- app/Worker/Hosting redeploy 없음; app248 그대로 테스트.
+
+재측정:
+1. no-op
+2. YouTube only
+3. bio only
+4. avatar only
+5. avatar+background
+
+이전 기준:
+- bio: query R0/W1, physical R9/W9.
+- avatar: query R0/W1, physical R12/W11.
+- dual media: query R0/W1, physical R12/W11.
+
+판정:
+- query W1 유지.
+- physical R/W가 얼마나 내려갔는지 비교.
+- 충분히 내려가지 않으면:
+  1) profile-update shared revision write가 현재 TEST/PRODUCTION에 실제 필요한지 exact deployed source 기준으로 감사 후 제거 후보화.
+  2) 텍스트 + 이미지가 동시에 바뀌는 Save를 단일 profile-save command로 묶어 canonical D1 UPDATE도 1회로 고정.
+- 정상 공개/비공개, 좋아요, 팔로우, Music Note 079, UI는 변경 금지.
+
 ## 2026-09-30 — app248 실사용 결과 후속
 
 실사용 결과:

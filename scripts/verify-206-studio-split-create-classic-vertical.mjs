@@ -168,21 +168,46 @@ const genreToggleStart = genre.indexOf('function handleExpandableToggle(');
 const genreToggleEnd = genre.indexOf('\ntype ModalStep', genreToggleStart);
 assert.ok(genreToggleStart >= 0 && genreToggleEnd > genreToggleStart, 'Genre toggle handler must remain discoverable');
 const genreToggle = genre.slice(genreToggleStart, genreToggleEnd);
-const collapseFastPath = genreToggle.indexOf('if (isExpanded) {');
-const firstLayoutRead = genreToggle.indexOf("getBoundingClientRect()");
-assert.ok(collapseFastPath >= 0, 'Genre collapse must have an explicit fast path');
-assert.ok(firstLayoutRead < 0 || collapseFastPath < firstLayoutRead, 'Genre collapse fast path must run before any synchronous layout read');
-assert.match(
+assert.doesNotMatch(
   genreToggle,
-  /if \(isExpanded\) \{[\s\S]*?onToggleExpand\?\.\(\);[\s\S]*?return;[\s\S]*?\}/,
-  'Genre collapse must toggle locally and return before scroll-anchor reconciliation',
+  /app218|if \(isExpanded\) \{[\s\S]*?onToggleExpand\?\.\(\);[\s\S]*?return;/,
+  'failed app218 shared Genre fast-path must stay reverted',
 );
 assert.match(
   genreToggle,
-  /const section = event\.currentTarget\.closest\('\[data-expand-section\]'\)[\s\S]*?window\.requestAnimationFrame/,
-  'Genre expansion must retain the existing scroll-anchor reconciliation path',
+  /const section = event\.currentTarget\.closest\('\[data-expand-section\]'\)[\s\S]*?const beforeTop = section\?\.getBoundingClientRect\(\)\.top[\s\S]*?onToggleExpand\?\.\(\);/,
+  'shared Genre toggle behavior must remain on the pre-app218 path',
 );
-console.log('APP218_GENRE_COLLAPSE_LOCAL_FAST_PATH=PASS');
+
+for (const [name, source] of [['lite', lite], ['legacy', legacy]]) {
+  assert.match(
+    source,
+    /activeWorkspace === 'music-note' \|\| activeWorkspace === 'library'/,
+    `${name}: Music Note and Library must bypass stale cross-pane top-card height sync`,
+  );
+  assert.match(
+    source,
+    /removeProperty\('--soridraw-studio-top-card-height'\)/,
+    `${name}: stale result title-height custom property must be cleared`,
+  );
+}
+assert.match(
+  lite,
+  /const connectTopCardObserver = useCallback\([\s\S]*?activeWorkspace === 'music-note' \|\| activeWorkspace === 'library'[\s\S]*?return;[\s\S]*?new ResizeObserver/,
+  'Lite split must exit before creating the Genre-card ResizeObserver for Music Note/Library',
+);
+assert.match(
+  legacy,
+  /if \(workspaceView === 'music-note' \|\| workspaceView === 'library'\) \{[\s\S]*?return;[\s\S]*?let observedCard:[\s\S]*?new ResizeObserver/,
+  'Legacy split must exit before creating the Genre-card ResizeObserver for Music Note/Library',
+);
+assert.match(
+  legacy,
+  /\}, \[syncResultTitleHeight, workspaceView\]\);/,
+  'Legacy observer lifecycle must reconnect only when the workspace page changes',
+);
+console.log('APP219_SPLIT_MUSICNOTE_LIBRARY_GENRE_OBSERVER_OFF=PASS');
+console.log('APP219_RECENT_TOP_CARD_SYNC_PRESERVED=PASS');
 console.log('APP212_CREATE_SCROLLBAR_EDGE=PASS');
 console.log('APP212_CREATE_CONTENT_WIDTH_PRESERVED=PASS');
 console.log('APP206_SPLITTER_AND_MOBILE_UNCHANGED=PASS');

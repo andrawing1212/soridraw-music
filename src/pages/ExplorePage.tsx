@@ -517,21 +517,50 @@ function ExploreRecommendationRail({
     if (maxScrollLeft <= 1) return;
 
     const scrollerRect = scroller.getBoundingClientRect();
-    const candidates = cards
-      .filter((_, index) => index % 3 === 0)
-      .map((card) => Math.min(
-        maxScrollLeft,
-        Math.max(0, card.getBoundingClientRect().left - scrollerRect.left + scroller.scrollLeft),
-      ));
-    candidates.push(maxScrollLeft);
-
     const current = scroller.scrollLeft;
-    const target = candidates.reduce(
-      (best, candidate) => (
-        Math.abs(candidate - current) < Math.abs(best - current) ? candidate : best
-      ),
-      candidates[0] ?? 0,
-    );
+
+    // SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_229_20260929
+    // After native momentum settles, score every contiguous three-card window by
+    // how much of those cards is currently visible. With two full cards plus
+    // partial cards on both sides, this naturally keeps the side with the larger
+    // visible share instead of snapping to a fixed 0/3/6... boundary.
+    const visibleRatios = cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      const visibleWidth = Math.max(
+        0,
+        Math.min(rect.right, scrollerRect.right) - Math.max(rect.left, scrollerRect.left),
+      );
+      return visibleWidth / Math.max(1, rect.width);
+    });
+
+    let target = current;
+    let bestVisibleScore = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let startIndex = 0; startIndex <= cards.length - 3; startIndex += 1) {
+      const visibleScore = (
+        visibleRatios[startIndex]
+        + visibleRatios[startIndex + 1]
+        + visibleRatios[startIndex + 2]
+      );
+      const cardRect = cards[startIndex].getBoundingClientRect();
+      const candidate = Math.min(
+        maxScrollLeft,
+        Math.max(0, cardRect.left - scrollerRect.left + current),
+      );
+      const distance = Math.abs(candidate - current);
+      const clearlyMoreVisible = visibleScore > bestVisibleScore + 0.001;
+      const equalVisibilityCloser = (
+        Math.abs(visibleScore - bestVisibleScore) <= 0.001
+        && distance < bestDistance
+      );
+
+      if (clearlyMoreVisible || equalVisibilityCloser) {
+        bestVisibleScore = visibleScore;
+        bestDistance = distance;
+        target = candidate;
+      }
+    }
 
     if (Math.abs(target - current) < 1) return;
     scroller.scrollTo({ left: target, behavior: 'smooth' });

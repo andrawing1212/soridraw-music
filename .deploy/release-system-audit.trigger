@@ -1,5 +1,5 @@
-explore_profile_grid_list_audit=2026-09-30T03:25:00+09:00
-source_head=63c5e6c5266e1cef0f6ff5965e789c0207ac60a1
+explore_profile_grid_list_audit=2026-09-30T03:28:00+09:00
+source_head=593d9f87dbc79c2f6947b8795dbb24d801f01028
 app_version=239
 deploy=false
 scope=public_profile_mobile_pinned_one_up_and_public_song_grid_list_toggle
@@ -24,7 +24,7 @@ equalizer_route_persistence_preserved=true
 product_page_commit=6a7ccf770ff801043cdb57eeb37dc070ff633a67
 product_explore_css_commit=12e5c94d1a3acd748b1f13f9898b10146a5384d9
 product_social_css_commit=0f05831927ef9563560fb003313fa3fd466d446f
-verifier_commit=63c5e6c5266e1cef0f6ff5965e789c0207ac60a1
+verifier_commit=593d9f87dbc79c2f6947b8795dbb24d801f01028
 version_commit=42e2dbed41b4334c9a61ec6ef70228b92b05714e
 extra_feed_reads=0
 extra_profile_reads=0

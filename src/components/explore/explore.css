@@ -79,22 +79,22 @@
 .soridraw-explore-recommend-stage:has(.soridraw-explore-recommend-track--creators) .soridraw-explore-recommend-edge{top:45%}
 
 .soridraw-explore-card{min-width:0;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
-.soridraw-explore-cover-button{display:block;width:100%;padding:0;border:0!important;outline:0!important;border-radius:16px;overflow:hidden;background:transparent!important;box-shadow:none!important}
+.soridraw-explore-cover-wrap{position:relative;display:block;width:100%;border-radius:16px}
+.soridraw-explore-cover-button{display:block;width:100%;padding:0;border:0!important;outline:0!important;border-radius:16px;overflow:hidden;background:transparent!important;box-shadow:none!important;cursor:pointer}
+.soridraw-explore-cover-button:disabled{cursor:default}
 .soridraw-explore-cover-shell{position:relative;display:block;width:100%;aspect-ratio:1/1;overflow:hidden;border-radius:16px;background:rgba(255,255,255,.055);isolation:isolate}
 .soridraw-explore-cover-shell>img{width:100%;height:100%;object-fit:cover;transform:scale(1.001);transition:transform .18s ease,filter .18s ease}
 .soridraw-explore-cover-button:hover .soridraw-explore-cover-shell>img{transform:scale(1.025);filter:brightness(1.04)}
 .soridraw-explore-card.is-previewing .soridraw-explore-cover-shell>img{filter:brightness(.72) saturate(1.22)}
 .soridraw-explore-cover-fallback{display:grid;place-items:center;width:100%;height:100%;background:radial-gradient(circle at 35% 25%,rgba(255,180,0,.22),transparent 38%),linear-gradient(145deg,#252528,#171719);color:rgba(255,255,255,.28)}
 .soridraw-explore-cover-fallback svg{width:34px;height:34px}
-.soridraw-explore-cover-primary-hit{position:absolute;inset:0;z-index:1;width:100%;height:100%;padding:0;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;cursor:pointer}
-.soridraw-explore-cover-primary-hit:disabled{cursor:default}
 .soridraw-explore-cover-open{position:absolute;z-index:5;right:10px;bottom:10px;display:grid;place-items:center;width:32px;height:32px;border-radius:11px;background:rgba(10,10,12,.68);color:rgba(255,255,255,.84);opacity:0;transform:translateY(3px);transition:opacity .14s ease,transform .14s ease;backdrop-filter:blur(10px);pointer-events:none}
 .soridraw-explore-cover-button:hover .soridraw-explore-cover-open{opacity:1;transform:translateY(0)}
 .soridraw-explore-cover-open svg{width:16px;height:16px}
 .soridraw-explore-preview-trigger{position:absolute;z-index:7;left:50%;top:50%;display:grid;place-items:center;width:clamp(42px,24%,58px);aspect-ratio:1/1;padding:0;border:1px solid rgba(255,255,255,.18)!important;outline:0!important;border-radius:50%;background:rgba(13,13,16,.68)!important;box-shadow:0 9px 28px rgba(0,0,0,.32),inset 0 0 0 1px rgba(255,255,255,.04)!important;color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.86);transition:opacity .15s ease,transform .15s ease,background .15s ease,box-shadow .15s ease;cursor:pointer;backdrop-filter:blur(12px)}
 .soridraw-explore-preview-trigger svg{width:44%;height:44%;fill:currentColor;stroke-width:2.4}
 .soridraw-explore-preview-trigger svg.lucide-pause{fill:none}
-.soridraw-explore-cover-button:hover .soridraw-explore-preview-trigger,.soridraw-explore-preview-trigger:focus-visible,.soridraw-explore-card.is-previewing .soridraw-explore-preview-trigger{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.soridraw-explore-cover-wrap:hover .soridraw-explore-preview-trigger,.soridraw-explore-preview-trigger:focus-visible,.soridraw-explore-card.is-previewing .soridraw-explore-preview-trigger{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .soridraw-explore-preview-trigger:hover{background:rgba(8,8,11,.82)!important;box-shadow:0 10px 32px rgba(0,0,0,.38),0 0 0 7px rgba(255,255,255,.055)!important}
 .soridraw-explore-card.is-previewing .soridraw-explore-preview-trigger{background:rgba(10,10,13,.74)!important}
 .soridraw-explore-preview-eq{position:absolute;z-index:3;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(6,6,10,.05),rgba(6,6,10,.26))}

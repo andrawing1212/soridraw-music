@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs';
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
+const profileEdit = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
+const socialService = readFileSync('src/services/exploreSocialService.ts', 'utf8');
+const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
+const workerEntry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
 assert.match(page, /buildExploreRecommendationModel221/);
 assert.match(page, /picks: source\.slice\(0, 20\)/);
@@ -612,4 +616,75 @@ console.log('APP241_EXPLORE_MOBILE_RAIL_BUTTON_ZINDEX=PASS');
 
 console.log('APP242_EXPLORE_PINNED_CONTROLS_IDLE_HIDE=PASS');
 console.log('APP242_EXPLORE_PINNED_CONTROLS_TAP_REVEAL_TWO_SECONDS=PASS');
+assert.match(
+  profileEdit,
+  /\['youtubeUrl', 'YouTube', 'https:\/\/www\.youtube\.com\/@\.\.\.'\]/,
+  'profile editor must expose a YouTube link input with the existing social-link controls',
+);
+assert.match(
+  socialService,
+  /youtube:\s*String\(row\?\.socialLinks\?\.youtube \|\| row\?\.youtubeUrl \|\| row\?\.youtube_url \|\| ''\)\.trim\(\)/,
+  'profile normalization must carry YouTube without changing legacy social fields',
+);
+assert.match(
+  socialService,
+  /youtubeUrl:\s*draft\.youtubeUrl\.trim\(\)/,
+  'profile PATCH must send the optional YouTube link',
+);
+assert.match(
+  profileFirstView,
+  /youtube:\s*String\(row\?\.socialLinks\?\.youtube \|\| row\?\.youtubeUrl \|\| row\?\.youtube_url \|\| ''\)\.trim\(\)/,
+  'first-view local cache must retain YouTube',
+);
+assert.match(
+  page,
+  /safeExternalSocialHref244[\s\S]*?profileSocialLinks244[\s\S]*?label: 'Spotify'[\s\S]*?label: 'Instagram'[\s\S]*?label: 'TikTok'[\s\S]*?label: 'YouTube'/,
+  'public profile must map all four social sites to safe external icon links',
+);
+assert.match(
+  page,
+  /soridraw-explore-profile-avatar-column-244[\s\S]*?soridraw-explore-profile-social-icons-244[\s\S]*?target="_blank"[\s\S]*?rel="noreferrer noopener"/,
+  'social icons must render directly below the profile photo and open externally',
+);
+assert.doesNotMatch(
+  page,
+  /soridraw-explore-profile-social-links/,
+  'legacy text social-link row must be removed after icon conversion',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-profile-social-icons-244 a\{[\s\S]*?width:30px;height:30px[\s\S]*?\.soridraw-explore-profile-social-icons-244 svg\{width:16px;height:16px\}/,
+  'profile social icons must have compact desktop icon-button styling',
+);
+assert.match(
+  workerEntry,
+  /SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930[\s\S]*?PROFILE_SOCIAL_EXTRA_PREFIX_244 = 'internal\/explore\/profile-social-extra-v1'/,
+  'Worker must persist the additive YouTube field in the shared profile-media bucket',
+);
+const workerSocial244 = workerEntry.slice(
+  workerEntry.indexOf('// SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930'),
+  workerEntry.indexOf('// SORIDRAW_EXPLORE_PUBLIC_LIKE_SERVER_ACCEPTED_AT_193_20260924'),
+);
+assert.ok(workerSocial244.length > 0, 'Worker social-extra block must be bounded');
+assert.doesNotMatch(
+  workerSocial244,
+  /env\.DB|\.prepare\(/,
+  'YouTube social-extra storage must not add canonical D1 reads or writes',
+);
+assert.match(
+  workerEntry,
+  /isProfileUpdate244[\s\S]*?Object\.prototype\.hasOwnProperty\.call\(requestBody, 'youtubeUrl'\)[\s\S]*?writeProfileSocialExtra244/,
+  'older profile clients that omit youtubeUrl must not erase the new shared field',
+);
+assert.match(
+  workerEntry,
+  /isPublicProfileRead244[\s\S]*?\/\^\\\/v1\\\/profiles\\\/\[\^\/\]\+\(\?:\\\/first-view\)\?\$\/[\s\S]*?attachProfileSocialExtra244/,
+  'both direct public-profile and first-view responses must receive the shared YouTube link',
+);
+
 console.log('APP242_EXPLORE_PINNED_CONTROLS_NO_CARD_OBSTRUCTION=PASS');
+console.log('APP244_PROFILE_YOUTUBE_INPUT=PASS');
+console.log('APP244_PROFILE_SOCIAL_ICONS_BELOW_PHOTO=PASS');
+console.log('APP244_PROFILE_SOCIAL_EXTERNAL_LINKS_SAFE=PASS');
+console.log('APP244_PROFILE_YOUTUBE_SHARED_R2_NO_D1=PASS');
+console.log('APP244_PROFILE_OLD_CLIENT_YOUTUBE_PRESERVE=PASS');

@@ -2102,9 +2102,10 @@ export default function ExplorePage() {
     label: string,
     ownerProfileAuthority: ExplorePublicProfile | null = null,
     density: 'default' | 'latest' = 'default',
+    feed = false,
   ) => (
     <section
-      className={`soridraw-explore-grid${density === 'latest' ? ' soridraw-explore-grid--latest' : ''}`}
+      className={`soridraw-explore-grid${feed ? ' soridraw-explore-grid--feed' : ''}${density === 'latest' ? ' soridraw-explore-grid--latest' : ''}`}
       aria-label={label}
     >
       {items.map((track) => renderTrackCard(track, ownerProfileAuthority))}
@@ -2418,6 +2419,7 @@ export default function ExplorePage() {
               'Explore 곡 목록',
               null,
               sort === 'latest' && !submittedQuery ? 'latest' : 'default',
+              true,
             )
           )}
           {!submittedQuery && feedNextCursor && (

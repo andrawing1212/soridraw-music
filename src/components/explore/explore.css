@@ -46,20 +46,37 @@
  * Rails reuse the already-loaded Feed cards and never own their own data fetch. */
 .soridraw-explore-recommend-feed{display:grid;gap:42px}
 .soridraw-explore-recommend-section{min-width:0}
-.soridraw-explore-recommend-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:0 0 14px}
+.soridraw-explore-recommend-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:0 0 13px}
 .soridraw-explore-recommend-head>div:first-child{min-width:0}
 .soridraw-explore-recommend-head span{display:block;margin-bottom:5px;color:#ffb400;font-size:10px;font-weight:900;letter-spacing:.13em}
 .soridraw-explore-recommend-head h2{margin:0;color:rgba(255,255,255,.96);font-size:21px;font-weight:900;letter-spacing:-.025em}
 .soridraw-explore-recommend-head p{margin:5px 0 0;color:rgba(235,235,240,.44);font-size:11px;font-weight:650}
-.soridraw-explore-recommend-controls{display:flex;align-items:center;gap:7px;flex:0 0 auto}
-.soridraw-explore-recommend-controls button{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0!important;outline:0!important;border-radius:12px;background:rgba(255,255,255,.065)!important;box-shadow:none!important;color:rgba(255,255,255,.76);cursor:pointer;transition:background .15s ease,color .15s ease,opacity .15s ease}
-.soridraw-explore-recommend-controls button:hover:not(:disabled){background:rgba(255,255,255,.11)!important;color:#fff}
-.soridraw-explore-recommend-controls button:disabled{opacity:.22;cursor:default}
-.soridraw-explore-recommend-controls svg{width:18px;height:18px}
+.soridraw-explore-recommend-keywords{display:flex;align-items:center;gap:7px;max-width:100%;margin:-2px 0 14px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.soridraw-explore-recommend-keywords::-webkit-scrollbar{display:none}
+.soridraw-explore-recommend-keywords button{flex:0 0 auto;min-height:30px;padding:0 11px;border:0!important;outline:0!important;border-radius:999px;background:rgba(255,255,255,.055)!important;box-shadow:none!important;color:rgba(235,235,240,.52);font-size:11px;font-weight:800;cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease}
+.soridraw-explore-recommend-keywords button:hover{background:rgba(255,255,255,.09)!important;color:rgba(255,255,255,.88)}
+.soridraw-explore-recommend-keywords button:active{transform:scale(.97)}
+.soridraw-explore-recommend-keywords button.is-active{background:#f3f3f4!important;color:#171719}
+.soridraw-explore-recommend-stage{position:relative;min-width:0}
 .soridraw-explore-recommend-scroll{width:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior-inline:contain}
 .soridraw-explore-recommend-scroll::-webkit-scrollbar{display:none}
 .soridraw-explore-recommend-track{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 84px)/7);gap:14px;align-items:start;min-width:100%}
 .soridraw-explore-recommend-track>.soridraw-explore-card{scroll-snap-align:start}
+.soridraw-explore-recommend-edge{position:absolute;z-index:5;top:38%;display:grid;place-items:center;width:36px;height:36px;padding:0;border:0!important;outline:0!important;border-radius:50%;background:rgba(17,17,19,.9)!important;box-shadow:0 5px 18px rgba(0,0,0,.3)!important;color:rgba(255,255,255,.92);cursor:pointer;transform:translateY(-50%);transition:opacity .15s ease,background .15s ease,color .15s ease}
+.soridraw-explore-recommend-edge:hover:not(:disabled){background:rgba(35,35,39,.96)!important;color:#fff}
+.soridraw-explore-recommend-edge:disabled{opacity:0;pointer-events:none}
+.soridraw-explore-recommend-edge svg{width:19px;height:19px}
+.soridraw-explore-recommend-edge--left{left:8px}
+.soridraw-explore-recommend-edge--right{right:8px}
+.soridraw-explore-recommend-track--creators{align-items:start}
+.soridraw-explore-recommend-creator-card{display:flex;min-width:0;flex-direction:column;align-items:center;padding:3px 4px 8px;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;color:rgba(255,255,255,.9);cursor:pointer;scroll-snap-align:start}
+.soridraw-explore-recommend-creator-card:hover .soridraw-explore-recommend-creator-avatar{transform:scale(1.035);filter:brightness(1.05)}
+.soridraw-explore-recommend-creator-avatar{display:grid;place-items:center;width:min(132px,72%);aspect-ratio:1/1;overflow:hidden;border-radius:50%;background:linear-gradient(145deg,rgba(255,180,0,.2),rgba(255,255,255,.06));color:rgba(255,255,255,.72);font-size:32px;font-weight:900;transition:transform .16s ease,filter .16s ease}
+.soridraw-explore-recommend-creator-avatar img{width:100%;height:100%;object-fit:cover}
+.soridraw-explore-recommend-creator-card strong{max-width:100%;margin-top:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850}
+.soridraw-explore-recommend-creator-card small{max-width:100%;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(235,235,240,.42);font-size:10px;font-weight:650}
+.soridraw-explore-recommend-track--creators~*{}
+.soridraw-explore-recommend-stage:has(.soridraw-explore-recommend-track--creators) .soridraw-explore-recommend-edge{top:45%}
 
 .soridraw-explore-card{min-width:0;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
 .soridraw-explore-cover-button{display:block;width:100%;padding:0;border:0!important;outline:0!important;border-radius:16px;overflow:hidden;background:transparent!important;box-shadow:none!important;cursor:pointer}
@@ -130,7 +147,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 }
 @media (max-width:720px){
 .soridraw-explore-top-navigation{grid-template-columns:1fr auto;padding:0 12px}.soridraw-explore-brand,.soridraw-explore-top-spacer{display:none}.soridraw-explore-top-navigation nav{grid-column:1/-1}.soridraw-explore-top-navigation .soridraw-top-nav-item{padding:0 10px;gap:6px;font-size:12px}.soridraw-explore-top-navigation .soridraw-top-nav-item svg{width:19px;height:19px}
-.soridraw-explore-page{padding:82px 12px 46px}.soridraw-explore-head{align-items:center;margin-bottom:18px}.soridraw-explore-head p{display:none}.soridraw-explore-title-line svg{width:22px;height:22px}.soridraw-explore-head h1{font-size:26px}.soridraw-explore-search form{width:min(58vw,280px)}.soridraw-explore-tabs{margin-bottom:16px}.soridraw-explore-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:19px 10px}.soridraw-explore-recommend-feed{gap:30px}.soridraw-explore-recommend-head{align-items:center;margin-bottom:11px}.soridraw-explore-recommend-head h2{font-size:18px}.soridraw-explore-recommend-head p{display:none}.soridraw-explore-recommend-controls button{width:32px;height:32px;border-radius:10px}.soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 10px)/2);gap:10px}.soridraw-explore-cover-shell{border-radius:13px}.soridraw-explore-card-copy{padding-top:9px}.soridraw-explore-card-genre{font-size:10px}.soridraw-explore-card-copy h3{font-size:15px}.soridraw-explore-creator{font-size:13px}.soridraw-explore-avatar{width:22px;height:22px;min-width:22px}.soridraw-explore-card-actions{gap:9px}
+.soridraw-explore-page{padding:82px 12px 46px}.soridraw-explore-head{align-items:center;margin-bottom:18px}.soridraw-explore-head p{display:none}.soridraw-explore-title-line svg{width:22px;height:22px}.soridraw-explore-head h1{font-size:26px}.soridraw-explore-search form{width:min(58vw,280px)}.soridraw-explore-tabs{margin-bottom:16px}.soridraw-explore-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:19px 10px}.soridraw-explore-recommend-feed{gap:30px}.soridraw-explore-recommend-head{align-items:center;margin-bottom:11px}.soridraw-explore-recommend-head h2{font-size:18px}.soridraw-explore-recommend-head p{display:none}.soridraw-explore-recommend-keywords{margin-bottom:11px;gap:6px}.soridraw-explore-recommend-keywords button{min-height:28px;padding:0 10px;font-size:10px}.soridraw-explore-recommend-edge{width:32px;height:32px}.soridraw-explore-recommend-edge--left{left:5px}.soridraw-explore-recommend-edge--right{right:5px}.soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 10px)/2);gap:10px}.soridraw-explore-recommend-creator-avatar{width:min(108px,74%)}.soridraw-explore-cover-shell{border-radius:13px}.soridraw-explore-card-copy{padding-top:9px}.soridraw-explore-card-genre{font-size:10px}.soridraw-explore-card-copy h3{font-size:15px}.soridraw-explore-creator{font-size:13px}.soridraw-explore-avatar{width:22px;height:22px;min-width:22px}.soridraw-explore-card-actions{gap:9px}
 }
 
 :root[data-soridraw-theme="light"] .soridraw-explore-app-shell,:root[data-soridraw-theme="light"] .soridraw-explore-page{background:#f5f5f6;color:#171719}
@@ -146,5 +163,11 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="light"] .soridraw-explore-tabs button.is-active{background:rgba(255,180,0,.1)!important;color:#b87c00!important}
 :root[data-soridraw-theme="light"] .soridraw-explore-recommend-head h2{color:rgba(20,20,22,.94)}
 :root[data-soridraw-theme="light"] .soridraw-explore-recommend-head p{color:rgba(25,25,28,.48)}
-:root[data-soridraw-theme="light"] .soridraw-explore-recommend-controls button{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.66)}
-:root[data-soridraw-theme="light"] .soridraw-explore-recommend-controls button:hover:not(:disabled){background:rgba(20,20,24,.09)!important;color:#111}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-keywords button{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.58)}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-keywords button:hover{background:rgba(20,20,24,.09)!important;color:#111}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-keywords button.is-active{background:#1d1d20!important;color:#fff}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-edge{background:rgba(248,248,249,.94)!important;color:#171719;box-shadow:0 5px 18px rgba(0,0,0,.14)!important}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-edge:hover:not(:disabled){background:#fff!important;color:#111}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-card{color:rgba(20,20,22,.92)}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-avatar{background:linear-gradient(145deg,rgba(255,180,0,.18),rgba(20,20,24,.055));color:rgba(20,20,22,.68)}
+:root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-card small{color:rgba(25,25,28,.46)}

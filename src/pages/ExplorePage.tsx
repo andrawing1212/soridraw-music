@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pause, Pencil, Pin, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -55,7 +55,6 @@ import {
 } from '../services/exploreSocialService';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
-import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
 import {
   buildExploreLegacyApplyKeywords,
@@ -581,36 +580,6 @@ function ExploreCreatorCard221({
 const EXPLORE_PREVIEW_MAX_MS_222 = 120_000;
 const EXPLORE_EQ_BAR_COUNT_222 = 24;
 
-const resolveExplorePreviewAudioUrl222 = (track: ExploreTrack) => {
-  const primary = safeText(track.sunoUrlPrimary);
-  const directCandidate = primary && (
-    /\.(mp3|m4a|aac|ogg|wav)(?:$|[?#])/i.test(primary)
-    || /^https:\/\/cdn\d*\.suno\.ai\//i.test(primary)
-    || /^https:\/\/d[0-9a-z]+\.cloudfront\.net\//i.test(primary)
-  ) ? primary : '';
-
-  // app223 — Explore stores a public Suno share page in sunoUrlPrimary, not
-  // a media file. Feeding that HTML page into <audio> made app222 flash the
-  // equalizer and immediately stop. The public cover URL carries the clip UUID.
-  const coverUrl = safeText(track.coverUrl);
-  const coverClipId = coverUrl.match(
-    /image(?:_large)?_([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i,
-  )?.[1] || '';
-  const clipCandidates = [
-    safeText(track.sourceSubTrackId),
-    coverClipId,
-    primary.match(/\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:[/?#]|$)/i)?.[1] || '',
-    primary.match(/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i)?.[1] || '',
-  ];
-  const clipId = clipCandidates.find((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
-
-  if (directCandidate) return directCandidate;
-  if (clipId) return `https://d2lwuy8qc234o3.cloudfront.net/1/clip/${clipId}.m4a`;
-
-  // Never hand a Suno HTML/share page to the audio element.
-  return '';
-};
-
 function ExploreTrackCard({
   track,
   liked,
@@ -701,12 +670,16 @@ function ExploreTrackCard({
           className="soridraw-explore-preview-trigger"
           onClick={(event) => {
             event.stopPropagation();
+            // app224 — this control is the same Suno link as the cover. SORIDRAW
+            // only paints the local equalizer/title feedback; it never streams audio.
+            openSuno();
             onTogglePreview(track);
           }}
-          aria-label={isPreviewing ? `${cardDisplayTitle.title} 미리듣기 일시정지` : `${cardDisplayTitle.title} 미리듣기 재생`}
-          title={isPreviewing ? '미리듣기 일시정지' : '미리듣기 재생'}
+          disabled={!openUrl}
+          aria-label={openUrl ? `${cardDisplayTitle.title} Suno에서 열기` : `${cardDisplayTitle.title} Suno 링크 없음`}
+          title={openUrl ? 'Suno에서 열기' : 'Suno 링크 없음'}
         >
-          {isPreviewing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          <Play aria-hidden="true" />
         </button>
       </div>
 
@@ -783,12 +756,6 @@ function ExploreTrackCard({
 
 export default function ExplorePage() {
   const navigate = useNavigate();
-  const {
-    currentTrack: globalPlayerTrack,
-    isPlaying: globalPlayerIsPlaying,
-    playTrack: playGlobalTrack,
-    togglePlayPause: toggleGlobalPlayPause,
-  } = useGlobalPlayerControls();
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -839,110 +806,33 @@ export default function ExplorePage() {
   const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
   const publicLikeRefreshAttemptsRef192 = useRef<Map<string, number>>(new Map());
   const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
-  const explorePreviewTimerRef222 = useRef<number | null>(null);
-  const globalPlayerTrackRef222 = useRef(globalPlayerTrack);
-  const globalPlayerIsPlayingRef222 = useRef(globalPlayerIsPlaying);
+  // app224 — the center play icon is only a second entry point to the existing
+  // Suno link. Keep the in-app feedback visual-only so Explore never attempts
+  // to stream, proxy, archive, or resolve third-party audio.
+  const [activeExplorePreviewTrackId224, setActiveExplorePreviewTrackId224] = useState('');
+  const explorePreviewTimerRef224 = useRef<number | null>(null);
 
-  globalPlayerTrackRef222.current = globalPlayerTrack;
-  globalPlayerIsPlayingRef222.current = globalPlayerIsPlaying;
-
-  const activeExplorePreviewTrackId222 = globalPlayerIsPlaying
-    && Boolean(globalPlayerTrack?.parent?.__exploreCardPreview)
-    ? safeText(globalPlayerTrack?.parent?.exploreTrackId)
-    : '';
-
-  const clearExplorePreviewTimer222 = () => {
-    if (explorePreviewTimerRef222.current == null) return;
-    window.clearTimeout(explorePreviewTimerRef222.current);
-    explorePreviewTimerRef222.current = null;
+  const clearExplorePreviewTimer224 = () => {
+    if (explorePreviewTimerRef224.current == null) return;
+    window.clearTimeout(explorePreviewTimerRef224.current);
+    explorePreviewTimerRef224.current = null;
   };
 
-  const scheduleExplorePreviewTimeout222 = (trackId: string) => {
-    clearExplorePreviewTimer222();
-    explorePreviewTimerRef222.current = window.setTimeout(() => {
-      const current = globalPlayerTrackRef222.current;
-      if (
-        current?.parent?.__exploreCardPreview
-        && safeText(current.parent.exploreTrackId) === trackId
-        && globalPlayerIsPlayingRef222.current
-      ) {
-        toggleGlobalPlayPause();
-      }
-      explorePreviewTimerRef222.current = null;
+  const showExploreLinkVisual224 = (track: ExploreTrack) => {
+    clearExplorePreviewTimer224();
+    setActiveExplorePreviewTrackId224(track.id);
+    explorePreviewTimerRef224.current = window.setTimeout(() => {
+      setActiveExplorePreviewTrackId224((current) => current === track.id ? '' : current);
+      explorePreviewTimerRef224.current = null;
     }, EXPLORE_PREVIEW_MAX_MS_222);
   };
 
-  const toggleExplorePreview222 = (track: ExploreTrack) => {
-    const activeId = globalPlayerTrack?.parent?.__exploreCardPreview
-      ? safeText(globalPlayerTrack.parent.exploreTrackId)
-      : '';
-
-    if (activeId === track.id) {
-      toggleGlobalPlayPause();
-      if (globalPlayerIsPlaying) {
-        clearExplorePreviewTimer222();
-      } else {
-        scheduleExplorePreviewTimeout222(track.id);
-      }
-      return;
-    }
-
-    const audioUrl = resolveExplorePreviewAudioUrl222(track);
-    if (!audioUrl) {
-      setSocialNotice('이 곡은 현재 재생 가능한 음원 URL을 확인할 수 없어요. 썸네일을 누르면 Suno 원본 링크로 이동할 수 있어요.');
-      return;
-    }
-
-    playGlobalTrack({
-      url: audioUrl,
-      id: `explore-preview-${track.id}`,
-      trackId: track.sourceId || track.id,
-      title: getExploreCardDisplayTitle(track).title,
-      imageUrl: track.coverUrl || undefined,
-      creatorDisplayId: track.displayName,
-      ownerNickname: track.displayName,
-      style: track.style || undefined,
-      prompt: track.prompt || undefined,
-      lyrics: track.lyrics || undefined,
-      duration: track.durationSeconds || undefined,
-      index: Number.isFinite(Number(track.sourceSubTrackIndex)) ? Number(track.sourceSubTrackIndex) : 0,
-      parent: {
-        __exploreCardPreview: true,
-        exploreTrackId: track.id,
-        id: track.sourceId || track.id,
-        trackId: track.sourceId || track.id,
-        sourceId: track.sourceId || track.id,
-        sourceType: 'shared_track',
-        ownerUid: track.ownerUid,
-        ownerNickname: track.displayName,
-        imageUrl: track.coverUrl || null,
-        coverUrl: track.coverUrl || null,
-        style: track.style || '',
-        prompt: track.prompt || '',
-        lyrics: track.lyrics || '',
-        sourceSubTrackId: track.sourceSubTrackId || null,
-        sourceSubTrackIndex: track.sourceSubTrackIndex ?? null,
-        createdAt: track.publishedAt || Date.now(),
-      },
-      sourceId: track.sourceId || track.id,
-      sourceSubTrackId: track.sourceSubTrackId || undefined,
-      sourceSubTrackIndex: track.sourceSubTrackIndex ?? undefined,
-    } as any);
-    scheduleExplorePreviewTimeout222(track.id);
-  };
-
-  useEffect(() => {
-    if (globalPlayerTrack?.parent?.__exploreCardPreview && globalPlayerIsPlaying) return;
-    clearExplorePreviewTimer222();
-  }, [globalPlayerTrack, globalPlayerIsPlaying]);
-
   useEffect(() => () => {
-    clearExplorePreviewTimer222();
-    const current = globalPlayerTrackRef222.current;
-    if (current?.parent?.__exploreCardPreview && globalPlayerIsPlayingRef222.current) {
-      toggleGlobalPlayPause();
+    if (explorePreviewTimerRef224.current != null) {
+      window.clearTimeout(explorePreviewTimerRef224.current);
+      explorePreviewTimerRef224.current = null;
     }
-  }, [toggleGlobalPlayPause]);
+  }, []);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -2208,8 +2098,8 @@ export default function ExplorePage() {
         track={displayTrack129}
         liked={pair129.liked}
         likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
-        isPreviewing={activeExplorePreviewTrackId222 === track.id}
-        onTogglePreview={toggleExplorePreview222}
+        isPreviewing={activeExplorePreviewTrackId224 === track.id}
+        onTogglePreview={showExploreLinkVisual224}
         onToggleLike={toggleLike}
         onOpenProfile={openProfile}
         onApplyNext={applyExploreTrackToNextSong}

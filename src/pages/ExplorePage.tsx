@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Grid3X3, Heart, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -228,6 +228,18 @@ const buildExploreR2SnapshotFeedUrl108 = (feedUrl: string, revision: string | nu
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();
   return normalized || fallback;
+};
+
+const safeExternalSocialHref244 = (value: unknown) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
 };
 
 const safeCount = (value: unknown) => {
@@ -2558,6 +2570,32 @@ export default function ExplorePage() {
   );
 
   const profilePinnedTracks231 = profileTracks.filter((track) => track.profilePinned);
+  const profileSocialLinks244 = profile ? ([
+    {
+      key: 'spotify',
+      label: 'Spotify',
+      href: safeExternalSocialHref244(profile.socialLinks?.spotify),
+      icon: <Disc3 aria-hidden="true" />,
+    },
+    {
+      key: 'instagram',
+      label: 'Instagram',
+      href: safeExternalSocialHref244(profile.socialLinks?.instagram),
+      icon: <Instagram aria-hidden="true" />,
+    },
+    {
+      key: 'tiktok',
+      label: 'TikTok',
+      href: safeExternalSocialHref244(profile.socialLinks?.tiktok),
+      icon: <Music2 aria-hidden="true" />,
+    },
+    {
+      key: 'youtube',
+      label: 'YouTube',
+      href: safeExternalSocialHref244(profile.socialLinks?.youtube),
+      icon: <Youtube aria-hidden="true" />,
+    },
+  ] as const).filter((item) => Boolean(item.href)) : [];
 
   if (profileUid) {
     return (
@@ -2591,8 +2629,26 @@ export default function ExplorePage() {
                 </div>
               )}
               <div className="soridraw-explore-profile-content">
-                <div className="soridraw-explore-profile-avatar" aria-hidden="true">
-                  {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
+                <div className="soridraw-explore-profile-avatar-column-244">
+                  <div className="soridraw-explore-profile-avatar" aria-hidden="true">
+                    {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
+                  </div>
+                  {profileSocialLinks244.length > 0 && (
+                    <div className="soridraw-explore-profile-social-icons-244" aria-label="소셜 링크">
+                      {profileSocialLinks244.map((item) => (
+                        <a
+                          key={item.key}
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          aria-label={`${item.label} 열기`}
+                          title={item.label}
+                        >
+                          {item.icon}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="soridraw-explore-profile-copy">
                   <div className="soridraw-explore-profile-name-line">
@@ -2621,13 +2677,6 @@ export default function ExplorePage() {
                     <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
                   </div>
                   {profile.genres.length > 0 && <div className="soridraw-explore-profile-genres">{profile.genres.map((genre) => <span key={genre}>{genre}</span>)}</div>}
-                  {(profile.socialLinks.spotify || profile.socialLinks.instagram || profile.socialLinks.tiktok) && (
-                    <div className="soridraw-explore-profile-social-links">
-                      {profile.socialLinks.spotify && <a href={profile.socialLinks.spotify} target="_blank" rel="noreferrer">Spotify</a>}
-                      {profile.socialLinks.instagram && <a href={profile.socialLinks.instagram} target="_blank" rel="noreferrer">Instagram</a>}
-                      {profile.socialLinks.tiktok && <a href={profile.socialLinks.tiktok} target="_blank" rel="noreferrer">TikTok</a>}
-                    </div>
-                  )}
                 </div>
               </div>
             </section>

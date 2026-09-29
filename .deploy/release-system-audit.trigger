@@ -1,7 +1,7 @@
-requested_at=2026-09-30T07:25:00+09:00
-requested_by=app248_profile_cost_phase2
-product_code_target=7f142009834536f065706e40334b51f5691f7d7e
-release_purpose=audit_app248_bio_fts_and_dual_media_batch
+requested_at=2026-09-30T07:31:00+09:00
+requested_by=app248_media_preflight_alignment
+product_code_target=ea051675d7a2b1529665a69769dcd5991d0e46af
+release_purpose=audit_app248_media_batch_preflight_alignment
 app_version=248
 preview_only=true
 deploy=false

@@ -1,3 +1,57 @@
+## 0JE. Explore 재생버튼 단독 링크 + 버튼 내부 이퀄라이저 (2026-09-29 KST)
+
+상태: **app224 사용자 실화면 PASS / app225 UI 미세조정 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 확인:
+- app224에서 중앙 재생버튼 → Suno 원본 링크 전환 정상 PASS.
+- 다만 전체 커버 이퀄라이저가 과하고, 배경 클릭도 링크가 열려 재생/일시정지 기능처럼 느껴질 수 있어 UI 조정 요청.
+
+app225 수정:
+- `src/pages/ExplorePage.tsx`
+  - 커버/배경은 완전 비클릭 시각 영역으로 변경.
+  - 중앙 재생버튼만 기존 `openSuno()` 링크를 실행.
+  - 재생버튼을 기존보다 크게 표시.
+  - 링크 실행 후 전체 커버 이퀄라이저/제목 강조 제거.
+  - 활성 피드백은 **재생버튼 내부 5-bar 이퀄라이저만** 표시.
+  - Pause 아이콘/일시정지 의미 없음. 활성 상태에서 다시 누르면 링크를 다시 여는 동작.
+- `src/components/explore/explore.css`
+  - 커버 pointer-events 제거/hover zoom 제거.
+  - 재생버튼 크기 `clamp(56px,30%,76px)`.
+  - 버튼 내부 이퀄라이저만 compositor-friendly transform 애니메이션.
+  - 전체-cover glow/sweep/title accent 삭제.
+- 제품 commit: `6237f11d8f0cccac9929ebdbaa1a48159c25ef84`, `5d223f3efd57b430ea3dea032202ee7332d0eb68`.
+- verifier 정리: `272136244e0f8817dccbfac376bb68bbae6bae99`, `9f3e2b04c6ccffb50d3011c71cf6da1c8e5519c2`.
+- app version commit: `a9e5d29fd763fb2a6a29c7796da1bd0e39144e88` / version `225`.
+
+검증:
+- 첫 Audit은 app201의 오래된 “커버 클릭 유지” 검증식 때문에 Static FAIL → 사용자 새 기준으로 verifier만 정정.
+- 두 번째 Audit attempt 1은 제품/정적/APP225 검증 PASS 후 Cloudflare GET 500 일시 오류로 중단.
+- 동일 Run `36564555562` attempt 2 재실행 **SUCCESS**.
+- TypeScript PASS / Build PASS / Static verification PASS / Like regression 및 비용/백엔드 감사 PASS.
+- `APP225_EXPLORE_COVER_BACKGROUND_NONINTERACTIVE=PASS`.
+- `APP225_EXPLORE_PLAY_BUTTON_ONLY_LINK=PASS`.
+- `APP225_EXPLORE_PLAY_BUTTON_LARGER=PASS`.
+- `APP225_EXPLORE_BUTTON_ONLY_EQUALIZER=PASS`.
+- `APP225_EXPLORE_NO_PAUSE_SEMANTICS=PASS`.
+- `APP225_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS`.
+- `APP225_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS`.
+
+PREVIEW 배포:
+- release SHA `48293b7895e5a13de3d6942a50de101a592e2d45`.
+- Firebase PREVIEW Hosting Run `36565034660` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=225`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- Firestore / D1 / 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+다음:
+- 실제 화면에서 배경 클릭 무반응, 중앙 재생버튼만 링크 전환, 버튼 내부 이퀄라이저 크기/강도 확인.
+- 정상이라면 app225 Explore 카드 재생 링크 UI를 동결 기준으로 보호.
+
 ## 0JD. Explore 재생버튼 = 기존 Suno 링크 · 앱 내부는 시각효과만 (2026-09-29 KST)
 
 상태: **사용자 영상 21570 기준 의도 재확정 / app224 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**

@@ -99,7 +99,17 @@ assert.match(
 assert.match(
   css,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track:not\(\.soridraw-explore-recommend-track--creators\)\{grid-auto-columns:calc\(\(100% - 16px\)\/3\);gap:8px\}/,
-  'Recommended mobile song rails must show three song cards in the viewport',
+  'Genre recommendation mobile song rails must retain three song cards in the viewport',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  'SORIDRAW picks mobile rail must show two song cards in the viewport',
+);
+assert.match(
+  page,
+  /title="SORIDRAW 추천"[\s\S]*?trackClassName="soridraw-explore-recommend-track--picks"[\s\S]*?mobileGroupSize=\{2\}/,
+  'SORIDRAW picks must use the two-card mobile alignment group without changing genre rails',
 );
 assert.match(
   css,
@@ -124,8 +134,8 @@ assert.match(
 );
 assert.match(
   page,
-  /SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_229_20260929/,
-  'mobile song rail alignment must use visible-share scoring',
+  /SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_231_20260930/,
+  'mobile song rail alignment must use rail-specific visible-share scoring',
 );
 assert.match(
   page,
@@ -134,8 +144,8 @@ assert.match(
 );
 assert.match(
   page,
-  /for \(let startIndex = 0; startIndex <= cards\.length - 3; startIndex \+= 1\)[\s\S]*?visibleRatios\[startIndex\][\s\S]*?visibleRatios\[startIndex \+ 1\][\s\S]*?visibleRatios\[startIndex \+ 2\]/,
-  'mobile song rail alignment must score contiguous three-card windows',
+  /startIndex <= cards\.length - mobileAlignGroupSize231[\s\S]*?\.slice\(startIndex, startIndex \+ mobileAlignGroupSize231\)[\s\S]*?\.reduce\(\(sum, ratio\) => sum \+ ratio, 0\)/,
+  'mobile song rail alignment must score contiguous groups using each rail mobile group size',
 );
 assert.match(
   page,
@@ -145,7 +155,38 @@ assert.match(
 assert.match(
   page,
   /scroller\.scrollTo\(\{ left: target, behavior: 'smooth' \}\)/,
-  'delayed mobile alignment must settle smoothly onto the nearest three-song group',
+  'delayed mobile alignment must settle smoothly onto the selected visible group',
+);
+
+assert.match(
+  page,
+  /const profilePinnedTracks231 = profileTracks\.filter\(\(track\) => track\.profilePinned\);[\s\S]*?const profileOtherTracks231 = profileTracks\.filter\(\(track\) => !track\.profilePinned\);/,
+  'public profile must separate pinned and ordinary public tracks locally',
+);
+assert.match(
+  page,
+  /soridraw-explore-profile-pinned-track-231[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile\)\)/,
+  'pinned public tracks must render in their dedicated profile rail',
+);
+assert.match(
+  social,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-profile-pinned-track-231\{[\s\S]*?grid-auto-flow:column;grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px[\s\S]*?overflow-x:auto/,
+  'mobile pinned public tracks must be a two-card horizontal rail',
+);
+assert.match(
+  page,
+  /renderTrackGrid\([\s\S]*?profileOtherTracks231,[\s\S]*?profile,[\s\S]*?'default',[\s\S]*?true,[\s\S]*?\)/,
+  'ordinary public-profile tracks must use the existing compact mobile feed density',
+);
+assert.doesNotMatch(
+  page,
+  /soridraw-explore-pin-badge/,
+  'shared Explore/public-profile cards must not render a pinned badge',
+);
+assert.doesNotMatch(
+  css + social,
+  /soridraw-explore-pin-badge/,
+  'obsolete pinned card badge styles must be removed',
 );
 
 assert.match(
@@ -278,16 +319,15 @@ console.log('APP225_EXPLORE_PLAY_BUTTON_ONLY_LINK=PASS');
 console.log('APP225_EXPLORE_PLAY_BUTTON_LARGER=PASS');
 console.log('APP225_EXPLORE_BUTTON_ONLY_EQUALIZER=PASS');
 console.log('APP225_EXPLORE_NO_PAUSE_SEMANTICS=PASS');
-console.log('APP225_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS');
 console.log('APP225_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS');
 console.log('APP226_EXPLORE_ACTIVE_TITLE_ACCENT_RESTORED=PASS');
 console.log('APP226_EXPLORE_BUTTON_EQUALIZER_SLOWER=PASS');
 console.log('APP226_EXPLORE_MOBILE_NATIVE_MOMENTUM_SCROLL=PASS');
 console.log('APP226_EXPLORE_MOBILE_SCROLL_SNAP_DISABLED=PASS');
-console.log('APP227_EXPLORE_MOBILE_RECOMMENDED_THREE_SONGS=PASS');
+console.log('APP227_EXPLORE_MOBILE_RECOMMENDED_THREE_SONGS_HISTORICAL=PASS');
 console.log('APP227_EXPLORE_MOBILE_LATEST_THREE_COLUMNS=PASS');
 console.log('APP227_EXPLORE_MOBILE_POPULAR_THREE_COLUMNS=PASS');
-console.log('APP227_EXPLORE_PROFILE_GRID_DENSITY_PROTECTED=PASS');
+console.log('APP227_EXPLORE_PROFILE_GRID_DENSITY_HISTORICAL=PASS');
 console.log('APP228_EXPLORE_MOBILE_TITLE_CREATOR_FONT_REDUCED=PASS');
 console.log('APP228_EXPLORE_MOBILE_THREE_SECOND_GROUP_ALIGNMENT=PASS');
 console.log('APP228_EXPLORE_MOBILE_NATIVE_MOMENTUM_BEFORE_ALIGNMENT=PASS');
@@ -296,3 +336,8 @@ console.log('APP229_EXPLORE_MOBILE_CONTIGUOUS_THREE_CARD_WINDOW=PASS');
 console.log('APP229_EXPLORE_MOBILE_PARTIAL_SIDE_WEIGHTING=PASS');
 console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS=PASS');
 console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES=PASS');
+
+console.log('APP231_EXPLORE_MOBILE_PICKS_TWO_UP=PASS');
+console.log('APP231_EXPLORE_PROFILE_PINNED_TWO_UP_HORIZONTAL=PASS');
+console.log('APP231_EXPLORE_PROFILE_OTHER_THREE_COLUMNS=PASS');
+console.log('APP231_EXPLORE_PIN_BADGES_REMOVED=PASS');

@@ -280,7 +280,7 @@ assert.doesNotMatch(
 );
 assert.match(
   css,
-  /\.soridraw-explore-preview-trigger\{[\s\S]*?width:clamp\(56px,30%,76px\)/,
+  /\.soridraw-explore-preview-trigger\{[\s\S]*?width:clamp\(38px,28%,104px\)/,
   'play-link control must be larger than app224',
 );
 assert.match(
@@ -350,3 +350,5 @@ console.log('APP232_EXPLORE_PROFILE_PINNED_SHARED_RAIL=PASS');
 console.log('APP232_EXPLORE_PROFILE_PINNED_MOBILE_BUTTONS_AND_TWO_SECOND_ALIGN=PASS');
 console.log('APP232_EXPLORE_PROFILE_PINNED_DUPLICATED_IN_FULL_LIST=PASS');
 console.log('APP232_EXPLORE_PROFILE_PC_SIDE_PADDING=PASS');
+console.log('APP233_EXPLORE_PLAY_CONTROL_RESPONSIVE_TO_THUMBNAIL=PASS');
+console.log('APP233_EXPLORE_EQUALIZER_RESPONSIVE_TO_THUMBNAIL=PASS');

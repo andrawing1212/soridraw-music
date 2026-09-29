@@ -1,7 +1,8 @@
-release_system_audit=2026-09-30-app246-profile-follow-cost
-source_head=784ae9ee92a36cd73c5e09629fd610d1caf8a916
-app_version=246
-scope=profile_follow_media_cost_hotpath_and_stale_rail_verifier
-runtime_change=true
+requested_at=2026-09-30T06:35:00+09:00
+requested_by=app247_profile_cost_audit
+product_code_target=909bbf2b5f6789a3bb723d3c0dd2e33aa9c1c066
+release_purpose=audit_app247_profile_save_r2_first_and_noop_skip
+app_version=247
 preview_only=true
+deploy=false
 test_production_unchanged_required=true

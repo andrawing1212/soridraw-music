@@ -1,3 +1,38 @@
+## 0JW. PREVIEW app247 · 프로필 저장 warm-path 추가 절감 (2026-09-30 KST)
+
+상태: **코드 반영 / 배포 전 / 정적 감사 대기**
+
+기준:
+- 작업 branch: `preview`
+- 시작 HEAD: `c73005774a9a2c7dd935315c0c8e7e2571295695`
+- app246 Audit: Run `36632631152` SUCCESS
+- app version: **247**
+
+이번 추가 절감:
+- 정상 프로필 저장은 shared R2의 현재 프로필을 먼저 사용. 정상 warm 상태에서는 `public_profiles + profile_stats` 사전 SELECT를 하지 않고, 실제 바뀐 필드가 있을 때만 canonical D1 UPDATE 수행.
+- 이미 읽은 shared R2 bundle을 같은 저장 요청 안에서 재사용하여 저장 직전 동일 프로필 R2 재조회도 제거.
+- UID가 확정된 프로필/이미지/팔로우 경로는 handle alias R2를 먼저 조회하지 않고 UID object를 직접 읽도록 변경.
+- 프로필 편집에서 **텍스트/장르/소셜 값이 하나도 안 바뀐 경우 PATCH 자체를 보내지 않음**. 이미지 전용 수정은 프로필 PATCH 없이 이미지 변경만 수행.
+- YouTube 링크가 기존 값과 같으면 shared R2 sidecar PUT을 생략. 기존 edge/cache 값 확인 후 실제 변경 때만 저장.
+- 기존 app246의 저장 후 공개프로필 재조회 제거, 이미지 저장 전체 프로필 rebuild 제거, 팔로우 RETURNING 최적화는 그대로 유지.
+
+남는 비용과 이유:
+- 닉네임/소개/핸들/장르/기존 3개 소셜처럼 **실제 canonical 프로필 필드가 바뀌면** shared D1 `public_profiles` 1회 UPDATE는 TEST/PRODUCTION 호환 때문에 유지.
+- 그 1회 UPDATE가 현재 shared D1의 기존 `explore032_profile_*` trigger를 통해 여러 physical rows_written으로 증폭될 수 있음.
+- 이미지 변경도 구버전 TEST/PRODUCTION이 같은 사용자 프로필을 읽어야 하므로 이미지 1개당 canonical 프로필 URL UPDATE는 아직 유지.
+- 이 남은 physical write fan-out을 없애려면 기존 trigger 교체 또는 모든 환경의 R2 profile authority 승격이 필요하며, 둘 다 별도 승인 없는 파괴적/호환성 작업으로 app247에서는 실행하지 않음.
+
+보호:
+- 사용자 데이터 삭제/백필/마이그레이션 없음.
+- 공개/비공개, 좋아요, 검색, UI/CSS, PC/모바일 레이아웃 변경 없음.
+- main / TEST / PRODUCTION 비변경.
+
+다음:
+- Release System Audit PASS 확인.
+- 사용자가 PREVIEW 배포를 요청하면 Worker + Hosting을 app247로 배포.
+- 배포 후 프로필 저장을 **(1) 값 변경 없음 (2) YouTube만 변경 (3) 소개만 변경 (4) 이미지 1개 (5) 이미지 2개**로 나눠 D1/R2 비용 실측.
+- 실제 필드 변경 1회에서 여전히 rows_written이 큰 경우에만 trigger fan-out 별도 유지보수안을 승인 절차로 진행.
+
 ## 0JV. PREVIEW app246 · 프로필/팔로우 비용 1차 실측 최적화 (2026-09-30 KST)
 
 상태: **영상 실측 원인 확인 / 안전한 코드 경로 수정 / PREVIEW 배포 전**

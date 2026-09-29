@@ -1,7 +1,7 @@
-requested_at=2026-09-30T07:31:00+09:00
-requested_by=app248_media_preflight_alignment
-product_code_target=ea051675d7a2b1529665a69769dcd5991d0e46af
-release_purpose=audit_app248_media_batch_preflight_alignment
+requested_at=2026-09-30T07:35:00+09:00
+requested_by=app248_multipart_preflight_alignment
+product_code_target=a4e226040cb6ee61a1082284fac65f588aedceab
+release_purpose=audit_app248_multipart_preflight_alignment
 app_version=248
 preview_only=true
 deploy=false

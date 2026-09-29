@@ -19,7 +19,7 @@ assert.match(page, /sort === 'recommended' && !submittedQuery/);
 assert.match(page, /ExploreRecommendationRail/);
 assert.match(page, /ChevronLeft/);
 assert.match(page, /ChevronRight/);
-assert.match(page, /scrollBy\(\{[\s\S]*?behavior: 'smooth'/);
+assert.match(page, /scroller\.scrollTo\(\{ left: target, behavior: 'smooth' \}\)/);
 assert.doesNotMatch(
   page.slice(page.indexOf('const buildExploreRecommendationModel221'), page.indexOf('function ExploreTrackCard')),
   /fetch\(|getDocs\(|onSnapshot\(|setDoc\(|updateDoc\(/,

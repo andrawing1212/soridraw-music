@@ -1,3 +1,46 @@
+## 0JB. Explore 카드 미리듣기 — hover 재생 / 제목 강조 / 전체 썸네일 이퀄라이저 (2026-09-29 KST)
+
+상태: **사용자 영상 기준 구현 완료 / Audit 전 / PREVIEW 미배포**
+
+사용자 기준:
+- 곡 썸네일에 마우스를 올리면 중앙 재생 버튼 표시.
+- 재생 시 해당 곡 제목 색상 변경.
+- 재생 중 썸네일 전체에 화려한 이퀄라이저 효과 표시.
+- 작은 이퀄라이저 아이콘이 아니라 **전체 커버 오버레이**.
+- 다른 곡을 재생하면 이전 곡은 즉시 해제.
+- 같은 곡 버튼은 재생/일시정지 토글.
+- 미리듣기는 최대 2분 후 자동 정지·원상복귀.
+
+구현:
+- `src/pages/ExplorePage.tsx` commit `739ad511a9c2ebc81d9316e892523f3a3908dab5`.
+- `src/components/GlobalPlayer.tsx` commit `f876e0774acb95c17970b97b7892b00b403dddaf`.
+- `src/components/explore/explore.css` commit `3f2372f0be5d39aaf3788a02536373f7211b8ac6`.
+- verifier commit `cb61b24aac71151818ecea726a04dd9201d6225c`.
+
+동작:
+- Explore 카드 미리듣기는 앱의 기존 단일 오디오 엔진을 재사용해서 동시에 한 곡만 재생.
+- Explore 미리듣기 트랙에는 `__exploreCardPreview`를 표시하고 floating GlobalPlayer UI는 숨김. 소리는 기존 오디오 엔진에서만 재생.
+- 공개 Suno clip ID가 있으면 `cdn1.suno.ai/<clip>.mp3` 직접 미리듣기를 우선 사용. 이미 직접 음원 URL이면 그대로 사용.
+- 공개 Explore 미리듣기는 `shared_track`으로 취급해 기존 lazy R2 archive 쓰기 경로를 타지 않도록 보호.
+- 120초 타이머는 현재 Explore 미리듣기 곡이 그대로 재생 중일 때만 정지.
+- 페이지 이탈 시 Explore 미리듣기가 재생 중이면 정지.
+
+UI/성능:
+- hover/focus/재생 상태에서만 중앙 play/pause 버튼 표시.
+- active 제목은 노란 accent로 변경.
+- 이퀄라이저 24개 bar + glow/sweep 오버레이. 애니메이션은 `transform/opacity` 중심으로 처리해 레이아웃 재계산을 피함.
+- `prefers-reduced-motion` 보호 포함.
+- app221 추천 레일/장르 버튼/추천 크리에이터 및 최신 8열/PC 액션 버튼 크기 유지.
+
+비용/데이터:
+- Explore Feed API / Firestore / D1 추가 read·write 없음.
+- Worker / Functions / Rules / 사용자 데이터 구조 변경 없음.
+- 재생 클릭 시 음원 CDN 네트워크 사용만 발생.
+
+다음:
+- Release System Audit에서 TypeScript / Build / app222 verifier / Like regression 확인.
+- PASS 시 PREVIEW app222 Hosting만 배포 후 실제 hover/play/2분 자동복귀 실화면 확인.
+
 ## 0JA. Explore 추천 레일 2차 — 끝단 화살표 / 장르 단일 카테고리 / 추천 크리에이터 (2026-09-29 KST)
 
 상태: **사용자 영상 2·3 + 크리에이터 레퍼런스 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app221 배포 완료 / 사용자 실화면 확인 대기**

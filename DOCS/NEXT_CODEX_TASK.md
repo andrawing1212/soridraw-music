@@ -1,3 +1,37 @@
+## 2026-09-30 — app248 프로필 비용 재측정
+
+PREVIEW app248 배포 완료:
+- Release System Audit `36640127864` SUCCESS.
+- Worker Release `36640355943` SUCCESS.
+  - active PREVIEW Worker `2d02c2e5-4ea9-4d73-9df5-d467f093d047`.
+  - Feed/Profile smoke PASS.
+  - warm revision D1 R0/W0 PASS.
+  - TEST/PRODUCTION Workers unchanged PASS.
+- Firebase PREVIEW Hosting `36640502100` SUCCESS.
+  - app version **248**
+  - exact build PASS
+  - TEST/PRODUCTION unchanged PASS.
+
+실사용 재측정:
+1. no-op
+2. YouTube only
+3. bio only
+4. avatar only
+5. avatar + background
+
+기대값:
+- no-op: D1 R0/W0.
+- YouTube: canonical D1 R0/W0.
+- bio: D1 query **W1** (app247 W3에서 FTS 2 writes 제거).
+- avatar only: D1 query W1.
+- avatar+background: **`/v1/me/profile-media` 1개 요청 + D1 query W1** (app247 W2/2 requests 제거).
+
+trigger 주의:
+- 기존 `076-derived-trigger-compaction-live033.sql`은 현재 live 상태보다 오래된 후보이므로 적용 금지.
+- profile 관련 076 최적화는 이미 live에 들어가 있고, track trigger는 더 최신 079 Music Note compaction 상태.
+- physical write가 여전히 높으면 079를 보존하는 새로운 profile-only maintenance 후보를 작성해 검증할 것.
+- 이번 app248 배포에서는 shared D1 schema/data 변경 0.
+
 ## 2026-09-30 — app247 프로필 비용 2차 최적화
 
 사용자 실측으로 남은 비용 원인 확정:

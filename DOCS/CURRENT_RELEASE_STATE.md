@@ -1,6 +1,6 @@
 ## 0JA. Explore 추천 레일 2차 — 끝단 화살표 / 장르 단일 카테고리 / 추천 크리에이터 (2026-09-29 KST)
 
-상태: **사용자 영상 2·3 + 크리에이터 레퍼런스 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app221 배포 전**
+상태: **사용자 영상 2·3 + 크리에이터 레퍼런스 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app221 배포 완료 / 사용자 실화면 확인 대기**
 
 사용자 실화면 피드백:
 - app220 추천 레일의 좌/우 버튼은 제목 옆이 아니라 **첫/마지막 보이는 곡의 양쪽 끝에 겹쳐서** 표시.
@@ -34,7 +34,13 @@
 - `APP221_EXPLORE_GENRES_ONE_CATEGORY_SWITCHER=PASS` / `APP221_EXPLORE_GENRE_CAP_20=PASS` / `APP221_EXPLORE_CREATOR_RECOMMENDATIONS_CAP_20=PASS`.
 - `APP221_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS` / `APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS` / `APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS`.
 - app version commit: `3529832193362e78a81d73720a9519c1f614355e` / app version `221`.
-- 다음: PREVIEW Hosting 배포 후 실화면 확인.
+- PREVIEW release SHA: `bd7187a0d0921dc043a28476c0daf00a55f3b387`.
+- Firebase PREVIEW Hosting Run: `36549263977` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=221` / `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED` / `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음. 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+- 다음: 추천 레일 끝단 화살표 / 장르 단일 카테고리 전환 / 추천 크리에이터 레일 실화면 확인.
 
 ## 0IZ. Explore 최신 8열 + 추천 주제형 가로 레일 (2026-09-29 KST)
 

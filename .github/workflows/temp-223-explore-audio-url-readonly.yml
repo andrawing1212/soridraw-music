@@ -36,7 +36,7 @@ jobs:
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT id,title,source_type,source_id,source_subtrack_index,source_subtrack_id,
+            SELECT id,title,source_type,source_id,source_subtrack_index,source_subtrack_id,cover_url,
                    suno_url_primary,suno_url_secondary,published_at
             FROM tracks
             WHERE is_public=1 AND status='published'
@@ -54,7 +54,7 @@ jobs:
           for(const row of p?.data?.items||[]) {
             console.log(JSON.stringify({
               id:row.id,title:row.title,sourceType:row.sourceType,sourceId:row.sourceId,
-              sourceSubTrackIndex:row.sourceSubTrackIndex,sourceSubTrackId:row.sourceSubTrackId,
+              sourceSubTrackIndex:row.sourceSubTrackIndex,sourceSubTrackId:row.sourceSubTrackId,coverUrl:row.coverUrl,
               sunoUrlPrimary:row.sunoUrlPrimary,openUrl:row.openUrl
             }));
           }

@@ -1,3 +1,18 @@
+## 2026-09-29 — Explore app226 실화면 확인
+
+- PREVIEW app226 배포 완료.
+- release SHA `b7891b8b5922987f0e69fde0364dfba022409b6c`.
+- Audit `36566167869` SUCCESS / Hosting `36566462070` SUCCESS.
+- 재생버튼 클릭 후 제목 accent 복구.
+- 버튼 내부 이퀄라이저 속도 완화.
+- 모바일/coarse pointer 추천 레일의 card snap 해제 → 브라우저 기본 관성 스크롤 사용.
+- 약한 스와이프는 짧게, 강한 플릭은 더 멀리 움직이는 자연스러운 이동을 목표.
+- PC 좌우 화살표 스크롤은 기존 유지.
+- 커버 배경 비클릭 / 재생버튼만 Suno 링크 / 앱 내부 음원 재생 없음 유지.
+- 서버 read/write, Worker, Functions, Rules, 사용자 데이터 변경 없음.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일 실기기에서 가로 플릭 강도별 이동량 + 세로/가로 제스처 충돌 여부 + 제목/이퀄라이저 확인.
+
 ## 2026-09-29 — Explore app225 재생버튼 UI 실화면 확인
 
 - PREVIEW app225 배포 완료.

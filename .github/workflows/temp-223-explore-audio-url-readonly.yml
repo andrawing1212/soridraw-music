@@ -73,7 +73,35 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/clip-meta.json','utf8'));
-          console.log(JSON.stringify({id:p.id,title:p.title,audio_url:p.audio_url,duration:p?.metadata?.duration||p.duration||null}));
+          console.log(JSON.stringify({
+            id:p.id,
+            title:p.title,
+            audio_url:p.audio_url,
+            media_urls:p.media_urls||p?.metadata?.media_urls||null,
+            duration:p?.metadata?.duration||p.duration||null
+          }));
+          NODE
+          node <<'NODE' > "$RUNNER_TEMP/media-urls.txt"
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/clip-meta.json','utf8'));
+          const value=p.media_urls||p?.metadata?.media_urls||{};
+          const urls=[];
+          const walk=(v)=>{
+            if(!v) return;
+            if(typeof v==='string' && /^https:\/\//.test(v)) urls.push(v);
+            else if(Array.isArray(v)) v.forEach(walk);
+            else if(typeof v==='object') Object.values(v).forEach(walk);
+          };
+          walk(value);
+          for(const u of [...new Set(urls)].slice(0,8)) console.log(u);
+          NODE
+          if test -s "$RUNNER_TEMP/media-urls.txt"; then
+            while IFS= read -r url; do
+              code="$(curl -sS -L -r 0-1 -o /dev/null -w '%{http_code}' "$url")"
+              ctype="$(curl -sSI -L "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2;exit}')"
+              echo "MEDIA_URL_PROBE code=$code type=$ctype $url"
+            done < "$RUNNER_TEMP/media-urls.txt"
+          fi
           NODE
       - name: Read-only compare PREVIEW Feed mapping
         shell: bash

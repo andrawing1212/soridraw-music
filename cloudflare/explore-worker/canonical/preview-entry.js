@@ -1027,10 +1027,17 @@ export default {
 
       if (uid && hasYoutubeField) {
         try {
-          const saved = await writeProfileSocialExtra244(env, uid, requestBody.youtubeUrl);
-          response = await attachProfileSocialExtra244(response, env, saved.youtubeUrl);
+          // SORIDRAW_PROFILE_SOCIAL_EXTRA_NOOP_247_20260930
+          const nextYoutubeUrl247 = normalizeProfileExternalUrl244(requestBody.youtubeUrl);
+          const currentExtra247 = await readProfileSocialExtra244(env, uid);
+          if (currentExtra247.youtubeUrl === nextYoutubeUrl247) {
+            response = await attachProfileSocialExtra244(response, env, currentExtra247.youtubeUrl);
+          } else {
+            const saved = await writeProfileSocialExtra244(env, uid, nextYoutubeUrl247);
+            response = await attachProfileSocialExtra244(response, env, saved.youtubeUrl);
+          }
         } catch (error) {
-          console.error('[244] YouTube profile link save failed:', String(error?.message || error || 'unknown'));
+          console.error('[247] YouTube profile link save failed:', String(error?.message || error || 'unknown'));
           return profileSocialExtraSaveFailure244(response);
         }
       } else {

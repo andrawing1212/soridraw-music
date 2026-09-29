@@ -1,3 +1,63 @@
+## 0JN. PREVIEW app235 · 고정 곡 2.2:1 피처 배너 + 블러/키워드 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- 공개프로필 `고정된 공개곡` → **고정 곡**.
+- `전체 공개곡` → **전체 곡**.
+- 고정 곡 카드만 정사각형이 아닌 **가로형 2.2:1 배너**로 변경.
+- 원본 썸네일은 억지로 늘리지 않고 왼쪽 정사각형 영역에 유지.
+- 오른쪽 잔여 공간은 같은 썸네일을 확대/블러/채도 보정해 대표색 분위기로 채움.
+- 블러 영역에 장르/분위기/주제/스타일/사운드 등 기존 곡 데이터에서 최대 4개 키워드를 표시.
+- 고정 곡 rail의 PC/모바일 좌우 스크롤, 버튼, 모바일 2초 정렬, 아래 전체 곡 중복 노출, app234 3:6 및 반응형 비율은 유지.
+
+app235 수정:
+- 제품 TSX 최종 commit: `384d89e76b676171c571b2601eb8c344d3c3dbc5`.
+- Explore CSS commit: `97b864a8e49e31192ef334a7e913b75fbf79a459`.
+- Social CSS commit: `0a108fb67703b64c2c6ce344041f000d7477af03`.
+- verifier commit: `82ab10797ea8cf06a6f01f5fdaff40d4c5f92777`.
+- version commit: `733c985f0e7c28ec42dfa66d362886a1398a000e`.
+- audit head: `1d7d8178ba9873611427a56b7958a65c7f51e420`.
+- release SHA: `bdcc9d48249ba065186c7d07de189c1711120de5`.
+- app version: **235**.
+
+UI/동작:
+- 고정 곡 전용 카드 variant `profilePinnedBanner` 추가. 일반 Explore/전체 곡 카드는 기존 구조 유지.
+- 배너 비율 `aspect-ratio: 2.2/1`.
+- 왼쪽 원본 이미지 영역은 전체 배너 폭의 45.455%로, 배너 높이와 같은 정사각형 비율.
+- 오른쪽은 같은 cover 이미지를 blur(24px) + saturation/brightness 보정하여 자연스럽게 확장.
+- 오른쪽 텍스트 영역에 제목 + 기존 `selectedKeywords`의 moods/themes/styles/sounds, 장르, style fallback을 중복 제거 후 최대 4개 표시.
+- 키워드는 이미 로드된 데이터만 사용하며 새 서버 조회 없음.
+- 재생/이퀄라이저 버튼은 왼쪽 원본 이미지 중심으로 이동하고 해당 이미지 크기에 맞춰 비례 조정.
+- 고정 곡 제목/전체 곡 제목으로 이름 변경.
+- app234 공개프로필 전체화면 고정 3 / 전체 6 및 축소 비율 유지.
+
+검증:
+- Release System Audit Run **36600917384 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36601180203 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=235`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- 기존 profileTracks/shareBundle 데이터의 화면 조합만 변경.
+- Feed/Profile/Firestore/D1 추가 read/write 0.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- PC에서 고정 곡 3개가 2.2:1 배너로 보이고 왼쪽 원본 이미지 + 오른쪽 블러/키워드가 자연스러운지 확인.
+- 모바일 2개 rail에서도 글자/키워드가 과밀하지 않은지 확인.
+- 일반 전체 곡 카드는 기존 정사각형 디자인을 유지하는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JM. PREVIEW app234 · 공개프로필 섹션 구분 + 고정곡/전체곡 1:2 반응형 밀도 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

@@ -73,7 +73,9 @@ jobs:
           if(!/avatar_url/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live feed profile baseline unexpectedly changed');
           if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert protection missing');
           if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update protection missing');
-          if(!/explore_shared_revision/i.test(by.get('soridraw_shared_rev_public_profiles_au_051'))) throw new Error('shared revision compatibility trigger missing');
+          const shared=by.get('soridraw_shared_rev_public_profiles_au_051')||'';
+          if(!/explore_shared_revision/i.test(shared)) throw new Error('shared revision compatibility trigger missing');
+          console.log('SHARED_PROFILE_REVISION_TRIGGER_SQL_B64='+Buffer.from(shared).toString('base64'));
           console.log('249_LIVE_PROFILE_TRIGGER_BASELINE=PASS');
           console.log('079_MUSIC_NOTE_TRIGGER_PROTECTION=PASS');
           console.log('SHARED_REVISION_COMPATIBILITY=PASS');

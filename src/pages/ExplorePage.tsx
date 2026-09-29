@@ -586,16 +586,29 @@ const resolveExplorePreviewAudioUrl222 = (track: ExploreTrack) => {
   const directCandidate = primary && (
     /\.(mp3|m4a|aac|ogg|wav)(?:$|[?#])/i.test(primary)
     || /^https:\/\/cdn\d*\.suno\.ai\//i.test(primary)
+    || /^https:\/\/d[0-9a-z]+\.cloudfront\.net\//i.test(primary)
   ) ? primary : '';
 
+  // app223 — Explore stores a public Suno share page in sunoUrlPrimary, not
+  // a media file. Feeding that HTML page into <audio> made app222 flash the
+  // equalizer and immediately stop. The public cover URL carries the clip UUID.
+  const coverUrl = safeText(track.coverUrl);
+  const coverClipId = coverUrl.match(
+    /image(?:_large)?_([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i,
+  )?.[1] || '';
   const clipCandidates = [
     safeText(track.sourceSubTrackId),
-    primary.match(/\/song\/([0-9a-f-]{36})(?:[/?#]|$)/i)?.[1] || '',
+    coverClipId,
+    primary.match(/\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:[/?#]|$)/i)?.[1] || '',
     primary.match(/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i)?.[1] || '',
   ];
   const clipId = clipCandidates.find((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 
-  return directCandidate || (clipId ? `https://cdn1.suno.ai/${clipId}.mp3` : primary);
+  if (directCandidate) return directCandidate;
+  if (clipId) return `https://d2lwuy8qc234o3.cloudfront.net/1/clip/${clipId}.m4a`;
+
+  // Never hand a Suno HTML/share page to the audio element.
+  return '';
 };
 
 function ExploreTrackCard({
@@ -876,7 +889,7 @@ export default function ExplorePage() {
 
     const audioUrl = resolveExplorePreviewAudioUrl222(track);
     if (!audioUrl) {
-      setSocialNotice('이 곡은 현재 미리듣기 음원을 확인할 수 없어요.');
+      setSocialNotice('이 곡은 현재 재생 가능한 음원 URL을 확인할 수 없어요. 썸네일을 누르면 Suno 원본 링크로 이동할 수 있어요.');
       return;
     }
 

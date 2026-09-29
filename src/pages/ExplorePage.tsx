@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Heart, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Grid3X3, Heart, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -513,7 +513,7 @@ function ExploreRecommendationRail({
   toolbar?: React.ReactNode;
   trackClassName?: string;
   itemLabel?: string;
-  mobileGroupSize?: 2 | 3;
+  mobileGroupSize?: 1 | 2 | 3;
   children: React.ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -783,7 +783,7 @@ function ExploreTrackCard({
   onApplyNext: (track: ExploreTrack) => void;
   onShare: (track: ExploreTrack) => void;
   onOpenMore: (track: ExploreTrack) => void;
-  variant?: 'default' | 'profilePinnedBanner';
+  variant?: 'default' | 'profilePinnedBanner' | 'profileList';
   showPublisher?: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -803,7 +803,7 @@ function ExploreTrackCard({
     : [];
 
   return (
-    <article className={`soridraw-explore-card${variant === 'profilePinnedBanner' ? ' soridraw-explore-card--profile-pinned' : ''}${isPreviewing ? ' is-previewing' : ''}`}>
+    <article className={`soridraw-explore-card${variant === 'profilePinnedBanner' ? ' soridraw-explore-card--profile-pinned' : ''}${variant === 'profileList' ? ' soridraw-explore-card--profile-list' : ''}${isPreviewing ? ' is-previewing' : ''}`}>
       <div className="soridraw-explore-cover-wrap">
         {variant === 'profilePinnedBanner' ? (
           <div className="soridraw-explore-pinned-banner-235">
@@ -982,6 +982,7 @@ export default function ExplorePage() {
   const [profile, setProfile] = useState<ExplorePublicProfile | null>(null);
   const [profileTracks, setProfileTracks] = useState<ExploreTrack[]>([]);
   const [profileCollection, setProfileCollection] = useState<'public' | 'liked'>('public');
+  const [profilePublicView239, setProfilePublicView239] = useState<'grid' | 'list'>('grid');
   const [profileLikedTracks, setProfileLikedTracks] = useState<ExploreTrack[]>([]);
   const [profileLikedLoading, setProfileLikedLoading] = useState(false);
   const [profileLikedError, setProfileLikedError] = useState('');
@@ -2310,7 +2311,7 @@ export default function ExplorePage() {
   const renderTrackCard = (
     track: ExploreTrack,
     ownerProfileAuthority: ExplorePublicProfile | null = null,
-    variant: 'default' | 'profilePinnedBanner' = 'default',
+    variant: 'default' | 'profilePinnedBanner' | 'profileList' = 'default',
     showPublisher = true,
   ) => {
     // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
@@ -2523,25 +2524,53 @@ export default function ExplorePage() {
                       subtitle="프로필에서 먼저 보여주는 대표 곡"
                       itemCount={profilePinnedTracks231.length}
                       trackClassName="soridraw-explore-recommend-track--profile-pinned"
-                      mobileGroupSize={2}
+                      mobileGroupSize={1}
                     >
                       {profilePinnedTracks231.map((track) => renderTrackCard(track, profile, 'profilePinnedBanner', false))}
                     </ExploreRecommendationRail>
                   </div>
                 )}
-                <section className="soridraw-explore-profile-public-list-234" aria-label="전체 곡">
+                <section className={`soridraw-explore-profile-public-list-234${profilePublicView239 === 'list' ? ' is-list' : ' is-grid'}`} aria-label="전체 곡">
                   <header className="soridraw-explore-profile-public-head-234">
-                    <span>PUBLIC</span>
-                    <h2>전체 곡</h2>
-                    <p>프로필에 공개한 모든 곡</p>
+                    <div className="soridraw-explore-profile-public-title-239">
+                      <span>PUBLIC</span>
+                      <h2>전체 곡</h2>
+                      <p>프로필에 공개한 모든 곡</p>
+                    </div>
+                    <div className="soridraw-explore-profile-view-toggle-239" aria-label="전체 곡 보기 방식">
+                      <button
+                        type="button"
+                        className={profilePublicView239 === 'grid' ? 'is-active' : undefined}
+                        onClick={() => setProfilePublicView239('grid')}
+                        aria-label="그리드로 보기"
+                        title="그리드로 보기"
+                        aria-pressed={profilePublicView239 === 'grid'}
+                      >
+                        <Grid3X3 aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className={profilePublicView239 === 'list' ? 'is-active' : undefined}
+                        onClick={() => setProfilePublicView239('list')}
+                        aria-label="목록으로 보기"
+                        title="목록으로 보기"
+                        aria-pressed={profilePublicView239 === 'list'}
+                      >
+                        <List aria-hidden="true" />
+                      </button>
+                    </div>
                   </header>
-                  {renderTrackGrid(
+                  {profilePublicView239 === 'grid' ? renderTrackGrid(
                     profileTracks,
                     `${profile.nickname} 전체 곡`,
                     profile,
                     'default',
                     true,
                     false,
+                  ) : (
+                    <section className="soridraw-explore-profile-song-list-239" aria-label={`${profile.nickname} 전체 곡 목록`}>
+                      {profileTracks.map((track) => renderTrackCard(track, profile, 'profileList', false))}
+                    </section>
                   )}
                 </section>
               </>

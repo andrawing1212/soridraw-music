@@ -1,3 +1,17 @@
+## 2026-09-29 — Explore app225 재생버튼 UI 실화면 확인
+
+- PREVIEW app225 배포 완료.
+- release SHA `48293b7895e5a13de3d6942a50de101a592e2d45`.
+- Audit Run `36564555562` attempt 2 SUCCESS / Hosting `36565034660` SUCCESS.
+- 커버/배경 클릭은 아무 동작 없음.
+- 중앙의 더 큰 재생버튼만 기존 Suno 원본 링크를 연다.
+- 링크 실행 후 전체 커버 효과/제목 강조 없음.
+- 활성 피드백은 재생버튼 내부 5-bar 이퀄라이저만 표시.
+- Pause/일시정지 의미 없음; 다시 누르면 링크를 다시 연다.
+- 앱 내부 음원 재생 없음, Feed/Firestore/D1 추가 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: 사용자 실화면에서 배경 무반응 + 버튼 링크 + 버튼 내부 이퀄라이저 확인.
+
 ## 2026-09-29 — Explore app224 재생버튼 링크 동작 실화면 확인
 
 - PREVIEW app224 배포 완료.

@@ -1,3 +1,63 @@
+## 0JK. PREVIEW app232 · 공개프로필 고정곡을 SORIDRAW 추천과 같은 레일로 통일 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 확인 대기**
+
+사용자 지시:
+- 공개프로필의 고정된 공개곡은 모바일/PC 모두 Explore의 **SORIDRAW 추천과 같은 좌우 스크롤 레일 UX** 사용.
+- 모바일은 2곡 기준, 좌/우 버튼, 손가락 가로 스크롤, 스크롤 정지 후 **2초 뒤 가시 비중 기준 정렬**.
+- PC도 좌/우 버튼 + 가로 스크롤.
+- 고정곡은 대표/광고판 노출용이며 **아래 전체 공개곡 목록에서도 그대로 다시 노출**.
+- PC 공개프로필은 좌우 여백을 더 줘 덜 빽빽하게 표시.
+- 카드 왼쪽 상단 pin badge 제거 상태 유지.
+
+app232 수정:
+- 제품 TSX commit: `4e8c3a2a938a76098a290d11c18a1fc92699ec7c`.
+- Explore CSS commit: `5cc794256a0488362788f4b364dcc5dd654eaaef`.
+- Social CSS commit: `8f767537feb40adee4c513befbc591b0a2dfc6c4`.
+- verifier 최종 commit: `b0a0dc05f429336243657d8b32d5eb77de344b0f`.
+- version commit: `13a5e9c49d50543903955012966fb29d05e08642`.
+- audit head: `72b76ad0e043472d8b3f1d7709b9ef14dcd5d567`.
+- release SHA: `295e122d6ead3a9f09e779f1e049b22db336e848`.
+- app version: **232**.
+
+UI/동작:
+- 고정곡은 별도 임시 grid가 아니라 기존 `ExploreRecommendationRail`을 재사용.
+- 모바일 2곡 / 좌우 버튼 / native momentum / 2초 정렬 / visible-share 정렬을 SORIDRAW 추천과 동일 경로로 사용.
+- PC도 동일 rail의 좌우 버튼 + horizontal scroll 사용.
+- 고정곡 목록은 `profilePinned`으로 로컬 projection만 만들고 추가 서버 조회 없음.
+- 아래 전체 공개곡 grid는 다시 `profileTracks` 전체를 사용하므로 고정곡도 중복 노출.
+- 모바일 전체 공개곡 3열 유지.
+- PC 공개프로필은 `padding-left/right: clamp(54px,5vw,92px)`로 좌우 여백 확대.
+- pin badge 제거 및 profilePinned 데이터 의미/저장 방식 유지.
+
+검증:
+- 첫 Audit Run `36592381424`는 제품 오류가 아니라 verifier가 SORIDRAW 추천 + 공개프로필 고정 rail의 합쳐진 CSS selector를 인식하지 못해 FAIL.
+- verifier만 수정 후 재실행 Audit Run **36592646169 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 preflight/read-only 점검 PASS.
+- Firebase PREVIEW Hosting Run **36592923107 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=232`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- Feed/공개프로필/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 및 재배포 없음.
+- 사용자 데이터 변경 없음.
+- 고정곡 중복 노출은 이미 로드된 `profileTracks`에서 UI projection만 추가.
+
+다음:
+- 모바일 공개프로필: 고정곡 좌우 버튼 + 손가락 스크롤 + 2초 정렬 확인.
+- PC 공개프로필: 고정곡 좌우 버튼/스크롤 + 좌우 여백 확인.
+- 같은 고정곡이 아래 전체 공개곡 목록에도 다시 보이는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JJ. PREVIEW app231 · 모바일 추천 2곡 + 공개프로필 고정곡 가로레일/일반곡 3열 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 모바일 실기기 최종 확인 대기**

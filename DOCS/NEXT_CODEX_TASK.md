@@ -1,3 +1,17 @@
+## 2026-09-30 — Explore app237 이퀄라이저 페이지 이동 유지 확인
+
+- PREVIEW app237 배포 완료.
+- release SHA `d7a8cffbb2e41cc34976bbceb62e39d67051d6a4`.
+- Audit Run `36607372464` SUCCESS / Hosting Run `36607648045` SUCCESS.
+- 재생/이퀄라이저 시각 상태 제한시간: **3분 30초**.
+- 다른 앱 페이지로 이동해 Explore가 unmount되어도 세션의 절대 만료시각을 유지.
+- 3분30초 안에 Explore/공개프로필 복귀 시 동일 곡의 이퀄라이저 상태 복원.
+- 복귀할 때 제한시간을 다시 3분30초로 리셋하지 않고 **남은 시간만** 유지.
+- 만료 후 복귀하면 재생 아이콘 상태.
+- sessionStorage만 사용하므로 추가 서버 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: Explore ↔ 다른 페이지, 공개프로필 ↔ 다른 페이지 왕복 테스트 및 3분30초 자동 해제 확인.
+
 ## 2026-09-30 — Explore app236 고정 곡 2.8:1 + 게시자 표시 분리 실화면 확인
 
 - PREVIEW app236 배포 완료.

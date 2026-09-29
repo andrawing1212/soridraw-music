@@ -1,6 +1,6 @@
 ## 0JW. PREVIEW app247 · 프로필 저장 warm-path 추가 절감 (2026-09-30 KST)
 
-상태: **코드 반영 / 배포 전 / 정적 감사 대기**
+상태: **코드 반영 / Release System Audit PASS / PREVIEW 배포 전**
 
 기준:
 - 작업 branch: `preview`
@@ -28,7 +28,7 @@
 - main / TEST / PRODUCTION 비변경.
 
 다음:
-- Release System Audit PASS 확인.
+- Release System Audit Run `36633984275` **SUCCESS**. TypeScript / Build / 정적 검증 / TEST·PRODUCTION Worker dry-run / shared D1 read-only preflight PASS.
 - 사용자가 PREVIEW 배포를 요청하면 Worker + Hosting을 app247로 배포.
 - 배포 후 프로필 저장을 **(1) 값 변경 없음 (2) YouTube만 변경 (3) 소개만 변경 (4) 이미지 1개 (5) 이미지 2개**로 나눠 D1/R2 비용 실측.
 - 실제 필드 변경 1회에서 여전히 rows_written이 큰 경우에만 trigger fan-out 별도 유지보수안을 승인 절차로 진행.

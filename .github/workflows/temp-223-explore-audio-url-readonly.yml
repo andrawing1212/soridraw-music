@@ -70,6 +70,8 @@ jobs:
           first_id="$(basename "$first_url" .mp3)"
           meta_code="$(curl -sS -L -A "$browser_ua" -o "$RUNNER_TEMP/clip-meta.json" -w '%{http_code}' "https://studio-api-prod.suno.com/api/clip/$first_id")"
           echo "CLIP_META_PROBE code=$meta_code"
+          cors_meta="$(curl -sSI -H 'Origin: https://preview.soridraw.com' "https://studio-api-prod.suno.com/api/clip/$first_id" | tr -d '\r' | awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2;exit}')"
+          echo "CLIP_META_CORS origin=$cors_meta"
           node <<'NODE'
           const fs=require('fs');
           const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/clip-meta.json','utf8'));

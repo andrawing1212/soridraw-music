@@ -1,5 +1,5 @@
-explore_play_button_local_equalizer_audit=2026-09-29T20:53:00+09:00
-source_head=a9e5d29fd763fb2a6a29c7796da1bd0e39144e88
+explore_play_button_local_equalizer_audit=2026-09-29T20:58:00+09:00
+source_head=9f3e2b04c6ccffb50d3011c71cf6da1c8e5519c2
 app_version=225
 deploy=false
 scope=explore_play_button_only_link_and_equalizer
@@ -9,7 +9,7 @@ requested_visual=larger_play_button_equalizer_inside_button_only
 pause_semantics=false
 product_page_commit=6237f11d8f0cccac9929ebdbaa1a48159c25ef84
 product_css_commit=5d223f3efd57b430ea3dea032202ee7332d0eb68
-verifier_commit=272136244e0f8817dccbfac376bb68bbae6bae99
+verifier_commit=9f3e2b04c6ccffb50d3011c71cf6da1c8e5519c2
 version_commit=a9e5d29fd763fb2a6a29c7796da1bd0e39144e88
 audio_engine_use=false
 third_party_media_resolution=false

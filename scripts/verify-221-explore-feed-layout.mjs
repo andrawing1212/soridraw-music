@@ -281,6 +281,31 @@ assert.match(
 );
 assert.match(
   page,
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*500[\s\S]*?EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243\s*=\s*200/,
+  'ordinary mobile rails must keep 0.5s settling while the public-profile pinned rail settles after 0.2s',
+);
+assert.match(
+  page,
+  /isProfilePinnedRail242[\s\S]*?EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243[\s\S]*?: EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228/,
+  'only the public-profile pinned rail may use the 0.2s mobile settle delay',
+);
+assert.match(
+  page,
+  /getRailViewportStepCount243[\s\S]*?visibleCount[\s\S]*?stepMode: 'single' \| 'viewport'[\s\S]*?anchorIndex \+ stepCount/,
+  'direct rail paging must derive its step from the number of cards visible in the current viewport',
+);
+assert.match(
+  page,
+  /onClick=\{\(\) => moveRail\(-1, 'viewport'\)\}[\s\S]*?onClick=\{\(\) => moveRail\(1, 'viewport'\)\}/,
+  'left/right rail buttons must page by the current visible card count',
+);
+assert.match(
+  page,
+  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)/,
+  'short touch drag must remain a one-card move and not inherit viewport paging',
+);
+assert.match(
+  page,
   /const isProfilePinnedRail242 = trackClassName\.includes\('soridraw-explore-recommend-track--profile-pinned'\)/,
   'automatic rail control hiding must be limited to the public-profile pinned rail',
 );

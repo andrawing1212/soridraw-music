@@ -1,3 +1,13 @@
+## 2026-09-29 — Explore app223 실제 음원 URL 연결 검증
+
+- app222 실화면 FAIL: Suno 공유 페이지 URL을 `<audio>`에 넣어 재생 실패.
+- app223: cover UUID → 현재 progressive Suno M4A media URL로 연결.
+- share page URL은 audio source로 사용 금지.
+- 기존 hover play / active title / full-cover equalizer / 120초 자동정지 유지.
+- 기존 썸네일 Suno 열기 / app221 레이아웃 유지.
+- Firestore/D1 추가 read/write 0, backend 변경 0.
+- Audit PASS 후 PREVIEW app223 Hosting 배포.
+
 ## 2026-09-29 — Explore app222 카드 미리듣기 실화면 확인
 
 - PREVIEW app222 배포 완료.

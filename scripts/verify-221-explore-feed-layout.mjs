@@ -190,8 +190,13 @@ assert.match(
 );
 assert.match(
   page,
-  /profilePublicView239[\s\S]*?Grid3X3[\s\S]*?aria-label="그리드로 보기"[\s\S]*?<List aria-hidden="true" \/>/,
-  'public profile must provide icon-only grid and list view controls',
+  /import \{[\s\S]*?Grid3X3[\s\S]*?List[\s\S]*?\} from 'lucide-react';/,
+  'public profile view controls must use grid/list icons',
+);
+assert.match(
+  page,
+  /className="soridraw-explore-profile-view-toggle-239"[\s\S]*?aria-label="그리드로 보기"[\s\S]*?<Grid3X3 aria-hidden="true" \/>[\s\S]*?aria-label="목록으로 보기"[\s\S]*?<List aria-hidden="true" \/>/,
+  'public profile must provide two icon-only grid/list buttons',
 );
 assert.match(
   page,

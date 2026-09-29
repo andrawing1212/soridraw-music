@@ -39,11 +39,8 @@
 .soridraw-explore-follow-button .soridraw-explore-spinner{width:15px;height:15px}
 .soridraw-explore-profile-section-label{display:flex;align-items:center;gap:7px;margin:0 0 16px;color:rgba(235,235,240,.52);font-size:12px;font-weight:800}
 .soridraw-explore-profile-section-label svg{width:14px;height:14px;color:#ffb400;fill:currentColor}
-.soridraw-explore-profile-pinned-track-231{margin-bottom:30px}
-
+.soridraw-explore-profile-pinned-rail-232{margin-bottom:34px}
 @media (max-width:720px){
-.soridraw-explore-profile-pinned-track-231{grid-template-columns:none!important;grid-auto-flow:column;grid-auto-columns:calc((100% - 10px)/2);gap:10px;align-items:start;width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
-.soridraw-explore-profile-pinned-track-231::-webkit-scrollbar{display:none}
 .soridraw-explore-profile-toolbar{margin-bottom:16px}
 .soridraw-explore-profile-head{align-items:flex-start;gap:16px;min-height:0;margin-bottom:28px;padding:8px 2px 14px}
 .soridraw-explore-profile-avatar{width:76px;height:76px;min-width:76px;font-size:24px}

@@ -1,3 +1,49 @@
+## 0JI. PREVIEW app230 · Explore 정렬 2초 + 이퀄라이저 표시 3분 (2026-09-29 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 확인 대기**
+
+사용자 지시:
+- app229의 모바일 추천 가로 레일 자동 정렬 대기 시간을 3초 → **2초**로 단축.
+- 재생버튼 클릭 후 작동하는 버튼 내부 이퀄라이저/제목 강조 상태의 자동 해제 시간을 2분 → **3분**으로 연장.
+- 그 외 app229 가시 비중 기반 3곡 정렬, native momentum, 카드 밀도 및 기존 정상 기능은 유지.
+
+app230 수정:
+- 제품 commit: `3fc282656d197aee3dc765059fd2a3dcd56f949f`.
+- verifier commit: `a7d5b6ead88f6b0a4715fd05f3e2c66d0824f4a4`.
+- version commit: `c3c864d02eb0051588a0142040d846886046bd1b`.
+- audit head: `e936f0bab44c79ecf25b73e92a89058939dacb3d`.
+- release SHA: `fa8981b9e040361f3c3e1153cabf36964ca151cf`.
+- `EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228`: `3_000` → `2_000`.
+- `EXPLORE_PREVIEW_MAX_MS_222`: `120_000` → `180_000`.
+- 재생버튼은 기존처럼 Suno 원본 링크를 열고, 앱 내부 오디오는 사용하지 않음.
+- 이퀄라이저/제목 강조는 클릭 후 로컬 시각 상태만 3분 유지 후 자동 해제.
+
+검증:
+- Release System Audit Run **36585673687 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Explore layout/static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 preflight/read-only 점검 PASS.
+- Firebase PREVIEW Hosting Run **36585958930 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=230`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- Feed/Firestore/D1 추가 read/write 없음.
+- Worker / Functions / Rules 변경 및 재배포 없음.
+- 사용자 데이터 변경 없음.
+- 변경은 브라우저 로컬 타이머 값 2개뿐이며 서버 비용 영향 없음.
+
+다음:
+- 모바일에서 스크롤 손을 뗀 뒤 약 2초 후 가시 비중 기준 3곡 정렬 확인.
+- 재생버튼 클릭 후 이퀄라이저/제목 강조가 약 3분 뒤 자동 해제되는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JH. PREVIEW app229 · Explore 모바일 3곡 가시 비중 정렬 (2026-09-29 KST)
 
 상태: **사용자 최종 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 최종 확인 대기**

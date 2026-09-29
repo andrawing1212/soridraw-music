@@ -1,3 +1,16 @@
+## 2026-09-30 — Explore app233 재생/이퀄라이저 버튼 비례 크기 실화면 확인
+
+- PREVIEW app233 배포 완료.
+- release SHA `9d9f91b63963f631b6f92acce9ecb57b2176ae5c`.
+- Audit Run `36594092596` SUCCESS / Hosting Run `36594376873` SUCCESS.
+- 재생/이퀄라이저 버튼은 썸네일 폭 기준 **28%**, 최소 38px / 최대 104px.
+- Play 아이콘과 Equalizer도 버튼 내부 비율로 함께 확대/축소.
+- 모바일 2-up 카드에서는 더 크게, 3열 카드에서는 더 작게 보이는 것이 의도.
+- PC도 카드 폭에 따라 버튼 크기 변화.
+- 2초 rail 정렬 / 3분 이퀄라이저 유지 / 고정곡 shared rail / 서버 비용 경로는 변경 없음.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일 2-up vs 3열, PC 카드 폭 차이에서 재생/이퀄라이저 크기 비례 체감 확인.
+
 ## 2026-09-30 — Explore app232 공개프로필 고정곡 rail 실화면 확인
 
 - PREVIEW app232 배포 완료.

@@ -496,6 +496,7 @@ const buildExploreRecommendationModel221 = (
 };
 
 const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 500;
+const EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243 = 200;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241 = 240;
 const EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241 = 8;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241 = 46;
@@ -656,7 +657,9 @@ function ExploreRecommendationRail({
     if (!shouldAutoAlignMobileRail228()) return;
     mobileAlignTimerRef228.current = window.setTimeout(
       alignMobileSongRail228,
-      EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228,
+      isProfilePinnedRail242
+        ? EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243
+        : EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228,
     );
   };
 
@@ -704,7 +707,25 @@ function ExploreRecommendationRail({
     );
   };
 
-  const moveRail = (direction: -1 | 1) => {
+  const getRailViewportStepCount243 = (cards: HTMLElement[]) => {
+    const scroller = scrollerRef.current;
+    if (!scroller || cards.length <= 1) return 1;
+
+    const first = cards[0];
+    const second = cards[1];
+    const step = Math.abs(second.offsetLeft - first.offsetLeft);
+    if (step <= 1) return 1;
+
+    const cardWidth = Math.max(1, first.offsetWidth);
+    const gap = Math.max(0, step - cardWidth);
+    const visibleCount = Math.floor((scroller.clientWidth + gap + 1) / step);
+    return Math.max(1, Math.min(cards.length, visibleCount));
+  };
+
+  const moveRail = (
+    direction: -1 | 1,
+    stepMode: 'single' | 'viewport' = 'single',
+  ) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
@@ -713,17 +734,25 @@ function ExploreRecommendationRail({
 
     const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
     const current = scroller.scrollLeft;
-    const positions = cards.map((card) => Math.min(maxScrollLeft, Math.max(0, card.offsetLeft)));
-    const epsilon = 3;
+    const rawPositions = cards.map((card) => Math.max(0, card.offsetLeft));
+    const stepCount = stepMode === 'viewport' ? getRailViewportStepCount243(cards) : 1;
+    const maxStartIndex = Math.max(0, cards.length - stepCount);
 
-    let target = direction > 0 ? maxScrollLeft : 0;
-    if (direction > 0) {
-      const next = positions.find((position) => position > current + epsilon);
-      if (typeof next === 'number') target = next;
-    } else {
-      const previous = [...positions].reverse().find((position) => position < current - epsilon);
-      if (typeof previous === 'number') target = previous;
-    }
+    let anchorIndex = 0;
+    let anchorDistance = Number.POSITIVE_INFINITY;
+    rawPositions.forEach((position, index) => {
+      const clamped = Math.min(maxScrollLeft, position);
+      const distance = Math.abs(clamped - current);
+      if (distance < anchorDistance) {
+        anchorIndex = index;
+        anchorDistance = distance;
+      }
+    });
+
+    const targetIndex = direction > 0
+      ? Math.min(stepMode === 'viewport' ? maxStartIndex : cards.length - 1, anchorIndex + stepCount)
+      : Math.max(0, anchorIndex - stepCount);
+    const target = Math.min(maxScrollLeft, rawPositions[targetIndex] ?? 0);
 
     clearMobileAlignTimer228();
     scroller.scrollTo({ left: target, behavior: 'smooth' });
@@ -807,7 +836,7 @@ function ExploreRecommendationRail({
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--left"
-          onClick={() => moveRail(-1)}
+          onClick={() => moveRail(-1, 'viewport')}
           disabled={!canScrollLeft}
           aria-label={`${title} 이전 ${itemLabel} 보기`}
         >
@@ -839,7 +868,7 @@ function ExploreRecommendationRail({
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--right"
-          onClick={() => moveRail(1)}
+          onClick={() => moveRail(1, 'viewport')}
           disabled={!canScrollRight}
           aria-label={`${title} 다음 ${itemLabel} 보기`}
         >

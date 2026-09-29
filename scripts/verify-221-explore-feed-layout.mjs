@@ -103,7 +103,7 @@ assert.match(
 );
 assert.match(
   css,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks,\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:100%;gap:10px\}/,
   'SORIDRAW picks mobile rail must show two song cards in the viewport',
 );
 assert.match(
@@ -165,13 +165,13 @@ assert.match(
 );
 assert.match(
   page,
-  /title="고정 곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile, 'profilePinnedBanner', false\)\)/,
-  'pinned public tracks must reuse the shared recommendation rail with two-card mobile alignment',
+  /title="고정 곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{1\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile, 'profilePinnedBanner', false\)\)/,
+  'pinned public tracks must reuse the shared recommendation rail with one-card mobile alignment',
 );
 assert.match(
   css,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks,\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
-  'mobile pinned profile rail must match the two-card SORIDRAW recommendation density',
+  'mobile pinned profile rail must show one featured song while SORIDRAW picks remain two-up',
 );
 assert.match(
   page,
@@ -182,6 +182,36 @@ assert.match(
   page,
   /soridraw-explore-profile-public-head-234[\s\S]*?<span>PUBLIC<\/span>[\s\S]*?<h2>전체 곡<\/h2>/,
   'public-profile full song list must have the renamed visible section title',
+);
+assert.match(
+  page,
+  /profilePublicView239[\s\S]*?Grid3X3[\s\S]*?aria-label="그리드로 보기"[\s\S]*?<List aria-hidden="true" \/>/,
+  'public profile must provide icon-only grid and list view controls',
+);
+assert.match(
+  page,
+  /profilePublicView239 === 'grid' \? renderTrackGrid\([\s\S]*?profileTracks[\s\S]*?false,[\s\S]*?\) : \([\s\S]*?soridraw-explore-profile-song-list-239[\s\S]*?renderTrackCard\(track, profile, 'profileList', false\)/,
+  'grid view must preserve the existing grid while list view renders one profileList card per song',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-profile-song-list-239\{display:flex;flex-direction:column;gap:10px\}/,
+  'list view must stack one song per row',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-card--profile-list\{display:grid;grid-template-columns:112px minmax\(0,1fr\)[\s\S]*?\.soridraw-explore-card--profile-list \.soridraw-explore-card-actions\{grid-column:2;grid-row:2/,
+  'PC list cards must place the thumbnail on the left and title/actions on the right',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-card--profile-list \.soridraw-explore-card-quick-actions\{flex:1 1 auto[\s\S]*?\.soridraw-explore-card--profile-list \.soridraw-explore-more-button\{margin-left:auto\}/,
+  'list actions must keep like/apply/share together while more stays at the far right',
+);
+assert.match(
+  social,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-card--profile-list\{grid-template-columns:84px minmax\(0,1fr\)/,
+  'mobile list view must remain a compact single-row song layout',
 );
 assert.match(
   css,
@@ -210,7 +240,7 @@ assert.match(
 );
 assert.match(
   page,
-  /variant\?: 'default' \| 'profilePinnedBanner'/,
+  /variant\?: 'default' \| 'profilePinnedBanner' \| 'profileList'/,
   'pinned public songs must use a dedicated banner card variant without changing ordinary cards',
 );
 assert.match(
@@ -472,3 +502,8 @@ console.log('APP237_EXPLORE_EQUALIZER_ROUTE_PERSISTENCE=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ABSOLUTE_EXPIRY_PRESERVED=PASS');
 
 console.log('APP238_EXPLORE_PROFILE_PC_GUTTERS_INCREASED=PASS');
+
+console.log('APP239_EXPLORE_PROFILE_PINNED_MOBILE_ONE_UP=PASS');
+console.log('APP239_EXPLORE_PROFILE_GRID_LIST_TOGGLE=PASS');
+console.log('APP239_EXPLORE_PROFILE_LIST_ONE_SONG_PER_ROW=PASS');
+console.log('APP239_EXPLORE_PROFILE_LIST_ACTION_LAYOUT=PASS');

@@ -1,3 +1,59 @@
+## 0JS. PREVIEW app242 · 모바일 고정 곡 좌우 버튼 자동 숨김/탭 표시 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 모바일 실사용 확인 대기**
+
+사용자 지시:
+- 모바일 공개프로필의 고정 곡 좌우 스크롤 버튼이 항상 떠 있어 카드를 가리는 문제 수정.
+- 고정 곡 rail에 움직임이 없으면 **0.5초 후 좌우 버튼 자동 숨김**.
+- 고정 곡 카드 아무 곳이나 터치하면 좌우 버튼을 **2초간 다시 표시**.
+- app241의 0.5초 자동 정렬, 짧은 드래그 한 곡 이동, 강한/긴 swipe native momentum, 버튼 exact next/prev, 높은 z-index는 유지.
+
+app242 수정:
+- 제품 TSX commit: `946332af717e621d1d370b395f1fedbe34a0ebea`.
+- Explore CSS commit: `9b9397b4a2015c517d34e6e5e85ecce7114f8722`.
+- verifier 최종 commit: `052657fc6ab712b3226a332e2a696fdd313b9832`.
+- version commit: `b7f206de8af832f1d80c8fb273bb86e524f9fd89`.
+- audit head: `b5f80d7a4352c446682acab2b76f87213772037b`.
+- release SHA: `840a1b2dfa01c45c967f22d9d27cb07476e1a017`.
+- app version: **242**.
+
+UI/동작:
+- 자동 숨김은 공개프로필의 `soridraw-explore-recommend-track--profile-pinned` rail에만 적용.
+- 초기 진입/스크롤 정지 후 500ms가 지나면 좌우 버튼 opacity 0 + visibility hidden + pointer-events none.
+- 카드 영역 터치 시 버튼을 즉시 다시 표시하고 2초 뒤 자동 숨김.
+- 스크롤 중에는 버튼을 다시 표시하고, 마지막 움직임 후 0.5초 뒤 숨김.
+- 숨김 상태 버튼은 카드 위를 덮거나 터치를 가로채지 않음.
+- Explore SORIDRAW 추천/장르 rail 버튼 표시 방식은 변경하지 않음.
+- app241 PC 버튼 바깥 배치, 46px 크기, 모바일 z-index 40 유지.
+- app241 모바일 자동 정렬 500ms 및 exact-card 이동/짧은 drag 로직 유지.
+
+검증:
+- Release System Audit Run **36617652986 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static release-system verification PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36617941465 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=242`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI 상태/timer만 추가.
+- Firestore / D1 추가 read/write 0.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- 모바일 공개프로필 고정 곡에서 진입 후 0.5초 뒤 버튼이 사라지는지 확인.
+- 카드 아무 곳 터치 시 버튼이 2초간 나타나는지 확인.
+- 스크롤 후 0.5초 뒤 다시 사라지는지 확인.
+- 숨김 상태에서 카드/재생버튼 터치 간섭이 없는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JR. PREVIEW app241 · 좌우 스크롤 버튼 위치/크기 + 0.5초 정렬 + 짧은 드래그 한 곡 이동 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**

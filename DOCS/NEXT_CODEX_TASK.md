@@ -1,3 +1,20 @@
+## 2026-09-30 — Explore app232 공개프로필 고정곡 rail 실화면 확인
+
+- PREVIEW app232 배포 완료.
+- release SHA `295e122d6ead3a9f09e779f1e049b22db336e848`.
+- Audit Run `36592646169` SUCCESS / Hosting Run `36592923107` SUCCESS.
+- 공개프로필 고정곡은 모바일/PC 모두 Explore SORIDRAW 추천과 같은 공통 rail 사용.
+- 모바일: 2곡, 좌우 버튼, native momentum, 스크롤 정지 후 2초 visible-share 정렬.
+- PC: 좌우 버튼 + horizontal scroll.
+- 고정곡은 상단 대표 rail과 아래 전체 공개곡 grid 양쪽에 모두 표시.
+- 모바일 전체 공개곡 3열 유지.
+- PC 공개프로필 좌우 여백 확대.
+- 카드 pin badge 제거 유지.
+- 추가 Feed/Profile/Firestore/D1 read/write 0.
+- Worker/Functions/Rules/사용자 데이터 변경 없음.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일/PC 실제 공개프로필에서 버튼·스크롤·2초 정렬·중복 노출·PC 여백 확인.
+
 ## 2026-09-30 — Explore app231 모바일/공개프로필 실화면 확인
 
 - PREVIEW app231 배포 완료.

@@ -1,3 +1,66 @@
+## 0JR. PREVIEW app239 · 모바일 고정 곡 1개 + 전체 곡 그리드/목록 전환 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / 최종 Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**
+
+사용자 지시:
+- 모바일 공개프로필의 고정 곡은 한 화면 2곡 → **1곡**.
+- PC/모바일 모두 `전체 곡` 오른쪽에 **그리드/목록 아이콘 버튼 2개** 추가.
+- 그리드형은 기존 카드 배치/반응형 규칙 그대로 유지.
+- 목록형은 한 줄에 곡 1개.
+- 목록형: 왼쪽 썸네일 / 오른쪽 장르+제목 / 하단 좋아요+다음곡 적용+공유 / 가장 오른쪽 더보기.
+- 공개프로필 공개곡의 게시자 숨김 정책은 유지.
+
+app239 수정:
+- TSX 제품 commit: `6a7ccf770ff801043cdb57eeb37dc070ff633a67`.
+- Explore CSS commit: `12e5c94d1a3acd748b1f13f9898b10146a5384d9`.
+- Social CSS commit: `0f05831927ef9563560fb003313fa3fd466d446f`.
+- verifier 최종 commit: `593d9f87dbc79c2f6947b8795dbb24d801f01028`.
+- version commit: `42e2dbed41b4334c9a61ec6ef70228b92b05714e`.
+- audit head: `64cbdcb91734bc8ac725f25cdc21303e88fbfb5e`.
+- release SHA: `9d2ba43af8fa9fe3ebff2cc46d8ec5cb37129cf7`.
+- app version: **239**.
+
+UI/동작:
+- 모바일 고정 곡 rail은 `mobileGroupSize=1` + 카드 폭 100%로 변경.
+- 기존 2초 delayed visible-share 정렬은 1곡 기준으로 그대로 사용.
+- SORIDRAW 추천 모바일 2곡, 장르 추천 3곡 등 다른 Explore rail 밀도는 변경하지 않음.
+- `전체 곡` 헤더 오른쪽에 `Grid3X3` / `List` 아이콘 버튼 추가. 텍스트는 보이지 않고 aria-label/title만 제공.
+- 기본값은 기존 **그리드형**.
+- 목록형은 `profileList` 전용 카드 variant를 사용해 한 곡당 한 줄.
+- PC 목록 썸네일 112px / 모바일 84px.
+- 오른쪽에 장르/제목, 아래 좋아요/다음곡 적용/공유 버튼, 더보기는 우측 끝에 배치.
+- 목록형도 기존 재생/이퀄라이저, 좋아요, 다음곡 적용, 공유, 더보기 실제 action 함수를 그대로 재사용.
+- 그리드/목록 선택은 React 로컬 UI state이며 서버 저장/조회 없음.
+- app238 PC 좌우 여백, app237 3분30초 이퀄라이저 복원, app236 2.8:1 고정 곡 배너 유지.
+
+검증:
+- 첫 두 Audit는 제품 TypeScript/Build는 PASS였고 신규 verifier 정규식이 실제 selector/아이콘 순서를 잘못 가정해 Static verification만 FAIL.
+- verifier 수정 후 최종 Release System Audit Run **36612139330 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static release-system verification PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36612427307 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=239`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI/CSS + 로컬 view state만 변경.
+- Feed/Profile/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- 모바일 공개프로필에서 고정 곡이 한 화면 1개로 보이고 2초 정렬/좌우 버튼이 유지되는지 확인.
+- PC/모바일 전체 곡 우측의 그리드/목록 아이콘 버튼 확인.
+- 목록형에서 왼쪽 썸네일, 오른쪽 장르/제목, 하단 좋아요/적용/공유, 우측 끝 더보기 배치 확인.
+- 그리드형이 app238 기존 밀도/반응형을 그대로 유지하는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JQ. PREVIEW app238 · PC 공개프로필 좌우 여백 확대 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

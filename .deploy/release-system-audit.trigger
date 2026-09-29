@@ -1,9 +1,7 @@
-release_system_audit=2026-09-30-app245-static-final-isolation
-source_head=e3841a930008c281e0ad212aa1fb681febadc43f
-app_version=245
-scope=diagnose_remaining_static_syntax_or_final_guard
-worker_run=36626448310
-worker_result=success
-runtime_change=false
+release_system_audit=2026-09-30-app246-profile-follow-cost
+source_head=784ae9ee92a36cd73c5e09629fd610d1caf8a916
+app_version=246
+scope=profile_follow_media_cost_hotpath_and_stale_rail_verifier
+runtime_change=true
 preview_only=true
 test_production_unchanged_required=true

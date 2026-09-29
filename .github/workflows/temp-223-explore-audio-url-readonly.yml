@@ -102,7 +102,6 @@ jobs:
               echo "MEDIA_URL_PROBE code=$code type=$ctype $url"
             done < "$RUNNER_TEMP/media-urls.txt"
           fi
-          NODE
       - name: Read-only compare PREVIEW Feed mapping
         shell: bash
         run: |

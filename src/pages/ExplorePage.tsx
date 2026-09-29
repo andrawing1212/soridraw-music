@@ -413,6 +413,35 @@ const readExploreRecommendationGenre221 = (track: ExploreTrack) => {
   return displayGenre || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim();
 };
 
+const readExplorePinnedKeywordList235 = (value: unknown): string[] => {
+  const source = Array.isArray(value) ? value : [value];
+  return source
+    .map((item) => safeText(item).replace(/^\[|\]$/g, '').trim())
+    .filter(Boolean);
+};
+
+const getExplorePinnedKeywords235 = (track: ExploreTrack): string[] => {
+  const selected = track.shareBundle?.selectedKeywords && typeof track.shareBundle.selectedKeywords === 'object'
+    ? track.shareBundle.selectedKeywords as Record<string, unknown>
+    : {};
+  const candidates = [
+    readExploreRecommendationGenre221(track),
+    ...readExplorePinnedKeywordList235(selected.moods).slice(0, 1),
+    ...readExplorePinnedKeywordList235(selected.themes).slice(0, 1),
+    ...readExplorePinnedKeywordList235(selected.styles).slice(0, 1),
+    ...readExplorePinnedKeywordList235(selected.sounds).slice(0, 1),
+    safeText(track.style),
+  ].filter(Boolean);
+
+  const seen = new Set<string>();
+  return candidates.filter((keyword) => {
+    const normalized = keyword.toLocaleLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  }).slice(0, 4);
+};
+
 // app221 — Keep recommendations local-first. SORIDRAW picks, genre folders and
 // creator suggestions are all projections of the already-loaded 40-card Feed.
 // Switching a genre or scrolling a rail never performs an extra server read.
@@ -695,6 +724,7 @@ function ExploreTrackCard({
   onApplyNext,
   onShare,
   onOpenMore,
+  variant = 'default',
 }: {
   track: ExploreTrack;
   liked: boolean;
@@ -706,6 +736,7 @@ function ExploreTrackCard({
   onApplyNext: (track: ExploreTrack) => void;
   onShare: (track: ExploreTrack) => void;
   onOpenMore: (track: ExploreTrack) => void;
+  variant?: 'default' | 'profilePinnedBanner';
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const openUrl = isOpenableUrl(track.openUrl)
@@ -719,28 +750,68 @@ function ExploreTrackCard({
     window.open(openUrl, '_blank', 'noopener,noreferrer');
   };
   const cardDisplayTitle = getExploreCardDisplayTitle(track);
+  const pinnedKeywords235 = variant === 'profilePinnedBanner'
+    ? getExplorePinnedKeywords235(track)
+    : [];
 
   return (
-    <article className={`soridraw-explore-card${isPreviewing ? ' is-previewing' : ''}`}>
+    <article className={`soridraw-explore-card${variant === 'profilePinnedBanner' ? ' soridraw-explore-card--profile-pinned' : ''}${isPreviewing ? ' is-previewing' : ''}`}>
       <div className="soridraw-explore-cover-wrap">
-        <div className="soridraw-explore-cover-button">
-          <span className="soridraw-explore-cover-shell">
-            {track.coverUrl && !imageFailed ? (
+        {variant === 'profilePinnedBanner' ? (
+          <div className="soridraw-explore-pinned-banner-235">
+            {track.coverUrl && !imageFailed && (
               <img
+                className="soridraw-explore-pinned-banner-blur-235"
                 src={track.coverUrl}
                 alt=""
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setImageFailed(true)}
+                aria-hidden="true"
               />
-            ) : (
-              <span className="soridraw-explore-cover-fallback" aria-hidden="true">
-                <Music2 />
-              </span>
             )}
-
-          </span>
-        </div>
+            <div className="soridraw-explore-pinned-banner-image-235">
+              {track.coverUrl && !imageFailed ? (
+                <img
+                  src={track.coverUrl}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImageFailed(true)}
+                />
+              ) : (
+                <span className="soridraw-explore-cover-fallback" aria-hidden="true">
+                  <Music2 />
+                </span>
+              )}
+            </div>
+            <div className="soridraw-explore-pinned-banner-shade-235" aria-hidden="true" />
+            <div className="soridraw-explore-pinned-banner-copy-235">
+              <span>FEATURED</span>
+              <h3 title={cardDisplayTitle.title}>{cardDisplayTitle.title}</h3>
+              <div className="soridraw-explore-pinned-keywords-235" aria-label="곡 키워드">
+                {pinnedKeywords235.map((keyword) => <em key={keyword}>{keyword}</em>)}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="soridraw-explore-cover-button">
+            <span className="soridraw-explore-cover-shell">
+              {track.coverUrl && !imageFailed ? (
+                <img
+                  src={track.coverUrl}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImageFailed(true)}
+                />
+              ) : (
+                <span className="soridraw-explore-cover-fallback" aria-hidden="true">
+                  <Music2 />
+                </span>
+              )}
+            </span>
+          </div>
+        )}
 
         <button
           type="button"
@@ -769,6 +840,7 @@ function ExploreTrackCard({
         </button>
       </div>
 
+      {variant !== 'profilePinnedBanner' && (
       <div className="soridraw-explore-card-copy">
         {cardDisplayTitle.genre && (
           <div className="soridraw-explore-card-genre">{cardDisplayTitle.genre}</div>
@@ -789,6 +861,7 @@ function ExploreTrackCard({
           <span>{track.displayName}</span>
         </button>
       </div>
+      )}
 
       <div className="soridraw-explore-card-actions" aria-label="곡 반응 정보">
         <button
@@ -2159,6 +2232,7 @@ export default function ExplorePage() {
   const renderTrackCard = (
     track: ExploreTrack,
     ownerProfileAuthority: ExplorePublicProfile | null = null,
+    variant: 'default' | 'profilePinnedBanner' = 'default',
   ) => {
     // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
     // On a public-profile page, the already-loaded profile is the display
@@ -2187,6 +2261,7 @@ export default function ExplorePage() {
         onOpenProfile={openProfile}
         onApplyNext={applyExploreTrackToNextSong}
         onShare={shareExploreTrack}
+        variant={variant}
         onOpenMore={(selectedTrack) => {
           setMoreTrack(selectedTrack);
           setMoreSheetMode('actions');
@@ -2363,25 +2438,25 @@ export default function ExplorePage() {
                 {profilePinnedTracks231.length > 0 && (
                   <div className="soridraw-explore-profile-pinned-rail-232">
                     <ExploreRecommendationRail
-                      title="고정된 공개곡"
-                      subtitle="프로필에서 먼저 보여주는 대표 공개곡"
+                      title="고정 곡"
+                      subtitle="프로필에서 먼저 보여주는 대표 곡"
                       itemCount={profilePinnedTracks231.length}
                       trackClassName="soridraw-explore-recommend-track--profile-pinned"
                       mobileGroupSize={2}
                     >
-                      {profilePinnedTracks231.map((track) => renderTrackCard(track, profile))}
+                      {profilePinnedTracks231.map((track) => renderTrackCard(track, profile, 'profilePinnedBanner'))}
                     </ExploreRecommendationRail>
                   </div>
                 )}
-                <section className="soridraw-explore-profile-public-list-234" aria-label="전체 공개곡">
+                <section className="soridraw-explore-profile-public-list-234" aria-label="전체 곡">
                   <header className="soridraw-explore-profile-public-head-234">
                     <span>PUBLIC</span>
-                    <h2>전체 공개곡</h2>
+                    <h2>전체 곡</h2>
                     <p>프로필에 공개한 모든 곡</p>
                   </header>
                   {renderTrackGrid(
                     profileTracks,
-                    `${profile.nickname} 전체 공개곡`,
+                    `${profile.nickname} 전체 곡`,
                     profile,
                     'default',
                     true,

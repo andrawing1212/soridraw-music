@@ -9230,6 +9230,88 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222(han
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
+// SORIDRAW_PROFILE_MUTATION_TARGETED_R2_245_20260930
+async function patchPublicProfileBundle245(env, uid, profilePatch, previousHandle = '') {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return null;
+
+  let bundle = null;
+  try { bundle = await readExploreSharedProfile060(env, normalizedUid); } catch {}
+  if (!validExploreProfileR2Bundle020(bundle)) {
+    try { bundle = await readExploreProfileCanonicalR2Bundle020(env, normalizedUid); } catch {}
+  }
+  if (!validExploreProfileR2Bundle020(bundle)) return null;
+
+  const previousProfile = bundle.body.data.profile || {};
+  const currentSocial = previousProfile.socialLinks && typeof previousProfile.socialLinks === 'object'
+    ? previousProfile.socialLinks
+    : {};
+  const nextProfile = {
+    ...previousProfile,
+    ...(profilePatch || {}),
+    socialLinks: profilePatch?.socialLinks
+      ? { ...currentSocial, ...profilePatch.socialLinks }
+      : currentSocial,
+  };
+  const revision = Math.max(1, Number(bundle.revision || bundle.body.data.revision || 0) + 1);
+  const now = Date.now();
+  const nextData = {
+    ...bundle.body.data,
+    profile: nextProfile,
+    revision,
+    updatedAt: now,
+  };
+  const nextBundle = {
+    ...bundle,
+    uid: normalizedUid,
+    handle: String(nextProfile.handle || bundle.handle || '').trim().replace(/^@+/, ''),
+    revision,
+    updatedAt: now,
+    body: { ...bundle.body, data: nextData },
+  };
+
+  await writeExploreR2Json(env, exploreProfileR2Key(normalizedUid), nextBundle);
+
+  const shared = env?.PROFILE_MEDIA || null;
+  if (shared) {
+    await shared.put(exploreSharedProfileR2Key060(normalizedUid), JSON.stringify(nextBundle), {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { soridrawSharedProfile: '245', mirroredAt: String(now) },
+    });
+  }
+
+  const oldHandle = String(previousHandle || previousProfile.handle || '').trim().replace(/^@+/, '').toLowerCase();
+  const nextHandle = String(nextProfile.handle || '').trim().replace(/^@+/, '').toLowerCase();
+  if (nextHandle && nextHandle !== oldHandle) {
+    await writeExploreProfileAlias020(env, nextHandle, normalizedUid);
+    if (shared) {
+      await shared.put(exploreSharedProfileAliasR2Key060(nextHandle), JSON.stringify({
+        schemaVersion: 1,
+        uid: normalizedUid,
+        handle: nextHandle,
+        updatedAt: now,
+      }), {
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: { soridrawSharedProfileAlias: '245', mirroredAt: String(now) },
+      });
+    }
+  }
+  if (oldHandle && oldHandle !== nextHandle) {
+    try { await exploreCacheBucket031(env)?.delete(exploreProfileHandleAliasR2Key020(oldHandle)); } catch {}
+    try { await shared?.delete(exploreSharedProfileAliasR2Key060(oldHandle)); } catch {}
+  }
+
+  return nextBundle;
+}
+
+async function refreshProfileSearchIndexFromPayload245(env, uid, nickname, bio) {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM profile_search_fts WHERE uid = ?').bind(uid),
+    env.DB.prepare('INSERT INTO profile_search_fts (uid, nickname, bio) VALUES (?, ?, ?)')
+      .bind(uid, nickname || '', bio || ''),
+  ]);
+}
+
 async function handleMyProfileUpdate(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
@@ -9244,10 +9326,7 @@ async function handleMyProfileUpdate(request, env, cors) {
   if (!/^[a-z0-9._]{3,24}$/.test(handle) || handle.startsWith(".") || handle.endsWith(".") || handle.includes("..")) {
     throwApi("INVALID_HANDLE", "\uD578\uB4E4\uC740 \uC601\uBB38 \uC18C\uBB38\uC790, \uC22B\uC790, \uC810(.), \uBC11\uC904(_)\uB85C 3~24\uC790\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.", 400);
   }
-  const handleOwner = await env.DB.prepare(`
-    SELECT uid FROM public_profiles WHERE handle = ? COLLATE NOCASE AND uid <> ? LIMIT 1
-  `).bind(handle, authContext.uid).first();
-  if (handleOwner?.uid) throwApi("HANDLE_TAKEN", "\uC774\uBBF8 \uC0AC\uC6A9 \uC911\uC778 \uD578\uB4E4\uC785\uB2C8\uB2E4.", 409);
+
   const genresRaw = Array.isArray(body.genres) ? body.genres : [];
   const genres = [];
   const seen = /* @__PURE__ */ new Set();
@@ -9260,39 +9339,109 @@ async function handleMyProfileUpdate(request, env, cors) {
     genres.push(genre);
     if (genres.length >= 5) break;
   }
+
   const spotifyUrl = normalizeProfileSocialUrl(body.spotifyUrl, "spotify");
   const instagramUrl = normalizeProfileSocialUrl(body.instagramUrl, "instagram");
   const tiktokUrl = normalizeProfileSocialUrl(body.tiktokUrl, "tiktok");
   const now = Date.now();
-  const existing = await env.DB.prepare(`SELECT uid FROM public_profiles WHERE uid = ? LIMIT 1`).bind(authContext.uid).first();
+
+  const readExisting245 = async () => await env.DB.prepare(`
+    SELECT
+      p.uid, p.nickname, p.avatar_url, p.background_url, p.bio, p.handle,
+      p.genre_override, p.spotify_url, p.instagram_url, p.tiktok_url,
+      p.is_public, p.profile_customized, p.created_at, p.updated_at,
+      COALESCE(ps.follower_count, 0) AS follower_count,
+      COALESCE(ps.following_count, 0) AS following_count
+    FROM public_profiles p
+    LEFT JOIN profile_stats ps ON ps.uid = p.uid
+    WHERE p.uid = ?
+    LIMIT 1
+  `).bind(authContext.uid).first();
+
+  let existing = await readExisting245();
   if (!existing) {
     await upsertPublicProfileFromFirebase(env, authContext, now);
+    existing = await readExisting245();
   }
-  await env.DB.prepare(`
-    UPDATE public_profiles
-    SET nickname = ?, bio = ?, handle = ?, genre_override = ?,
-        spotify_url = ?, instagram_url = ?, tiktok_url = ?,
-        profile_customized = 1, is_public = 1, updated_at = ?
-    WHERE uid = ?
-  `).bind(
+  if (!existing) throwApi("PROFILE_NOT_FOUND", "\uD504\uB85C\uD544\uC744 \uD655\uC778\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", 409);
+
+  const previousHandle = String(existing.handle || "").trim().replace(/^@+/, "");
+  const handleChanged = previousHandle.toLowerCase() !== handle.toLowerCase();
+  if (handleChanged) {
+    const handleOwner = await env.DB.prepare(`
+      SELECT uid FROM public_profiles WHERE handle = ? COLLATE NOCASE AND uid <> ? LIMIT 1
+    `).bind(handle, authContext.uid).first();
+    if (handleOwner?.uid) throwApi("HANDLE_TAKEN", "\uC774\uBBF8 \uC0AC\uC6A9 \uC911\uC778 \uD578\uB4E4\uC785\uB2C8\uB2E4.", 409);
+  }
+
+  const previousGenres = JSON.stringify(parseProfileGenres(existing.genre_override));
+  const nextGenres = JSON.stringify(genres);
+  const searchChanged = String(existing.nickname || "") !== nickname || String(existing.bio || "") !== bio;
+  const coreChanged = searchChanged
+    || handleChanged
+    || previousGenres !== nextGenres
+    || String(existing.spotify_url || "") !== spotifyUrl
+    || String(existing.instagram_url || "") !== instagramUrl
+    || String(existing.tiktok_url || "") !== tiktokUrl
+    || Number(existing.profile_customized || 0) !== 1
+    || Number(existing.is_public || 0) !== 1;
+
+  if (coreChanged) {
+    await env.DB.prepare(`
+      UPDATE public_profiles
+      SET nickname = ?, bio = ?, handle = ?, genre_override = ?,
+          spotify_url = ?, instagram_url = ?, tiktok_url = ?,
+          profile_customized = 1, is_public = 1, updated_at = ?
+      WHERE uid = ?
+    `).bind(
+      nickname,
+      bio,
+      handle,
+      nextGenres,
+      spotifyUrl,
+      instagramUrl,
+      tiktokUrl,
+      now,
+      authContext.uid
+    ).run();
+  }
+
+  if (searchChanged) {
+    await refreshProfileSearchIndexFromPayload245(env, authContext.uid, nickname, bio);
+  }
+
+  const profilePatch = {
+    uid: authContext.uid,
     nickname,
+    avatarUrl: String(existing.avatar_url || ""),
+    backgroundUrl: String(existing.background_url || ""),
     bio,
     handle,
-    JSON.stringify(genres),
-    spotifyUrl,
-    instagramUrl,
-    tiktokUrl,
-    now,
-    authContext.uid
-  ).run();
-  await refreshProfileSearchIndex(env, authContext.uid);
-  const profile = await readPublicProfileByUid(env, authContext.uid);
-  const firstViewRefs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid);
-  await invalidatePublicProfileFirstViewEdgeCache(request, firstViewRefs);
-  if (isExploreR2CatalogEnabled066(env)) {
+    genres,
+    socialLinks: {
+      spotify: spotifyUrl,
+      instagram: instagramUrl,
+      tiktok: tiktokUrl,
+    },
+    createdAt: Number(existing.created_at || now),
+    updatedAt: coreChanged ? now : Number(existing.updated_at || now),
+  };
+
+  const patchedBundle = await patchPublicProfileBundle245(env, authContext.uid, profilePatch, previousHandle);
+  const profile = patchedBundle?.body?.data?.profile || {
+    ...profilePatch,
+    followerCount: Number(existing.follower_count || 0),
+    followingCount: Number(existing.following_count || 0),
+    trackCount: 0,
+  };
+
+  await invalidatePublicProfileFirstViewEdgeCache(request, [authContext.uid, previousHandle, handle].filter(Boolean));
+
+  if (isExploreR2CatalogEnabled066(env) && (handleChanged || String(existing.nickname || "") !== nickname)) {
     try { await syncExploreCatalogArtist066(env, profile); }
-    catch (error) { console.warn('[SORIDRAW 066] explicit profile artist sync deferred:', String(error?.message || error || 'unknown')); }
+    catch (error) { console.warn('[SORIDRAW 245] profile artist sync deferred:', String(error?.message || error || 'unknown')); }
   }
+
   return json({ ok: true, data: { profile } }, 200, cors);
 }
 __name(handleMyProfileUpdate, "handleMyProfileUpdate");
@@ -27200,10 +27349,10 @@ async function patchExploreProfileR2Counters020Core060(env, uid, patch) {
 async function patchExploreProfileR2Counters020(...args) {
   const env = args[0];
   const uid = String(args[1] || '').trim();
-  if (uid) await primeExploreLocalProfile060(env, uid).catch(() => false);
-  const result = await patchExploreProfileR2Counters020Core060(...args);
-  if (uid) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
-  return result;
+  const patch = args[2] && typeof args[2] === 'object' ? args[2] : {};
+  if (!uid) return false;
+  const bundle = await patchPublicProfileBundle245(env, uid, patch);
+  return Boolean(bundle);
 }
 __name(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name2(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");

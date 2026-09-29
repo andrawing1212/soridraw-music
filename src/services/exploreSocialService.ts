@@ -312,7 +312,16 @@ export const updateExplorePublicProfile = async (
       youtubeUrl: draft.youtubeUrl.trim(),
     }),
   });
-  return normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  const saved = normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  return {
+    ...saved,
+    socialLinks: {
+      spotify: draft.spotifyUrl.trim(),
+      instagram: draft.instagramUrl.trim(),
+      tiktok: draft.tiktokUrl.trim(),
+      youtube: draft.youtubeUrl.trim(),
+    },
+  };
 };
 
 export type ExploreProfileMediaKind = 'avatar' | 'background';

@@ -688,4 +688,11 @@ console.log('APP244_PROFILE_YOUTUBE_INPUT=PASS');
 console.log('APP244_PROFILE_SOCIAL_ICONS_BELOW_PHOTO=PASS');
 console.log('APP244_PROFILE_SOCIAL_EXTERNAL_LINKS_SAFE=PASS');
 console.log('APP244_PROFILE_YOUTUBE_SHARED_R2_NO_D1=PASS');
+assert.match(
+  socialService,
+  /const saved = normalizeProfile[\s\S]*?socialLinks:[\s\S]*?spotify: draft\.spotifyUrl\.trim\(\)[\s\S]*?instagram: draft\.instagramUrl\.trim\(\)[\s\S]*?tiktok: draft\.tiktokUrl\.trim\(\)[\s\S]*?youtube: draft\.youtubeUrl\.trim\(\)/,
+  'successful profile save must keep all just-saved social links in local profile state immediately',
+);
+
 console.log('APP244_PROFILE_OLD_CLIENT_YOUTUBE_PRESERVE=PASS');
+console.log('APP245_PROFILE_SAVED_SOCIAL_STATE=PASS');

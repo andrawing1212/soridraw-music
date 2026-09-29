@@ -15,6 +15,24 @@ assert.doesNotMatch(social244, /env\.DB|\.prepare\(/, '244 must not add canonica
 assert.match(previewEntry244, /Object\.prototype\.hasOwnProperty\.call\(requestBody, 'youtubeUrl'\)/);
 assert.match(previewEntry244, /isPublicProfileRead244[\s\S]*?attachProfileSocialExtra244/);
 
+const canonicalWorker245 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+const profile245Start = canonicalWorker245.indexOf('async function handleMyProfileUpdate(');
+const profile245End = canonicalWorker245.indexOf('\n}', profile245Start);
+assert.ok(profile245Start >= 0 && profile245End > profile245Start, '245 profile handler missing');
+const profile245 = canonicalWorker245.slice(profile245Start, profile245End + 2);
+assert.match(profile245, /const coreChanged =/);
+assert.match(profile245, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch, previousHandle\)/);
+assert.doesNotMatch(profile245, /readPublicProfileByUid\(/, '245 profile save must not post-read full profile + track count');
+assert.doesNotMatch(profile245, /refreshOrPrebuildPublicProfileFirstView\(/, '245 profile save must not rebuild first-view');
+assert.doesNotMatch(profile245, /syncDerivedCache032\(/, '245 profile save must not run derived profile sync');
+assert.doesNotMatch(profile245, /refreshProfileSearchIndex\(env/, '245 profile save must not re-read profile for FTS');
+const counter245Start = canonicalWorker245.indexOf('async function patchExploreProfileR2Counters020(');
+const counter245End = canonicalWorker245.indexOf('\n}', counter245Start);
+assert.ok(counter245Start >= 0 && counter245End > counter245Start, '245 follow R2 counter patch missing');
+const counter245 = canonicalWorker245.slice(counter245Start, counter245End + 2);
+assert.match(counter245, /patchPublicProfileBundle245\(env, uid, patch\)/);
+assert.doesNotMatch(counter245, /syncDerivedCache032|env\.DB/, 'follow counter cache patch must be R2-only');
+
 if (process.argv.includes('--connections')) {
   const prepared=readFileSync('cloudflare/explore-worker/scripts/deploy-prepared.mjs','utf8');
   const productionGuardIndex=prepared.indexOf('if (isCloudflareNativeBuild && !allowProductionDeploy)');

@@ -1,5 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
-# rerun-20260918-w18-audit
+# rerun-20260930-app248-profile-trigger-baseline
 
 on:
   push:

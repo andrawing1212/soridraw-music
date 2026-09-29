@@ -1,8 +1,8 @@
-requested_at=2026-09-30T06:41:00+09:00
-requested_by=user_app247_profile_cost_preview_deploy
-product_code_target=909bbf2b5f6789a3bb723d3c0dd2e33aa9c1c066
-release_purpose=deploy_app247_profile_save_r2_first_noop_skip
-app_version=247
+requested_at=2026-09-30T07:38:00+09:00
+requested_by=user_app248_profile_cost_preview_deploy
+product_code_target=a4e226040cb6ee61a1082284fac65f588aedceab
+release_purpose=deploy_app248_bio_fts_and_dual_media_batch
+app_version=248
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=true

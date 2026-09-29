@@ -1,7 +1,7 @@
-requested_at=2026-09-30T06:43:00+09:00
-requested_by=app247_worker_preflight_alignment
-product_code_target=3d0bc1733033638aedfe2ec7f96cdb41e4cb5832
-release_purpose=audit_app247_worker_release_preflight_alignment
+requested_at=2026-09-30T06:49:00+09:00
+requested_by=app247_worker_preflight_full_alignment
+product_code_target=0cff01db5db5e58392816ca6739548660501f521
+release_purpose=audit_app247_worker_preflight_full_alignment
 app_version=247
 preview_only=true
 deploy=false

@@ -56,6 +56,28 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
+      - name: Verify app245 canonical lock and syntax
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '[:space:]' < canonical/source-sha256.txt)"
+          actual="$(sha256sum canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          node --check canonical/preview-worker.js
+          node --check canonical/preview-entry.js
+          grep -q 'SORIDRAW_PROFILE_MUTATION_TARGETED_R2_245_20260930' canonical/preview-worker.js
+          grep -q 'SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930' canonical/preview-entry.js
+          echo 'APP245_CANONICAL_LOCK_AND_SYNTAX=PASS'
+
+      - name: Verify app245 profile and follow cost bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo 'APP245_PROFILE_FOLLOW_COST_BOUNDS=PASS'
+
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
         shell: bash

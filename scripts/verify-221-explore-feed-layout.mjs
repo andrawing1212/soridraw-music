@@ -183,11 +183,27 @@ assert.match(
 );
 assert.match(
   css,
-  /\.soridraw-explore-preview-button-eq i\{[\s\S]*?animation:soridraw-explore-preview-bar-222/,
-  'button equalizer must keep compositor-friendly transform animation',
+  /\.soridraw-explore-preview-button-eq i\{[\s\S]*?animation:soridraw-explore-preview-bar-222 calc\(\.92s \+ \(var\(--eq-index\) \* \.05s\)\)/,
+  'button equalizer must keep compositor-friendly animation at the slower app226 pace',
 );
-assert.doesNotMatch(css, /\.soridraw-explore-preview-eq\{|\.soridraw-explore-preview-eq-bars|\.soridraw-explore-card\.is-previewing \.soridraw-explore-card-copy h3/,
-  'full-cover equalizer and card-title active accent must be removed');
+assert.match(
+  css,
+  /\.soridraw-explore-card\.is-previewing \.soridraw-explore-card-copy h3\{color:#ffbf24/,
+  'active play-link feedback must restore the title accent without restoring full-cover animation',
+);
+assert.doesNotMatch(css, /\.soridraw-explore-preview-eq\{|\.soridraw-explore-preview-eq-bars/,
+  'full-cover equalizer must stay removed',
+);
+assert.match(
+  css,
+  /@media \(hover:none\),\(pointer:coarse\)\{[\s\S]*?\.soridraw-explore-recommend-scroll\{scroll-snap-type:none;scroll-behavior:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y\}/,
+  'coarse-pointer/mobile rails must use native free momentum instead of card snapping',
+);
+assert.match(
+  css,
+  /@media \(hover:none\),\(pointer:coarse\)\{[\s\S]*?\.soridraw-explore-recommend-track>\.soridraw-explore-card,\.soridraw-explore-recommend-creator-card\{scroll-snap-align:none\}/,
+  'mobile track items must not force two-card snap stops',
+);
 
 console.log('APP221_EXPLORE_EXISTING_LAYOUT_PRESERVED=PASS');
 console.log('APP224_EXPLORE_VISUAL_ONLY_NO_AUDIO_ENGINE=PASS');
@@ -198,3 +214,7 @@ console.log('APP225_EXPLORE_BUTTON_ONLY_EQUALIZER=PASS');
 console.log('APP225_EXPLORE_NO_PAUSE_SEMANTICS=PASS');
 console.log('APP225_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS');
 console.log('APP225_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS');
+console.log('APP226_EXPLORE_ACTIVE_TITLE_ACCENT_RESTORED=PASS');
+console.log('APP226_EXPLORE_BUTTON_EQUALIZER_SLOWER=PASS');
+console.log('APP226_EXPLORE_MOBILE_NATIVE_MOMENTUM_SCROLL=PASS');
+console.log('APP226_EXPLORE_MOBILE_SCROLL_SNAP_DISABLED=PASS');

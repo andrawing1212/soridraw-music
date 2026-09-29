@@ -1,3 +1,47 @@
+## 0JZ. app248 PREVIEW 실사용 비용 재측정 (2026-09-30 KST)
+
+상태: **기능/쿼리 수 최적화 PASS / physical D1 rows 비용 최적화 계속 필요**
+
+사용자 실측:
+- 1) no-op 저장: PASS.
+- 2) YouTube only: `/v1/me/profile`
+  - D1 query R0/W0
+  - 이번 실행 총 physical **R0/W0**
+  - PASS.
+- 3) bio only: `/v1/me/profile`
+  - D1 query R0/W1
+  - 이번 실행 총 physical **R9/W9**
+  - app247의 query W3 → app248 W1 목표는 달성.
+  - 그러나 청구 기준 physical rows는 아직 R9/W9.
+- 4) avatar only: `/v1/me/profile-media/avatar`
+  - D1 query R0/W1
+  - 이번 실행 총 physical **R12/W11**.
+- 5) avatar + background: `/v1/me/profile-media`
+  - dual-media batch 요청 1개 확인.
+  - D1 query R0/W1
+  - 이번 실행 총 physical **R12/W11**.
+  - 두 이미지를 함께 바꿔도 canonical D1 비용이 avatar 1개와 같은 수준으로 묶이는 목표 달성.
+
+해석:
+- `D1 쿼리 읽기 0`은 별도 SELECT query가 없다는 뜻.
+- 비용 판단에는 Cloudflare가 보고하는 **이번 실행 총 R/W physical rows**도 반드시 포함.
+- 따라서 app248은 요청 수와 explicit query write 수를 줄이는 데 성공했지만, bio/media의 남은 physical rows는 live D1 trigger fan-out에서 발생.
+- live read-only schema audit 기준:
+  - `public_profiles UPDATE` → `explore032_profile_update`
+  - `explore_derived_profiles UPDATE` → `explore032_derived_profile_update`
+  - nickname/avatar/active 변경이면 `explore032_derived_profile_feed`
+  - `soridraw_shared_rev_public_profiles_au_051` → shared revision update
+  - 이 연쇄가 physical read/write의 다음 최적화 대상.
+- 기존 076 maintenance 후보는 현재 live 079 Music Note trigger baseline을 덮을 위험 때문에 그대로 적용 금지.
+
+다음:
+- current live 079 구조를 보호한 **profile-only trigger compaction** 후보를 새로 설계.
+- bio-only에서 Feed/global 불필요 파생 갱신을 최소화하고, avatar 변경은 실제 필요한 공개 카드/프로필 갱신만 유지.
+- 먼저 offline fixture로 exact R/W fan-out을 재현하고, 사용자 데이터 변경 없는 trigger-only maintenance로 제한.
+- shared D1 변경은 별도 승인 전 실행 금지.
+
+기준 preview HEAD 기록 시점: `ad587c47eb1c4e921d800bf6c40639a5b06b7635`
+
 ## 0JY. PREVIEW app248 · 프로필 편집 비용 2차 절감 · 배포 완료 (2026-09-30 KST)
 
 상태: **PREVIEW app248 Hosting + Worker 배포 완료 / 실사용 비용 재측정 대기**

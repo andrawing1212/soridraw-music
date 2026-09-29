@@ -1,3 +1,60 @@
+## 0JM. PREVIEW app234 · 공개프로필 섹션 구분 + 고정곡/전체곡 1:2 반응형 밀도 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- 고정된 공개곡 아래 일반 공개곡 영역에도 제목을 넣어 두 영역을 명확히 구분.
+- PC 전체화면 기준 고정된 공개곡은 한 화면 3곡, 전체 공개곡은 한 줄 6곡.
+- 창이 줄어들면 고정곡:전체 공개곡의 한 줄 노출 수를 약 1:2로 유지.
+- 전체 공개곡 한 줄 수가 홀수면 전체÷2를 반올림해 고정곡 수를 결정. 예: 5→3, 3→2.
+- app232의 고정곡 가로 rail / 좌우 버튼 / 모바일 2초 정렬 / 고정곡의 아래 목록 중복 노출은 유지.
+
+app234 수정:
+- TSX commit: `2c79f0f0aeedc0a07264fca29eb074359795a961`.
+- Explore CSS commit: `bffb5fd99eabba55e1f354c25f23cb7619566919`.
+- Social CSS commit: `5904470c9b64c7463f940a7d9689ae87bd4db60e`.
+- verifier commit: `a863f4922e36e8b85492147aa41d458f44e121d1`.
+- version commit: `a8e46187c3e8d0d4a903f939e0d8342b9cb7a74f`.
+- audit head: `805914ffdae5552ffb72480938f0186629897d50`.
+- release SHA: `7a729874ec161fa9091ba7f0fff96670324d5a40`.
+- app version: **234**.
+
+UI/반응형:
+- 일반 공개곡 영역 위에 `PUBLIC / 전체 공개곡 / 프로필에 공개한 모든 곡` 제목을 추가.
+- >=1800px: 전체 공개곡 6열 / 고정곡 rail 3곡.
+- 1600~1799px: 전체 공개곡 5열 / 고정곡 3곡 (5÷2=2.5 반올림).
+- 1100~1599px: 전체 공개곡 4열 / 고정곡 2곡.
+- <=1099px: 전체 공개곡 3열 / 고정곡 2곡 (3÷2=1.5 반올림).
+- <=720px 모바일: 기존 전체 공개곡 3열 / 고정곡 2곡 유지.
+- 고정곡은 계속 `ExploreRecommendationRail`을 사용하므로 PC/모바일 가로스크롤, 좌우 버튼, 모바일 2초 정렬이 유지됨.
+- 고정곡은 아래 전체 공개곡에도 그대로 중복 노출.
+
+검증:
+- Release System Audit Run **36596760541 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36597042561 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=234`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI/CSS 배치 변경만 있음.
+- Feed/Profile/Firestore/D1 추가 read/write 0.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- PC 전체화면에서 고정곡 3 / 전체 공개곡 6 확인.
+- 창 너비를 줄이며 5→3, 4→2, 3→2 비율 전환 확인.
+- 모바일에서 고정곡 2 / 전체 공개곡 3과 2초 정렬 유지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JL. PREVIEW app233 · 재생/이퀄라이저 버튼 썸네일 비례 크기 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

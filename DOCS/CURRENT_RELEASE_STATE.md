@@ -1,3 +1,47 @@
+## 0JQ. PREVIEW app238 · PC 공개프로필 좌우 여백 확대 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- PC 공개프로필 화면의 좌우 여백을 더 크게 늘려 내부 콘텐츠 폭을 더 줄임.
+- 모바일/태블릿 레이아웃과 기존 공개프로필 카드 밀도/기능은 유지.
+
+app238 수정:
+- CSS 제품 commit: `90295e1227d18bd0348eb982313748e6919c744b`.
+- verifier commit: `cf77c030a13834dc045b7c57bdc862131ac5c067`.
+- version commit: `350e5ae305441de323103f1b5deb80cb30cdd2e8`.
+- audit head: `23eaa77e873f57c26b3af07f2e15a34f8326a783`.
+- release SHA: `f7be4d02155ecd7107ffba7182c326ac1dd0a974`.
+- app version: **238**.
+- PC 공개프로필 padding: `clamp(54px, 5vw, 92px)` → `clamp(76px, 7.5vw, 144px)`.
+- 1100px 이상 공개프로필에만 적용.
+- 모바일/태블릿 breakpoint와 카드 수 규칙은 변경하지 않음.
+
+검증:
+- Release System Audit Run **36608770923 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36609010538 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=238`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- CSS-only 제품 변경.
+- Firestore / D1 추가 read/write 0.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- PC 전체화면 공개프로필에서 좌우 공간이 이전보다 충분히 넓어졌는지 확인.
+- 고정 곡 3 / 전체 곡 6, 2.8:1 배너, 재생/이퀄라이저, 모바일/태블릿 레이아웃 유지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JP. PREVIEW app237 · Explore 이퀄라이저 3분30초 + 페이지 이동 후 상태 유지 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**

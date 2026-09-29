@@ -470,6 +470,7 @@ function ExploreRecommendationRail({
   toolbar,
   trackClassName = '',
   itemLabel = '곡',
+  mobileGroupSize = 3,
   children,
 }: {
   title: string;
@@ -478,6 +479,7 @@ function ExploreRecommendationRail({
   toolbar?: React.ReactNode;
   trackClassName?: string;
   itemLabel?: string;
+  mobileGroupSize?: 2 | 3;
   children: React.ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -485,6 +487,7 @@ function ExploreRecommendationRail({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const isSongRail228 = !trackClassName.includes('soridraw-explore-recommend-track--creators');
+  const mobileAlignGroupSize231 = mobileGroupSize;
 
   const clearMobileAlignTimer228 = () => {
     if (mobileAlignTimerRef228.current == null) return;
@@ -511,7 +514,7 @@ function ExploreRecommendationRail({
     const cards = Array.from(track.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement,
     );
-    if (cards.length <= 3) return;
+    if (cards.length <= mobileAlignGroupSize231) return;
 
     const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
     if (maxScrollLeft <= 1) return;
@@ -519,11 +522,11 @@ function ExploreRecommendationRail({
     const scrollerRect = scroller.getBoundingClientRect();
     const current = scroller.scrollLeft;
 
-    // SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_229_20260929
-    // After native momentum settles, score every contiguous three-card window by
-    // how much of those cards is currently visible. With two full cards plus
-    // partial cards on both sides, this naturally keeps the side with the larger
-    // visible share instead of snapping to a fixed 0/3/6... boundary.
+    // SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_231_20260930
+    // After native momentum settles, score each contiguous visible group. The
+    // SORIDRAW picks rail uses two cards on mobile; genre rails keep three.
+    // Each rail therefore settles around the cards that are actually most visible
+    // without changing the user's native momentum behavior.
     const visibleRatios = cards.map((card) => {
       const rect = card.getBoundingClientRect();
       const visibleWidth = Math.max(
@@ -537,12 +540,14 @@ function ExploreRecommendationRail({
     let bestVisibleScore = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
 
-    for (let startIndex = 0; startIndex <= cards.length - 3; startIndex += 1) {
-      const visibleScore = (
-        visibleRatios[startIndex]
-        + visibleRatios[startIndex + 1]
-        + visibleRatios[startIndex + 2]
-      );
+    for (
+      let startIndex = 0;
+      startIndex <= cards.length - mobileAlignGroupSize231;
+      startIndex += 1
+    ) {
+      const visibleScore = visibleRatios
+        .slice(startIndex, startIndex + mobileAlignGroupSize231)
+        .reduce((sum, ratio) => sum + ratio, 0);
       const cardRect = cards[startIndex].getBoundingClientRect();
       const candidate = Math.min(
         maxScrollLeft,
@@ -734,11 +739,6 @@ function ExploreTrackCard({
               </span>
             )}
 
-            {track.profilePinned && (
-              <span className="soridraw-explore-pin-badge" title="공개 프로필 고정" aria-label="공개 프로필 고정">
-                <Pin aria-hidden="true" />
-              </span>
-            )}
           </span>
         </div>
 
@@ -2211,6 +2211,9 @@ export default function ExplorePage() {
     </section>
   );
 
+  const profilePinnedTracks231 = profileTracks.filter((track) => track.profilePinned);
+  const profileOtherTracks231 = profileTracks.filter((track) => !track.profilePinned);
+
   if (profileUid) {
     return (
       <main className="soridraw-explore-page">
@@ -2358,10 +2361,24 @@ export default function ExplorePage() {
               </div>
             ) : (
               <>
-                {profileTracks.some((track) => track.profilePinned) && (
-                  <div className="soridraw-explore-profile-section-label"><Pin aria-hidden="true" /> 고정된 공개곡</div>
+                {profilePinnedTracks231.length > 0 && (
+                  <>
+                    <div className="soridraw-explore-profile-section-label"><Pin aria-hidden="true" /> 고정된 공개곡</div>
+                    <section
+                      className="soridraw-explore-grid soridraw-explore-profile-pinned-track-231"
+                      aria-label={`${profile.nickname} 고정된 공개곡`}
+                    >
+                      {profilePinnedTracks231.map((track) => renderTrackCard(track, profile))}
+                    </section>
+                  </>
                 )}
-                {renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`, profile)}
+                {profileOtherTracks231.length > 0 && renderTrackGrid(
+                  profileOtherTracks231,
+                  `${profile.nickname} 공개곡`,
+                  profile,
+                  'default',
+                  true,
+                )}
               </>
             )}
           </>
@@ -2463,6 +2480,8 @@ export default function ExplorePage() {
                   title="SORIDRAW 추천"
                   subtitle="지금 Explore에서 먼저 들려주고 싶은 곡"
                   itemCount={recommendationModel221.picks.length}
+                  trackClassName="soridraw-explore-recommend-track--picks"
+                  mobileGroupSize={2}
                 >
                   {recommendationModel221.picks.map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>

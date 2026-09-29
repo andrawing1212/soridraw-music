@@ -1,3 +1,60 @@
+## 0JU. PREVIEW app244 · 공개프로필 YouTube 링크 + 소셜 아이콘 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / 코드·검증기 반영 / Release System Audit·PREVIEW Worker·Firebase PREVIEW Hosting 트리거 실행 / Actions 최종 결과·실주소 확인 대기**
+
+사용자 지시:
+- 프로필 편집의 소셜 링크에 **YouTube** 입력칸 추가.
+- 입력된 Spotify / Instagram / TikTok / YouTube 링크를 공개프로필 **프로필 사진 아래 아이콘**으로 표시.
+- 아이콘 클릭 시 해당 외부 사이트를 새 탭으로 열기.
+- 기존 정상 기능은 유지.
+
+app244 변경:
+- YouTube 입력 UI: `94f2823c019064f31f08423022d7394a6fb5ded1`.
+- 클라이언트 profile type/PATCH: `8ed4f6a03119151bd5a4d5e46d0ec26ab48bb8f5`.
+- first-view local cache: `d43476f3d9269ed838c65075d8e642aed5590697`.
+- 공개프로필 아이콘 렌더: `fa912ae3700987955a886112698b33c88ade7de7`.
+- 아이콘 CSS: `6382fe2a4bf364c18022d30d95b9ab050e16f02d`.
+- PREVIEW Worker shared YouTube sidecar: `2c60587c7cc3df31d1352b6d388c522c2ae736bd`.
+- app244 verifier: `ced7f0c3192746962e2053112b52991a504887d1` + `9b7a1e54e995c0fedfcdfeb73a29ccc9842fca83`.
+- Worker deploy preflight: `cd19c8d21989a88c6d0ce38c517e33b2efdaee19`.
+- version commit: `57ee961f02bc2bcfd138e5b9ee2fc8e5ee54a243`.
+- final audit source: `f2a0e28a3b632d21a91f665169237ee9351cdfdc`.
+- Worker release trigger: `ad98f284a6e7239636ee8b9456c1dacf1b560493`.
+- Firebase PREVIEW Hosting trigger: `6dc83ce32b5cf94bfad738ce1c4baa4e2c9f877e`.
+- app version: **244**.
+
+동작:
+- 기존 Spotify / Instagram / TikTok 값은 기존 저장 구조를 그대로 사용.
+- YouTube만 기존 D1 스키마를 바꾸지 않고 공유 `PROFILE_MEDIA` R2의 `internal/explore/profile-social-extra-v1/{uid}.json`에 추가 저장.
+- 구버전 앱이 `youtubeUrl` 필드를 보내지 않으면 기존 YouTube 값을 지우지 않음.
+- 공개프로필 direct GET / first-view 응답에 YouTube 값을 합쳐 클라이언트가 PC/모바일에서 동일하게 읽음.
+- 링크 표시는 텍스트 대신 프로필 사진 아래 Spotify / Instagram / TikTok / YouTube 아이콘.
+- 외부 링크는 http/https만 허용하고, 스킴이 없으면 https로 보정. 클릭 시 새 탭.
+
+비용/데이터:
+- D1 schema migration 없음.
+- YouTube 추가 저장 시 canonical D1 read/write **추가 0**.
+- YouTube 저장은 사용자 프로필 변경 시 작은 shared R2 object 1개만 변경.
+- 공개프로필 네트워크 응답에 YouTube를 합칠 때 edge cache 우선. edge miss에서만 작은 shared R2 object 조회.
+- 정상 local first-view 재진입의 기존 서버 0-read 경로는 그대로 유지.
+- Firestore / Functions / Rules 변경 없음.
+- 기존 사용자 데이터 삭제·대량변환 없음.
+
+검증/배포:
+- app244 정적 verifier와 Worker deploy preflight에 YouTube/아이콘/구버전 호환/D1 미사용 가드 추가.
+- Release System Audit trigger 실행.
+- PREVIEW Worker release trigger 실행.
+- Firebase PREVIEW Hosting trigger 실행.
+- 현재 연결에서는 push-trigger GitHub Actions Run 목록과 실제 `preview.soridraw.com` 응답을 직접 조회할 수 없어 Run ID/최종 배포 결과는 **미확인**.
+- 최종 완료 판정 전 TypeScript / Build / verifier / Worker smoke / Hosting exact build / TEST·PRODUCTION 비변경 확인 필요.
+
+다음:
+- Actions 결과 확인 가능 시 Audit/Worker/Hosting PASS 고정.
+- 프로필 편집에서 YouTube 저장 → 공개프로필 사진 아래 YouTube 아이콘 즉시 표시 확인.
+- Spotify/Instagram/TikTok 기존 값도 사진 아래 아이콘 표시 및 클릭 이동 확인.
+- PC/모바일 동일 확인.
+- TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JT. PREVIEW app243 · 고정곡 0.2초 정렬 + 좌우 버튼 화면 단위 이동 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / focused static PASS / Release System Audit 트리거 실행 / Firebase PREVIEW Hosting 트리거 실행 / Actions 최종 결과·실주소 확인 대기**

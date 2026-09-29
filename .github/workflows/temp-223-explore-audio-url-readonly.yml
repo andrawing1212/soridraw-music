@@ -102,6 +102,42 @@ jobs:
               echo "MEDIA_URL_PROBE code=$code type=$ctype $url"
             done < "$RUNNER_TEMP/media-urls.txt"
           fi
+      - name: Inspect Suno share page for playable media without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          share_url="$(node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/audio-fields.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          console.log(String(rows[0]?.suno_url_primary||''));
+          NODE
+          )"
+          test -n "$share_url"
+          browser_ua='Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'
+          curl -sS -L -A "$browser_ua" -D "$RUNNER_TEMP/share-headers.txt" -o "$RUNNER_TEMP/share.html" "$share_url"
+          echo "SHARE_FINAL_URL=$(curl -sS -L -A "$browser_ua" -o /dev/null -w '%{url_effective}' "$share_url")"
+          echo "SHARE_HTTP=$(curl -sS -L -A "$browser_ua" -o /dev/null -w '%{http_code}' "$share_url")"
+          grep -Eio 'https?://[^"'"'"' <>()]+\.(mp3|m4a)(\?[^"'"'"' <>()]+)?' "$RUNNER_TEMP/share.html" | head -n 12 || true
+          grep -Eio '(og:audio|audio_url|audioUrl|stream_audio_url|streamAudioUrl)[^<]{0,500}' "$RUNNER_TEMP/share.html" | head -n 20 || true
+          node <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync(process.env.RUNNER_TEMP+'/share.html','utf8');
+          const patterns=[
+            /<meta[^>]+property=["']og:audio(?::url)?["'][^>]+content=["']([^"']+)["']/ig,
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:audio(?::url)?["']/ig,
+            /["']audio_url["']\s*:\s*["']([^"']+)["']/ig,
+            /["']audioUrl["']\s*:\s*["']([^"']+)["']/ig,
+            /https?:\\?\/\\?\/[^"'<> ]+\.mp3[^"'<> ]*/ig,
+          ];
+          const found=[];
+          for(const re of patterns){
+            let m;
+            while((m=re.exec(html)) && found.length<30) found.push(m[1]||m[0]);
+          }
+          console.log('SHARE_MEDIA_CANDIDATES='+JSON.stringify([...new Set(found)].slice(0,20)));
+          console.log('SHARE_HTML_BYTES='+Buffer.byteLength(html));
+          NODE
       - name: Read-only compare PREVIEW Feed mapping
         shell: bash
         run: |

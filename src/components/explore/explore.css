@@ -159,7 +159,7 @@
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-page-frame[data-workspace-view="explore"]>.soridraw-studio-masthead-divider{display:none!important;right:0!important}
 }
 @media (min-width:1100px){
-.soridraw-explore-page--profile{padding-left:clamp(76px,7.5vw,144px);padding-right:clamp(76px,7.5vw,144px)}
+.soridraw-explore-page--profile{padding-left:clamp(96px,10vw,192px);padding-right:clamp(96px,10vw,192px)}
 }
 
 @media (max-width:1099px){

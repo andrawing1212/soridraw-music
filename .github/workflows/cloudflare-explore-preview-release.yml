@@ -100,15 +100,29 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-085-liked-profile.mjs
 
-      - name: Verify existing Explore cache regressions
+      - name: Verify existing liked public-count regression
         shell: bash
         run: |
           set -euo pipefail
-          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
-          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-110-explore-liked-public-count.mjs
-          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-109-mobile-feed-refresh-zero.mjs
-          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-108-explore-feed-cache-recovery.mjs
-          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-107-explore-direct-count-zero-read.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-110-explore-liked-public-count.mjs
+
+      - name: Verify existing mobile feed refresh regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-109-mobile-feed-refresh-zero.mjs
+
+      - name: Verify existing feed cache recovery regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-108-explore-feed-cache-recovery.mjs
+
+      - name: Verify existing direct-count zero-read regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-107-explore-direct-count-zero-read.mjs
 
       - name: Verify existing like and action regressions
         shell: bash

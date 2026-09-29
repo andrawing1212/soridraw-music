@@ -1,3 +1,97 @@
+## 0KA. Shared D1 profile trigger source-compaction 적용 (2026-09-30 KST)
+
+상태: **공유 D1 trigger-only 비용 절감 적용 완료 / 사용자 데이터 변경 0 / PREVIEW 실측 대기**
+
+배경:
+- app248 실측에서 explicit D1 query는 이미 bio/media 모두 R0/W1까지 줄었지만 physical rows는 bio R9/W9, avatar R12/W11, avatar+background R12/W11로 남음.
+- 원인은 `public_profiles UPDATE -> explore_derived_profiles UPDATE -> profile/feed journal trigger -> shared revision`의 중첩 fan-out.
+- Cloudflare D1은 query 반환 행이 아니라 실제 rows read / rows written을 과금하므로 다음 단계는 query 수가 아니라 trigger fan-out 축소가 핵심.
+
+대기업 구조 참고 방향:
+- Meta/TAO: 작은 변경 때문에 큰 캐시 단위를 통째로 무효화하는 구조를 피하고 변경 범위를 작게 유지.
+- Slack: 한 설정 변경이 전체 workspace cache를 무효화하던 구조를 더 작은 단위로 재설계하고 CDC/캐시 계층을 분리.
+- Uber Docstore/CacheFront: canonical DB write를 기준으로 변경된 row만 invalidation/upsert하며 version/timestamp로 중복 cache write를 억제.
+- SORIDRAW 적용 원칙: **한 사용자 저장 = canonical 1회 + 필요한 projection/signal만**, projection 위에 다시 projection trigger가 연쇄되는 구조를 제거.
+
+적용:
+- 신규 migration:
+  - `cloudflare/explore-worker/migrations/20260930_01_profile_source_trigger_compaction.sql`
+- 신규 verifier:
+  - `scripts/verify-249-profile-source-trigger-compaction.py`
+- offline + live baseline read-only 검증 workflow:
+  - `.github/workflows/temp-249-profile-trigger-verify.yml`
+  - Run `36643921713` SUCCESS
+  - remote D1 writes 0
+- trigger-only maintenance workflow:
+  - `.github/workflows/temp-249-apply-profile-trigger-compaction.yml`
+  - Run `36644010199` SUCCESS
+  - live preflight PASS
+  - rollback capture PASS
+  - user data reads 0
+  - user data rows mutated 0
+  - shared D1 trigger migration PASS
+- post-migration Release System Audit:
+  - Run `36644121319` SUCCESS
+  - TypeScript PASS
+  - Build PASS
+  - static/regression PASS
+  - TEST / PRODUCTION Worker dry-run PASS
+  - live shared D1 preflight PASS
+  - branch refs unchanged PASS
+
+실제 trigger 변경:
+- `explore032_profile_update`
+  - 기존: public_profiles를 다시 SELECT하고 profile_stats까지 LEFT JOIN한 뒤 derived row를 UPSERT, 이후 derived trigger가 다시 profile/feed change journal을 생성.
+  - 현재: `NEW.*` 값으로 derived profile row를 직접 1회 UPDATE.
+  - `updated_at`만 바뀐 old-client no-op 저장은 derived cascade를 깨우지 않음.
+  - profile scope journal을 source trigger에서 직접 기록.
+  - feed에 실제 필요한 `nickname / avatar / active` 변경만 feed journal 기록.
+  - profile + feed가 모두 필요한 경우 **sequence 증가 1회**를 공유.
+- `explore032_derived_profile_update`
+  - follower/following 변경 전용으로 축소.
+  - row_json / active 변경은 더 이상 중첩 journal을 만들지 않음.
+- `explore032_derived_profile_feed`
+  - 기존 이름은 preflight 호환을 위해 유지하되 `WHEN 0` zero-cost guard로 비활성화.
+  - feed invalidation은 source `public_profiles` trigger에서 필요한 경우에만 직접 생성.
+- `explore032_profile_delete`
+  - generic derived trigger 제거 후에도 profile/feed 삭제 invalidation이 유지되도록 source trigger에서 두 scope를 같은 seq로 기록.
+
+보호:
+- `explore032_derived_track_insert`
+- `explore079_music_note_derived_track_insert`
+- `explore032_derived_track_update`
+- `explore079_music_note_derived_track_update`
+  - **모두 SQL 그대로 유지 PASS**
+- `soridraw_shared_rev_public_profiles_au_051`
+  - 기존 TEST/PRODUCTION 호환성 때문에 **그대로 유지 PASS**
+- 사용자 canonical row / derived row migration/backfill 없음.
+- Firestore / Functions / Rules / Hosting 변경 없음.
+- PREVIEW Worker 코드 재배포 없음. active Worker는 app248 `2d02c2e5-4ea9-4d73-9df5-d467f093d047` 유지.
+- 앱 버전 **248** 유지.
+- main / TEST / PRODUCTION 코드/Worker 비변경.
+- 공유 D1의 trigger 정의만 변경됨.
+
+offline logical write 검증:
+- old-client updated_at-only: 2 logical rows (canonical + protected shared revision), derived/profile/feed cascade 0.
+- bio actual change: 5 logical rows including protected shared revision.
+- avatar actual change: 6 logical rows including protected shared revision.
+- avatar의 profile + feed change는 state seq 증가 1회.
+- follower update / track_count / delete compatibility PASS.
+- 실제 Cloudflare physical rows는 인덱스/SQLite 내부 accounting 때문에 위 logical row와 동일하다고 가정하지 않으며 PREVIEW 실측으로 판정.
+
+다음 실측:
+1. app248 그대로 no-op.
+2. YouTube only.
+3. bio only.
+4. avatar only.
+5. avatar+background.
+- 특히 physical `이번 실행 총 R/W`를 이전 bio R9/W9, avatar R12/W11, dual R12/W11과 비교.
+- explicit query는 bio/media W1 유지가 기준.
+- 결과가 충분히 낮아지지 않으면 다음 후보는 shared revision profile-update 호환 write 제거 여부와 전체 profile-save command coalescing.
+- 단, shared revision 제거는 TEST 124 / PRODUCTION 117 호환성 근거를 별도 고정한 뒤 진행.
+
+작업 기준 preview HEAD 기록 시점: `33b264192edc7bbd771be951319004bfeb392803`
+
 ## 0JZ. app248 PREVIEW 실사용 비용 재측정 (2026-09-30 KST)
 
 상태: **기능/쿼리 수 최적화 PASS / physical D1 rows 비용 최적화 계속 필요**

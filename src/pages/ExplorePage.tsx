@@ -388,70 +388,94 @@ const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   return { genre, title };
 };
 
-type ExploreRecommendationSection = {
+type ExploreGenreRecommendation221 = {
   id: string;
-  title: string;
-  subtitle: string;
+  label: string;
   tracks: ExploreTrack[];
 };
 
-const readExploreRecommendationGenre220 = (track: ExploreTrack) => {
+type ExploreCreatorRecommendation221 = {
+  id: string;
+  displayName: string;
+  handle: string;
+  avatarUrl: string | null;
+  track: ExploreTrack;
+};
+
+type ExploreRecommendationModel221 = {
+  picks: ExploreTrack[];
+  genres: ExploreGenreRecommendation221[];
+  creators: ExploreCreatorRecommendation221[];
+};
+
+const readExploreRecommendationGenre221 = (track: ExploreTrack) => {
   const displayGenre = getExploreCardDisplayTitle(track).genre.replace(/^\[|\]$/g, '').trim();
   return displayGenre || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim();
 };
 
-// app220 — Recommendation rows are composed entirely from the already-loaded
-// Explore feed. No topic row performs its own fetch/read: the current cached
-// 40-card feed remains the single data source, and every row is capped at 20.
-const buildExploreRecommendationSections220 = (items: ExploreTrack[]): ExploreRecommendationSection[] => {
+// app221 — Keep recommendations local-first. SORIDRAW picks, genre folders and
+// creator suggestions are all projections of the already-loaded 40-card Feed.
+// Switching a genre or scrolling a rail never performs an extra server read.
+const buildExploreRecommendationModel221 = (
+  items: ExploreTrack[],
+  currentUid = '',
+): ExploreRecommendationModel221 => {
   const source = items.slice(0, 40);
-  if (!source.length) return [];
+  const genreBuckets = new Map<string, { label: string; firstIndex: number; tracks: ExploreTrack[] }>();
+  const creatorBuckets = new Map<string, ExploreCreatorRecommendation221>();
 
-  const sections: ExploreRecommendationSection[] = [{
-    id: 'soridraw-picks',
-    title: 'SORIDRAW 추천',
-    subtitle: '지금 Explore에서 먼저 들려주고 싶은 곡',
-    tracks: source.slice(0, 20),
-  }];
-
-  const buckets = new Map<string, { label: string; firstIndex: number; tracks: ExploreTrack[] }>();
   source.forEach((track, index) => {
-    const label = readExploreRecommendationGenre220(track);
-    if (!label) return;
-    const key = label.toLocaleLowerCase();
-    const current = buckets.get(key);
-    if (current) {
-      current.tracks.push(track);
-      return;
+    const genreLabel = readExploreRecommendationGenre221(track);
+    if (genreLabel) {
+      const key = genreLabel.toLocaleLowerCase();
+      const current = genreBuckets.get(key);
+      if (current) current.tracks.push(track);
+      else genreBuckets.set(key, { label: genreLabel, firstIndex: index, tracks: [track] });
     }
-    buckets.set(key, { label, firstIndex: index, tracks: [track] });
+
+    if (track.ownerUid && track.ownerUid !== currentUid && !creatorBuckets.has(track.ownerUid)) {
+      creatorBuckets.set(track.ownerUid, {
+        id: track.ownerUid,
+        displayName: track.displayName,
+        handle: track.ownerHandle,
+        avatarUrl: track.avatarUrl || null,
+        track,
+      });
+    }
   });
 
-  [...buckets.values()]
-    .filter((bucket) => bucket.tracks.length >= 2)
+  const genres = [...genreBuckets.entries()]
+    .map(([key, bucket]) => ({
+      id: `genre-${key.replace(/[^a-z0-9가-힣]+/g, '-')}`,
+      label: bucket.label,
+      firstIndex: bucket.firstIndex,
+      tracks: bucket.tracks.slice(0, 20),
+    }))
     .sort((a, b) => b.tracks.length - a.tracks.length || a.firstIndex - b.firstIndex)
-    .slice(0, 5)
-    .forEach((bucket) => {
-      sections.push({
-        id: `genre-${bucket.label.toLocaleLowerCase().replace(/[^a-z0-9가-힣]+/g, '-')}`,
-        title: `${bucket.label} 추천`,
-        subtitle: `${bucket.label} 무드로 이어 듣기`,
-        tracks: bucket.tracks.slice(0, 20),
-      });
-    });
+    .map(({ id, label, tracks }) => ({ id, label, tracks }));
 
-  return sections;
+  return {
+    picks: source.slice(0, 20),
+    genres,
+    creators: [...creatorBuckets.values()].slice(0, 20),
+  };
 };
 
 function ExploreRecommendationRail({
   title,
   subtitle,
   itemCount,
+  toolbar,
+  trackClassName = '',
+  itemLabel = '곡',
   children,
 }: {
   title: string;
   subtitle: string;
   itemCount: number;
+  toolbar?: React.ReactNode;
+  trackClassName?: string;
+  itemLabel?: string;
   children: React.ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -493,35 +517,63 @@ function ExploreRecommendationRail({
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        <div className="soridraw-explore-recommend-controls" aria-label={`${title} 좌우 이동`}>
-          <button
-            type="button"
-            onClick={() => moveRail(-1)}
-            disabled={!canScrollLeft}
-            aria-label={`${title} 이전 곡 보기`}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => moveRail(1)}
-            disabled={!canScrollRight}
-            aria-label={`${title} 다음 곡 보기`}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
-        </div>
       </header>
-      <div
-        ref={scrollerRef}
-        className="soridraw-explore-recommend-scroll"
-        onScroll={syncScrollButtons}
-      >
-        <div className="soridraw-explore-recommend-track">
-          {children}
+      {toolbar}
+      <div className="soridraw-explore-recommend-stage">
+        <button
+          type="button"
+          className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--left"
+          onClick={() => moveRail(-1)}
+          disabled={!canScrollLeft}
+          aria-label={`${title} 이전 ${itemLabel} 보기`}
+        >
+          <ChevronLeft aria-hidden="true" />
+        </button>
+        <div
+          ref={scrollerRef}
+          className="soridraw-explore-recommend-scroll"
+          onScroll={syncScrollButtons}
+        >
+          <div className={`soridraw-explore-recommend-track${trackClassName ? ` ${trackClassName}` : ''}`}>
+            {children}
+          </div>
         </div>
+        <button
+          type="button"
+          className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--right"
+          onClick={() => moveRail(1)}
+          disabled={!canScrollRight}
+          aria-label={`${title} 다음 ${itemLabel} 보기`}
+        >
+          <ChevronRight aria-hidden="true" />
+        </button>
       </div>
     </section>
+  );
+}
+
+function ExploreCreatorCard221({
+  creator,
+  onOpen,
+}: {
+  creator: ExploreCreatorRecommendation221;
+  onOpen: (track: ExploreTrack) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="soridraw-explore-recommend-creator-card"
+      onClick={() => onOpen(creator.track)}
+      aria-label={`${creator.displayName} 공개 프로필 보기`}
+    >
+      <span className="soridraw-explore-recommend-creator-avatar" aria-hidden="true">
+        {creator.avatarUrl
+          ? <img src={creator.avatarUrl} alt="" referrerPolicy="no-referrer" />
+          : creator.displayName.charAt(0).toUpperCase()}
+      </span>
+      <strong>{creator.displayName}</strong>
+      {creator.handle && <small>@{creator.handle}</small>}
+    </button>
   );
 }
 
@@ -665,6 +717,7 @@ export default function ExplorePage() {
   const profileUid = safeText(searchParams.get('profile'));
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [sort, setSort] = useState<ExploreSort>('recommended');
+  const [recommendationGenreId221, setRecommendationGenreId221] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -1805,9 +1858,12 @@ export default function ExplorePage() {
     ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
     : tracks;
 
-  const recommendationSections220 = sort === 'recommended' && !submittedQuery
-    ? buildExploreRecommendationSections220(visibleFeedTracks)
-    : [];
+  const recommendationModel221 = sort === 'recommended' && !submittedQuery
+    ? buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || '')
+    : { picks: [], genres: [], creators: [] };
+  const activeRecommendationGenre221 = recommendationModel221.genres.find(
+    (genre) => genre.id === recommendationGenreId221,
+  ) || recommendationModel221.genres[0] || null;
 
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
@@ -2246,16 +2302,59 @@ export default function ExplorePage() {
         <>
           {sort === 'recommended' && !submittedQuery ? (
             <div className="soridraw-explore-recommend-feed" aria-label="Explore 추천 모음">
-              {recommendationSections220.map((section) => (
+              {recommendationModel221.picks.length > 0 && (
                 <ExploreRecommendationRail
-                  key={section.id}
-                  title={section.title}
-                  subtitle={section.subtitle}
-                  itemCount={section.tracks.length}
+                  title="SORIDRAW 추천"
+                  subtitle="지금 Explore에서 먼저 들려주고 싶은 곡"
+                  itemCount={recommendationModel221.picks.length}
                 >
-                  {section.tracks.map((track) => renderTrackCard(track))}
+                  {recommendationModel221.picks.map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
-              ))}
+              )}
+
+              {activeRecommendationGenre221 && (
+                <ExploreRecommendationRail
+                  key={activeRecommendationGenre221.id}
+                  title="장르별 추천"
+                  subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
+                  itemCount={activeRecommendationGenre221.tracks.length}
+                  toolbar={(
+                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
+                      {recommendationModel221.genres.map((genre) => (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
+                          onClick={() => setRecommendationGenreId221(genre.id)}
+                          aria-pressed={activeRecommendationGenre221.id === genre.id}
+                        >
+                          {genre.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                >
+                  {activeRecommendationGenre221.tracks.map((track) => renderTrackCard(track))}
+                </ExploreRecommendationRail>
+              )}
+
+              {recommendationModel221.creators.length > 0 && (
+                <ExploreRecommendationRail
+                  title="좋아할 만한 크리에이터"
+                  subtitle="추천 곡에서 발견한 크리에이터를 더 둘러보세요."
+                  itemCount={recommendationModel221.creators.length}
+                  itemLabel="크리에이터"
+                  trackClassName="soridraw-explore-recommend-track--creators"
+                >
+                  {recommendationModel221.creators.map((creator) => (
+                    <ExploreCreatorCard221
+                      key={creator.id}
+                      creator={creator}
+                      onOpen={openProfile}
+                    />
+                  ))}
+                </ExploreRecommendationRail>
+              )}
             </div>
           ) : (
             renderTrackGrid(

@@ -1,13 +1,13 @@
-## 2026-09-29 — Explore app222 카드 미리듣기 검증
+## 2026-09-29 — Explore app222 카드 미리듣기 실화면 확인
 
-- hover 시 중앙 play 버튼.
-- 재생 시 제목 accent + 썸네일 전체 이퀄라이저.
-- 단일 shared audio engine 사용, floating GlobalPlayer 숨김.
-- 다른 곡 재생 시 이전 곡 해제, 같은 곡 play/pause 토글.
-- 120초 후 자동 정지/원상복귀.
+- PREVIEW app222 배포 완료.
+- 최종 Audit Run `36552275054` SUCCESS.
+- release SHA `e8c51de1f3370959c2bc25fefe059e05189f74b7`.
+- Hosting Run `36552629770` SUCCESS / exact build 222 PASS / TEST·PRODUCTION unchanged.
+- hover 중앙 play / 재생 제목 accent / 전체 썸네일 equalizer / 단일 shared audio engine / 120초 자동 정지 적용.
+- 기존 cover Suno 열기 경로, app221 추천 레일/장르/크리에이터/최신 8열 보호.
 - Explore Feed/Firestore/D1 추가 read/write 0.
-- app221 추천 레일/장르/크리에이터/최신 8열 보호.
-- Audit PASS 후 PREVIEW app222 배포.
+- 다음: 사용자 실화면 확인 후 통과/미세조정.
 
 ## 2026-09-29 — Explore app221 추천 레일 실화면 확인
 

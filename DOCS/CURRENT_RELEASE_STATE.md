@@ -1,3 +1,38 @@
+## 0JV. PREVIEW app246 · 프로필/팔로우 비용 1차 실측 최적화 (2026-09-30 KST)
+
+상태: **영상 실측 원인 확인 / 안전한 코드 경로 수정 / PREVIEW 배포 전**
+
+기준:
+- 작업 branch: `preview`
+- 시작 HEAD: `1cf653ebc7891122a1d38aa7c13fa029aecf453b`
+- 직전 PREVIEW Worker: `3d0f2766-1677-41eb-a3d2-800148f03266` (app245)
+- app version: **246**
+
+app246 안전 수정:
+- 프로필 저장 완료 뒤 클라이언트가 방금 저장한 프로필을 다시 `/v1/profiles/:uid`로 읽던 요청 제거. PATCH 응답 + 이미지 업로드 응답만으로 즉시 화면 상태를 구성.
+- direct 공개프로필 GET은 shared R2 프로필을 먼저 사용하고, shared R2가 없는 진짜 cold/repair 상황에서만 기존 D1 경로 사용.
+- 프로필 이미지 업로드에서 매번 실행하던 검색 인덱스 재생성 + public-profile first-view 전체 재빌드를 정상 경로에서 제거. 이미지 1개와 해당 프로필 R2 bundle만 갱신. R2가 없는 cold repair에서만 기존 rebuild 허용.
+- 프로필 이미지 GET도 shared R2 공개상태를 먼저 확인하여 정상 캐시 프로필은 D1 R0 경로 사용.
+- 팔로우 대상 공개 여부는 shared R2 우선, D1은 cold fallback만 사용.
+- 팔로우/해제 후 별도 profile_stats SELECT를 정상 성공 경로에서 제거하고 기존 변경문의 RETURNING 값으로 카운트를 즉시 반영. 중복/복구 상황에만 bounded fallback SELECT.
+- 팔로우 상태 확인도 사용자 following R2 bundle + shared profile R2 우선으로 변경.
+- TEST/PRODUCTION 호환 때문에 shared D1 `follows` + `profile_stats` canonical 쓰기는 유지.
+
+중요한 남은 비용:
+- 팔로우와 프로필 핵심필드 변경의 physical rows_written 중 큰 부분은 shared D1의 기존 `profile_stats/public_profiles -> explore_derived_*` trigger fan-out이다.
+- 이 trigger 구조를 바꾸지 않고는 물리적 rows_written을 W1~W2까지 내리는 것은 어렵다.
+- 저장소의 `076-derived-trigger-compaction*.sql`도 DROP/CREATE TRIGGER가 필요한 별도 schema-maintenance 후보로 명시되어 있으므로 app246에서는 실행하지 않음.
+- 사용자 데이터 삭제/대량변환/백필/스키마 변경 **없음**.
+
+보호:
+- 공개/비공개, 좋아요, 기존 shared R2, 검색, UI/CSS, PC/모바일 레이아웃 변경 없음.
+- main / TEST / PRODUCTION 비변경.
+
+다음:
+- app246 정적/빌드 검증 후 PREVIEW 배포 여부 결정.
+- PREVIEW 배포 후 동일 절차로 팔로우/해제, 텍스트 프로필 저장, 배경/아바타 저장을 각각 1회씩 실측.
+- physical W3+가 남으면 trigger fan-out을 별도 schema-maintenance 작업으로 설계/검증 후 승인 절차로 적용.
+
 ## 0JU. PREVIEW app244 · 공개프로필 YouTube 링크 + 소셜 아이콘 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / 코드·검증기 반영 / Release System Audit·PREVIEW Worker·Firebase PREVIEW Hosting 트리거 실행 / Actions 최종 결과·실주소 확인 대기**

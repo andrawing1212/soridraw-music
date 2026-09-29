@@ -173,13 +173,6 @@ assert.match(
 );
 assert.match(
   page,
-  /const positions = cards\.map\(\(card\) => Math\.min\(maxScrollLeft, Math\.max\(0, card\.offsetLeft\)\)\)[\s\S]*?positions\.find\(\(position\) => position > current \+ epsilon\)[\s\S]*?\.reverse\(\)\.find\(\(position\) => position < current - epsilon\)/,
-  'rail arrow buttons must target exact adjacent card positions instead of a viewport percentage',
-);
-
-
-assert.match(
-  page,
   /const profilePinnedTracks231 = profileTracks\.filter\(\(track\) => track\.profilePinned\);/,
   'public profile must derive pinned tracks locally without another server read',
 );

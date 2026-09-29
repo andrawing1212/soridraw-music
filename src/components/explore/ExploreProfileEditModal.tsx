@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Link2, Loader2, Pencil, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
-  getExplorePublicProfile,
   updateExplorePublicProfile,
   uploadExploreProfileMedia,
   type ExploreProfileDraft,
@@ -155,10 +154,18 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     setSaving(true);
     setError('');
     try {
-      await updateExplorePublicProfile(user, { ...draft, nickname });
-      if (backgroundBlob) await uploadExploreProfileMedia(user, 'background', backgroundBlob);
-      if (avatarBlob) await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
-      const refreshed = await getExplorePublicProfile(user.uid);
+      const saved = await updateExplorePublicProfile(user, { ...draft, nickname });
+      const backgroundUrl = backgroundBlob
+        ? await uploadExploreProfileMedia(user, 'background', backgroundBlob)
+        : saved.backgroundUrl;
+      const avatarUrl = avatarBlob
+        ? await uploadExploreProfileMedia(user, 'avatar', avatarBlob)
+        : saved.avatarUrl;
+      const refreshed: ExplorePublicProfile = {
+        ...saved,
+        backgroundUrl: backgroundUrl || saved.backgroundUrl,
+        avatarUrl: avatarUrl || saved.avatarUrl,
+      };
       try {
         await syncSoridrawProfileAvatarAuthority(user, refreshed.avatarUrl);
       } catch (avatarSyncError) {

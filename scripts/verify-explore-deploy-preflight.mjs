@@ -33,6 +33,35 @@ const counter245 = canonicalWorker245.slice(counter245Start, counter245End);
 assert.match(counter245, /patchPublicProfileBundle245\(env, uid, patch\)/);
 assert.doesNotMatch(counter245, /syncDerivedCache032|env\.DB/, 'follow counter cache patch must be R2-only');
 
+const publicProfile246Start = canonicalWorker245.indexOf('async function handlePublicProfile(');
+const publicProfile246End = canonicalWorker245.indexOf('\n__name(handlePublicProfile', publicProfile246Start);
+const publicProfile246 = canonicalWorker245.slice(publicProfile246Start, publicProfile246End);
+assert.match(publicProfile246, /SORIDRAW_PROFILE_FOLLOW_MEDIA_COST_246_20260930/);
+assert.match(publicProfile246, /readExploreSharedProfile060\(env, profileRef\)/);
+assert.ok(publicProfile246.indexOf('readExploreSharedProfile060') < publicProfile246.indexOf('resolvePublicProfileRef'), '246 direct profile must try shared R2 before canonical D1');
+
+const media246Start = canonicalWorker245.indexOf('async function handleProfileMediaUpload(');
+const media246End = canonicalWorker245.indexOf('\n__name(handleProfileMediaUpload', media246Start);
+const media246 = canonicalWorker245.slice(media246Start, media246End);
+assert.match(media246, /SORIDRAW_PROFILE_MEDIA_TARGETED_R2_246_20260930/);
+assert.match(media246, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch\)/);
+assert.doesNotMatch(media246, /refreshProfileSearchIndex|readPublicProfileByUid/, '246 profile media must not rescan the public profile');
+assert.match(media246, /if \(patchedBundle\)[\s\S]*?else \{[\s\S]*?refreshOrPrebuildPublicProfileFirstView/, '246 heavy first-view rebuild must be cold-repair only');
+
+const follow246Start = canonicalWorker245.indexOf('async function adjustExploreFollowCountersDelta(');
+const follow246End = canonicalWorker245.indexOf('\n__name(adjustExploreFollowCountersDelta', follow246Start);
+const follow246 = canonicalWorker245.slice(follow246Start, follow246End);
+assert.match(follow246, /SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930/);
+assert.match(follow246, /RETURNING uid, follower_count, following_count/);
+assert.ok(follow246.indexOf('fallbackRead') >= 0, '246 follow must retain idempotent cold fallback');
+assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_R2_TARGET_GUARD_246_20260930[\s\S]*?readExploreSharedProfile060\(env, targetUid\)/);
+assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930[\s\S]*?readExploreFollowingR2Bundle/);
+
+const profileEdit246 = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
+assert.doesNotMatch(profileEdit246, /getExplorePublicProfile\(user\.uid\)/, '246 profile save must not re-read the just-saved public profile');
+assert.match(profileEdit246, /const saved = await updateExplorePublicProfile[\s\S]*?const refreshed: ExplorePublicProfile = \{[\s\S]*?backgroundUrl[\s\S]*?avatarUrl/);
+
+
 if (process.argv.includes('--connections')) {
   const prepared=readFileSync('cloudflare/explore-worker/scripts/deploy-prepared.mjs','utf8');
   const productionGuardIndex=prepared.indexOf('if (isCloudflareNativeBuild && !allowProductionDeploy)');

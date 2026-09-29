@@ -9009,6 +9009,19 @@ __name2222222222222222222222222222222222222222222222222222222222(handlePublicPro
 __name22222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 async function handlePublicProfile(profileRef, env, cors) {
+  // SORIDRAW_PROFILE_FOLLOW_MEDIA_COST_246_20260930
+  // Shared R2 is the cross-environment public-profile authority on the warm path.
+  // Keep the canonical D1 reader only as a cold/repair fallback.
+  try {
+    const shared = await readExploreSharedProfile060(env, profileRef);
+    const profile = shared?.body?.data?.profile || null;
+    if (profile && String(profile.uid || '').trim()) {
+      return json({ ok: true, data: { profile } }, 200, cors);
+    }
+  } catch (error) {
+    console.warn('[SORIDRAW 246] shared profile direct-read fallback:', String(error?.message || error || 'unknown'));
+  }
+
   const resolved = await resolvePublicProfileRef(env, profileRef);
   if (!resolved?.uid) {
     return apiError("NOT_FOUND", "\uACF5\uAC1C \uD504\uB85C\uD544\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
@@ -9596,6 +9609,7 @@ __name22222222222222222222222222222222222222222222222222222222222222222222222(ge
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 async function handleProfileMediaUpload(request, env, cors, kind) {
+  // SORIDRAW_PROFILE_MEDIA_TARGETED_R2_246_20260930
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "profile-media", RATE_LIMITS.profileMedia);
   if (!env?.PROFILE_MEDIA) throwApi("PROFILE_MEDIA_NOT_CONFIGURED", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC800\uC7A5\uC18C \uC5F0\uACB0\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 503);
@@ -9607,25 +9621,48 @@ async function handleProfileMediaUpload(request, env, cors, kind) {
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throwApi("PAYLOAD_TOO_LARGE", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC6A9\uB7C9\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4.", 413);
   const bytes = await request.arrayBuffer();
   if (!bytes.byteLength || bytes.byteLength > maxBytes) throwApi("PAYLOAD_TOO_LARGE", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC6A9\uB7C9\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4.", 413);
+
   const now = Date.now();
   const key = getProfileMediaKey(authContext.uid, kind);
   await env.PROFILE_MEDIA.put(key, bytes, {
     httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
     customMetadata: { uid: authContext.uid, kind, updatedAt: String(now) }
   });
-  const existing = await env.DB.prepare(`SELECT uid FROM public_profiles WHERE uid = ? LIMIT 1`).bind(authContext.uid).first();
-  if (!existing) await upsertPublicProfileFromFirebase(env, authContext, now);
+
   const origin = new URL(request.url).origin;
   const publicUrl = `${origin}/v1/profile-media/${encodeURIComponent(authContext.uid)}/${kind}?v=${now}`;
   const column = kind === "avatar" ? "avatar_url" : "background_url";
-  await env.DB.prepare(`
+
+  let updated = await env.DB.prepare(`
     UPDATE public_profiles
     SET ${column} = ?, profile_customized = 1, is_public = 1, updated_at = ?
     WHERE uid = ?
   `).bind(publicUrl, now, authContext.uid).run();
-  await refreshProfileSearchIndex(env, authContext.uid);
-  const firstViewRefs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid);
-  await invalidatePublicProfileFirstViewEdgeCache(request, firstViewRefs);
+
+  if (Number(updated?.meta?.changes || 0) === 0) {
+    await upsertPublicProfileFromFirebase(env, authContext, now);
+    updated = await env.DB.prepare(`
+      UPDATE public_profiles
+      SET ${column} = ?, profile_customized = 1, is_public = 1, updated_at = ?
+      WHERE uid = ?
+    `).bind(publicUrl, now, authContext.uid).run();
+  }
+
+  const profilePatch = kind === "avatar"
+    ? { avatarUrl: publicUrl, updatedAt: now }
+    : { backgroundUrl: publicUrl, updatedAt: now };
+  const patchedBundle = await patchPublicProfileBundle245(env, authContext.uid, profilePatch);
+
+  let refs = [authContext.uid];
+  if (patchedBundle) {
+    const handle = String(patchedBundle?.body?.data?.profile?.handle || '').trim().replace(/^@+/, '');
+    if (handle) refs.push(handle);
+  } else {
+    // Cold repair only. Normal users with the shared R2 profile never enter this path.
+    try { refs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid); } catch {}
+  }
+  await invalidatePublicProfileFirstViewEdgeCache(request, refs);
+
   return json({ ok: true, data: { kind, url: publicUrl, updatedAt: now } }, 200, cors);
 }
 __name(handleProfileMediaUpload, "handleProfileMediaUpload");
@@ -9703,12 +9740,19 @@ __name22222222222222222222222222222222222222222222222222222222222222222222222(ha
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 async function handleProfileMediaGet(uid, kind, env, cors) {
+  // SORIDRAW_PROFILE_MEDIA_R2_PUBLIC_GUARD_246_20260930
   if (!env?.PROFILE_MEDIA) return apiError("PROFILE_MEDIA_NOT_CONFIGURED", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC800\uC7A5\uC18C \uC5F0\uACB0\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 503, cors);
-  if (kind !== "avatar" && kind !== "background") return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
-  const profile = await env.DB.prepare(`SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1`).bind(uid).first();
-  if (!profile) return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
+  if (kind !== "avatar" && kind !== "background") return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2E4.", 404, cors);
+
+  let publicProfile = null;
+  try { publicProfile = await readExploreSharedProfile060(env, uid); } catch {}
+  if (!publicProfile) {
+    const profile = await env.DB.prepare(`SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1`).bind(uid).first();
+    if (!profile) return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
+  }
+
   const object = await env.PROFILE_MEDIA.get(getProfileMediaKey(uid, kind));
-  if (!object) return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
+  if (!object) return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2E4.", 404, cors);
   const headers = new Headers(cors);
   object.writeHttpMetadata(headers);
   headers.set("Content-Type", "image/webp");
@@ -12262,15 +12306,23 @@ __name22222222222222222222222222222222222222222222222222222222222222222222222(re
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
 async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
+  // SORIDRAW_FOLLOW_R2_TARGET_GUARD_246_20260930
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "follow", RATE_LIMITS.follow);
   if (!targetUid || targetUid === authContext.uid) throwApi("SELF_FOLLOW_NOT_ALLOWED", "\uC790\uAE30 \uC790\uC2E0\uC740 \uD314\uB85C\uC6B0\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 400);
+
   if (shouldFollow) {
-    const target = await env.DB.prepare(`
-      SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1
-    `).bind(targetUid).first();
-    if (!target) throwApi("NOT_FOUND", "\uACF5\uAC1C \uD06C\uB9AC\uC5D0\uC774\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404);
+    let targetBundle = null;
+    try { targetBundle = await readExploreSharedProfile060(env, targetUid); } catch {}
+    const targetProfile = targetBundle?.body?.data?.profile || null;
+    if (!targetProfile || String(targetProfile.uid || '').trim() !== String(targetUid || '').trim()) {
+      const target = await env.DB.prepare(`
+        SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1
+      `).bind(targetUid).first();
+      if (!target) throwApi("NOT_FOUND", "\uACF5\uAC1C \uD06C\uB9AC\uC5D0\uC774\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404);
+    }
   }
+
   const now = Date.now();
   const stats = await adjustExploreFollowCountersDelta(env, authContext.uid, targetUid, shouldFollow, now);
   await patchExploreFirstViewFollowCounts(env, authContext.uid, targetUid, stats, now);
@@ -12461,79 +12513,89 @@ __name22222222222222222222222222222222222222222222(clampExploreSocialCount, "cla
 __name222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 __name2222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, shouldFollow, now) {
-  const delta = shouldFollow ? 1 : -1;
+  // SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930
+  const fallbackRead = async () => {
+    const result = await env.DB.prepare(`
+      SELECT uid, follower_count, following_count
+      FROM profile_stats
+      WHERE uid IN (?, ?)
+    `).bind(followerUid, followingUid).all();
+    const rows = result.results || [];
+    const byUid = new Map(rows.map((row) => [String(row.uid || ""), row]));
+    return {
+      follower: byUid.get(String(followerUid)) || null,
+      following: byUid.get(String(followingUid)) || null,
+    };
+  };
+
   if (shouldFollow) {
-    await env.DB.batch([
-      env.DB.prepare(`
-        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
-        VALUES (?, 0, 0, ?)
-        ON CONFLICT(uid) DO NOTHING
-      `).bind(followerUid, now),
-      env.DB.prepare(`
-        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
-        VALUES (?, 0, 0, ?)
-        ON CONFLICT(uid) DO NOTHING
-      `).bind(followingUid, now),
+    const results = await env.DB.batch([
       env.DB.prepare(`
         INSERT OR IGNORE INTO follows (follower_uid, following_uid, created_at)
         VALUES (?, ?, ?)
       `).bind(followerUid, followingUid, now),
       env.DB.prepare(`
-        UPDATE profile_stats
-        SET following_count = following_count + 1, updated_at = ?
-        WHERE uid = ?
-          AND EXISTS (
-            SELECT 1 FROM follows
-            WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
-          )
-      `).bind(now, followerUid, followerUid, followingUid, now),
+        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
+        SELECT ?, 0, 1, ?
+        WHERE EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
+        )
+        ON CONFLICT(uid) DO UPDATE SET
+          following_count = profile_stats.following_count + 1,
+          updated_at = excluded.updated_at
+        RETURNING uid, follower_count, following_count
+      `).bind(followerUid, now, followerUid, followingUid, now),
       env.DB.prepare(`
-        UPDATE profile_stats
-        SET follower_count = follower_count + 1, updated_at = ?
-        WHERE uid = ?
-          AND EXISTS (
-            SELECT 1 FROM follows
-            WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
-          )
-      `).bind(now, followingUid, followerUid, followingUid, now)
+        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
+        SELECT ?, 1, 0, ?
+        WHERE EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
+        )
+        ON CONFLICT(uid) DO UPDATE SET
+          follower_count = profile_stats.follower_count + 1,
+          updated_at = excluded.updated_at
+        RETURNING uid, follower_count, following_count
+      `).bind(followingUid, now, followerUid, followingUid, now)
     ]);
-  } else {
-    await env.DB.batch([
-      env.DB.prepare(`
-        UPDATE profile_stats
-        SET following_count = MAX(0, following_count - 1), updated_at = ?
-        WHERE uid = ?
-          AND EXISTS (
-            SELECT 1 FROM follows
-            WHERE follower_uid = ? AND following_uid = ?
-          )
-      `).bind(now, followerUid, followerUid, followingUid),
-      env.DB.prepare(`
-        UPDATE profile_stats
-        SET follower_count = MAX(0, follower_count - 1), updated_at = ?
-        WHERE uid = ?
-          AND EXISTS (
-            SELECT 1 FROM follows
-            WHERE follower_uid = ? AND following_uid = ?
-          )
-      `).bind(now, followingUid, followerUid, followingUid),
-      env.DB.prepare(`
-        DELETE FROM follows WHERE follower_uid = ? AND following_uid = ?
-      `).bind(followerUid, followingUid)
-    ]);
+    const follower = results?.[1]?.results?.[0] || null;
+    const following = results?.[2]?.results?.[0] || null;
+    if (follower && following) return { follower, following, delta: 1 };
+    const fallback = await fallbackRead();
+    return { ...fallback, delta: 0 };
   }
-  const result = await env.DB.prepare(`
-    SELECT uid, follower_count, following_count
-    FROM profile_stats
-    WHERE uid IN (?, ?)
-  `).bind(followerUid, followingUid).all();
-  const rows = result.results || [];
-  const byUid = new Map(rows.map((row) => [String(row.uid || ""), row]));
-  return {
-    follower: byUid.get(String(followerUid)) || null,
-    following: byUid.get(String(followingUid)) || null,
-    delta
-  };
+
+  const results = await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE profile_stats
+      SET following_count = MAX(0, following_count - 1), updated_at = ?
+      WHERE uid = ?
+        AND EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ?
+        )
+      RETURNING uid, follower_count, following_count
+    `).bind(now, followerUid, followerUid, followingUid),
+    env.DB.prepare(`
+      UPDATE profile_stats
+      SET follower_count = MAX(0, follower_count - 1), updated_at = ?
+      WHERE uid = ?
+        AND EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ?
+        )
+      RETURNING uid, follower_count, following_count
+    `).bind(now, followingUid, followerUid, followingUid),
+    env.DB.prepare(`
+      DELETE FROM follows WHERE follower_uid = ? AND following_uid = ?
+    `).bind(followerUid, followingUid)
+  ]);
+  const follower = results?.[0]?.results?.[0] || null;
+  const following = results?.[1]?.results?.[0] || null;
+  if (follower && following) return { follower, following, delta: -1 };
+  const fallback = await fallbackRead();
+  return { ...fallback, delta: 0 };
 }
 __name(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
 __name2(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
@@ -13191,7 +13253,26 @@ __name22222222222222222222222222222222222222222222(handleProfileConnections, "ha
 __name222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 __name2222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 async function handleFollowState(request, env, cors, targetUid) {
+  // SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930
   const authContext = await requireExploreAuth(request);
+  try {
+    const [followingUids, profileBundle] = await Promise.all([
+      readExploreFollowingR2Bundle(env, authContext.uid),
+      readExploreSharedProfile060(env, targetUid),
+    ]);
+    const profile = profileBundle?.body?.data?.profile || null;
+    if (Array.isArray(followingUids) && profile && String(profile.uid || '').trim()) {
+      return json({ ok: true, data: {
+        uid: targetUid,
+        following: followingUids.includes(String(targetUid || '').trim()),
+        followerCount: clampExploreSocialCount(profile.followerCount),
+        followingCount: clampExploreSocialCount(profile.followingCount)
+      } }, 200, cors);
+    }
+  } catch (error) {
+    console.warn('[SORIDRAW 246] follow-state R2 fallback:', String(error?.message || error || 'unknown'));
+  }
+
   const row = await env.DB.prepare(`
     SELECT 1 AS following FROM follows WHERE follower_uid = ? AND following_uid = ? LIMIT 1
   `).bind(authContext.uid, targetUid).first();

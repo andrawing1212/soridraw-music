@@ -1,3 +1,85 @@
+## 0JY. PREVIEW app248 · 프로필 편집 비용 2차 절감 · 배포 완료 (2026-09-30 KST)
+
+상태: **PREVIEW app248 Hosting + Worker 배포 완료 / 실사용 비용 재측정 대기**
+
+기준:
+- 작업 branch: `preview`
+- app version: **248**
+- 핵심 제품 코드:
+  - Worker bio FTS 제거 + dual media batch: `3219c6a25303dd25a34411538e94a244dbb296a2`
+  - Worker canonical SHA lock: `4d1765cb8933053977d8c20a856355bcf80e6f7f`
+  - client batch service: `1869f993a05afe352695999d07d79fffc18b5624`
+  - profile edit modal batch wiring: `6e4997e580c46e7f0b500dba5fa1317e985cf0b4`
+  - app248 verifier: `37ee5d4b4361c04570d7873723d6991fd0f9c9b1`
+  - verifier alignment: `ea051675d7a2b1529665a69769dcd5991d0e46af`, `a4e226040cb6ee61a1082284fac65f588aedceab`
+  - app version 248: `7f142009834536f065706e40334b51f5691f7d7e`
+
+app248 변경:
+- 소개(bio)만 바뀐 저장은 기존 `profile_search_fts` DELETE + INSERT를 실행하지 않음.
+  - creator 검색은 현재 R2 catalog name/handle 경로를 사용하며, legacy D1 fallback creator 검색도 nickname 기준.
+  - bio 자체 canonical `public_profiles` 저장은 유지.
+  - 목표: bio-only D1 query write **W3 → W1**.
+- 배경 + 프로필 사진을 동시에 바꾸면 새 `PUT /v1/me/profile-media` multipart batch 경로 사용.
+  - 이미지 R2 object 2개는 각각 저장.
+  - canonical `public_profiles` avatar/background URL은 **UPDATE 1회**로 묶음.
+  - shared profile R2 patch / edge invalidation도 1회.
+  - 목표: dual-media canonical D1 query write **W2 → W1**.
+- 이미지 한 장만 변경하는 기존 `/v1/me/profile-media/:kind` 경로는 그대로 유지.
+- no-op / YouTube-only app247 R0/W0 경로 유지.
+
+검증:
+- live D1 trigger exact read-only audit Run `36638719006` SUCCESS / remote D1 writes 0.
+- app248 Release System Audit Run `36640127864` SUCCESS.
+  - TypeScript PASS
+  - Build PASS
+  - 정적/회귀 검증 PASS
+  - TEST / PRODUCTION Worker dry-run PASS
+  - shared D1 read-only preflight PASS
+  - canonical Worker SHA256 expected=actual:
+    `b476368c410498bf02b1d8fff24f5a2b8ca1d5be0154e5741a7ccd79a03ba589`
+- 앞선 Worker release Runs `36639593556`, `36639980642`는 app248 신규 동작과 불일치한 verifier 표현 때문에 **deploy 단계 전에 차단**. live Worker 변경 없음.
+- 최종 Cloudflare PREVIEW Worker Run `36640355943` SUCCESS.
+  - locked source: `a4e226040cb6ee61a1082284fac65f588aedceab`
+  - Worker before: `3b9978ef-83bf-438a-8f86-9320a75f17bb`
+  - Worker after: `2d02c2e5-4ea9-4d73-9df5-d467f093d047`
+  - PREVIEW release preflight PASS
+  - Feed smoke PASS
+  - Profile smoke PASS
+  - public like-card D1 R0/W0 PASS
+  - warm revision D1 R0/W0 PASS
+  - TEST / PRODUCTION Workers unchanged PASS
+- Firebase PREVIEW Hosting Run `36640502100` SUCCESS.
+  - locked PREVIEW SHA: `44c2e9b3e05ff7d71e811a4ea921aff47d7dca91`
+  - Firebase PREVIEW deploy PASS
+  - remote app version **248**
+  - PREVIEW exact build PASS
+  - shared RTDB rules deploy SKIPPED
+  - TEST / PRODUCTION unchanged PASS
+
+shared D1 trigger 안전점검:
+- 사용자 승인 후 기존 `076-derived-trigger-compaction-live033.sql` 적용 전 live schema를 read-only로 재확인.
+- 현재 live `explore032_derived_profile_feed`는 이미 nickname/avatar/active만 Feed를 깨우는 selective 조건이 적용되어 있음.
+- 현재 live `explore032_derived_profile_update`도 이미 track_count-only 변화를 제외하는 compaction이 적용되어 있음.
+- 반면 현재 track insert/update trigger는 더 최신 `079 Music Note write compaction` 구조를 사용.
+- 따라서 오래된 076 live033 후보를 그대로 적용하면 이미 적용된 profile 최적화는 중복되고, 더 최신 Music Note trigger 보호를 덮어쓸 수 있어 **적용 중단**.
+- shared D1 DROP/CREATE TRIGGER, migration, data rewrite는 이번 app248에서 **0**.
+- 다음 trigger 비용 최적화는 현재 live 079 baseline을 기준으로 새 maintenance 후보를 별도 설계해야 함.
+
+보호:
+- 사용자 데이터 삭제/백필/대량변환 없음.
+- Firestore schema / Functions / Rules 변경 없음.
+- shared D1 schema 변경 없음.
+- 공개/비공개, 좋아요, 팔로우, UI/CSS, PC/모바일 레이아웃 변경 없음.
+- main / TEST / PRODUCTION 코드/Worker 비변경.
+
+다음 실사용 측정:
+1. 아무 값도 변경하지 않고 저장 → D1 R0/W0 유지 확인.
+2. YouTube만 변경 → canonical D1 R0/W0 유지 확인.
+3. 소개(bio)만 변경 → `/v1/me/profile` D1 query W1 목표.
+4. 프로필 사진 1개 → 기존 W1 query 유지, physical R/W 잔량 측정.
+5. 배경+프로필 사진 → 요청이 **`/v1/me/profile-media` 1개**로 표시되고 D1 query W1 목표.
+6. physical W가 여전히 높으면 현재 live 079 baseline을 보존하는 profile-only trigger/index maintenance를 새로 설계·offline 검증 후 적용.
+
 ## 0JX. PREVIEW app247 · 프로필 저장 실사용 비용 측정 결과 (2026-09-30 KST)
 
 상태: **app247 절감 일부 PASS / 남은 D1 trigger fan-out 비용 과다 확인 / 다음 구조 최적화 필요**

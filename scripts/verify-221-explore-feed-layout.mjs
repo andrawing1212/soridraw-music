@@ -676,9 +676,10 @@ assert.match(
   /isProfileUpdate244[\s\S]*?Object\.prototype\.hasOwnProperty\.call\(requestBody, 'youtubeUrl'\)[\s\S]*?writeProfileSocialExtra244/,
   'older profile clients that omit youtubeUrl must not erase the new shared field',
 );
-assert.match(
-  workerEntry,
-  /isPublicProfileRead244[\s\S]*?\/\^\\\/v1\\\/profiles\\\/\[\^\/\]\+\(\?:\\\/first-view\)\?\$\/[\s\S]*?attachProfileSocialExtra244/,
+assert.ok(
+  workerEntry.includes("const isPublicProfileRead244 = request.method === 'GET'")
+    && workerEntry.includes("/^\\/v1\\/profiles\\/[^/]+(?:\\/first-view)?$/")
+    && workerEntry.includes('response = await attachProfileSocialExtra244(response, env);'),
   'both direct public-profile and first-view responses must receive the shared YouTube link',
 );
 

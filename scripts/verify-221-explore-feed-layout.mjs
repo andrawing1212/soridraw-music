@@ -179,6 +179,31 @@ assert.match(
   'full public track list must retain pinned songs as duplicated advertising exposure',
 );
 assert.match(
+  page,
+  /soridraw-explore-profile-public-head-234[\s\S]*?<span>PUBLIC<\/span>[\s\S]*?<h2>전체 공개곡<\/h2>/,
+  'public-profile full song list must have a visible section title',
+);
+assert.match(
+  css,
+  /@media \(min-width:1800px\)\{[\s\S]*?\.soridraw-explore-page--profile \.soridraw-explore-profile-public-list-234>\.soridraw-explore-grid\{grid-template-columns:repeat\(6,minmax\(0,1fr\)\)[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 36px\)\/3\);gap:18px\}/,
+  'full-screen PC public profile must use six public cards and three pinned cards per row',
+);
+assert.match(
+  css,
+  /@media \(min-width:1600px\) and \(max-width:1799px\)\{[\s\S]*?profile-public-list-234>\.soridraw-explore-grid\{grid-template-columns:repeat\(5,minmax\(0,1fr\)\)[\s\S]*?profile-pinned\{grid-auto-columns:calc\(\(100% - 36px\)\/3\);gap:18px\}/,
+  'five public cards must round half up to three pinned cards',
+);
+assert.match(
+  css,
+  /@media \(min-width:1100px\) and \(max-width:1599px\)\{[\s\S]*?profile-public-list-234>\.soridraw-explore-grid\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)[\s\S]*?profile-pinned\{grid-auto-columns:calc\(\(100% - 18px\)\/2\);gap:18px\}/,
+  'four public cards must pair with two pinned cards',
+);
+assert.match(
+  css,
+  /@media \(max-width:1099px\)\{[\s\S]*?profile-public-list-234>\.soridraw-explore-grid\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)[\s\S]*?profile-pinned\{grid-auto-columns:calc\(\(100% - 15px\)\/2\);gap:15px\}/,
+  'three public cards must round half up to two pinned cards',
+);
+assert.match(
   css,
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(54px,5vw,92px\);padding-right:clamp\(54px,5vw,92px\)\}/,
   'PC public profile must use wider side padding for a less crowded layout',
@@ -352,3 +377,7 @@ console.log('APP232_EXPLORE_PROFILE_PINNED_DUPLICATED_IN_FULL_LIST=PASS');
 console.log('APP232_EXPLORE_PROFILE_PC_SIDE_PADDING=PASS');
 console.log('APP233_EXPLORE_PLAY_CONTROL_RESPONSIVE_TO_THUMBNAIL=PASS');
 console.log('APP233_EXPLORE_EQUALIZER_RESPONSIVE_TO_THUMBNAIL=PASS');
+console.log('APP234_EXPLORE_PROFILE_FULL_LIST_LABEL=PASS');
+console.log('APP234_EXPLORE_PROFILE_PC_SIX_TO_THREE_RATIO=PASS');
+console.log('APP234_EXPLORE_PROFILE_ODD_COLUMN_HALF_ROUND_UP=PASS');
+console.log('APP234_EXPLORE_PROFILE_SHRINK_RATIO=PASS');

@@ -1,11 +1,15 @@
-## 2026-09-29 — Explore 최신/추천 레이아웃 app220 검증
+## 2026-09-29 — Explore app220 실화면 확인
 
+- PREVIEW app220 배포 완료.
+- Audit Run `36546707888` SUCCESS.
+- release SHA `956afda38bc14a74b7132b9146c76cf4144805e2`.
+- Hosting Run `36547016175` release job SUCCESS / exact build 220 PASS / TEST·PRODUCTION unchanged.
 - 최신 Feed: 최대폭 8열, 기존 축소 구간 유지.
 - 추천 Feed: 주제별 가로 레일, 최대 20곡/레일, 최대폭 7곡 노출, 좌우 이동 버튼.
 - SORIDRAW 추천 + 현재 로드 Feed 기반 장르 추천 레일.
 - PC 좋아요/다음곡 적용/공유/더보기 버튼 소폭 확대.
 - 추가 서버 read/write 없음. 기존 40곡 Feed를 로컬 재배열.
-- Audit PASS 후 PREVIEW app220 배포.
+- 다음: 사용자 PC 실화면 확인 후 통과/미세조정.
 
 ## 2026-09-29 — app219 장르 접기 작업 완료
 

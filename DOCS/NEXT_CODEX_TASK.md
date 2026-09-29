@@ -1,3 +1,18 @@
+## 2026-09-30 — app244 공개프로필 소셜 링크 실사용 확인
+
+- 프로필 편집: Spotify / Instagram / TikTok + **YouTube**.
+- 공개프로필: 저장된 링크만 프로필 사진 아래 아이콘으로 표시.
+- 아이콘 클릭: 외부 사이트 새 탭.
+- YouTube는 shared PROFILE_MEDIA R2 additive user-data object로 저장, D1 schema 변경 없음.
+- 기존 3개 소셜 링크의 저장 구조는 변경 없음.
+- 구버전 앱이 youtubeUrl을 보내지 않아도 기존 YouTube 값 보존.
+- 추가 canonical D1 read/write 0.
+- Audit source `f2a0e28a3b632d21a91f665169237ee9351cdfdc`.
+- Worker trigger `ad98f284a6e7239636ee8b9456c1dacf1b560493`.
+- Hosting trigger `6dc83ce32b5cf94bfad738ce1c4baa4e2c9f877e`.
+- 현재 연결에서 GitHub Actions push-run/실주소 확인은 미확인.
+- 다음: PREVIEW PC/모바일에서 4개 소셜 링크 저장·표시·외부 이동 확인.
+
 ## 2026-09-30 — Explore app243 rail 실사용 확인
 
 - PREVIEW source app version **243**.

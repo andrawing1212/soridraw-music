@@ -1,6 +1,6 @@
 ## 0JA. Explore 추천 레일 2차 — 끝단 화살표 / 장르 단일 카테고리 / 추천 크리에이터 (2026-09-29 KST)
 
-상태: **사용자 영상 2·3 + 크리에이터 레퍼런스 반영 / 코드 수정 완료 / Audit 전 / PREVIEW 미배포**
+상태: **사용자 영상 2·3 + 크리에이터 레퍼런스 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app221 배포 전**
 
 사용자 실화면 피드백:
 - app220 추천 레일의 좌/우 버튼은 제목 옆이 아니라 **첫/마지막 보이는 곡의 양쪽 끝에 겹쳐서** 표시.
@@ -29,8 +29,12 @@
 - 좋아요 / 공개 카운트 / 개인 하트 / Worker / Functions / Rules / 사용자 데이터 구조 비변경.
 
 다음:
-- Release System Audit → TypeScript / Build / refined Explore verifier / Like regression PASS 확인.
-- PASS 시 app221 PREVIEW Hosting만 배포 후 실화면 확인.
+- Audit Run `36548939226` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS / Like regression PASS.
+- `APP221_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS` / `APP221_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS` / `APP221_EXPLORE_RAIL_EDGE_ARROWS=PASS`.
+- `APP221_EXPLORE_GENRES_ONE_CATEGORY_SWITCHER=PASS` / `APP221_EXPLORE_GENRE_CAP_20=PASS` / `APP221_EXPLORE_CREATOR_RECOMMENDATIONS_CAP_20=PASS`.
+- `APP221_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS` / `APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS` / `APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS`.
+- app version commit: `3529832193362e78a81d73720a9519c1f614355e` / app version `221`.
+- 다음: PREVIEW Hosting 배포 후 실화면 확인.
 
 ## 0IZ. Explore 최신 8열 + 추천 주제형 가로 레일 (2026-09-29 KST)
 

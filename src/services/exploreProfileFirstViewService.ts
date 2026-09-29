@@ -86,6 +86,7 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
     spotify: String(row?.socialLinks?.spotify || row?.spotifyUrl || row?.spotify_url || '').trim(),
     instagram: String(row?.socialLinks?.instagram || row?.instagramUrl || row?.instagram_url || '').trim(),
     tiktok: String(row?.socialLinks?.tiktok || row?.tiktokUrl || row?.tiktok_url || '').trim(),
+    youtube: String(row?.socialLinks?.youtube || row?.youtubeUrl || row?.youtube_url || '').trim(),
   },
   followerCount: normalizeCount(row?.followerCount ?? row?.follower_count),
   followingCount: normalizeCount(row?.followingCount ?? row?.following_count),

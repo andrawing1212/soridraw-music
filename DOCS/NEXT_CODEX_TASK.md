@@ -1,3 +1,17 @@
+## 2026-09-29 — Explore app230 실화면 확인
+
+- PREVIEW app230 배포 완료.
+- release SHA `fa8981b9e040361f3c3e1153cabf36964ca151cf`.
+- Audit Run `36585673687` SUCCESS / Hosting Run `36585958930` SUCCESS.
+- 모바일 추천 레일: 스크롤 정지 후 자동 정렬 대기 3초 → **2초**.
+- app229의 현재 화면 가시 비중 기반 연속 3곡 선택 방식은 그대로 유지.
+- 재생버튼 클릭 후 버튼 내부 이퀄라이저/제목 강조 자동 해제 2분 → **3분**.
+- Suno 링크 열기 / 앱 내부 오디오 미사용 / 커버 배경 비클릭 유지.
+- Creator 2카드 / 공개프로필 2열 / PC 화살표 / 모바일 native momentum 유지.
+- 추가 Feed/Firestore/D1 read/write 0, Worker/Functions/Rules/사용자 데이터 변경 없음.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일에서 2초 정렬 체감 + 재생버튼 시각효과 3분 유지/자동 해제 확인.
+
 ## 2026-09-29 — Explore app229 모바일 3곡 가시 비중 정렬 실화면 확인
 
 - PREVIEW app229 배포 완료.

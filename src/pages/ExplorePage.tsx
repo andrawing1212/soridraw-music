@@ -495,7 +495,10 @@ const buildExploreRecommendationModel221 = (
   };
 };
 
-const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 1_000;
+const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 500;
+const EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241 = 240;
+const EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241 = 8;
+const EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241 = 46;
 
 function ExploreRecommendationRail({
   title,
@@ -518,6 +521,14 @@ function ExploreRecommendationRail({
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const mobileAlignTimerRef228 = useRef<number | null>(null);
+  const mobilePointerGestureRef241 = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startedAt: number;
+    startScrollLeft: number;
+  } | null>(null);
+  const suppressRailClickUntilRef241 = useRef(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const isSongRail228 = !trackClassName.includes('soridraw-explore-recommend-track--creators');
@@ -633,13 +644,101 @@ function ExploreRecommendationRail({
     };
   }, [itemCount]);
 
+  const getRailCards241 = () => {
+    const scroller = scrollerRef.current;
+    const track = scroller?.firstElementChild as HTMLElement | null;
+    if (!scroller || !track) return [];
+    return Array.from(track.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+  };
+
   const moveRail = (direction: -1 | 1) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    scroller.scrollBy({
-      left: direction * Math.max(260, scroller.clientWidth * 0.88),
-      behavior: 'smooth',
-    });
+
+    const cards = getRailCards241();
+    if (cards.length === 0) return;
+
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const current = scroller.scrollLeft;
+    const positions = cards.map((card) => Math.min(maxScrollLeft, Math.max(0, card.offsetLeft)));
+    const epsilon = 3;
+
+    let target = direction > 0 ? maxScrollLeft : 0;
+    if (direction > 0) {
+      const next = positions.find((position) => position > current + epsilon);
+      if (typeof next === 'number') target = next;
+    } else {
+      const previous = [...positions].reverse().find((position) => position < current - epsilon);
+      if (typeof previous === 'number') target = previous;
+    }
+
+    clearMobileAlignTimer228();
+    scroller.scrollTo({ left: target, behavior: 'smooth' });
+  };
+
+  const handleRailPointerDown241 = (event: React.PointerEvent<HTMLDivElement>) => {
+    clearMobileAlignTimer228();
+    const scroller = scrollerRef.current;
+    if (
+      !scroller
+      || !shouldAutoAlignMobileRail228()
+      || event.pointerType !== 'touch'
+    ) {
+      mobilePointerGestureRef241.current = null;
+      return;
+    }
+    mobilePointerGestureRef241.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      startScrollLeft: scroller.scrollLeft,
+    };
+  };
+
+  const handleRailPointerUp241 = (event: React.PointerEvent<HTMLDivElement>) => {
+    const scroller = scrollerRef.current;
+    const gesture = mobilePointerGestureRef241.current;
+    mobilePointerGestureRef241.current = null;
+
+    if (
+      !scroller
+      || !gesture
+      || gesture.pointerId !== event.pointerId
+      || !shouldAutoAlignMobileRail228()
+    ) {
+      scheduleMobileSongRailAlign228();
+      return;
+    }
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    const dragDistance = Math.abs(deltaX);
+    const scrollDistance = Math.abs(scroller.scrollLeft - gesture.startScrollLeft);
+    const elapsed = performance.now() - gesture.startedAt;
+    const shortControlledDrag = (
+      elapsed <= EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241
+      && dragDistance >= EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241
+      && dragDistance <= EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241
+      && Math.abs(deltaY) <= 28
+      && scrollDistance <= 72
+    );
+
+    if (shortControlledDrag) {
+      suppressRailClickUntilRef241.current = performance.now() + 280;
+      moveRail(deltaX < 0 ? 1 : -1);
+      return;
+    }
+
+    scheduleMobileSongRailAlign228();
+  };
+
+  const handleRailClickCapture241 = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (performance.now() >= suppressRailClickUntilRef241.current) return;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   return (
@@ -665,8 +764,13 @@ function ExploreRecommendationRail({
         <div
           ref={scrollerRef}
           className="soridraw-explore-recommend-scroll"
-          onPointerDown={clearMobileAlignTimer228}
-          onPointerUp={scheduleMobileSongRailAlign228}
+          onPointerDown={handleRailPointerDown241}
+          onPointerUp={handleRailPointerUp241}
+          onPointerCancel={() => {
+            mobilePointerGestureRef241.current = null;
+            scheduleMobileSongRailAlign228();
+          }}
+          onClickCapture={handleRailClickCapture241}
           onScroll={() => {
             syncScrollButtons();
             scheduleMobileSongRailAlign228();

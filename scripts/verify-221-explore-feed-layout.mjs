@@ -165,7 +165,7 @@ assert.match(
 );
 assert.match(
   page,
-  /title="고정 곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile, 'profilePinnedBanner'\)\)/,
+  /title="고정 곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile, 'profilePinnedBanner', false\)\)/,
   'pinned public tracks must reuse the shared recommendation rail with two-card mobile alignment',
 );
 assert.match(
@@ -175,7 +175,7 @@ assert.match(
 );
 assert.match(
   page,
-  /renderTrackGrid\([\s\S]*?profileTracks,[\s\S]*?profile,[\s\S]*?'default',[\s\S]*?true,[\s\S]*?\)/,
+  /renderTrackGrid\([\s\S]*?profileTracks,[\s\S]*?profile,[\s\S]*?'default',[\s\S]*?true,[\s\S]*?false,[\s\S]*?\)/,
   'full public track list must retain pinned songs as duplicated advertising exposure',
 );
 assert.match(
@@ -247,6 +247,21 @@ assert.match(
   css,
   /\.soridraw-explore-card--profile-pinned \.soridraw-explore-preview-trigger\{left:17\.857%;width:clamp\(32px,10%,82px\)\}/,
   'pinned play/equalizer control must stay centered on the left artwork and scale to that artwork',
+);
+assert.match(
+  page,
+  /showPublisher\?: boolean/,
+  'Explore track cards must support hiding publisher identity per context',
+);
+assert.match(
+  page,
+  /\{showPublisher && \([\s\S]*?className="soridraw-explore-creator"/,
+  'publisher row must be conditionally rendered rather than removed globally',
+);
+assert.match(
+  page,
+  /renderTrackGrid\(profileLikedTracks,[\s\S]*?좋아요 곡[\s\S]*?profile\)/,
+  'profile liked songs must keep the default publisher identity display',
 );
 assert.doesNotMatch(
   page,
@@ -428,3 +443,6 @@ console.log('APP235_EXPLORE_SECTION_LABELS_RENAMED=PASS');
 console.log('APP236_EXPLORE_PINNED_BANNER_2_8_RATIO=PASS');
 console.log('APP236_EXPLORE_PINNED_BLUR_AND_HAZE=PASS');
 console.log('APP236_EXPLORE_PINNED_PLAY_CONTROL_RECENTERED=PASS');
+
+console.log('APP236_EXPLORE_PUBLIC_PROFILE_PUBLISHER_HIDDEN=PASS');
+console.log('APP236_EXPLORE_LIKED_TRACK_PUBLISHER_PRESERVED=PASS');

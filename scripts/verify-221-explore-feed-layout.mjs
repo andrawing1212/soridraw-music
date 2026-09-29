@@ -129,8 +129,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*2_000/,
-  'mobile recommendation rail alignment must wait two seconds after scrolling stops',
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*1_000/,
+  'mobile recommendation rail alignment must wait one second after scrolling stops',
 );
 assert.match(
   page,
@@ -245,8 +245,8 @@ assert.match(
 );
 assert.match(
   css,
-  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(76px,7\.5vw,144px\);padding-right:clamp\(76px,7\.5vw,144px\)\}/,
-  'PC public profile must use stronger side gutters for a narrower content frame',
+  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(96px,10vw,192px\);padding-right:clamp\(96px,10vw,192px\)\}/,
+  'PC public profile must use larger side gutters for a further narrowed content frame',
 );
 assert.match(
   page,
@@ -479,7 +479,7 @@ console.log('APP228_EXPLORE_MOBILE_NATIVE_MOMENTUM_BEFORE_ALIGNMENT=PASS');
 console.log('APP229_EXPLORE_MOBILE_VISIBLE_SHARE_SCORING=PASS');
 console.log('APP229_EXPLORE_MOBILE_CONTIGUOUS_THREE_CARD_WINDOW=PASS');
 console.log('APP229_EXPLORE_MOBILE_PARTIAL_SIDE_WEIGHTING=PASS');
-console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS=PASS');
+console.log('APP230_EXPLORE_MOBILE_ALIGN_TWO_SECONDS_HISTORICAL=PASS');
 console.log('APP230_EXPLORE_EQUALIZER_THREE_MINUTES_HISTORICAL=PASS');
 
 console.log('APP231_EXPLORE_MOBILE_PICKS_TWO_UP=PASS');
@@ -487,7 +487,7 @@ console.log('APP231_EXPLORE_PROFILE_PINNED_TWO_UP_HORIZONTAL_HISTORICAL=PASS');
 console.log('APP231_EXPLORE_PROFILE_OTHER_THREE_COLUMNS_HISTORICAL=PASS');
 console.log('APP231_EXPLORE_PIN_BADGES_REMOVED=PASS');
 console.log('APP232_EXPLORE_PROFILE_PINNED_SHARED_RAIL=PASS');
-console.log('APP232_EXPLORE_PROFILE_PINNED_MOBILE_BUTTONS_AND_TWO_SECOND_ALIGN=PASS');
+console.log('APP232_EXPLORE_PROFILE_PINNED_MOBILE_BUTTONS_AND_TWO_SECOND_ALIGN_HISTORICAL=PASS');
 console.log('APP232_EXPLORE_PROFILE_PINNED_DUPLICATED_IN_FULL_LIST=PASS');
 console.log('APP232_EXPLORE_PROFILE_PC_SIDE_PADDING=PASS');
 console.log('APP233_EXPLORE_PLAY_CONTROL_RESPONSIVE_TO_THUMBNAIL=PASS');
@@ -517,3 +517,6 @@ console.log('APP239_EXPLORE_PROFILE_PINNED_MOBILE_ONE_UP=PASS');
 console.log('APP239_EXPLORE_PROFILE_GRID_LIST_TOGGLE=PASS');
 console.log('APP239_EXPLORE_PROFILE_LIST_ONE_SONG_PER_ROW=PASS');
 console.log('APP239_EXPLORE_PROFILE_LIST_ACTION_LAYOUT=PASS');
+
+console.log('APP240_EXPLORE_MOBILE_ALIGN_ONE_SECOND=PASS');
+console.log('APP240_EXPLORE_PROFILE_PC_GUTTERS_WIDER=PASS');

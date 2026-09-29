@@ -1,3 +1,43 @@
+## 0JC. PREVIEW app222 재생 실화면 FAIL · Explore Suno media URL 연결 수정 (2026-09-29 KST)
+
+상태: **app222 사용자 실화면 FAIL / 원인 실측 완료 / app223 후보 구현 완료 / Audit 전**
+
+사용자 실화면:
+- 재생 버튼을 누르면 이퀄라이저가 잠깐 반응한 뒤 바로 꺼지고 실제 음원이 재생되지 않음.
+- 사용자 영상 `21569.mp4`에서 카드 active/equalizer 상태가 짧게 켜졌다 해제되는 현상 확인.
+
+실측 원인:
+- app222는 `track.sunoUrlPrimary`를 재생 URL 후보로 사용했음.
+- PREVIEW 공유 D1 + 실제 PREVIEW Feed를 SELECT-only로 12곡 확인한 결과, 최근 Music Note 공개곡의 `suno_url_primary`는 모두 `https://suno.com/s/...` 형태의 **Suno 공유 페이지 URL**이었음.
+- 같은 곡의 `source_subtrack_id`는 `null`이어서 app222의 UUID 경로도 작동하지 않았음.
+- 결과적으로 `<audio>`에 HTML 공유 페이지 URL을 넣어 `play()`가 실패했고, GlobalPlayer가 재생 실패를 감지해 `isPlaying=false`로 되돌리면서 이퀄라이저도 바로 꺼졌음.
+- 공개 cover URL에는 `image_large_<clip UUID>.jpeg` 형태로 실제 clip UUID가 존재함.
+- 기존 `cdn1.suno.ai/<uuid>.mp3`는 현재 실측 HTTP 403이라 사용 불가.
+- 같은 clip의 현재 공개 metadata `media_urls`는 `https://d2lwuy8qc234o3.cloudfront.net/1/clip/<uuid>.m4a` progressive `m4a-opus`를 반환했고 Range probe HTTP 206 / `audio/mp4` 확인.
+
+app223 수정:
+- `src/pages/ExplorePage.tsx` commit `91ef43cf19cd01924a0655afbb8931f8eb4d70a4`.
+- direct audio URL이 이미 있으면 기존 URL 우선.
+- 아니면 `coverUrl`의 Suno clip UUID를 읽어서 현재 progressive M4A URL로 연결.
+- `https://suno.com/s/...` 같은 HTML/share URL은 더 이상 `<audio>`에 전달하지 않음.
+- 재생 불가 시 짧은 오류 안내만 표시하고 기존 썸네일 Suno 원본 열기 경로는 그대로 유지.
+- verifier commit `4fa84f29e13f07361b399a33e8035f6d0a27cc1c`.
+
+진단 안전:
+- 임시 workflow는 공유 D1 SELECT-only + 공개 URL HTTP probe만 수행.
+- 사용자 데이터 write/delete 0, migration 0, Worker/Functions/Rules deploy 0.
+- 진단 workflow는 commit `da7d3ac19f02afe745c5be651c41ef338d4b1350`에서 삭제 완료.
+
+보호:
+- app221 Explore 추천 레일/장르/크리에이터/최신 8열 UI 유지.
+- app222 hover play / 제목 accent / 전체-cover equalizer / 120초 자동정지 구조 유지.
+- 기존 cover click → Suno 원본 링크 유지.
+- Firestore / D1 / Worker / Functions / Rules / 사용자 데이터 구조 변경 없음.
+
+다음:
+- Release System Audit에서 TypeScript / Build / 기존 app201/app221/app222 + app223 verifier 확인.
+- PASS 시 PREVIEW app223 Hosting만 배포.
+
 ## 0JB. Explore 카드 미리듣기 — hover 재생 / 제목 강조 / 전체 썸네일 이퀄라이저 (2026-09-29 KST)
 
 상태: **사용자 영상 기준 구현 완료 / Audit PASS / PREVIEW app222 배포 완료 / 사용자 실화면 확인 대기**

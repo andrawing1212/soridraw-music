@@ -1,3 +1,51 @@
+## 0JD. Explore 재생버튼 = 기존 Suno 링크 · 앱 내부는 시각효과만 (2026-09-29 KST)
+
+상태: **사용자 영상 21570 기준 의도 재확정 / app224 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 기준:
+- 기존 썸네일 클릭 → Suno 원본 링크 열기는 그대로 유지.
+- 중앙 재생버튼도 **같은 Suno 원본 링크를 여는 버튼**으로 동작.
+- SORIDRAW 앱 내부에서는 실제 음원 스트리밍/재생을 하지 않음.
+- 앱 내부 피드백은 기존 전체-cover 이퀄라이저 + 제목 accent만 표시.
+- 재생버튼을 다시 눌러도 pause 의미를 만들지 않고 항상 링크 열기 동작.
+- 기존 120초 시각효과 자동 종료는 유지.
+
+수정:
+- `src/pages/ExplorePage.tsx` product commit `a74e865eb31b502121ff872a1ad73a0a55b7db52`.
+- Explore에서 `useGlobalPlayerControls`, `playGlobalTrack`, `toggleGlobalPlayPause`, third-party media URL resolver 경로 제거.
+- 재생버튼 클릭 시 카드의 기존 `openSuno()`를 그대로 호출한 뒤 로컬 시각 상태만 켬.
+- 링크가 없는 카드의 재생버튼은 비활성.
+- 썸네일 기존 `onClick={openSuno}` 경로 유지.
+- GlobalPlayer / Worker / Functions / Rules / 데이터 구조 변경 없음.
+
+검증:
+- verifier commit `b2ae15532ca67f770166c5f279ef5382dcef3716`.
+- app version commit `ee064f4b19c4b8410806742bcf50b50315c1ccd3` / version `224`.
+- 최종 Audit trigger/head `86e887104ab23c3c2634a162c8d9fd52dcf42be8`.
+- Audit Run `36562762144` SUCCESS.
+- TypeScript PASS / Build PASS / 기존 release-system + Like regression PASS.
+- `APP224_EXPLORE_PLAY_BUTTON_OPENS_EXISTING_SUNO_LINK=PASS`.
+- `APP224_EXPLORE_VISUAL_ONLY_NO_AUDIO_ENGINE=PASS`.
+- `APP224_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS`.
+- `APP224_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS`.
+
+PREVIEW 배포:
+- PREVIEW release SHA `b284dc558c356637a564ca1f8206f0a85881871c`.
+- Firebase PREVIEW Hosting Run `36562943756` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=224`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- Firestore / D1 / 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+다음:
+- 실제 화면에서 **재생버튼 클릭 → Suno 링크 열림** 확인.
+- 앱으로 돌아왔을 때 해당 카드 이퀄라이저/제목 accent 표시 확인.
+- 썸네일 링크, 추천 레일, 좋아요, 다음곡 적용 등 기존 정상 기능은 변경 없이 보호.
+
 ## 0JC. PREVIEW app222 재생 실화면 FAIL · Explore Suno media URL 연결 수정 (2026-09-29 KST)
 
 상태: **app222 사용자 실화면 FAIL / 원인 실측 완료 / app223 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**

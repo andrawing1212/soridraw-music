@@ -1,6 +1,6 @@
 ## 0IZ. Explore 최신 8열 + 추천 주제형 가로 레일 (2026-09-29 KST)
 
-상태: **사용자 새 UI 지시 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app220 배포 전**
+상태: **사용자 새 UI 지시 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app220 배포 완료 / 사용자 실화면 확인 대기**
 
 사용자 기준:
 - PC 30인치 전체화면급 최대 폭에서 **최신 Feed는 한 줄 8곡**.
@@ -38,7 +38,13 @@
 - Audit Run `36546707888` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS / Like regression PASS.
 - `APP220_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS` / `APP220_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS` / `APP220_EXPLORE_RECOMMENDED_TOPIC_CAP_20=PASS` / `APP220_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS` / `APP220_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS` / `APP220_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS`.
 - app version commit: `f54c88bc1b0c16bf0192eb3f4be57b2c186097a0` / app version `220`.
-- 다음: PREVIEW Hosting 배포 후 PC 최대폭 8열/추천 7개 레일/축소 반응형 실화면 확인.
+- PREVIEW release SHA: `956afda38bc14a74b7132b9146c76cf4144805e2`.
+- Firebase PREVIEW Hosting Run: `36547016175` / release job SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=220` / `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED` / `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음. 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+- 다음: PC 최대폭 최신 8열 / 추천 7개 레일 / 좌우 버튼 / 창 축소 시 기존 단계 / PC 액션 버튼 크기 실화면 확인.
 
 ## 0IY. PREVIEW app219 · Music Note/Library 장르 접기 사용자 실화면 PASS (2026-09-29 KST)
 

@@ -1,3 +1,49 @@
+## 0JH. PREVIEW app229 · Explore 모바일 3곡 가시 비중 정렬 (2026-09-29 KST)
+
+상태: **사용자 최종 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 최종 확인 대기**
+
+배경:
+- app228은 모바일 추천 가로 레일에서 스크롤 정지 후 3초 뒤 3곡 단위 정렬까지는 구현·배포돼 있었음.
+- 하지만 app228 정렬 기준은 고정 0/3/6... 그룹 중 현재 scrollLeft와 가장 가까운 경계를 고르는 방식이어서, 사용자가 요구한 **현재 화면에서 실제로 더 많이 보이는 쪽 카드**를 기준으로 3곡을 고르는 규칙은 반영되지 않았음.
+- 사용자 최종 기준: 스크롤이 멈춘 시점에 온전히 보이는 2곡을 중심으로 좌/우에 걸친 카드 중 **보이는 비중이 더 큰 쪽**을 포함한 연속 3곡이 3초 뒤 깔끔하게 정렬되어야 함.
+
+app229 수정:
+- 제품 commit: `3cbd6531495209c23460095827bd74663e186f60`.
+- verifier commit: `3d82c2d3ca49c496349e78b39a7bb1b07f9d0c33`.
+- version commit: `cd4c95d688b7487c7ba3474ca786b9da77e6cfbe`.
+- audit head: `257371dccb2959d168d78050ecd35606c2cdb8bc`.
+- release SHA: `582d991a685a2f9a9c9a1b2cae0bb3d3ae69d14c`.
+- `src/pages/ExplorePage.tsx`: 3초 대기와 모바일 native momentum은 유지하고, 정렬 시 각 카드가 viewport 안에 실제로 보이는 가로 비율을 계산함.
+- 가능한 **연속 3곡 묶음 전체**를 비교해 가시 비율 합이 가장 높은 3곡을 선택함.
+- 두 후보의 가시 비율이 사실상 같을 때만 현재 위치에서 이동 거리가 더 짧은 묶음을 선택함.
+- 따라서 2곡이 완전히 보이고 양옆 카드가 일부씩 보이는 일반 상황에서는 더 많이 노출된 쪽 카드가 자동으로 세 번째 카드가 됨.
+- Creator 레일 2카드, 공개프로필 2열, PC 좌우 화살표, app228 글자 크기/제목 강조/느린 이퀄라이저/커버 비클릭 구조는 그대로 보호.
+
+검증:
+- Release System Audit Run **36584276062 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Explore layout/static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 preflight/read-only 점검 PASS.
+- Firebase PREVIEW Hosting Run **36584692049 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=229`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- Feed/Firestore/D1 추가 read/write 없음.
+- Worker / Functions / Rules 변경 및 재배포 없음.
+- 사용자 데이터 변경 없음.
+- 정렬 계산은 모바일에서 스크롤 정지 후 3초가 지난 시점에 이미 화면에 있는 DOM 카드 geometry만 로컬 계산.
+
+다음:
+- 모바일 실기기에서 좌/우 부분 노출 비율이 다른 위치에 멈춘 뒤 3초 기다려 **더 많이 보이던 쪽을 포함한 연속 3곡**으로 정렬되는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JF. Explore 제목 강조 복구 + 버튼 이퀄라이저 감속 + 모바일 손가락 관성 스크롤 (2026-09-29 KST)
 
 상태: **app225 사용자 실화면 양호 / 영상 21575 기준 모바일 가로 스크롤 원인 확인 / app226 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**

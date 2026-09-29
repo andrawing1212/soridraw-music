@@ -1,3 +1,14 @@
+## 2026-09-29 — Explore app222 카드 미리듣기 검증
+
+- hover 시 중앙 play 버튼.
+- 재생 시 제목 accent + 썸네일 전체 이퀄라이저.
+- 단일 shared audio engine 사용, floating GlobalPlayer 숨김.
+- 다른 곡 재생 시 이전 곡 해제, 같은 곡 play/pause 토글.
+- 120초 후 자동 정지/원상복귀.
+- Explore Feed/Firestore/D1 추가 read/write 0.
+- app221 추천 레일/장르/크리에이터/최신 8열 보호.
+- Audit PASS 후 PREVIEW app222 배포.
+
 ## 2026-09-29 — Explore app221 추천 레일 실화면 확인
 
 - PREVIEW app221 배포 완료.

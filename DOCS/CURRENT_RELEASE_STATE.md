@@ -1,3 +1,59 @@
+## 0JF. Explore 제목 강조 복구 + 버튼 이퀄라이저 감속 + 모바일 손가락 관성 스크롤 (2026-09-29 KST)
+
+상태: **app225 사용자 실화면 양호 / 영상 21575 기준 모바일 가로 스크롤 원인 확인 / app226 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**
+
+사용자 기준:
+- app225의 배경 비클릭 + 중앙 재생버튼 단독 링크 구조는 유지.
+- 재생버튼을 누른 카드의 제목 색상 강조는 다시 표시.
+- 재생버튼 내부 이퀄라이저는 기존보다 조금 느리게 움직임.
+- 모바일 추천/장르 추천 가로 레일은 손가락 스와이프 강도에 따라 자연스럽게 관성 이동.
+- 손을 놓을 때 카드 1~2칸 단위로 강제 맞춤되는 느낌 제거.
+- PC의 좌/우 화살표 버튼 스크롤은 기존 동작 유지.
+
+실측/원인:
+- 사용자 영상 `21575.mp4`에서 모바일 레일이 스와이프 후 특정 카드 시작점으로 자주 붙으면서 짧은 스와이프와 강한 스와이프의 이동량이 비슷하게 보이는 구간 확인.
+- Explore 추천 레일 CSS에 `scroll-snap-type:x proximity`와 카드별 `scroll-snap-align:start`가 공통 적용되어 있었음.
+- 터치 브라우저의 기본 관성 스크롤 이후 snap이 개입해 1~2카드 단위로 멈추는 느낌을 만들 수 있는 구조였음.
+
+app226 수정:
+- `src/components/explore/explore.css` commit `5d409c28d1fa02c951749da3ff251631001a2bdb`.
+- 활성 카드 제목 accent 복구: dark `#ffbf24`, light `#a96f00`.
+- 버튼 내부 이퀄라이저 주기 `.56s + index*.035s` → `.92s + index*.05s`로 완화.
+- `@media (hover:none),(pointer:coarse)`에서 추천 레일 snap 해제.
+- 모바일/coarse pointer에서 `scroll-behavior:auto`, `-webkit-overflow-scrolling:touch`, `touch-action:pan-x pan-y` 적용.
+- 카드/크리에이터의 `scroll-snap-align`도 모바일에서 해제.
+- 데스크톱의 기존 snap/화살표 `scrollBy(... behavior:'smooth')`는 그대로 유지.
+- 커버 배경 비클릭 / 중앙 재생버튼만 링크 / 버튼 내부 이퀄라이저 / Pause 의미 없음 / 앱 내부 음원 재생 없음 모두 유지.
+
+검증:
+- verifier commit `7578cec4aedbacf11932973980aa4b6486f93f79`.
+- app version commit `063e52601bfd164ef228b164e3095b09e1fff4db` / version `226`.
+- Audit head `838b571a24e7236641ae8a79f31b33d54d36f9f3`.
+- Audit Run `36566167869` SUCCESS.
+- TypeScript PASS / Build PASS / Static verification PASS / Like regression 및 비용·백엔드 감사 PASS.
+- `APP226_EXPLORE_ACTIVE_TITLE_ACCENT_RESTORED=PASS`.
+- `APP226_EXPLORE_BUTTON_EQUALIZER_SLOWER=PASS`.
+- `APP226_EXPLORE_MOBILE_NATIVE_MOMENTUM_SCROLL=PASS`.
+- `APP226_EXPLORE_MOBILE_SCROLL_SNAP_DISABLED=PASS`.
+
+PREVIEW 배포:
+- release SHA `b7891b8b5922987f0e69fde0364dfba022409b6c`.
+- Firebase PREVIEW Hosting Run `36566462070` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=226`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음.
+- Firestore / D1 / 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+
+다음:
+- 모바일에서 약한 스와이프 / 강한 플릭 각각 이동량이 자연스럽게 달라지는지 확인.
+- 세로 스크롤과 가로 레일 제스처가 서로 방해하지 않는지 확인.
+- 재생버튼 클릭 후 제목 accent + 느려진 버튼 이퀄라이저 확인.
+- 정상이라면 app226 Explore 카드/모바일 레일을 새 보호 기준으로 기록.
+
 ## 0JE. Explore 재생버튼 단독 링크 + 버튼 내부 이퀄라이저 (2026-09-29 KST)
 
 상태: **app224 사용자 실화면 PASS / app225 UI 미세조정 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**

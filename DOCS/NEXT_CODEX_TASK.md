@@ -1,19 +1,37 @@
 ## 2026-09-30 — app247 프로필 저장 비용 실측
 
-- app246 Audit Run `36632631152` SUCCESS.
-- app247 Audit Run `36633984275` SUCCESS. TypeScript / Build / static guards / TEST·PRODUCTION Worker dry-run PASS.
+- **PREVIEW app247 배포 완료.**
+- Firebase PREVIEW Hosting Run `36634768011` SUCCESS.
+  - remote app version **247**
+  - exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- Cloudflare PREVIEW Worker Run `36635851602` SUCCESS.
+  - locked source `0cff01db5db5e58392816ca6739548660501f521`
+  - active Worker `3b9978ef-83bf-438a-8f86-9320a75f17bb`
+  - Feed/Profile smoke PASS
+  - warm revision D1 R0/W0 PASS
+  - TEST / PRODUCTION Workers unchanged PASS
+- 배포 전 오래된 app246 verifier 2곳이 app247 helper/클라이언트 구조를 오탐했으며 둘 다 제품 코드가 아니라 verifier 정합성 문제로 확인.
+  - 실패한 두 Run은 Worker deploy 단계 전에 종료되어 live Worker 변경 없음.
+  - verifier 최소 정합화 후 Release System Audit Run `36635628280` SUCCESS.
 - app247는 warm 프로필 저장의 canonical D1 사전 SELECT 제거, 동일 R2 bundle 재조회 제거, no-op PATCH 제거, 동일 YouTube sidecar PUT 제거.
-- 사용자 데이터 migration 없음. shared D1 schema/trigger 변경 없음.
-- 배포 전 상태.
-- PREVIEW 배포 후 같은 계정에서 순서대로 측정:
-  1. 아무 값도 바꾸지 않고 저장
-  2. YouTube만 변경
-  3. 소개(bio)만 변경
-  4. 프로필 사진만 변경
-  5. 배경+프로필 사진 둘 다 변경
-- 목표: 1번은 프로필 저장 서버 mutation 0, 2번은 canonical D1 R0/W0, 3번은 warm-path 사전 D1 read 0. 이미지 경로는 전체 프로필 rebuild/검색 재생성 금지 유지.
-- 3~5번 physical rows_written 잔량은 기존 shared D1 trigger fan-out과 분리해서 기록.
-- TEST/main/PRODUCTION 변경 금지.
+- 사용자 데이터 migration/backfill 없음. shared D1 schema/trigger 변경 없음.
+- main / TEST / PRODUCTION 변경 없음.
+
+PREVIEW 실사용 측정 순서:
+1. 아무 값도 바꾸지 않고 저장
+2. YouTube만 변경
+3. 소개(bio)만 변경
+4. 프로필 사진만 변경
+5. 배경+프로필 사진 둘 다 변경
+
+목표:
+- 1번: 프로필 저장 서버 mutation 0
+- 2번: canonical D1 R0/W0
+- 3번: warm-path 저장 전 D1 read 0
+- 3~5번 physical rows_written 잔량은 기존 shared D1 trigger fan-out과 분리해서 기록
+- 이미지 경로는 전체 프로필 rebuild/검색 재생성 금지 유지
+- TEST 승격 전 위 5개 PREVIEW 실사용 비용 검증 완료
 
 ## 2026-09-30 — app244 공개프로필 소셜 링크 실사용 확인
 

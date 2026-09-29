@@ -689,3 +689,15 @@ assert.match(
 
 console.log('APP244_PROFILE_OLD_CLIENT_YOUTUBE_PRESERVE=PASS');
 console.log('APP245_PROFILE_SAVED_SOCIAL_STATE=PASS');
+assert.match(
+  profileEdit,
+  /profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile/,
+  'app247 must skip the profile PATCH when only media changed or the form is unchanged',
+);
+assert.match(
+  workerEntry,
+  /SORIDRAW_PROFILE_SOCIAL_EXTRA_NOOP_247_20260930[\s\S]*?currentExtra247\.youtubeUrl === nextYoutubeUrl247[\s\S]*?writeProfileSocialExtra244/,
+  'app247 must not rewrite the YouTube sidecar when its normalized value is unchanged',
+);
+console.log('APP247_PROFILE_NOOP_PATCH_SKIP=PASS');
+console.log('APP247_PROFILE_YOUTUBE_NOOP_R2_WRITE_SKIP=PASS');

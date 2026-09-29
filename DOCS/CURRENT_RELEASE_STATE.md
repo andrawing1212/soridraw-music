@@ -1,3 +1,50 @@
+## 0JL. PREVIEW app233 · 재생/이퀄라이저 버튼 썸네일 비례 크기 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- PC/모바일 모두 재생버튼 및 재생 중 이퀄라이저 버튼 크기를 곡 썸네일 크기에 맞춰 비례 조정.
+- 기존에는 썸네일 크기와 무관하게 버튼이 거의 같은 크기로 보이는 문제 수정.
+- 그 외 Explore / 공개프로필 rail, 2초 정렬, 3분 이퀄라이저 표시, 카드 밀도는 유지.
+
+app233 수정:
+- CSS 제품 commit: `c07e69ce1685642e0fa255fce5ca1ad485c5d872`.
+- verifier commit: `191476d436ae09b1d303cfbc1ae9654a620229fd`.
+- version commit: `e074ffc794d4ff6df15a0b2355598e90be4b5b49`.
+- audit head: `ad41ba1beeac90f1bbe4e4d298d463e050bdd820`.
+- release SHA: `9d9f91b63963f631b6f92acce9ecb57b2176ae5c`.
+- app version: **233**.
+- `.soridraw-explore-preview-trigger` 크기를 `clamp(56px,30%,76px)` → `clamp(38px,28%,104px)`로 변경.
+- 버튼의 % 기준은 cover wrapper 폭을 따르므로 작은 썸네일에서는 작아지고 큰 썸네일에서는 커짐.
+- 내부 Play 아이콘(42%)과 Equalizer(48%)는 버튼 크기에 비례해 함께 확대/축소됨.
+- 최소 38px / 최대 104px 안전 범위를 유지.
+
+검증:
+- Release System Audit Run **36594092596 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36594376873 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=233`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- CSS-only 제품 변경.
+- Firestore / D1 추가 read/write 0.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- 모바일 2-up 고정곡/추천 카드와 3열 일반 공개곡에서 재생버튼 크기 차이가 썸네일 크기에 맞게 자연스러운지 확인.
+- PC에서도 큰/작은 카드 폭에 따라 버튼 크기가 함께 바뀌는지 확인.
+- 이퀄라이저 전환 시 같은 버튼 영역 안에서 동일 비례 크기 유지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JK. PREVIEW app232 · 공개프로필 고정곡을 SORIDRAW 추천과 같은 레일로 통일 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실기기 확인 대기**

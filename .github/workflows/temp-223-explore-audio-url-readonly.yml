@@ -44,6 +44,26 @@ jobs:
             LIMIT 12;
           " --json > "$RUNNER_TEMP/audio-fields.json"
           cat "$RUNNER_TEMP/audio-fields.json"
+      - name: Probe cover-derived Suno MP3 URLs without D1 writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > "$RUNNER_TEMP/mp3-urls.txt"
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/audio-fields.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          for(const row of rows.slice(0,3)) {
+            const cover=String(row.cover_url||'');
+            const match=cover.match(/image(?:_large)?_([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
+            if(match) console.log('https://cdn1.suno.ai/'+match[1]+'.mp3');
+          }
+          NODE
+          test -s "$RUNNER_TEMP/mp3-urls.txt"
+          while IFS= read -r url; do
+            code="$(curl -sS -L -r 0-1 -o /dev/null -w '%{http_code}' "$url")"
+            echo "MP3_PROBE $code $url"
+            case "$code" in 200|206) ;; *) exit 1 ;; esac
+          done < "$RUNNER_TEMP/mp3-urls.txt"
       - name: Read-only compare PREVIEW Feed mapping
         shell: bash
         run: |

@@ -286,7 +286,7 @@ assert.match(
 );
 assert.match(
   page,
-  /revealPinnedControls242\(\);[\s\S]*?handleRailPointerDown241/,
+  /const handleRailPointerDown241[\s\S]*?revealPinnedControls242\(\);/,
   'touching the pinned card area must reveal controls without replacing existing gesture handling',
 );
 assert.match(

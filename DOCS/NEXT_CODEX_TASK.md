@@ -1,3 +1,20 @@
+## 2026-09-30 — Explore app231 모바일/공개프로필 실화면 확인
+
+- PREVIEW app231 배포 완료.
+- release SHA `d5f62d9731fcae0b27ec3600af23b0d343e8fb4a`.
+- Audit Run `36588224747` SUCCESS / Hosting Run `36588523044` SUCCESS.
+- 모바일 SORIDRAW 추천: 3곡 → **2곡**.
+- 모바일 장르별 추천 / 최신 / 인기: **기존 3곡 유지**.
+- SORIDRAW 추천 자동 정렬도 2곡 기준으로 계산, 장르별 추천은 기존 3곡 기준 유지.
+- 공개프로필 고정곡: 별도 구역 + 모바일 2곡 너비 + 좌우 가로 스크롤.
+- 공개프로필 일반 공개곡: 모바일 **3열**.
+- 카드 왼쪽 상단 pin badge: 공통 Feed / 공개프로필 모두 제거.
+- `profilePinned` 데이터와 공개설정 기능은 그대로 유지.
+- 추가 Feed/Profile/Firestore/D1 read/write 0.
+- Worker/Functions/Rules/사용자 데이터 변경 없음.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일 실기기에서 ① SORIDRAW 추천 2곡 ② 장르별 추천 3곡 ③ 공개프로필 고정곡 horizontal 2-up ④ 일반곡 3열 ⑤ 카드 pin badge 제거 확인.
+
 ## 2026-09-29 — Explore app230 실화면 확인
 
 - PREVIEW app230 배포 완료.

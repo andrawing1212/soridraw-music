@@ -391,6 +391,23 @@ export const uploadExploreProfileMedia = async (
   return String(payload?.data?.url || '').trim();
 };
 
+export const uploadExploreProfileMediaBatch = async (
+  user: User,
+  media: { avatar: Blob; background: Blob },
+): Promise<{ avatarUrl: string; backgroundUrl: string }> => {
+  const form = new FormData();
+  form.set('avatar', media.avatar, 'avatar.webp');
+  form.set('background', media.background, 'background.webp');
+  const payload = await requestAuthed(user, '/v1/me/profile-media', {
+    method: 'PUT',
+    body: form,
+  });
+  return {
+    avatarUrl: String(payload?.data?.avatarUrl || '').trim(),
+    backgroundUrl: String(payload?.data?.backgroundUrl || '').trim(),
+  };
+};
+
 const loadBitmap = async (file: Blob): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dw: number, dh: number) => void; close: () => void }> => {
   if (typeof createImageBitmap === 'function') {
     const bitmap = await createImageBitmap(file);

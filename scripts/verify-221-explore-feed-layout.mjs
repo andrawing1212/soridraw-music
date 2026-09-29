@@ -79,7 +79,32 @@ assert.match(
 assert.match(
   css,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-grid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/,
-  'existing 2-column mobile behavior must stay intact',
+  'non-feed Explore grids must keep the existing 2-column mobile behavior',
+);
+assert.match(
+  page,
+  /className=\{\`soridraw-explore-grid\$\{feed \? ' soridraw-explore-grid--feed' : ''\}/,
+  'main feed density must be scoped separately from public-profile grids',
+);
+assert.match(
+  page,
+  /renderTrackGrid\([\s\S]*?visibleFeedTracks[\s\S]*?sort === 'latest' && !submittedQuery \? 'latest' : 'default',[\s\S]*?true,[\s\S]*?\)/,
+  'Latest and Popular main feeds must opt into the mobile feed density class',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-grid--feed\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:17px 8px\}/,
+  'Latest and Popular mobile feeds must show three song cards per row',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track:not\(\.soridraw-explore-recommend-track--creators\)\{grid-auto-columns:calc\(\(100% - 16px\)\/3\);gap:8px\}/,
+  'Recommended mobile song rails must show three song cards in the viewport',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  'creator recommendation rail must retain its existing two-card mobile density',
 );
 
 assert.match(
@@ -218,3 +243,7 @@ console.log('APP226_EXPLORE_ACTIVE_TITLE_ACCENT_RESTORED=PASS');
 console.log('APP226_EXPLORE_BUTTON_EQUALIZER_SLOWER=PASS');
 console.log('APP226_EXPLORE_MOBILE_NATIVE_MOMENTUM_SCROLL=PASS');
 console.log('APP226_EXPLORE_MOBILE_SCROLL_SNAP_DISABLED=PASS');
+console.log('APP227_EXPLORE_MOBILE_RECOMMENDED_THREE_SONGS=PASS');
+console.log('APP227_EXPLORE_MOBILE_LATEST_THREE_COLUMNS=PASS');
+console.log('APP227_EXPLORE_MOBILE_POPULAR_THREE_COLUMNS=PASS');
+console.log('APP227_EXPLORE_PROFILE_GRID_DENSITY_PROTECTED=PASS');

@@ -1,6 +1,6 @@
 ## 0IZ. Explore 최신 8열 + 추천 주제형 가로 레일 (2026-09-29 KST)
 
-상태: **사용자 새 UI 지시 반영 / 코드 수정 완료 / Audit 전 / PREVIEW 미배포**
+상태: **사용자 새 UI 지시 반영 / 코드 수정 완료 / Audit PASS / PREVIEW app220 배포 전**
 
 사용자 기준:
 - PC 30인치 전체화면급 최대 폭에서 **최신 Feed는 한 줄 8곡**.
@@ -35,8 +35,10 @@
 - 모바일 기존 2열 및 기존 카드 기능 보호.
 
 다음:
-- Release System Audit에서 TypeScript / Build / APP220 verifier / like regression 확인.
-- PASS 시 app220으로 PREVIEW Hosting만 배포 후 PC 최대폭 8열/추천 7개 레일/축소 반응형 실화면 확인.
+- Audit Run `36546707888` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS / Like regression PASS.
+- `APP220_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS` / `APP220_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS` / `APP220_EXPLORE_RECOMMENDED_TOPIC_CAP_20=PASS` / `APP220_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS` / `APP220_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS` / `APP220_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS`.
+- app version commit: `f54c88bc1b0c16bf0192eb3f4be57b2c186097a0` / app version `220`.
+- 다음: PREVIEW Hosting 배포 후 PC 최대폭 8열/추천 7개 레일/축소 반응형 실화면 확인.
 
 ## 0IY. PREVIEW app219 · Music Note/Library 장르 접기 사용자 실화면 PASS (2026-09-29 KST)
 

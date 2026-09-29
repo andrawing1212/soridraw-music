@@ -1,3 +1,60 @@
+## 0JO. PREVIEW app236 · 고정 곡 2.8:1 + 더 부드러운 블러/흐림 + 공개곡 게시자 숨김 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- 공개프로필 고정 곡 배너 비율을 2.2:1 → **2.8:1**로 변경.
+- 오른쪽 확장 영역은 기존 blur에 더해 눈에 보이는 **흐림/안개 효과**를 추가해 정보 영역을 더 부드럽게 처리.
+- 공개프로필의 공개 곡 목록에서는 이미 프로필 소유자가 명확하므로 게시자 아바타/이름 행을 숨김.
+- 단, 소유자의 **좋아요 곡**은 다른 게시자의 곡이 섞이므로 게시자 표시를 그대로 유지.
+- app235 키워드/왼쪽 원본 이미지/가로 rail/좌우 버튼/모바일 2초 정렬/app234 3:6 반응형 밀도는 유지.
+
+app236 수정:
+- Social CSS commit: `999cadcf736101013bfe0c9bc190bcc3396b42b2`.
+- Explore CSS commit: `432e5eea5d4aeb6e9972c98e306467cc90aaf55c`.
+- 공개프로필 게시자 가시성 TSX commit: `6c9bfd05a90c2309e61090d0736bd44137fe0476`.
+- verifier 최종 commit: `9985d0ab20db31a59ab5c8814070e07207e5fe58`.
+- version commit: `851f1cfb4e743428364d84e51f4b4d1a501a1845`.
+- audit head: `4ea91696f5fee2b1a78f990a070e894a5585a0df`.
+- release SHA: `31edf7ed5aae2c4da433f265b8af321d74c6aace`.
+- app version: **236**.
+
+UI/동작:
+- 고정 곡 배너 `aspect-ratio: 2.8/1`.
+- 왼쪽 원본 이미지 영역은 배너 폭의 35.714%로 정사각형 비율 유지.
+- 오른쪽 배경은 같은 cover를 `blur(32px)`로 확대하고 opacity/saturation/brightness/contrast를 낮춰 더 퍼지고 부드럽게 표시.
+- 기존 shade에 밝기/채도 완화가 추가되어 블러 위에 한 번 더 흐린 안개층처럼 보이도록 처리.
+- 재생/이퀄라이저 버튼은 새 왼쪽 원본 이미지 중앙(17.857%) 기준으로 재배치.
+- 공개프로필의 **고정 곡 + 전체 곡**에서는 게시자 아바타/이름을 숨김.
+- 내 공개프로필의 **좋아요 곡** 탭은 게시자 아바타/이름을 유지.
+- Feed/추천/최신/인기 등 다른 Explore 카드의 게시자 표시는 그대로 유지.
+
+검증:
+- 최종 Release System Audit Run **36605327404 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36605630565 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=236`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI/CSS와 렌더링 조건만 변경.
+- Feed/Profile/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- PC/모바일에서 고정 곡 배너가 2.8:1로 자연스러운지 확인.
+- 오른쪽 블러 + 추가 흐림층 강도가 과하거나 약하지 않은지 확인.
+- 공개프로필 공개곡에서 게시자 행이 사라지고, 좋아요 곡에서는 유지되는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JN. PREVIEW app235 · 고정 곡 2.2:1 피처 배너 + 블러/키워드 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

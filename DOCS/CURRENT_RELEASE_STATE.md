@@ -1,3 +1,55 @@
+## 0JS. PREVIEW app240 · 모바일 좌우 스크롤 1초 정렬 + PC 공개프로필 좌우 여백 추가 확대 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**
+
+사용자 지시:
+- Explore의 기존 모바일 좌우 스크롤 자동 정렬 대기시간을 2초 → **1초**로 단축.
+- PC 공개프로필의 좌우 여백을 app238보다 더 키워 내부 콘텐츠 폭을 더 줄임.
+- app239의 모바일 고정곡 1개 노출, 전체 곡 Grid/List 보기 전환, 2.8:1 고정곡 배너, app237 이퀄라이저 상태 유지 기능은 그대로 보호.
+
+app240 수정:
+- rail timing 제품 commit: `d08cec6c96db80dccf98404e2d31d1530e9e998c`.
+- PC profile gutter 제품 commit: `631c4f1a5eedf90a64edf7eb786692027d975238`.
+- verifier commit: `bc717db1dcd257df1117f15393e56dabb025ffb3`.
+- version commit: `36686506d84075c0cbbe60b44e7b7883faadc4a4`.
+- audit head: `dda428b7ad06b451cc7f9bc043911ca913c13154`.
+- release SHA: `93d1eb91ea404110e5b6be566451c5e5f32f6c45`.
+- app version: **240**.
+
+UI/동작:
+- `EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228`: `2_000` → `1_000`.
+- 모바일 song rail은 손가락 momentum이 끝난 뒤 **1초** 대기 후 기존 visible-share 기준으로 정렬.
+- SORIDRAW 추천 / 장르 rail / 공개프로필 고정 곡 rail의 기존 정렬 알고리즘과 카드 수 기준은 변경하지 않음.
+- PC 공개프로필 좌우 padding: `clamp(76px, 7.5vw, 144px)` → `clamp(96px, 10vw, 192px)`.
+- 1100px 이상 공개프로필에만 적용.
+- 모바일/태블릿 공개프로필 여백은 변경 없음.
+
+검증:
+- Release System Audit Run **36613745623 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static verifier PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36613979353 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=240`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI timer/CSS 변경만 있음.
+- Feed/Profile/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+
+다음:
+- 모바일에서 좌우 스크롤을 멈춘 뒤 1초 후 정렬되는지 확인.
+- PC 전체화면 공개프로필에서 좌우 여백이 app238보다 더 넓어지고 내부 카드 영역이 더 좁아졌는지 확인.
+- app239 Grid/List 전환과 모바일 고정곡 1개 표시가 그대로 유지되는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JR. PREVIEW app239 · 모바일 고정 곡 1개 + 전체 곡 그리드/목록 전환 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / 최종 Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**

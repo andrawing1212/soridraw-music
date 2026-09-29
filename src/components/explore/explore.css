@@ -87,7 +87,7 @@
 .soridraw-explore-cover-fallback svg{width:34px;height:34px}
 .soridraw-explore-preview-trigger{position:absolute;z-index:7;left:50%;top:50%;display:grid;place-items:center;width:clamp(38px,28%,104px);aspect-ratio:1/1;padding:0;border:1px solid rgba(255,255,255,.2)!important;outline:0!important;border-radius:50%;background:rgba(13,13,16,.72)!important;box-shadow:0 10px 30px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.045)!important;color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.88);transition:opacity .15s ease,transform .15s ease,background .15s ease,box-shadow .15s ease,border-color .15s ease;cursor:pointer;backdrop-filter:blur(12px)}
 .soridraw-explore-preview-trigger svg{width:42%;height:42%;fill:currentColor;stroke-width:2.4}
-.soridraw-explore-card--profile-pinned .soridraw-explore-preview-trigger{left:22.727%;width:clamp(34px,12.7%,88px)}
+.soridraw-explore-card--profile-pinned .soridraw-explore-preview-trigger{left:17.857%;width:clamp(32px,10%,82px)}
 .soridraw-explore-card--profile-pinned .soridraw-explore-card-actions{padding-top:7px}
 .soridraw-explore-cover-wrap:hover .soridraw-explore-preview-trigger,.soridraw-explore-preview-trigger:focus-visible,.soridraw-explore-card.is-previewing .soridraw-explore-preview-trigger{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .soridraw-explore-preview-trigger:hover{background:rgba(8,8,11,.84)!important;box-shadow:0 11px 34px rgba(0,0,0,.4),0 0 0 7px rgba(255,255,255,.055)!important}

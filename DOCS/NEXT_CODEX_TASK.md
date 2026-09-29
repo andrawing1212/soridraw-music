@@ -1,3 +1,16 @@
+## 2026-09-30 — Explore app240 1초 정렬 + PC 공개프로필 여백 확인
+
+- PREVIEW app240 배포 완료.
+- release SHA `93d1eb91ea404110e5b6be566451c5e5f32f6c45`.
+- Audit Run `36613745623` SUCCESS / Hosting Run `36613979353` SUCCESS.
+- 모바일 좌우 스크롤 자동 정렬 대기: **2초 → 1초**.
+- PC 공개프로필 좌우 padding: `clamp(96px, 10vw, 192px)`.
+- 모바일/태블릿 여백은 변경 없음.
+- 모바일 고정곡 1개 표시, 전체 곡 Grid/List 전환, 2.8:1 고정 배너, 3분30초 이퀄라이저 상태 유지 기능 변경 없음.
+- 추가 서버 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: 모바일 1초 정렬과 PC 전체화면 좌우 여백 체감 확인.
+
 ## 2026-09-30 — Explore app239 공개프로필 그리드/목록 실화면 확인
 
 - PREVIEW app239 배포 완료.

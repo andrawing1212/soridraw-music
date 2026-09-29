@@ -44,6 +44,77 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Diagnose audit static group A
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-release-controller.mjs
+          node scripts/verify-release-command-pipeline.mjs
+          node scripts/verify-shared-d1-release-system.mjs
+          npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-hard-ban-fallback.cjs
+
+      - name: Diagnose audit static group B
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-154-cross-account-like-sync.mjs
+          node scripts/verify-117-explore-public-count-cache-separation.mjs
+          node scripts/verify-110-explore-liked-public-count.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-181-personal-r2-exact-mutation.mjs
+          node scripts/verify-182-account-partial-like-repair.mjs
+          node scripts/verify-189-personal-like-settled-guard-release.mjs
+          node scripts/verify-190-like-card-authority.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-198-social-snapshot-diagnostic-reason.mjs
+
+      - name: Diagnose audit static group C
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-199-rap-auto-neutral.mjs
+          node scripts/verify-200-admin-gemini-mobile-header.mjs
+          node scripts/verify-201-explore-track-action-sheet.mjs
+          node scripts/verify-202-explore-action-cost-bounds.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-206-studio-split-create-classic-vertical.mjs
+          node scripts/verify-207-library-music-api-admin-persistence.mjs
+          node scripts/verify-208-gemini-adaptive-repair-routing.mjs
+          node scripts/verify-209-search-persistence-mobile.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          node scripts/verify-211-cross-device-publication-refresh.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
+          node scripts/verify-213-explore-more-page-cache.mjs
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
+          node scripts/verify-218-explore-title-display.mjs
+          node scripts/verify-219-account-menu-visual-parity.mjs
+          node scripts/verify-220-account-menu-content-parity.mjs
+
+      - name: Diagnose audit static group D
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-221-explore-feed-layout.mjs
+          node --check .deploy/release-worker-runtime.mjs
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected_worker_sha"
+          test "$expected_worker_sha" = "$actual_worker_sha"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-114-shared-social-parity.mjs
+
       - name: Static release-system verification
         shell: bash
         run: |

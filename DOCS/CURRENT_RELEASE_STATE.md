@@ -1,6 +1,6 @@
 ## 0JC. PREVIEW app222 재생 실화면 FAIL · Explore Suno media URL 연결 수정 (2026-09-29 KST)
 
-상태: **app222 사용자 실화면 FAIL / 원인 실측 완료 / app223 구현 완료 / Audit PASS / PREVIEW 배포 전**
+상태: **app222 사용자 실화면 FAIL / 원인 실측 완료 / app223 구현·Audit·PREVIEW 배포 완료 / 사용자 실화면 확인 대기**
 
 사용자 실화면:
 - 재생 버튼을 누르면 이퀄라이저가 잠깐 반응한 뒤 바로 꺼지고 실제 음원이 재생되지 않음.
@@ -42,7 +42,13 @@ app223 수정:
 - `APP223_EXPLORE_COVER_UUID_MEDIA_URL=PASS`.
 - `APP223_EXPLORE_PROGRESSIVE_M4A_PLAYBACK_URL=PASS`.
 - app version commit `82a32cd37ed307568bdbc013bbaad54fe43c8a55` / version `223`.
-- 다음: PREVIEW app223 Hosting 배포 후 실제 음원 재생/다른 곡 전환/2분 자동정지 실화면 확인.
+- PREVIEW release SHA `e42856599a4424fc8d948685ebdb7e7524b5a11b`.
+- Firebase PREVIEW Hosting Run `36556008149` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=223` / `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED` / `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음. 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+- 다음: 실제 음원 재생 지속 여부 / 다른 곡 전환 / 일시정지 / 2분 자동정지 실화면 확인.
 
 ## 0JB. Explore 카드 미리듣기 — hover 재생 / 제목 강조 / 전체 썸네일 이퀄라이저 (2026-09-29 KST)
 

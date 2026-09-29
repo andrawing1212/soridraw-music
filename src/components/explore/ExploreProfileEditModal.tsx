@@ -151,10 +151,31 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       return;
     }
 
+    const normalizedDraft = {
+      nickname,
+      bio: draft.bio.trim(),
+      handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+      spotifyUrl: draft.spotifyUrl.trim(),
+      instagramUrl: draft.instagramUrl.trim(),
+      tiktokUrl: draft.tiktokUrl.trim(),
+      youtubeUrl: draft.youtubeUrl.trim(),
+    };
+    const profileFieldsChanged247 = normalizedDraft.nickname !== String(profile.nickname || '').trim().replace(/\s+/g, ' ')
+      || normalizedDraft.bio !== String(profile.bio || '').trim()
+      || normalizedDraft.handle !== String(profile.handle || '').trim().replace(/^@+/, '').toLowerCase()
+      || JSON.stringify(normalizedDraft.genres) !== JSON.stringify((profile.genres || []).map((value) => String(value || '').trim()).filter(Boolean).slice(0, 5))
+      || normalizedDraft.spotifyUrl !== String(profile.socialLinks?.spotify || '').trim()
+      || normalizedDraft.instagramUrl !== String(profile.socialLinks?.instagram || '').trim()
+      || normalizedDraft.tiktokUrl !== String(profile.socialLinks?.tiktok || '').trim()
+      || normalizedDraft.youtubeUrl !== String(profile.socialLinks?.youtube || '').trim();
+
     setSaving(true);
     setError('');
     try {
-      const saved = await updateExplorePublicProfile(user, { ...draft, nickname });
+      const saved = profileFieldsChanged247
+        ? await updateExplorePublicProfile(user, normalizedDraft)
+        : profile;
       const backgroundUrl = backgroundBlob
         ? await uploadExploreProfileMedia(user, 'background', backgroundBlob)
         : saved.backgroundUrl;

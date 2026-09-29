@@ -225,22 +225,27 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-banner-235\{[\s\S]*?aspect-ratio:2\.2\/1/,
-  'pinned profile banner must use the requested 2.2-to-1 horizontal ratio',
+  /\.soridraw-explore-pinned-banner-235\{[\s\S]*?aspect-ratio:2\.8\/1/,
+  'pinned profile banner must use the requested 2.8-to-1 horizontal ratio',
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-banner-image-235\{[\s\S]*?width:45\.455%;height:100%[\s\S]*?\.soridraw-explore-pinned-banner-image-235>img\{[\s\S]*?object-fit:cover/,
+  /\.soridraw-explore-pinned-banner-image-235\{[\s\S]*?width:35\.714%;height:100%[\s\S]*?\.soridraw-explore-pinned-banner-image-235>img\{[\s\S]*?object-fit:cover/,
   'pinned artwork must stay proportional in the left square area instead of stretching across the banner',
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-banner-blur-235\{[\s\S]*?filter:blur\(24px\) saturate\(1\.28\) brightness\(\.72\)/,
-  'remaining pinned banner space must be filled by a blurred color continuation of the cover image',
+  /\.soridraw-explore-pinned-banner-blur-235\{[\s\S]*?filter:blur\(32px\) saturate\(1\.12\) brightness\(\.66\) contrast\(\.78\)[\s\S]*?opacity:\.74/,
+  'remaining pinned banner space must use a stronger blurred and softened color continuation of the cover image',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-pinned-banner-shade-235\{[\s\S]*?rgba\(14,14,17,\.38\)[\s\S]*?rgba\(10,10,13,\.84\)[\s\S]*?backdrop-filter:saturate\(\.86\) brightness\(\.9\)/,
+  'blurred side must add a visible haze/dimming layer so image detail stays soft behind text',
 );
 assert.match(
   css,
-  /\.soridraw-explore-card--profile-pinned \.soridraw-explore-preview-trigger\{left:22\.727%;width:clamp\(34px,12\.7%,88px\)\}/,
+  /\.soridraw-explore-card--profile-pinned \.soridraw-explore-preview-trigger\{left:17\.857%;width:clamp\(32px,10%,82px\)\}/,
   'pinned play/equalizer control must stay centered on the left artwork and scale to that artwork',
 );
 assert.doesNotMatch(
@@ -420,3 +425,6 @@ console.log('APP235_EXPLORE_PINNED_BANNER_RATIO=PASS');
 console.log('APP235_EXPLORE_PINNED_BLUR_CONTINUATION=PASS');
 console.log('APP235_EXPLORE_PINNED_KEYWORDS_LOCAL_ONLY=PASS');
 console.log('APP235_EXPLORE_SECTION_LABELS_RENAMED=PASS');
+console.log('APP236_EXPLORE_PINNED_BANNER_2_8_RATIO=PASS');
+console.log('APP236_EXPLORE_PINNED_BLUR_AND_HAZE=PASS');
+console.log('APP236_EXPLORE_PINNED_PLAY_CONTROL_RECENTERED=PASS');

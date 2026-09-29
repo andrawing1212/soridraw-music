@@ -84,6 +84,28 @@ assert.doesNotMatch(patch247, /readExploreSharedProfile060\(env, normalizedUid\)
 assert.match(profileEdit246, /profileFieldsChanged247/);
 assert.match(profileEdit246, /profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile/);
 
+// app248 profile cost guards.
+assert.match(profile247, /SORIDRAW_PROFILE_BIO_NO_FTS_248_20260930/);
+assert.match(profile247, /const searchChanged = nicknameChanged;/);
+assert.match(profile247, /const coreChanged = bioChanged[\s\S]*?\|\| searchChanged/);
+assert.doesNotMatch(profile247, /const searchChanged = nicknameChanged \|\| bioChanged/);
+
+const media248Start = canonicalWorker245.indexOf('async function handleProfileMediaBatchUpload248(');
+const media248End = canonicalWorker245.indexOf('\nasync function handleProfileMediaGet', media248Start);
+assert.ok(media248Start >= 0 && media248End > media248Start, '248 profile media batch handler missing');
+const media248 = canonicalWorker245.slice(media248Start, media248End);
+assert.match(media248, /SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930/);
+assert.match(media248, /form\.get\("avatar"\)[\s\S]*?form\.get\("background"\)/);
+assert.match(media248, /UPDATE public_profiles[\s\S]*?avatar_url = \?[\s\S]*?background_url = \?/);
+assert.match(media248, /patchPublicProfileBundle245\(env, authContext\.uid, \{[\s\S]*?avatarUrl,[\s\S]*?backgroundUrl/);
+assert.match(canonicalWorker245, /url\.pathname === "\/v1\/me\/profile-media"[\s\S]*?handleProfileMediaBatchUpload248/);
+
+const socialService248 = readFileSync('src/services/exploreSocialService.ts', 'utf8');
+assert.match(socialService248, /export const uploadExploreProfileMediaBatch/);
+assert.match(socialService248, /form\.set\('avatar'[\s\S]*?form\.set\('background'/);
+assert.match(socialService248, /\/v1\/me\/profile-media/);
+assert.match(profileEdit246, /backgroundBlob && avatarBlob[\s\S]*?uploadExploreProfileMediaBatch/);
+
 
 if (process.argv.includes('--connections')) {
   const prepared=readFileSync('cloudflare/explore-worker/scripts/deploy-prepared.mjs','utf8');

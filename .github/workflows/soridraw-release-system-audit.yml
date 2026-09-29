@@ -115,6 +115,41 @@ jobs:
           test "$expected_worker_sha" = "$actual_worker_sha"
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-114-shared-social-parity.mjs
 
+      - name: Diagnose audit static syntax E1
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
+          node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
+          node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
+
+      - name: Diagnose audit static syntax E2
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
+          node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
+          node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
+          node --check cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs
+          node --check cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
+
+      - name: Diagnose audit static final guards E3
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
+          grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
+
       - name: Static release-system verification
         shell: bash
         run: |

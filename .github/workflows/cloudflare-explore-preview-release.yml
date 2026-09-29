@@ -90,6 +90,40 @@ jobs:
           set -euo pipefail
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
 
+      - name: Verify existing publication regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-085-liked-profile.mjs
+
+      - name: Verify existing Explore cache regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-110-explore-liked-public-count.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-109-mobile-feed-refresh-zero.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-108-explore-feed-cache-recovery.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-107-explore-direct-count-zero-read.mjs
+
+      - name: Verify existing like and action regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-105-explore-like-1min.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
         shell: bash

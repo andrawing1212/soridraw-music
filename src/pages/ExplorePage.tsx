@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, Heart, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -2212,11 +2212,10 @@ export default function ExplorePage() {
   );
 
   const profilePinnedTracks231 = profileTracks.filter((track) => track.profilePinned);
-  const profileOtherTracks231 = profileTracks.filter((track) => !track.profilePinned);
 
   if (profileUid) {
     return (
-      <main className="soridraw-explore-page">
+      <main className="soridraw-explore-page soridraw-explore-page--profile">
         {renderMoreSheet()}
         {renderPublicationSettingsModal()}
         <section className="soridraw-explore-profile-toolbar">
@@ -2362,18 +2361,20 @@ export default function ExplorePage() {
             ) : (
               <>
                 {profilePinnedTracks231.length > 0 && (
-                  <>
-                    <div className="soridraw-explore-profile-section-label"><Pin aria-hidden="true" /> 고정된 공개곡</div>
-                    <section
-                      className="soridraw-explore-grid soridraw-explore-profile-pinned-track-231"
-                      aria-label={`${profile.nickname} 고정된 공개곡`}
+                  <div className="soridraw-explore-profile-pinned-rail-232">
+                    <ExploreRecommendationRail
+                      title="고정된 공개곡"
+                      subtitle="프로필에서 먼저 보여주는 대표 공개곡"
+                      itemCount={profilePinnedTracks231.length}
+                      trackClassName="soridraw-explore-recommend-track--profile-pinned"
+                      mobileGroupSize={2}
                     >
                       {profilePinnedTracks231.map((track) => renderTrackCard(track, profile))}
-                    </section>
-                  </>
+                    </ExploreRecommendationRail>
+                  </div>
                 )}
-                {profileOtherTracks231.length > 0 && renderTrackGrid(
-                  profileOtherTracks231,
+                {renderTrackGrid(
+                  profileTracks,
                   `${profile.nickname} 공개곡`,
                   profile,
                   'default',

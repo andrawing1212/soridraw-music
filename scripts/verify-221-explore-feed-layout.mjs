@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
+const globalPlayer = readFileSync('src/components/GlobalPlayer.tsx', 'utf8');
 
 assert.match(page, /buildExploreRecommendationModel221/);
 assert.match(page, /picks: source\.slice\(0, 20\)/);
@@ -102,3 +103,72 @@ console.log('APP221_EXPLORE_CREATOR_RECOMMENDATIONS_CAP_20=PASS');
 console.log('APP221_EXPLORE_EXISTING_SHRINK_BREAKPOINTS_PRESERVED=PASS');
 console.log('APP221_EXPLORE_PC_ACTION_BUTTONS_LARGER=PASS');
 console.log('APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');
+
+
+assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*120_000/);
+assert.match(page, /EXPLORE_EQ_BAR_COUNT_222\s*=\s*24/);
+assert.match(page, /resolveExplorePreviewAudioUrl222/);
+assert.match(page, /https:\/\/cdn1\.suno\.ai\/\$\{clipId\}\.mp3/);
+assert.match(page, /useGlobalPlayerControls\(\)/);
+assert.match(page, /__exploreCardPreview:\s*true/);
+assert.match(page, /sourceType:\s*'shared_track'/);
+assert.match(page, /scheduleExplorePreviewTimeout222\(track\.id\)/);
+assert.match(page, /toggleGlobalPlayPause\(\)/);
+assert.match(page, /isPreviewing=\{activeExplorePreviewTrackId222 === track\.id\}/);
+assert.match(page, /soridraw-explore-preview-trigger/);
+assert.match(page, /soridraw-explore-preview-eq-bars/);
+assert.match(page, /<Play aria-hidden="true" \/>/);
+assert.match(page, /<Pause aria-hidden="true" \/>/);
+
+const previewHandlerStart = page.indexOf('const toggleExplorePreview222 =');
+const previewHandlerEnd = page.indexOf('\n\n  useEffect(() => {', previewHandlerStart);
+assert.ok(previewHandlerStart >= 0 && previewHandlerEnd > previewHandlerStart, 'Explore preview handler must remain discoverable');
+const previewHandler = page.slice(previewHandlerStart, previewHandlerEnd);
+assert.doesNotMatch(
+  previewHandler,
+  /fetch\(|getDocs\(|onSnapshot\(|setDoc\(|updateDoc\(|EXPLORE_API_BASE/,
+  'Explore preview click must not add feed/D1/Firestore requests',
+);
+
+assert.match(
+  css,
+  /\.soridraw-explore-preview-trigger\{[\s\S]*?opacity:0[\s\S]*?transform:translate\(-50%,-50%\) scale\(\.86\)/,
+  'preview play control must be hidden until hover/focus/active',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-cover-button:hover \.soridraw-explore-preview-trigger[\s\S]*?opacity:1/,
+  'hovering a cover must reveal the preview play button',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-preview-eq\{position:absolute;[\s\S]*?inset:0/,
+  'playing equalizer must cover the full thumbnail',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-preview-eq-bars i\{[\s\S]*?animation:soridraw-explore-preview-bar-222/,
+  'equalizer bars must animate only with compositor-friendly transforms',
+);
+assert.match(
+  css,
+  /@keyframes soridraw-explore-preview-bar-222\{[\s\S]*?transform:scaleY/,
+  'equalizer animation must use transform scaleY instead of layout-height animation',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-card\.is-previewing \.soridraw-explore-card-copy h3\{color:/,
+  'playing card title must change color',
+);
+assert.match(
+  globalPlayer,
+  /if \(!currentTrack \|\| currentTrack\.parent\?\.__exploreCardPreview\) return null;/,
+  'Explore card preview must reuse the shared audio engine without showing floating GlobalPlayer chrome',
+);
+
+console.log('APP222_EXPLORE_HOVER_PLAY_BUTTON=PASS');
+console.log('APP222_EXPLORE_ACTIVE_TITLE_COLOR=PASS');
+console.log('APP222_EXPLORE_FULL_COVER_EQUALIZER=PASS');
+console.log('APP222_EXPLORE_SINGLE_SHARED_AUDIO_ENGINE=PASS');
+console.log('APP222_EXPLORE_TWO_MINUTE_AUTO_STOP=PASS');
+console.log('APP222_EXPLORE_PREVIEW_NO_FEED_SERVER_READ_WRITE=PASS');

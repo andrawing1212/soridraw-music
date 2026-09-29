@@ -165,7 +165,7 @@ assert.match(
 );
 assert.match(
   page,
-  /title="고정된 공개곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile\)\)/,
+  /title="고정 곡"[\s\S]*?trackClassName="soridraw-explore-recommend-track--profile-pinned"[\s\S]*?mobileGroupSize=\{2\}[\s\S]*?profilePinnedTracks231\.map\(\(track\) => renderTrackCard\(track, profile, 'profilePinnedBanner'\)\)/,
   'pinned public tracks must reuse the shared recommendation rail with two-card mobile alignment',
 );
 assert.match(
@@ -180,8 +180,8 @@ assert.match(
 );
 assert.match(
   page,
-  /soridraw-explore-profile-public-head-234[\s\S]*?<span>PUBLIC<\/span>[\s\S]*?<h2>전체 공개곡<\/h2>/,
-  'public-profile full song list must have a visible section title',
+  /soridraw-explore-profile-public-head-234[\s\S]*?<span>PUBLIC<\/span>[\s\S]*?<h2>전체 곡<\/h2>/,
+  'public-profile full song list must have the renamed visible section title',
 );
 assert.match(
   css,
@@ -207,6 +207,41 @@ assert.match(
   css,
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(54px,5vw,92px\);padding-right:clamp\(54px,5vw,92px\)\}/,
   'PC public profile must use wider side padding for a less crowded layout',
+);
+assert.match(
+  page,
+  /variant\?: 'default' \| 'profilePinnedBanner'/,
+  'pinned public songs must use a dedicated banner card variant without changing ordinary cards',
+);
+assert.match(
+  page,
+  /getExplorePinnedKeywords235[\s\S]*?selected\.moods[\s\S]*?selected\.themes[\s\S]*?selected\.styles[\s\S]*?selected\.sounds[\s\S]*?slice\(0, 4\)/,
+  'pinned banner keywords must be derived locally from existing genre/mood/theme/style/sound data and capped at four',
+);
+assert.match(
+  page,
+  /soridraw-explore-pinned-banner-blur-235[\s\S]*?soridraw-explore-pinned-banner-image-235[\s\S]*?soridraw-explore-pinned-keywords-235/,
+  'pinned banner must render the source artwork, blurred continuation, and keyword area',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-pinned-banner-235\{[\s\S]*?aspect-ratio:2\.2\/1/,
+  'pinned profile banner must use the requested 2.2-to-1 horizontal ratio',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-pinned-banner-image-235\{[\s\S]*?width:45\.455%;height:100%[\s\S]*?\.soridraw-explore-pinned-banner-image-235>img\{[\s\S]*?object-fit:cover/,
+  'pinned artwork must stay proportional in the left square area instead of stretching across the banner',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-pinned-banner-blur-235\{[\s\S]*?filter:blur\(24px\) saturate\(1\.28\) brightness\(\.72\)/,
+  'remaining pinned banner space must be filled by a blurred color continuation of the cover image',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-card--profile-pinned \.soridraw-explore-preview-trigger\{left:22\.727%;width:clamp\(34px,12\.7%,88px\)\}/,
+  'pinned play/equalizer control must stay centered on the left artwork and scale to that artwork',
 );
 assert.doesNotMatch(
   page,
@@ -381,3 +416,7 @@ console.log('APP234_EXPLORE_PROFILE_FULL_LIST_LABEL=PASS');
 console.log('APP234_EXPLORE_PROFILE_PC_SIX_TO_THREE_RATIO=PASS');
 console.log('APP234_EXPLORE_PROFILE_ODD_COLUMN_HALF_ROUND_UP=PASS');
 console.log('APP234_EXPLORE_PROFILE_SHRINK_RATIO=PASS');
+console.log('APP235_EXPLORE_PINNED_BANNER_RATIO=PASS');
+console.log('APP235_EXPLORE_PINNED_BLUR_CONTINUATION=PASS');
+console.log('APP235_EXPLORE_PINNED_KEYWORDS_LOCAL_ONLY=PASS');
+console.log('APP235_EXPLORE_SECTION_LABELS_RENAMED=PASS');

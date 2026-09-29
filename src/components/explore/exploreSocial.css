@@ -13,9 +13,6 @@
 .soridraw-explore-like-button .soridraw-explore-spinner{width:14px;height:14px}
 @keyframes soridraw-explore-like-heart-pop{0%{transform:scale(.9)}55%{transform:scale(1.1) translateY(-1px)}100%{transform:scale(1)}}
 
-.soridraw-explore-pin-badge{position:absolute;top:10px;left:10px;display:grid;place-items:center;width:29px;height:29px;border-radius:10px;background:rgba(10,10,12,.72);color:#ffb400;backdrop-filter:blur(10px)}
-.soridraw-explore-pin-badge svg{width:14px;height:14px;fill:currentColor}
-
 .soridraw-explore-social-notice{position:fixed;z-index:120;top:72px;left:50%;transform:translateX(-50%);max-width:min(440px,calc(100vw - 28px));padding:10px 14px;border:0!important;outline:0!important;border-radius:13px;background:rgba(38,38,41,.96);box-shadow:0 10px 32px rgba(0,0,0,.28);color:rgba(255,255,255,.92);font-size:12px;font-weight:750;text-align:center;pointer-events:none}
 
 .soridraw-explore-profile-toolbar{display:flex;align-items:center;gap:10px;margin:0 0 28px;color:rgba(235,235,240,.48);font-size:13px;font-weight:800}
@@ -42,8 +39,11 @@
 .soridraw-explore-follow-button .soridraw-explore-spinner{width:15px;height:15px}
 .soridraw-explore-profile-section-label{display:flex;align-items:center;gap:7px;margin:0 0 16px;color:rgba(235,235,240,.52);font-size:12px;font-weight:800}
 .soridraw-explore-profile-section-label svg{width:14px;height:14px;color:#ffb400;fill:currentColor}
+.soridraw-explore-profile-pinned-track-231{margin-bottom:30px}
 
 @media (max-width:720px){
+.soridraw-explore-profile-pinned-track-231{grid-template-columns:none!important;grid-auto-flow:column;grid-auto-columns:calc((100% - 10px)/2);gap:10px;align-items:start;width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.soridraw-explore-profile-pinned-track-231::-webkit-scrollbar{display:none}
 .soridraw-explore-profile-toolbar{margin-bottom:16px}
 .soridraw-explore-profile-head{align-items:flex-start;gap:16px;min-height:0;margin-bottom:28px;padding:8px 2px 14px}
 .soridraw-explore-profile-avatar{width:76px;height:76px;min-width:76px;font-size:24px}
@@ -58,7 +58,6 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-like-button{color:rgba(25,25,28,.45)}
 :root[data-soridraw-theme="light"] .soridraw-explore-like-button:hover:not(:disabled){color:rgba(20,20,22,.86)}
 :root[data-soridraw-theme="light"] .soridraw-explore-like-button.is-liked{color:#d84b58}
-:root[data-soridraw-theme="light"] .soridraw-explore-pin-badge{background:rgba(245,245,246,.88);color:#b87c00}
 :root[data-soridraw-theme="light"] .soridraw-explore-social-notice{background:rgba(36,36,39,.94);color:#fff}
 :root[data-soridraw-theme="light"] .soridraw-explore-profile-toolbar{color:rgba(25,25,28,.48)}
 :root[data-soridraw-theme="light"] .soridraw-explore-back-button{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.72)}

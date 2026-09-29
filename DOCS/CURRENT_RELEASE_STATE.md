@@ -1,3 +1,43 @@
+## 0IZ. Explore 최신 8열 + 추천 주제형 가로 레일 (2026-09-29 KST)
+
+상태: **사용자 새 UI 지시 반영 / 코드 수정 완료 / Audit 전 / PREVIEW 미배포**
+
+사용자 기준:
+- PC 30인치 전체화면급 최대 폭에서 **최신 Feed는 한 줄 8곡**.
+- 창을 줄일 때 기존 5→4→3→2 반응형 축소 흐름은 유지.
+- 추천 Feed는 한 주제당 **최대 20곡**, 최대 화면에서 **7곡 노출 + 좌/우 버튼으로 가로 이동**.
+- 주제는 SORIDRAW 추천, 장르별 추천처럼 확장 가능한 구조.
+- 카드의 좋아요 / 다음곡 적용 / 공유 / 더보기 버튼은 PC에서 조금 더 크게.
+- 상세 기능/정보는 기존 더보기 액션 시트를 그대로 사용.
+
+구현:
+- `src/pages/ExplorePage.tsx` commit `f7d55d867378cc0bcda2c6078ef4cc3c05da769f`.
+- `src/components/explore/explore.css` commit `2bd721b73abaeb482c7a12a774d9590b8749f76c`.
+- `src/components/explore/exploreSocial.css` commit `024d804caa38fa63dc677628f3fa8d5bf9884374`.
+- verifier `scripts/verify-221-explore-feed-layout.mjs` commit `fa8e1f946681b3505f9c6c7fd9d46d4307f8750d`.
+- audit workflow verifier 등록 commit `b5b14ffbc7c57c7895fa7f76429fcbeda9acc7f5`.
+
+레이아웃:
+- 최신: >=1800px에서 8열. 1600~1799px는 기존 5열, 1100~1599px 4열, 721~1099px 3열, <=720px 2열.
+- 추천: >=1800px 7개, 1600~1799px 5개, 1100~1599px 4개, 721~1099px 3개, <=720px 2개.
+- 추천 각 레일은 최대 20곡. 첫 레일 `SORIDRAW 추천`, 이후 현재 로드된 Feed의 장르를 이용한 장르 추천 레일을 생성.
+- 좌/우 버튼 + native horizontal scroll 사용.
+
+비용/데이터:
+- **새 API 호출 / 새 Firestore read/write / 새 D1 read/write 없음**.
+- 추천 레일은 기존 Explore가 이미 캐시/로드한 최대 40곡에서 프론트에서만 재배열.
+- 추천/최신/인기/검색/공개프로필 데이터 소스와 좋아요 동기화 로직은 비변경.
+- Worker / Functions / Rules / 사용자 데이터 구조 비변경.
+
+보호:
+- app219 Music Note/Library 장르 접기 PASS 유지.
+- Explore 좋아요/공개 카운트/개인 하트/캐시 비용 구조 수정 금지.
+- 모바일 기존 2열 및 기존 카드 기능 보호.
+
+다음:
+- Release System Audit에서 TypeScript / Build / APP220 verifier / like regression 확인.
+- PASS 시 app220으로 PREVIEW Hosting만 배포 후 PC 최대폭 8열/추천 7개 레일/축소 반응형 실화면 확인.
+
 ## 0IY. PREVIEW app219 · Music Note/Library 장르 접기 사용자 실화면 PASS (2026-09-29 KST)
 
 - 사용자 실화면 확인 결과: **통과**.

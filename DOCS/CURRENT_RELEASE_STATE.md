@@ -1,3 +1,37 @@
+## 0IX. app218 실화면 FAIL · 실제 분할 엔진 위치 확인 / Music Note·Library 장르 접기 병목 수정 (2026-09-29 KST)
+
+상태: **사용자 2개 영상 재확인 / app218 FAIL / 실제 Split Workspace 병목 확인 / app219 후보 수정+verifier 완료 / Audit 전**
+
+영상 판정:
+- 첫 영상: Music Note / Library split 상태에서 장르 접기가 눈에 띄게 끊김.
+- 둘째 영상: 같은 Builder 장르 카드인데 Recent split에서는 정상적으로 부드러움.
+- 따라서 공용 GenreHierarchySelector 자체가 아니라 **오른쪽 결과 페이지 종류에 따라 추가되는 Split Workspace 측 처리**를 우선 원인으로 재분류.
+
+정확한 실제 위치:
+- `src/components/studio/LiteStudioSplitWorkspace.tsx`와 fallback `StudioSplitWorkspace.tsx`에 장르 카드 높이를 감시하는 `ResizeObserver`가 존재.
+- 이 감시는 과거 생성결과 제목 높이를 접힌 장르 카드와 맞추기 위한 cross-pane 보정.
+- 장르가 펼쳐져 있을 때는 `data-expanded=true`라 동기화를 건너뛰지만, **접기를 누르는 즉시 false가 되어 220ms 접힘 애니메이션의 매 프레임마다 ResizeObserver가 실행**됨.
+- 각 프레임마다 장르 카드 `getBoundingClientRect()`를 읽고 오른쪽 result pane에 `--soridraw-studio-top-card-height`를 다시 씀.
+- Music Note / Library는 오른쪽 DOM이 크기 때문에 이 inherited custom-property write가 큰 결과 트리의 style/layout 계산을 반복시켜 버벅임이 커짐.
+- Recent는 오른쪽 결과 트리가 상대적으로 가벼워 같은 오래된 경로가 있어도 체감 문제가 작음.
+- 현재 preview CSS에는 `--soridraw-studio-top-card-height` 소비자가 남아 있지 않고, Music Note / Library 페이지는 생성결과 제목 높이 맞춤 계약도 사용하지 않음.
+
+app219 후보 수정:
+- app218에서 넣었던 공용 `GenreHierarchySelector` 접기 fast-path는 효과가 없었으므로 **원복**: `3143d9d8646ef078f0a38a6d48e89007f134482e`.
+- Lite 실제 split 엔진 수정: `b65141ff22e27e78b0df86f3d7bb63df38d29404`.
+- Legacy/fallback split 엔진 동일 보호: `4a8c852c2e9cc2f25cd9b8694e7eb3952b2d172a`.
+- verifier: `b821f96d773b8a32c3e7a9f604532731bd7ddb89`.
+- Music Note / Library workspace에서는 장르 카드 top-height ResizeObserver 자체를 연결하지 않음.
+- stale `--soridraw-studio-top-card-height`도 제거.
+- Recent/Create의 기존 top-card sync는 그대로 유지.
+- 장르 220ms 공통 모션, 높이 측정, 카드 디자인/위치/크기, splitter geometry, 생성바, 데이터/백엔드 모두 비변경.
+
+검증 계획:
+- `APP219_SPLIT_MUSICNOTE_LIBRARY_GENRE_OBSERVER_OFF=PASS`.
+- `APP219_RECENT_TOP_CARD_SYNC_PRESERVED=PASS`.
+- TypeScript / Build / 전체 release audit PASS 후 PREVIEW app219만 배포.
+- 실화면 기준: Recent는 현재 속도 유지, Music Note/Library 장르 접기만 Recent와 같은 수준으로 부드러워져야 함.
+
 ## 0IW. app217 실화면 FAIL · 장르 접기 로컬 fast-path 수정 (2026-09-29 KST)
 
 상태: **사용자 영상 기준 app217 FAIL / 최근 생성곡 정상 / Music Note·Library에서 장르 '접기'만 느림 / app218 수정 완료 / Audit PASS / PREVIEW app218 배포 완료 / 사용자 실화면 확인 대기**

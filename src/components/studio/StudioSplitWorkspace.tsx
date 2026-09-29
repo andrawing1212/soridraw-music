@@ -229,6 +229,16 @@ export default function StudioSplitWorkspace({
   }, []);
 
   const syncResultTitleHeight = useCallback(() => {
+    // app219 — Music Note / Library result pages do not use the generated-title
+    // height parity contract. Do not let their large result trees participate in
+    // the Genre card's collapse ResizeObserver loop.
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
@@ -1170,6 +1180,12 @@ export default function StudioSplitWorkspace({
     const result = resultRef.current;
     if (!builder || !result || typeof ResizeObserver === 'undefined') return;
 
+    if (workspaceView === 'music-note' || workspaceView === 'library') {
+      result.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     let observedCard: HTMLElement | null = null;
     const observer = new ResizeObserver(() => syncResultTitleHeight());
     const connect = () => {
@@ -1197,7 +1213,7 @@ export default function StudioSplitWorkspace({
       result.style.removeProperty('--soridraw-studio-top-card-height');
       lastTopCardHeightRef.current = null;
     };
-  }, [syncResultTitleHeight]);
+  }, [syncResultTitleHeight, workspaceView]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {

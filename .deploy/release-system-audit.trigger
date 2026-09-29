@@ -1,7 +1,7 @@
-release_system_audit=2026-09-30-app245-static-isolation
-source_head=7244d4a27c3c0ffd250ef24b189368f4176b4319
+release_system_audit=2026-09-30-app245-static-final-isolation
+source_head=e3841a930008c281e0ad212aa1fb681febadc43f
 app_version=245
-scope=diagnose_remaining_static_audit_blocker_after_worker_success
+scope=diagnose_remaining_static_syntax_or_final_guard
 worker_run=36626448310
 worker_result=success
 runtime_change=false

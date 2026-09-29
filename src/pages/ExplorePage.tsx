@@ -6,7 +6,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, EllipsisVertical, ExternalLink, Heart, Loader2, Music2, NotebookTabs, Pencil, Pin, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -387,6 +387,143 @@ const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   const title = normalizeExploreDisplayTitle218(titleSource) || '제목 없는 곡';
   return { genre, title };
 };
+
+type ExploreRecommendationSection = {
+  id: string;
+  title: string;
+  subtitle: string;
+  tracks: ExploreTrack[];
+};
+
+const readExploreRecommendationGenre220 = (track: ExploreTrack) => {
+  const displayGenre = getExploreCardDisplayTitle(track).genre.replace(/^\[|\]$/g, '').trim();
+  return displayGenre || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim();
+};
+
+// app220 — Recommendation rows are composed entirely from the already-loaded
+// Explore feed. No topic row performs its own fetch/read: the current cached
+// 40-card feed remains the single data source, and every row is capped at 20.
+const buildExploreRecommendationSections220 = (items: ExploreTrack[]): ExploreRecommendationSection[] => {
+  const source = items.slice(0, 40);
+  if (!source.length) return [];
+
+  const sections: ExploreRecommendationSection[] = [{
+    id: 'soridraw-picks',
+    title: 'SORIDRAW 추천',
+    subtitle: '지금 Explore에서 먼저 들려주고 싶은 곡',
+    tracks: source.slice(0, 20),
+  }];
+
+  const buckets = new Map<string, { label: string; firstIndex: number; tracks: ExploreTrack[] }>();
+  source.forEach((track, index) => {
+    const label = readExploreRecommendationGenre220(track);
+    if (!label) return;
+    const key = label.toLocaleLowerCase();
+    const current = buckets.get(key);
+    if (current) {
+      current.tracks.push(track);
+      return;
+    }
+    buckets.set(key, { label, firstIndex: index, tracks: [track] });
+  });
+
+  [...buckets.values()]
+    .filter((bucket) => bucket.tracks.length >= 2)
+    .sort((a, b) => b.tracks.length - a.tracks.length || a.firstIndex - b.firstIndex)
+    .slice(0, 5)
+    .forEach((bucket) => {
+      sections.push({
+        id: `genre-${bucket.label.toLocaleLowerCase().replace(/[^a-z0-9가-힣]+/g, '-')}`,
+        title: `${bucket.label} 추천`,
+        subtitle: `${bucket.label} 무드로 이어 듣기`,
+        tracks: bucket.tracks.slice(0, 20),
+      });
+    });
+
+  return sections;
+};
+
+function ExploreRecommendationRail({
+  title,
+  subtitle,
+  itemCount,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  itemCount: number;
+  children: React.ReactNode;
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const syncScrollButtons = () => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    setCanScrollLeft(scroller.scrollLeft > 2);
+    setCanScrollRight(scroller.scrollLeft < maxScrollLeft - 2);
+  };
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(syncScrollButtons);
+    const handleResize = () => syncScrollButtons();
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [itemCount]);
+
+  const moveRail = (direction: -1 | 1) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: direction * Math.max(260, scroller.clientWidth * 0.88),
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <section className="soridraw-explore-recommend-section">
+      <header className="soridraw-explore-recommend-head">
+        <div>
+          <span>CURATED</span>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+        <div className="soridraw-explore-recommend-controls" aria-label={`${title} 좌우 이동`}>
+          <button
+            type="button"
+            onClick={() => moveRail(-1)}
+            disabled={!canScrollLeft}
+            aria-label={`${title} 이전 곡 보기`}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => moveRail(1)}
+            disabled={!canScrollRight}
+            aria-label={`${title} 다음 곡 보기`}
+          >
+            <ChevronRight aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+      <div
+        ref={scrollerRef}
+        className="soridraw-explore-recommend-scroll"
+        onScroll={syncScrollButtons}
+      >
+        <div className="soridraw-explore-recommend-track">
+          {children}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function ExploreTrackCard({
   track,
@@ -1668,6 +1805,10 @@ export default function ExplorePage() {
     ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
     : tracks;
 
+  const recommendationSections220 = sort === 'recommended' && !submittedQuery
+    ? buildExploreRecommendationSections220(visibleFeedTracks)
+    : [];
+
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
     const liked = likedTrackIds[moreTrack.id] === true;
@@ -1806,45 +1947,55 @@ export default function ExplorePage() {
     />
   ) : null;
 
+  const renderTrackCard = (
+    track: ExploreTrack,
+    ownerProfileAuthority: ExplorePublicProfile | null = null,
+  ) => {
+    // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
+    // On a public-profile page, the already-loaded profile is the display
+    // authority for that owner's cards. This fixes stale per-track avatar
+    // snapshots without any new server read/write or cache invalidation.
+    const authorityTrack217 = applyExploreCardAvatarAuthority218(
+      track,
+      user,
+      ownerProfileAuthority,
+    );
+    const liked129 = likedTrackIds[authorityTrack217.id] === true;
+    const pair129 = normalizeExploreLikeDisplayPair129(liked129, authorityTrack217.likeCount);
+    const displayTrack129 = pair129.likeCount === authorityTrack217.likeCount
+      ? authorityTrack217
+      : { ...authorityTrack217, likeCount: pair129.likeCount };
+
+    return (
+      <ExploreTrackCard
+        key={authorityTrack217.id}
+        track={displayTrack129}
+        liked={pair129.liked}
+        likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
+        onToggleLike={toggleLike}
+        onOpenProfile={openProfile}
+        onApplyNext={applyExploreTrackToNextSong}
+        onShare={shareExploreTrack}
+        onOpenMore={(selectedTrack) => {
+          setMoreTrack(selectedTrack);
+          setMoreSheetMode('actions');
+          setFolderChoices([]);
+        }}
+      />
+    );
+  };
+
   const renderTrackGrid = (
     items: ExploreTrack[],
     label: string,
     ownerProfileAuthority: ExplorePublicProfile | null = null,
+    density: 'default' | 'latest' = 'default',
   ) => (
-    <section className="soridraw-explore-grid" aria-label={label}>
-      {items.map((track) => {
-        // SORIDRAW_EXPLORE_PROFILE_CARD_AVATAR_AUTHORITY_217_20260928
-        // On a public-profile page, the already-loaded profile is the display
-        // authority for that owner's cards. This fixes stale per-track avatar
-        // snapshots without any new server read/write or cache invalidation.
-        const authorityTrack217 = applyExploreCardAvatarAuthority218(
-          track,
-          user,
-          ownerProfileAuthority,
-        );
-        const liked129 = likedTrackIds[authorityTrack217.id] === true;
-        const pair129 = normalizeExploreLikeDisplayPair129(liked129, authorityTrack217.likeCount);
-        const displayTrack129 = pair129.likeCount === authorityTrack217.likeCount
-          ? authorityTrack217
-          : { ...authorityTrack217, likeCount: pair129.likeCount };
-        return (
-          <ExploreTrackCard
-            key={authorityTrack217.id}
-            track={displayTrack129}
-            liked={pair129.liked}
-            likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
-            onToggleLike={toggleLike}
-            onOpenProfile={openProfile}
-            onApplyNext={applyExploreTrackToNextSong}
-            onShare={shareExploreTrack}
-            onOpenMore={(selectedTrack) => {
-              setMoreTrack(selectedTrack);
-              setMoreSheetMode('actions');
-              setFolderChoices([]);
-                      }}
-          />
-        );
-      })}
+    <section
+      className={`soridraw-explore-grid${density === 'latest' ? ' soridraw-explore-grid--latest' : ''}`}
+      aria-label={label}
+    >
+      {items.map((track) => renderTrackCard(track, ownerProfileAuthority))}
     </section>
   );
 
@@ -2093,7 +2244,27 @@ export default function ExplorePage() {
         </>
       ) : (
         <>
-          {renderTrackGrid(visibleFeedTracks, 'Explore 곡 목록')}
+          {sort === 'recommended' && !submittedQuery ? (
+            <div className="soridraw-explore-recommend-feed" aria-label="Explore 추천 모음">
+              {recommendationSections220.map((section) => (
+                <ExploreRecommendationRail
+                  key={section.id}
+                  title={section.title}
+                  subtitle={section.subtitle}
+                  itemCount={section.tracks.length}
+                >
+                  {section.tracks.map((track) => renderTrackCard(track))}
+                </ExploreRecommendationRail>
+              ))}
+            </div>
+          ) : (
+            renderTrackGrid(
+              visibleFeedTracks,
+              'Explore 곡 목록',
+              null,
+              sort === 'latest' && !submittedQuery ? 'latest' : 'default',
+            )
+          )}
           {!submittedQuery && feedNextCursor && (
             <div className="soridraw-explore-load-more">
               <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>

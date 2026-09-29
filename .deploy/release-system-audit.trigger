@@ -1,5 +1,5 @@
-release_system_audit=2026-09-30-app244-profile-social-icons
-source_head=57ee961f02bc2bcfd138e5b9ee2fc8e5ee54a243
+release_system_audit=2026-09-30-app244-profile-social-icons-final
+source_head=9b7a1e54e995c0fedfcdfeb73a29ccc9842fca83
 app_version=244
 deploy=false
 scope=public_profile_youtube_social_link_plus_social_icons

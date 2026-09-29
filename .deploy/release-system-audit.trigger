@@ -1,7 +1,7 @@
-requested_at=2026-09-30T07:35:00+09:00
-requested_by=app248_multipart_preflight_alignment
-product_code_target=a4e226040cb6ee61a1082284fac65f588aedceab
-release_purpose=audit_app248_multipart_preflight_alignment
+requested_at=2026-09-30T08:17:00+09:00
+requested_by=profile_trigger_compaction_post_migration_audit
+product_code_target=9e502806cfb35ce686eefeba763b14417db4ff7e
+release_purpose=audit_shared_d1_profile_trigger_compaction_249
 app_version=248
 preview_only=true
 deploy=false

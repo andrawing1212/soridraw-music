@@ -1,6 +1,6 @@
 ## 0JB. Explore 카드 미리듣기 — hover 재생 / 제목 강조 / 전체 썸네일 이퀄라이저 (2026-09-29 KST)
 
-상태: **사용자 영상 기준 구현 완료 / Audit 전 / PREVIEW 미배포**
+상태: **사용자 영상 기준 구현 완료 / Audit PASS / PREVIEW app222 배포 전**
 
 사용자 기준:
 - 곡 썸네일에 마우스를 올리면 중앙 재생 버튼 표시.
@@ -38,8 +38,14 @@ UI/성능:
 - 재생 클릭 시 음원 CDN 네트워크 사용만 발생.
 
 다음:
-- Release System Audit에서 TypeScript / Build / app222 verifier / Like regression 확인.
-- PASS 시 PREVIEW app222 Hosting만 배포 후 실제 hover/play/2분 자동복귀 실화면 확인.
+- 첫 Audit Run `36551752181`은 기존 `verify-201`이 cover 전체 클릭 경로의 정확한 기존 DOM 문자열을 요구해 Static FAIL. 제품 TypeScript/Build는 PASS였고, 재생 기능 자체 실패가 아님.
+- 기존 cover `className="soridraw-explore-cover-button"` + `onClick={openSuno}` 경로를 그대로 복구하면서 play 버튼은 sibling overlay로 분리.
+- 최종 Audit Run `36552275054` SUCCESS. TypeScript PASS / Build PASS / Static verification PASS / Like regression PASS.
+- 기존 Explore action verifier `APP201_*` PASS, app221 추천 레이아웃 verifier 전체 PASS.
+- `APP222_EXPLORE_HOVER_PLAY_BUTTON=PASS` / `APP222_EXPLORE_ACTIVE_TITLE_COLOR=PASS` / `APP222_EXPLORE_FULL_COVER_EQUALIZER=PASS`.
+- `APP222_EXPLORE_SINGLE_SHARED_AUDIO_ENGINE=PASS` / `APP222_EXPLORE_TWO_MINUTE_AUTO_STOP=PASS` / `APP222_EXPLORE_PREVIEW_NO_FEED_SERVER_READ_WRITE=PASS`.
+- app version commit: `9e7faa81a399b5bd06b0ecfe9f103dc7a1d67163` / app version `222`.
+- 다음: PREVIEW Hosting 배포 후 실제 hover/play/다른 곡 전환/2분 자동복귀 실화면 확인.
 
 ## 0JA. Explore 추천 레일 2차 — 끝단 화살표 / 장르 단일 카테고리 / 추천 크리에이터 (2026-09-29 KST)
 

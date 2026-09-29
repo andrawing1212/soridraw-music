@@ -1,3 +1,16 @@
+## 2026-09-29 — Explore app224 재생버튼 링크 동작 실화면 확인
+
+- PREVIEW app224 배포 완료.
+- release SHA `b284dc558c356637a564ca1f8206f0a85881871c`.
+- Audit `36562762144` SUCCESS / Hosting `36562943756` SUCCESS.
+- 중앙 재생버튼은 썸네일과 동일한 Suno 원본 링크를 연다.
+- SORIDRAW 내부 실제 음원 재생/GlobalPlayer 사용 없음.
+- 앱 내부는 기존 전체-cover 이퀄라이저 + 제목 accent만 로컬 표시.
+- 120초 뒤 시각효과 자동 종료.
+- Feed/Firestore/D1 추가 read/write 0, backend 변경 0.
+- TEST / PRODUCTION 비변경.
+- 다음: 사용자 실화면에서 재생버튼 링크 열림 + 복귀 후 이퀄라이저 표시 확인.
+
 ## 2026-09-29 — Explore app223 재생 실화면 확인
 
 - PREVIEW app223 배포 완료.

@@ -1,8 +1,8 @@
-requested_at=2026-09-30T06:49:00+09:00
-requested_by=app247_worker_preflight_full_alignment
-product_code_target=0cff01db5db5e58392816ca6739548660501f521
-release_purpose=audit_app247_worker_preflight_full_alignment
-app_version=247
+requested_at=2026-09-30T07:25:00+09:00
+requested_by=app248_profile_cost_phase2
+product_code_target=7f142009834536f065706e40334b51f5691f7d7e
+release_purpose=audit_app248_bio_fts_and_dual_media_batch
+app_version=248
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

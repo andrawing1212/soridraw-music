@@ -461,7 +461,7 @@ const buildExploreRecommendationModel221 = (
   };
 };
 
-const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 3_000;
+const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 2_000;
 
 function ExploreRecommendationRail({
   title,
@@ -676,7 +676,7 @@ function ExploreCreatorCard221({
   );
 }
 
-const EXPLORE_PREVIEW_MAX_MS_222 = 120_000;
+const EXPLORE_PREVIEW_MAX_MS_222 = 180_000;
 const EXPLORE_EQ_BUTTON_BAR_COUNT_225 = 5;
 
 function ExploreTrackCard({

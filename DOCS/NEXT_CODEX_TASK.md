@@ -1,3 +1,21 @@
+## 2026-09-30 — app248 실사용 결과 후속
+
+실사용 결과:
+- no-op: PASS.
+- YouTube only: D1 query R0/W0, physical R0/W0.
+- bio only: D1 query R0/W1, physical R9/W9.
+- avatar only: D1 query R0/W1, physical R12/W11.
+- avatar+background batch: `/v1/me/profile-media` 1 request, D1 query R0/W1, physical R12/W11.
+
+다음 작업:
+- query 수는 목표 달성했으므로 더 이상 client/API 요청 수를 건드리지 않는다.
+- 다음 비용 대상은 **physical rows**.
+- live 079 Music Note 구조를 보호하는 profile-only trigger maintenance 후보를 설계.
+- `public_profiles -> explore_derived_profiles -> derived_profile_update/feed -> shared revision` 연쇄를 offline fixture로 계측.
+- bio-only / avatar-only 각각 어떤 trigger가 R/W를 만드는지 분리 측정.
+- no-op, YouTube, 공개/비공개, 좋아요, 팔로우, Music Note publication 정상 경로 보호.
+- shared D1 DROP/CREATE TRIGGER는 사용자 별도 승인 전 실행 금지.
+
 ## 2026-09-30 — app248 프로필 비용 재측정
 
 PREVIEW app248 배포 완료:

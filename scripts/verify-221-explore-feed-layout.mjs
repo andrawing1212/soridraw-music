@@ -103,7 +103,7 @@ assert.match(
 );
 assert.match(
   css,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks,\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
   'SORIDRAW picks mobile rail must show two song cards in the viewport',
 );
 assert.match(

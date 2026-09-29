@@ -499,6 +499,8 @@ const EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228 = 500;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241 = 240;
 const EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241 = 8;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241 = 46;
+const EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242 = 500;
+const EXPLORE_MOBILE_PINNED_CONTROLS_TAP_SHOW_MS_242 = 2_000;
 
 function ExploreRecommendationRail({
   title,
@@ -521,6 +523,7 @@ function ExploreRecommendationRail({
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const mobileAlignTimerRef228 = useRef<number | null>(null);
+  const mobilePinnedControlsTimerRef242 = useRef<number | null>(null);
   const mobilePointerGestureRef241 = useRef<{
     pointerId: number;
     startX: number;
@@ -531,13 +534,45 @@ function ExploreRecommendationRail({
   const suppressRailClickUntilRef241 = useRef(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [mobilePinnedControlsVisible242, setMobilePinnedControlsVisible242] = useState(true);
   const isSongRail228 = !trackClassName.includes('soridraw-explore-recommend-track--creators');
+  const isProfilePinnedRail242 = trackClassName.includes('soridraw-explore-recommend-track--profile-pinned');
   const mobileAlignGroupSize231 = mobileGroupSize;
 
   const clearMobileAlignTimer228 = () => {
     if (mobileAlignTimerRef228.current == null) return;
     window.clearTimeout(mobileAlignTimerRef228.current);
     mobileAlignTimerRef228.current = null;
+  };
+
+  const clearMobilePinnedControlsTimer242 = () => {
+    if (mobilePinnedControlsTimerRef242.current == null) return;
+    window.clearTimeout(mobilePinnedControlsTimerRef242.current);
+    mobilePinnedControlsTimerRef242.current = null;
+  };
+
+  const shouldAutoHidePinnedControls242 = () => (
+    isProfilePinnedRail242
+    && window.innerWidth <= 720
+    && (
+      window.matchMedia('(hover: none)').matches
+      || window.matchMedia('(pointer: coarse)').matches
+    )
+  );
+
+  const schedulePinnedControlsHide242 = (delayMs: number) => {
+    if (!shouldAutoHidePinnedControls242()) return;
+    clearMobilePinnedControlsTimer242();
+    mobilePinnedControlsTimerRef242.current = window.setTimeout(() => {
+      setMobilePinnedControlsVisible242(false);
+      mobilePinnedControlsTimerRef242.current = null;
+    }, delayMs);
+  };
+
+  const revealPinnedControls242 = (visibleMs = EXPLORE_MOBILE_PINNED_CONTROLS_TAP_SHOW_MS_242) => {
+    if (!shouldAutoHidePinnedControls242()) return;
+    setMobilePinnedControlsVisible242(true);
+    schedulePinnedControlsHide242(visibleMs);
   };
 
   const shouldAutoAlignMobileRail228 = () => (
@@ -634,13 +669,29 @@ function ExploreRecommendationRail({
   };
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(syncScrollButtons);
-    const handleResize = () => syncScrollButtons();
+    const frame = window.requestAnimationFrame(() => {
+      syncScrollButtons();
+      if (shouldAutoHidePinnedControls242()) {
+        schedulePinnedControlsHide242(EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242);
+      } else {
+        setMobilePinnedControlsVisible242(true);
+      }
+    });
+    const handleResize = () => {
+      syncScrollButtons();
+      if (shouldAutoHidePinnedControls242()) {
+        schedulePinnedControlsHide242(EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242);
+      } else {
+        clearMobilePinnedControlsTimer242();
+        setMobilePinnedControlsVisible242(true);
+      }
+    };
     window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', handleResize);
       clearMobileAlignTimer228();
+      clearMobilePinnedControlsTimer242();
     };
   }, [itemCount]);
 
@@ -680,6 +731,7 @@ function ExploreRecommendationRail({
 
   const handleRailPointerDown241 = (event: React.PointerEvent<HTMLDivElement>) => {
     clearMobileAlignTimer228();
+    revealPinnedControls242();
     const scroller = scrollerRef.current;
     if (
       !scroller
@@ -751,7 +803,7 @@ function ExploreRecommendationRail({
         </div>
       </header>
       {toolbar}
-      <div className="soridraw-explore-recommend-stage">
+      <div className={`soridraw-explore-recommend-stage${isProfilePinnedRail242 ? ' soridraw-explore-recommend-stage--profile-pinned' : ''}${isProfilePinnedRail242 && !mobilePinnedControlsVisible242 ? ' is-mobile-controls-hidden' : ''}`}>
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--left"
@@ -773,6 +825,10 @@ function ExploreRecommendationRail({
           onClickCapture={handleRailClickCapture241}
           onScroll={() => {
             syncScrollButtons();
+            if (shouldAutoHidePinnedControls242()) {
+              setMobilePinnedControlsVisible242(true);
+              schedulePinnedControlsHide242(EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242);
+            }
             scheduleMobileSongRailAlign228();
           }}
         >

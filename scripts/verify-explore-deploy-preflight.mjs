@@ -56,7 +56,7 @@ const follow246 = canonicalWorker245.slice(follow246Start, follow246End);
 assert.match(follow246, /SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930/);
 assert.match(follow246, /RETURNING uid, follower_count, following_count/);
 assert.ok(follow246.indexOf('fallbackRead') >= 0, '246 follow must retain idempotent cold fallback');
-assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_R2_TARGET_GUARD_246_20260930[\s\S]*?readExploreSharedProfile060\(env, targetUid\)/);
+assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_R2_TARGET_GUARD_246_20260930[\s\S]*?readExploreSharedProfileByUid247\(env, targetUid\)/);
 assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930[\s\S]*?readExploreFollowingR2Bundle/);
 
 const profileEdit246 = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');

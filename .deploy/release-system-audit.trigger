@@ -1,5 +1,5 @@
-explore_profile_pinned_shared_rail_audit=2026-09-30T00:46:00+09:00
-source_head=13a5e9c49d50543903955012966fb29d05e08642
+explore_profile_pinned_shared_rail_audit=2026-09-30T00:48:00+09:00
+source_head=b0a0dc05f429336243657d8b32d5eb77de344b0f
 app_version=232
 deploy=false
 scope=public_profile_pinned_tracks_reuse_shared_recommendation_rail
@@ -24,7 +24,7 @@ equalizer_visual_timeout_ms=180000
 product_page_commit=4e8c3a2a938a76098a290d11c18a1fc92699ec7c
 product_explore_css_commit=5cc794256a0488362788f4b364dcc5dd654eaaef
 product_social_css_commit=8f767537feb40adee4c513befbc591b0a2dfc6c4
-verifier_commit=0b2bae4c37bfb3b28e9120f7c5c3555136b8e73d
+verifier_commit=b0a0dc05f429336243657d8b32d5eb77de344b0f
 version_commit=13a5e9c49d50543903955012966fb29d05e08642
 extra_feed_reads=0
 extra_profile_reads=0

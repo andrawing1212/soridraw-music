@@ -1,5 +1,5 @@
-explore_rail_interaction_audit=2026-09-30T03:52:00+09:00
-source_head=8b1d99f07406b899a6bf9b4a6930451e7ca10b83
+explore_rail_interaction_audit=2026-09-30T03:57:00+09:00
+source_head=57fdd0b89076113fb7993c2bf5571d8d3f8e9731
 app_version=241
 deploy=false
 scope=explore_recommendation_rail_buttons_and_mobile_short_drag_behavior
@@ -25,7 +25,7 @@ equalizer_visual_timeout_ms=210000
 equalizer_route_persistence_preserved=true
 product_page_commit=513776d3baa77606ab5adf4bd1d89d88aff36351
 product_css_commit=8f7c78b33044f01b91a849b5db5d55f99fd3bb65
-verifier_commit=6b04c4197dd3ae10881d4f50416b1bff35eeaba5
+verifier_commit=57fdd0b89076113fb7993c2bf5571d8d3f8e9731
 version_commit=8b1d99f07406b899a6bf9b4a6930451e7ca10b83
 extra_feed_reads=0
 extra_profile_reads=0

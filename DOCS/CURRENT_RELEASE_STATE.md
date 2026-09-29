@@ -1,3 +1,65 @@
+## 0JR. PREVIEW app241 · 좌우 스크롤 버튼 위치/크기 + 0.5초 정렬 + 짧은 드래그 한 곡 이동 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**
+
+사용자 지시:
+- PC Explore/공개프로필 가로 rail의 좌우 스크롤 버튼을 카드 이미지 안이 아니라 바깥 좌우로 이동.
+- PC 버튼 크기를 키우고 색을 조금 더 밝게.
+- 모바일에서는 좌우 버튼이 재생버튼 뒤로 들어가 오작동하지 않도록 가장 위에 표시.
+- 모바일 자동 정렬 대기시간을 1초 → **0.5초**로 단축.
+- 모바일에서 아주 짧고 가벼운 드래그는 바로 이전/다음 한 곡으로 이동.
+- 길게 밀거나 강하게 밀 때는 기존 native momentum 스크롤 유지.
+- 좌우 버튼 클릭 시 뷰포트 비율만큼 어중간하게 이동하지 않고 정확히 인접한 곡 위치로 이동.
+
+app241 수정:
+- 제품 TSX commit: `513776d3baa77606ab5adf4bd1d89d88aff36351`.
+- Explore CSS commit: `8f7c78b33044f01b91a849b5db5d55f99fd3bb65`.
+- verifier 최종 commit: `57fdd0b89076113fb7993c2bf5571d8d3f8e9731`.
+- version commit: `8b1d99f07406b899a6bf9b4a6930451e7ca10b83`.
+- audit head: `bb01f1abfc588021af2275277189d83ffb359ca3`.
+- release SHA: `96102aa3ae986116e0e6cba6bc27a10442417ea6`.
+- app version: **241**.
+
+UI/동작:
+- PC rail 버튼: 46px, `left/right: -23px`, 밝은 dark-gray background, z-index 24.
+- 모바일 rail 버튼: 38px, z-index 40로 재생/이퀄라이저 버튼보다 위.
+- 모바일 auto-align delay: **500ms**.
+- 짧은 드래그 기준: 240ms 이내, 수평 8~46px, 과도한 수직 이동/스크롤이 없을 때 한 곡 단위 이동.
+- 짧은 드래그 직후 생길 수 있는 카드 클릭을 잠깐 차단해 재생버튼 오작동을 방지.
+- 길거나 강한 swipe는 기존 browser/native momentum을 그대로 사용.
+- 좌우 버튼 이동은 각 카드의 실제 `offsetLeft` 기준으로 정확히 이전/다음 카드 위치로 이동.
+- app240 PC 공개프로필 좌우 여백 `clamp(96px,10vw,192px)` 유지.
+- app239 그리드/목록 보기, 모바일 고정곡 1곡, app237 3분30초 이퀄라이저 상태 유지 기능 모두 보존.
+
+검증:
+- 첫 Audit Run `36615355136`은 제품 오류가 아니라 기존 verifier의 과거 `scrollBy` 가정이 남아 있어 FAIL.
+- verifier를 현재 exact-card `scrollTo` 구조에 맞춘 뒤 최종 Audit Run **36615605196 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static release-system verification PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36615857831 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=241`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- UI/클라이언트 제스처 로직만 변경.
+- Feed/Profile/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+다음:
+- PC에서 좌우 버튼이 카드 이미지 바깥에 있고 크기/명도가 적절한지 확인.
+- 모바일에서 버튼이 재생버튼보다 위에 있어 오클릭이 없는지 확인.
+- 버튼 클릭 시 정확히 인접 곡으로 이동하는지 확인.
+- 짧은 가벼운 드래그는 한 곡 이동, 길거나 강한 swipe는 native scroll 유지되는지 확인.
+- 0.5초 정렬 체감 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JS. PREVIEW app240 · 모바일 좌우 스크롤 1초 정렬 + PC 공개프로필 좌우 여백 추가 확대 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

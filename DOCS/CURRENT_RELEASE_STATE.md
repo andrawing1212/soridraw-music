@@ -1,3 +1,53 @@
+## 0JP. PREVIEW app237 · Explore 이퀄라이저 3분30초 + 페이지 이동 후 상태 유지 (2026-09-30 KST)
+
+상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실사용 확인 대기**
+
+사용자 지시:
+- Explore 및 공개프로필에서 재생버튼 클릭 후 작동하는 버튼 내부 이퀄라이저가 다른 페이지를 다녀오면 정지되는 문제 수정.
+- 제한시간 동안에는 다른 페이지를 갔다가 돌아와도 동일 곡의 이퀄라이저 상태가 계속 살아 있어야 함.
+- 자동 해제 제한시간을 3분 → **3분 30초**로 변경.
+
+app237 수정:
+- 제품 commit: `9ff60d45fd1682b19097a1221a963a33d0847f2e`.
+- verifier commit: `db238ac6a3853396ca177069346ec63abe00f4c4`.
+- version commit: `afd9fdff9c618ee8bf35f07141ceb196c791237a`.
+- audit head: `e07468be5b68a4c5eb5be812e61939d20184fc08`.
+- release SHA: `d7a8cffbb2e41cc34976bbceb62e39d67051d6a4`.
+- app version: **237**.
+- `EXPLORE_PREVIEW_MAX_MS_222`: `180_000` → `210_000`.
+- 재생 클릭 시 브라우저 `sessionStorage`에 `trackId + absolute expiresAt`만 저장.
+- Explore가 다른 페이지 이동으로 unmount될 때 React timer만 정리하고 만료 정보는 유지.
+- Explore/공개프로필로 돌아오면 저장된 만료시각이 아직 유효할 때만 해당 곡을 다시 active 상태로 복원하고 남은 시간만 timer 재설정.
+- 페이지 이동/복귀 때문에 3분30초 제한시간이 새로 시작되지 않음.
+- 시간이 이미 끝난 뒤 돌아오면 즉시 일반 재생버튼 상태로 표시.
+- 앱 서버/Firestore/D1에는 상태를 저장하지 않음.
+
+검증:
+- Release System Audit Run **36607372464 SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Static release-system verification PASS.
+- Like candidate regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- Firebase PREVIEW Hosting Run **36607648045 SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `PREVIEW_APP_VERSION=237`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+비용/데이터:
+- 브라우저 로컬 sessionStorage만 사용.
+- Feed/Profile/Firestore/D1 추가 read/write **0**.
+- Worker / Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+
+다음:
+- Explore에서 재생 클릭 → 다른 앱 페이지 이동 → 3분30초 안에 Explore 복귀 시 같은 곡 이퀄라이저가 유지되는지 확인.
+- 공개프로필에서도 같은 방식으로 확인.
+- 3분30초가 지난 뒤 복귀하면 자동으로 재생 아이콘으로 돌아오는지 확인.
+- 실사용 확인 전 TEST/main 승격 금지. PRODUCTION 비변경.
+
 ## 0JO. PREVIEW app236 · 고정 곡 2.8:1 + 더 부드러운 블러/흐림 + 공개곡 게시자 숨김 (2026-09-30 KST)
 
 상태: **사용자 지시 반영 / Audit PASS / Firebase PREVIEW Hosting 배포 완료 / 실화면 확인 대기**

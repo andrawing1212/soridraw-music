@@ -1,3 +1,34 @@
+## 2026-09-30 — profile shared revision retirement 재실측
+
+완료:
+- TEST app124 / PRODUCTION app117 exact Worker source 감사 결과, legacy `readSharedDataRevision031` 호출 0 확인.
+- Feed는 derived cursor, 공개프로필은 shared Profile R2/profile revision을 사용.
+- dead compatibility trigger `soridraw_shared_rev_public_profiles_au_051` 1개만 제거.
+- Verify Run `36646516982` SUCCESS.
+- Apply Run `36646618715` SUCCESS.
+- Post-migration Audit Run `36646690814` SUCCESS.
+- 249 profile triggers / Music Note 079 triggers / main / production unchanged.
+- user data rows mutated 0.
+- app248 / PREVIEW Worker / Hosting 그대로.
+
+재측정:
+1. bio only
+2. avatar only
+3. avatar + background
+
+직전 기준:
+- bio: query R0/W1, physical R6/W9.
+- avatar: query R0/W1, physical R8/W10.
+- dual media: query R0/W1, physical R8/W10.
+
+판정:
+- query W1 유지.
+- physical R/W 감소 폭 확인.
+- 정상 공개/비공개, 좋아요, 팔로우, Music Note 079, UI는 변경 금지.
+- write가 여전히 높으면 profile scope journal / derived state가 현재 direct shared-R2 mutation과 중복인지 먼저 exact source + offline fixture로 확인.
+- 중복이 입증되기 전 journal/state를 제거하지 않는다.
+- 텍스트+이미지 동시 저장의 단일 canonical Profile Save command는 별도 후속 후보.
+
 ## 2026-09-30 — profile trigger compaction 실측
 
 공유 D1 profile trigger source-compaction 적용 완료:

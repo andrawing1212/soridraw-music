@@ -170,8 +170,13 @@ assert.match(
 );
 assert.match(
   css,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks,\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
-  'mobile pinned profile rail must show one featured song while SORIDRAW picks remain two-up',
+  /\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}/,
+  'mobile SORIDRAW picks must remain two-up',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:100%;gap:10px\}/,
+  'mobile pinned profile rail must show one featured song',
 );
 assert.match(
   page,

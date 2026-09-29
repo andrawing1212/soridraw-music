@@ -1,3 +1,16 @@
+## 2026-09-30 — Explore app238 PC 공개프로필 여백 확인
+
+- PREVIEW app238 배포 완료.
+- release SHA `f7be4d02155ecd7107ffba7182c326ac1dd0a974`.
+- Audit Run `36608770923` SUCCESS / Hosting Run `36609010538` SUCCESS.
+- PC 공개프로필 좌우 padding을 `clamp(76px, 7.5vw, 144px)`로 확대.
+- 기존보다 내부 콘텐츠 폭을 더 좁혀 전체 화면이 덜 꽉 차 보이도록 조정.
+- 1100px 이상에서만 적용, 모바일/태블릿은 변경 없음.
+- 고정 곡/전체 곡 카드 수 규칙, 2.8:1 배너, 2초 정렬, 3분30초 이퀄라이저 상태 유지 기능 변경 없음.
+- 추가 서버 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: PC 전체화면에서 여백 체감 확인.
+
 ## 2026-09-30 — Explore app237 이퀄라이저 페이지 이동 유지 확인
 
 - PREVIEW app237 배포 완료.

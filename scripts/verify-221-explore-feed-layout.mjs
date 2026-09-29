@@ -137,7 +137,7 @@ assert.match(
 );
 assert.match(
   css,
-  /\.soridraw-explore-cover-button:hover \.soridraw-explore-preview-trigger[\s\S]*?opacity:1/,
+  /\.soridraw-explore-cover-wrap:hover \.soridraw-explore-preview-trigger[\s\S]*?opacity:1/,
   'hovering a cover must reveal the preview play button',
 );
 assert.match(

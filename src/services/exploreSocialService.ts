@@ -92,6 +92,7 @@ export type ExplorePublicProfile = {
     spotify: string;
     instagram: string;
     tiktok: string;
+    youtube: string;
   };
   followerCount: number;
   followingCount: number;
@@ -106,6 +107,7 @@ export type ExploreProfileDraft = {
   spotifyUrl: string;
   instagramUrl: string;
   tiktokUrl: string;
+  youtubeUrl: string;
 };
 
 export type ExploreFollowState = {
@@ -223,6 +225,7 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
     spotify: String(row?.socialLinks?.spotify || row?.spotifyUrl || row?.spotify_url || '').trim(),
     instagram: String(row?.socialLinks?.instagram || row?.instagramUrl || row?.instagram_url || '').trim(),
     tiktok: String(row?.socialLinks?.tiktok || row?.tiktokUrl || row?.tiktok_url || '').trim(),
+    youtube: String(row?.socialLinks?.youtube || row?.youtubeUrl || row?.youtube_url || '').trim(),
   },
   followerCount: toCount(row?.followerCount ?? row?.follower_count),
   followingCount: toCount(row?.followingCount ?? row?.following_count),
@@ -306,6 +309,7 @@ export const updateExplorePublicProfile = async (
       spotifyUrl: draft.spotifyUrl.trim(),
       instagramUrl: draft.instagramUrl.trim(),
       tiktokUrl: draft.tiktokUrl.trim(),
+      youtubeUrl: draft.youtubeUrl.trim(),
     }),
   });
   return normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);

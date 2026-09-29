@@ -9430,8 +9430,11 @@ async function handleMyProfileUpdate(request, env, cors) {
   const nextGenres = JSON.stringify(genres);
   const nicknameChanged = String(existing.nickname || "") !== nickname;
   const bioChanged = String(existing.bio || "") !== bio;
-  const searchChanged = nicknameChanged || bioChanged;
-  const coreChanged = searchChanged
+  // SORIDRAW_PROFILE_BIO_NO_FTS_248_20260930
+  // Creator search is name/handle based. Bio-only edits must not rewrite the legacy FTS row.
+  const searchChanged = nicknameChanged;
+  const coreChanged = bioChanged
+    || searchChanged
     || handleChanged
     || previousGenres !== nextGenres
     || String(existing.spotify_url || "") !== spotifyUrl
@@ -9818,6 +9821,86 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222(han
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
+// SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930
+async function handleProfileMediaBatchUpload248(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  await enforceUserRateLimit(env, authContext.uid, "profile-media", RATE_LIMITS.profileMedia);
+  if (!env?.PROFILE_MEDIA) throwApi("PROFILE_MEDIA_NOT_CONFIGURED", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC800\uC7A5\uC18C \uC5F0\uACB0\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 503);
+
+  let form = null;
+  try { form = await request.formData(); }
+  catch { throwApi("INVALID_MEDIA_BATCH", "\uC774\uBBF8\uC9C0 \uBB36\uC74C \uC694\uCCAD\uC744 \uC77D\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", 400); }
+
+  const avatar = form?.get("avatar");
+  const background = form?.get("background");
+  const validBlob = (value) => value && typeof value.arrayBuffer === "function";
+  if (!validBlob(avatar) || !validBlob(background)) {
+    throwApi("INVALID_MEDIA_BATCH", "\uD504\uB85C\uD544 \uC0AC\uC9C4\uACFC \uBC30\uACBD \uC774\uBBF8\uC9C0\uAC00 \uBAA8\uB450 \uD544\uC694\uD569\uB2C8\uB2E4.", 400);
+  }
+  if (String(avatar.type || "").toLowerCase() !== "image/webp" || String(background.type || "").toLowerCase() !== "image/webp") {
+    throwApi("INVALID_MEDIA_TYPE", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0\uB294 WEBP \uD615\uC2DD\uB9CC \uC5C5\uB85C\uB4DC\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.", 415);
+  }
+
+  const [avatarBytes, backgroundBytes] = await Promise.all([
+    avatar.arrayBuffer(),
+    background.arrayBuffer(),
+  ]);
+  if (!avatarBytes.byteLength || avatarBytes.byteLength > 700 * 1024) {
+    throwApi("PAYLOAD_TOO_LARGE", "\uD504\uB85C\uD544 \uC0AC\uC9C4 \uC6A9\uB7C9\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4.", 413);
+  }
+  if (!backgroundBytes.byteLength || backgroundBytes.byteLength > 1800 * 1024) {
+    throwApi("PAYLOAD_TOO_LARGE", "\uBC30\uACBD \uC774\uBBF8\uC9C0 \uC6A9\uB7C9\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4.", 413);
+  }
+
+  const now = Date.now();
+  const origin = new URL(request.url).origin;
+  const avatarUrl = `${origin}/v1/profile-media/${encodeURIComponent(authContext.uid)}/avatar?v=${now}`;
+  const backgroundUrl = `${origin}/v1/profile-media/${encodeURIComponent(authContext.uid)}/background?v=${now}`;
+
+  await Promise.all([
+    env.PROFILE_MEDIA.put(getProfileMediaKey(authContext.uid, "avatar"), avatarBytes, {
+      httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
+      customMetadata: { uid: authContext.uid, kind: "avatar", updatedAt: String(now) },
+    }),
+    env.PROFILE_MEDIA.put(getProfileMediaKey(authContext.uid, "background"), backgroundBytes, {
+      httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
+      customMetadata: { uid: authContext.uid, kind: "background", updatedAt: String(now) },
+    }),
+  ]);
+
+  const writeProfile248 = async () => await env.DB.prepare(`
+    UPDATE public_profiles
+    SET avatar_url = ?, background_url = ?, profile_customized = 1, is_public = 1, updated_at = ?
+    WHERE uid = ?
+  `).bind(avatarUrl, backgroundUrl, now, authContext.uid).run();
+
+  let updated = await writeProfile248();
+  if (Number(updated?.meta?.changes || 0) === 0) {
+    await upsertPublicProfileFromFirebase(env, authContext, now);
+    updated = await writeProfile248();
+  }
+  if (Number(updated?.meta?.changes || 0) === 0) {
+    throwApi("PROFILE_NOT_FOUND", "\uD504\uB85C\uD544\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", 409);
+  }
+
+  const patchedBundle = await patchPublicProfileBundle245(env, authContext.uid, {
+    avatarUrl,
+    backgroundUrl,
+    updatedAt: now,
+  });
+
+  let refs = [authContext.uid];
+  if (patchedBundle) {
+    const handle = String(patchedBundle?.body?.data?.profile?.handle || "").trim().replace(/^@+/, "");
+    if (handle) refs.push(handle);
+  } else {
+    try { refs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid); } catch {}
+  }
+  await invalidatePublicProfileFirstViewEdgeCache(request, refs);
+
+  return json({ ok: true, data: { avatarUrl, backgroundUrl, updatedAt: now } }, 200, cors);
+}
+
 async function handleProfileMediaGet(uid, kind, env, cors) {
   // SORIDRAW_PROFILE_MEDIA_R2_PUBLIC_GUARD_246_20260930
   if (!env?.PROFILE_MEDIA) return apiError("PROFILE_MEDIA_NOT_CONFIGURED", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC800\uC7A5\uC18C \uC5F0\uACB0\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 503, cors);
@@ -26419,6 +26502,9 @@ async function handleExploreRequest(request, env) {
       return await handleExploreAccess(request, env, cors);
     }
     const segments = url.pathname.split("/").filter(Boolean);
+    if (request.method === "PUT" && url.pathname === "/v1/me/profile-media") {
+      return await handleProfileMediaBatchUpload248(request, env, cors);
+    }
     if (request.method === "PUT" && segments.length === 4 && segments[0] === "v1" && segments[1] === "me" && segments[2] === "profile-media") {
       return await handleProfileMediaUpload(request, env, cors, decodeURIComponent(segments[3]));
     }

@@ -1,3 +1,19 @@
+## 2026-09-30 — Explore app236 고정 곡 2.8:1 + 게시자 표시 분리 실화면 확인
+
+- PREVIEW app236 배포 완료.
+- release SHA `31edf7ed5aae2c4da433f265b8af321d74c6aace`.
+- Audit Run `36605327404` SUCCESS / Hosting Run `36605630565` SUCCESS.
+- 고정 곡 배너: **2.8:1**.
+- 오른쪽: 같은 cover 기반 32px blur + 낮춘 opacity/brightness/contrast + 추가 흐림/안개층.
+- 왼쪽 원본 이미지는 정사각형 비율 유지.
+- 공개프로필 공개 곡: 게시자 아바타/이름 숨김.
+- 소유자의 좋아요 곡: 게시자 아바타/이름 유지.
+- Feed/추천/최신/인기 게시자 표시는 변경 없음.
+- 좌우 rail/버튼, 모바일 2초 정렬, PC 고정3/전체6 반응형 비율 유지.
+- 추가 Feed/Profile/Firestore/D1 read/write 0.
+- TEST / PRODUCTION 비변경.
+- 다음: PC/모바일에서 2.8:1 배너 체감, 흐림 강도, 공개곡/좋아요 곡 게시자 표시 차이 확인.
+
 ## 2026-09-30 — Explore app235 고정 곡 피처 배너 실화면 확인
 
 - PREVIEW app235 배포 완료.

@@ -1,4 +1,4 @@
-name: TEMP 249 Apply Profile Trigger Compaction
+name: TEMP 250 Apply Profile Shared Revision Retirement
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: soridraw-249-profile-trigger-compaction
+  group: soridraw-250-profile-revision-retire
   cancel-in-progress: false
 
 jobs:
   migrate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -24,81 +24,126 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-          fetch-depth: 1
-
-      - name: Offline verified migration
-        run: python scripts/verify-249-profile-source-trigger-compaction.py
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      - name: Offline retirement verification
+        run: node scripts/verify-250-profile-shared-revision-retire.mjs
+
+      - name: Exact TEST and PRODUCTION compatibility gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          node <<'NODE'
+          const {execFileSync}=require('child_process');
+          const show=(ref,path)=>execFileSync('git',['show',ref+':'+path],{encoding:'utf8',maxBuffer:32*1024*1024});
+          const path='cloudflare/explore-worker/canonical/preview-worker.js';
+          function functionText(src,name){
+            for(const prefix of ['async function ','function ']){
+              const start=src.indexOf(prefix+name+'(');
+              if(start<0)continue;
+              const brace=src.indexOf('{',start);
+              let depth=0,quote='',escape=false,comment='';
+              for(let i=brace;i<src.length;i++){
+                const ch=src[i],next=src[i+1];
+                if(comment==='line'){if(ch==='\n')comment='';continue;}
+                if(comment==='block'){if(ch==='*'&&next==='/'){comment='';i++;}continue;}
+                if(quote){if(escape)escape=false;else if(ch==='\\')escape=true;else if(ch===quote)quote='';continue;}
+                if(ch==='/'&&next==='/'){comment='line';i++;continue;}
+                if(ch==='/'&&next==='*'){comment='block';i++;continue;}
+                if(ch==='"'||ch==="'"||ch==='`'){quote=ch;continue;}
+                if(ch==='{')depth++;
+                if(ch==='}'&&--depth===0)return {start,end:i+1,text:src.slice(start,i+1)};
+              }
+            }
+            throw new Error('missing function '+name);
+          }
+          for(const [label,ref,versionExpected] of [['TEST','origin/main','124'],['PRODUCTION','origin/production','117']]){
+            const src=show(ref,path);
+            const version=String(JSON.parse(show(ref,'public/app-version.json')).version);
+            if(version!==versionExpected) throw new Error(label+' version drift '+version);
+            const legacy=functionText(src,'readSharedDataRevision031');
+            const rest=src.slice(0,legacy.start)+src.slice(legacy.end);
+            if(rest.includes('readSharedDataRevision031(')) throw new Error(label+' still consumes global shared revision');
+            if(!functionText(src,'ensureExploreSharedFeedCache031').text.includes('syncDerivedFeeds032')) throw new Error(label+' feed compatibility not derived');
+            if(!functionText(src,'handleExploreFeedRevision019').text.includes('syncDerivedCache032')) throw new Error(label+' feed revision not derived');
+            if(!src.includes('readExploreSharedProfile060')) throw new Error(label+' shared profile R2 reader missing');
+            console.log(label+'_PROFILE_SHARED_REVISION_UNUSED=PASS');
+          }
+          NODE
+
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Guard, migrate profile triggers only, verify, rollback on failure
+      - name: Guard, retire one dead trigger, verify, rollback on failure
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          MIG="$PWD/migrations/20260930_01_profile_source_trigger_compaction.sql"
+          MIG="$PWD/migrations/20260930_02_profile_shared_revision_retire.sql"
           test -f "$MIG"
 
           query() {
             node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$1" --json
           }
 
-          TARGETS="'explore032_profile_update','explore032_profile_delete','explore032_derived_profile_update','explore032_derived_profile_feed'"
-          PROTECTED="'explore032_derived_track_insert','explore079_music_note_derived_track_insert','explore032_derived_track_update','explore079_music_note_derived_track_update','soridraw_shared_rev_public_profiles_au_051'"
+          TARGET="'soridraw_shared_rev_public_profiles_au_051'"
+          PROTECTED="'explore032_profile_update','explore032_profile_delete','explore032_derived_profile_update','explore032_derived_profile_feed','explore032_derived_track_insert','explore079_music_note_derived_track_insert','explore032_derived_track_update','explore079_music_note_derived_track_update'"
 
-          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGETS,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/before.json"
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGET,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/before.json"
+          query "SELECT revision,updated_at FROM explore_shared_revision WHERE scope='global' LIMIT 1;" > "$RUNNER_TEMP/revision-before.json"
 
           node <<'NODE'
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/before.json','utf8'));
           const rows=raw.flatMap(x=>x.results||[]);
           const by=new Map(rows.map(r=>[String(r.name||''),String(r.sql||'')]));
-          const targets=[
-            'explore032_profile_update','explore032_profile_delete',
-            'explore032_derived_profile_update','explore032_derived_profile_feed'
-          ];
+          const target='soridraw_shared_rev_public_profiles_au_051';
           const protectedNames=[
+            'explore032_profile_update','explore032_profile_delete',
+            'explore032_derived_profile_update','explore032_derived_profile_feed',
             'explore032_derived_track_insert','explore079_music_note_derived_track_insert',
-            'explore032_derived_track_update','explore079_music_note_derived_track_update',
-            'soridraw_shared_rev_public_profiles_au_051'
+            'explore032_derived_track_update','explore079_music_note_derived_track_update'
           ];
-          for(const name of [...targets,...protectedNames]) if(!by.get(name)) throw new Error('missing live trigger '+name);
-          if(!/LEFT JOIN profile_stats/i.test(by.get('explore032_profile_update'))) throw new Error('live profile-update baseline drift; migration blocked');
-          if(!/OLD\.row_json IS NOT NEW\.row_json/i.test(by.get('explore032_derived_profile_update'))) throw new Error('live derived-profile baseline drift; migration blocked');
-          if(!/avatar_url/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('live profile-feed baseline drift; migration blocked');
-          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert trigger missing; migration blocked');
-          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update trigger missing; migration blocked');
-          if(!/explore_shared_revision/i.test(by.get('soridraw_shared_rev_public_profiles_au_051'))) throw new Error('shared revision compatibility trigger missing; migration blocked');
+          for(const name of [target,...protectedNames]) if(!by.get(name)) throw new Error('missing live trigger '+name);
 
-          const q=(s)=>'"'+String(s).replaceAll('"','""')+'"';
-          const rollback=[
-            ...targets.map(n=>`DROP TRIGGER IF EXISTS ${q(n)};`),
-            ...targets.map(n=>String(by.get(n)).replace(/;?\s*$/,';')),
-          ].join('\n')+'\n';
+          const shared=by.get(target);
+          const normalized=shared.replace(/["`]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+          const expected="create trigger soridraw_shared_rev_public_profiles_au_051 after update on public_profiles begin update explore_shared_revision set revision=revision+1,updated_at=cast(strftime('%s','now') as integer)*1000 where scope='global'; end";
+          if(normalized!==expected) throw new Error('shared profile revision exact baseline drift');
+
+          const profile=by.get('explore032_profile_update')||'';
+          if(!/AFTER\s+UPDATE\s+OF/i.test(profile)||/LEFT\s+JOIN\s+profile_stats/i.test(profile)) throw new Error('249 profile trigger baseline drift');
+          if(!/AFTER\s+UPDATE\s+OF\s+followers\s*,\s*following/i.test(by.get('explore032_derived_profile_update'))) throw new Error('249 follower trigger drift');
+          if(!/WHEN\s+0/i.test(by.get('explore032_derived_profile_feed'))) throw new Error('249 inert feed trigger drift');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_insert'))) throw new Error('079 insert missing');
+          if(!/source_type[\s\S]*music_note/i.test(by.get('explore079_music_note_derived_track_update'))) throw new Error('079 update missing');
+
+          const rollback=shared.replace(/;?\s*$/,';')+'\n';
           fs.writeFileSync(process.env.RUNNER_TEMP+'/rollback.sql',rollback);
           fs.writeFileSync(process.env.RUNNER_TEMP+'/protected.json',JSON.stringify(Object.fromEntries(protectedNames.map(n=>[n,by.get(n)]))));
-          console.log('249_LIVE_PREFLIGHT=PASS');
-          console.log('249_ROLLBACK_CAPTURE=PASS');
-          console.log('079_PROTECTED_BEFORE=PASS');
-          console.log('SHARED_REVISION_PROTECTED_BEFORE=PASS');
-          console.log('USER_DATA_READS=0');
+          console.log('250_LIVE_PREFLIGHT=PASS');
+          console.log('250_ROLLBACK_CAPTURE=PASS');
+          console.log('250_249_PROFILE_PROTECTION_BEFORE=PASS');
+          console.log('250_079_PROTECTION_BEFORE=PASS');
           NODE
 
           migrated=0
           rollback() {
             status=$?
             if [ "$status" -ne 0 ] && [ "$migrated" = 1 ]; then
-              echo '249_VERIFY_FAILED_ROLLBACK=START'
+              echo '250_VERIFY_FAILED_ROLLBACK=START'
               node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/rollback.sql" >/dev/null || true
-              echo '249_ROLLBACK=ATTEMPTED'
+              echo '250_ROLLBACK=ATTEMPTED'
             fi
             exit "$status"
           }
@@ -107,39 +152,35 @@ jobs:
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$MIG"
           migrated=1
 
-          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGETS,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/after.json"
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($TARGET,$PROTECTED) ORDER BY name;" > "$RUNNER_TEMP/after.json"
+          query "SELECT revision,updated_at FROM explore_shared_revision WHERE scope='global' LIMIT 1;" > "$RUNNER_TEMP/revision-after.json"
 
           node <<'NODE'
           const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/revision-before.json','utf8')).flatMap(x=>x.results||[])[0]||{};
+          const after=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/revision-after.json','utf8')).flatMap(x=>x.results||[])[0]||{};
+          if(String(before.revision)!==String(after.revision)||String(before.updated_at)!==String(after.updated_at)) throw new Error('global revision row changed during trigger-only migration');
+
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/after.json','utf8'));
           const rows=raw.flatMap(x=>x.results||[]);
           const by=new Map(rows.map(r=>[String(r.name||''),String(r.sql||'')]));
-          const profile=by.get('explore032_profile_update')||'';
-          const derived=by.get('explore032_derived_profile_update')||'';
-          const feed=by.get('explore032_derived_profile_feed')||'';
-          const del=by.get('explore032_profile_delete')||'';
-
-          if(!/AFTER\s+UPDATE\s+OF/i.test(profile)) throw new Error('249 column-scoped profile trigger not active');
-          if(/LEFT\s+JOIN\s+profile_stats/i.test(profile)) throw new Error('249 profile trigger still reads profile_stats');
-          if(!/UPDATE\s+explore_derived_profiles/i.test(profile)) throw new Error('249 profile projection update missing');
-          if(!/VALUES\('profile:'\s*\|\|\s*NEW\.uid/i.test(profile)) throw new Error('249 profile journal missing');
-          if(!/SELECT\s+'feed'[^;]+WHERE[\s\S]*OLD\.avatar_url/i.test(profile)) throw new Error('249 targeted feed journal missing');
-          if(!/AFTER\s+UPDATE\s+OF\s+followers\s*,\s*following/i.test(derived)) throw new Error('249 follower-only derived trigger not active');
-          if(!/WHEN\s+0/i.test(feed)) throw new Error('249 legacy feed cascade not inert');
-          if(!/VALUES\('profile:'\s*\|\|\s*OLD\.uid/i.test(del) || !/VALUES\('feed'\s*,\s*'profile'/i.test(del)) throw new Error('249 delete compatibility journal missing');
+          if(by.has('soridraw_shared_rev_public_profiles_au_051')) throw new Error('retired trigger still present');
 
           const protectedBefore=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/protected.json','utf8'));
-          for(const [name,sql] of Object.entries(protectedBefore)) {
-            if((by.get(name)||'')!==sql) throw new Error('protected trigger changed: '+name);
-          }
-          console.log('249_PROFILE_SOURCE_TRIGGER=PASS');
-          console.log('249_DERIVED_PROFILE_FOLLOWER_ONLY=PASS');
-          console.log('249_FEED_CASCADE_INERT=PASS');
-          console.log('249_DELETE_COMPATIBILITY=PASS');
-          console.log('079_MUSIC_NOTE_TRIGGERS_UNCHANGED=PASS');
-          console.log('SHARED_REVISION_TRIGGER_UNCHANGED=PASS');
+          for(const [name,sql] of Object.entries(protectedBefore)) if((by.get(name)||'')!==sql) throw new Error('protected trigger changed: '+name);
+
+          console.log('250_PROFILE_SHARED_REVISION_TRIGGER_REMOVED=PASS');
+          console.log('250_GLOBAL_REVISION_ROW_UNCHANGED=PASS');
+          console.log('250_249_PROFILE_TRIGGERS_UNCHANGED=PASS');
+          console.log('250_079_MUSIC_NOTE_TRIGGERS_UNCHANGED=PASS');
           console.log('USER_DATA_ROWS_MUTATED=0');
-          console.log('249_SHARED_D1_TRIGGER_MIGRATION=PASS');
           NODE
 
+          cd ../..
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'
+
           trap - EXIT
+          echo '250_SHARED_D1_TRIGGER_MIGRATION=PASS'

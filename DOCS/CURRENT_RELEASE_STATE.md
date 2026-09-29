@@ -1,14 +1,47 @@
-## 0JW. PREVIEW app247 · 프로필 저장 warm-path 추가 절감 (2026-09-30 KST)
+## 0JW. PREVIEW app247 · 프로필 저장 warm-path 추가 절감 · 배포 완료 (2026-09-30 KST)
 
-상태: **코드 반영 / Release System Audit PASS / PREVIEW 배포 전**
+상태: **PREVIEW Hosting + Explore Worker 배포 완료 / 실사용 비용 측정 대기**
 
 기준:
 - 작업 branch: `preview`
-- 시작 HEAD: `c73005774a9a2c7dd935315c0c8e7e2571295695`
-- app246 Audit: Run `36632631152` SUCCESS
 - app version: **247**
+- app247 제품 기준 commit: `909bbf2b5f6789a3bb723d3c0dd2e33aa9c1c066`
+- Worker preflight verifier 정합화 commits:
+  - `3d0bc1733033638aedfe2ec7f96cdb41e4cb5832`
+  - `0cff01db5db5e58392816ca6739548660501f521`
+- 최종 PREVIEW Hosting trigger commit: `c3007b9dfb8909d2e38e4ddba6aef51c6648c88a`
+- 최종 PREVIEW Worker trigger commit: `14bce1f66cf025ce679e47d7a99ce9e83a8bb143`
 
-이번 추가 절감:
+검증 / 배포:
+- 최초 app247 Release System Audit Run `36633984275` SUCCESS.
+- Worker 배포 전 verifier가 app246 helper 이름을 고정 검사해 app247 direct-UID R2 helper를 오탐한 문제를 확인.
+  - Run `36634712961`: preflight 단계 FAIL, **Worker deploy 단계 진입 전 종료 / live Worker 변경 없음**.
+  - follow R2 verifier 정합화 후 Run `36635377763`: 두 번째 stale profile-save assertion에서 preflight FAIL, **Worker deploy 단계 진입 전 종료 / live Worker 변경 없음**.
+- 두 verifier를 app247 실제 구조에 맞게 최소 수정한 뒤 Release System Audit Run `36635628280` SUCCESS.
+  - TypeScript PASS
+  - Build PASS
+  - 정적 검증 PASS
+  - TEST / PRODUCTION Worker dry-run PASS
+  - shared D1 read-only preflight PASS
+- Firebase PREVIEW Hosting Run `36634768011` SUCCESS.
+  - locked PREVIEW SHA `c3007b9dfb8909d2e38e4ddba6aef51c6648c88a`
+  - Firebase PREVIEW deploy PASS
+  - `preview.soridraw.com` exact build PASS
+  - remote app version **247** PASS
+  - shared RTDB rules deploy SKIPPED
+  - TEST / PRODUCTION unchanged PASS
+- Cloudflare PREVIEW Worker Run `36635851602` SUCCESS.
+  - locked source `0cff01db5db5e58392816ca6739548660501f521`
+  - PREVIEW release preflight PASS
+  - Worker before `3d0f2766-1677-41eb-a3d2-800148f03266`
+  - Worker after `3b9978ef-83bf-438a-8f86-9320a75f17bb`
+  - Feed smoke PASS
+  - Profile smoke PASS
+  - public like-card D1 R0/W0 PASS
+  - warm revision R0/W0 PASS
+  - TEST / PRODUCTION Workers unchanged PASS
+
+app247 추가 절감:
 - 정상 프로필 저장은 shared R2의 현재 프로필을 먼저 사용. 정상 warm 상태에서는 `public_profiles + profile_stats` 사전 SELECT를 하지 않고, 실제 바뀐 필드가 있을 때만 canonical D1 UPDATE 수행.
 - 이미 읽은 shared R2 bundle을 같은 저장 요청 안에서 재사용하여 저장 직전 동일 프로필 R2 재조회도 제거.
 - UID가 확정된 프로필/이미지/팔로우 경로는 handle alias R2를 먼저 조회하지 않고 UID object를 직접 읽도록 변경.
@@ -16,22 +49,24 @@
 - YouTube 링크가 기존 값과 같으면 shared R2 sidecar PUT을 생략. 기존 edge/cache 값 확인 후 실제 변경 때만 저장.
 - 기존 app246의 저장 후 공개프로필 재조회 제거, 이미지 저장 전체 프로필 rebuild 제거, 팔로우 RETURNING 최적화는 그대로 유지.
 
+데이터 / 보호:
+- 사용자 데이터 삭제/백필/마이그레이션 없음.
+- shared D1 schema/trigger 변경 없음.
+- Firestore schema / Functions / Rules 변경 없음.
+- 공개/비공개, 좋아요, 검색, UI/CSS, PC/모바일 레이아웃 변경 없음.
+- main / TEST / PRODUCTION 비변경.
+
 남는 비용과 이유:
 - 닉네임/소개/핸들/장르/기존 3개 소셜처럼 **실제 canonical 프로필 필드가 바뀌면** shared D1 `public_profiles` 1회 UPDATE는 TEST/PRODUCTION 호환 때문에 유지.
 - 그 1회 UPDATE가 현재 shared D1의 기존 `explore032_profile_*` trigger를 통해 여러 physical rows_written으로 증폭될 수 있음.
 - 이미지 변경도 구버전 TEST/PRODUCTION이 같은 사용자 프로필을 읽어야 하므로 이미지 1개당 canonical 프로필 URL UPDATE는 아직 유지.
 - 이 남은 physical write fan-out을 없애려면 기존 trigger 교체 또는 모든 환경의 R2 profile authority 승격이 필요하며, 둘 다 별도 승인 없는 파괴적/호환성 작업으로 app247에서는 실행하지 않음.
 
-보호:
-- 사용자 데이터 삭제/백필/마이그레이션 없음.
-- 공개/비공개, 좋아요, 검색, UI/CSS, PC/모바일 레이아웃 변경 없음.
-- main / TEST / PRODUCTION 비변경.
-
 다음:
-- Release System Audit Run `36633984275` **SUCCESS**. TypeScript / Build / 정적 검증 / TEST·PRODUCTION Worker dry-run / shared D1 read-only preflight PASS.
-- 사용자가 PREVIEW 배포를 요청하면 Worker + Hosting을 app247로 배포.
-- 배포 후 프로필 저장을 **(1) 값 변경 없음 (2) YouTube만 변경 (3) 소개만 변경 (4) 이미지 1개 (5) 이미지 2개**로 나눠 D1/R2 비용 실측.
-- 실제 필드 변경 1회에서 여전히 rows_written이 큰 경우에만 trigger fan-out 별도 유지보수안을 승인 절차로 진행.
+- PREVIEW에서 같은 계정으로 프로필 저장 비용을 **(1) 값 변경 없음 (2) YouTube만 변경 (3) 소개만 변경 (4) 이미지 1개 (5) 이미지 2개** 순서로 실측.
+- 목표: 1번 서버 mutation 0, 2번 canonical D1 R0/W0, 3번 warm-path 저장 전 D1 read 0.
+- 3~5번 physical rows_written 잔량은 기존 shared D1 trigger fan-out과 분리해 기록.
+- TEST 승격은 위 PREVIEW 실사용 검증 후 별도 진행.
 
 ## 0JV. PREVIEW app246 · 프로필/팔로우 비용 1차 실측 최적화 (2026-09-30 KST)
 

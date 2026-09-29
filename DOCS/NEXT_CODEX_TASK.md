@@ -1,10 +1,13 @@
-## 2026-09-29 — app219 실제 Split Workspace 장르 접기 수정 검증/배포
+## 2026-09-29 — app219 장르 접기 작업 완료
 
-- app218 실화면 FAIL: Music Note/Library만 장르 접기 느림, Recent는 정상.
-- 공용 Genre 수정은 원복.
-- 실제 split 엔진의 장르 카드 ResizeObserver가 Music Note/Library 접기 애니메이션 동안 매 프레임 cross-pane 높이 동기화를 하던 경로를 차단.
-- 대상 commits: `3143d9d8646ef078f0a38a6d48e89007f134482e`, `b65141ff22e27e78b0df86f3d7bb63df38d29404`, `4a8c852c2e9cc2f25cd9b8694e7eb3952b2d172a`, verifier `b821f96d773b8a32c3e7a9f604532731bd7ddb89`.
-- 다음: Release System Audit → PASS 시 app219 version bump → PREVIEW Hosting 배포 → Recent/Music Note/Library 장르 접기 실화면 비교.
+- 사용자 실화면 **PASS**.
+- Recent 정상 유지.
+- Music Note / Library 장르 접기 버벅임 해결.
+- 최종 원인/해결은 실제 split workspace의 불필요한 Genre-card top-height observer 제거.
+- PREVIEW app219 / release SHA `ae4b7b4352ca6c080f7bde2bea3b52ca23d25016`.
+- Audit Run `36542639632` SUCCESS.
+- Hosting Run `36542907430` SUCCESS / exact build PASS / TEST·PRODUCTION unchanged.
+- 이 작업은 종료. 다음 사용자 지시 전까지 해당 경로를 정상 기능으로 보호.
 
 ## 2026-09-29 — app217 장르 접기 실화면 확인
 

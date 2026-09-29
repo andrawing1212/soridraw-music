@@ -205,8 +205,8 @@ assert.match(
 );
 assert.match(
   css,
-  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(54px,5vw,92px\);padding-right:clamp\(54px,5vw,92px\)\}/,
-  'PC public profile must use wider side padding for a less crowded layout',
+  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-page--profile\{padding-left:clamp\(76px,7\.5vw,144px\);padding-right:clamp\(76px,7\.5vw,144px\)\}/,
+  'PC public profile must use stronger side gutters for a narrower content frame',
 );
 assert.match(
   page,
@@ -470,3 +470,5 @@ console.log('APP236_EXPLORE_LIKED_TRACK_PUBLISHER_PRESERVED=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_THREE_MINUTES_THIRTY_SECONDS=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ROUTE_PERSISTENCE=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ABSOLUTE_EXPIRY_PRESERVED=PASS');
+
+console.log('APP238_EXPLORE_PROFILE_PC_GUTTERS_INCREASED=PASS');

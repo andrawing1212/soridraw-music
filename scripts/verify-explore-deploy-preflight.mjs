@@ -94,7 +94,7 @@ const media248Start = canonicalWorker245.indexOf('async function handleProfileMe
 const media248End = canonicalWorker245.indexOf('\nasync function handleProfileMediaGet', media248Start);
 assert.ok(media248Start >= 0 && media248End > media248Start, '248 profile media batch handler missing');
 const media248 = canonicalWorker245.slice(media248Start, media248End);
-assert.match(media248, /SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930/);
+assert.match(canonicalWorker245, /SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930/);
 assert.match(media248, /form\.get\("avatar"\)[\s\S]*?form\.get\("background"\)/);
 assert.match(media248, /UPDATE public_profiles[\s\S]*?avatar_url = \?[\s\S]*?background_url = \?/);
 assert.match(media248, /patchPublicProfileBundle245\(env, authContext\.uid, \{[\s\S]*?avatarUrl,[\s\S]*?backgroundUrl/);

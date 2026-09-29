@@ -390,6 +390,19 @@ export default function LiteStudioSplitWorkspace({
       || builderCollapsedRef.current
       || resultCollapsedRef.current
     ) return;
+
+    // app219 — Music Note / Library do not use the generated-result title-height
+    // parity contract. Keeping this stale cross-pane sync active made the Genre
+    // card's ResizeObserver fire on every collapse-animation frame, then forced a
+    // layout read and an inherited custom-property write across the large result
+    // tree. Recent keeps the existing title-height sync unchanged.
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
@@ -407,6 +420,14 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
     if (typeof ResizeObserver === 'undefined' || draggingRef.current) return;
+
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     const genreCard = builderRef.current?.querySelector<HTMLElement>('[data-studio-menu="genre"]') || null;
     if (!genreCard) {
       syncResultTitleHeight();

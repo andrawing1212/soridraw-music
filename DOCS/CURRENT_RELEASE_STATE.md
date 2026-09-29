@@ -1,6 +1,6 @@
 ## 0JB. Explore 카드 미리듣기 — hover 재생 / 제목 강조 / 전체 썸네일 이퀄라이저 (2026-09-29 KST)
 
-상태: **사용자 영상 기준 구현 완료 / Audit PASS / PREVIEW app222 배포 전**
+상태: **사용자 영상 기준 구현 완료 / Audit PASS / PREVIEW app222 배포 완료 / 사용자 실화면 확인 대기**
 
 사용자 기준:
 - 곡 썸네일에 마우스를 올리면 중앙 재생 버튼 표시.
@@ -45,7 +45,13 @@ UI/성능:
 - `APP222_EXPLORE_HOVER_PLAY_BUTTON=PASS` / `APP222_EXPLORE_ACTIVE_TITLE_COLOR=PASS` / `APP222_EXPLORE_FULL_COVER_EQUALIZER=PASS`.
 - `APP222_EXPLORE_SINGLE_SHARED_AUDIO_ENGINE=PASS` / `APP222_EXPLORE_TWO_MINUTE_AUTO_STOP=PASS` / `APP222_EXPLORE_PREVIEW_NO_FEED_SERVER_READ_WRITE=PASS`.
 - app version commit: `9e7faa81a399b5bd06b0ecfe9f103dc7a1d67163` / app version `222`.
-- 다음: PREVIEW Hosting 배포 후 실제 hover/play/다른 곡 전환/2분 자동복귀 실화면 확인.
+- PREVIEW release SHA: `e8c51de1f3370959c2bc25fefe059e05189f74b7`.
+- Firebase PREVIEW Hosting Run: `36552629770` SUCCESS.
+- `FIREBASE_PREVIEW_DEPLOY=PASS` / `PREVIEW_APP_VERSION=222` / `PREVIEW_EXACT_BUILD=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED` / `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Rules 재배포 없음. 사용자 데이터 변경 없음.
+- 주소: `https://preview.soridraw.com/`.
+- 다음: 실제 hover/play/제목 accent/전체 썸네일 equalizer/다른 곡 전환/2분 자동복귀 실화면 확인.
 
 ## 0JA. Explore 추천 레일 2차 — 끝단 화살표 / 장르 단일 카테고리 / 추천 크리에이터 (2026-09-29 KST)
 

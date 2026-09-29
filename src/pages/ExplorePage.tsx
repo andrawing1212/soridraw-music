@@ -715,8 +715,49 @@ function ExploreCreatorCard221({
   );
 }
 
-const EXPLORE_PREVIEW_MAX_MS_222 = 180_000;
+const EXPLORE_PREVIEW_MAX_MS_222 = 210_000;
 const EXPLORE_EQ_BUTTON_BAR_COUNT_225 = 5;
+const EXPLORE_PREVIEW_SESSION_KEY_237 = 'soridraw:explore:preview-visual:v1';
+
+type ExplorePreviewVisualState237 = {
+  trackId: string;
+  expiresAt: number;
+};
+
+const readExplorePreviewVisualState237 = (): ExplorePreviewVisualState237 | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(EXPLORE_PREVIEW_SESSION_KEY_237) || 'null');
+    const trackId = safeText(parsed?.trackId);
+    const expiresAt = Number(parsed?.expiresAt || 0);
+    if (!trackId || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      window.sessionStorage.removeItem(EXPLORE_PREVIEW_SESSION_KEY_237);
+      return null;
+    }
+    return { trackId, expiresAt };
+  } catch {
+    try { window.sessionStorage.removeItem(EXPLORE_PREVIEW_SESSION_KEY_237); } catch {}
+    return null;
+  }
+};
+
+const writeExplorePreviewVisualState237 = (state: ExplorePreviewVisualState237) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(EXPLORE_PREVIEW_SESSION_KEY_237, JSON.stringify(state));
+  } catch {}
+};
+
+const clearExplorePreviewVisualState237 = (trackId?: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (trackId) {
+      const current = readExplorePreviewVisualState237();
+      if (current?.trackId !== trackId) return;
+    }
+    window.sessionStorage.removeItem(EXPLORE_PREVIEW_SESSION_KEY_237);
+  } catch {}
+};
 
 function ExploreTrackCard({
   track,
@@ -971,10 +1012,12 @@ export default function ExplorePage() {
   const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
   const publicLikeRefreshAttemptsRef192 = useRef<Map<string, number>>(new Map());
   const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
-  // app224 — the center play icon is only a second entry point to the existing
-  // Suno link. Keep the in-app feedback visual-only so Explore never attempts
-  // to stream, proxy, archive, or resolve third-party audio.
-  const [activeExplorePreviewTrackId224, setActiveExplorePreviewTrackId224] = useState('');
+  // app237 — keep the visual equalizer alive across Explore route unmounts.
+  // sessionStorage preserves only a tiny local {trackId, expiresAt} marker:
+  // no server read/write, and the original expiration clock never resets.
+  const [activeExplorePreviewTrackId224, setActiveExplorePreviewTrackId224] = useState(
+    () => readExplorePreviewVisualState237()?.trackId || '',
+  );
   const explorePreviewTimerRef224 = useRef<number | null>(null);
 
   const clearExplorePreviewTimer224 = () => {
@@ -983,20 +1026,46 @@ export default function ExplorePage() {
     explorePreviewTimerRef224.current = null;
   };
 
-  const showExploreLinkVisual224 = (track: ExploreTrack) => {
-    clearExplorePreviewTimer224();
-    setActiveExplorePreviewTrackId224(track.id);
-    explorePreviewTimerRef224.current = window.setTimeout(() => {
-      setActiveExplorePreviewTrackId224((current) => current === track.id ? '' : current);
-      explorePreviewTimerRef224.current = null;
-    }, EXPLORE_PREVIEW_MAX_MS_222);
+  const expireExplorePreviewVisual237 = (trackId: string) => {
+    setActiveExplorePreviewTrackId224((current) => current === trackId ? '' : current);
+    clearExplorePreviewVisualState237(trackId);
+    explorePreviewTimerRef224.current = null;
   };
 
-  useEffect(() => () => {
-    if (explorePreviewTimerRef224.current != null) {
-      window.clearTimeout(explorePreviewTimerRef224.current);
-      explorePreviewTimerRef224.current = null;
+  const scheduleExplorePreviewVisualExpiry237 = (trackId: string, expiresAt: number) => {
+    clearExplorePreviewTimer224();
+    const remainingMs = expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      expireExplorePreviewVisual237(trackId);
+      return;
     }
+    explorePreviewTimerRef224.current = window.setTimeout(
+      () => expireExplorePreviewVisual237(trackId),
+      remainingMs,
+    );
+  };
+
+  const showExploreLinkVisual224 = (track: ExploreTrack) => {
+    const expiresAt = Date.now() + EXPLORE_PREVIEW_MAX_MS_222;
+    setActiveExplorePreviewTrackId224(track.id);
+    writeExplorePreviewVisualState237({ trackId: track.id, expiresAt });
+    scheduleExplorePreviewVisualExpiry237(track.id, expiresAt);
+  };
+
+  useEffect(() => {
+    const restored = readExplorePreviewVisualState237();
+    if (restored) {
+      setActiveExplorePreviewTrackId224(restored.trackId);
+      scheduleExplorePreviewVisualExpiry237(restored.trackId, restored.expiresAt);
+    } else {
+      setActiveExplorePreviewTrackId224('');
+    }
+
+    return () => {
+      // Route changes may unmount Explore. Stop only this component timer;
+      // the persisted expiration remains authoritative until 3m30s elapses.
+      clearExplorePreviewTimer224();
+    };
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {

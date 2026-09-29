@@ -105,7 +105,7 @@ console.log('APP221_EXPLORE_RECOMMENDATIONS_LOCAL_ONLY=PASS');
 
 
 assert.match(page, /EXPLORE_PREVIEW_MAX_MS_222\s*=\s*120_000/);
-assert.match(page, /EXPLORE_EQ_BAR_COUNT_222\s*=\s*24/);
+assert.match(page, /EXPLORE_EQ_BUTTON_BAR_COUNT_225\s*=\s*5/);
 assert.match(page, /activeExplorePreviewTrackId224/);
 assert.match(page, /showExploreLinkVisual224/);
 assert.match(page, /setActiveExplorePreviewTrackId224\(track\.id\)/);
@@ -113,7 +113,7 @@ assert.match(page, /window\.setTimeout\([\s\S]*?EXPLORE_PREVIEW_MAX_MS_222/);
 assert.match(page, /isPreviewing=\{activeExplorePreviewTrackId224 === track\.id\}/);
 assert.match(page, /onTogglePreview=\{showExploreLinkVisual224\}/);
 assert.match(page, /soridraw-explore-preview-trigger/);
-assert.match(page, /soridraw-explore-preview-eq-bars/);
+assert.match(page, /soridraw-explore-preview-button-eq/);
 assert.match(page, /<Play aria-hidden="true" \/>/);
 
 const cardStart = page.indexOf('function ExploreTrackCard');
@@ -123,19 +123,31 @@ const card = page.slice(cardStart, pageStart);
 assert.match(card, /const openSuno = \(\) => \{[\s\S]*?window\.open\(openUrl, '_blank', 'noopener,noreferrer'\)/);
 assert.match(
   card,
-  /className="soridraw-explore-cover-button"[\s\S]*?onClick=\{openSuno\}/,
-  'cover click must keep the existing Suno-link behavior',
+  /<div className="soridraw-explore-cover-button">[\s\S]*?<span className="soridraw-explore-cover-shell">/,
+  'cover artwork must remain a non-interactive visual surface',
+);
+assert.doesNotMatch(
+  card,
+  /className="soridraw-explore-cover-button"[\s\S]{0,220}?onClick=/,
+  'cover artwork itself must not open Suno',
 );
 assert.match(
   card,
   /className="soridraw-explore-preview-trigger"[\s\S]*?openSuno\(\);[\s\S]*?onTogglePreview\(track\);/,
-  'center play button must open the same Suno link and then paint local visual feedback',
+  'only the center play control must open the Suno link and then paint local visual feedback',
 );
 assert.match(
   card,
   /className="soridraw-explore-preview-trigger"[\s\S]*?disabled=\{!openUrl\}/,
   'play-link control must be disabled when no external Suno URL exists',
 );
+assert.match(
+  card,
+  /isPreviewing \? \([\s\S]*?soridraw-explore-preview-button-eq[\s\S]*?EXPLORE_EQ_BUTTON_BAR_COUNT_225[\s\S]*?\) : \([\s\S]*?<Play aria-hidden="true" \/>/,
+  'active feedback must replace the play glyph with a button-local equalizer instead of a pause icon',
+);
+assert.doesNotMatch(card, /<Pause|lucide-pause|soridraw-explore-preview-eq|soridraw-explore-cover-open/,
+  'card must not expose pause semantics, full-cover equalizer, or a separate background-link affordance');
 assert.doesNotMatch(page, /useGlobalPlayerControls\(\)|playGlobalTrack|toggleGlobalPlayPause|resolveExplorePreviewAudioUrl222|__exploreCardPreview/,
   'Explore link button must not invoke the in-app audio engine or resolve third-party media');
 assert.doesNotMatch(
@@ -146,39 +158,43 @@ assert.doesNotMatch(
 
 assert.match(
   css,
-  /\.soridraw-explore-preview-trigger\{[\s\S]*?opacity:0[\s\S]*?transform:translate\(-50%,-50%\) scale\(\.86\)/,
-  'preview link control must be hidden until hover/focus/active',
+  /\.soridraw-explore-cover-button\{[\s\S]*?cursor:default;pointer-events:none/,
+  'cover background must be non-interactive',
+);
+assert.doesNotMatch(
+  css,
+  /\.soridraw-explore-cover-button:hover \.soridraw-explore-cover-shell>img/,
+  'non-interactive cover must not retain click-like hover zoom',
+);
+assert.match(
+  css,
+  /\.soridraw-explore-preview-trigger\{[\s\S]*?width:clamp\(56px,30%,76px\)/,
+  'play-link control must be larger than app224',
 );
 assert.match(
   css,
   /\.soridraw-explore-cover-wrap:hover \.soridraw-explore-preview-trigger[\s\S]*?opacity:1/,
-  'hovering a cover must reveal the play-link button',
+  'hovering a cover must reveal the play-link control',
 );
 assert.match(
   css,
-  /\.soridraw-explore-preview-eq\{position:absolute;[\s\S]*?inset:0/,
-  'visual equalizer must cover the full thumbnail',
+  /\.soridraw-explore-preview-button-eq\{[\s\S]*?width:48%;height:48%/,
+  'equalizer feedback must be confined inside the play control',
 );
 assert.match(
   css,
-  /\.soridraw-explore-preview-eq-bars i\{[\s\S]*?animation:soridraw-explore-preview-bar-222/,
-  'equalizer bars must animate only with compositor-friendly transforms',
+  /\.soridraw-explore-preview-button-eq i\{[\s\S]*?animation:soridraw-explore-preview-bar-222/,
+  'button equalizer must keep compositor-friendly transform animation',
 );
-assert.match(
-  css,
-  /@keyframes soridraw-explore-preview-bar-222\{[\s\S]*?transform:scaleY/,
-  'equalizer animation must use transform scaleY instead of layout-height animation',
-);
-assert.match(
-  css,
-  /\.soridraw-explore-card\.is-previewing \.soridraw-explore-card-copy h3\{color:/,
-  'active link-feedback card title must keep the existing accent',
-);
+assert.doesNotMatch(css, /\.soridraw-explore-preview-eq\{|\.soridraw-explore-preview-eq-bars|\.soridraw-explore-card\.is-previewing \.soridraw-explore-card-copy h3/,
+  'full-cover equalizer and card-title active accent must be removed');
 
-console.log('APP222_EXPLORE_HOVER_PLAY_BUTTON=PASS');
-console.log('APP222_EXPLORE_ACTIVE_TITLE_COLOR=PASS');
-console.log('APP222_EXPLORE_FULL_COVER_EQUALIZER=PASS');
-console.log('APP224_EXPLORE_PLAY_BUTTON_OPENS_EXISTING_SUNO_LINK=PASS');
+console.log('APP221_EXPLORE_EXISTING_LAYOUT_PRESERVED=PASS');
 console.log('APP224_EXPLORE_VISUAL_ONLY_NO_AUDIO_ENGINE=PASS');
-console.log('APP224_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS');
-console.log('APP224_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS');
+console.log('APP225_EXPLORE_COVER_BACKGROUND_NONINTERACTIVE=PASS');
+console.log('APP225_EXPLORE_PLAY_BUTTON_ONLY_LINK=PASS');
+console.log('APP225_EXPLORE_PLAY_BUTTON_LARGER=PASS');
+console.log('APP225_EXPLORE_BUTTON_ONLY_EQUALIZER=PASS');
+console.log('APP225_EXPLORE_NO_PAUSE_SEMANTICS=PASS');
+console.log('APP225_EXPLORE_TWO_MINUTE_VISUAL_TIMEOUT=PASS');
+console.log('APP225_EXPLORE_LINK_VISUAL_NO_FEED_SERVER_READ_WRITE=PASS');

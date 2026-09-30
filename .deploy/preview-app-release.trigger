@@ -1,8 +1,8 @@
-requested_at=2026-09-30T11:12:00+09:00
-requested_by=user_app253_symmetric_half_snap
-product_code_target=bf8e4a69f6f8541e95238d5e78ab14e3559d0a12
-release_purpose=deploy_app253_symmetric_half_snap
-app_version=253
+requested_at=2026-09-30T11:31:00+09:00
+requested_by=user_app254_remove_feed_load_more
+product_code_target=396375ac4faacd1566b2e2f9e7c0d0db84485328
+release_purpose=deploy_app254_remove_feed_load_more
+app_version=254
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

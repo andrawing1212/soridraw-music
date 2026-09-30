@@ -823,6 +823,11 @@ function ExploreRecommendationRail({
         <div
           ref={scrollerRef}
           className="soridraw-explore-recommend-scroll"
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'mouse') {
+              revealRailControls251();
+            }
+          }}
           onPointerDown={handleRailPointerDown241}
           onPointerUp={handleRailPointerUp241}
           onPointerCancel={() => {

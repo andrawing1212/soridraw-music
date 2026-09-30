@@ -1,4 +1,4 @@
-requested_at=2026-10-01T08:28:00+09:00
+requested_at=2026-10-01T08:33:00+09:00
 requested_by=user
 target=app276
 scope=my_note_shared_note_recent_favorite_cross_device
@@ -7,3 +7,4 @@ build=true
 focused_regression=true
 normal_navigation_extra_read_required=0
 exact_remote_change_read_only_changed_documents=true
+rerun_after=3ca9d90cd8b2170e8aaf82a867d16339014bc9c8

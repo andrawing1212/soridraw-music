@@ -1221,6 +1221,8 @@ export default function ExplorePage() {
   const [publicationPrivateConfirm, setPublicationPrivateConfirm] = useState(false);
   const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const moreHistoryPushedRef257 = useRef(false);
+  const moreActionBusyRef257 = useRef<'sharedNote' | 'apply' | null>(null);
   const likeHydrationKeyRef = useRef('');
   const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
@@ -1306,22 +1308,59 @@ export default function ExplorePage() {
     setFolderChoices([]);
   }, [profileUid]);
 
+  moreActionBusyRef257.current = moreActionBusy;
+
   useEffect(() => {
     if (!moreTrack || typeof document === 'undefined') return undefined;
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || moreActionBusy !== null) return;
+
+    if (!moreHistoryPushedRef257.current) {
+      window.history.pushState(
+        { ...(window.history.state || {}), soridrawExploreMore257: true },
+        '',
+        window.location.href,
+      );
+      moreHistoryPushedRef257.current = true;
+    }
+
+    const dismissMoreFromHistory257 = () => {
+      moreHistoryPushedRef257.current = false;
       setMoreTrack(null);
       setMoreSheetMode('actions');
       setFolderChoices([]);
-      };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      setMoreActionBusy(null);
     };
-  }, [moreTrack, moreActionBusy]);
+
+    const handlePopState257 = () => {
+      if (!moreHistoryPushedRef257.current) return;
+      dismissMoreFromHistory257();
+    };
+
+    const handleKeyDown257 = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || moreActionBusyRef257.current !== null) return;
+      if (moreHistoryPushedRef257.current) {
+        window.history.back();
+        return;
+      }
+      dismissMoreFromHistory257();
+    };
+
+    window.addEventListener('popstate', handlePopState257);
+    window.addEventListener('keydown', handleKeyDown257);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState257);
+      window.removeEventListener('keydown', handleKeyDown257);
+      document.body.style.overflow = previousOverflow;
+
+      if (moreHistoryPushedRef257.current) {
+        moreHistoryPushedRef257.current = false;
+        window.history.back();
+      }
+    };
+  }, [moreTrack?.id]);
 
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.

@@ -5,6 +5,7 @@ const worker = readFileSync('cloudflare/explore-worker/canonical/preview-worker.
 const actionService = readFileSync('src/services/exploreTrackActionService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
+const publicationService = readFileSync('src/services/explorePublicationService.ts', 'utf8');
 
 function functionRange(source, name) {
   const needles = [`async function ${name}(`, `function ${name}(`];
@@ -50,6 +51,7 @@ assert.doesNotMatch(apply, /\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i,
   'apply-source must remain read-only');
 
 const save = functionRange(worker, 'handleFollowerSaveAccess');
+const publicationBatch = functionRange(worker, 'handleMusicNotePublicationBatch048');
 assert.match(save, /WHERE id = \? AND is_public = 1 AND status = 'published'/,
   'save-access must target one public track');
 assert.match(save, /WHERE follower_uid = \? AND following_uid = \?/,
@@ -60,6 +62,14 @@ assert.equal((save.match(/env\.DB\.prepare/g) || []).length, 2,
   'save-access must stay at exactly two bounded D1 lookups');
 assert.doesNotMatch(save, /\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i,
   'save-access must remain read-only');
+assert.match(worker, /SORIDRAW_FOLLOWER_SAVE_LYRICS_LEGACY_REFRESH_271_20261001/,
+  'worker must include the app271 explicit-mutation legacy lyrics refresh');
+assert.match(publicationBatch, /refreshSourceContent[\s\S]*?fetchFirestoreDocument\(\['favorites', mutation\.sourceId\][\s\S]*?encodeTrackLyrics270\(note\)/,
+  'registered publication refresh must read only the changed owner Music Note and reuse app270 structured lyrics encoding');
+assert.match(publicationBatch, /sets\.push\('lyrics=\?'\)[\s\S]*?UPDATE tracks SET \$\{sets\.join\(','\)\}/,
+  'legacy lyrics refresh must fold into the same one-track publication UPDATE instead of a second D1 write');
+assert.match(publicationService, /refreshSourceContent: pending\.desiredState\.status === 'public'[\s\S]*?pending\.desiredState\.allowFollowerSave/,
+  'client must request source refresh only on an explicit public follower-save mutation');
 assert.match(save, /SORIDRAW_FOLLOWER_SAVE_LINK_SHARE_PARITY_269_20261001/,
   'save-access must preserve the app269 follower-save/link-share parity contract');
 assert.match(worker, /SORIDRAW_MUSIC_NOTE_LYRICS_OBJECT_PARITY_270_20261001/,
@@ -119,4 +129,5 @@ console.log('APP202_SHARED_NOTE_CACHE_FIRST=PASS');
 console.log('APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS');
 console.log('APP269_FOLLOWER_SAVE_LINK_SHARE_PARITY=PASS');
 console.log('APP270_FOLLOWER_SAVE_LYRICS_PARITY=PASS');
+console.log('APP271_FOLLOWER_SAVE_LEGACY_LYRICS_REFRESH=PASS');
 console.log('APP202_LIBRARY_PATH_UNUSED=PASS');

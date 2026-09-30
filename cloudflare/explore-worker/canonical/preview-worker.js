@@ -25006,6 +25006,7 @@ async function syncMusicNotePublicationR2Batch049(env, uid, transitions) {
   }
 }
 
+// SORIDRAW_FOLLOWER_SAVE_LYRICS_LEGACY_REFRESH_271_20261001
 async function handleMusicNotePublicationBatch048(request, env, cors) {
   const authContext = await requireExploreAuth(request.clone());
   let body = null;
@@ -25028,6 +25029,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
       status,
       registered,
       mutationAt,
+      refreshSourceContent: value?.refreshSourceContent === true,
       options: pageSyncPublicationOptions048(value?.options),
     });
   }
@@ -25139,6 +25141,13 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
         const unresolvedTrackIds = new Set();
 
         for (const mutation of registeredMutations) {
+          // app271: when the owner explicitly changes a public follower-save setting,
+          // bypass the no-read warm UPDATE so the same single canonical write can also
+          // refresh legacy structured lyrics from the owner's canonical Music Note.
+          if (mutation.refreshSourceContent) {
+            unresolvedTrackIds.add(mutation.trackId);
+            continue;
+          }
           const previousState = publicationStates[mutation.sourceId];
           const nextValues = {
             is_public: mutation.status === 'public' ? 1 : 0,
@@ -25241,6 +25250,19 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
 
     if (canonicalReadOk) {
       const rowById = new Map(canonicalRows.map((row) => [String(row.id || ''), row]));
+      const refreshedLyricsBySource = new Map();
+      for (const mutation of registeredMutations) {
+        if (!mutation.refreshSourceContent) continue;
+        const row = rowById.get(mutation.trackId);
+        if (!row || String(row.source_type || '') !== 'music_note') continue;
+        try {
+          const note = await fetchFirestoreDocument(['favorites', mutation.sourceId], authContext);
+          const encodedLyrics = note ? encodeTrackLyrics270(note) : '';
+          if (encodedLyrics) refreshedLyricsBySource.set(mutation.sourceId, encodedLyrics.slice(0, 3e4));
+        } catch (error) {
+          console.warn('[SORIDRAW 271] legacy publication lyrics refresh skipped:', String(error?.message || error || 'unknown'));
+        }
+      }
       const direct = [];
       const fallback = [];
       for (const mutation of registeredMutations) {
@@ -25271,12 +25293,14 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
         const wasPublic = previousPublicBySource.has(mutation.sourceId)
           ? Boolean(previousPublicBySource.get(mutation.sourceId))
           : (Number(row.is_public || 0) === 1 && String(row.status || '') === 'published');
+        const refreshedLyrics = String(refreshedLyricsBySource.get(mutation.sourceId) || '');
         const changed = preUpdatedTrackIds.has(mutation.trackId)
           || Number(row.is_public || 0) !== (next.isPublic ? 1 : 0)
           || Number(row.allow_next_song_apply || 0) !== (next.allowNextSongApply ? 1 : 0)
           || Number(row.allow_follower_save || 0) !== (next.allowFollowerSave ? 1 : 0)
-          || Number(row.profile_pinned || 0) !== (next.profilePinned ? 1 : 0);
-        direct.push({ mutation, row, next, wasPublic, changed });
+          || Number(row.profile_pinned || 0) !== (next.profilePinned ? 1 : 0)
+          || Boolean(refreshedLyrics && String(row.lyrics || '') !== refreshedLyrics);
+        direct.push({ mutation, row, next, wasPublic, changed, refreshedLyrics });
       }
 
       // Rare legacy/non-Music-Note rows retain the previous proven behavior.
@@ -25373,6 +25397,10 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
             // profile_pinned is indexed. Mention it only when it truly changes, otherwise
             // SQLite rewrites idx_tracks_owner_profile_order for no semantic reason.
             if (Number(item.row.profile_pinned || 0) !== nextPinned) { sets.push('profile_pinned=?'); values.push(nextPinned); }
+            if (item.refreshedLyrics && String(item.row.lyrics || '') !== item.refreshedLyrics) {
+              sets.push('lyrics=?');
+              values.push(item.refreshedLyrics);
+            }
             sets.push('updated_at=?');
             values.push(now);
             statements.push(env.DB.prepare(`UPDATE tracks SET ${sets.join(',')}
@@ -25413,6 +25441,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
               allow_next_song_apply: next.allowNextSongApply ? 1 : 0,
               allow_follower_save: next.allowFollowerSave ? 1 : 0,
               profile_pinned: next.profilePinned ? 1 : 0,
+              lyrics: item.refreshedLyrics || row.lyrics,
               updated_at: changed ? now : Number(row.updated_at || now),
             };
             const snapshotItem = next.isPublic ? mapTrackRow({

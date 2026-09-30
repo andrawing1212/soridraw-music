@@ -616,6 +616,10 @@ export const flushPendingExplorePublicationsForPageExit = async (user: User): Pr
         trackId: pending.trackId,
         status: pending.desiredState.status,
         registered: pending.baseState.registered,
+        // app271: only an explicit public + follower-save mutation asks the Worker
+        // to refresh canonical source content. Page entry/revisit never sets this.
+        refreshSourceContent: pending.desiredState.status === 'public'
+          && pending.desiredState.allowFollowerSave,
         options: {
 allowNextSongApply: pending.desiredState.allowNextSongApply,
 allowFollowerSave: pending.desiredState.allowFollowerSave,

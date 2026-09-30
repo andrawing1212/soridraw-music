@@ -1,3 +1,25 @@
+## CURRENT TASK — app272 실사용 FAIL 재진단 (2026-10-01 KST)
+
+사용자 판정: **이전 작업 후 실제 화면에서 전혀 변화가 없어 FAIL.**
+
+즉시 기준:
+- app272를 완료로 보지 않는다.
+- D1 글로벌 lyrics parity PASS만으로 제품 정상 판정 금지.
+- 이미 저장된 follower shared_music_note가 그대로 남아 있어 화면이 안 바뀌는 경로를 우선 확인.
+- 먼저 read-only 진단으로 stale 저장본 범위와 실제 불일치 필드를 확정.
+- 새 저장/재저장 경로도 실제 payload -> Firestore -> Catalog/cache -> 상세 hydrate까지 끝단 검증.
+- 좋아요/Feed/공개프로필/분할/UI 등 정상 기능은 변경 금지.
+- 사용자 데이터 bulk rewrite/전체 backfill은 승인 전 금지.
+- TEST/PRODUCTION 승격 금지.
+
+합격선:
+1. 기존 저장본을 열었을 때 필요한 상세가 정상 표시되는 해결 경로가 마련됨.
+2. 같은 곡 재저장 시 deterministic 문서가 실제로 갱신됨.
+3. 한글/외국어 가사, 프롬프트, 키워드가 상세에서 모두 확인됨.
+4. PC/모바일 동일.
+5. 전체 스캔/페이지 진입 read/write/불필요한 서버 비용 증가 없음.
+6. 사용자 실사용 PASS 전 완료 보고 금지.
+
 ## CURRENT TASK — app272 글로벌 공개곡 follower-save 실사용 확인 (2026-10-01 KST)
 
 완료:

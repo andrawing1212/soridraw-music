@@ -1,3 +1,28 @@
+## 2026-10-01 — app263 강한 flick 관성 후 snap 실사용 확인
+
+배포 완료:
+- 작은 이동은 app262 release 0.1초 snap 유지.
+- 강한 touch flick은 release 직후 native momentum을 먼저 자연스럽게 감속.
+- 관성 scroll이 계속되는 동안 0.1초 settle timer를 마지막 inertial scroll 기준으로 다시 예약.
+- 관성 종료 후 0.1초 동안 추가 움직임이 없을 때만 app253 50% nearest-anchor smooth snap.
+- app262 touch pointercancel 보호 유지.
+- PREVIEW App Release Run `36738204376` SUCCESS.
+- preview app version 263 exact verification PASS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 작은 이동 -> app262처럼 release 후 약 0.1초 정렬.
+2. 강한 flick -> 먼저 자연 감속, 그 뒤 최종 정렬 1회.
+3. 급브레이크가 여러 단계로 걸리는 느낌이 없는지.
+4. 정렬 직전/직후 좌우로 흔들리는 느낌이 없는지.
+5. 손가락을 계속 대고 있으면 snap 금지 유지.
+
+판정:
+- 위 항목 PASS면 app263 종료.
+- 강한 flick에서 여전히 흔들리면 timer를 더 덧붙이지 말고 native momentum과 programmatic smooth snap의 소유권 자체를 재검토한다.
+- 서버/좋아요/공개/프로필/More/카드 디자인은 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-10-01 — app262 모바일 rail 실제 release 재확인
 
 배포 완료:

@@ -62,7 +62,8 @@ assert.match(canonicalWorker245, /SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930[\s
 
 const profileEdit246 = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
 assert.doesNotMatch(profileEdit246, /getExplorePublicProfile\(user\.uid\)/, '246 profile save must not re-read the just-saved public profile');
-assert.match(profileEdit246, /const saved = profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile;[\s\S]*?const refreshed: ExplorePublicProfile = \{[\s\S]*?backgroundUrl[\s\S]*?avatarUrl/);
+assert.match(profileEdit246, /const saved = useUnifiedProfileSave252[\s\S]*?saveExplorePublicProfileUnified\([\s\S]*?: profileFieldsChanged247[\s\S]*?updateExplorePublicProfile\(user, normalizedDraft, \{ youtubeChanged: youtubeChanged252 \}\)[\s\S]*?: profile;/);
+assert.match(profileEdit246, /const refreshed: ExplorePublicProfile = \{[\s\S]*?backgroundUrl[\s\S]*?avatarUrl/);
 
 const profile247 = canonicalWorker245.slice(profile245Start, profile245End);
 assert.match(profile247, /SORIDRAW_PROFILE_SAVE_R2_FIRST_247_20260930/);
@@ -83,7 +84,7 @@ assert.match(patch247, /readExploreSharedProfileByUid247\(env, normalizedUid\)/)
 assert.doesNotMatch(patch247, /readExploreSharedProfile060\(env, normalizedUid\)/);
 
 assert.match(profileEdit246, /profileFieldsChanged247/);
-assert.match(profileEdit246, /profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile/);
+assert.match(profileEdit246, /profileFieldsChanged247[\s\S]*?updateExplorePublicProfile\(user, normalizedDraft, \{ youtubeChanged: youtubeChanged252 \}\)[\s\S]*?: profile/);
 
 // app248 profile cost guards.
 assert.match(profile247, /SORIDRAW_PROFILE_BIO_NO_FTS_248_20260930/);

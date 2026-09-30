@@ -1,3 +1,70 @@
+## 0LB. app272 팔로워 공유노트 상세 전달 수정 + legacy 공개곡 자동보정 필요 확인 (2026-10-01 KST)
+
+상태: **app271 실사용 FAIL 판정 / 프롬프트 누락의 실제 저장 경로 수정 app272 PREVIEW 배포 완료 / 기존 공개곡을 사용자에게 하나씩 재설정시키는 방식 폐기 / legacy 공개곡 6건 자동보정은 공유 D1 데이터 write이므로 사용자 승인 대기**
+
+사용자 실사용:
+- 한 번도 공개하지 않은 곡을 follower-save 허용과 함께 새로 공개 후 저장: 가사는 보이지만 프롬프트가 비는 사례.
+- 이미 공개된 곡에서 follower-save만 켜고 저장: 가사와 프롬프트가 모두 비는 사례.
+- 기존곡에서 follower-save를 OFF -> ON으로 다시 실제 반영한 뒤 저장: 가사는 복구되지만 프롬프트는 여전히 비는 사례.
+- 공개곡이 많은 사용자가 모든 곡을 하나씩 다시 토글해야 하는 방식은 제품 요구에 맞지 않으므로 app271의 owner-mutation 의존 복구 방식은 최종 해법으로 채택하지 않음.
+
+read-only 실데이터 진단:
+- Diagnostic Run `36780082471` SUCCESS / 사용자 데이터 write 0.
+- 현재 public + follower-save Music Note canonical rows: **12**.
+- 그중 D1 `lyrics` 누락: **6** / D1 `prompt` 누락: **0**.
+- 누락 6건의 원본 `favorites/{sourceId}`를 exact read-only 대조:
+  - source missing 0.
+  - Firestore 원본 lyrics present **6/6**.
+  - 즉 기존 공개곡 가사 손실은 원본 손실이 아니라 legacy public projection 누락.
+- Shared-copy Diagnostic Run `36780313836` SUCCESS / 사용자 데이터 write 0.
+  - 기존 follower 저장 shared_music_note 10건 대조.
+  - D1 prompt가 존재하는데 저장본 prompt가 비어 있는 건 **7건**.
+  - D1 lyrics가 존재하는데 저장본 lyrics가 비어 있는 건 **1건**.
+  - 따라서 프롬프트 문제는 D1 publication 누락이 아니라 follower-save client/copy 전달 단계 문제로 확정.
+
+app272 수정:
+- `src/pages/ExplorePage.tsx`
+  - Worker의 authorized `saveSource` 전체 스냅샷을 lightweight Feed/More 카드 상태와 분리.
+  - `sharedNoteAuthorizedTrackRef272`에 prompt / lyrics / lyricsParts / style / shareBundle / Suno 정보를 동기적으로 고정.
+  - 폴더 선택 뒤 실제 저장 시 React state 갱신 타이밍에 의존하지 않고 **그 authorized snapshot 자체**를 `saveExploreTrackToSharedNote`에 전달.
+- D1 / Worker API / Firestore 저장 횟수 추가 없음.
+- follower save-access 비용은 기존 그대로 track PK 1 + follow 1 = 2 bounded SELECT / D1 write 0.
+
+검증/배포:
+- app272 code commit: `44fbea7b57eedde378522af95489e24293a8ba61`.
+- legacy verifier compatibility commit: `7336229783e6f0e22b9395815b815a600ec70894`.
+- Release System Audit Run `36780865841`: **SUCCESS**.
+  - TypeScript PASS / Build PASS / app201~272 관련 static regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight read-only PASS.
+- PREVIEW App trigger: `95748a36058321d914e46b9bc7007188b51188bb`.
+- PREVIEW App Release Run `36781099874`: **SUCCESS**.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` app version **272**.
+  - PREVIEW exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - RTDB Rules deploy skipped / Functions / Firestore Rules 변경 없음.
+- app272는 client-only 수정이므로 Worker app271 배포본 유지.
+- 완료된 임시 app272 diagnostic workflow/trigger는 저장소에서 제거 완료.
+
+legacy 기존 공개곡 최종 해법:
+- 사용자가 공개곡을 하나씩 OFF/ON 또는 follower-save 재체크하게 하지 않는다.
+- 앱 업데이트/페이지 진입/재방문 시 전체 scan/read/write도 하지 않는다.
+- 현재 진단으로 확인된 **D1 lyrics 비어 있는 6개 public follower-save row만** canonical Firestore 원본과 대조 후 1회 자동 보정하는 bounded maintenance가 적절함.
+- 계획:
+  - 대상 조건을 exact query로 다시 고정하고 예상 6건이 아니면 fail-closed.
+  - 6개 source document를 모두 read-only 사전 확인하고 owner/source identity + lyrics 존재를 검증.
+  - 검증 완료 후 각 대상 row의 `lyrics`만 기존 app270 인코딩으로 1회 UPDATE.
+  - Firestore write 0 / schema 변경 0 / migration 0 / Feed/profile rebuild 0 / TEST/PRODUCTION deploy 0.
+  - 현재 공유 D1 데이터 write이므로 사용자 명시 승인 전 실행 금지.
+- 이 보정이 끝나면 기존 공개곡도 owner 설정 재저장 없이 follower가 바로 저장 가능.
+- 이미 잘못 저장된 follower shared-note 문서는 app272 이후 같은 곡을 다시 저장하면 deterministic 문서가 full authorized detail로 갱신됨. 이미 저장된 모든 follower 문서를 일괄 수정하는 추가 대량 write는 승인 없이 하지 않음.
+
+다음:
+1. 사용자 승인 시 legacy 6건 targeted D1 lyrics repair를 fail-closed로 실행하고 즉시 read-only 재검증.
+2. 이후 기존 공개곡을 소유자 설정 재토글 없이 follower 계정에서 다시 저장해 가사/프롬프트 확인.
+3. TEST 승격은 별도 사용자 요청 전 금지.
+
 ## 0LA. app271 팔로워 공유노트 가사 보존 + 기존 공개곡 1곡 단위 복구 경로 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **app269에서 키워드/프롬프트는 복구됐지만 가사가 비어 있던 원인 수정 / app270 구조화 가사 보존 추가 / app271 기존 공개곡도 다음 실제 소유자 공개설정 변경 때 같은 1곡 UPDATE 안에서 가사를 재동기화 / PREVIEW Worker + App 배포 완료 / 사용자 실사용 확인 대기**

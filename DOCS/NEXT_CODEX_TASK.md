@@ -1,3 +1,40 @@
+## CURRENT TASK — app272 legacy 공개곡 targeted lyrics repair 승인 대기 (2026-10-01 KST)
+
+현재 판단:
+- app271의 "기존 공개곡은 owner가 설정을 다시 저장해야 복구" 방식은 사용자 실사용 기준 **FAIL**.
+- app272는 follower-save authorized detail snapshot 전달 문제를 수정해 PREVIEW 배포 완료.
+- 실데이터 read-only 진단상 기존 public + follower-save 12건 중 **6건만 D1 lyrics가 비어 있고, 원본 Firestore에는 6/6 lyrics가 존재**.
+- D1 prompt 누락은 0. 기존 saved shared-note의 prompt 누락은 client/copy 전달 문제이며 app272로 수정됨.
+
+배포 기준:
+- app272 code: `44fbea7b57eedde378522af95489e24293a8ba61`.
+- verifier: `7336229783e6f0e22b9395815b815a600ec70894`.
+- Audit Run `36780865841` SUCCESS.
+- PREVIEW App Run `36781099874` SUCCESS / app272 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+사용자 승인 후에만 실행할 데이터 작업:
+- shared D1 canonical `tracks`에서 다음 exact 조건을 만족하는 현재 6건만:
+  - source_type = music_note
+  - public + published
+  - allow_follower_save = 1
+  - lyrics empty
+- 실행 전 count가 예상값과 다르면 중단.
+- 모든 sourceId를 canonical Firestore에서 사전 read-only 검증한 뒤에만 UPDATE.
+- owner/source mismatch / source missing / lyrics missing 하나라도 있으면 write 시작 전 전체 중단.
+- 각 대상 D1 row `lyrics` 1회 UPDATE 외 다른 필드 변경 금지.
+- Firestore write / R2 Feed rebuild / profile rebuild / schema migration / 전체 backfill 금지.
+- TEST/PRODUCTION 비변경.
+- 완료 후 D1 missing lyrics 0과 원본 parity read-only 재검증.
+
+사용자 실사용 합격선:
+1. 기존 공개곡 소유자가 follower-save 설정을 다시 만지지 않음.
+2. follower 계정에서 기존 공개곡을 공유 노트에 저장.
+3. 한글/외국어 가사 + 프롬프트 + 키워드 표시.
+4. 기존 곡을 재저장하면 deterministic shared-note 문서가 갱신.
+5. PC/모바일 동일.
+6. 좋아요/공개프로필/Feed/다음곡 적용/공유 설정 회귀 없음.
+
 ## CURRENT TASK — app271 공유노트 가사 실사용 검증 (2026-10-01 KST)
 
 상태: **코드/감사/PREVIEW Worker/PREVIEW App 배포 완료. 사용자 실기기 확인만 남음.**

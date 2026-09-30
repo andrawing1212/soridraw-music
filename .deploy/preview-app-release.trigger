@@ -1,11 +1,12 @@
-requested_at=2026-09-30T07:38:00+09:00
-requested_by=user_app248_profile_cost_preview_deploy
-product_code_target=a4e226040cb6ee61a1082284fac65f588aedceab
-release_purpose=deploy_app248_bio_fts_and_dual_media_batch
-app_version=248
+requested_at=2026-09-30T10:08:00+09:00
+requested_by=user_app249_unified_profile_save_final
+product_code_target=23b8b368f55d09973051fa86116f2e45640aa659
+release_purpose=deploy_app249_unified_profile_save_252
+app_version=249
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=true
+worker_release_run=36653551593
 functions_redeploy=false
 rules_redeploy=false
 firestore_unchanged=true

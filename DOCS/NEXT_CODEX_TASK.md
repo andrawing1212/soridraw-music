@@ -1,3 +1,20 @@
+## 2026-10-01 — app268 다른 사용자 공유 노트 저장 실사용 확인
+
+PREVIEW 배포 완료:
+- 다른 사용자 곡도 권한 통과 후 canonical Firestore + Music Note Catalog 저장 유지.
+- 저장 성공 뒤 변경곡 1건을 same-device favoritesStore/local instant cache에 즉시 upsert.
+- Music Note를 이미 열어 본 세션에서도 새 공유곡이 바로 표시되도록 수정.
+- app268 exact build PASS.
+- TEST/PRODUCTION 비변경.
+
+다음 확인:
+1. 다른 사용자 곡 + follower-save 허용 + 실제 팔로우 상태에서 새폴더 저장.
+2. Music Note > 공유 노트 > 같은 폴더에 즉시 표시.
+3. 두 번째/세 번째 다른 사용자 곡을 연속 저장해도 누락 없이 누적.
+4. 저장 곡 상세 클릭 app267 정상.
+5. 권한 OFF 곡은 app266 비활성 유지.
+6. 서버 비용: 저장당 canonical 1 write + 기존 R2 one-item delta, 추가 Firestore read 없음.
+
 ## 2026-10-01 — app267 공유 노트 상세 클릭 실사용 확인
 
 PREVIEW 배포 완료:

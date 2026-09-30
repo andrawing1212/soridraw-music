@@ -7,6 +7,10 @@ import {
   rememberRecentSongsPendingSignalVersion,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
+import {
+  queueMusicNoteFavoriteCountDelta,
+  resumeMusicNoteFavoriteCountDelta,
+} from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -9064,6 +9068,7 @@ const toggleCycleVariantSelection = (
         musicNoteActiveUiUid = nextMusicNoteUiUid;
       }
       if (currentUser) {
+        resumeMusicNoteFavoriteCountDelta(currentUser.uid);
         const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
         setCachedHeaderIdentity(nextHeaderIdentity);
         writeCachedHeaderIdentity(nextHeaderIdentity);
@@ -9250,28 +9255,6 @@ const toggleCycleVariantSelection = (
             });
             writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
-            applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
-            const musicNoteRemoteVersion = Number(data?.syncVersions?.musicNote || data?.favoriteSyncSignalUpdatedAt || 0);
-            if (musicNoteRemoteVersion > 0) {
-              const musicNoteOriginDeviceId = String(data?.favoriteSyncSignal?.originDeviceId || '');
-              writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
-              // 1010 — the latest Music Note mutation came from this browser, so its
-              // local cache already contains that mutation. Advance the local version
-              // immediately even while Studio is open; otherwise the next heart click
-              // performs a redundant favorites duplicate-check query.
-              if (musicNoteOriginDeviceId && musicNoteOriginDeviceId === getMusicNoteDeviceId()) {
-                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
-              }
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_VERSION_EVENT, {
-                  detail: {
-                    uid: currentUser.uid,
-                    version: musicNoteRemoteVersion,
-                    originDeviceId: musicNoteOriginDeviceId,
-                  },
-                }));
-              }
-            }
 
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
@@ -9382,7 +9365,6 @@ const toggleCycleVariantSelection = (
           });
           writeGeminiAutoModelFallback(cachedUserProfileForRefresh.generationPreferences?.autoModelFallback !== false, currentUser.uid);
           setIsUserLyricClicheGuardReady(true);
-          applyFavoriteSyncSignal(currentUser.uid, cachedUserProfileForRefresh.favoriteSyncSignal);
           if (cachedUserProfileForRefresh.accountStatus) {
             const cachedStatus = cachedUserProfileForRefresh.accountStatus as AccountStatus;
             setUserStatus(cachedStatus);
@@ -10159,11 +10141,7 @@ const toggleCycleVariantSelection = (
             },
           });
           applyFavoriteSyncSignal(user.uid, deleteSignal);
-          await updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: deleteSignal,
-            favoriteSyncSignalUpdatedAt: deletedAt,
-            favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to decrement favoriteCount or publish favorite delete signal:", err));
+          queueMusicNoteFavoriteCountDelta(user.uid, -1);
           showToast('곡이 삭제 되었습니다.');
           return;
         }
@@ -10195,10 +10173,7 @@ const toggleCycleVariantSelection = (
           }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
           const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
-          updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: saveSignal,
-            favoriteSyncSignalUpdatedAt: saveSignal.at,
-          }).catch(err => console.error("Failed to publish favorite restore sync signal:", err));
+          // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
           showToast('보관함에 다시 저장되었습니다.');
           return;
         }
@@ -10260,11 +10235,7 @@ const toggleCycleVariantSelection = (
 
           removeLocalFavorite(existingFav.id);
           applyFavoriteSyncSignal(user.uid, unsaveSignal);
-          await updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: unsaveSignal,
-            favoriteSyncSignalUpdatedAt: unsavedAt,
-            favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to publish favorite unsave sync signal:", err));
+          queueMusicNoteFavoriteCountDelta(user.uid, -1);
           showToast('저장이 해제되었습니다.');
           return;
         } catch (unsaveError: any) {
@@ -10276,10 +10247,7 @@ const toggleCycleVariantSelection = (
           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
             removeLocalFavorite(existingFav.id);
             applyFavoriteSyncSignal(user.uid, unsaveSignal);
-            await updateDoc(doc(db, 'users', user.uid), {
-              favoriteSyncSignal: unsaveSignal,
-              favoriteSyncSignalUpdatedAt: unsavedAt,
-            }).catch(err => console.error("Failed to publish local favorite cleanup signal:", err));
+            // No canonical document changed here, so do not emit a server sync write.
             showToast('저장이 해제되었습니다.');
             return;
           }
@@ -10382,11 +10350,7 @@ const toggleCycleVariantSelection = (
       });
 
       const saveSignal = buildFavoriteSyncSignal('save', localFavorite, [localFavorite], createdAtMs);
-      await updateDoc(doc(db, 'users', user.uid), {
-        favoriteSyncSignal: saveSignal,
-        favoriteSyncSignalUpdatedAt: createdAtMs,
-        favoriteCount: increment(1)
-      }).catch(err => console.error("Failed to increment favoriteCount or publish save signal:", err));
+      queueMusicNoteFavoriteCountDelta(user.uid, 1);
 
       showToast('저장되었습니다.');
     } catch (error) {
@@ -10540,10 +10504,7 @@ const toggleCycleVariantSelection = (
       if (user?.uid) {
         patchFavoriteCacheImmediately(user.uid, id, updates);
         const updateSignal = buildFavoriteSyncSignal('update', updatedFavoriteSnapshot, [updatedFavoriteSnapshot], favoriteUpdatedAtMs);
-        updateDoc(doc(db, 'users', user.uid), {
-          favoriteSyncSignal: updateSignal,
-          favoriteSyncSignalUpdatedAt: favoriteUpdatedAtMs,
-        }).catch(err => console.error('Failed to publish favorite update sync signal:', err));
+        // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
       }
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");

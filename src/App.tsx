@@ -10185,7 +10185,14 @@ const toggleCycleVariantSelection = (
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
           };
-          await runV1MutationBoundary({ domain: 'musicNote', operation: 'restore', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
+          await runV1MutationBoundary({
+            domain: 'musicNote',
+            operation: 'restore',
+            uid: user.uid,
+            documentIds: [existingFav.id],
+            affectedCount: 1,
+            syncItem: sanitizeForFirestore({ ...existingFav, ...restoreUpdates, id: existingFav.id, firestoreId: existingFav.id }),
+          }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
           const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
           updateDoc(doc(db, 'users', user.uid), {
@@ -10226,12 +10233,29 @@ const toggleCycleVariantSelection = (
         });
         try {
           if (unsaveTargets.length > 0) {
-            await Promise.all(unsaveTargets.map((targetFavorite) => runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [targetFavorite.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
-              ...unsaveUpdates,
-              favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
-            })))));
+            await Promise.all(unsaveTargets.map((targetFavorite) => {
+              const targetUpdates = sanitizeForFirestore({
+                ...unsaveUpdates,
+                favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
+              });
+              return runV1MutationBoundary({
+                domain: 'musicNote',
+                operation: 'unsave',
+                uid: user.uid,
+                documentIds: [targetFavorite.id],
+                affectedCount: 1,
+                syncItem: sanitizeForFirestore({ ...targetFavorite, ...targetUpdates, id: targetFavorite.id, firestoreId: targetFavorite.id }),
+              }, updateDoc(doc(db, 'favorites', targetFavorite.id), targetUpdates));
+            }));
           } else if (existingFav?.id) {
-            await runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
+            await runV1MutationBoundary({
+              domain: 'musicNote',
+              operation: 'unsave',
+              uid: user.uid,
+              documentIds: [existingFav.id],
+              affectedCount: 1,
+              syncItem: sanitizeForFirestore({ ...existingFav, ...unsaveUpdates, id: existingFav.id, firestoreId: existingFav.id }),
+            }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
           }
 
           removeLocalFavorite(existingFav.id);
@@ -10326,12 +10350,12 @@ const toggleCycleVariantSelection = (
         : null;
       if (favoriteDocRef) {
         await runV1MutationBoundary(
-          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1, syncItem: { ...favoritePayload, id: favoriteDocRef.id, firestoreId: favoriteDocRef.id } },
           setDoc(favoriteDocRef, favoritePayload, { merge: true }),
         );
       }
       const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
-        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1, syncItem: favoritePayload },
         addDoc(collection(db, 'favorites'), favoritePayload),
       );
 
@@ -10495,7 +10519,14 @@ const toggleCycleVariantSelection = (
     try {
       const favoriteUpdatedAtMs = Date.now();
       sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'update',
+        uid: user?.uid || currentFavorite?.uid || '',
+        documentIds: [id],
+        affectedCount: 1,
+        syncItem: sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id }),
+      }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
       const updatedFavoriteSnapshot = sanitizeForFirestore({
         ...(currentFavorite || {}),
         ...sanitizedUpdates,

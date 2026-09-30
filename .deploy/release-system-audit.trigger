@@ -1,8 +1,4 @@
-requested_at=2026-10-01T05:07:00+09:00
-requested_by=user_app269_follower_share_link_parity
-product_code_target=bcbb9ba036f71eab31485ae0d07e0056b10caad1
-release_purpose=audit_app269_follower_share_link_parity
-app_version=269
-preview_only=true
-deploy=false
-test_production_unchanged_required=true
+requested_at=2026-10-01T05:52:00+09:00
+requested_by=chatgpt
+purpose=app270_follower_save_lyrics_parity
+source_target=ca621ea94c350b8348ee960aa53b0ef132b89a9f

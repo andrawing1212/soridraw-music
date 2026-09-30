@@ -67,23 +67,23 @@
 .soridraw-explore-pinned-action-255:disabled{cursor:default;opacity:.28}
 .soridraw-explore-pinned-action-255 svg{width:23px;height:23px;stroke-width:2.15}
 .soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:20px;height:20px}
-.soridraw-explore-pinned-bottom-row-258{position:absolute;left:39.5%;right:6px;bottom:6px;display:flex;height:38px;align-items:center;justify-content:space-between;pointer-events:none}
+.soridraw-explore-pinned-top-actions-259{position:absolute;right:6px;top:6px;display:flex;height:38px;align-items:center;gap:3px;pointer-events:none}
+.soridraw-explore-pinned-top-actions-259>*{pointer-events:auto}
 .soridraw-explore-pinned-like-255{position:static!important;display:flex!important;align-items:center!important;min-width:0!important;min-height:0!important;height:100%!important;margin:0!important;padding:0!important;gap:7px;border:0!important;background:transparent!important;box-shadow:none!important;color:rgba(255,255,255,.92)!important;line-height:1!important;text-shadow:0 2px 12px rgba(0,0,0,.48);pointer-events:auto}
 .soridraw-explore-pinned-like-255:hover:not(:disabled){background:transparent!important;color:#fff!important}
 .soridraw-explore-pinned-like-255 span{font-size:12px;font-weight:850;line-height:1}
 .soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:23px;height:23px;fill:none;stroke:#fff}
 .soridraw-explore-pinned-like-255.is-liked{color:#fff!important;background:transparent!important}
 .soridraw-explore-pinned-like-255.is-liked svg:not(.soridraw-explore-spinner){fill:#fff;stroke:#fff}
-.soridraw-explore-pinned-actions-right-255{position:static;display:flex;height:100%;align-items:center;gap:3px;pointer-events:none}
-.soridraw-explore-pinned-actions-right-255 .soridraw-explore-pinned-action-255{pointer-events:auto}
 .soridraw-explore-pinned-apply-255:not(.is-available){color:rgba(255,255,255,.28)}
 .soridraw-explore-pinned-apply-255:disabled{opacity:1;color:rgba(255,255,255,.28)}
 .soridraw-explore-pinned-apply-255.is-available{color:#ff7a9d}
 .soridraw-explore-pinned-apply-255.is-available:hover:not(:disabled){color:#ff9ab5}
 .soridraw-explore-pinned-share-255,.soridraw-explore-pinned-more-255{color:rgba(255,255,255,.92)}
-.soridraw-explore-pinned-more-255{position:absolute;right:6px;top:6px}
+.soridraw-explore-pinned-more-255{position:static}
+.soridraw-explore-pinned-share-255{position:absolute;right:6px;bottom:6px}
 @media (min-width:1100px){
-.soridraw-explore-pinned-bottom-row-258{height:40px}
+.soridraw-explore-pinned-top-actions-259{height:40px}
 .soridraw-explore-pinned-action-255{width:40px;height:40px}
 .soridraw-explore-pinned-action-255 svg{width:25px;height:25px}
 .soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:25px;height:25px}
@@ -118,15 +118,14 @@
 .soridraw-explore-pinned-banner-copy-235 h3{font-size:12px}
 .soridraw-explore-pinned-keywords-235{gap:4px;margin-top:7px;flex-wrap:wrap;max-height:42px}
 .soridraw-explore-pinned-keywords-235 em{max-width:78px;padding:4px 6px;font-size:8px}
-.soridraw-explore-pinned-bottom-row-258{left:39.5%;right:4px;bottom:4px;height:34px}
+.soridraw-explore-pinned-top-actions-259{right:4px;top:4px;height:34px;gap:2px}
 .soridraw-explore-pinned-action-255{width:34px;height:34px}
 .soridraw-explore-pinned-action-255 svg{width:21px;height:21px}
 .soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:18px;height:18px}
 .soridraw-explore-pinned-like-255{gap:5px}
 .soridraw-explore-pinned-like-255 span{font-size:11px}
 .soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:21px;height:21px}
-.soridraw-explore-pinned-actions-right-255{gap:2px}
-.soridraw-explore-pinned-more-255{right:4px;top:4px}
+.soridraw-explore-pinned-share-255{right:4px;bottom:4px}
 .soridraw-explore-profile-public-head-234{align-items:center;margin-bottom:12px}
 .soridraw-explore-profile-public-head-234 h2{font-size:18px}
 .soridraw-explore-profile-public-head-234 p{display:none}

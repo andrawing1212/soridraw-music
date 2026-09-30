@@ -36,6 +36,15 @@ export type ExploreTrackSaveAccess = {
     coverUrl?: string;
     sunoUrlPrimary?: string;
     sunoUrlSecondary?: string | null;
+    durationSeconds?: number | null;
+    lyrics?: string | null;
+    style?: string | null;
+    prompt?: string | null;
+    shareBundle?: {
+      schemaVersion?: number;
+      selectedKeywords?: Record<string, unknown>;
+      nextSong?: Record<string, unknown> | null;
+    } | null;
   } | null;
 };
 

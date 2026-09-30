@@ -389,8 +389,8 @@ assert.match(
 );
 assert.match(
   page,
-  /soridraw-explore-pinned-keywords-235[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
-  'pinned like must sit under the keyword row while apply/share stay bottom-right and more stays top-right',
+  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
+  'pinned like must share the bottom action row while apply/share stay bottom-right and more stays top-right',
 );
 assert.match(
   page,
@@ -399,8 +399,8 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-like-255\{align-self:flex-start;height:30px;margin-top:9px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:6px;bottom:6px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:6px;top:6px/,
-  'desktop/tablet pinned controls must place like below keywords and pin the other actions tightly to the right edges',
+  /\.soridraw-explore-pinned-like-255\{position:absolute;left:39\.5%;bottom:6px;height:38px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:6px;bottom:6px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:6px;top:6px/,
+  'desktop/tablet pinned controls must align like with the apply/share row without changing the centered title/keyword copy',
 );
 assert.match(
   social,
@@ -414,13 +414,23 @@ assert.match(
 );
 assert.match(
   social,
+  /\.soridraw-explore-pinned-apply-255:not\(\.is-available\)\{color:rgba\(255,255,255,\.28\)\}[\s\S]*?\.soridraw-explore-pinned-apply-255\.is-available\{color:#ff7a9d\}/,
+  'pinned apply must use the same pink available state as other apply actions and a dark inactive state',
+);
+assert.match(
+  page,
+  /className="soridraw-explore-more-backdrop"[\s\S]*?onClick=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/,
+  'Explore More sheet must close when the dimmed backdrop is clicked while clicks inside the sheet stay open',
+);
+assert.match(
+  social,
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:40px;height:40px\}/,
   'PC pinned action hit areas must be reduced from app255 while keeping the larger icons',
 );
 assert.match(
   social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}/,
-  'mobile pinned action hit areas must also be reduced without shrinking the icon artwork',
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{left:39\.5%;bottom:4px;height:34px/,
+  'mobile pinned actions must keep the compact hit areas with like aligned to the same bottom row',
 );
 assert.doesNotMatch(
   page,

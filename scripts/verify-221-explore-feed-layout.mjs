@@ -133,8 +133,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*500/,
-  'mobile recommendation rail alignment must wait half a second after scrolling stops',
+  /EXPLORE_RAIL_ALIGN_DELAY_MS_251\s*=\s*200/,
+  'every Explore recommendation rail must use the shared 0.2s settle delay on PC and mobile',
 );
 assert.match(
   page,
@@ -153,8 +153,8 @@ assert.match(
 );
 assert.match(
   page,
-  /onPointerDown=\{handleRailPointerDown241\}[\s\S]*?onPointerUp=\{handleRailPointerUp241\}[\s\S]*?onPointerCancel=[\s\S]*?onClickCapture=\{handleRailClickCapture241\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
-  'mobile rail must distinguish controlled short drags while preserving native momentum and delayed alignment',
+  /onPointerDown=\{handleRailPointerDown241\}[\s\S]*?onPointerUp=\{handleRailPointerUp241\}[\s\S]*?onPointerCancel=[\s\S]*?onClickCapture=\{handleRailClickCapture241\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'all Explore rails must share pointer/scroll handling and the 0.2s delayed alignment',
 );
 assert.match(
   page,
@@ -163,8 +163,8 @@ assert.match(
 );
 assert.match(
   page,
-  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
-  'a short light drag must advance one card while longer or stronger motion keeps native scrolling',
+  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'a short light touch drag must advance one card while other motion uses the shared rail settle path',
 );
 assert.match(
   page,
@@ -263,28 +263,28 @@ assert.match(
 );
 assert.match(
   css,
-  /\.soridraw-explore-recommend-edge\{[\s\S]*?z-index:24[\s\S]*?width:46px;height:46px[\s\S]*?background:rgba\(48,48,52,\.96\)[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-23px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-23px\}/,
-  'PC rail controls must be larger, brighter, and positioned outside the card images',
+  /\.soridraw-explore-recommend-edge\{[\s\S]*?z-index:24[\s\S]*?width:42px;height:42px[\s\S]*?background:rgba\(48,48,52,\.96\)[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-21px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-21px\}/,
+  'PC rail controls must keep the same placement while shrinking slightly',
 );
 assert.match(
   css,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:38px;height:38px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:8px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:8px\}/,
-  'mobile rail controls must sit above play/equalizer controls with the highest rail z-index',
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:35px;height:35px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:8px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:8px\}/,
+  'mobile rail controls must remain above card controls while shrinking slightly',
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242\s*=\s*500[\s\S]*?EXPLORE_MOBILE_PINNED_CONTROLS_TAP_SHOW_MS_242\s*=\s*2_000/,
-  'mobile pinned rail control visibility timings must be explicit at 0.5s idle hide and 2s tap reveal',
+  /EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251\s*=\s*500[\s\S]*?EXPLORE_RAIL_CONTROLS_TAP_SHOW_MS_251\s*=\s*2_000/,
+  'all Explore rail controls must share 0.5s idle hide and 2s card-touch reveal timing',
 );
 assert.match(
   page,
-  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228\s*=\s*500[\s\S]*?EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243\s*=\s*200/,
-  'ordinary mobile rails must keep 0.5s settling while the public-profile pinned rail settles after 0.2s',
+  /EXPLORE_RAIL_ALIGN_DELAY_MS_251\s*=\s*200[\s\S]*?scheduleExploreRailAlign251[\s\S]*?EXPLORE_RAIL_ALIGN_DELAY_MS_251/,
+  'all Explore rails must share the pinned-rail 0.2s settle timing',
 );
-assert.match(
+assert.doesNotMatch(
   page,
-  /isProfilePinnedRail242[\s\S]*?EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243[\s\S]*?: EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228/,
-  'only the public-profile pinned rail may use the 0.2s mobile settle delay',
+  /EXPLORE_MOBILE_RAIL_ALIGN_DELAY_MS_228|EXPLORE_MOBILE_PINNED_RAIL_ALIGN_DELAY_MS_243|shouldAutoAlignMobileRail228|isSongRail228/,
+  'rail settle timing must no longer be restricted by device or rail type',
 );
 assert.match(
   page,
@@ -303,28 +303,23 @@ assert.match(
 );
 assert.match(
   page,
-  /const isProfilePinnedRail242 = trackClassName\.includes\('soridraw-explore-recommend-track--profile-pinned'\)/,
-  'automatic rail control hiding must be limited to the public-profile pinned rail',
+  /const handleRailPointerDown241[\s\S]*?revealRailControls251\(\);/,
+  'touching or clicking any Explore rail card area must reveal its controls for the shared visibility window',
 );
 assert.match(
   page,
-  /const handleRailPointerDown241[\s\S]*?revealPinnedControls242\(\);/,
-  'touching the pinned card area must reveal controls without replacing existing gesture handling',
+  /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'scrolling any Explore rail must reveal controls, hide them 0.5s after motion stops, and use shared alignment',
 );
 assert.match(
   page,
-  /onScroll=\{\(\) => \{[\s\S]*?setMobilePinnedControlsVisible242\(true\)[\s\S]*?EXPLORE_MOBILE_PINNED_CONTROLS_IDLE_HIDE_MS_242[\s\S]*?scheduleMobileSongRailAlign228\(\)/,
-  'scrolling must reveal pinned controls and hide them 0.5s after motion stops while keeping rail alignment',
-);
-assert.match(
-  page,
-  /soridraw-explore-recommend-stage--profile-pinned[\s\S]*?is-mobile-controls-hidden/,
-  'pinned rail stage must expose a mobile hidden-control state',
+  /soridraw-explore-recommend-stage[\s\S]*?is-controls-hidden/,
+  'every Explore recommendation rail stage must expose the shared hidden-control state',
 );
 assert.match(
   css,
-  /\.soridraw-explore-recommend-stage--profile-pinned\.is-mobile-controls-hidden \.soridraw-explore-recommend-edge\{opacity:0;visibility:hidden;pointer-events:none\}/,
-  'hidden mobile pinned controls must not cover or intercept the song card',
+  /\.soridraw-explore-recommend-stage\.is-controls-hidden \.soridraw-explore-recommend-edge\{opacity:0;visibility:hidden;pointer-events:none\}/,
+  'hidden controls on every Explore rail must not cover or intercept cards',
 );
 
 assert.match(

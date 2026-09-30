@@ -163,13 +163,13 @@ assert.match(
 );
 assert.match(
   page,
-  /onPointerCancel=\{\(event\) => \{[\s\S]*?event\.pointerType === 'touch'[\s\S]*?return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?onTouchEnd=\{\(\) => \{[\s\S]*?if \(!railPointerActiveRef261\.current\) return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?!railReleaseAlignPendingRef261\.current[\s\S]*?scheduleExploreRailAlign251\(true\)/,
-  'touch pointercancel must stay held until the real touchend release while mouse/pen cancel can settle normally',
+  /onPointerCancel=\{\(event\) => \{[\s\S]*?event\.pointerType === 'touch'[\s\S]*?return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?onTouchEnd=\{\(\) => \{[\s\S]*?if \(!railPointerActiveRef261\.current\) return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?railReleaseMomentumSettleRef263\.current = true[\s\S]*?!railReleaseAlignPendingRef261\.current[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'touch pointercancel must stay held until real touchend and then enter momentum-settle mode',
 );
 assert.match(
   page,
-  /onScroll=\{\(\) => \{[\s\S]*?railPointerActiveRef261\.current \|\| railReleaseAlignPendingRef261\.current[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
-  'scroll events must not restart or trigger snapping while a pointer is held or a release snap is already pending',
+  /onScroll=\{\(\) => \{[\s\S]*?if \(railPointerActiveRef261\.current\)[\s\S]*?return;[\s\S]*?if \(railReleaseMomentumSettleRef263\.current\)[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?return;[\s\S]*?if \(railReleaseAlignPendingRef261\.current\)[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'held touch must never snap, post-release momentum must re-arm settle from the latest inertial scroll, and ordinary fallback must remain bounded',
 );
 assert.match(
   page,
@@ -180,6 +180,16 @@ assert.match(
   page,
   /shortControlledDrag[\s\S]*?scheduleExploreRailMoveAfterRelease261\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleExploreRailAlign251\(true\)/,
   'short touch drags and ordinary drags must both start their movement/snap timing from pointer release',
+);
+assert.match(
+  page,
+  /railReleaseMomentumSettleRef263\.current = event\.pointerType === 'touch'[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'ordinary touch release must enter momentum-settle mode before arming the shared 0.1s snap',
+);
+assert.match(
+  page,
+  /alignExploreRail251 = \(\) => \{[\s\S]*?railReleaseAlignPendingRef261\.current = false[\s\S]*?railReleaseMomentumSettleRef263\.current = false/,
+  'momentum-settle mode must clear exactly when the final nearest-anchor alignment begins',
 );
 assert.match(
   page,

@@ -1,3 +1,29 @@
+## 2026-10-01 — app266 Explore 공유 노트 권한/저장 실사용 확인
+
+배포 완료:
+- `팔로워 곡 저장 허용=false`이면 로그인 사용자의 More `공유 노트에 추가` 비활성.
+- owner도 permission OFF 우회 금지.
+- 타 사용자 곡은 permission ON + 기존 follower save-access 조건 유지.
+- 공유 노트 canonical Firestore 저장 후 변경곡 1개만 Music Note local/R2 Catalog delta에 반영.
+- 전체 favorites 재조회 / 전체 Catalog rebuild 없음.
+- PREVIEW App Release Run `36763773547` SUCCESS.
+- preview app version 266 exact verification PASS.
+- Worker / D1 / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. permission OFF: 버튼 비활성, 폴더 화면 진입 불가.
+2. permission ON 저장 후 More 재오픈: 버튼 활성.
+3. 허용곡을 공유 노트 폴더에 저장 후 Music Note > 공유 노트 해당 폴더에 바로 표시.
+4. 다른 계정 곡은 실제 follower 조건까지 만족해야 저장 가능.
+5. 공유 노트 항목은 읽기 전용/원작자 정보/미디어 유지.
+6. 앱 진입/재진입 때문에 추가 전체 Firestore read가 생기지 않는지.
+
+주의:
+- 과거 Firestore에 이미 저장됐지만 Catalog에서 누락된 기존 공유노트의 대량 백필은 사용자 승인 없이 하지 않는다.
+- 사용자 실사용에서 과거 누락 항목 복구 필요가 확인되면, 전체 스캔보다 특정 문서/변경분 복구를 먼저 설계한다.
+- 좋아요/공개/프로필/rail/app265 pinned UI는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-10-01 — app265 고정 곡 반응형 실사용 확인
 
 배포 완료:

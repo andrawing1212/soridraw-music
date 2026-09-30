@@ -538,6 +538,7 @@ function ExploreRecommendationRail({
   const railMouseHoverRef252 = useRef(false);
   const railPointerActiveRef261 = useRef(false);
   const railReleaseAlignPendingRef261 = useRef(false);
+  const railReleaseMomentumSettleRef263 = useRef(false);
   const mobilePointerGestureRef241 = useRef<{
     pointerId: number;
     startX: number;
@@ -583,6 +584,7 @@ function ExploreRecommendationRail({
   const alignExploreRail251 = () => {
     railAlignTimerRef251.current = null;
     railReleaseAlignPendingRef261.current = false;
+    railReleaseMomentumSettleRef263.current = false;
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
@@ -752,6 +754,7 @@ function ExploreRecommendationRail({
   const handleRailPointerDown241 = (event: React.PointerEvent<HTMLDivElement>) => {
     railPointerActiveRef261.current = true;
     railReleaseAlignPendingRef261.current = false;
+    railReleaseMomentumSettleRef263.current = false;
     clearRailAlignTimer251();
     revealRailControls251();
     const scroller = scrollerRef.current;
@@ -805,6 +808,7 @@ function ExploreRecommendationRail({
       return;
     }
 
+    railReleaseMomentumSettleRef263.current = event.pointerType === 'touch';
     scheduleExploreRailAlign251(true);
   };
 
@@ -870,6 +874,7 @@ function ExploreRecommendationRail({
           onTouchEnd={() => {
             if (!railPointerActiveRef261.current) return;
             railPointerActiveRef261.current = false;
+            railReleaseMomentumSettleRef263.current = true;
 
             // If pointerup already armed the release snap, do not restart it.
             if (!railReleaseAlignPendingRef261.current) {
@@ -886,7 +891,21 @@ function ExploreRecommendationRail({
             // must never arm the snap timer. The 0.1s snap starts from release.
             // Wheel/trackpad scrolling has no pointer-release signal, so it keeps
             // the bounded 0.1s scroll-idle fallback.
-            if (railPointerActiveRef261.current || railReleaseAlignPendingRef261.current) {
+            if (railPointerActiveRef261.current) {
+              return;
+            }
+
+            // app263 — after a strong touch flick, native momentum can continue
+            // producing scroll events after the finger is released. Re-arm the
+            // 0.1s settle from the latest inertial scroll so our smooth snap
+            // never fights the browser's deceleration. Small releases with no
+            // momentum still settle 0.1s after release.
+            if (railReleaseMomentumSettleRef263.current) {
+              scheduleExploreRailAlign251(true);
+              return;
+            }
+
+            if (railReleaseAlignPendingRef261.current) {
               return;
             }
             scheduleExploreRailAlign251();

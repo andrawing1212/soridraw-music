@@ -1,3 +1,94 @@
+## 0LA. app271 팔로워 공유노트 가사 보존 + 기존 공개곡 1곡 단위 복구 경로 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **app269에서 키워드/프롬프트는 복구됐지만 가사가 비어 있던 원인 수정 / app270 구조화 가사 보존 추가 / app271 기존 공개곡도 다음 실제 소유자 공개설정 변경 때 같은 1곡 UPDATE 안에서 가사를 재동기화 / PREVIEW Worker + App 배포 완료 / 사용자 실사용 확인 대기**
+
+사용자 실사용에서 확인된 문제:
+- Explore 공개곡을 `팔로워 곡 저장 허용`으로 공유 노트에 저장하면 목록/키워드와 상세 프롬프트는 정상.
+- 그러나 상세의 `한글 가사` / `외국어 가사`가 비어 있었음.
+- 링크 공유 저장 경로는 원래 `lyrics.korean` / `lyrics.english`를 구조화 상태로 보존하므로, follower-save도 동일해야 함.
+
+정확한 원인:
+- canonical Worker의 기존 `combineLyrics(source)`가 문자열 필드만 읽었음.
+- 실제 Music Note 원본은 일반적으로 `lyrics: { korean, english }` 객체이므로, 공개 시 D1 `tracks.lyrics`에 가사가 비어 저장될 수 있었음.
+- `prompt`는 문자열이라 정상 저장되어 사용자 화면에서 “프롬프트만 있고 가사는 없음”으로 나타남.
+
+app270 수정:
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+  - `SORIDRAW_MUSIC_NOTE_LYRICS_OBJECT_PARITY_270_20261001`.
+  - Music Note의 중첩 `lyrics.korean` / `lyrics.english`를 읽어 기존 `tracks.lyrics TEXT` 한 칸 안에 내부 길이-prefix 형식으로 보존.
+  - 외부 Feed에는 내부 인코딩을 노출하지 않고 기존처럼 일반 결합 텍스트만 반환.
+  - authorized `save-access`는 `lyricsParts: { korean, foreign }`를 함께 반환.
+- `src/services/exploreTrackActionService.ts`, `src/pages/ExplorePage.tsx`
+  - 폴더 선택 중에도 `lyricsParts`를 유지.
+- `src/services/exploreSharedNoteService.ts`
+  - 구조화 가사가 있으면 `{ korean, english }`로 정확히 저장하고, legacy plain-text 곡만 기존 판별 fallback 사용.
+- 신규/재등록 공개곡은 링크 공유 저장과 같은 한글/외국어 가사 구조를 보존.
+
+app271 기존 공개곡 보강:
+- `SORIDRAW_FOLLOWER_SAVE_LYRICS_LEGACY_REFRESH_271_20261001`.
+- app270 이전에 이미 공개되어 D1 가사가 빈 곡은 **대량 backfill하지 않음**.
+- 소유자가 해당 곡에 대해 실제 공개설정 변경을 전송했고 최종 상태가 `public + allowFollowerSave=true`이면:
+  - 그 변경곡의 `favorites/{sourceId}` 1건만 읽음.
+  - 구조화 가사를 app270 형식으로 변환.
+  - 기존 공개설정 변경과 **같은 `UPDATE tracks SET ...` 한 번에 lyrics를 합쳐 저장**.
+  - 가사 복구를 위해 두 번째 D1 UPDATE를 추가하지 않음.
+- 페이지 진입/재진입/앱 업데이트만으로 복구 read/write를 실행하지 않음.
+- 평상시 follower `save-access`는 app269 그대로 **track PK 1 + follow 1 = 정확히 2 bounded D1 SELECT / D1 write 0**.
+
+코드/검증:
+- app270 base/code: `ca621ea94c350b8348ee960aa53b0ef132b89a9f`.
+- app271 code: `e611693b3b261c573c42f11934591372bf3ff301`.
+- app271 verifier: `b8653b1e8cd76eee926ddcc535ff38dccbbb9b62`.
+- canonical SHA lock: `17b5563ef20f431f218df3781e4d781ec6c46e3b`.
+- canonical Worker SHA256: `143f281146e8eed36e00b2de0ae115336d6793a79e9a048e6160411bc9952d5f`.
+- Release System Audit Run `36777031706`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app202/app269/app270/app271 action/cost regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 live preflight SELECT-only PASS.
+
+PREVIEW 배포:
+- PREVIEW Worker trigger commit: `c4e4982ffc3dc3945816b42d486814dad241762d`.
+- PREVIEW Worker Release Run `36777248898`: **SUCCESS**.
+  - active PREVIEW Worker: `cd5dc8b5-d061-4b4b-abd9-9a28052bacf0`.
+  - Feed smoke PASS / Profile smoke PASS.
+  - TEST / PRODUCTION Workers unchanged PASS.
+- PREVIEW App trigger commit: `65eef9faaca859c853c522c094dee8e63f18ac1c`.
+- Firebase PREVIEW App Release Run `36777381094`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` exact build PASS.
+  - remote `app-version.json=271` PASS.
+  - TEST / PRODUCTION Hosting + branches unchanged PASS.
+- RTDB Rules / Firestore Rules / Functions 변경 없음.
+
+데이터/비용:
+- D1 schema 변경 없음.
+- migration / bulk backfill / 전체 사용자 데이터 재생성 없음.
+- 신규 공개곡은 실제 공개 mutation 때만 가사 포함.
+- 기존 공개곡 복구도 해당 소유자가 실제 공개설정을 바꾼 **그 1곡만** 처리.
+- follower-save 권한 확인은 기존 2 bounded D1 SELECT, W0 유지.
+- 공유 노트 저장은 기존 canonical Firestore 1건 + Music Note Catalog 1-item delta 유지.
+- UI/반응형/좋아요/공개프로필/Feed 디자인 변경 없음.
+
+사용자 실사용 확인:
+1. **신규 또는 app271 이후 다시 공개 등록되는 곡**: follower-save 후 공유 노트 상세에서 한글/외국어 가사 + 프롬프트 + 키워드가 모두 보이는지.
+2. **app270 이전에 이미 공개돼 있던 현재 테스트 곡**:
+   - 소유자 계정에서 `팔로워 곡 저장 허용`을 실제 서버 변경으로 한 번 갱신해야 함.
+   - 현재 ON이면 OFF 변경을 실제 반영한 뒤 다시 ON 변경을 실제 반영. OFF→ON을 너무 빨리 눌러 한 번의 net-zero 묶음으로 만들지 않음.
+   - ON으로 실제 반영되는 mutation에서 해당 1곡 원본 가사가 canonical row에 같이 복구됨.
+   - 그 뒤 follower 계정에서 같은 곡을 공유 노트에 다시 저장하면 deterministic 문서가 갱신되어 가사가 보여야 함.
+3. 한글 가사와 외국어 가사가 각각 올바른 칸에 들어가는지.
+4. 기존 프롬프트/키워드/다음곡 적용/Suno 링크/원작자 정보가 그대로인지.
+5. follower-save OFF 곡 차단, direct Explore `다음곡 적용 허용` 차단 등 기존 권한이 그대로인지.
+6. PC/모바일 모두 동일 결과인지.
+
+판정:
+- 위 실사용이 PASS면 app271 종료.
+- 기존곡이 실제 ON mutation 이후에도 가사가 비면 해당 **한 곡의 sourceId/trackId 경로만** 진단하고 전체 backfill은 하지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 0KZ. app269 팔로워 저장을 링크 공유 저장과 동일 정보 구조로 보강 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **팔로워 곡 저장 허용으로 저장한 다른 사용자 곡의 키워드/가사/프롬프트/다음곡 적용 정보 누락 수정 / 기존 2회 bounded D1 조회 안에서 처리 / PREVIEW Worker + App 배포 완료 / 사용자 실사용 확인 대기**

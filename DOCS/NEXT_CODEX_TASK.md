@@ -1,3 +1,34 @@
+## CURRENT TASK — app271 공유노트 가사 실사용 검증 (2026-10-01 KST)
+
+상태: **코드/감사/PREVIEW Worker/PREVIEW App 배포 완료. 사용자 실기기 확인만 남음.**
+
+기준:
+- app271 product SHA lock: `17b5563ef20f431f218df3781e4d781ec6c46e3b`.
+- Audit Run `36777031706` SUCCESS.
+- PREVIEW Worker Run `36777248898` SUCCESS / active version `cd5dc8b5-d061-4b4b-abd9-9a28052bacf0`.
+- PREVIEW App Run `36777381094` SUCCESS / `preview.soridraw.com` app `271` exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+검증할 것:
+1. 신규/재등록 공개곡의 follower-save -> 공유 노트 상세에서 한글/외국어 가사와 프롬프트가 모두 표시.
+2. app270 이전 기존 공개곡은 대량 backfill하지 않았으므로, 소유자 계정에서 실제 공개설정 mutation을 한 번 발생시켜야 함.
+3. 현재 `팔로워 곡 저장 허용=ON`인 기존곡은 OFF를 실제 반영한 뒤 ON을 실제 반영한다. 두 변경을 너무 빨리 되돌려 net-zero로 만들지 않는다.
+4. ON mutation 뒤 follower가 같은 곡을 다시 저장 -> 기존 deterministic 공유노트 문서가 갱신되고 가사가 표시.
+5. 한글/외국어 칸 분리, 프롬프트, 키워드, 다음곡 적용, Suno 링크, 원작자 정보 회귀 없음.
+6. PC/모바일 동일.
+
+보호:
+- 정상인 좋아요/공개프로필/Explore Feed/분할 UI/다른 Music Note 저장 구조는 변경 금지.
+- 전체 D1/Firestore backfill, migration, 대량 사용자 데이터 수정 금지.
+- follower save-access는 track PK 1 + follow 1 = 2 bounded D1 SELECT / W0 유지.
+- 기존곡 보정은 owner의 실제 publication mutation에만, 해당 source 1건 Firestore read + 같은 canonical UPDATE에 lyrics 병합.
+- 페이지 진입/업데이트/재방문만으로 repair read/write 금지.
+
+다음:
+- 사용자 실사용 PASS면 코드 수정 없이 app271 동결.
+- FAIL이면 실패한 곡 1건의 canonical lyrics 값과 owner mutation 경로만 좁혀 진단.
+- TEST 승격은 사용자 요청 전 금지.
+
 ## 2026-10-01 — app269 팔로워 공유노트 링크공유 동등성 실사용 확인
 
 PREVIEW 배포 완료:

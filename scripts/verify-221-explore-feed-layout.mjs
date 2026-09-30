@@ -491,6 +491,11 @@ assert.match(
 );
 assert.match(
   sharedNoteService,
+  /favoritesStore\.getFavorites\(\)[\s\S]*?filter\(\(item\) => String\(item\?\.firestoreId \|\| item\?\.id \|\| ''\)\.trim\(\) !== documentId\)[\s\S]*?favoritesStore\.setFavorites\(nextFavorites\)[\s\S]*?soridraw_favorites_cache_/,
+  'same-device Explore shared-note save must upsert the single saved note into the live Music Note store and instant-paint cache without a Firestore reread',
+);
+assert.match(
+  sharedNoteService,
   /sharedNoteFolderId: folder\.id[\s\S]*?isSharedMusicNote: true[\s\S]*?sharedReadOnly: true|isSharedMusicNote: true[\s\S]*?sharedReadOnly: true[\s\S]*?sharedNoteFolderId: folder\.id/,
   'shared-note catalog item must retain the classification and target folder fields used by Music Note shared-folder filtering',
 );

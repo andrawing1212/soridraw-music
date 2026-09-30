@@ -308,6 +308,11 @@ assert.match(
 );
 assert.match(
   page,
+  /onPointerEnter=\{\(event\) => \{[\s\S]*?event\.pointerType === 'mouse'[\s\S]*?revealRailControls251\(\);[\s\S]*?\}\}/,
+  'hovering a scrollable Explore rail with a mouse must reveal the same controls for the shared 2s window',
+);
+assert.match(
+  page,
   /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?scheduleExploreRailAlign251\(\)/,
   'scrolling any Explore rail must reveal controls, hide them 0.5s after motion stops, and use shared alignment',
 );

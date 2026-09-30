@@ -1,6 +1,6 @@
-requested_at=2026-09-30T10:03:00+09:00
-requested_by=unified_profile_save_252_final_audit
-product_code_target=885963f7b505dba29c385b56dcd6f2050ae9accb
+requested_at=2026-09-30T10:06:30+09:00
+requested_by=unified_profile_save_252_final_audit_retry
+product_code_target=23749e424d6be577ed30ac7cd41d6ef33be7ac50
 release_purpose=audit_app249_unified_profile_save
 app_version=249
 preview_only=true

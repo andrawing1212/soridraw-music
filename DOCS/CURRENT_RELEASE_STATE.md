@@ -1,3 +1,64 @@
+## 0KE. app249 Unified Profile Save PREVIEW 배포 완료 (2026-09-30 KST)
+
+상태: **텍스트 + 이미지 동시 저장을 하나의 Profile Save로 통합 / PREVIEW Worker + Hosting 배포 완료 / 실사용 재측정 대기**
+
+중요 타이밍:
+- 사용자 실측 메시지 시각: **2026-09-30 10:08:40 KST**.
+- app249 Firebase PREVIEW exact-build 완료: **2026-09-30 10:09:34 KST**.
+- 따라서 직전 사용자 캡처는 app249 Hosting 완료 **약 54초 전** 결과이며, 최신 app249 통합 저장 경로의 판정 자료로 사용하지 않는다.
+
+변경:
+- app version: **249**
+- 텍스트/소셜 + avatar/background가 같은 저장에서 함께 바뀌면 신규 `/v1/me/profile-save` multipart 요청 **1회** 사용.
+- 신규 통합 route는 기존 canonical `handleMyProfileUpdate`를 재사용하며 media URL까지 같은 canonical `public_profiles` dynamic UPDATE에 포함.
+- text-only / media-only 기존 경로는 그대로 유지해 구형 TEST/PRODUCTION 클라이언트 호환 보호.
+- YouTube가 변경되지 않은 app249 저장은 별도 R2 sidecar read/write를 생략.
+- D1 schema / migration / user data backfill 없음.
+
+검증:
+- Unified verify Run `36653023544` **SUCCESS**
+  - 252 unified profile save PASS
+  - TypeScript PASS
+  - Build PASS
+  - Worker syntax/source lock PASS
+- Release System Audit Run `36653397983` **SUCCESS**
+  - TypeScript / Build / static regression PASS
+  - like/publication/profile regressions PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - live shared D1 preflight read-only PASS
+  - protected refs unchanged PASS
+- PREVIEW Worker Release Run `36653551593` **SUCCESS**
+  - locked source `23b8b368f55d09973051fa86116f2e45640aa659`
+  - Worker before `d4f0b104-ffc1-461f-bf10-63bc39ca0868`
+  - Worker after `167b57b5-f510-4a8a-bbfd-83229a8bb37e`
+  - Feed/Profile smoke PASS
+  - warm feed revision D1 R0/W0 PASS
+  - TEST/PRODUCTION Worker unchanged PASS
+- Firebase PREVIEW App Release Run `36653638016` **SUCCESS**
+  - exact Hosting source `332f78fdb3215ad5dc22386c1fc86a515b6b1ef5`
+  - `PREVIEW_APP_VERSION=249`
+  - `PREVIEW_EXACT_BUILD=PASS`
+  - TEST/PRODUCTION unchanged PASS
+- 임시 252 검증 workflow/trigger 제거 완료.
+
+다음 실사용 검증:
+1. preview.soridraw.com이 app249로 갱신된 뒤 새로고침.
+2. 진단 패널 초기화.
+3. **소개 + 프로필 사진 + 배경**을 한 번에 바꾸고 저장 1회.
+4. 요청 상세에 `/v1/me/profile-save` 1줄이 보이는지 확인.
+5. D1 query는 canonical W1 유지 여부 확인.
+6. physical rows_written이 기존 텍스트 저장 + media 저장을 따로 실행한 합계보다 줄었는지 확인.
+7. 이미지/닉네임/소개/소셜 링크가 즉시 화면과 재진입에서 일치하는지 확인.
+
+보호:
+- main / TEST / production / PRODUCTION 승격 없음.
+- Firebase Functions / Rules / shared RTDB rules 변경 없음.
+- user data bulk mutation 없음.
+- 공개/비공개, 좋아요, 팔로우, Music Note 079, 기존 UI/CSS 변경 없음.
+
+제품 기준 commit: `23749e424d6be577ed30ac7cd41d6ef33be7ac50`
+PREVIEW exact Hosting commit: `332f78fdb3215ad5dc22386c1fc86a515b6b1ef5`
+
 ## 0KD. app248 / 251 실사용 비용 재측정 PASS (2026-09-30 KST)
 
 상태: **251 indexed-write compaction 실사용 개선 확인 / dual-media batch 1요청 확인 / 다음은 unified Profile Save 설계**

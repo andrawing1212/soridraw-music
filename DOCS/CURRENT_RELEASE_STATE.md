@@ -1,3 +1,85 @@
+## 0KM. app256 고정 곡 액션 재배치 + rail 화살표 이미지 중앙 정렬 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **사용자 실사용 피드백 반영 / 좋아요를 키워드 아래로 이동 / 좋아요 흰색 기존 규칙 복구 / 우측 액션 축소·투명화·모서리 밀착 / rail 좌우 버튼 이미지 세로 중앙 기준 + 바깥 이동 / PREVIEW 배포 완료 / 시각 확인 대기**
+
+사용자 피드백:
+- app255 좋아요가 왼쪽 artwork/재생 영역을 침범함.
+- 좋아요는 제목과 4개 키워드 아래의 텍스트 영역에 있어야 함.
+- 좋아요 활성 상태는 빨간 버튼이 아니라 기존처럼 흰색 꽉 찬 하트, 비활성은 흰색 외곽선 하트.
+- 액션 아이콘 크기는 괜찮지만 버튼 hit-area/chrome가 너무 큼.
+- 다음곡 적용/공유는 오른쪽 아래, 더보기는 오른쪽 위에 더 명확하게 붙어야 함.
+- 액션 버튼 배경색/테두리는 투명.
+- 모든 Explore 가로 rail의 좌우 스크롤 버튼은 카드 전체 높이가 아니라 **카드 이미지/visual의 세로 중앙**을 기준으로 해야 하며 좌우로 더 바깥에 배치.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - pinned 좋아요 버튼을 overlay 왼쪽 아래에서 제거하고 `pinned keywords` 바로 아래에 배치.
+  - 기존 `soridraw-explore-like-button` 클래스를 재사용해 기존 좋아요 semantics/interaction 유지.
+  - pinned overlay에는 다음곡 적용/공유/더보기만 남김.
+  - `syncRailVisualCenter256` 추가:
+    - 첫 카드의 `.soridraw-explore-cover-wrap` 또는 creator avatar 실제 visual 높이 측정.
+    - mount/itemCount/resize 때만 CSS variable `--soridraw-explore-rail-image-center-y` 설정.
+    - scroll 이벤트마다 layout 측정하지 않아 성능 경로 보호.
+- `src/components/explore/exploreSocial.css`
+  - pinned like: 키워드 아래, 투명 배경/테두리, 흰색 outline/filled heart.
+  - liked 상태 빨간 배경/테두리 제거.
+  - 우측 액션 hit-area 기본 38px, PC 40px, 모바일 34px로 app255 대비 약 20~25% 축소.
+  - 아이콘 크기는 23~25px / 모바일 21px로 유지.
+  - 다음곡 적용/공유: right/bottom 6px (mobile 4px).
+  - 더보기: right/top 6px (mobile 4px).
+  - 모든 pinned 액션 배경/테두리/shadow 투명.
+- `src/components/explore/explore.css`
+  - rail arrow top을 `var(--soridraw-explore-rail-image-center-y, 38%)`로 변경.
+  - PC/tablet left/right: -21px -> **-32px**.
+  - mobile left/right: 8px -> **-6px**.
+  - creator rail의 별도 `top:45%` override 제거, 실제 visual center 공통 규칙 사용.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - app256 좋아요 위치/색/투명 chrome/버튼 크기/우측 배치/rail image-center 회귀 검사 갱신.
+- app version: **256**.
+
+검증:
+- 첫 Audit Run `36663373364`: **FAIL**
+  - TypeScript PASS / Build PASS.
+  - 구현 문제가 아니라 verifier 앞부분에 app251 시절 `left:8px/right:8px` 고정 assertion이 남아 static verification FAIL.
+  - 해당 legacy assertion을 app256 `-32px` 기준으로 갱신.
+- 최종 Release System Audit Run `36663547866`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Explore layout/app256 verifier PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36663692598`: **SUCCESS**
+  - exact Hosting source `f8acdc7ce34c6d333d922ffbfefbd9523bc5e6bb`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+주요 commit:
+- behavior: `eed3ca273be3bc127050f1bc60578d61bd943159`
+- pinned CSS: `b9b38fdcc71f817047c19188e227728dd12e624c`
+- rail arrow CSS: `364821b9fedb20e7704dd365868f9c26c597ab9a`
+- verifier: `58a8d63526ffce56baaa5287755ace1a9d1f41ed`
+- app256: `d9c28712f02c8b3583518dc8f1ca4e359804db7c`
+- legacy verifier fix: `cba84ca4112734aafadba52bf4f7cb4385b7e8a0`
+
+범위/비용:
+- client UI/layout만 수정.
+- 좋아요 handler, 다음곡 적용, 공유, 더보기 기능 로직은 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. pinned 좋아요가 제목/키워드 아래의 텍스트 영역에 있고 artwork/play 영역을 침범하지 않는지.
+2. 좋아요 OFF = 흰색 외곽선, ON = 흰색 꽉 찬 하트인지.
+3. 우측 아래 적용/공유와 우측 위 더보기가 카드 가장자리에 명확히 붙어 있는지.
+4. 액션 배경/테두리가 보이지 않고 아이콘만 자연스럽게 보이는지.
+5. 모든 가로 rail 좌우 버튼이 카드 이미지/creator visual 세로 중앙에 맞는지.
+6. 좌우 버튼이 이전보다 확실히 바깥쪽에 위치하는지.
+7. PC / 태블릿 / 모바일에서 기존 0.2초 50% snap 및 버튼 표시 규칙이 유지되는지.
+
 ## 0KL. app255 공개프로필 고정 곡 카드 액션 오버레이 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **고정 곡 카드 하단 외부 액션 제거 / 카드 내부로 좋아요·다음곡 적용·공유·더보기 이동 / 버튼 확대 / 설명 문구 제거 / PREVIEW 배포 완료 / 실사용 시각 확인 대기**

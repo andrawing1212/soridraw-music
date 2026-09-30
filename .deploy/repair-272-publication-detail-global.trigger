@@ -1,7 +1,7 @@
-requested_at=2026-10-01T06:52:00+09:00
+requested_at=2026-10-01T06:57:00+09:00
 requested_by=user
 approval=global_all_users_public_music_note_detail_repair
-purpose=repair_missing_public_music_note_lyrics_prompt_from_canonical_firestore
+purpose=retry_global_repair_without_explicit_transaction
 scope=all_public_music_note_owners
 firestore_write=false
 d1_schema_write=false

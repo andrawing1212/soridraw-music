@@ -14,15 +14,13 @@ const requireText = (name, text, needle) => {
 requireText('page', page, 'SORIDRAW_EXPLORE_FEED_COMPLETENESS_049');
 requireText('page', page, `const apiSort = sort === 'popular' ? 'popular' : 'latest';`);
 requireText('page', page, `return \`${'${EXPLORE_API_BASE}'}/v1/feed?sort=${'${apiSort}'}&limit=40\`;`);
-requireText('page', page, 'readExploreFeedSessionCacheCursor');
-requireText('page', page, 'const [feedNextCursor, setFeedNextCursor]');
-requireText('page', page, 'const loadMoreFeed = async () =>');
-requireText('page', page, `new URLSearchParams({ sort: apiSort, limit: '40', cursor: feedNextCursor })`);
-requireText('page', page, `normalized.filter((track) => !seen.has(track.id))`);
-requireText('page', page, `setFeedNextCursor(safeText(payload?.data?.nextCursor) || null)`);
-requireText('page', page, `!submittedQuery && feedNextCursor`);
 requireText('cache', cache, 'readExploreFeedSessionCacheCursor');
-requireText('css', css, '.soridraw-explore-load-more');
+if (/loadMoreFeed|feedNextCursor|loadingMore|loadMoreError|soridraw-explore-load-more/.test(page)) {
+  throw new Error('[049] manual Explore feed load-more UI/read path must stay removed');
+}
+if (/soridraw-explore-load-more/.test(css)) {
+  throw new Error('[049] obsolete Explore feed load-more styles must stay removed');
+}
 
 requireText('worker', workerPatch, 'syncDerivedCache032');
 requireText('worker', workerPatch, 'explore_derived_changes');
@@ -41,7 +39,8 @@ if (!workerPatch.includes('caches.default.match') || !workerPatch.includes('curs
 
 console.log('VERIFY_049_EXPLORE_FEED_INTEGRITY=PASS');
 console.log('FIRST_PAGE_CACHE_FIRST_40=PASS');
-console.log('OLDER_PUBLIC_TRACKS_CURSOR_PAGINATED=PASS');
+console.log('MANUAL_FEED_LOAD_MORE_REMOVED=PASS');
+console.log('SERVER_CURSOR_COMPATIBILITY_RETAINED=PASS');
 console.log('INDEXED_TOP40_DELTA_REFILL=PASS');
 console.log('ENVIRONMENT_R2_CURSOR_CAS=PASS');
 console.log('NO_POLLING=PASS');

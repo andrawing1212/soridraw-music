@@ -1,3 +1,84 @@
+## 0LH. app276 마이노트/공유노트/최근생성곡 보관함 PC↔모바일 동기화 수정 PREVIEW 배포 (2026-10-01 KST)
+
+사용자 실사용 FAIL:
+- 같은 계정에서 Music Note의 마이노트/공유노트가 다른 디바이스와 동기화되지 않음.
+- 최근생성곡의 하트(보관함 저장/해제)도 동일.
+- 사용자 관찰상 모바일에서 저장하면 PC에는 보이지만, PC에서 저장/해제하면 모바일이 반응하지 않는 비대칭이 재현됨.
+- 따라서 app275 상태의 Music Note cross-device sync는 FAIL로 판정.
+
+확인한 구조적 원인:
+1. `userDomainSyncService.ts`의 Music Note RTDB signal `version`이 각 기기의 `Date.now()`였음.
+   - PC/모바일 기기 시계가 조금만 어긋나도 한 기기의 새 signal 숫자가 다른 기기가 이미 본 version보다 작아질 수 있음.
+   - receiver는 `localVersion >= remoteVersion`이면 무시하므로 이후 정상 save/unsave도 한 방향에서 영구 무시될 수 있는 구조였음.
+2. RTDB signal은 이미 변경된 `documentIds` 최대 10개를 담고 있었지만 App event에는 version/origin만 전달해 ID를 버리고 있었음.
+3. receiver는 `window.location.pathname === '/history'`일 때만 Music Note delta를 읽도록 막혀 있었음.
+   - 실제 Studio Black/Split에서는 Music Note가 `/studio?view=music-note`에 embed될 수 있고,
+   - 최근생성곡 하트는 Studio/Recent 화면에서 변하므로 다른 기기가 /history 밖에 있으면 변경 signal을 받아도 아무 반영을 하지 않았음.
+4. RTDB listener가 React effect보다 먼저 signal을 받은 경우 version만 localStorage에 남고 exact documentIds는 사라져, 나중에 bounded exact sync를 못 하는 손실 경로가 있었음.
+
+app276 수정:
+- `src/services/userDomainSyncService.ts`
+  - Music Note signal version을 같은 UID의 RTDB node transaction으로 **단조 증가(monotonic)**하도록 변경.
+  - 한 기기 시계가 앞서더라도 다음 기기의 변경 version은 항상 기존 remote version보다 커짐.
+  - 기존 tiny RTDB signal 1회 구조 유지.
+  - event에 `documentIds`, `truncated`, operation을 함께 전달.
+  - 마지막 exact Music Note signal 전체를 UID별 localStorage에 보관해 React consumer가 늦게 mount돼도 복구 가능.
+- `src/App.tsx`
+  - 다른 기기에서 exact documentIds가 온 경우 현재 route가 /history인지와 무관하게 **바뀐 favorites 문서만** 최대 10개 exact `getDoc`.
+  - save/update/shared-note는 해당 문서를 local favorites state/cache에 upsert.
+  - unsave/soft-remove는 해당 문서를 local state/cache에서 제거.
+  - permanent delete처럼 문서가 없으면 exact changed id를 local state/cache에서 제거.
+  - 이 global favorites state가 최근생성곡의 보관함 하트와 Music Note My/Shared 목록의 공통 기준이므로 PC↔모바일 모두 갱신됨.
+  - exact id 없는 legacy/bulk signal만 기존 Music Note visible-route bounded fallback을 사용.
+  - 변경 없는 앱 진입/페이지 이동/재방문에는 새 Firestore read 없음.
+- `public/app-version.json`: 276.
+
+비용:
+- 변경 없음: 추가 Firestore/D1 read 0.
+- 실제 다른 기기 Music Note mutation 1건: 변경된 Firestore favorite 문서 **1건 exact read**만 발생.
+- 최대 10개 bounded signal은 최대 변경 문서 10건만 exact read.
+- collection scan / 전체 favorites 재조회 / 전체 Catalog rebuild 없음.
+- D1 read/write 추가 없음.
+- RTDB는 기존 mutation signal 1회 구조를 유지하며 version 충돌 방지를 위해 동일 작은 node transaction 사용.
+- 공유노트 canonical Firestore + Catalog delta 구조, 최근생성곡 원본 저장 구조는 유지.
+
+검증:
+- app276 Focused Audit Run `36791729395`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `APP276_MUSIC_NOTE_SIGNAL_MONOTONIC=PASS`.
+- `APP276_MUSIC_NOTE_EXACT_CHANGED_DOC_SYNC=PASS`.
+- `APP276_RECENT_HEART_GLOBAL_FAVORITES_PATCH=PASS`.
+- `APP276_UNCHANGED_NAVIGATION_EXTRA_READ=0`.
+- 기존 Recent Songs 동기화 보호 4개 PASS.
+- app274 공유노트 저장됨 표시/추가 read 0 회귀 PASS.
+- app273 공유노트 상세 복구 회귀 PASS.
+- 감사 중 첫 2번 실패는 각각 현재 RTDB rules와 맞지 않는 오래된 verifier, app274 exact-version 고정 verifier 때문이었고 제품 코드 실패가 아니며 verifier를 현재 기준으로 수정 후 최종 감사 PASS.
+
+PREVIEW 배포:
+- Product code target: `3285ab06052d60f851498275439a2b21ba85271a`.
+- Release trigger commit: `a902dd511e0c4402a98675aeea866ae6a937a43f`.
+- Firebase PREVIEW App Run `36791874121`: **SUCCESS**.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app version **276** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB rules deploy SKIPPED — 기존 rules 그대로 사용.
+- Worker / Functions / Firestore Rules / D1 / 사용자 데이터 migration/backfill 없음.
+- 완료된 app276 audit 임시 workflow/trigger 제거 완료.
+- 현재 preview HEAD: `71877da43246833f736fced7405feccfceff67e5` (배포 이후 audit cleanup 포함).
+
+실사용 합격선:
+1. 같은 계정 PC와 모바일을 동시에 열어 둠.
+2. PC 최근생성곡에서 하트 저장 → 모바일 최근생성곡 하트 + Music Note에 자동 반영.
+3. PC에서 같은 하트 해제 → 모바일에서도 자동 해제/목록 제거.
+4. 모바일 저장 → PC 자동 반영.
+5. 모바일 해제 → PC 자동 반영.
+6. Music Note 마이노트 편집/저장/해제도 반대 기기에 수렴.
+7. Explore에서 공유노트 저장 → 반대 기기 Music Note > 공유노트에 수렴.
+8. 새로고침/페이지 이동 없이 확인.
+9. 좋아요(public Explore like) 동결 기능은 변경하지 않음.
+10. 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## 0LG. app275 공유노트 '저장됨' 핑크 강조 PREVIEW 배포 (2026-10-01 KST)
 
 사용자 확인:

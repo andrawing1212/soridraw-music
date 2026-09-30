@@ -1,8 +1,8 @@
-requested_at=2026-10-01T00:38:00+09:00
-requested_by=user_app263_momentum_settle_fix
-product_code_target=9acb26c598ac53dc609652d8f7f366deba0f3332
-release_purpose=deploy_app263_momentum_aware_rail_settle
-app_version=263
+requested_at=2026-10-01T02:57:00+09:00
+requested_by=user_app264_pinned_action_swap
+product_code_target=495e2e74b9aea7b6ea1a0dd39372de53d824ab65
+release_purpose=deploy_app264_pinned_action_swap
+app_version=264
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

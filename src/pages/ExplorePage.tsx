@@ -1131,18 +1131,6 @@ function ExploreTrackCard({
             <div className="soridraw-explore-pinned-top-actions-259">
               <button
                 type="button"
-                className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
-                onClick={() => onToggleLike(track)}
-                disabled={likeBusy}
-                title={liked ? '좋아요 취소' : '좋아요'}
-                aria-label={liked ? '좋아요 취소' : '좋아요'}
-              >
-                {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
-                <span>{formatCount(track.likeCount)}</span>
-              </button>
-
-              <button
-                type="button"
                 className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-apply-255${track.allowNextSongApply ? ' is-available' : ''}`}
                 onClick={() => onApplyNext(track)}
                 disabled={!track.allowNextSongApply}
@@ -1150,6 +1138,16 @@ function ExploreTrackCard({
                 title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
               >
                 <RefreshCw aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-share-255"
+                onClick={() => onShare(track)}
+                aria-label="공유"
+                title="공유"
+              >
+                <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
               </button>
 
               <button
@@ -1165,12 +1163,14 @@ function ExploreTrackCard({
 
             <button
               type="button"
-              className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-share-255"
-              onClick={() => onShare(track)}
-              aria-label="공유"
-              title="공유"
+              className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
+              onClick={() => onToggleLike(track)}
+              disabled={likeBusy}
+              title={liked ? '좋아요 취소' : '좋아요'}
+              aria-label={liked ? '좋아요 취소' : '좋아요'}
             >
-              <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
+              {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+              <span>{formatCount(track.likeCount)}</span>
             </button>
           </div>
         )}

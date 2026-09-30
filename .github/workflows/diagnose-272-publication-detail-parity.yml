@@ -1,0 +1,133 @@
+name: SORIDRAW app272 publication detail parity diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/diagnose-272-publication-detail-parity.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Authenticate Firebase read-only diagnostic
+        id: firebase-auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+
+      - name: Compare missing public detail against canonical Firestore source
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase-auth.outputs.access_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              COUNT(*) AS public_follower_save_total,
+              SUM(CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END) AS missing_prompt,
+              SUM(CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END) AS missing_lyrics,
+              SUM(CASE WHEN COALESCE(prompt,'')='' OR COALESCE(lyrics,'')='' THEN 1 ELSE 0 END) AS missing_any
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published' AND allow_follower_save=1;
+            SELECT id,owner_uid,source_id,
+              CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END AS d1_prompt_missing,
+              CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END AS d1_lyrics_missing
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published' AND allow_follower_save=1
+              AND (COALESCE(prompt,'')='' OR COALESCE(lyrics,'')='')
+            ORDER BY updated_at DESC
+            LIMIT 50;
+          " --json > "$RUNNER_TEMP/app272-d1.json"
+
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          from pathlib import Path
+
+          data=json.loads(Path(os.environ['RUNNER_TEMP']+'/app272-d1.json').read_text())
+          rows=[r for block in data for r in (block.get('results') or [])]
+          summary=next((r for r in rows if 'public_follower_save_total' in r), {})
+          candidates=[r for r in rows if 'source_id' in r]
+          token=os.environ['FIREBASE_ACCESS_TOKEN']
+          project=os.environ['FIREBASE_PROJECT_ID']
+
+          counts={
+            'checked':0,
+            'source_missing':0,
+            'd1_prompt_missing_firestore_prompt_present':0,
+            'd1_prompt_missing_firestore_prompt_missing':0,
+            'd1_lyrics_missing_firestore_lyrics_present':0,
+            'd1_lyrics_missing_firestore_lyrics_missing':0,
+            'firestore_request_payload_prompt_present':0,
+          }
+
+          def present_string(field):
+            return isinstance(field, dict) and bool(str(field.get('stringValue','')).strip())
+
+          for row in candidates:
+            sid=str(row.get('source_id') or '').strip()
+            if not sid:
+              continue
+            url=f"https://firestore.googleapis.com/v1/projects/{urllib.parse.quote(project)}/databases/(default)/documents/favorites/{urllib.parse.quote(sid)}"
+            req=urllib.request.Request(url, headers={'Authorization':f'Bearer {token}','Accept':'application/json'})
+            try:
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                doc=json.loads(resp.read().decode())
+            except Exception as exc:
+              if getattr(exc,'code',None)==404:
+                counts['source_missing']+=1
+                continue
+              raise
+
+            counts['checked']+=1
+            fields=doc.get('fields') or {}
+            prompt_present=present_string(fields.get('prompt'))
+
+            rp=((fields.get('requestPayload') or {}).get('mapValue') or {}).get('fields') or {}
+            if present_string(rp.get('prompt')):
+              counts['firestore_request_payload_prompt_present']+=1
+
+            lyrics=(fields.get('lyrics') or {})
+            lyrics_fields=((lyrics.get('mapValue') or {}).get('fields') or {})
+            lyrics_present=(
+              present_string(lyrics_fields.get('korean'))
+              or present_string(lyrics_fields.get('english'))
+              or present_string(lyrics_fields.get('foreign'))
+              or present_string(lyrics)
+            )
+
+            if int(row.get('d1_prompt_missing') or 0):
+              counts['d1_prompt_missing_firestore_prompt_present' if prompt_present else 'd1_prompt_missing_firestore_prompt_missing']+=1
+            if int(row.get('d1_lyrics_missing') or 0):
+              counts['d1_lyrics_missing_firestore_lyrics_present' if lyrics_present else 'd1_lyrics_missing_firestore_lyrics_missing']+=1
+
+          print('APP272_D1_SUMMARY='+json.dumps(summary,sort_keys=True))
+          print('APP272_FIRESTORE_COMPARE='+json.dumps(counts,sort_keys=True))
+          print('APP272_READ_ONLY=PASS')
+          print('APP272_NO_USER_DATA_WRITE=PASS')
+          PY

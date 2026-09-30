@@ -1596,7 +1596,7 @@ function mapTrackRow(row) {
     description: row.description || "",
     coverUrl: row.cover_url || "",
     durationSeconds: row.duration_seconds === null || row.duration_seconds === void 0 ? null : Number(row.duration_seconds),
-    lyrics: row.lyrics || null,
+    lyrics: decodeTrackLyrics270(row.lyrics).combined || null,
     style: row.style || null,
     primaryGenre: row.primary_genre || null,
     sunoUrlPrimary: row.suno_url_primary || "",
@@ -15732,21 +15732,77 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222(get
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
-function combineLyrics(source) {
-  const ko = firstNonEmptyString(
+const SORIDRAW_TRACK_LYRICS_PREFIX_270 = "SORIDRAW_LYRICS_V1:";
+
+// SORIDRAW_MUSIC_NOTE_LYRICS_OBJECT_PARITY_270_20261001
+function normalizeTrackLyricsParts270(source) {
+  const nested = source?.lyrics && typeof source.lyrics === "object" && !Array.isArray(source.lyrics)
+    ? source.lyrics
+    : {};
+  let korean = firstNonEmptyString(
     source?.editedKoreanLyrics,
     source?.koreanLyrics,
-    source?.lyrics,
+    nested?.korean,
+    nested?.ko
+  );
+  let foreign = firstNonEmptyString(
+    source?.editedEnglishLyrics,
+    source?.englishLyrics,
+    nested?.english,
+    nested?.foreign,
+    nested?.en
+  );
+  const legacy = firstNonEmptyString(
+    typeof source?.lyrics === "string" ? source.lyrics : "",
     source?.lyricsText
   );
-  const en = firstNonEmptyString(
-    source?.editedEnglishLyrics,
-    source?.englishLyrics
-  );
-  if (ko && en && ko !== en) return `${ko}
+  if (!korean && !foreign && legacy) return { korean: "", foreign: "", legacy };
 
-${en}`;
-  return ko || en || "";
+  const maxBodyChars = 29500;
+  if (korean.length + foreign.length > maxBodyChars) {
+    if (korean && foreign) {
+      const half = Math.floor(maxBodyChars / 2);
+      korean = korean.slice(0, half);
+      foreign = foreign.slice(0, maxBodyChars - korean.length);
+    } else if (korean) {
+      korean = korean.slice(0, maxBodyChars);
+    } else {
+      foreign = foreign.slice(0, maxBodyChars);
+    }
+  }
+  return { korean, foreign, legacy: "" };
+}
+
+function encodeTrackLyrics270(source) {
+  const parts = normalizeTrackLyricsParts270(source);
+  if (parts.legacy) return parts.legacy;
+  if (!parts.korean && !parts.foreign) return "";
+  const prefix = `${SORIDRAW_TRACK_LYRICS_PREFIX_270}${parts.korean.length}:${parts.foreign.length}:`;
+  return `${prefix}${parts.korean}${parts.foreign}`;
+}
+
+function decodeTrackLyrics270(value) {
+  const text = String(value || "");
+  if (!text.startsWith(SORIDRAW_TRACK_LYRICS_PREFIX_270)) {
+    return { korean: "", foreign: "", combined: text };
+  }
+  const rest = text.slice(SORIDRAW_TRACK_LYRICS_PREFIX_270.length);
+  const match = rest.match(/^(\d+):(\d+):/);
+  if (!match) return { korean: "", foreign: "", combined: text };
+  const koreanLength = Math.max(0, Number(match[1] || 0));
+  const foreignLength = Math.max(0, Number(match[2] || 0));
+  const body = rest.slice(match[0].length);
+  const korean = body.slice(0, koreanLength);
+  const foreign = body.slice(koreanLength, koreanLength + foreignLength);
+  return {
+    korean,
+    foreign,
+    combined: [korean, foreign].filter(Boolean).join("\n\n")
+  };
+}
+
+function combineLyrics(source) {
+  return encodeTrackLyrics270(source);
 }
 __name(combineLyrics, "combineLyrics");
 __name2(combineLyrics, "combineLyrics");
@@ -17957,6 +18013,7 @@ async function handleFollowerSaveAccess(request, env, cors, trackId) {
     following = Boolean(follow?.following);
   }
   const allowed = permissionEnabled && following;
+  const saveLyrics = decodeTrackLyrics270(track.lyrics);
 
   let saveShareBundle = null;
   if (allowed && Number(track.share_schema_version || 0) === SORIDRAW_PUBLIC_SHARE_SCHEMA_015) {
@@ -18002,7 +18059,8 @@ async function handleFollowerSaveAccess(request, env, cors, trackId) {
       sunoUrlPrimary: track.suno_url_primary || "",
       sunoUrlSecondary: track.suno_url_secondary || null,
       durationSeconds: track.duration_seconds == null ? null : Number(track.duration_seconds),
-      lyrics: track.lyrics || "",
+      lyrics: saveLyrics.combined || "",
+      lyricsParts: saveLyrics.korean || saveLyrics.foreign ? { korean: saveLyrics.korean, foreign: saveLyrics.foreign } : null,
       style: track.style || "",
       prompt: track.prompt || "",
       shareBundle: saveShareBundle

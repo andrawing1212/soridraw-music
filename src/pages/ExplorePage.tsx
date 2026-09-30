@@ -98,6 +98,7 @@ type ExploreTrack = {
   primaryGenre?: string | null;
   prompt?: string | null;
   lyrics?: string | null;
+  lyricsParts?: { korean?: string | null; foreign?: string | null } | null;
   allowNextSongApply: boolean;
   allowFollowerSave: boolean;
   shareBundle?: {
@@ -2416,6 +2417,7 @@ export default function ExplorePage() {
             sunoUrlSecondary: saveSource.sunoUrlSecondary || current.sunoUrlSecondary,
             durationSeconds: saveSource.durationSeconds ?? current.durationSeconds,
             lyrics: saveSource.lyrics ?? current.lyrics,
+            lyricsParts: saveSource.lyricsParts || current.lyricsParts,
             style: saveSource.style ?? current.style,
             prompt: saveSource.prompt ?? current.prompt,
             shareBundle: saveSource.shareBundle || current.shareBundle,

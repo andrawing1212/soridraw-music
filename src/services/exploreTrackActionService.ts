@@ -38,6 +38,7 @@ export type ExploreTrackSaveAccess = {
     sunoUrlSecondary?: string | null;
     durationSeconds?: number | null;
     lyrics?: string | null;
+    lyricsParts?: { korean?: string | null; foreign?: string | null } | null;
     style?: string | null;
     prompt?: string | null;
     shareBundle?: {

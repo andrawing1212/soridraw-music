@@ -29,6 +29,7 @@ export type ExploreSharedNoteTrack = {
   style?: string | null;
   prompt?: string | null;
   lyrics?: string | null;
+  lyricsParts?: { korean?: string | null; foreign?: string | null } | null;
   publishedAt?: number | null;
   allowFollowerSave?: boolean;
   shareBundle?: {
@@ -184,9 +185,14 @@ export const saveExploreTrackToSharedNote = async (
   const secondaryShareUrl = String(track.sunoUrlSecondary || '').trim();
   const coverUrl = String(track.coverUrl || '').trim();
   const lyricsText = String(track.lyrics || '');
-  const lyrics = /[가-힣]/.test(lyricsText)
-    ? { korean: lyricsText, english: '' }
-    : { korean: '', english: lyricsText };
+  const explicitKoreanLyrics = String(track.lyricsParts?.korean || '');
+  const explicitForeignLyrics = String(track.lyricsParts?.foreign || '');
+  const hasExplicitLyrics = Boolean(explicitKoreanLyrics.trim() || explicitForeignLyrics.trim());
+  const lyrics = hasExplicitLyrics
+    ? { korean: explicitKoreanLyrics, english: explicitForeignLyrics }
+    : /[가-힣]/.test(lyricsText)
+      ? { korean: lyricsText, english: '' }
+      : { korean: '', english: lyricsText };
   const creatorName = String(track.displayName || track.ownerHandle || 'SORiDRAW').trim() || 'SORiDRAW';
   const sunoLinks = [shareUrl, secondaryShareUrl]
     .filter((url, index, list) => Boolean(url) && list.indexOf(url) === index)

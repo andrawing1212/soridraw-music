@@ -326,6 +326,13 @@ export const saveExploreTrackToSharedNote = async (
     uid,
     documentIds: [documentId],
     affectedCount: 1,
+    syncItem: {
+      ...payload,
+      id: documentId,
+      firestoreId: documentId,
+      updatedAtMs: now,
+      sharedNoteSavedAtMs: now,
+    },
   }, setDoc(doc(db, 'favorites', documentId), payload, { merge: true }));
 
   // app266 — Music Note renders from the local/R2 Catalog, not from a fresh

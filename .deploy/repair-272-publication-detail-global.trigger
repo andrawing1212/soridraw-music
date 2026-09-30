@@ -1,0 +1,10 @@
+requested_at=2026-10-01T06:52:00+09:00
+requested_by=user
+approval=global_all_users_public_music_note_detail_repair
+purpose=repair_missing_public_music_note_lyrics_prompt_from_canonical_firestore
+scope=all_public_music_note_owners
+firestore_write=false
+d1_schema_write=false
+d1_targeted_content_repair=true
+test_production_deploy=false
+fail_closed_candidate_cap=200

@@ -1,0 +1,394 @@
+name: SORIDRAW app272 global publication detail repair
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/repair-272-publication-detail-global.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Authenticate Firebase canonical source
+        id: firebase-auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+
+      - name: Global preflight and build exact repair
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase-auth.outputs.access_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              COUNT(*) AS public_music_note_total,
+              COUNT(DISTINCT owner_uid) AS public_owner_total,
+              SUM(CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END) AS missing_lyrics,
+              SUM(CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END) AS missing_prompt
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published';
+
+            SELECT id,owner_uid,source_id,
+              CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END AS d1_lyrics_missing,
+              CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END AS d1_prompt_missing
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published'
+              AND (COALESCE(lyrics,'')='' OR COALESCE(prompt,'')='')
+            ORDER BY owner_uid,id
+            LIMIT 201;
+          " --json > "$RUNNER_TEMP/app272-global-before.json"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const blocks = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'app272-global-before.json'), 'utf8'));
+          const rows = blocks.flatMap((block) => block.results || []);
+          const summary = rows.find((row) => Object.prototype.hasOwnProperty.call(row, 'public_music_note_total')) || {};
+          const candidates = rows.filter((row) => Object.prototype.hasOwnProperty.call(row, 'source_id'));
+
+          const total = Number(summary.public_music_note_total || 0);
+          const owners = Number(summary.public_owner_total || 0);
+          const missingLyrics = Number(summary.missing_lyrics || 0);
+          const missingPrompt = Number(summary.missing_prompt || 0);
+
+          if (!Number.isInteger(total) || total < 0 || !Number.isInteger(owners) || owners < 0) {
+            throw new Error('GLOBAL_SUMMARY_INVALID');
+          }
+          if (candidates.length > 200) {
+            throw new Error('GLOBAL_REPAIR_FAIL_CLOSED_OVER_200_CANDIDATES');
+          }
+
+          const token = process.env.FIREBASE_ACCESS_TOKEN;
+          const project = process.env.FIREBASE_PROJECT_ID;
+          if (!token || !project) throw new Error('FIREBASE_AUTH_CONTEXT_MISSING');
+
+          const firstNonEmptyString = (...values) => {
+            for (const value of values) {
+              if (typeof value === 'string' && value.trim()) return value.trim();
+            }
+            return '';
+          };
+
+          const decodeFirestoreValue = (value) => {
+            if (!value || typeof value !== 'object') return null;
+            if ('nullValue' in value) return null;
+            if ('stringValue' in value) return value.stringValue;
+            if ('timestampValue' in value) return value.timestampValue;
+            if ('booleanValue' in value) return Boolean(value.booleanValue);
+            if ('integerValue' in value) return Number(value.integerValue);
+            if ('doubleValue' in value) return Number(value.doubleValue);
+            if ('referenceValue' in value) return value.referenceValue;
+            if ('bytesValue' in value) return value.bytesValue;
+            if ('arrayValue' in value) return Array.isArray(value.arrayValue?.values)
+              ? value.arrayValue.values.map(decodeFirestoreValue)
+              : [];
+            if ('mapValue' in value) {
+              const out = {};
+              for (const [key, child] of Object.entries(value.mapValue?.fields || {})) {
+                out[key] = decodeFirestoreValue(child);
+              }
+              return out;
+            }
+            return null;
+          };
+
+          const decodeDocument = (doc) => {
+            const out = {};
+            for (const [key, value] of Object.entries(doc?.fields || {})) {
+              out[key] = decodeFirestoreValue(value);
+            }
+            return out;
+          };
+
+          const encodeLyrics = (source) => {
+            const nested = source?.lyrics && typeof source.lyrics === 'object' && !Array.isArray(source.lyrics)
+              ? source.lyrics
+              : {};
+            let korean = firstNonEmptyString(
+              source?.editedKoreanLyrics,
+              source?.koreanLyrics,
+              nested?.korean,
+              nested?.ko,
+            );
+            let foreign = firstNonEmptyString(
+              source?.editedEnglishLyrics,
+              source?.englishLyrics,
+              nested?.english,
+              nested?.foreign,
+              nested?.en,
+            );
+            const legacy = firstNonEmptyString(
+              typeof source?.lyrics === 'string' ? source.lyrics : '',
+              source?.lyricsText,
+            );
+            if (!korean && !foreign && legacy) return legacy.slice(0, 30000);
+
+            const maxBodyChars = 29500;
+            if (korean.length + foreign.length > maxBodyChars) {
+              if (korean && foreign) {
+                const half = Math.floor(maxBodyChars / 2);
+                korean = korean.slice(0, half);
+                foreign = foreign.slice(0, maxBodyChars - korean.length);
+              } else if (korean) {
+                korean = korean.slice(0, maxBodyChars);
+              } else {
+                foreign = foreign.slice(0, maxBodyChars);
+              }
+            }
+            if (!korean && !foreign) return '';
+            return `SORIDRAW_LYRICS_V1:${korean.length}:${foreign.length}:${korean}${foreign}`.slice(0, 30000);
+          };
+
+          const sqlText = (value) => `CAST(X'${Buffer.from(String(value), 'utf8').toString('hex')}' AS TEXT)`;
+          const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
+          (async () => {
+            const repairs = [];
+            const unresolved = [];
+            const ownerSet = new Set();
+
+            for (const row of candidates) {
+              const id = String(row.id || '').trim();
+              const ownerUid = String(row.owner_uid || '').trim();
+              const sourceId = String(row.source_id || '').trim();
+              if (!id || !ownerUid || !sourceId) throw new Error('CANDIDATE_IDENTITY_MISSING');
+              if (id !== `music_note_${ownerUid}_${sourceId}`) throw new Error('CANDIDATE_IDENTITY_MISMATCH');
+
+              const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(project)}/databases/(default)/documents/favorites/${encodeURIComponent(sourceId)}`;
+              const response = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+              });
+              if (response.status === 404) throw new Error('SOURCE_DOCUMENT_MISSING');
+              if (!response.ok) throw new Error(`SOURCE_DOCUMENT_READ_${response.status}`);
+              const note = decodeDocument(await response.json());
+
+              const sourceOwner = firstNonEmptyString(note?.uid, note?.ownerUid);
+              if (sourceOwner && sourceOwner !== ownerUid) throw new Error('SOURCE_OWNER_MISMATCH');
+
+              const setParts = [];
+              const repairedFields = [];
+
+              if (Number(row.d1_lyrics_missing || 0) === 1) {
+                const encodedLyrics = encodeLyrics(note);
+                if (encodedLyrics) {
+                  setParts.push(`lyrics = ${sqlText(encodedLyrics)}`);
+                  repairedFields.push('lyrics');
+                } else {
+                  unresolved.push({ kind: 'lyrics', id });
+                }
+              }
+
+              if (Number(row.d1_prompt_missing || 0) === 1) {
+                const prompt = firstNonEmptyString(note?.prompt).slice(0, 8000);
+                if (prompt) {
+                  setParts.push(`prompt = ${sqlText(prompt)}`);
+                  repairedFields.push('prompt');
+                } else {
+                  unresolved.push({ kind: 'prompt', id });
+                }
+              }
+
+              if (setParts.length) {
+                repairs.push({
+                  id,
+                  ownerUid,
+                  sourceId,
+                  repairedFields,
+                  sql: `UPDATE tracks SET ${setParts.join(', ')} WHERE id = ${sqlLiteral(id)} AND owner_uid = ${sqlLiteral(ownerUid)} AND source_id = ${sqlLiteral(sourceId)} AND source_type = 'music_note' AND is_public = 1 AND status = 'published';`,
+                });
+                ownerSet.add(ownerUid);
+              }
+            }
+
+            const repairSql = [
+              'BEGIN TRANSACTION;',
+              ...repairs.map((row) => row.sql),
+              'COMMIT;',
+            ].join('\n') + '\n';
+
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'app272-global-repair.sql'), repairSql);
+
+            const manifest = {
+              publicMusicNoteTotal: total,
+              publicOwnerTotal: owners,
+              missingLyricsBefore: missingLyrics,
+              missingPromptBefore: missingPrompt,
+              candidateCount: candidates.length,
+              repairTrackCount: repairs.length,
+              repairOwnerCount: ownerSet.size,
+              repairLyricsCount: repairs.filter((r) => r.repairedFields.includes('lyrics')).length,
+              repairPromptCount: repairs.filter((r) => r.repairedFields.includes('prompt')).length,
+              unresolvedSourceEmptyCount: unresolved.length,
+            };
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'app272-global-manifest.json'), JSON.stringify(manifest));
+
+            console.log('APP272_GLOBAL_PREFLIGHT=' + JSON.stringify(manifest));
+            console.log('APP272_ALL_USERS_SCOPE=PASS');
+            console.log('APP272_FIRESTORE_SOURCE_READ_ONLY=PASS');
+            console.log('APP272_FAIL_CLOSED_IDENTITY_GUARD=PASS');
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Apply bounded shared D1 repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          MANIFEST="$RUNNER_TEMP/app272-global-manifest.json"
+
+          repairs="$(node -e "const m=require(process.argv[1]);process.stdout.write(String(m.repairTrackCount||0))" "$MANIFEST")"
+          if [ "$repairs" -eq 0 ]; then
+            echo "APP272_GLOBAL_REPAIR=NOOP"
+            exit 0
+          fi
+          if [ "$repairs" -gt 200 ]; then
+            echo "refusing unexpected repair count: $repairs" >&2
+            exit 1
+          fi
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/app272-global-repair.sql" --json > "$RUNNER_TEMP/app272-global-write.json"
+          echo "APP272_GLOBAL_REPAIR=APPLIED"
+          echo "APP272_GLOBAL_REPAIR_TRACKS=$repairs"
+
+      - name: Verify every public Music Note source-present detail globally
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase-auth.outputs.access_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              COUNT(*) AS public_music_note_total,
+              COUNT(DISTINCT owner_uid) AS public_owner_total,
+              SUM(CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END) AS missing_lyrics_after,
+              SUM(CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END) AS missing_prompt_after
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published';
+
+            SELECT id,owner_uid,source_id,
+              CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END AS d1_lyrics_missing,
+              CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END AS d1_prompt_missing
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published'
+              AND (COALESCE(lyrics,'')='' OR COALESCE(prompt,'')='')
+            ORDER BY owner_uid,id
+            LIMIT 201;
+          " --json > "$RUNNER_TEMP/app272-global-after.json"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const blocks = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'app272-global-after.json'), 'utf8'));
+          const rows = blocks.flatMap((block) => block.results || []);
+          const summary = rows.find((row) => Object.prototype.hasOwnProperty.call(row, 'public_music_note_total')) || {};
+          const remaining = rows.filter((row) => Object.prototype.hasOwnProperty.call(row, 'source_id'));
+          if (remaining.length > 200) throw new Error('POSTCHECK_FAIL_CLOSED_OVER_200');
+
+          const token = process.env.FIREBASE_ACCESS_TOKEN;
+          const project = process.env.FIREBASE_PROJECT_ID;
+          const firstNonEmptyString = (...values) => {
+            for (const value of values) if (typeof value === 'string' && value.trim()) return value.trim();
+            return '';
+          };
+          const decodeValue = (v) => {
+            if (!v || typeof v !== 'object') return null;
+            if ('nullValue' in v) return null;
+            if ('stringValue' in v) return v.stringValue;
+            if ('timestampValue' in v) return v.timestampValue;
+            if ('booleanValue' in v) return Boolean(v.booleanValue);
+            if ('integerValue' in v) return Number(v.integerValue);
+            if ('doubleValue' in v) return Number(v.doubleValue);
+            if ('arrayValue' in v) return Array.isArray(v.arrayValue?.values) ? v.arrayValue.values.map(decodeValue) : [];
+            if ('mapValue' in v) {
+              const out = {};
+              for (const [k,c] of Object.entries(v.mapValue?.fields || {})) out[k]=decodeValue(c);
+              return out;
+            }
+            return null;
+          };
+          const decodeDoc = (doc) => {
+            const out={};
+            for (const [k,v] of Object.entries(doc?.fields || {})) out[k]=decodeValue(v);
+            return out;
+          };
+          const hasLyrics = (source) => {
+            const nested = source?.lyrics && typeof source.lyrics === 'object' && !Array.isArray(source.lyrics) ? source.lyrics : {};
+            return Boolean(firstNonEmptyString(
+              source?.editedKoreanLyrics, source?.koreanLyrics, nested?.korean, nested?.ko,
+              source?.editedEnglishLyrics, source?.englishLyrics, nested?.english, nested?.foreign, nested?.en,
+              typeof source?.lyrics === 'string' ? source.lyrics : '', source?.lyricsText,
+            ));
+          };
+
+          (async () => {
+            let bad = 0;
+            let legitimateSourceEmpty = 0;
+            for (const row of remaining) {
+              const sourceId=String(row.source_id||'').trim();
+              const ownerUid=String(row.owner_uid||'').trim();
+              const id=String(row.id||'').trim();
+              if (id !== `music_note_${ownerUid}_${sourceId}`) throw new Error('POSTCHECK_IDENTITY_MISMATCH');
+              const url=`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(project)}/databases/(default)/documents/favorites/${encodeURIComponent(sourceId)}`;
+              const response=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});
+              if (!response.ok) throw new Error(`POSTCHECK_SOURCE_READ_${response.status}`);
+              const note=decodeDoc(await response.json());
+              const sourceOwner=firstNonEmptyString(note?.uid,note?.ownerUid);
+              if(sourceOwner && sourceOwner!==ownerUid) throw new Error('POSTCHECK_OWNER_MISMATCH');
+
+              const lyricsShouldExist=hasLyrics(note);
+              const promptShouldExist=Boolean(firstNonEmptyString(note?.prompt));
+              if(Number(row.d1_lyrics_missing||0)===1 && lyricsShouldExist) bad++;
+              else if(Number(row.d1_lyrics_missing||0)===1) legitimateSourceEmpty++;
+              if(Number(row.d1_prompt_missing||0)===1 && promptShouldExist) bad++;
+              else if(Number(row.d1_prompt_missing||0)===1) legitimateSourceEmpty++;
+            }
+            if (bad) throw new Error(`POSTCHECK_SOURCE_PRESENT_STILL_MISSING_${bad}`);
+            console.log('APP272_GLOBAL_POSTCHECK=' + JSON.stringify({
+              publicMusicNoteTotal:Number(summary.public_music_note_total||0),
+              publicOwnerTotal:Number(summary.public_owner_total||0),
+              d1MissingLyricsAfter:Number(summary.missing_lyrics_after||0),
+              d1MissingPromptAfter:Number(summary.missing_prompt_after||0),
+              sourcePresentStillMissing:bad,
+              legitimateSourceEmpty,
+            }));
+            console.log('APP272_GLOBAL_SOURCE_PRESENT_PARITY=PASS');
+            console.log('APP272_OTHER_USERS_INCLUDED=PASS');
+          })().catch((error)=>{console.error(error);process.exit(1);});
+          NODE

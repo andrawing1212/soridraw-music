@@ -1006,15 +1006,24 @@ export default {
       return handlePublicLikeCards192(request, env);
     }
     const isProfileUpdate244 = request.method === 'PATCH' && url.pathname === '/v1/me/profile';
+    const isUnifiedProfileSave252 = request.method === 'PUT' && url.pathname === '/v1/me/profile-save';
     const isPublicProfileRead244 = request.method === 'GET'
       && /^\/v1\/profiles\/[^/]+(?:\/first-view)?$/.test(url.pathname);
-    const profileUpdateRequest244 = isProfileUpdate244 ? request.clone() : null;
+    const profileUpdateRequest244 = (isProfileUpdate244 || isUnifiedProfileSave252) ? request.clone() : null;
 
     let response = await baseWorker.fetch(request, env, ctx);
 
-    if (isProfileUpdate244 && response.ok) {
+    if ((isProfileUpdate244 || isUnifiedProfileSave252) && response.ok) {
       let requestBody = null;
-      try { requestBody = await profileUpdateRequest244?.json(); } catch {}
+      try {
+        if (isUnifiedProfileSave252) {
+          const form252 = await profileUpdateRequest244?.formData();
+          const rawProfile252 = form252?.get('profile');
+          requestBody = typeof rawProfile252 === 'string' ? JSON.parse(rawProfile252) : null;
+        } else {
+          requestBody = await profileUpdateRequest244?.json();
+        }
+      } catch {}
       let responsePayload = null;
       try { responsePayload = await response.clone().json(); } catch {}
       const profile = profileSocialExtraProfileRow244(responsePayload);
@@ -1028,19 +1037,27 @@ export default {
       if (uid && hasYoutubeField) {
         try {
           // SORIDRAW_PROFILE_SOCIAL_EXTRA_NOOP_247_20260930
+          // SORIDRAW_PROFILE_SOCIAL_CHANGED_ONLY_252_20260930
           const nextYoutubeUrl247 = normalizeProfileExternalUrl244(requestBody.youtubeUrl);
-          const currentExtra247 = await readProfileSocialExtra244(env, uid);
-          if (currentExtra247.youtubeUrl === nextYoutubeUrl247) {
-            response = await attachProfileSocialExtra244(response, env, currentExtra247.youtubeUrl);
-          } else {
+          const explicitYoutubeChanged252 = Number(requestBody?.profileMutationVersion || 0) === 252
+            && requestBody?.youtubeChanged === true;
+          if (explicitYoutubeChanged252) {
             const saved = await writeProfileSocialExtra244(env, uid, nextYoutubeUrl247);
             response = await attachProfileSocialExtra244(response, env, saved.youtubeUrl);
+          } else {
+            const currentExtra247 = await readProfileSocialExtra244(env, uid);
+            if (currentExtra247.youtubeUrl === nextYoutubeUrl247) {
+              response = await attachProfileSocialExtra244(response, env, currentExtra247.youtubeUrl);
+            } else {
+              const saved = await writeProfileSocialExtra244(env, uid, nextYoutubeUrl247);
+              response = await attachProfileSocialExtra244(response, env, saved.youtubeUrl);
+            }
           }
         } catch (error) {
-          console.error('[247] YouTube profile link save failed:', String(error?.message || error || 'unknown'));
+          console.error('[252] YouTube profile link save failed:', String(error?.message || error || 'unknown'));
           return profileSocialExtraSaveFailure244(response);
         }
-      } else {
+      } else if (Number(requestBody?.profileMutationVersion || 0) !== 252) {
         response = await attachProfileSocialExtra244(response, env);
       }
     } else if (isPublicProfileRead244) {

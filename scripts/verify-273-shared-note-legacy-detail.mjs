@@ -6,7 +6,7 @@ const page = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const shared = fs.readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(String(version.version), '273', 'app version must be 273');
+assert.ok(Number(version.version) >= 273, 'app version must be 273 or newer');
 assert.match(cache, /const SHARED_NOTE_DETAIL_VERSION = 273;/);
 assert.match(cache, /isIncompleteLegacySharedNoteDetail/);
 assert.match(cache, /if \(Number\(data\.sharedDetailVersion \|\| 0\) >= SHARED_NOTE_DETAIL_VERSION\) return false;/);

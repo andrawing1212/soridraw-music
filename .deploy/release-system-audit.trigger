@@ -1,7 +1,7 @@
-requested_at=2026-09-30T11:06:00+09:00
+requested_at=2026-09-30T11:09:00+09:00
 requested_by=user_app253_symmetric_half_snap
-product_code_target=fef1892f89229c3a21a78cdface4d72865bb8ad0
-release_purpose=audit_app253_symmetric_half_snap
+product_code_target=f25db955290d2e8c845be3b8bf70d45aea3a1cf3
+release_purpose=reaudit_app253_symmetric_half_snap
 app_version=253
 preview_only=true
 deploy=false

@@ -1,8 +1,8 @@
-requested_at=2026-09-30T13:05:00+09:00
-requested_by=user_app259_pinned_top_actions_more_back
-product_code_target=4f63f7930a1f2027abac30a3fe2452cfbbef5776
-release_purpose=audit_app259_pinned_top_actions_more_back
-app_version=259
+requested_at=2026-09-30T13:18:00+09:00
+requested_by=user_app260_more_backdrop_click_guard
+product_code_target=30e7ac305d1582b907388f6a9ba396ddf7467f0c
+release_purpose=audit_app260_more_backdrop_click_guard
+app_version=260
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

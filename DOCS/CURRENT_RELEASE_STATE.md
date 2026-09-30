@@ -1,3 +1,71 @@
+## 0KH. app251 Explore 좌우 스크롤 동작 공통화 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **Explore 가로 카드 rail의 PC/모바일 동작 통일 / 0.2초 settle / 버튼 표시시간 통일 / 버튼 소폭 축소 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 요청:
+- 모바일 공개프로필 `고정 곡`에 적용했던 0.2초 좌우 스크롤 정렬 동작을 PC/모바일 전체 Explore 가로 카드 rail에 공통 적용.
+- 카드 영역 터치/클릭 시 좌우 스크롤 버튼을 2초간 표시.
+- 실제 스크롤 이동 중에는 버튼을 표시하고, 움직임이 멈춘 뒤 기존과 같은 0.5초 후 숨김.
+- 좌우 스크롤 버튼 크기를 조금 축소.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - `ExploreRecommendationRail` 전체가 공통 `200ms` settle timer 사용.
+  - 디바이스 폭/포인터 종류/rail 종류에 따른 0.5초 vs 0.2초 분기 제거.
+  - SORIDRAW 추천 / 장르별 추천 / 크리에이터 / 공개프로필 고정 곡 모두 동일 경로.
+  - card area pointer down에서 controls 2초 표시.
+  - scroll event마다 controls 표시 + 마지막 움직임 이후 500ms 숨김.
+  - touch short-drag 1-card 이동과 native momentum 보호는 유지.
+- `src/components/explore/explore.css`
+  - 공통 hidden state `.is-controls-hidden`을 모든 Explore recommendation rail에 적용.
+  - PC 버튼 46px -> **42px**, icon 22px -> **20px**, 바깥 위치 -23px -> **-21px**.
+  - 모바일 버튼 38px -> **35px**, icon 20px -> **18px**.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 기존 pinned-mobile 전용 timing guard를 새 공통 rail 계약으로 갱신.
+- app version: **251**.
+
+범위/비용:
+- 가로 카드 rail의 클라이언트 UI 동작만 변경.
+- API / Worker / D1 / R2 / Firestore / Functions / Rules 변경 없음.
+- 새 서버 read/write 없음.
+- 곡 데이터/좋아요/공개·비공개/팔로우/프로필 저장 로직 변경 없음.
+- 장르 키워드 chip strip은 카드 rail이 아니므로 기존 그대로 유지.
+
+검증/배포:
+- product commits:
+  - `97f04998770ddbd3cad9d0adcddae7608d8e5aac` rail 공통 동작
+  - `ff15cd9f51e86eb149013be8cc6e012bda81ec28` 버튼 축소/CSS
+  - `2fc648d1ab2a0bb6a1a009041c2c5eaaecf59700` verifier 갱신
+  - `d3b18529c89d6d0f4d6bd0a85fe6ac44391b727e` app251
+- Release System Audit Run `36656048572`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Explore layout/rail verifier PASS
+  - existing static regressions PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36656243470`: **SUCCESS**
+  - exact Hosting source `6bf5055f577bc8288f3a19452a5c54b82502256e`
+  - TypeScript PASS
+  - Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호:
+- PREVIEW Worker 재배포 없음.
+- Firebase Functions / Firestore Rules / shared RTDB Rules 변경 없음.
+- D1 schema / migration / user data 변경 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. PC 추천의 SORIDRAW 추천 / 장르별 추천 / 크리에이터 rail 좌우 스크롤 후 0.2초 settle 확인.
+2. 모바일 동일 확인.
+3. 공개프로필 고정 곡도 기존 0.2초 체감 유지 확인.
+4. 카드 영역 클릭/터치 후 버튼 약 2초 표시 확인.
+5. 스크롤 이동 후 멈추면 약 0.5초 뒤 버튼 숨김 확인.
+6. PC 42px / 모바일 35px 버튼 크기 체감 확인.
+
 ## 0KG. app250 공개프로필 전체 곡 정렬 수정 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **고정 곡은 상단 전용 영역만 유지 / 전체 곡은 고정 여부와 무관하게 공개 최신순 / PREVIEW Hosting 배포 완료 / 실사용 확인 대기**

@@ -1063,7 +1063,7 @@ function ExploreTrackCard({
 
         {variant === 'profilePinnedBanner' && (
           <div className="soridraw-explore-pinned-actions-255" aria-label="고정 곡 빠른 작업">
-            <div className="soridraw-explore-pinned-bottom-row-258">
+            <div className="soridraw-explore-pinned-top-actions-259">
               <button
                 type="button"
                 className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
@@ -1076,37 +1076,36 @@ function ExploreTrackCard({
                 <span>{formatCount(track.likeCount)}</span>
               </button>
 
-              <div className="soridraw-explore-pinned-actions-right-255">
-                <button
-                  type="button"
-                  className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-apply-255${track.allowNextSongApply ? ' is-available' : ''}`}
-                  onClick={() => onApplyNext(track)}
-                  disabled={!track.allowNextSongApply}
-                  aria-label={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
-                  title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
-                >
-                  <RefreshCw aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-share-255"
-                  onClick={() => onShare(track)}
-                  aria-label="공유"
-                  title="공유"
-                >
-                  <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
-                </button>
-              </div>
+              <button
+                type="button"
+                className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-apply-255${track.allowNextSongApply ? ' is-available' : ''}`}
+                onClick={() => onApplyNext(track)}
+                disabled={!track.allowNextSongApply}
+                aria-label={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+                title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+              >
+                <RefreshCw aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-more-255"
+                onClick={() => onOpenMore(track)}
+                aria-label="곡 더보기"
+                title="더보기"
+              >
+                <EllipsisVertical aria-hidden="true" />
+              </button>
             </div>
 
             <button
               type="button"
-              className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-more-255"
-              onClick={() => onOpenMore(track)}
-              aria-label="곡 더보기"
-              title="더보기"
+              className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-share-255"
+              onClick={() => onShare(track)}
+              aria-label="공유"
+              title="공유"
             >
-              <EllipsisVertical aria-hidden="true" />
+              <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
             </button>
           </div>
         )}

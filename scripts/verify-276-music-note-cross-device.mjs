@@ -4,6 +4,8 @@ import fs from 'node:fs';
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
+const rules = fs.readFileSync('database.rules.json', 'utf8');
+const main = fs.readFileSync('src/main.tsx', 'utf8');
 
 assert.equal(String(version.version), '276');
 
@@ -13,6 +15,11 @@ assert.match(sync, /documentIds: signal\.documentIds/);
 assert.match(sync, /truncated: signal\.truncated/);
 assert.match(sync, /MUSIC_NOTE_PENDING_SIGNAL_BASE = 'soridraw_music_note_pending_signal_v2'/);
 assert.match(sync, /export const readPendingMusicNoteSyncSignal/);
+assert.match(sync, /MAX_DOCUMENT_IDS = 10/);
+assert.doesNotMatch(sync, /firebase\/firestore|getDocs\(|collection\(/);
+assert.match(rules, /"userSync"/);
+assert.match(rules, /\$index\.matches\(\/\^\[0-9\]\$\//);
+assert.match(main, /import '\.\/services\/userDomainSyncService';/);
 
 const exactMarker = app.indexOf('const exactDocumentIds = [...new Set(');
 const routeGate = app.indexOf("const musicNotePageActive = typeof window !== 'undefined'", exactMarker);

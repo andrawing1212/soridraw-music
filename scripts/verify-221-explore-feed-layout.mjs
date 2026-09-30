@@ -691,8 +691,8 @@ console.log('APP244_PROFILE_OLD_CLIENT_YOUTUBE_PRESERVE=PASS');
 console.log('APP245_PROFILE_SAVED_SOCIAL_STATE=PASS');
 assert.match(
   profileEdit,
-  /profileFieldsChanged247[\s\S]*?\? await updateExplorePublicProfile\(user, normalizedDraft\)[\s\S]*?: profile/,
-  'app247 must skip the profile PATCH when only media changed or the form is unchanged',
+  /const useUnifiedProfileSave252 = profileFieldsChanged247 && hasProfileMedia252[\s\S]*?const saved = useUnifiedProfileSave252[\s\S]*?: profileFieldsChanged247[\s\S]*?updateExplorePublicProfile\(user, normalizedDraft, \{ youtubeChanged: youtubeChanged252 \}\)[\s\S]*?: profile/,
+  'app252 must use unified save for text+media while still skipping the profile PATCH for media-only or unchanged forms',
 );
 assert.match(
   workerEntry,

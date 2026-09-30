@@ -60,6 +60,14 @@ assert.equal((save.match(/env\.DB\.prepare/g) || []).length, 2,
   'save-access must stay at exactly two bounded D1 lookups');
 assert.doesNotMatch(save, /\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i,
   'save-access must remain read-only');
+assert.match(save, /SORIDRAW_FOLLOWER_SAVE_LINK_SHARE_PARITY_269_20261001/,
+  'save-access must preserve the app269 follower-save/link-share parity contract');
+assert.match(save, /duration_seconds[\s\S]*?lyrics[\s\S]*?style[\s\S]*?prompt[\s\S]*?share_schema_version[\s\S]*?share_payload_json/,
+  'the existing bounded track lookup must return the reusable Music Note detail and keyword payload');
+assert.match(save, /JSON\.parse\(String\(track\.share_payload_json \|\| ""\)\)[\s\S]*?selectedKeywords[\s\S]*?nextSong/,
+  'authorized follower save must decode the already-stored public share bundle without another D1 read');
+assert.match(save, /saveSource: allowed \?[\s\S]*?durationSeconds:[\s\S]*?lyrics:[\s\S]*?style:[\s\S]*?prompt:[\s\S]*?shareBundle: saveShareBundle/,
+  'authorized saveSource must carry detail plus next-song recipe to the client');
 
 assert.match(actionService, /method: 'GET'/, 'Explore action helper must use read-only GET routes');
 assert.match(actionService, /soridraw:explore:disliked:v1:/, 'dislike storage must stay account scoped');
@@ -79,6 +87,8 @@ assert.ok(workerApplyFallbackIndex > localLegacyFallbackIndex,
   'server apply-source read must remain after both cache and local public-keyword fallbacks');
 assert.match(page, /if \(user\.uid !== track\.ownerUid\)[\s\S]*?getExploreTrackSaveAccess/s,
   'owner shared-note save must avoid the follower permission read while other users are checked');
+assert.match(page, /const saveSource = access\.saveSource;[\s\S]*?setMoreTrack\(\(current\)[\s\S]*?lyrics: saveSource\.lyrics[\s\S]*?prompt: saveSource\.prompt[\s\S]*?shareBundle: saveSource\.shareBundle/,
+  'authorized follower save must retain the server-provided full save snapshot through folder selection');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/,
   'Explore must not re-enter the experimental Library path');
 
@@ -93,10 +103,15 @@ assert.match(sharedNoteService, /operation: 'shared-note-save'/,
   'shared-note save must stay inside the existing Music Note mutation boundary');
 assert.match(sharedNoteService, /documentIds: \[documentId\]/,
   'shared-note mutation must identify only the changed document');
+assert.match(sharedNoteService, /appliedKeywords: \{[\s\S]*?genre: \[\][\s\S]*?instrumentSound: \[\][\s\S]*?\.\.\.\(nextSong as Record<string, unknown>\)/,
+  'follower-save copy must persist the same reusable next-song keyword recipe as a Music Note shared copy');
+assert.match(sharedNoteService, /lyrics,[\s\S]*?prompt: track\.prompt \|\| ''[\s\S]*?userInput: String\(\(nextSong as any\)\.userInput \|\| ''\)/,
+  'follower-save copy must persist lyrics, prompt, and command input for read-only detail/apply parity');
 
 console.log('APP202_EXPLORE_ACTION_WORKER_ROUTES=PASS');
 console.log('APP202_EXPLORE_ACTION_READ_BOUNDS=PASS');
 console.log('APP202_EXPLORE_DISLIKE_ZERO_SERVER_WRITE=PASS');
 console.log('APP202_SHARED_NOTE_CACHE_FIRST=PASS');
 console.log('APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS');
+console.log('APP269_FOLLOWER_SAVE_LINK_SHARE_PARITY=PASS');
 console.log('APP202_LIBRARY_PATH_UNUSED=PASS');

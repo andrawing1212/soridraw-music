@@ -1,3 +1,23 @@
+## 2026-09-30 — app253 Explore 50% 좌우 대칭 정렬 실사용 확인
+
+배포 완료:
+- 모든 Explore 가로 카드 rail의 0.2초 정렬을 card-start nearest-anchor 방식으로 변경.
+- 인접 카드 anchor 중간점이 정확한 50% 경계.
+- 우측/좌측 모두 같은 기준.
+- PREVIEW App Release Run `36658541957` SUCCESS.
+- Worker / D1 / R2 / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 모바일 / 태블릿 / PC에서 우측으로 50% 미만 이동 후 놓기 -> 원위치.
+2. 우측으로 50% 초과 -> 다음 카드.
+3. 좌측으로 50% 미만 -> 원위치.
+4. 좌측으로 50% 초과 -> 이전 카드.
+5. 0.2초 settle 체감과 PC hover / 모바일 버튼 동작 유지.
+
+판정:
+- 좌/우 모두 위 기준 PASS면 작업 종료.
+- 서버/데이터/카드 디자인은 추가 수정 금지.
+
 ## 2026-09-30 — app252 Explore rail hover 실사용 확인
 
 배포 완료:

@@ -13,7 +13,6 @@ import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readExploreFeedSessionCache,
-  readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
   patchExploreFeedSessionCachesRow,
@@ -1129,9 +1128,6 @@ export default function ExplorePage() {
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [tracks, setTracks] = useState<ExploreTrack[]>([]);
-  const [feedNextCursor, setFeedNextCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadMoreError, setLoadMoreError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({});
@@ -1555,8 +1551,6 @@ export default function ExplorePage() {
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       const displayTracks = overlayActorLikeCounts120(normalizedTracks);
-      setFeedNextCursor(nextCursor);
-      setLoadMoreError('');
       setTracks(displayTracks);
       if (feedRequest) {
         syncSharedPublicCountsToLocal110(normalizedTracks);
@@ -1568,8 +1562,6 @@ export default function ExplorePage() {
 
     if (cachedRows) {
       setError('');
-      setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
-      setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
       // SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918
       // App updates and ordinary re-entry render the last known good Feed immediately
@@ -1662,8 +1654,6 @@ export default function ExplorePage() {
         if (controller.signal.aborted) return;
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
-        setFeedNextCursor(null);
-        setLoadMoreError('');
         setTracks([]);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -1965,37 +1955,6 @@ export default function ExplorePage() {
     await flushExploreLikeBoundary094();
     setSearchParams({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const loadMoreFeed = async () => {
-    if (profileUid || submittedQuery || !feedNextCursor || loadingMore) return;
-    const apiSort = sort === 'popular' ? 'popular' : 'latest';
-    const params = new URLSearchParams({ sort: apiSort, limit: '40', cursor: feedNextCursor });
-    setLoadingMore(true);
-    setLoadMoreError('');
-    try {
-      const response = await fetch(EXPLORE_API_BASE + '/v1/feed?' + params.toString(), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-      recordCloudflareResponse(response);
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      const payload = await response.json() as ExploreApiResponse;
-      const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-      const normalized = rows.map(normalizeTrack).filter((track) => track.id);
-      const displayRows = overlayActorLikeCounts120(normalized);
-      syncSharedPublicCountsToLocal110(normalized);
-      setTracks((previous) => {
-        const seen = new Set(previous.map((track) => track.id));
-        return [...previous, ...displayRows.filter((track) => !seen.has(track.id))];
-      });
-      setFeedNextCursor(safeText(payload?.data?.nextCursor) || null);
-    } catch (reason) {
-      console.warn('Explore feed load-more failed:', reason);
-      setLoadMoreError('이전 공개곡을 불러오지 못했어요. 다시 시도해주세요.');
-    } finally {
-      setLoadingMore(false);
-    }
   };
 
   // App 120 no longer reads or writes the old 069/071 actor refresh cache.
@@ -2852,13 +2811,6 @@ export default function ExplorePage() {
             <strong>{submittedQuery ? '검색 결과가 없어요.' : sort === 'recommended' && tracks.length > 0 ? '현재 추천할 곡이 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
             <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : sort === 'recommended' && tracks.length > 0 ? '싫어요한 곡은 추천에서 제외됩니다.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
           </div>
-          {!submittedQuery && feedNextCursor && (
-            <div className="soridraw-explore-load-more">
-              <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>
-                {loadingMore ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 불러오는 중</> : '더 보기'}
-              </button>
-            </div>
-          )}
         </>
       ) : (
         <>
@@ -2929,14 +2881,6 @@ export default function ExplorePage() {
               true,
             )
           )}
-          {!submittedQuery && feedNextCursor && (
-            <div className="soridraw-explore-load-more">
-              <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>
-                {loadingMore ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 불러오는 중</> : '더 보기'}
-              </button>
-            </div>
-          )}
-          {loadMoreError && <div className="soridraw-explore-load-more-error" role="status">{loadMoreError}</div>}
         </>
       )}
     </main>

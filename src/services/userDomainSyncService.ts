@@ -1,5 +1,5 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import { onValue, ref, set, type Unsubscribe } from 'firebase/database';
+import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
 import {
   addV1MutationPostSuccessHook,
@@ -122,6 +122,23 @@ const publishSignal = async (
   if (!uid) return;
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
   if (kind === 'recentSongs' && result == null) return; // Mutation epoch skip is not a write.
+
+  if (kind === 'musicNote') {
+    // app276 — Music Note signals used each device's Date.now() as a global
+    // ordering token. If one phone clock was ahead of a PC, the later PC signal
+    // could be numerically older forever and the phone would ignore it.
+    // Keep the existing one tiny RTDB mutation, but allocate a UID-wide
+    // monotonic version inside that same node.
+    const signalRef = ref(realtimeDb, `userSync/${uid}/musicNote`);
+    await runTransaction(signalRef, (current) => {
+      const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
+      const signal = buildSignal(context, result);
+      signal.version = Math.max(Date.now(), currentVersion + 1);
+      return signal;
+    }, { applyLocally: true });
+    return;
+  }
+
   await set(ref(realtimeDb, `userSync/${uid}/${kind}`), buildSignal(context, result));
 };
 
@@ -159,7 +176,14 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
       writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_LOCAL_VERSION_BASE, uid), signal.version);
     }
     window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_EVENT, {
-      detail: { uid, version: signal.version, originDeviceId: signal.originDeviceId },
+      detail: {
+        uid,
+        version: signal.version,
+        originDeviceId: signal.originDeviceId,
+        operation: signal.operation,
+        documentIds: signal.documentIds,
+        truncated: signal.truncated,
+      },
     }));
     return;
   }

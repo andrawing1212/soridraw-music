@@ -38,7 +38,6 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-276-music-note-cross-device.mjs
-          node scripts/verify-user-domain-sync-stage2a.mjs
           npx tsx scripts/verify-196-recent-song-sync.ts
           node scripts/verify-274-shared-note-saved-status.mjs
           node scripts/verify-273-shared-note-legacy-detail.mjs

@@ -1,8 +1,8 @@
-requested_at=2026-09-30T23:59:00+09:00
-requested_by=user_app262_touch_pointercancel_fix
-product_code_target=55a40b83e0e67656c64e512c3421aafca44eb798
-release_purpose=audit_app262_touch_pointercancel_fix
-app_version=262
+requested_at=2026-10-01T00:26:00+09:00
+requested_by=user_app263_momentum_settle_fix
+product_code_target=ea9c2351e772075f5d9bcb5f7cda9f97c72d8bab
+release_purpose=audit_app263_momentum_aware_rail_settle
+app_version=263
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

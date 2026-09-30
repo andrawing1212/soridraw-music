@@ -274,7 +274,12 @@ assert.match(
 assert.match(
   page,
   /EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251\s*=\s*500[\s\S]*?EXPLORE_RAIL_CONTROLS_TAP_SHOW_MS_251\s*=\s*2_000/,
-  'all Explore rail controls must share 0.5s idle hide and 2s card-touch reveal timing',
+  'touch controls must keep the 0.5s idle hide and 2s card-touch reveal timing when the mouse is not hovering',
+);
+assert.match(
+  page,
+  /scheduleRailControlsHide251[\s\S]*?if \(railMouseHoverRef252\.current\) return[\s\S]*?if \(!railMouseHoverRef252\.current\)[\s\S]*?setRailControlsVisible251\(false\)/,
+  'idle hide must never dismiss rail controls while a mouse remains over the rail',
 );
 assert.match(
   page,
@@ -308,8 +313,8 @@ assert.match(
 );
 assert.match(
   page,
-  /onPointerEnter=\{\(event\) => \{[\s\S]*?event\.pointerType === 'mouse'[\s\S]*?revealRailControls251\(\);[\s\S]*?\}\}/,
-  'hovering a scrollable Explore rail with a mouse must reveal the same controls for the shared 2s window',
+  /railMouseHoverRef252[\s\S]*?onPointerEnter=\{\(event\) => \{[\s\S]*?event\.pointerType !== 'mouse'[\s\S]*?railMouseHoverRef252\.current = true[\s\S]*?clearRailControlsTimer251\(\)[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?onPointerLeave=\{\(event\) => \{[\s\S]*?railMouseHoverRef252\.current = false[\s\S]*?setRailControlsVisible251\(false\)/,
+  'mouse hover over any Explore card rail must keep controls visible continuously and hide them when the pointer leaves the rail',
 );
 assert.match(
   page,

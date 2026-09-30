@@ -353,8 +353,8 @@ assert.match(
 );
 assert.match(
   page,
-  /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?railPointerActiveRef261\.current \|\| railReleaseAlignPendingRef261\.current[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
-  'scrolling any Explore rail must reveal controls while pointer-held motion cannot arm or restart the snap timer',
+  /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?if \(railPointerActiveRef261\.current\)[\s\S]*?return;[\s\S]*?if \(railReleaseMomentumSettleRef263\.current\)[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?if \(railReleaseAlignPendingRef261\.current\)[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'scrolling any Explore rail must reveal controls, held motion must never snap, and released native momentum may defer the final settle',
 );
 assert.match(
   page,

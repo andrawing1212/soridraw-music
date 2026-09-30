@@ -17933,16 +17933,18 @@ __name22222222222222222222222222222222222222222222222222222222222222222222222(ha
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
 async function handleFollowerSaveAccess(request, env, cors, trackId) {
+  // SORIDRAW_FOLLOWER_SAVE_LINK_SHARE_PARITY_269_20261001
   const authContext = await requireExploreAuth(request);
   const track = await env.DB.prepare(`
-    SELECT id, owner_uid, title, cover_url, suno_url_primary, suno_url_secondary,
+    SELECT id, owner_uid, title, cover_url, duration_seconds,
+      lyrics, style, prompt, suno_url_primary, suno_url_secondary,
       source_type, source_id, source_subtrack_key, source_subtrack_index, source_subtrack_id,
-      allow_follower_save
+      allow_follower_save, share_schema_version, share_payload_json
     FROM tracks
     WHERE id = ? AND is_public = 1 AND status = 'published'
     LIMIT 1
   `).bind(trackId).first();
-  if (!track) throwApi("NOT_FOUND", "\uACF5\uAC1C \uACE1\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404);
+  if (!track) throwApi("NOT_FOUND", "공개 곡을 찾을 수 없습니다.", 404);
   const permissionEnabled = Number(track.allow_follower_save || 0) === 1;
   let following = false;
   if (authContext.uid !== track.owner_uid) {
@@ -17955,6 +17957,32 @@ async function handleFollowerSaveAccess(request, env, cors, trackId) {
     following = Boolean(follow?.following);
   }
   const allowed = permissionEnabled && following;
+
+  let saveShareBundle = null;
+  if (allowed && Number(track.share_schema_version || 0) === SORIDRAW_PUBLIC_SHARE_SCHEMA_015) {
+    try {
+      const parsed = JSON.parse(String(track.share_payload_json || ""));
+      if (
+        parsed
+        && typeof parsed === "object"
+        && !Array.isArray(parsed)
+        && Number(parsed.schemaVersion || 0) === SORIDRAW_PUBLIC_SHARE_SCHEMA_015
+      ) {
+        saveShareBundle = {
+          schemaVersion: SORIDRAW_PUBLIC_SHARE_SCHEMA_015,
+          selectedKeywords: parsed.selectedKeywords && typeof parsed.selectedKeywords === "object" && !Array.isArray(parsed.selectedKeywords)
+            ? parsed.selectedKeywords
+            : {},
+          nextSong: parsed.nextSong && typeof parsed.nextSong === "object" && !Array.isArray(parsed.nextSong)
+            ? parsed.nextSong
+            : null
+        };
+      }
+    } catch {
+      saveShareBundle = null;
+    }
+  }
+
   return json({ ok: true, data: {
     trackId: track.id,
     ownerUid: track.owner_uid,
@@ -17972,7 +18000,12 @@ async function handleFollowerSaveAccess(request, env, cors, trackId) {
       title: track.title || "",
       coverUrl: track.cover_url || "",
       sunoUrlPrimary: track.suno_url_primary || "",
-      sunoUrlSecondary: track.suno_url_secondary || null
+      sunoUrlSecondary: track.suno_url_secondary || null,
+      durationSeconds: track.duration_seconds == null ? null : Number(track.duration_seconds),
+      lyrics: track.lyrics || "",
+      style: track.style || "",
+      prompt: track.prompt || "",
+      shareBundle: saveShareBundle
     } : null
   } }, 200, cors);
 }

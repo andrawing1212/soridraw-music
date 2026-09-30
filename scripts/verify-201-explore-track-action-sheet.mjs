@@ -14,8 +14,8 @@ assert.match(page, /const renderMoreSheet = \(\) =>/, 'Explore must render the b
 assert.match(page, /className="soridraw-explore-more-backdrop"[\s\S]*?onPointerDown=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?!actionBusy[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/, 'backdrop close must be pointer-safe, outside-only, and blocked while an action is busy');
 assert.match(page, /document\.body\.style\.overflow = 'hidden'/, 'open action sheet must lock background scrolling');
 assert.match(page, /event\.key !== 'Escape' \|\| moreActionBusyRef257\.current !== null/, 'Escape must not dismiss the sheet while an action is busy');
-assert.match(page, /window\.history\.pushState\([\s\S]*?soridrawExploreMore257: true/, 'More sheet must add one local history entry for system back');
-assert.match(page, /window\.addEventListener\('popstate', handlePopState257\)/, 'system/browser back must be captured while More is open');
+assert.match(page, /onOpenMore=\{\(selectedTrack\) => \{[\s\S]*?window\.history\.pushState\([\s\S]*?soridrawExploreMore259: true[\s\S]*?setMoreTrack\(selectedTrack\)/, 'More must reserve its history entry synchronously before the sheet opens');
+assert.match(page, /window\.addEventListener\('popstate', handlePopState257\)/, 'system/browser back must be captured while More is open on PC and mobile');
 assert.match(page, /const handlePopState257 = \(\) => \{[\s\S]*?dismissMoreFromHistory257\(\)/, 'system/browser back must close More before leaving Explore');
 assert.match(page, /aria-pressed=\{liked\}/, 'sheet like action must expose its active state');
 assert.match(page, />공유 노트에 추가</, 'shared-note action must remain in the sheet');

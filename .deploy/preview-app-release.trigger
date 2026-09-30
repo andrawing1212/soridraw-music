@@ -1,8 +1,8 @@
-requested_at=2026-09-30T12:57:00+09:00
-requested_by=user_app258_fixed_pinned_bottom_row
-product_code_target=0323ae145a190cf4375986c7e514f1d87aa13ab4
-release_purpose=deploy_app258_fixed_pinned_bottom_row
-app_version=258
+requested_at=2026-09-30T13:10:00+09:00
+requested_by=user_app259_pinned_top_actions_more_back
+product_code_target=b4f1ab611329880f77bd3798d88fda1ecd9b32a8
+release_purpose=deploy_app259_pinned_top_actions_more_back
+app_version=259
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

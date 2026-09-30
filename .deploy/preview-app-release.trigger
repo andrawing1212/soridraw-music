@@ -1,8 +1,8 @@
-requested_at=2026-09-30T18:03:00+09:00
-requested_by=user_app261_release_based_rail_snap
-product_code_target=8c58f601864b308a80cb20b67639ed1ce794f3bb
-release_purpose=deploy_app261_release_based_rail_snap
-app_version=261
+requested_at=2026-10-01T00:06:00+09:00
+requested_by=user_app262_touch_pointercancel_fix
+product_code_target=7c5da7196a6690efaa95b295c7a4ab46c3c49e78
+release_purpose=deploy_app262_touch_pointercancel_fix
+app_version=262
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

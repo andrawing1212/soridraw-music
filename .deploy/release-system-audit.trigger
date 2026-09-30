@@ -1,7 +1,7 @@
-requested_at=2026-09-30T17:58:00+09:00
+requested_at=2026-09-30T18:01:00+09:00
 requested_by=user_app261_release_based_rail_snap
-product_code_target=213e562a83b50677cd3a14dc13b00edb7b9860a4
-release_purpose=audit_app261_release_based_rail_snap
+product_code_target=a5462fc26724622f65aac38d76c67aef412d247e
+release_purpose=reaudit_app261_release_based_rail_snap
 app_version=261
 preview_only=true
 deploy=false

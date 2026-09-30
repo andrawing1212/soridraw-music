@@ -253,6 +253,7 @@
 .soridraw-explore-more-primary button.is-active{background:rgba(255,255,255,.11)!important;color:#fff}
 .soridraw-explore-more-primary button.is-active svg{fill:currentColor;stroke:currentColor}
 .soridraw-explore-more-primary button:disabled{opacity:.48;cursor:wait}
+.soridraw-explore-more-primary button.is-disabled:disabled{cursor:default}
 .soridraw-explore-more-primary svg{width:20px;height:20px}
 
 .soridraw-explore-more-rows{display:grid;gap:2px;padding:7px 0 0;border-top:1px solid rgba(255,255,255,.07)}

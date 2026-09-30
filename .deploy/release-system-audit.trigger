@@ -1,8 +1,8 @@
-requested_at=2026-09-30T10:49:30+09:00
-requested_by=user_explore_rail_hover_reveal
-product_code_target=f1ef82e5e8a9f7aa7a99634941d4abaa19bb6a3e
-release_purpose=audit_explore_rail_hover_reveal_2s
-app_version=251
+requested_at=2026-09-30T10:52:00+09:00
+requested_by=user_app252_persistent_rail_hover
+product_code_target=10c13e713bdf10a9ac3cc2c8b50b071ca4652c2c
+release_purpose=audit_app252_persistent_rail_hover
+app_version=252
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

@@ -9654,6 +9654,8 @@ const toggleCycleVariantSelection = (
     originDeviceId = '',
     documentIds: string[] = [],
     truncated = false,
+    operation = '',
+    itemJson = '',
   ) => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
@@ -9676,39 +9678,39 @@ const toggleCycleVariantSelection = (
         .filter(Boolean)
     )].slice(0, 10);
 
-    // app276 — cross-device My Note / Shared Note / recent-song save signals
-    // already carry the exact changed favorite document ids. Consume those ids
-    // on every route instead of requiring pathname === '/history'. This keeps
-    // Recent Songs hearts and Split-mode Music Note in sync without a collection
-    // query: one remote mutation reads only the changed document(s).
+    // app277 — normal changed-item UI state rides the tiny RTDB signal.
+    // Receiving devices patch the local Music Note catalog directly, so save,
+    // unsave and shared-note sync add no Firestore read on the other device.
     if (exactDocumentIds.length > 0 && truncated !== true) {
-      try {
-        const exactSnapshots = await Promise.all(
-          exactDocumentIds.map((documentId) => getDoc(doc(db, 'favorites', documentId)))
-        );
-        const changedFavorites = exactSnapshots
-          .filter((snapshot) => snapshot.exists())
-          .map(mapFavoriteFirestoreDoc);
+      let remoteItem: any = null;
+      if (itemJson) {
+        try {
+          const parsed = JSON.parse(itemJson);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) remoteItem = parsed;
+        } catch {}
+      }
 
+      const normalizedOperation = String(operation || '').trim();
+      const isRemovalOperation = normalizedOperation === 'unsave'
+        || normalizedOperation === 'permanent-delete'
+        || normalizedOperation === 'bulk-delete';
+
+      if (remoteItem || isRemovalOperation) {
         setFavorites((prev) => {
-          let next = Array.isArray(prev) ? [...prev] : [];
           const changedIds = new Set(exactDocumentIds);
-          next = next.filter((item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim()));
-          changedFavorites.forEach((favorite) => {
-            if (!isFavoriteSoftRemoved(favorite)) {
-              next = mergeFavoritePages([favorite], next);
-            }
-          });
+          let next = (Array.isArray(prev) ? prev : []).filter(
+            (item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim())
+          );
+          if (remoteItem && !isFavoriteSoftRemoved(remoteItem)) {
+            next = mergeFavoritePages([remoteItem], next);
+          }
           const sorted = sortFavoriteList(next);
           writeFavoritesCache(uid, sorted);
           return sorted;
         });
-
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-        markCacheDiagnostic('musicNote', 'SYNC', exactSnapshots.length);
+        markCacheDiagnostic('musicNote', 'SYNC', 0);
         return;
-      } catch (error) {
-        console.warn('Music Note exact cross-device sync failed. Falling back to existing bounded sync.', error);
       }
     }
 
@@ -9782,6 +9784,8 @@ const toggleCycleVariantSelection = (
         originDeviceId?: string;
         documentIds?: string[];
         truncated?: boolean;
+        operation?: string;
+        itemJson?: string;
       }>).detail;
       if (!detail || detail.uid !== currentUser.uid) return;
       void syncMusicNoteIncrementalFromRemoteVersion(
@@ -9789,6 +9793,8 @@ const toggleCycleVariantSelection = (
         String(detail.originDeviceId || ''),
         Array.isArray(detail.documentIds) ? detail.documentIds : [],
         detail.truncated === true,
+        String(detail.operation || ''),
+        String(detail.itemJson || ''),
       );
     };
 
@@ -9803,6 +9809,8 @@ const toggleCycleVariantSelection = (
         pendingSignal.originDeviceId,
         pendingSignal.documentIds,
         pendingSignal.truncated,
+        pendingSignal.operation,
+        pendingSignal.itemJson || '',
       );
     } else {
       const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);

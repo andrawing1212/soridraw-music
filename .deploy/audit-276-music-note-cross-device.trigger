@@ -1,0 +1,9 @@
+requested_at=2026-10-01T08:28:00+09:00
+requested_by=user
+target=app276
+scope=my_note_shared_note_recent_favorite_cross_device
+typescript=true
+build=true
+focused_regression=true
+normal_navigation_extra_read_required=0
+exact_remote_change_read_only_changed_documents=true

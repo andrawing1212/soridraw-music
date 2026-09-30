@@ -1,3 +1,76 @@
+## 0KW. app266 Explore 공유 노트 권한/저장 누락 수정 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **공유 노트 버튼을 '팔로워 곡 저장 허용'과 동일 조건으로 잠금 / 허용된 곡 저장 시 Music Note Catalog에 변경곡 1개만 반영 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**
+
+사용자 실사용:
+- 공개 설정의 `팔로워 곡 저장 허용`이 OFF인데도 Explore More의 `공유 노트에 추가`가 활성 상태였고 폴더 선택까지 가능했음.
+- 해당 설정을 ON으로 저장한 뒤 공유 노트 폴더를 골라도 Music Note > 공유 노트에서 곡이 보이지 않았음.
+
+원인:
+1. 권한 표시/실행:
+   - More 버튼 자체가 `actionBusy`만 확인해 항상 활성처럼 보였음.
+   - `openExploreSharedNotePicker`도 본인 곡이면 `allowFollowerSave` 검사를 우회했음.
+2. 저장 후 목록:
+   - 공유 노트 저장은 canonical Firestore `favorites/{explore_shared_*}` 1건에는 성공했지만,
+   - 현재 Music Note 목록의 기준인 local/R2 Music Note Catalog에는 해당 신규 문서를 반영하지 않았음.
+   - 따라서 Firestore에는 저장돼도 페이지는 이전 Catalog를 계속 렌더링해 공유 노트 폴더에서 안 보일 수 있었음.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - 로그인 상태에서 `allowFollowerSave=false`이면 More의 `공유 노트에 추가`를 실제 disabled 처리.
+  - 본인 곡도 동일하게 `allowFollowerSave=true`일 때만 폴더 선택 가능.
+  - 타 사용자 곡은 기존대로 그 조건에 더해 Worker `save-access`의 팔로우 권한 확인 유지.
+  - 폴더 저장 직전에도 permission OFF stale 상태를 한 번 더 차단.
+- `src/services/exploreSharedNoteService.ts`
+  - 서비스 자체에서도 `allowFollowerSave !== true` 저장 차단.
+  - 기존 canonical Firestore shared-note 문서 저장 성공 후,
+    **그 문서 1개만** Music Note Catalog delta로 local/IndexedDB + R2에 반영하고 완료를 반환.
+  - 전체 `favorites` collection 재조회/전체 Catalog rebuild 없음.
+  - 기존 shared-note 분류 필드(`isSharedMusicNote`, `sharedReadOnly`, `sharedNoteFolderId` 등) 유지.
+- `src/components/explore/exploreSocial.css`
+  - 권한 OFF disabled 버튼은 busy cursor 대신 일반 disabled 상태로 표시.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - owner 포함 permission gate, More disabled state, service hard gate, one-item Music Note Catalog publish 회귀 검사 추가.
+- app version: **266**.
+
+검증/배포:
+- Catalog publish commit: `ce4485160fced15030920b73237e181583f25636`
+- permission/UI commit: `8ba100d28de8f379d956d55710fab66d09649085`
+- disabled visual commit: `b67b6cf9238d7c5e4b720efe1b1f4aa6b92a1756`
+- verifier commit: `07c3649ed92ceb82575d5a62f9ccf6d98ef04d93`
+- app266 commit: `8392c9075cd50ee3dc1f229970bc471e53ce7c62`
+- Release System Audit source commit: `1742b04ad61abcb575ec4a5a1a2bb9b05204d6e2`
+- Release System Audit Run `36763481443`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - shared-note permission/catalog guards PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- Firebase PREVIEW App Release source commit: `6327a524db603cfe74453a58790c68265a3999a6`
+- Firebase PREVIEW App Release Run `36763773547`: **SUCCESS**
+  - locked source `6327a524db603cfe74453a58790c68265a3999a6`
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **266**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+데이터/비용:
+- migration / backfill / 기존 사용자 데이터 대량변경 없음.
+- 실제 `공유 노트 저장` 동작 때만 기존 canonical Firestore 문서 1건 저장.
+- 추가 반영은 D1이 아니라 이미 존재하는 Music Note R2 Catalog에 **변경곡 1개 delta**만 반영.
+- 앱 진입/페이지 이동/업데이트만으로 추가 Firestore/D1 전체조회 없음.
+- Worker 코드 / D1 schema / Functions / Rules 변경 없음.
+- 과거에 이미 Firestore에 저장됐지만 Catalog에 빠진 공유 노트에 대한 전체 백필은 실행하지 않음.
+
+실사용 확인:
+1. `팔로워 곡 저장 허용 OFF`인 로그인 사용자는 More의 `공유 노트에 추가`가 흐리게 비활성이고 폴더 선택창이 열리지 않는지.
+2. 해당 옵션 ON 저장 후 More를 다시 열면 버튼이 활성되는지.
+3. 타 사용자 곡은 옵션 ON이어도 실제 팔로우 조건을 만족할 때만 폴더 선택 가능한지.
+4. 허용된 곡을 `기본 / 최고의 곡 / 새폴더` 중 하나에 추가 후 Music Note > 공유 노트의 해당 폴더에 곧바로 표시되는지.
+5. 표시된 공유 노트가 기존처럼 읽기 전용이고 원작자 정보/미디어가 유지되는지.
+6. 좋아요/공유/다음곡 적용/공개 설정 및 app265 UI/app263 rail 동작이 비변경인지.
+
 ## 0KV. app265 고정 곡 모바일 FEATURED 복구 + 카드폭 반응형 액션 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **모바일 FEATURED 복구 / 모바일 제목 소폭 확대 / 태블릿~PC에서 실제 고정곡 카드 폭이 좁아질 때 키워드 2열 + 액션 버튼 소폭 축소 / 넓은 카드에서는 기존 크기 유지 / PREVIEW 배포 완료 / 실사용 확인 대기**

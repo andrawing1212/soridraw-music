@@ -7,6 +7,7 @@ import {
   scheduleCatalogSnapshotPublishIfDirty,
 } from '../lib/userDataEngine';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import { favoritesStore } from '../hooks/useFavoritesStore';
 
 export type ExploreSharedNoteFolder = {
   id: string;
@@ -272,11 +273,34 @@ export const saveExploreTrackToSharedNote = async (
     updatedAt: now,
     updatedAtMs: now,
     sharedNoteSavedAt: now,
+    __catalogSummary: false,
   };
   scheduleCatalogSnapshotPublishIfDirty('musicNote', uid, [catalogItem], {
     complete: false,
   });
   await flushPendingCatalogPublishes(uid);
+
+  // app268 — same-device Music Note sync intentionally does not reread Firestore:
+  // it assumes the successful local mutation already patched the UI cache/state.
+  // Explore lives outside the Music Note tree, so explicitly upsert this one saved
+  // note into the shared favorites store + legacy instant-paint cache. Without this,
+  // a second save made after Music Note had already been opened can remain invisible
+  // until a full reload even though Firestore and R2 Catalog are both correct.
+  const previousFavorites = favoritesStore.getFavorites();
+  const nextFavorites = [
+    catalogItem,
+    ...previousFavorites.filter((item) => String(item?.firestoreId || item?.id || '').trim() !== documentId),
+  ].sort((left, right) => {
+    const leftTime = Number(left?.createdAtMs || left?.updatedAtMs || 0);
+    const rightTime = Number(right?.createdAtMs || right?.updatedAtMs || 0);
+    return rightTime - leftTime;
+  });
+  favoritesStore.setFavorites(nextFavorites);
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(nextFavorites));
+    } catch {}
+  }
 
   return documentId;
 };

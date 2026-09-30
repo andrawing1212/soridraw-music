@@ -267,14 +267,24 @@ assert.match(
   'PC public profile must use larger side gutters for a further narrowed content frame',
 );
 assert.match(
-  css,
-  /\.soridraw-explore-recommend-edge\{[\s\S]*?z-index:24[\s\S]*?width:42px;height:42px[\s\S]*?background:rgba\(48,48,52,\.96\)[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-21px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-21px\}/,
-  'PC rail controls must keep the same placement while shrinking slightly',
+  page,
+  /const syncRailVisualCenter256 = \(\) => \{[\s\S]*?soridraw-explore-cover-wrap, \.soridraw-explore-recommend-creator-avatar[\s\S]*?--soridraw-explore-rail-image-center-y/,
+  'rail arrows must derive their vertical center from the actual card image or creator visual',
 );
 assert.match(
   css,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:35px;height:35px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:8px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:8px\}/,
-  'mobile rail controls must remain above card controls while shrinking slightly',
+  /\.soridraw-explore-recommend-edge\{[\s\S]*?top:var\(--soridraw-explore-rail-image-center-y,38%\)[\s\S]*?width:42px;height:42px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-32px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-32px\}/,
+  'PC/tablet rail controls must center on card visuals and sit farther outside both edges',
+);
+assert.match(
+  css,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-edge\{z-index:40;width:35px;height:35px[\s\S]*?\.soridraw-explore-recommend-edge--left\{left:-6px\}[\s\S]*?\.soridraw-explore-recommend-edge--right\{right:-6px\}/,
+  'mobile rail controls must keep their compact size while moving farther outward',
+);
+assert.doesNotMatch(
+  css,
+  /recommend-stage:has\(\.soridraw-explore-recommend-track--creators\) \.soridraw-explore-recommend-edge\{top:45%\}/,
+  'creator rails must not override the shared image-centered arrow position',
 );
 assert.match(
   page,
@@ -379,8 +389,8 @@ assert.match(
 );
 assert.match(
   page,
-  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
-  'pinned banner must render like bottom-left, apply/share bottom-right, and more as dedicated in-card controls',
+  /soridraw-explore-pinned-keywords-235[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
+  'pinned like must sit under the keyword row while apply/share stay bottom-right and more stays top-right',
 );
 assert.match(
   page,
@@ -389,18 +399,28 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-like-255\{position:absolute;left:14px;bottom:14px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:14px;bottom:14px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:14px;top:14px/,
-  'desktop/tablet pinned controls must match the approved corner positions',
+  /\.soridraw-explore-pinned-like-255\{align-self:flex-start;height:30px;margin-top:9px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:6px;bottom:6px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:6px;top:6px/,
+  'desktop/tablet pinned controls must place like below keywords and pin the other actions tightly to the right edges',
 );
 assert.match(
   social,
-  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:52px;height:52px\}/,
-  'PC pinned action controls must be substantially larger than the former 32px actions',
+  /\.soridraw-explore-pinned-action-255\{[\s\S]*?width:38px;height:38px[\s\S]*?border:1px solid transparent!important[\s\S]*?background:transparent!important[\s\S]*?box-shadow:none!important/,
+  'pinned action chrome must be reduced and fully transparent',
 );
 assert.match(
   social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:44px;height:44px\}/,
-  'mobile pinned action controls must be twice the former compact 22px controls',
+  /\.soridraw-explore-pinned-like-255\.is-liked[\s\S]*?color:#fff!important[\s\S]*?\.soridraw-explore-pinned-like-255\.is-liked svg:not\(\.soridraw-explore-spinner\)\{fill:#fff;stroke:#fff\}/,
+  'pinned like must preserve the existing white filled-heart liked state rather than red chrome',
+);
+assert.match(
+  social,
+  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:40px;height:40px\}/,
+  'PC pinned action hit areas must be reduced from app255 while keeping the larger icons',
+);
+assert.match(
+  social,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}/,
+  'mobile pinned action hit areas must also be reduced without shrinking the icon artwork',
 );
 assert.doesNotMatch(
   page,

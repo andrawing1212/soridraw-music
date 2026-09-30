@@ -1,3 +1,38 @@
+## CURRENT TASK — app276 PC↔모바일 Music Note/보관함 동기화 실사용 확인 (2026-10-01 KST)
+
+사용자 제보:
+- 모바일 → PC 저장은 보이지만 PC → 모바일 저장/해제가 반응하지 않는 비대칭.
+- 마이노트/공유노트 및 최근생성곡 하트(보관함 저장/해제)가 모두 같은 cross-device 문제로 확인 대상.
+
+현재:
+- app276 PREVIEW 배포 완료.
+- RTDB Music Note version을 UID-wide monotonic으로 수정.
+- exact changed favorite IDs를 event에 보존하고 route와 무관하게 반대 기기에서 해당 문서만 exact sync.
+- missed signal도 local pending payload에서 exact IDs 복구.
+- 변경 없음 read 0 유지.
+- PREVIEW Run `36791874121` SUCCESS / app276 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+사용자 테스트 순서:
+1. PC/모바일 동일 계정으로 PREVIEW를 둘 다 켠다.
+2. **PC → 모바일**
+   - 최근생성곡 A 하트 저장 → 모바일 하트/뮤직노트 확인.
+   - 같은 A 하트 해제 → 모바일 하트 해제/뮤직노트 제거 확인.
+3. **모바일 → PC**
+   - 다른 곡 B 저장 → PC 확인.
+   - B 해제 → PC 확인.
+4. Explore 공개곡 C를 PC에서 공유노트 저장 → 모바일 공유노트 확인.
+5. 가능하면 모바일에서 다른 공유곡 D 저장 → PC 확인.
+6. 페이지 이동/새로고침 없이 수렴해야 PASS.
+
+비용/보호:
+- 실제 remote mutation 때만 변경 문서 exact read.
+- 전체 favorites query/scan 금지.
+- 변경 없음 앱 진입/페이지 이동 read 0.
+- 기존 좋아요(public Explore like) app164/Worker195 동결 영역 변경 금지.
+- 공유노트 상세 app273, 저장됨 표시 app274/275 정상 기능 보호.
+- TEST 승격은 사용자 실사용 PASS + 명시 요청 전 금지.
+
 ## CURRENT TASK — app275 저장됨 핑크 표시 실사용 확인 (2026-10-01 KST)
 
 현재 상태:

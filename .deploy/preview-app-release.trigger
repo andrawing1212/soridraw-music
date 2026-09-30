@@ -1,8 +1,8 @@
-requested_at=2026-09-30T10:56:00+09:00
-requested_by=user_app252_persistent_rail_hover
-product_code_target=c574b9d182c5ab21482505be2ff0a1bd8900aae6
-release_purpose=deploy_app252_persistent_rail_hover
-app_version=252
+requested_at=2026-09-30T11:12:00+09:00
+requested_by=user_app253_symmetric_half_snap
+product_code_target=bf8e4a69f6f8541e95238d5e78ab14e3559d0a12
+release_purpose=deploy_app253_symmetric_half_snap
+app_version=253
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

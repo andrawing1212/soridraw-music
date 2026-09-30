@@ -6,6 +6,7 @@ const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const profileEdit = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
 const socialService = readFileSync('src/services/exploreSocialService.ts', 'utf8');
+const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
 const workerEntry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
@@ -466,6 +467,36 @@ assert.match(
   social,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-banner-copy-235>span\{display:block;margin-bottom:4px;font-size:7\.5px;letter-spacing:\.11em\}[\s\S]*?\.soridraw-explore-pinned-banner-copy-235 h3\{font-size:13\.5px\}[\s\S]*?\.soridraw-explore-pinned-top-actions-259\{right:4px;top:4px;height:34px;gap:2px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{right:4px;bottom:4px;height:34px!important;gap:5px\}/,
   'mobile pinned banner must show FEATURED, use the slightly larger title, and preserve the compact action placement',
+);
+assert.match(
+  page,
+  /const openExploreSharedNotePicker = async \(track: ExploreTrack\) => \{[\s\S]*?if \(!track\.allowFollowerSave\) \{[\s\S]*?공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요\.[\s\S]*?if \(user\.uid !== track\.ownerUid\)[\s\S]*?getExploreTrackSaveAccess\(user, track\.id\)/,
+  'shared-note picker must require the publication save permission for owners too, while non-owners still pass the follower access check',
+);
+assert.match(
+  page,
+  /disabled=\{actionBusy \|\| \(Boolean\(user\) && !moreTrack\.allowFollowerSave\)\}[\s\S]*?className=\{!moreTrack\.allowFollowerSave \? 'is-disabled' : undefined\}[\s\S]*?공유 노트에 추가/,
+  'logged-in More sheet must render shared-note add as disabled when follower-save permission is off',
+);
+assert.match(
+  sharedNoteService,
+  /allowFollowerSave\?: boolean[\s\S]*?track\.allowFollowerSave !== true[\s\S]*?공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요\./,
+  'shared-note service must reject permission-off tracks even if called outside the More-sheet UI',
+);
+assert.match(
+  sharedNoteService,
+  /setDoc\(doc\(db, 'favorites', documentId\), payload, \{ merge: true \}\)[\s\S]*?id: documentId[\s\S]*?firestoreId: documentId[\s\S]*?scheduleCatalogSnapshotPublishIfDirty\('musicNote', uid, \[catalogItem\][\s\S]*?flushPendingCatalogPublishes\(uid\)/,
+  'successful shared-note Firestore save must publish exactly that new note into the Music Note local/R2 catalog before reporting success',
+);
+assert.match(
+  sharedNoteService,
+  /sharedNoteFolderId: folder\.id[\s\S]*?isSharedMusicNote: true[\s\S]*?sharedReadOnly: true|isSharedMusicNote: true[\s\S]*?sharedReadOnly: true[\s\S]*?sharedNoteFolderId: folder\.id/,
+  'shared-note catalog item must retain the classification and target folder fields used by Music Note shared-folder filtering',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-more-primary button\.is-disabled:disabled\{cursor:default\}/,
+  'permission-disabled shared-note action must look unavailable rather than busy',
 );
 assert.match(
   social,

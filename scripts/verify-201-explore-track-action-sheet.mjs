@@ -11,9 +11,12 @@ assert.match(page, /className="soridraw-explore-card-quick-actions"/, 'cards mus
 assert.match(page, /onApplyNext=\{applyExploreTrackToNextSong\}/, 'card next-song icon must reuse the same apply action');
 assert.match(page, /onShare=\{shareExploreTrack\}/, 'card share icon must reuse the same share action');
 assert.match(page, /const renderMoreSheet = \(\) =>/, 'Explore must render the bottom action sheet');
-assert.match(page, /onPointerDown=\{\(\) => \{\s*if \(!actionBusy\) closeMoreSheet\(\);/s, 'backdrop close must be pointer-safe and blocked while an action is busy');
+assert.match(page, /className="soridraw-explore-more-backdrop"[\s\S]*?onPointerDown=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?!actionBusy[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/, 'backdrop close must be pointer-safe, outside-only, and blocked while an action is busy');
 assert.match(page, /document\.body\.style\.overflow = 'hidden'/, 'open action sheet must lock background scrolling');
-assert.match(page, /event\.key !== 'Escape' \|\| moreActionBusy !== null/, 'Escape must not dismiss the sheet while an action is busy');
+assert.match(page, /event\.key !== 'Escape' \|\| moreActionBusyRef257\.current !== null/, 'Escape must not dismiss the sheet while an action is busy');
+assert.match(page, /window\.history\.pushState\([\s\S]*?soridrawExploreMore257: true/, 'More sheet must add one local history entry for system back');
+assert.match(page, /window\.addEventListener\('popstate', handlePopState257\)/, 'system/browser back must be captured while More is open');
+assert.match(page, /const handlePopState257 = \(\) => \{[\s\S]*?dismissMoreFromHistory257\(\)/, 'system/browser back must close More before leaving Explore');
 assert.match(page, /aria-pressed=\{liked\}/, 'sheet like action must expose its active state');
 assert.match(page, />공유 노트에 추가</, 'shared-note action must remain in the sheet');
 assert.match(page, />좋아요</, 'like action must remain in the sheet');

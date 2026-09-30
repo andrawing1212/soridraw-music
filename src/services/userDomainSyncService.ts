@@ -18,6 +18,7 @@ export type UserDomainSyncSignal = {
   documentIds: string[];
   truncated: boolean;
   itemJson?: string;
+  removed?: boolean;
 };
 
 const GENERIC_DEVICE_STORAGE_KEY = 'soridraw_user_domain_sync_device_v1';
@@ -129,6 +130,7 @@ const buildSignal = (
     && Number.isFinite(result) && result > 0 ? Math.floor(result) : 0;
 
   let itemJson = '';
+  let removed = false;
   if (kind === 'musicNote' && context.syncItem && typeof context.syncItem === 'object') {
     try {
       const preferredId = uniqueIds[0] || resultDocumentId(result);
@@ -141,6 +143,8 @@ const buildSignal = (
         // Keep the account-level signal tiny and bounded. Oversized detail never
         // rides RTDB; only the normal catalog summary is eligible.
         if (encoded.length <= 24000) itemJson = encoded;
+      } else {
+        removed = true;
       }
     } catch {}
   }
@@ -154,6 +158,7 @@ const buildSignal = (
     documentIds: uniqueIds.slice(0, MAX_DOCUMENT_IDS),
     truncated: uniqueIds.length > MAX_DOCUMENT_IDS,
     ...(itemJson ? { itemJson } : {}),
+    ...(removed ? { removed: true } : {}),
   };
 };
 
@@ -198,6 +203,7 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
     : [];
   const itemJsonRaw = typeof value.itemJson === 'string' ? value.itemJson : '';
   const itemJson = itemJsonRaw.length <= 24000 ? itemJsonRaw : '';
+  const removed = value.removed === true;
   return {
     version,
     at: Number.isFinite(at) && at > 0 ? at : version,
@@ -207,6 +213,7 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
     documentIds,
     truncated: value.truncated === true,
     ...(itemJson ? { itemJson } : {}),
+    ...(removed ? { removed: true } : {}),
   };
 };
 
@@ -231,6 +238,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
         documentIds: signal.documentIds,
         truncated: signal.truncated,
         itemJson: signal.itemJson || '',
+        removed: signal.removed === true,
       },
     }));
     return;

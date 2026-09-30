@@ -1,8 +1,8 @@
-requested_at=2026-10-01T06:06:00+09:00
-requested_by=user_app270_follower_share_lyrics_parity
-product_code_target=ca621ea94c350b8348ee960aa53b0ef132b89a9f
-release_purpose=deploy_app270_follower_share_structured_lyrics_parity
-app_version=270
+requested_at=2026-10-01T06:47:00+09:00
+requested_by=user_app271_follower_share_legacy_lyrics_refresh
+product_code_target=17b5563ef20f431f218df3781e4d781ec6c46e3b
+release_purpose=deploy_app271_follower_share_legacy_lyrics_refresh
+app_version=271
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

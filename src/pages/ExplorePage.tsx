@@ -2387,12 +2387,13 @@ export default function ExplorePage() {
       setSocialNotice('공유 노트 추가는 로그인 후 사용할 수 있어요.');
       return;
     }
+    if (!track.allowFollowerSave) {
+      setSocialNotice('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
+      return;
+    }
     setMoreActionBusy('sharedNote');
     try {
       if (user.uid !== track.ownerUid) {
-        if (!track.allowFollowerSave) {
-          throw new Error('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
-        }
         const access = await getExploreTrackSaveAccess(user, track.id);
         if (!access.allowed) {
           throw new Error(access.permissionEnabled
@@ -2415,6 +2416,11 @@ export default function ExplorePage() {
 
   const saveExploreTrackToSharedNoteFolder = async (track: ExploreTrack, folder: ExploreSharedNoteFolder) => {
     if (!user) return;
+    if (!track.allowFollowerSave) {
+      setSocialNotice('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
+      setMoreSheetMode('actions');
+      return;
+    }
     setMoreActionBusy('sharedNote');
     try {
       await saveExploreTrackToSharedNote(user, track, folder);
@@ -2519,7 +2525,12 @@ export default function ExplorePage() {
               </div>
 
               <div className="soridraw-explore-more-primary">
-                <button type="button" disabled={actionBusy} onClick={() => openExploreSharedNotePicker(moreTrack)}>
+                <button
+                  type="button"
+                  disabled={actionBusy || (Boolean(user) && !moreTrack.allowFollowerSave)}
+                  className={!moreTrack.allowFollowerSave ? 'is-disabled' : undefined}
+                  onClick={() => openExploreSharedNotePicker(moreTrack)}
+                >
                   {moreActionBusy === 'sharedNote' ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <NotebookTabs aria-hidden="true" />}
                   <span>공유 노트에 추가</span>
                 </button>

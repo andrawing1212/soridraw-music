@@ -1,7 +1,7 @@
-requested_at=2026-09-30T10:38:30+09:00
-requested_by=user_app251_explore_rail_unification
-product_code_target=d3b18529c89d6d0f4d6bd0a85fe6ac44391b727e
-release_purpose=audit_app251_explore_rail_unification
+requested_at=2026-09-30T10:49:30+09:00
+requested_by=user_explore_rail_hover_reveal
+product_code_target=f1ef82e5e8a9f7aa7a99634941d4abaa19bb6a3e
+release_purpose=audit_explore_rail_hover_reveal_2s
 app_version=251
 preview_only=true
 deploy=false

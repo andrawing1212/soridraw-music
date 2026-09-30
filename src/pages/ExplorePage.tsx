@@ -2403,7 +2403,7 @@ export default function ExplorePage() {
       <div
         className="soridraw-explore-more-backdrop"
         role="presentation"
-        onClick={(event) => {
+        onPointerDown={(event) => {
           if (event.target === event.currentTarget && !actionBusy) {
             closeMoreSheet();
           }
@@ -2414,7 +2414,7 @@ export default function ExplorePage() {
           role="dialog"
           aria-modal="true"
           aria-label={moreSheetMode === 'folders' ? '공유 노트에 추가' : `${moreTrack.title} 더보기`}
-          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="soridraw-explore-more-handle" aria-hidden="true" />
           {moreSheetMode === 'folders' ? (

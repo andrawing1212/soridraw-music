@@ -1,3 +1,33 @@
+## 0LD. app272 사용자 실사용 FAIL — 기존 공유노트 화면 변화 없음 (2026-10-01 KST)
+
+상태: **사용자 실사용 기준 FAIL. app272/글로벌 D1 repair를 완료로 취급하지 않음.**
+
+사용자 피드백:
+- 이전 작업 후 실제 화면에서 **전혀 바뀐 것이 없음**.
+- 따라서 GitHub/Audit/D1 postcheck PASS와 무관하게 제품 합격선 미달.
+
+현재 확인된 범위 불일치:
+- app272는 follower-save 시 앞으로 저장되는 authorized snapshot 전달 경로를 수정함.
+- 글로벌 repair는 shared canonical D1의 공개 Music Note 원본 projection에서 비어 있던 lyrics를 복구함.
+- 하지만 **이미 follower 계정에 저장돼 있던 shared_music_note Firestore 문서는 일괄 갱신하지 않았음**.
+- 그래서 사용자가 기존 저장본을 그대로 열어 확인한 경우 화면이 바뀌지 않는 구조였음.
+- 이 상태를 사용자 체감 완료로 보고한 판단은 폐기.
+
+새 판정:
+- app272 = 배포 성공 / 정적 검증 성공 / **실사용 FAIL**.
+- 기존 저장본이 자동으로 정상화되는지까지 확인하기 전 완료 금지.
+- 정상 좋아요/Feed/공개프로필/분할/UI는 보호.
+- 사용자 데이터 write 전에는 먼저 read-only로 stale shared-note 범위를 정확히 확정.
+- 대량 rewrite/전체 backfill은 사용자 승인 없이 금지.
+- TEST/PRODUCTION 승격 금지.
+
+다음:
+1. 이미 저장된 shared_music_note 중 lyrics/prompt/detail이 원본과 불일치한 문서 범위를 read-only 진단.
+2. canonical 공개 원본(D1/Firestore)과 follower 저장본을 정확히 대조.
+3. 새 저장 경로(app272) 자체가 실제 재저장에서도 정상 갱신되는지 별도로 검증.
+4. 필요한 경우 **불일치 문서만** targeted repair 설계 후 사용자 승인 요청.
+5. 사용자 실기기에서 기존 저장본/재저장본 모두 정상 확인 후에만 PASS.
+
 ## 0LC. app272 전체 사용자 공개 Music Note 상세 글로벌 보정 완료 (2026-10-01 KST)
 
 상태: **사용자 승인 후 전체 사용자 범위 read-only preflight → bounded shared D1 repair → 글로벌 postcheck 완료 / 기존 공개곡 소유자 재설정 불필요**

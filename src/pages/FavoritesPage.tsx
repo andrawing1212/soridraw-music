@@ -5654,7 +5654,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     // app267 — shared-note rows are also compact Catalog summaries. Their full
     // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
     // that one document on explicit detail open. Page entry remains Catalog-only.
-    if (!song?.__catalogSummary || !user?.uid || isMusicNoteSharedView) return song;
+    // app273 — old follower saves can still exist as full local cache rows
+    // (__catalogSummary=false) even though their legacy prompt/lyrics are empty.
+    // Only that incomplete shared-note case is allowed through the existing
+    // exact-document hydrator. Complete rows keep the warm zero-read path.
+    const legacySharedNoteNeedsHydration273 = isSharedMusicNoteItem(song)
+      && Number(song?.sharedDetailVersion || 0) < 273
+      && (
+        !String(song?.prompt || '').trim()
+        || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
+      );
+    if ((!song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);

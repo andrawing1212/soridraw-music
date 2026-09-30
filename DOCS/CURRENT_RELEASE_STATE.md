@@ -1,3 +1,49 @@
+## 0KG. app250 공개프로필 전체 곡 정렬 수정 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **고정 곡은 상단 전용 영역만 유지 / 전체 곡은 고정 여부와 무관하게 공개 최신순 / PREVIEW Hosting 배포 완료 / 실사용 확인 대기**
+
+사용자 요청:
+- 공개프로필에서 `고정 곡`으로 지정한 곡은 상단 대표곡 영역에 계속 표시.
+- 아래 `전체 곡` 목록에서는 고정 상태를 정렬 우선순위로 사용하지 않음.
+- `전체 곡`은 기존 공개 시각 `publishedAt DESC` 순서만 사용.
+
+변경:
+- `src/pages/ExplorePage.tsx`의 공개프로필 화면용 정렬에서 `profilePinned` 우선 정렬 제거.
+- 상단 `고정 곡` rail의 필터/표시 기능은 그대로 유지.
+- 서버/API/Worker/공유 D1/R2 정렬 구조는 변경하지 않음. 따라서 서버 비용 증가 없음.
+- UI 크기/간격/색상/카드 디자인 변경 없음.
+- app version: **250**.
+
+검증/배포:
+- product code commit: `21c47444d8d5807ab775d6411d91c0c78b545a49`
+- app250 version commit: `718b9baa42c989a6a5a568495457b2b65902ad84`
+- Release System Audit Run `36655057937`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - static/regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 preflight read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36655276881`: **SUCCESS**
+  - exact Hosting source `2cfd7f4c901bc818ab12935ea8f3e02ef870da3a`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호:
+- PREVIEW Worker 변경/재배포 없음.
+- Firebase Functions / Rules / shared RTDB rules 변경 없음.
+- D1 schema / migration / user data 변경 없음.
+- 좋아요 / 공개·비공개 / 팔로우 / 프로필 저장 / Music Note 079 변경 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. app250 새로고침.
+2. 오래 전에 올린 곡 하나를 고정.
+3. 상단 `고정 곡`에는 표시되는지 확인.
+4. 아래 `전체 곡`에서는 원래 공개한 순서 위치를 유지하는지 확인.
+5. 고정 해제 후 전체 곡 순서가 바뀌지 않는지 확인.
+
 ## 0KF. app249 Unified Profile Save 실사용 PASS (2026-09-30 KST)
 
 상태: **소개 + 프로필 사진 + 배경 동시 저장 실사용 PASS / 통합 요청 1회 / canonical D1 W1 유지 / physical 비용 절감 확인**

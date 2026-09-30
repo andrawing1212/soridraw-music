@@ -1,3 +1,38 @@
+## 0LG. app275 공유노트 '저장됨' 핑크 강조 PREVIEW 배포 (2026-10-01 KST)
+
+사용자 확인:
+- app274 공유노트 저장 위치 표시 기능은 실사용 PASS.
+- 다만 폴더 선택창 우측의 `저장됨` 글자가 어두워 잘 보이지 않아 핑크색 강조 요청.
+
+app275 수정:
+- `src/components/explore/exploreSocial.css`만 UI 변경.
+- 기존 `저장됨` 배지의 텍스트 색상을 기존 Explore 강조 핑크 `#ff7a9d`로 변경.
+- 크기/위치/간격/동작/비활성 처리/저장 로직은 그대로 유지.
+- 서버 읽기/쓰기/Firestore/D1/R2/Worker/Functions 변경 없음.
+- 사용자 데이터 변경 없음.
+
+버전/배포:
+- `public/app-version.json`: 275.
+- UI commit: `778cb95f67ed2760ef8375668b6e100aab4a0655`.
+- version commit: `f6ce5a0d55ab48ab18dd8e50a88a5f7583dfa869`.
+- release trigger commit: `fe7dcf86268aafb32b4778e4ec767bbd59389fec`.
+- Firebase PREVIEW App Run `36789135930`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app version **275** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- RTDB Rules deploy skipped.
+- Worker / Functions / Firestore Rules / D1 비변경.
+
+현재 preview HEAD: `fe7dcf86268aafb32b4778e4ec767bbd59389fec` (배포 이후 문서 갱신 전).
+
+다음 실사용:
+1. Explore > 공유 노트에 추가 진입.
+2. 저장된 폴더 우측 `저장됨`이 핑크색으로 또렷하게 보이는지 확인.
+3. 저장 위치 표시/동일 폴더 재저장 차단 동작은 app274와 동일해야 함.
+4. PC/모바일 동일 확인.
+
 ## 0LF. app274 공유노트 저장 위치 표시 + 같은 폴더 재저장 차단 PREVIEW 배포 (2026-10-01 KST)
 
 사용자 확인:

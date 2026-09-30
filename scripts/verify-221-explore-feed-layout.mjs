@@ -138,18 +138,23 @@ assert.match(
 );
 assert.match(
   page,
-  /SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_231_20260930/,
-  'mobile song rail alignment must use rail-specific visible-share scoring',
+  /SORIDRAW_EXPLORE_RAIL_SYMMETRIC_HALF_SNAP_253_20260930/,
+  'all Explore rails must use the shared symmetric half-card snap rule',
 );
 assert.match(
   page,
-  /const visibleRatios = cards\.map\([\s\S]*?visibleWidth \/ Math\.max\(1, rect\.width\)/,
-  'mobile song rail alignment must calculate each visible card share',
+  /const anchors = cards[\s\S]*?card\.offsetLeft[\s\S]*?Math\.min\(maxScrollLeft[\s\S]*?filter\(\(position, index, source\)/,
+  'rail alignment must derive clamped card-start anchors from the rendered cards',
 );
 assert.match(
   page,
-  /startIndex <= cards\.length - mobileAlignGroupSize231[\s\S]*?\.slice\(startIndex, startIndex \+ mobileAlignGroupSize231\)[\s\S]*?\.reduce\(\(sum, ratio\) => sum \+ ratio, 0\)/,
-  'mobile song rail alignment must score contiguous groups using each rail mobile group size',
+  /let target = anchors\[0\][\s\S]*?bestDistance = Math\.abs\(current - target\)[\s\S]*?distance < bestDistance[\s\S]*?target = candidate/,
+  'rail alignment must choose the nearest anchor so the midpoint is the same 50% threshold in both directions',
+);
+assert.doesNotMatch(
+  page,
+  /visibleRatios|bestVisibleScore|clearlyMoreVisible|equalVisibilityCloser/,
+  'direction-biased visible-group scoring must not remain in the shared rail settle path',
 );
 assert.match(
   page,

@@ -51,7 +51,13 @@ assert.doesNotMatch(apply, /\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i,
   'apply-source must remain read-only');
 
 const save = functionRange(worker, 'handleFollowerSaveAccess');
-const publicationBatch = functionRange(worker, 'handleMusicNotePublicationBatch048');
+const publicationBatchStart = worker.indexOf('async function handleMusicNotePublicationBatch048(');
+assert.ok(publicationBatchStart >= 0, 'handleMusicNotePublicationBatch048 must exist');
+const publicationBatchEnd = worker.indexOf('// SORIDRAW_LIKE_R2_REVISION_ROUTE_173', publicationBatchStart);
+const publicationBatch = worker.slice(
+  publicationBatchStart,
+  publicationBatchEnd > publicationBatchStart ? publicationBatchEnd : publicationBatchStart + 200000,
+);
 assert.match(save, /WHERE id = \? AND is_public = 1 AND status = 'published'/,
   'save-access must target one public track');
 assert.match(save, /WHERE follower_uid = \? AND following_uid = \?/,

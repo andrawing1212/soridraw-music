@@ -1,3 +1,39 @@
+## 0KF. app249 Unified Profile Save 실사용 PASS (2026-09-30 KST)
+
+상태: **소개 + 프로필 사진 + 배경 동시 저장 실사용 PASS / 통합 요청 1회 / canonical D1 W1 유지 / physical 비용 절감 확인**
+
+사용자 PREVIEW 실측:
+- 실행 전 CACHE LIVE 초기화 후 **소개 + 프로필 사진 + 배경**을 한 저장에서 동시에 변경.
+- 요청 상세: **`/v1/me/profile-save` 1회**.
+- D1 query: **R0 / W1**.
+- physical D1: **R7 / W8**.
+- browser SDK: **R0 / W0**, Firestore: **R0 / W0**.
+- 공개프로필 후속 확인: D1 **R0 / W0**.
+- R2: Class A 3 / Class B 3.
+
+비용 판정:
+- 직전 분리 저장 기준은 bio **R5/W6** + avatar+background **R7/W8** = 합산 **R12/W14**.
+- app249 통합 저장은 **R7/W8**로 수렴.
+- 같은 사용자 저장 1회 기준 physical read **12 -> 7 (-41.7%)**, physical write **14 -> 8 (-42.9%)**.
+- canonical D1 UPDATE는 목표대로 **총 W1**.
+- 통합 저장 비용이 media-only batch와 같은 physical **R7/W8** 수준으로 내려감.
+
+기능 판정:
+- app249 신규 unified path 실사용 PASS.
+- 기존 text-only / avatar-only / dual-media-only 경로는 직전 실측 PASS 유지.
+- no-op / YouTube-only 보호 구조 변경 없음.
+- 공개/비공개, 좋아요, 팔로우, Music Note 079, UI/CSS 변경 없음.
+
+현재 결론:
+- **Unified Profile Save PREVIEW 작업 완료.**
+- 이 비용 단계에서 추가 최적화를 위해 정상 경로를 더 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+- profile compatibility journal/state retirement는 TEST/PRODUCTION이 direct targeted profile mutation 경로로 승격된 뒤 별도 검토한다.
+
+실사용 기준 app: **249**
+PREVIEW Worker: **167b57b5-f510-4a8a-bbfd-83229a8bb37e**
+PREVIEW exact Hosting commit: **332f78fdb3215ad5dc22386c1fc86a515b6b1ef5**
+
 ## 0KE. app249 Unified Profile Save PREVIEW 배포 완료 (2026-09-30 KST)
 
 상태: **텍스트 + 이미지 동시 저장을 하나의 Profile Save로 통합 / PREVIEW Worker + Hosting 배포 완료 / 실사용 재측정 대기**

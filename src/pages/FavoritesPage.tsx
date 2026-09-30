@@ -4456,8 +4456,8 @@ updates: draft.updates,
     setEditedTitleGenre(getEditableFavoriteTitleGenre(selectedSong));
     setEditedKoreanTitle(cleanTitlePart(normalizedTitles.korean));
     setEditedEnglishTitle(cleanTitlePart(normalizedTitles.english));
-    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean));
-    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english));
+    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || ''));
+    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || ''));
     setEditedPrompt(normalizeFavoritePromptForDisplay(selectedSong.prompt || ''));
     const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
     setDetailSunoUrlInputs(nextSunoState.inputs);
@@ -5651,7 +5651,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   };
 
   const hydrateCatalogFavorite = async (song: any): Promise<any> => {
-    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
+    // app267 — shared-note rows are also compact Catalog summaries. Their full
+    // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
+    // that one document on explicit detail open. Page entry remains Catalog-only.
+    if (!song?.__catalogSummary || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
@@ -8814,7 +8817,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || ''), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -8834,7 +8837,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean)}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '')}
                       </div>
                     )}
                   </section>
@@ -8911,7 +8914,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || ''), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
@@ -8931,7 +8934,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english)}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '')}
                       </div>
                     )}
                   </section>

@@ -506,7 +506,7 @@ const buildExploreRecommendationModel221 = (
   };
 };
 
-const EXPLORE_RAIL_ALIGN_DELAY_MS_251 = 200;
+const EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261 = 100;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241 = 240;
 const EXPLORE_MOBILE_SHORT_DRAG_MIN_PX_241 = 8;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_PX_241 = 46;
@@ -536,6 +536,8 @@ function ExploreRecommendationRail({
   const railAlignTimerRef251 = useRef<number | null>(null);
   const railControlsTimerRef251 = useRef<number | null>(null);
   const railMouseHoverRef252 = useRef(false);
+  const railPointerActiveRef261 = useRef(false);
+  const railReleaseAlignPendingRef261 = useRef(false);
   const mobilePointerGestureRef241 = useRef<{
     pointerId: number;
     startX: number;
@@ -580,6 +582,7 @@ function ExploreRecommendationRail({
 
   const alignExploreRail251 = () => {
     railAlignTimerRef251.current = null;
+    railReleaseAlignPendingRef261.current = false;
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
@@ -620,12 +623,25 @@ function ExploreRecommendationRail({
     scroller.scrollTo({ left: target, behavior: 'smooth' });
   };
 
-  const scheduleExploreRailAlign251 = () => {
+  const scheduleExploreRailAlign251 = (fromPointerRelease261 = false) => {
     clearRailAlignTimer251();
+    if (fromPointerRelease261) {
+      railReleaseAlignPendingRef261.current = true;
+    }
     railAlignTimerRef251.current = window.setTimeout(
       alignExploreRail251,
-      EXPLORE_RAIL_ALIGN_DELAY_MS_251,
+      EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261,
     );
+  };
+
+  const scheduleExploreRailMoveAfterRelease261 = (direction: -1 | 1) => {
+    clearRailAlignTimer251();
+    railReleaseAlignPendingRef261.current = true;
+    railAlignTimerRef251.current = window.setTimeout(() => {
+      railAlignTimerRef251.current = null;
+      railReleaseAlignPendingRef261.current = false;
+      moveRail(direction);
+    }, EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261);
   };
 
   const syncScrollButtons = () => {
@@ -734,6 +750,8 @@ function ExploreRecommendationRail({
   };
 
   const handleRailPointerDown241 = (event: React.PointerEvent<HTMLDivElement>) => {
+    railPointerActiveRef261.current = true;
+    railReleaseAlignPendingRef261.current = false;
     clearRailAlignTimer251();
     revealRailControls251();
     const scroller = scrollerRef.current;
@@ -754,6 +772,7 @@ function ExploreRecommendationRail({
   };
 
   const handleRailPointerUp241 = (event: React.PointerEvent<HTMLDivElement>) => {
+    railPointerActiveRef261.current = false;
     const scroller = scrollerRef.current;
     const gesture = mobilePointerGestureRef241.current;
     mobilePointerGestureRef241.current = null;
@@ -763,7 +782,7 @@ function ExploreRecommendationRail({
       || !gesture
       || gesture.pointerId !== event.pointerId
     ) {
-      scheduleExploreRailAlign251();
+      scheduleExploreRailAlign251(true);
       return;
     }
 
@@ -782,11 +801,11 @@ function ExploreRecommendationRail({
 
     if (shortControlledDrag) {
       suppressRailClickUntilRef241.current = performance.now() + 280;
-      moveRail(deltaX < 0 ? 1 : -1);
+      scheduleExploreRailMoveAfterRelease261(deltaX < 0 ? 1 : -1);
       return;
     }
 
-    scheduleExploreRailAlign251();
+    scheduleExploreRailAlign251(true);
   };
 
   const handleRailClickCapture241 = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -835,14 +854,23 @@ function ExploreRecommendationRail({
           onPointerDown={handleRailPointerDown241}
           onPointerUp={handleRailPointerUp241}
           onPointerCancel={() => {
+            railPointerActiveRef261.current = false;
             mobilePointerGestureRef241.current = null;
-            scheduleExploreRailAlign251();
+            scheduleExploreRailAlign251(true);
           }}
           onClickCapture={handleRailClickCapture241}
           onScroll={() => {
             syncScrollButtons();
             setRailControlsVisible251(true);
             scheduleRailControlsHide251(EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251);
+
+            // app261 — while a finger or mouse button is still held, scrolling
+            // must never arm the snap timer. The 0.1s snap starts from release.
+            // Wheel/trackpad scrolling has no pointer-release signal, so it keeps
+            // the bounded 0.1s scroll-idle fallback.
+            if (railPointerActiveRef261.current || railReleaseAlignPendingRef261.current) {
+              return;
+            }
             scheduleExploreRailAlign251();
           }}
         >

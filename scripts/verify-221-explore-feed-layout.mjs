@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const profileEdit = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
@@ -497,6 +498,21 @@ assert.match(
   social,
   /\.soridraw-explore-more-primary button\.is-disabled:disabled\{cursor:default\}/,
   'permission-disabled shared-note action must look unavailable rather than busy',
+);
+assert.match(
+  favorites,
+  /const hydrateCatalogFavorite = async \(song: any\): Promise<any> => \{[\s\S]*?if \(!song\?\.__catalogSummary \|\| !user\?\.uid \|\| isMusicNoteSharedView\) return song;[\s\S]*?getOrLoadMusicNoteDetail[\s\S]*?getDoc\(doc\(db, 'favorites', sourceId\)\)/,
+  'shared-note Catalog rows must hydrate exactly their own canonical favorites document on explicit detail open',
+);
+assert.doesNotMatch(
+  favorites,
+  /if \(!song\?\.__catalogSummary \|\| !user\?\.uid \|\| isSharedMusicNoteItem\(song\) \|\| isMusicNoteSharedView\) return song;/,
+  'shared-note detail hydration must not be skipped',
+);
+assert.doesNotMatch(
+  favorites,
+  /selectedSong\.lyrics\.(korean|english)/,
+  'Music Note detail rendering must not crash when a legacy or compact row has no lyrics object',
 );
 assert.match(
   social,

@@ -1,3 +1,26 @@
+## 2026-09-30 — app258 pinned 하단 고정 행 실사용 확인
+
+배포 완료:
+- 고정 곡 좋아요 + 다음곡 적용 + 공유를 하나의 `pinned-bottom-row`로 묶음.
+- 창 크기/반응형 구간이 바뀌어도 세 액션이 같은 bottom 기준과 같은 중심선 사용.
+- desktop/tablet: bottom 6px.
+- mobile: bottom 4px.
+- title/keyword 중앙 정렬, 좋아요 흰색 규칙, apply 핑크/어두운색, More 바깥/뒤로가기 닫기 유지.
+- PREVIEW App Release Run `36666561946` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. PC 창 폭을 여러 단계로 바꿔도 하트/적용/공유가 같은 줄인지.
+2. 태블릿 폭에서도 같은 줄인지.
+3. 모바일에서 하트만 아래로 처지지 않는지.
+4. 제목/키워드 세로 중앙은 그대로인지.
+5. More 바깥 클릭과 뒤로가기 1회 닫기가 정상인지.
+
+판정:
+- 위 항목 PASS면 app258 종료.
+- 미세 위치가 남으면 `pinned-bottom-row-258`의 bottom/height만 최소 조정.
+- 서버/좋아요/공개/프로필/Feed 로직은 건드리지 않는다.
+
 ## 2026-09-30 — app257 pinned 하단 정렬 + More 닫기 실사용 확인
 
 배포 완료:

@@ -1,8 +1,8 @@
-requested_at=2026-10-01T03:03:00+09:00
-requested_by=user_app265_responsive_pinned_banner
-product_code_target=a1511bab603bcf204edc39ca3534521f5c144637
-release_purpose=audit_app265_responsive_pinned_banner
-app_version=265
+requested_at=2026-10-01T04:10:00+09:00
+requested_by=user_app266_shared_note_permission_catalog_fix
+product_code_target=8392c9075cd50ee3dc1f229970bc471e53ce7c62
+release_purpose=audit_app266_shared_note_permission_catalog_fix
+app_version=266
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

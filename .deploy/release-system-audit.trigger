@@ -1,7 +1,7 @@
-requested_at=2026-09-30T12:12:00+09:00
+requested_at=2026-09-30T12:16:00+09:00
 requested_by=user_app256_pinned_action_refinement
-product_code_target=d9c28712f02c8b3583518dc8f1ca4e359804db7c
-release_purpose=audit_app256_pinned_action_refinement
+product_code_target=cba84ca4112734aafadba52bf4f7cb4385b7e8a0
+release_purpose=reaudit_app256_pinned_action_refinement
 app_version=256
 preview_only=true
 deploy=false

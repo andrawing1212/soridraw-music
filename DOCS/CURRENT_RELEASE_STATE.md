@@ -1,3 +1,70 @@
+## 0KJ. app253 Explore 50% 좌우 대칭 정렬 수정 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **태블릿/PC에서 깨지던 좌우 50% 정렬 기준 수정 / 모든 Explore rail이 동일한 카드 중간점 기준 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 증상:
+- 모바일은 0.2초 후 "절반 이상 보이는 카드 쪽" 정렬이 정상.
+- 태블릿/PC는 우측 이동 시 50% 미만이어도 다음 카드로 넘어가고, 좌측 이동 시 50% 규칙이 사실상 동작하지 않음.
+
+원인:
+- app251 공통화 때 모바일용 `visible group score` 계산을 PC/태블릿까지 그대로 확장함.
+- 여러 카드가 동시에 완전히 보이는 PC/태블릿에서는 여러 연속 그룹의 점수가 같아지고 거리 tie-break가 섞여, 카드 중간점(50%)이 실제 경계가 아니게 됨.
+- 결과적으로 이동 방향에 따라 체감 기준이 달라지는 비대칭이 발생.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - visible-group 합산 점수 방식 제거.
+  - 실제 렌더된 각 카드의 시작 위치를 anchor로 사용.
+  - 현재 scroll 위치에서 **가장 가까운 anchor**로 정렬.
+  - 인접 anchor의 정확한 중간점이 50% 경계가 되므로 좌/우가 동일하게 동작.
+  - 50% 미만 이동 -> 원래 카드 위치로 복귀.
+  - 50% 초과 이동 -> 다음/이전 카드 위치로 정렬.
+  - 끝 구간은 `maxScrollLeft`로 안전하게 clamp.
+  - 기존 0.2초 settle, 모바일 짧은 drag, native momentum, PC hover 버튼 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 기존 visible-group scoring이 남지 않는지 검사.
+  - card anchor + nearest-distance 방식이 유지되는지 회귀 검사 추가.
+- app version: **253**.
+
+검증:
+- 첫 Audit Run `36658248823`: **FAIL**
+  - TypeScript PASS / Build PASS.
+  - 실제 구현 문제가 아니라 새 verifier 정규식의 순서 조건 오류로 static verification만 FAIL.
+- verifier 수정 commit: `f25db955290d2e8c845be3b8bf70d45aea3a1cf3`.
+- 최종 Release System Audit Run `36658420723`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - symmetric half-snap verifier PASS
+  - existing static regressions PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36658541957`: **SUCCESS**
+  - exact Hosting source `fb12bf60a98410fa1d5938fd14d815ed881261c8`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+주요 commit:
+- behavior: `4e3069c74224816d1b6267f993e6691d0203eb2e`
+- verifier: `c4b855c6d520e11451d3d8775bbebecfba7a287b`
+- app253: `fef1892f89229c3a21a78cdface4d72865bb8ad0`
+- verifier fix: `f25db955290d2e8c845be3b8bf70d45aea3a1cf3`
+
+범위/비용:
+- client scroll alignment only.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 서버 read/write 추가 없음.
+- 좋아요 / 공개·비공개 / 프로필 / 고정 곡 데이터 동작 변경 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 모바일 / 태블릿 / PC 각 rail에서 우측으로 카드 간격의 절반 미만 이동 -> 원위치 복귀.
+2. 절반 초과 이동 -> 다음 카드로 정렬.
+3. 좌측도 동일하게 절반 미만 -> 원위치, 절반 초과 -> 이전 카드로 정렬.
+4. 정렬 시작은 스크롤 정지 후 약 0.2초.
+5. PC hover 버튼 / 모바일 터치 버튼 기존 동작 유지.
+
 ## 0KI. app252 Explore rail 마우스 hover 버튼 유지 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **PC 마우스가 Explore 가로 카드 rail 위에 있는 동안 좌우 버튼 계속 표시 / rail에서 벗어나면 즉시 숨김 / 터치 2초·스크롤 정지 0.5초 규칙 유지 / PREVIEW 배포 완료**

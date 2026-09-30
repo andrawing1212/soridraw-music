@@ -27,7 +27,7 @@ assert.match(page, /<strong>싫어요<\/strong>/, 'dislike action must remain in
 assert.match(page, /sessionStorage\.setItem\('pendingAppliedKeywords'/, 'next-song apply must reuse the existing pending keyword handoff');
 assert.match(page, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/, 'next-song apply backup handoff must remain');
 assert.match(page, /navigate\('\/studio\?applyPending=1'\)/, 'next-song apply must route through the existing studio apply path');
-assert.match(page, /await saveExploreTrackToSharedNote\(user, track, folder\)/, 'shared-note action must use the Music Note shared-note path');
+assert.match(page, /await saveExploreTrackToSharedNote\(user, (?:authorizedTrack|track), folder\)/, 'shared-note action must use the Music Note shared-note path');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/, 'Explore action sheet must not use Library playlist storage');
 assert.match(page, /await toggleLike\(moreTrack\)/, 'sheet like action must reuse existing like behavior');
 assert.match(page, /className="soridraw-explore-cover-button"/, 'cover artwork surface must remain available after the play-link refinement');

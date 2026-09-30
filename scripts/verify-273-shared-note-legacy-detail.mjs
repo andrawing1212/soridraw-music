@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const cache = fs.readFileSync('src/lib/musicNoteDetailCache.ts', 'utf8');
+const page = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const shared = fs.readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
@@ -11,6 +12,8 @@ assert.match(cache, /isIncompleteLegacySharedNoteDetail/);
 assert.match(cache, /if \(Number\(data\.sharedDetailVersion \|\| 0\) >= SHARED_NOTE_DETAIL_VERSION\) return false;/);
 assert.match(cache, /return !promptPresent \|\| !lyricsPresent;/);
 assert.match(cache, /if \(isIncompleteLegacySharedNoteDetail\(record\.data\)\) return false;/);
+assert.match(page, /legacySharedNoteNeedsHydration273 = isSharedMusicNoteItem\(song\)/);
+assert.match(page, /!song\?\.__catalogSummary && !legacySharedNoteNeedsHydration273/);
 
 assert.match(shared, /sharedDetailVersion: 273/);
 assert.match(shared, /setDoc\(doc\(db, 'favorites', documentId\), payload, \{ merge: true \}\)/);

@@ -536,6 +536,7 @@ function ExploreRecommendationRail({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const railAlignTimerRef251 = useRef<number | null>(null);
   const railControlsTimerRef251 = useRef<number | null>(null);
+  const railMouseHoverRef252 = useRef(false);
   const mobilePointerGestureRef241 = useRef<{
     pointerId: number;
     startX: number;
@@ -564,8 +565,11 @@ function ExploreRecommendationRail({
 
   const scheduleRailControlsHide251 = (delayMs: number) => {
     clearRailControlsTimer251();
+    if (railMouseHoverRef252.current) return;
     railControlsTimerRef251.current = window.setTimeout(() => {
-      setRailControlsVisible251(false);
+      if (!railMouseHoverRef252.current) {
+        setRailControlsVisible251(false);
+      }
       railControlsTimerRef251.current = null;
     }, delayMs);
   };
@@ -810,7 +814,21 @@ function ExploreRecommendationRail({
         </div>
       </header>
       {toolbar}
-      <div className={`soridraw-explore-recommend-stage${isProfilePinnedRail242 ? ' soridraw-explore-recommend-stage--profile-pinned' : ''}${!railControlsVisible251 ? ' is-controls-hidden' : ''}`}>
+      <div
+        className={`soridraw-explore-recommend-stage${isProfilePinnedRail242 ? ' soridraw-explore-recommend-stage--profile-pinned' : ''}${!railControlsVisible251 ? ' is-controls-hidden' : ''}`}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          railMouseHoverRef252.current = true;
+          clearRailControlsTimer251();
+          setRailControlsVisible251(true);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          railMouseHoverRef252.current = false;
+          clearRailControlsTimer251();
+          setRailControlsVisible251(false);
+        }}
+      >
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--left"
@@ -823,11 +841,6 @@ function ExploreRecommendationRail({
         <div
           ref={scrollerRef}
           className="soridraw-explore-recommend-scroll"
-          onPointerEnter={(event) => {
-            if (event.pointerType === 'mouse') {
-              revealRailControls251();
-            }
-          }}
           onPointerDown={handleRailPointerDown241}
           onPointerUp={handleRailPointerUp241}
           onPointerCancel={() => {

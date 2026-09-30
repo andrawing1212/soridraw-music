@@ -47,7 +47,7 @@
 .soridraw-explore-profile-section-label{display:flex;align-items:center;gap:7px;margin:0 0 16px;color:rgba(235,235,240,.52);font-size:12px;font-weight:800}
 .soridraw-explore-profile-section-label svg{width:14px;height:14px;color:#ffb400;fill:currentColor}
 .soridraw-explore-profile-pinned-rail-232{margin-bottom:34px}
-.soridraw-explore-pinned-banner-235{position:relative;width:100%;aspect-ratio:2.8/1;overflow:hidden;border-radius:18px;background:#171719;isolation:isolate}
+.soridraw-explore-pinned-banner-235{position:relative;width:100%;aspect-ratio:2.8/1;overflow:hidden;border-radius:18px;background:#171719;isolation:isolate;container-type:inline-size;container-name:soridraw-pinned-banner}
 .soridraw-explore-pinned-banner-blur-235{position:absolute;z-index:0;right:-5%;top:-18%;width:76%;height:136%;object-fit:cover;filter:blur(32px) saturate(1.12) brightness(.66) contrast(.78);transform:scale(1.18);opacity:.74}
 .soridraw-explore-pinned-banner-image-235{position:absolute;z-index:2;left:0;top:0;width:35.714%;height:100%;overflow:hidden;background:#0d0d0f}
 .soridraw-explore-pinned-banner-image-235>img{display:block;width:100%;height:100%;object-fit:cover}
@@ -87,6 +87,33 @@
 .soridraw-explore-pinned-like-255{height:40px!important}
 .soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:25px;height:25px}
 }
+@media (min-width:721px){
+@container soridraw-pinned-banner (max-width:520px){
+.soridraw-explore-pinned-banner-copy-235>span{margin-bottom:4px;font-size:8px}
+.soridraw-explore-pinned-banner-copy-235 h3{font-size:15px}
+.soridraw-explore-pinned-keywords-235{display:grid;grid-template-columns:repeat(2,minmax(0,max-content));align-items:center;gap:4px 5px;margin-top:7px;max-height:43px;overflow:hidden}
+.soridraw-explore-pinned-keywords-235 em{max-width:90px;padding:4px 6px;font-size:8px}
+.soridraw-explore-pinned-top-actions-259{right:4px;top:4px;height:36px;gap:1px}
+.soridraw-explore-pinned-action-255{width:36px;height:36px}
+.soridraw-explore-pinned-action-255 svg{width:22px;height:22px}
+.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:18px;height:18px}
+.soridraw-explore-pinned-like-255{right:4px;bottom:4px;height:36px!important;gap:5px}
+.soridraw-explore-pinned-like-255 span{font-size:11px}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:22px;height:22px}
+}
+@container soridraw-pinned-banner (max-width:420px){
+.soridraw-explore-pinned-banner-copy-235 h3{font-size:14px}
+.soridraw-explore-pinned-keywords-235{gap:3px 4px;margin-top:6px;max-height:39px}
+.soridraw-explore-pinned-keywords-235 em{max-width:76px;padding:3px 5px;font-size:7.5px}
+.soridraw-explore-pinned-top-actions-259{height:32px}
+.soridraw-explore-pinned-action-255{width:32px;height:32px}
+.soridraw-explore-pinned-action-255 svg{width:19px;height:19px}
+.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:16px;height:16px}
+.soridraw-explore-pinned-like-255{height:32px!important;gap:4px}
+.soridraw-explore-pinned-like-255 span{font-size:10px}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:19px;height:19px}
+}
+}
 .soridraw-explore-profile-public-list-234{min-width:0}
 .soridraw-explore-profile-public-head-234{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 16px}
 .soridraw-explore-profile-public-title-239{min-width:0}
@@ -113,8 +140,8 @@
 @media (max-width:720px){
 .soridraw-explore-pinned-banner-235{border-radius:14px}
 .soridraw-explore-pinned-banner-copy-235{left:39.5%;right:4.5%}
-.soridraw-explore-pinned-banner-copy-235>span{display:none}
-.soridraw-explore-pinned-banner-copy-235 h3{font-size:12px}
+.soridraw-explore-pinned-banner-copy-235>span{display:block;margin-bottom:4px;font-size:7.5px;letter-spacing:.11em}
+.soridraw-explore-pinned-banner-copy-235 h3{font-size:13.5px}
 .soridraw-explore-pinned-keywords-235{gap:4px;margin-top:7px;flex-wrap:wrap;max-height:42px}
 .soridraw-explore-pinned-keywords-235 em{max-width:78px;padding:4px 6px;font-size:8px}
 .soridraw-explore-pinned-top-actions-259{right:4px;top:4px;height:34px;gap:2px}

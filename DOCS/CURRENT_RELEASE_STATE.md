@@ -1,3 +1,73 @@
+## 0KV. app265 고정 곡 모바일 FEATURED 복구 + 카드폭 반응형 액션 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **모바일 FEATURED 복구 / 모바일 제목 소폭 확대 / 태블릿~PC에서 실제 고정곡 카드 폭이 좁아질 때 키워드 2열 + 액션 버튼 소폭 축소 / 넓은 카드에서는 기존 크기 유지 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 실사용:
+- 모바일 고정 곡에서 FEATURED 문구가 보이지 않음.
+- 모바일 제목이 조금 더 커졌으면 함.
+- 태블릿~PC에서 창 폭을 줄이면 카드 폭은 줄어드는데 적용/공유/더보기/좋아요 버튼 크기는 유지되어 제목/키워드와 겹침.
+- 넓은 화면의 현재 배치는 만족, 좁은 카드에서만 자연스럽게 작아지는 반응형 요구.
+
+수정:
+- `src/components/explore/exploreSocial.css`
+  - pinned banner 자체를 inline-size container로 지정해 **viewport가 아니라 실제 카드 폭**을 기준으로 반응하도록 변경.
+  - 모바일 `<=720px`:
+    - FEATURED `display:block` 복구.
+    - FEATURED 7.5px, 제목 12px -> **13.5px**로 소폭 확대.
+    - 기존 모바일 액션 34px 위치/크기 유지.
+  - 태블릿/PC `>=721px` + 실제 pinned card 폭 `<=520px`:
+    - 키워드 4개를 **2개 x 2줄** grid로 배치.
+    - 액션 버튼 40/38px 계열 -> **36px**, 아이콘 22px.
+    - 좋아요도 동일 36px 높이로 축소.
+    - FEATURED/키워드 간격과 칩 크기만 소폭 압축.
+  - 실제 pinned card 폭 `<=420px`:
+    - 액션 버튼 **32px**, 아이콘 19px.
+    - 키워드 칩/간격을 한 단계 더 소폭 축소.
+  - 넓은 pinned card는 app264 크기/배치 그대로 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 모바일 FEATURED 표시 + 13.5px 제목 guard 추가.
+  - pinned banner container guard 추가.
+  - 태블릿/PC compact card에서 2열 키워드 + 36px/32px 반응형 액션 guard 추가.
+- app version: **265**.
+
+검증/배포:
+- CSS commit: `32344381446f9954c36fd3973a0f9774ecd0d9ff`
+- verifier commit: `2ab958eb8daaa0d67d0a5d4095b2b482548369ed`
+- app265 commit: `a1511bab603bcf204edc39ca3534521f5c144637`
+- Release System Audit source commit: `97aa99489037db930cbf6b00d8176d83221ebc6d`
+- Release System Audit Run `36760290995`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - pinned responsive layout guards PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- Firebase PREVIEW App Release source commit: `c9821e528cc377d391eb26201161df30164d1c2c`
+- Firebase PREVIEW App Release Run `36760576791`: **SUCCESS**
+  - locked PREVIEW source `c9821e528cc377d391eb26201161df30164d1c2c`
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **265**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- 고정 곡 전용 CSS 반응형만 변경.
+- app264 액션 순서(적용 → 공유 → 더보기 / 좋아요 우하단) 유지.
+- app263 rail momentum/snap 변경 없음.
+- 좋아요/공유/다음곡 적용/더보기 기능 로직 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 모바일에서 FEATURED가 다시 보이는지.
+2. 모바일 제목이 이전보다 조금 커졌지만 키워드/버튼과 겹치지 않는지.
+3. 태블릿~PC에서 넓은 카드일 때 app264 크기 그대로인지.
+4. 창을 줄여 카드가 좁아지면 키워드가 2개씩 2줄로 바뀌는지.
+5. 같은 구간에서 상단 3버튼과 우하단 좋아요가 살짝 작아져 제목/키워드와 겹치지 않는지.
+6. 더 좁은 카드에서도 버튼/키워드가 추가로 한 단계 축소되어 안정적인지.
+7. 실제 기능 클릭과 rail 이동은 기존과 동일한지.
+
 ## 0KU. app264 고정 곡 액션 위치 교환 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **사용자 지정 순서대로 좋아요↔공유, 이어서 공유↔다음곡 적용 위치 교환 / 고정 곡만 변경 / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**

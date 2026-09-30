@@ -1,3 +1,64 @@
+## 0KQ. app260 More 배경 클릭-through 차단 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **더보기 창의 불투명 배경을 누르면 오직 창 닫기만 수행 / 뒤쪽 카드·좋아요·재생 등 버튼으로 클릭이 전달되지 않도록 수정 / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 증상:
+- More가 열린 상태에서 어두운 배경 영역을 눌렀을 때 More는 닫히지만, 바로 뒤에 카드 버튼이 있으면 그 버튼까지 함께 눌리는 현상.
+- 요구: 어두운 배경 전체는 하나의 닫기 영역이며, 뒤쪽 UI는 절대 동작하면 안 됨.
+
+원인:
+- app257~259에서 backdrop의 `pointerdown` 시점에 즉시 More를 닫음.
+- overlay가 pointer sequence 중간에 먼저 사라져 같은 손가락/마우스 동작의 후속 click이 뒤쪽 카드 컨트롤에 도달할 수 있었음.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - backdrop `pointerdown`은 닫지 않고 이벤트 전파만 차단.
+  - 실제 닫기는 backdrop 자체의 `click`이 완전히 성립한 뒤 수행.
+  - backdrop click에서 `preventDefault + stopPropagation` 적용.
+  - sheet 내부는 `pointerdown`과 `click` 모두 전파 차단.
+  - 따라서 overlay가 전체 클릭 sequence 동안 유지되어 뒤쪽 버튼이 눌릴 수 없음.
+  - `actionBusy` 중에는 기존대로 닫지 않되 backdrop이 입력을 흡수하므로 뒤쪽 버튼에도 전달되지 않음.
+  - PC/모바일 동일 동작.
+- `scripts/verify-201-explore-track-action-sheet.mjs`
+  - full pointer/click sequence 흡수 및 click-through 방지 회귀 검사 추가.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - More backdrop click-through 방지 계약으로 검사 갱신.
+- app version: **260**.
+
+검증/배포:
+- behavior commit: `c4f9f0dd4cde688c14f60c0cc3110fbe14e62756`
+- verify-201 commit: `b22dc78d029fba325f7c1aa8b610964b1a2c6662`
+- verify-221 commit: `d7dd6fcc1222c3434f66d67dc4ae7d354fba22e6`
+- app260 commit: `30e7ac305d1582b907388f6a9ba396ddf7467f0c`
+- Release System Audit Run `36668156195`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - More backdrop click-through guard PASS
+  - existing More Back/history guards PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36668317050`: **SUCCESS**
+  - exact Hosting source `b3c1a17db428f219d548359d5566d89a32d3bb40`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- More backdrop event handling만 수정.
+- 고정 곡 버튼 배치, 좋아요, 다음곡 적용, 공유, 공개 설정, 싫어요 기능 로직 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. PC에서 More를 열고 뒤쪽 버튼이 보이는 어두운 배경을 클릭 -> More만 닫히는지.
+2. 모바일에서도 같은 위치를 탭 -> More만 닫히는지.
+3. 배경 뒤 카드의 좋아요/재생/더보기/공유 등이 함께 실행되지 않는지.
+4. More sheet 내부 버튼은 기존대로 정상 동작하는지.
+5. 브라우저/시스템 Back으로 More 닫기 동작은 app259 그대로 유지되는지.
+
 ## 0KP. app259 고정 곡 상단 액션 재배치 + PC More 뒤로가기 수정 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **고정 곡 좋아요/다음곡 적용을 더보기 왼쪽에 배치 / 공유는 기존 우측 하단 유지 / More history entry를 열기 전에 선점해 PC 뒤로가기 1회로 창 닫기 / PREVIEW 배포 완료 / 실사용 확인 대기**

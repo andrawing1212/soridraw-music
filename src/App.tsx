@@ -10176,7 +10176,6 @@ const toggleCycleVariantSelection = (
             syncItem: sanitizeForFirestore({ ...existingFav, ...restoreUpdates, id: existingFav.id, firestoreId: existingFav.id }),
           }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
-          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
           // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
           showToast('보관함에 다시 저장되었습니다.');
           return;
@@ -10353,7 +10352,6 @@ const toggleCycleVariantSelection = (
         return merged;
       });
 
-      const saveSignal = buildFavoriteSyncSignal('save', localFavorite, [localFavorite], createdAtMs);
       queueMusicNoteFavoriteCountDelta(user.uid, 1);
 
       showToast('저장되었습니다.');
@@ -10507,7 +10505,6 @@ const toggleCycleVariantSelection = (
       if (!isRemovalLikeUpdate) applyFavoriteUpdateToLocalState([id]);
       if (user?.uid) {
         patchFavoriteCacheImmediately(user.uid, id, updates);
-        const updateSignal = buildFavoriteSyncSignal('update', updatedFavoriteSnapshot, [updatedFavoriteSnapshot], favoriteUpdatedAtMs);
         // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
       }
       if ('isLocked' in updates) {

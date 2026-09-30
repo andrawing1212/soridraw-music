@@ -303,8 +303,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_RAIL_ALIGN_DELAY_MS_251\s*=\s*200[\s\S]*?scheduleExploreRailAlign251[\s\S]*?EXPLORE_RAIL_ALIGN_DELAY_MS_251/,
-  'all Explore rails must share the pinned-rail 0.2s settle timing',
+  /EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261\s*=\s*100[\s\S]*?scheduleExploreRailAlign251[\s\S]*?EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261/,
+  'all Explore rails must share the app261 0.1s release-based settle timing',
 );
 assert.doesNotMatch(
   page,
@@ -323,8 +323,8 @@ assert.match(
 );
 assert.match(
   page,
-  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)/,
-  'short touch drag must remain a one-card move and not inherit viewport paging',
+  /shortControlledDrag[\s\S]*?scheduleExploreRailMoveAfterRelease261\(deltaX < 0 \? 1 : -1\)/,
+  'short touch drag must remain a one-card move but wait for the shared 0.1s release delay',
 );
 assert.match(
   page,
@@ -338,8 +338,8 @@ assert.match(
 );
 assert.match(
   page,
-  /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?scheduleExploreRailAlign251\(\)/,
-  'scrolling any Explore rail must reveal controls, hide them 0.5s after motion stops, and use shared alignment',
+  /onScroll=\{\(\) => \{[\s\S]*?setRailControlsVisible251\(true\)[\s\S]*?EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251[\s\S]*?railPointerActiveRef261\.current \|\| railReleaseAlignPendingRef261\.current[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'scrolling any Explore rail must reveal controls while pointer-held motion cannot arm or restart the snap timer',
 );
 assert.match(
   page,

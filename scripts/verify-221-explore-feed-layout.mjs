@@ -419,13 +419,23 @@ assert.match(
 );
 assert.match(
   page,
-  /className="soridraw-explore-more-backdrop"[\s\S]*?onClick=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/,
-  'Explore More sheet must close when the dimmed backdrop is clicked while clicks inside the sheet stay open',
+  /className="soridraw-explore-more-backdrop"[\s\S]*?onPointerDown=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?!actionBusy[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/,
+  'Explore More sheet must close when the dimmed backdrop is pressed while interactions inside the sheet stay open',
 );
 assert.match(
   page,
-  /moreHistoryPushedRef257[\s\S]*?window\.history\.pushState\([\s\S]*?soridrawExploreMore257: true[\s\S]*?window\.addEventListener\('popstate', handlePopState257\)[\s\S]*?dismissMoreFromHistory257\(\)[\s\S]*?window\.history\.back\(\)/,
-  'Explore More must own one history entry so the browser/system back key closes the sheet before leaving the page',
+  /moreHistoryPushedRef257[\s\S]*?window\.history\.pushState\([\s\S]*?soridrawExploreMore257: true/,
+  'Explore More must push one local history entry when it opens',
+);
+assert.match(
+  page,
+  /const handlePopState257 = \(\) => \{[\s\S]*?dismissMoreFromHistory257\(\)[\s\S]*?window\.addEventListener\('popstate', handlePopState257\)/,
+  'browser/system back must close Explore More before leaving the page',
+);
+assert.match(
+  page,
+  /if \(moreHistoryPushedRef257\.current\) \{[\s\S]*?window\.history\.back\(\)/,
+  'normal More dismissal must remove its temporary history entry',
 );
 assert.match(
   social,

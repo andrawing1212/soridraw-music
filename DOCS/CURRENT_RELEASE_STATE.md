@@ -1,3 +1,79 @@
+## 0LC. app272 전체 사용자 공개 Music Note 상세 글로벌 보정 완료 (2026-10-01 KST)
+
+상태: **사용자 승인 후 전체 사용자 범위 read-only preflight → bounded shared D1 repair → 글로벌 postcheck 완료 / 기존 공개곡 소유자 재설정 불필요**
+
+사용자 추가 지시:
+- 현재 테스트 계정 곡만이 아니라 **다른 사용자들의 공개곡도 동일 문제 여부를 모두 확인**해야 함.
+- 공개곡이 많은 사용자가 `팔로워 곡 저장 허용`을 하나씩 다시 설정하는 방식은 사용하지 않음.
+
+글로벌 preflight:
+- 대상: shared canonical D1의 **모든 owner**에 대한 `source_type='music_note' AND is_public=1 AND status='published'`.
+- 공개 Music Note 총 **38곡 / 3명의 owner** 확인.
+- D1 lyrics 누락: **32곡**.
+- D1 prompt 누락: **0곡**.
+- 32개 대상 모두 canonical Firestore `favorites/{sourceId}` exact read-only 대조.
+- owner/source identity guard PASS.
+- Firestore 원본 lyrics 존재: **32/32**.
+- source missing / owner mismatch / 원본 lyrics empty: **0**.
+- 즉 특정 사용자만의 문제가 아니라 legacy 공개 projection 전체에 걸친 구조 문제였음.
+
+실행:
+- 사용자 승인 범위에 따라 **32개 공개곡 모두** D1 `tracks.lyrics`만 app270 canonical 인코딩 형식으로 1회 복구.
+- owner 설정/팔로워 설정/공개상태/좋아요/Feed 카드/프로필/검색필드/프롬프트는 변경하지 않음.
+- prompt write 0.
+- Firestore write 0.
+- D1 schema/migration 0.
+- 전체 Feed/Profile rebuild 0.
+- TEST/PRODUCTION 코드 배포 0.
+- shared user canonical data이므로 PREVIEW/TEST/PRODUCTION 앱은 동일 복구 데이터를 보게 됨.
+
+결과:
+- Repair Run `36782335008`: **SUCCESS**.
+- preflight:
+  - publicMusicNoteTotal=38
+  - publicOwnerTotal=3
+  - missingLyricsBefore=32
+  - missingPromptBefore=0
+  - repairTrackCount=32
+  - repairOwnerCount=3
+  - unresolvedSourceEmptyCount=0
+- postcheck:
+  - d1MissingLyricsAfter=**0**
+  - d1MissingPromptAfter=**0**
+  - sourcePresentStillMissing=**0**
+  - legitimateSourceEmpty=0
+- **전체 사용자 공개 Music Note의 source-present 가사/프롬프트 parity PASS.**
+
+app272 저장 경로:
+- app272는 Worker save-access에서 받은 authorized full snapshot을 React state 타이밍과 분리해 그대로 공유 노트 저장에 전달.
+- 따라서 지금부터 follower가 기존 공개곡을 저장하면 owner가 공개설정을 다시 만질 필요 없이:
+  - 가사
+  - 프롬프트
+  - 키워드
+  - nextSong 정보
+  를 정상 저장해야 함.
+- 이미 과거에 잘못 저장된 follower shared-note 문서는 대량 강제수정하지 않음.
+- 같은 곡을 app272에서 다시 저장하면 deterministic 문서가 최신 full snapshot으로 갱신됨.
+
+안전:
+- 이번 repair는 전체 사용자 데이터 삭제/대량 migration이 아니라, preflight에서 정확히 확인된 legacy 누락 32개 row의 빈 lyrics 필드 복구.
+- 처음 실행은 Wrangler explicit transaction 제한으로 write 전에 실패했고 실제 repair 미실행.
+- 재실행은 transaction wrapper를 제거한 뒤 성공했고 postcheck로 누락 0 확인.
+- 완료된 one-off repair workflow/trigger는 저장소에서 제거함.
+
+현재 앱:
+- PREVIEW: app272.
+- PREVIEW App Run `36781099874` SUCCESS / exact build PASS.
+- Worker는 app271 canonical 배포본 유지.
+- TEST/PRODUCTION 코드 비변경.
+
+다음 실사용:
+1. 기존에 이미 공개된 다른 사용자 곡을 owner 설정 재저장 없이 follower 계정에서 공유 노트에 저장.
+2. 한글/외국어 가사 + 프롬프트 + 키워드 확인.
+3. 과거에 잘못 저장했던 곡이면 같은 곡을 다시 저장해 deterministic 문서 갱신 확인.
+4. PC/모바일 동일 확인.
+5. 좋아요/공개프로필/Feed/다음곡 적용/팔로워 권한 회귀 없음 확인.
+
 ## 0LB. app272 팔로워 공유노트 상세 전달 수정 + legacy 공개곡 자동보정 필요 확인 (2026-10-01 KST)
 
 상태: **app271 실사용 FAIL 판정 / 프롬프트 누락의 실제 저장 경로 수정 app272 PREVIEW 배포 완료 / 기존 공개곡을 사용자에게 하나씩 재설정시키는 방식 폐기 / legacy 공개곡 6건 자동보정은 공유 D1 데이터 write이므로 사용자 승인 대기**

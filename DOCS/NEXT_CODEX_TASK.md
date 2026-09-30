@@ -1,3 +1,31 @@
+## CURRENT TASK — app272 글로벌 공개곡 follower-save 실사용 확인 (2026-10-01 KST)
+
+완료:
+- 특정 사용자뿐 아니라 **전체 사용자** shared canonical 공개 Music Note를 전수 조건 검사.
+- 38곡 / 3 owner 중 legacy D1 lyrics 누락 32곡 발견.
+- 32/32 canonical Firestore 원본 lyrics 존재 확인.
+- 사용자 승인 후 32개 D1 lyrics targeted repair 완료.
+- Repair Run `36782335008` SUCCESS.
+- postcheck: public Music Note D1 missing lyrics 0 / missing prompt 0 / source-present parity PASS.
+- one-off repair workflow/trigger 제거 완료.
+- PREVIEW app272 유지 / TEST·PRODUCTION 코드 비변경.
+
+실사용 확인:
+1. owner가 기존 공개 설정을 다시 만지지 않는다.
+2. follower 계정에서 기존 공개곡을 공유 노트에 저장.
+3. 한글/외국어 가사, 프롬프트, 키워드가 모두 표시.
+4. 과거에 잘못 저장된 동일 곡은 다시 저장하면 deterministic shared-note 문서가 갱신.
+5. 다른 사용자 곡에서도 동일.
+6. PC/모바일 동일.
+7. 좋아요/공개프로필/Feed/다음곡 적용/권한 로직 회귀 없음.
+
+보호:
+- 전체 사용자 원본 Firestore write 금지.
+- 이미 저장된 follower shared-note 전체 일괄 rewrite 금지.
+- 페이지 진입/업데이트/재방문에 repair read/write 추가 금지.
+- 정상 좋아요/Feed/프로필/UI 변경 금지.
+- TEST 승격은 사용자 요청 전 금지.
+
 ## CURRENT TASK — app272 legacy 공개곡 targeted lyrics repair 승인 대기 (2026-10-01 KST)
 
 현재 판단:

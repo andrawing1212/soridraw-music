@@ -1,3 +1,73 @@
+## 0KC. app248 · profile indexed-write compaction 251 PREVIEW Worker 배포 (2026-09-30 KST)
+
+상태: **PREVIEW Worker 비용 절감 배포 완료 / 정상 기능 회귀 감사 PASS / app248 유지 / 사용자 데이터·D1 schema 변경 0 / 실사용 재측정 대기**
+
+직전 실사용 기준:
+- 소개(bio) only: query R0/W1, physical **R5/W8**.
+- 프로필 사진(avatar) only: query R0/W1, physical **R7/W9**.
+- 직전 세 번째 캡처는 `/v1/me/profile-media/avatar` + `/v1/me/profile-media`가 누적으로 보였으므로, dual-media 단독 비용은 패널 초기화 후 재측정 필요.
+- 현재 클라이언트 코드는 avatar+background가 같은 저장에 함께 있으면 batch `/v1/me/profile-media` **한 요청**을 사용하도록 보호되어 있음.
+
+원인 계산:
+- D1은 UPDATE에 **인덱스가 걸린 컬럼이 포함되면 index row write도 physical rows_written에 추가**된다.
+- `public_profiles`에는 `handle` 단독 unique index와 `(is_public, handle, uid)` index가 존재.
+- 기존 warm bio/media UPDATE는 값이 안 바뀐 `handle`/`is_public`까지 SET 절에 포함해 불필요한 index maintenance를 유발할 수 있었음.
+- 249 trigger compaction 이후에도 profile derived compatibility journal은 TEST app124 / PRODUCTION app117의 기존 profile mutation 경로가 `syncDerivedCache032`를 통해 소비하므로 아직 제거하면 안 됨.
+
+251 변경:
+- 제품 commit: `43da52290eaa4e0fdb196dfff4b7fafba6faa24d`.
+- `handleMyProfileUpdate` warm UPDATE는 **실제로 바뀐 컬럼 + updated_at만** SET.
+  - bio-only이면 bio/updated_at만.
+  - handle이 안 바뀌면 indexed handle을 쓰지 않음.
+  - is_public이 이미 1이면 indexed is_public을 쓰지 않음.
+- 단일 avatar/background warm UPDATE도 shared Profile R2가 정상일 때 is_public 재쓰기를 제거.
+- dual-media batch도 같은 방식으로 is_public 재쓰기를 제거.
+- shared Profile R2 baseline을 cache patch에 재사용해 media 저장 중 동일 profile R2를 한 번 더 읽는 경로 제거.
+- 기존 full writer는 missing/race/cold recovery에서만 유지해 복구 안전성 보호.
+- UI/client/요청 구조/공개·비공개/좋아요/팔로우/Music Note 079 변경 없음.
+
+검증:
+- Apply/Build Run `36648918978` **SUCCESS**.
+  - profile cost guard PASS
+  - TypeScript PASS
+  - Build PASS
+  - Worker syntax/source lock PASS
+  - D1 schema change 0
+  - user data mutation 0
+- Release System Audit Run `36649084536` **SUCCESS**.
+  - TypeScript / Build / static & regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - live shared D1 preflight read-only PASS
+  - main / production refs unchanged PASS
+- PREVIEW Worker Release Run `36649277715` **SUCCESS**.
+  - locked product source `43da52290eaa4e0fdb196dfff4b7fafba6faa24d`
+  - PREVIEW Worker before `2d02c2e5-4ea9-4d73-9df5-d467f093d047`
+  - PREVIEW Worker after `d4f0b104-ffc1-461f-bf10-63bc39ca0868`
+  - Feed smoke PASS
+  - Profile smoke PASS
+  - warm feed revision D1 R0/W0 PASS
+  - public-like changed-card D1 R0/W0 PASS
+  - TEST / PRODUCTION Worker unchanged PASS
+- 작업용 temp 251 workflow 제거 완료.
+
+글로벌-scale 설계 대조:
+- 현재 방향은 **canonical source-of-truth point mutation + changed-key only cache patch/invalidation + versioned cache + no-change read avoidance**로 Meta/Uber의 대규모 cache invalidation 원칙과 같은 방향.
+- 최종형은 아직 아님. shared D1 profile derived journal/state는 구형 TEST/PRODUCTION mutation consumer와의 하위호환 때문에 임시 유지 중.
+- 다음 최종 구조는 모든 환경의 profile mutation을 direct targeted R2/edge update로 승격한 뒤, shared D1의 profile compatibility journal/state writes를 안전하게 retirement하는 것.
+- consistency는 단순 TTL이 아니라 version/changed-key 기반으로 유지하고, 향후 cache-vs-canonical parity sampler를 운영 진단에 추가하는 방향.
+
+다음 PREVIEW 실측:
+1. 진단 패널 **초기화**.
+2. bio only 1회 저장.
+3. 다시 초기화.
+4. avatar only 1회 저장.
+5. 다시 초기화.
+6. avatar+background를 **같은 저장 1회**로 실행.
+- query W1 유지가 1차 기준.
+- physical rows_written이 251 이전 bio W8 / avatar W9보다 실제로 감소하는지 확인.
+- dual-media는 요청 상세에 `/v1/me/profile-media` 한 줄만 보이는지 확인.
+- 수치가 충분히 내려가지 않으면 trigger를 무작정 삭제하지 않고, 다음 단계로 unified Profile Save + cross-environment direct-R2 cutover 설계를 진행.
+
 ## 0KB. Shared D1 legacy profile global revision trigger 제거 (2026-09-30 KST)
 
 상태: **공유 D1 trigger-only 비용 절감 적용 완료 / 정상 기능 보호 PASS / 사용자 데이터 변경 0 / PREVIEW 재실측 대기**

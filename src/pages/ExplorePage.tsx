@@ -1013,17 +1013,6 @@ function ExploreTrackCard({
               <div className="soridraw-explore-pinned-keywords-235" aria-label="곡 키워드">
                 {pinnedKeywords235.map((keyword) => <em key={keyword}>{keyword}</em>)}
               </div>
-              <button
-                type="button"
-                className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
-                onClick={() => onToggleLike(track)}
-                disabled={likeBusy}
-                title={liked ? '좋아요 취소' : '좋아요'}
-                aria-label={liked ? '좋아요 취소' : '좋아요'}
-              >
-                {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
-                <span>{formatCount(track.likeCount)}</span>
-              </button>
             </div>
           </div>
         ) : (
@@ -1074,6 +1063,18 @@ function ExploreTrackCard({
 
         {variant === 'profilePinnedBanner' && (
           <div className="soridraw-explore-pinned-actions-255" aria-label="고정 곡 빠른 작업">
+            <button
+              type="button"
+              className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
+              onClick={() => onToggleLike(track)}
+              disabled={likeBusy}
+              title={liked ? '좋아요 취소' : '좋아요'}
+              aria-label={liked ? '좋아요 취소' : '좋아요'}
+            >
+              {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+              <span>{formatCount(track.likeCount)}</span>
+            </button>
+
             <div className="soridraw-explore-pinned-actions-right-255">
               <button
                 type="button"
@@ -2363,8 +2364,10 @@ export default function ExplorePage() {
       <div
         className="soridraw-explore-more-backdrop"
         role="presentation"
-        onPointerDown={() => {
-          if (!actionBusy) closeMoreSheet();
+        onClick={(event) => {
+          if (event.target === event.currentTarget && !actionBusy) {
+            closeMoreSheet();
+          }
         }}
       >
         <section
@@ -2372,7 +2375,7 @@ export default function ExplorePage() {
           role="dialog"
           aria-modal="true"
           aria-label={moreSheetMode === 'folders' ? '공유 노트에 추가' : `${moreTrack.title} 더보기`}
-          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <div className="soridraw-explore-more-handle" aria-hidden="true" />
           {moreSheetMode === 'folders' ? (

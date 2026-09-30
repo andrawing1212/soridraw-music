@@ -56,7 +56,11 @@ if (appVersion >= 155) {
   fail('persistent liked-card cache is not reconciled');
 }
 if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*(?:exploreFeedLastRevisionCheckAt126\.set\((?:revisionCheckKey154|requestUrl), Date\.now\(\)\);\s*)?\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
-if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
+if (appVersion < 254) {
+  if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
+} else if (/loadMoreFeed|feedNextCursor|loadingMore|loadMoreError/.test(page)) {
+  fail('254 manual Feed load-more path must stay removed');
+}
 
 if (appVersion >= 120) {
   if (!liked.includes('SORIDRAW_EXPLORE_LIKED_TRACK_LATEST_CACHE_120_20260918')) fail('latest liked-track cache marker missing');

@@ -1,3 +1,36 @@
+## 2026-09-30 — 251 실사용 PASS 이후: Unified Profile Save
+
+확정 실측:
+- bio only: query R0/W1, physical **R5/W6**, R2 A1/B3.
+- avatar only: query R0/W1, physical **R7/W8**, R2 A2/B1.
+- avatar+background: batch `/v1/me/profile-media` 1요청, query R0/W1, physical **R7/W8**, R2 A3/B1.
+- 251 이전 대비 bio W8->W6, avatar W9->W8.
+- app248 유지.
+- TEST/PRODUCTION unchanged.
+
+다음 구현 목표:
+- 사용자가 한 저장에서 텍스트 + media를 같이 변경해도 canonical D1 `public_profiles` UPDATE를 **총 1회**만 수행.
+- media R2 객체는 실제 변경된 avatar/background만 저장.
+- text-only / single-media-only / dual-media-only 기존 정상 경로와 old client 호환 유지.
+- YouTube R2 sidecar/no-op 보호 유지.
+- handle uniqueness, normalization, media size/type validation, cold recovery 유지.
+- shared Profile R2/alias/first-view edge는 changed key만 patch/invalidate.
+- D1 schema/migration/backfill/user data bulk operation 금지.
+- Music Note 079 / likes / follows / publication / UI 비변경.
+
+합격:
+- combined text+avatar 저장: D1 query W1.
+- combined text+avatar+background 저장: D1 query W1.
+- no-op: D1 R0/W0.
+- 기존 bio-only R0/W1, avatar-only R0/W1, dual-media R0/W1 유지.
+- TypeScript/Build/profile regressions PASS.
+- PREVIEW만 배포, TEST/PRODUCTION unchanged.
+- live physical W는 combined-save에서 기존 두 mutation 합산보다 확실히 낮아야 함.
+
+주의:
+- 현재 profile derived compatibility journal/state는 바로 제거하지 않는다.
+- 모든 환경이 direct targeted R2/edge mutation 경로로 승격된 뒤 retirement 판단.
+
 ## 2026-09-30 — app248 / 251 indexed-write compaction 실사용 재측정
 
 배포 완료:

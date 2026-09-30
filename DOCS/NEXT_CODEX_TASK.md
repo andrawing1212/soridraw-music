@@ -1,3 +1,28 @@
+## CURRENT TASK — app273 기존 저장 공유노트 실기기 확인 (2026-10-01 KST)
+
+현재 상태:
+- app272 “화면 변화 없음” 원인을 기존 Firestore shared-note + 기기 full local cache까지 확장해 수정.
+- 현재 공유 허용 상태와 연결된 stale shared-note **11문서 targeted repair 완료**.
+- prompt 누락 8 / lyrics 누락 7, identity mismatch 0 / source missing 0.
+- app273는 오래된 full local row도 detail이 불완전할 때만 exact Firestore 1건을 재수화.
+- PREVIEW Run `36784611639` SUCCESS / app version 273 / exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+사용자 확인:
+1. 기존에 문제였던 공유노트를 재저장하지 말고 그대로 상세 열기.
+2. 한글/외국어 가사 확인.
+3. 프롬프트 확인.
+4. 키워드/다음곡 적용/원작자/Suno 링크 기존 정상 기능 확인.
+5. 같은 곡 재저장 후에도 동일 정상.
+6. PC/모바일 동일.
+
+판정:
+- 위 항목이 실제 화면에서 PASS하면 app273 동결.
+- 아직 빈 값이 있으면 그 shared-note **1문서만** ID/source/cache 경로를 좁혀 진단하고 전체 구조를 다시 바꾸지 않는다.
+- 현재 공유 허용 대상이 아닌 기존 25개 shared-note는 이번 targeted repair 범위 밖이며 임의 수정 금지.
+- 좋아요/Feed/프로필/분할/다른 Music Note 저장 구조 변경 금지.
+- TEST 승격은 사용자 요청 전 금지.
+
 ## CURRENT TASK — app272 실사용 FAIL 재진단 (2026-10-01 KST)
 
 사용자 판정: **이전 작업 후 실제 화면에서 전혀 변화가 없어 FAIL.**

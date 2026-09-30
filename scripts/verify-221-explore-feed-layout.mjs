@@ -384,8 +384,8 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-banner-235\{[\s\S]*?aspect-ratio:2\.8\/1/,
-  'pinned profile banner must use the requested 2.8-to-1 horizontal ratio',
+  /\.soridraw-explore-pinned-banner-235\{[\s\S]*?aspect-ratio:2\.8\/1[\s\S]*?container-type:inline-size[\s\S]*?container-name:soridraw-pinned-banner/,
+  'pinned profile banner must keep the requested 2.8-to-1 ratio and expose its own inline-size container for card-width responsive controls',
 );
 assert.match(
   social,
@@ -464,8 +464,13 @@ assert.match(
 );
 assert.match(
   social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-top-actions-259\{right:4px;top:4px;height:34px;gap:2px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{right:4px;bottom:4px;height:34px!important;gap:5px\}/,
-  'mobile pinned apply/share/More must stay grouped at top-right while like stays bottom-right',
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-banner-copy-235>span\{display:block;margin-bottom:4px;font-size:7\.5px;letter-spacing:\.11em\}[\s\S]*?\.soridraw-explore-pinned-banner-copy-235 h3\{font-size:13\.5px\}[\s\S]*?\.soridraw-explore-pinned-top-actions-259\{right:4px;top:4px;height:34px;gap:2px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{right:4px;bottom:4px;height:34px!important;gap:5px\}/,
+  'mobile pinned banner must show FEATURED, use the slightly larger title, and preserve the compact action placement',
+);
+assert.match(
+  social,
+  /@media \(min-width:721px\)\{[\s\S]*?@container soridraw-pinned-banner \(max-width:520px\)\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,max-content\)\)[\s\S]*?\.soridraw-explore-pinned-action-255\{width:36px;height:36px\}[\s\S]*?@container soridraw-pinned-banner \(max-width:420px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:32px;height:32px\}/,
+  'tablet and desktop pinned cards must react to the actual banner width by using two-column keywords and slightly smaller controls on compact cards',
 );
 assert.doesNotMatch(
   page,

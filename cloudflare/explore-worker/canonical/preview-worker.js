@@ -9327,11 +9327,20 @@ async function refreshProfileSearchIndexFromPayload245(env, uid, nickname, bio) 
   ]);
 }
 
-async function handleMyProfileUpdate(request, env, cors) {
+async function handleMyProfileUpdate(request, env, cors, mutation252 = null) {
   // SORIDRAW_PROFILE_SAVE_R2_FIRST_247_20260930
-  const authContext = await requireExploreAuth(request);
-  await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
-  const body = await readJsonBody(request, 8192);
+  // SORIDRAW_UNIFIED_PROFILE_SAVE_CORE_252_20260930
+  const delegatedAuth252 = mutation252?.authContext || null;
+  const authContext = delegatedAuth252 || await requireExploreAuth(request);
+  if (!delegatedAuth252) {
+    await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
+  }
+  const body = mutation252?.body && typeof mutation252.body === "object"
+    ? mutation252.body
+    : await readJsonBody(request, 8192);
+  const media252 = mutation252?.media && typeof mutation252.media === "object"
+    ? mutation252.media
+    : null;
   const nickname = String(body.nickname || "").trim().replace(/\s+/g, " ");
   if (!nickname || nickname.length > 40) {
     throwApi("INVALID_NICKNAME", "\uB2C9\uB124\uC784\uC740 1~40\uC790\uB85C \uC785\uB825\uD574\uC8FC\uC138\uC694.", 400);
@@ -9360,6 +9369,13 @@ async function handleMyProfileUpdate(request, env, cors) {
   const instagramUrl = normalizeProfileSocialUrl(body.instagramUrl, "instagram");
   const tiktokUrl = normalizeProfileSocialUrl(body.tiktokUrl, "tiktok");
   const now = Date.now();
+  const mediaOrigin252 = new URL(request.url).origin;
+  const avatarUrl252 = media252?.avatarBytes
+    ? `${mediaOrigin252}/v1/profile-media/${encodeURIComponent(authContext.uid)}/avatar?v=${now}`
+    : "";
+  const backgroundUrl252 = media252?.backgroundBytes
+    ? `${mediaOrigin252}/v1/profile-media/${encodeURIComponent(authContext.uid)}/background?v=${now}`
+    : "";
 
   const readExistingD1247 = async () => await env.DB.prepare(`
     SELECT
@@ -9426,6 +9442,11 @@ async function handleMyProfileUpdate(request, env, cors) {
     }
   }
 
+  const nextAvatarUrl252 = avatarUrl252 || String(existing.avatar_url || "");
+  const nextBackgroundUrl252 = backgroundUrl252 || String(existing.background_url || "");
+  const avatarChanged252 = nextAvatarUrl252 !== String(existing.avatar_url || "");
+  const backgroundChanged252 = nextBackgroundUrl252 !== String(existing.background_url || "");
+
   const previousGenres = JSON.stringify(parseProfileGenres(existing.genre_override));
   const nextGenres = JSON.stringify(genres);
   const nicknameChanged = String(existing.nickname || "") !== nickname;
@@ -9440,12 +9461,34 @@ async function handleMyProfileUpdate(request, env, cors) {
     || String(existing.spotify_url || "") !== spotifyUrl
     || String(existing.instagram_url || "") !== instagramUrl
     || String(existing.tiktok_url || "") !== tiktokUrl
+    || avatarChanged252
+    || backgroundChanged252
     || Number(existing.profile_customized || 0) !== 1
     || Number(existing.is_public || 0) !== 1;
 
   let profile = sharedProfile ? { ...sharedProfile } : null;
 
   if (coreChanged) {
+    if (media252 && (avatarChanged252 || backgroundChanged252)) {
+      if (!env?.PROFILE_MEDIA) {
+        throwApi("PROFILE_MEDIA_NOT_CONFIGURED", "프로필 이미지 저장소 연결이 필요합니다.", 503);
+      }
+      const mediaWrites252 = [];
+      if (avatarChanged252 && media252.avatarBytes) {
+        mediaWrites252.push(env.PROFILE_MEDIA.put(getProfileMediaKey(authContext.uid, "avatar"), media252.avatarBytes, {
+          httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
+          customMetadata: { uid: authContext.uid, kind: "avatar", updatedAt: String(now) },
+        }));
+      }
+      if (backgroundChanged252 && media252.backgroundBytes) {
+        mediaWrites252.push(env.PROFILE_MEDIA.put(getProfileMediaKey(authContext.uid, "background"), media252.backgroundBytes, {
+          httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
+          customMetadata: { uid: authContext.uid, kind: "background", updatedAt: String(now) },
+        }));
+      }
+      await Promise.all(mediaWrites252);
+    }
+
     // SORIDRAW_PROFILE_INDEXED_WRITE_COMPACTION_251_20260930
     // Only changed columns belong in the warm UPDATE. D1 bills index maintenance
     // when an indexed column is included in a write, even if the value is unchanged.
@@ -9459,6 +9502,8 @@ async function handleMyProfileUpdate(request, env, cors) {
     if (String(existing.spotify_url || "") !== spotifyUrl) { set251.push("spotify_url = ?"); bind251.push(spotifyUrl); }
     if (String(existing.instagram_url || "") !== instagramUrl) { set251.push("instagram_url = ?"); bind251.push(instagramUrl); }
     if (String(existing.tiktok_url || "") !== tiktokUrl) { set251.push("tiktok_url = ?"); bind251.push(tiktokUrl); }
+    if (avatarChanged252) { set251.push("avatar_url = ?"); bind251.push(nextAvatarUrl252); }
+    if (backgroundChanged252) { set251.push("background_url = ?"); bind251.push(nextBackgroundUrl252); }
     if (Number(existing.profile_customized || 0) !== 1) set251.push("profile_customized = 1");
     if (Number(existing.is_public || 0) !== 1) set251.push("is_public = 1");
     set251.push("updated_at = ?");
@@ -9471,6 +9516,7 @@ async function handleMyProfileUpdate(request, env, cors) {
     const writeProfileRecovery251 = async () => await env.DB.prepare(`
       UPDATE public_profiles
       SET nickname = ?, bio = ?, handle = ?, genre_override = ?,
+          avatar_url = ?, background_url = ?,
           spotify_url = ?, instagram_url = ?, tiktok_url = ?,
           profile_customized = 1, is_public = 1, updated_at = ?
       WHERE uid = ?
@@ -9479,6 +9525,8 @@ async function handleMyProfileUpdate(request, env, cors) {
       bio,
       handle,
       nextGenres,
+      nextAvatarUrl252,
+      nextBackgroundUrl252,
       spotifyUrl,
       instagramUrl,
       tiktokUrl,
@@ -9502,8 +9550,8 @@ async function handleMyProfileUpdate(request, env, cors) {
     const profilePatch = {
       uid: authContext.uid,
       nickname,
-      avatarUrl: String(existing.avatar_url || ""),
-      backgroundUrl: String(existing.background_url || ""),
+      avatarUrl: nextAvatarUrl252,
+      backgroundUrl: nextBackgroundUrl252,
       bio,
       handle,
       genres,
@@ -9540,8 +9588,8 @@ async function handleMyProfileUpdate(request, env, cors) {
     profile = {
       uid: authContext.uid,
       nickname,
-      avatarUrl: String(existing.avatar_url || ""),
-      backgroundUrl: String(existing.background_url || ""),
+      avatarUrl: nextAvatarUrl252,
+      backgroundUrl: nextBackgroundUrl252,
       bio,
       handle,
       genres,
@@ -9712,6 +9760,61 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222(get
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
+// SORIDRAW_UNIFIED_PROFILE_SAVE_252_20260930
+async function handleProfileUnifiedSave252(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
+  await enforceUserRateLimit(env, authContext.uid, "profile-media", RATE_LIMITS.profileMedia);
+  if (!env?.PROFILE_MEDIA) throwApi("PROFILE_MEDIA_NOT_CONFIGURED", "프로필 이미지 저장소 연결이 필요합니다.", 503);
+
+  let form = null;
+  try { form = await request.formData(); }
+  catch { throwApi("INVALID_PROFILE_SAVE", "프로필 저장 요청을 읽지 못했습니다.", 400); }
+
+  const rawProfile = form?.get("profile");
+  if (typeof rawProfile !== "string" || !rawProfile.trim() || rawProfile.length > 8192) {
+    throwApi("INVALID_PROFILE_SAVE", "프로필 정보를 확인하지 못했습니다.", 400);
+  }
+  let profileBody = null;
+  try { profileBody = JSON.parse(rawProfile); }
+  catch { throwApi("INVALID_PROFILE_SAVE", "프로필 정보를 확인하지 못했습니다.", 400); }
+  if (!profileBody || typeof profileBody !== "object" || Array.isArray(profileBody)) {
+    throwApi("INVALID_PROFILE_SAVE", "프로필 정보를 확인하지 못했습니다.", 400);
+  }
+
+  const avatar = form?.get("avatar");
+  const background = form?.get("background");
+  const validBlob252 = (value) => value && typeof value.arrayBuffer === "function";
+  const hasAvatar252 = validBlob252(avatar);
+  const hasBackground252 = validBlob252(background);
+  if ((avatar !== null && !hasAvatar252) || (background !== null && !hasBackground252) || (!hasAvatar252 && !hasBackground252)) {
+    throwApi("INVALID_PROFILE_SAVE", "변경할 프로필 이미지를 확인하지 못했습니다.", 400);
+  }
+  if (hasAvatar252 && String(avatar.type || "").toLowerCase() !== "image/webp") {
+    throwApi("INVALID_MEDIA_TYPE", "프로필 이미지는 WEBP 형식만 업로드할 수 있습니다.", 415);
+  }
+  if (hasBackground252 && String(background.type || "").toLowerCase() !== "image/webp") {
+    throwApi("INVALID_MEDIA_TYPE", "프로필 이미지는 WEBP 형식만 업로드할 수 있습니다.", 415);
+  }
+
+  const [avatarBytes, backgroundBytes] = await Promise.all([
+    hasAvatar252 ? avatar.arrayBuffer() : Promise.resolve(null),
+    hasBackground252 ? background.arrayBuffer() : Promise.resolve(null),
+  ]);
+  if (avatarBytes && (!avatarBytes.byteLength || avatarBytes.byteLength > 700 * 1024)) {
+    throwApi("PAYLOAD_TOO_LARGE", "프로필 사진 용량이 너무 큽니다.", 413);
+  }
+  if (backgroundBytes && (!backgroundBytes.byteLength || backgroundBytes.byteLength > 1800 * 1024)) {
+    throwApi("PAYLOAD_TOO_LARGE", "배경 이미지 용량이 너무 큽니다.", 413);
+  }
+
+  return await handleMyProfileUpdate(request, env, cors, {
+    authContext,
+    body: profileBody,
+    media: { avatarBytes, backgroundBytes },
+  });
+}
+
 async function handleProfileMediaUpload(request, env, cors, kind) {
   // SORIDRAW_PROFILE_MEDIA_TARGETED_R2_246_20260930
   const authContext = await requireExploreAuth(request);
@@ -26539,6 +26642,9 @@ async function handleExploreRequest(request, env) {
       return await handleExploreAccess(request, env, cors);
     }
     const segments = url.pathname.split("/").filter(Boolean);
+    if (request.method === "PUT" && url.pathname === "/v1/me/profile-save") {
+      return await handleProfileUnifiedSave252(request, env, cors);
+    }
     if (request.method === "PUT" && url.pathname === "/v1/me/profile-media") {
       return await handleProfileMediaBatchUpload248(request, env, cors);
     }

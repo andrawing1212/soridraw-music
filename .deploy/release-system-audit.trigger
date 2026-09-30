@@ -1,8 +1,8 @@
-requested_at=2026-09-30T10:06:30+09:00
-requested_by=unified_profile_save_252_final_audit_retry
-product_code_target=23749e424d6be577ed30ac7cd41d6ef33be7ac50
-release_purpose=audit_app249_unified_profile_save
-app_version=249
+requested_at=2026-09-30T10:24:00+09:00
+requested_by=user_app250_profile_all_tracks_order
+product_code_target=718b9baa42c989a6a5a568495457b2b65902ad84
+release_purpose=audit_app250_profile_all_tracks_chronological
+app_version=250
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

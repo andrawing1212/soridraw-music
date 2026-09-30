@@ -1,3 +1,60 @@
+## 0KS. app262 모바일 rail pointercancel 오판정 수정 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **영상 실사용에서 손가락을 놓기 전 snap이 다시 시작되는 원인 확인 / 모바일 native 가로 스크롤의 pointercancel을 실제 release로 오판정하던 경로 제거 / 0.1초 release snap 유지 / PREVIEW 배포 완료 / 사용자 재확인 대기**
+
+사용자 실사용:
+- app261 배포 후 모바일에서 손가락을 계속 대고 좌우로 움직이는 도중에도 카드가 먼저 정렬되어, 좌우 이동이 잘 이어지지 않는 현상 확인.
+- 해결이 불안정하면 app261 변경을 되돌리는 것을 허용했으나, 현재 코드에서 원인이 한 곳으로 좁혀져 전체 롤백 대신 최소 수정 진행.
+
+원인:
+- 모바일 브라우저가 native horizontal scrolling을 가져갈 때 Pointer Events의 `pointercancel`이 손가락을 실제로 뗀 시점보다 먼저 발생할 수 있음.
+- app261은 `pointercancel`을 `pointerup`과 동일한 release로 처리해 `active=false` + 100ms snap을 예약했음.
+- 따라서 손가락이 화면에 남아 있어도 browser scroll takeover만으로 snap timer가 시작될 수 있었음.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - touch `pointercancel`은 실제 release로 취급하지 않음.
+  - touch `pointercancel`에서는 gesture tracking만 정리하고 held guard를 유지.
+  - 실제 `touchend`에서만 held guard를 해제하고 100ms release snap을 예약.
+  - 정상 `pointerup`이 이미 snap을 예약한 경우 `touchend`가 timer를 다시 시작하지 않도록 pending guard 유지.
+  - mouse/pen `pointercancel`은 기존처럼 cancel/release로 처리.
+  - app253 50% nearest-anchor 규칙, app261 100ms delay, rail 버튼/hover, short-drag 기준은 변경 없음.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - touch pointercancel이 snap을 예약하지 않고 실제 touchend를 기다리는지 정적 회귀 검사 추가.
+- app version: **262**.
+
+검증/배포:
+- behavior commit: `595e432e0350fb0ef6c0a1a832002690ce25c30f`
+- verifier commit: `995e5ca55398df29def1518081a6975bee30605f`
+- app262 commit: `55a40b83e0e67656c64e512c3421aafca44eb798`
+- Release System Audit trigger commit: `7c5da7196a6690efaa95b295c7a4ab46c3c49e78`
+- Release System Audit Run `36733891741`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - verify-221 포함 static release guards PASS
+  - like regression / Worker dry-run / shared D1 read-only guards PASS
+- Firebase PREVIEW App Release trigger/source commit: `ee09a237d704b389c9b5ebe826a84f8faa62e410`
+- Firebase PREVIEW App Release Run `36734252253`: **SUCCESS**
+  - locked source `ee09a237d704b389c9b5ebe826a84f8faa62e410`
+  - TypeScript PASS / Build PASS
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **262** exact verification PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- Explore 가로 rail의 client touch lifecycle만 수정.
+- 좋아요 / 공개·비공개 / 프로필 / More / Feed 데이터 경로 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 재확인:
+1. 모바일에서 손가락을 댄 채 좌우로 충분히 이동하고 중간에 멈춰도 놓기 전에는 snap이 절대 시작되지 않는지.
+2. 손가락을 놓은 뒤 약 0.1초 후 50% 기준으로만 정렬되는지.
+3. 좌우 이동이 app261보다 끊기지 않고 자연스럽게 이어지는지.
+4. PC mouse drag는 기존 app261 동작 그대로인지.
+5. 위 증상이 남으면 추가 보정으로 끌지 말고 app261 release-timing 변경 전체를 이전 app260/app253 동작으로 되돌리는 방향을 우선 검토.
+
 ## 0KR. app261 Explore rail 놓기 기준 0.1초 정렬 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **손가락/마우스를 누른 채 이동 중에는 정렬 금지 / 놓는 순간부터 0.1초 뒤 50% snap / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**

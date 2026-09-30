@@ -1,8 +1,8 @@
-requested_at=2026-10-01T02:55:00+09:00
-requested_by=user_app264_pinned_action_swap
-product_code_target=4090d50f0cd304a57c591d9617e4f0d5292c73cf
-release_purpose=audit_app264_pinned_action_swap
-app_version=264
+requested_at=2026-10-01T03:03:00+09:00
+requested_by=user_app265_responsive_pinned_banner
+product_code_target=a1511bab603bcf204edc39ca3534521f5c144637
+release_purpose=audit_app265_responsive_pinned_banner
+app_version=265
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

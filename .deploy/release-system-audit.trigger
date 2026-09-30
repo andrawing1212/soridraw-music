@@ -1,7 +1,7 @@
-requested_at=2026-09-30T12:38:00+09:00
+requested_at=2026-09-30T12:42:00+09:00
 requested_by=user_app257_pinned_row_more_dismiss
-product_code_target=ce240fe5d31ca9914b7cdf80317d56b2dde57a63
-release_purpose=reaudit_app257_pinned_row_more_dismiss
+product_code_target=7abc0a5505c2bef1c56894a4d13a2ece4927fe5d
+release_purpose=final_audit_app257_pinned_row_more_dismiss
 app_version=257
 preview_only=true
 deploy=false

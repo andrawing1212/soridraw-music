@@ -1,8 +1,8 @@
-requested_at=2026-09-30T12:20:00+09:00
-requested_by=user_app256_pinned_action_refinement
-product_code_target=d355f4c2df5efbb7799ef96310cb39d0b4de4a81
-release_purpose=deploy_app256_pinned_action_refinement
-app_version=256
+requested_at=2026-09-30T12:46:00+09:00
+requested_by=user_app257_pinned_row_more_dismiss
+product_code_target=0b728d8291c4e594b1fe7b89dd58a5a139e86efb
+release_purpose=deploy_app257_pinned_row_more_dismiss
+app_version=257
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

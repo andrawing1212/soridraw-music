@@ -389,8 +389,8 @@ assert.match(
 );
 assert.match(
   page,
-  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
-  'pinned like must share the bottom action row while apply/share stay bottom-right and more stays top-right',
+  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-bottom-row-258[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
+  'pinned like/apply/share must share one explicit bottom row while more stays top-right',
 );
 assert.match(
   page,
@@ -399,8 +399,8 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-like-255\{position:absolute;left:39\.5%;bottom:6px;height:38px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:6px;bottom:6px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:6px;top:6px/,
-  'desktop/tablet pinned controls must align like with the apply/share row without changing the centered title/keyword copy',
+  /\.soridraw-explore-pinned-bottom-row-258\{position:absolute;left:39\.5%;right:6px;bottom:6px;display:flex;height:38px;align-items:center;justify-content:space-between[\s\S]*?\.soridraw-explore-pinned-like-255\{position:static!important[\s\S]*?height:100%!important[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:static;display:flex;height:100%;align-items:center[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:6px;top:6px/,
+  'desktop/tablet pinned bottom actions must share one bottom-anchored flex row independent of card width',
 );
 assert.match(
   social,
@@ -444,8 +444,8 @@ assert.match(
 );
 assert.match(
   social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{left:39\.5%;bottom:4px;height:34px/,
-  'mobile pinned actions must keep the compact hit areas with like aligned to the same bottom row',
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-bottom-row-258\{left:39\.5%;right:4px;bottom:4px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}/,
+  'mobile pinned actions must keep one fixed bottom row and compact hit areas across responsive widths',
 );
 assert.doesNotMatch(
   page,

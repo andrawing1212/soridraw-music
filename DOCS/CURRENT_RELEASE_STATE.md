@@ -1,3 +1,41 @@
+## 0KD. app248 / 251 실사용 비용 재측정 PASS (2026-09-30 KST)
+
+상태: **251 indexed-write compaction 실사용 개선 확인 / dual-media batch 1요청 확인 / 다음은 unified Profile Save 설계**
+
+사용자 PREVIEW 실측(각 실행 전 CACHE LIVE 초기화):
+- bio only `/v1/me/profile`
+  - D1 query: **R0 / W1**
+  - physical: **R5 / W6**
+  - R2: Class A 1 / Class B 3
+  - 251 이전 physical R5/W8 대비 **W 8 -> 6 (-25%)**
+- avatar only `/v1/me/profile-media/avatar`
+  - D1 query: **R0 / W1**
+  - physical: **R7 / W8**
+  - R2: Class A 2 / Class B 1
+  - 251 이전 physical R7/W9 대비 **W 9 -> 8 (-11.1%)**
+- avatar + background same save `/v1/me/profile-media`
+  - 요청 상세: **batch 1요청만 확인**
+  - D1 query: **R0 / W1**
+  - physical: **R7 / W8**
+  - R2: Class A 3 / Class B 1
+  - 두 이미지를 바꿔도 canonical D1 UPDATE는 1회 유지.
+
+판정:
+- 251의 unchanged indexed-column 제거가 live D1 physical billing에서도 실제 절감으로 확인됨.
+- bio W6는 현재 canonical row 1 + derived compatibility profile projection/journal/state 및 관련 index 유지 비용이 남은 구조.
+- avatar/dual-media W8은 위 compatibility profile cost에 Feed-visible avatar change journal 비용이 추가되는 구조.
+- 현재 남은 write를 더 줄이기 위해 249 compatibility journal/state trigger를 즉시 제거하는 것은 금지. TEST app124 / PRODUCTION app117 old mutation/read compatibility 승격 완료 후 retirement해야 함.
+- 정상 기능/공개·비공개/좋아요/팔로우/Music Note 079/UI 변경 없음.
+
+다음 비용 절감 순서:
+1. **Unified Profile Save**: 한 번의 저장에서 텍스트 + avatar/background가 같이 바뀌면 R2 media 업로드 후 canonical `public_profiles` D1 point UPDATE를 총 1회만 실행.
+2. 기존 text-only / media-only 경로는 유지해 old client 호환 보호.
+3. PREVIEW에서 combined-save D1 query W1 및 기능 회귀 검증.
+4. TEST 승격 후 cross-environment shared Profile R2/edge parity 검증.
+5. PRODUCTION 명확한 승인 후 승격.
+6. 모든 환경이 legacy profile derived consumer에서 벗어난 뒤에만 profile compatibility journal/state write retirement 검토.
+7. 최종 단계에서 cache-vs-canonical parity sampler/diagnostic을 추가해 stale cache를 정량 검증.
+
 ## 0KC. app248 · profile indexed-write compaction 251 PREVIEW Worker 배포 (2026-09-30 KST)
 
 상태: **PREVIEW Worker 비용 절감 배포 완료 / 정상 기능 회귀 감사 PASS / app248 유지 / 사용자 데이터·D1 schema 변경 0 / 실사용 재측정 대기**

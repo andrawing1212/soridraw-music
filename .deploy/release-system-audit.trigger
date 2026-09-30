@@ -1,7 +1,7 @@
-requested_at=2026-10-01T00:26:00+09:00
+requested_at=2026-10-01T00:36:00+09:00
 requested_by=user_app263_momentum_settle_fix
-product_code_target=ea9c2351e772075f5d9bcb5f7cda9f97c72d8bab
-release_purpose=audit_app263_momentum_aware_rail_settle
+product_code_target=d31106b9bc57c62d056238aa5f496dd119fcb88e
+release_purpose=reaudit_app263_momentum_aware_rail_settle
 app_version=263
 preview_only=true
 deploy=false

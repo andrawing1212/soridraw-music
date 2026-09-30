@@ -2,6 +2,10 @@ import type { User } from 'firebase/auth';
 import { db } from '../firebase';
 import { doc, getDoc, serverTimestamp, setDoc } from '../lib/firestoreMeasured';
 import { readUserProfileCache } from '../lib/userProfileCache';
+import {
+  flushPendingCatalogPublishes,
+  scheduleCatalogSnapshotPublishIfDirty,
+} from '../lib/userDataEngine';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 
 export type ExploreSharedNoteFolder = {
@@ -24,6 +28,7 @@ export type ExploreSharedNoteTrack = {
   prompt?: string | null;
   lyrics?: string | null;
   publishedAt?: number | null;
+  allowFollowerSave?: boolean;
   shareBundle?: {
     selectedKeywords?: Record<string, unknown>;
     nextSong?: Record<string, unknown> | null;
@@ -157,6 +162,9 @@ export const saveExploreTrackToSharedNote = async (
   const uid = String(user?.uid || '').trim();
   const trackId = String(track?.id || '').trim();
   if (!uid || !trackId) throw new Error('공유 노트에 저장할 곡 정보를 확인하지 못했습니다.');
+  if (track.allowFollowerSave !== true) {
+    throw new Error('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
+  }
 
   const now = Date.now();
   const sourceCreatedAtMs = Math.max(1, Number(track.publishedAt || 0) || now);
@@ -252,6 +260,23 @@ export const saveExploreTrackToSharedNote = async (
     documentIds: [documentId],
     affectedCount: 1,
   }, setDoc(doc(db, 'favorites', documentId), payload, { merge: true }));
+
+  // app266 — Music Note renders from the local/R2 Catalog, not from a fresh
+  // favorites collection scan. Publish exactly this one changed document into
+  // that Catalog after the canonical Firestore write succeeds. This keeps
+  // Explore -> 공유 노트 immediately discoverable without a page-entry full read.
+  const catalogItem = {
+    ...payload,
+    id: documentId,
+    firestoreId: documentId,
+    updatedAt: now,
+    updatedAtMs: now,
+    sharedNoteSavedAt: now,
+  };
+  scheduleCatalogSnapshotPublishIfDirty('musicNote', uid, [catalogItem], {
+    complete: false,
+  });
+  await flushPendingCatalogPublishes(uid);
 
   return documentId;
 };

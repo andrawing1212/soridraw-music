@@ -298,19 +298,26 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
 export const updateExplorePublicProfile = async (
   user: User,
   draft: ExploreProfileDraft,
+  options: { youtubeChanged?: boolean } = {},
 ): Promise<ExplorePublicProfile> => {
+  const includeYoutube252 = options.youtubeChanged !== false;
+  const body252 = {
+    nickname: draft.nickname.trim(),
+    bio: draft.bio.trim(),
+    handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+    genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+    spotifyUrl: draft.spotifyUrl.trim(),
+    instagramUrl: draft.instagramUrl.trim(),
+    tiktokUrl: draft.tiktokUrl.trim(),
+    profileMutationVersion: 252,
+    ...(includeYoutube252 ? {
+      youtubeUrl: draft.youtubeUrl.trim(),
+      ...(options.youtubeChanged === true ? { youtubeChanged: true } : {}),
+    } : {}),
+  };
   const payload = await requestAuthed(user, '/v1/me/profile', {
     method: 'PATCH',
-    body: JSON.stringify({
-      nickname: draft.nickname.trim(),
-      bio: draft.bio.trim(),
-      handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
-      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
-      spotifyUrl: draft.spotifyUrl.trim(),
-      instagramUrl: draft.instagramUrl.trim(),
-      tiktokUrl: draft.tiktokUrl.trim(),
-      youtubeUrl: draft.youtubeUrl.trim(),
-    }),
+    body: JSON.stringify(body252),
   });
   const saved = normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
   return {
@@ -405,6 +412,49 @@ export const uploadExploreProfileMediaBatch = async (
   return {
     avatarUrl: String(payload?.data?.avatarUrl || '').trim(),
     backgroundUrl: String(payload?.data?.backgroundUrl || '').trim(),
+  };
+};
+
+// SORIDRAW_UNIFIED_PROFILE_SAVE_CLIENT_252_20260930
+export const saveExplorePublicProfileUnified = async (
+  user: User,
+  draft: ExploreProfileDraft,
+  media: { avatar?: Blob | null; background?: Blob | null },
+  options: { youtubeChanged?: boolean } = {},
+): Promise<ExplorePublicProfile> => {
+  if (!media.avatar && !media.background) {
+    throw new Error('통합 프로필 저장에는 변경된 이미지가 필요합니다.');
+  }
+  const profilePayload252 = {
+    nickname: draft.nickname.trim(),
+    bio: draft.bio.trim(),
+    handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+    genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+    spotifyUrl: draft.spotifyUrl.trim(),
+    instagramUrl: draft.instagramUrl.trim(),
+    tiktokUrl: draft.tiktokUrl.trim(),
+    profileMutationVersion: 252,
+    ...(options.youtubeChanged === true
+      ? { youtubeUrl: draft.youtubeUrl.trim(), youtubeChanged: true }
+      : {}),
+  };
+  const form = new FormData();
+  form.set('profile', JSON.stringify(profilePayload252));
+  if (media.avatar) form.set('avatar', media.avatar, 'avatar.webp');
+  if (media.background) form.set('background', media.background, 'background.webp');
+  const payload = await requestAuthed(user, '/v1/me/profile-save', {
+    method: 'PUT',
+    body: form,
+  });
+  const saved = normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  return {
+    ...saved,
+    socialLinks: {
+      spotify: draft.spotifyUrl.trim(),
+      instagram: draft.instagramUrl.trim(),
+      tiktok: draft.tiktokUrl.trim(),
+      youtube: draft.youtubeUrl.trim(),
+    },
   };
 };
 

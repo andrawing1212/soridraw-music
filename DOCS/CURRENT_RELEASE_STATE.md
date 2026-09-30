@@ -1,3 +1,83 @@
+## 0KN. app257 고정 곡 액션 정렬 + More 닫기 규칙 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **고정 곡 좋아요를 다음곡 적용과 같은 하단 행에 정렬 / 제목·키워드 세로 중앙 유지 / 다음곡 적용 활성 핑크·비활성 어두운색 / Explore 더보기 바깥 영역 탭·뒤로가기 닫기 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 요청:
+- 고정 곡 좋아요를 현재 키워드 바로 아래가 아니라 `다음곡에 적용` 버튼과 같은 세로 위치까지 내려 한 줄로 정렬.
+- 제목 + 키워드 묶음은 기존처럼 카드 오른쪽 영역 세로 중앙 정렬 유지.
+- 고정 곡 다음곡 적용 버튼:
+  - 활성: 다른 Explore 적용 버튼과 같은 핑크.
+  - 비활성: 흰색보다 어두운 색.
+- Explore 더보기(bottom sheet)가 열린 상태에서:
+  - 불투명 배경/바깥 영역을 누르면 닫기.
+  - 모바일/브라우저 뒤로가기 키는 페이지 이동보다 먼저 더보기 창 닫기.
+  - sheet 내부 터치는 닫기 금지.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - pinned 좋아요를 title/keyword copy 내부에서 제거하고 pinned action overlay 하단에 배치.
+  - 좋아요 `left:39.5%` 기준으로 텍스트 영역 시작점에 맞추고 apply/share와 동일 bottom line 사용.
+  - title/keyword copy 자체에는 액션을 넣지 않아 기존 `top:50% + translateY(-50%)` 중앙 정렬 유지.
+  - More backdrop은 `onPointerDown`에서 `event.target === event.currentTarget`일 때만 닫기.
+  - sheet 내부는 pointer event propagation 차단.
+  - More 오픈 시 URL을 바꾸지 않는 임시 history entry 1개 추가.
+  - `popstate`에서 More만 닫고 Explore 페이지는 유지.
+  - UI/액션으로 정상 닫을 때 임시 history entry 정리.
+  - Escape도 기존처럼 action busy가 아닐 때 닫기 유지.
+- `src/components/explore/exploreSocial.css`
+  - pinned like: desktop/tablet bottom 6px, mobile bottom 4px.
+  - apply/share와 같은 하단 행.
+  - 활성 apply: **#ff7a9d**, hover **#ff9ab5** — 기존 Explore quick apply와 동일 계열.
+  - 비활성 apply: **rgba(255,255,255,.28)**, disabled opacity 별도 감소 없이 어두운 아이콘으로 명확히 표시.
+  - 좋아요 흰색 outline/filled 규칙 및 투명 chrome 유지.
+- verifier:
+  - `verify-201-explore-track-action-sheet.mjs`: backdrop outside-only/pointer-safe, action busy 보호, history back close 검사.
+  - `verify-221-explore-feed-layout.mjs`: pinned same-row 배치, apply 활성/비활성 색, backdrop/뒤로가기 회귀 검사.
+- app version: **257**.
+
+검증:
+- 중간 Audit `36664966289`: **FAIL**
+  - TypeScript / Build는 PASS.
+  - app201 verifier가 이전 backdrop 구현(`onPointerDown={() => ...}`)을 고정 요구했고, app221의 새 history 정규식 순서가 실제 코드 순서와 맞지 않아 static verification FAIL.
+  - 기능 코드를 되돌리지 않고 두 verifier를 새 계약에 맞게 수정.
+- 최종 Release System Audit Run `36665245384`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app201/app221 More dismissal guards PASS
+  - pinned action/like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36665389251`: **SUCCESS**
+  - exact Hosting source `025cb264126c46d79020efd2d38c95f5dc786a37`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+주요 commit:
+- pinned row + backdrop click: `15e14abd9c8db5f15353b36ed18358b9eb677bef`
+- pinned apply states: `cf73fe40681e11236a44fc1ea9c13122ba46442d`
+- app257 verifier/version: `47a5c76ec8da8edb21c6e6f1a6daf37e6f5267f2`, `e47989ebb8bdbfa862ce1a94257f3fa9787a586d`
+- back-key history support: `a3be2d940c6c6d5e28fdb54cf016cafe28cf8913`
+- pointer-safe backdrop: `bf602cba68cae008cb3b6f25e4953447291cfb65`
+- final verifier fixes: `54b6cd37cbd5bf2e2e2d40bda0b15c515337141d`, `7abc0a5505c2bef1c56894a4d13a2ece4927fe5d`
+
+범위/비용:
+- PREVIEW client UI/history interaction only.
+- 좋아요/다음곡 적용/공유/더보기 실제 서버 handler 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / 사용자 데이터 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 제목/키워드 묶음이 이전처럼 세로 가운데인지.
+2. 좋아요와 다음곡 적용/공유가 같은 하단 기준선인지.
+3. 적용 허용 시 핑크, 비허용 시 어두운 아이콘인지.
+4. 더보기 창의 어두운 배경을 누르면 닫히는지.
+5. 더보기 창 내부를 눌러도 닫히지 않는지.
+6. Android/브라우저 뒤로가기를 한 번 누르면 페이지 이동 없이 더보기만 닫히는지.
+7. 더보기 닫힌 뒤 다시 뒤로가기를 누르면 기존 페이지 이동이 정상인지.
+
 ## 0KM. app256 고정 곡 액션 재배치 + rail 화살표 이미지 중앙 정렬 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **사용자 실사용 피드백 반영 / 좋아요를 키워드 아래로 이동 / 좋아요 흰색 기존 규칙 복구 / 우측 액션 축소·투명화·모서리 밀착 / rail 좌우 버튼 이미지 세로 중앙 기준 + 바깥 이동 / PREVIEW 배포 완료 / 시각 확인 대기**

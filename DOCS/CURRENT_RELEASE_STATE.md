@@ -1,3 +1,52 @@
+## 0KI. app252 Explore rail 마우스 hover 버튼 유지 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **PC 마우스가 Explore 가로 카드 rail 위에 있는 동안 좌우 버튼 계속 표시 / rail에서 벗어나면 즉시 숨김 / 터치 2초·스크롤 정지 0.5초 규칙 유지 / PREVIEW 배포 완료**
+
+사용자 요청:
+- 스크롤 가능한 Explore 카드 rail의 곡 위에 마우스를 올리면 좌우 버튼 표시.
+- 마우스가 rail 위에 있는 동안 시간 제한 없이 계속 표시.
+- 마우스가 rail을 벗어나면 버튼 숨김.
+- 기존 터치 동작은 변경하지 않음.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - 공통 rail stage에 mouse pointer enter/leave 상태 추가.
+  - mouse hover 중에는 controls hide timer 자체를 막아 0.5초/2초 timer가 버튼을 숨기지 못하게 함.
+  - mouse leave 시 timer 정리 후 즉시 버튼 숨김.
+  - 버튼으로 포인터를 이동할 때도 같은 stage 안이므로 버튼이 사라지지 않아 클릭 가능.
+  - touch card 2초 표시, scroll stop 0.5초 hide, 0.2초 settle은 기존 그대로 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - persistent hover / leave-hide / hover 중 idle-hide 차단 회귀 검사 추가.
+- app version: **252**.
+
+검증/배포:
+- behavior commit: `aaf09cd432d67a4655f70a0c8c78075bc160b392`
+- verifier commit: `30187dc5090d5d7cc0103cfa295b77ed7b665a70`
+- app252 commit: `10c13e713bdf10a9ac3cc2c8b50b071ca4652c2c`
+- Release System Audit Run `36657117025`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Explore rail verifier PASS
+  - existing regressions PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36657296530`: **SUCCESS**
+  - exact Hosting source `22bf99604577ae399ea59199af18a3792797d1ef`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+범위:
+- client UI interaction only.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. PC에서 SORIDRAW 추천 / 장르별 추천 / 크리에이터 / 공개프로필 고정 곡 중 스크롤 가능한 rail 위에 마우스 올림.
+2. 2초 이상 그대로 두어도 좌우 버튼이 계속 보이는지 확인.
+3. 버튼 쪽으로 마우스를 이동해도 버튼이 유지되는지 확인.
+4. 해당 rail 밖으로 마우스를 빼면 버튼이 즉시 사라지는지 확인.
+5. 모바일 터치 2초 / 스크롤 정지 0.5초 / 0.2초 정렬은 이전과 같은지 확인.
+
 ## 0KH. app251 Explore 좌우 스크롤 동작 공통화 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **Explore 가로 카드 rail의 PC/모바일 동작 통일 / 0.2초 settle / 버튼 표시시간 통일 / 버튼 소폭 축소 / PREVIEW 배포 완료 / 실사용 확인 대기**

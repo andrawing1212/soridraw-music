@@ -1,3 +1,64 @@
+## 0KX. app267 공유 노트 상세 클릭 크래시 수정 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **공유 노트 저장/표시는 정상 / 상세 클릭 시 lyrics undefined 크래시 원인 확인 및 수정 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**
+
+사용자 증상:
+- app266에서 Explore -> 공유 노트 저장은 정상 동작.
+- Music Note > 공유 노트에 저장된 곡도 표시됨.
+- 그러나 해당 공유 노트 카드를 클릭하면 앱 오류 화면:
+  `Cannot read properties of undefined (reading 'korean')`.
+
+원인:
+- Music Note 목록은 가벼운 Catalog summary를 사용하며, summary에는 전체 `lyrics`/prompt를 싣지 않음.
+- 일반 Music Note는 상세 클릭 시 해당 `favorites/{id}` 문서 1건을 hydrate하는데,
+  기존 코드가 `isSharedMusicNoteItem(song)`이면 hydrate를 명시적으로 건너뛰고 있었음.
+- 그래서 공유 노트 상세는 `lyrics`가 없는 compact summary 상태로 열렸고,
+  상세 UI 일부가 `selectedSong.lyrics.korean` / `english`을 직접 읽으면서 크래시.
+
+수정:
+- `src/pages/FavoritesPage.tsx`
+  - 공유 노트 Catalog row도 **사용자가 실제 상세 카드를 클릭한 순간에만** 해당 `favorites/{id}` 문서 1건을 기존 detail cache 경로로 hydrate.
+  - 페이지 진입/폴더 이동만으로 Firestore 상세 read 추가 없음.
+  - 이미 detail cache가 있으면 기존 캐시 경로 재사용.
+  - 상세 렌더/cancel 경로의 lyrics 접근을 optional-safe로 변경해 legacy/compact row가 들어와도 앱 전체 오류 화면으로 넘어가지 않게 보호.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - shared-note detail hydrate skip 금지
+  - explicit detail 1-doc load contract
+  - `selectedSong.lyrics.korean/english` 직접 접근 금지 회귀 검사 추가.
+- app version: **267**.
+
+검증/배포:
+- fix commit: `cd0da34b549d7fecad52fe1aba1057b31949d71e`
+- verifier commit: `cb7101bee7936843ea71bc41a8c9be35fe53fce0`
+- app267 commit: `788bbd589e97f3d5a491d89d51ed4973368a0353`
+- Release System Audit source: `ddf42a71ea9cb057e8b1133ae68fa6b127ff50ce`
+- Audit Run `36764826031`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - static/release verification PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- PREVIEW release source: `340672fcaa934b1636bd1fd9d7b0e8b1c6adb558`
+- Firebase PREVIEW App Release Run `36765078024`: **SUCCESS**
+  - Firebase Hosting release complete
+  - preview app version **267**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+비용/데이터:
+- 사용자 데이터 migration/backfill 없음.
+- 공유 노트 상세을 실제로 열 때만 해당 canonical Firestore 문서 **최대 1건** 상세 확인.
+- Music Note 진입/재진입/폴더 이동은 기존 Catalog 경로 유지.
+- 전체 favorites 조회 / 전체 Catalog rebuild / D1 read/write 추가 없음.
+- Worker / Functions / Rules / D1 schema 변경 없음.
+
+실사용 확인:
+1. app267에서 방금 저장한 공유 노트 카드 클릭 시 오류 화면 없이 상세가 열리는지.
+2. 가사/프롬프트/원작자/미디어가 정상 표시되는지.
+3. 공유 노트는 기존처럼 읽기 전용인지.
+4. 같은 공유 노트를 닫았다 다시 열 때 불필요한 전체 목록 read가 없는지.
+5. app266 권한 OFF/ON 동작과 저장 폴더 분류가 그대로 정상인지.
+
 ## 0KW. app266 Explore 공유 노트 권한/저장 누락 수정 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **공유 노트 버튼을 '팔로워 곡 저장 허용'과 동일 조건으로 잠금 / 허용된 곡 저장 시 Music Note Catalog에 변경곡 1개만 반영 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**

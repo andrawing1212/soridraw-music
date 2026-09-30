@@ -2396,7 +2396,15 @@ export default function ExplorePage() {
         className="soridraw-explore-more-backdrop"
         role="presentation"
         onPointerDown={(event) => {
-          if (event.target === event.currentTarget && !actionBusy) {
+          if (event.target === event.currentTarget) {
+            event.stopPropagation();
+          }
+        }}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!actionBusy) {
             closeMoreSheet();
           }
         }}
@@ -2407,6 +2415,7 @@ export default function ExplorePage() {
           aria-modal="true"
           aria-label={moreSheetMode === 'folders' ? '공유 노트에 추가' : `${moreTrack.title} 더보기`}
           onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <div className="soridraw-explore-more-handle" aria-hidden="true" />
           {moreSheetMode === 'folders' ? (

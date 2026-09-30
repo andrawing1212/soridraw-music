@@ -1,3 +1,24 @@
+## 2026-09-30 — app254 Explore 피드 수동 더 보기 제거 실사용 확인
+
+배포 완료:
+- 추천 / 최신 / 인기 Feed 하단의 수동 `더 보기` 제거.
+- 사용자가 추가 40곡 cursor page를 직접 요청하는 UI/네트워크 경로 제거.
+- 최초 Feed `limit=40`, cache-first/R2/revision 구조는 유지.
+- 카드별 세로 점 `곡 더보기`는 유지.
+- PREVIEW App Release Run `36659951404` SUCCESS.
+- Worker / D1 schema / R2 data / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 추천 / 최신 / 인기 하단에 Feed `더 보기` 버튼이 없는지.
+2. 끝까지 스크롤해도 자동 추가 page 요청이 없는지.
+3. 검색 / 공개프로필 접근은 정상인지.
+4. 카드별 세로 점 메뉴는 정상인지.
+
+판정:
+- 위 항목 PASS면 app254 작업 종료.
+- 서버 cursor/More cache는 구버전 호환 때문에 지금 제거하지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app253 Explore 50% 좌우 대칭 정렬 실사용 확인
 
 배포 완료:

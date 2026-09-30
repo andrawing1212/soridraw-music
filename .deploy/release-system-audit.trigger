@@ -1,8 +1,8 @@
-requested_at=2026-10-01T04:38:00+09:00
-requested_by=user_app268_shared_note_live_state_fix
-product_code_target=2c24b852cf0ea17b85bb3cf5302e5b03daf282d7
-release_purpose=audit_app268_shared_note_live_state_fix
-app_version=268
+requested_at=2026-10-01T05:07:00+09:00
+requested_by=user_app269_follower_share_link_parity
+product_code_target=bcbb9ba036f71eab31485ae0d07e0056b10caad1
+release_purpose=audit_app269_follower_share_link_parity
+app_version=269
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

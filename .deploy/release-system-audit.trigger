@@ -1,8 +1,8 @@
-requested_at=2026-10-01T04:10:00+09:00
-requested_by=user_app266_shared_note_permission_catalog_fix
-product_code_target=8392c9075cd50ee3dc1f229970bc471e53ce7c62
-release_purpose=audit_app266_shared_note_permission_catalog_fix
-app_version=266
+requested_at=2026-10-01T04:18:00+09:00
+requested_by=user_app267_shared_note_detail_crash_fix
+product_code_target=788bbd589e97f3d5a491d89d51ed4973368a0353
+release_purpose=audit_app267_shared_note_detail_crash_fix
+app_version=267
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

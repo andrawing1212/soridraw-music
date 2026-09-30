@@ -1,8 +1,8 @@
-requested_at=2026-09-30T12:51:00+09:00
-requested_by=user_app258_fixed_pinned_bottom_row
-product_code_target=df201475473963e4bfbe85a983e6cd9c81aab4a0
-release_purpose=audit_app258_fixed_pinned_bottom_row
-app_version=258
+requested_at=2026-09-30T13:05:00+09:00
+requested_by=user_app259_pinned_top_actions_more_back
+product_code_target=4f63f7930a1f2027abac30a3fe2452cfbbef5776
+release_purpose=audit_app259_pinned_top_actions_more_back
+app_version=259
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

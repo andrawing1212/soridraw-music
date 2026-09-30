@@ -1,8 +1,8 @@
-requested_at=2026-09-30T12:16:00+09:00
-requested_by=user_app256_pinned_action_refinement
-product_code_target=cba84ca4112734aafadba52bf4f7cb4385b7e8a0
-release_purpose=reaudit_app256_pinned_action_refinement
-app_version=256
+requested_at=2026-09-30T12:34:00+09:00
+requested_by=user_app257_pinned_row_more_dismiss
+product_code_target=e47989ebb8bdbfa862ce1a94257f3fa9787a586d
+release_purpose=audit_app257_pinned_row_more_dismiss
+app_version=257
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

@@ -1,0 +1,40 @@
+name: SORIDRAW app274 shared-note saved status audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/audit-274-shared-note-status.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-274-shared-note-saved-status.mjs
+          node scripts/verify-273-shared-note-legacy-detail.mjs
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-202-explore-action-cost-bounds.mjs
+          echo 'APP274_FOCUSED_AUDIT=PASS'

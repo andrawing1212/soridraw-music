@@ -1,8 +1,8 @@
-requested_at=2026-09-30T10:52:00+09:00
-requested_by=user_app252_persistent_rail_hover
-product_code_target=10c13e713bdf10a9ac3cc2c8b50b071ca4652c2c
-release_purpose=audit_app252_persistent_rail_hover
-app_version=252
+requested_at=2026-09-30T11:06:00+09:00
+requested_by=user_app253_symmetric_half_snap
+product_code_target=fef1892f89229c3a21a78cdface4d72865bb8ad0
+release_purpose=audit_app253_symmetric_half_snap
+app_version=253
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

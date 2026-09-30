@@ -107,8 +107,10 @@ assert.ok(workerApplyFallbackIndex > localLegacyFallbackIndex,
   'server apply-source read must remain after both cache and local public-keyword fallbacks');
 assert.match(page, /if \(user\.uid !== track\.ownerUid\)[\s\S]*?getExploreTrackSaveAccess/s,
   'owner shared-note save must avoid the follower permission read while other users are checked');
-assert.match(page, /const saveSource = access\.saveSource;[\s\S]*?setMoreTrack\(\(current\)[\s\S]*?lyrics: saveSource\.lyrics[\s\S]*?lyricsParts: saveSource\.lyricsParts[\s\S]*?prompt: saveSource\.prompt[\s\S]*?shareBundle: saveSource\.shareBundle/,
-  'authorized follower save must retain structured lyrics and the full save snapshot through folder selection');
+assert.match(page, /const saveSource = access\.saveSource;[\s\S]*?authorizedTrack = \{[\s\S]*?lyrics: saveSource\.lyrics[\s\S]*?lyricsParts: saveSource\.lyricsParts[\s\S]*?prompt: saveSource\.prompt[\s\S]*?shareBundle: saveSource\.shareBundle/,
+  'authorized follower save must build one full detail snapshot from the server response');
+assert.match(page, /sharedNoteAuthorizedTrackRef272\.current = authorizedTrack[\s\S]*?saveExploreTrackToSharedNote\(user, authorizedTrack, folder\)/,
+  'app272 must persist and save the exact authorized prompt/lyrics snapshot without relying on React state timing');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/,
   'Explore must not re-enter the experimental Library path');
 
@@ -136,4 +138,5 @@ console.log('APP202_SHARED_NOTE_SINGLE_DOCUMENT_WRITE=PASS');
 console.log('APP269_FOLLOWER_SAVE_LINK_SHARE_PARITY=PASS');
 console.log('APP270_FOLLOWER_SAVE_LYRICS_PARITY=PASS');
 console.log('APP271_FOLLOWER_SAVE_LEGACY_LYRICS_REFRESH=PASS');
+console.log('APP272_FOLLOWER_SAVE_AUTHORIZED_DETAIL_SNAPSHOT=PASS');
 console.log('APP202_LIBRARY_PATH_UNUSED=PASS');

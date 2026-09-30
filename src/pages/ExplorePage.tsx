@@ -1281,6 +1281,10 @@ export default function ExplorePage() {
   const [followBusy, setFollowBusy] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
+  // app272 — keep the authorized full follower-save snapshot outside the lightweight
+  // Feed card state. Folder selection must save this exact server-authorized object,
+  // including prompt/lyrics, rather than a stale summary card from the More sheet.
+  const sharedNoteAuthorizedTrackRef272 = useRef<ExploreTrack | null>(null);
   const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
   const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | null>(null);
   const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
@@ -1371,6 +1375,7 @@ export default function ExplorePage() {
   }, [user?.uid]);
 
   useEffect(() => {
+    sharedNoteAuthorizedTrackRef272.current = null;
     setMoreTrack(null);
     setMoreSheetMode('actions');
     setFolderChoices([]);
@@ -1386,6 +1391,7 @@ export default function ExplorePage() {
 
     const dismissMoreFromHistory257 = () => {
       moreHistoryPushedRef257.current = false;
+      sharedNoteAuthorizedTrackRef272.current = null;
       setMoreTrack(null);
       setMoreSheetMode('actions');
       setFolderChoices([]);
@@ -2206,6 +2212,7 @@ export default function ExplorePage() {
   };
 
   const closeMoreSheet = () => {
+    sharedNoteAuthorizedTrackRef272.current = null;
     setMoreTrack(null);
     setMoreSheetMode('actions');
     setFolderChoices([]);
@@ -2395,6 +2402,7 @@ export default function ExplorePage() {
     }
     setMoreActionBusy('sharedNote');
     try {
+      let authorizedTrack: ExploreTrack = track;
       if (user.uid !== track.ownerUid) {
         const access = await getExploreTrackSaveAccess(user, track.id);
         if (!access.allowed) {
@@ -2404,32 +2412,38 @@ export default function ExplorePage() {
         }
         const saveSource = access.saveSource;
         if (saveSource) {
-          setMoreTrack((current) => current?.id === track.id ? {
-            ...current,
-            sourceType: saveSource.originalSourceType || current.sourceType,
-            sourceId: saveSource.originalSourceId || current.sourceId,
-            sourceSubTrackKey: saveSource.sourceSubTrackKey || current.sourceSubTrackKey,
-            sourceSubTrackIndex: saveSource.sourceSubTrackIndex ?? current.sourceSubTrackIndex,
-            sourceSubTrackId: saveSource.sourceSubTrackId || current.sourceSubTrackId,
-            title: saveSource.title || current.title,
-            coverUrl: saveSource.coverUrl || current.coverUrl,
-            sunoUrlPrimary: saveSource.sunoUrlPrimary || current.sunoUrlPrimary,
-            sunoUrlSecondary: saveSource.sunoUrlSecondary || current.sunoUrlSecondary,
-            durationSeconds: saveSource.durationSeconds ?? current.durationSeconds,
-            lyrics: saveSource.lyrics ?? current.lyrics,
-            lyricsParts: saveSource.lyricsParts || current.lyricsParts,
-            style: saveSource.style ?? current.style,
-            prompt: saveSource.prompt ?? current.prompt,
-            shareBundle: saveSource.shareBundle || current.shareBundle,
-          } : current);
+          authorizedTrack = {
+            ...track,
+            sourceType: saveSource.originalSourceType || track.sourceType,
+            sourceId: saveSource.originalSourceId || track.sourceId,
+            sourceSubTrackKey: saveSource.sourceSubTrackKey || track.sourceSubTrackKey,
+            sourceSubTrackIndex: saveSource.sourceSubTrackIndex ?? track.sourceSubTrackIndex,
+            sourceSubTrackId: saveSource.sourceSubTrackId || track.sourceSubTrackId,
+            title: saveSource.title || track.title,
+            coverUrl: saveSource.coverUrl || track.coverUrl,
+            sunoUrlPrimary: saveSource.sunoUrlPrimary || track.sunoUrlPrimary,
+            sunoUrlSecondary: saveSource.sunoUrlSecondary || track.sunoUrlSecondary,
+            durationSeconds: saveSource.durationSeconds ?? track.durationSeconds,
+            lyrics: saveSource.lyrics ?? track.lyrics,
+            lyricsParts: saveSource.lyricsParts || track.lyricsParts,
+            style: saveSource.style ?? track.style,
+            prompt: saveSource.prompt ?? track.prompt,
+            shareBundle: saveSource.shareBundle || track.shareBundle,
+          };
         }
       }
+
+      // Do not depend on React state flush timing between "open folders" and the
+      // user's next click. The exact authorized payload is held synchronously.
+      sharedNoteAuthorizedTrackRef272.current = authorizedTrack;
+      setMoreTrack((current) => current?.id === track.id ? authorizedTrack : current);
 
       const folders = await getExploreSharedNoteFolders(user);
       if (!folders.length) throw new Error('공유 노트 폴더를 확인하지 못했어요.');
       setFolderChoices(folders);
       setMoreSheetMode('folders');
     } catch (reason) {
+      sharedNoteAuthorizedTrackRef272.current = null;
       console.error('Explore shared note picker failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '공유 노트를 불러오지 못했어요.');
     } finally {
@@ -2439,14 +2453,17 @@ export default function ExplorePage() {
 
   const saveExploreTrackToSharedNoteFolder = async (track: ExploreTrack, folder: ExploreSharedNoteFolder) => {
     if (!user) return;
-    if (!track.allowFollowerSave) {
+    const authorizedTrack = sharedNoteAuthorizedTrackRef272.current?.id === track.id
+      ? sharedNoteAuthorizedTrackRef272.current
+      : track;
+    if (!authorizedTrack.allowFollowerSave) {
       setSocialNotice('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
       setMoreSheetMode('actions');
       return;
     }
     setMoreActionBusy('sharedNote');
     try {
-      await saveExploreTrackToSharedNote(user, track, folder);
+      await saveExploreTrackToSharedNote(user, authorizedTrack, folder);
       setSocialNotice(`공유 노트 · '${folder.title}'에 추가했어요.`);
       closeMoreSheet();
     } catch (reason) {
@@ -2680,6 +2697,7 @@ export default function ExplorePage() {
             );
             moreHistoryPushedRef257.current = true;
           }
+          sharedNoteAuthorizedTrackRef272.current = null;
           setMoreTrack(selectedTrack);
           setMoreSheetMode('actions');
           setFolderChoices([]);

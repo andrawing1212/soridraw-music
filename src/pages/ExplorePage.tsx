@@ -636,13 +636,30 @@ function ExploreRecommendationRail({
     setCanScrollRight(scroller.scrollLeft < maxScrollLeft - 2);
   };
 
+  const syncRailVisualCenter256 = () => {
+    const scroller = scrollerRef.current;
+    const stage = scroller?.parentElement;
+    const firstCard = scroller?.firstElementChild?.firstElementChild as HTMLElement | null;
+    const visual = firstCard?.querySelector<HTMLElement>(
+      '.soridraw-explore-cover-wrap, .soridraw-explore-recommend-creator-avatar',
+    );
+    if (!stage || !visual) return;
+
+    const stageRect = stage.getBoundingClientRect();
+    const visualRect = visual.getBoundingClientRect();
+    const imageCenterY = visualRect.top - stageRect.top + (visualRect.height / 2);
+    stage.style.setProperty('--soridraw-explore-rail-image-center-y', `${imageCenterY}px`);
+  };
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       syncScrollButtons();
+      syncRailVisualCenter256();
       scheduleRailControlsHide251(EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251);
     });
     const handleResize = () => {
       syncScrollButtons();
+      syncRailVisualCenter256();
       setRailControlsVisible251(true);
       scheduleRailControlsHide251(EXPLORE_RAIL_CONTROLS_IDLE_HIDE_MS_251);
     };
@@ -996,6 +1013,17 @@ function ExploreTrackCard({
               <div className="soridraw-explore-pinned-keywords-235" aria-label="곡 키워드">
                 {pinnedKeywords235.map((keyword) => <em key={keyword}>{keyword}</em>)}
               </div>
+              <button
+                type="button"
+                className={`soridraw-explore-like-button soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
+                onClick={() => onToggleLike(track)}
+                disabled={likeBusy}
+                title={liked ? '좋아요 취소' : '좋아요'}
+                aria-label={liked ? '좋아요 취소' : '좋아요'}
+              >
+                {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+                <span>{formatCount(track.likeCount)}</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -1046,18 +1074,6 @@ function ExploreTrackCard({
 
         {variant === 'profilePinnedBanner' && (
           <div className="soridraw-explore-pinned-actions-255" aria-label="고정 곡 빠른 작업">
-            <button
-              type="button"
-              className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
-              onClick={() => onToggleLike(track)}
-              disabled={likeBusy}
-              title={liked ? '좋아요 취소' : '좋아요'}
-              aria-label={liked ? '좋아요 취소' : '좋아요'}
-            >
-              {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
-              <span>{formatCount(track.likeCount)}</span>
-            </button>
-
             <div className="soridraw-explore-pinned-actions-right-255">
               <button
                 type="button"

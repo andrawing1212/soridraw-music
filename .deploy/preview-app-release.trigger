@@ -1,8 +1,8 @@
-requested_at=2026-09-30T11:50:00+09:00
-requested_by=user_app255_pinned_banner_controls
-product_code_target=84319d140aad6aaeeab8d7c941362c8c758c1211
-release_purpose=deploy_app255_pinned_banner_controls
-app_version=255
+requested_at=2026-09-30T12:20:00+09:00
+requested_by=user_app256_pinned_action_refinement
+product_code_target=d355f4c2df5efbb7799ef96310cb39d0b4de4a81
+release_purpose=deploy_app256_pinned_action_refinement
+app_version=256
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

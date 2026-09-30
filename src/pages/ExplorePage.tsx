@@ -86,6 +86,7 @@ type ExploreTrack = {
   avatarUrl?: string | null;
   coverUrl?: string | null;
   sunoUrlPrimary?: string | null;
+  sunoUrlSecondary?: string | null;
   openUrl?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
@@ -2399,6 +2400,26 @@ export default function ExplorePage() {
           throw new Error(access.permissionEnabled
             ? '팔로우한 아티스트의 저장 허용곡만 공유 노트에 추가할 수 있어요.'
             : '공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
+        }
+        const saveSource = access.saveSource;
+        if (saveSource) {
+          setMoreTrack((current) => current?.id === track.id ? {
+            ...current,
+            sourceType: saveSource.originalSourceType || current.sourceType,
+            sourceId: saveSource.originalSourceId || current.sourceId,
+            sourceSubTrackKey: saveSource.sourceSubTrackKey || current.sourceSubTrackKey,
+            sourceSubTrackIndex: saveSource.sourceSubTrackIndex ?? current.sourceSubTrackIndex,
+            sourceSubTrackId: saveSource.sourceSubTrackId || current.sourceSubTrackId,
+            title: saveSource.title || current.title,
+            coverUrl: saveSource.coverUrl || current.coverUrl,
+            sunoUrlPrimary: saveSource.sunoUrlPrimary || current.sunoUrlPrimary,
+            sunoUrlSecondary: saveSource.sunoUrlSecondary || current.sunoUrlSecondary,
+            durationSeconds: saveSource.durationSeconds ?? current.durationSeconds,
+            lyrics: saveSource.lyrics ?? current.lyrics,
+            style: saveSource.style ?? current.style,
+            prompt: saveSource.prompt ?? current.prompt,
+            shareBundle: saveSource.shareBundle || current.shareBundle,
+          } : current);
         }
       }
 

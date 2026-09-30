@@ -1,8 +1,8 @@
-requested_at=2026-09-30T13:10:00+09:00
-requested_by=user_app259_pinned_top_actions_more_back
-product_code_target=b4f1ab611329880f77bd3798d88fda1ecd9b32a8
-release_purpose=deploy_app259_pinned_top_actions_more_back
-app_version=259
+requested_at=2026-09-30T13:23:00+09:00
+requested_by=user_app260_more_backdrop_click_guard
+product_code_target=2027702a229d4101497588152f543ccd257338b9
+release_purpose=deploy_app260_more_backdrop_click_guard
+app_version=260
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

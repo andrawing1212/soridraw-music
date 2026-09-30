@@ -1,3 +1,67 @@
+## 0KU. app264 고정 곡 액션 위치 교환 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **사용자 지정 순서대로 좋아요↔공유, 이어서 공유↔다음곡 적용 위치 교환 / 고정 곡만 변경 / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 요청:
+- 현재 고정 곡 액션 기준에서 먼저 좋아요 버튼과 공유 버튼의 위치를 교환.
+- 그 상태에서 공유 버튼과 다음곡에 적용 버튼의 위치를 다시 교환.
+- 결과 위치:
+  - 우측 상단 그룹: **다음곡에 적용 → 공유 → 더보기**
+  - 우측 하단: **좋아요 + 숫자**
+- 기능/색상/크기/간격/카드 구조는 위치 외 변경 금지.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - 고정 곡 전용 액션 JSX 순서를 `다음곡 적용 → 공유 → 더보기`로 변경.
+  - 좋아요 버튼은 상단 그룹에서 분리해 기존 공유 위치인 우측 하단으로 이동.
+  - 각 버튼의 기존 handler, disabled 상태, aria/title, 좋아요 수 표시 유지.
+- `src/components/explore/exploreSocial.css`
+  - `soridraw-explore-pinned-like-255`를 desktop/tablet 우측 하단 `right:6px; bottom:6px`로 이동.
+  - mobile은 `right:4px; bottom:4px`.
+  - 좋아요 높이는 기존 상단 행과 동일하게 desktop/tablet 38/40px, mobile 34px 유지.
+  - 공유/더보기는 상단 flex row 내부 static 배치.
+  - 기존 좋아요 흰색 outline/filled 규칙, 적용 가능 핑크/불가 어두운색, 투명 버튼 chrome 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 고정 곡 상단 순서와 좋아요 우하단 위치를 PC/모바일 회귀 검사로 갱신.
+- app version: **264**.
+
+검증/배포:
+- JSX commit: `ad66bda4d4a115b5d666880c4e0d27cf3b5ed0e6`
+- CSS commit: `72be5686e1ff2eb378da0c172b336dc8506ad8b5`
+- verifier commit: `4a5cea5fd2201dd26fe09a858c334e55162d8ffd`
+- app264 commit: `4090d50f0cd304a57c591d9617e4f0d5292c73cf`
+- Release System Audit trigger/source commit: `495e2e74b9aea7b6ea1a0dd39372de53d824ab65`
+- Release System Audit Run `36754712658`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - pinned action order/position guard PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- Firebase PREVIEW App Release source commit: `cf787e0ceff429df52690a36eba1efb1b7fb44b2`
+- Firebase PREVIEW App Release Run `36754989527`: **SUCCESS**
+  - locked PREVIEW source `cf787e0ceff429df52690a36eba1efb1b7fb44b2`
+  - TypeScript PASS / Build PASS
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **264**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- 고정 곡 액션의 시각적 위치만 변경.
+- 좋아요 로직/숫자 집계, 다음곡 적용 기능, 공유 기능, 더보기 기능 자체 변경 없음.
+- 일반 Explore 카드 / 공개프로필 전체 곡 카드 / rail snap app263 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. PC/태블릿 고정 곡 우측 상단이 `다음곡 적용 → 공유 → 더보기` 순서인지.
+2. 좋아요 + 숫자가 우측 하단에 있는지.
+3. 모바일도 같은 위치 관계인지.
+4. 좋아요 ON/OFF 흰색 표시와 숫자, 적용 핑크 상태, 공유/더보기 클릭이 기존처럼 정상인지.
+5. 카드 제목/키워드/재생 버튼/rail 움직임이 변하지 않았는지.
+
 ## 0KT. app263 강한 flick 관성 후 snap PREVIEW 배포 (2026-10-01 KST)
 
 상태: **작은 이동 app262 유지 / 강한 좌우 flick에서 브라우저 관성과 0.1초 snap이 충돌하던 현상 수정 / 관성 감속이 끝난 뒤 0.1초 후 50% snap / PREVIEW 배포 완료 / 실사용 확인 대기**

@@ -1,8 +1,8 @@
-requested_at=2026-10-01T03:07:00+09:00
-requested_by=user_app265_responsive_pinned_banner
-product_code_target=97aa99489037db930cbf6b00d8176d83221ebc6d
-release_purpose=deploy_app265_responsive_pinned_banner
-app_version=265
+requested_at=2026-10-01T04:12:00+09:00
+requested_by=user_app266_shared_note_permission_catalog_fix
+product_code_target=1742b04ad61abcb575ec4a5a1a2bb9b05204d6e2
+release_purpose=deploy_app266_shared_note_permission_catalog_fix
+app_version=266
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

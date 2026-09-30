@@ -1,8 +1,8 @@
-requested_at=2026-09-30T10:42:00+09:00
-requested_by=user_app251_explore_rail_unification
-product_code_target=d9f31b9070fbfdbe84f868b6a1c24b7c52ce9ec8
-release_purpose=deploy_app251_explore_rail_unification
-app_version=251
+requested_at=2026-09-30T10:56:00+09:00
+requested_by=user_app252_persistent_rail_hover
+product_code_target=c574b9d182c5ab21482505be2ff0a1bd8900aae6
+release_purpose=deploy_app252_persistent_rail_hover
+app_version=252
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

@@ -1,8 +1,8 @@
-requested_at=2026-09-30T18:01:00+09:00
-requested_by=user_app261_release_based_rail_snap
-product_code_target=a5462fc26724622f65aac38d76c67aef412d247e
-release_purpose=reaudit_app261_release_based_rail_snap
-app_version=261
+requested_at=2026-09-30T23:59:00+09:00
+requested_by=user_app262_touch_pointercancel_fix
+product_code_target=55a40b83e0e67656c64e512c3421aafca44eb798
+release_purpose=audit_app262_touch_pointercancel_fix
+app_version=262
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

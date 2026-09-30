@@ -1,3 +1,65 @@
+## 0KO. app258 고정 곡 하단 액션 행 고정 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **창 크기에 따라 흔들리던 고정 곡 하단 액션을 하나의 공통 bottom row로 고정 / 좋아요·다음곡 적용·공유 줄 정렬 통일 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 실사용 증상:
+- app257에서 `bottom` 값은 같았지만 좋아요와 apply/share가 서로 독립 absolute 요소라, 카드 크기/반응형 구간에 따라 실제 아이콘 중심선이 미세하게 달라 보임.
+- 모바일에서는 하트가 다른 액션보다 더 아래로 보이는 경우가 있음.
+- 요구: 카드 크기와 무관하게 하단 기준으로 고정하고 세 버튼 행의 시각적 정렬을 항상 동일하게 유지.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - pinned banner에 `soridraw-explore-pinned-bottom-row-258` 단일 하단 행 추가.
+  - 좋아요와 apply/share를 같은 row 안에 넣음.
+  - 더보기는 기존처럼 우측 상단 독립 유지.
+  - title/keyword copy는 기존 구조 그대로라 `top:50% + translateY(-50%)` 세로 중앙 정렬 유지.
+- `src/components/explore/exploreSocial.css`
+  - desktop/tablet bottom row: `left:39.5%; right:6px; bottom:6px; height:38px`.
+  - PC row height: 40px.
+  - mobile bottom row: `left:39.5%; right:4px; bottom:4px; height:34px`.
+  - 좋아요는 더 이상 독립 absolute 위치를 갖지 않고 row 안에서 `height:100%` / `align-items:center`.
+  - apply/share 그룹도 row 안에서 `height:100%` / `align-items:center`.
+  - 따라서 카드 폭/브레이크포인트 변화와 무관하게 세 액션의 중심선이 한 행에 고정.
+  - app257의 좋아요 흰색 outline/filled, apply 활성 핑크/비활성 어두운색, 투명 chrome 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 독립 absolute 위치 검사를 제거하고 app258 단일 bottom-row 계약으로 회귀 검사 갱신.
+- app version: **258**.
+
+검증/배포:
+- behavior commit: `31b05482ee7bcbbc21e73dfae47b53e1e72ba6d6`
+- CSS commit: `10536dcd51062dd1707ddd7e941625aeded75e96`
+- verifier commit: `d3bbc5740287257d2ea6307d155ac5de8143041e`
+- app258 commit: `df201475473963e4bfbe85a983e6cd9c81aab4a0`
+- Release System Audit Run `36666389673`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app201/app221 More dismissal guards PASS
+  - app258 pinned bottom-row guard PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36666561946`: **SUCCESS**
+  - exact Hosting source `b7c6c8f91771684dc899b4c7d7116c9519b30099`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- client layout only.
+- More 바깥 클릭/뒤로가기 닫기 규칙은 app257 그대로 유지.
+- 좋아요/다음곡 적용/공유 실제 handler 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 창을 넓게/좁게 바꿔도 좋아요·다음곡 적용·공유의 세로 중심선이 한 줄로 유지되는지.
+2. PC/태블릿은 카드 아래에서 6px 기준, 모바일은 4px 기준으로 같은 하단 행에 붙는지.
+3. 제목/키워드가 기존처럼 오른쪽 영역 세로 중앙을 유지하는지.
+4. 좋아요 흰색 ON/OFF, apply 핑크/어두운색 규칙이 그대로인지.
+5. More 바깥 영역 탭/뒤로가기 닫기가 그대로 정상인지.
+
 ## 0KN. app257 고정 곡 액션 정렬 + More 닫기 규칙 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **고정 곡 좋아요를 다음곡 적용과 같은 하단 행에 정렬 / 제목·키워드 세로 중앙 유지 / 다음곡 적용 활성 핑크·비활성 어두운색 / Explore 더보기 바깥 영역 탭·뒤로가기 닫기 / PREVIEW 배포 완료 / 실사용 확인 대기**

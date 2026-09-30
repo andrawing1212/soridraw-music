@@ -423,6 +423,11 @@ assert.match(
   'Explore More sheet must close when the dimmed backdrop is clicked while clicks inside the sheet stay open',
 );
 assert.match(
+  page,
+  /moreHistoryPushedRef257[\s\S]*?window\.history\.pushState\([\s\S]*?soridrawExploreMore257: true[\s\S]*?window\.addEventListener\('popstate', handlePopState257\)[\s\S]*?dismissMoreFromHistory257\(\)[\s\S]*?window\.history\.back\(\)/,
+  'Explore More must own one history entry so the browser/system back key closes the sheet before leaving the page',
+);
+assert.match(
   social,
   /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:40px;height:40px\}/,
   'PC pinned action hit areas must be reduced from app255 while keeping the larger icons',

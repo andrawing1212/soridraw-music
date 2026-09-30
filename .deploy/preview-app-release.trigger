@@ -1,8 +1,8 @@
-requested_at=2026-10-01T00:06:00+09:00
-requested_by=user_app262_touch_pointercancel_fix
-product_code_target=7c5da7196a6690efaa95b295c7a4ab46c3c49e78
-release_purpose=deploy_app262_touch_pointercancel_fix
-app_version=262
+requested_at=2026-10-01T00:38:00+09:00
+requested_by=user_app263_momentum_settle_fix
+product_code_target=9acb26c598ac53dc609652d8f7f366deba0f3332
+release_purpose=deploy_app263_momentum_aware_rail_settle
+app_version=263
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

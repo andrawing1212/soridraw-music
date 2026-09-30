@@ -1,3 +1,73 @@
+## 0KR. app261 Explore rail 놓기 기준 0.1초 정렬 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **손가락/마우스를 누른 채 이동 중에는 정렬 금지 / 놓는 순간부터 0.1초 뒤 50% snap / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 증상:
+- 기존 0.2초 timer가 `scroll` 이벤트의 잠깐 멈춤을 기준으로 재시작되어, 손가락/마우스를 아직 놓지 않았는데도 이동 중간에 카드 정렬이 시작될 수 있었음.
+- 요구:
+  - 손가락 또는 마우스를 **놓는 시점**을 정렬 timer의 기준으로 사용.
+  - 기존 0.2초 -> **0.1초**.
+  - 모바일 / 태블릿 / PC 공통.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - 공통 rail delay를 `EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261 = 100`으로 변경.
+  - `railPointerActiveRef261`: pointer가 눌린 동안 active 유지.
+  - pointer down:
+    - 기존 align timer 취소.
+    - active=true.
+  - pointer 이동 중 `onScroll`:
+    - 버튼 상태만 갱신.
+    - pointer가 눌려 있으면 snap timer를 만들거나 재시작하지 않음.
+  - pointer up / cancel:
+    - active=false.
+    - **그 시점부터 100ms 후** 공통 50% nearest-anchor 정렬.
+  - 모바일 짧은 drag의 1-card 이동도 즉시 실행하지 않고 놓은 뒤 100ms 후 실행.
+  - release snap이 이미 대기 중이면 후속 scroll 이벤트가 timer 기준을 다시 뒤로 미루지 못하게 보호.
+  - wheel/trackpad처럼 pointer release 신호가 없는 입력은 기존 scroll-idle fallback을 유지하되 delay만 100ms.
+  - app253의 좌우 대칭 50% 규칙 자체는 변경 없음.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - 0.1초 release 기준, pointer-held 중 snap 금지, short-drag release 기준 회귀 검사 추가.
+  - 남아 있던 app251 0.2초 legacy guard 제거.
+- app version: **261**.
+
+검증/배포:
+- behavior commit: `8a327c6c5b99715f29fc029dc30a2ba9e0b9546b`
+- primary verifier commit: `f1bfe95d7b930910006760a5dd5a44e1dba911bd`
+- app261 commit: `213e562a83b50677cd3a14dc13b00edb7b9860a4`
+- 첫 Audit Run `36693086344`: **FAIL**
+  - TypeScript PASS / Build PASS.
+  - 실제 기능 문제가 아니라 `verify-221` 후반부에 app251 시절 `200ms` 고정 assertion이 하나 더 남아 static verification FAIL.
+- stale verifier 제거 commit: `a5462fc26724622f65aac38d76c67aef412d247e`.
+- 최종 Release System Audit Run `36693393049`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - release-based 100ms rail guards PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36693629667`: **SUCCESS**
+  - exact Hosting source `28bf80f2f2a6b5a41645355c59532e7b98d8faf2`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- Explore 가로 rail client interaction만 수정.
+- 카드 50% 좌우 대칭 판정, 좌우 버튼, hover/터치 버튼 표시 규칙은 그대로 유지.
+- 좋아요 / 공개·비공개 / 프로필 / More / Feed 데이터 경로 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 모바일에서 손가락을 댄 채 좌우로 움직이고 중간에 0.1초 이상 멈춰도 카드가 자동 정렬되지 않는지.
+2. 손가락을 놓은 뒤 약 0.1초 후 50% 기준으로 정렬되는지.
+3. PC/태블릿에서 마우스 pointer를 누른 채 이동/정지해도 놓기 전에는 정렬되지 않는지.
+4. 마우스를 놓은 뒤 약 0.1초 후 정렬되는지.
+5. 좌/우 50% 규칙은 app253과 동일하게 유지되는지.
+
 ## 0KQ. app260 More 배경 클릭-through 차단 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **더보기 창의 불투명 배경을 누르면 오직 창 닫기만 수행 / 뒤쪽 카드·좋아요·재생 등 버튼으로 클릭이 전달되지 않도록 수정 / PC·모바일 공통 / PREVIEW 배포 완료 / 실사용 확인 대기**

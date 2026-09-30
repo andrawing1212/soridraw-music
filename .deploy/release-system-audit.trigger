@@ -1,4 +1,4 @@
-requested_at=2026-10-01T06:18:00+09:00
+requested_at=2026-10-01T06:27:00+09:00
 requested_by=chatgpt
-purpose=app271_follower_save_legacy_lyrics_refresh
-source_target=e611693b3b261c573c42f11934591372bf3ff301
+purpose=app271_follower_save_legacy_lyrics_refresh_reaudit
+source_target=b8653b1e8cd76eee926ddcc535ff38dccbbb9b62

@@ -287,8 +287,8 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
 });
 
 const comparePublicProfileTracks = (a: ExploreTrack, b: ExploreTrack) => {
-  const pinnedOrder = Number(b.profilePinned) - Number(a.profilePinned);
-  if (pinnedOrder !== 0) return pinnedOrder;
+  // Profile pinning is only for the dedicated "고정 곡" rail.
+  // "전체 곡" must stay in normal publication order regardless of pin state.
   if (a.publishedAt !== b.publishedAt) return b.publishedAt - a.publishedAt;
   return b.id.localeCompare(a.id);
 };

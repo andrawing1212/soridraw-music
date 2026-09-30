@@ -1,3 +1,29 @@
+## 2026-10-01 — app269 팔로워 공유노트 링크공유 동등성 실사용 확인
+
+PREVIEW 배포 완료:
+- 다른 사용자 곡의 `팔로워 곡 저장 허용` 경로가 권한 통과 시 기존 canonical track row의 가사/프롬프트/style + share keyword/nextSong recipe를 같은 save-access 응답으로 받음.
+- D1 비용은 기존 그대로 track PK 1 + follow 1 = 2 bounded SELECT, write 0.
+- 저장된 공유노트는 lyrics/prompt/userInput/appliedKeywords/Suno 링크를 보존.
+- Music Note 목록 키워드, 상세 정보, 다음곡 적용이 링크 공유 저장본과 같은 기능 기준을 갖도록 연결.
+- PREVIEW Worker Run `36771319454` SUCCESS, active version `6917ac59-a1b0-4d50-b5de-e1979efd1f64`.
+- PREVIEW App Run `36771471427` SUCCESS, app269 exact build PASS.
+- TEST/PRODUCTION 비변경.
+
+다음 확인:
+1. 타 사용자 + follower-save ON + 실제 팔로우 -> 공유노트 저장.
+2. 목록 키워드 표시.
+3. 상세 가사/프롬프트 표시.
+4. 공유노트 상세/카드의 다음곡 적용이 원본 keyword/command recipe를 Studio로 전달.
+5. 원작자/커버/Suno 링크 유지.
+6. follower-save OFF 저장 차단 유지.
+7. direct Explore apply permission은 기존대로 독립 유지.
+
+판정:
+- 위 항목 PASS면 app269 종료.
+- 특정 오래된 공개곡에서 정보가 비면 그 track 1건의 canonical share payload 생성 시점을 먼저 확인하며 전체 backfill은 금지.
+- 좋아요/Explore Feed/프로필/rail/app265 UI는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-10-01 — app268 다른 사용자 공유 노트 저장 실사용 확인
 
 PREVIEW 배포 완료:

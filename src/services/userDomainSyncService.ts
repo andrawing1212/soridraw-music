@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
+import { projectCatalogItemForSync } from '../lib/userDataEngine';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -16,6 +17,7 @@ export type UserDomainSyncSignal = {
   affectedCount: number;
   documentIds: string[];
   truncated: boolean;
+  itemJson?: string;
 };
 
 const GENERIC_DEVICE_STORAGE_KEY = 'soridraw_user_domain_sync_device_v1';
@@ -125,6 +127,24 @@ const buildSignal = (
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
   const persistedRecentVersion = kind === 'recentSongs' && typeof result === 'number'
     && Number.isFinite(result) && result > 0 ? Math.floor(result) : 0;
+
+  let itemJson = '';
+  if (kind === 'musicNote' && context.syncItem && typeof context.syncItem === 'object') {
+    try {
+      const preferredId = uniqueIds[0] || resultDocumentId(result);
+      const projected = projectCatalogItemForSync('musicNote', {
+        ...(context.syncItem as Record<string, unknown>),
+        ...(preferredId ? { id: preferredId, firestoreId: preferredId } : {}),
+      });
+      if (projected) {
+        const encoded = JSON.stringify(projected);
+        // Keep the account-level signal tiny and bounded. Oversized detail never
+        // rides RTDB; only the normal catalog summary is eligible.
+        if (encoded.length <= 24000) itemJson = encoded;
+      }
+    } catch {}
+  }
+
   return {
     version: persistedRecentVersion || now,
     at: now,
@@ -133,6 +153,7 @@ const buildSignal = (
     affectedCount: Math.max(0, Math.min(1_000_000, Number(context.affectedCount || uniqueIds.length || 1) || 1)),
     documentIds: uniqueIds.slice(0, MAX_DOCUMENT_IDS),
     truncated: uniqueIds.length > MAX_DOCUMENT_IDS,
+    ...(itemJson ? { itemJson } : {}),
   };
 };
 
@@ -175,6 +196,8 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   const documentIds = Array.isArray(value.documentIds)
     ? value.documentIds.map((id) => String(id || '').trim()).filter(Boolean).slice(0, MAX_DOCUMENT_IDS)
     : [];
+  const itemJsonRaw = typeof value.itemJson === 'string' ? value.itemJson : '';
+  const itemJson = itemJsonRaw.length <= 24000 ? itemJsonRaw : '';
   return {
     version,
     at: Number.isFinite(at) && at > 0 ? at : version,
@@ -183,6 +206,7 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
     affectedCount: Math.max(0, Math.min(1_000_000, Number(value.affectedCount || 0) || 0)),
     documentIds,
     truncated: value.truncated === true,
+    ...(itemJson ? { itemJson } : {}),
   };
 };
 
@@ -206,6 +230,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
         operation: signal.operation,
         documentIds: signal.documentIds,
         truncated: signal.truncated,
+        itemJson: signal.itemJson || '',
       },
     }));
     return;

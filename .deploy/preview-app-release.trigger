@@ -1,8 +1,8 @@
-requested_at=2026-10-01T04:40:00+09:00
-requested_by=user_app268_shared_note_live_state_fix
-product_code_target=fe4578bd28b80e1210de8ee2bcea86572508ae55
-release_purpose=deploy_app268_shared_note_live_state_fix
-app_version=268
+requested_at=2026-10-01T05:17:00+09:00
+requested_by=user_app269_follower_share_link_parity
+product_code_target=45d17dbb7225ea1fc262128155c394bcd65f334f
+release_purpose=deploy_app269_follower_share_link_parity
+app_version=269
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

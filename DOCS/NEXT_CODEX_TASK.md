@@ -1,3 +1,19 @@
+## CURRENT TASK — app275 저장됨 핑크 표시 실사용 확인 (2026-10-01 KST)
+
+현재 상태:
+- app274 저장 위치 표시 기능 PASS.
+- app275에서 `저장됨` 글자 색상만 핑크 `#ff7a9d`로 변경.
+- PREVIEW Run `36789135930` SUCCESS / app version 275 / exact build PASS.
+- 추가 서버 read/write 0.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. 저장된 폴더의 `저장됨`이 핑크색으로 명확히 보임.
+2. 버튼 위치/크기/간격 변화 없음.
+3. 같은 폴더 재저장 차단 유지.
+4. 다른 폴더 저장 동작 유지.
+5. PC/모바일 동일.
+
 ## CURRENT TASK — app274 공유노트 저장 위치 표시 실사용 확인 (2026-10-01 KST)
 
 현재 상태:

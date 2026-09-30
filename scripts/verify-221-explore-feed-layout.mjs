@@ -379,6 +379,36 @@ assert.match(
 );
 assert.match(
   page,
+  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-actions-right-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255/,
+  'pinned banner must render like bottom-left, apply/share bottom-right, and more as dedicated in-card controls',
+);
+assert.match(
+  page,
+  /\{variant !== 'profilePinnedBanner' && \([\s\S]*?className="soridraw-explore-card-actions"/,
+  'legacy below-card actions must stay on ordinary cards but not render below pinned banners',
+);
+assert.match(
+  social,
+  /\.soridraw-explore-pinned-like-255\{position:absolute;left:14px;bottom:14px[\s\S]*?\.soridraw-explore-pinned-actions-right-255\{position:absolute;right:14px;bottom:14px[\s\S]*?\.soridraw-explore-pinned-more-255\{position:absolute;right:14px;top:14px/,
+  'desktop/tablet pinned controls must match the approved corner positions',
+);
+assert.match(
+  social,
+  /@media \(min-width:1100px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:52px;height:52px\}/,
+  'PC pinned action controls must be substantially larger than the former 32px actions',
+);
+assert.match(
+  social,
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-action-255\{width:44px;height:44px\}/,
+  'mobile pinned action controls must be twice the former compact 22px controls',
+);
+assert.doesNotMatch(
+  page,
+  /프로필에서 먼저 보여주는 대표 곡|프로필에 공개한 모든 곡/,
+  'public-profile helper descriptions requested for removal must stay absent',
+);
+assert.match(
+  page,
   /showPublisher\?: boolean/,
   'Explore track cards must support hiding publisher identity per context',
 );

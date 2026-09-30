@@ -409,8 +409,8 @@ assert.match(
 );
 assert.match(
   page,
-  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-top-actions-259[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-more-255[\s\S]*?soridraw-explore-pinned-share-255/,
-  'pinned like and apply must sit directly left of More while share remains separately anchored',
+  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-top-actions-259[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255/,
+  'pinned top row must be apply then share then More while like stays separately anchored at bottom-right',
 );
 assert.match(
   page,
@@ -419,8 +419,8 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-top-actions-259\{position:absolute;right:6px;top:6px;display:flex;height:38px;align-items:center;gap:3px[\s\S]*?\.soridraw-explore-pinned-like-255\{position:static!important[\s\S]*?height:100%!important[\s\S]*?\.soridraw-explore-pinned-more-255\{position:static\}[\s\S]*?\.soridraw-explore-pinned-share-255\{position:absolute;right:6px;bottom:6px\}/,
-  'desktop/tablet pinned like/apply/More must share the top-right row while share stays bottom-right',
+  /\.soridraw-explore-pinned-top-actions-259\{position:absolute;right:6px;top:6px;display:flex;height:38px;align-items:center;gap:3px[\s\S]*?\.soridraw-explore-pinned-like-255\{position:absolute!important;right:6px;bottom:6px[\s\S]*?height:38px!important[\s\S]*?\.soridraw-explore-pinned-share-255,\.soridraw-explore-pinned-more-255\{position:static/,
+  'desktop/tablet pinned apply/share/More must share the top-right row while like stays bottom-right',
 );
 assert.match(
   social,
@@ -464,8 +464,8 @@ assert.match(
 );
 assert.match(
   social,
-  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-top-actions-259\{right:4px;top:4px;height:34px;gap:2px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-share-255\{right:4px;bottom:4px\}/,
-  'mobile pinned like/apply/More must stay grouped at top-right while share stays bottom-right',
+  /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-pinned-top-actions-259\{right:4px;top:4px;height:34px;gap:2px\}[\s\S]*?\.soridraw-explore-pinned-action-255\{width:34px;height:34px\}[\s\S]*?\.soridraw-explore-pinned-like-255\{right:4px;bottom:4px;height:34px!important;gap:5px\}/,
+  'mobile pinned apply/share/More must stay grouped at top-right while like stays bottom-right',
 );
 assert.doesNotMatch(
   page,

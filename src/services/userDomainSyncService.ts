@@ -22,6 +22,7 @@ const GENERIC_DEVICE_STORAGE_KEY = 'soridraw_user_domain_sync_device_v1';
 const MUSIC_NOTE_DEVICE_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_REMOTE_VERSION_BASE = 'soridraw_music_note_remote_sync_version_v1';
 const MUSIC_NOTE_LOCAL_VERSION_BASE = 'soridraw_music_note_local_sync_version_v1';
+const MUSIC_NOTE_PENDING_SIGNAL_BASE = 'soridraw_music_note_pending_signal_v2';
 const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 // Separate RTDB delivery timestamps from the authoritative Firestore document
 // version. Persist both signal and acknowledgement across Studio navigation.
@@ -65,6 +66,27 @@ const writeLocalNumberMax = (key: string, value: number): void => {
   try {
     window.localStorage.setItem(key, String(Math.max(readLocalNumber(key), Math.floor(value))));
   } catch {}
+};
+
+const rememberMusicNotePendingSignal = (uid: string, signal: UserDomainSyncSignal): void => {
+  if (!uid || typeof window === 'undefined' || !signal?.version) return;
+  try {
+    const key = scopedVersionKey(MUSIC_NOTE_PENDING_SIGNAL_BASE, uid);
+    const currentRaw = window.localStorage.getItem(key);
+    const current = currentRaw ? JSON.parse(currentRaw) : null;
+    if (Number(current?.version || 0) > signal.version) return;
+    window.localStorage.setItem(key, JSON.stringify(signal));
+  } catch {}
+};
+
+export const readPendingMusicNoteSyncSignal = (uid: string): UserDomainSyncSignal | null => {
+  if (!uid || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(scopedVersionKey(MUSIC_NOTE_PENDING_SIGNAL_BASE, uid));
+    return raw ? normalizeSignal(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
 };
 
 export const readRecentSongsPendingSignalVersion = (uid: string): number =>
@@ -169,6 +191,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
 
   if (kind === 'musicNote') {
     writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_REMOTE_VERSION_BASE, uid), signal.version);
+    rememberMusicNotePendingSignal(uid, signal);
     if (signal.originDeviceId === getDeviceId('musicNote')) {
       // The successful local mutation already patched Music Note cache/state.
       // Acknowledge its RTDB mirror before dispatch so the existing incremental

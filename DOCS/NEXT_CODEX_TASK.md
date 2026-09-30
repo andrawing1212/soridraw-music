@@ -1,3 +1,23 @@
+## 2026-09-30 — app252 Explore rail hover 실사용 확인
+
+배포 완료:
+- PC mouse hover 중 Explore 가로 카드 rail 좌우 버튼 계속 표시.
+- rail을 벗어나면 즉시 숨김.
+- 버튼으로 이동해도 같은 rail stage 안에서는 유지.
+- 모바일 touch 2초 표시 / scroll stop 0.5초 hide / 0.2초 settle 유지.
+- PREVIEW App Release Run `36657296530` SUCCESS.
+- Worker / D1 / R2 / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. PC에서 각 스크롤 가능한 rail에 마우스를 2초 이상 올려도 버튼이 유지되는지.
+2. 버튼으로 마우스를 옮겨 실제 클릭 가능한지.
+3. rail 밖으로 빼면 즉시 사라지는지.
+4. 모바일 기존 동작이 그대로인지.
+
+판정:
+- 위 항목 PASS면 이 작업 종료.
+- rail 데이터/좋아요/프로필 서버 경로는 건드리지 않는다.
+
 ## 2026-09-30 — app251 Explore rail 공통 동작 실사용 확인
 
 배포 완료:

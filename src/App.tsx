@@ -9638,6 +9638,7 @@ const toggleCycleVariantSelection = (
     truncated = false,
     operation = '',
     itemJson = '',
+    removed = false,
   ) => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
@@ -9677,7 +9678,7 @@ const toggleCycleVariantSelection = (
         || normalizedOperation === 'permanent-delete'
         || normalizedOperation === 'bulk-delete';
 
-      if (remoteItem || isRemovalOperation) {
+      if (remoteItem || removed || isRemovalOperation) {
         setFavorites((prev) => {
           const changedIds = new Set(exactDocumentIds);
           let next = (Array.isArray(prev) ? prev : []).filter(
@@ -9768,6 +9769,7 @@ const toggleCycleVariantSelection = (
         truncated?: boolean;
         operation?: string;
         itemJson?: string;
+        removed?: boolean;
       }>).detail;
       if (!detail || detail.uid !== currentUser.uid) return;
       void syncMusicNoteIncrementalFromRemoteVersion(
@@ -9777,6 +9779,7 @@ const toggleCycleVariantSelection = (
         detail.truncated === true,
         String(detail.operation || ''),
         String(detail.itemJson || ''),
+        detail.removed === true,
       );
     };
 
@@ -9793,6 +9796,7 @@ const toggleCycleVariantSelection = (
         pendingSignal.truncated,
         pendingSignal.operation,
         pendingSignal.itemJson || '',
+        pendingSignal.removed === true,
       );
     } else {
       const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);

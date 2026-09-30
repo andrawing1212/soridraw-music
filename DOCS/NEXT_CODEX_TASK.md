@@ -1,3 +1,18 @@
+## 2026-10-01 — app267 공유 노트 상세 클릭 실사용 확인
+
+PREVIEW 배포 완료:
+- 공유 노트 compact Catalog row도 상세 클릭 시 해당 favorites 문서 1건만 hydrate.
+- lyrics undefined 상세 크래시 방어.
+- app267 exact build PASS.
+- TEST/PRODUCTION 비변경.
+
+다음 확인:
+1. 공유 노트 카드 클릭 -> 상세 정상 오픈.
+2. 한글/외국어 가사, 프롬프트, 원작자, 미디어 정상 표시.
+3. 읽기 전용 유지.
+4. 같은 곡 재오픈 시 전체 Music Note 재조회 없음.
+5. app266 공유노트 권한 OFF/ON 및 폴더 저장 정상 유지.
+
 ## 2026-10-01 — app266 Explore 공유 노트 권한/저장 실사용 확인
 
 배포 완료:

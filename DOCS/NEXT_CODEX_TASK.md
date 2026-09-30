@@ -1,3 +1,26 @@
+## 2026-09-30 — app260 More 배경 click-through 실사용 확인
+
+배포 완료:
+- 어두운 More backdrop은 전체 클릭 sequence를 끝까지 흡수.
+- pointerdown에서는 닫지 않고 전파만 차단.
+- backdrop click 완료 후 More 닫기.
+- sheet 내부 pointer/click은 전파 차단.
+- 뒤쪽 카드/좋아요/재생/공유/더보기로 입력 전달 금지.
+- PC/모바일 공통.
+- PREVIEW App Release Run `36668317050` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. PC에서 뒤쪽 버튼 위의 어두운 배경 클릭 -> More만 닫기.
+2. 모바일에서 동일 위치 탭 -> More만 닫기.
+3. 뒤 카드의 버튼 상태가 변하지 않는지.
+4. sheet 내부 버튼은 정상인지.
+5. app259 뒤로가기 닫기 동작이 유지되는지.
+
+판정:
+- 위 항목 PASS면 app260 종료.
+- 이 작업 외 UI/서버 로직은 건드리지 않는다.
+
 ## 2026-09-30 — app259 pinned 상단 액션 + PC More 뒤로가기 실사용 확인
 
 배포 완료:

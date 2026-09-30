@@ -1,3 +1,26 @@
+## 2026-09-30 — app259 pinned 상단 액션 + PC More 뒤로가기 실사용 확인
+
+배포 완료:
+- 고정 곡 우측 상단 순서: 좋아요 -> 다음곡 적용 -> 더보기.
+- 공유는 기존 우측 하단 유지.
+- More history entry를 sheet 표시 전에 동기적으로 예약.
+- PC/모바일 모두 첫 뒤로가기는 More 닫기, More가 닫힌 뒤 다음 뒤로가기는 원래 navigation.
+- PREVIEW App Release Run `36667468362` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. pinned 우측 상단 세 액션의 간격/위치가 자연스러운지.
+2. 공유가 기존 우측 하단에 그대로 있는지.
+3. PC browser Back 1회로 More만 닫히는지.
+4. More 닫힌 뒤 다시 Back하면 정상적으로 이전 페이지로 가는지.
+5. 모바일 시스템 Back / 바깥 영역 터치 닫기도 정상인지.
+
+판정:
+- 위 항목 PASS면 app259 종료.
+- 위치 미세조정은 pinned 전용 CSS만 최소 수정.
+- 서버/좋아요/공개/프로필/Feed 경로는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app258 pinned 하단 고정 행 실사용 확인
 
 배포 완료:

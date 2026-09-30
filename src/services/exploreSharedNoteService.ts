@@ -157,6 +157,51 @@ const buildSharedNoteDocumentId = (uid: string, trackId: string) => {
   return `explore_shared_${safeUid}_${safeTrack}`;
 };
 
+export const getExploreSharedNoteSavedFolderLocal274 = (
+  uid: string,
+  trackId: string,
+): { folderId: string; folderTitle: string } | null => {
+  const safeUid = String(uid || '').trim();
+  const safeTrackId = String(trackId || '').trim();
+  if (!safeUid || !safeTrackId) return null;
+
+  const documentId = buildSharedNoteDocumentId(safeUid, safeTrackId);
+  const isActiveSharedNote = (item: any) => Boolean(
+    item
+    && String(item.sourceType || '').trim() === 'shared_music_note'
+    && item.isSharedMusicNote === true
+    && item.sharedReadOnly === true
+    && item.favoriteRemoved !== true
+    && item.saved !== false
+    && !item.favoriteRemovedAt
+    && !item.deletedAt
+    && !item.trashedAt
+  );
+  const findSaved = (items: any[]) => items.find((item) => (
+    isActiveSharedNote(item)
+    && (
+      String(item.firestoreId || item.id || '').trim() === documentId
+      || String(item.exploreTrackId || '').trim() === safeTrackId
+      || String(item.sharedNoteShareId || '').trim() === safeTrackId
+    )
+  ));
+
+  let saved = findSaved(favoritesStore.getFavorites());
+  if (!saved && typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(`soridraw_favorites_cache_${safeUid}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) saved = findSaved(parsed);
+    } catch {}
+  }
+  if (!saved) return null;
+
+  return {
+    folderId: String(saved.sharedNoteFolderId || saved.sharedNoteFolder || 'default').trim() || 'default',
+    folderTitle: String(saved.sharedNoteFolderTitle || '').trim(),
+  };
+};
+
 export const saveExploreTrackToSharedNote = async (
   user: User,
   track: ExploreSharedNoteTrack,

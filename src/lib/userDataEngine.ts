@@ -217,7 +217,7 @@ const isMusicNoteCatalogItem = (item: any) => !(
   || item?.trashedAt
 );
 
-const projectCatalogItem = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
+export const projectCatalogItemForSync = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
   if (!sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return null;
   if (kind === 'musicNote' && !isMusicNoteCatalogItem(sourceItem)) return null;
   const id = String(sourceItem?.id || sourceItem?.firestoreId || '').trim();
@@ -243,7 +243,7 @@ const normalizeCatalogItems = (kind: SoridrawCatalogKind, sourceItems: any[]): a
   const normalized: any[] = [];
   for (const sourceItem of Array.isArray(sourceItems) ? sourceItems : []) {
     if (normalized.length >= CATALOG_MAX_ITEMS) break;
-    const projected = projectCatalogItem(kind, sourceItem);
+    const projected = projectCatalogItemForSync(kind, sourceItem);
     if (!projected || seen.has(projected.id)) continue;
     seen.add(projected.id);
     normalized.push(projected);
@@ -467,7 +467,7 @@ const applyCatalogSyncResponse = (
     for (const rawItem of entry.upserts) {
       const id = String(rawItem?.id || rawItem?.firestoreId || '').trim();
       if (!id) return null;
-      const projected = projectCatalogItem(kind, rawItem);
+      const projected = projectCatalogItemForSync(kind, rawItem);
       if (!projected) byId.delete(id);
       else byId.set(id, projected);
     }

@@ -1,7 +1,7 @@
-requested_at=2026-09-30T11:24:00+09:00
+requested_at=2026-09-30T11:28:00+09:00
 requested_by=user_app254_remove_feed_load_more
-product_code_target=020c5cf45b1276855d9939e1369f8b62e345db94
-release_purpose=audit_app254_remove_feed_load_more
+product_code_target=595aa6151fdc75dcd923ac5dbe75062f14af70c5
+release_purpose=reaudit_app254_remove_feed_load_more
 app_version=254
 preview_only=true
 deploy=false

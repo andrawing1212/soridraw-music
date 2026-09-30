@@ -1,3 +1,29 @@
+## 2026-09-30 — app256 pinned 액션/rail 화살표 실사용 확인
+
+배포 완료:
+- 고정 곡 좋아요를 제목/키워드 아래 텍스트 영역으로 이동.
+- 좋아요 OFF = 흰색 outline / ON = 흰색 filled heart.
+- pinned 적용/공유/더보기는 투명 chrome + app255 대비 약 20~25% 축소.
+- 적용/공유는 오른쪽 아래, 더보기는 오른쪽 위에 더 밀착.
+- 모든 Explore rail 좌우 버튼은 실제 카드 image/creator visual 세로 중앙을 계산해 정렬.
+- PC/tablet 화살표 좌우 위치 -32px, mobile -6px.
+- PREVIEW App Release Run `36663692598` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. pinned 좋아요가 artwork/play를 침범하지 않고 키워드 아래에 있는지.
+2. 좋아요 ON/OFF가 기존 흰색 하트 규칙 그대로인지.
+3. 우측 액션이 카드 오른쪽 위/아래에 확실히 붙어 있는지.
+4. 액션 아이콘 크기는 유지되면서 버튼 덩어리만 작아졌는지.
+5. 배경/테두리가 투명인지.
+6. PC/태블릿/모바일 가로 rail 화살표가 이미지 기준 세로 중앙인지.
+7. 좌우 화살표가 이전보다 바깥쪽으로 충분히 이동했는지.
+
+판정:
+- 시각 미세조정이 필요하면 pinned 전용 CSS/rail edge 위치만 최소 수정.
+- 좋아요/공개/프로필/Feed 서버 경로와 0.2초 50% snap 로직은 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app255 공개프로필 고정 곡 액션 배치 실사용 확인
 
 배포 완료:

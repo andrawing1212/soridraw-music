@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import './verify-252-unified-profile-save.mjs';
 import { deployWithDerivedPreflight, requiredTables, requiredTriggers, requiredLike035Objects } from '../cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs';
 
 const previewEntry244 = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');

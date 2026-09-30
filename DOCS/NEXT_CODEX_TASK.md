@@ -1,3 +1,28 @@
+## 2026-10-01 — app262 모바일 rail 실제 release 재확인
+
+배포 완료:
+- 모바일 native horizontal scroll takeover에서 발생하는 touch `pointercancel`을 실제 손가락 release로 취급하지 않도록 수정.
+- touch pointercancel 중에는 held guard 유지.
+- 실제 `touchend`에서만 0.1초 snap 시작.
+- 정상 pointerup이 먼저 처리된 경우 touchend가 timer를 다시 시작하지 않음.
+- app253 50% 좌우 대칭 nearest-anchor, app261 0.1초 delay, PC mouse 동작 유지.
+- PREVIEW App Release Run `36734252253` SUCCESS.
+- preview app version 262 exact verification PASS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 모바일에서 손가락을 계속 대고 좌우 이동 -> 손가락을 놓기 전 정렬 금지.
+2. 이동 중 0.1초 이상 멈춤 -> 손가락을 대고 있으면 정렬 금지.
+3. 손가락 release -> 약 0.1초 후 50% 기준 snap.
+4. 연속 좌우 이동이 끊기지 않는지.
+5. PC mouse drag/release는 기존과 동일한지.
+
+판정:
+- 위 항목 PASS면 app262 종료.
+- 같은 증상이 남으면 새 예외를 계속 덧붙이지 않고, 사용자 지시대로 app261 release-timing 변경을 제거하고 app260/app253의 이전 rail 동작으로 복귀하는 것을 우선한다.
+- 서버/좋아요/공개/프로필/More/UI 배치는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app261 rail 놓기 기준 0.1초 snap 실사용 확인
 
 배포 완료:

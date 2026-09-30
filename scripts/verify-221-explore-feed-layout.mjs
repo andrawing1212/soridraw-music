@@ -143,7 +143,7 @@ assert.match(
 );
 assert.match(
   page,
-  /const anchors = cards[\s\S]*?card\.offsetLeft[\s\S]*?Math\.min\(maxScrollLeft[\s\S]*?filter\(\(position, index, source\)/,
+  /const anchors = cards[\s\S]*?Math\.min\(maxScrollLeft,\s*Math\.max\(0,\s*card\.offsetLeft\)\)[\s\S]*?filter\(\(position, index, source\)/,
   'rail alignment must derive clamped card-start anchors from the rendered cards',
 );
 assert.match(

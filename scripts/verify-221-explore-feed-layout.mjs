@@ -47,13 +47,13 @@ assert.match(
 );
 assert.match(
   css,
-  /\.soridraw-explore-recommend-edge--left\{left:8px\}/,
-  'left arrow must overlay the left edge of the card rail',
+  /\.soridraw-explore-recommend-edge--left\{left:-32px\}/,
+  'desktop rail left arrow must sit clearly outside the card rail',
 );
 assert.match(
   css,
-  /\.soridraw-explore-recommend-edge--right\{right:8px\}/,
-  'right arrow must overlay the right edge of the card rail',
+  /\.soridraw-explore-recommend-edge--right\{right:-32px\}/,
+  'desktop rail right arrow must sit clearly outside the card rail',
 );
 assert.match(
   css,

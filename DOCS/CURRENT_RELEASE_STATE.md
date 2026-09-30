@@ -1,3 +1,64 @@
+## 0KY. app268 다른 사용자 공유 노트 저장 즉시 반영 수정 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **다른 사용자 곡 저장 권한 통과 후 Firestore/R2에는 저장되지만 이미 열려 있던 Music Note 화면의 메모리 상태가 갱신되지 않던 문제 수정 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**
+
+사용자 실사용:
+- 본인 곡은 공유 노트 저장 후 정상 표시.
+- 다른 사용자 곡도 `공유 노트에 추가` -> 폴더 선택까지 정상 진입했으나 Music Note > 공유 노트에 새 곡이 나타나지 않음.
+- 폴더 선택창이 열렸으므로 `allowFollowerSave` 및 타 사용자 `save-access` 권한 검사는 이미 통과한 상태.
+
+원인:
+- app266은 canonical Firestore 문서 + Music Note R2/IndexedDB Catalog delta까지 정상 저장.
+- 그러나 SORIDRAW의 same-device Music Note invalidation은 “성공한 로컬 mutation이 이미 현재 UI cache/state를 갱신했다”는 전제로 같은 기기에서 Firestore를 재조회하지 않음.
+- Explore의 공유 노트 저장은 Music Note 화면 바깥에서 실행되므로 Catalog는 갱신했지만 `favoritesStore`와 기존 instant-paint local cache를 직접 갱신하지 않았음.
+- 따라서 Music Note를 한 번 연 뒤 두 번째 공유곡을 저장하는 경우, 서버 데이터는 정상이어도 현재 세션의 Music Note 목록은 이전 메모리 상태를 계속 보여줄 수 있었음.
+- 첫 저장/새 세션에서는 Catalog bootstrap으로 보일 수 있어 “내 곡은 되고 다른 사람 곡은 안 된다”처럼 보였음.
+
+수정:
+- `src/services/exploreSharedNoteService.ts`
+  - 기존 canonical Firestore 1건 저장 유지.
+  - 기존 Music Note Catalog 변경곡 1건 delta publish 유지.
+  - publish 성공 뒤 해당 documentId 1건만 `favoritesStore`에 upsert.
+  - 같은 UID의 기존 `soridraw_favorites_cache_${uid}` instant-paint cache도 같은 목록으로 갱신.
+  - 같은 documentId 재저장은 교체(upsert)하며 중복 추가하지 않음.
+  - 전체 favorites collection 재조회/전체 Catalog rebuild 없음.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - shared-note save가 live store + instant-paint cache를 single-item upsert하는 회귀 검사 추가.
+- app version: **268**.
+
+검증/배포:
+- fix commit: `5ba9800e4387626ea24ea1f284f42c2f143b4b0b`
+- verifier commit: `3884d88f507464183dbe8f55b920928d132f9cfb`
+- app268 commit: `2c24b852cf0ea17b85bb3cf5302e5b03daf282d7`
+- Release System Audit source: `fe4578bd28b80e1210de8ee2bcea86572508ae55`
+- Audit Run `36766990239`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - shared-note live cache guard PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- PREVIEW release source: `1b0bdeac204e5f4651496fbf89bda70934076145`
+- Firebase PREVIEW App Release Run `36767240551`: **SUCCESS**
+  - Firebase Hosting release complete
+  - preview app version **268**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+비용/데이터:
+- 다른 사용자 곡 저장도 실제 저장 동작 때만 기존 Firestore 1건 write.
+- 추가 UI 반영은 기기 메모리/localStorage에서 처리: 서버 read/write 0.
+- R2 Catalog는 기존과 동일하게 변경곡 1건 delta.
+- 페이지 진입/재진입 때문에 전체 favorites read 없음.
+- migration/backfill 없음.
+- Worker / D1 / Functions / Rules 변경 없음.
+
+실사용 확인:
+1. 팔로우 중이고 공개자가 `팔로워 곡 저장 허용`을 켠 다른 사용자 곡에서 폴더 선택 가능.
+2. `새폴더` 등 선택 직후 Music Note > 공유 노트 해당 폴더에 그 다른 사용자 곡이 표시되는지.
+3. 이미 Music Note를 한 번 열어 둔 상태에서 Explore로 돌아가 두 번째/세 번째 곡을 연속 저장해도 즉시 누적되는지.
+4. 다른 사용자 곡 상세 클릭 시 app267 오류 없이 열리는지.
+5. 권한 OFF 곡은 app266대로 버튼 비활성 유지.
+
 ## 0KX. app267 공유 노트 상세 클릭 크래시 수정 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **공유 노트 저장/표시는 정상 / 상세 클릭 시 lyrics undefined 크래시 원인 확인 및 수정 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**

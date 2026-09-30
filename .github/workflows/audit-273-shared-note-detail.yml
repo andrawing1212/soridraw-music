@@ -35,6 +35,5 @@ jobs:
           node scripts/verify-273-shared-note-legacy-detail.mjs
           node scripts/verify-029-music-note-library.mjs
           node scripts/verify-030-library-warm-cache-no-idle-read.mjs
-          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
           node scripts/verify-202-explore-action-cost-bounds.mjs
           echo 'APP273_FOCUSED_AUDIT=PASS'

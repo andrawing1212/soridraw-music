@@ -1,8 +1,8 @@
-requested_at=2026-10-01T02:57:00+09:00
-requested_by=user_app264_pinned_action_swap
-product_code_target=495e2e74b9aea7b6ea1a0dd39372de53d824ab65
-release_purpose=deploy_app264_pinned_action_swap
-app_version=264
+requested_at=2026-10-01T03:07:00+09:00
+requested_by=user_app265_responsive_pinned_banner
+product_code_target=97aa99489037db930cbf6b00d8176d83221ebc6d
+release_purpose=deploy_app265_responsive_pinned_banner
+app_version=265
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

@@ -1,0 +1,90 @@
+name: TEMP 252 Unified Profile Save Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-252-unified-profile-save.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-252-unified-profile-save
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply exact unified profile save
+        run: python .deploy/apply-252-unified-profile-save.py
+
+      - name: Guard change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git diff --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          allowed="$RUNNER_TEMP/allowed.txt"
+          cat > "$allowed" <<'EOF'
+          cloudflare/explore-worker/canonical/preview-entry.js
+          cloudflare/explore-worker/canonical/preview-worker.js
+          cloudflare/explore-worker/canonical/source-sha256.txt
+          public/app-version.json
+          scripts/verify-252-unified-profile-save.mjs
+          scripts/verify-explore-deploy-preflight.mjs
+          src/components/explore/ExploreProfileEditModal.tsx
+          src/services/exploreSocialService.ts
+          EOF
+          printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/changed.txt"
+          diff -u "$allowed" "$RUNNER_TEMP/changed.txt"
+          echo '252_CHANGE_BOUNDARY=PASS'
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify unified profile save
+        run: |
+          node scripts/verify-252-unified-profile-save.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Worker syntax and lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          grep -q 'SORIDRAW_UNIFIED_PROFILE_SAVE_252_20260930' cloudflare/explore-worker/canonical/preview-worker.js
+          echo 'PROFILE_252_CANONICAL_LOCK=PASS'
+
+      - name: Commit generated product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add             cloudflare/explore-worker/canonical/preview-entry.js             cloudflare/explore-worker/canonical/preview-worker.js             cloudflare/explore-worker/canonical/source-sha256.txt             public/app-version.json             scripts/verify-252-unified-profile-save.mjs             scripts/verify-explore-deploy-preflight.mjs             src/components/explore/ExploreProfileEditModal.tsx             src/services/exploreSocialService.ts
+          git commit -m 'perf(preview): unify profile text and media save'
+          git push origin HEAD:preview

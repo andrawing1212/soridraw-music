@@ -58,29 +58,29 @@
 .soridraw-explore-pinned-banner-copy-235 h3{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(14px,1.1vw,20px);font-weight:900;letter-spacing:-.025em}
 .soridraw-explore-pinned-keywords-235{display:flex;align-items:center;gap:6px;margin-top:11px;overflow:hidden}
 .soridraw-explore-pinned-keywords-235 em{display:block;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(10,10,13,.34);color:rgba(255,255,255,.82);font-size:9px;font-style:normal;font-weight:800;backdrop-filter:blur(8px)}
-/* app255 — pinned-profile controls live inside the featured banner.
- * Their positions follow the approved visual guide: like bottom-left,
- * apply/share bottom-right, more top-right. Ordinary cards are untouched. */
+/* app256 — pinned actions stay inside the featured banner, but keep the
+ * ordinary white like language and transparent chrome requested in live review. */
 .soridraw-explore-pinned-actions-255{position:absolute;z-index:9;inset:0;pointer-events:none}
-.soridraw-explore-pinned-action-255{display:grid;place-items:center;width:48px;height:48px;padding:0;border:1px solid rgba(255,255,255,.2)!important;outline:0!important;border-radius:50%;background:rgba(12,12,15,.74)!important;box-shadow:0 8px 22px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.035)!important;color:rgba(255,255,255,.9);cursor:pointer;pointer-events:auto;backdrop-filter:blur(10px);transition:background .15s ease,color .15s ease,transform .15s ease,border-color .15s ease}
-.soridraw-explore-pinned-action-255:hover:not(:disabled){background:rgba(22,22,26,.9)!important;border-color:rgba(255,255,255,.3)!important;color:#fff;transform:scale(1.04)}
-.soridraw-explore-pinned-action-255:active:not(:disabled){transform:scale(.94)}
-.soridraw-explore-pinned-action-255:disabled{cursor:default;opacity:.3}
+.soridraw-explore-pinned-action-255{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid transparent!important;outline:0!important;border-radius:50%;background:transparent!important;box-shadow:none!important;color:rgba(255,255,255,.92);cursor:pointer;pointer-events:auto;transition:color .15s ease,transform .15s ease,opacity .15s ease}
+.soridraw-explore-pinned-action-255:hover:not(:disabled){border-color:transparent!important;background:transparent!important;color:#fff;transform:scale(1.06)}
+.soridraw-explore-pinned-action-255:active:not(:disabled){transform:scale(.92)}
+.soridraw-explore-pinned-action-255:disabled{cursor:default;opacity:.28}
 .soridraw-explore-pinned-action-255 svg{width:23px;height:23px;stroke-width:2.15}
-.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:21px;height:21px}
-.soridraw-explore-pinned-like-255{position:absolute;left:14px;bottom:14px;display:flex;min-width:62px;width:auto;padding:0 14px;gap:7px;border-radius:999px;color:#fff}
-.soridraw-explore-pinned-like-255 span{font-size:13px;font-weight:850;line-height:1}
-.soridraw-explore-pinned-like-255.is-liked{color:#ff6578;border-color:rgba(255,101,120,.42)!important;background:rgba(32,15,20,.82)!important}
-.soridraw-explore-pinned-like-255.is-liked svg:not(.soridraw-explore-spinner){fill:currentColor;stroke:currentColor}
-.soridraw-explore-pinned-actions-right-255{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;gap:9px;pointer-events:none}
+.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:20px;height:20px}
+.soridraw-explore-pinned-like-255{align-self:flex-start;height:30px;margin-top:9px;padding:0;gap:7px;border:0!important;background:transparent!important;box-shadow:none!important;color:rgba(255,255,255,.92)!important;text-shadow:0 2px 12px rgba(0,0,0,.48)}
+.soridraw-explore-pinned-like-255:hover:not(:disabled){background:transparent!important;color:#fff!important}
+.soridraw-explore-pinned-like-255 span{font-size:12px;font-weight:850;line-height:1}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:23px;height:23px;fill:none;stroke:#fff}
+.soridraw-explore-pinned-like-255.is-liked{color:#fff!important;background:transparent!important}
+.soridraw-explore-pinned-like-255.is-liked svg:not(.soridraw-explore-spinner){fill:#fff;stroke:#fff}
+.soridraw-explore-pinned-actions-right-255{position:absolute;right:6px;bottom:6px;display:flex;align-items:center;gap:3px;pointer-events:none}
 .soridraw-explore-pinned-actions-right-255 .soridraw-explore-pinned-action-255{pointer-events:auto}
-.soridraw-explore-pinned-apply-255.is-available{color:#ff86aa;border-color:rgba(255,134,170,.34)!important}
-.soridraw-explore-pinned-share-255{color:rgba(255,255,255,.9)}
-.soridraw-explore-pinned-more-255{position:absolute;right:14px;top:14px;color:rgba(255,255,255,.9)}
+.soridraw-explore-pinned-apply-255.is-available,.soridraw-explore-pinned-share-255,.soridraw-explore-pinned-more-255{color:rgba(255,255,255,.92)}
+.soridraw-explore-pinned-more-255{position:absolute;right:6px;top:6px}
 @media (min-width:1100px){
-.soridraw-explore-pinned-action-255{width:52px;height:52px}
+.soridraw-explore-pinned-action-255{width:40px;height:40px}
 .soridraw-explore-pinned-action-255 svg{width:25px;height:25px}
-.soridraw-explore-pinned-like-255{min-width:68px;width:auto}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:25px;height:25px}
 }
 .soridraw-explore-profile-public-list-234{min-width:0}
 .soridraw-explore-profile-public-head-234{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 16px}
@@ -112,13 +112,14 @@
 .soridraw-explore-pinned-banner-copy-235 h3{font-size:12px}
 .soridraw-explore-pinned-keywords-235{gap:4px;margin-top:7px;flex-wrap:wrap;max-height:42px}
 .soridraw-explore-pinned-keywords-235 em{max-width:78px;padding:4px 6px;font-size:8px}
-.soridraw-explore-pinned-action-255{width:44px;height:44px}
+.soridraw-explore-pinned-action-255{width:34px;height:34px}
 .soridraw-explore-pinned-action-255 svg{width:21px;height:21px}
-.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:19px;height:19px}
-.soridraw-explore-pinned-like-255{left:10px;bottom:10px;min-width:58px;width:auto;padding:0 12px;gap:6px}
-.soridraw-explore-pinned-like-255 span{font-size:12px}
-.soridraw-explore-pinned-actions-right-255{right:10px;bottom:10px;gap:7px}
-.soridraw-explore-pinned-more-255{right:10px;top:10px}
+.soridraw-explore-pinned-action-255 .soridraw-explore-spinner{width:18px;height:18px}
+.soridraw-explore-pinned-like-255{height:27px;margin-top:6px;gap:5px}
+.soridraw-explore-pinned-like-255 span{font-size:11px}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:21px;height:21px}
+.soridraw-explore-pinned-actions-right-255{right:4px;bottom:4px;gap:2px}
+.soridraw-explore-pinned-more-255{right:4px;top:4px}
 .soridraw-explore-profile-public-head-234{align-items:center;margin-bottom:12px}
 .soridraw-explore-profile-public-head-234 h2{font-size:18px}
 .soridraw-explore-profile-public-head-234 p{display:none}

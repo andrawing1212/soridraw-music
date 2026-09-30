@@ -1,8 +1,8 @@
-requested_at=2026-09-30T13:23:00+09:00
-requested_by=user_app260_more_backdrop_click_guard
-product_code_target=2027702a229d4101497588152f543ccd257338b9
-release_purpose=deploy_app260_more_backdrop_click_guard
-app_version=260
+requested_at=2026-09-30T18:03:00+09:00
+requested_by=user_app261_release_based_rail_snap
+product_code_target=8c58f601864b308a80cb20b67639ed1ce794f3bb
+release_purpose=deploy_app261_release_based_rail_snap
+app_version=261
 hosting_only=true
 deploy_shared_rtdb_rules=false
 worker_release_same_batch=false

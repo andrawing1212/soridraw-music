@@ -1,0 +1,12 @@
+requested_at=2026-10-01T07:04:00+09:00
+requested_by=user
+approval=repair_existing_stale_shared_note_detail
+scope=currently_shareable_shared_music_note_documents_only
+repair_missing_prompt=true
+repair_missing_lyrics=true
+shared_detail_version=273
+firestore_targeted_write=true
+d1_write=false
+schema_migration=false
+test_production_deploy=false
+fail_closed_max_repairs=100

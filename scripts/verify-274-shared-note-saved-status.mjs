@@ -6,7 +6,7 @@ const service = fs.readFileSync('src/services/exploreSharedNoteService.ts', 'utf
 const css = fs.readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(String(version.version), '274');
+assert.ok(Number(version.version) >= 274, 'app version must be 274 or newer');
 
 assert.match(page, /getExploreSharedNoteSavedFolderLocal274/);
 assert.match(page, /setSharedNoteSavedFolderId274\(savedFolder\?\.folderId \|\| null\)/);

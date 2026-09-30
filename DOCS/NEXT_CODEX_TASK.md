@@ -1,3 +1,32 @@
+## 2026-09-30 — app257 pinned 하단 정렬 + More 닫기 실사용 확인
+
+배포 완료:
+- 고정 곡 좋아요를 다음곡 적용/공유와 같은 하단 행에 정렬.
+- 제목/키워드 묶음의 기존 세로 중앙 정렬 유지.
+- pinned 다음곡 적용: 활성 핑크(#ff7a9d), 비활성 어두운 흰색 28%.
+- Explore More:
+  - 어두운 바깥 영역 pointer down -> 닫기.
+  - sheet 내부 pointer -> 유지.
+  - 브라우저/Android 뒤로가기 -> 페이지 이동 전 More만 닫기.
+  - 정상 닫기 후 임시 history entry 정리.
+- PREVIEW App Release Run `36665389251` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. PC/모바일 pinned 제목+키워드가 세로 중앙을 유지하는지.
+2. 좋아요 / 다음곡 적용 / 공유가 같은 하단 높이에 자연스럽게 정렬되는지.
+3. apply 허용 ON = 핑크, OFF = 어두운색인지.
+4. Feed/공개프로필 어느 카드에서든 More 창 바깥 어두운 영역 탭으로 닫히는지.
+5. More sheet 내부 터치로는 닫히지 않는지.
+6. Android/브라우저 뒤로가기 1회로 More만 닫히고 페이지는 유지되는지.
+7. More 닫힌 뒤 다음 뒤로가기는 원래 navigation대로 동작하는지.
+
+판정:
+- 위 항목 PASS면 app257 종료.
+- 미세 위치만 필요하면 pinned CSS 최소 수정.
+- 좋아요/공개/프로필/Feed 서버 경로는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app256 pinned 액션/rail 화살표 실사용 확인
 
 배포 완료:

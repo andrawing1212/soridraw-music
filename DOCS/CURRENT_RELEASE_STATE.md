@@ -1,3 +1,61 @@
+## 0LF. app274 공유노트 저장 위치 표시 + 같은 폴더 재저장 차단 PREVIEW 배포 (2026-10-01 KST)
+
+사용자 확인:
+- app273 기존 공유노트 상세 복구는 실사용에서 **PASS**.
+- 공유노트 상세 가사/프롬프트 정상 적용 확인. app273 동결.
+
+사용자 추가 요구:
+- Explore의 `공유 노트에 추가` 폴더 선택 화면에서 이미 저장된 곡인지 알 수 없어 불편.
+- 저장 상태 표시 때문에 서버 read 비용이 추가된다면 기능을 원하지 않음.
+
+app274 구현:
+- 현재 기기에 이미 있는 Music Note local state / favorites cache만 사용해 해당 Explore 곡의 shared-note 문서를 찾음.
+- `exploreTrackId`, deterministic shared-note document id, `sharedNoteFolderId` 기준으로 현재 저장 폴더 확인.
+- **추가 Firestore / D1 / R2 read 0**.
+- 저장된 폴더 행 오른쪽에 `저장됨` 표시.
+- 이미 저장된 동일 폴더 버튼은 비활성화해 불필요한 같은 문서 재-write도 차단.
+- 다른 폴더를 선택하면 기존 deterministic shared-note 문서의 folder 정보가 변경되는 기존 동작 유지.
+- 새 기기처럼 로컬에 아직 해당 shared-note 정보가 전혀 없는 경우, 저장 표시만을 위해 별도 서버 read를 추가하지 않음. 기존 Music Note Catalog/cache가 들어온 뒤 표시됨.
+
+변경 파일:
+- `src/services/exploreSharedNoteService.ts`
+  - `getExploreSharedNoteSavedFolderLocal274` 추가.
+  - favoritesStore + 기존 localStorage cache만 조회.
+- `src/pages/ExplorePage.tsx`
+  - 폴더 picker 진입 시 로컬 저장 폴더 확인.
+  - 현재 폴더 `저장됨` 표시 / 동일 폴더 저장 차단.
+- `src/components/explore/exploreSocial.css`
+  - 저장됨 배지 및 저장된 행 표시.
+- `public/app-version.json`: 274.
+- `scripts/verify-274-shared-note-saved-status.mjs` 추가.
+- app273 verifier는 후속 버전에서도 실행 가능하게 version guard를 `>=273`으로 수정.
+
+검증:
+- Focused Audit Run `36788381352`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `APP274_SHARED_NOTE_SAVED_STATUS_LOCAL_ONLY=PASS`.
+- `APP274_SHARED_NOTE_SAME_FOLDER_NO_WRITE=PASS`.
+- `APP274_SHARED_NOTE_STATUS_EXTRA_SERVER_READ=0`.
+- Music Note warm cache 0-remote regression PASS.
+- Explore shared-note single-document write / action read bound PASS.
+
+PREVIEW 배포:
+- Release commit: `b6a735dd0058119076feafa1140aadb9a9584570`.
+- Firebase PREVIEW App Run `36788528796`: **SUCCESS**.
+- `preview.soridraw.com` app version **274** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / Rules / D1 / 사용자 데이터 변경 없음.
+- 완료된 app274 audit 임시 workflow/trigger 제거 완료.
+
+다음 실사용:
+1. 이미 공유 노트에 저장된 곡의 Explore More > 공유 노트에 추가 진입.
+2. 실제 저장된 폴더 오른쪽에 `저장됨` 표시 확인.
+3. 해당 폴더는 다시 누를 수 없는지 확인.
+4. 미저장 곡은 아무 폴더에도 `저장됨`이 없는지 확인.
+5. 다른 폴더로 이동 저장 후 다시 열면 새 폴더에 표시되는지 확인.
+6. PC/모바일 동일 확인.
+
 ## 0LE. app273 기존 공유노트 상세 실사용 복구 PREVIEW 배포 완료 (2026-10-01 KST)
 
 상태: **app272 사용자 실사용 FAIL 원인 보강 완료 / 기존 stale follower shared-note targeted Firestore repair 완료 / stale 로컬 캐시 1회 exact-document 재수화 경로 추가 / PREVIEW app273 배포 완료 / 사용자 실기기 확인 대기**

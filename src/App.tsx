@@ -1,6 +1,7 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
 import {
   acknowledgeRecentSongsSignalVersion,
+  readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
   rememberRecentSongsPendingSignalVersion,
@@ -9792,9 +9793,22 @@ const toggleCycleVariantSelection = (
     };
 
     window.addEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
-    const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
-    if (pendingRemoteVersion > 0) {
-      void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+    // app276 — the RTDB listener can replay before this React effect mounts.
+    // Recover the persisted exact signal so Studio/Recent routes do not lose the
+    // document ids and fall back to a route-gated legacy refresh.
+    const pendingSignal = readPendingMusicNoteSyncSignal(currentUser.uid);
+    if (pendingSignal?.version) {
+      void syncMusicNoteIncrementalFromRemoteVersion(
+        pendingSignal.version,
+        pendingSignal.originDeviceId,
+        pendingSignal.documentIds,
+        pendingSignal.truncated,
+      );
+    } else {
+      const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+      if (pendingRemoteVersion > 0) {
+        void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+      }
     }
     return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);

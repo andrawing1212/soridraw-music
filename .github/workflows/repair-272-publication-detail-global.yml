@@ -230,9 +230,7 @@ jobs:
             }
 
             const repairSql = [
-              'BEGIN TRANSACTION;',
               ...repairs.map((row) => row.sql),
-              'COMMIT;',
             ].join('\n') + '\n';
 
             fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'app272-global-repair.sql'), repairSql);
@@ -279,7 +277,10 @@ jobs:
             exit 1
           fi
 
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/app272-global-repair.sql" --json > "$RUNNER_TEMP/app272-global-write.json"
+          if ! node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/app272-global-repair.sql" --json > "$RUNNER_TEMP/app272-global-write.json" 2>&1; then
+            cat "$RUNNER_TEMP/app272-global-write.json"
+            exit 1
+          fi
           echo "APP272_GLOBAL_REPAIR=APPLIED"
           echo "APP272_GLOBAL_REPAIR_TRACKS=$repairs"
 

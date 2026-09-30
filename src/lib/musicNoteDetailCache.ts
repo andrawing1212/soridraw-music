@@ -60,7 +60,34 @@ export const getMusicNoteDetailSourceVersion = (source: any): number => {
   return 0;
 };
 
+const SHARED_NOTE_DETAIL_VERSION = 273;
+
+const isIncompleteLegacySharedNoteDetail = (data: any): boolean => {
+  if (!data || typeof data !== 'object') return false;
+  const isSharedNote = data.sharedReadOnly === true
+    || data.isSharedMusicNote === true
+    || String(data.sourceType || '').trim() === 'shared_music_note';
+  if (!isSharedNote) return false;
+
+  // app273 — old follower-save documents/caches could be created before the full
+  // authorized detail payload was preserved. A versioned document is authoritative
+  // even when lyrics are intentionally empty; otherwise only obviously incomplete
+  // legacy detail is forced through the existing one-document loader once.
+  if (Number(data.sharedDetailVersion || 0) >= SHARED_NOTE_DETAIL_VERSION) return false;
+
+  const promptPresent = Boolean(String(data.prompt || '').trim());
+  const lyrics = data.lyrics && typeof data.lyrics === 'object' ? data.lyrics : {};
+  const lyricsPresent = Boolean(
+    String(lyrics.korean || '').trim()
+    || String(lyrics.english || '').trim()
+    || String(lyrics.foreign || '').trim()
+    || (typeof data.lyrics === 'string' && data.lyrics.trim())
+  );
+  return !promptPresent || !lyricsPresent;
+};
+
 const cacheRecordIsFresh = (record: MusicNoteDetailCacheRecord, sourceVersion: number): boolean => {
+  if (isIncompleteLegacySharedNoteDetail(record.data)) return false;
   if (sourceVersion > 0) return Number(record.sourceVersion || 0) === sourceVersion;
   return Date.now() - Number(record.savedAtMs || 0) <= UNKNOWN_VERSION_TTL_MS;
 };

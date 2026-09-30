@@ -1,3 +1,100 @@
+## 0KZ. app269 팔로워 저장을 링크 공유 저장과 동일 정보 구조로 보강 PREVIEW 배포 (2026-10-01 KST)
+
+상태: **팔로워 곡 저장 허용으로 저장한 다른 사용자 곡의 키워드/가사/프롬프트/다음곡 적용 정보 누락 수정 / 기존 2회 bounded D1 조회 안에서 처리 / PREVIEW Worker + App 배포 완료 / 사용자 실사용 확인 대기**
+
+사용자 실사용:
+- app268에서 다른 사용자 공개곡을 공유 노트 폴더에 저장하는 것 자체는 정상화됨.
+- 그러나 저장된 곡은 링크 공유로 저장한 공유곡과 달리:
+  - 곡 목록의 키워드가 비어 있음.
+  - 상세 팝업의 가사/프롬프트가 비어 있음.
+  - 공유 노트에서 `다음 곡에 적용`이 원본 정보대로 동작하지 않음.
+- 사용자 기준: **`팔로워 곡 저장 허용`을 통해 저장한 곡은 링크 공유하기로 저장한 곡과 같은 기능/정보를 가져야 함.**
+
+원인:
+- 공개 Music Note를 Explore에 게시할 때 canonical `tracks` row에는 이미 가사/프롬프트/style/Suno 링크와 bounded share payload(키워드 + nextSong recipe)가 저장되어 있었음.
+- 하지만 기존 `GET /v1/tracks/:id/save-access`는 권한 확인 후 title/cover/Suno URL 정도만 반환함.
+- Explore 화면의 일반 Feed track은 비용/전송량 절감을 위한 카드 요약이라 전체 가사/프롬프트/nextSong recipe가 항상 들어 있지 않음.
+- 따라서 follower-save가 권한은 통과해도 가벼운 카드 정보만 Music Note에 복사했고, 링크 공유 경로와 정보량이 달랐음.
+
+수정:
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+  - `handleFollowerSaveAccess`의 **기존 단일 track PK 조회**에서 추가 쿼리 없이 다음 필드를 함께 가져옴:
+    - `duration_seconds`, `lyrics`, `style`, `prompt`
+    - `share_schema_version`, `share_payload_json`
+  - follower-save 권한이 실제로 통과한 경우에만 기존 share payload를 파싱하여 `saveSource.shareBundle`로 반환.
+  - `saveSource`에 가사/프롬프트/style/길이/키워드/nextSong recipe를 포함.
+  - direct Explore의 `다음곡에 적용 허용` 권한은 변경하지 않음.
+  - 단, 사용자가 명시적으로 `팔로워 곡 저장 허용`한 곡을 공유 노트에 복사한 뒤에는 저장된 공유 노트가 링크 공유 저장본처럼 자신의 Music Note에서 nextSong recipe를 재사용할 수 있게 함.
+  - D1 query 수는 기존 그대로 **track 1 + follow 1 = 정확히 2 bounded SELECT**, write 0.
+- `src/services/exploreTrackActionService.ts`
+  - authorized `saveSource` 타입에 detail + shareBundle 필드 추가.
+- `src/pages/ExplorePage.tsx`
+  - 다른 사용자 곡의 save-access 성공 시 returned `saveSource`를 폴더 선택 중인 track에 합쳐, 실제 저장 단계까지 full authorized snapshot을 유지.
+- `src/services/exploreSharedNoteService.ts`
+  - 가사/프롬프트/style/command input 저장.
+  - `nextSong` 전체를 Music Note `appliedKeywords`에 보존하고 표준 빈 배열 축을 유지.
+  - primary/secondary Suno 링크 둘 다 공유노트 링크 배열에 보존.
+  - Suno 페이지 URL을 direct audio URL처럼 잘못 넣지 않도록 `audioUrl`은 비움.
+  - app266~268의 deterministic Firestore 1건 저장, Music Note Catalog 1-item delta, same-device live store patch는 그대로 유지.
+- `scripts/verify-202-explore-action-cost-bounds.mjs`
+  - app269 follower-save/link-share parity marker
+  - full save snapshot 반환
+  - 같은 2 bounded D1 reads 유지
+  - read-only route 유지
+  - client 폴더 선택 중 full payload 보존
+  - 저장 문서의 lyrics/prompt/userInput/nextSong recipe 보존 회귀 검사 추가.
+- app version: **269**.
+
+검증/배포:
+- save-source type commit: `6cd805d3375c5e290d131ac3e290f4c424e59fb9`
+- Explore picker payload commit: `112a23b553ad98db3a8d90f183336fe0a7a24399`
+- shared-note detail payload commit: `7d9ee3696651020988150fc04d3a11c3158950f9`
+- canonical Worker commit: `bf5016ef2e1324a433d58e6c914f8886113ad498`
+- canonical SHA lock commit: `c8635a79b244c323424c6d97b10df3d9b365c4cf`
+  - SHA256: `93568b9cb9a4c083bff20cab5e32372b27af3321a18d2150c1bc332b321e0959`
+- verifier commit: `2df90c8eb2c49abbf544e041e3d0d6a7d1eefd87`
+- app269 commit: `bcbb9ba036f71eab31485ae0d07e0056b10caad1`
+- Release System Audit source: `c1e966d21079e672f8170d77d2942d2d3a6cb2ac`
+- Release System Audit Run `36771016701`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app201~204 / app269 action and cost guards PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 live preflight SELECT-only PASS
+- PREVIEW Worker Release trigger: `45d17dbb7225ea1fc262128155c394bcd65f334f`
+- PREVIEW Worker Release Run `36771319454`: **SUCCESS**
+  - locked source: `c1e966d21079e672f8170d77d2942d2d3a6cb2ac`
+  - canonical preflight PASS
+  - Feed smoke PASS
+  - Profile smoke PASS
+  - active PREVIEW Worker: `6917ac59-a1b0-4d50-b5de-e1979efd1f64`
+  - TEST / PRODUCTION Workers unchanged PASS
+- PREVIEW App Release trigger/source: `8cb197da400eea79f3d9b9718c124482dfcda985`
+- Firebase PREVIEW App Release Run `36771471427`: **SUCCESS**
+  - TypeScript PASS / Build PASS
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **269**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+비용/데이터:
+- follower save 권한 확인의 D1 비용은 **기존과 동일한 2개 bounded SELECT**. 새 D1 query 없음.
+- save-access는 read-only이며 D1 write 0.
+- 실제 공유노트 저장 때만 기존 canonical Firestore 1건 write + Music Note R2 Catalog 해당 곡 1건 delta.
+- 페이지 진입/재진입 때문에 전체 favorites/Explore 조회 추가 없음.
+- D1 schema migration / backfill / 사용자 데이터 대량변경 없음.
+- 기존 공개곡도 canonical track row에 이미 저장된 detail/share payload를 사용하므로 별도 전체 백필을 하지 않음.
+- Functions / Firestore Rules / RTDB Rules 변경 없음.
+
+실사용 확인:
+1. 다른 사용자 공개곡에서 `팔로워 곡 저장 허용 ON` + 실제 팔로우 상태로 공유 노트 폴더 저장.
+2. Music Note > 공유 노트 목록에서 장르/분위기/주제/style/sound 등 보존된 키워드가 나타나는지.
+3. 상세 팝업에서 가사와 곡 프롬프트가 표시되는지.
+4. 저장된 공유 노트의 `다음 곡에 적용`이 링크 공유 저장본과 같은 keyword/command recipe를 적용하는지.
+5. 같은 곡의 Suno 링크/커버/원작자 정보가 유지되는지.
+6. follower-save OFF 곡은 app266대로 저장 버튼 비활성 유지.
+7. direct Explore `다음곡에 적용 허용` OFF는 공개 화면의 직접 적용을 계속 차단하는지.
+
 ## 0KY. app268 다른 사용자 공유 노트 저장 즉시 반영 수정 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **다른 사용자 곡 저장 권한 통과 후 Firestore/R2에는 저장되지만 이미 열려 있던 Music Note 화면의 메모리 상태가 갱신되지 않던 문제 수정 / PREVIEW 배포 완료 / 사용자 실사용 확인 대기**

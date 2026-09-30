@@ -1,3 +1,30 @@
+## 2026-10-01 — app265 고정 곡 반응형 실사용 확인
+
+배포 완료:
+- 모바일 FEATURED 복구.
+- 모바일 고정곡 제목 13.5px로 소폭 확대.
+- 태블릿/PC는 viewport가 아니라 실제 pinned card 폭 기준으로 반응.
+- card <=520px: 키워드 2개 x 2줄, 액션 36px.
+- card <=420px: 액션 32px, 키워드/간격 추가 소폭 축소.
+- 넓은 카드의 app264 디자인/액션 크기 유지.
+- PREVIEW App Release Run `36760576791` SUCCESS.
+- preview app version 265 exact verification PASS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 모바일 FEATURED 표시.
+2. 모바일 제목 크기/겹침.
+3. 넓은 태블릿/PC에서 기존 크기 유지.
+4. 창을 줄여 compact card가 되면 키워드 2열과 버튼 축소가 자연스럽게 적용되는지.
+5. 적용 → 공유 → 더보기 / 좋아요 우하단 위치 유지.
+6. 버튼 클릭, 좋아요 숫자, rail app263 동작 비변경.
+
+판정:
+- 겹침이 사라지고 전환이 자연스러우면 app265 종료.
+- 미세 조정이 필요하면 pinned 전용 container threshold/크기만 수정.
+- 서버/좋아요 동기화/프로필 데이터/rail 로직은 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-10-01 — app264 고정 곡 액션 위치 실사용 확인
 
 배포 완료:

@@ -1317,15 +1317,6 @@ export default function ExplorePage() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    if (!moreHistoryPushedRef257.current) {
-      window.history.pushState(
-        { ...(window.history.state || {}), soridrawExploreMore257: true },
-        '',
-        window.location.href,
-      );
-      moreHistoryPushedRef257.current = true;
-    }
-
     const dismissMoreFromHistory257 = () => {
       moreHistoryPushedRef257.current = false;
       setMoreTrack(null);
@@ -2570,6 +2561,17 @@ export default function ExplorePage() {
         variant={variant}
         showPublisher={showPublisher}
         onOpenMore={(selectedTrack) => {
+          // app259 — reserve the modal history entry synchronously before
+          // rendering the sheet. This matches the app's proven popup pattern
+          // and prevents PC browser Back from reaching the previous page first.
+          if (!moreHistoryPushedRef257.current) {
+            window.history.pushState(
+              { ...(window.history.state || {}), soridrawExploreMore259: true },
+              '',
+              window.location.href,
+            );
+            moreHistoryPushedRef257.current = true;
+          }
           setMoreTrack(selectedTrack);
           setMoreSheetMode('actions');
           setFolderChoices([]);

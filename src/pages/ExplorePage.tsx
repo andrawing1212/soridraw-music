@@ -65,6 +65,7 @@ import {
 } from '../services/exploreTrackActionService';
 import {
   getExploreSharedNoteFolders,
+  getExploreSharedNoteSavedFolderLocal274,
   saveExploreTrackToSharedNote,
   type ExploreSharedNoteFolder,
 } from '../services/exploreSharedNoteService';
@@ -1288,6 +1289,7 @@ export default function ExplorePage() {
   const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
   const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | null>(null);
   const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
+  const [sharedNoteSavedFolderId274, setSharedNoteSavedFolderId274] = useState<string | null>(null);
   const [publicationSettings, setPublicationSettings] = useState<{ track: ExploreTrack; options: ExplorePublicationOptions } | null>(null);
   const [publicationSettingsBusy, setPublicationSettingsBusy] = useState(false);
   const [publicationPrivateConfirm, setPublicationPrivateConfirm] = useState(false);
@@ -1379,6 +1381,8 @@ export default function ExplorePage() {
     setMoreTrack(null);
     setMoreSheetMode('actions');
     setFolderChoices([]);
+    setSharedNoteSavedFolderId274(null);
+    setSharedNoteSavedFolderId274(null);
   }, [profileUid]);
 
   moreActionBusyRef257.current = moreActionBusy;
@@ -1395,6 +1399,7 @@ export default function ExplorePage() {
       setMoreTrack(null);
       setMoreSheetMode('actions');
       setFolderChoices([]);
+      setSharedNoteSavedFolderId274(null);
       setMoreActionBusy(null);
     };
 
@@ -2438,6 +2443,11 @@ export default function ExplorePage() {
       sharedNoteAuthorizedTrackRef272.current = authorizedTrack;
       setMoreTrack((current) => current?.id === track.id ? authorizedTrack : current);
 
+      // app274 — saved-folder status is read only from the already-present local
+      // Music Note cache/store. It adds no Firestore/D1/R2 read.
+      const savedFolder = getExploreSharedNoteSavedFolderLocal274(user.uid, track.id);
+      setSharedNoteSavedFolderId274(savedFolder?.folderId || null);
+
       const folders = await getExploreSharedNoteFolders(user);
       if (!folders.length) throw new Error('공유 노트 폴더를 확인하지 못했어요.');
       setFolderChoices(folders);
@@ -2459,6 +2469,10 @@ export default function ExplorePage() {
     if (!authorizedTrack.allowFollowerSave) {
       setSocialNotice('공개자가 이 곡의 공유 노트 저장을 허용하지 않았어요.');
       setMoreSheetMode('actions');
+      return;
+    }
+    if (sharedNoteSavedFolderId274 === folder.id) {
+      setSocialNotice(`이미 공유 노트 · '${folder.title}'에 저장되어 있어요.`);
       return;
     }
     setMoreActionBusy('sharedNote');
@@ -2538,18 +2552,23 @@ export default function ExplorePage() {
                 <strong>공유 노트에 추가</strong>
               </div>
               <div className="soridraw-explore-more-folder-list">
-                {folderChoices.map((folder) => (
-                  <button
-                    key={folder.id}
-                    type="button"
-                    disabled={moreActionBusy === 'sharedNote'}
-                    onClick={() => saveExploreTrackToSharedNoteFolder(moreTrack, folder)}
-                  >
-                    <NotebookTabs aria-hidden="true" />
-                    <span>{folder.title}</span>
-                    {moreActionBusy === 'sharedNote' && <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />}
-                  </button>
-                ))}
+                {folderChoices.map((folder) => {
+                  const isSavedHere274 = sharedNoteSavedFolderId274 === folder.id;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      disabled={moreActionBusy === 'sharedNote' || isSavedHere274}
+                      className={isSavedHere274 ? 'is-saved' : undefined}
+                      onClick={() => saveExploreTrackToSharedNoteFolder(moreTrack, folder)}
+                    >
+                      <NotebookTabs aria-hidden="true" />
+                      <span>{folder.title}</span>
+                      {isSavedHere274 && <small className="soridraw-explore-more-folder-saved">저장됨</small>}
+                      {moreActionBusy === 'sharedNote' && !isSavedHere274 && <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : (

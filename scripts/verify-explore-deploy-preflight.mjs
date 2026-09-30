@@ -46,7 +46,7 @@ const media246Start = canonicalWorker245.indexOf('async function handleProfileMe
 const media246End = canonicalWorker245.indexOf('\n__name(handleProfileMediaUpload', media246Start);
 const media246 = canonicalWorker245.slice(media246Start, media246End);
 assert.match(media246, /SORIDRAW_PROFILE_MEDIA_TARGETED_R2_246_20260930/);
-assert.match(media246, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch\)/);
+assert.match(media246, /patchPublicProfileBundle245\(env, authContext\.uid, profilePatch, "", baseline251\)/);
 assert.doesNotMatch(media246, /refreshProfileSearchIndex|readPublicProfileByUid/, '246 profile media must not rescan the public profile');
 assert.match(media246, /if \(patchedBundle\)[\s\S]*?else \{[\s\S]*?refreshOrPrebuildPublicProfileFirstView/, '246 heavy first-view rebuild must be cold-repair only');
 
@@ -105,6 +105,31 @@ assert.match(socialService248, /export const uploadExploreProfileMediaBatch/);
 assert.match(socialService248, /form\.set\('avatar'[\s\S]*?form\.set\('background'/);
 assert.match(socialService248, /\/v1\/me\/profile-media/);
 assert.match(profileEdit246, /backgroundBlob && avatarBlob[\s\S]*?uploadExploreProfileMediaBatch/);
+
+// app248 Worker-only physical write compaction, internal change 251.
+assert.match(profile247, /SORIDRAW_PROFILE_INDEXED_WRITE_COMPACTION_251_20260930/);
+assert.match(profile247, /if \(bioChanged\) \{ set251\.push\("bio = \?"\)/);
+assert.match(profile247, /if \(handleChanged\) \{ set251\.push\("handle = \?"\)/);
+assert.match(profile247, /writeProfileRecovery251/);
+assert.doesNotMatch(
+  profile247,
+  /const writeProfile247 = async \(\) => await env\.DB\.prepare\(`[\s\S]*?SET nickname = \?, bio = \?, handle = \?/,
+  '251 warm profile save must not rewrite unchanged indexed handle/is_public columns',
+);
+assert.match(media246, /const knownPublic251 = validExploreProfileR2Bundle020\(baseline251\)/);
+assert.match(media246, /writeMediaWarm251[\s\S]*?profile_customized = 1, updated_at = \?[\s\S]*?WHERE uid = \?/);
+assert.doesNotMatch(
+  media246.slice(media246.indexOf('const writeMediaWarm251'), media246.indexOf('const writeMediaRecovery251')),
+  /is_public/,
+  '251 warm single-media save must not touch indexed is_public',
+);
+assert.match(media248, /const knownPublicBatch251 = validExploreProfileR2Bundle020\(baselineBatch251\)/);
+assert.doesNotMatch(
+  media248.slice(media248.indexOf('const writeProfile248'), media248.indexOf('const writeProfileRecovery251')),
+  /is_public/,
+  '251 warm dual-media save must not touch indexed is_public',
+);
+assert.match(media248, /baselineBatch251\);/);
 
 
 if (process.argv.includes('--connections')) {

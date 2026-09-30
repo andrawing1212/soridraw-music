@@ -9446,7 +9446,29 @@ async function handleMyProfileUpdate(request, env, cors) {
   let profile = sharedProfile ? { ...sharedProfile } : null;
 
   if (coreChanged) {
-    const writeProfile247 = async () => await env.DB.prepare(`
+    // SORIDRAW_PROFILE_INDEXED_WRITE_COMPACTION_251_20260930
+    // Only changed columns belong in the warm UPDATE. D1 bills index maintenance
+    // when an indexed column is included in a write, even if the value is unchanged.
+    // Keep the old full writer only as a cold recovery after a missing/raced row.
+    const set251 = [];
+    const bind251 = [];
+    if (nicknameChanged) { set251.push("nickname = ?"); bind251.push(nickname); }
+    if (bioChanged) { set251.push("bio = ?"); bind251.push(bio); }
+    if (handleChanged) { set251.push("handle = ?"); bind251.push(handle); }
+    if (previousGenres !== nextGenres) { set251.push("genre_override = ?"); bind251.push(nextGenres); }
+    if (String(existing.spotify_url || "") !== spotifyUrl) { set251.push("spotify_url = ?"); bind251.push(spotifyUrl); }
+    if (String(existing.instagram_url || "") !== instagramUrl) { set251.push("instagram_url = ?"); bind251.push(instagramUrl); }
+    if (String(existing.tiktok_url || "") !== tiktokUrl) { set251.push("tiktok_url = ?"); bind251.push(tiktokUrl); }
+    if (Number(existing.profile_customized || 0) !== 1) set251.push("profile_customized = 1");
+    if (Number(existing.is_public || 0) !== 1) set251.push("is_public = 1");
+    set251.push("updated_at = ?");
+    bind251.push(now);
+
+    const writeProfile247 = async () => await env.DB.prepare(
+      `UPDATE public_profiles SET ${set251.join(", ")} WHERE uid = ?`
+    ).bind(...bind251, authContext.uid).run();
+
+    const writeProfileRecovery251 = async () => await env.DB.prepare(`
       UPDATE public_profiles
       SET nickname = ?, bio = ?, handle = ?, genre_override = ?,
           spotify_url = ?, instagram_url = ?, tiktok_url = ?,
@@ -9467,7 +9489,7 @@ async function handleMyProfileUpdate(request, env, cors) {
     let updated = await writeProfile247();
     if (Number(updated?.meta?.changes || 0) === 0) {
       await upsertPublicProfileFromFirebase(env, authContext, now);
-      updated = await writeProfile247();
+      updated = await writeProfileRecovery251();
     }
     if (Number(updated?.meta?.changes || 0) === 0) {
       throwApi("PROFILE_NOT_FOUND", "\uD504\uB85C\uD544\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", 409);
@@ -9715,25 +9737,31 @@ async function handleProfileMediaUpload(request, env, cors, kind) {
   const publicUrl = `${origin}/v1/profile-media/${encodeURIComponent(authContext.uid)}/${kind}?v=${now}`;
   const column = kind === "avatar" ? "avatar_url" : "background_url";
 
-  let updated = await env.DB.prepare(`
+  let baseline251 = null;
+  try { baseline251 = await readExploreSharedProfileByUid247(env, authContext.uid); } catch {}
+  const knownPublic251 = validExploreProfileR2Bundle020(baseline251);
+
+  const writeMediaWarm251 = async () => await env.DB.prepare(`
+    UPDATE public_profiles
+    SET ${column} = ?, profile_customized = 1, updated_at = ?
+    WHERE uid = ?
+  `).bind(publicUrl, now, authContext.uid).run();
+  const writeMediaRecovery251 = async () => await env.DB.prepare(`
     UPDATE public_profiles
     SET ${column} = ?, profile_customized = 1, is_public = 1, updated_at = ?
     WHERE uid = ?
   `).bind(publicUrl, now, authContext.uid).run();
 
+  let updated = knownPublic251 ? await writeMediaWarm251() : await writeMediaRecovery251();
   if (Number(updated?.meta?.changes || 0) === 0) {
     await upsertPublicProfileFromFirebase(env, authContext, now);
-    updated = await env.DB.prepare(`
-      UPDATE public_profiles
-      SET ${column} = ?, profile_customized = 1, is_public = 1, updated_at = ?
-      WHERE uid = ?
-    `).bind(publicUrl, now, authContext.uid).run();
+    updated = await writeMediaRecovery251();
   }
 
   const profilePatch = kind === "avatar"
     ? { avatarUrl: publicUrl, updatedAt: now }
     : { backgroundUrl: publicUrl, updatedAt: now };
-  const patchedBundle = await patchPublicProfileBundle245(env, authContext.uid, profilePatch);
+  const patchedBundle = await patchPublicProfileBundle245(env, authContext.uid, profilePatch, "", baseline251);
 
   let refs = [authContext.uid];
   if (patchedBundle) {
@@ -9868,16 +9896,25 @@ async function handleProfileMediaBatchUpload248(request, env, cors) {
     }),
   ]);
 
+  let baselineBatch251 = null;
+  try { baselineBatch251 = await readExploreSharedProfileByUid247(env, authContext.uid); } catch {}
+  const knownPublicBatch251 = validExploreProfileR2Bundle020(baselineBatch251);
+
   const writeProfile248 = async () => await env.DB.prepare(`
+    UPDATE public_profiles
+    SET avatar_url = ?, background_url = ?, profile_customized = 1, updated_at = ?
+    WHERE uid = ?
+  `).bind(avatarUrl, backgroundUrl, now, authContext.uid).run();
+  const writeProfileRecovery251 = async () => await env.DB.prepare(`
     UPDATE public_profiles
     SET avatar_url = ?, background_url = ?, profile_customized = 1, is_public = 1, updated_at = ?
     WHERE uid = ?
   `).bind(avatarUrl, backgroundUrl, now, authContext.uid).run();
 
-  let updated = await writeProfile248();
+  let updated = knownPublicBatch251 ? await writeProfile248() : await writeProfileRecovery251();
   if (Number(updated?.meta?.changes || 0) === 0) {
     await upsertPublicProfileFromFirebase(env, authContext, now);
-    updated = await writeProfile248();
+    updated = await writeProfileRecovery251();
   }
   if (Number(updated?.meta?.changes || 0) === 0) {
     throwApi("PROFILE_NOT_FOUND", "\uD504\uB85C\uD544\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", 409);
@@ -9887,7 +9924,7 @@ async function handleProfileMediaBatchUpload248(request, env, cors) {
     avatarUrl,
     backgroundUrl,
     updatedAt: now,
-  });
+  }, "", baselineBatch251);
 
   let refs = [authContext.uid];
   if (patchedBundle) {

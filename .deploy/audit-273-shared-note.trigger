@@ -1,7 +1,8 @@
-requested_at=2026-10-01T07:10:00+09:00
+requested_at=2026-10-01T07:15:00+09:00
 requested_by=chatgpt
 target=app273
-scope=shared_note_legacy_detail_cache_and_save
+scope=shared_note_legacy_detail_cache_save_and_full_local_row_hydration
 typescript=true
 build=true
 focused_regression=true
+rerun_after=f04c3f9f201f11a8193f3ec9e28a78294adb4cab

@@ -158,8 +158,13 @@ assert.doesNotMatch(
 );
 assert.match(
   page,
-  /railPointerActiveRef261\.current = true[\s\S]*?handleRailPointerUp241[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?onPointerCancel=[\s\S]*?scheduleExploreRailAlign251\(true\)/,
-  'finger and mouse drag snapping must arm only when the pointer is released or cancelled',
+  /railPointerActiveRef261\.current = true[\s\S]*?handleRailPointerUp241[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'finger and mouse drag snapping must arm from pointer release',
+);
+assert.match(
+  page,
+  /onPointerCancel=\{\(event\) => \{[\s\S]*?event\.pointerType === 'touch'[\s\S]*?return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?onTouchEnd=\{\(\) => \{[\s\S]*?if \(!railPointerActiveRef261\.current\) return;[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?!railReleaseAlignPendingRef261\.current[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'touch pointercancel must stay held until the real touchend release while mouse/pen cancel can settle normally',
 );
 assert.match(
   page,

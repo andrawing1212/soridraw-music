@@ -1,8 +1,8 @@
-requested_at=2026-09-30T11:09:00+09:00
-requested_by=user_app253_symmetric_half_snap
-product_code_target=f25db955290d2e8c845be3b8bf70d45aea3a1cf3
-release_purpose=reaudit_app253_symmetric_half_snap
-app_version=253
+requested_at=2026-09-30T11:24:00+09:00
+requested_by=user_app254_remove_feed_load_more
+product_code_target=020c5cf45b1276855d9939e1369f8b62e345db94
+release_purpose=audit_app254_remove_feed_load_more
+app_version=254
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

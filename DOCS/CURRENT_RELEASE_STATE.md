@@ -1,3 +1,67 @@
+## 0KT. app263 강한 flick 관성 후 snap PREVIEW 배포 (2026-10-01 KST)
+
+상태: **작은 이동 app262 유지 / 강한 좌우 flick에서 브라우저 관성과 0.1초 snap이 충돌하던 현상 수정 / 관성 감속이 끝난 뒤 0.1초 후 50% snap / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 실사용/영상:
+- app262에서 작은 이동과 손가락을 놓기 전 조기 snap 문제는 개선됨.
+- 다만 손가락으로 강하게 좌우 flick 후 놓으면 자연스럽게 감속하지 못하고 급브레이크를 여러 번 나눠 밟는 느낌, 좌우 흔들림이 남음.
+
+원인:
+- touch release 직후 모바일 브라우저의 native momentum scroll이 계속 진행되는데, app262는 release 순간부터 고정 100ms 뒤 nearest-anchor smooth snap을 시작했음.
+- 강한 flick에서는 브라우저 관성 감속이 아직 끝나기 전에 앱의 smooth snap이 개입해 두 움직임이 서로 경쟁함.
+- 작은 이동은 post-release momentum이 거의 없어 app262 방식이 정상적으로 체감됨.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - `railReleaseMomentumSettleRef263` 추가.
+  - ordinary touch release는 momentum-settle 상태로 진입.
+  - release 후 native inertia가 `scroll` 이벤트를 계속 내면 기존 100ms timer를 **마지막 inertial scroll 기준으로 다시 예약**.
+  - 브라우저 관성 감속이 끝난 뒤 100ms 동안 추가 scroll이 없을 때만 기존 50% nearest-anchor smooth snap 실행.
+  - 작은 이동처럼 post-release inertia가 없으면 기존대로 release 후 약 100ms에 snap.
+  - app262 touch pointercancel 보호 유지.
+  - app261 100ms delay, app253 50% 좌우 대칭 nearest-anchor, short controlled drag 1-card 규칙 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - held 상태 snap 금지, momentum 중 timer re-arm, final align 시 momentum 상태 해제 회귀 검사 추가.
+  - 첫 Audit에서 남아 있던 app262 이전 static assertion 1개를 app263 규칙으로 갱신.
+
+검증/배포:
+- behavior commit: `3510290a69bf1f67cf44c653d7b7a75656abfb06`
+- verifier commit: `ada489ca8a6682d8eff191f898ac2dd5ed6f18f5`
+- app263 commit: `ea9c2351e772075f5d9bcb5f7cda9f97c72d8bab`
+- 첫 Release System Audit Run `36737551386`: **FAIL**
+  - TypeScript PASS / Build PASS.
+  - 실제 기능 코드 문제가 아니라 verify-221 중복 구간의 app262 stale assertion 1개가 남아 final static verification FAIL.
+- stale verifier 수정 commit: `d31106b9bc57c62d056238aa5f496dd119fcb88e`.
+- 최종 Release System Audit Run `36737915202`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app263 momentum-aware rail guards PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only guards PASS
+- Firebase PREVIEW App Release source commit: `6dcd6aa612ab9f030e32c3b50dbfd2e4210e5339`
+- Firebase PREVIEW App Release Run `36738204376`: **SUCCESS**
+  - locked PREVIEW source `6dcd6aa612ab9f030e32c3b50dbfd2e4210e5339`
+  - TypeScript PASS / Build PASS
+  - Firebase Hosting release complete
+  - `preview.soridraw.com` app version **263**
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- Explore 가로 rail client touch momentum 처리만 수정.
+- 카드 위치/디자인/50% 판정/버튼/hover/More/좋아요/공개·비공개/프로필/Feed 데이터 경로 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 재확인:
+1. 작은 좌우 이동은 app262처럼 손가락 release 후 약 0.1초에 자연스럽게 정렬되는지.
+2. 강한 flick 후에는 먼저 native 감속이 자연스럽게 끝나고, 그 뒤 최종 카드 정렬만 한 번 일어나는지.
+3. 급브레이크를 여러 번 밟는 느낌/좌우 흔들림이 사라졌는지.
+4. 손가락을 계속 대고 있을 때 snap이 다시 발생하지 않는지.
+5. 위 증상이 남으면 추가 timer 보정보다 rail의 programmatic smooth snap 자체와 native momentum의 소유권을 다시 분리해 검토.
+
 ## 0KS. app262 모바일 rail pointercancel 오판정 수정 PREVIEW 배포 (2026-10-01 KST)
 
 상태: **영상 실사용에서 손가락을 놓기 전 snap이 다시 시작되는 원인 확인 / 모바일 native 가로 스크롤의 pointercancel을 실제 release로 오판정하던 경로 제거 / 0.1초 release snap 유지 / PREVIEW 배포 완료 / 사용자 재확인 대기**

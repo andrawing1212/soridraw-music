@@ -419,8 +419,8 @@ assert.match(
 );
 assert.match(
   page,
-  /className="soridraw-explore-more-backdrop"[\s\S]*?onPointerDown=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?!actionBusy[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/,
-  'Explore More sheet must close when the dimmed backdrop is pressed while interactions inside the sheet stay open',
+  /className="soridraw-explore-more-backdrop"[\s\S]*?onPointerDown=\{\(event\) => \{[\s\S]*?event\.target === event\.currentTarget[\s\S]*?event\.stopPropagation\(\)[\s\S]*?onClick=\{\(event\) => \{[\s\S]*?event\.target !== event\.currentTarget[\s\S]*?event\.preventDefault\(\)[\s\S]*?event\.stopPropagation\(\)[\s\S]*?!actionBusy[\s\S]*?closeMoreSheet\(\)[\s\S]*?className="soridraw-explore-more-sheet"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/,
+  'Explore More backdrop must absorb the whole gesture and close only after the backdrop click completes, preventing click-through to underlying cards',
 );
 assert.match(
   page,

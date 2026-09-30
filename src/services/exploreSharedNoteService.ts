@@ -269,6 +269,10 @@ export const saveExploreTrackToSharedNote = async (
     updatedAt: serverTimestamp(),
     sharedNoteSavedAt: serverTimestamp(),
     sharedNoteSavedAtMs: now,
+    // app273 — marks a follower-save detail snapshot as complete. The detail
+    // cache uses this only to distinguish repaired/new snapshots from legacy
+    // incomplete cached copies; it does not add any server read on warm opens.
+    sharedDetailVersion: 273,
   });
 
   await runV1MutationBoundary({

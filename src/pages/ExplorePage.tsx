@@ -853,10 +853,28 @@ function ExploreRecommendationRail({
           className="soridraw-explore-recommend-scroll"
           onPointerDown={handleRailPointerDown241}
           onPointerUp={handleRailPointerUp241}
-          onPointerCancel={() => {
-            railPointerActiveRef261.current = false;
+          onPointerCancel={(event) => {
             mobilePointerGestureRef241.current = null;
+
+            // app262 — touch pointercancel is not a real finger release.
+            // Mobile browsers may cancel Pointer Events as soon as native
+            // horizontal scrolling takes ownership, while the finger is still
+            // on the screen. Keep the held guard active and wait for touchend.
+            if (event.pointerType === 'touch') {
+              return;
+            }
+
+            railPointerActiveRef261.current = false;
             scheduleExploreRailAlign251(true);
+          }}
+          onTouchEnd={() => {
+            if (!railPointerActiveRef261.current) return;
+            railPointerActiveRef261.current = false;
+
+            // If pointerup already armed the release snap, do not restart it.
+            if (!railReleaseAlignPendingRef261.current) {
+              scheduleExploreRailAlign251(true);
+            }
           }}
           onClickCapture={handleRailClickCapture241}
           onScroll={() => {

@@ -9651,6 +9651,8 @@ const toggleCycleVariantSelection = (
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
     originDeviceId = '',
+    documentIds: string[] = [],
+    truncated = false,
   ) => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
@@ -9664,15 +9666,62 @@ const toggleCycleVariantSelection = (
       markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
-    if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
-      return;
+    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+    if (localVersion >= remoteVersion) return;
+
+    const exactDocumentIds = [...new Set(
+      (Array.isArray(documentIds) ? documentIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )].slice(0, 10);
+
+    // app276 — cross-device My Note / Shared Note / recent-song save signals
+    // already carry the exact changed favorite document ids. Consume those ids
+    // on every route instead of requiring pathname === '/history'. This keeps
+    // Recent Songs hearts and Split-mode Music Note in sync without a collection
+    // query: one remote mutation reads only the changed document(s).
+    if (exactDocumentIds.length > 0 && truncated !== true) {
+      try {
+        const exactSnapshots = await Promise.all(
+          exactDocumentIds.map((documentId) => getDoc(doc(db, 'favorites', documentId)))
+        );
+        const changedFavorites = exactSnapshots
+          .filter((snapshot) => snapshot.exists())
+          .map(mapFavoriteFirestoreDoc);
+
+        setFavorites((prev) => {
+          let next = Array.isArray(prev) ? [...prev] : [];
+          const changedIds = new Set(exactDocumentIds);
+          next = next.filter((item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim()));
+          changedFavorites.forEach((favorite) => {
+            if (!isFavoriteSoftRemoved(favorite)) {
+              next = mergeFavoritePages([favorite], next);
+            }
+          });
+          const sorted = sortFavoriteList(next);
+          writeFavoritesCache(uid, sorted);
+          return sorted;
+        });
+
+        writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+        markCacheDiagnostic('musicNote', 'SYNC', exactSnapshots.length);
+        return;
+      } catch (error) {
+        console.warn('Music Note exact cross-device sync failed. Falling back to existing bounded sync.', error);
+      }
     }
+
+    // Signals without exact ids are legacy/bulk fallback only. Keep the old
+    // bounded query route-gated so ordinary app entry/navigation never creates
+    // a Music Note Firestore read.
+    const musicNotePageActive = typeof window !== 'undefined'
+      && ((window as any).__soridrawMusicNotePageActive === true || window.location.pathname === '/history');
+    if (!musicNotePageActive) return;
+
     if (musicNoteBundleActiveUids.has(uid)) {
       markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
-    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
-    if (localVersion >= remoteVersion) return;
 
     if (musicNoteFreshBootstrapUids.has(uid)) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
@@ -9726,11 +9775,19 @@ const toggleCycleVariantSelection = (
     if (!currentUser?.uid || typeof window === 'undefined') return;
 
     const handleMusicNoteSyncVersion = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; version?: number; originDeviceId?: string }>).detail;
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        version?: number;
+        originDeviceId?: string;
+        documentIds?: string[];
+        truncated?: boolean;
+      }>).detail;
       if (!detail || detail.uid !== currentUser.uid) return;
       void syncMusicNoteIncrementalFromRemoteVersion(
         Number(detail.version || 0),
         String(detail.originDeviceId || ''),
+        Array.isArray(detail.documentIds) ? detail.documentIds : [],
+        detail.truncated === true,
       );
     };
 

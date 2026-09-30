@@ -50,6 +50,10 @@ export interface V1MutationBoundaryContext {
   documentIds?: readonly string[];
   affectedCount?: number;
   mirrorTargets?: readonly V1MutationMirrorTarget[];
+  // Optional compact source snapshot for cross-device Music Note UI sync.
+  // The sync service projects this through the same catalog summary allow-list,
+  // so RTDB never receives the full detail document.
+  syncItem?: unknown;
 }
 
 export type V1MutationWrite<T> = Promise<T> | (() => Promise<T>);

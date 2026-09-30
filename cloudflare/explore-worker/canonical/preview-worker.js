@@ -9762,6 +9762,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222222(g
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 // SORIDRAW_UNIFIED_PROFILE_SAVE_252_20260930
 async function handleProfileUnifiedSave252(request, env, cors) {
+  // SORIDRAW_UNIFIED_PROFILE_SAVE_252_20260930
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
   await enforceUserRateLimit(env, authContext.uid, "profile-media", RATE_LIMITS.profileMedia);

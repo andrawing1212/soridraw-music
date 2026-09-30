@@ -133,8 +133,8 @@ assert.match(
 );
 assert.match(
   page,
-  /EXPLORE_RAIL_ALIGN_DELAY_MS_251\s*=\s*200/,
-  'every Explore recommendation rail must use the shared 0.2s settle delay on PC and mobile',
+  /EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261\s*=\s*100/,
+  'every Explore recommendation rail must use the shared 0.1s release-based settle delay on PC and mobile',
 );
 assert.match(
   page,
@@ -158,8 +158,13 @@ assert.doesNotMatch(
 );
 assert.match(
   page,
-  /onPointerDown=\{handleRailPointerDown241\}[\s\S]*?onPointerUp=\{handleRailPointerUp241\}[\s\S]*?onPointerCancel=[\s\S]*?onClickCapture=\{handleRailClickCapture241\}[\s\S]*?onScroll=\{\(\) => \{[\s\S]*?scheduleExploreRailAlign251\(\)/,
-  'all Explore rails must share pointer/scroll handling and the 0.2s delayed alignment',
+  /railPointerActiveRef261\.current = true[\s\S]*?handleRailPointerUp241[\s\S]*?railPointerActiveRef261\.current = false[\s\S]*?scheduleExploreRailAlign251\(true\)[\s\S]*?onPointerCancel=[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'finger and mouse drag snapping must arm only when the pointer is released or cancelled',
+);
+assert.match(
+  page,
+  /onScroll=\{\(\) => \{[\s\S]*?railPointerActiveRef261\.current \|\| railReleaseAlignPendingRef261\.current[\s\S]*?return;[\s\S]*?scheduleExploreRailAlign251\(\)/,
+  'scroll events must not restart or trigger snapping while a pointer is held or a release snap is already pending',
 );
 assert.match(
   page,
@@ -168,13 +173,13 @@ assert.match(
 );
 assert.match(
   page,
-  /shortControlledDrag[\s\S]*?moveRail\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleExploreRailAlign251\(\)/,
-  'a short light touch drag must advance one card while other motion uses the shared rail settle path',
+  /shortControlledDrag[\s\S]*?scheduleExploreRailMoveAfterRelease261\(deltaX < 0 \? 1 : -1\)[\s\S]*?scheduleExploreRailAlign251\(true\)/,
+  'short touch drags and ordinary drags must both start their movement/snap timing from pointer release',
 );
 assert.match(
   page,
   /scroller\.scrollTo\(\{ left: target, behavior: 'smooth' \}\)/,
-  'delayed mobile alignment must settle smoothly onto the selected visible group',
+  'release-based alignment must still settle smoothly onto the selected half-snap anchor',
 );
 assert.match(
   page,

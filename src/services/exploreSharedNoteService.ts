@@ -22,6 +22,7 @@ export type ExploreSharedNoteTrack = {
   title: string;
   coverUrl?: string | null;
   sunoUrlPrimary?: string | null;
+  sunoUrlSecondary?: string | null;
   openUrl?: string | null;
   sourceId?: string | null;
   durationSeconds?: number | null;
@@ -180,21 +181,24 @@ export const saveExploreTrackToSharedNote = async (
     || firstText((nextSong as any).subGenre)
     || firstText((nextSong as any).genre);
   const shareUrl = String(track.openUrl || track.sunoUrlPrimary || '').trim();
+  const secondaryShareUrl = String(track.sunoUrlSecondary || '').trim();
   const coverUrl = String(track.coverUrl || '').trim();
   const lyricsText = String(track.lyrics || '');
   const lyrics = /[가-힣]/.test(lyricsText)
     ? { korean: lyricsText, english: '' }
     : { korean: '', english: lyricsText };
   const creatorName = String(track.displayName || track.ownerHandle || 'SORiDRAW').trim() || 'SORiDRAW';
-  const sunoLinks = shareUrl ? [{
-    url: shareUrl,
-    title: track.title,
-    coverUrl,
-    durationSeconds: Number(track.durationSeconds || 0) || null,
-    rank: 1,
-    updatedAt: now,
-    fetchedAt: now,
-  }] : [];
+  const sunoLinks = [shareUrl, secondaryShareUrl]
+    .filter((url, index, list) => Boolean(url) && list.indexOf(url) === index)
+    .map((url, index) => ({
+      url,
+      title: track.title,
+      coverUrl,
+      durationSeconds: Number(track.durationSeconds || 0) || null,
+      rank: index + 1,
+      updatedAt: now,
+      fetchedAt: now,
+    }));
 
   const documentId = buildSharedNoteDocumentId(uid, trackId);
   const payload = cleanUndefinedValues({
@@ -222,8 +226,15 @@ export const saveExploreTrackToSharedNote = async (
     genre,
     lyrics,
     prompt: track.prompt || '',
-    appliedKeywords: { ...(nextSong as Record<string, unknown>) },
-    userInput: '',
+    appliedKeywords: {
+      genre: [],
+      mood: [],
+      theme: [],
+      style: [],
+      instrumentSound: [],
+      ...(nextSong as Record<string, unknown>),
+    },
+    userInput: String((nextSong as any).userInput || ''),
     situationSummary: String((nextSong as any).situationSummary || ''),
     style: track.style || '',
     musicNoteMemo: '',
@@ -234,7 +245,7 @@ export const saveExploreTrackToSharedNote = async (
     sunoShareLinks: sunoLinks,
     mainSunoIndex: 0,
     imageUrl: coverUrl,
-    audioUrl: track.sunoUrlPrimary || '',
+    audioUrl: '',
     isLocked: false,
     isSharedMusicNote: true,
     sharedReadOnly: true,

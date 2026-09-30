@@ -1,3 +1,70 @@
+## 0KK. app254 Explore 피드 수동 더 보기 제거 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **Explore 피드 하단 수동 `더 보기` 제거 / 사용자 클릭으로 두 번째 40곡 페이지 D1 조회가 발생하는 경로 제거 / PREVIEW 배포 완료**
+
+사용자 판단:
+- Explore 피드의 하단 `더 보기`는 누를 때 이전 공개곡 40개 cursor page를 추가 요청하여 서버 행 읽기를 발생시킴.
+- 현재 비용 우선 운영에서는 기본 Feed 첫 페이지로 탐색하고, 오래된 곡은 검색/공개프로필 등 기존 목적 경로로 찾는 편이 적합.
+- 따라서 피드 하단 수동 pagination UI는 제거.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - `loadMoreFeed` 네트워크 요청 경로 제거.
+  - `feedNextCursor / loadingMore / loadMoreError` UI state 제거.
+  - 빈 Feed와 일반 Feed 아래의 `더 보기` 버튼 제거.
+  - 최초 Feed는 기존대로 `limit=40`을 유지하고 local/session/R2/revision 경로는 변경하지 않음.
+- `src/components/explore/explore.css`
+  - 더 이상 사용하지 않는 Feed `더 보기` 전용 CSS 제거.
+- 기존 서버 cursor 지원 및 More-page cache 인프라는 **구버전 TEST/PRODUCTION 호환을 위해 유지**. 새 PREVIEW UI에서만 호출하지 않음.
+- 카드별 세로 점 `곡 더보기` 메뉴는 곡 작업 기능이므로 **변경하지 않음**.
+- app version: **254**.
+
+비용 영향:
+- 사용자가 Feed 하단 `더 보기`를 눌러 발생시키던 `/v1/feed?...&limit=40&cursor=...` 추가 요청 자체가 없어짐.
+- 따라서 PREVIEW app254에서는 이 UI 행동으로 추가 D1 row read가 발생할 수 없음.
+- 기본 첫 페이지/재진입 cache-first 비용 구조는 기존 그대로.
+- 검색 / 공개프로필 / 좋아요 / 공개·비공개 / 프로필 저장 비용 경로 변경 없음.
+
+검증:
+- 첫 Release System Audit Run `36659568246`: **FAIL**
+  - TypeScript PASS / Build PASS.
+  - 기능 실패가 아니라 기존 verifier 2개가 제거된 수동 More 경로를 아직 필수로 요구해서 static verification FAIL.
+  - `verify-110-explore-liked-public-count.mjs`, `verify-213-explore-more-page-cache.mjs`를 app254 정책에 맞게 갱신.
+- 최종 Release System Audit Run `36659790667`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - static/regression PASS
+  - manual Feed More removed guard PASS
+  - legacy server cursor/cache compatibility guard PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36659951404`: **SUCCESS**
+  - exact Hosting source `dd1d9a87a622b78a34efc5ad129c471b6dba928d`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+주요 commit:
+- UI/read path 제거: `8b463d9f754e547345692f2db28a35be9a63ec3e`
+- CSS 정리: `03ddf03560d180d382a6abfba9ee353895e77da7`
+- 049 비용/무More guard: `a990d6520b4c5a1e5970a345b005d98af53701bc`
+- verifier compatibility:
+  - `a3fd6d2151751bcb9a273f26c079a6459ff42b5d`
+  - `595aa6151fdc75dcd923ac5dbe75062f14af70c5`
+- app254: `020c5cf45b1276855d9939e1369f8b62e345db94`
+
+범위:
+- PREVIEW Hosting/client only.
+- Worker / D1 schema / R2 data / Firestore / Functions / Rules / 사용자 데이터 변경 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 추천 / 최신 / 인기 피드 하단에 `더 보기`가 더 이상 보이지 않는지.
+2. Feed를 끝까지 내려도 추가 Feed cursor 요청이 발생하지 않는지.
+3. 검색 및 공개프로필에서 기존 곡 접근이 정상인지.
+4. 각 곡 카드의 세로 점 `더보기` 메뉴는 그대로 정상인지.
+
 ## 0KJ. app253 Explore 50% 좌우 대칭 정렬 수정 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **태블릿/PC에서 깨지던 좌우 50% 정렬 기준 수정 / 모든 Explore rail이 동일한 카드 중간점 기준 / PREVIEW 배포 완료 / 실사용 확인 대기**

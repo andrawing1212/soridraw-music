@@ -1,3 +1,68 @@
+## 0KL. app255 공개프로필 고정 곡 카드 액션 오버레이 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **고정 곡 카드 하단 외부 액션 제거 / 카드 내부로 좋아요·다음곡 적용·공유·더보기 이동 / 버튼 확대 / 설명 문구 제거 / PREVIEW 배포 완료 / 실사용 시각 확인 대기**
+
+사용자 요청:
+- 공개프로필 상단 `고정 곡`의 좋아요/다음곡 적용/공유/더보기 버튼이 카드 아래에서 존재감이 약함.
+- 사용자 표시 위치 기준:
+  - 좋아요: 카드 내부 왼쪽 아래.
+  - 다음곡 적용 + 공유: 카드 내부 오른쪽 아래.
+  - 더보기: 카드 내부 오른쪽 위.
+- 버튼은 기존보다 크게 보이도록 확대.
+- `프로필에서 먼저 보여주는 대표 곡`, `프로필에 공개한 모든 곡` 설명 문구 제거.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - `profilePinnedBanner` 전용 액션 오버레이 추가.
+  - 좋아요는 왼쪽 아래, 다음곡 적용/공유는 오른쪽 아래, 더보기는 오른쪽 위.
+  - pinned banner에서는 기존 카드 아래 `soridraw-explore-card-actions`를 렌더하지 않음.
+  - 일반 Feed / 전체 곡 / 목록형 카드 액션 구조는 그대로 유지.
+  - `ExploreRecommendationRail.subtitle`을 선택값으로 변경하고 고정 곡 설명 문구 제거.
+  - 전체 곡 header의 설명 문구 제거.
+- `src/components/explore/exploreSocial.css`
+  - pinned 전용 반투명 원형 컨트롤 추가.
+  - 기본 48px, PC 52px, 모바일 44px.
+  - 좋아요는 count가 함께 보이는 pill 형태, liked 상태는 기존 의미가 보이도록 강조.
+  - 기존 pinned banner artwork/title/keyword/play 구조는 유지.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - pinned 전용 위치/크기/외부 액션 미표시/설명 문구 제거 회귀 검사 추가.
+- app version: **255**.
+
+검증/배포:
+- behavior commit: `dd0a5cfd4bbbbb46896fda5faade6614290b538f`
+- style commit: `49c0e489567ee886d2019e658f297518e022c520`
+- verifier commit: `561cf18e2778a69bf3723b34afa21509db00d08f`
+- app255 commit: `ecd2df2e7adcd56930dd5709972dea1bad832fca`
+- Release System Audit Run `36661455047`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Explore layout/pinned verifier PASS
+  - existing static regressions PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36661616839`: **SUCCESS**
+  - exact Hosting source `3dcbcb7e6a3f79ca9e516222af46a2f94d548fb4`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+범위/비용:
+- 공개프로필 pinned card의 client UI만 변경.
+- 좋아요/다음곡 적용/공유/더보기의 기존 handler는 그대로 재사용.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 고정 곡 카드에서 좋아요가 왼쪽 아래 안쪽에 보이는지.
+2. 다음곡 적용/공유가 오른쪽 아래 안쪽에 보이는지.
+3. 더보기가 오른쪽 위 안쪽에 보이는지.
+4. 버튼 크기와 카드 텍스트/키워드/재생 버튼 충돌 여부.
+5. 카드 아래에는 기존 액션 줄이 더 이상 남지 않는지.
+6. `프로필에서 먼저 보여주는 대표 곡`, `프로필에 공개한 모든 곡` 문구가 사라졌는지.
+7. PC / 모바일에서 각 기능 클릭이 정상인지.
+
 ## 0KK. app254 Explore 피드 수동 더 보기 제거 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **Explore 피드 하단 수동 `더 보기` 제거 / 사용자 클릭으로 두 번째 40곡 페이지 D1 조회가 발생하는 경로 제거 / PREVIEW 배포 완료**

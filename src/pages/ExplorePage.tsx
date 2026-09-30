@@ -594,49 +594,24 @@ function ExploreRecommendationRail({
     const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
     if (maxScrollLeft <= 1) return;
 
-    const scrollerRect = scroller.getBoundingClientRect();
     const current = scroller.scrollLeft;
 
-    // SORIDRAW_EXPLORE_MOBILE_VISIBLE_GROUP_ALIGN_231_20260930
-    // After native momentum settles, score each contiguous visible group. The
-    // SORIDRAW picks rail uses two cards on mobile; genre rails keep three.
-    // Each rail therefore settles around the cards that are actually most visible
-    // without changing the user's native momentum behavior.
-    const visibleRatios = cards.map((card) => {
-      const rect = card.getBoundingClientRect();
-      const visibleWidth = Math.max(
-        0,
-        Math.min(rect.right, scrollerRect.right) - Math.max(rect.left, scrollerRect.left),
-      );
-      return visibleWidth / Math.max(1, rect.width);
-    });
+    // SORIDRAW_EXPLORE_RAIL_SYMMETRIC_HALF_SNAP_253_20260930
+    // Snap to the nearest card-start anchor. The midpoint between adjacent
+    // anchors is the exact 50% boundary, so right/left drags use the same rule
+    // on mobile, tablet, and PC instead of direction-biased visible-group scoring.
+    const anchors = cards
+      .map((card) => Math.min(maxScrollLeft, Math.max(0, card.offsetLeft)))
+      .filter((position, index, source) => (
+        index === 0 || Math.abs(position - source[index - 1]) > 1
+      ));
 
-    let target = current;
-    let bestVisibleScore = -1;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (
-      let startIndex = 0;
-      startIndex <= cards.length - mobileAlignGroupSize231;
-      startIndex += 1
-    ) {
-      const visibleScore = visibleRatios
-        .slice(startIndex, startIndex + mobileAlignGroupSize231)
-        .reduce((sum, ratio) => sum + ratio, 0);
-      const cardRect = cards[startIndex].getBoundingClientRect();
-      const candidate = Math.min(
-        maxScrollLeft,
-        Math.max(0, cardRect.left - scrollerRect.left + current),
-      );
-      const distance = Math.abs(candidate - current);
-      const clearlyMoreVisible = visibleScore > bestVisibleScore + 0.001;
-      const equalVisibilityCloser = (
-        Math.abs(visibleScore - bestVisibleScore) <= 0.001
-        && distance < bestDistance
-      );
-
-      if (clearlyMoreVisible || equalVisibilityCloser) {
-        bestVisibleScore = visibleScore;
+    let target = anchors[0] ?? 0;
+    let bestDistance = Math.abs(current - target);
+    for (let index = 1; index < anchors.length; index += 1) {
+      const candidate = anchors[index];
+      const distance = Math.abs(current - candidate);
+      if (distance < bestDistance) {
         bestDistance = distance;
         target = candidate;
       }

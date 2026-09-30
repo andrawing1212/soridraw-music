@@ -76,6 +76,9 @@
           "itemJson": {
             ".validate": "newData.isString() && newData.val().length <= 24000"
           },
+          "removed": {
+            ".validate": "newData.isBoolean()"
+          },
           "$other": {
             ".validate": false
           }

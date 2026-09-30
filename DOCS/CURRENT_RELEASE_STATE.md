@@ -1,3 +1,70 @@
+## 0KP. app259 고정 곡 상단 액션 재배치 + PC More 뒤로가기 수정 PREVIEW 배포 (2026-09-30 KST)
+
+상태: **고정 곡 좋아요/다음곡 적용을 더보기 왼쪽에 배치 / 공유는 기존 우측 하단 유지 / More history entry를 열기 전에 선점해 PC 뒤로가기 1회로 창 닫기 / PREVIEW 배포 완료 / 실사용 확인 대기**
+
+사용자 요청:
+- 고정 곡에서 `좋아요`, `다음곡에 적용`을 `더보기`의 왼쪽에 나란히 배치.
+- `공유` 버튼은 기존 우측 하단 위치 유지.
+- PC에서도 More가 열린 상태에서 브라우저 뒤로가기를 누르면 이전 페이지로 가지 말고 먼저 More만 닫기.
+
+변경:
+- `src/pages/ExplorePage.tsx`
+  - pinned 전용 상단 우측 액션 그룹 `soridraw-explore-pinned-top-actions-259` 추가.
+  - 순서: 좋아요 -> 다음곡 적용 -> 더보기.
+  - 공유는 별도 버튼으로 기존 우측 하단 유지.
+  - More 열기 callback에서 `window.history.pushState(...soridrawExploreMore259...)`를 **setMoreTrack 이전에 동기적으로 실행**.
+  - 따라서 PC browser Back을 누를 때 이전 route보다 modal용 history entry가 먼저 소모되어 More를 닫는 구조.
+  - 기존 popstate handler / 바깥 영역 pointer down 닫기 / Escape 닫기 / busy 보호 유지.
+- `src/components/explore/exploreSocial.css`
+  - 상단 우측 그룹: desktop/tablet `right:6px; top:6px`, mobile `right:4px; top:4px`.
+  - 좋아요/다음곡 적용/더보기는 같은 높이로 정렬.
+  - 공유는 desktop/tablet `right:6px; bottom:6px`, mobile `right:4px; bottom:4px` 유지.
+  - 좋아요 흰색 outline/filled 및 다음곡 적용 활성 핑크/비활성 어두운색 유지.
+  - 투명 배경/테두리 유지.
+- `scripts/verify-201-explore-track-action-sheet.mjs`
+  - More history entry가 sheet 렌더보다 먼저 예약되는지 회귀 검사.
+  - PC/모바일 popstate 닫기 유지 검사.
+- `scripts/verify-221-explore-feed-layout.mjs`
+  - pinned top-right 액션 순서/위치, share 별도 우측 하단, synchronous More history 예약 회귀 검사.
+- app version: **259**.
+
+검증/배포:
+- pinned JSX commit: `a70e61fe4f23bc548d5ad0ffef763be19816dde9`
+- pinned CSS commit: `2c5d22e4a27cc1043fdb41a43e36261fcf8080d1`
+- PC Back behavior commit: `16fa6b13c75b26e82912a92b9f956a5e00f4ab3a`
+- verifier commits:
+  - `2f8e18ff8b17deea1096ea754d83a3c24408075d`
+  - `396ef40a92579debc87b19355e7d5b8dacb2a383`
+- app259 commit: `4f63f7930a1f2027abac30a3fe2452cfbbef5776`
+- Release System Audit Run `36667331303`: **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - More action sheet/backdrop/history guards PASS
+  - pinned placement guard PASS
+  - like regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 checks read-only PASS
+  - protected refs unchanged PASS
+- Firebase PREVIEW App Release Run `36667468362`: **SUCCESS**
+  - exact Hosting source `07b0c15cc65b7f2672279a093f1e191d30f6bd4d`
+  - TypeScript PASS / Build PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+
+보호/비용:
+- client UI/history interaction only.
+- 좋아요 / 다음곡 적용 / 공유 / More 내부 액션 handler 변경 없음.
+- Worker / D1 / R2 / Firestore / Functions / Rules / user data 변경 없음.
+- 추가 서버 read/write 없음.
+- TEST / PRODUCTION 승격 없음.
+
+실사용 확인:
+1. 고정 곡 우측 상단이 좋아요 -> 다음곡 적용 -> 더보기 순서로 보이는지.
+2. 공유는 기존 우측 하단에 그대로 있는지.
+3. PC에서 More를 열고 브라우저 뒤로가기 1회 -> More만 닫히고 Explore/public profile 페이지는 유지되는지.
+4. More 닫힌 뒤 다음 뒤로가기 -> 원래 페이지 이동이 정상인지.
+5. 모바일도 기존 뒤로가기/바깥 영역 닫기가 유지되는지.
+
 ## 0KO. app258 고정 곡 하단 액션 행 고정 PREVIEW 배포 (2026-09-30 KST)
 
 상태: **창 크기에 따라 흔들리던 고정 곡 하단 액션을 하나의 공통 bottom row로 고정 / 좋아요·다음곡 적용·공유 줄 정렬 통일 / PREVIEW 배포 완료 / 실사용 확인 대기**

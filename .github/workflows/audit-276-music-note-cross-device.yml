@@ -1,0 +1,45 @@
+name: SORIDRAW app276 music-note cross-device audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/audit-276-music-note-cross-device.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Cross-device focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-276-music-note-cross-device.mjs
+          node scripts/verify-user-domain-sync-stage2a.mjs
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-274-shared-note-saved-status.mjs
+          node scripts/verify-273-shared-note-legacy-detail.mjs
+          echo 'APP276_FOCUSED_AUDIT=PASS'

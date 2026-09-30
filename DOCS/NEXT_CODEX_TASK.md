@@ -1,3 +1,26 @@
+## 2026-09-30 — app261 rail 놓기 기준 0.1초 snap 실사용 확인
+
+배포 완료:
+- 손가락/마우스를 누른 채 이동 중에는 snap timer를 만들지 않음.
+- pointer up/cancel 시점부터 100ms 후 app253 50% nearest-anchor 정렬.
+- 모바일 short drag 1-card 이동도 놓은 뒤 100ms 기준.
+- release snap 대기 중 후속 scroll은 timer를 다시 미루지 않음.
+- wheel/trackpad는 release 신호가 없으므로 100ms scroll-idle fallback 유지.
+- PREVIEW App Release Run `36693629667` SUCCESS.
+- Worker / D1 / R2 / Firestore / Functions / Rules / TEST / PRODUCTION 변경 없음.
+
+다음 확인:
+1. 모바일에서 손가락을 댄 채 이동 후 잠시 멈춰도 놓기 전에는 snap이 시작되지 않는지.
+2. 손가락을 놓은 뒤 약 0.1초 후 50% 기준으로 정렬되는지.
+3. PC/태블릿에서도 mouse pointer를 누른 상태의 일시 정지로 snap이 시작되지 않는지.
+4. mouse pointer를 놓은 뒤 약 0.1초 후 정렬되는지.
+5. 좌/우 50% 대칭 규칙과 rail 버튼/hover 표시가 그대로인지.
+
+판정:
+- 위 항목 PASS면 app261 종료.
+- snap 체감 외 서버/카드 디자인/좋아요/More 경로는 건드리지 않는다.
+- TEST 승격은 사용자 요청 전 진행하지 않는다.
+
 ## 2026-09-30 — app260 More 배경 click-through 실사용 확인
 
 배포 완료:

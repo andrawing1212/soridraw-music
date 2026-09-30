@@ -524,7 +524,7 @@ function ExploreRecommendationRail({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   itemCount: number;
   toolbar?: React.ReactNode;
   trackClassName?: string;
@@ -784,7 +784,7 @@ function ExploreRecommendationRail({
         <div>
           <span>CURATED</span>
           <h2>{title}</h2>
-          <p>{subtitle}</p>
+          {subtitle && <p>{subtitle}</p>}
         </div>
       </header>
       {toolbar}
@@ -1043,6 +1043,54 @@ function ExploreTrackCard({
             <Play aria-hidden="true" />
           )}
         </button>
+
+        {variant === 'profilePinnedBanner' && (
+          <div className="soridraw-explore-pinned-actions-255" aria-label="고정 곡 빠른 작업">
+            <button
+              type="button"
+              className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-like-255${liked ? ' is-liked' : ''}`}
+              onClick={() => onToggleLike(track)}
+              disabled={likeBusy}
+              title={liked ? '좋아요 취소' : '좋아요'}
+              aria-label={liked ? '좋아요 취소' : '좋아요'}
+            >
+              {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+              <span>{formatCount(track.likeCount)}</span>
+            </button>
+
+            <div className="soridraw-explore-pinned-actions-right-255">
+              <button
+                type="button"
+                className={`soridraw-explore-pinned-action-255 soridraw-explore-pinned-apply-255${track.allowNextSongApply ? ' is-available' : ''}`}
+                onClick={() => onApplyNext(track)}
+                disabled={!track.allowNextSongApply}
+                aria-label={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+                title={track.allowNextSongApply ? '다음곡에 적용' : '다음곡 적용 불가'}
+              >
+                <RefreshCw aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-share-255"
+                onClick={() => onShare(track)}
+                aria-label="공유"
+                title="공유"
+              >
+                <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-more-255"
+              onClick={() => onOpenMore(track)}
+              aria-label="곡 더보기"
+              title="더보기"
+            >
+              <EllipsisVertical aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
 
       {variant !== 'profilePinnedBanner' && (
@@ -1070,6 +1118,7 @@ function ExploreTrackCard({
       </div>
       )}
 
+      {variant !== 'profilePinnedBanner' && (
       <div className="soridraw-explore-card-actions" aria-label="곡 반응 정보">
         <button
           type="button"
@@ -1113,6 +1162,7 @@ function ExploreTrackCard({
           </button>
         </div>
       </div>
+      )}
     </article>
   );
 }
@@ -2675,7 +2725,6 @@ export default function ExplorePage() {
                   <div className="soridraw-explore-profile-pinned-rail-232">
                     <ExploreRecommendationRail
                       title="고정 곡"
-                      subtitle="프로필에서 먼저 보여주는 대표 곡"
                       itemCount={profilePinnedTracks231.length}
                       trackClassName="soridraw-explore-recommend-track--profile-pinned"
                       mobileGroupSize={1}
@@ -2689,7 +2738,6 @@ export default function ExplorePage() {
                     <div className="soridraw-explore-profile-public-title-239">
                       <span>PUBLIC</span>
                       <h2>전체 곡</h2>
-                      <p>프로필에 공개한 모든 곡</p>
                     </div>
                     <div className="soridraw-explore-profile-view-toggle-239" aria-label="전체 곡 보기 방식">
                       <button

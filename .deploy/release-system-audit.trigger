@@ -1,8 +1,8 @@
-requested_at=2026-09-30T13:18:00+09:00
-requested_by=user_app260_more_backdrop_click_guard
-product_code_target=30e7ac305d1582b907388f6a9ba396ddf7467f0c
-release_purpose=audit_app260_more_backdrop_click_guard
-app_version=260
+requested_at=2026-09-30T17:58:00+09:00
+requested_by=user_app261_release_based_rail_snap
+product_code_target=213e562a83b50677cd3a14dc13b00edb7b9860a4
+release_purpose=audit_app261_release_based_rail_snap
+app_version=261
 preview_only=true
 deploy=false
 test_production_unchanged_required=true

@@ -1,3 +1,47 @@
+## 2026-09-30 — app248 / 251 indexed-write compaction 실사용 재측정
+
+배포 완료:
+- product commit `43da52290eaa4e0fdb196dfff4b7fafba6faa24d`.
+- Apply Run `36648918978` SUCCESS.
+- Release Audit Run `36649084536` SUCCESS.
+- PREVIEW Worker Release Run `36649277715` SUCCESS.
+- PREVIEW Worker `d4f0b104-ffc1-461f-bf10-63bc39ca0868`.
+- app248 유지, Hosting/client 변경 없음.
+- D1 schema/migration/backfill/user data mutation 없음.
+- TEST/PRODUCTION unchanged.
+
+251 핵심:
+- warm profile save는 실제 변경된 column만 UPDATE.
+- bio-only는 unchanged indexed handle/is_public을 SET하지 않음.
+- media warm path는 unchanged indexed is_public을 SET하지 않음.
+- media cache patch는 이미 읽은 shared Profile R2 baseline 재사용.
+- cold recovery full writer는 유지.
+- 기존 249 profile derived journal과 Music Note 079는 그대로 유지.
+
+재측정 절차:
+1. CACHE LIVE 초기화 -> bio only.
+2. 초기화 -> avatar only.
+3. 초기화 -> avatar + background를 같은 저장 1회.
+4. 각 실행의 D1 query R/W, physical R/W, 요청 상세, R2 A/B 캡처.
+5. dual-media 요청 상세는 `/v1/me/profile-media` batch 1개여야 함.
+
+비교 기준(251 이전):
+- bio: query R0/W1, physical R5/W8.
+- avatar: query R0/W1, physical R7/W9.
+- dual media: 직전 캡처는 이전 avatar 실행 누적 가능성이 있어 독립 baseline 재측정 필요.
+
+판정:
+- query W1 유지.
+- physical W가 실제 감소했는지 Cloudflare 계측으로 판정.
+- 정상 공개/비공개, 좋아요, 팔로우, Music Note 079, UI는 변경 금지.
+- W 잔량의 대부분이 profile derived compatibility journal/state라면, 현재 TEST app124 / PRODUCTION app117 mutation code가 이를 아직 소비하므로 shared trigger를 바로 제거하지 않는다.
+- 다음 구조 작업은:
+  1) 텍스트+이미지 동시 저장을 한 canonical Profile Save command / 한 D1 point UPDATE로 합치기.
+  2) PREVIEW direct targeted R2/edge profile mutation 경로를 TEST까지 승격·검증.
+  3) 사용자 명확한 PRODUCTION 승인 후 같은 경로를 PRODUCTION에 승격.
+  4) 모든 환경이 legacy `syncDerivedCache032` profile mutation consumer에서 벗어난 뒤에만 profile compatibility journal/state trigger retirement 검토.
+  5) cache-canonical parity sampler/diagnostic을 추가해 version staleness를 정량 검증.
+
 ## 2026-09-30 — profile shared revision retirement 재실측
 
 완료:

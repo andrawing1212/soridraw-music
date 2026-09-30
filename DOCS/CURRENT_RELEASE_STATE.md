@@ -1,3 +1,71 @@
+## 0LE. app273 기존 공유노트 상세 실사용 복구 PREVIEW 배포 완료 (2026-10-01 KST)
+
+상태: **app272 사용자 실사용 FAIL 원인 보강 완료 / 기존 stale follower shared-note targeted Firestore repair 완료 / stale 로컬 캐시 1회 exact-document 재수화 경로 추가 / PREVIEW app273 배포 완료 / 사용자 실기기 확인 대기**
+
+실제 원인:
+- app272는 앞으로의 follower-save authorized payload 전달은 고쳤지만, 과거에 이미 저장된 `shared_music_note` Firestore 문서와 기기 로컬 full-row 캐시는 그대로 남을 수 있었음.
+- 특히 오래된 로컬 full-row는 `__catalogSummary=false`라 app267 detail hydrator를 아예 건너뛰어, 서버를 고쳐도 화면이 계속 빈 상태로 남을 수 있었음.
+- 따라서 기존 저장본을 그대로 보는 사용자의 화면에는 “전혀 변화 없음”이 재현 가능한 구조였음.
+
+공유 사용자 데이터 targeted repair:
+- Run `36783835841`: **SUCCESS**.
+- Firestore `favorites`의 `sourceType='shared_music_note'` 정확 조건 조회: 총 36문서.
+- 현재도 public + published + follower-save 허용 상태와 정확히 연결되는 문서: 11.
+- identity/source mismatch: 0 / source missing: 0.
+- 그 11개 중 prompt 누락 후보: **8**, lyrics 누락 후보: **7**.
+- 중복 포함 최종 repair 문서: **11**.
+- 각 문서는 canonical 원본 `favorites/{originalFavoriteId}`와 owner/source identity를 확인한 뒤 **비어 있는 prompt/lyrics만** 보정.
+- repaired 문서에 `sharedDetailVersion=273` 기록.
+- D1 write 0 / schema migration 0 / 전체 favorites scan·rewrite 없음.
+- 현재 공유 허용 대상이 아닌 25개 기존 shared-note 문서는 이번 repair에서 변경하지 않음.
+
+app273 코드:
+- `src/lib/musicNoteDetailCache.ts`
+  - legacy shared-note 캐시가 prompt/lyrics가 비어 있고 v273 marker가 없을 때만 stale로 판정.
+  - 정상 Music Note와 완성된 shared-note는 기존 warm cache 0-read 유지.
+- `src/pages/FavoritesPage.tsx`
+  - 오래된 full local row가 `__catalogSummary=false`여도 shared-note 상세이 불완전한 경우에만 기존 exact-document hydrator를 1회 허용.
+  - 따라서 app272 이전 로컬 캐시가 남아 있어도 상세를 열면 repaired Firestore 1건을 다시 받아 화면을 갱신.
+- `src/services/exploreSharedNoteService.ts`
+  - 앞으로 새 저장/재저장 shared-note는 `sharedDetailVersion: 273` 포함.
+  - 기존 single-document Firestore write + one-item Catalog delta 구조 유지.
+- `public/app-version.json`: 273.
+
+검증:
+- Focused Audit Run `36784311038`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- app273 stale cache refresh PASS.
+- 신규 shared-note version marker PASS.
+- 기존 shared-note save 비용 형태 PASS.
+- Music Note detail/cache regression PASS.
+- Explore shared-note 1-document write / bounded action regression PASS.
+
+PREVIEW 배포:
+- Release commit: `93c07620cc2e33f59ec6b37d255e77cb5f94cc21`.
+- Firebase PREVIEW App Run `36784611639`: **SUCCESS**.
+- `preview.soridraw.com` remote app version **273**.
+- exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- RTDB Rules deploy skipped.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 완료된 app273 repair/audit 임시 workflow + trigger 제거 완료.
+- 현재 preview HEAD: `f09059d4b9cf32b2533a36cd00e6733adfbcec14` (cleanup 이후, 배포 앱 코드는 release commit과 동일).
+
+비용/안전:
+- 페이지 진입 때문에 전체 shared-note 조회 추가 없음.
+- 불완전한 legacy shared-note 상세을 실제로 여는 경우에만 기존 exact Firestore 문서 **1건** 재수화.
+- 정상화 후에는 v273/full detail 캐시를 사용하므로 반복 서버 read를 만들지 않음.
+- 좋아요 / Feed / 공개프로필 / 분할 UI / 공개·비공개 로직 변경 없음.
+
+사용자 실사용 합격선:
+1. PREVIEW app273 확인.
+2. 이전에 이미 저장해 둔 문제 공유노트를 **삭제/재저장하지 않고 그대로 열기**.
+3. 한글/외국어 가사 + 프롬프트가 표시되는지 확인.
+4. 같은 곡을 Explore에서 다시 저장해도 동일 상세이 유지되는지 확인.
+5. PC/모바일 동일 확인.
+6. 위 실사용 PASS 전 TEST 승격 금지.
+
 ## 0LD. app272 사용자 실사용 FAIL — 기존 공유노트 화면 변화 없음 (2026-10-01 KST)
 
 상태: **사용자 실사용 기준 FAIL. app272/글로벌 D1 repair를 완료로 취급하지 않음.**

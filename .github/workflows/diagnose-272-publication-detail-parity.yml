@@ -63,6 +63,12 @@ jobs:
               AND (COALESCE(prompt,'')='' OR COALESCE(lyrics,'')='')
             ORDER BY updated_at DESC
             LIMIT 50;
+            SELECT id AS public_track_id,
+              CASE WHEN COALESCE(prompt,'')='' THEN 1 ELSE 0 END AS d1_public_prompt_missing,
+              CASE WHEN COALESCE(lyrics,'')='' THEN 1 ELSE 0 END AS d1_public_lyrics_missing
+            FROM tracks
+            WHERE source_type='music_note' AND is_public=1 AND status='published' AND allow_follower_save=1
+            LIMIT 100;
           " --json > "$RUNNER_TEMP/app272-d1.json"
 
           python3 - <<'PY'
@@ -73,6 +79,7 @@ jobs:
           rows=[r for block in data for r in (block.get('results') or [])]
           summary=next((r for r in rows if 'public_follower_save_total' in r), {})
           candidates=[r for r in rows if 'source_id' in r]
+          public_by_id={str(r.get('public_track_id') or ''):r for r in rows if 'public_track_id' in r}
           token=os.environ['FIREBASE_ACCESS_TOKEN']
           project=os.environ['FIREBASE_PROJECT_ID']
 
@@ -126,8 +133,72 @@ jobs:
             if int(row.get('d1_lyrics_missing') or 0):
               counts['d1_lyrics_missing_firestore_lyrics_present' if lyrics_present else 'd1_lyrics_missing_firestore_lyrics_missing']+=1
 
+          shared_query={
+            'structuredQuery':{
+              'select':{'fields':[
+                {'fieldPath':'exploreTrackId'},
+                {'fieldPath':'prompt'},
+                {'fieldPath':'lyrics'},
+                {'fieldPath':'sharedNoteSavedAtMs'},
+              ]},
+              'from':[{'collectionId':'favorites'}],
+              'where':{
+                'fieldFilter':{
+                  'field':{'fieldPath':'sourceType'},
+                  'op':'EQUAL',
+                  'value':{'stringValue':'shared_music_note'},
+                }
+              },
+              'limit':100,
+            }
+          }
+          endpoint=f"https://firestore.googleapis.com/v1/projects/{urllib.parse.quote(project)}/databases/(default)/documents:runQuery"
+          req=urllib.request.Request(
+            endpoint,
+            data=json.dumps(shared_query).encode(),
+            headers={
+              'Authorization':f'Bearer {token}',
+              'Accept':'application/json',
+              'Content-Type':'application/json',
+            },
+            method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=30) as resp:
+            shared_rows=json.loads(resp.read().decode())
+
+          saved={
+            'shared_docs_checked':0,
+            'matched_public_tracks':0,
+            'saved_prompt_missing_while_d1_present':0,
+            'saved_lyrics_missing_while_d1_present':0,
+            'saved_prompt_present':0,
+            'saved_lyrics_present':0,
+          }
+          for row in shared_rows:
+            doc=row.get('document') or {}
+            fields=doc.get('fields') or {}
+            track_id=str((fields.get('exploreTrackId') or {}).get('stringValue') or '').strip()
+            if not track_id:
+              continue
+            saved['shared_docs_checked']+=1
+            d1=public_by_id.get(track_id)
+            if not d1:
+              continue
+            saved['matched_public_tracks']+=1
+            prompt_present=present_string(fields.get('prompt'))
+            lyrics_field=fields.get('lyrics') or {}
+            lf=((lyrics_field.get('mapValue') or {}).get('fields') or {})
+            lyrics_present=present_string(lf.get('korean')) or present_string(lf.get('english')) or present_string(lf.get('foreign'))
+            if prompt_present: saved['saved_prompt_present']+=1
+            if lyrics_present: saved['saved_lyrics_present']+=1
+            if not prompt_present and int(d1.get('d1_public_prompt_missing') or 0)==0:
+              saved['saved_prompt_missing_while_d1_present']+=1
+            if not lyrics_present and int(d1.get('d1_public_lyrics_missing') or 0)==0:
+              saved['saved_lyrics_missing_while_d1_present']+=1
+
           print('APP272_D1_SUMMARY='+json.dumps(summary,sort_keys=True))
           print('APP272_FIRESTORE_COMPARE='+json.dumps(counts,sort_keys=True))
+          print('APP272_SHARED_COPY_COMPARE='+json.dumps(saved,sort_keys=True))
           print('APP272_READ_ONLY=PASS')
           print('APP272_NO_USER_DATA_WRITE=PASS')
           PY

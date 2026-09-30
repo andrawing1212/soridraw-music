@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Link2, Loader2, Pencil, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
+  saveExplorePublicProfileUnified,
   updateExplorePublicProfile,
   uploadExploreProfileMedia,
   uploadExploreProfileMediaBatch,
@@ -162,6 +163,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       tiktokUrl: draft.tiktokUrl.trim(),
       youtubeUrl: draft.youtubeUrl.trim(),
     };
+    const youtubeChanged252 = normalizedDraft.youtubeUrl !== String(profile.socialLinks?.youtube || '').trim();
     const profileFieldsChanged247 = normalizedDraft.nickname !== String(profile.nickname || '').trim().replace(/\s+/g, ' ')
       || normalizedDraft.bio !== String(profile.bio || '').trim()
       || normalizedDraft.handle !== String(profile.handle || '').trim().replace(/^@+/, '').toLowerCase()
@@ -169,28 +171,40 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       || normalizedDraft.spotifyUrl !== String(profile.socialLinks?.spotify || '').trim()
       || normalizedDraft.instagramUrl !== String(profile.socialLinks?.instagram || '').trim()
       || normalizedDraft.tiktokUrl !== String(profile.socialLinks?.tiktok || '').trim()
-      || normalizedDraft.youtubeUrl !== String(profile.socialLinks?.youtube || '').trim();
+      || youtubeChanged252;
 
     setSaving(true);
     setError('');
     try {
-      const saved = profileFieldsChanged247
-        ? await updateExplorePublicProfile(user, normalizedDraft)
-        : profile;
+      // SORIDRAW_UNIFIED_PROFILE_SAVE_UI_252_20260930
+      const hasProfileMedia252 = Boolean(avatarBlob || backgroundBlob);
+      const useUnifiedProfileSave252 = profileFieldsChanged247 && hasProfileMedia252;
+      const saved = useUnifiedProfileSave252
+        ? await saveExplorePublicProfileUnified(
+            user,
+            normalizedDraft,
+            { avatar: avatarBlob, background: backgroundBlob },
+            { youtubeChanged: youtubeChanged252 },
+          )
+        : profileFieldsChanged247
+          ? await updateExplorePublicProfile(user, normalizedDraft, { youtubeChanged: youtubeChanged252 })
+          : profile;
 
       let backgroundUrl = saved.backgroundUrl;
       let avatarUrl = saved.avatarUrl;
-      if (backgroundBlob && avatarBlob) {
-        // SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930
-        const media = await uploadExploreProfileMediaBatch(user, {
-          background: backgroundBlob,
-          avatar: avatarBlob,
-        });
-        backgroundUrl = media.backgroundUrl || backgroundUrl;
-        avatarUrl = media.avatarUrl || avatarUrl;
-      } else {
-        if (backgroundBlob) backgroundUrl = await uploadExploreProfileMedia(user, 'background', backgroundBlob);
-        if (avatarBlob) avatarUrl = await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
+      if (!useUnifiedProfileSave252) {
+        if (backgroundBlob && avatarBlob) {
+          // SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930
+          const media = await uploadExploreProfileMediaBatch(user, {
+            background: backgroundBlob,
+            avatar: avatarBlob,
+          });
+          backgroundUrl = media.backgroundUrl || backgroundUrl;
+          avatarUrl = media.avatarUrl || avatarUrl;
+        } else {
+          if (backgroundBlob) backgroundUrl = await uploadExploreProfileMedia(user, 'background', backgroundBlob);
+          if (avatarBlob) avatarUrl = await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
+        }
       }
 
       const refreshed: ExplorePublicProfile = {

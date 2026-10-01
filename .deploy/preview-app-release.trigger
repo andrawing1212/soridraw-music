@@ -1,6 +1,6 @@
-app287-idempotent-save-live-sync-release
-target_source=e2c3a3023a283a70e9eda747eb0d8daaf9031dbe
-app_version=287
+app288-rtdb-ack-version-release
+target_source=0fa377a9d424daf0bda9c1598575d54d1cda381b
+app_version=288
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

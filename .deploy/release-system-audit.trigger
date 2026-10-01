@@ -1,4 +1,3 @@
-requested_at=2026-10-01T06:58:00+09:00
-requested_by=chatgpt
-purpose=app272_follower_save_authorized_detail_snapshot_reaudit
-source_target=7336229783e6f0e22b9395815b815a600ec70894
+app281-suno-url-cross-device
+source=6967c28019ccb8ee7b7c1cb73929655b8f9f9e7f
+requested=2026-10-01T03:13:35Z

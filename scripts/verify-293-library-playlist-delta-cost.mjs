@@ -18,6 +18,9 @@ assert.ok(service.includes('subscribeLibraryPlaylistSync'), 'Library RTDB subscr
 assert.ok(service.includes('applyLibraryPlaylistSyncSignalToCache'), 'Library delta cache applier missing');
 assert.ok(service.includes('MAX_LIBRARY_PLAYLIST_SYNC_PAYLOAD_CHARS = 24000'), 'payload bound missing');
 assert.ok(service.includes('truncated: encoded.truncated'), 'oversized delta fallback missing');
+assert.ok(service.includes('previousSyncVersion'), 'RTDB continuity token missing');
+assert.ok(service.includes('listSnapshot.version < signal.previousSyncVersion'), 'missed-delta continuity fence missing');
+assert.ok(service.includes('cached.version < expectedRevision'), 'stale item-cache fence missing');
 
 const resolver = slice(service, 'const resolvePlaylistInsertOrder = async', '// Saving from the global player');
 assert.ok(resolver.includes('readLibraryPlaylistItemsCache(uid, playlistId)'), 'insert warm cache missing');
@@ -43,7 +46,8 @@ assert.ok(!rename.includes('commitMusicNoteFolderUpdates('), 'Music Note rename 
 assert.ok(!rename.includes('affectedSongs'), 'Music Note rename still enumerates songs');
 
 assert.ok(rules.includes('"libraryPlaylist": {'), 'Library RTDB rule missing');
-assert.ok(rules.includes("newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','payloadJson','truncated'])"), 'Library RTDB rule shape missing');
+assert.ok(rules.includes("newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','previousSyncVersion','payloadJson','truncated'])"), 'Library RTDB rule shape missing');
+assert.ok(rules.includes('"previousSyncVersion": {'), 'Library RTDB continuity field rule missing');
 
 console.log('APP293_LIBRARY_PLAYLIST_DELTA_SYNC=PASS');
 console.log('APP293_LIBRARY_WARM_INSERT_SERVER_R0_PATH=PASS');

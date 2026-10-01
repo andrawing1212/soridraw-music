@@ -1,3 +1,50 @@
+## 0LY. `스쳐간 이름 뒤에` SAVE live-sync ROOT CAUSE 확정 — RTDB changed-item payload 24KB 초과 (2026-10-02 KST)
+
+**판정**
+- app288 실기기 FAIL 이후 Codex read-only 분석은 root cause를 확정하지 못했으나, 추가 read-only payload-size forensics로 **단일 원인 확정**.
+- 제품 코드 수정/배포는 아직 하지 않음.
+- TEST / PRODUCTION 비변경.
+
+**확정 원인**
+1. Music Note SAVE/RESTORE RTDB signal은 `projectCatalogItemForSync('musicNote', ...)`로 active item summary를 만든 뒤 `JSON.stringify(payload).length <= 24000`일 때만 `itemJson`을 실음.
+2. 문제곡 current row의 SAVE projection 크기: **26,758 bytes**.
+3. 문제곡 historical duplicate row의 SAVE projection 크기: **27,654 bytes**.
+4. 둘 다 24,000 limit 초과라 SAVE signal은 operation/documentId/version만 남고 **itemJson이 비어 있음**.
+5. 수신 App의 exact changed-item 경로는 SAVE에서 `remoteItem`이 있어야 `rememberRecentHeartAuthority(..., true, ...)`를 호출하고 Studio heart를 즉시 filled로 바꿈.
+6. itemJson이 비면 `remoteItem=null`; SAVE는 removal operation도 아니므로 exact branch가 local heart authority를 갱신하지 못하고 Studio route에서는 Firestore fallback도 실행하지 않아 그대로 empty.
+7. UNSAVE는 active projection이 아니라 compact removal identity payload를 사용하므로 itemJson 약 517 bytes로 정상 전송되어 즉시 동기화됨.
+8. 이름 변경은 별도의 작은 preview/update sync 경로라 정상.
+9. 정상 비교 Recent favorite 1개 projected SAVE 크기: **13,056 bytes** (<24,000)라 정상 changed-item payload 전달 가능.
+10. 문제곡에서 크기를 폭증시킨 핵심은 `appliedKeywords`:
+   - current row **25,390 bytes**
+   - historical row **25,325 bytes**
+   - 정상 비교곡 **10,915 bytes**
+- 따라서 “왜 이 곡만”의 직접 원인은 duplicate 자체가 아니라 **이 곡의 비정상적으로 큰 appliedKeywords가 RTDB SAVE itemJson 상한을 넘기는 것**.
+- duplicate 두 row 모두 동일하게 oversized인 것은 같은 오래된 payload lineage가 복제된 결과로 보이며, duplicate 삭제/merge는 해결책이 아님.
+
+**증거**
+- Read-only payload-size Run `36913925421`: SUCCESS.
+- Firestore write 0 / delete 0 / RTDB write 0.
+- current target: 26,758 > 24,000.
+- historical target: 27,654 > 24,000.
+- normal control: 13,056 < 24,000.
+- temporary diagnostic workflow/trigger 제거 완료.
+
+**다음 최소 수정 방향**
+- 전체 Music Note summary를 RTDB에 싣지 말고 SAVE/RESTORE heart live-sync용으로는 exact document id + immutable song identity + saved-state만 담은 **compact heart-state payload**를 사용.
+- 필요한 필드 예:
+  - id/firestoreId
+  - soridrawSongId
+  - recentSongSyncKey
+  - appliedKeywords 중 generationBatchId + generationIndex만
+  - saved/favoriteRemoved
+  - 필요한 legacy identity 최소값
+- lyrics/prompt 전체나 거대한 appliedKeywords 전체는 RTDB heart signal에 싣지 않음.
+- 수신기 Firestore R0/W0 유지 가능.
+- RTDB mutation 수 증가 없음(기존 1 signal 재사용).
+- 사용자 원본 데이터 수정/정리 없음.
+- duplicate 삭제/merge 없음.
+
 ## 0LX. PREVIEW app288 실기기 FAIL — `스쳐간 이름 뒤에` 한 곡 원인분석 전용 단계로 전환 (2026-10-02 KST)
 
 **사용자 실기기 판정**

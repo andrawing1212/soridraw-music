@@ -1,3 +1,31 @@
+## CURRENT TASK — app289 compact Music Note heart-state RTDB payload 구현 준비 (2026-10-02 KST)
+
+ROOT CAUSE 확정:
+- 문제곡 SAVE projected RTDB item payload 26,758 bytes > 24,000 limit.
+- historical duplicate도 27,654 bytes > 24,000.
+- 정상 비교곡은 13,056 bytes.
+- 문제곡 appliedKeywords만 25KB대라 전체 Music Note summary를 signal에 싣는 현재 방식에서 itemJson이 탈락.
+- 그래서 SAVE는 exact id/version만 가고 remoteItem이 없어 Studio heart authority를 갱신하지 못함.
+- UNSAVE는 compact removal identity 약 517 bytes라 정상.
+- 이름 변경은 별도 small preview sync라 정상.
+- duplicate 자체는 직접 원인 아님.
+
+다음 구현 목표:
+1. SAVE/RESTORE/idempotent SAVE의 RTDB changed-item payload를 compact heart-state 전용 projection으로 축소.
+2. exact id + generation identity + soridrawSongId + recentSongSyncKey + saved/favoriteRemoved만 유지.
+3. 전체 appliedKeywords / prompt / lyrics / media summary를 heart live-sync signal에 싣지 않음.
+4. 기존 RTDB signal 1회만 사용. 추가 RTDB mutation 금지.
+5. 수신 Firestore R0/W0 유지.
+6. canonical save/restore/unsave Firestore 비용 기존 W1 유지.
+7. duplicate 데이터 삭제/merge/backfill 금지.
+8. app282 title sync / app281 Suno URL / app278 shared note / app164 Explore like / Music Note 60s batch 보호.
+9. TypeScript / Build / focused regression 후 PREVIEW만 배포.
+10. 실기기에서 문제곡 + 정상곡 양방향 save/unsave 즉시 반영 확인 전 TEST 금지.
+
+근거 Run:
+- app288 failed-state read-only: `36911142979`
+- payload-size root-cause read-only: `36913925421`
+
 ## CURRENT TASK — Codex High: `스쳐간 이름 뒤에` SAVE live-sync 원인증명만 수행 (2026-10-02 KST)
 
 목표:

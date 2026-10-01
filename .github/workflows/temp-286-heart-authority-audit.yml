@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e 7d45d4a5e8963276b67f73f85e280317bb15fd92^{commit}
-          allowed='^(src/App\.tsx|src/lib/musicNoteSavedState\.ts|src/hooks/useFavoritesStore\.ts|src/lib/userDataEngine\.ts|src/lib/listBundleCache\.ts|public/app-version\.json|scripts/verify-285-save-unsave-same-identity\.mjs|scripts/verify-286-heart-direction-authority\.ts|\.github/workflows/temp-286-heart-authority-audit\.yml|\.deploy/app286-heart-authority-audit\.trigger)$'
+          allowed='^(src/App\.tsx|src/lib/musicNoteSavedState\.ts|src/hooks/useFavoritesStore\.ts|src/lib/userDataEngine\.ts|src/lib/listBundleCache\.ts|public/app-version\.json|scripts/verify-280-music-note-resurrection\.mjs|scripts/verify-285-save-unsave-same-identity\.mjs|scripts/verify-286-heart-direction-authority\.ts|\.github/workflows/temp-286-heart-authority-audit\.yml|\.deploy/app286-heart-authority-audit\.trigger)$'
           unexpected="$(git diff --name-only 7d45d4a5e8963276b67f73f85e280317bb15fd92..HEAD | grep -Ev "$allowed" || true)"
           test -z "$unexpected" || { echo "Unexpected app286 files:"; echo "$unexpected"; exit 1; }
 

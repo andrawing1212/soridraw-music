@@ -1,0 +1,39 @@
+name: audit app290 recent edit batching
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'src/App.tsx'
+      - 'src/services/userDomainSyncService.ts'
+      - 'src/data/v1MutationBoundary.ts'
+      - 'src/pages/FavoritesPage.tsx'
+      - 'scripts/verify-290-recent-edit-batch.mjs'
+      - '.github/workflows/audit-290-recent-edit-batch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Recent edit cost verifier
+        run: node scripts/verify-290-recent-edit-batch.mjs
+      - name: Music Note detail batch regression
+        run: node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: app289 heart regression
+        run: node scripts/verify-289-music-note-compact-heart-sync.mjs
+      - name: Explore new-track like regression
+        run: node scripts/verify-197-new-public-track-like.mjs
+      - name: Build
+        run: npm run build

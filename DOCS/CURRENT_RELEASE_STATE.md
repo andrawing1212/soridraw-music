@@ -28,12 +28,17 @@
 - app version 294: `42ea54fc1284d46e8030240d51633bae64d661cf`.
 
 **검증/배포 상태**
-- focused verifier: 배포 Workflow 실행 전.
-- TypeScript / Build: 배포 Workflow 실행 전.
-- PREVIEW Hosting: 배포 전.
-- TEST / PRODUCTION: 변경 금지.
+- `scripts/verify-294-library-new-folder-r0.mjs` 추가: create 경로에 server `getDocs`가 없고 canonical 성공 후 새 playlist의 빈 items cache를 같은 syncVersion으로 seed하는 계약 고정.
+- Release System Audit Run `36941393567`: **FAIL**. 단, 이번 수정과 직접 관련된 TypeScript / Build 및 진단 그룹 A~D는 PASS. 최종 static 단계에서 기존 `verify-221-explore-feed-layout.mjs`가 현재 Music Note detail hydrate 구현 형태를 옛 정규식으로 검사해 assertion FAIL. app294 Library 변경 경로와 무관하며 이 작업에서는 제품/검사 범위를 넓혀 수정하지 않음.
+- Firebase PREVIEW Release Run `36941526371`: **SUCCESS**.
+- locked PREVIEW source: `3c9f1d67a72aaf9b94408f0d050752f8b47e439f`.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- remote `preview.soridraw.com`: app **294**, exact build PASS.
+- shared RTDB Rules: SKIPPED (변경 없음).
+- TEST / PRODUCTION unchanged PASS.
 - 사용자 데이터 migration/backfill/delete: 없음.
 - Worker / Functions / D1 / Firestore Rules 변경: 없음.
+- 실기기 다음 확인: My/Shared에서 새 폴더 생성 시 `user_playlists:getDocs`가 더 이상 증가하지 않아 **create 직후 R0**인지 확인.
 
 ## 0MI. PREVIEW app293 배포 완료 — Library changed-item sync + Music Note folder rename 비용 절감 (2026-10-02 KST)
 

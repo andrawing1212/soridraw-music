@@ -36,7 +36,9 @@ export type V1MusicNoteMutationOperation =
   | 'color-sync'
   | 'structure-update'
   | 'suno-media-preview'
-  | 'detail-preview';
+  | 'detail-preview'
+  | 'heart-preview-save'
+  | 'heart-preview-unsave';
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 

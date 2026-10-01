@@ -5748,10 +5748,17 @@ function App() {
     removeStudioHeartPendingIntent(uid, documentId);
   };
 
-  const rememberStudioHeartPreviewVersion = (uid: string, documentId: string, version: number, desiredSaved?: boolean) => {
+  const rememberStudioHeartPreviewVersion = (
+    uid: string,
+    documentId: string,
+    version: number,
+    desiredSaved?: boolean,
+    expectedUpdatedAtMs?: number,
+  ) => {
     if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
     const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => {
       if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return current;
+      if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return current;
       return {
         ...current,
         signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
@@ -5759,6 +5766,7 @@ function App() {
     });
     if (!updated) return;
     if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
+    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
     if (
       updated.pendingRemotePreviewVersion > 0
       && updated.pendingRemotePreviewVersion > updated.signalVersion
@@ -9974,7 +9982,6 @@ const toggleCycleVariantSelection = (
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
       if (isHeartPreview) {
         const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
-        if (previewDocumentId) rememberStudioHeartPreviewVersion(uid, previewDocumentId, remoteVersion, isHeartPreviewSave);
         writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
         markCacheDiagnostic('musicNote', 'CACHE', 0);
         return;
@@ -11027,6 +11034,11 @@ const toggleCycleVariantSelection = (
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
+    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
+      removeStudioHeartPendingIntent(uid, safeDocumentId);
+      return;
+    }
+
     // Multiple toggles inside the trailing window collapse to their final state.
     // If the final state equals the canonical baseline, there is nothing to write.
     if (intent.desiredSaved === intent.baselineSaved) {
@@ -11120,7 +11132,7 @@ const toggleCycleVariantSelection = (
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
     void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
       .then((version) => {
-        if (version > 0) rememberStudioHeartPreviewVersion(uid, safeDocumentId, version, desiredSaved);
+        if (version > 0) rememberStudioHeartPreviewVersion(uid, safeDocumentId, version, desiredSaved, now);
       })
       .catch((error) => console.warn('Studio heart live preview unavailable.', error));
     return true;

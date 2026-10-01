@@ -566,7 +566,13 @@ export const createPlaylist = async (uid: string, type: 'normal' | 'shared', tit
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as Playlist;
-  await patchLibraryPlaylistListCache(uid, (items) => [...items, createdForCache], syncVersion);
+  await Promise.all([
+    patchLibraryPlaylistListCache(uid, (items) => [...items, createdForCache], syncVersion),
+    // app294: a freshly created playlist is canonically empty. Seed the empty
+    // items cache at the same sync version before the UI selects it, so opening
+    // that new folder does not issue a redundant Firestore getDocs().
+    writeLibraryPlaylistItemsCache(uid, newDocRef.id, [], syncVersion),
+  ]);
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-create', syncVersion, { playlist: createdForCache });
   return newDocRef.id;
 };

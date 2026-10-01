@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e 0a84c6ea76c36a10184235ce713840671201528d^{commit}
-          allowed='^(src/App\.tsx|src/services/userDomainSyncService\.ts|public/app-version\.json|scripts/verify-277-music-note-sync-cost\.mjs|scripts/verify-287-save-live-sync\.mjs|\.github/workflows/temp-287-save-live-sync-audit\.yml|\.deploy/app287-save-live-sync-audit\.trigger)$'
+          allowed='^(src/App\.tsx|src/services/userDomainSyncService\.ts|public/app-version\.json|scripts/verify-277-music-note-sync-cost\.mjs|scripts/verify-286-heart-direction-authority\.ts|scripts/verify-287-save-live-sync\.mjs|\.github/workflows/temp-287-save-live-sync-audit\.yml|\.deploy/app287-save-live-sync-audit\.trigger)$'
           unexpected="$(git diff --name-only 0a84c6ea76c36a10184235ce713840671201528d..HEAD | grep -Ev "$allowed" || true)"
           test -z "$unexpected" || { echo "Unexpected app287 files:"; echo "$unexpected"; exit 1; }
 

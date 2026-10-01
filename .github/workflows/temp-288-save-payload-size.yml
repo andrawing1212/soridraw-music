@@ -1,0 +1,117 @@
+name: SORIDRAW app288 Save Payload Size Forensics
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app288-save-payload-size.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Measure projected SAVE payload sizes
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const crypto=require('crypto'); const admin=require('firebase-admin');
+          admin.initializeApp({projectId:'soridraw-app-866a5'});
+          const db=admin.firestore(), TARGET='스쳐간 이름 뒤에', LIMIT=24000;
+          const h=v=>{const s=String(v||'').trim();return s?crypto.createHash('sha256').update(s).digest('hex').slice(0,12):''};
+          const toMs=v=>!v?0:typeof v.toMillis==='function'?v.toMillis():typeof v.seconds==='number'?v.seconds*1000:Number(v)||0;
+          const KEYS=[
+            'uid','soridrawSongId','favoriteKey','recentSongSyncKey','recentLegacySourceId','recentLegacyCreatedAtMs',
+            'title','koreanTitle','englishTitle','genre','appliedKeywords','searchTokens',
+            'isLocked','liked','isLiked','personalLiked','favoriteLiked','isFavorite',
+            'isPublic','exploreTrackId','explorePublicationId',
+            'hidden','favoriteHidden','favoriteRemoved','favoriteRemovedAt','saved','deletedAt','trashedAt',
+            'color','favoriteColor','noteColor','folderId','folderIds','musicNoteFolderIds',
+            'noteFolderId','noteFolderTitle','noteFolderUpdatedAt','myNoteFolderId','favoriteFolderId',
+            'sharedNoteFolderId','sharedNoteFolderTitle','sharedNoteFolderUpdatedAt','sharedNoteFolder','noteSharedFolderId',
+            'sharedNoteShareId','isSharedMusicNote','sharedReadOnly','sourceType','originalFavoriteId',
+            'createdAtMs','createdAt','updatedAtMs','updatedAt',
+            'sunoLinks','sunoShareLinks','mainSunoIndex',
+            'sunoShareUrl','sunoUrl','sunoSongUrl','sunoTitle',
+            'sunoCoverUrl','sunoImageUrl','sunoArtworkUrl',
+            'sunoDurationSeconds','sunoDurationText','sunoShareUrlUpdatedAt','sunoCoverFetchedAt',
+            'audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl',
+            'imageUrl','image_url','coverUrl','thumbnailUrl','sunoAudioUrl',
+            'creatorNickname','ownerNickname','ownerUid','nickname'
+          ];
+          const clean=(v,d=0)=>{
+            if(v===undefined)return undefined;
+            if(v===null||typeof v==='string'||typeof v==='boolean')return v;
+            if(typeof v==='number')return Number.isFinite(v)?v:undefined;
+            if(typeof v?.toMillis==='function')return v.toMillis();
+            if(Array.isArray(v))return v.map(x=>clean(x,d+1)).filter(x=>x!==undefined);
+            if(typeof v!=='object'||d>10)return undefined;
+            const o={}; for(const [k,x] of Object.entries(v)){const c=clean(x,d+1);if(c!==undefined)o[k]=c;} return o;
+          };
+          const createdAtMs=x=>Number(x?.createdAtMs||0)||toMs(x?.createdAt)||Number(x?.updatedAtMs||0)||toMs(x?.updatedAt)||0;
+          const project=(x,id)=>{
+            const src={...x,id,firestoreId:id,hidden:false,favoriteHidden:false,favoriteRemoved:false,favoriteRemovedAt:null,
+              unlikedAt:null,unsavedAt:null,deletedAt:null,trashedAt:null,saved:true};
+            const p={id,firestoreId:id,createdAtMs:createdAtMs(src),__catalogSummary:true};
+            for(const k of KEYS){if(!(k in src))continue;const c=clean(src[k]);if(c!==undefined)p[k]=c;}
+            p.createdAtMs=createdAtMs(p); return p;
+          };
+          const bytes=v=>Buffer.byteLength(JSON.stringify(v),'utf8');
+          const breakdown=p=>Object.entries(p).map(([k,v])=>({key:k,bytes:bytes(v)})).sort((a,b)=>b.bytes-a.bytes).slice(0,12);
+          (async()=>{
+            const [a,b]=await Promise.all([
+              db.collection('favorites').where('title','==',TARGET).limit(20).get(),
+              db.collection('favorites').where('koreanTitle','==',TARGET).limit(20).get()
+            ]);
+            const m=new Map(); [...a.docs,...b.docs].forEach(d=>m.set(d.id,d));
+            const docs=[...m.values()]; if(!docs.length)throw new Error('target not found');
+            const uid=String(docs[0].data()?.uid||'');
+            const recent=await db.collection('user_recent_songs').doc(uid).get();
+            const songs=Array.isArray(recent.data()?.songs)?recent.data().songs:[];
+            let control=null;
+            for(const s of songs){
+              if([s?.title,s?.koreanTitle,s?.englishTitle].some(v=>String(v||'').trim()===TARGET))continue;
+              const fid=String(s?.favoriteFirestoreId||s?.musicNoteFavoriteId||'').trim();
+              if(!fid)continue;
+              const snap=await db.collection('favorites').doc(fid).get();
+              if(snap.exists){control={song:s,doc:snap};break;}
+            }
+            const target=docs.map(d=>{
+              const p=project(d.data(),d.id); return {
+                idHash:h(d.id),title:String(d.data()?.title||d.data()?.koreanTitle||''),
+                projectedSaveBytes:bytes(p),limit:LIMIT,overLimit:bytes(p)>LIMIT,
+                topFields:breakdown(p),
+                appliedKeywordsBytes:bytes(clean(p.appliedKeywords)),
+                searchTokensBytes:bytes(clean(p.searchTokens)),
+                sunoLinksBytes:bytes(clean(p.sunoLinks)),
+                sunoShareLinksBytes:bytes(clean(p.sunoShareLinks)),
+              };
+            });
+            let controlOut=null;
+            if(control){
+              const p=project(control.doc.data(),control.doc.id);
+              controlOut={idHash:h(control.doc.id),titleHash:h(control.doc.data()?.title||control.doc.data()?.koreanTitle||''),
+                projectedSaveBytes:bytes(p),limit:LIMIT,overLimit:bytes(p)>LIMIT,
+                topFields:breakdown(p),appliedKeywordsBytes:bytes(clean(p.appliedKeywords))};
+            }
+            console.log(JSON.stringify({safety:{firestoreWrites:0,firestoreDeletes:0,rtdbWrites:0},target,control:controlOut},null,2));
+            await admin.app().delete();
+          })().catch(async e=>{console.error(e?.stack||e);try{await admin.app().delete()}catch{}process.exit(1)});
+          NODE

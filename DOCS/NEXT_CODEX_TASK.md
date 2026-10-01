@@ -1,3 +1,41 @@
+## CURRENT TASK — app280 해제 후 재접속 부활 실기기 확인 (2026-10-01 KST)
+
+현재:
+- 사용자 보고로 특정 legacy 곡 문제가 아니라 **Music Note Catalog unsave 삭제 신호 누락**이 실제 공통 원인으로 확인됨.
+- Firestore에는 해제가 저장되지만 Catalog가 해제 전 row를 계속 보유해 재접속 시 다시 살아나는 구조였음.
+- app280은 unsave 문서 ID를 exact Catalog tombstone/deletedIds로 연결.
+- 같은 tombstone을 PC↔모바일 RTDB 수신기에도 저장하여 상대 기기 재접속 부활도 차단.
+- save/restore 시 tombstone을 해제해 정상 재저장 가능.
+- PREVIEW app280 배포 완료.
+- Focused Audit `36808471976` SUCCESS.
+- PREVIEW Release `36808630013` SUCCESS / app280 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+사용자 테스트:
+1. PC/모바일 둘 다 app280.
+2. CACHE LIVE 초기화.
+3. 현재 반복적으로 살아나는 기존 곡 1개를 하트 해제.
+4. 반대 기기에서도 즉시 해제 확인.
+5. **재접속/새로고침/페이지 왕복 후에도 하트와 Music Note가 다시 살아나지 않는지 확인.**
+6. 동일 현상이던 나머지 곡도 한 번씩 해제 후 재접속 테스트.
+7. 해제했던 곡 1개를 다시 저장 → 양 기기 저장 상태 + 재접속 후 유지 확인.
+8. 수신 기기 Firestore R0/W0.
+9. 변경 없이 1분 대기 및 페이지 재진입에서 추가 Firestore/D1 R/W 0.
+
+비용 판정:
+- 실제 unsave: canonical favorites W1은 정상.
+- Catalog delta는 기존 changed-item page-sync 구조를 사용하며 전체 목록 rebuild 없음.
+- remote device sync는 Firestore R0/W0.
+- 페이지 재접속만으로 canonical write 금지.
+- 전체 favorites scan/query 금지.
+
+보호:
+- 공유노트 폴더 생성/곡 저장/이동 app278 동작 보호.
+- 일반 최근생성곡 PC↔모바일 동기화 보호.
+- Explore public like app164/Worker195 동결.
+- Music Note 상세 60초 묶음 저장 보호.
+- 사용자 실사용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app279 특정 legacy 곡 폐기 여부 결정 / 정상 경로 검증 (2026-10-01 KST)
 
 현재:

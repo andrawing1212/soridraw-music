@@ -1,6 +1,6 @@
-app289-compact-music-note-heart-release
-target_source=d91983de73954871d3f693ec341d066e0de7d1bb
-app_version=289
+app290-live-preview-canonical-batch-release
+target_source=800730d920dc6ccb4c4c9a5a19870c6fb0568c45
+app_version=290
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

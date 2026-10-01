@@ -1,3 +1,86 @@
+## 0LK. app279 특정 legacy 최근생성곡 하트 identity 수정 + app278 비용 실사용 판정 (2026-10-01 KST)
+
+사용자 app278 실사용 결과:
+- 공유노트 새 폴더 생성 **PASS**.
+- 공유노트 곡 저장/폴더 이동 **PASS**.
+- 일반 최근생성곡 PC↔모바일 저장/해제 **정상 유지**.
+- 특정 legacy 최근생성곡 `스쳐간 이름 뒤에`만 여전히 FAIL:
+  - 모바일 저장/해제 → PC 하트 반응 없음.
+  - PC 저장 → 반응 없음.
+  - PC/모바일 둘 다 저장 상태로 맞춘 뒤 PC 해제 → 양쪽 해제 반응은 됨.
+- 사용자 CACHE LIVE 캡처:
+  - Browser SDK 누적: 읽기 1 / 쓰기 19.
+  - SDK WRITE 발생처: `favorites:write 11`, `user_structures:write 7`, `favorites:batch 1`.
+  - SDK READ 발생처: `favorites:getDocs 1`.
+  - PAGE SYNC: NOOP, D1 R0/W0, Firestore R0/W0.
+  - Cloudflare 이번 실행 D1 R0/W0.
+- 위 write 증가의 대부분은 **실제 사용자 원본 변경의 canonical write**임:
+  - 폴더 생성/이름/순서 변경 → `user_structures/{uid}` W1/실제 구조 변경.
+  - 곡 폴더 이동/제거 → 변경된 `favorites/{id}` 문서 W1/곡 (batch는 네트워크 묶음일 뿐 문서 write 수는 실제 변경 곡 수).
+  - 최근생성곡 하트 저장/해제 → 해당 `favorites/{id}` canonical W1.
+  - 이는 cross-device 동기화 fanout write가 아니며, SORIDRAW 원칙의 “실제 데이터가 바뀐 만큼만 서버 사용” 범위.
+  - 수신 기기에서 추가 Firestore R/W가 붙거나 idle/navigation만으로 증가하면 FAIL.
+
+app279 원인:
+- app278의 `recentSongSyncKey`가 먼저 로컬 `soridrawSongId`를 사용.
+- 오래된 최근생성곡은 PC/모바일 캐시에 각각 따로 부여된 `sd_...` 값이 있을 수 있어 같은 곡인데도 기기별 key가 달라질 수 있었음.
+- `스쳐간 이름 뒤에` 증상은 이 legacy cache identity split과 일치.
+- 반대로 새/정상 곡은 동일 identity를 이미 공유하므로 app278에서도 정상 작동.
+
+app279 수정:
+1. `generationBatchId + generationIndex`를 최근생성곡의 최우선 immutable cross-device identity로 사용.
+2. favorite와 recent song 모두 이 generation identity를 직접 비교하도록 보강.
+3. favorites status map에도 generation identity alias를 추가하여 수신된 favorite summary만으로 하트 즉시 판정.
+4. deterministic favorite document ID도 기기별 로컬 `soridrawSongId`보다 새 cross-device identity를 우선 사용.
+5. hidden/restore 경로에서도 새 `recentSongSyncKey`를 함께 보존해 재저장 시 다시 기기별 identity로 갈라지지 않게 함.
+6. 기존 정상 recent song, app278 공유노트 구조/폴더 changed-item sync, Explore public like app164/Worker195 동결 기능은 변경하지 않음.
+7. 서버/Rules/Functions/Worker/D1 변경 없음. 사용자 데이터 migration/backfill/delete 없음.
+
+변경 파일:
+- `src/App.tsx`
+- `src/hooks/useFavoritesStore.ts`
+- `public/app-version.json`: 279
+- `scripts/verify-278-music-note-cross-device.mjs`: 후속 앱 버전에서도 보호검사 가능하도록 version gate만 >=278.
+- `scripts/verify-279-legacy-recent-heart.mjs` 추가.
+
+검증:
+- 제품 commit: `c7386cd82e29d3e40dbd0faa694ace3591106de7`.
+- Focused Audit Run `36806408964`: **SUCCESS**.
+  - app279 legacy generation identity PASS.
+  - deterministic recent favorite document PASS.
+  - app278 protected zero-read sync verifier PASS.
+  - Recent Songs protected regression PASS.
+  - shared-note app273/app274 regressions PASS.
+  - TypeScript PASS.
+  - Build PASS.
+- PREVIEW Release Run `36806515670`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` app version **279** / exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - RTDB Rules deploy SKIPPED.
+- 완료된 app279 임시 audit workflow/trigger 제거 완료.
+
+현재 비용 판정:
+- app278에서 확인된 수신 PAGE SYNC/Cloudflare D1 R0/W0는 정상.
+- 실제 폴더/곡/보관함 변경의 canonical Firestore W는 의도된 원본 저장이며 제거 대상 아님.
+- cross-device transport 때문에 추가 canonical Firestore read/write가 붙는지는 계속 **R0/W0**가 합격선.
+- 특정 legacy 곡의 initiator `favorites:getDocs 1`은 app279 실기기 재확인 대상이며, 수신 기기 read 0 기준과 구분해 본다.
+
+실사용 확인:
+1. 진단을 **초기화**하고 PC/모바일 PREVIEW app279 동시 접속.
+2. `스쳐간 이름 뒤에` 둘 다 빈 하트로 맞춘 뒤 모바일 저장 → PC 즉시 채움.
+3. 모바일 해제 → PC 즉시 해제.
+4. PC 저장 → 모바일 즉시 채움.
+5. PC 해제 → 모바일 즉시 해제.
+6. 일반 곡 1개 저장/해제 회귀 없음.
+7. 수신 기기 Firestore R0/W0 유지.
+8. 실제 저장/해제 initiating device의 `favorites:write` W1은 정상 canonical write로 판정.
+9. 폴더 생성의 `user_structures:write` W1, 곡 이동의 `favorites:batch` changed-doc write도 실제 변경으로 정상.
+10. 아무 조작 없이 1분 대기/페이지 재진입에서 추가 R/W 0.
+11. 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## 0LJ. app278 공유노트 구조/곡상태 + legacy 최근곡 하트 PC↔모바일 동기화 PREVIEW 배포 (2026-10-01 KST)
 
 사용자 실사용 판정(app277):

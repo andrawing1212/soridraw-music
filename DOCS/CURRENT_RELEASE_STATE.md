@@ -1,3 +1,71 @@
+## 0MH. Music Note / Library 저장·동기화 비용 구조 감사 (2026-10-02 KST)
+
+**범위 / 상태**
+- 코드 수정/배포 없이 현재 PREVIEW app292 구조를 정적 감사.
+- Music Note 목록 버튼, Detail 편집, My/Shared Note 폴더, Library Workspace, My/Shared Playlist 폴더·아이템, 기기간 동기화 경로 확인.
+- 아래 비용은 코드 경로 기준이며 별도 실기기 CACHE LIVE 재측정 전에는 운영 실측값으로 단정하지 않음.
+
+**Music Note — 현재 좋은 구조**
+- 목록 개인 좋아요/잠금:
+  - 로컬 + localStorage 즉시 반영.
+  - UID-scoped RTDB `musicNoteCardStateDelta`로 반대 기기 즉시 반영.
+  - 페이지 안 반복 클릭은 Firestore W0.
+  - dirty state를 페이지 이탈 시 `user_structures/{uid}.musicNoteCardState` 한 번 W1로 저장.
+- Detail 제목/프롬프트/가사 등:
+  - 필드 저장은 local durable draft에 합산하며 field-save마다 Firestore write 없음.
+  - title/detail/Suno media preview는 compact RTDB preview로 반대 기기 반영.
+  - canonical flush 시 해당 `favorites/{id}` W1.
+  - 현재 실제 `scheduleFavoriteDetailFlush()`는 no-op이므로 오래된 60초 설명과 달리 자동 60초 flush는 없음; page-exit/manual/recovery 중심.
+- Detail open:
+  - 목록은 compact catalog summary.
+  - 필요한 경우에만 exact `favorites/{sourceId}` 1건 hydrate; detail cache 재사용.
+- My/Shared Note 폴더 구조:
+  - folder metadata는 `user_structures/{uid}` aggregate + local cache/session.
+  - folder add/reorder는 structure W1.
+  - structure RTDB changed patch로 반대 기기 갱신; persistent Firestore structure listener 없음.
+  - 기존 폴더에 1곡 배치/제거는 해당 favorite W1; N곡 선택은 changed-song-only WN.
+
+**Music Note — 개선 필요 지점**
+- 폴더 이름 변경:
+  - structure W1 이후 해당 폴더의 모든 favorite에 중복 저장된 `noteFolderTitle/sharedNoteFolderTitle`을 다시 써서 **W1 + W(폴더곡수)**.
+- 폴더 삭제:
+  - structure W1 이후 해당 폴더 모든 곡을 default folder로 옮겨 **W1 + W(폴더곡수)**.
+- 원인: song 문서에 folderId뿐 아니라 folderTitle을 중복 저장.
+- 향후 개선 방향: folderId를 canonical membership으로 유지하고 화면 title은 structure에서 resolve, legacy title은 fallback만 사용하도록 하위호환 전환하면 rename fan-out을 W1로 줄일 수 있음. 사용자 승인 전 schema 의미 변경/백필 금지.
+- 공개(globe) 경로는 Explore Worker/R2/D1 별도 보호 경로. warm publication-state read는 revision/R2 cache 중심이며 D1 R0/W0 경로가 있으나, 이번 감사에서 Worker mutation rows_written을 재실측하지 않았으므로 기존 동결 기준을 임의 수정하지 않음.
+
+**Library Workspace — 현재 좋은 구조**
+- authenticated session 동안 workspace snapshot/listener를 한 번 유지하고 page re-entry는 in-memory/IndexedDB cache 재사용.
+- 정상 재진입은 server read 0 목표 경로.
+- 더보기는 full local catalog의 UI pagination만 수행하여 추가 server read 없음.
+- 색상 변경은 화면/로컬 먼저 변경하고 page exit에 changed keys만 저장.
+
+**Library My / Shared Playlist — 비용 개선 필요**
+- playlist list는 IndexedDB cache + `users.syncVersions.playlists` revision gate를 사용해 warm entry R0 가능.
+- 하지만 cross-device 변경은 Music Note/Recent처럼 changed-item RTDB payload로 직접 patch하지 않고 revision 상승 후 collection refresh:
+  - list revision이 바뀌면 playlist list collection 재조회.
+  - active playlist의 `itemsRevision`이 바뀌면 그 playlist의 **전체 items collection 재조회**.
+- mutation canonical 비용:
+  - 폴더 생성/이름변경: list doc W1 + users revision W1 = **W2**.
+  - 곡 추가: duplicate/order 확인 bounded read(최대 source query 8 + tail 1) + item W1 + parent itemsRevision W1 + users revision W1 = **W3**.
+  - 곡 삭제: item W1 + parent revision W1 + users revision W1 = **W3**.
+  - 곡 이동: new item W1 + old item delete W1 + source parent W1 + target parent W1 + users revision W1 = **W5**, plus bounded duplicate/order reads.
+  - 순서 swap: two item W2 + parent W1 + users W1 = **W4**.
+  - folder delete: 먼저 folder items 전체 `getDocs` 후 item 수만큼 delete + folder delete W1 + users revision W1 → **R/W가 폴더 곡 수에 비례**.
+  - playlist color sync: changed item마다 item + parent revision + users revision = **W3/item**.
+- Library playlist social like `toggleTrackLike`:
+  - 클릭마다 canonical relation + count 2건 transaction read, 변화 시 relation + count 2건 write.
+  - local optimistic UI는 있으나 Recent/Studio heart 같은 trailing batch/RTDB cross-device final-intent 구조는 아님.
+- 따라서 **Library My/Shared Playlist는 app292 Recent/Music Note 수준의 비용 최적화라고 판정할 수 없음**.
+
+**안전한 다음 최적화 후보 — 아직 미실행**
+1. Library playlist changed-item RTDB signal + local cache patch로 cross-device one-item change 시 전체 playlist items reread 제거.
+2. playlist item mutation의 parent revision/users revision 중복 write 축소 또는 UID aggregate/batched revision 설계.
+3. playlist folder delete의 full items read/delete fan-out 재설계.
+4. Library social like를 local-first + final-intent batch 방식으로 전환 가능한지 별도 설계.
+5. Music Note folder title duplication 제거를 backward-compatible 방식으로 설계해 rename fan-out 제거.
+6. Music Note Detail의 실제 no-idle-flush 동작과 오래된 60초 문서 설명을 정리하되, 사용자 승인 없이 정상 동작 변경 금지.
+
 ## 0MG. Song Save / Edit / Sync Cost 스킬 저장 (2026-10-02 KST)
 
 - 신규 스킬: `.agents/skills/song-save-edit-sync-cost/SKILL.md`

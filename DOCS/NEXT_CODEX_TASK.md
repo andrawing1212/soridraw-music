@@ -1,3 +1,45 @@
+## CURRENT TASK — app290 PREVIEW 실기기 비용 + PC↔모바일 최종 검증 (2026-10-02 KST)
+
+현재:
+- app290 PREVIEW Hosting 배포 완료.
+- Audit Run `36926223044` SUCCESS.
+- Release Run `36926449503` SUCCESS.
+- `preview.soridraw.com` app290 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+실기기 최소 검증:
+1. PC/모바일 모두 app290 확인.
+2. `스쳐간 이름 뒤에`:
+   - PC SAVE → 모바일 즉시 filled.
+   - 모바일 UNSAVE → PC 즉시 empty.
+   - 모바일 SAVE → PC 즉시 filled.
+   - PC UNSAVE → 모바일 즉시 empty.
+   - route/tab/refresh 도움 없이 2회 이상 반복.
+3. Studio heart rapid toggle:
+   - 같은 곡을 30초 안에 빠르게 10회 토글.
+   - 화면/반대 기기는 즉시 최종 상태로 수렴.
+   - 시작 상태와 최종 상태가 같으면 CACHE LIVE `favorites:write 0` 목표.
+   - 최종 상태가 다르면 `favorites:write 1` 목표.
+4. Recent Song 편집:
+   - 같은 곡 title → prompt → lyrics를 60초 안에 각각 저장.
+   - 반대 기기에 각 편집은 즉시 보여야 함.
+   - canonical Firestore는 최종 1묶음만: `user_recent_songs:write 1 + users:write 1 = W2 이하`.
+   - 저장 3회가 다시 W6이면 FAIL.
+5. pending 편집 뒤 다른 페이지 왕복 및 새로고침:
+   - 로컬 최신 편집이 사라지지 않음.
+   - 60초 batch 또는 복구 timer 후 canonical 최종 상태와 수렴.
+6. Music Note Detail title/prompt/lyrics:
+   - 기존 local draft/묶음 저장 유지.
+   - field save마다 `favorites` canonical write 반복 증가 금지.
+7. Explore public like / 공개·비공개 / split UI는 이번 변경 범위 밖이며 기존 정상 기준 유지.
+
+판정:
+- 위 실기기 기능 + CACHE LIVE 비용이 모두 맞으면 app290 PREVIEW PASS.
+- 하나라도 기존 정상 동기화가 깨지거나 W6/반복 write가 재현되면 TEST 승격 금지하고 해당 경로만 최소 수정.
+- 사용자 `테스트배포` 지시 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확한 정식배포 승인 전 변경 금지.
+
 ## CURRENT TASK — PREVIEW 비용 최적화: 실시간 UX와 canonical Firestore write 분리 (2026-10-02 KST)
 
 목표:

@@ -1,3 +1,84 @@
+## 0MC. PREVIEW app290 배포 완료 — 실시간 UX 유지 + canonical Firestore write 묶음 처리 (2026-10-02 KST)
+
+**사용자 지시**
+- 이전 채팅의 비용 최적화 작업을 계속 진행하고, 수정 완료 후 PREVIEW 배포까지 진행.
+- 정상 기능은 건드리지 않고 app289 Music Note heart 실기기 PASS를 회귀 기준으로 보호.
+
+**이번 수정**
+- Recent Song 제목/프롬프트/가사:
+  - 저장 즉시 로컬 UI/cache 반영.
+  - 작은 RTDB `edit-preview`로 PC↔모바일 화면 즉시 반영.
+  - Firestore `user_recent_songs` canonical 저장은 60초 trailing batch로 collapse.
+  - 기존 1회 flush의 `user_recent_songs W1 + users.syncVersions W1` 구조를 유지하여 여러 연속 편집을 최종 1묶음으로 처리.
+  - durable local marker/cache로 reload 후 pending batch 복구.
+  - 새 보강: local pending draft가 있는 동안 remote preview/canonical payload가 그 local cache를 덮지 않도록 fence.
+  - 새 보강: RTDB `edit-preview`는 item 적용 여부와 무관하게 Firestore fallback read로 절대 내려가지 않음.
+  - 새 보강: 이전 flush가 진행 중 새 편집이 들어와도 이전 flush가 새 pending marker/outbox를 지우지 않음.
+- Studio Music Note heart:
+  - 클릭 즉시 local heart authority 반영.
+  - 기존 UID-scoped RTDB channel로 PC↔모바일 live preview 유지.
+  - canonical favorites mutation은 곡별 30초 trailing durable outbox로 최종 상태만 commit.
+  - 시작 상태와 최종 상태가 같으면 canonical net-zero W0 guard.
+  - 최종 상태가 다르면 기존 exact favorite mutation 1회만 수행하도록 collapse.
+  - heart preview payload는 exact identity + 최소 generation identity만 사용하여 app289의 oversized payload 문제를 재발시키지 않음.
+  - remote newer preview / overlapping local preview ordering fence 및 bounded retry(최대 2회) 적용.
+- Music Note Detail의 기존 local draft + 묶음 저장 경로는 유지.
+- Explore app164/Worker195 및 분할/UI 경로 비변경.
+
+**검증**
+- 제품/안전 최종 코드 commit: `42b9e6c7c8da42295a59d2bd757251c6bb35e429`.
+- 임시 audit workflow 제거 후 runtime tree commit: `800730d920dc6ccb4c4c9a5a19870c6fb0568c45`.
+- app290 Audit Run `36926223044`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- `APP290_RECENT_EDIT_IMMEDIATE_FIRESTORE_W0=PASS`.
+- `APP290_RECENT_EDIT_TRAILING_BATCH_60S=PASS`.
+- `APP290_RECENT_EDIT_LIVE_PREVIEW_RTDB=PASS`.
+- `APP290_RECENT_EDIT_DURABLE_PENDING_MARKER=PASS`.
+- `APP290_RECENT_EDIT_LOCAL_DRAFT_FENCE=PASS`.
+- `APP290_RECENT_EDIT_PREVIEW_RECEIVER_FIRESTORE_R0=PASS`.
+- `APP290_STUDIO_HEART_LOCAL_FIRST_PREVIEW=PASS`.
+- `APP290_STUDIO_HEART_CANONICAL_30S_BATCH=PASS`.
+- `APP290_STUDIO_HEART_NET_ZERO_W0_GUARD=PASS`.
+- `APP290_STUDIO_HEART_DURABLE_OUTBOX=PASS`.
+- `APP290_STUDIO_HEART_PREVIEW_NO_FIRESTORE_IO=PASS`.
+- Music Note Detail batch regression PASS.
+- app289 oversized Music Note SAVE/UNSAVE regression PASS.
+- app197 Explore 신규 공개곡 좋아요 회귀 PASS.
+- 임시 `audit-290-recent-edit-batch.yml` 제거 완료.
+
+**PREVIEW 배포**
+- release commit: `21f9b19126a338fd818a9e6af2783c4c8bb135dc`.
+- Firebase PREVIEW Run `36926449503`: **SUCCESS**.
+- locked source: `21f9b19126a338fd818a9e6af2783c4c8bb135dc`.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **290** / exact build PASS.
+- Shared RTDB Rules: SKIPPED (변경 없음).
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- TEST / PRODUCTION code + live HTML unchanged PASS.
+- 사용자 데이터 migration/backfill/delete/duplicate merge 없음.
+
+**비용 판정**
+- 정적/코드 경로 기준:
+  - Recent edit 저장 버튼 1회마다 Firestore 즉시 write **W0**.
+  - 60초 안 연속 title/prompt/lyrics 변경은 최종 canonical batch 1회로 collapse, 현재 aggregate 구조 기준 **최대 W2 목표**.
+  - Studio heart rapid toggle은 30초 안 최종=시작이면 favorites canonical **W0 목표**, 최종≠시작이면 **W1 목표**.
+  - 수신 기기 RTDB preview는 Firestore R0/W0, D1 R0/W0 경로.
+- 위 W0/W1/W2 수치는 **실기기 CACHE LIVE 비용 계측 전**이므로 운영 실측 합격 선언은 보류.
+
+**다음 게이트**
+1. PC/모바일 둘 다 app290 확인.
+2. app289 문제곡 `스쳐간 이름 뒤에` SAVE/UNSAVE 양방향 즉시 동기화 회귀 없음 확인.
+3. Studio heart 10회 rapid toggle 비용 실측:
+   - 최종 상태=시작 상태 → favorites write 0 목표.
+   - 최종 상태≠시작 상태 → favorites write 1 목표.
+4. Recent title→prompt→lyrics 3회 연속 저장:
+   - 반대 기기 각 변경 즉시 표시.
+   - 60초 후 canonical `user_recent_songs W1 + users W1 = W2 이하`.
+   - 기존처럼 W6이면 FAIL.
+5. pending 상태에서 페이지 이동/새로고침 후 최종 저장 복구 확인.
+6. Music Note Detail 기존 60초/page-exit batch 회귀 없음 확인.
+7. 사용자 실기기 비용+동기화 PASS 전 TEST 승격 금지.
+
 ## 0MB. 비용 회귀 확인 — 실시간 UX와 Firestore 영구저장을 분리해야 함 (2026-10-02 KST)
 
 **사용자 실기기 영상 증거**

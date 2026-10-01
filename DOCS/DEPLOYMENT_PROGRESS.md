@@ -1,3 +1,19 @@
+## PREVIEW app290 live UX + canonical write batching (2026-10-02 KST)
+
+- 제품/안전 최종 코드: `42b9e6c7c8da42295a59d2bd757251c6bb35e429`.
+- runtime tree: `800730d920dc6ccb4c4c9a5a19870c6fb0568c45`.
+- release commit: `21f9b19126a338fd818a9e6af2783c4c8bb135dc`.
+- app290 Audit Run `36926223044` SUCCESS.
+- Firebase PREVIEW Hosting Run `36926449503` SUCCESS.
+- TypeScript / Build / focused regression PASS.
+- remote app version **290** / exact build PASS.
+- Shared RTDB Rules SKIPPED; Worker / Functions / Firestore Rules / D1 변경 없음.
+- TEST / PRODUCTION unchanged PASS.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 목적: PC↔모바일 즉시 화면 반응은 RTDB preview로 유지하면서 Recent edit Firestore canonical을 60초 1묶음, Studio heart canonical을 30초 최종 상태 1회로 줄임.
+- 코드상 비용 목표: Recent 3회 편집 W2 이하, heart rapid toggle 최종=시작 W0 / 최종≠시작 W1. **실기기 CACHE LIVE 실측 전**.
+- TEST 승격 전 app289 문제곡 회귀 + PC/mobile live sync + rapid toggle/edit 비용 실측 필수.
+
 # SORIDRAW Deployment Progress
 
 최종 갱신: 2026-09-22 KST

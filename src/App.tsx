@@ -622,6 +622,19 @@ const rememberFavoriteDeletedTombstones = (uid: string, ids: string[]) => {
   }
 };
 
+// app280 — this set is also the local Catalog exclusion guard for soft unsave.
+// A later explicit save/restore of the same document must clear it first.
+const forgetFavoriteDeletedTombstones = (uid: string, ids: string[]) => {
+  const safeIds = Array.from(new Set((ids || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!uid || safeIds.length === 0) return;
+  const tombstones = getFavoriteDeletedTombstoneIds(uid);
+  let changed = false;
+  safeIds.forEach((id) => {
+    if (tombstones.delete(id)) changed = true;
+  });
+  if (changed) writeFavoriteDeletedTombstoneIds(uid, tombstones);
+};
+
 const isFavoriteDeletedTombstoned = (uid: string, id: string): boolean => {
   if (!uid || !id) return false;
   return getFavoriteDeletedTombstoneIds(uid).has(id);
@@ -5980,8 +5993,13 @@ function App() {
 
     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
       if (!savedFavorite?.id) return;
-      if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+      const savedFavoriteId = String(savedFavorite.id);
       const isExplicitSaveSignal = signal.action === 'save';
+      if (isExplicitSaveSignal) {
+        forgetFavoriteDeletedTombstones(uid, [savedFavoriteId]);
+      } else if (isFavoriteDeletedTombstoned(uid, savedFavoriteId)) {
+        return;
+      }
       const normalizedFavorite = sanitizeForFirestore({
         ...savedFavorite,
         uid: savedFavorite.uid || uid,
@@ -6031,9 +6049,14 @@ function App() {
 
     if (signal.action !== 'unsave' && signal.action !== 'delete') return;
 
-    if (signal.action === 'delete') {
-      const deletedIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
-      rememberFavoriteDeletedTombstones(uid, deletedIds);
+    const removedFavoriteIds = Array.from(new Set([
+      ...(Array.isArray(signal.favoriteIds) ? signal.favoriteIds : []),
+      signal.favoriteId,
+    ].map((id) => String(id || '').trim()).filter(Boolean)));
+    if (removedFavoriteIds.length > 0) {
+      // Soft unsave must suppress the stale full Catalog row on reload just like
+      // permanent delete. This is local-only metadata; it is cleared by save/restore.
+      rememberFavoriteDeletedTombstones(uid, removedFavoriteIds);
     }
 
     // Clean localStorage directly as well as React state.
@@ -9756,6 +9779,15 @@ const toggleCycleVariantSelection = (
         || normalizedOperation === 'bulk-delete';
 
       if (remoteItem || removed || isRemovalOperation) {
+        if (isRemovalOperation) {
+          rememberFavoriteDeletedTombstones(uid, exactDocumentIds);
+        } else if (
+          normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'shared-note-save'
+        ) {
+          forgetFavoriteDeletedTombstones(uid, exactDocumentIds);
+        }
         setFavorites((prev) => {
           const changedIds = new Set(exactDocumentIds);
           let next = (Array.isArray(prev) ? prev : []).filter(
@@ -10257,6 +10289,7 @@ const toggleCycleVariantSelection = (
             affectedCount: 1,
             syncItem: sanitizeForFirestore({ ...existingFav, ...restoreUpdates, id: existingFav.id, firestoreId: existingFav.id }),
           }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
+          forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
           // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
           showToast('보관함에 다시 저장되었습니다.');
@@ -10318,6 +10351,12 @@ const toggleCycleVariantSelection = (
             }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
           }
 
+          const unsaveCatalogRemovalIds = Array.from(new Set(
+            (unsaveTargets.length > 0 ? unsaveTargets : [existingFav])
+              .map((favorite) => String(favorite?.id || '').trim())
+              .filter(Boolean)
+          ));
+          rememberFavoriteDeletedTombstones(user.uid, unsaveCatalogRemovalIds);
           removeLocalFavorite(existingFav.id);
           applyFavoriteSyncSignal(user.uid, unsaveSignal);
           queueMusicNoteFavoriteCountDelta(user.uid, -1);
@@ -10330,6 +10369,7 @@ const toggleCycleVariantSelection = (
             || code === 'invalid-argument'
             || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
+            rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
             removeLocalFavorite(existingFav.id);
             applyFavoriteSyncSignal(user.uid, unsaveSignal);
             // No canonical document changed here, so do not emit a server sync write.
@@ -10413,6 +10453,8 @@ const toggleCycleVariantSelection = (
         { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1, syncItem: favoritePayload },
         addDoc(collection(db, 'favorites'), favoritePayload),
       );
+
+      forgetFavoriteDeletedTombstones(user.uid, [createdFavoriteDocRef.id]);
 
       const localFavorite = sanitizeForFirestore({
         ...song,

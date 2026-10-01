@@ -5,7 +5,7 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const store = fs.readFileSync('src/hooks/useFavoritesStore.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 279);
+assert.ok(Number(version.version) >= 279, 'app version must be 279 or newer');
 
 const keyStart = app.indexOf('  const getRecentSongGenerationSyncKey = (song: any): string => {');
 const keyEnd = app.indexOf('  const getFavoriteComparableText', keyStart);

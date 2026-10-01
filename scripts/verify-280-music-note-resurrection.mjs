@@ -1,0 +1,62 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const app = fs.readFileSync('src/App.tsx', 'utf8');
+const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
+
+assert.equal(Number(version.version), 280);
+
+assert.match(app, /const forgetFavoriteDeletedTombstones = \(uid: string, ids: string\[\]\) =>/);
+assert.match(app, /rememberFavoriteDeletedTombstones\(user\.uid, unsaveCatalogRemovalIds\)/);
+assert.match(app, /forgetFavoriteDeletedTombstones\(user\.uid, \[existingFav\.id\]\)/);
+assert.match(app, /forgetFavoriteDeletedTombstones\(user\.uid, \[createdFavoriteDocRef\.id\]\)/);
+
+const cacheStart = app.indexOf('  const writeFavoritesCache = (');
+const cacheEnd = app.indexOf('  const patchFavoriteCacheImmediately', cacheStart);
+assert.ok(cacheStart >= 0 && cacheEnd > cacheStart, 'writeFavoritesCache block missing');
+const cacheBlock = app.slice(cacheStart, cacheEnd);
+assert.match(cacheBlock, /deletedIds: Array\.from\(getFavoriteDeletedTombstoneIds\(uid\)\)/);
+
+const bundleMarker = "const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);";
+assert.ok(app.includes(bundleMarker), 'catalog hydration tombstone filter missing');
+assert.match(app, /!localDeletedIds\.has\(favoriteId\)/);
+
+const remoteStart = app.indexOf('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback');
+const remoteEnd = app.indexOf('  useEffect(() => {', remoteStart);
+assert.ok(remoteStart >= 0 && remoteEnd > remoteStart, 'remote Music Note sync block missing');
+const remote = app.slice(remoteStart, remoteEnd);
+assert.match(remote, /if \(isRemovalOperation\) \{\s*rememberFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
+assert.match(remote, /normalizedOperation === 'save'/);
+assert.match(remote, /forgetFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
+assert.doesNotMatch(remote, /getDoc\(|getDocs\(/);
+
+const toggleStart = app.indexOf('  const toggleFavorite = async (song: SongResult');
+const toggleEnd = app.indexOf('  const updateFavorite = async', toggleStart);
+assert.ok(toggleStart >= 0 && toggleEnd > toggleStart, 'toggleFavorite block missing');
+const toggle = app.slice(toggleStart, toggleEnd);
+assert.match(toggle, /operation: 'unsave'/);
+assert.match(toggle, /favoriteRemoved: true/);
+assert.match(toggle, /saved: false/);
+assert.match(toggle, /rememberFavoriteDeletedTombstones\(user\.uid, unsaveCatalogRemovalIds\)/);
+
+// The fix must not add another canonical Firestore write/read to unsave.
+const unsaveAnchor = toggle.indexOf('const unsavedAt = Date.now()');
+const saveAnchor = toggle.indexOf('const createdAtMs = Date.now()', unsaveAnchor);
+const unsave = toggle.slice(unsaveAnchor, saveAnchor);
+assert.equal((unsave.match(/updateDoc\(/g) || []).length, 2, 'existing bounded unsave update branches changed unexpectedly');
+assert.equal((unsave.match(/getDoc\(/g) || []).length, 0);
+assert.equal((unsave.match(/getDocs\(/g) || []).length, 0);
+
+const legacyStart = app.indexOf('  const applyFavoriteSyncSignal = (uid: string, signal: any) => {');
+const legacyEnd = app.indexOf("  const SUNO_LIBRARY_SIGNAL_KEY", legacyStart);
+assert.ok(legacyStart >= 0 && legacyEnd > legacyStart, 'legacy sync block missing');
+const legacy = app.slice(legacyStart, legacyEnd);
+assert.match(legacy, /Soft unsave must suppress the stale full Catalog row on reload/);
+assert.match(legacy, /rememberFavoriteDeletedTombstones\(uid, removedFavoriteIds\)/);
+assert.match(legacy, /forgetFavoriteDeletedTombstones\(uid, \[savedFavoriteId\]\)/);
+
+console.log('APP280_UNSAVE_CATALOG_TOMBSTONE=PASS');
+console.log('APP280_REENTRY_NO_RESURRECTION_GUARD=PASS');
+console.log('APP280_REMOTE_DEVICE_NO_RESURRECTION_GUARD=PASS');
+console.log('APP280_SAVE_RESTORE_REVIVES_EXACT_ID=PASS');
+console.log('APP280_NO_EXTRA_FIRESTORE_IO=PASS');

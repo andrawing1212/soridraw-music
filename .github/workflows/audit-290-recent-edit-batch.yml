@@ -8,7 +8,9 @@ on:
       - 'src/services/userDomainSyncService.ts'
       - 'src/data/v1MutationBoundary.ts'
       - 'src/pages/FavoritesPage.tsx'
+      - 'src/lib/studioHeartBatch.ts'
       - 'scripts/verify-290-recent-edit-batch.mjs'
+      - 'scripts/verify-290-studio-heart-batch.mjs'
       - 'scripts/verify-031-music-note-detail-batched-draft.mjs'
       - '.github/workflows/audit-290-recent-edit-batch.yml'
 
@@ -30,6 +32,8 @@ jobs:
         run: npm run lint
       - name: Recent edit cost verifier
         run: node scripts/verify-290-recent-edit-batch.mjs
+      - name: Studio heart cost verifier
+        run: node scripts/verify-290-studio-heart-batch.mjs
       - name: Music Note detail batch regression
         run: node scripts/verify-031-music-note-detail-batched-draft.mjs
       - name: app289 heart regression

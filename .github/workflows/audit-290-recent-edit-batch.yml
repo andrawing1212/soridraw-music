@@ -9,6 +9,7 @@ on:
       - 'src/data/v1MutationBoundary.ts'
       - 'src/pages/FavoritesPage.tsx'
       - 'scripts/verify-290-recent-edit-batch.mjs'
+      - 'scripts/verify-031-music-note-detail-batched-draft.mjs'
       - '.github/workflows/audit-290-recent-edit-batch.yml'
 
 permissions:

@@ -1,3 +1,20 @@
+## PREVIEW app294 Library new-folder R0 (2026-10-02 KST)
+
+- product fix: `7decc68c80114eae11129894135346992054b7cb`.
+- focused verifier: `be1ee8cc091f4150510ba16abdc485b44e4689cf`.
+- app version commit: `42ea54fc1284d46e8030240d51633bae64d661cf`.
+- release trigger/locked source: `3c9f1d67a72aaf9b94408f0d050752f8b47e439f`.
+- Firebase PREVIEW Run `36941526371`: SUCCESS.
+- TypeScript PASS / Build PASS / Firebase Hosting PASS.
+- `preview.soridraw.com` app 294 / exact build PASS.
+- Shared RTDB Rules SKIPPED; Worker / Functions / D1 / Firestore Rules unchanged.
+- TEST / PRODUCTION unchanged PASS.
+- user data migration/backfill/delete 없음.
+- 변경: 새 My/Shared playlist 생성 성공 직후 해당 새 folder의 empty items cache를 same syncVersion으로 seed. 자동 선택 직후의 불필요 `user_playlists/.../items getDocs` 1회를 제거하는 R0 경로.
+- canonical create/rename W2 계약은 그대로 유지.
+- 실기기 CACHE LIVE에서 새 폴더 생성 직후 read 0 확인 전.
+- Release System Audit `36941393567`은 TypeScript/Build PASS 후 unrelated stale `verify-221` assertion으로 FAIL; app294 Library 변경 경로와 별개.
+
 ## PREVIEW app293 Library playlist delta cost + Music Note folder rename (2026-10-02 KST)
 
 - 제품 구현: `b3f4443ecb873006eb93f4dd6e3a4df05556470e`.

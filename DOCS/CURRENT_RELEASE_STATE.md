@@ -1,3 +1,87 @@
+## 0LT. PREVIEW app285 배포 완료 — 저장/해제 시 같은 곡 identity 유지, duplicate 상태에서도 양 기기 exact-link 수렴 (2026-10-02 KST)
+
+**사용자 실사용 판정**
+- app284도 `스쳐간 이름 뒤에` PC↔모바일 하트 불일치가 그대로라 FAIL.
+- 사용자 관찰: "좋아요 저장하기 전에는 다른 곡으로 인식하다가 저장 후에는 같은 곡으로 인식하는 느낌".
+- 이 관찰을 기준으로 save와 unsave의 실제 RTDB changed-item payload를 다시 비교함.
+
+**read-only 실데이터 재진단**
+- 진단 Run `36900044773`: SUCCESS / Firestore write 0 / delete 0 / RTDB write 0.
+- 문제 곡 favorite 문서 2개는 여전히 같은 generationBatchId+generationIndex / 같은 soridrawSongId / 같은 recentSongSyncKey.
+- 두 문서 모두 서버 기준 soft-removed.
+- `user_recent_songs`는 그중 한 문서를 `favoriteFirestoreId`로 보유.
+- 최신 실제 unsave RTDB signal은 exact document ID는 있었지만 **itemJson이 비어 있었음**.
+- 즉 save 때는 active favorite summary에 generation/soridraw/recent identity가 실려 상대 기기가 "같은 곡"으로 수렴하지만, unsave 때는 문서 ID만 오고 song identity가 사라져 상대 기기가 과거 로컬 duplicate/generation fallback을 계속 사용할 수 있었음.
+- 또한 Studio local handler가 unsave 뒤 modern recent row의 `favoriteFirestoreId`를 삭제하고 있었음.
+- 따라서 "저장 전에는 다른 곡 / 저장 후에는 같은 곡처럼 보인다"는 사용자 관찰과 코드/실데이터가 정확히 일치함.
+
+**app285 수정**
+1. 하트의 filled/empty는 상태만 바꾸고 **Recent Song -> Music Note exact document identity는 유지**.
+2. unsave 전 local cache에 exact link가 없더라도 현재 active favorite가 확인되면 그 document ID를 같은 곡 link로 회수.
+3. unsave 뒤 `favoriteFirestoreId / musicNoteFavoriteId`를 삭제하지 않음.
+4. 실제 heart mutation으로 잃어버린 exact link를 처음 회수한 경우에만 `user_recent_songs` W1 1회로 durable repair.
+5. Music Note unsave RTDB signal도 save와 같은 방식으로 generationBatchId+generationIndex / soridrawSongId / recentSongSyncKey를 작은 removal identity payload에 포함.
+6. 수신 기기는 save/restore/update/unsave 모두 `isSameRecentSongSyncItem`으로 같은 Recent Song을 찾고 exact favorite document ID를 유지.
+7. 따라서 stale duplicate가 local cache에 남아 있어도 Recent Song 하트는 exact linked favorite 1개만 기준으로 판단.
+8. 기존 duplicate Firestore 문서는 자동 삭제/병합하지 않음. 사용자의 원본 데이터에 destructive cleanup 없음.
+9. app282 제목, app281 Suno URL, app280 tombstone, app278 공유노트, Explore public like app164/Worker195 정상 기능 비변경.
+
+**비용**
+- unchanged idle/navigation/app update: Firestore/D1 R0/W0 목표 유지.
+- 일반 save/unsave: 기존 favorite canonical W1.
+- exact link가 이미 정상인 곡: recent 추가 W0.
+- exact link를 실제 heart action에서 처음 복구해야 하는 경우에만 user_recent_songs W1 1회 추가 → 해당 repair action 최대 W2.
+- 수신 기기 Firestore R0/W0.
+- D1 추가 R/W 0.
+- RTDB 추가 mutation 없음. 기존 1회 Music Note changed-item 신호의 payload만 보강.
+
+**검증**
+- 핵심 제품 commit:
+  - `230a70965722a75152c4f6de4200f90639fa68ed` — unsave에서도 exact recent link 유지/repair.
+  - `6a093aa2e2d3844e76ab77f083fc14fe251cd360` — modern unsave RTDB removal identity 전달.
+- Focused Audit Run `36900679216`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app278~app284 보호검사 PASS.
+  - APP285_UNSAVE_PRESERVES_EXACT_RECENT_LINK PASS.
+  - APP285_REMOTE_UNSAVE_CARRIES_MODERN_SONG_IDENTITY PASS.
+  - APP285_SAVE_UNSAVE_USE_SAME_RECENT_IDENTITY PASS.
+  - APP285_STALE_DUPLICATE_HEART_FALLBACK_BLOCKED PASS.
+  - APP285_REMOTE_RECEIVER_FIRESTORE_R0 PASS.
+  - Recent Songs 196 regression PASS.
+- 임시 diagnostic/audit workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- locked release commit: `35027235894af100cff4155584c62baeb20854ca`.
+- Firebase PREVIEW App Run `36900908194`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **285**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 데이터 delete/migration/backfill 없음.
+
+**실기기 테스트**
+1. PC/모바일 모두 app285.
+2. `스쳐간 이름 뒤에` 한쪽이 filled면 그 기기에서 해제.
+3. 상대가 페이지 이동/새로고침 없이 empty.
+4. 같은 기기에서 저장 → 상대 즉시 filled.
+5. 반대 기기에서 해제 → 첫 기기 즉시 empty.
+6. 반대 기기에서 저장 → 첫 기기 즉시 filled.
+7. 양쪽 새로고침/재접속 후 마지막 상태 동일.
+8. 일반 정상 곡 1개 같은 순서 회귀 없음.
+9. 제목 변경/복원 app282 회귀 없음.
+10. 수신 기기 Firestore R0/W0, D1 R0/W0.
+11. 문제 곡 첫 link repair 시 initiating side 최대 W2 허용. 이후 동일 곡 toggle에서 recent repair W1 반복 시 FAIL.
+
+**상태**
+- PREVIEW app285 코드/감사/배포 완료.
+- 사용자 실기기 검증 전.
+- TEST / PRODUCTION 비변경.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## 0LS. PREVIEW app284 배포 완료 — 특정 곡 실제 원인 확정: 중복 identity가 아니라 removed favorite를 가리키는 stale exact link + duplicate fallback (2026-10-02 KST)
 
 **사용자 판정**

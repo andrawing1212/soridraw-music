@@ -1,6 +1,6 @@
-app286-heart-direction-authority-release
-target_source=1ad4b2436a7a980bdf94f97b66fb4aebb641dc4f
-app_version=286
+app287-idempotent-save-live-sync-release
+target_source=e2c3a3023a283a70e9eda747eb0d8daaf9031dbe
+app_version=287
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

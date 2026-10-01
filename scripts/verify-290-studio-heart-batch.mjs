@@ -39,6 +39,10 @@ const publishEnd = sync.indexOf('// app287', publishStart);
 assert.ok(publishStart >= 0 && publishEnd > publishStart);
 const publishBlock = sync.slice(publishStart, publishEnd);
 assert.match(publishBlock, /operation: desiredSaved \? 'heart-preview-save' : 'heart-preview-unsave'/);
+assert.match(publishBlock, /const identityOnly: Record<string, unknown> = \{/);
+assert.match(publishBlock, /generationBatchId/);
+assert.match(publishBlock, /generationIndex/);
+assert.doesNotMatch(publishBlock, /\.\.\.\(syncItem as Record<string, unknown>\)/);
 assert.match(publishBlock, /return publishSignal/);
 assert.doesNotMatch(publishBlock, /\b(?:getDoc|getDocs|setDoc|updateDoc|addDoc|deleteDoc)\s*\(/);
 

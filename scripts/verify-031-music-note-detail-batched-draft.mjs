@@ -38,11 +38,20 @@ assert(commit.includes('queueFavoriteDetailPatch(payload.targetSongId, payload.u
 assert(!commit.includes('await updateFavorite('), 'title/lyrics/prompt still write Firestore immediately');
 
 const sunoSave = block('  const saveFavoriteSunoShareUrls = async', '\n\n  const saveFavoriteSunoShareUrl');
-assert(sunoSave.includes("if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);"), 'detail Suno URL save does not use batch queue');
-assert(sunoSave.includes('else await updateFavorite(song.id, updates);'), 'non-detail Suno URL behavior changed unexpectedly');
+assert(
+  sunoSave.includes("if (source === 'detail')") && sunoSave.includes('queueFavoriteDetailPatch(song.id, updates);'),
+  'detail Suno URL save does not use batch queue'
+);
+assert(
+  sunoSave.includes('else {') && sunoSave.includes('await updateFavorite(song.id, updates);'),
+  'non-detail Suno URL behavior changed unexpectedly'
+);
 
 const sunoRemove = block('  const removeFavoriteSunoShareUrl = async', '\n\n  const COLOR_SYNC_USAGE_KEY');
-assert(sunoRemove.includes("if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);"), 'detail Suno URL remove does not use batch queue');
+assert(
+  sunoRemove.includes("if (source === 'detail')") && sunoRemove.includes('queueFavoriteDetailPatch(song.id, updates);'),
+  'detail Suno URL remove does not use batch queue'
+);
 
 const queue = block('  const queueFavoriteDetailPatch = (songId: string', '\n\n  const flushAllMusicNoteLocalChangesForPageExit');
 assert(queue.includes('writeMusicNoteDetailDraft(user.uid'), 'pending changes are not persisted to IndexedDB');

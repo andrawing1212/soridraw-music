@@ -1,9 +1,0 @@
-requested_at=2026-10-01T11:35:00+09:00
-requested_by=user
-task=app279_legacy_recent_heart_identity
-base_preview_sha=6bf860e6b502b92cf0d5731036b77abb11e6a540
-scope=single_legacy_recent_song_cross_device_heart_only
-normal_recent_songs_protected=true
-shared_note_app278_pass_protected=true
-no_user_data_migration=true
-test_production_unchanged=true

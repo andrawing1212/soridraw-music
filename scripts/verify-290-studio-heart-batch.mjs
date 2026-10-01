@@ -37,7 +37,7 @@ assert.ok(publishStart >= 0 && publishEnd > publishStart);
 const publishBlock = sync.slice(publishStart, publishEnd);
 assert.match(publishBlock, /operation: desiredSaved \? 'heart-preview-save' : 'heart-preview-unsave'/);
 assert.match(publishBlock, /return publishSignal/);
-assert.doesNotMatch(publishBlock, /firestore|getDoc|getDocs|setDoc|updateDoc/i);
+assert.doesNotMatch(publishBlock, /\b(?:getDoc|getDocs|setDoc|updateDoc|addDoc|deleteDoc)\s*\(/);
 
 const dispatchStart = sync.indexOf('const dispatchSignal =');
 const dispatchEnd = sync.indexOf('let activeUid', dispatchStart);

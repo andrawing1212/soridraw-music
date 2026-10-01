@@ -13,6 +13,7 @@ type PendingPlaylistRevision = {
 
 const timers = new Map<string, number>();
 const inflight = new Map<string, Promise<void>>();
+const pendingMemory = new Map<string, PendingPlaylistRevision>();
 const latestSharedSignalVersionByUid = new Map<string, number>();
 
 const normalizeUid = (uid: string): string => String(uid || '').trim();
@@ -25,12 +26,17 @@ const safeVersion = (value: unknown): number => {
 
 const readPending = (uid: string): PendingPlaylistRevision | null => {
   const safeUid = normalizeUid(uid);
-  if (!safeUid || typeof localStorage === 'undefined') return null;
+  if (!safeUid) return null;
+  const memory = pendingMemory.get(safeUid);
+  if (memory) return memory;
+  if (typeof localStorage === 'undefined') return null;
   try {
     const parsed = JSON.parse(localStorage.getItem(storageKey(safeUid)) || 'null');
     const latestVersion = safeVersion(parsed?.latestVersion);
     const updatedAt = safeVersion(parsed?.updatedAt);
-    return latestVersion > 0 && updatedAt > 0 ? { latestVersion, updatedAt } : null;
+    const pending = latestVersion > 0 && updatedAt > 0 ? { latestVersion, updatedAt } : null;
+    if (pending) pendingMemory.set(safeUid, pending);
+    return pending;
   } catch {
     return null;
   }
@@ -38,7 +44,9 @@ const readPending = (uid: string): PendingPlaylistRevision | null => {
 
 const writePending = (uid: string, value: PendingPlaylistRevision): void => {
   const safeUid = normalizeUid(uid);
-  if (!safeUid || typeof localStorage === 'undefined') return;
+  if (!safeUid) return;
+  pendingMemory.set(safeUid, value);
+  if (typeof localStorage === 'undefined') return;
   try { localStorage.setItem(storageKey(safeUid), JSON.stringify(value)); } catch {}
 };
 
@@ -48,6 +56,7 @@ const clearPending = (uid: string): void => {
   const timer = timers.get(safeUid);
   if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
   timers.delete(safeUid);
+  pendingMemory.delete(safeUid);
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(storageKey(safeUid)); } catch {}
   }

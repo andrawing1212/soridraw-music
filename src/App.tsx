@@ -463,6 +463,10 @@ const SORIDRAW_901_MUSIC_NOTE_SYNC_PERMISSION_HARDENING = true;
 const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_local_sync_version_v1';
 const MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_remote_sync_version_v1';
+// app288 — RTDB delivery acknowledgement must never share the catalog/data
+// timestamp key. Catalog generatedAtMs and RTDB signal version are different
+// version domains; mixing them can make a healthy changed-item signal look stale.
+const MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE = 'soridraw_music_note_rtdb_ack_version_v1';
 const MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE = 'soridraw_music_note_pagination_cursor_v1';
 const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
@@ -9860,11 +9864,17 @@ const toggleCycleVariantSelection = (
     // already updated the cache before publishing the sync signal.
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
+
+    // app288 — Reject only an RTDB signal we have actually acknowledged.
+    // The old localVersion can be advanced by Catalog generatedAtMs and may be
+    // numerically ahead of a perfectly new RTDB SAVE/UNSAVE signal.
+    const signalAckVersion = readMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid);
+    if (signalAckVersion >= remoteVersion) return;
     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
-    if (localVersion >= remoteVersion) return;
 
     const exactDocumentIds = [...new Set(
       (Array.isArray(documentIds) ? documentIds : [])
@@ -9889,6 +9899,7 @@ const toggleCycleVariantSelection = (
       && parsedItemPayload?.__musicNoteStructureSync === true
     ) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'SYNC', 0);
       return;
     }
@@ -10033,6 +10044,7 @@ const toggleCycleVariantSelection = (
           return sorted;
         });
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
         markCacheDiagnostic('musicNote', 'SYNC', 0);
         return;
       }
@@ -10052,6 +10064,7 @@ const toggleCycleVariantSelection = (
 
     if (musicNoteFreshBootstrapUids.has(uid)) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       return;
     }
 
@@ -10089,6 +10102,7 @@ const toggleCycleVariantSelection = (
 
       if (snapshot.docs.length < FAVORITES_PAGE_SIZE || maxSeenVersion >= remoteVersion) {
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       } else if (maxSeenVersion > localVersion) {
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, maxSeenVersion);
       }

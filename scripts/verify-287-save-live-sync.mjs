@@ -5,7 +5,7 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 287);
+assert.ok(Number(version.version) >= 287, 'app version must be 287 or newer');
 
 assert.match(sync, /export const publishMusicNoteSaveStateDelta/);
 const publisherStart = sync.indexOf('export const publishMusicNoteSaveStateDelta');

@@ -5629,6 +5629,18 @@ function App() {
       || 0,
   });
 
+  const buildLegacyRecentFavoriteBridge = (song: any): { recentLegacySourceId?: string; recentLegacyCreatedAtMs?: number } => {
+    // app283 — Only legacy Recent Songs need this bridge. Modern generated songs
+    // already have generationBatchId + generationIndex and stay on that stronger identity.
+    if (getRecentSongGenerationSyncKey(song)) return {};
+    const sourceIdentity = getRecentSongSourceIdentity(song);
+    if (!sourceIdentity.sourceId) return {};
+    return {
+      recentLegacySourceId: sourceIdentity.sourceId,
+      ...(sourceIdentity.createdAtMs > 0 ? { recentLegacyCreatedAtMs: sourceIdentity.createdAtMs } : {}),
+    };
+  };
+
   const isSameRecentSongSyncItem = (left: any, right: any): boolean => {
     if (!left || !right) return false;
     const leftGeneration = getRecentSongGenerationSyncKey(left);
@@ -5736,7 +5748,7 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
-    if ((song as any)?.recentFavoriteDetachedAt) return false;
+    if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
     if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
@@ -9812,6 +9824,74 @@ const toggleCycleVariantSelection = (
         || normalizedOperation === 'permanent-delete'
         || normalizedOperation === 'bulk-delete';
 
+      // app283 — A very old generated song can have different device-local
+      // favorite/soridraw ids on PC and mobile. The canonical Music Note mutation
+      // already emits one bounded RTDB changed-item signal, so use its optional
+      // legacy source bridge to converge the Recent Songs heart without any
+      // extra Firestore read/write or a second RTDB mutation.
+      const recentLegacySourceId = String(remoteItem?.recentLegacySourceId || '').trim();
+      const recentLegacyCreatedAtMs = Number(remoteItem?.recentLegacyCreatedAtMs || 0);
+      const isLegacyRecentFavoriteLinkOperation = recentLegacySourceId && (
+        normalizedOperation === 'save'
+        || normalizedOperation === 'restore'
+        || normalizedOperation === 'update'
+        || isRemovalOperation
+      );
+      if (isLegacyRecentFavoriteLinkOperation) {
+        const currentHistory = historyRef.current;
+        const targetIndex = currentHistory.findIndex((song: any) => {
+          const sourceIdentity = getRecentSongSourceIdentity(song);
+          if (!sourceIdentity.sourceId || sourceIdentity.sourceId !== recentLegacySourceId) return false;
+          if (sourceIdentity.createdAtMs > 0 && recentLegacyCreatedAtMs > 0) {
+            return sourceIdentity.createdAtMs === recentLegacyCreatedAtMs;
+          }
+          return true;
+        });
+
+        if (targetIndex >= 0) {
+          const currentSong = currentHistory[targetIndex] as any;
+          const nextSong = { ...currentSong } as any;
+          const remoteRecentSongSyncKey = String(remoteItem?.recentSongSyncKey || '').trim();
+          const remoteSoridrawSongId = String(remoteItem?.soridrawSongId || '').trim();
+          const remoteFavoriteId = String(
+            remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
+          ).trim();
+
+          if (remoteRecentSongSyncKey) nextSong.recentSongSyncKey = remoteRecentSongSyncKey;
+          if (isSoridrawSongId(remoteSoridrawSongId)) nextSong.soridrawSongId = remoteSoridrawSongId;
+
+          if (isRemovalOperation) {
+            delete nextSong.favoriteFirestoreId;
+            delete nextSong.musicNoteFavoriteId;
+            nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
+              remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
+            );
+          } else if (remoteFavoriteId) {
+            nextSong.favoriteFirestoreId = remoteFavoriteId;
+            nextSong.musicNoteFavoriteId = remoteFavoriteId;
+            delete nextSong.recentFavoriteExplicitlyUnsavedAt;
+            delete nextSong.recentFavoriteDetachedAt;
+          }
+
+          const nextHistory = currentHistory.map((song: any, index: number) =>
+            index === targetIndex ? nextSong : song,
+          );
+          historyRef.current = nextHistory;
+          setHistory(nextHistory);
+          recentSongsReadyToCacheRef.current = true;
+          saveRecentSongsCache(uid, {
+            history: nextHistory,
+            historyIndex: historyIndexRef.current,
+            latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+          });
+          if (historyIndexRef.current === targetIndex) {
+            resultRef.current = nextSong as SongResult;
+            setResult(nextSong as SongResult);
+          }
+          markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
+        }
+      }
+
       if (remoteItem || removed || isRemovalOperation) {
         if (isRemovalOperation) {
           rememberFavoriteDeletedTombstones(uid, exactDocumentIds);
@@ -10313,6 +10393,7 @@ const toggleCycleVariantSelection = (
             restoredAt: Date.now(),
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
             recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song) || existingFav.recentSongSyncKey,
+            ...buildLegacyRecentFavoriteBridge(song),
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
           };
           await runV1MutationBoundary({
@@ -10371,7 +10452,7 @@ const toggleCycleVariantSelection = (
                 uid: user.uid,
                 documentIds: [targetFavorite.id],
                 affectedCount: 1,
-                syncItem: sanitizeForFirestore({ ...targetFavorite, ...targetUpdates, id: targetFavorite.id, firestoreId: targetFavorite.id }),
+                syncItem: sanitizeForFirestore({ ...targetFavorite, ...targetUpdates, ...buildLegacyRecentFavoriteBridge(song), id: targetFavorite.id, firestoreId: targetFavorite.id }),
               }, updateDoc(doc(db, 'favorites', targetFavorite.id), targetUpdates));
             }));
           } else if (existingFav?.id) {
@@ -10381,7 +10462,7 @@ const toggleCycleVariantSelection = (
               uid: user.uid,
               documentIds: [existingFav.id],
               affectedCount: 1,
-              syncItem: sanitizeForFirestore({ ...existingFav, ...unsaveUpdates, id: existingFav.id, firestoreId: existingFav.id }),
+              syncItem: sanitizeForFirestore({ ...existingFav, ...unsaveUpdates, ...buildLegacyRecentFavoriteBridge(song), id: existingFav.id, firestoreId: existingFav.id }),
             }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
           }
 
@@ -10448,6 +10529,7 @@ const toggleCycleVariantSelection = (
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
         recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song),
+        ...buildLegacyRecentFavoriteBridge(song),
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',
@@ -14708,6 +14790,7 @@ ${normalizePromptForDisplay(result.prompt)}
             situationSummary: (heartSnapshot as any).situationSummary ?? (heartSnapshot.appliedKeywords as any)?.situationSummary ?? '',
             recentSongSyncKey: buildRecentSongSyncKey(heartSnapshot) || existingEditedFavorite.recentSongSyncKey,
             soridrawSongId: getLiveSoridrawSongId(heartSnapshot) || existingEditedFavorite.soridrawSongId,
+            ...buildLegacyRecentFavoriteBridge(heartSnapshot),
             saved: true,
             hidden: false,
             favoriteHidden: false,
@@ -14740,6 +14823,13 @@ ${normalizePromptForDisplay(result.prompt)}
         const nextCommittedSong = ({ ...currentSongAfterToggle } as any);
         delete nextCommittedSong.recentFavoriteDetachedAt;
         delete nextCommittedSong.musicNoteFavoriteId;
+
+        const legacyFavoriteBridge = buildLegacyRecentFavoriteBridge(nextCommittedSong);
+        if (wasFavoritedBeforeToggle && legacyFavoriteBridge.recentLegacySourceId) {
+          nextCommittedSong.recentFavoriteExplicitlyUnsavedAt = Date.now();
+        } else {
+          delete nextCommittedSong.recentFavoriteExplicitlyUnsavedAt;
+        }
 
         if (wasFavoritedBeforeToggle) {
           delete nextCommittedSong.favoriteFirestoreId;

@@ -1,7 +1,7 @@
-app292-recent-edit-150s-release
-target_source=34127904db7bb158ebcae28000fa65745fe56c8b
-app_version=292
+app293-library-playlist-delta-cost-release
+target_source=e7b0c172dd2a9763911263c46924fc098980b537
+app_version=293
 scope=hosting-only
-deploy_shared_rtdb_rules=false
+deploy_shared_rtdb_rules=true
 no_user_data_migration=true
-release_request=external-292-150s
+release_request=external-293-library-cost

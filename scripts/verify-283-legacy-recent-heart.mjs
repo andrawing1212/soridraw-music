@@ -6,7 +6,7 @@ const engine = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 283);
+assert.ok(Number(version.version) >= 283, 'app version must be 283 or newer');
 
 const identityStart = app.indexOf('  const getRecentSongGenerationSyncKey = (song: any): string => {');
 const identityEnd = app.indexOf('  const getFavoriteComparableText', identityStart);

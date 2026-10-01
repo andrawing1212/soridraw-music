@@ -16,8 +16,7 @@ export type V1RecentMutationOperation =
   | 'regenerate'
   | 'add-lyrics-language'
   | 'edit'
-  | 'pre-favorite-edit'
-  | 'item-preview';
+  | 'pre-favorite-edit';
 
 export type V1MusicNoteMutationOperation =
   | 'save'

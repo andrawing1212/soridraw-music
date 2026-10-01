@@ -274,7 +274,7 @@ const publishSignal = async (
   const uid = String(context.uid || '').trim();
   if (!uid) return;
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
-  if (kind === 'recentSongs' && result == null && context.operation !== 'item-preview') return; // Mutation epoch skip is not a write.
+  if (kind === 'recentSongs' && result == null) return; // Mutation epoch skip is not a write.
 
   if (kind === 'musicNote') {
     // app276 — Music Note signals used each device's Date.now() as a global
@@ -349,21 +349,6 @@ export const publishMusicNoteDetailPreviewDelta = async (
   }, null);
 };
 
-export const publishRecentSongPreviewDelta = async (
-  uid: string,
-  syncItem: unknown,
-): Promise<void> => {
-  const safeUid = String(uid || '').trim();
-  if (!safeUid || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
-  await publishSignal({
-    domain: 'recent',
-    operation: 'item-preview',
-    uid: safeUid,
-    affectedCount: 1,
-    syncItem,
-  }, null);
-};
-
 const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Record<string, unknown>;
@@ -413,25 +398,6 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
         truncated: signal.truncated,
         itemJson: signal.itemJson || '',
         removed: signal.removed === true,
-      },
-    }));
-    return;
-  }
-
-  const isPreviewOnly = signal.operation === 'item-preview';
-  if (isPreviewOnly) {
-    // The initiating browser already has this local edit. Remote browsers can
-    // paint the changed recent-song item directly from RTDB without a canonical
-    // Firestore read, while the existing explicit save/heart boundary remains
-    // responsible for durable persistence.
-    if (signal.originDeviceId === getDeviceId('recentSongs')) return;
-    window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_EVENT, {
-      detail: {
-        uid,
-        version: signal.version,
-        originDeviceId: signal.originDeviceId,
-        operation: signal.operation,
-        itemJson: signal.itemJson || '',
       },
     }));
     return;

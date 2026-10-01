@@ -5,7 +5,6 @@ import {
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
   rememberRecentSongsPendingSignalVersion,
-  publishRecentSongPreviewDelta,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
 import {
@@ -11588,13 +11587,7 @@ const unlockAllFavorites = async () => {
         return;
       }
       const signaledVersion = Number(detail.version || 0);
-      const operation = String(detail.operation || '').trim();
       const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
-
-      if (operation === 'item-preview') {
-        // Preview-only title/UI sync never reads or writes Firestore.
-        return;
-      }
 
       if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
         // A canonical recent-song mutation carried the changed item itself, so
@@ -14582,14 +14575,10 @@ ${normalizePromptForDisplay(result.prompt)}
 
       if (user?.uid) {
         queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
-        const previewSong = historyRef.current[currentIndex] || nextSong;
-        try {
-          await publishRecentSongPreviewDelta(user.uid, previewSong);
-        } catch (error) {
-          // Local draft remains safe and the next explicit persistence boundary
-          // will still save it canonically.
-          console.warn('Recent song title cross-device preview unavailable.', error);
-        }
+        // "수정 저장" is an actual user change, so persist the one recent-song
+        // aggregate document once here. The RTDB post-success payload carries the
+        // changed item to the other device, avoiding a receiving Firestore read.
+        await flushRecentSongTextWrite();
       }
 
       setIsRecentSongEditOpen(false);
@@ -14790,13 +14779,20 @@ ${normalizePromptForDisplay(result.prompt)}
               syncItem: nextCommittedSong,
             };
             await flushRecentSongTextWrite();
-          }
-          if (wasDetachedBeforeToggle) {
-            try {
-              await publishRecentSongPreviewDelta(user.uid, nextCommittedSong);
-            } catch (error) {
-              console.warn('Recent song saved-state cross-device preview unavailable.', error);
-            }
+          } else if (wasDetachedBeforeToggle) {
+            // The edit itself was already persisted by "수정 저장". Saving that
+            // edited version now clears the detached-heart marker durably with
+            // one changed recent-song write, so reload/new-device state cannot
+            // fall back to the pre-save empty heart.
+            recentSongTextWritePendingRef.current = {
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              operation: 'pre-favorite-edit',
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+              syncItem: nextCommittedSong,
+            };
+            await flushRecentSongTextWrite();
           }
         }
       }

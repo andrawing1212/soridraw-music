@@ -10,14 +10,10 @@ const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
 assert.equal(Number(version.version), 282);
 
-assert.match(boundary, /'item-preview'/);
 assert.match(boundary, /'detail-preview'/);
-assert.match(sync, /export const publishRecentSongPreviewDelta/);
 assert.match(sync, /export const publishMusicNoteDetailPreviewDelta/);
 assert.match(sync, /__recentSongSync: true/);
 assert.match(sync, /__recentSongPartial: true/);
-assert.match(sync, /context\.operation !== 'item-preview'/);
-assert.match(sync, /const isPreviewOnly = signal\.operation === 'item-preview'/);
 assert.match(sync, /itemJson: signal\.itemJson \|\| ''/);
 assert.match(rules, /"recentSongs"[\s\S]*?"itemJson": \{[\s\S]*?length <= 24000/);
 
@@ -37,27 +33,29 @@ assert.match(editBuild, /recentSongSyncKey: immutableRecentSongSyncKey/);
 const saveEditEnd = app.indexOf('  const handleRecentSongTitleInputKeyDown', saveEditStart);
 const saveEdit = app.slice(saveEditStart, saveEditEnd);
 assert.match(saveEdit, /queueRecentSongTextWrite/);
-assert.match(saveEdit, /await publishRecentSongPreviewDelta\(user\.uid, previewSong\)/);
+assert.match(saveEdit, /await flushRecentSongTextWrite\(\)/);
+assert.match(saveEdit, /"수정 저장" is an actual user change/);
 
 const receiveStart = app.indexOf('    const applyRecentSongSignalItem = (');
 const receiveEnd = app.indexOf('    window.addEventListener\(RECENT_SONGS_SYNC_VERSION_EVENT', receiveStart);
 assert.ok(receiveStart >= 0 && receiveEnd > receiveStart, 'recent changed-item receiver missing');
 const receive = app.slice(receiveStart, receiveEnd);
-assert.match(receive, /operation === 'item-preview'/);
 assert.match(receive, /writeRecentSongsLocalVersion/);
 assert.match(receive, /acknowledgeRecentSongsSignalVersion/);
-const previewBranchStart = receive.indexOf("if (operation === 'item-preview')");
-const previewBranchEnd = receive.indexOf('if (itemResult.applied', previewBranchStart);
-assert.ok(previewBranchStart >= 0 && previewBranchEnd > previewBranchStart);
-const previewBranch = receive.slice(previewBranchStart, previewBranchEnd);
-assert.doesNotMatch(previewBranch, /getDoc\(|getDocs\(/);
+const itemFastStart = receive.indexOf('if (itemResult.applied');
+const itemFastEnd = receive.indexOf('if (signaledVersion > readRecentSongsLocalVersion', itemFastStart);
+assert.ok(itemFastStart >= 0 && itemFastEnd > itemFastStart);
+const itemFast = receive.slice(itemFastStart, itemFastEnd);
+assert.doesNotMatch(itemFast, /getDoc\(|getDocs\(/);
 
 const heartStart = app.indexOf('  const handleToggleCurrentStudioFavorite = async');
 const heartEnd = app.indexOf('  const isRecentSongSectionEditing', heartStart);
 const heart = app.slice(heartStart, heartEnd);
 assert.match(heart, /An edited saved recent song intentionally shows an empty heart/);
 assert.match(heart, /await updateFavorite\(existingEditedFavorite\.id,/);
-assert.match(heart, /await publishRecentSongPreviewDelta\(user\.uid, nextCommittedSong\)/);
+assert.match(heart, /else if \(wasDetachedBeforeToggle\)/);
+assert.match(heart, /operation: 'pre-favorite-edit'/);
+assert.match(heart, /await flushRecentSongTextWrite\(\)/);
 
 assert.match(page, /publishMusicNoteDetailPreviewDelta/);
 const detailCommitStart = page.indexOf('  const commitFavoriteDraftIfNeeded = async');
@@ -74,6 +72,6 @@ assert.doesNotMatch(detailCommit, /updateDoc\(|setDoc\(/);
 
 console.log('APP282_MUSIC_NOTE_TITLE_RTDB_PREVIEW_R0W0=PASS');
 console.log('APP282_RECENT_TITLE_IDENTITY_FROZEN=PASS');
-console.log('APP282_RECENT_TITLE_CHANGED_ITEM_RTDB_R0W0=PASS');
+console.log('APP282_RECENT_TITLE_W1_REMOTE_R0=PASS');
 console.log('APP282_EDITED_RECENT_HEART_SAVES_NOT_UNSAVES=PASS');
 console.log('APP282_EXISTING_BATCH_PERSISTENCE_PRESERVED=PASS');

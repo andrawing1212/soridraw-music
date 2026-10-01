@@ -1,6 +1,6 @@
-app290-live-preview-canonical-batch-release
-target_source=800730d920dc6ccb4c4c9a5a19870c6fb0568c45
-app_version=290
+app291-recent-lyrics-live-preview-release
+target_source=dcb9686875ae35918a22faf365296b5c20998978
+app_version=291
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

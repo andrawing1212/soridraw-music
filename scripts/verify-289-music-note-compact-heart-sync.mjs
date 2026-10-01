@@ -5,7 +5,7 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 289);
+assert.ok(Number(version.version) >= 289);
 assert.match(sync, /const MAX_SYNC_ITEM_JSON_CHARS = 24000/);
 assert.match(sync, /const projectMusicNoteItemForSignal = \(/);
 assert.match(sync, /JSON\.stringify\(projected\)\.length <= MAX_SYNC_ITEM_JSON_CHARS/);

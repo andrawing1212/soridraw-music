@@ -12171,6 +12171,18 @@ const unlockAllFavorites = async () => {
         return { applied: false, partial: false };
       }
 
+      const localPending = recentSongTextWritePendingRef.current;
+      if (
+        localPending?.uid === user.uid
+        && localPending.syncItem
+        && isSameRecentSongSyncItem(localPending.syncItem, incoming)
+      ) {
+        // Preserve the newest local draft/outbox. Remote preview/canonical state
+        // can reconcile after this pending local edit commits; it must not replace
+        // the durable cache that crash recovery depends on.
+        return { applied: false, partial: incoming.__recentSongPartial === true };
+      }
+
       const currentHistory = historyRef.current;
       const targetIndex = currentHistory.findIndex((song) => isSameRecentSongSyncItem(song, incoming));
       if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
@@ -12218,12 +12230,13 @@ const unlockAllFavorites = async () => {
         return;
       }
       const signaledVersion = Number(detail.version || 0);
-      const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
       const isEditPreview = String(detail.operation || '') === 'edit-preview';
+      const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
 
-      if (isEditPreview && itemResult.applied) {
-        // Non-canonical live preview: update the other device now, but wait for
-        // the later batched Firestore write before advancing document ACKs.
+      if (isEditPreview) {
+        // Preview is RTDB-only by design. Whether the item was applied, missing
+        // from this device, or fenced by a newer local draft, it must never fall
+        // through to the canonical Firestore aggregate read path.
         return;
       }
 
@@ -14728,29 +14741,38 @@ ${normalizePromptForDisplay(result.prompt)}
     const pending = recentSongTextWritePendingRef.current;
     if (!pending?.uid || !Array.isArray(pending.songs)) return;
 
-    recentSongTextWritePendingRef.current = null;
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
       recentSongTextWriteTimerRef.current = null;
     }
 
+    const clearPendingIfCurrent = () => {
+      // A second edit can be queued while this Firestore batch is in flight.
+      // Never let the older flush erase the newer durable marker/outbox.
+      if (recentSongTextWritePendingRef.current !== pending) return;
+      recentSongTextWritePendingRef.current = null;
+      clearRecentSongTextPendingMarker(pending.uid);
+    };
+
     try {
-      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
+      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) {
+        clearPendingIfCurrent();
+        return;
+      }
       const ref = doc(db, "user_recent_songs", pending.uid);
       const persistedVersion = await runV1MutationBoundary(
         { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: pending.syncItem },
         persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
       );
       if (!persistedVersion) {
-        clearRecentSongTextPendingMarker(pending.uid);
+        clearPendingIfCurrent();
         return;
       }
-      clearRecentSongTextPendingMarker(pending.uid);
+      clearPendingIfCurrent();
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
-      // Keep the newest pending value so a later edit/flush can retry instead of
-      // dropping a locally saved text change.
-      recentSongTextWritePendingRef.current = pending;
+      // The same pending payload stays in memory + local cache/marker. A later
+      // edit, explicit flush, or reload can retry it without losing the draft.
       console.error('Failed to flush batched recent-song text edits:', error);
     }
   }, []);

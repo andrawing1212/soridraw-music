@@ -17,6 +17,9 @@ assert.ok(restoreStart >= 0 && restoreEnd > restoreStart);
 const restoreBlock = app.slice(restoreStart, restoreEnd);
 assert.doesNotMatch(restoreBlock, /location\.pathname/, 'pending Recent edit timer must survive route navigation');
 assert.match(app, /const isEditPreview = String\(detail\.operation \|\| ''\) === 'edit-preview';/);
+assert.match(app, /const localPending = recentSongTextWritePendingRef\.current;/);
+assert.match(app, /isSameRecentSongSyncItem\(localPending\.syncItem, incoming\)/);
+assert.match(app, /if \(isEditPreview\) \{[\s\S]*?must never fall[\s\S]*?return;[\s\S]*?\}/);
 
 const editStart = app.indexOf('  const saveRecentSongEdit = async');
 const editEnd = app.indexOf('  const handleRecentSongTitleInputKeyDown', editStart);
@@ -45,4 +48,6 @@ console.log('APP290_RECENT_EDIT_IMMEDIATE_FIRESTORE_W0=PASS');
 console.log('APP290_RECENT_EDIT_TRAILING_BATCH_60S=PASS');
 console.log('APP290_RECENT_EDIT_LIVE_PREVIEW_RTDB=PASS');
 console.log('APP290_RECENT_EDIT_DURABLE_PENDING_MARKER=PASS');
+console.log('APP290_RECENT_EDIT_LOCAL_DRAFT_FENCE=PASS');
+console.log('APP290_RECENT_EDIT_PREVIEW_RECEIVER_FIRESTORE_R0=PASS');
 console.log('APP290_MUSIC_NOTE_DETAIL_BATCH_PRESERVED=PASS');

@@ -1,3 +1,18 @@
+## CURRENT TASK — app279 특정 legacy 곡 폐기 여부 결정 / 정상 경로 검증 (2026-10-01 KST)
+
+현재:
+- `스쳐간 이름 뒤에`는 app279에서도 실기기 FAIL.
+- 나머지 최근생성곡 동기화 정상.
+- 공유노트 폴더 생성/곡 저장/이동 정상.
+- 이 한 곡만 위해 동기화 구조를 계속 수정하면 정상 기능 회귀 위험이 커서 추가 구조 수정은 중단 후보.
+
+다음:
+1. 사용자가 곡 폐기를 선택하면 해당 한 곡만 수동 정리.
+2. 전체 favorites/최근곡 대량 정리·migration 금지.
+3. 정상 곡 1개로 양방향 저장/해제 재확인.
+4. CACHE LIVE 초기화 후 initiating device canonical W1, receiving device Firestore R0/W0, idle R/W0 확인.
+5. 사용자 실사용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app279 legacy 최근곡 하트 양방향 최종 실사용 확인 (2026-10-01 KST)
 
 현재:

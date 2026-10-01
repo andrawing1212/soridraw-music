@@ -8,7 +8,7 @@ const boundary = fs.readFileSync('src/data/v1MutationBoundary.ts', 'utf8');
 const rules = fs.readFileSync('database.rules.json', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 282);
+assert.ok(Number(version.version) >= 282, 'app version must be 282 or newer');
 
 assert.match(boundary, /'detail-preview'/);
 assert.match(sync, /export const publishMusicNoteDetailPreviewDelta/);

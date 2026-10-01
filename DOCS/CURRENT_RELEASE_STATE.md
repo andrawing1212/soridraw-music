@@ -1,3 +1,62 @@
+## 0LN. PREVIEW app281 — Suno URL 등록 미디어 PC↔모바일 즉시 동기화 수정 / 배포 전 (2026-10-01 KST)
+
+**사용자 실사용에서 새로 확인된 문제**
+- app280의 Music Note 저장/해제 동기화와 재접속 부활 방지는 사용자 확인상 정상.
+- 그러나 Music Note 상세의 **수노 URL 연결**에서 URL을 저장해도 상대 기기 곡 목록 썸네일이 즉시 바뀌지 않음.
+- 상대 기기에서 같은 곡 상세를 이미 열어둔 경우, 내부 Suno URL/대표 순위 상태도 갱신되지 않는 경우가 있음.
+
+**원인**
+- 상세 화면의 URL 저장은 기존 Music Note 상세 편집 정책대로 로컬 draft에만 즉시 반영되고 canonical Firestore는 60초/페이지 이탈 묶음 저장을 사용함.
+- 따라서 같은 기기 목록은 로컬 `favoritesStore` 패치로 바로 바뀌지만, 명시적 URL 저장 순간에는 상대 기기로 보낼 changed-item 신호가 없었음.
+- canonical 저장이 나중에 끝난 뒤에는 기존 app277 changed-item RTDB 경로로 상대 기기 목록이 갱신될 수 있으나, 사용자가 기대하는 “URL 저장 즉시 썸네일 변경”과는 맞지 않았음.
+- 또한 상대 기기의 열린 상세는 list row가 갱신돼도 동일 곡 editor 재초기화를 의도적으로 막는 보호 로직 때문에 Suno URL 입력 상태가 남을 수 있었음.
+
+**app281 수정**
+1. 상세에서 Suno URL **저장/연결 해제**를 명시적으로 누른 순간, 기존 UID-scoped Music Note RTDB에 변경된 한 곡의 작은 Catalog summary를 `suno-media-preview`로 발행.
+2. 수신 기기는 기존 app277 exact changed-item fast path를 그대로 사용해 목록 썸네일/URL 메타만 로컬 cache/store에 패치.
+3. 이 즉시 신호는 **Firestore 원본 write가 아님**. 기존 상세 draft + 60초/페이지 이탈 canonical Firestore 묶음 저장은 그대로 유지.
+4. 같은 곡 상세를 상대 기기에서 이미 열어둔 경우에도, 그 기기에서 사용자가 URL을 직접 입력 중이지 않을 때만 Suno URL/대표 순위를 최신 list row에서 갱신.
+5. 사용자가 상대 기기에서 URL 입력 중이면 remote UI delta가 로컬 입력을 덮지 않도록 guard 유지.
+6. 전체 Music Note 조회/scan/rebuild 없음. 변경된 document ID 1개만 전달.
+7. Explore public like, 공유노트, 최근생성곡 하트, 분할 UI, Worker/Functions/Rules 비변경.
+
+**코드/검증**
+- 기준 PREVIEW: `c6563224640df1fa682bd8d1904d44343112de62`.
+- 제품 코드 commit: `6967c28019ccb8ee7b7c1cb73929655b8f9f9e7f`.
+- 현재 app version: **281**.
+- 변경 파일:
+  - `src/pages/FavoritesPage.tsx`
+  - `src/services/userDomainSyncService.ts`
+  - `src/data/v1MutationBoundary.ts`
+  - `scripts/verify-280-music-note-resurrection.mjs`
+  - `scripts/verify-281-suno-url-cross-device.mjs`
+  - `public/app-version.json`
+- Focused Audit Run `36810877247`: **SUCCESS**.
+  - app281 URL RTDB preview sync PASS.
+  - remote list thumbnail Firestore R0 PASS.
+  - already-open Detail Suno media refresh PASS.
+  - existing detail Firestore batching preserved PASS.
+  - app280/app279/app278 protected regressions PASS.
+  - Recent Songs regression PASS.
+  - shared-note app273/app274 regression PASS.
+  - TypeScript PASS / Build PASS.
+- 최초 범용 Release System Audit Run `36810534642`은 TypeScript/Build 및 진단 그룹은 PASS했으나, app281과 무관한 오래된 shared-note 정적 verifier가 현재 구조를 따라오지 못해 최종 static 단계 FAIL.
+- focused audit 1/2차 재시도에서도 각각 오래된 Worker 051 기준 verifier와 과거 RTDB rules 문자열 verifier가 현재 구조와 맞지 않아 제거 후 현재 보호 범위만 독립 검증. 제품 app281 verifier와 app280/279/278은 매번 PASS.
+- 임시 app281 focused audit workflow/trigger는 검증 후 제거 완료.
+
+**비용/데이터**
+- URL 저장 즉시 추가되는 것은 UID-scoped RTDB 작은 신호 1회.
+- 수신 기기 Firestore **R0/W0** 설계 유지.
+- canonical Firestore 상세 저장 횟수 증가 없음. 기존 묶음 저장 유지.
+- D1 R0/W0 추가, Worker/Functions/Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete/전체 재생성 없음.
+
+**상태**
+- 제품 코드와 focused audit는 완료.
+- 아직 PREVIEW Hosting app281 배포 전.
+- TEST / PRODUCTION 변경 금지 상태 유지.
+- 배포 후 PC↔모바일 실기기에서 URL 등록/해제, 목록 썸네일, 이미 열린 상세의 URL 상태를 양방향 확인해야 최종 PASS.
+
 ## 0LM. app280 Music Note 해제 후 재접속 시 곡 부활 원인 수정 (2026-10-01 KST)
 
 사용자 실사용에서 새로 확인된 핵심:

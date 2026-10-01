@@ -1,3 +1,34 @@
+## CURRENT TASK — app281 Suno URL 썸네일/상세 PC↔모바일 실기기 확인 (2026-10-01 KST)
+
+현재:
+- app280 저장/해제 및 재접속 부활 방지는 사용자 확인상 정상.
+- 새 문제는 Music Note 상세에서 Suno URL 저장 시 상대 기기 목록 썸네일과 이미 열린 상세 내부 URL 상태가 즉시 갱신되지 않는 것.
+- app281은 상세 URL 저장/해제 시 변경된 한 곡의 Suno media summary만 기존 UID RTDB로 즉시 전달.
+- canonical Firestore 상세 저장은 기존 60초/페이지 이탈 묶음 정책 그대로 유지.
+- 수신 기기 Firestore R0/W0, 전체 Music Note scan/rebuild 없음.
+- 제품 commit `6967c28019ccb8ee7b7c1cb73929655b8f9f9e7f`.
+- Focused Audit Run `36810877247` SUCCESS.
+- TypeScript / Build / app280·279·278 / Recent Songs / shared-note regressions PASS.
+- PREVIEW Hosting 배포 대기.
+
+배포 후 사용자 테스트:
+1. PC/모바일 모두 app281 확인.
+2. PC에서 Music Note 곡 A 상세를 열고 Suno URL 등록 → 저장.
+3. 모바일은 새로고침/페이지 왕복 없이 **곡 목록 썸네일이 바로 바뀌어야 함**.
+4. 모바일에서 곡 A 상세를 미리 열어둔 상태에서도 URL/대표 순위가 바로 바뀌는지 확인.
+5. 모바일 → PC 방향도 동일하게 반복.
+6. URL 연결 해제도 상대 기기 목록 썸네일과 열린 상세에 즉시 반영되는지 확인.
+7. 소스 기기에서 페이지 이탈/재접속 후에도 URL/썸네일이 유지되는지 확인해 canonical 묶음 저장 persistence 확인.
+8. 수신 기기 CACHE LIVE Firestore R0/W0, D1 R0/W0 확인.
+9. 아무 조작 없이 1분 대기/페이지 재진입에서 추가 Firestore/D1 R/W 0 확인.
+
+보호:
+- Music Note 상세 텍스트 60초/페이지 이탈 묶음 저장 유지.
+- app280 unsave tombstone/재접속 부활 방지 유지.
+- app278 공유노트 구조/카드 상태, app279 최근곡 identity 정상 경로 유지.
+- Explore public like app164/Worker195 동결.
+- 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app280 해제 후 재접속 부활 실기기 확인 (2026-10-01 KST)
 
 현재:

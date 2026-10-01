@@ -1,3 +1,43 @@
+## CURRENT TASK — app287 SAVE/UNSAVE 양방향 실기기 최종 확인 (2026-10-02 KST)
+
+현재:
+- app286 사용자 실기기 FAIL.
+- 증상은 저장만 상대 기기에 즉시 안 가고, 해제와 이름 변경은 즉시 동기화.
+- 원인은 빈 하트 SAVE인데 canonical favorite가 이미 active인 경우 app286이 로컬만 filled로 바꾸고 return하여 RTDB SAVE 신호를 만들지 않은 비대칭.
+- app287은 이 idempotent SAVE 분기에서 Firestore write 없이 기존 UID Music Note RTDB changed-item SAVE 신호만 1회 발행.
+- 수신 기기는 app286의 per-song heart authority를 그대로 사용하므로 추가 Firestore read/write 없이 filled 상태를 반영.
+- UNSAVE / 제목 변경 / Suno URL / 공유노트 / Explore public like 경로는 비변경.
+- 최종 Focused Audit `36907514680` SUCCESS.
+- PREVIEW Release `36907740259` SUCCESS.
+- locked release commit `e3fe46183cf89691430e224d7bd21092258a122a`.
+- `preview.soridraw.com` app287 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 delete/migration/backfill 없음.
+
+실기기 테스트:
+1. PC/모바일 둘 다 app287 확인.
+2. `스쳐간 이름 뒤에` 양쪽 empty 상태에서 A 저장 → B 즉시 filled.
+3. B 해제 → A 즉시 empty.
+4. B 저장 → A 즉시 filled.
+5. A 해제 → B 즉시 empty.
+6. 2~5를 2회 이상 반복. 저장만 빠지거나 반대 mutation이 나오면 FAIL.
+7. 일반 정상 최근곡 1개 같은 순서 회귀 없음.
+8. 이름 변경/복원 app282 동시 반영 유지.
+9. 양쪽 새로고침/재접속 후 마지막 상태 동일.
+10. 수신 기기 SAVE/UNSAVE로 추가 Firestore R/W 0, D1 R/W 0.
+11. 일반 canonical save/restore/unsave 비용은 기존 W1 기준 유지.
+12. idle/페이지 왕복/앱 업데이트 추가 mutation 0.
+
+보호:
+- app286에서 정상 확인된 UNSAVE 동시 반영을 건드리지 않음.
+- app282 이름 동기화 보호.
+- 문제곡 duplicate user data 자동 삭제/병합 금지.
+- 일반 recent heart / Music Note 목록 / Suno URL / 공유노트 정상 기능 유지.
+- Explore public like app164/Worker195 동결.
+- Music Note 60초 상세 batch 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app286 PC↔모바일 하트 방향/상태 최종 실기기 확인 (2026-10-02 KST)
 
 현재:

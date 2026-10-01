@@ -1,3 +1,87 @@
+## 0LV. PREVIEW app287 배포 완료 — 저장만 반대 기기에 안 가던 마지막 RTDB 신호 누락 보완 (2026-10-02 KST)
+
+**사용자 실기기 판정 — app286 FAIL**
+- 사용자가 app286에서 확인한 결과:
+  - 저장: PC↔모바일 동시 반영 안 됨.
+  - 해제: PC↔모바일 동시 반영 됨.
+  - 이름 변경: PC↔모바일 동시 반영 됨.
+- 따라서 RTDB 연결/구독 전체가 죽은 문제가 아니라 **SAVE 한 경로만 신호를 만들지 않는 비대칭**으로 범위가 좁혀짐.
+
+**확정 원인**
+1. app286은 화면의 빈 하트 SAVE를 내부 서버 상태가 반대로 뒤집지 않도록 `intendedAction='save'`를 고정함.
+2. 그런데 빈 하트인데 이 기기의 Music Note 캐시에 이미 active canonical favorite가 남아 있는 경우,
+   `intendedAction === 'save' && !isFavoriteHidden(existingFav)` 분기가 로컬 상태만 active로 보정하고 바로 return 했음.
+3. 이 분기는 실제 Firestore 상태가 이미 저장 상태라 canonical write를 다시 하지 않는 것은 맞지만, `runV1MutationBoundary`도 타지 않아서 **UID RTDB Music Note SAVE changed-item 신호도 0회**였음.
+4. 그래서 누른 기기는 즉시 filled가 되지만 상대 기기는 아무 이벤트도 받지 않아 empty로 남았음.
+5. 반면 UNSAVE는 canonical W1 경로에서 RTDB 신호가 발행되고, 제목 변경도 기존 RTDB preview 신호가 있으므로 둘은 정상 동시 반영됐음.
+6. 사용자 관찰인 “저장만 안 되고 해제/이름은 된다”와 코드 분기가 정확히 일치.
+
+**app287 수정**
+- `src/services/userDomainSyncService.ts`에 `publishMusicNoteSaveStateDelta` 추가.
+- 위의 “이미 canonical active라 Firestore를 다시 쓸 필요 없는 SAVE” 분기에서만:
+  - Firestore write를 새로 만들지 않고,
+  - 기존 UID-scoped Music Note RTDB 노드에 `operation='save'` changed-item 신호 1회만 발행.
+- 신호에는 exact favorite document id + 기존 Recent Song identity를 함께 싣고,
+  수신 기기는 app286의 기존 `rememberRecentHeartAuthority` 경로를 그대로 사용해 filled 상태를 즉시 반영.
+- 일반 SAVE/RESTORE canonical W1 경로는 기존 mutation-boundary 신호를 그대로 사용.
+- UNSAVE 동작과 제목 변경(app282), Suno URL(app281), 공유노트(app278), Explore public like app164/Worker195는 변경하지 않음.
+- 기존 duplicate favorite 문서 삭제/병합 없음.
+
+**비용**
+- app287가 새로 추가한 것은 문제 분기에서의 작은 RTDB signal 1회뿐.
+- 해당 idempotent SAVE 분기에서 **추가 Firestore canonical write 0**.
+- 수신 기기 추가 Firestore read/write 0.
+- D1 추가 read/write 0.
+- 일반 save/restore canonical W1, unsave W1 구조는 기존 그대로.
+- idle / 페이지 이동 / 앱 업데이트로 추가 mutation 없음.
+- 사용자 데이터 migration / backfill / delete 없음.
+
+**검증**
+- 제품 수정 commit: `d9223b376f4d4e5d90133a7c76db0498fa1b8343`.
+- 첫 Focused Audit Run `36906896920`: FAIL — 구형 app277 verifier가 app version을 정확히 277로만 허용한 검사식 문제. TypeScript/Build는 PASS.
+- 두 번째 Run `36907259887`: FAIL — 동일하게 app286 verifier가 정확히 286만 허용한 검사식 문제. TypeScript/Build 및 app278~285 회귀는 PASS.
+- 구형 verifier를 forward-compatible(`>=277`, `>=286`)하게만 수정.
+- 최종 Focused Audit Run `36907514680`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app277~app286 regression PASS.
+  - APP287_IDEMPOTENT_SAVE_PUBLISHES_RTDB PASS.
+  - APP287_SAVE_RECEIVER_FIRESTORE_R0 PASS.
+  - APP287_UNSAVE_PATH_UNCHANGED PASS.
+  - APP287_TITLE_SYNC_PROTECTED PASS.
+  - Recent Songs 196 regression PASS.
+- 임시 app287 audit workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- locked release commit: `e3fe46183cf89691430e224d7bd21092258a122a`.
+- Firebase PREVIEW App Run `36907740259`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **287**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 데이터 delete / migration / backfill 없음.
+
+**실기기 확인**
+1. PC/모바일 모두 app287.
+2. 문제곡 `스쳐간 이름 뒤에`에서 양쪽 empty 기준으로 A 저장 → B가 페이지 이동/새로고침 없이 filled.
+3. B 해제 → A 즉시 empty.
+4. B 저장 → A 즉시 filled.
+5. A 해제 → B 즉시 empty.
+6. 위 순서를 2회 이상 반복해 SAVE와 UNSAVE가 모두 양방향 같은 방향으로 움직이는지 확인.
+7. 일반 정상 최근곡 1개도 같은 순서 회귀 없음 확인.
+8. 이름 변경/복원 app282 동시 반영 유지.
+9. 양쪽 새로고침/재접속 후 마지막 하트 상태 동일.
+10. 상대 기기에서 SAVE 수신 때문에 Firestore read/write가 추가되면 FAIL.
+
+**상태**
+- PREVIEW app287 코드/감사/배포 완료.
+- 사용자 실기기 검증 전.
+- TEST / PRODUCTION 비변경.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## 0LU. PREVIEW app286 배포 완료 — 하트 표시 방향과 실제 저장/해제 명령을 하나의 기준으로 통합 (2026-10-02 KST)
 
 **사용자 실기기 판정**

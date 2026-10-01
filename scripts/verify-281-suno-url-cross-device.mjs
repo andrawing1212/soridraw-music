@@ -8,7 +8,7 @@ const boundary = fs.readFileSync('src/data/v1MutationBoundary.ts', 'utf8');
 const engine = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 281, 'app281 verifier must run against version 281');
+assert.ok(Number(version.version) >= 281, 'app version must be 281 or newer');
 
 assert.match(boundary, /'suno-media-preview'/);
 assert.match(sync, /export const publishMusicNoteSunoMediaDelta/);

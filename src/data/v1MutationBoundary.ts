@@ -16,7 +16,8 @@ export type V1RecentMutationOperation =
   | 'regenerate'
   | 'add-lyrics-language'
   | 'edit'
-  | 'pre-favorite-edit';
+  | 'pre-favorite-edit'
+  | 'item-preview';
 
 export type V1MusicNoteMutationOperation =
   | 'save'
@@ -34,7 +35,8 @@ export type V1MusicNoteMutationOperation =
   | 'folder-delete'
   | 'color-sync'
   | 'structure-update'
-  | 'suno-media-preview';
+  | 'suno-media-preview'
+  | 'detail-preview';
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 

@@ -113,6 +113,82 @@ const resultDocumentId = (result: unknown): string => {
   return String((result as { id?: unknown }).id || '').trim();
 };
 
+const toSyncTimestamp = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value && typeof value === 'object' && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
+    try {
+      const resolved = Number((value as { toMillis: () => number }).toMillis());
+      return Number.isFinite(resolved) ? resolved : 0;
+    } catch {}
+  }
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const source = raw as Record<string, any>;
+  const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
+    ? source.appliedKeywords as Record<string, any>
+    : {};
+  const full: Record<string, unknown> = {
+    __recentSongSync: true,
+    __recentSongPartial: false,
+    id: source.id ?? null,
+    taskId: source.taskId ?? null,
+    sourceId: source.sourceId ?? null,
+    soridrawSongId: source.soridrawSongId ?? null,
+    recentSongSyncKey: source.recentSongSyncKey ?? null,
+    title: source.title ?? '',
+    koreanTitle: source.koreanTitle ?? '',
+    englishTitle: source.englishTitle ?? '',
+    displayGenre: source.displayGenre ?? null,
+    genre: source.genre ?? null,
+    prompt: source.prompt ?? '',
+    lyrics: source.lyrics ?? null,
+    appliedKeywords: source.appliedKeywords ?? null,
+    userInput: source.userInput ?? null,
+    situationSummary: source.situationSummary ?? null,
+    favoriteFirestoreId: source.favoriteFirestoreId ?? null,
+    musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
+    recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
+    createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
+    updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
+  };
+  try {
+    if (JSON.stringify(full).length <= 24000) return full;
+  } catch {}
+
+  return {
+    __recentSongSync: true,
+    __recentSongPartial: true,
+    id: source.id ?? null,
+    taskId: source.taskId ?? null,
+    sourceId: source.sourceId ?? null,
+    soridrawSongId: source.soridrawSongId ?? null,
+    recentSongSyncKey: source.recentSongSyncKey ?? null,
+    title: source.title ?? '',
+    koreanTitle: source.koreanTitle ?? '',
+    englishTitle: source.englishTitle ?? '',
+    displayGenre: source.displayGenre ?? null,
+    genre: source.genre ?? null,
+    favoriteFirestoreId: source.favoriteFirestoreId ?? null,
+    musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
+    recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
+    createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
+    updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
+    appliedKeywords: {
+      generationBatchId: applied.generationBatchId ?? null,
+      generationIndex: applied.generationIndex ?? null,
+      secondaryLanguage: applied.secondaryLanguage ?? null,
+      titleLanguages: applied.titleLanguages ?? null,
+      titlesByLanguage: applied.titlesByLanguage ?? null,
+      editedInStudio: applied.editedInStudio ?? null,
+      editedInStudioAt: applied.editedInStudioAt ?? null,
+    },
+  };
+};
+
 const buildSignal = (
   context: Readonly<V1MutationBoundaryContext>,
   result: unknown,
@@ -168,6 +244,14 @@ const buildSignal = (
         }
       }
     } catch {}
+  } else if (kind === 'recentSongs') {
+    try {
+      const projected = projectRecentSongForSync(context.syncItem);
+      if (projected) {
+        const encoded = JSON.stringify(projected);
+        if (encoded.length <= 24000) itemJson = encoded;
+      }
+    } catch {}
   }
 
   return {
@@ -190,7 +274,7 @@ const publishSignal = async (
   const uid = String(context.uid || '').trim();
   if (!uid) return;
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
-  if (kind === 'recentSongs' && result == null) return; // Mutation epoch skip is not a write.
+  if (kind === 'recentSongs' && result == null && context.operation !== 'item-preview') return; // Mutation epoch skip is not a write.
 
   if (kind === 'musicNote') {
     // app276 — Music Note signals used each device's Date.now() as a global
@@ -242,6 +326,39 @@ export const publishMusicNoteSunoMediaDelta = async (
     operation: 'suno-media-preview',
     uid: safeUid,
     documentIds: [safeDocumentId],
+    affectedCount: 1,
+    syncItem,
+  }, null);
+};
+
+export const publishMusicNoteDetailPreviewDelta = async (
+  uid: string,
+  documentId: string,
+  syncItem: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
+  await publishSignal({
+    domain: 'musicNote',
+    operation: 'detail-preview',
+    uid: safeUid,
+    documentIds: [safeDocumentId],
+    affectedCount: 1,
+    syncItem,
+  }, null);
+};
+
+export const publishRecentSongPreviewDelta = async (
+  uid: string,
+  syncItem: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
+  await publishSignal({
+    domain: 'recent',
+    operation: 'item-preview',
+    uid: safeUid,
     affectedCount: 1,
     syncItem,
   }, null);
@@ -301,6 +418,25 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     return;
   }
 
+  const isPreviewOnly = signal.operation === 'item-preview';
+  if (isPreviewOnly) {
+    // The initiating browser already has this local edit. Remote browsers can
+    // paint the changed recent-song item directly from RTDB without a canonical
+    // Firestore read, while the existing explicit save/heart boundary remains
+    // responsible for durable persistence.
+    if (signal.originDeviceId === getDeviceId('recentSongs')) return;
+    window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_EVENT, {
+      detail: {
+        uid,
+        version: signal.version,
+        originDeviceId: signal.originDeviceId,
+        operation: signal.operation,
+        itemJson: signal.itemJson || '',
+      },
+    }));
+    return;
+  }
+
   if (signal.originDeviceId === getDeviceId('recentSongs')) {
     // Recent-song writes save the aggregate document before this mirror fires.
     // Advance the local gate so the existing event consumer does not reread that
@@ -311,7 +447,13 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     rememberRecentSongsPendingSignalVersion(uid, signal.version);
   }
   window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_EVENT, {
-    detail: { uid, version: signal.version },
+    detail: {
+      uid,
+      version: signal.version,
+      originDeviceId: signal.originDeviceId,
+      operation: signal.operation,
+      itemJson: signal.itemJson || '',
+    },
   }));
 };
 

@@ -1,6 +1,7 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import {
   MUSIC_NOTE_SYNC_EVENT,
+  publishMusicNoteDetailPreviewDelta,
   publishMusicNoteStructureDelta,
   publishMusicNoteSunoMediaDelta,
   readPendingMusicNoteSyncSignal,
@@ -3529,6 +3530,44 @@ updates: draft.updates,
     setDetailSunoUrlError('');
   }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
 
+  // A remote title/genre save should update an already-open Detail & Edit panel
+  // without forcing a route round-trip. Never overwrite a local editor or a
+  // locally pending title draft.
+  useEffect(() => {
+    if (!selectedSong?.id || isMusicNoteSharedView || isEditing) return;
+    const selectedSongId = String(selectedSong.id || '').trim();
+    const latestSong = (favorites || []).find((song: any) => (
+      String(song?.id || song?.firestoreId || '').trim() === selectedSongId
+    ));
+    if (!latestSong) return;
+
+    const pending = favoriteDetailPendingPatchRef.current;
+    const pendingHasTitle = pending?.songId === selectedSongId && [
+      'title', 'koreanTitle', 'englishTitle', 'displayGenre',
+    ].some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key));
+    if (pendingHasTitle) return;
+
+    const nextTitle = String(latestSong.title || '');
+    const nextTitleGenre = getEditableFavoriteTitleGenre(latestSong);
+    const nextKoreanTitle = cleanTitlePart(latestSong.koreanTitle || '');
+    const nextEnglishTitle = cleanTitlePart(latestSong.englishTitle || '');
+    if (
+      nextTitle === originalTitle
+      && nextTitleGenre === originalTitleGenre
+      && nextKoreanTitle === originalKoreanTitle
+      && nextEnglishTitle === originalEnglishTitle
+    ) return;
+
+    setOriginalTitle(nextTitle);
+    setOriginalTitleGenre(nextTitleGenre);
+    setOriginalKoreanTitle(nextKoreanTitle);
+    setOriginalEnglishTitle(nextEnglishTitle);
+    setEditedTitle(nextTitle);
+    setEditedTitleGenre(nextTitleGenre);
+    setEditedKoreanTitle(nextKoreanTitle);
+    setEditedEnglishTitle(nextEnglishTitle);
+  }, [favorites, selectedSong?.id, isMusicNoteSharedView, isEditing]);
+
   useEffect(() => {
     favoriteUserRef.current = user;
   }, [user]);
@@ -3861,6 +3900,19 @@ updates: draft.updates,
       // 031: Detail edits are local-first. Multiple section saves are merged into one
       // pending patch and only flushed after 60s idle or when the detail/page exits.
       queueFavoriteDetailPatch(payload.targetSongId, payload.updates);
+
+      const hasCatalogVisibleTitleChange = [
+        'title', 'koreanTitle', 'englishTitle', 'displayGenre',
+      ].some((key) => Object.prototype.hasOwnProperty.call(payload.updates, key));
+      if (hasCatalogVisibleTitleChange && user?.uid) {
+        try {
+          await publishMusicNoteDetailPreviewDelta(user.uid, payload.targetSongId, payload.nextSong);
+        } catch (error) {
+          // The local draft remains authoritative for this edit and will still
+          // reach Firestore through the existing 60s/page-exit batch.
+          console.warn('Music Note title cross-device preview unavailable.', error);
+        }
+      }
 
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);

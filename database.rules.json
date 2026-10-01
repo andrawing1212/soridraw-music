@@ -108,6 +108,9 @@
               ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
             }
           },
+          "itemJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
           "$other": {
             ".validate": false
           }

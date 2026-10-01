@@ -5,6 +5,7 @@ import {
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
   rememberRecentSongsPendingSignalVersion,
+  publishRecentSongPreviewDelta,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
 import {
@@ -5620,6 +5621,40 @@ function App() {
       hash = Math.imul(hash, 16777619);
     }
     return `legacy:${(hash >>> 0).toString(36)}`;
+  };
+
+  const getRecentSongSourceIdentity = (song: any): { sourceId: string; createdAtMs: number } => ({
+    sourceId: String(song?.id || song?.taskId || song?.sourceId || '').trim(),
+    createdAtMs: Number(song?.createdAtMs || 0)
+      || getTimestampMs(song?.createdAt)
+      || 0,
+  });
+
+  const isSameRecentSongSyncItem = (left: any, right: any): boolean => {
+    if (!left || !right) return false;
+    const leftGeneration = getRecentSongGenerationSyncKey(left);
+    const rightGeneration = getRecentSongGenerationSyncKey(right);
+    if (leftGeneration && rightGeneration && leftGeneration === rightGeneration) return true;
+
+    const leftStable = getLiveSoridrawSongId(left);
+    const rightStable = getLiveSoridrawSongId(right);
+    if (leftStable && rightStable && leftStable === rightStable) return true;
+
+    const leftExplicit = String(left?.recentSongSyncKey || '').trim();
+    const rightExplicit = String(right?.recentSongSyncKey || '').trim();
+    const leftKey = leftExplicit || buildRecentSongSyncKey(left);
+    const rightKey = rightExplicit || buildRecentSongSyncKey(right);
+    if (leftKey && rightKey && leftKey === rightKey) return true;
+
+    // Final legacy bridge is deliberately title-independent. Once a legacy song
+    // is renamed, its title can no longer participate in cross-device identity.
+    const leftSource = getRecentSongSourceIdentity(left);
+    const rightSource = getRecentSongSourceIdentity(right);
+    if (!leftSource.sourceId || !rightSource.sourceId || leftSource.sourceId !== rightSource.sourceId) return false;
+    if (leftSource.createdAtMs > 0 && rightSource.createdAtMs > 0) {
+      return leftSource.createdAtMs === rightSource.createdAtMs;
+    }
+    return true;
   };
 
   const getFavoriteComparableText = (song: any) => ({
@@ -11498,14 +11533,77 @@ const unlockAllFavorites = async () => {
         });
     };
 
+    const applyRecentSongSignalItem = (itemJson: string): { applied: boolean; partial: boolean } => {
+      if (!itemJson) return { applied: false, partial: false };
+      let incoming: any = null;
+      try { incoming = JSON.parse(itemJson); } catch {}
+      if (!incoming || incoming.__recentSongSync !== true || Array.isArray(incoming)) {
+        return { applied: false, partial: false };
+      }
+
+      const currentHistory = historyRef.current;
+      const targetIndex = currentHistory.findIndex((song) => isSameRecentSongSyncItem(song, incoming));
+      if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
+
+      const currentSong = currentHistory[targetIndex] as any;
+      const merged = normalizeFavoriteTitleFields({
+        ...currentSong,
+        ...incoming,
+        lyrics: incoming.lyrics && typeof incoming.lyrics === 'object'
+          ? { ...(currentSong.lyrics || {}), ...(incoming.lyrics || {}) }
+          : currentSong.lyrics,
+        appliedKeywords: incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
+          ? { ...(currentSong.appliedKeywords || {}), ...(incoming.appliedKeywords || {}) }
+          : currentSong.appliedKeywords,
+      } as SongResult) as SongResult;
+      const nextHistory = currentHistory.map((song, index) => index === targetIndex ? merged : song);
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
+      recentSongsReadyToCacheRef.current = true;
+      saveRecentSongsCache(user.uid, {
+        history: nextHistory,
+        historyIndex: historyIndexRef.current,
+        latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+      });
+      if (historyIndexRef.current === targetIndex) {
+        resultRef.current = merged;
+        setResult(merged);
+      }
+      markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
+      return { applied: true, partial: incoming.__recentSongPartial === true };
+    };
+
     const handleRecentSongsVersionSignal = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; version?: number; resumeAfterRead?: boolean }>).detail;
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        version?: number;
+        resumeAfterRead?: boolean;
+        originDeviceId?: string;
+        operation?: string;
+        itemJson?: string;
+      }>).detail;
       if (!detail || detail.uid !== user.uid) return;
       if (detail.resumeAfterRead === true) {
         runRecentSongsServerSyncIfNeeded();
         return;
       }
       const signaledVersion = Number(detail.version || 0);
+      const operation = String(detail.operation || '').trim();
+      const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
+
+      if (operation === 'item-preview') {
+        // Preview-only title/UI sync never reads or writes Firestore.
+        return;
+      }
+
+      if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
+        // A canonical recent-song mutation carried the changed item itself, so
+        // the receiving device can acknowledge it without rereading the aggregate
+        // user_recent_songs document.
+        writeRecentSongsLocalVersion(user.uid, signaledVersion);
+        acknowledgeRecentSongsSignalVersion(user.uid, signaledVersion);
+        return;
+      }
       if (!Number.isFinite(signaledVersion) || signaledVersion <= 0) return;
       if (signaledVersion > readRecentSongsLocalVersion(user.uid)) {
         // Profile-cache notification can arrive independently of the RTDB
@@ -13991,7 +14089,7 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number; syncItem?: any } | null>(null);
 
   const flushRecentSongTextWrite = useCallback(async () => {
     const pending = recentSongTextWritePendingRef.current;
@@ -14007,7 +14105,7 @@ ${normalizePromptForDisplay(result.prompt)}
       if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
       const ref = doc(db, "user_recent_songs", pending.uid);
       const persistedVersion = await runV1MutationBoundary(
-        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets },
+        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: pending.syncItem },
         persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
       );
       if (!persistedVersion) return;
@@ -14045,7 +14143,14 @@ ${normalizePromptForDisplay(result.prompt)}
       historyIndex: activeIndex,
       latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
     });
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets, mutationEpoch: readRecentSongsMutationEpoch(uid) };
+    recentSongTextWritePendingRef.current = {
+      uid,
+      songs: nextSongs,
+      operation,
+      mirrorTargets,
+      mutationEpoch: readRecentSongsMutationEpoch(uid),
+      syncItem: activeIndex >= 0 && activeIndex < nextSongs.length ? nextSongs[activeIndex] : undefined,
+    };
   }, []);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
@@ -14383,6 +14488,11 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const buildEditedRecentSong = (song: SongResult, draft: RecentSongEditDraft): SongResult => {
+    // Freeze the pre-edit recent-song identity before title mutation. Legacy
+    // fallback identity used the title, so changing the name could otherwise
+    // make the same generated song look like a different item forever.
+    const immutableRecentSongSyncKey = String((song as any)?.recentSongSyncKey || '').trim()
+      || buildRecentSongSyncKey(song);
     const koreanTitle = draft.koreanTitle.trim();
     const secondaryTitle = draft.secondaryTitle.trim();
     const secondaryLanguage = (draft.secondaryLanguage || 'en') as LanguageCode;
@@ -14421,6 +14531,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
     const editedSong = {
       ...song,
+      ...(immutableRecentSongSyncKey ? { recentSongSyncKey: immutableRecentSongSyncKey } : {}),
       title: (shouldEditKoreanTitle ? koreanTitle : '') || (shouldEditSecondaryTitle ? secondaryTitle : '') || song.title || 'Untitled',
       koreanTitle: shouldEditKoreanTitle ? koreanTitle : (song.koreanTitle || ''),
       englishTitle: shouldEditSecondaryTitle ? secondaryTitle : (song.englishTitle || ''),
@@ -14471,6 +14582,14 @@ ${normalizePromptForDisplay(result.prompt)}
 
       if (user?.uid) {
         queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
+        const previewSong = historyRef.current[currentIndex] || nextSong;
+        try {
+          await publishRecentSongPreviewDelta(user.uid, previewSong);
+        } catch (error) {
+          // Local draft remains safe and the next explicit persistence boundary
+          // will still save it canonically.
+          console.warn('Recent song title cross-device preview unavailable.', error);
+        }
       }
 
       setIsRecentSongEditOpen(false);
@@ -14577,18 +14696,55 @@ ${normalizePromptForDisplay(result.prompt)}
         ? false
         : isSongFavorited(heartSnapshot);
 
-      await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+      let linkedFavoriteId = '';
+      if (wasDetachedBeforeToggle) {
+        // An edited saved recent song intentionally shows an empty heart. Clicking
+        // it means "save this edited version", not "unsave the old title".
+        const existingEditedFavorite = findBestMatchingFavorite(
+          favoritesStore.getFavorites(),
+          heartSnapshot,
+          buildFavoriteIdentityKey(heartSnapshot),
+        );
+        if (existingEditedFavorite && !isFavoriteHidden(existingEditedFavorite)) {
+          await updateFavorite(existingEditedFavorite.id, {
+            title: heartSnapshot.title,
+            koreanTitle: (heartSnapshot as any).koreanTitle ?? '',
+            englishTitle: (heartSnapshot as any).englishTitle ?? '',
+            displayGenre: (heartSnapshot as any).displayGenre ?? null,
+            genre: getResolvedGenre(heartSnapshot),
+            prompt: heartSnapshot.prompt,
+            lyrics: heartSnapshot.lyrics,
+            appliedKeywords: heartSnapshot.appliedKeywords,
+            userInput: (heartSnapshot as any).userInput ?? (heartSnapshot.appliedKeywords as any)?.userInput ?? '',
+            situationSummary: (heartSnapshot as any).situationSummary ?? (heartSnapshot.appliedKeywords as any)?.situationSummary ?? '',
+            recentSongSyncKey: buildRecentSongSyncKey(heartSnapshot) || existingEditedFavorite.recentSongSyncKey,
+            soridrawSongId: getLiveSoridrawSongId(heartSnapshot) || existingEditedFavorite.soridrawSongId,
+            saved: true,
+            hidden: false,
+            favoriteHidden: false,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            unsavedAt: null,
+            unlikedAt: null,
+          } as any);
+          linkedFavoriteId = String(existingEditedFavorite.firestoreId || existingEditedFavorite.id || '').trim();
+        } else {
+          await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+        }
+      } else {
+        await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+      }
 
-      const linkedFavorite = wasFavoritedBeforeToggle
-        ? null
-        : findBestMatchingFavorite(
-            favoritesStore.getFavorites(),
-            heartSnapshot,
-            buildFavoriteIdentityKey(heartSnapshot),
-          );
-      const linkedFavoriteId = String(
-        (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
-      ).trim();
+      if (!linkedFavoriteId && !wasFavoritedBeforeToggle) {
+        const linkedFavorite = findBestMatchingFavorite(
+          favoritesStore.getFavorites(),
+          heartSnapshot,
+          buildFavoriteIdentityKey(heartSnapshot),
+        );
+        linkedFavoriteId = String(
+          (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
+        ).trim();
+      }
 
       if (currentIndex >= 0) {
         const currentSongAfterToggle = (historyRef.current[currentIndex] || heartSnapshot) as any;
@@ -14631,8 +14787,16 @@ ${normalizePromptForDisplay(result.prompt)}
               uid: user.uid,
               songs: nextCommittedHistory,
               mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              syncItem: nextCommittedSong,
             };
             await flushRecentSongTextWrite();
+          }
+          if (wasDetachedBeforeToggle) {
+            try {
+              await publishRecentSongPreviewDelta(user.uid, nextCommittedSong);
+            } catch (error) {
+              console.warn('Recent song saved-state cross-device preview unavailable.', error);
+            }
           }
         }
       }

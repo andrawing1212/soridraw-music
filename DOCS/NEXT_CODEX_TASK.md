@@ -1,3 +1,43 @@
+## CURRENT TASK — app288 RTDB ACK 분리 후 SAVE/UNSAVE 양방향 실기기 확인 (2026-10-02 KST)
+
+현재:
+- app287 사용자 실기기 FAIL: 저장 즉시 동기화가 여전히 안 됨.
+- 실패 직후 read-only Run `36909095714`에서 실제 RTDB Music Note signal과 exact item identity가 존재함을 확인.
+- 수신 App이 RTDB 신호 순번과 Catalog generatedAtMs를 같은 localVersion 키로 비교하던 구조 발견.
+- Catalog 시각이 앞서면 실제 새 RTDB changed-item을 stale로 버릴 수 있었음.
+- app288은 RTDB signal ack를 전용 키로 분리하여 Catalog timestamp가 SAVE/UNSAVE 신호를 차단하지 못하게 수정.
+- exact receiver는 Firestore R0/W0 유지.
+- Focused Audit `36909879917` SUCCESS.
+- PREVIEW Release `36910149870` SUCCESS.
+- locked release commit `e704decf0c0e0274203dabdaa84d399c26d4a131`.
+- `preview.soridraw.com` app288 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 delete/migration/backfill 없음.
+
+실기기 테스트:
+1. PC/모바일 모두 app288 확인.
+2. `스쳐간 이름 뒤에` A 저장 → B 즉시 filled.
+3. B 해제 → A 즉시 empty.
+4. B 저장 → A 즉시 filled.
+5. A 해제 → B 즉시 empty.
+6. 2~5를 2회 이상 반복. route/tab/refresh 도움 없이 양방향 수렴해야 PASS.
+7. 일반 정상 최근곡 1개 같은 순서 회귀 없음.
+8. 이름 변경/원복 app282 동시 반영 유지.
+9. 재접속 후 마지막 상태 동일.
+10. exact receiver Firestore R0/W0, D1 R0/W0.
+11. idle/navigation/app update 추가 mutation 0.
+
+보호:
+- app287 SAVE signal 보완 유지.
+- app286 UI action direction authority 유지.
+- app285 exact recent/favorite identity 유지.
+- app282 이름 동기화 보호.
+- duplicate user data 자동 삭제/병합 금지.
+- Explore public like app164/Worker195 동결.
+- Music Note 60초 상세 batch 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app287 SAVE/UNSAVE 양방향 실기기 최종 확인 (2026-10-02 KST)
 
 현재:

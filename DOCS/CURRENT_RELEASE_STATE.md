@@ -1,3 +1,95 @@
+## 0LW. PREVIEW app288 배포 완료 — Music Note RTDB 신호와 Catalog 시간축을 분리 (2026-10-02 KST)
+
+**사용자 실기기 판정 — app287 FAIL**
+- 사용자 확인: app287도 저장 PC↔모바일 즉시 동기화가 이전과 동일하게 실패.
+- app287에서 추가한 idempotent SAVE 송신 보완만으로는 해결되지 않았으므로, 송신 누락 가설만으로 계속 수정하지 않고 실제 서버 상태를 read-only로 재확인.
+
+**app287 실패 직후 read-only 실데이터 진단**
+- Diagnostic Run `36909095714`: SUCCESS.
+- 안전성: Firestore write 0 / delete 0 / RTDB write 0.
+- 문제곡 `스쳐간 이름 뒤에`:
+  - favorite historical rows 2개는 동일 generationBatchId+generationIndex / soridrawSongId / recentSongSyncKey.
+  - 현재 canonical 상태는 두 row 모두 soft-removed.
+  - user_recent_songs는 exact favorite link를 계속 유지.
+- 최신 실제 UID Music Note RTDB signal:
+  - operation=`unsave`
+  - exact favorite document id 존재.
+  - itemJson 길이 517.
+  - generation / soridraw / recent identity 포함.
+- 즉 RTDB 채널 자체와 changed-item payload는 실제 운영 데이터에서 존재하고 있었음. app287의 “SAVE 송신 한 분기만 문제” 수정만으로는 설명이 부족했음.
+
+**추가로 발견된 수신측 구조 문제**
+- App의 Music Note live receiver는 RTDB `remoteVersion`을 받을 때 `MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE`와 비교해 이미 처리한 신호인지 판정하고 있었음.
+- 그런데 같은 `LOCAL_SYNC_VERSION` 키를 Music Note Catalog 로딩에서도 `bundle.updatedAtMs` (= Catalog snapshot `generatedAtMs`)로 올리고 있었음.
+- 즉 하나의 숫자에 서로 다른 두 의미가 섞여 있었음:
+  1. RTDB changed-item 신호의 순번/ack.
+  2. Catalog가 만들어진 시각.
+- Catalog 시각이 RTDB 신호 숫자보다 앞서 있으면 실제로 새 SAVE/UNSAVE 신호가 와도 `localVersion >= remoteVersion`으로 판단해 수신 직후 버릴 수 있었음.
+- 이 경우 서버에는 정상 신호가 있어도 열린 PC/모바일 Studio 하트가 반응하지 않으며, 페이지 이동/다른 동기화 경로 뒤에만 상태가 맞는 현상이 가능.
+- 이름 변경은 별도의 preview/update 동기화 경로가 있어 정상으로 보일 수 있으므로 사용자 관찰과도 일치.
+
+**app288 수정**
+- 신규 로컬 키 `soridraw_music_note_rtdb_ack_version_v1` 도입.
+- RTDB changed-item의 중복/구형 판정은 이제 **실제로 처리 완료한 RTDB signal version끼리만** 비교.
+- Catalog `generatedAtMs / bundle.updatedAtMs`는 기존 데이터 캐시 판단에만 남기고 RTDB signal ack로 사용하지 않음.
+- exact SAVE/UNSAVE/restore/structure 신호를 정상 적용한 뒤에만 새 RTDB ack를 기록.
+- 수신 exact signal 경로는 기존처럼 Firestore query/read 없이 local favorites + Recent heart authority만 갱신.
+- 기존 app287 SAVE signal 보완은 유지.
+- app286 visible direction authority, app285 exact identity, app282 이름 동기화, app281 Suno URL, app278 공유노트, Explore public like app164/Worker195 비변경.
+- duplicate user data 삭제/병합 없음.
+
+**비용**
+- 신규 서버 read/write 0.
+- 추가 RTDB mutation 0.
+- 수신 기기 exact SAVE/UNSAVE: Firestore R0/W0, D1 R0/W0.
+- Catalog server read 정책 변경 0.
+- canonical save/restore/unsave 비용 구조 비변경.
+- idle / 페이지 이동 / 앱 업데이트로 추가 mutation 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+**검증**
+- 제품 수정 commit: `88c346f292898c5a4a55894140da36128eeb8f93`.
+- Focused Audit Run `36909879917`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app277~app287 regression PASS.
+  - APP288_RTDB_ACK_VERSION_DOMAIN_SEPARATED PASS.
+  - APP288_CATALOG_TIMESTAMP_CANNOT_DROP_SAVE_SIGNAL PASS.
+  - APP288_EXACT_SAVE_UNSAVE_RECEIVER_FIRESTORE_R0 PASS.
+  - APP288_NAME_SYNC_PATH_UNCHANGED PASS.
+  - Recent Songs 196 regression PASS.
+- 임시 app288 audit/diagnostic workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- locked release commit: `e704decf0c0e0274203dabdaa84d399c26d4a131`.
+- Firebase PREVIEW App Run `36910149870`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **288**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 데이터 변경 없음.
+
+**실기기 확인**
+1. PC/모바일 모두 app288.
+2. `스쳐간 이름 뒤에`에서 A 저장 → B가 페이지 이동/새로고침 없이 filled.
+3. B 해제 → A 즉시 empty.
+4. B 저장 → A 즉시 filled.
+5. A 해제 → B 즉시 empty.
+6. 위 순서를 2회 이상 반복.
+7. 일반 정상 최근곡 1개도 같은 순서 회귀 없음.
+8. 이름 변경/복원 동시 반영 유지.
+9. 양쪽 새로고침/재접속 후 마지막 상태 동일.
+10. 상대 기기 exact 신호 수신 Firestore/D1 R/W 0 유지.
+
+**상태**
+- PREVIEW app288 코드/감사/배포 완료.
+- 사용자 실기기 검증 전.
+- TEST / PRODUCTION 비변경.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## 0LV. PREVIEW app287 배포 완료 — 저장만 반대 기기에 안 가던 마지막 RTDB 신호 누락 보완 (2026-10-02 KST)
 
 **사용자 실기기 판정 — app286 FAIL**

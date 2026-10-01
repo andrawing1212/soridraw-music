@@ -24,6 +24,7 @@ assert.match(sync, /const projectRemovedMusicNoteIdentityForSync/);
 assert.match(sync, /__musicNoteRemovalIdentity: true/);
 assert.match(sync, /recentLegacySourceId/);
 assert.match(sync, /favoriteRemoved: true/);
+assert.match(sync, /recentFavoriteIdentityHealedAt/);
 assert.doesNotMatch(sync, /firebase\/firestore|getDoc\(|getDocs\(|collection\(/,
   'RTDB transport must remain Firestore-read free');
 
@@ -40,6 +41,10 @@ assert.ok(heartStart >= 0 && heartEnd > heartStart, 'Recent Studio heart block m
 const heart = app.slice(heartStart, heartEnd);
 assert.match(heart, /recentFavoriteExplicitlyUnsavedAt = Date\.now\(\)/);
 assert.match(heart, /delete nextCommittedSong\.recentFavoriteExplicitlyUnsavedAt/);
+assert.match(heart, /recentFavoriteIdentityHealedAt = Date\.now\(\)/);
+assert.match(heart, /one-time legacy repair/);
+assert.match(heart, /!legacyIdentityWasHealed/);
+assert.match(heart, /operation: 'pre-favorite-edit'/);
 
 const favoritedStart = app.indexOf('  const isSongFavorited = useCallback');
 const favoritedEnd = app.indexOf('  const getFavoriteTitleFingerprint', favoritedStart);
@@ -60,4 +65,5 @@ assert.doesNotMatch(fast, /getDoc\(|getDocs\(/,
 console.log('APP283_LEGACY_RECENT_HEART_SOURCE_BRIDGE=PASS');
 console.log('APP283_MUSIC_NOTE_SIGNAL_REUSED_NO_EXTRA_RTDB_WRITE=PASS');
 console.log('APP283_REMOTE_FIRESTORE_R0=PASS');
+console.log('APP283_ONE_TIME_LEGACY_REPAIR_RECENT_W1=PASS');
 console.log('APP283_MODERN_GENERATION_IDENTITY_UNCHANGED=PASS');

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 284);
+assert.ok(Number(version.version) >= 284, 'app version must be 284 or newer');
 
 const favoritedStart = app.indexOf('  const isSongFavorited = useCallback');
 const favoritedEnd = app.indexOf('  const getFavoriteTitleFingerprint', favoritedStart);

@@ -1,3 +1,3 @@
-app282-title-cross-device
+app282-title-cross-device-rerun
 source=e52f1c78ea59d8551bb55b5afabb25277a916a44
-scope=music-note-title-recent-title-identity
+verifier=7a0e9fa6a60977ddbeffdbab1ebd6c2fab895526

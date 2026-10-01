@@ -19,6 +19,11 @@ import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike } from '../services/playlistService';
+import {
+  flushLibraryPlaylistRevisionBatch,
+  markLibraryPlaylistRevisionCommitted,
+  resumeLibraryPlaylistRevisionBatch,
+} from '../services/libraryPlaylistRevisionBatch';
 import { Playlist, PlaylistItem } from '../types';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
@@ -1727,6 +1732,32 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (applied) markCacheDiagnostic('library', 'CACHE', 0);
       });
     });
+  }, [user?.uid, isSharedView]);
+
+  // app295 — resume any durable compatibility-revision batch left by a
+  // previous tab/session. Folder changes stay visible immediately through the
+  // local cache + RTDB delta; this only batches the legacy users revision write.
+  useEffect(() => {
+    if (!user?.uid || isSharedView) return;
+    const uid = user.uid;
+    resumeLibraryPlaylistRevisionBatch(uid);
+
+    const flushWhenHidden = () => {
+      if (document.visibilityState === 'hidden') void flushLibraryPlaylistRevisionBatch(uid);
+    };
+    const flushOnPageHide = () => {
+      void flushLibraryPlaylistRevisionBatch(uid);
+    };
+
+    document.addEventListener('visibilitychange', flushWhenHidden);
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', flushWhenHidden);
+      window.removeEventListener('pagehide', flushOnPageHide);
+      // Route navigation keeps the durable batch safe and asks it to settle;
+      // if the request cannot finish, localStorage recovery remains intact.
+      void flushLibraryPlaylistRevisionBatch(uid);
+    };
   }, [user?.uid, isSharedView]);
 
   const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
@@ -6491,6 +6522,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       .forEach((playlist) => batch.update(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }));
     batch.update(doc(db, 'users', user.uid), { 'syncVersions.playlists': syncVersion });
     await batch.commit();
+    markLibraryPlaylistRevisionCommitted(user.uid, syncVersion);
     const sectionById = new Map(sectionList.map((playlist) => [playlist.id, playlist]));
     const next = playlistsRef.current.map((playlist) => sectionById.get(playlist.id) || playlist);
     playlistListCacheVersionRef.current = syncVersion;

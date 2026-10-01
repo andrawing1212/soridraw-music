@@ -14945,6 +14945,7 @@ ${normalizePromptForDisplay(result.prompt)}
       const wasFavoritedBeforeToggle = wasDetachedBeforeToggle
         ? false
         : isSongFavorited(heartSnapshot);
+      const intendedFavoriteAction: 'save' | 'unsave' = wasFavoritedBeforeToggle ? 'unsave' : 'save';
 
       // app285 — Keep the exact Music Note document identity even while the
       // heart is empty. The broken song had two historical favorite documents;
@@ -15002,10 +15003,10 @@ ${normalizePromptForDisplay(result.prompt)}
           linkedFavoriteId = String(existingEditedFavorite.firestoreId || existingEditedFavorite.id || '').trim();
           linkedFavoriteForRecentBridge = existingEditedFavorite;
         } else {
-          await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+          await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true, intendedAction: 'save' });
         }
       } else {
-        await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+        await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true, intendedAction: intendedFavoriteAction });
       }
 
       if (!linkedFavoriteId && !wasFavoritedBeforeToggle) {
@@ -15018,6 +15019,18 @@ ${normalizePromptForDisplay(result.prompt)}
         linkedFavoriteId = String(
           (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
         ).trim();
+      }
+
+      if (user?.uid) {
+        rememberRecentHeartAuthority(
+          user.uid,
+          heartSnapshot,
+          intendedFavoriteAction === 'save',
+          intendedFavoriteAction === 'save'
+            ? (linkedFavoriteId || favoriteLinkBeforeToggle)
+            : favoriteLinkBeforeToggle,
+          Date.now(),
+        );
       }
 
       if (currentIndex >= 0) {

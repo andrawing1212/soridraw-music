@@ -82,6 +82,9 @@ jobs:
             explicitlyUnsaved: Number(x?.recentFavoriteExplicitlyUnsavedAt || 0) > 0,
             saved: x?.saved === true,
             favoriteRemoved: x?.favoriteRemoved === true,
+            hasFavoriteRemovedAt: Boolean(x?.favoriteRemovedAt),
+            hasUnlikedAt: Boolean(x?.unlikedAt),
+            hasUnsavedAt: Boolean(x?.unsavedAt),
             hidden: x?.hidden === true || x?.favoriteHidden === true,
           });
 

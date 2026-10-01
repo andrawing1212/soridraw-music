@@ -1,3 +1,29 @@
+## CURRENT TASK — PREVIEW app281 Suno URL cross-device 실기기 최종 확인 (2026-10-01 KST)
+
+배포 완료:
+- Focused Audit `36810877247` SUCCESS.
+- PREVIEW Release `36811169561` SUCCESS.
+- locked source `3f8770519e11bfb9ed0d317f4e2e3362f0a962f6`.
+- `preview.soridraw.com` app281 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- RTDB Rules / Worker / Functions / D1 / 사용자 데이터 변경 없음.
+
+지금 확인할 것:
+1. PC→모바일: 상세 Suno URL 저장 직후 목록 썸네일 자동 변경.
+2. 모바일에서 같은 상세를 이미 열어둔 상태: URL/대표 순위 자동 변경.
+3. 모바일→PC도 동일.
+4. URL 연결 해제도 목록 + 열린 상세 양방향 즉시 반영.
+5. 원본 기기 페이지 이탈/재접속 뒤에도 상태 유지.
+6. 수신 기기 Firestore R0/W0, D1 R0/W0.
+7. idle/페이지 이동만으로 추가 read/write 없음.
+
+보호:
+- Music Note 상세 60초/페이지 이탈 canonical 묶음 저장 동결.
+- app280 unsave tombstone/재접속 부활 방지 동결.
+- app278 공유노트 구조/카드 상태 및 app279 최근곡 정상 identity 경로 동결.
+- Explore public like app164/Worker195 동결.
+- 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app281 Suno URL 썸네일/상세 PC↔모바일 실기기 확인 (2026-10-01 KST)
 
 현재:

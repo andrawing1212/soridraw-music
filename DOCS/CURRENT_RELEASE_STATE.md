@@ -1,3 +1,35 @@
+## 0LO. PREVIEW app281 배포 완료 — Suno URL 목록 썸네일/열린 상세 cross-device 즉시 반영 (2026-10-01 KST)
+
+**최종 상태**
+- 제품 코드 기준: `6967c28019ccb8ee7b7c1cb73929655b8f9f9e7f`.
+- 배포 잠금 source / release trigger commit: `3f8770519e11bfb9ed0d317f4e2e3362f0a962f6`.
+- Focused Audit Run `36810877247`: **SUCCESS**.
+- Firebase PREVIEW App Run `36811169561`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` remote app version **281** / `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Shared RTDB Rules deploy **SKIPPED**. 기존 규칙만 사용.
+- Functions / Cloudflare Worker / Firestore Rules / D1 변경 없음.
+- 사용자 원본 데이터 migration/backfill/delete/복제 없음.
+
+**이번 수정의 비용 계약**
+- 상세에서 Suno URL 저장 또는 연결 해제를 누르면 변경된 한 곡의 Suno media summary를 기존 UID RTDB Music Note 신호로 1회 전달.
+- 반대 기기는 기존 exact changed-item fast path로 목록 썸네일과 URL 메타를 로컬 cache/store에 패치하며 Firestore R0/W0.
+- canonical Firestore 상세 저장은 기존 60초/페이지 이탈 묶음 저장을 유지하므로 이번 수정으로 canonical write 횟수 증가 없음.
+- 목록 전체 조회/전체 rebuild 없음. D1 R0/W0 추가.
+
+**사용자 실기기 최종 확인**
+1. PC와 모바일 모두 app281인지 확인.
+2. PC에서 곡 A 상세 → Suno URL 입력 → 저장.
+3. 모바일에서 페이지 이동/새로고침 없이 곡 A의 목록 썸네일이 즉시 변경되는지 확인.
+4. 모바일에서 같은 곡 상세를 미리 열어둔 상태에서도 URL/대표 순위가 갱신되는지 확인.
+5. 모바일 → PC 방향도 동일하게 반복.
+6. URL 연결 해제도 반대 기기의 목록 썸네일과 열린 상세에 즉시 반영되는지 확인.
+7. 원본 기기 페이지 이탈 후 양 기기 재접속에서도 URL/썸네일 유지 확인.
+8. 수신 기기 Firestore R0/W0, D1 R0/W0. 변경 없이 1분/페이지 재진입 추가 R/W 0 확인.
+9. 실기기 PASS 전 TEST 승격 금지.
+
 ## 0LN. PREVIEW app281 — Suno URL 등록 미디어 PC↔모바일 즉시 동기화 수정 / 배포 전 (2026-10-01 KST)
 
 **사용자 실사용에서 새로 확인된 문제**

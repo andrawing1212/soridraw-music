@@ -8,7 +8,7 @@ const engine = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
 const bundle = fs.readFileSync('src/lib/listBundleCache.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 286);
+assert.ok(Number(version.version) >= 286, 'app version must be 286 or newer');
 
 // Current explicit state must beat old historical removal timestamps.
 assert.equal(isMusicNoteItemRemoved({

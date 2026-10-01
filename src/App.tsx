@@ -10285,7 +10285,7 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
+  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean; intendedAction?: 'save' | 'unsave' }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -10454,6 +10454,7 @@ const toggleCycleVariantSelection = (
         return null;
       });
       const existingFav = localExistingFav || serverExistingFav;
+      const intendedAction = options?.intendedAction;
 
       if (existingFav) {
         if (existingFav.isLocked && !forceDeleteFavoriteById) {
@@ -10494,6 +10495,36 @@ const toggleCycleVariantSelection = (
           applyFavoriteSyncSignal(user.uid, deleteSignal);
           queueMusicNoteFavoriteCountDelta(user.uid, -1);
           showToast('곡이 삭제 되었습니다.');
+          return;
+        }
+
+        // app286 — A Studio heart click has an explicit direction from the UI.
+        // Never reinterpret an empty-heart SAVE click as UNSAVE just because a
+        // fresher server lookup found an active copy from the other device.
+        if (intendedAction === 'save' && !isFavoriteHidden(existingFav)) {
+          const activeAt = Date.now();
+          const activeUpdates = {
+            hidden: false,
+            favoriteHidden: false,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            unlikedAt: null,
+            unsavedAt: null,
+            deletedAt: null,
+            trashedAt: null,
+            saved: true,
+            updatedAtMs: Math.max(Number(existingFav.updatedAtMs || 0), activeAt),
+          };
+          forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+          patchLocalFavorite(existingFav.id, activeUpdates, existingFav);
+          showToast('저장되었습니다.');
+          return;
+        }
+
+        if (intendedAction === 'unsave' && isFavoriteHidden(existingFav)) {
+          rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+          removeLocalFavorite(existingFav.id);
+          showToast('저장이 해제되었습니다.');
           return;
         }
 
@@ -10613,6 +10644,24 @@ const toggleCycleVariantSelection = (
           }
           throw unsaveError;
         }
+      }
+
+      if (intendedAction === 'unsave') {
+        const exactFavoriteId = String(
+          (song as any)?.favoriteFirestoreId
+          || (song as any)?.musicNoteFavoriteId
+          || (song as any)?.firestoreId
+          || '',
+        ).trim();
+        if (exactFavoriteId) {
+          rememberFavoriteDeletedTombstones(user.uid, [exactFavoriteId]);
+          removeLocalFavorite(exactFavoriteId);
+        }
+        // The visible heart was already filled and the canonical item is already
+        // absent/removed. Treat the click as an idempotent UNSAVE; never create a
+        // new favorite while trying to turn a heart off.
+        showToast('저장이 해제되었습니다.');
+        return;
       }
 
       const createdAtMs = Date.now();

@@ -10,7 +10,7 @@ const store = fs.readFileSync('src/hooks/useFavoritesStore.ts', 'utf8');
 const countBatch = fs.readFileSync('src/services/musicNoteFavoriteCountBatch.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 278);
+assert.ok(Number(version.version) >= 278, 'app version must be 278 or newer');
 
 assert.match(boundary, /'structure-update'/);
 assert.match(boundary, /syncItems\?: readonly unknown\[\]/);

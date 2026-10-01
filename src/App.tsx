@@ -5568,10 +5568,26 @@ function App() {
     return `song_${(hash >>> 0).toString(36)}`;
   };
 
+  const getRecentSongGenerationSyncKey = (song: any): string => {
+    if (!song || typeof song !== 'object') return '';
+    const generationBatchId = String((song?.appliedKeywords as any)?.generationBatchId || '').trim();
+    const generationIndex = Math.floor(Number((song?.appliedKeywords as any)?.generationIndex || 0));
+    if (!generationBatchId || !Number.isFinite(generationIndex) || generationIndex <= 0) return '';
+    return `generation:${generationBatchId}:${generationIndex}`;
+  };
+
   const buildRecentSongSyncKey = (song: any): string => {
     if (!song || typeof song !== 'object') return '';
+
+    // app279 — generationBatchId + generationIndex are the immutable cross-device
+    // identity for generated Studio results. app278 preferred a locally assigned
+    // soridrawSongId first, which can differ between devices for old cached songs.
+    const generationKey = getRecentSongGenerationSyncKey(song);
+    if (generationKey) return generationKey;
+
     const explicit = String(song?.recentSongSyncKey || '').trim();
     if (explicit) return explicit;
+
     const stableSongId = getLiveSoridrawSongId(song);
     if (stableSongId) return `sid:${stableSongId}`;
 
@@ -5581,9 +5597,8 @@ function App() {
       || Number(song?.updatedAtMs || 0)
       || getTimestampMs(song?.updatedAt)
       || 0;
-    const generationBatchId = String((song?.appliedKeywords as any)?.generationBatchId || '').trim();
     const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
-    const sourceText = [sourceId, String(createdAtMs || ''), generationBatchId, titlePart].join('|');
+    const sourceText = [sourceId, String(createdAtMs || ''), titlePart].join('|');
     if (!sourceText.replace(/\|/g, '').trim()) return '';
 
     let hash = 2166136261;
@@ -5624,6 +5639,9 @@ function App() {
   const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
     if (!favorite || !song) return false;
     if (song?.id && favorite?.id && song.id === favorite.id) return true;
+    const favoriteGenerationKey = getRecentSongGenerationSyncKey(favorite);
+    const songGenerationKey = getRecentSongGenerationSyncKey(song);
+    if (favoriteGenerationKey && songGenerationKey && favoriteGenerationKey === songGenerationKey) return true;
     const favoriteStableSongId = getLiveSoridrawSongId(favorite);
     const songStableSongId = getLiveSoridrawSongId(song);
     if (favoriteStableSongId && songStableSongId && favoriteStableSongId === songStableSongId) return true;
@@ -10228,6 +10246,7 @@ const toggleCycleVariantSelection = (
             saved: true,
             restoredAt: Date.now(),
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
+            recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song) || existingFav.recentSongSyncKey,
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
           };
           await runV1MutationBoundary({
@@ -10324,15 +10343,15 @@ const toggleCycleVariantSelection = (
       const createdAtMs = Date.now();
       song = ensureLiveSoridrawSongId(song as any) as SongResult;
       const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
-      const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
-        const raw = `${uid}|${stableSongId}`;
+      const buildRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
+        const raw = `${uid}|${stableIdentity}`;
         let hash = 2166136261;
         for (let index = 0; index < raw.length; index += 1) {
           hash ^= raw.charCodeAt(index);
           hash = Math.imul(hash, 16777619);
         }
-        const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
-        return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+        const safeIdentity = stableIdentity.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+        return `rs_${safeIdentity}_${(hash >>> 0).toString(36)}`;
       };
       const resolvedGenre = getResolvedGenre(song);
       const favoriteMediaKeys = [
@@ -10377,11 +10396,12 @@ const toggleCycleVariantSelection = (
         favoriteKey: songIdentityKey,
         searchTokens: buildFavoriteSearchTokens(song)
       });
+      const deterministicRecentIdentity = recentSongSyncKey || buildRecentSongSyncKey(song) || favoriteSoridrawSongId || '';
       const useDeterministicRecentFavoriteDoc = Boolean(
-        canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+        canTrustRecentStudioLocalIdentity && deterministicRecentIdentity
       );
       const favoriteDocRef = useDeterministicRecentFavoriteDoc
-        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
+        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, deterministicRecentIdentity))
         : null;
       if (favoriteDocRef) {
         await runV1MutationBoundary(

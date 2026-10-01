@@ -116,7 +116,7 @@
           }
         },
         "libraryPlaylist": {
-          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','payloadJson','truncated'])",
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','previousSyncVersion','payloadJson','truncated'])",
           "version": {
             ".validate": "newData.isNumber() && newData.val() > 0"
           },
@@ -131,6 +131,9 @@
           },
           "syncVersion": {
             ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "previousSyncVersion": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
           },
           "payloadJson": {
             ".validate": "newData.isString() && newData.val().length <= 24000"

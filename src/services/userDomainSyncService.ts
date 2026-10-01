@@ -34,6 +34,7 @@ const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_sign
 export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
+const MAX_SYNC_ITEM_JSON_CHARS = 24000;
 
 const getStoredDeviceId = (storageKey: string, prefix: string): string => {
   if (typeof window === 'undefined') return 'server';
@@ -168,6 +169,81 @@ const toSyncTimestamp = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+
+const projectMusicNoteItemForSignal = (
+  raw: unknown,
+  preferredId = '',
+): Record<string, unknown> | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const source = raw as Record<string, any>;
+  const id = String(preferredId || source.id || source.firestoreId || '').trim();
+  if (!id) return null;
+
+  const projected = projectCatalogItemForSync('musicNote', {
+    ...source,
+    id,
+    firestoreId: id,
+  });
+  if (!projected) return null;
+
+  try {
+    if (JSON.stringify(projected).length <= MAX_SYNC_ITEM_JSON_CHARS) return projected;
+  } catch {}
+
+  // app289 — Oversized active Music Note summaries used to lose itemJson entirely.
+  // Reuse the same RTDB mutation but shrink only appliedKeywords to immutable song
+  // identity so SAVE/RESTORE can still update the remote Studio heart.
+  const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
+    ? source.appliedKeywords as Record<string, any>
+    : {};
+  const generationBatchId = String(applied.generationBatchId || '').trim();
+  const generationIndex = Math.floor(Number(applied.generationIndex || 0));
+  const hasGenerationIdentity = Boolean(
+    generationBatchId && Number.isFinite(generationIndex) && generationIndex > 0
+  );
+  const compactProjected: Record<string, unknown> = {
+    ...projected,
+    __musicNoteCompactActiveSync: true,
+    appliedKeywords: hasGenerationIdentity ? {
+      generationBatchId,
+      generationIndex,
+    } : null,
+  };
+
+  try {
+    if (JSON.stringify(compactProjected).length <= MAX_SYNC_ITEM_JSON_CHARS) return compactProjected;
+  } catch {}
+
+  // Extreme fallback. The canonical Firestore document is untouched; this only
+  // bounds the transient changed-item signal and keeps receiver Firestore reads at 0.
+  return {
+    __catalogSummary: true,
+    __musicNoteCompactActiveSync: true,
+    id,
+    firestoreId: id,
+    title: String(source.title || ''),
+    koreanTitle: String(source.koreanTitle || ''),
+    englishTitle: String(source.englishTitle || ''),
+    genre: source.genre ?? null,
+    soridrawSongId: String(source.soridrawSongId || '').trim() || null,
+    recentSongSyncKey: String(source.recentSongSyncKey || '').trim() || null,
+    recentLegacySourceId: String(source.recentLegacySourceId || '').trim() || null,
+    recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
+    appliedKeywords: hasGenerationIdentity ? {
+      generationBatchId,
+      generationIndex,
+    } : null,
+    isLocked: source.isLocked === true,
+    isPublic: source.isPublic === true,
+    hidden: false,
+    favoriteHidden: false,
+    favoriteRemoved: false,
+    saved: true,
+    createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
+    updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
+  };
+};
+
 const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const source = raw as Record<string, any>;
@@ -263,7 +339,7 @@ const buildSignal = (
         });
         // Reuse the already-approved bounded itemJson field so no RTDB rule or
         // schema expansion is needed for folder/card-state live sync.
-        if (encoded.length <= 24000) itemJson = encoded;
+        if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
       } else {
         const rawSyncItems = Array.isArray(context.syncItems)
           ? context.syncItems.slice(0, MAX_DOCUMENT_IDS)
@@ -274,10 +350,7 @@ const buildSignal = (
           .map((rawItem, index) => {
             if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) return null;
             const preferredId = uniqueIds[index] || uniqueIds[0] || resultDocumentId(result);
-            return projectCatalogItemForSync('musicNote', {
-              ...(rawItem as Record<string, unknown>),
-              ...(preferredId ? { id: preferredId, firestoreId: preferredId } : {}),
-            });
+            return projectMusicNoteItemForSignal(rawItem, preferredId);
           })
           .filter(Boolean);
         if (projectedItems.length > 0) {
@@ -285,7 +358,7 @@ const buildSignal = (
           const encoded = JSON.stringify(payload);
           // Keep the account-level signal tiny and bounded. Oversized detail never
           // rides RTDB; only catalog summaries are eligible.
-          if (encoded.length <= 24000) itemJson = encoded;
+          if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
         } else if (rawSyncItems.length > 0) {
           removed = true;
           const removalItems = rawSyncItems
@@ -297,7 +370,7 @@ const buildSignal = (
           if (removalItems.length > 0) {
             const payload = removalItems.length === 1 ? removalItems[0] : removalItems;
             const encoded = JSON.stringify(payload);
-            if (encoded.length <= 24000) itemJson = encoded;
+            if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
           }
         }
       }
@@ -307,7 +380,7 @@ const buildSignal = (
       const projected = projectRecentSongForSync(context.syncItem);
       if (projected) {
         const encoded = JSON.stringify(projected);
-        if (encoded.length <= 24000) itemJson = encoded;
+        if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
       }
     } catch {}
   }

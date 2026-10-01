@@ -10033,11 +10033,30 @@ const toggleCycleVariantSelection = (
         }
         setFavorites((prev) => {
           const changedIds = new Set(exactDocumentIds);
-          let next = (Array.isArray(prev) ? prev : []).filter(
+          const previousItems = Array.isArray(prev) ? prev : [];
+          const previousById = new Map(
+            previousItems
+              .map((item) => [String(item?.id || item?.firestoreId || '').trim(), item] as const)
+              .filter(([id]) => Boolean(id))
+          );
+          let next = previousItems.filter(
             (item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim())
           );
           for (const item of remoteItems) {
-            if (!isFavoriteSoftRemoved(item)) next = mergeFavoritePages([item], next);
+            if (isFavoriteSoftRemoved(item)) continue;
+            const itemId = String(item?.id || item?.firestoreId || '').trim();
+            const previousItem = itemId ? previousById.get(itemId) : null;
+            const incomingItem = item?.__musicNoteCompactActiveSync === true && previousItem
+              ? {
+                  ...previousItem,
+                  ...item,
+                  appliedKeywords: {
+                    ...(previousItem?.appliedKeywords || {}),
+                    ...(item?.appliedKeywords || {}),
+                  },
+                }
+              : item;
+            next = mergeFavoritePages([incomingItem], next);
           }
           const sorted = sortFavoriteList(next);
           writeFavoritesCache(uid, sorted, { publishDerived: false });

@@ -5,7 +5,7 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 288);
+assert.ok(Number(version.version) >= 288);
 assert.match(app, /MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE = 'soridraw_music_note_rtdb_ack_version_v1'/);
 
 const remoteStart = app.indexOf('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback');

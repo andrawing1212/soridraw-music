@@ -1,3 +1,72 @@
+## 0LR. PREVIEW app283 배포 완료 — 특정 legacy 최근생성곡 하트 identity 수렴 / 실기기 검증 대기 (2026-10-02 KST)
+
+**사용자 실사용에서 확정된 범위**
+- app282에서 Music Note/최근생성곡 제목 변경 동기화는 정상화됨.
+- 일반 최근생성곡 하트 동기화도 정상.
+- 특정 오래된 곡 `스쳐간 이름 뒤에`만 PC/모바일 하트가 서로 다른 상태로 남는 현상이 지속됨.
+- 제목은 같은 곡으로 동기화되는데 하트만 어긋나는 점에서, 전역 동기화 실패가 아니라 해당 legacy 곡의 기기별 favorite/soridraw identity split으로 범위를 한정함.
+
+**app283 수정**
+- 현대 생성곡의 `generationBatchId + generationIndex` identity 경로는 변경하지 않음.
+- generation identity가 없는 legacy recent row에만 기존 app282가 이미 신뢰하는 `sourceId + createdAtMs` bridge를 추가.
+- 실제 favorite save/update/unsave W1이 성공할 때 이미 발행되는 UID Music Note RTDB changed-item 신호에 legacy source bridge를 함께 실어 보냄.
+- 수신 기기는 그 bridge가 있는 경우에만 해당 최근생성곡 1개를 찾아 `favoriteFirestoreId / recentSongSyncKey / soridrawSongId`를 같은 canonical favorite 쪽으로 수렴.
+- legacy unsave 시 과거 split twin이 로컬 cache에 남아 있어도 하트가 다시 켜지지 않도록 explicit-unsaved marker를 사용.
+- 첫 성공 legacy save에서만 exact favorite link/identity를 `user_recent_songs`에 1회 W1로 확정하고 healed marker를 저장. 이후 동일 legacy 곡 하트는 healed exact favorite id를 우선 authority로 사용.
+- 기존 중복/legacy favorite 문서를 자동 삭제하거나 합치지 않음. 대량 migration/backfill/delete 없음.
+- Explore public like app164/Worker195, 공유노트, Music Note 60초 상세 batch, 분할 UI 비변경.
+
+**비용 계약**
+- 정상 modern recent song: 기존과 동일. 실제 save/unsave canonical favorite W1, 수신 기기 Firestore R0/W0.
+- legacy identity 첫 repair save: favorite W1 + `user_recent_songs` repair W1 = 최대 W2. 실제 데이터 변경 시 1회만.
+- legacy repair 이후 heart toggle: 기존 favorite mutation 경로 사용, 추가 recent repair W0.
+- app283 때문에 추가 RTDB mutation을 만들지 않음. 기존 Music Note changed-item RTDB 신호 재사용.
+- 수신 기기 Firestore R0/W0, D1 R0/W0 목표 유지.
+- 전체 favorites/recent scan/query/rebuild 없음.
+
+**검증**
+- app283 제품 코드 최종 PREVIEW 기준: `e277b0f140a4fce1f93b06271919a6869d45a65b`.
+- Focused Audit Run `36894349233`: **SUCCESS**.
+  - Scope guard PASS.
+  - TypeScript PASS.
+  - Build PASS.
+  - app278/app279/app280/app281/app282 regression PASS.
+  - app283 legacy recent heart source bridge PASS.
+  - Recent Songs 196 regression PASS.
+  - 수신 Firestore R0 static contract PASS.
+  - 추가 RTDB mutation 0 contract PASS.
+- 임시 app283 audit workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- release trigger / locked source commit: `41c41d0c2dafdf23bb8a14a6f52e5738dce5f420`.
+- Firebase PREVIEW App Run `36894655946`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: **SKIPPED** (기존 rules 그대로).
+- Firebase PREVIEW Hosting: PASS.
+- `preview.soridraw.com` remote app version **283**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 원본 데이터 migration/backfill/delete 없음.
+
+**실기기 검증 대기**
+1. PC/모바일 모두 app283 확인.
+2. `스쳐간 이름 뒤에`가 한쪽 filled / 한쪽 empty면 **filled 쪽에서 먼저 해제** → 상대도 페이지 이동 없이 empty가 되어야 함.
+3. 같은 기기에서 다시 저장 → 상대도 즉시 filled. 이 첫 save가 legacy identity 1회 수렴 지점.
+4. 이후 반대 기기에서 해제/저장 → 원래 기기도 즉시 동일.
+5. 양쪽 새로고침/재접속 뒤에도 동일한 하트 상태 유지.
+6. 제목 변경/복원 cross-device app282 기능 회귀 없음.
+7. 일반 정상 곡 1개 저장/해제로 회귀 없음.
+8. 수신 기기 Firestore R0/W0, D1 R0/W0.
+9. legacy 첫 repair save는 initiating side 최대 W2 허용, 그 이후 같은 legacy heart toggle은 추가 recent repair write가 없어야 함.
+10. 변경 없이 idle/페이지 왕복 추가 Firestore/D1 R/W 0.
+
+**상태**
+- PREVIEW app283 코드/감사/배포 완료.
+- 실제 PC↔모바일 검증 전.
+- 사용자 실사용 PASS 전 TEST 승격 금지.
+- TEST / PRODUCTION 비변경.
+
 ## 0LQ. PREVIEW app282 배포 완료 — 제목/최근생성곡 양방향 동기화 실기기 검증 대기 (2026-10-02 KST)
 
 **배포 결과**

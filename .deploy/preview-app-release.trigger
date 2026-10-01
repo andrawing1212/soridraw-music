@@ -1,6 +1,6 @@
-app285-save-unsave-same-identity-release
-target_source=ff969bbc24df385029a19f1bede999d3ce7199c7
-app_version=285
+app286-heart-direction-authority-release
+target_source=1ad4b2436a7a980bdf94f97b66fb4aebb641dc4f
+app_version=286
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

@@ -1,3 +1,47 @@
+## 0ME. PREVIEW app292 배포 완료 — Recent canonical batch 150초 + 다중곡 동작 확인 (2026-10-02 KST)
+
+**사용자 결정**
+- Recent Song 제목/프롬프트/가사 canonical Firestore trailing batch를 60초 → **150초**로 연장.
+- PC↔모바일 즉시 화면 반영 RTDB preview는 그대로 유지.
+- Studio Music Note heart의 30초 per-song batch는 변경하지 않음.
+
+**동작 기준**
+- Recent Song 편집:
+  - 같은 UID의 Recent 목록 전체가 하나의 aggregate document이므로 pending snapshot/timer도 UID당 1개.
+  - 150초 안에 A곡 제목 → B곡 프롬프트 → C곡 가사처럼 서로 다른 곡을 수정해도 매 수정마다 같은 150초 timer가 다시 시작됨.
+  - 마지막 수정 후 150초가 지나면 그 시점의 Recent 목록 최종 상태를 canonical 1회 저장.
+  - 현재 구조 기준 canonical 비용은 곡 수가 아니라 aggregate 1회 기준 `user_recent_songs W1 + users.syncVersions W1 = W2`.
+  - 즉시 RTDB preview는 변경된 각 곡만 보내며 Firestore R0/W0.
+- Studio heart:
+  - **Recent 편집과 다름.**
+  - heart pending/timer는 favorite document ID(곡)별 Map으로 관리.
+  - A곡 heart 후 B곡 heart를 눌러도 A곡 30초 timer는 B곡 때문에 다시 시작되지 않음.
+  - 같은 곡을 다시 누를 때만 그 곡 timer가 reset되고 final state로 collapse.
+  - 여러 곡의 final heart 상태가 각각 달라지면 canonical favorite write도 각 곡 W1씩 필요.
+  - 다만 `users.favoriteCount` 파생 통계 delta는 UID 단위 30초 batch로 합쳐질 수 있음.
+
+**수정 / 검증**
+- verified source commit: `34127904db7bb158ebcae28000fa65745fe56c8b`.
+- release request commit: `513637969b59f7c1ed964faa452a5537ed83a23f`.
+- apply/audit Run `36932805247`: **SUCCESS**.
+- `APP292_RECENT_EDIT_TRAILING_BATCH_150S=PASS`.
+- `APP292_RECENT_MULTI_SONG_AGGREGATE_BATCH=PASS`.
+- app290 Studio heart batching regression PASS.
+- app291 lyrics live preview regression PASS.
+- app289 Music Note heart regression PASS.
+- Music Note Detail batch regression PASS.
+- TypeScript PASS / Build PASS.
+- 임시 apply workflow는 verified source commit에서 제거됨.
+
+**PREVIEW 배포**
+- Firebase PREVIEW Run `36933026848`: **SUCCESS**.
+- locked deploy source: `513637969b59f7c1ed964faa452a5537ed83a23f`.
+- `preview.soridraw.com` app **292** / exact build PASS.
+- Shared RTDB Rules SKIPPED.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- TEST / PRODUCTION unchanged PASS.
+- 사용자 데이터 migration/backfill/delete 없음.
+
 ## 0MD. PREVIEW app291 배포 완료 — Recent 가사 편집도 PC↔모바일 즉시 반영 + app290 실기기 비용 확인 (2026-10-02 KST)
 
 **app290 사용자 실기기 / CACHE LIVE 비용 확인**

@@ -1,9 +1,0 @@
-requested_at=2026-10-01T12:11:00+09:00
-requested_by=user
-task=app280_music_note_catalog_resurrection
-base_preview_sha=d7a69ff3afbb00202ede9e49922b5f28a5eeb4c0
-scope=unsave_catalog_tombstone_reentry_cross_device
-no_user_data_migration=true
-no_bulk_delete=true
-firestore_extra_io=false
-test_production_unchanged=true

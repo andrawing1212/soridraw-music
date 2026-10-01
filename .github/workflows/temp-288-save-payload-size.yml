@@ -73,7 +73,7 @@ jobs:
             for(const k of KEYS){if(!(k in src))continue;const c=clean(src[k]);if(c!==undefined)p[k]=c;}
             p.createdAtMs=createdAtMs(p); return p;
           };
-          const bytes=v=>Buffer.byteLength(JSON.stringify(v),'utf8');
+          const bytes=v=>{const s=JSON.stringify(v);return typeof s==='string'?Buffer.byteLength(s,'utf8'):0;};
           const breakdown=p=>Object.entries(p).map(([k,v])=>({key:k,bytes:bytes(v)})).sort((a,b)=>b.bytes-a.bytes).slice(0,12);
           (async()=>{
             const [a,b]=await Promise.all([

@@ -1,3 +1,108 @@
+## 0LI. app277 보관함/Music Note PC↔모바일 동기화 비용 폭증 제거 PREVIEW 배포 (2026-10-01 KST)
+
+사용자 실사용 판정:
+- app276 양방향 동기화 수정 직후, 저장/해제 시 **실시간 Firestore read/write가 과도하게 증가**하는 비용 회귀를 사용자 확인.
+- app276의 “반대 기기 exact Firestore 1문서 read” 방식은 SORIDRAW 비용 원칙의 `RTDB changed-track receive/UI replay: extra Firestore IO 0` 기준에 어긋나므로 **비용 FAIL**로 철회.
+- 사용자 요구: 저장 버튼을 반복 사용해도 동기화 때문에 서버 비용이 배수로 늘지 않도록 즉시 축소.
+
+app277 핵심 수정:
+1. **반대 기기 Firestore read 제거**
+   - canonical Music Note mutation 성공 뒤 RTDB `userSync/{uid}/musicNote`의 기존 작은 계정별 신호에 **Catalog summary만** 함께 전달.
+   - summary는 `userDataEngine`의 Music Note Catalog allow-list를 그대로 사용하며 가사/프롬프트 상세은 포함하지 않음.
+   - 최대 JSON 24KB fail-closed.
+   - 다른 기기는 이 summary/removed flag를 로컬 favorites state/cache에 직접 반영.
+   - 최근생성곡 하트, 마이노트, 공유노트의 정상 changed-item sync에서 **추가 Firestore read 0**.
+2. **remote replay의 Catalog echo write 차단**
+   - 반대 기기가 RTDB 신호를 적용할 때 `writeFavoritesCache(..., { publishDerived:false })` 사용.
+   - 같은 변경을 receiver가 다시 R2/Catalog delta로 서버에 되쓰는 echo 경로 차단.
+3. **legacy Firestore user-doc sync fanout 제거**
+   - save/unsave/update 때 `users/{uid}.favoriteSyncSignal` / `favoriteSyncSignalUpdatedAt`를 매 클릭 쓰던 경로 제거.
+   - user document는 더 이상 Music Note changed-item transport로 사용하지 않음.
+   - cross-device transport는 RTDB 1개 UID-scoped signal이 담당.
+4. **derived `favoriteCount` 30초 묶음**
+   - 이전: save/unsave마다 `users/{uid}`에 `favoriteCount: increment(±1)` 즉시 W1.
+   - app277: 성공한 canonical save/unsave의 count delta를 기기에 durable pending으로 누적하고 **30초 trailing 1회**로 `increment(netDelta)`.
+   - 같은 30초 창에서 저장/해제가 상쇄되어 net delta=0이면 count 서버 write 0.
+   - 실패하면 pending delta를 로컬에 유지하고 다음 bounded flush에서 재시도.
+5. **canonical 원본은 유지**
+   - 실제 곡을 저장/해제하면 `favorites/{id}`의 **원본 W1은 유지**. 이것은 실제 사용자 데이터 변경이므로 제거하지 않음.
+   - 즉 app277 목표는 실제 원본 W1을 제외한 **동기화용 Firestore R/W fanout을 0으로 만드는 것**.
+   - 전체 favorites scan/query/rebuild 없음.
+
+변경 파일:
+- `src/services/userDomainSyncService.ts`
+  - UID-wide monotonic RTDB signal 유지.
+  - optional `itemJson` / `removed` changed-item payload 추가.
+  - remote signal은 Firestore를 읽지 않음.
+- `src/data/v1MutationBoundary.ts`
+  - mutation context에 optional `syncItem` 추가.
+- `src/lib/userDataEngine.ts`
+  - 기존 Music Note Catalog summary projector를 sync에도 재사용하도록 export.
+- `src/App.tsx`
+  - app276 remote exact `getDoc(favorites/{id})` 제거.
+  - RTDB summary로 로컬 favorites 직접 patch.
+  - remote replay의 Catalog publish 금지.
+  - legacy `users/{uid}.favoriteSyncSignal` per-click writes 제거.
+  - `favoriteCount`를 30초 batch queue로 변경.
+- `src/services/exploreSharedNoteService.ts`
+  - shared-note-save에도 동일 Catalog summary를 mutation signal에 제공.
+- `src/services/musicNoteFavoriteCountBatch.ts`
+  - net count 30초 trailing batch 추가.
+- `database.rules.json`
+  - 기존 `userSync/{uid}/musicNote`에 optional `itemJson <= 24000` / `removed:boolean`만 additive 허용.
+- `public/app-version.json`: 277.
+- `scripts/verify-277-music-note-sync-cost.mjs` 추가.
+
+비용 합격선:
+- 변경 없음 / 페이지 이동 / 재진입: app277 때문에 추가 Firestore R/W **0**.
+- 실제 save/unsave 1곡:
+  - canonical `favorites` **W1**.
+  - cross-device receiver Firestore **R0 / W0**.
+  - legacy user-doc sync **W0**.
+  - RTDB tiny UID signal **1회**.
+- 30초 내 여러 save/unsave:
+  - `favoriteCount`는 net delta를 **최대 W1/30초**로 묶음.
+  - net delta 0이면 count W0.
+- D1 추가 R/W 0.
+- remote receiver R2/Catalog echo write 0.
+- 서로 다른 실제 곡 N개를 최종 저장하면 canonical 원본 N개 W는 실제 데이터 변경이므로 필요하지만, 동기화 때문에 N배 추가 Firestore read/write가 붙지 않음.
+
+검증:
+- Focused Audit Run `36794132093`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- `APP277_REMOTE_CHANGED_ITEM_FIRESTORE_R0=PASS`.
+- `APP277_LEGACY_USER_SYNC_FIRESTORE_W0=PASS`.
+- `APP277_FAVORITE_COUNT_30S_BATCH=PASS`.
+- `APP277_SHARED_NOTE_ZERO_READ_SYNC=PASS`.
+- `APP277_NORMAL_NAVIGATION_EXTRA_RW=0`.
+- Recent Songs 196 sync 보호 4개 PASS.
+- app274 저장됨 표시 비용 회귀 PASS.
+- app273 공유노트 상세 회귀 PASS.
+- Music Note/Library 기본 회귀 PASS.
+- RTDB rules JSON PASS.
+
+PREVIEW 배포:
+- Product code target: `7a81f4a69fe327625340bb2535b99d773f0edd2f`.
+- Release trigger: `f45052d61ca496a0811f71f994eea98a31542b54`.
+- Firebase PREVIEW App Run `36794274979`: **SUCCESS**.
+- Shared RTDB Rules: **DEPLOY PASS + exact source match PASS**.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app version **277** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / Firestore Rules / D1 / 사용자 원본 migration/backfill 없음.
+- 완료된 app277 audit workflow/trigger 제거 완료.
+- 현재 preview HEAD: `4b84e6570d6df0c00cf196d5c110fe714b19ada5` (배포 이후 audit cleanup 포함).
+
+실사용 확인:
+1. PC/모바일 동일 계정 PREVIEW 동시 접속.
+2. PC 최근생성곡 하트 저장/해제 → 모바일 자동 반영.
+3. 모바일 저장/해제 → PC 자동 반영.
+4. 공유노트 저장 → 반대 기기 Music Note에 자동 반영.
+5. 동시에 Firestore Usage/진단에서 **반대 기기 동기화 때문에 read가 매 클릭 증가하지 않는지** 확인.
+6. 한두 번 클릭 시 canonical favorites write만 즉시 보이고, `users.favoriteCount` derived write는 30초 묶음인지 확인.
+7. 사용자 실기기 + 비용 PASS 전 TEST 승격 금지.
+
 ## 0LH. app276 마이노트/공유노트/최근생성곡 보관함 PC↔모바일 동기화 수정 PREVIEW 배포 (2026-10-01 KST)
 
 사용자 실사용 FAIL:

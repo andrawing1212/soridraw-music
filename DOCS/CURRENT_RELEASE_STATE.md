@@ -1,3 +1,84 @@
+## 0LJ. app278 공유노트 구조/곡상태 + legacy 최근곡 하트 PC↔모바일 동기화 PREVIEW 배포 (2026-10-01 KST)
+
+사용자 실사용 판정(app277):
+- PC/모바일 동일 계정 기본 동기화는 대부분 즉시 반영되어 부분 PASS.
+- 특정 legacy 최근생성곡 `스쳐간 이름 뒤에`는 해제는 양쪽에 반영되지만 저장 하트는 기기별로 따로 켜지는 FAIL 확인.
+- Explore 공개곡 → 공유노트 저장은 반대 기기에 즉시 나타나 PASS.
+- 공유노트 내부의 폴더 생성/이름/순서, 곡 폴더 이동·제거, 카드 Like/Lock 상태는 반대 기기에 즉시 반영되지 않아 FAIL.
+- 모바일 진단에서 app277 수신 중 `Firestore R0 / W0`, PAGE SYNC IDLE 확인되어 app276의 반대 기기 read 폭증은 재현되지 않음.
+
+app278 수정:
+1. **공유노트 폴더 구조 실시간 동기화**
+   - 기존 `user_structures/{uid}` canonical 저장은 그대로 유지.
+   - 실제 폴더 변경 성공 뒤 기존 UID-scoped RTDB Music Note 신호의 `itemJson`에 작은 structure patch를 함께 전달.
+   - 반대 기기는 로컬 structure cache/session만 patch하며 Firestore 재조회 없음.
+   - 폴더 생성/이름/순서 변경이 페이지 이동·새로고침 없이 반영되는 경로 추가.
+2. **공유노트 곡 폴더 이동/제거 changed-item 동기화**
+   - 실제 `favorites/{id}` folder mutation은 기존 canonical write 유지.
+   - 변경된 곡 summary만 최대 10개 bounded payload로 같은 RTDB 신호에 전달.
+   - receiving device는 해당 row만 local favorites/cache에 patch하고 `publishDerived:false`로 Catalog/R2 echo write 차단.
+   - 전체 favorites query/scan/rebuild 없음.
+3. **Music Note 카드 Like/Lock 상태 실시간 표시**
+   - 기존 Local First + 페이지 이탈 시 묶음 canonical `user_structures` 저장 정책 유지.
+   - 클릭 즉시 Firestore write를 추가하지 않고 작은 RTDB card-state delta만 반대 기기에 전달.
+   - 반대 기기 Firestore R/W 0으로 화면 상태를 맞춤.
+   - 기존 page-exit canonical flush 성공 시에도 structure snapshot signal을 보내 최종 수렴.
+4. **legacy 최근생성곡 저장 하트 identity 보강**
+   - `soridrawSongId`가 없는 과거 최근곡은 저장 직전 기기별 랜덤 ID에만 의존하지 않도록 `recentSongSyncKey`를 추가.
+   - 기존 source id / 생성시각 / generation batch / 제목을 이용한 deterministic legacy key를 저장 summary에 포함.
+   - favorites status map은 Firestore id 외에 `soridrawSongId`와 `recentSongSyncKey`도 인식.
+   - 기존 정상 곡의 favoriteKey/문서 구조/Explore public like 동결 영역은 변경하지 않음.
+5. **RTDB/Rules 비용 보호**
+   - 새 RTDB 필드 추가 없음. app277에서 이미 승인·배포된 `itemJson <= 24000`만 재사용.
+   - RTDB Rules 재배포 없음.
+   - 정상 수신 path의 Firestore read 0 / write 0 유지.
+
+변경 파일:
+- `src/data/v1MutationBoundary.ts`
+- `src/services/userDomainSyncService.ts`
+- `src/lib/userDataEngine.ts`
+- `src/hooks/useFavoritesStore.ts`
+- `src/App.tsx`
+- `src/pages/FavoritesPage.tsx`
+- `public/app-version.json`: 278
+- `scripts/verify-278-music-note-cross-device.mjs` 추가.
+
+검증:
+- 제품 commit: `83413d2ecf49ab29436cdd5c2b73c9dc4c2c2dcb`.
+- Focused Audit Run `36797912332`: **SUCCESS**.
+  - app278 focused verifier PASS.
+  - app273 공유노트 상세 회귀 PASS.
+  - app274 저장됨 표시/추가 read 0 회귀 PASS.
+  - Music Note 60초 상세 편집 묶음 저장 회귀 PASS.
+  - Recent Songs protected regression PASS.
+  - TypeScript PASS.
+  - Build PASS.
+- Backend V2 Safety Run `36797912218`: **SUCCESS**.
+- app164/Worker195 Explore public like 동결 코드 비변경.
+
+PREVIEW 배포:
+- release trigger commit: `8d60897dfd0c0c0b435ba8cd23018cbcfe7543bf`.
+- Firebase PREVIEW App Run `36798048915`: **SUCCESS**.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app version **278** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- RTDB Rules deploy **SKIPPED** (기존 app277 규칙 재사용).
+- Worker / Functions / Firestore Rules / D1 변경·재배포 없음.
+- 사용자 원본 migration/backfill/delete 없음.
+- 완료된 app278 임시 audit workflow/trigger 제거 완료.
+- 문서 갱신 직전 preview HEAD: `6b33a60e079316e4bb6beaa79ea1c96d0bd904a5`.
+
+실사용 확인:
+1. PC/모바일 동일 계정 PREVIEW 동시 접속.
+2. 공유노트 폴더 생성 → 반대 기기 즉시 생성.
+3. 폴더 이름/순서 변경 → 반대 기기 즉시 동일.
+4. 공유노트 곡을 다른 폴더로 이동/폴더에서 제거 → 반대 기기 즉시 동일.
+5. Music Note 카드 Like/Lock 변경 → 반대 기기 화면 즉시 동일. 이 클릭만으로 Firestore write가 매번 생기면 FAIL.
+6. `스쳐간 이름 뒤에` 저장/해제 PC→모바일, 모바일→PC 모두 즉시 동일.
+7. Explore 공개곡 → 공유노트 저장 기존 PASS 유지.
+8. 수신 기기 Firestore R0/W0, idle 1분 반복 R/W 0 확인.
+9. 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## 0LI. app277 보관함/Music Note PC↔모바일 동기화 비용 폭증 제거 PREVIEW 배포 (2026-10-01 KST)
 
 사용자 실사용 판정:

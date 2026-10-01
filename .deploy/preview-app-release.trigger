@@ -1,6 +1,6 @@
-app288-rtdb-ack-version-release
-target_source=0fa377a9d424daf0bda9c1598575d54d1cda381b
-app_version=288
+app289-compact-music-note-heart-release
+target_source=d91983de73954871d3f693ec341d066e0de7d1bb
+app_version=289
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

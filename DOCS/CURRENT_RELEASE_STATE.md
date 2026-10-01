@@ -1,3 +1,19 @@
+## 0MG. Song Save / Edit / Sync Cost 스킬 저장 (2026-10-02 KST)
+
+- 신규 스킬: `.agents/skills/song-save-edit-sync-cost/SKILL.md`
+- 기준 문서: `.agents/skills/song-save-edit-sync-cost/references/soridraw-app292-save-edit-sync-cost-baseline.md`
+- 범위:
+  - Studio 저장/해제 하트 30초 per-song canonical batch
+  - Recent Song 제목/프롬프트/가사 150초 UID-wide aggregate batch
+  - PC↔모바일 RTDB 즉시 changed-item preview
+  - preview receiver Firestore R0/W0 원칙
+  - `users.favoriteCount` UID-wide 30초 derived-delta batch
+  - net-zero W0 / changed-item-only / durable pending / stale overwrite 방지
+  - app289~292 회귀검사와 실기기 비용 확인 기준
+- `AGENTS.md`에 관련 작업 전 신규 스킬 필수 확인 규칙 추가.
+- 코드/백엔드/사용자 데이터 변경 없음.
+- PREVIEW/TEST/PRODUCTION 배포 변경 없음.
+
 ## 0MF. Music Note 저장곡 수 통계 batch 구조 유지 확정 (2026-10-02 KST)
 
 **사용자 결정**

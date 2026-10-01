@@ -177,6 +177,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
     recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
     recentFavoriteExplicitlyUnsavedAt: source.recentFavoriteExplicitlyUnsavedAt ?? null,
+    recentFavoriteIdentityHealedAt: source.recentFavoriteIdentityHealedAt ?? null,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   };
@@ -201,6 +202,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
     recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
     recentFavoriteExplicitlyUnsavedAt: source.recentFavoriteExplicitlyUnsavedAt ?? null,
+    recentFavoriteIdentityHealedAt: source.recentFavoriteIdentityHealedAt ?? null,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
     appliedKeywords: {

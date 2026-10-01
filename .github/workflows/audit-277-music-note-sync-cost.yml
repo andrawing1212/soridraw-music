@@ -1,0 +1,41 @@
+name: SORIDRAW app277 music-note sync cost audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/audit-277-music-note-sync-cost.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Focused cost regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-277-music-note-sync-cost.mjs
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-274-shared-note-saved-status.mjs
+          node scripts/verify-273-shared-note-legacy-detail.mjs
+          node scripts/verify-029-music-note-library.mjs
+          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8')); console.log('APP277_RTDB_RULES_JSON=PASS')"
+          echo 'APP277_FOCUSED_AUDIT=PASS'

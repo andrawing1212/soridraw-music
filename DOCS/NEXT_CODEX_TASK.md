@@ -1,3 +1,39 @@
+## CURRENT TASK — app284 특정 곡 exact-link 하트 실기기 최종 확인 (2026-10-02 KST)
+
+현재:
+- app283은 사용자 실기기 FAIL. 원인 가설이 틀렸음.
+- read-only 실데이터 비교로 실제 원인 확정:
+  - `스쳐간 이름 뒤에` favorite 2개가 같은 generation/soridraw/recent identity를 공유하지만 둘 다 soft-removed.
+  - recent row는 그중 removed 문서 하나를 `favoriteFirestoreId`로 계속 가리킴.
+  - 정상 곡은 recent row가 active favorite 문서 1개를 정확히 가리킴.
+- app284는 정상 곡과 같은 원칙으로 **explicit favoriteFirestoreId를 최우선 단일 authority**로 사용.
+- stale duplicate는 같은 generation/recent key라도 하트를 다시 켤 수 없음.
+- 빈 하트 저장은 exact linked favorite를 W1로 복구하며 soft-remove residue를 모두 해제.
+- Focused Audit `36897262237` SUCCESS.
+- PREVIEW Release `36897519538` SUCCESS.
+- locked release commit `baa210c7e451bc4301ed0889edec8e62606cc7e5`.
+- `preview.soridraw.com` app284 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+실기기 확인:
+1. PC/모바일 모두 app284.
+2. `스쳐간 이름 뒤에`가 한쪽 filled이면 그 기기에서 먼저 해제 → 상대도 즉시 empty.
+3. 한쪽에서 저장 → 상대 기기 페이지 이동/새로고침 없이 즉시 filled.
+4. 반대 기기에서 해제 → 첫 기기 즉시 empty.
+5. 반대 기기에서 다시 저장 → 첫 기기 즉시 filled.
+6. 양쪽 새로고침/재접속 후 마지막 상태 유지.
+7. 일반 정상 곡 1개 저장/해제 회귀 없음.
+8. 제목 변경/복원 app282 회귀 없음.
+9. 수신 기기 Firestore R0/W0, D1 R0/W0.
+10. idle/페이지 왕복 추가 R/W 0.
+
+판정:
+- 위 양방향 하트가 PASS하면 app284 동결.
+- 아직 FAIL이면 **사용자 데이터 삭제/병합 없이** 해당 클릭 직후의 exact linked favorite + RTDB signal만 다시 read-only 추적.
+- 전체 favorite scan/rebuild, duplicate 자동삭제, 정상 곡 경로 변경 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app283 특정 legacy 최근곡 하트 PC↔모바일 최종 실사용 확인 (2026-10-02 KST)
 
 현재:

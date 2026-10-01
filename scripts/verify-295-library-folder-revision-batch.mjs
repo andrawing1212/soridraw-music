@@ -32,6 +32,9 @@ assert.ok(!create.includes('getDocs('), 'create must stay Firestore-read free');
 
 assert.ok(batcher.includes('const LIBRARY_PLAYLIST_REVISION_BATCH_MS = 30_000'));
 assert.ok(batcher.includes("soridraw.library.playlistRevisionBatch.v1"));
+assert.ok(batcher.includes('const pendingMemory = new Map<string, PendingPlaylistRevision>()'));
+assert.ok(batcher.includes('pendingMemory.set(safeUid, value)'),
+  'batch must keep an in-memory fallback when localStorage is unavailable');
 assert.ok(batcher.includes("updateDoc(doc(db, 'users', safeUid)"));
 assert.ok(batcher.includes("'syncVersions.playlists': targetVersion"));
 assert.ok(batcher.includes('latestSharedSignalVersionByUid'));

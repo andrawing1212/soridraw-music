@@ -56,14 +56,15 @@ const readCachedRemoteVersion = (uid: string): number => safeVersion(
   (readUserProfileCache(uid) as any)?.syncVersions?.playlists
 );
 
-const readLatestSharedSignalVersion = async (uid: string): Promise<number> => {
+const readLatestSharedSignalVersion = async (uid: string): Promise<number | null> => {
   try {
     const snapshot = await get(ref(realtimeDb, `userSync/${uid}/libraryPlaylist`));
     return safeVersion(snapshot.val()?.syncVersion);
   } catch {
-    // RTDB is only a monotonic safety floor here. The durable pending marker
-    // remains and the next resume/queue can retry without losing the mutation.
-    return 0;
+    // Fail closed: never risk lowering a shared compatibility revision when the
+    // newest cross-device signal cannot be checked. Durable pending state stays
+    // in localStorage and resumes on the next Library session/mutation.
+    return null;
   }
 };
 
@@ -128,6 +129,7 @@ export const flushLibraryPlaylistRevisionBatch = async (uid: string): Promise<vo
     // monotonic floor so a suspended older device cannot later lower the shared
     // Firestore compatibility revision.
     const sharedSignalVersion = await readLatestSharedSignalVersion(safeUid);
+    if (sharedSignalVersion === null) return;
     const targetVersion = Math.max(pending.latestVersion, sharedSignalVersion, cachedRemote);
     if (targetVersion <= 0) return;
 

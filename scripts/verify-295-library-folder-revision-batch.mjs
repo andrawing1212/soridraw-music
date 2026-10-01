@@ -34,8 +34,12 @@ assert.ok(batcher.includes('const LIBRARY_PLAYLIST_REVISION_BATCH_MS = 30_000'))
 assert.ok(batcher.includes("soridraw.library.playlistRevisionBatch.v1"));
 assert.ok(batcher.includes("updateDoc(doc(db, 'users', safeUid)"));
 assert.ok(batcher.includes("'syncVersions.playlists': targetVersion"));
+assert.ok(batcher.includes('latestSharedSignalVersionByUid'));
+assert.ok(batcher.includes('noteLibraryPlaylistRevisionSignal'));
 assert.ok(batcher.includes("get(ref(realtimeDb, `userSync/${uid}/libraryPlaylist`))"),
-  'flush must use latest shared RTDB signal as a monotonic cross-device floor');
+  'flush must fall back to the latest shared RTDB signal as a monotonic cross-device floor');
+assert.ok(batcher.includes('if (sharedSignalVersion < pending.latestVersion)'),
+  'normal active-session flushes should reuse the already observed RTDB signal without another read');
 assert.ok(batcher.includes('latest.latestVersion <= targetVersion'),
   'newer queued work must survive an older in-flight flush');
 assert.ok(batcher.includes('resumeLibraryPlaylistRevisionBatch'));
@@ -46,6 +50,9 @@ assert.ok(addItem.includes('markLibraryPlaylistRevisionCommitted(uid, syncVersio
   'an immediate newer item mutation must retire an older pending folder revision');
 
 assert.ok(page.includes('resumeLibraryPlaylistRevisionBatch(uid)'));
+assert.ok(page.includes('noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion)'));
+assert.ok(page.includes("['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete'].includes(signal.operation)"));
+assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(uid, remoteVersion)'));
 assert.ok(page.includes("document.addEventListener('visibilitychange', flushWhenHidden)"));
 assert.ok(page.includes("window.addEventListener('pagehide', flushOnPageHide)"));
 assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(user.uid, syncVersion)'),

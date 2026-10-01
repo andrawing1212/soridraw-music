@@ -5663,6 +5663,81 @@ function App() {
     return true;
   };
 
+  type RecentHeartAuthorityEntry = {
+    saved: boolean;
+    favoriteId: string;
+    version: number;
+  };
+  const RECENT_HEART_AUTHORITY_STORAGE_BASE = 'soridraw_recent_heart_authority_v1';
+  const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
+  const recentHeartAuthorityUidRef = useRef('');
+
+  const persistRecentHeartAuthority = (uid: string) => {
+    if (!uid || typeof window === 'undefined') return;
+    try {
+      const entries = Array.from(recentHeartAuthorityRef.current.entries())
+        .map(([key, value]) => ({ key, ...value }))
+        .sort((left, right) => right.version - left.version)
+        .slice(0, 120);
+      window.localStorage.setItem(
+        `${RECENT_HEART_AUTHORITY_STORAGE_BASE}_${uid}`,
+        JSON.stringify(entries),
+      );
+    } catch {}
+  };
+
+  const rememberRecentHeartAuthority = (
+    uid: string,
+    song: any,
+    saved: boolean,
+    favoriteId = '',
+    version = Date.now(),
+  ) => {
+    if (!uid || !song) return;
+    const identityKey = buildRecentSongSyncKey(song);
+    if (!identityKey) return;
+    const safeVersion = Math.max(1, Math.floor(Number(version || Date.now())));
+    const previous = recentHeartAuthorityRef.current.get(identityKey);
+    if (previous && previous.version > safeVersion) return;
+    recentHeartAuthorityRef.current.set(identityKey, {
+      saved,
+      favoriteId: String(favoriteId || previous?.favoriteId || '').trim(),
+      version: safeVersion,
+    });
+    persistRecentHeartAuthority(uid);
+    setFavoriteUiVersion((current) => current + 1);
+  };
+
+  const readRecentHeartAuthority = (song: any): RecentHeartAuthorityEntry | null => {
+    const identityKey = buildRecentSongSyncKey(song);
+    if (!identityKey) return null;
+    return recentHeartAuthorityRef.current.get(identityKey) || null;
+  };
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    recentHeartAuthorityRef.current = new Map();
+    recentHeartAuthorityUidRef.current = uid;
+    if (!uid || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(`${RECENT_HEART_AUTHORITY_STORAGE_BASE}_${uid}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        parsed.slice(0, 120).forEach((entry: any) => {
+          const key = String(entry?.key || '').trim();
+          const version = Math.floor(Number(entry?.version || 0));
+          if (!key || !Number.isFinite(version) || version <= 0 || typeof entry?.saved !== 'boolean') return;
+          recentHeartAuthorityRef.current.set(key, {
+            saved: entry.saved,
+            favoriteId: String(entry?.favoriteId || '').trim(),
+            version,
+          });
+        });
+      }
+    } catch {}
+    setFavoriteUiVersion((current) => current + 1);
+  }, [user?.uid]);
+
   const getFavoriteComparableText = (song: any) => ({
     title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
     prompt: normalizeFavoriteSearchValue(song?.prompt),
@@ -5743,6 +5818,11 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
+    // app286 — The latest per-song RTDB heart state outranks stale device-local
+    // Recent/Music Note cache. This keeps the visual state and the next click
+    // direction identical on both devices even if historical duplicate rows exist.
+    const recentHeartAuthority = readRecentHeartAuthority(song);
+    if (recentHeartAuthority) return recentHeartAuthority.saved;
     if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();

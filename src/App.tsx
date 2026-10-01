@@ -5748,13 +5748,17 @@ function App() {
     removeStudioHeartPendingIntent(uid, documentId);
   };
 
-  const rememberStudioHeartPreviewVersion = (uid: string, documentId: string, version: number) => {
+  const rememberStudioHeartPreviewVersion = (uid: string, documentId: string, version: number, desiredSaved?: boolean) => {
     if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
-    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => ({
-      ...current,
-      signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
-    }));
+    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => {
+      if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return current;
+      return {
+        ...current,
+        signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
+      };
+    });
     if (!updated) return;
+    if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
     if (
       updated.pendingRemotePreviewVersion > 0
       && updated.pendingRemotePreviewVersion > updated.signalVersion
@@ -9970,7 +9974,7 @@ const toggleCycleVariantSelection = (
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
       if (isHeartPreview) {
         const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
-        if (previewDocumentId) rememberStudioHeartPreviewVersion(uid, previewDocumentId, remoteVersion);
+        if (previewDocumentId) rememberStudioHeartPreviewVersion(uid, previewDocumentId, remoteVersion, isHeartPreviewSave);
         writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
         markCacheDiagnostic('musicNote', 'CACHE', 0);
         return;
@@ -11008,6 +11012,126 @@ const toggleCycleVariantSelection = (
       throw error;
     }
   };
+
+  const flushStudioHeartPendingIntent = async (documentId: string) => {
+    const uid = String(user?.uid || '').trim();
+    const safeDocumentId = String(documentId || '').trim();
+    if (!uid || !safeDocumentId) return;
+
+    clearStudioHeartIntentTimer(safeDocumentId);
+    const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
+    if (!intent) return;
+
+    // Multiple toggles inside the trailing window collapse to their final state.
+    // If the final state equals the canonical baseline, there is nothing to write.
+    if (intent.desiredSaved === intent.baselineSaved) {
+      removeStudioHeartPendingIntent(uid, safeDocumentId);
+      return;
+    }
+
+    try {
+      const commitSong = normalizeFavoriteTitleFields({
+        ...(intent.song || {}),
+        favoriteFirestoreId: safeDocumentId,
+        musicNoteFavoriteId: safeDocumentId,
+      } as SongResult) as SongResult;
+      await toggleFavorite(commitSong, {
+        trustedRecentStudio: true,
+        intendedAction: intent.desiredSaved ? 'save' : 'unsave',
+        canonicalBaseline: {
+          saved: intent.baselineSaved,
+          favorite: intent.baselineFavorite,
+        },
+      });
+
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
+        removeStudioHeartPendingIntent(uid, safeDocumentId);
+      }
+    } catch (error) {
+      console.warn('Studio heart canonical batch commit failed.', error);
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (!latest || latest.updatedAtMs !== intent.updatedAtMs) return;
+      const retryCount = Math.min(2, Number(latest.retryCount || 0) + 1);
+      writeStudioHeartPendingIntent({ ...latest, retryCount });
+      if (retryCount <= 2) {
+        const retryTimer = window.setTimeout(() => {
+          studioHeartIntentTimersRef.current.delete(safeDocumentId);
+          void flushStudioHeartPendingIntent(safeDocumentId);
+        }, STUDIO_HEART_RETRY_MS);
+        studioHeartIntentTimersRef.current.set(safeDocumentId, retryTimer);
+      }
+    }
+  };
+
+  const scheduleStudioHeartPendingIntent = (documentId: string, delayMs = STUDIO_HEART_BATCH_MS) => {
+    const safeDocumentId = String(documentId || '').trim();
+    if (!safeDocumentId) return;
+    clearStudioHeartIntentTimer(safeDocumentId);
+    const timer = window.setTimeout(() => {
+      studioHeartIntentTimersRef.current.delete(safeDocumentId);
+      void flushStudioHeartPendingIntent(safeDocumentId);
+    }, Math.max(1_000, Math.floor(delayMs)));
+    studioHeartIntentTimersRef.current.set(safeDocumentId, timer);
+  };
+
+  const queueStudioHeartPendingIntent = (
+    song: SongResult,
+    documentId: string,
+    desiredSaved: boolean,
+    baselineSaved: boolean,
+    baselineFavorite: any | null,
+  ) => {
+    const uid = String(user?.uid || '').trim();
+    const safeDocumentId = String(documentId || '').trim();
+    const identityKey = buildRecentSongSyncKey(song) || getLiveSoridrawSongId(song) || safeDocumentId;
+    if (!uid || !safeDocumentId || !identityKey) return false;
+
+    const existing = readStudioHeartPendingIntent(uid, safeDocumentId);
+    const now = Date.now();
+    const intent: StudioHeartPendingIntent = {
+      schemaVersion: 1,
+      uid,
+      documentId: safeDocumentId,
+      identityKey,
+      baselineSaved: existing ? existing.baselineSaved : baselineSaved,
+      desiredSaved,
+      baselineFavorite: existing ? existing.baselineFavorite : baselineFavorite,
+      song: {
+        ...(song as any),
+        favoriteFirestoreId: safeDocumentId,
+        musicNoteFavoriteId: safeDocumentId,
+      },
+      updatedAtMs: now,
+      signalVersion: 0,
+      pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
+      retryCount: 0,
+    };
+    writeStudioHeartPendingIntent(intent);
+    scheduleStudioHeartPendingIntent(safeDocumentId);
+
+    rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
+    void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
+      .then((version) => {
+        if (version > 0) rememberStudioHeartPreviewVersion(uid, safeDocumentId, version, desiredSaved);
+      })
+      .catch((error) => console.warn('Studio heart live preview unavailable.', error));
+    return true;
+  };
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    for (const intent of listStudioHeartPendingIntents(uid)) {
+      const age = Math.max(0, Date.now() - intent.updatedAtMs);
+      const delay = Math.max(1_000, STUDIO_HEART_BATCH_MS - age);
+      scheduleStudioHeartPendingIntent(intent.documentId, delay);
+    }
+    return () => {
+      for (const timer of studioHeartIntentTimersRef.current.values()) window.clearTimeout(timer);
+      studioHeartIntentTimersRef.current.clear();
+    };
+  }, [user?.uid]);
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
     const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
@@ -15282,6 +15406,86 @@ ${normalizePromptForDisplay(result.prompt)}
         || activeFavoriteBeforeToggle?.id
         || '',
       ).trim();
+
+      if (!wasDetachedBeforeToggle && user?.uid) {
+        const canonicalFavorites = favoritesStore.getFavorites();
+        const exactCanonicalFavorite = favoriteLinkBeforeToggle
+          ? canonicalFavorites.find((favorite: any) => (
+              String(favorite?.firestoreId || favorite?.id || '').trim() === favoriteLinkBeforeToggle
+            )) || null
+          : findBestMatchingFavorite(
+              canonicalFavorites,
+              heartSnapshot,
+              buildFavoriteIdentityKey(heartSnapshot),
+            );
+        const canonicalFavoriteId = String(
+          favoriteLinkBeforeToggle
+          || exactCanonicalFavorite?.firestoreId
+          || exactCanonicalFavorite?.id
+          || '',
+        ).trim();
+        const stableBatchIdentity = buildRecentSongSyncKey(heartSnapshot) || getLiveSoridrawSongId(heartSnapshot) || '';
+        const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+        const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+        const canDeriveFirstSaveId = Boolean(
+          stableBatchIdentity
+          && hasMusicNotePayloadCache(user.uid)
+          && localMusicNoteVersion > 0
+          && remoteMusicNoteVersion <= localMusicNoteVersion
+        );
+        const batchDocumentId = canonicalFavoriteId || (
+          canDeriveFirstSaveId
+            ? buildBatchedRecentFavoriteDocumentId(user.uid, stableBatchIdentity)
+            : ''
+        );
+
+        if (batchDocumentId) {
+          const existingIntent = readStudioHeartPendingIntent(user.uid, batchDocumentId);
+          const baselineFavorite = existingIntent?.baselineFavorite
+            ?? (exactCanonicalFavorite && !isFavoriteHidden(exactCanonicalFavorite) ? exactCanonicalFavorite : null);
+          const baselineSaved = existingIntent
+            ? existingIntent.baselineSaved
+            : Boolean(baselineFavorite && !isFavoriteHidden(baselineFavorite));
+          const batchedSong = normalizeFavoriteTitleFields({
+            ...heartSnapshot,
+            favoriteFirestoreId: batchDocumentId,
+            musicNoteFavoriteId: batchDocumentId,
+          } as SongResult) as SongResult;
+
+          if (queueStudioHeartPendingIntent(
+            batchedSong,
+            batchDocumentId,
+            intendedFavoriteAction === 'save',
+            baselineSaved,
+            baselineFavorite,
+          )) {
+            if (currentIndex >= 0) {
+              const nextSong = { ...(historyRef.current[currentIndex] || batchedSong) } as any;
+              nextSong.favoriteFirestoreId = batchDocumentId;
+              nextSong.musicNoteFavoriteId = batchDocumentId;
+              if (intendedFavoriteAction === 'unsave') {
+                nextSong.recentFavoriteExplicitlyUnsavedAt = Date.now();
+              } else {
+                delete nextSong.recentFavoriteExplicitlyUnsavedAt;
+                delete nextSong.recentFavoriteDetachedAt;
+              }
+              const nextHistory = historyRef.current.map((item, index) => index === currentIndex ? nextSong : item);
+              historyRef.current = nextHistory;
+              resultRef.current = nextSong as SongResult;
+              setHistory(nextHistory);
+              setResult(nextSong as SongResult);
+              recentSongsReadyToCacheRef.current = true;
+              saveRecentSongsCache(user.uid, {
+                history: nextHistory,
+                historyIndex: currentIndex,
+                latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+              });
+            }
+            showToast(intendedFavoriteAction === 'save' ? '저장되었습니다.' : '저장이 해제되었습니다.');
+            return;
+          }
+        }
+      }
 
       let linkedFavoriteId = '';
       let linkedFavoriteForRecentBridge: any = null;

@@ -1,3 +1,41 @@
+## CURRENT TASK — app283 특정 legacy 최근곡 하트 PC↔모바일 최종 실사용 확인 (2026-10-02 KST)
+
+현재:
+- app282 제목 변경 cross-device는 사용자 확인상 정상 방향.
+- 일반 최근생성곡 하트도 정상이며, 문제는 특정 legacy 곡 `스쳐간 이름 뒤에` 하나로 한정.
+- app283은 modern generation identity 경로를 건드리지 않고 legacy source identity bridge만 추가.
+- 첫 successful legacy save 때 exact favorite id/recent identity를 `user_recent_songs`에 1회 확정해 이후 stale split favorite가 하트를 다시 켜지 못하게 함.
+- Focused Audit `36894349233` SUCCESS.
+- PREVIEW Release `36894655946` SUCCESS.
+- locked release commit `41c41d0c2dafdf23bb8a14a6f52e5738dce5f420`.
+- `preview.soridraw.com` app283 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+테스트 순서:
+1. PC/모바일 모두 app283인지 확인.
+2. `스쳐간 이름 뒤에`가 한쪽 filled / 한쪽 empty면 **filled 쪽에서 먼저 해제**한다.
+3. 상대 기기 하트가 페이지 이동/새로고침 없이 empty로 바뀌는지 확인.
+4. 같은 기기에서 다시 저장 → 상대 기기 하트도 즉시 filled.
+5. 이후 반대 기기에서 해제 → 원래 기기 즉시 empty.
+6. 반대 기기에서 다시 저장 → 원래 기기 즉시 filled.
+7. 양 기기 새로고침/재접속 후에도 마지막 상태 유지.
+8. 같은 곡 제목 변경/원복도 app282처럼 즉시 양방향 반영.
+9. 일반 정상 최근곡 1개도 저장/해제하여 회귀 없음 확인.
+10. CACHE LIVE에서 수신 기기 Firestore R0/W0, D1 R0/W0 확인.
+11. 첫 legacy repair save만 initiating side 최대 favorites W1 + recent W1 = W2 허용. 이후 같은 곡 하트 toggle에서 legacy repair recent W1이 반복되면 FAIL.
+12. 아무 조작 없이 1분/페이지 왕복 시 추가 Firestore/D1 R/W 0.
+
+보호:
+- app282 제목 동기화 정상 기능 동결.
+- 일반 recent heart 정상 경로 동결.
+- app281 Suno URL, app280 unsave resurrection, app278 공유노트 동결.
+- Explore public like app164/Worker195 동결.
+- Music Note 상세 60초/페이지 이탈 batch 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- legacy duplicate 자동 삭제/대량 정리 금지.
+- 사용자 실사용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app282 제목/최근생성곡 PC↔모바일 실기기 최종 확인 (2026-10-02 KST)
 
 현재:

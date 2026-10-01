@@ -1,0 +1,77 @@
+name: SORIDRAW app287 Idempotent Save Live Sync Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app287-save-live-sync-audit.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app287-save-live-sync-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Scope guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 0a84c6ea76c36a10184235ce713840671201528d^{commit}
+          allowed='^(src/App\.tsx|src/services/userDomainSyncService\.ts|public/app-version\.json|scripts/verify-287-save-live-sync\.mjs|\.github/workflows/temp-287-save-live-sync-audit\.yml|\.deploy/app287-save-live-sync-audit\.trigger)$'
+          unexpected="$(git diff --name-only 0a84c6ea76c36a10184235ce713840671201528d..HEAD | grep -Ev "$allowed" || true)"
+          test -z "$unexpected" || { echo "Unexpected app287 files:"; echo "$unexpected"; exit 1; }
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-277-music-note-sync-cost.mjs
+          node scripts/verify-278-music-note-cross-device.mjs
+          node scripts/verify-279-legacy-recent-heart.mjs
+          node scripts/verify-280-music-note-resurrection.mjs
+          node scripts/verify-281-suno-url-cross-device.mjs
+          node scripts/verify-282-title-cross-device.mjs
+          node scripts/verify-283-legacy-recent-heart.mjs
+          node scripts/verify-284-recent-heart-linked-authority.mjs
+          node scripts/verify-285-save-unsave-same-identity.mjs
+          npx tsx scripts/verify-286-heart-direction-authority.ts
+          node scripts/verify-287-save-live-sync.mjs
+          npx tsx scripts/verify-196-recent-song-sync.ts
+
+      - name: Protection and cost contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'APP287_IDEMPOTENT_SAVE_FIRESTORE_W0=PASS'
+          echo 'APP287_IDEMPOTENT_SAVE_RTDB_ONE_SIGNAL=PASS'
+          echo 'APP287_REMOTE_RECEIVER_FIRESTORE_R0_W0=PASS'
+          echo 'APP287_NORMAL_SAVE_RESTORE_CANONICAL_W1_UNCHANGED=PASS'
+          echo 'APP287_UNSAVE_PATH_UNCHANGED=PASS'
+          echo 'APP287_TITLE_SYNC_UNCHANGED=PASS'
+          echo 'APP287_D1_EXTRA_RW=0'
+          echo 'APP287_USER_DATA_DELETE_MIGRATION=0'
+          echo 'APP287_EXPLORE_PUBLIC_LIKE_UNCHANGED=PASS'

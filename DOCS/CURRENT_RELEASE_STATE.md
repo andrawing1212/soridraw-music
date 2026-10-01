@@ -1,3 +1,89 @@
+## 0LS. PREVIEW app284 배포 완료 — 특정 곡 실제 원인 확정: 중복 identity가 아니라 removed favorite를 가리키는 stale exact link + duplicate fallback (2026-10-02 KST)
+
+**사용자 판정**
+- app283 실기기 결과: `스쳐간 이름 뒤에` 하트 PC↔모바일 문제 **변화 없음 / FAIL**.
+- 다른 최근생성곡은 계속 정상. 제목 동기화도 정상.
+- 따라서 app283의 "generation identity가 없는 legacy 곡" 가설을 폐기하고 실제 공유 데이터와 정상 곡을 read-only 비교함.
+
+**실데이터 read-only 비교 결과**
+- 진단 Run `36896815077`: SUCCESS / Firestore write 0 / delete 0 / RTDB write 0.
+- 문제 곡 `스쳐간 이름 뒤에`:
+  - 같은 계정에 favorite 문서가 **2개** 존재.
+  - 두 문서는 **같은 generation identity / 같은 soridrawSongId / 같은 recentSongSyncKey**를 가짐.
+  - 둘 다 현재 `saved:false`, `favoriteRemoved:true`, removal timestamp가 남아 있는 soft-removed 상태.
+  - `user_recent_songs`의 해당 곡은 그중 한 removed favorite 문서 ID를 `favoriteFirestoreId`로 계속 가리킴.
+- 정상 비교 곡 `먼저 건네는 말`:
+  - recent row의 `favoriteFirestoreId`가 실제 active favorite 문서 1개를 정확히 가리킴.
+  - recent/favorite의 generation identity와 soridrawSongId가 동일하고, active favorite가 `saved:true / favoriteRemoved:false`.
+- 즉 **문제 곡도 generation identity 자체는 이미 정상**. 차이는 recent row가 active favorite를 가리키느냐, removed 문서를 가리킨 상태에서 다른 duplicate fallback이 하트 판정에 끼어드느냐였음.
+
+**app283이 효과가 없었던 정확한 이유**
+- app283 bridge는 `generationBatchId + generationIndex`가 없는 진짜 legacy row에만 동작하도록 설계되어 있었음.
+- 실제 문제 곡에는 generation identity가 존재하므로 app283 bridge는 의도대로 **아무 것도 하지 않음**.
+- 따라서 사용자 실기기에서 "전혀 바뀐 게 없음"이 실제 데이터와 일치함.
+- app283은 정상 modern 경로를 깨지는 않았지만 이 문제의 원인 진단은 틀렸음.
+
+**app284 수정 — 정상 곡의 구조를 그대로 기준으로 사용**
+1. Recent Song에 `favoriteFirestoreId`가 있으면 그 **정확한 Music Note 문서 1개만 하트 기준**으로 사용.
+2. exact linked favorite가 비활성/없으면 같은 generation/recent key를 가진 다른 오래된 duplicate가 있어도 하트를 다시 켜지 않음.
+3. 하트 클릭 시 explicit linked ID가 있으면 local duplicate fallback으로 빠지지 않음.
+4. 빈 하트에서 저장하면 새 duplicate를 찾거나 만들기보다 **linked favorite 문서 자체를 exact W1로 복구/저장**.
+5. save 시 `favoriteRemoved / favoriteRemovedAt / unlikedAt / unsavedAt / deletedAt / trashedAt` 제거 상태를 모두 해제.
+6. 기존 PC↔모바일 changed-item RTDB 신호와 exact document ID 경로는 그대로 사용. 수신 기기 Firestore 재조회 없음.
+7. 기존 duplicate 문서를 자동 삭제/병합하지 않음. 사용자 데이터 bulk cleanup/migration 없음.
+8. 일반 최근곡, 제목 app282, Suno URL app281, unsave tombstone app280, 공유노트, Explore public like app164/Worker195 비변경.
+
+**비용**
+- 변경 없음 / 페이지 이동 / 앱 업데이트: 기존 R0/W0 목표 유지.
+- 정상 recent heart save/unsave: 기존 canonical favorite W1.
+- 문제 곡처럼 stale linked favorite를 다시 저장: exact linked favorite W1. 전체 favorites query/scan 없음.
+- 수신 기기 Firestore R0/W0.
+- D1 추가 R/W 0.
+- RTDB 추가 mutation 없음. 기존 Music Note changed-item 신호 재사용.
+
+**검증**
+- app284 핵심 제품 commit: `4467ca9bbe2d85d1836f61166b573ccbc89e48de`.
+- Focused Audit Run `36897262237`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app278/app279/app280/app281/app282/app283 보호검사 PASS.
+  - APP284 exact-link heart authority PASS.
+  - stale duplicate cannot relight PASS.
+  - empty-heart exact linked W1 restore PASS.
+  - removal residue clear PASS.
+  - remote receiver Firestore R0 PASS.
+  - Recent Songs 196 regression PASS.
+- 임시 diagnostic/audit workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- 배포 잠금 commit: `baa210c7e451bc4301ed0889edec8e62606cc7e5`.
+- Firebase PREVIEW App Run `36897519538`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting: PASS.
+- `preview.soridraw.com` remote app version **284**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 원본 데이터 migration/backfill/delete 없음.
+
+**실기기 확인**
+1. PC/모바일 모두 app284 확인.
+2. `스쳐간 이름 뒤에`가 한쪽 filled이면 그쪽에서 먼저 해제 → 양쪽 empty.
+3. 한쪽에서 저장 → 반대 기기 페이지 이동 없이 filled.
+4. 반대 기기에서 해제 → 첫 기기 즉시 empty.
+5. 반대 기기에서 다시 저장 → 첫 기기 즉시 filled.
+6. 양쪽 새로고침/재접속 뒤에도 동일.
+7. 일반 정상 곡 1개 저장/해제 회귀 없음.
+8. 제목 변경/복원 app282 회귀 없음.
+9. 수신 기기 Firestore R0/W0, D1 R0/W0.
+10. 변경 없이 idle/페이지 왕복 추가 R/W 0.
+
+**상태**
+- PREVIEW app284 코드/감사/배포 완료.
+- 실기기 검증 전.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## 0LR. PREVIEW app283 배포 완료 — 특정 legacy 최근생성곡 하트 identity 수렴 / 실기기 검증 대기 (2026-10-02 KST)
 
 **사용자 실사용에서 확정된 범위**

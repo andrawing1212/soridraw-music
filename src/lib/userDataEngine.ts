@@ -109,7 +109,7 @@ const CATALOG_PREVIEW_HOSTS = new Set([
 ]);
 
 const MUSIC_NOTE_SUMMARY_KEYS = new Set([
-  'uid', 'soridrawSongId', 'favoriteKey', 'recentSongSyncKey',
+  'uid', 'soridrawSongId', 'favoriteKey', 'recentSongSyncKey', 'recentLegacySourceId', 'recentLegacyCreatedAtMs',
   'title', 'koreanTitle', 'englishTitle', 'genre', 'appliedKeywords', 'searchTokens',
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',

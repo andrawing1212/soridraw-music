@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { isMusicNoteItemRemoved } from '../lib/musicNoteSavedState';
 
 const getRecentGenerationSyncKey = (song: any): string => {
   if (!song || typeof song !== 'object') return '';
@@ -45,18 +46,7 @@ class FavoritesStore {
   }
 
   private isFavoriteHidden(favorite: any) {
-    if (!favorite) return true;
-    return Boolean(
-      favorite.favoriteRemoved === true
-      || favorite.saved === false
-      || favorite.favoriteRemovedAt
-      || favorite.unlikedAt
-      || favorite.unsavedAt
-      || favorite.hidden === true
-      || favorite.favoriteHidden === true
-      || favorite.deletedAt
-      || favorite.trashedAt
-    );
+    return isMusicNoteItemRemoved(favorite);
   }
 
   private buildFavoriteIdentityKey(song: any) {

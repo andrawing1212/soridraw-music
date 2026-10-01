@@ -20,7 +20,8 @@ assert.match(sync, /export const MUSIC_NOTE_SYNC_EVENT/);
 assert.match(sync, /__musicNoteStructureSync: true/);
 assert.match(sync, /export const publishMusicNoteStructureDelta/);
 assert.match(sync, /Array\.isArray\(context\.syncItems\)/);
-assert.match(sync, /encoded\.length <= 24000/);
+assert.match(sync, /const MAX_SYNC_ITEM_JSON_CHARS = 24000/);
+assert.match(sync, /encoded\.length <= MAX_SYNC_ITEM_JSON_CHARS/);
 assert.doesNotMatch(sync, /getDoc\(|getDocs\(|collection\(|firebase\/firestore/);
 
 assert.match(engine, /'recentSongSyncKey'/);

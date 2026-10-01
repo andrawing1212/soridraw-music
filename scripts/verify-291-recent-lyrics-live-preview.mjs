@@ -27,3 +27,5 @@ assert.doesNotMatch(previewBlock, /\b(?:getDoc|getDocs|setDoc|updateDoc|addDoc|d
 console.log('APP291_RECENT_LYRICS_PREVIEW_LOCAL_LANGUAGE_MAP=PASS');
 console.log('APP291_RECENT_LYRICS_PREVIEW_EXTRA_RTDB_WRITE_ZERO=PASS');
 console.log('APP291_RECENT_LYRICS_PREVIEW_FIRESTORE_R0_W0=PASS');
+
+// audit trigger

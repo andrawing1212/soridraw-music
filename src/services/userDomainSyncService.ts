@@ -506,11 +506,32 @@ export const publishMusicNoteHeartPreviewDelta = async (
   const safeDocumentId = String(documentId || '').trim();
   if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return 0;
   const now = Date.now();
+  const source = syncItem as Record<string, any>;
+  const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
+    ? source.appliedKeywords as Record<string, any>
+    : {};
+  // Heart preview is a state/identity signal, not a Music Note document mirror.
+  // Keep it sub-KB for normal songs and for the historical 25KB appliedKeywords case.
+  const identityOnly: Record<string, unknown> = {
+    id: safeDocumentId,
+    firestoreId: safeDocumentId,
+    soridrawSongId: String(source.soridrawSongId || '').trim() || null,
+    recentSongSyncKey: String(source.recentSongSyncKey || '').trim() || null,
+    recentLegacySourceId: String(source.recentLegacySourceId || '').trim() || null,
+    recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
+    title: String(source.title || ''),
+    koreanTitle: String(source.koreanTitle || ''),
+    englishTitle: String(source.englishTitle || ''),
+    appliedKeywords: {
+      generationBatchId: String(applied.generationBatchId || '').trim() || null,
+      generationIndex: Number.isFinite(Number(applied.generationIndex))
+        ? Math.floor(Number(applied.generationIndex))
+        : null,
+    },
+  };
   const item = desiredSaved
     ? {
-        ...(syncItem as Record<string, unknown>),
-        id: safeDocumentId,
-        firestoreId: safeDocumentId,
+        ...identityOnly,
         saved: true,
         hidden: false,
         favoriteHidden: false,
@@ -520,9 +541,7 @@ export const publishMusicNoteHeartPreviewDelta = async (
         unlikedAt: null,
       }
     : {
-        ...(syncItem as Record<string, unknown>),
-        id: safeDocumentId,
-        firestoreId: safeDocumentId,
+        ...identityOnly,
         saved: false,
         hidden: false,
         favoriteHidden: false,

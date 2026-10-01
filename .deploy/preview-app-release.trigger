@@ -1,6 +1,6 @@
-app282-title-cross-device-release
-target_source=6211ed052ac9426fcd9bc763fc84e58b70c9a1a0
-app_version=282
-scope=hosting-plus-shared-rtdb-rules
-deploy_shared_rtdb_rules=true
+app283-legacy-recent-heart-release
+target_source=e277b0f140a4fce1f93b06271919a6869d45a65b
+app_version=283
+scope=hosting-only
+deploy_shared_rtdb_rules=false
 no_user_data_migration=true

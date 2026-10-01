@@ -1,0 +1,95 @@
+name: SORIDRAW app285 Broken-vs-Normal Heart Diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app285-heart-diag.trigger'
+      - '.github/workflows/temp-285-heart-diag.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Read exact target state
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const crypto = require('crypto');
+          const admin = require('firebase-admin');
+          admin.initializeApp({projectId:'soridraw-app-866a5',databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com'});
+          const db=admin.firestore(); const rtdb=admin.database();
+          const TARGET='스쳐간 이름 뒤에';
+          const h=v=>{const s=String(v||'').trim();return s?crypto.createHash('sha256').update(s).digest('hex').slice(0,12):''};
+          const ms=v=>!v?0:typeof v.toMillis==='function'?v.toMillis():typeof v.seconds==='number'?v.seconds*1000:Number(v)||0;
+          const state=(d,id='')=>({
+            idHash:h(id||d?.id||d?.firestoreId),
+            title:String(d?.title||d?.koreanTitle||''),
+            saved:d?.saved===true,
+            favoriteRemoved:d?.favoriteRemoved===true,
+            favoriteRemovedAt:ms(d?.favoriteRemovedAt),
+            unlikedAt:ms(d?.unlikedAt),
+            unsavedAt:ms(d?.unsavedAt),
+            createdAtMs:Number(d?.createdAtMs||0)||ms(d?.createdAt),
+            updatedAtMs:Number(d?.updatedAtMs||0)||ms(d?.updatedAt),
+            genBatchHash:h(d?.appliedKeywords?.generationBatchId),
+            genIndex:Number(d?.appliedKeywords?.generationIndex||0),
+            sidHash:h(d?.soridrawSongId),
+            recentKeyHash:h(d?.recentSongSyncKey),
+            favoriteFirestoreIdHash:h(d?.favoriteFirestoreId),
+            favoriteKeyHash:h(d?.favoriteKey),
+          });
+          (async()=>{
+            const [a,b]=await Promise.all([
+              db.collection('favorites').where('title','==',TARGET).limit(10).get(),
+              db.collection('favorites').where('koreanTitle','==',TARGET).limit(10).get()
+            ]);
+            const docs=new Map(); [...a.docs,...b.docs].forEach(d=>docs.set(d.id,d));
+            if(!docs.size) throw new Error('target missing');
+            const targetDocs=[...docs.values()];
+            const uid=String(targetDocs[0].data()?.uid||'');
+            const recentSnap=await db.collection('user_recent_songs').doc(uid).get();
+            const songs=Array.isArray(recentSnap.data()?.songs)?recentSnap.data().songs:[];
+            const targetRecent=songs.find(s=>[s?.title,s?.koreanTitle,s?.englishTitle].some(v=>String(v||'').trim()===TARGET));
+            const normalRecent=songs.find(s=>s?.favoriteFirestoreId && s!==targetRecent && s?.appliedKeywords?.generationBatchId);
+            let normalFav=null;
+            if(normalRecent?.favoriteFirestoreId){
+              const n=await db.collection('favorites').doc(String(normalRecent.favoriteFirestoreId)).get();
+              if(n.exists) normalFav=state(n.data(),n.id);
+            }
+            const sig=(await rtdb.ref(`userSync/${uid}/musicNote`).get()).val()||{};
+            let item=null; try{item=sig.itemJson?JSON.parse(sig.itemJson):null}catch{}
+            console.log(JSON.stringify({
+              safety:{firestoreWrites:0,firestoreDeletes:0,rtdbWrites:0},
+              targetFavoriteCount:targetDocs.length,
+              targetFavorites:targetDocs.map(d=>state(d.data(),d.id)),
+              targetRecent:targetRecent?state(targetRecent):null,
+              normalPair:normalRecent?{recent:state(normalRecent),favorite:normalFav}:null,
+              latestSignal:{
+                version:Number(sig.version||0),
+                operation:String(sig.operation||''),
+                documentIdHashes:Array.isArray(sig.documentIds)?sig.documentIds.map(h):[],
+                item:Array.isArray(item)?item.map(x=>state(x)):item?state(item):null
+              }
+            },null,2));
+            await admin.app().delete();
+          })().catch(async e=>{console.error(e?.stack||e);try{await admin.app().delete()}catch{}process.exit(1)});
+          NODE

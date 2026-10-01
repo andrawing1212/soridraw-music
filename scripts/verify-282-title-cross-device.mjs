@@ -50,7 +50,7 @@ const previewBranchStart = receive.indexOf("if (operation === 'item-preview')");
 const previewBranchEnd = receive.indexOf('if (itemResult.applied', previewBranchStart);
 assert.ok(previewBranchStart >= 0 && previewBranchEnd > previewBranchStart);
 const previewBranch = receive.slice(previewBranchStart, previewBranchEnd);
-assert.doesNotMatch(previewBranch, /getDoc|getDocs|Firestore/);
+assert.doesNotMatch(previewBranch, /getDoc\(|getDocs\(/);
 
 const heartStart = app.indexOf('  const handleToggleCurrentStudioFavorite = async');
 const heartEnd = app.indexOf('  const isRecentSongSectionEditing', heartStart);

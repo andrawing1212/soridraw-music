@@ -1,6 +1,6 @@
-app291-recent-lyrics-live-preview-release
-target_source=dcb9686875ae35918a22faf365296b5c20998978
-app_version=291
+app292-recent-edit-150s-release
+target_source=34127904db7bb158ebcae28000fa65745fe56c8b
+app_version=292
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

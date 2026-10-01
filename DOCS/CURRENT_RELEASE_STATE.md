@@ -1,3 +1,40 @@
+## 0MJ. PREVIEW app294 — Library 새 폴더 생성 직후 불필요 read 제거 (2026-10-02 KST)
+
+**사용자 실기기 app293 비용 확인**
+- 영상 누적 Browser SDK: Firestore read 3 / write 15.
+- Cloudflare / Worker / D1: R0/W0.
+- Music Note folder rename은 곡 수와 무관하게 structure W1 / favorites W0로 동작 확인.
+- Library My/Shared playlist create/rename은 현재 하위호환 canonical 계약대로 W2 유지.
+- 남은 read 3은 새 Library playlist 3개 생성 직후, UI가 방금 생성된 빈 폴더를 선택하면서 items cache가 없어 `user_playlists/.../items getDocs`를 각 1회 실행한 경로로 확인.
+
+**app294 수정**
+- `src/services/playlistService.ts`의 `createPlaylist()` canonical commit 성공 직후:
+  - playlist list cache patch와 함께
+  - 새 playlist ID의 items cache를 같은 `syncVersion`의 빈 배열로 즉시 seed.
+- 방금 생성된 폴더는 canonical로 빈 폴더임이 이미 확정돼 있으므로, 선택 직후 `SunoLibraryPage`의 items loader가 이 로컬 cache를 current로 인정하고 Firestore `getDocs`를 생략.
+- My / Shared 양쪽 모두 같은 `createPlaylist()` 경로를 사용하므로 공통 적용.
+- create canonical write 계약은 **W2 그대로**. RTDB changed-item signal, 기존 playlist list/items revision 구조, UI는 변경 없음.
+- create-and-save 경로도 먼저 빈 current items cache를 갖게 되어 후속 첫 item insert의 warm R0 판단을 그대로 사용할 수 있음.
+
+**폴더 30/60초 묶음 저장 판단**
+- 이번 app294에서는 적용하지 않음.
+- 서로 다른 폴더 create/rename은 각각 별도 canonical playlist 문서이므로 단순 writeBatch로 네트워크 요청을 묶어도 Firestore 과금 write 수 자체는 줄지 않음.
+- 같은 폴더 이름을 짧은 시간 여러 번 바꾸는 경우 final-intent batching은 기술적으로 가능하지만, 현재 PREVIEW가 TEST/PRODUCTION 구버전과 shared data를 동시에 사용하고 `users.syncVersions.playlists` 하위호환 신호도 유지해야 해 즉시 canonical W2 계약을 우선 보호.
+- 향후 별도 최적화 시 가장 현실적인 후보는 여러 playlist 변경의 공통 `users.syncVersions.playlists` revision write를 UID 단위로 묶는 방식이며, old-client convergence와 crash/reload durability를 먼저 설계해야 함.
+
+**변경 commit**
+- product fix: `7decc68c80114eae11129894135346992054b7cb`.
+- focused verifier: `be1ee8cc091f4150510ba16abdc485b44e4689cf`.
+- app version 294: `42ea54fc1284d46e8030240d51633bae64d661cf`.
+
+**검증/배포 상태**
+- focused verifier: 배포 Workflow 실행 전.
+- TypeScript / Build: 배포 Workflow 실행 전.
+- PREVIEW Hosting: 배포 전.
+- TEST / PRODUCTION: 변경 금지.
+- 사용자 데이터 migration/backfill/delete: 없음.
+- Worker / Functions / D1 / Firestore Rules 변경: 없음.
+
 ## 0MI. PREVIEW app293 배포 완료 — Library changed-item sync + Music Note folder rename 비용 절감 (2026-10-02 KST)
 
 **배포/검증 기준**

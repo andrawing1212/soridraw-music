@@ -344,7 +344,7 @@ const recentSongsSessionVerifiedUids = new Set<string>();
 const recentSongsSessionReadInFlightUids = new Set<string>();
 const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
-const RECENT_SONG_TEXT_BATCH_MS = 60_000;
+const RECENT_SONG_TEXT_BATCH_MS = 150_000;
 const RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text_pending_v2';
 type RecentSongTextPendingMarker = {
   operation: 'regenerate' | 'edit' | 'pre-favorite-edit';
@@ -15355,7 +15355,7 @@ ${normalizePromptForDisplay(result.prompt)}
       if (user?.uid) {
         // Local UI/cache updates immediately. A compact RTDB preview keeps the
         // other device current, while the canonical aggregate waits for the
-        // 60-second trailing batch so title/prompt/lyrics edits collapse.
+        // 150-second trailing batch so title/prompt/lyrics edits collapse.
         queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
       }
 

@@ -6,7 +6,7 @@ const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const boundary = fs.readFileSync('src/data/v1MutationBoundary.ts', 'utf8');
 const musicNote = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 
-assert.match(app, /const RECENT_SONG_TEXT_BATCH_MS = 60_000;/);
+assert.match(app, /const RECENT_SONG_TEXT_BATCH_MS = 150_000;/);
 assert.match(app, /RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text_pending_v2'/);
 assert.match(app, /publishRecentSongEditPreviewDelta\(uid, syncItem\)/);
 assert.match(app, /window\.setTimeout\(\(\) => \{\s*recentSongTextWriteTimerRef\.current = null;\s*void flushRecentSongTextWrite\(\);\s*\}, RECENT_SONG_TEXT_BATCH_MS\)/s);
@@ -45,7 +45,7 @@ assert.match(detailBlock, /queueFavoriteDetailPatch\(payload\.targetSongId, payl
 assert.doesNotMatch(detailBlock, /await updateFavorite\(/);
 
 console.log('APP290_RECENT_EDIT_IMMEDIATE_FIRESTORE_W0=PASS');
-console.log('APP290_RECENT_EDIT_TRAILING_BATCH_60S=PASS');
+console.log('APP292_RECENT_EDIT_TRAILING_BATCH_150S=PASS');
 console.log('APP290_RECENT_EDIT_LIVE_PREVIEW_RTDB=PASS');
 console.log('APP290_RECENT_EDIT_DURABLE_PENDING_MARKER=PASS');
 console.log('APP290_RECENT_EDIT_LOCAL_DRAFT_FENCE=PASS');

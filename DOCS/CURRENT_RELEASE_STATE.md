@@ -1,3 +1,91 @@
+## 0LZ. PREVIEW app289 배포 완료 — oversized Music Note SAVE signal compact fallback (2026-10-02 KST)
+
+**사용자 지시**
+- app288 실패 원인 확정 후 ChatGPT가 직접 최소 수정.
+- 정상 기능은 건드리지 않고 PREVIEW 검증/배포까지 진행.
+
+**최종 ROOT CAUSE 재확인**
+- 실제 코드 gate는 UTF-8 byte가 아니라 `JSON.stringify(...).length <= 24000` 문자 길이 기준.
+- 추가 read-only Run `36914806927`: SUCCESS.
+- 문제곡 current row: `jsLength=24405` → **24,000 초과 / 현재 gate FAIL**.
+- historical duplicate row: `jsLength=25245` → **24,000 초과 / 현재 gate FAIL**.
+- 즉 이전 byte-size 진단뿐 아니라 실제 제품 코드의 문자 길이 기준에서도 SAVE itemJson 탈락이 확정됨.
+- Firestore W0 / delete0 / RTDB W0.
+
+**app289 수정**
+- 기준 clean source: `d91983de73954871d3f693ec341d066e0de7d1bb`.
+- 핵심 제품 수정:
+  - `src/services/userDomainSyncService.ts`
+    - 기존 full Music Note catalog summary가 24,000 chars 이하이면 **기존 payload 그대로 유지**.
+    - 초과할 때만 `appliedKeywords`를 immutable generation identity(`generationBatchId + generationIndex`)로 축소한 compact active sync payload 사용.
+    - 그마저 비정상적으로 큰 경우를 위한 최소 card + exact identity fallback 추가.
+    - RTDB mutation은 기존 UID-scoped 1회 transaction 그대로 재사용.
+    - UNSAVE removal identity 경로 비변경.
+  - `src/App.tsx`
+    - compact active payload를 받았을 때 기존 cached favorite가 있으면 기존 상세 keyword 정보를 보존한 채 changed state만 merge.
+    - exact receiver는 Firestore query/read 없이 기존 heart authority를 그대로 갱신.
+  - `public/app-version.json`: 289.
+  - app277/app278 verifier는 동일 24,000 상수를 상수명으로 확인하도록 테스트만 보정.
+  - 신규 `scripts/verify-289-music-note-compact-heart-sync.mjs`.
+
+**실데이터 compact proof**
+- 최종 Audit Run `36915869748`: SUCCESS.
+- 문제곡 current:
+  - full `24405`
+  - compact `1354`
+- historical duplicate:
+  - full `25245`
+  - compact `2259`
+- 둘 다 compact 후 24,000보다 충분히 작음.
+- 진단/감사 과정 사용자 데이터 write/delete 0.
+
+**검증**
+- TypeScript PASS.
+- Build PASS.
+- app277~app289 Music Note focused regression PASS.
+- app196 Recent Songs sync PASS.
+- app197 신규 공개곡 좋아요 보호 PASS.
+- app289:
+  - `APP289_OVERSIZED_SAVE_COMPACT_PAYLOAD=PASS`
+  - `APP289_COMPACT_RECEIVER_PRESERVES_EXISTING_KEYWORDS=PASS`
+  - `APP289_EXACT_RECEIVER_FIRESTORE_R0=PASS`
+  - `APP289_UNSAVE_COMPACT_REMOVAL_UNCHANGED=PASS`
+  - `APP289_EXTRA_RTDB_MUTATION_ZERO=PASS`
+- 첫 audit `36915469948`은 제품 오류가 아니라 app277/app278의 옛 literal verifier가 새 상수명을 인식하지 못해 FAIL. verifier를 동일 의미로 보정 후 최종 audit PASS.
+- 임시 audit/diagnostic workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- release commit: `178a3eb7489e0d89dea76481a1b6a76f5c600681`.
+- Firebase PREVIEW App Run `36916222178`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **289**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 데이터 migration/backfill/delete/duplicate merge 없음.
+
+**비용**
+- 수신기 compact SAVE/RESTORE: Firestore R0/W0, D1 R0/W0.
+- 기존 RTDB signal 1회 재사용, 추가 RTDB mutation 0.
+- canonical save/restore/unsave 비용 구조 변경 없음.
+- 앱 업데이트/페이지 이동/idle 추가 mutation 없음.
+- Explore public like app164/Worker195 비변경.
+- Music Note 60초 batch 비변경.
+
+**실기기 확인 필요**
+1. PC/모바일 모두 app289 확인.
+2. `스쳐간 이름 뒤에`: PC 저장 → 모바일이 페이지 이동/새로고침 없이 즉시 filled.
+3. 모바일 해제 → PC 즉시 empty.
+4. 모바일 저장 → PC 즉시 filled.
+5. PC 해제 → 모바일 즉시 empty.
+6. 2~5를 2회 이상 반복.
+7. 정상 최근곡 1개도 같은 순서 회귀 없음.
+8. 이름 변경/원복 즉시 동기화 유지.
+9. 재접속 후 마지막 상태 동일.
+- 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## 0LY. `스쳐간 이름 뒤에` SAVE live-sync ROOT CAUSE 확정 — RTDB changed-item payload 24KB 초과 (2026-10-02 KST)
 
 **판정**

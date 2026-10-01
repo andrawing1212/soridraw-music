@@ -1,3 +1,49 @@
+## CURRENT TASK — app289 문제곡 SAVE/UNSAVE 양방향 실기기 최종 확인 (2026-10-02 KST)
+
+현재:
+- app288 사용자 실기기 FAIL.
+- ROOT CAUSE 확정: 문제곡 active SAVE itemJson이 실제 제품 gate `JSON.stringify(...).length <= 24000`를 초과.
+  - current row 24,405 chars.
+  - historical row 25,245 chars.
+- app289은 24,000 이하 정상곡은 기존 full payload 그대로 유지.
+- oversized active item에만 compact fallback 적용.
+  - current target compact 1,354 chars.
+  - historical target compact 2,259 chars.
+- UNSAVE compact removal 경로 비변경.
+- exact receiver Firestore R0/W0.
+- 추가 RTDB mutation 0.
+- Audit `36915869748` SUCCESS.
+- PREVIEW Release `36916222178` SUCCESS.
+- release commit `178a3eb7489e0d89dea76481a1b6a76f5c600681`.
+- `preview.soridraw.com` app289 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 delete/migration/backfill/duplicate merge 없음.
+
+실기기 테스트:
+1. PC/모바일 둘 다 app289.
+2. `스쳐간 이름 뒤에` PC 저장 → 모바일 즉시 filled.
+3. 모바일 해제 → PC 즉시 empty.
+4. 모바일 저장 → PC 즉시 filled.
+5. PC 해제 → 모바일 즉시 empty.
+6. 2~5를 2회 이상 반복. route/tab/refresh 도움 없이 PASS해야 함.
+7. 일반 정상 Recent Song 1개 같은 순서 회귀 없음.
+8. 이름 변경/원복 app282 즉시 동기화 유지.
+9. 재접속 후 마지막 상태 동일.
+10. exact receiver Firestore/D1 R/W 0 유지.
+
+보호:
+- 24KB 이하 기존 Music Note sync payload 동작 그대로 유지.
+- app288 RTDB ACK 분리 유지.
+- app287 idempotent SAVE signal 유지.
+- app286 UI direction authority 유지.
+- app285 exact identity 유지.
+- app282 title sync 유지.
+- duplicate user data 자동 삭제/병합 금지.
+- Explore public like app164/Worker195 동결.
+- Music Note 60초 상세 batch 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app289 compact Music Note heart-state RTDB payload 구현 준비 (2026-10-02 KST)
 
 ROOT CAUSE 확정:

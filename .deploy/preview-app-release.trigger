@@ -1,5 +1,6 @@
-app281-suno-url-cross-device-release
-target_source=cef779a7654d55674b8d3d9f7b9969bd25c7ff11
-app_version=281
-scope=hosting-only
+app282-title-cross-device-release
+target_source=6211ed052ac9426fcd9bc763fc84e58b70c9a1a0
+app_version=282
+scope=hosting-plus-shared-rtdb-rules
+deploy_shared_rtdb_rules=true
 no_user_data_migration=true

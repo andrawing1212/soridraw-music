@@ -1,3 +1,18 @@
+## PREVIEW app291 Recent lyrics live-preview receiver fix (2026-10-02 KST)
+
+- app290 실기기 비용: Firestore R0, D1 R0/W0; heart W2, Recent 연속 편집 W2, 테스트 구간 총 W4.
+- 가사 60초 지연 원인: RTDB top-level lyrics는 즉시 도착했지만 수신기 로컬 `appliedKeywords.lyricsByLanguage`가 stale 상태로 남아 렌더가 이전 가사를 우선 표시.
+- app291은 수신기 local merge만 수정. 추가 RTDB mutation 0 / Firestore R0 W0.
+- product commit `9ca5c6707dcd1b2b0380d88d5b28e5b32813a5d3`.
+- final audit commit `65fcdf2a6d5e4e7fa31ad5348580761643b356a3`.
+- Audit Run `36929318487`: SUCCESS.
+- release commit `f6c0daed7790aa2302333bd44073fbd4a37698d8`.
+- Firebase PREVIEW Run `36929528762`: SUCCESS.
+- remote app291 exact build PASS.
+- Shared RTDB Rules / Worker / Functions / Firestore Rules / D1 unchanged.
+- TEST / PRODUCTION unchanged PASS.
+- 사용자 데이터 migration/backfill/delete 없음.
+
 ## PREVIEW app290 live UX + canonical write batching (2026-10-02 KST)
 
 - 제품/안전 최종 코드: `42b9e6c7c8da42295a59d2bd757251c6bb35e429`.

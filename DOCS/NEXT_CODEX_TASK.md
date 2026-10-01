@@ -1,3 +1,30 @@
+## CURRENT TASK — app291 가사 즉시 동기화 실기기 확인 (2026-10-02 KST)
+
+현재:
+- PREVIEW app291 배포 완료.
+- Audit Run `36929318487` SUCCESS.
+- Firebase PREVIEW Run `36929528762` SUCCESS.
+- `preview.soridraw.com` app291 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 변경 없음.
+
+app290 실기기 비용 결과:
+- Firestore read 0.
+- D1 R0/W0.
+- heart 실제 최종 변경: `favorites W1 + users.favoriteCount W1 = W2`.
+- Recent title/prompt/lyrics 연속 편집: `user_recent_songs W1 + users.syncVersions W1 = W2`.
+- 한 테스트 구간 합계: favorites 1 + recent 1 + users 2 = Firestore W4.
+- 과거 편집 3회 W6 반복 구조는 제거됨.
+
+지금 확인할 것:
+1. app291 확인.
+2. Recent Song 가사 한 줄 수정 후 저장.
+3. 다른 기기에서 페이지 이동/새로고침 없이 즉시 반영되는지 확인.
+4. 한글 + 2차언어 각각 확인.
+5. 제목/프롬프트/하트 즉시 반영은 기존 정상 그대로인지 확인.
+6. 가사 수정 직후 추가 Firestore write가 생기면 FAIL. canonical write는 60초 trailing batch만 허용.
+7. 사용자 PASS 전 main/TEST 승격 금지.
+
 ## CURRENT TASK — app290 PREVIEW 실기기 비용 + PC↔모바일 최종 검증 (2026-10-02 KST)
 
 현재:

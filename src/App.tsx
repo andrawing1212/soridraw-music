@@ -10451,6 +10451,7 @@ const toggleCycleVariantSelection = (
     trustedRecentStudio?: boolean;
     intendedAction?: 'save' | 'unsave';
     canonicalBaseline?: { saved: boolean; favorite: any | null };
+    suppressSuccessToast?: boolean;
   }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
@@ -10459,6 +10460,10 @@ const toggleCycleVariantSelection = (
       handleLogin();
       return;
     }
+
+    const notifyFavoriteSuccess = (message: string) => {
+      if (!options?.suppressSuccessToast) showToast(message);
+    };
 
     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
@@ -10665,7 +10670,7 @@ const toggleCycleVariantSelection = (
           });
           applyFavoriteSyncSignal(user.uid, deleteSignal);
           queueMusicNoteFavoriteCountDelta(user.uid, -1);
-          showToast('곡이 삭제 되었습니다.');
+          notifyFavoriteSuccess('곡이 삭제 되었습니다.');
           return;
         }
 
@@ -10706,14 +10711,14 @@ const toggleCycleVariantSelection = (
               firestoreId: existingFav.id,
             }),
           );
-          showToast('저장되었습니다.');
+          notifyFavoriteSuccess('저장되었습니다.');
           return;
         }
 
         if (intendedAction === 'unsave' && isFavoriteHidden(existingFav)) {
           rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           removeLocalFavorite(existingFav.id);
-          showToast('저장이 해제되었습니다.');
+          notifyFavoriteSuccess('저장이 해제되었습니다.');
           return;
         }
 
@@ -10747,7 +10752,7 @@ const toggleCycleVariantSelection = (
           forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
           // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
-          showToast('보관함에 다시 저장되었습니다.');
+          notifyFavoriteSuccess('보관함에 다시 저장되었습니다.');
           return;
         }
 
@@ -10815,7 +10820,7 @@ const toggleCycleVariantSelection = (
           removeLocalFavorite(existingFav.id);
           applyFavoriteSyncSignal(user.uid, unsaveSignal);
           queueMusicNoteFavoriteCountDelta(user.uid, -1);
-          showToast('저장이 해제되었습니다.');
+          notifyFavoriteSuccess('저장이 해제되었습니다.');
           return;
         } catch (unsaveError: any) {
           const code = String(unsaveError?.code || '');
@@ -10828,7 +10833,7 @@ const toggleCycleVariantSelection = (
             removeLocalFavorite(existingFav.id);
             applyFavoriteSyncSignal(user.uid, unsaveSignal);
             // No canonical document changed here, so do not emit a server sync write.
-            showToast('저장이 해제되었습니다.');
+            notifyFavoriteSuccess('저장이 해제되었습니다.');
             return;
           }
           throw unsaveError;
@@ -10891,7 +10896,7 @@ const toggleCycleVariantSelection = (
 
         // Explicit UNSAVE is idempotent: it may turn off the exact canonical row,
         // but it can never fall through into the save/create path.
-        showToast('저장이 해제되었습니다.');
+        notifyFavoriteSuccess('저장이 해제되었습니다.');
         return;
       }
 
@@ -11006,7 +11011,7 @@ const toggleCycleVariantSelection = (
 
       queueMusicNoteFavoriteCountDelta(user.uid, 1);
 
-      showToast('저장되었습니다.');
+      notifyFavoriteSuccess('저장되었습니다.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
       throw error;
@@ -11042,6 +11047,7 @@ const toggleCycleVariantSelection = (
           saved: intent.baselineSaved,
           favorite: intent.baselineFavorite,
         },
+        suppressSuccessToast: true,
       });
 
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
@@ -14795,7 +14801,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
   useEffect(() => {
     const uid = String(user?.uid || '').trim();
-    if (!uid || location.pathname !== '/studio') return;
+    if (!uid) return;
     if (recentSongTextWritePendingRef.current?.uid === uid) return;
 
     const marker = readRecentSongTextPendingMarker(uid);
@@ -14838,7 +14844,7 @@ ${normalizePromptForDisplay(result.prompt)}
         recentSongTextWriteTimerRef.current = null;
       }
     };
-  }, [user?.uid, location.pathname, flushRecentSongTextWrite]);
+  }, [user?.uid, flushRecentSongTextWrite]);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
     const currentIndex = historyIndexRef.current;
@@ -15447,6 +15453,11 @@ ${normalizePromptForDisplay(result.prompt)}
           const baselineSaved = existingIntent
             ? existingIntent.baselineSaved
             : Boolean(baselineFavorite && !isFavoriteHidden(baselineFavorite));
+          const batchBlockedByLock = Boolean(baselineFavorite?.isLocked);
+          if (batchBlockedByLock) {
+            // Preserve the established locked-song guard; do not preview an action
+            // that the canonical mutation is not allowed to perform.
+          } else {
           const batchedSong = normalizeFavoriteTitleFields({
             ...heartSnapshot,
             favoriteFirestoreId: batchDocumentId,
@@ -15484,6 +15495,7 @@ ${normalizePromptForDisplay(result.prompt)}
             }
             showToast(intendedFavoriteAction === 'save' ? '저장되었습니다.' : '저장이 해제되었습니다.');
             return;
+          }
           }
         }
       }

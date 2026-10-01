@@ -1,3 +1,23 @@
+## PREVIEW app293 Library playlist delta cost + Music Note folder rename (2026-10-02 KST)
+
+- 제품 구현: `b3f4443ecb873006eb93f4dd6e3a4df05556470e`.
+- missed-delta 안전 보강: `c86a9ae7b86349ddb3ef39f4d059434441f8cba4`.
+- focused final source: `35986cee25f6dcf128fa9c61b37a5bcbc4661783`.
+- runtime cleanup: `e7b0c172dd2a9763911263c46924fc098980b537`.
+- release commit: `d0a0fd540e7104c7a70be82489758a14e30e48c9`.
+- Audit Run `36938832665`: SUCCESS.
+- Backend Safety Run `36938820471`: SUCCESS.
+- Firebase PREVIEW Run `36939049573`: SUCCESS.
+- remote app version **293** / exact build PASS.
+- Shared RTDB Rules exact match + deploy PASS.
+- Firebase Hosting PREVIEW PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- Library: changed-item RTDB delta + continuity fence, warm add/move pre-read R0 path, warm folder-delete discovery R0 path.
+- Music Note: folder rename per-song title fan-out 제거, code target structure W1 + favorites W0.
+- 실제 PC/mobile 및 CACHE LIVE 비용은 사용자 실기기 검증 전.
+
 ## PREVIEW app291 Recent lyrics live-preview receiver fix (2026-10-02 KST)
 
 - app290 실기기 비용: Firestore R0, D1 R0/W0; heart W2, Recent 연속 편집 W2, 테스트 구간 총 W4.

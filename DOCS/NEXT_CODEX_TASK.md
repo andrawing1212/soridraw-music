@@ -1,3 +1,47 @@
+## CURRENT TASK — app293 PREVIEW Library/Music Note 실기기 비용 검증 (2026-10-02 KST)
+
+현재:
+- PREVIEW app293 배포 완료.
+- final Audit Run `36938832665` SUCCESS.
+- Backend Safety Run `36938820471` SUCCESS.
+- Firebase PREVIEW Run `36939049573` SUCCESS.
+- shared RTDB rules exact match/deploy PASS.
+- `preview.soridraw.com` app293 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+실기기 최소 검증:
+1. PC/모바일 모두 app293 확인.
+2. Library **마이 리스트** 같은 폴더를 양쪽 기기에서 연 상태:
+   - 곡 1개 추가 → 상대 기기에 새로고침/탭 왕복 없이 반영.
+   - 곡 1개 삭제 → 상대 기기에 즉시 제거.
+   - 폴더 이름 변경 → 상대 기기에 반영.
+   - 가능하면 곡을 다른 폴더로 이동 → 양쪽 폴더 상태 반영.
+3. 위 연속 변경에서 healthy cache 수신기 목표:
+   - Library changed-item 수신 자체 Firestore **R0/W0**.
+   - 한 곡 변경 때문에 active playlist 전체 item reread가 발생하면 FAIL.
+   - 중간 signal을 놓친 cold/stale 복구에서만 bounded Firestore fallback 허용.
+4. warm Library add/move:
+   - duplicate/max-order 확인용 Firestore read **R0 목표**.
+5. warm playlist folder delete:
+   - 삭제 대상 ID 확인을 위한 사전 items collection read **R0 목표**.
+   - 실제 item delete writes는 삭제 곡 수만큼 정상/필수.
+6. Music Note 마이/공유 폴더:
+   - 여러 곡이 든 폴더 이름 변경.
+   - 곡들이 그대로 새 이름 폴더 아래 보여야 함.
+   - CACHE LIVE 목표: `user_structures W1`, rename 때문에 `favorites write 0`.
+7. app292 보호 회귀:
+   - Recent title/prompt/lyrics 즉시 PC↔모바일 + 150초 batch.
+   - Studio heart 즉시 PC↔모바일 + 30초 final-intent.
+   - Music Note Detail 기존 저장/편집 정상.
+8. Library social like는 app293에서 미변경. 별도 후속 최적화 대상.
+
+판정:
+- 위 실기기 기능 + 비용이 맞으면 app293 PREVIEW PASS.
+- 전체 playlist reread, 폴더 rename favorites WN, PC↔mobile 미반영이 재현되면 TEST 승격 금지하고 해당 경로만 최소 수정.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확한 승인 전 변경 금지.
+
 ## CURRENT TASK — app292 PREVIEW 실기기 확인: Recent 150초 batch (2026-10-02 KST)
 
 현재:

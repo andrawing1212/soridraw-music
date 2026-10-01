@@ -1,3 +1,70 @@
+## 0MI. PREVIEW app293 배포 완료 — Library changed-item sync + Music Note folder rename 비용 절감 (2026-10-02 KST)
+
+**배포/검증 기준**
+- 기준 branch: `preview`.
+- 제품 구현 시작: `b3f4443ecb873006eb93f4dd6e3a4df05556470e`.
+- missed-delta 안전 보강: `c86a9ae7b86349ddb3ef39f4d059434441f8cba4`.
+- RTDB continuity rules: `f49ca39ba717dc62afbecba0c2ab5184c63081bf`.
+- focused verifier 최종: `35986cee25f6dcf128fa9c61b37a5bcbc4661783`.
+- runtime cleanup: `e7b0c172dd2a9763911263c46924fc098980b537`.
+- app version 293: `dfc094b13ef4c0a98378c22dc740766319489275`.
+- PREVIEW release/locked source: `d0a0fd540e7104c7a70be82489758a14e30e48c9`.
+- 최종 focused Audit Run `36938832665`: **SUCCESS**.
+- Backend V2 Safety Run `36938820471`: **SUCCESS**.
+- Firebase PREVIEW Release Run `36939049573`: **SUCCESS**.
+- remote `preview.soridraw.com`: app **293**, exact build PASS.
+- shared RTDB rules: exact source match + deploy PASS.
+- TEST / PRODUCTION unchanged PASS.
+- 사용자 데이터 migration/backfill/delete: **없음**.
+- Worker / Functions / D1 / Firestore Rules 변경: **없음**.
+
+**Library My/Shared Playlist**
+- 기존 canonical Firestore 구조와 `users.syncVersions.playlists` / `itemsRevision`을 유지하여 app292 이하 TEST/PRODUCTION과 하위호환.
+- 변경 성공 후 UID-scoped RTDB `userSync/{uid}/libraryPlaylist`에 최대 24KB changed-item delta 1개를 게시.
+- 정상 cache + 연속 signal이면 반대 기기는 Firestore를 다시 읽지 않고 IndexedDB list/item cache를 직접 patch.
+- signal은 `previousSyncVersion` continuity token을 포함. 기기가 offline 중 중간 delta를 놓쳤거나 payload가 oversized/truncated이면 cache revision을 거짓으로 앞당기지 않고 기존 Firestore fallback 1회로 복구.
+- warm add/move에서 destination item cache가 current이면 duplicate + max-order 계산을 로컬에서 처리하여 사전 Firestore read **R0 경로**.
+- warm playlist delete는 current item cache의 IDs를 사용하여 삭제 대상 탐색 Firestore read **R0 경로**. 실제 item canonical delete write는 데이터 삭제이므로 그대로 유지.
+- canonical write 수는 이번 단계에서 의도적으로 유지:
+  - playlist create/rename: W2.
+  - item add/delete: W3.
+  - item move: W5.
+  - item order swap: W4.
+  - 이유: TEST/PRODUCTION 구버전도 shared canonical data 변화를 계속 감지해야 하므로 parent/items revision + users revision을 아직 제거할 수 없음.
+- Library social like `toggleTrackLike`의 R2/W2 transaction은 **이번 app293 범위 밖, 미변경**. 별도 후속 최적화 대상.
+
+**Music Note**
+- folder rename은 `user_structures/{uid}`의 folder structure만 canonical로 갱신.
+- 기존 song의 `noteFolderTitle/sharedNoteFolderTitle` legacy copy는 읽기 호환용으로 그대로 두고 더 이상 rename 때 N곡을 재작성하지 않음.
+- folder membership/filter는 기존처럼 stable folder ID를 사용.
+- 코드상 rename 비용 목표: 기존 `structure W1 + favorites WN` → **structure W1 / favorites W0**.
+- folder delete는 곡들의 folderId를 default로 실제 변경해야 하므로 현재 WN을 유지. 구버전 호환을 깨지 않고 제거할 수 없어 이번에는 건드리지 않음.
+
+**보호된 기존 기능**
+- app292 Recent 150초 UID-wide canonical batch 유지.
+- Studio heart 30초 per-song final-intent batch 유지.
+- favoriteCount 30초 UID-wide batch 유지.
+- Music Note Detail draft/batch/RTDB preview 유지.
+- Library workspace warm cache/re-entry R0 경로 유지.
+- Explore / public like / 공개·비공개 / split UI 미변경.
+
+**검증**
+- TypeScript PASS.
+- Build PASS.
+- `APP293_LIBRARY_PLAYLIST_DELTA_SYNC=PASS`.
+- `APP293_LIBRARY_WARM_INSERT_SERVER_R0_PATH=PASS`.
+- `APP293_LIBRARY_WARM_DELETE_DISCOVERY_R0_PATH=PASS`.
+- `APP293_MUSIC_NOTE_FOLDER_RENAME_W1_ONLY=PASS`.
+- Library 101 / 030 / 116 warm-cost regressions PASS.
+- Music Note Detail 031 PASS.
+- app289 heart / app290 Recent / app290 Studio heart / app291 lyrics regressions PASS.
+- 첫 Audit Run `36938199952`의 FAIL은 제품 코드가 아니라 app196 이후 변경된 Recent sync gate를 옛 문자열로 검사하던 `verify-116`의 stale assertion 때문. 현재 pure `needsRecentSongsServerRead()` 의미 기준으로 verifier를 갱신한 뒤 final Audit SUCCESS.
+
+**실기기 확인 전 비용 판정**
+- 위 수치는 code/static guard 기준.
+- PC↔모바일 실제 즉시 반영과 CACHE LIVE Firestore R/W는 사용자 실기기 검증 전까지 **실사용 검증 전**.
+- 사용자 `테스트배포` 지시 전 main/TEST 승격 금지.
+
 ## 0MH. Music Note / Library 저장·동기화 비용 구조 감사 (2026-10-02 KST)
 
 **범위 / 상태**

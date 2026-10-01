@@ -1,3 +1,40 @@
+## CURRENT TASK — app277 양방향 동기화 + 비용 실사용 확인 (2026-10-01 KST)
+
+현재:
+- app276 양방향 sync 기능은 비용 회귀로 FAIL.
+- app277 PREVIEW 배포 완료.
+- 정상 cross-device changed-item receive는 Firestore R0/W0.
+- 실제 save/unsave canonical favorite W1만 유지.
+- legacy `users.favoriteSyncSignal` per-click Firestore write 제거.
+- derived `favoriteCount` 30초 trailing batch.
+- remote replay Catalog/R2 echo write 차단.
+- Shared RTDB rules additive 배포 PASS.
+- PREVIEW Run `36794274979` SUCCESS / app277 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+사용자 테스트:
+1. PC에서 최근생성곡 A 저장 → 모바일 자동 하트/뮤직노트 반영.
+2. PC에서 A 해제 → 모바일 자동 해제.
+3. 모바일에서 B 저장/해제 → PC 자동 반영.
+4. 공유노트 C 저장 → 반대 기기 공유노트 자동 반영.
+5. Firestore Usage를 같이 보고 클릭 1회마다 반대 기기 R1이 더 붙지 않는지 확인.
+6. 30초 안에 여러 저장/해제를 해도 user favoriteCount write가 매 클릭 발생하지 않는지 확인.
+7. 아무 조작 없이 1분 대기 시 반복 read/write가 없어야 함.
+
+합격 비용:
+- unchanged idle/navigation: R0/W0.
+- actual favorite save/unsave: canonical favorites W1.
+- remote device sync: Firestore R0/W0.
+- derived favoriteCount: 최대 users W1 / 30초 net batch, net0이면 W0.
+- D1 R0/W0 추가.
+- 전체 favorites scan/query/rebuild 0.
+
+보호:
+- public Explore 좋아요 app164/Worker195 동결 영역 비변경.
+- 공유노트 상세 app273, 저장됨 app274/275 보호.
+- Music Note 60초 상세 편집 묶음 저장 보호.
+- 실사용/비용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app276 PC↔모바일 Music Note/보관함 동기화 실사용 확인 (2026-10-01 KST)
 
 사용자 제보:

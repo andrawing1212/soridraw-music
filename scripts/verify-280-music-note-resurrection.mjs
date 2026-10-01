@@ -39,11 +39,15 @@ assert.match(toggle, /favoriteRemoved: true/);
 assert.match(toggle, /saved: false/);
 assert.match(toggle, /rememberFavoriteDeletedTombstones\(user\.uid, unsaveCatalogRemovalIds\)/);
 
-// The fix must not add another canonical Firestore write/read to unsave.
+// app286 adds one mutually-exclusive exact-id UNSAVE branch for the case where
+// the UI knows the canonical favorite id but this device's active cache row is
+// missing. It is still a single W1 at runtime and adds no Firestore read.
 const unsaveAnchor = toggle.indexOf('const unsavedAt = Date.now()');
 const saveAnchor = toggle.indexOf('const createdAtMs = Date.now()', unsaveAnchor);
 const unsave = toggle.slice(unsaveAnchor, saveAnchor);
-assert.equal((unsave.match(/updateDoc\(/g) || []).length, 2, 'existing bounded unsave update branches changed unexpectedly');
+assert.equal((unsave.match(/updateDoc\(/g) || []).length, 3, 'expected two existing unsave branches plus app286 exact-id branch');
+assert.match(unsave, /if \(intendedAction === 'unsave'\)/);
+assert.match(unsave, /updateDoc\(doc\(db, 'favorites', exactFavoriteId\), exactUnsaveUpdates\)/);
 assert.equal((unsave.match(/getDoc\(/g) || []).length, 0);
 assert.equal((unsave.match(/getDocs\(/g) || []).length, 0);
 

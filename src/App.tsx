@@ -10653,13 +10653,55 @@ const toggleCycleVariantSelection = (
           || (song as any)?.firestoreId
           || '',
         ).trim();
+
         if (exactFavoriteId) {
+          const unsavedAt = Date.now();
+          const exactUnsaveUpdates = sanitizeForFirestore({
+            favoriteRemoved: true,
+            favoriteRemovedAt: unsavedAt,
+            unlikedAt: unsavedAt,
+            unsavedAt,
+            updatedAtMs: unsavedAt,
+            saved: false,
+            hidden: false,
+            favoriteHidden: false,
+            deletedAt: null,
+            trashedAt: null,
+            isPublic: false,
+            updatedAt: serverTimestamp(),
+          });
+          let canonicalChanged = false;
+          try {
+            await runV1MutationBoundary({
+              domain: 'musicNote',
+              operation: 'unsave',
+              uid: user.uid,
+              documentIds: [exactFavoriteId],
+              affectedCount: 1,
+              syncItem: sanitizeForFirestore({
+                ...song,
+                ...exactUnsaveUpdates,
+                ...buildLegacyRecentFavoriteBridge(song),
+                id: exactFavoriteId,
+                firestoreId: exactFavoriteId,
+              }),
+            }, updateDoc(doc(db, 'favorites', exactFavoriteId), exactUnsaveUpdates));
+            canonicalChanged = true;
+          } catch (exactUnsaveError: any) {
+            const code = String(exactUnsaveError?.code || '');
+            const message = String(exactUnsaveError?.message || exactUnsaveError || '');
+            const alreadyAbsent = code === 'not-found'
+              || /No document to update|not[- ]found/i.test(message);
+            if (!alreadyAbsent) throw exactUnsaveError;
+          }
+
           rememberFavoriteDeletedTombstones(user.uid, [exactFavoriteId]);
           removeLocalFavorite(exactFavoriteId);
+          if (canonicalChanged) queueMusicNoteFavoriteCountDelta(user.uid, -1);
         }
-        // The visible heart was already filled and the canonical item is already
-        // absent/removed. Treat the click as an idempotent UNSAVE; never create a
-        // new favorite while trying to turn a heart off.
+
+        // Explicit UNSAVE is idempotent: it may turn off the exact canonical row,
+        // but it can never fall through into the save/create path.
         showToast('저장이 해제되었습니다.');
         return;
       }
@@ -14935,10 +14977,17 @@ ${normalizePromptForDisplay(result.prompt)}
         : (snapshot as any);
       const wasDetachedBeforeToggle = Boolean(currentSongBeforeToggle?.recentFavoriteDetachedAt);
       const heartSnapshot = ({ ...snapshot } as any);
+      const authorityBeforeToggle = readRecentHeartAuthority(heartSnapshot);
 
       if (wasDetachedBeforeToggle) {
         delete heartSnapshot.favoriteFirestoreId;
         delete heartSnapshot.musicNoteFavoriteId;
+      } else if (authorityBeforeToggle?.favoriteId) {
+        // app286 — The latest RTDB per-song authority also carries the exact
+        // Music Note id. Use it for the mutation even when this device's Recent
+        // cache is stale, so a filled-heart UNSAVE cannot become a no-op.
+        heartSnapshot.favoriteFirestoreId = authorityBeforeToggle.favoriteId;
+        heartSnapshot.musicNoteFavoriteId = authorityBeforeToggle.favoriteId;
       }
       delete heartSnapshot.recentFavoriteDetachedAt;
 
@@ -14960,7 +15009,9 @@ ${normalizePromptForDisplay(result.prompt)}
             buildFavoriteIdentityKey(heartSnapshot),
           );
       const favoriteLinkBeforeToggle = String(
-        currentSongBeforeToggle?.favoriteFirestoreId
+        heartSnapshot?.favoriteFirestoreId
+        || heartSnapshot?.musicNoteFavoriteId
+        || currentSongBeforeToggle?.favoriteFirestoreId
         || currentSongBeforeToggle?.musicNoteFavoriteId
         || activeFavoriteBeforeToggle?.firestoreId
         || activeFavoriteBeforeToggle?.id

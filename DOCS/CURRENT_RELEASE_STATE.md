@@ -1,3 +1,85 @@
+## 0LM. app280 Music Note 해제 후 재접속 시 곡 부활 원인 수정 (2026-10-01 KST)
+
+사용자 실사용에서 새로 확인된 핵심:
+- `스쳐간 이름 뒤에`만의 legacy identity 문제가 아니었음.
+- 해당 곡을 삭제한 뒤에도 상단 기존 곡 여러 개가 저장 해제 직후에는 사라지지만 PC/모바일 재접속 시 다시 살아나는 현상 확인.
+- 사용자 화면에서 동일한 4곡이 반복적으로 살아남아 “하드코딩처럼” 보이는 상태였음.
+
+실제 원인:
+- 최근생성곡 하트 해제는 Firestore `favorites/{id}`에 `favoriteRemoved:true / saved:false`를 정상 기록하고 현재 화면/로컬 favorites 목록에서도 제거하고 있었음.
+- 그러나 Music Note 전체 Catalog는 **부분 UI 목록의 단순 부재를 삭제로 해석하지 않도록 안전 설계**되어 있음.
+- 해제 경로가 해당 문서 ID를 Catalog의 명시적 `deletedIds`로 넘기지 않아, R2/IndexedDB Catalog에는 해제 전 saved row가 계속 남아 있었음.
+- 재접속 시 Catalog가 다시 authoritative bootstrap으로 들어오면서 그 stale row가 화면과 최근생성곡 하트 상태를 재생성함.
+- 기존 permanent-delete에는 tombstone이 있었지만 soft unsave에는 없었던 것이 핵심 누락.
+- 따라서 app278/app279에서 곡 identity를 계속 조정해도 “해제 후 재접속 부활” 자체는 해결되지 않았음.
+
+app280 수정:
+1. **unsave도 Catalog 제외 tombstone으로 기록**
+   - canonical Firestore unsave 성공 후 해당 favorite 문서 ID를 로컬 tombstone set에 기록.
+   - 그 즉시 `writeFavoritesCache`가 기존 Catalog delta의 `deletedIds`에 해당 ID를 포함.
+   - 전체 Music Note 재조회/재생성 없음. 바뀐 한 문서 ID만 제거 대상으로 전달.
+2. **재접속 즉시 부활 차단**
+   - 기존 Music Note Catalog hydration이 이미 local tombstone을 필터링하고 있었으므로, app280에서는 soft unsave도 같은 guard를 사용.
+   - Catalog/R2 flush 전에 같은 기기에서 재접속해도 stale row를 화면에 다시 올리지 않음.
+3. **PC↔모바일 수신기에도 tombstone 저장**
+   - RTDB changed-item `unsave / permanent-delete / bulk-delete` 수신 시 exact document ID만 로컬 tombstone에 기록.
+   - 상대 기기 Firestore read/write 추가 없음.
+   - 상대 기기 역시 재접속 후 stale Catalog row가 부활하지 않음.
+4. **재저장/복원 보호**
+   - 같은 문서를 나중에 명시적으로 save/restore하면 해당 ID tombstone을 먼저 해제.
+   - 따라서 한번 해제한 곡이 영구적으로 저장 불가능해지는 문제 없음.
+5. **기존 비용/기능 보호**
+   - unsave canonical Firestore W1 구조 유지. 추가 Firestore read/write 없음.
+   - Catalog는 기존 page-sync delta 구조 재사용. 전체 scan/rebuild 없음.
+   - 공유노트 app278, recent identity app279, Explore public like app164/Worker195 동결 영역 비변경.
+   - 사용자 데이터 migration/backfill/delete 없음.
+
+변경 파일:
+- `src/App.tsx`
+- `public/app-version.json`: 280
+- `scripts/verify-279-legacy-recent-heart.mjs`: 후속 버전 보호검사 허용.
+- `scripts/verify-280-music-note-resurrection.mjs` 추가.
+
+검증:
+- 제품 코드 commit: `88c6ce956ba5fabb7a6741c12a827d282793e922`.
+- 최초 focused audit `36808340531`: **FAIL**.
+  - 제품 코드 실패가 아니라 verifier가 remote fast-path 뒤의 legacy fallback `getDocs`까지 같이 검사한 범위 오류.
+  - verifier 범위만 exact changed-item fast path로 좁혀 재실행.
+- 최종 Focused Audit Run `36808471976`: **SUCCESS**.
+  - app280 unsave Catalog tombstone PASS.
+  - same-device re-entry resurrection guard PASS.
+  - remote-device resurrection guard PASS.
+  - save/restore tombstone clear PASS.
+  - additional Firestore I/O 0 PASS.
+  - app279/app278 protected verifiers PASS.
+  - Recent Songs regression PASS.
+  - shared-note app273/app274 regressions PASS.
+  - TypeScript PASS.
+  - Build PASS.
+- 완료된 app280 임시 audit workflow/trigger 제거 완료.
+
+PREVIEW 배포:
+- release trigger commit: `34d1434d333137ffcb8ba84c437ede84403d3538`.
+- Firebase PREVIEW App Run `36808630013`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app version **280** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- RTDB Rules 배포 SKIPPED.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 원본 migration/backfill/delete 없음.
+
+실사용 확인:
+1. PC/모바일 모두 PREVIEW app280 확인.
+2. CACHE LIVE 초기화.
+3. 현재 계속 살아나는 기존 곡 중 한 곡을 최근생성곡 하트에서 해제.
+4. 즉시 Music Note에서 빠지고 상대 기기에서도 해제되는지 확인.
+5. 다른 페이지 이동 후 복귀 또는 새로고침/재접속 후에도 **다시 살아나지 않아야 PASS**.
+6. 나머지 살아나는 곡들도 한 번씩 해제하면 동일하게 영구 해제되어야 함.
+7. 이후 그중 한 곡을 다시 저장하면 정상적으로 다시 나타나고 재접속 후에도 저장 상태 유지되어야 함.
+8. 수신 기기 Firestore R0/W0, idle R/W0 유지.
+9. TEST 승격은 사용자 실기기 PASS 후에만 가능.
+
 ## 0LL. app279 특정 legacy 최근생성곡 실사용 재검증 FAIL — 추가 구조 수정 중단 후보 (2026-10-01 KST)
 
 사용자 실사용:

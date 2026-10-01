@@ -1,3 +1,68 @@
+## CURRENT TASK — PREVIEW 비용 최적화: 실시간 UX와 canonical Firestore write 분리 (2026-10-02 KST)
+
+목표:
+- 사용자 영상에서 확인된 반복 write 폭증을 줄인다.
+- 즉시 로컬 반응과 PC↔모바일 자동 동기화는 유지한다.
+- app289 Music Note heart 정상 기준과 Explore app164/Worker195 동결 기준을 깨지 않는다.
+- TEST / PRODUCTION 변경 금지.
+
+실측 문제:
+- Studio 하트 반복 토글 10회 → `favorites:write 10`.
+- Recent title/prompt/lyrics 수정 저장 3회 → `user_recent_songs:write 3 + users:write 3 = Firestore W6`.
+- 현재 `saveRecentSongEdit()`가 `queueRecentSongTextWrite()` 직후 `flushRecentSongTextWrite()`를 호출.
+- `persistRecentSongsDocument()`은 aggregate document W1 + `users.syncVersions.recentSongs` W1이라 편집 저장 1회당 W2.
+- Music Note Detail title/prompt/lyrics에는 이미 local draft/page-exit flush + RTDB preview 구조가 있으므로 이 정상 batch는 보존. 실제 필드 저장마다 Firestore 증가 경로가 있다면 원인을 따로 찾아 최소 수정.
+
+구현 원칙:
+1. **Recent title/prompt/lyrics**
+   - UI/local cache 즉시.
+   - RTDB changed-item preview로 반대 기기 즉시 반영.
+   - canonical Firestore는 trailing 60초 또는 dirty page-exit 1회로 collapse.
+   - 60초 안 같은 곡의 여러 수정은 마지막 payload만 저장.
+   - 현재 aggregate 구조를 유지한다면 batch flush 1회 비용은 최대 `user_recent_songs W1 + users syncVersion W1 = W2`.
+   - 같은 변경을 되돌려 baseline과 같아지면 net-zero canonical W0.
+   - pending edit는 in-memory ref만 믿지 말고 durable local draft/outbox로 재접속 후 복구 가능해야 함.
+2. **Studio Music Note save heart**
+   - 클릭 즉시 local heart authority 갱신.
+   - same-account PC↔mobile은 existing UID RTDB changed-item channel을 이용해 즉시/짧은 debounce로 수렴.
+   - canonical `favorites` save/unsave는 30초 trailing per-song outbox로 final desired state만 commit.
+   - 같은 곡 rapid toggle은 마지막 상태 하나로 collapse. 시작 상태와 최종 상태가 같으면 Firestore W0.
+   - canonical flush 실패 시 durable local intent를 유지하고 bounded retry. 무한 retry/polling 금지.
+   - app289 exact favorite id, recent immutable identity, compact oversized payload fallback, ACK ordering을 그대로 보호.
+3. **Music Note Detail**
+   - 기존 local draft + page-exit canonical flush를 우선 보호.
+   - title/prompt/lyrics에서 field-save마다 `favorites` write가 실제 생기는 우회 경로가 있는지 verifier/runtime audit.
+   - 있으면 그 우회만 제거하고 existing draft/RTDB preview 경로로 통일.
+4. 페이지 이동/idle/app update 자체는 write 0. 단 pending user change가 있을 때만 bounded flush 허용.
+5. receiver는 preview signal 수신만으로 Firestore/D1 read/write 0.
+6. 전체 favorites/recent scan/rebuild 금지. 사용자 데이터 migration/backfill/delete 없음.
+7. UI/CSS/분할바/생성바/Explore public like 변경 금지.
+
+필수 검증:
+- rapid heart 10회:
+  - 로컬 UI 즉시 반응.
+  - 반대 기기 자동 반영.
+  - 30초 window 최종 상태가 시작과 같으면 favorites W0 목표.
+  - 최종 상태가 다르면 favorites W1 목표.
+- Recent title→prompt→lyrics 3회:
+  - 반대 기기 각 변경 자동 반영.
+  - canonical Firestore는 batch 최종 W2 이하.
+  - 세 번 각각 W2가 발생하면 FAIL.
+- Music Note Detail title/prompt/lyrics 3회:
+  - field save 동안 canonical favorites 반복 write 금지.
+  - pending changes page exit/60s policy에 따라 1회 collapse.
+- pending 상태에서 reload/crash recovery.
+- 동시 PC/mobile edit ordering에서 오래된 signal이 최신 local intent를 덮지 않음.
+- app289 문제곡 `스쳐간 이름 뒤에` SAVE/UNSAVE 양방향 회귀 없음.
+- 정상 Recent Song 1개 heart 회귀 없음.
+- TypeScript / Build / focused tests PASS.
+- PREVIEW만 배포, TEST/PRODUCTION unchanged.
+
+중단 조건:
+- app289 live heart를 깨야만 비용을 줄일 수 있는 구조면 구현 중단 후 보고.
+- canonical batch를 위해 destructive schema migration/전체 backfill이 필요하면 중단.
+- 같은 계정 PC/mobile 동시 변경에서 데이터 손실 가능성을 해소할 수 없으면 임의 구현 금지.
+
 ## CURRENT TASK — app289 사용자 실기기 PASS / Music Note heart live-sync 동결 (2026-10-02 KST)
 
 상태:

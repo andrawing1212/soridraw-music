@@ -12188,15 +12188,60 @@ const unlockAllFavorites = async () => {
       if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
 
       const currentSong = currentHistory[targetIndex] as any;
+      const incomingApplied = incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
+        ? incoming.appliedKeywords as Record<string, any>
+        : null;
+      let mergedAppliedKeywords = incomingApplied
+        ? { ...(currentSong.appliedKeywords || {}), ...incomingApplied }
+        : currentSong.appliedKeywords;
+
+      if (
+        incoming.__recentSongEditPreview === true
+        && incoming.lyrics
+        && typeof incoming.lyrics === 'object'
+      ) {
+        // app291 — Studio renders lyrics from appliedKeywords.lyricsByLanguage first.
+        // The compact edit preview already carries the freshly edited top-level
+        // korean/secondary lyrics, so mirror those two strings into the local
+        // language map on the receiving device. This is local-only: no extra RTDB
+        // payload and no Firestore read/write are added.
+        const currentApplied = (currentSong.appliedKeywords || {}) as Record<string, any>;
+        const currentLanguages = Array.isArray(mergedAppliedKeywords?.lyricLanguages)
+          ? mergedAppliedKeywords.lyricLanguages.filter(Boolean)
+          : Array.isArray(currentApplied.lyricLanguages)
+            ? currentApplied.lyricLanguages.filter(Boolean)
+            : [];
+        const secondaryLanguage = String(
+          incomingApplied?.secondaryLanguage
+          || mergedAppliedKeywords?.secondaryLanguage
+          || currentLanguages.find((lang: string) => lang !== 'ko')
+          || 'en',
+        ).trim() || 'en';
+        const nextLyricsByLanguage: Record<string, string> = {
+          ...((mergedAppliedKeywords?.lyricsByLanguage && typeof mergedAppliedKeywords.lyricsByLanguage === 'object')
+            ? mergedAppliedKeywords.lyricsByLanguage
+            : {}),
+        };
+        if (typeof incoming.lyrics.korean === 'string') {
+          nextLyricsByLanguage.ko = incoming.lyrics.korean;
+        }
+        if (typeof incoming.lyrics.english === 'string') {
+          nextLyricsByLanguage[secondaryLanguage] = incoming.lyrics.english;
+        }
+        mergedAppliedKeywords = {
+          ...(mergedAppliedKeywords || {}),
+          secondaryLanguage,
+          lyricsByLanguage: nextLyricsByLanguage,
+        };
+      }
+
       const merged = normalizeFavoriteTitleFields({
         ...currentSong,
         ...incoming,
         lyrics: incoming.lyrics && typeof incoming.lyrics === 'object'
           ? { ...(currentSong.lyrics || {}), ...(incoming.lyrics || {}) }
           : currentSong.lyrics,
-        appliedKeywords: incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
-          ? { ...(currentSong.appliedKeywords || {}), ...(incoming.appliedKeywords || {}) }
-          : currentSong.appliedKeywords,
+        appliedKeywords: mergedAppliedKeywords,
       } as SongResult) as SongResult;
       const nextHistory = currentHistory.map((song, index) => index === targetIndex ? merged : song);
       historyRef.current = nextHistory;

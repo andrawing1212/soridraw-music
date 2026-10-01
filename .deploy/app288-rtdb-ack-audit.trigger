@@ -1,4 +1,0 @@
-app288-rtdb-ack-version-audit
-base=a79b8fe53eb56e59a22ba23a2532a7967f54d6ee
-no_deploy=true
-no_user_data_migration=true

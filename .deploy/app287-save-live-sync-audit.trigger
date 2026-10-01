@@ -2,3 +2,4 @@ app287-idempotent-save-live-sync-audit
 base=0a84c6ea76c36a10184235ce713840671201528d
 no_deploy=true
 no_user_data_migration=true
+rerun=2

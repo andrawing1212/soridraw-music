@@ -1,3 +1,111 @@
+## 0LU. PREVIEW app286 배포 완료 — 하트 표시 방향과 실제 저장/해제 명령을 하나의 기준으로 통합 (2026-10-02 KST)
+
+**사용자 실기기 판정**
+- app285도 `스쳐간 이름 뒤에` PC↔모바일 하트 동기화 FAIL.
+- 실제 증상:
+  - A에서 저장해도 B 화면은 빈 하트 유지.
+  - 그 상태에서 B가 "저장" 의도로 빈 하트를 누르면 B는 그대로 빈 하트이고 A의 저장이 해제됨.
+  - 반대 방향도 동일.
+- 즉 두 기기가 단순히 늦게 동기화되는 수준이 아니라 **보이는 하트 방향과 실제 실행되는 mutation 방향이 서로 달라진 상태**였음.
+
+**app285 이후 read-only 재진단**
+- 진단 Run `36902514549`: SUCCESS / Firestore write 0 / delete 0 / RTDB write 0.
+- 최신 실제 unsave RTDB signal:
+  - operation=`unsave`
+  - exact favorite document id 존재
+  - itemJson 길이 517
+  - generationBatchId+generationIndex / soridrawSongId / recentSongSyncKey 모두 포함
+- 따라서 app285의 "unsave 신호에 곡 identity가 빠지는 문제"는 실제로 해결됐음.
+- 그런데 사용자 증상은 계속됐으므로 전송층이 아니라 **클라이언트 상태 판정과 click mutation 판정이 서로 다른 기준을 쓰는 문제**로 좁혀짐.
+
+**추가로 확인된 구조적 원인 — 다른 곡에서도 재발 가능했던 부분**
+1. Music Note의 "현재 저장 상태"를 판단하는 코드가 서로 달랐음.
+   - Catalog / List Bundle은 `saved:false`, `favoriteRemoved:true`, hidden/delete 같은 **현재 플래그**를 기준으로 판단.
+   - App / FavoritesStore 일부 경로는 과거의 `unlikedAt / unsavedAt / favoriteRemovedAt` timestamp가 하나라도 남아 있으면 제거 상태로 판단.
+2. 실제 정상 비교 곡에서도 `saved:true / favoriteRemoved:false`인데 과거 `unlikedAt / unsavedAt` timestamp가 남아 있는 레코드가 확인됐음.
+3. 그래서 같은 레코드를 한 경로에서는 "저장됨", 다른 경로에서는 "저장 해제됨"으로 볼 수 있었음.
+4. Studio 하트 버튼은 화면에서 보이는 상태로 명령을 결정하지 않고, click 안에서 다시 local/server favorite 존재 여부를 조회해 toggle 방향을 재판정하고 있었음.
+5. 그 결과 B 화면은 빈 하트라 사용자는 "저장"을 눌렀는데, server 조회에서 A가 방금 저장한 active favorite를 발견하면 내부 코드는 이를 "이미 저장됨 → 해제"로 뒤집어 실행할 수 있었음.
+6. 사용자가 보고한 "양 방향으로 서로 반대를 바라보는 느낌"과 정확히 일치.
+
+**app286 수정 — 한 기준으로 통합**
+- 신규 공통 판정 `src/lib/musicNoteSavedState.ts` 추가.
+- 현재 상태 우선순위:
+  1. `favoriteRemoved:true / saved:false / hidden / deleted` → 제거 상태.
+  2. `saved:true / favoriteRemoved:false` → **현재 저장 상태**. 과거 unlikedAt/unsavedAt timestamp가 남아 있어도 저장 상태를 뒤집지 않음.
+  3. 명시 현재 플래그가 없는 오래된 legacy record에서만 과거 timestamp를 fallback으로 사용.
+- App / FavoritesStore / User Data Catalog / List Bundle이 모두 같은 판정 함수를 사용하도록 통일.
+- Recent Song별 작은 로컬 heart authority를 immutable `buildRecentSongSyncKey`로 유지.
+  - 상대 기기 RTDB save/unsave가 오면 Recent cache 매칭보다 먼저 최신 filled/empty 상태를 기록.
+  - 따라서 오래된 duplicate나 stale Recent row가 있어도 열린 Studio 하트는 최신 신호 방향을 우선 표시.
+  - localStorage의 작은 상태 캐시만 사용하며 서버 read/write 없음.
+- Studio 하트 클릭은 이제 UI에서 결정된 `intendedAction = save | unsave`를 mutation 함수에 명시 전달.
+  - 빈 하트 click은 끝까지 SAVE.
+  - 꽉찬 하트 click은 끝까지 UNSAVE.
+  - server/cache에서 반대 상태를 발견해도 명령 방향을 뒤집지 않음.
+- 상대 기기 save를 화면이 아직 못 따라온 극단적인 stale-cache 상황에서 사용자가 빈 하트를 누르더라도, 더 이상 상대 저장을 해제하지 않고 idempotent SAVE로 수렴.
+- filled 상태인데 active row가 local cache에 없더라도 RTDB authority가 들고 있는 exact favorite id로 Firestore read 없이 정확한 UNSAVE W1 실행.
+- 기존 duplicate 문서 자동삭제/병합 없음.
+- Explore public like / 제목 동기화 / Suno URL / 공유노트 / Music Note 60초 상세 batch 비변경.
+
+**비용**
+- 상대 기기 RTDB 수신: Firestore R0/W0.
+- 추가 RTDB mutation: 0. 기존 UID Music Note signal 재사용.
+- local heart authority: 기기 localStorage만 사용.
+- 실제 save/unsave: canonical favorite 최대 W1.
+- 과거에 잃어버린 Recent exact link를 실제 heart action에서 처음 복구하는 경우에만 기존 app285 정책대로 `user_recent_songs` W1 1회 추가 가능 → 해당 repair action 최대 W2.
+- idle / 페이지 이동 / 앱 업데이트로 추가 Firestore/D1 R/W 없음.
+- D1 추가 R/W 0.
+
+**검증**
+- read-only 진단 Run `36902514549`: SUCCESS.
+- 첫 app286 audit은 기존 app280 정적 검사가 새 mutually-exclusive exact UNSAVE branch를 인식하지 못해 FAIL. TypeScript/Build는 PASS였고 제품 오류가 아닌 verifier 기대값(2 branches) 문제였음.
+- app280 verifier를 "기존 2개 + app286 exact-id branch 1개, runtime에서는 상호배타적 W1"로 갱신.
+- 최종 Focused Audit Run `36904280495`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app278~app285 regression PASS.
+  - APP286_SHARED_SAVED_STATE_AUTHORITY PASS.
+  - APP286_REMOTE_HEART_AUTHORITY_BEFORE_CACHE_MATCH PASS.
+  - APP286_UI_DIRECTION_EQUALS_MUTATION_DIRECTION PASS.
+  - APP286_STALE_CACHE_UNSAVE_EXACT_W1 PASS.
+  - APP286_REMOTE_RECEIVER_FIRESTORE_R0 PASS.
+  - APP286_DUPLICATE_ROW_CANNOT_REVERSE_HEART_DIRECTION PASS.
+  - Recent Songs 196 regression PASS.
+- 임시 diagnostic/audit workflow/trigger 제거 완료.
+
+**PREVIEW 배포**
+- locked release commit: `fcf733dbe6dfb165e62af01dcd56ad08f698bf65`.
+- Firebase PREVIEW App Run `36904602856`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules: SKIPPED.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` app **286**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+- 사용자 데이터 delete / bulk migration / backfill 없음.
+
+**실기기 확인**
+1. PC/모바일 둘 다 app286.
+2. `스쳐간 이름 뒤에` 양쪽 상태가 다르면 한쪽에서 한 번 저장 또는 해제.
+3. 상대 기기 하트가 페이지 이동/새로고침 없이 같은 방향으로 즉시 수렴하는지 확인.
+4. A 저장 → B filled.
+5. B 해제 → A empty.
+6. A 해제 상태에서 B 저장 → A filled.
+7. 양쪽에서 번갈아 3~4회 눌러도 항상 같은 방향으로 움직이는지 확인.
+8. 일반 정상 최근곡 1개도 같은 순서로 회귀 없음 확인.
+9. 양쪽 새로고침/재접속 후 마지막 상태 동일.
+10. 제목 변경/복원 app282 기능 정상.
+11. 수신 기기 Firestore R0/W0, D1 R0/W0.
+12. 동일 곡에서 click 한 번이 반대 방향 mutation으로 뒤집히면 즉시 FAIL.
+
+**상태**
+- PREVIEW app286 코드/감사/배포 완료.
+- 사용자 실기기 검증 전.
+- TEST / PRODUCTION 비변경.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## 0LT. PREVIEW app285 배포 완료 — 저장/해제 시 같은 곡 identity 유지, duplicate 상태에서도 양 기기 exact-link 수렴 (2026-10-02 KST)
 
 **사용자 실사용 판정**

@@ -1,0 +1,98 @@
+name: SORIDRAW app289 Compact Heart Sync Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app289-compact-heart-audit.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 02885b65120a4d11e5553d8dc6a3a920d77afe63
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scope guard
+        run: |
+          git diff --name-only 2c3dcabb649fb90811bb914e5bf5345488e47931..02885b65120a4d11e5553d8dc6a3a920d77afe63 | sort > /tmp/changed.txt
+          cat >/tmp/allowed.txt <<'EOF'
+          public/app-version.json
+          scripts/verify-288-rtdb-ack-version-domain.mjs
+          scripts/verify-289-music-note-compact-heart-sync.mjs
+          src/App.tsx
+          src/services/userDomainSyncService.ts
+          EOF
+          sort -o /tmp/allowed.txt /tmp/allowed.txt
+          echo "Changed files:"
+          cat /tmp/changed.txt
+          test -z "$(comm -23 /tmp/changed.txt /tmp/allowed.txt)"
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Music Note focused regression
+        run: |
+          node scripts/verify-277-music-note-sync-cost.mjs
+          node scripts/verify-278-music-note-cross-device.mjs
+          node scripts/verify-279-legacy-recent-heart.mjs
+          node scripts/verify-280-music-note-resurrection.mjs
+          node scripts/verify-281-suno-url-cross-device.mjs
+          node scripts/verify-282-title-cross-device.mjs
+          node scripts/verify-283-legacy-recent-heart.mjs
+          node scripts/verify-284-recent-heart-linked-authority.mjs
+          node scripts/verify-285-save-unsave-same-identity.mjs
+          npx tsx scripts/verify-286-heart-direction-authority.ts
+          node scripts/verify-287-save-live-sync.mjs
+          node scripts/verify-288-rtdb-ack-version-domain.mjs
+          node scripts/verify-289-music-note-compact-heart-sync.mjs
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-197-new-public-track-like.mjs
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Read-only target payload proof
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          admin.initializeApp({projectId:'soridraw-app-866a5'});
+          const db=admin.firestore(), TARGET='스쳐간 이름 뒤에', LIMIT=24000;
+          const KEYS=new Set(['uid','soridrawSongId','favoriteKey','recentSongSyncKey','recentLegacySourceId','recentLegacyCreatedAtMs','title','koreanTitle','englishTitle','genre','appliedKeywords','searchTokens','isLocked','liked','isLiked','personalLiked','favoriteLiked','isFavorite','isPublic','exploreTrackId','explorePublicationId','hidden','favoriteHidden','favoriteRemoved','favoriteRemovedAt','saved','deletedAt','trashedAt','color','favoriteColor','noteColor','folderId','folderIds','musicNoteFolderIds','noteFolderId','noteFolderTitle','noteFolderUpdatedAt','myNoteFolderId','favoriteFolderId','sharedNoteFolderId','sharedNoteFolderTitle','sharedNoteFolderUpdatedAt','sharedNoteFolder','noteSharedFolderId','sharedNoteShareId','isSharedMusicNote','sharedReadOnly','sourceType','originalFavoriteId','createdAtMs','createdAt','updatedAtMs','updatedAt','sunoLinks','sunoShareLinks','mainSunoIndex','sunoShareUrl','sunoUrl','sunoSongUrl','sunoTitle','sunoCoverUrl','sunoImageUrl','sunoArtworkUrl','sunoDurationSeconds','sunoDurationText','sunoShareUrlUpdatedAt','sunoCoverFetchedAt','audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl','imageUrl','image_url','coverUrl','thumbnailUrl','sunoAudioUrl','creatorNickname','ownerNickname','ownerUid','nickname']);
+          const toMs=v=>!v?0:typeof v.toMillis==='function'?v.toMillis():typeof v.seconds==='number'?v.seconds*1000:Number(v)||0;
+          const clean=(v,d=0)=>{if(v===undefined)return undefined;if(v===null||typeof v==='string'||typeof v==='boolean')return v;if(typeof v==='number')return Number.isFinite(v)?v:undefined;if(typeof v?.toMillis==='function')return v.toMillis();if(Array.isArray(v))return v.map(x=>clean(x,d+1)).filter(x=>x!==undefined);if(typeof v!=='object'||d>10)return undefined;const o={};for(const [k,x] of Object.entries(v)){const c=clean(x,d+1);if(c!==undefined)o[k]=c;}return o;};
+          const project=(x,id)=>{const src={...x,id,firestoreId:id,hidden:false,favoriteHidden:false,favoriteRemoved:false,favoriteRemovedAt:null,unlikedAt:null,unsavedAt:null,deletedAt:null,trashedAt:null,saved:true};const p={id,firestoreId:id,createdAtMs:Number(src.createdAtMs||0)||toMs(src.createdAt)||Number(src.updatedAtMs||0)||toMs(src.updatedAt),__catalogSummary:true};for(const k of KEYS){if(!(k in src))continue;const c=clean(src[k]);if(c!==undefined)p[k]=c;}return p;};
+          (async()=>{
+            const [a,b]=await Promise.all([
+              db.collection('favorites').where('title','==',TARGET).limit(20).get(),
+              db.collection('favorites').where('koreanTitle','==',TARGET).limit(20).get()
+            ]);
+            const m=new Map();[...a.docs,...b.docs].forEach(d=>m.set(d.id,d));
+            const rows=[...m.values()]; if(!rows.length) throw new Error('target not found');
+            const proof=rows.map(d=>{
+              const source=d.data(), full=project(source,d.id);
+              const applied=source.appliedKeywords&&typeof source.appliedKeywords==='object'?source.appliedKeywords:{};
+              const batch=String(applied.generationBatchId||'').trim();
+              const idx=Math.floor(Number(applied.generationIndex||0));
+              const compact={...full,__musicNoteCompactActiveSync:true,appliedKeywords:batch&&idx>0?{generationBatchId:batch,generationIndex:idx}:null};
+              const fullLength=JSON.stringify(full).length, compactLength=JSON.stringify(compact).length;
+              if(fullLength<=LIMIT) throw new Error('expected oversized target');
+              if(compactLength>LIMIT) throw new Error('compact target still oversized');
+              return {fullLength,compactLength,passes:compactLength<=LIMIT};
+            });
+            console.log(JSON.stringify({safety:{firestoreWrites:0,firestoreDeletes:0,rtdbWrites:0},proof},null,2));
+            await admin.app().delete();
+          })().catch(async e=>{console.error(e?.stack||e);try{await admin.app().delete()}catch{}process.exit(1)});
+          NODE

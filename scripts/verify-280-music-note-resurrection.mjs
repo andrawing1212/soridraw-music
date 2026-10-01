@@ -22,13 +22,13 @@ assert.ok(app.includes(bundleMarker), 'catalog hydration tombstone filter missin
 assert.match(app, /!localDeletedIds\.has\(favoriteId\)/);
 
 const remoteStart = app.indexOf('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback');
-const remoteEnd = app.indexOf('  useEffect(() => {', remoteStart);
-assert.ok(remoteStart >= 0 && remoteEnd > remoteStart, 'remote Music Note sync block missing');
-const remote = app.slice(remoteStart, remoteEnd);
-assert.match(remote, /if \(isRemovalOperation\) \{\s*rememberFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
-assert.match(remote, /normalizedOperation === 'save'/);
-assert.match(remote, /forgetFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
-assert.doesNotMatch(remote, /getDoc\(|getDocs\(/);
+const remoteFastEnd = app.indexOf('// Signals without exact ids are legacy/bulk fallback only.', remoteStart);
+assert.ok(remoteStart >= 0 && remoteFastEnd > remoteStart, 'remote Music Note fast path missing');
+const remoteFast = app.slice(remoteStart, remoteFastEnd);
+assert.match(remoteFast, /if \(isRemovalOperation\) \{\s*rememberFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
+assert.match(remoteFast, /normalizedOperation === 'save'/);
+assert.match(remoteFast, /forgetFavoriteDeletedTombstones\(uid, exactDocumentIds\)/);
+assert.doesNotMatch(remoteFast, /getDoc\(|getDocs\(/);
 
 const toggleStart = app.indexOf('  const toggleFavorite = async (song: SongResult');
 const toggleEnd = app.indexOf('  const updateFavorite = async', toggleStart);

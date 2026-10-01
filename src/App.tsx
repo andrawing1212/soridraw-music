@@ -1069,6 +1069,7 @@ import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
+import { isMusicNoteItemRemoved } from './lib/musicNoteSavedState';
 import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
@@ -5375,13 +5376,7 @@ function App() {
   const favoritePaginationFallbackModeRef = useRef(false);
   const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
   const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
-  const isFavoriteSoftRemoved = (favorite: any) => Boolean(
-    favorite?.favoriteRemoved === true
-    || favorite?.saved === false
-    || favorite?.favoriteRemovedAt
-    || favorite?.unlikedAt
-    || favorite?.unsavedAt
-  );
+  const isFavoriteSoftRemoved = (favorite: any) => isMusicNoteItemRemoved(favorite);
 
   const sortFavoriteList = (list: any[]) => {
     return [...list].sort((a: any, b: any) => {

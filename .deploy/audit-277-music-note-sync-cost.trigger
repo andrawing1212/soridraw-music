@@ -1,9 +1,0 @@
-requested_at=2026-10-01T08:55:00+09:00
-requested_by=user
-target=app277
-scope=music_note_recent_heart_shared_note_cross_device_cost
-typescript=true
-build=true
-remote_changed_item_firestore_read_required=0
-legacy_user_sync_firestore_write_required=0
-favorite_count_batch_ms=30000

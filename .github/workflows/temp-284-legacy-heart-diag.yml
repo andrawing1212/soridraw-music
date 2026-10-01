@@ -159,8 +159,10 @@ jobs:
               },
               reports,
             }, null, 2));
-          })().catch(err => {
+            await admin.app().delete();
+          })().catch(async err => {
             console.error(err?.stack || err);
+            try { await admin.app().delete(); } catch {}
             process.exit(1);
           });
           NODE

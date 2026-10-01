@@ -9828,22 +9828,32 @@ const toggleCycleVariantSelection = (
         || normalizedOperation === 'permanent-delete'
         || normalizedOperation === 'bulk-delete';
 
-      // app283 — A very old generated song can have different device-local
-      // favorite/soridraw ids on PC and mobile. The canonical Music Note mutation
-      // already emits one bounded RTDB changed-item signal, so use its optional
-      // legacy source bridge to converge the Recent Songs heart without any
-      // extra Firestore read/write or a second RTDB mutation.
+      // app285 — Save and unsave must identify the Recent Song the same way.
+      // Previously save carried the song identity, but modern unsave often carried
+      // only a favorite document id. With two historical favorite rows this let
+      // one device fall back to a different same-generation row until the next save.
+      // Keep the exact favorite link on both states, using the already-existing
+      // RTDB changed-item payload and zero Firestore reads on the receiver.
       const recentLegacySourceId = String(remoteItem?.recentLegacySourceId || '').trim();
       const recentLegacyCreatedAtMs = Number(remoteItem?.recentLegacyCreatedAtMs || 0);
-      const isLegacyRecentFavoriteLinkOperation = recentLegacySourceId && (
-        normalizedOperation === 'save'
-        || normalizedOperation === 'restore'
-        || normalizedOperation === 'update'
-        || isRemovalOperation
+      const remoteFavoriteId = String(
+        remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
+      ).trim();
+      const canPatchRecentFavoriteLink = Boolean(
+        remoteItem
+        && remoteFavoriteId
+        && (
+          normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'update'
+          || isRemovalOperation
+        )
       );
-      if (isLegacyRecentFavoriteLinkOperation) {
+      if (canPatchRecentFavoriteLink) {
         const currentHistory = historyRef.current;
         const targetIndex = currentHistory.findIndex((song: any) => {
+          if (isSameRecentSongSyncItem(song, remoteItem)) return true;
+          if (!recentLegacySourceId) return false;
           const sourceIdentity = getRecentSongSourceIdentity(song);
           if (!sourceIdentity.sourceId || sourceIdentity.sourceId !== recentLegacySourceId) return false;
           if (sourceIdentity.createdAtMs > 0 && recentLegacyCreatedAtMs > 0) {
@@ -9857,27 +9867,22 @@ const toggleCycleVariantSelection = (
           const nextSong = { ...currentSong } as any;
           const remoteRecentSongSyncKey = String(remoteItem?.recentSongSyncKey || '').trim();
           const remoteSoridrawSongId = String(remoteItem?.soridrawSongId || '').trim();
-          const remoteFavoriteId = String(
-            remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
-          ).trim();
 
           if (remoteRecentSongSyncKey) nextSong.recentSongSyncKey = remoteRecentSongSyncKey;
           if (isSoridrawSongId(remoteSoridrawSongId)) nextSong.soridrawSongId = remoteSoridrawSongId;
 
+          // Empty heart and filled heart are two states of the same exact Music
+          // Note identity. Never delete this link merely because the favorite was unsaved.
+          nextSong.favoriteFirestoreId = remoteFavoriteId;
+          nextSong.musicNoteFavoriteId = remoteFavoriteId;
+
           if (isRemovalOperation) {
-            if (nextSong.recentFavoriteIdentityHealedAt && remoteFavoriteId) {
-              nextSong.favoriteFirestoreId = remoteFavoriteId;
-              nextSong.musicNoteFavoriteId = remoteFavoriteId;
-            } else {
-              delete nextSong.favoriteFirestoreId;
-              delete nextSong.musicNoteFavoriteId;
+            if (recentLegacySourceId) {
+              nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
+                remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
+              );
             }
-            nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
-              remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
-            );
-          } else if (remoteFavoriteId) {
-            nextSong.favoriteFirestoreId = remoteFavoriteId;
-            nextSong.musicNoteFavoriteId = remoteFavoriteId;
+          } else {
             delete nextSong.recentFavoriteExplicitlyUnsavedAt;
             delete nextSong.recentFavoriteDetachedAt;
           }
@@ -14789,6 +14794,26 @@ ${normalizePromptForDisplay(result.prompt)}
         ? false
         : isSongFavorited(heartSnapshot);
 
+      // app285 — Keep the exact Music Note document identity even while the
+      // heart is empty. The broken song had two historical favorite documents;
+      // removing this link on unsave made each device fall back to a different
+      // same-generation row. A normal song keeps one stable Recent -> Music Note
+      // identity, so preserve or recover that exact id before the mutation.
+      const activeFavoriteBeforeToggle = wasDetachedBeforeToggle
+        ? null
+        : findBestMatchingFavorite(
+            favoritesStore.getFavorites(),
+            heartSnapshot,
+            buildFavoriteIdentityKey(heartSnapshot),
+          );
+      const favoriteLinkBeforeToggle = String(
+        currentSongBeforeToggle?.favoriteFirestoreId
+        || currentSongBeforeToggle?.musicNoteFavoriteId
+        || activeFavoriteBeforeToggle?.firestoreId
+        || activeFavoriteBeforeToggle?.id
+        || '',
+      ).trim();
+
       let linkedFavoriteId = '';
       let linkedFavoriteForRecentBridge: any = null;
       if (wasDetachedBeforeToggle) {
@@ -14867,13 +14892,22 @@ ${normalizePromptForDisplay(result.prompt)}
         }
 
         if (wasFavoritedBeforeToggle) {
-          // Once a legacy row is healed, keep its exact favorite document id as
-          // the durable identity anchor even while the favorite itself is unsaved.
-          if (!nextCommittedSong.recentFavoriteIdentityHealedAt) delete nextCommittedSong.favoriteFirestoreId;
+          // app285 — Empty heart is a state, not a new song identity.
+          // Preserve the exact linked favorite document across unsave so the next
+          // save cannot jump to an older duplicate with the same generation key.
+          if (favoriteLinkBeforeToggle) {
+            nextCommittedSong.favoriteFirestoreId = favoriteLinkBeforeToggle;
+            nextCommittedSong.musicNoteFavoriteId = favoriteLinkBeforeToggle;
+          } else {
+            delete nextCommittedSong.favoriteFirestoreId;
+            delete nextCommittedSong.musicNoteFavoriteId;
+          }
         } else if (linkedFavoriteId) {
           nextCommittedSong.favoriteFirestoreId = linkedFavoriteId;
+          nextCommittedSong.musicNoteFavoriteId = linkedFavoriteId;
         } else {
           delete nextCommittedSong.favoriteFirestoreId;
+          delete nextCommittedSong.musicNoteFavoriteId;
         }
 
         const nextCommittedHistory = historyRef.current.map((song, index) =>
@@ -14939,6 +14973,26 @@ ${normalizePromptForDisplay(result.prompt)}
               syncItem: nextCommittedSong,
             };
             await flushRecentSongTextWrite();
+          } else {
+            const favoriteLinkAfterToggle = String(
+              nextCommittedSong.favoriteFirestoreId || nextCommittedSong.musicNoteFavoriteId || '',
+            ).trim();
+            if (favoriteLinkAfterToggle && favoriteLinkAfterToggle !== String(
+              currentSongBeforeToggle?.favoriteFirestoreId || currentSongBeforeToggle?.musicNoteFavoriteId || '',
+            ).trim()) {
+              // app285 one-time identity repair. Persist only when this device had
+              // lost the exact link and the real heart mutation resolved it.
+              // This is W1 once for user_recent_songs, never a page-entry/read repair.
+              recentSongTextWritePendingRef.current = {
+                uid: user.uid,
+                songs: nextCommittedHistory,
+                operation: 'pre-favorite-edit',
+                mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+                mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+                syncItem: nextCommittedSong,
+              };
+              await flushRecentSongTextWrite();
+            }
           }
         }
       }

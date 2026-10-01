@@ -1,3 +1,17 @@
+## CURRENT TASK — app289 사용자 실기기 PASS / Music Note heart live-sync 동결 (2026-10-02 KST)
+
+상태:
+- 사용자 실기기 확인: app289 문제곡 `스쳐간 이름 뒤에` PC↔모바일 SAVE/UNSAVE 즉시 동기화 정상.
+- app289을 현재 Music Note heart live-sync 정상 기준으로 동결.
+- 별도 오류 보고가 없으면 이 경로 추가 수정 금지.
+- 정상곡 기존 payload, UNSAVE, 이름 변경, Explore public like, Music Note 60초 batch 보호.
+- TEST 승격은 사용자의 별도 지시 전까지 진행하지 않음.
+
+다음:
+- 새로운 사용자 지시를 기다린다.
+- 후속 작업이 좋아요/동기화와 무관하면 app289 경로를 건드리지 않는다.
+- 후속 작업이 관련 경로를 수정해야 할 경우 app289 실기기 PASS를 회귀 기준으로 먼저 고정한다.
+
 ## CURRENT TASK — app289 문제곡 SAVE/UNSAVE 양방향 실기기 최종 확인 (2026-10-02 KST)
 
 현재:

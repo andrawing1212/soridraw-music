@@ -1,3 +1,19 @@
+## 0MF. Music Note 저장곡 수 통계 batch 구조 유지 확정 (2026-10-02 KST)
+
+**사용자 결정**
+- 실제 저장/해제 곡 문서는 곡별 정확한 canonical 상태를 유지.
+- `users/{uid}.favoriteCount`는 파생 통계이므로 클릭마다 쓰지 않고 UID 단위 30초 delta batch를 유지.
+- 같은 30초 안 여러 곡 저장/해제는 `+1/-1` 변화량을 합산해 `users.favoriteCount`를 한 번만 갱신.
+- 합산 결과가 0이면 통계 write 0.
+- 이 통계값을 저장 제한/권한/결제 판정의 canonical 기준으로 사용하지 않음.
+
+**현재 실제 코드 확인**
+- `src/services/musicNoteFavoriteCountBatch.ts`에 이미 위 구조가 구현되어 있음.
+- UID별 단일 pending delta + 30초 trailing timer + localStorage 복구 구조.
+- 실제 canonical favorite 변경이 성공한 경우에만 `queueMusicNoteFavoriteCountDelta(uid, ±1)`를 호출.
+- 따라서 추가 기능 수정은 불필요하며 현재 구조를 정상 기준으로 동결.
+- UI/백엔드/데이터 구조 변경 없음. 배포 불필요.
+
 ## 0ME. PREVIEW app292 배포 완료 — Recent canonical batch 150초 + 다중곡 동작 확인 (2026-10-02 KST)
 
 **사용자 결정**

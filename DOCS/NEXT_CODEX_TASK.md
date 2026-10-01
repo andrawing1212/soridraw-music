@@ -1,3 +1,44 @@
+## CURRENT TASK — app279 legacy 최근곡 하트 양방향 최종 실사용 확인 (2026-10-01 KST)
+
+현재:
+- app278 공유노트 폴더 생성/곡 저장/곡 이동 사용자 PASS.
+- 일반 최근생성곡 PC↔모바일 하트 정상.
+- 특정 `스쳐간 이름 뒤에`만 device-local legacy identity가 갈려 app278 FAIL.
+- app279는 `generationBatchId + generationIndex`를 최우선 cross-device identity로 바꾸고 deterministic favorite doc도 같은 identity를 사용.
+- Focused Audit `36806408964` SUCCESS.
+- PREVIEW Release `36806515670` SUCCESS / app279 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+테스트 전:
+- PC/모바일 둘 다 app279 확인.
+- CACHE LIVE **초기화** 후 시작.
+- `스쳐간 이름 뒤에`는 먼저 둘 다 빈 하트 상태로 맞춘다.
+
+필수 테스트:
+1. 모바일 저장 → PC 하트 즉시 채움.
+2. 모바일 해제 → PC 즉시 해제.
+3. PC 저장 → 모바일 즉시 채움.
+4. PC 해제 → 모바일 즉시 해제.
+5. 일반 정상 곡 1개 같은 순서로 회귀 없음 확인.
+6. 수신 기기 CACHE LIVE에서 해당 remote replay 때문에 Firestore R/W가 증가하지 않아야 함.
+7. 아무 조작 없이 1분 대기 → Firestore/D1 반복 R/W 0.
+
+비용 해석 — 중요:
+- **실제 데이터 변경은 write가 올라가는 것이 정상**.
+- 최근생성곡 저장/해제: initiating device `favorites:write` canonical W1/행동.
+- 폴더 생성/이름/순서: `user_structures:write` canonical W1/실제 구조 변경.
+- 곡 폴더 이동/제거: 변경된 `favorites` 문서 write. batch는 네트워크 묶음이며 변경 곡 수만큼 원본 문서 write가 잡힘.
+- 문제로 보는 것은 **수신 동기화 때문에 추가 Firestore read/write**, 페이지 이동/idle만으로 추가 write, 또는 전체 favorites scan.
+- app278 사용자 캡처의 PAGE SYNC NOOP + D1 R0/W0 + Firestore R0/W0는 정상.
+- `favorites:getDocs 1`은 legacy initiating-device fallback 가능성이 있어 app279 재테스트에서 별도 관찰.
+
+보호:
+- app278 공유노트 폴더 구조/곡 이동 기능 동결.
+- 일반 최근생성곡 하트 동기화 정상 경로 동결.
+- public Explore like app164/Worker195 동결.
+- Music Note 상세 60초 묶음 저장 동결.
+- 사용자 실사용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app278 공유노트 구조/legacy 최근곡 하트 실사용 확인 (2026-10-01 KST)
 
 현재:

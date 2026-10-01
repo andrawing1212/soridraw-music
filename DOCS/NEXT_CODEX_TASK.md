@@ -1,3 +1,40 @@
+## CURRENT TASK — app282 제목/최근생성곡 PC↔모바일 실기기 최종 확인 (2026-10-02 KST)
+
+현재:
+- app281 Suno URL 1~4 사용자 실기기 PASS.
+- app282에서 Music Note 제목 변경은 RTDB changed-item 1곡 delta로 즉시 표시, canonical Firestore 60초/페이지 이탈 batch 유지.
+- 최근 생성곡 제목은 immutable recentSongSyncKey를 먼저 고정해 제목 변경 후에도 같은 곡 identity 유지.
+- 최근 생성곡의 '수정 저장'은 실제 사용자 변경이므로 user_recent_songs W1 1회로 확정하고, 상대 기기는 RTDB payload로 Firestore R0 즉시 반영.
+- 수정 후 빈 하트 저장은 기존 favorite를 해제하지 않고 현재 수정본을 저장/update.
+- Backend V2 Safety `36885082023` SUCCESS.
+- Focused Audit `36885111844` SUCCESS.
+- app version 282.
+- PREVIEW 배포 대기.
+
+배포 후 확인:
+1. Music Note 곡 제목 변경 저장 → 반대 기기 목록 제목이 페이지 이동 없이 즉시 변경.
+2. 반대 기기에서 같은 곡 상세를 열어둔 상태에서도 제목이 자동 반영.
+3. 최근 생성곡 A 제목 변경 → 반대 기기 최근 생성곡에 즉시 동일 제목 표시.
+4. A를 다시 원래 제목으로 변경 → 상대 기기도 다시 즉시 원복.
+5. 제목 변경 후 A 하트 저장 → 반대 기기 하트와 Music Note 저장 상태 즉시 반영.
+6. PC→모바일, 모바일→PC 양방향 모두 확인.
+7. 재접속/새로고침 뒤에도 제목과 저장 상태 유지.
+8. 수신 기기 Firestore R0/W0, D1 R0/W0.
+9. 변경 없이 idle/페이지 왕복은 추가 Firestore/D1 R/W 0.
+
+비용 합격선:
+- Music Note title explicit save: RTDB only + 기존 batch, 추가 canonical W0.
+- Recent title explicit save: initiating user_recent_songs W1, receiving R0/W0.
+- Edited recent heart save: 실제 원본 2개 변경이면 favorites W1 + user_recent_songs W1 허용, receiving R0/W0.
+- 전체 recent/favorites scan/query 금지.
+
+보호:
+- app281 Suno URL 정상 기능 동결.
+- app280 unsave resurrection guard 동결.
+- app278 공유노트 구조/카드 상태, app279 identity 정상 경로 보호.
+- Explore public like app164/Worker195 동결.
+- 사용자 실기기 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — PREVIEW app281 Suno URL cross-device 실기기 최종 확인 (2026-10-01 KST)
 
 배포 완료:

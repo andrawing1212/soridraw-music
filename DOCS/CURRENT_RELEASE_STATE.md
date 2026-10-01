@@ -1,3 +1,56 @@
+## 0LP. app282 제목 변경 PC↔모바일 즉시 동기화 + 최근생성곡 저장 단절 수정 / PREVIEW 배포 전 (2026-10-02 KST)
+
+**사용자 실사용**
+- app281 Suno URL 등록/해제 1~4번 실기기 테스트 PASS.
+- 새 문제 1: Music Note에서 제목을 바꾸면 상대 기기는 다른 페이지를 다녀와야 변경된 제목이 보임.
+- 새 문제 2: 최근 생성곡에서 제목을 바꾸면 상대 기기에 제목이 연동되지 않음.
+- 새 문제 3: 제목을 한 번 바꾼 최근 생성곡은 이후 원래 제목으로 되돌려도 동기화가 계속 끊김.
+- 새 문제 4: 제목을 바꾼 최근 생성곡을 하트 저장해도 상대 기기에 저장 상태가 보이지 않는 경우 확인.
+- 사용자 제공 영상 2개에서 동일 현상 확인.
+
+**원인**
+1. Music Note 제목 수정은 기존 60초/페이지 이탈 묶음 저장만 사용해, 저장 직후 상대 기기로 changed-item UI delta가 없었음.
+2. 최근 생성곡 제목 수정은 로컬 cache + pending text write까지만 만들고, 실제 Firestore 저장은 하트 클릭 같은 다음 경계까지 미루는 구조라 다른 기기가 즉시 알 수 없었음.
+3. legacy recent identity fallback 일부가 제목을 포함해 계산되므로 제목 변경 뒤 같은 곡을 다른 기기에서 같은 곡으로 찾지 못할 수 있었음.
+4. 제목 수정 시 intentionally detached heart 상태를 만들었는데, 이후 하트 저장 경로가 이미 존재하는 같은 favorite를 '해제' 쪽으로 해석할 수 있어 저장 상태와 cross-device 표시가 비대칭해질 수 있었음.
+
+**app282 수정**
+- Music Note 제목/한글제목/보조제목/표시장르를 명시적으로 저장하면 app281과 같은 UID RTDB changed-item 경로로 그 곡 1개 summary를 즉시 전달.
+- canonical Firestore 상세 저장은 기존 60초/페이지 이탈 묶음 정책 그대로 유지. 즉 제목 즉시 표시 때문에 Firestore write를 추가하지 않음.
+- 최근 생성곡은 제목 수정 전에 불변 `recentSongSyncKey`를 고정해 제목 변경/복원 후에도 같은 곡 identity를 유지.
+- 최근 생성곡의 **수정 저장 버튼은 실제 사용자 변경이므로 user_recent_songs 원본 문서 W1을 그 순간 한 번만 실행**하도록 변경.
+- 그 canonical W1 성공 후 기존 RTDB post-success 신호에 변경된 최근곡 item을 함께 실어 상대 기기가 Firestore 재조회 없이 즉시 로컬 반영.
+- 수신 기기는 changed-item payload를 generation identity / stable song id / frozen recentSongSyncKey / legacy source identity 순으로 매칭. 제목 자체는 최종 identity로 사용하지 않음.
+- edited recent song의 빈 하트 클릭은 기존 저장곡 해제가 아니라 **현재 수정본 저장**으로 처리. 같은 favorite가 있으면 exact W1 update, 없으면 기존 save W1.
+- 수정본 저장 후 detached marker가 user_recent_songs에 남지 않도록 recent document도 1회 W1로 확정. 이후 재접속/다른 기기에서도 저장 상태 유지.
+- 전체 recent songs scan/query, 전체 Music Note scan/rebuild 없음.
+- Explore public like / app164 Worker195 / 공유노트 / Suno URL app281 정상 기능 비변경.
+
+**비용**
+- Music Note 제목 저장: 추가 Firestore R0/W0, RTDB 작은 delta 1회. canonical 상세 write는 기존 batch 그대로.
+- 최근 생성곡 제목 저장: initiating device `user_recent_songs` W1/사용자 실제 수정 1회. receiving device Firestore R0/W0.
+- 수정본 하트 저장: favorite canonical W1 + recent saved-state canonical W1(실제 두 원본 상태 변경). 수신 기기 R0/W0.
+- idle/navigation/app update로 추가 Firestore/D1 read/write 없음.
+- D1 변경 없음.
+
+**검증**
+- 제품 commit chain 핵심: `e52f1c78ea59d8551bb55b5afabb25277a916a44` → durable recent write 보정 `97f666ad8ace418740de27396d725f3de35619b3`.
+- Backend V2 Safety Run `36885082023`: SUCCESS.
+- 최종 Focused Audit Run `36885111844`: SUCCESS (첫 attempt npm registry ECONNRESET, rerun success).
+- app282 verifier PASS.
+- app281/app280/app279/app278 보호검사 PASS.
+- Recent Songs 196 regression PASS.
+- shared-note app273/app274 regressions PASS.
+- TypeScript PASS / Build PASS.
+- 임시 app282 audit workflow/trigger 제거 완료.
+- 현재 app version 282.
+- `database.rules.json`에는 recentSongs의 bounded `itemJson <= 24000` 허용만 additive로 추가. 기존 read/write 권한 변경 없음.
+
+**상태**
+- 코드/검증 완료, PREVIEW Hosting + shared RTDB Rules 배포 전.
+- TEST / PRODUCTION 변경 금지.
+- 배포 후 PC↔모바일에서 Music Note 제목 즉시 반영, 최근생성곡 제목 변경/복원, 수정본 하트 저장의 양방향 실기기 확인 필요.
+
 ## 0LO. PREVIEW app281 배포 완료 — Suno URL 목록 썸네일/열린 상세 cross-device 즉시 반영 (2026-10-01 KST)
 
 **최종 상태**

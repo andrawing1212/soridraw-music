@@ -11,6 +11,11 @@ assert.match(app, /RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text
 assert.match(app, /publishRecentSongEditPreviewDelta\(uid, syncItem\)/);
 assert.match(app, /window\.setTimeout\(\(\) => \{\s*recentSongTextWriteTimerRef\.current = null;\s*void flushRecentSongTextWrite\(\);\s*\}, RECENT_SONG_TEXT_BATCH_MS\)/s);
 assert.match(app, /hasRecentSongTextPendingMarker\(user\.uid\)/);
+const restoreStart = app.indexOf("    const marker = readRecentSongTextPendingMarker(uid);");
+const restoreEnd = app.indexOf("  const persistRegeneratedCurrentSong = async", restoreStart);
+assert.ok(restoreStart >= 0 && restoreEnd > restoreStart);
+const restoreBlock = app.slice(restoreStart, restoreEnd);
+assert.doesNotMatch(restoreBlock, /location\.pathname/, 'pending Recent edit timer must survive route navigation');
 assert.match(app, /const isEditPreview = String\(detail\.operation \|\| ''\) === 'edit-preview';/);
 
 const editStart = app.indexOf('  const saveRecentSongEdit = async');

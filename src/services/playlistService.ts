@@ -7,6 +7,7 @@ import { readUserProfileCache } from '../lib/userProfileCache';
 import {
   deleteLibraryPlaylistItemsCache,
   nextLibraryPlaylistSyncVersion,
+  type LibraryPlaylistCacheSnapshot,
   patchLibraryPlaylistItemsCache,
   patchLibraryPlaylistListCache,
   readLibraryPlaylistItemsCache,
@@ -38,6 +39,7 @@ export type LibraryPlaylistSyncSignal = {
   originDeviceId: string;
   operation: string;
   syncVersion: number;
+  previousSyncVersion: number;
   payloadJson: string;
   truncated: boolean;
 };
@@ -70,6 +72,7 @@ const normalizeLibraryPlaylistSyncSignal = (raw: unknown): LibraryPlaylistSyncSi
   const value = raw as Record<string, unknown>;
   const version = Math.floor(Number(value.version || 0));
   const syncVersion = Math.floor(Number(value.syncVersion || 0));
+  const previousSyncVersion = Math.max(0, Math.floor(Number(value.previousSyncVersion || 0)));
   const at = Math.floor(Number(value.at || 0));
   const originDeviceId = String(value.originDeviceId || '').trim();
   const operation = String(value.operation || '').trim().slice(0, 48);
@@ -77,7 +80,7 @@ const normalizeLibraryPlaylistSyncSignal = (raw: unknown): LibraryPlaylistSyncSi
     ? value.payloadJson
     : '';
   if (version <= 0 || syncVersion <= 0 || at <= 0 || !originDeviceId || !operation) return null;
-  return { version, syncVersion, at, originDeviceId, operation, payloadJson, truncated: value.truncated === true };
+  return { version, syncVersion, previousSyncVersion, at, originDeviceId, operation, payloadJson, truncated: value.truncated === true };
 };
 
 const publishLibraryPlaylistSyncSignal = async (
@@ -93,12 +96,14 @@ const publishLibraryPlaylistSyncSignal = async (
   try {
     await runRealtimeTransaction(signalRef, (current) => {
       const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
+      const previousSyncVersion = Math.max(0, Math.floor(Number(current?.syncVersion || 0)));
       return {
         version: Math.max(Date.now(), currentVersion + 1),
         at: Date.now(),
         originDeviceId: getLibraryPlaylistSyncDeviceId(),
         operation: String(operation || '').slice(0, 48),
         syncVersion: Math.floor(syncVersion),
+        previousSyncVersion,
         payloadJson: encoded.payloadJson,
         truncated: encoded.truncated,
       };
@@ -163,26 +168,30 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
   }
 
   const version = signal.syncVersion;
-  const patchLists = async (updater: (items: Playlist[]) => Playlist[]): Promise<boolean> => {
-    const current = await readLibraryPlaylistListCache(safeUid);
-    if (!current) return false;
-    if (current.version >= version) return true;
-    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(updater(current.items)), version);
-    return true;
+  const listSnapshot = await readLibraryPlaylistListCache(safeUid);
+  if (!listSnapshot) return false;
+  if (listSnapshot.version >= version) return true;
+
+  // app293 continuity fence: RTDB stores only the newest delta. If this device
+  // was offline long enough to miss an earlier signal, never advance its cache
+  // revision using only the newest patch. Returning false preserves the existing
+  // users.syncVersions fallback, which refreshes canonical Firestore once.
+  if (signal.previousSyncVersion > 0 && listSnapshot.version < signal.previousSyncVersion) return false;
+
+  const previousList = listSnapshot.items;
+  const playlistRevision = (playlistId: string): number => Number(
+    previousList.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0
+  );
+  const loadCurrentItems = async (playlistId: string): Promise<LibraryPlaylistCacheSnapshot<PlaylistItem> | null> => {
+    const cached = await readLibraryPlaylistItemsCache(safeUid, playlistId);
+    if (!cached) return null;
+    const expectedRevision = playlistRevision(playlistId);
+    if (expectedRevision > 0 && cached.version < expectedRevision) return null;
+    return cached;
   };
-  const patchItems = async (playlistId: string, updater: (items: PlaylistItem[]) => PlaylistItem[]): Promise<boolean> => {
-    const safePlaylistId = String(playlistId || '').trim();
-    if (!safePlaylistId) return false;
-    const current = await readLibraryPlaylistItemsCache(safeUid, safePlaylistId);
-    if (!current) return false;
-    if (current.version >= version) return true;
-    await writeLibraryPlaylistItemsCache(safeUid, safePlaylistId, sortPlaylistItems(updater(current.items)), version);
-    return true;
-  };
-  const touchListRevisions = async (playlistIds: string[]): Promise<boolean> => {
-    const idSet = new Set(playlistIds.map((id) => String(id || '').trim()).filter(Boolean));
-    if (idSet.size === 0) return false;
-    return patchLists((items) => items.map((playlist) => (
+  const withTouchedRevisions = (items: Playlist[], playlistIds: string[]): Playlist[] => {
+    const idSet = new Set(playlistIds.filter(Boolean));
+    return sortPlaylists(items.map((playlist) => (
       playlist.id && idSet.has(playlist.id)
         ? { ...playlist, itemsRevision: Math.max(Number(playlist.itemsRevision || 0), version) }
         : playlist
@@ -192,71 +201,98 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
   if (signal.operation === 'playlist-create') {
     const playlist = payload.playlist as Playlist | undefined;
     if (!playlist?.id) return false;
-    return patchLists((items) => items.some((item) => item.id === playlist.id)
-      ? items.map((item) => item.id === playlist.id ? { ...item, ...playlist } : item)
-      : [...items, playlist]);
+    const next = previousList.some((item) => item.id === playlist.id)
+      ? previousList.map((item) => item.id === playlist.id ? { ...item, ...playlist } : item)
+      : [...previousList, playlist];
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(next), version);
+    return true;
   }
+
   if (signal.operation === 'playlist-rename') {
     const playlistId = String(payload.playlistId || '').trim();
     const title = String(payload.title || '').trim();
     if (!playlistId || !title) return false;
-    return patchLists((items) => items.map((playlist) => playlist.id === playlistId ? { ...playlist, title } : playlist));
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
+      playlist.id === playlistId ? { ...playlist, title } : playlist
+    ))), version);
+    return true;
   }
+
   if (signal.operation === 'playlist-delete') {
     const playlistId = String(payload.playlistId || '').trim();
     if (!playlistId) return false;
-    const listApplied = await patchLists((items) => items.filter((playlist) => playlist.id !== playlistId));
-    if (listApplied) await deleteLibraryPlaylistItemsCache(safeUid, playlistId);
-    return listApplied;
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.filter((playlist) => playlist.id !== playlistId)), version);
+    await deleteLibraryPlaylistItemsCache(safeUid, playlistId);
+    return true;
   }
+
   if (signal.operation === 'item-add') {
     const playlistId = String(payload.playlistId || '').trim();
     const item = payload.item as PlaylistItem | undefined;
     if (!playlistId || !item?.id) return false;
-    const [itemsApplied, listApplied] = await Promise.all([
-      patchItems(playlistId, (items) => items.some((entry) => entry.id === item.id)
-        ? items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
-        : [...items, item]),
-      touchListRevisions([playlistId]),
+    const currentItems = await loadCurrentItems(playlistId);
+    if (!currentItems) return false;
+    const nextItems = currentItems.items.some((entry) => entry.id === item.id)
+      ? currentItems.items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
+      : [...currentItems.items, item];
+    await Promise.all([
+      writeLibraryPlaylistItemsCache(safeUid, playlistId, sortPlaylistItems(nextItems), version),
+      writeLibraryPlaylistListCache(safeUid, withTouchedRevisions(previousList, [playlistId]), version),
     ]);
-    return itemsApplied && listApplied;
+    return true;
   }
+
   if (signal.operation === 'item-delete') {
     const playlistId = String(payload.playlistId || '').trim();
     const itemId = String(payload.itemId || '').trim();
     if (!playlistId || !itemId) return false;
-    const [itemsApplied, listApplied] = await Promise.all([
-      patchItems(playlistId, (items) => items.filter((item) => item.id !== itemId)),
-      touchListRevisions([playlistId]),
+    const currentItems = await loadCurrentItems(playlistId);
+    if (!currentItems) return false;
+    await Promise.all([
+      writeLibraryPlaylistItemsCache(safeUid, playlistId, sortPlaylistItems(currentItems.items.filter((item) => item.id !== itemId)), version),
+      writeLibraryPlaylistListCache(safeUid, withTouchedRevisions(previousList, [playlistId]), version),
     ]);
-    return itemsApplied && listApplied;
+    return true;
   }
+
   if (signal.operation === 'item-move') {
     const fromPlaylistId = String(payload.fromPlaylistId || '').trim();
     const toPlaylistId = String(payload.toPlaylistId || '').trim();
     const oldItemId = String(payload.oldItemId || '').trim();
     const item = payload.item as PlaylistItem | undefined;
     if (!fromPlaylistId || !toPlaylistId || !oldItemId || !item?.id) return false;
-    const [fromApplied, toApplied, listApplied] = await Promise.all([
-      patchItems(fromPlaylistId, (items) => items.filter((entry) => entry.id !== oldItemId)),
-      patchItems(toPlaylistId, (items) => items.some((entry) => entry.id === item.id)
-        ? items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
-        : [...items, item]),
-      touchListRevisions([fromPlaylistId, toPlaylistId]),
+    const [fromItems, toItems] = await Promise.all([
+      loadCurrentItems(fromPlaylistId),
+      loadCurrentItems(toPlaylistId),
     ]);
-    return fromApplied && toApplied && listApplied;
+    if (!fromItems || !toItems) return false;
+    const nextTo = toItems.items.some((entry) => entry.id === item.id)
+      ? toItems.items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
+      : [...toItems.items, item];
+    await Promise.all([
+      writeLibraryPlaylistItemsCache(safeUid, fromPlaylistId, sortPlaylistItems(fromItems.items.filter((entry) => entry.id !== oldItemId)), version),
+      writeLibraryPlaylistItemsCache(safeUid, toPlaylistId, sortPlaylistItems(nextTo), version),
+      writeLibraryPlaylistListCache(safeUid, withTouchedRevisions(previousList, [fromPlaylistId, toPlaylistId]), version),
+    ]);
+    return true;
   }
+
   if (signal.operation === 'item-color') {
     const playlistId = String(payload.playlistId || '').trim();
     const itemId = String(payload.itemId || '').trim();
     if (!playlistId || !itemId) return false;
+    const currentItems = await loadCurrentItems(playlistId);
+    if (!currentItems) return false;
     const colorTag = payload.colorTag === null ? null : String(payload.colorTag || '').trim() || null;
-    const [itemsApplied, listApplied] = await Promise.all([
-      patchItems(playlistId, (items) => items.map((item) => item.id === itemId ? { ...item, colorTag } : item)),
-      touchListRevisions([playlistId]),
+    await Promise.all([
+      writeLibraryPlaylistItemsCache(safeUid, playlistId, sortPlaylistItems(currentItems.items.map((item) => (
+        item.id === itemId ? { ...item, colorTag } : item
+      ))), version),
+      writeLibraryPlaylistListCache(safeUid, withTouchedRevisions(previousList, [playlistId]), version),
     ]);
-    return itemsApplied && listApplied;
+    return true;
   }
+
   if (signal.operation === 'item-swap') {
     const playlistId = String(payload.playlistId || '').trim();
     const itemAId = String(payload.itemAId || '').trim();
@@ -264,20 +300,22 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     const itemAOrder = Number(payload.itemAOrder);
     const itemBOrder = Number(payload.itemBOrder);
     if (!playlistId || !itemAId || !itemBId || !Number.isFinite(itemAOrder) || !Number.isFinite(itemBOrder)) return false;
-    const [itemsApplied, listApplied] = await Promise.all([
-      patchItems(playlistId, (items) => items.map((item) => {
-        if (item.id === itemAId) return { ...item, order: itemAOrder };
-        if (item.id === itemBId) return { ...item, order: itemBOrder };
-        return item;
-      })),
-      touchListRevisions([playlistId]),
+    const currentItems = await loadCurrentItems(playlistId);
+    if (!currentItems) return false;
+    const nextItems = currentItems.items.map((item) => {
+      if (item.id === itemAId) return { ...item, order: itemAOrder };
+      if (item.id === itemBId) return { ...item, order: itemBOrder };
+      return item;
+    });
+    await Promise.all([
+      writeLibraryPlaylistItemsCache(safeUid, playlistId, sortPlaylistItems(nextItems), version),
+      writeLibraryPlaylistListCache(safeUid, withTouchedRevisions(previousList, [playlistId]), version),
     ]);
-    return itemsApplied && listApplied;
+    return true;
   }
+
   return false;
 };
-
-
 
 // 1006 — A playlist insert must stay O(1) as a folder grows. The old path read
 // every item in the destination collection just to detect a duplicate and find

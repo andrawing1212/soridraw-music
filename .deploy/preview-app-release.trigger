@@ -1,6 +1,6 @@
-app283-legacy-recent-heart-release
-target_source=e277b0f140a4fce1f93b06271919a6869d45a65b
-app_version=283
+app284-recent-heart-exact-link-release
+target_source=bf5d82550c0c20226f63064a9eeb54e735eb2b01
+app_version=284
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true

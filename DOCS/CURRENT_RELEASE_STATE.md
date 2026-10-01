@@ -1,3 +1,48 @@
+## 0LX. PREVIEW app288 실기기 FAIL — `스쳐간 이름 뒤에` 한 곡 원인분석 전용 단계로 전환 (2026-10-02 KST)
+
+**사용자 실기기 판정**
+- app288도 동일 증상으로 FAIL.
+- 사용자 요청: 더 이상 추정 수정 반복 금지. 왜 이 곡만 꼬였는지 디테일하게 원인 규명. 필요 시 Codex는 원인분석만 수행.
+
+**app288 실패 직후 서버 read-only forensics**
+- Run `36911142979`: SUCCESS.
+- Firestore write 0 / delete 0 / RTDB write 0.
+- 문제곡의 사용자 원본에는 **동일 generation identity를 가진 historical favorite row가 2개** 존재:
+  1. 현재 Recent Song이 exact-link 하는 row.
+  2. 과거 제목 `[Synth Pop] '스쳐간 이름 뒤에'`를 가진 오래된 row.
+- 두 row 모두:
+  - 동일 `generationBatchId + generationIndex`
+  - 동일 `soridrawSongId`
+  - 동일 `recentSongSyncKey`
+- 현재 둘 다 `saved:false / favoriteRemoved:true` soft-removed 상태.
+- `user_recent_songs`의 해당 곡은 current exact favorite link를 유지.
+- 최신 RTDB Music Note signal:
+  - operation=`unsave`
+  - exact favorite document id = current Recent exact-link row.
+  - generation/soridraw/recent identity 포함.
+  - signal age 약 200초.
+- 즉 **최신 unsave 서버 mutation과 RTDB fanout은 정확한 현재 row를 가리키고 있음**.
+- app288의 RTDB ACK version 분리 후에도 실패했으므로 “Catalog timestamp가 signal을 버린다”만으로는 원인 설명 불가.
+
+**중요하게 남은 범위**
+1. 서버 canonical 데이터와 최신 unsave signal은 exact current row 기준으로 정렬되어 있음.
+2. 문제곡만 historical duplicate row 2개 + title lineage가 존재하는 것은 실제 확인됨.
+3. app285~288에서 generation identity / exact link / UI action direction / RTDB ack까지 보완했는데도 SAVE live sync만 재현 실패.
+4. 따라서 다음 단계는 수정이 아니라 아래 세 축의 **런타임 원인증명**:
+   - SAVE signal이 실제로 publish되는 순간의 exact payload와 operation/version.
+   - 반대 기기가 그 SAVE signal을 onValue → CustomEvent → receiver까지 실제로 받았는지.
+   - 받았다면 `rememberRecentHeartAuthority`의 identity key/version guard에서 버려지는지, 아니면 이후 다른 local state가 덮어쓰는지.
+5. 특히 현재 코드의 per-song heart authority는 localStorage에 song별 version을 보존하고, local click에서는 `Date.now()`, remote에서는 RTDB `remoteVersion`을 사용함. 문제곡은 반복된 과거 실험 때문에 이 로컬 authority 기록이 다른 곡보다 훨씬 많이 누적된 특수 케이스이므로 반드시 실제 두 기기 상태를 검증해야 함.
+6. `runV1MutationBoundary`의 post-success hook은 hook Promise를 await하지 않는 fire-and-forget 구조이므로 SAVE/RESTORE에서 publish 완료 여부를 실제 런타임으로 검증해야 함. 단, UNSAVE도 같은 boundary를 쓰는 경로가 있으므로 이것만 원인이라고 단정 금지.
+7. duplicate row 자동 삭제/병합으로 해결 시도 금지. 사용자 원본 데이터 변경 없이 원인을 먼저 증명.
+
+**현재 결론**
+- app288까지의 수정으로 원인이 해결됐다고 볼 수 없음.
+- 더 이상의 추정 패치/배포 중단.
+- 다음 작업은 Codex High 기준 **read-only / analysis-only root-cause audit**.
+- 원인을 하나로 증명하기 전 코드 수정 금지.
+- TEST / PRODUCTION 비변경.
+
 ## 0LW. PREVIEW app288 배포 완료 — Music Note RTDB 신호와 Catalog 시간축을 분리 (2026-10-02 KST)
 
 **사용자 실기기 판정 — app287 FAIL**

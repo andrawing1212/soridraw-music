@@ -1,3 +1,88 @@
+## CURRENT TASK — Codex High: `스쳐간 이름 뒤에` SAVE live-sync 원인증명만 수행 (2026-10-02 KST)
+
+목표:
+- app288에서도 반복되는 **한 곡 전용 SAVE PC↔모바일 live-sync 실패의 단일 원인**을 증명한다.
+- 수정하지 않는다. 배포하지 않는다. 사용자 데이터 쓰기/삭제/병합 금지.
+- “가능성이 높다”가 아니라 어떤 조건문/상태/신호가 SAVE를 막는지 코드+실데이터 근거로 확정한다.
+
+현재 고정 사실:
+- PREVIEW app288 deployed exact build PASS.
+- app288 user real-device FAIL.
+- 이름 변경 live sync 정상.
+- UNSAVE live sync는 사용자 관찰상 정상.
+- 문제곡만 historical duplicate favorite row 2개가 확인됨.
+- 두 row는 동일 generationBatchId+generationIndex / soridrawSongId / recentSongSyncKey.
+- 현재 Recent Song은 current row exact favorite id를 유지.
+- 최신 서버 unsave + RTDB signal은 그 current exact row를 정확히 가리킴.
+- Diagnostic `36911142979`: Firestore W0/delete0/RTDB W0 read-only.
+- app285 identity, app286 UI direction, app287 idempotent SAVE signal, app288 RTDB ACK-domain 분리 모두 적용됐지만 증상 지속.
+
+반드시 확인:
+1. `src/App.tsx`:
+   - `handleToggleCurrentStudioFavorite`
+   - `toggleFavorite`
+   - `isSongFavorited`
+   - `rememberRecentHeartAuthority` / `readRecentHeartAuthority`
+   - `buildRecentSongSyncKey`
+   - `syncMusicNoteIncrementalFromRemoteVersion`
+   - Recent history/cache exact-link update
+2. `src/services/userDomainSyncService.ts`:
+   - `publishSignal`
+   - `publishMusicNoteSaveStateDelta`
+   - `dispatchSignal`
+   - `startDomainSubscriptions`
+   - pending signal / local version / RTDB ack storage
+3. `src/data/v1MutationBoundary.ts`:
+   - post-success hook가 fire-and-forget인 점이 SAVE/RESTORE에 실제 영향을 주는지.
+4. `src/hooks/useFavoritesStore.ts`, `src/lib/musicNoteSavedState.ts`,
+   `src/lib/userDataEngine.ts`, `src/lib/listBundleCache.ts`:
+   - duplicate/soft-removed row가 UI heart authority를 뒤집거나 stale state를 다시 주입하는지.
+5. 문제곡의 두 historical row와 current `user_recent_songs` link를 read-only로 비교.
+6. 정상 recent song 1개와 문제곡을 같은 코드 경로 기준으로 비교해서 “왜 이 곡만” 차이가 무엇인지 표로 제시.
+7. SAVE 클릭 한 번의 전체 chain을 번호로 추적:
+   UI empty → intendedAction=save → chosen favorite row/id → Firestore mutation 여부 → V1 boundary hook → RTDB operation/version/itemJson → receiver onValue → MUSIC_NOTE_SYNC_EVENT → signal guard → recentHeartAuthority key/version → render isSongFavorited.
+8. 그 chain에서 실제로 끊기는 **정확한 한 지점**을 증명.
+9. 필요하면 임시 GitHub Action을 만들어도 되지만:
+   - read-only만 허용.
+   - Firestore write/delete 0.
+   - RTDB write 0.
+   - 사용자 데이터 mutation 0.
+   - 진단 후 workflow/trigger 삭제.
+10. localStorage/device-only 상태가 없으면 증명이 불가능한 경우:
+   - 어떤 키/값을 PC와 모바일에서 각각 봐야 하는지 최소 5개 이하로 정확히 지정.
+   - 가능하면 앱 코드 수정 없이 브라우저 콘솔 1회 명령으로 수집 가능한 read-only 진단 스니펫 제시.
+   - 그 정보 없이는 단정하지 말 것.
+
+특별 의심점 — 검증은 하되 결론 선입견 금지:
+- 문제곡 per-song `recentHeartAuthority`가 과거 반복 테스트에서 남은 높은 version 때문에 새 SAVE remoteVersion을 거절하는지.
+- remote SAVE payload와 현재 화면 song이 동일 generation key로 실제 매칭되는지.
+- SAVE/RESTORE의 `runV1MutationBoundary` post-success RTDB publish가 fire-and-forget이라 실제 완료 전에 경로가 끝나는지.
+- SAVE 직후 다른 Music Note operation이 같은 RTDB 단일 노드를 덮어써 상대 기기가 SAVE state를 못 보는지.
+- PC/mobile 각각의 stale exact favorite link가 서로 다른 historical duplicate row를 가리키는지.
+- remote SAVE가 receiver에서 적용된 뒤 catalog/favorites/history hydration이 다시 empty state로 덮는지.
+
+금지:
+- 원인 확정 전 코드 수정.
+- duplicate 문서 삭제/merge.
+- 전체 favorites/recent scan/rebuild.
+- cache generation 강제 리셋.
+- 사용자 데이터 backfill/migration.
+- TEST/PRODUCTION 변경.
+- Explore public like / Music Note 60s batch 수정.
+- “일단 이렇게 바꿔보자” 패치.
+
+최종 보고 형식:
+- 기준 branch / HEAD.
+- 읽은 파일.
+- 실제 문제곡 vs 정상곡 차이.
+- SAVE chain 단계별 PASS/FAIL.
+- **ROOT CAUSE: 파일 + 함수 + 조건 + 왜 이 곡만인지**.
+- 확신도(높음/중간/낮음)와 근거.
+- 필요한 최소 수정안 1개만 제시하되 구현하지 말 것.
+- 예상 비용 영향.
+- 데이터 손실/회귀 위험.
+- 사용한 read-only 진단과 W0 증거.
+
 ## CURRENT TASK — app288 RTDB ACK 분리 후 SAVE/UNSAVE 양방향 실기기 확인 (2026-10-02 KST)
 
 현재:

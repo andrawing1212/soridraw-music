@@ -1,6 +1,7 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
 import {
   acknowledgeRecentSongsSignalVersion,
+  publishMusicNoteSaveStateDelta,
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
@@ -10517,6 +10518,24 @@ const toggleCycleVariantSelection = (
           };
           forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           patchLocalFavorite(existingFav.id, activeUpdates, existingFav);
+          // app287 — If the visible heart was empty but this device already has
+          // an active canonical row, SAVE is idempotent and must still publish
+          // the changed-item state. Otherwise the local heart fills with no RTDB
+          // event, so the other device remains empty until another mutation.
+          await publishMusicNoteSaveStateDelta(
+            user.uid,
+            existingFav.id,
+            sanitizeForFirestore({
+              ...existingFav,
+              ...activeUpdates,
+              soridrawSongId: getLiveSoridrawSongId(song) || existingFav.soridrawSongId,
+              recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song) || existingFav.recentSongSyncKey,
+              appliedKeywords: song.appliedKeywords || existingFav.appliedKeywords,
+              ...buildLegacyRecentFavoriteBridge(song),
+              id: existingFav.id,
+              firestoreId: existingFav.id,
+            }),
+          );
           showToast('저장되었습니다.');
           return;
         }

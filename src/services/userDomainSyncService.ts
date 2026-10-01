@@ -353,6 +353,28 @@ const publishSignal = async (
   await set(ref(realtimeDb, `userSync/${uid}/${kind}`), buildSignal(context, result));
 };
 
+// app287 — An empty-heart SAVE can be idempotent when the canonical favorite
+// row is already active locally. In that case there is no Firestore write to
+// trigger the mutation boundary, but the other device still needs the same
+// bounded changed-item signal. Publish only the existing UID-scoped RTDB event.
+export const publishMusicNoteSaveStateDelta = async (
+  uid: string,
+  documentId: string,
+  syncItem: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
+  await publishSignal({
+    domain: 'musicNote',
+    operation: 'save',
+    uid: safeUid,
+    documentIds: [safeDocumentId],
+    affectedCount: 1,
+    syncItem,
+  }, null);
+};
+
 export const publishMusicNoteStructureDelta = async (
   uid: string,
   syncStructure: unknown,

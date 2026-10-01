@@ -121,19 +121,38 @@ const projectRemovedMusicNoteIdentityForSync = (
   const source = raw as Record<string, any>;
   const id = String(preferredId || source.id || source.firestoreId || '').trim();
   if (!id) return null;
+
+  const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
+    ? source.appliedKeywords as Record<string, any>
+    : {};
+  const generationBatchId = String(applied.generationBatchId || '').trim();
+  const generationIndex = Math.floor(Number(applied.generationIndex || 0));
   const recentLegacySourceId = String(source.recentLegacySourceId || '').trim();
-  if (!recentLegacySourceId) return null;
+  const soridrawSongId = String(source.soridrawSongId || '').trim();
+  const recentSongSyncKey = String(source.recentSongSyncKey || '').trim();
+  const hasGenerationIdentity = Boolean(generationBatchId && Number.isFinite(generationIndex) && generationIndex > 0);
+
+  // app285 — removed rows still need enough song identity for the receiving
+  // device to keep Recent Songs linked to the same exact Music Note document.
+  // This is the same already-existing RTDB signal; no extra mutation/read.
+  if (!recentLegacySourceId && !soridrawSongId && !recentSongSyncKey && !hasGenerationIdentity) return null;
+
   return {
     __musicNoteRemovalIdentity: true,
     id,
     firestoreId: id,
-    soridrawSongId: source.soridrawSongId ?? null,
-    recentSongSyncKey: source.recentSongSyncKey ?? null,
-    recentLegacySourceId,
+    soridrawSongId: soridrawSongId || null,
+    recentSongSyncKey: recentSongSyncKey || null,
+    appliedKeywords: hasGenerationIdentity ? {
+      generationBatchId,
+      generationIndex,
+    } : null,
+    recentLegacySourceId: recentLegacySourceId || null,
     recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
     favoriteRemoved: true,
     saved: false,
     favoriteRemovedAt: toSyncTimestamp(source.favoriteRemovedAt || source.unsavedAt || source.updatedAtMs),
+    unsavedAt: toSyncTimestamp(source.unsavedAt || source.favoriteRemovedAt || source.updatedAtMs),
   };
 };
 

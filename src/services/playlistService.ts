@@ -5,6 +5,10 @@ import { Playlist, PlaylistItem } from '../types';
 import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 import { readUserProfileCache } from '../lib/userProfileCache';
 import {
+  markLibraryPlaylistRevisionCommitted,
+  queueLibraryPlaylistRevisionBatch,
+} from './libraryPlaylistRevisionBatch';
+import {
   deleteLibraryPlaylistItemsCache,
   nextLibraryPlaylistSyncVersion,
   type LibraryPlaylistCacheSnapshot,
@@ -504,6 +508,7 @@ const ensureDefaultPlaylistsInternal = async (uid: string, expectedVersion = 0):
     syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
     batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
     await batch.commit();
+    markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   }
   await writeLibraryPlaylistListCache(uid, currentLists, syncVersion || expectedVersion);
   return currentLists;
@@ -554,8 +559,8 @@ export const createPlaylist = async (uid: string, type: 'normal' | 'shared', tit
   };
   const batch = writeBatch(db);
   batch.set(newDocRef, created);
-  batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
   const createdForCache = {
     id: newDocRef.id,
     title,
@@ -585,8 +590,8 @@ export const renamePlaylist = async (uid: string, playlistId: string, title: str
     title,
     updatedAt: serverTimestamp()
   });
-  batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
   await patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
     playlist.id === playlistId ? { ...playlist, title } : playlist
   )), syncVersion);
@@ -614,6 +619,7 @@ export const addPlaylistItem = async (uid: string, playlistId: string, itemData:
   }, { merge: true });
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   const createdForCache = {
     ...itemData,
     id: newItemRef.id,
@@ -644,6 +650,7 @@ export const deletePlaylistItem = async (uid: string, playlistId: string, itemId
   }, { merge: true });
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   await Promise.all([
     patchLibraryPlaylistItemsCache(uid, playlistId, (items) => items.filter((item) => item.id !== itemId), syncVersion),
     patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
@@ -690,6 +697,7 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   const movedForCache = {
     ...itemWithoutId,
     id: newItemRef.id,
@@ -726,6 +734,7 @@ export const updatePlaylistItemColor = async (uid: string, playlistId: string, i
   batch.set(doc(db, 'user_playlists', uid, 'lists', playlistId), { itemsRevision: syncVersion }, { merge: true });
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   await Promise.all([
     patchLibraryPlaylistItemsCache(uid, playlistId, (items) => items.map((item) => (
       item.id === itemId ? { ...item, colorTag } : item
@@ -750,6 +759,7 @@ export const swapPlaylistItemOrder = async (uid: string, playlistId: string, ite
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   await Promise.all([
     patchLibraryPlaylistItemsCache(uid, playlistId, (items) => items.map((item) => {
       if (item.id === itemA.id) return { ...item, order: itemB.order };
@@ -802,6 +812,7 @@ export const deletePlaylist = async (uid: string, playlistId: string) => {
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
   await batch.commit();
+  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   await Promise.all([
     patchLibraryPlaylistListCache(uid, (items) => items.filter((playlist) => playlist.id !== playlistId), syncVersion),
     deleteLibraryPlaylistItemsCache(uid, playlistId),

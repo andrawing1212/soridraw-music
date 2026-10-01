@@ -465,11 +465,11 @@ const buildSignal = (
 const publishSignal = async (
   context: Readonly<V1MutationBoundaryContext>,
   result: unknown,
-): Promise<void> => {
+): Promise<number> => {
   const uid = String(context.uid || '').trim();
-  if (!uid) return;
+  if (!uid) return 0;
   const kind: UserDomainSyncKind = context.domain === 'musicNote' ? 'musicNote' : 'recentSongs';
-  if (kind === 'recentSongs' && result == null) return; // Mutation epoch skip is not a write.
+  if (kind === 'recentSongs' && result == null) return 0; // Mutation epoch skip is not a write.
 
   if (kind === 'musicNote') {
     // app276 — Music Note signals used each device's Date.now() as a global
@@ -478,16 +478,67 @@ const publishSignal = async (
     // Keep the existing one tiny RTDB mutation, but allocate a UID-wide
     // monotonic version inside that same node.
     const signalRef = ref(realtimeDb, `userSync/${uid}/musicNote`);
-    await runTransaction(signalRef, (current) => {
+    const transaction = await runTransaction(signalRef, (current) => {
       const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
       const signal = buildSignal(context, result);
       signal.version = Math.max(Date.now(), currentVersion + 1);
       return signal;
     }, { applyLocally: true });
-    return;
+    return Math.max(0, Math.floor(Number(transaction.snapshot.val()?.version || 0)));
   }
 
-  await set(ref(realtimeDb, `userSync/${uid}/${kind}`), buildSignal(context, result));
+  const signal = buildSignal(context, result);
+  await set(ref(realtimeDb, `userSync/${uid}/${kind}`), signal);
+  return Math.max(0, Math.floor(Number(signal.version || 0)));
+};
+
+// app290 — Studio heart clicks use this RTDB-only preview immediately, while
+// the canonical favorites write waits for the 30-second trailing client batch.
+// The returned monotonic version lets two devices resolve overlapping pending
+// intents without relying on their local clocks.
+export const publishMusicNoteHeartPreviewDelta = async (
+  uid: string,
+  documentId: string,
+  syncItem: unknown,
+  desiredSaved: boolean,
+): Promise<number> => {
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return 0;
+  const now = Date.now();
+  const item = desiredSaved
+    ? {
+        ...(syncItem as Record<string, unknown>),
+        id: safeDocumentId,
+        firestoreId: safeDocumentId,
+        saved: true,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        unsavedAt: null,
+        unlikedAt: null,
+      }
+    : {
+        ...(syncItem as Record<string, unknown>),
+        id: safeDocumentId,
+        firestoreId: safeDocumentId,
+        saved: false,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: true,
+        favoriteRemovedAt: now,
+        unsavedAt: now,
+        unlikedAt: now,
+      };
+  return publishSignal({
+    domain: 'musicNote',
+    operation: desiredSaved ? 'heart-preview-save' : 'heart-preview-unsave',
+    uid: safeUid,
+    documentIds: [safeDocumentId],
+    affectedCount: 1,
+    syncItem: item,
+  }, null);
 };
 
 // app287 — An empty-heart SAVE can be idempotent when the canonical favorite
@@ -614,10 +665,14 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   if (kind === 'musicNote') {
     writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_REMOTE_VERSION_BASE, uid), signal.version);
     rememberMusicNotePendingSignal(uid, signal);
-    if (signal.originDeviceId === getDeviceId('musicNote')) {
-      // The successful local mutation already patched Music Note cache/state.
-      // Acknowledge its RTDB mirror before dispatch so the existing incremental
-      // handler can never reread Firestore for the same-device mutation.
+    if (
+      signal.originDeviceId === getDeviceId('musicNote')
+      && signal.operation !== 'heart-preview-save'
+      && signal.operation !== 'heart-preview-unsave'
+    ) {
+      // A canonical local mutation already patched Music Note cache/state.
+      // Heart preview is intentionally non-canonical and must not advance the
+      // Firestore/catalog document version before the trailing batch commits.
       writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_LOCAL_VERSION_BASE, uid), signal.version);
     }
     window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_EVENT, {
@@ -693,7 +748,9 @@ const startDomainSubscriptions = (uid: string) => {
 // SORIDRAW_USER_DOMAIN_SYNC_STAGE2A_20260905
 // Mutation-only publisher: app entry, reload, cache hydration and ordinary reads never call set().
 // The payload is fixed-size and contains at most 10 document IDs.
-addV1MutationPostSuccessHook(publishSignal);
+addV1MutationPostSuccessHook(async (context, result) => {
+  await publishSignal(context, result);
+});
 
 // SORIDRAW_USER_DOMAIN_SYNC_STAGE2B_20260905
 // Read-only UID-scoped RTDB subscribers feed the existing version-event consumers.

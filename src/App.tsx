@@ -11052,9 +11052,10 @@ const toggleCycleVariantSelection = (
       console.warn('Studio heart canonical batch commit failed.', error);
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (!latest || latest.updatedAtMs !== intent.updatedAtMs) return;
-      const retryCount = Math.min(2, Number(latest.retryCount || 0) + 1);
+      const previousRetryCount = Math.max(0, Number(latest.retryCount || 0));
+      const retryCount = Math.min(2, previousRetryCount + 1);
       writeStudioHeartPendingIntent({ ...latest, retryCount });
-      if (retryCount <= 2) {
+      if (previousRetryCount < 2) {
         const retryTimer = window.setTimeout(() => {
           studioHeartIntentTimersRef.current.delete(safeDocumentId);
           void flushStudioHeartPendingIntent(safeDocumentId);

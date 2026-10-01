@@ -11,7 +11,7 @@ const rulesText = fs.readFileSync('database.rules.json', 'utf8');
 const rules = JSON.parse(rulesText);
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(String(version.version), '277');
+assert.ok(Number(version.version) >= 277, 'app version must be 277 or newer');
 
 assert.match(boundary, /syncItem\?: unknown/);
 assert.match(engine, /export const projectCatalogItemForSync/);

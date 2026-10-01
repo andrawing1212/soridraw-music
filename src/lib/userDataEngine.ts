@@ -1,4 +1,5 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
+import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 import { readUserProfileCache } from './userProfileCache';
 import {
   clearAdaptiveListIndexDirtyRevision,
@@ -209,14 +210,7 @@ const cleanValue = (value: any, depth = 0): any => {
   return next;
 };
 
-const isMusicNoteCatalogItem = (item: any) => !(
-  item?.favoriteRemoved === true
-  || item?.saved === false
-  || item?.hidden === true
-  || item?.favoriteHidden === true
-  || item?.deletedAt
-  || item?.trashedAt
-);
+const isMusicNoteCatalogItem = (item: any) => !isMusicNoteItemRemoved(item);
 
 export const projectCatalogItemForSync = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
   if (!sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return null;

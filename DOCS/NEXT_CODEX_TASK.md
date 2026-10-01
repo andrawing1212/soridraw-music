@@ -1,3 +1,45 @@
+## CURRENT TASK — app286 PC↔모바일 하트 방향/상태 최종 실기기 확인 (2026-10-02 KST)
+
+현재:
+- app285 사용자 실기기 FAIL.
+- 사용자 증상: A에서 저장해도 B는 빈 하트, 그 상태에서 B가 저장 의도로 누르면 A의 저장이 해제되는 "서로 반대 방향" 현상.
+- read-only Run `36902514549`에서 app285 unsave RTDB payload에는 generation/soridraw/recent identity가 정상 포함된 것을 확인. 전송 identity 누락은 해결됨.
+- 실제 구조적 문제는 **하트 표시 상태와 click mutation 방향이 서로 다른 authority를 사용한 것**.
+- Catalog/List Bundle은 explicit current flags 기준인데 App/FavoritesStore 일부는 과거 unlikedAt/unsavedAt timestamp까지 현재 제거 상태로 해석하고 있었음.
+- 정상 레코드에서도 saved:true/favoriteRemoved:false + 과거 unsavedAt/unlikedAt이 공존 가능하므로 다른 곡에도 재발 가능했던 구조.
+- app286은 공통 `musicNoteSavedState` 판정으로 App/FavoritesStore/Catalog/List Bundle을 통일.
+- per-song RTDB heart authority를 Recent immutable identity로 먼저 적용.
+- Studio click은 화면이 empty면 SAVE, filled면 UNSAVE를 끝까지 명시적으로 유지하며 내부 server lookup이 반대로 뒤집지 못함.
+- stale local cache에서 active row가 없더라도 filled-heart UNSAVE는 authority의 exact favorite id에 W1로 적용.
+- 최종 Focused Audit `36904280495` SUCCESS.
+- PREVIEW Release `36904602856` SUCCESS.
+- locked release commit `fcf733dbe6dfb165e62af01dcd56ad08f698bf65`.
+- `preview.soridraw.com` app286 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 delete/migration/backfill 없음.
+
+실기기 테스트:
+1. PC/모바일 모두 app286.
+2. `스쳐간 이름 뒤에`에서 A 저장 → B가 페이지 이동 없이 filled.
+3. B 해제 → A 즉시 empty.
+4. A 저장 → B filled → B 저장해제 → A empty처럼 3~4회 번갈아 반복.
+5. 어떤 클릭도 "빈 하트를 눌렀는데 상대 저장이 해제"되는 반대 mutation이 없어야 함.
+6. 일반 정상 최근곡 1개도 같은 순서로 회귀 없음 확인.
+7. 양쪽 새로고침/재접속 후 마지막 상태 동일.
+8. 제목 변경/원복 app282 회귀 없음.
+9. 수신 기기 Firestore R0/W0, D1 R0/W0.
+10. 실제 save/unsave canonical favorite W1.
+11. 잃어버린 Recent link 첫 repair가 필요한 경우만 해당 action 최대 W2.
+12. idle/페이지 왕복/앱 업데이트 추가 Firestore/D1 R/W 0.
+
+보호:
+- 문제 곡의 기존 duplicate favorite 문서 자동 삭제/병합 금지.
+- 일반 recent heart / Music Note 목록 / 제목 / Suno URL / 공유노트 정상 기능 유지.
+- Explore public like app164/Worker195 동결.
+- Music Note 60초 상세 batch 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app285 저장/해제 동일 identity 실기기 확인 (2026-10-02 KST)
 
 현재:

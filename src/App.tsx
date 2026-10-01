@@ -2,6 +2,7 @@ import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1Mut
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
+  publishMusicNoteHeartPreviewDelta,
   publishRecentSongEditPreviewDelta,
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
@@ -16,6 +17,14 @@ import {
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
+import {
+  listStudioHeartPendingIntents,
+  readStudioHeartPendingIntent,
+  removeStudioHeartPendingIntent,
+  updateStudioHeartPendingIntent,
+  writeStudioHeartPendingIntent,
+  type StudioHeartPendingIntent,
+} from './lib/studioHeartBatch';
 
 const SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951 = true;
 const getLiveSoridrawSongId = (song: any): string | null => {
@@ -28,6 +37,19 @@ const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => 
   const soridrawSongId = createSoridrawSongId();
   try { (song as any).soridrawSongId = soridrawSongId; return song; }
   catch { return { ...song, soridrawSongId }; }
+};
+
+const STUDIO_HEART_BATCH_MS = 30_000;
+const STUDIO_HEART_RETRY_MS = 60_000;
+const buildBatchedRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
+  const raw = `${uid}|${stableIdentity}`;
+  let hash = 2166136261;
+  for (let index = 0; index < raw.length; index += 1) {
+    hash ^= raw.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const safeIdentity = stableIdentity.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+  return `rs_${safeIdentity}_${(hash >>> 0).toString(36)}`;
 };
 
 const buildRecentMirrorTargets = (songs: readonly any[], operation: 'upsert' | 'recent-hide', sourceUpdatedAtMs = Date.now()): V1MutationMirrorTarget[] => {
@@ -5711,6 +5733,49 @@ function App() {
   const RECENT_HEART_AUTHORITY_STORAGE_BASE = 'soridraw_recent_heart_authority_v1';
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
   const recentHeartAuthorityUidRef = useRef('');
+  const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+
+  const clearStudioHeartIntentTimer = (documentId: string) => {
+    const safeDocumentId = String(documentId || '').trim();
+    if (!safeDocumentId) return;
+    const timer = studioHeartIntentTimersRef.current.get(safeDocumentId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    studioHeartIntentTimersRef.current.delete(safeDocumentId);
+  };
+
+  const removeStudioHeartIntentLocal = (uid: string, documentId: string) => {
+    clearStudioHeartIntentTimer(documentId);
+    removeStudioHeartPendingIntent(uid, documentId);
+  };
+
+  const rememberStudioHeartPreviewVersion = (uid: string, documentId: string, version: number) => {
+    if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
+    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => ({
+      ...current,
+      signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
+    }));
+    if (!updated) return;
+    if (
+      updated.pendingRemotePreviewVersion > 0
+      && updated.pendingRemotePreviewVersion > updated.signalVersion
+    ) {
+      removeStudioHeartIntentLocal(uid, documentId);
+    }
+  };
+
+  const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
+    if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+    const pending = readStudioHeartPendingIntent(uid, documentId);
+    if (!pending) return;
+    if (pending.signalVersion > 0) {
+      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
+      return;
+    }
+    updateStudioHeartPendingIntent(uid, documentId, (current) => ({
+      ...current,
+      pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
+    }));
+  };
 
   const persistRecentHeartAuthority = (uid: string) => {
     if (!uid || typeof window === 'undefined') return;
@@ -10354,7 +10419,11 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean; intendedAction?: 'save' | 'unsave' }) => {
+  const toggleFavorite = async (song: SongResult, options?: {
+    trustedRecentStudio?: boolean;
+    intendedAction?: 'save' | 'unsave';
+    canonicalBaseline?: { saved: boolean; favorite: any | null };
+  }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -10371,6 +10440,10 @@ const toggleCycleVariantSelection = (
     // on PC and mobile even when they predate soridrawSongId.
     const recentSongSyncKey = options?.trustedRecentStudio ? buildRecentSongSyncKey(song) : '';
     const findLocalExistingFavorite = () => {
+      if (options?.canonicalBaseline) {
+        if (!options.canonicalBaseline.saved) return null;
+        return options.canonicalBaseline.favorite || null;
+      }
       if ((song as any)?.recentFavoriteDetachedAt) return null;
       const latestFavorites = favoritesStore.getFavorites();
       const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
@@ -10515,7 +10588,8 @@ const toggleCycleVariantSelection = (
         && remoteMusicNoteVersion <= localMusicNoteVersion
       );
       const serverExistingFav = (
-        localExistingFav
+        options?.canonicalBaseline
+        || localExistingFav
         || (song as any)?.recentFavoriteDetachedAt
         || canTrustRecentStudioLocalIdentity
       ) ? null : await findServerExistingFavorite().catch((error) => {

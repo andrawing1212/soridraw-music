@@ -1,3 +1,42 @@
+## CURRENT TASK — app285 저장/해제 동일 identity 실기기 확인 (2026-10-02 KST)
+
+현재:
+- app284 사용자 실기기 FAIL.
+- 실제 최신 unsave signal을 read-only로 확인한 결과, save는 song identity가 RTDB payload에 포함되지만 unsave는 exact document ID만 있고 item payload가 비어 있었음.
+- 동시에 Studio local handler가 unsave 뒤 modern recent row의 exact favorite link를 삭제하고 있었음.
+- 따라서 duplicate가 있는 문제 곡에서 빈 하트 상태에서는 PC/모바일이 서로 다른 favorite row를 볼 수 있고, 저장 순간에만 active favorite summary가 전파돼 다시 같은 곡으로 수렴하는 구조였음.
+- 사용자 관찰 "저장 전에는 다른 곡, 저장 후에는 같은 곡처럼 보임"과 일치.
+- app285는 save/unsave 양쪽 모두 같은 Recent Song identity + exact Music Note document link를 유지.
+- unsave signal에도 generation/soridraw/recent identity를 포함해 수신 기기가 Firestore read 없이 exact link를 갱신.
+- lost link가 heart action에서 처음 복구될 때만 user_recent_songs W1 1회 허용.
+- Focused Audit `36900679216` SUCCESS.
+- PREVIEW Release `36900908194` SUCCESS.
+- locked release commit `35027235894af100cff4155584c62baeb20854ca`.
+- `preview.soridraw.com` app285 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 delete/migration/backfill 없음.
+
+테스트:
+1. PC/모바일 둘 다 app285.
+2. `스쳐간 이름 뒤에` 한쪽 filled면 그쪽에서 해제 → 상대 즉시 empty.
+3. 같은 기기에서 저장 → 상대 즉시 filled.
+4. 반대 기기에서 해제 → 첫 기기 즉시 empty.
+5. 반대 기기에서 저장 → 첫 기기 즉시 filled.
+6. 양쪽 새로고침/재접속 후 마지막 상태 유지.
+7. 일반 정상 곡 1개 같은 순서 회귀 없음.
+8. 제목 변경/원복 app282 회귀 없음.
+9. 수신 기기 Firestore R0/W0, D1 R0/W0.
+10. 첫 lost-link repair action만 favorites W1 + recent W1 = 최대 W2 허용. 이후 동일 곡 toggle에서 recent repair W1 반복 시 FAIL.
+11. idle/페이지 왕복 추가 R/W 0.
+
+보호:
+- duplicate user data 자동 삭제/병합 금지.
+- 일반 recent heart 정상 경로와 app282 제목 동기화 유지.
+- app281 Suno URL, app280 tombstone, app278 공유노트 유지.
+- Explore public like app164/Worker195 동결.
+- 전체 favorites/recent scan/query/rebuild 금지.
+- 사용자 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app284 특정 곡 exact-link 하트 실기기 최종 확인 (2026-10-02 KST)
 
 현재:

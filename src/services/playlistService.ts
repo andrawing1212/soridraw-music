@@ -6,6 +6,7 @@ import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 import { readUserProfileCache } from '../lib/userProfileCache';
 import {
   markLibraryPlaylistRevisionCommitted,
+  noteLibraryPlaylistRevisionSignal,
   queueLibraryPlaylistRevisionBatch,
 } from './libraryPlaylistRevisionBatch';
 import {
@@ -112,6 +113,7 @@ const publishLibraryPlaylistSyncSignal = async (
         truncated: encoded.truncated,
       };
     }, { applyLocally: true });
+    noteLibraryPlaylistRevisionSignal(safeUid, syncVersion);
   } catch (error) {
     console.warn('[Library playlist sync] delta publish unavailable; version fallback remains active.', error);
   }

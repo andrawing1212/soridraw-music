@@ -1,3 +1,35 @@
+## CURRENT TASK — app278 공유노트 구조/legacy 최근곡 하트 실사용 확인 (2026-10-01 KST)
+
+현재:
+- app278 PREVIEW 배포 완료.
+- Focused Audit `36797912332` SUCCESS / Backend V2 Safety `36797912218` SUCCESS.
+- PREVIEW App Run `36798048915` SUCCESS / app278 exact build PASS.
+- 공유노트 새 저장뿐 아니라 폴더 구조와 changed-item 이동을 기존 UID RTDB 신호로 전달.
+- Music Note Like/Lock은 즉시 RTDB UI delta, canonical Firestore는 기존 page-exit 묶음 정책 유지.
+- legacy 최근곡은 deterministic `recentSongSyncKey`로 양 기기 하트 identity 보강.
+- TEST / PRODUCTION unchanged.
+
+사용자 테스트:
+1. PC에서 공유노트 폴더 하나 생성 → 모바일에 새로고침 없이 즉시 표시.
+2. 폴더 이름 변경 및 순서 이동 → 모바일 즉시 동일.
+3. 공유노트 곡 1개를 다른 폴더로 이동 → 모바일 즉시 이동.
+4. 모바일에서도 위 작업을 반대로 수행 → PC 즉시 동일.
+5. Music Note 카드 Like/Lock 한 번 변경 → 반대 기기 즉시 동일.
+6. `스쳐간 이름 뒤에` PC 저장/해제 → 모바일 즉시 동일.
+7. `스쳐간 이름 뒤에` 모바일 저장/해제 → PC 즉시 동일.
+8. Explore 공개곡 → 공유노트 저장 기존 정상 동작 재확인.
+9. 진단에서 수신 기기 Firestore R0/W0 확인.
+10. 아무 조작 없이 1분 대기 → 반복 Firestore/D1 R/W 0.
+
+비용/보호:
+- 구조/카드-state 실시간 화면 반영은 RTDB small delta이며 수신 Firestore R0/W0.
+- 폴더/곡 이동의 canonical 원본 write는 실제 사용자 변경이므로 유지.
+- 카드 Like/Lock 클릭마다 Firestore write를 새로 만들지 않음; 기존 page-exit 묶음 저장 유지.
+- 전체 favorites scan/query/rebuild 금지.
+- public Explore like app164/Worker195 동결 영역 비변경.
+- app273 공유노트 상세, app274/275 저장됨 표시, Music Note 60초 상세 편집 묶음 저장 보호.
+- 사용자 실사용 + 비용 PASS 전 TEST 승격 금지.
+
 ## CURRENT TASK — app277 양방향 동기화 + 비용 실사용 확인 (2026-10-01 KST)
 
 현재:

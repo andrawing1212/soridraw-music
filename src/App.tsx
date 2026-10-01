@@ -5751,10 +5751,11 @@ function App() {
     if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
-    if ((song as any)?.recentFavoriteIdentityHealedAt) {
-      return Boolean(linkedFavoriteId && statusMap.has(linkedFavoriteId));
-    }
-    if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
+    // app284 — Once a Recent Song carries an explicit Music Note document link,
+    // that exact document is the heart authority. Do not let an older duplicate
+    // with the same generation/recent key relight the heart after the linked row
+    // was unsaved. Normal songs already follow this one-link/one-active-row shape.
+    if (linkedFavoriteId) return statusMap.has(linkedFavoriteId);
     if (song.id && statusMap.has(song.id)) return true;
     const stableSongId = getLiveSoridrawSongId(song);
     if (stableSongId && statusMap.has(`soridraw:${stableSongId}`)) return true;
@@ -10200,7 +10201,10 @@ const toggleCycleVariantSelection = (
         const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
           String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
         );
-        if (exactLinkedFavorite) return exactLinkedFavorite;
+        // app284 — explicit linked id is a hard boundary. If its active row is
+        // absent locally, this is a save/restore action; never reinterpret a
+        // different duplicate with the same generation key as the current row.
+        return exactLinkedFavorite || null;
       }
       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
       if (byId) return byId;
@@ -10553,6 +10557,10 @@ const toggleCycleVariantSelection = (
         favoriteHidden: false,
         favoriteRemoved: false,
         favoriteRemovedAt: null,
+        unlikedAt: null,
+        unsavedAt: null,
+        deletedAt: null,
+        trashedAt: null,
         saved: true,
         createdAtMs,
         updatedAtMs: createdAtMs,
@@ -10561,12 +10569,18 @@ const toggleCycleVariantSelection = (
         searchTokens: buildFavoriteSearchTokens(song)
       });
       const deterministicRecentIdentity = recentSongSyncKey || buildRecentSongSyncKey(song) || favoriteSoridrawSongId || '';
+      const linkedFavoriteAuthorityId = String((song as any)?.favoriteFirestoreId || '').trim();
       const useDeterministicRecentFavoriteDoc = Boolean(
         canTrustRecentStudioLocalIdentity && deterministicRecentIdentity
       );
-      const favoriteDocRef = useDeterministicRecentFavoriteDoc
-        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, deterministicRecentIdentity))
-        : null;
+      // app284 — preserve the exact Recent Song -> Music Note link first.
+      // This turns an empty-heart click on a soft-removed linked document into
+      // one exact W1 restore instead of creating/finding a duplicate row.
+      const favoriteDocRef = linkedFavoriteAuthorityId
+        ? doc(db, 'favorites', linkedFavoriteAuthorityId)
+        : useDeterministicRecentFavoriteDoc
+          ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, deterministicRecentIdentity))
+          : null;
       if (favoriteDocRef) {
         await runV1MutationBoundary(
           { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1, syncItem: { ...favoritePayload, id: favoriteDocRef.id, firestoreId: favoriteDocRef.id } },

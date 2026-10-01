@@ -2,6 +2,7 @@ import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1Mut
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
+  publishRecentSongEditPreviewDelta,
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
@@ -321,6 +322,40 @@ const recentSongsSessionVerifiedUids = new Set<string>();
 const recentSongsSessionReadInFlightUids = new Set<string>();
 const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
+const RECENT_SONG_TEXT_BATCH_MS = 60_000;
+const RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text_pending_v2';
+type RecentSongTextPendingMarker = {
+  operation: 'regenerate' | 'edit' | 'pre-favorite-edit';
+  activeIndex: number;
+  mutationEpoch: number;
+  updatedAtMs: number;
+};
+const getRecentSongTextPendingStorageKey = (uid: string) => `${RECENT_SONG_TEXT_PENDING_STORAGE_BASE}_${uid}`;
+const readRecentSongTextPendingMarker = (uid: string): RecentSongTextPendingMarker | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getRecentSongTextPendingStorageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const operation = String(parsed?.operation || '');
+    if (!['regenerate', 'edit', 'pre-favorite-edit'].includes(operation)) return null;
+    return {
+      operation: operation as RecentSongTextPendingMarker['operation'],
+      activeIndex: Math.floor(Number(parsed?.activeIndex ?? -1)),
+      mutationEpoch: Math.max(0, Math.floor(Number(parsed?.mutationEpoch || 0))),
+      updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
+    };
+  } catch { return null; }
+};
+const writeRecentSongTextPendingMarker = (uid: string, marker: RecentSongTextPendingMarker) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(getRecentSongTextPendingStorageKey(uid), JSON.stringify(marker)); } catch {}
+};
+const clearRecentSongTextPendingMarker = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try { localStorage.removeItem(getRecentSongTextPendingStorageKey(uid)); } catch {}
+};
+const hasRecentSongTextPendingMarker = (uid: string) => Boolean(readRecentSongTextPendingMarker(uid));
 
 const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
 const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
@@ -11792,7 +11827,7 @@ const unlockAllFavorites = async () => {
       }
       // In-flight local mutations and locally saved text edits must never be
       // overwritten by an older remote snapshot.
-      if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid) return;
+      if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
@@ -11802,7 +11837,7 @@ const unlockAllFavorites = async () => {
         .then((snap) => {
           if (cancelledRecentSongsRead || snap.metadata.fromCache) return;
           if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
-          if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid) return;
+          if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
 
           const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
@@ -11943,6 +11978,13 @@ const unlockAllFavorites = async () => {
       }
       const signaledVersion = Number(detail.version || 0);
       const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
+      const isEditPreview = String(detail.operation || '') === 'edit-preview';
+
+      if (isEditPreview && itemResult.applied) {
+        // Non-canonical live preview: update the other device now, but wait for
+        // the later batched Firestore write before advancing document ACKs.
+        return;
+      }
 
       if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
         // A canonical recent-song mutation carried the changed item itself, so
@@ -12511,6 +12553,7 @@ const unlockAllFavorites = async () => {
       try {
         const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
         recentSongTextWritePendingRef.current = null;
+        clearRecentSongTextPendingMarker(user.uid);
         if (recentSongTextWriteTimerRef.current !== null) {
           window.clearTimeout(recentSongTextWriteTimerRef.current);
           recentSongTextWriteTimerRef.current = null;
@@ -12544,6 +12587,7 @@ const unlockAllFavorites = async () => {
         try {
           const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
           recentSongTextWritePendingRef.current = null;
+          clearRecentSongTextPendingMarker(user.uid);
           if (recentSongTextWriteTimerRef.current !== null) {
             window.clearTimeout(recentSongTextWriteTimerRef.current);
             recentSongTextWriteTimerRef.current = null;
@@ -14456,7 +14500,11 @@ ${normalizePromptForDisplay(result.prompt)}
         { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: pending.syncItem },
         persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
       );
-      if (!persistedVersion) return;
+      if (!persistedVersion) {
+        clearRecentSongTextPendingMarker(pending.uid);
+        return;
+      }
+      clearRecentSongTextPendingMarker(pending.uid);
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
       // Keep the newest pending value so a later edit/flush can retry instead of
@@ -14491,15 +14539,83 @@ ${normalizePromptForDisplay(result.prompt)}
       historyIndex: activeIndex,
       latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
     });
+    const mutationEpoch = readRecentSongsMutationEpoch(uid);
+    const syncItem = activeIndex >= 0 && activeIndex < nextSongs.length ? nextSongs[activeIndex] : undefined;
     recentSongTextWritePendingRef.current = {
       uid,
       songs: nextSongs,
       operation,
       mirrorTargets,
-      mutationEpoch: readRecentSongsMutationEpoch(uid),
-      syncItem: activeIndex >= 0 && activeIndex < nextSongs.length ? nextSongs[activeIndex] : undefined,
+      mutationEpoch,
+      syncItem,
     };
-  }, []);
+    writeRecentSongTextPendingMarker(uid, {
+      operation,
+      activeIndex,
+      mutationEpoch,
+      updatedAtMs: Date.now(),
+    });
+
+    if (syncItem) {
+      void publishRecentSongEditPreviewDelta(uid, syncItem)
+        .catch((error) => console.warn('Recent song edit live preview unavailable.', error));
+    }
+
+    if (recentSongTextWriteTimerRef.current !== null) {
+      window.clearTimeout(recentSongTextWriteTimerRef.current);
+    }
+    recentSongTextWriteTimerRef.current = window.setTimeout(() => {
+      recentSongTextWriteTimerRef.current = null;
+      void flushRecentSongTextWrite();
+    }, RECENT_SONG_TEXT_BATCH_MS);
+  }, [flushRecentSongTextWrite]);
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid || location.pathname !== '/studio') return;
+    if (recentSongTextWritePendingRef.current?.uid === uid) return;
+
+    const marker = readRecentSongTextPendingMarker(uid);
+    if (!marker) return;
+    if (marker.mutationEpoch !== readRecentSongsMutationEpoch(uid)) {
+      clearRecentSongTextPendingMarker(uid);
+      return;
+    }
+    const cache = loadRecentSongsCache(uid);
+    if (!cache?.history?.length) {
+      clearRecentSongTextPendingMarker(uid);
+      return;
+    }
+    const activeIndex = marker.activeIndex >= 0 && marker.activeIndex < cache.history.length
+      ? marker.activeIndex
+      : Math.min(Math.max(Number(cache.historyIndex || 0), 0), cache.history.length - 1);
+    const syncItem = cache.history[activeIndex];
+    recentSongTextWritePendingRef.current = {
+      uid,
+      songs: cache.history,
+      operation: marker.operation,
+      mirrorTargets: syncItem ? buildRecentMirrorTargets([syncItem], 'upsert') : undefined,
+      mutationEpoch: marker.mutationEpoch,
+      syncItem,
+    };
+
+    const age = Math.max(0, Date.now() - marker.updatedAtMs);
+    const delay = Math.max(1_000, RECENT_SONG_TEXT_BATCH_MS - age);
+    if (recentSongTextWriteTimerRef.current !== null) {
+      window.clearTimeout(recentSongTextWriteTimerRef.current);
+    }
+    recentSongTextWriteTimerRef.current = window.setTimeout(() => {
+      recentSongTextWriteTimerRef.current = null;
+      void flushRecentSongTextWrite();
+    }, delay);
+
+    return () => {
+      if (recentSongTextWriteTimerRef.current !== null) {
+        window.clearTimeout(recentSongTextWriteTimerRef.current);
+        recentSongTextWriteTimerRef.current = null;
+      }
+    };
+  }, [user?.uid, location.pathname, flushRecentSongTextWrite]);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
     const currentIndex = historyIndexRef.current;
@@ -14929,11 +15045,10 @@ ${normalizePromptForDisplay(result.prompt)}
       recentSongsReadyToCacheRef.current = true;
 
       if (user?.uid) {
+        // Local UI/cache updates immediately. A compact RTDB preview keeps the
+        // other device current, while the canonical aggregate waits for the
+        // 60-second trailing batch so title/prompt/lyrics edits collapse.
         queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
-        // "수정 저장" is an actual user change, so persist the one recent-song
-        // aggregate document once here. The RTDB post-success payload carries the
-        // changed item to the other device, avoiding a receiving Firestore read.
-        await flushRecentSongTextWrite();
       }
 
       setIsRecentSongEditOpen(false);

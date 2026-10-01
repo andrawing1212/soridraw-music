@@ -22,6 +22,7 @@ import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshP
 import {
   flushLibraryPlaylistRevisionBatch,
   markLibraryPlaylistRevisionCommitted,
+  noteLibraryPlaylistRevisionSignal,
   resumeLibraryPlaylistRevisionBatch,
 } from '../services/libraryPlaylistRevisionBatch';
 import { Playlist, PlaylistItem } from '../types';
@@ -1727,6 +1728,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!user?.uid || isSharedView) return;
     const uid = user.uid;
     return subscribeLibraryPlaylistSync(uid, (signal) => {
+      noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion);
       if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
       void applyLibraryPlaylistSyncSignalToCache(uid, signal).then((applied) => {
         if (applied) markCacheDiagnostic('library', 'CACHE', 0);

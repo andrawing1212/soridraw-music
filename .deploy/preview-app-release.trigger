@@ -4,3 +4,4 @@ app_version=292
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
+release_request=external-292-150s

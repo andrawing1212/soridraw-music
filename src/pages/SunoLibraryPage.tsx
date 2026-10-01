@@ -1729,6 +1729,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const uid = user.uid;
     return subscribeLibraryPlaylistSync(uid, (signal) => {
       noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion);
+      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete'].includes(signal.operation)) {
+        markLibraryPlaylistRevisionCommitted(uid, signal.syncVersion);
+      }
       if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
       void applyLibraryPlaylistSyncSignalToCache(uid, signal).then((applied) => {
         if (applied) markCacheDiagnostic('library', 'CACHE', 0);
@@ -1830,6 +1833,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (detail?.uid !== uid) return;
       const remoteVersion = readRemoteVersion();
+      markLibraryPlaylistRevisionCommitted(uid, remoteVersion);
       if (remoteVersion <= playlistListCacheVersionRef.current) return;
 
       if (profileFallbackTimer !== null) window.clearTimeout(profileFallbackTimer);

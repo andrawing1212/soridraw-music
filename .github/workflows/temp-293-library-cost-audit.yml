@@ -6,6 +6,7 @@ on:
       - 'src/services/playlistService.ts'
       - 'src/pages/SunoLibraryPage.tsx'
       - 'src/pages/FavoritesPage.tsx'
+      - 'src/lib/recentSongsSyncGate.ts'
       - 'database.rules.json'
       - 'scripts/verify-293-library-playlist-delta-cost.mjs'
       - '.github/workflows/temp-293-library-cost-audit.yml'

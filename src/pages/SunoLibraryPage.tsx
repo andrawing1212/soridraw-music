@@ -18,7 +18,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, toggleTrackLike } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
@@ -1716,6 +1716,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
   };
 
+  // app293 — compact changed-item sync keeps warm Library playlist devices
+  // current without rereading an entire playlist collection.
+  useEffect(() => {
+    if (!user?.uid || isSharedView) return;
+    const uid = user.uid;
+    return subscribeLibraryPlaylistSync(uid, (signal) => {
+      if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
+      void applyLibraryPlaylistSyncSignalToCache(uid, signal).then((applied) => {
+        if (applied) markCacheDiagnostic('library', 'CACHE', 0);
+      });
+    });
+  }, [user?.uid, isSharedView]);
+
   const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
 
   useEffect(() => {
@@ -1727,6 +1740,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     let cancelled = false;
+    let profileFallbackTimer: number | null = null;
     const uid = user.uid;
     const readRemoteVersion = () => Number((readUserProfileCache(uid) as any)?.syncVersions?.playlists || 0);
 
@@ -1782,7 +1796,24 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const handleProfileChange = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (detail?.uid !== uid) return;
-      if (readRemoteVersion() > playlistListCacheVersionRef.current) void loadPlaylists(true);
+      const remoteVersion = readRemoteVersion();
+      if (remoteVersion <= playlistListCacheVersionRef.current) return;
+
+      if (profileFallbackTimer !== null) window.clearTimeout(profileFallbackTimer);
+      profileFallbackTimer = window.setTimeout(() => {
+        profileFallbackTimer = null;
+        void readLibraryPlaylistListCache(uid).then((cached) => {
+          if (cancelled) return;
+          const latestRemoteVersion = readRemoteVersion();
+          if (cached && cached.version >= latestRemoteVersion) {
+            playlistListCacheVersionRef.current = cached.version;
+            setPlaylists(cached.items);
+            markCacheDiagnostic('library', 'CACHE', 0);
+            return;
+          }
+          void loadPlaylists(true);
+        });
+      }, 650);
     };
 
     window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
@@ -1791,6 +1822,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return () => {
       cancelled = true;
+      if (profileFallbackTimer !== null) window.clearTimeout(profileFallbackTimer);
       window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
     };

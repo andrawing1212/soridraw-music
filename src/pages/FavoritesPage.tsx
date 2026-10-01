@@ -6322,12 +6322,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     else setMyNoteFolders(nextFolders);
 
     try {
+      // app293 — folder ID + structure is the canonical membership/title pair.
+      // Legacy per-song title copies remain untouched for backward readability,
+      // so rename is one structure write instead of rewriting every song.
       await persistMusicNoteFolders(mode, nextFolders);
-      const affectedSongs = favorites.filter((song) => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
-      const titleUpdates = mode === 'sharedNote'
-        ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
-        : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), titleUpdates, 'folder-rename');
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {

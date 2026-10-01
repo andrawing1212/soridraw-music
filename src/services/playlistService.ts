@@ -1,4 +1,5 @@
-import { db } from '../firebase';
+import { db, realtimeDb } from '../firebase';
+import { onValue, ref, runTransaction as runRealtimeTransaction, type Unsubscribe } from 'firebase/database';
 import { collection, doc, writeBatch, serverTimestamp, getDocs, query, where, orderBy, limit } from '../lib/firestoreMeasured';
 import { Playlist, PlaylistItem } from '../types';
 import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
@@ -8,7 +9,9 @@ import {
   nextLibraryPlaylistSyncVersion,
   patchLibraryPlaylistItemsCache,
   patchLibraryPlaylistListCache,
+  readLibraryPlaylistItemsCache,
   readLibraryPlaylistListCache,
+  writeLibraryPlaylistItemsCache,
   writeLibraryPlaylistListCache,
 } from '../lib/libraryPlaylistCache';
 
@@ -25,6 +28,100 @@ const playlistCacheIsCurrent = (uid: string, cachedVersion: number): boolean => 
   const remoteVersion = readRemotePlaylistVersion(uid);
   return remoteVersion <= 0 || cachedVersion >= remoteVersion;
 };
+
+const LIBRARY_PLAYLIST_SYNC_DEVICE_STORAGE_KEY = 'soridraw_library_playlist_sync_device_v1';
+const MAX_LIBRARY_PLAYLIST_SYNC_PAYLOAD_CHARS = 24000;
+
+export type LibraryPlaylistSyncSignal = {
+  version: number;
+  at: number;
+  originDeviceId: string;
+  operation: string;
+  syncVersion: number;
+  payloadJson: string;
+  truncated: boolean;
+};
+
+export const getLibraryPlaylistSyncDeviceId = (): string => {
+  if (typeof window === 'undefined') return 'server';
+  try {
+    const existing = String(window.localStorage.getItem(LIBRARY_PLAYLIST_SYNC_DEVICE_STORAGE_KEY) || '').trim();
+    if (existing) return existing;
+    const created = `lib_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(LIBRARY_PLAYLIST_SYNC_DEVICE_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return `lib_mem_${Math.random().toString(36).slice(2, 10)}`;
+  }
+};
+
+const encodeLibraryPlaylistSyncPayload = (payload: Record<string, unknown>): { payloadJson: string; truncated: boolean } => {
+  try {
+    const encoded = JSON.stringify(payload || {});
+    if (encoded.length <= MAX_LIBRARY_PLAYLIST_SYNC_PAYLOAD_CHARS) {
+      return { payloadJson: encoded, truncated: false };
+    }
+  } catch {}
+  return { payloadJson: '', truncated: true };
+};
+
+const normalizeLibraryPlaylistSyncSignal = (raw: unknown): LibraryPlaylistSyncSignal | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const version = Math.floor(Number(value.version || 0));
+  const syncVersion = Math.floor(Number(value.syncVersion || 0));
+  const at = Math.floor(Number(value.at || 0));
+  const originDeviceId = String(value.originDeviceId || '').trim();
+  const operation = String(value.operation || '').trim().slice(0, 48);
+  const payloadJson = typeof value.payloadJson === 'string' && value.payloadJson.length <= MAX_LIBRARY_PLAYLIST_SYNC_PAYLOAD_CHARS
+    ? value.payloadJson
+    : '';
+  if (version <= 0 || syncVersion <= 0 || at <= 0 || !originDeviceId || !operation) return null;
+  return { version, syncVersion, at, originDeviceId, operation, payloadJson, truncated: value.truncated === true };
+};
+
+const publishLibraryPlaylistSyncSignal = async (
+  uid: string,
+  operation: string,
+  syncVersion: number,
+  payload: Record<string, unknown>,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !Number.isFinite(syncVersion) || syncVersion <= 0) return;
+  const encoded = encodeLibraryPlaylistSyncPayload(payload);
+  const signalRef = ref(realtimeDb, `userSync/${safeUid}/libraryPlaylist`);
+  try {
+    await runRealtimeTransaction(signalRef, (current) => {
+      const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
+      return {
+        version: Math.max(Date.now(), currentVersion + 1),
+        at: Date.now(),
+        originDeviceId: getLibraryPlaylistSyncDeviceId(),
+        operation: String(operation || '').slice(0, 48),
+        syncVersion: Math.floor(syncVersion),
+        payloadJson: encoded.payloadJson,
+        truncated: encoded.truncated,
+      };
+    }, { applyLocally: true });
+  } catch (error) {
+    console.warn('[Library playlist sync] delta publish unavailable; version fallback remains active.', error);
+  }
+};
+
+export const subscribeLibraryPlaylistSync = (
+  uid: string,
+  listener: (signal: LibraryPlaylistSyncSignal) => void,
+): Unsubscribe => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return () => {};
+  return onValue(ref(realtimeDb, `userSync/${safeUid}/libraryPlaylist`), (snapshot) => {
+    const signal = normalizeLibraryPlaylistSyncSignal(snapshot.val());
+    if (signal) listener(signal);
+  }, (error) => {
+    console.warn('[Library playlist sync] delta subscription unavailable; version fallback remains active.', error);
+  });
+};
+
 
 const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
   const sourceType = normalizeKeyPart(item?.sourceType);
@@ -46,25 +143,183 @@ const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<Pla
   return Boolean(keyA && keyB && keyA === keyB);
 };
 
+const sortPlaylists = (items: Playlist[]) => [...items].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+const sortPlaylistItems = (items: PlaylistItem[]) => [...items].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+export const applyLibraryPlaylistSyncSignalToCache = async (
+  uid: string,
+  signal: LibraryPlaylistSyncSignal,
+): Promise<boolean> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !signal || signal.syncVersion <= 0 || signal.truncated || !signal.payloadJson) return false;
+
+  let payload: Record<string, any>;
+  try {
+    const parsed = JSON.parse(signal.payloadJson);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+    payload = parsed;
+  } catch {
+    return false;
+  }
+
+  const version = signal.syncVersion;
+  const patchLists = async (updater: (items: Playlist[]) => Playlist[]): Promise<boolean> => {
+    const current = await readLibraryPlaylistListCache(safeUid);
+    if (!current) return false;
+    if (current.version >= version) return true;
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(updater(current.items)), version);
+    return true;
+  };
+  const patchItems = async (playlistId: string, updater: (items: PlaylistItem[]) => PlaylistItem[]): Promise<boolean> => {
+    const safePlaylistId = String(playlistId || '').trim();
+    if (!safePlaylistId) return false;
+    const current = await readLibraryPlaylistItemsCache(safeUid, safePlaylistId);
+    if (!current) return false;
+    if (current.version >= version) return true;
+    await writeLibraryPlaylistItemsCache(safeUid, safePlaylistId, sortPlaylistItems(updater(current.items)), version);
+    return true;
+  };
+  const touchListRevisions = async (playlistIds: string[]): Promise<boolean> => {
+    const idSet = new Set(playlistIds.map((id) => String(id || '').trim()).filter(Boolean));
+    if (idSet.size === 0) return false;
+    return patchLists((items) => items.map((playlist) => (
+      playlist.id && idSet.has(playlist.id)
+        ? { ...playlist, itemsRevision: Math.max(Number(playlist.itemsRevision || 0), version) }
+        : playlist
+    )));
+  };
+
+  if (signal.operation === 'playlist-create') {
+    const playlist = payload.playlist as Playlist | undefined;
+    if (!playlist?.id) return false;
+    return patchLists((items) => items.some((item) => item.id === playlist.id)
+      ? items.map((item) => item.id === playlist.id ? { ...item, ...playlist } : item)
+      : [...items, playlist]);
+  }
+  if (signal.operation === 'playlist-rename') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const title = String(payload.title || '').trim();
+    if (!playlistId || !title) return false;
+    return patchLists((items) => items.map((playlist) => playlist.id === playlistId ? { ...playlist, title } : playlist));
+  }
+  if (signal.operation === 'playlist-delete') {
+    const playlistId = String(payload.playlistId || '').trim();
+    if (!playlistId) return false;
+    const listApplied = await patchLists((items) => items.filter((playlist) => playlist.id !== playlistId));
+    if (listApplied) await deleteLibraryPlaylistItemsCache(safeUid, playlistId);
+    return listApplied;
+  }
+  if (signal.operation === 'item-add') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const item = payload.item as PlaylistItem | undefined;
+    if (!playlistId || !item?.id) return false;
+    const [itemsApplied, listApplied] = await Promise.all([
+      patchItems(playlistId, (items) => items.some((entry) => entry.id === item.id)
+        ? items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
+        : [...items, item]),
+      touchListRevisions([playlistId]),
+    ]);
+    return itemsApplied && listApplied;
+  }
+  if (signal.operation === 'item-delete') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const itemId = String(payload.itemId || '').trim();
+    if (!playlistId || !itemId) return false;
+    const [itemsApplied, listApplied] = await Promise.all([
+      patchItems(playlistId, (items) => items.filter((item) => item.id !== itemId)),
+      touchListRevisions([playlistId]),
+    ]);
+    return itemsApplied && listApplied;
+  }
+  if (signal.operation === 'item-move') {
+    const fromPlaylistId = String(payload.fromPlaylistId || '').trim();
+    const toPlaylistId = String(payload.toPlaylistId || '').trim();
+    const oldItemId = String(payload.oldItemId || '').trim();
+    const item = payload.item as PlaylistItem | undefined;
+    if (!fromPlaylistId || !toPlaylistId || !oldItemId || !item?.id) return false;
+    const [fromApplied, toApplied, listApplied] = await Promise.all([
+      patchItems(fromPlaylistId, (items) => items.filter((entry) => entry.id !== oldItemId)),
+      patchItems(toPlaylistId, (items) => items.some((entry) => entry.id === item.id)
+        ? items.map((entry) => entry.id === item.id ? { ...entry, ...item } : entry)
+        : [...items, item]),
+      touchListRevisions([fromPlaylistId, toPlaylistId]),
+    ]);
+    return fromApplied && toApplied && listApplied;
+  }
+  if (signal.operation === 'item-color') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const itemId = String(payload.itemId || '').trim();
+    if (!playlistId || !itemId) return false;
+    const colorTag = payload.colorTag === null ? null : String(payload.colorTag || '').trim() || null;
+    const [itemsApplied, listApplied] = await Promise.all([
+      patchItems(playlistId, (items) => items.map((item) => item.id === itemId ? { ...item, colorTag } : item)),
+      touchListRevisions([playlistId]),
+    ]);
+    return itemsApplied && listApplied;
+  }
+  if (signal.operation === 'item-swap') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const itemAId = String(payload.itemAId || '').trim();
+    const itemBId = String(payload.itemBId || '').trim();
+    const itemAOrder = Number(payload.itemAOrder);
+    const itemBOrder = Number(payload.itemBOrder);
+    if (!playlistId || !itemAId || !itemBId || !Number.isFinite(itemAOrder) || !Number.isFinite(itemBOrder)) return false;
+    const [itemsApplied, listApplied] = await Promise.all([
+      patchItems(playlistId, (items) => items.map((item) => {
+        if (item.id === itemAId) return { ...item, order: itemAOrder };
+        if (item.id === itemBId) return { ...item, order: itemBOrder };
+        return item;
+      })),
+      touchListRevisions([playlistId]),
+    ]);
+    return itemsApplied && listApplied;
+  }
+  return false;
+};
+
+
 
 // 1006 — A playlist insert must stay O(1) as a folder grows. The old path read
 // every item in the destination collection just to detect a duplicate and find
 // max order, so saving one song could cost hundreds/thousands of reads. Query
 // only the same source family (bounded) plus the single highest-order row.
-const resolvePlaylistInsertOrder = async (itemsRef: any, itemData: Partial<PlaylistItem> | any): Promise<number> => {
+const resolvePlaylistInsertOrder = async (
+  uid: string,
+  playlistId: string,
+  itemsRef: any,
+  itemData: Partial<PlaylistItem> | any,
+): Promise<number> => {
+  const [listCache, itemsCache] = await Promise.all([
+    readLibraryPlaylistListCache(uid),
+    readLibraryPlaylistItemsCache(uid, playlistId),
+  ]);
+  const playlist = listCache?.items.find((entry) => entry.id === playlistId);
+  const expectedItemsRevision = Number(playlist?.itemsRevision || 0);
+  const canTrustWarmItems = Boolean(
+    listCache
+    && playlistCacheIsCurrent(uid, listCache.version)
+    && itemsCache
+    && (expectedItemsRevision <= 0 || itemsCache.version >= expectedItemsRevision)
+  );
+  if (canTrustWarmItems && itemsCache) {
+    if (itemsCache.items.some((entry) => isSamePlaylistSourceItem(entry, itemData))) throw new Error('DUPLICATE');
+    const highestOrder = itemsCache.items.reduce((highest, entry) => {
+      const order = Number(entry?.order || 0);
+      return Number.isFinite(order) ? Math.max(highest, order) : highest;
+    }, 0);
+    return highestOrder + 1;
+  }
+
   const sourceId = normalizeKeyPart(itemData?.sourceId || itemData?.trackId);
   const uniqueKey = getPlaylistItemUniqueKey(itemData);
-
   const duplicateSnap = sourceId
     ? await getDocs(query(itemsRef, where('sourceId', '==', sourceId), limit(8)))
     : await getDocs(query(itemsRef, where('playlistUniqueKey', '==', uniqueKey), limit(1)));
-
   let duplicate = false;
   duplicateSnap.forEach((entry) => {
     if (isSamePlaylistSourceItem(entry.data() as PlaylistItem, itemData)) duplicate = true;
   });
   if (duplicate) throw new Error('DUPLICATE');
-
   const tailSnap = await getDocs(query(itemsRef, orderBy('order', 'desc'), limit(1)));
   const highestOrder = tailSnap.empty ? 0 : Number((tailSnap.docs[0]?.data() as any)?.order || 0);
   return (Number.isFinite(highestOrder) ? highestOrder : 0) + 1;
@@ -263,7 +518,18 @@ export const createPlaylist = async (uid: string, type: 'normal' | 'shared', tit
   batch.set(newDocRef, created);
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
-  await patchLibraryPlaylistListCache(uid, (items) => [...items, { id: newDocRef.id, ...created } as Playlist], syncVersion);
+  const createdForCache = {
+    id: newDocRef.id,
+    title,
+    type,
+    order,
+    isDefault: false,
+    itemsRevision: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as Playlist;
+  await patchLibraryPlaylistListCache(uid, (items) => [...items, createdForCache], syncVersion);
+  await publishLibraryPlaylistSyncSignal(uid, 'playlist-create', syncVersion, { playlist: createdForCache });
   return newDocRef.id;
 };
 
@@ -280,11 +546,12 @@ export const renamePlaylist = async (uid: string, playlistId: string, title: str
   await patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
     playlist.id === playlistId ? { ...playlist, title } : playlist
   )), syncVersion);
+  await publishLibraryPlaylistSyncSignal(uid, 'playlist-rename', syncVersion, { playlistId, title });
 };
 
 export const addPlaylistItem = async (uid: string, playlistId: string, itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'>) => {
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
-  const newOrder = await resolvePlaylistInsertOrder(itemsRef, itemData);
+  const newOrder = await resolvePlaylistInsertOrder(uid, playlistId, itemsRef, itemData);
   const newItemRef = doc(itemsRef);
 
   const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
@@ -303,12 +570,21 @@ export const addPlaylistItem = async (uid: string, playlistId: string, itemData:
   }, { merge: true });
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
   await batch.commit();
+  const createdForCache = {
+    ...itemData,
+    id: newItemRef.id,
+    playlistUniqueKey: getPlaylistItemUniqueKey(itemData),
+    order: newOrder,
+    addedAt: Date.now(),
+    updatedAt: Date.now(),
+  } as PlaylistItem;
   await Promise.all([
-    patchLibraryPlaylistItemsCache(uid, playlistId, (items) => [...items, { id: newItemRef.id, ...created } as PlaylistItem], syncVersion),
+    patchLibraryPlaylistItemsCache(uid, playlistId, (items) => [...items, createdForCache], syncVersion),
     patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
       playlist.id === playlistId ? { ...playlist, itemsRevision: syncVersion } as Playlist : playlist
     )), syncVersion),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'item-add', syncVersion, { playlistId, item: createdForCache });
 
   return newItemRef.id;
 };
@@ -330,11 +606,12 @@ export const deletePlaylistItem = async (uid: string, playlistId: string, itemId
       playlist.id === playlistId ? { ...playlist, itemsRevision: syncVersion } as Playlist : playlist
     )), syncVersion),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'item-delete', syncVersion, { playlistId, itemId });
 };
 
 export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPlaylistId: string, item: PlaylistItem) => {
   const toItemsRef = collection(db, 'user_playlists', uid, 'lists', toPlaylistId, 'items');
-  const newOrder = await resolvePlaylistInsertOrder(toItemsRef, item);
+  const newOrder = await resolvePlaylistInsertOrder(uid, toPlaylistId, toItemsRef, item);
   const batch = writeBatch(db);
   const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
 
@@ -369,15 +646,29 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
   await batch.commit();
+  const movedForCache = {
+    ...itemWithoutId,
+    id: newItemRef.id,
+    playlistUniqueKey: getPlaylistItemUniqueKey(itemWithoutId),
+    order: newOrder,
+    addedAt: Date.now(),
+    updatedAt: Date.now(),
+  } as PlaylistItem;
   await Promise.all([
     patchLibraryPlaylistItemsCache(uid, fromPlaylistId, (items) => items.filter((entry) => entry.id !== item.id), syncVersion),
-    patchLibraryPlaylistItemsCache(uid, toPlaylistId, (items) => [...items, { id: newItemRef.id, ...newItemData } as PlaylistItem], syncVersion),
+    patchLibraryPlaylistItemsCache(uid, toPlaylistId, (items) => [...items, movedForCache], syncVersion),
     patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
       playlist.id === fromPlaylistId || playlist.id === toPlaylistId
         ? { ...playlist, itemsRevision: syncVersion } as Playlist
         : playlist
     )), syncVersion),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'item-move', syncVersion, {
+    fromPlaylistId,
+    toPlaylistId,
+    oldItemId: item.id,
+    item: movedForCache,
+  });
 };
 
 export const updatePlaylistItemColor = async (uid: string, playlistId: string, itemId: string, colorTag: string | null) => {
@@ -399,6 +690,7 @@ export const updatePlaylistItemColor = async (uid: string, playlistId: string, i
       playlist.id === playlistId ? { ...playlist, itemsRevision: syncVersion } as Playlist : playlist
     )), syncVersion),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'item-color', syncVersion, { playlistId, itemId, colorTag });
 };
 
 export const swapPlaylistItemOrder = async (uid: string, playlistId: string, itemA: PlaylistItem, itemB: PlaylistItem) => {
@@ -424,20 +716,43 @@ export const swapPlaylistItemOrder = async (uid: string, playlistId: string, ite
       playlist.id === playlistId ? { ...playlist, itemsRevision: syncVersion } as Playlist : playlist
     )), syncVersion),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'item-swap', syncVersion, {
+    playlistId,
+    itemAId: itemA.id,
+    itemBId: itemB.id,
+    itemAOrder: itemB.order,
+    itemBOrder: itemA.order,
+  });
 };
 
 export const deletePlaylist = async (uid: string, playlistId: string) => {
-  // Delete subcollection first
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
-  const itemsSnap = await getDocs(itemsRef);
+  const [listCache, itemCache] = await Promise.all([
+    readLibraryPlaylistListCache(uid),
+    readLibraryPlaylistItemsCache(uid, playlistId),
+  ]);
+  const playlist = listCache?.items.find((entry) => entry.id === playlistId);
+  const expectedItemsRevision = Number(playlist?.itemsRevision || 0);
+  const canUseWarmItemIds = Boolean(
+    listCache
+    && playlistCacheIsCurrent(uid, listCache.version)
+    && itemCache
+    && (expectedItemsRevision <= 0 || itemCache.version >= expectedItemsRevision)
+  );
+
+  let itemIds: string[] = [];
+  if (canUseWarmItemIds && itemCache) {
+    itemIds = itemCache.items.map((item) => String(item.id || '').trim()).filter(Boolean);
+  } else {
+    const itemsSnap = await getDocs(itemsRef);
+    itemIds = itemsSnap.docs.map((itemDoc) => itemDoc.id);
+  }
+
   const batch = writeBatch(db);
   const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
-
-  itemsSnap.forEach((itemDoc) => {
-    batch.delete(itemDoc.ref);
+  itemIds.forEach((itemId) => {
+    batch.delete(doc(itemsRef, itemId));
   });
-
-  // Delete the playlist document itself
   const playlistRef = doc(db, 'user_playlists', uid, 'lists', playlistId);
   batch.delete(playlistRef);
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
@@ -447,6 +762,7 @@ export const deletePlaylist = async (uid: string, playlistId: string) => {
     patchLibraryPlaylistListCache(uid, (items) => items.filter((playlist) => playlist.id !== playlistId), syncVersion),
     deleteLibraryPlaylistItemsCache(uid, playlistId),
   ]);
+  await publishLibraryPlaylistSyncSignal(uid, 'playlist-delete', syncVersion, { playlistId });
 };
 
 export const getTrackGlobalId = (item: PlaylistItem | any) => {

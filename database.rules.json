@@ -115,6 +115,33 @@
             ".validate": false
           }
         },
+        "libraryPlaylist": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','payloadJson','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "syncVersion": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "payloadJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
         "exploreLike": {
           ".validate": "newData.hasChildren(['version','previousVersion','results']) && newData.child('version').val() > newData.child('previousVersion').val()",
           "version": {

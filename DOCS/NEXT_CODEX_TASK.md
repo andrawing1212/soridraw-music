@@ -9,7 +9,12 @@
 - Backend V2 Safety `36885082023` SUCCESS.
 - Focused Audit `36885111844` SUCCESS.
 - app version 282.
-- PREVIEW 배포 대기.
+- PREVIEW 배포 완료: Run `36887684964` SUCCESS.
+- locked release commit `301330edc5eafc01a43027205cbaf28cab00ce9a`.
+- `preview.soridraw.com` app282 exact build PASS.
+- shared RTDB Rules deploy/exact match PASS.
+- TEST / PRODUCTION unchanged.
+- 현재는 사용자 PC↔모바일 실기기 검증 단계.
 
 배포 후 확인:
 1. Music Note 곡 제목 변경 저장 → 반대 기기 목록 제목이 페이지 이동 없이 즉시 변경.

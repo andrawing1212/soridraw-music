@@ -1,3 +1,35 @@
+## 0LQ. PREVIEW app282 배포 완료 — 제목/최근생성곡 양방향 동기화 실기기 검증 대기 (2026-10-02 KST)
+
+**배포 결과**
+- 배포 잠금 commit: `301330edc5eafc01a43027205cbaf28cab00ce9a`.
+- Firebase PREVIEW App Run `36887684964`: **SUCCESS**.
+- TypeScript PASS / Build PASS.
+- Shared RTDB Rules deploy PASS.
+- Shared RTDB Rules exact source match PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- `preview.soridraw.com` remote app version **282**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- 사용자 데이터 migration/backfill/delete 없음.
+- Worker / Functions / Firestore Rules / D1 변경 없음.
+
+**이번 app282 실기기 확인 대상**
+1. Music Note 제목 저장 → 반대 기기 목록 제목 즉시 변경.
+2. 반대 기기에서 같은 곡 상세를 이미 열어둔 상태에서도 제목 즉시 반영.
+3. 최근 생성곡 제목 변경 → 반대 기기 최근 생성곡 제목 즉시 반영.
+4. 변경한 제목을 다시 기존 제목으로 복원 → 상대 기기도 즉시 복원.
+5. 제목 변경 후 하트 저장 → 상대 기기 저장/하트 및 Music Note 상태 반영.
+6. PC→모바일 / 모바일→PC 양방향 확인.
+7. 재접속/새로고침 뒤에도 제목과 저장 상태 유지.
+8. 수신 기기 Firestore R0/W0, D1 R0/W0 확인.
+9. 변경 없는 idle/페이지 왕복 추가 Firestore/D1 R/W 0 확인.
+
+**비용 계약**
+- Music Note title explicit save: RTDB tiny changed-item only, 추가 canonical Firestore W0.
+- Recent title explicit save: 실제 변경 시 `user_recent_songs` W1 1회, 상대 기기 Firestore R0.
+- Edited recent heart save: 실제 원본 2개가 바뀌는 경우 favorites W1 + recent state W1 허용, 상대 기기 R0.
+- 전체 목록 재조회/전체 scan/rebuild 없음.
+
 ## 0LP. app282 제목 변경 PC↔모바일 즉시 동기화 + 최근생성곡 저장 단절 수정 / PREVIEW 배포 전 (2026-10-02 KST)
 
 **사용자 실사용**

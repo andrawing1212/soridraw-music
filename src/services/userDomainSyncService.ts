@@ -113,6 +113,30 @@ const resultDocumentId = (result: unknown): string => {
   return String((result as { id?: unknown }).id || '').trim();
 };
 
+const projectRemovedMusicNoteIdentityForSync = (
+  raw: unknown,
+  preferredId = '',
+): Record<string, unknown> | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const source = raw as Record<string, any>;
+  const id = String(preferredId || source.id || source.firestoreId || '').trim();
+  if (!id) return null;
+  const recentLegacySourceId = String(source.recentLegacySourceId || '').trim();
+  if (!recentLegacySourceId) return null;
+  return {
+    __musicNoteRemovalIdentity: true,
+    id,
+    firestoreId: id,
+    soridrawSongId: source.soridrawSongId ?? null,
+    recentSongSyncKey: source.recentSongSyncKey ?? null,
+    recentLegacySourceId,
+    recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
+    favoriteRemoved: true,
+    saved: false,
+    favoriteRemovedAt: toSyncTimestamp(source.favoriteRemovedAt || source.unsavedAt || source.updatedAtMs),
+  };
+};
+
 const toSyncTimestamp = (value: unknown): number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (value && typeof value === 'object' && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
@@ -152,6 +176,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     favoriteFirestoreId: source.favoriteFirestoreId ?? null,
     musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
     recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
+    recentFavoriteExplicitlyUnsavedAt: source.recentFavoriteExplicitlyUnsavedAt ?? null,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   };
@@ -175,6 +200,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     favoriteFirestoreId: source.favoriteFirestoreId ?? null,
     musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
     recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
+    recentFavoriteExplicitlyUnsavedAt: source.recentFavoriteExplicitlyUnsavedAt ?? null,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
     appliedKeywords: {
@@ -241,6 +267,17 @@ const buildSignal = (
           if (encoded.length <= 24000) itemJson = encoded;
         } else if (rawSyncItems.length > 0) {
           removed = true;
+          const removalItems = rawSyncItems
+            .map((rawItem, index) => projectRemovedMusicNoteIdentityForSync(
+              rawItem,
+              uniqueIds[index] || uniqueIds[0] || '',
+            ))
+            .filter(Boolean);
+          if (removalItems.length > 0) {
+            const payload = removalItems.length === 1 ? removalItems[0] : removalItems;
+            const encoded = JSON.stringify(payload);
+            if (encoded.length <= 24000) itemJson = encoded;
+          }
         }
       }
     } catch {}

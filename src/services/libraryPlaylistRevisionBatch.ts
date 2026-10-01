@@ -13,6 +13,7 @@ type PendingPlaylistRevision = {
 
 const timers = new Map<string, number>();
 const inflight = new Map<string, Promise<void>>();
+const latestSharedSignalVersionByUid = new Map<string, number>();
 
 const normalizeUid = (uid: string): string => String(uid || '').trim();
 const storageKey = (uid: string): string => `${STORAGE_PREFIX}.${normalizeUid(uid)}`;
@@ -55,6 +56,16 @@ const clearPending = (uid: string): void => {
 const readCachedRemoteVersion = (uid: string): number => safeVersion(
   (readUserProfileCache(uid) as any)?.syncVersions?.playlists
 );
+
+export const noteLibraryPlaylistRevisionSignal = (uid: string, syncVersion: number): void => {
+  const safeUid = normalizeUid(uid);
+  const version = safeVersion(syncVersion);
+  if (!safeUid || version <= 0) return;
+  latestSharedSignalVersionByUid.set(
+    safeUid,
+    Math.max(version, latestSharedSignalVersionByUid.get(safeUid) || 0),
+  );
+};
 
 const readLatestSharedSignalVersion = async (uid: string): Promise<number | null> => {
   try {
@@ -128,8 +139,13 @@ export const flushLibraryPlaylistRevisionBatch = async (uid: string): Promise<vo
     // RTDB stores the newest current-app playlist delta. Use it only as a
     // monotonic floor so a suspended older device cannot later lower the shared
     // Firestore compatibility revision.
-    const sharedSignalVersion = await readLatestSharedSignalVersion(safeUid);
-    if (sharedSignalVersion === null) return;
+    let sharedSignalVersion = latestSharedSignalVersionByUid.get(safeUid) || 0;
+    if (sharedSignalVersion < pending.latestVersion) {
+      const fetchedSignalVersion = await readLatestSharedSignalVersion(safeUid);
+      if (fetchedSignalVersion === null) return;
+      sharedSignalVersion = fetchedSignalVersion;
+      noteLibraryPlaylistRevisionSignal(safeUid, fetchedSignalVersion);
+    }
     const targetVersion = Math.max(pending.latestVersion, sharedSignalVersion, cachedRemote);
     if (targetVersion <= 0) return;
 

@@ -5808,23 +5808,31 @@ function App() {
     return mergeFavoritePages(firstPageFavs, retainedCached);
   };
 
-  const writeFavoritesCache = (uid: string, list: any[]) => {
+  const writeFavoritesCache = (
+    uid: string,
+    list: any[],
+    options: { publishDerived?: boolean } = {},
+  ) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
-    // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
+    // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date.
+    // Remote RTDB replay must never echo the same mutation back into Catalog/R2.
     favoritesInMemoryCache.set(uid, safeList);
-    const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
-    schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
-      hasMore: fullCatalogReady ? false : undefined,
-      complete: fullCatalogReady,
-      deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
-    });
-    if (musicNoteBundleActiveUids.has(uid)) {
-      scheduleListBundleWrite('musicNote', uid, safeList, {
-        limit: 20,
-        hasMore: safeList.length >= 20,
+    const publishDerived = options.publishDerived !== false;
+    if (publishDerived) {
+      const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
+      schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
+        hasMore: fullCatalogReady ? false : undefined,
+        complete: fullCatalogReady,
         deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
       });
+      if (musicNoteBundleActiveUids.has(uid)) {
+        scheduleListBundleWrite('musicNote', uid, safeList, {
+          limit: 20,
+          hasMore: safeList.length >= 20,
+          deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+        });
+      }
     }
 
     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
@@ -9688,7 +9696,7 @@ const toggleCycleVariantSelection = (
             next = mergeFavoritePages([remoteItem], next);
           }
           const sorted = sortFavoriteList(next);
-          writeFavoritesCache(uid, sorted);
+          writeFavoritesCache(uid, sorted, { publishDerived: false });
           return sorted;
         });
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);

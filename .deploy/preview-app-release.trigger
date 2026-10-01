@@ -1,7 +1,7 @@
-app294-library-new-folder-empty-cache-r0
-target_source=9d85a7e322f7dad622db6b7ea66e76c3f763eb26
-app_version=294
+app295-library-folder-revision-batch
+target_source=230da5f8641e131e63936eaf70d90c8634accdff
+app_version=295
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=external-294-library-new-folder-r0
+release_request=external-295-library-folder-write-batch

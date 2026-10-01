@@ -5751,6 +5751,9 @@ function App() {
     if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+    if ((song as any)?.recentFavoriteIdentityHealedAt) {
+      return Boolean(linkedFavoriteId && statusMap.has(linkedFavoriteId));
+    }
     if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
     if (song.id && statusMap.has(song.id)) return true;
     const stableSongId = getLiveSoridrawSongId(song);
@@ -9861,8 +9864,13 @@ const toggleCycleVariantSelection = (
           if (isSoridrawSongId(remoteSoridrawSongId)) nextSong.soridrawSongId = remoteSoridrawSongId;
 
           if (isRemovalOperation) {
-            delete nextSong.favoriteFirestoreId;
-            delete nextSong.musicNoteFavoriteId;
+            if (nextSong.recentFavoriteIdentityHealedAt && remoteFavoriteId) {
+              nextSong.favoriteFirestoreId = remoteFavoriteId;
+              nextSong.musicNoteFavoriteId = remoteFavoriteId;
+            } else {
+              delete nextSong.favoriteFirestoreId;
+              delete nextSong.musicNoteFavoriteId;
+            }
             nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
               remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
             );
@@ -14768,6 +14776,7 @@ ${normalizePromptForDisplay(result.prompt)}
         : isSongFavorited(heartSnapshot);
 
       let linkedFavoriteId = '';
+      let linkedFavoriteForRecentBridge: any = null;
       if (wasDetachedBeforeToggle) {
         // An edited saved recent song intentionally shows an empty heart. Clicking
         // it means "save this edited version", not "unsave the old title".
@@ -14800,6 +14809,7 @@ ${normalizePromptForDisplay(result.prompt)}
             unlikedAt: null,
           } as any);
           linkedFavoriteId = String(existingEditedFavorite.firestoreId || existingEditedFavorite.id || '').trim();
+          linkedFavoriteForRecentBridge = existingEditedFavorite;
         } else {
           await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
         }
@@ -14813,6 +14823,7 @@ ${normalizePromptForDisplay(result.prompt)}
           heartSnapshot,
           buildFavoriteIdentityKey(heartSnapshot),
         );
+        linkedFavoriteForRecentBridge = linkedFavorite;
         linkedFavoriteId = String(
           (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
         ).trim();
@@ -14825,6 +14836,16 @@ ${normalizePromptForDisplay(result.prompt)}
         delete nextCommittedSong.musicNoteFavoriteId;
 
         const legacyFavoriteBridge = buildLegacyRecentFavoriteBridge(nextCommittedSong);
+        const legacyIdentityWasHealed = Number(nextCommittedSong.recentFavoriteIdentityHealedAt || 0) > 0;
+        const linkedBridgeSoridrawSongId = getLiveSoridrawSongId(linkedFavoriteForRecentBridge);
+        const linkedBridgeRecentSongSyncKey = String(linkedFavoriteForRecentBridge?.recentSongSyncKey || '').trim();
+
+        if (!wasFavoritedBeforeToggle && legacyFavoriteBridge.recentLegacySourceId && linkedFavoriteId) {
+          if (linkedBridgeSoridrawSongId) nextCommittedSong.soridrawSongId = linkedBridgeSoridrawSongId;
+          if (linkedBridgeRecentSongSyncKey) nextCommittedSong.recentSongSyncKey = linkedBridgeRecentSongSyncKey;
+          if (!legacyIdentityWasHealed) nextCommittedSong.recentFavoriteIdentityHealedAt = Date.now();
+        }
+
         if (wasFavoritedBeforeToggle && legacyFavoriteBridge.recentLegacySourceId) {
           nextCommittedSong.recentFavoriteExplicitlyUnsavedAt = Date.now();
         } else {
@@ -14832,7 +14853,9 @@ ${normalizePromptForDisplay(result.prompt)}
         }
 
         if (wasFavoritedBeforeToggle) {
-          delete nextCommittedSong.favoriteFirestoreId;
+          // Once a legacy row is healed, keep its exact favorite document id as
+          // the durable identity anchor even while the favorite itself is unsaved.
+          if (!nextCommittedSong.recentFavoriteIdentityHealedAt) delete nextCommittedSong.favoriteFirestoreId;
         } else if (linkedFavoriteId) {
           nextCommittedSong.favoriteFirestoreId = linkedFavoriteId;
         } else {
@@ -14874,6 +14897,25 @@ ${normalizePromptForDisplay(result.prompt)}
             // edited version now clears the detached-heart marker durably with
             // one changed recent-song write, so reload/new-device state cannot
             // fall back to the pre-save empty heart.
+            recentSongTextWritePendingRef.current = {
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              operation: 'pre-favorite-edit',
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+              syncItem: nextCommittedSong,
+            };
+            await flushRecentSongTextWrite();
+          } else if (
+            !wasFavoritedBeforeToggle
+            && legacyFavoriteBridge.recentLegacySourceId
+            && linkedFavoriteId
+            && !legacyIdentityWasHealed
+          ) {
+            // app283 one-time legacy repair: persist the converged favorite link
+            // and identity exactly once. This is a real save mutation, capped at
+            // one additional user_recent_songs W1; later heart toggles stay on
+            // the normal Music Note mutation path with zero Recent reads.
             recentSongTextWritePendingRef.current = {
               uid: user.uid,
               songs: nextCommittedHistory,

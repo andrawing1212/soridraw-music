@@ -1,0 +1,42 @@
+name: SORIDRAW app289 Payload Char-Length Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app289-payload-charlen.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Verify actual JS itemJson length gate
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const admin=require('firebase-admin'); admin.initializeApp({projectId:'soridraw-app-866a5'}); const db=admin.firestore();
+          const TARGET='스쳐간 이름 뒤에';
+          const KEYS=new Set(['uid','soridrawSongId','favoriteKey','recentSongSyncKey','recentLegacySourceId','recentLegacyCreatedAtMs','title','koreanTitle','englishTitle','genre','appliedKeywords','searchTokens','isLocked','liked','isLiked','personalLiked','favoriteLiked','isFavorite','isPublic','exploreTrackId','explorePublicationId','hidden','favoriteHidden','favoriteRemoved','favoriteRemovedAt','saved','deletedAt','trashedAt','color','favoriteColor','noteColor','folderId','folderIds','musicNoteFolderIds','noteFolderId','noteFolderTitle','noteFolderUpdatedAt','myNoteFolderId','favoriteFolderId','sharedNoteFolderId','sharedNoteFolderTitle','sharedNoteFolderUpdatedAt','sharedNoteFolder','noteSharedFolderId','sharedNoteShareId','isSharedMusicNote','sharedReadOnly','sourceType','originalFavoriteId','createdAtMs','createdAt','updatedAtMs','updatedAt','sunoLinks','sunoShareLinks','mainSunoIndex','sunoShareUrl','sunoUrl','sunoSongUrl','sunoTitle','sunoCoverUrl','sunoImageUrl','sunoArtworkUrl','sunoDurationSeconds','sunoDurationText','sunoShareUrlUpdatedAt','sunoCoverFetchedAt','audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl','imageUrl','image_url','coverUrl','thumbnailUrl','sunoAudioUrl','creatorNickname','ownerNickname','ownerUid','nickname']);
+          const toMs=v=>!v?0:typeof v.toMillis==='function'?v.toMillis():typeof v.seconds==='number'?v.seconds*1000:Number(v)||0;
+          const clean=(v,d=0)=>{if(v===undefined)return undefined;if(v===null||typeof v==='string'||typeof v==='boolean')return v;if(typeof v==='number')return Number.isFinite(v)?v:undefined;if(typeof v?.toMillis==='function')return v.toMillis();if(Array.isArray(v))return v.map(x=>clean(x,d+1)).filter(x=>x!==undefined);if(typeof v!=='object'||d>10)return undefined;const o={};for(const [k,x] of Object.entries(v)){const c=clean(x,d+1);if(c!==undefined)o[k]=c;}return o;};
+          const project=(x,id)=>{const src={...x,id,firestoreId:id,hidden:false,favoriteHidden:false,favoriteRemoved:false,favoriteRemovedAt:null,unlikedAt:null,unsavedAt:null,deletedAt:null,trashedAt:null,saved:true};const p={id,firestoreId:id,createdAtMs:Number(src.createdAtMs||0)||toMs(src.createdAt)||Number(src.updatedAtMs||0)||toMs(src.updatedAt),__catalogSummary:true};for(const k of KEYS){if(!(k in src))continue;const c=clean(src[k]);if(c!==undefined)p[k]=c;}return p;};
+          (async()=>{const [a,b]=await Promise.all([db.collection('favorites').where('title','==',TARGET).limit(20).get(),db.collection('favorites').where('koreanTitle','==',TARGET).limit(20).get()]);const m=new Map();[...a.docs,...b.docs].forEach(d=>m.set(d.id,d));const out=[...m.values()].map(d=>{const s=JSON.stringify(project(d.data(),d.id));return {jsLength:s.length,utf8Bytes:Buffer.byteLength(s,'utf8'),passesCurrentGate:s.length<=24000,appliedJsLength:JSON.stringify(d.data().appliedKeywords||{}).length,appliedUtf8Bytes:Buffer.byteLength(JSON.stringify(d.data().appliedKeywords||{}),'utf8')};});console.log(JSON.stringify({safety:{firestoreWrites:0,firestoreDeletes:0,rtdbWrites:0},out},null,2));await admin.app().delete();})().catch(async e=>{console.error(e);try{await admin.app().delete()}catch{}process.exit(1)});
+          NODE

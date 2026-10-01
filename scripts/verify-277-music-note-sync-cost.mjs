@@ -19,7 +19,8 @@ assert.doesNotMatch(engine.slice(engine.indexOf('const MUSIC_NOTE_SUMMARY_KEYS')
   'RTDB sync summary must not carry Music Note detail text');
 
 assert.match(sync, /projectCatalogItemForSync\('musicNote'/);
-assert.match(sync, /encoded\.length <= 24000/);
+assert.match(sync, /const MAX_SYNC_ITEM_JSON_CHARS = 24000/);
+assert.match(sync, /encoded\.length <= MAX_SYNC_ITEM_JSON_CHARS/);
 assert.match(sync, /runTransaction\(signalRef/);
 assert.match(sync, /currentVersion \+ 1/);
 assert.match(sync, /itemJson: signal\.itemJson \|\| ''/);

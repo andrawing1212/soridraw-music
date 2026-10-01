@@ -1,3 +1,37 @@
+## 0MB. 비용 회귀 확인 — 실시간 UX와 Firestore 영구저장을 분리해야 함 (2026-10-02 KST)
+
+**사용자 실기기 영상 증거**
+- 영상 1: Studio 하트를 빠르게 반복 토글한 뒤 CACHE LIVE에서 `favorites:write 10` 확인.
+- 같은 영상에서 제목/프롬프트/가사 수정 저장 3회 후 `user_recent_songs:write 3` + `users:write 3`으로 총 6회 추가 Firestore write 확인.
+- 영상 2도 수정 저장 3회 동안 `user_recent_songs:write 3` + `users:write 3`으로 동일한 W6 증가 확인.
+- 사용자 요구: PC↔모바일 즉시 반영 UX는 유지하되 실제 Firestore canonical write는 여러 변경을 최종 상태로 묶어 비용 폭증을 막을 것. Music Note 수정 경로도 같은 기준으로 감사/보호.
+
+**코드상 직접 원인**
+- Studio Recent Song `saveRecentSongEdit()`가 `queueRecentSongTextWrite(...)` 직후 `flushRecentSongTextWrite()`를 즉시 호출하여 기존 pending/batch 구조를 사실상 우회.
+- `persistRecentSongsDocument()` 한 번은
+  1. `user_recent_songs/{uid}` W1
+  2. `users/{uid}.syncVersions.recentSongs` W1
+  을 수행하므로 수정 저장 1회 = Firestore W2.
+- Studio Music Note 저장 하트는 현재 canonical favorite mutation이 클릭마다 실행되어 반복 토글 수만큼 `favorites` write가 증가.
+- 반면 Music Note Detail의 title/prompt/lyrics 자체는 현재 코드상 local draft + page-exit canonical flush 구조가 이미 존재하며, title/Suno media의 즉시 타기기 반영은 RTDB preview signal을 사용. 따라서 Music Note에서 필드 저장마다 Firestore write가 실제 증가한다면 해당 경로를 별도 회귀로 찾아야 하며 기존 batch를 제거/약화하지 않음.
+
+**다음 설계 방향 — Live Preview / Canonical Commit 분리**
+1. 화면은 local-first로 즉시 반영.
+2. PC↔모바일 즉시 경험은 작은 RTDB changed-item preview signal로 유지.
+3. Firestore canonical은 trailing batch로 최종 상태만 저장.
+4. 같은 곡의 연속 토글/수정은 마지막 상태로 collapse.
+5. 시작 상태와 최종 상태가 같으면 canonical net-zero W0을 우선.
+6. Recent text edit는 30~60초 창에서 여러 title/prompt/lyrics 변경을 하나로 묶고, 현 구조 유지 시 최종 flush 1회당 `user_recent_songs W1 + users syncVersion W1 = W2` 상한.
+7. Studio heart는 30초 trailing outbox로 같은 곡 최종 saved state만 canonical W0~W1; live UI는 RTDB signal과 durable local intent로 즉시 수렴.
+8. pending 변경은 기기 재접속/비정상 종료에도 유실되지 않도록 durable local outbox/draft를 사용.
+9. page exit은 변경이 있을 때만 단 1회 flush; 이동 자체로 write 금지.
+10. app289 exact identity/compact payload/PC↔모바일 PASS, Explore app164/Worker195, Music Note 상세 batch는 회귀 기준으로 동결.
+
+**승격 게이트**
+- 먼저 PREVIEW에서 코드/비용 회귀를 분리 검증.
+- TEST/PRODUCTION 비변경.
+- 사용자 실기기에서 즉시 동기화 + rapid toggle/edit 비용 collapse를 함께 확인하기 전 승격 금지.
+
 ## 0MA. PREVIEW app289 사용자 실기기 PASS — Music Note 문제곡 SAVE/UNSAVE 양방향 정상 동결 (2026-10-02 KST)
 
 **사용자 최종 실기기 판정**

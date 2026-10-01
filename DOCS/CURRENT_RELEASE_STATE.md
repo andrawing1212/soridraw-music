@@ -1,3 +1,35 @@
+## 0MA. PREVIEW app289 사용자 실기기 PASS — Music Note 문제곡 SAVE/UNSAVE 양방향 정상 동결 (2026-10-02 KST)
+
+**사용자 최종 실기기 판정**
+- 사용자 확인: app289에서 문제곡 `스쳐간 이름 뒤에` PC↔모바일 저장/해제 즉시 동기화가 정상.
+- 이전 app285~288에서 반복되던 SAVE 미반영/반대 방향 증상은 app289에서 재현되지 않음.
+- 현재 app289 Music Note heart live-sync를 **정상 동결 기준**으로 취급.
+- 새 구체 오류나 사용자 명시 변경 지시가 없으면 해당 경로를 리팩터링/교체하지 않음.
+
+**왜 다른 기능 영향이 제한적인가**
+- 24,000 chars 이하 정상 Music Note payload는 기존 full payload를 그대로 유지.
+- 24,000 chars 초과 active SAVE/RESTORE에만 compact fallback 적용.
+- compact 수신 시 기존 cached favorite가 있으면 상세 `appliedKeywords`를 보존하고 상태만 merge.
+- UNSAVE compact removal 경로 비변경.
+- exact receiver Firestore R0/W0, D1 R0/W0.
+- 기존 UID-scoped RTDB signal 1회 재사용, 추가 RTDB mutation 0.
+- canonical Firestore save/restore/unsave 비용 구조 비변경.
+- Explore public like app164/Worker195, Music Note 60초 상세 batch, app282 title sync, Suno URL/shared note 경로 비변경.
+
+**검증/배포 기준**
+- release commit: `178a3eb7489e0d89dea76481a1b6a76f5c600681`.
+- preview 기록 HEAD 이전 기준: `fa395db3c7049df3117a68bfb61d95d97252b177`.
+- Firebase PREVIEW Run `36916222178`: SUCCESS.
+- TypeScript PASS / Build PASS / exact build PASS / TEST·PRODUCTION unchanged PASS.
+- app289 focused audit `36915869748`: SUCCESS.
+- 사용자 데이터 migration/backfill/delete/duplicate merge 없음.
+- TEST 승격은 별도 사용자 지시 전까지 진행하지 않음.
+
+**남은 주의**
+- 모든 가능한 미래 데이터 조합을 100% 보장할 수는 없음.
+- 특히 24KB 초과 + 로컬에 기존 cache가 전혀 없는 새 기기/손상 cache의 극단 fallback은 실사용 회귀 관찰 대상.
+- 현재 확인된 정상곡과 문제곡 양방향 실기기 기준에서는 회귀 징후 없음.
+
 ## 0LZ. PREVIEW app289 배포 완료 — oversized Music Note SAVE signal compact fallback (2026-10-02 KST)
 
 **사용자 지시**

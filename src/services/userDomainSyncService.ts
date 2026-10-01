@@ -250,6 +250,70 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
   const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
     ? source.appliedKeywords as Record<string, any>
     : {};
+
+  // app290 — live Recent text preview must not carry the large generation payload.
+  // Send only immutable identity + user-visible edited fields so PC/mobile can update
+  // immediately while the canonical Firestore aggregate waits for the trailing batch.
+  if (source.__recentSongEditPreview === true) {
+    const preview: Record<string, unknown> = {
+      __recentSongSync: true,
+      __recentSongPartial: false,
+      __recentSongEditPreview: true,
+      id: source.id ?? null,
+      taskId: source.taskId ?? null,
+      sourceId: source.sourceId ?? null,
+      soridrawSongId: source.soridrawSongId ?? null,
+      recentSongSyncKey: source.recentSongSyncKey ?? null,
+      title: source.title ?? '',
+      koreanTitle: source.koreanTitle ?? '',
+      englishTitle: source.englishTitle ?? '',
+      displayGenre: source.displayGenre ?? null,
+      genre: source.genre ?? null,
+      prompt: source.prompt ?? '',
+      lyrics: source.lyrics ?? null,
+      favoriteFirestoreId: source.favoriteFirestoreId ?? null,
+      musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
+      recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
+      recentFavoriteExplicitlyUnsavedAt: source.recentFavoriteExplicitlyUnsavedAt ?? null,
+      recentFavoriteIdentityHealedAt: source.recentFavoriteIdentityHealedAt ?? null,
+      createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
+      updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt) || Date.now(),
+      appliedKeywords: {
+        generationBatchId: applied.generationBatchId ?? null,
+        generationIndex: applied.generationIndex ?? null,
+        secondaryLanguage: applied.secondaryLanguage ?? null,
+        titleLanguages: applied.titleLanguages ?? null,
+        titlesByLanguage: applied.titlesByLanguage ?? null,
+        editedInStudio: applied.editedInStudio ?? null,
+        editedInStudioAt: applied.editedInStudioAt ?? null,
+      },
+    };
+    try {
+      if (JSON.stringify(preview).length <= MAX_SYNC_ITEM_JSON_CHARS) return preview;
+    } catch {}
+    return {
+      __recentSongSync: true,
+      __recentSongPartial: true,
+      __recentSongEditPreview: true,
+      id: source.id ?? null,
+      taskId: source.taskId ?? null,
+      sourceId: source.sourceId ?? null,
+      soridrawSongId: source.soridrawSongId ?? null,
+      recentSongSyncKey: source.recentSongSyncKey ?? null,
+      title: source.title ?? '',
+      koreanTitle: source.koreanTitle ?? '',
+      englishTitle: source.englishTitle ?? '',
+      displayGenre: source.displayGenre ?? null,
+      genre: source.genre ?? null,
+      favoriteFirestoreId: source.favoriteFirestoreId ?? null,
+      musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
+      appliedKeywords: {
+        generationBatchId: applied.generationBatchId ?? null,
+        generationIndex: applied.generationIndex ?? null,
+      },
+      updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt) || Date.now(),
+    };
+  }
   const full: Record<string, unknown> = {
     __recentSongSync: true,
     __recentSongPartial: false,
@@ -430,6 +494,21 @@ const publishSignal = async (
 // row is already active locally. In that case there is no Firestore write to
 // trigger the mutation boundary, but the other device still needs the same
 // bounded changed-item signal. Publish only the existing UID-scoped RTDB event.
+export const publishRecentSongEditPreviewDelta = async (
+  uid: string,
+  syncItem: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
+  await publishSignal({
+    domain: 'recent',
+    operation: 'edit-preview',
+    uid: safeUid,
+    affectedCount: 1,
+    syncItem: { ...(syncItem as Record<string, unknown>), __recentSongEditPreview: true },
+  }, Date.now());
+};
+
 export const publishMusicNoteSaveStateDelta = async (
   uid: string,
   documentId: string,

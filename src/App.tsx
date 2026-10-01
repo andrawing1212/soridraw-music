@@ -9959,10 +9959,22 @@ const toggleCycleVariantSelection = (
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
 
     const uid = currentUser.uid;
-    // 1010 — own-device invalidation does not need a server delta query and is
-    // safe to acknowledge on every route because the successful local mutation
-    // already updated the cache before publishing the sync signal.
+    const normalizedOperation = String(operation || '').trim();
+    const isHeartPreviewSave = normalizedOperation === 'heart-preview-save';
+    const isHeartPreviewUnsave = normalizedOperation === 'heart-preview-unsave';
+    const isHeartPreview = isHeartPreviewSave || isHeartPreviewUnsave;
+
+    // 1010 — own-device canonical invalidation does not need a server delta query.
+    // app290 heart preview is different: it is only a live UI signal and must not
+    // advance the Firestore/catalog document version before the 30s batch commits.
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+      if (isHeartPreview) {
+        const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
+        if (previewDocumentId) rememberStudioHeartPreviewVersion(uid, previewDocumentId, remoteVersion);
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+        markCacheDiagnostic('musicNote', 'CACHE', 0);
+        return;
+      }
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'CACHE', 0);
@@ -9989,8 +10001,6 @@ const toggleCycleVariantSelection = (
     if (itemJson) {
       try { parsedItemPayload = JSON.parse(itemJson); } catch {}
     }
-    const normalizedOperation = String(operation || '').trim();
-
     // app278 — folder/card-state structure changes use the same UID-scoped RTDB
     // channel. FavoritesPage consumes the structure payload; App only advances
     // the watermark so this path never falls through to a Firestore query.
@@ -10026,12 +10036,13 @@ const toggleCycleVariantSelection = (
       const remoteFavoriteId = String(
         remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
       ).trim();
-      const remoteHeartSaved = isRemovalOperation
+      const remoteHeartSaved = (isRemovalOperation || isHeartPreviewUnsave)
         ? false
         : (
             normalizedOperation === 'save'
             || normalizedOperation === 'restore'
             || normalizedOperation === 'shared-note-save'
+            || isHeartPreviewSave
             || (remoteItem && !isFavoriteSoftRemoved(remoteItem))
           )
           ? true
@@ -10058,6 +10069,7 @@ const toggleCycleVariantSelection = (
           || normalizedOperation === 'restore'
           || normalizedOperation === 'update'
           || isRemovalOperation
+          || isHeartPreview
         )
       );
       if (canPatchRecentFavoriteLink) {
@@ -10091,7 +10103,7 @@ const toggleCycleVariantSelection = (
           nextSong.favoriteFirestoreId = remoteFavoriteId;
           nextSong.musicNoteFavoriteId = remoteFavoriteId;
 
-          if (isRemovalOperation) {
+          if (isRemovalOperation || isHeartPreviewUnsave) {
             if (recentLegacySourceId) {
               nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
                 remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
@@ -10119,6 +10131,18 @@ const toggleCycleVariantSelection = (
           }
           markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
         }
+      }
+
+      if (isHeartPreview) {
+        if (remoteFavoriteId) {
+          supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
+        }
+        // The RTDB preview is fully consumed by Recent heart authority + exact link.
+        // Keep canonical Music Note cache/version untouched until the trailing
+        // favorites mutation succeeds and emits its normal save/unsave signal.
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+        markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
+        return;
       }
 
       if (remoteItem || removed || isRemovalOperation) {

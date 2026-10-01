@@ -13,6 +13,6 @@ assert.match(block, /writeLibraryPlaylistItemsCache\(uid, newDocRef\.id, \[\], s
 assert.ok(!block.includes('getDocs('), 'playlist creation must not add a server read');
 assert.ok(block.indexOf('await batch.commit()') < block.indexOf('writeLibraryPlaylistItemsCache(uid, newDocRef.id, [], syncVersion)'),
   'empty items cache must be seeded only after canonical create succeeds');
-assert.equal(Number(version.version), 294);
+assert.ok(Number(version.version) >= 294, 'app294 R0 regression must remain enabled in later builds');
 
 console.log('APP294_LIBRARY_NEW_FOLDER_EMPTY_CACHE_R0=PASS');

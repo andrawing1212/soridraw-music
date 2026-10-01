@@ -33,7 +33,8 @@ export type V1MusicNoteMutationOperation =
   | 'folder-rename'
   | 'folder-delete'
   | 'color-sync'
-  | 'structure-update';
+  | 'structure-update'
+  | 'suno-media-preview';
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 

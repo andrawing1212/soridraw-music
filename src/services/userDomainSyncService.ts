@@ -226,6 +226,27 @@ export const publishMusicNoteStructureDelta = async (
   }, null);
 };
 
+// URL Save inside Detail & Edit stays on the existing local draft / page-exit
+// Firestore batch. This tiny RTDB-only preview makes the changed Suno artwork
+// visible on the user's other devices immediately without adding a Firestore read/write.
+export const publishMusicNoteSunoMediaDelta = async (
+  uid: string,
+  documentId: string,
+  syncItem: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return;
+  await publishSignal({
+    domain: 'musicNote',
+    operation: 'suno-media-preview',
+    uid: safeUid,
+    documentIds: [safeDocumentId],
+    affectedCount: 1,
+    syncItem,
+  }, null);
+};
+
 const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Record<string, unknown>;

@@ -2,6 +2,7 @@ import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import {
   MUSIC_NOTE_SYNC_EVENT,
   publishMusicNoteStructureDelta,
+  publishMusicNoteSunoMediaDelta,
   readPendingMusicNoteSyncSignal,
 } from '../services/userDomainSyncService';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
@@ -1831,6 +1832,26 @@ export default function FavoritesPage({
     if (changed) favoritesStore.setFavorites(next);
   };
 
+  const publishFavoriteSunoMediaDraft = async (songId: string, updates: Record<string, any>) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !user?.uid || !updates) return;
+    const latest = favoritesStore.getFavorites().find((song: any) => (
+      String(song?.id || song?.firestoreId || '').trim() === safeSongId
+    ));
+    try {
+      await publishMusicNoteSunoMediaDelta(user.uid, safeSongId, {
+        ...(latest || {}),
+        ...updates,
+        id: safeSongId,
+        firestoreId: safeSongId,
+      });
+    } catch (error) {
+      // Canonical detail save is still protected by the existing local draft +
+      // page-exit flush. A transient RTDB failure must never discard the edit.
+      console.warn('Music Note Suno media cross-device preview unavailable.', error);
+    }
+  };
+
   // A full R2 catalog can arrive after a local URL edit and replace the row with
   // an older server summary. Overlay only this device's durable, compatible Suno
   // draft after each list source update; never fetch per-song details on list entry.
@@ -3193,8 +3214,12 @@ updates: draft.updates,
         sunoCoverFetchedAt: now,
       };
 
-      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
-      else await updateFavorite(song.id, updates);
+      if (source === 'detail') {
+        queueFavoriteDetailPatch(song.id, updates);
+        await publishFavoriteSunoMediaDraft(song.id, updates);
+      } else {
+        await updateFavorite(song.id, updates);
+      }
 
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
@@ -3253,8 +3278,12 @@ updates: draft.updates,
         sunoDurationText: null,
         sunoCoverFetchedAt: null,
       };
-      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
-      else await updateFavorite(song.id, updates);
+      if (source === 'detail') {
+        queueFavoriteDetailPatch(song.id, updates);
+        await publishFavoriteSunoMediaDraft(song.id, updates);
+      } else {
+        await updateFavorite(song.id, updates);
+      }
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
         && activeFavoriteEditorSongIdRef.current === targetSongId
@@ -3466,6 +3495,38 @@ updates: draft.updates,
         ? mergeMusicNoteDetailDraft(merged, pending.updates)
         : merged;
     });
+  }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
+
+  // Cross-device Suno media can arrive while this exact Detail & Edit panel is
+  // already open. The selectedSong object is refreshed from the list above, but
+  // the editor intentionally skips same-song reinitialization. Refresh only the
+  // Suno URL controls when the user is not in the middle of a local URL edit.
+  useEffect(() => {
+    if (!selectedSong?.id || isMusicNoteSharedView) return;
+    const selectedSongId = String(selectedSong.id || '').trim();
+    const latestSong = (favorites || []).find((song: any) => (
+      String(song?.id || song?.firestoreId || '').trim() === selectedSongId
+    ));
+    if (!latestSong) return;
+
+    const pending = favoriteDetailPendingPatchRef.current;
+    const pendingHasSunoMedia = pending?.songId === selectedSongId && [
+      'sunoLinks', 'sunoShareUrl', 'mainSunoIndex', 'sunoCoverUrl',
+    ].some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key));
+    if (pendingHasSunoMedia) return;
+
+    const currentState = buildFavoriteSunoEditorState(selectedSong);
+    const editorHasUnsavedUrlInput = (
+      currentState.inputs[0] !== detailSunoUrlInputs[0]
+      || currentState.inputs[1] !== detailSunoUrlInputs[1]
+      || currentState.mainIndex !== detailSunoUrlMainIndex
+    );
+    if (editorHasUnsavedUrlInput) return;
+
+    const nextState = buildFavoriteSunoEditorState(latestSong);
+    setDetailSunoUrlInputs(nextState.inputs);
+    setDetailSunoUrlMainIndex(nextState.mainIndex);
+    setDetailSunoUrlError('');
   }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(Number(version.version), 280);
+assert.ok(Number(version.version) >= 280, 'app version must be 280 or newer');
 
 assert.match(app, /const forgetFavoriteDeletedTombstones = \(uid: string, ids: string\[\]\) =>/);
 assert.match(app, /rememberFavoriteDeletedTombstones\(user\.uid, unsaveCatalogRemovalIds\)/);

@@ -9914,6 +9914,30 @@ const toggleCycleVariantSelection = (
       const remoteFavoriteId = String(
         remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
       ).trim();
+      const remoteHeartSaved = isRemovalOperation
+        ? false
+        : (
+            normalizedOperation === 'save'
+            || normalizedOperation === 'restore'
+            || normalizedOperation === 'shared-note-save'
+            || (remoteItem && !isFavoriteSoftRemoved(remoteItem))
+          )
+          ? true
+          : null;
+
+      // app286 — Record the latest heart direction before trying to patch a
+      // possibly stale Recent Songs row. The immutable song key in the RTDB
+      // payload is enough to update the open Studio heart without Firestore IO.
+      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean') {
+        rememberRecentHeartAuthority(
+          uid,
+          remoteItem,
+          remoteHeartSaved,
+          remoteFavoriteId,
+          remoteVersion,
+        );
+      }
+
       const canPatchRecentFavoriteLink = Boolean(
         remoteItem
         && remoteFavoriteId
@@ -9927,6 +9951,10 @@ const toggleCycleVariantSelection = (
       if (canPatchRecentFavoriteLink) {
         const currentHistory = historyRef.current;
         const targetIndex = currentHistory.findIndex((song: any) => {
+          const localFavoriteId = String(
+            song?.favoriteFirestoreId || song?.musicNoteFavoriteId || '',
+          ).trim();
+          if (localFavoriteId && localFavoriteId === remoteFavoriteId) return true;
           if (isSameRecentSongSyncItem(song, remoteItem)) return true;
           if (!recentLegacySourceId) return false;
           const sourceIdentity = getRecentSongSourceIdentity(song);

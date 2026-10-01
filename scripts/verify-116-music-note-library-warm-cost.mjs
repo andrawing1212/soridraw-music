@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const app = readFileSync('src/App.tsx', 'utf8');
 const library = readFileSync('src/pages/SunoLibraryPage.tsx', 'utf8');
+const recentSongsGate = readFileSync('src/lib/recentSongsSyncGate.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[116-AUDIT] ${message}`); };
@@ -77,18 +78,32 @@ assert.ok(
   'Music Note normal entry can republish cached list to server',
 );
 
-// Recent Songs warm state reads only when the root profile version advanced.
+// Recent Songs warm state is now guarded by a pure predicate that also honors
+// unacknowledged RTDB invalidation signals. Preserve the same zero-read warm path
+// without pinning this audit to the older inline hasLocalState implementation.
 const recent = functionBlock(app, 'const runRecentSongsServerSyncIfNeeded = () =>', 'Recent Songs version gate');
 for (const required of [
+  'const latestCache = loadRecentSongsCache(user.uid)',
   'const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0)',
   'const localVersion = readRecentSongsLocalVersion(user.uid)',
-  'const hasLocalState = Boolean(cached)',
-  'const needsServerRead = !hasLocalState || remoteVersion > localVersion',
+  'const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid)',
+  'const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid)',
+  'const needsServerRead = needsRecentSongsServerRead({',
+  'hasLocalCache: Boolean(latestCache)',
+  'profileVersion: remoteVersion',
+  'localDocumentVersion: localVersion',
+  'pendingSignalVersion',
+  'acknowledgedSignalVersion',
   'if (!needsServerRead)',
   "markCacheDiagnostic('recentSongs', 'CACHE', 0, 0)",
   'void getDocFromServer(ref)',
 ]) assert.ok(recent.includes(required), `Recent Songs warm guard missing: ${required}`);
 assert.ok(recent.indexOf('if (!needsServerRead)') < recent.indexOf('void getDocFromServer(ref)'), 'Recent Songs server read precedes cache escape');
+for (const required of [
+  '!gate.hasLocalCache',
+  'gate.profileVersion > gate.localDocumentVersion',
+  'gate.pendingSignalVersion > gate.acknowledgedSignalVersion',
+]) assert.ok(recentSongsGate.includes(required), `Recent Songs pure gate missing: ${required}`);
 
 const recentPersist = functionBlock(app, 'const persistRecentSongsDocument = async', 'Recent Songs mutation helper');
 assert.ok(recentPersist.includes("'syncVersions.recentSongs': syncVersion"), 'Recent Songs mutation no longer publishes version signal');

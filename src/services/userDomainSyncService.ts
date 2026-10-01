@@ -31,7 +31,7 @@ const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 // version. Persist both signal and acknowledgement across Studio navigation.
 const RECENT_PENDING_SIGNAL_BASE = 'soridraw_recent_songs_pending_signal_v3';
 const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_signal_v3';
-const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
+export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
 
@@ -131,20 +131,41 @@ const buildSignal = (
 
   let itemJson = '';
   let removed = false;
-  if (kind === 'musicNote' && context.syncItem && typeof context.syncItem === 'object') {
+  if (kind === 'musicNote') {
     try {
-      const preferredId = uniqueIds[0] || resultDocumentId(result);
-      const projected = projectCatalogItemForSync('musicNote', {
-        ...(context.syncItem as Record<string, unknown>),
-        ...(preferredId ? { id: preferredId, firestoreId: preferredId } : {}),
-      });
-      if (projected) {
-        const encoded = JSON.stringify(projected);
-        // Keep the account-level signal tiny and bounded. Oversized detail never
-        // rides RTDB; only the normal catalog summary is eligible.
+      if (context.syncStructure && typeof context.syncStructure === 'object') {
+        const encoded = JSON.stringify({
+          __musicNoteStructureSync: true,
+          data: context.syncStructure,
+        });
+        // Reuse the already-approved bounded itemJson field so no RTDB rule or
+        // schema expansion is needed for folder/card-state live sync.
         if (encoded.length <= 24000) itemJson = encoded;
       } else {
-        removed = true;
+        const rawSyncItems = Array.isArray(context.syncItems)
+          ? context.syncItems.slice(0, MAX_DOCUMENT_IDS)
+          : context.syncItem && typeof context.syncItem === 'object'
+            ? [context.syncItem]
+            : [];
+        const projectedItems = rawSyncItems
+          .map((rawItem, index) => {
+            if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) return null;
+            const preferredId = uniqueIds[index] || uniqueIds[0] || resultDocumentId(result);
+            return projectCatalogItemForSync('musicNote', {
+              ...(rawItem as Record<string, unknown>),
+              ...(preferredId ? { id: preferredId, firestoreId: preferredId } : {}),
+            });
+          })
+          .filter(Boolean);
+        if (projectedItems.length > 0) {
+          const payload = projectedItems.length === 1 ? projectedItems[0] : projectedItems;
+          const encoded = JSON.stringify(payload);
+          // Keep the account-level signal tiny and bounded. Oversized detail never
+          // rides RTDB; only catalog summaries are eligible.
+          if (encoded.length <= 24000) itemJson = encoded;
+        } else if (rawSyncItems.length > 0) {
+          removed = true;
+        }
       }
     } catch {}
   }
@@ -188,6 +209,21 @@ const publishSignal = async (
   }
 
   await set(ref(realtimeDb, `userSync/${uid}/${kind}`), buildSignal(context, result));
+};
+
+export const publishMusicNoteStructureDelta = async (
+  uid: string,
+  syncStructure: unknown,
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !syncStructure || typeof syncStructure !== 'object') return;
+  await publishSignal({
+    domain: 'musicNote',
+    operation: 'structure-update',
+    uid: safeUid,
+    affectedCount: 1,
+    syncStructure,
+  }, null);
 };
 
 const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {

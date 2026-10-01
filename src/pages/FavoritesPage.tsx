@@ -1,4 +1,9 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import {
+  MUSIC_NOTE_SYNC_EVENT,
+  publishMusicNoteStructureDelta,
+  readPendingMusicNoteSyncSignal,
+} from '../services/userDomainSyncService';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -430,7 +435,20 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
         },
         musicNoteStructureVersion: structureVersion,
       };
-      await setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true });
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'structure-update',
+        uid,
+        affectedCount: 1,
+        syncStructure: {
+          musicNoteCardState: {
+            schemaVersion: 1,
+            items: snapshot.items,
+            updatedAtMs: snapshot.updatedAtMs,
+          },
+          musicNoteStructureVersion: structureVersion,
+        },
+      }, setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true }));
       publishMusicNoteStructureSession(uid, {
         musicNoteCardState: {
           schemaVersion: 1,
@@ -2435,6 +2453,53 @@ updates: draft.updates,
 
 
   useEffect(() => {
+    if (!user?.uid || typeof window === 'undefined') return;
+    const uid = user.uid;
+
+    const applyStructurePayload = (itemJson: string) => {
+      if (!itemJson) return;
+      try {
+        const parsed = JSON.parse(itemJson);
+        if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
+        const patch = parsed.data as Record<string, any>;
+
+        if (patch.musicNoteCardStateDelta && typeof patch.musicNoteCardStateDelta === 'object') {
+          const deltaId = String(patch.musicNoteCardStateDelta.id || '').trim();
+          const deltaItem = patch.musicNoteCardStateDelta.item;
+          if (deltaId && deltaItem && typeof deltaItem === 'object') {
+            const current = readMusicNoteCardStateLocal(uid);
+            const normalizedDelta = normalizeMusicNoteCardState({ items: { [deltaId]: deltaItem } }).items[deltaId];
+            if (normalizedDelta) {
+              const merged: MusicNoteCardStateSnapshot = {
+                schemaVersion: 1,
+                items: { ...current.items, [deltaId]: normalizedDelta },
+                updatedAtMs: Math.max(Number(current.updatedAtMs || 0), Number(normalizedDelta.updatedAtMs || 0)),
+              };
+              writeMusicNoteCardStateLocal(uid, merged);
+              patch.musicNoteCardState = merged;
+            }
+            delete patch.musicNoteCardStateDelta;
+          }
+        }
+
+        const structureVersion = Number(patch.musicNoteStructureVersion || readMusicNoteStructureCache(uid)?.version || 0);
+        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch), structureVersion, true);
+      } catch {}
+    };
+
+    const handleStructureSync = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; operation?: string; itemJson?: string }>).detail;
+      if (!detail || String(detail.uid || '') !== uid || String(detail.operation || '') !== 'structure-update') return;
+      applyStructurePayload(String(detail.itemJson || ''));
+    };
+
+    window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    const pending = readPendingMusicNoteSyncSignal(uid);
+    if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''));
+    return () => window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user?.uid) {
       setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
       setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
@@ -2490,10 +2555,17 @@ updates: draft.updates,
       })),
       updatedAt: Date.now(),
     };
-    await setDoc(doc(db, 'user_structures', user.uid), {
+    const structureSyncPatch = {
       musicNoteFolders: folderPatch,
       musicNoteStructureVersion: structureVersion,
-    }, { merge: true });
+    };
+    await runV1MutationBoundary({
+      domain: 'musicNote',
+      operation: 'structure-update',
+      uid: user.uid,
+      affectedCount: 1,
+      syncStructure: structureSyncPatch,
+    }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
     publishMusicNoteStructureSession(user.uid, {
       musicNoteFolders: folderPatch,
       musicNoteStructureVersion: structureVersion,
@@ -2537,14 +2609,30 @@ updates: draft.updates,
     }
   };
 
-  const commitMusicNoteFolderUpdates = async (songIds: string[], updates: Record<string, any>) => {
+  const commitMusicNoteFolderUpdates = async (
+    songIds: string[],
+    updates: Record<string, any>,
+    operation: 'folder-update' | 'folder-rename' | 'folder-delete' = 'folder-update',
+  ) => {
+    const sourceFavorites = favoritesStore.getFavorites();
     for (let index = 0; index < songIds.length; index += MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT) {
       const chunk = songIds.slice(index, index + MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT);
       const batch = writeBatch(db);
       chunk.forEach((id) => {
         batch.update(doc(db, 'favorites', id), updates);
       });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-update', uid: user?.uid || '', documentIds: chunk, affectedCount: chunk.length }, batch.commit());
+      const syncItems = chunk.slice(0, 10).map((id) => {
+        const source = sourceFavorites.find((item: any) => String(item?.firestoreId || item?.id || '') === id);
+        return source ? { ...source, ...updates, id, firestoreId: id, updatedAtMs: Date.now() } : null;
+      }).filter(Boolean);
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation,
+        uid: user?.uid || '',
+        documentIds: chunk,
+        affectedCount: chunk.length,
+        syncItems,
+      }, batch.commit());
     }
   };
 
@@ -3813,6 +3901,9 @@ updates: draft.updates,
     setMusicNoteCardState(nextSnapshot);
     writeMusicNoteCardStateLocal(user.uid, nextSnapshot);
     markMusicNoteCardStateDirty(user.uid);
+    void publishMusicNoteStructureDelta(user.uid, {
+      musicNoteCardStateDelta: { id, item: nextItem },
+    }).catch((error) => console.warn('Music Note card-state live sync signal failed.', error));
 
     // Keep legacy object consumers in this render/session consistent without a favorites write.
     song.isLiked = nextItem.liked;
@@ -6123,7 +6214,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const titleUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-rename', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates))));
+      await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), titleUpdates, 'folder-rename');
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
@@ -6168,7 +6259,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-delete', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates))));
+      await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), fallbackUpdates, 'folder-delete');
       setMusicNoteFolderDeleteArgs(null);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {

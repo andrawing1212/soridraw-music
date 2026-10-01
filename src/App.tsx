@@ -5568,6 +5568,32 @@ function App() {
     return `song_${(hash >>> 0).toString(36)}`;
   };
 
+  const buildRecentSongSyncKey = (song: any): string => {
+    if (!song || typeof song !== 'object') return '';
+    const explicit = String(song?.recentSongSyncKey || '').trim();
+    if (explicit) return explicit;
+    const stableSongId = getLiveSoridrawSongId(song);
+    if (stableSongId) return `sid:${stableSongId}`;
+
+    const sourceId = String(song?.id || song?.taskId || song?.sourceId || '').trim();
+    const createdAtMs = Number(song?.createdAtMs || 0)
+      || getTimestampMs(song?.createdAt)
+      || Number(song?.updatedAtMs || 0)
+      || getTimestampMs(song?.updatedAt)
+      || 0;
+    const generationBatchId = String((song?.appliedKeywords as any)?.generationBatchId || '').trim();
+    const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
+    const sourceText = [sourceId, String(createdAtMs || ''), generationBatchId, titlePart].join('|');
+    if (!sourceText.replace(/\|/g, '').trim()) return '';
+
+    let hash = 2166136261;
+    for (let index = 0; index < sourceText.length; index += 1) {
+      hash ^= sourceText.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `legacy:${(hash >>> 0).toString(36)}`;
+  };
+
   const getFavoriteComparableText = (song: any) => ({
     title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
     prompt: normalizeFavoriteSearchValue(song?.prompt),
@@ -5598,6 +5624,12 @@ function App() {
   const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
     if (!favorite || !song) return false;
     if (song?.id && favorite?.id && song.id === favorite.id) return true;
+    const favoriteStableSongId = getLiveSoridrawSongId(favorite);
+    const songStableSongId = getLiveSoridrawSongId(song);
+    if (favoriteStableSongId && songStableSongId && favoriteStableSongId === songStableSongId) return true;
+    const favoriteRecentSyncKey = String(favorite?.recentSongSyncKey || '').trim();
+    const songRecentSyncKey = buildRecentSongSyncKey(song);
+    if (favoriteRecentSyncKey && songRecentSyncKey && favoriteRecentSyncKey === songRecentSyncKey) return true;
     const favoriteIdentityKey = favorite?.favoriteKey || buildFavoriteIdentityKey(favorite);
     if (songIdentityKey && favoriteIdentityKey && songIdentityKey === favoriteIdentityKey) return true;
 
@@ -5644,6 +5676,10 @@ function App() {
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
     if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
     if (song.id && statusMap.has(song.id)) return true;
+    const stableSongId = getLiveSoridrawSongId(song);
+    if (stableSongId && statusMap.has(`soridraw:${stableSongId}`)) return true;
+    const recentSongSyncKey = buildRecentSongSyncKey(song);
+    if (recentSongSyncKey && statusMap.has(`recent:${recentSongSyncKey}`)) return true;
     const key = buildFavoriteIdentityKey(song);
     if (key && statusMap.has(key)) return true;
     return false;
@@ -9672,16 +9708,31 @@ const toggleCycleVariantSelection = (
     // app277 — normal changed-item UI state rides the tiny RTDB signal.
     // Receiving devices patch the local Music Note catalog directly, so save,
     // unsave and shared-note sync add no Firestore read on the other device.
-    if (exactDocumentIds.length > 0 && truncated !== true) {
-      let remoteItem: any = null;
-      if (itemJson) {
-        try {
-          const parsed = JSON.parse(itemJson);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) remoteItem = parsed;
-        } catch {}
-      }
+    let parsedItemPayload: any = null;
+    if (itemJson) {
+      try { parsedItemPayload = JSON.parse(itemJson); } catch {}
+    }
+    const normalizedOperation = String(operation || '').trim();
 
-      const normalizedOperation = String(operation || '').trim();
+    // app278 — folder/card-state structure changes use the same UID-scoped RTDB
+    // channel. FavoritesPage consumes the structure payload; App only advances
+    // the watermark so this path never falls through to a Firestore query.
+    if (
+      normalizedOperation === 'structure-update'
+      && parsedItemPayload?.__musicNoteStructureSync === true
+    ) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'SYNC', 0);
+      return;
+    }
+
+    if (exactDocumentIds.length > 0 && truncated !== true) {
+      const remoteItems: any[] = Array.isArray(parsedItemPayload)
+        ? parsedItemPayload.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+        : parsedItemPayload && typeof parsedItemPayload === 'object'
+          ? [parsedItemPayload]
+          : [];
+      const remoteItem: any = remoteItems[0] || null;
       const isRemovalOperation = normalizedOperation === 'unsave'
         || normalizedOperation === 'permanent-delete'
         || normalizedOperation === 'bulk-delete';
@@ -9692,8 +9743,8 @@ const toggleCycleVariantSelection = (
           let next = (Array.isArray(prev) ? prev : []).filter(
             (item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim())
           );
-          if (remoteItem && !isFavoriteSoftRemoved(remoteItem)) {
-            next = mergeFavoritePages([remoteItem], next);
+          for (const item of remoteItems) {
+            if (!isFavoriteSoftRemoved(item)) next = mergeFavoritePages([item], next);
           }
           const sorted = sortFavoriteList(next);
           writeFavoritesCache(uid, sorted, { publishDerived: false });
@@ -9965,6 +10016,10 @@ const toggleCycleVariantSelection = (
     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
+    // Capture the legacy recent-song identity before ensureLiveSoridrawSongId can
+    // assign a new local UUID. Old recent songs must resolve to the same favorite
+    // on PC and mobile even when they predate soridrawSongId.
+    const recentSongSyncKey = options?.trustedRecentStudio ? buildRecentSongSyncKey(song) : '';
     const findLocalExistingFavorite = () => {
       if ((song as any)?.recentFavoriteDetachedAt) return null;
       const latestFavorites = favoritesStore.getFavorites();
@@ -10299,6 +10354,7 @@ const toggleCycleVariantSelection = (
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
+        recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song),
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',

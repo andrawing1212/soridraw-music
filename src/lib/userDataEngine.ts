@@ -109,13 +109,14 @@ const CATALOG_PREVIEW_HOSTS = new Set([
 ]);
 
 const MUSIC_NOTE_SUMMARY_KEYS = new Set([
-  'uid', 'soridrawSongId', 'favoriteKey',
+  'uid', 'soridrawSongId', 'favoriteKey', 'recentSongSyncKey',
   'title', 'koreanTitle', 'englishTitle', 'genre', 'appliedKeywords', 'searchTokens',
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
   'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
-  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+  'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt', 'myNoteFolderId', 'favoriteFolderId',
+  'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt', 'sharedNoteFolder', 'noteSharedFolderId',
   'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
   'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',

@@ -32,7 +32,8 @@ export type V1MusicNoteMutationOperation =
   | 'shared-note-save'
   | 'folder-rename'
   | 'folder-delete'
-  | 'color-sync';
+  | 'color-sync'
+  | 'structure-update';
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 
@@ -54,6 +55,13 @@ export interface V1MutationBoundaryContext {
   // The sync service projects this through the same catalog summary allow-list,
   // so RTDB never receives the full detail document.
   syncItem?: unknown;
+  // Optional bounded changed-item summaries for one canonical mutation that touches
+  // multiple Music Note rows (for example a folder move/rename).
+  syncItems?: readonly unknown[];
+  // Optional small Music Note structure patch (folders or card-state delta). It is
+  // transported through the existing UID-scoped RTDB signal and never causes a
+  // receiving-device Firestore read.
+  syncStructure?: unknown;
 }
 
 export type V1MutationWrite<T> = Promise<T> | (() => Promise<T>);

@@ -1,0 +1,7 @@
+requested_at=2026-10-01T09:45:00+09:00
+requested_by=user
+task=app278_shared_music_note_live_sync
+base_preview_sha=973c23a88f55d02cb1c928a90e0331ed017c30c5
+scope=shared_note_folders_folder_moves_card_state_legacy_recent_heart
+no_user_data_migration=true
+test_production_unchanged=true

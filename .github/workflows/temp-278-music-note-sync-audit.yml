@@ -1,0 +1,43 @@
+name: app278 Music Note Sync Focused Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app278-music-note-sync-audit.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app278-music-note-sync-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: app278 focused verifier
+        run: node scripts/verify-278-music-note-cross-device.mjs
+      - name: Shared note regressions
+        run: |
+          node scripts/verify-273-shared-note-legacy-detail.mjs
+          node scripts/verify-274-shared-note-saved-status.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: Recent songs protected regression
+        run: npx tsx scripts/verify-196-recent-song-sync.ts
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

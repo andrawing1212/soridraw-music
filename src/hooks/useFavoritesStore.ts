@@ -23,6 +23,8 @@ class FavoritesStore {
       if (!this.isFavoriteHidden(fav)) {
         if (fav.id) map.set(fav.id, fav);
         if (fav.firestoreId) map.set(String(fav.firestoreId), fav);
+        if (fav.soridrawSongId) map.set(`soridraw:${String(fav.soridrawSongId)}`, fav);
+        if (fav.recentSongSyncKey) map.set(`recent:${String(fav.recentSongSyncKey)}`, fav);
         const key = fav.favoriteKey || this.buildFavoriteIdentityKey(fav);
         if (key) map.set(key, fav);
       }
@@ -97,6 +99,8 @@ export function useIsSongFavorited(song: any) {
     if (!song) return false;
     const statusMap = favoritesStore.getStatusMap();
     if (song.id && statusMap.has(song.id)) return true;
+    if (song.soridrawSongId && statusMap.has(`soridraw:${String(song.soridrawSongId)}`)) return true;
+    if (song.recentSongSyncKey && statusMap.has(`recent:${String(song.recentSongSyncKey)}`)) return true;
     const key = song.favoriteKey || (song.title ? `${song.title}_${song.createdAtMs || ''}` : null);
     if (key && statusMap.has(key)) return true;
     return false;

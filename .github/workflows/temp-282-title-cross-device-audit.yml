@@ -1,0 +1,48 @@
+name: app282 Title Cross Device Focused Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app282-title-cross-device-audit.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app282-title-cross-device-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: app282 focused verifier
+        run: node scripts/verify-282-title-cross-device.mjs
+      - name: Protected Music Note regressions
+        run: |
+          node scripts/verify-281-suno-url-cross-device.mjs
+          node scripts/verify-280-music-note-resurrection.mjs
+          node scripts/verify-279-legacy-recent-heart.mjs
+          node scripts/verify-278-music-note-cross-device.mjs
+      - name: Recent Songs protected regression
+        run: npx tsx scripts/verify-196-recent-song-sync.ts
+      - name: Shared note regressions
+        run: |
+          node scripts/verify-273-shared-note-legacy-detail.mjs
+          node scripts/verify-274-shared-note-saved-status.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

@@ -50,7 +50,7 @@ for(const marker of [
 assert.ok(sync.includes('persistedRecentVersion || now'), 'recent write must publish canonical document version');
 assert.ok(sync.includes('rememberRecentSongsPendingSignalVersion(uid, signal.version)'), 'signal must survive off-Studio');
 assert.ok(sync.includes('acknowledgeRecentSongsSignalVersion(uid, signal.version)'), 'same-device signal must be acknowledged');
-assert.ok(sync.includes("if (kind === 'recentSongs' && result == null) return"), 'mutation epoch skip cannot signal write');
+assert.ok(sync.includes("if (kind === 'recentSongs' && result == null && context.operation !== 'item-preview') return"), 'mutation epoch skip cannot signal a canonical write; preview-only RTDB delta is the sole exception');
 
 const verification = app.slice(app.indexOf('const runRecentSongsServerSyncIfNeeded'), app.indexOf('const handleRecentSongsVersionSignal'));
 assert.ok(verification.indexOf('saveRecentSongsCache(user.uid, {') < verification.indexOf('acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion)'),

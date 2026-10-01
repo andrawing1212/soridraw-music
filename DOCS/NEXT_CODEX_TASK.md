@@ -1,3 +1,19 @@
+## CURRENT TASK — app292 PREVIEW 실기기 확인: Recent 150초 batch (2026-10-02 KST)
+
+현재:
+- PREVIEW app292 배포 완료.
+- Recent title/prompt/lyrics canonical trailing batch: **150초**.
+- PC↔모바일 RTDB 즉시 preview: 기존 유지.
+- Firebase PREVIEW Run `36933026848` SUCCESS / app292 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+확인:
+1. Recent 서로 다른 여러 곡을 150초 안에 순서대로 수정해도 각 기기 화면은 즉시 반영.
+2. 마지막 Recent 수정 후 150초가 지나기 전에는 canonical Firestore write가 반복 발생하지 않음.
+3. 150초 후 Recent aggregate canonical은 한 번만: `user_recent_songs W1 + users W1 = W2`.
+4. heart는 per-song 30초 구조 유지: 다른 곡 heart가 기존 곡 timer를 reset하지 않음.
+5. 사용자 실기기 PASS 전 main/TEST 승격 금지.
+
 ## CURRENT TASK — app291 가사 즉시 동기화 실기기 확인 (2026-10-02 KST)
 
 현재:

@@ -1,3 +1,15 @@
+## COMPLETED — app302 Studio 저장 하트 실기기 확인 / Skill 동결 (2026-10-03 KST)
+
+- 사용자 실기기 확인: **정상 적용**.
+- app302/app302b Studio 저장 하트 경로는 현재 정상 보호 기준으로 동결.
+- `local-first-like-sync` Skill과 `song-save-edit-sync-cost` Skill에 방금 pending-layer 패치까지 반영 완료.
+- 새 구체 오류가 없으면 Studio 저장 하트/Explore 좋아요 정상 경로 추가 수정 금지.
+- 다음 작업에서 "하트/좋아요"라는 표현만으로 두 상태기를 합치지 말 것:
+  - Explore 공개 좋아요 → app164/Worker195 좋아요 기준.
+  - Recent 저장 하트/Music Note favorite → app302/app302b 기준.
+- TEST 승격은 사용자 명시 `테스트배포` 전 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app302 PREVIEW 실기기 최종 확인 (2026-10-03 KST)
 
 배포 완료:

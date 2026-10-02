@@ -60,7 +60,7 @@ assert.ok(addItem.includes('markLibraryPlaylistRevisionCommitted(uid, syncVersio
 
 assert.ok(page.includes('resumeLibraryPlaylistRevisionBatch(uid)'));
 assert.ok(page.includes('noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion)'));
-assert.ok(page.includes("['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete'].includes(signal.operation)"));
+assert.ok(page.includes("'playlist-delete'") && page.includes("'playlist-rename-batch'"));
 assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(uid, remoteVersion)'));
 assert.ok(page.includes("window.addEventListener('pagehide', flushOnPageHide)"));
 assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(user.uid, syncVersion)'),

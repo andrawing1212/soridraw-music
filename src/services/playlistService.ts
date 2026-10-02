@@ -1360,7 +1360,6 @@ export const deletePlaylist = async (
   });
   const playlistRef = doc(db, 'user_playlists', uid, 'lists', playlistId);
   batch.delete(playlistRef);
-  batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
   try {
     await batch.commit();
@@ -1381,7 +1380,11 @@ export const deletePlaylist = async (
     throw error;
   }
 
-  markLibraryPlaylistRevisionCommitted(uid, syncVersion);
+  // app301: deletion follows the same compatibility-cost rule already used by
+  // create/reorder/rename. The playlist/item documents are canonical immediately,
+  // while users.syncVersions.playlists is only a legacy compatibility signal and
+  // can collapse to one UID-wide write after 60 seconds of quiet.
+  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
   await Promise.all([
     previousListCache
       ? Promise.resolve()

@@ -2,7 +2,6 @@ import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1Mut
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
-  publishMusicNoteHeartPreviewDelta,
   publishRecentSongEditPreviewDelta,
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
@@ -5420,15 +5419,16 @@ function App() {
   const [, setFavoriteUiVersion] = useState(0);
   useEffect(() => favoritesStore.subscribe(() => setFavoriteUiVersion((version) => version + 1)), []);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
-  // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
+  // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change.
+  // app302: Studio-heart pending intent is an initiating-device-only optimistic layer.
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
-    if (typeof list === 'function') {
-      const current = favoritesStore.getFavorites();
-      favoritesStore.setFavorites(list(current));
-    } else {
-      favoritesStore.setFavorites(list);
-    }
-  }, []);
+    const current = favoritesStore.getFavorites();
+    const resolved = typeof list === 'function' ? list(current) : list;
+    const uid = String(user?.uid || auth.currentUser?.uid || '').trim();
+    favoritesStore.setFavorites(
+      uid ? overlayStudioHeartPendingIntentsOnFavorites(uid, resolved) : resolved,
+    );
+  }, [user?.uid]);
   const favorites = favoritesStore.getFavorites();
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const FAVORITES_PAGE_SIZE = 20;
@@ -5908,6 +5908,63 @@ function App() {
     || favorite?.trashedAt
   );
 
+  function overlayStudioHeartPendingIntentsOnFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    let next = Array.isArray(list) ? [...list] : [];
+    if (!safeUid) return next;
+
+    const pending = listStudioHeartPendingIntents(safeUid)
+      .slice()
+      .sort((left, right) => left.updatedAtMs - right.updatedAtMs);
+
+    for (const intent of pending) {
+      const documentId = String(intent.documentId || '').trim();
+      if (!documentId) continue;
+
+      next = next.filter((favorite: any) => (
+        String(favorite?.firestoreId || favorite?.id || '').trim() !== documentId
+      ));
+
+      if (!intent.desiredSaved) continue;
+
+      const source = normalizeFavoriteTitleFields({
+        ...(intent.baselineFavorite || {}),
+        ...(intent.song || {}),
+      } as any) as any;
+      const createdAtMs = Number(
+        intent.baselineFavorite?.createdAtMs
+        || source?.createdAtMs
+        || 0,
+      ) || Math.max(1, Number(intent.updatedAtMs || Date.now()));
+      const optimisticFavorite = {
+        ...source,
+        id: documentId,
+        firestoreId: documentId,
+        uid: safeUid,
+        saved: true,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        unsavedAt: null,
+        unlikedAt: null,
+        deletedAt: null,
+        trashedAt: null,
+        isPublic: source?.isPublic === true,
+        isLocked: source?.isLocked === true,
+        createdAtMs,
+        updatedAtMs: Math.max(createdAtMs, Number(intent.updatedAtMs || Date.now())),
+        favoriteKey: source?.favoriteKey || buildFavoriteIdentityKey(source),
+        searchTokens: source?.searchTokens || buildFavoriteSearchTokens(source),
+        __studioHeartPendingLocal: true,
+      };
+
+      next = mergeFavoritePages([optimisticFavorite], next);
+    }
+
+    return sortFavoriteList(next);
+  }
+
   const getFavoriteCreatedSortTime = (favorite: any): number => {
     return Number(favorite?.createdAtMs || 0)
       || getTimestampMs(favorite?.createdAt)
@@ -5935,9 +5992,9 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
-    // app286 — The latest per-song RTDB heart state outranks stale device-local
-    // Recent/Music Note cache. This keeps the visual state and the next click
-    // direction identical on both devices even if historical duplicate rows exist.
+    // Canonical RTDB heart state from another device outranks stale device-local
+    // Recent/Music Note cache. app302 no longer emits pre-canonical Studio-heart
+    // previews; legacy preview signals remain readable during mixed-version rollout.
     const recentHeartAuthority = readRecentHeartAuthority(song);
     if (recentHeartAuthority) return recentHeartAuthority.saved;
     if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
@@ -9873,6 +9930,7 @@ const toggleCycleVariantSelection = (
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+                  if (favorite?.__studioHeartPendingLocal === true) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -10390,6 +10448,7 @@ const toggleCycleVariantSelection = (
       const bundleVersion = Number(bundle.updatedAtMs || 0);
       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+        if (favorite?.__studioHeartPendingLocal === true) return false;
         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -11129,22 +11188,27 @@ const toggleCycleVariantSelection = (
     writeStudioHeartPendingIntent(intent);
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
+    // app302 option-2:
+    // this device gets immediate local Music Note visibility, while another
+    // device waits for the successful canonical mutation after latest click +30s.
+    // Same-song clicks keep the original canonical baseline and replace only
+    // desiredSaved, so final == baseline still settles at W0.
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
-    void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
-      .then((version) => {
-        if (version > 0) rememberStudioHeartPreviewVersion(uid, safeDocumentId, version, desiredSaved, now);
-      })
-      .catch((error) => console.warn('Studio heart live preview unavailable.', error));
+    setFavorites((previous) => previous);
     return true;
   };
 
   useEffect(() => {
     const uid = String(user?.uid || '').trim();
     if (!uid) return;
-    for (const intent of listStudioHeartPendingIntents(uid)) {
+    const pendingIntents = listStudioHeartPendingIntents(uid);
+    for (const intent of pendingIntents) {
       const age = Math.max(0, Date.now() - intent.updatedAtMs);
       const delay = Math.max(1_000, STUDIO_HEART_BATCH_MS - age);
       scheduleStudioHeartPendingIntent(intent.documentId, delay);
+    }
+    if (pendingIntents.length > 0) {
+      setFavorites((previous) => previous);
     }
     return () => {
       for (const timer of studioHeartIntentTimersRef.current.values()) window.clearTimeout(timer);

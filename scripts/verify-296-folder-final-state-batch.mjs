@@ -55,8 +55,18 @@ assert.ok(create.includes('writeLibraryPlaylistItemsCache(uid, newDocRef.id, [],
 assert.ok(!create.includes('getDocs('));
 assert.ok(create.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'));
 
+const renameStart = playlistService.indexOf('export const renamePlaylist = async', createStart);
+const addItemStart = playlistService.indexOf('export const addPlaylistItem = async', renameStart);
+const rename = playlistService.slice(renameStart, addItemStart);
+assert.ok(rename.includes('queueLibraryPlaylistRenameBatch(uid, playlistId, title, syncVersion)'));
+assert.ok(!rename.includes('batch.commit()'), 'Library rename canonical write must wait for the 60s final-state batch');
+assert.ok(playlistService.includes('const LIBRARY_PLAYLIST_RENAME_BATCH_MS = 60_000'));
+assert.ok(playlistService.includes("publishLibraryPlaylistSyncSignal(safeUid, 'playlist-rename-batch', syncVersion"));
+assert.ok(playlistService.includes("signal.operation === 'playlist-rename-batch'"));
+
 console.log('APP296_MUSIC_NOTE_FOLDER_60S_FINAL_STATE_BATCH=PASS');
 console.log('APP296_MUSIC_NOTE_FOLDER_IMMEDIATE_RTDB=PASS');
 console.log('APP296_MUSIC_NOTE_FOLDER_DELETE_IMMEDIATE=PASS');
 console.log('APP296_LIBRARY_REVISION_60S_BATCH=PASS');
+console.log('APP296_LIBRARY_RENAME_60S_FINAL_STATE_BATCH=PASS');
 console.log('APP296_APP294_NEW_FOLDER_R0_REGRESSION=PASS');

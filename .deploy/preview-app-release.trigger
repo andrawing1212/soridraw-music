@@ -1,7 +1,7 @@
-app297-library-folder-reorder-o1-live-sync
-target_source=fb1a136a7e6f69cedb7b1a5293ec2eca6ab820f9
-app_version=297
+app298-library-delete-warm-zero-read
+target_source=fa76cee05b227a627187967db259ce264da437ab
+app_version=298
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=library-reorder-cost-live-sync-fix
+release_request=library-delete-warm-zero-read

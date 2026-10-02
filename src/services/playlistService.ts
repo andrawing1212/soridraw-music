@@ -134,6 +134,199 @@ export const subscribeLibraryPlaylistSync = (
 };
 
 
+const LIBRARY_PLAYLIST_RENAME_BATCH_MS = 60_000;
+const LIBRARY_PLAYLIST_RENAME_STORAGE_PREFIX = 'soridraw.library.playlistRenameBatch.v1';
+
+type PendingPlaylistRenameEntry = {
+  title: string;
+  version: number;
+  updatedAt: number;
+};
+
+type PendingPlaylistRenameBatch = {
+  entries: Record<string, PendingPlaylistRenameEntry>;
+  updatedAt: number;
+};
+
+const playlistRenameTimers = new Map<string, number>();
+const playlistRenameInflight = new Map<string, Promise<void>>();
+const playlistRenameMemory = new Map<string, PendingPlaylistRenameBatch>();
+
+const playlistRenameStorageKey = (uid: string) => `${LIBRARY_PLAYLIST_RENAME_STORAGE_PREFIX}.${String(uid || '').trim()}`;
+
+const readPendingPlaylistRenameBatch = (uid: string): PendingPlaylistRenameBatch | null => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return null;
+  const memory = playlistRenameMemory.get(safeUid);
+  if (memory) return memory;
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(playlistRenameStorageKey(safeUid)) || 'null');
+    if (!raw || typeof raw !== 'object' || !raw.entries || typeof raw.entries !== 'object') return null;
+    const entries: Record<string, PendingPlaylistRenameEntry> = {};
+    Object.entries(raw.entries as Record<string, any>).forEach(([playlistId, value]) => {
+      const id = String(playlistId || '').trim();
+      const title = String(value?.title || '').trim();
+      const version = Math.max(0, Math.floor(Number(value?.version || 0)));
+      const updatedAt = Math.max(0, Math.floor(Number(value?.updatedAt || 0)));
+      if (id && title && version > 0 && updatedAt > 0) entries[id] = { title, version, updatedAt };
+    });
+    if (Object.keys(entries).length === 0) return null;
+    const pending = { entries, updatedAt: Math.max(0, Math.floor(Number(raw.updatedAt || 0))) };
+    playlistRenameMemory.set(safeUid, pending);
+    return pending;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingPlaylistRenameBatch = (uid: string, pending: PendingPlaylistRenameBatch): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  playlistRenameMemory.set(safeUid, pending);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(playlistRenameStorageKey(safeUid), JSON.stringify(pending)); } catch {}
+  }
+};
+
+const clearPendingPlaylistRenameBatch = (uid: string): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  const timer = playlistRenameTimers.get(safeUid);
+  if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
+  playlistRenameTimers.delete(safeUid);
+  playlistRenameMemory.delete(safeUid);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(playlistRenameStorageKey(safeUid)); } catch {}
+  }
+};
+
+const schedulePlaylistRenameBatch = (uid: string, delayMs = LIBRARY_PLAYLIST_RENAME_BATCH_MS): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || typeof window === 'undefined') return;
+  const previous = playlistRenameTimers.get(safeUid);
+  if (previous !== undefined) window.clearTimeout(previous);
+  const timer = window.setTimeout(() => {
+    playlistRenameTimers.delete(safeUid);
+    void flushLibraryPlaylistRenameBatch(safeUid);
+  }, Math.max(0, delayMs));
+  playlistRenameTimers.set(safeUid, timer);
+};
+
+const queueLibraryPlaylistRenameBatch = (
+  uid: string,
+  playlistId: string,
+  title: string,
+  version: number,
+): void => {
+  const safeUid = String(uid || '').trim();
+  const safePlaylistId = String(playlistId || '').trim();
+  const safeTitle = String(title || '').trim();
+  const safeVersion = Math.max(0, Math.floor(Number(version || 0)));
+  if (!safeUid || !safePlaylistId || !safeTitle || safeVersion <= 0) return;
+  const current = readPendingPlaylistRenameBatch(safeUid) || { entries: {}, updatedAt: 0 };
+  const now = Date.now();
+  writePendingPlaylistRenameBatch(safeUid, {
+    entries: {
+      ...current.entries,
+      [safePlaylistId]: { title: safeTitle, version: safeVersion, updatedAt: now },
+    },
+    updatedAt: now,
+  });
+  schedulePlaylistRenameBatch(safeUid);
+};
+
+export const cancelLibraryPlaylistRenameBatch = (uid: string, playlistId: string, floorVersion = Number.MAX_SAFE_INTEGER): void => {
+  const safeUid = String(uid || '').trim();
+  const safePlaylistId = String(playlistId || '').trim();
+  const pending = readPendingPlaylistRenameBatch(safeUid);
+  const target = pending?.entries?.[safePlaylistId];
+  if (!safeUid || !safePlaylistId || !pending || !target || target.version > floorVersion) return;
+  const nextEntries = { ...pending.entries };
+  delete nextEntries[safePlaylistId];
+  if (Object.keys(nextEntries).length === 0) {
+    clearPendingPlaylistRenameBatch(safeUid);
+    return;
+  }
+  writePendingPlaylistRenameBatch(safeUid, { entries: nextEntries, updatedAt: Date.now() });
+  schedulePlaylistRenameBatch(safeUid);
+};
+
+export const flushLibraryPlaylistRenameBatch = async (uid: string): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  const existing = playlistRenameInflight.get(safeUid);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const pending = readPendingPlaylistRenameBatch(safeUid);
+    if (!pending) return;
+    const entries = Object.entries(pending.entries);
+    if (entries.length === 0) {
+      clearPendingPlaylistRenameBatch(safeUid);
+      return;
+    }
+
+    const floor = Math.max(
+      readRemotePlaylistVersion(safeUid),
+      ...entries.map(([, value]) => Number(value.version || 0)),
+    );
+    const syncVersion = nextLibraryPlaylistSyncVersion(safeUid, floor);
+    const batch = writeBatch(db);
+    entries.forEach(([playlistId, value]) => {
+      batch.update(doc(db, 'user_playlists', safeUid, 'lists', playlistId), {
+        title: value.title,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    batch.update(doc(db, 'users', safeUid), { 'syncVersions.playlists': syncVersion });
+    await batch.commit();
+    markLibraryPlaylistRevisionCommitted(safeUid, syncVersion);
+
+    const titleById = new Map(entries.map(([playlistId, value]) => [playlistId, value.title]));
+    await patchLibraryPlaylistListCache(safeUid, (items) => items.map((playlist) => (
+      playlist.id && titleById.has(playlist.id)
+        ? { ...playlist, title: titleById.get(playlist.id)! }
+        : playlist
+    )), syncVersion);
+    await publishLibraryPlaylistSyncSignal(safeUid, 'playlist-rename-batch', syncVersion, {
+      renames: entries.map(([playlistId, value]) => ({ playlistId, title: value.title })),
+    });
+
+    const latest = readPendingPlaylistRenameBatch(safeUid);
+    if (!latest) return;
+    const nextEntries = { ...latest.entries };
+    entries.forEach(([playlistId, captured]) => {
+      const current = nextEntries[playlistId];
+      if (current && current.version <= captured.version && current.updatedAt <= captured.updatedAt) {
+        delete nextEntries[playlistId];
+      }
+    });
+    if (Object.keys(nextEntries).length === 0) {
+      clearPendingPlaylistRenameBatch(safeUid);
+      return;
+    }
+    writePendingPlaylistRenameBatch(safeUid, { entries: nextEntries, updatedAt: latest.updatedAt });
+    schedulePlaylistRenameBatch(safeUid);
+  })().catch((error) => {
+    console.warn('[Library playlist rename batch] canonical flush deferred; pending final titles kept.', error);
+    schedulePlaylistRenameBatch(safeUid);
+  }).finally(() => {
+    playlistRenameInflight.delete(safeUid);
+  });
+
+  playlistRenameInflight.set(safeUid, task);
+  return task;
+};
+
+export const resumeLibraryPlaylistRenameBatch = (uid: string): void => {
+  const safeUid = String(uid || '').trim();
+  const pending = readPendingPlaylistRenameBatch(safeUid);
+  if (!safeUid || !pending) return;
+  const elapsed = Math.max(0, Date.now() - Number(pending.updatedAt || 0));
+  schedulePlaylistRenameBatch(safeUid, Math.max(0, LIBRARY_PLAYLIST_RENAME_BATCH_MS - elapsed));
+};
+
 const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
   const sourceType = normalizeKeyPart(item?.sourceType);
   const sourceId = normalizeKeyPart(item?.sourceId || item?.trackId);
@@ -585,18 +778,11 @@ export const createPlaylist = async (uid: string, type: 'normal' | 'shared', tit
 };
 
 export const renamePlaylist = async (uid: string, playlistId: string, title: string) => {
-  const docRef = doc(db, 'user_playlists', uid, 'lists', playlistId);
   const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
-  const batch = writeBatch(db);
-  batch.update(docRef, {
-    title,
-    updatedAt: serverTimestamp()
-  });
-  await batch.commit();
-  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
   await patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
     playlist.id === playlistId ? { ...playlist, title } : playlist
   )), syncVersion);
+  queueLibraryPlaylistRenameBatch(uid, playlistId, title, syncVersion);
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-rename', syncVersion, { playlistId, title });
 };
 
@@ -782,6 +968,7 @@ export const swapPlaylistItemOrder = async (uid: string, playlistId: string, ite
 };
 
 export const deletePlaylist = async (uid: string, playlistId: string) => {
+  cancelLibraryPlaylistRenameBatch(uid, playlistId);
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
   const [listCache, itemCache] = await Promise.all([
     readLibraryPlaylistListCache(uid),

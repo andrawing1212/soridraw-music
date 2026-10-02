@@ -1,3 +1,3 @@
-app297-library-folder-reorder-o1-live-sync
-source=bc4da91e042a8fbc065971acbd9e4e445f84615b
-requested=2026-10-02T10:55:00+09:00
+app298-library-delete-warm-zero-read
+source=c0dfac2fa45536692db7eda4ac8602c22067accd
+requested=2026-10-02T22:47:00+09:00

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from '../lib/firestoreMeasured';
 import { httpsCallable } from 'firebase/functions';
-import { CheckCircle2, Crown, FlaskConical, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Compass, Crown, FlaskConical, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { readSplitPerfToolVisibility, writeSplitPerfToolVisibility } from '../components/studio/splitPerfDiagnostics';
 import { ADMIN_PERMISSION_DEFINITIONS, FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
@@ -10,6 +10,7 @@ import { auth, db, functions } from '../firebase';
 import type { AdminPermissions, AppUserInfo, StaffRole } from '../types';
 import { getTimestampMs } from '../App';
 import { readAdminStaffListCache, writeAdminStaffListCache } from '../lib/adminStaffListCache';
+import { getExploreManagerPermissions307, setExploreManagerPermission307 } from '../services/exploreCurationService';
 
 const parseUser = (uid: string, data: Record<string, any>): AppUserInfo => ({
   uid,
@@ -43,6 +44,8 @@ export default function MasterPermissionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingUid, setSavingUid] = useState<string | null>(null);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
+  const [explorePermissionSaved307, setExplorePermissionSaved307] = useState<Record<string, boolean>>({});
+  const [explorePermissionDrafts307, setExplorePermissionDrafts307] = useState<Record<string, boolean>>({});
 
 
 const applyAdminList = useCallback((nextAdmins: AppUserInfo[]) => {
@@ -55,6 +58,24 @@ const applyAdminList = useCallback((nextAdmins: AppUserInfo[]) => {
   ])));
 }, []);
 
+const loadExplorePermissions307 = useCallback(async (nextAdmins: AppUserInfo[]) => {
+  const masterUser = auth.currentUser;
+  if (!masterUser) return;
+  const targetUids = nextAdmins.filter((item) => item.staffRole !== 'master').map((item) => item.uid);
+  try {
+    const permissions = await getExploreManagerPermissions307(masterUser, targetUids);
+    const withMaster = Object.fromEntries(nextAdmins.map((item) => [
+      item.uid,
+      item.staffRole === 'master' ? true : permissions[item.uid] === true,
+    ]));
+    setExplorePermissionSaved307(withMaster);
+    setExplorePermissionDrafts307(withMaster);
+  } catch (error) {
+    console.error('Failed to load Explore management permissions:', error);
+    setMessage({ success: false, text: error instanceof Error ? error.message : '익스플로어 관리 권한을 불러오지 못했습니다.' });
+  }
+}, []);
+
 const loadAdmins = useCallback(async (forceServer = false) => {
   const masterUid = auth.currentUser?.uid || '';
   if (!masterUid) {
@@ -65,6 +86,7 @@ const loadAdmins = useCallback(async (forceServer = false) => {
     const cached = readAdminStaffListCache(masterUid);
     if (cached) {
       applyAdminList(cached.admins);
+      await loadExplorePermissions307(cached.admins);
       setIsLoading(false);
       return;
     }
@@ -83,13 +105,14 @@ const loadAdmins = useCallback(async (forceServer = false) => {
       });
     applyAdminList(nextAdmins);
     writeAdminStaffListCache(masterUid, nextAdmins);
+    await loadExplorePermissions307(nextAdmins);
   } catch (error: any) {
     console.error('Failed to load admin permissions:', error);
     setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
   } finally {
     setIsLoading(false);
   }
-}, [applyAdminList]);
+}, [applyAdminList, loadExplorePermissions307]);
 
 useEffect(() => {
   if (activeTab !== 'admin-permissions') {
@@ -114,28 +137,51 @@ useEffect(() => {
     setMessage(null);
   };
 
+  const updateExplorePermission307 = (uid: string) => {
+    setExplorePermissionDrafts307((current) => ({
+      ...current,
+      [uid]: !(current[uid] === true),
+    }));
+    setMessage(null);
+  };
+
   const saveAdmin = async (user: AppUserInfo) => {
     if (user.staffRole === 'master') return;
     const permissions = drafts[user.uid] || normalizeAdminPermissions(user);
+    const savedPermissions = normalizeAdminPermissions(user);
+    const basePermissionsChanged = !samePermissions(permissions, savedPermissions);
+    const explorePermission = explorePermissionDrafts307[user.uid] === true;
+    const savedExplorePermission = explorePermissionSaved307[user.uid] === true;
+    const explorePermissionChanged = explorePermission !== savedExplorePermission;
     setSavingUid(user.uid);
     setMessage(null);
     try {
-      const callable = httpsCallable(functions, 'masterSetAdminAccess');
-      await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
-      const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
-      void signalControlRevision({ targetUid: user.uid, reason: 'admin-permissions' }).catch((error) => {
-        console.warn('Admin permission revision signal failed; Firestore listener fallback remains active.', error);
-      });
-      const nextAdmins: AppUserInfo[] = admins.map((item) => item.uid === user.uid
-        ? { ...item, staffRole: 'admin' as StaffRole, adminPermissions: { ...permissions } }
-        : item);
-      setAdmins(nextAdmins);
-      setDrafts((current) => ({ ...current, [user.uid]: { ...permissions } }));
-      const masterUid = auth.currentUser?.uid || '';
-      if (masterUid) writeAdminStaffListCache(masterUid, nextAdmins);
+      let nextAdmins = admins;
+      if (basePermissionsChanged) {
+        const callable = httpsCallable(functions, 'masterSetAdminAccess');
+        await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
+        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+        void signalControlRevision({ targetUid: user.uid, reason: 'admin-permissions' }).catch((error) => {
+          console.warn('Admin permission revision signal failed; Firestore listener fallback remains active.', error);
+        });
+        nextAdmins = admins.map((item) => item.uid === user.uid
+          ? { ...item, staffRole: 'admin' as StaffRole, adminPermissions: { ...permissions } }
+          : item);
+        setAdmins(nextAdmins);
+        setDrafts((current) => ({ ...current, [user.uid]: { ...permissions } }));
+        const masterUid = auth.currentUser?.uid || '';
+        if (masterUid) writeAdminStaffListCache(masterUid, nextAdmins);
+      }
+      if (explorePermissionChanged) {
+        const masterUser = auth.currentUser;
+        if (!masterUser) throw new Error('마스터 로그인이 필요합니다.');
+        await setExploreManagerPermission307(masterUser, user.uid, explorePermission);
+        setExplorePermissionSaved307((current) => ({ ...current, [user.uid]: explorePermission }));
+        setExplorePermissionDrafts307((current) => ({ ...current, [user.uid]: explorePermission }));
+      }
       setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
     } catch (error: any) {
-      console.error('masterSetAdminAccess failed:', error);
+      console.error('Admin permission save failed:', error);
       setMessage({ success: false, text: error?.message || '권한 저장에 실패했습니다.' });
     } finally {
       setSavingUid(null);
@@ -262,7 +308,12 @@ useEffect(() => {
               const isMaster = user.staffRole === 'master';
               const draft = drafts[user.uid] || normalizeAdminPermissions(user);
               const savedPermissions = isMaster ? FULL_ADMIN_PERMISSIONS : normalizeAdminPermissions(user);
-              const changed = !isMaster && !samePermissions(draft, savedPermissions);
+              const exploreEnabled307 = isMaster || explorePermissionDrafts307[user.uid] === true;
+              const exploreSaved307 = isMaster || explorePermissionSaved307[user.uid] === true;
+              const changed = !isMaster && (
+                !samePermissions(draft, savedPermissions)
+                || exploreEnabled307 !== exploreSaved307
+              );
 
               return (
                 <div
@@ -312,6 +363,26 @@ useEffect(() => {
                         </button>
                       );
                     })}
+                    <button
+                      type="button"
+                      disabled={isMaster || savingUid === user.uid}
+                      onClick={() => updateExplorePermission307(user.uid)}
+                      className={cn(
+                        'flex items-start gap-3 rounded-2xl p-3 text-left transition disabled:cursor-default',
+                        exploreEnabled307 ? 'bg-white/[0.10]' : 'bg-black/20 hover:bg-white/[0.055]'
+                      )}
+                    >
+                      <span className={cn(
+                        'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+                        exploreEnabled307 ? 'bg-white/[0.14] text-zinc-100' : 'bg-white/[0.035] text-zinc-700'
+                      )}>
+                        <Compass className="h-3.5 w-3.5" />
+                      </span>
+                      <span>
+                        <span className="block text-xs font-black text-zinc-100">익스플로어 관리</span>
+                        <span className="mt-1 block text-[10px] leading-relaxed text-zinc-500">SORIDRAW 추천곡 승격·해제와 승격 곡 관리</span>
+                      </span>
+                    </button>
                   </div>
 
                   {!isMaster && (

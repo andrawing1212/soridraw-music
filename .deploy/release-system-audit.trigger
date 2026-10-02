@@ -1,4 +1,4 @@
-app306-explore-order-pc-arrows
-source=811c15803339effefb05a0a47b0878c6128d5964
-product_commit=811c15803339effefb05a0a47b0878c6128d5964
-requested=2026-10-03T08:15:00+09:00
+app307-explore-curation-management
+source=239fa2dd192855b97ffd30753bc378a994187093
+product_commit=239fa2dd192855b97ffd30753bc378a994187093
+requested=2026-10-03T08:36:00+09:00

@@ -35,6 +35,525 @@ const EXPLORE_FEED_R2_SNAPSHOT_EDGE_SECONDS_108 = 5 * 60;
 const EXPLORE_SHARED_FEED_R2_VERSION_112 = '112';
 const sharedFeedR2Key112 = (sort) => `internal/explore/shared-feed-v112/${sort === 'popular' ? 'popular' : 'latest'}-40.json`;
 
+// SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003
+// SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003
+const SORIDRAW_CURATED_COLLECTION_307 = 'soridraw';
+const SORIDRAW_CURATED_R2_KEY_307 = 'internal/explore/curated-v307/soridraw-40.json';
+const SORIDRAW_CURATED_EDGE_SECONDS_307 = 5 * 60;
+const SORIDRAW_FIREBASE_PROJECT_307 = 'soridraw-app-866a5';
+
+function curationCors307(request) {
+  const origin = String(request.headers.get('Origin') || '');
+  if (!RELEASE_ALLOWED_ORIGINS_036.has(origin)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Firebase-AppCheck',
+    'Vary': 'Origin',
+  };
+}
+
+function curationHeaders307(request, {
+  d1Read = 0,
+  d1Write = 0,
+  r2A = 0,
+  r2B = 0,
+  revision = '',
+  source = 'CURATION-307',
+} = {}) {
+  const headers = new Headers(curationCors307(request));
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('X-SORIDRAW-CF-Diagnostics', '307');
+  headers.set('X-SORIDRAW-CF-Worker', '1');
+  headers.set('X-SORIDRAW-D1-Read', String(Math.max(0, d1Read)));
+  headers.set('X-SORIDRAW-D1-Write', String(Math.max(0, d1Write)));
+  headers.set('X-SORIDRAW-D1-Read-Queries', String(d1Read > 0 ? 1 : 0));
+  headers.set('X-SORIDRAW-D1-Write-Queries', String(d1Write > 0 ? 1 : 0));
+  headers.set('X-SORIDRAW-D1-Other-Queries', '0');
+  headers.set('X-SORIDRAW-R2-A', String(Math.max(0, r2A)));
+  headers.set('X-SORIDRAW-R2-B', String(Math.max(0, r2B)));
+  if (revision) headers.set('X-SORIDRAW-Curated-Revision', revision);
+  headers.set('X-SORIDRAW-Curated-Source', source);
+  headers.set('Access-Control-Expose-Headers', [
+    'X-SORIDRAW-CF-Diagnostics','X-SORIDRAW-CF-Worker',
+    'X-SORIDRAW-D1-Read','X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-D1-Read-Queries','X-SORIDRAW-D1-Write-Queries','X-SORIDRAW-D1-Other-Queries',
+    'X-SORIDRAW-R2-A','X-SORIDRAW-R2-B','X-SORIDRAW-Curated-Revision','X-SORIDRAW-Curated-Source',
+  ].join(', '));
+  return headers;
+}
+
+const curatedBucket307 = (env) => env?.EXPLORE_CACHE || null;
+const curatedRevision307 = (object) => String(
+  object?.httpEtag
+  || object?.etag
+  || object?.customMetadata?.updatedAt
+  || (object?.uploaded && typeof object.uploaded.getTime === 'function' ? object.uploaded.getTime() : '')
+  || '',
+).trim();
+const curatedRevisionEdgeKey307 = (url) =>
+  new Request(new URL('/__soridraw/curated-revision-v307/soridraw', url.origin).toString(), { method: 'GET' });
+const curatedBodyEdgeKey307 = (url, revision, limit) => {
+  const edge = new URL('/__soridraw/curated-body-v307/soridraw', url.origin);
+  edge.searchParams.set('revision', String(revision || 'none'));
+  edge.searchParams.set('limit', String(limit));
+  return new Request(edge.toString(), { method: 'GET' });
+};
+
+async function clearCuratedEdge307(url) {
+  try { await caches.default.delete(curatedRevisionEdgeKey307(url)); } catch {}
+}
+
+async function validateExploreAuth307(request, env, ctx) {
+  const authUrl = new URL('/auth-test', request.url);
+  const authRequest = new Request(authUrl.toString(), { method: 'POST', headers: request.headers });
+  const response = await baseWorker.fetch(authRequest, env, ctx);
+  const payload = await response.clone().json().catch(() => null);
+  if (!response.ok || payload?.authenticated !== true || !payload?.uid) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({
+        ok: false,
+        error: { code: 'AUTHENTICATION_REQUIRED', message: '인증이 필요합니다.' },
+      }), {
+        status: response.status === 403 ? 403 : 401,
+        headers: curationHeaders307(request, { source: 'AUTH-REJECTED-307' }),
+      }),
+    };
+  }
+  return {
+    ok: true,
+    uid: String(payload.uid),
+    idToken: String(request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim(),
+    appCheckToken: String(request.headers.get('X-Firebase-AppCheck') || '').trim(),
+  };
+}
+
+async function readOwnStaffProfile307(actor) {
+  const url = `https://firestore.googleapis.com/v1/projects/${SORIDRAW_FIREBASE_PROJECT_307}/databases/(default)/documents/users/${encodeURIComponent(actor.uid)}`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${actor.idToken}`,
+      'X-Firebase-AppCheck': actor.appCheckToken,
+      Accept: 'application/json',
+    },
+  });
+  if (!response.ok) return { role: '', staffRole: '' };
+  const doc = await response.json().catch(() => null);
+  const fields = doc?.fields || {};
+  return {
+    role: String(fields?.role?.stringValue || '').trim().toLowerCase(),
+    staffRole: String(fields?.staffRole?.stringValue || '').trim().toLowerCase(),
+  };
+}
+
+async function resolveExploreManagementAccess307(request, env, ctx) {
+  const actor = await validateExploreAuth307(request, env, ctx);
+  if (!actor.ok) return actor;
+  const profile = await readOwnStaffProfile307(actor);
+  const isMaster = profile.staffRole === 'master';
+  const isAdmin = isMaster || profile.staffRole === 'admin' || profile.role === 'admin';
+  if (isMaster) return { ...actor, canCurate: true, curatorRole: 'master', isMaster: true, d1Read: 0 };
+  if (!isAdmin) return { ...actor, canCurate: false, curatorRole: null, isMaster: false, d1Read: 0 };
+
+  const row = await env.DB.prepare(
+    `SELECT role,is_active,created_by_uid FROM explore_curators WHERE uid=? LIMIT 1`
+  ).bind(actor.uid).first();
+  // Legacy automatic rows used role='admin'. Only an explicit Master grant uses
+  // role='master', so ordinary admins never inherit curation access automatically.
+  const explicitlyGranted = row?.is_active === 1 && row?.role === 'master';
+  return {
+    ...actor,
+    canCurate: explicitlyGranted,
+    curatorRole: explicitlyGranted ? 'admin' : null,
+    isMaster: false,
+    d1Read: 1,
+  };
+}
+
+async function handleExploreManagementAccess307(request, env, ctx) {
+  const access = await resolveExploreManagementAccess307(request, env, ctx);
+  if (!access.ok) return access.response;
+  return new Response(JSON.stringify({
+    ok: true,
+    data: { uid: access.uid, canCurate: access.canCurate === true, curatorRole: access.curatorRole || null },
+  }), {
+    status: 200,
+    headers: curationHeaders307(request, { d1Read: access.d1Read, source: 'MANAGEMENT-ACCESS-307' }),
+  });
+}
+
+async function requireMaster307(request, env, ctx) {
+  const access = await resolveExploreManagementAccess307(request, env, ctx);
+  if (!access.ok) return access;
+  if (!access.isMaster) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({
+        ok: false,
+        error: { code: 'MASTER_REQUIRED', message: '마스터 권한이 필요합니다.' },
+      }), { status: 403, headers: curationHeaders307(request, { d1Read: access.d1Read, source: 'MASTER-REQUIRED-307' }) }),
+    };
+  }
+  return access;
+}
+
+async function handleExploreManagerList307(request, env, ctx) {
+  const actor = await requireMaster307(request, env, ctx);
+  if (!actor.ok) return actor.response;
+  const url = new URL(request.url);
+  const uids = [...new Set(String(url.searchParams.get('uids') || '')
+    .split(',').map((value) => value.trim()).filter(Boolean))].slice(0, 100);
+  if (!uids.length) {
+    return new Response(JSON.stringify({ ok: true, data: { permissions: {} } }), {
+      status: 200,
+      headers: curationHeaders307(request, { source: 'MANAGER-LIST-EMPTY-307' }),
+    });
+  }
+  const placeholders = uids.map(() => '?').join(',');
+  const result = await env.DB.prepare(
+    `SELECT uid,role,is_active FROM explore_curators WHERE uid IN (${placeholders})`
+  ).bind(...uids).all();
+  const rows = Array.isArray(result?.results) ? result.results : [];
+  const enabled = new Set(rows
+    .filter((row) => row?.role === 'master' && row?.is_active === 1)
+    .map((row) => String(row.uid || '').trim())
+    .filter(Boolean));
+  const permissions = Object.fromEntries(uids.map((uid) => [uid, enabled.has(uid)]));
+  return new Response(JSON.stringify({ ok: true, data: { permissions } }), {
+    status: 200,
+    headers: curationHeaders307(request, { d1Read: rows.length, source: 'MANAGER-LIST-307' }),
+  });
+}
+
+async function handleExploreManagerMutation307(request, env, ctx, targetUid, enabled) {
+  const actor = await requireMaster307(request, env, ctx);
+  if (!actor.ok) return actor.response;
+  const uid = String(targetUid || '').trim();
+  if (!uid || uid.length > 256) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'INVALID_UID', message: '관리자 UID가 올바르지 않습니다.' },
+    }), { status: 400, headers: curationHeaders307(request, { source: 'MANAGER-INVALID-307' }) });
+  }
+  const now = Date.now();
+  if (enabled) {
+    await env.DB.prepare(`
+      INSERT INTO explore_curators(uid,role,is_active,created_by_uid,created_at,updated_at)
+      VALUES (?,'master',1,?,?,?)
+      ON CONFLICT(uid) DO UPDATE SET
+        role='master',is_active=1,created_by_uid=excluded.created_by_uid,updated_at=excluded.updated_at
+    `).bind(uid, actor.uid, now, now).run();
+  } else {
+    await env.DB.prepare(
+      `UPDATE explore_curators SET is_active=0,updated_at=? WHERE uid=?`
+    ).bind(now, uid).run();
+  }
+  return new Response(JSON.stringify({ ok: true, data: { uid, enabled } }), {
+    status: 200,
+    headers: curationHeaders307(request, { d1Write: 1, source: 'MANAGER-MUTATION-307' }),
+  });
+}
+
+async function materializeCuratedR2FromBase307(request, env, ctx) {
+  const bucket = curatedBucket307(env);
+  if (!bucket) return { object: null, payload: null, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
+  const target = new URL('/v1/curated', request.url);
+  target.searchParams.set('collection', SORIDRAW_CURATED_COLLECTION_307);
+  target.searchParams.set('limit', '40');
+  const baseResponse = await baseWorker.fetch(new Request(target.toString(), {
+    method: 'GET',
+    headers: { Origin: request.headers.get('Origin') || '' },
+  }), env, ctx);
+  const payload = await baseResponse.clone().json().catch(() => null);
+  if (!baseResponse.ok || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+    return { object: null, payload: null, d1Read: 0, source: 'D1-BOOTSTRAP-FAILED-307' };
+  }
+  const stored = {
+    schemaVersion: 1,
+    collection: SORIDRAW_CURATED_COLLECTION_307,
+    payload,
+    updatedAt: Date.now(),
+  };
+  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { updatedAt: String(stored.updatedAt) },
+  });
+  await clearCuratedEdge307(new URL(request.url));
+  const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
+  return {
+    object,
+    payload,
+    d1Read: Math.max(1, Number(payload.data.items.length || 0)),
+    source: 'D1-BOOTSTRAP-307',
+  };
+}
+
+async function readCuratedObject307(request, env, ctx) {
+  const bucket = curatedBucket307(env);
+  if (!bucket) return { object: null, payload: null, r2Reads: 0, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
+  let object = null;
+  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  if (!object) {
+    const boot = await materializeCuratedR2FromBase307(request, env, ctx);
+    return { object: boot.object, payload: boot.payload, r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
+  }
+  let stored = null;
+  try { stored = JSON.parse(await object.text()); } catch {}
+  const payload = stored?.payload;
+  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+    try { await bucket.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    const boot = await materializeCuratedR2FromBase307(request, env, ctx);
+    return { object: boot.object, payload: boot.payload, r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
+  }
+  return { object, payload, r2Reads: 1, d1Read: 0, source: 'R2-CURATED-307' };
+}
+
+async function handleCuratedRevision307(request, env) {
+  const bucket = curatedBucket307(env);
+  if (!bucket) {
+    return new Response(JSON.stringify({ ok: false, error: 'Curated cache unavailable' }), {
+      status: 503,
+      headers: curationHeaders307(request, { source: 'R2-BINDING-MISSING-307' }),
+    });
+  }
+  const url = new URL(request.url);
+  const edgeKey = curatedRevisionEdgeKey307(url);
+  try {
+    const cached = await caches.default.match(edgeKey);
+    if (cached) {
+      const revision = String(await cached.text() || '').trim();
+      if (revision) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { collection: SORIDRAW_CURATED_COLLECTION_307, revision, exists: true },
+        }), {
+          status: 200,
+          headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-HEAD-307' }),
+        });
+      }
+    }
+  } catch {}
+  let head = null;
+  try { head = await bucket.head(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  const revision = curatedRevision307(head);
+  if (!revision) {
+    return new Response(JSON.stringify({
+      ok: true,
+      data: { collection: SORIDRAW_CURATED_COLLECTION_307, revision: '', exists: false },
+    }), {
+      status: 200,
+      headers: curationHeaders307(request, { r2B: 1, source: 'R2-CURATED-MISSING-307' }),
+    });
+  }
+  try {
+    await caches.default.put(edgeKey, new Response(revision, {
+      headers: { 'Cache-Control': 'public, max-age=60' },
+    }));
+  } catch {}
+  return new Response(JSON.stringify({
+    ok: true,
+    data: { collection: SORIDRAW_CURATED_COLLECTION_307, revision, exists: true },
+  }), {
+    status: 200,
+    headers: curationHeaders307(request, { r2B: 1, revision, source: 'R2-CURATED-HEAD-307' }),
+  });
+}
+
+async function handleCuratedPublic307(request, env, ctx) {
+  const url = new URL(request.url);
+  const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  const selected = await readCuratedObject307(request, env, ctx);
+  if (!selected.payload?.data?.items) {
+    return new Response(JSON.stringify({ ok: false, error: 'SORIDRAW 추천곡을 불러오지 못했습니다.' }), {
+      status: 503,
+      headers: curationHeaders307(request, {
+        d1Read: selected.d1Read,
+        r2B: selected.r2Reads,
+        source: selected.source,
+      }),
+    });
+  }
+  const revision = curatedRevision307(selected.object);
+  const edgeKey = curatedBodyEdgeKey307(url, revision, limit);
+  try {
+    const cached = await caches.default.match(edgeKey);
+    if (cached) {
+      return new Response(await cached.text(), {
+        status: 200,
+        headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+      });
+    }
+  } catch {}
+  const body = JSON.stringify({
+    ...selected.payload,
+    data: {
+      ...selected.payload.data,
+      collection: SORIDRAW_CURATED_COLLECTION_307,
+      items: selected.payload.data.items.slice(0, limit),
+      revision,
+    },
+  });
+  try {
+    await caches.default.put(edgeKey, new Response(body, {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': `public, max-age=${SORIDRAW_CURATED_EDGE_SECONDS_307}`,
+      },
+    }));
+  } catch {}
+  return new Response(body, {
+    status: 200,
+    headers: curationHeaders307(request, {
+      d1Read: selected.d1Read,
+      r2B: selected.r2Reads,
+      revision,
+      source: selected.source,
+    }),
+  });
+}
+
+async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, curatorRole) {
+  const bucket = curatedBucket307(env);
+  if (!bucket) return;
+  const selected = await readCuratedObject307(request, env, ctx);
+  if (!selected.payload?.data?.items) return;
+  let items = selected.payload.data.items.filter((item) => String(item?.track?.id || '').trim() !== trackId);
+  if (promoted) {
+    const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
+    const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
+      method: 'GET',
+      headers: { Origin: request.headers.get('Origin') || '' },
+    }), env, ctx);
+    const detail = await detailResponse.clone().json().catch(() => null);
+    const track = detail?.data?.track;
+    if (detailResponse.ok && track?.id) {
+      items.unshift({
+        track,
+        curation: {
+          curatorUid: '',
+          curatorRole,
+          sortOrder: 0,
+          startsAt: null,
+          endsAt: null,
+        },
+      });
+    }
+  }
+  const payload = {
+    ok: true,
+    data: { collection: SORIDRAW_CURATED_COLLECTION_307, items: items.slice(0, 40) },
+  };
+  const stored = {
+    schemaVersion: 1,
+    collection: SORIDRAW_CURATED_COLLECTION_307,
+    payload,
+    updatedAt: Date.now(),
+  };
+  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { updatedAt: String(stored.updatedAt) },
+  });
+  await clearCuratedEdge307(new URL(request.url));
+}
+
+async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
+  const access = await resolveExploreManagementAccess307(request, env, ctx);
+  if (!access.ok) return access.response;
+  if (!access.canCurate) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'EXPLORE_MANAGEMENT_REQUIRED', message: '익스플로어 관리 권한이 필요합니다.' },
+    }), {
+      status: 403,
+      headers: curationHeaders307(request, { d1Read: access.d1Read, source: 'CURATION-DENIED-307' }),
+    });
+  }
+  const id = String(trackId || '').trim();
+  if (!id) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'INVALID_TRACK', message: '추천곡 대상이 없습니다.' },
+    }), { status: 400, headers: curationHeaders307(request, { source: 'CURATION-INVALID-307' }) });
+  }
+  const now = Date.now();
+  let d1Read = access.d1Read;
+  if (promoted) {
+    const track = await env.DB.prepare(
+      `SELECT id FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1`
+    ).bind(id).first();
+    d1Read += 1;
+    if (!track) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: { code: 'NOT_FOUND', message: '공개 곡을 찾을 수 없습니다.' },
+      }), {
+        status: 404,
+        headers: curationHeaders307(request, { d1Read, source: 'CURATION-TRACK-MISSING-307' }),
+      });
+    }
+    await env.DB.prepare(`
+      INSERT INTO curated_picks(collection_key,track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at)
+      VALUES (?,?,?,?,0,NULL,NULL,?,?)
+      ON CONFLICT(collection_key,track_id) DO UPDATE SET
+        curator_uid=excluded.curator_uid,curator_role=excluded.curator_role,sort_order=0,
+        starts_at=NULL,ends_at=NULL,updated_at=excluded.updated_at
+    `).bind(SORIDRAW_CURATED_COLLECTION_307, id, access.uid, access.curatorRole, now, now).run();
+  } else {
+    await env.DB.prepare(
+      `DELETE FROM curated_picks WHERE collection_key=? AND track_id=?`
+    ).bind(SORIDRAW_CURATED_COLLECTION_307, id).run();
+  }
+
+  try {
+    await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
+  } catch (error) {
+    console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
+    try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    await clearCuratedEdge307(new URL(request.url));
+  }
+
+  return new Response(JSON.stringify({
+    ok: true,
+    data: { collection: SORIDRAW_CURATED_COLLECTION_307, trackId: id, recommended: promoted },
+  }), {
+    status: 200,
+    headers: curationHeaders307(request, {
+      d1Read,
+      d1Write: 1,
+      source: promoted ? 'CURATION-PROMOTE-307' : 'CURATION-REMOVE-307',
+    }),
+  });
+}
+
+async function handleManagedCurated307(request, env, ctx) {
+  const access = await resolveExploreManagementAccess307(request, env, ctx);
+  if (!access.ok) return access.response;
+  if (!access.canCurate) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'EXPLORE_MANAGEMENT_REQUIRED', message: '익스플로어 관리 권한이 필요합니다.' },
+    }), {
+      status: 403,
+      headers: curationHeaders307(request, { d1Read: access.d1Read, source: 'MANAGED-LIST-DENIED-307' }),
+    });
+  }
+  const target = new URL('/v1/curated', request.url);
+  target.searchParams.set('collection', SORIDRAW_CURATED_COLLECTION_307);
+  target.searchParams.set('limit', '50');
+  const response = await baseWorker.fetch(new Request(target.toString(), {
+    method: 'GET',
+    headers: { Origin: request.headers.get('Origin') || '' },
+  }), env, ctx);
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(curationCors307(request))) headers.set(key, value);
+  headers.set('Cache-Control', 'no-store');
+  headers.set('X-SORIDRAW-Curated-Source', 'MANAGED-D1-307');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 async function readFeedHeadSource112(env, sort) {
   const shared = env?.PROFILE_MEDIA || null;
   if (shared) {
@@ -1005,13 +1524,59 @@ export default {
     if (request.method === 'GET' && url.pathname === PUBLIC_LIKE_CARD_ROUTE_192) {
       return handlePublicLikeCards192(request, env);
     }
+    const segments307 = url.pathname.split('/').filter(Boolean);
+    const curatedCollection307 = String(url.searchParams.get('collection') || '').trim().toLowerCase();
+    if (request.method === 'GET' && url.pathname === '/v1/curated-revision' && curatedCollection307 === SORIDRAW_CURATED_COLLECTION_307) {
+      return handleCuratedRevision307(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/curated' && curatedCollection307 === SORIDRAW_CURATED_COLLECTION_307) {
+      return handleCuratedPublic307(request, env, ctx);
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/me/explore-management-access') {
+      return handleExploreManagementAccess307(request, env, ctx);
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/explore-managers') {
+      return handleExploreManagerList307(request, env, ctx);
+    }
+    if (
+      (request.method === 'PUT' || request.method === 'DELETE')
+      && segments307.length === 3
+      && segments307[0] === 'v1'
+      && segments307[1] === 'explore-managers'
+    ) {
+      return handleExploreManagerMutation307(
+        request, env, ctx, decodeURIComponent(segments307[2]), request.method === 'PUT',
+      );
+    }
+    if (
+      (request.method === 'PUT' || request.method === 'DELETE')
+      && segments307.length === 4
+      && segments307[0] === 'v1'
+      && segments307[1] === 'curation'
+      && decodeURIComponent(segments307[2]).toLowerCase() === SORIDRAW_CURATED_COLLECTION_307
+    ) {
+      return handleCurationMutation307(
+        request, env, ctx, decodeURIComponent(segments307[3]), request.method === 'PUT',
+      );
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/manage/curated' && curatedCollection307 === SORIDRAW_CURATED_COLLECTION_307) {
+      return handleManagedCurated307(request, env, ctx);
+    }
+
     const isProfileUpdate244 = request.method === 'PATCH' && url.pathname === '/v1/me/profile';
     const isUnifiedProfileSave252 = request.method === 'PUT' && url.pathname === '/v1/me/profile-save';
     const isPublicProfileRead244 = request.method === 'GET'
       && /^\/v1\/profiles\/[^/]+(?:\/first-view)?$/.test(url.pathname);
     const profileUpdateRequest244 = (isProfileUpdate244 || isUnifiedProfileSave252) ? request.clone() : null;
 
+    const isTrackVisibilityMutation307 = request.method === 'PATCH'
+      && /^\/v1\/tracks\/[^/]+\/visibility$/.test(url.pathname);
     let response = await baseWorker.fetch(request, env, ctx);
+
+    if (isTrackVisibilityMutation307 && response.ok) {
+      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+      await clearCuratedEdge307(url);
+    }
 
     if ((isProfileUpdate244 || isUnifiedProfileSave252) && response.ok) {
       let requestBody = null;

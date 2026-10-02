@@ -4002,7 +4002,7 @@ function Navigation({
 
     const openCompactStudioWorkspace = (view: StudioWorkspaceView) => {
       onStudioWorkspaceSelect(view);
-      if (location.pathname !== '/studio') navigate('/studio');
+      if (location.pathname !== '/studio') navigate(`/studio?view=${view}`);
       else scrollToTop();
     };
 
@@ -5237,6 +5237,39 @@ function App() {
     setStudioWorkspaceView(view);
     setStudioWorkspaceLayoutRequestId((current) => current + 1);
   }, []);
+
+  // app303: Split keeps all four Studio workspaces on /studio, so a plain
+  // state-only rail switch was invisible to browser Back/Forward. Record the
+  // workspace in the URL history only for user navigation while preserving
+  // every existing split geometry/query option.
+  const navigateStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
+    const previousView = studioWorkspaceView;
+    selectStudioWorkspaceView(view);
+    if (previousView === view) return;
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
+
+    const nextParams = new URLSearchParams(location.search);
+    if (nextParams.get('view') === view) return;
+    nextParams.set('view', view);
+    const query = nextParams.toString();
+    navigate(`/studio${query ? `?${query}` : ''}`);
+  }, [location.pathname, location.search, navigate, selectStudioWorkspaceView, studioWorkspaceView]);
+
+  // Browser Back/Forward (including mouse thumb buttons) restores the exact
+  // split workspace represented by that history entry. /studio without an
+  // explicit view remains the canonical Create entry.
+  useEffect(() => {
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
+    const requestedView = new URLSearchParams(location.search).get('view');
+    const nextView: StudioWorkspaceView = requestedView === 'recent'
+      || requestedView === 'music-note'
+      || requestedView === 'library'
+      || requestedView === 'create'
+      ? requestedView
+      : 'create';
+    if (nextView === studioWorkspaceView) return;
+    selectStudioWorkspaceView(nextView);
+  }, [location.pathname, location.search, selectStudioWorkspaceView, studioWorkspaceView]);
 
   // 951: A Classic Music Note/Library route is a standalone page. When the
   // user switches that live page into Split, move into the canonical Studio
@@ -17867,7 +17900,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         clearSunoLibrarySignal={clearSunoLibrarySignal}
         studioCompactMobileLayout={isStudioCompactMobileLayout}
         studioWorkspaceView={studioWorkspaceView}
-        onStudioWorkspaceSelect={selectStudioWorkspaceView}
+        onStudioWorkspaceSelect={navigateStudioWorkspaceView}
       />
 
       <SplitPerformanceDiagnostics isAdmin={isMasterDiagnosticsUser} />
@@ -17899,12 +17932,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <StudioLeftRail
                 activeWorkspace={studioWorkspaceView}
                 onCreate={() => {
-                  selectStudioWorkspaceView('create');
+                  navigateStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
                 }}
-                onRecentSongs={() => selectStudioWorkspaceView('recent')}
-                onMusicNote={() => selectStudioWorkspaceView('music-note')}
-                onLibrary={() => selectStudioWorkspaceView('library')}
+                onRecentSongs={() => navigateStudioWorkspaceView('recent')}
+                onMusicNote={() => navigateStudioWorkspaceView('music-note')}
+                onLibrary={() => navigateStudioWorkspaceView('library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
@@ -17938,7 +17971,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatSongGenre={formatStudioDashboardGenre}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={(song, index) => {
-                  selectStudioWorkspaceView('recent');
+                  navigateStudioWorkspaceView('recent');
                   openStudioDashboardSong(song, index);
                 }}
                 isSongUnread={isStudioDashboardSongUnread}
@@ -19252,7 +19285,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => selectStudioWorkspaceView('music-note')}
+                      onClick={() => navigateStudioWorkspaceView('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -20620,7 +20653,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            selectStudioWorkspaceView('library');
+                            navigateStudioWorkspaceView('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"

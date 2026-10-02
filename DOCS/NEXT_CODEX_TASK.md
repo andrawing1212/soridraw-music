@@ -1,3 +1,25 @@
+## CURRENT TASK — app300 실기기 warm delete R0 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app300 / Run `37055366260` SUCCESS.
+- locked source `0c56140c95de7e24b67bf402fee32efb54c37705`.
+- `preview.soridraw.com` app300 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+이번 확인은 짧게:
+1. CACHE LIVE 초기화.
+2. 마이 리스트 기본 폴더를 한 번 열어 곡 목록 표시 확인.
+3. 빈 비기본 폴더 선택 → 빈 화면 로딩 완료 → 삭제.
+4. 기대: `user_playlists:getDocs 0`.
+5. 빈 폴더 삭제 자체는 `user_playlists:batch W1 + users:batch W1`.
+6. 같은 삭제를 2~3회 반복해도 getDocs가 delete 때문에 증가하지 않아야 함.
+7. 삭제 후 다음 warm 폴더 화면 정상.
+8. app299 reorder는 계속 즉시 반영 + 60초 final-state 구조 유지.
+
+warm 삭제에서 getDocs가 다시 +1이면 FAIL이며 원인 미해결로 기록.
+cold/stale snapshot 자체가 없는 예외 caller의 bounded fallback read는 허용.
+TEST/PRODUCTION 승격 금지.
+
 ## CURRENT TASK — app300 PREVIEW Library warm delete R0 재검증 (2026-10-03 KST)
 
 app299 사용자 영상:

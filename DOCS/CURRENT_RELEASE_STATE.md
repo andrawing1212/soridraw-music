@@ -1,3 +1,24 @@
+## 0MU. PREVIEW app300 배포 완료 — Library warm delete redundant R1 보강 (2026-10-03 KST)
+
+- Firebase PREVIEW Release Run `37055366260`: **SUCCESS**.
+- locked PREVIEW source: `0c56140c95de7e24b67bf402fee32efb54c37705`.
+- remote `preview.soridraw.com`: app **300**, exact build PASS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 사용자 app299 영상에서 확인된 상태:
+  - Library reorder 반복 구간은 Firestore R0/W0 → app299 개선 유지.
+  - warm empty folder delete마다 `user_playlists:getDocs +1`이 반복되어 delete R0는 FAIL.
+- app300은 warm delete를 두 군데 보강:
+  - 완료된 active playlist exact item IDs를 playlistId별 snapshot으로 고정하여 빈 폴더도 warm snapshot으로 확실히 구분.
+  - canonical delete 전에 local playlist-list cache를 같은 syncVersion으로 먼저 반영하여 users revision 때문에 같은 list를 다시 읽는 race를 차단.
+  - commit 실패 시 local playlist metadata를 안전하게 복구.
+- Backend Safety Run `37054867155`: SUCCESS.
+- Release Audit Run `37055069258`: TypeScript/Build/diagnose PASS, overall FAIL은 기존 stale `verify-221` 한 건만 동일.
+- 상태: **PREVIEW 배포 완료 / 사용자 CACHE LIVE warm delete R0 재검증 대기**.
+
 ## 0MT. PREVIEW app300 후보 — Library warm delete 실기기 R1 제거 보강 (2026-10-03 KST)
 
 **app299 사용자 영상 판정**

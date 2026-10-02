@@ -1,3 +1,25 @@
+## PREVIEW app296 Music Note + Library My/Shared 60s final-state batching (2026-10-02 KST)
+
+- 범위: Music Note 마이/공유 폴더 + Library 마이/공유 플레이리스트 폴더 비용 최적화.
+- Music Note create/rename/reorder: local + RTDB 즉시, `user_structures/{uid}` canonical 60초 final-state W1 목표.
+- Music Note folder delete/song membership: 기존 즉시 canonical 유지.
+- Library compatibility revision: 30초 → 60초.
+- Library rename: local + RTDB 즉시, canonical unique playlist title 60초 final-state batch + users revision W1.
+- Library create: playlist W1 즉시 + users revision 60초 batch. app294 empty-items cache seed/R0 보호 유지.
+- Library aggregate single-document writer는 미도입: TEST/PRODUCTION 구버전이 legacy list documents를 공유 원본으로 읽는 동안 병행 writer를 추가하면 비용이 증가하므로 cutover 전까지 보류.
+- 사용자 데이터 migration/backfill/delete 없음.
+- Worker / Functions source / D1 / Firestore Rules 변경 없음.
+- app version: 296.
+- Backend V2 Step 2-A Safety Run `36950337897`: SUCCESS.
+- Backend V2 Step 2-A Safety Run `36950358483`: SUCCESS.
+- Release System Audit Run `36950546019`: TypeScript PASS / Build PASS / static groups PASS; overall FAIL only from pre-existing stale `verify-221-explore-feed-layout.mjs` assertion.
+- release locked source: `2c230b9dd0fe47bff31f83412919d335fb98a2ff`.
+- Firebase PREVIEW Run `36950877406`: SUCCESS.
+- `preview.soridraw.com`: app 296 / exact build PASS.
+- Shared RTDB Rules SKIPPED.
+- TEST / PRODUCTION unchanged PASS.
+- 실기기 검증 전: Music Note 7회 구조 변경 W1 목표, Library 동일 폴더 rename 5~7회 W2 목표, 새 폴더 5개 W6/R0 목표, 반대 기기 즉시 반영 확인 필요.
+
 ## PREVIEW app295 Library My/Shared folder revision batching (2026-10-02 KST)
 
 - 목적: Library My/Shared playlist folder create/rename의 공통 `users.syncVersions.playlists` write를 30초 UID trailing batch로 축소.

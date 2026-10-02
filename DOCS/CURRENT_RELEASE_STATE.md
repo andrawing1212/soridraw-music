@@ -1,3 +1,30 @@
+## 0MR. PREVIEW app299 배포 완료 — Library reorder 60초 final-state batch (2026-10-02 KST)
+
+- Firebase PREVIEW Release Run `37022415990`: **SUCCESS**.
+- locked PREVIEW source: `522420c7d9801e98537b6994979959b94e3dd131`.
+- remote `preview.soridraw.com`: app **299**, exact build PASS.
+- Release job TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules: **SKIPPED** (rules source 변경 없음).
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- app299 핵심:
+  - Library My/Shared folder reorder는 local/cache + RTDB로 즉시 반영.
+  - 같은 폴더 반복 reorder canonical write는 마지막 변경 후 60초 final-state로 축소.
+  - 같은 폴더가 원래 canonical order로 돌아오면 canonical reorder W0 목표.
+  - 서로 다른 폴더는 변경된 unique playlist 문서만 settlement.
+  - settlement users revision은 batch 전체 W1.
+  - 상대 기기에는 `playlist-order-batch`로 canonical revision까지 Firestore read 없이 수렴.
+  - 삭제된 폴더의 pending order는 취소.
+- app298 delete warm R0 보호 유지:
+  - active folder loaded snapshot 삭제 전 재조회 없음.
+  - 삭제 후 다음 folder item cache가 정상 존재하면 R0.
+  - cache가 실제로 없는 cold/stale next folder는 정확성 보호용 bounded R1 fallback 유지.
+- 사전 검증:
+  - Backend Safety Run `37021658904` SUCCESS.
+  - Release Audit Run `37021945536`: TypeScript/Build/diagnose PASS; overall FAIL은 기존 stale `verify-221` 한 건만 동일.
+- 상태: **PREVIEW 배포 완료 / 사용자 CACHE LIVE + PC↔모바일 실기기 검증 대기**.
+
 ## 0MQ. PREVIEW app299 후보 — Library 폴더 순서 60초 최종상태 묶음 (2026-10-02 KST)
 
 **사용자 실기기 비교**

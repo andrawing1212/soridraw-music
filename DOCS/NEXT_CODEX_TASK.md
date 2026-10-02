@@ -1,3 +1,35 @@
+## CURRENT TASK — app299 배포 후 Library reorder 비용/동기화 실기기 확인 (2026-10-02 KST)
+
+배포 완료:
+- PREVIEW app299 / Run `37022415990` SUCCESS.
+- locked source `522420c7d9801e98537b6994979959b94e3dd131`.
+- `preview.soridraw.com` app299 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Rules 변경 없음.
+
+사용자 최소 확인:
+1. PC/모바일 둘 다 app299 확인.
+2. 같은 마이 리스트 폴더를 60초 안 5~7회 이동:
+   - 상대 기기 즉시 같은 순서.
+   - 60초 전 reorder `user_playlists:batch` 반복 증가 0 목표.
+   - 마지막 변경 후 60초에 해당 폴더 `user_playlists:batch W1 + users:batch W1` 목표.
+3. 같은 폴더를 움직였다 원래 위치로 되돌리고 60초:
+   - reorder canonical W0 목표.
+4. 서로 다른 폴더를 여러 개 움직이면 unique moved folder 수만큼 playlist write + users W1.
+5. 공유 리스트도 동일.
+6. folder delete:
+   - active folder 로딩 완료 후 삭제 전 `user_playlists:getDocs 0`.
+   - 삭제 후 자동 선택된 next folder가 warm cache면 R0.
+   - 실제 cache가 없는 cold/stale next folder의 최초 bounded R1은 정확성 보호 경로.
+7. create/rename/delete/item add-delete-move/color/swap 회귀 없음.
+8. D1 R0/W0 / Worker 0.
+
+판정:
+- drag마다 Firestore write가 보이면 FAIL.
+- warm next-folder cache인데도 delete 후 getDocs가 나오면 FAIL.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app299 PREVIEW Library reorder 60초 final-state 실기기 검증 (2026-10-02 KST)
 
 현재 후보:

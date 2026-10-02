@@ -1,4 +1,4 @@
-app304-explore-latest-popular-home
-source=ebe7c70cb643150420f21f7cb0409c824b27a557
-product_commit=ebe7c70cb643150420f21f7cb0409c824b27a557
-requested=2026-10-03T07:55:00+09:00
+app305-restore-explore-recommendations
+source=decf7ed1b34aee39256b3ad42d69d29fceefb732
+product_commit=decf7ed1b34aee39256b3ad42d69d29fceefb732
+requested=2026-10-03T08:05:00+09:00

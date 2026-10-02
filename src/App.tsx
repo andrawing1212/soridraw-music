@@ -5422,9 +5422,12 @@ function App() {
   // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change.
   // app302: Studio-heart pending intent is an initiating-device-only optimistic layer.
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
-    const current = favoritesStore.getFavorites();
-    const resolved = typeof list === 'function' ? list(current) : list;
     const uid = String(user?.uid || auth.currentUser?.uid || '').trim();
+    const current = favoritesStore.getFavorites();
+    const canonicalCurrent = uid
+      ? stripStudioHeartPendingLayerFromFavorites(uid, current)
+      : current;
+    const resolved = typeof list === 'function' ? list(canonicalCurrent) : list;
     favoritesStore.setFavorites(
       uid ? overlayStudioHeartPendingIntentsOnFavorites(uid, resolved) : resolved,
     );
@@ -5746,6 +5749,7 @@ function App() {
   const removeStudioHeartIntentLocal = (uid: string, documentId: string) => {
     clearStudioHeartIntentTimer(documentId);
     removeStudioHeartPendingIntent(uid, documentId);
+    setFavorites((previous) => previous);
   };
 
   const rememberStudioHeartPreviewVersion = (
@@ -5908,9 +5912,38 @@ function App() {
     || favorite?.trashedAt
   );
 
+  function stripStudioHeartPendingLayerFromFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    const source = Array.isArray(list) ? list : [];
+    if (!safeUid) return [...source];
+
+    const pendingById = new Map(
+      listStudioHeartPendingIntents(safeUid)
+        .map((intent) => [String(intent.documentId || '').trim(), intent] as const),
+    );
+    const next: any[] = [];
+
+    for (const favorite of source) {
+      if (favorite?.__studioHeartPendingLocal !== true) {
+        next.push(favorite);
+        continue;
+      }
+
+      const documentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+      const intent = pendingById.get(documentId);
+      if (intent?.baselineSaved && intent.baselineFavorite) {
+        const restored = { ...intent.baselineFavorite };
+        delete restored.__studioHeartPendingLocal;
+        next.push(restored);
+      }
+    }
+
+    return sortFavoriteList(next);
+  }
+
   function overlayStudioHeartPendingIntentsOnFavorites(uid: string, list: any[]): any[] {
     const safeUid = String(uid || '').trim();
-    let next = Array.isArray(list) ? [...list] : [];
+    let next = stripStudioHeartPendingLayerFromFavorites(safeUid, list);
     if (!safeUid) return next;
 
     const pending = listStudioHeartPendingIntents(safeUid)
@@ -11101,7 +11134,7 @@ const toggleCycleVariantSelection = (
     // Multiple toggles inside the trailing window collapse to their final state.
     // If the final state equals the canonical baseline, there is nothing to write.
     if (intent.desiredSaved === intent.baselineSaved) {
-      removeStudioHeartPendingIntent(uid, safeDocumentId);
+      removeStudioHeartIntentLocal(uid, safeDocumentId);
       return;
     }
 
@@ -11123,7 +11156,7 @@ const toggleCycleVariantSelection = (
 
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
-        removeStudioHeartPendingIntent(uid, safeDocumentId);
+        removeStudioHeartIntentLocal(uid, safeDocumentId);
       }
     } catch (error) {
       console.warn('Studio heart canonical batch commit failed.', error);

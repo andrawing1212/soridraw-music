@@ -506,8 +506,8 @@ assert.match(
 );
 assert.match(
   favorites,
-  /const hydrateCatalogFavorite = async \(song: any\): Promise<any> => \{[\s\S]*?if \(!song\?\.__catalogSummary \|\| !user\?\.uid \|\| isMusicNoteSharedView\) return song;[\s\S]*?getOrLoadMusicNoteDetail[\s\S]*?getDoc\(doc\(db, 'favorites', sourceId\)\)/,
-  'shared-note Catalog rows must hydrate exactly their own canonical favorites document on explicit detail open',
+  /const hydrateCatalogFavorite = async \(song: any\): Promise<any> => \{[\s\S]*?const legacySharedNoteNeedsHydration273 = isSharedMusicNoteItem\(song\)[\s\S]*?if \(\(!song\?\.__catalogSummary && !legacySharedNoteNeedsHydration273\) \|\| !user\?\.uid \|\| isMusicNoteSharedView\) return song;[\s\S]*?getOrLoadMusicNoteDetail[\s\S]*?getDoc\(doc\(db, 'favorites', sourceId\)\)/,
+  'shared-note Catalog rows and incomplete legacy shared-note rows must hydrate exactly their own canonical favorites document on explicit detail open',
 );
 assert.doesNotMatch(
   favorites,

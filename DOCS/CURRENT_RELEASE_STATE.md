@@ -39,8 +39,12 @@
 - Backend V2 Step 2-A Safety Run `36943137531`: latest playlistService signal-floor 보강 기준 SUCCESS.
 - Release System Audit Run `36943212496`: TypeScript PASS / Build PASS / 진단 A~D PASS. 최종 audit는 app294 때와 동일한 기존 stale `verify-221-explore-feed-layout.mjs` assertion 때문에 FAIL; app295 Library 경로와 무관.
 - 최종 Release System Audit Run `36943416655`: latest memory fallback 포함 TypeScript PASS / Build PASS / 진단 A~D PASS. 최종 static 단계는 동일한 기존 `verify-221` stale assertion만 반복 FAIL.
-- PREVIEW app295 Hosting: 배포 전.
-- TEST / PRODUCTION: 변경 금지.
+- Firebase PREVIEW Release Run `36943574387`: **SUCCESS**.
+- locked PREVIEW source: `b3ce248ee41ac075a8713b37d6aaa77755fac028`.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- remote `preview.soridraw.com`: app **295**, exact build PASS.
+- shared RTDB Rules SKIPPED; Worker / Functions / D1 / Firestore Rules 변경 없음.
+- TEST / PRODUCTION unchanged PASS.
 
 **실기기 비용 확인 목표**
 - 새 folder 1회: Firestore R0 목표, 즉시 folder W1 + 30초 후 users revision W1 = 총 W2.

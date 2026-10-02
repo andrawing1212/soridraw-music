@@ -1,7 +1,7 @@
-app303-split-browser-history
-target_source=04856ef0b47f8bd1a7b87a5bdbd8a1cef7f45cf3
-app_version=303
+app304-explore-latest-popular-home
+target_source=746e635e8fd8ef3c50938fa38a08177a599b0b24
+app_version=304
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=split-browser-history
+release_request=explore-latest-popular-home-my-profile

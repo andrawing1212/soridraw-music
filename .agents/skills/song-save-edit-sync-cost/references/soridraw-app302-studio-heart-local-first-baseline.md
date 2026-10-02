@@ -110,3 +110,34 @@ Before TEST promotion:
 - TypeScript: PASS
 - Build: PASS
 - PREVIEW real-device verification: pending
+
+
+## 9. app302b pre-deploy correction
+
+Before PREVIEW deployment, one local-only cleanup gap was closed without changing the approved timing/cost contract.
+
+Problem prevented:
+- an optimistic `__studioHeartPendingLocal` row could be passed back into a generic favorites updater as if it were canonical;
+- after canonical settlement or a net-zero toggle, that optimistic row could therefore survive locally until another authoritative refresh.
+
+Protected correction:
+- `setFavorites` strips the Studio-heart pending layer before applying updater functions;
+- a pending row whose baseline was already saved restores the baseline canonical favorite when the optimistic layer is removed;
+- settlement and net-zero cleanup remove the durable intent and immediately rebuild the local Music Note list from the canonical base plus any remaining pending intents.
+
+Evidence:
+- product correction commit: `8c00f1a020093740b726384fb188633e5e7aaa45`
+- focused verifier protection commit: `a853ea930434da7be661de1f7ff6ddf4db198fe1`
+- app302b apply Run: `37065777855` — PASS
+- final Release System Audit Run: `37065967160` — PASS
+- PREVIEW Release Run: `37066438604` — PASS
+- deployed PREVIEW app version: 302
+
+This correction does not alter:
+- 30-second per-song final-state batching;
+- final==baseline favorite W0;
+- final!=baseline favorite W1;
+- no pre-canonical cross-device heart preview;
+- canonical-success RTDB changed-item delivery;
+- Recent title/prompt/lyrics immediate preview;
+- app301 Music Note / Library folder behavior.

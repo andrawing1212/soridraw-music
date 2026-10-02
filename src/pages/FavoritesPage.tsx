@@ -2630,6 +2630,9 @@ updates: draft.updates,
     // immediately, while Firestore canonical persistence collapses to the final
     // My/Shared structure after 60 seconds of quiet.
     publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+    // Persist the pending final state before waiting on the network so reload,
+    // app backgrounding, or a failed RTDB request cannot lose the canonical intent.
+    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion);
     let finalVersion = structureVersion;
     try {
       const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);
@@ -2642,8 +2645,8 @@ updates: draft.updates,
         ...structureSyncPatch,
         musicNoteStructureVersion: finalVersion,
       }, finalVersion, true);
+      queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
     }
-    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {

@@ -28,6 +28,7 @@ assert.ok(persistStart >= 0 && persistEnd > persistStart);
 const persist = favorites.slice(persistStart, persistEnd);
 assert.ok(persist.includes('publishMusicNoteStructureSession(user.uid, structureSyncPatch'));
 assert.ok(persist.includes('publishMusicNoteStructureDelta(user.uid, structureSyncPatch)'));
+assert.ok(persist.includes('queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion)'));
 assert.ok(persist.includes('queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion)'));
 assert.ok(persist.includes('if (options.immediate)'));
 assert.ok(favorites.includes("persistMusicNoteFolders(mode, nextFolders, { immediate: true })"),

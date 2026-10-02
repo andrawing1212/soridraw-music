@@ -13,11 +13,17 @@ Explicit user instructions always override this skill.
 
 As of 2026-09-25 KST, the user confirmed the **newly published track first-like defect resolved on PREVIEW app164 + Worker195**. The previous PREVIEW app160 + Worker195 verification of existing likes/unlikes, same-account PC↔mobile and cross-account public likeCount remains the protected historical baseline. **Do not touch any working like function unless a concrete new defect is reported and the user explicitly authorizes the exact change.** Read `references/soridraw-app164-worker195-frozen.md`, `references/soridraw-app160-worker195-frozen.md`, and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW like-related work. The app141 baseline remains historical receiver-order guidance. The user's app164 confirmation does not independently prove every new-device/cross-account case or live physical D1 billing.
 
+As of 2026-10-03 KST, the user also confirmed the **PREVIEW app302 Studio save-heart / Music Note local-first patch is normally applied on a real device**. This is a separate heart domain from Explore public likes: Studio save-heart uses the Music Note favorite/canonical path, not the Explore public-like state machine. Before touching Studio save/unsave heart behavior, also read `.agents/skills/song-save-edit-sync-cost/SKILL.md` and `.agents/skills/song-save-edit-sync-cost/references/soridraw-app302-studio-heart-local-first-baseline.md`. The app302 confirmation protects the visible behavior and the app302b pending-layer cleanup, but does **not** by itself convert unmeasured Firestore/D1 cost targets into measured billing proof.
+
 **Default for SORIDRAW: protect-only, NO code changes and NO like deployment.** Do not refactor, optimize, replace, or quietly alter likes in client/Worker/RTDB/R2/D1/Rules/cache/notifications/UI. An unrelated change to a common file must preserve all like code paths and pass a targeted regression. A concrete new defect/security issue plus explicit user instruction is required to reopen; never infer permission from a generic optimization request. TEST/PRODUCTION promotion is a separate explicit release request; preserve the same verified features and do not copy user data.
 
 ## 1. Choose the mode first
 
 If the repository is `andrawing1212/soridraw-music`, or the user explicitly says SORIDRAW, use **SORIDRAW mode** and read `references/soridraw-app141-baseline.md` before changing code.
+
+Within SORIDRAW, distinguish these two heart systems before editing anything:
+- **Explore like/unlike** → this skill's app164/app160/app141 protected references.
+- **Studio Recent save-heart / Music Note favorite membership** → the app302 song-save skill/baseline. Do not copy Explore-like queue, public likeCount, D1, or first-like initialization rules into the private Music Note save-heart path.
 
 For any other app, use **portable mode**. Reuse the architecture principles, but do not assume Firebase, Cloudflare D1, R2, RTDB, a 30-second batch window, or SORIDRAW-specific schema names unless that app actually uses them.
 
@@ -56,6 +62,37 @@ A new device, missing catalog, damaged cache, or explicitly detected revision ga
 - When a snapshot is **partial or unconfirmed**, absence is not proof of `false`. Verify only unknown visible IDs with the existing bounded private `/v1/me/likes?trackIds=...` endpoint, then persist their exact membership. Do not trigger a whole-account/Feed membership scan.
 - Warm re-entry with an unchanged verified state must not redo the read or local cache write. Keep personal filled-heart state separate from public likeCount.
 - Preserve the protected regression `scripts/verify-197-new-public-track-like.mjs` and the existing full like regression set. See `references/soridraw-app164-worker195-frozen.md` for source SHA, user-observed scope and remaining cost limits.
+
+## 3B. Studio save-heart local pending layer (SORIDRAW app302 protected behavior)
+
+This subsection applies only when the "heart" means **Recent Song save/unsave into Music Note**, not an Explore public like.
+
+Protected app302/app302b rules:
+- the initiating device changes the Recent heart and Music Note membership immediately from a durable local pending intent;
+- the other device must **not** receive a pre-canonical Studio-heart preview;
+- each song owns its own trailing 30-second final-state timer;
+- final state == original canonical baseline → favorite canonical W0 target;
+- final state != original canonical baseline → favorite canonical W1 after the latest click +30 seconds;
+- only canonical success emits the normal compact RTDB save/unsave changed-item signal to the other device;
+- receiver target remains Firestore R0/W0 and D1 R0/W0.
+
+The app302b cleanup is a hard local-state invariant:
+1. before a generic favorites updater runs, strip `__studioHeartPendingLocal` rows from the updater's canonical input;
+2. if a pending row started from an already-saved baseline, restore that baseline canonical favorite while stripping the optimistic layer;
+3. after net-zero settlement or canonical success removes the durable pending intent, immediately rebuild the local Music Note list from canonical rows plus any remaining pending intents;
+4. never let an optimistic pending row survive as if it were canonical after its intent has been removed.
+
+This prevents the failure where save→unsave returns to the original state but an optimistic Music Note row remains until another authoritative refresh.
+
+Protected evidence:
+- app302 runtime correction commit: `8c00f1a020093740b726384fb188633e5e7aaa45`;
+- focused verifier protection commit: `a853ea930434da7be661de1f7ff6ddf4db198fe1`;
+- app302b apply Run `37065777855`: PASS;
+- final Release System Audit Run `37065967160`: PASS;
+- PREVIEW Release Run `37066438604`: PASS;
+- user real-device confirmation on 2026-10-03 KST: normal application confirmed.
+
+Do not reopen this save-heart path for generic "like optimization." A concrete Studio save-heart defect plus explicit user instruction is required.
 
 ## 4. Mutation rule
 
@@ -154,6 +191,13 @@ At minimum, test:
 - page navigation cost;
 - TypeScript/build/tests;
 - no unintended TEST/PRODUCTION or user-data change.
+
+If the touched "heart" is the Studio Recent save-heart / Music Note path, also verify:
+- initiating device Music Note membership changes immediately;
+- another device stays unchanged before canonical settlement;
+- save→unsave net-zero removes the optimistic row immediately and does not leave `__studioHeartPendingLocal` behind;
+- canonical success removes the local pending layer and the receiver updates without refresh/tab navigation;
+- updater functions never receive the optimistic pending row as canonical input.
 
 ## 11. Release rule
 

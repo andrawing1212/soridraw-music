@@ -1,3 +1,38 @@
+## 0MQ. PREVIEW app299 후보 — Library 폴더 순서 60초 최종상태 묶음 (2026-10-02 KST)
+
+**사용자 실기기 비교**
+- app298 Library 영상은 같은 폴더 순서 변경 반복에서 Firestore `user_playlists:batch`가 드래그마다 증가했고, Music Note는 같은 조작 구간에서 canonical write를 60초 최종상태로 묶어 큰 차이가 확인됨.
+- Library 삭제 연속 테스트에서 보인 `user_playlists:getDocs`는 app298이 제거한 "삭제 직전 같은 active folder 재조회"와 별개로, 삭제 후 자동 선택된 다음 폴더의 item cache가 없는 cold/stale 경우의 bounded load일 수 있음.
+
+**app299 최소 수정**
+- Library My/Shared 폴더 reorder는 화면 state + persistent list cache + 기존 RTDB `playlist-order` signal로 즉시 반영.
+- canonical `user_playlists/{uid}/lists/{playlistId}.order` 저장은 **마지막 reorder 후 60초** final-state batch로 이동.
+- 같은 폴더를 60초 안 여러 번 움직이면 마지막 order만 canonical W1.
+- 같은 폴더가 원래 canonical 위치로 돌아오면 pending을 제거하여 reorder canonical W0 목표.
+- 서로 다른 폴더를 움직인 경우에는 변경된 unique playlist document만 각각 W1이며, legacy 호환 `users.syncVersions.playlists`는 batch 전체 W1.
+- settlement 뒤 `playlist-order-batch` RTDB signal로 상대 기기 cache revision도 올려 Firestore reread를 피함.
+- 반대 기기의 더 최신 order signal 또는 folder delete가 오면 오래된 local pending order를 취소.
+- folder delete 시 해당 playlist의 pending rename/order도 취소하여 삭제된 문서에 지연 write가 재시도되지 않게 함.
+- app298 delete warm path는 그대로 보호: active folder item snapshot이 있으면 삭제 전 `getDocs` R0. 다음 폴더도 정상 item cache가 있으면 R0.
+- **cache가 실제로 없는 다음 폴더는 정확성 보호를 위해 최초 bounded R1 fallback을 유지**. 빈 것으로 추정해 R0을 꾸미는 방식은 사용하지 않음.
+
+**변경 / 검증**
+- 코드 commit: `114b3095745356f949bac7a323056dd6759ce85b`.
+- 변경 파일:
+  - `src/services/playlistService.ts`
+  - `src/pages/SunoLibraryPage.tsx`
+  - `scripts/verify-299-library-reorder-final-state-batch.mjs`
+  - `public/app-version.json` → app299
+- Backend V2 Step 2-A Safety Run `37021658904`: **SUCCESS**.
+  - contract PASS / adapter PASS / TypeScript PASS / Build PASS.
+- Release System Audit Run `37021945536`:
+  - TypeScript PASS / Build PASS / diagnose A~D + syntax E1~E3 PASS.
+  - overall FAIL은 app298과 동일한 기존 stale `verify-221-explore-feed-layout.mjs` shared-note detail assertion 한 건.
+  - app299 Library reorder 경로와 무관함을 job log에서 확인.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules source 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 상태: **PREVIEW 배포 후보 / Firebase PREVIEW 배포 후 reorder CACHE LIVE + PC↔모바일 실기기 검증 필요**.
+
 ## 0MP. PREVIEW app298 배포 완료 — Library warm 폴더 삭제 사전 read 제거 (2026-10-02 KST)
 
 - Firebase PREVIEW Release Run `37015147954`: **SUCCESS**.

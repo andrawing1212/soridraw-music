@@ -1,7 +1,7 @@
-app298-library-delete-warm-zero-read
-target_source=fa76cee05b227a627187967db259ce264da437ab
-app_version=298
+app299-library-reorder-final-state-batch
+target_source=53983b8b9d90c3f0bf9acc4e9dcfd11ade932c6b
+app_version=299
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=library-delete-warm-zero-read
+release_request=library-reorder-final-state-batch

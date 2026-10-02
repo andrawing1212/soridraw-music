@@ -1,3 +1,38 @@
+## CURRENT TASK — app299 PREVIEW Library reorder 60초 final-state 실기기 검증 (2026-10-02 KST)
+
+현재 후보:
+- app299 code commit `114b3095745356f949bac7a323056dd6759ce85b`.
+- 동일 폴더 reorder 반복은 local/cache + RTDB 즉시, canonical playlist order는 마지막 변경 후 60초 final-state.
+- Backend Safety `37021658904` SUCCESS.
+- Release Audit `37021945536`: TypeScript/Build/diagnose PASS, overall은 기존 stale verify-221 한 건만 동일.
+- TEST / PRODUCTION 변경 금지.
+
+PREVIEW 배포 후 최소 확인:
+1. PC/모바일 모두 app299.
+2. 같은 Library 마이 폴더를 60초 안 5~7회 이동:
+   - 매번 상대 기기에 새로고침/페이지 왕복 없이 즉시 같은 순서.
+   - 60초 전 `user_playlists:batch` reorder canonical write 반복 증가 **0** 목표.
+   - 마지막 변경 후 60초에 해당 폴더 `user_playlists:batch W1 + users:batch W1` 목표.
+3. 같은 폴더를 움직였다 원래 canonical 위치로 되돌린 뒤 60초:
+   - reorder canonical W0 목표.
+4. 서로 다른 폴더 여러 개를 움직이면:
+   - 변경된 unique playlist 수만큼만 playlist write.
+   - users revision은 batch 전체 W1.
+5. 공유 리스트도 동일한 final-state 동작.
+6. folder delete:
+   - active folder 로딩 완료 상태 삭제 전 `user_playlists:getDocs 0`.
+   - 삭제 후 자동 선택된 다음 폴더에 정상 item cache가 있으면 R0.
+   - 다음 폴더 cache가 실제로 없는 cold/stale 최초 접근은 정확성 보호용 bounded R1 허용.
+7. create/rename/delete/item add-delete-move/color/swap 기존 정상 회귀 없음.
+8. D1 R0/W0 / Worker 0.
+
+판정:
+- reorder 즉시 동기화 + 60초 final-state canonical batch가 모두 맞아야 PASS.
+- drag마다 Firestore write가 다시 보이면 FAIL.
+- warm next-folder cache인데도 delete 뒤 getDocs가 나오면 FAIL.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app298 warm Library folder delete 최종 실기기 확인 (2026-10-02 KST)
 
 배포 완료:

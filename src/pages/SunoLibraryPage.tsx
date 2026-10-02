@@ -1749,10 +1749,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     resumeLibraryPlaylistRenameBatch(uid);
 
     const flushOnPageHide = () => {
-      void Promise.all([
-        flushLibraryPlaylistRenameBatch(uid),
-        flushLibraryPlaylistRevisionBatch(uid),
-      ]);
+      // Rename canonical settlement allocates the newest playlist revision.
+      // Let it settle first so the compatibility-only revision batch can never
+      // race afterward with an older value during a real page unload.
+      void flushLibraryPlaylistRenameBatch(uid)
+        .then(() => flushLibraryPlaylistRevisionBatch(uid));
     };
 
     window.addEventListener('pagehide', flushOnPageHide);

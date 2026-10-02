@@ -1,3 +1,46 @@
+## 0MY. PREVIEW app302 후보 — Recent 저장 하트: 저장한 기기 즉시 / 다른 기기 30초 확정 후 (2026-10-03 KST)
+
+**사용자 확정 동작**
+- 최근 생성곡에서 저장/해제를 누른 기기는 **뮤직노트에 즉시 로컬 표시**한다.
+- 다른 기기에는 저장 버튼 클릭 순간의 임시 상태를 보내지 않는다.
+- 같은 곡에서 30초 안 저장↔저장해제를 여러 번 눌러도 기존 규칙 유지:
+  - 마지막 클릭마다 그 곡의 30초 타이머 재시작.
+  - 최초 canonical 기준과 최종 상태가 같으면 favorite W0.
+  - 최종 상태가 다르면 마지막 클릭 +30초 뒤 favorite W1.
+- canonical favorite 저장/해제가 성공한 뒤 기존 RTDB changed-item 신호가 전송되고, 다른 기기는 그때 로컬 캐시를 갱신한다.
+- 서로 다른 곡은 기존처럼 곡별 독립 30초 타이머.
+
+**app302 구현**
+- `src/App.tsx`
+  - Studio heart pending intent를 Music Note 목록 위에 initiating-device-only optimistic layer로 적용.
+  - pending save는 즉시 Music Note에 추가, pending unsave는 즉시 제거.
+  - pending row는 `__studioHeartPendingLocal` 표시로 catalog canonical-newer 판단에서 제외.
+  - reload/navigation 시 durable `studioHeartBatch` pending intent를 다시 overlay.
+  - app302 Studio heart initiating path에서 `publishMusicNoteHeartPreviewDelta` 호출 제거.
+  - 30초 final-state / net-zero W0 / retry 구조는 그대로 유지.
+- 다른 기기 반영은 canonical mutation 성공 뒤 `runV1MutationBoundary`의 기존 정상 save/unsave RTDB signal만 사용.
+- Recent 제목/프롬프트/가사 즉시 RTDB preview는 변경 없음.
+- Library/Music Note 폴더 app301 기준 변경 없음.
+
+**비용**
+- initiating-device 즉시 Music Note 표시: Firestore R0/W0.
+- pre-canonical Studio-heart RTDB write: 0.
+- final changed song: favorite W1/곡.
+- final == baseline: favorite W0.
+- receiver: Firestore R0/W0 목표, D1 R0/W0.
+- `users.favoriteCount` 기존 UID 30초 derived batch 유지.
+
+**검증**
+- 제품 commit: `24447627c2222d5cedc6fe96dcaccbfb26c0593a`.
+- app302 apply/verify Run `37064864663`: **SUCCESS**.
+  - focused app302 verifier PASS.
+  - TypeScript PASS.
+  - Build PASS.
+- 임시 apply workflow/script/trigger 제거 완료.
+- 전용 Skill 갱신 + app302 baseline 추가.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules / 사용자 데이터 migration 변경 없음.
+- 상태: **PREVIEW 배포 전 최종 release audit 대기**.
+
 ## 0MX. app301 폴더 기준 동결 + 전용 Skill 저장 (2026-10-03 KST)
 
 **최신 사용자 실기기 영상 판정**

@@ -1,3 +1,46 @@
+## 0MT. PREVIEW app300 후보 — Library warm delete 실기기 R1 제거 보강 (2026-10-03 KST)
+
+**app299 사용자 영상 판정**
+- 영상 초반 약 18초 동안 Library 폴더 reorder를 반복했지만 Firestore SDK write가 **R0/W0 유지** → app299의 즉시 reorder + 60초 canonical 지연은 의도대로 작동.
+- 이후 비기본 빈 폴더 삭제 때마다:
+  - 1차 삭제: `user_playlists:batch W1 + users:batch W1 + user_playlists:getDocs R1`.
+  - 2차 삭제 후 누적: W2/W2/R2.
+  - 뒤쪽 추가 삭제 후 누적 read가 R3까지 증가.
+- 즉 reorder 비용 회귀는 해결됐지만, **warm active folder delete에서 R1이 아직 반복되어 app298/app299 삭제 R0 목표는 FAIL**.
+- 영상에서 기본 폴더는 삭제 전 이미 열어 곡 목록이 보였으므로 단순한 "다음 폴더 최초 cold read"로만 설명할 수 없음.
+
+**app300 최소 보강**
+- 삭제 대상 active playlist의 item snapshot을 `playlistId + exact itemIds`로 완료 시점에 별도 ref에 고정.
+  - 빈 폴더도 `itemIds=[]`인 **완료된 snapshot**으로 구분.
+  - React의 일시적인 `loadingPlaylistItems/playlistItems` 상태 타이밍에 기대지 않음.
+- warm delete service는 해당 exact IDs가 전달되면 item `getDocs`를 절대 선행하지 않음.
+- canonical delete에서 `users.syncVersions.playlists`가 먼저 관측되어 playlist list cache를 stale로 오판하는 경로를 막기 위해:
+  - canonical batch commit 전에 **로컬 list cache만** 같은 syncVersion으로 먼저 삭제 반영.
+  - 서버 write/read 추가 없음.
+  - canonical commit 실패 시 삭제한 playlist metadata를 최신 local cache와 merge하여 복구; 더 최신 cross-device cache version은 덮어쓰지 않음.
+- canonical delete 자체 의미/비용은 그대로:
+  - playlist/item 실제 삭제 + `users.syncVersions.playlists` 즉시 compatibility write 유지.
+  - RTDB `playlist-delete` 즉시 동기화 유지.
+- app299 reorder, create/rename, item 기능, Music Note, UI/CSS는 변경하지 않음.
+- cold/stale caller에 item snapshot 자체가 없을 때의 bounded Firestore fallback은 데이터 정확성 보호를 위해 유지.
+
+**변경 / 검증**
+- 코드 commit: `837d6ce5d3f3d8d2c45bb0f8a170e6be57a6eab9`.
+- 변경 파일:
+  - `src/services/playlistService.ts`
+  - `src/pages/SunoLibraryPage.tsx`
+  - `scripts/verify-300-library-delete-no-redundant-read.mjs`
+  - `public/app-version.json` → app300
+- Backend V2 Step 2-A Safety Run `37054867155`: **SUCCESS**.
+  - contract PASS / adapter PASS / TypeScript PASS / Build PASS.
+- Release System Audit Run `37055069258`:
+  - TypeScript PASS / Build PASS / diagnose A~D + syntax E1~E3 PASS.
+  - overall FAIL은 기존 stale `verify-221-explore-feed-layout.mjs` shared-note assertion 한 건만 동일.
+  - app300 Library delete 경로와 무관함을 job log에서 확인.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 상태: **PREVIEW 배포 후보 / 배포 후 같은 영상 패턴으로 warm delete R0 재확인 필요**.
+
 ## 0MR. PREVIEW app299 배포 완료 — Library reorder 60초 final-state batch (2026-10-02 KST)
 
 - Firebase PREVIEW Release Run `37022415990`: **SUCCESS**.

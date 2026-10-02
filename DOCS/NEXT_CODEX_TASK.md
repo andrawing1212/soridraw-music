@@ -1,3 +1,37 @@
+## CURRENT TASK — app300 PREVIEW Library warm delete R0 재검증 (2026-10-03 KST)
+
+app299 사용자 영상:
+- reorder 반복 구간 R0/W0 → app299 reorder 개선 PASS.
+- warm empty folder delete마다 `user_playlists:getDocs +1` 반복 → 삭제 R0 목표 FAIL.
+- 첫 삭제 전에 기본 폴더를 이미 열어 목록을 표시했으므로 "다음 폴더 최초 cold read"만의 문제로 보지 않음.
+
+app300 후보:
+- code commit `837d6ce5d3f3d8d2c45bb0f8a170e6be57a6eab9`.
+- active playlist의 완료된 exact item ID snapshot을 playlistId와 함께 고정.
+- canonical delete commit 전에 local list cache를 동일 syncVersion으로 선반영하여 local users revision에 의한 불필요 list refresh race 차단.
+- commit 실패 시 local metadata rollback.
+- Backend Safety `37054867155` SUCCESS.
+- Release Audit `37055069258`: TypeScript/Build/diagnose PASS, overall은 기존 stale verify-221 한 건만 동일.
+- TEST / PRODUCTION 변경 금지.
+
+PREVIEW 배포 후 최소 확인:
+1. app300 확인 후 CACHE LIVE 초기화.
+2. 마이 리스트 기본 폴더를 한 번 열어 곡 목록을 확인.
+3. 별도 빈 비기본 폴더 선택 → 빈 화면 로딩 완료 → 삭제.
+4. 기대: `user_playlists:getDocs 0`, 빈 폴더 기준 `user_playlists:batch W1 + users:batch W1`.
+5. 같은 과정을 2~3회 반복해도 delete 때문에 getDocs 누적 증가 금지.
+6. 삭제 후 기본/다른 warm 폴더가 즉시 정상 표시.
+7. 상대 기기 삭제 즉시 반영.
+8. app299 reorder는 60초 전 W0, 마지막 변경 60초 뒤 final-state settlement 유지.
+9. D1 R0/W0 / Worker 0.
+10. 실제 item cache가 존재하지 않는 cold/stale 삭제 caller는 bounded fallback read 허용.
+
+판정:
+- warm 삭제 1회라도 `user_playlists:getDocs +1`이면 FAIL.
+- 삭제 누락/실패 복구/PC↔모바일 회귀가 있어도 FAIL.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app299 배포 후 Library reorder 비용/동기화 실기기 확인 (2026-10-02 KST)
 
 배포 완료:

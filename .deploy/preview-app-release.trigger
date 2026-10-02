@@ -1,7 +1,7 @@
-app299-library-reorder-final-state-batch
-target_source=53983b8b9d90c3f0bf9acc4e9dcfd11ade932c6b
-app_version=299
+app300-library-delete-warm-zero-read-runtime
+target_source=b3681689d32264d231c87e22e21a0a136a9bd7cd
+app_version=300
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=library-reorder-final-state-batch
+release_request=library-delete-warm-zero-read-runtime

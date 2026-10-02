@@ -446,6 +446,16 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     return true;
   }
 
+  if (signal.operation === 'playlist-order') {
+    const playlistId = String(payload.playlistId || '').trim();
+    const order = Number(payload.order);
+    if (!playlistId || !Number.isFinite(order)) return false;
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
+      playlist.id === playlistId ? { ...playlist, order } : playlist
+    ))), version);
+    return true;
+  }
+
   if (signal.operation === 'playlist-delete') {
     const playlistId = String(payload.playlistId || '').trim();
     if (!playlistId) return false;
@@ -813,6 +823,30 @@ export const renamePlaylist = async (uid: string, playlistId: string, title: str
   )), syncVersion);
   queueLibraryPlaylistRenameBatch(uid, playlistId, title, syncVersion);
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-rename', syncVersion, { playlistId, title });
+};
+
+export const reorderPlaylist = async (uid: string, playlistId: string, order: number): Promise<number> => {
+  const safeOrder = Number(order);
+  if (!uid || !playlistId || !Number.isFinite(safeOrder)) {
+    throw new Error('INVALID_PLAYLIST_ORDER');
+  }
+  const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'user_playlists', uid, 'lists', playlistId), {
+    order: safeOrder,
+    updatedAt: serverTimestamp(),
+  });
+  await batch.commit();
+
+  // Only the moved playlist is canonicalized now. Current app devices receive
+  // the changed-folder order through RTDB immediately; the legacy users
+  // compatibility revision stays in the existing UID-wide 60-second batch.
+  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
+  await patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
+    playlist.id === playlistId ? { ...playlist, order: safeOrder } : playlist
+  )), syncVersion);
+  await publishLibraryPlaylistSyncSignal(uid, 'playlist-order', syncVersion, { playlistId, order: safeOrder });
+  return syncVersion;
 };
 
 export const addPlaylistItem = async (uid: string, playlistId: string, itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'>) => {

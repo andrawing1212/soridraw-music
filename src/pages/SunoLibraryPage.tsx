@@ -18,7 +18,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch } from '../services/playlistService';
 import {
   flushLibraryPlaylistRevisionBatch,
   markLibraryPlaylistRevisionCommitted,
@@ -808,6 +808,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     startX: number;
     startY: number;
     active: boolean;
+    originalOrders: Record<string, number>;
     target?: HTMLButtonElement | null;
     windowMoveHandler?: (event: PointerEvent) => void;
     windowEndHandler?: (event: PointerEvent) => void;
@@ -6514,22 +6515,50 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setPlaylists(nextPlaylists);
   };
 
-  const persistPlaylistOrder = async (section: 'normal' | 'shared') => {
+  const persistPlaylistOrder = async (
+    section: 'normal' | 'shared',
+    playlistId: string,
+    originalOrders: Record<string, number>,
+  ) => {
     if (!user?.uid) return;
-    const sectionList = getPlaylistsBySectionForDrag(section).map((playlist, index) => ({ ...playlist, order: index + 1 }));
-    const remoteVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.playlists || 0);
-    const syncVersion = nextLibraryPlaylistSyncVersion(user.uid, Math.max(playlistListCacheVersionRef.current, remoteVersion));
-    const batch = writeBatch(db);
-    sectionList
-      .filter((playlist) => playlist.id && !(playlist as any).isFallback)
-      .forEach((playlist) => batch.update(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }));
-    batch.update(doc(db, 'users', user.uid), { 'syncVersions.playlists': syncVersion });
-    await batch.commit();
-    markLibraryPlaylistRevisionCommitted(user.uid, syncVersion);
-    const sectionById = new Map(sectionList.map((playlist) => [playlist.id, playlist]));
-    const next = playlistsRef.current.map((playlist) => sectionById.get(playlist.id) || playlist);
-    playlistListCacheVersionRef.current = syncVersion;
-    await writeLibraryPlaylistListCache(user.uid, next, syncVersion);
+    const sectionList = getPlaylistsBySectionForDrag(section);
+    const targetIndex = sectionList.findIndex((playlist) => playlist.id === playlistId);
+    if (targetIndex <= 0) return;
+
+    const previous = sectionList[targetIndex - 1];
+    const next = sectionList[targetIndex + 1];
+    const originalOrderFor = (playlist?: Playlist | null) => {
+      if (!playlist?.id) return Number(playlist?.order || 0);
+      const captured = originalOrders[playlist.id];
+      return Number.isFinite(captured) ? captured : Number(playlist.order || 0);
+    };
+    const previousOrder = originalOrderFor(previous);
+    const nextOrder = next ? originalOrderFor(next) : null;
+    const originalMovedOrder = Number(originalOrders[playlistId]);
+
+    let movedOrder = previousOrder + 1;
+    if (nextOrder !== null && Number.isFinite(nextOrder) && nextOrder > previousOrder) {
+      movedOrder = previousOrder + (nextOrder - previousOrder) / 2;
+    }
+    if (!Number.isFinite(movedOrder)) return;
+
+    // The drag renderer temporarily renumbers the row so the buttons move
+    // smoothly. Restore every untouched playlist to its captured canonical
+    // order and persist only the moved folder with a numeric fractional key.
+    // Existing TEST/PRODUCTION clients already sort numeric order values.
+    const restored = playlistsRef.current.map((playlist) => {
+      if (playlist.type !== section || !playlist.id) return playlist;
+      if (playlist.id === playlistId) return { ...playlist, order: movedOrder };
+      const captured = originalOrders[playlist.id];
+      return Number.isFinite(captured) ? { ...playlist, order: captured } : playlist;
+    });
+    playlistsRef.current = restored;
+    setPlaylists(restored);
+
+    if (Number.isFinite(originalMovedOrder) && Math.abs(originalMovedOrder - movedOrder) < 1e-9) return;
+
+    const syncVersion = await reorderPlaylist(user.uid, playlistId, movedOrder);
+    playlistListCacheVersionRef.current = Math.max(playlistListCacheVersionRef.current, syncVersion);
   };
 
   const handlePlaylistPointerDown = (
@@ -6547,7 +6576,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const startX = event.clientX;
     const startY = event.clientY;
     const target = event.currentTarget;
-    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, target };
+    const originalOrders = Object.fromEntries(
+      getPlaylistsBySectionForDrag(section)
+        .filter((entry) => Boolean(entry.id))
+        .map((entry) => [entry.id!, Number(entry.order || 0)]),
+    );
+    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, originalOrders, target };
 
     playlistPressTimerRef.current = window.setTimeout(() => {
       const drag = playlistDragRef.current;
@@ -6658,7 +6692,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     setPlaylistDragging(null);
     try {
-      await persistPlaylistOrder(drag.section);
+      await persistPlaylistOrder(drag.section, drag.playlistId, drag.originalOrders);
       showToast('플레이리스트 순서를 변경했습니다.');
     } catch (error) {
       console.error('playlist reorder failed:', error);

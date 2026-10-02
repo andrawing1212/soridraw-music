@@ -1,0 +1,3 @@
+app302b-studio-heart-local-layer
+base=276b07b80d63de7d3b5ca2f635dc8ca355b17e0c
+requested=2026-10-03T06:24:00+09:00

@@ -1,7 +1,7 @@
-app301-library-folder-create-delete-cost
-target_source=ec57a72a15c2e846f645bf8282deffdf851167d5
-app_version=301
+app302-studio-heart-local-first-final
+target_source=50d3ddff89d2f118dce146c35632e275fdc7e650
+app_version=302
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=library-folder-create-delete-cost
+release_request=studio-heart-local-first-delayed-remote-final

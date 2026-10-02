@@ -1,3 +1,40 @@
+## CURRENT TASK — app302 Recent 저장 하트 실기기 검증 (2026-10-03 KST)
+
+현재 후보:
+- app302 제품 commit `24447627c2222d5cedc6fe96dcaccbfb26c0593a`.
+- 저장을 누른 **현재 기기**는 Music Note local pending overlay로 즉시 표시.
+- **다른 기기**에는 pre-canonical heart preview를 보내지 않음.
+- 같은 곡 저장↔저장해제 반복은 기존 30초 final-state:
+  - 마지막 클릭마다 30초 재시작.
+  - final == baseline → favorite W0.
+  - final != baseline → favorite W1.
+- canonical 성공 뒤 기존 save/unsave RTDB signal로 다른 기기 반영.
+- app302 apply/verify Run `37064864663` SUCCESS / focused verifier PASS / TypeScript PASS / Build PASS.
+- TEST / PRODUCTION 변경 금지.
+
+PREVIEW 배포 후 최소 확인:
+1. PC에서 최근 생성곡 1곡 저장.
+2. 바로 Music Note 진입:
+   - 같은 PC에서 곡 즉시 표시.
+   - 30초 전 favorite Firestore W0.
+3. 모바일에서는 30초 전 임시 저장 상태가 나타나지 않아야 함.
+4. 같은 곡을 30초 안 저장→해제:
+   - PC 화면은 즉시 최종 해제.
+   - 30초 후 favorite W0 목표.
+5. 같은 곡을 저장→해제→저장:
+   - 마지막 클릭부터 30초 뒤 favorite W1.
+   - 모바일은 canonical 성공 뒤 새로고침/탭 왕복 없이 반영.
+6. receiver Firestore R0/W0 / D1 R0/W0.
+7. 서로 다른 곡 여러 개는 곡별 독립 30초 timer 유지.
+8. Recent 제목/프롬프트/가사 즉시 cross-device preview 및 app301 폴더 기능 회귀 없음.
+
+FAIL:
+- 저장한 기기 Music Note가 30초를 기다려야 표시됨.
+- 30초 전 다른 기기에 Studio heart 임시 상태가 표시됨.
+- 같은 곡 반복 토글이 최종상태가 아니라 중간 상태를 canonical 저장.
+- net-zero인데 favorite write 발생.
+- canonical 성공 뒤 다른 기기 반영에 Firestore read가 추가되거나 새로고침이 필요.
+
 ## CURRENT TASK — app301 폴더 기준 동결 상태 (2026-10-03 KST)
 
 - Music Note / Library 폴더 생성·저장·이름변경·삭제·순서이동 관련 전용 Skill 저장 완료.

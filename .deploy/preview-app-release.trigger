@@ -1,7 +1,7 @@
-app305-restore-explore-recommendations
-target_source=5b0fc905da93cc54d22ea61e3fcefe01f9b35c21
-app_version=305
+app306-explore-order-pc-arrows
+target_source=465a39e7d12cc92ece5c9f9f4eff44b2d4e10465
+app_version=306
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=restore-existing-recommendations-plus-latest-popular
+release_request=explore-order-and-pc-rail-arrows

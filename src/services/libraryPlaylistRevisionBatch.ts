@@ -3,7 +3,7 @@ import { doc, updateDoc } from '../lib/firestoreMeasured';
 import { db, realtimeDb } from '../firebase';
 import { readUserProfileCache } from '../lib/userProfileCache';
 
-const LIBRARY_PLAYLIST_REVISION_BATCH_MS = 30_000;
+const LIBRARY_PLAYLIST_REVISION_BATCH_MS = 60_000;
 const STORAGE_PREFIX = 'soridraw.library.playlistRevisionBatch.v1';
 
 type PendingPlaylistRevision = {
@@ -102,7 +102,7 @@ const scheduleFlush = (uid: string, delayMs = LIBRARY_PLAYLIST_REVISION_BATCH_MS
 
 // app295: Folder metadata stays canonical immediately, while the compatibility
 // users.syncVersions.playlists signal is collapsed to one UID-wide write after
-// 30 seconds of quiet. Current app devices still receive each changed-folder
+// 60 seconds of quiet. Current app devices still receive each changed-folder
 // RTDB delta immediately, so visible PC/mobile sync does not wait for Firestore.
 export const queueLibraryPlaylistRevisionBatch = (uid: string, syncVersion: number): void => {
   const safeUid = normalizeUid(uid);

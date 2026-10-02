@@ -18,7 +18,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch, flushLibraryPlaylistOrderBatch, resumeLibraryPlaylistOrderBatch } from '../services/playlistService';
 import {
   flushLibraryPlaylistRevisionBatch,
   markLibraryPlaylistRevisionCommitted,
@@ -1730,7 +1730,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const uid = user.uid;
     return subscribeLibraryPlaylistSync(uid, (signal) => {
       noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion);
-      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete', 'playlist-rename-batch'].includes(signal.operation)) {
+      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete', 'playlist-rename-batch', 'playlist-order-batch'].includes(signal.operation)) {
         markLibraryPlaylistRevisionCommitted(uid, signal.syncVersion);
       }
       if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
@@ -1748,12 +1748,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const uid = user.uid;
     resumeLibraryPlaylistRevisionBatch(uid);
     resumeLibraryPlaylistRenameBatch(uid);
+    resumeLibraryPlaylistOrderBatch(uid);
 
     const flushOnPageHide = () => {
-      // Rename canonical settlement allocates the newest playlist revision.
-      // Let it settle first so the compatibility-only revision batch can never
-      // race afterward with an older value during a real page unload.
+      // Metadata final-state batches settle before the compatibility-only
+      // revision batch. Ordinary SPA navigation still keeps the full 60-second
+      // trailing window.
       void flushLibraryPlaylistRenameBatch(uid)
+        .then(() => flushLibraryPlaylistOrderBatch(uid))
         .then(() => flushLibraryPlaylistRevisionBatch(uid));
     };
 
@@ -6560,7 +6562,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (Number.isFinite(originalMovedOrder) && Math.abs(originalMovedOrder - movedOrder) < 1e-9) return;
 
-    const syncVersion = await reorderPlaylist(user.uid, playlistId, movedOrder);
+    const syncVersion = await reorderPlaylist(user.uid, playlistId, movedOrder, originalMovedOrder);
     playlistListCacheVersionRef.current = Math.max(playlistListCacheVersionRef.current, syncVersion);
   };
 

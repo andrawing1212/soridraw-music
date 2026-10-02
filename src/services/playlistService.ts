@@ -327,6 +327,248 @@ export const resumeLibraryPlaylistRenameBatch = (uid: string): void => {
   schedulePlaylistRenameBatch(safeUid, Math.max(0, LIBRARY_PLAYLIST_RENAME_BATCH_MS - elapsed));
 };
 
+const LIBRARY_PLAYLIST_ORDER_BATCH_MS = 60_000;
+const LIBRARY_PLAYLIST_ORDER_STORAGE_PREFIX = 'soridraw.library.playlistOrderBatch.v1';
+
+type PendingPlaylistOrderEntry = {
+  order: number;
+  baseOrder: number;
+  version: number;
+  updatedAt: number;
+};
+
+type PendingPlaylistOrderBatch = {
+  entries: Record<string, PendingPlaylistOrderEntry>;
+  updatedAt: number;
+};
+
+const playlistOrderTimers = new Map<string, number>();
+const playlistOrderInflight = new Map<string, Promise<void>>();
+const playlistOrderMemory = new Map<string, PendingPlaylistOrderBatch>();
+
+const playlistOrderStorageKey = (uid: string) => `${LIBRARY_PLAYLIST_ORDER_STORAGE_PREFIX}.${String(uid || '').trim()}`;
+
+const readPendingPlaylistOrderBatch = (uid: string): PendingPlaylistOrderBatch | null => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return null;
+  const memory = playlistOrderMemory.get(safeUid);
+  if (memory) return memory;
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(playlistOrderStorageKey(safeUid)) || 'null');
+    if (!raw || typeof raw !== 'object' || !raw.entries || typeof raw.entries !== 'object') return null;
+    const entries: Record<string, PendingPlaylistOrderEntry> = {};
+    Object.entries(raw.entries as Record<string, any>).forEach(([playlistId, value]) => {
+      const id = String(playlistId || '').trim();
+      const order = Number(value?.order);
+      const baseOrder = Number(value?.baseOrder);
+      const version = Math.max(0, Math.floor(Number(value?.version || 0)));
+      const updatedAt = Math.max(0, Math.floor(Number(value?.updatedAt || 0)));
+      if (id && Number.isFinite(order) && Number.isFinite(baseOrder) && version > 0 && updatedAt > 0) {
+        entries[id] = { order, baseOrder, version, updatedAt };
+      }
+    });
+    if (Object.keys(entries).length === 0) return null;
+    const pending = { entries, updatedAt: Math.max(0, Math.floor(Number(raw.updatedAt || 0))) };
+    playlistOrderMemory.set(safeUid, pending);
+    return pending;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingPlaylistOrderBatch = (uid: string, pending: PendingPlaylistOrderBatch): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  playlistOrderMemory.set(safeUid, pending);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(playlistOrderStorageKey(safeUid), JSON.stringify(pending)); } catch {}
+  }
+};
+
+const clearPendingPlaylistOrderBatch = (uid: string): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  const timer = playlistOrderTimers.get(safeUid);
+  if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
+  playlistOrderTimers.delete(safeUid);
+  playlistOrderMemory.delete(safeUid);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(playlistOrderStorageKey(safeUid)); } catch {}
+  }
+};
+
+const schedulePlaylistOrderBatch = (uid: string, delayMs = LIBRARY_PLAYLIST_ORDER_BATCH_MS): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || typeof window === 'undefined') return;
+  const previous = playlistOrderTimers.get(safeUid);
+  if (previous !== undefined) window.clearTimeout(previous);
+  const timer = window.setTimeout(() => {
+    playlistOrderTimers.delete(safeUid);
+    void flushLibraryPlaylistOrderBatch(safeUid);
+  }, Math.max(0, delayMs));
+  playlistOrderTimers.set(safeUid, timer);
+};
+
+const queueLibraryPlaylistOrderBatch = (
+  uid: string,
+  playlistId: string,
+  order: number,
+  previousOrder: number,
+  version: number,
+): void => {
+  const safeUid = String(uid || '').trim();
+  const safePlaylistId = String(playlistId || '').trim();
+  const safeOrder = Number(order);
+  const safePreviousOrder = Number(previousOrder);
+  const safeVersion = Math.max(0, Math.floor(Number(version || 0)));
+  if (!safeUid || !safePlaylistId || !Number.isFinite(safeOrder) || !Number.isFinite(safePreviousOrder) || safeVersion <= 0) return;
+
+  const current = readPendingPlaylistOrderBatch(safeUid) || { entries: {}, updatedAt: 0 };
+  const existing = current.entries[safePlaylistId];
+  const baseOrder = existing && Number.isFinite(existing.baseOrder) ? existing.baseOrder : safePreviousOrder;
+  const nextEntries = { ...current.entries };
+  const now = Date.now();
+
+  // If repeated drags return to the canonical starting order inside the window,
+  // there is no server mutation to settle at all.
+  if (Math.abs(safeOrder - baseOrder) < 1e-9) {
+    delete nextEntries[safePlaylistId];
+    if (Object.keys(nextEntries).length === 0) {
+      clearPendingPlaylistOrderBatch(safeUid);
+      return;
+    }
+    writePendingPlaylistOrderBatch(safeUid, { entries: nextEntries, updatedAt: now });
+    schedulePlaylistOrderBatch(safeUid);
+    return;
+  }
+
+  nextEntries[safePlaylistId] = {
+    order: safeOrder,
+    baseOrder,
+    version: safeVersion,
+    updatedAt: now,
+  };
+  writePendingPlaylistOrderBatch(safeUid, { entries: nextEntries, updatedAt: now });
+  schedulePlaylistOrderBatch(safeUid);
+};
+
+export const cancelLibraryPlaylistOrderBatch = (
+  uid: string,
+  playlistId: string,
+  floorVersion = Number.MAX_SAFE_INTEGER,
+): void => {
+  const safeUid = String(uid || '').trim();
+  const safePlaylistId = String(playlistId || '').trim();
+  const pending = readPendingPlaylistOrderBatch(safeUid);
+  const target = pending?.entries?.[safePlaylistId];
+  if (!safeUid || !safePlaylistId || !pending || !target || target.version > floorVersion) return;
+  const nextEntries = { ...pending.entries };
+  delete nextEntries[safePlaylistId];
+  if (Object.keys(nextEntries).length === 0) {
+    clearPendingPlaylistOrderBatch(safeUid);
+    return;
+  }
+  writePendingPlaylistOrderBatch(safeUid, { entries: nextEntries, updatedAt: Date.now() });
+  schedulePlaylistOrderBatch(safeUid);
+};
+
+export const flushLibraryPlaylistOrderBatch = async (uid: string): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  const existing = playlistOrderInflight.get(safeUid);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const pending = readPendingPlaylistOrderBatch(safeUid);
+    if (!pending) return;
+    const entries = Object.entries(pending.entries);
+    if (entries.length === 0) {
+      clearPendingPlaylistOrderBatch(safeUid);
+      return;
+    }
+
+    const floor = Math.max(
+      readRemotePlaylistVersion(safeUid),
+      ...entries.map(([, value]) => Number(value.version || 0)),
+    );
+    const syncVersion = nextLibraryPlaylistSyncVersion(safeUid, floor);
+    const batch = writeBatch(db);
+    entries.forEach(([playlistId, value]) => {
+      batch.update(doc(db, 'user_playlists', safeUid, 'lists', playlistId), {
+        order: value.order,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    batch.update(doc(db, 'users', safeUid), { 'syncVersions.playlists': syncVersion });
+    await batch.commit();
+    markLibraryPlaylistRevisionCommitted(safeUid, syncVersion);
+
+    const latest = readPendingPlaylistOrderBatch(safeUid);
+    const supersededIds = new Set(
+      entries
+        .filter(([playlistId, captured]) => {
+          const current = latest?.entries?.[playlistId];
+          return Boolean(current && (current.version > captured.version || current.updatedAt > captured.updatedAt));
+        })
+        .map(([playlistId]) => playlistId),
+    );
+    const newestPendingVersion = latest
+      ? Math.max(0, ...Object.values(latest.entries).map((entry) => Number(entry.version || 0)))
+      : 0;
+
+    // Local cache already received every drag immediately. Only advance its
+    // version here; do not overwrite a newer pending local order with the
+    // captured canonical settlement.
+    await patchLibraryPlaylistListCache(
+      safeUid,
+      (items) => items,
+      Math.max(syncVersion, newestPendingVersion),
+    );
+
+    const settledOrders = entries
+      .filter(([playlistId]) => !supersededIds.has(playlistId))
+      .map(([playlistId, value]) => ({ playlistId, order: value.order }));
+    if (settledOrders.length > 0) {
+      await publishLibraryPlaylistSyncSignal(safeUid, 'playlist-order-batch', syncVersion, {
+        orders: settledOrders,
+      });
+    }
+
+    const afterPublish = readPendingPlaylistOrderBatch(safeUid);
+    if (!afterPublish) return;
+    const nextEntries = { ...afterPublish.entries };
+    entries.forEach(([playlistId, captured]) => {
+      const current = nextEntries[playlistId];
+      if (current && current.version <= captured.version && current.updatedAt <= captured.updatedAt) {
+        delete nextEntries[playlistId];
+      }
+    });
+    if (Object.keys(nextEntries).length === 0) {
+      clearPendingPlaylistOrderBatch(safeUid);
+      return;
+    }
+    writePendingPlaylistOrderBatch(safeUid, { entries: nextEntries, updatedAt: afterPublish.updatedAt });
+    schedulePlaylistOrderBatch(safeUid);
+  })().catch((error) => {
+    console.warn('[Library playlist order batch] canonical flush deferred; pending final orders kept.', error);
+    if (readPendingPlaylistOrderBatch(safeUid)) schedulePlaylistOrderBatch(safeUid);
+  }).finally(() => {
+    playlistOrderInflight.delete(safeUid);
+  });
+
+  playlistOrderInflight.set(safeUid, task);
+  return task;
+};
+
+export const resumeLibraryPlaylistOrderBatch = (uid: string): void => {
+  const safeUid = String(uid || '').trim();
+  const pending = readPendingPlaylistOrderBatch(safeUid);
+  if (!safeUid || !pending) return;
+  const elapsed = Math.max(0, Date.now() - Number(pending.updatedAt || 0));
+  schedulePlaylistOrderBatch(safeUid, Math.max(0, LIBRARY_PLAYLIST_ORDER_BATCH_MS - elapsed));
+};
+
 const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
   const sourceType = normalizeKeyPart(item?.sourceType);
   const sourceId = normalizeKeyPart(item?.sourceId || item?.trackId);
@@ -373,8 +615,16 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
       payload.renames.forEach((entry: any) => {
         cancelLibraryPlaylistRenameBatch(safeUid, String(entry?.playlistId || '').trim(), signal.syncVersion);
       });
+    } else if (signal.operation === 'playlist-order') {
+      cancelLibraryPlaylistOrderBatch(safeUid, String(payload.playlistId || '').trim(), signal.syncVersion);
+    } else if (signal.operation === 'playlist-order-batch' && Array.isArray(payload.orders)) {
+      payload.orders.forEach((entry: any) => {
+        cancelLibraryPlaylistOrderBatch(safeUid, String(entry?.playlistId || '').trim(), signal.syncVersion);
+      });
     } else if (signal.operation === 'playlist-delete') {
-      cancelLibraryPlaylistRenameBatch(safeUid, String(payload.playlistId || '').trim(), signal.syncVersion);
+      const playlistId = String(payload.playlistId || '').trim();
+      cancelLibraryPlaylistRenameBatch(safeUid, playlistId, signal.syncVersion);
+      cancelLibraryPlaylistOrderBatch(safeUid, playlistId, signal.syncVersion);
     }
   }
 
@@ -452,6 +702,23 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     if (!playlistId || !Number.isFinite(order)) return false;
     await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
       playlist.id === playlistId ? { ...playlist, order } : playlist
+    ))), version);
+    return true;
+  }
+
+  if (signal.operation === 'playlist-order-batch') {
+    const orders = Array.isArray(payload.orders) ? payload.orders : [];
+    const orderById = new Map<string, number>();
+    orders.forEach((entry: any) => {
+      const playlistId = String(entry?.playlistId || '').trim();
+      const order = Number(entry?.order);
+      if (playlistId && Number.isFinite(order)) orderById.set(playlistId, order);
+    });
+    if (orderById.size === 0) return false;
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
+      playlist.id && orderById.has(playlist.id)
+        ? { ...playlist, order: orderById.get(playlist.id)! }
+        : playlist
     ))), version);
     return true;
   }
@@ -825,26 +1092,28 @@ export const renamePlaylist = async (uid: string, playlistId: string, title: str
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-rename', syncVersion, { playlistId, title });
 };
 
-export const reorderPlaylist = async (uid: string, playlistId: string, order: number): Promise<number> => {
+export const reorderPlaylist = async (
+  uid: string,
+  playlistId: string,
+  order: number,
+  previousOrder: number,
+): Promise<number> => {
   const safeOrder = Number(order);
-  if (!uid || !playlistId || !Number.isFinite(safeOrder)) {
+  const safePreviousOrder = Number(previousOrder);
+  if (!uid || !playlistId || !Number.isFinite(safeOrder) || !Number.isFinite(safePreviousOrder)) {
     throw new Error('INVALID_PLAYLIST_ORDER');
   }
-  const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
-  const batch = writeBatch(db);
-  batch.update(doc(db, 'user_playlists', uid, 'lists', playlistId), {
-    order: safeOrder,
-    updatedAt: serverTimestamp(),
-  });
-  await batch.commit();
 
-  // Only the moved playlist is canonicalized now. Current app devices receive
-  // the changed-folder order through RTDB immediately; the legacy users
-  // compatibility revision stays in the existing UID-wide 60-second batch.
-  queueLibraryPlaylistRevisionBatch(uid, syncVersion);
+  const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
+
+  // app299: match Music Note's visible-now/canonical-later behavior. The local
+  // cache and the other signed-in device receive every drag immediately, while
+  // repeated drags of the same folder collapse to its final canonical order
+  // after 60 seconds of quiet.
   await patchLibraryPlaylistListCache(uid, (items) => items.map((playlist) => (
     playlist.id === playlistId ? { ...playlist, order: safeOrder } : playlist
   )), syncVersion);
+  queueLibraryPlaylistOrderBatch(uid, playlistId, safeOrder, safePreviousOrder, syncVersion);
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-order', syncVersion, { playlistId, order: safeOrder });
   return syncVersion;
 };
@@ -1036,6 +1305,7 @@ export const deletePlaylist = async (
   knownItemIds?: string[],
 ) => {
   cancelLibraryPlaylistRenameBatch(uid, playlistId);
+  cancelLibraryPlaylistOrderBatch(uid, playlistId);
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
 
   // app298: the Library page already owns a fully loaded active-playlist item

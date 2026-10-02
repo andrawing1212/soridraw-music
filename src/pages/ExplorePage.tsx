@@ -6,11 +6,12 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import {
   readExploreFeedSessionCache,
   readExploreFeedSessionCacheRevision,
@@ -74,6 +75,13 @@ import {
   setExploreTrackVisibility,
   type ExplorePublicationOptions,
 } from '../services/explorePublicationService';
+import {
+  getExploreCurationAccess307,
+  getManagedSoridrawCuratedTracks307,
+  getSoridrawCuratedTracks307,
+  setSoridrawCuratedTrack307,
+  type ExploreCurationAccess307,
+} from '../services/exploreCurationService';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
@@ -1260,6 +1268,7 @@ export default function ExplorePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
+  const curationManageRequested307 = searchParams.get('curation') === 'manage';
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [sort] = useState<ExploreSort>('recommended');
   const [recommendationGenreId221, setRecommendationGenreId221] = useState('');
@@ -1268,6 +1277,12 @@ export default function ExplorePage() {
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [tracks, setTracks] = useState<ExploreTrack[]>([]);
   const [popularTracks, setPopularTracks] = useState<ExploreTrack[]>([]);
+  const [curatedTracks307, setCuratedTracks307] = useState<ExploreTrack[]>([]);
+  const [curatedLoading307, setCuratedLoading307] = useState(true);
+  const [managedCuratedTracks307, setManagedCuratedTracks307] = useState<ExploreTrack[]>([]);
+  const [managedCuratedLoading307, setManagedCuratedLoading307] = useState(false);
+  const [curationAccess307, setCurationAccess307] = useState<ExploreCurationAccess307>({ canCurate: false, curatorRole: null });
+  const [curationBusyTrackId307, setCurationBusyTrackId307] = useState('');
   const [popularLoading, setPopularLoading] = useState(true);
   const [popularError, setPopularError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1293,7 +1308,7 @@ export default function ExplorePage() {
   // including prompt/lyrics, rather than a stale summary card from the More sheet.
   const sharedNoteAuthorizedTrackRef272 = useRef<ExploreTrack | null>(null);
   const [moreSheetMode, setMoreSheetMode] = useState<'actions' | 'folders'>('actions');
-  const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | null>(null);
+  const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | 'curation' | null>(null);
   const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
   const [sharedNoteSavedFolderId274, setSharedNoteSavedFolderId274] = useState<string | null>(null);
   const [publicationSettings, setPublicationSettings] = useState<{ track: ExploreTrack; options: ExplorePublicationOptions } | null>(null);
@@ -1302,7 +1317,7 @@ export default function ExplorePage() {
   const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const moreHistoryPushedRef257 = useRef(false);
-  const moreActionBusyRef257 = useRef<'sharedNote' | 'apply' | null>(null);
+  const moreActionBusyRef257 = useRef<'sharedNote' | 'apply' | 'curation' | null>(null);
   const likeHydrationKeyRef = useRef('');
   const popularLikeHydrationKeyRef304 = useRef('');
   const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
@@ -1383,6 +1398,59 @@ export default function ExplorePage() {
     setDislikedTrackIds(user?.uid ? readExploreDislikedTrackIds(user.uid) : new Set());
   }, [user?.uid]);
 
+  // app307 — Only accounts already known locally as admin/master ask the Worker
+  // for the tiny management permission. Ordinary Explore users add no auth/data read.
+  useEffect(() => {
+    if (!user?.uid) {
+      setCurationAccess307({ canCurate: false, curatorRole: null });
+      return undefined;
+    }
+    let cancelled = false;
+    let requestInFlight = false;
+    let lastSignature = '';
+
+    const refreshAccess307 = () => {
+      const cached = readUserProfileCache(user.uid) as any;
+      const candidate = cached?.staffRole === 'master'
+        || cached?.staffRole === 'admin'
+        || cached?.role === 'admin';
+      const signature = `${cached?.staffRole || ''}:${cached?.role || ''}`;
+      if (!candidate) {
+        lastSignature = signature;
+        setCurationAccess307({ canCurate: false, curatorRole: null });
+        return;
+      }
+      if (requestInFlight || (signature === lastSignature && lastSignature)) return;
+      lastSignature = signature;
+      requestInFlight = true;
+      void getExploreCurationAccess307(user)
+        .then((access) => {
+          if (!cancelled) setCurationAccess307(access);
+        })
+        .catch((reason) => {
+          if (!cancelled) {
+            console.warn('[app307] Explore management access check failed:', reason);
+            setCurationAccess307({ canCurate: false, curatorRole: null });
+          }
+        })
+        .finally(() => { requestInFlight = false; });
+    };
+
+    const onProfileCache307 = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!detail?.uid || detail.uid === user.uid) {
+        lastSignature = '';
+        refreshAccess307();
+      }
+    };
+    refreshAccess307();
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache307);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache307);
+    };
+  }, [user?.uid]);
+
   useEffect(() => {
     sharedNoteAuthorizedTrackRef272.current = null;
     setMoreTrack(null);
@@ -1442,7 +1510,7 @@ export default function ExplorePage() {
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.
   publicLikeVisibleTracksRef192.current = new Map(
-    [...tracks, ...popularTracks, ...profileTracks, ...profileLikedTracks]
+    [...tracks, ...popularTracks, ...curatedTracks307, ...managedCuratedTracks307, ...profileTracks, ...profileLikedTracks]
       .filter((track) => Boolean(track?.id))
       .map((track) => [track.id, track.ownerUid || '']),
   );
@@ -1488,6 +1556,8 @@ export default function ExplorePage() {
             ));
             setTracks(patchPublicCounts192);
             setPopularTracks(patchPublicCounts192);
+            setCuratedTracks307(patchPublicCounts192);
+            setManagedCuratedTracks307(patchPublicCounts192);
             setProfileTracks(patchPublicCounts192);
             setProfileLikedTracks(patchPublicCounts192);
           }
@@ -1576,6 +1646,8 @@ export default function ExplorePage() {
         ));
         setTracks(patchRemotePair129);
         setPopularTracks(patchRemotePair129);
+        setCuratedTracks307(patchRemotePair129);
+        setManagedCuratedTracks307(patchRemotePair129);
         setProfileTracks(patchRemotePair129);
         setProfileLikedTracks((previous) => {
           const patched = patchRemotePair129(previous);
@@ -1620,6 +1692,41 @@ export default function ExplorePage() {
     };
   }, [user?.uid]);
 
+  useEffect(() => {
+    if (profileUid || submittedQuery) return undefined;
+    let cancelled = false;
+    setCuratedLoading307(true);
+    void getSoridrawCuratedTracks307(false)
+      .then((rows) => {
+        if (cancelled) return;
+        setCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+      })
+      .catch((reason) => {
+        if (!cancelled) console.warn('[app307] SORIDRAW curated load failed:', reason);
+      })
+      .finally(() => {
+        if (!cancelled) setCuratedLoading307(false);
+      });
+    return () => { cancelled = true; };
+  }, [profileUid, submittedQuery]);
+
+  useEffect(() => {
+    if (!user || !curationManageRequested307 || !curationAccess307.canCurate) return undefined;
+    let cancelled = false;
+    setManagedCuratedLoading307(true);
+    void getManagedSoridrawCuratedTracks307(user)
+      .then((rows) => {
+        if (!cancelled) setManagedCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+      })
+      .catch((reason) => {
+        if (!cancelled) setSocialNotice(reason instanceof Error ? reason.message : '승격 곡 목록을 불러오지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setManagedCuratedLoading307(false);
+      });
+    return () => { cancelled = true; };
+  }, [user?.uid, curationManageRequested307, curationAccess307.canCurate]);
+
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
     if (cleanQuery) {
@@ -1658,6 +1765,8 @@ export default function ExplorePage() {
 
     setTracks(applyPublicCounts110);
     setPopularTracks(applyPublicCounts110);
+    setCuratedTracks307(applyPublicCounts110);
+    setManagedCuratedTracks307(applyPublicCounts110);
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
@@ -2283,6 +2392,34 @@ export default function ExplorePage() {
   }, [user, popularTracks, profileUid, submittedQuery, likeAccountSyncSignal]);
 
   useEffect(() => {
+    if (!user || profileUid || curatedTracks307.length === 0) return undefined;
+    const visibleCurated307 = curatedTracks307.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304);
+    const ids = [...new Set(visibleCurated307.map((track) => track.id).filter(Boolean))];
+    if (!ids.length) return undefined;
+    const immediateLocal: Record<string, boolean> = {};
+    ids.forEach((id) => {
+      const liked = readExploreTrackLikeMembership127(user.uid, id);
+      if (typeof liked === 'boolean') immediateLocal[id] = liked;
+    });
+    if (Object.keys(immediateLocal).length) {
+      setLikedTrackIds((previous) => ({ ...previous, ...immediateLocal }));
+    }
+    let cancelled = false;
+    getExploreLikedTrackIds(user, ids)
+      .then((likedIds) => {
+        if (cancelled) return;
+        const likedSet = new Set(likedIds);
+        setLikedTrackIds((previous) => {
+          const next = { ...previous };
+          ids.forEach((id) => { next[id] = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id); });
+          return next;
+        });
+      })
+      .catch((reason) => console.warn('[app307] curated like hydration failed:', reason));
+    return () => { cancelled = true; };
+  }, [user, curatedTracks307, profileUid, likeAccountSyncSignal]);
+
+  useEffect(() => {
     if (!searchOpen) return;
     const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
@@ -2374,6 +2511,8 @@ export default function ExplorePage() {
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       setTracks(patchOptimisticCount120);
       setPopularTracks(patchOptimisticCount120);
+      setCuratedTracks307(patchOptimisticCount120);
+      setManagedCuratedTracks307(patchOptimisticCount120);
       setProfileTracks(patchOptimisticCount120);
       setProfileLikedTracks((previous) => {
         const patched = patchOptimisticCount120(previous);
@@ -2532,6 +2671,8 @@ export default function ExplorePage() {
     };
     setTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
     setPopularTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
+    setCuratedTracks307((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
+    setManagedCuratedTracks307((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
     setProfileTracks((previous) => previous
       .map((item) => item.id === track.id ? { ...item, ...patch } : item)
       .sort(comparePublicProfileTracks));
@@ -2591,6 +2732,8 @@ export default function ExplorePage() {
       await setExploreTrackVisibility(user, track.id, false, publicationSettings.options);
       setTracks((previous) => previous.filter((item) => item.id !== track.id));
       setPopularTracks((previous) => previous.filter((item) => item.id !== track.id));
+      setCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
+      setManagedCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
       setProfileTracks((previous) => previous.filter((item) => item.id !== track.id));
       setProfileLikedTracks((previous) => previous.filter((item) => item.id !== track.id));
       setSocialNotice('비공개로 전환했어요.');
@@ -2705,6 +2848,50 @@ export default function ExplorePage() {
     setDislikedTrackIds((previous) => new Set([...previous, track.id]));
     setSocialNotice('추천에서 제외했어요.');
     closeMoreSheet();
+  };
+
+  const curatedTrackIds307 = new Set(
+    [...curatedTracks307, ...managedCuratedTracks307].map((track) => track.id).filter(Boolean),
+  );
+
+  const toggleSoridrawCuration307 = async (track: ExploreTrack, promoted: boolean) => {
+    if (!user || !curationAccess307.canCurate || curationBusyTrackId307) return;
+    setCurationBusyTrackId307(track.id);
+    setMoreActionBusy('curation');
+    try {
+      await setSoridrawCuratedTrack307(user, track.id, promoted);
+      if (promoted) {
+        setCuratedTracks307((previous) => previous.some((item) => item.id === track.id)
+          ? previous
+          : [track, ...previous].slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));
+        setManagedCuratedTracks307((previous) => previous.some((item) => item.id === track.id)
+          ? previous
+          : [track, ...previous]);
+        setSocialNotice('SORIDRAW 추천곡으로 승격했어요.');
+      } else {
+        setCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
+        setManagedCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
+        setSocialNotice('SORIDRAW 추천곡에서 해제했어요.');
+      }
+      closeMoreSheet();
+    } catch (reason) {
+      console.error('[app307] SORIDRAW curation mutation failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '추천곡 변경에 실패했어요.');
+      setMoreActionBusy(null);
+    } finally {
+      setCurationBusyTrackId307('');
+    }
+  };
+
+  const openCurationManager307 = () => {
+    if (!curationAccess307.canCurate) return;
+    setSearchParams({ curation: 'manage' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const closeCurationManager307 = () => {
+    setSearchParams({});
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const visibleFeedTracks = sort === 'recommended' && !submittedQuery
@@ -2845,6 +3032,22 @@ export default function ExplorePage() {
                     {(!user || user.uid !== moreTrack.ownerUid) && <small>본인 곡에서만 변경할 수 있어요.</small>}
                   </span>
                 </button>
+                {curationAccess307.canCurate && (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    className={curatedTrackIds307.has(moreTrack.id) ? 'is-active' : undefined}
+                    onClick={() => void toggleSoridrawCuration307(moreTrack, !curatedTrackIds307.has(moreTrack.id))}
+                  >
+                    {curationBusyTrackId307 === moreTrack.id
+                      ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
+                      : <Crown aria-hidden="true" />}
+                    <span>
+                      <strong>{curatedTrackIds307.has(moreTrack.id) ? '추천곡 해제' : '추천곡 승격'}</strong>
+                      <small>{curatedTrackIds307.has(moreTrack.id) ? 'SORIDRAW 추천에서 제거합니다.' : 'SORIDRAW 추천에 추가합니다.'}</small>
+                    </span>
+                  </button>
+                )}
                 <button type="button" disabled={actionBusy} onClick={() => dislikeExploreTrack(moreTrack)}>
                   <ThumbsDown aria-hidden="true" />
                   <span>
@@ -2977,6 +3180,40 @@ export default function ExplorePage() {
     },
   ] as const).filter((item) => Boolean(item.href)) : [];
 
+  if (curationManageRequested307 && curationAccess307.canCurate) {
+    return (
+      <main className="soridraw-explore-page soridraw-explore-page--curation-manage-307">
+        {renderMoreSheet()}
+        {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
+        <section className="soridraw-explore-profile-toolbar soridraw-explore-curation-toolbar-307">
+          <button type="button" onClick={closeCurationManager307} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
+            <ArrowLeft aria-hidden="true" />
+          </button>
+          <span>승격 곡 관리</span>
+        </section>
+        <header className="soridraw-explore-curation-manage-head-307">
+          <div>
+            <span>CURATED</span>
+            <h1>SORIDRAW 추천곡</h1>
+            <p>승격된 곡을 한곳에서 확인하고, 곡 더보기에서 추천곡 해제를 할 수 있어요.</p>
+          </div>
+        </header>
+        {managedCuratedLoading307 ? (
+          <div className="soridraw-explore-state" role="status">
+            <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 승격 곡을 불러오는 중
+          </div>
+        ) : managedCuratedTracks307.length === 0 ? (
+          <div className="soridraw-explore-state soridraw-explore-state--empty">
+            <Crown aria-hidden="true" />
+            <strong>아직 승격된 추천곡이 없어요.</strong>
+          </div>
+        ) : (
+          renderTrackGrid(managedCuratedTracks307, '승격 곡 관리')
+        )}
+      </main>
+    );
+  }
+
   if (profileUid) {
     return (
       <main className="soridraw-explore-page soridraw-explore-page--profile">
@@ -3075,13 +3312,15 @@ export default function ExplorePage() {
                     ownerAvatarUrl: nextProfile.avatarUrl,
                   };
                   const ownerTrackIds = new Set(
-                    [...tracks, ...popularTracks, ...profileTracks, ...profileLikedTracks]
+                    [...tracks, ...popularTracks, ...curatedTracks307, ...managedCuratedTracks307, ...profileTracks, ...profileLikedTracks]
                       .filter((track) => track.ownerUid === nextProfile.uid && Boolean(track.id))
                       .map((track) => track.id),
                   );
 
                   setTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   setPopularTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  setCuratedTracks307((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  setManagedCuratedTracks307((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   setProfileTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   setProfileLikedTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   ownerTrackIds.forEach((trackId) => {
@@ -3212,7 +3451,18 @@ export default function ExplorePage() {
           <p>SORiDRAW에서 발견한 음악을 Suno에서 바로 만나보세요.</p>
         </div>
 
-        <div className={`soridraw-explore-search${searchOpen ? ' is-open' : ''}`}>
+        <div className="soridraw-explore-head-actions-307">
+          {curationAccess307.canCurate && (
+            <button
+              type="button"
+              className="soridraw-explore-curation-manage-button-307"
+              onClick={openCurationManager307}
+            >
+              <Crown aria-hidden="true" />
+              <span>승격 곡 관리</span>
+            </button>
+          )}
+          <div className={`soridraw-explore-search${searchOpen ? ' is-open' : ''}`}>
           {searchOpen ? (
             <form onSubmit={submitSearch}>
               <Search aria-hidden="true" />
@@ -3230,6 +3480,7 @@ export default function ExplorePage() {
               <Search aria-hidden="true" />
             </button>
           )}
+          </div>
         </div>
       </section>
 
@@ -3265,16 +3516,21 @@ export default function ExplorePage() {
         <>
           {!submittedQuery ? (
             <div className="soridraw-explore-recommend-feed" aria-label="Explore 추천, 최신 및 인기">
-              {recommendationModel221.picks.length > 0 && (
+              {curatedTracks307.length > 0 && (
                 <ExploreRecommendationRail
                   title="SORIDRAW 추천"
-                  subtitle="지금 Explore에서 먼저 들려주고 싶은 곡"
-                  itemCount={recommendationModel221.picks.length}
+                  subtitle="관리자가 직접 선정한 추천곡"
+                  itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, curatedTracks307.length)}
                   trackClassName="soridraw-explore-recommend-track--picks"
                   mobileGroupSize={2}
                 >
-                  {recommendationModel221.picks.map((track) => renderTrackCard(track))}
+                  {curatedTracks307.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
+              )}
+              {curatedLoading307 && curatedTracks307.length === 0 && (
+                <div className="soridraw-explore-state soridraw-explore-curated-loading-307" role="status">
+                  <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 추천곡을 확인하는 중
+                </div>
               )}
 
               {tracks.length > 0 && (

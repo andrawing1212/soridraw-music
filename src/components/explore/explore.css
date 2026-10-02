@@ -203,3 +203,22 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="light"] .soridraw-explore-recommend-creator-card small{color:rgba(25,25,28,.46)}
 :root[data-soridraw-theme="light"] .soridraw-explore-preview-trigger{background:rgba(20,20,22,.68)!important;color:#fff;border-color:rgba(255,255,255,.18)!important}
 :root[data-soridraw-theme="light"] .soridraw-explore-card.is-previewing .soridraw-explore-card-copy h3{color:#a96f00;text-shadow:none}
+
+/* app307 — explicit Explore curation controls. */
+.soridraw-explore-head-actions-307{display:flex;align-items:center;gap:10px}
+.soridraw-explore-curation-manage-button-307{display:inline-flex;height:42px;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#1d1d20;padding:0 14px;color:#f5f5f5;font-size:12px;font-weight:800;white-space:nowrap}
+.soridraw-explore-curation-manage-button-307:hover{background:#29292d}
+.soridraw-explore-curation-manage-button-307 svg{width:15px;height:15px;color:#f0b400}
+.soridraw-explore-curation-manage-head-307{margin:24px 0 18px}
+.soridraw-explore-curation-manage-head-307 span{display:block;margin-bottom:6px;color:#f0b400;font-size:10px;font-weight:900;letter-spacing:.08em}
+.soridraw-explore-curation-manage-head-307 h1{margin:0;color:#f5f5f5;font-size:24px;font-weight:900}
+.soridraw-explore-curation-manage-head-307 p{margin:7px 0 0;color:#7f8794;font-size:12px}
+.soridraw-explore-curated-loading-307{min-height:100px}
+@media (max-width:1599px){
+.soridraw-explore-curation-manage-button-307{height:40px;padding:0 11px}
+}
+@media (max-width:767px){
+.soridraw-explore-head-actions-307{gap:7px}
+.soridraw-explore-curation-manage-button-307 span{display:none}
+.soridraw-explore-curation-manage-button-307{width:40px;padding:0;justify-content:center}
+}

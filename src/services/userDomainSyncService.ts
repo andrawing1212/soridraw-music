@@ -600,10 +600,10 @@ export const publishMusicNoteSaveStateDelta = async (
 export const publishMusicNoteStructureDelta = async (
   uid: string,
   syncStructure: unknown,
-): Promise<void> => {
+): Promise<number> => {
   const safeUid = String(uid || '').trim();
-  if (!safeUid || !syncStructure || typeof syncStructure !== 'object') return;
-  await publishSignal({
+  if (!safeUid || !syncStructure || typeof syncStructure !== 'object') return 0;
+  return publishSignal({
     domain: 'musicNote',
     operation: 'structure-update',
     uid: safeUid,

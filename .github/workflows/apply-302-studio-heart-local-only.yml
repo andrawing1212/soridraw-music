@@ -1,0 +1,54 @@
+name: Apply app302 Studio Heart Local First
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - '.deploy/trigger-app302-studio-heart-local-only.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply app302 patch
+        run: python3 .deploy/apply-302-studio-heart-local-only.py
+
+      - name: Verify app302 contract
+        run: node scripts/verify-302-studio-heart-local-first-delayed-remote.mjs
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit validated app302 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx public/app-version.json
+          if git diff --cached --quiet; then
+            echo "APP302_NO_CHANGES=1"
+            exit 1
+          fi
+          git commit -m "fix: show pending Studio save locally only"
+          git push origin HEAD:preview

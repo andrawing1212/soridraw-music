@@ -1,3 +1,31 @@
+## CURRENT TASK — app298 Library 폴더 삭제 warm R0 실기기 검증 (2026-10-02 KST)
+
+현재:
+- app297에서 관측된 Library folder delete `user_playlists:getDocs R1`만 최소 수정.
+- app298 code commit `c0dfac2fa45536692db7eda4ac8602c22067accd`.
+- 활성 playlist가 로딩 완료된 정상 warm path는 화면이 이미 가진 item IDs를 재사용하여 delete 전 Firestore reread를 제거.
+- cold/stale fallback read는 데이터 안전을 위해 유지.
+- Backend Safety `37014662854` SUCCESS.
+- Release Audit `37014825981`: TypeScript/Build/diagnose PASS, overall은 기존 stale verify-221 한 건만 FAIL.
+- TEST / PRODUCTION 변경 금지.
+
+PREVIEW 배포 후 최소 확인:
+1. app298 확인.
+2. Library 마이 리스트에서 비기본 폴더를 선택해 내용 로딩이 끝난 뒤 CACHE LIVE 초기화.
+3. 폴더 삭제:
+   - `user_playlists:getDocs` **0** 목표.
+   - 빈 폴더 기준 `user_playlists:batch W1 + users:batch W1`.
+   - 폴더가 즉시 사라지고 선택이 남은 폴더로 정상 이동.
+4. 같은 계정 상대 기기에서도 삭제가 즉시 반영.
+5. D1 R0/W0 / Worker 0.
+6. app297 reorder/rename/create 정상 기능 회귀 없음.
+
+주의:
+- 아직 로딩 전인 cold/stale folder를 즉시 삭제하는 예외 경로는 정확한 item 삭제를 위해 bounded `getDocs` fallback을 유지한다.
+- 정상 warm 경로에서 다시 R1이 보이면 FAIL.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app297 PREVIEW Library reorder 실기기 검증 (2026-10-02 KST)
 
 배포 완료:

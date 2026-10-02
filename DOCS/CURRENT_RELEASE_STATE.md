@@ -1,3 +1,39 @@
+## 0MO. PREVIEW app298 후보 — Library 폴더 삭제 warm R0 (2026-10-02 KST)
+
+**사용자 실기기 발견**
+- app297 Library 폴더 삭제에서 정상 쓰기 `user_playlists:batch W1 + users:batch W1` 외에 `user_playlists:getDocs R1`이 추가로 관측됨.
+- 사용자는 다른 정상 기능을 건드리지 않고 이 삭제 전 read만 제거해서 PREVIEW 배포하도록 지시.
+
+**원인 / 최소 수정**
+- Library 화면은 삭제 대상 활성 playlist의 item 목록을 이미 로컬 cache/state로 보유하고 있는데, `deletePlaylist()`가 서비스 내부의 전역 playlist cache freshness 조건 때문에 같은 items subcollection을 다시 `getDocs()` 할 수 있었음.
+- app298은 활성 playlist가 로딩 완료된 경우 화면이 이미 가진 **정확한 item document ID 목록**을 delete service에 전달.
+- service는 그 목록이 제공되면 추가 Firestore read 없이 해당 item 문서 + playlist 문서를 기존 batch로 삭제.
+- 활성 playlist snapshot이 없거나 아직 로딩 중인 cold/stale 호출은 기존 `getDocs` fallback을 그대로 유지하여 삭제 정확성을 비용 때문에 약화하지 않음.
+- UI/CSS, Library create/rename/reorder, Music Note, Recent, heart, Explore, RTDB 구조는 변경하지 않음.
+
+**비용 목표**
+- 정상 warm Library folder delete: 사전 Firestore **R0**.
+- 쓰기 의미는 그대로: 실제 item delete 개수 + playlist delete W1 + users revision W1.
+- 빈 warm folder의 사용자 실측 목표: `user_playlists:getDocs 0`, `user_playlists:batch W1`, `users:batch W1`.
+- D1 R0/W0 / Worker 0 유지.
+
+**변경 / 검증**
+- 코드 commit: `c0dfac2fa45536692db7eda4ac8602c22067accd`.
+- 변경 파일:
+  - `src/services/playlistService.ts`
+  - `src/pages/SunoLibraryPage.tsx`
+  - `scripts/verify-298-library-delete-warm-zero-read.mjs`
+  - `public/app-version.json` → app298
+- Backend V2 Step 2-A Safety Run `37014662854`: **SUCCESS**.
+  - contract PASS / adapter PASS / TypeScript PASS / Build PASS.
+- Release System Audit Run `37014825981`:
+  - TypeScript PASS / Build PASS / diagnose A~D + syntax E1~E3 PASS.
+  - overall FAIL은 app297과 동일한 기존 stale `verify-221-explore-feed-layout.mjs` shared-note detail assertion 한 건.
+  - app298 Library delete 경로와 무관함을 job log에서 확인.
+- Worker / Functions / D1 / Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 상태: **PREVIEW 배포 전 / Firebase PREVIEW 배포 후 warm folder delete CACHE LIVE 재검증 필요**.
+
 ## 0MN. PREVIEW app297 배포 완료 — Library 폴더 reorder 비용/실시간 수정 (2026-10-02 KST)
 
 - Firebase PREVIEW Release Run `36953630146`: **SUCCESS**.

@@ -36,9 +36,9 @@ SORIDRAW uses two different jobs and they must stay separate.
 
 **Immediate visibility**
 - update the initiating device locally first;
-- send the smallest practical RTDB changed-item preview to the user's other device;
-- receiver applies that preview from local/cache state;
-- preview receive path must not perform a Firestore read or write.
+- for Recent title/prompt/lyrics, send the smallest practical RTDB changed-item preview to the user's other device and apply it from local/cache state;
+- for Studio save-heart / unsave, **do not** send a pre-canonical heart preview: only the initiating device shows the local pending membership until canonical settlement;
+- any RTDB receiver path used by these flows must not perform a Firestore read or write.
 
 **Canonical persistence**
 - wait for the relevant trailing batch window;
@@ -101,6 +101,15 @@ Example:
 For one song:
 - starting state == final state inside the window → canonical favorite target **W0**;
 - starting state != final state → canonical favorite target **W1**.
+
+### app302b pending-layer cleanup invariant
+The optimistic Music Note row is not canonical data.
+
+Therefore:
+- before applying any generic `setFavorites(previous => ...)` style updater, derive its input from the **canonical base with the Studio-heart pending layer stripped**;
+- if an optimistic row represents a song that was already saved at the captured baseline, stripping the overlay must restore that baseline canonical favorite;
+- when a net-zero intent or successful canonical settlement removes the pending intent, immediately recompute the local Music Note list so the removed optimistic row cannot linger;
+- `__studioHeartPendingLocal` must never survive as a canonical row after the corresponding pending intent is gone.
 
 Never force a multi-song heart action into one fake favorite document merely to lower writes. Each song's membership is real canonical data and must remain independently correct.
 
@@ -199,6 +208,7 @@ Before declaring a change ready, verify at minimum:
 | Recent lyrics edit | other device immediate | language-map display stays coherent; no receiver Firestore read |
 | Recent A→B→C edits within 150s | every edit immediate | one final Recent aggregate W2 target |
 | Same-song heart repeated | initiating device immediate; other device waits for canonical | net-zero W0 or final-changed W1 after latest-click +30s |
+| Same-song save→unsave net-zero | optimistic Music Note row disappears immediately on initiating device | no lingering `__studioHeartPendingLocal`; favorite W0 target |
 | Different-song hearts | initiating device each immediate; each song has independent 30s settlement | per changed song favorite W1 |
 | Several favorite count changes | local display may be immediate | users.favoriteCount one UID batch W1 target |
 | Favorite-count net delta 0 | correct visible state | users.favoriteCount W0 target |
@@ -254,3 +264,7 @@ Read `references/soridraw-app302-studio-heart-local-first-baseline.md` before ch
 - Only a successful canonical save/unsave emits the normal RTDB changed-item signal for the other device.
 - The receiving device must update from that canonical signal with Firestore R0/W0.
 - Do not publish local optimistic rows into derived server bundles/indexes before canonical settlement.
+- Before canonical/local list updater functions run, strip the pending overlay from their input; updater logic must operate on canonical rows, not optimistic rows.
+- If the captured baseline was saved, stripping the pending overlay restores that baseline canonical favorite.
+- Net-zero cleanup and successful canonical settlement both remove the durable intent and immediately rebuild the local list, preventing a stale optimistic Music Note row.
+- User real-device confirmation on 2026-10-03 KST: the deployed app302/app302b behavior was reported as normally applied. Treat this visible behavior and the pending-layer cleanup as frozen unless a concrete defect is reported.

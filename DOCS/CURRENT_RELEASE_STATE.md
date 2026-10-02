@@ -1,3 +1,55 @@
+## 0MM. PREVIEW app297 후보 — Library 폴더 순서 O(1) 저장 + PC↔모바일 즉시 동기화 (2026-10-02 KST)
+
+**사용자 실기기 발견**
+- app296 Music Note 폴더 테스트에서 사용자가 마지막 변경 후 60초에 `user_structures` write 1회가 추가되는 것을 확인. 테스트 숫자는 폴더 삭제까지 포함.
+- Library 영상에서는 폴더 순서 변경 1회마다 현재 섹션의 모든 playlist 문서를 다시 쓰고 `users.syncVersions.playlists`까지 즉시 쓰는 비용 회귀가 확인됨.
+  - 마이 리스트 6개 기준: 순서 변경 1회당 `user_playlists +6` + `users +1`.
+  - 공유 리스트 5개 기준: 순서 변경 1회당 `user_playlists +5` + `users +1`.
+- Library 폴더 순서 변경은 RTDB changed-item signal이 없어서 같은 계정 PC↔모바일에 즉시 반영되지 않음.
+- 영상 중 Library 폴더 삭제에서는 warm item cache를 사용하지 못한 경우 `user_playlists:getDocs R1`도 관측됨. 삭제 read는 이번 순서변경 수정 범위 밖의 별도 확인 항목으로 남김.
+
+**원인**
+- `SunoLibraryPage.tsx`의 기존 `persistPlaylistOrder`가 drag 종료 시 섹션 전체를 1..N으로 다시 번호 매기고 모든 `user_playlists/{uid}/lists/*` 문서를 batch update.
+- 같은 batch에서 `users/{uid}.syncVersions.playlists`도 매 drag 즉시 update.
+- 순서 변경용 `playlist-order` RTDB operation/receiver가 존재하지 않았음.
+
+**app297 수정**
+- 화면 드래그 동작/디자인은 그대로 유지.
+- drag 시작 시 기존 canonical order를 snapshot.
+- drag 종료 시 화면용 임시 재번호는 제거하고, **실제로 이동한 폴더 하나만** 앞/뒤 이웃 사이의 numeric fractional order로 저장.
+- 기존 TEST/PRODUCTION도 numeric `order` 정렬을 그대로 읽을 수 있어 shared data 하위호환 유지.
+- 새 `reorderPlaylist` 경로:
+  - 이동한 playlist document canonical **W1**.
+  - `users.syncVersions.playlists`는 기존 UID 60초 revision batch에 합류하여 반복 drag마다 쓰지 않음.
+  - 현재 기기 persistent cache 즉시 patch.
+  - RTDB `playlist-order` changed-item signal 즉시 발행.
+- 수신 기기:
+  - `playlist-order` 하나만 local playlist cache에 patch + sort.
+  - Firestore read/write 없이 화면 갱신.
+- create/rename/delete/item add/delete/move/color/swap, Music Note, Explore 좋아요, UI/CSS는 변경하지 않음.
+
+**비용 목표**
+- 폴더 순서 변경 1회: 기존 `playlist W=N + users W1` → **moved playlist W1**.
+- 60초 안 여러 번 reorder: 각 실제 이동당 moved playlist W1, `users` revision은 window 전체 **W1** 목표.
+- 수신 기기: Firestore **R0/W0**, D1 **R0/W0**, Worker **0**.
+- 같은 폴더를 여러 번 움직이는 canonical order 자체의 60초 final-state collapse는 이번 최소 수정에 포함하지 않음. 먼저 전체폴더 재쓰기와 실시간 동기화 결함을 제거함.
+
+**변경 / 검증**
+- 코드 commit: `bc4da91e042a8fbc065971acbd9e4e445f84615b`.
+- 변경 파일:
+  - `src/services/playlistService.ts`
+  - `src/pages/SunoLibraryPage.tsx`
+- Backend V2 Step 2-A Safety Run `36953291017`: **SUCCESS**.
+- Release System Audit Run `36953307140`:
+  - TypeScript PASS.
+  - Build PASS.
+  - 진단 static A~D / syntax E1~E3 PASS.
+  - overall FAIL은 기존과 동일한 stale `verify-221-explore-feed-layout.mjs` shared-note detail assertion 1건.
+  - app297 Library reorder 경로와 무관함을 job log에서 재확인.
+- Worker / Functions / D1 / Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- 상태: **PREVIEW app297 배포 전 후보 / Firebase PREVIEW 배포 후 실기기 재검증 필요**.
+
 ## 0ML. PREVIEW app296 — Music Note + Library My/Shared 폴더 60초 최종상태 묶음 (2026-10-02 KST)
 
 **사용자 범위 확정**

@@ -1,3 +1,37 @@
+## CURRENT TASK — app297 Library 폴더 순서 실기기 재검증 (2026-10-02 KST)
+
+현재:
+- app296 사용자 영상에서 Library 폴더 reorder 비용 회귀와 동일계정 PC↔모바일 즉시 동기화 누락 확인.
+- 원인: reorder 1회가 섹션의 모든 playlist order 문서 + users revision을 즉시 쓰고, RTDB reorder signal이 없었음.
+- app297 후보 code commit `bc4da91e042a8fbc065971acbd9e4e445f84615b`에서 최소 수정 완료.
+- moved playlist 1개만 numeric fractional order W1, users revision은 60초 UID batch, RTDB `playlist-order` 즉시 sync.
+- Backend Safety `36953291017` SUCCESS.
+- Release Audit `36953307140`: TypeScript/Build/진단 A~D PASS, overall은 기존 stale verify-221 한 건만 FAIL.
+- TEST / PRODUCTION 변경 금지.
+
+PREVIEW 배포 후 최소 검증:
+1. PC/모바일 모두 app297 확인.
+2. 마이 리스트에서 폴더 하나를 한 칸 이동:
+   - 상대 기기에 새로고침/페이지 왕복 없이 즉시 같은 위치 반영.
+   - CACHE LIVE `user_playlists:write +1` 목표.
+   - 기존처럼 +6 등 전체 폴더 수만큼 증가하면 FAIL.
+   - 즉시 `users:write +1`이 붙지 않아야 함.
+3. 60초 안 마이 리스트 reorder를 3~5회:
+   - 각 이동은 상대 기기에 즉시.
+   - playlist write는 실제 이동 횟수만큼만 증가.
+   - 마지막 이동 후 60초 정착 시 users revision **W1** 목표.
+4. 공유 리스트도 동일:
+   - 5개 폴더라도 reorder 1회 `user_playlists +1` 목표, +5면 FAIL.
+5. 수신 기기 reorder signal 자체 Firestore R0/W0 / D1 R0/W0 / Worker 0.
+6. rename/create/delete와 Library 곡 item 동작은 기존 정상 회귀 없음.
+7. 영상에서 별도로 관측된 playlist delete `getDocs R1`은 reorder PASS 후 warm-cache 조건을 따로 재현해 판단.
+
+판정:
+- cross-device 즉시 + moved playlist W1이 모두 맞으면 app297 reorder PASS.
+- 전체 playlist rewrite, users immediate write, 상대 기기 미반영 중 하나라도 재현되면 TEST 승격 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app296 PREVIEW Music Note + Library My/Shared 60초 batch 실기기 검증 (2026-10-02 KST)
 
 현재:

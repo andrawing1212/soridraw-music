@@ -1,4 +1,4 @@
-app307-explore-curation-management
-source=239fa2dd192855b97ffd30753bc378a994187093
-product_commit=239fa2dd192855b97ffd30753bc378a994187093
-requested=2026-10-03T08:36:00+09:00
+app308-explore-curation-hardening
+source=38ecbdd766368119686a0871a32e96e6b3e6e0ce
+product_commit=38ecbdd766368119686a0871a32e96e6b3e6e0ce
+requested=2026-10-03T08:56:00+09:00

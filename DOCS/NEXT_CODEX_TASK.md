@@ -1,3 +1,29 @@
+## CURRENT TASK — app304 Explore 최신/인기 홈 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app304 / Release Run `37075062146` SUCCESS.
+- locked source `e2547cf7d3a7bc6e90df052aa474f15e42df6f05`.
+- `preview.soridraw.com` app304 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Rules / 사용자 데이터 migration 변경 없음.
+
+사용자 확인:
+1. Explore 상단의 기존 `추천 / 최신 / 인기` 페이지 탭이 없어졌는지.
+2. 같은 홈 화면에 **최신**과 **인기** 레일이 각각 최대 20곡 표시되는지.
+3. 기존 탭 위치의 **MY 프로필** 버튼이 자기 프로필로 이동하는지.
+4. 계정 메뉴와 Studio left-rail에서 `MY 프로필` 명칭이 보이는지.
+5. 자기 프로필 상단은 `MY 프로필`, 다른 사용자 프로필 상단은 `공개 프로필`인지.
+6. PC / 모바일 카드 크기·액션·좋아요 표시가 기존과 같은지.
+7. Explore 재진입 warm cache에서 D1 직접 read가 새로 생기지 않는지.
+
+보호:
+- app302/app302b Studio 저장 하트 변경 금지.
+- app301 Music Note / Library 폴더 경로 변경 금지.
+- app303 Split browser-history / Pure Pane 경로 변경 금지.
+- 이번 UI 후속 요청 전 추천·장르별추천·크리에이터 추천 기능 확장 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## COMPLETED — app302 Studio 저장 하트 실기기 확인 / Skill 동결 (2026-10-03 KST)
 
 - 사용자 실기기 확인: **정상 적용**.

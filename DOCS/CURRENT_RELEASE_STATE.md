@@ -1,3 +1,62 @@
+## 0NC. PREVIEW app304 배포 완료 — Explore 최신/인기 동시 홈 + MY 프로필 명칭 (2026-10-03 KST)
+
+- 사용자 요청대로 Explore의 기존 `추천 / 최신 / 인기` 탭형 페이지 구분을 제거하고, 한 화면에서 **최신 / 인기** 두 가로 레일을 함께 표시.
+- 최신: 화면에 최대 20곡.
+- 인기: 화면에 최대 20곡.
+- 기존 Worker의 R2 first-page 계약이 `limit=40` 고정이므로 서버 계약은 변경하지 않고, latest/popular R2 snapshot 40개를 기존 local-first 캐시에 보관한 뒤 UI에서 각각 20개만 노출.
+- canonical D1 Feed 전체조회/새 Worker 경로/새 migration 없음.
+- 기존 추천/장르별추천/크리에이터 추천 UI는 이번 홈 화면에서 숨기고 추가 확장은 보류.
+- 기존 탭 위치에는 **MY 프로필** 버튼을 배치하여 현재 로그인 사용자의 `/explore?profile={uid}`로 이동.
+- 계정 메뉴와 Studio left-rail의 자기 프로필 명칭을 `공개 프로필` → `MY 프로필`로 변경.
+- 프로필 상단은 자기 프로필일 때 `MY 프로필`, 다른 사용자의 프로필은 기존 `공개 프로필` 유지.
+- 카드 디자인 / 좋아요 mutation / 공개·비공개 / 저장 하트 / app301 폴더 / app303 Split history 동작은 변경하지 않음.
+
+**변경 commit**
+- 제품/UI: `fe9b7d7c8b07b98a9e16294852818fc08e25f054`.
+- MY 프로필 rail label + verifier 정합화: `ebe7c70cb643150420f21f7cb0409c824b27a557`.
+- 최종 audit source: `746e635e8fd8ef3c50938fa38a08177a599b0b24`.
+- PREVIEW locked release source: `e2547cf7d3a7bc6e90df052aa474f15e42df6f05`.
+
+**검증 / 배포**
+- 첫 audit Run `37074532330`: FAIL.
+  - 제품 TypeScript / Build는 PASS.
+  - 실패 원인은 UI 명칭/레이아웃 변경 뒤 기존 verifier의 `공개 프로필` 및 예전 Latest/Popular grid 계약 assertion이 남아 있던 것.
+  - 제품 런타임 오류가 아니라 verifier 기준 정합화 문제로 확인.
+- verifier/left-rail 명칭 정리 후 Release System Audit Run `37074868844`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - static A~D PASS.
+  - release-system verification PASS.
+  - like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight/read-only diagnostics PASS.
+  - branch-ref guard PASS.
+- Firebase PREVIEW Release Run `37075062146`: **SUCCESS**.
+  - Firebase Hosting PASS.
+  - remote `preview.soridraw.com`: app **304**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**실기기 확인 포인트**
+1. Explore 상단에서 기존 추천/최신/인기 탭이 사라지고 MY 프로필 버튼이 보이는지.
+2. 최신 레일 최대 20곡, 인기 레일 최대 20곡이 같은 Explore 홈에 연속 표시되는지.
+3. PC/모바일에서 기존 카드 디자인과 액션 위치가 유지되는지.
+4. MY 프로필 버튼, 계정 메뉴, Studio left-rail에서 자기 프로필 진입이 정상인지.
+5. 자기 프로필 상단은 MY 프로필, 다른 사용자 프로필은 공개 프로필로 보이는지.
+6. 좋아요/해제 및 공개/비공개 기존 정상 기능 회귀가 없는지.
+
+## 0NB. PREVIEW app303 배포 완료 — Split 작업화면 브라우저 Back/Forward 복원 (2026-10-03 KST)
+
+- 제품 commit: `cc84fba18b8ccbec6b83b983f6a3a1217046516c`.
+- Split의 곡 만들기 / 최근 생성곡 / Music Note / Library 이동을 `/studio?view=...` history에 기록하고 브라우저 Back/Forward 및 마우스 뒤로/앞으로로 복원.
+- app303 version JSON 복구 commit: `df1978d56012d73265509165d3ba0d92faea32b7`.
+- focused Verify Run `37070391369`: SUCCESS.
+- Release System Audit Run `37070574836`: SUCCESS.
+- Firebase PREVIEW Release Run `37070784375`: SUCCESS.
+- app303 exact build PASS / TEST·PRODUCTION unchanged PASS.
+- app302/app302b 저장 하트, app301 폴더, 기존 Split Pure Pane 보호 기준 변경 없음.
+
 ## 0NA. app302/app302b 사용자 실기기 정상 확인 + 좋아요/저장하트 스킬 동결 (2026-10-03 KST)
 
 **사용자 확인**

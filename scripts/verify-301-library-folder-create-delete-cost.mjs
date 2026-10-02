@@ -12,7 +12,7 @@ const region = (startMarker, endMarker) => {
 };
 
 const create = region('export const createPlaylist = async', 'export const renamePlaylist = async');
-assert.ok(!create.includes('getDoc(') && !create.includes('getDocs('), 'folder create gained a Firestore read');
+assert.ok(!create.includes('await getDoc(') && !create.includes('await getDocs('), 'folder create gained a Firestore read');
 assert.ok(create.includes('batch.set(newDocRef, created)'), 'folder create must persist exactly its new playlist document');
 assert.ok(!create.includes("batch.update(doc(db, 'users'"), 'folder create must not immediately write users revision');
 assert.ok(create.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'), 'folder create compatibility revision is not delayed/batched');

@@ -100,11 +100,17 @@ A user click updates local UI/state immediately and records one durable local in
 
 Batching is allowed when the product does not require server-immediate settlement. Multiple changes inside the batch window should collapse to the final desired state per item.
 
-For SORIDRAW:
+For SORIDRAW Explore public likes:
 - keep the verified trailing batch window at 30 seconds;
 - keep the W1 queue-intake architecture;
 - do not reintroduce direct per-track interactive settlement;
 - do not turn navigation, focus, page exit, or idle time into automatic repeated mutation retries.
+
+For SORIDRAW Studio Recent save-heart / Music Note favorite membership:
+- use the separate app302 per-song 30-second final-state rule;
+- final==baseline targets canonical favorite W0, final!=baseline targets canonical favorite W1;
+- do not publish a pre-canonical heart preview to the other device;
+- do not reinterpret the Studio save-heart path as the Explore W1 queue-intake state machine.
 
 For portable mode:
 - choose the batch window from the product's latency requirement;

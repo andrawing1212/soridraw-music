@@ -1,4 +1,4 @@
-app305-restore-explore-recommendations
-source=decf7ed1b34aee39256b3ad42d69d29fceefb732
-product_commit=decf7ed1b34aee39256b3ad42d69d29fceefb732
-requested=2026-10-03T08:05:00+09:00
+app306-explore-order-pc-arrows
+source=811c15803339effefb05a0a47b0878c6128d5964
+product_commit=811c15803339effefb05a0a47b0878c6128d5964
+requested=2026-10-03T08:15:00+09:00

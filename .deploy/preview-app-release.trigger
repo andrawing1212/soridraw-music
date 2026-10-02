@@ -1,7 +1,7 @@
-app302-studio-heart-local-first-delayed-remote
-target_source=8a3075027a273339847e9e67f4988e778a971192
-app_version=302
+app303-split-browser-history
+target_source=04856ef0b47f8bd1a7b87a5bdbd8a1cef7f45cf3
+app_version=303
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=studio-heart-local-first-delayed-remote
+release_request=split-browser-history

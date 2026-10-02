@@ -1,3 +1,29 @@
+## 0MX. app301 폴더 기준 동결 + 전용 Skill 저장 (2026-10-03 KST)
+
+**최신 사용자 실기기 영상 판정**
+- app301 PREVIEW 영상 길이 약 53.23초.
+- Library warm 빈 폴더 삭제 2회 구간 최종 Browser SDK: **읽기 0 / 쓰기 2**.
+- SDK write source: **`user_playlists:batch = 2`**.
+- 영상 안에서는 `users:batch` 즉시 write 없음.
+- D1 R0/W0 / Worker 0.
+- 따라서 영상이 직접 증명하는 **warm delete R0 + folder당 canonical W1 + users 즉시 W0** 기준은 PASS.
+- 단 영상이 60초 trailing settlement 전에 끝나므로, 마지막 `users.syncVersions.playlists W1` 60초 지연 write는 이 영상에서 실측된 것으로 표기하지 않음. 코드/CI 계약으로 유지.
+
+**생성/삭제/이동 재정리**
+- Library create는 app301에서도 기존 정상 경로 유지: R0 / 새 playlist W1 / users 즉시 W0 / empty item cache seed / RTDB 즉시.
+- Library delete: warm R0 / 실제 items + playlist만 canonical / users revision 60초 UID batch.
+- Library reorder: local+RTDB 즉시 / per-drag Firestore 0 / 60초 final-state.
+- Music Note create/rename/reorder: aggregate `user_structures` 60초 final-state.
+- Music Note delete: 구조 즉시 확정 + 삭제 폴더 소속 곡만 기본 폴더로 이동하여 데이터 일관성 보호.
+
+**Skill**
+- 신규: `.agents/skills/music-note-library-folder-sync-cost/SKILL.md`
+- 기준: `.agents/skills/music-note-library-folder-sync-cost/references/soridraw-app301-folder-baseline.md`
+- `AGENTS.md`에 폴더 작업 전 필수 Skill로 등록.
+- app301 폴더 정상 경로를 보호 기준으로 동결.
+- 앱 런타임 코드 변경 없음 / 재배포 없음.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0MW. PREVIEW app301 배포 완료 — Library 폴더 생성/삭제 비용 정리 (2026-10-03 KST)
 
 - Firebase PREVIEW Release Run `37058559063`: **SUCCESS**.

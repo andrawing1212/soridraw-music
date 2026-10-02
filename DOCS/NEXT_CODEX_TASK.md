@@ -1,3 +1,14 @@
+## CURRENT TASK — app301 폴더 기준 동결 상태 (2026-10-03 KST)
+
+- Music Note / Library 폴더 생성·저장·이름변경·삭제·순서이동 관련 전용 Skill 저장 완료.
+- 현재 보호 기준: `.agents/skills/music-note-library-folder-sync-cost/references/soridraw-app301-folder-baseline.md`.
+- Library app301 warm delete 사용자 영상: R0 / user_playlists W2 for two deletes / users immediate W0 / D1 R0/W0 / Worker 0 PASS.
+- 앱 코드는 변경하지 않음.
+- 새로운 구체 폴더 오류가 없으면 app301 정상 폴더 경로 추가 수정 금지.
+- 추후 폴더 관련 작업 전 반드시 신규 Skill + baseline을 먼저 읽을 것.
+- TEST 승격은 사용자 명시 `테스트배포` 전 금지.
+- PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app301 Library create/delete 실기기 최종 확인 (2026-10-03 KST)
 
 배포 완료:

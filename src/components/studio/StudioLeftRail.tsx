@@ -212,7 +212,7 @@ export default function StudioLeftRail({
             </button>
             <button type="button" role="menuitem" data-soridraw-menu-access="explore" className="soridraw-account-menu-row" onClick={() => runMenuAction(onPublicProfile)}>
               <Compass aria-hidden="true" />
-              <span>공개 프로필</span>
+              <span>MY 프로필</span>
             </button>
             <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onSettings)}>
               <Settings aria-hidden="true" />

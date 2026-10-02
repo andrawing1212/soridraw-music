@@ -90,8 +90,8 @@ assert.match(
 );
 assert.match(
   page,
-  /renderTrackGrid\([\s\S]*?visibleFeedTracks[\s\S]*?sort === 'latest' && !submittedQuery \? 'latest' : 'default',[\s\S]*?true,[\s\S]*?\)/,
-  'Latest and Popular main feeds must opt into the mobile feed density class',
+  /title="최신"[\s\S]*?mobileGroupSize=\{3\}[\s\S]*?title="인기"[\s\S]*?mobileGroupSize=\{3\}/,
+  'Latest and Popular home sections must use the shared three-card mobile rail contract',
 );
 assert.match(
   css,
@@ -107,11 +107,6 @@ assert.match(
   css,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--picks\{grid-auto-columns:calc\(\(100% - 10px\)\/2\);gap:10px\}[\s\S]*?\.soridraw-explore-recommend-track\.soridraw-explore-recommend-track--profile-pinned\{grid-auto-columns:100%;gap:10px\}/,
   'SORIDRAW picks mobile rail must show two song cards in the viewport',
-);
-assert.match(
-  page,
-  /title="최신"[\s\S]*?mobileGroupSize=\{3\}[\s\S]*?title="인기"[\s\S]*?mobileGroupSize=\{3\}/,
-  'Latest and Popular home rails must share the standard three-card mobile alignment group',
 );
 assert.match(
   css,

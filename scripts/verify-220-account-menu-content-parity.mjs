@@ -15,9 +15,9 @@ const mobile = app.slice(mobileStart, mobileEnd);
 
 for (const block of [desktop, mobile, rail]) {
   assert.ok(block.includes('MY 페이지'), 'MY 페이지 missing');
-  assert.ok(block.includes('공개 프로필'), '공개 프로필 missing');
+  assert.ok(block.includes('MY 프로필'), 'MY 프로필 missing');
   assert.ok(block.includes('설정'), '설정 missing');
-  assert.ok(block.indexOf('MY 페이지') < block.indexOf('공개 프로필'), 'public profile must follow MY page');
+  assert.ok(block.indexOf('MY 페이지') < block.indexOf('MY 프로필'), 'MY profile must follow MY page');
   assert.ok(!block.includes('요금제'), 'plan row must be removed from account menu');
   assert.ok(!block.includes('결제 관리'), 'billing row must be removed from account menu');
 }

@@ -1303,16 +1303,13 @@ export const deletePlaylist = async (
   uid: string,
   playlistId: string,
   knownItemIds?: string[],
-) => {
+): Promise<number> => {
   cancelLibraryPlaylistRenameBatch(uid, playlistId);
   cancelLibraryPlaylistOrderBatch(uid, playlistId);
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
 
-  // app298: the Library page already owns a fully loaded active-playlist item
-  // snapshot before it exposes the delete action. Reuse those exact document
-  // IDs instead of issuing another getDocs() immediately before deletion.
-  // Keep the existing cold/stale fallback for non-UI callers so correctness is
-  // never traded away just to force a zero-read number.
+  // app298/app300: when the page has a completed active-playlist snapshot,
+  // deleting that folder must not reread its items from Firestore.
   let itemIds: string[] = [];
   if (Array.isArray(knownItemIds)) {
     itemIds = Array.from(new Set(
@@ -1340,8 +1337,24 @@ export const deletePlaylist = async (
     }
   }
 
-  const batch = writeBatch(db);
   const syncVersion = nextLibraryPlaylistSyncVersion(uid, readRemotePlaylistVersion(uid));
+
+  // app300: advance the durable local list cache before the canonical delete.
+  // The users.syncVersions write can otherwise arrive first and make the page
+  // briefly believe its list cache is stale, causing a redundant getDocs().
+  // This is local-only optimism; a failed commit restores the removed playlist
+  // without discarding any newer cross-device cache version.
+  const previousListCache = await readLibraryPlaylistListCache(uid);
+  const deletedPlaylistSnapshot = previousListCache?.items.find((entry) => entry.id === playlistId);
+  if (previousListCache && deletedPlaylistSnapshot) {
+    await writeLibraryPlaylistListCache(
+      uid,
+      sortPlaylists(previousListCache.items.filter((entry) => entry.id !== playlistId)),
+      syncVersion,
+    );
+  }
+
+  const batch = writeBatch(db);
   itemIds.forEach((itemId) => {
     batch.delete(doc(itemsRef, itemId));
   });
@@ -1349,13 +1362,34 @@ export const deletePlaylist = async (
   batch.delete(playlistRef);
   batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion });
 
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (error) {
+    if (deletedPlaylistSnapshot) {
+      const latestCache = await readLibraryPlaylistListCache(uid);
+      if (latestCache && !latestCache.items.some((entry) => entry.id === playlistId)) {
+        const rollbackVersion = latestCache.version > syncVersion
+          ? latestCache.version
+          : Number(previousListCache?.version || 0);
+        await writeLibraryPlaylistListCache(
+          uid,
+          sortPlaylists([...latestCache.items, deletedPlaylistSnapshot]),
+          rollbackVersion,
+        );
+      }
+    }
+    throw error;
+  }
+
   markLibraryPlaylistRevisionCommitted(uid, syncVersion);
   await Promise.all([
-    patchLibraryPlaylistListCache(uid, (items) => items.filter((playlist) => playlist.id !== playlistId), syncVersion),
+    previousListCache
+      ? Promise.resolve()
+      : patchLibraryPlaylistListCache(uid, (items) => items.filter((playlist) => playlist.id !== playlistId), syncVersion),
     deleteLibraryPlaylistItemsCache(uid, playlistId),
   ]);
   await publishLibraryPlaylistSyncSignal(uid, 'playlist-delete', syncVersion, { playlistId });
+  return syncVersion;
 };
 
 export const getTrackGlobalId = (item: PlaylistItem | any) => {

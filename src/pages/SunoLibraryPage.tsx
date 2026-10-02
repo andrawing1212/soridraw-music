@@ -821,6 +821,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const playlistListRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
+  const loadedPlaylistItemsSnapshotRef = useRef<{ playlistId: string; itemIds: string[] } | null>(null);
   const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
@@ -1960,10 +1961,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       danger: true,
       onConfirm: async () => {
         try {
-          const knownItemIds = activePlaylistId === playlist.id && !loadingPlaylistItems
-            ? playlistItems.map((item) => String(item.id || '').trim()).filter(Boolean)
+          const loadedSnapshot = loadedPlaylistItemsSnapshotRef.current;
+          const knownItemIds = loadedSnapshot?.playlistId === playlist.id
+            ? loadedSnapshot.itemIds
             : undefined;
-          await deletePlaylist(user.uid, playlist.id!, knownItemIds);
+          const syncVersion = await deletePlaylist(user.uid, playlist.id!, knownItemIds);
+          playlistListCacheVersionRef.current = Math.max(playlistListCacheVersionRef.current, syncVersion);
           
           // Update selection if the deleted one was selected
           if (isNormal && selectedNormalPlaylistId === playlist.id) {
@@ -2016,6 +2019,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => {
     if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || !activePlaylistId) {
+      loadedPlaylistItemsSnapshotRef.current = null;
       setPlaylistItems([]);
       return;
     }
@@ -2023,6 +2027,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     let cancelled = false;
     const uid = user.uid;
     const playlistId = activePlaylistId;
+    loadedPlaylistItemsSnapshotRef.current = null;
     const expectedVersion = Number(playlists.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0);
 
     const loadItems = async () => {
@@ -2031,7 +2036,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const cacheIsCurrent = Boolean(cached && (expectedVersion <= 0 || cached.version >= expectedVersion));
       if (cacheIsCurrent && cached) {
         if (!cancelled) {
-          setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+          const sortedItems = [...cached.items].sort((a, b) => a.order - b.order);
+          loadedPlaylistItemsSnapshotRef.current = {
+            playlistId,
+            itemIds: sortedItems.map((item) => String(item.id || '').trim()).filter(Boolean),
+          };
+          setPlaylistItems(sortedItems);
           setLoadingPlaylistItems(false);
           markCacheDiagnostic('library', 'CACHE', 0);
         }
@@ -2044,7 +2054,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           .map((entry) => ({ id: entry.id, ...entry.data() } as PlaylistItem))
           .sort((a, b) => a.order - b.order);
         await writeLibraryPlaylistItemsCache(uid, playlistId, items, expectedVersion);
-        if (!cancelled) setPlaylistItems(items);
+        if (!cancelled) {
+          loadedPlaylistItemsSnapshotRef.current = {
+            playlistId,
+            itemIds: items.map((item) => String(item.id || '').trim()).filter(Boolean),
+          };
+          setPlaylistItems(items);
+        }
       } catch (error) {
         console.error('Failed to fetch playlist items:', error);
         if (!cancelled && cached) setPlaylistItems(cached.items);
@@ -2057,7 +2073,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const detail = (event as CustomEvent<{ uid?: string; scope?: string; playlistId?: string }>).detail;
       if (detail?.uid !== uid || detail.scope !== 'items' || detail.playlistId !== playlistId) return;
       void readLibraryPlaylistItemsCache(uid, playlistId).then((cached) => {
-        if (!cancelled && cached) setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+        if (!cancelled && cached) {
+          const sortedItems = [...cached.items].sort((a, b) => a.order - b.order);
+          const currentExpectedVersion = Number(
+            playlistsRef.current.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0
+          );
+          if (currentExpectedVersion <= 0 || cached.version >= currentExpectedVersion) {
+            loadedPlaylistItemsSnapshotRef.current = {
+              playlistId,
+              itemIds: sortedItems.map((item) => String(item.id || '').trim()).filter(Boolean),
+            };
+          }
+          setPlaylistItems(sortedItems);
+        }
       });
     };
 

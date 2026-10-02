@@ -1030,28 +1030,44 @@ export const swapPlaylistItemOrder = async (uid: string, playlistId: string, ite
   });
 };
 
-export const deletePlaylist = async (uid: string, playlistId: string) => {
+export const deletePlaylist = async (
+  uid: string,
+  playlistId: string,
+  knownItemIds?: string[],
+) => {
   cancelLibraryPlaylistRenameBatch(uid, playlistId);
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
-  const [listCache, itemCache] = await Promise.all([
-    readLibraryPlaylistListCache(uid),
-    readLibraryPlaylistItemsCache(uid, playlistId),
-  ]);
-  const playlist = listCache?.items.find((entry) => entry.id === playlistId);
-  const expectedItemsRevision = Number(playlist?.itemsRevision || 0);
-  const canUseWarmItemIds = Boolean(
-    listCache
-    && playlistCacheIsCurrent(uid, listCache.version)
-    && itemCache
-    && (expectedItemsRevision <= 0 || itemCache.version >= expectedItemsRevision)
-  );
 
+  // app298: the Library page already owns a fully loaded active-playlist item
+  // snapshot before it exposes the delete action. Reuse those exact document
+  // IDs instead of issuing another getDocs() immediately before deletion.
+  // Keep the existing cold/stale fallback for non-UI callers so correctness is
+  // never traded away just to force a zero-read number.
   let itemIds: string[] = [];
-  if (canUseWarmItemIds && itemCache) {
-    itemIds = itemCache.items.map((item) => String(item.id || '').trim()).filter(Boolean);
+  if (Array.isArray(knownItemIds)) {
+    itemIds = Array.from(new Set(
+      knownItemIds.map((itemId) => String(itemId || '').trim()).filter(Boolean),
+    ));
   } else {
-    const itemsSnap = await getDocs(itemsRef);
-    itemIds = itemsSnap.docs.map((itemDoc) => itemDoc.id);
+    const [listCache, itemCache] = await Promise.all([
+      readLibraryPlaylistListCache(uid),
+      readLibraryPlaylistItemsCache(uid, playlistId),
+    ]);
+    const playlist = listCache?.items.find((entry) => entry.id === playlistId);
+    const expectedItemsRevision = Number(playlist?.itemsRevision || 0);
+    const canUseWarmItemIds = Boolean(
+      listCache
+      && playlistCacheIsCurrent(uid, listCache.version)
+      && itemCache
+      && (expectedItemsRevision <= 0 || itemCache.version >= expectedItemsRevision)
+    );
+
+    if (canUseWarmItemIds && itemCache) {
+      itemIds = itemCache.items.map((item) => String(item.id || '').trim()).filter(Boolean);
+    } else {
+      const itemsSnap = await getDocs(itemsRef);
+      itemIds = itemsSnap.docs.map((itemDoc) => itemDoc.id);
+    }
   }
 
   const batch = writeBatch(db);

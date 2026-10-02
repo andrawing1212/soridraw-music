@@ -1958,7 +1958,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       danger: true,
       onConfirm: async () => {
         try {
-          await deletePlaylist(user.uid, playlist.id!);
+          const knownItemIds = activePlaylistId === playlist.id && !loadingPlaylistItems
+            ? playlistItems.map((item) => String(item.id || '').trim()).filter(Boolean)
+            : undefined;
+          await deletePlaylist(user.uid, playlist.id!, knownItemIds);
           
           // Update selection if the deleted one was selected
           if (isNormal && selectedNormalPlaylistId === playlist.id) {

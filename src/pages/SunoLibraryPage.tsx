@@ -1739,29 +1739,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   }, [user?.uid, isSharedView]);
 
-  // app295 — resume any durable compatibility-revision batch left by a
-  // previous tab/session. Folder changes stay visible immediately through the
-  // local cache + RTDB delta; this only batches the legacy users revision write.
+  // app296 — keep the full 60-second trailing window across ordinary tab and
+  // SPA route changes. The pending revision is durable; only a real page unload
+  // asks for a best-effort early flush so compatibility state is not stranded.
   useEffect(() => {
     if (!user?.uid || isSharedView) return;
     const uid = user.uid;
     resumeLibraryPlaylistRevisionBatch(uid);
 
-    const flushWhenHidden = () => {
-      if (document.visibilityState === 'hidden') void flushLibraryPlaylistRevisionBatch(uid);
-    };
     const flushOnPageHide = () => {
       void flushLibraryPlaylistRevisionBatch(uid);
     };
 
-    document.addEventListener('visibilitychange', flushWhenHidden);
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
-      document.removeEventListener('visibilitychange', flushWhenHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
-      // Route navigation keeps the durable batch safe and asks it to settle;
-      // if the request cannot finish, localStorage recovery remains intact.
-      void flushLibraryPlaylistRevisionBatch(uid);
     };
   }, [user?.uid, isSharedView]);
 

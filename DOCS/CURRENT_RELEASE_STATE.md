@@ -1,3 +1,20 @@
+## 0MP. PREVIEW app298 배포 완료 — Library warm 폴더 삭제 사전 read 제거 (2026-10-02 KST)
+
+- Firebase PREVIEW Release Run `37015147954`: **SUCCESS**.
+- locked PREVIEW source: `e16183ae37b6c34d509f065afd63b5f3c120a99a`.
+- remote `preview.soridraw.com`: app **298**, exact build PASS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules SKIPPED; Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- app298 변경은 Library 활성 폴더 삭제 경로 하나:
+  - 이미 로딩 완료된 active playlist의 item IDs를 재사용.
+  - 같은 items collection의 중복 `getDocs` 제거.
+  - cold/stale 상태에서 item snapshot이 없는 경우 기존 안전 fallback read 유지.
+- Backend Safety Run `37014662854`: SUCCESS.
+- Release Audit Run `37014825981`: TypeScript/Build/diagnose PASS, overall FAIL은 기존 stale `verify-221` 한 건만 동일.
+- 상태: **PREVIEW 배포 완료 / 사용자 CACHE LIVE에서 warm folder delete R0 확인 대기**.
+
 ## 0MO. PREVIEW app298 후보 — Library 폴더 삭제 warm R0 (2026-10-02 KST)
 
 **사용자 실기기 발견**

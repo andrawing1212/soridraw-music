@@ -1,3 +1,26 @@
+## CURRENT TASK — app298 warm Library folder delete 최종 실기기 확인 (2026-10-02 KST)
+
+배포 완료:
+- PREVIEW app298 / Run `37015147954` SUCCESS.
+- locked source `e16183ae37b6c34d509f065afd63b5f3c120a99a`.
+- TEST / PRODUCTION unchanged.
+
+사용자 최소 확인:
+1. Library 비기본 폴더를 선택하고 내용 로딩 완료.
+2. CACHE LIVE 초기화.
+3. 그 폴더 삭제.
+4. 기대:
+   - `user_playlists:getDocs 0`.
+   - 빈 폴더라면 `user_playlists:batch W1 + users:batch W1`.
+   - 폴더 즉시 삭제 / 남은 폴더 선택 정상.
+   - 상대 기기 삭제 즉시 반영.
+   - D1 R0/W0 / Worker 0.
+5. cold/stale 상태에서 로딩 완료 전 삭제하는 예외는 정확성 보호용 bounded fallback read 허용.
+
+app297 reorder/create/rename 및 Music Note 정상 기능은 동결.
+TEST 승격은 사용자 `테스트배포` 지시 전 금지.
+PRODUCTION은 별도 명확 승인 전 금지.
+
 ## CURRENT TASK — app298 Library 폴더 삭제 warm R0 실기기 검증 (2026-10-02 KST)
 
 현재:

@@ -1,3 +1,25 @@
+## PREVIEW app295 Library My/Shared folder revision batching (2026-10-02 KST)
+
+- 목적: Library My/Shared playlist folder create/rename의 공통 `users.syncVersions.playlists` write를 30초 UID trailing batch로 축소.
+- folder canonical create/rename W1은 즉시 유지; current app PC/mobile은 기존 RTDB changed-item delta로 즉시 반영.
+- 목표 비용: N회 create/rename inside one 30s window = folder WN + users revision W1. 예: 5회 W10 → W6.
+- 1회만 수정하면 총 W2로 기존과 동일. item mutation/delete/reorder가 더 높은 revision을 즉시 확정하면 pending users write를 흡수해 추가 delayed W0 가능.
+- app294 empty new-folder items cache seed 유지: create 직후 Firestore item read R0 목표.
+- durable pending: localStorage + memory fallback. visibility/pagehide/route exit에서 조기 flush 시도.
+- monotonic safety: active RTDB signal floor reuse; 필요한 경우 shared RTDB latest signal 1회 확인; 확인 실패 시 fail-closed.
+- product/source commits: `bcc346c0aa2499ea06937c230d94e73de13645c8` → `bde6b4528c3bd9b380685d4a5b50865c011d78a1` → `4cd2700b460b4297186f7cb815289d01e6049f3c` → `516e9e74b9ae6b0c3e3e13bdd6476b9fc51b19c3` → `77aa75f73dc6459af82ca96811270ba42ec2c480` → `3c1af755a9cda7cee1ef08e774500bfd7ff4de12` → `e465146bac3651da652269f4a34ade5691ed4fba`.
+- app version 295: `fa9dc0d2693bb2bc9a42a5ad04a9b67c5307f746`.
+- focused verifier latest: `69902bce0a216341b5872c5eb1d2f724d72731f6`.
+- Backend V2 Safety Run `36943137531`: SUCCESS.
+- final Release System Audit `36943416655`: TypeScript/Build + groups A~D PASS; overall FAIL only from pre-existing stale `verify-221-explore-feed-layout.mjs` assertion unrelated to Library change.
+- release locked source: `b3ce248ee41ac075a8713b37d6aaa77755fac028`.
+- Firebase PREVIEW Run `36943574387`: SUCCESS.
+- `preview.soridraw.com`: app 295 / exact build PASS.
+- Shared RTDB Rules SKIPPED; Worker / Functions / D1 / Firestore Rules unchanged.
+- TEST / PRODUCTION unchanged PASS.
+- user data migration/backfill/delete 없음.
+- 실기기 검증 전: My/Shared folder 5회 연속 create/rename 후 Firestore 목표 R0 / W6 및 반대 기기 즉시 반영 확인 필요.
+
 ## PREVIEW app294 Library new-folder R0 (2026-10-02 KST)
 
 - product fix: `7decc68c80114eae11129894135346992054b7cb`.

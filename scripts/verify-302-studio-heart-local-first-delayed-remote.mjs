@@ -24,6 +24,10 @@ assert.ok(flush.includes('await toggleFavorite(commitSong'), 'canonical favorite
 assert.ok(flush.includes("intendedAction: intent.desiredSaved ? 'save' : 'unsave'"), 'final click does not control canonical intent');
 
 assert.ok(app.includes('function overlayStudioHeartPendingIntentsOnFavorites'), 'local Music Note pending overlay missing');
+assert.ok(app.includes('function stripStudioHeartPendingLayerFromFavorites'), 'pending overlay canonical-strip helper missing');
+assert.ok(app.includes('const canonicalCurrent = uid'), 'setFavorites must derive updater input from canonical rows, not the optimistic overlay');
+assert.ok(app.includes('? stripStudioHeartPendingLayerFromFavorites(uid, current)'), 'setFavorites does not strip the pending local layer before applying canonical updates');
+assert.ok(app.includes('removeStudioHeartPendingIntent(uid, documentId);\n    setFavorites((previous) => previous);'), 'settled or net-zero intents do not clear the initiating-device pending layer');
 assert.ok(app.includes('__studioHeartPendingLocal: true'), 'pending local marker missing');
 assert.ok(app.includes("if (favorite?.__studioHeartPendingLocal === true) return false;"), 'server merge can mistake pending row for canonical newer data');
 

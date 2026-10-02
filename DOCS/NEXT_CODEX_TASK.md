@@ -1,3 +1,45 @@
+## CURRENT TASK — app301 PREVIEW Library create/delete 비용 실기기 검증 (2026-10-03 KST)
+
+현재 판정:
+- app299 사용자 영상의 누적 W7/users W3/R3은 **create 4회 + delete 3회**로 설명됨.
+- create는 이미 R0 + playlist W1/회 + users delayed batch라 정상.
+- delete는 app300 warm R0 보강에 더해 app301에서 users revision도 60초 batch로 통일.
+
+PREVIEW 배포 후 최소 테스트:
+1. app301 확인 → CACHE LIVE 초기화.
+2. 빈 마이 리스트 폴더 **3개 연속 생성**:
+   - `user_playlists:batch +3`.
+   - `user_playlists:getDocs 0`.
+   - 60초 전 `users:batch 0`.
+   - 새 폴더 선택/표시 즉시 정상.
+3. 방금 만든 빈 폴더 **3개 연속 삭제**:
+   - warm path `user_playlists:getDocs 0`.
+   - `user_playlists:batch +3`.
+   - 60초 전 delete 때문에 `users:batch` 증가 금지.
+   - 삭제/다음 폴더 선택 즉시 정상.
+4. 마지막 create/delete/reorder metadata 변경 후 60초:
+   - `users:batch W1` 목표.
+5. 같은 계정 다른 기기:
+   - create/delete가 새로고침/페이지 왕복 없이 즉시 반영.
+   - receiver Firestore R0/W0.
+6. 공유 리스트도 같은 원칙.
+7. 곡이 든 폴더 삭제:
+   - warm read R0.
+   - 실제 item delete 수 + folder W1은 정상 canonical cost.
+   - 전체 playlist/list 재조회 금지.
+8. D1 R0/W0 / Worker 0.
+9. Library item add/delete/move/color/swap, rename, app299 reorder 정상 회귀 없음.
+
+FAIL:
+- create에서 getDocs 발생.
+- warm empty delete에서 getDocs 발생.
+- create/delete마다 users W1 즉시 반복.
+- PC↔모바일 즉시 반영 누락.
+- 실제 item 삭제 누락.
+
+사용자 `테스트배포` 전 main/TEST 승격 금지.
+PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app300 실기기 warm delete R0 확인 (2026-10-03 KST)
 
 배포 완료:

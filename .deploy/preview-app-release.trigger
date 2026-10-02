@@ -1,7 +1,7 @@
-app300-library-delete-warm-zero-read-runtime
-target_source=b3681689d32264d231c87e22e21a0a136a9bd7cd
-app_version=300
+app301-library-folder-create-delete-cost
+target_source=ec57a72a15c2e846f645bf8282deffdf851167d5
+app_version=301
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=library-delete-warm-zero-read-runtime
+release_request=library-folder-create-delete-cost

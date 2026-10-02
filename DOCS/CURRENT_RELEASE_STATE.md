@@ -1,3 +1,60 @@
+## 0MV. PREVIEW app301 후보 — Library 폴더 생성/삭제 비용 재감사 + delete users revision batch (2026-10-03 KST)
+
+**사용자 app299 영상 전체 재분석 — 생성과 삭제를 분리해서 판정**
+- 영상 종료 진단 누적값: `user_playlists:batch W7`, `users:batch W3`, `user_playlists:getDocs R3`.
+- 영상 동작과 현재 코드 경로를 대조하면:
+  - **폴더 생성 4회** = `user_playlists W4`, Firestore read **R0**, users 즉시 write **W0**.
+  - **빈 폴더 삭제 3회** = `user_playlists W3 + users W3 + getDocs R3`.
+- 따라서 이전 분석에서 삭제만 강조했지만, 영상에는 생성도 포함되어 있었고 **생성은 이미 정상 저비용 경로**, 삭제가 비용 차이의 원인이었음.
+
+**Music Note와 구조 비교**
+- Music Note folder create/rename/reorder는 하나의 `user_structures/{uid}` 구조 문서 final-state를 60초 묶음 저장하므로 여러 folder metadata 변경을 W1로 합칠 수 있음.
+- Library는 folder마다 별도 canonical playlist document이므로 살아남는 새 폴더 1개당 playlist W1은 현재 데이터 구조상 정상/최소 O(1).
+- Library create는 이미:
+  - Firestore read R0.
+  - 새 playlist document W1.
+  - 새 빈 items cache 즉시 seed.
+  - `users.syncVersions.playlists`는 즉시 쓰지 않고 UID-wide 60초 batch.
+  - RTDB로 같은 계정 PC↔모바일 즉시 반영.
+- 따라서 create의 playlist W1까지 없애려면 canonical folder 생성 자체를 지연시키는 더 큰 구조 변경이 필요하며, 현재 정상 동작/구버전 호환 위험 대비 비용 이득이 작아 **변경하지 않음**.
+
+**app301 수정 — delete를 create/reorder/rename과 같은 revision 정책으로 통일**
+- app300의 warm active folder exact item-ID snapshot + pre-commit local cache fence는 그대로 유지.
+- folder/item canonical delete는 즉시 수행.
+- 삭제 때마다 즉시 붙던 `users/{uid}.syncVersions.playlists W1`을 canonical delete batch에서 제거.
+- 대신 기존 `queueLibraryPlaylistRevisionBatch()`에 합류:
+  - 마지막 playlist metadata 변경 후 60초에 users revision **W1**.
+  - 60초 안 create/delete/reorder가 여러 번이면 users compatibility write는 최종 revision 1회로 합쳐짐.
+- `playlist-delete` RTDB signal 수신 자체가 delayed revision을 "이미 Firestore commit 됨"으로 잘못 지우지 않도록 committed-operation 목록에서 delete를 제외.
+- 현재 앱의 PC↔모바일 delete 즉시 반영은 기존 RTDB delta 그대로 유지.
+- 구버전/legacy compatibility fallback만 최대 60초 뒤 users revision으로 수렴하며, 이는 이미 create/reorder/rename에 사용 중인 동일 정책.
+- non-empty folder delete는 실제 item 문서도 지워야 하므로 canonical write는 **item 수 + folder 1**이 정상. 전체 collection 재조회/전체 rewrite는 하지 않음.
+
+**app301 목표**
+- 빈 folder create 1회: Firestore **R0 / playlist W1 / users 즉시 W0**; 60초 revision batch에 users W1 contribution.
+- warm 빈 folder delete 1회: Firestore **R0 / playlist W1 / users 즉시 W0**; 60초 revision batch에 users W1 contribution.
+- create/delete 여러 번을 60초 안 수행: playlist는 실제 생성/삭제된 folder 각각 W1, users revision은 전체 window **W1** 목표.
+- cross-device receiver Firestore R0/W0, D1 R0/W0, Worker 0.
+
+**변경 / 검증**
+- 제품 코드 commit: `cb9bd5fe7dfd409885551d1910024ba0c92254b1`.
+- verifier 보정 commit: `5462fac25dab4c17a39c128b7eb6af130607bc52`.
+- 변경 파일:
+  - `src/services/playlistService.ts`
+  - `src/pages/SunoLibraryPage.tsx`
+  - `scripts/verify-301-library-folder-create-delete-cost.mjs`
+  - `public/app-version.json` → app301
+- focused source contract: create R0/W1 + delayed users revision / warm delete R0 path + delayed users revision / RTDB receiver guard **PASS**.
+- Backend V2 Step 2-A Safety Run `37058078858`: **SUCCESS**.
+  - contract PASS / adapter PASS / TypeScript PASS / Build PASS.
+- Release System Audit Run `37058260455`:
+  - TypeScript PASS / Build PASS / diagnose A~D + syntax E1~E3 PASS.
+  - overall FAIL은 기존 stale `verify-221-explore-feed-layout.mjs` shared-note detail assertion 한 건만 동일.
+  - Library create/delete 변경과 무관함을 job log에서 재확인.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+- 상태: **PREVIEW app301 배포 후보 / 배포 후 create+delete CACHE LIVE 실기기 확인 필요**.
+
 ## 0MU. PREVIEW app300 배포 완료 — Library warm delete redundant R1 보강 (2026-10-03 KST)
 
 - Firebase PREVIEW Release Run `37055366260`: **SUCCESS**.

@@ -6,6 +6,12 @@ import {
   publishMusicNoteSunoMediaDelta,
   readPendingMusicNoteSyncSignal,
 } from '../services/userDomainSyncService';
+import {
+  flushMusicNoteFolderStructureBatch,
+  markMusicNoteFolderStructureCommitted,
+  queueMusicNoteFolderStructureBatch,
+  resumeMusicNoteFolderStructureBatch,
+} from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -2478,7 +2484,7 @@ updates: draft.updates,
     if (!user?.uid || typeof window === 'undefined') return;
     const uid = user.uid;
 
-    const applyStructurePayload = (itemJson: string) => {
+    const applyStructurePayload = (itemJson: string, signalVersion = 0) => {
       if (!itemJson) return;
       try {
         const parsed = JSON.parse(itemJson);
@@ -2504,7 +2510,11 @@ updates: draft.updates,
           }
         }
 
-        const structureVersion = Number(patch.musicNoteStructureVersion || readMusicNoteStructureCache(uid)?.version || 0);
+        const structureVersion = Math.max(
+          Number(patch.musicNoteStructureVersion || 0),
+          Number(signalVersion || 0),
+          Number(readMusicNoteStructureCache(uid)?.version || 0),
+        );
         publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch), structureVersion, true);
       } catch {}
     };
@@ -2512,12 +2522,12 @@ updates: draft.updates,
     const handleStructureSync = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string; operation?: string; itemJson?: string }>).detail;
       if (!detail || String(detail.uid || '') !== uid || String(detail.operation || '') !== 'structure-update') return;
-      applyStructurePayload(String(detail.itemJson || ''));
+      applyStructurePayload(String(detail.itemJson || ''), Number((detail as any).version || 0));
     };
 
     window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
     const pending = readPendingMusicNoteSyncSignal(uid);
-    if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''));
+    if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''), Number(pending.version || 0));
     return () => window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
   }, [user?.uid]);
 
@@ -2557,41 +2567,83 @@ updates: draft.updates,
     sharedNoteFoldersRef.current = sharedNoteFolders;
   }, [sharedNoteFolders]);
 
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    resumeMusicNoteFolderStructureBatch(uid);
+    const flushOnPageHide = () => {
+      void flushMusicNoteFolderStructureBatch(uid);
+    };
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageHide);
+    };
+  }, [user?.uid]);
+
   useEffect(() => () => {
     if (musicNoteFolderPressTimerRef.current) window.clearTimeout(musicNoteFolderPressTimerRef.current);
     document.body.classList.remove('soridraw-folder-dragging');
   }, []);
 
-  const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
+  const persistMusicNoteFolders = async (
+    mode: MusicNoteFolderMode,
+    folders: MusicNoteFolder[],
+    options: { immediate?: boolean } = {},
+  ) => {
     if (!user?.uid) return;
-    const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
+    const normalized = normalizeMusicNoteFolders(
+      folders,
+      mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
+    );
     const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    const folderItems = normalized.map((folder, index) => ({
+      id: folder.id,
+      title: folder.title,
+      order: folder.order || index + 1,
+      isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+      createdAt: folder.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    }));
     const folderPatch = {
-      [mode]: normalized.map((folder, index) => ({
-        id: folder.id,
-        title: folder.title,
-        order: folder.order || index + 1,
-        isDefault: Boolean(folder.isDefault || folder.id === 'default'),
-        createdAt: folder.createdAt || Date.now(),
-        updatedAt: Date.now(),
-      })),
+      [mode]: folderItems,
       updatedAt: Date.now(),
     };
     const structureSyncPatch = {
       musicNoteFolders: folderPatch,
       musicNoteStructureVersion: structureVersion,
     };
-    await runV1MutationBoundary({
-      domain: 'musicNote',
-      operation: 'structure-update',
-      uid: user.uid,
-      affectedCount: 1,
-      syncStructure: structureSyncPatch,
-    }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
-    publishMusicNoteStructureSession(user.uid, {
-      musicNoteFolders: folderPatch,
-      musicNoteStructureVersion: structureVersion,
-    }, structureVersion, true);
+
+    if (options.immediate) {
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'structure-update',
+        uid: user.uid,
+        affectedCount: 1,
+        syncStructure: structureSyncPatch,
+      }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
+      markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
+      publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+      return;
+    }
+
+    // app296 — folder metadata is local/RTDB-first. The other device sees this
+    // immediately, while Firestore canonical persistence collapses to the final
+    // My/Shared structure after 60 seconds of quiet.
+    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+    let finalVersion = structureVersion;
+    try {
+      const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);
+      finalVersion = Math.max(finalVersion, Number(liveVersion || 0));
+    } catch (error) {
+      console.warn('Music Note folder live sync signal failed; canonical batch remains queued.', error);
+    }
+    if (finalVersion !== structureVersion) {
+      publishMusicNoteStructureSession(user.uid, {
+        ...structureSyncPatch,
+        musicNoteStructureVersion: finalVersion,
+      }, finalVersion, true);
+    }
+    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {
@@ -6365,7 +6417,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     try {
-      await persistMusicNoteFolders(mode, nextFolders);
+      await persistMusicNoteFolders(mode, nextFolders, { immediate: true });
       const affectedSongs = favorites.filter((song) => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }

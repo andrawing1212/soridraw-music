@@ -1,3 +1,34 @@
+## CURRENT TASK — app305 Explore 기존 추천 복구 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app305 / Release Run `37075730053` SUCCESS.
+- locked source `647bfe2b21a2195ac281462b6464da84c10b9364`.
+- `preview.soridraw.com` app305 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Rules / 사용자 데이터 migration 변경 없음.
+
+현재 화면의 의도된 순서:
+1. SORIDRAW 추천
+2. 장르별 추천
+3. 좋아할 만한 크리에이터
+4. 최신 — 최대 20곡
+5. 인기 — 최대 20곡
+
+유지:
+- 상단 MY 프로필 버튼.
+- 기존 추천/장르/크리에이터 카드 디자인과 가로 레일 동작.
+- app304 인기 R2 local-first 경로.
+- 기존 좋아요/공개·비공개/저장하트/폴더/Split 기능.
+
+FAIL:
+- 기존 추천 3종 중 하나라도 사라짐.
+- 최신/인기가 별도 페이지/탭으로 다시 분리됨.
+- 최신/인기 추가 때문에 기존 추천 데이터/카드가 바뀜.
+- warm Explore 재진입에서 새 D1 직접 read가 추가됨.
+
+사용자 `테스트배포` 전 main/TEST 승격 금지.
+PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app304 Explore 최신/인기 홈 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

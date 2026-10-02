@@ -1,3 +1,52 @@
+## 0ND. PREVIEW app305 배포 완료 — 기존 Explore 추천 3종 복구 + 최신/인기 추가 유지 (2026-10-03 KST)
+
+**사용자 실기기 피드백**
+- app304에서 `최신 / 인기`를 추가하면서 기존 `SORIDRAW 추천 / 장르별 추천 / 좋아할 만한 크리에이터`가 사라진 것은 사용자 의도와 다름.
+- 정확한 요구는 **기존 기능을 그대로 유지하고 최신/인기를 추가**하는 것.
+- app304의 "기존 추천 UI 숨김" 해석은 잘못된 작업으로 판정하고 app305에서 즉시 복구.
+
+**app305 수정**
+- 기존 추천 3종을 app303 이전과 같은 로컬 추천 모델로 복구:
+  1. `SORIDRAW 추천`
+  2. `장르별 추천`
+  3. `좋아할 만한 크리에이터`
+- 그 아래에 app304에서 추가한:
+  4. `최신` 최대 20곡
+  5. `인기` 최대 20곡
+  을 그대로 유지.
+- 기존 `추천 / 최신 / 인기` 페이지 탭은 다시 만들지 않음.
+- 상단 `MY 프로필` 버튼과 계정 메뉴의 `MY 프로필` 명칭은 유지.
+- 추천 모델은 기존처럼 이미 로드된 latest Feed를 로컬에서 분류하므로 추가 D1 read/write 없음.
+- 인기 섹션은 기존 app304의 R2 first-page `limit=40` 계약 + UI 20곡 노출을 그대로 사용.
+- 카드 디자인 / 좋아요 / 공개·비공개 / 저장 하트 / Music Note·Library 폴더 / Split history는 변경하지 않음.
+
+**변경 / 검증**
+- 제품 수정 commit: `decf7ed1b34aee39256b3ad42d69d29fceefb732`.
+- audit source: `5b0fc905da93cc54d22ea61e3fcefe01f9b35c21`.
+- Release System Audit Run `37075540135`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static A~D + syntax guards PASS.
+  - release-system verification PASS.
+  - like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only preflight/diagnostics PASS.
+- Firebase PREVIEW Release Run `37075730053`: **SUCCESS**.
+  - locked source `647bfe2b21a2195ac281462b6464da84c10b9364`.
+  - Firebase Hosting PASS.
+  - `preview.soridraw.com` app **305**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**현재 실기기 확인 포인트**
+1. 상단 MY 프로필 아래 기존 `SORIDRAW 추천`이 다시 보이는지.
+2. `장르별 추천`과 장르 버튼이 기존처럼 보이고 동작하는지.
+3. `좋아할 만한 크리에이터`가 다시 보이는지.
+4. 그 아래에 `최신`, `인기`가 추가로 보이는지.
+5. PC/모바일 기존 카드·가로 스크롤·화살표·좋아요/액션 회귀 없음.
+
 ## 0NC. PREVIEW app304 배포 완료 — Explore 최신/인기 동시 홈 + MY 프로필 명칭 (2026-10-03 KST)
 
 - 사용자 요청대로 Explore의 기존 `추천 / 최신 / 인기` 탭형 페이지 구분을 제거하고, 한 화면에서 **최신 / 인기** 두 가로 레일을 함께 표시.

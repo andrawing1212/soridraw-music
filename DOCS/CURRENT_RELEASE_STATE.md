@@ -1,3 +1,38 @@
+## 0MW. PREVIEW app301 배포 완료 — Library 폴더 생성/삭제 비용 정리 (2026-10-03 KST)
+
+- Firebase PREVIEW Release Run `37058559063`: **SUCCESS**.
+- locked PREVIEW source: `3b1a24a3a28c212c128a171efed7401ac58de0b7`.
+- remote `preview.soridraw.com`: app **301**, exact build PASS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**이번 결론**
+- 사용자 app299 영상은 생성과 삭제를 모두 포함했고 종료 진단 `user_playlists W7 / users W3 / getDocs R3`을 재분해하면:
+  - 폴더 생성 4회 = playlist W4 / Firestore R0 / users 즉시 W0.
+  - 빈 폴더 삭제 3회 = playlist W3 / users W3 / getDocs R3.
+- 따라서 Library folder create는 이미 정상 저비용 경로였고 변경하지 않음.
+- app301은 delete만 create/reorder/rename과 같은 compatibility revision 정책으로 통일:
+  - warm active delete R0 경로(app300) 유지.
+  - 실제 playlist/item canonical delete만 즉시.
+  - `users.syncVersions.playlists`는 delete마다 즉시 W1 하지 않고 60초 UID batch.
+  - RTDB `playlist-delete` 즉시 동기화는 유지.
+- 빈 create/delete 예상:
+  - create: R0 / playlist W1 / users 즉시 W0.
+  - warm delete: R0 / playlist W1 / users 즉시 W0.
+  - 60초 안 여러 create/delete/reorder: users revision 전체 W1 목표.
+- 곡이 든 folder delete는 실제 item 문서 삭제 수 + folder 1 write가 정상 canonical cost이며 전체 조회/전체 rewrite는 금지.
+
+**검증**
+- 제품 코드 commit: `cb9bd5fe7dfd409885551d1910024ba0c92254b1`.
+- verifier commit: `5462fac25dab4c17a39c128b7eb6af130607bc52`.
+- Backend Safety Run `37058078858`: SUCCESS.
+- Release Audit Run `37058260455`: TypeScript/Build/diagnose PASS, overall FAIL은 기존 stale `verify-221` 한 건만 동일.
+- PREVIEW Release Run `37058559063`: SUCCESS / app301 exact build PASS / TEST-PRODUCTION unchanged PASS.
+- 상태: **PREVIEW 배포 완료 / create 3회 + delete 3회 CACHE LIVE 및 PC↔모바일 실기기 검증 대기**.
+
 ## 0MV. PREVIEW app301 후보 — Library 폴더 생성/삭제 비용 재감사 + delete users revision batch (2026-10-03 KST)
 
 **사용자 app299 영상 전체 재분석 — 생성과 삭제를 분리해서 판정**

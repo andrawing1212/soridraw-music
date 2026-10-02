@@ -1,3 +1,38 @@
+## CURRENT TASK — app301 Library create/delete 실기기 최종 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app301 / Run `37058559063` SUCCESS.
+- locked source `3b1a24a3a28c212c128a171efed7401ac58de0b7`.
+- `preview.soridraw.com` app301 exact build PASS.
+- TEST / PRODUCTION unchanged.
+
+최소 테스트:
+1. CACHE LIVE 초기화.
+2. 빈 마이 리스트 folder 3개 연속 생성:
+   - `user_playlists:batch +3`.
+   - `user_playlists:getDocs 0`.
+   - 60초 전 `users:batch 0`.
+3. 방금 만든 빈 folder 3개 연속 삭제:
+   - warm `user_playlists:getDocs 0`.
+   - `user_playlists:batch +3`.
+   - 60초 전 delete 때문에 `users:batch` 증가 0.
+4. 마지막 metadata 변경 후 60초:
+   - `users:batch W1` 목표.
+5. 상대 기기 create/delete 즉시 반영, receiver Firestore R0/W0.
+6. 공유 리스트도 같은 원칙.
+7. 곡이 든 folder 삭제는 item 수 + folder W1은 정상; 전체 list reread/rewrite 금지.
+8. app299 reorder / rename / Library item 기능 회귀 없음.
+9. D1 R0/W0 / Worker 0.
+
+FAIL:
+- create에서 getDocs.
+- warm empty delete에서 getDocs.
+- create/delete마다 users 즉시 W1.
+- cross-device 즉시 반영 실패.
+
+사용자 `테스트배포` 전 main/TEST 승격 금지.
+PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app301 PREVIEW Library create/delete 비용 실기기 검증 (2026-10-03 KST)
 
 현재 판정:

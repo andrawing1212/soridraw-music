@@ -1,7 +1,7 @@
-app302-studio-heart-local-first-final
-target_source=50d3ddff89d2f118dce146c35632e275fdc7e650
+app302-studio-heart-local-first-delayed-remote
+target_source=8a3075027a273339847e9e67f4988e778a971192
 app_version=302
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=studio-heart-local-first-delayed-remote-final
+release_request=studio-heart-local-first-delayed-remote

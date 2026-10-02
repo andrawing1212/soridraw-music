@@ -55,7 +55,6 @@ assert.ok(create.includes('writeLibraryPlaylistItemsCache(uid, newDocRef.id, [],
 assert.ok(!create.includes('getDocs('));
 assert.ok(create.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'));
 
-const renameStart = playlistService.indexOf('export const renamePlaylist = async', createStart);
 const addItemStart = playlistService.indexOf('export const addPlaylistItem = async', renameStart);
 const rename = playlistService.slice(renameStart, addItemStart);
 assert.ok(rename.includes('queueLibraryPlaylistRenameBatch(uid, playlistId, title, syncVersion)'));

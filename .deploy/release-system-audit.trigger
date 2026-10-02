@@ -1,4 +1,4 @@
 app304-explore-latest-popular-home
-source=fe9b7d7c8b07b98a9e16294852818fc08e25f054
-product_commit=fe9b7d7c8b07b98a9e16294852818fc08e25f054
-requested=2026-10-03T07:40:00+09:00
+source=ebe7c70cb643150420f21f7cb0409c824b27a557
+product_commit=ebe7c70cb643150420f21f7cb0409c824b27a557
+requested=2026-10-03T07:55:00+09:00

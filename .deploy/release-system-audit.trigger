@@ -1,3 +1,4 @@
-app301-library-folder-create-delete-cost
-source=5462fac25dab4c17a39c128b7eb6af130607bc52
-requested=2026-10-03T05:05:00+09:00
+app302-studio-heart-local-first-delayed-remote
+source=5ad438c422df8c5093a5226594e5056e47bd4922
+product_commit=24447627c2222d5cedc6fe96dcaccbfb26c0593a
+requested=2026-10-03T06:15:00+09:00

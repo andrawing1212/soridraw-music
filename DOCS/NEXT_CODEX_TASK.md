@@ -1,3 +1,32 @@
+## CURRENT TASK — app306 Explore 순서 / PC 좌우 버튼 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app306 / Release Run `37076722003` SUCCESS.
+- locked source `decf246958b596f4345c8012fe680cf4afde8d5b`.
+- `preview.soridraw.com` app306 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Rules / 사용자 데이터 변경 없음.
+
+확인:
+1. Explore 순서:
+   - SORIDRAW 추천
+   - 최신
+   - 인기
+   - 좋아할 만한 크리에이터
+   - 장르별 추천
+2. PC(1600px+)에서 Explore 가로레일의 왼쪽/오른쪽 버튼이 항상 보임.
+3. PC MY 프로필 고정곡 가로레일도 양쪽 버튼이 항상 보임.
+4. 시작/끝 위치의 비활성 버튼도 위치가 사라지지 않음.
+5. 태블릿/모바일은 기존 표시/숨김 동작 유지.
+6. 카드 디자인/가로스크롤/스냅/좋아요/공개·비공개/저장 하트 회귀 없음.
+
+보호:
+- app302/app302b Studio 저장 하트 변경 금지.
+- app301 Music Note / Library 폴더 경로 변경 금지.
+- app303 Split browser-history / Pure Pane 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app305 Explore 기존 추천 복구 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

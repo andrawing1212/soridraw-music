@@ -1,3 +1,50 @@
+## 0NE. PREVIEW app306 배포 완료 — Explore 섹션 순서 조정 + PC 좌우 스크롤 버튼 상시 노출 (2026-10-03 KST)
+
+**사용자 요청**
+1. 현재 Explore 기준으로 `최신 / 인기`를 장르별 추천보다 위로 이동.
+2. `장르별 추천`을 `좋아할 만한 크리에이터` 아래로 이동.
+3. Explore와 MY 프로필의 곡 가로레일 좌/우 버튼을 **PC에서만 항상 노출**.
+4. 모바일/태블릿의 기존 버튼 표시/숨김 동작은 그대로 유지.
+
+**최종 Explore 홈 순서**
+1. SORIDRAW 추천
+2. 최신 — 최대 20곡
+3. 인기 — 최대 20곡
+4. 좋아할 만한 크리에이터
+5. 장르별 추천
+
+**PC 버튼 동작**
+- PC 기준 `1600px+`에서 ExploreRecommendationRail 좌/우 버튼을 idle/hover 상태와 무관하게 항상 표시.
+- 레일 시작/끝에서 사용할 수 없는 버튼도 위치는 계속 보이되 비활성 표시.
+- `<1600px` 태블릿/모바일에는 기존 hover/tap/idle 숨김 로직을 변경하지 않음.
+- MY 프로필의 고정곡 가로레일도 같은 공용 rail을 사용하므로 PC에서 양쪽 버튼 상시 노출.
+- 카드 크기/간격/가로 스크롤/스냅/좋아요/액션 로직 변경 없음.
+
+**변경 / 검증**
+- 제품 commit: `811c15803339effefb05a0a47b0878c6128d5964`.
+- Release System Audit source: `465a39e7d12cc92ece5c9f9f4eff44b2d4e10465`.
+- Release System Audit Run `37076540406`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static release-system verification PASS.
+  - like candidate regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only preflight/diagnostics PASS.
+- Firebase PREVIEW Release Run `37076722003`: **SUCCESS**.
+  - locked source `decf246958b596f4345c8012fe680cf4afde8d5b`.
+  - Firebase Hosting PASS.
+  - `preview.soridraw.com` app **306**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**실기기 확인**
+- PC: Explore 모든 가로 레일에서 좌/우 버튼이 항상 보이는지.
+- PC: MY 프로필 고정곡 레일에서도 양쪽 버튼이 항상 보이는지.
+- 태블릿/모바일: 기존처럼 필요할 때만 버튼이 나타나고 자동으로 숨는지.
+- Explore 순서가 `SORIDRAW 추천 → 최신 → 인기 → 좋아할 만한 크리에이터 → 장르별 추천`인지.
+
 ## 0ND. PREVIEW app305 배포 완료 — 기존 Explore 추천 3종 복구 + 최신/인기 추가 유지 (2026-10-03 KST)
 
 **사용자 실기기 피드백**

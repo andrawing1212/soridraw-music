@@ -109,7 +109,7 @@ Before TEST promotion:
 - focused verifier: PASS
 - TypeScript: PASS
 - Build: PASS
-- PREVIEW real-device verification: pending
+- PREVIEW real-device verification: **USER CONFIRMED NORMAL on 2026-10-03 KST**
 
 
 ## 9. app302b pre-deploy correction
@@ -141,3 +141,20 @@ This correction does not alter:
 - canonical-success RTDB changed-item delivery;
 - Recent title/prompt/lyrics immediate preview;
 - app301 Music Note / Library folder behavior.
+
+
+## 10. User-confirmed frozen status — 2026-10-03 KST
+
+The user confirmed after the app302 PREVIEW deployment that the behavior is normally applied.
+
+Freeze the following as one protected behavior set:
+- initiating device Recent heart and Music Note membership update immediately;
+- other devices do not see the temporary pre-canonical Studio-heart state;
+- same-song 30-second clicks collapse to the final state;
+- net-zero returns to the original state without leaving an optimistic Music Note row behind;
+- final changed state settles canonically, then the other device receives the normal changed-item signal;
+- the app302b canonical-base strip/restore/cleanup logic stays intact.
+
+This user confirmation is a **real-device visible-behavior confirmation**. Do not reinterpret it as a direct measurement of every Firestore/D1 billing target unless the corresponding diagnostic counters were actually captured.
+
+No further Studio-heart refactor/optimization is allowed from this baseline without a concrete new defect and explicit user instruction.

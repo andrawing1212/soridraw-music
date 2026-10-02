@@ -1,3 +1,48 @@
+## 0MZ. PREVIEW app302 배포 완료 — Recent 저장 하트 local-first 최종 정리 (2026-10-03 KST)
+
+- Firebase PREVIEW Release Run `37066438604`: **SUCCESS**.
+- locked PREVIEW source: `bfe9893405ac50a314e1d4b8ab9eeafdedce3136`.
+- remote `preview.soridraw.com`: app **302**, exact build PASS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**최종 app302 동작**
+- Recent 저장/해제를 누른 기기에서는 Music Note가 즉시 로컬 반영.
+- 다른 기기에는 30초 전 임시 heart 상태를 보내지 않음.
+- 같은 곡 30초 반복 토글은 마지막 상태만 canonical 반영:
+  - final == baseline → favorite W0.
+  - final != baseline → favorite W1.
+- canonical 성공 뒤 기존 RTDB save/unsave signal로 다른 기기 반영.
+- 서로 다른 곡은 곡별 독립 30초 timer.
+- Recent 제목/프롬프트/가사 즉시 cross-device preview는 그대로 유지.
+
+**app302b 배포 전 보강**
+- 제품 보강 commit: `8c00f1a020093740b726384fb188633e5e7aaa45`.
+- optimistic pending row가 canonical updater 입력으로 다시 섞여 settlement/net-zero 뒤 남을 수 있는 경로를 차단:
+  - canonical updater 전에 pending local layer 제거.
+  - baseline favorite가 있던 pending row는 원래 canonical row로 복원.
+  - settlement/net-zero에서 pending intent 제거 직후 Music Note local layer도 즉시 정리.
+- verifier 보강 commit: `a853ea930434da7be661de1f7ff6ddf4db198fe1`.
+- stale `verify-221-explore-feed-layout.mjs` assertion은 현재 legacy shared-note hydration 계약에 맞춰 보정:
+  - verifier fix commit `31e02bf55868716f41566e204d20de353f01ccc1`.
+- 임시 app302b workflow/script/trigger 제거 완료.
+
+**검증**
+- app302b apply Run `37065777855`: focused verifier PASS / TypeScript PASS / Build PASS.
+- 최종 Release System Audit Run `37065967160`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - diagnose static A~D + syntax E1~E3 PASS.
+  - static release-system verification PASS.
+  - app302 like candidate regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight/read-only diagnostics PASS.
+  - branch refs unchanged PASS.
+- PREVIEW Release Run `37066438604`: **SUCCESS**.
+- 상태: **PREVIEW 배포 완료 / PC↔모바일 실기기 최종 확인 대기**.
+
 ## 0MY. PREVIEW app302 후보 — Recent 저장 하트: 저장한 기기 즉시 / 다른 기기 30초 확정 후 (2026-10-03 KST)
 
 **사용자 확정 동작**

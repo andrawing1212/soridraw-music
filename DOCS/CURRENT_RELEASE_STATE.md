@@ -1,3 +1,28 @@
+## 0MN. PREVIEW app297 배포 완료 — Library 폴더 reorder 비용/실시간 수정 (2026-10-02 KST)
+
+- Firebase PREVIEW Release Run `36953630146`: **SUCCESS**.
+- locked PREVIEW source: `080fa7e98f10c892ec06401c05f824a7b509b61c`.
+- remote `preview.soridraw.com`: app **297**, exact build PASS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- shared RTDB Rules: **SKIPPED** (rules 변경 없음).
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- app297 핵심:
+  - Library 마이/공유 폴더 순서 변경 시 전체 폴더 rewrite 제거.
+  - 실제 이동한 playlist 문서 하나만 W1.
+  - users playlist revision은 기존 60초 UID batch 사용.
+  - RTDB `playlist-order` signal로 동일계정 PC↔모바일 즉시 반영.
+- app296 사용자 확인:
+  - Music Note 폴더 batch에서 마지막 변경 후 60초 `user_structures` W1 추가 확인.
+  - 당시 수치는 폴더 삭제까지 포함.
+- 남은 실기기 확인:
+  - app297 Library reorder 1회가 `user_playlists +1`인지.
+  - 상대 기기에 route/refresh 없이 즉시 같은 순서가 보이는지.
+  - 60초 내 여러 reorder 후 users revision이 1회로 묶이는지.
+  - 영상에서 별도 관측된 Library delete warm-cache miss `getDocs R1`은 reorder PASS 후 별도 확인.
+- 상태: **PREVIEW 배포 완료 / Library reorder PC↔모바일 + CACHE LIVE 사용자 재검증 대기**.
+
 ## 0MM. PREVIEW app297 후보 — Library 폴더 순서 O(1) 저장 + PC↔모바일 즉시 동기화 (2026-10-02 KST)
 
 **사용자 실기기 발견**

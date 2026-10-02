@@ -1,3 +1,34 @@
+## CURRENT TASK — app297 PREVIEW Library reorder 실기기 검증 (2026-10-02 KST)
+
+배포 완료:
+- Firebase PREVIEW Run `36953630146` SUCCESS.
+- locked source `080fa7e98f10c892ec06401c05f824a7b509b61c`.
+- `preview.soridraw.com` app297 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Rules 변경 없음.
+
+사용자 확인은 아래만 수행:
+1. PC/모바일 둘 다 app297.
+2. 마이 리스트 폴더 한 번 이동:
+   - 상대 기기 즉시 같은 순서.
+   - `user_playlists:write +1` 목표.
+   - `users:write` 즉시 +1 금지.
+3. 60초 안 reorder 3~5회:
+   - playlist write는 실제 이동 횟수만큼.
+   - 마지막 변경 후 60초 users revision W1 목표.
+4. 공유 리스트 한 번 이동:
+   - 폴더가 5개여도 `user_playlists +1`, 기존 +5 재현 시 FAIL.
+   - 상대 기기 즉시.
+5. 수신기 Firestore R0/W0, D1 R0/W0, Worker 0 목표.
+6. Library rename/create/delete/item 정상 회귀 확인.
+7. playlist delete에서 `getDocs R1`이 다시 보이면 warm-cache 상태와 함께 별도 후속 처리.
+
+판정:
+- 실시간 동기화 + moved playlist W1이 맞으면 reorder PASS.
+- 전체 folder rewrite / users 즉시 반복 write / 상대기기 미반영 중 하나라도 있으면 FAIL.
+- TEST 승격은 사용자 `테스트배포` 지시 전 금지.
+- PRODUCTION은 별도 명확 승인 전 금지.
+
 ## CURRENT TASK — app297 Library 폴더 순서 실기기 재검증 (2026-10-02 KST)
 
 현재:

@@ -1,3 +1,40 @@
+## CURRENT TASK — app302 PREVIEW 실기기 최종 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app302 / Release Run `37066438604` SUCCESS.
+- locked source `bfe9893405ac50a314e1d4b8ab9eeafdedce3136`.
+- `preview.soridraw.com` app302 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- app302b pending-layer cleanup 포함.
+
+최소 실기기 확인:
+1. PC Recent에서 아직 저장 안 된 곡 1개 저장.
+   - PC Music Note 즉시 표시.
+   - 30초 전 favorite Firestore W0.
+2. 같은 곡을 30초 안 저장→해제.
+   - PC 즉시 최종 해제.
+   - settlement 뒤 favorite W0 목표.
+   - pending local row가 Music Note에 남지 않아야 함.
+3. 같은 곡 저장→해제→저장.
+   - 마지막 클릭 +30초 뒤 favorite W1.
+   - 모바일은 canonical 성공 뒤 새로고침/탭 왕복 없이 반영.
+4. 모바일에는 30초 전 PC의 임시 heart 상태가 나타나지 않아야 함.
+5. 반대로 모바일에서 저장/해제해도 같은 원칙.
+6. receiver Firestore R0/W0 / D1 R0/W0.
+7. 서로 다른 곡 여러 개는 곡별 독립 30초 timer.
+8. Recent 제목/프롬프트/가사 즉시 cross-device preview 정상.
+9. app301 Music Note / Library 폴더 정상 기능 회귀 없음.
+
+FAIL:
+- 같은 기기 Music Note가 30초를 기다려야 표시됨.
+- net-zero 뒤 optimistic pending row가 남음.
+- 30초 전 다른 기기에 임시 저장 상태가 표시됨.
+- net-zero favorite write 발생.
+- canonical 성공 뒤 다른 기기 반영에 Firestore read 또는 수동 새로고침 필요.
+
+사용자 `테스트배포` 전 main/TEST 승격 금지.
+PRODUCTION은 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app302 Recent 저장 하트 실기기 검증 (2026-10-03 KST)
 
 현재 후보:

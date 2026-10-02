@@ -1,3 +1,3 @@
-app298-library-delete-warm-zero-read
-source=c0dfac2fa45536692db7eda4ac8602c22067accd
-requested=2026-10-02T22:47:00+09:00
+app299-library-reorder-final-state-batch
+source=114b3095745356f949bac7a323056dd6759ce85b
+requested=2026-10-02T23:45:00+09:00

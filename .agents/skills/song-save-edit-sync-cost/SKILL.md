@@ -84,8 +84,9 @@ The number of edited Recent songs inside that window must not multiply canonical
 ## 4. Save heart / Music Note membership rule
 
 ### Current SORIDRAW timing
-- Canonical Studio save-heart trailing batch: **30 seconds per song**.
-- Immediate local + PC↔mobile preview: RTDB.
+- Canonical Studio save-heart trailing batch: **30 seconds per song after the latest click**.
+- Initiating device: Recent heart and Music Note list update **immediately from local pending state**.
+- Other devices: **no pre-canonical heart preview**. They update only after the 30-second canonical save/unsave succeeds and its normal RTDB mutation signal arrives.
 - Pending timer key: exact favorite/Music Note document identity.
 
 ### Per-song behavior
@@ -124,15 +125,22 @@ Do not use a delayed derived count as a payment, authorization, hard quota, or m
 
 ## 6. Cross-device synchronization contract
 
-The other device should feel immediate even though canonical storage is delayed.
+Recent text edits and Studio save-heart intentionally use different timing.
 
-For every accepted action:
+For Recent title/prompt/lyrics:
 1. initiating device updates local UI/cache first;
-2. write one compact RTDB changed-item preview;
-3. receiving device merges it into its healthy local cache;
-4. receiving device updates UI without Firestore/D1 read;
-5. pending canonical writer later settles the final state;
-6. canonical signal/version converges caches without replacing a newer local pending intent.
+2. write one compact RTDB edit preview;
+3. receiving device merges it immediately without Firestore/D1 read;
+4. canonical Recent aggregate settles later.
+
+For Studio save-heart / unsave:
+1. initiating device updates its Recent heart and Music Note list immediately from the durable local pending intent;
+2. do **not** publish a pre-canonical RTDB heart preview;
+3. repeated clicks on the same song restart that song's 30-second timer and collapse to final intent;
+4. if final state equals the original canonical baseline, canonical favorite target is W0 and no remote change is needed;
+5. if final state differs, the 30-second canonical favorite mutation succeeds first;
+6. only then the existing mutation boundary publishes the normal compact save/unsave RTDB signal;
+7. receiving device merges that canonical changed item without Firestore/D1 read.
 
 Do not:
 - reload a whole Recent list because one song changed;
@@ -190,13 +198,13 @@ Before declaring a change ready, verify at minimum:
 | Recent prompt edit | other device immediate | same UID 150s batch resets |
 | Recent lyrics edit | other device immediate | language-map display stays coherent; no receiver Firestore read |
 | Recent A→B→C edits within 150s | every edit immediate | one final Recent aggregate W2 target |
-| Same-song heart repeated | immediate final heart | net-zero W0 or final-changed W1 favorite |
-| Different-song hearts | each immediate | per changed song favorite W1 |
+| Same-song heart repeated | initiating device immediate; other device waits for canonical | net-zero W0 or final-changed W1 after latest-click +30s |
+| Different-song hearts | initiating device each immediate; each song has independent 30s settlement | per changed song favorite W1 |
 | Several favorite count changes | local display may be immediate | users.favoriteCount one UID batch W1 target |
 | Favorite-count net delta 0 | correct visible state | users.favoriteCount W0 target |
 | Page navigation/reload while pending | latest local state preserved | pending later settles once |
 | Healthy revisit/no change | cache first | Firestore data R0/W0 target |
-| PC→mobile and mobile→PC | no refresh/tab assist | receiver adds no canonical Firestore I/O |
+| Studio heart PC→mobile / mobile→PC | initiating device immediate; receiver updates after canonical 30s settlement without refresh/tab assist | receiver Firestore R0/W0; no pre-canonical RTDB heart preview |
 
 Also run the existing app289/app290/app291/app292 targeted regressions relevant to the touched path, plus TypeScript and Build.
 
@@ -222,13 +230,27 @@ Current important implementation areas:
 - `DOCS/CURRENT_RELEASE_STATE.md`
   - current release truth
 
-Read `references/soridraw-app292-save-edit-sync-cost-baseline.md` before changing this architecture.
+Read `references/soridraw-app302-studio-heart-local-first-baseline.md` before changing this architecture.
 
 ## 12. Release and reporting rule
 
 - Work on `preview` first.
 - Do not call CI success proof of real PC↔mobile behavior.
-- PREVIEW real-device verification must confirm immediate cross-device visibility and measured cost.
+- For Recent text edits, PREVIEW real-device verification should confirm immediate cross-device visibility.
+- For Studio heart, PREVIEW real-device verification should confirm initiating-device immediate Music Note visibility and receiving-device update only after canonical 30-second settlement.
 - TEST promotion only on explicit user test-deploy instruction.
 - PRODUCTION only on explicit production approval.
 - Report user-visible behavior, canonical timing, measured/target reads and writes, RTDB role, real-device status, and remaining risk separately.
+
+## 13. app302 Studio-heart local-first / delayed-remote rule
+
+- The initiating device's pending favorite row is a **local optimistic view only**.
+- It is backed by the existing durable `studioHeartBatch` outbox so ordinary navigation/reload can recover it.
+- The optimistic row is tagged `__studioHeartPendingLocal` and must not be mistaken for canonical server-newer data.
+- The app302 initiating path does not call `publishMusicNoteHeartPreviewDelta`.
+- Same-song clicks inside 30 seconds preserve the first canonical baseline and replace only the final desired state.
+- final == baseline → favorite W0 target.
+- final != baseline → favorite W1 at latest-click +30 seconds.
+- Only a successful canonical save/unsave emits the normal RTDB changed-item signal for the other device.
+- The receiving device must update from that canonical signal with Firestore R0/W0.
+- Do not publish local optimistic rows into derived server bundles/indexes before canonical settlement.

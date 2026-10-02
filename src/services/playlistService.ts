@@ -366,6 +366,18 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     return false;
   }
 
+  if (signal.originDeviceId !== getLibraryPlaylistSyncDeviceId()) {
+    if (signal.operation === 'playlist-rename') {
+      cancelLibraryPlaylistRenameBatch(safeUid, String(payload.playlistId || '').trim(), signal.syncVersion);
+    } else if (signal.operation === 'playlist-rename-batch' && Array.isArray(payload.renames)) {
+      payload.renames.forEach((entry: any) => {
+        cancelLibraryPlaylistRenameBatch(safeUid, String(entry?.playlistId || '').trim(), signal.syncVersion);
+      });
+    } else if (signal.operation === 'playlist-delete') {
+      cancelLibraryPlaylistRenameBatch(safeUid, String(payload.playlistId || '').trim(), signal.syncVersion);
+    }
+  }
+
   const version = signal.syncVersion;
   const listSnapshot = await readLibraryPlaylistListCache(safeUid);
   if (!listSnapshot) return false;
@@ -413,6 +425,23 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     if (!playlistId || !title) return false;
     await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
       playlist.id === playlistId ? { ...playlist, title } : playlist
+    ))), version);
+    return true;
+  }
+
+  if (signal.operation === 'playlist-rename-batch') {
+    const renames = Array.isArray(payload.renames) ? payload.renames : [];
+    const titleById = new Map<string, string>();
+    renames.slice(0, 20).forEach((entry: any) => {
+      const playlistId = String(entry?.playlistId || '').trim();
+      const title = String(entry?.title || '').trim();
+      if (playlistId && title) titleById.set(playlistId, title);
+    });
+    if (titleById.size === 0) return false;
+    await writeLibraryPlaylistListCache(safeUid, sortPlaylists(previousList.map((playlist) => (
+      playlist.id && titleById.has(playlist.id)
+        ? { ...playlist, title: titleById.get(playlist.id)! }
+        : playlist
     ))), version);
     return true;
   }

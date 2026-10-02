@@ -74,8 +74,13 @@
 - focused source inspection: app296 60초 Music Note batch / Library revision 60초 / Library rename final-state / app294 new-folder R0 보호 조건 PASS.
 - Worker / Functions source / D1 / Rules 변경 없음.
 - 사용자 데이터 migration/backfill/delete 없음.
-- PREVIEW Hosting: 배포 전.
-- TEST / PRODUCTION: 변경 없음.
+- Firebase PREVIEW Release Run `36950877406`: **SUCCESS**.
+- locked PREVIEW source: `2c230b9dd0fe47bff31f83412919d335fb98a2ff`.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- remote `preview.soridraw.com`: app **296**, exact build PASS.
+- shared RTDB Rules SKIPPED; Worker / Functions / D1 / Firestore Rules 변경 없음.
+- TEST / PRODUCTION unchanged PASS.
+- 상태: **PREVIEW 배포 완료 / 사용자 PC↔모바일 + CACHE LIVE 비용 실측 대기**.
 
 ## 0MK. PREVIEW app295 — Library My/Shared 폴더 공통 revision 30초 묶음 저장 (2026-10-02 KST)
 

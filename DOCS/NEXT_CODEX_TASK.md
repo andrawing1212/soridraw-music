@@ -1,7 +1,7 @@
 ## CURRENT TASK — app296 PREVIEW Music Note + Library My/Shared 60초 batch 실기기 검증 (2026-10-02 KST)
 
 현재:
-- app296 코드 완료, PREVIEW 배포 전.
+- app296 PREVIEW 배포 완료. Firebase PREVIEW Run `36950877406` SUCCESS / app296 exact build PASS.
 - Music Note folder create/rename/reorder: local + RTDB 즉시, `user_structures` canonical 60초 UID final-state batch.
 - Music Note folder delete / song membership change: 기존 즉시 canonical 안전 경로 유지.
 - Library create: playlist W1 즉시 + users revision 60초 UID batch.

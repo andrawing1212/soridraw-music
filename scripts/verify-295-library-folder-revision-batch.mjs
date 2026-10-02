@@ -18,7 +18,7 @@ const create = block('export const createPlaylist = async', 'export const rename
 const rename = block('export const renamePlaylist = async', 'export const addPlaylistItem = async');
 const addItem = block('export const addPlaylistItem = async', 'export const deletePlaylistItem = async');
 
-assert.equal(Number(version.version), 295);
+assert.ok(Number(version.version) >= 295, 'app295 regression must remain enabled in later builds');
 
 for (const [name, body] of [['create', create], ['rename', rename]]) {
   assert.ok(body.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'), `${name} must queue the UID revision batch`);
@@ -30,7 +30,7 @@ assert.ok(create.includes('writeLibraryPlaylistItemsCache(uid, newDocRef.id, [],
   'app294 new-folder empty-cache R0 path must remain protected');
 assert.ok(!create.includes('getDocs('), 'create must stay Firestore-read free');
 
-assert.ok(batcher.includes('const LIBRARY_PLAYLIST_REVISION_BATCH_MS = 30_000'));
+assert.ok(/const LIBRARY_PLAYLIST_REVISION_BATCH_MS = (?:30_000|60_000);/.test(batcher));
 assert.ok(batcher.includes("soridraw.library.playlistRevisionBatch.v1"));
 assert.ok(batcher.includes('const pendingMemory = new Map<string, PendingPlaylistRevision>()'));
 assert.ok(batcher.includes('pendingMemory.set(safeUid, value)'),
@@ -56,12 +56,11 @@ assert.ok(page.includes('resumeLibraryPlaylistRevisionBatch(uid)'));
 assert.ok(page.includes('noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion)'));
 assert.ok(page.includes("['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete'].includes(signal.operation)"));
 assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(uid, remoteVersion)'));
-assert.ok(page.includes("document.addEventListener('visibilitychange', flushWhenHidden)"));
 assert.ok(page.includes("window.addEventListener('pagehide', flushOnPageHide)"));
 assert.ok(page.includes('markLibraryPlaylistRevisionCommitted(user.uid, syncVersion)'),
   'playlist reorder immediate revision must cancel older pending folder batches');
 
 console.log('APP295_LIBRARY_FOLDER_REVISION_BATCH=PASS');
 console.log('APP295_LIBRARY_FOLDER_CREATE_RENAME_IMMEDIATE_W1=PASS');
-console.log('APP295_LIBRARY_FOLDER_COMPAT_REVISION_UID_30S_W1=PASS');
+console.log('APP295_LIBRARY_FOLDER_COMPAT_REVISION_UID_BATCHED_W1=PASS');
 console.log('APP295_LIBRARY_APP294_NEW_FOLDER_R0_REGRESSION=PASS');

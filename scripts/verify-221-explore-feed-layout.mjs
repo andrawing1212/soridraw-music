@@ -10,6 +10,60 @@ const socialService = readFileSync('src/services/exploreSocialService.ts', 'utf8
 const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
 const workerEntry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
+const masterPermissions307 = readFileSync('src/pages/MasterPermissionsPage.tsx', 'utf8');
+const curationService307 = readFileSync('src/services/exploreCurationService.ts', 'utf8');
+
+// app307: manual SORIDRAW curation is permission-gated; app306 layout/arrows remain protected.
+assert.match(page, /getSoridrawCuratedTracks307/);
+assert.match(
+  page,
+  /title="SORIDRAW 추천"[\s\S]*?curatedTracks307\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)\.map/,
+  'SORIDRAW recommendation rail must render only explicitly promoted tracks',
+);
+assert.doesNotMatch(
+  page,
+  /title="SORIDRAW 추천"[\s\S]{0,700}?recommendationModel221\.picks\.map/,
+  'automatic latest-feed picks must not populate SORIDRAW recommendations',
+);
+assert.match(page, /추천곡 승격/);
+assert.match(page, /추천곡 해제/);
+assert.match(page, /승격 곡 관리/);
+assert.match(page, /curationAccess307\.canCurate[\s\S]*?추천곡 승격/);
+assert.match(page, /curationManageRequested307 && curationAccess307\.canCurate/);
+assert.match(page, /getManagedSoridrawCuratedTracks307/);
+assert.match(
+  page,
+  /soridraw-explore-curation-manage-button-307[\s\S]*?<span>승격 곡 관리<\/span>/,
+  'authorized Explore managers must receive the top-right promoted-track manager button',
+);
+assert.match(masterPermissions307, /익스플로어 관리/);
+assert.match(masterPermissions307, /setExploreManagerPermission307/);
+assert.match(masterPermissions307, /exploreEnabled307/);
+assert.match(
+  masterPermissions307,
+  /basePermissionsChanged[\s\S]*?masterSetAdminAccess[\s\S]*?explorePermissionChanged[\s\S]*?setExploreManagerPermission307/,
+  'Explore-only permission changes must not require rewriting the existing Firebase admin permission document',
+);
+assert.match(curationService307, /SORIDRAW_CURATED_COLLECTION_307 = 'soridraw'/);
+assert.match(curationService307, /\/v1\/me\/explore-management-access/);
+assert.match(curationService307, /\/v1\/curation\/\$\{SORIDRAW_CURATED_COLLECTION_307\}\/\$\{id\}/);
+assert.match(curationService307, /\/v1\/curated-revision\?collection=\$\{SORIDRAW_CURATED_COLLECTION_307\}/);
+assert.match(curationService307, /SORIDRAW_CURATED_RECHECK_MS_307 = 60_000/);
+assert.match(workerEntry, /SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003/);
+assert.match(workerEntry, /SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003/);
+assert.match(workerEntry, /Legacy automatic rows used role='admin'/);
+assert.match(workerEntry, /row\?\.role === 'master'/);
+assert.match(workerEntry, /INSERT INTO explore_curators[\s\S]*?VALUES \(\?,'master',1/);
+assert.match(workerEntry, /INSERT INTO curated_picks[\s\S]*?ON CONFLICT\(collection_key,track_id\)/);
+assert.match(workerEntry, /DELETE FROM curated_picks WHERE collection_key=\? AND track_id=\?/);
+assert.match(workerEntry, /SORIDRAW_CURATED_R2_KEY_307/);
+assert.match(workerEntry, /X-SORIDRAW-Curated-Revision/);
+assert.match(workerEntry, /d1Write: 1/);
+assert.doesNotMatch(
+  curationService307,
+  /firebase\/firestore|collection\(|getDocs\(|onSnapshot\(/,
+  'Explore curation client must not add direct Firestore collection reads',
+);
 
 // app306: preserve every existing section, reorder Latest/Popular above Creator/Genre, and keep PC rail arrows visible.
 assert.match(page, /EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\s*=\s*20/);
@@ -872,3 +926,9 @@ assert.match(
 );
 console.log('APP247_PROFILE_NOOP_PATCH_SKIP=PASS');
 console.log('APP247_PROFILE_YOUTUBE_NOOP_R2_WRITE_SKIP=PASS');
+
+console.log('APP307_SORIDRAW_MANUAL_CURATED_ONLY=PASS');
+console.log('APP307_EXPLORE_MANAGER_PERMISSION_GATED=PASS');
+console.log('APP307_PROMOTED_TRACK_MANAGER_PAGE=PASS');
+console.log('APP307_CURATED_LOCAL_FIRST_R2=PASS');
+console.log('APP307_CURATED_MUTATION_W1_CONTRACT=PASS');

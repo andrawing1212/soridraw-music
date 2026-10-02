@@ -18,7 +18,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch } from '../services/playlistService';
 import {
   flushLibraryPlaylistRevisionBatch,
   markLibraryPlaylistRevisionCommitted,
@@ -1746,9 +1746,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!user?.uid || isSharedView) return;
     const uid = user.uid;
     resumeLibraryPlaylistRevisionBatch(uid);
+    resumeLibraryPlaylistRenameBatch(uid);
 
     const flushOnPageHide = () => {
-      void flushLibraryPlaylistRevisionBatch(uid);
+      void Promise.all([
+        flushLibraryPlaylistRenameBatch(uid),
+        flushLibraryPlaylistRevisionBatch(uid),
+      ]);
     };
 
     window.addEventListener('pagehide', flushOnPageHide);

@@ -160,10 +160,6 @@ useEffect(() => {
       if (basePermissionsChanged) {
         const callable = httpsCallable(functions, 'masterSetAdminAccess');
         await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
-        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
-        void signalControlRevision({ targetUid: user.uid, reason: 'admin-permissions' }).catch((error) => {
-          console.warn('Admin permission revision signal failed; Firestore listener fallback remains active.', error);
-        });
         nextAdmins = admins.map((item) => item.uid === user.uid
           ? { ...item, staffRole: 'admin' as StaffRole, adminPermissions: { ...permissions } }
           : item);
@@ -178,6 +174,15 @@ useEffect(() => {
         await setExploreManagerPermission307(masterUser, user.uid, explorePermission);
         setExplorePermissionSaved307((current) => ({ ...current, [user.uid]: explorePermission }));
         setExplorePermissionDrafts307((current) => ({ ...current, [user.uid]: explorePermission }));
+      }
+      if (basePermissionsChanged || explorePermissionChanged) {
+        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+        void signalControlRevision({
+          targetUid: user.uid,
+          reason: explorePermissionChanged ? 'explore-management-permission' : 'admin-permissions',
+        }).catch((error) => {
+          console.warn('Admin permission revision signal failed; the target account will refresh on its next profile sync.', error);
+        });
       }
       setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
     } catch (error: any) {

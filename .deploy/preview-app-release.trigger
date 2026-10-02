@@ -1,7 +1,7 @@
-app304-explore-latest-popular-home
-target_source=746e635e8fd8ef3c50938fa38a08177a599b0b24
-app_version=304
+app305-restore-explore-recommendations
+target_source=5b0fc905da93cc54d22ea61e3fcefe01f9b35c21
+app_version=305
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-latest-popular-home-my-profile
+release_request=restore-existing-recommendations-plus-latest-popular

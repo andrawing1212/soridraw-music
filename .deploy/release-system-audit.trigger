@@ -1,4 +1,5 @@
-app302-studio-heart-local-first-delayed-remote
-source=5ad438c422df8c5093a5226594e5056e47bd4922
-product_commit=24447627c2222d5cedc6fe96dcaccbfb26c0593a
-requested=2026-10-03T06:15:00+09:00
+app302b-studio-heart-local-first-final-audit
+source=efc8dd9d212db38b6657bce2b40f4650a6ecfc40
+product_commit=8c00f1a020093740b726384fb188633e5e7aaa45
+verifier_fix=31e02bf55868716f41566e204d20de353f01ccc1
+requested=2026-10-03T06:18:30+09:00

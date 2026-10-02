@@ -3277,50 +3277,6 @@ export default function ExplorePage() {
                 </ExploreRecommendationRail>
               )}
 
-              {activeRecommendationGenre221 && (
-                <ExploreRecommendationRail
-                  key={activeRecommendationGenre221.id}
-                  title="장르별 추천"
-                  subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
-                  itemCount={activeRecommendationGenre221.tracks.length}
-                  toolbar={(
-                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
-                      {recommendationModel221.genres.map((genre) => (
-                        <button
-                          key={genre.id}
-                          type="button"
-                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
-                          onClick={() => setRecommendationGenreId221(genre.id)}
-                          aria-pressed={activeRecommendationGenre221.id === genre.id}
-                        >
-                          {genre.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                >
-                  {activeRecommendationGenre221.tracks.map((track) => renderTrackCard(track))}
-                </ExploreRecommendationRail>
-              )}
-
-              {recommendationModel221.creators.length > 0 && (
-                <ExploreRecommendationRail
-                  title="좋아할 만한 크리에이터"
-                  subtitle="추천 곡에서 발견한 크리에이터를 더 둘러보세요."
-                  itemCount={recommendationModel221.creators.length}
-                  itemLabel="크리에이터"
-                  trackClassName="soridraw-explore-recommend-track--creators"
-                >
-                  {recommendationModel221.creators.map((creator) => (
-                    <ExploreCreatorCard221
-                      key={creator.id}
-                      creator={creator}
-                      onOpen={openProfile}
-                    />
-                  ))}
-                </ExploreRecommendationRail>
-              )}
-
               {tracks.length > 0 && (
                 <ExploreRecommendationRail
                   title="최신"
@@ -3346,6 +3302,50 @@ export default function ExplorePage() {
               ) : popularError ? (
                 <div className="soridraw-explore-state">{popularError}</div>
               ) : null}
+
+              {recommendationModel221.creators.length > 0 && (
+                <ExploreRecommendationRail
+                  title="좋아할 만한 크리에이터"
+                  subtitle="추천 곡에서 발견한 크리에이터를 더 둘러보세요."
+                  itemCount={recommendationModel221.creators.length}
+                  itemLabel="크리에이터"
+                  trackClassName="soridraw-explore-recommend-track--creators"
+                >
+                  {recommendationModel221.creators.map((creator) => (
+                    <ExploreCreatorCard221
+                      key={creator.id}
+                      creator={creator}
+                      onOpen={openProfile}
+                    />
+                  ))}
+                </ExploreRecommendationRail>
+              )}
+
+              {activeRecommendationGenre221 && (
+                <ExploreRecommendationRail
+                  key={activeRecommendationGenre221.id}
+                  title="장르별 추천"
+                  subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
+                  itemCount={activeRecommendationGenre221.tracks.length}
+                  toolbar={(
+                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
+                      {recommendationModel221.genres.map((genre) => (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
+                          onClick={() => setRecommendationGenreId221(genre.id)}
+                          aria-pressed={activeRecommendationGenre221.id === genre.id}
+                        >
+                          {genre.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                >
+                  {activeRecommendationGenre221.tracks.map((track) => renderTrackCard(track))}
+                </ExploreRecommendationRail>
+              )}
             </div>
           ) : (
             renderTrackGrid(

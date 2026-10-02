@@ -136,6 +136,12 @@
 .soridraw-explore-page--profile .soridraw-explore-profile-public-list-234>.soridraw-explore-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:24px 16px}
 .soridraw-explore-recommend-track.soridraw-explore-recommend-track--profile-pinned{grid-auto-columns:calc((100% - 36px)/3);gap:18px}
 }
+@media (min-width:1600px){
+/* app306 — PC keeps both Explore/My Profile rail controls visible at all times.
+ * Tablet/mobile retain the existing hover/tap/idle behavior unchanged. */
+.soridraw-explore-recommend-stage.is-controls-hidden .soridraw-explore-recommend-edge{opacity:1;visibility:visible;pointer-events:auto}
+.soridraw-explore-recommend-stage .soridraw-explore-recommend-edge:disabled{opacity:.34;visibility:visible;pointer-events:none}
+}
 @media (min-width:1100px) and (max-width:1599px){
 .soridraw-explore-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .soridraw-explore-recommend-track{grid-auto-columns:calc((100% - 54px)/4);gap:18px}

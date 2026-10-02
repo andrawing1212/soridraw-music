@@ -20,11 +20,17 @@ const addItem = block('export const addPlaylistItem = async', 'export const dele
 
 assert.ok(Number(version.version) >= 295, 'app295 regression must remain enabled in later builds');
 
-for (const [name, body] of [['create', create], ['rename', rename]]) {
-  assert.ok(body.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'), `${name} must queue the UID revision batch`);
-  assert.ok(!body.includes("batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion })"),
-    `${name} must not write users.syncVersions.playlists immediately`);
-}
+assert.ok(create.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)'),
+  'create must queue the UID compatibility revision batch');
+assert.ok(!create.includes("batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion })"),
+  'create must not write users.syncVersions.playlists immediately');
+assert.ok(
+  rename.includes('queueLibraryPlaylistRevisionBatch(uid, syncVersion)')
+    || rename.includes('queueLibraryPlaylistRenameBatch(uid, playlistId, title, syncVersion)'),
+  'rename must stay delayed/batched instead of writing users revision immediately',
+);
+assert.ok(!rename.includes("batch.update(doc(db, 'users', uid), { 'syncVersions.playlists': syncVersion })"),
+  'rename must not write users.syncVersions.playlists immediately');
 
 assert.ok(create.includes('writeLibraryPlaylistItemsCache(uid, newDocRef.id, [], syncVersion)'),
   'app294 new-folder empty-cache R0 path must remain protected');

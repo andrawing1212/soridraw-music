@@ -1,4 +1,4 @@
-app302-studio-heart-local-first-final
-source=efc8dd9d212db38b6657bce2b40f4650a6ecfc40
-product_commit=8c00f1a020093740b726384fb188633e5e7aaa45
-requested=2026-10-03T06:30:00+09:00
+app303-split-browser-history
+source=d80e431bed8dde2851a218c03d2d738d14a3e9d9
+product_commit=cc84fba18b8ccbec6b83b983f6a3a1217046516c
+requested=2026-10-03T07:05:00+09:00

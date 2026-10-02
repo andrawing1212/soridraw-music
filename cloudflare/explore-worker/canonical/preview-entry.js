@@ -100,9 +100,12 @@ const curatedBodyEdgeKey307 = (url, revision, limit) => {
   edge.searchParams.set('limit', String(limit));
   return new Request(edge.toString(), { method: 'GET' });
 };
+const curatedStableBodyEdgeKey307 = (url) =>
+  new Request(new URL('/__soridraw/curated-body-v307/soridraw-20', url.origin).toString(), { method: 'GET' });
 
 async function clearCuratedEdge307(url) {
   try { await caches.default.delete(curatedRevisionEdgeKey307(url)); } catch {}
+  try { await caches.default.delete(curatedStableBodyEdgeKey307(url)); } catch {}
 }
 
 async function validateExploreAuth307(request, env, ctx) {
@@ -271,9 +274,13 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   if (!baseResponse.ok || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
     return { object: null, payload: null, d1Read: 0, source: 'D1-BOOTSTRAP-FAILED-307' };
   }
+  const memberIds = payload.data.items
+    .map((item) => String(item?.track?.id || '').trim())
+    .filter(Boolean);
   const stored = {
     schemaVersion: 1,
     collection: SORIDRAW_CURATED_COLLECTION_307,
+    memberIds,
     payload,
     updatedAt: Date.now(),
   };
@@ -286,6 +293,7 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   return {
     object,
     payload,
+    memberIds,
     d1Read: Math.max(1, Number(payload.data.items.length || 0)),
     source: 'D1-BOOTSTRAP-307',
   };
@@ -293,12 +301,12 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
 
 async function readCuratedObject307(request, env, ctx) {
   const bucket = curatedBucket307(env);
-  if (!bucket) return { object: null, payload: null, r2Reads: 0, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
+  if (!bucket) return { object: null, payload: null, memberIds: [], r2Reads: 0, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
   let object = null;
   try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
   if (!object) {
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
-    return { object: boot.object, payload: boot.payload, r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
+    return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
   }
   let stored = null;
   try { stored = JSON.parse(await object.text()); } catch {}
@@ -306,9 +314,12 @@ async function readCuratedObject307(request, env, ctx) {
   if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
     try { await bucket.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
-    return { object: boot.object, payload: boot.payload, r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
+    return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
   }
-  return { object, payload, r2Reads: 1, d1Read: 0, source: 'R2-CURATED-307' };
+  const memberIds = Array.isArray(stored?.memberIds)
+    ? stored.memberIds.map((value) => String(value || '').trim()).filter(Boolean)
+    : payload.data.items.map((item) => String(item?.track?.id || '').trim()).filter(Boolean);
+  return { object, payload, memberIds, r2Reads: 1, d1Read: 0, source: 'R2-CURATED-307' };
 }
 
 async function handleCuratedRevision307(request, env) {
@@ -365,6 +376,18 @@ async function handleCuratedRevision307(request, env) {
 async function handleCuratedPublic307(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  if (limit === 20) {
+    try {
+      const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
+      if (cached) {
+        const revision = String(cached.headers.get('X-SORIDRAW-Curated-Revision') || '').trim();
+        return new Response(await cached.text(), {
+          status: 200,
+          headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+        });
+      }
+    } catch {}
+  }
   const selected = await readCuratedObject307(request, env, ctx);
   if (!selected.payload?.data?.items) {
     return new Response(JSON.stringify({ ok: false, error: 'SORIDRAW 추천곡을 불러오지 못했습니다.' }), {
@@ -397,12 +420,15 @@ async function handleCuratedPublic307(request, env, ctx) {
     },
   });
   try {
-    await caches.default.put(edgeKey, new Response(body, {
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': `public, max-age=${SORIDRAW_CURATED_EDGE_SECONDS_307}`,
-      },
-    }));
+    const cachedHeaders307 = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': `public, max-age=${SORIDRAW_CURATED_EDGE_SECONDS_307}`,
+      'X-SORIDRAW-Curated-Revision': revision,
+    };
+    await caches.default.put(edgeKey, new Response(body, { headers: cachedHeaders307 }));
+    if (limit === 20) {
+      await caches.default.put(curatedStableBodyEdgeKey307(url), new Response(body, { headers: cachedHeaders307 }));
+    }
   } catch {}
   return new Response(body, {
     status: 200,
@@ -420,8 +446,12 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
   if (!bucket) return;
   const selected = await readCuratedObject307(request, env, ctx);
   if (!selected.payload?.data?.items) return;
+  let memberIds = [...new Set((selected.memberIds || [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean))].filter((value) => value !== trackId);
   let items = selected.payload.data.items.filter((item) => String(item?.track?.id || '').trim() !== trackId);
   if (promoted) {
+    memberIds = [trackId, ...memberIds].slice(0, 40);
     const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
     const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
       method: 'GET',
@@ -449,12 +479,88 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
   const stored = {
     schemaVersion: 1,
     collection: SORIDRAW_CURATED_COLLECTION_307,
+    memberIds,
     payload,
     updatedAt: Date.now(),
   };
   await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
+  });
+  await clearCuratedEdge307(new URL(request.url));
+}
+
+// SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
+async function syncCuratedPublicationResults307(request, env, results) {
+  const bucket = curatedBucket307(env);
+  if (!bucket || !Array.isArray(results) || !results.length) return;
+  let object = null;
+  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  if (!object) return;
+
+  let stored = null;
+  try { stored = JSON.parse(await object.text()); } catch {}
+  const payload = stored?.payload;
+  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) return;
+
+  const memberIds = Array.isArray(stored?.memberIds)
+    ? stored.memberIds.map((value) => String(value || '').trim()).filter(Boolean)
+    : payload.data.items.map((item) => String(item?.track?.id || '').trim()).filter(Boolean);
+  const memberSet = new Set(memberIds);
+  if (!memberSet.size) return;
+
+  const itemByTrackId = new Map(
+    payload.data.items
+      .map((item) => [String(item?.track?.id || '').trim(), item])
+      .filter(([trackId]) => Boolean(trackId)),
+  );
+  let changed = false;
+
+  for (const result of results) {
+    if (result?.ok !== true) continue;
+    const trackId = String(result?.trackId || '').trim();
+    if (!trackId || !memberSet.has(trackId)) continue;
+    const status = result?.status === 'public' ? 'public' : 'private';
+    if (status === 'private') {
+      if (itemByTrackId.delete(trackId)) changed = true;
+      continue;
+    }
+    const track = result?.snapshotItem;
+    if (!track?.id) continue;
+    const previous = itemByTrackId.get(trackId);
+    itemByTrackId.set(trackId, {
+      track,
+      curation: previous?.curation || {
+        curatorUid: '',
+        curatorRole: '',
+        sortOrder: memberIds.indexOf(trackId),
+        startsAt: null,
+        endsAt: null,
+      },
+    });
+    changed = true;
+  }
+
+  if (!changed) return;
+  const items = memberIds.map((trackId) => itemByTrackId.get(trackId)).filter(Boolean).slice(0, 40);
+  const nextPayload = {
+    ...payload,
+    data: {
+      ...payload.data,
+      collection: SORIDRAW_CURATED_COLLECTION_307,
+      items,
+    },
+  };
+  const nextStored = {
+    schemaVersion: 1,
+    collection: SORIDRAW_CURATED_COLLECTION_307,
+    memberIds,
+    payload: nextPayload,
+    updatedAt: Date.now(),
+  };
+  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { updatedAt: String(nextStored.updatedAt) },
   });
   await clearCuratedEdge307(new URL(request.url));
 }
@@ -1571,11 +1677,25 @@ export default {
 
     const isTrackVisibilityMutation307 = request.method === 'PATCH'
       && /^\/v1\/tracks\/[^/]+\/visibility$/.test(url.pathname);
+    const isPublicationBatch307 = request.method === 'POST'
+      && url.pathname === '/v1/me/music-note-publications/batch';
     let response = await baseWorker.fetch(request, env, ctx);
 
-    if (isTrackVisibilityMutation307 && response.ok) {
-      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-      await clearCuratedEdge307(url);
+    if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok) {
+      try {
+        const mutationPayload307 = await response.clone().json();
+        const results307 = isPublicationBatch307
+          ? (Array.isArray(mutationPayload307?.data?.results) ? mutationPayload307.data.results : [])
+          : [{
+              ok: mutationPayload307?.ok === true,
+              trackId: String(mutationPayload307?.data?.trackId || decodeURIComponent(url.pathname.split('/')[3] || '')).trim(),
+              status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
+              snapshotItem: mutationPayload307?.data?.snapshotItem || null,
+            }];
+        await syncCuratedPublicationResults307(request, env, results307);
+      } catch (error) {
+        console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
+      }
     }
 
     if ((isProfileUpdate244 || isUnifiedProfileSave252) && response.ok) {

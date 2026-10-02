@@ -1729,7 +1729,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const uid = user.uid;
     return subscribeLibraryPlaylistSync(uid, (signal) => {
       noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion);
-      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete'].includes(signal.operation)) {
+      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-delete', 'playlist-rename-batch'].includes(signal.operation)) {
         markLibraryPlaylistRevisionCommitted(uid, signal.syncVersion);
       }
       if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;

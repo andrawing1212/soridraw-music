@@ -1,3 +1,33 @@
+## 0NA. app302/app302b 사용자 실기기 정상 확인 + 좋아요/저장하트 스킬 동결 (2026-10-03 KST)
+
+**사용자 확인**
+- PREVIEW app302 배포 후 사용자 피드백: **"정상 적용됐어."**
+- 따라서 app302/app302b의 사용자-visible Studio 저장 하트 동작을 실기기 정상 기준으로 동결.
+- 단 이번 피드백은 화면/동기화 동작 정상 확인이며, 별도 계측하지 않은 Firestore/D1 비용 숫자까지 실측 PASS로 확대 해석하지 않음.
+
+**이번 문서/Skill 업데이트**
+- `.agents/skills/local-first-like-sync/SKILL.md`
+  - Explore 공개 좋아요와 Studio Recent 저장 하트를 서로 다른 상태기로 명시.
+  - app302 30초 final-state + delayed-remote 규칙 추가.
+  - app302b pending local layer strip / baseline restore / settlement cleanup을 하드 invariant로 추가.
+  - save→unsave net-zero 뒤 optimistic Music Note row가 남지 않아야 하는 회귀 항목 추가.
+- `.agents/skills/song-save-edit-sync-cost/SKILL.md`
+  - Recent text edit RTDB preview와 Studio save-heart delayed remote를 명확히 분리.
+  - generic favorites updater는 pending overlay를 제거한 canonical base를 입력으로 사용하도록 보호 규칙 추가.
+  - pending intent 제거 직후 local Music Note layer 정리 규칙 추가.
+- `.agents/skills/song-save-edit-sync-cost/references/soridraw-app302-studio-heart-local-first-baseline.md`
+  - PREVIEW 실기기 상태를 **USER CONFIRMED NORMAL**로 갱신.
+  - app302b 보강까지 현재 동결 기준으로 기록.
+- `AGENTS.md`
+  - app302/app302b 사용자 정상 확인 기준 및 Explore like / Studio save-heart 구분 라우팅 추가.
+
+**보호 기준**
+- runtime correction commit: `8c00f1a020093740b726384fb188633e5e7aaa45`.
+- PREVIEW Release Run: `37066438604` SUCCESS.
+- app302 exact build PASS.
+- TEST / PRODUCTION 변경 없음.
+- 이 작업은 문서/Skill 갱신만 수행. 앱 코드/Backend/사용자 데이터/배포 변경 없음.
+
 ## 0MZ. PREVIEW app302 배포 완료 — Recent 저장 하트 local-first 최종 정리 (2026-10-03 KST)
 
 - Firebase PREVIEW Release Run `37066438604`: **SUCCESS**.

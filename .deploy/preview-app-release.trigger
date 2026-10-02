@@ -1,7 +1,7 @@
-app306-explore-order-pc-arrows
-target_source=465a39e7d12cc92ece5c9f9f4eff44b2d4e10465
-app_version=306
+app307-explore-curation-management
+target_source=62d6b98d73f75ccc1ddc6535a9198d08829c868d
+app_version=307
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-order-and-pc-rail-arrows
+release_request=explore-curation-permission-promoted-track-management

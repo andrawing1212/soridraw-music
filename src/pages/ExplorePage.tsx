@@ -78,6 +78,9 @@ import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
 
+const EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304 = 20;
+const EXPLORE_POPULAR_FEED_REQUEST_URL_304 = `${EXPLORE_API_BASE}/v1/feed?sort=popular&limit=40`;
+
 type ExploreTrack = {
   id: string;
   ownerUid: string;
@@ -1258,12 +1261,14 @@ export default function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
-  const [sort, setSort] = useState<ExploreSort>('recommended');
-  const [recommendationGenreId221, setRecommendationGenreId221] = useState('');
+  const [sort] = useState<ExploreSort>('latest');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [tracks, setTracks] = useState<ExploreTrack[]>([]);
+  const [popularTracks, setPopularTracks] = useState<ExploreTrack[]>([]);
+  const [popularLoading, setPopularLoading] = useState(true);
+  const [popularError, setPopularError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({});
@@ -1298,6 +1303,7 @@ export default function ExplorePage() {
   const moreHistoryPushedRef257 = useRef(false);
   const moreActionBusyRef257 = useRef<'sharedNote' | 'apply' | null>(null);
   const likeHydrationKeyRef = useRef('');
+  const popularLikeHydrationKeyRef304 = useRef('');
   const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
@@ -1435,7 +1441,7 @@ export default function ExplorePage() {
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.
   publicLikeVisibleTracksRef192.current = new Map(
-    [...tracks, ...profileTracks, ...profileLikedTracks]
+    [...tracks, ...popularTracks, ...profileTracks, ...profileLikedTracks]
       .filter((track) => Boolean(track?.id))
       .map((track) => [track.id, track.ownerUid || '']),
   );
@@ -1480,6 +1486,7 @@ export default function ExplorePage() {
               settled.has(track.id) ? { ...track, likeCount: settled.get(track.id)! } : track
             ));
             setTracks(patchPublicCounts192);
+            setPopularTracks(patchPublicCounts192);
             setProfileTracks(patchPublicCounts192);
             setProfileLikedTracks(patchPublicCounts192);
           }
@@ -1567,6 +1574,7 @@ export default function ExplorePage() {
           track.id === detail.trackId ? { ...track, likeCount: pair129.likeCount } : track
         ));
         setTracks(patchRemotePair129);
+        setPopularTracks(patchRemotePair129);
         setProfileTracks(patchRemotePair129);
         setProfileLikedTracks((previous) => {
           const patched = patchRemotePair129(previous);
@@ -1648,6 +1656,7 @@ export default function ExplorePage() {
     });
 
     setTracks(applyPublicCounts110);
+    setPopularTracks(applyPublicCounts110);
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
@@ -1838,6 +1847,135 @@ export default function ExplorePage() {
 
     return () => controller.abort();
   }, [requestUrl, feedRevisionSignal, user?.uid]);
+
+  // app304 — Latest and Popular now share the Explore home screen. The Worker
+  // R2 first-page contract remains limit=40, while this UI exposes only 20
+  // cards per section. Warm re-entry stays session-cache first and D1-free.
+  useEffect(() => {
+    if (profileUid || submittedQuery.trim()) return;
+
+    const requestUrl304 = EXPLORE_POPULAR_FEED_REQUEST_URL_304;
+    const cachedRows304 = readExploreFeedSessionCache(requestUrl304);
+    const revisionCheckKey304 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl304);
+    const controller304 = new AbortController();
+
+    const fetchPopularRevision304 = async (): Promise<string | null> => {
+      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl304), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller304.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`popular revision HTTP ${response.status}`);
+      const payload = await response.json() as ExploreFeedRevisionResponse;
+      const revision = safeText(payload?.data?.revision) || null;
+      if (revision) exploreFeedLastRevisionCheckAt126.set(revisionCheckKey304, Date.now());
+      return revision;
+    };
+
+    const fetchPopularSnapshot304 = async (revision: string | null) => {
+      const response = await fetch(buildExploreR2SnapshotFeedUrl108(requestUrl304, revision), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller304.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`popular R2 snapshot HTTP ${response.status}`);
+      const payload = await response.json() as ExploreApiResponse;
+      const actualRevision = safeText(response.headers.get('X-SORIDRAW-Feed-Revision')) || revision;
+      return { payload, revision: actualRevision };
+    };
+
+    const applyPopularPayload304 = (payload: ExploreApiResponse, serverRevision: string | null) => {
+      if (payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+        throw new Error('Invalid Explore popular snapshot; preserving the previous Feed');
+      }
+      const rows = payload.data.items;
+      writeExploreFeedSessionCache(
+        requestUrl304,
+        rows,
+        safeText(payload?.data?.nextCursor) || null,
+        serverRevision,
+      );
+      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      setPopularTracks(overlayActorLikeCounts120(normalizedTracks));
+      syncSharedPublicCountsToLocal110(normalizedTracks);
+      markExploreSharedLikeCacheRepair124(requestUrl304);
+      exploreFeedLastRevisionCheckAt126.set(revisionCheckKey304, Date.now());
+      setPopularError('');
+    };
+
+    if (cachedRows304) {
+      const cachedTracks304 = cachedRows304.map(normalizeTrack).filter((track) => track.id);
+      setPopularTracks(overlayActorLikeCounts120(cachedTracks304));
+      setPopularLoading(false);
+      setPopularError('');
+
+      const oneTimeSharedRepair304 = !hasExploreSharedLikeCacheRepair124(requestUrl304);
+      if (oneTimeSharedRepair304) {
+        void (async () => {
+          try {
+            const snapshot = await fetchPopularSnapshot304(null);
+            if (!controller304.signal.aborted) applyPopularPayload304(snapshot.payload, snapshot.revision);
+          } catch (reason) {
+            if (!controller304.signal.aborted) {
+              console.warn('Explore popular one-time shared cache repair failed; keeping cached feed:', reason);
+            }
+          }
+        })();
+        return () => controller304.abort();
+      }
+
+      const lastCheckedAt304 = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey304) || 0;
+      if (!shouldRevalidateExploreFeedOnEntry126(true, false, lastCheckedAt304, Date.now())) {
+        return () => controller304.abort();
+      }
+
+      void (async () => {
+        try {
+          const serverRevision = await fetchPopularRevision304();
+          if (!serverRevision || controller304.signal.aborted) return;
+          const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl304);
+          if (cachedRevision === serverRevision) {
+            syncSharedPublicCountsToLocal110(cachedTracks304);
+            return;
+          }
+          const snapshot = await fetchPopularSnapshot304(serverRevision);
+          if (!controller304.signal.aborted) applyPopularPayload304(snapshot.payload, snapshot.revision);
+        } catch (reason) {
+          if (!controller304.signal.aborted) {
+            console.warn('Explore popular revision revalidation failed; keeping cached feed:', reason);
+          }
+        }
+      })();
+
+      return () => controller304.abort();
+    }
+
+    setPopularLoading(true);
+    setPopularError('');
+    void (async () => {
+      try {
+        const serverRevision = await fetchPopularRevision304().catch((reason) => {
+          if (!controller304.signal.aborted) {
+            console.warn('Explore popular revision bootstrap failed; continuing with R2 snapshot:', reason);
+          }
+          return null;
+        });
+        const snapshot = await fetchPopularSnapshot304(serverRevision);
+        if (!controller304.signal.aborted) applyPopularPayload304(snapshot.payload, snapshot.revision);
+      } catch (reason) {
+        if (controller304.signal.aborted) return;
+        console.error('Explore popular feed load failed:', reason);
+        setPopularError('인기 곡을 불러오지 못했어요.');
+        setPopularTracks([]);
+      } finally {
+        if (!controller304.signal.aborted) setPopularLoading(false);
+      }
+    })();
+
+    return () => controller304.abort();
+  }, [feedRevisionSignal, profileUid, submittedQuery, user?.uid]);
 
   useEffect(() => {
     if (!isExploreFeedRequest(requestUrl) || profileUid) return;
@@ -2088,6 +2226,62 @@ export default function ExplorePage() {
   }, [user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal]);
 
   useEffect(() => {
+    if (!user || profileUid || submittedQuery || popularTracks.length === 0) return;
+    const visiblePopular304 = popularTracks.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304);
+    const ids = [...new Set(visiblePopular304.map((track) => track.id).filter(Boolean))];
+    if (!ids.length) return;
+
+    const hydrationKey304 = `${user.uid}:${likeAccountSyncSignal}:${ids.join(',')}`;
+    if (popularLikeHydrationKeyRef304.current === hydrationKey304) return;
+    popularLikeHydrationKeyRef304.current = hydrationKey304;
+
+    const immediateLocal: Record<string, boolean> = {};
+    ids.forEach((id) => {
+      const liked = readExploreTrackLikeMembership127(user.uid, id);
+      if (typeof liked === 'boolean') immediateLocal[id] = liked;
+    });
+    if (Object.keys(immediateLocal).length) {
+      setLikedTrackIds((previous) => ({ ...previous, ...immediateLocal }));
+    }
+
+    let cancelled = false;
+    const interactionVersion = likeInteractionVersionRef090.current;
+    getExploreLikedTrackIds(user, ids)
+      .then((likedIds) => {
+        if (cancelled) return;
+        if (interactionVersion !== likeInteractionVersionRef090.current) {
+          popularLikeHydrationKeyRef304.current = '';
+          setLikeAccountSyncSignal((value) => value + 1);
+          return;
+        }
+        const likedSet = new Set(likedIds);
+        const visibleById = new Map(visiblePopular304.map((track) => [track.id, track]));
+        setLikedTrackIds((previous) => {
+          const next = { ...previous };
+          ids.forEach((id) => {
+            const liked = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
+            next[id] = liked;
+            const visibleTrack = visibleById.get(id);
+            if (visibleTrack) {
+              rememberExploreLikedTrack(
+                user.uid,
+                visibleTrack as unknown as Record<string, unknown>,
+                liked,
+              );
+            }
+          });
+          return next;
+        });
+      })
+      .catch((reason) => {
+        console.warn('Explore popular like state hydration failed:', reason);
+        popularLikeHydrationKeyRef304.current = '';
+      });
+
+    return () => { cancelled = true; };
+  }, [user, popularTracks, profileUid, submittedQuery, likeAccountSyncSignal]);
+
+  useEffect(() => {
     if (!searchOpen) return;
     const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
@@ -2124,6 +2318,16 @@ export default function ExplorePage() {
     if (!track.ownerUid) return;
     await flushExploreLikeBoundary094();
     setSearchParams({ profile: track.ownerUid });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openMyProfile304 = async () => {
+    if (!user?.uid) {
+      setSocialNotice('MY 프로필은 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    await flushExploreLikeBoundary094();
+    setSearchParams({ profile: user.uid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -2168,6 +2372,7 @@ export default function ExplorePage() {
       ));
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       setTracks(patchOptimisticCount120);
+      setPopularTracks(patchOptimisticCount120);
       setProfileTracks(patchOptimisticCount120);
       setProfileLikedTracks((previous) => {
         const patched = patchOptimisticCount120(previous);
@@ -2325,6 +2530,7 @@ export default function ExplorePage() {
       profilePinned: options.profilePinned,
     };
     setTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
+    setPopularTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
     setProfileTracks((previous) => previous
       .map((item) => item.id === track.id ? { ...item, ...patch } : item)
       .sort(comparePublicProfileTracks));
@@ -2383,6 +2589,7 @@ export default function ExplorePage() {
       const track = publicationSettings.track;
       await setExploreTrackVisibility(user, track.id, false, publicationSettings.options);
       setTracks((previous) => previous.filter((item) => item.id !== track.id));
+      setPopularTracks((previous) => previous.filter((item) => item.id !== track.id));
       setProfileTracks((previous) => previous.filter((item) => item.id !== track.id));
       setProfileLikedTracks((previous) => previous.filter((item) => item.id !== track.id));
       setSocialNotice('비공개로 전환했어요.');
@@ -2502,13 +2709,6 @@ export default function ExplorePage() {
   const visibleFeedTracks = sort === 'recommended' && !submittedQuery
     ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
     : tracks;
-
-  const recommendationModel221 = sort === 'recommended' && !submittedQuery
-    ? buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || '')
-    : { picks: [], genres: [], creators: [] };
-  const activeRecommendationGenre221 = recommendationModel221.genres.find(
-    (genre) => genre.id === recommendationGenreId221,
-  ) || recommendationModel221.genres[0] || null;
 
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
@@ -2778,7 +2978,7 @@ export default function ExplorePage() {
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
           </button>
-          <span>공개 프로필</span>
+          <span>{profileIsOwn ? 'MY 프로필' : '공개 프로필'}</span>
         </section>
 
         {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
@@ -2867,12 +3067,13 @@ export default function ExplorePage() {
                     ownerAvatarUrl: nextProfile.avatarUrl,
                   };
                   const ownerTrackIds = new Set(
-                    [...tracks, ...profileTracks, ...profileLikedTracks]
+                    [...tracks, ...popularTracks, ...profileTracks, ...profileLikedTracks]
                       .filter((track) => track.ownerUid === nextProfile.uid && Boolean(track.id))
                       .map((track) => track.id),
                   );
 
                   setTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
+                  setPopularTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   setProfileTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   setProfileLikedTracks((current) => current.map((track) => patchExploreTrackOwnerProfile215(track, nextProfile)));
                   ownerTrackIds.forEach((trackId) => {
@@ -3024,28 +3225,14 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      <nav className="soridraw-explore-tabs" aria-label="Explore 정렬">
-        {([
-          ['recommended', '추천'],
-          ['latest', '최신'],
-          ['popular', '인기'],
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={sort === value ? 'is-active' : undefined}
-            onClick={() => {
-              setSort(value);
-              if (submittedQuery) {
-                setSubmittedQuery('');
-                setQuery('');
-              }
-            }}
-            aria-current={sort === value ? 'page' : undefined}
-          >
-            {label}
-          </button>
-        ))}
+      <nav className="soridraw-explore-tabs" aria-label="내 프로필">
+        <button
+          type="button"
+          className="is-active"
+          onClick={() => void openMyProfile304()}
+        >
+          MY 프로필
+        </button>
       </nav>
 
       {submittedQuery && (
@@ -3058,80 +3245,50 @@ export default function ExplorePage() {
         <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 곡을 불러오는 중</div>
       ) : error ? (
         <div className="soridraw-explore-state">{error}</div>
-      ) : visibleFeedTracks.length === 0 ? (
+      ) : (submittedQuery ? visibleFeedTracks.length === 0 : tracks.length === 0 && popularTracks.length === 0 && !popularLoading) ? (
         <>
           <div className="soridraw-explore-state soridraw-explore-state--empty">
             <Compass aria-hidden="true" />
-            <strong>{submittedQuery ? '검색 결과가 없어요.' : sort === 'recommended' && tracks.length > 0 ? '현재 추천할 곡이 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
-            <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : sort === 'recommended' && tracks.length > 0 ? '싫어요한 곡은 추천에서 제외됩니다.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
+            <strong>{submittedQuery ? '검색 결과가 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
+            <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
           </div>
         </>
       ) : (
         <>
-          {sort === 'recommended' && !submittedQuery ? (
-            <div className="soridraw-explore-recommend-feed" aria-label="Explore 추천 모음">
-              {recommendationModel221.picks.length > 0 && (
+          {!submittedQuery ? (
+            <div className="soridraw-explore-recommend-feed" aria-label="Explore 최신 및 인기">
+              {tracks.length > 0 && (
                 <ExploreRecommendationRail
-                  title="SORIDRAW 추천"
-                  subtitle="지금 Explore에서 먼저 들려주고 싶은 곡"
-                  itemCount={recommendationModel221.picks.length}
-                  trackClassName="soridraw-explore-recommend-track--picks"
-                  mobileGroupSize={2}
+                  title="최신"
+                  subtitle="새로 공개된 곡"
+                  itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, tracks.length)}
+                  mobileGroupSize={3}
                 >
-                  {recommendationModel221.picks.map((track) => renderTrackCard(track))}
+                  {tracks.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
               )}
 
-              {activeRecommendationGenre221 && (
+              {popularTracks.length > 0 ? (
                 <ExploreRecommendationRail
-                  key={activeRecommendationGenre221.id}
-                  title="장르별 추천"
-                  subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
-                  itemCount={activeRecommendationGenre221.tracks.length}
-                  toolbar={(
-                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
-                      {recommendationModel221.genres.map((genre) => (
-                        <button
-                          key={genre.id}
-                          type="button"
-                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
-                          onClick={() => setRecommendationGenreId221(genre.id)}
-                          aria-pressed={activeRecommendationGenre221.id === genre.id}
-                        >
-                          {genre.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  title="인기"
+                  subtitle="지금 많이 듣는 곡"
+                  itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, popularTracks.length)}
+                  mobileGroupSize={3}
                 >
-                  {activeRecommendationGenre221.tracks.map((track) => renderTrackCard(track))}
+                  {popularTracks.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
-              )}
-
-              {recommendationModel221.creators.length > 0 && (
-                <ExploreRecommendationRail
-                  title="좋아할 만한 크리에이터"
-                  subtitle="추천 곡에서 발견한 크리에이터를 더 둘러보세요."
-                  itemCount={recommendationModel221.creators.length}
-                  itemLabel="크리에이터"
-                  trackClassName="soridraw-explore-recommend-track--creators"
-                >
-                  {recommendationModel221.creators.map((creator) => (
-                    <ExploreCreatorCard221
-                      key={creator.id}
-                      creator={creator}
-                      onOpen={openProfile}
-                    />
-                  ))}
-                </ExploreRecommendationRail>
-              )}
+              ) : popularLoading ? (
+                <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 인기 곡을 불러오는 중</div>
+              ) : popularError ? (
+                <div className="soridraw-explore-state">{popularError}</div>
+              ) : null}
             </div>
           ) : (
             renderTrackGrid(
               visibleFeedTracks,
-              'Explore 곡 목록',
+              'Explore 검색 결과',
               null,
-              sort === 'latest' && !submittedQuery ? 'latest' : 'default',
+              'default',
               true,
             )
           )}

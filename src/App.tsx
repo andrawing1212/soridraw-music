@@ -4266,7 +4266,7 @@ function Navigation({
                     )}
                     {[
                       { label: 'MY 페이지', path: '/my-page', icon: UserIcon },
-                      { label: '공개 프로필', path: `/explore?profile=${encodeURIComponent(user.uid)}`, icon: Compass },
+                      { label: 'MY 프로필', path: `/explore?profile=${encodeURIComponent(user.uid)}`, icon: Compass },
                       { label: '설정', path: '/my-page?tab=settings', icon: Settings },
                     ].map((item) => {
                       const Icon = item.icon;
@@ -4465,7 +4465,7 @@ function Navigation({
                           className="soridraw-account-menu-row"
                         >
                           <Compass aria-hidden="true" />
-                          <span>공개 프로필</span>
+                          <span>MY 프로필</span>
                         </button>
                         <button
                           type="button"

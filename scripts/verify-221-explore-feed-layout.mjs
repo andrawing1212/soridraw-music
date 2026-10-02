@@ -11,17 +11,13 @@ const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts
 const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
 const workerEntry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
-assert.match(page, /buildExploreRecommendationModel221/);
-assert.match(page, /picks: source\.slice\(0, 20\)/);
-assert.match(page, /tracks: bucket\.tracks\.slice\(0, 20\)/);
-assert.match(page, /creators: \[\.\.\.creatorBuckets\.values\(\)\]\.slice\(0, 20\)/);
-assert.match(page, /title="SORIDRAW 추천"/);
-assert.match(page, /title="장르별 추천"/);
-assert.match(page, /recommendationModel221\.genres\.map/);
-assert.match(page, /setRecommendationGenreId221\(genre\.id\)/);
-assert.match(page, /title="좋아할 만한 크리에이터"/);
-assert.match(page, /ExploreCreatorCard221/);
-assert.match(page, /sort === 'recommended' && !submittedQuery/);
+// app304: Explore home no longer uses separate Recommended/Latest/Popular pages.
+assert.match(page, /EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\s*=\s*20/);
+assert.match(page, /EXPLORE_POPULAR_FEED_REQUEST_URL_304[\s\S]*?sort=popular&limit=40/);
+assert.match(page, /title="최신"[\s\S]*?tracks\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
+assert.match(page, /title="인기"[\s\S]*?popularTracks\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
+assert.match(page, /className="soridraw-explore-tabs" aria-label="내 프로필"[\s\S]*?MY 프로필/);
+assert.doesNotMatch(page, /\['recommended', '추천'\][\s\S]*?\['latest', '최신'\][\s\S]*?\['popular', '인기'\]/);
 assert.match(page, /ExploreRecommendationRail/);
 assert.match(page, /ChevronLeft/);
 assert.match(page, /ChevronRight/);
@@ -114,8 +110,8 @@ assert.match(
 );
 assert.match(
   page,
-  /title="SORIDRAW 추천"[\s\S]*?trackClassName="soridraw-explore-recommend-track--picks"[\s\S]*?mobileGroupSize=\{2\}/,
-  'SORIDRAW picks must use the two-card mobile alignment group without changing genre rails',
+  /title="최신"[\s\S]*?mobileGroupSize=\{3\}[\s\S]*?title="인기"[\s\S]*?mobileGroupSize=\{3\}/,
+  'Latest and Popular home rails must share the standard three-card mobile alignment group',
 );
 assert.match(
   css,

@@ -1,3 +1,47 @@
+## CURRENT TASK — app296 PREVIEW Music Note + Library My/Shared 60초 batch 실기기 검증 (2026-10-02 KST)
+
+현재:
+- app296 코드 완료, PREVIEW 배포 전.
+- Music Note folder create/rename/reorder: local + RTDB 즉시, `user_structures` canonical 60초 UID final-state batch.
+- Music Note folder delete / song membership change: 기존 즉시 canonical 안전 경로 유지.
+- Library create: playlist W1 즉시 + users revision 60초 UID batch.
+- Library rename: local + RTDB 즉시, unique playlist title final-state 60초 batch + users revision W1.
+- Library aggregate single-document cutover는 TEST/PRODUCTION 구버전 호환 때문에 아직 미실행.
+- TypeScript PASS / Build PASS (Release System Audit Run `36950546019`).
+- Backend V2 Safety `36950337897`, `36950358483` SUCCESS.
+- 전체 Release System Audit overall FAIL은 기존 stale `verify-221-explore-feed-layout.mjs` 한 건이며 이번 folder batch와 무관.
+
+배포 후 실기기 최소 검증:
+1. PC/모바일 모두 app296 확인.
+2. Music Note 마이 노트에서 폴더 생성/이름변경/순서변경을 합계 7회 이상 60초 안에 연속 수행.
+   - 각 UI 변경은 즉시.
+   - 반대 기기도 새로고침/탭 왕복 없이 즉시.
+   - 60초 전 Browser SDK `user_structures:write` 반복 증가 금지.
+   - 마지막 변경 후 60초 정착 시 `user_structures:write W1` 목표.
+   - Function server-side users revision은 canonical batch 1회 기준으로만 발생해야 함.
+3. Music Note 공유 노트에서도 동일 패턴 3~5회 확인.
+4. Music Note folder delete:
+   - 삭제는 즉시 canonical.
+   - 포함 곡은 default로 정상 이동.
+   - 이전 pending 구조가 삭제 폴더를 60초 뒤 되살리면 FAIL.
+5. Library 같은 기존 폴더 이름을 60초 안에 5회 이상 변경.
+   - 상대 기기 즉시 반영.
+   - canonical playlist title W1 + users revision W1 = 총 W2 목표.
+6. Library 서로 다른 기존 폴더 5개 rename:
+   - playlist W5 + users W1 = W6 목표.
+7. Library 새 폴더 5개 생성:
+   - playlist W5 + users revision W1 = W6 목표.
+   - 새 폴더 자동 선택의 items read R0.
+8. 같은 구간 private path D1 R0/W0 / Worker 0.
+9. app292 Recent 150초 / Studio heart 30초 / Music Note Detail / Explore 좋아요 정상 기능 회귀 없음.
+
+판정:
+- 위 실기기 기능/비용이 맞으면 app296 PREVIEW PASS.
+- cross-device가 60초 canonical을 기다리거나, stale pending이 최신 폴더 상태를 덮거나, Music Note 구조가 WN으로 반복되면 FAIL.
+- Library aggregate document 도입은 app296 실기기 PASS 후 별도 단계. PREVIEW에 writer만 먼저 추가해 비용을 늘리는 방식 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION은 별도 명확한 승인 전 변경 금지.
+
 ## CURRENT TASK — app293 PREVIEW Library/Music Note 실기기 비용 검증 (2026-10-02 KST)
 
 현재:

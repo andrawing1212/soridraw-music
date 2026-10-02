@@ -1,3 +1,82 @@
+## 0ML. PREVIEW app296 — Music Note + Library My/Shared 폴더 60초 최종상태 묶음 (2026-10-02 KST)
+
+**사용자 범위 확정**
+- "마이 / 공유"는 Music Note의 마이 노트/공유 노트와 Library의 마이/공유 플레이리스트를 모두 뜻함.
+- 공통 원칙: 화면/동일계정 PC↔모바일 반영은 RTDB/local cache로 즉시, canonical Firestore는 안전한 범위에서 **마지막 변경 후 60초 final-state**로 묶음.
+
+**Music Note My/Shared**
+- 대상: 폴더 생성 / 이름변경 / 순서변경.
+- 변경 즉시:
+  - 현재 기기 state + persistent structure cache 반영.
+  - 기존 UID-scoped Music Note RTDB structure delta 전송.
+  - 반대 기기는 Firestore read 없이 structure patch를 적용.
+- canonical:
+  - `user_structures/{uid}` 폴더 구조 pending을 UID 단위 localStorage + memory에 보관.
+  - 마지막 폴더 구조 변경 후 60초에 My/Shared 최신 구조를 **한 문서 W1**로 저장.
+  - 60초 안 같은/다른 My/Shared 폴더 구조 변경이 여러 번 있어도 마지막 구조만 canonical.
+  - 기존 `syncMusicNoteStructureVersion` Function은 canonical `user_structures` 변경 때만 실행되므로 반복 UI 변경 횟수만큼 호출되지 않고 batch canonical 횟수로 축소.
+- 안전:
+  - pending은 RTDB 요청 전에 먼저 durable 저장하여 background/reload 중 canonical intent 유실 방지.
+  - RTDB UID monotonic signal version을 받아 local cache/pending version floor로 사용.
+  - 실제 곡 membership이 바뀌는 **폴더 삭제는 batch 대상에서 제외하고 즉시 canonical**. 삭제 후 affected favorites의 default 이동도 기존 changed-song-only 경로 유지.
+  - 곡을 폴더에 넣기/빼기 역시 실제 favorite membership write이므로 이번 구조 batch와 분리.
+
+**Library My/Shared**
+- app295 compatibility revision window를 30초 → **60초**로 통일.
+- 일반 탭 숨김/SPA route 이동만으로 조기 flush하지 않음. pending은 durable하게 남고 실제 page unload에서만 best-effort flush.
+- 폴더 생성:
+  - 새 playlist document W1은 즉시 유지. 새 ID를 즉시 사용하고 TEST/PRODUCTION 구버전과 shared data 호환을 지켜야 하기 때문.
+  - `users.syncVersions.playlists`는 60초 UID batch W1.
+  - app294 empty-items cache seed 유지 → 생성 직후 items Firestore read R0 목표.
+- 폴더 이름변경:
+  - 현재 기기 cache + 반대 기기 RTDB `playlist-rename`은 즉시.
+  - canonical playlist title은 60초 final-state batch.
+  - 같은 폴더를 여러 번 rename하면 마지막 title만 W1.
+  - 여러 폴더를 같은 window에서 rename하면 변경된 unique playlist document당 W1 + users revision W1.
+  - canonical settlement 뒤 `playlist-rename-batch` RTDB signal로 current app cache version도 같은 revision으로 맞춰 불필요한 Firestore reread를 방지.
+  - 더 최신 반대기기 rename/delete signal이 오면 오래된 local pending rename을 취소하여 stale final-state overwrite 방지.
+- Library item add/delete/move/color/swap, playlist delete는 실제 membership/데이터 변경이므로 기존 즉시 canonical 경로 유지.
+- Library folder reorder는 현재 legacy per-playlist order 문서 구조를 유지. aggregate cutover 전에는 임의로 W1 구조로 바꾸지 않음.
+
+**Library aggregate 구조 판단**
+- Music Note처럼 Library 폴더 ID/title/order를 한 aggregate document에 모으는 구조는 가능하고 장기 목표로 유지.
+- 하지만 현재 TEST/PRODUCTION 구버전은 `user_playlists/{uid}/lists/*`를 직접 읽으며 사용자 원본 DB를 PREVIEW와 공유함.
+- PREVIEW만 aggregate writer를 추가하면 legacy list write + aggregate write가 동시에 필요해 **오히려 비용이 늘어남**.
+- 따라서 app296에서는 새 aggregate server write를 만들지 않음.
+- 안전한 cutover 순서: 새 코드가 aggregate read/fallback을 지원 → PREVIEW 검증 → TEST/PRODUCTION 동일 코드 승격 → 모든 환경이 새 구조를 읽을 수 있는 시점에 legacy per-folder metadata write 제거.
+- 그 cutover 이후 Library 폴더 생성/이름/순서 구조도 Music Note처럼 N회 변경 → aggregate W1 목표가 가능함. 데이터 migration/backfill은 별도 사용자 승인 없이는 실행하지 않음.
+
+**비용 목표**
+- Music Note 폴더 구조 7회 연속 변경: Browser canonical `user_structures` **W7 → W1 목표**. Function 후속도 canonical 1회 기준으로 축소.
+- Library 동일 폴더 rename 7회: playlist title W1 + users revision W1 = **W2 목표**.
+- Library 서로 다른 기존 폴더 5개 rename: playlist W5 + users W1 = **W6 목표**.
+- Library 새 폴더 5개 생성: playlist W5 + users revision W1 = **W6 목표**, items read R0.
+- private folder test D1 R0/W0 / Worker 0 유지 목표.
+- 위 수치는 code-path 목표이며 사용자 CACHE LIVE 재측정 전까지 **실사용 검증 전**.
+
+**변경 / 검증**
+- 신규 `src/services/musicNoteFolderStructureBatch.ts`: 60초 durable Music Note structure outbox.
+- `src/pages/FavoritesPage.tsx`: Music Note folder local/RTDB-first + canonical 60초 batch, delete immediate safety.
+- `src/services/userDomainSyncService.ts`: Music Note structure RTDB monotonic version 반환.
+- `src/services/libraryPlaylistRevisionBatch.ts`: 60초 window.
+- `src/services/playlistService.ts`: Library rename final-state 60초 durable batch + cross-device stale pending fence.
+- `src/pages/SunoLibraryPage.tsx`: 60초 batch resume/pagehide serialized safety.
+- app296 verifier: `scripts/verify-296-folder-final-state-batch.mjs`.
+- app version: **296**.
+- Backend V2 Step 2-A Safety:
+  - Run `36950337897` SUCCESS.
+  - Run `36950358483` SUCCESS.
+- Release System Audit Run `36950546019`:
+  - TypeScript PASS.
+  - Build PASS.
+  - static groups A~D / syntax guards PASS.
+  - overall FAIL은 app294/app295와 동일한 기존 stale `verify-221-explore-feed-layout.mjs` shared-note detail assertion 한 건. app296 folder batch 경로와 무관.
+- focused source inspection: app296 60초 Music Note batch / Library revision 60초 / Library rename final-state / app294 new-folder R0 보호 조건 PASS.
+- Worker / Functions source / D1 / Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- PREVIEW Hosting: 배포 전.
+- TEST / PRODUCTION: 변경 없음.
+
 ## 0MK. PREVIEW app295 — Library My/Shared 폴더 공통 revision 30초 묶음 저장 (2026-10-02 KST)
 
 **목표**

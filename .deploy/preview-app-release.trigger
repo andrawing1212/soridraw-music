@@ -1,7 +1,7 @@
-app295-library-folder-revision-batch
-target_source=230da5f8641e131e63936eaf70d90c8634accdff
-app_version=295
+app296-music-note-library-folder-60s-final-state
+target_source=b49b06b51acbdbabf1b958bbbcf10fc08bbbe14a
+app_version=296
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=external-295-library-folder-write-batch
+release_request=external-296-folder-final-state-batch

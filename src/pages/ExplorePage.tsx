@@ -1261,7 +1261,8 @@ export default function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
-  const [sort] = useState<ExploreSort>('latest');
+  const [sort] = useState<ExploreSort>('recommended');
+  const [recommendationGenreId221, setRecommendationGenreId221] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -2710,6 +2711,13 @@ export default function ExplorePage() {
     ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
     : tracks;
 
+  const recommendationModel221 = sort === 'recommended' && !submittedQuery
+    ? buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || '')
+    : { picks: [], genres: [], creators: [] };
+  const activeRecommendationGenre221 = recommendationModel221.genres.find(
+    (genre) => genre.id === recommendationGenreId221,
+  ) || recommendationModel221.genres[0] || null;
+
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
     const liked = likedTrackIds[moreTrack.id] === true;
@@ -3256,7 +3264,63 @@ export default function ExplorePage() {
       ) : (
         <>
           {!submittedQuery ? (
-            <div className="soridraw-explore-recommend-feed" aria-label="Explore 최신 및 인기">
+            <div className="soridraw-explore-recommend-feed" aria-label="Explore 추천, 최신 및 인기">
+              {recommendationModel221.picks.length > 0 && (
+                <ExploreRecommendationRail
+                  title="SORIDRAW 추천"
+                  subtitle="지금 Explore에서 먼저 들려주고 싶은 곡"
+                  itemCount={recommendationModel221.picks.length}
+                  trackClassName="soridraw-explore-recommend-track--picks"
+                  mobileGroupSize={2}
+                >
+                  {recommendationModel221.picks.map((track) => renderTrackCard(track))}
+                </ExploreRecommendationRail>
+              )}
+
+              {activeRecommendationGenre221 && (
+                <ExploreRecommendationRail
+                  key={activeRecommendationGenre221.id}
+                  title="장르별 추천"
+                  subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
+                  itemCount={activeRecommendationGenre221.tracks.length}
+                  toolbar={(
+                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
+                      {recommendationModel221.genres.map((genre) => (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
+                          onClick={() => setRecommendationGenreId221(genre.id)}
+                          aria-pressed={activeRecommendationGenre221.id === genre.id}
+                        >
+                          {genre.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                >
+                  {activeRecommendationGenre221.tracks.map((track) => renderTrackCard(track))}
+                </ExploreRecommendationRail>
+              )}
+
+              {recommendationModel221.creators.length > 0 && (
+                <ExploreRecommendationRail
+                  title="좋아할 만한 크리에이터"
+                  subtitle="추천 곡에서 발견한 크리에이터를 더 둘러보세요."
+                  itemCount={recommendationModel221.creators.length}
+                  itemLabel="크리에이터"
+                  trackClassName="soridraw-explore-recommend-track--creators"
+                >
+                  {recommendationModel221.creators.map((creator) => (
+                    <ExploreCreatorCard221
+                      key={creator.id}
+                      creator={creator}
+                      onOpen={openProfile}
+                    />
+                  ))}
+                </ExploreRecommendationRail>
+              )}
+
               {tracks.length > 0 && (
                 <ExploreRecommendationRail
                   title="최신"

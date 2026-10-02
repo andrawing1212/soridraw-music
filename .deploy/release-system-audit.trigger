@@ -1,4 +1,4 @@
-app308-explore-curation-hardening
-source=38ecbdd766368119686a0871a32e96e6b3e6e0ce
-product_commit=38ecbdd766368119686a0871a32e96e6b3e6e0ce
-requested=2026-10-03T08:56:00+09:00
+app308-explore-curation-hardening-final
+source=c10a30467e2cc08ed582706942cc289e1615aff9
+product_commit=c10a30467e2cc08ed582706942cc289e1615aff9
+requested=2026-10-03T08:59:00+09:00

@@ -1,4 +1,4 @@
-app303-split-browser-history
-source=d80e431bed8dde2851a218c03d2d738d14a3e9d9
-product_commit=cc84fba18b8ccbec6b83b983f6a3a1217046516c
-requested=2026-10-03T07:05:00+09:00
+app304-explore-latest-popular-home
+source=fe9b7d7c8b07b98a9e16294852818fc08e25f054
+product_commit=fe9b7d7c8b07b98a9e16294852818fc08e25f054
+requested=2026-10-03T07:40:00+09:00

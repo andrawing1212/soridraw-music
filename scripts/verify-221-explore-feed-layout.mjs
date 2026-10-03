@@ -1059,3 +1059,44 @@ assert.match(
   'profile bio editor must remain visually capped instead of being vertically resizable',
 );
 console.log('APP317_PROFILE_GENRE_FIVE_BIO_150_FOUR_LINES=PASS');
+
+/* app318 — handle validation stays quiet during normal editing and is only
+ * surfaced after a save attempt fails the existing 3..24 lowercase handle
+ * contract. The save button must remain clickable so the deferred warning can run. */
+assert.match(profileEdit, /const \[handleValidationVisible, setHandleValidationVisible\] = useState\(false\);/);
+assert.match(
+  profileEdit,
+  /if \(!handleValid\) \{[^]*?setHandleValidationVisible\(true\);[^]*?setError\(''\);[^]*?return;/,
+  'invalid handle must reveal its warning only from save validation',
+);
+assert.match(
+  profileEdit,
+  /handleValidationVisible && !handleValid \? ' is-invalid' : ''/,
+  'invalid styling must be deferred until the failed save attempt',
+);
+assert.match(
+  profileEdit,
+  /id="soridraw-profile-handle-warning"[^]*?영문 소문자, 숫자, 점\(\.\), 밑줄\(_\)[^]*?3~24자/,
+  'handle warning text must be rendered directly below the handle field',
+);
+assert.match(
+  profileEdit,
+  /disabled=\{saving \|\| !draft\.nickname\.trim\(\)\}/,
+  'save must remain clickable when only the handle is invalid',
+);
+assert.doesNotMatch(
+  profileEdit,
+  /disabled=\{saving \|\| !handleValid/,
+  'handle validity must not disable save before validation feedback can appear',
+);
+assert.match(
+  profileEditCss,
+  /soridraw-explore-profile-handle-wrap\.is-invalid\{[^}]*box-shadow:inset 0 0 0 1px rgba\(255,96,104,\.42\)/,
+  'deferred invalid handle state must have the requested warning treatment',
+);
+assert.match(
+  profileEditCss,
+  /soridraw-explore-profile-handle-warning\{[^}]*color:#ff7f88[^}]*font-size:11px/,
+  'deferred warning text must stay visually local to the handle field',
+);
+console.log('APP318_DEFERRED_HANDLE_WARNING=PASS');

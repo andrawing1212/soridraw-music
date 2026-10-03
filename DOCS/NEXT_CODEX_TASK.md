@@ -1,3 +1,28 @@
+## CURRENT TASK — first-publication W12 post-migration fanout decomposition (2026-10-04 KST)
+
+실기기 결과:
+- never-published 첫 공개: D1 query R3/W1, billable **R7/W12**, Firestore W0.
+- migration 전 W18 → 현재 W12로 감소했지만 hard gate FAIL.
+
+다음 작업은 **추가 쓰기/migration 전에 read-only 분해**:
+1. live D1 Insights에서 first-publication UPSERT의 post-migration avgRowsWritten 재확인.
+2. 현재 tracks indexes / triggers exact 목록 확인.
+3. tracks INSERT → explore_derived_tracks INSERT → explore_derived_changes / explore_derived_state / derived profile repair까지 실제 write contribution 분해.
+4. 남은 각 write가 PREVIEW/TEST/PRODUCTION 조회 호환성에 필요한지 증명.
+5. 제거 가능한 redundant index/trigger/event만 두 번째 compaction 후보로 제안.
+6. 사용자 row delete/backfill/rewrite 금지.
+7. W1~W2 불가능한 항목은 숨기지 말고 하위호환 최소 floor와 이유를 보고.
+
+동시에 별도 버그:
+- same-source registered private→public이 W3 source-refresh로 잘못 분기되는 문제를 우선 수정하여 W2 복구.
+
+보호:
+- 제목/장르/아티스트 이름·handle 검색.
+- public→private W2 정상 경로.
+- 좋아요 app164/160, 저장 하트 app302, 폴더 app301, Split app303.
+- Music Note 60초/local-first batch.
+- TEST/PRODUCTION 변경 금지.
+
 ## CURRENT TASK — same-source private→public false source-refresh W3 fix (2026-10-04 KST)
 
 실기기 증거:

@@ -191,6 +191,31 @@ const signalRevisionByUid127 = new Map<string, number>();
 const signalPublishInFlight127 = new Map<string, Promise<void>>();
 const revisionCheckAtByUid127 = new Map<string, number>();
 const revisionCheckInFlight127 = new Map<string, Promise<void>>();
+// app334: the existing five-minute private-like revision cadence must survive a
+// browser reload. Reload is not a like change, so do not restart the Worker clock.
+const EXPLORE_LIKE_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:like-revision-check-at:v1';
+const exploreLikeRevisionCheckStorageKey334 = (uid: string) =>
+  `${EXPLORE_LIKE_REVISION_CHECK_STORAGE_PREFIX_334}:${encodeURIComponent(uid)}`;
+const readExploreLikeRevisionCheckAt334 = (uid: string) => {
+  const memory = revisionCheckAtByUid127.get(uid);
+  if (memory) return memory;
+  if (typeof window === 'undefined') return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(exploreLikeRevisionCheckStorageKey334(uid)) || 0);
+    if (Number.isFinite(stored) && stored > 0) {
+      revisionCheckAtByUid127.set(uid, stored);
+      return stored;
+    }
+  } catch {}
+  return 0;
+};
+const writeExploreLikeRevisionCheckAt334 = (uid: string, checkedAt: number) => {
+  revisionCheckAtByUid127.set(uid, checkedAt);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(exploreLikeRevisionCheckStorageKey334(uid), String(checkedAt));
+  } catch {}
+};
 const targetedVerifiedByUid127 = new Map<string, Set<string>>();
 const targetedVerifiedRevisionByUid130 = new Map<string, string>();
 
@@ -856,7 +881,7 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
   const uid = String(user?.uid || '').trim();
   if (!uid) return;
   const now = Date.now();
-  if (now - (revisionCheckAtByUid127.get(uid) || 0) < EXPLORE_LIKE_LEGACY_CHECK_MS_127) return;
+  if (now - readExploreLikeRevisionCheckAt334(uid) < EXPLORE_LIKE_LEGACY_CHECK_MS_127) return;
   const existing = revisionCheckInFlight127.get(uid);
   if (existing) return existing;
   const task = (async () => {
@@ -880,11 +905,11 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
       }
       // Same private R2 revision means no account like changed. Keep the
       // app134 per-track canonical proof and make ordinary re-entry D1 R0.
-      revisionCheckAtByUid127.set(uid, Date.now());
+      writeExploreLikeRevisionCheckAt334(uid, Date.now());
     } catch (error) {
       // Throttle a broken connection for only 30 seconds, not for the entire
       // five-minute normal check window. Never clear the last good liked set.
-      revisionCheckAtByUid127.set(uid, Date.now() - EXPLORE_LIKE_LEGACY_CHECK_MS_127 + 30_000);
+      writeExploreLikeRevisionCheckAt334(uid, Date.now() - EXPLORE_LIKE_LEGACY_CHECK_MS_127 + 30_000);
       throw error;
     }
   })().finally(() => { revisionCheckInFlight127.delete(uid); });

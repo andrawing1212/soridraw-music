@@ -584,6 +584,16 @@ export const refreshExploreMusicNotePublicationSource = async (
       body: JSON.stringify({
         sourceType: 'music_note',
         sourceId: normalizedSourceId,
+        ...(sourceMedia ? {
+          sourceMedia: {
+            coverUrl: String(sourceMedia.coverUrl || '').trim().slice(0, 4096),
+            durationSeconds: sourceMedia.durationSeconds == null
+              ? null
+              : Math.max(0, Number(sourceMedia.durationSeconds) || 0),
+            sunoUrlPrimary: String(sourceMedia.sunoUrlPrimary || '').trim().slice(0, 4096),
+            sunoUrlSecondary: String(sourceMedia.sunoUrlSecondary || '').trim().slice(0, 4096) || null,
+          },
+        } : {}),
         ...normalizedOptions,
       }),
     });

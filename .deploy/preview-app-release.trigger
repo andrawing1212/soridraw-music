@@ -1,7 +1,7 @@
-app321-profile-layout-bio-handle
-target_source=57f6f839810f5037f32c988e8043e1864ba5cc46
-app_version=321
+app322-profile-bio-no-line-limit
+target_source=a47f37dbed2763632d80781cb7cbdc6bc64a0de8
+app_version=322
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-layout-bio-handle-refinement
+release_request=profile-bio-line-limit-removed

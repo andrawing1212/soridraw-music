@@ -1,3 +1,53 @@
+## 0NR. PREVIEW app320 배포 완료 — 소개 줄바꿈 보존 + 핸들 자유 입력/저장 시 검증 (2026-10-03 KST)
+
+**적용**
+- app319에서 프로필 소개의 **엔터 줄바꿈을 공개 프로필에서도 그대로 표시**하도록 수정.
+  - 편집창에서 Enter로 나눈 줄은 저장 후 공개 프로필에서도 같은 줄바꿈으로 보임.
+  - 긴 한 줄 텍스트는 기존처럼 영역 안에서 자동 줄바꿈.
+- app320에서 고유 핸들 입력 중의 강제 필터링을 제거.
+  - 대문자/소문자/특수문자/한글 등 다른 언어/길이 초과 문자열도 **입력 자체는 막지 않음**.
+  - 입력 중 자동 소문자 변환/문자 삭제 없음.
+  - 최대 길이 입력 차단도 제거.
+- 핸들 저장 조건은 기존 계약 그대로 유지.
+  - 영문 소문자, 숫자, 점(.), 밑줄(_)만 허용.
+  - 3~24자.
+  - 점(.)은 처음/끝/연속 사용 불가.
+- 위 조건에 맞지 않는 상태에서 **저장 버튼을 눌렀을 때만** 입력칸 경고 스타일 + 안내문 노출.
+- 올바른 값으로 수정하면 경고는 즉시 해제.
+- 대표 장르 최대 5개, 소개 150자/4줄, 프로필 사진/배경 크롭 동작은 그대로 유지.
+
+**변경 / 검증 / 배포**
+- 소개 줄바꿈 제품 commit: `d9726e9a416e6635658625abf998e19bcd512276`.
+- 소개 줄바꿈 verifier: `fc898f0c2fea5acc313b09dfb1dd60f189268952`.
+- app319 audit `37096474003`: **SUCCESS**.
+- app319 PREVIEW release `37096558530`: **SUCCESS**, app319 exact build PASS.
+- 핸들 자유 입력 제품 commit: `84480f57794ff5dd3b7cbad91310cf317f16939f`.
+- app320 verifier: `02019b3de5ffc58796f367f4681acdf4a8cb9754`.
+- 최초 app320 audit `37096694758`: FAIL — 제품 코드가 아니라 verifier가 unrelated 기존 문자열을 넓게 잡은 정규식 문제.
+- verifier fix: `2a027f6c8e7aef1ae0e5eaf5f1ffef525c19e0e8`.
+- 최종 audit trigger: `c9f0de49a4aca1c67aa7356dc05dc8fee42f9fe9`.
+- Final Release System Audit `37096804790`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37096905327`: **SUCCESS**.
+  - locked source `fa23583413a207c716a13333343c6149622917ce`.
+  - `preview.soridraw.com` app **320**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 소개 편집창에서 Enter로 2~4줄 작성 후 저장 → 공개 프로필에서 동일 줄바꿈 표시.
+2. 핸들에 대문자, 한글, 특수문자를 입력해도 입력 중 삭제/변환되지 않는지.
+3. 24자를 넘겨도 입력 자체는 가능한지.
+4. 잘못된 핸들 상태에서 저장할 때만 경고문과 붉은 입력 상태가 보이는지.
+5. 올바른 영문 소문자/숫자/점/밑줄 3~24자로 고치면 경고가 사라지고 저장되는지.
+6. 대표 장르 5개 / 소개 150자·4줄 / 이미지 편집에 회귀가 없는지.
+
 ## 0NQ. PREVIEW app318 배포 완료 — 대표 장르 5개 + 소개 150자/4줄 + 핸들 저장 시 경고 (2026-10-03 KST)
 
 **적용**

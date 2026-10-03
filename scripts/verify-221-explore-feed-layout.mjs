@@ -6,6 +6,7 @@ const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const profileEdit = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
+const cropModal = readFileSync('src/components/explore/ExploreImageCropModal.tsx', 'utf8');
 const profileEditCss = readFileSync('src/components/explore/exploreProfileEdit.css', 'utf8');
 const socialService = readFileSync('src/services/exploreSocialService.ts', 'utf8');
 const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
@@ -990,3 +991,40 @@ assert.match(
   'mobile profile hero height must remain unchanged at 190px',
 );
 console.log('APP314_MY_PROFILE_HERO_HEIGHT_FINE_TUNE=PASS');
+
+
+/* app315 — profile image editor starts in the middle of the existing 1..3
+ * zoom range so both zoom-out and zoom-in are available immediately.
+ * Profile representative genres are capped to four only in the profile editor. */
+assert.match(
+  cropModal,
+  /const DEFAULT_PROFILE_CROP_ZOOM_315 = 2;/,
+  'profile/background crop default zoom must start at the midpoint',
+);
+assert.match(
+  cropModal,
+  /useState<ExploreProfileMediaCrop>({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })/,
+  'both profile and background crop editors must start at midpoint zoom',
+);
+assert.match(
+  cropModal,
+  /min="1"[sS]*?max="3"[sS]*?value={crop.zoom}/,
+  'crop control must preserve the existing safe 1..3 zoom range',
+);
+assert.match(
+  cropModal,
+  /setCrop({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })/,
+  'crop reset must return to the new midpoint default',
+);
+assert.match(profileEdit, /const PROFILE_GENRE_LIMIT_315 = 4;/);
+assert.match(profileEdit, /genres: (profile.genres || []).slice(0, PROFILE_GENRE_LIMIT_315)/);
+assert.match(profileEdit, /draft.genres.length >= PROFILE_GENRE_LIMIT_315/);
+assert.match(profileEdit, /result.genres.slice(0, PROFILE_GENRE_LIMIT_315)/);
+assert.match(profileEdit, /genres: draft.genres.map([sS]*?.slice(0, PROFILE_GENRE_LIMIT_315)/);
+assert.match(profileEdit, /대표 장르 <span>{draft.genres.length}/{PROFILE_GENRE_LIMIT_315}</span>/);
+assert.doesNotMatch(
+  profileEdit,
+  /draft.genres.length >= 5|draft.genres.length}/5|slice(0, 5)/,
+  'profile editor must not retain the previous five-genre limit',
+);
+console.log('APP315_PROFILE_CROP_MID_ZOOM_AND_FOUR_GENRES=PASS');

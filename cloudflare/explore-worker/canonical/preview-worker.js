@@ -5356,6 +5356,82 @@ async function handleIndexedGenreAlias338(url, genreAlias, env, cors) {
   return json({ ok: true, data: { genre, items, nextCursor: null } }, 200, cors);
 }
 
+// SORIDRAW_KOREAN_GENRE_ALIAS_BOUND_CACHE_339_20261004
+function narrowKoreanGenreAliases339(query, aliases) {
+  const q = String(query || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  const list = [...new Set((aliases || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const exact = new Map([
+    ['힙합', 'Hip-hop'],
+    ['재즈', 'Jazz'],
+    ['트로트', 'Trot'],
+    ['록', 'Rock'],
+    ['락', 'Rock'],
+    ['메탈', 'Metal'],
+    ['하우스', 'House'],
+    ['테크노', 'Techno'],
+    ['트랜스', 'Trance'],
+    ['클래식', 'Classical'],
+    ['팝', 'Pop'],
+  ]);
+  const exactAlias = exact.get(q);
+  if (exactAlias) {
+    const found = list.find((value) => value.toLowerCase() === exactAlias.toLowerCase());
+    return [found || exactAlias];
+  }
+  // Family searches such as 발라드/시티팝 may legitimately need multiple
+  // English genre labels, but never fan one user search out beyond three aliases.
+  return list.slice(0, 3);
+}
+
+function genreSearchCacheKey339(url, aliases) {
+  const q = String(url.searchParams.get('q') || '').normalize('NFKC').toLowerCase().trim();
+  const canonical = [...new Set((aliases || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))]
+    .sort()
+    .join('|');
+  return new Request(
+    'https://preview.soridraw.com/__soridraw_edge/genre-search-339'
+      + '?q=' + encodeURIComponent(q)
+      + '&g=' + encodeURIComponent(canonical),
+    { method: 'GET' }
+  );
+}
+
+async function readGenreSearchCache339(url, aliases) {
+  try {
+    if (typeof caches === 'undefined' || !caches?.default) return null;
+    const hit = await caches.default.match(genreSearchCacheKey339(url, aliases));
+    if (!(hit instanceof Response)) return null;
+    const headers = new Headers(hit.headers);
+    headers.set('X-SORIDRAW-Genre-Cache', 'HIT-339');
+    headers.set('Cache-Control', 'no-store');
+    return new Response(hit.body, {
+      status: hit.status,
+      statusText: hit.statusText,
+      headers,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function writeGenreSearchCache339(url, aliases, response) {
+  try {
+    if (typeof caches === 'undefined' || !caches?.default || !(response instanceof Response) || !response.ok) return;
+    const clone = response.clone();
+    const headers = new Headers(clone.headers);
+    headers.set('Cache-Control', 'public, max-age=90');
+    headers.set('X-SORIDRAW-Genre-Cache', 'STORED-339');
+    await caches.default.put(
+      genreSearchCacheKey339(url, aliases),
+      new Response(clone.body, {
+        status: clone.status,
+        statusText: clone.statusText,
+        headers,
+      })
+    );
+  } catch {}
+}
+
 async function handleSearch(url, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleSearchCore336(url, env, cors);
@@ -5388,12 +5464,14 @@ async function handleSearch(url, env, cors) {
     );
   }
 
-  const genreAliases = [...new Set(
+  const genreAliases = narrowKoreanGenreAliases339(
+    url.searchParams.get('q'),
     url.searchParams.getAll('genre')
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-  )].slice(0, 6);
+  );
   if (genreAliases.length > 0) {
+    const cachedGenreSearch339 = await readGenreSearchCache339(url, genreAliases);
+    if (cachedGenreSearch339) return cachedGenreSearch339;
+
     const limit = getPageSize(url);
     const items = [];
     const seen = new Set();
@@ -5421,10 +5499,18 @@ async function handleSearch(url, env, cors) {
         creators: [],
         nextCursor: null,
       };
-      return withHybridReadHeaders336(
+      const response339 = withHybridReadHeaders336(
         json({ ok: true, data }, 200, cors),
         'INDEXED-GENRE-FALLBACK-337'
       );
+      await writeGenreSearchCache339(url, genreAliases, response339);
+      const headers339 = new Headers(response339.headers);
+      headers339.set('X-SORIDRAW-Genre-Cache', 'MISS-339');
+      return new Response(response339.body, {
+        status: response339.status,
+        statusText: response339.statusText,
+        headers: headers339,
+      });
     }
   }
 

@@ -526,6 +526,7 @@ export const refreshExploreMusicNotePublicationSource = async (
   user: User,
   sourceId: string,
   options?: Partial<ExplorePublicationOptions>,
+  registeredTrackId?: string | null,
 ): Promise<ExploreMusicNotePublicationState> => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) {
@@ -533,18 +534,47 @@ export const refreshExploreMusicNotePublicationSource = async (
   }
   const expectedTrackId = getMusicNoteTrackId(user.uid, normalizedSourceId);
   const normalizedOptions = normalizePublicationOptions(options);
-  const payload = await requestExplore(user, '/v1/publications', {
-    method: 'POST',
-    body: JSON.stringify({
-      sourceType: 'music_note',
-      sourceId: normalizedSourceId,
-      ...normalizedOptions,
-    }),
-  });
-  const data = payload?.data || {};
+  const normalizedRegisteredTrackId = String(registeredTrackId || '').trim();
+
+  let data: any = null;
+  if (normalizedRegisteredTrackId) {
+    const payload = await requestExplore(user, '/v1/me/music-note-publications/batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        mutations: [{
+          sourceId: normalizedSourceId,
+          trackId: normalizedRegisteredTrackId,
+          status: 'public',
+          registered: true,
+          mutationAt: Date.now(),
+          refreshSourceMedia: true,
+          options: normalizedOptions,
+        }],
+      }),
+    });
+    const result = Array.isArray(payload?.data?.results) ? payload.data.results[0] : null;
+    if (!result?.ok) {
+      throw new ExploreApiError(
+        'PUBLICATION_SOURCE_REFRESH_FAILED',
+        String(result?.error || '공개 곡 연결을 갱신하지 못했습니다.'),
+      );
+    }
+    data = result;
+  } else {
+    const payload = await requestExplore(user, '/v1/publications', {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceType: 'music_note',
+        sourceId: normalizedSourceId,
+        ...normalizedOptions,
+      }),
+    });
+    data = payload?.data || {};
+  }
+
   const nextState: ExploreMusicNotePublicationState = {
     status: 'public',
-    trackId: String(data?.trackId || expectedTrackId),
+    trackId: String(data?.trackId || normalizedRegisteredTrackId || expectedTrackId),
     registered: true,
     allowNextSongApply: Boolean(data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
     allowFollowerSave: Boolean(data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),

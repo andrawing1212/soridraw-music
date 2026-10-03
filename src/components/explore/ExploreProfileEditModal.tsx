@@ -295,13 +295,12 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
             <input
               id="soridraw-profile-handle"
               value={draft.handle}
-              maxLength={24}
               autoCapitalize="none"
               spellCheck={false}
               aria-invalid={handleValidationVisible && !handleValid}
               aria-describedby={handleValidationVisible && !handleValid ? 'soridraw-profile-handle-warning' : undefined}
               onChange={(event) => {
-                const nextHandle = event.target.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9._]/g, '');
+                const nextHandle = event.target.value;
                 setDraft((prev) => ({ ...prev, handle: nextHandle }));
                 if (/^[a-z0-9._]{3,24}$/.test(nextHandle) && !nextHandle.startsWith('.') && !nextHandle.endsWith('.') && !nextHandle.includes('..')) {
                   setHandleValidationVisible(false);

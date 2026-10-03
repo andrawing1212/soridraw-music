@@ -1,5 +1,4 @@
-app315-profile-crop-midpoint-four-genres-retry
-source=48ea5579496b04856d1942bedbf9f698015c2bc0
+app315-profile-editor-final
+source=f93a372e8f13c6f8af2f81ed25f126e584bbf177
 product_commit=39e4694fba0cb5884b32d47f7fbf0c9c2bd8d555
-requested=2026-10-03T12:36:00+09:00
-deploy=false
+requested=2026-10-03T12:41:00+09:00

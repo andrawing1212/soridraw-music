@@ -1,3 +1,45 @@
+## 0NO. PREVIEW app315 배포 완료 — 프로필 이미지 기본 줌 중앙 + 대표 장르 4개 제한 (2026-10-03 KST)
+
+**적용**
+- 프로필 사진/배경 이미지 편집의 확대·축소 게이지 기본값을 기존 최소값(zoom 1)에서 중앙값 **zoom 2**로 변경.
+- 게이지 범위는 기존 **1~3** 그대로 유지하여, 처음 사진을 불러온 직후부터 축소와 확대를 모두 할 수 있음.
+- 초기화 버튼도 새 기본값인 zoom 2 + 중앙 위치로 복귀.
+- 프로필 편집의 대표 장르 최대 개수를 **5개 → 4개**로 조정.
+- 기존 프로필에 5개가 있어도 편집창에서는 최대 4개까지만 유지.
+- 수동 추가, 자동 새로고침 결과, 저장/변경 비교 모두 4개 제한으로 통일.
+- 이미지 크롭 비율/저장 해상도/드래그 이동/프로필 저장 경로는 변경 없음.
+
+**변경 / 검증 / 배포**
+- crop default commit: `db7f0866b0d05403f96799c3b6636aceb8cc4848`.
+- genre limit commit: `39e4694fba0cb5884b32d47f7fbf0c9c2bd8d555`.
+- verifier commit: `f2240838b209b22778ebe502af78b7d2c90ca4c5`.
+- 최초 Audit `37093499122`: FAIL — 제품 코드가 아니라 verifier 정규식 문법 오류. TypeScript 단계에서 verifier 파일 파싱 실패.
+- verifier fix: `48ea5579496b04856d1942bedbf9f698015c2bc0`.
+- 후보 Audit `37093694247`: **SUCCESS**.
+- app315 version commit: `f93a372e8f13c6f8af2f81ed25f126e584bbf177`.
+- Final Release System Audit `37093821640`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37093928424`: **SUCCESS**.
+  - locked source `118d15bcaac051fe524b7a14a2671abec5177a1b`.
+  - `preview.soridraw.com` app **315**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 프로필 사진 선택 직후 줌 손잡이가 중앙에서 시작하는지.
+2. 배경 이미지 선택 직후 줌 손잡이가 중앙에서 시작하는지.
+3. 중앙에서 왼쪽으로 축소, 오른쪽으로 확대 모두 가능한지.
+4. 초기화 버튼이 다시 중앙 줌으로 복귀하는지.
+5. 대표 장르 카운터가 `0/4 ~ 4/4`인지.
+6. 4개 상태에서 추가 버튼 비활성, 자동 추천도 최대 4개인지.
+7. 저장 후 공개 프로필에 최대 4개만 표시되는지.
+
 ## 0NN. PREVIEW app314 배포 완료 — MY 프로필 배경 높이 335/270px (2026-10-03 KST)
 
 **적용**

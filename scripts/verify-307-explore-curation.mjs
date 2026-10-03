@@ -38,6 +38,12 @@ assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker 
 assert(worker.includes('curatedStableBodyEdgeKey307'), 'Shared edge body cache is missing.');
 assert(worker.includes('EDGE-CURATED-BODY-307'), 'Edge curated response path is missing.');
 assert(worker.includes('SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003'), 'Targeted publication/privacy sync is missing.');
+assert(worker.includes('SORIDRAW_CURATED_MANAGER_R2_READ_310_20261003'), 'Manager list must reuse the curated R2 snapshot.');
+const managedAt310 = worker.indexOf('async function handleManagedCurated307');
+const managedSlice310 = worker.slice(managedAt310, worker.indexOf('async function readFeedHeadSource112', managedAt310));
+assert(managedSlice310.includes('readCuratedObject307(request, env, ctx)'), 'Manager list must read the existing curated R2 object.');
+assert(managedSlice310.includes("source: 'MANAGED-R2-310'"), 'Manager list must expose the R2 diagnostic source.');
+assert(!managedSlice310.includes('baseWorker.fetch('), 'Manager list must not call the D1-backed curated list route.');
 assert(worker.includes("url.pathname === '/v1/me/music-note-publications/batch'"), 'Current Music Note publication batch path must sync curated privacy.');
 assert(worker.includes('memberIds'), 'Curated R2 must preserve promoted membership while a song is private.');
 assert(worker.includes('syncCuratedPublicationResults307(request, env, results307)'), 'Publication results must patch curated R2.');

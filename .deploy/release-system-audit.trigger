@@ -1,4 +1,4 @@
-app311-curated-manager-feed-parity
-source=b21a677ea8053abf6dc148fbe6536ce7ebb68b22
+app311-curated-manager-feed-parity-retry
+source=85a7dfe6ba05c0a0308a03ccd4c84e4618f78595
 product_commit=b21a677ea8053abf6dc148fbe6536ce7ebb68b22
-requested=2026-10-03T11:08:00+09:00
+requested=2026-10-03T11:11:00+09:00

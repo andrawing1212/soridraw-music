@@ -470,7 +470,7 @@ export const getExploreMusicNotePublicationStates = async (
     && lastPersistentValidationAt334 > 0
     && Date.now() - lastPersistentValidationAt334 < PUBLICATION_REVISION_CHECK_MS_334
   ) {
-    markPublicationServerValidated334(uid);
+    publicationServerValidatedUids.add(uid);
     return cached;
   }
 

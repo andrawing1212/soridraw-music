@@ -1,3 +1,46 @@
+## CURRENT TASK — cached reload Worker-zero pass (Explore / profile / Music Note) (2026-10-04 KST)
+
+증거:
+- Explore warm reload: D1 R0/W0이지만 Worker가 `explore-management-access`, `likes-revision`, revision/profile conditional 경로에서 누적.
+- public profile warm browser reload: app211이 60s cache window 안에서도 conditional Worker revalidation을 강제.
+- Music Note warm reload: `music-note-publications-revision` Worker가 reload마다 1 증가; D1 R0/W0.
+- 목표는 **정상 캐시 + 변경 없음 reload = Worker 0 / D1 R0 W0**.
+
+구현 범위:
+1. `src/services/exploreCurationService.ts`
+   - `getExploreCurationAccess307` 결과를 uid-scoped durable cache로 유지.
+   - 일반 reload가 `/v1/me/explore-management-access`를 다시 부르지 않게 함.
+   - 권한 변경/로그아웃/명시 관리 action 시 invalidation 가능하게 유지.
+2. `src/services/exploreLikeService.ts`
+   - `revisionCheckAtByUid127`의 정상 check window가 reload로 초기화되지 않도록 uid-scoped persistent checkedAt 사용.
+   - 기존 5분 정상 check cadence와 30초 failure retry 의미는 유지.
+   - PC↔모바일 like convergence 기능 약화 금지.
+3. `src/services/explorePublicationService.ts`
+   - persistent publication envelope에 last validated/check timestamp를 사용하여 healthy cached reload가 즉시 `/v1/me/music-note-publications-revision`을 호출하지 않게 함.
+   - publication mutation/outbox가 있으면 기존 safety path 유지.
+   - cross-device freshness 요구를 깨지 않는 bounded validation cadence 유지.
+4. `src/services/exploreProfileFirstViewService.ts`
+   - app211의 browser reload 강제 revalidation을 제거하고 existing persistent `validatedAt` window를 존중.
+   - profile mutation/invalidation/parity 기능 유지.
+5. Explore feed revision도 reload 자체가 강제 Worker trigger인지 확인하고 동일 원칙 적용.
+6. CACHE LIVE verifier 추가:
+   - warm Explore reload: Worker 0 / D1 R0 W0.
+   - warm profile reload: Worker 0 / D1 R0 W0.
+   - warm Music Note reload: Worker 0 / D1 R0 W0.
+   - validation TTL 만료/실제 signal 변경 시에만 필요한 Worker request 허용.
+7. UI 변경 없음.
+
+절대 보호:
+- app164/160 Explore likes.
+- app331~333 publication behavior.
+- app302 Studio save heart.
+- app301 folders.
+- app303 Split.
+- Music Note 60s/local-first canonical batch.
+- TEST/PRODUCTION 변경 금지.
+- Worker/D1 schema 변경 없이 client cache-trigger 최적화부터 수행.
+- 정상 기능을 비용 때문에 삭제 금지.
+
 ## CURRENT TASK — first-publication W12 post-migration fanout decomposition (2026-10-04 KST)
 
 실기기 결과:

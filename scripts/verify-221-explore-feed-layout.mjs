@@ -6,6 +6,7 @@ const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const social = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const profileEdit = readFileSync('src/components/explore/ExploreProfileEditModal.tsx', 'utf8');
+const profileEditCss = readFileSync('src/components/explore/exploreProfileEdit.css', 'utf8');
 const socialService = readFileSync('src/services/exploreSocialService.ts', 'utf8');
 const sharedNoteService = readFileSync('src/services/exploreSharedNoteService.ts', 'utf8');
 const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
@@ -974,17 +975,17 @@ assert.match(
   'My Profile hero height scope must not affect other public profiles',
 );
 assert.match(
-  profileEdit,
+  profileEditCss,
   /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:252px\}\}/,
   'tablet My Profile hero must be 1.2x the existing 210px height',
 );
 assert.match(
-  profileEdit,
+  profileEditCss,
   /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:315px\}\}/,
   'PC My Profile hero must be 1.5x the existing 210px height',
 );
 assert.match(
-  profileEdit,
+  profileEditCss,
   /@media\(max-width:720px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:190px;padding:20px 14px\}/,
   'mobile profile hero height must remain unchanged at 190px',
 );

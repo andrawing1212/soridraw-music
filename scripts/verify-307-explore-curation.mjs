@@ -31,6 +31,10 @@ assert(service.includes('soridraw-managed-curated-local-309'), 'Managed curated 
 assert(service.includes('soridraw-managed-curated-revision-309'), 'Managed curated stale cache must reuse unchanged revision without list reread.');
 assert(service.includes('fetchCuratedRevision309'), 'Managed curated cache must revalidate with the D1-free curated revision path.');
 assert(service.includes('invalidateManagedCuratedCache309'), 'A real curation mutation must invalidate only the manager cache for the acting account.');
+assert(service.includes('SORIDRAW_CURATED_MANAGER_PUBLIC_CACHE_PARITY_311_20261003'), 'Manager snapshot must seed the public curated cache.');
+assert(service.includes('syncPublicCuratedCacheFromManaged311'), 'Manager/public curated cache parity helper is missing.');
+assert(page.includes('SORIDRAW_CURATED_MANAGER_PUBLIC_STATE_PARITY_311_20261003'), 'Manager snapshot must patch the public Explore state.');
+assert(page.includes('setCuratedTracks307(normalized.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304))'), 'Manager sync must update the visible curated feed without a second server read.');
 assert(!service.includes("from 'firebase/firestore'"), 'Curated public reads must not add Firestore page-entry reads.');
 
 assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Worker curation marker is missing.');

@@ -340,7 +340,7 @@ assert.match(page, /const liked = readExploreTrackLikeMembership127\(user\.uid, 
 assert.match(page, /verifiedMembership\.forEach\(\(liked, id\) => \{ next\[id\] = liked; \}\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);
 assert.match(page, /checkExplorePersonalLikeRevision127\(user\)/);
-assert.match(page, /window\.addEventListener\('focus', onResume\)/);
+assert.doesNotMatch(page, /window\.addEventListener\('focus', onResume\)/, 'app335 reload/focus must not spend a private-like revision Worker request');
 assert.match(page, /document\.addEventListener\('visibilitychange', onResume\)/);
 assert.match(service, /EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 \* 60_000/);
 assert.match(service, /if \(previous !== revision\) \{/);

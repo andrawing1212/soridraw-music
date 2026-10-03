@@ -1048,15 +1048,15 @@ assert.match(profileEdit, /draft\.genres\.map[^]*?PROFILE_GENRE_LIMIT_317/);
 assert.match(profileEdit, /대표 장르[^]*?PROFILE_GENRE_LIMIT_317/);
 assert.match(
   profileEdit,
-  /maxLength=\{PROFILE_BIO_MAX_LENGTH_317\}[^]*?rows=\{PROFILE_BIO_MAX_LINES_317\}[^]*?normalizeProfileBio317\(event\.currentTarget\.value\)[^]*?scrollHeight > event\.currentTarget\.clientHeight \+ 1/,
-  'profile bio textarea must expose the 150 character / four-visible-row contract',
+  /maxLength=\{PROFILE_BIO_MAX_LENGTH_317\}[^]*?rows=\{PROFILE_BIO_MAX_LINES_317\}[^]*?normalizeProfileBio317\(event\.currentTarget\.value\)/,
+  'profile bio textarea must keep the 150 character cap while allowing additional lines beyond the initial visible rows',
 );
 assert.match(profileEdit, /draft\.bio\.length[^]*?PROFILE_BIO_MAX_LENGTH_317/);
 assert.doesNotMatch(profileEdit, /PROFILE_GENRE_LIMIT_315|maxLength=\{?200\}?|draft\.bio\.length}\/200/);
 assert.match(
   profileEditCss,
-  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*height:130px[^}]*max-height:130px[^}]*resize:none[^}]*overflow-y:hidden/,
-  'profile bio editor must remain visually capped at the visible four-row surface instead of scrolling',
+  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*height:130px[^}]*max-height:130px[^}]*resize:none[^}]*overflow-y:auto/,
+  'profile bio editor may scroll when the user writes more lines while keeping the existing editor height',
 );
 console.log('APP317_PROFILE_GENRE_FIVE_BIO_150_FOUR_LINES=PASS');
 
@@ -1150,15 +1150,15 @@ assert.doesNotMatch(
   /\.split\('\\n'\)[^]*?\.slice\(0, PROFILE_BIO_MAX_LINES_317\)/,
   'bio normalizer must not delete previously typed text when a fifth explicit newline is attempted',
 );
-assert.match(
+assert.doesNotMatch(
   profileEdit,
-  /event\.currentTarget\.scrollHeight > event\.currentTarget\.clientHeight \+ 1/,
-  'bio input must reject only the change that would overflow the four-row textarea',
+  /scrollHeight > event\.currentTarget\.clientHeight/,
+  'bio input must not reject text based on visible line count',
 );
 assert.match(
   profileEditCss,
-  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*overflow-y:hidden/,
-  'bio textarea must not silently scroll beyond its visible four-row contract',
+  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*overflow-y:auto/,
+  'bio textarea must allow scrolling instead of imposing a line-count limit',
 );
 assert.match(
   page,
@@ -1176,3 +1176,19 @@ assert.match(
   'saved bio must begin under the avatar side and preserve author-entered line breaks',
 );
 console.log('APP321_PROFILE_LAYOUT_BIO_HANDLE_REFINEMENT=PASS');
+
+
+/* app322 — user removed the profile bio line-count limit.
+ * Keep the 150-character cap and current editor size, but do not reject input
+ * based on explicit or automatic wrapping lines. */
+assert.doesNotMatch(
+  profileEdit,
+  /scrollHeight > event\.currentTarget\.clientHeight/,
+  'profile bio must not enforce a visible-line ceiling',
+);
+assert.match(
+  profileEdit,
+  /onChange=\{\(event\) => setDraft\(\(prev\) => \(\{ \.\.\.prev, bio: normalizeProfileBio317\(event\.currentTarget\.value\) \}\)\)\}/,
+  'profile bio must accept normalized input directly up to the character limit',
+);
+console.log('APP322_PROFILE_BIO_LINE_LIMIT_REMOVED=PASS');

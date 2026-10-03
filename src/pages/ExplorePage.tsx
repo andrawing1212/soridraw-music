@@ -298,7 +298,6 @@ type ExploreFeedRevisionResponse = {
 };
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000;
-const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
 // SORIDRAW_EXPLORE_ENTRY_REVISION_REVALIDATION_126_20260920
 // The last successful check survives Explore route remounts within this tab.
 // Rendering cached rows must never reset this clock: otherwise opening Explore
@@ -2323,21 +2322,11 @@ export default function ExplorePage() {
         });
     };
 
-    // app335: browser focus/pageshow can fire as part of a reload. They are not
-    // data-change signals. Use only post-entry pointer activity or a real tab
-    // hidden→visible resume, both still bounded by the persistent two-minute gate.
-    const requestActivityRevisionCheck = () => {
-      if (document.visibilityState !== 'visible') return;
-      const now = Date.now();
-      if (now - feedRevisionActivityAtRef.current < EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS) return;
-      feedRevisionActivityAtRef.current = now;
-      requestRevisionCheck();
-    };
-
-    window.addEventListener('pointerdown', requestActivityRevisionCheck, { passive: true });
+    // app335: route entry, reload, focus, pageshow and ordinary pointer clicks are
+    // not change signals. Revalidate only after a real hidden→visible tab resume;
+    // mutation-specific like/publication signals keep their own targeted paths.
     document.addEventListener('visibilitychange', requestRevisionCheck);
     return () => {
-      window.removeEventListener('pointerdown', requestActivityRevisionCheck);
       document.removeEventListener('visibilitychange', requestRevisionCheck);
     };
   }, [requestUrl, profileUid, user?.uid]);
@@ -2449,11 +2438,9 @@ export default function ExplorePage() {
         },
       });
     };
-    window.addEventListener('pointerdown', requestProfileRevalidation335, { passive: true });
     document.addEventListener('visibilitychange', requestProfileRevalidation335);
     return () => {
       cancelled = true;
-      window.removeEventListener('pointerdown', requestProfileRevalidation335);
       document.removeEventListener('visibilitychange', requestProfileRevalidation335);
     };
   }, [profileUid, user?.uid]);

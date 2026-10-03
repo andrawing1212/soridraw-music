@@ -208,6 +208,17 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
   return task;
 };
 
+// SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003
+// Reuse the existing local/R2 social snapshot. The Latest Following filter must
+// never create a second D1-backed feed or re-read one profile per followed user.
+export const getExploreFollowingUids312 = async (user: User): Promise<string[]> => {
+  const bundle = await loadExploreFollowingBundle(user);
+  return Object.entries(bundle.states)
+    .filter(([, following]) => following === true)
+    .map(([uid]) => uid)
+    .filter(Boolean);
+};
+
 const toCount = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;

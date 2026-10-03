@@ -1,3 +1,48 @@
+## 0NU. PREVIEW app327 배포 완료 — 뒤로가기 단독 / 소셜 2배 / 소개 반응형 글자 크기 (2026-10-03 KST)
+
+**적용**
+- 프로필 상단 툴바에서 `MY 프로필` 텍스트 제거.
+  - 자기/다른 사용자 프로필 모두 뒤로가기 화살표 버튼만 표시.
+- 소셜 링크 버튼 확대.
+  - PC: 30x30 → **60x60**, 아이콘 16 → **32px**.
+  - Mobile: 26x26 → **52x52**, 아이콘 14 → **28px**.
+  - 위치는 승인된 대표장르 아래 유지.
+- 소개글은 현재 PC 모양을 기준으로 유지하고 화면이 좁아질 때 단계적으로 축소.
+  - 1200px 이상: **13px**.
+  - 901~1199px: **12px**.
+  - 721~900px: **11px**.
+  - 481~720px: **10px**.
+  - 480px 이하: **9px**.
+- 소개 위치는 프로필 사진 아래 왼쪽 열 전용 유지.
+- app323 입력 크래시 수정, app322 줄 수 제한 제거, 150자 제한 유지.
+- 프로필 저장 API / 미디어 / 좋아요 / 공개·비공개 / 폴더 / Split / 사용자 데이터 비변경.
+
+**검증 / 배포**
+- toolbar product: `8306f90beae93d8dbaa4b28a21f4af2c67ccddca`.
+- social 2x: `1599647dc67233667abc1cf5664fa5f60dd9932d`.
+- responsive bio + historical verifier 정합화: `3ed2451ad4daa01aec0daa49a95bca4477bb5019`, `46e1174cd9c11b859b7ccebed65cf7a5a655054a`.
+- app325/app326 중간 Audit은 기존 verifier가 이전 툴바/소셜 크기를 계속 요구해 FAIL했고 제품 TypeScript/Build는 PASS.
+- 최종 app327 Release System Audit `37104517413`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Static verification PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37104633865`: **SUCCESS**.
+  - locked source / release commit: `86bb1f4b01fe00fd13b33c07391dfcfefd9ab182`.
+  - `preview.soridraw.com` app **327**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 상단에 뒤로가기 버튼만 있고 `MY 프로필` 문구가 없는지.
+2. 소셜 버튼이 PC/모바일 모두 확실히 커졌는지.
+3. PC 소개글 모양은 유지되는지.
+4. 화면 축소 시 13→12→11→10→9px로 자연스럽게 줄어 모바일에서도 PC와 비슷한 줄바꿈 밀도를 보이는지.
+5. 소개 위치/배경 높이/프로필 저장/입력 크래시 회귀 없음.
+
 ## 0NT. PREVIEW app324 배포 완료 — 프로필 공통 높이 / 소개 왼쪽열 / MY 프로필 통일 (2026-10-03 KST)
 
 **사용자 실사용 피드백 반영**

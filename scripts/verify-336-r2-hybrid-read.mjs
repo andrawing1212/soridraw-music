@@ -152,7 +152,9 @@ if (generatedPath) {
     assert.ok(worker.includes(token), 'generated worker missing ' + token);
   }
   assert.ok(
-    worker.includes('R2-LEGACY-SEARCH-336') || worker.includes('R2-FIRST-SEARCH-337'),
+    worker.includes('R2-LEGACY-SEARCH-336')
+      || worker.includes('R2-FIRST-SEARCH-337')
+      || worker.includes('R2-ONLY-SEARCH-341'),
     'generated worker missing compatible search marker'
   );
   assert.ok(worker.indexOf('SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919')

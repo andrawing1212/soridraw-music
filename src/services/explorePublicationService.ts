@@ -76,6 +76,28 @@ const PUBLICATION_CACHE_SOURCE_TYPE = 'explore_publication_states';
 const publicationMemoryCache = new Map<string, Record<string, ExploreMusicNotePublicationState>>();
 const publicationInflight = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState>>>();
 const publicationServerValidatedUids = new Set<string>();
+// app334: keep the publication revision validation window across browser reloads.
+// A reload is not a publication change; real mutations/outbox state still bypass this gate.
+const PUBLICATION_REVISION_CHECK_MS_334 = 60_000;
+const PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:publication-revision-check-at:v1';
+const publicationRevisionCheckStorageKey334 = (uid: string) =>
+  `${PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334}:${encodeURIComponent(uid)}`;
+const readPublicationRevisionCheckAt334 = (uid: string) => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(publicationRevisionCheckStorageKey334(uid)) || 0);
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  } catch {
+    return 0;
+  }
+};
+const markPublicationServerValidated334 = (uid: string, checkedAt = Date.now()) => {
+  publicationServerValidatedUids.add(uid);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(publicationRevisionCheckStorageKey334(uid), String(checkedAt));
+  } catch {}
+};
 
 
 const EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION = 1;
@@ -442,6 +464,15 @@ export const getExploreMusicNotePublicationStates = async (
   const envelope = readPublicationStateEnvelope(uid);
   if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;
   if (cached && publicationServerValidatedUids.has(uid)) return cached;
+  const lastPersistentValidationAt334 = readPublicationRevisionCheckAt334(uid);
+  if (
+    cached
+    && lastPersistentValidationAt334 > 0
+    && Date.now() - lastPersistentValidationAt334 < PUBLICATION_REVISION_CHECK_MS_334
+  ) {
+    markPublicationServerValidated334(uid);
+    return cached;
+  }
 
   const inFlight = publicationInflight.get(uid);
   if (inFlight) return inFlight;
@@ -468,7 +499,7 @@ export const getExploreMusicNotePublicationStates = async (
           knownRevision = '';
         }
         if (knownRevision && localRevision && knownRevision === localRevision) {
-          publicationServerValidatedUids.add(uid);
+          markPublicationServerValidated334(uid);
           return clonePublicationStates(cached);
         }
         // Upgrade a healthy 076 cache without downloading the whole state bundle.
@@ -476,12 +507,15 @@ export const getExploreMusicNotePublicationStates = async (
         // the cached data is already current; simply attach the current revision.
         if (knownRevision && !localRevision && remoteUpdatedAt > 0 && localSyncedAt >= remoteUpdatedAt) {
           writePublicationStateCache(uid, cached, knownRevision);
-          publicationServerValidatedUids.add(uid);
+          markPublicationServerValidated334(uid);
           return clonePublicationStates(cached);
         }
       } catch (revisionError) {
         console.warn('[Explore publication] revision validation unavailable; using persistent snapshot.', revisionError);
-        publicationServerValidatedUids.add(uid);
+        markPublicationServerValidated334(
+          uid,
+          Date.now() - PUBLICATION_REVISION_CHECK_MS_334 + 30_000,
+        );
         return clonePublicationStates(cached);
       }
     }
@@ -492,7 +526,10 @@ export const getExploreMusicNotePublicationStates = async (
     const bundledStates = parseMusicNotePublicationBundle(payload?.data);
     if (!bundledStates) {
       if (cached) {
-        publicationServerValidatedUids.add(uid);
+        markPublicationServerValidated334(
+          uid,
+          Date.now() - PUBLICATION_REVISION_CHECK_MS_334 + 30_000,
+        );
         return clonePublicationStates(cached);
       }
       throw new ExploreApiError(
@@ -503,7 +540,7 @@ export const getExploreMusicNotePublicationStates = async (
     const bundleRevision = String(payload?.data?.revision || knownRevision || '').trim() || null;
     const mergedStates = overlayPendingPublicationStates(uid, bundledStates);
     writePublicationStateCache(uid, mergedStates, bundleRevision);
-    publicationServerValidatedUids.add(uid);
+    markPublicationServerValidated334(uid);
     return clonePublicationStates(mergedStates);
   })().finally(() => {
     publicationInflight.delete(uid);
@@ -777,7 +814,7 @@ profilePinned: pending.desiredState.profilePinned,
   persistPublicationOutbox(uid, latestOutbox);
   const revision = String(payload?.data?.revision || '').trim();
   writePublicationStateCache(uid, states, revision || undefined);
-  publicationServerValidatedUids.add(uid);
+  markPublicationServerValidated334(uid);
   if (failed || Object.keys(latestOutbox).length > 0) {
     throw new ExploreApiError('PUBLICATION_BATCH_PENDING', '일부 공개상태 변경을 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
   }

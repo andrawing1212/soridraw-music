@@ -5880,7 +5880,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       return;
     }
 
+    // app330: public/save must feel instant. Reflect the requested state and close the
+    // dialog before waiting for Firestore/Worker settlement; the busy guard still
+    // prevents a duplicate mutation while the exact same backend path completes.
+    const optimisticState: ExploreMusicNotePublicationState = {
+      ...state,
+      ...options,
+      status: 'public',
+    };
     setExplorePublicationBusyId(sourceId);
+    setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }));
+    setExplorePublicationDialog(null);
+    setExplorePublicationPrivateConfirm(false);
+
     try {
       if (selectionChanged) {
         const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(song, requestedIndex);
@@ -5889,11 +5901,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         setSelectedSong((current: any) => (
           current && getFavoriteDocumentId(current) === sourceId
             ? { ...current, ...primaryUpdates }
-            : current
-        ));
-        setExplorePublicationDialog((current) => (
-          current && current.sourceId === sourceId
-            ? { ...current, song: { ...current.song, ...primaryUpdates }, selectedSunoIndex: requestedIndex }
             : current
         ));
       }
@@ -5924,9 +5931,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }
 
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
-      setExplorePublicationDialog(null);
-      setExplorePublicationPrivateConfirm(false);
     } catch (error) {
+      // The local-first preview is only provisional until the mutation is accepted.
+      // If settlement fails, restore the exact prior publication state and let the
+      // existing error toast explain the failure without leaving a false public flag.
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
       console.error('explore publication submit failed:', error);
       showFavoriteToast(getExplorePublicationErrorMessage(error));
     } finally {

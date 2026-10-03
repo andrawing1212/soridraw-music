@@ -80,23 +80,9 @@ type WindowWithRevisionCacheFlag = Window & {
 const memoryCache = new Map<string, RevisionCacheEntry>();
 const pendingDeltas = new Map<string, PendingDelta>();
 
-// SORIDRAW_EXPLORE_PUBLICATION_REFRESH_RELOAD_211_20260927
-// Revision responses stay locally cached during ordinary navigation, but an
-// explicit browser reload must be able to verify cross-device publication changes.
-// This bypasses only the tiny feed-revision response once per sort after reload;
-// it does not clear Feed rows and does not read canonical D1.
-const reloadedRevisionUrls211 = new Set<string>();
-const browserReloaded211 = (() => {
-  if (typeof performance === 'undefined') return false;
-  try {
-    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-    if (navigation?.type === 'reload') return true;
-    const legacy = performance as Performance & { navigation?: { type?: number } };
-    return Number(legacy.navigation?.type ?? 0) === 1;
-  } catch {
-    return false;
-  }
-})();
+// app334: the one-minute revision response cache survives browser reloads.
+// Reload itself is not a publication/like change signal; real cache expiry and
+// existing mutation signals still trigger the normal bounded revision request.
 
 const storageKeyFor = (url: string) => `${STORAGE_PREFIX}${encodeURIComponent(url)}`;
 
@@ -339,12 +325,7 @@ export const installExploreRevisionRequestCache = () => {
     if (revisionTarget) {
       abortIfNeeded(input, init);
       const revisionUrl = revisionTarget.toString();
-      const bypassReloadCache211 = browserReloaded211 && !reloadedRevisionUrls211.has(revisionUrl);
-      if (bypassReloadCache211) {
-        reloadedRevisionUrls211.add(revisionUrl);
-        removeEntry(revisionUrl);
-      }
-      const cached = bypassReloadCache211 ? null : readEntry(revisionUrl);
+      const cached = readEntry(revisionUrl);
       if (cached) {
         rememberDeltaFromBody(revisionTarget, cached.body);
         return cachedResponse(cached);

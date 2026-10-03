@@ -5900,7 +5900,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       let nextState: ExploreMusicNotePublicationState;
       if (selectionChanged) {
-        nextState = await refreshExploreMusicNotePublicationSource(user, sourceId, options);
+        nextState = await refreshExploreMusicNotePublicationSource(
+          user,
+          sourceId,
+          options,
+          state.registered ? state.trackId : null,
+        );
         showFavoriteToast(state.status === 'public'
           ? '선택한 곡으로 공개 설정을 저장했습니다.'
           : state.registered

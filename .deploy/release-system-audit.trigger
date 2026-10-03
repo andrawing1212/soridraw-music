@@ -1,5 +1,4 @@
-app312-candidate-latest-public-following-filter
-source=c81245506385f6ca171674061cd875df70ee0511
+app312-latest-public-following-filter-final
+source=aa04f734f852f4d253d5c062165a02f9e857d7dc
 product_commit=38908224aafb834996aec76e064eb66ca1bad300
-requested=2026-10-03T11:35:00+09:00
-deploy=false
+requested=2026-10-03T11:38:00+09:00

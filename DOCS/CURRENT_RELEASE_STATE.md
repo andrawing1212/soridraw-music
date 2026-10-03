@@ -1,3 +1,78 @@
+## 0NW. PREVIEW app329 배포 완료 — Explore 공개 설정 수노곡 선택 + 선택곡 미디어 저비용 갱신 (2026-10-04 KST)
+
+**현재 기준**
+- 작업 branch: `preview`.
+- 앱 PREVIEW 배포 기준: `fa54c6d37ba002654998ac05af72c6e4d781d3f5`.
+- Worker 감사/배포 기준 source: `1e6b2011e77933db3b4e44f8b55dffdd00374a12`.
+- 앱 버전: **329**.
+- TEST / PRODUCTION은 비변경.
+
+**사용자 요청 반영**
+- Explore에서 본인 공개곡의 `공개 설정`을 열었을 때, 원본 Music Note에 Suno URL 2곡이 있으면 두 곡을 좌/우 카드로 표시.
+- 1번/2번 중 실제 공개에 사용할 곡을 선택 가능.
+- 카드 선택만 바꿀 때는 로컬 UI만 변경하고 서버 요청 없음.
+- 이미 공개된 동일 track에서 선택곡을 바꾸고 저장하면 새 공개곡을 복제하지 않고 **기존 동일 공개 track의 미디어 원본만 갱신**.
+- 기존 공개 옵션 3개 / 비공개 전환 / 좋아요 / 폴더 / Split / 프로필 UI는 보호.
+
+**검증**
+- 최종 Release System Audit `37133838966`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Static release verification PASS.
+  - 기존 Like regression PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- canonical PREVIEW Worker hash: `81609d11c7de425cbb496b964a0f2e5e43673a3019d9be6d94d64c56fe130730`.
+
+**공유 D1 안전 변경**
+- app329 전용 trigger migration: `20261004_01_publication_media_source_cost.sql`.
+- Guarded D1 migration Run `37133356419`: **SUCCESS**.
+  - 기존 app080 trigger 상태에서 app329 trigger로 정상 승격.
+  - canonical `tracks` 사용자 행 변경 없음.
+  - `explore_derived_tracks` 기존 행 변경 없음.
+  - `USER_ROW_MUTATION=0`.
+  - shared revision trigger 비변경.
+  - PREVIEW / TEST / PRODUCTION Worker 버전은 migration 중 비변경.
+  - main / production refs 비변경.
+- 작업 완료 후 일회성 migration workflow/trigger 파일은 제거함.
+
+**Cloudflare PREVIEW Worker**
+- PREVIEW Worker Release `37133979250`: **SUCCESS**.
+- locked source: `1e6b2011e77933db3b4e44f8b55dffdd00374a12`.
+- deployed Worker version: `c0ff8eeb-5d61-4496-9806-714b2037fb99`.
+- publication / like / cache regression 및 one-shot preflight PASS.
+- TEST / PRODUCTION Workers unchanged PASS.
+- Functions 변경 없음.
+
+**Firebase PREVIEW**
+- Firebase PREVIEW App Release `37134047300`: **SUCCESS**.
+- locked source: `fa54c6d37ba002654998ac05af72c6e4d781d3f5`.
+- `preview.soridraw.com` app **329**, exact build PASS.
+- shared RTDB Rules: **SKIPPED**.
+- Firestore Rules / RTDB Rules / Functions 변경 없음.
+- TEST / PRODUCTION unchanged PASS.
+
+**비용 구조**
+- 2곡 카드 표시/선택 자체: 추가 서버 read/write 없음.
+- 실제 선택곡 변경 저장 시 전체 Feed/공개프로필 scan/rebuild 없이 해당 Music Note/해당 공개 track만 처리하는 bounded O(1) 경로.
+- Worker는 `refreshSourceMedia`에서 해당 Music Note 원본을 정확히 읽고 cover/duration/Suno URL 필드만 좁게 갱신.
+- D1 trigger는 media-only 변경이면 해당 `explore_derived_tracks` 1행의 `row_json`만 patch하고, 넓은 콘텐츠 변경일 때만 기존 호환 full upsert 경로를 유지.
+- **실제 사용자 선택 변경 1회의 live D1 `rows_written` W1~W2는 아직 실사용 측정 전. 미검증 상태이며 hard gate 유지.**
+
+**사용자 데이터 변경**
+- migration/backfill/delete 없음.
+- trigger DDL만 변경.
+- trigger 변경 당시 canonical / derived 사용자 행 변경 0 확인.
+
+**실사용 확인 필요**
+1. Explore에서 본인 공개곡 → 공개 설정 → Suno 2곡 카드가 정확히 표시되는지.
+2. 1번/2번 선택 표시 및 미리보기 정보가 맞는지.
+3. 이미 공개된 곡에서 다른 Suno 곡 선택 후 저장 → 동일 공개 track의 커버/재생 URL/길이가 새 선택곡으로 갱신되는지.
+4. 기존 공개 옵션 3개와 비공개 전환 회귀 없음.
+5. 좋아요 / 저장 하트 / 폴더 / Split / 프로필 정상.
+6. PC / 모바일 팝업 잘림·겹침 없음.
+7. 실제 source swap 1회 D1 `rows_written` W1~W2 확인.
+
 ## 0NV. PREVIEW app328 배포 완료 — 공개할 수노 곡 선택 + 디테일 지구본 아이콘 (2026-10-03 KST)
 
 **사용자 요청 반영**

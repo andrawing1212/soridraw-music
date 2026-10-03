@@ -1,9 +1,8 @@
--- LOCAL-ONLY candidate. Never apply this file to shared D1 directly.
--- It models the post-rollout cutover after PREVIEW/TEST/PRODUCTION all understand
--- the R2 catalog + legacy-derived hybrid read contract.
+-- DIAGNOSTIC-ONLY candidate. Never apply this file to shared D1 directly.
+-- Models the final schema cutover only after PREVIEW/TEST/PRODUCTION all understand
+-- the hybrid R2-catalog + legacy-derived read contract.
+-- Diagnostic cutoff 2000 is synthetic; a live migration would use a locked release cutoff.
 
--- Fixed diagnostic cutoff; production migration would use an explicitly locked release cutoff.
--- New Music Note rows at/after this cutoff are R2-catalog owned.
 DROP INDEX IF EXISTS idx_w2p336_tracks_latest_order;
 DROP INDEX IF EXISTS idx_w2p336_tracks_owner_latest;
 DROP INDEX IF EXISTS idx_w2p336_tracks_owner_source;
@@ -27,7 +26,7 @@ CREATE TRIGGER w2p336_track_insert
 AFTER INSERT ON w2p336_tracks
 WHEN NEW.source_type <> 'music_note' OR NEW.created_at < 2000
 BEGIN
-  INSERT INTO explore_derived_w2p336_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
+  INSERT INTO w2p336_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
   SELECT
     t.id,t.owner_uid,(t.is_public=1 AND t.status='published'),t.published_at,t.profile_pinned,
     COALESCE(s.like_count,0),
@@ -46,9 +45,9 @@ DROP TRIGGER IF EXISTS w2p336_track_update;
 CREATE TRIGGER w2p336_track_update
 AFTER UPDATE OF cover_url,duration_seconds,suno_url_primary,suno_url_secondary
 ON w2p336_tracks
-WHEN NEW.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.created_at < 2000
 BEGIN
-  UPDATE explore_derived_w2p336_tracks
+  UPDATE w2p336_derived_tracks
   SET row_json=json_patch(
     row_json,
     json_object(
@@ -62,8 +61,8 @@ BEGIN
   WHERE id=NEW.id;
 END;
 
-DROP TRIGGER IF EXISTS soridraw_shared_rev_w2p336_tracks_ai_051;
-CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_ai_051
+DROP TRIGGER IF EXISTS w2p336_shared_rev_ai;
+CREATE TRIGGER w2p336_shared_rev_ai
 AFTER INSERT ON w2p336_tracks
 WHEN NEW.source_type <> 'music_note' OR NEW.created_at < 2000
 BEGIN
@@ -72,10 +71,10 @@ BEGIN
   WHERE scope='global';
 END;
 
-DROP TRIGGER IF EXISTS soridraw_shared_rev_w2p336_tracks_au_051;
-CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_au_051
+DROP TRIGGER IF EXISTS w2p336_shared_rev_au;
+CREATE TRIGGER w2p336_shared_rev_au
 AFTER UPDATE ON w2p336_tracks
-WHEN NEW.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.created_at < 2000
 BEGIN
   UPDATE w2p336_shared_revision
   SET revision=revision+1,updated_at=NEW.updated_at

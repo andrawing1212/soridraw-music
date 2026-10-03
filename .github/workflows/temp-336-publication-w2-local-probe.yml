@@ -99,7 +99,7 @@ jobs:
           }
 
           setup_base() {
-            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "$(cat "$BASE")" --json > "$RUNNER_TEMP/setup-base.json"
+            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command="$(sed '/^[[:space:]]*--/d' "$BASE")" --json > "$RUNNER_TEMP/setup-base.json"
             run_json "SELECT name,type FROM sqlite_schema WHERE name LIKE 'w2p336_%' OR name LIKE 'idx_w2p336_%' ORDER BY type,name" "$RUNNER_TEMP/setup-schema.json"
             node - "$RUNNER_TEMP/setup-schema.json" <<'NODE'
           const fs=require('fs');
@@ -124,7 +124,7 @@ jobs:
 
           cleanup
           setup_base
-          node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "$(cat "$CANDIDATE")" --json > "$RUNNER_TEMP/setup-candidate.json"
+          node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command="$(sed '/^[[:space:]]*--/d' "$CANDIDATE")" --json > "$RUNNER_TEMP/setup-candidate.json"
           run_json "$INSERT_SQL" "$RUNNER_TEMP/cand-insert.json"
           CAND_INSERT="$(meta_write "$RUNNER_TEMP/cand-insert.json")"
           run_json "$SWAP_SQL" "$RUNNER_TEMP/cand-swap.json"

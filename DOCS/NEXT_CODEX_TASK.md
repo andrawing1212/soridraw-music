@@ -1,3 +1,39 @@
+## CURRENT TASK — app312 후보 PREVIEW 배포 대기 (2026-10-03 KST)
+
+구현/검증 완료:
+- `최신` → `최신 공개곡`.
+- `전체 / 팔로잉` 버튼을 장르별 추천 버튼과 동일한 toolbar 스타일로 추가.
+- 전체 = 기존 최신 Feed.
+- 팔로잉 = 기존 latest Feed + 기존 local/R2 following bundle의 로컬 필터.
+- Release System Audit `37090109213` SUCCESS.
+- TypeScript / Build / 관련 verifier PASS.
+- Worker / Functions / Rules / 사용자 데이터 변경 없음.
+
+현재:
+- preview branch 후보 HEAD: `1fe077326460208d33a0289786f2988af0d399b0`.
+- 실제 PREVIEW 배포 앱은 app311.
+- `public/app-version.json`도 311.
+- **배포 전 / 실사용 검증 전**.
+
+다음:
+1. 사용자가 `프리뷰배포` 또는 명확한 배포 요청을 하면 app312로 버전 고정.
+2. Firebase PREVIEW Hosting만 배포.
+3. `preview.soridraw.com` exact build 확인.
+4. CACHE LIVE:
+   - 전체 클릭: 추가 D1 R0/W0.
+   - 팔로잉 클릭 warm: 추가 D1 R0/W0.
+   - 팔로잉 first recovery: social R2만 허용, 새 D1 feed 조회 금지.
+5. PC/모바일 버튼 위치와 기존 레일 크기 동일 확인.
+6. TEST/PRODUCTION 변경 없음 확인.
+
+보호:
+- app311 승격관리/추천 피드 parity 변경 금지.
+- app310 승격관리 최초 D1 R0 변경 금지.
+- 인기/좋아할 만한 크리에이터/장르별 추천 동작 변경 금지.
+- 기존 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app311 승격관리 ↔ 일반 추천 피드 일치 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

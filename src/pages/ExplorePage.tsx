@@ -1624,7 +1624,7 @@ export default function ExplorePage() {
       if (requestInFlight || (signature === lastSignature && lastSignature)) return;
       lastSignature = signature;
       requestInFlight = true;
-      void getExploreCurationAccess307(user)
+      void getExploreCurationAccess307(user, signature)
         .then((access) => {
           if (!cancelled) setCurationAccess307(access);
         })

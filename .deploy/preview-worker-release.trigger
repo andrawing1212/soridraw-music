@@ -1,9 +1,9 @@
-requested_at=2026-10-04T00:36:00+09:00
+requested_at=2026-10-04T00:40:00+09:00
 requested_by=user_continue_app329
-product_code_target=d35eb315a6d30637092ec6e71f4c28ce74f21db6
+product_code_target=1e6b2011e77933db3b4e44f8b55dffdd00374a12
 release_source_target=canonical_preview_worker_app329
 release_purpose=deploy_app329_explore_publication_track_picker
-required_verifier=release_system_audit_37133238985_pass
+required_verifier=release_system_audit_37133838966_pass
 app_version=329
 profile_full_snapshot_rebuild=false
 follow_profile_counter_d1_rebuild=false

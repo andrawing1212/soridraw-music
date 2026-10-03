@@ -5834,7 +5834,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       void revalidateExploreMusicNotePublicationStates335(user)
         .then((states) => {
           if (cancelled) return;
-          setExplorePublicationStateBySongId((prev) => ({ ...states, ...prev }));
+          setExplorePublicationStateBySongId((prev) => {
+            const next = { ...prev };
+            Object.entries(states).forEach(([sourceId, state]) => {
+              if (!explorePublicationMutationInFlightRef.current.has(sourceId)) {
+                next[sourceId] = state;
+              }
+            });
+            return next;
+          });
         })
         .catch((error) => {
           console.warn('explore publication resume validation failed:', error);

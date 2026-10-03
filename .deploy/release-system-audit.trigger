@@ -1,4 +1,5 @@
-app325-profile-toolbar-back-only
-source=eaee8f1185f356b0b95d8beab34c4fa721901635
+app326-profile-toolbar-back-only-social-2x
+source=1e2befeb0f667a63a71c86eeb605d77a6ff7d0c2
 product_commit=8306f90beae93d8dbaa4b28a21f4af2c67ccddca
-requested=2026-10-03T15:48:00+09:00
+social_commit=1599647dc67233667abc1cf5664fa5f60dd9932d
+requested=2026-10-03T15:50:00+09:00

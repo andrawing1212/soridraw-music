@@ -1,3 +1,54 @@
+## 0OK. app336 구현 후보 완료 — R2 + legacy hybrid read 코드/검증 PASS, PREVIEW 배포 전 감사 단계 (2026-10-04 KST)
+
+**구현**
+- app336 Worker 호환층을 `preview`에 구현.
+- generated canonical Worker commit: `e935d52fa6a63ef9f115ef2c07471f77bd9e726a`.
+- PREVIEW-only `SORIDRAW_R2_HYBRID_READ_V1=1` 활성.
+- app version source = **336**.
+- TEST / PRODUCTION config/code 배포 변경 없음.
+
+**동작 원칙**
+- legacy-only 곡은 기존 경로에서 계속 읽음.
+- catalog-only 곡은 R2 catalog + shared track-card에서 읽음.
+- 같은 track id가 양쪽에 있으면 R2/shared card가 최신 authority.
+- catalog meta가 private인 곡은 stale legacy 공개행을 화면에 재노출하지 않음.
+- latest / popular / public-profile deep / genre는 hybrid cursor로 legacy + R2를 합성.
+- title / artist nickname·handle search first page는 legacy + R2 검색 결과를 합성.
+- public-profile first-view의 기존 shared-R2/Edge warm 경로는 유지.
+- 호환 단계의 legacy 보충 scan은 최대 4 page로 bounded; 무제한 전체 scan 금지.
+- warm client cache Worker-zero(app335) 경로는 변경하지 않음.
+
+**검증**
+- Apply/verify Run `37151610954`: **SUCCESS**.
+  - isolated Worker composition PASS.
+  - legacy-only PASS.
+  - catalog-only PASS.
+  - mixed dedupe PASS.
+  - stale legacy media/count가 R2 authority를 덮지 않음 PASS.
+  - hybrid cursor state PASS.
+  - search merge PASS.
+  - targeted publication/like regression PASS.
+  - TypeScript PASS.
+  - Build PASS.
+  - canonical worker SHA lock PASS: `0367c086772996c21cbf9ae84db3ac5c9796bee19153dbc15b57ee4cd03bc140`.
+- shared D1 schema/index/trigger change **0**.
+- user data migration/backfill/delete/rewrite **0**.
+- Firebase / Worker 실배포는 아직 **0**.
+
+**안전**
+- 실제 W2 D1 cutover migration은 이번 app336에 포함하지 않음.
+- app336은 세 환경이 향후 같은 read contract를 지원할 수 있게 만드는 선행 호환층.
+- app164 likes / app302 save heart / app301 folders / app303 Split / Music Note 60초 local-first / app331~335 publication UI 보호.
+- one-shot app336 implementation workflow와 완료된 W2 diagnostic workflow는 정리 완료.
+
+**다음**
+1. Final Release System Audit.
+2. PASS 시 PREVIEW Worker만 app336 source로 배포.
+3. Firebase PREVIEW app336 배포.
+4. 실제 `preview.soridraw.com` 및 Worker smoke 확인.
+5. TEST / PRODUCTION 비변경 확인.
+6. 사용자 실기기 검증 전 shared D1 W2 cutover migration 금지.
+
 ## 0OJ. app336 설계 기준 확정 — first-publication W12 원인 완전 분해 + W2 격리모델 PASS (2026-10-04 KST)
 
 **현재 배포 상태**

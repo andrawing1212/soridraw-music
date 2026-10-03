@@ -142,6 +142,7 @@ for (const required of [
   'revalidateCachedProfile113',
   'requestMaterializedFirstView(normalizedRef, cached.revision)',
   "materialized.kind === 'not-modified'",
+  'revalidateExplorePublicProfileFirstView335',
   'revalidateCachedProfile113(normalizedRef, cached, options',
 ]) {
   if (!client.includes(required)) fail(`client missing ${required}`);
@@ -151,14 +152,19 @@ const warmAt = client.indexOf('if (cached) {', client.indexOf('export const getE
 const coldAt = client.indexOf('const inflightKey', warmAt);
 const warm = warmAt >= 0 && coldAt > warmAt ? client.slice(warmAt, coldAt) : '';
 if (!warm.includes('return cached')) fail('warm profile no longer renders local snapshot immediately');
-if (!warm.includes('revalidateCachedProfile113')) fail('warm profile bounded shared revalidation missing');
-if (warm.indexOf('return cached') < warm.indexOf('revalidateCachedProfile113')) fail('shared revalidation must be scheduled without blocking local render');
+if (appVersion >= 335) {
+  if (warm.includes('revalidateCachedProfile113')) fail('app335 warm route entry/reload must be Worker-free');
+  if (!client.includes('revalidateExplorePublicProfileFirstView335')) fail('app335 activity revalidator missing');
+} else {
+  if (!warm.includes('revalidateCachedProfile113')) fail('warm profile bounded shared revalidation missing');
+  if (warm.indexOf('return cached') < warm.indexOf('revalidateCachedProfile113')) fail('shared revalidation must be scheduled without blocking local render');
+}
 
 console.log('113_SHARED_PROFILE_PARITY=PASS');
 console.log('PROFILE_READ_ORDER=LOCAL_BROWSER_THEN_EDGE_THEN_SHARED_R2_THEN_ONE_MATERIALIZED_ROW_THEN_GUARDED_FALLBACK');
 console.log('COLD_UID_TARGET=ONE_PRIMARY_KEY_MATERIALIZED_ROW');
 console.log('WARM_RENDER=LOCAL_IMMEDIATE');
-console.log('WARM_REVALIDATION=MAX_ONCE_PER_60S_ON_REVISIT');
+console.log(appVersion >= 335 ? 'WARM_ENTRY_RELOAD=WORKER_0_ACTIVITY_REVALIDATION_60S' : 'WARM_REVALIDATION=MAX_ONCE_PER_60S_ON_REVISIT');
 console.log('UNCHANGED_PROFILE_D1=R0_AFTER_SHARED_R2_SEED');
 console.log('MUTATION_SYNC=TARGETED_PROFILE_ONLY');
 console.log('NO_FULL_PROFILE_SCAN=true');

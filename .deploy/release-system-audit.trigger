@@ -1,4 +1,4 @@
-app316-avatar-crop-less-zoomed-midpoint
-source=4bd7393a63c031a16160b0667324eef3b2e21210
-product_commit=36fb6bb39b1aba3fe40275782e007b5062aa038b
-requested=2026-10-03T12:54:00+09:00
+app317-profile-genre-five-bio-150-four-lines
+source=815eac6fcfdb0dcdd5a663a49e1aa34c42a421e2
+product_commit=341229ea4ba1a5c88ddd0cf4a7a76cab753f8a5b
+requested=2026-10-03T13:13:00+09:00

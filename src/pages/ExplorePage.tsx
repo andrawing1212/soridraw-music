@@ -1716,7 +1716,15 @@ export default function ExplorePage() {
     setManagedCuratedLoading307(true);
     void getManagedSoridrawCuratedTracks307(user)
       .then((rows) => {
-        if (!cancelled) setManagedCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+        if (cancelled) return;
+        const normalized = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
+        setManagedCuratedTracks307(normalized);
+        // SORIDRAW_CURATED_MANAGER_PUBLIC_STATE_PARITY_311_20261003
+        // Manager and public feed share the same curated R2 snapshot. When a
+        // cross-device change is observed in the manager view, patch the public
+        // feed state immediately too instead of showing the older local list
+        // when the manager closes.
+        setCuratedTracks307(normalized.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));
       })
       .catch((reason) => {
         if (!cancelled) setSocialNotice(reason instanceof Error ? reason.message : '승격 곡 목록을 불러오지 못했어요.');

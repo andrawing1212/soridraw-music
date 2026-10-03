@@ -1,4 +1,4 @@
-app308-explore-curation-hardening-final
-source=c10a30467e2cc08ed582706942cc289e1615aff9
-product_commit=c10a30467e2cc08ed582706942cc289e1615aff9
-requested=2026-10-03T08:59:00+09:00
+app309-explore-manager-warm-cache
+source=f01aa545e6f2f1cdb047ca3bc6066bdcc77f0639
+product_commit=f01aa545e6f2f1cdb047ca3bc6066bdcc77f0639
+requested=2026-10-03T10:35:00+09:00

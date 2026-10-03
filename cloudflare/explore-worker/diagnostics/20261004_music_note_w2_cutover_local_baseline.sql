@@ -1,9 +1,10 @@
--- Local-only D1 fixture for SORIDRAW Music Note W2 cutover modeling.
--- No remote database is touched by the verifier workflow.
+-- PREVIEW diagnostic-D1 fixture for SORIDRAW Music Note W2 cutover modeling.
+-- Uses only w2p336_* temporary objects in the environment-specific RATE_DB.
+-- Never target the shared canonical user-data DB.
 
 PRAGMA foreign_keys=OFF;
 
-CREATE TABLE tracks (
+CREATE TABLE w2p336_tracks (
   id TEXT PRIMARY KEY NOT NULL,
   owner_uid TEXT NOT NULL,
   source_type TEXT NOT NULL CHECK (source_type IN ('music_note','suno_library')),
@@ -36,24 +37,24 @@ CREATE TABLE tracks (
   primary_genre TEXT
 );
 
-CREATE INDEX idx_tracks_latest_order ON tracks (published_at DESC, id DESC);
-CREATE UNIQUE INDEX idx_tracks_legacy_global_nonempty
-  ON tracks (legacy_global_id)
+CREATE INDEX idx_w2p336_tracks_latest_order ON w2p336_tracks (published_at DESC, id DESC);
+CREATE UNIQUE INDEX idx_w2p336_tracks_legacy_global_nonempty
+  ON w2p336_tracks (legacy_global_id)
   WHERE legacy_global_id IS NOT NULL AND TRIM(legacy_global_id) <> '';
-CREATE INDEX idx_tracks_owner_latest ON tracks (owner_uid, published_at DESC);
-CREATE UNIQUE INDEX idx_tracks_owner_source
-  ON tracks (owner_uid, source_type, source_id, source_subtrack_key);
-CREATE INDEX idx_tracks_primary_genre_latest
-  ON tracks (primary_genre, published_at DESC, id DESC);
+CREATE INDEX idx_w2p336_tracks_owner_latest ON w2p336_tracks (owner_uid, published_at DESC);
+CREATE UNIQUE INDEX idx_w2p336_tracks_owner_source
+  ON w2p336_tracks (owner_uid, source_type, source_id, source_subtrack_key);
+CREATE INDEX idx_w2p336_tracks_primary_genre_latest
+  ON w2p336_tracks (primary_genre, published_at DESC, id DESC);
 
-CREATE TABLE track_stats(
+CREATE TABLE w2p336_track_stats(
   track_id TEXT PRIMARY KEY,
   like_count INTEGER NOT NULL DEFAULT 0,
   comment_count INTEGER NOT NULL DEFAULT 0,
   play_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE explore_derived_tracks(
+CREATE TABLE explore_derived_w2p336_tracks(
   id TEXT PRIMARY KEY,
   owner_uid TEXT NOT NULL,
   active INTEGER NOT NULL,
@@ -62,14 +63,14 @@ CREATE TABLE explore_derived_tracks(
   likes INTEGER NOT NULL,
   row_json TEXT NOT NULL
 );
-CREATE INDEX idx_explore_rank_latest
-  ON explore_derived_tracks(active,published_at DESC,id DESC);
-CREATE INDEX idx_explore_rank_popular
-  ON explore_derived_tracks(active,likes DESC,published_at DESC,id DESC);
-CREATE INDEX idx_explore_rank_profile
-  ON explore_derived_tracks(owner_uid,active,pinned DESC,published_at DESC,id DESC);
+CREATE INDEX idx_w2p336_rank_latest
+  ON explore_derived_w2p336_tracks(active,published_at DESC,id DESC);
+CREATE INDEX idx_w2p336_rank_popular
+  ON explore_derived_w2p336_tracks(active,likes DESC,published_at DESC,id DESC);
+CREATE INDEX idx_w2p336_rank_profile
+  ON explore_derived_w2p336_tracks(owner_uid,active,pinned DESC,published_at DESC,id DESC);
 
-CREATE TABLE explore_derived_profiles(
+CREATE TABLE w2p336_derived_profiles(
   uid TEXT PRIMARY KEY,
   active INTEGER NOT NULL DEFAULT 0,
   row_json TEXT NOT NULL DEFAULT '{}',
@@ -78,18 +79,18 @@ CREATE TABLE explore_derived_profiles(
   track_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE explore_shared_revision(
+CREATE TABLE w2p336_shared_revision(
   scope TEXT PRIMARY KEY,
   revision INTEGER NOT NULL DEFAULT 1,
   updated_at INTEGER NOT NULL DEFAULT 0
 );
-INSERT INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0);
-INSERT INTO explore_derived_profiles(uid,active,row_json) VALUES('probe-user',1,'{"uid":"probe-user"}');
+INSERT INTO w2p336_shared_revision(scope,revision,updated_at) VALUES('global',1,0);
+INSERT INTO w2p336_derived_profiles(uid,active,row_json) VALUES('probe-user',1,'{"uid":"probe-user"}');
 
-CREATE TRIGGER explore032_track_insert
-AFTER INSERT ON tracks
+CREATE TRIGGER w2p336_track_insert
+AFTER INSERT ON w2p336_tracks
 BEGIN
-  INSERT INTO explore_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
+  INSERT INTO explore_derived_w2p336_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
   SELECT
     t.id,t.owner_uid,(t.is_public=1 AND t.status='published'),t.published_at,t.profile_pinned,
     COALESCE(s.like_count,0),
@@ -100,15 +101,15 @@ BEGIN
       'is_public',t.is_public,'status',t.status,'published_at',t.published_at,
       'created_at',t.created_at,'updated_at',t.updated_at,'primary_genre',t.primary_genre
     )
-  FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id
+  FROM w2p336_tracks t LEFT JOIN w2p336_track_stats s ON s.track_id=t.id
   WHERE t.id=NEW.id;
 END;
 
-CREATE TRIGGER explore032_track_update
+CREATE TRIGGER w2p336_track_update
 AFTER UPDATE OF cover_url,duration_seconds,suno_url_primary,suno_url_secondary
-ON tracks
+ON w2p336_tracks
 BEGIN
-  UPDATE explore_derived_tracks
+  UPDATE explore_derived_w2p336_tracks
   SET row_json=json_patch(
     row_json,
     json_object(
@@ -122,18 +123,18 @@ BEGIN
   WHERE id=NEW.id;
 END;
 
-CREATE TRIGGER soridraw_shared_rev_tracks_ai_051
-AFTER INSERT ON tracks
+CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_ai_051
+AFTER INSERT ON w2p336_tracks
 BEGIN
-  UPDATE explore_shared_revision
+  UPDATE w2p336_shared_revision
   SET revision=revision+1,updated_at=NEW.updated_at
   WHERE scope='global';
 END;
 
-CREATE TRIGGER soridraw_shared_rev_tracks_au_051
-AFTER UPDATE ON tracks
+CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_au_051
+AFTER UPDATE ON w2p336_tracks
 BEGIN
-  UPDATE explore_shared_revision
+  UPDATE w2p336_shared_revision
   SET revision=revision+1,updated_at=NEW.updated_at
   WHERE scope='global';
 END;

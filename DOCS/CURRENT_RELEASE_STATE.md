@@ -1,3 +1,48 @@
+## 0NI. PREVIEW app312 후보 구현 완료 — 최신 공개곡 전체/팔로잉 필터 (2026-10-03 KST)
+
+**사용자 요청**
+- Explore `최신` 제목을 `최신 공개곡`으로 변경.
+- 장르별 추천과 같은 위치/스타일의 `전체 / 팔로잉` 버튼 추가.
+- `전체`: 기존 최신 공개곡 Feed를 시간 순서 그대로 표시.
+- `팔로잉`: 사용자가 팔로우한 크리에이터의 곡만 기존 최신 Feed에서 시간 순서 그대로 필터.
+
+**구현**
+- 기존 `tracks` latest Feed를 그대로 재사용. 새 Feed API / D1 목록 쿼리 추가 없음.
+- 팔로잉 UID는 기존 Explore social local/R2 bundle을 재사용.
+- 팔로잉 버튼을 처음 눌렀을 때 계정의 기존 follow bundle을 한 번 해석하고 이후 기기 캐시 사용.
+- 같은 기기에서 팔로우/해제하면 팔로잉 필터 목록도 즉시 반영.
+- 계정 전환 시 이전 계정 팔로잉 목록을 로컬 state에서 즉시 폐기.
+- 카드 크기/레일/모바일 3열/인기/추천/장르/좋아요/공개·비공개 경로 변경 없음.
+
+**변경 commit**
+- follow bundle 재사용 helper: `9b077a645c7fb4c574a1aa5fbf81de14aff1bfb0`.
+- Explore UI / 필터: `38908224aafb834996aec76e064eb66ca1bad300`.
+- verifier: `c81245506385f6ca171674061cd875df70ee0511`.
+- audit trigger: `1fe077326460208d33a0289786f2988af0d399b0`.
+
+**검증**
+- Release System Audit Run `37090109213`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Explore feed layout verifier PASS.
+- Like regression PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 read-only preflight PASS.
+- 데이터 migration/backfill 없음.
+- Worker / Functions / Firebase Rules / Cloudflare 배포 없음.
+
+**배포 상태**
+- 이 작업은 **PREVIEW 코드 수정만 완료, 아직 배포 전**.
+- `public/app-version.json`은 여전히 **311**.
+- 실제 `preview.soridraw.com`도 현재 app311 유지.
+- 사용자 명시적 프리뷰배포 요청 전 Firebase Hosting/Worker 배포 금지.
+
+**비용 판단**
+- `전체 ↔ 팔로잉` 전환 자체는 기존 latest Feed 배열 필터이므로 D1 R0/W0.
+- 팔로잉 목록이 이미 기기에 있으면 추가 서버 읽기 0.
+- 팔로잉 목록 캐시가 없는 새 기기/복구 상황에서는 기존 social snapshot R2 경로를 사용하며 별도 D1 following-feed를 만들지 않음.
+- 공개곡 전체 수가 늘어도 버튼 전환 때문에 별도 전체 조회가 생기지 않음.
+
 ## 0NH. PREVIEW app311 배포 완료 — 승격관리와 SORIDRAW 추천 피드 상태 일치 (2026-10-03 KST)
 
 **사용자 실측 문제**

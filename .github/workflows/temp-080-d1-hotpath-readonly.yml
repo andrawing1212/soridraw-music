@@ -1,5 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
-# rerun-20261004-app333-index-migration-preflight-v2
+# rerun-20261004-app335-postmigration-fanout-readonly
 
 on:
   push:

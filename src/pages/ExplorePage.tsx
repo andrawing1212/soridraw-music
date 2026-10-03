@@ -42,7 +42,7 @@ import {
   patchExploreLikedTrackCachedCount091,
   rememberExploreLikedTrack,
 } from '../services/exploreLikedTracksService';
-import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
+import { getExplorePublicProfileFirstView, revalidateExplorePublicProfileFirstView335, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   fetchExplorePublicLikeCards192,
   subscribeExplorePublicLikeInvalidation192,
@@ -84,6 +84,7 @@ import {
   getExploreCurationAccess307,
   getManagedSoridrawCuratedTracks307,
   getSoridrawCuratedTracks307,
+  revalidateSoridrawCuratedTracks335,
   setSoridrawCuratedTrack307,
   type ExploreCurationAccess307,
 } from '../services/exploreCurationService';
@@ -339,11 +340,12 @@ const shouldRevalidateExploreFeedOnEntry126 = (
   explicitRevision: boolean,
   lastCheckedAt: number,
   now: number,
-) => feedRequest && (
-  explicitRevision ||
-  !lastCheckedAt ||
-  now - lastCheckedAt >= EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS
-);
+) => feedRequest
+  && explicitRevision
+  && (
+    !lastCheckedAt
+    || now - lastCheckedAt >= EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS
+  );
 // SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
 // Public Feed revision checks are capped at one per two minutes. The actor keeps the
 // immediate optimistic heart/count locally; other users pick up the shared result
@@ -1882,12 +1884,12 @@ export default function ExplorePage() {
       });
     };
     const unsubscribeLikeUi139 = subscribeExploreLikeUiSync139(user.uid, onRemote);
-    window.addEventListener('focus', onResume);
+    // app335: focus can be emitted by a browser reload. A real tab resume is
+    // represented by visibilitychange; keep that bounded private revision path.
     document.addEventListener('visibilitychange', onResume);
     window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     return () => {
       unsubscribeLikeUi139();
-      window.removeEventListener('focus', onResume);
       document.removeEventListener('visibilitychange', onResume);
       window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     };
@@ -2246,7 +2248,7 @@ export default function ExplorePage() {
       }
 
       const lastCheckedAt304 = readExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
-      if (!shouldRevalidateExploreFeedOnEntry126(true, false, lastCheckedAt304, Date.now())) {
+      if (!shouldRevalidateExploreFeedOnEntry126(true, feedRevisionSignal > 0, lastCheckedAt304, Date.now())) {
         return () => controller304.abort();
       }
 
@@ -2302,15 +2304,28 @@ export default function ExplorePage() {
     const requestRevisionCheck = () => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
+      const revisionKey = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
+      const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionKey);
+      if (lastCheckedAt > 0 && now - lastCheckedAt < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
       feedRevisionRequestedUrlRef.current = requestUrl;
       setFeedRevisionSignal((value) => value + 1);
+
+      // app335: SORIDRAW recommendation revision is checked only alongside a real
+      // post-entry activity/resume, never merely because the page was opened/reloaded.
+      void revalidateSoridrawCuratedTracks335()
+        .then((rows) => {
+          setCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+        })
+        .catch((reason) => {
+          console.warn('[app335] SORIDRAW curated activity revalidation failed:', reason);
+        });
     };
 
-    // SORIDRAW_EXPLORE_ACTIVE_REVALIDATION_045_20260908
-    // A tab can remain visible for a long time without focus/visibility events.
-    // Re-check only the zero-D1 revision endpoint on real user interaction, throttled.
+    // app335: browser focus/pageshow can fire as part of a reload. They are not
+    // data-change signals. Use only post-entry pointer activity or a real tab
+    // hidden→visible resume, both still bounded by the persistent two-minute gate.
     const requestActivityRevisionCheck = () => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
@@ -2319,17 +2334,13 @@ export default function ExplorePage() {
       requestRevisionCheck();
     };
 
-    window.addEventListener('focus', requestRevisionCheck);
-    window.addEventListener('pageshow', requestRevisionCheck);
     window.addEventListener('pointerdown', requestActivityRevisionCheck, { passive: true });
     document.addEventListener('visibilitychange', requestRevisionCheck);
     return () => {
-      window.removeEventListener('focus', requestRevisionCheck);
-      window.removeEventListener('pageshow', requestRevisionCheck);
       window.removeEventListener('pointerdown', requestActivityRevisionCheck);
       document.removeEventListener('visibilitychange', requestRevisionCheck);
     };
-  }, [requestUrl, profileUid]);
+  }, [requestUrl, profileUid, user?.uid]);
 
   useEffect(() => {
     if (!profileUid) {
@@ -2411,6 +2422,41 @@ export default function ExplorePage() {
 
     return () => { cancelled = true; };
   }, [profileUid, user]);
+
+  // app335: warm public-profile entry/reload is Worker 0. Preserve eventual
+  // cross-device freshness by doing the existing 60s shared-R2 check only after
+  // actual profile interaction or a real hidden→visible tab resume.
+  useEffect(() => {
+    if (!profileUid) return undefined;
+    let cancelled = false;
+    const requestProfileRevalidation335 = () => {
+      if (document.visibilityState !== 'visible') return;
+      revalidateExplorePublicProfileFirstView335(profileUid, {
+        onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
+          if (cancelled) return;
+          const normalizedTracks = refreshedRows.map(normalizeTrack).filter((track) => track.id);
+          normalizedTracks.sort(comparePublicProfileTracks);
+          syncSharedPublicCountsToLocal110(normalizedTracks);
+          setProfile(refreshedProfile);
+          setProfileTracks(overlayActorLikeCounts120(normalizedTracks));
+        },
+        onInvalidated: (message) => {
+          if (cancelled) return;
+          setProfile(null);
+          setProfileTracks([]);
+          setFollowState(null);
+          setProfileError(message || '공개 프로필을 불러오지 못했어요.');
+        },
+      });
+    };
+    window.addEventListener('pointerdown', requestProfileRevalidation335, { passive: true });
+    document.addEventListener('visibilitychange', requestProfileRevalidation335);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('pointerdown', requestProfileRevalidation335);
+      document.removeEventListener('visibilitychange', requestProfileRevalidation335);
+    };
+  }, [profileUid, user?.uid]);
 
   const profileIsOwn = Boolean(profile && user?.uid === profile.uid);
 

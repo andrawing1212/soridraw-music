@@ -1,5 +1,5 @@
-app339-korean-genre-alias-bound-cache
-source=9ede46e248847d9fc8b11508dcda432c8f763c41
-scope=search-r2-first,korean-genre,alias-bound,edge-cache,worker-only,release-gates
+app340-repeat-search-local-zero
+source=5dfe5b0b9183c27b946136dc8d25bca11303606b
+scope=explore-search,local-cache,repeat-worker-zero,hosting-version,release-gates
 protect=likes,save-heart,folders,split,music-note-batching,test-production,shared-d1-schema,user-data
-requested=2026-10-04T08:05:00+09:00
+requested=2026-10-04T08:18:00+09:00

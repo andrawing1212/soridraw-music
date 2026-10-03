@@ -1,3 +1,25 @@
+## CURRENT TASK — app314 MY 프로필 높이 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app314.
+- Final Release System Audit `37092786220` SUCCESS.
+- Firebase PREVIEW Release `37092878119` SUCCESS.
+- locked source `e3005b1f5b6ad43c3cea0b6f9bea1da0e37874e3`.
+- `preview.soridraw.com` app314 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+확인:
+1. PC MY 프로필 배경 높이 335px.
+2. 태블릿 270px.
+3. 모바일 190px 그대로.
+4. 다른 사용자 공개 프로필 기존 높이 유지.
+5. 높이 외 UI 변화 없음.
+
+운영 규칙:
+- 이후 사용자 수정 요청은 기본적으로 PREVIEW 수정 → 검증 → PREVIEW 배포까지 완료.
+- TEST/PRODUCTION 승격은 기존 승인 규칙 유지.
+
 ## CURRENT TASK — app314 MY 프로필 높이 미세 조정 PREVIEW 배포 대기 (2026-10-03 KST)
 
 구현/검증 완료:

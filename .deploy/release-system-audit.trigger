@@ -1,4 +1,4 @@
-app310-explore-manager-r2-first-load
-source=6f679bf89a390783e51729cd4f27986014661393
-product_commit=6f679bf89a390783e51729cd4f27986014661393
-requested=2026-10-03T10:54:00+09:00
+app311-curated-manager-feed-parity
+source=b21a677ea8053abf6dc148fbe6536ce7ebb68b22
+product_commit=b21a677ea8053abf6dc148fbe6536ce7ebb68b22
+requested=2026-10-03T11:08:00+09:00

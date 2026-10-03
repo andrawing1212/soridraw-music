@@ -1029,15 +1029,15 @@ assert.doesNotMatch(
 );
 console.log('APP316_AVATAR_CROP_LESS_ZOOMED_MIDPOINT=PASS');
 
-/* app317 — restore representative genres to five and constrain profile bio to
- * 150 characters / four explicit lines without changing profile save APIs. */
+/* app317/app321 — keep five representative genres and constrain profile bio to
+ * 150 characters / four visible editor rows without changing profile save APIs. */
 assert.match(profileEdit, /const PROFILE_GENRE_LIMIT_317 = 5;/);
 assert.match(profileEdit, /const PROFILE_BIO_MAX_LENGTH_317 = 150;/);
 assert.match(profileEdit, /const PROFILE_BIO_MAX_LINES_317 = 4;/);
 assert.match(
   profileEdit,
-  /normalizeProfileBio317[^]*?split\('\\n'\)[^]*?slice\(0, PROFILE_BIO_MAX_LINES_317\)[^]*?slice\(0, PROFILE_BIO_MAX_LENGTH_317\)/,
-  'profile bio must clamp pasted/typed input to four lines and 150 characters',
+  /normalizeProfileBio317[^]*?replace\(\/\\r\\n\?\/g, '\\n'\)[^]*?slice\(0, PROFILE_BIO_MAX_LENGTH_317\)/,
+  'profile bio must normalize newlines and keep the 150 character limit without destructive line slicing',
 );
 assert.match(profileEdit, /bio: normalizeProfileBio317\(profile\.bio \|\| ''\)/);
 assert.match(profileEdit, /bio: normalizeProfileBio317\(draft\.bio\)\.trim\(\)/);
@@ -1048,15 +1048,15 @@ assert.match(profileEdit, /draft\.genres\.map[^]*?PROFILE_GENRE_LIMIT_317/);
 assert.match(profileEdit, /대표 장르[^]*?PROFILE_GENRE_LIMIT_317/);
 assert.match(
   profileEdit,
-  /maxLength=\{PROFILE_BIO_MAX_LENGTH_317\}[^]*?rows=\{PROFILE_BIO_MAX_LINES_317\}[^]*?normalizeProfileBio317\(event\.target\.value\)/,
-  'profile bio textarea must expose the 150 character / four-row contract',
+  /maxLength=\{PROFILE_BIO_MAX_LENGTH_317\}[^]*?rows=\{PROFILE_BIO_MAX_LINES_317\}[^]*?normalizeProfileBio317\(event\.currentTarget\.value\)[^]*?scrollHeight > event\.currentTarget\.clientHeight \+ 1/,
+  'profile bio textarea must expose the 150 character / four-visible-row contract',
 );
 assert.match(profileEdit, /draft\.bio\.length[^]*?PROFILE_BIO_MAX_LENGTH_317/);
 assert.doesNotMatch(profileEdit, /PROFILE_GENRE_LIMIT_315|maxLength=\{?200\}?|draft\.bio\.length}\/200/);
 assert.match(
   profileEditCss,
-  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*height:130px[^}]*max-height:130px[^}]*resize:none[^}]*overflow-y:auto/,
-  'profile bio editor must remain visually capped instead of being vertically resizable',
+  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*height:130px[^}]*max-height:130px[^}]*resize:none[^}]*overflow-y:hidden/,
+  'profile bio editor must remain visually capped at the visible four-row surface instead of scrolling',
 );
 console.log('APP317_PROFILE_GENRE_FIVE_BIO_150_FOUR_LINES=PASS');
 

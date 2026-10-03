@@ -15,12 +15,13 @@ type Props = {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const DEFAULT_PROFILE_CROP_ZOOM_315 = 2;
 
 export default function ExploreImageCropModal({ file, kind, onCancel, onApply }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
-  const [crop, setCrop] = useState<ExploreProfileMediaCrop>({ zoom: 1, offsetX: 0, offsetY: 0 });
+  const [crop, setCrop] = useState<ExploreProfileMediaCrop>({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 });
   const [ready, setReady] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState('');
@@ -137,7 +138,7 @@ export default function ExploreImageCropModal({ file, kind, onCancel, onApply }:
           <button
             type="button"
             className="soridraw-explore-crop-reset"
-            onClick={() => setCrop({ zoom: 1, offsetX: 0, offsetY: 0 })}
+            onClick={() => setCrop({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })}
             aria-label="위치와 확대 초기화"
             title="초기화"
           >

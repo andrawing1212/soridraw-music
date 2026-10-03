@@ -1213,15 +1213,15 @@ console.log('APP323_PROFILE_BIO_EVENT_TARGET_CRASH_FIX=PASS');
 /* app324 — profile parity and left-column bio placement.
  * The approved hero size and toolbar naming apply to every viewed profile,
  * while the bio must stay under the avatar and never occupy the right copy area. */
-assert.match(
+assert.doesNotMatch(
   page,
   /soridraw-explore-profile-toolbar[^]*?<span>MY 프로필<\/span>/,
-  'profile toolbar label must stay MY 프로필 on own and other-user profile views',
+  'profile toolbar must not show a MY 프로필 label beside the back button',
 );
 assert.doesNotMatch(
   page,
   /profileIsOwn \? 'MY 프로필' : '공개 프로필'/,
-  'profile toolbar label must not switch back to 공개 프로필 for other users',
+  'profile toolbar label must not switch back to the old own/other-user labels',
 );
 assert.match(
   page,
@@ -1234,3 +1234,19 @@ assert.match(
   'profile bio must remain confined to the avatar-width left column',
 );
 console.log('APP324_PROFILE_PARITY_LEFT_BIO=PASS');
+
+
+/* app325 — profile toolbar keeps only the back button.
+ * A text label beside the arrow looks like the arrow navigates specifically
+ * to "MY 프로필", so remove the label for both own and other-user profiles. */
+assert.match(
+  page,
+  /soridraw-explore-profile-toolbar[^]*?soridraw-explore-back-button[^]*?<\/section>/,
+  'profile toolbar must retain the back button',
+);
+assert.doesNotMatch(
+  page,
+  /soridraw-explore-profile-toolbar[^]*?<span>/,
+  'profile toolbar must not render any text label beside the back button',
+);
+console.log('APP325_PROFILE_TOOLBAR_BACK_ONLY=PASS');

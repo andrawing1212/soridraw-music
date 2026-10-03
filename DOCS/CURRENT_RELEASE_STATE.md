@@ -1,3 +1,41 @@
+## 0NL. PREVIEW app313 배포 완료 — MY 프로필 배경 높이만 확대 (2026-10-03 KST)
+
+**적용 범위**
+- MY 프로필 상단 배경 높이만 변경.
+- PC(1600px 이상): 기존 210px → 315px(1.5배).
+- 태블릿(721~1599px): 기존 210px → 252px(1.2배).
+- 모바일(720px 이하): 기존 190px 그대로 유지.
+- 다른 사용자의 공개 프로필 높이는 기존값 유지.
+- 패딩/텍스트/아바타/이미지 필터/크롭/위치/간격 변경 없음.
+
+**변경 / 검증 / 배포**
+- profile scope commit: `3d04a6e479522781555afd62bf7fa75bd8210e8a`.
+- CSS commit: `8365f202b68d70ffa8363b92fd3aaae6e99cbbb7`.
+- verifier fix 포함 최종 후보: `d98d0a6e655d1d479aaac75568a30dd10f6ac7b9`.
+- app313 version commit: `b2ce36f03cea10b7545150b6ef0fb5a5c8a52dac`.
+- final audit trigger: `f2b0399bb0b83709eece67956e9ee5fdaff0c912`.
+- Final Release System Audit `37092012879`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37092136757`: **SUCCESS**.
+  - locked source `8def3f847ea8735bfbf14a934b020c6a91f0d180`.
+  - `preview.soridraw.com` app **313**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 변경 없음.
+
+**실사용 확인**
+1. PC MY 프로필 배경 높이 315px 체감 확인.
+2. 태블릿 MY 프로필 배경 높이 252px 확인.
+3. 모바일은 기존 높이/레이아웃 그대로인지 확인.
+4. 다른 사용자 공개 프로필 높이 비변경 확인.
+5. 높이 외 위치/간격/텍스트/아바타/크롭 회귀 없음.
+6. 위 항목은 **실사용 검증 전**.
+
 ## 0NK. PREVIEW app313 후보 — MY 프로필 배경 높이만 반응형 확대 (2026-10-03 KST)
 
 **요청 / 범위**

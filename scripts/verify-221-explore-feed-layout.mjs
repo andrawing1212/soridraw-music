@@ -976,17 +976,17 @@ assert.match(
 );
 assert.match(
   profileEditCss,
-  /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:252px\}\}/,
-  'tablet My Profile hero must be 1.2x the existing 210px height',
+  /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:270px\}\}/,
+  'tablet My Profile hero must be 270px',
 );
 assert.match(
   profileEditCss,
-  /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:315px\}\}/,
-  'PC My Profile hero must be 1.5x the existing 210px height',
+  /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:335px\}\}/,
+  'PC My Profile hero must be 335px',
 );
 assert.match(
   profileEditCss,
   /@media\(max-width:720px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:190px;padding:20px 14px\}/,
   'mobile profile hero height must remain unchanged at 190px',
 );
-console.log('APP313_MY_PROFILE_HERO_HEIGHT_ONLY=PASS');
+console.log('APP314_MY_PROFILE_HERO_HEIGHT_FINE_TUNE=PASS');

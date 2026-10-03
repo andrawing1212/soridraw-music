@@ -1,5 +1,5 @@
-app326-profile-toolbar-back-only-social-2x-retry
-source=0ba37d12b8546ebd209e7101a4ba3baf15c1ad85
-product_commit=8306f90beae93d8dbaa4b28a21f4af2c67ccddca
-social_commit=1599647dc67233667abc1cf5664fa5f60dd9932d
-requested=2026-10-03T15:52:00+09:00
+app327-profile-toolbar-social-bio-polish
+source=6924431b443cd1f031b70fc821cfa8dcbffaf891
+toolbar_commit=8306f90beae93d8dbaa4b28a21f4af2c67ccddca
+social_commit=3ed2451ad4daa01aec0daa49a95bca4477bb5019
+requested=2026-10-03T15:53:00+09:00

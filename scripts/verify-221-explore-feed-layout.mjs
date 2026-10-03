@@ -965,3 +965,27 @@ console.log('APP307_EXPLORE_MANAGER_PERMISSION_GATED=PASS');
 console.log('APP307_PROMOTED_TRACK_MANAGER_PAGE=PASS');
 console.log('APP307_CURATED_LOCAL_FIRST_R2=PASS');
 console.log('APP307_CURATED_MUTATION_W1_CONTRACT=PASS');
+
+// app313 — only the signed-in user's My Profile hero gets taller.
+// Mobile keeps the existing 190px contract; tablet/PC change min-height only.
+assert.match(
+  page,
+  /soridraw-explore-profile-head\$\{profile\.backgroundUrl \? ' has-background' : ''\}\$\{user\?\.uid === profile\.uid \? ' is-own-profile-313' : ''\}/,
+  'My Profile hero height scope must not affect other public profiles',
+);
+assert.match(
+  profileEdit,
+  /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:252px\}\}/,
+  'tablet My Profile hero must be 1.2x the existing 210px height',
+);
+assert.match(
+  profileEdit,
+  /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:315px\}\}/,
+  'PC My Profile hero must be 1.5x the existing 210px height',
+);
+assert.match(
+  profileEdit,
+  /@media\(max-width:720px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:190px;padding:20px 14px\}/,
+  'mobile profile hero height must remain unchanged at 190px',
+);
+console.log('APP313_MY_PROFILE_HERO_HEIGHT_ONLY=PASS');

@@ -1,7 +1,7 @@
-app327-profile-toolbar-social-bio-polish
-target_source=c6742c16c89b271e116c2c244206067f72dbff13
-app_version=327
+app328-music-note-publication-track-picker
+target_source=f7d1de9927be691d844df5949aba4044ad88de80
+app_version=328
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-toolbar-social-bio-polish
+release_request=music-note-publication-track-picker

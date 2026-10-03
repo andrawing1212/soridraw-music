@@ -1,3 +1,45 @@
+## CURRENT TASK — app335 실기기 Worker-zero 검증 → source-swap W3 / first-publication W12 후속 (2026-10-04 KST)
+
+배포 완료:
+- PREVIEW app335.
+- Audit `37148217453` SUCCESS.
+- Firebase PREVIEW Release `37148368369` SUCCESS.
+- `preview.soridraw.com` app335 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / Rules / D1 schema / 사용자 데이터 변경 없음.
+
+먼저 사용자 실기기:
+1. Explore warm cache → CACHE LIVE 초기화 → browser reload.
+   - 목표 Worker 0 / D1 R0 W0 / Firestore R0 W0.
+2. 공개 프로필 warm cache → 초기화 → reload.
+   - 목표 Worker 0 / D1 R0 W0.
+3. Music Note warm cache → 초기화 → reload.
+   - 목표 publication revision Worker 0 / D1 R0 W0.
+4. 진단 초기화/일반 클릭만으로 Worker가 증가하지 않는지 확인.
+5. 실제 hidden→visible tab resume은 bounded freshness Worker 허용.
+6. same-source public↔private W2 재확인.
+
+그 다음 비용 구조:
+- 실제 Suno 1↔2 source swap 현재 R11/W3:
+  - canonical track media W1
+  - derived media delta W1
+  - protected shared revision W1
+- TEST/PRODUCTION 구 Worker가 shared revision + derived recovery를 참조하므로 schema/trigger 즉시 제거 금지.
+- W2 가능성은 **구 Worker 호환성을 유지한 대체 invalidation/derived ownership 구조**를 먼저 설계·증명한 뒤 판단.
+- 불가능하면 하위호환 floor와 이유를 명확히 보고하고 기능 삭제로 숫자를 맞추지 않음.
+- never-published first publication R7/W12는 source-swap 호환 설계 뒤 별도 exact fanout compaction.
+
+보호:
+- app164/160 Explore likes.
+- app302 save heart.
+- app301 folders.
+- app303 Split.
+- Music Note 60초/local-first canonical batch.
+- app331~335 publication UI/media behavior.
+- title/genre/artist name·handle search.
+- TEST/PRODUCTION 승격 금지.
+- 사용자 row delete/backfill/rewrite 금지.
+
 ## CURRENT TASK — app334 실기기 Worker-zero + same-source W2 검증 (2026-10-04 KST)
 
 배포 완료:

@@ -7,7 +7,7 @@
 
 **W18 read-only 실DB 진단**
 - Read-only shared D1 schema inspection Run `37135568537`: SUCCESS, `REMOTE_D1_WRITES=0`.
-- Read-only D1 Insights Run `37135782161` 계열 job: SUCCESS, `REMOTE_D1_INSIGHTS_READONLY=PASS`.
+- Read-only D1 Insights Run `37135908156`: SUCCESS, `REMOTE_D1_INSIGHTS_READONLY=PASS`.
 - 현재 `tracks`에는 secondary index 9개가 존재하며, D1 `rows_written`은 table row뿐 아니라 index row 유지비까지 포함한다.
 - 지난 1일 actual D1 Insights:
   - 첫 공개/full publication UPSERT: **avgRowsWritten 16** (`numberOfTimesRun=10`, total 162).

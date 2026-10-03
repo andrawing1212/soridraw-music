@@ -1,3 +1,32 @@
+## CURRENT TASK — app324 프로필 공통 배치 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app324.
+- Final Release System Audit `37103755979` SUCCESS.
+- Firebase PREVIEW Release `37103853836` SUCCESS.
+- locked source `3dbd9f774c8cef0d39240d4f0a3f7988dc689573`.
+- `preview.soridraw.com` app324 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 자기/다른 사용자 프로필 모두 동일한 270px(tablet)/335px(PC) 배경 높이.
+2. 프로필 상단 툴바 명칭 모두 `MY 프로필`.
+3. 소개글은 프로필 사진 바로 아래 왼쪽 열 전용.
+4. 오른쪽 이름/통계/장르/소셜 영역 침범 없음.
+5. 소셜 링크는 대표장르 아래 위치 유지.
+6. 소개 입력 크래시 없음, 줄 수 제한 없음, 150자 제한 유지.
+7. 모바일 190px 높이 및 기존 프로필/이미지 기능 회귀 없음.
+
+보호:
+- app323 소개 입력 crash fix 유지.
+- app322 줄 수 제한 제거 유지.
+- app320 핸들 자유 입력 후 저장 검증 유지.
+- 프로필 이미지 크롭/줌, 저장 API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app323 소개 입력 크래시 수정 확인 + 프로필 레이아웃 후속 (2026-10-03 KST)
 
 배포 완료:

@@ -1,10 +1,10 @@
-app330-instant-music-note-publication-ui
-target_source=57d6ccfa7f3d65557f03267754d5e4d944ab9a42
-app_version=330
+app331-instant-public-private-controls
+target_source=4e9af117580d1c8419760056797698089d2e47a8
+app_version=331
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=instant-publication-ui-response
-required_audit_run=37135125184
+release_request=instant-public-private-controls
+required_audit_run=37136314964
 worker_change=false
 functions_change=false

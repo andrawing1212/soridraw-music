@@ -26,8 +26,9 @@ if (appVersion >= 123) {
   if (appVersion >= 126) {
     if (!page.includes('SORIDRAW_EXPLORE_ENTRY_REVISION_REVALIDATION_126_20260920')) fail('126 entry revision marker missing');
     if (!page.includes('if (!shouldRevalidate) return () => controller.abort();')) fail('126 unchanged warm Feed revision guard missing');
-    if (!page.includes('const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey154) || 0;') &&
-        !page.includes('const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(requestUrl) || 0;')) fail('126/154 successful-check timestamp missing');
+    if (!page.includes('const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionCheckKey154);') &&
+        !page.includes('const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey154) || 0;') &&
+        !page.includes('const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(requestUrl) || 0;')) fail('126/154/334 successful-check timestamp missing');
     if (!page.includes('const serverRevision = await fetchRevision();')) fail('126 stale-entry revision validation missing');
   } else if (!page.includes('if (!revalidateRequested) {')) {
     fail('123 update/re-entry zero-read branch missing');
@@ -55,7 +56,7 @@ if (appVersion >= 155) {
 } else if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) {
   fail('persistent liked-card cache is not reconciled');
 }
-if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*(?:exploreFeedLastRevisionCheckAt126\.set\((?:revisionCheckKey154|requestUrl), Date\.now\(\)\);\s*)?\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
+if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*(?:(?:exploreFeedLastRevisionCheckAt126\.set\((?:revisionCheckKey154|requestUrl), Date\.now\(\)\)|writeExploreFeedLastRevisionCheckAt334\(revisionCheckKey154\));\s*)?\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
 if (appVersion < 254) {
   if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
 } else if (/loadMoreFeed|feedNextCursor|loadingMore|loadMoreError/.test(page)) {

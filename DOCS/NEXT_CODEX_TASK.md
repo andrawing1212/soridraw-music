@@ -1,3 +1,46 @@
+## CURRENT TASK — app333 실기기 공개 비용 재측정 + schema-level 비용 최적화 승인 대기 (2026-10-04 KST)
+
+배포 완료:
+- PREVIEW app333.
+- Audit `37140228404` SUCCESS.
+- PREVIEW Worker `37140381356` SUCCESS / version `0f4e7ac6-2baa-442c-87cc-dbb6e640206b`.
+- Firebase PREVIEW `37140463309` SUCCESS / app333 exact build.
+- TEST / PRODUCTION unchanged.
+- D1 schema / Functions / Rules / 사용자 데이터 변경 없음.
+
+실기기 확인:
+1. 이미 공개된 곡에서 Suno 1→2 또는 2→1 변경 후 저장.
+   - 목표: 즉시 Firestore favorites write **0**.
+   - 목표: Cloudflare Worker **1회**.
+   - D1 media rows_written은 schema 미변경이라 W4 가능; 실제 수치 기록.
+2. 같은 곡 public→private→public.
+   - 목표: Firestore W0 / D1 W2.
+3. 다음곡에 적용 허용만 변경.
+   - 목표: D1 W2, Firestore W0.
+4. 팔로워 곡 저장 허용만 변경.
+   - 목표: D1 W2, Firestore W0.
+5. 공개 프로필 고정만 변경.
+   - 현 구조 예상: D1 W3. W3이면 known schema hard-gate FAIL로 기록.
+6. never-published 첫 공개.
+   - 현 구조 예상: W18. 첫 공개 선택 media 정확성은 app333에서 보호되지만 D1 fanout 비용은 별도.
+
+다음 설계:
+- source swap W4 절감 후보: `idx_tracks_owner_suno_url` 제거/대체.
+- pin W3 절감 후보: `idx_tracks_owner_profile_order` 재설계.
+- first publication W18: tracks/index/trigger fanout을 하위호환 가능한 단계적 canonical 구조로 재설계.
+- 위 3개는 shared D1 schema에 영향을 주므로 guarded read-only query-plan 감사 → migration안 → 사용자 별도 승인 → PREVIEW migration 순서.
+- migration 실행 전 TEST/PRODUCTION 구 Worker의 동일 shared data 읽기 호환성을 증명하지 못하면 실행 금지.
+
+보호:
+- app164/160 좋아요 동결 기준.
+- app302 저장 하트 / app301 폴더 / app303 Split.
+- Music Note local-first/batched save.
+- app331 즉시 공개/비공개 UI.
+- app332 fresh media identity guard.
+- app333 one-Worker inline-media path.
+- 프로필 정상 UI / Explore 검색 및 공개옵션 3개.
+- main/TEST/PRODUCTION 승격 금지.
+
 ## CURRENT TASK — app332 동일곡 공개/비공개 실기기 비용 확인 (2026-10-04 KST)
 
 배포 완료:

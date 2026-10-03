@@ -49,22 +49,9 @@ const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>()
 const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113 = 60_000;
 const profileRevalidationInflight113 = new Map<string, Promise<void>>();
 
-// SORIDRAW_EXPLORE_PUBLICATION_REFRESH_RELOAD_211_20260927
-// Keep normal profile revisits fully local, but make an explicit browser reload
-// perform one conditional shared-R2/edge validation even inside the 60s window.
-// This is D1 R0/W0 and preserves the last-known profile on transient failures.
-const profileReloadRevalidated211 = new Set<string>();
-const browserReloadedProfile211 = (() => {
-  if (typeof performance === 'undefined') return false;
-  try {
-    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-    if (navigation?.type === 'reload') return true;
-    const legacy = performance as Performance & { navigation?: { type?: number } };
-    return Number(legacy.navigation?.type ?? 0) === 1;
-  } catch {
-    return false;
-  }
-})();
+// app334: a browser reload is not a profile-change signal. The persistent
+// validatedAt window already survives reloads, so warm reloads stay local and
+// the normal one-minute background revalidation cadence remains unchanged.
 
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
@@ -416,10 +403,7 @@ export const getExplorePublicProfileFirstView = async (
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
       'LOCAL HIT · 즉시 표시 · D1 읽기 0',
     );
-    const reloadKey211 = String(cached.profile.uid || normalizedRef).trim().toLowerCase();
-    const forceReloadRevalidation211 = browserReloadedProfile211 && !profileReloadRevalidated211.has(reloadKey211);
-    if (forceReloadRevalidation211) profileReloadRevalidated211.add(reloadKey211);
-    revalidateCachedProfile113(normalizedRef, cached, options, forceReloadRevalidation211);
+    revalidateCachedProfile113(normalizedRef, cached, options);
     return cached;
   }
 

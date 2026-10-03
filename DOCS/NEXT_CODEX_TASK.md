@@ -1,3 +1,31 @@
+## CURRENT TASK — app332 동일곡 공개/비공개 실기기 비용 확인 (2026-10-04 KST)
+
+배포 완료:
+- PREVIEW app332.
+- audited source `083d4310059ee27cb225ddf1578340ec3219278a`.
+- Release System Audit `37138323981` SUCCESS.
+- Firebase PREVIEW Release `37138464737` SUCCESS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+지금 확인:
+1. 이미 등록된 같은 Suno 곡을 비공개 → 다시 공개.
+   - 목표: Firestore W0.
+   - 목표: D1 billable W1~W2.
+2. 다시 공개 → 비공개 반복.
+   - 목표 동일.
+3. 같은 곡인데 `favorites:write 1` 또는 D1 W4가 나오면 캡처와 함께 FAIL로 기록.
+4. 실제 다른 Suno 곡 선택 전환은 W4가 나올 수 있음. 이번 app332는 그 경로를 약화하거나 제거하지 않음.
+
+보호:
+- app331 즉시 공개/비공개 UI 반응 유지.
+- app329 실제 source-media swap 기능 유지.
+- app164/160 Explore 좋아요 변경 금지.
+- app302 저장 하트, app301 폴더, app303 Split 변경 금지.
+- 프로필 / Music Note 60초 저장 / Library 정상 기능 변경 금지.
+- TEST/PRODUCTION 승격 금지.
+- 실제 source-media W4와 first-publication W18 최적화는 app332 실기기 확인 후 별도 작업.
+
 ## CURRENT TASK — app331 실기기 비용 분기 고정 / W4·W18 다음 최적화 (2026-10-04 KST)
 
 실기기 확인:

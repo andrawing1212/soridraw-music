@@ -37,6 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s inherit_errexit
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           BASE="$PWD/diagnostics/20261004_music_note_w2_cutover_local_baseline.sql"
@@ -61,6 +62,7 @@ jobs:
               DROP TRIGGER IF EXISTS w2p336_track_update;
               DROP TRIGGER IF EXISTS w2p336_shared_rev_ai;
               DROP TRIGGER IF EXISTS w2p336_shared_rev_au;
+              DROP TABLE IF EXISTS explore_derived_w2p336_tracks;
               DROP TABLE IF EXISTS w2p336_derived_tracks;
               DROP TABLE IF EXISTS w2p336_derived_profiles;
               DROP TABLE IF EXISTS w2p336_track_stats;
@@ -122,6 +124,10 @@ jobs:
           run_json "$VIS_SQL" "$RUNNER_TEMP/cand-vis.json"
           CAND_VIS="$(meta_write "$RUNNER_TEMP/cand-vis.json")"
 
+          for value in "$BASE_INSERT" "$CAND_INSERT" "$BASE_SWAP" "$CAND_SWAP" "$BASE_VIS" "$CAND_VIS"; do
+            [[ "$value" =~ ^[0-9]+$ ]] || { echo "INVALID_ROWS_WRITTEN=$value"; exit 1; }
+          done
+
           echo "BASELINE_FIRST_PUBLICATION_W=$BASE_INSERT"
           echo "CANDIDATE_FIRST_PUBLICATION_W=$CAND_INSERT"
           echo "BASELINE_SOURCE_SWAP_W=$BASE_SWAP"
@@ -135,6 +141,8 @@ jobs:
           test "$CAND_SWAP" -le 2
           test "$BASE_VIS" -ge 2
           test "$CAND_VIS" -le 2
+          test "$CAND_INSERT" -lt "$BASE_INSERT"
+          test "$CAND_SWAP" -lt "$BASE_SWAP"
 
           cleanup
           trap - EXIT

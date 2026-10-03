@@ -9,7 +9,6 @@ const SORIDRAW_CURATED_RECHECK_MS_307 = 60_000;
 const SORIDRAW_MANAGED_CURATED_CACHE_PREFIX_309 = 'soridraw_explore_managed_curated_soridraw_v309';
 const SORIDRAW_MANAGED_CURATED_RECHECK_MS_309 = 60_000;
 const SORIDRAW_CURATION_ACCESS_CACHE_PREFIX_334 = 'soridraw_explore_curation_access_v1';
-const SORIDRAW_CURATION_ACCESS_RECHECK_MS_334 = 5 * 60_000;
 
 export type ExploreCurationAccess307 = {
   canCurate: boolean;
@@ -322,7 +321,6 @@ export const getExploreCurationAccess307 = async (
   const cached = readCurationAccessCache334(uid);
   if (
     cached
-    && Date.now() - cached.checkedAt < SORIDRAW_CURATION_ACCESS_RECHECK_MS_334
     && (!signature || cached.roleSignature === signature)
   ) {
     recordCloudflareLocalCacheHit('/v1/me/explore-management-access', 'LOCAL HIT · 관리 권한 캐시');

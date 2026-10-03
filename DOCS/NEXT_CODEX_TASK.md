@@ -1,3 +1,62 @@
+## CURRENT TASK — app336 R2 catalog + legacy-derived hybrid read 호환층 구현 (2026-10-04 KST)
+
+확정 근거:
+- live exact fanout audit `37149706339` SUCCESS:
+  - first-publication W12 = canonical tracks W6 + derived track W5 + shared revision W1.
+- 3환경 runtime audit `37149380218` SUCCESS:
+  - PREVIEW만 R2 catalog write runtime 보유.
+  - TEST/PRODUCTION은 아직 legacy derived/shared-revision recovery 의존.
+- isolated PREVIEW RATE_DB probe `37150337923` SUCCESS:
+  - first publish W12→W2.
+  - source swap W3→W1.
+  - visibility W2→W1.
+  - shared canonical user-data write 0 / migration 0.
+
+app336 목표:
+1. **migration 없이 Worker read compatibility부터 구현**.
+2. R2 catalog와 legacy derived 결과를 함께 읽을 수 있는 hybrid adapter 추가.
+3. 중복 track id는 R2/shared track-card 쪽을 최신 authority로 우선.
+4. R2 catalog에 없는 기존 곡은 legacy derived path로 그대로 fallback.
+5. 다음 경로 모두 동일 API shape 유지:
+   - latest / popular first page
+   - feed deep page
+   - public profile first/deep page
+   - genre
+   - title search
+   - artist nickname / handle search
+6. pagination/cursor에서 legacy→catalog 경계 때문에 누락/중복이 생기지 않게 verifier 작성.
+7. like count / profile pin / private / republish / source-media swap 후 R2 marker 이동과 legacy fallback 충돌 테스트.
+8. app336에서는 `SORIDRAW_R2_CATALOG_READ_V1`을 무조건 켜지 말고, hybrid verifier가 PASS한 뒤 PREVIEW에서만 활성 판단.
+9. **shared D1 index/trigger/schema 변경 금지**.
+10. 사용자 row delete/backfill/rewrite/copy 금지.
+
+합격선:
+- legacy-only fixture + catalog-only fixture + mixed fixture 전부 결과 parity PASS.
+- 같은 track이 양쪽에 있을 때 stale legacy media/count가 최신 R2를 덮지 않음.
+- 기존 곡 2페이지 이후 누락 0 / 중복 0.
+- title/genre/artist 검색 유지.
+- no-change warm path에 새 D1 전체 scan 없음.
+- TypeScript / Build / 관련 Worker verifier PASS.
+- app164 like / app331~335 publication regression PASS.
+- TEST/PRODUCTION 코드·배포 변경 없음.
+
+app336 완료 후:
+- PREVIEW Worker/app 필요 범위만 배포 검토.
+- 실기기에서 기능/비용 확인.
+- 그 다음에야 TEST→PRODUCTION 코드 호환층 승격 계획.
+- 3환경이 hybrid read를 지원한 뒤 별도 사용자 승인으로 W2 shared-D1 cutover migration 진행.
+
+절대 보호:
+- app164/160 Explore likes.
+- app302 save heart.
+- app301 folders.
+- app303 Split.
+- Music Note 60초/local-first canonical batch.
+- app331~335 publication UI/media behavior.
+- title/genre/artist name·handle search.
+- main/TEST/PRODUCTION 승격 금지.
+- shared canonical 사용자 데이터 변경 금지.
+
 ## CURRENT TASK — app335 실기기 Worker-zero 검증 → source-swap W3 / first-publication W12 후속 (2026-10-04 KST)
 
 배포 완료:

@@ -1,7 +1,7 @@
-app312-latest-public-following-filter
-target_source=3a3e0cbccf069d9a6b34ed1da1b90c47e3ebe090
-app_version=312
+app313-my-profile-hero-height
+target_source=f2b0399bb0b83709eece67956e9ee5fdaff0c912
+app_version=313
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=latest-public-all-following-filter
+release_request=my-profile-hero-height-responsive-only

@@ -1,3 +1,33 @@
+## CURRENT TASK — app336 release audit → PREVIEW Worker/App 배포 (2026-10-04 KST)
+
+구현 후보:
+- canonical Worker commit `e935d52fa6a63ef9f115ef2c07471f77bd9e726a`.
+- implementation verifier Run `37151610954` SUCCESS.
+- app version source 336.
+- PREVIEW hybrid flag ON.
+- shared D1 schema/user data mutation 없음.
+
+지금 할 일:
+1. release-system audit 전체 PASS.
+2. exact product source commit 고정.
+3. PREVIEW Worker release.
+4. Worker smoke:
+   - feed latest/popular HTTP 200.
+   - profile first-view HTTP 200.
+   - app336 verifier/marker/flag.
+   - likes/public-count 기존 smoke.
+   - TEST/PRODUCTION Worker unchanged.
+5. Firebase PREVIEW app336 release.
+6. `preview.soridraw.com` exact build/version 336.
+7. TEST/PRODUCTION Hosting unchanged.
+8. CURRENT_RELEASE_STATE 최종 갱신.
+
+금지:
+- shared D1 cutover migration.
+- 사용자 row rewrite/backfill/delete.
+- main/TEST/PRODUCTION promotion.
+- 정상 likes/save/folders/Split/Music Note batching 변경.
+
 ## CURRENT TASK — app336 R2 catalog + legacy-derived hybrid read 호환층 구현 (2026-10-04 KST)
 
 확정 근거:

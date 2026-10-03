@@ -148,10 +148,13 @@ if (generatedPath) {
     'R2-LEGACY-FEED-336',
     'R2-LEGACY-PROFILE-336',
     'R2-LEGACY-GENRE-336',
-    'R2-LEGACY-SEARCH-336',
   ]) {
     assert.ok(worker.includes(token), 'generated worker missing ' + token);
   }
+  assert.ok(
+    worker.includes('R2-LEGACY-SEARCH-336') || worker.includes('R2-FIRST-SEARCH-337'),
+    'generated worker missing compatible search marker'
+  );
   assert.ok(worker.indexOf('SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919')
     < worker.indexOf('SORIDRAW_R2_HYBRID_READ_336_20261004'), 'hybrid layer must compose after catalog runtime');
   assert.match(

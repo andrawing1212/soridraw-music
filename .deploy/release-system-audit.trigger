@@ -1,4 +1,4 @@
-app323-profile-bio-input-crash-fix
-source=9c3b89df72b816dede58f4380df1af6fb6108148
-product_commit=2f414d9a55dadcf9778dbaa7765708222b930034
-requested=2026-10-03T15:29:00+09:00
+app324-profile-parity-left-bio
+source=efca071e534a50bac787336279af38ec4179af0d
+product_commit=60502405d239e14470808eb90a017956c2a5d2bb
+requested=2026-10-03T15:39:00+09:00

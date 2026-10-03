@@ -26,6 +26,11 @@ assert(master.includes('explore-management-permission'), 'Explore permission cha
 assert(service.includes('soridraw_explore_curated_soridraw_v307'), 'Curated local cache key is missing.');
 assert(service.includes('SORIDRAW_CURATED_RECHECK_MS_307'), 'Curated local-first recheck guard is missing.');
 assert(service.includes('/v1/curated-revision'), 'Curated revision check is missing.');
+assert(service.includes('SORIDRAW_MANAGED_CURATED_CACHE_PREFIX_309'), 'Managed curated local cache is missing.');
+assert(service.includes('soridraw-managed-curated-local-309'), 'Managed curated warm re-entry must use local cache.');
+assert(service.includes('soridraw-managed-curated-revision-309'), 'Managed curated stale cache must reuse unchanged revision without list reread.');
+assert(service.includes('fetchCuratedRevision309'), 'Managed curated cache must revalidate with the D1-free curated revision path.');
+assert(service.includes('invalidateManagedCuratedCache309'), 'A real curation mutation must invalidate only the manager cache for the acting account.');
 assert(!service.includes("from 'firebase/firestore'"), 'Curated public reads must not add Firestore page-entry reads.');
 
 assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Worker curation marker is missing.');

@@ -9,7 +9,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
+import { favoritesStore } from '../hooks/useFavoritesStore';
+import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import {
@@ -72,6 +75,7 @@ import {
   type ExploreSharedNoteFolder,
 } from '../services/exploreSharedNoteService';
 import {
+  refreshExploreMusicNotePublicationSource,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExplorePublicationOptions,
@@ -122,6 +126,157 @@ type ExploreTrack = {
   likeCount: number;
   publishedAt: number;
   profilePinned: boolean;
+};
+
+type ExplorePublicationSunoLink = {
+  url: string;
+  title?: string | null;
+  coverUrl?: string | null;
+  durationSeconds?: number | null;
+  durationText?: string | null;
+  rank?: 1 | 2;
+  updatedAt?: number;
+  fetchedAt?: number;
+};
+
+type ExplorePublicationSettingsState = {
+  track: ExploreTrack;
+  options: ExplorePublicationOptions;
+  sourceId: string;
+  sourceSong: Record<string, any> | null;
+  sunoLinks: ExplorePublicationSunoLink[];
+  selectedSunoIndex: 0 | 1;
+  initialSunoIndex: 0 | 1;
+};
+
+const normalizeExplorePublicationSunoLink = (raw: any, index: number): ExplorePublicationSunoLink | null => {
+  const url = safeText(raw?.url ?? raw?.sunoShareUrl ?? raw?.sunoUrl);
+  if (!url) return null;
+  const duration = Number(raw?.durationSeconds ?? raw?.duration);
+  const rankValue = Number(raw?.rank);
+  return {
+    url,
+    title: safeText(raw?.title) || null,
+    coverUrl: safeText(raw?.coverUrl ?? raw?.imageUrl ?? raw?.artworkUrl) || null,
+    durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
+    durationText: safeText(raw?.durationText) || null,
+    rank: rankValue === 2 ? 2 : rankValue === 1 ? 1 : (index === 0 ? 1 : 2),
+    updatedAt: Number(raw?.updatedAt || 0) || undefined,
+    fetchedAt: Number(raw?.fetchedAt || 0) || undefined,
+  };
+};
+
+const getExplorePublicationSunoLinks = (song: any, track?: ExploreTrack | null): ExplorePublicationSunoLink[] => {
+  const raw = Array.isArray(song?.sunoLinks)
+    ? song.sunoLinks
+    : Array.isArray(song?.sunoShareLinks)
+      ? song.sunoShareLinks
+      : [];
+  const links = raw
+    .map((link: any, index: number) => normalizeExplorePublicationSunoLink(link, index))
+    .filter(Boolean) as ExplorePublicationSunoLink[];
+  if (links.length) return links.slice(0, 2);
+
+  const legacyPrimary = safeText(song?.sunoShareUrl ?? song?.sunoUrl ?? song?.sunoSongUrl ?? track?.sunoUrlPrimary);
+  const legacySecondary = safeText(track?.sunoUrlSecondary);
+  const fallback: ExplorePublicationSunoLink[] = [];
+  if (legacyPrimary) fallback.push({
+    url: legacyPrimary,
+    title: safeText(song?.sunoTitle) || track?.title || null,
+    coverUrl: safeText(song?.sunoCoverUrl ?? song?.sunoImageUrl ?? song?.sunoArtworkUrl ?? track?.coverUrl) || null,
+    durationSeconds: Number(song?.sunoDurationSeconds || track?.durationSeconds || 0) || null,
+    durationText: safeText(song?.sunoDurationText) || null,
+    rank: 1,
+  });
+  if (legacySecondary && legacySecondary !== legacyPrimary) fallback.push({
+    url: legacySecondary,
+    title: track?.title || null,
+    coverUrl: null,
+    durationSeconds: track?.durationSeconds || null,
+    durationText: null,
+    rank: 2,
+  });
+  return fallback.slice(0, 2);
+};
+
+const readExplorePublicationSourceFromLocal = (uid: string, sourceId: string): Record<string, any> | null => {
+  const safeSourceId = String(sourceId || '').trim();
+  if (!uid || !safeSourceId) return null;
+  const live = favoritesStore.getFavorites().find((item: any) => (
+    String(item?.id || item?.firestoreId || '').trim() === safeSourceId
+  ));
+  if (live) return live as Record<string, any>;
+  try {
+    const raw = window.localStorage.getItem(`soridraw_favorites_cache_${uid}`);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.find((item: any) => String(item?.id || item?.firestoreId || '').trim() === safeSourceId) || null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveExplorePublicationMainIndex = (
+  song: any,
+  track: ExploreTrack,
+  links: ExplorePublicationSunoLink[],
+): 0 | 1 => {
+  if (links.length <= 1) return 0;
+  const publicPrimary = safeText(track.sunoUrlPrimary);
+  const publicIndex = links.findIndex((link) => safeText(link.url) === publicPrimary);
+  if (publicIndex === 1) return 1;
+  if (publicIndex === 0) return 0;
+  const saved = Number(song?.mainSunoIndex);
+  if (saved === 0 || saved === 1) return saved as 0 | 1;
+  return links.findIndex((link) => Number(link.rank) === 1) === 1 ? 1 : 0;
+};
+
+const buildExplorePublicationMainSelectionUpdates = (
+  links: ExplorePublicationSunoLink[],
+  requestedIndex: 0 | 1,
+) => {
+  const mainIndex = (requestedIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
+  const selected = links[mainIndex] || links[0] || null;
+  const now = Date.now();
+  const rankedLinks = links.map((link, index) => ({ ...link, rank: index === mainIndex ? 1 as const : 2 as const }));
+  return {
+    sunoLinks: rankedLinks,
+    mainSunoIndex: mainIndex,
+    sunoLinkCount: rankedLinks.length,
+    sunoShareUrl: selected?.url || null,
+    sunoShareUrlUpdatedAt: now,
+    sunoCoverUrl: selected?.coverUrl || null,
+    sunoTitle: selected?.title || null,
+    sunoDurationSeconds: selected?.durationSeconds ?? null,
+    sunoDurationText: selected?.durationText || null,
+    sunoCoverFetchedAt: selected?.fetchedAt || now,
+    updatedAtMs: now,
+  };
+};
+
+const patchExplorePublicationSourceLocalCache = (uid: string, sourceId: string, patch: Record<string, any>) => {
+  const current = favoritesStore.getFavorites();
+  let storeChanged = false;
+  const next = current.map((item: any) => {
+    if (String(item?.id || item?.firestoreId || '').trim() !== sourceId) return item;
+    storeChanged = true;
+    return { ...item, ...patch };
+  });
+  if (storeChanged) favoritesStore.setFavorites(next);
+
+  try {
+    const key = `soridraw_favorites_cache_${uid}`;
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return;
+    let changed = false;
+    const cached = parsed.map((item: any) => {
+      if (String(item?.id || item?.firestoreId || '').trim() !== sourceId) return item;
+      changed = true;
+      return { ...item, ...patch };
+    });
+    if (changed) window.localStorage.setItem(key, JSON.stringify(cached));
+  } catch {}
 };
 
 type ExploreApiResponse = {
@@ -274,7 +429,8 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   displayName: safeText(row.ownerNickname ?? row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
   avatarUrl: safeText(row.ownerAvatarUrl ?? row.avatarUrl) || null,
   coverUrl: safeText(row.coverUrl) || null,
-  sunoUrlPrimary: safeText(row.sunoUrlPrimary) || null,
+  sunoUrlPrimary: safeText(row.sunoUrlPrimary ?? row.suno_url_primary) || null,
+  sunoUrlSecondary: safeText(row.sunoUrlSecondary ?? row.suno_url_secondary) || null,
   openUrl: safeText(row.openUrl) || null,
   sourceType: safeText(row.sourceType ?? row.source_type) || null,
   sourceId: safeText(row.sourceId ?? row.source_id) || null,
@@ -1321,7 +1477,7 @@ export default function ExplorePage() {
   const [moreActionBusy, setMoreActionBusy] = useState<'sharedNote' | 'apply' | 'curation' | null>(null);
   const [folderChoices, setFolderChoices] = useState<ExploreSharedNoteFolder[]>([]);
   const [sharedNoteSavedFolderId274, setSharedNoteSavedFolderId274] = useState<string | null>(null);
-  const [publicationSettings, setPublicationSettings] = useState<{ track: ExploreTrack; options: ExplorePublicationOptions } | null>(null);
+  const [publicationSettings, setPublicationSettings] = useState<ExplorePublicationSettingsState | null>(null);
   const [publicationSettingsBusy, setPublicationSettingsBusy] = useState(false);
   const [publicationPrivateConfirm, setPublicationPrivateConfirm] = useState(false);
   const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<string>>(() => new Set());
@@ -2729,12 +2885,7 @@ export default function ExplorePage() {
     }
   };
 
-  const patchExplorePublicationOptions = (track: ExploreTrack, options: ExplorePublicationOptions) => {
-    const patch = {
-      allowNextSongApply: options.allowNextSongApply,
-      allowFollowerSave: options.allowFollowerSave,
-      profilePinned: options.profilePinned,
-    };
+  const patchExplorePublicationTrack = (track: ExploreTrack, patch: Partial<ExploreTrack>) => {
     setTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
     setPopularTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
     setCuratedTracks307((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
@@ -2743,12 +2894,44 @@ export default function ExplorePage() {
       .map((item) => item.id === track.id ? { ...item, ...patch } : item)
       .sort(comparePublicProfileTracks));
     setProfileLikedTracks((previous) => previous.map((item) => item.id === track.id ? { ...item, ...patch } : item));
-    patchExploreFeedSessionCachesRow(track.id, patch);
-    if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, patch);
+    patchExploreFeedSessionCachesRow(track.id, patch as Record<string, unknown>);
+    if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, patch as Record<string, unknown>);
   };
 
-  const openExplorePublicationSettings = (track: ExploreTrack) => {
+  const patchExplorePublicationOptions = (track: ExploreTrack, options: ExplorePublicationOptions) => {
+    patchExplorePublicationTrack(track, {
+      allowNextSongApply: options.allowNextSongApply,
+      allowFollowerSave: options.allowFollowerSave,
+      profilePinned: options.profilePinned,
+    });
+  };
+
+  const openExplorePublicationSettings = async (track: ExploreTrack) => {
     if (!user || user.uid !== track.ownerUid) return;
+    setPublicationPrivateConfirm(false);
+    closeMoreSheet();
+
+    const sourceId = track.sourceType === 'music_note' ? safeText(track.sourceId) : '';
+    let sourceSong: Record<string, any> | null = sourceId
+      ? readExplorePublicationSourceFromLocal(user.uid, sourceId)
+      : null;
+    if (sourceId && !sourceSong) {
+      try {
+        const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Record<string, any>;
+          const ownerUid = safeText(data.uid ?? data.ownerUid);
+          if (!ownerUid || ownerUid === user.uid) {
+            sourceSong = { ...data, id: snapshot.id, firestoreId: snapshot.id };
+          }
+        }
+      } catch (reason) {
+        console.warn('Explore publication source exact read unavailable; using public card fallback.', reason);
+      }
+    }
+
+    const sunoLinks = getExplorePublicationSunoLinks(sourceSong, track);
+    const selectedSunoIndex = resolveExplorePublicationMainIndex(sourceSong, track, sunoLinks);
     setPublicationSettings({
       track,
       options: {
@@ -2756,9 +2939,12 @@ export default function ExplorePage() {
         allowFollowerSave: Boolean(track.allowFollowerSave),
         profilePinned: Boolean(track.profilePinned),
       },
+      sourceId,
+      sourceSong,
+      sunoLinks,
+      selectedSunoIndex,
+      initialSunoIndex: selectedSunoIndex,
     });
-    setPublicationPrivateConfirm(false);
-    closeMoreSheet();
   };
 
   const toggleExplorePublicationSetting = (key: keyof ExplorePublicationOptions) => {
@@ -2773,9 +2959,57 @@ export default function ExplorePage() {
     if (!user || !publicationSettings || user.uid !== publicationSettings.track.ownerUid || publicationSettingsBusy) return;
     setPublicationSettingsBusy(true);
     try {
-      const saved = await setExploreTrackPublicationOptions(user, publicationSettings.track.id, publicationSettings.options);
-      patchExplorePublicationOptions(publicationSettings.track, saved);
-      setSocialNotice('공개 설정을 저장했어요.');
+      const selectionChanged = Boolean(
+        publicationSettings.sourceId
+        && publicationSettings.sourceSong
+        && publicationSettings.sunoLinks.length > 1
+        && publicationSettings.selectedSunoIndex !== publicationSettings.initialSunoIndex
+      );
+
+      if (selectionChanged) {
+        const sourceId = publicationSettings.sourceId;
+        const updates = buildExplorePublicationMainSelectionUpdates(
+          publicationSettings.sunoLinks,
+          publicationSettings.selectedSunoIndex,
+        );
+        const nextSourceSong = {
+          ...publicationSettings.sourceSong,
+          ...updates,
+          id: sourceId,
+          firestoreId: sourceId,
+          uid: user.uid,
+        };
+        await runV1MutationBoundary({
+          domain: 'musicNote',
+          operation: 'update',
+          uid: user.uid,
+          documentIds: [sourceId],
+          affectedCount: 1,
+          syncItem: nextSourceSong,
+        }, updateDoc(doc(db, 'favorites', sourceId), updates));
+        patchExplorePublicationSourceLocalCache(user.uid, sourceId, updates);
+
+        await refreshExploreMusicNotePublicationSource(user, sourceId, publicationSettings.options);
+        const selected = publicationSettings.sunoLinks[publicationSettings.selectedSunoIndex]
+          || publicationSettings.sunoLinks[0];
+        const other = publicationSettings.sunoLinks.find((link) => link.url !== selected?.url) || null;
+        patchExplorePublicationTrack(publicationSettings.track, {
+          allowNextSongApply: publicationSettings.options.allowNextSongApply,
+          allowFollowerSave: publicationSettings.options.allowFollowerSave,
+          profilePinned: publicationSettings.options.profilePinned,
+          coverUrl: selected?.coverUrl || publicationSettings.track.coverUrl || null,
+          durationSeconds: selected?.durationSeconds ?? publicationSettings.track.durationSeconds ?? null,
+          sunoUrlPrimary: selected?.url || publicationSettings.track.sunoUrlPrimary || null,
+          sunoUrlSecondary: other?.url || null,
+          openUrl: selected?.url || publicationSettings.track.openUrl || null,
+        });
+        setSocialNotice('선택한 곡으로 공개 설정을 저장했어요.');
+      } else {
+        const saved = await setExploreTrackPublicationOptions(user, publicationSettings.track.id, publicationSettings.options);
+        patchExplorePublicationOptions(publicationSettings.track, saved);
+        setSocialNotice('공개 설정을 저장했어요.');
+      }
+
       setPublicationSettings(null);
       setPublicationPrivateConfirm(false);
     } catch (reason) {
@@ -3139,6 +3373,18 @@ export default function ExplorePage() {
     <ExplorePublicationSettingsModal
       title={publicationSettings.track.title}
       options={publicationSettings.options}
+      trackChoices={publicationSettings.sunoLinks.map((link, index) => ({
+        index: (index === 1 ? 1 : 0) as 0 | 1,
+        title: safeText(link.title, `수노 곡 ${index + 1}`),
+        coverUrl: safeText(link.coverUrl) || null,
+        available: Boolean(safeText(link.url)),
+      }))}
+      selectedTrackIndex={publicationSettings.selectedSunoIndex}
+      onSelectTrackIndex={(index) => {
+        if (publicationSettingsBusy) return;
+        setPublicationSettings((current) => current ? { ...current, selectedSunoIndex: index } : current);
+        setPublicationPrivateConfirm(false);
+      }}
       busy={publicationSettingsBusy}
       privateConfirm={publicationPrivateConfirm}
       onToggle={toggleExplorePublicationSetting}

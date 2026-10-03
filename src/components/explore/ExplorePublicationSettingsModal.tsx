@@ -1,12 +1,22 @@
 import React from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Music2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import StudioCenterModalPortal from '../studio/StudioCenterModalPortal';
 import type { ExplorePublicationOptions } from '../../services/explorePublicationService';
 
+export type ExplorePublicationTrackChoice = {
+  index: 0 | 1;
+  title: string;
+  coverUrl?: string | null;
+  available?: boolean;
+};
+
 type Props = {
   title: string;
   options: ExplorePublicationOptions;
+  trackChoices?: ExplorePublicationTrackChoice[];
+  selectedTrackIndex?: 0 | 1;
+  onSelectTrackIndex?: (index: 0 | 1) => void;
   busy: boolean;
   privateConfirm: boolean;
   onToggle: (key: keyof ExplorePublicationOptions) => void;
@@ -18,6 +28,9 @@ type Props = {
 export default function ExplorePublicationSettingsModal({
   title,
   options,
+  trackChoices = [],
+  selectedTrackIndex = 0,
+  onSelectTrackIndex,
   busy,
   privateConfirm,
   onToggle,
@@ -66,6 +79,39 @@ export default function ExplorePublicationSettingsModal({
               <X className="h-4 w-4" />
             </button>
           </div>
+
+          {trackChoices.length > 1 && (
+            <div className="soridraw-explore-publication-track-picker">
+              <div className="soridraw-explore-publication-track-picker-head">
+                <strong>공개할 곡 선택</strong>
+                <span>2곡 중 1곡</span>
+              </div>
+              <div className="soridraw-explore-publication-track-grid">
+                {trackChoices.slice(0, 2).map((choice) => {
+                  const selected = selectedTrackIndex === choice.index;
+                  return (
+                    <button
+                      key={choice.index}
+                      type="button"
+                      className={selected ? 'is-selected' : undefined}
+                      aria-pressed={selected}
+                      disabled={busy || choice.available === false}
+                      onClick={() => onSelectTrackIndex?.(choice.index)}
+                    >
+                      <div className="soridraw-explore-publication-track-cover">
+                        {choice.coverUrl ? <img src={choice.coverUrl} alt="" /> : <Music2 aria-hidden="true" />}
+                        <span>{selected ? '선택' : `${choice.index + 1}번`}</span>
+                      </div>
+                      <div className="soridraw-explore-publication-track-meta">
+                        <strong>{choice.title || `수노 곡 ${choice.index + 1}`}</strong>
+                        <small>{choice.available === false ? '연결 확인 필요' : '공개 가능'}</small>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 space-y-2.5">
             {([

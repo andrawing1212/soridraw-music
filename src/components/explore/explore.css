@@ -222,3 +222,24 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-explore-curation-manage-button-307 span{display:none}
 .soridraw-explore-curation-manage-button-307{width:40px;padding:0;justify-content:center}
 }
+
+/* app329 — own Music Note publication source picker parity */
+.soridraw-explore-publication-track-picker { margin: 18px 0 20px; }
+.soridraw-explore-publication-track-picker-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; padding:0 2px; }
+.soridraw-explore-publication-track-picker-head strong { font-size:11px; font-weight:900; color:rgba(255,255,255,.76); }
+.soridraw-explore-publication-track-picker-head span { font-size:10px; font-weight:800; color:rgba(255,255,255,.32); }
+.soridraw-explore-publication-track-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.soridraw-explore-publication-track-grid > button { overflow:hidden; min-width:0; padding:0; border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(255,255,255,.035); color:inherit; text-align:left; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
+.soridraw-explore-publication-track-grid > button:hover:not(:disabled) { border-color:rgba(255,255,255,.17); background:rgba(255,255,255,.055); }
+.soridraw-explore-publication-track-grid > button.is-selected { border-color:rgba(255,122,114,.72); background:rgba(255,122,114,.10); box-shadow:0 8px 24px rgba(255,122,114,.10); }
+.soridraw-explore-publication-track-grid > button:disabled { cursor:not-allowed; opacity:.45; }
+.soridraw-explore-publication-track-cover { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:rgba(0,0,0,.22); color:rgba(255,255,255,.28); }
+.soridraw-explore-publication-track-cover img { width:100%; height:100%; object-fit:cover; }
+.soridraw-explore-publication-track-cover > svg { width:24px; height:24px; }
+.soridraw-explore-publication-track-cover > span { position:absolute; top:8px; left:8px; padding:4px 8px; border-radius:999px; background:rgba(0,0,0,.66); color:rgba(255,255,255,.72); font-size:9px; font-weight:900; }
+.soridraw-explore-publication-track-grid > button.is-selected .soridraw-explore-publication-track-cover > span { background:#ff7a72; color:#fff; }
+.soridraw-explore-publication-track-meta { padding:10px 12px 11px; }
+.soridraw-explore-publication-track-meta strong,.soridraw-explore-publication-track-meta small { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.soridraw-explore-publication-track-meta strong { color:rgba(255,255,255,.82); font-size:11px; font-weight:900; }
+.soridraw-explore-publication-track-meta small { margin-top:4px; color:rgba(255,255,255,.34); font-size:9px; font-weight:800; }
+@media (max-width:520px) { .soridraw-explore-publication-track-grid { gap:8px; } .soridraw-explore-publication-track-meta { padding:9px 10px 10px; } }

@@ -9228,6 +9228,7 @@ async function handleProfileTracks(url, profileRef, env, cors) {
   }
 
   const legacy = await collectHybridLegacyKind336(
+    env,
     url,
     limit,
     state?.boundary,
@@ -10473,6 +10474,7 @@ async function handleGenreTracks(url, genreValue, env, cors) {
   }
 
   const legacy = await collectHybridLegacyKind336(
+    env,
     url,
     limit,
     state?.boundary,
@@ -27892,7 +27894,7 @@ async function collectHybridCatalog336(env, prefix, limit, state) {
   return { items, r2Started, r2Done, r2Next };
 }
 
-async function collectHybridLegacyKind336(baseUrl, limit, boundary, prefix, kind, fetchPage) {
+async function collectHybridLegacyKind336(env, baseUrl, limit, boundary, prefix, kind, fetchPage) {
   const url = new URL(baseUrl.toString());
   url.searchParams.set('limit', String(limit));
   const firstCursor = hybridLegacyCursor336(kind, boundary);
@@ -28006,6 +28008,7 @@ async function handleFeedWithEdgeCache(request, url, env, cors) {
   }
 
   const legacy = await collectHybridLegacyKind336(
+    env,
     url,
     limit,
     state?.boundary,

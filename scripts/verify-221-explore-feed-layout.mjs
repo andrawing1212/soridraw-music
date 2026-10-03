@@ -75,9 +75,42 @@ assert.match(page, /recommendationModel221\.genres\.map/);
 assert.match(page, /setRecommendationGenreId221\(genre\.id\)/);
 assert.match(page, /title="좋아할 만한 크리에이터"/);
 assert.match(page, /ExploreCreatorCard221/);
-assert.match(page, /title="최신"[\s\S]*?tracks\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
+
+// app312: "최신 공개곡" stays on the existing chronological latest Feed.
+// "팔로잉" is a local filter using the already-existing following bundle;
+// switching the chip must not add another Feed/D1 route.
+assert.match(page, /SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003/);
+assert.match(page, /const \[latestPublicScope312, setLatestPublicScope312\] = useState<'all' \| 'following'>\('all'\)/);
+assert.match(page, /aria-label="최신 공개곡 범위 선택"[\s\S]*?>\s*전체\s*<[\s\S]*?>\s*\{followingLoading312 \? '팔로잉 확인 중' : '팔로잉'\}\s*</);
+assert.match(
+  page,
+  /const latestPublicTracks312 = useMemo\([\s\S]*?latestPublicScope312 === 'all'\) return tracks;[\s\S]*?tracks\.filter\(\(track\) => followingUids312\.has\(track\.ownerUid\)\)/,
+  'Following tab must filter the existing chronological latest Feed by owner uid',
+);
+assert.match(
+  page,
+  /getExploreFollowingUids312\(user\)[\s\S]*?setFollowingUids312\(new Set\(uids\)\)/,
+  'Following tab must resolve the viewer following bundle once and keep it locally',
+);
+assert.match(
+  page,
+  /setExploreFollow\(user, profile\.uid, nextShouldFollow\)[\s\S]*?setFollowingUids312[\s\S]*?result\.isFollowing[\s\S]*?next\.add\(profile\.uid\)[\s\S]*?next\.delete\(profile\.uid\)/,
+  'Same-device follow/unfollow must patch the Following filter immediately',
+);
+assert.match(socialService, /SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003/);
+const followingFilter312Start = socialService.indexOf('export const getExploreFollowingUids312');
+const followingFilter312End = socialService.indexOf('const toCount', followingFilter312Start);
+assert.ok(followingFilter312Start >= 0 && followingFilter312End > followingFilter312Start);
+const followingFilter312 = socialService.slice(followingFilter312Start, followingFilter312End);
+assert.match(followingFilter312, /loadExploreFollowingBundle\(user\)/);
+assert.doesNotMatch(
+  followingFilter312,
+  /requestAuthed\(|requestPublic\(|fetch\(/,
+  'Latest Following filter must not own a second network/D1 feed query',
+);
+assert.match(page, /title="최신 공개곡"[\s\S]*?latestPublicTracks312[\s\S]*?\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
 assert.match(page, /title="인기"[\s\S]*?popularTracks\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
-assert.match(page, /title="SORIDRAW 추천"[\s\S]*?title="최신"[\s\S]*?title="인기"[\s\S]*?title="좋아할 만한 크리에이터"[\s\S]*?title="장르별 추천"/);
+assert.match(page, /title="SORIDRAW 추천"[\s\S]*?title="최신 공개곡"[\s\S]*?title="인기"[\s\S]*?title="좋아할 만한 크리에이터"[\s\S]*?title="장르별 추천"/);
 assert.match(page, /className="soridraw-explore-tabs" aria-label="내 프로필"[\s\S]*?MY 프로필/);
 assert.doesNotMatch(page, /\['recommended', '추천'\][\s\S]*?\['latest', '최신'\][\s\S]*?\['popular', '인기'\]/);
 assert.match(page, /ExploreRecommendationRail/);
@@ -162,7 +195,7 @@ assert.match(
 );
 assert.match(
   page,
-  /title="최신"[\s\S]*?mobileGroupSize=\{3\}[\s\S]*?title="인기"[\s\S]*?mobileGroupSize=\{3\}/,
+  /title="최신 공개곡"[\s\S]*?mobileGroupSize=\{3\}[\s\S]*?title="인기"[\s\S]*?mobileGroupSize=\{3\}/,
   'Latest and Popular home sections must use the shared three-card mobile rail contract',
 );
 assert.match(

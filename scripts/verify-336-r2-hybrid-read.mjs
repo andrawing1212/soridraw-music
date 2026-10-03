@@ -154,6 +154,16 @@ if (generatedPath) {
   }
   assert.ok(worker.indexOf('SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919')
     < worker.indexOf('SORIDRAW_R2_HYBRID_READ_336_20261004'), 'hybrid layer must compose after catalog runtime');
+  assert.match(
+    worker,
+    /async function collectHybridLegacyKind336\(env, baseUrl, limit, boundary, prefix, kind, fetchPage\)/,
+    'hybrid legacy collector must receive Worker env explicitly'
+  );
+  assert.equal(
+    (worker.match(/collectHybridLegacyKind336\(\s*env,\s*url,/g) || []).length,
+    3,
+    'feed/profile/genre must all pass Worker env to the legacy catalog-ownership filter'
+  );
 }
 
 console.log('APP336_HYBRID_READ_HELPERS=PASS');

@@ -634,6 +634,9 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   });
 }
 
+// SORIDRAW_CURATED_MANAGER_R2_READ_310_20261003
+// The manager page must reuse the already-materialized curated R2 snapshot.
+// App/version changes must not turn a management-page visit into a D1 list scan.
 async function handleManagedCurated307(request, env, ctx) {
   const access = await resolveExploreManagementAccess307(request, env, ctx);
   if (!access.ok) return access.response;
@@ -646,18 +649,43 @@ async function handleManagedCurated307(request, env, ctx) {
       headers: curationHeaders307(request, { d1Read: access.d1Read, source: 'MANAGED-LIST-DENIED-307' }),
     });
   }
-  const target = new URL('/v1/curated', request.url);
-  target.searchParams.set('collection', SORIDRAW_CURATED_COLLECTION_307);
-  target.searchParams.set('limit', '50');
-  const response = await baseWorker.fetch(new Request(target.toString(), {
-    method: 'GET',
-    headers: { Origin: request.headers.get('Origin') || '' },
-  }), env, ctx);
-  const headers = new Headers(response.headers);
-  for (const [key, value] of Object.entries(curationCors307(request))) headers.set(key, value);
-  headers.set('Cache-Control', 'no-store');
-  headers.set('X-SORIDRAW-Curated-Source', 'MANAGED-D1-307');
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+
+  const selected = await readCuratedObject307(request, env, ctx);
+  if (!selected.payload?.data?.items) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: { code: 'CURATED_CACHE_UNAVAILABLE', message: '승격 곡 목록을 불러오지 못했습니다.' },
+    }), {
+      status: 503,
+      headers: curationHeaders307(request, {
+        d1Read: Number(access.d1Read || 0) + Number(selected.d1Read || 0),
+        r2B: selected.r2Reads,
+        source: selected.source || 'MANAGED-R2-MISSING-310',
+      }),
+    });
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(40, Math.max(1, Number(url.searchParams.get('limit') || 40)));
+  const revision = curatedRevision307(selected.object);
+  const body = JSON.stringify({
+    ...selected.payload,
+    data: {
+      ...selected.payload.data,
+      collection: SORIDRAW_CURATED_COLLECTION_307,
+      items: selected.payload.data.items.slice(0, limit),
+      revision,
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: curationHeaders307(request, {
+      d1Read: Number(access.d1Read || 0) + Number(selected.d1Read || 0),
+      r2B: selected.r2Reads,
+      revision,
+      source: 'MANAGED-R2-310',
+    }),
+  });
 }
 
 async function readFeedHeadSource112(env, sort) {

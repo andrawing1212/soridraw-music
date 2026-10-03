@@ -137,6 +137,7 @@ jobs:
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-204-explore-next-song-parity.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-336-r2-hybrid-read.mjs
 
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
@@ -153,6 +154,8 @@ jobs:
           grep -q 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916' canonical/preview-entry.js
           grep -q 'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920' canonical/preview-worker.js
           grep -q '/v1/me/likes-revision' canonical/preview-worker.js
+          grep -q 'SORIDRAW_R2_HYBRID_READ_336_20261004' canonical/preview-worker.js
+          grep -q '"SORIDRAW_R2_HYBRID_READ_V1": "1"' canonical/wrangler.preview.jsonc
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..

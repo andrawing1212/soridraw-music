@@ -1,0 +1,195 @@
+name: SORIDRAW PREVIEW 334 Publication D1 Fanout Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-334-publication-write-fanout.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-334-publication-d1-fanout
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify migration source
+        run: node scripts/verify-334-publication-write-fanout.mjs
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Guarded read-only preflight
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN (
+              'idx_tracks_latest_order','idx_tracks_legacy_global','idx_tracks_owner_latest',
+              'idx_tracks_owner_profile_order','idx_tracks_owner_source','idx_tracks_owner_suno_url',
+              'idx_tracks_primary_genre_latest','idx_tracks_source_type_latest','idx_tracks_title',
+              'idx_tracks_legacy_global_nonempty'
+            ) ORDER BY name;
+            SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name='explore079_music_note_derived_track_insert';
+            SELECT COUNT(*) AS tracks_count FROM tracks;
+            SELECT COUNT(*) AS derived_tracks_count FROM explore_derived_tracks;
+            SELECT COUNT(*) AS derived_profiles_count FROM explore_derived_profiles;
+            SELECT COALESCE(MAX(n),0) AS max_tracks_per_owner FROM (SELECT owner_uid,COUNT(*) AS n FROM tracks GROUP BY owner_uid);
+            SELECT COUNT(*) AS music_note_rows,
+                   SUM(CASE WHEN legacy_global_id IS NOT NULL AND TRIM(legacy_global_id)<>'' THEN 1 ELSE 0 END) AS music_note_legacy_nonempty
+            FROM tracks INDEXED BY idx_tracks_source_type_latest WHERE source_type='music_note';
+            EXPLAIN QUERY PLAN SELECT id FROM tracks INDEXED BY idx_tracks_owner_latest
+              WHERE owner_uid='__audit__' AND is_public=1 AND status='published'
+              ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN SELECT id,source_id FROM tracks
+              WHERE owner_uid='__audit__' AND source_type='music_note' AND source_id IS NOT NULL AND source_id<>'' LIMIT 200;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND (title LIKE '%__audit__%' OR search_text LIKE '%__audit__%')
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+          " --json > "$RUNNER_TEMP/preflight.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preflight.json','utf8'));
+          const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
+          const indexes=sets[0]||[];
+          const names=new Set(indexes.map(x=>x.name));
+          for(const n of [
+            'idx_tracks_latest_order','idx_tracks_legacy_global','idx_tracks_owner_latest',
+            'idx_tracks_owner_profile_order','idx_tracks_owner_source','idx_tracks_owner_suno_url',
+            'idx_tracks_primary_genre_latest','idx_tracks_source_type_latest','idx_tracks_title'
+          ]) if(!names.has(n)) throw new Error('missing pre-migration index '+n);
+          if(names.has('idx_tracks_legacy_global_nonempty')) throw new Error('app334 migration already appears applied');
+          const trigger=String((sets[1]||[])[0]?.sql||'');
+          if(!trigger.includes('track_count = track_count + NEW.active')) throw new Error('unexpected pre-migration Music Note trigger');
+          const max=Number((sets[5]||[])[0]?.max_tracks_per_owner||0);
+          if(max>100) throw new Error('owner-profile fallback bound changed: '+max);
+          const legacy=sets[6]?.[0]||{};
+          if(Number(legacy.music_note_legacy_nonempty||0)!==0) throw new Error('music_note legacy ids are no longer empty');
+          const profilePlan=JSON.stringify(sets[7]||[]);
+          if(!profilePlan.includes('idx_tracks_owner_latest') || !profilePlan.includes('TEMP B-TREE')) throw new Error('owner profile fallback plan changed: '+profilePlan);
+          const sourcePlan=JSON.stringify(sets[8]||[]);
+          if(!sourcePlan.includes('idx_tracks_owner_source')) throw new Error('owner source plan changed: '+sourcePlan);
+          const searchPlan=JSON.stringify(sets[9]||[]);
+          if(!searchPlan.includes('idx_tracks_latest_order')) throw new Error('title fallback plan changed: '+searchPlan);
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/counts-before.json',JSON.stringify({
+            tracks:Number(sets[2]?.[0]?.tracks_count||0),
+            derivedTracks:Number(sets[3]?.[0]?.derived_tracks_count||0),
+            derivedProfiles:Number(sets[4]?.[0]?.derived_profiles_count||0)
+          }));
+          console.log('APP334_PRE_MIGRATION_READONLY=PASS max_tracks_per_owner='+max);
+          NODE
+
+      - name: Apply shared D1 index compaction with automatic rollback
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          MIG="$PWD/migrations/20261004_02_publication_write_fanout_compaction.sql"
+          ROLLBACK="$PWD/migrations/20261004_02_publication_write_fanout_rollback.sql"
+          applied=0
+          rollback_on_error() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$applied" = 1 ]; then
+              echo "APP334_POSTCHECK_FAILED_ROLLBACK=START"
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$ROLLBACK" || true
+              echo "APP334_POSTCHECK_FAILED_ROLLBACK=ATTEMPTED"
+            fi
+            exit "$status"
+          }
+          trap rollback_on_error EXIT
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$MIG"
+          applied=1
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN (
+              'idx_tracks_latest_order','idx_tracks_legacy_global','idx_tracks_owner_latest',
+              'idx_tracks_owner_profile_order','idx_tracks_owner_source','idx_tracks_owner_suno_url',
+              'idx_tracks_primary_genre_latest','idx_tracks_source_type_latest','idx_tracks_title',
+              'idx_tracks_legacy_global_nonempty'
+            ) ORDER BY name;
+            SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name='explore079_music_note_derived_track_insert';
+            SELECT COUNT(*) AS tracks_count FROM tracks;
+            SELECT COUNT(*) AS derived_tracks_count FROM explore_derived_tracks;
+            SELECT COUNT(*) AS derived_profiles_count FROM explore_derived_profiles;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks
+              WHERE owner_uid='__audit__' AND is_public=1 AND status='published'
+              ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN SELECT id,source_id FROM tracks
+              WHERE owner_uid='__audit__' AND source_type='music_note' AND source_id IS NOT NULL AND source_id<>'' LIMIT 200;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND (title LIKE '%__audit__%' OR search_text LIKE '%__audit__%')
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks
+              WHERE is_public=1 AND status='published' AND primary_genre='__audit__'
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+            PRAGMA quick_check;
+          " --json > "$RUNNER_TEMP/postflight.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/counts-before.json','utf8'));
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/postflight.json','utf8'));
+          const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
+          const indexes=sets[0]||[];
+          const names=new Set(indexes.map(x=>x.name));
+          for(const n of ['idx_tracks_owner_suno_url','idx_tracks_source_type_latest','idx_tracks_owner_profile_order','idx_tracks_title','idx_tracks_legacy_global']){
+            if(names.has(n)) throw new Error('retired index still exists '+n);
+          }
+          for(const n of ['idx_tracks_latest_order','idx_tracks_owner_latest','idx_tracks_owner_source','idx_tracks_primary_genre_latest','idx_tracks_legacy_global_nonempty']){
+            if(!names.has(n)) throw new Error('required post-migration index missing '+n);
+          }
+          const legacySql=String(indexes.find(x=>x.name==='idx_tracks_legacy_global_nonempty')?.sql||'');
+          if(!/WHERE legacy_global_id IS NOT NULL AND TRIM\(legacy_global_id\) <> ''/.test(legacySql)) throw new Error('partial legacy uniqueness predicate missing');
+          const trigger=String((sets[1]||[])[0]?.sql||'');
+          if(!trigger.includes('INSERT INTO explore_derived_profiles')) throw new Error('profile repair trigger missing');
+          if(/track_count\s*=/.test(trigger)) throw new Error('obsolete derived track_count write still present');
+          const after={
+            tracks:Number(sets[2]?.[0]?.tracks_count||0),
+            derivedTracks:Number(sets[3]?.[0]?.derived_tracks_count||0),
+            derivedProfiles:Number(sets[4]?.[0]?.derived_profiles_count||0)
+          };
+          if(JSON.stringify(after)!==JSON.stringify(before)) throw new Error('user/derived row counts changed '+JSON.stringify({before,after}));
+          const profilePlan=JSON.stringify(sets[5]||[]);
+          if(!profilePlan.includes('idx_tracks_owner_latest') || !profilePlan.includes('TEMP B-TREE')) throw new Error('post profile fallback plan invalid '+profilePlan);
+          const sourcePlan=JSON.stringify(sets[6]||[]);
+          if(!sourcePlan.includes('idx_tracks_owner_source')) throw new Error('post owner source plan invalid '+sourcePlan);
+          const searchPlan=JSON.stringify(sets[7]||[]);
+          if(!searchPlan.includes('idx_tracks_latest_order')) throw new Error('post title fallback plan invalid '+searchPlan);
+          const genrePlan=JSON.stringify(sets[8]||[]);
+          if(!genrePlan.includes('idx_tracks_primary_genre_latest')) throw new Error('post genre plan invalid '+genrePlan);
+          const quick=JSON.stringify(sets[9]||[]);
+          if(!quick.toLowerCase().includes('ok')) throw new Error('D1 quick_check failed '+quick);
+          console.log('APP334_SHARED_D1_MIGRATION=PASS');
+          console.log('APP334_USER_ROW_COUNTS_UNCHANGED=PASS');
+          console.log('APP334_TEST_PRODUCTION_QUERY_COMPATIBILITY=PASS');
+          NODE
+
+          applied=0
+          trap - EXIT
+          echo 'APP334_MIGRATION_COMPLETE=PASS'

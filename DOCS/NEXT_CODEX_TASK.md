@@ -1,3 +1,29 @@
+## CURRENT TASK — app316 프로필 사진 초기 확대 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app316.
+- Release System Audit `37094788361` SUCCESS.
+- Firebase PREVIEW Release `37094882121` SUCCESS.
+- locked source `6399e8516acdfb274579d1e157cf5f7110205c4d`.
+- `preview.soridraw.com` app316 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 프로필 사진 선택 직후 app315보다 덜 확대되어 보이는지.
+2. 프로필 사진 슬라이더는 중앙에서 시작하는지.
+3. avatar 범위 1~2 / 기본 1.5가 체감상 적절한지.
+4. 배경 이미지 편집은 기존 1~3 / 기본 2 그대로인지.
+5. 초기화, 드래그, 확대/축소, 적용, 취소, 저장 정상.
+6. 대표 장르 4개 제한 및 다른 프로필 기능 회귀 없음.
+
+보호:
+- 배경 이미지 편집 동작 추가 변경 금지.
+- 프로필 저장/API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app315 프로필 편집 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

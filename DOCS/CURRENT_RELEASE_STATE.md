@@ -1,3 +1,50 @@
+## 0NX. PREVIEW app330 배포 완료 — Music Note 공개/저장 즉시 UI 반응 (2026-10-04 KST)
+
+**현재 기준**
+- 작업 branch: `preview`.
+- 제품 수정 기준: `7af56bc0398017baccc74d729738df471b4e67c5`.
+- app330 버전 기준: `57d6ccfa7f3d65557f03267754d5e4d944ab9a42`.
+- Firebase PREVIEW 배포 locked source: `0399644d0cddcc7097abdccb2f639c9234013961`.
+- 앱 버전: **330**.
+- TEST / PRODUCTION은 비변경.
+
+**사용자 실기기 문제**
+- app329에서 공개/설정 저장 버튼을 누른 뒤 서버 반영이 끝날 때까지 팝업이 오래 남아 있어 공개 동작이 느리게 보임.
+- 사용자 영상에서는 저장 후 화면 닫힘까지 긴 대기 구간이 확인됨.
+
+**app330 수정**
+- Music Note 공개/설정 저장 시 서버 완료를 기다리기 전에 즉시 로컬 공개 상태를 반영하고 팝업을 닫음.
+- 기존 Firestore / Explore Worker 반영은 동일한 기존 경로로 뒤에서 계속 수행.
+- 서버 반영 실패 시 화면의 공개 상태를 정확한 이전 상태로 되돌리고 기존 오류 안내를 표시.
+- 중복 클릭 방지 busy guard는 서버 완료까지 유지.
+- 공개곡 Suno 1/2 선택, app329 media-only refresh, 기존 공개 옵션 3개와 비공개 전환은 구조 변경 없음.
+
+**검증 / 배포**
+- Release System Audit `37135125184`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 기존 publication / like 등 Release regression PASS.
+  - app330 즉시 UI 반응 verifier 추가 및 PASS.
+- Firebase PREVIEW Release `37135265146`: **SUCCESS**.
+  - `preview.soridraw.com` app **330**.
+  - exact build PASS.
+  - shared RTDB Rules **SKIPPED**.
+  - TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules 변경 없음.
+
+**비용 / 데이터**
+- 이 수정은 UI 반응 순서만 바꾼 것으로 기존 공개 서버 호출 수와 D1 mutation 경로를 늘리지 않음.
+- 사용자 데이터 migration / backfill / delete 없음.
+- app329의 실제 source-media swap D1 W1~W2 hard gate는 그대로 유지하며, 실기기 비용 재측정은 아직 필요.
+
+**실사용 확인 필요**
+1. 공개 또는 공개 설정 저장을 누르는 즉시 팝업이 닫히고 공개 상태가 바로 보이는지.
+2. Suno 1/2 선택 변경 후에도 즉시 닫히는지.
+3. 서버 반영 후 같은 곡의 실제 공개 미디어가 정확한 선택곡인지.
+4. 실패 상황에서 거짓 공개 상태가 남지 않고 이전 상태로 복구되는지.
+5. CACHE LIVE에서 실제 source swap 1회 D1 `rows_written` W1~W2인지.
+6. 좋아요 / 저장 하트 / 폴더 / Split / 프로필 회귀 없음.
+
 ## 0NW. PREVIEW app329 배포 완료 — Explore 공개 설정 수노곡 선택 + 선택곡 미디어 저비용 갱신 (2026-10-04 KST)
 
 **현재 기준**

@@ -1,0 +1,75 @@
+name: TEMP 336 Runtime Fix Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-336-runtime-fix-verify.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-336-runtime-fix
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Lock canonical Worker checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          echo "APP336_ENV_WIRING=PASS"
+
+      - name: Regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-197-new-public-track-like.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          echo "APP336_FIX_REGRESSION=PASS"
+
+      - name: TypeScript and Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+          echo "APP336_FIX_TYPESCRIPT_BUILD=PASS"
+
+      - name: Commit checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cloudflare/explore-worker/canonical/source-sha256.txt
+          if git diff --cached --quiet; then
+            echo 'CHECKSUM_ALREADY_CURRENT=PASS'
+            exit 0
+          fi
+          git commit -m 'fix(preview): lock app336 env-wiring Worker checksum'
+          git push origin HEAD:preview
+          echo "APP336_FIX_COMMIT=$(git rev-parse HEAD)"

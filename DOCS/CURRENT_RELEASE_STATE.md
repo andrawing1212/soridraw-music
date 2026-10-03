@@ -1,3 +1,61 @@
+## 0ON. PREVIEW Worker app338 hotfix — 한글 장르 검색 D1 R500~600 폭증 제거 (2026-10-04 KST)
+
+**사용자 실기기 관찰**
+- ID/제목 검색: 정상.
+- 한글 장르 검색: `/v1/search` 1회마다 D1 rows_read 약 **R584** 관찰.
+
+**원인 확정**
+- app337의 한글 장르 legacy fallback이 기존 `handleGenreTracksCore066` 쿼리를 재사용.
+- 해당 쿼리는 `primary_genre = ? OR (... EXISTS track_tags ...)` 구조라 SQLite planner가 장르 인덱스를 사용하지 못하고:
+  - `SCAN t USING INDEX idx_tracks_latest_order`
+  - 각 행마다 tag lookup
+  로 동작.
+- read-only live query-plan audit Run `37159126328`에서 원인 재현 PASS.
+- 같은 라이브 DB에는 이미 다음 인덱스가 존재:
+  - `idx_tracks_primary_genre_latest`
+  - `idx_track_tags_kind_value_track`
+  - `idx_track_tags_lookup`
+- 즉 새 schema/index 생성은 필요 없음.
+
+**app338 수정**
+- R2-first 검색은 그대로 유지.
+- R2 결과가 없는 한글 장르 fallback만 별도 indexed path로 교체.
+- `primary_genre` branch:
+  - `INDEXED BY idx_tracks_primary_genre_latest`
+- legacy `track_tags` branch:
+  - `INDEXED BY idx_track_tags_kind_value_track`
+- 두 결과만 합쳐 반환.
+- 기존 scan-prone `handleGenreTracksCore066` 호출 제거.
+- broad legacy title/artist search fallback은 마지막 호환층으로 그대로 유지.
+
+**검증**
+- app338 apply/verify Run `37159304152`: **SUCCESS**.
+- live query plan:
+  - primary genre: `SEARCH t USING INDEX idx_tracks_primary_genre_latest (primary_genre=?)` PASS.
+  - legacy tag: `SEARCH tt USING COVERING INDEX idx_track_tags_kind_value_track (kind=? AND value=?)` + track PK lookup PASS.
+- app336 hybrid regression PASS.
+- app197 / app210 like regressions PASS.
+- shared D1 schema change **0**.
+- user data migration/backfill/delete/rewrite **0**.
+- Final Release System Audit Run `37159372696`: **SUCCESS**.
+
+**배포**
+- PREVIEW Worker Release Run `37159504049`: **SUCCESS**.
+- active PREVIEW Worker version: `4929b0b7-3d6b-448a-8fae-1b0ffe7b5941`.
+- FEED smoke PASS / PROFILE smoke PASS.
+- public-like-card D1 R0/W0 PASS.
+- TEST / PRODUCTION Worker unchanged PASS.
+- Firebase Hosting 재배포 없음 — app은 계속 **337**.
+- product source commit: `7e5f6b9c1cdd0f0ad0d24611568aa2117495c3b9`.
+
+**다음 실기기 확인**
+1. 동일한 한글 장르 검색어를 다시 1회 검색.
+2. 기대값:
+   - 이전 R584 같은 전체 스캔은 없어야 함.
+   - R2에 장르 marker가 있으면 R0 가능.
+   - legacy fallback이어도 matching rows 중심의 소량 read만 허용.
+3. 여전히 수백 read면 즉시 FAIL 처리하고 다음 단계 중단.
+
 ## 0OM. PREVIEW app337 배포 완료 — 검색 D1 폭증 완화 + 한글 장르 검색 (2026-10-04 KST)
 
 **사용자 app336 실기기 결과**

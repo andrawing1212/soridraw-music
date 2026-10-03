@@ -896,8 +896,8 @@ assert.match(
 );
 assert.match(
   page,
-  /soridraw-explore-profile-avatar-column-244[\s\S]*?soridraw-explore-profile-social-icons-244[\s\S]*?target="_blank"[\s\S]*?rel="noreferrer noopener"/,
-  'social icons must render directly below the profile photo and open externally',
+  /soridraw-explore-profile-genres[\s\S]*?soridraw-explore-profile-social-icons-244[\s\S]*?target="_blank"[\s\S]*?rel="noreferrer noopener"/,
+  'social icons must render below representative genres and open externally',
 );
 assert.doesNotMatch(
   page,
@@ -906,8 +906,8 @@ assert.doesNotMatch(
 );
 assert.match(
   social,
-  /\.soridraw-explore-profile-social-icons-244 a\{[\s\S]*?width:30px;height:30px[\s\S]*?\.soridraw-explore-profile-social-icons-244 svg\{width:16px;height:16px\}/,
-  'profile social icons must have compact desktop icon-button styling',
+  /\.soridraw-explore-profile-social-icons-244 a\{[\s\S]*?width:60px;height:60px[\s\S]*?\.soridraw-explore-profile-social-icons-244 svg\{width:32px;height:32px\}/,
+  'profile social icons must use the approved enlarged desktop icon-button styling',
 );
 assert.match(
   workerEntry,
@@ -1270,3 +1270,33 @@ assert.match(
   'mobile social glyphs must scale with the larger controls',
 );
 console.log('APP326_PROFILE_SOCIAL_BUTTONS_2X=PASS');
+
+
+/* app327 — preserve the approved PC bio appearance, then reduce the bio font
+ * in steps as the avatar column narrows so mobile line breaks resemble PC. */
+assert.match(
+  social,
+  /soridraw-explore-profile-bio\{[^}]*font-size:13px[^}]*line-height:1\.55/,
+  'profile bio must keep the current 13px PC appearance',
+);
+assert.match(
+  social,
+  /@media \(min-width:901px\) and \(max-width:1199px\)\{\.soridraw-explore-profile-bio\{font-size:12px;line-height:1\.52\}\}/,
+  'mid-width profile bio must step down to 12px',
+);
+assert.match(
+  social,
+  /@media \(min-width:721px\) and \(max-width:900px\)\{\.soridraw-explore-profile-bio\{font-size:11px;line-height:1\.5\}\}/,
+  'narrow tablet profile bio must step down to 11px',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-bio\{margin-top:7px;font-size:10px;line-height:1\.48\}/,
+  'mobile profile bio must step down to 10px',
+);
+assert.match(
+  social,
+  /@media \(max-width:480px\)\{\.soridraw-explore-profile-bio\{font-size:9px;line-height:1\.46\}\}/,
+  'small mobile profile bio must step down to 9px',
+);
+console.log('APP327_PROFILE_BIO_RESPONSIVE_FONT_STEPS=PASS');

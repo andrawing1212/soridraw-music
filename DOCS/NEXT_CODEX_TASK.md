@@ -1,3 +1,46 @@
+## CURRENT TASK — app336 PREVIEW 실기기 검증 → 3환경 hybrid 호환층 승격 계획 (2026-10-04 KST)
+
+배포 완료:
+- preview HEAD `be3ce04652ae6c3604aba872e857c19a703a1876`.
+- Audit `37152439362` SUCCESS.
+- PREVIEW Worker `37152582192` SUCCESS / active version `903c72d5-a569-45e7-a196-947b74ddd6e2`.
+- Firebase PREVIEW app336 `37152665528` SUCCESS / exact build PASS.
+- TEST / PRODUCTION Worker + Hosting unchanged.
+- shared D1 schema/user data migration 없음.
+
+지금 할 일:
+1. PREVIEW 실기기 기능 검증.
+   - latest / popular.
+   - 공개 프로필 first/deep.
+   - genre.
+   - title 검색.
+   - artist nickname / handle 검색.
+   - 기존 legacy 공개곡과 최근 R2 공개곡이 함께 보이고 중복/누락이 없는지.
+2. warm cache 비용 검증.
+   - Explore reload/re-entry Worker 0 / D1 R0W0 목표.
+   - 공개 프로필 reload/re-entry Worker 0 / D1 R0W0 목표.
+3. 기존 정상 기능 회귀 확인.
+   - app164 Explore likes.
+   - app302 save heart.
+   - app301 folders.
+   - app303 Split.
+   - Music Note 60초/local-first.
+4. PASS 후에만 TEST → PRODUCTION 순서로 **hybrid read 코드만** 승격 계획.
+5. 세 환경이 hybrid read를 지원하기 전 shared D1 W2 cutover migration 금지.
+
+다음 비용 단계(아직 실행 금지):
+- first publication W12 → W2 후보.
+- source-media swap W3 → W1 후보.
+- visibility W2 → W1 후보.
+- 기존 legacy row backfill/rewrite/delete 없이 cutover 이후 row만 새 구조 사용.
+
+절대 금지:
+- shared D1 cutover migration 선실행.
+- 사용자 row rewrite/backfill/delete.
+- 기능 정상값을 비용 숫자 때문에 제거.
+- main/TEST/PRODUCTION 무승인 승격.
+- 정상 likes/save/folders/Split/Music Note batching 변경.
+
 ## CURRENT TASK — app336 release audit → PREVIEW Worker/App 배포 (2026-10-04 KST)
 
 구현 후보:

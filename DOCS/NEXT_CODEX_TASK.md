@@ -1,3 +1,34 @@
+## CURRENT TASK — app311 승격관리 ↔ 일반 추천 피드 일치 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app311.
+- Release System Audit `37088793832` SUCCESS.
+- Firebase PREVIEW Release `37088927776` SUCCESS.
+- locked source `580805847292d03ca2120c7e659d8c9e37ba90c6`.
+- `preview.soridraw.com` app311 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+최소 확인:
+1. 기기 A에서 곡 1개 승격 또는 해제.
+2. 기기 B에서 승격 곡 관리 진입:
+   - 최신 목록 표시.
+   - D1 R0 목표(app310 유지).
+3. 기기 B에서 관리 화면 닫기:
+   - 일반 SORIDRAW 추천 피드도 방금 본 최신 목록과 즉시 동일해야 함.
+   - 별도 새로고침/추가 D1 목록읽기 없어야 함.
+4. 다른 정상 기능 회귀 없음.
+
+보호:
+- 승격 R1/W1, 해제 추가 R0/W1 비용 계약 유지.
+- 일반 Explore 최신/인기/크리에이터/장르 변경 금지.
+- app302/app302b Studio 저장 하트 변경 금지.
+- app301 Music Note / Library 폴더 변경 금지.
+- app303 Split 변경 금지.
+- 기존 좋아요/공개·비공개 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app310 승격관리 최초 진입 D1 R0 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

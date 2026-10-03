@@ -80,6 +80,7 @@ import { favoritesStore } from '../hooks/useFavoritesStore';
 import {
   getExploreMusicNotePublicationState,
   getExploreMusicNotePublicationStates,
+  revalidateExploreMusicNotePublicationStates335,
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
   refreshExploreMusicNotePublicationSource,
@@ -5820,6 +5821,31 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         }
       });
   }, [user?.uid, activeFavoriteSource.length]);
+
+  // app335: browser reload/route entry stays local. Once the tab is actually
+  // resumed after being hidden, run the existing bounded publication revision
+  // validation so cross-device changes still converge without charging reloads.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return undefined;
+    let cancelled = false;
+    const onPublicationResume335 = () => {
+      if (document.visibilityState !== 'visible') return;
+      void revalidateExploreMusicNotePublicationStates335(user)
+        .then((states) => {
+          if (cancelled) return;
+          setExplorePublicationStateBySongId((prev) => ({ ...states, ...prev }));
+        })
+        .catch((error) => {
+          console.warn('explore publication resume validation failed:', error);
+        });
+    };
+    document.addEventListener('visibilitychange', onPublicationResume335);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onPublicationResume335);
+    };
+  }, [user?.uid]);
 
   const openFavoriteExplorePublicationDialog = async (song: any) => {
     setActiveFavoriteMenuId(null);

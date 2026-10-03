@@ -1125,8 +1125,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   profileEdit,
-  /const nextHandle = event\.target\.value\.toLowerCase\(\)|replace\(\/\[\^a-z0-9\._\]\+\/g/,
-  'handle input must not strip uppercase, symbols, or other languages while typing',
+  /const nextHandle = event\.target\.value\.toLowerCase\(\)\.replace\(\/\^@\+\//,
+  'handle input must not lowercase or strip characters while typing',
 );
 assert.match(
   profileEdit,

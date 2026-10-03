@@ -1,3 +1,36 @@
+## CURRENT TASK — app309 승격관리 warm 재진입 비용 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app309 / Release Run `37086923105` SUCCESS.
+- locked source `2236b051451d6e71884a3ee1be125359124602ae`.
+- `preview.soridraw.com` app309 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+최소 CACHE LIVE 확인:
+1. 업데이트 후 승격 곡 관리 첫 진입.
+   - 관리 캐시 최초 seed이므로 `/v1/manage/curated` D1 R1은 허용.
+2. 아무 변경 없이 Explore로 돌아갔다 승격 곡 관리 재진입.
+   - `/v1/manage/curated` 추가 요청 0 목표.
+   - D1 R0 / W0 목표.
+3. 60초를 넘긴 뒤 아무 변경 없이 다시 진입.
+   - `/v1/curated-revision` 확인은 허용.
+   - D1 R0 / W0 목표.
+   - revision 동일이면 `/v1/manage/curated` 재조회 금지.
+4. 실제 곡 1개 승격 또는 해제 후 다음 진입.
+   - 변경 때문에 관리 캐시 재동기화 1회는 허용.
+   - 기존 승격 R1/W1, 해제 추가 R0/W1 계약 유지.
+
+보호:
+- 일반 Explore `/v1/curated` D1 R0 경로 변경 금지.
+- 승격/해제 mutation 구조 추가 최적화 금지 — 이번 범위 아님.
+- app302/app302b Studio 저장 하트 변경 금지.
+- app301 Music Note / Library 폴더 변경 금지.
+- app303 Split browser-history / Pure Pane 변경 금지.
+- 기존 좋아요/공개·비공개 경로 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app306 Explore 순서 / PC 좌우 버튼 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

@@ -1,3 +1,31 @@
+## CURRENT TASK — app327 프로필 미세 UI 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app327.
+- Final Release System Audit `37104517413` SUCCESS.
+- Firebase PREVIEW Release `37104633865` SUCCESS.
+- locked source `86bb1f4b01fe00fd13b33c07391dfcfefd9ab182`.
+- `preview.soridraw.com` app327 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 서버 / 사용자 데이터 변경 없음.
+
+확인:
+1. 프로필 상단은 뒤로가기 버튼만 표시.
+2. 소셜 버튼 PC 60x60 / 모바일 52x52.
+3. 소개 폰트: PC 13px → 12px → 11px → 모바일 10px → 소형 모바일 9px.
+4. 모바일 줄바꿈 밀도가 PC와 비슷하게 보이는지.
+5. 기존 승인된 소개 위치/소셜 위치/배경 높이 유지.
+
+보호:
+- app324 프로필 공통 높이/왼쪽 소개 배치 유지.
+- app323 소개 입력 crash fix 유지.
+- app322 줄 수 제한 제거 유지.
+- app320 핸들 입력/저장 검증 유지.
+- 프로필 저장 API/이미지 크롭/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 승인 전 변경 금지.
+
 ## CURRENT TASK — app324 프로필 공통 배치 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

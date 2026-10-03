@@ -1,7 +1,7 @@
-app318-profile-editor-limits-and-handle-warning
-target_source=8a95b50ddf2654e6ba4cf8aea679c03a68e91a19
-app_version=318
+app319-profile-bio-line-breaks
+target_source=4b2bd83474f04fb442279269c58553269b0cbc74
+app_version=319
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-genre-five-bio-150-four-lines-handle-warning
+release_request=preserve-profile-bio-line-breaks

@@ -95,6 +95,24 @@ replaceOnce(
   'prefer inline media over Firestore read',
 );
 
+replaceOnce(
+  `    const source = await resolvePublicationSource(body, authContext);
+    const publicationOptions = normalizePublicationOptions(body);
+    return await handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions);`,
+  `    const resolvedSource = await resolvePublicationSource(body, authContext);
+    const inlineMedia = normalizePublicationSourceMedia093(body?.sourceMedia);
+    const source = inlineMedia ? {
+      ...resolvedSource,
+      coverUrl: inlineMedia.coverUrl,
+      durationSeconds: inlineMedia.durationSeconds,
+      sunoUrlPrimary: inlineMedia.sunoUrlPrimary,
+      sunoUrlSecondary: inlineMedia.sunoUrlSecondary,
+    } : resolvedSource;
+    const publicationOptions = normalizePublicationOptions(body);
+    return await handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions);`,
+  'apply inline media to first publication source',
+);
+
 source += '\n// ' + MARKER + '\n';
 writeFileSync(workerPath, source, 'utf8');
 console.log('[093] selected publication media can settle in the same Worker request without an immediate Firestore read.');

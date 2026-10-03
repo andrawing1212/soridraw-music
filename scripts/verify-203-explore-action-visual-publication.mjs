@@ -49,6 +49,33 @@ assert.match(
   'failed Music Note publication settlement must restore the previous visible publication state',
 );
 
+
+const openStart = favorites.indexOf('const openFavoriteExplorePublicationDialog = async (song: any) => {');
+const openEnd = favorites.indexOf('const updateFavoriteExplorePublicationDialogOption', openStart);
+assert.ok(openStart >= 0 && openEnd > openStart, 'Music Note publication dialog opener must remain discoverable');
+const openBody = favorites.slice(openStart, openEnd);
+assert.match(openBody, /const localState = explorePublicationStateBySongId\[sourceId\]/, 'publication dialog must read the already-rendered local state first');
+assert.match(openBody, /if \(localState\) \{[\s\S]*setExplorePublicationDialog\(/, 'warm publication dialog must open directly from local state');
+assert.ok(
+  openBody.indexOf('if (localState)') < openBody.indexOf('await getExploreMusicNotePublicationState'),
+  'warm publication dialog path must precede the cold network fallback',
+);
+
+const privateStart = favorites.indexOf('const makeFavoriteExplorePublicationPrivate = async () => {');
+const privateEnd = favorites.indexOf('const hydrateCatalogFavorite = async', privateStart);
+assert.ok(privateStart >= 0 && privateEnd > privateStart, 'Music Note private handler must remain discoverable');
+const privateBody = favorites.slice(privateStart, privateEnd);
+const privateOptimisticPaint = privateBody.indexOf('setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }))');
+const privateClose = privateBody.indexOf('setExplorePublicationDialog(null)');
+const privateAwait = privateBody.indexOf('await setExploreTrackVisibility');
+assert.ok(privateOptimisticPaint >= 0 && privateOptimisticPaint < privateAwait, 'private state must paint before the server await');
+assert.ok(privateClose >= 0 && privateClose < privateAwait, 'private dialog must close before the server await');
+assert.doesNotMatch(submitBody, /setExplorePublicationBusyId\(sourceId\)/, 'public settlement must not hold the visible busy spinner');
+assert.doesNotMatch(privateBody, /setExplorePublicationBusyId\(sourceId\)/, 'private settlement must not hold the visible busy spinner');
+assert.match(submitBody, /explorePublicationMutationInFlightRef\.current\.add\(sourceId\)/, 'public settlement must retain an invisible duplicate-mutation guard');
+assert.match(privateBody, /explorePublicationMutationInFlightRef\.current\.add\(sourceId\)/, 'private settlement must retain an invisible duplicate-mutation guard');
+assert.match(privateBody, /catch \(error\) \{[\s\S]*setExplorePublicationStateBySongId\(\(prev\) => \(\{ \.\.\.prev, \[sourceId\]: state \}\)\)/, 'failed private settlement must restore the previous visible state');
+
 console.log('APP203_EXPLORE_STUDIO_APPLY_ICON=PASS');
 console.log('APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS');
 console.log('APP203_EXPLORE_PINK_TEXT_ONLY_GUIDE=PASS');
@@ -56,3 +83,6 @@ console.log('APP203_EXPLORE_OWNER_PUBLICATION_SETTINGS=PASS');
 console.log('APP203_EXPLORE_PUBLICATION_OPEN_R0=PASS');
 console.log('APP203_EXPLORE_MORE_TEXT_READABILITY=PASS');
 console.log('APP203_MUSIC_NOTE_PUBLICATION_OPTIMISTIC_UI=PASS');
+console.log('APP203_MUSIC_NOTE_PUBLICATION_WARM_OPEN_LOCAL_FIRST=PASS');
+console.log('APP203_MUSIC_NOTE_PUBLICATION_PRIVATE_OPTIMISTIC_UI=PASS');
+console.log('APP203_MUSIC_NOTE_PUBLICATION_NO_SETTLEMENT_SPINNER=PASS');

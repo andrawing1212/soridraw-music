@@ -968,29 +968,29 @@ console.log('APP307_PROMOTED_TRACK_MANAGER_PAGE=PASS');
 console.log('APP307_CURATED_LOCAL_FIRST_R2=PASS');
 console.log('APP307_CURATED_MUTATION_W1_CONTRACT=PASS');
 
-// app313 — only the signed-in user's My Profile hero gets taller.
-// Mobile keeps the existing 190px contract; tablet/PC change min-height only.
+// app324 — own and other users must share the same approved hero height.
+// Mobile keeps 190px; tablet/PC use the app314 dimensions for every profile.
 assert.match(
   page,
-  /soridraw-explore-profile-head\$\{profile\.backgroundUrl \? ' has-background' : ''\}\$\{user\?\.uid === profile\.uid \? ' is-own-profile-313' : ''\}/,
-  'My Profile hero height scope must not affect other public profiles',
+  /soridraw-explore-profile-head\$\{profile\.backgroundUrl \? ' has-background' : ''\}/,
+  'profile hero must keep the shared background class path',
 );
 assert.match(
   profileEditCss,
-  /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:270px\}\}/,
-  'tablet My Profile hero must be 270px',
+  /@media\(min-width:721px\) and \(max-width:1599px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:270px\}\}/,
+  'tablet profile hero must be 270px for own and other users',
 );
 assert.match(
   profileEditCss,
-  /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\.is-own-profile-313\{min-height:335px\}\}/,
-  'PC My Profile hero must be 335px',
+  /@media\(min-width:1600px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:335px\}\}/,
+  'PC profile hero must be 335px for own and other users',
 );
 assert.match(
   profileEditCss,
   /@media\(max-width:720px\)\{\.soridraw-explore-profile-head\.has-background\{min-height:190px;padding:20px 14px\}/,
   'mobile profile hero height must remain unchanged at 190px',
 );
-console.log('APP314_MY_PROFILE_HERO_HEIGHT_FINE_TUNE=PASS');
+console.log('APP324_ALL_PROFILE_HERO_HEIGHT_PARITY=PASS');
 
 
 /* app316 — avatar crop opens less zoomed while the slider thumb still starts
@@ -1162,8 +1162,8 @@ assert.match(
 );
 assert.match(
   page,
-  /soridraw-explore-profile-genres[^]*?soridraw-explore-profile-social-icons-244[^]*?soridraw-explore-profile-bio/,
-  'public profile must place social links below representative genres and bio in the lower hero row',
+  /soridraw-explore-profile-avatar-column-244[^]*?soridraw-explore-profile-avatar[^]*?soridraw-explore-profile-bio[^]*?soridraw-explore-profile-copy[^]*?soridraw-explore-profile-genres[^]*?soridraw-explore-profile-social-icons-244/,
+  'public profile must place bio directly below the avatar while social links remain below representative genres',
 );
 assert.match(
   profileEditCss,
@@ -1172,8 +1172,8 @@ assert.match(
 );
 assert.match(
   social,
-  /soridraw-explore-profile-bio\{[^}]*grid-column:1 \/ -1[^}]*white-space:pre-line/,
-  'saved bio must begin under the avatar side and preserve author-entered line breaks',
+  /soridraw-explore-profile-bio\{[^}]*max-width:112px[^}]*white-space:pre-line/,
+  'saved bio must stay inside the avatar-width left column and preserve author-entered line breaks',
 );
 console.log('APP321_PROFILE_LAYOUT_BIO_HANDLE_REFINEMENT=PASS');
 
@@ -1208,3 +1208,29 @@ assert.doesNotMatch(
   'profile bio state updater must not dereference a released React currentTarget',
 );
 console.log('APP323_PROFILE_BIO_EVENT_TARGET_CRASH_FIX=PASS');
+
+
+/* app324 — profile parity and left-column bio placement.
+ * The approved hero size and toolbar naming apply to every viewed profile,
+ * while the bio must stay under the avatar and never occupy the right copy area. */
+assert.match(
+  page,
+  /soridraw-explore-profile-toolbar[^]*?<span>MY 프로필<\/span>/,
+  'profile toolbar label must stay MY 프로필 on own and other-user profile views',
+);
+assert.doesNotMatch(
+  page,
+  /profileIsOwn \? 'MY 프로필' : '공개 프로필'/,
+  'profile toolbar label must not switch back to 공개 프로필 for other users',
+);
+assert.match(
+  page,
+  /soridraw-explore-profile-avatar-column-244[^]*?soridraw-explore-profile-bio[^]*?soridraw-explore-profile-copy/,
+  'profile bio must be nested in the avatar column before the right-side copy column',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-bio\{[^}]*width:100%[^}]*max-width:112px/,
+  'profile bio must remain confined to the avatar-width left column',
+);
+console.log('APP324_PROFILE_PARITY_LEFT_BIO=PASS');

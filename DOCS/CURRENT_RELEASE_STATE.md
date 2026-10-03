@@ -1,3 +1,28 @@
+## 0NY. app330 실기기 공개 비용 재진단 — 첫 공개 W18 원인 고정 (2026-10-04 KST)
+
+**사용자 실기기**
+- 사용자가 비공개 Music Note에서 `공개`를 누른 실제 영상 기준, 기존 app329 UI는 서버 완료까지 공개 모달이 약 16~18초 동안 busy 상태로 남았음.
+- 같은 실행의 CACHE LIVE: D1 query `R3 / W1`, billable row `R8 / W18`.
+- app330은 이 대기 UX를 서버 처리와 분리해 공개 클릭 즉시 로컬 공개 상태 반영 + 모달 닫힘으로 수정/배포 완료.
+
+**W18 read-only 실DB 진단**
+- Read-only shared D1 schema inspection Run `37135568537`: SUCCESS, `REMOTE_D1_WRITES=0`.
+- Read-only D1 Insights Run `37135782161` 계열 job: SUCCESS, `REMOTE_D1_INSIGHTS_READONLY=PASS`.
+- 현재 `tracks`에는 secondary index 9개가 존재하며, D1 `rows_written`은 table row뿐 아니라 index row 유지비까지 포함한다.
+- 지난 1일 actual D1 Insights:
+  - 첫 공개/full publication UPSERT: **avgRowsWritten 16** (`numberOfTimesRun=10`, total 162).
+  - app329 media-only source refresh: **avgRowsWritten 4** (1회 측정).
+  - 등록된 Music Note 공개/비공개 visibility narrow UPDATE: **avgRowsWritten 2** (1회 측정).
+- 즉 CACHE LIVE의 W18은 “W1 쿼리 하나가 공짜에 가까운 1행”이라는 뜻이 아니라, 첫 공개 full UPSERT + index/trigger fanout이 실제 row-write 비용을 만든 결과다.
+- app329 media trigger 최적화는 동작하고 있으나, 첫 공개 full canonical registration 비용에는 적용되지 않는다.
+
+**판정**
+- 공개/비공개 **기등록 곡 visibility 전환 W2는 합격선**.
+- media-only source swap **W4는 W1~W2 hard gate 미달**.
+- 첫 공개 **W18은 불합격**.
+- 첫 공개를 현재 `tracks` + 기존 검색/소유자/feed용 index 구조 그대로 유지하면서 W1~W2라고 보고해서는 안 됨.
+- 다음 비용 작업은 UI나 계측값을 숨기는 수정이 아니라, first-publication canonical write/index 구조를 하위호환 방식으로 재설계해야 함. TEST/PRODUCTION 기존 코드가 shared canonical data를 계속 읽을 수 있어야 하므로 무검증 index drop 또는 PREVIEW-only canonical table 전환 금지.
+
 ## 0NX. PREVIEW app330 배포 완료 — Music Note 공개/저장 즉시 UI 반응 (2026-10-04 KST)
 
 **현재 기준**

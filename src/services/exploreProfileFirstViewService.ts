@@ -387,6 +387,17 @@ export const patchExplorePublicProfileFirstViewTrack = (
   writeCache(cached.profile.uid || profileRef, { ...cached, tracks });
 };
 
+export const revalidateExplorePublicProfileFirstView335 = (
+  profileRef: string,
+  options: ExploreProfileFirstViewOptions = {},
+) => {
+  const normalizedRef = normalizeProfileRef(profileRef);
+  if (!normalizedRef) return;
+  const cached = readCache(normalizedRef);
+  if (!cached) return;
+  revalidateCachedProfile113(normalizedRef, cached, options);
+};
+
 export const getExplorePublicProfileFirstView = async (
   profileRef: string,
   options: ExploreProfileFirstViewOptions = {},
@@ -396,14 +407,13 @@ export const getExplorePublicProfileFirstView = async (
 
   const cached = readCache(normalizedRef);
   if (cached) {
-    // 113: render the warm snapshot immediately. At most once per minute on a
-    // revisit, verify its shared revision in the background. The Worker serves
-    // this conditional path from shared R2/edge; unchanged profiles never read D1.
+    // app335: route entry/reload is not a profile-change signal. Keep the warm
+    // profile entirely local; explicit post-entry activity can call the bounded
+    // shared-R2 revalidator exported below.
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      'LOCAL HIT · 즉시 표시 · D1 읽기 0',
+      'LOCAL HIT · 변경 없음 · Worker 0 · D1 읽기 0',
     );
-    revalidateCachedProfile113(normalizedRef, cached, options);
     return cached;
   }
 

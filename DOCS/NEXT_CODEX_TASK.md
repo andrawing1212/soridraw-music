@@ -1,3 +1,37 @@
+## CURRENT TASK — app312 최신 공개곡 전체/팔로잉 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app312.
+- final Release System Audit `37090441432` SUCCESS.
+- Firebase PREVIEW Release `37090519862` SUCCESS.
+- locked source `2676a531c1541ff61e8cf460e71f00a67f7a5f13`.
+- `preview.soridraw.com` app312 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+확인:
+1. `최신 공개곡` 제목 표시.
+2. 바로 아래 `전체 / 팔로잉` 버튼이 장르별 추천 버튼과 동일한 위치/스타일.
+3. 전체:
+   - 기존 모든 사용자의 최신 공개곡.
+   - 기존 시간 순서/레일/카드 크기 유지.
+4. 팔로잉:
+   - 내가 팔로우한 크리에이터 곡만 노출.
+   - 기존 latest Feed의 시간 순서 유지.
+   - warm 전환 D1 R0/W0 목표.
+5. 팔로우/해제 후 같은 기기 팔로잉 결과 즉시 반영.
+6. PC/모바일 동일 동작.
+7. 추천/인기/크리에이터/장르별 추천/좋아요/승격/공개·비공개 회귀 없음.
+
+보호:
+- app311 승격관리 ↔ 추천 피드 parity 변경 금지.
+- app310 승격관리 최초 D1 R0 변경 금지.
+- 기존 latest Feed/R2 snapshot/revision 구조 변경 금지.
+- 새 following 전용 D1 Feed/전체 scan 추가 금지.
+- app302 저장 하트 / app301 폴더 / app303 Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app312 후보 PREVIEW 배포 대기 (2026-10-03 KST)
 
 구현/검증 완료:

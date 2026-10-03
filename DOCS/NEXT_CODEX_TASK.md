@@ -1,3 +1,26 @@
+## CURRENT TASK — app337 검색 실기기 재검증 (2026-10-04 KST)
+
+배포 완료:
+- product source `7465cce1f14d418059946651d9b05d19229ccea2`.
+- Audit `37155219113` SUCCESS.
+- PREVIEW Worker `37155369295` SUCCESS / active `4b3e02c8-f906-4c22-bbc1-36cd963babee`.
+- Firebase PREVIEW app337 `37155428848` SUCCESS / exact build PASS.
+- TEST / PRODUCTION unchanged.
+- shared D1 schema/user data migration 없음.
+
+사용자에게 필요한 테스트는 두 가지뿐:
+1. app336에서 rows_read가 크게 증가했던 동일 검색어 재검색.
+   - 목표: R2 catalog hit이면 D1 R0/W0.
+   - legacy-only fallback이면 D1이 남을 수 있으므로 검색어와 수치 기록.
+2. 한글 장르 검색.
+   - `발라드`, `힙합`, `재즈`, `트로트` 또는 실제 보유 장르 한글명.
+   - 영문 장르 marker와 연결되어 결과가 나와야 함.
+
+PASS 후:
+- app337 검색 수정 동결.
+- 다음 큰 단계는 3환경 hybrid read 승격 계획.
+- shared D1 W2 cutover / derived catalog 전체 backfill은 별도 승인 전 실행 금지.
+
 ## CURRENT TASK — app336 PREVIEW 실기기 검증 → 3환경 hybrid 호환층 승격 계획 (2026-10-04 KST)
 
 배포 완료:

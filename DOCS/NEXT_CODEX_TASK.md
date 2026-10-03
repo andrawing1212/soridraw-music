@@ -1,3 +1,30 @@
+## VERIFIED — app333 + shared D1 migration source-swap 실기기 비용 PASS (2026-10-04 KST)
+
+사용자 실기기 영상/CACHE LIVE 확인:
+- 공개 설정에서 실제 선택 Suno 곡을 바꿔 Explore에 다시 공개.
+- 완료 후 Cloudflare: LOCAL 0 / Worker 1.
+- D1 query: R3 / W1.
+- D1 billable/request total: R11 / **W3**.
+- Browser SDK: R0 / W0.
+- Firestore: R0 / **W0**.
+- PAGE SYNC: D1 R0 / W0.
+- 토스트: "선택한 곡으로 Explore에 다시 공개했습니다."
+- 판정: **source swap 목표 W3 + 즉시 Firestore favorites W0 + Worker 1회 = PASS**.
+- 영상 중 진단 초기화를 요청 완료 전에 눌렀지만, 완료 이벤트가 초기화 후 들어와 최종 W3가 독립적으로 계측됨.
+
+남은 실기기 항목:
+1. 같은 공개곡 → 비공개: W2 / Firestore W0.
+2. 같은 private곡 → 다시 공개: W2 / Firestore W0.
+3. 다음곡에 적용 허용만 변경: W2.
+4. 팔로워 곡 저장 허용만 변경: W2.
+5. 공개 프로필에 고정만 변경: W2.
+6. never-published 곡 최초 공개: W10 전후 목표, exact 실측.
+
+보호:
+- source swap W3 하위호환 floor를 더 줄이기 위해 derived media/shared revision을 제거하지 않는다.
+- app164/160 좋아요, app302 저장 하트, app301 폴더, app303 Split, Music Note 60초/local-first batch, app331~333 공개 경로 변경 금지.
+- TEST / PRODUCTION 승격 금지.
+
 ## CURRENT TASK — app333 + shared D1 app334 fanout migration 실기기 비용 재측정 (2026-10-04 KST)
 
 완료:

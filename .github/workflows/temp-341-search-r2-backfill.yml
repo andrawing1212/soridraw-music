@@ -129,7 +129,7 @@ jobs:
           processed=0
           while :; do
             encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]||''))" "$cursor")"
-            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/backfill?limit=5&cursor=$encoded" > "$RUNNER_TEMP/page.json"
+            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/backfill?limit=1&cursor=$encoded" > "$RUNNER_TEMP/page.json"
             node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); if(x.ok!==true) { console.error(x); process.exit(2); }"
             n="$(node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); process.stdout.write(String(Number(x.processed||0)))")"
             next="$(node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); process.stdout.write(String(x.nextCursor||''))")"
@@ -145,7 +145,7 @@ jobs:
           verified=0
           while :; do
             encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]||''))" "$cursor")"
-            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/verify?limit=5&cursor=$encoded" > "$RUNNER_TEMP/verify.json"
+            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/verify?limit=1&cursor=$encoded" > "$RUNNER_TEMP/verify.json"
             node - <<'NODE'
             const x=require(process.env.RUNNER_TEMP+'/verify.json');
             if(x.ok!==true || (x.missing||[]).length){ console.error(JSON.stringify(x)); process.exit(2); }

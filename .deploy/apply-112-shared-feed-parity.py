@@ -234,21 +234,3 @@ manifest['patches'] = patches
 MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 print('[112] shared Feed read path now prefers the shared PROFILE_MEDIA mirror and falls back to environment-local R2 only when the shared mirror is not seeded.')
-
-
-# SORIDRAW_TRANSIENT_APPLY_329_PUBLICATION_MEDIA_PATCH
-import os
-import shutil
-import subprocess
-import tempfile
-
-worker_source = ROOT / 'cloudflare/explore-worker/canonical/preview-worker.js'
-patch_329 = ROOT / 'cloudflare/explore-worker/patches/092-publication-media-source-cost.mjs'
-with tempfile.TemporaryDirectory(prefix='soridraw-329-worker-') as temp_dir:
-    temp_path = Path(temp_dir)
-    shutil.copy2(worker_source, temp_path / 'worker.js')
-    env = dict(os.environ)
-    env['SORIDRAW_REMOTE_WORKER_DIR'] = str(temp_path)
-    subprocess.run(['node', str(patch_329)], check=True, env=env)
-    shutil.copy2(temp_path / 'worker.js', worker_source)
-print('[329] canonical Worker media-source cost patch applied for generated-source commit.')

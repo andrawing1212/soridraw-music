@@ -1,3 +1,30 @@
+## CURRENT TASK — app320 프로필 소개/핸들 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app320.
+- Final Release System Audit `37096804790` SUCCESS.
+- Firebase PREVIEW Release `37096905327` SUCCESS.
+- locked source `fa23583413a207c716a13333343c6149622917ce`.
+- `preview.soridraw.com` app320 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 소개 Enter 줄바꿈이 공개 프로필에 그대로 보이는지.
+2. 핸들 입력 중 대문자/한글/특수문자/길이 초과 문자열이 삭제 또는 자동변환되지 않는지.
+3. 잘못된 핸들로 저장을 눌렀을 때만 경고 표시.
+4. 정상 핸들로 수정 시 경고 즉시 해제 및 정상 저장.
+5. 대표 장르 최대 5개, 소개 150자/4줄 유지.
+6. app316 이미지 크롭 및 프로필 저장 경로 회귀 없음.
+
+보호:
+- 핸들 저장 유효성 계약(영문 소문자/숫자/점/밑줄, 3~24자, 점 처음·끝·연속 금지) 변경 금지.
+- 입력 단계에서는 위 계약을 강제 필터링하지 않음.
+- 프로필 저장 API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app318 프로필 편집 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

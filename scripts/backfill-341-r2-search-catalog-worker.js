@@ -130,9 +130,11 @@ async function syncArtist(bucket, row) {
   const next = new Set(nextKeys);
   const remove = [...old].filter((k) => !next.has(k));
   if (remove.length) await bucket.delete(remove);
-  for (const key of nextKeys) await putJson(bucket, key, { schemaVersion: 1, uid }, { uid, kind: 'artist' });
   const signature = JSON.stringify({ uid, nickname, handle, nextKeys });
-  await putJson(bucket, mk, { schemaVersion: 1, uid, markerKeys: nextKeys, signature, updatedAt: Date.now() }, { uid, kind: 'artist-meta' });
+  await Promise.all([
+    ...nextKeys.map((key) => putJson(bucket, key, { schemaVersion: 1, uid }, { uid, kind: 'artist' })),
+    putJson(bucket, mk, { schemaVersion: 1, uid, markerKeys: nextKeys, signature, updatedAt: Date.now() }, { uid, kind: 'artist-meta' }),
+  ]);
 }
 
 async function syncTrack(bucket, row) {
@@ -146,11 +148,13 @@ async function syncTrack(bucket, row) {
   const remove = [...old].filter((k) => !next.has(k));
   if (remove.length) await bucket.delete(remove);
   const markerPayload = { schemaVersion: 1, trackId: track.id, ownerUid: track.ownerUid, publishedAt: track.publishedAt, likeCount: track.likeCount };
-  for (const key of keys) await putJson(bucket, key, markerPayload, { trackId: track.id, ownerUid: track.ownerUid });
   const signature = JSON.stringify({ schemaVersion: 1, public: true, ...track, markerKeys: keys });
-  await putJson(bucket, mk, { schemaVersion: 1, trackId: track.id, public: true, track, markerKeys: keys, signature, updatedAt: Date.now() }, { trackId: track.id, kind: 'meta' });
-  await putJson(bucket, cardKey(track.id), { schemaVersion: 1, trackId: track.id, updatedAt: Date.now(), card }, { trackId: track.id, kind: 'shared-track-card' });
-  await syncArtist(bucket, row);
+  await Promise.all([
+    ...keys.map((key) => putJson(bucket, key, markerPayload, { trackId: track.id, ownerUid: track.ownerUid })),
+    putJson(bucket, mk, { schemaVersion: 1, trackId: track.id, public: true, track, markerKeys: keys, signature, updatedAt: Date.now() }, { trackId: track.id, kind: 'meta' }),
+    putJson(bucket, cardKey(track.id), { schemaVersion: 1, trackId: track.id, updatedAt: Date.now(), card }, { trackId: track.id, kind: 'shared-track-card' }),
+    syncArtist(bucket, row),
+  ]);
   return { id: track.id, markers: keys.length };
 }
 

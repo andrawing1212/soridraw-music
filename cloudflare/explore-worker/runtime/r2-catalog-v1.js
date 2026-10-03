@@ -637,12 +637,23 @@ export async function handleCatalogSearch066(url, env, cors) {
   const creatorLimitRaw = Number(url.searchParams.get('creatorLimit') || 10);
   const creatorLimit = Number.isFinite(creatorLimitRaw) ? Math.min(20, Math.max(5, Math.floor(creatorLimitRaw))) : 10;
 
-  const [titleIds, genreIds, nameUids, handleUids] = await Promise.all([
+  // SORIDRAW_R2_SEARCH_GENRE_ALIASES_337_20261004
+  // Korean/UI aliases arrive as repeated genre= params. They expand only the
+  // R2 genre prefix lookup; title/creator semantics remain tied to the original q.
+  const genreQueries = [...new Set([
+    normalized,
+    ...url.searchParams.getAll('genre').map((value) => normalizeCatalogText066(value)).filter(Boolean),
+  ])].slice(0, 8);
+
+  const [titleIds, genreIdLists, nameUids, handleUids] = await Promise.all([
     listCatalogPrefixIds066(env, `${EXPLORE_R2_CATALOG_ROOT_066}/title/${catalogSegment066(normalized)}`, Math.min(100, limit * 2)),
-    listCatalogPrefixIds066(env, catalogListPrefix066('genre', normalized), Math.min(100, limit * 2)),
+    Promise.all(genreQueries.map((genreQuery) =>
+      listCatalogPrefixIds066(env, catalogListPrefix066('genre', genreQuery), Math.min(100, limit * 2))
+    )),
     listCatalogArtistUids066(env, 'name', normalized, creatorLimit),
     listCatalogArtistUids066(env, 'handle', normalized.replace(/^@+/, ''), creatorLimit),
   ]);
+  const genreIds = [...new Set(genreIdLists.flat())];
 
   const creatorUids = [...new Set([...nameUids, ...handleUids])].slice(0, creatorLimit);
   const artistTrackLists = await Promise.all(creatorUids.map((uid) =>

@@ -1,7 +1,7 @@
-app319-profile-bio-line-breaks
-target_source=4b2bd83474f04fb442279269c58553269b0cbc74
-app_version=319
+app320-permissive-handle-typing
+target_source=c9f0de49a4aca1c67aa7356dc05dc8fee42f9fe9
+app_version=320
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=preserve-profile-bio-line-breaks
+release_request=permissive-handle-typing-save-validation

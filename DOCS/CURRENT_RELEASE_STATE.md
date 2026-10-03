@@ -1,3 +1,46 @@
+## 0NF. PREVIEW app309 배포 완료 — 승격관리 재진입 D1 반복 읽기 제거 (2026-10-03 KST)
+
+**사용자 실측 문제**
+- 승격 곡 관리 페이지 진입 때마다 `/v1/manage/curated`가 D1 R1을 반복해 행읽기가 누적됨.
+- 승격 자체 R1/W1, 승격 해제 추가 R0/W1은 이번 수정 대상에서 제외하고 기존 정상 동작 유지.
+
+**app309 수정**
+- 승격관리 전용 목록을 계정별 local-first cache로 보존.
+- 첫 정상 조회 뒤 60초 이내 재진입은 서버 목록 요청 없이 로컬 캐시 사용.
+- 60초 이후에도 기존 `/v1/curated-revision`으로 변경 여부만 확인하며 이 경로는 D1 R0.
+- revision이 같으면 기존 관리 목록을 그대로 사용하여 `/v1/manage/curated` D1 재조회 없음.
+- 실제 승격/해제처럼 추천 목록이 변경되면 해당 계정의 관리 캐시만 무효화하고 다음 필요 시 목록을 다시 받음.
+- 일반 Explore `/v1/curated`, 승격/해제 mutation, 좋아요/공개·비공개/Studio 저장 하트/폴더/Split 경로는 변경하지 않음.
+
+**변경 / 검증 / 배포**
+- 제품 commit: `30e2474b1477e4958dd368f3aa7e51ed399467f9`.
+- verifier commit: `f01aa545e6f2f1cdb047ca3bc6066bdcc77f0639`.
+- app309 version commit: `37cf4ad227c99890053370747bf094b384ff0f6e`.
+- 1차 Release System Audit Run `37086609323`: SUCCESS.
+- 최종 Release System Audit Run `37086773217`: SUCCESS.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore curation verifier PASS.
+  - like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only preflight/diagnostics PASS.
+- Firebase PREVIEW Release Run `37086923105`: SUCCESS.
+  - locked source `2236b051451d6e71884a3ee1be125359124602ae`.
+  - Firebase Hosting PASS.
+  - `preview.soridraw.com` app **309**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**비용 기대값 / 실기기 확인 필요**
+1. app309 최초 승격관리 진입: 관리 캐시가 없으면 기존처럼 D1 R1 가능 — 최초 1회 seed.
+2. 변경 없이 바로 나갔다 재진입: `/v1/manage/curated` 추가 호출 없음, D1 R0/W0 목표.
+3. 60초 이후 변경 없이 재진입: revision 확인만 수행, D1 R0/W0 목표.
+4. 실제 승격/해제 뒤에는 관리 캐시가 무효화되므로 다음 필요 조회에서 D1 R1은 허용.
+5. 승격 R1/W1, 해제 추가 R0/W1 기존 계약 유지.
+6. 위 비용 숫자는 사용자 CACHE LIVE 실기기 재측정 전까지 **실사용 검증 전**.
+
 ## 0NE. PREVIEW app306 배포 완료 — Explore 섹션 순서 조정 + PC 좌우 스크롤 버튼 상시 노출 (2026-10-03 KST)
 
 **사용자 요청**

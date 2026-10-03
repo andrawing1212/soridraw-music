@@ -1,7 +1,7 @@
-app315-profile-editor
-target_source=4120e1c71d9ed0279a5eeda87342c4ff10691656
-app_version=315
+app316-avatar-crop-initial-zoom
+target_source=1c952a7f393c3372067687f7db7ff071d603874b
+app_version=316
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-editor-ui
+release_request=avatar-crop-less-zoomed-midpoint

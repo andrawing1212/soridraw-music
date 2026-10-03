@@ -1,3 +1,32 @@
+## 0NM. PREVIEW app314 후보 — MY 프로필 배경 높이 미세 조정 (2026-10-03 KST)
+
+**변경**
+- MY 프로필 상단 배경 높이만 재조정.
+- PC(1600px 이상): 315px → **335px**.
+- 태블릿(721~1599px): 252px → **270px**.
+- 모바일(720px 이하): 기존 190px 그대로.
+- 다른 사용자 공개 프로필 높이 그대로.
+- 패딩/텍스트/아바타/이미지 필터/크롭/위치/간격 변경 없음.
+
+**commit / 검증**
+- CSS commit: `449f4c2b8dd1554319aa3a9d3eb07c09ebed0fd0`.
+- verifier commit: `1a397b02b581180ff1a1dd7b3d0b025074cde316`.
+- audit trigger: `259100d5f303198f52406163c4ef367e8e5cff04`.
+- Release System Audit `37092580600`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- 서버/데이터/Worker/Functions/Rules 변경 없음.
+
+**배포 상태**
+- 아직 배포 전.
+- 실제 PREVIEW는 app313 유지.
+- `public/app-version.json`도 313 유지.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0NL. PREVIEW app313 배포 완료 — MY 프로필 배경 높이만 확대 (2026-10-03 KST)
 
 **적용 범위**

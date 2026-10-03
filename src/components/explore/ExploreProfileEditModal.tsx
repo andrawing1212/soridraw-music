@@ -74,6 +74,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
   const [genreRefreshing, setGenreRefreshing] = useState(false);
   const [genreNotice, setGenreNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [handleValidationVisible, setHandleValidationVisible] = useState(false);
   const [error, setError] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
@@ -159,9 +160,11 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       return;
     }
     if (!handleValid) {
-      setError('핸들은 영문 소문자, 숫자, 점(.), 밑줄(_)로 3~24자만 사용할 수 있습니다.');
+      setHandleValidationVisible(true);
+      setError('');
       return;
     }
+    setHandleValidationVisible(false);
 
     const normalizedDraft = {
       nickname,
@@ -287,10 +290,30 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
           </div>
 
           <label className="soridraw-explore-profile-edit-label" htmlFor="soridraw-profile-handle">고유 핸들</label>
-          <div className={`soridraw-explore-profile-handle-wrap${handleValid ? '' : ' is-invalid'}`}>
+          <div className={`soridraw-explore-profile-handle-wrap${handleValidationVisible && !handleValid ? ' is-invalid' : ''}`}>
             <span>@</span>
-            <input id="soridraw-profile-handle" value={draft.handle} maxLength={24} autoCapitalize="none" spellCheck={false} onChange={(event) => setDraft((prev) => ({ ...prev, handle: event.target.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9._]/g, '') }))} />
+            <input
+              id="soridraw-profile-handle"
+              value={draft.handle}
+              maxLength={24}
+              autoCapitalize="none"
+              spellCheck={false}
+              aria-invalid={handleValidationVisible && !handleValid}
+              aria-describedby={handleValidationVisible && !handleValid ? 'soridraw-profile-handle-warning' : undefined}
+              onChange={(event) => {
+                const nextHandle = event.target.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9._]/g, '');
+                setDraft((prev) => ({ ...prev, handle: nextHandle }));
+                if (/^[a-z0-9._]{3,24}$/.test(nextHandle) && !nextHandle.startsWith('.') && !nextHandle.endsWith('.') && !nextHandle.includes('..')) {
+                  setHandleValidationVisible(false);
+                }
+              }}
+            />
           </div>
+          {handleValidationVisible && !handleValid && (
+            <p id="soridraw-profile-handle-warning" className="soridraw-explore-profile-handle-warning" role="alert">
+              영문 소문자, 숫자, 점(.), 밑줄(_)만 사용할 수 있으며 3~24자로 입력해주세요. 점(.)은 처음·끝 또는 연속으로 사용할 수 없습니다.
+            </p>
+          )}
           <p className="soridraw-explore-profile-edit-help">페이지를 구분하는 고유 이름입니다. 중복 확인은 저장할 때 한 번만 합니다.</p>
 
           <div className="soridraw-explore-profile-genre-heading">
@@ -344,7 +367,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
         <footer className="soridraw-explore-profile-edit-footer">
           <button type="button" className="is-cancel" onClick={onClose} disabled={saving}>취소</button>
-          <button type="button" className="is-save" onClick={() => void save()} disabled={saving || !handleValid || !draft.nickname.trim()}>
+          <button type="button" className="is-save" onClick={() => void save()} disabled={saving || !draft.nickname.trim()}>
             {saving ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 저장 중</> : '저장'}
           </button>
         </footer>

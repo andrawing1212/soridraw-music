@@ -1,5 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
-# rerun-20261004-app330-publication-w18-readonly
+# rerun-20261004-app330-publication-w18-insights
 
 on:
   push:
@@ -54,4 +54,20 @@ jobs:
           console.log('TRACK_INDEXES='+JSON.stringify(trackIndexes));
           console.log('TRACK_TRIGGERS='+JSON.stringify(trackTriggers));
           console.log('SEARCH_SCHEMA_AUDIT_20260918=PASS\nREMOTE_D1_WRITES=0');
+          NODE
+
+      - name: Read D1 query insights only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 insights DB --config "$CFG" --sort-type=sum --sort-by=writes --sort-direction=DESC --limit=30 --time-period=1d --json > "$RUNNER_TEMP/insights.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/insights.json','utf8'));
+          const rows=Array.isArray(raw)?raw:(raw?.result||[]);
+          console.log('D1_TOP_WRITE_INSIGHTS='+JSON.stringify(rows));
+          console.log('REMOTE_D1_INSIGHTS_READONLY=PASS');
           NODE

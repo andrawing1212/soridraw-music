@@ -68,7 +68,7 @@ if end < 0:
     raise SystemExit("[338] handleSearch unterminated")
 
 old = source[start:end]
-if "SORIDRAW_SEARCH_R2_FIRST_337_20261004" not in old:
+if "SORIDRAW_SEARCH_R2_FIRST_337_20261004" not in source:
     raise SystemExit("[338] app337 search prerequisite missing")
 if "handleGenreTracksCore066(genreUrl, genreAlias, env, cors)" not in old:
     raise SystemExit("[338] app337 scan-prone genre fallback anchor missing")

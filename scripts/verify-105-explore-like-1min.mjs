@@ -58,7 +58,20 @@ if (appVersion >= 120) {
 
 // Current viewer refresh is activity-gated at two minutes. There is no actor-forced
 // 1m+10s refresh timer anymore; the shared revision is checked only on real activity.
-if (appVersion >= 121) {
+if (appVersion >= 335) {
+  // app335 keeps the two-minute de-dupe but deliberately removes the old
+  // focus/pageshow/general-activity revision trigger. Warm entry/reload must
+  // stay Worker-zero; only a real hidden→visible resume may request revision.
+  assert.match(page, /SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918/);
+  assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
+  assert.doesNotMatch(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS/);
+  assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+  assert.doesNotMatch(page, /window\.addEventListener\('focus', requestRevisionCheck\)/);
+  assert.doesNotMatch(page, /window\.addEventListener\('pageshow', requestRevisionCheck\)/);
+  assert.match(page, /route entry, reload, focus, pageshow and ordinary pointer clicks are/);
+  assert.doesNotMatch(page, /scheduleAggregateCountRefresh071/);
+  assert.doesNotMatch(page, /EXPLORE_LIKE_REFRESH_GRACE_MS_105/);
+} else if (appVersion >= 121) {
   assert.match(page, /SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918/);
   assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
   assert.match(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000/);
@@ -77,7 +90,7 @@ assert.doesNotMatch(revision, /const REVISION_CACHE_TTL_MS = 5 \* 60 \* 1000;/);
 console.log('105_EXPLORE_LIKE_1MIN=PASS');
 console.log(appVersion >= 159 ? 'SERVER_AGGREGATE_WINDOW=5SEC_AFTER_W1_EVENT' : 'SERVER_AGGREGATE_WINDOW=1MIN_EVENT_DRIVEN');
 console.log(appVersion >= 120 ? 'ACTOR_BATCH_IDLE=30_SECONDS' : 'CLIENT_EVENT_WINDOW=1MIN');
-console.log(appVersion >= 121 ? 'VIEWER_ACTIVITY_GATE=120_SECONDS' : 'VIEWER_REFRESH=LEGACY_105');
+console.log(appVersion >= 335 ? 'VIEWER_RESUME_GATE=VISIBILITY_ONLY_120_SECONDS' : (appVersion >= 121 ? 'VIEWER_ACTIVITY_GATE=120_SECONDS' : 'VIEWER_REFRESH=LEGACY_105'));
 console.log('REVISION_CACHE_TTL=1MIN');
 console.log('IDLE_PERIODIC_CRON=0');
 if (appVersion >= 160) {

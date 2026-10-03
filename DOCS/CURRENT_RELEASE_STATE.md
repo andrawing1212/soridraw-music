@@ -1,3 +1,55 @@
+## 0NJ. PREVIEW app312 배포 완료 — 최신 공개곡 전체/팔로잉 필터 (2026-10-03 KST)
+
+**기능**
+- Explore `최신` 섹션명을 `최신 공개곡`으로 변경.
+- 장르별 추천 toolbar와 같은 위치/스타일로 `전체 / 팔로잉` 버튼 추가.
+- `전체`: 기존 최신 공개곡 Feed를 시간 순서 그대로 표시.
+- `팔로잉`: 기존 latest Feed에서 내가 팔로우한 크리에이터의 곡만 시간 순서 그대로 필터.
+- 동일 기기에서 팔로우/해제 시 팔로잉 필터 membership도 즉시 반영.
+- 계정 전환 시 이전 계정의 팔로잉 state를 즉시 폐기.
+
+**비용 구조**
+- 새 latest/following Feed API 추가 없음.
+- `전체 ↔ 팔로잉` 버튼 전환은 기존 `tracks` 배열의 로컬 필터이므로 D1 R0/W0.
+- 팔로잉 UID는 기존 Explore social local/R2 bundle을 재사용.
+- 공개곡 수가 늘어도 버튼 전환 때문에 별도 전체 조회/Firestore read/D1 scan 없음.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 변경 없음.
+
+**변경 commit**
+- following bundle 재사용 helper: `9b077a645c7fb4c574a1aa5fbf81de14aff1bfb0`.
+- Explore UI/필터: `38908224aafb834996aec76e064eb66ca1bad300`.
+- verifier: `c81245506385f6ca171674061cd875df70ee0511`.
+- app312 version: `aa04f734f852f4d253d5c062165a02f9e857d7dc`.
+- final audit trigger: `3a3e0cbccf069d9a6b34ed1da1b90c47e3ebe090`.
+- PREVIEW release trigger / locked release source: `2676a531c1541ff61e8cf460e71f00a67f7a5f13`.
+
+**검증 / 배포**
+- 후보 Audit `37090109213`: SUCCESS.
+- 최종 Release System Audit `37090441432`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore feed/layout verifier PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only preflight PASS.
+- Firebase PREVIEW Release `37090519862`: **SUCCESS**.
+  - locked source `2676a531c1541ff61e8cf460e71f00a67f7a5f13`.
+  - Firebase Hosting PASS.
+  - `preview.soridraw.com` app **312**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Cloudflare Worker / Functions / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**실사용 확인 필요**
+1. PC/모바일에서 `최신 공개곡` 제목 및 `전체 / 팔로잉` 버튼 위치가 장르별 추천과 동일한지.
+2. `전체`: 기존 최신 공개곡 순서/카드 수/스크롤 동작 그대로인지.
+3. `팔로잉`: 팔로우한 크리에이터 곡만 시간 순서대로 노출되는지.
+4. 팔로우 0명일 때 빈 상태가 어색하지 않은지.
+5. CACHE LIVE에서 warm `전체 ↔ 팔로잉` 전환 D1 R0/W0인지.
+6. 다른 정상 Explore 섹션/좋아요/승격/공개·비공개 회귀 없음.
+7. 위 실기기 항목은 **실사용 검증 전**.
+
 ## 0NI. PREVIEW app312 후보 구현 완료 — 최신 공개곡 전체/팔로잉 필터 (2026-10-03 KST)
 
 **사용자 요청**

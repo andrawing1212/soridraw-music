@@ -64,7 +64,7 @@ jobs:
           for(const token of ['.run()', '.batch([', 'INSERT INTO', 'UPDATE tracks', 'DELETE FROM tracks', 'ALTER TABLE', 'DROP TABLE', 'CREATE TABLE']) {
             if(s.includes(token)) throw Error('forbidden D1 mutation token: '+token);
           }
-          if(!s.includes('PROFILE_MEDIA.put')) throw Error('derived R2 write missing');
+          if(!s.includes('await bucket.put')) throw Error('derived R2 write missing');
           console.log('APP341_BACKFILL_D1_SELECT_ONLY=PASS');
           console.log('APP341_BACKFILL_USER_DATA_WRITE=0');
           NODE

@@ -303,6 +303,31 @@ const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
 // Rendering cached rows must never reset this clock: otherwise opening Explore
 // hides a cross-device unlike behind a fresh two-minute delay.
 const exploreFeedLastRevisionCheckAt126 = new Map<string, number>();
+// app334: keep the existing two-minute feed revision gate across browser reloads.
+// The cached Feed remains the first paint; a reload itself is not a data-change signal.
+const EXPLORE_FEED_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:feed-revision-check-at:v1';
+const exploreFeedRevisionCheckStorageKey334 = (key: string) =>
+  `${EXPLORE_FEED_REVISION_CHECK_STORAGE_PREFIX_334}:${encodeURIComponent(key)}`;
+const readExploreFeedLastRevisionCheckAt334 = (key: string) => {
+  const memory = exploreFeedLastRevisionCheckAt126.get(key);
+  if (memory) return memory;
+  if (typeof window === 'undefined') return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(exploreFeedRevisionCheckStorageKey334(key)) || 0);
+    if (Number.isFinite(stored) && stored > 0) {
+      exploreFeedLastRevisionCheckAt126.set(key, stored);
+      return stored;
+    }
+  } catch {}
+  return 0;
+};
+const writeExploreFeedLastRevisionCheckAt334 = (key: string, checkedAt = Date.now()) => {
+  exploreFeedLastRevisionCheckAt126.set(key, checkedAt);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(exploreFeedRevisionCheckStorageKey334(key), String(checkedAt));
+  } catch {}
+};
 // SORIDRAW_EXPLORE_CROSS_ACCOUNT_SHARED_FEED_REVALIDATION_154_20260924
 // Public Feed data is shared, but a revision-check timestamp must never leak
 // across signed-in accounts in the same browser/tab. Otherwise account B can
@@ -1995,7 +2020,7 @@ export default function ExplorePage() {
       if (!response.ok) throw new Error(`revision HTTP ${response.status}`);
       const payload = await response.json() as ExploreFeedRevisionResponse;
       const revision = safeText(payload?.data?.revision) || null;
-      if (revision) exploreFeedLastRevisionCheckAt126.set(revisionCheckKey154, Date.now());
+      if (revision) writeExploreFeedLastRevisionCheckAt334(revisionCheckKey154);
       return revision;
     };
 
@@ -2035,7 +2060,7 @@ export default function ExplorePage() {
         syncSharedPublicCountsToLocal110(normalizedTracks);
         // Mark only after the current snapshot is applied to Feed and loaded cards.
         markExploreSharedLikeCacheRepair124(requestUrl);
-        exploreFeedLastRevisionCheckAt126.set(revisionCheckKey154, Date.now());
+        writeExploreFeedLastRevisionCheckAt334(revisionCheckKey154);
       }
     };
 
@@ -2070,7 +2095,7 @@ export default function ExplorePage() {
       }
 
       const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
-      const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey154) || 0;
+      const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionCheckKey154);
       const shouldRevalidate = shouldRevalidateExploreFeedOnEntry126(
         feedRequest,
         revalidateRequested,
@@ -2163,7 +2188,7 @@ export default function ExplorePage() {
       if (!response.ok) throw new Error(`popular revision HTTP ${response.status}`);
       const payload = await response.json() as ExploreFeedRevisionResponse;
       const revision = safeText(payload?.data?.revision) || null;
-      if (revision) exploreFeedLastRevisionCheckAt126.set(revisionCheckKey304, Date.now());
+      if (revision) writeExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
       return revision;
     };
 
@@ -2195,7 +2220,7 @@ export default function ExplorePage() {
       setPopularTracks(overlayActorLikeCounts120(normalizedTracks));
       syncSharedPublicCountsToLocal110(normalizedTracks);
       markExploreSharedLikeCacheRepair124(requestUrl304);
-      exploreFeedLastRevisionCheckAt126.set(revisionCheckKey304, Date.now());
+      writeExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
       setPopularError('');
     };
 
@@ -2220,7 +2245,7 @@ export default function ExplorePage() {
         return () => controller304.abort();
       }
 
-      const lastCheckedAt304 = exploreFeedLastRevisionCheckAt126.get(revisionCheckKey304) || 0;
+      const lastCheckedAt304 = readExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
       if (!shouldRevalidateExploreFeedOnEntry126(true, false, lastCheckedAt304, Date.now())) {
         return () => controller304.abort();
       }

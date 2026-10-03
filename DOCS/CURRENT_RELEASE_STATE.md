@@ -1,3 +1,27 @@
+## 0OF. never-published 첫 공개 실기기 비용 W12 — migration 후 감소했지만 HARD FAIL (2026-10-04 KST)
+
+**사용자 실기기 CACHE LIVE**
+- 완전히 새로운 Music Note 곡 최초 공개 1회.
+- Cloudflare: LOCAL 0 / Worker 1.
+- D1 query: R3 / W1.
+- D1 billable/request rows: **R7 / W12**.
+- Browser SDK: R0 / W0.
+- Firestore: R0 / W0.
+- PAGE SYNC: D1 R0 / W0.
+
+**판정**
+- migration 전 사용자 실측 W18 대비 **W18 → W12**로 6 rows 감소.
+- 하지만 SORIDRAW hard gate는 사용자 action 1회 W1~W2이므로 **W12는 명확한 FAIL**.
+- 사전 예상 W10 전후보다도 2 rows 높음. 추정으로 다음 migration을 밀어붙이지 않고 post-migration live Insights/read-only schema audit로 남은 fanout을 정확히 분해해야 함.
+- R7은 전체곡 수에 비례한 폭주 수치는 아니지만 first-publication 1회에서 W12가 남아 있으므로 비용 최적화 미완료.
+
+**현재 우선순위**
+1. 동일 source private→public false source-refresh W3 버그 수정.
+2. first publication W12의 남은 write fanout을 read-only로 분해.
+3. canonical tracks insert에 꼭 필요한 index와 TEST/PRODUCTION 호환 derived/revision write를 구분.
+4. 기능/검색/하위호환을 깨지 않는 범위에서 두 번째 schema/trigger compaction 후보를 설계.
+5. 사용자 row 삭제/backfill/rewrite 없이 진행.
+
 ## 0OE. CORRECTION — same-source private→public W3 is FAIL, not ignorable (2026-10-04 KST)
 
 **사용자 영상 재판독**

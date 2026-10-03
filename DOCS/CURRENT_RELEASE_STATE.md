@@ -1,3 +1,84 @@
+## 0OH. PREVIEW app334 배포 완료 — 변경 없는 새로고침 Worker 반복 호출 차단 + 동일 source 재공개 W3 오분기 수정 (2026-10-04 KST)
+
+**사용자 실기기 문제**
+- Explore 새로고침, 공개 프로필 새로고침, Music Note 새로고침에서 D1은 R0/W0인데 Cloudflare Worker 요청이 매번 증가.
+- 동일 Suno source 그대로 private→public 재공개에서도 source 변경으로 오판되어 D1 billable W3가 발생.
+- never-published 첫 공개는 migration 후 W18→W12로 감소했지만 여전히 hard gate FAIL.
+
+**app334 변경**
+- Explore Feed:
+  - 기존 2분 revision check 시각을 localStorage에 유지하여 browser reload가 check window를 초기화하지 않음.
+  - 1분 feed-revision response cache를 reload에서도 그대로 존중; app211의 reload 강제 bypass 제거.
+- Explore 개인 좋아요:
+  - 기존 5분 `/v1/me/likes-revision` check 시각을 UID별 persistent timestamp로 유지.
+  - 실패 30초 retry 의미는 유지.
+  - 좋아요 mutation/하트/공개 숫자 authority는 변경 없음.
+- 공개 프로필:
+  - browser reload라는 이유만으로 60초 `validatedAt` window를 무시하던 app211 forced revalidation 제거.
+  - 기존 profile mutation/invalidation 및 정상 background revalidation 유지.
+- Music Note 공개상태:
+  - `/v1/me/music-note-publications-revision` 검증 시각을 UID별 persistent timestamp로 유지.
+  - healthy cached reload는 60초 window 안에서 Worker 재호출하지 않음.
+  - pending publication outbox는 기존 safety path 유지.
+- Explore 관리권한:
+  - `/v1/me/explore-management-access` 결과를 UID + local role signature 기준 5분 durable cache.
+  - 서버 authorization 자체는 변경 없음.
+- 동일 source 재공개:
+  - `selectionChanged`를 background Music Note snapshot 비교가 아니라 **공개 dialog를 연 뒤 사용자가 실제 1↔2 선택을 바꿨는지**로 판정.
+  - 같은 source private→public은 visibility-only 경로로 고정 목표 W2.
+  - 실제 1↔2 변경 기능은 그대로 유지.
+
+**변경 파일**
+- `src/pages/ExplorePage.tsx`
+- `src/pages/FavoritesPage.tsx`
+- `src/services/exploreRevisionRequestCache.ts`
+- `src/services/exploreProfileFirstViewService.ts`
+- `src/services/exploreLikeService.ts`
+- `src/services/explorePublicationService.ts`
+- `src/services/exploreCurationService.ts`
+- `scripts/verify-110-explore-liked-public-count.mjs`
+- `scripts/verify-127-atomic-personal-like.mjs`
+- `scripts/verify-154-cross-account-like-sync.mjs`
+- `scripts/verify-203-explore-action-visual-publication.mjs`
+- `scripts/verify-211-cross-device-publication-refresh.mjs`
+- `public/app-version.json`
+- release trigger files.
+
+**검증**
+- 최종 Release System Audit Run `37145212030`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static groups / syntax / final guards PASS.
+  - release-system verification PASS.
+  - app164 like candidate regression PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight / diagnostics read-only PASS.
+- 이전 audit Runs `37144785554`, `37144962795`, `37145090204`는 제품 TypeScript/Build 오류가 아니라 app334 의도 변경을 아직 옛 형태로 검사하던 legacy verifier assertion을 순차 정렬하는 과정에서 FAIL. 최종 verifier와 전체 audit은 PASS.
+
+**PREVIEW 배포**
+- Firebase PREVIEW Release Run `37145418195`: **SUCCESS**.
+- locked PREVIEW source: `e9fd3d537cf477e393c9cb0a7e038917dc02b6a0`.
+- `preview.soridraw.com` app **334**.
+- PREVIEW exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- shared RTDB Rules SKIPPED.
+- Worker 재배포 없음.
+- Functions / Firestore Rules / D1 schema 변경 없음.
+- 사용자 데이터 migration / backfill / delete 없음.
+
+**실기기 검증 전 목표**
+- 정상 캐시 + 변경 없음 Explore reload: Worker 0 / D1 R0 W0.
+- 정상 캐시 + 변경 없음 공개 프로필 reload: Worker 0 / D1 R0 W0.
+- 정상 캐시 + 변경 없음 Music Note reload: publication revision Worker 0 / D1 R0 W0.
+- 동일 source registered private→public: D1 billable W2 / Firestore W0.
+- 실제 Suno source 1↔2 변경: 기능 유지. 현재 D1 W3 하위호환 floor는 별도 비용 최적화 대상.
+- never-published first publication: 현재 실측 W12 HARD FAIL 유지. 이번 app334 client pass에서는 schema/trigger 추가 변경 안 함.
+
+**주의**
+- app334로 처음 진입한 직후에는 각 persistent validation timestamp를 처음 seed하기 위한 기존 bounded Worker validation이 1회 있을 수 있음.
+- 그 뒤 freshness window 안의 단순 reload가 Worker를 다시 증가시키지 않는지가 이번 실기기 핵심 합격선.
+- Worker 0을 위해 PC↔모바일 동기화/좋아요/공개상태 freshness 기능을 제거하지 않음.
+
 ## 0OG. Refresh Worker fanout confirmed across Explore / public profile / Music Note (2026-10-04 KST)
 
 **사용자 실기기 영상**

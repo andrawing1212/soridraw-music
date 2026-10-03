@@ -1,3 +1,49 @@
+## 0NR. PREVIEW app321 배포 완료 — 프로필 소개 4줄/핸들 경고/상단 배치 정리 (2026-10-03 KST)
+
+**적용**
+- 고유 핸들 저장 오류 문구를 짧게 변경:
+  - `영문 소문자, 숫자, 밑줄만 사용할 수 있으며 3~24자로 입력해주세요.`
+- 핸들 오류 표시를 기존 붉은 안쪽 그림자/양끝 표시 대신 **입력창 전체 실제 빨간 테두리**로 변경.
+- app320의 자유 입력 방식은 유지: 입력 중에는 대문자/특수문자/한글 등을 강제로 지우지 않고, 저장 시 기존 유효성 검사를 수행.
+- 소개는 최대 150자 유지.
+- 기존처럼 5번째 Enter에서 뒤쪽 문장을 잘라내지 않도록 **파괴적 줄 자르기 제거**.
+- 편집창의 실제 4줄 높이를 넘기는 입력만 그 입력 동작을 받지 않도록 변경하여, Enter 줄바꿈과 자동 줄바꿈을 같은 4줄 화면 기준으로 처리.
+- 공개 프로필 상단 배치를 위쪽 정렬로 변경.
+- 프로필 사진/핵심 정보는 상단으로 이동.
+- 소개는 프로필 사진 아래쪽에서 시작하는 하단 행으로 이동.
+- 소셜 링크는 대표 장르 아래로 이동.
+- 배경 이미지 높이/크롭/프로필 저장 API/미디어 업로드 구조는 비변경.
+
+**변경 / 검증 / 배포**
+- 제품 + verifier commit: `cbf6e3c7fb8176e3cfc636ce75ceed0809d4225e`.
+- app321 version commit: `aaaf1521075de38033e7ba74821cc6ead6136baf`.
+- 최초 Audit `37098941263`: FAIL — 제품 TypeScript/Build는 PASS였고, 기존 app317 정적 verifier가 예전 explicit-line/scroll 규칙을 계속 요구해 final static 단계에서 실패.
+- verifier 정합화: `db4103039197a54598511d98eeb17dd52a899267`.
+- 재감사 trigger: `57f6f839810f5037f32c988e8043e1864ba5cc46`.
+- Final Release System Audit `37099055378`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37099154060`: **SUCCESS**.
+  - release commit / locked PREVIEW source: `a530a84f4c05f2e8c632fba46d0b0851b632e4e3`.
+  - `preview.soridraw.com` app **321**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 잘못된 핸들로 저장 시 새 짧은 문구와 입력창 전체 빨간 테두리 표시.
+2. 입력 중 문자를 강제로 제거하지 않는 app320 동작 유지.
+3. 소개에서 Enter로 5번째 줄을 시도해도 기존 문장이 사라지지 않는지.
+4. Enter 없이 길게 입력해 자동 줄바꿈되는 경우에도 4줄 화면을 넘지 않는지.
+5. 저장 후 소개 줄바꿈/호흡이 편집창 의도와 일치하는지.
+6. 프로필 사진/이름·핸들·통계·대표장르가 상단으로 올라갔는지.
+7. 소개가 프로필 사진 아래 공간, 소셜 링크가 대표장르 아래에 배치되는지.
+8. PC/모바일에서 배경/이미지 크롭/저장/좋아요/폴더/Split 회귀 없음.
+
 ## 0NR. PREVIEW app320 배포 완료 — 소개 줄바꿈 보존 + 핸들 자유 입력/저장 시 검증 (2026-10-03 KST)
 
 **적용**

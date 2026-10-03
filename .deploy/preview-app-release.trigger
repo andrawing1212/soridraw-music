@@ -1,7 +1,7 @@
-app309-explore-manager-warm-cache
-target_source=42c68078d77214bb10325ab2f7fa7d5766f51010
-app_version=309
+app310-explore-manager-r2-first-load
+target_source=0098c44f74de5300a92cd56eb1e70db58692aa41
+app_version=310
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-manager-warm-cache-d1-zero-reentry
+release_request=explore-manager-first-load-r2-d1-zero

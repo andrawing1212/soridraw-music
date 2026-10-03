@@ -1,3 +1,31 @@
+## CURRENT TASK — app330 공개/저장 즉시 UI 반응 실사용 확인 (2026-10-04 KST)
+
+배포 완료:
+- PREVIEW app330.
+- Release System Audit `37135125184` SUCCESS.
+- Firebase PREVIEW Release `37135265146` SUCCESS.
+- deployed locked source `0399644d0cddcc7097abdccb2f639c9234013961`.
+- `preview.soridraw.com` app330 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / Rules / D1 schema / 사용자 데이터 migration 변경 없음.
+
+확인:
+1. Music Note 공개 또는 공개 설정 저장 클릭 즉시 팝업이 닫히는지.
+2. 공개 상태가 서버 응답을 기다리지 않고 즉시 화면에 반영되는지.
+3. Suno 1번↔2번 선택 변경 공개도 같은 즉시 반응인지.
+4. 백그라운드 서버 반영 완료 후 실제 Explore 곡 미디어가 선택한 곡과 일치하는지.
+5. 실패 시 이전 공개 상태로 복구되고 잘못된 공개 표시가 남지 않는지.
+6. 실제 source swap 1회 CACHE LIVE D1 rows_written W1~W2.
+7. 좋아요 / 저장 하트 / 폴더 / Split / 프로필 회귀 없음.
+
+보호:
+- app329 media-only source refresh와 D1 trigger 구조 변경 금지.
+- app164/160 Explore 좋아요 동결 기준 변경 금지.
+- app302 저장 하트, app301 폴더, app303 Split 변경 금지.
+- 공개 옵션 3개 / 비공개 전환 / 프로필 UI 비변경.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 승인 전 변경 금지.
+
 ## CURRENT TASK — app328 공개곡 선택 / 지구본 아이콘 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

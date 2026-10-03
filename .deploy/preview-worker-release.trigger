@@ -1,9 +1,9 @@
-requested_at=2026-10-04T05:35:00+09:00
-requested_by=user_app336_preview_deploy
-product_code_target=577bebe62bed8416e499ce0fbc652d18cf22665a
+requested_at=2026-10-04T05:42:00+09:00
+requested_by=user_app336_preview_deploy_retry
+product_code_target=f9e3a6de99319aa88cb184eaccf10df039e0272b
 release_source_target=canonical_preview_worker_app336
 release_purpose=deploy_app336_r2_legacy_hybrid_read
-required_verifier=release_system_audit_37151826969_pass
+required_verifier=release_system_audit_37152043026_pass
 app_version=336
 profile_full_snapshot_rebuild=false
 follow_profile_counter_d1_rebuild=false

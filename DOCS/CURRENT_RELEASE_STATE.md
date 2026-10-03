@@ -1,3 +1,87 @@
+## 0OI. PREVIEW app335 배포 완료 — warm entry/reload Worker-zero 후보 + 공개 비용 실측 정정 (2026-10-04 KST)
+
+**사용자 실기기 app334 결과 재판독**
+- Explore/프로필 새로고침: D1 rows는 R0/W0이지만 Worker가 시간기반 revision 확인으로 누적되어 FAIL.
+- 공개 비용:
+  - 단순 public→private: billable **R5/W2**, Firestore W0 = PASS.
+  - 동일 source private→public: app334 visibility-only 경로로 W2 보호.
+  - 영상 후반 **사용자가 실제 두 번째 Suno 카드를 선택한 source swap**: billable **R11/W3**, Firestore W0 = HARD FAIL.
+- 따라서 후반 W3는 같은-source 오분기가 아니라 **실제 source-media 변경의 현재 D1 fanout**이다.
+
+**app335 변경**
+- Explore Feed:
+  - cached entry/reload에서 나이(age)만으로 `/v1/feed-revision`을 부르지 않음.
+  - focus/pageshow/일반 pointer click은 revision Worker trigger가 아님.
+  - 일반 Feed revision은 실제 hidden→visible tab resume 또는 기존 targeted mutation signal에만 묶음.
+- SORIDRAW 추천:
+  - healthy curated local cache는 route entry/reload에서 그대로 사용.
+  - `curated-revision` 시간만료 Worker 확인을 entry에서 제거.
+- Explore 관리권한 UI hint:
+  - UID + local role signature cache가 일치하면 시간만료만으로 `explore-management-access`를 재호출하지 않음.
+  - 실제 관리 mutation의 서버 authorization은 그대로 유지.
+- 공개 프로필:
+  - warm profile route entry/reload는 persistent first-view를 즉시 사용하고 Worker 0.
+  - bounded shared-R2 revalidation은 real tab resume에서만 수행.
+- Music Note 공개상태:
+  - healthy persistent publication state는 entry/reload에서 Worker 0.
+  - bounded publication revision revalidation은 real tab resume에서만 수행.
+  - pending outbox / mutation safety path는 유지.
+- 좋아요:
+  - reload와 같이 발생할 수 있는 focus 이벤트를 private-like revision trigger에서 제거.
+  - 기존 RTDB/public-like targeted signal, local-first heart, mutation settlement 보호.
+- 일반 클릭/진단 초기화 자체가 Worker 비용을 만들지 않도록 pointer 기반 general revision check 제거.
+- UI/레이아웃 변경 없음.
+
+**검증**
+- Final Release System Audit Run `37148217453`: **SUCCESS**.
+  - audited product source: `ce43f5b835555ba9db8a52973023a61f1f3303cb`.
+  - TypeScript PASS.
+  - Build PASS.
+  - static release verification PASS.
+  - app164 like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight read-only PASS.
+- PREVIEW App Release Run `37148368369`: **SUCCESS**.
+  - deployed release commit: `cb89c9e161597c685917ea0d524c4a7192b7eb9c`.
+  - audited source→release commit 차이는 `.deploy/release-system-audit.trigger`, `.deploy/preview-app-release.trigger` 두 배포 메타 파일뿐이며 제품 소스 차이 없음.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` app **335** exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+  - Worker / Functions / Firestore Rules / D1 schema 배포 없음.
+  - 사용자 데이터 migration/backfill/delete 없음.
+- Live read-only runtime audit Run `37148012532`: SUCCESS.
+  - PREVIEW/TEST/PRODUCTION 모두 shared canonical D1 `217ef5b1-5d80-4f7c-afc7-9e07eb05c06b` 및 shared `soridraw-profile-media` 사용 확인.
+  - 현재 source swap W3의 D1 원인을 정확히 분해:
+    1. canonical `tracks` media UPDATE = W1
+    2. `explore032_track_update` media delta → `explore_derived_tracks` = W1
+    3. `soridraw_shared_rev_tracks_au_051` → `explore_shared_revision` = W1
+    → 합계 W3.
+  - TEST/PRODUCTION의 현재 구 Worker도 shared revision/derived 구조를 참조하므로, 둘 중 하나를 검증 없이 제거하면 shared-data 하위호환 위험. 이번 app335에서는 D1 trigger/schema를 추가 변경하지 않음.
+
+**현재 비용 판정**
+- 단순 공개↔비공개: W2 목표/기존 실측 PASS 유지.
+- 실제 Suno source swap: **W3 HARD FAIL 유지**. 현재 shared TEST/PRODUCTION 하위호환 의존성 때문에 무검증 제거 금지.
+- never-published 최초 공개: **R7/W12 HARD FAIL 유지** (이전 W18→W12).
+- warm entry/reload Worker 0: app335 코드/CI PASS, **사용자 실기기 검증 전**.
+
+**실기기 app335 합격선**
+1. Explore 정상 캐시 상태 → CACHE LIVE 초기화 → 같은 탭 browser reload:
+   - Worker **0**, D1 **R0/W0**, Firestore R0/W0.
+2. 공개 프로필 동일 방식:
+   - Worker **0**, D1 R0/W0.
+3. Music Note 동일 방식:
+   - publication revision Worker **0**, D1 R0/W0.
+4. CACHE LIVE 초기화 버튼/일반 화면 클릭만으로 Worker가 증가하지 않아야 함.
+5. 탭을 실제로 다른 곳에 두었다가 다시 보이면 bounded freshness 확인 Worker는 허용.
+6. 동일 source private↔public: W2.
+7. 실제 Suno 1↔2 source swap: 현재 W3 known FAIL로 기록, 다음 compatibility 설계 대상.
+
+**릴리스 안전**
+- obsolete `preview-033-explore-feed-revision.yml`의 preview auto-deploy job을 비활성화. 옛 preview-only D1/R2 binding으로 우회 배포하지 못하게 함.
+- TEST/main 승격 없음.
+- PRODUCTION 변경 없음.
+
 ## 0OH. PREVIEW app334 배포 완료 — 변경 없는 새로고침 Worker 반복 호출 차단 + 동일 source 재공개 W3 오분기 수정 (2026-10-04 KST)
 
 **사용자 실기기 문제**

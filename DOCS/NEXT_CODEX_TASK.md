@@ -1,3 +1,25 @@
+## CURRENT TASK — app331 실기기 비용 분기 고정 / W4·W18 다음 최적화 (2026-10-04 KST)
+
+실기기 확인:
+- 순수 비공개 전환: D1 billable W2 / Firestore W0.
+- 순수 공개·비공개 저비용 케이스: D1 billable W2 / Firestore W0.
+- Suno 선택 변경이 동반된 공개/재공개: Firestore favorites W1 + D1 billable W4.
+- 공개 상태에서 다른 Suno 곡 source swap: Firestore favorites W1 + D1 billable W4.
+- 차이는 랜덤이 아니라 클라이언트 `selectionChanged` 분기와 Worker `refreshSourceMedia` 경로 차이로 확인.
+
+다음 작업:
+1. 사용자가 실제 Suno 곡을 바꾸지 않은 공개/비공개는 항상 visibility-only 경로로 고정하고 Firestore W0 / D1 W2를 넘지 않게 보호.
+2. 실제 source-media swap은 현재 D1 W4이므로 W1~W2 hard gate에 맞출 수 있는 하위호환 구조를 설계. 기존 TEST/PRODUCTION이 shared canonical data를 계속 읽을 수 있어야 함.
+3. never-published 첫 공개 W18은 별도 first-publication canonical/index fanout 문제로 유지. 무검증 index drop, canonical table 분리, 사용자 데이터 migration 금지.
+4. 곡을 바꾸지 않았는데도 실기기에서 `favorites:write 1 / W4`가 재현되면 stale `selectionChanged` 판정부터 우선 수정.
+5. 좋아요 / 저장 하트 / 폴더 / Split / 프로필 정상 기능은 건드리지 않음.
+
+합격선:
+- 동일 선택곡 공개↔비공개: Firestore W0, D1 W1~W2.
+- 실제 source-media swap: D1 W1~W2 목표. 불가능하면 이유와 하위호환 대안을 먼저 보고.
+- first publication: W1~W2 목표. W3+는 승격 금지.
+- TEST / PRODUCTION 변경 금지. 사용자 데이터 migration/backfill/delete 금지.
+
 ## CURRENT TASK — app330 공개/저장 즉시 UI 반응 실사용 확인 (2026-10-04 KST)
 
 배포 완료:

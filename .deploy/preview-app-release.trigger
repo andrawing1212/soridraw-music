@@ -1,10 +1,10 @@
-app334-cached-reload-worker-zero
-target_source=8a116bf06f4641b032125b31434ec734bc372a1a
-app_version=334
-scope=hosting-only-cached-reload-worker-zero-and-same-source-republish
+app335-warm-entry-worker-zero
+target_source=ce43f5b835555ba9db8a52973023a61f1f3303cb
+app_version=335
+scope=hosting-only-warm-entry-worker-zero
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-profile-music-note-reload-worker-zero
-required_audit_run=37145212030
+release_request=explore-profile-music-note-worker-zero
+required_audit_run=37148217453
 worker_change=false
 functions_change=false

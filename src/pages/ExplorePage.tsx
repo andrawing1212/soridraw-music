@@ -2906,16 +2906,41 @@ export default function ExplorePage() {
     });
   };
 
-  const openExplorePublicationSettings = async (track: ExploreTrack) => {
+  const openExplorePublicationSettings = (track: ExploreTrack) => {
     if (!user || user.uid !== track.ownerUid) return;
     setPublicationPrivateConfirm(false);
     closeMoreSheet();
 
     const sourceId = track.sourceType === 'music_note' ? safeText(track.sourceId) : '';
-    let sourceSong: Record<string, any> | null = sourceId
+    const localSourceSong = sourceId
       ? readExplorePublicationSourceFromLocal(user.uid, sourceId)
       : null;
-    if (sourceId && !sourceSong) {
+
+    const showPublicationSettings = (sourceSong: Record<string, any> | null) => {
+      const sunoLinks = getExplorePublicationSunoLinks(sourceSong, track);
+      const selectedSunoIndex = resolveExplorePublicationMainIndex(sourceSong, track, sunoLinks);
+      setPublicationSettings({
+        track,
+        options: {
+          allowNextSongApply: Boolean(track.allowNextSongApply),
+          allowFollowerSave: Boolean(track.allowFollowerSave),
+          profilePinned: Boolean(track.profilePinned),
+        },
+        sourceId,
+        sourceSong,
+        sunoLinks,
+        selectedSunoIndex,
+        initialSunoIndex: selectedSunoIndex,
+      });
+    };
+
+    if (!sourceId || localSourceSong) {
+      showPublicationSettings(localSourceSong);
+      return;
+    }
+
+    void (async () => {
+      let sourceSong: Record<string, any> | null = null;
       try {
         const snapshot = await getDoc(doc(db, 'favorites', sourceId));
         if (snapshot.exists()) {
@@ -2928,23 +2953,9 @@ export default function ExplorePage() {
       } catch (reason) {
         console.warn('Explore publication source exact read unavailable; using public card fallback.', reason);
       }
-    }
-
-    const sunoLinks = getExplorePublicationSunoLinks(sourceSong, track);
-    const selectedSunoIndex = resolveExplorePublicationMainIndex(sourceSong, track, sunoLinks);
-    setPublicationSettings({
-      track,
-      options: {
-        allowNextSongApply: Boolean(track.allowNextSongApply),
-        allowFollowerSave: Boolean(track.allowFollowerSave),
-        profilePinned: Boolean(track.profilePinned),
-      },
-      sourceId,
-      sourceSong,
-      sunoLinks,
-      selectedSunoIndex,
-      initialSunoIndex: selectedSunoIndex,
-    });
+      if (auth.currentUser?.uid !== user.uid) return;
+      showPublicationSettings(sourceSong);
+    })();
   };
 
   const toggleExplorePublicationSetting = (key: keyof ExplorePublicationOptions) => {

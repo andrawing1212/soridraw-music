@@ -54,8 +54,32 @@ jobs:
                 'suno_url_primary',
                 'suno_url_secondary',
               ]){
+                const escaped=q.replace(/[.*+?^${}()|[\]\\]/g,'\\              for(const q of [
+                'readFeedR2Revision077',
+                '/v1/feed-revision',
+                'explore_shared_revision',
+                'explore_derived_tracks',
+                'syncExploreFeedR2Publication043',
+                'patchExploreProfileR2Publication043',
+                'refreshSourceMedia',
+                'suno_url_primary',
+                'suno_url_secondary',
+              ]){
                 const escaped=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
                 console.log(`${stage}_MARKER_${q.replace(/[^a-z0-9]+/gi,'_')}=${(s.match(new RegExp(escaped,'g'))||[]).length}`);
+              }
+');
+                console.log(`${stage}_MARKER_${q.replace(/[^a-z0-9]+/gi,'_')}=${(s.match(new RegExp(escaped,'g'))||[]).length}`);
+              }
+              if(stage!=='PREVIEW'){
+                for(const needle of ['explore_shared_revision','explore_derived_tracks']){
+                  let from=0,index=0;
+                  while((from=s.indexOf(needle,from))>=0 && index<6){
+                    const snippet=s.slice(Math.max(0,from-700),Math.min(s.length,from+1300)).replace(/\s+/g,' ');
+                    console.log(`${stage}_CONTEXT_${needle}_${index}=${snippet}`);
+                    from+=needle.length; index+=1;
+                  }
+                }
               }
               const settings=await g(base+'/settings');
               const bindings=Array.isArray(settings.bindings)?settings.bindings:[];

@@ -77,13 +77,19 @@ if (shared113) {
   if (!profile.includes('PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113 = 60_000')) fail('113 bounded revalidation window missing');
   if (!profile.includes('profileRevalidationInflight113')) fail('113 revalidation dedupe missing');
   if (!profile.includes('requestMaterializedFirstView(normalizedRef, cached.revision)')) fail('113 conditional shared revision check missing');
-  if (!warmBranch.includes('revalidateCachedProfile113(normalizedRef, cached, options')) fail('warm branch does not schedule shared revalidation');
   if (!warmBranch.includes('return cached')) fail('warm profile must render local snapshot immediately');
-  if (warmBranch.indexOf('revalidateCachedProfile113') > warmBranch.indexOf('return cached')) fail('revalidation must be scheduled before immediate local return');
+  if (appVersion >= 335) {
+    if (warmBranch.includes('revalidateCachedProfile113')) fail('app335 warm entry/reload must not schedule Worker revalidation');
+    if (!profile.includes('revalidateExplorePublicProfileFirstView335')) fail('app335 explicit profile activity revalidator missing');
+    if (!profile.includes('revalidateCachedProfile113(normalizedRef, cached, options')) fail('app335 activity revalidator lost bounded shared check');
+  } else {
+    if (!warmBranch.includes('revalidateCachedProfile113(normalizedRef, cached, options')) fail('warm branch does not schedule shared revalidation');
+    if (warmBranch.indexOf('revalidateCachedProfile113') > warmBranch.indexOf('return cached')) fail('revalidation must be scheduled before immediate local return');
+  }
   if (!profile.includes("materialized.kind === 'not-modified'")) fail('304/no-change path missing');
   if (!profile.includes('validatedAt: Date.now()')) fail('successful revalidation timestamp refresh missing');
   if (/setInterval|setTimeout/.test(profile.slice(profile.indexOf('const revalidateCachedProfile113'), functionAt))) {
-    fail('profile revalidation must be revisit-driven, not polling');
+    fail('profile revalidation must be activity-driven, not polling');
   }
 } else {
   if (profile.includes('PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS')) fail('time-based profile revalidation remains');
@@ -95,7 +101,7 @@ if (shared113) {
 console.log('107_EXPLORE_DIRECT_COUNT_ZERO_READ=PASS');
 console.log('PUBLIC_COUNT_SOURCE=SHARED_FEED_PROFILE_WITH_ACTOR_LOCAL_PENDING_OVERLAY');
 console.log(appVersion >= 120 ? 'ACTOR_PENDING_COUNT=LOCAL_ONLY_BASELINE_FINAL_DELTA' : 'ACCOUNT_SIGNAL=MEMBERSHIP_ONLY');
-console.log(shared113 ? 'PROFILE_WARM_REVISIT=LOCAL_IMMEDIATE_PLUS_BOUNDED_SHARED_R2_CHECK' : 'PROFILE_WARM_REVISIT_D1_READ=0_BY_CLIENT_CONTRACT');
+console.log(shared113 ? (appVersion >= 335 ? 'PROFILE_WARM_ENTRY=LOCAL_WORKER_ZERO_ACTIVITY_REVALIDATION' : 'PROFILE_WARM_REVISIT=LOCAL_IMMEDIATE_PLUS_BOUNDED_SHARED_R2_CHECK') : 'PROFILE_WARM_REVISIT_D1_READ=0_BY_CLIENT_CONTRACT');
 console.log('PROFILE_WARM_D1_READ=0_BY_CONTRACT');
 console.log('OBSOLETE_DISPLAY_OVERLAY=REMOVED');
 console.log('NO_UI_CSS_CHANGE=true');

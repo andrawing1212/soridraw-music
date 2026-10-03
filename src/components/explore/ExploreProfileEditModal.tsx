@@ -280,11 +280,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
               value={draft.bio}
               maxLength={PROFILE_BIO_MAX_LENGTH_317}
               rows={PROFILE_BIO_MAX_LINES_317}
-              onChange={(event) => {
-                const nextBio = normalizeProfileBio317(event.currentTarget.value);
-                if (event.currentTarget.scrollHeight > event.currentTarget.clientHeight + 1) return;
-                setDraft((prev) => ({ ...prev, bio: nextBio }));
-              }}
+              onChange={(event) => setDraft((prev) => ({ ...prev, bio: normalizeProfileBio317(event.currentTarget.value) }))}
               placeholder="음악과 작업을 간단히 소개해보세요."
             />
             <span>{draft.bio.length}/{PROFILE_BIO_MAX_LENGTH_317}</span>

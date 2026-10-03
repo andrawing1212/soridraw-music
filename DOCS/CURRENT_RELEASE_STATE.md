@@ -1,3 +1,80 @@
+## 0OJ. app336 설계 기준 확정 — first-publication W12 원인 완전 분해 + W2 격리모델 PASS (2026-10-04 KST)
+
+**현재 배포 상태**
+- 실제 PREVIEW 배포본은 계속 **app335**.
+- Firebase / Worker / Functions / Rules 추가 배포 없음.
+- TEST / PRODUCTION 변경 없음.
+- shared canonical D1 사용자 데이터 변경 없음.
+
+**실제 W12 원인 확정**
+- Live schema/runtime read-only audit Run `37149706339`: **SUCCESS**.
+- never-published Music Note 첫 공개의 실기기 W12는 현재 구조에서 정확히 다음으로 분해됨.
+  1. canonical `tracks` insert: **W6**
+     - table row W1
+     - PK autoindex W1
+     - Music Note에도 적용되는 4개 secondary index W4
+  2. `explore_derived_tracks` insert: **W5**
+     - table row W1
+     - PK autoindex W1
+     - latest / popular / profile rank index W3
+  3. `explore_shared_revision` update: **W1**
+  - 합계 **W12**.
+- Music Note derived insert의 generic change-log/state trigger는 이미 `source_type <> 'music_note'` 조건으로 제외되어 있어 W12 원인이 아님.
+- 기존 owner의 derived-profile repair도 실제 정상 owner에서는 추가 write 원인이 아님.
+
+**3환경 호환성 감사**
+- Run `37149380218`: **SUCCESS**.
+- PREVIEW Worker:
+  - R2 ordered catalog runtime 포함.
+  - `SORIDRAW_R2_CATALOG_V1=1` write/preparation mode 활성.
+  - catalog read / first-publisher cutover flag는 아직 비활성.
+- TEST / PRODUCTION Worker:
+  - 현재 R2 catalog runtime/flag 없음.
+  - 기존 shared revision + derived recovery 경로를 계속 사용.
+- 세 환경은 같은 canonical D1 / shared profile media를 사용.
+- 따라서 지금 shared D1에서 Music Note derived/shared-revision을 바로 끊으면 TEST/PRODUCTION 호환성이 깨질 수 있으므로 **즉시 migration 금지**.
+
+**post-migration hotpath 감사**
+- stale audit가 제거된 index `idx_tracks_source_type_latest`를 강제해 실패한 진단은 audit-script 문제였고 제품 실패가 아님.
+- 수정 후 Run `37149635235`: **SUCCESS**.
+- current Music Note rows 68, non-empty legacy_global_id 0.
+- current query-plan:
+  - owner/source = `idx_tracks_owner_source`
+  - profile fallback = `idx_tracks_owner_latest` + bounded temp sort
+  - title fallback = `idx_tracks_latest_order`
+  - genre = `idx_tracks_primary_genre_latest`.
+
+**격리 diagnostic W2 모델**
+- PREVIEW 전용 RATE_DB `soridraw-explore-preview-db`에 `w2p336_*` 임시 객체만 만들어 측정.
+- shared canonical D1 `soridraw-explore-db`와 다른 DB ID임을 hard guard로 확인.
+- 최종 Run `37150337923`: **SUCCESS**.
+- 측정:
+  - first publication: **W12 → W2**
+  - actual source-media swap: **W3 → W1**
+  - visibility change: **W2 → W1**
+- 후보 구조:
+  - cutover 이후 새 Music Note row를 legacy secondary indexes에서 제외.
+  - cutover 이후 새 Music Note row는 legacy `explore_derived_tracks` mirror에서 제외.
+  - cutover 이후 Music Note mutation은 legacy global shared-revision trigger에서 제외.
+  - canonical `tracks` row/PK는 유지.
+  - 기존 legacy Music Note rows는 그대로 두며 row rewrite/backfill/delete 없음.
+- 진단 종료 시 임시 객체 cleanup.
+- `SHARED_USER_DATA_WRITES=0`, `USER_DATA_MIGRATION=0`.
+
+**판정**
+- W1~W2가 물리적으로 불가능한 문제가 아님. **새 구조에서는 first publication W2 / source swap W1까지 가능함을 격리 D1에서 증명**.
+- 그러나 live 적용 선행조건은 PREVIEW/TEST/PRODUCTION 모두가 **R2 catalog + legacy derived hybrid read**를 이해하는 것.
+- 기존 사용자 row를 backfill/rewrite하지 않고, legacy row는 그대로 읽고 cutover 이후 row는 R2 catalog를 우선 읽는 방식으로 전환해야 함.
+
+**다음 구현 — app336**
+1. Worker에 R2 catalog + legacy-derived **hybrid read path** 추가.
+2. 같은 track이 양쪽에 있으면 R2 catalog/card를 최신 authority로 우선.
+3. catalog에 없는 기존 legacy row는 현재 derived/D1 recovery로 계속 읽음.
+4. first page / deep page / public profile / title·genre·artist search 모두 결과 누락/중복 없음 verifier 추가.
+5. app336 단계에서는 shared D1 schema/trigger/index migration **금지**.
+6. read path가 3환경 승격 가능한 수준으로 검증된 뒤에만 별도 cutover migration을 설계하고 사용자 승인 요청.
+7. 기존 app164/160 likes, app302 save heart, app301 folders, app303 Split, Music Note 60초/local-first, app331~335 publication UI/media 보호.
+
 ## 0OI. PREVIEW app335 배포 완료 — warm entry/reload Worker-zero 후보 + 공개 비용 실측 정정 (2026-10-04 KST)
 
 **사용자 실기기 app334 결과 재판독**

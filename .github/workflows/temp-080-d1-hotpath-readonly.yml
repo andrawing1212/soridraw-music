@@ -1,5 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
-# rerun-20261004-app330-publication-w18-insights
+# rerun-20261004-app330-publication-w18-avg-insights
 
 on:
   push:
@@ -70,4 +70,17 @@ jobs:
           const rows=Array.isArray(raw)?raw:(raw?.result||[]);
           console.log('D1_TOP_WRITE_INSIGHTS='+JSON.stringify(rows));
           console.log('REMOTE_D1_INSIGHTS_READONLY=PASS');
+          NODE
+
+          node "$WRANGLER" d1 insights DB --config "$CFG" --sort-type=avg --sort-by=writes --sort-direction=DESC --limit=100 --time-period=1d --json > "$RUNNER_TEMP/insights-avg.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/insights-avg.json','utf8'));
+          const rows=Array.isArray(raw)?raw:(raw?.result||[]);
+          const target=rows.filter((row)=>{
+            const q=String(row?.query||'');
+            return /(?:INSERT INTO tracks|UPDATE tracks SET|UPDATE explore_derived_tracks|UPDATE explore_shared_revision)/i.test(q);
+          });
+          console.log('D1_AVG_WRITE_TARGET_INSIGHTS='+JSON.stringify(target));
+          console.log('REMOTE_D1_AVG_INSIGHTS_READONLY=PASS');
           NODE

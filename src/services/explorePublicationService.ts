@@ -458,11 +458,18 @@ const parseMusicNotePublicationBundle = (
 // SORIDRAW_EXPLORE_PUBLICATION_BATCH_STATE_965
 export const getExploreMusicNotePublicationStates = async (
   user: User,
+  options: { revalidate?: boolean } = {},
 ): Promise<Record<string, ExploreMusicNotePublicationState>> => {
   const uid = String(user.uid || '').trim();
   const cached = readPublicationStateCache(uid);
   const envelope = readPublicationStateEnvelope(uid);
   if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;
+  // app335: normal Music Note entry/reload renders the healthy persistent state
+  // without turning navigation into a Worker request. Explicit post-entry activity
+  // may request the bounded revision validation below.
+  if (cached && options.revalidate !== true) {
+    return cached;
+  }
   if (cached && publicationServerValidatedUids.has(uid)) return cached;
   const lastPersistentValidationAt334 = readPublicationRevisionCheckAt334(uid);
   if (
@@ -549,6 +556,12 @@ export const getExploreMusicNotePublicationStates = async (
   publicationInflight.set(uid, task);
   return task;
 };
+
+export const revalidateExploreMusicNotePublicationStates335 = async (
+  user: User,
+): Promise<Record<string, ExploreMusicNotePublicationState>> => (
+  getExploreMusicNotePublicationStates(user, { revalidate: true })
+);
 
 export const getExploreMusicNotePublicationState = async (
   user: User,

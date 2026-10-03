@@ -1,3 +1,35 @@
+## 0NS. PREVIEW app323 배포 완료 — 프로필 소개 입력 크래시 긴급 수정 (2026-10-03 KST)
+
+**문제**
+- app322에서 소개 줄 수 제한을 제거하면서 `onChange`의 state updater 내부에서 `event.currentTarget.value`를 읽도록 바뀜.
+- React 이벤트 핸들러가 끝난 뒤 updater가 실행될 때 `currentTarget`이 `null`이 되어 `Cannot read properties of null (reading 'value')` 전체 오류 화면 발생.
+
+**수정**
+- textarea 값을 이벤트 핸들러 안에서 먼저 일반 문자열 `nextBio`로 캡처한 뒤 state updater에는 문자열만 전달.
+- app322의 **줄 수 제한 제거**는 그대로 유지.
+- 소개 최대 150자, 입력창 높이/스크롤 방식, 저장 API는 그대로 유지.
+- 다른 프로필 기능 / 좋아요 / 공개·비공개 / 폴더 / Split / 서버 구조 비변경.
+
+**검증 / 배포**
+- 제품 commit: `2f414d9a55dadcf9778dbaa7765708222b930034`.
+- verifier commit: `7b539c25a2dcf7b931d65ff65f6e999739cf5f7d`.
+- app323 version: `9c3b89df72b816dede58f4380df1af6fb6108148`.
+- Final Release System Audit `37103230539`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression / Worker dry-run / shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37103325505`: **SUCCESS**.
+  - locked source / release commit: `4356e3635070a4fb7fe0fc956ea6ef688b5ef634`.
+  - `preview.soridraw.com` app323 exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+**남은 프로필 레이아웃 실사용 수정**
+- 소개 위치는 현재 전체 하단 폭을 사용 중 → 사용자가 요구한 **프로필 사진 아래 왼쪽 열 전용 영역**으로 옮겨야 함.
+- app313/314 높이 조정이 `is-own-profile-313` 범위라 다른 사용자 공개 프로필에는 미적용 상태 → 사용자 요구에 맞춰 동일 높이 적용 범위 재조정 필요.
+- 상단 툴바 명칭은 현재 자기 프로필 `MY 프로필` / 타 사용자 `공개 프로필`로 분기 중이며, 사용자 실사용 피드백상 명칭 통일 요구 확인 필요.
+
 ## 0NR. PREVIEW app321 배포 완료 — 프로필 소개 4줄/핸들 경고/상단 배치 정리 (2026-10-03 KST)
 
 **적용**

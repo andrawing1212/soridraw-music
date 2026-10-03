@@ -3295,7 +3295,7 @@ export default function ExplorePage() {
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
           </button>
-          <span>{profileIsOwn ? 'MY 프로필' : '공개 프로필'}</span>
+          <span>MY 프로필</span>
         </section>
 
         {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
@@ -3322,6 +3322,7 @@ export default function ExplorePage() {
                   <div className="soridraw-explore-profile-avatar" aria-hidden="true">
                     {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
                   </div>
+                  {profile.bio && <p className="soridraw-explore-profile-bio">{profile.bio}</p>}
                 </div>
                 <div className="soridraw-explore-profile-copy">
                   <div className="soridraw-explore-profile-name-line">
@@ -3366,7 +3367,6 @@ export default function ExplorePage() {
                     </div>
                   )}
                 </div>
-                {profile.bio && <p className="soridraw-explore-profile-bio">{profile.bio}</p>}
               </div>
             </section>
 

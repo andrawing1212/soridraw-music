@@ -1,3 +1,56 @@
+## 0OB. PREVIEW app333 배포 완료 — 공개 source 변경 1회 Worker + 즉시 Firestore write 제거 (2026-10-04 KST)
+
+**목표**
+- 기존 정상 공개/비공개 W2 경로는 보호.
+- 공개된 곡에서 Suno 1↔2 선택 변경 시 app332에서 관측된 `favorites:write 1` + Worker 2회 누적 D1 W6 경로를 축소.
+- 공개 설정 3개 옵션의 현재 최소비용 경로를 보호하고, 첫 공개 W18은 호환성/스키마 문제와 분리.
+
+**app333 변경**
+- Suno 공개곡 선택 변경 시 더 이상 `updateFavorite(...)`로 Firestore favorites 문서를 즉시 쓰지 않음.
+- 선택 변경은 기존 Music Note local-first draft에 합류하며 canonical Firestore 저장은 기존 묶음/page-exit 경로가 담당.
+- PC↔모바일 즉시 미디어 미리보기는 기존 bounded RTDB delta를 유지.
+- 선택된 Suno media(cover/duration/primary/secondary URL)를 Explore Worker 요청에 직접 포함.
+- Worker는 새 app333 요청에서는 media 확인을 위한 Firestore favorites 재읽기를 생략하고, 구버전 요청에만 기존 Firestore fallback을 유지.
+- 기등록 source swap과 never-published 첫 공개 모두 선택한 media를 동일 Worker 요청에서 사용하도록 정합화.
+- 좋아요 / 저장 하트 / 폴더 / Split / 프로필 / 공개 옵션 UI 변경 없음.
+
+**검증 / 배포**
+- 제품/Worker audited source: `be803b450e14c3d356aab905620c2712461566b5`.
+- canonical Worker SHA256: `fbcc7a525393078f762965853d2b4cbc92a5b3ede16c314a3e6348a45a69aae3`.
+- Release System Audit `37140228404`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - app333 publication cost guards PASS.
+  - existing publication / like / profile / cache regressions PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - shared D1 checks read-only PASS.
+- Cloudflare PREVIEW Worker Release `37140381356`: **SUCCESS**.
+  - locked source `be803b450e14c3d356aab905620c2712461566b5`.
+  - deployed version `0f4e7ac6-2baa-442c-87cc-dbb6e640206b`.
+  - TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+  - PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase PREVIEW Release `37140463309`: **SUCCESS**.
+  - locked source `8364a888340b33791fa8c1989b260da6c0946b58`.
+  - `preview.soridraw.com` app **333**, exact build PASS.
+  - shared RTDB Rules SKIPPED.
+  - TEST / PRODUCTION unchanged PASS.
+- Functions / Firestore Rules / RTDB Rules / D1 schema 변경 없음.
+- 사용자 데이터 migration / backfill / delete 없음.
+
+**현재 비용 판정**
+- 동일곡 registered public↔private: 실측 D1 billable W2 / Firestore W0 — 현재 하위호환 구조의 합격 경로, 보호.
+- 공개 설정에서 값 변경 없음: local/outbox net-zero로 server write 0 유지.
+- `다음곡에 적용 허용` / `팔로워 곡 저장 허용`: canonical tracks + 구 TEST/PRODUCTION 호환 shared revision 때문에 D1 W2가 현재 안전 최저선.
+- `공개 프로필에 고정`: `profile_pinned`이 `idx_tracks_owner_profile_order`에 포함되어 실측 W3. **hard gate FAIL**이며 코드만으로 W2 이하 보장 불가.
+- 실제 Suno source swap: app333은 즉시 Firestore W1과 두 번째 Worker 원인을 제거했지만 D1 media UPDATE 자체는 `idx_tracks_owner_suno_url` 유지비 때문에 기존 Insights 기준 W4 가능. **실기기 재측정 전**.
+- never-published 첫 공개: `tracks` 9개 secondary index + trigger/구환경 호환 구조로 실제 W18. **이번 코드 수정으로 D1 W18 자체는 감소하지 않음 / hard gate FAIL**.
+
+**다음 비용 단계 — D1 schema 변경 전 승인 필요**
+- `idx_tracks_owner_suno_url (owner_uid, suno_url_primary)`는 현재 PREVIEW/main/production Worker 코드 검색에서 조회 조건으로 사용되는 경로를 찾지 못했으며 source swap W4의 유력한 추가 row-write 원인.
+- `idx_tracks_owner_profile_order (owner_uid, profile_pinned, published_at, id)`는 pin W3의 추가 write 원인.
+- 두 index의 제거/대체는 비용 절감 가능성이 있으나 shared D1 schema migration이므로 별도 guarded preflight + TEST/PRODUCTION query-plan 호환성 확인 + 사용자 승인 없이 실행 금지.
+- first publication W18→W1~W2는 단순 UI/Worker 수정으로 불가능. 기존 TEST/PRODUCTION이 같은 canonical `tracks`를 읽는 동안에는 index/trigger fanout을 유지해야 하므로 하위호환 canonical 구조 재설계가 필요.
+
 ## 0OA. PREVIEW app332 배포 완료 — 동일곡 공개/비공개 stale media 판정 차단 (2026-10-04 KST)
 
 **사용자 지시**

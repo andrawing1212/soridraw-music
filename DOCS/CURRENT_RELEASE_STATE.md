@@ -1,3 +1,41 @@
+## 0NK. PREVIEW app313 후보 — MY 프로필 배경 높이만 반응형 확대 (2026-10-03 KST)
+
+**요청 / 범위**
+- MY 프로필 상단 배경 높이만 변경.
+- PC: 기존 210px 기준 1.5배 → 315px.
+- 태블릿: 기존 210px 기준 1.2배 → 252px.
+- 모바일: 기존 190px 그대로 유지.
+- 다른 사용자의 공개 프로필 높이는 기존값 유지.
+- 패딩/간격/텍스트/아바타/이미지 필터/크롭/레이아웃 변경 없음.
+
+**구현**
+- 자기 프로필에만 `is-own-profile-313` scope 추가.
+- 721~1599px: min-height 252px.
+- 1600px 이상: min-height 315px.
+- 720px 이하: 기존 mobile rule 190px 그대로.
+- 서버/데이터/캐시/비용 관련 변경 없음.
+
+**commit / 검증**
+- scope commit: `3d04a6e479522781555afd62bf7fa75bd8210e8a`.
+- CSS commit: `8365f202b68d70ffa8363b92fd3aaae6e99cbbb7`.
+- verifier commit: `84c9efde7531bfdae98d170b050ee6621ceb9973`.
+- 1차 Audit `37091267340`: FAIL — 제품 코드가 아니라 verifier가 CSS 대신 TSX 파일을 검사한 테스트 오류. TypeScript/Build는 PASS.
+- verifier fix: `d98d0a6e655d1d479aaac75568a30dd10f6ac7b9`.
+- 재검증 Audit `37091395204`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+
+**배포 상태**
+- 아직 배포 전.
+- 실제 PREVIEW는 app312 유지.
+- `public/app-version.json`도 app312 유지.
+- Worker / Functions / Rules / 사용자 데이터 변경 없음.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0NJ. PREVIEW app312 배포 완료 — 최신 공개곡 전체/팔로잉 필터 (2026-10-03 KST)
 
 **기능**

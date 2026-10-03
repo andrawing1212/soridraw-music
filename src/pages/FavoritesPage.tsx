@@ -5845,9 +5845,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     // dialog must not wait for the revision/network validation that already runs in
     // the page hydration path.
     const localState = explorePublicationStateBySongId[sourceId];
+    const latestSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+      || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+      || song;
     if (localState) {
       setExplorePublicationDialog({
-        song,
+        song: latestSong,
         sourceId,
         state: localState,
         options: {
@@ -5855,7 +5858,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(localState.allowFollowerSave),
           profilePinned: Boolean(localState.profilePinned),
         },
-        selectedSunoIndex: getFavoriteSunoMainIndex(song),
+        selectedSunoIndex: getFavoriteSunoMainIndex(latestSong),
       });
       return;
     }
@@ -5865,8 +5868,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     try {
       const state = await getExploreMusicNotePublicationState(user, sourceId);
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+      const latestColdSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+        || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+        || latestSong;
       setExplorePublicationDialog({
-        song,
+        song: latestColdSong,
         sourceId,
         state,
         options: {
@@ -5874,7 +5880,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(state.allowFollowerSave),
           profilePinned: Boolean(state.profilePinned),
         },
-        selectedSunoIndex: getFavoriteSunoMainIndex(song),
+        selectedSunoIndex: getFavoriteSunoMainIndex(latestColdSong),
       });
     } catch (error) {
       console.error('explore publication dialog load failed:', error);
@@ -5902,7 +5908,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const links = getFavoriteSunoLinks(song);
     const requestedIndex = (selectedSunoIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
     const selectedLink = links[requestedIndex] || links[0] || null;
-    const selectionChanged = links.length > 1 && requestedIndex !== getFavoriteSunoMainIndex(song);
+
+    // app332: the dialog can outlive a list-row object. Compare the selected media
+    // against the freshest local Music Note snapshot by URL, not a possibly stale
+    // mainSunoIndex. This keeps unchanged public/private transitions on the cheap
+    // visibility-only path while preserving the real source-media swap path.
+    const latestSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+      || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+      || song;
+    const latestMainLink = getFavoriteMainSunoLink(latestSong);
+    const selectedUrl = String(selectedLink?.url || '').trim();
+    const latestMainUrl = String(latestMainLink?.url || '').trim();
+    const selectionChanged = Boolean(
+      links.length > 1
+      && selectedUrl
+      && latestMainUrl
+      && selectedUrl !== latestMainUrl
+    );
     if ((state.status !== 'public' || selectionChanged) && !isConnectedFavoriteSunoLink(selectedLink)) {
       showFavoriteToast('공개할 수노 곡을 먼저 선택하고 정상 연결 상태를 확인해주세요.');
       return;
@@ -5923,7 +5945,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     try {
       if (selectionChanged) {
-        const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(song, requestedIndex);
+        const latestLinks = getFavoriteSunoLinks(latestSong);
+        const latestRequestedIndex = Math.max(0, latestLinks.findIndex((link) => (
+          String(link?.url || '').trim() === selectedUrl
+        ))) as 0 | 1;
+        const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(latestSong, latestRequestedIndex);
         await Promise.resolve(updateFavorite(sourceId, primaryUpdates));
         syncFavoriteSunoCardMedia(sourceId, primaryUpdates);
         setSelectedSong((current: any) => (

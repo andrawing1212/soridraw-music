@@ -3295,7 +3295,6 @@ export default function ExplorePage() {
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
           </button>
-          <span>MY 프로필</span>
         </section>
 
         {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}

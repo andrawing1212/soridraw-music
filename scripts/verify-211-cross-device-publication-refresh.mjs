@@ -21,7 +21,13 @@ assert.match(revision, /const cached = readEntry\(revisionUrl\)/);
 assert.match(profile, /app334: a browser reload is not a profile-change signal/);
 assert.doesNotMatch(profile, /browserReloadedProfile211|profileReloadRevalidated211|forceReloadRevalidation211/);
 assert.match(profile, /if \(!force && cached\.validatedAt > 0 && age < PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113\) return/);
+assert.match(profile, /revalidateExplorePublicProfileFirstView335/);
 assert.match(profile, /revalidateCachedProfile113\(normalizedRef, cached, options\)/);
+const profileWarm335 = profile.slice(
+  profile.indexOf('export const getExplorePublicProfileFirstView = async'),
+  profile.indexOf('const inflightKey', profile.indexOf('export const getExplorePublicProfileFirstView = async')),
+);
+assert.doesNotMatch(profileWarm335, /revalidateCachedProfile113/, 'app335 warm profile entry/reload must stay Worker-free');
 
 // Music Note publication state: validation time survives reload, while pending
 // publication outbox still bypasses the gate.
@@ -29,6 +35,10 @@ assert.match(publication, /PUBLICATION_REVISION_CHECK_MS_334 = 60_000/);
 assert.match(publication, /readPublicationRevisionCheckAt334\(uid\)/);
 assert.match(publication, /getPendingExplorePublicationMutationCount\(uid\) > 0/);
 assert.match(publication, /markPublicationServerValidated334\(uid\)/);
+assert.match(publication, /options: \{ revalidate\?: boolean \} = \{\}/);
+assert.match(publication, /cached && options\.revalidate !== true/);
+assert.match(publication, /revalidateExploreMusicNotePublicationStates335/);
+assert.match(favorites, /document\.addEventListener\('visibilitychange', onPublicationResume335\)/);
 
 // Explore feed and private like revision clocks survive reload without changing
 // the existing 2-minute / 5-minute semantic cadence.
@@ -45,6 +55,9 @@ assert.match(curation, /SORIDRAW_CURATION_ACCESS_RECHECK_MS_334 = 5 \* 60_000/);
 assert.match(curation, /readCurationAccessCache334\(uid\)/);
 assert.match(curation, /curationAccessInflight334/);
 assert.match(page, /getExploreCurationAccess307\(user, signature\)/);
+assert.match(curation, /soridraw-curated-local-335/);
+assert.match(curation, /revalidateSoridrawCuratedTracks335/);
+assert.match(page, /revalidateSoridrawCuratedTracks335\(\)/);
 
 // Same-source republish must be driven by an explicit dialog source choice, not
 // a stale background Music Note snapshot.
@@ -63,4 +76,9 @@ assert.match(session, /const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 3;/);
 assert.match(profile, /const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6;/);
 assert.doesNotMatch(revision, /invalidateExploreFeedSessionCache\(/);
 
-console.log('PASS 211/334: warm browser reload respects persistent Feed/profile/like/publication/management caches, same-source republish stays visibility-only, and existing freshness TTLs/signals remain intact.');
+assert.doesNotMatch(page, /window\.addEventListener\('pageshow', requestRevisionCheck\)/);
+assert.doesNotMatch(page, /window\.addEventListener\('focus', requestRevisionCheck\)/);
+assert.match(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
+assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+
+console.log('PASS 211/335: warm browser entry/reload is Worker-free for Feed/profile/curation/publication checks; bounded freshness moves to real post-entry activity or tab resume; same-source republish remains visibility-only.');

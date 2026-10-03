@@ -1,10 +1,10 @@
-app331-instant-public-private-controls
-target_source=4e9af117580d1c8419760056797698089d2e47a8
-app_version=331
+app332-publication-media-identity-guard
+target_source=083d4310059ee27cb225ddf1578340ec3219278a
+app_version=332
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=instant-public-private-controls
-required_audit_run=37136314964
+release_request=publication-media-identity-guard
+required_audit_run=37138323981
 worker_change=false
 functions_change=false

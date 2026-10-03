@@ -34,6 +34,8 @@
 .soridraw-explore-profile-name-line{display:flex;align-items:center;gap:12px;min-width:0}
 .soridraw-explore-profile-name-line h1{min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(255,255,255,.95);font-size:clamp(24px,2.6vw,36px);font-weight:920;letter-spacing:-.035em}
 .soridraw-explore-profile-bio{width:100%;max-width:112px;min-width:0;margin:14px 0 0;color:rgba(235,235,240,.52);font-size:13px;font-weight:600;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
+@media (min-width:901px) and (max-width:1199px){.soridraw-explore-profile-bio{font-size:12px;line-height:1.52}}
+@media (min-width:721px) and (max-width:900px){.soridraw-explore-profile-bio{font-size:11px;line-height:1.5}}
 .soridraw-explore-profile-stats{display:flex;align-items:center;gap:18px;margin-top:15px;color:rgba(235,235,240,.48);font-size:12px;font-weight:650}
 .soridraw-explore-profile-stats strong{color:rgba(255,255,255,.88);font-weight:850}
 .soridraw-explore-own-profile{display:inline-flex;align-items:center;height:32px;padding:0 11px;border-radius:11px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.56);font-size:11px;font-weight:800;white-space:nowrap}
@@ -178,7 +180,7 @@
 .soridraw-explore-profile-social-icons-244 svg{width:28px;height:28px}
 .soridraw-explore-profile-name-line{align-items:flex-start;flex-wrap:wrap;gap:8px}
 .soridraw-explore-profile-name-line h1{width:100%;font-size:23px}
-.soridraw-explore-profile-bio{margin-top:7px;font-size:12px}
+.soridraw-explore-profile-bio{margin-top:7px;font-size:10px;line-height:1.48}
 .soridraw-explore-profile-stats{gap:12px;margin-top:11px;font-size:11px;flex-wrap:wrap}
 .soridraw-explore-follow-button,.soridraw-explore-own-profile{height:30px}
 }
@@ -319,3 +321,5 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available:hover:not(:disabled){background:rgba(20,20,24,.055)!important;color:#171719}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available>svg{color:rgba(20,20,22,.66)}
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available strong{color:#d94d74}
+
+@media (max-width:480px){.soridraw-explore-profile-bio{font-size:9px;line-height:1.46}}

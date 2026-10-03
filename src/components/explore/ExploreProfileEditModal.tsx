@@ -27,6 +27,7 @@ type CropEditorState = {
 } | null;
 
 const genericNames = new Set(['SORIDRAW 사용자', 'SORIDRAW User', 'SORiDRAW', 'SORIDRAW']);
+const PROFILE_GENRE_LIMIT_315 = 4;
 
 const suggestedNickname = (user: User, profile: ExplorePublicProfile) => {
   const current = String(profile.nickname || '').trim();
@@ -49,7 +50,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     nickname: suggestedNickname(user, profile),
     bio: profile.bio || '',
     handle: suggestedHandle(user, profile),
-    genres: profile.genres || [],
+    genres: (profile.genres || []).slice(0, PROFILE_GENRE_LIMIT_315),
     spotifyUrl: profile.socialLinks?.spotify || '',
     instagramUrl: profile.socialLinks?.instagram || '',
     tiktokUrl: profile.socialLinks?.tiktok || '',
@@ -105,7 +106,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
   const addGenre = () => {
     const value = genreInput.trim().slice(0, 20);
-    if (!value || draft.genres.length >= 5) return;
+    if (!value || draft.genres.length >= PROFILE_GENRE_LIMIT_315) return;
     if (draft.genres.some((item) => item.toLowerCase() === value.toLowerCase())) {
       setGenreInput('');
       return;
@@ -131,7 +132,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
         setGenreNotice(`최근 ${result.recentSongCount}곡에서 장르 정보를 찾지 못했어요.`);
         return;
       }
-      setDraft((prev) => ({ ...prev, genres: result.genres }));
+      setDraft((prev) => ({ ...prev, genres: result.genres.slice(0, PROFILE_GENRE_LIMIT_315) }));
       setGenreNotice(`최근 ${result.recentSongCount}곡 기준으로 대표 장르를 갱신했어요. 서버 읽기 ${result.firestoreReads}회.`);
     } catch (reason) {
       console.error('Explore profile genre refresh failed:', reason);
@@ -157,7 +158,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       nickname,
       bio: draft.bio.trim(),
       handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
-      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, PROFILE_GENRE_LIMIT_315),
       spotifyUrl: draft.spotifyUrl.trim(),
       instagramUrl: draft.instagramUrl.trim(),
       tiktokUrl: draft.tiktokUrl.trim(),
@@ -167,7 +168,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     const profileFieldsChanged247 = normalizedDraft.nickname !== String(profile.nickname || '').trim().replace(/\s+/g, ' ')
       || normalizedDraft.bio !== String(profile.bio || '').trim()
       || normalizedDraft.handle !== String(profile.handle || '').trim().replace(/^@+/, '').toLowerCase()
-      || JSON.stringify(normalizedDraft.genres) !== JSON.stringify((profile.genres || []).map((value) => String(value || '').trim()).filter(Boolean).slice(0, 5))
+      || JSON.stringify(normalizedDraft.genres) !== JSON.stringify((profile.genres || []).map((value) => String(value || '').trim()).filter(Boolean).slice(0, PROFILE_GENRE_LIMIT_315))
       || normalizedDraft.spotifyUrl !== String(profile.socialLinks?.spotify || '').trim()
       || normalizedDraft.instagramUrl !== String(profile.socialLinks?.instagram || '').trim()
       || normalizedDraft.tiktokUrl !== String(profile.socialLinks?.tiktok || '').trim()
@@ -277,7 +278,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
           <p className="soridraw-explore-profile-edit-help">페이지를 구분하는 고유 이름입니다. 중복 확인은 저장할 때 한 번만 합니다.</p>
 
           <div className="soridraw-explore-profile-genre-heading">
-            <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/5</span></label>
+            <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/{PROFILE_GENRE_LIMIT_315}</span></label>
             <button
               type="button"
               className="soridraw-explore-profile-genre-refresh"
@@ -297,7 +298,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
               type="button"
               className="soridraw-explore-profile-genre-plus"
               onClick={addGenre}
-              disabled={!genreInput.trim() || draft.genres.length >= 5}
+              disabled={!genreInput.trim() || draft.genres.length >= PROFILE_GENRE_LIMIT_315}
               aria-label="장르 추가"
               title="장르 추가"
             ><Plus aria-hidden="true" /></button>

@@ -1,0 +1,48 @@
+name: TEMP 340 Search Local Zero Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-340-search-local-zero.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-340-search-local-zero
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify app340
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-340-search-local-zero.mjs
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: Self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/temp-340-search-local-zero.yml
+          git commit -m 'ci(preview): finish app340 search cache verification'
+          git push origin HEAD:preview
+          echo "APP340_VERIFIED_COMMIT=$(git rev-parse HEAD)"

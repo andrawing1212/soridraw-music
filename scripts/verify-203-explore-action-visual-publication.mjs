@@ -5,6 +5,8 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const modal = readFileSync('src/components/explore/ExplorePublicationSettingsModal.tsx', 'utf8');
 const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
+const publicationService = readFileSync('src/services/explorePublicationService.ts', 'utf8');
+const publicationWorker = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 
 assert.match(page, /<RefreshCw aria-hidden="true" \/>/, 'next-song actions must use the Studio-style refresh arrows');
 assert.doesNotMatch(page, /WandSparkles|<Forward\b/, 'old quick action icons must be removed');
@@ -101,6 +103,66 @@ assert.match(
   /buildFavoriteSunoMainSelectionUpdates\(latestSong, latestRequestedIndex\)/,
   'real source-media swaps must update from the freshest local Music Note row',
 );
+
+assert.doesNotMatch(
+  submitBody,
+  /updateFavorite\(sourceId,\s*primaryUpdates\)/,
+  'public source selection must not force an immediate Firestore favorites write',
+);
+assert.match(
+  submitBody,
+  /queueFavoriteDetailPatch\(sourceId, primaryUpdates\)/,
+  'public source selection must join the existing Music Note local-first canonical batch',
+);
+assert.match(
+  submitBody,
+  /publishFavoriteSunoMediaDraft\(sourceId, primaryUpdates\)/,
+  'public source selection must preserve bounded cross-device media preview',
+);
+assert.match(
+  submitBody,
+  /refreshExploreMusicNotePublicationSource\([\s\S]*selectedPublicationMedia[\s\S]*\)/,
+  'public source swap must send selected media in the same Explore mutation',
+);
+assert.match(
+  publicationService,
+  /refreshExploreMusicNotePublicationSource = async \([\s\S]*sourceMedia\?: ExplorePublicationSourceMedia \| null/,
+  'publication service must accept inline selected media',
+);
+assert.match(
+  publicationService,
+  /refreshSourceMedia: true,[\s\S]*sourceMedia: \{/,
+  'registered source refresh must include inline media',
+);
+assert.match(
+  publicationService,
+  /sourceType: 'music_note',[\s\S]*sourceMedia: \{[\s\S]*sunoUrlPrimary/,
+  'first publication must include the same selected inline media',
+);
+assert.match(
+  publicationWorker,
+  /SORIDRAW_PUBLICATION_MEDIA_INLINE_SOURCE_333_20261004/,
+  'app333 canonical Worker marker missing',
+);
+assert.match(
+  publicationWorker,
+  /sourceMedia: normalizePublicationSourceMedia093\(value\?\.sourceMedia\)/,
+  'publication batch must accept inline media',
+);
+assert.match(
+  publicationWorker,
+  /mutation\.refreshSourceMedia && !inlineMedia[\s\S]*fetchFirestoreDocument/,
+  'registered source swap must only read Firestore as an old-client fallback',
+);
+assert.match(
+  publicationWorker,
+  /const resolvedSource = await resolvePublicationSource\(body, authContext\);[\s\S]*const inlineMedia = normalizePublicationSourceMedia093\(body\?\.sourceMedia\);[\s\S]*handleMusicNotePublicationSingleWrite016/,
+  'first publication must apply selected inline media before the canonical publication write',
+);
+
+console.log('APP333_PUBLIC_SOURCE_FIRESTORE_IMMEDIATE_W0=PASS');
+console.log('APP333_PUBLIC_SOURCE_SINGLE_WORKER_MUTATION=PASS');
+console.log('APP333_FIRST_PUBLICATION_SELECTED_MEDIA_PARITY=PASS');
 
 console.log('APP203_EXPLORE_STUDIO_APPLY_ICON=PASS');
 console.log('APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS');

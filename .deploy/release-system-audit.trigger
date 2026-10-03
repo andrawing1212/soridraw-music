@@ -1,5 +1,5 @@
-app333-publication-cost-compaction
-source=be803b450e14c3d356aab905620c2712461566b5
-scope=publication-source-single-worker,first-publication-selected-media,options-cost-guard
+app334-cached-reload-worker-zero
+source=3400c5c440985ac1863d9e9e787b8f23ac7baabe
+scope=explore-feed,public-profile,music-note-publication,like-revision,curation-access,same-source-republish
 protect=likes,save-heart,folders,split,profile,music-note-batching,test-production
-requested=2026-10-04T02:13:00+09:00
+requested=2026-10-04T03:40:00+09:00

@@ -1,3 +1,61 @@
+## 0OO. PREVIEW Worker app339 hotfix — 한글 장르 검색 alias 폭증 제한 + 90초 Edge Cache (2026-10-04 KST)
+
+**사용자 실기기 관찰**
+- app338 이후 한글 `힙합` 검색 1회:
+  - D1 query R16 / W0
+  - rows_read R250 / W0
+- 전체 스캔은 제거됐지만 alias 하나의 검색이 여러 영문 장르로 fan-out되며 indexed query가 반복되는 비용이 남음.
+
+**원인**
+- 클라이언트가 `힙합` 한 번에 Hip-hop 계열 여러 alias를 전달.
+- Worker가 alias마다 `primary_genre` + legacy `track_tags` 두 indexed query를 각각 수행.
+- 그래서 한 번의 사용자 검색이 다수의 작은 indexed query로 증폭.
+
+**app339 수정**
+- 정확한 한국어 메인 장르:
+  - `힙합 → Hip-hop`
+  - `재즈 → Jazz`
+  - `트로트 → Trot`
+  - `록/락 → Rock`
+  - `메탈 → Metal`
+  - `하우스 → House`
+  - `테크노 → Techno`
+  - `트랜스 → Trance`
+  - `클래식 → Classical`
+  - `팝 → Pop`
+  로 **alias 1개만** 사용.
+- `발라드`, `시티팝` 같은 family 검색도 최대 alias 3개로 제한.
+- 한글 장르 fallback 결과는 Cloudflare Edge Cache에 **90초** 저장.
+  - 같은 Edge에서 같은 검색어 재검색 시 D1 **R0 목표**.
+- R2-first 검색 유지.
+- app338 indexed primary_genre / track_tags fallback 유지.
+- shared D1 schema/index/trigger 변경 0.
+- 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 앱 Hosting 변경 없음, app337 유지.
+
+**검증**
+- app339 apply/verify Run `37160726661`: SUCCESS.
+- TypeScript PASS / Build PASS.
+- app336 hybrid regression PASS.
+- app197/app210 like regression PASS.
+- Final Release System Audit Run `37160817225`: SUCCESS.
+
+**배포**
+- PREVIEW Worker Release Run `37160937090`: SUCCESS.
+- active PREVIEW Worker version: `aedd8111-b2f4-407f-9e3f-ba062a82ed16`.
+- FEED smoke PASS / PROFILE smoke PASS.
+- public-like-card D1 R0/W0 PASS.
+- TEST / PRODUCTION Worker unchanged PASS.
+- product source commit: `9ede46e248847d9fc8b11508dcda432c8f763c41`.
+
+**다음 실기기 확인**
+1. 같은 `힙합` 검색 1회.
+2. 바로 같은 `힙합` 검색을 한 번 더.
+3. 기대:
+   - 첫 검색: app338의 R16/R250보다 크게 낮아야 함.
+   - 두 번째 검색: Edge Cache hit이면 D1 R0/W0 목표.
+4. 두 번째도 D1이 남거나 첫 검색이 여전히 과도하면 FAIL 처리.
+
 ## 0ON. PREVIEW Worker app338 hotfix — 한글 장르 검색 D1 R500~600 폭증 제거 (2026-10-04 KST)
 
 **사용자 실기기 관찰**

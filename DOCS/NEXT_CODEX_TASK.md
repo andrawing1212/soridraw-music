@@ -1,3 +1,36 @@
+## CURRENT TASK — app333 + shared D1 app334 fanout migration 실기기 비용 재측정 (2026-10-04 KST)
+
+완료:
+- app333 PREVIEW client/Worker 배포 유지.
+- shared D1 migration Run `37141622358` SUCCESS.
+- user row counts unchanged / quick_check / TEST-PRODUCTION query compatibility PASS.
+- Hosting/Worker/Functions/Rules 추가 배포 없음.
+
+지금 실기기 CACHE LIVE로 각각 **초기화 후 한 동작씩** 확인:
+1. 같은 공개곡 → 비공개: 목표 D1 billable **W2**, Firestore W0.
+2. 같은 private곡 → 다시 공개: 목표 **W2**, Firestore W0.
+3. 공개 상태에서 Suno 1↔2 실제 변경: 목표 Worker 1회, 즉시 Firestore favorites W0, D1 billable **W3**.
+4. 다음곡에 적용 허용만 변경: 목표 **W2**.
+5. 팔로워 곡 저장 허용만 변경: 목표 **W2**.
+6. 공개 프로필에 고정만 변경: 목표 **W2** (migration 전 W3).
+7. never-published 곡 최초 공개: 현재 W16 baseline 기준 **W10 전후 목표**. 정확한 실측 기록.
+
+주의:
+- 여러 동작을 연속 실행하면 CACHE LIVE '이번 실행 누적'이 합쳐져 W가 다르게 보일 수 있으므로 각 항목 전에 진단 초기화.
+- source swap W3는 현재 TEST/PRODUCTION 하위호환 안전 floor. W2 이하를 위해 derived media/shared revision을 끊지 말 것.
+- first publication이 W10보다 높으면 live Insights에서 남은 write fanout을 다시 분해한 뒤 다음 구조 변경 판단.
+
+보호:
+- Explore 좋아요 app164/160.
+- 저장 하트 app302 / 폴더 app301 / Split app303.
+- Music Note 60초/local-first batch.
+- app331 optimistic publication UI.
+- app332 media identity guard.
+- app333 inline media / one-Worker path.
+- 검색: 제목 / 장르 / 아티스트 이름·handle.
+- TEST / PRODUCTION 코드 승격 금지.
+- PRODUCTION 배포 금지.
+
 ## CURRENT TASK — app333 실기기 공개 비용 재측정 + schema-level 비용 최적화 승인 대기 (2026-10-04 KST)
 
 배포 완료:

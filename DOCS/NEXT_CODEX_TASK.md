@@ -1,3 +1,34 @@
+## CURRENT TASK — app323 소개 입력 크래시 수정 확인 + 프로필 레이아웃 후속 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app323.
+- Final Release System Audit `37103230539` SUCCESS.
+- Firebase PREVIEW Release `37103325505` SUCCESS.
+- locked source `4356e3635070a4fb7fe0fc956ea6ef688b5ef634`.
+- `preview.soridraw.com` app323 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+즉시 확인:
+1. 프로필 편집 → 소개 입력 시 전체 오류 화면이 다시 뜨지 않는지.
+2. 줄 수 제한 없이 Enter/자동 줄바꿈 입력 가능.
+3. 150자 제한은 유지.
+
+다음 레이아웃 수정:
+1. 소개를 전체 하단 폭이 아니라 **프로필 사진 바로 아래 왼쪽 열에만** 배치. 오른쪽 이름/통계/장르/소셜 영역 침범 금지.
+2. 다른 사용자 프로필도 app314와 같은 상단 프로필 배경 높이 적용 필요.
+3. 자기 프로필/타 사용자 프로필 상단 명칭의 최종 통일 방식 반영.
+4. 소셜 링크의 현재 대표장르 아래 위치는 유지.
+
+보호:
+- app323 소개 입력 crash fix 유지.
+- app322 줄 수 제한 제거 유지.
+- app320 핸들 자유 입력 후 저장 검증 유지.
+- 프로필 이미지 크롭/줌, 저장 API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app321 프로필 레이아웃/소개/핸들 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

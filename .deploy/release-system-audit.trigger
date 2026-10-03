@@ -1,4 +1,4 @@
-app318-profile-handle-warning
-source=b90dcca7586a8597e8129c7ece25eb5d08583ad3
-product_commit=f98d4c6509293905dc84b957fbdd5a0a391e9935
-requested=2026-10-03T13:16:00+09:00
+app319-profile-bio-line-breaks
+source=3aff8f65c91e9d63b676d4600894ad8de7fa9107
+product_commit=d9726e9a416e6635658625abf998e19bcd512276
+requested=2026-10-03T13:26:00+09:00

@@ -1,7 +1,7 @@
-app311-curated-manager-feed-parity
-target_source=16894d3ce0de3d89ef4c62cd6135f9001401b0bf
-app_version=311
+app312-latest-public-following-filter
+target_source=3a3e0cbccf069d9a6b34ed1da1b90c47e3ebe090
+app_version=312
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=curated-manager-public-feed-cache-state-parity
+release_request=latest-public-all-following-filter

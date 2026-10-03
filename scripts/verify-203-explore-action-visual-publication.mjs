@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const css = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 const modal = readFileSync('src/components/explore/ExplorePublicationSettingsModal.tsx', 'utf8');
+const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 
 assert.match(page, /<RefreshCw aria-hidden="true" \/>/, 'next-song actions must use the Studio-style refresh arrows');
 assert.doesNotMatch(page, /WandSparkles|<Forward\b/, 'old quick action icons must be removed');
@@ -30,9 +31,28 @@ assert.ok(modal.includes('저장'), 'public Explore track settings must save in 
 assert.match(modal, /비공개로 전환/, 'public Explore track settings must retain the private conversion control');
 assert.match(modal, /bg-\[#FF7A72\]/, 'publication modal must preserve the existing coral/pink control family');
 
+
+const submitStart = favorites.indexOf('const submitFavoriteExplorePublicationDialog = async () => {');
+const submitEnd = favorites.indexOf('const makeFavoriteExplorePublicationPrivate = async () => {', submitStart);
+assert.ok(submitStart >= 0 && submitEnd > submitStart, 'Music Note publication submit handler must remain discoverable');
+const submitBody = favorites.slice(submitStart, submitEnd);
+const optimisticIndex = submitBody.indexOf('const optimisticState: ExploreMusicNotePublicationState');
+const optimisticPaintIndex = submitBody.indexOf('setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }))');
+const closeIndex = submitBody.indexOf('setExplorePublicationDialog(null)');
+const firstAwaitIndex = submitBody.indexOf('await ');
+assert.ok(optimisticIndex >= 0, 'Music Note publication submit must define an optimistic public state');
+assert.ok(optimisticPaintIndex >= 0 && optimisticPaintIndex < firstAwaitIndex, 'Music Note publication state must paint before the first server await');
+assert.ok(closeIndex >= 0 && closeIndex < firstAwaitIndex, 'Music Note publication dialog must close before the first server await');
+assert.match(
+  submitBody,
+  /catch \(error\) \{[\s\S]*setExplorePublicationStateBySongId\(\(prev\) => \(\{ \.\.\.prev, \[sourceId\]: state \}\)\)/,
+  'failed Music Note publication settlement must restore the previous visible publication state',
+);
+
 console.log('APP203_EXPLORE_STUDIO_APPLY_ICON=PASS');
 console.log('APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS');
 console.log('APP203_EXPLORE_PINK_TEXT_ONLY_GUIDE=PASS');
 console.log('APP203_EXPLORE_OWNER_PUBLICATION_SETTINGS=PASS');
 console.log('APP203_EXPLORE_PUBLICATION_OPEN_R0=PASS');
 console.log('APP203_EXPLORE_MORE_TEXT_READABILITY=PASS');
+console.log('APP203_MUSIC_NOTE_PUBLICATION_OPTIMISTIC_UI=PASS');

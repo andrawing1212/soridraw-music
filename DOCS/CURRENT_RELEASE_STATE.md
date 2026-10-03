@@ -1,3 +1,54 @@
+## 0NG. PREVIEW app310 배포 완료 — 승격관리 최초 D1 목록읽기 제거 (2026-10-03 KST)
+
+**사용자 실측 문제**
+- app309에서 재진입 반복 읽기는 해결됐지만, 앱 업데이트 후 승격 곡 관리 첫 진입에서 현재 9곡을 표시하는데 D1 rows read가 약 43 발생.
+- 원인은 관리 전용 `/v1/manage/curated`가 기존 R2 추천 스냅샷을 재사용하지 않고 D1-backed curated 목록 경로를 다시 호출한 것.
+
+**app310 수정**
+- 승격관리 목록을 기존 curated R2 snapshot에서 직접 읽도록 변경.
+- 일반 Explore가 사용하는 추천 스냅샷과 같은 R2 원본을 재사용하므로 앱 버전 변경 때문에 관리 목록을 D1에서 다시 구성하지 않음.
+- 기존 app309 브라우저 local-first cache는 그대로 유지하여 warm 재진입은 계속 LOCAL/CACHE 우선.
+- R2 snapshot 자체가 유실된 예외 복구 시에만 기존 bootstrap 경로가 D1을 사용할 수 있음. 앱 업데이트 자체는 R2를 지우지 않음.
+- 승격/해제 mutation은 변경하지 않음:
+  - 승격: 기존 R1/W1 계약 유지.
+  - 해제: 추가 R0/W1 계약 유지.
+- 일반 Explore `/v1/curated`, 좋아요, 공개/비공개, Studio 저장 하트, Music Note/Library 폴더, Split 경로 변경 없음.
+
+**변경 / 검증 / 배포**
+- Worker 제품 commit: `5581a4d4954be9d4c6dffe9961a8beb09e2b1e0e`.
+- verifier commit: `0ba7fc06938603865a7629ebec5c6ed5734fb212`.
+- app310 version commit: `6f679bf89a390783e51729cd4f27986014661393`.
+- Release System Audit Run `37087850076`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore curation verifier PASS.
+  - like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only preflight/diagnostics PASS.
+- Cloudflare PREVIEW Worker Release Run `37087979937`: **SUCCESS**.
+  - PREVIEW Worker version: `191554c0-f3d2-4731-999f-f57a57a07994`.
+  - TEST / PRODUCTION Workers unchanged PASS.
+  - D1 schema write/migration/backfill 없음.
+- Firebase PREVIEW Release Run `37088038676`: **SUCCESS**.
+  - locked source `d8890e22060ee884c7e070463608f1f7576a0f67`.
+  - `preview.soridraw.com` app **310**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Functions / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/대량변경 없음.
+
+**실기기 비용 확인**
+1. app310 업데이트 직후 CACHE LIVE 초기화.
+2. 승격 곡 관리 첫 진입.
+   - `/v1/manage/curated` D1 R0 / W0 목표.
+   - R2/Worker 또는 LOCAL/CACHE 표시는 허용.
+3. 나갔다 재진입.
+   - D1 R0 / W0 목표.
+4. 60초 이후 재진입.
+   - revision 확인이 있더라도 D1 R0 / W0 목표.
+5. 실제 승격/해제 비용은 기존 계약 그대로.
+6. 위 최초 진입 D1 R0 수치는 사용자 실기기 CACHE LIVE 재측정 전까지 **실사용 검증 전**.
+
 ## 0NF. PREVIEW app309 배포 완료 — 승격관리 재진입 D1 반복 읽기 제거 (2026-10-03 KST)
 
 **사용자 실측 문제**

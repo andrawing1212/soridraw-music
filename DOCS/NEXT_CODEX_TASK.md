@@ -1,3 +1,32 @@
+## CURRENT TASK — app321 프로필 레이아웃/소개/핸들 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app321.
+- Final Release System Audit `37099055378` SUCCESS.
+- Firebase PREVIEW Release `37099154060` SUCCESS.
+- locked source `a530a84f4c05f2e8c632fba46d0b0851b632e4e3`.
+- `preview.soridraw.com` app321 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 핸들 저장 경고 문구가 요청 문구와 동일.
+2. 오류 시 입력창 전체 빨간 테두리, 양끝 애매한 붉은 표시 없음.
+3. 소개는 150자 / 실제 보이는 4줄 범위.
+4. 5번째 Enter 또는 자동 줄바꿈 초과 시 기존 작성 문장이 사라지지 않음.
+5. 저장 후 소개 줄바꿈이 편집 의도와 일치.
+6. 상단 사진 + 우측 핵심 정보가 위로 이동.
+7. 소개는 사진 아래, 소셜 링크는 대표장르 아래.
+8. PC/모바일 및 기존 이미지 편집/프로필 저장 기능 회귀 없음.
+
+보호:
+- app320 핸들 자유 입력 후 저장 검증 방식 유지.
+- app316 프로필 이미지 크롭/줌 구조 변경 금지.
+- 프로필 저장 API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app320 프로필 소개/핸들 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

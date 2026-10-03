@@ -25007,6 +25007,22 @@ async function syncMusicNotePublicationR2Batch049(env, uid, transitions) {
 }
 
 // SORIDRAW_FOLLOWER_SAVE_LYRICS_LEGACY_REFRESH_271_20261001
+function normalizePublicationSourceMedia093(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const sunoUrlPrimary = String(value.sunoUrlPrimary || '').trim().slice(0, 4096);
+  if (!sunoUrlPrimary || !/^https?:\/\//i.test(sunoUrlPrimary)) return null;
+  const rawDuration = value.durationSeconds;
+  const parsedDuration = rawDuration == null || rawDuration === '' ? null : Number(rawDuration);
+  return {
+    coverUrl: String(value.coverUrl || '').trim().slice(0, 4096),
+    durationSeconds: parsedDuration == null || !Number.isFinite(parsedDuration)
+      ? null
+      : Math.max(0, parsedDuration),
+    sunoUrlPrimary,
+    sunoUrlSecondary: String(value.sunoUrlSecondary || '').trim().slice(0, 4096) || null,
+  };
+}
+
 async function handleMusicNotePublicationBatch048(request, env, cors) {
   const authContext = await requireExploreAuth(request.clone());
   let body = null;
@@ -25031,6 +25047,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
       mutationAt,
       refreshSourceContent: value?.refreshSourceContent === true,
       refreshSourceMedia: value?.refreshSourceMedia === true,
+      sourceMedia: normalizePublicationSourceMedia093(value?.sourceMedia),
       options: pageSyncPublicationOptions048(value?.options),
     });
   }
@@ -25258,22 +25275,30 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
         const row = rowById.get(mutation.trackId);
         if (!row || String(row.source_type || '') !== 'music_note') continue;
         try {
-          const note = await fetchFirestoreDocument(['favorites', mutation.sourceId], authContext);
+          let note = null;
+          const inlineMedia = mutation.refreshSourceMedia ? mutation.sourceMedia : null;
+          if (mutation.refreshSourceContent || (mutation.refreshSourceMedia && !inlineMedia)) {
+            note = await fetchFirestoreDocument(['favorites', mutation.sourceId], authContext);
+          }
           if (mutation.refreshSourceContent) {
             const encodedLyrics = note ? encodeTrackLyrics270(note) : '';
             if (encodedLyrics) refreshedLyricsBySource.set(mutation.sourceId, encodedLyrics.slice(0, 3e4));
           }
-          if (mutation.refreshSourceMedia && note) {
-            const media = buildMusicNoteExploreSource(note, authContext.uid, mutation.sourceId);
-            refreshedMediaBySource.set(mutation.sourceId, {
-              coverUrl: String(media.coverUrl || ''),
-              durationSeconds: media.durationSeconds == null ? null : Number(media.durationSeconds),
-              sunoUrlPrimary: String(media.sunoUrlPrimary || ''),
-              sunoUrlSecondary: media.sunoUrlSecondary ? String(media.sunoUrlSecondary) : null,
-            });
+          if (mutation.refreshSourceMedia) {
+            let media = inlineMedia;
+            if (!media && note) {
+              const built = buildMusicNoteExploreSource(note, authContext.uid, mutation.sourceId);
+              media = {
+                coverUrl: String(built.coverUrl || ''),
+                durationSeconds: built.durationSeconds == null ? null : Number(built.durationSeconds),
+                sunoUrlPrimary: String(built.sunoUrlPrimary || ''),
+                sunoUrlSecondary: built.sunoUrlSecondary ? String(built.sunoUrlSecondary) : null,
+              };
+            }
+            if (media?.sunoUrlPrimary) refreshedMediaBySource.set(mutation.sourceId, media);
           }
         } catch (error) {
-          console.warn('[SORIDRAW 329] publication source refresh skipped:', String(error?.message || error || 'unknown'));
+          console.warn('[SORIDRAW 333] publication source refresh skipped:', String(error?.message || error || 'unknown'));
         }
       }
       const direct = [];
@@ -28260,3 +28285,5 @@ export {
 // SORIDRAW_LIKED_TRACK_SCHEMA_REPAIR_053_20260914
 
 // SORIDRAW_PUBLICATION_MEDIA_SOURCE_COST_329_20261003
+
+// SORIDRAW_PUBLICATION_MEDIA_INLINE_SOURCE_333_20261004

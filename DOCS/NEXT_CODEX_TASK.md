@@ -1,3 +1,26 @@
+## CURRENT TASK — app315 프로필 편집 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app315.
+- Final Release System Audit `37093821640` SUCCESS.
+- Firebase PREVIEW Release `37093928424` SUCCESS.
+- locked source `118d15bcaac051fe524b7a14a2671abec5177a1b`.
+- `preview.soridraw.com` app315 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 프로필 사진 / 배경 사진 편집 게이지 기본 위치가 중앙.
+2. 최초 상태에서 축소/확대 양쪽 모두 가능.
+3. 초기화 시 중앙 줌으로 복귀.
+4. 대표 장르 최대 4개.
+5. 자동 추천/수동 추가/저장 모두 4개 제한.
+6. 기존 프로필 저장/이미지 크롭/공개프로필 회귀 없음.
+
+운영 규칙:
+- 이후 수정 요청은 기본적으로 PREVIEW 수정 → 검증 → PREVIEW 배포까지 완료.
+- TEST/PRODUCTION 승격은 기존 승인 규칙 유지.
+
 ## CURRENT TASK — app314 MY 프로필 높이 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

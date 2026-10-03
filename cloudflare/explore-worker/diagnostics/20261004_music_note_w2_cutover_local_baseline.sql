@@ -37,11 +37,13 @@ CREATE TABLE w2p336_tracks (
   primary_genre TEXT
 );
 
-CREATE INDEX idx_w2p336_tracks_latest_order ON w2p336_tracks (published_at DESC, id DESC);
+CREATE INDEX idx_w2p336_tracks_latest_order
+  ON w2p336_tracks (published_at DESC, id DESC);
 CREATE UNIQUE INDEX idx_w2p336_tracks_legacy_global_nonempty
   ON w2p336_tracks (legacy_global_id)
   WHERE legacy_global_id IS NOT NULL AND TRIM(legacy_global_id) <> '';
-CREATE INDEX idx_w2p336_tracks_owner_latest ON w2p336_tracks (owner_uid, published_at DESC);
+CREATE INDEX idx_w2p336_tracks_owner_latest
+  ON w2p336_tracks (owner_uid, published_at DESC);
 CREATE UNIQUE INDEX idx_w2p336_tracks_owner_source
   ON w2p336_tracks (owner_uid, source_type, source_id, source_subtrack_key);
 CREATE INDEX idx_w2p336_tracks_primary_genre_latest
@@ -54,7 +56,7 @@ CREATE TABLE w2p336_track_stats(
   play_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE explore_derived_w2p336_tracks(
+CREATE TABLE w2p336_derived_tracks(
   id TEXT PRIMARY KEY,
   owner_uid TEXT NOT NULL,
   active INTEGER NOT NULL,
@@ -64,11 +66,11 @@ CREATE TABLE explore_derived_w2p336_tracks(
   row_json TEXT NOT NULL
 );
 CREATE INDEX idx_w2p336_rank_latest
-  ON explore_derived_w2p336_tracks(active,published_at DESC,id DESC);
+  ON w2p336_derived_tracks(active,published_at DESC,id DESC);
 CREATE INDEX idx_w2p336_rank_popular
-  ON explore_derived_w2p336_tracks(active,likes DESC,published_at DESC,id DESC);
+  ON w2p336_derived_tracks(active,likes DESC,published_at DESC,id DESC);
 CREATE INDEX idx_w2p336_rank_profile
-  ON explore_derived_w2p336_tracks(owner_uid,active,pinned DESC,published_at DESC,id DESC);
+  ON w2p336_derived_tracks(owner_uid,active,pinned DESC,published_at DESC,id DESC);
 
 CREATE TABLE w2p336_derived_profiles(
   uid TEXT PRIMARY KEY,
@@ -90,7 +92,7 @@ INSERT INTO w2p336_derived_profiles(uid,active,row_json) VALUES('probe-user',1,'
 CREATE TRIGGER w2p336_track_insert
 AFTER INSERT ON w2p336_tracks
 BEGIN
-  INSERT INTO explore_derived_w2p336_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
+  INSERT INTO w2p336_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
   SELECT
     t.id,t.owner_uid,(t.is_public=1 AND t.status='published'),t.published_at,t.profile_pinned,
     COALESCE(s.like_count,0),
@@ -109,7 +111,7 @@ CREATE TRIGGER w2p336_track_update
 AFTER UPDATE OF cover_url,duration_seconds,suno_url_primary,suno_url_secondary
 ON w2p336_tracks
 BEGIN
-  UPDATE explore_derived_w2p336_tracks
+  UPDATE w2p336_derived_tracks
   SET row_json=json_patch(
     row_json,
     json_object(
@@ -123,7 +125,7 @@ BEGIN
   WHERE id=NEW.id;
 END;
 
-CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_ai_051
+CREATE TRIGGER w2p336_shared_rev_ai
 AFTER INSERT ON w2p336_tracks
 BEGIN
   UPDATE w2p336_shared_revision
@@ -131,7 +133,7 @@ BEGIN
   WHERE scope='global';
 END;
 
-CREATE TRIGGER soridraw_shared_rev_w2p336_tracks_au_051
+CREATE TRIGGER w2p336_shared_rev_au
 AFTER UPDATE ON w2p336_tracks
 BEGIN
   UPDATE w2p336_shared_revision

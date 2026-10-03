@@ -1,3 +1,21 @@
+## CURRENT TASK — app340 동일 검색 2회차 Worker 0 실기기 검증 (2026-10-04 KST)
+
+현재:
+- PREVIEW app340 배포 완료.
+- Firebase Run `37161506204` SUCCESS / exact build PASS.
+- app339 Worker 유지: `aedd8111-b2f4-407f-9e3f-ba062a82ed16`.
+- TEST / PRODUCTION unchanged.
+- shared D1/user data 변경 없음.
+
+사용자 테스트:
+1. CACHE LIVE 초기화.
+2. `힙합` 검색 1회.
+3. 2분 안에 같은 `힙합`을 다시 검색.
+4. 기대:
+   - 첫 검색: Worker 1회 / 현재 서버 비용 발생 가능.
+   - 두 번째: Worker 증가 0 / D1 증가 0.
+5. 두 번째에서도 Worker 또는 D1이 증가하면 FAIL.
+
 ## CURRENT TASK — app339 한글 장르 검색 비용 재검증 (2026-10-04 KST)
 
 현재:

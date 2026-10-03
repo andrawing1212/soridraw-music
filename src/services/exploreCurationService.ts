@@ -6,6 +6,8 @@ import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/
 const SORIDRAW_CURATED_COLLECTION_307 = 'soridraw';
 const SORIDRAW_CURATED_CACHE_KEY_307 = 'soridraw_explore_curated_soridraw_v307';
 const SORIDRAW_CURATED_RECHECK_MS_307 = 60_000;
+const SORIDRAW_MANAGED_CURATED_CACHE_PREFIX_309 = 'soridraw_explore_managed_curated_soridraw_v309';
+const SORIDRAW_MANAGED_CURATED_RECHECK_MS_309 = 60_000;
 
 export type ExploreCurationAccess307 = {
   canCurate: boolean;
@@ -20,7 +22,15 @@ type CuratedCache307 = {
   items: Array<Record<string, unknown>>;
 };
 
+type ManagedCuratedCache309 = {
+  schemaVersion: 1;
+  revision: string;
+  checkedAt: number;
+  items: Array<Record<string, unknown>>;
+};
+
 let memoryCache307: CuratedCache307 | null = null;
+const managedMemoryCache309 = new Map<string, ManagedCuratedCache309>();
 
 const readJson = async (response: Response) => {
   try { return await response.json(); } catch { return null; }
@@ -98,6 +108,72 @@ export const invalidateSoridrawCuratedCache307 = () => {
   }
 };
 
+const managedCacheKey309 = (uid: string) =>
+  `${SORIDRAW_MANAGED_CURATED_CACHE_PREFIX_309}:${String(uid || '').trim()}`;
+
+const readManagedCuratedCache309 = (uid: string): ManagedCuratedCache309 | null => {
+  const key = managedCacheKey309(uid);
+  const memory = managedMemoryCache309.get(key);
+  if (memory) return memory;
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ManagedCuratedCache309>;
+    if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed?.items)) return null;
+    const next: ManagedCuratedCache309 = {
+      schemaVersion: 1,
+      revision: String(parsed.revision || ''),
+      checkedAt: Math.max(0, Number(parsed.checkedAt || 0)),
+      items: parsed.items as Array<Record<string, unknown>>,
+    };
+    managedMemoryCache309.set(key, next);
+    return next;
+  } catch {
+    return null;
+  }
+};
+
+const writeManagedCuratedCache309 = (
+  uid: string,
+  items: Array<Record<string, unknown>>,
+  revision: string,
+  checkedAt = Date.now(),
+) => {
+  const key = managedCacheKey309(uid);
+  const next: ManagedCuratedCache309 = {
+    schemaVersion: 1,
+    revision: String(revision || ''),
+    checkedAt,
+    items,
+  };
+  managedMemoryCache309.set(key, next);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+  }
+  return next;
+};
+
+const invalidateManagedCuratedCache309 = (uid: string) => {
+  const key = managedCacheKey309(uid);
+  managedMemoryCache309.delete(key);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(key); } catch {}
+  }
+};
+
+const fetchCuratedRevision309 = async () => {
+  const revisionPath = `/v1/curated-revision?collection=${SORIDRAW_CURATED_COLLECTION_307}`;
+  const response = await fetch(`${EXPLORE_API_BASE}${revisionPath}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+  recordCloudflareResponse(response, revisionPath);
+  const payload = await readJson(response);
+  if (!response.ok || payload?.ok !== true) return '';
+  return String(payload?.data?.revision || '').trim();
+};
+
 const fetchCuratedBody307 = async () => {
   const path = `/v1/curated?collection=${SORIDRAW_CURATED_COLLECTION_307}&limit=20`;
   const response = await fetch(`${EXPLORE_API_BASE}${path}`, {
@@ -163,18 +239,56 @@ export const setSoridrawCuratedTrack307 = async (user: User, trackId: string, pr
     promoted ? { method: 'PUT', body: JSON.stringify({ sortOrder: 0 }) } : { method: 'DELETE' },
   );
   invalidateSoridrawCuratedCache307();
+  invalidateManagedCuratedCache309(String(user?.uid || '').trim());
   return payload?.data || null;
 };
 
-export const getManagedSoridrawCuratedTracks307 = async (user: User): Promise<Array<Record<string, unknown>>> => {
+export const getManagedSoridrawCuratedTracks307 = async (
+  user: User,
+  force = false,
+): Promise<Array<Record<string, unknown>>> => {
+  const uid = String(user?.uid || '').trim();
+  const cached = uid ? readManagedCuratedCache309(uid) : null;
+  if (!force && cached && Date.now() - cached.checkedAt < SORIDRAW_MANAGED_CURATED_RECHECK_MS_309) {
+    recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-local-309');
+    return cached.items;
+  }
+
+  let currentRevision = '';
+  if (!force && cached?.revision) {
+    try {
+      currentRevision = await fetchCuratedRevision309();
+      if (currentRevision && currentRevision === cached.revision) {
+        writeManagedCuratedCache309(uid, cached.items, cached.revision, Date.now());
+        recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-revision-309');
+        return cached.items;
+      }
+    } catch (error) {
+      console.warn('[app309] managed curation revision unavailable; keeping local cache.', error);
+      return cached.items;
+    }
+  }
+
   const payload = await requestAuthed307(
     user,
     `/v1/manage/curated?collection=${SORIDRAW_CURATED_COLLECTION_307}&limit=50`,
   );
-  if (!Array.isArray(payload?.data?.items)) return [];
-  return payload.data.items
-    .map((item: any) => item?.track)
-    .filter((item: unknown): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+  const items = Array.isArray(payload?.data?.items)
+    ? payload.data.items
+      .map((item: any) => item?.track)
+      .filter((item: unknown): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    : [];
+
+  if (uid) {
+    if (!currentRevision) {
+      currentRevision = readCuratedCache307()?.revision || '';
+      if (!currentRevision) {
+        try { currentRevision = await fetchCuratedRevision309(); } catch {}
+      }
+    }
+    writeManagedCuratedCache309(uid, items, currentRevision, Date.now());
+  }
+  return items;
 };
 
 export const getExploreManagerPermissions307 = async (

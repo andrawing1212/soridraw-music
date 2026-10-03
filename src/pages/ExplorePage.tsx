@@ -10,6 +10,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVe
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
+import { GENRES } from '../constants';
 import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
@@ -423,6 +424,71 @@ const buildExploreR2SnapshotFeedUrl108 = (feedUrl: string, revision: string | nu
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();
   return normalized || fallback;
+};
+
+// SORIDRAW_EXPLORE_KOREAN_GENRE_SEARCH_337_20261004
+// The visible query stays exactly as the user typed it. Korean genre labels are
+// translated only into extra R2 genre lookup hints, so one search request can
+// match the same English genre labels stored on public tracks without creating
+// extra D1 requests.
+const normalizeExploreSearchLabel337 = (value: unknown) => String(value ?? '')
+  .normalize('NFKC')
+  .toLowerCase()
+  .replace(/[\s_-]+/g, ' ')
+  .trim();
+
+const getExploreGenreAliases337 = (query: string) => {
+  const normalized = normalizeExploreSearchLabel337(query);
+  if (!normalized) return [] as string[];
+
+  const aliases: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: unknown) => {
+    const text = safeText(value);
+    const key = normalizeExploreSearchLabel337(text);
+    if (!text || !key || seen.has(key)) return;
+    seen.add(key);
+    aliases.push(text);
+  };
+
+  const broadAliases: Array<[RegExp, string[]]> = [
+    [/발라드/, ['Ballad']],
+    [/(?:시티\s*팝|시티팝)/, ['City Pop']],
+    [/힙합/, ['Hip-hop']],
+    [/(?:알앤비|r&b|rnb)/i, ['R&B']],
+    [/재즈/, ['Jazz']],
+    [/트로트/, ['Trot']],
+    [/(?:록|락)/, ['Rock']],
+    [/메탈/, ['Metal']],
+    [/하우스/, ['House']],
+    [/테크노/, ['Techno']],
+    [/트랜스/, ['Trance']],
+    [/(?:앰비언트|엠비언트)/, ['Ambient']],
+    [/로파이/, ['Lo-fi']],
+    [/포크/, ['Folk']],
+    [/컨트리/, ['Country']],
+    [/소울/, ['Soul']],
+    [/펑크/, ['Funk', 'Punk']],
+    [/클래식/, ['Classical']],
+  ];
+  broadAliases.forEach(([pattern, values]) => {
+    if (pattern.test(normalized)) values.forEach(push);
+  });
+
+  GENRES.forEach((genre) => {
+    const ko = normalizeExploreSearchLabel337(genre.labelKo);
+    const en = normalizeExploreSearchLabel337(genre.label);
+    if (!ko && !en) return;
+    if (
+      ko === normalized
+      || en === normalized
+      || (normalized.length >= 2 && ko.includes(normalized))
+      || (ko.length >= 2 && normalized.includes(ko))
+    ) {
+      push(genre.label);
+    }
+  });
+  return aliases.slice(0, 8);
 };
 
 const safeExternalSocialHref244 = (value: unknown) => {
@@ -1941,6 +2007,7 @@ export default function ExplorePage() {
     const cleanQuery = submittedQuery.trim();
     if (cleanQuery) {
       const params = new URLSearchParams({ q: cleanQuery });
+      getExploreGenreAliases337(cleanQuery).forEach((genre) => params.append('genre', genre));
       return `${EXPLORE_API_BASE}/v1/search?${params.toString()}`;
     }
     const apiSort = sort === 'popular' ? 'popular' : 'latest';

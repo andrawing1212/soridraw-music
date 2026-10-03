@@ -1,0 +1,101 @@
+name: TEMP 336 Publication W2 Local Probe
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-336-publication-w2-local-probe.yml'
+      - 'cloudflare/explore-worker/diagnostics/20261004_music_note_w2_cutover_local_baseline.sql'
+      - 'cloudflare/explore-worker/diagnostics/20261004_music_note_w2_cutover_local_candidate.sql'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Run baseline and candidate only in local D1
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          BASE="$PWD/diagnostics/20261004_music_note_w2_cutover_local_baseline.sql"
+          CANDIDATE="$PWD/diagnostics/20261004_music_note_w2_cutover_local_candidate.sql"
+          BASE_STATE="$RUNNER_TEMP/d1-w2-baseline"
+          CAND_STATE="$RUNNER_TEMP/d1-w2-candidate"
+          mkdir -p "$BASE_STATE" "$CAND_STATE"
+
+          run_json() {
+            local state="$1"
+            local sql="$2"
+            local out="$3"
+            node "$WRANGLER" d1 execute DB --local --persist-to "$state" --config "$CFG" --command "$sql" --json > "$out"
+          }
+
+          meta_write() {
+            node - "$1" <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const rows=Array.isArray(raw)?raw:(raw?.result||[]);
+          const meta=rows.find(x=>x?.meta)?.meta||{};
+          process.stdout.write(String(Number(meta.rows_written||0)));
+          NODE
+          }
+
+          node "$WRANGLER" d1 execute DB --local --persist-to "$BASE_STATE" --config "$CFG" --file "$BASE" >/dev/null
+          node "$WRANGLER" d1 execute DB --local --persist-to "$CAND_STATE" --config "$CFG" --file "$BASE" >/dev/null
+          node "$WRANGLER" d1 execute DB --local --persist-to "$CAND_STATE" --config "$CFG" --file "$CANDIDATE" >/dev/null
+
+          INSERT_SQL="INSERT INTO tracks(id,owner_uid,source_type,source_id,source_subtrack_key,title,cover_url,suno_url_primary,is_public,status,published_at,created_at,updated_at,primary_genre) VALUES('music_note_probe-user_note-new','probe-user','music_note','note-new','','Probe Song','https://example.test/a.webp','https://example.test/a.mp3',1,'published',3000,3000,3000,'Indie Pop')"
+          run_json "$BASE_STATE" "$INSERT_SQL" "$RUNNER_TEMP/base-insert.json"
+          run_json "$CAND_STATE" "$INSERT_SQL" "$RUNNER_TEMP/cand-insert.json"
+
+          BASE_INSERT="$(meta_write "$RUNNER_TEMP/base-insert.json")"
+          CAND_INSERT="$(meta_write "$RUNNER_TEMP/cand-insert.json")"
+
+          BASE_SWAP_SQL="UPDATE tracks SET cover_url='https://example.test/b.webp',suno_url_primary='https://example.test/b.mp3',updated_at=3100 WHERE id='music_note_probe-user_note-new'"
+          run_json "$BASE_STATE" "$BASE_SWAP_SQL" "$RUNNER_TEMP/base-swap.json"
+          run_json "$CAND_STATE" "$BASE_SWAP_SQL" "$RUNNER_TEMP/cand-swap.json"
+          BASE_SWAP="$(meta_write "$RUNNER_TEMP/base-swap.json")"
+          CAND_SWAP="$(meta_write "$RUNNER_TEMP/cand-swap.json")"
+
+          BASE_VIS_SQL="UPDATE tracks SET is_public=0,updated_at=3200 WHERE id='music_note_probe-user_note-new'"
+          run_json "$BASE_STATE" "$BASE_VIS_SQL" "$RUNNER_TEMP/base-vis.json"
+          run_json "$CAND_STATE" "$BASE_VIS_SQL" "$RUNNER_TEMP/cand-vis.json"
+          BASE_VIS="$(meta_write "$RUNNER_TEMP/base-vis.json")"
+          CAND_VIS="$(meta_write "$RUNNER_TEMP/cand-vis.json")"
+
+          echo "BASELINE_FIRST_PUBLICATION_W=$BASE_INSERT"
+          echo "CANDIDATE_FIRST_PUBLICATION_W=$CAND_INSERT"
+          echo "BASELINE_SOURCE_SWAP_W=$BASE_SWAP"
+          echo "CANDIDATE_SOURCE_SWAP_W=$CAND_SWAP"
+          echo "BASELINE_VISIBILITY_W=$BASE_VIS"
+          echo "CANDIDATE_VISIBILITY_W=$CAND_VIS"
+
+          test "$BASE_INSERT" -ge 10
+          test "$CAND_INSERT" -le 2
+          test "$BASE_SWAP" -ge 3
+          test "$CAND_SWAP" -le 2
+          test "$BASE_VIS" -ge 2
+          test "$CAND_VIS" -le 2
+
+          echo 'LOCAL_D1_W2_CUTOVER_MODEL=PASS'
+          echo 'REMOTE_D1_WRITES=0'
+          echo 'USER_DATA_MIGRATION=0'

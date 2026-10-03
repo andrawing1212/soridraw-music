@@ -1,4 +1,4 @@
-app315-profile-editor-final
-source=f93a372e8f13c6f8af2f81ed25f126e584bbf177
-product_commit=39e4694fba0cb5884b32d47f7fbf0c9c2bd8d555
-requested=2026-10-03T12:41:00+09:00
+app316-avatar-crop-less-zoomed-midpoint
+source=4bd7393a63c031a16160b0667324eef3b2e21210
+product_commit=36fb6bb39b1aba3fe40275782e007b5062aa038b
+requested=2026-10-03T12:54:00+09:00

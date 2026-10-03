@@ -1,3 +1,23 @@
+## CURRENT TASK — app339 한글 장르 검색 비용 재검증 (2026-10-04 KST)
+
+현재:
+- app UI/Hosting: app337 유지.
+- PREVIEW Worker app339 배포 완료.
+- product source `9ede46e248847d9fc8b11508dcda432c8f763c41`.
+- Worker Release `37160937090` SUCCESS.
+- active Worker `aedd8111-b2f4-407f-9e3f-ba062a82ed16`.
+- TEST / PRODUCTION unchanged.
+- shared D1 schema/index 변경 없음.
+- 사용자 데이터 변경 없음.
+
+사용자 테스트:
+1. `힙합` 검색 1회.
+2. 바로 같은 `힙합` 검색 1회 더.
+3. CACHE LIVE 비교.
+   - 첫 검색: R16/R250보다 크게 감소해야 함.
+   - 두 번째: D1 R0/W0 목표.
+4. 실패 시 다음 단계 중단.
+
 ## CURRENT TASK — app338 한글 장르 검색 실기기 재검증 (2026-10-04 KST)
 
 현재:

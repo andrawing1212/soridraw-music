@@ -1,3 +1,39 @@
+## CURRENT TASK — app310 승격관리 최초 진입 D1 R0 실기기 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app310.
+- Release System Audit `37087850076` SUCCESS.
+- PREVIEW Worker Release `37087979937` SUCCESS.
+- PREVIEW Worker version `191554c0-f3d2-4731-999f-f57a57a07994`.
+- Firebase PREVIEW Release `37088038676` SUCCESS.
+- locked source `d8890e22060ee884c7e070463608f1f7576a0f67`.
+- `preview.soridraw.com` app310 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 / D1 schema / Rules 변경 없음.
+
+CACHE LIVE 최소 확인:
+1. app310 업데이트 후 CACHE LIVE 초기화.
+2. 승격 곡 관리 첫 진입:
+   - 현재 9곡 표시 정상.
+   - `/v1/manage/curated` D1 R0 / W0 목표.
+   - 과거처럼 rows read 약 43 증가하면 FAIL.
+3. Explore로 나갔다 재진입:
+   - D1 R0 / W0 목표.
+4. 60초 뒤 변경 없이 재진입:
+   - D1 R0 / W0 목표.
+5. 승격/해제는 이번 범위 아님:
+   - 승격 기존 R1/W1 유지.
+   - 해제 추가 R0/W1 유지.
+
+보호:
+- 일반 Explore 추천 / 최신 / 인기 / 크리에이터 / 장르 UI 변경 금지.
+- app302/app302b Studio 저장 하트 변경 금지.
+- app301 Music Note / Library 폴더 변경 금지.
+- app303 Split browser-history / Pure Pane 변경 금지.
+- 기존 좋아요/공개·비공개 경로 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app309 승격관리 warm 재진입 비용 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

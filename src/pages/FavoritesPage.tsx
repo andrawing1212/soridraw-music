@@ -82,6 +82,7 @@ import {
   getExploreMusicNotePublicationStates,
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
+  refreshExploreMusicNotePublicationSource,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExploreMusicNotePublicationState,
@@ -1635,6 +1636,7 @@ export default function FavoritesPage({
     sourceId: string;
     state: ExploreMusicNotePublicationState;
     options: ExplorePublicationOptions;
+    selectedSunoIndex: 0 | 1;
   } | null>(null);
   const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
   // SORIDRAW_EXPLORE_PUBLICATION_STATE_HYDRATION_965
@@ -3016,6 +3018,30 @@ updates: draft.updates,
     const mainUrl = String(getFavoriteMainSunoLink(song)?.url || '').trim();
     if (mainUrl) return mainUrl;
     return song?.isSharedMusicNote ? String(song?.audioUrl || '').trim() : '';
+  };
+
+  const buildFavoriteSunoMainSelectionUpdates = (song: any, requestedIndex: 0 | 1) => {
+    const links = getFavoriteSunoLinks(song);
+    const mainIndex = (requestedIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
+    const selected = links[mainIndex] || links[0] || null;
+    const now = Date.now();
+    const rankedLinks = links.map((link, index) => ({
+      ...link,
+      rank: index === mainIndex ? 1 as const : 2 as const,
+    }));
+
+    return {
+      sunoLinks: rankedLinks,
+      mainSunoIndex: mainIndex,
+      sunoLinkCount: rankedLinks.length,
+      sunoShareUrl: selected?.url || null,
+      sunoShareUrlUpdatedAt: now,
+      sunoCoverUrl: selected?.coverUrl || null,
+      sunoTitle: selected?.title || null,
+      sunoDurationSeconds: selected?.durationSeconds ?? null,
+      sunoDurationText: selected?.durationText || null,
+      sunoCoverFetchedAt: selected?.fetchedAt || now,
+    };
   };
 
   const normalizeFavoriteSunoShareUrl = (value: string): string => {
@@ -5707,25 +5733,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const hasConnectedFavoriteSunoUrl = (song: any) => {
-    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
-    if (!mainUrl) return false;
-
-    const links = getFavoriteSunoLinks(song);
-    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
-      || links.find((link: any) => String(link?.url || '').trim());
-    if (!connectedLink) return false;
-
+  const isConnectedFavoriteSunoLink = (link: any) => {
+    if (!String(link?.url || '').trim()) return false;
     // URL text alone is not enough. A successful Suno metadata connection leaves
     // fetchedAt or usable metadata on the normalized link. The metadata fallback
     // keeps older successfully-linked Music Note records compatible.
     return Boolean(
-      connectedLink?.fetchedAt
-      || String(connectedLink?.title || '').trim()
-      || String(connectedLink?.coverUrl || '').trim()
-      || Number(connectedLink?.durationSeconds || 0) > 0
-      || String(connectedLink?.durationText || '').trim()
+      link?.fetchedAt
+      || String(link?.title || '').trim()
+      || String(link?.coverUrl || '').trim()
+      || Number(link?.durationSeconds || 0) > 0
+      || String(link?.durationText || '').trim()
     );
+  };
+
+  const hasConnectedFavoriteSunoUrl = (song: any) => {
+    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
+    if (!mainUrl) return false;
+    const links = getFavoriteSunoLinks(song);
+    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
+      || links.find((link: any) => String(link?.url || '').trim());
+    return isConnectedFavoriteSunoLink(connectedLink);
   };
 
   const canToggleFavoriteExplorePublication = (song: any) => {
@@ -5822,6 +5850,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(state.allowFollowerSave),
           profilePinned: Boolean(state.profilePinned),
         },
+        selectedSunoIndex: getFavoriteSunoMainIndex(song),
       });
     } catch (error) {
       console.error('explore publication dialog load failed:', error);
@@ -5839,33 +5868,54 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const submitFavoriteExplorePublicationDialog = async () => {
     if (!user?.uid || !explorePublicationDialog) return;
-    const { song, sourceId, state, options } = explorePublicationDialog;
+    const { song, sourceId, state, options, selectedSunoIndex } = explorePublicationDialog;
     if (explorePublicationBusyId === sourceId) return;
 
-    if (state.status !== 'public' && !hasConnectedFavoriteSunoUrl(song)) {
-      showFavoriteToast('수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.');
+    const links = getFavoriteSunoLinks(song);
+    const requestedIndex = (selectedSunoIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
+    const selectedLink = links[requestedIndex] || links[0] || null;
+    const selectionChanged = links.length > 1 && requestedIndex !== getFavoriteSunoMainIndex(song);
+    if ((state.status !== 'public' || selectionChanged) && !isConnectedFavoriteSunoLink(selectedLink)) {
+      showFavoriteToast('공개할 수노 곡을 먼저 선택하고 정상 연결 상태를 확인해주세요.');
       return;
     }
 
     setExplorePublicationBusyId(sourceId);
     try {
+      if (selectionChanged) {
+        const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(song, requestedIndex);
+        await Promise.resolve(updateFavorite(sourceId, primaryUpdates));
+        syncFavoriteSunoCardMedia(sourceId, primaryUpdates);
+        setSelectedSong((current: any) => (
+          current && getFavoriteDocumentId(current) === sourceId
+            ? { ...current, ...primaryUpdates }
+            : current
+        ));
+        setExplorePublicationDialog((current) => (
+          current && current.sourceId === sourceId
+            ? { ...current, song: { ...current.song, ...primaryUpdates }, selectedSunoIndex: requestedIndex }
+            : current
+        ));
+      }
+
       let nextState: ExploreMusicNotePublicationState;
-      if (state.status === 'public') {
+      if (selectionChanged) {
+        nextState = await refreshExploreMusicNotePublicationSource(user, sourceId, options);
+        showFavoriteToast(state.status === 'public'
+          ? '선택한 곡으로 공개 설정을 저장했습니다.'
+          : state.registered
+            ? '선택한 곡으로 Explore에 다시 공개했습니다.'
+            : '선택한 곡을 Explore에 공개했습니다.');
+      } else if (state.status === 'public') {
         const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
         nextState = { ...state, ...savedOptions, status: 'public' };
         showFavoriteToast('공개 설정을 저장했습니다.');
       } else if (state.registered) {
-
         nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
-
         showFavoriteToast('Explore에 다시 공개했습니다.');
-
       } else {
-
         nextState = await publishMusicNoteToExplore(user, sourceId, options);
-
         showFavoriteToast('Explore에 공개했습니다.');
-
       }
 
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
@@ -7996,6 +8046,65 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   </button>
                 </div>
 
+                {getFavoriteSunoLinks(explorePublicationDialog.song).length > 1 && (
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between gap-3 px-0.5">
+                      <span className="text-[11px] font-black text-white/72">공개할 곡 선택</span>
+                      <span className="text-[10px] font-semibold text-white/30">2곡 중 1곡</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2.5">
+                      {getFavoriteSunoLinks(explorePublicationDialog.song).slice(0, 2).map((link, index) => {
+                        const safeIndex = (index === 1 ? 1 : 0) as 0 | 1;
+                        const selected = explorePublicationDialog.selectedSunoIndex === safeIndex;
+                        const connected = isConnectedFavoriteSunoLink(link);
+                        const label = String(link?.title || `수노 곡 ${index + 1}`).trim();
+                        return (
+                          <button
+                            key={String(link?.url || index)}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={explorePublicationBusyId === explorePublicationDialog.sourceId || !connected}
+                            onClick={() => {
+                              setExplorePublicationPrivateConfirm(false);
+                              setExplorePublicationDialog((current) => current
+                                ? { ...current, selectedSunoIndex: safeIndex }
+                                : current);
+                            }}
+                            className={cn(
+                              "overflow-hidden rounded-2xl border text-left transition-all disabled:cursor-not-allowed disabled:opacity-40",
+                              selected
+                                ? "border-[#FF7A72]/70 bg-[#FF7A72]/10 shadow-[0_8px_24px_rgba(255,122,114,0.12)]"
+                                : "border-white/[0.08] bg-white/[0.035] hover:border-white/[0.16] hover:bg-white/[0.055]"
+                            )}
+                          >
+                            <div className="relative aspect-[16/9] overflow-hidden bg-black/24">
+                              {String(link?.coverUrl || '').trim() ? (
+                                <img src={String(link.coverUrl)} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-white/28">
+                                  <Music className="h-6 w-6" />
+                                </div>
+                              )}
+                              <span className={cn(
+                                "absolute left-2 top-2 rounded-full px-2 py-1 text-[9px] font-black",
+                                selected ? "bg-[#FF7A72] text-white" : "bg-black/65 text-white/65"
+                              )}>
+                                {selected ? '선택' : `${index + 1}번`}
+                              </span>
+                            </div>
+                            <div className="px-3 py-2.5">
+                              <div className="truncate text-[11px] font-black text-white/82">{label}</div>
+                              <div className={cn("mt-1 text-[9px] font-bold", connected ? "text-white/30" : "text-red-300/65")}>
+                                {connected ? '공개 가능' : '연결 확인 필요'}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 space-y-2.5">
                   {([
                     { key: 'allowNextSongApply', label: '다음곡에 적용 허용', description: '다른 사용자가 이 곡의 공개 설정을 다음곡에 활용할 수 있습니다.' },
@@ -8645,9 +8754,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       >
                         {explorePublicationBusyId === getFavoriteDocumentId(selectedSong)
                           ? <Loader2 className="h-5 w-5 animate-spin" />
-                          : explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public'
-                            ? <Lock className="h-5 w-5" />
-                            : <Unlock className="h-5 w-5" />}
+                          : <Globe2 className="h-5 w-5" />}
                       </button>
                     )}
 

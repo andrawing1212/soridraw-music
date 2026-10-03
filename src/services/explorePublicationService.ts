@@ -522,6 +522,44 @@ export const getExploreMusicNotePublicationState = async (
   };
 };
 
+export const refreshExploreMusicNotePublicationSource = async (
+  user: User,
+  sourceId: string,
+  options?: Partial<ExplorePublicationOptions>,
+): Promise<ExploreMusicNotePublicationState> => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) {
+    throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
+  }
+  const expectedTrackId = getMusicNoteTrackId(user.uid, normalizedSourceId);
+  const normalizedOptions = normalizePublicationOptions(options);
+  const payload = await requestExplore(user, '/v1/publications', {
+    method: 'POST',
+    body: JSON.stringify({
+      sourceType: 'music_note',
+      sourceId: normalizedSourceId,
+      ...normalizedOptions,
+    }),
+  });
+  const data = payload?.data || {};
+  const nextState: ExploreMusicNotePublicationState = {
+    status: 'public',
+    trackId: String(data?.trackId || expectedTrackId),
+    registered: true,
+    allowNextSongApply: Boolean(data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
+    allowFollowerSave: Boolean(data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
+    profilePinned: Boolean(data?.profilePinned ?? normalizedOptions.profilePinned),
+  };
+
+  const outbox = readPublicationOutbox(user.uid);
+  if (outbox[normalizedSourceId]) {
+    delete outbox[normalizedSourceId];
+    persistPublicationOutbox(user.uid, outbox);
+  }
+  patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
+  return { ...nextState };
+};
+
 export const publishMusicNoteToExplore = async (
   user: User,
   sourceId: string,

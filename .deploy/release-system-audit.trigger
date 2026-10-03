@@ -1,5 +1,5 @@
-app332-publication-media-identity-guard
-source=083d4310059ee27cb225ddf1578340ec3219278a
-scope=music-note-publication-fresh-media-identity,unchanged-visibility-only,no-firestore-write
-protect=likes,folders,split,profile,publication-backend,test-production
-requested=2026-10-04T01:49:00+09:00
+app333-publication-cost-compaction
+source=be803b450e14c3d356aab905620c2712461566b5
+scope=publication-source-single-worker,first-publication-selected-media,options-cost-guard
+protect=likes,save-heart,folders,split,profile,music-note-batching,test-production
+requested=2026-10-04T02:13:00+09:00

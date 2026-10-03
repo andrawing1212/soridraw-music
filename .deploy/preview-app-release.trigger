@@ -1,7 +1,7 @@
-app324-profile-parity-left-bio
-target_source=a3755b924f024ce369be94547f4f6bfaf1f17bf5
-app_version=324
+app327-profile-toolbar-social-bio-polish
+target_source=c6742c16c89b271e116c2c244206067f72dbff13
+app_version=327
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-parity-left-bio
+release_request=profile-toolbar-social-bio-polish

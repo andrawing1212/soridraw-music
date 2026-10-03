@@ -1,3 +1,54 @@
+## 0OM. PREVIEW app337 배포 완료 — 검색 D1 폭증 완화 + 한글 장르 검색 (2026-10-04 KST)
+
+**사용자 app336 실기기 결과**
+- 공개/비공개, Explore, 공개 프로필 등은 정상.
+- 검색 1회에서 legacy D1 search가 먼저 실행되며 rows_read가 크게 증가하는 문제 확인.
+- 한글 장르명(예: 발라드/힙합/재즈/트로트 등)을 그대로 검색하면 저장된 영문 장르와 연결되지 않는 사용성 문제 확인.
+
+**app337 변경**
+- 검색 first page를 **R2 catalog 우선**으로 변경.
+  - R2에서 곡/아티스트 결과가 있으면 legacy D1 search를 호출하지 않음.
+  - legacy D1 broad search는 R2에 결과가 전혀 없는 기존 legacy-only 검색어의 최종 호환 fallback으로만 유지.
+- 한글 장르 검색:
+  - 앱의 기존 `GENRES.labelKo → label` 데이터를 사용해 한글 입력을 같은 1회 검색 요청의 genre alias로 전달.
+  - 발라드/시티팝/힙합/R&B/재즈/트로트/록/메탈/하우스/테크노/트랜스/앰비언트/로파이/포크/컨트리/소울/펑크/클래식 등의 broad alias 보강.
+  - R2 marker가 없는 legacy 곡은 broad search가 아니라 기존 indexed genre route로 bounded fallback.
+- 검색 UI/레이아웃/기존 공개/좋아요/저장/폴더/Split/Music Note 저장 구조 변경 없음.
+- shared D1 schema/index/trigger 변경 0.
+- 사용자 데이터 migration/backfill/delete/rewrite 0.
+
+**검증/배포**
+- app337 apply/verify Workflow Run `37154967808`: **SUCCESS** (attempt 3).
+  - app337 R2-first verifier PASS.
+  - Korean genre alias verifier PASS.
+  - app336 hybrid regression PASS.
+  - like/publication/Music Note focused regression PASS.
+  - TypeScript PASS / Build PASS.
+- Final Release System Audit Run `37155219113`: **SUCCESS**.
+- PREVIEW Worker Release Run `37155369295`: **SUCCESS**.
+  - active Worker version: `4b3e02c8-f906-4c22-bbc1-36cd963babee`.
+  - FEED smoke PASS / PROFILE smoke PASS.
+  - public-like-card D1 R0/W0 PASS.
+  - TEST / PRODUCTION Worker unchanged PASS.
+- Firebase PREVIEW App Release Run `37155428848`: **SUCCESS**.
+  - `preview.soridraw.com` app **337** exact build PASS.
+  - TEST / PRODUCTION Hosting unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- approved product source commit: `7465cce1f14d418059946651d9b05d19229ccea2`.
+
+**남은 제한**
+- catalog에 아직 marker가 전혀 없는 오래된 legacy-only 제목/아티스트 검색은 최종 호환 fallback으로 D1 search를 1회 사용할 수 있음.
+- 이를 완전히 0으로 만들려면 기존 공개곡의 R2 catalog를 한 번 채우는 derived-cache backfill 또는 3환경 cutover가 필요하며, 현재는 실행하지 않음.
+
+**다음 실기기 확인 — 이것만**
+1. 이전 영상에서 rows_read가 크게 오른 동일 검색어를 다시 1회 검색.
+   - R2 catalog에 존재하는 검색어라면 D1 **R0/W0 목표**.
+2. 한글 장르 검색 3개 정도:
+   - 예: `발라드`, `힙합`, `재즈` 또는 실제 공개곡 장르의 한글명.
+   - 결과가 정상 표시되어야 함.
+3. 위 2개가 PASS하면 app337 검색 수정 종료.
+4. legacy-only 검색어에서 여전히 D1 fallback이 확인되면 별도 derived R2 catalog backfill 승인 여부를 판단.
+
 ## 0OL. PREVIEW app336 배포 완료 — R2 + legacy hybrid read 호환층 활성 (2026-10-04 KST)
 
 **실제 배포 상태**

@@ -1,7 +1,7 @@
-app320-permissive-handle-typing
-target_source=c9f0de49a4aca1c67aa7356dc05dc8fee42f9fe9
-app_version=320
+app321-profile-layout-bio-handle
+target_source=57f6f839810f5037f32c988e8043e1864ba5cc46
+app_version=321
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=permissive-handle-typing-save-validation
+release_request=profile-layout-bio-handle-refinement

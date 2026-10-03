@@ -64,14 +64,14 @@ jobs:
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN ('idx_tracks_owner_suno_url','idx_tracks_source_type_latest','idx_tracks_owner_profile_order','idx_tracks_owner_latest') ORDER BY name;
+            SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN ('idx_tracks_latest_order','idx_tracks_legacy_global_nonempty','idx_tracks_owner_latest','idx_tracks_owner_source','idx_tracks_primary_genre_latest') ORDER BY name;
             EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE owner_uid='__audit__' AND is_public=1 AND status='published' ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
             EXPLAIN QUERY PLAN SELECT id FROM tracks INDEXED BY idx_tracks_owner_latest WHERE owner_uid='__audit__' AND is_public=1 AND status='published' ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
             EXPLAIN QUERY PLAN SELECT id,source_id FROM tracks WHERE owner_uid='__audit__' AND source_type='music_note' AND source_id IS NOT NULL AND source_id<>'' LIMIT 200;
             SELECT COALESCE(MAX(n),0) AS max_tracks_per_owner, COALESCE(AVG(n),0) AS avg_tracks_per_owner FROM (SELECT owner_uid,COUNT(*) AS n FROM tracks GROUP BY owner_uid);
             SELECT COUNT(*) AS music_note_rows,
                    SUM(CASE WHEN legacy_global_id IS NOT NULL AND TRIM(legacy_global_id)<>'' THEN 1 ELSE 0 END) AS music_note_legacy_nonempty
-            FROM tracks INDEXED BY idx_tracks_source_type_latest
+            FROM tracks INDEXED BY idx_tracks_owner_source
             WHERE source_type='music_note';
             EXPLAIN QUERY PLAN
               SELECT id FROM tracks
@@ -89,7 +89,7 @@ jobs:
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/index-preflight.json','utf8'));
           const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
           sets.forEach((rows,i)=>console.log('INDEX_PREFLIGHT_SET_'+i+'='+JSON.stringify(rows)));
-          console.log('PUBLICATION_INDEX_MIGRATION_PREFLIGHT_READONLY=PASS');
+          console.log('PUBLICATION_POST_MIGRATION_FANOUT_READONLY=PASS');
           console.log('REMOTE_D1_WRITES=0');
           NODE
 

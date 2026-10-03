@@ -1,3 +1,31 @@
+## CURRENT TASK — app328 공개곡 선택 / 지구본 아이콘 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app328.
+- Final Release System Audit `37106027818` SUCCESS.
+- Firebase PREVIEW Release `37106162581` SUCCESS.
+- locked source `239d12318d8c980c15b5aa9c80bf3a0b5b4464d9`.
+- `preview.soridraw.com` app328 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / Rules / migration 변경 없음.
+
+확인:
+1. 수노 URL 2곡이 연결된 Music Note → 공개 설정 상단에 좌/우 2곡 카드 표시.
+2. 공개할 곡을 1번/2번 중 선택 가능.
+3. 선택한 곡으로 실제 Explore 공개 결과가 맞는지.
+4. 이미 공개된 곡에서 선택곡을 바꾸고 저장해도 동일 공개 track이 새 선택곡으로 갱신되는지.
+5. Music Note Detail 삭제 버튼 오른쪽 공개 버튼이 지구본 아이콘인지.
+6. PC/모바일 팝업 잘림/겹침 없음.
+7. 선택 변경 실제 공개 시 D1 rows_written W1~W2.
+
+보호:
+- app327 프로필 UI 유지.
+- app302 저장 하트, app301 폴더, app303 Split 동작 변경 금지.
+- Explore 좋아요 app164/160 동결 기준 변경 금지.
+- 기존 공개 옵션/비공개 기능 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 승인 전 변경 금지.
+
 ## CURRENT TASK — app327 프로필 미세 UI 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

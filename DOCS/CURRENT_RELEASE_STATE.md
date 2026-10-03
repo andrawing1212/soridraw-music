@@ -1,3 +1,47 @@
+## 0NV. PREVIEW app328 배포 완료 — 공개할 수노 곡 선택 + 디테일 지구본 아이콘 (2026-10-03 KST)
+
+**사용자 요청 반영**
+- Music Note에 수노 URL 2곡이 연결된 경우, Explore `공개 설정` 팝업 상단에 두 곡을 **좌/우 카드로 표시**.
+- 두 카드 중 실제 공개할 곡을 먼저 선택한 뒤 공개/설정 저장 가능.
+- 선택만 바꿀 때는 로컬 UI만 변경하며 서버 요청 없음.
+- 공개 실행 시 선택한 곡이 기존 Music Note의 메인/1순위 Suno 기준과 일치하도록 `mainSunoIndex` 및 메인 URL/커버/제목/길이 필드를 함께 정합화한 뒤 기존 단일 공개곡 경로로 반영.
+- 이미 공개된 곡도 다른 수노 곡을 선택해 저장하면 기존 동일 공개 track을 source-refresh하여 새 선택곡으로 갱신. 별도 공개곡 복제/새 track 생성 없음.
+- Music Note Detail에서 삭제 버튼 오른쪽 Explore 공개 버튼의 잠금/해제 아이콘을 **지구본(`Globe2`) 아이콘**으로 교체.
+- 기존 공개 옵션 3개, 비공개 전환, 좋아요, 폴더, Split, 프로필 UI는 비변경.
+
+**변경 / 검증 / 배포**
+- 제품 구현 commit: `384938dfd40794d4bde1dc94619aa467339eef62`.
+- Release System Audit trigger/source: `f7d1de9927be691d844df5949aba4044ad88de80`.
+- Final Release System Audit `37106027818`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 기존 Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37106162581`: **SUCCESS**.
+  - locked source / release commit: `239d12318d8c980c15b5aa9c80bf3a0b5b4464d9`.
+  - `preview.soridraw.com` app **328**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+
+**비용**
+- 공개 팝업의 2곡 표시/선택은 기존 Music Note 로컬 `sunoLinks`만 사용하므로 선택 UI 자체 추가 DB read/write 없음.
+- 선택곡이 기존 1순위와 같으면 기존 공개 비용 경로 그대로.
+- 선택곡이 달라 실제 공개하면 Music Note 메인 선택 canonical 변경 W1 + 기존 Explore 단일 publication upsert 경로를 사용.
+- D1은 기존 단일 track O(1) 경로를 재사용하며 전체 Feed/프로필 scan/rebuild 추가 없음.
+- 실제 선택 변경 후 live D1 `rows_written`은 사용자 실사용 전이라 **미검증**. W1~W2 hard gate는 그대로 유지.
+
+**실사용 확인**
+1. 수노 URL 2곡 연결 Music Note에서 공개 설정 → 상단에 두 커버가 좌/우로 보이는지.
+2. 1번/2번 곡 선택 표시가 정확히 바뀌는지.
+3. 2번 곡 선택 후 공개 → Explore에서 실제 2번 곡이 공개되는지.
+4. 이미 공개된 곡에서 다른 곡 선택 후 저장 → 같은 공개곡이 새 선택곡으로 갱신되는지.
+5. Detail의 삭제 버튼 오른쪽 아이콘이 지구본인지.
+6. PC/모바일 팝업 레이아웃 및 기존 공개 옵션 회귀 없음.
+7. live mutation D1 rows_written W1~W2인지.
+
 ## 0NU. PREVIEW app327 배포 완료 — 뒤로가기 단독 / 소셜 2배 / 소개 반응형 글자 크기 (2026-10-03 KST)
 
 **적용**

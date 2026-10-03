@@ -1,4 +1,4 @@
-name: TEMP 336 Publication W2 Local Probe
+name: TEMP 336 Publication W2 Diagnostic Probe
 
 on:
   push:
@@ -15,6 +15,9 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +32,7 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Run baseline and candidate only in local D1
+      - name: Guard diagnostic DB and measure baseline vs W2 candidate
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -38,15 +41,40 @@ jobs:
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           BASE="$PWD/diagnostics/20261004_music_note_w2_cutover_local_baseline.sql"
           CANDIDATE="$PWD/diagnostics/20261004_music_note_w2_cutover_local_candidate.sql"
-          BASE_STATE="$RUNNER_TEMP/d1-w2-baseline"
-          CAND_STATE="$RUNNER_TEMP/d1-w2-candidate"
-          mkdir -p "$BASE_STATE" "$CAND_STATE"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('canonical/wrangler.preview.jsonc','utf8'));
+          const db=(cfg.d1_databases||[]).find(x=>x.binding==='DB');
+          const rate=(cfg.d1_databases||[]).find(x=>x.binding==='RATE_DB');
+          if(!db||!rate) throw new Error('DB/RATE_DB binding missing');
+          if(rate.database_id===db.database_id) throw new Error('RATE_DB unexpectedly equals shared canonical DB');
+          if(rate.database_name!=='soridraw-explore-preview-db') throw new Error('unexpected RATE_DB '+rate.database_name);
+          console.log('DIAGNOSTIC_DB_GUARD=PASS '+rate.database_name);
+          console.log('SHARED_CANONICAL_DB_UNTOUCHED='+db.database_name);
+          NODE
+
+          cleanup() {
+            set +e
+            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "
+              DROP TRIGGER IF EXISTS w2p336_track_insert;
+              DROP TRIGGER IF EXISTS w2p336_track_update;
+              DROP TRIGGER IF EXISTS w2p336_shared_rev_ai;
+              DROP TRIGGER IF EXISTS w2p336_shared_rev_au;
+              DROP TABLE IF EXISTS w2p336_derived_tracks;
+              DROP TABLE IF EXISTS w2p336_derived_profiles;
+              DROP TABLE IF EXISTS w2p336_track_stats;
+              DROP TABLE IF EXISTS w2p336_shared_revision;
+              DROP TABLE IF EXISTS w2p336_tracks;
+            " >/dev/null 2>&1
+          }
+          trap cleanup EXIT
+          cleanup
 
           run_json() {
-            local state="$1"
-            local sql="$2"
-            local out="$3"
-            node "$WRANGLER" d1 execute DB --local --persist-to "$state" --config "$CFG" --command "$sql" --json > "$out"
+            local sql="$1"
+            local out="$2"
+            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "$sql" --json > "$out"
           }
 
           meta_write() {
@@ -54,32 +82,44 @@ jobs:
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
           const rows=Array.isArray(raw)?raw:(raw?.result||[]);
-          const meta=rows.find(x=>x?.meta)?.meta||{};
-          process.stdout.write(String(Number(meta.rows_written||0)));
+          const metas=[];
+          for(const item of rows){
+            if(item?.meta) metas.push(item.meta);
+            if(Array.isArray(item?.results)) for(const nested of item.results) if(nested?.meta) metas.push(nested.meta);
+          }
+          const values=metas.map(m=>Number(m.rows_written ?? m.rowsWritten ?? 0)).filter(Number.isFinite);
+          if(!values.length) {
+            console.error(JSON.stringify(raw));
+            throw new Error('rows_written meta missing');
+          }
+          process.stdout.write(String(values.reduce((a,b)=>a+b,0)));
           NODE
           }
 
-          node "$WRANGLER" d1 execute DB --local --persist-to "$BASE_STATE" --config "$CFG" --file "$BASE" >/dev/null
-          node "$WRANGLER" d1 execute DB --local --persist-to "$CAND_STATE" --config "$CFG" --file "$BASE" >/dev/null
-          node "$WRANGLER" d1 execute DB --local --persist-to "$CAND_STATE" --config "$CFG" --file "$CANDIDATE" >/dev/null
+          setup_base() {
+            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --file "$BASE" >/dev/null
+          }
 
-          INSERT_SQL="INSERT INTO tracks(id,owner_uid,source_type,source_id,source_subtrack_key,title,cover_url,suno_url_primary,is_public,status,published_at,created_at,updated_at,primary_genre) VALUES('music_note_probe-user_note-new','probe-user','music_note','note-new','','Probe Song','https://example.test/a.webp','https://example.test/a.mp3',1,'published',3000,3000,3000,'Indie Pop')"
-          run_json "$BASE_STATE" "$INSERT_SQL" "$RUNNER_TEMP/base-insert.json"
-          run_json "$CAND_STATE" "$INSERT_SQL" "$RUNNER_TEMP/cand-insert.json"
+          INSERT_SQL="INSERT INTO w2p336_tracks(id,owner_uid,source_type,source_id,source_subtrack_key,title,cover_url,suno_url_primary,is_public,status,published_at,created_at,updated_at,primary_genre) VALUES('music_note_probe-user_note-new','probe-user','music_note','note-new','','Probe Song','https://example.test/a.webp','https://example.test/a.mp3',1,'published',3000,3000,3000,'Indie Pop')"
+          SWAP_SQL="UPDATE w2p336_tracks SET cover_url='https://example.test/b.webp',suno_url_primary='https://example.test/b.mp3',updated_at=3100 WHERE id='music_note_probe-user_note-new'"
+          VIS_SQL="UPDATE w2p336_tracks SET is_public=0,updated_at=3200 WHERE id='music_note_probe-user_note-new'"
 
+          setup_base
+          run_json "$INSERT_SQL" "$RUNNER_TEMP/base-insert.json"
           BASE_INSERT="$(meta_write "$RUNNER_TEMP/base-insert.json")"
-          CAND_INSERT="$(meta_write "$RUNNER_TEMP/cand-insert.json")"
-
-          BASE_SWAP_SQL="UPDATE tracks SET cover_url='https://example.test/b.webp',suno_url_primary='https://example.test/b.mp3',updated_at=3100 WHERE id='music_note_probe-user_note-new'"
-          run_json "$BASE_STATE" "$BASE_SWAP_SQL" "$RUNNER_TEMP/base-swap.json"
-          run_json "$CAND_STATE" "$BASE_SWAP_SQL" "$RUNNER_TEMP/cand-swap.json"
+          run_json "$SWAP_SQL" "$RUNNER_TEMP/base-swap.json"
           BASE_SWAP="$(meta_write "$RUNNER_TEMP/base-swap.json")"
-          CAND_SWAP="$(meta_write "$RUNNER_TEMP/cand-swap.json")"
-
-          BASE_VIS_SQL="UPDATE tracks SET is_public=0,updated_at=3200 WHERE id='music_note_probe-user_note-new'"
-          run_json "$BASE_STATE" "$BASE_VIS_SQL" "$RUNNER_TEMP/base-vis.json"
-          run_json "$CAND_STATE" "$BASE_VIS_SQL" "$RUNNER_TEMP/cand-vis.json"
+          run_json "$VIS_SQL" "$RUNNER_TEMP/base-vis.json"
           BASE_VIS="$(meta_write "$RUNNER_TEMP/base-vis.json")"
+
+          cleanup
+          setup_base
+          node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --file "$CANDIDATE" >/dev/null
+          run_json "$INSERT_SQL" "$RUNNER_TEMP/cand-insert.json"
+          CAND_INSERT="$(meta_write "$RUNNER_TEMP/cand-insert.json")"
+          run_json "$SWAP_SQL" "$RUNNER_TEMP/cand-swap.json"
+          CAND_SWAP="$(meta_write "$RUNNER_TEMP/cand-swap.json")"
+          run_json "$VIS_SQL" "$RUNNER_TEMP/cand-vis.json"
           CAND_VIS="$(meta_write "$RUNNER_TEMP/cand-vis.json")"
 
           echo "BASELINE_FIRST_PUBLICATION_W=$BASE_INSERT"
@@ -96,6 +136,8 @@ jobs:
           test "$BASE_VIS" -ge 2
           test "$CAND_VIS" -le 2
 
-          echo 'LOCAL_D1_W2_CUTOVER_MODEL=PASS'
-          echo 'REMOTE_D1_WRITES=0'
+          cleanup
+          trap - EXIT
+          echo 'DIAGNOSTIC_D1_W2_CUTOVER_MODEL=PASS'
+          echo 'SHARED_USER_DATA_WRITES=0'
           echo 'USER_DATA_MIGRATION=0'

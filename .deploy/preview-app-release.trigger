@@ -1,7 +1,7 @@
-app323-profile-bio-input-crash-fix
-target_source=07e5c24b5110a85a496b4deb86b5890f2cac9535
-app_version=323
+app324-profile-parity-left-bio
+target_source=a3755b924f024ce369be94547f4f6bfaf1f17bf5
+app_version=324
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=profile-bio-input-crash-fix
+release_request=profile-parity-left-bio

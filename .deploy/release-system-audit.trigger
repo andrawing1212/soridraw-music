@@ -1,4 +1,4 @@
-app321-profile-layout-bio-handle-retry
-source=db4103039197a54598511d98eeb17dd52a899267
-product_commit=cbf6e3c7fb8176e3cfc636ce75ceed0809d4225e
-requested=2026-10-03T14:13:00+09:00
+app322-profile-bio-no-line-limit
+source=f0a9ddcd75055a1ae99c7dd7b2468cef5503ebf1
+product_commit=5d67d6b2ec4158403e727b7102004f841f751e60
+requested=2026-10-03T15:23:00+09:00

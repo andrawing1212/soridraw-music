@@ -1,3 +1,48 @@
+## 0NT. PREVIEW app324 배포 완료 — 프로필 공통 높이 / 소개 왼쪽열 / MY 프로필 통일 (2026-10-03 KST)
+
+**사용자 실사용 피드백 반영**
+- app323 소개 입력 크래시 수정은 유지.
+- 소개글은 더 이상 전체 하단 폭을 사용하지 않음.
+  - **프로필 사진 바로 아래 왼쪽 열 내부**에만 배치.
+  - 오른쪽 이름/핸들/통계/대표장르/소셜 영역 침범 금지.
+  - 줄바꿈은 유지하고 긴 문자열은 왼쪽 열 안에서 줄바꿈.
+- 소셜 링크는 사용자가 통과시킨 **대표장르 아래 위치 그대로 유지**.
+- 상단 프로필 배경 높이를 자기 프로필뿐 아니라 **다른 사용자 프로필에도 동일 적용**.
+  - Tablet 721~1599px: 270px.
+  - PC 1600px+: 335px.
+  - Mobile: 기존 190px 유지.
+- 프로필 상단 툴바 명칭을 자기/타 사용자 구분 없이 **MY 프로필**로 통일.
+- 프로필 저장 API / 미디어 업로드 / 좋아요 / 공개·비공개 / 폴더 / Split / 사용자 데이터 구조 비변경.
+
+**변경 / 검증 / 배포**
+- 주요 UI commits:
+  - page: `60502405d239e14470808eb90a017956c2a5d2bb`.
+  - hero CSS: `75c0d12a0c70b46b3d745d3fa6a5d26385d911f2`.
+  - bio CSS: `379d7e6b3c680746a70fed60d677c085f75b8d22`.
+  - verifier: `c796de08d27484bce0dc2327fa1727e00d9105c3`.
+- app324 version commit: `efca071e534a50bac787336279af38ec4179af0d`.
+- Final Release System Audit `37103755979`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37103853836`: **SUCCESS**.
+  - release commit / locked PREVIEW source: `3dbd9f774c8cef0d39240d4f0a3f7988dc689573`.
+  - `preview.soridraw.com` app **324**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 자기/다른 사용자 프로필 모두 같은 상단 배경 높이인지.
+2. 상단 툴바가 모두 `MY 프로필`인지.
+3. 소개가 프로필 사진 바로 아래 왼쪽 폭에만 존재하고 오른쪽 영역을 침범하지 않는지.
+4. 소셜 링크는 대표장르 아래 그대로인지.
+5. 소개 입력 크래시 재발 없음 / 줄 수 제한 없음 / 150자 제한 유지.
+6. PC/태블릿/모바일 레이아웃 및 기존 이미지 편집/저장 회귀 없음.
+
 ## 0NS. PREVIEW app323 배포 완료 — 프로필 소개 입력 크래시 긴급 수정 (2026-10-03 KST)
 
 **문제**

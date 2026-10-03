@@ -25030,6 +25030,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
       registered,
       mutationAt,
       refreshSourceContent: value?.refreshSourceContent === true,
+      refreshSourceMedia: value?.refreshSourceMedia === true,
       options: pageSyncPublicationOptions048(value?.options),
     });
   }
@@ -25144,7 +25145,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           // app271: when the owner explicitly changes a public follower-save setting,
           // bypass the no-read warm UPDATE so the same single canonical write can also
           // refresh legacy structured lyrics from the owner's canonical Music Note.
-          if (mutation.refreshSourceContent) {
+          if (mutation.refreshSourceContent || mutation.refreshSourceMedia) {
             unresolvedTrackIds.add(mutation.trackId);
             continue;
           }
@@ -25251,16 +25252,28 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
     if (canonicalReadOk) {
       const rowById = new Map(canonicalRows.map((row) => [String(row.id || ''), row]));
       const refreshedLyricsBySource = new Map();
+      const refreshedMediaBySource = new Map();
       for (const mutation of registeredMutations) {
-        if (!mutation.refreshSourceContent) continue;
+        if (!mutation.refreshSourceContent && !mutation.refreshSourceMedia) continue;
         const row = rowById.get(mutation.trackId);
         if (!row || String(row.source_type || '') !== 'music_note') continue;
         try {
           const note = await fetchFirestoreDocument(['favorites', mutation.sourceId], authContext);
-          const encodedLyrics = note ? encodeTrackLyrics270(note) : '';
-          if (encodedLyrics) refreshedLyricsBySource.set(mutation.sourceId, encodedLyrics.slice(0, 3e4));
+          if (mutation.refreshSourceContent) {
+            const encodedLyrics = note ? encodeTrackLyrics270(note) : '';
+            if (encodedLyrics) refreshedLyricsBySource.set(mutation.sourceId, encodedLyrics.slice(0, 3e4));
+          }
+          if (mutation.refreshSourceMedia && note) {
+            const media = buildMusicNoteExploreSource(note, authContext.uid, mutation.sourceId);
+            refreshedMediaBySource.set(mutation.sourceId, {
+              coverUrl: String(media.coverUrl || ''),
+              durationSeconds: media.durationSeconds == null ? null : Number(media.durationSeconds),
+              sunoUrlPrimary: String(media.sunoUrlPrimary || ''),
+              sunoUrlSecondary: media.sunoUrlSecondary ? String(media.sunoUrlSecondary) : null,
+            });
+          }
         } catch (error) {
-          console.warn('[SORIDRAW 271] legacy publication lyrics refresh skipped:', String(error?.message || error || 'unknown'));
+          console.warn('[SORIDRAW 329] publication source refresh skipped:', String(error?.message || error || 'unknown'));
         }
       }
       const direct = [];
@@ -25294,13 +25307,22 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           ? Boolean(previousPublicBySource.get(mutation.sourceId))
           : (Number(row.is_public || 0) === 1 && String(row.status || '') === 'published');
         const refreshedLyrics = String(refreshedLyricsBySource.get(mutation.sourceId) || '');
+        const refreshedMedia = refreshedMediaBySource.get(mutation.sourceId) || null;
+        const currentDuration = row.duration_seconds == null ? null : Number(row.duration_seconds);
+        const mediaChanged = Boolean(refreshedMedia && (
+          String(row.cover_url || '') !== String(refreshedMedia.coverUrl || '')
+          || currentDuration !== refreshedMedia.durationSeconds
+          || String(row.suno_url_primary || '') !== String(refreshedMedia.sunoUrlPrimary || '')
+          || String(row.suno_url_secondary || '') !== String(refreshedMedia.sunoUrlSecondary || '')
+        ));
         const changed = preUpdatedTrackIds.has(mutation.trackId)
           || Number(row.is_public || 0) !== (next.isPublic ? 1 : 0)
           || Number(row.allow_next_song_apply || 0) !== (next.allowNextSongApply ? 1 : 0)
           || Number(row.allow_follower_save || 0) !== (next.allowFollowerSave ? 1 : 0)
           || Number(row.profile_pinned || 0) !== (next.profilePinned ? 1 : 0)
-          || Boolean(refreshedLyrics && String(row.lyrics || '') !== refreshedLyrics);
-        direct.push({ mutation, row, next, wasPublic, changed, refreshedLyrics });
+          || Boolean(refreshedLyrics && String(row.lyrics || '') !== refreshedLyrics)
+          || mediaChanged;
+        direct.push({ mutation, row, next, wasPublic, changed, refreshedLyrics, refreshedMedia });
       }
 
       // Rare legacy/non-Music-Note rows retain the previous proven behavior.
@@ -25401,6 +25423,14 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
               sets.push('lyrics=?');
               values.push(item.refreshedLyrics);
             }
+            if (item.refreshedMedia) {
+              const nextMedia = item.refreshedMedia;
+              const currentDuration = item.row.duration_seconds == null ? null : Number(item.row.duration_seconds);
+              if (String(item.row.cover_url || '') !== String(nextMedia.coverUrl || '')) { sets.push('cover_url=?'); values.push(nextMedia.coverUrl || ''); }
+              if (currentDuration !== nextMedia.durationSeconds) { sets.push('duration_seconds=?'); values.push(nextMedia.durationSeconds); }
+              if (String(item.row.suno_url_primary || '') !== String(nextMedia.sunoUrlPrimary || '')) { sets.push('suno_url_primary=?'); values.push(nextMedia.sunoUrlPrimary); }
+              if (String(item.row.suno_url_secondary || '') !== String(nextMedia.sunoUrlSecondary || '')) { sets.push('suno_url_secondary=?'); values.push(nextMedia.sunoUrlSecondary); }
+            }
             sets.push('updated_at=?');
             values.push(now);
             statements.push(env.DB.prepare(`UPDATE tracks SET ${sets.join(',')}
@@ -25442,6 +25472,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
               allow_follower_save: next.allowFollowerSave ? 1 : 0,
               profile_pinned: next.profilePinned ? 1 : 0,
               lyrics: item.refreshedLyrics || row.lyrics,
+              ...(item.refreshedMedia ? { cover_url: item.refreshedMedia.coverUrl || '', duration_seconds: item.refreshedMedia.durationSeconds, suno_url_primary: item.refreshedMedia.sunoUrlPrimary, suno_url_secondary: item.refreshedMedia.sunoUrlSecondary } : {}),
               updated_at: changed ? now : Number(row.updated_at || now),
             };
             const snapshotItem = next.isPublic ? mapTrackRow({
@@ -28227,3 +28258,5 @@ export {
 
 
 // SORIDRAW_LIKED_TRACK_SCHEMA_REPAIR_053_20260914
+
+// SORIDRAW_PUBLICATION_MEDIA_SOURCE_COST_329_20261003

@@ -109,3 +109,58 @@ jobs:
             console.log('D1_READONLY_SCHEMA_AUDIT=PASS rows='+rows.length);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+
+
+      - name: Audit first-publication fanout layers read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,D=process.env.SHARED_D1_ID;
+          const sql=`
+            SELECT type,name,tbl_name,sql
+            FROM sqlite_schema
+            WHERE tbl_name IN (
+              'tracks',
+              'explore_derived_tracks',
+              'explore_derived_changes',
+              'explore_derived_state',
+              'explore_derived_profiles',
+              'explore_shared_revision'
+            )
+              AND type IN ('index','trigger','table')
+            ORDER BY tbl_name,type,name;
+            PRAGMA index_list('tracks');
+            PRAGMA index_list('explore_derived_tracks');
+            PRAGMA index_list('explore_derived_changes');
+            PRAGMA index_list('explore_derived_profiles');
+          `;
+          (async()=>{
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${D}/query`,{
+              method:'POST',
+              headers:{Authorization:`Bearer ${T}`,Accept:'application/json','Content-Type':'application/json'},
+              body:JSON.stringify({sql})
+            });
+            const x=await r.json();
+            if(!r.ok||x.success===false) throw Error('D1 '+r.status+' '+JSON.stringify(x).slice(0,800));
+            const sets=(x.result||[]).map(v=>v?.results||[]);
+            const schema=sets[0]||[];
+            const groups=new Map();
+            for(const row of schema){
+              const key=String(row.tbl_name||'');
+              if(!groups.has(key)) groups.set(key,[]);
+              groups.get(key).push({
+                type:String(row.type||''),
+                name:String(row.name||''),
+                sql:String(row.sql||'').replace(/\s+/g,' ').trim(),
+              });
+            }
+            for(const [table,rows] of groups) console.log('FANOUT_SCHEMA_'+table+'='+JSON.stringify(rows));
+            console.log('FANOUT_INDEX_LIST_tracks='+JSON.stringify(sets[1]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_tracks='+JSON.stringify(sets[2]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_changes='+JSON.stringify(sets[3]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_profiles='+JSON.stringify(sets[4]||[]));
+            console.log('FIRST_PUBLICATION_FANOUT_READONLY=PASS');
+            console.log('REMOTE_D1_WRITES=0');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

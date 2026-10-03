@@ -3310,7 +3310,7 @@ export default function ExplorePage() {
           </div>
         ) : (
           <>
-            <section className={`soridraw-explore-profile-head${profile.backgroundUrl ? ' has-background' : ''}`}>
+            <section className={`soridraw-explore-profile-head${profile.backgroundUrl ? ' has-background' : ''}${user?.uid === profile.uid ? ' is-own-profile-313' : ''}`}>
               {profile.backgroundUrl && (
                 <div className="soridraw-explore-profile-background" aria-hidden="true">
                   <img src={profile.backgroundUrl} alt="" referrerPolicy="no-referrer" />

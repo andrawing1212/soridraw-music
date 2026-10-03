@@ -5297,6 +5297,65 @@ async function handleSearchCore336(url, env, cors) {
 }
 
 // SORIDRAW_SEARCH_R2_FIRST_337_20261004
+// SORIDRAW_KOREAN_GENRE_INDEXED_FALLBACK_338_20261004
+async function handleIndexedGenreAlias338(url, genreAlias, env, cors) {
+  const genre = String(genreAlias || '').trim().slice(0, 160);
+  if (!genre) return json({ ok: true, data: { genre, items: [], nextCursor: null } }, 200, cors);
+  const limit = Math.min(40, Math.max(1, getPageSize(url)));
+
+  const [primary, legacyTags] = await env.DB.batch([
+    env.DB.prepare(`
+      SELECT
+        t.*,
+        p.nickname AS owner_nickname,
+        p.avatar_url AS owner_avatar_url,
+        COALESCE(s.like_count,0) AS like_count,
+        COALESCE(s.comment_count,0) AS comment_count,
+        COALESCE(s.play_count,0) AS play_count
+      FROM tracks t INDEXED BY idx_tracks_primary_genre_latest
+      LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+      LEFT JOIN track_stats s ON s.track_id = t.id
+      WHERE t.primary_genre = ?
+        AND t.is_public = 1
+        AND t.status = 'published'
+      ORDER BY t.published_at DESC, t.id DESC
+      LIMIT ?
+    `).bind(genre, limit + 1),
+    env.DB.prepare(`
+      SELECT
+        t.*,
+        p.nickname AS owner_nickname,
+        p.avatar_url AS owner_avatar_url,
+        COALESCE(s.like_count,0) AS like_count,
+        COALESCE(s.comment_count,0) AS comment_count,
+        COALESCE(s.play_count,0) AS play_count
+      FROM track_tags tt INDEXED BY idx_track_tags_kind_value_track
+      JOIN tracks t ON t.id = tt.track_id
+      LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+      LEFT JOIN track_stats s ON s.track_id = t.id
+      WHERE tt.kind = 'genre'
+        AND tt.value = ?
+        AND (t.primary_genre IS NULL OR TRIM(t.primary_genre) = '')
+        AND t.is_public = 1
+        AND t.status = 'published'
+      ORDER BY t.published_at DESC, t.id DESC
+      LIMIT ?
+    `).bind(genre, limit + 1),
+  ]);
+
+  const byId = new Map();
+  for (const row of [...(primary?.results || []), ...(legacyTags?.results || [])]) {
+    const id = String(row?.id || '').trim();
+    if (!id || byId.has(id)) continue;
+    byId.set(id, mapTrackRow(row));
+  }
+  const items = [...byId.values()]
+    .sort((a, b) => Number(b?.publishedAt || 0) - Number(a?.publishedAt || 0)
+      || String(b?.id || '').localeCompare(String(a?.id || '')))
+    .slice(0, limit);
+  return json({ ok: true, data: { genre, items, nextCursor: null } }, 200, cors);
+}
+
 async function handleSearch(url, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleSearchCore336(url, env, cors);
@@ -5342,7 +5401,7 @@ async function handleSearch(url, env, cors) {
       const genreUrl = new URL(url.toString());
       genreUrl.searchParams.delete('cursor');
       genreUrl.searchParams.set('limit', String(limit));
-      const response = await handleGenreTracksCore066(genreUrl, genreAlias, env, cors);
+      const response = await handleIndexedGenreAlias338(genreUrl, genreAlias, env, cors);
       const data = await parseHybridResponseData336(response);
       for (const item of Array.isArray(data?.items) ? data.items : []) {
         const id = hybridTrackId336(item);

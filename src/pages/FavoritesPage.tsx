@@ -5944,14 +5944,40 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     setExplorePublicationPrivateConfirm(false);
 
     try {
+      let selectedPublicationMedia: {
+        coverUrl: string;
+        durationSeconds: number | null;
+        sunoUrlPrimary: string;
+        sunoUrlSecondary: string | null;
+      } | null = null;
+
       if (selectionChanged) {
         const latestLinks = getFavoriteSunoLinks(latestSong);
         const latestRequestedIndex = Math.max(0, latestLinks.findIndex((link) => (
           String(link?.url || '').trim() === selectedUrl
         ))) as 0 | 1;
         const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(latestSong, latestRequestedIndex);
-        await Promise.resolve(updateFavorite(sourceId, primaryUpdates));
+        const projectedSong = { ...latestSong, ...primaryUpdates };
+        const projectedLinks = getFavoriteSunoLinks(projectedSong);
+        const projectedMainIndex = getFavoriteSunoMainIndex(projectedSong);
+        const projectedPrimary = projectedLinks[projectedMainIndex] || projectedLinks[0] || null;
+        const projectedSecondary = projectedLinks.find((_, index) => index !== projectedMainIndex) || null;
+
+        selectedPublicationMedia = {
+          coverUrl: String(projectedPrimary?.coverUrl || primaryUpdates.sunoCoverUrl || '').trim(),
+          durationSeconds: typeof projectedPrimary?.durationSeconds === 'number'
+            ? projectedPrimary.durationSeconds
+            : (typeof primaryUpdates.sunoDurationSeconds === 'number' ? primaryUpdates.sunoDurationSeconds : null),
+          sunoUrlPrimary: String(projectedPrimary?.url || primaryUpdates.sunoShareUrl || '').trim(),
+          sunoUrlSecondary: String(projectedSecondary?.url || '').trim() || null,
+        };
+
+        // app333: selecting the public Suno source is a normal Music Note edit.
+        // Keep it local-first and let the existing 60s/page-exit canonical batch settle
+        // Firestore once, instead of paying an immediate favorites write before Explore.
+        queueFavoriteDetailPatch(sourceId, primaryUpdates);
         syncFavoriteSunoCardMedia(sourceId, primaryUpdates);
+        await publishFavoriteSunoMediaDraft(sourceId, primaryUpdates);
         setSelectedSong((current: any) => (
           current && getFavoriteDocumentId(current) === sourceId
             ? { ...current, ...primaryUpdates }
@@ -5966,6 +5992,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           sourceId,
           options,
           state.registered ? state.trackId : null,
+          selectedPublicationMedia,
         );
         showFavoriteToast(state.status === 'public'
           ? '선택한 곡으로 공개 설정을 저장했습니다.'

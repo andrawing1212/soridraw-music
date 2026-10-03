@@ -1,4 +1,4 @@
-app309-explore-manager-warm-cache-final
-source=37cf4ad227c99890053370747bf094b384ff0f6e
-product_commit=37cf4ad227c99890053370747bf094b384ff0f6e
-requested=2026-10-03T10:37:00+09:00
+app310-explore-manager-r2-first-load
+source=6f679bf89a390783e51729cd4f27986014661393
+product_commit=6f679bf89a390783e51729cd4f27986014661393
+requested=2026-10-03T10:54:00+09:00

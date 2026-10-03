@@ -3322,22 +3322,6 @@ export default function ExplorePage() {
                   <div className="soridraw-explore-profile-avatar" aria-hidden="true">
                     {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
                   </div>
-                  {profileSocialLinks244.length > 0 && (
-                    <div className="soridraw-explore-profile-social-icons-244" aria-label="소셜 링크">
-                      {profileSocialLinks244.map((item) => (
-                        <a
-                          key={item.key}
-                          href={item.href}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          aria-label={`${item.label} 열기`}
-                          title={item.label}
-                        >
-                          {item.icon}
-                        </a>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div className="soridraw-explore-profile-copy">
                   <div className="soridraw-explore-profile-name-line">
@@ -3359,14 +3343,30 @@ export default function ExplorePage() {
                     )}
                   </div>
                   {profile.handle && <div className="soridraw-explore-profile-handle">@{profile.handle}</div>}
-                  {profile.bio && <p>{profile.bio}</p>}
                   <div className="soridraw-explore-profile-stats">
                     <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
                     <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
                     <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
                   </div>
                   {profile.genres.length > 0 && <div className="soridraw-explore-profile-genres">{profile.genres.map((genre) => <span key={genre}>{genre}</span>)}</div>}
+                  {profileSocialLinks244.length > 0 && (
+                    <div className="soridraw-explore-profile-social-icons-244" aria-label="소셜 링크">
+                      {profileSocialLinks244.map((item) => (
+                        <a
+                          key={item.key}
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          aria-label={`${item.label} 열기`}
+                          title={item.label}
+                        >
+                          {item.icon}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
+                {profile.bio && <p className="soridraw-explore-profile-bio">{profile.bio}</p>}
               </div>
             </section>
 

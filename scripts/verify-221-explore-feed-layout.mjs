@@ -1076,7 +1076,7 @@ assert.match(
 );
 assert.match(
   profileEdit,
-  /id="soridraw-profile-handle-warning"[^]*?영문 소문자, 숫자, 점\(\.\), 밑줄\(_\)[^]*?3~24자/,
+  /id="soridraw-profile-handle-warning"[^]*?영문 소문자, 숫자, 밑줄만 사용할 수 있으며 3~24자로 입력해주세요\./,
   'handle warning text must be rendered directly below the handle field',
 );
 assert.match(
@@ -1091,8 +1091,8 @@ assert.doesNotMatch(
 );
 assert.match(
   profileEditCss,
-  /soridraw-explore-profile-handle-wrap\.is-invalid\{[^}]*box-shadow:inset 0 0 0 1px rgba\(255,96,104,\.42\)/,
-  'deferred invalid handle state must have the requested warning treatment',
+  /soridraw-explore-profile-handle-wrap\.is-invalid\{[^}]*border-color:#ff666f!important[^}]*box-shadow:none!important/,
+  'deferred invalid handle state must use a real full red border without inset side marks',
 );
 assert.match(
   profileEditCss,
@@ -1105,7 +1105,7 @@ console.log('APP318_DEFERRED_HANDLE_WARNING=PASS');
  * enough for textarea Enter/newline layout to survive into the public profile. */
 assert.match(
   social,
-  /soridraw-explore-profile-copy>p\{[^}]*white-space:pre-line[^}]*overflow-wrap:anywhere/,
+  /soridraw-explore-profile-bio\{[^}]*white-space:pre-line[^}]*overflow-wrap:anywhere/,
   'public profile bio must preserve saved newline breaks while still wrapping long text safely',
 );
 console.log('APP319_PROFILE_BIO_LINE_BREAKS=PASS');
@@ -1139,3 +1139,40 @@ assert.match(
   'invalid handle must still be rejected only when Save runs',
 );
 console.log('APP320_PERMISSIVE_HANDLE_TYPING_SAVE_VALIDATION=PASS');
+
+
+/* app321 — profile layout/bio input refinement.
+ * Keep the app320 free-typing handle path, but make the warning shorter,
+ * prevent destructive newline truncation, reject only the keystroke that
+ * would exceed four visible textarea rows, and use the lower hero space. */
+assert.doesNotMatch(
+  profileEdit,
+  /\.split\('\\n'\)[^]*?\.slice\(0, PROFILE_BIO_MAX_LINES_317\)/,
+  'bio normalizer must not delete previously typed text when a fifth explicit newline is attempted',
+);
+assert.match(
+  profileEdit,
+  /event\.currentTarget\.scrollHeight > event\.currentTarget\.clientHeight \+ 1/,
+  'bio input must reject only the change that would overflow the four-row textarea',
+);
+assert.match(
+  profileEditCss,
+  /soridraw-explore-profile-edit-textarea-wrap textarea\{[^}]*overflow-y:hidden/,
+  'bio textarea must not silently scroll beyond its visible four-row contract',
+);
+assert.match(
+  page,
+  /soridraw-explore-profile-genres[^]*?soridraw-explore-profile-social-icons-244[^]*?soridraw-explore-profile-bio/,
+  'public profile must place social links below representative genres and bio in the lower hero row',
+);
+assert.match(
+  profileEditCss,
+  /soridraw-explore-profile-content\{[^}]*display:grid[^}]*grid-template-columns:112px minmax\(0,1fr\)[^}]*align-content:start/,
+  'profile hero content must use the top-aligned two-column grid',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-bio\{[^}]*grid-column:1 \/ -1[^}]*white-space:pre-line/,
+  'saved bio must begin under the avatar side and preserve author-entered line breaks',
+);
+console.log('APP321_PROFILE_LAYOUT_BIO_HANDLE_REFINEMENT=PASS');

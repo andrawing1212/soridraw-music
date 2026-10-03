@@ -23,17 +23,17 @@
 .soridraw-explore-profile-head{display:flex;align-items:center;gap:24px;min-height:150px;margin:0 0 36px;padding:22px 4px;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
 .soridraw-explore-profile-avatar{display:grid;place-items:center;width:112px;height:112px;min-width:112px;overflow:hidden;border-radius:50%;background:rgba(255,255,255,.075);color:rgba(255,255,255,.72);font-size:34px;font-weight:950}
 .soridraw-explore-profile-avatar img{width:100%;height:100%;object-fit:cover}
-.soridraw-explore-profile-avatar-column-244{display:flex;flex:0 0 auto;flex-direction:column;align-items:center;gap:9px}
-.soridraw-explore-profile-social-icons-244{display:flex;align-items:center;justify-content:center;gap:6px;min-height:32px}
+.soridraw-explore-profile-avatar-column-244{display:flex;grid-column:1;grid-row:1;flex-direction:column;align-items:flex-start}
+.soridraw-explore-profile-social-icons-244{display:flex;align-items:center;justify-content:flex-start;gap:6px;min-height:32px;margin-top:12px}
 .soridraw-explore-profile-social-icons-244 a{display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.72);text-decoration:none;transition:background .15s ease,color .15s ease,border-color .15s ease,transform .15s ease}
 .soridraw-explore-profile-social-icons-244 a:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);color:#fff}
 .soridraw-explore-profile-social-icons-244 a:active{transform:scale(.96)}
 .soridraw-explore-profile-social-icons-244 a:focus-visible{outline:2px solid #ffb400;outline-offset:2px}
 .soridraw-explore-profile-social-icons-244 svg{width:16px;height:16px}
-.soridraw-explore-profile-copy{min-width:0;flex:1}
+.soridraw-explore-profile-copy{grid-column:2;grid-row:1;min-width:0}
 .soridraw-explore-profile-name-line{display:flex;align-items:center;gap:12px;min-width:0}
 .soridraw-explore-profile-name-line h1{min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(255,255,255,.95);font-size:clamp(24px,2.6vw,36px);font-weight:920;letter-spacing:-.035em}
-.soridraw-explore-profile-copy>p{max-width:660px;margin:10px 0 0;color:rgba(235,235,240,.52);font-size:13px;font-weight:600;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
+.soridraw-explore-profile-bio{grid-column:1 / -1;grid-row:2;max-width:660px;margin:0;color:rgba(235,235,240,.52);font-size:13px;font-weight:600;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
 .soridraw-explore-profile-stats{display:flex;align-items:center;gap:18px;margin-top:15px;color:rgba(235,235,240,.48);font-size:12px;font-weight:650}
 .soridraw-explore-profile-stats strong{color:rgba(255,255,255,.88);font-weight:850}
 .soridraw-explore-own-profile{display:inline-flex;align-items:center;height:32px;padding:0 11px;border-radius:11px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.56);font-size:11px;font-weight:800;white-space:nowrap}
@@ -172,13 +172,13 @@
 .soridraw-explore-profile-toolbar{margin-bottom:16px}
 .soridraw-explore-profile-head{align-items:flex-start;gap:16px;min-height:0;margin-bottom:28px;padding:8px 2px 14px}
 .soridraw-explore-profile-avatar{width:76px;height:76px;min-width:76px;font-size:24px}
-.soridraw-explore-profile-avatar-column-244{gap:7px}
-.soridraw-explore-profile-social-icons-244{gap:4px;min-height:27px}
+.soridraw-explore-profile-avatar-column-244{align-items:flex-start}
+.soridraw-explore-profile-social-icons-244{gap:4px;min-height:27px;margin-top:9px}
 .soridraw-explore-profile-social-icons-244 a{width:26px;height:26px;border-radius:8px}
 .soridraw-explore-profile-social-icons-244 svg{width:14px;height:14px}
 .soridraw-explore-profile-name-line{align-items:flex-start;flex-wrap:wrap;gap:8px}
 .soridraw-explore-profile-name-line h1{width:100%;font-size:23px}
-.soridraw-explore-profile-copy>p{margin-top:7px;font-size:12px}
+.soridraw-explore-profile-bio{margin-top:7px;font-size:12px}
 .soridraw-explore-profile-stats{gap:12px;margin-top:11px;font-size:11px;flex-wrap:wrap}
 .soridraw-explore-follow-button,.soridraw-explore-own-profile{height:30px}
 }
@@ -200,7 +200,7 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-back-button:hover{background:rgba(20,20,24,.09)!important;color:#111}
 :root[data-soridraw-theme="light"] .soridraw-explore-profile-avatar{background:rgba(20,20,24,.065);color:rgba(20,20,22,.68)}
 :root[data-soridraw-theme="light"] .soridraw-explore-profile-name-line h1{color:rgba(20,20,22,.94)}
-:root[data-soridraw-theme="light"] .soridraw-explore-profile-copy>p,:root[data-soridraw-theme="light"] .soridraw-explore-profile-stats,:root[data-soridraw-theme="light"] .soridraw-explore-profile-section-label{color:rgba(25,25,28,.5)}
+:root[data-soridraw-theme="light"] .soridraw-explore-profile-bio,:root[data-soridraw-theme="light"] .soridraw-explore-profile-stats,:root[data-soridraw-theme="light"] .soridraw-explore-profile-section-label{color:rgba(25,25,28,.5)}
 :root[data-soridraw-theme="light"] .soridraw-explore-profile-stats strong{color:rgba(20,20,22,.88)}
 :root[data-soridraw-theme="light"] .soridraw-explore-own-profile{background:rgba(20,20,24,.055);color:rgba(20,20,22,.58)}
 :root[data-soridraw-theme="light"] .soridraw-explore-follow-button{background:#1d1d20!important;color:#fff}

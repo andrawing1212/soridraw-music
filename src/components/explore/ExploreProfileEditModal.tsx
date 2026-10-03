@@ -33,9 +33,6 @@ const PROFILE_BIO_MAX_LINES_317 = 4;
 
 const normalizeProfileBio317 = (value: string) => String(value || '')
   .replace(/\r\n?/g, '\n')
-  .split('\n')
-  .slice(0, PROFILE_BIO_MAX_LINES_317)
-  .join('\n')
   .slice(0, PROFILE_BIO_MAX_LENGTH_317);
 
 const suggestedNickname = (user: User, profile: ExplorePublicProfile) => {
@@ -283,7 +280,11 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
               value={draft.bio}
               maxLength={PROFILE_BIO_MAX_LENGTH_317}
               rows={PROFILE_BIO_MAX_LINES_317}
-              onChange={(event) => setDraft((prev) => ({ ...prev, bio: normalizeProfileBio317(event.target.value) }))}
+              onChange={(event) => {
+                const nextBio = normalizeProfileBio317(event.currentTarget.value);
+                if (event.currentTarget.scrollHeight > event.currentTarget.clientHeight + 1) return;
+                setDraft((prev) => ({ ...prev, bio: nextBio }));
+              }}
               placeholder="음악과 작업을 간단히 소개해보세요."
             />
             <span>{draft.bio.length}/{PROFILE_BIO_MAX_LENGTH_317}</span>
@@ -310,7 +311,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
           </div>
           {handleValidationVisible && !handleValid && (
             <p id="soridraw-profile-handle-warning" className="soridraw-explore-profile-handle-warning" role="alert">
-              영문 소문자, 숫자, 점(.), 밑줄(_)만 사용할 수 있으며 3~24자로 입력해주세요. 점(.)은 처음·끝 또는 연속으로 사용할 수 없습니다.
+              영문 소문자, 숫자, 밑줄만 사용할 수 있으며 3~24자로 입력해주세요.
             </p>
           )}
           <p className="soridraw-explore-profile-edit-help">페이지를 구분하는 고유 이름입니다. 중복 확인은 저장할 때 한 번만 합니다.</p>

@@ -11,7 +11,8 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const appRelease = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
 const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
 
-assert.ok(Number(version.version) >= 160, 'verified app160 public like behavior must remain protected on later releases');
+const appVersion = Number(version.version);
+assert.ok(appVersion >= 160, 'verified app160 public like behavior must remain protected on later releases');
 
 // One bounded RTDB invalidation bus for active Explore screens. It never carries
 // a public count or another account's personal heart as authority.
@@ -129,9 +130,16 @@ assert.equal(publicRule?.rows?.$index?.$other?.['.validate'], false);
 assert.equal(publicRule?.rows?.$index?.likeCount, undefined);
 assert.match(String(publicRule?.rows?.$index?.trackId?.['.validate'] || ''), /length <= 512/);
 
-// The normal two-minute activity gate remains for unchanged users. The new path
-// is change-driven only and does not turn app entry into a polling loop.
-assert.match(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000/);
+// app335 removes ordinary pointer/focus entry checks entirely. Public-like
+// changes still use their dedicated signal, while the general Feed revision path
+// is limited to a real tab resume and remains polling-free.
+if (appVersion >= 335) {
+  assert.doesNotMatch(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS/);
+  assert.doesNotMatch(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
+  assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+} else {
+  assert.match(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000/);
+}
 assert.doesNotMatch(page192Start >= 0 ? page.slice(page192Start, page192End) : '', /setInterval\(/);
 
 // PREVIEW app release can deploy the additive shared RTDB rule and verifies the

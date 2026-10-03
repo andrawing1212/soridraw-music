@@ -1,4 +1,4 @@
-app320-permissive-handle-typing-retry
-source=2a027f6c8e7aef1ae0e5eaf5f1ffef525c19e0e8
-product_commit=84480f57794ff5dd3b7cbad91310cf317f16939f
-requested=2026-10-03T13:31:00+09:00
+app321-profile-layout-bio-handle
+source=aaaf1521075de38033e7ba74821cc6ead6136baf
+product_commit=cbf6e3c7fb8176e3cfc636ce75ceed0809d4225e
+requested=2026-10-03T14:05:00+09:00

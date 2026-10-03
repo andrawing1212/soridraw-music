@@ -1,5 +1,5 @@
-app336-r2-legacy-hybrid-read-r3
-source=56e67b5c8f462e0e14d2c2da3248fae013a1698f
-scope=worker-hybrid-read,feed,profile,genre,search,hosting-version,env-wiring,release-gates
+app337-search-r2-first-korean-genre
+source=7465cce1f14d418059946651d9b05d19229ccea2
+scope=search-r2-first,korean-genre-alias,indexed-legacy-genre-fallback,hosting-version,release-gates
 protect=likes,save-heart,folders,split,music-note-batching,test-production,shared-d1-schema
-requested=2026-10-04T05:46:00+09:00
+requested=2026-10-04T06:28:00+09:00

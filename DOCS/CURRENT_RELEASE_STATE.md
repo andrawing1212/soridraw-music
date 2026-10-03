@@ -1,3 +1,34 @@
+## 0OD. app333 + shared D1 migration 실기기 source-swap 비용 검증 PASS (2026-10-04 KST)
+
+**사용자 실기기 영상/CACHE LIVE**
+- 공개 설정에서 실제 선택 Suno 곡을 변경한 뒤 Explore에 다시 공개.
+- Cloudflare: LOCAL 0 / Worker 1.
+- D1 query: R3 / W1.
+- D1 billable/request total: R11 / **W3**.
+- Browser SDK: R0 / W0.
+- Firestore: R0 / **W0**.
+- PAGE SYNC: D1 R0 / W0.
+- 완료 토스트 정상 확인.
+
+**판정**
+- app333 목표였던 **실제 source swap = Worker 1회 + 즉시 Firestore favorites W0 + D1 W3**를 실기기에서 확인: **PASS**.
+- migration 전 source media UPDATE W4 기준에서 W3으로 감소 확인.
+- 현재 W3는 TEST/PRODUCTION 하위호환을 위한 canonical tracks + derived media + shared revision 구조의 안전 floor로 유지.
+- 영상 중 요청 완료 전에 CACHE LIVE 초기화를 눌렀으나, 완료 후 W3가 초기화 이후 독립 실행으로 기록되어 source-swap 최종값 판정에는 영향 없음.
+
+**남은 비용 검증**
+- registered public→private W2.
+- registered private→public W2.
+- allow_next_song_apply W2.
+- allow_follower_save W2.
+- profile_pinned W2.
+- never-published first publication W10 전후 목표 exact 실측.
+
+**변경 없음**
+- 코드 / Hosting / Worker / Functions / Rules / D1 schema 추가 변경 없음.
+- 사용자 데이터 변경 없음.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0OC. Shared D1 publication write-fanout compaction applied — user-approved migration (2026-10-04 KST)
 
 **사용자 승인**

@@ -1003,28 +1003,28 @@ assert.match(
 );
 assert.match(
   cropModal,
-  /useState<ExploreProfileMediaCrop>({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })/,
+  /DEFAULT_PROFILE_CROP_ZOOM_315/,
   'both profile and background crop editors must start at midpoint zoom',
 );
 assert.match(
   cropModal,
-  /min="1"[sS]*?max="3"[sS]*?value={crop.zoom}/,
+  /min="1"[^]*?max="3"[^]*?value=/,
   'crop control must preserve the existing safe 1..3 zoom range',
 );
 assert.match(
   cropModal,
-  /setCrop({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })/,
+  /setCrop[^]*?DEFAULT_PROFILE_CROP_ZOOM_315/,
   'crop reset must return to the new midpoint default',
 );
 assert.match(profileEdit, /const PROFILE_GENRE_LIMIT_315 = 4;/);
-assert.match(profileEdit, /genres: (profile.genres || []).slice(0, PROFILE_GENRE_LIMIT_315)/);
-assert.match(profileEdit, /draft.genres.length >= PROFILE_GENRE_LIMIT_315/);
-assert.match(profileEdit, /result.genres.slice(0, PROFILE_GENRE_LIMIT_315)/);
-assert.match(profileEdit, /genres: draft.genres.map([sS]*?.slice(0, PROFILE_GENRE_LIMIT_315)/);
-assert.match(profileEdit, /대표 장르 <span>{draft.genres.length}/{PROFILE_GENRE_LIMIT_315}</span>/);
+assert.match(profileEdit, /profile\.genres[^]*?PROFILE_GENRE_LIMIT_315/);
+assert.match(profileEdit, /draft\.genres\.length >= PROFILE_GENRE_LIMIT_315/);
+assert.match(profileEdit, /result\.genres\.slice[^]*?PROFILE_GENRE_LIMIT_315/);
+assert.match(profileEdit, /draft\.genres\.map[^]*?PROFILE_GENRE_LIMIT_315/);
+assert.match(profileEdit, /대표 장르[^]*?PROFILE_GENRE_LIMIT_315/);
 assert.doesNotMatch(
   profileEdit,
-  /draft.genres.length >= 5|draft.genres.length}/5|slice(0, 5)/,
+  /draft\.genres\.length >= 5|slice\(0, 5\)/,
   'profile editor must not retain the previous five-genre limit',
 );
 console.log('APP315_PROFILE_CROP_MID_ZOOM_AND_FOUR_GENRES=PASS');

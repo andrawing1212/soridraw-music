@@ -1,7 +1,7 @@
-app308-explore-curation-hardening
-target_source=17d4a4031d23a7c1b2bf7a972a158727bb169e7f
-app_version=308
+app309-explore-manager-warm-cache
+target_source=42c68078d77214bb10325ab2f7fa7d5766f51010
+app_version=309
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-curation-private-safe-edge-cache-hardening
+release_request=explore-manager-warm-cache-d1-zero-reentry

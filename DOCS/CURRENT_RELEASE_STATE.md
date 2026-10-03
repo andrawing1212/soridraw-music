@@ -1,3 +1,43 @@
+## 0OL. PREVIEW app336 배포 완료 — R2 + legacy hybrid read 호환층 활성 (2026-10-04 KST)
+
+**실제 배포 상태**
+- preview HEAD: `be3ce04652ae6c3604aba872e857c19a703a1876`.
+- Final Release System Audit Run `37152439362`: **SUCCESS**.
+- PREVIEW Worker Release Run `37152582192`: **SUCCESS**.
+  - active Worker version: `903c72d5-a569-45e7-a196-947b74ddd6e2`.
+  - `SORIDRAW_R2_HYBRID_READ_V1=1` 활성.
+  - FEED smoke PASS / PROFILE smoke PASS.
+  - public-like-card smoke D1 **R0/W0 PASS**.
+  - TEST / PRODUCTION Worker unchanged PASS.
+- Firebase PREVIEW App Release Run `37152665528`: **SUCCESS**.
+  - remote app version **336**.
+  - `preview.soridraw.com` exact build PASS.
+  - TEST / PRODUCTION Hosting unchanged PASS.
+  - shared RTDB Rules deploy SKIPPED.
+- Functions / Firestore Rules / shared D1 schema 변경 없음.
+- 사용자 데이터 migration / backfill / delete / rewrite 없음.
+
+**app336 목적**
+- 기존 legacy-only 공개곡과 R2 catalog-only 공개곡을 동시에 읽는 호환층.
+- 같은 track id가 양쪽에 있으면 R2/shared card를 최신 authority로 사용.
+- stale legacy 공개행이 private R2 상태를 다시 노출하지 않도록 차단.
+- latest / popular / public-profile / genre / title / artist nickname·handle 검색 호환 유지.
+- warm client cache Worker-zero(app335) 경로 유지.
+
+**중요**
+- 이번 배포는 **read compatibility 선행 단계**다.
+- first-publication W12→W2 후보 cutover migration은 아직 실행하지 않았다.
+- shared D1 cutover는 사용자 실기기 app336 검증과 3환경 호환층 승격 전까지 금지.
+- app164 likes / app302 save heart / app301 folders / app303 Split / Music Note 60초 local-first 정상 기준은 동결 유지.
+
+**다음**
+1. 사용자 실기기에서 app336 기능 회귀 확인.
+2. Explore/공개프로필 warm 재진입 Worker 0 유지 확인.
+3. legacy 곡 + 최근 R2 곡 latest/popular/profile/search 누락·중복 여부 확인.
+4. 기존 좋아요/저장하트/폴더/분할/Music Note 동작 확인.
+5. 실기기 PASS 뒤에만 TEST/PRODUCTION에 hybrid read 호환층 승격 계획 수립.
+6. 세 환경이 hybrid read를 지원한 뒤 별도 명시 승인으로 shared D1 W2 cutover migration 검토.
+
 ## 0OK. app336 구현 후보 완료 — R2 + legacy hybrid read 코드/검증 PASS, PREVIEW 배포 전 감사 단계 (2026-10-04 KST)
 
 **구현**

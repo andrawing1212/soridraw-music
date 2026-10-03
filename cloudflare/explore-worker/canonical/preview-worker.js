@@ -5296,6 +5296,7 @@ async function handleSearchCore336(url, env, cors) {
   return await handleSearchCore066(url, env, cors);
 }
 
+// SORIDRAW_SEARCH_R2_FIRST_337_20261004
 async function handleSearch(url, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleSearchCore336(url, env, cors);
@@ -5303,11 +5304,6 @@ async function handleSearch(url, env, cors) {
   if (url.searchParams.get('cursor')) {
     return await handleSearchCore066(url, env, cors);
   }
-
-  const legacyResponse = await handleSearchCore066(url, env, cors);
-  if (!(legacyResponse instanceof Response) || !legacyResponse.ok) return legacyResponse;
-  const legacyData = await parseHybridResponseData336(legacyResponse);
-  if (!legacyData) return legacyResponse;
 
   let catalogData = null;
   try {
@@ -5317,17 +5313,66 @@ async function handleSearch(url, env, cors) {
       : null;
   } catch (error) {
     console.warn(
-      '[SORIDRAW 336] catalog search merge deferred:',
+      '[SORIDRAW 337] catalog search first-pass deferred:',
       String(error?.message || error || 'unknown')
     );
   }
-  if (!catalogData) return legacyResponse;
 
-  const q = String(url.searchParams.get('q') || '').trim();
-  const merged = mergeHybridSearch336(legacyData, catalogData, q, getPageSize(url));
+  const catalogItems = Array.isArray(catalogData?.items)
+    ? catalogData.items
+    : (Array.isArray(catalogData?.tracks?.items) ? catalogData.tracks.items : []);
+  const catalogCreators = Array.isArray(catalogData?.creators) ? catalogData.creators : [];
+  if (catalogData && (catalogItems.length > 0 || catalogCreators.length > 0)) {
+    return withHybridReadHeaders336(
+      json({ ok: true, data: catalogData }, 200, cors),
+      'R2-FIRST-SEARCH-337'
+    );
+  }
+
+  const genreAliases = [...new Set(
+    url.searchParams.getAll('genre')
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  )].slice(0, 6);
+  if (genreAliases.length > 0) {
+    const limit = getPageSize(url);
+    const items = [];
+    const seen = new Set();
+    for (const genreAlias of genreAliases) {
+      const genreUrl = new URL(url.toString());
+      genreUrl.searchParams.delete('cursor');
+      genreUrl.searchParams.set('limit', String(limit));
+      const response = await handleGenreTracksCore066(genreUrl, genreAlias, env, cors);
+      const data = await parseHybridResponseData336(response);
+      for (const item of Array.isArray(data?.items) ? data.items : []) {
+        const id = hybridTrackId336(item);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        items.push(item);
+        if (items.length >= limit) break;
+      }
+      if (items.length >= limit) break;
+    }
+    if (items.length > 0) {
+      const q = String(url.searchParams.get('q') || '').trim();
+      const data = {
+        query: q,
+        items,
+        tracks: { items, nextCursor: null },
+        creators: [],
+        nextCursor: null,
+      };
+      return withHybridReadHeaders336(
+        json({ ok: true, data }, 200, cors),
+        'INDEXED-GENRE-FALLBACK-337'
+      );
+    }
+  }
+
+  const legacyResponse = await handleSearchCore066(url, env, cors);
   return withHybridReadHeaders336(
-    json({ ok: true, data: merged }, 200, cors),
-    'R2-LEGACY-SEARCH-336'
+    legacyResponse,
+    'LEGACY-SEARCH-FALLBACK-337'
   );
 }
 __name(handleSearch, "handleSearch");
@@ -21081,12 +21126,23 @@ async function handleCatalogSearch066(url, env, cors) {
   const creatorLimitRaw = Number(url.searchParams.get('creatorLimit') || 10);
   const creatorLimit = Number.isFinite(creatorLimitRaw) ? Math.min(20, Math.max(5, Math.floor(creatorLimitRaw))) : 10;
 
-  const [titleIds, genreIds, nameUids, handleUids] = await Promise.all([
+  // SORIDRAW_R2_SEARCH_GENRE_ALIASES_337_20261004
+  // Korean/UI aliases arrive as repeated genre= params. They expand only the
+  // R2 genre prefix lookup; title/creator semantics remain tied to the original q.
+  const genreQueries = [...new Set([
+    normalized,
+    ...url.searchParams.getAll('genre').map((value) => normalizeCatalogText066(value)).filter(Boolean),
+  ])].slice(0, 8);
+
+  const [titleIds, genreIdLists, nameUids, handleUids] = await Promise.all([
     listCatalogPrefixIds066(env, `${EXPLORE_R2_CATALOG_ROOT_066}/title/${catalogSegment066(normalized)}`, Math.min(100, limit * 2)),
-    listCatalogPrefixIds066(env, catalogListPrefix066('genre', normalized), Math.min(100, limit * 2)),
+    Promise.all(genreQueries.map((genreQuery) =>
+      listCatalogPrefixIds066(env, catalogListPrefix066('genre', genreQuery), Math.min(100, limit * 2))
+    )),
     listCatalogArtistUids066(env, 'name', normalized, creatorLimit),
     listCatalogArtistUids066(env, 'handle', normalized.replace(/^@+/, ''), creatorLimit),
   ]);
+  const genreIds = [...new Set(genreIdLists.flat())];
 
   const creatorUids = [...new Set([...nameUids, ...handleUids])].slice(0, creatorLimit);
   const artistTrackLists = await Promise.all(creatorUids.map((uid) =>

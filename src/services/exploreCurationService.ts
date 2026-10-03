@@ -162,6 +162,18 @@ const invalidateManagedCuratedCache309 = (uid: string) => {
   }
 };
 
+// SORIDRAW_CURATED_MANAGER_PUBLIC_CACHE_PARITY_311_20261003
+// Manager and public SORIDRAW recommendation views are two views of the same
+// curated R2 snapshot. Whenever the manager has a newer snapshot, seed the
+// public cache too so closing the manager can never reveal an older feed.
+const syncPublicCuratedCacheFromManaged311 = (
+  items: Array<Record<string, unknown>>,
+  revision: string,
+  checkedAt = Date.now(),
+) => {
+  writeCuratedCache307(items.slice(0, 20), revision, checkedAt);
+};
+
 const fetchCuratedRevision309 = async () => {
   const revisionPath = `/v1/curated-revision?collection=${SORIDRAW_CURATED_COLLECTION_307}`;
   const response = await fetch(`${EXPLORE_API_BASE}${revisionPath}`, {
@@ -250,6 +262,7 @@ export const getManagedSoridrawCuratedTracks307 = async (
   const uid = String(user?.uid || '').trim();
   const cached = uid ? readManagedCuratedCache309(uid) : null;
   if (!force && cached && Date.now() - cached.checkedAt < SORIDRAW_MANAGED_CURATED_RECHECK_MS_309) {
+    syncPublicCuratedCacheFromManaged311(cached.items, cached.revision, cached.checkedAt);
     recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-local-309');
     return cached.items;
   }
@@ -259,7 +272,9 @@ export const getManagedSoridrawCuratedTracks307 = async (
     try {
       currentRevision = await fetchCuratedRevision309();
       if (currentRevision && currentRevision === cached.revision) {
-        writeManagedCuratedCache309(uid, cached.items, cached.revision, Date.now());
+        const checkedAt = Date.now();
+        writeManagedCuratedCache309(uid, cached.items, cached.revision, checkedAt);
+        syncPublicCuratedCacheFromManaged311(cached.items, cached.revision, checkedAt);
         recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-revision-309');
         return cached.items;
       }
@@ -286,7 +301,9 @@ export const getManagedSoridrawCuratedTracks307 = async (
         try { currentRevision = await fetchCuratedRevision309(); } catch {}
       }
     }
-    writeManagedCuratedCache309(uid, items, currentRevision, Date.now());
+    const checkedAt = Date.now();
+    writeManagedCuratedCache309(uid, items, currentRevision, checkedAt);
+    syncPublicCuratedCacheFromManaged311(items, currentRevision, checkedAt);
   }
   return items;
 };

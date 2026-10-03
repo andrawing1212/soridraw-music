@@ -6,8 +6,9 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 assert.match(page, /SORIDRAW_EXPLORE_CROSS_ACCOUNT_SHARED_FEED_REVALIDATION_154_20260924/);
 assert.match(page, /const exploreFeedRevisionCheckKey154 = \(uid: string \| null \| undefined, requestUrl: string\)/);
 assert.match(page, /const revisionCheckKey154 = exploreFeedRevisionCheckKey154\(user\?\.uid \|\| null, requestUrl\)/);
-assert.match(page, /exploreFeedLastRevisionCheckAt126\.set\(revisionCheckKey154, Date\.now\(\)\)/);
-assert.match(page, /exploreFeedLastRevisionCheckAt126\.get\(revisionCheckKey154\) \|\| 0/);
+assert.match(page, /writeExploreFeedLastRevisionCheckAt334\(revisionCheckKey154\)/);
+assert.match(page, /readExploreFeedLastRevisionCheckAt334\(revisionCheckKey154\)/);
+assert.match(page, /EXPLORE_FEED_REVISION_CHECK_STORAGE_PREFIX_334/);
 assert.match(page, /\}, \[requestUrl, feedRevisionSignal, user\?\.uid\]\);/);
 
 // Public Feed remains shared and zero-D1 on revalidation. This fix only makes

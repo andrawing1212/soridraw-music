@@ -1,3 +1,45 @@
+## CURRENT TASK — app334 실기기 Worker-zero + same-source W2 검증 (2026-10-04 KST)
+
+배포 완료:
+- PREVIEW app334.
+- Release System Audit `37145212030` SUCCESS.
+- Firebase PREVIEW Release `37145418195` SUCCESS.
+- deployed source `e9fd3d537cf477e393c9cb0a7e038917dc02b6a0`.
+- `preview.soridraw.com` app334 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / Rules / D1 schema / 사용자 데이터 변경 없음.
+
+실기기 순서:
+1. **app334 업데이트 후 각 화면을 한 번 정상 진입**하여 persistent validation timestamp를 seed.
+2. CACHE LIVE 초기화.
+3. Explore에서 데이터 변경 없이 바로 browser reload.
+   - 목표: Worker **0**, D1 rows **R0/W0**, Firestore R0/W0.
+4. 공개 프로필에서 정상 캐시가 있는 상태로 60초 안에 reload.
+   - 목표: Worker **0**, D1 R0/W0.
+5. Music Note에서 정상 캐시가 있는 상태로 60초 안에 reload.
+   - 목표: `music-note-publications-revision` Worker **0**, D1 R0/W0.
+6. 같은 registered 곡 public→private:
+   - 목표 D1 billable W2 / Firestore W0.
+7. 선택 Suno를 바꾸지 않고 private→public:
+   - 목표 D1 billable **W2** / Firestore W0.
+   - 토스트는 일반 `Explore에 다시 공개했습니다.` 경로여야 함.
+8. 실제 Suno 1↔2 변경은 기능 정상 여부만 확인.
+   - 현재 D1 W3는 별도 schema/compat 비용 작업 대상이며 hard gate PASS로 보지 않음.
+
+남은 별도 비용 작업:
+- never-published 첫 공개 실측 **R7/W12**.
+- migration 전 W18→W12 감소했지만 hard gate FAIL.
+- 다음 schema 수정 전 live D1 Insights + exact index/trigger contribution을 read-only로 분해.
+- 추가 migration은 별도 안전검증 후 판단.
+
+보호:
+- app164/160 Explore 좋아요.
+- app302 저장 하트 / app301 폴더 / app303 Split.
+- Music Note 60초/local-first batch.
+- app331~333 공개 UI/media path.
+- 검색 제목/장르/아티스트 이름·handle.
+- TEST / PRODUCTION 승격 금지.
+
 ## CURRENT TASK — cached reload Worker-zero pass (Explore / profile / Music Note) (2026-10-04 KST)
 
 증거:

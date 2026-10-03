@@ -1,3 +1,35 @@
+## 0OG. Refresh Worker fanout confirmed across Explore / public profile / Music Note (2026-10-04 KST)
+
+**사용자 실기기 영상**
+- Explore 새로고침/재진입:
+  - D1 rows는 R0/W0 유지.
+  - 그러나 Worker 요청이 누적됨.
+  - CACHE LIVE에서 반복 확인된 주요 경로:
+    - `/v1/me/explore-management-access`
+    - `/v1/me/likes-revision`
+    - feed/public-profile revision 계열 conditional 요청.
+- 공개 프로필:
+  - warm cache가 있어도 browser reload에서 conditional profile validation Worker 1회가 발생.
+  - 현재 코드 `src/services/exploreProfileFirstViewService.ts`의 app211 계약이 reload이면 60초 window 안에서도 강제 revalidation하도록 되어 있음.
+- Music Note 새로고침:
+  - `/v1/me/music-note-publications-revision`이 reload마다 다시 Worker를 호출.
+  - 사용자 영상에서 Worker 1 → refresh 후 Worker 2, D1 R0/W0.
+  - 원인: `publicationServerValidatedUids`가 메모리 Set이라 브라우저 reload 때 초기화되고, persistent cache가 있어도 다시 revision route를 호출.
+
+**판정**
+- 현재 구조는 D1 read/write 0 최적화에는 성공했지만 **브라우저 새로고침을 Worker 호출과 분리하지 못함**.
+- 데이터 변경 없는 reload가 반복될 때 Worker 요청 수가 사용자 reload 횟수에 비례하므로 SORIDRAW 장기 비용 목표에는 미달.
+- 이 문제는 D1 rows 비용과 별도인 Cloudflare Worker 요청 비용 문제로 기록.
+- 다만 cross-device freshness를 잃기 위해 revision 검사를 무조건 삭제하는 수정은 금지. refresh 자체가 아니라 실제 sync cadence / change signal에 묶어야 함.
+
+**수정 방향**
+1. Explore management access는 매 reload auth Worker 조회 대신 durable local permission snapshot + 명시 invalidation/TTL 사용.
+2. likes revision은 in-memory check timestamp를 reload-persistent timestamp로 바꾸어 반복 reload가 5분 window를 리셋하지 않게 함.
+3. Music Note publication revision도 persistent validation timestamp/revision을 사용해 reload가 검증 상태를 잃지 않게 함.
+4. public profile의 app211 forced reload revalidation 제거 또는 persistent validation window로 대체.
+5. 정상 cached reload 목표: Worker 0 / D1 R0 W0.
+6. cross-device 변경 감지는 기존 요구 시간 안에서 유지하며, 페이지 reload 자체를 change-check trigger로 사용하지 않음.
+
 ## 0OF. never-published 첫 공개 실기기 비용 W12 — migration 후 감소했지만 HARD FAIL (2026-10-04 KST)
 
 **사용자 실기기 CACHE LIVE**

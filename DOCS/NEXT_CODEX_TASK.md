@@ -1,3 +1,23 @@
+## CURRENT TASK — app338 한글 장르 검색 실기기 재검증 (2026-10-04 KST)
+
+현재:
+- app UI/Hosting: app337 유지.
+- PREVIEW Worker hotfix app338 배포 완료.
+- product source `7e5f6b9c1cdd0f0ad0d24611568aa2117495c3b9`.
+- Worker Release `37159504049` SUCCESS.
+- active Worker `4929b0b7-3d6b-448a-8fae-1b0ffe7b5941`.
+- TEST / PRODUCTION unchanged.
+- schema/index 추가 없음.
+- 사용자 데이터 변경 없음.
+
+사용자 테스트는 1개:
+- 방금 R584가 나온 **같은 한글 장르 검색**을 다시 1회 실행.
+- CACHE LIVE의 D1 rows_read만 확인.
+- 수백 read면 FAIL.
+- 소량 read 또는 R0이면 app338 장르 검색 cost fix PASS.
+
+그 외 ID/제목 검색, 공개/비공개, Explore/공개프로필은 이미 PASS 상태라 재테스트 불필요.
+
 ## CURRENT TASK — app337 검색 실기기 재검증 (2026-10-04 KST)
 
 배포 완료:

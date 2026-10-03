@@ -1,7 +1,9 @@
-app328-music-note-publication-track-picker
-target_source=f7d1de9927be691d844df5949aba4044ad88de80
-app_version=328
+app329-explore-publication-track-picker
+target_source=1e6b2011e77933db3b4e44f8b55dffdd00374a12
+app_version=329
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=music-note-publication-track-picker
+release_request=explore-publication-track-picker
+required_audit_run=37133838966
+required_worker_release_run=37133979250

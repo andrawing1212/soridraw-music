@@ -1,3 +1,25 @@
+## CURRENT TASK — app313 MY 프로필 배경 높이 후보 PREVIEW 배포 대기 (2026-10-03 KST)
+
+구현 완료:
+- PC MY 프로필 배경 높이 315px(기존 대비 1.5배).
+- 태블릿 252px(기존 대비 1.2배).
+- 모바일 190px 그대로.
+- 다른 사용자 공개 프로필 기존 높이 유지.
+- 높이 외 스타일/배치 변경 없음.
+- Release System Audit `37091395204` SUCCESS.
+- TypeScript / Build PASS.
+- 서버/데이터/Worker/Functions/Rules 변경 없음.
+
+현재:
+- preview HEAD: `67f3c59e5225c3e3898b8bdaa0431fa8a94c5e5c`.
+- 실제 PREVIEW는 app312.
+- **배포 전 / 실사용 검증 전**.
+
+다음:
+- 사용자가 프리뷰배포를 요청하면 app313 버전 고정 후 Firebase PREVIEW Hosting만 배포.
+- PC(>=1600), 태블릿(721~1599), 모바일(<=720) 높이 실기기 확인.
+- 다른 공개 프로필 높이 비변경 확인.
+
 ## CURRENT TASK — app312 최신 공개곡 전체/팔로잉 실기기 확인 (2026-10-03 KST)
 
 배포 완료:

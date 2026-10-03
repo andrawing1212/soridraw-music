@@ -99,7 +99,15 @@ jobs:
           }
 
           setup_base() {
-            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --file "$BASE" >/dev/null
+            node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "$(cat "$BASE")" --json > "$RUNNER_TEMP/setup-base.json"
+            run_json "SELECT name,type FROM sqlite_schema WHERE name LIKE 'w2p336_%' OR name LIKE 'idx_w2p336_%' ORDER BY type,name" "$RUNNER_TEMP/setup-schema.json"
+            node - "$RUNNER_TEMP/setup-schema.json" <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const rows=(Array.isArray(raw)?raw:(raw?.result||[])).flatMap(x=>Array.isArray(x?.results)?x.results:[]);
+          if(!rows.some(r=>r.name==='w2p336_tracks'&&r.type==='table')) throw new Error('w2p336_tracks setup missing');
+          console.log('W2P336_FIXTURE_SETUP=PASS objects='+rows.length);
+          NODE
           }
 
           INSERT_SQL="INSERT INTO w2p336_tracks(id,owner_uid,source_type,source_id,source_subtrack_key,title,cover_url,suno_url_primary,is_public,status,published_at,created_at,updated_at,primary_genre) VALUES('music_note_probe-user_note-new','probe-user','music_note','note-new','','Probe Song','https://example.test/a.webp','https://example.test/a.mp3',1,'published',3000,3000,3000,'Indie Pop')"
@@ -116,7 +124,7 @@ jobs:
 
           cleanup
           setup_base
-          node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --file "$CANDIDATE" >/dev/null
+          node "$WRANGLER" d1 execute RATE_DB --remote --config "$CFG" --command "$(cat "$CANDIDATE")" --json > "$RUNNER_TEMP/setup-candidate.json"
           run_json "$INSERT_SQL" "$RUNNER_TEMP/cand-insert.json"
           CAND_INSERT="$(meta_write "$RUNNER_TEMP/cand-insert.json")"
           run_json "$SWAP_SQL" "$RUNNER_TEMP/cand-swap.json"

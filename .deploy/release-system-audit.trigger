@@ -1,4 +1,4 @@
-app309-explore-manager-warm-cache
-source=f01aa545e6f2f1cdb047ca3bc6066bdcc77f0639
-product_commit=f01aa545e6f2f1cdb047ca3bc6066bdcc77f0639
-requested=2026-10-03T10:35:00+09:00
+app309-explore-manager-warm-cache-final
+source=37cf4ad227c99890053370747bf094b384ff0f6e
+product_commit=37cf4ad227c99890053370747bf094b384ff0f6e
+requested=2026-10-03T10:37:00+09:00

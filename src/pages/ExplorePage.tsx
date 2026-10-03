@@ -21,6 +21,8 @@ import {
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
   patchExploreFeedSessionCachesRow,
+  readExploreSearchCache340,
+  writeExploreSearchCache340,
 } from '../services/exploreSessionCache';
 import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
@@ -2061,8 +2063,12 @@ export default function ExplorePage() {
   };
 
   useEffect(() => {
-    const cachedRows = readExploreFeedSessionCache(requestUrl);
+    // SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004
+    // Exact warm searches are served from the device for two minutes: Worker 0 / D1 R0.
     const feedRequest = isExploreFeedRequest(requestUrl);
+    const cachedRows = feedRequest
+      ? readExploreFeedSessionCache(requestUrl)
+      : readExploreSearchCache340(requestUrl);
     const revisionCheckKey154 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
     const controller = new AbortController();
 
@@ -2120,6 +2126,8 @@ export default function ExplorePage() {
           nextCursor,
           serverRevision,
         );
+      } else {
+        writeExploreSearchCache340(requestUrl, rows);
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       const displayTracks = overlayActorLikeCounts120(normalizedTracks);

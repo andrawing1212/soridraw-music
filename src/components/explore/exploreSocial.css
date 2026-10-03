@@ -33,7 +33,7 @@
 .soridraw-explore-profile-copy{min-width:0;flex:1}
 .soridraw-explore-profile-name-line{display:flex;align-items:center;gap:12px;min-width:0}
 .soridraw-explore-profile-name-line h1{min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(255,255,255,.95);font-size:clamp(24px,2.6vw,36px);font-weight:920;letter-spacing:-.035em}
-.soridraw-explore-profile-copy>p{max-width:660px;margin:10px 0 0;color:rgba(235,235,240,.52);font-size:13px;font-weight:600;line-height:1.55}
+.soridraw-explore-profile-copy>p{max-width:660px;margin:10px 0 0;color:rgba(235,235,240,.52);font-size:13px;font-weight:600;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
 .soridraw-explore-profile-stats{display:flex;align-items:center;gap:18px;margin-top:15px;color:rgba(235,235,240,.48);font-size:12px;font-weight:650}
 .soridraw-explore-profile-stats strong{color:rgba(255,255,255,.88);font-weight:850}
 .soridraw-explore-own-profile{display:inline-flex;align-items:center;height:32px;padding:0 11px;border-radius:11px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.56);font-size:11px;font-weight:800;white-space:nowrap}

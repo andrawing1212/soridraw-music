@@ -1188,7 +1188,23 @@ assert.doesNotMatch(
 );
 assert.match(
   profileEdit,
-  /onChange=\{\(event\) => setDraft\(\(prev\) => \(\{ \.\.\.prev, bio: normalizeProfileBio317\(event\.currentTarget\.value\) \}\)\)\}/,
-  'profile bio must accept normalized input directly up to the character limit',
+  /onChange=\{\(event\) => \{[^]*?const nextBio = normalizeProfileBio317\(event\.currentTarget\.value\);[^]*?setDraft\(\(prev\) => \(\{ \.\.\.prev, bio: nextBio \}\)\);[^]*?\}\}/,
+  'profile bio must capture the textarea value synchronously before the state updater runs',
 );
 console.log('APP322_PROFILE_BIO_LINE_LIMIT_REMOVED=PASS');
+
+
+/* app323 — React clears currentTarget after the event handler returns.
+ * Capture the textarea value synchronously, then pass only the plain string
+ * into the state updater so typing cannot crash with currentTarget=null. */
+assert.match(
+  profileEdit,
+  /const nextBio = normalizeProfileBio317\(event\.currentTarget\.value\);[^]*?setDraft\(\(prev\) => \(\{ \.\.\.prev, bio: nextBio \}\)\)/,
+  'profile bio typing must not read event.currentTarget from inside the state updater',
+);
+assert.doesNotMatch(
+  profileEdit,
+  /setDraft\(\(prev\) => \(\{[^}]*event\.currentTarget\.value/,
+  'profile bio state updater must not dereference a released React currentTarget',
+);
+console.log('APP323_PROFILE_BIO_EVENT_TARGET_CRASH_FIX=PASS');

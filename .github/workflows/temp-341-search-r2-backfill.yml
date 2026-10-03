@@ -1,0 +1,179 @@
+name: TEMP 341 Search R2 Backfill Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-341-search-r2-backfill.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-341-search-r2-backfill
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      TEMP_WORKER: soridraw-explore-backfill-341
+      TEMP_URL: https://soridraw-explore-backfill-341.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix cloudflare/explore-worker install --no-audit --no-fund --package-lock=false
+
+      - name: Apply app341 R2-only search
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .deploy/apply_341_search_r2_only.py
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node scripts/verify-341-search-r2-only.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-197-new-public-track-like.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          npx tsc --noEmit
+          npm run build
+
+      - name: Static backfill safety guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('scripts/backfill-341-r2-search-catalog-worker.js','utf8');
+          if(!s.includes('SORIDRAW_SEARCH_R2_BACKFILL_341_20261004')) throw Error('backfill marker missing');
+          if(!s.includes("WHERE t.is_public=1 AND t.status='published'")) throw Error('public-only guard missing');
+          for(const token of ['.run()', '.batch([', 'INSERT INTO', 'UPDATE tracks', 'DELETE FROM tracks', 'ALTER TABLE', 'DROP TABLE', 'CREATE TABLE']) {
+            if(s.includes(token)) throw Error('forbidden D1 mutation token: '+token);
+          }
+          if(!s.includes('PROFILE_MEDIA.put')) throw Error('derived R2 write missing');
+          console.log('APP341_BACKFILL_D1_SELECT_ONLY=PASS');
+          console.log('APP341_BACKFILL_USER_DATA_WRITE=0');
+          NODE
+
+      - name: Deploy isolated one-time backfill worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(openssl rand -hex 32)"
+          printf '%s' "$secret" > "$RUNNER_TEMP/backfill-secret"
+          cat > "$RUNNER_TEMP/wrangler-341.jsonc" <<JSON
+          {
+            "name": "$TEMP_WORKER",
+            "main": "$GITHUB_WORKSPACE/scripts/backfill-341-r2-search-catalog-worker.js",
+            "compatibility_date": "2026-08-28",
+            "workers_dev": true,
+            "d1_databases": [
+              {
+                "binding": "DB",
+                "database_name": "soridraw-explore-db",
+                "database_id": "217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"
+              }
+            ],
+            "r2_buckets": [
+              {
+                "binding": "PROFILE_MEDIA",
+                "bucket_name": "soridraw-profile-media"
+              }
+            ],
+            "vars": {
+              "BACKFILL_SECRET": "$secret"
+            }
+          }
+          JSON
+          node node_modules/wrangler/bin/wrangler.js deploy --config "$RUNNER_TEMP/wrangler-341.jsonc"
+          echo 'APP341_TEMP_BACKFILL_WORKER_DEPLOY=PASS'
+
+      - name: Approved derived R2 catalog backfill
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(cat "$RUNNER_TEMP/backfill-secret")"
+          cleanup() {
+            curl -fsS -X DELETE               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEMP_WORKER" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 20); do
+            code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/stats.json" -w '%{http_code}' -H "x-soridraw-backfill: $secret" "$TEMP_URL/stats" || true)"
+            if [ "$code" = 200 ]; then break; fi
+            test "$i" != 20 || { echo "BACKFILL_STATS_UNAVAILABLE HTTP=$code"; exit 3; }
+            sleep 3
+          done
+          cat "$RUNNER_TEMP/stats.json"
+          total="$(node -e "const x=require(process.env.RUNNER_TEMP+'/stats.json'); if(x.ok!==true)process.exit(2); process.stdout.write(String(Number(x.total||0)))")"
+          test "$total" -ge 0
+          test "$total" -le 10000 || { echo "BACKFILL_ABORT_TOO_MANY_PUBLIC_TRACKS=$total"; exit 4; }
+          echo "APP341_PUBLIC_TRACKS=$total"
+
+          cursor=""
+          processed=0
+          while :; do
+            encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]||''))" "$cursor")"
+            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/backfill?limit=5&cursor=$encoded" > "$RUNNER_TEMP/page.json"
+            node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); if(x.ok!==true) { console.error(x); process.exit(2); }"
+            n="$(node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); process.stdout.write(String(Number(x.processed||0)))")"
+            next="$(node -e "const x=require(process.env.RUNNER_TEMP+'/page.json'); process.stdout.write(String(x.nextCursor||''))")"
+            processed=$((processed+n))
+            echo "APP341_BACKFILL_PROGRESS=$processed/$total"
+            if [ -z "$next" ] || [ "$n" -eq 0 ]; then break; fi
+            cursor="$next"
+            test "$processed" -le "$((total+5))" || { echo 'BACKFILL_CURSOR_LOOP'; exit 5; }
+          done
+          test "$processed" -eq "$total" || { echo "BACKFILL_COUNT_MISMATCH processed=$processed total=$total"; exit 6; }
+
+          cursor=""
+          verified=0
+          while :; do
+            encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]||''))" "$cursor")"
+            curl -fsS --max-time 60 -H "x-soridraw-backfill: $secret" "$TEMP_URL/verify?limit=5&cursor=$encoded" > "$RUNNER_TEMP/verify.json"
+            node - <<'NODE'
+            const x=require(process.env.RUNNER_TEMP+'/verify.json');
+            if(x.ok!==true || (x.missing||[]).length){ console.error(JSON.stringify(x)); process.exit(2); }
+            NODE
+            n="$(node -e "const x=require(process.env.RUNNER_TEMP+'/verify.json'); process.stdout.write(String(Number(x.checked||0)))")"
+            next="$(node -e "const x=require(process.env.RUNNER_TEMP+'/verify.json'); process.stdout.write(String(x.nextCursor||''))")"
+            verified=$((verified+n))
+            echo "APP341_VERIFY_PROGRESS=$verified/$total"
+            if [ -z "$next" ] || [ "$n" -eq 0 ]; then break; fi
+            cursor="$next"
+            test "$verified" -le "$((total+5))" || { echo 'VERIFY_CURSOR_LOOP'; exit 7; }
+          done
+          test "$verified" -eq "$total" || { echo "VERIFY_COUNT_MISMATCH verified=$verified total=$total"; exit 8; }
+          echo "APP341_R2_SEARCH_CATALOG_BACKFILL=PASS total=$total"
+          echo "APP341_R2_SEARCH_CATALOG_VERIFY=PASS total=$verified"
+          echo "APP341_SHARED_D1_WRITE=0"
+          echo "APP341_USER_DATA_WRITE=0"
+          cleanup
+          trap - EXIT
+
+      - name: Commit verified product and self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/temp-341-search-r2-backfill.yml
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git commit -m 'fix(preview): make Explore search D1-zero with R2 authority'
+          git push origin HEAD:preview
+          echo "APP341_PRODUCT_COMMIT=$(git rev-parse HEAD)"

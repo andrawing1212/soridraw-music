@@ -1100,3 +1100,12 @@ assert.match(
   'deferred warning text must stay visually local to the handle field',
 );
 console.log('APP318_DEFERRED_HANDLE_WARNING=PASS');
+
+/* app319 — public profile bio must preserve author-entered line breaks exactly
+ * enough for textarea Enter/newline layout to survive into the public profile. */
+assert.match(
+  social,
+  /soridraw-explore-profile-copy>p\{[^}]*white-space:pre-line[^}]*overflow-wrap:anywhere/,
+  'public profile bio must preserve saved newline breaks while still wrapping long text safely',
+);
+console.log('APP319_PROFILE_BIO_LINE_BREAKS=PASS');

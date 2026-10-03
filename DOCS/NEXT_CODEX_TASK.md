@@ -1,3 +1,31 @@
+## CURRENT TASK — app318 프로필 편집 실사용 확인 (2026-10-03 KST)
+
+배포 완료:
+- PREVIEW app318.
+- Final Release System Audit `37095952402` SUCCESS.
+- Firebase PREVIEW Release `37096051261` SUCCESS.
+- locked source `6f2bf80bde951eeea8736bce25fa1f4be612e22d`.
+- `preview.soridraw.com` app318 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 schema / Rules / 사용자 데이터 migration 없음.
+
+확인:
+1. 대표 장르 최대 5개.
+2. 소개 최대 150자.
+3. 소개 최대 4줄, 입력창 세로 resize 금지.
+4. 핸들 경고는 평소 숨김.
+5. 잘못된 핸들로 저장할 때만 입력칸 경고 + 아래 안내문 표시.
+6. 핸들을 정상 조건으로 수정하면 경고 즉시 해제.
+7. app316 프로필 사진 초기 줌 및 배경 편집 정상.
+8. 프로필 저장/공개프로필/소셜 링크 회귀 없음.
+
+보호:
+- 프로필 사진/배경 이미지 크롭 구조 추가 변경 금지.
+- 프로필 저장 API/미디어 업로드 구조 변경 금지.
+- 좋아요/공개·비공개/저장 하트/폴더/Split 변경 금지.
+- 사용자 `테스트배포` 전 main/TEST 승격 금지.
+- PRODUCTION 별도 명확 승인 전 변경 금지.
+
 ## CURRENT TASK — app316 프로필 사진 초기 확대 실사용 확인 (2026-10-03 KST)
 
 배포 완료:

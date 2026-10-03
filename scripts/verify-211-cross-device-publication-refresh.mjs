@@ -78,7 +78,7 @@ assert.doesNotMatch(revision, /invalidateExploreFeedSessionCache\(/);
 
 assert.doesNotMatch(page, /window\.addEventListener\('pageshow', requestRevisionCheck\)/);
 assert.doesNotMatch(page, /window\.addEventListener\('focus', requestRevisionCheck\)/);
-assert.match(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
+assert.doesNotMatch(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
 assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
 
-console.log('PASS 211/335: warm browser entry/reload is Worker-free for Feed/profile/curation/publication checks; bounded freshness moves to real post-entry activity or tab resume; same-source republish remains visibility-only.');
+console.log('PASS 211/335: warm browser entry/reload and ordinary clicks are Worker-free for Feed/profile/curation/publication checks; bounded freshness moves to real tab resume or targeted mutation signals; same-source republish remains visibility-only.');

@@ -53,6 +53,15 @@ jobs:
                 'refreshSourceMedia',
                 'suno_url_primary',
                 'suno_url_secondary',
+                'SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919',
+                'isExploreR2CatalogEnabled066',
+                'isExploreR2CatalogReadEnabled066',
+                'isExploreR2FirstPublisherEnabled066',
+                'handleCatalogFeed066',
+                'handleCatalogProfileTracks066',
+                'handleCatalogGenre066',
+                'handleCatalogSearch066',
+                'firstPublisherBootstrap066',
               ]){
                 const escaped=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
                 console.log(`${stage}_MARKER_${q.replace(/[^a-z0-9]+/gi,'_')}=${(s.match(new RegExp(escaped,'g'))||[]).length}`);
@@ -61,8 +70,12 @@ jobs:
               const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
               const db=bindings.find(b=>b.type==='d1'&&b.name==='DB');
               const media=bindings.find(b=>b.type==='r2_bucket'&&b.name==='PROFILE_MEDIA');
+              const catalogFlags=Object.fromEntries(bindings
+                .filter(b=>b.type==='plain_text' && /^SORIDRAW_R2_(CATALOG|FIRST_PUBLISHER)/.test(String(b.name||'')))
+                .map(b=>[String(b.name),String(b.text||b.value||'')]));
               console.log(`${stage}_DB_ID=${String(db?.id||db?.database_id||db?.uuid||'')}`);
               console.log(`${stage}_PROFILE_MEDIA=${String(media?.bucket_name||media?.bucket||media?.name||'')}`);
+              console.log(`${stage}_R2_CATALOG_FLAGS=${JSON.stringify(catalogFlags)}`);
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

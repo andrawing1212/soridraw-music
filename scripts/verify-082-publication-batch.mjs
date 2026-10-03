@@ -6,7 +6,7 @@ const worker = readFileSync(workerPath, 'utf8');
 const client = readFileSync('src/services/explorePublicationService.ts', 'utf8');
 const patch = readFileSync('cloudflare/explore-worker/patches/049-publication-internal-batch-compaction.mjs', 'utf8');
 const mediaPatch = readFileSync('cloudflare/explore-worker/patches/092-publication-media-source-cost.mjs', 'utf8');
-const mediaMigration = readFileSync('cloudflare/explore-worker/migrations/20260913_04_music_note_visibility_hotpath.sql', 'utf8');
+const mediaMigration = readFileSync('cloudflare/explore-worker/migrations/20261004_01_publication_media_source_cost.sql', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
 

@@ -993,28 +993,39 @@ assert.match(
 console.log('APP314_MY_PROFILE_HERO_HEIGHT_FINE_TUNE=PASS');
 
 
-/* app315 — profile image editor starts in the middle of the existing 1..3
- * zoom range so both zoom-out and zoom-in are available immediately.
- * Profile representative genres are capped to four only in the profile editor. */
+/* app316 — avatar crop opens less zoomed while the slider thumb still starts
+ * at the visual midpoint. Background crop keeps app315's existing 1..3 / 2.0
+ * behavior. Profile representative genres remain capped to four. */
+assert.match(cropModal, /const AVATAR_CROP_MIN_ZOOM_316 = 1;/);
+assert.match(cropModal, /const AVATAR_CROP_MAX_ZOOM_316 = 2;/);
+assert.match(cropModal, /const AVATAR_CROP_DEFAULT_ZOOM_316 = 1\.5;/);
+assert.match(cropModal, /const BACKGROUND_CROP_MIN_ZOOM_316 = 1;/);
+assert.match(cropModal, /const BACKGROUND_CROP_MAX_ZOOM_316 = 3;/);
+assert.match(cropModal, /const BACKGROUND_CROP_DEFAULT_ZOOM_316 = 2;/);
 assert.match(
   cropModal,
-  /const DEFAULT_PROFILE_CROP_ZOOM_315 = 2;/,
-  'profile/background crop default zoom must start at the midpoint',
+  /kind === 'avatar'[^]*?AVATAR_CROP_MIN_ZOOM_316[^]*?AVATAR_CROP_MAX_ZOOM_316[^]*?AVATAR_CROP_DEFAULT_ZOOM_316[^]*?BACKGROUND_CROP_MIN_ZOOM_316[^]*?BACKGROUND_CROP_MAX_ZOOM_316[^]*?BACKGROUND_CROP_DEFAULT_ZOOM_316/,
+  'avatar and background crop zoom ranges must remain independently scoped',
 );
 assert.match(
+  cropModal,
+  /useState<ExploreProfileMediaCrop>\(\{ zoom: zoomBounds316\.initial, offsetX: 0, offsetY: 0 \}\)/,
+  'crop editor must initialize from the kind-specific midpoint',
+);
+assert.match(
+  cropModal,
+  /min=\{zoomBounds316\.min\}[^]*?max=\{zoomBounds316\.max\}[^]*?value=\{crop\.zoom\}/,
+  'slider must render the kind-specific zoom range',
+);
+assert.match(
+  cropModal,
+  /setCrop\(\{ zoom: zoomBounds316\.initial, offsetX: 0, offsetY: 0 \}\)/,
+  'reset must return to the kind-specific initial zoom',
+);
+assert.doesNotMatch(
   cropModal,
   /DEFAULT_PROFILE_CROP_ZOOM_315/,
-  'both profile and background crop editors must start at midpoint zoom',
-);
-assert.match(
-  cropModal,
-  /min="1"[^]*?max="3"[^]*?value=/,
-  'crop control must preserve the existing safe 1..3 zoom range',
-);
-assert.match(
-  cropModal,
-  /setCrop[^]*?DEFAULT_PROFILE_CROP_ZOOM_315/,
-  'crop reset must return to the new midpoint default',
+  'app315 shared zoom default must not return and re-enlarge avatar initial framing',
 );
 assert.match(profileEdit, /const PROFILE_GENRE_LIMIT_315 = 4;/);
 assert.match(profileEdit, /profile\.genres[^]*?PROFILE_GENRE_LIMIT_315/);
@@ -1027,4 +1038,4 @@ assert.doesNotMatch(
   /draft\.genres\.length >= 5|slice\(0, 5\)/,
   'profile editor must not retain the previous five-genre limit',
 );
-console.log('APP315_PROFILE_CROP_MID_ZOOM_AND_FOUR_GENRES=PASS');
+console.log('APP316_AVATAR_CROP_LESS_ZOOMED_MIDPOINT=PASS');

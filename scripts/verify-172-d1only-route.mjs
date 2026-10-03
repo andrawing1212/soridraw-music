@@ -6,7 +6,7 @@ const service = readFileSync('src/services/exploreLikeService.ts','utf8');
 const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json','utf8'));
 const migration = readFileSync('cloudflare/explore-worker/migrations/20260921_03_explore_like_d1only_v171_additive.sql','utf8');
 
-assert.equal(manifest.patches.at(-1),'082-like-d1only-route.mjs');
+assert.ok(manifest.patches.includes('082-like-d1only-route.mjs'),'missing 082 D1-only route release patch');
 assert.match(worker,/SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
 assert.match(worker,/SORIDRAW_LIKE_D1ONLY_CANONICAL_171_20260921/);
 

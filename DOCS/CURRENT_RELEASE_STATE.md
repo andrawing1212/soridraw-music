@@ -1,3 +1,53 @@
+## 0NQ. PREVIEW app318 배포 완료 — 대표 장르 5개 + 소개 150자/4줄 + 핸들 저장 시 경고 (2026-10-03 KST)
+
+**적용**
+- 대표 장르 최대 개수를 **4개 → 5개**로 복원.
+- 수동 추가 / 최근 10곡 자동 추천 / 저장 / 변경 비교 모두 최대 5개로 통일.
+- 소개 글자 수를 **최대 150자**로 제한.
+- 소개는 **최대 4줄**까지만 입력/붙여넣기 허용.
+- 소개 입력창은 세로 크기 고정, 사용자가 임의로 늘리지 못하게 유지.
+- 고유 핸들 제한은 기존 계약 유지:
+  - 영문 소문자, 숫자, 점(.), 밑줄(_).
+  - 3~24자.
+  - 점(.)은 처음/끝/연속 사용 불가.
+- 핸들 경고는 평소에는 노출하지 않고 **저장 버튼을 눌렀을 때 조건에 맞지 않는 경우에만** 입력칸 경고 스타일 + 안내문을 표시.
+- 핸들이 올바르게 수정되면 경고는 즉시 해제.
+- app316 프로필 사진 초기 줌(avatar 1~2 / 기본 1.5)과 배경 편집(1~3 / 기본 2)은 그대로 유지.
+
+**변경 / 검증 / 배포**
+- 대표 장르 5개 + 소개 제한: `abbfc04f493fc38313701679c61e86ec06bb7634`.
+- 소개 4줄 UI 고정: `341229ea4ba1a5c88ddd0cf4a7a76cab753f8a5b`.
+- app317 verifier: `fda9377fb9cf539508342b81a2d44aeeebb8ab43`.
+- app317 Release System Audit `37095789989`: **SUCCESS**.
+- 핸들 저장 시 경고: `c179ff83a8f117741a3ee65e9aed8ccdb2e2b8e9`.
+- 핸들 경고 스타일: `f98d4c6509293905dc84b957fbdd5a0a391e9935`.
+- app318 verifier: `ef5d707320ad27babf9f0ce848196ecb583d87ac`.
+- app318 version commit: `b90dcca7586a8597e8129c7ece25eb5d08583ad3`.
+- final audit trigger: `8a95b50ddf2654e6ba4cf8aea679c03a68e91a19`.
+- Final Release System Audit `37095952402`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37096051261`: **SUCCESS**.
+  - locked source `6f2bf80bde951eeea8736bce25fa1f4be612e22d`.
+  - `preview.soridraw.com` app **318**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 없음.
+
+**실사용 확인**
+1. 대표 장르가 최대 5개까지 추가/자동추천/저장되는지.
+2. 소개가 150자에서 더 입력되지 않는지.
+3. 줄바꿈 기준 4줄을 넘기면 5번째 줄이 들어가지 않는지.
+4. 소개 입력창이 4줄 범위에서 고정되어 세로 resize 되지 않는지.
+5. 정상 핸들 상태에서는 경고가 보이지 않는지.
+6. 잘못된 핸들 상태로 저장을 누르면 해당 입력칸 바로 아래에 경고가 나타나는지.
+7. 핸들을 정상 조건으로 고치면 경고가 즉시 사라지는지.
+8. app316 프로필 사진/배경 이미지 편집 동작 회귀 없음.
+
 ## 0NP. PREVIEW app316 배포 완료 — 프로필 사진 초기 확대 축소 (2026-10-03 KST)
 
 **적용**

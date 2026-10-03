@@ -3000,7 +3000,12 @@ export default function ExplorePage() {
         }, updateDoc(doc(db, 'favorites', sourceId), updates));
         patchExplorePublicationSourceLocalCache(user.uid, sourceId, updates);
 
-        await refreshExploreMusicNotePublicationSource(user, sourceId, publicationSettings.options);
+        await refreshExploreMusicNotePublicationSource(
+          user,
+          sourceId,
+          publicationSettings.options,
+          publicationSettings.track.id,
+        );
         const selected = publicationSettings.sunoLinks[publicationSettings.selectedSunoIndex]
           || publicationSettings.sunoLinks[0];
         const other = publicationSettings.sunoLinks.find((link) => link.url !== selected?.url) || null;

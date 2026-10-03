@@ -1,9 +1,10 @@
-app329-explore-publication-track-picker
-target_source=1e6b2011e77933db3b4e44f8b55dffdd00374a12
-app_version=329
+app330-instant-music-note-publication-ui
+target_source=57d6ccfa7f3d65557f03267754d5e4d944ab9a42
+app_version=330
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-publication-track-picker
-required_audit_run=37133838966
-required_worker_release_run=37133979250
+release_request=instant-publication-ui-response
+required_audit_run=37135125184
+worker_change=false
+functions_change=false

@@ -1,0 +1,99 @@
+name: SORIDRAW PREVIEW 336 Hybrid Read Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/apply-336-hybrid-read.yml'
+      - '.deploy/apply_336_hybrid_read.py'
+      - 'cloudflare/explore-worker/runtime/r2-hybrid-read-336.js'
+      - 'scripts/verify-336-r2-hybrid-read.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-preview-336-hybrid-read-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Compose app336 in isolated Worker copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/soridraw-app336"
+          mkdir -p "$work"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$work/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$work" python3 .deploy/apply_336_hybrid_read.py
+          node --check "$work/worker.js"
+          SORIDRAW_GENERATED_WORKER="$work/worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          echo "APP336_ISOLATED_COMPOSE=PASS"
+
+      - name: Targeted regression verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/soridraw-app336/worker.js"
+          node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-197-new-public-track-like.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-212-publication-shared-profile-parity.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          echo "APP336_TARGETED_REGRESSION=PASS"
+
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+          echo "APP336_TYPESCRIPT_BUILD=PASS"
+
+      - name: Install generated canonical Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/soridraw-app336/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          git diff --check
+          echo "APP336_CANONICAL_LOCK=PASS sha256=$actual"
+
+      - name: Commit product implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add             cloudflare/explore-worker/canonical/preview-worker.js             cloudflare/explore-worker/canonical/source-sha256.txt
+          git diff --cached --quiet && { echo 'No generated Worker change'; exit 1; }
+          git commit -m 'feat(preview): compose app336 hybrid read worker'
+          git push origin HEAD:preview
+          echo "APP336_IMPLEMENTATION_COMMIT=$(git rev-parse HEAD)"
+          echo "SHARED_D1_SCHEMA_CHANGE=0"
+          echo "USER_DATA_MIGRATION=0"
+          echo "DEPLOYMENT=0"

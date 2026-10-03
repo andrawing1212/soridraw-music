@@ -1,3 +1,77 @@
+## 0OC. Shared D1 publication write-fanout compaction applied — user-approved migration (2026-10-04 KST)
+
+**사용자 승인**
+- 공유 D1 인덱스/구조 변경 migration을 명확히 승인.
+- 목표: 공개/비공개, 공개 source 변경, 공개 설정 옵션, 최초 공개의 D1 rows_written을 가능한 안전 최저선까지 축소.
+- 사용자 row 삭제/백필/변환/덮어쓰기 금지 유지.
+
+**사전 read-only 감사**
+- Run `37141297366`: **SUCCESS**.
+- 현재 Music Note first-publication track UPSERT D1 Insights: 평균 `rows_written=16`.
+- source media UPDATE: 평균 `rows_written=4`.
+- `profile_pinned` UPDATE: `rows_written=3`.
+- `allow_next_song_apply` / `allow_follower_save`: `rows_written=2`.
+- public/private visibility: `rows_written=2`.
+- owner별 tracks: 최대 **42**, 평균 **22**.
+- public profile fallback은 `idx_tracks_owner_latest` + 임시 정렬로 정확히 처리 가능.
+- owner + source_type 조회는 이미 `idx_tracks_owner_source` 사용.
+- 실제 title fallback 검색은 `idx_tracks_latest_order`를 사용하며 `idx_tracks_title`을 사용하지 않음.
+- Music Note 66 rows 중 non-empty `legacy_global_id` = **0**.
+- PREVIEW/main/production Worker 모두 제거 대상 index를 `INDEXED BY`로 강제하지 않음.
+
+**적용한 shared D1 변경**
+Migration:
+- `cloudflare/explore-worker/migrations/20261004_02_publication_write_fanout_compaction.sql`
+- rollback:
+  `cloudflare/explore-worker/migrations/20261004_02_publication_write_fanout_rollback.sql`
+
+제거:
+- `idx_tracks_owner_suno_url`
+- `idx_tracks_source_type_latest`
+- `idx_tracks_owner_profile_order`
+- `idx_tracks_title`
+- full `idx_tracks_legacy_global`
+
+대체:
+- `idx_tracks_legacy_global_nonempty`
+  - non-empty legacy id에 대해서만 UNIQUE 유지.
+  - Music Note의 null legacy id는 더 이상 index row를 만들지 않음.
+
+Music Note derived insert:
+- `explore079_music_note_derived_track_insert`는 missing derived profile 복구 기능은 유지.
+- obsolete `track_count = track_count + NEW.active` write 제거.
+- PREVIEW/TEST/PRODUCTION의 `derivedProfile032`가 이미 canonical `COUNT(*) FROM tracks`를 사용하므로 표시 의미 변경 없음.
+
+**실제 migration 결과**
+- Apply Run `37141622358`: **SUCCESS**.
+- static migration verifier PASS.
+- guarded live read-only preflight PASS.
+- migration PASS.
+- postflight D1 `PRAGMA quick_check` PASS.
+- tracks / explore_derived_tracks / explore_derived_profiles row count 전후 동일 PASS.
+- TEST/PRODUCTION query compatibility PASS.
+- rollback 실행되지 않음.
+- 사용자 데이터 row 삭제 / backfill / rewrite: **0**.
+- Worker / Hosting / Functions / Firebase Rules / RTDB Rules 변경 없음.
+- 현재 PREVIEW 앱은 계속 **app333**이며, 이번 변경은 shared D1 schema/trigger만 적용됨.
+
+**예상 정상 mutation 비용 — 다음 실기기 검증 대상**
+- 동일곡 public↔private: **W2 유지**.
+- 다음곡 적용 허용: **W2 유지**.
+- 팔로워 곡 저장 허용: **W2 유지**.
+- 공개 프로필 고정: **W3 → W2 목표**.
+- 실제 Suno source swap: **W4 → W3 목표**.
+  - tracks canonical 1 + derived media row 1 + shared revision 1이 하위호환 최소 구조.
+- never-published 첫 공개: current Insights W16 기준 **약 W10 목표**.
+  - 이전 사용자 실측 W18 기준이면 약 W12 수준 가능.
+  - exact 실측 필요.
+
+**현재 하위호환 한계**
+- source swap을 W2 이하로 만들려면 media-only `explore_derived_tracks` 갱신 또는 shared revision 중 하나를 제거해야 함.
+- 그러나 현재 TEST/PRODUCTION cold recovery가 shared revision + derived row를 사용하므로 지금 제거하면 다른 환경이 오래된 공개 미디어를 볼 수 있음. **현재 안전 floor는 W3**.
+- first publication W1~W2는 현재 shared `tracks` + feed/profile recovery index 구조와 동시에 달성 불가.
+- W10 아래로 크게 내리려면 TEST/PRODUCTION까지 새 canonical 구조를 읽도록 코드 승격한 뒤 legacy index/derived compatibility layer를 단계적으로 종료해야 함.
+
 ## 0OB. PREVIEW app333 배포 완료 — 공개 source 변경 1회 Worker + 즉시 Firestore write 제거 (2026-10-04 KST)
 
 **목표**

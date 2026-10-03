@@ -15,13 +15,23 @@ type Props = {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-const DEFAULT_PROFILE_CROP_ZOOM_315 = 2;
+const AVATAR_CROP_MIN_ZOOM_316 = 1;
+const AVATAR_CROP_MAX_ZOOM_316 = 2;
+const AVATAR_CROP_DEFAULT_ZOOM_316 = 1.5;
+const BACKGROUND_CROP_MIN_ZOOM_316 = 1;
+const BACKGROUND_CROP_MAX_ZOOM_316 = 3;
+const BACKGROUND_CROP_DEFAULT_ZOOM_316 = 2;
+
+const getCropZoomBounds316 = (kind: ExploreProfileMediaKind) => kind === 'avatar'
+  ? { min: AVATAR_CROP_MIN_ZOOM_316, max: AVATAR_CROP_MAX_ZOOM_316, initial: AVATAR_CROP_DEFAULT_ZOOM_316 }
+  : { min: BACKGROUND_CROP_MIN_ZOOM_316, max: BACKGROUND_CROP_MAX_ZOOM_316, initial: BACKGROUND_CROP_DEFAULT_ZOOM_316 };
 
 export default function ExploreImageCropModal({ file, kind, onCancel, onApply }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
-  const [crop, setCrop] = useState<ExploreProfileMediaCrop>({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 });
+  const zoomBounds316 = getCropZoomBounds316(kind);
+  const [crop, setCrop] = useState<ExploreProfileMediaCrop>({ zoom: zoomBounds316.initial, offsetX: 0, offsetY: 0 });
   const [ready, setReady] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState('');
@@ -75,7 +85,7 @@ export default function ExploreImageCropModal({ file, kind, onCancel, onApply }:
   };
 
   const changeZoom = (value: number) => {
-    setCrop((current) => ({ ...current, zoom: clamp(value, 1, 3) }));
+    setCrop((current) => ({ ...current, zoom: clamp(value, zoomBounds316.min, zoomBounds316.max) }));
   };
 
   const apply = async () => {
@@ -127,8 +137,8 @@ export default function ExploreImageCropModal({ file, kind, onCancel, onApply }:
           <button type="button" onClick={() => changeZoom(crop.zoom - 0.1)} aria-label="축소"><Minus aria-hidden="true" /></button>
           <input
             type="range"
-            min="1"
-            max="3"
+            min={zoomBounds316.min}
+            max={zoomBounds316.max}
             step="0.01"
             value={crop.zoom}
             onChange={(event) => changeZoom(Number(event.target.value))}
@@ -138,7 +148,7 @@ export default function ExploreImageCropModal({ file, kind, onCancel, onApply }:
           <button
             type="button"
             className="soridraw-explore-crop-reset"
-            onClick={() => setCrop({ zoom: DEFAULT_PROFILE_CROP_ZOOM_315, offsetX: 0, offsetY: 0 })}
+            onClick={() => setCrop({ zoom: zoomBounds316.initial, offsetX: 0, offsetY: 0 })}
             aria-label="위치와 확대 초기화"
             title="초기화"
           >

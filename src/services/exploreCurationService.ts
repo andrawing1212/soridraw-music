@@ -8,12 +8,21 @@ const SORIDRAW_CURATED_CACHE_KEY_307 = 'soridraw_explore_curated_soridraw_v307';
 const SORIDRAW_CURATED_RECHECK_MS_307 = 60_000;
 const SORIDRAW_MANAGED_CURATED_CACHE_PREFIX_309 = 'soridraw_explore_managed_curated_soridraw_v309';
 const SORIDRAW_MANAGED_CURATED_RECHECK_MS_309 = 60_000;
+const SORIDRAW_CURATION_ACCESS_CACHE_PREFIX_334 = 'soridraw_explore_curation_access_v1';
+const SORIDRAW_CURATION_ACCESS_RECHECK_MS_334 = 5 * 60_000;
 
 export type ExploreCurationAccess307 = {
   canCurate: boolean;
   curatorRole: 'master' | 'admin' | null;
 };
 export type ExploreCuratorPermissionMap307 = Record<string, boolean>;
+
+type ExploreCurationAccessCache334 = {
+  schemaVersion: 1;
+  checkedAt: number;
+  roleSignature: string;
+  access: ExploreCurationAccess307;
+};
 
 type CuratedCache307 = {
   schemaVersion: 1;
@@ -31,6 +40,63 @@ type ManagedCuratedCache309 = {
 
 let memoryCache307: CuratedCache307 | null = null;
 const managedMemoryCache309 = new Map<string, ManagedCuratedCache309>();
+const curationAccessMemory334 = new Map<string, ExploreCurationAccessCache334>();
+const curationAccessInflight334 = new Map<string, Promise<ExploreCurationAccess307>>();
+
+const curationAccessStorageKey334 = (uid: string) =>
+  `${SORIDRAW_CURATION_ACCESS_CACHE_PREFIX_334}:${String(uid || '').trim()}`;
+
+const readCurationAccessCache334 = (uid: string): ExploreCurationAccessCache334 | null => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return null;
+  const memory = curationAccessMemory334.get(normalizedUid);
+  if (memory) return memory;
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(curationAccessStorageKey334(normalizedUid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ExploreCurationAccessCache334>;
+    const role = parsed?.access?.curatorRole;
+    if (
+      parsed?.schemaVersion !== 1
+      || !Number.isFinite(Number(parsed?.checkedAt))
+      || (role !== null && role !== 'admin' && role !== 'master')
+      || typeof parsed?.access?.canCurate !== 'boolean'
+    ) return null;
+    const next: ExploreCurationAccessCache334 = {
+      schemaVersion: 1,
+      checkedAt: Math.max(0, Number(parsed.checkedAt || 0)),
+      roleSignature: String(parsed.roleSignature || ''),
+      access: {
+        canCurate: Boolean(parsed.access.canCurate),
+        curatorRole: role === 'master' ? 'master' : role === 'admin' ? 'admin' : null,
+      },
+    };
+    curationAccessMemory334.set(normalizedUid, next);
+    return next;
+  } catch {
+    return null;
+  }
+};
+
+const writeCurationAccessCache334 = (
+  uid: string,
+  roleSignature: string,
+  access: ExploreCurationAccess307,
+) => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return;
+  const next: ExploreCurationAccessCache334 = {
+    schemaVersion: 1,
+    checkedAt: Date.now(),
+    roleSignature: String(roleSignature || ''),
+    access: { ...access },
+  };
+  curationAccessMemory334.set(normalizedUid, next);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(curationAccessStorageKey334(normalizedUid), JSON.stringify(next)); } catch {}
+  }
+};
 
 const readJson = async (response: Response) => {
   try { return await response.json(); } catch { return null; }
@@ -233,13 +299,41 @@ export const getSoridrawCuratedTracks307 = async (force = false): Promise<Array<
   return fetchCuratedBody307();
 };
 
-export const getExploreCurationAccess307 = async (user: User): Promise<ExploreCurationAccess307> => {
-  const payload = await requestAuthed307(user, '/v1/me/explore-management-access');
-  const role = String(payload?.data?.curatorRole || '').trim();
-  return {
-    canCurate: payload?.data?.canCurate === true,
-    curatorRole: role === 'master' ? 'master' : role === 'admin' ? 'admin' : null,
-  };
+export const getExploreCurationAccess307 = async (
+  user: User,
+  roleSignature = '',
+): Promise<ExploreCurationAccess307> => {
+  const uid = String(user?.uid || '').trim();
+  if (!uid) return { canCurate: false, curatorRole: null };
+
+  const signature = String(roleSignature || '');
+  const cached = readCurationAccessCache334(uid);
+  if (
+    cached
+    && Date.now() - cached.checkedAt < SORIDRAW_CURATION_ACCESS_RECHECK_MS_334
+    && (!signature || cached.roleSignature === signature)
+  ) {
+    recordCloudflareLocalCacheHit('/v1/me/explore-management-access', 'LOCAL HIT · 관리 권한 캐시');
+    return { ...cached.access };
+  }
+
+  const existing = curationAccessInflight334.get(uid);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const payload = await requestAuthed307(user, '/v1/me/explore-management-access');
+    const role = String(payload?.data?.curatorRole || '').trim();
+    const access: ExploreCurationAccess307 = {
+      canCurate: payload?.data?.canCurate === true,
+      curatorRole: role === 'master' ? 'master' : role === 'admin' ? 'admin' : null,
+    };
+    writeCurationAccessCache334(uid, signature, access);
+    return access;
+  })().finally(() => {
+    curationAccessInflight334.delete(uid);
+  });
+  curationAccessInflight334.set(uid, task);
+  return task;
 };
 
 export const setSoridrawCuratedTrack307 = async (user: User, trackId: string, promoted: boolean) => {

@@ -45,6 +45,7 @@
     "080-direct-like-atomic-batch.mjs",
     "081-batch-like-final-freeze.mjs",
     "082-like-d1only-route.mjs",
-    "092-publication-media-source-cost.mjs"
+    "092-publication-media-source-cost.mjs",
+    "093-publication-inline-media-source.mjs"
   ]
 }

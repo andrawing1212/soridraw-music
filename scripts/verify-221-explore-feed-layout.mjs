@@ -1109,3 +1109,33 @@ assert.match(
   'public profile bio must preserve saved newline breaks while still wrapping long text safely',
 );
 console.log('APP319_PROFILE_BIO_LINE_BREAKS=PASS');
+
+/* app320 — handle input itself must stay permissive. Uppercase, symbols,
+ * non-Latin text and over-limit strings may be typed; the existing lowercase
+ * 3..24 contract is enforced only when Save runs. */
+assert.match(
+  profileEdit,
+  /id="soridraw-profile-handle"[^]*?value=\{draft\.handle\}[^]*?onChange=\{\(event\) => \{[^]*?const nextHandle = event\.target\.value;[^]*?setDraft/,
+  'handle input must preserve exactly what the user types before save validation',
+);
+assert.doesNotMatch(
+  profileEdit,
+  /id="soridraw-profile-handle"[^]*?maxLength=\{?24\}?/,
+  'handle input must not block over-limit text before Save is pressed',
+);
+assert.doesNotMatch(
+  profileEdit,
+  /const nextHandle = event\.target\.value\.toLowerCase\(\)|replace\(\/\[\^a-z0-9\._\]\+\/g/,
+  'handle input must not strip uppercase, symbols, or other languages while typing',
+);
+assert.match(
+  profileEdit,
+  /const handleValid = useMemo\(\(\) => \/\^\[a-z0-9\._\]\{3,24\}\$\//,
+  'save-time handle validation contract must remain unchanged',
+);
+assert.match(
+  profileEdit,
+  /if \(!handleValid\) \{[^]*?setHandleValidationVisible\(true\);[^]*?return;/,
+  'invalid handle must still be rejected only when Save runs',
+);
+console.log('APP320_PERMISSIVE_HANDLE_TYPING_SAVE_VALIDATION=PASS');

@@ -1,7 +1,7 @@
-app307-explore-curation-management
-target_source=62d6b98d73f75ccc1ddc6535a9198d08829c868d
-app_version=307
+app308-explore-curation-hardening
+target_source=17d4a4031d23a7c1b2bf7a972a158727bb169e7f
+app_version=308
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-curation-permission-promoted-track-management
+release_request=explore-curation-private-safe-edge-cache-hardening

@@ -1627,6 +1627,10 @@ export default function FavoritesPage({
   // SORIDRAW_EXPLORE_PUBLICATION_UI_902
   const [explorePublicationStateBySongId, setExplorePublicationStateBySongId] = useState<Record<string, ExploreMusicNotePublicationState>>({});
   const [explorePublicationBusyId, setExplorePublicationBusyId] = useState<string | null>(null);
+  // app331: backend settlement must never hold the visible publication control in a
+  // spinner/busy state. Keep a hidden per-source guard so duplicate mutations remain blocked
+  // while the card/icon/dialog can reflect the optimistic state immediately.
+  const explorePublicationMutationInFlightRef = useRef<Set<string>>(new Set());
   // SORIDRAW_EXPLORE_8E4_MUSIC_NOTE_PUBLICATION_UI_956
   // SORIDRAW_EXPLORE_8E4_INTERACTION_BUTTON_FIX_957
   // SORIDRAW_EXPLORE_8E4_STATE_BUTTON_FILL_LIVE_LIKE_958
@@ -5837,6 +5841,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
     if (explorePublicationBusyId === sourceId) return;
 
+    // app331: a healthy local publication snapshot is the first paint. Opening the
+    // dialog must not wait for the revision/network validation that already runs in
+    // the page hydration path.
+    const localState = explorePublicationStateBySongId[sourceId];
+    if (localState) {
+      setExplorePublicationDialog({
+        song,
+        sourceId,
+        state: localState,
+        options: {
+          allowNextSongApply: Boolean(localState.allowNextSongApply),
+          allowFollowerSave: Boolean(localState.allowFollowerSave),
+          profilePinned: Boolean(localState.profilePinned),
+        },
+        selectedSunoIndex: getFavoriteSunoMainIndex(song),
+      });
+      return;
+    }
+
+    // Cold/no-cache fallback only: accuracy is more important than inventing a state.
     setExplorePublicationBusyId(sourceId);
     try {
       const state = await getExploreMusicNotePublicationState(user, sourceId);
@@ -5870,6 +5894,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (!user?.uid || !explorePublicationDialog) return;
     const { song, sourceId, state, options, selectedSunoIndex } = explorePublicationDialog;
     if (explorePublicationBusyId === sourceId) return;
+    if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
+      showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
     const links = getFavoriteSunoLinks(song);
     const requestedIndex = (selectedSunoIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
@@ -5888,7 +5916,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       ...options,
       status: 'public',
     };
-    setExplorePublicationBusyId(sourceId);
+    explorePublicationMutationInFlightRef.current.add(sourceId);
     setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }));
     setExplorePublicationDialog(null);
     setExplorePublicationPrivateConfirm(false);
@@ -5939,7 +5967,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       console.error('explore publication submit failed:', error);
       showFavoriteToast(getExplorePublicationErrorMessage(error));
     } finally {
-      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+      explorePublicationMutationInFlightRef.current.delete(sourceId);
     }
   };
 
@@ -5952,8 +5980,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       setExplorePublicationPrivateConfirm(true);
       return;
     }
+    if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
+      showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
-    setExplorePublicationBusyId(sourceId);
+    // app331: private conversion follows the same local-first rule as public.
+    // Hide/close immediately, then settle the exact existing backend mutation.
+    const optimisticState: ExploreMusicNotePublicationState = {
+      ...state,
+      ...options,
+      status: 'private',
+    };
+    explorePublicationMutationInFlightRef.current.add(sourceId);
+    setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }));
+    setExplorePublicationDialog(null);
+    setExplorePublicationPrivateConfirm(false);
+
     try {
       const visibilityState = await setExploreTrackVisibility(user, state.trackId, false);
       const nextState: ExploreMusicNotePublicationState = {
@@ -5962,14 +6005,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         status: 'private',
       };
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
-      setExplorePublicationDialog(null);
-      setExplorePublicationPrivateConfirm(false);
       showFavoriteToast('Explore에서 비공개로 전환했습니다.');
     } catch (error) {
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
       console.error('explore publication private transition failed:', error);
       showFavoriteToast(getExplorePublicationErrorMessage(error));
     } finally {
-      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+      explorePublicationMutationInFlightRef.current.delete(sourceId);
     }
   };
 

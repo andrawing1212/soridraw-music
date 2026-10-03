@@ -1,4 +1,4 @@
-app324-profile-parity-left-bio
-source=efca071e534a50bac787336279af38ec4179af0d
-product_commit=60502405d239e14470808eb90a017956c2a5d2bb
-requested=2026-10-03T15:39:00+09:00
+app325-profile-toolbar-back-only
+source=eaee8f1185f356b0b95d8beab34c4fa721901635
+product_commit=8306f90beae93d8dbaa4b28a21f4af2c67ccddca
+requested=2026-10-03T15:48:00+09:00

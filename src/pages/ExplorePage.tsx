@@ -47,6 +47,7 @@ import {
 } from '../services/explorePublicLikeSyncService';
 import {
   getExploreFollowState,
+  getExploreFollowingUids312,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
@@ -1272,6 +1273,15 @@ export default function ExplorePage() {
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [sort] = useState<ExploreSort>('recommended');
   const [recommendationGenreId221, setRecommendationGenreId221] = useState('');
+  // SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003
+  // "전체" reuses the existing chronological latest Feed. "팔로잉" only
+  // filters that already-loaded Feed with the viewer's existing local/R2 follow
+  // bundle; it must not create a second D1 Feed query.
+  const [latestPublicScope312, setLatestPublicScope312] = useState<'all' | 'following'>('all');
+  const [followingUids312, setFollowingUids312] = useState<Set<string>>(() => new Set());
+  const [followingLoadedUid312, setFollowingLoadedUid312] = useState('');
+  const [followingLoading312, setFollowingLoading312] = useState(false);
+  const [followingError312, setFollowingError312] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -1396,6 +1406,16 @@ export default function ExplorePage() {
 
   useEffect(() => {
     setDislikedTrackIds(user?.uid ? readExploreDislikedTrackIds(user.uid) : new Set());
+  }, [user?.uid]);
+
+  useEffect(() => {
+    // Following membership is account-private local state. Never let another
+    // account inherit the previous account's filter membership in the same tab.
+    setLatestPublicScope312('all');
+    setFollowingUids312(new Set());
+    setFollowingLoadedUid312('');
+    setFollowingLoading312(false);
+    setFollowingError312('');
   }, [user?.uid]);
 
   // app307 — Only accounts already known locally as admin/master ask the Worker
@@ -2540,6 +2560,36 @@ export default function ExplorePage() {
     }
   };
 
+  const selectLatestPublicScope312 = async (scope: 'all' | 'following') => {
+    if (scope === 'all') {
+      setLatestPublicScope312('all');
+      return;
+    }
+    if (!user?.uid) {
+      setSocialNotice('팔로잉 공개곡은 로그인 후 볼 수 있어요.');
+      return;
+    }
+
+    setLatestPublicScope312('following');
+    if (followingLoadedUid312 === user.uid) return;
+
+    const viewerUid = user.uid;
+    setFollowingLoading312(true);
+    setFollowingError312('');
+    try {
+      const uids = await getExploreFollowingUids312(user);
+      if (auth.currentUser?.uid !== viewerUid) return;
+      setFollowingUids312(new Set(uids));
+      setFollowingLoadedUid312(viewerUid);
+    } catch (reason) {
+      if (auth.currentUser?.uid !== viewerUid) return;
+      console.warn('[app312] Explore following latest filter unavailable:', reason);
+      setFollowingError312(reason instanceof Error ? reason.message : '팔로잉 목록을 확인하지 못했어요.');
+    } finally {
+      if (auth.currentUser?.uid === viewerUid) setFollowingLoading312(false);
+    }
+  };
+
   const toggleFollow = async () => {
     if (!profileUid || !profile) return;
     if (!user) {
@@ -2552,6 +2602,14 @@ export default function ExplorePage() {
     try {
       const result = await setExploreFollow(user, profile.uid, nextShouldFollow);
       setFollowState(result);
+      if (followingLoadedUid312 === user.uid) {
+        setFollowingUids312((previous) => {
+          const next = new Set(previous);
+          if (result.isFollowing) next.add(profile.uid);
+          else next.delete(profile.uid);
+          return next;
+        });
+      }
       patchExplorePublicProfileFirstViewProfile(profile.uid, {
         followerCount: result.followerCount || (nextShouldFollow ? profile.followerCount + 1 : Math.max(0, profile.followerCount - 1)),
         followingCount: result.followingCount || profile.followingCount,
@@ -2905,6 +2963,12 @@ export default function ExplorePage() {
   const visibleFeedTracks = sort === 'recommended' && !submittedQuery
     ? tracks.filter((track) => !dislikedTrackIds.has(track.id))
     : tracks;
+
+  const latestPublicTracks312 = useMemo(() => {
+    if (latestPublicScope312 === 'all') return tracks;
+    if (!user?.uid || followingLoadedUid312 !== user.uid) return [];
+    return tracks.filter((track) => followingUids312.has(track.ownerUid));
+  }, [tracks, latestPublicScope312, user?.uid, followingLoadedUid312, followingUids312]);
 
   const recommendationModel221 = sort === 'recommended' && !submittedQuery
     ? buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || '')
@@ -3543,13 +3607,39 @@ export default function ExplorePage() {
 
               {tracks.length > 0 && (
                 <ExploreRecommendationRail
-                  title="최신"
+                  title="최신 공개곡"
                   subtitle="새로 공개된 곡"
-                  itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, tracks.length)}
+                  itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, latestPublicTracks312.length)}
                   mobileGroupSize={3}
+                  toolbar={(
+                    <div className="soridraw-explore-recommend-keywords" aria-label="최신 공개곡 범위 선택">
+                      <button
+                        type="button"
+                        className={latestPublicScope312 === 'all' ? 'is-active' : undefined}
+                        onClick={() => void selectLatestPublicScope312('all')}
+                        aria-pressed={latestPublicScope312 === 'all'}
+                      >
+                        전체
+                      </button>
+                      <button
+                        type="button"
+                        className={latestPublicScope312 === 'following' ? 'is-active' : undefined}
+                        onClick={() => void selectLatestPublicScope312('following')}
+                        aria-pressed={latestPublicScope312 === 'following'}
+                        disabled={followingLoading312}
+                      >
+                        {followingLoading312 ? '팔로잉 확인 중' : '팔로잉'}
+                      </button>
+                    </div>
+                  )}
                 >
-                  {tracks.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
+                  {latestPublicTracks312
+                    .slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304)
+                    .map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
+              )}
+              {latestPublicScope312 === 'following' && !followingLoading312 && followingError312 && (
+                <div className="soridraw-explore-state">{followingError312}</div>
               )}
 
               {popularTracks.length > 0 ? (

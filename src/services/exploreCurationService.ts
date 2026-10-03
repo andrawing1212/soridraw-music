@@ -273,11 +273,14 @@ const fetchCuratedBody307 = async () => {
 
 export const getSoridrawCuratedTracks307 = async (force = false): Promise<Array<Record<string, unknown>>> => {
   const cached = readCuratedCache307();
-  if (!force && cached && Date.now() - cached.checkedAt < SORIDRAW_CURATED_RECHECK_MS_307) {
-    recordCloudflareLocalCacheHit('/v1/curated?soridraw=1', 'soridraw-curated-memory-307');
+  // app335: normal Explore entry/reload is not a curated-data change signal.
+  // A healthy device snapshot paints locally forever until an explicit activity
+  // revalidation below, or a same-device curator mutation invalidates it.
+  if (!force && cached) {
+    recordCloudflareLocalCacheHit('/v1/curated?soridraw=1', 'soridraw-curated-local-335');
     return cached.items;
   }
-  if (!force && cached) {
+  if (cached) {
     const revisionPath = `/v1/curated-revision?collection=${SORIDRAW_CURATED_COLLECTION_307}`;
     try {
       const response = await fetch(`${EXPLORE_API_BASE}${revisionPath}`, {
@@ -292,11 +295,20 @@ export const getSoridrawCuratedTracks307 = async (force = false): Promise<Array<
         return cached.items;
       }
     } catch (error) {
-      console.warn('[app307] SORIDRAW curated revision unavailable; keeping local cache.', error);
+      console.warn('[app335] SORIDRAW curated activity revalidation unavailable; keeping local cache.', error);
       return cached.items;
     }
   }
   return fetchCuratedBody307();
+};
+
+export const revalidateSoridrawCuratedTracks335 = async (): Promise<Array<Record<string, unknown>>> => {
+  const cached = readCuratedCache307();
+  if (cached && Date.now() - cached.checkedAt < SORIDRAW_CURATED_RECHECK_MS_307) {
+    recordCloudflareLocalCacheHit('/v1/curated?soridraw=1', 'soridraw-curated-recent-335');
+    return cached.items;
+  }
+  return getSoridrawCuratedTracks307(true);
 };
 
 export const getExploreCurationAccess307 = async (

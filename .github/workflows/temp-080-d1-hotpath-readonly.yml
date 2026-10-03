@@ -1,5 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
-# rerun-20261004-app333-index-migration-preflight
+# rerun-20261004-app333-index-migration-preflight-v2
 
 on:
   push:
@@ -69,6 +69,20 @@ jobs:
             EXPLAIN QUERY PLAN SELECT id FROM tracks INDEXED BY idx_tracks_owner_latest WHERE owner_uid='__audit__' AND is_public=1 AND status='published' ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
             EXPLAIN QUERY PLAN SELECT id,source_id FROM tracks WHERE owner_uid='__audit__' AND source_type='music_note' AND source_id IS NOT NULL AND source_id<>'' LIMIT 200;
             SELECT COALESCE(MAX(n),0) AS max_tracks_per_owner, COALESCE(AVG(n),0) AS avg_tracks_per_owner FROM (SELECT owner_uid,COUNT(*) AS n FROM tracks GROUP BY owner_uid);
+            SELECT COUNT(*) AS music_note_rows,
+                   SUM(CASE WHEN legacy_global_id IS NOT NULL AND TRIM(legacy_global_id)<>'' THEN 1 ELSE 0 END) AS music_note_legacy_nonempty
+            FROM tracks INDEXED BY idx_tracks_source_type_latest
+            WHERE source_type='music_note';
+            EXPLAIN QUERY PLAN
+              SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND (title LIKE '%__audit__%' OR search_text LIKE '%__audit__%')
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN
+              SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND primary_genre='__audit__'
+              ORDER BY published_at DESC,id DESC LIMIT 25;
           " --json > "$RUNNER_TEMP/index-preflight.json"
           node <<'NODE'
           const fs=require('fs');

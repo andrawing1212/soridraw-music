@@ -1250,3 +1250,28 @@ assert.doesNotMatch(
   'profile toolbar must not render any text label beside the back button',
 );
 console.log('APP325_PROFILE_TOOLBAR_BACK_ONLY=PASS');
+
+
+/* app326 — social link controls are intentionally doubled in size for easier
+ * recognition and tapping while keeping the approved position below genres. */
+assert.match(
+  social,
+  /soridraw-explore-profile-social-icons-244 a\{[^}]*width:60px[^}]*height:60px[^}]*border-radius:20px/,
+  'desktop profile social buttons must render at 60x60',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-social-icons-244 svg\{width:32px;height:32px\}/,
+  'desktop social glyphs must scale with the larger controls',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-social-icons-244 a\{width:52px;height:52px;border-radius:16px\}/,
+  'mobile profile social buttons must render at 52x52',
+);
+assert.match(
+  social,
+  /soridraw-explore-profile-social-icons-244 svg\{width:28px;height:28px\}/,
+  'mobile social glyphs must scale with the larger controls',
+);
+console.log('APP326_PROFILE_SOCIAL_BUTTONS_2X=PASS');

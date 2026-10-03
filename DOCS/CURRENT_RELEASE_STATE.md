@@ -1,3 +1,40 @@
+## 0NP. PREVIEW app316 배포 완료 — 프로필 사진 초기 확대 축소 (2026-10-03 KST)
+
+**적용**
+- 사용자 실사용 피드백에 따라 **프로필 사진 편집창의 최초 확대 상태만 완화**.
+- 프로필 사진(avatar) 확대 범위: **1~2**, 기본값 **1.5**.
+- 따라서 최초 진입 시 슬라이더 손잡이는 계속 **중앙 위치**에서 시작하지만, 실제 이미지는 app315의 zoom 2보다 덜 확대되어 보임.
+- 배경 이미지 편집은 app315 동작 그대로 유지: 확대 범위 **1~3**, 기본값 **2**.
+- 프로필 사진/배경 이미지 모두 드래그 이동, 확대/축소, 초기화, 적용/취소, 저장 경로 비변경.
+- 대표 장르 최대 4개 제한도 그대로 유지.
+
+**변경 / 검증 / 배포**
+- 제품 commit: `36fb6bb39b1aba3fe40275782e007b5062aa038b`.
+- verifier commit: `ba3ffe1992ae7a86cc32a79bb9de942f6063f23f`.
+- app316 version commit: `4bd7393a63c031a16160b0667324eef3b2e21210`.
+- audit trigger: `1c952a7f393c3372067687f7db7ff071d603874b`.
+- Release System Audit `37094788361`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37094882121`: **SUCCESS**.
+  - locked source `6399e8516acdfb274579d1e157cf5f7110205c4d`.
+  - `preview.soridraw.com` app **316**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 migration/backfill 변경 없음.
+
+**실사용 확인**
+1. 프로필 사진 선택 직후 이미지가 app315보다 덜 확대되어 보이는지.
+2. 프로필 사진 슬라이더 손잡이는 중앙에서 시작하는지.
+3. 중앙에서 왼쪽 축소 / 오른쪽 확대 모두 자연스러운지.
+4. 초기화 시 프로필 사진은 zoom 1.5 중앙 위치로 복귀하는지.
+5. 배경 이미지 편집은 기존 zoom 2 / 1~3 동작 그대로인지.
+6. 적용/취소/드래그/저장/대표 장르 4개 기능에 회귀가 없는지.
+
 ## 0NO. PREVIEW app315 배포 완료 — 프로필 이미지 기본 줌 중앙 + 대표 장르 4개 제한 (2026-10-03 KST)
 
 **적용**

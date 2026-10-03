@@ -1,7 +1,7 @@
-app310-explore-manager-r2-first-load
-target_source=0098c44f74de5300a92cd56eb1e70db58692aa41
-app_version=310
+app311-curated-manager-feed-parity
+target_source=16894d3ce0de3d89ef4c62cd6135f9001401b0bf
+app_version=311
 scope=hosting-only
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=explore-manager-first-load-r2-d1-zero
+release_request=curated-manager-public-feed-cache-state-parity

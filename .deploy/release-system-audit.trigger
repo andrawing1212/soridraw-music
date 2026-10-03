@@ -1,4 +1,4 @@
-app320-permissive-handle-typing
-source=1a8faed566cf8b796679759fa902ab600e35f458
+app320-permissive-handle-typing-retry
+source=2a027f6c8e7aef1ae0e5eaf5f1ffef525c19e0e8
 product_commit=84480f57794ff5dd3b7cbad91310cf317f16939f
-requested=2026-10-03T13:29:00+09:00
+requested=2026-10-03T13:31:00+09:00

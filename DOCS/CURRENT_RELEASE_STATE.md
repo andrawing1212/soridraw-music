@@ -1,3 +1,25 @@
+## 0NZ. app331 실기기 공개 비용 분기 확인 — W2/W4가 랜덤이 아님 (2026-10-04 KST)
+
+**사용자 실기기 CACHE LIVE 결과**
+- 비공개 전환: Cloudflare D1 query `R3 / W1`, billable row `R3 / W2`, Browser SDK `R0 / W0`.
+- 공개 실행 중 Firestore `favorites:write 1`이 동반된 케이스: D1 billable row `R11 / W4`.
+- 공개 상태에서 다른 Suno 곡으로 전환: Firestore `favorites:write 1` + D1 billable row `R11 / W4`.
+- 같은 공개/비공개 동작 중 media/main 선택 변경이 없는 저비용 케이스: Browser SDK `R0 / W0`, D1 billable row `R5 / W2`.
+
+**코드 대조 결과**
+- app331 `FavoritesPage.tsx`는 `selectionChanged`일 때 먼저 `updateFavorite(...)`로 Music Note 메인 Suno 선택을 Firestore에 기록한 뒤 `refreshExploreMusicNotePublicationSource(...)`를 호출한다.
+- 이 경로가 실기기에서 `favorites:write 1` + D1 `W4`와 정확히 일치한다.
+- 선택곡 변경이 없는 기등록 private→public / public→private는 `setExploreTrackVisibility(...)`의 좁은 visibility 경로를 사용하며 W2 실측과 일치한다.
+- 따라서 W2/W4 차이는 무작위 변동이 아니라 **source-media 선택 변경 여부에 따른 서로 다른 mutation 경로**다.
+- 단, 사용자가 실제로 곡을 바꾸지 않았는데도 `favorites:write 1 / W4`가 발생한다면 `selectionChanged`가 stale Music Note row를 보고 잘못 true가 되는 별도 클라이언트 버그로 판정한다.
+
+**현재 판정**
+- 기등록 곡의 순수 공개/비공개 W2: PASS.
+- 실제 다른 Suno 곡 source-media swap W4: hard gate FAIL.
+- never-published 첫 공개 W18: 기존과 동일하게 FAIL.
+- 다음 비용 수정은 UI가 아니라 W4 media swap과 W18 first-publication write/index fanout을 분리해 줄여야 한다.
+- 좋아요 app164/160, 저장 하트 app302, 폴더 app301, Split app303, 프로필 정상 경로는 변경 금지.
+
 ## 0NY. app330 실기기 공개 비용 재진단 — 첫 공개 W18 원인 고정 (2026-10-04 KST)
 
 **사용자 실기기**

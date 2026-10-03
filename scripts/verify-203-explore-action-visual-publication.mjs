@@ -76,6 +76,32 @@ assert.match(submitBody, /explorePublicationMutationInFlightRef\.current\.add\(s
 assert.match(privateBody, /explorePublicationMutationInFlightRef\.current\.add\(sourceId\)/, 'private settlement must retain an invisible duplicate-mutation guard');
 assert.match(privateBody, /catch \(error\) \{[\s\S]*setExplorePublicationStateBySongId\(\(prev\) => \(\{ \.\.\.prev, \[sourceId\]: state \}\)\)/, 'failed private settlement must restore the previous visible state');
 
+assert.match(
+  openBody,
+  /const latestSong = favoritesStore\.getFavorites\(\)\.find[\s\S]*selectedSunoIndex: getFavoriteSunoMainIndex\(latestSong\)/,
+  'publication dialog must seed Suno selection from the freshest local Music Note snapshot',
+);
+assert.match(
+  submitBody,
+  /const latestSong = favoritesStore\.getFavorites\(\)\.find[\s\S]*const latestMainLink = getFavoriteMainSunoLink\(latestSong\)/,
+  'publication submit must compare against the freshest local Music Note snapshot',
+);
+assert.match(
+  submitBody,
+  /const selectedUrl = String\(selectedLink\?\.url \|\| ''\)\.trim\(\)[\s\S]*const latestMainUrl = String\(latestMainLink\?\.url \|\| ''\)\.trim\(\)/,
+  'publication submit must compare the actual selected media identity instead of stale index state',
+);
+assert.match(
+  submitBody,
+  /selectedUrl !== latestMainUrl/,
+  'only a real Suno media change may enter the source-media refresh path',
+);
+assert.match(
+  submitBody,
+  /buildFavoriteSunoMainSelectionUpdates\(latestSong, latestRequestedIndex\)/,
+  'real source-media swaps must update from the freshest local Music Note row',
+);
+
 console.log('APP203_EXPLORE_STUDIO_APPLY_ICON=PASS');
 console.log('APP203_EXPLORE_NEUTRAL_CIRCLE_ACTIONS=PASS');
 console.log('APP203_EXPLORE_PINK_TEXT_ONLY_GUIDE=PASS');
@@ -86,3 +112,4 @@ console.log('APP203_MUSIC_NOTE_PUBLICATION_OPTIMISTIC_UI=PASS');
 console.log('APP203_MUSIC_NOTE_PUBLICATION_WARM_OPEN_LOCAL_FIRST=PASS');
 console.log('APP203_MUSIC_NOTE_PUBLICATION_PRIVATE_OPTIMISTIC_UI=PASS');
 console.log('APP203_MUSIC_NOTE_PUBLICATION_NO_SETTLEMENT_SPINNER=PASS');
+console.log('APP203_MUSIC_NOTE_PUBLICATION_FRESH_MEDIA_IDENTITY_GUARD=PASS');

@@ -346,7 +346,7 @@ assert.match(service, /EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 \* 60_000/);
 assert.match(service, /if \(previous !== revision\) \{/);
 assert.match(service, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(service, /writeLikeLocal127\(key, revision\)/);
-assert.match(service, /revisionCheckAtByUid127\.set\(uid, Date\.now\(\) - EXPLORE_LIKE_LEGACY_CHECK_MS_127 \+ 30_000\)/);
+assert.match(service, /writeExploreLikeRevisionCheckAt334\(uid, Date\.now\(\) - EXPLORE_LIKE_LEGACY_CHECK_MS_127 \+ 30_000\)/);
 assert.match(legacyPatch, /requireExploreAuth\(request\)/);
 assert.match(legacyPatch, /bucket\.head\(exploreSharedLikesKey061\(authContext\.uid\)\)/);
 assert.match(legacyPatch, /\/v1\/me\/likes-revision/);

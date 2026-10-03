@@ -1,3 +1,38 @@
+## 0NN. PREVIEW app314 배포 완료 — MY 프로필 배경 높이 335/270px (2026-10-03 KST)
+
+**적용**
+- MY 프로필 상단 배경 높이만 재조정.
+- PC(1600px 이상): **335px**.
+- 태블릿(721~1599px): **270px**.
+- 모바일(720px 이하): 기존 **190px 그대로**.
+- 다른 사용자 공개 프로필 높이 비변경.
+- 패딩/텍스트/아바타/이미지 필터/크롭/위치/간격 변경 없음.
+
+**변경 / 검증 / 배포**
+- CSS commit: `449f4c2b8dd1554319aa3a9d3eb07c09ebed0fd0`.
+- verifier commit: `1a397b02b581180ff1a1dd7b3d0b025074cde316`.
+- app314 version commit: `1b8bfab06ae57096e7601b91fe44563527382b0f`.
+- final audit trigger: `806ed75a5577068f0cb4e5713a65d76958bb300f`.
+- Final Release System Audit `37092786220`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - 정적 검증 PASS.
+  - Like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37092878119`: **SUCCESS**.
+  - locked source `e3005b1f5b6ad43c3cea0b6f9bea1da0e37874e3`.
+  - `preview.soridraw.com` app **314**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules / 사용자 데이터 변경 없음.
+
+**사용자 작업 규칙 갱신**
+- 앞으로 사용자의 **수정 요청은 PREVIEW 수정 + 검증 + PREVIEW 배포까지 완료**하는 것으로 진행.
+- 사용자가 별도로 배포 제외를 지시한 경우만 PREVIEW 배포를 생략.
+- TEST 승격은 사용자의 `테스트배포` 요청 시에만.
+- PRODUCTION은 별도의 명확한 정식배포 승인 시에만.
+
 ## 0NM. PREVIEW app314 후보 — MY 프로필 배경 높이 미세 조정 (2026-10-03 KST)
 
 **변경**

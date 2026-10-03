@@ -1,5 +1,5 @@
-app330-instant-music-note-publication-ui
-source=57d6ccfa7f3d65557f03267754d5e4d944ab9a42
-scope=music-note-publication-optimistic-ui,existing-publication-regression
+app331-instant-public-private-controls
+source=4e9af117580d1c8419760056797698089d2e47a8
+scope=music-note-publication-warm-open,public-private-optimistic-ui,no-visible-settlement-spinner
 protect=likes,folders,split,profile,publication-backend,test-production
-requested=2026-10-04T00:58:00+09:00
+requested=2026-10-04T01:16:00+09:00

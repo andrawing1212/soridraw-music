@@ -1,3 +1,50 @@
+## 0OA. PREVIEW app332 배포 완료 — 동일곡 공개/비공개 stale media 판정 차단 (2026-10-04 KST)
+
+**사용자 지시**
+- app331 실기기에서 동일곡 공개/비공개인데도 간헐적으로 Firestore `favorites:write 1` + D1 W4가 발생하는 비용 분기만 수정.
+- 좋아요 / 저장 하트 / 폴더 / Split / 프로필 / Worker / D1 schema 등 다른 정상 기능은 변경 금지.
+
+**원인 / 수정**
+- 공개 설정 dialog가 오래된 Music Note row 객체를 들고 있으면 `mainSunoIndex`가 현재 로컬 최신 선택과 달라져, 실제로 곡을 바꾸지 않아도 `selectionChanged=true`가 될 수 있었음.
+- app332는 dialog open과 submit에서 `favoritesStore`의 최신 Music Note snapshot을 우선 사용.
+- 선택 변경 판정은 stale 숫자 index 비교가 아니라 **실제 선택 Suno URL vs 최신 main Suno URL** 비교로 변경.
+- 같은 URL이면 source-media refresh를 타지 않고 기존 visibility-only 공개/비공개 경로 유지.
+- 실제 다른 Suno URL을 선택한 경우에만 기존 `updateFavorite + refreshExploreMusicNotePublicationSource` 경로 유지.
+- backend / Worker / D1 trigger / schema / Firestore 구조 변경 없음.
+
+**변경 파일**
+- `src/pages/FavoritesPage.tsx`
+- `scripts/verify-203-explore-action-visual-publication.mjs`
+- `public/app-version.json`
+- release trigger files only.
+
+**기준 / 검증 / 배포**
+- 제품 수정 commit: `7085b03c3013c60fdbebb441901832e5ba2b1255`.
+- verifier commit: `3d9da23bef8bc20288788d3e42c5f81ea056207c`.
+- audited app332 source: `083d4310059ee27cb225ddf1578340ec3219278a`.
+- Release System Audit Run `37138323981`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static groups / release verification PASS.
+  - existing like regression PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - shared D1 checks read-only PASS.
+- Firebase PREVIEW Release Run `37138464737`: **SUCCESS**.
+  - PREVIEW Hosting PASS.
+  - exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules release not requested.
+- PREVIEW app version: **332**.
+- Worker / Functions / D1 schema / Firestore Rules / RTDB Rules 변경 없음.
+- 사용자 데이터 migration / backfill / delete 없음.
+
+**실사용 합격선**
+1. 같은 Suno 곡 그대로 private→public: Firestore W0, D1 W1~W2.
+2. 같은 Suno 곡 그대로 public→private: Firestore W0, D1 W1~W2.
+3. 위 동작 반복에서도 `favorites:write 1`이 나타나면 FAIL.
+4. 실제 다른 Suno 곡으로 변경: 기존 source-media swap 경로 유지. 현재 W4는 별도 비용 최적화 대상이며 이번 수정 범위 아님.
+5. never-published 첫 공개 W18도 별도 문제로 이번 수정에서 건드리지 않음.
+
 ## 0NZ. app331 실기기 공개 비용 분기 확인 — W2/W4가 랜덤이 아님 (2026-10-04 KST)
 
 **사용자 실기기 CACHE LIVE 결과**

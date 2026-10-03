@@ -51,8 +51,9 @@ assert.match(like, /EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 \* 60_000/);
 
 // Admin/master management permission is a UI hint backed by server authorization.
 // Keep a short UID + local-role-signature cache so reloads do not re-request it.
-assert.match(curation, /SORIDRAW_CURATION_ACCESS_RECHECK_MS_334 = 5 \* 60_000/);
+assert.doesNotMatch(curation, /SORIDRAW_CURATION_ACCESS_RECHECK_MS_334/, 'app335 management hint cache must not expire merely because time passed');
 assert.match(curation, /readCurationAccessCache334\(uid\)/);
+assert.match(curation, /cached[\s\S]{0,180}cached\.roleSignature === signature/);
 assert.match(curation, /curationAccessInflight334/);
 assert.match(page, /getExploreCurationAccess307\(user, signature\)/);
 assert.match(curation, /soridraw-curated-local-335/);

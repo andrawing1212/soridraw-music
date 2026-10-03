@@ -1,4 +1,4 @@
-app322-profile-bio-no-line-limit
-source=f0a9ddcd75055a1ae99c7dd7b2468cef5503ebf1
-product_commit=5d67d6b2ec4158403e727b7102004f841f751e60
-requested=2026-10-03T15:23:00+09:00
+app323-profile-bio-input-crash-fix
+source=9c3b89df72b816dede58f4380df1af6fb6108148
+product_commit=2f414d9a55dadcf9778dbaa7765708222b930034
+requested=2026-10-03T15:29:00+09:00

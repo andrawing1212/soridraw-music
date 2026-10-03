@@ -1755,10 +1755,17 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch165 = readFileSync('cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs', 'utf8');
   const release165 = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
   assert.match(worker165, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
-  assert.equal(release165.patches.at(-4), '079-like-intake-drain-barrier.mjs');
-  assert.equal(release165.patches.at(-3), '080-direct-like-atomic-batch.mjs');
-  assert.equal(release165.patches.at(-2), '081-batch-like-final-freeze.mjs');
-  assert.equal(release165.patches.at(-1), '082-like-d1only-route.mjs');
+  const likePatchStart165 = release165.patches.indexOf('079-like-intake-drain-barrier.mjs');
+  assert.ok(likePatchStart165 >= 0, 'missing 079 like drain barrier release patch');
+  assert.deepEqual(
+    release165.patches.slice(likePatchStart165, likePatchStart165 + 4),
+    [
+      '079-like-intake-drain-barrier.mjs',
+      '080-direct-like-atomic-batch.mjs',
+      '081-batch-like-final-freeze.mjs',
+      '082-like-d1only-route.mjs',
+    ],
+  );
   assert.match(patch165, /const marker165 = 'SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921'/);
   const slice165 = (name) => {
     const start = worker165.indexOf('async function ' + name + '(');

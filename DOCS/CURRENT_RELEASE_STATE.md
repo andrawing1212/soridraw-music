@@ -1,3 +1,45 @@
+## 0OP. PREVIEW app340 — 동일 검색 재실행 Worker 0 / D1 R0 로컬 캐시 (2026-10-04 KST)
+
+**사용자 요구**
+- 첫 검색은 서버 1회 허용.
+- 같은 검색어의 두 번째 검색부터는 서버 호출 0, D1 R0 목표.
+
+**app340 변경**
+- Explore exact search 결과를 기기에 2분간 저장.
+- 같은 request URL(검색어 + 장르 alias 조합)이 2분 안에 다시 검색되면:
+  - Worker 호출 0.
+  - D1 R0/W0.
+  - 기기 로컬 캐시에서 즉시 결과 표시.
+- 첫 검색은 기존 app339 R2-first + indexed genre path 사용.
+- 검색 결과가 없거나 오류인 경우 정상 서버 fallback 유지.
+- Feed / 공개프로필 / 좋아요 / 저장하트 / 폴더 / Split / Music Note 구조 변경 없음.
+- shared D1 schema/index/trigger 변경 0.
+- 사용자 데이터 migration/backfill/delete/rewrite 0.
+
+**검증**
+- TEMP app340 Verify Run `37161309234`: SUCCESS.
+- TypeScript PASS / Build PASS.
+- app340 repeat-search Worker-zero contract PASS.
+- Music Note batching regression PASS.
+- Final Release System Audit Run `37161393974`: SUCCESS.
+
+**배포**
+- Firebase PREVIEW App Release Run `37161506204`: SUCCESS.
+- PREVIEW app version **340**.
+- `preview.soridraw.com` exact build PASS.
+- shared RTDB Rules SKIPPED.
+- TEST / PRODUCTION Hosting unchanged PASS.
+- Worker는 app339 active `aedd8111-b2f4-407f-9e3f-ba062a82ed16` 그대로 유지.
+- approved source: `5dfe5b0b9183c27b946136dc8d25bca11303606b`.
+
+**실기기 최종 확인**
+1. `힙합` 첫 검색: Worker 1회 허용.
+2. 2분 안에 같은 `힙합` 재검색:
+   - Browser/local cache hit.
+   - Worker 증가 0.
+   - D1 query/read 증가 0.
+3. 실패하면 app340 검색 캐시 경로 FAIL로 처리하고 다음 승격 중단.
+
 ## 0OO. PREVIEW Worker app339 hotfix — 한글 장르 검색 alias 폭증 제한 + 90초 Edge Cache (2026-10-04 KST)
 
 **사용자 실기기 관찰**

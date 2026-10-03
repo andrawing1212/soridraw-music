@@ -1,3 +1,26 @@
+## 0OE. CORRECTION — same-source private→public W3 is FAIL, not ignorable (2026-10-04 KST)
+
+**사용자 영상 재판독**
+- 같은 곡/같은 선택 Suno source로 시작.
+- 1차 public→private 완료: CACHE LIVE D1 query R0/W1, billable rows **R3/W2**, Firestore W0 → **PASS**.
+- 진단 초기화 후 같은 곡을 다시 공개. 영상에서 공개 모달의 선택 source는 이전과 동일했으며 별도 source 변경 없음.
+- 2차 private→public 완료: CACHE LIVE D1 query R3/W1, billable rows **R11/W3**, Firestore W0 → **FAIL**.
+- 완료 토스트가 `선택한 곡으로 Explore에 다시 공개했습니다.`로 표시되어, 같은 source 재공개가 visibility-only가 아니라 `selectionChanged`/source refresh 분기로 잘못 들어간 정황과 일치.
+
+**판정 정정**
+- `행 R11 / W3`는 무시 대상이 아니다. D1 비용 판단에서 billable row read/write가 핵심 계측값이다.
+- SORIDRAW hard gate는 사용자 동작 1회 **W1~W2만 PASS**. 같은-source 재공개 W3는 불합격.
+- 직전 0OD의 “source-swap W3 PASS” 표현은 최종 비용 합격 의미로 사용하지 않는다. 실제 source swap W3는 하위호환 구조의 현재 관측 floor일 뿐이며 최종 hard gate 기준으로는 여전히 승격 불가.
+- 이번 영상의 W3는 실제 source swap도 아니므로 더 명확한 회귀/오분기다.
+
+**다음 수정 범위**
+- 정상 public→private W2 경로는 건드리지 않는다.
+- registered private→public에서 사용자가 source를 바꾸지 않았으면 반드시 visibility-only 경로로 고정하여 W2 복구.
+- app332의 최신 media identity guard가 local-first draft보다 늦은/stale favoritesStore snapshot에 의해 다시 뒤집히는지 우선 확인.
+- 실제 source 변경과 동일-source 재공개를 분리한 회귀 테스트 추가.
+- 좋아요/저장 하트/폴더/Split/프로필/Music Note 60초 저장은 변경 금지.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0OD. app333 + shared D1 migration 실기기 source-swap 비용 검증 PASS (2026-10-04 KST)
 
 **사용자 실기기 영상/CACHE LIVE**

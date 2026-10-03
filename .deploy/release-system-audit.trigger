@@ -1,4 +1,4 @@
-app319-profile-bio-line-breaks
-source=3aff8f65c91e9d63b676d4600894ad8de7fa9107
-product_commit=d9726e9a416e6635658625abf998e19bcd512276
-requested=2026-10-03T13:26:00+09:00
+app320-permissive-handle-typing
+source=1a8faed566cf8b796679759fa902ab600e35f458
+product_commit=84480f57794ff5dd3b7cbad91310cf317f16939f
+requested=2026-10-03T13:29:00+09:00

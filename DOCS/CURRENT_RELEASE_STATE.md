@@ -1,3 +1,46 @@
+## 0NH. PREVIEW app311 배포 완료 — 승격관리와 SORIDRAW 추천 피드 상태 일치 (2026-10-03 KST)
+
+**사용자 실측 문제**
+- 다른 기기에서 승격 변화는 `승격 곡 관리` 화면에는 반영되지만, 일반 SORIDRAW 추천 피드는 이전 목록을 계속 표시.
+- 원인은 관리 목록 캐시/state와 공개 추천 피드 캐시/state가 별도로 유지되어, 관리 화면이 최신 R2 snapshot을 받은 뒤에도 일반 피드가 오래된 로컬 목록을 계속 사용하는 것.
+
+**app311 수정**
+- 승격관리에서 최신 curated snapshot을 받으면 동일 revision/items를 일반 SORIDRAW 추천 로컬 캐시에도 즉시 반영.
+- Explore 화면 state도 함께 갱신하여 승격관리 화면을 닫았을 때 별도 서버 재조회 없이 같은 최신 목록을 바로 표시.
+- 추가 D1 read/write 없음. 기존 R2/local-first 구조 재사용.
+- app310의 승격관리 최초 D1 R0 구조 유지.
+- 승격/해제 mutation 비용 구조 변경 없음.
+- Worker / Functions / D1 schema / Rules 변경 없음.
+
+**변경 / 검증 / 배포**
+- service commit: `39e6f4c687b366effae5da031cc51356259a68ea`.
+- Explore state commit: `73401ebb786be767e771ef4b0fe52ccc2db2473a`.
+- verifier commit: `7d134f0ee0b6853fd9e310fa46452dbb937be065`.
+- verifier typo fix: `85a7dfe6ba05c0a0308a03ccd4c84e4618f78595`.
+- app311 version commit: `b21a677ea8053abf6dc148fbe6536ce7ebb68b22`.
+- 최초 Audit `37088680852`: FAIL — 제품 코드가 아니라 verifier 변수명 오타(`page` → `explore`)로 실패, TypeScript/Build는 PASS.
+- 재검증 Audit `37088793832`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore curation verifier PASS.
+  - like regression PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - shared D1 read-only checks PASS.
+- Firebase PREVIEW Release `37088927776`: **SUCCESS**.
+  - locked source `580805847292d03ca2120c7e659d8c9e37ba90c6`.
+  - `preview.soridraw.com` app **311**, exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules SKIPPED.
+- Cloudflare Worker는 app310 배포본 그대로. Functions/Rules/사용자 데이터 변경 없음.
+
+**실기기 확인**
+1. 기기 A에서 곡 승격/해제.
+2. 기기 B에서 승격관리 화면을 열어 최신 목록 확인.
+3. 기기 B에서 승격관리 화면을 닫고 일반 SORIDRAW 추천 피드로 복귀.
+4. 별도 새로고침/추가 D1 read 없이 일반 피드도 동일 목록을 표시해야 함.
+5. app310의 승격관리 최초 진입 D1 R0도 계속 유지되어야 함.
+6. 완전히 열린 다른 기기의 일반 피드를 실시간 push로 자동 갱신하는 기능은 이번 범위에 포함하지 않음.
+
 ## 0NG. PREVIEW app310 배포 완료 — 승격관리 최초 D1 목록읽기 제거 (2026-10-03 KST)
 
 **사용자 실측 문제**

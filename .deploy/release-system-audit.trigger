@@ -1,5 +1,5 @@
-app327-profile-toolbar-social-bio-polish
-source=6924431b443cd1f031b70fc821cfa8dcbffaf891
-toolbar_commit=8306f90beae93d8dbaa4b28a21f4af2c67ccddca
-social_commit=3ed2451ad4daa01aec0daa49a95bca4477bb5019
-requested=2026-10-03T15:53:00+09:00
+app328-music-note-publication-track-picker
+source=384938dfd40794d4bde1dc94619aa467339eef62
+scope=music-note-publication-ui
+protect=likes,folders,split,profile
+requested=2026-10-03T16:12:00+09:00

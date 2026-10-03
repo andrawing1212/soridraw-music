@@ -1241,13 +1241,8 @@ console.log('APP324_PROFILE_PARITY_LEFT_BIO=PASS');
  * to "MY 프로필", so remove the label for both own and other-user profiles. */
 assert.match(
   page,
-  /soridraw-explore-profile-toolbar[^]*?soridraw-explore-back-button[^]*?<\/section>/,
-  'profile toolbar must retain the back button',
-);
-assert.doesNotMatch(
-  page,
-  /soridraw-explore-profile-toolbar[^]*?<span>/,
-  'profile toolbar must not render any text label beside the back button',
+  /<section className="soridraw-explore-profile-toolbar">\s*<button[^>]*className="soridraw-explore-back-button"[^>]*>\s*<ArrowLeft[^>]*\/>\s*<\/button>\s*<\/section>/,
+  'profile toolbar must contain only the back button and no adjacent text label',
 );
 console.log('APP325_PROFILE_TOOLBAR_BACK_ONLY=PASS');
 

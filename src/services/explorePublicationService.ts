@@ -38,6 +38,13 @@ export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {
   registered: boolean;
 };
 
+export type ExplorePublicationSourceMedia = {
+  coverUrl: string;
+  durationSeconds: number | null;
+  sunoUrlPrimary: string;
+  sunoUrlSecondary: string | null;
+};
+
 class ExploreApiError extends Error {
   code: string;
   status: number;
@@ -527,6 +534,7 @@ export const refreshExploreMusicNotePublicationSource = async (
   sourceId: string,
   options?: Partial<ExplorePublicationOptions>,
   registeredTrackId?: string | null,
+  sourceMedia?: ExplorePublicationSourceMedia | null,
 ): Promise<ExploreMusicNotePublicationState> => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) {
@@ -548,6 +556,16 @@ export const refreshExploreMusicNotePublicationSource = async (
           registered: true,
           mutationAt: Date.now(),
           refreshSourceMedia: true,
+          ...(sourceMedia ? {
+            sourceMedia: {
+              coverUrl: String(sourceMedia.coverUrl || '').trim().slice(0, 4096),
+              durationSeconds: sourceMedia.durationSeconds == null
+                ? null
+                : Math.max(0, Number(sourceMedia.durationSeconds) || 0),
+              sunoUrlPrimary: String(sourceMedia.sunoUrlPrimary || '').trim().slice(0, 4096),
+              sunoUrlSecondary: String(sourceMedia.sunoUrlSecondary || '').trim().slice(0, 4096) || null,
+            },
+          } : {}),
           options: normalizedOptions,
         }],
       }),

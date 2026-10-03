@@ -85,18 +85,23 @@ assert.match(
 );
 assert.match(
   submitBody,
-  /const latestSong = favoritesStore\.getFavorites\(\)\.find[\s\S]*const latestMainLink = getFavoriteMainSunoLink\(latestSong\)/,
-  'publication submit must compare against the freshest local Music Note snapshot',
+  /const latestSong = favoritesStore\.getFavorites\(\)\.find/,
+  'publication submit must still use the freshest local Music Note snapshot for projected media updates',
 );
 assert.match(
   submitBody,
-  /const selectedUrl = String\(selectedLink\?\.url \|\| ''\)\.trim\(\)[\s\S]*const latestMainUrl = String\(latestMainLink\?\.url \|\| ''\)\.trim\(\)/,
-  'publication submit must compare the actual selected media identity instead of stale index state',
+  /initialSunoIndex, selectedSunoIndex/,
+  'publication submit must retain the dialog-open source identity',
 );
 assert.match(
+  submitBody,
+  /selectedSunoIndex !== initialSunoIndex/,
+  'only an explicit Suno selection change inside the dialog may enter the source-media refresh path',
+);
+assert.doesNotMatch(
   submitBody,
   /selectedUrl !== latestMainUrl/,
-  'only a real Suno media change may enter the source-media refresh path',
+  'same-source republish must not infer a source swap from a stale background Music Note snapshot',
 );
 assert.match(
   submitBody,

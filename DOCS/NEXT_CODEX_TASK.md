@@ -1,3 +1,26 @@
+## CURRENT TASK — same-source private→public false source-refresh W3 fix (2026-10-04 KST)
+
+실기기 증거:
+- public→private: billable R3/W2, Firestore W0 = PASS.
+- 초기화 후 **동일 source 그대로** private→public: billable **R11/W3**, Firestore W0 = FAIL.
+- 영상에서 재공개 전/후 선택 Suno는 동일.
+- 토스트가 `선택한 곡으로 Explore에 다시 공개했습니다.`여서 `selectionChanged=true` 분기로 들어간 것으로 보임.
+
+작업 목표:
+1. 동일 source registered private→public을 visibility-only `setExploreTrackVisibility(..., true, options)`로 확정.
+2. 실제 Suno 1↔2 변경일 때만 `refreshExploreMusicNotePublicationSource`.
+3. local-first Music Note source 선택이 서버/스토어 stale snapshot으로 덮여 false `selectionChanged`가 되지 않게 함.
+4. 동일 source 재공개 billable W2 / Firestore W0 실기기 복구.
+5. 실제 source 변경 기능은 유지. 비용 W3는 별도 최적화 대상으로 남기고 hard gate PASS로 오판하지 않음.
+
+보호:
+- public→private W2 정상 경로.
+- app164/160 좋아요.
+- app302 저장 하트 / app301 폴더 / app303 Split.
+- Music Note 60초/local-first batch.
+- 공개 옵션 3개와 검색 기능.
+- TEST/PRODUCTION 변경 금지.
+
 ## VERIFIED — app333 + shared D1 migration source-swap 실기기 비용 PASS (2026-10-04 KST)
 
 사용자 실기기 영상/CACHE LIVE 확인:

@@ -1640,6 +1640,7 @@ export default function FavoritesPage({
     sourceId: string;
     state: ExploreMusicNotePublicationState;
     options: ExplorePublicationOptions;
+    initialSunoIndex: 0 | 1;
     selectedSunoIndex: 0 | 1;
   } | null>(null);
   const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
@@ -5858,6 +5859,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(localState.allowFollowerSave),
           profilePinned: Boolean(localState.profilePinned),
         },
+        initialSunoIndex: getFavoriteSunoMainIndex(latestSong),
         selectedSunoIndex: getFavoriteSunoMainIndex(latestSong),
       });
       return;
@@ -5880,6 +5882,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(state.allowFollowerSave),
           profilePinned: Boolean(state.profilePinned),
         },
+        initialSunoIndex: getFavoriteSunoMainIndex(latestColdSong),
         selectedSunoIndex: getFavoriteSunoMainIndex(latestColdSong),
       });
     } catch (error) {
@@ -5898,7 +5901,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const submitFavoriteExplorePublicationDialog = async () => {
     if (!user?.uid || !explorePublicationDialog) return;
-    const { song, sourceId, state, options, selectedSunoIndex } = explorePublicationDialog;
+    const { song, sourceId, state, options, initialSunoIndex, selectedSunoIndex } = explorePublicationDialog;
     if (explorePublicationBusyId === sourceId) return;
     if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
       showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
@@ -5916,14 +5919,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const latestSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
       || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
       || song;
-    const latestMainLink = getFavoriteMainSunoLink(latestSong);
     const selectedUrl = String(selectedLink?.url || '').trim();
-    const latestMainUrl = String(latestMainLink?.url || '').trim();
+    // app334: a source refresh is an explicit dialog choice, not an inference from
+    // whichever Music Note snapshot happens to win a reload/catalog race. This keeps
+    // same-source private→public on the visibility-only W2 path while preserving a
+    // real 1↔2 selection change.
     const selectionChanged = Boolean(
       links.length > 1
       && selectedUrl
-      && latestMainUrl
-      && selectedUrl !== latestMainUrl
+      && selectedSunoIndex !== initialSunoIndex
     );
     if ((state.status !== 'public' || selectionChanged) && !isConnectedFavoriteSunoLink(selectedLink)) {
       showFavoriteToast('공개할 수노 곡을 먼저 선택하고 정상 연결 상태를 확인해주세요.');

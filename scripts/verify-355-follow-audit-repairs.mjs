@@ -167,6 +167,58 @@ const user={uid:'viewer',getIdToken:async()=> 'fixture'};
 assert.equal((await client.exports.getExploreFollowState(user,'omitted')).isFollowing,true);
 assert.equal(targetReads,1);assert.equal(store.get('viewer').data.complete,false);
 assert.equal((await client.exports.getExploreFollowState(user,'omitted')).isFollowing,true);assert.equal(targetReads,1);
+
+// Upgrade an existing schema2 capped cache without resetting any cache/version.
+const legacyStore=new Map();let legacyReads=0,legacyWrites=0;
+let reply=true,fail=false;
+const legacyClient=clientContext('src/services/exploreSocialService.ts',{
+  EXPLORE_API_BASE:'https://fixture.invalid',getFirebaseAppCheckToken:async()=> 'fixture',
+  recordCloudflareResponse:()=>{},recordCloudflareLocalCacheHit:()=>{},
+  readSoridrawPersistentCache:o=>{assert.equal(o.schemaVersion,2);return legacyStore.get(o.uid)},
+  writeSoridrawPersistentCache:o=>{assert.equal(o.schemaVersion,2);legacyWrites++;legacyStore.set(o.uid,{data:o.data})},
+  getExplorePersonalSocialSnapshot:async()=>{throw Error('Partial-cache target must not hydrate a snapshot')},
+  fetch:async(url)=>{
+    assert.ok(url.endsWith('/follow-state'));legacyReads++;
+    if(fail)throw Error('fixture network failure');
+    return Response.json({data:{following:reply}});
+  },
+});
+const legacyUser={...user,uid:'legacy-capped'};
+const legacyStates=Object.fromEntries(Array.from({length:5000},(_,i)=>['known-'+i,true]));
+legacyStates['known-negative']=false;
+legacyStore.set(legacyUser.uid,{data:{complete:true,states:legacyStates}});
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'known-0')).isFollowing,true);
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'known-negative')).isFollowing,false);
+assert.equal(legacyReads,0);assert.equal(legacyWrites,0);
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'omitted-followed')).isFollowing,true);
+assert.equal(legacyReads,1);assert.equal(legacyWrites,1);
+assert.equal(legacyStore.get(legacyUser.uid).data.complete,false);
+assert.equal(legacyStore.get(legacyUser.uid).data.states['known-4999'],true);
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'omitted-followed')).isFollowing,true);
+assert.equal(legacyReads,1);assert.equal(legacyWrites,1);
+reply=false;
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'omitted-unfollowed')).isFollowing,false);
+assert.equal(legacyReads,2);
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'omitted-unfollowed')).isFollowing,false);
+assert.equal(legacyReads,2);
+fail=true;const saved=legacyStore.get(legacyUser.uid);
+await assert.rejects(legacyClient.exports.getExploreFollowState(legacyUser,'unknown-on-failure'),/fixture network failure/);
+assert.equal(legacyStore.get(legacyUser.uid),saved);
+assert.equal(Object.hasOwn(saved.data.states,'unknown-on-failure'),false);
+fail=false;reply=true;
+assert.equal((await legacyClient.exports.getExploreFollowState(legacyUser,'unknown-on-failure')).isFollowing,true);
+// Known complete cache: both positive and absent targets remain read/write zero.
+const healthy={...user,uid:'healthy'};
+legacyStore.set(healthy.uid,{data:{complete:true,states:{known:true,...Object.fromEntries(Array.from({length:5000},(_,i)=>['negative-'+i,false]))}}});
+const readsBefore=legacyReads,writesBefore=legacyWrites;
+assert.equal((await legacyClient.exports.getExploreFollowState(healthy,'known')).isFollowing,true);
+assert.equal((await legacyClient.exports.getExploreFollowState(healthy,'absent')).isFollowing,false);
+assert.equal(legacyReads,readsBefore);assert.equal(legacyWrites,writesBefore);
+const partial={...user,uid:'new-partial'};
+legacyStore.set(partial.uid,{data:{complete:false,states:{known:true}}});
+assert.equal((await legacyClient.exports.getExploreFollowState(partial,'missing')).isFollowing,true);
+assert.equal(legacyReads,readsBefore+1);
+console.log('FOLLOW355_LEGACY_SCHEMA2_CAPPED_CACHE_TARGET_RECOVERY_AND_HEALTHY_ZERO_READ=PASS');
 const normalized=clientContext('src/services/exploreSocialSnapshotService.ts',{},'\nglobalThis.normalize=normalizeSnapshot;');
 assert.equal(normalized.normalize({followingUids:Array.from({length:5000},(_,i)=>String(i))}).followingComplete,false);
 assert.equal(normalized.normalize({followingUids:['target'],followingComplete:false,followProtocol:354}).followProtocol,354);

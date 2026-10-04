@@ -1,3 +1,13 @@
+## 0P3. candidate355 legacy schema2 follow cache blocker repaired — independent re-audit pending (2026-10-05 KST)
+
+- Branch/base: preview / a6a3053d440245cd91f9f71a6c45c0a153d81800. Scope is only the remaining capped schema2 follow-cache blocker; Worker code and protected features are unchanged.
+- Existing cache with 5,000 or more true memberships is conservatively incomplete even if its old complete flag is true. Known true/false states are preserved. Schema2, cache keys and cache contents are not reset or globally invalidated.
+- An unknown target in an existing nonempty incomplete cache goes directly to the single-target follow-state endpoint, bypassing list/snapshot hydration. Successful recovery remembers only that target while keeping the cache incomplete. Failure rejects without storing a false negative.
+- Healthy complete caches below the membership cap retain positive/absent-target server reads0 and local writes0. Known targets in capped caches also retain reads0. True-membership counting excludes explicit negative entries.
+- Regression is integrated into verify355: persisted legacy schema2 capped cache, known positive/negative, missing positive/negative, repeat reads0, failed lookup/retry, healthy complete cache with many explicit negatives, and current partial-cache recovery.
+- TypeScript PASS; Build PASS (existing dynamic-import/chunk-size warnings; output isolated under ignored node_modules, tracked dist unchanged). Verify347/348/349(includes353)/350/351/352/354/355 PASS, including the new legacy-cache regression. No remote billing rerun: Worker/SQL unchanged; local HTTP conditional fixtures retain prior cost samples. Real PC/mobile and live billing are unverified in this client-only task.
+- No deployment, Firebase/Functions/Cloudflare resource change, shared migration, manifest activation, shared/user data write or main/TEST/PRODUCTION change. Live baseline remains app344 / PREVIEW Worker341. No new branch/workflow. Independent Astra re-audit and later live-device/release gates remain pending; RELEASE BLOCKED.
+
 ## 0P2. candidate355 Astra 재감사 FAIL — legacy schema2 follow cache 1건 잔존 (2026-10-05 KST)
 
 - 감사 기준: `preview` / `46d21590ceea908353cec2e2a4235e8348404c20`; 실제 코드 `634589b2af0aa8041fe394402aa6f3a7a7abdc99`.

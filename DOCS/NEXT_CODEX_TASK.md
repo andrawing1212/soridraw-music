@@ -1,3 +1,11 @@
+## NEXT TASK — independent re-audit of repaired candidate355 legacy schema2 cache blocker
+
+- Implementation base: preview / a6a3053d440245cd91f9f71a6c45c0a153d81800. Audit the final fixed commit; do not modify code or deploy.
+- Recheck persisted schema2 complete=true with 5,000 true memberships: missing target uses one targeted follow-state request, never a false inferred from absence or a legacy snapshot hydration. Known cached states remain intact and repeat recovery reads0.
+- Confirm healthy complete cache positive/absent reads0, explicit negatives are not counted toward the membership cap, and failed recovery does not persist a false negative.
+- No cache/version reset, Worker changes, shared migration/cutover/data write, deployment or main/TEST/PRODUCTION promotion. Earlier live R2/Worker and PC/mobile gates remain open.
+- Original implementation task follows as the acceptance record.
+
 ## CURRENT TASK — candidate355 legacy schema2 follow cache blocker 1건 수정 (2026-10-05 KST)
 
 기준:

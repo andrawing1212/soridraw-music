@@ -133,7 +133,10 @@ const normalizeExploreFollowCache = (value: unknown): ExploreFollowCacheData => 
     if (normalizedUid) acc[normalizedUid] = Boolean(state);
     return acc;
   }, {});
-  return { complete: Boolean(row?.complete), states };
+  // Legacy schema2 marked a capped 5,000-member list complete. Preserve its
+  // known states, but absence cannot certify a negative membership.
+  const capped = Object.values(states).filter((following) => following).length >= 5000;
+  return { complete: Boolean(row?.complete) && !capped, states };
 };
 
 const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
@@ -164,8 +167,7 @@ const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData
   });
 };
 
-const readCachedExploreFollowState = (viewerUid: string, targetUid: string): boolean | null => {
-  const data = readExploreFollowCache(viewerUid);
+const readCachedExploreFollowState = (viewerUid: string, targetUid: string, data = readExploreFollowCache(viewerUid)): boolean | null => {
   if (Object.prototype.hasOwnProperty.call(data.states, targetUid)) return Boolean(data.states[targetUid]);
   return data.complete ? false : null;
 };
@@ -266,21 +268,27 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
 
-  const cached = readCachedExploreFollowState(user.uid, normalizedUid);
+  const cachedBundle = readExploreFollowCache(user.uid);
+  const cached = readCachedExploreFollowState(user.uid, normalizedUid, cachedBundle);
   if (cached !== null) {
     recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 전체 팔로우 묶음');
     return { isFollowing: cached, followerCount: 0, followingCount: 0 };
   }
 
-  try {
-    const bundle = await loadExploreFollowingBundle(user);
-    if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
-      const isFollowing = Boolean(bundle.states[normalizedUid]);
-      recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
-      return { isFollowing, followerCount: 0, followingCount: 0 };
+  // An existing partial list needs only this missing target, not another list
+  // hydration that could reintroduce an older snapshot's complete flag.
+  const partialCache = !cachedBundle.complete && Object.keys(cachedBundle.states).length > 0;
+  if (!partialCache) {
+    try {
+      const bundle = await loadExploreFollowingBundle(user);
+      if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
+        const isFollowing = Boolean(bundle.states[normalizedUid]);
+        recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
+        return { isFollowing, followerCount: 0, followingCount: 0 };
+      }
+    } catch (bundleError) {
+      console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
     }
-  } catch (bundleError) {
-    console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
   }
 
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);

@@ -13122,6 +13122,8 @@ __name222222222222222222222222222222222222222222222(clampExploreSocialCount, "cl
 __name2222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, shouldFollow, now) {
   // SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930
+  // SORIDRAW_FOLLOW_COMBINED_COUNTERS_345: query W2, NOT physical rows W2.
+  // Both legacy canonical counters and derived notifications remain authoritative.
   const fallbackRead = async () => {
     const result = await env.DB.prepare(`
       SELECT uid, follower_count, following_count
@@ -13144,31 +13146,19 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
       `).bind(followerUid, followingUid, now),
       env.DB.prepare(`
         INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
-        SELECT ?, 0, 1, ?
-        WHERE EXISTS (
-          SELECT 1 FROM follows
-          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
-        )
+        SELECT ?, 0, 1, ? WHERE changes() = 1
+        UNION ALL
+        SELECT ?, 1, 0, ? WHERE changes() = 1
         ON CONFLICT(uid) DO UPDATE SET
-          following_count = profile_stats.following_count + 1,
+          follower_count = profile_stats.follower_count + excluded.follower_count,
+          following_count = profile_stats.following_count + excluded.following_count,
           updated_at = excluded.updated_at
         RETURNING uid, follower_count, following_count
-      `).bind(followerUid, now, followerUid, followingUid, now),
-      env.DB.prepare(`
-        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
-        SELECT ?, 1, 0, ?
-        WHERE EXISTS (
-          SELECT 1 FROM follows
-          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
-        )
-        ON CONFLICT(uid) DO UPDATE SET
-          follower_count = profile_stats.follower_count + 1,
-          updated_at = excluded.updated_at
-        RETURNING uid, follower_count, following_count
-      `).bind(followingUid, now, followerUid, followingUid, now)
+      `).bind(followerUid, now, followingUid, now)
     ]);
-    const follower = results?.[1]?.results?.[0] || null;
-    const following = results?.[2]?.results?.[0] || null;
+    const rows = results?.[1]?.results || [];
+    const follower = rows.find((row) => row.uid === followerUid) || null;
+    const following = rows.find((row) => row.uid === followingUid) || null;
     if (follower && following) return { follower, following, delta: 1 };
     const fallback = await fallbackRead();
     return { ...fallback, delta: 0 };
@@ -13177,30 +13167,23 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
   const results = await env.DB.batch([
     env.DB.prepare(`
       UPDATE profile_stats
-      SET following_count = MAX(0, following_count - 1), updated_at = ?
-      WHERE uid = ?
+      SET following_count = MAX(0, following_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
+          follower_count = MAX(0, follower_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
+          updated_at = ?
+      WHERE uid IN (?, ?)
         AND EXISTS (
           SELECT 1 FROM follows
           WHERE follower_uid = ? AND following_uid = ?
         )
       RETURNING uid, follower_count, following_count
-    `).bind(now, followerUid, followerUid, followingUid),
-    env.DB.prepare(`
-      UPDATE profile_stats
-      SET follower_count = MAX(0, follower_count - 1), updated_at = ?
-      WHERE uid = ?
-        AND EXISTS (
-          SELECT 1 FROM follows
-          WHERE follower_uid = ? AND following_uid = ?
-        )
-      RETURNING uid, follower_count, following_count
-    `).bind(now, followingUid, followerUid, followingUid),
+    `).bind(followerUid, followingUid, now, followerUid, followingUid, followerUid, followingUid),
     env.DB.prepare(`
       DELETE FROM follows WHERE follower_uid = ? AND following_uid = ?
     `).bind(followerUid, followingUid)
   ]);
-  const follower = results?.[0]?.results?.[0] || null;
-  const following = results?.[1]?.results?.[0] || null;
+  const rows = results?.[0]?.results || [];
+  const follower = rows.find((row) => row.uid === followerUid) || null;
+  const following = rows.find((row) => row.uid === followingUid) || null;
   if (follower && following) return { follower, following, delta: -1 };
   const fallback = await fallbackRead();
   return { ...fallback, delta: 0 };

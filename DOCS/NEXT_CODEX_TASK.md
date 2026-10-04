@@ -7173,3 +7173,28 @@ A/B가 PASS해도 자동 진행 금지. 별도 사용자 승인 필요.
 - Firebase 재배포.
 - TEST 승격.
 - PRODUCTION 승격.
+## IMPLEMENTATION CANDIDATE — 팔로우 비용 / 크리에이터 추천 미완료, PREVIEW 배포 차단 (2026-10-04 KST)
+
+기준: preview `2817327ee17f04fe248df237a3daefa3cf5bf3c5`에서 이어진 이 기록의 구현 commit. 실제 앱은 app344 유지. 전체 상황은 CURRENT_RELEASE_STATE 0OW 참조.
+
+구현된 부분:
+- follow/unfollow atomic query W3→W2, RETURNING/no-postread/R2-only patch 유지.
+- same-millisecond 중복 follow의 counter 이중 증가를 changes() guard로 제거.
+- SQLite fixture에서 3 cycle functional + duplicate + rollback + indexed counter access + Feed journal 불변 PASS.
+- creator 후보 curated/latest/popular 확대, cached 대표장르 exact/family 우선, self/dedupe, 순위 실제 catalog alias 테스트 PASS. UI 불변.
+- TypeScript/Build/관련 verifier PASS.
+
+**완료·배포 금지 사유**
+1. SQLite total_changes **9→9**. physical trigger amplification을 아직 줄이지 못함. query W2가 physical W2라는 보고 금지.
+2. 실제 PREVIEW Rows Read/Written + Worker + R2 A/B 및 D1 batch changes() 연속성 미검증.
+3. cold 기기에 로그인 사용자/후보 대표장르를 제공하는 일괄 R2 summary가 없음. 현재 cached genres만 우선하고 나머지는 curated/latest/popular fallback.
+4. PC/모바일 실사용 검증 전.
+
+다음 수행 순서:
+1. 기존 preview/test/production canonical counter와 derived-change 독자 호환을 확인해 physical 비용 감소 설계 확정. 관계+양쪽 canonical counter 보존만으로 최소 3 canonical 행이므로 W1/W2 physical 목표와 충돌을 숨기지 말 것.
+2. schema/trigger authority cutover가 필요하면 additive/backward-compatible 및 실제 안전 조건을 검증. 사용자 허용 범위를 벗어나는 교체/대량변경/backfill은 실행하지 말 것.
+3. `verify-345-follow-cost.mjs`를 재사용해 실제 production 함수를 검증. missing stats cold-repair 제한, D1 batch changes() 및 index billing을 추가 검증. 논리/SQLite/실제 billing 세 수치를 분리.
+4. 후보별 profile GET 없는 bounded R2 genre summary 공급 설계/구현. 전체 사용자 scan 금지, 무단 백필 금지. 자기 대표장르도 cold 기기에서 확보 가능해야 함.
+5. TypeScript/Build/Test + 독립 검토 후, 실제 PREVIEW follow/unfollow 3 cycle 증거를 수집. `node scripts/verify-345-follow-cost.mjs --release --live <evidence.json>`은 비용 gate 미달이면 실패해야 함.
+6. live evidence format: `{environment:"preview",commit:"<40-char SHA>",samples:[6 records]}`. 각 record는 action(follow/unfollow 교대), queryR/queryW, rowsRead/rowsWritten, worker, r2A/r2B, requestId, timestamp. 실제 요청 단위 메타/계기판 차이를 기록하며 기대값을 입력해 증거를 만들지 말 것.
+7. 두 작업을 모두 완성·검증한 후 필요한 PREVIEW Worker/Hosting만 기존 release path로 배포. main/TEST/PRODUCTION 및 사용자 원본 데이터 변경 금지.

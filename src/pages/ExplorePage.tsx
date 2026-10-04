@@ -1,4 +1,6 @@
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
+import { rankExploreCreators } from '../services/exploreCreatorRecommendations';
+import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstViewService';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
@@ -968,7 +970,6 @@ const buildExploreRecommendationModel221 = (
     tracks: ExploreTrack[];
     trackIds: Set<string>;
   }>();
-  const creatorBuckets = new Map<string, ExploreCreatorRecommendation221>();
 
   source.forEach((track, index) => {
     const genre = resolveExploreRecommendationGenre343(track);
@@ -1006,15 +1007,6 @@ const buildExploreRecommendationModel221 = (
       }
     }
 
-    if (track.ownerUid && track.ownerUid !== currentUid && !creatorBuckets.has(track.ownerUid)) {
-      creatorBuckets.set(track.ownerUid, {
-        id: track.ownerUid,
-        displayName: track.displayName,
-        handle: track.ownerHandle,
-        avatarUrl: track.avatarUrl || null,
-        track,
-      });
-    }
   });
 
   const majorGenres: ExploreGenreRecommendation221[] = [...majorBuckets.entries()]
@@ -1040,7 +1032,7 @@ const buildExploreRecommendationModel221 = (
   return {
     picks: source.slice(0, 20),
     genres: [...majorGenres, ...detailGenres],
-    creators: [...creatorBuckets.values()].slice(0, 20),
+    creators: [],
   };
 };
 
@@ -3640,8 +3632,41 @@ export default function ExplorePage() {
     return tracks.filter((track) => followingUids312.has(track.ownerUid));
   }, [tracks, latestPublicScope312, user?.uid, followingLoadedUid312, followingUids312]);
 
+  // Use the already-loaded three pools. Profile summaries are local reads only;
+  // missing representative genres stay unknown, never inferred from song genres.
+  const recommendedCreators345 = useMemo(() => {
+    if (sort !== 'recommended' || submittedQuery || profileUid) return [];
+    const currentUid = user?.uid || '';
+    const candidateUids = new Set(
+      [...curatedTracks307.slice(0, 40), ...tracks.slice(0, 40), ...popularTracks.slice(0, 40)]
+        .map((track) => track.ownerUid).filter(Boolean),
+    );
+    const profileGenres = new Map<string, string[]>();
+    candidateUids.forEach((uid) => {
+      const summary = profile?.uid === uid ? profile : readCachedExplorePublicProfile(uid);
+      if (summary) profileGenres.set(uid, summary.genres);
+    });
+    const viewer = profile?.uid === currentUid ? profile : readCachedExplorePublicProfile(currentUid);
+    const genreSignal = (raw: string) => {
+      const normalized = normalizeExploreGenreCatalogKey342(raw);
+      const known = EXPLORE_GENRE_LOOKUP_342.get(normalized)
+        || EXPLORE_GENRE_LOOKUP_342.get(compactExploreGenreCatalogKey342(raw)) || null;
+      return {
+        key: normalizeExploreGenreCatalogKey342(known?.id || raw),
+        family: resolveExploreMajorGenre343(known, raw)?.id || '',
+      };
+    };
+    return rankExploreCreators({
+      currentUid, viewerGenres: viewer?.genres || [], profileGenres,
+      curated: curatedTracks307, latest: tracks.filter((track) => !dislikedTrackIds.has(track.id)), popular: popularTracks,
+      genreSignal, songGenre: (track) => track.primaryGenre || readExploreRecommendationGenre221(track),
+    }).map((track) => ({
+      id: track.ownerUid, displayName: track.displayName, handle: track.ownerHandle,
+      avatarUrl: track.avatarUrl || null, track,
+    }));
+  }, [sort, submittedQuery, profileUid, user?.uid, profile, curatedTracks307, tracks, popularTracks, dislikedTrackIds]);
   const recommendationModel221 = sort === 'recommended' && !submittedQuery
-    ? buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || '')
+    ? { ...buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || ''), creators: recommendedCreators345 }
     : { picks: [], genres: [], creators: [] };
   const activeRecommendationGenre221 = recommendationModel221.genres.find(
     (genre) => genre.id === recommendationGenreId221,

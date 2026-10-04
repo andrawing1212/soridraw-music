@@ -100,6 +100,12 @@ const readCache = (profileRef: string): ExploreProfileFirstViewData | null => {
   return normalizeCachedData(envelope.data);
 };
 
+// Recommendation ranking must never fetch one profile per candidate.
+export const readCachedExplorePublicProfile = (uid: string): ExplorePublicProfile | null => {
+  const cached = readCache(uid);
+  return cached?.profile.uid === uid ? cached.profile : null;
+};
+
 const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
   const normalizedData = normalizeCachedData(data);
   const refs = new Set<string>([

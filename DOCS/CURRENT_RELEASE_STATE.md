@@ -3068,3 +3068,63 @@ Music Note derived insert:
 4. 비용은 app290과 동일하게 Recent 편집 최종 W2, heart 실제 최종 변경 W2 이하 유지 확인.
 5. 실기기 PASS 전 TEST 승격 금지.
 
+## 0OW. 팔로우·크리에이터 추천 구현 후보 — 릴리스 BLOCKED, app344 유지 (2026-10-04 KST)
+
+**작업 기준**
+- branch `preview`, 시작 HEAD `2817327ee17f04fe248df237a3daefa3cf5bf3c5`.
+- 이 항목을 포함한 preview commit은 구현 후보이며, app345 배포 완료본이 아니다.
+- PREVIEW만 작업. main/TEST/PRODUCTION 변경 및 배포 0.
+
+**작업 A — 구현 및 원인 재현**
+- 관계 INSERT + 양쪽 counter를 단일 UPSERT로 묶음. 해제도 양쪽 counter를 단일 UPDATE + 관계 DELETE로 묶음.
+- 동일 atomic D1 batch, RETURNING/no-postread, R2 target guard/counter patch 보호.
+- 정상 경로 logical query R0/W3 → R0/W2.
+- 관계 INSERT 직후 `changes() = 1`로 counter를 보호하여 같은 millisecond의 중복 follow가 counter를 중복 증가시키지 않음. 실제 D1 batch에서 changes() 연속성은 미검증.
+- canonical `profile_stats`, derived profile counter 및 변경 신호는 기존 코드와 호환되도록 유지. schema/trigger 실제 변경 0.
+- 관계 1행 + 양쪽 canonical counter 2행 = 최소 3개 canonical 행 변경. 이를 W1/W2 physical로 보이게 하려고 counter를 R2만으로 옮기면 기존 TEST/PRODUCTION 숫자 authority가 깨지므로 실행하지 않음.
+- 현재 trigger 경로의 synthetic SQLite 재현: 관계 1 + canonical counter 2 + derived profile 2 + seq 2 + profile journal 2 = **total_changes 9**.
+- follow/unfollow 3회씩: baseline도 9, 후보도 9. **physical amplification 미해결**. 쿼리를 묶었다는 이유로 비용 정상화 PASS 처리 금지.
+- SQLite total_changes는 D1 index 비용 포함 Rows Read/Written이 아니다.
+- 사용자 실제 baseline: query R0/W3, Rows Read 18~19, Rows Written 14~17. 수정 후 실제 D1 Rows Read/Written, Worker, R2 A/B는 **미검증**.
+- `scripts/verify-345-follow-cost.mjs`: production 함수 자체를 추출해 기존 schema/032/249 trigger fixture에서 3 cycle, 양쪽 canonical/derived 수치, duplicate no-op, indexed UPDATE, Feed journal 불변, rollback을 검사. `--release`는 실제 PREVIEW 6 sample evidence 없이 실패한다. 비용 gate를 완화하지 않음.
+
+**작업 B — 구현 범위와 미완료**
+- latest 40 owner-only 후보를 curated 40 + latest 40 + popular 40의 bounded owner pool로 확대.
+- 우선순위: 대표 프로필 장르 exact > 같은 broad family > curated > latest > popular. 곡 장르는 같은 source 안의 보조 신호.
+- 본인 제외, UID 중복 제거, 20명 카드 제한. UI/CSS/레이아웃 변경 0.
+- 기존 first-view 기기 캐시의 공개프로필 대표장르만 읽음. 프로필마다 GET/서버 조회, 전체 사용자 scan, 새 D1/Firestore/Worker/R2 요청 0.
+- profile cache 추출은 useMemo로 묶어 단순 UI 렌더마다 최대 120개 envelope를 반복 파싱하지 않음.
+- **미완료:** 기기에 없는 로그인 사용자/후보의 대표장르는 알 수 없음. 이 경우 곡 장르를 대표 프로필 장르로 위장하지 않고 source fallback만 사용. 최초 기기에서도 대표장르 1순위가 보장되는 R2 일괄 요약 공급은 아직 구현되지 않음.
+- 현재 R2 artist metadata는 uid/marker keys/signature 중심이며 프로필 대표장르 전체를 한 번에 제공하는 기존 bundle을 확인하지 못함. 후보별 R2 profile GET으로 우회하지 않음.
+
+**검증**
+- TypeScript PASS, Build PASS (로컬 Node 24.15.0; 릴리스 Node 20 검증은 미실행).
+- follow 3-cycle functional/duplicate/rollback verifier PASS; physical cost gate **BLOCKED**.
+- creator 대표장르 순위/실제 한국어·영어 catalog alias/curated-latest-popular fallback/self/dedupe/local IO verifier PASS; cold-profile 장르 공급은 미완료.
+- existing `verify-explore-deploy-preflight.mjs`, `verify-202-explore-action-cost-bounds.mjs` PASS.
+- Work 독립 read-only diff 검토: 정상행 atomicity/순위 회귀 없음. D1 changes() 실제 연속성, cold-profile 장르 공급, PC/모바일은 미검증.
+- 기존 missing profile_stats unfollow에서는 일부 counter/관계만 변경되고 delta=0이 반환될 수 있는 cold-repair 제한이 남음. 이번에 전체 scan/backfill로 복구하지 않음.
+- npm 11 ci는 기존 잠금 파일 누락으로 실패. npm 10.8.2 ci + 잠금 버전 Windows native package 3개만 별도 압축 해제로 검증. package.json/package-lock 변경 0. Build 산출물은 원래 tracked dist로 복원.
+
+**배포/데이터**
+- Firebase Hosting/Functions/Rules/설정 변경 0. Cloudflare Worker/R2/D1/schema/trigger 실제 변경 0.
+- 사용자 원본 데이터 write/delete/copy/migration/backfill 0. synthetic in-memory fixture만 사용.
+- PREVIEW release trigger/app-version 변경 0, 배포 Run 없음. app344/Worker341 유지.
+- PC/모바일 실제 확인 및 PREVIEW live cost 계측 미실행. TEST/PRODUCTION live unchanged 감사 미실행; 이 작업에서는 해당 branch/service 변경 명령을 실행하지 않음.
+- 새 branch/workflow 생성·삭제 0. 임시 workflow 0.
+
+**[이번 작업 변경 파일] / [누적 변경 파일] — 시작 기준점 이후 동일 8개**
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `src/pages/ExplorePage.tsx`
+- `src/services/exploreProfileFirstViewService.ts`
+- `src/services/exploreCreatorRecommendations.ts`
+- `scripts/verify-345-follow-cost.mjs`
+- `scripts/verify-345-creator-recommendations.mjs`
+- `DOCS/CURRENT_RELEASE_STATE.md`
+- `DOCS/NEXT_CODEX_TASK.md`
+
+**다음 작업**
+- 이 구현 후보를 완료/배포본으로 취급하지 않는다.
+- shared legacy counter/derived-reader 동시 호환 조건에서 physical 행 증폭을 실제로 낮출 설계를 먼저 확정. trigger 교체/authority cutover가 필요하면 별도 안전 검증 및 사용자 범위 확인 전 실제 shared DB 적용 금지.
+- 후보별 GET 없이 cold 기기에도 대표장르를 공급하는 bounded R2 summary 계약을 설계. 읽기/쓰기/초기 공급 비용과 기존 사용자 호환성을 명시. 무단 backfill 금지.
+- 실제 D1 batch 및 PC↔모바일을 검증한 뒤, 비용 원인 해결 + 실제 3-cycle 계측이 통과할 때만 같은 릴리스의 PREVIEW 배포를 진행.

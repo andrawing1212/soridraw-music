@@ -1,3 +1,47 @@
+## CURRENT NEXT GATE — first-public W12→W2를 위한 dormant R2-only publication read cutover 설계/구현
+
+확정된 physical fanout:
+- tracks row+PK+4 applicable secondary indexes = W6.
+- explore_derived_tracks row+PK+3 rank indexes = W5.
+- shared revision = W1.
+- 합계 W12.
+- Worker는 1회이므로 Worker 중복 문제가 아님.
+
+목표:
+- 기존 `tracks` table/id PK를 유지한 현실적 first-public floor **W2**.
+- source swap도 최종적으로 W1~W2.
+- Worker mutation 1회 유지.
+- Firestore publication hot path R0/W0 유지.
+
+다음 구현은 **배포/공유 D1 적용 없이 dormant source만**:
+1. PREVIEW Worker에 R2-only publication-read cutover flag를 추가.
+   - default OFF.
+   - OFF일 때 app336 hybrid behavior byte/semantic parity.
+   - ON일 때 Feed/Profile/Genre/Search의 Music Note 공개 목록은 R2 catalog/shared-card authority.
+   - stale legacy row가 private/reswap 상태를 되살리지 못해야 함.
+2. exact track detail / owner mutation lookup은 deterministic track id + primary key를 계속 사용.
+3. cutover verifier:
+   - public new track appears from R2 without legacy derived row.
+   - source swap uses R2 media authority.
+   - private tombstone/meta suppresses stale legacy item.
+   - title/genre/artist search remains available.
+   - first page/deep page/profile pagination exactness.
+   - normal warm read D1 R0.
+4. current source-swap W2 candidate migration은 그대로 PREP ONLY.
+5. R2-only cutover가 모든 환경에서 승격/검증된 뒤에만 별도 shared-D1 candidate:
+   - Music Note를 four secondary index hot fanout에서 제외.
+   - Music Note `explore032_track_insert` derived insert skip.
+   - Music Note shared revision D1 write retire 여부 검증.
+   - expected first publish: tracks row W1 + PK W1 = W2.
+6. shared migration/backfill/delete/cutover/deploy 금지.
+
+절대 보호:
+- PC↔모바일 저장하트 즉시동기화.
+- +30초 canonical W0/W1.
+- registered private/public 현재 W2 behavior.
+- app353 thumbnail media overlay.
+- TEST/PRODUCTION 비변경.
+
 ## CURRENT NEXT GATE — source-swap W2 후보 PASS, cross-env hybrid 호환 전 shared D1 적용 금지
 
 현재 완료:

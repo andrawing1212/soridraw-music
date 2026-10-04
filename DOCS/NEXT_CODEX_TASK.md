@@ -1,3 +1,31 @@
+## CURRENT NEXT GATE — app351 PC Suno thumbnail reload/restart 실기기 확인
+
+현재 PREVIEW:
+- Hosting app **351** / Run `37226652526` SUCCESS / exact build PASS.
+- Release System Audit `37226502953` SUCCESS.
+- PC receiver media persistence fix source: `46079ef2d7aa29e9b4967d689fbf817d4f3e70d9`.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 0.
+
+사용자 확인 순서:
+1. PC/모바일을 app351로 갱신.
+2. 과거 이미 캐시에서 사라진 곡보다 **새 테스트 곡**이 가장 정확함. 모바일 또는 한 기기에서 Suno URL/media를 새로 저장해 changed-item signal 1회를 발생.
+3. 반대 PC Music Note 목록에서 썸네일이 즉시 보이는지 확인.
+4. PC 새로고침 후 유지되는지 확인.
+5. PC 브라우저 완전 종료/재실행 후 유지되는지 확인.
+6. 하트와 Music Note membership은 즉시, 마지막 클릭 +30초 뒤에도 상태 유지하는지 같이 확인.
+
+합격하면:
+- app349 저장하트/Music Note + app351 Suno media 지속성 경로를 함께 보호 기준으로 문서화.
+- 해당 경로는 다시 열지 않고 follow 저비용 Worker 독립 비용 감사로 복귀.
+
+FAIL이면:
+- 전체 Music Note reread/cache reset 금지.
+- exact favorite-id media overlay / Catalog merge 경로만 좁혀 수정.
+- Firestore/D1 추가 read/write로 우회 금지.
+- 정상 모바일 경로와 app349 heart settlement는 변경 금지.
+
 ## CURRENT NEXT GATE — app349 실기기 4포인트 확인 + follow Worker 독립 정적 감사 계속
 
 현재 실제 PREVIEW:

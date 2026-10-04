@@ -1,3 +1,19 @@
+## 0P4. candidate355 Astra 재감사 PASS — 코드 감사 완료, PREVIEW 배포 전 (2026-10-05 KST)
+
+- Branch/code: `preview` / `f8e2d1830f237a94abd064795c5be325171746ff`.
+- 독립 Astra 재감사: **PASS**.
+- 마지막 남은 legacy schema2 5,000-cap cache 문제는 해결 확인:
+  - 누락 target은 false로 확정하지 않고 targeted `follow-state` recovery.
+  - 정상 complete cache는 서버 read 0 유지.
+  - explicit false 항목은 cap 계산에 포함되지 않음.
+  - recovery 실패 시 false negative 저장 없음.
+  - cache/version reset 없음.
+- 따라서 candidate355의 코드 감사 단계는 통과.
+- 실제 서비스는 여전히 app344 / PREVIEW Worker341. 아직 배포 없음.
+- shared migration/cutover manifest 활성화, 사용자 데이터 변경, main/TEST/PRODUCTION 변경 없음.
+- 다음 단계는 **PREVIEW 코드-only 호환층 배포** 후 legacy mode 비변경 확인. shared schema/cutover는 계속 금지.
+- PREVIEW 배포 후 실제 PC/모바일, Worker/R2 요청·비용, no-op/복구 실측을 진행해야 하며, 그 결과 전까지 TEST/PRODUCTION 승격 금지.
+
 ## 0P3. candidate355 legacy schema2 follow cache blocker repaired — independent re-audit pending (2026-10-05 KST)
 
 - Branch/base: preview / a6a3053d440245cd91f9f71a6c45c0a153d81800. Scope is only the remaining capped schema2 follow-cache blocker; Worker code and protected features are unchanged.

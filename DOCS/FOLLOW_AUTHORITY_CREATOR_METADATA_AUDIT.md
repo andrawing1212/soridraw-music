@@ -166,3 +166,25 @@ All eight paths are connected and exercised by scripts/verify-355-follow-audit-r
 Local actual HTTP handler counters (DB queryR/queryW; R2 get/put attempts): new follow 2/1,12/7; duplicate 1/0,4/1; same-state new ID 2/0,7/2; unfollow 1/1,12/7; stale rejection 1/0,2/1; relation-saved R2 failure 2/1,7/6 (5 successful puts); recovery retry 9/3,13/5 (three fenced D1 write attempts, SQLite changes0). RATE_DB read/write0 and native limiter1 per request. These are actual function calls with fixtures, not physical D1/R2 billing. Required rate receipts are reported rather than hidden as W0 server cost.
 
 The existing isolated remote measurement now invokes the same actual HTTP handler with a separate synthetic namespace in its freshly owned D1. It checks total D1 physical rows_written<=2, retains the original relation billing samples/index plans, and cleans up only the owned DB. R2/native limiter remain local fixtures, so live CAS contention, actual Worker/R2 billing, device synchronization, and cross-environment readiness still require separate evidence. No shared manifest/schema/user write or deployment is authorized or performed.
+
+### Remote evidence355 (initial candidate c28a6eb8a3c1550a8fdca3f5df8de6a8356f23aa)
+
+Run [37209848937](https://github.com/andrawing1212/soridraw-music/actions/runs/37209848937) SUCCESS; actual checkout c28a6eb8. TypeScript/build/static audit and TEST/PRODUCTION dry-run + SELECT-only shared preflight PASS. Owned synthetic D1 deletion PASS. No shared DB write, migration or deployment.
+
+Relation helper physical R/W: new follow 1/2; new unfollow 3/1; legacy unfollow 3/2; legacy refollow 5/1; duplicates W0 and resumed stale writer R1/W0. Forward/reverse indexed fixture R9/R9.
+
+Actual HTTP handler against the owned synthetic remote D1 (R2 get/put are in-memory API attempts, not billing):
+
+| HTTP scenario | D1 rows read | D1 rows written | RATE_DB write | R2 get | R2 put attempts |
+|---|---:|---:|---:|---:|---:|
+| New follow | 2 | 2 | 0 | 12 | 7 |
+| Duplicate ID | 1 | 0 | 0 | 4 | 1 |
+| Same state/new ID | 4 | 0 | 0 | 7 | 2 |
+| Unfollow | 6 | 1 | 0 | 12 | 7 |
+| Stale revision rejection | 1 | 0 | 0 | 2 | 1 |
+| Relation saved/R2 failed | 5 | 1 | 0 | 7 | 6 (5 succeeded) |
+| Recovery retry | 16 | 0 | 0 | 13 | 5 |
+
+Recovery makes three fenced SQL write attempts but physical writes0; queryW is not rows_written. Every HTTP sample uses one native limiter call. One required rate-counter R2 put is included even in duplicates/no-ops/rejections. No normal no-op profile count write or history SUM.
+
+Final review also adds a fail-closed check for malformed/future rate windows: a suspended old request cannot reset a newer rate window. Actual verifier rejects it with no counter write. The final code revision will be remeasured before recording the fixed audit commit. PC/mobile live behavior and actual Worker/R2 billing remain unverified; existing pre-cutover device caches and all-environment activation compatibility remain cutover approval gates. Independent Astra re-audit is required.

@@ -14131,6 +14131,10 @@ async function enforceFollowEdgeRateLimit355(env, uid) {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const object = await env.PROFILE_MEDIA.get(key);
     const old = object ? JSON.parse(await object.text()) : null;
+    if (object && (!old || !Number.isSafeInteger(old.windowStart) || !Number.isSafeInteger(old.count) || old.count < 1 || old.windowStart > windowStart)) {
+      // A suspended request must never roll a newer window back to its old one.
+      throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 상태를 다시 확인해 주세요.', 503);
+    }
     const count = old?.windowStart === windowStart ? Number(old.count) + 1 : 1;
     if (!Number.isSafeInteger(count) || count < 1) throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 상태를 확인하는 중입니다.', 503);
     if (count > RATE_LIMITS.follow) throwApi('RATE_LIMITED', '잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });

@@ -1,6 +1,6 @@
 ## Implementation candidate355 status (2026-10-04 KST)
 
-The eight fixes below are implemented from preview 57acc664; local TS/build/regression and actual-consumer fixtures PASS. Remote relation + HTTP D1 remeasurement is queued. Independent Astra review remains required; deployment/shared migration/cutover/TEST/PRODUCTION are forbidden. See CURRENT_RELEASE_STATE 0P1 for evidence and limits. Keep the original task below as the acceptance checklist.
+The eight fixes below are implemented from preview 57acc664; local TS/build/regression and actual-consumer fixtures PASS. Initial remote Run 37209848937 PASS (relation and actual HTTP DB physical W<=2; RATE_DB W0; synthetic DB deleted). Final rate-window ordering guard is locally verified; final candidate remote remeasurement is queued. Independent Astra review remains required; deployment/shared migration/cutover/TEST/PRODUCTION are forbidden. See CURRENT_RELEASE_STATE 0P1 for evidence and limits. Keep the original task below as the acceptance checklist.
 
 ## CURRENT TASK — protocol354 독립감사 FAIL 8건 수정 (2026-10-04 KST)
 

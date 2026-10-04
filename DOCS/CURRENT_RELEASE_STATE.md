@@ -1,3 +1,47 @@
+## 0PC. app351 PC Music Note Suno 썸네일 재실행 지속성 보강 PREVIEW 배포 (2026-10-05 KST)
+
+- 사용자 app349 실기기 결과:
+  - 모바일: 새로고침/앱 재실행 후에도 Music Note 목록 썸네일 유지 PASS.
+  - PC: 새로고침/재실행 뒤 썸네일이 다시 사라지는 잔여 오류 확인.
+- 원인:
+  - Suno media RTDB changed-item preview는 PC 화면/일반 favorites cache까지는 도착했지만, 수신 PC에는 편집 기기의 Detail draft가 없음.
+  - 이후 PC가 서버 Catalog를 다시 적용하면 아직 media를 포함하지 않은 Catalog가 수신 캐시를 덮을 수 있었음.
+  - source 모바일은 자기 Detail draft가 다시 media를 덮어주므로 증상이 보이지 않았음.
+- 수정:
+  - `src/lib/userDataEngine.ts`: UID + favorite-id별 bounded device-local Music Note media overlay 추가. Suno/card media 필드만 저장.
+  - `src/services/userDomainSyncService.ts`: 기존 RTDB signal 수신 시 화면 event 전에 media overlay를 로컬 저장.
+  - overlay는 Firestore/D1/RTDB write intent가 아니며 서버 write를 추가하지 않음.
+  - 서버 Catalog가 아직 media를 반영하지 못해도 PC 새로고침/재실행 때 overlay를 다시 적용.
+  - app351 보강: 현재 화면/로컬 Catalog가 overlay와 같다는 이유만으로 overlay를 지우지 않음. **더 최신 canonical media version**이 들어올 때만 오래된 overlay를 폐기하여 반복 stale Catalog GET에서도 썸네일 재소실 방지.
+  - bounded max 256 changed media items; 전체 Music Note reread/cache reset 없음.
+- 제품 commits:
+  - app350 기반: `30b9fc809f59f20707e5e479c891aee424bfdd4f`, `e8d6ac90f22a92c730e8b9f8b285b46433dc671a`.
+  - app351 stale-Catalog guard: `46079ef2d7aa29e9b4967d689fbf817d4f3e70d9`.
+  - app351 version: `357b0ed91504de646c0132ce6e4a469e97b4d284`.
+- Release System Audit Run `37226502953`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - release static groups A~D, syntax/guards, TEST/PRODUCTION Worker dry-run, shared D1 read-only preflight PASS.
+- Firebase PREVIEW App Release Run `37226652526`: **SUCCESS**.
+  - release trigger: `6949fc69d36b5cdfa66d6b18b993ca3012143757`.
+  - PREVIEW Hosting app **351** / exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules 변경 요청 없음.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 비용 영향:
+  - 수신기 추가 Firestore read/write 0.
+  - D1 read/write 0.
+  - 추가 RTDB write 0; 이미 존재하는 changed-item signal을 수신해 기기 localStorage/Catalog cache만 보강.
+  - 앱 진입/재실행 때문에 사용자 데이터 서버 write를 만들지 않음.
+- 실기기 최종 확인 필요:
+  1. app351을 PC/모바일 모두 로드.
+  2. **새 테스트 곡 또는 Suno URL을 한 번 새로 저장/수정해 새 media signal을 만든 뒤** PC 목록에 썸네일 즉시 표시 확인.
+  3. PC 새로고침 → 썸네일 유지.
+  4. PC 브라우저 완전 종료/재실행 → 썸네일 유지.
+  5. 같은 과정에서 하트/Music Note membership +30초 canonical 동작은 app349 기준 그대로 유지.
+- 참고: 이미 app349에서 PC 로컬 media가 사라진 과거 곡은 새 signal이 전혀 없으면 기기에 복구할 원본이 없으므로, 전체 서버 재조회 없이 과거 상태를 억지 복원하지 않음. 실기기 검증은 새 media signal로 확인한다.
+- PREVIEW live Worker는 계속 Worker341 rollback본 유지. follow cutover OFF. follow 저비용 candidate는 이 실기기 확인과 별도 작업.
+
 ## 0PB. app349 Studio 저장하트 settlement / Music Note 즉시 membership / Suno 목록 미디어 안정화 PREVIEW 배포 + 기준 동결 (2026-10-05 KST)
 
 - branch: `preview`.

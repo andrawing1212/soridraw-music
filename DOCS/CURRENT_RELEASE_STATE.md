@@ -1,3 +1,18 @@
+## 0P7. Worker341 rollback 실사용 확인 + 5~7초 UX 지연 확인 (2026-10-05 KST)
+
+- 사용자 동일 조건 재측정으로 rollback 정상 확인:
+  - follow sample 1: D1 query R0/W3, physical Rows Read18 / Rows Written14.
+  - follow sample 2: D1 query R0/W3, physical Rows Read19 / Rows Written17.
+- 이는 기존 문서화된 legacy baseline R18~19 / W14~17과 일치한다. candidate355 배포 때 관찰된 R23/W14 증가는 rollback으로 제거됨.
+- 따라서 현재 PREVIEW Worker는 비용 관점에서 **예전 기준으로 복구**됐지만, 그 예전 기준 자체가 최종 합격선은 아니다. 목표는 여전히 overlay authority에서 physical W1~W2.
+- 사용자 추가 확인: 팔로우 및 공개/비공개 액션에서 클릭 후 화면 확정까지 약 **5~7초 로딩 체감**.
+- 코드 확인:
+  - Explore 공개프로필 `toggleFollow`은 서버 `setExploreFollow` 응답을 await한 뒤에 버튼/카운트를 바꾸므로 Worker 지연이 그대로 UI 로딩으로 노출됨.
+  - Explore 공개프로필의 publication settings private/save 경로도 서버 settlement를 기다리는 경로가 있어 같은 체감 지연 가능.
+  - Music Note의 app330/331 publication path는 이미 local-first optimistic이므로 그 정상 동작은 보호.
+- 합격 UX: 사용자 클릭 즉시 로컬 상태 반영, 서버는 뒤에서 settle, 실패 시 정확 rollback. 비용을 숨기기 위한 가짜 성공이 아니라 server failure/ordering 보호 유지.
+- 이 UX 수정은 follow low-cost backend 구조와 분리해 검증하며, 좋아요/UI 레이아웃/색상은 변경하지 않는다.
+
 ## 0P6. app345 live follow cost regression — PREVIEW Worker rolled back to Worker341 code (2026-10-05 KST)
 
 - User real-device CACHE LIVE after candidate355 compatibility deploy showed legacy follow physical amplification still high and one direction worse than prior baseline:

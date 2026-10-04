@@ -135,30 +135,9 @@ jobs:
           remote_block = remote_block.replace(remote_old, remote_new, 1)
           app = app[:remote_start] + remote_block + app[remote_end:]
 
-          # 3) Clearing the preview map during canonical receive must not repaint an
-          # intermediate list without the row. The canonical merge immediately after
-          # this call owns the repaint.
-          old = """    if (changed) setFavorites((previous) => previous);
-          };"""
-          # There are multiple "changed" helpers in App. Scope replacement to the
-          # clearRemoteStudioHeartPreviewFromCanonical block.
-          clear_start = app.find('  const clearRemoteStudioHeartPreviewFromCanonical = (')
-          clear_end = app.find('\n\n  function overlayStudioHeartPendingIntentsOnFavorites', clear_start)
-          if clear_start < 0 or clear_end <= clear_start:
-              raise SystemExit('clear remote preview block not found')
-          clear_block = app[clear_start:clear_end]
-          if clear_block.count(old) != 1:
-              raise SystemExit(f'clear remote repaint anchor count={clear_block.count(old)}')
-          clear_block = clear_block.replace(
-              old,
-              """    // app349 — do not render an empty transition here. The canonical
-            // changed-item merge that follows replaces the preview atomically.
-            void changed;
-          };""",
-              1,
-          )
-          app = app[:clear_start] + clear_block + app[clear_end:]
-          app_path.write_text(app)
+          # 3) Keep the current canonical-receive ordering unchanged in app349.
+          # The initiating-device disappearance is fixed by materializing the
+          # settled row before the local pending layer is removed.
 
           # 4) Suno media preview in the Music Note list must be durable locally.
           # Generic favorite updatedAt (for example heart settlement) must not make

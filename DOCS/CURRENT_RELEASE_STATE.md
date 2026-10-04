@@ -1,3 +1,64 @@
+## 0PJ. publication source-swap W3→W2 후보 준비/감사 PASS — 적용은 cross-env hybrid 승격 전 차단 (2026-10-05 KST)
+
+- 사용자 지시 기준:
+  - D1 **physical Rows Written 최우선**.
+  - mutation마다 Worker 요청 수를 함께 확인.
+  - 정상 기능/좋아요 즉시동기화를 비용 때문에 변경 금지.
+- 현재 실기기 source swap baseline:
+  - Worker **1**.
+  - D1 physical **R11 / W3**.
+  - Firestore **R0 / W0**.
+- W3 구성 확정:
+  1. canonical `tracks` media UPDATE W1 — 유지.
+  2. `explore032_track_update` → legacy `explore_derived_tracks` media mirror W1.
+  3. `soridraw_shared_rev_tracks_au_051` → shared revision W1 — 구환경 freshness 보호.
+- 안전한 W2 후보:
+  - canonical tracks W1 유지.
+  - shared revision W1 유지.
+  - **media-only legacy derived mirror만 W0**.
+  - non-media/content 변경은 기존 derived cold-recovery projection 유지.
+  - 예상 normal source swap = physical **W2**, Worker 요청 수는 기존 **1회 유지**.
+- PREVIEW 준비 파일:
+  - candidate migration:
+    `cloudflare/explore-worker/migrations/20261005_01_publication_source_swap_w2_post_hybrid.sql`
+    - commit `efad094f8452463503e839d72faa404deb171e77`.
+  - rollback:
+    `cloudflare/explore-worker/migrations/20261005_01_publication_source_swap_w2_post_hybrid_rollback.sql`
+    - commit `ef631e132255b4f1fa1768d32ba21979586dd100`.
+  - readiness verifier:
+    `scripts/verify-357-publication-source-swap-w2-readiness.mjs`
+    - initial commit `e55a5241773963b0990d435a6e5ecefd37b77331`.
+    - verifier comment false-positive fix `eed2d860495446c9709c5a1df16155244a443a6d`.
+  - Release System Audit에 readiness guard 포함:
+    `8bbaffeaae93d9cc79b1258451c436b79346681e`.
+- 첫 audit `37231601335`:
+  - TypeScript/Build 및 diagnostic groups는 PASS였으나 verifier가 SQL 주석의 `UPDATE ... shared trigger name` 문구를 실제 DDL로 오인해 FAIL.
+  - 제품/후보 구조 오류가 아니라 verifier regex false-positive로 판정하고 수정.
+- 최종 rerun Release System Audit `37231798452`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static release-system verification PASS.
+  - app336 R2 hybrid read regression PASS.
+  - publication W2 readiness verifier PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - live shared D1 preflight는 read-only PASS.
+  - branch refs unchanged PASS.
+- **공유 D1 migration은 실행하지 않음.**
+  - D1 row/schema 실제 변경 0.
+  - Worker 배포 0.
+  - Firebase 배포 0.
+  - Functions/Rules 변경 0.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 현재 차단 이유:
+  - PREVIEW source에는 app336 `SORIDRAW_R2_HYBRID_READ_V1` compatibility가 존재하고 preview wrangler에서 활성.
+  - 현재 `main` Worker source/config에는 hybrid-read marker/flag가 없음.
+  - 구 TEST/PRODUCTION Worker는 legacy derived row + shared revision freshness에 아직 의존.
+  - shared D1 trigger는 3환경 공용이므로 지금 derived media mirror를 제거하면 TEST/PRODUCTION에 stale 공개 media 위험.
+- 결론:
+  - **W3→W2 구현 후보 자체는 준비/정적감사 PASS**.
+  - 그러나 안전 적용은 TEST/PRODUCTION도 hybrid-read authority를 지원한 이후에만 가능.
+  - 이 차단을 우회해 PREVIEW 단독 shared-D1 migration을 적용하지 않는다.
+
 ## 0PI. 비용 최적화 우선순위 재확정 — D1 physical Rows Written 최우선 + Worker 매 테스트 계측 (2026-10-05 KST)
 
 사용자 재지시:

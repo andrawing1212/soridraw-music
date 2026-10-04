@@ -1,10 +1,10 @@
-app347-studio-heart-canonical-reconcile
-target_source=37199e0b71057ffe33cb5c385a2865224d865de0
-app_version=347
-scope=hosting-only-studio-heart-canonical-reconcile
+app348-studio-heart-immediate-cross-device
+target_source=a9e378778f6dc0f9512fb5a4fc0e47dc200bfd73
+app_version=348
+scope=hosting-only-studio-heart-live-sync-restore
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app347-studio-heart-canonical-reconcile
+release_request=app348-studio-heart-immediate-cross-device
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

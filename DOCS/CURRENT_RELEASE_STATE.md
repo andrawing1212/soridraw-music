@@ -1,3 +1,43 @@
+## 0PD. app352 PC Music Note 목록 썸네일 canonical-ID 매칭 수정 PREVIEW 배포 (2026-10-05 KST)
+
+- 사용자 app351 실기기 결과:
+  - PC Music Note 목록: 여전히 음표 placeholder 표시 FAIL.
+  - 같은 PC에서 Detail & Edit를 열면 동일 곡의 Suno URL 1/2와 cover image가 정상 표시.
+  - 즉 **미디어 데이터 자체는 PC에 존재하지만 목록 summary row와 Detail row의 식별자 매칭이 실패**한 증상으로 좁혀짐.
+- 확인된 코드 원인:
+  - Music Note canonical document id는 `firestoreId` 우선인데, 일부 media list/cache 경로가 `id || firestoreId` 순서로 비교.
+  - PC Catalog row에서 `id`와 `firestoreId`가 다를 수 있는 경우, Detail hydration은 `firestoreId`로 정상 문서를 열지만 목록 media patch/overlay는 다른 `id`를 보고 건너뜀.
+  - 그래서 Detail에는 cover가 보이지만 배경 목록은 계속 placeholder였음.
+- app352 수정:
+  - `src/pages/FavoritesPage.tsx`
+    - Suno card media patch 대상을 `getFavoriteDocumentId(song)` 기준으로 통일.
+    - Detail flush 후 latest row lookup, RTDB media preview source lookup, durable draft lookup도 canonical favorite document id 기준으로 통일.
+  - `src/lib/userDataEngine.ts`
+    - Music Note media overlay key/match에서 `firestoreId || id` 우선으로 통일.
+  - 전체 Catalog id 구조/사용자 데이터는 변경하지 않고, media overlay/card patch의 식별자 비교만 최소 수정.
+- commits:
+  - FavoritesPage canonical id fix: `86144a3bde69f437edd0e42f2f7fbd12e5510b5c`.
+  - userDataEngine overlay id fix: `51b23dc5440c46e278f76f03a773782d7ce71b42`.
+  - app352 version: `91cd69db0fd7a30ac6d82741cee711493dd3ad11`.
+- Release System Audit Run `37227306745`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - release static groups, existing regression, TEST/PRODUCTION Worker dry-run, shared D1 read-only checks PASS.
+- Firebase PREVIEW App Release Run `37227428264`: **SUCCESS**.
+  - release trigger commit: `d0c5546a200ec7e05d3c767e3fbb645b1acfbbdc`.
+  - PREVIEW Hosting app **352** / exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules deploy SKIPPED.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 비용 영향:
+  - 추가 Firestore/D1/R2/RTDB read/write 0.
+  - 기존 local card media patch와 device-local overlay가 정확한 문서 id를 찾도록 수정한 것뿐.
+- 실기기 확인:
+  1. PC app352 새로고침.
+  2. 현재 스크린샷의 `빛속의 오답`, `무거운 발걸음`처럼 Detail에서 cover가 이미 보이는 곡의 목록 썸네일 확인.
+  3. 목록에 cover가 보이면 PC 새로고침 → 브라우저 완전 종료/재실행 후도 유지 확인.
+  4. 하트/Music Note membership +30초 canonical behavior는 변경 금지/비변경.
+
 ## 0PC. app351 PC Music Note Suno 썸네일 재실행 지속성 보강 PREVIEW 배포 (2026-10-05 KST)
 
 - 사용자 app349 실기기 결과:

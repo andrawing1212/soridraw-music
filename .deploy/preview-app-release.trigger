@@ -1,10 +1,10 @@
-app351-pc-suno-media-stale-catalog-guard
-target_source=1e67b060542f0d724b0602c033ba859f0e449f41
-app_version=351
-scope=hosting-only-pc-suno-media-stale-catalog-guard
+app352-pc-musicnote-canonical-media-identity
+target_source=d2ed99e54bae1d557be45ab73146328cfee9711d
+app_version=352
+scope=hosting-only-pc-musicnote-canonical-media-identity
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app351-pc-suno-media-stale-catalog-guard
+release_request=app352-pc-musicnote-canonical-media-identity
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

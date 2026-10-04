@@ -1,3 +1,29 @@
+## CURRENT NEXT GATE — app348 실기기 최종 4포인트 확인
+
+현재 PREVIEW:
+- Hosting app **348** / Run `37222387192` SUCCESS / exact build PASS.
+- product commit `441a256106d95427bfc5926f5a0c83d4bf4151d5`.
+- Release System Audit `37222258188` SUCCESS.
+- Studio save-heart 기준은 app348 Skill로 동결.
+- Worker는 기존 Worker341 rollback본 유지, follow cutover OFF.
+- 사용자 데이터 migration/backfill/delete 0.
+
+사용자가 확인할 것:
+1. PC에서 A곡 save/unsave → 모바일 Recent 하트와 Music Note membership이 즉시 바뀌는지.
+2. 모바일에서 B곡 save/unsave → PC가 즉시 바뀌는지.
+3. 마지막 클릭 +30초 뒤 canonical settlement가 되어도 양쪽이 같은 상태를 유지하는지.
+4. Detail에서 Suno URL/media를 넣은 곡의 Music Note 목록 thumbnail/media가 사라지지 않는지.
+
+합격 시:
+- app348 Studio heart/Music Note save sync 복구 종료.
+- 이 기능은 다시 열지 않고 app348 Skill 보호.
+- 그 뒤 팔로우 저비용 Worker 독립 audit/cost 작업으로 복귀.
+
+FAIL 시:
+- 전체 Music Note reread/cache reset 금지.
+- exact changed song / exact preview layer만 bounded 수정.
+- 30초 canonical final-state 및 immediate cross-device behavior는 변경 금지.
+
 ## CURRENT NEXT GATE — app347 PC↔모바일 저장하트 / Music Note 실사용 재정합 확인
 
 현재 실제 PREVIEW:

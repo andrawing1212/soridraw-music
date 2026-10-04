@@ -1,3 +1,30 @@
+## 0P0. protocol354 Astra 독립감사 FAIL — 배포 차단 8건 (2026-10-04 KST)
+
+- 기준 branch/commit: `preview` / `c47f6c6dbca385787b1cd5cd0f5c61585f7a27a7`.
+- 독립 감사 판정: **FAIL**. 현재 후보는 PREVIEW 배포/활성화 금지.
+- 관계 SQL 자체의 isolated D1 physical W1~W2 증거는 유효하지만, 실제 HTTP 전체 경로 비용과 모든 reader/cache 호환성은 아직 미통과.
+
+확인된 차단 항목:
+1. `patchPublicProfileBundle245` 및 `writeExploreSharedProfile060`이 오래된 profile bundle을 무조건 저장해 정확한 follower/following count와 pending/exact 복구 기록을 되감을 수 있음. 공유 프로필 writer는 최신 객체 CAS 병합 + follow count/recovery metadata 보존 필요.
+2. `readSharedProfileConnection348`, public profile, first-view 경로가 pending/exact 미완료 상태를 복구하지 않고 동결된 legacy D1 count를 정상값처럼 반환할 수 있음. overlay reader에서 복구/fail-closed 필요.
+3. `handleMySocialSnapshot042`이 overlay 대신 legacy R2/legacy follows를 사용하여 다른 PC/모바일에서 새 팔로우를 누락할 수 있음. snapshot follow authority를 overlay/effective reader로 전환하고 client complete 판정 수정 필요.
+4. `handleMyFollowingR2Bundle` 353 경로가 5,000 제한 잘림을 complete 목록처럼 반환 가능. completeness/pagination 신호와 incomplete cache의 개별 relation 확인 필요.
+5. `handleFollowerSaveAccess`가 legacy `follows`만 검사해 overlay 신규 팔로우/해제와 권한이 어긋남. cutover 이후 effective membership 사용, legacy 분기 유지.
+6. follow mutation/recovery가 UID cache만 무효화하고 실제 handle first-view cache를 남길 수 있음. UID+handle 캐시 무효화가 mutation과 recovery 양쪽에 필요.
+7. relation 변화 없는 동일 상태 요청도 `completeFollowIntent354 -> repairFollowProfile354`에서 exact recovery/R2 writes를 반복. 정상 no-op과 장애 recovery를 분리해 불필요한 R2/overlay history 합산 금지.
+8. Run `37206991230`의 W1~W2는 relation SQL 단독 증거이며 `enforceUserRateLimit`의 RATE_DB write 등 실제 HTTP 총비용은 제외. 실제 Worker HTTP 경로에서 DB + RATE_DB + R2 비용을 분리 측정해야 함.
+
+보호 범위:
+- 좋아요 / 공개·비공개 / 검색 / 크리에이터 추천 / UI 정상 경로 변경 금지.
+- shared migration, cutover manifest 활성화, 사용자 데이터 write/backfill/delete, TEST/PRODUCTION/main 변경 금지.
+- 실제 서비스는 여전히 app344 / PREVIEW Worker341.
+
+다음 합격 조건:
+- 위 8건 수정 후 TypeScript/Build 및 347~354 + 새 verifier PASS.
+- stale/duplicate/reverse/crash/no-op/profile-edit/social-snapshot/5001-follow/follower-save-access/handle-cache recovery 재현 PASS.
+- isolated relation SQL W1~W2 유지 + 실제 HTTP 경로 DB/RATE_DB/R2 비용 계측 분리.
+- Astra 독립 재감사 PASS 전 PREVIEW 배포 금지.
+
 ## 0OZ. Follow candidate354 — crash-consistent orchestration implemented, NOT activated (2026-10-04 KST)
 
 - Branch: preview. Exact starting HEAD: `9709c6f2ef06d40d6c780f07ec856c4a917449f6`. App344 / deployed PREVIEW Worker341 remain the documented live baseline; no release requested or executed.

@@ -3178,7 +3178,7 @@ async function syncExactSharedFollowing347(env, uid, targetUid, following, actor
       uid: normalized,
       updatedAt: Date.now(),
       followingUids: [...ids].slice(0, 5000),
-      exactFollowingCount347,
+      exactFollowingCount347: exactFollowingCount,
       followRevision347: followRevision,
       canonicalCountComplete347: true,
       membershipComplete347: membershipComplete,

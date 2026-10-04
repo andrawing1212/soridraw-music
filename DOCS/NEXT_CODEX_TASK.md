@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — source-swap W2 후보 PASS, cross-env hybrid 호환 전 shared D1 적용 금지
+
+현재 완료:
+- source swap baseline Worker1 / D1 R11 W3 / Firestore0 원인 분해 완료.
+- post-hybrid candidate: tracks W1 + shared revision W1 + derived media mirror W0 = **W2 예상**.
+- migration + rollback + verifier 준비 완료.
+- Release System Audit `37231798452` SUCCESS.
+- Worker 추가 요청 없음: 목표 Worker 1 유지.
+- shared D1/Worker/Hosting 배포는 아직 0.
+
+안전 blocker:
+- PREVIEW는 R2 hybrid-read compatibility가 있으나 현재 main/TEST/PRODUCTION 기준은 아직 legacy derived freshness를 요구.
+- shared D1 trigger는 환경 공용이므로 TEST/PRODUCTION 호환 전 migration 적용 금지.
+
+다음 진행:
+1. 배포 없이 first-publication W12 physical write fanout도 계속 분해/후보 설계.
+2. source-swap W2 실제 적용은 향후 **TEST 승격 승인**으로 hybrid compatibility가 main/TEST에 들어간 뒤에도 PRODUCTION 구버전 영향까지 확인할 것.
+3. PRODUCTION hybrid 지원 전 shared-D1 legacy media mirror 제거가 안전하지 않으면 그대로 차단.
+4. 최종 cutover 때 same fixture:
+   - Worker 1 이하.
+   - D1 physical W2 이하.
+   - Firestore W0.
+   - private/re-public W2 회귀 없음.
+   - PC↔모바일 저장하트 즉시동기화 회귀 없음.
+
+금지:
+- 좋아요/저장하트 즉시동기화 변경.
+- 정상 private/re-public W2 경로 변경.
+- 사용자 데이터 migration/backfill/delete.
+- 승인 없는 main/TEST/PRODUCTION 변경.
+- cross-env blocker를 무시한 shared D1 trigger 적용.
+
 ## CURRENT NEXT GATE — Rows Written 우선: source-swap W3→W2 먼저, Worker 1 상한 동시 검증
 
 우선순위:

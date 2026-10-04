@@ -226,6 +226,7 @@ jobs:
           open_block = open_block.replace(open_anchor, open_replacement, 1)
           page = page[:open_start] + open_block + page[open_end:]
 
+          app_path.write_text(app)
           page_path.write_text(page)
 
           version = json.loads(version_path.read_text())

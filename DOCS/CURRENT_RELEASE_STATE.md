@@ -1,3 +1,43 @@
+## 0OR. PREVIEW app342 — 장르별 추천 정리 + 2줄 분리 + 가로 스크롤 복구 (2026-10-04 KST)
+
+**사용자 요청**
+- 장르별 추천에서 같은 장르의 ID/영문 표기 중복을 정리.
+- 첫 줄은 한글 장르명, 둘째 줄은 한글 표기가 없는 장르를 영문으로 표시.
+- 장르가 화면 폭을 넘을 때 잘리지 않고 좌우로 이동 가능하게 수정.
+
+**app342 변경**
+- 이미 로드된 Explore Feed 40곡만 사용. 새 Worker/D1/Firestore 조회 없음.
+- `GENRES + GENRE_HIERARCHY`의 id/영문명/한글명을 기기에서만 대조해 canonical 장르로 합침.
+  - 예: `neo_soul / Neo Soul → 네오 소울`
+  - `k_new_jack_swing / K-New Jack Swing → K-뉴잭스윙`
+  - `underground_hiphop / Underground Hip-Hop` 같은 중복도 한 항목으로 합침.
+- 한글 표시명이 있는 장르는 첫 줄, 한글 표시명이 없는 장르는 둘째 영문 줄.
+- 두 줄 각각 독립 horizontal overflow.
+- 마우스 휠/트랙패드의 세로 delta도 해당 줄이 실제로 더 이동할 수 있을 때만 좌우 이동으로 사용.
+- 장르 선택은 기존 로컬 추천 카드 필터만 변경하며 추가 서버 요청 없음.
+- 좋아요/저장하트/폴더/Split/Music Note/검색 Worker 변경 없음.
+
+**변경 파일**
+- `src/pages/ExplorePage.tsx`
+- `src/components/explore/explore.css`
+- `public/app-version.json`
+- `.deploy/preview-app-release.trigger`
+
+**검증/배포**
+- product source: `735b01b428d04e3577bb6bfe4ca7cda0b1f60e8c`
+- PREVIEW release commit: `566d10cac7dbf0387404d5d3ca597c665ee49195`
+- Firebase PREVIEW Run `37167991654`: **SUCCESS**
+- TypeScript PASS / Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` exact build PASS.
+- shared RTDB Rules SKIPPED.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 변경 없음.
+
+**남은 확인**
+- 실제 화면에서 한글/영문 두 줄 분리와 중복 제거, PC/모바일 좌우 스크롤 체감 확인 전.
+
 ## 0OQ. PREVIEW Worker 341 — Explore 검색 D1 완전 차단 + 승인된 R2 검색 카탈로그 1회 백필 (2026-10-04 KST)
 
 **사용자 승인 목표**

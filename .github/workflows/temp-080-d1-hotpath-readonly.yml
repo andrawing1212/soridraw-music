@@ -93,6 +93,43 @@ jobs:
           console.log('REMOTE_D1_WRITES=0');
           NODE
 
+      - name: Read live follow schema only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT type,name,tbl_name,sql
+            FROM sqlite_schema
+            WHERE sql IS NOT NULL
+              AND (
+                tbl_name IN ('follows','profile_stats','explore_derived_profiles','explore_derived_changes','explore_derived_state')
+                OR (type='trigger' AND (
+                  sql LIKE '%profile_stats%'
+                  OR sql LIKE '%explore_derived_profiles%'
+                  OR sql LIKE '%follows%'
+                ))
+              )
+            ORDER BY type,tbl_name,name;
+            PRAGMA index_list('follows');
+            PRAGMA index_list('profile_stats');
+            PRAGMA index_list('explore_derived_profiles');
+            PRAGMA index_list('explore_derived_changes');
+            EXPLAIN QUERY PLAN SELECT 1 FROM follows WHERE follower_uid='__audit_a__' AND following_uid='__audit_b__' LIMIT 1;
+            EXPLAIN QUERY PLAN SELECT following_uid FROM follows WHERE follower_uid='__audit_a__' ORDER BY created_at DESC,following_uid DESC LIMIT 50;
+            EXPLAIN QUERY PLAN SELECT follower_uid FROM follows WHERE following_uid='__audit_b__' ORDER BY created_at DESC,follower_uid DESC LIMIT 50;
+          " --json > "$RUNNER_TEMP/follow-schema.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/follow-schema.json','utf8'));
+          const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
+          sets.forEach((rows,i)=>console.log('FOLLOW_SCHEMA_SET_'+i+'='+JSON.stringify(rows)));
+          console.log('FOLLOW_LIVE_SCHEMA_READONLY=PASS');
+          console.log('REMOTE_D1_WRITES=0');
+          NODE
+
       - name: Read D1 query insights only
         working-directory: cloudflare/explore-worker
         shell: bash

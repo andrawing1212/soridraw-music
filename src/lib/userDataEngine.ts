@@ -334,8 +334,10 @@ const applyMusicNoteMediaOverlaysToSnapshot = (
       JSON.stringify(item?.[key] ?? null) === JSON.stringify(value ?? null)
     ));
     if (covered) {
-      delete records[id];
-      recordsChanged = true;
+      // app351 — matching the local visible row is not proof that the server
+      // Catalog has caught up. Keep the bounded overlay until a strictly newer
+      // canonical media version arrives, otherwise the next stale Catalog GET
+      // can erase the thumbnail again after a PC reload/restart.
       return item;
     }
 

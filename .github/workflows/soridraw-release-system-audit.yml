@@ -569,6 +569,21 @@ jobs:
           console.log('161_TARGETED_LEGACY_MEMBERSHIP_INDEX_PLAN=PASS ' + detail);
           NODE
 
+      - name: Real remote D1 follow billing on isolated synthetic database
+        if: contains(github.event.head_commit.message, 'measure isolated follow D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-348-isolated-follow-d1.mjs
+          node scripts/measure-348-isolated-follow-d1.mjs
+
+      - name: Emergency cleanup of isolated follow D1
+        if: always() && contains(github.event.head_commit.message, 'measure isolated follow D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/measure-348-isolated-follow-d1.mjs cleanup
+
       - name: Real remote D1 like billing on isolated synthetic database
         if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1')
         shell: bash

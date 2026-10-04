@@ -1823,6 +1823,7 @@ export default function FavoritesPage({
       'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
       'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
       'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+      'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',
       'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
     ];
     const mediaPatch: Record<string, any> = {};
@@ -1844,7 +1845,14 @@ export default function FavoritesPage({
       changed = true;
       return { ...item, ...mediaPatch };
     });
-    if (changed) favoritesStore.setFavorites(next);
+    if (changed) {
+    favoritesStore.setFavorites(next);
+    if (user?.uid && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(next));
+      } catch {}
+    }
+  }
   };
 
   const publishFavoriteSunoMediaDraft = async (songId: string, updates: Record<string, any>) => {
@@ -1887,8 +1895,23 @@ export default function FavoritesPage({
         if (!song || !draft.updates) continue;
         const sourceVersion = getMusicNoteDetailSourceVersion(song);
         const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
-        if (!compatible) continue;
-        syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);
+        const draftMediaVersion = Math.max(
+        Number(draft.updates?.sunoShareUrlUpdatedAt || 0),
+        Number(draft.updates?.sunoCoverFetchedAt || 0),
+        Number(draft.updatedAtMs || 0),
+      );
+      const currentMediaVersion = Math.max(
+        Number(song?.sunoShareUrlUpdatedAt || 0),
+        Number(song?.sunoCoverFetchedAt || 0),
+      );
+      const mediaVersionCompatible = draftMediaVersion <= 0
+        || currentMediaVersion <= 0
+        || currentMediaVersion <= draftMediaVersion;
+      // A heart/folder/card-state write can advance generic updatedAt
+      // without changing Suno media. Such a write must not hide the
+      // user's newer durable Suno draft on reload.
+      if (!compatible && !mediaVersionCompatible) continue;
+      syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);
       }
     })().catch((error) => console.warn('Music Note pending Suno card overlay unavailable.', error));
     return () => { cancelled = true; };
@@ -6162,8 +6185,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const recovered = await readMusicNoteDetailDraft(user.uid, sourceId);
       if (recovered?.updates && Object.keys(recovered.updates).length > 0) {
         const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
-        if (compatible) {
-          const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
+        const recoveredMediaVersion = Math.max(
+        Number(recovered.updates?.sunoShareUrlUpdatedAt || 0),
+        Number(recovered.updates?.sunoCoverFetchedAt || 0),
+        Number(recovered.updatedAtMs || 0),
+      );
+      const hydratedMediaVersion = Math.max(
+        Number(hydrated?.sunoShareUrlUpdatedAt || 0),
+        Number(hydrated?.sunoCoverFetchedAt || 0),
+      );
+      const mediaVersionCompatible = recoveredMediaVersion > 0
+        && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
+      if (compatible || mediaVersionCompatible) {
+        const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
           if (Object.keys(recoveredUpdates).length > 0) {
             nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
             favoriteDetailPendingPatchRef.current = {

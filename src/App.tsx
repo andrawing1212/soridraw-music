@@ -5795,10 +5795,67 @@ function App() {
   };
 
   const removeStudioHeartIntentLocal = (uid: string, documentId: string) => {
-    clearStudioHeartIntentTimer(documentId);
-    removeStudioHeartPendingIntent(uid, documentId);
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId) return;
+
+  // app349 — capture the visible pending row before removing the durable
+  // intent. The pending overlay occupied the same list slot as the newly
+  // committed canonical row; removing the intent first used to drop both
+  // from the in-memory list until a reload rehydrated Firestore.
+  const settlingIntent = readStudioHeartPendingIntent(safeUid, safeDocumentId);
+  const current = favoritesStore.getFavorites();
+  const currentVisible = current.find((favorite: any) => (
+    String(favorite?.firestoreId || favorite?.id || '').trim() === safeDocumentId
+  )) || null;
+
+  clearStudioHeartIntentTimer(safeDocumentId);
+  removeStudioHeartPendingIntent(safeUid, safeDocumentId);
+
+  if (!settlingIntent) {
     setFavorites((previous) => previous);
-  };
+    return;
+  }
+
+  let next = current.filter((favorite: any) => (
+    String(favorite?.firestoreId || favorite?.id || '').trim() !== safeDocumentId
+  ));
+
+  if (settlingIntent.desiredSaved) {
+    const source = normalizeFavoriteTitleFields({
+      ...(settlingIntent.baselineFavorite || {}),
+      ...(settlingIntent.song || {}),
+      ...(currentVisible || {}),
+    } as any) as any;
+    const canonicalRow: any = {
+      ...source,
+      id: safeDocumentId,
+      firestoreId: safeDocumentId,
+      uid: safeUid,
+      saved: true,
+      hidden: false,
+      favoriteHidden: false,
+      favoriteRemoved: false,
+      favoriteRemovedAt: null,
+      unlikedAt: null,
+      unsavedAt: null,
+      deletedAt: null,
+      trashedAt: null,
+      updatedAtMs: Math.max(
+        Number(source?.updatedAtMs || 0),
+        Number(settlingIntent.updatedAtMs || 0),
+      ),
+    };
+    delete canonicalRow.__studioHeartPendingLocal;
+    delete canonicalRow.__studioHeartRemotePreviewLocal;
+    delete canonicalRow.__studioHeartRemotePreview;
+    next = mergeFavoritePages([canonicalRow], next);
+  }
+
+  const settled = sortFavoriteList(next);
+  favoritesStore.setFavorites(settled);
+  writeFavoritesCache(safeUid, settled);
+};
 
   // app347 — a canonical save/unsave from either device may complete the exact
   // membership a local pending intent was waiting for. If the canonical result
@@ -6150,7 +6207,17 @@ function App() {
       song: remoteItem || {},
       version: Math.floor(remoteVersion),
     });
-    setFavorites((previous) => previous);
+    // app349 — materialize the non-canonical preview synchronously. This
+  // keeps Music Note membership as immediate as the Recent heart and also
+  // lets a route opened before canonical settlement reuse the local cache.
+  const previewBase = stripStudioHeartPendingLayerFromFavorites(
+    safeUid,
+    stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, favoritesStore.getFavorites()),
+  );
+  const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
+  const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
+  favoritesStore.setFavorites(visible);
+  writeFavoritesCache(safeUid, visible);
   };
 
   const clearRemoteStudioHeartPreviewFromCanonical = (

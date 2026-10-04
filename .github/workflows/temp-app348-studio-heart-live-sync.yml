@@ -277,29 +277,24 @@ jobs:
           """
           app = app.replace(overlay_anchor, remote_helpers + overlay_anchor, 1)
 
-          own_branch_old = """    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
-              if (isHeartPreview) {
-                const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
-                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
-                markCacheDiagnostic('musicNote', 'CACHE', 0);
-                return;
-              }
-              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-              writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);"""
-          own_branch_new = """    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
-              if (isHeartPreview) {
-                const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
-                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
-                markCacheDiagnostic('musicNote', 'CACHE', 0);
-                return;
-              }
-              clearRemoteStudioHeartPreviewFromCanonical(
+          own_branch_start = app.index("    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {")
+          if own_branch_start < 0:
+              raise SystemExit('own-device signal branch missing')
+          own_local_write = app.index(
+              "      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);",
+              own_branch_start,
+          )
+          if own_local_write < 0:
+              raise SystemExit('own-device canonical write anchor missing')
+          own_prefix = app[own_branch_start:own_local_write]
+          if 'clearRemoteStudioHeartPreviewFromCanonical(' not in own_prefix:
+              insertion = """      clearRemoteStudioHeartPreviewFromCanonical(
                 uid,
                 Array.isArray(documentIds) ? documentIds : [],
               );
-              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-              writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);"""
-          app = once(app, own_branch_old, own_branch_new, 'own canonical cleanup')
+"""
+              app = app[:own_local_write] + insertion + app[own_local_write:]
+
 
           app = once(
               app,

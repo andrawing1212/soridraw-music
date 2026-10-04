@@ -1,3 +1,71 @@
+## CURRENT TASK — protocol354 독립감사 FAIL 8건 수정 (2026-10-04 KST)
+
+기준:
+- branch: `preview`
+- 감사 기준 commit: `c47f6c6dbca385787b1cd5cd0f5c61585f7a27a7`
+- 상태 문서 감사 기록 commit: `daae182450e45602b367cfbcec85ec896d21758a`
+- 실제 서비스: app344 / PREVIEW Worker341 유지. 아직 배포 금지.
+
+목표:
+protocol354의 relation W1~W2 후보를 유지하면서, 독립감사에서 확인된 reader/cache/profile writer/실제 HTTP 비용 구멍 8개를 최소 수정으로 닫는다.
+
+필수 수정:
+1. `patchPublicProfileBundle245`, `writeExploreSharedProfile060`
+   - 최신 shared profile을 CAS로 읽고 병합.
+   - followerCount/followingCount, exact/pending/recovery/order fence metadata를 오래된 baselineBundle이 되감지 못하게 보존.
+   - 일반 프로필 수정은 프로필 필드만 변경.
+2. overlay public-profile readers
+   - `readSharedProfileConnection348`, public profile, first-view에서 pending/exact 미완료를 정상값으로 반환하지 말 것.
+   - 필요한 경우 bounded 351 recovery 또는 fail-closed.
+   - frozen legacy `profile_stats` count를 overlay 정상 count로 오인하지 말 것.
+3. `handleMySocialSnapshot042`
+   - overlay mode follow membership을 legacy R2/`follows` 재생성으로 덮지 말 것.
+   - effective overlay reader 또는 안전한 complete snapshot authority로 연결.
+   - client `loadExploreFollowingBundle` complete 판정도 서버 completeness와 일치.
+4. 353 5,000 cap
+   - `handleMyFollowingR2Bundle`이 잘린 목록을 complete로 반환하지 않게 completeness/pagination/truncated 신호 추가.
+   - client incomplete cache는 누락 target을 false로 단정하지 말고 개별 follow-state 확인.
+5. `handleFollowerSaveAccess`
+   - legacy mode는 기존 그대로.
+   - overlay mode는 effective membership348 사용.
+6. handle cache invalidation
+   - follow mutation 성공/중단 후 recovery 모두 target/follower profile의 UID + 실제 handle first-view cache 무효화.
+   - stale 304/revision 재사용 금지.
+7. no-op 비용
+   - 동일 desired state + 새 request id가 relation change 0이면 정상 no-op으로 종료.
+   - unresolved pending/crash case만 recovery 수행.
+   - no-op에서 exact history SUM/recovery 및 불필요한 R2 writes 금지.
+8. 실제 HTTP 비용 측정
+   - relation SQL Rows Written와 별도로 `handleFollowOverlay354` 전체 요청의 DB, RATE_DB, R2 read/write를 측정.
+   - duplicate/no-op/stale/recovery 경로 포함.
+   - 비용 보고에서 relation W와 total request cost를 분리.
+
+회귀 금지:
+- 좋아요, 공개/비공개, 검색, 크리에이터 추천, UI/CSS 변경 금지.
+- legacy follow mode 동작 변경 금지.
+- shared migration/cutover manifest 활성화 금지.
+- TEST/PRODUCTION/main 변경 금지.
+- 사용자 데이터 write/backfill/delete/migration 금지.
+- 전체 follows/profile scan 금지.
+
+검증:
+- TypeScript / Build.
+- verify-347/348/349/350/351/352/354 + 새 verifier.
+- profile edit after follow, crash after relation before R2, public profile/first-view/connection reader recovery, social snapshot cross-device, 5001 following, follower-save access, handle cache, duplicate/no-op, stale/reverse/concurrent request fixtures.
+- isolated remote D1 candidate cost 재측정.
+- 실제 HTTP 경로 DB/RATE_DB/R2 비용 계측. shared/user DB 사용 금지.
+- 변경 후 Astra 독립 감사용 고정 commit 생성.
+
+완료 보고:
+- branch/base/final SHA
+- 변경 파일
+- TS/Build/tests
+- relation Rows Read/Written
+- total HTTP DB/RATE_DB/R2 비용
+- shared/user data 변경 0 여부
+- deployment 0 여부
+- 남은 위험
+
 ## CURRENT TASK — verified follow overlay 348 compatibility implementation (2026-10-04 KST)
 
 확정 근거:

@@ -277,18 +277,29 @@ jobs:
           """
           app = app.replace(overlay_anchor, remote_helpers + overlay_anchor, 1)
 
-          app = once(
-              app,
-              """      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);""",
-              """      clearRemoteStudioHeartPreviewFromCanonical(
-                  uid,
-                  Array.isArray(documentIds) ? documentIds : [],
-                );
-                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);""",
-              'own canonical cleanup',
-          )
+          own_branch_old = """    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+              if (isHeartPreview) {
+                const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
+                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+                markCacheDiagnostic('musicNote', 'CACHE', 0);
+                return;
+              }
+              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+              writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);"""
+          own_branch_new = """    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+              if (isHeartPreview) {
+                const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
+                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+                markCacheDiagnostic('musicNote', 'CACHE', 0);
+                return;
+              }
+              clearRemoteStudioHeartPreviewFromCanonical(
+                uid,
+                Array.isArray(documentIds) ? documentIds : [],
+              );
+              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+              writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);"""
+          app = once(app, own_branch_old, own_branch_new, 'own canonical cleanup')
 
           app = once(
               app,

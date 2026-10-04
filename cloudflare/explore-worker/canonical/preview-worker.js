@@ -9491,7 +9491,7 @@ async function handleProfileTracksCore336(url, profileRef, env, cors) {
   return await handleProfileTracksCore066(url, profileRef, env, cors);
 }
 
-async function handleProfileTracks(url, profileRef, env, cors) {
+async function handleProfileTracksCore358(url, profileRef, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleProfileTracksCore336(url, profileRef, env, cors);
   }
@@ -9539,6 +9539,15 @@ async function handleProfileTracks(url, profileRef, env, cors) {
     'R2-LEGACY-PROFILE-336'
   );
 }
+
+
+async function handleProfileTracks(url, profileRef, env, cors) {
+  if (!isExplorePublicationR2OnlyReadEnabled358(env)) {
+    return await handleProfileTracksCore358(url, profileRef, env, cors);
+  }
+  return await handlePublicationR2OnlyProfile358(url, profileRef, env, cors);
+}
+
 __name(handleProfileTracks, "handleProfileTracks");
 __name2(handleProfileTracks, "handleProfileTracks");
 __name22(handleProfileTracks, "handleProfileTracks");
@@ -10743,7 +10752,7 @@ async function handleGenreTracksCore336(url, genreValue, env, cors) {
   return await handleGenreTracksCore066(url, genreValue, env, cors);
 }
 
-async function handleGenreTracks(url, genreValue, env, cors) {
+async function handleGenreTracksCore358(url, genreValue, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleGenreTracksCore336(url, genreValue, env, cors);
   }
@@ -10787,6 +10796,15 @@ async function handleGenreTracks(url, genreValue, env, cors) {
     'R2-LEGACY-GENRE-336'
   );
 }
+
+
+async function handleGenreTracks(url, genreValue, env, cors) {
+  if (!isExplorePublicationR2OnlyReadEnabled358(env)) {
+    return await handleGenreTracksCore358(url, genreValue, env, cors);
+  }
+  return await handlePublicationR2OnlyGenre358(url, genreValue, env, cors);
+}
+
 __name(handleGenreTracks, "handleGenreTracks");
 __name2(handleGenreTracks, "handleGenreTracks");
 __name22(handleGenreTracks, "handleGenreTracks");
@@ -29197,7 +29215,130 @@ async function handleFeedWithEdgeCacheCore336(request, url, env, cors) {
   catch { return response; }
 }
 
-async function handleFeedWithEdgeCache(request, url, env, cors) {
+// SORIDRAW_PUBLICATION_R2_ONLY_READ_CUTOVER_358_20261005
+// Pure gate helper. No D1/R2 I/O here.
+// The cutover is deliberately triple-gated so merely shipping this code changes nothing.
+
+const EXPLORE_PUBLICATION_R2_ONLY_SCHEMA_358 = 1;
+
+function isExplorePublicationR2OnlyReadEnabled358(env) {
+  return String(env?.SORIDRAW_R2_CATALOG_V1 || '').trim() === '1'
+    && String(env?.SORIDRAW_R2_HYBRID_READ_V1 || '').trim() === '1'
+    && String(env?.SORIDRAW_PUBLICATION_R2_ONLY_READ_V1 || '').trim() === '1';
+}
+
+
+
+async function publicationR2OnlyCatalogPage358(env, prefix, kind, limit, rawCursor) {
+  const state = rawCursor
+    ? hybridCursorState336(decodeCursor(rawCursor), kind, prefix)
+    : { boundary: null, r2Started: false, r2Done: false, r2Next: null, r2Carry: [] };
+  if (rawCursor && !state) return { invalidCursor: true };
+
+  const catalog = await collectHybridCatalog336(env, prefix, limit, state);
+  const merged = mergeHybridItems336([], catalog.items, kind, limit);
+  const nextCursor = buildHybridNextCursor336(
+    kind,
+    prefix,
+    merged,
+    limit,
+    false,
+    catalog
+  );
+  return { items: merged.items, nextCursor, invalidCursor: false };
+}
+
+function withPublicationR2OnlyHeader358(response, kind) {
+  if (!(response instanceof Response)) return response;
+  const headers = new Headers(response.headers);
+  headers.set('X-SORIDRAW-Publication-Read-Authority', 'R2-ONLY-358');
+  headers.set('X-SORIDRAW-D1-Read', '0');
+  headers.set('X-SORIDRAW-D1-Write', '0');
+  headers.set('X-SORIDRAW-R2-Only-Kind', String(kind || ''));
+  const expose = new Set(String(headers.get('Access-Control-Expose-Headers') || '')
+    .split(',').map((value) => value.trim()).filter(Boolean));
+  for (const name of [
+    'X-SORIDRAW-Publication-Read-Authority',
+    'X-SORIDRAW-D1-Read',
+    'X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-R2-Only-Kind',
+  ]) expose.add(name);
+  headers.set('Access-Control-Expose-Headers', [...expose].join(', '));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function handlePublicationR2OnlyFeed358(request, url, env, cors) {
+  if (!catalogBucket066(env)) {
+    return apiError('R2_CATALOG_UNAVAILABLE', '공개곡 카탈로그를 확인할 수 없습니다.', 503, cors);
+  }
+  const sort = url.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
+  const prefix = catalogListPrefix066(sort);
+  const limit = getPageSize(url);
+  const rawCursor = url.searchParams.get('cursor');
+  const page = await publicationR2OnlyCatalogPage358(env, prefix, sort, limit, rawCursor);
+  if (page.invalidCursor) {
+    // Transitional compatibility only. Existing pre-cutover cursors are allowed to
+    // finish through the frozen hybrid path; new first pages mint R2-only cursors.
+    return await handleFeedWithEdgeCacheCore358(request, url, env, cors);
+  }
+  return withPublicationR2OnlyHeader358(
+    json({ ok: true, data: { items: page.items, nextCursor: page.nextCursor, sort } }, 200, cors),
+    'feed'
+  );
+}
+
+async function handlePublicationR2OnlyProfile358(url, profileRef, env, cors) {
+  if (!catalogBucket066(env)) {
+    return apiError('R2_CATALOG_UNAVAILABLE', '공개 프로필 카탈로그를 확인할 수 없습니다.', 503, cors);
+  }
+  let bundle = null;
+  try { bundle = await readExploreSharedProfile060(env, profileRef); } catch {}
+  const uid = String(bundle?.uid || bundle?.body?.data?.profile?.uid || '').trim();
+  if (!uid) return apiError('NOT_FOUND', '공개 프로필을 찾을 수 없습니다.', 404, cors);
+
+  const prefix = catalogListPrefix066('profile', uid);
+  const limit = getPageSize(url);
+  const rawCursor = url.searchParams.get('cursor');
+  const page = await publicationR2OnlyCatalogPage358(env, prefix, 'profile', limit, rawCursor);
+  if (page.invalidCursor) {
+    return await handleProfileTracksCore358(url, profileRef, env, cors);
+  }
+  return withPublicationR2OnlyHeader358(
+    json({ ok: true, data: { items: page.items, nextCursor: page.nextCursor } }, 200, cors),
+    'profile'
+  );
+}
+
+async function handlePublicationR2OnlyGenre358(url, genreValue, env, cors) {
+  if (!catalogBucket066(env)) {
+    return apiError('R2_CATALOG_UNAVAILABLE', '장르 카탈로그를 확인할 수 없습니다.', 503, cors);
+  }
+  const genre = normalizeCatalogText066(genreValue).slice(0, 160);
+  if (!genre) {
+    return withPublicationR2OnlyHeader358(
+      json({ ok: true, data: { genre: genreValue, items: [], nextCursor: null } }, 200, cors),
+      'genre'
+    );
+  }
+  const prefix = catalogListPrefix066('genre', genre);
+  const limit = getPageSize(url);
+  const rawCursor = url.searchParams.get('cursor');
+  const page = await publicationR2OnlyCatalogPage358(env, prefix, 'genre', limit, rawCursor);
+  if (page.invalidCursor) {
+    return await handleGenreTracksCore358(url, genreValue, env, cors);
+  }
+  return withPublicationR2OnlyHeader358(
+    json({ ok: true, data: { genre: genreValue, items: page.items, nextCursor: page.nextCursor } }, 200, cors),
+    'genre'
+  );
+}
+
+
+async function handleFeedWithEdgeCacheCore358(request, url, env, cors) {
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleFeedWithEdgeCacheCore336(request, url, env, cors);
   }
@@ -29239,6 +29380,15 @@ async function handleFeedWithEdgeCache(request, url, env, cors) {
     'R2-LEGACY-FEED-336'
   );
 }
+
+
+async function handleFeedWithEdgeCache(request, url, env, cors) {
+  if (!isExplorePublicationR2OnlyReadEnabled358(env)) {
+    return await handleFeedWithEdgeCacheCore358(request, url, env, cors);
+  }
+  return await handlePublicationR2OnlyFeed358(request, url, env, cors);
+}
+
 __name(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name2(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name22(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");

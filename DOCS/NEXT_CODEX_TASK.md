@@ -1,3 +1,14 @@
+## UX ACCEPTANCE — follow/public-private immediate local response
+
+Alongside the Worker341 legacy parity blocker:
+- Explore public-profile follow button/count must reflect requested state immediately; do not show a 5~7s blocking spinner while waiting for server.
+- Keep one in-flight mutation guard per target; server settlement remains authoritative.
+- On server failure/conflict, rollback exact previous local state and show the existing error notice.
+- Explore public-profile publication save/private paths must use the same local-first behavior where safe: visible state changes immediately, backend settles after, exact rollback on failure.
+- Preserve existing Music Note app330/331 optimistic publication behavior; do not rewrite it.
+- This UX work must add **zero extra D1/Firestore/R2 reads/writes** and must not alter backend cost paths.
+- Add focused regression proving immediate local state before a delayed mocked server response and rollback after rejection.
+
 ## CURRENT TASK — preserve Worker341 legacy follow path inside candidate355 compatibility Worker
 
 Current live PREVIEW after regression rollback:

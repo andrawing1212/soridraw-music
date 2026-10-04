@@ -1,3 +1,25 @@
+## CURRENT NEXT GATE — app349 실기기 4포인트 확인 + follow Worker 독립 정적 감사 계속
+
+현재 실제 PREVIEW:
+- Hosting app **349** / Run `37224986893` SUCCESS / exact build PASS.
+- product commit `53646fce918060f5bcb376af9a31a5e0acd05e6c`.
+- Release System Audit `37224853496` SUCCESS.
+- Studio save-heart/Music Note 기준은 app349 Skill로 동결.
+- PREVIEW live Worker는 Worker341 rollback본 `9c11b95cf4c95210011b1425cea23f3e51cbf34f` 유지.
+- follow cutover OFF / migration-backfill-user-data change 0.
+
+사용자 실기기 최종 확인:
+1. PC → 모바일 save/unsave 즉시 하트 + Music Note membership 반영.
+2. 모바일 → PC 반대 방향도 즉시 반영.
+3. 마지막 클릭 +30초 canonical settlement 뒤 양쪽 상태 유지, 저장 row 순간 소실 없음.
+4. Detail의 Suno URL/media/thumbnail이 목록에 즉시 보이고 새로고침/재실행 후에도 유지.
+
+동시에 계속할 수 있는 비배포 감사:
+- current preview의 candidate Worker source blob은 Worker341-parity fix commit `e312cfdea8b4c047aa8309506e8ebc78d9ed1bf2`의 Worker blob과 동일함.
+- `scripts/verify-356-follow-worker341-legacy-parity.mjs`는 legacy counter mutation과 post-mutation R2 sync를 Worker341 함수와 exact-equality로 비교하고, overlay router 외 legacy core 차이를 금지함.
+- 다음 단계는 candidate legacy mode의 실제 D1 physical Rows Read/Written + R2 write를 Worker341 동일 fixture와 독립 비교하는 것.
+- 이 감사 전 candidate Worker deploy / follow cutover / shared migration / main·TEST·PRODUCTION 승격 금지.
+
 ## CURRENT NEXT GATE — app348 실기기 최종 4포인트 확인
 
 현재 PREVIEW:

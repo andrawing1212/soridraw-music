@@ -1,3 +1,28 @@
+## CURRENT TASK — preserve Worker341 legacy follow path inside candidate355 compatibility Worker
+
+Current live PREVIEW after regression rollback:
+- Hosting app345 remains deployed.
+- PREVIEW Worker is rolled back to Worker341 code source `9c11b95cf4c95210011b1425cea23f3e51cbf34f`; rollback Run `37214678869` SUCCESS.
+- Shared follow cutover OFF.
+- User observed candidate legacy physical rows R23/W14 and R17/W17, so candidate Worker is blocked.
+
+Required fix on `preview` source:
+1. When `readFollowCutoverState348(env)` resolves legacy mode, follow mutation must preserve Worker341 behavior/cost exactly:
+   - original 246 `adjustExploreFollowCountersDelta` legacy statements/ordering,
+   - original legacy rate limit,
+   - original post-mutation R2 sync/cache invalidation behavior.
+2. Do not run `SORIDRAW_FOLLOW_COMBINED_COUNTERS_345` or `syncExactSharedFollowing347` in legacy mode.
+3. Keep 348/354/355 overlay implementation dormant and reachable only when fully armed cutover manifest is present.
+4. Do not change likes/public-private/search/creator/UI or shared data.
+5. No migration/backfill/cutover/deploy during implementation.
+
+Verification:
+- Static/function diff proving legacy follow path equivalent to Worker341.
+- Existing 347~355 tests plus new legacy-parity regression.
+- TypeScript/Build.
+- Isolated legacy D1 measurement against Worker341 and candidate: physical Rows Read/Written must match within same fixture; no extra R2 compatibility writes in legacy mode.
+- Astra independent re-audit before candidate Worker PREVIEW redeploy.
+
 ## NEXT TASK — app345 PREVIEW live follow compatibility verification
 
 Current deployed PREVIEW:

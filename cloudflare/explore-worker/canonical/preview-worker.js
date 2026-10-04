@@ -3081,6 +3081,11 @@ async function writeSharedFollowing061(env, uid, followingUids) {
   const normalized = String(uid || '').trim();
   const bucket = env?.PROFILE_MEDIA || null;
   if (!normalized || !bucket || !followingUids) return false;
+  // SORIDRAW_FOLLOW_EXACT_COUNT_GUARD_347_20261004
+  // Stage-1 exact-count objects must never be overwritten by the old capped
+  // v114 mirror writer.
+  const existing347 = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));
+  if (existing347?.canonicalCountComplete347 === true || Number(existing347?.schemaVersion) === 2) return false;
   const ids = [...new Set([...followingUids].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5000);
   await bucket.put(exploreSharedFollowingKey061(normalized), JSON.stringify({
     schemaVersion: 1,
@@ -3098,8 +3103,99 @@ async function readSharedFollowing061(env, uid) {
   const normalized = String(uid || '').trim();
   if (!normalized) return null;
   const bundle = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));
-  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.followingUids)) return null;
-  return [...new Set(bundle.followingUids.map((value) => String(value || '').trim()).filter(Boolean))];
+  const state347 = normalizeSharedFollowingState347(bundle, normalized);
+  return state347 ? state347.followingUids : null;
+}
+
+// SORIDRAW_FOLLOW_EXACT_COUNT_AUTHORITY_347_20261004
+// Compatibility stage only. D1 remains canonical. The new shared object carries
+// an exact monotonic following count without pretending the legacy 5,000-member
+// list is always complete.
+function normalizeSharedFollowingState347(bundle, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized || !bundle || ![1, 2].includes(Number(bundle.schemaVersion)) ||
+      String(bundle.uid || '').trim() !== normalized || !Array.isArray(bundle.followingUids)) return null;
+  const followingUids = [...new Set(bundle.followingUids.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5000);
+  const exactFollowingCount = Number(bundle.exactFollowingCount347);
+  const followRevision = Number(bundle.followRevision347);
+  const countExact = bundle.canonicalCountComplete347 === true &&
+    Number.isSafeInteger(exactFollowingCount) && exactFollowingCount >= 0 &&
+    Number.isSafeInteger(followRevision) && followRevision > 0;
+  const membershipComplete = bundle.membershipComplete347 === true &&
+    countExact && exactFollowingCount <= 5000 && followingUids.length === exactFollowingCount;
+  return {
+    followingUids,
+    countExact,
+    exactFollowingCount: countExact ? exactFollowingCount : null,
+    followRevision: countExact ? followRevision : 0,
+    membershipComplete,
+  };
+}
+
+async function readSharedFollowingState347(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return null;
+  const bundle = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));
+  return normalizeSharedFollowingState347(bundle, normalized);
+}
+
+async function syncExactSharedFollowing347(env, uid, targetUid, following, actorStats, delta) {
+  const normalized = String(uid || '').trim();
+  const target = String(targetUid || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  const exactFollowingCount = Number(actorStats?.following_count);
+  const followRevision = Number(actorStats?.updated_at);
+  if (!normalized || !target || !bucket ||
+      !Number.isSafeInteger(exactFollowingCount) || exactFollowingCount < 0 ||
+      !Number.isSafeInteger(followRevision) || followRevision <= 0) return false;
+
+  const key = exploreSharedFollowingKey061(normalized);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const object = await bucket.get(key);
+    let existing = null;
+    if (object) {
+      try { existing = JSON.parse(await object.text()); } catch { existing = null; }
+    }
+    const state = normalizeSharedFollowingState347(existing, normalized);
+    if (state?.countExact && state.followRevision > followRevision) return true;
+    if (state?.countExact && state.followRevision === followRevision &&
+        state.exactFollowingCount === exactFollowingCount) return true;
+
+    const ids = new Set(state?.followingUids || []);
+    if (following) ids.add(target); else ids.delete(target);
+    const normalizedDelta = Number(delta || 0);
+    const canCertifyFreshMembership =
+      (!object || !state) &&
+      ((normalizedDelta === 1 && exactFollowingCount === 1 && following) ||
+       (normalizedDelta === -1 && exactFollowingCount === 0 && !following) ||
+       (normalizedDelta === 0 && exactFollowingCount === 0 && !following));
+    const membershipComplete = Boolean(state?.membershipComplete || canCertifyFreshMembership) &&
+      ids.size === exactFollowingCount && exactFollowingCount <= 5000;
+
+    const payload = {
+      ...(existing && typeof existing === 'object' ? existing : {}),
+      schemaVersion: 2,
+      uid: normalized,
+      updatedAt: Date.now(),
+      followingUids: [...ids].slice(0, 5000),
+      exactFollowingCount347,
+      followRevision347: followRevision,
+      canonicalCountComplete347: true,
+      membershipComplete347: membershipComplete,
+      canonicalSource347: 'profile_stats-returning',
+    };
+    const saved = await bucket.put(key, JSON.stringify(payload), {
+      onlyIf: object?.etag ? { etagMatches: object.etag } : { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: {
+        soridrawSharedFollowing: '347',
+        followRevision347: String(followRevision),
+        updatedAt: String(Date.now()),
+      },
+    });
+    if (saved) return true;
+  }
+  throw new Error('[SORIDRAW 347] following summary CAS contention');
 }
 
 async function seedSharedLikesFromPreviewLocal061(env, uid, localReader) {
@@ -8634,6 +8730,10 @@ async function syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, f
 }
 
 async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, following) {
+  // SORIDRAW_FOLLOW_SHARED_FASTPATH_347_20261004
+  // handleFollowR2Core already advanced the shared summary from canonical
+  // RETURNING data. Reuse it once for the local cache instead of the old
+  // read/write/read/write/mirror loop.
   const shared = await readSharedFollowing061(env, uid);
   if (shared) {
     await writeExploreR2Json(env, exploreFollowingR2Key(uid), {
@@ -8642,6 +8742,7 @@ async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, followin
       updatedAt: Date.now(),
       followingUids: shared.slice(0, 5000),
     });
+    return { source: 'shared-347' };
   }
   const result = await syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, following);
   const local = await readExploreFollowingR2BundleCore061(env, uid);
@@ -12934,6 +13035,13 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
 
   const now = Date.now();
   const stats = await adjustExploreFollowCountersDelta(env, authContext.uid, targetUid, shouldFollow, now);
+  try {
+    await syncExactSharedFollowing347(env, authContext.uid, targetUid, shouldFollow, stats?.follower, stats?.delta);
+  } catch (error) {
+    // Compatibility stage only: a successful canonical D1 follow must not be
+    // rolled back merely because the shared R2 summary is temporarily unavailable.
+    console.warn("[SORIDRAW 347] exact following-count sync deferred:", String(error?.message || error || "unknown"));
+  }
   await patchExploreFirstViewFollowCounts(env, authContext.uid, targetUid, stats, now);
   return json({ ok: true, data: {
     uid: targetUid,
@@ -13124,10 +13232,12 @@ __name2222222222222222222222222222222222222222222222(clampExploreSocialCount, "c
 async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, shouldFollow, now) {
   // SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930
   // SORIDRAW_FOLLOW_COMBINED_COUNTERS_345: query W2, NOT physical rows W2.
-  // Both legacy canonical counters and derived notifications remain authoritative.
+  // SORIDRAW_FOLLOW_MONOTONIC_REVISION_347_20261004
+  // D1 remains canonical in stage 1. updated_at also becomes the actor's ordered
+  // revision for the exact shared following-count summary.
   const fallbackRead = async () => {
     const result = await env.DB.prepare(`
-      SELECT uid, follower_count, following_count
+      SELECT uid, follower_count, following_count, updated_at
       FROM profile_stats
       WHERE uid IN (?, ?)
     `).bind(followerUid, followingUid).all();
@@ -13153,8 +13263,8 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
         ON CONFLICT(uid) DO UPDATE SET
           follower_count = profile_stats.follower_count + excluded.follower_count,
           following_count = profile_stats.following_count + excluded.following_count,
-          updated_at = excluded.updated_at
-        RETURNING uid, follower_count, following_count
+          updated_at = MAX(profile_stats.updated_at + 1, excluded.updated_at)
+        RETURNING uid, follower_count, following_count, updated_at
       `).bind(followerUid, now, followingUid, now)
     ]);
     const rows = results?.[1]?.results || [];
@@ -13170,13 +13280,13 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
       UPDATE profile_stats
       SET following_count = MAX(0, following_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
           follower_count = MAX(0, follower_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
-          updated_at = ?
+          updated_at = MAX(updated_at + 1, ?)
       WHERE uid IN (?, ?)
         AND EXISTS (
           SELECT 1 FROM follows
           WHERE follower_uid = ? AND following_uid = ?
         )
-      RETURNING uid, follower_count, following_count
+      RETURNING uid, follower_count, following_count, updated_at
     `).bind(followerUid, followingUid, now, followerUid, followingUid, followerUid, followingUid),
     env.DB.prepare(`
       DELETE FROM follows WHERE follower_uid = ? AND following_uid = ?

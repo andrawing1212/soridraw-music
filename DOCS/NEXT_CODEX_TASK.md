@@ -1,3 +1,25 @@
+## CURRENT NEXT GATE — app347 PC↔모바일 저장하트 / Music Note 실사용 재정합 확인
+
+현재 실제 PREVIEW:
+- Hosting app **347** / Run `37220292148` SUCCESS / exact build PASS.
+- product fix `976037b932b6ee1606206939494b5a660cd5659c`.
+- Release System Audit `37220098629` SUCCESS.
+- Worker는 기존 Worker341 rollback본 유지. follow cutover OFF.
+- shared/user data migration/backfill/delete 0.
+
+우선 확인:
+1. PC/모바일 둘 다 app347 로드.
+2. A곡: PC에서 save/unsave → initiating device 즉시 반영 → 마지막 클릭 +30초 canonical 뒤 모바일이 별도 route/tab/refresh 없이 같은 상태.
+3. B곡: 모바일에서 반대 방향으로 같은 확인.
+4. 각 곡에서 Recent 하트와 Music Note 실제 membership이 1:1 일치.
+5. 새 저장곡 Detail에 Suno URL/두 media를 넣은 뒤 목록 thumbnail/media가 사라지지 않음.
+6. Firestore/D1는 receiver에서 추가 read/write 0 유지.
+
+이미 app346에서 꼬여 있던 A/B가 app347 로드 후에도 그대로 남으면:
+- 전체 Music Note 재조회/전체 cache reset 금지.
+- stale pending exact document / stable identity만 대상으로 bounded recovery.
+- 정상 app302 30초 final-state, app301 folder, Recent 150초 text batch, Explore like는 변경 금지.
+
 ## CURRENT NEXT GATE — app346 PREVIEW 실사용 UX 확인 + candidate Worker 독립 gate
 
 현재 실제 PREVIEW:

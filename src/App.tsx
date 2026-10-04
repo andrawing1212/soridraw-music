@@ -2,6 +2,7 @@ import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1Mut
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
+  publishMusicNoteHeartPreviewDelta,
   publishRecentSongEditPreviewDelta,
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
@@ -5458,11 +5459,17 @@ function App() {
     const uid = String(user?.uid || auth.currentUser?.uid || '').trim();
     const current = favoritesStore.getFavorites();
     const canonicalCurrent = uid
-      ? stripStudioHeartPendingLayerFromFavorites(uid, current)
+      ? stripStudioHeartPendingLayerFromFavorites(
+          uid,
+          stripStudioHeartRemotePreviewLayerFromFavorites(uid, current),
+        )
       : current;
     const resolved = typeof list === 'function' ? list(canonicalCurrent) : list;
+    const withRemotePreview = uid
+      ? overlayStudioHeartRemotePreviewsOnFavorites(uid, resolved)
+      : resolved;
     favoritesStore.setFavorites(
-      uid ? overlayStudioHeartPendingIntentsOnFavorites(uid, resolved) : resolved,
+      uid ? overlayStudioHeartPendingIntentsOnFavorites(uid, withRemotePreview) : withRemotePreview,
     );
   }, [user?.uid]);
   const favorites = favoritesStore.getFavorites();
@@ -5770,6 +5777,14 @@ function App() {
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
   const recentHeartAuthorityUidRef = useRef('');
   const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+  const studioHeartRemotePreviewRef = useRef<Map<string, {
+    documentId: string;
+    identityKey: string;
+    desiredSaved: boolean;
+    baselineFavorite: any | null;
+    song: any;
+    version: number;
+  }>>(new Map());
 
   const clearStudioHeartIntentTimer = (documentId: string) => {
     const safeDocumentId = String(documentId || '').trim();
@@ -5999,6 +6014,174 @@ function App() {
 
     return sortFavoriteList(next);
   }
+
+
+  function buildStudioHeartPreviewIdentity(source: any, fallbackDocumentId = ''): string {
+    return String(
+      buildRecentSongSyncKey(source)
+      || getLiveSoridrawSongId(source)
+      || fallbackDocumentId
+      || '',
+    ).trim();
+  }
+
+  function matchesStudioHeartPreviewIdentity(
+    favorite: any,
+    documentId: string,
+    identityKey: string,
+  ): boolean {
+    const favoriteDocumentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+    if (documentId && favoriteDocumentId === documentId) return true;
+    if (!identityKey) return false;
+    return buildStudioHeartPreviewIdentity(favorite, favoriteDocumentId) === identityKey;
+  }
+
+  function stripStudioHeartRemotePreviewLayerFromFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    const source = Array.isArray(list) ? list : [];
+    if (!safeUid) return [...source];
+
+    let next = source.filter((favorite: any) => favorite?.__studioHeartRemotePreviewLocal !== true);
+    for (const preview of studioHeartRemotePreviewRef.current.values()) {
+      const baseline = preview.baselineFavorite;
+      if (!baseline || isFavoriteSoftRemoved(baseline)) continue;
+      const exists = next.some((favorite: any) => matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      ));
+      if (exists) continue;
+      const restored = { ...baseline };
+      delete restored.__studioHeartRemotePreviewLocal;
+      next = mergeFavoritePages([restored], next);
+    }
+    return sortFavoriteList(next);
+  }
+
+  function overlayStudioHeartRemotePreviewsOnFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    let next = stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, list);
+    if (!safeUid) return next;
+
+    const previews = [...studioHeartRemotePreviewRef.current.values()]
+      .sort((left, right) => left.version - right.version);
+
+    for (const preview of previews) {
+      const currentFavorite = next.find((favorite: any) => matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      )) || null;
+      next = next.filter((favorite: any) => !matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      ));
+
+      if (!preview.desiredSaved) continue;
+
+      const source = normalizeFavoriteTitleFields({
+        ...(preview.baselineFavorite || {}),
+        ...(preview.song || {}),
+        ...(currentFavorite || {}),
+      } as any) as any;
+      const createdAtMs = Number(
+        preview.baselineFavorite?.createdAtMs
+        || source?.createdAtMs
+        || 0,
+      ) || Math.max(1, Number(source?.updatedAtMs || Date.now()));
+      const optimisticFavorite = {
+        ...source,
+        id: preview.documentId,
+        firestoreId: preview.documentId,
+        uid: safeUid,
+        saved: true,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        unsavedAt: null,
+        unlikedAt: null,
+        deletedAt: null,
+        trashedAt: null,
+        isPublic: source?.isPublic === true,
+        isLocked: source?.isLocked === true,
+        createdAtMs,
+        updatedAtMs: Math.max(createdAtMs, Number(source?.updatedAtMs || 0)),
+        favoriteKey: source?.favoriteKey || buildFavoriteIdentityKey(source),
+        searchTokens: source?.searchTokens || buildFavoriteSearchTokens(source),
+        __studioHeartRemotePreviewLocal: true,
+      };
+      next = mergeFavoritePages([optimisticFavorite], next);
+    }
+
+    return sortFavoriteList(next);
+  }
+
+  const applyRemoteStudioHeartPreview = (
+    uid: string,
+    remoteItem: any,
+    remoteFavoriteId: string,
+    desiredSaved: boolean,
+    remoteVersion: number,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeDocumentId = String(remoteFavoriteId || remoteItem?.firestoreId || remoteItem?.id || '').trim();
+    if (!safeUid || !safeDocumentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+
+    const identityKey = buildStudioHeartPreviewIdentity(remoteItem, safeDocumentId);
+    const existing = studioHeartRemotePreviewRef.current.get(safeDocumentId);
+    if (existing && existing.version >= remoteVersion) return;
+
+    const canonicalBase = stripStudioHeartPendingLayerFromFavorites(
+      safeUid,
+      stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, favoritesStore.getFavorites()),
+    );
+    const baselineFavorite = existing?.baselineFavorite ?? canonicalBase.find((favorite: any) => (
+      !isFavoriteSoftRemoved(favorite)
+      && matchesStudioHeartPreviewIdentity(favorite, safeDocumentId, identityKey)
+    )) ?? null;
+
+    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
+      documentId: safeDocumentId,
+      identityKey,
+      desiredSaved,
+      baselineFavorite,
+      song: remoteItem || {},
+      version: Math.floor(remoteVersion),
+    });
+    setFavorites((previous) => previous);
+  };
+
+  const clearRemoteStudioHeartPreviewFromCanonical = (
+    uid: string,
+    documentIds: readonly string[],
+    remoteItem?: any,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    if (!safeUid || studioHeartRemotePreviewRef.current.size === 0) return;
+    const exactIds = new Set((Array.isArray(documentIds) ? documentIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean));
+    const remoteIdentityKey = remoteItem
+      ? buildStudioHeartPreviewIdentity(
+          remoteItem,
+          String(remoteItem?.firestoreId || remoteItem?.id || '').trim(),
+        )
+      : '';
+
+    let changed = false;
+    for (const [key, preview] of studioHeartRemotePreviewRef.current.entries()) {
+      if (
+        exactIds.has(preview.documentId)
+        || (remoteIdentityKey && preview.identityKey === remoteIdentityKey)
+      ) {
+        studioHeartRemotePreviewRef.current.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) setFavorites((previous) => previous);
+  };
 
   function overlayStudioHeartPendingIntentsOnFavorites(uid: string, list: any[]): any[] {
     const safeUid = String(uid || '').trim();
@@ -10144,6 +10327,10 @@ const toggleCycleVariantSelection = (
         markCacheDiagnostic('musicNote', 'CACHE', 0);
         return;
       }
+      clearRemoteStudioHeartPreviewFromCanonical(
+        uid,
+        Array.isArray(documentIds) ? documentIds : [],
+      );
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'CACHE', 0);
@@ -10303,16 +10490,22 @@ const toggleCycleVariantSelection = (
       }
 
       if (isHeartPreview) {
-        if (remoteFavoriteId) {
-          supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-        }
-        // The RTDB preview is fully consumed by Recent heart authority + exact link.
-        // Keep canonical Music Note cache/version untouched until the trailing
-        // favorites mutation succeeds and emits its normal save/unsave signal.
-        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
-        markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
-        return;
+      applyRemoteStudioHeartPreview(
+        uid,
+        remoteItem,
+        remoteFavoriteId,
+        isHeartPreviewSave,
+        remoteVersion,
+      );
+      if (remoteFavoriteId) {
+        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
       }
+      // app348: every signed-in device updates immediately; only the
+      // canonical favorite write waits for the per-song 30s final state.
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
+      return;
+    }
 
       if (remoteItem || removed || isRemovalOperation) {
         // app347 — only canonical membership signals may settle a local pending
@@ -10331,6 +10524,7 @@ const toggleCycleVariantSelection = (
             remoteFavoriteId || exactDocumentIds[0] || '',
             canonicalRemoteSaved,
           );
+          clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
         }
 
         if (isRemovalOperation) {
@@ -11313,6 +11507,17 @@ const toggleCycleVariantSelection = (
     // desiredSaved, so final == baseline still settles at W0.
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
     setFavorites((previous) => previous);
+    void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
+      .then((version) => {
+        if (version > 0) rememberStudioHeartPreviewVersion(
+          uid,
+          safeDocumentId,
+          version,
+          desiredSaved,
+          now,
+        );
+      })
+      .catch((error) => console.warn('Studio heart live preview unavailable.', error));
     return true;
   };
 

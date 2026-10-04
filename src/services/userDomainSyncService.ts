@@ -507,31 +507,33 @@ export const publishMusicNoteHeartPreviewDelta = async (
   if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return 0;
   const now = Date.now();
   const source = syncItem as Record<string, any>;
-  const applied = source.appliedKeywords && typeof source.appliedKeywords === 'object'
-    ? source.appliedKeywords as Record<string, any>
-    : {};
-  // Heart preview is a state/identity signal, not a Music Note document mirror.
-  // Keep it sub-KB for normal songs and for the historical 25KB appliedKeywords case.
-  const identityOnly: Record<string, unknown> = {
+  const projected = projectMusicNoteItemForSignal(source, safeDocumentId) || {
+    __catalogSummary: true,
     id: safeDocumentId,
     firestoreId: safeDocumentId,
+    title: String(source.title || ''),
+    koreanTitle: String(source.koreanTitle || ''),
+    englishTitle: String(source.englishTitle || ''),
     soridrawSongId: String(source.soridrawSongId || '').trim() || null,
     recentSongSyncKey: String(source.recentSongSyncKey || '').trim() || null,
     recentLegacySourceId: String(source.recentLegacySourceId || '').trim() || null,
     recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
-    title: String(source.title || ''),
-    koreanTitle: String(source.koreanTitle || ''),
-    englishTitle: String(source.englishTitle || ''),
-    appliedKeywords: {
-      generationBatchId: String(applied.generationBatchId || '').trim() || null,
-      generationIndex: Number.isFinite(Number(applied.generationIndex))
-        ? Math.floor(Number(applied.generationIndex))
-        : null,
-    },
+    imageUrl: source.imageUrl ?? source.image_url ?? null,
+    coverUrl: source.coverUrl ?? null,
+    thumbnailUrl: source.thumbnailUrl ?? null,
+    sunoCoverUrl: source.sunoCoverUrl ?? null,
+    sunoImageUrl: source.sunoImageUrl ?? null,
+    sunoArtworkUrl: source.sunoArtworkUrl ?? null,
+    sunoLinks: source.sunoLinks ?? null,
+    sunoShareLinks: source.sunoShareLinks ?? null,
+    mainSunoIndex: source.mainSunoIndex ?? null,
+    createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
+    updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   };
   const item = desiredSaved
     ? {
-        ...identityOnly,
+        ...projected,
+        __studioHeartRemotePreview: true,
         saved: true,
         hidden: false,
         favoriteHidden: false,
@@ -541,7 +543,8 @@ export const publishMusicNoteHeartPreviewDelta = async (
         unlikedAt: null,
       }
     : {
-        ...identityOnly,
+        ...projected,
+        __studioHeartRemotePreview: true,
         saved: false,
         hidden: false,
         favoriteHidden: false,

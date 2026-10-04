@@ -1,6 +1,11 @@
-## Implementation candidate355 status (2026-10-04 KST)
+## NEXT TASK — independent Astra re-audit of candidate355 (deployment blocked)
 
-The eight fixes below are implemented from preview 57acc664; local TS/build/regression and actual-consumer fixtures PASS. Initial remote Run 37209848937 PASS (relation and actual HTTP DB physical W<=2; RATE_DB W0; synthetic DB deleted). Final rate-window ordering guard is locally verified; final candidate remote remeasurement is queued. Independent Astra review remains required; deployment/shared migration/cutover/TEST/PRODUCTION are forbidden. See CURRENT_RELEASE_STATE 0P1 for evidence and limits. Keep the original task below as the acceptance checklist.
+- Branch: preview. Audited implementation code: 634589b2af0aa8041fe394402aa6f3a7a7abdc99; final follow-up is documentation only. Audit the current preview HEAD after checking its Worker/client/test blobs match this code candidate.
+- Base: 57acc664f59d9e3c4c110f5a2b6797525dce010e. The eight audit fixes below are implemented and locally verified. TypeScript/build and required regressions PASS; final remote Run [37210263354](https://github.com/andrawing1212/soridraw-music/actions/runs/37210263354) SUCCESS.
+- Relation SQL physical W1~W2 retained. Actual HTTP handler against owned synthetic D1: new follow R2/W2, unfollow R6/W1, duplicate R1/W0, no-op R4/W0, stale R1/W0, relation-saved failure R5/W1, recovery R16/W0. RATE_DB W0. R2/native limiter are conditional memory fixtures, not live Worker/R2 billing. Owned D1 deletion PASS.
+- Independent audit must cover all eight consumers, crash/reverse/concurrency/CAS/no-op/5001+ membership and malformed/future rate-window guards. Also check pre-cutover cached devices, all-environment compatibility, missing-profile baseline policy and live R2/Worker/PC-mobile limits. No automatic cache reset is authorized.
+- No code modification, deployment, shared migration/cutover, user data mutation, TEST/PRODUCTION/main change during the independent audit. PASS/FAIL only; release remains blocked pending independent review and later explicit approvals.
+- Original implementation task below is retained as the acceptance checklist.
 
 ## CURRENT TASK — protocol354 독립감사 FAIL 8건 수정 (2026-10-04 KST)
 

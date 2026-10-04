@@ -5785,6 +5785,32 @@ function App() {
     setFavorites((previous) => previous);
   };
 
+  // app347 — a canonical save/unsave from either device may complete the exact
+  // membership a local pending intent was waiting for. If the canonical result
+  // already equals the local desired state, the pending layer is redundant and
+  // must be removed before it can mask the canonical Music Note row.
+  const reconcileStudioHeartPendingFromCanonicalSignal = (
+    uid: string,
+    remoteItem: any,
+    remoteFavoriteId: string,
+    remoteSaved: boolean,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeRemoteId = String(remoteFavoriteId || '').trim();
+    const remoteIdentityKey = remoteItem
+      ? String(buildRecentSongSyncKey(remoteItem) || getLiveSoridrawSongId(remoteItem) || safeRemoteId || '').trim()
+      : safeRemoteId;
+    if (!safeUid || (!safeRemoteId && !remoteIdentityKey)) return;
+
+    for (const pending of listStudioHeartPendingIntents(safeUid)) {
+      const sameDocument = Boolean(safeRemoteId && pending.documentId === safeRemoteId);
+      const sameIdentity = Boolean(remoteIdentityKey && pending.identityKey === remoteIdentityKey);
+      if (!sameDocument && !sameIdentity) continue;
+      if (pending.desiredSaved !== remoteSaved) continue;
+      removeStudioHeartIntentLocal(safeUid, pending.documentId);
+    }
+  };
+
   const rememberStudioHeartPreviewVersion = (
     uid: string,
     documentId: string,
@@ -5987,6 +6013,13 @@ function App() {
       const documentId = String(intent.documentId || '').trim();
       if (!documentId) continue;
 
+      // app347 — pending controls membership only. If a newer canonical/local row
+      // already exists for this document (for example Detail Suno media changed),
+      // preserve that row's title/media fields instead of replacing it with the
+      // older song snapshot captured when the heart was clicked.
+      const currentFavorite = next.find((favorite: any) => (
+        String(favorite?.firestoreId || favorite?.id || '').trim() === documentId
+      )) || null;
       next = next.filter((favorite: any) => (
         String(favorite?.firestoreId || favorite?.id || '').trim() !== documentId
       ));
@@ -5996,6 +6029,7 @@ function App() {
       const source = normalizeFavoriteTitleFields({
         ...(intent.baselineFavorite || {}),
         ...(intent.song || {}),
+        ...(currentFavorite || {}),
       } as any) as any;
       const createdAtMs = Number(
         intent.baselineFavorite?.createdAtMs
@@ -10281,6 +10315,24 @@ const toggleCycleVariantSelection = (
       }
 
       if (remoteItem || removed || isRemovalOperation) {
+        // app347 — only canonical membership signals may settle a local pending
+        // heart. Detail/Suno preview signals are deliberately excluded.
+        const isCanonicalMembershipSignal = normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'shared-note-save'
+          || isRemovalOperation;
+        if (isCanonicalMembershipSignal) {
+          const canonicalRemoteSaved = !isRemovalOperation
+            && !removed
+            && Boolean(remoteItem && !isFavoriteSoftRemoved(remoteItem));
+          reconcileStudioHeartPendingFromCanonicalSignal(
+            uid,
+            remoteItem,
+            remoteFavoriteId || exactDocumentIds[0] || '',
+            canonicalRemoteSaved,
+          );
+        }
+
         if (isRemovalOperation) {
           rememberFavoriteDeletedTombstones(uid, exactDocumentIds);
         } else if (

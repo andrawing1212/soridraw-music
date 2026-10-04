@@ -48,3 +48,7 @@ app352-pc-musicnote-canonical-media-identity
 target=91cd69db0fd7a30ac6d82741cee711493dd3ad11
 focus=firestoreId-first-card-media,pc-list-thumbnail,zero-extra-io
 requested=2026-10-05T04:10KST
+app353-pc-musicnote-media-catalog-priority
+target=921ee914ce51a025325504623c59994ef595b702
+focus=detail-media-durable-overlay,catalog-reentry-priority,no-extra-io
+requested=2026-10-05T04:27KST

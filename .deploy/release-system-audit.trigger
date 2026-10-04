@@ -44,3 +44,7 @@ app351-pc-suno-media-stale-catalog-guard
 target=357b0ed91504de646c0132ce6e4a469e97b4d284
 focus=pc-reload-repeat-stale-catalog-preserve,no-extra-io
 requested=2026-10-05T03:58KST
+app352-pc-musicnote-canonical-media-identity
+target=91cd69db0fd7a30ac6d82741cee711493dd3ad11
+focus=firestoreId-first-card-media,pc-list-thumbnail,zero-extra-io
+requested=2026-10-05T04:10KST

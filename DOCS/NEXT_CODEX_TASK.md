@@ -1,3 +1,30 @@
+## CURRENT TASK — candidate355 legacy schema2 follow cache blocker 1건 수정 (2026-10-05 KST)
+
+기준:
+- branch: `preview`
+- Astra 재감사 기준 HEAD: `46d21590ceea908353cec2e2a4235e8348404c20`
+- 감사 기록 문서 commit: `106bddb49906f1cf696aeab0f6dfb2e1b5b31b35`
+- 실제 서비스: app344 / PREVIEW Worker341. 아직 배포 금지.
+
+수정 범위:
+- 파일: `src/services/exploreSocialService.ts`
+- 함수: `normalizeExploreFollowCache`, `readCachedExploreFollowState`, `loadExploreFollowingBundle`
+- 기존 schema2 `complete:true` 캐시 중 과거 5,000 cap으로 생성된 제한 목록을 complete authority로 신뢰하지 않게 수정.
+- 누락 target은 false로 단정하지 말고 targeted `/follow-state` recovery.
+- 전체 캐시 초기화/버전 강제 reset 금지.
+- 정상 complete cache hit은 서버 read 0 유지.
+- 새 completeness/truncated/cursor metadata 경로는 그대로 보호.
+- 좋아요/공개/비공개/검색/UI/Worker relation writer 변경 금지.
+
+검증:
+1. 과거 schema2 capped cache + 누락 target fixture -> targeted follow-state 1회, false 오판 금지.
+2. 정상 complete cache + 존재/부재 target -> 서버 read 0.
+3. incomplete/truncated cache miss -> targeted recovery.
+4. TypeScript / Build.
+5. 기존 follow 관련 verifier + 새 legacy-cache regression PASS.
+6. 코드 수정 후 commit/push, 배포 없음.
+7. Astra 재감사용 고정 commit 보고.
+
 ## NEXT TASK — independent Astra re-audit of candidate355 (deployment blocked)
 
 - Branch: preview. Audited implementation code: 634589b2af0aa8041fe394402aa6f3a7a7abdc99; final follow-up is documentation only. Audit the current preview HEAD after checking its Worker/client/test blobs match this code candidate.

@@ -1,3 +1,26 @@
+## COST GATE — 팔로우는 D1 query 수와 physical rows를 동시에 줄일 것 (2026-10-04 KST)
+
+팔로우 수정 시 `D1 W3`만 보고 완료 처리 금지.
+
+반드시 측정:
+1. D1 query read
+2. D1 query write
+3. D1 Rows Read
+4. D1 Rows Written
+5. Worker 요청
+6. R2 A/B
+
+현재 실사용 baseline:
+- query R0/W3
+- Rows Read 18~19
+- Rows Written 14~17
+
+목표:
+- 단일 팔로우/해제가 변경된 관계와 필요한 카운터만 건드리는 O(1)
+- 불필요한 trigger/derived update 때문에 row 수가 증폭되지 않도록 수정
+- physical row 수가 과도하면 FAIL
+- verifier와 PREVIEW 실제 계기판 둘 다 통과해야 완료
+
 ## CURRENT TASK — 팔로우 physical D1 비용 정상화 + 크리에이터 추천 확장 (2026-10-04 KST)
 
 우선순위 1 — 팔로우 비용:

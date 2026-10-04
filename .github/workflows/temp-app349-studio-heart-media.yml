@@ -1,0 +1,416 @@
+name: SORIDRAW app349 Studio Heart Settlement Media Fix
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app349-studio-heart-media.trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-app349-studio-heart-media
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Apply focused app349 fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          app_path = Path('src/App.tsx')
+          page_path = Path('src/pages/FavoritesPage.tsx')
+          version_path = Path('public/app-version.json')
+          app = app_path.read_text()
+          page = page_path.read_text()
+
+          # 1) Canonical settlement must never create a one-frame/refresh-only gap.
+          pattern = re.compile(r"  const removeStudioHeartIntentLocal = \(uid: string, documentId: string\) => \{.*?\n  \};", re.S)
+          matches = list(pattern.finditer(app))
+          if len(matches) != 1:
+              raise SystemExit(f'removeStudioHeartIntentLocal matches={len(matches)}')
+          replacement = r"""  const removeStudioHeartIntentLocal = (uid: string, documentId: string) => {
+            const safeUid = String(uid || '').trim();
+            const safeDocumentId = String(documentId || '').trim();
+            if (!safeUid || !safeDocumentId) return;
+
+            // app349 — capture the visible pending row before removing the durable
+            // intent. The pending overlay occupied the same list slot as the newly
+            // committed canonical row; removing the intent first used to drop both
+            // from the in-memory list until a reload rehydrated Firestore.
+            const settlingIntent = readStudioHeartPendingIntent(safeUid, safeDocumentId);
+            const current = favoritesStore.getFavorites();
+            const currentVisible = current.find((favorite: any) => (
+              String(favorite?.firestoreId || favorite?.id || '').trim() === safeDocumentId
+            )) || null;
+
+            clearStudioHeartIntentTimer(safeDocumentId);
+            removeStudioHeartPendingIntent(safeUid, safeDocumentId);
+
+            if (!settlingIntent) {
+              setFavorites((previous) => previous);
+              return;
+            }
+
+            let next = current.filter((favorite: any) => (
+              String(favorite?.firestoreId || favorite?.id || '').trim() !== safeDocumentId
+            ));
+
+            if (settlingIntent.desiredSaved) {
+              const source = normalizeFavoriteTitleFields({
+                ...(settlingIntent.baselineFavorite || {}),
+                ...(settlingIntent.song || {}),
+                ...(currentVisible || {}),
+              } as any) as any;
+              const canonicalRow: any = {
+                ...source,
+                id: safeDocumentId,
+                firestoreId: safeDocumentId,
+                uid: safeUid,
+                saved: true,
+                hidden: false,
+                favoriteHidden: false,
+                favoriteRemoved: false,
+                favoriteRemovedAt: null,
+                unlikedAt: null,
+                unsavedAt: null,
+                deletedAt: null,
+                trashedAt: null,
+                updatedAtMs: Math.max(
+                  Number(source?.updatedAtMs || 0),
+                  Number(settlingIntent.updatedAtMs || 0),
+                ),
+              };
+              delete canonicalRow.__studioHeartPendingLocal;
+              delete canonicalRow.__studioHeartRemotePreviewLocal;
+              delete canonicalRow.__studioHeartRemotePreview;
+              next = mergeFavoritePages([canonicalRow], next);
+            }
+
+            const settled = sortFavoriteList(next);
+            favoritesStore.setFavorites(settled);
+            writeFavoritesCache(safeUid, settled);
+          };"""
+          app = pattern.sub(replacement, app, count=1)
+
+          # 2) The receiving device must materialize the RTDB preview directly in
+          # favoritesStore/cache. Do not wait for the +30s canonical signal.
+          old = """    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
+              documentId: safeDocumentId,
+              identityKey,
+              desiredSaved,
+              baselineFavorite,
+              song: remoteItem || {},
+              version: Math.floor(remoteVersion),
+            });
+            setFavorites((previous) => previous);
+          };"""
+          new = """    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
+              documentId: safeDocumentId,
+              identityKey,
+              desiredSaved,
+              baselineFavorite,
+              song: remoteItem || {},
+              version: Math.floor(remoteVersion),
+            });
+
+            // app349 — materialize the non-canonical preview synchronously. This
+            // keeps Music Note membership as immediate as the Recent heart and also
+            // lets a route opened before canonical settlement reuse the local cache.
+            const previewBase = stripStudioHeartPendingLayerFromFavorites(
+              safeUid,
+              stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, favoritesStore.getFavorites()),
+            );
+            const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
+            const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
+            favoritesStore.setFavorites(visible);
+            writeFavoritesCache(safeUid, visible);
+          };"""
+          if app.count(old) != 1:
+              raise SystemExit(f'applyRemote preview anchor count={app.count(old)}')
+          app = app.replace(old, new, 1)
+
+          # 3) Clearing the preview map during canonical receive must not repaint an
+          # intermediate list without the row. The canonical merge immediately after
+          # this call owns the repaint.
+          old = """    if (changed) setFavorites((previous) => previous);
+          };"""
+          # There are multiple "changed" helpers in App. Scope replacement to the
+          # clearRemoteStudioHeartPreviewFromCanonical block.
+          clear_start = app.find('  const clearRemoteStudioHeartPreviewFromCanonical = (')
+          clear_end = app.find('\n\n  function overlayStudioHeartPendingIntentsOnFavorites', clear_start)
+          if clear_start < 0 or clear_end <= clear_start:
+              raise SystemExit('clear remote preview block not found')
+          clear_block = app[clear_start:clear_end]
+          if clear_block.count(old) != 1:
+              raise SystemExit(f'clear remote repaint anchor count={clear_block.count(old)}')
+          clear_block = clear_block.replace(
+              old,
+              """    // app349 — do not render an empty transition here. The canonical
+            // changed-item merge that follows replaces the preview atomically.
+            void changed;
+          };""",
+              1,
+          )
+          app = app[:clear_start] + clear_block + app[clear_end:]
+          app_path.write_text(app)
+
+          # 4) Suno media preview in the Music Note list must be durable locally.
+          # Generic favorite updatedAt (for example heart settlement) must not make
+          # an unflushed but newer Suno draft look stale.
+          old_keys = """    const mediaKeys = [
+              'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
+              'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+              'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+              'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+            ];"""
+          new_keys = """    const mediaKeys = [
+              'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
+              'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+              'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+              'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',
+              'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+            ];"""
+          if page.count(old_keys) != 1:
+              raise SystemExit(f'media keys anchor count={page.count(old_keys)}')
+          page = page.replace(old_keys, new_keys, 1)
+
+          old_changed = """    if (changed) favoritesStore.setFavorites(next);
+          };"""
+          new_changed = """    if (changed) {
+              favoritesStore.setFavorites(next);
+              if (user?.uid && typeof localStorage !== 'undefined') {
+                try {
+                  localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(next));
+                } catch {}
+              }
+            }
+          };"""
+          sync_start = page.find('  const syncFavoriteSunoCardMedia = (')
+          sync_end = page.find('\n\n  const publishFavoriteSunoMediaDraft', sync_start)
+          if sync_start < 0 or sync_end <= sync_start:
+              raise SystemExit('syncFavoriteSunoCardMedia block missing')
+          sync_block = page[sync_start:sync_end]
+          if sync_block.count(old_changed) != 1:
+              raise SystemExit(f'card cache anchor count={sync_block.count(old_changed)}')
+          sync_block = sync_block.replace(old_changed, new_changed, 1)
+          page = page[:sync_start] + sync_block + page[sync_end:]
+
+          old_draft = """        const sourceVersion = getMusicNoteDetailSourceVersion(song);
+                const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
+                if (!compatible) continue;
+                syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);"""
+          new_draft = """        const sourceVersion = getMusicNoteDetailSourceVersion(song);
+                const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
+                const draftMediaVersion = Math.max(
+                  Number(draft.updates?.sunoShareUrlUpdatedAt || 0),
+                  Number(draft.updates?.sunoCoverFetchedAt || 0),
+                  Number(draft.updatedAtMs || 0),
+                );
+                const currentMediaVersion = Math.max(
+                  Number(song?.sunoShareUrlUpdatedAt || 0),
+                  Number(song?.sunoCoverFetchedAt || 0),
+                );
+                const mediaVersionCompatible = draftMediaVersion <= 0
+                  || currentMediaVersion <= 0
+                  || currentMediaVersion <= draftMediaVersion;
+                // A heart/folder/card-state write can advance generic updatedAt
+                // without changing Suno media. Such a write must not hide the
+                // user's newer durable Suno draft on reload.
+                if (!compatible && !mediaVersionCompatible) continue;
+                syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);"""
+          if page.count(old_draft) != 1:
+              raise SystemExit(f'draft overlay anchor count={page.count(old_draft)}')
+          page = page.replace(old_draft, new_draft, 1)
+
+          # Detail recovery uses the same media-specific conflict rule so a generic
+          # version bump cannot hide a durable local Suno URL after restart.
+          old_open = """        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
+                if (compatible) {
+                  const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);"""
+          new_open = """        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
+                const recoveredMediaVersion = Math.max(
+                  Number(recovered.updates?.sunoShareUrlUpdatedAt || 0),
+                  Number(recovered.updates?.sunoCoverFetchedAt || 0),
+                  Number(recovered.updatedAtMs || 0),
+                );
+                const hydratedMediaVersion = Math.max(
+                  Number(hydrated?.sunoShareUrlUpdatedAt || 0),
+                  Number(hydrated?.sunoCoverFetchedAt || 0),
+                );
+                const mediaVersionCompatible = recoveredMediaVersion > 0
+                  && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
+                if (compatible || mediaVersionCompatible) {
+                  const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);"""
+          if page.count(old_open) != 1:
+              raise SystemExit(f'detail recovery anchor count={page.count(old_open)}')
+          page = page.replace(old_open, new_open, 1)
+          page_path.write_text(page)
+
+          version = json.loads(version_path.read_text())
+          if int(version.get('version', 0)) != 348:
+              raise SystemExit(f"expected app348, got {version.get('version')}")
+          version['version'] = 349
+          version_path.write_text(json.dumps(version, indent=2) + '\n')
+          print('APP349_APPLY=PASS')
+          PY
+
+      - name: Add focused regression
+        shell: bash
+        run: |
+          cat > scripts/verify-349-studio-heart-settlement-media.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+          import ts from 'typescript';
+
+          const app = fs.readFileSync('src/App.tsx', 'utf8');
+          const page = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
+
+          function extractConstArrow(source, name, nextMarker) {
+            const start = source.indexOf('  const ' + name + ' = (');
+            assert.ok(start >= 0, 'missing ' + name);
+            const end = source.indexOf(nextMarker, start);
+            assert.ok(end > start, 'missing end for ' + name);
+            return source.slice(start, end);
+          }
+
+          const settle = extractConstArrow(app, 'removeStudioHeartIntentLocal', '\n\n  // app347');
+          assert.match(settle, /const settlingIntent = readStudioHeartPendingIntent/);
+          assert.match(settle, /favoritesStore\.setFavorites\(settled\)/);
+          assert.match(settle, /writeFavoritesCache\(safeUid, settled\)/);
+          assert.match(settle, /delete canonicalRow\.__studioHeartPendingLocal/);
+          assert.doesNotMatch(settle, /getDoc\(|getDocs\(|setDoc\(|updateDoc\(|fetch\(/);
+
+          // Simulate the exact A-device failure: only the pending overlay is visible
+          // when +30s canonical settlement finishes. Removing the intent must leave
+          // one ordinary saved row, not an empty list.
+          const settleJs = ts.transpileModule(settle + '\n;globalThis.__settle = removeStudioHeartIntentLocal;', {
+            compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+          }).outputText;
+          let current = [{
+            id: 'doc-a', firestoreId: 'doc-a', title: 'A', saved: true,
+            sunoCoverUrl: 'cover-a', __studioHeartPendingLocal: true, updatedAtMs: 200,
+          }];
+          const pending = {
+            documentId: 'doc-a', desiredSaved: true, updatedAtMs: 100,
+            baselineFavorite: null, song: { id: 'doc-a', title: 'A', saved: true },
+          };
+          let removed = false;
+          let cached = null;
+          const ctx = {
+            String, Number,
+            readStudioHeartPendingIntent: () => pending,
+            favoritesStore: {
+              getFavorites: () => current,
+              setFavorites: (next) => { current = next; },
+            },
+            clearStudioHeartIntentTimer: () => {},
+            removeStudioHeartPendingIntent: () => { removed = true; },
+            normalizeFavoriteTitleFields: (x) => x,
+            mergeFavoritePages: (a, b) => [...a, ...b.filter((x) => !a.some((y) => y.id === x.id))],
+            sortFavoriteList: (x) => x,
+            writeFavoritesCache: (_uid, next) => { cached = next; },
+            setFavorites: () => { throw new Error('fallback setFavorites must not run'); },
+          };
+          vm.createContext(ctx);
+          vm.runInContext(settleJs, ctx);
+          ctx.__settle('u', 'doc-a');
+          assert.equal(removed, true);
+          assert.equal(current.length, 1);
+          assert.equal(current[0].id, 'doc-a');
+          assert.equal(current[0].saved, true);
+          assert.equal(current[0].sunoCoverUrl, 'cover-a');
+          assert.equal(current[0].__studioHeartPendingLocal, undefined);
+          assert.equal(cached.length, 1);
+
+          const remote = extractConstArrow(app, 'applyRemoteStudioHeartPreview', '\n\n  const clearRemoteStudioHeartPreviewFromCanonical');
+          assert.match(remote, /favoritesStore\.setFavorites\(visible\)/);
+          assert.match(remote, /writeFavoritesCache\(safeUid, visible\)/);
+          assert.match(remote, /overlayStudioHeartRemotePreviewsOnFavorites/);
+          assert.doesNotMatch(remote, /getDoc\(|getDocs\(|setDoc\(|updateDoc\(|fetch\(/);
+
+          const clear = extractConstArrow(app, 'clearRemoteStudioHeartPreviewFromCanonical', '\n\n  function overlayStudioHeartPendingIntentsOnFavorites');
+          assert.doesNotMatch(clear, /setFavorites\(|favoritesStore\.setFavorites\(/);
+          assert.match(clear, /void changed/);
+
+          const cardStart = page.indexOf('  const syncFavoriteSunoCardMedia = (');
+          const cardEnd = page.indexOf('\n\n  const publishFavoriteSunoMediaDraft', cardStart);
+          const card = page.slice(cardStart, cardEnd);
+          assert.match(card, /soridraw_favorites_cache_/);
+          assert.match(card, /localStorage\.setItem/);
+          assert.match(card, /'sunoLinks'/);
+          assert.match(card, /'sunoCoverUrl'/);
+          assert.match(card, /'thumbnailUrl'/);
+          assert.doesNotMatch(card, /getDoc\(|updateFavorite\(/);
+
+          const overlayStart = page.indexOf('// A full R2 catalog can arrive after a local URL edit');
+          const overlayEnd = page.indexOf('\n\n  const queueFavoriteDetailPatch', overlayStart);
+          const draftOverlay = page.slice(overlayStart, overlayEnd);
+          assert.match(draftOverlay, /const mediaVersionCompatible/);
+          assert.match(draftOverlay, /currentMediaVersion <= draftMediaVersion/);
+          assert.match(draftOverlay, /if \(!compatible && !mediaVersionCompatible\) continue/);
+          assert.doesNotMatch(draftOverlay, /getDoc\(|updateFavorite\(/);
+
+          const openStart = page.indexOf('  const openFavoriteDetail = async');
+          const openEnd = page.indexOf('\n\n  const executeFavoriteMenuAction', openStart);
+          const open = page.slice(openStart, openEnd);
+          assert.match(open, /const mediaVersionCompatible/);
+          assert.match(open, /compatible \|\| mediaVersionCompatible/);
+
+          assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000;/);
+          assert.match(app, /publishMusicNoteHeartPreviewDelta\(uid, safeDocumentId, intent\.song, desiredSaved\)/);
+
+          console.log('APP349_A_CANONICAL_SETTLEMENT_NO_DISAPPEAR=PASS');
+          console.log('APP349_B_REMOTE_MUSIC_NOTE_IMMEDIATE_CACHE=PASS');
+          console.log('APP349_SUNO_LIST_MEDIA_DURABLE_LOCAL_CACHE=PASS');
+          console.log('APP349_SUNO_DRAFT_MEDIA_REVISION_ISOLATED=PASS');
+          console.log('APP349_EXTRA_FIRESTORE_D1_IO=0');
+          EOF
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+
+      - name: Protected regressions
+        run: |
+          set -euo pipefail
+          node scripts/verify-302-studio-heart-local-first-delayed-remote.mjs
+          node scripts/verify-347-studio-heart-reconcile.mjs
+          node scripts/verify-289-music-note-compact-heart-sync.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-291-recent-lyrics-live-preview.mjs
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "soridraw-release-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/App.tsx src/pages/FavoritesPage.tsx public/app-version.json scripts/verify-349-studio-heart-settlement-media.mjs
+          git diff --cached --quiet && { echo "No product diff"; exit 1; }
+          git commit -m "fix(preview): keep Music Note state stable through settlement"
+          git push origin HEAD:preview

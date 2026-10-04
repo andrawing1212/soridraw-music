@@ -14073,6 +14073,78 @@ async function readEffectiveFollowMembership348(env, followerUid, followingUid, 
   };
 }
 
+// SORIDRAW_FOLLOW_OVERLAY_RELATION_WRITER_350_20261004
+// Dormant until the shared cutover manifest is fully armed. The legacy follows
+// table remains immutable after cutover; only the sparse overlay row changes.
+async function mutateFollowOverlayRelation350(env, followerUid, followingUid, shouldFollow, now, cutoverState) {
+  const follower = String(followerUid || "").trim();
+  const following = String(followingUid || "").trim();
+  const desired = shouldFollow ? 1 : 0;
+  if (!follower || !following || follower === following) {
+    throw new Error("[SORIDRAW 350] invalid follow relation");
+  }
+  if (cutoverState?.mode !== "overlay348" || !String(cutoverState?.cutoverToken || "").trim()) {
+    throw new Error("[SORIDRAW 350] overlay writer requires armed cutover state");
+  }
+  const mutationId = [
+    String(cutoverState.cutoverToken),
+    String(now),
+    String(desired),
+    typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+  ].join(":");
+
+  // Exactly one of these statements may mutate a row:
+  // - desired == immutable legacy baseline -> delete sparse override
+  // - desired != baseline -> insert/update sparse override
+  // Duplicate requests change neither statement.
+  const results = await env.DB.batch([
+    env.DB.prepare(`
+      DELETE FROM explore_follow_overrides_348
+      WHERE follower_uid = ?
+        AND following_uid = ?
+        AND baseline_following = ?
+    `).bind(follower, following, desired),
+    env.DB.prepare(`
+      WITH baseline(following) AS (
+        SELECT EXISTS(
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ?
+        )
+      )
+      INSERT INTO explore_follow_overrides_348(
+        follower_uid, following_uid, following, baseline_following,
+        updated_at, mutation_id
+      )
+      SELECT ?, ?, ?, baseline.following, ?, ?
+      FROM baseline
+      WHERE baseline.following <> ?
+      ON CONFLICT(follower_uid, following_uid) DO UPDATE SET
+        following = excluded.following,
+        baseline_following = explore_follow_overrides_348.baseline_following,
+        updated_at = excluded.updated_at,
+        mutation_id = excluded.mutation_id
+      WHERE explore_follow_overrides_348.following <> excluded.following
+    `).bind(
+      follower, following,
+      follower, following, desired, now, mutationId, desired,
+    ),
+  ]);
+
+  const changes = (results || []).reduce(
+    (sum, row) => sum + Math.max(0, Number(row?.meta?.changes || 0)),
+    0,
+  );
+  if (changes > 1) {
+    throw new Error("[SORIDRAW 350] overlay relation changed more than one row");
+  }
+  return {
+    changed: changes === 1,
+    delta: changes === 1 ? (desired === 1 ? 1 : -1) : 0,
+    following: desired === 1,
+    mutationId,
+  };
+}
+
 async function readSharedProfileConnection348(env, uid, followedAt) {
   const normalized = String(uid || "").trim();
   if (!normalized) return null;

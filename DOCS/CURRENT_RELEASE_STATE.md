@@ -1,3 +1,35 @@
+## 0PB. app349 Studio 저장하트 settlement / Music Note 즉시 membership / Suno 목록 미디어 안정화 PREVIEW 배포 + 기준 동결 (2026-10-05 KST)
+
+- branch: `preview`.
+- 제품 commit: `53646fce918060f5bcb376af9a31a5e0acd05e6c`.
+- focused implementation/verification Run `37224717803`: **SUCCESS**.
+  - +30초 canonical settlement 시 저장된 Music Note row가 순간 사라지지 않는 회귀검사 PASS.
+  - 상대 기기 RTDB preview 수신 즉시 Music Note membership/cache 반영 PASS.
+  - Suno URL/thumbnail/list media 로컬 캐시 지속성 PASS.
+  - media-specific revision이 generic favorite updatedAt에 잘못 밀리지 않는 보호 PASS.
+  - 추가 Firestore/D1 IO 정적 목표 0.
+  - 보호 회귀(app302/app347/app289/app031/app032/app291), TypeScript, Build PASS.
+- Release System Audit Run `37224853496`: **SUCCESS**.
+- Firebase PREVIEW App Release Run `37224986893`: **SUCCESS**.
+  - app version **349** / exact PREVIEW build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules deploy SKIPPED.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 현재 보호 기준: `.agents/skills/song-save-edit-sync-cost/references/soridraw-app349-studio-heart-settlement-media-baseline.md`.
+- app349 visible contract:
+  - 같은 기기 Recent 하트 + Music Note membership 즉시.
+  - 같은 계정 다른 기기 Recent 하트 + Music Note membership 즉시.
+  - canonical favorite는 곡별 마지막 클릭 +30초 final-state W0/W1 계약 유지.
+  - settlement 순간 저장 row가 사라졌다가 재등장하는 전환 금지.
+  - Detail에 저장된 Suno media/thumbnail이 목록/재실행에서 사라지는 회귀 금지.
+- 남은 실기기 최종 확인:
+  1. PC → 모바일 save/unsave 즉시 반영.
+  2. 모바일 → PC save/unsave 즉시 반영.
+  3. 마지막 클릭 +30초 뒤 양쪽 하트 + Music Note membership이 그대로 유지.
+  4. Detail Suno URL/media가 Music Note 목록 thumbnail/media에 즉시 보이고 새로고침/재실행 후 유지.
+- 별도 다음 백엔드 작업: PREVIEW live Worker는 계속 Worker341 rollback본 유지, follow cutover OFF. 저비용 follow candidate는 legacy Worker341 parity + 실제 D1/R2 비용 독립 검증 전 재배포 금지.
+
 ## 0PA. app348 Studio 저장하트 즉시 PC↔모바일 동기화 복구 + Skill 재동결 (2026-10-05 KST)
 
 - 사용자 명시 기준으로 app302에서 제거됐던 pre-canonical Studio-heart cross-device preview를 복구.

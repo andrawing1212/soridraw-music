@@ -1,3 +1,25 @@
+## CURRENT NEXT GATE — app346 PREVIEW 실사용 UX 확인 + candidate Worker 독립 gate
+
+현재 실제 PREVIEW:
+- Hosting app **346** / Firebase Run `37217908194` SUCCESS / exact build PASS.
+- PREVIEW Worker는 rollback된 Worker341 source `9c11b95cf4c95210011b1425cea23f3e51cbf34f`, active version `35a0bb0a-f547-4f4a-84ab-d55ba075ba13` 유지.
+- mandatory follow audit `37217745269` SUCCESS: TypeScript/Build, 347~355, 356 legacy parity, immediate UX rollback/cost guard PASS.
+- shared follow cutover OFF, migration/backfill/user-data change 0.
+
+지금 확인할 것:
+1. PC + mobile 공개프로필 follow/unfollow 클릭 즉시 버튼/숫자가 바뀌고 5~7초 blocking 체감이 사라지는지.
+2. Following 필터에서도 같은 클릭이 즉시 포함/제외로 반영되는지.
+3. Explore publication settings save/private가 화면에서 즉시 반영되고 실패가 없을 때 그대로 유지되는지.
+4. 기존 좋아요 / Music Note publication / 검색 / creator / UI는 비변경인지.
+5. page entry/revisit 때문에 새 backend write가 생기지 않는지.
+
+candidate Worker 재배포 전 필수:
+- Astra independent re-audit.
+- Worker341 legacy mutation/post-sync exact parity 재확인.
+- 가능한 동일 synthetic fixture에서 Worker341 vs candidate legacy physical D1 Rows Read/Written + R2 write 수 비교.
+- candidate legacy mode에서 `SORIDRAW_FOLLOW_COMBINED_COUNTERS_345`, `syncExactSharedFollowing347`가 실행되지 않음을 유지.
+- 이 gate 전에는 Worker deploy / shared cutover manifest / D1 migration / main·TEST·PRODUCTION 승격 금지.
+
 ## UX ACCEPTANCE — follow/public-private immediate local response
 
 Alongside the Worker341 legacy parity blocker:

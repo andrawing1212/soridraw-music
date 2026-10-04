@@ -1,5 +1,5 @@
-app347-follow-exact-count-stage1-rerun2
-source=8302806e26d01a3cc5dc5dfb5b4c9e8a0890a4fa
-scope=follow-exact-count-stage1,monotonic-revision,shared-r2-fastpath,hard-release-gate,regression-harness-repair
-protect=likes,save-heart,folders,split,music-note-batching,creator-recommendation,test-production,shared-d1-schema,user-data
-requested=2026-10-04T12:58:00+09:00
+app348-isolated-follow-overlay-billing
+source=2744ab0680130949bb029caa33d8a65ba2f4727b
+scope=isolated-follow-overlay-physical-billing,no-backfill,index-plans
+protect=shared-user-data,likes,save-heart,folders,split,music-note-batching,creator-recommendation,test-production,shared-d1-schema
+requested=2026-10-04T13:05:00+09:00

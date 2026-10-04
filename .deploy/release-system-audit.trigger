@@ -28,3 +28,7 @@ app347-studio-heart-recovery
 target=976037b932b6ee1606206939494b5a660cd5659c
 focus=canonical-pending-reconcile,overlay-media-preservation
 requested=2026-10-05T02:22KST
+app348-studio-heart-immediate-cross-device-restore
+target=441a256106d95427bfc5926f5a0c83d4bf4151d5
+focus=immediate-pc-mobile-heart,music-note-membership,30s-canonical-final-state,app347-stale-guard
+requested=2026-10-05T02:54KST

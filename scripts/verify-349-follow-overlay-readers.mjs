@@ -144,8 +144,8 @@ assert.deepEqual(reverse,['new-follower','legacy-follower']);
 
 const pairPlan=db.prepare("EXPLAIN QUERY PLAN SELECT following FROM explore_follow_overrides_348 WHERE follower_uid='actor' AND following_uid='new-add'").all().map(x=>String(x.detail)).join(' | ');
 assert.match(pairPlan,/SEARCH explore_follow_overrides_348 USING PRIMARY KEY/);
-const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_active_reverse WHERE following_uid='creator' AND following=1").all().map(x=>String(x.detail)).join(' | ');
-assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_active_reverse/);
+const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_reverse WHERE following_uid='creator'").all().map(x=>String(x.detail)).join(' | ');
+assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_reverse/);
 
 console.log('FOLLOW349_LEGACY_DEFAULT_FAIL_CLOSED_WRITER=PASS');
 console.log('FOLLOW349_TARGETED_EFFECTIVE_MEMBERSHIP=PASS');

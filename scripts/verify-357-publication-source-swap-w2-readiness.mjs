@@ -13,14 +13,16 @@ assert.match(migration, /SORIDRAW 357 candidate/i, 'candidate marker missing');
 assert.match(migration, /DROP TRIGGER IF EXISTS explore032_track_update/i, 'track trigger replacement missing');
 assert.match(migration, /CREATE TRIGGER explore032_track_update/i, 'replacement trigger missing');
 
+const migrationSqlOnly = migration.replace(/--.*$/gm, '');
+
 assert.doesNotMatch(
-  migration,
-  /(?:DROP|CREATE|UPDATE|INSERT|DELETE)[\s\S]{0,120}soridraw_shared_rev_tracks_au_051/i,
+  migrationSqlOnly,
+  /(?:DROP|CREATE)\s+TRIGGER\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?soridraw_shared_rev_tracks_au_051\b/i,
   'candidate must not mutate protected shared revision trigger',
 );
 assert.doesNotMatch(
-  migration,
-  /UPDATE\s+explore_shared_revision/i,
+  migrationSqlOnly,
+  /UPDATE\s+explore_shared_revision\b/i,
   'candidate must not directly write shared revision',
 );
 

@@ -1,3 +1,22 @@
+## CURRENT NEXT GATE — publication 비용: W2 정상 경로 보호, source-swap W3 / first-public W12만 분리 최적화
+
+보호:
+- registered public→private R3/W2 실기기 PASS.
+- same-source private→public R5/W2 실기기 PASS.
+- 이 두 정상 경로는 더 건드리지 말 것.
+- app348/app349 PC↔모바일 즉시 좋아요/저장하트 동기화 변경 금지.
+
+미완료:
+- Suno source swap R11/W3 = known HARD FAIL.
+- never-published first publication R7/W12 = known HARD FAIL.
+
+다음 감사/설계:
+1. source swap W3에서 canonical tracks W1은 유지.
+2. legacy derived W1 / shared revision W1 중 어떤 것을 구버전 TEST/PRODUCTION 호환을 깨지 않고 제거/대체 가능한지 독립 감사.
+3. first-public W12도 동일한 hybrid-read/cutover 설계와 함께 전체 fanout을 O(1) W1~W2로 줄이는 경로 검토.
+4. shared user data migration/backfill/trigger 제거는 사용자 승인 전 실행 금지.
+5. 후보 Worker/D1 변경은 PREVIEW에서도 독립 감사 완료 전 배포 금지.
+
 ## CURRENT NEXT GATE — 좋아요 동기화 동결 유지 + 공개/비공개 registered W2 격리 확인
 
 절대 보호:

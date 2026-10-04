@@ -55,3 +55,5 @@ console.log('FOLLOW348_EFFECTIVE_BASELINE_OVERLAY=PASS');
 console.log('FOLLOW348_FORWARD_PK_REVERSE_FULL_INDEX=PASS');
 console.log('FOLLOW348_SHARED_MIGRATION_APPLIED=NO');
 console.log('FOLLOW348_REMOTE_BILLING_PROOF_RUN=37175419175');
+
+await import('./verify-356-follow-worker341-legacy-parity.mjs');

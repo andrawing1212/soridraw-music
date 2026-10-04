@@ -51,8 +51,13 @@
 .soridraw-explore-recommend-head span{display:block;margin-bottom:5px;color:#ffb400;font-size:10px;font-weight:900;letter-spacing:.13em}
 .soridraw-explore-recommend-head h2{margin:0;color:rgba(255,255,255,.96);font-size:21px;font-weight:900;letter-spacing:-.025em}
 .soridraw-explore-recommend-head p{margin:5px 0 0;color:rgba(235,235,240,.44);font-size:11px;font-weight:650}
-.soridraw-explore-recommend-keywords{display:flex;align-items:center;gap:7px;max-width:100%;margin:-2px 0 14px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.soridraw-explore-recommend-keywords{display:flex;align-items:center;gap:7px;width:100%;min-width:0;max-width:100%;margin:-2px 0 14px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none}
 .soridraw-explore-recommend-keywords::-webkit-scrollbar{display:none}
+/* app342 — genre chips use two independently scrollable rows so long genre
+ * catalogs never clip at the Explore content boundary. */
+.soridraw-explore-recommend-genre-rows{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;width:100%;min-width:0;max-width:100%;margin:-2px 0 14px}
+.soridraw-explore-recommend-genre-rows .soridraw-explore-recommend-keywords{margin:0}
+.soridraw-explore-recommend-genre-row{scroll-behavior:smooth}
 .soridraw-explore-recommend-keywords button{flex:0 0 auto;min-height:30px;padding:0 11px;border:0!important;outline:0!important;border-radius:999px;background:rgba(255,255,255,.055)!important;box-shadow:none!important;color:rgba(235,235,240,.52);font-size:11px;font-weight:800;cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease}
 .soridraw-explore-recommend-keywords button:hover{background:rgba(255,255,255,.09)!important;color:rgba(255,255,255,.88)}
 .soridraw-explore-recommend-keywords button:active{transform:scale(.97)}

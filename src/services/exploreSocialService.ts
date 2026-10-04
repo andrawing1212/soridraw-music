@@ -185,20 +185,24 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
 
   const task = (async () => {
     let rawUids: unknown[] = [];
+    let complete = false;
     try {
       const snapshot = await getExplorePersonalSocialSnapshot(user);
       rawUids = snapshot.followingUids;
+      complete = snapshot.followingComplete !== false && rawUids.length < 5000;
     } catch (snapshotError) {
       console.warn('[Explore follow] Social Snapshot unavailable; using following bundle recovery.', snapshotError);
       const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
       rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
+      complete = typeof payload?.data?.followingComplete === 'boolean'
+        ? payload.data.followingComplete : rawUids.length < 5000;
     }
     const states: Record<string, boolean> = rawUids.reduce<Record<string, boolean>>((acc, value: unknown) => {
       const uid = String(value || '').trim();
       if (uid) acc[uid] = true;
       return acc;
     }, {} as Record<string, boolean>);
-    const next: ExploreFollowCacheData = { complete: true, states };
+    const next: ExploreFollowCacheData = { complete, states };
     writeExploreFollowCache(user.uid, next);
     return next;
   })().finally(() => {
@@ -270,9 +274,11 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
 
   try {
     const bundle = await loadExploreFollowingBundle(user);
-    const isFollowing = Boolean(bundle.states[normalizedUid]);
-    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
-    return { isFollowing, followerCount: 0, followingCount: 0 };
+    if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
+      const isFollowing = Boolean(bundle.states[normalizedUid]);
+      recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
+      return { isFollowing, followerCount: 0, followingCount: 0 };
+    }
   } catch (bundleError) {
     console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
   }

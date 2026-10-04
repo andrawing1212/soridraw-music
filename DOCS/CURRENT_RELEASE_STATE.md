@@ -1,3 +1,16 @@
+## 0P1. protocol354 audit repairs355 — implementation candidate, deployment blocked (2026-10-04 KST)
+
+- Branch/base: preview / 57acc664f59d9e3c4c110f5a2b6797525dce010e. Fixes the eight independent audit failures at c47f6c6d. Current service remains app344 / PREVIEW Worker341.
+- Shared profile patch/mirror writers use a fresh conditional merge in overlay mode, preserving current follower/following counts and followSync354 pending/exact/order records. Missing shared profiles fail closed rather than importing frozen legacy counters.
+- Overlay public profile, connection, first-view and permission readers repair pending work or fail closed. First-view validates shared R2 revision before returning a cached response/304; mutation and request-driven recovery invalidate UID + actual handle keys. Legacy follow writer/client branches remain unchanged.
+- Social snapshot and following-bundle use effective overlay pages with completeness/truncation/cursor metadata. Client absence on an incomplete list uses a targeted state lookup. Existing cache schema/like behavior/UI are preserved; no app-version cache reset.
+- Certified same-state/new-ID requests persist only the pair ordering receipt (one R2 write), without profile markers/history SUM. Duplicate IDs make no relation/count writes. The normal rate guard adds one necessary R2 CAS per request.
+- Overlay request limiting keeps the original RATE_LIMITS.follow / RATE_LIMIT_WINDOW_MS through bounded R2 CAS and uses the existing native limiter with a separate follow key. RATE_DB is untouched; no binding/resource configuration change. Existing legacy rate path remains intact.
+- Local TypeScript and Build PASS (existing chunk/import warnings); verify347/348/349(includes353)/350/351/352/354/355 PASS. Also 345 functional/creator, 346 metadata, 197 likes, 198 snapshot diagnostics, 202 action bounds, 114 parity PASS. 345 continues to expose unchanged legacy trigger amplification, not an overlay billing claim.
+- verify355 executes actual consumer functions: stale profile edit/mirror and concurrent CAS conflict, relation-saved/R2-failed readers, dirty profile edit, missing-profile fail-closed, social snapshot with missing-like fallback, 5002 memberships over two pages, follower save allow/deny, handle cache revision/recovery, no-op receipt, client missing-target recovery, and rate rejection. Existing 354 stale/reverse/concurrent/crash tests remain intact.
+- Isolated remote remeasurement is queued through the existing release-system audit trigger. It now measures the actual HTTP handler against only the owned synthetic D1, including duplicate/no-op/stale/recovery. R2 and native limiter operations are conditional in-memory fixtures; these are operation counts, NOT real R2/Worker billing or live-device proof.
+- No deployment, shared migration/manifest activation, shared/user data write, backfill or TEST/PRODUCTION/main change. No new branch or workflow. Remaining gates: independent Astra re-audit, live R2/Worker contention and PC/mobile, all-environment cutover compatibility and missing-profile baseline policy. RELEASE BLOCKED.
+
 ## 0P0. protocol354 Astra 독립감사 FAIL — 배포 차단 8건 (2026-10-04 KST)
 
 - 기준 branch/commit: `preview` / `c47f6c6dbca385787b1cd5cd0f5c61585f7a27a7`.

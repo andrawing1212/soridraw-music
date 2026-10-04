@@ -13,9 +13,9 @@ assert.equal(context.mapTrackRow({}).ownerProfileGenres,null);
 assert.equal(JSON.stringify(context.mapTrackRow({owner_profile_genres:'[]'}).ownerProfileGenres),'[]');
 assert.equal(JSON.stringify(context.mapTrackRow({owner_profile_genres:'["soul"]',primary_genre:'rock'}).ownerProfileGenres),'["soul"]');
 let selfReads=0;
-const snapshotContext = { requireExploreAuth: async () => ({uid:'self'}),
+const snapshotContext = { readFollowCutoverState348: async () => ({mode:'legacy'}), EXPLORE_R2_FOLLOW_LIMIT: 5000, requireExploreAuth: async () => ({uid:'self'}),
  readSharedLikesState161: async () => ({likedIds:new Set(), exact:true, exactLikeCount:0, source:'r2'}),
- readExploreFollowingR2Bundle: async () => new Set(),
+ readExploreFollowingR2Bundle: async () => [],
  readExploreSharedProfileByUid247: async (env,uid) => {selfReads++;assert.equal(uid,'self');return {body:{data:{profile:{uid,genres:['soul'],updatedAt:4}}}};},
  json: value => value, URL, console };
 vm.createContext(snapshotContext); vm.runInContext(fn('handleMySocialSnapshot042'),snapshotContext);

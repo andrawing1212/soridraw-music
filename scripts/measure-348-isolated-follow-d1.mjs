@@ -197,6 +197,17 @@ if (process.argv[2] === 'cleanup') {
     console.log('348_LEGACY_FOLLOWS_IMMUTABLE=PASS');
     console.log('348_SHARED_USER_DATA_TOUCHED=0');
     console.log('354_ACTUAL_FENCED_WRITER_REMOTE_BILLING=PASS');
+
+    // Synthetic HTTP namespace: separate from relation samples above; no live
+    // Worker, R2 bucket, RATE_DB, or shared user resource is bound or written.
+    await ddl("CREATE TABLE profile_stats(uid TEXT PRIMARY KEY,follower_count INTEGER,following_count INTEGER,updated_at INTEGER)");
+    await ddl("CREATE TABLE public_profiles(uid TEXT PRIMARY KEY,is_public INTEGER)");
+    await ddl("INSERT INTO follows VALUES('http-actor','http-legacy',1)");
+    await ddl("INSERT INTO profile_stats VALUES('http-actor',0,1,1),('http-target',0,0,1)");
+    await ddl("INSERT INTO public_profiles VALUES('http-target',1)");
+    const { measureHttp355 } = await import('./verify-355-follow-audit-repairs.mjs');
+    await measureHttp355(query, 'http-');
+    console.log('355_HTTP_ACTUAL_HANDLER_REMOTE_DB_W2_RATE_DB_W0_R2_FIXTURE=PASS');
   } finally {
     if (created) await cleanup();
   }

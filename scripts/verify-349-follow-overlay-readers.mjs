@@ -74,8 +74,10 @@ assert.match(mine,/FROM follows f/);
 const bundle=fn('handleMyFollowingR2Bundle');
 assert.match(bundle,/SORIDRAW_FOLLOWING_BUNDLE_OVERLAY_COMPAT_353_20261004/);
 assert.match(bundle,/readFollowCutoverState348/);
-assert.match(bundle,/readEffectiveFollowConnectionPage348/);
-assert.match(bundle,/overlay348-d1-recovery/);
+assert.match(bundle,/readOverlayFollowing355/);
+assert.match(fn('readOverlayFollowing355'),/readEffectiveFollowConnectionPage348/);
+assert.match(fn('readOverlayFollowing355'),/overlay348-d1-recovery/);
+assert.match(fn('readOverlayFollowing355'),/followingComplete: !cursor && !truncated/);
 
 const feed=fn('handleFollowingFeed');
 assert.match(feed,/WITH effective_following AS/);

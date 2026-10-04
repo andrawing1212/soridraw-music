@@ -156,3 +156,13 @@ The request's changed-file list and cumulative list are identical: 13 files. Doc
 - `src/services/exploreSocialService.ts` — follow-only helper delegation and existing error-code preservation.
 
 Tracked dist build outputs were restored after verification; final build output is an ignored local verification artifact. No app version, UI/CSS, app/Worker/schema deployment trigger, Workflow, main/production branch, Firebase/Functions configuration or user-origin data was changed.
+
+## Continuation355 — independent audit FAIL eight repairs (2026-10-04)
+
+Base preview 57acc664f59d9e3c4c110f5a2b6797525dce010e. Implementation candidate only; independent re-audit/deployment remain blocked.
+
+All eight paths are connected and exercised by scripts/verify-355-follow-audit-repairs.mjs, extending the actual function/SQLite/conditional R2 fixture from verify354. Profile field CAS retries preserve the current follow authority; overlay readers cannot certify frozen legacy count fallbacks. Social completeness and 5000-cap pagination survive normalization and client cache hydration. Save permission uses the recovered effective relation; handle caches validate against shared revision even if invalidation was interrupted. Same-state new IDs need only a durable pair CAS receipt. Rate limiting preserves the original user/window budget via R2 CAS, adds a separate existing native follow key, and never touches RATE_DB in overlay mode.
+
+Local actual HTTP handler counters (DB queryR/queryW; R2 get/put attempts): new follow 2/1,12/7; duplicate 1/0,4/1; same-state new ID 2/0,7/2; unfollow 1/1,12/7; stale rejection 1/0,2/1; relation-saved R2 failure 2/1,7/6 (5 successful puts); recovery retry 9/3,13/5 (three fenced D1 write attempts, SQLite changes0). RATE_DB read/write0 and native limiter1 per request. These are actual function calls with fixtures, not physical D1/R2 billing. Required rate receipts are reported rather than hidden as W0 server cost.
+
+The existing isolated remote measurement now invokes the same actual HTTP handler with a separate synthetic namespace in its freshly owned D1. It checks total D1 physical rows_written<=2, retains the original relation billing samples/index plans, and cleans up only the owned DB. R2/native limiter remain local fixtures, so live CAS contention, actual Worker/R2 billing, device synchronization, and cross-environment readiness still require separate evidence. No shared manifest/schema/user write or deployment is authorized or performed.

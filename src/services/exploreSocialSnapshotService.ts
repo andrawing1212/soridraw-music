@@ -18,6 +18,9 @@ const SOCIAL_SNAPSHOT_PATH = '/v1/me/social-snapshot';
 export type ExplorePersonalSocialSnapshot = {
   likedTrackIds: string[];
   followingUids: string[];
+  followingComplete?: boolean;
+  followProtocol?: number;
+  followRevision?: number;
   updatedAt: number;
 };
 
@@ -38,6 +41,9 @@ const normalizeSnapshot = (value: unknown): ExplorePersonalSocialSnapshot => {
   return {
     likedTrackIds: normalizeIds(row.likedTrackIds),
     followingUids: normalizeIds(row.followingUids),
+    followingComplete: typeof row.followingComplete === 'boolean' ? row.followingComplete : normalizeIds(row.followingUids).length < 5000,
+    followProtocol: Number(row.followProtocol || 0),
+    followRevision: Number(row.followRevision || 0),
     updatedAt: Math.max(0, Number(row.updatedAt || 0)),
   };
 };

@@ -14,13 +14,24 @@ const names = [
   'handleFollowOverlay354', 'readFollowStateSnapshot354', 'mutateFollowOverlayRelation350', 'readEffectiveFollowMembership348',
   'patchSharedProfileFollowDelta352', 'readExactEffectiveFollowCounts351',
   'handleFollow', 'handleFollowR2Core', 'handleFollowState',
+  'invalidateFollowProfiles355', 'enforceFollowEdgeRateLimit355',
 ];
 const functions = new Map(ast.statements.filter(ts.isFunctionDeclaration).map(n => [n.name?.text, n.getText(ast)]));
 const baseline = execFileSync('git',['show','9709c6f2ef06d40d6c780f07ec856c4a917449f6:cloudflare/explore-worker/canonical/preview-worker.js'],{ encoding: 'utf8',maxBuffer: 8*1024*1024 });
 const baselineAst = ts.createSourceFile('baseline.js',baseline,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const allowed = new Set(['readFollowCutoverState348','handleFollowR2Core','handleFollow',
-  'mutateFollowOverlayRelation350','patchSharedProfileFollowDelta352','handleFollowState']);
+  'mutateFollowOverlayRelation350','patchSharedProfileFollowDelta352','handleFollowState',
+  // The independent audit explicitly requires these existing follow consumers.
+  'patchPublicProfileBundle245','writeExploreSharedProfile060','handlePublicProfile',
+  'readSharedProfileConnection348','handlePublicProfileFirstViewWithEdgeCache',
+  'handleMyFollowingR2Bundle','handleFollowerSaveAccess','handleMySocialSnapshot042',
+  'handleProfileConnections','handleMyFollowing']);
 for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
+  if (node.name?.text === 'handleExploreRequest') {
+    assert.equal(functions.get(node.name.text).replace('handlePublicProfile(decodeURIComponent(segments[2]), env, cors, request)',
+      'handlePublicProfile(decodeURIComponent(segments[2]), env, cors)').replaceAll('\r\n','\n'),node.getText(baselineAst).replaceAll('\r\n','\n'));
+    continue;
+  }
   if (!allowed.has(node.name?.text)) assert.equal(functions.get(node.name?.text)?.replaceAll('\r\n','\n'),node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
 }
 for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
@@ -47,7 +58,7 @@ function fixture() {
     INSERT INTO public_profiles VALUES('target',1),('legacy',1),('other',1);`);
   db.exec(readFileSync('cloudflare/explore-worker/candidates/348-follow-overlay.sql', 'utf8'));
   const records = new Map();
-  let sequence = 0, writes = 0, reads = 0, changed = 0;
+  let sequence = 0, writes = 0, reads = 0, changed = 0, putAttempts = 0;
   let bucketHook = null, dbHook = null, now = 1000;
   const bucket = {
     async get(key) {
@@ -56,6 +67,7 @@ function fixture() {
       return row ? { etag: row.etag, customMetadata: {}, text: async () => row.body } : null;
     },
     async put(key, body, opts = {}) {
+      putAttempts++;
       if (bucketHook) await bucketHook('before', key, JSON.parse(body));
       const row = records.get(key);
       if (opts.onlyIf?.etagMatches && row?.etag !== opts.onlyIf.etagMatches) return null;
@@ -84,15 +96,15 @@ function fixture() {
       return { meta: { changes: Number(out.changes) } };
     },
   });
-  const env = { PROFILE_MEDIA: bucket, DB: { prepare, batch: async stmts => {
+  const env = { PROFILE_MEDIA: bucket, LIKE_RATE_LIMITER: { limit: async () => ({ success: true }) }, DB: { prepare, batch: async stmts => {
     db.exec('BEGIN');
     try { const out = []; for (const s of stmts) out.push(await s.all()); db.exec('COMMIT'); return out; }
     catch (e) { db.exec('ROLLBACK'); throw e; }
   } } };
   const ctx = {
-    console, JSON, Number, String, Boolean, Object, Math, crypto, Response, Set,
+    console, JSON, Number, String, Boolean, Object, Math, crypto, Response, Request, URL, Set,
     Date: { now: () => ++now },
-    EXPLORE_FOLLOW_CUTOVER_KEY_348: 'manifest', RATE_LIMITS: { follow: {} },
+    EXPLORE_FOLLOW_CUTOVER_KEY_348: 'manifest', RATE_LIMITS: { follow: 120 }, RATE_LIMIT_WINDOW_MS: 600000,
     exploreSharedProfileR2Key060: uid => 'profiles/' + uid,
     validExploreProfileR2Bundle020: b => Boolean(b?.body?.data?.profile),
     readExploreSharedProfileByUid247: async (_, uid) => JSON.parse(records.get('profiles/' + uid)?.body || 'null'),
@@ -112,7 +124,7 @@ function fixture() {
     EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?)) AS n`).get(actor,target,actor,target).n);
   return { ctx, env, db, records, call, profile, relation,
     hooks: (b = null, d = null) => { bucketHook = b; dbHook = d; },
-    metrics: () => ({ writes, reads, changed }) };
+    metrics: () => ({ writes, reads, changed, putAttempts }) };
 }
 
 const f = fixture();
@@ -248,3 +260,5 @@ console.log('FOLLOW354_ACTUAL_HTTP_FLOW_LEGACY_SYNC_BYPASS=PASS');
 console.log('FOLLOW354_UNRELATED_FUNCTIONS_AND_LEGACY_PATH_UNCHANGED=PASS');
 console.log('FOLLOW354_CLIENT_LEGACY_ONE_REQUEST_ORDERED_QUEUE_STABLE_RETRY=PASS');
 console.log('FOLLOW354_SHARED_DB_DEPLOYMENT_USER_DATA_CHANGES=0');
+
+export { fixture, functions, cutover, id };

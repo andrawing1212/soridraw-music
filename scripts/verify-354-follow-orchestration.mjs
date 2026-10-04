@@ -27,7 +27,26 @@ const allowed = new Set(['readFollowCutoverState348','handleFollowR2Core','handl
   'readSharedProfileConnection348','handlePublicProfileFirstViewWithEdgeCache',
   'handleMyFollowingR2Bundle','handleFollowerSaveAccess','handleMySocialSnapshot042',
   'handleProfileConnections','handleMyFollowing']);
+const publication358Wrapped = new Map([
+  ['handleFeedWithEdgeCache', 'handleFeedWithEdgeCacheCore358'],
+  ['handleProfileTracks', 'handleProfileTracksCore358'],
+  ['handleGenreTracks', 'handleGenreTracksCore358'],
+]);
 for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
+  const wrappedCore = publication358Wrapped.get(node.name?.text || '');
+  if (wrappedCore) {
+    const coreText = functions.get(wrappedCore);
+    assert.ok(coreText, 'app358 frozen core missing: ' + wrappedCore);
+    const normalizedCore = coreText
+      .replace(`function ${wrappedCore}(`, `function ${node.name?.text}(`)
+      .replaceAll('\r\n','\n');
+    assert.equal(
+      normalizedCore,
+      node.getText(baselineAst).replaceAll('\r\n','\n'),
+      'app358 OFF-path changed follow-audited function: ' + node.name?.text,
+    );
+    continue;
+  }
   if (node.name?.text === 'handleExploreRequest') {
     assert.equal(functions.get(node.name.text).replace('handlePublicProfile(decodeURIComponent(segments[2]), env, cors, request)',
       'handlePublicProfile(decodeURIComponent(segments[2]), env, cors)').replaceAll('\r\n','\n'),node.getText(baselineAst).replaceAll('\r\n','\n'));

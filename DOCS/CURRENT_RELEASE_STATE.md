@@ -1,3 +1,42 @@
+## 0PI. 비용 최적화 우선순위 재확정 — D1 physical Rows Written 최우선 + Worker 매 테스트 계측 (2026-10-05 KST)
+
+사용자 재지시:
+- 행 읽기/쓰기가 비용에 직접 영향을 주므로 **특히 physical Rows Written을 최우선 절감 지표**로 사용.
+- Cloudflare Worker 요청 수도 매 테스트마다 반드시 함께 확인.
+- 비용 절감을 이유로 정상 기능을 제거/지연하지 않음.
+
+현재 실기기 기준:
+- registered public→private: Worker 1 / D1 R3 W2 / Firestore W0 = PASS.
+- same-source private→public: Worker 1 / D1 R5 W2 / Firestore W0 = PASS.
+- Suno source/media swap: Worker 1 / D1 R11 W3 / Firestore W0 = HARD FAIL.
+- never-published first publication: Worker 1 / D1 R7 W12 / Firestore는 별도 동시 batch 분리 필요 = HARD FAIL.
+- idle/revisit/page sync는 Worker 0 / D1 R0 W0 목표 유지.
+
+매 작업 합격선:
+1. **D1 physical Rows Written**
+   - W0~W2만 PASS.
+   - W3+는 HARD FAIL.
+   - query-level W1만 보고 통과 금지. 반드시 request/physical rows written을 기준으로 판정.
+2. D1 physical Rows Read
+   - 전체 곡/사용자 수에 비례하는 scan 금지.
+   - changed-item O(1) 우선.
+3. Cloudflare Worker
+   - 실제 mutation 1회당 Worker 1을 현재 정상 상한으로 추적.
+   - 같은 action에서 Worker 2+가 나오면 fanout/중복 호출 감사.
+   - 변경 없는 재진입/reload는 Worker 0 목표.
+4. Firestore Browser SDK
+   - publication hot path Firestore R0/W0 보호.
+5. 기능 보호
+   - app348/app349 PC↔모바일 즉시 저장하트 동기화 및 +30초 canonical W0/W1 변경 금지.
+   - registered private/public W2 정상 경로 변경 금지.
+
+현재 source-swap W3의 physical write map:
+- canonical `tracks` media UPDATE = W1.
+- `explore032_track_update` trigger → `explore_derived_tracks` mirror UPDATE = W1.
+- `soridraw_shared_rev_tracks_au_051` trigger → shared revision UPDATE = W1.
+- 합계 W3.
+Worker는 mutation 1회에 요청 1회이며 현재 중복 Worker fanout은 실기기에서 보이지 않음.
+
 ## 0PH. app353 공개/비공개/source-swap 실기기 비용 분리 PASS/FAIL 확정 (2026-10-05 KST)
 
 사용자 영상은 각 동작 사이 CACHE LIVE 초기화를 수행한 상태로 판정.

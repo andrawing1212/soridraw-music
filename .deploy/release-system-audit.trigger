@@ -40,3 +40,7 @@ app350-pc-suno-media-durable-overlay
 target=1dde878ad61b68b75c15f1289797fa7dd8bcb28a
 focus=pc-reload-suno-media-overlay,catalog-refresh-preserve,no-extra-io
 requested=2026-10-05T03:49KST
+app351-pc-suno-media-stale-catalog-guard
+target=357b0ed91504de646c0132ce6e4a469e97b4d284
+focus=pc-reload-repeat-stale-catalog-preserve,no-extra-io
+requested=2026-10-05T03:58KST

@@ -297,20 +297,14 @@ jobs:
               app = app[:own_local_write] + insertion + app[own_local_write:]
 
 
-          app = once(
-              app,
-              """      if (isHeartPreview) {
-                if (remoteFavoriteId) {
-                  supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-                }
-                // The RTDB preview is fully consumed by Recent heart authority + exact link.
-                // Keep canonical Music Note cache/version untouched until the trailing
-                // favorites mutation succeeds and emits its normal save/unsave signal.
-                writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
-                markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
-                return;
-              }""",
-              """      if (isHeartPreview) {
+          remote_id_anchor = app.index("      const remoteFavoriteId = String(")
+          if remote_id_anchor < 0:
+              raise SystemExit('remote favorite id anchor missing')
+          remote_heart_start = app.index("      if (isHeartPreview) {", remote_id_anchor)
+          remote_heart_end = app.index("\n\n      if (remoteItem || removed || isRemovalOperation) {", remote_heart_start)
+          if remote_heart_start < 0 or remote_heart_end <= remote_heart_start:
+              raise SystemExit('remote heart-preview branch bounds missing')
+          remote_heart_replacement = """      if (isHeartPreview) {
                 applyRemoteStudioHeartPreview(
                   uid,
                   remoteItem,
@@ -326,27 +320,27 @@ jobs:
                 writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
                 markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
                 return;
-              }""",
-              'remote preview apply',
-          )
+              }"""
+          app = app[:remote_heart_start] + remote_heart_replacement + app[remote_heart_end:]
 
-          app = once(
-              app,
-              """          reconcileStudioHeartPendingFromCanonicalSignal(
-                    uid,
-                    remoteItem,
-                    remoteFavoriteId || exactDocumentIds[0] || '',
-                    canonicalRemoteSaved,
-                  );""",
-              """          reconcileStudioHeartPendingFromCanonicalSignal(
-                    uid,
-                    remoteItem,
-                    remoteFavoriteId || exactDocumentIds[0] || '',
-                    canonicalRemoteSaved,
-                  );
-                  clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);""",
-              'canonical remote cleanup',
-          )
+
+          canonical_signal_start = app.index("        const isCanonicalMembershipSignal =")
+          canonical_signal_end = app.index("\n\n        if (isRemovalOperation)", canonical_signal_start)
+          if canonical_signal_start < 0 or canonical_signal_end <= canonical_signal_start:
+              raise SystemExit('canonical membership block missing')
+          canonical_block = app[canonical_signal_start:canonical_signal_end]
+          if 'clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);' not in canonical_block:
+              reconcile_start = app.index("          reconcileStudioHeartPendingFromCanonicalSignal(", canonical_signal_start)
+              reconcile_end = app.index("\n          );", reconcile_start)
+              if reconcile_start < 0 or reconcile_end < 0 or reconcile_end >= canonical_signal_end:
+                  raise SystemExit('canonical reconcile call bounds missing')
+              reconcile_end += len("\n          );")
+              app = (
+                  app[:reconcile_end]
+                  + "\n          clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);"
+                  + app[reconcile_end:]
+              )
+
 
           app = once(
               app,

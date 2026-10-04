@@ -34,6 +34,7 @@ const createHarness = ({ markers = {}, unresolved = {}, outbox = {}, responses =
     URLSearchParams,
     buildAuthHeaders: async () => ({}),
     recordCloudflareResponse: () => {},
+    rememberExploreViewerGenres: () => {},
     fetch: async (url) => {
       fetches += 1;
       onFetch?.({ fetches, setSignal: value => { signal = value; } });

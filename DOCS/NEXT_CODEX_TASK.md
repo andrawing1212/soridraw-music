@@ -1,3 +1,27 @@
+## CURRENT TASK — Worker341 검색 최초/랜덤/재검색 D1 R0 실기기 검증 (2026-10-04 KST)
+
+현재:
+- R2 검색 카탈로그 1회 백필 45/45 완료 + 검증 PASS.
+- D1 SELECT-only, D1 write/schema change 0, 사용자 원본 데이터 변경 0.
+- Worker341 PREVIEW 배포 완료.
+- Worker Run `37166719557` SUCCESS.
+- active Worker `59ed42ea-f29a-4837-a9a7-20e70648e59c`.
+- app UI/Hosting은 app340 유지.
+- TEST / PRODUCTION unchanged.
+
+사용자 테스트 — 검색만:
+1. CACHE LIVE 초기화.
+2. 기존 정상 제목 또는 아티스트 검색 1회 → D1 query/rows **R0 W0**.
+3. `힙합` 검색 1회 → D1 **R0 W0**.
+4. 랜덤 문자열 `ㅁㄴㅇㄹ341` 1회 → D1 **R0 W0**.
+5. 같은 검색어를 2분 안에 다시 검색 → Worker 증가 0 / D1 증가 0 목표.
+
+합격선:
+- 어떤 검색어를 최초 입력해도 D1 query/read/write가 0.
+- 같은 검색어 재검색은 app340 local cache가 Worker 호출까지 0.
+- 제목/장르/아티스트 검색 결과 기능 유지.
+- FAIL 시 TEST/PRODUCTION 승격 금지.
+
 ## CURRENT TASK — app340 동일 검색 2회차 Worker 0 실기기 검증 (2026-10-04 KST)
 
 현재:

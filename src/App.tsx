@@ -6607,7 +6607,7 @@ function App() {
 
       let updated = false;
       const newList = list.map((item) => {
-        if (item.id !== songId) return item;
+        if (String(item?.firestoreId || item?.id || '').trim() !== String(songId || '').trim()) return item;
         updated = true;
 
         const isSunoDeletion = Array.isArray(updates.sunoLinks) && updates.sunoLinks.length === 0 && updates.sunoShareUrl === null;
@@ -11607,7 +11607,10 @@ const toggleCycleVariantSelection = (
   }, [user?.uid]);
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
-    const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
+    const safeFavoriteDocumentId = String(id || '').trim();
+    const currentFavorite = favoritesStore.getFavorites().find((favorite) => (
+      String(favorite?.firestoreId || favorite?.id || '').trim() === safeFavoriteDocumentId
+    ));
     let sanitizedUpdates = sanitizeForFirestore(updates);
     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
       const mergedForSearch = {
@@ -11641,9 +11644,10 @@ const toggleCycleVariantSelection = (
       const removeIdSet = new Set(localIdsToRemove.filter(Boolean));
       setFavorites((prev) => {
         const next = (prev || [])
-          .filter((favorite) => !removeIdSet.has(favorite.id))
+          .filter((favorite) => !removeIdSet.has(String(favorite?.firestoreId || favorite?.id || '').trim()))
           .map((favorite) => {
-            if (!targetIdSet.has(favorite.id)) return favorite;
+            const favoriteDocumentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+            if (!targetIdSet.has(favoriteDocumentId)) return favorite;
             return {
               ...favorite,
               ...sanitizedUpdates,
@@ -11662,7 +11666,9 @@ const toggleCycleVariantSelection = (
 
     const removeLocalFavoriteOnly = (localId: string) => {
       setFavorites((prev) => {
-        const next = (prev || []).filter((favorite) => favorite.id !== localId);
+        const next = (prev || []).filter((favorite) => (
+          String(favorite?.firestoreId || favorite?.id || '').trim() !== String(localId || '').trim()
+        ));
         if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
         return next;
       });

@@ -1,3 +1,23 @@
+## CURRENT TASK — 팔로우 physical D1 비용 정상화 + 크리에이터 추천 확장 (2026-10-04 KST)
+
+우선순위 1 — 팔로우 비용:
+- app344 실사용에서 팔로우 해제 1회가 logical D1 W3인데 실제 D1 row read/write 증폭 확인.
+- app245/246의 RETURNING/no-postread/R2-only counter patch는 보호.
+- `follows + profile_stats + explore032 derived triggers` physical amplification을 재현/계측.
+- 목표: 변경된 관계 1개만 처리. 가능하면 canonical W1. 불가하면 이유와 최소값을 명시.
+- 전체 follows/profile scan, 전체 profile/feed rebuild 금지.
+- shared D1 schema/trigger를 실제 변경하기 전 기존 PREVIEW/TEST/PRODUCTION Worker 호환성 독립 검증 필수.
+
+우선순위 2 — 좋아할 만한 크리에이터:
+- 현재 latest 40 owner-only 후보 구조 제거.
+- ranking: 프로필 대표장르 유사도 > SORIDRAW 추천 > 최신 공개곡 > 인기곡.
+- owner UID dedupe, 본인 제외.
+- 후보 profile genres를 사람 수만큼 GET 금지.
+- R2/로컬 creator summary 또는 이미 로드된 파생 bundle로 D1 R0 목표.
+- 기존 UI 레이아웃/카드 디자인 변경 금지.
+
+완료 전 PREVIEW 배포만 허용. TEST/PRODUCTION 변경 금지.
+
 ## CURRENT TASK — app343 장르 2줄 구조 실사용 확인 (2026-10-04 KST)
 
 PREVIEW app343 배포 완료. Run `37168925936` SUCCESS.

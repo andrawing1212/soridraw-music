@@ -1,3 +1,54 @@
+## 0PG. 좋아요 동기화 재확정 동결 + app353 공개/비공개 실기기 비용 확인 (2026-10-05 KST)
+
+### 좋아요/저장하트 — 사용자 재확정 보호 기준
+- 사용자 명시: **현재 PC↔모바일 즉시 좋아요/저장하트 동기화 동작을 그대로 유지. 비용 최적화를 이유로 기능을 임의 변경하지 말 것.**
+- 과거 변경 원인 확인:
+  - app302 제품 commit `24447627c2222d5cedc6fe96dcaccbfb26c0593a`에서 비용 절감을 위해 pre-canonical `publishMusicNoteHeartPreviewDelta` RTDB preview를 제거.
+  - 당시 의도는 initiating device만 즉시 표시하고 상대 기기는 마지막 클릭 +30초 canonical 성공 뒤에만 반영하여 **pre-canonical RTDB write 0**을 만드는 것.
+  - 이 변경 때문에 기존 사용자 요구였던 PC↔모바일 즉시 동기화가 지연되는 기능 회귀가 발생.
+  - app348 제품 commit `441a256106d95427bfc5926f5a0c83d4bf4151d5`에서 RTDB changed-item preview를 복구하여 **상대 기기 즉시 반영 + canonical +30초 W0/W1**을 동시에 유지하도록 정상화.
+- 현재 하드 보호:
+  - same-device Recent heart + Music Note membership 즉시.
+  - same-account other-device heart + membership 즉시.
+  - 페이지/탭 이동/새로고침 불필요.
+  - canonical favorite는 마지막 클릭 +30초 final-state: net-zero W0 / changed W1.
+  - receiver Firestore/D1 추가 IO 0 목표.
+  - **향후 비용 최적화가 이 visible behavior를 제거/지연하면 FAIL. 사용자 승인 없이는 변경 금지.**
+
+### 공개 테스트 — never-published 최초 공개 1곡
+사용자 CACHE LIVE 스크린샷:
+- Cloudflare: LOCAL 0 / Worker 1.
+- D1 query: R3 / W1.
+- D1 billable/request rows: **R7 / W12**.
+- Browser SDK: R0 / W1, source `users:write = 1`.
+- PAGE SYNC: D1 R0/W0, Firestore R0/W0.
+판정:
+- D1 **R7/W12는 app335에서 이미 기록된 never-published 최초 공개 baseline과 동일**. 새 app353 회귀로 증가한 수치는 아님.
+- 하지만 SORIDRAW hard gate W1~W2 기준에는 여전히 **HARD FAIL**이며, first-publication fanout 최적화 미완료 상태.
+- Browser SDK `users:write 1`은 app335 문서의 publication Firestore W0 기대와 다름. 이 한 장만으로 publication 자체가 만든 write라고 단정하지 않고, 30/60초 delayed users batch 등 동시 write 가능성을 분리 실측해야 함.
+
+### 바로 이어진 비공개 테스트
+사용자 스크린샷:
+- Browser SDK R0/W0.
+- Cloudflare LOCAL 0 / Worker 0.
+- D1 R0/W0.
+- R2 Class A/B 0.
+판정:
+- Music Note/Explore publication UI는 app331/app346부터 **optimistic local-first**라 화면에서는 서버 응답 전 즉시 private로 보일 수 있음.
+- 현재 실제 서비스 코드는 `setExploreTrackVisibility() -> flushPendingExplorePublicationsForPageExit() -> /v1/me/music-note-publications/batch`를 호출하므로, **서버까지 확정된 registered public→private mutation이라면 Worker/D1 mutation이 존재해야 함**.
+- 기존 app335 실측 baseline은 동일 source public→private **D1 R5/W2 / Firestore W0**.
+- 따라서 이번 R0/W0/Worker0 캡처는 성공 settlement 완료 후 수치인지, optimistic 화면 직후 수치인지 추가 1회 격리 확인 필요. 완료 PASS로 오판하지 않음.
+
+### 다음 공개 비용 확인
+1. 같은 registered 곡을 public 상태로 만든 뒤 CACHE LIVE 초기화.
+2. private 클릭 후 성공 토스트까지 기다리고 2~3초 뒤 캡처.
+   - 기대 baseline: Worker 1 / D1 W2 / Firestore W0.
+3. 다시 같은 source로 public.
+   - registered 재공개 기대: Worker 1 / D1 W2 / Firestore W0.
+   - W12가 다시 나오면 first-publication 오분기 회귀.
+4. 이 두 동작에서도 `users:write 1`이 반복되면 publication 경로의 새 Firestore write regression으로 분리 감사.
+5. 새 never-published 곡 최초 공개 W12는 이미 known HARD FAIL이므로 별도 저비용 구조 작업 대상.
+
 ## 0PF. app353 PC Music Note 썸네일 실기기 PASS / 보호 기준 동결 (2026-10-05 KST)
 
 - 사용자 실기기 확인: **"일단 수정은 됐어."**

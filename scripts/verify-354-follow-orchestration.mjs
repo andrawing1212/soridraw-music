@@ -20,6 +20,7 @@ const functions = new Map(ast.statements.filter(ts.isFunctionDeclaration).map(n 
 const baseline = execFileSync('git',['show','9709c6f2ef06d40d6c780f07ec856c4a917449f6:cloudflare/explore-worker/canonical/preview-worker.js'],{ encoding: 'utf8',maxBuffer: 8*1024*1024 });
 const baselineAst = ts.createSourceFile('baseline.js',baseline,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const allowed = new Set(['readFollowCutoverState348','handleFollowR2Core','handleFollow',
+  'adjustExploreFollowCountersDelta','syncExploreFollowingR2AfterMutation',
   'mutateFollowOverlayRelation350','patchSharedProfileFollowDelta352','handleFollowState',
   // The independent audit explicitly requires these existing follow consumers.
   'patchPublicProfileBundle245','writeExploreSharedProfile060','handlePublicProfile',

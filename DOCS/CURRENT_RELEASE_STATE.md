@@ -1,3 +1,20 @@
+## 0P2. candidate355 Astra 재감사 FAIL — legacy schema2 follow cache 1건 잔존 (2026-10-05 KST)
+
+- 감사 기준: `preview` / `46d21590ceea908353cec2e2a4235e8348404c20`; 실제 코드 `634589b2af0aa8041fe394402aa6f3a7a7abdc99`.
+- 독립 재감사 판정: **FAIL 1건**. 이전 8건 중 7건은 재감사에서 추가 차단점이 확인되지 않았고, 기존 4번의 pre-cutover cache 사례가 남음.
+- 남은 문제: `src/services/exploreSocialService.ts`의 `normalizeExploreFollowCache` / `readCachedExploreFollowState` / `loadExploreFollowingBundle`이 과거 schema2 캐시의 `complete:true`를 신뢰함. 예전 5,000 cap 캐시에 빠진 target도 서버 확인 없이 `false`로 확정 가능.
+- 재현: 누락 target -> false, server/social snapshot/follow-state 확인 0회.
+- 최소 수정 원칙: 전체 캐시 초기화 금지. 기존 제한 캐시를 불완전으로 판별하고, 불완전 cache miss는 개별 `follow-state` 확인으로 복구. 새 서버 completeness/truncated metadata를 존중하며 정상 complete cache fast-path는 유지.
+- Run `37210263354`는 지정 코드와 일치하지만 이 legacy cache fixture는 검증에서 빠졌으므로 candidate355 release gate는 아직 FAIL.
+- 실제 서비스는 app344 / PREVIEW Worker341 유지. 배포/shared migration/cutover/main/TEST/PRODUCTION/user data 변경 금지.
+
+합격 조건:
+1. legacy schema2 capped cache fixture에서 누락 target이 false로 확정되지 않고 targeted follow-state recovery.
+2. 정상 complete cache hit은 서버 read 0 유지.
+3. new incomplete/truncated cache도 targeted recovery 유지.
+4. TypeScript/Build + 관련 follow verifier + 새 legacy-cache regression PASS.
+5. Astra 재감사 PASS 전 PREVIEW 배포 금지.
+
 ## 0P1. protocol354 audit repairs355 — implementation candidate, deployment blocked (2026-10-04 KST)
 
 - Branch/base: preview / 57acc664f59d9e3c4c110f5a2b6797525dce010e. Fixes the eight independent audit failures at c47f6c6d. Current service remains app344 / PREVIEW Worker341.

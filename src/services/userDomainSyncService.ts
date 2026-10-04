@@ -1,7 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
-import { projectCatalogItemForSync } from '../lib/userDataEngine';
+import { projectCatalogItemForSync, rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -685,6 +685,25 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   if (typeof window === 'undefined') return;
 
   if (kind === 'musicNote') {
+    // app350 — persist only bounded media fields before the UI event. This is
+    // device-local cache state (no Firestore/D1/RTDB write) and survives a PC
+    // reload while the canonical Catalog catches up with the Detail draft.
+    if (signal.itemJson) {
+      try {
+        const parsed = JSON.parse(signal.itemJson);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (const item of items) {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+          const mediaVersion = Math.max(
+            Number((item as any)?.sunoShareUrlUpdatedAt || 0),
+            Number((item as any)?.sunoCoverFetchedAt || 0),
+          );
+          if (signal.operation === 'suno-media-preview' || mediaVersion > 0) {
+            rememberMusicNoteMediaPreview(uid, item, Math.max(Number(signal.at || 0), Number(signal.version || 0)));
+          }
+        }
+      } catch {}
+    }
     writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_REMOTE_VERSION_BASE, uid), signal.version);
     rememberMusicNotePendingSignal(uid, signal);
     if (

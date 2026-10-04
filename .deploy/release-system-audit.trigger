@@ -32,3 +32,7 @@ app348-studio-heart-immediate-cross-device-restore
 target=441a256106d95427bfc5926f5a0c83d4bf4151d5
 focus=immediate-pc-mobile-heart,music-note-membership,30s-canonical-final-state,app347-stale-guard
 requested=2026-10-05T02:54KST
+app349-studio-heart-settlement-media
+target=53646fce918060f5bcb376af9a31a5e0acd05e6c
+focus=A-canonical-no-gap,B-immediate-membership,suno-list-cache-media-revision,no-extra-io
+requested=2026-10-05T03:33KST

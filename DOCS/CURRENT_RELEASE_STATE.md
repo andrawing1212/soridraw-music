@@ -1,3 +1,67 @@
+## 0OY. 팔로우 W2 물리비용 경로 실증 + app347 호환 1단계 PASS (2026-10-04 KST)
+
+**중요: 아직 배포 완료가 아니다. 실제 앱은 app344 / PREVIEW Worker341 유지.**
+
+### app347 호환 1단계
+- 현재 D1을 canonical authority로 유지한 채, R2 following summary에 정확한 following count + monotonic revision을 추가하는 후보 구현.
+- 기존 5,000명 membership cap과 정확한 count를 분리해, capped list를 완전한 목록으로 오인하지 않음.
+- 오래된 mutation이 최신 count/list를 되감지 못하도록 R2 conditional write/CAS + revision guard 추가.
+- 기존 v114 writer가 새 exact-count object를 덮지 못하도록 fence 추가.
+- follow 후 R2 local/shared 동기화의 중복 read/write loop를 shared fast-path로 축소.
+- D1 physical write/read는 **이 단계에서 일부러 변경하지 않음**. 현재 비용 문제를 해결했다고 보고하지 않는다.
+
+Release System Audit:
+- Run `37175153805`: **SUCCESS**.
+- TypeScript PASS / Build PASS / hard static release gate PASS.
+- `verify-347-follow-authority.mjs` hard gate PASS.
+- canonical Worker SHA lock PASS: `498c939d1a45dd67017167e4b333bac59a3ae990cc6f9b90a5317d7d6d32df27`.
+- TEST/PRODUCTION dry-run PASS / shared D1 preflight SELECT-only PASS.
+- 배포/사용자 데이터 변경 0.
+
+### 실제 shared D1 팔로우 원인 감사
+Read-only Run `37175284793`: SUCCESS / remote D1 writes 0.
+
+live `follows`:
+- rowid table + composite PK autoindex.
+- `idx_follows_follower_created`.
+- `idx_follows_following_created`.
+- follow INSERT/DELETE마다 global shared revision trigger 존재.
+
+live `profile_stats`:
+- PK index.
+- update마다 shared revision trigger.
+- update → `explore_derived_profiles` counter update.
+- derived counter update → seq 증가 + profile journal write.
+
+따라서 현재 follows 관계 1건 자체도 여러 physical row를 쓰며, 양쪽 profile_stats/derived trigger가 더 붙는다. 현재 구조를 query W2로 묶는 것만으로 Rows Written W1~W2는 불가능하다는 원인을 live schema로 확인.
+
+### W2 후보를 실제 Cloudflare 원격 D1에서 실증
+격리 synthetic D1 Run `37175419175`: SUCCESS. shared/user DB 미사용, 종료 후 DB 삭제 PASS.
+
+후보:
+- legacy `follows`는 immutable baseline.
+- post-cutover 변경만 `explore_follow_overrides_348` sparse overlay에 기록.
+- overlay는 `WITHOUT ROWID` PK(follower_uid,following_uid).
+- 신규 active follower reverse 탐색용 partial index 1개만 사용.
+- legacy data backfill 0.
+
+실제 Cloudflare D1 billing:
+- 새 관계 follow: **Rows Written 2 / Rows Read 0**.
+- 같은 follow 재요청: **W0**.
+- 새 관계 unfollow(원래 baseline 미존재로 복귀): **Rows Written 1 / Rows Read 1**.
+- legacy 관계 unfollow: **Rows Written 1 / Rows Read 0**.
+- legacy 관계 refollow(원래 baseline으로 복귀): **Rows Written 1 / Rows Read 1**.
+- 중복 unfollow/refollow: **W0**.
+- forward 목록 test Rows Read 9 / reverse 목록 test Rows Read 8, 둘 다 index search이며 whole-table scan 없음.
+- targeted pair lookup PK/index search PASS.
+- legacy follows row 3개 그대로 유지, backfill/rewrite 0.
+
+**결론**
+- 사용자 비용 합격선 W1~W2를 실제 D1에서 만족하는 저장 구조를 찾음.
+- 하지만 shared cutover는 아직 실행 금지.
+- 이유: TEST/PRODUCTION 현재 Worker가 legacy follows/profile_stats/derived counters를 읽고 쓰므로, 먼저 3환경 reader/writer compatibility를 배포해야 shared canonical을 overlay authority로 전환할 수 있음.
+- 지금 shared schema, trigger, user data는 변경하지 않았다.
+
 ## 0OX. 9d10970 candidate continued — physical follow / cold-device release BLOCKED (2026-10-04)
 
 - Branch preview; basis 9d10970b44c072d16c4355fc868ea25f083d4eeb. app344 / deployed Worker341 unchanged. Candidate not deployed.

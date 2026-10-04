@@ -114,3 +114,45 @@ Full R2/Worker cost is NOT proven by isolated D1. Certified normal mutation requ
 Missing/invalid R2 profile or missing frozen profile_stats baseline fails closed. Automatic profile creation, baseline recount from all relations, and uncertified baseline repairs were not introduced. Reachable older profile writers/readers, social-snapshot membership and cached first-view handling must be independently audited for protocol354 fence/count preservation before activation across releases. TEST/PRODUCTION compatibility, live R2 contention, complete snapshot parity, PC/mobile and cache invalidation recovery remain release prerequisites. No shared migration, cutover activation, user-origin writes, deployment, auth/config change or environment promotion was executed.
 
 First isolated remote run `37206675183`, source `c911ae4d86159d55335f02a0df155904e8fcae6f`: TS/build/static system audit + all eight normal/duplicate samples passed; normal physical writes 2/1/2/1 and reads 1/3/3/5, duplicate physical writes 0. The measurement then failed because its stale-request assertion expected the old requested state instead of the correctly retained current state. This was a measurement expectation error; candidate writer unchanged. Owned synthetic DB deletion PASS. Corrected expectation is remeasured using the same existing audit path, not reported as an overall PASS from this failed run.
+
+### Final isolated remote evidence — PASS, still NOT a release approval
+
+Run [37206991230](https://github.com/andrawing1212/soridraw-music/actions/runs/37206991230), audited commit `3b7a27e5d558b4bec2d2a8614aafd5c32ffbc26c`: overall SUCCESS. Execution code unchanged from `c911ae4d86159d55335f02a0df155904e8fcae6f`; only measurement expectation/trigger/docs changed. Final subsequent commit records results only.
+
+| Actual candidate SQL operation | Query write attempts | Rows Written | Rows Read |
+| --- | --- | --- | --- |
+| New-edge follow | 1 | 2 | 1 |
+| Duplicate new-edge follow | 1 | 0 | 1 |
+| New-edge unfollow retaining fence | 1 | 1 | 3 |
+| Duplicate new-edge unfollow | 1 | 0 | 3 |
+| Legacy-edge unfollow | 1 | 2 | 3 |
+| Duplicate legacy-edge unfollow | 1 | 0 | 3 |
+| Legacy-edge refollow retaining fence | 1 | 1 | 5 |
+| Duplicate legacy-edge refollow | 1 | 0 | 5 |
+| Suspended old new-edge follow after unfollow | 1 | 0 | 1 |
+
+These are actual Cloudflare D1 mutation SQL billing metadata; fixture assertion/setup queries are separate. They do not include authenticated Worker target/rate-limit checks, R2 reads/writes or exceptional exact recovery. New-edge and legacy-edge state verification, immutable legacy row count, retained ordering fences, targeted pair and both indexed list plans PASS. Forward/reverse list fixture rows_read9/9. Owned DB `soridraw-follow-cost-348-37206991230-1` was created for synthetic data only and deleted successfully; emergency cleanup also passed. No shared user DB write.
+
+Same run: TS/build/static release-system checks, Node22 actual orchestration verifier, existing like/publication regressions, TEST/PRODUCTION Worker dry-run, SELECT-only shared D1 schema/preflight and main/production ref preservation PASS. No app/Worker deployment. No new Workflow/branch; existing audit trigger reused. Previously existing temp Workflow and unrelated branches were not modified/deleted.
+
+Remaining gate remains full live protocol354 compatibility, R2/Worker actual costs, PC/mobile and independent all-reader/profile-fence preservation audit. Existing social-snapshot/first-view caches and missing baseline/profile cases remain explicitly uncertified; do not activate the manifest based on this isolated proof.
+
+### This session's changed files (cumulative since 9709c6f2)
+
+The request's changed-file list and cumulative list are identical: 13 files. Documentation follow-up does not add new file names.
+
+- `.deploy/release-system-audit.trigger` — existing audit-only execution marker; no release trigger changed.
+- `DOCS/CURRENT_RELEASE_STATE.md` — candidate state and real isolated evidence.
+- `DOCS/FOLLOW_AUTHORITY_CREATOR_METADATA_AUDIT.md` — correctness, limitations, measurements and file inventory.
+- `cloudflare/explore-worker/candidates/348-follow-overlay.sql` — candidate commentary about retained fences; no DDL structure changed/applied.
+- `cloudflare/explore-worker/canonical/preview-worker.js` — follow orchestration, fenced writer, count CAS and state recovery only.
+- `cloudflare/explore-worker/canonical/source-sha256.txt` — canonical candidate source lock.
+- `scripts/measure-348-isolated-follow-d1.mjs` — actual-function isolated remote billing, stale-request assertion and owned cleanup.
+- `scripts/verify-348-follow-overlay-contract.mjs` — schema/index verifier correctness.
+- `scripts/verify-349-follow-overlay-readers.mjs` — actual writer/state integration and existing353 reader coverage.
+- `scripts/verify-350-follow-overlay-writer.mjs` — helper extraction boundary correction.
+- `scripts/verify-354-follow-orchestration.mjs` — actual function/crash/concurrency/legacy/client regression verification.
+- `src/services/exploreFollowOrdering354.ts` — negotiated ordered requests, same-pair queue and stable uncertain retry.
+- `src/services/exploreSocialService.ts` — follow-only helper delegation and existing error-code preservation.
+
+Tracked dist build outputs were restored after verification; final build output is an ignored local verification artifact. No app version, UI/CSS, app/Worker/schema deployment trigger, Workflow, main/production branch, Firebase/Functions configuration or user-origin data was changed.

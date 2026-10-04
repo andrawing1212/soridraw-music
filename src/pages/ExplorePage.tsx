@@ -10,7 +10,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVe
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { GENRES } from '../constants';
+import { GENRES, GENRE_HIERARCHY } from '../constants';
 import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
@@ -664,9 +664,12 @@ const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   return { genre, title };
 };
 
+type ExploreGenreDisplayRow342 = 'ko' | 'en';
+
 type ExploreGenreRecommendation221 = {
   id: string;
   label: string;
+  row: ExploreGenreDisplayRow342;
   tracks: ExploreTrack[];
 };
 
@@ -684,9 +687,114 @@ type ExploreRecommendationModel221 = {
   creators: ExploreCreatorRecommendation221[];
 };
 
+// SORIDRAW_EXPLORE_GENRE_CANONICAL_ROWS_342_20261004
+// Recommendation genres are a local projection of the already-loaded Feed.
+// Canonicalize historical id/label variants without any server read:
+//   neo_soul / Neo Soul -> 네오 소울
+//   k_new_jack_swing / K-New Jack Swing -> K-뉴잭스윙
+// Korean-friendly labels live on the first row. Labels that have no meaningful
+// Hangul display name stay in English on the second row.
+type ExploreGenreCatalogEntry342 = {
+  id: string;
+  label: string;
+  labelKo: string;
+};
+
+const normalizeExploreGenreCatalogKey342 = (value: unknown) => safeText(value)
+  .normalize('NFKC')
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9가-힣]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const compactExploreGenreCatalogKey342 = (value: unknown) => (
+  normalizeExploreGenreCatalogKey342(value).replace(/\s+/g, '')
+);
+
+const EXPLORE_GENRE_CATALOG_342 = (() => {
+  const entries: ExploreGenreCatalogEntry342[] = [];
+  const seen = new Set<string>();
+
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    const id = safeText(node.id);
+    const label = safeText(node.label);
+    const labelKo = safeText(node.labelKo);
+    if (id && (label || labelKo) && !seen.has(id)) {
+      seen.add(id);
+      entries.push({ id, label: label || id, labelKo });
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+
+  (GENRES as any[]).forEach(visit);
+  (GENRE_HIERARCHY as any[]).forEach(visit);
+  return entries;
+})();
+
+const EXPLORE_GENRE_LOOKUP_342 = (() => {
+  const lookup = new Map<string, ExploreGenreCatalogEntry342>();
+  const add = (value: unknown, entry: ExploreGenreCatalogEntry342) => {
+    const normalized = normalizeExploreGenreCatalogKey342(value);
+    const compact = compactExploreGenreCatalogKey342(value);
+    if (normalized && !lookup.has(normalized)) lookup.set(normalized, entry);
+    if (compact && !lookup.has(compact)) lookup.set(compact, entry);
+  };
+  EXPLORE_GENRE_CATALOG_342.forEach((entry) => {
+    add(entry.id, entry);
+    add(entry.label, entry);
+    add(entry.labelKo, entry);
+  });
+  return lookup;
+})();
+
+const formatUnknownExploreGenre342 = (value: string) => {
+  const cleaned = safeText(value).replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned || /[가-힣]/.test(cleaned)) return cleaned;
+  return cleaned
+    .split(' ')
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (['r&b', 'edm', 'ost', 'bgm', 'k-pop', 'j-pop'].includes(lower)) return word.toUpperCase();
+      return word ? word.charAt(0).toUpperCase() + word.slice(1) : '';
+    })
+    .join(' ');
+};
+
+const resolveExploreRecommendationGenre342 = (track: ExploreTrack) => {
+  const raw = (
+    getExploreCardDisplayTitle(track).genre.replace(/^\[|\]$/g, '').trim()
+    || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim()
+  );
+  if (!raw) return null;
+
+  const normalized = normalizeExploreGenreCatalogKey342(raw);
+  const compact = compactExploreGenreCatalogKey342(raw);
+  const known = EXPLORE_GENRE_LOOKUP_342.get(normalized) || EXPLORE_GENRE_LOOKUP_342.get(compact) || null;
+
+  if (known) {
+    const koreanLabel = safeText(known.labelKo);
+    const hasHangulLabel = /[가-힣]/.test(koreanLabel);
+    const englishLabel = safeText(known.label, raw);
+    return {
+      key: normalizeExploreGenreCatalogKey342(englishLabel) || normalizeExploreGenreCatalogKey342(known.id),
+      label: hasHangulLabel ? koreanLabel : englishLabel,
+      row: (hasHangulLabel ? 'ko' : 'en') as ExploreGenreDisplayRow342,
+    };
+  }
+
+  const readable = formatUnknownExploreGenre342(raw);
+  return {
+    key: normalizeExploreGenreCatalogKey342(readable),
+    label: readable,
+    row: (/[가-힣]/.test(readable) ? 'ko' : 'en') as ExploreGenreDisplayRow342,
+  };
+};
+
 const readExploreRecommendationGenre221 = (track: ExploreTrack) => {
-  const displayGenre = getExploreCardDisplayTitle(track).genre.replace(/^\[|\]$/g, '').trim();
-  return displayGenre || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim();
+  const genre = resolveExploreRecommendationGenre342(track);
+  return genre?.label || '';
 };
 
 const readExplorePinnedKeywordList235 = (value: unknown): string[] => {
@@ -731,16 +839,33 @@ const buildExploreRecommendationModel221 = (
   currentUid = '',
 ): ExploreRecommendationModel221 => {
   const source = items.slice(0, 40);
-  const genreBuckets = new Map<string, { label: string; firstIndex: number; tracks: ExploreTrack[] }>();
+  const genreBuckets = new Map<string, {
+    label: string;
+    row: ExploreGenreDisplayRow342;
+    firstIndex: number;
+    tracks: ExploreTrack[];
+    trackIds: Set<string>;
+  }>();
   const creatorBuckets = new Map<string, ExploreCreatorRecommendation221>();
 
   source.forEach((track, index) => {
-    const genreLabel = readExploreRecommendationGenre221(track);
-    if (genreLabel) {
-      const key = genreLabel.toLocaleLowerCase();
-      const current = genreBuckets.get(key);
-      if (current) current.tracks.push(track);
-      else genreBuckets.set(key, { label: genreLabel, firstIndex: index, tracks: [track] });
+    const genre = resolveExploreRecommendationGenre342(track);
+    if (genre?.key && genre.label) {
+      const current = genreBuckets.get(genre.key);
+      if (current) {
+        if (!current.trackIds.has(track.id)) {
+          current.trackIds.add(track.id);
+          current.tracks.push(track);
+        }
+      } else {
+        genreBuckets.set(genre.key, {
+          label: genre.label,
+          row: genre.row,
+          firstIndex: index,
+          tracks: [track],
+          trackIds: new Set([track.id]),
+        });
+      }
     }
 
     if (track.ownerUid && track.ownerUid !== currentUid && !creatorBuckets.has(track.ownerUid)) {
@@ -758,17 +883,35 @@ const buildExploreRecommendationModel221 = (
     .map(([key, bucket]) => ({
       id: `genre-${key.replace(/[^a-z0-9가-힣]+/g, '-')}`,
       label: bucket.label,
+      row: bucket.row,
       firstIndex: bucket.firstIndex,
       tracks: bucket.tracks.slice(0, 20),
     }))
-    .sort((a, b) => b.tracks.length - a.tracks.length || a.firstIndex - b.firstIndex)
-    .map(({ id, label, tracks }) => ({ id, label, tracks }));
+    .sort((a, b) => {
+      if (a.row !== b.row) return a.row === 'ko' ? -1 : 1;
+      return b.tracks.length - a.tracks.length || a.firstIndex - b.firstIndex;
+    })
+    .map(({ id, label, row, tracks }) => ({ id, label, row, tracks }));
 
   return {
     picks: source.slice(0, 20),
     genres,
     creators: [...creatorBuckets.values()].slice(0, 20),
   };
+};
+
+const handleExploreGenreRowWheel342 = (event: React.WheelEvent<HTMLDivElement>) => {
+  const row = event.currentTarget;
+  const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth);
+  if (maxScrollLeft <= 1) return;
+
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  if (!delta) return;
+  const next = Math.min(maxScrollLeft, Math.max(0, row.scrollLeft + delta));
+  if (Math.abs(next - row.scrollLeft) < 1) return;
+
+  row.scrollLeft = next;
+  event.preventDefault();
 };
 
 const EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261 = 100;
@@ -3359,6 +3502,8 @@ export default function ExplorePage() {
   const activeRecommendationGenre221 = recommendationModel221.genres.find(
     (genre) => genre.id === recommendationGenreId221,
   ) || recommendationModel221.genres[0] || null;
+  const koreanRecommendationGenres342 = recommendationModel221.genres.filter((genre) => genre.row === 'ko');
+  const englishRecommendationGenres342 = recommendationModel221.genres.filter((genre) => genre.row === 'en');
 
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
@@ -4076,18 +4221,45 @@ export default function ExplorePage() {
                   subtitle="한 카테고리에서 장르만 골라 바로 바꿔보세요."
                   itemCount={activeRecommendationGenre221.tracks.length}
                   toolbar={(
-                    <div className="soridraw-explore-recommend-keywords" aria-label="추천 장르 선택">
-                      {recommendationModel221.genres.map((genre) => (
-                        <button
-                          key={genre.id}
-                          type="button"
-                          className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
-                          onClick={() => setRecommendationGenreId221(genre.id)}
-                          aria-pressed={activeRecommendationGenre221.id === genre.id}
+                    <div className="soridraw-explore-recommend-genre-rows" aria-label="추천 장르 선택">
+                      {koreanRecommendationGenres342.length > 0 && (
+                        <div
+                          className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
+                          aria-label="한글 장르"
+                          onWheel={handleExploreGenreRowWheel342}
                         >
-                          {genre.label}
-                        </button>
-                      ))}
+                        {koreanRecommendationGenres342.map((genre) => (
+                          <button
+                            key={genre.id}
+                            type="button"
+                            className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
+                            onClick={() => setRecommendationGenreId221(genre.id)}
+                            aria-pressed={activeRecommendationGenre221.id === genre.id}
+                          >
+                            {genre.label}
+                          </button>
+                        ))}
+                        </div>
+                      )}
+                      {englishRecommendationGenres342.length > 0 && (
+                        <div
+                          className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
+                          aria-label="영문 장르"
+                          onWheel={handleExploreGenreRowWheel342}
+                        >
+                        {englishRecommendationGenres342.map((genre) => (
+                          <button
+                            key={genre.id}
+                            type="button"
+                            className={activeRecommendationGenre221.id === genre.id ? 'is-active' : undefined}
+                            onClick={() => setRecommendationGenreId221(genre.id)}
+                            aria-pressed={activeRecommendationGenre221.id === genre.id}
+                          >
+                            {genre.label}
+                          </button>
+                        ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 >

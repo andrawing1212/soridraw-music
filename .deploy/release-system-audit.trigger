@@ -68,3 +68,7 @@ publication-r2-only-readiness-358
 target=a9bb99dab5bc5d3a89088712e7cdec0d247c69fc
 focus=dormant-r2-only-feed-profile-genre,worker-one,first-public-w2-enabler,no-deploy
 requested=2026-10-05T05:38KST
+publication-r2-only-readiness-358-rerun
+target=1e8da96832e8b4d2ff15fb9ac438017d34af9e6a
+focus=follow-audit-offpath-strict,publication-r2-only-dormant,no-deploy
+requested=2026-10-05T05:45KST

@@ -1,3 +1,43 @@
+## 0P9. app347 Studio 저장하트 / Music Note canonical 재정합 복구 (2026-10-05 KST)
+
+- 사용자 실기기에서 app346 이후 별도 신규 오류 확인:
+  - 같은 계정인데 PC / 모바일의 Recent 저장하트 상태가 서로 다름.
+  - PC의 하트 표시와 실제 Music Note 목록 membership도 불일치.
+  - 방금 저장한 곡에서 Detail에 Suno URL/두 곡 정보가 보이는데 Music Note 목록 썸네일/미디어가 비어 보이는 사례.
+- app302/app302b 동결 스킬 기준으로 재감사한 결과, app346 follow UX 작업 자체가 Music Note 저장 경로를 수정한 것은 아님.
+- 확인된 구조적 취약점:
+  1. Studio-heart pending optimistic layer가 canonical/changed-item row와 같은 곡을 덮을 때, 하트 클릭 시점의 오래된 `intent.song` snapshot이 더 최신인 list/media row를 다시 가릴 수 있었음.
+  2. PC/모바일 중 한 기기의 canonical save/unsave가 이미 로컬 pending의 원하는 최종 상태를 달성했어도, 해당 pending intent를 정리하지 않아 optimistic membership이 canonical 상태 위에 계속 남을 수 있었음.
+  3. 이 조합이 하트↔Music Note membership 불일치와 Detail media↔목록 thumbnail 불일치를 동시에 만들 수 있음.
+- app347 수정:
+  - pending layer는 이제 **membership만 제어**. 같은 document의 더 최신 canonical/local row가 있으면 title/media/thumbnail/Suno fields는 그 최신 row를 보존.
+  - canonical `save/restore/shared-note-save/unsave/remove` signal이 로컬 pending과 같은 document ID 또는 같은 stable song identity이고 최종 saved 상태도 같으면 해당 pending intent를 즉시 제거.
+  - Detail/Suno preview signal은 canonical settlement로 취급하지 않음.
+  - 추가 Firestore/D1/Worker read/write 0. shared RTDB schema/rules 변경 없음.
+- product commit: `976037b932b6ee1606206939494b5a660cd5659c`.
+- focused Apply/Verify Run `37219963501`: **SUCCESS**.
+  - app347 focused regression PASS.
+  - app302 protected regression PASS.
+  - app289 compact heart sync PASS.
+  - app291 Recent lyrics live-preview PASS.
+  - TypeScript PASS / Build PASS.
+  - 기존 verify-290은 pre-app302 heart-preview 송신을 요구하는 stale historical assertion이라 app302 현재 계약의 release gate로 사용하지 않음.
+- Release System Audit Run `37220098629`: **SUCCESS**.
+- Firebase PREVIEW Hosting Run `37220292148`: **SUCCESS**.
+  - locked release commit: `a8894bdd3826116e5efde992e176403652db1e30`.
+  - remote `preview.soridraw.com` app version **347** / exact build PASS.
+  - shared RTDB Rules SKIPPED.
+  - TEST / PRODUCTION unchanged PASS.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- PREVIEW Worker는 계속 rollback된 Worker341 유지. follow low-cost candidate/cutover와 이번 Music Note 복구는 분리.
+- **실사용 검증 필요**:
+  1. PC와 모바일을 둘 다 app347로 새로고침.
+  2. 같은 A곡 저장/해제를 한 방향에서 실행하고 30초 canonical settlement 뒤 상대 기기가 새로고침/탭 이동 없이 같은 하트 + 같은 Music Note membership으로 수렴하는지.
+  3. 반대 방향도 동일 확인.
+  4. 저장 직후 Detail에서 Suno URL/두 곡 media를 넣은 경우 목록 thumbnail/media가 pending layer 때문에 사라지지 않는지.
+  5. 이미 app346에서 꼬여 있던 A/B가 최신 canonical signal replay만으로 모두 정리되는지는 실기기 확인 전. 남으면 전체 스캔 없이 해당 곡만 bounded recovery 설계.
+
 ## 0P8. app346 immediate social UX PREVIEW 배포 + mandatory follow gate PASS (2026-10-05 KST)
 
 - branch: `preview`.

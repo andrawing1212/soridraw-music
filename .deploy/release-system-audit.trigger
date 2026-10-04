@@ -4,3 +4,7 @@ scope=isolated-follow-D1,actual-HTTP-DB-RATE_DB-R2-fixture-cost,eight-consumer-r
 protect=shared-user-data,likes,publication,search,UI,test-production,shared-d1-schema,cutover
 requested=2026-10-04
 rate-window-monotonic=355
+follow-worker341-parity=356
+explore-immediate-social-ux=356
+app-version=346
+requested=2026-10-05T01:20KST

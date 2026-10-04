@@ -66,3 +66,16 @@ Current preview continuation commits after b5fed25:
 The new dormant relation writer keeps legacy follows immutable and changes at most one sparse override user row per requested state transition. Returning to the immutable baseline deletes the override; diverging from baseline inserts/updates the override; duplicate desired state is a no-op. The writer contains no profile_stats mutation. It is still unreachable because the shared cutover manifest is not armed.
 
 Release remains BLOCKED. Before any activation, exact follower/following count authority and failure recovery must be made concurrency-safe in R2, all PREVIEW/TEST/PRODUCTION readers and writers must understand the same contract, the shared schema/cutover must receive the required approval, remote Rows Read/Written must be remeasured on the actual candidate, and PC/mobile verification must pass. No shared migration, backfill, deployment, user-data mutation, TEST change or PRODUCTION change was performed in this continuation.
+
+
+## 2026-10-04 continuation 2 — exact count recovery + overlay reader gap closed
+
+Additional preview-only preparation:
+- `bf0c02d5036df8256aaf2ff5f4b4967af4150e6c`: added dormant targeted exact follower/following count recovery from frozen legacy `profile_stats` baseline + sparse overlay deltas. Forward recovery uses the WITHOUT ROWID PK prefix; reverse recovery is forced through `idx_explore_follow_overrides_348_reverse`. No legacy counter/relation writes.
+- `1e3390246577ba1e899cd15da05e1ffe88f621c4`: added verifier for baseline + sparse-delta exact count recovery and indexed access.
+- `1c8f514ba9e58a8fac7cadda5865d0174f2209f0`: added dormant normal R2 CAS delta layer. A changed edge can adjust only the actor following count and target follower count in shared R2, with D1 0 on the normal count-patch path; invalid/missing shared bundles fail closed to the separate exact-recovery path.
+- `2c75443fd94ecd61196f00bce04e737864e4efdd`: added verifier that the normal delta helper is R2-only, bounded to +/-1 and CAS guarded.
+- `ddd00e20d854b49615eeee229b8edf22abdc95b7`: fixed a reader-compatibility hole: `/v1/me/following-bundle` no longer returns the stale legacy R2 list when overlay mode is armed. Overlay cold recovery uses the effective legacy+overlay indexed reader instead.
+- `f754837c7da5ba1576f673cd5169776b4dcf1abe`: extended the 349 reader verifier to include the following-bundle route.
+
+Still NOT activated or deployed. A crash-consistent writer orchestration and actual remote billing proof remain required before compatibility can be considered complete. Shared migration/cutover, TEST/PRODUCTION changes, user-data writes and deployment remain zero.

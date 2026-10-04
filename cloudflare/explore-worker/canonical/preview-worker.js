@@ -14145,6 +14145,104 @@ async function mutateFollowOverlayRelation350(env, followerUid, followingUid, sh
   };
 }
 
+// SORIDRAW_FOLLOW_EXACT_COUNT_RECOVERY_351_20261004
+// Dormant compatibility layer for overlay cutover. Normal follow mutations should
+// update shared profile counts from the changed relation only. These helpers are
+// the bounded recovery path when an R2 count patch is missing or conflicted.
+// They never rewrite legacy follows/profile_stats and never scan unrelated users.
+async function readExactEffectiveFollowCounts351(env, uid) {
+  const normalized = String(uid || "").trim();
+  if (!normalized) return null;
+  const rows = await env.DB.batch([
+    env.DB.prepare(`
+      SELECT follower_count, following_count
+      FROM profile_stats
+      WHERE uid = ?
+      LIMIT 1
+    `).bind(normalized),
+    env.DB.prepare(`
+      SELECT COALESCE(SUM(following - baseline_following), 0) AS delta
+      FROM explore_follow_overrides_348
+      WHERE follower_uid = ?
+    `).bind(normalized),
+    env.DB.prepare(`
+      SELECT COALESCE(SUM(following - baseline_following), 0) AS delta
+      FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_reverse
+      WHERE following_uid = ?
+    `).bind(normalized),
+  ]);
+  const base = rows?.[0]?.results?.[0] || null;
+  if (!base) return null;
+  const followingDelta = Number(rows?.[1]?.results?.[0]?.delta || 0);
+  const followerDelta = Number(rows?.[2]?.results?.[0]?.delta || 0);
+  return {
+    followerCount: Math.max(0, Number(base.follower_count || 0) + followerDelta),
+    followingCount: Math.max(0, Number(base.following_count || 0) + followingDelta),
+  };
+}
+
+async function patchSharedProfileFollowCounts351(env, uid, counts) {
+  const normalized = String(uid || "").trim();
+  const followerCount = Number(counts?.followerCount);
+  const followingCount = Number(counts?.followingCount);
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalized || !bucket ||
+      !Number.isSafeInteger(followerCount) || followerCount < 0 ||
+      !Number.isSafeInteger(followingCount) || followingCount < 0) return false;
+  const key = exploreSharedProfileR2Key060(normalized);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const object = await bucket.get(key);
+    if (!object) return false;
+    let bundle = null;
+    try { bundle = JSON.parse(await object.text()); } catch { return false; }
+    if (!validExploreProfileR2Bundle020(bundle)) return false;
+    const profile = bundle?.body?.data?.profile || null;
+    if (!profile || String(profile.uid || "").trim() !== normalized) return false;
+    if (clampExploreSocialCount(profile.followerCount ?? profile.follower_count) === followerCount &&
+        clampExploreSocialCount(profile.followingCount ?? profile.following_count) === followingCount) {
+      return true;
+    }
+    const now = Date.now();
+    const revision = Math.max(1, Number(bundle.revision || bundle?.body?.data?.revision || 0) + 1);
+    const nextProfile = {
+      ...profile,
+      followerCount,
+      followingCount,
+    };
+    const nextData = {
+      ...bundle.body.data,
+      profile: nextProfile,
+      revision,
+      updatedAt: now,
+    };
+    const nextBundle = {
+      ...bundle,
+      revision,
+      updatedAt: now,
+      body: { ...bundle.body, data: nextData },
+    };
+    const saved = await bucket.put(key, JSON.stringify(nextBundle), {
+      onlyIf: { etagMatches: object.etag },
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+      customMetadata: {
+        ...(object.customMetadata || {}),
+        soridrawSharedProfile: "351",
+        followCountRecovery: "exact-overlay",
+        mirroredAt: String(now),
+      },
+    });
+    if (saved) return true;
+  }
+  return false;
+}
+
+async function repairSharedProfileFollowCounts351(env, uid) {
+  const counts = await readExactEffectiveFollowCounts351(env, uid);
+  if (!counts) return { ok: false, reason: "missing_profile_stats" };
+  const ok = await patchSharedProfileFollowCounts351(env, uid, counts);
+  return ok ? { ok: true, counts } : { ok: false, reason: "shared_profile_conflict", counts };
+}
+
 async function readSharedProfileConnection348(env, uid, followedAt) {
   const normalized = String(uid || "").trim();
   if (!normalized) return null;

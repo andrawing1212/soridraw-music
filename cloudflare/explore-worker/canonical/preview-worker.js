@@ -8793,6 +8793,28 @@ __name2222222222222222222222222222222222222222(syncExploreFollowingR2AfterMutati
 __name22222222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
 async function handleMyFollowingR2Bundle(request, env, cors) {
   const authContext = await requireExploreAuth(request);
+  const cutover = await readFollowCutoverState348(env);
+  if (cutover.mode === "overlay348") {
+    // SORIDRAW_FOLLOWING_BUNDLE_OVERLAY_COMPAT_353_20261004
+    // Cold recovery only. Normal devices continue to use their local complete
+    // follow catalog; overlay mode must never return the stale legacy R2 list.
+    const rows = await readEffectiveFollowConnectionPage348(
+      env,
+      authContext.uid,
+      "following",
+      EXPLORE_R2_FOLLOW_LIMIT,
+      null,
+    );
+    return json({
+      ok: true,
+      data: {
+        followingUids: [...new Set(rows.map((row) => String(row.uid || "").trim()).filter(Boolean))]
+          .slice(0, EXPLORE_R2_FOLLOW_LIMIT),
+        source: "overlay348-d1-recovery"
+      }
+    }, 200, cors);
+  }
+
   const bundled = await readExploreFollowingR2Bundle(env, authContext.uid);
   if (bundled) return json({ ok: true, data: { followingUids: bundled, source: "r2" } }, 200, cors);
   const result = await env.DB.prepare(`

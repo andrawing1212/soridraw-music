@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — app353 PC Catalog 재진입 우선순위 실기기 확인
+
+현재 PREVIEW:
+- Hosting app **353** / Firebase Run `37228706933` SUCCESS / exact build PASS.
+- Release System Audit `37228542810` SUCCESS.
+- root cause: Detail/list의 media patch보다 V4 full Catalog authority가 재진입 때 우선되어 thumbnail을 되돌림.
+- fix: exact Detail/save media를 bounded local media overlay에 기록 + App local row/cache writeback을 `firestoreId || id` canonical identity로 통일.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 0.
+
+사용자 확인:
+1. PC에서 app353 로드.
+2. `빛속의 오답`, `무거운 발걸음` Detail을 각각 한 번 열고 닫아 thumbnail 표시 확인.
+3. **Explore로 이동했다가 Music Note로 돌아오기** — 이전 영상에서 실패하던 핵심 단계. thumbnail이 유지되어야 함.
+4. 새로고침 후 유지.
+5. 브라우저 완전 종료/재실행 후 유지.
+6. 가능하면 새 Suno URL/media 1건 저장 후에는 Detail 재오픈 없이 3~5번 모두 유지되는지 확인.
+
+참고:
+- app353 이전에 만들어진 PC의 과거 row는 dedicated media overlay 자체가 없을 수 있으므로 최초 1회 Detail open으로 exact media를 로컬에 기록하는 확인이 필요할 수 있음.
+- app353 이후 새 저장은 저장 시점에 overlay도 같이 생성됨.
+
+PASS면:
+- app349 heart settlement + app353 PC media Catalog-priority 경로를 보호 기준으로 동결.
+- 썸네일 이슈 종료 후 follow 저비용 Worker 독립 감사로 복귀.
+
+FAIL이면:
+- 서버 수신/이미지 다운로드/전체 Catalog 읽기로 우회하지 말 것.
+- 영상에서 확정된 `Catalog onData -> setFavorites authoritative merge` 이후 실제 row의 media field만 계측/추적.
+- 정상 모바일, 하트 즉시동기화, +30초 canonical, UI는 변경 금지.
+
 ## CURRENT NEXT GATE — app352 PC 목록↔Detail 동일곡 썸네일 확인
 
 현재 PREVIEW:

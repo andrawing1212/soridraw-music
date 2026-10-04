@@ -1,10 +1,10 @@
-app348-studio-heart-immediate-cross-device
-target_source=a9e378778f6dc0f9512fb5a4fc0e47dc200bfd73
-app_version=348
-scope=hosting-only-studio-heart-live-sync-restore
+app349-studio-heart-settlement-media
+target_source=63c267f8e72b4f72cb63c608cddf1f488a40fb7c
+app_version=349
+scope=hosting-only-studio-heart-settlement-media
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app348-studio-heart-immediate-cross-device
+release_request=app349-studio-heart-settlement-media
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

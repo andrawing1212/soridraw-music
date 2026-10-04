@@ -69,6 +69,12 @@ assert.match(mine,/readEffectiveFollowConnectionPage348/);
 assert.match(mine,/readSharedProfileConnection348/);
 assert.match(mine,/FROM follows f/);
 
+const bundle=fn('handleMyFollowingR2Bundle');
+assert.match(bundle,/SORIDRAW_FOLLOWING_BUNDLE_OVERLAY_COMPAT_353_20261004/);
+assert.match(bundle,/readFollowCutoverState348/);
+assert.match(bundle,/readEffectiveFollowConnectionPage348/);
+assert.match(bundle,/overlay348-d1-recovery/);
+
 const feed=fn('handleFollowingFeed');
 assert.match(feed,/WITH effective_following AS/);
 assert.match(feed,/explore_follow_overrides_348/);
@@ -151,5 +157,6 @@ console.log('FOLLOW349_LEGACY_DEFAULT_FAIL_CLOSED_WRITER=PASS');
 console.log('FOLLOW349_TARGETED_EFFECTIVE_MEMBERSHIP=PASS');
 console.log('FOLLOW349_FORWARD_REVERSE_EFFECTIVE_LIST=PASS');
 console.log('FOLLOW349_FOLLOWING_FEED_READER_COMPAT=PASS');
+console.log('FOLLOW353_FOLLOWING_BUNDLE_READER_COMPAT=PASS');
 console.log('FOLLOW349_PROFILE_COUNTS_SHARED_R2_CONTRACT=PASS');
 console.log('FOLLOW349_OVERLAY_AUTHORITY_ACTIVE=NO');

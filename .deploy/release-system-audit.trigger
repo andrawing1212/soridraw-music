@@ -1,5 +1,5 @@
-app347-follow-exact-count-stage1
-source=d108f9eb8a2b13f44b49a5ffcf005e51c6ba1347
-scope=follow-exact-count-stage1,monotonic-revision,shared-r2-fastpath,release-gate
+app347-follow-exact-count-stage1-rerun
+source=f5b09c658504479601e59c0ebf9613e9a82d86a8
+scope=follow-exact-count-stage1,monotonic-revision,shared-r2-fastpath,hard-release-gate,regression-verifier-repair
 protect=likes,save-heart,folders,split,music-note-batching,creator-recommendation,test-production,shared-d1-schema,user-data
-requested=2026-10-04T12:45:00+09:00
+requested=2026-10-04T12:52:00+09:00

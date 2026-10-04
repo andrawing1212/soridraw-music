@@ -27,6 +27,7 @@ const run = async (repair, settlement, status = 200) => {
     EXPLORE_API_BASE: 'https://preview.invalid',
     buildAuthHeaders: async () => ({}),
     recordCloudflareResponse: (...args) => records.push(args),
+    rememberExploreViewerGenres: () => {},
     fetch: async (url, opts) => { calls.push({ url, opts }); return fakeResponse; },
   };
   const maker = new Function(...Object.keys(context),

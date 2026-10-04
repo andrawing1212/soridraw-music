@@ -47,9 +47,13 @@ jobs:
           const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
           const rows=sets.flat();
           const indexes=rows.filter(r=>r.type==='index'&&r.tbl_name==='tracks');
+          const pragmaIndexes=rows.filter(r=>Object.prototype.hasOwnProperty.call(r,'seq') && Object.prototype.hasOwnProperty.call(r,'origin'));
+          const trackTable=rows.find(r=>r.type==='table'&&r.name==='tracks');
           const triggers=rows.filter(r=>r.type==='trigger'&&r.tbl_name==='tracks');
+          console.log('TRACK_TABLE_SQL='+JSON.stringify(trackTable?.sql||''));
           console.log('TRACK_INDEX_COUNT='+indexes.length);
           for(const x of indexes) console.log('TRACK_INDEX='+JSON.stringify({name:x.name,sql:x.sql}));
+          for(const x of pragmaIndexes) console.log('TRACK_PRAGMA_INDEX='+JSON.stringify(x));
           console.log('TRACK_TRIGGER_COUNT='+triggers.length);
           for(const x of triggers) console.log('TRACK_TRIGGER='+JSON.stringify({name:x.name,sql:x.sql}));
           const shared=rows.filter(r=>r.type==='trigger'&&String(r.sql||'').includes('explore_shared_revision'));

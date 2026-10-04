@@ -1,3 +1,44 @@
+## 0PH. app353 공개/비공개/source-swap 실기기 비용 분리 PASS/FAIL 확정 (2026-10-05 KST)
+
+사용자 영상은 각 동작 사이 CACHE LIVE 초기화를 수행한 상태로 판정.
+
+### 실측
+1. **registered public → private**
+   - Worker 1
+   - D1 query R0 / W1
+   - D1 physical/request rows **R3 / W2**
+   - Browser SDK R0/W0
+   - 판정: **PASS**. hard gate W1~W2 충족.
+   - app335 과거 baseline R5/W2보다 read rows는 2 감소, write floor W2 동일.
+
+2. **같은 source private → public 재공개**
+   - Worker 1
+   - D1 query R2 / W1
+   - D1 physical/request rows **R5 / W2**
+   - Browser SDK R0/W0
+   - 판정: **PASS**. hard gate W1~W2 충족.
+   - app334/app335 동일-source 재공개 목표 W2와 일치.
+
+3. **공개 상태에서 Suno 1↔2 source/media 전환**
+   - Worker 1
+   - D1 query R3 / W1
+   - D1 physical/request rows **R11 / W3**
+   - Browser SDK R0/W0
+   - 판정: **HARD FAIL**. app335 known source-swap baseline R11/W3와 동일, app353 신규 회귀는 아님.
+   - 기존 read-only audit에서 W3 원인은:
+     1) canonical tracks media UPDATE W1
+     2) explore032_track_update → explore_derived_tracks W1
+     3) soridraw_shared_rev_tracks_au_051 → explore_shared_revision W1
+     = physical W3.
+
+### 결론
+- 비용 숫자가 매번 랜덤하게 달라지는 것이 아니라 **동작 종류가 달라서 경로가 다름**.
+- private / same-source public은 W2로 현재 합격.
+- source swap은 기능은 정상이나 W3라 비용 기준 FAIL.
+- never-published 최초 공개는 별도 known baseline R7/W12로 여전히 HARD FAIL.
+- 이번 registered 테스트 3개 모두 Firestore/Browser SDK W0이므로 직전 first-publication에서 보였던 `users:write 1`은 항상 publication mutation에 붙는 write가 아님. delayed users batch 등 동시 이벤트 가능성이 높으며 publication 공통 regression으로 보지 않음.
+- 좋아요/저장하트 app348/app349 즉시 PC↔모바일 동기화는 보호 기준 그대로 동결. publication 비용 작업에서 변경 금지.
+
 ## 0PG. 좋아요 동기화 재확정 동결 + app353 공개/비공개 실기기 비용 확인 (2026-10-05 KST)
 
 ### 좋아요/저장하트 — 사용자 재확정 보호 기준

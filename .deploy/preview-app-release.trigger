@@ -1,10 +1,10 @@
-app346-explore-immediate-social-ux
-target_source=b711f1dba68aed2b97df92636c40d22bc7577767
-app_version=346
-scope=hosting-only-explore-immediate-follow-publication-ux
+app347-studio-heart-canonical-reconcile
+target_source=37199e0b71057ffe33cb5c385a2865224d865de0
+app_version=347
+scope=hosting-only-studio-heart-canonical-reconcile
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app346-explore-immediate-social-ux
+release_request=app347-studio-heart-canonical-reconcile
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

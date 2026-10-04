@@ -24,3 +24,7 @@ mandatory-follow-gate=347-imports-348-355
 requested=2026-10-05T01:50KST
 rerun=356h
 requested=2026-10-05T01:55KST
+app347-studio-heart-recovery
+target=976037b932b6ee1606206939494b5a660cd5659c
+focus=canonical-pending-reconcile,overlay-media-preservation
+requested=2026-10-05T02:22KST

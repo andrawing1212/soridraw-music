@@ -142,42 +142,36 @@ jobs:
           # 4) Suno media preview in the Music Note list must be durable locally.
           # Generic favorite updatedAt (for example heart settlement) must not make
           # an unflushed but newer Suno draft look stale.
-          old_keys = """    const mediaKeys = [
-              'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
-              'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
-              'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
-              'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
-            ];"""
-          new_keys = """    const mediaKeys = [
-              'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
-              'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
-              'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
-              'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',
-              'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
-            ];"""
-          if page.count(old_keys) != 1:
-              raise SystemExit(f'media keys anchor count={page.count(old_keys)}')
-          page = page.replace(old_keys, new_keys, 1)
-
-          old_changed = """    if (changed) favoritesStore.setFavorites(next);
-          };"""
-          new_changed = """    if (changed) {
-              favoritesStore.setFavorites(next);
-              if (user?.uid && typeof localStorage !== 'undefined') {
-                try {
-                  localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(next));
-                } catch {}
-              }
-            }
-          };"""
           sync_start = page.find('  const syncFavoriteSunoCardMedia = (')
           sync_end = page.find('\n\n  const publishFavoriteSunoMediaDraft', sync_start)
           if sync_start < 0 or sync_end <= sync_start:
               raise SystemExit('syncFavoriteSunoCardMedia block missing')
           sync_block = page[sync_start:sync_end]
-          if sync_block.count(old_changed) != 1:
-              raise SystemExit(f'card cache anchor count={sync_block.count(old_changed)}')
-          sync_block = sync_block.replace(old_changed, new_changed, 1)
+
+          media_anchor = "      'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',"
+          if sync_block.count(media_anchor) != 1:
+              raise SystemExit(f'media anchor count={sync_block.count(media_anchor)}')
+          sync_block = sync_block.replace(
+              media_anchor,
+              media_anchor + "\n      'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',",
+              1,
+          )
+
+          changed_anchor = "    if (changed) favoritesStore.setFavorites(next);"
+          if sync_block.count(changed_anchor) != 1:
+              raise SystemExit(f'card cache anchor count={sync_block.count(changed_anchor)}')
+          sync_block = sync_block.replace(
+              changed_anchor,
+              """    if (changed) {
+              favoritesStore.setFavorites(next);
+              if (user?.uid && typeof localStorage !== 'undefined') {
+                try {
+                  localStorage.setItem(\`soridraw_favorites_cache_\${user.uid}\`, JSON.stringify(next));
+                } catch {}
+              }
+            }""",
+              1,
+          )
           page = page[:sync_start] + sync_block + page[sync_end:]
 
           old_draft = """        const sourceVersion = getMusicNoteDetailSourceVersion(song);

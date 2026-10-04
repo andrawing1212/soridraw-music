@@ -82,6 +82,7 @@ if (process.argv[2] === 'cleanup') {
     await ddl("CREATE TABLE explore_follow_overrides_348 (" +
       "follower_uid TEXT NOT NULL, following_uid TEXT NOT NULL," +
       "following INTEGER NOT NULL CHECK(following IN(0,1))," +
+      "baseline_following INTEGER NOT NULL CHECK(baseline_following IN(0,1))," +
       "updated_at INTEGER NOT NULL, mutation_id TEXT NOT NULL," +
       "PRIMARY KEY(follower_uid,following_uid)) WITHOUT ROWID");
     await ddl("CREATE INDEX idx_explore_follow_overrides_348_active_reverse " +
@@ -109,10 +110,11 @@ if (process.argv[2] === 'cleanup') {
       } else {
         const mutation = actor + ':' + target + ':' + Number(desired) + ':' + at;
         out = await query("INSERT INTO explore_follow_overrides_348" +
-          "(follower_uid,following_uid,following,updated_at,mutation_id) VALUES(" +
-          [q(actor),q(target),Number(desired),at,q(mutation)].join(',') + ")" +
+          "(follower_uid,following_uid,following,baseline_following,updated_at,mutation_id) VALUES(" +
+          [q(actor),q(target),Number(desired),Number(baselineFollowing),at,q(mutation)].join(',') + ")" +
           " ON CONFLICT(follower_uid,following_uid) DO UPDATE SET " +
-          "following=excluded.following,updated_at=excluded.updated_at,mutation_id=excluded.mutation_id" +
+          "following=excluded.following,baseline_following=explore_follow_overrides_348.baseline_following," +
+          "updated_at=excluded.updated_at,mutation_id=excluded.mutation_id" +
           " WHERE explore_follow_overrides_348.following<>excluded.following");
       }
       const final = await query("SELECT " + effectiveSql(actor, target) + " AS following");
@@ -149,7 +151,7 @@ if (process.argv[2] === 'cleanup') {
 
     // Recreate representative post-cutover overrides to verify both pagination directions.
     await query("INSERT INTO explore_follow_overrides_348(follower_uid,following_uid,following,updated_at,mutation_id) VALUES" +
-      "('actor','new-target',1,300,'m1'),('actor','legacy-target',0,301,'m2'),('new-follower','legacy-target',1,302,'m3')");
+      "('actor','new-target',1,0,300,'m1'),('actor','legacy-target',0,1,301,'m2'),('new-follower','legacy-target',1,0,302,'m3')");
     const forwardSql =
       "SELECT following_uid,followed_at FROM (" +
       "SELECT l.following_uid,l.created_at AS followed_at FROM follows_legacy_348 l " +

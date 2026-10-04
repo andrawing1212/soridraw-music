@@ -1,3 +1,50 @@
+## 0PA. app348 Studio 저장하트 즉시 PC↔모바일 동기화 복구 + Skill 재동결 (2026-10-05 KST)
+
+- 사용자 명시 기준으로 app302에서 제거됐던 pre-canonical Studio-heart cross-device preview를 복구.
+- **현재 보호 동작**
+  - 같은 기기: Recent 하트 즉시 + Music Note membership 즉시.
+  - 같은 계정 다른 기기: RTDB changed-item preview로 하트 + Music Note membership 즉시.
+  - 페이지 이동 / 탭 이동 / 새로고침 불필요.
+  - canonical Firestore favorite: 곡별 마지막 클릭 +30초 뒤 최종 상태만 저장.
+  - final == baseline → favorite W0.
+  - final != baseline → favorite W1.
+  - 다른 곡은 독립 30초 timer.
+- app347 stale-overwrite / media 보호 유지:
+  - remote preview는 non-canonical overlay로 분리.
+  - generic favorites updater 전 local pending + remote preview layer를 canonical input에서 제거.
+  - canonical save/unsave가 오면 matching preview layer 정리.
+  - 최신 Detail/Suno media가 오래된 heart-click snapshot에 덮이지 않음.
+- RTDB preview payload:
+  - bounded Music Note summary를 사용하며 thumbnail/cover/Suno media 필드를 포함.
+  - receiver Firestore R0/W0, D1 R0/W0 정적 guard.
+  - preview는 canonical Music Note catalog/document version을 올리지 않음.
+- 제품 commit: `441a256106d95427bfc5926f5a0c83d4bf4151d5`.
+- focused apply/verify Run `37222138737`: **SUCCESS**.
+  - immediate PC/mobile preview PASS.
+  - canonical 30s final-state PASS.
+  - remote Music Note no-Firestore-IO PASS.
+  - app347 stale-overwrite guard PASS.
+  - TypeScript PASS / Build PASS.
+- Release System Audit Run `37222258188`: **SUCCESS**.
+- Firebase PREVIEW App Release Run `37222387192`: **SUCCESS**.
+  - locked release commit: `da1be338d2007e287c33400b5e9e5d78719e68f6`.
+  - `preview.soridraw.com` app **348** exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules deploy SKIPPED.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- Skill / guardrail 갱신:
+  - 신규 기준: `.agents/skills/song-save-edit-sync-cost/references/soridraw-app348-studio-heart-immediate-cross-device-baseline.md`.
+  - `song-save-edit-sync-cost/SKILL.md`, `local-first-like-sync/SKILL.md`, `AGENTS.md`를 app348 즉시 동기화 기준으로 갱신.
+  - app302 delayed-remote 기준은 historical/superseded로 명시.
+  - 향후 비용 최적화를 이유로 cross-device 즉시 동기화를 사용자 승인 없이 제거/지연 금지.
+- 남은 실기기 최종 확인:
+  1. PC → 모바일 save/unsave 즉시 반영.
+  2. 모바일 → PC save/unsave 즉시 반영.
+  3. 30초 canonical settlement 뒤 양쪽 상태 유지.
+  4. Detail/Suno media가 Music Note 목록 thumbnail에서 사라지지 않음.
+- 팔로우 저비용 Worker candidate/cutover는 별도 작업이며 현재 Worker341 유지.
+
 ## 0P9. app347 Studio 저장하트 / Music Note canonical 재정합 복구 (2026-10-05 KST)
 
 - 사용자 실기기에서 app346 이후 별도 신규 오류 확인:

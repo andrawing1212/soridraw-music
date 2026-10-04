@@ -8730,10 +8730,6 @@ async function syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, f
 }
 
 async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, following) {
-  // SORIDRAW_FOLLOW_SHARED_FASTPATH_347_20261004
-  // handleFollowR2Core already advanced the shared summary from canonical
-  // RETURNING data. Reuse it once for the local cache instead of the old
-  // read/write/read/write/mirror loop.
   const shared = await readSharedFollowing061(env, uid);
   if (shared) {
     await writeExploreR2Json(env, exploreFollowingR2Key(uid), {
@@ -8742,7 +8738,6 @@ async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, followin
       updatedAt: Date.now(),
       followingUids: shared.slice(0, 5000),
     });
-    return { source: 'shared-347' };
   }
   const result = await syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, following);
   const local = await readExploreFollowingR2BundleCore061(env, uid);
@@ -13054,13 +13049,6 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
 
   const now = Date.now();
   const stats = await adjustExploreFollowCountersDelta(env, authContext.uid, targetUid, shouldFollow, now);
-  try {
-    await syncExactSharedFollowing347(env, authContext.uid, targetUid, shouldFollow, stats?.follower, stats?.delta);
-  } catch (error) {
-    // Compatibility stage only: a successful canonical D1 follow must not be
-    // rolled back merely because the shared R2 summary is temporarily unavailable.
-    console.warn("[SORIDRAW 347] exact following-count sync deferred:", String(error?.message || error || "unknown"));
-  }
   await patchExploreFirstViewFollowCounts(env, authContext.uid, targetUid, stats, now);
   return json({ ok: true, data: {
     uid: targetUid,
@@ -13253,13 +13241,9 @@ __name222222222222222222222222222222222222222222222(clampExploreSocialCount, "cl
 __name2222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, shouldFollow, now) {
   // SORIDRAW_FOLLOW_RETURNING_NO_POSTREAD_246_20260930
-  // SORIDRAW_FOLLOW_COMBINED_COUNTERS_345: query W2, NOT physical rows W2.
-  // SORIDRAW_FOLLOW_MONOTONIC_REVISION_347_20261004
-  // D1 remains canonical in stage 1. updated_at also becomes the actor's ordered
-  // revision for the exact shared following-count summary.
   const fallbackRead = async () => {
     const result = await env.DB.prepare(`
-      SELECT uid, follower_count, following_count, updated_at
+      SELECT uid, follower_count, following_count
       FROM profile_stats
       WHERE uid IN (?, ?)
     `).bind(followerUid, followingUid).all();
@@ -13279,19 +13263,31 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
       `).bind(followerUid, followingUid, now),
       env.DB.prepare(`
         INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
-        SELECT ?, 0, 1, ? WHERE changes() = 1
-        UNION ALL
-        SELECT ?, 1, 0, ? WHERE changes() = 1
+        SELECT ?, 0, 1, ?
+        WHERE EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
+        )
         ON CONFLICT(uid) DO UPDATE SET
-          follower_count = profile_stats.follower_count + excluded.follower_count,
-          following_count = profile_stats.following_count + excluded.following_count,
-          updated_at = MAX(profile_stats.updated_at + 1, excluded.updated_at)
-        RETURNING uid, follower_count, following_count, updated_at
-      `).bind(followerUid, now, followingUid, now)
+          following_count = profile_stats.following_count + 1,
+          updated_at = excluded.updated_at
+        RETURNING uid, follower_count, following_count
+      `).bind(followerUid, now, followerUid, followingUid, now),
+      env.DB.prepare(`
+        INSERT INTO profile_stats (uid, follower_count, following_count, updated_at)
+        SELECT ?, 1, 0, ?
+        WHERE EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
+        )
+        ON CONFLICT(uid) DO UPDATE SET
+          follower_count = profile_stats.follower_count + 1,
+          updated_at = excluded.updated_at
+        RETURNING uid, follower_count, following_count
+      `).bind(followingUid, now, followerUid, followingUid, now)
     ]);
-    const rows = results?.[1]?.results || [];
-    const follower = rows.find((row) => row.uid === followerUid) || null;
-    const following = rows.find((row) => row.uid === followingUid) || null;
+    const follower = results?.[1]?.results?.[0] || null;
+    const following = results?.[2]?.results?.[0] || null;
     if (follower && following) return { follower, following, delta: 1 };
     const fallback = await fallbackRead();
     return { ...fallback, delta: 0 };
@@ -13300,23 +13296,30 @@ async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, 
   const results = await env.DB.batch([
     env.DB.prepare(`
       UPDATE profile_stats
-      SET following_count = MAX(0, following_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
-          follower_count = MAX(0, follower_count - CASE WHEN uid = ? THEN 1 ELSE 0 END),
-          updated_at = MAX(updated_at + 1, ?)
-      WHERE uid IN (?, ?)
+      SET following_count = MAX(0, following_count - 1), updated_at = ?
+      WHERE uid = ?
         AND EXISTS (
           SELECT 1 FROM follows
           WHERE follower_uid = ? AND following_uid = ?
         )
-      RETURNING uid, follower_count, following_count, updated_at
-    `).bind(followerUid, followingUid, now, followerUid, followingUid, followerUid, followingUid),
+      RETURNING uid, follower_count, following_count
+    `).bind(now, followerUid, followerUid, followingUid),
+    env.DB.prepare(`
+      UPDATE profile_stats
+      SET follower_count = MAX(0, follower_count - 1), updated_at = ?
+      WHERE uid = ?
+        AND EXISTS (
+          SELECT 1 FROM follows
+          WHERE follower_uid = ? AND following_uid = ?
+        )
+      RETURNING uid, follower_count, following_count
+    `).bind(now, followingUid, followerUid, followingUid),
     env.DB.prepare(`
       DELETE FROM follows WHERE follower_uid = ? AND following_uid = ?
     `).bind(followerUid, followingUid)
   ]);
-  const rows = results?.[0]?.results || [];
-  const follower = rows.find((row) => row.uid === followerUid) || null;
-  const following = rows.find((row) => row.uid === followingUid) || null;
+  const follower = results?.[0]?.results?.[0] || null;
+  const following = results?.[1]?.results?.[0] || null;
   if (follower && following) return { follower, following, delta: -1 };
   const fallback = await fallbackRead();
   return { ...fallback, delta: 0 };

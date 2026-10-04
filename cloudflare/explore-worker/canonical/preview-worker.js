@@ -5432,93 +5432,79 @@ async function writeGenreSearchCache339(url, aliases, response) {
   } catch {}
 }
 
+// SORIDRAW_SEARCH_R2_ONLY_341_20261004
+function searchEdgeKey341(url) {
+  const q = String(url.searchParams.get('q') || '').normalize('NFKC').toLowerCase().trim();
+  const genres = [...new Set(url.searchParams.getAll('genre').map((v) => String(v || '').normalize('NFKC').toLowerCase().trim()).filter(Boolean))].sort();
+  return new Request(
+    'https://preview.soridraw.com/__soridraw_edge/search-r2-only-341'
+      + '?q=' + encodeURIComponent(q)
+      + '&g=' + encodeURIComponent(genres.join('|')),
+    { method: 'GET' }
+  );
+}
+async function readSearchEdge341(url) {
+  try {
+    if (typeof caches === 'undefined' || !caches?.default) return null;
+    const hit = await caches.default.match(searchEdgeKey341(url));
+    if (!(hit instanceof Response)) return null;
+    const headers = new Headers(hit.headers);
+    headers.set('Cache-Control','no-store');
+    headers.set('X-SORIDRAW-Search-Cache','HIT-341');
+    return new Response(hit.body,{status:hit.status,statusText:hit.statusText,headers});
+  } catch { return null; }
+}
+async function writeSearchEdge341(url,response) {
+  try {
+    if (typeof caches === 'undefined' || !caches?.default || !(response instanceof Response) || !response.ok) return;
+    const clone=response.clone();
+    const headers=new Headers(clone.headers);
+    headers.set('Cache-Control','public, max-age=300');
+    headers.set('X-SORIDRAW-Search-Cache','STORED-341');
+    await caches.default.put(searchEdgeKey341(url),new Response(clone.body,{status:clone.status,statusText:clone.statusText,headers}));
+  } catch {}
+}
+
 async function handleSearch(url, env, cors) {
+  // SORIDRAW_SEARCH_R2_ONLY_341_20261004
+  // PREVIEW hybrid mode: all user search is R2-only. D1 search/index fallbacks are
+  // deliberately unreachable so arbitrary or typo queries cannot create D1 reads.
   if (!isExploreR2HybridReadEnabled336(env)) {
     return await handleSearchCore336(url, env, cors);
   }
-  if (url.searchParams.get('cursor')) {
-    return await handleSearchCore066(url, env, cors);
+
+  const q = String(url.searchParams.get('q') || '').trim();
+  if (!q || q.length > 120) {
+    return withCatalogDiagnostics066(json({
+      ok: true,
+      data: { query: q, items: [], tracks: { items: [], nextCursor: null }, creators: [], nextCursor: null },
+    }, 200, cors), 'R2-ONLY-SEARCH-341');
   }
 
-  let catalogData = null;
-  try {
-    const catalogResponse = await handleCatalogSearch066(url, env, cors);
-    catalogData = catalogResponse
-      ? await parseHybridResponseData336(catalogResponse)
-      : null;
-  } catch (error) {
-    console.warn(
-      '[SORIDRAW 337] catalog search first-pass deferred:',
-      String(error?.message || error || 'unknown')
-    );
+  const edgeHit = await readSearchEdge341(url);
+  if (edgeHit) return edgeHit;
+
+  let response = null;
+  try { response = await handleCatalogSearch066(url, env, cors); }
+  catch (error) {
+    console.warn('[SORIDRAW 341] R2 search unavailable:', String(error?.message || error || 'unknown'));
   }
-
-  const catalogItems = Array.isArray(catalogData?.items)
-    ? catalogData.items
-    : (Array.isArray(catalogData?.tracks?.items) ? catalogData.tracks.items : []);
-  const catalogCreators = Array.isArray(catalogData?.creators) ? catalogData.creators : [];
-  if (catalogData && (catalogItems.length > 0 || catalogCreators.length > 0)) {
-    return withHybridReadHeaders336(
-      json({ ok: true, data: catalogData }, 200, cors),
-      'R2-FIRST-SEARCH-337'
-    );
+  if (!(response instanceof Response)) {
+    response = withCatalogDiagnostics066(json({
+      ok: true,
+      data: { query: q, items: [], tracks: { items: [], nextCursor: null }, creators: [], nextCursor: null },
+    }, 200, cors), 'R2-ONLY-SEARCH-341');
+  } else {
+    const headers = new Headers(response.headers);
+    headers.set('X-SORIDRAW-Search-Authority','R2-ONLY-341');
+    headers.set('X-SORIDRAW-D1-Read','0');
+    headers.set('X-SORIDRAW-D1-Write','0');
+    response = new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
-
-  const genreAliases = narrowKoreanGenreAliases339(
-    url.searchParams.get('q'),
-    url.searchParams.getAll('genre')
-  );
-  if (genreAliases.length > 0) {
-    const cachedGenreSearch339 = await readGenreSearchCache339(url, genreAliases);
-    if (cachedGenreSearch339) return cachedGenreSearch339;
-
-    const limit = getPageSize(url);
-    const items = [];
-    const seen = new Set();
-    for (const genreAlias of genreAliases) {
-      const genreUrl = new URL(url.toString());
-      genreUrl.searchParams.delete('cursor');
-      genreUrl.searchParams.set('limit', String(limit));
-      const response = await handleIndexedGenreAlias338(genreUrl, genreAlias, env, cors);
-      const data = await parseHybridResponseData336(response);
-      for (const item of Array.isArray(data?.items) ? data.items : []) {
-        const id = hybridTrackId336(item);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        items.push(item);
-        if (items.length >= limit) break;
-      }
-      if (items.length >= limit) break;
-    }
-    if (items.length > 0) {
-      const q = String(url.searchParams.get('q') || '').trim();
-      const data = {
-        query: q,
-        items,
-        tracks: { items, nextCursor: null },
-        creators: [],
-        nextCursor: null,
-      };
-      const response339 = withHybridReadHeaders336(
-        json({ ok: true, data }, 200, cors),
-        'INDEXED-GENRE-FALLBACK-337'
-      );
-      await writeGenreSearchCache339(url, genreAliases, response339);
-      const headers339 = new Headers(response339.headers);
-      headers339.set('X-SORIDRAW-Genre-Cache', 'MISS-339');
-      return new Response(response339.body, {
-        status: response339.status,
-        statusText: response339.statusText,
-        headers: headers339,
-      });
-    }
-  }
-
-  const legacyResponse = await handleSearchCore066(url, env, cors);
-  return withHybridReadHeaders336(
-    legacyResponse,
-    'LEGACY-SEARCH-FALLBACK-337'
-  );
+  await writeSearchEdge341(url,response);
+  const headers = new Headers(response.headers);
+  headers.set('X-SORIDRAW-Search-Cache','MISS-341');
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }
 __name(handleSearch, "handleSearch");
 __name2(handleSearch, "handleSearch");

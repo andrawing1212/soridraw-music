@@ -1,3 +1,19 @@
+## 0OT. PREVIEW app344 — Explore 필터 버튼 가독성 확대 (2026-10-04 KST)
+
+**변경**
+- 장르별 추천의 대분류/세부장르 칩과 최신 공개곡의 전체/팔로잉 등 동일 계열 필터 버튼을 조금 확대.
+- PC: 높이 30→34px, 좌우 여백 11→13px, 글자 11→12px.
+- 모바일: 높이 28→32px, 좌우 여백 10→12px, 글자 10→11px.
+- 버튼 기능/배치/색/테마/장르 분류 로직 변경 없음.
+
+**배포**
+- app344.
+- PREVIEW release commit: `d3a132f5a2cfbde4503ac4211b57723c4830952a`.
+- Firebase PREVIEW Run `37169322007`: **SUCCESS**.
+- TypeScript PASS / Build PASS / Hosting PASS / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 / Firestore / 사용자 데이터 변경 없음.
+
 ## 0OS. PREVIEW app343 — 장르별 추천 대분류/세부장르 2줄 구조 (2026-10-04 KST)
 
 **사용자 확정 기준**

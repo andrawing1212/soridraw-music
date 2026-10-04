@@ -4,6 +4,10 @@
 --
 -- Existing follows remains an immutable baseline after cutover.
 -- No backfill/rewrite/delete of legacy user rows is required.
+-- Writer 354 retains a fence on naturally touched edges even when the desired
+-- state returns to baseline. Never delete those ordering tombstones: suspended
+-- requests must remain unable to resurrect an older state. Untouched edges
+-- remain baseline-only. No additional column, index or migration is required.
 
 CREATE TABLE IF NOT EXISTS explore_follow_overrides_348 (
   follower_uid TEXT NOT NULL,

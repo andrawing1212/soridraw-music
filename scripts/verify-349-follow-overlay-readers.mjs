@@ -47,10 +47,12 @@ assert.match(cutover,/if \(!object\) return \{ mode: "legacy"/);
 
 const core=fn('handleFollowR2Core');
 assert.ok(core.indexOf('readFollowCutoverState348') < core.indexOf('adjustExploreFollowCountersDelta'));
-assert.match(core,/FOLLOW_OVERLAY_WRITER_NOT_READY/);
+assert.match(core,/return handleFollowOverlay354/);
+assert.ok(core.indexOf('return handleFollowOverlay354') < core.indexOf('enforceUserRateLimit'));
 
 const state=fn('handleFollowState');
-assert.match(state,/readEffectiveFollowMembership348/);
+assert.match(state,/readFollowStateSnapshot354/);
+assert.match(fn('readFollowStateSnapshot354'),/readEffectiveFollowMembership348/);
 assert.match(state,/followingState\?\.membershipComplete/);
 assert.match(state,/FROM follows WHERE follower_uid = \? AND following_uid = \?/);
 
@@ -151,7 +153,7 @@ assert.deepEqual(reverse,['new-follower','legacy-follower']);
 const pairPlan=db.prepare("EXPLAIN QUERY PLAN SELECT following FROM explore_follow_overrides_348 WHERE follower_uid='actor' AND following_uid='new-add'").all().map(x=>String(x.detail)).join(' | ');
 assert.match(pairPlan,/SEARCH explore_follow_overrides_348 USING PRIMARY KEY/);
 const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_reverse WHERE following_uid='creator'").all().map(x=>String(x.detail)).join(' | ');
-assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_reverse/);
+assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING (?:COVERING )?INDEX idx_explore_follow_overrides_348_reverse/);
 
 console.log('FOLLOW349_LEGACY_DEFAULT_FAIL_CLOSED_WRITER=PASS');
 console.log('FOLLOW349_TARGETED_EFFECTIVE_MEMBERSHIP=PASS');

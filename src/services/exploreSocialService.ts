@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
+import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
 import {
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialFollow,
@@ -75,7 +76,7 @@ const requestAuthed = async (user: User, path: string, init: RequestInit = {}) =
         ? '프로필 이미지 저장소 연결이 필요합니다.'
         : 'Explore 요청을 처리하지 못했습니다.';
     const message = String(payload?.message || payload?.error?.message || payload?.error || fallback).trim();
-    throw new Error(message || fallback);
+    throw Object.assign(new Error(message || fallback), { code });
   }
   return payload;
 };
@@ -290,10 +291,9 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
 export const setExploreFollow = async (user: User, uid: string, follow: boolean): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
-  const payload = await requestAuthed(
-    user,
-    `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow`,
-    { method: follow ? 'PUT' : 'DELETE' },
+  const payload = await requestOrderedExploreFollow354(
+    user.uid, normalizedUid, follow,
+    (path, init) => requestAuthed(user, path, init),
   );
   const row = payload?.data || {};
   const result = {

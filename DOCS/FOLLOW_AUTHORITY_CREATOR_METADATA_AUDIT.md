@@ -1,6 +1,6 @@
 # Follow authority / cold creator metadata audit (2026-10-04)
 
-Status: RELEASE BLOCKED. Continue candidate 9d10970b44c072d16c4355fc868ea25f083d4eeb on preview. No deployment or schema/data change.
+Status: RELEASE BLOCKED. Current continuation354 starts from preview `9709c6f2ef06d40d6c780f07ec856c4a917449f6`; historical sections below preserve earlier evidence. No deployment or shared schema/data change.
 
 ## Current release reader audit
 
@@ -79,3 +79,36 @@ Additional preview-only preparation:
 - `f754837c7da5ba1576f673cd5169776b4dcf1abe`: extended the 349 reader verifier to include the following-bundle route.
 
 Still NOT activated or deployed. A crash-consistent writer orchestration and actual remote billing proof remain required before compatibility can be considered complete. Shared migration/cutover, TEST/PRODUCTION changes, user-data writes and deployment remain zero.
+
+## 2026-10-04 continuation354 — durable orchestration and ordered client implemented
+
+Basis: `9709c6f2ef06d40d6c780f07ec856c4a917449f6` on preview. Candidate only; app344 / Worker341 untouched. This section supersedes the outstanding writer orchestration item above; it does NOT clear the release gates.
+
+### Correctness contract
+
+1. CAS a persistent R2 intent for the authenticated actor/target pair. Operation id, desired state, expected revision and monotonically increasing server revision are immutable. A pending predecessor is settled before a newer revision can be accepted; old/conflicting requests receive 409. No client-clock ordering.
+2. Register the intent in BOTH endpoint shared-profile bundles before any D1 relation write. These dirty markers are part of the same object as counts and are changed only by etag CAS. No expiry-based lock takeover, background-only recovery or distributed in-memory lock.
+3. Actual 350 writer executes one fenced upsert. Only a newer revision with a different state can update the touched edge. The legacy follows/profile_stats rows stay immutable. The existing updated_at field supplies the touched-edge durable ordering fence.
+4. A certified, uncontended profile can apply 352 +/-1 only against the etag returned by its own registration, and atomically clear that registration in the count write. A duplicate/replayed relation or conflicted/uncertified profile must use exact recovery instead. No speculative delta or duplicate increment.
+5. Recovery captures each profile's etag before the D1 count read, replays its recorded operations idempotently, computes 351 immutable baseline + indexed per-account deltas, and CASes both exact counts plus an empty pending map. It registers the other endpoint before replay only if that intent can still change the edge. Concurrent registrations/profile edits invalidate the snapshot. A delayed old D1 call cannot change the relation after recovery because its fence remains in D1.
+6. Pair settlement is CASed after both count patches. A lost response is retried with the same operation id; a GET follow-state also completes pending work. State GET checks the intent revision before/after reading membership, so it cannot pair an old membership with a newer accepted request revision. Busy recovery fails closed at 6 retries / 32 pending entries, retains durable intent and never rolls back an acknowledged canonical edge speculatively.
+
+### Necessary change from the earlier sparse-delete design
+
+Returning to baseline now RETAINS a touched-edge ordering tombstone. Without it, an old request paused before D1 could insert after a newer unfollow deletes the row and silently reverse the relation. Untouched baseline edges remain unmaterialized; no bulk backfill or new D1 column/index is needed. The effective readers and exact delta SUM already handle baseline-equal entries. Storage/indexed exceptional count recovery now grow with naturally touched edges per account, including restored edges, rather than only current divergent edges. These fences and pair intents must not be pruned without a separately proven durable fence replacement; no cleanup job was added.
+
+### App and legacy protection
+
+The new ordering helper is used only by setExploreFollow. An unarmed server retains its original one mutation request, no added body/read and no client queue. Only `FOLLOW_ORDER_REQUIRED` negotiates protocol354; overlay requests queue per authenticated viewer/target, keep the operation id after response loss, and never automatically rebase a stale-revision conflict into a new write. Existing local following/snapshot patches still run after the successful response. The Worker wrapper bypasses legacy sync only on an explicitly marked overlay response. Required manifest flags were strengthened; no active manifest written.
+
+Verify354 compares every old Worker function against the exact starting commit and allows changes only to the six explicit follow functions. It also compares legacy statements after removing the overlay branch/guard. No likes/publication/search/UI functions changed. Existing 348 verifier defects (index name excluded by schema filter and SQLite covering-index spelling) and 350 helper-boundary leakage were corrected without weakening indexed/no-legacy-write requirements. Verify353 following-bundle compatibility remains included in verify349.
+
+### Validation and remaining risks
+
+Local TS/build + 347–352/353(in349)/354 PASS. Actual function execution, crash boundaries, R2 failure before/after persistence, same-pair conflicts, reversed old writers, shared-target contention, both baseline types, actual HTTP wrapper and client queue/retry PASS. 197/202/114/preflight and 345/346/creator contracts PASS; existing legacy physical amplification remains unresolved as expected while manifest is absent. No independent live Work/PC/mobile audit is claimed.
+
+Remote measurement now extracts the actual 350 writer AST and binds it ONLY to a newly created synthetic remote database. It measures SQL attempts, duplicates and resumed stale requests with no W0 shortcut, and verifies deletion of that owned DB. Existing audit-only workflow is reused; shared schema preflight in that workflow is SELECT-only. Implementation commit records the measurement as pending until its actual run evidence is appended.
+
+Full R2/Worker cost is NOT proven by isolated D1. Certified normal mutation requires a durable pair intent, two profile markers, two count patches and pair settlement (six R2 writes before any retry); initialization/recovery additionally reads only the affected accounts' indexed deltas. Pending caps/retry caps bound contention, but full live Class A/B/request counts and high-follower recovery costs need measurement. Direct R2 binding and primary D1 are correctness assumptions; do not substitute cached object reads or unconstrained replica sessions. Sources: [R2 consistency](https://developers.cloudflare.com/r2/reference/consistency/), [conditional writes](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/), [D1 primary default and sessions](https://developers.cloudflare.com/d1/best-practices/read-replication/).
+
+Missing/invalid R2 profile or missing frozen profile_stats baseline fails closed. Automatic profile creation, baseline recount from all relations, and uncertified baseline repairs were not introduced. Reachable older profile writers/readers, social-snapshot membership and cached first-view handling must be independently audited for protocol354 fence/count preservation before activation across releases. TEST/PRODUCTION compatibility, live R2 contention, complete snapshot parity, PC/mobile and cache invalidation recovery remain release prerequisites. No shared migration, cutover activation, user-origin writes, deployment, auth/config change or environment promotion was executed.

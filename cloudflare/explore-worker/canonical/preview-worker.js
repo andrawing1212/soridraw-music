@@ -13042,10 +13042,7 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   const authContext = await requireExploreAuth(request);
   const followCutover348 = await readFollowCutoverState348(env);
   if (followCutover348.mode === "overlay348") {
-    // Reader compatibility is intentionally deployable before the writer.
-    // If a shared manifest is armed too early, fail closed rather than write
-    // the frozen legacy follows/profile_stats path.
-    throwApi("FOLLOW_OVERLAY_WRITER_NOT_READY", "팔로우 저장 전환 준비 중입니다. 잠시 후 다시 시도해 주세요.", 503, { "Retry-After": "2" });
+    return handleFollowOverlay354(request, env, cors, authContext.uid, targetUid, shouldFollow, followCutover348);
   }
   await enforceUserRateLimit(env, authContext.uid, "follow", RATE_LIMITS.follow);
   if (!targetUid || targetUid === authContext.uid) throwApi("SELF_FOLLOW_NOT_ALLOWED", "\uC790\uAE30 \uC790\uC2E0\uC740 \uD314\uB85C\uC6B0\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 400);
@@ -13124,6 +13121,9 @@ __name22222222222222222222222222222222222222222(handleFollowR2Core, "handleFollo
 async function handleFollow(request, env, cors, targetUid, shouldFollow) {
   const response = await handleFollowR2Core(request, env, cors, targetUid, shouldFollow);
   if (!response.ok) return response;
+  // Overlay orchestration owns its durable recovery; never invoke v114/347
+  // legacy membership/counter writers after an overlay mutation.
+  if (response.headers.get("X-Soridraw-Follow-Protocol") === "354") return response;
   try {
     const authContext = await requireExploreAuth(request);
     await syncExploreFollowingR2AfterMutation(env, authContext.uid, targetUid, shouldFollow);
@@ -14039,9 +14039,230 @@ async function readFollowCutoverState348(env) {
     value?.allEnvironmentWritersReady === true &&
     value?.profileCountsR2Exact === true &&
     value?.ownerProtocol === "follow-overlay-348" &&
+    value?.crashConsistentWriter354 === true &&
+    value?.orderedClientRequests354 === true &&
     token.length > 0 && token.length <= 128;
   if (!armed) throw new Error("[SORIDRAW 348] follow cutover manifest present but not fully armed");
   return { mode: "overlay348", cutoverToken: token };
+}
+
+// SORIDRAW_FOLLOW_CRASH_CONSISTENT_WRITER_354_20261004
+// Write-ahead pair intent -> BOTH profile dirty markers -> fenced D1 edge ->
+// CAS counts -> settled pair intent. No leases, timeout takeover or waitUntil.
+// Any replayer can finish an intent; the D1 edge fence makes delayed execution
+// harmless, including after a return to baseline. All helpers remain dormant.
+function followIntentKey354(token, actor, target) {
+  return `internal/explore/follow-intents-v354/${encodeURIComponent(token)}/${encodeURIComponent(actor)}/${encodeURIComponent(target)}.json`;
+}
+
+async function readFollowIntent354(env, cutover, actor, target) {
+  const key = followIntentKey354(cutover.cutoverToken, actor, target);
+  const object = await env.PROFILE_MEDIA.get(key);
+  if (!object) return { key, object: null, value: null };
+  const value = JSON.parse(await object.text());
+  if (value?.token !== cutover.cutoverToken || value.actor !== actor || value.target !== target ||
+      typeof value.following !== "boolean" || !Number.isSafeInteger(value.revision) || value.revision <= 0 ||
+      !Number.isSafeInteger(value.expectedRevision) || value.expectedRevision < 0 ||
+      !/^[a-zA-Z0-9_-]{16,128}$/.test(value.id || "") || typeof value.settled !== "boolean") {
+    throw new Error("[SORIDRAW 354] invalid follow intent");
+  }
+  return { key, object, value };
+}
+
+async function readFollowProfile354(env, uid, cutover) {
+  const key = exploreSharedProfileR2Key060(uid);
+  const object = await env.PROFILE_MEDIA.get(key);
+  const bundle = object ? JSON.parse(await object.text()) : null;
+  const profile = bundle?.body?.data?.profile;
+  if (!bundle || !validExploreProfileR2Bundle020(bundle) || profile?.uid !== uid) {
+    throwApi("FOLLOW_PROFILE_CACHE_UNAVAILABLE", "팔로우 프로필 정보를 동기화하는 중입니다.", 503);
+  }
+  const sync = bundle.followSync354;
+  if (sync && (sync.token !== cutover.cutoverToken || !sync.pending || typeof sync.pending !== "object" || Array.isArray(sync.pending))) {
+    throw new Error("[SORIDRAW 354] invalid follow profile fence");
+  }
+  return { key, object, bundle, sync: sync || { token: cutover.cutoverToken, exact: false, pending: {} } };
+}
+
+async function saveFollowProfile354(env, state, sync, counts = null) {
+  const now = Date.now();
+  const bundle = state.bundle;
+  const revision = Math.max(1, Number(bundle.revision || bundle.body.data.revision || 0) + 1);
+  const data = { ...bundle.body.data, revision, updatedAt: now,
+    profile: { ...bundle.body.data.profile, ...(counts || {}) } };
+  return env.PROFILE_MEDIA.put(state.key, JSON.stringify({ ...bundle,
+    revision, updatedAt: now, followSync354: sync, body: { ...bundle.body, data } }), {
+    onlyIf: { etagMatches: state.object.etag },
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: { ...(state.object.customMetadata || {}), soridrawSharedProfile: "354" },
+  });
+}
+
+async function registerFollowPending354(env, uid, operation, cutover) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const state = await readFollowProfile354(env, uid, cutover);
+    const existing = state.sync.pending[operation.id];
+    if (existing) {
+      if (JSON.stringify(existing) !== JSON.stringify(operation)) throw new Error("[SORIDRAW 354] operation id collision");
+      return { ...state, deltaSafe: false };
+    }
+    if (Object.keys(state.sync.pending).length >= 32) {
+      throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
+    }
+    const sync = { ...state.sync, pending: { ...state.sync.pending, [operation.id]: operation } };
+    const saved = await saveFollowProfile354(env, state, sync);
+    if (saved) return { ...state, object: { ...state.object, etag: saved.etag }, sync,
+      deltaSafe: state.sync.exact === true && Object.keys(state.sync.pending).length === 0 };
+  }
+  throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
+}
+
+async function repairFollowProfile354(env, uid, cutover) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    let state = await readFollowProfile354(env, uid, cutover);
+    const pending = Object.values(state.sync.pending);
+    // Register the other endpoint BEFORE replaying a half-registered intent.
+    // This makes a simultaneous exact snapshot on that endpoint fail its CAS.
+    for (const operation of pending) {
+      if (operation.token !== cutover.cutoverToken || (operation.actor !== uid && operation.target !== uid)) {
+        throw new Error("[SORIDRAW 354] invalid pending operation owner");
+      }
+      const other = operation.actor === uid ? operation.target : operation.actor;
+      const membership = await readEffectiveFollowMembership348(env, operation.actor, operation.target, cutover);
+      if (membership.following !== operation.following &&
+          Number(membership.override?.updatedAt || 0) < operation.revision) {
+        await registerFollowPending354(env, other, operation, cutover);
+      }
+    }
+    // Snapshot before the D1 read, never after it. A new intent/profile update
+    // invalidates this etag. Replay of every captured intent precedes the count.
+    for (const operation of Object.values(state.sync.pending)) {
+      await mutateFollowOverlayRelation350(env, operation.actor, operation.target,
+        operation.following, operation.revision, cutover, operation);
+    }
+    const counts = await readExactEffectiveFollowCounts351(env, uid);
+    if (!counts) throwApi("FOLLOW_BASELINE_UNAVAILABLE", "팔로우 기준 정보를 확인하는 중입니다.", 503);
+    const saved = await saveFollowProfile354(env, state,
+      { token: cutover.cutoverToken, exact: true, pending: {} }, counts);
+    if (saved) return counts;
+  }
+  throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
+}
+
+async function completeFollowIntent354(env, operation, cutover) {
+  const actorState = await registerFollowPending354(env, operation.actor, operation, cutover);
+  const targetState = await registerFollowPending354(env, operation.target, operation, cutover);
+  const relation = await mutateFollowOverlayRelation350(env, operation.actor, operation.target,
+    operation.following, operation.revision, cutover, operation);
+  for (const [uid, state, followerDelta, followingDelta] of [
+    [operation.actor, actorState, 0, relation.delta],
+    [operation.target, targetState, relation.delta, 0],
+  ]) {
+    let patched = false;
+    if (relation.changed && state.deltaSafe) {
+      const result = await patchSharedProfileFollowDelta352(env, uid, {
+        followerDelta, followingDelta, expectedEtag354: state.object.etag,
+        operationId354: operation.id, cutoverToken354: operation.token,
+      });
+      patched = result.ok;
+    }
+    if (!patched) await repairFollowProfile354(env, uid, cutover);
+  }
+  const current = await readFollowIntent354(env, cutover, operation.actor, operation.target);
+  if (current.value?.id !== operation.id) throw new Error("[SORIDRAW 354] intent superseded before settlement");
+  if (!current.value.settled) {
+    const saved = await env.PROFILE_MEDIA.put(current.key, JSON.stringify({ ...operation, settled: true }), {
+      onlyIf: { etagMatches: current.object.etag },
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    if (!saved) throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
+  }
+  return relation;
+}
+
+async function orchestrateFollowOverlay354(env, actor, target, following, id, expectedRevision, cutover) {
+  if (cutover?.mode !== "overlay348" || !cutover.cutoverToken || !actor || !target || actor === target) {
+    throwApi("FOLLOW_OVERLAY_WRITER_NOT_READY", "팔로우 저장 정보를 확인해 주세요.", 503);
+  }
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(id || "") ||
+      !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throwApi("FOLLOW_ORDER_REQUIRED", "팔로우 상태를 확인한 후 다시 시도해 주세요.", 409);
+  }
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const current = await readFollowIntent354(env, cutover, actor, target);
+    const previous = current.value;
+    if (previous && !previous.settled) await completeFollowIntent354(env, previous, cutover);
+    if (previous?.id === id) {
+      if (previous.following !== following || previous.expectedRevision !== expectedRevision) {
+        throwApi("FOLLOW_OPERATION_CONFLICT", "팔로우 요청 상태를 다시 확인해 주세요.", 409);
+      }
+      return { revision: previous.revision, following: previous.following, duplicate: true };
+    }
+    if ((previous?.revision || 0) !== expectedRevision) {
+      throwApi("FOLLOW_REVISION_CONFLICT", "팔로우 상태가 변경되었습니다. 다시 확인해 주세요.", 409);
+    }
+    // Re-read after recovery: no CAS based on a stale pending intent etag.
+    const settled = await readFollowIntent354(env, cutover, actor, target);
+    if (settled.value && !settled.value.settled) continue;
+    if ((settled.value?.revision || 0) !== expectedRevision) continue;
+    const operation = { token: cutover.cutoverToken, actor, target, following, id,
+      expectedRevision, revision: Math.max(Date.now(), expectedRevision + 1), settled: false };
+    const saved = await env.PROFILE_MEDIA.put(settled.key, JSON.stringify(operation), {
+      onlyIf: settled.object ? { etagMatches: settled.object.etag } : { etagDoesNotMatch: "*" },
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    if (!saved) continue;
+    const relation = await completeFollowIntent354(env, operation, cutover);
+    return { revision: operation.revision, following, duplicate: !relation.changed };
+  }
+  throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
+}
+
+async function handleFollowOverlay354(request, env, cors, actor, target, following, cutover) {
+  if (!target || target === actor) throwApi("SELF_FOLLOW_NOT_ALLOWED", "자기 자신은 팔로우할 수 없습니다.", 400);
+  await enforceUserRateLimit(env, actor, "follow", RATE_LIMITS.follow);
+  if (following) {
+    const row = await env.DB.prepare("SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1").bind(target).first();
+    if (!row) throwApi("NOT_FOUND", "공개 크리에이터를 찾을 수 없습니다.", 404);
+  }
+  // JSON uses the existing Content-Type CORS contract; no auth/CORS change.
+  let payload = null;
+  try { payload = await request.json(); } catch {}
+  const expected = payload?.followExpectedRevision;
+  const result = await orchestrateFollowOverlay354(env, actor, target, following,
+    payload?.followOperationId, expected, cutover);
+  const state = await readFollowProfile354(env, target, cutover);
+  if (Object.keys(state.sync.pending).length) await repairFollowProfile354(env, target, cutover);
+  const current = await readFollowProfile354(env, target, cutover);
+  await invalidatePublicProfileFirstViewEdgeCache(request, [actor, target]);
+  return json({ ok: true, data: { uid: target, ...result,
+    followerCount: current.bundle.body.data.profile.followerCount,
+    followingCount: current.bundle.body.data.profile.followingCount } }, 200,
+    { ...cors, "X-Soridraw-Follow-Protocol": "354" });
+}
+
+async function readFollowStateSnapshot354(env, actor, target, cutover) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const before = await readFollowIntent354(env, cutover, actor, target);
+    if (before.value && !before.value.settled) {
+      await completeFollowIntent354(env, before.value, cutover);
+      continue;
+    }
+    for (const uid of [actor, target]) {
+      const state = await readFollowProfile354(env, uid, cutover);
+      if (!state.sync.exact || Object.keys(state.sync.pending).length) await repairFollowProfile354(env, uid, cutover);
+    }
+    const membership = await readEffectiveFollowMembership348(env, actor, target, cutover);
+    const profile = await readFollowProfile354(env, target, cutover);
+    const after = await readFollowIntent354(env, cutover, actor, target);
+    if ((after.value?.revision || 0) !== (before.value?.revision || 0) ||
+        (after.value && !after.value.settled) || Object.keys(profile.sync.pending).length) continue;
+    return { uid: target, following: membership.following, followProtocol: 354,
+      followRevision: after.value?.revision || 0,
+      followerCount: clampExploreSocialCount(profile.bundle.body.data.profile.followerCount),
+      followingCount: clampExploreSocialCount(profile.bundle.body.data.profile.followingCount) };
+  }
+  throwApi("FOLLOW_RECOVERY_BUSY", "팔로우 동기화를 다시 시도해 주세요.", 503);
 }
 
 async function readEffectiveFollowMembership348(env, followerUid, followingUid, knownState = null) {
@@ -14098,7 +14319,7 @@ async function readEffectiveFollowMembership348(env, followerUid, followingUid, 
 // SORIDRAW_FOLLOW_OVERLAY_RELATION_WRITER_350_20261004
 // Dormant until the shared cutover manifest is fully armed. The legacy follows
 // table remains immutable after cutover; only the sparse overlay row changes.
-async function mutateFollowOverlayRelation350(env, followerUid, followingUid, shouldFollow, now, cutoverState) {
+async function mutateFollowOverlayRelation350(env, followerUid, followingUid, shouldFollow, now, cutoverState, operation = null) {
   const follower = String(followerUid || "").trim();
   const following = String(followingUid || "").trim();
   const desired = shouldFollow ? 1 : 0;
@@ -14107,6 +14328,39 @@ async function mutateFollowOverlayRelation350(env, followerUid, followingUid, sh
   }
   if (cutoverState?.mode !== "overlay348" || !String(cutoverState?.cutoverToken || "").trim()) {
     throw new Error("[SORIDRAW 350] overlay writer requires armed cutover state");
+  }
+  if (operation) {
+    if (operation.actor !== follower || operation.target !== following ||
+        operation.token !== cutoverState.cutoverToken || operation.following !== Boolean(shouldFollow) ||
+        !Number.isSafeInteger(operation.revision) || operation.revision <= 0) {
+      throw new Error("[SORIDRAW 354] invalid fenced operation");
+    }
+    // Retain a touched-edge ordering tombstone on return to baseline. Deleting
+    // it permits an older suspended writer to resurrect the relation. No
+    // backfill: only naturally changed edges acquire a durable fence.
+    const result = await env.DB.prepare(`
+      WITH baseline(following) AS (
+        SELECT EXISTS(SELECT 1 FROM follows WHERE follower_uid = ? AND following_uid = ?)
+      )
+      INSERT INTO explore_follow_overrides_348(
+        follower_uid, following_uid, following, baseline_following, updated_at, mutation_id
+      )
+      SELECT ?, ?, ?, baseline.following, ?, ? FROM baseline
+      WHERE baseline.following <> ? OR EXISTS(
+        SELECT 1 FROM explore_follow_overrides_348 WHERE follower_uid = ? AND following_uid = ?
+      )
+      ON CONFLICT(follower_uid, following_uid) DO UPDATE SET
+        following = excluded.following,
+        updated_at = excluded.updated_at,
+        mutation_id = excluded.mutation_id
+      WHERE explore_follow_overrides_348.updated_at < excluded.updated_at
+        AND explore_follow_overrides_348.following <> excluded.following
+    `).bind(follower, following, follower, following, desired, operation.revision,
+      operation.id, desired, follower, following).run();
+    const changes = Number(result?.meta?.changes || 0);
+    if (changes > 1) throw new Error("[SORIDRAW 350] overlay relation changed more than one row");
+    return { changed: changes === 1, delta: changes === 1 ? (desired ? 1 : -1) : 0,
+      following: Boolean(desired), mutationId: operation.id };
   }
   const mutationId = [
     String(cutoverState.cutoverToken),
@@ -14197,12 +14451,21 @@ async function patchSharedProfileFollowDelta352(env, uid, delta = {}) {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const object = await bucket.get(key);
     if (!object) return { ok: false, reason: "missing_shared_profile" };
+    if (delta.expectedEtag354 && object.etag !== delta.expectedEtag354) {
+      return { ok: false, reason: "follow_snapshot_changed" };
+    }
     let bundle = null;
     try { bundle = JSON.parse(await object.text()); } catch { return { ok: false, reason: "invalid_shared_profile" }; }
     if (!validExploreProfileR2Bundle020(bundle)) return { ok: false, reason: "invalid_shared_profile" };
     const profile = bundle?.body?.data?.profile || null;
     if (!profile || String(profile.uid || "").trim() !== normalized) {
       return { ok: false, reason: "profile_uid_mismatch" };
+    }
+    if (delta.expectedEtag354 && (bundle.followSync354?.exact !== true ||
+        bundle.followSync354?.token !== delta.cutoverToken354 ||
+        Object.keys(bundle.followSync354?.pending || {}).length !== 1 ||
+        !bundle.followSync354?.pending?.[delta.operationId354])) {
+      return { ok: false, reason: "follow_snapshot_uncertified" };
     }
     const followerCount = Math.max(
       0,
@@ -14222,6 +14485,9 @@ async function patchSharedProfileFollowDelta352(env, uid, delta = {}) {
     };
     const nextBundle = {
       ...bundle,
+      ...(delta.expectedEtag354 ? { followSync354: {
+        token: delta.cutoverToken354, exact: true, pending: {},
+      } } : {}),
       revision,
       updatedAt: now,
       body: { ...bundle.body, data: nextData },
@@ -14409,20 +14675,7 @@ async function handleFollowState(request, env, cors, targetUid) {
   const cutover = await readFollowCutoverState348(env);
 
   if (cutover.mode === "overlay348") {
-    const [membership, profileBundle] = await Promise.all([
-      readEffectiveFollowMembership348(env, authContext.uid, targetUid, cutover),
-      readExploreSharedProfileByUid247(env, targetUid),
-    ]);
-    const profile = profileBundle?.body?.data?.profile || null;
-    if (!profile || String(profile.uid || "").trim() !== String(targetUid || "").trim()) {
-      throwApi("FOLLOW_PROFILE_CACHE_UNAVAILABLE", "팔로우 프로필 정보를 동기화하는 중입니다.", 503);
-    }
-    return json({ ok: true, data: {
-      uid: targetUid,
-      following: membership.following,
-      followerCount: clampExploreSocialCount(profile.followerCount),
-      followingCount: clampExploreSocialCount(profile.followingCount)
-    } }, 200, cors);
+    return json({ ok: true, data: await readFollowStateSnapshot354(env, authContext.uid, targetUid, cutover) }, 200, cors);
   }
 
   try {

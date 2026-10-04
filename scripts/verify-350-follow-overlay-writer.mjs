@@ -7,7 +7,7 @@ const schema = readFileSync('cloudflare/explore-worker/candidates/348-follow-ove
 
 const start = worker.indexOf('async function mutateFollowOverlayRelation350(');
 assert.ok(start >= 0, 'missing mutateFollowOverlayRelation350');
-const end = worker.indexOf('\nasync function readSharedProfileConnection348', start);
+const end = worker.indexOf('\n// SORIDRAW_FOLLOW_R2_DELTA_CAS_352', start);
 assert.ok(end > start, 'writer helper boundary missing');
 const fn = worker.slice(start, end);
 

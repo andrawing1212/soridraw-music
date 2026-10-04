@@ -1,3 +1,16 @@
+## PREVIEW app345 candidate355 follow compatibility layer (2026-10-05 KST)
+
+- User-approved PREVIEW code-only compatibility release.
+- Firebase PREVIEW Hosting Run `37213744061`: SUCCESS.
+- remote app version **345** / exact build PASS / TypeScript PASS / Build PASS.
+- Cloudflare PREVIEW Worker Run `37213658493`: SUCCESS.
+- active Worker version `2e544865-0392-4dbe-8cc0-28e1b8a01fb6`; feed/profile smoke PASS; warm revision D1 R0 W0 PASS.
+- candidate355 follow crash/recovery/cache compatibility code present, but shared follow cutover manifest **OFF** and no shared follow schema migration executed.
+- shared RTDB rules SKIPPED; Firebase Functions unchanged.
+- TEST / PRODUCTION app and Workers unchanged PASS.
+- shared/user data migration/backfill/delete 0.
+- PREVIEW PC/mobile and live R2/Worker follow-cost verification still required before any cutover or TEST promotion.
+
 ## PREVIEW app296 Music Note + Library My/Shared 60s final-state batching (2026-10-02 KST)
 
 - 범위: Music Note 마이/공유 폴더 + Library 마이/공유 플레이리스트 폴더 비용 최적화.

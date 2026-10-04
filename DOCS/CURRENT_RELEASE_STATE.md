@@ -1,3 +1,22 @@
+## 0PF. app353 PC Music Note 썸네일 실기기 PASS / 보호 기준 동결 (2026-10-05 KST)
+
+- 사용자 실기기 확인: **"일단 수정은 됐어."**
+- 따라서 app353에서 확인한 PC Music Note 썸네일 문제는 실사용 기준 PASS 처리.
+- 확정 보호 범위:
+  - Detail에서 확인된 Suno media가 Music Note 목록에 반영되는 경로.
+  - Explore 이동 후 Music Note 재진입 시 stale V4 Catalog가 썸네일을 다시 지우지 않는 media overlay 우선순위.
+  - `firestoreId || id` canonical document identity 기준의 local row/cache writeback.
+  - app349 heart/Music Note membership 즉시 동기화 및 마지막 클릭 +30초 canonical settlement.
+- 현재 PREVIEW Hosting: app **353**.
+- Firebase PREVIEW App Release Run: `37228706933` SUCCESS / exact build PASS.
+- Release System Audit: `37228542810` SUCCESS.
+- TEST / PRODUCTION unchanged.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 비용 영향: 추가 Firestore/D1/R2/RTDB read/write 0.
+- 다음 큰 작업은 썸네일 경로를 더 건드리지 않고 follow 저비용 Worker 독립 감사로 복귀.
+- 썸네일 관련 새 수정은 별도의 실사용 회귀가 확인된 경우에만 진행.
+
 ## 0PE. app353 PC Music Note 썸네일 우선순위/Catalog 재진입 원인 확정 + PREVIEW 배포 (2026-10-05 KST)
 
 - 사용자 app352 실기기 영상 결과:

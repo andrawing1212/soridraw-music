@@ -22,8 +22,8 @@ assert.match(css, /\.soridraw-explore-more-rows strong\{[^}]*font-size:14px[^}]*
 assert.match(page, /<strong>공개 설정<\/strong>/, 'Explore more sheet must include publication settings');
 assert.match(page, /disabled=\{actionBusy \|\| !user \|\| user\.uid !== moreTrack\.ownerUid\}/, 'publication settings must be disabled for non-owner tracks');
 assert.match(page, /const openExplorePublicationSettings = \(track: ExploreTrack\) => \{\s*if \(!user \|\| user\.uid !== track\.ownerUid \|\| publicationSettingsBusy\) return;/s, 'publication settings open path must stay owner-only and reject a second in-flight settlement');
-assert.match(page, /setExploreTrackPublicationOptions\(user, publicationSettings\.track\.id, publicationSettings\.options\)/, 'publication option save must reuse the existing local-first publication service');
-assert.match(page, /setExploreTrackVisibility\(user, track\.id, false, publicationSettings\.options\)/, 'private conversion must reuse the existing publication visibility service');
+assert.match(page, /setExploreTrackPublicationOptions\(user, pendingSettings\.track\.id, pendingSettings\.options\)/, 'publication option save must reuse the existing local-first publication service');
+assert.match(page, /setExploreTrackVisibility\(user, track\.id, false, pendingSettings\.options\)/, 'private conversion must reuse the existing publication visibility service');
 assert.doesNotMatch(page, /getExploreMusicNotePublicationState/, 'opening publication settings from an already-rendered own Explore track must not add a server read');
 
 for (const label of ['다음곡에 적용 허용', '팔로워 곡 저장 허용', '공개 프로필에 고정']) {

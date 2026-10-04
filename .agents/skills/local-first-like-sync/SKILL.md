@@ -13,7 +13,7 @@ Explicit user instructions always override this skill.
 
 As of 2026-09-25 KST, the user confirmed the **newly published track first-like defect resolved on PREVIEW app164 + Worker195**. The previous PREVIEW app160 + Worker195 verification of existing likes/unlikes, same-account PC↔mobile and cross-account public likeCount remains the protected historical baseline. **Do not touch any working like function unless a concrete new defect is reported and the user explicitly authorizes the exact change.** Read `references/soridraw-app164-worker195-frozen.md`, `references/soridraw-app160-worker195-frozen.md`, and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW like-related work. The app141 baseline remains historical receiver-order guidance. The user's app164 confirmation does not independently prove every new-device/cross-account case or live physical D1 billing.
 
-As of 2026-10-03 KST, the user also confirmed the **PREVIEW app302 Studio save-heart / Music Note local-first patch is normally applied on a real device**. This is a separate heart domain from Explore public likes: Studio save-heart uses the Music Note favorite/canonical path, not the Explore public-like state machine. Before touching Studio save/unsave heart behavior, also read `.agents/skills/song-save-edit-sync-cost/SKILL.md` and `.agents/skills/song-save-edit-sync-cost/references/soridraw-app302-studio-heart-local-first-baseline.md`. The app302 confirmation protects the visible behavior and the app302b pending-layer cleanup, but does **not** by itself convert unmeasured Firestore/D1 cost targets into measured billing proof.
+As of 2026-10-03 KST, the user also confirmed the **PREVIEW app302 Studio save-heart / Music Note local-first patch is normally applied on a real device**. This is a separate heart domain from Explore public likes: Studio save-heart uses the Music Note favorite/canonical path, not the Explore public-like state machine. Before touching Studio save/unsave heart behavior, also read `.agents/skills/song-save-edit-sync-cost/SKILL.md` and `.agents/skills/song-save-edit-sync-cost/references/soridraw-app348-studio-heart-immediate-cross-device-baseline.md`. The app302 confirmation protects the visible behavior and the app302b pending-layer cleanup, but does **not** by itself convert unmeasured Firestore/D1 cost targets into measured billing proof.
 
 **Default for SORIDRAW: protect-only, NO code changes and NO like deployment.** Do not refactor, optimize, replace, or quietly alter likes in client/Worker/RTDB/R2/D1/Rules/cache/notifications/UI. An unrelated change to a common file must preserve all like code paths and pass a targeted regression. A concrete new defect/security issue plus explicit user instruction is required to reopen; never infer permission from a generic optimization request. TEST/PRODUCTION promotion is a separate explicit release request; preserve the same verified features and do not copy user data.
 
@@ -67,14 +67,15 @@ A new device, missing catalog, damaged cache, or explicitly detected revision ga
 
 This subsection applies only when the "heart" means **Recent Song save/unsave into Music Note**, not an Explore public like.
 
-Protected app302/app302b rules:
+Current protected app348 rules (superseding the app302 delayed-remote timing):
 - the initiating device changes the Recent heart and Music Note membership immediately from a durable local pending intent;
-- the other device must **not** receive a pre-canonical Studio-heart preview;
+- the same signed-in account on other devices receives the bounded RTDB heart + Music Note membership preview immediately;
 - each song owns its own trailing 30-second final-state timer;
 - final state == original canonical baseline → favorite canonical W0 target;
 - final state != original canonical baseline → favorite canonical W1 after the latest click +30 seconds;
-- only canonical success emits the normal compact RTDB save/unsave changed-item signal to the other device;
-- receiver target remains Firestore R0/W0 and D1 R0/W0.
+- canonical success clears matching preview/pending overlays and remains durable truth;
+- receiver target remains Firestore R0/W0 and D1 R0/W0;
+- app347 stale-overwrite/media protection remains mandatory.
 
 The app302b cleanup is a hard local-state invariant:
 1. before a generic favorites updater runs, strip `__studioHeartPendingLocal` rows from the updater's canonical input;

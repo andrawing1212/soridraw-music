@@ -198,6 +198,7 @@ jobs:
           node scripts/verify-221-explore-feed-layout.mjs
           node scripts/verify-307-explore-curation.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          node scripts/verify-347-follow-authority.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

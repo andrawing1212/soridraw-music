@@ -13795,12 +13795,31 @@ async function handleMyFollowStates(request, url, env, cors) {
   const raw = String(url.searchParams.get("uids") || "");
   const uids = [...new Set(raw.split(",").map((value) => value.trim()).filter(Boolean))].slice(0, 50);
   if (!uids.length) return json({ ok: true, data: { followingUids: [] } }, 200, cors);
+  const cutover = await readFollowCutoverState348(env);
   const placeholders = uids.map(() => "?").join(",");
-  const result = await env.DB.prepare(`
-    SELECT following_uid
-    FROM follows
-    WHERE follower_uid = ? AND following_uid IN (${placeholders})
-  `).bind(authContext.uid, ...uids).all();
+  const result = cutover.mode === "overlay348"
+    ? await env.DB.prepare(`
+        WITH requested(uid) AS (VALUES ${uids.map(() => "(?)").join(",")})
+        SELECT r.uid AS following_uid
+        FROM requested r
+        WHERE COALESCE(
+          (
+            SELECT o.following
+            FROM explore_follow_overrides_348 o
+            WHERE o.follower_uid = ? AND o.following_uid = r.uid
+            LIMIT 1
+          ),
+          EXISTS(
+            SELECT 1 FROM follows f
+            WHERE f.follower_uid = ? AND f.following_uid = r.uid
+          )
+        ) = 1
+      `).bind(...uids, authContext.uid, authContext.uid).all()
+    : await env.DB.prepare(`
+        SELECT following_uid
+        FROM follows
+        WHERE follower_uid = ? AND following_uid IN (${placeholders})
+      `).bind(authContext.uid, ...uids).all();
   return json({
     ok: true,
     data: {
@@ -13857,9 +13876,25 @@ __name222222222222222222222222222222222222222222222(handleMyFollowStates, "handl
 __name2222222222222222222222222222222222222222222222(handleMyFollowStates, "handleMyFollowStates");
 async function handleProfileConnections(request, url, env, cors, profileRef, direction) {
   const resolved = await resolvePublicProfileRef(env, profileRef);
-  if (!resolved?.uid) return apiError("NOT_FOUND", "\uACF5\uAC1C \uD504\uB85C\uD544\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
+  if (!resolved?.uid) return apiError("NOT_FOUND", "공개 프로필을 찾을 수 없습니다.", 404, cors);
   const limit = Math.min(30, getPageSize(url));
   const cursor = decodeCursor(url.searchParams.get("cursor"));
+  const cutover = await readFollowCutoverState348(env);
+
+  if (cutover.mode === "overlay348") {
+    const rows = await readEffectiveFollowConnectionPage348(env, resolved.uid, direction, limit, cursor);
+    const hasMore = rows.length > limit;
+    const visible = rows.slice(0, limit);
+    const items = (await Promise.all(
+      visible.map((row) => readSharedProfileConnection348(env, row.uid, row.followed_at).catch(() => null))
+    )).filter(Boolean);
+    const last = visible[visible.length - 1];
+    return json({ ok: true, data: {
+      items,
+      nextCursor: hasMore && last ? encodeCursor({ followedAt: Number(last.followed_at || 0), uid: String(last.uid || "") }) : null
+    } }, 200, cors);
+  }
+
   const bindings = [resolved.uid];
   let cursorSql = "";
   if (cursor) {
@@ -13899,13 +13934,10 @@ async function handleProfileConnections(request, url, env, cors, profileRef, dir
     followedAt: Number(row.followed_at || 0)
   }));
   const last = visible[visible.length - 1];
-  return json({
-    ok: true,
-    data: {
-      items,
-      nextCursor: hasMore && last ? encodeCursor({ followedAt: Number(last.followed_at || 0), uid: String(last.uid || "") }) : null
-    }
-  }, 200, cors);
+  return json({ ok: true, data: {
+    items,
+    nextCursor: hasMore && last ? encodeCursor({ followedAt: Number(last.followed_at || 0), uid: String(last.uid || "") }) : null
+  } }, 200, cors);
 }
 __name(handleProfileConnections, "handleProfileConnections");
 __name2(handleProfileConnections, "handleProfileConnections");
@@ -13954,25 +13986,188 @@ __name2222222222222222222222222222222222222222222(handleProfileConnections, "han
 __name22222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 __name222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 __name2222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
+// SORIDRAW_FOLLOW_OVERLAY_READER_COMPAT_348_20261004
+// Compatibility only. Absence of the shared cutover manifest means legacy
+// reads/writes exactly as before. An overlay manifest is accepted only after
+// every environment is explicitly marked reader/writer compatible.
+const EXPLORE_FOLLOW_CUTOVER_KEY_348 = "internal/explore/follow-cutover-v348/active.json";
+
+async function readFollowCutoverState348(env) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) return { mode: "legacy", cutoverToken: null };
+  const object = await bucket.get(EXPLORE_FOLLOW_CUTOVER_KEY_348);
+  if (!object) return { mode: "legacy", cutoverToken: null };
+  let value = null;
+  try { value = JSON.parse(await object.text()); }
+  catch { throw new Error("[SORIDRAW 348] follow cutover manifest unreadable"); }
+  const token = String(value?.cutoverToken || "").trim();
+  const armed = Number(value?.schemaVersion) === 1 &&
+    value?.relationMode === "overlay348" &&
+    value?.relationTable === "explore_follow_overrides_348" &&
+    value?.legacyRelationWritersFrozen === true &&
+    value?.legacyCounterWritersFrozen === true &&
+    value?.allEnvironmentReadersReady === true &&
+    value?.allEnvironmentWritersReady === true &&
+    value?.profileCountsR2Exact === true &&
+    value?.ownerProtocol === "follow-overlay-348" &&
+    token.length > 0 && token.length <= 128;
+  if (!armed) throw new Error("[SORIDRAW 348] follow cutover manifest present but not fully armed");
+  return { mode: "overlay348", cutoverToken: token };
+}
+
+async function readEffectiveFollowMembership348(env, followerUid, followingUid, knownState = null) {
+  const follower = String(followerUid || "").trim();
+  const following = String(followingUid || "").trim();
+  if (!follower || !following) return { following: false, mode: "legacy", baselineFollowing: false, override: null };
+  const state = knownState || await readFollowCutoverState348(env);
+  if (state.mode !== "overlay348") {
+    const row = await env.DB.prepare(
+      "SELECT 1 AS following FROM follows WHERE follower_uid = ? AND following_uid = ? LIMIT 1"
+    ).bind(follower, following).first();
+    return { following: Boolean(row?.following), mode: "legacy", baselineFollowing: Boolean(row?.following), override: null };
+  }
+  const row = await env.DB.prepare(`
+    SELECT
+      EXISTS(
+        SELECT 1 FROM follows
+        WHERE follower_uid = ? AND following_uid = ?
+      ) AS baseline_following,
+      (
+        SELECT o.following
+        FROM explore_follow_overrides_348 o
+        WHERE o.follower_uid = ? AND o.following_uid = ?
+        LIMIT 1
+      ) AS override_following,
+      (
+        SELECT o.updated_at
+        FROM explore_follow_overrides_348 o
+        WHERE o.follower_uid = ? AND o.following_uid = ?
+        LIMIT 1
+      ) AS override_updated_at,
+      (
+        SELECT o.mutation_id
+        FROM explore_follow_overrides_348 o
+        WHERE o.follower_uid = ? AND o.following_uid = ?
+        LIMIT 1
+      ) AS mutation_id
+  `).bind(follower, following, follower, following, follower, following, follower, following).first();
+  const baselineFollowing = Number(row?.baseline_following || 0) === 1;
+  const hasOverride = row?.override_following === 0 || row?.override_following === 1;
+  const effective = hasOverride ? Number(row.override_following) === 1 : baselineFollowing;
+  return {
+    following: effective,
+    mode: "overlay348",
+    baselineFollowing,
+    override: hasOverride ? {
+      following: effective,
+      updatedAt: Number(row?.override_updated_at || 0),
+      mutationId: String(row?.mutation_id || ""),
+    } : null,
+  };
+}
+
+async function readSharedProfileConnection348(env, uid, followedAt) {
+  const normalized = String(uid || "").trim();
+  if (!normalized) return null;
+  const bundle = await readExploreSharedProfileByUid247(env, normalized);
+  const profile = bundle?.body?.data?.profile || null;
+  if (!profile || String(profile.uid || "").trim() !== normalized) return null;
+  return {
+    uid: normalized,
+    nickname: String(profile.nickname || ""),
+    handle: String(profile.handle || "").replace(/^@+/, ""),
+    avatarUrl: String(profile.avatarUrl || profile.avatar_url || ""),
+    bio: String(profile.bio || ""),
+    followerCount: clampExploreSocialCount(profile.followerCount ?? profile.follower_count),
+    followingCount: clampExploreSocialCount(profile.followingCount ?? profile.following_count),
+    trackCount: clampExploreSocialCount(profile.trackCount ?? profile.track_count),
+    followedAt: Number(followedAt || 0),
+  };
+}
+
+async function readEffectiveFollowConnectionPage348(env, ownerUid, direction, limit, cursor) {
+  const owner = String(ownerUid || "").trim();
+  const isFollowers = direction === "followers";
+  const uidColumn = isFollowers ? "follower_uid" : "following_uid";
+  const ownerColumn = isFollowers ? "following_uid" : "follower_uid";
+  const overlayUidColumn = isFollowers ? "follower_uid" : "following_uid";
+  const overlayOwnerColumn = isFollowers ? "following_uid" : "follower_uid";
+  const bindings = [owner, owner];
+  let cursorSql = "";
+  if (cursor) {
+    const followedAt = Number(cursor.followedAt);
+    const uid = safeString(cursor.uid);
+    if (Number.isFinite(followedAt) && uid) {
+      cursorSql = "WHERE (followed_at < ? OR (followed_at = ? AND uid < ?))";
+      bindings.push(followedAt, followedAt, uid);
+    }
+  }
+  bindings.push(limit + 1);
+  const result = await env.DB.prepare(`
+    WITH effective AS (
+      SELECT f.${uidColumn} AS uid, f.created_at AS followed_at
+      FROM follows f
+      WHERE f.${ownerColumn} = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM explore_follow_overrides_348 o
+          WHERE o.follower_uid = f.follower_uid
+            AND o.following_uid = f.following_uid
+        )
+      UNION ALL
+      SELECT o.${overlayUidColumn} AS uid, o.updated_at AS followed_at
+      FROM explore_follow_overrides_348 o
+      WHERE o.${overlayOwnerColumn} = ?
+        AND o.following = 1
+    )
+    SELECT uid, followed_at
+    FROM effective
+    ${cursorSql}
+    ORDER BY followed_at DESC, uid DESC
+    LIMIT ?
+  `).bind(...bindings).all();
+  return result.results || [];
+}
+
 async function handleFollowState(request, env, cors, targetUid) {
   // SORIDRAW_FOLLOW_STATE_R2_FIRST_246_20260930
+  // SORIDRAW_FOLLOW_STATE_OVERLAY_COMPAT_348_20261004
   const authContext = await requireExploreAuth(request);
-  try {
-    const [followingUids, profileBundle] = await Promise.all([
-      readExploreFollowingR2Bundle(env, authContext.uid),
+  const cutover = await readFollowCutoverState348(env);
+
+  if (cutover.mode === "overlay348") {
+    const [membership, profileBundle] = await Promise.all([
+      readEffectiveFollowMembership348(env, authContext.uid, targetUid, cutover),
       readExploreSharedProfileByUid247(env, targetUid),
     ]);
     const profile = profileBundle?.body?.data?.profile || null;
-    if (Array.isArray(followingUids) && profile && String(profile.uid || '').trim()) {
+    if (!profile || String(profile.uid || "").trim() !== String(targetUid || "").trim()) {
+      throwApi("FOLLOW_PROFILE_CACHE_UNAVAILABLE", "팔로우 프로필 정보를 동기화하는 중입니다.", 503);
+    }
+    return json({ ok: true, data: {
+      uid: targetUid,
+      following: membership.following,
+      followerCount: clampExploreSocialCount(profile.followerCount),
+      followingCount: clampExploreSocialCount(profile.followingCount)
+    } }, 200, cors);
+  }
+
+  try {
+    const [followingState, profileBundle] = await Promise.all([
+      readSharedFollowingState347(env, authContext.uid),
+      readExploreSharedProfileByUid247(env, targetUid),
+    ]);
+    const profile = profileBundle?.body?.data?.profile || null;
+    if (followingState?.membershipComplete && profile && String(profile.uid || "").trim()) {
       return json({ ok: true, data: {
         uid: targetUid,
-        following: followingUids.includes(String(targetUid || '').trim()),
+        following: followingState.followingUids.includes(String(targetUid || "").trim()),
         followerCount: clampExploreSocialCount(profile.followerCount),
         followingCount: clampExploreSocialCount(profile.followingCount)
       } }, 200, cors);
     }
   } catch (error) {
-    console.warn('[SORIDRAW 246] follow-state R2 fallback:', String(error?.message || error || 'unknown'));
+    console.warn("[SORIDRAW 348] legacy follow-state targeted fallback:", String(error?.message || error || "unknown"));
   }
 
   const row = await env.DB.prepare(`
@@ -14593,6 +14788,22 @@ async function handleMyFollowing(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const limit = getPageSize(url);
   const cursor = decodeCursor(url.searchParams.get("cursor"));
+  const cutover = await readFollowCutoverState348(env);
+
+  if (cutover.mode === "overlay348") {
+    const rows = await readEffectiveFollowConnectionPage348(env, authContext.uid, "following", limit, cursor);
+    const hasMore = rows.length > limit;
+    const visible = rows.slice(0, limit);
+    const items = (await Promise.all(
+      visible.map((row) => readSharedProfileConnection348(env, row.uid, row.followed_at).catch(() => null))
+    )).filter(Boolean);
+    const last = visible[visible.length - 1];
+    return json({ ok: true, data: {
+      items,
+      nextCursor: hasMore && last ? encodeCursor({ followedAt: Number(last.followed_at || 0), uid: String(last.uid || "") }) : null
+    } }, 200, cors);
+  }
+
   const bindings = [authContext.uid];
   let cursorSql = "";
   if (cursor) {
@@ -18170,7 +18381,10 @@ async function handleFollowingFeed(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const limit = getPageSize(url);
   const cursor = decodeCursor(url.searchParams.get("cursor"));
-  const bindings = [authContext.uid];
+  const cutover = await readFollowCutoverState348(env);
+  const bindings = cutover.mode === "overlay348"
+    ? [authContext.uid, authContext.uid]
+    : [authContext.uid];
   let cursorSql = "";
   if (cursor) {
     const publishedAt = Number(cursor.publishedAt);
@@ -18180,22 +18394,53 @@ async function handleFollowingFeed(request, url, env, cors) {
       bindings.push(publishedAt, publishedAt, id);
     }
   }
-  const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
-      COALESCE(s.like_count,0) AS like_count,
-      COALESCE(s.comment_count,0) AS comment_count,
-      COALESCE(s.play_count,0) AS play_count
-    FROM follows f
-    JOIN tracks t ON t.owner_uid = f.following_uid
-    LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
-    LEFT JOIN track_stats s ON s.track_id = t.id
-    WHERE f.follower_uid = ?
-      AND t.is_public = 1
-      AND t.status = 'published'
-      ${cursorSql}
-    ORDER BY t.published_at DESC, t.id DESC
-    LIMIT ?
-  `).bind(...bindings, limit + 1).all();
+
+  const result = cutover.mode === "overlay348"
+    ? await env.DB.prepare(`
+        WITH effective_following AS (
+          SELECT f.following_uid
+          FROM follows f
+          WHERE f.follower_uid = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM explore_follow_overrides_348 o
+              WHERE o.follower_uid = f.follower_uid
+                AND o.following_uid = f.following_uid
+            )
+          UNION ALL
+          SELECT o.following_uid
+          FROM explore_follow_overrides_348 o
+          WHERE o.follower_uid = ? AND o.following = 1
+        )
+        SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
+          COALESCE(s.like_count,0) AS like_count,
+          COALESCE(s.comment_count,0) AS comment_count,
+          COALESCE(s.play_count,0) AS play_count
+        FROM effective_following ef
+        JOIN tracks t ON t.owner_uid = ef.following_uid
+        LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+        LEFT JOIN track_stats s ON s.track_id = t.id
+        WHERE t.is_public = 1 AND t.status = 'published'
+          ${cursorSql}
+        ORDER BY t.published_at DESC, t.id DESC
+        LIMIT ?
+      `).bind(...bindings, limit + 1).all()
+    : await env.DB.prepare(`
+        SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
+          COALESCE(s.like_count,0) AS like_count,
+          COALESCE(s.comment_count,0) AS comment_count,
+          COALESCE(s.play_count,0) AS play_count
+        FROM follows f
+        JOIN tracks t ON t.owner_uid = f.following_uid
+        LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+        LEFT JOIN track_stats s ON s.track_id = t.id
+        WHERE f.follower_uid = ?
+          AND t.is_public = 1
+          AND t.status = 'published'
+          ${cursorSql}
+        ORDER BY t.published_at DESC, t.id DESC
+        LIMIT ?
+      `).bind(...bindings, limit + 1).all();
+
   const rows = result.results || [];
   const hasMore = rows.length > limit;
   const visible = rows.slice(0, limit);

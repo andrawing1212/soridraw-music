@@ -56,3 +56,7 @@ app353b-pc-musicnote-media-canonical-writeback
 target=b39e7f052ea92034bbf685aa822de8115fad89e6
 focus=canonical-document-id-local-patch,catalog-delta-source,detail-media-overlay,no-extra-io
 requested=2026-10-05T04:31KST
+publication-source-swap-w2-readiness-357
+target=8bbaffeaae93d9cc79b1258451c436b79346681e
+focus=physical-writes-w2,worker-one,hybrid-read-cutover-gate,no-deploy
+requested=2026-10-05T05:14KST

@@ -1842,7 +1842,11 @@ export default function ExplorePage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
-  const [followBusy, setFollowBusy] = useState(false);
+  const [followBusyUid, setFollowBusyUid] = useState('');
+  const followInFlightTargetsRef = useRef<Set<string>>(new Set());
+  const activeProfileUidRef = useRef('');
+  activeProfileUidRef.current = profile?.uid || profileUid || '';
+  const followBusy = Boolean(profile?.uid && followBusyUid === profile.uid);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
   // app272 — keep the authorized full follower-save snapshot outside the lightweight
@@ -3167,34 +3171,86 @@ export default function ExplorePage() {
       setSocialNotice('팔로우는 로그인 후 사용할 수 있어요.');
       return;
     }
-    if (user.uid === profile.uid || followBusy) return;
+    const targetUid = profile.uid;
+    const viewerUid = user.uid;
+    if (viewerUid === targetUid || followInFlightTargetsRef.current.has(targetUid)) return;
+
     const nextShouldFollow = !Boolean(followState?.isFollowing);
-    setFollowBusy(true);
+    const previousFollowState = followState;
+    const previousProfile = profile;
+    const previousFollowingIncluded = followingLoadedUid312 === viewerUid
+      ? followingUids312.has(targetUid)
+      : null;
+    const optimisticFollowerCount = Math.max(0, Number(profile.followerCount || 0) + (nextShouldFollow ? 1 : -1));
+    const optimisticState: ExploreFollowState = {
+      isFollowing: nextShouldFollow,
+      followerCount: optimisticFollowerCount,
+      followingCount: Number(profile.followingCount || 0),
+    };
+
+    followInFlightTargetsRef.current.add(targetUid);
+    setFollowBusyUid(targetUid);
+    setFollowState(optimisticState);
+    if (followingLoadedUid312 === viewerUid) {
+      setFollowingUids312((previous) => {
+        const next = new Set(previous);
+        if (nextShouldFollow) next.add(targetUid);
+        else next.delete(targetUid);
+        return next;
+      });
+    }
+    patchExplorePublicProfileFirstViewProfile(targetUid, {
+      followerCount: optimisticFollowerCount,
+      followingCount: optimisticState.followingCount,
+    });
+    setProfile((previous) => previous?.uid === targetUid
+      ? { ...previous, followerCount: optimisticFollowerCount }
+      : previous);
+
     try {
-      const result = await setExploreFollow(user, profile.uid, nextShouldFollow);
-      setFollowState(result);
-      if (followingLoadedUid312 === user.uid) {
+      const result = await setExploreFollow(user, targetUid, nextShouldFollow);
+      if (auth.currentUser?.uid !== viewerUid) return;
+
+      if (activeProfileUidRef.current === targetUid) setFollowState(result);
+      if (followingLoadedUid312 === viewerUid) {
         setFollowingUids312((previous) => {
           const next = new Set(previous);
-          if (result.isFollowing) next.add(profile.uid);
-          else next.delete(profile.uid);
+          if (result.isFollowing) next.add(targetUid);
+          else next.delete(targetUid);
           return next;
         });
       }
-      patchExplorePublicProfileFirstViewProfile(profile.uid, {
-        followerCount: result.followerCount || (nextShouldFollow ? profile.followerCount + 1 : Math.max(0, profile.followerCount - 1)),
-        followingCount: result.followingCount || profile.followingCount,
+      patchExplorePublicProfileFirstViewProfile(targetUid, {
+        followerCount: result.followerCount,
+        followingCount: result.followingCount,
       });
-      setProfile((prev) => prev ? {
-        ...prev,
-        followerCount: result.followerCount || (nextShouldFollow ? prev.followerCount + 1 : Math.max(0, prev.followerCount - 1)),
-        followingCount: result.followingCount || prev.followingCount,
-      } : prev);
+      setProfile((previous) => previous?.uid === targetUid ? {
+        ...previous,
+        followerCount: result.followerCount,
+        followingCount: result.followingCount,
+      } : previous);
     } catch (reason) {
-      console.error('Explore follow failed:', reason);
-      setSocialNotice(reason instanceof Error ? reason.message : '팔로우 처리에 실패했어요.');
+      if (auth.currentUser?.uid === viewerUid) {
+        if (activeProfileUidRef.current === targetUid) setFollowState(previousFollowState);
+        if (previousFollowingIncluded !== null) {
+          setFollowingUids312((previous) => {
+            const next = new Set(previous);
+            if (previousFollowingIncluded) next.add(targetUid);
+            else next.delete(targetUid);
+            return next;
+          });
+        }
+        patchExplorePublicProfileFirstViewProfile(targetUid, {
+          followerCount: previousProfile.followerCount,
+          followingCount: previousProfile.followingCount,
+        });
+        setProfile((previous) => previous?.uid === targetUid ? previousProfile : previous);
+        console.error('Explore follow failed:', reason);
+        setSocialNotice(reason instanceof Error ? reason.message : '팔로우 처리에 실패했어요.');
+      }
     } finally {
-      setFollowBusy(false);
+      followInFlightTargetsRef.current.delete(targetUid);
+      setFollowBusyUid((current) => current === targetUid ? '' : current);
     }
   };
 
@@ -3322,7 +3378,7 @@ export default function ExplorePage() {
   };
 
   const openExplorePublicationSettings = (track: ExploreTrack) => {
-    if (!user || user.uid !== track.ownerUid) return;
+    if (!user || user.uid !== track.ownerUid || publicationSettingsBusy) return;
     setPublicationPrivateConfirm(false);
     closeMoreSheet();
 
@@ -3383,23 +3439,53 @@ export default function ExplorePage() {
 
   const saveExplorePublicationSettings = async () => {
     if (!user || !publicationSettings || user.uid !== publicationSettings.track.ownerUid || publicationSettingsBusy) return;
-    setPublicationSettingsBusy(true);
-    try {
-      const selectionChanged = Boolean(
-        publicationSettings.sourceId
-        && publicationSettings.sourceSong
-        && publicationSettings.sunoLinks.length > 1
-        && publicationSettings.selectedSunoIndex !== publicationSettings.initialSunoIndex
-      );
 
+    const pendingSettings = publicationSettings;
+    const previousCollections = {
+      tracks,
+      popularTracks,
+      curatedTracks307,
+      managedCuratedTracks307,
+      profileTracks,
+      profileLikedTracks,
+    };
+    const selectionChanged = Boolean(
+      pendingSettings.sourceId
+      && pendingSettings.sourceSong
+      && pendingSettings.sunoLinks.length > 1
+      && pendingSettings.selectedSunoIndex !== pendingSettings.initialSunoIndex
+    );
+    const selected = pendingSettings.sunoLinks[pendingSettings.selectedSunoIndex]
+      || pendingSettings.sunoLinks[0]
+      || null;
+    const other = pendingSettings.sunoLinks.find((link) => link.url !== selected?.url) || null;
+    const optimisticPatch: Partial<ExploreTrack> = {
+      allowNextSongApply: pendingSettings.options.allowNextSongApply,
+      allowFollowerSave: pendingSettings.options.allowFollowerSave,
+      profilePinned: pendingSettings.options.profilePinned,
+      ...(selectionChanged ? {
+        coverUrl: selected?.coverUrl || pendingSettings.track.coverUrl || null,
+        durationSeconds: selected?.durationSeconds ?? pendingSettings.track.durationSeconds ?? null,
+        sunoUrlPrimary: selected?.url || pendingSettings.track.sunoUrlPrimary || null,
+        sunoUrlSecondary: other?.url || null,
+        openUrl: selected?.url || pendingSettings.track.openUrl || null,
+      } : {}),
+    };
+
+    setPublicationSettingsBusy(true);
+    patchExplorePublicationTrack(pendingSettings.track, optimisticPatch);
+    setPublicationSettings(null);
+    setPublicationPrivateConfirm(false);
+
+    try {
       if (selectionChanged) {
-        const sourceId = publicationSettings.sourceId;
+        const sourceId = pendingSettings.sourceId;
         const updates = buildExplorePublicationMainSelectionUpdates(
-          publicationSettings.sunoLinks,
-          publicationSettings.selectedSunoIndex,
+          pendingSettings.sunoLinks,
+          pendingSettings.selectedSunoIndex,
         );
         const nextSourceSong = {
-          ...publicationSettings.sourceSong,
+          ...pendingSettings.sourceSong,
           ...updates,
           id: sourceId,
           firestoreId: sourceId,
@@ -3418,32 +3504,24 @@ export default function ExplorePage() {
         await refreshExploreMusicNotePublicationSource(
           user,
           sourceId,
-          publicationSettings.options,
-          publicationSettings.track.id,
+          pendingSettings.options,
+          pendingSettings.track.id,
         );
-        const selected = publicationSettings.sunoLinks[publicationSettings.selectedSunoIndex]
-          || publicationSettings.sunoLinks[0];
-        const other = publicationSettings.sunoLinks.find((link) => link.url !== selected?.url) || null;
-        patchExplorePublicationTrack(publicationSettings.track, {
-          allowNextSongApply: publicationSettings.options.allowNextSongApply,
-          allowFollowerSave: publicationSettings.options.allowFollowerSave,
-          profilePinned: publicationSettings.options.profilePinned,
-          coverUrl: selected?.coverUrl || publicationSettings.track.coverUrl || null,
-          durationSeconds: selected?.durationSeconds ?? publicationSettings.track.durationSeconds ?? null,
-          sunoUrlPrimary: selected?.url || publicationSettings.track.sunoUrlPrimary || null,
-          sunoUrlSecondary: other?.url || null,
-          openUrl: selected?.url || publicationSettings.track.openUrl || null,
-        });
         setSocialNotice('선택한 곡으로 공개 설정을 저장했어요.');
       } else {
-        const saved = await setExploreTrackPublicationOptions(user, publicationSettings.track.id, publicationSettings.options);
-        patchExplorePublicationOptions(publicationSettings.track, saved);
+        const saved = await setExploreTrackPublicationOptions(user, pendingSettings.track.id, pendingSettings.options);
+        patchExplorePublicationOptions(pendingSettings.track, saved);
         setSocialNotice('공개 설정을 저장했어요.');
       }
-
-      setPublicationSettings(null);
-      setPublicationPrivateConfirm(false);
     } catch (reason) {
+      setTracks(previousCollections.tracks);
+      setPopularTracks(previousCollections.popularTracks);
+      setCuratedTracks307(previousCollections.curatedTracks307);
+      setManagedCuratedTracks307(previousCollections.managedCuratedTracks307);
+      setProfileTracks(previousCollections.profileTracks);
+      setProfileLikedTracks(previousCollections.profileLikedTracks);
+      setPublicationSettings(pendingSettings);
+      setPublicationPrivateConfirm(false);
       console.error('Explore publication settings save failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '공개 설정 저장에 실패했어요.');
     } finally {
@@ -3457,20 +3535,40 @@ export default function ExplorePage() {
       setPublicationPrivateConfirm(true);
       return;
     }
+
+    const pendingSettings = publicationSettings;
+    const track = pendingSettings.track;
+    const previousCollections = {
+      tracks,
+      popularTracks,
+      curatedTracks307,
+      managedCuratedTracks307,
+      profileTracks,
+      profileLikedTracks,
+    };
+
     setPublicationSettingsBusy(true);
+    setTracks((previous) => previous.filter((item) => item.id !== track.id));
+    setPopularTracks((previous) => previous.filter((item) => item.id !== track.id));
+    setCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
+    setManagedCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
+    setProfileTracks((previous) => previous.filter((item) => item.id !== track.id));
+    setProfileLikedTracks((previous) => previous.filter((item) => item.id !== track.id));
+    setPublicationSettings(null);
+    setPublicationPrivateConfirm(false);
+
     try {
-      const track = publicationSettings.track;
-      await setExploreTrackVisibility(user, track.id, false, publicationSettings.options);
-      setTracks((previous) => previous.filter((item) => item.id !== track.id));
-      setPopularTracks((previous) => previous.filter((item) => item.id !== track.id));
-      setCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
-      setManagedCuratedTracks307((previous) => previous.filter((item) => item.id !== track.id));
-      setProfileTracks((previous) => previous.filter((item) => item.id !== track.id));
-      setProfileLikedTracks((previous) => previous.filter((item) => item.id !== track.id));
+      await setExploreTrackVisibility(user, track.id, false, pendingSettings.options);
       setSocialNotice('비공개로 전환했어요.');
-      setPublicationSettings(null);
-      setPublicationPrivateConfirm(false);
     } catch (reason) {
+      setTracks(previousCollections.tracks);
+      setPopularTracks(previousCollections.popularTracks);
+      setCuratedTracks307(previousCollections.curatedTracks307);
+      setManagedCuratedTracks307(previousCollections.managedCuratedTracks307);
+      setProfileTracks(previousCollections.profileTracks);
+      setProfileLikedTracks(previousCollections.profileLikedTracks);
+      setPublicationSettings(pendingSettings);
+      setPublicationPrivateConfirm(true);
       console.error('Explore publication private switch failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '비공개 전환에 실패했어요.');
     } finally {
@@ -4060,7 +4158,7 @@ export default function ExplorePage() {
                         disabled={followBusy}
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
-                        {followBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
+                        {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
                         {followState?.isFollowing ? '팔로잉' : '팔로우'}
                       </button>
                     )}

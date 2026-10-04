@@ -664,12 +664,13 @@ const getExploreCardDisplayTitle = (track: ExploreTrack) => {
   return { genre, title };
 };
 
-type ExploreGenreDisplayRow342 = 'ko' | 'en';
+type ExploreGenreTier343 = 'major' | 'detail';
 
 type ExploreGenreRecommendation221 = {
   id: string;
   label: string;
-  row: ExploreGenreDisplayRow342;
+  tier: ExploreGenreTier343;
+  sortOrder: number;
   tracks: ExploreTrack[];
 };
 
@@ -687,18 +688,53 @@ type ExploreRecommendationModel221 = {
   creators: ExploreCreatorRecommendation221[];
 };
 
-// SORIDRAW_EXPLORE_GENRE_CANONICAL_ROWS_342_20261004
-// Recommendation genres are a local projection of the already-loaded Feed.
-// Canonicalize historical id/label variants without any server read:
-//   neo_soul / Neo Soul -> 네오 소울
-//   k_new_jack_swing / K-New Jack Swing -> K-뉴잭스윙
-// Korean-friendly labels live on the first row. Labels that have no meaningful
-// Hangul display name stay in English on the second row.
+// SORIDRAW_EXPLORE_GENRE_MAJOR_DETAIL_ROWS_343_20261004
+// The first row is always broad genres. The second row is independent detail
+// genres from the current Feed. Clicking a broad genre never expands/replaces
+// the detail row; both rows are local projections of the same already-loaded
+// Feed and therefore add no Worker/D1/Firestore reads.
 type ExploreGenreCatalogEntry342 = {
   id: string;
   label: string;
   labelKo: string;
+  branchId: string;
 };
+
+type ExploreMajorGenre343 = {
+  id: string;
+  label: string;
+  order: number;
+};
+
+const EXPLORE_MAJOR_GENRES_343: ExploreMajorGenre343[] = [
+  { id: 'pop', label: '팝', order: 10 },
+  { id: 'kpop', label: 'K-Pop', order: 20 },
+  { id: 'jpop', label: 'J-Pop', order: 30 },
+  { id: 'hiphop', label: '힙합', order: 40 },
+  { id: 'rnb', label: 'R&B', order: 50 },
+  { id: 'soul', label: '소울', order: 60 },
+  { id: 'funk', label: '펑크', order: 70 },
+  { id: 'rock', label: '록', order: 80 },
+  { id: 'metal', label: '메탈', order: 90 },
+  { id: 'edm', label: 'EDM', order: 100 },
+  { id: 'jazz', label: '재즈', order: 110 },
+  { id: 'folk', label: '포크', order: 120 },
+  { id: 'acoustic', label: '어쿠스틱', order: 130 },
+  { id: 'country', label: '컨트리', order: 140 },
+  { id: 'world', label: '월드뮤직', order: 150 },
+  { id: 'reggae', label: '레게', order: 160 },
+  { id: 'latin', label: '라틴', order: 170 },
+  { id: 'afro', label: '아프로', order: 180 },
+  { id: 'trot', label: '트로트', order: 190 },
+  { id: '7080', label: '7080 가요', order: 200 },
+  { id: 'classical', label: '클래식', order: 210 },
+  { id: 'cinematic', label: '시네마틱', order: 220 },
+  { id: 'instrumental', label: '연주곡', order: 230 },
+];
+
+const EXPLORE_MAJOR_GENRE_BY_ID_343 = new Map(
+  EXPLORE_MAJOR_GENRES_343.map((genre) => [genre.id, genre]),
+);
 
 const normalizeExploreGenreCatalogKey342 = (value: unknown) => safeText(value)
   .normalize('NFKC')
@@ -716,20 +752,35 @@ const EXPLORE_GENRE_CATALOG_342 = (() => {
   const entries: ExploreGenreCatalogEntry342[] = [];
   const seen = new Set<string>();
 
-  const visit = (node: any) => {
+  const pushEntry = (node: any, branchId = '') => {
     if (!node || typeof node !== 'object') return;
     const id = safeText(node.id);
     const label = safeText(node.label);
     const labelKo = safeText(node.labelKo);
-    if (id && (label || labelKo) && !seen.has(id)) {
-      seen.add(id);
-      entries.push({ id, label: label || id, labelKo });
-    }
-    if (Array.isArray(node.children)) node.children.forEach(visit);
+    if (!id || (!label && !labelKo) || seen.has(id)) return;
+    seen.add(id);
+    entries.push({ id, label: label || id, labelKo, branchId });
   };
 
-  (GENRES as any[]).forEach(visit);
-  (GENRE_HIERARCHY as any[]).forEach(visit);
+  // Hierarchy first so label/id aliases inherit their broad branch.
+  (GENRE_HIERARCHY as any[]).forEach((group) => {
+    if (!Array.isArray(group?.children)) return;
+    group.children.forEach((branch: any) => {
+      const branchId = safeText(branch?.id);
+      pushEntry(branch, branchId);
+      if (Array.isArray(branch?.children)) {
+        branch.children.forEach((child: any) => {
+          const visit = (node: any) => {
+            pushEntry(node, branchId);
+            if (Array.isArray(node?.children)) node.children.forEach(visit);
+          };
+          visit(child);
+        });
+      }
+    });
+  });
+
+  (GENRES as any[]).forEach((entry) => pushEntry(entry, ''));
   return entries;
 })();
 
@@ -762,7 +813,75 @@ const formatUnknownExploreGenre342 = (value: string) => {
     .join(' ');
 };
 
-const resolveExploreRecommendationGenre342 = (track: ExploreTrack) => {
+const resolveExploreMajorGenre343 = (
+  entry: ExploreGenreCatalogEntry342 | null,
+  rawValue: string,
+): ExploreMajorGenre343 | null => {
+  const branchId = safeText(entry?.branchId);
+  const id = safeText(entry?.id).toLowerCase();
+  const key = normalizeExploreGenreCatalogKey342(
+    [entry?.id, entry?.label, entry?.labelKo, rawValue].filter(Boolean).join(' '),
+  );
+
+  let majorId = '';
+  if (branchId === 'pop') majorId = 'pop';
+  else if (branchId === 'kpop') majorId = 'kpop';
+  else if (branchId === 'jpop') majorId = 'jpop';
+  else if (branchId === 'hiphop') majorId = 'hiphop';
+  else if (branchId === 'rnb') {
+    if (['neo_soul', 'soul', 'soul_blues'].includes(id)) majorId = 'soul';
+    else if (id === 'funk') majorId = 'funk';
+    else majorId = 'rnb';
+  } else if (branchId === 'rock') majorId = 'rock';
+  else if (branchId === 'metal') majorId = 'metal';
+  else if (branchId === 'edm' || branchId === 'bass_synth') majorId = 'edm';
+  else if (branchId === 'jazz') majorId = 'jazz';
+  else if (branchId === 'acoustic_folk') {
+    if (/country|bluegrass/.test(key)) majorId = 'country';
+    else if (/acoustic session|fingerstyle/.test(key)) majorId = 'acoustic';
+    else majorId = 'folk';
+  } else if (branchId === 'world_music_folk') majorId = 'world';
+  else if (branchId === 'global_rhythm') {
+    if (/reggae/.test(key) && !/reggaeton/.test(key)) majorId = 'reggae';
+    else if (/afro/.test(key)) majorId = 'afro';
+    else majorId = 'latin';
+  } else if (branchId === 'trot') majorId = 'trot';
+  else if (branchId === '7080_gayo') majorId = '7080';
+  else if (branchId === 'classical') majorId = 'classical';
+  else if (branchId === 'theme_score') majorId = 'cinematic';
+  else if (branchId === 'instrumental_bgm') majorId = 'instrumental';
+
+  // Historical/unknown labels may not have a hierarchy branch. Keep this
+  // intentionally broad and never create combined "A / B" major labels.
+  if (!majorId) {
+    if (/k[ -]?pop|케이팝/.test(key)) majorId = 'kpop';
+    else if (/j[ -]?pop|제이팝/.test(key)) majorId = 'jpop';
+    else if (/hip hop|hiphop|힙합|rap|랩|drill|드릴|boom bap|붐뱁/.test(key)) majorId = 'hiphop';
+    else if (/neo soul|soul|소울/.test(key)) majorId = 'soul';
+    else if (/funk|펑크/.test(key)) majorId = 'funk';
+    else if (/r and b|rnb|알앤비/.test(key)) majorId = 'rnb';
+    else if (/metal|메탈|hardcore/.test(key)) majorId = 'metal';
+    else if (/rock|록|락/.test(key)) majorId = 'rock';
+    else if (/jazz|재즈|bossa|보사노바/.test(key)) majorId = 'jazz';
+    else if (/edm|house|techno|trance|dubstep|electro|synth|hardstyle|전자/.test(key)) majorId = 'edm';
+    else if (/country|bluegrass|컨트리|블루그래스/.test(key)) majorId = 'country';
+    else if (/acoustic|어쿠스틱|fingerstyle|핑거스타일/.test(key)) majorId = 'acoustic';
+    else if (/folk|포크/.test(key)) majorId = 'folk';
+    else if (/reggae|레게/.test(key)) majorId = 'reggae';
+    else if (/afro|아프로/.test(key)) majorId = 'afro';
+    else if (/latin|salsa|reggaeton|차차차|라틴/.test(key)) majorId = 'latin';
+    else if (/trot|트로트/.test(key)) majorId = 'trot';
+    else if (/7080/.test(key)) majorId = '7080';
+    else if (/classical|클래식|opera|오페라|orchestra|오케스트라/.test(key)) majorId = 'classical';
+    else if (/cinematic|score|theme|trailer|bgm|시네마틱|스코어|테마/.test(key)) majorId = 'cinematic';
+    else if (/instrumental|연주/.test(key)) majorId = 'instrumental';
+    else if (/pop|팝/.test(key)) majorId = 'pop';
+  }
+
+  return EXPLORE_MAJOR_GENRE_BY_ID_343.get(majorId) || null;
+};
+
+const resolveExploreRecommendationGenre343 = (track: ExploreTrack) => {
   const raw = (
     getExploreCardDisplayTitle(track).genre.replace(/^\[|\]$/g, '').trim()
     || safeText(track.primaryGenre).replace(/^\[|\]$/g, '').trim()
@@ -772,29 +891,28 @@ const resolveExploreRecommendationGenre342 = (track: ExploreTrack) => {
   const normalized = normalizeExploreGenreCatalogKey342(raw);
   const compact = compactExploreGenreCatalogKey342(raw);
   const known = EXPLORE_GENRE_LOOKUP_342.get(normalized) || EXPLORE_GENRE_LOOKUP_342.get(compact) || null;
+  const detailLabel = known
+    ? (safeText(known.labelKo) || safeText(known.label, raw))
+    : formatUnknownExploreGenre342(raw);
+  const detailKey = normalizeExploreGenreCatalogKey342(known?.label || known?.id || detailLabel);
+  const major = resolveExploreMajorGenre343(known, raw);
 
-  if (known) {
-    const koreanLabel = safeText(known.labelKo);
-    const hasHangulLabel = /[가-힣]/.test(koreanLabel);
-    const englishLabel = safeText(known.label, raw);
-    return {
-      key: normalizeExploreGenreCatalogKey342(englishLabel) || normalizeExploreGenreCatalogKey342(known.id),
-      label: hasHangulLabel ? koreanLabel : englishLabel,
-      row: (hasHangulLabel ? 'ko' : 'en') as ExploreGenreDisplayRow342,
-    };
-  }
+  const majorMatchesDetail = major && (
+    normalizeExploreGenreCatalogKey342(major.label) === normalizeExploreGenreCatalogKey342(detailLabel)
+    || normalizeExploreGenreCatalogKey342(major.id) === normalizeExploreGenreCatalogKey342(known?.id)
+  );
 
-  const readable = formatUnknownExploreGenre342(raw);
   return {
-    key: normalizeExploreGenreCatalogKey342(readable),
-    label: readable,
-    row: (/[가-힣]/.test(readable) ? 'ko' : 'en') as ExploreGenreDisplayRow342,
+    major,
+    detail: majorMatchesDetail || !detailKey || !detailLabel
+      ? null
+      : { key: detailKey, label: detailLabel },
   };
 };
 
 const readExploreRecommendationGenre221 = (track: ExploreTrack) => {
-  const genre = resolveExploreRecommendationGenre342(track);
-  return genre?.label || '';
+  const genre = resolveExploreRecommendationGenre343(track);
+  return genre?.detail?.label || genre?.major?.label || '';
 };
 
 const readExplorePinnedKeywordList235 = (value: unknown): string[] => {
@@ -831,17 +949,21 @@ const getExplorePinnedKeywords235 = (track: ExploreTrack): string[] => {
   }).slice(0, 4);
 };
 
-// app221 — Keep recommendations local-first. SORIDRAW picks, genre folders and
-// creator suggestions are all projections of the already-loaded 40-card Feed.
-// Switching a genre or scrolling a rail never performs an extra server read.
+// app221/app343 — Keep recommendations local-first. Broad and detail genre
+// rows are independent projections of the already-loaded 40-card Feed.
 const buildExploreRecommendationModel221 = (
   items: ExploreTrack[],
   currentUid = '',
 ): ExploreRecommendationModel221 => {
   const source = items.slice(0, 40);
-  const genreBuckets = new Map<string, {
+  const majorBuckets = new Map<string, {
     label: string;
-    row: ExploreGenreDisplayRow342;
+    sortOrder: number;
+    tracks: ExploreTrack[];
+    trackIds: Set<string>;
+  }>();
+  const detailBuckets = new Map<string, {
+    label: string;
     firstIndex: number;
     tracks: ExploreTrack[];
     trackIds: Set<string>;
@@ -849,18 +971,34 @@ const buildExploreRecommendationModel221 = (
   const creatorBuckets = new Map<string, ExploreCreatorRecommendation221>();
 
   source.forEach((track, index) => {
-    const genre = resolveExploreRecommendationGenre342(track);
-    if (genre?.key && genre.label) {
-      const current = genreBuckets.get(genre.key);
+    const genre = resolveExploreRecommendationGenre343(track);
+    if (genre?.major) {
+      const current = majorBuckets.get(genre.major.id);
       if (current) {
         if (!current.trackIds.has(track.id)) {
           current.trackIds.add(track.id);
           current.tracks.push(track);
         }
       } else {
-        genreBuckets.set(genre.key, {
-          label: genre.label,
-          row: genre.row,
+        majorBuckets.set(genre.major.id, {
+          label: genre.major.label,
+          sortOrder: genre.major.order,
+          tracks: [track],
+          trackIds: new Set([track.id]),
+        });
+      }
+    }
+
+    if (genre?.detail?.key && genre.detail.label) {
+      const current = detailBuckets.get(genre.detail.key);
+      if (current) {
+        if (!current.trackIds.has(track.id)) {
+          current.trackIds.add(track.id);
+          current.tracks.push(track);
+        }
+      } else {
+        detailBuckets.set(genre.detail.key, {
+          label: genre.detail.label,
           firstIndex: index,
           tracks: [track],
           trackIds: new Set([track.id]),
@@ -879,23 +1017,29 @@ const buildExploreRecommendationModel221 = (
     }
   });
 
-  const genres = [...genreBuckets.entries()]
+  const majorGenres: ExploreGenreRecommendation221[] = [...majorBuckets.entries()]
     .map(([key, bucket]) => ({
-      id: `genre-${key.replace(/[^a-z0-9가-힣]+/g, '-')}`,
+      id: `genre-major-${key}`,
       label: bucket.label,
-      row: bucket.row,
-      firstIndex: bucket.firstIndex,
+      tier: 'major' as const,
+      sortOrder: bucket.sortOrder,
       tracks: bucket.tracks.slice(0, 20),
     }))
-    .sort((a, b) => {
-      if (a.row !== b.row) return a.row === 'ko' ? -1 : 1;
-      return b.tracks.length - a.tracks.length || a.firstIndex - b.firstIndex;
-    })
-    .map(({ id, label, row, tracks }) => ({ id, label, row, tracks }));
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const detailGenres: ExploreGenreRecommendation221[] = [...detailBuckets.entries()]
+    .map(([key, bucket]) => ({
+      id: `genre-detail-${key.replace(/[^a-z0-9가-힣]+/g, '-')}`,
+      label: bucket.label,
+      tier: 'detail' as const,
+      sortOrder: bucket.firstIndex,
+      tracks: bucket.tracks.slice(0, 20),
+    }))
+    .sort((a, b) => b.tracks.length - a.tracks.length || a.sortOrder - b.sortOrder);
 
   return {
     picks: source.slice(0, 20),
-    genres,
+    genres: [...majorGenres, ...detailGenres],
     creators: [...creatorBuckets.values()].slice(0, 20),
   };
 };
@@ -3502,8 +3646,8 @@ export default function ExplorePage() {
   const activeRecommendationGenre221 = recommendationModel221.genres.find(
     (genre) => genre.id === recommendationGenreId221,
   ) || recommendationModel221.genres[0] || null;
-  const koreanRecommendationGenres342 = recommendationModel221.genres.filter((genre) => genre.row === 'ko');
-  const englishRecommendationGenres342 = recommendationModel221.genres.filter((genre) => genre.row === 'en');
+  const majorRecommendationGenres343 = recommendationModel221.genres.filter((genre) => genre.tier === 'major');
+  const detailRecommendationGenres343 = recommendationModel221.genres.filter((genre) => genre.tier === 'detail');
 
   const renderMoreSheet = () => {
     if (!moreTrack) return null;
@@ -4222,13 +4366,13 @@ export default function ExplorePage() {
                   itemCount={activeRecommendationGenre221.tracks.length}
                   toolbar={(
                     <div className="soridraw-explore-recommend-genre-rows" aria-label="추천 장르 선택">
-                      {koreanRecommendationGenres342.length > 0 && (
+                      {majorRecommendationGenres343.length > 0 && (
                         <div
                           className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
-                          aria-label="한글 장르"
+                          aria-label="대분류 장르"
                           onWheel={handleExploreGenreRowWheel342}
                         >
-                        {koreanRecommendationGenres342.map((genre) => (
+                        {majorRecommendationGenres343.map((genre) => (
                           <button
                             key={genre.id}
                             type="button"
@@ -4241,13 +4385,13 @@ export default function ExplorePage() {
                         ))}
                         </div>
                       )}
-                      {englishRecommendationGenres342.length > 0 && (
+                      {detailRecommendationGenres343.length > 0 && (
                         <div
                           className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
-                          aria-label="영문 장르"
+                          aria-label="세부 장르"
                           onWheel={handleExploreGenreRowWheel342}
                         >
-                        {englishRecommendationGenres342.map((genre) => (
+                        {detailRecommendationGenres343.map((genre) => (
                           <button
                             key={genre.id}
                             type="button"

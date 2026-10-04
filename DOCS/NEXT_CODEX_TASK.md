@@ -1,3 +1,23 @@
+## NEXT TASK — candidate355 PREVIEW code-only compatibility deploy + live verification
+
+Current code audit status:
+- `preview` candidate `f8e2d1830f237a94abd064795c5be325171746ff`: Astra independent re-audit PASS.
+- No deployment yet. Live baseline remains app344 / PREVIEW Worker341.
+
+When PREVIEW deployment is requested:
+1. Fix exact target commit and run TypeScript / Build / required follow verifiers.
+2. Deploy only the code-compatible app/Worker pieces needed for candidate355.
+3. **Do not create/arm shared cutover manifest and do not run shared D1 migration yet.**
+4. Confirm legacy mode remains behaviorally unchanged on preview.soridraw.com.
+5. Verify no unintended Firebase/Functions/shared user-data change.
+6. Then perform focused PC/mobile checks and collect actual Worker/R2 request-cost evidence for follow, unfollow, duplicate/no-op and recovery scenarios.
+7. TEST/main promotion requires separate user approval. PRODUCTION requires explicit production approval.
+
+Protected:
+- likes / public-private / search / creator recommendations / UI.
+- no backfill/delete/data copy.
+- no shared authority activation while TEST/PRODUCTION old code exists.
+
 ## NEXT TASK — independent re-audit of repaired candidate355 legacy schema2 cache blocker
 
 - Implementation base: preview / a6a3053d440245cd91f9f71a6c45c0a153d81800. Audit the final fixed commit; do not modify code or deploy.

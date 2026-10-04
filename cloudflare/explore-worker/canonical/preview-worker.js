@@ -14145,6 +14145,80 @@ async function mutateFollowOverlayRelation350(env, followerUid, followingUid, sh
   };
 }
 
+// SORIDRAW_FOLLOW_R2_DELTA_CAS_352_20261004
+// Normal overlay-mode count update: changed relation only, R2 CAS only, D1 0.
+// The cutover manifest may claim profileCountsR2Exact only after these shared
+// profile bundles are certified exact. Missing/invalid bundles fail closed and
+// use the separate 351 targeted recovery path instead of inventing a count.
+async function patchSharedProfileFollowDelta352(env, uid, delta = {}) {
+  const normalized = String(uid || "").trim();
+  const followerDelta = Number(delta?.followerDelta || 0);
+  const followingDelta = Number(delta?.followingDelta || 0);
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalized || !bucket ||
+      !Number.isInteger(followerDelta) || Math.abs(followerDelta) > 1 ||
+      !Number.isInteger(followingDelta) || Math.abs(followingDelta) > 1) {
+    return { ok: false, reason: "invalid_delta" };
+  }
+  if (followerDelta === 0 && followingDelta === 0) {
+    const existing = await readExploreSharedProfileByUid247(env, normalized);
+    const profile = existing?.body?.data?.profile || null;
+    return profile ? {
+      ok: true,
+      followerCount: clampExploreSocialCount(profile.followerCount ?? profile.follower_count),
+      followingCount: clampExploreSocialCount(profile.followingCount ?? profile.following_count),
+      changed: false,
+    } : { ok: false, reason: "missing_shared_profile" };
+  }
+
+  const key = exploreSharedProfileR2Key060(normalized);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const object = await bucket.get(key);
+    if (!object) return { ok: false, reason: "missing_shared_profile" };
+    let bundle = null;
+    try { bundle = JSON.parse(await object.text()); } catch { return { ok: false, reason: "invalid_shared_profile" }; }
+    if (!validExploreProfileR2Bundle020(bundle)) return { ok: false, reason: "invalid_shared_profile" };
+    const profile = bundle?.body?.data?.profile || null;
+    if (!profile || String(profile.uid || "").trim() !== normalized) {
+      return { ok: false, reason: "profile_uid_mismatch" };
+    }
+    const followerCount = Math.max(
+      0,
+      clampExploreSocialCount(profile.followerCount ?? profile.follower_count) + followerDelta,
+    );
+    const followingCount = Math.max(
+      0,
+      clampExploreSocialCount(profile.followingCount ?? profile.following_count) + followingDelta,
+    );
+    const now = Date.now();
+    const revision = Math.max(1, Number(bundle.revision || bundle?.body?.data?.revision || 0) + 1);
+    const nextData = {
+      ...bundle.body.data,
+      profile: { ...profile, followerCount, followingCount },
+      revision,
+      updatedAt: now,
+    };
+    const nextBundle = {
+      ...bundle,
+      revision,
+      updatedAt: now,
+      body: { ...bundle.body, data: nextData },
+    };
+    const saved = await bucket.put(key, JSON.stringify(nextBundle), {
+      onlyIf: { etagMatches: object.etag },
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+      customMetadata: {
+        ...(object.customMetadata || {}),
+        soridrawSharedProfile: "352",
+        followCountDelta: "cas",
+        mirroredAt: String(now),
+      },
+    });
+    if (saved) return { ok: true, followerCount, followingCount, changed: true };
+  }
+  return { ok: false, reason: "shared_profile_contention" };
+}
+
 // SORIDRAW_FOLLOW_EXACT_COUNT_RECOVERY_351_20261004
 // Dormant compatibility layer for overlay cutover. Normal follow mutations should
 // update shared profile counts from the changed relation only. These helpers are

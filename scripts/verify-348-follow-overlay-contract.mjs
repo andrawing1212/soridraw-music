@@ -57,3 +57,10 @@ console.log('FOLLOW348_SHARED_MIGRATION_APPLIED=NO');
 console.log('FOLLOW348_REMOTE_BILLING_PROOF_RUN=37175419175');
 
 await import('./verify-356-follow-worker341-legacy-parity.mjs');
+
+await import('./verify-349-follow-overlay-readers.mjs');
+await import('./verify-350-follow-overlay-writer.mjs');
+await import('./verify-351-follow-count-recovery.mjs');
+await import('./verify-352-follow-r2-delta.mjs');
+await import('./verify-354-follow-orchestration.mjs');
+await import('./verify-355-follow-audit-repairs.mjs');

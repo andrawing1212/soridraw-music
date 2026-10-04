@@ -113,26 +113,15 @@ jobs:
 
           # 2) The receiving device must materialize the RTDB preview directly in
           # favoritesStore/cache. Do not wait for the +30s canonical signal.
-          old = """    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
-              documentId: safeDocumentId,
-              identityKey,
-              desiredSaved,
-              baselineFavorite,
-              song: remoteItem || {},
-              version: Math.floor(remoteVersion),
-            });
-            setFavorites((previous) => previous);
-          };"""
-          new = """    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
-              documentId: safeDocumentId,
-              identityKey,
-              desiredSaved,
-              baselineFavorite,
-              song: remoteItem || {},
-              version: Math.floor(remoteVersion),
-            });
-
-            // app349 — materialize the non-canonical preview synchronously. This
+          remote_start = app.find('  const applyRemoteStudioHeartPreview = (')
+          remote_end = app.find('\n\n  const clearRemoteStudioHeartPreviewFromCanonical', remote_start)
+          if remote_start < 0 or remote_end <= remote_start:
+              raise SystemExit('applyRemoteStudioHeartPreview block missing')
+          remote_block = app[remote_start:remote_end]
+          remote_old = "    setFavorites((previous) => previous);"
+          if remote_block.count(remote_old) != 1:
+              raise SystemExit(f'applyRemote repaint anchor count={remote_block.count(remote_old)}')
+          remote_new = """    // app349 — materialize the non-canonical preview synchronously. This
             // keeps Music Note membership as immediate as the Recent heart and also
             // lets a route opened before canonical settlement reuse the local cache.
             const previewBase = stripStudioHeartPendingLayerFromFavorites(
@@ -142,11 +131,9 @@ jobs:
             const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
             const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
             favoritesStore.setFavorites(visible);
-            writeFavoritesCache(safeUid, visible);
-          };"""
-          if app.count(old) != 1:
-              raise SystemExit(f'applyRemote preview anchor count={app.count(old)}')
-          app = app.replace(old, new, 1)
+            writeFavoritesCache(safeUid, visible);"""
+          remote_block = remote_block.replace(remote_old, remote_new, 1)
+          app = app[:remote_start] + remote_block + app[remote_end:]
 
           # 3) Clearing the preview map during canonical receive must not repaint an
           # intermediate list without the row. The canonical merge immediately after

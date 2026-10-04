@@ -1,3 +1,27 @@
+## 0P5. PREVIEW app345 + candidate355 compatibility Worker deployed — cutover OFF (2026-10-05 KST)
+
+- User approved PREVIEW deployment after Astra independent audit PASS.
+- Branch release sequence:
+  - app version bump: `736645d999edc09518a88dca8d7564ede9929819`
+  - Worker release trigger: `c968035c74975b69dd00252b6bc6b1caa8f5e051`
+  - Hosting release trigger / deployed source HEAD: `051247aad2b8127aae01475880c549caceb37968`
+- Cloudflare PREVIEW Worker Run `37213658493`: **SUCCESS**.
+  - canonical Worker SHA256 `ff824b1818ef00b685ceb8ccfcdb1db876ca1d780970fc828f4b2bd41d62dd01`
+  - active PREVIEW Worker version `2e544865-0392-4dbe-8cc0-28e1b8a01fb6`
+  - feed smoke PASS / profile smoke PASS / warm revision D1 R0 W0 PASS.
+  - TEST/PRODUCTION Workers unchanged PASS.
+  - D1 schema migration 0. No follow schema/cutover activation.
+- Firebase PREVIEW Hosting Run `37213744061`: **SUCCESS**.
+  - TypeScript PASS / Build PASS / Firebase PREVIEW deploy PASS.
+  - remote app version **345** / exact build PASS.
+  - shared RTDB rules SKIPPED.
+  - TEST/PRODUCTION unchanged PASS.
+- Shared follow cutover manifest remains unarmed/absent by this release path; candidate355 code is deployed in compatibility/legacy mode only.
+- Firebase Functions unchanged. Shared/user data migration/backfill/delete 0.
+- Existing like/public-private/search/creator/UI protected paths were not intentionally changed.
+- Two unrelated `diagnose-069-live-like.yml` push runs were reported as failure with zero jobs on the release-trigger commits; they were not part of either successful deploy workflow and were not modified in this release. Track separately; do not treat them as candidate355 validation.
+- **Next gate:** PREVIEW real-device PC/mobile + actual Worker/R2 behavior/cost. No TEST/main or PRODUCTION promotion until live verification passes.
+
 ## 0P4. candidate355 Astra 재감사 PASS — 코드 감사 완료, PREVIEW 배포 전 (2026-10-05 KST)
 
 - Branch/code: `preview` / `f8e2d1830f237a94abd064795c5be325171746ff`.

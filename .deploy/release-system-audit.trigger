@@ -52,3 +52,7 @@ app353-pc-musicnote-media-catalog-priority
 target=921ee914ce51a025325504623c59994ef595b702
 focus=detail-media-durable-overlay,catalog-reentry-priority,no-extra-io
 requested=2026-10-05T04:27KST
+app353b-pc-musicnote-media-canonical-writeback
+target=b39e7f052ea92034bbf685aa822de8115fad89e6
+focus=canonical-document-id-local-patch,catalog-delta-source,detail-media-overlay,no-extra-io
+requested=2026-10-05T04:31KST

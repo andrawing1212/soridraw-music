@@ -37,7 +37,7 @@ SORIDRAW uses two different jobs and they must stay separate.
 **Immediate visibility**
 - update the initiating device locally first;
 - for Recent title/prompt/lyrics, send the smallest practical RTDB changed-item preview to the user's other device and apply it from local/cache state;
-- for Studio save-heart / unsave, **do not** send a pre-canonical heart preview: only the initiating device shows the local pending membership until canonical settlement;
+- for Studio save-heart / unsave, send the bounded RTDB changed-item preview immediately so the same signed-in account on other devices shows the same heart + Music Note membership without navigation/refresh;
 - any RTDB receiver path used by these flows must not perform a Firestore read or write.
 
 **Canonical persistence**
@@ -81,12 +81,18 @@ The number of edited Recent songs inside that window must not multiply canonical
 - lyrics rendering may depend on both top-level `lyrics` and `appliedKeywords.lyricsByLanguage`; when a live lyric preview arrives, keep those local display representations coherent immediately;
 - do not add another RTDB mutation merely to repair display state.
 
+## app348 immediate cross-device freeze — supersedes app302 delayed-remote timing
+
+The current explicit user requirement and protected baseline are in `.agents/skills/song-save-edit-sync-cost/references/soridraw-app348-studio-heart-immediate-cross-device-baseline.md`.
+
+**Hard rule:** same-device UI is immediate, PC↔mobile visible heart + Music Note membership is also immediate, while canonical Firestore persistence remains per-song latest-click +30 seconds. Do not remove or delay the cross-device preview to reduce cost. Preserve app347 stale-overwrite/media protection.
+
 ## 4. Save heart / Music Note membership rule
 
 ### Current SORIDRAW timing
 - Canonical Studio save-heart trailing batch: **30 seconds per song after the latest click**.
 - Initiating device: Recent heart and Music Note list update **immediately from local pending state**.
-- Other devices: **no pre-canonical heart preview**. They update only after the 30-second canonical save/unsave succeeds and its normal RTDB mutation signal arrives.
+- Other devices: **immediate RTDB heart + Music Note membership preview**. Canonical Firestore persistence still waits for the 30-second final-state settlement.
 - Pending timer key: exact favorite/Music Note document identity.
 
 ### Per-song behavior
@@ -144,12 +150,13 @@ For Recent title/prompt/lyrics:
 
 For Studio save-heart / unsave:
 1. initiating device updates its Recent heart and Music Note list immediately from the durable local pending intent;
-2. do **not** publish a pre-canonical RTDB heart preview;
-3. repeated clicks on the same song restart that song's 30-second timer and collapse to final intent;
-4. if final state equals the original canonical baseline, canonical favorite target is W0 and no remote change is needed;
-5. if final state differs, the 30-second canonical favorite mutation succeeds first;
-6. only then the existing mutation boundary publishes the normal compact save/unsave RTDB signal;
-7. receiving device merges that canonical changed item without Firestore/D1 read.
+2. publish one bounded RTDB heart/Music Note changed-item preview immediately;
+3. receiving devices apply that preview from local/cache state with Firestore R0/W0 and D1 R0/W0;
+4. repeated clicks on the same song restart that song's 30-second timer and collapse to final intent;
+5. if final state equals the original canonical baseline, canonical favorite target is W0;
+6. if final state differs, the 30-second canonical favorite mutation persists only the final state;
+7. canonical save/unsave clears the matching non-canonical preview layer and remains the durable truth;
+8. no route change, tab change, refresh, or whole Music Note reload is required for visible convergence.
 
 Do not:
 - reload a whole Recent list because one song changed;

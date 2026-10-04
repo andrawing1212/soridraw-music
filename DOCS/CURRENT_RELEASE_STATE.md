@@ -1,3 +1,31 @@
+## 0OV. 비용 검증 기준 보강 — query W뿐 아니라 D1 Rows Read/Written 동시 합격 필수 (2026-10-04 KST)
+
+사용자 지적 반영.
+
+팔로우/좋아요/공개·비공개/프로필 수정 등 비용 검증에서 이제 아래를 항상 한 세트로 본다.
+
+- D1 query read/write
+- D1 Rows Read
+- D1 Rows Written
+- Worker 요청 수
+- R2 Class A/B
+- Firestore read/write
+
+특히 logical `D1 W3`만 낮아 보여도 실제 `Rows Read/Written`이 크게 증가하면 비용 최적화 PASS로 보지 않는다.
+
+2026-10-04 팔로우 해제 실사용 캡처:
+- 한 실행에서 `D1 query R0/W3`인데 실제 `Rows Read 18 / Rows Written 14`
+- 이어진 실행에서는 `Rows Read 19 / Rows Written 17`
+- 따라서 현재 팔로우 경로는 비용 기준 FAIL로 취급.
+
+다음 팔로우 수정의 합격 조건:
+- 관계 1개 변경만 처리
+- 전체 follows/profile/feed scan 금지
+- Rows Read/Written이 변경량에 비례하는 O(1)이어야 함
+- query W 수치와 physical row 수치를 둘 다 기록
+- PREVIEW 실사용에서 같은 동작을 3회 이상 반복해 수치가 안정적으로 낮은지 확인
+- 비용 원인을 모르면 다음 기능 작업으로 넘어가지 않음
+
 ## 0OU. app344 실사용 발견 — 팔로우 변경 실제 D1 row 증폭 + 크리에이터 추천 범위 확장 필요 (2026-10-04 KST)
 
 **사용자 실사용 발견**

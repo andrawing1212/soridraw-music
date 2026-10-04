@@ -1,3 +1,59 @@
+## 0OQ. PREVIEW Worker 341 — Explore 검색 D1 완전 차단 + 승인된 R2 검색 카탈로그 1회 백필 (2026-10-04 KST)
+
+**사용자 승인 목표**
+- 처음 보는 검색어도 D1 read/write 0.
+- 오타/랜덤 문자열도 D1 read/write 0.
+- 같은 검색어 재검색은 app340 기기 캐시로 Worker 0 / D1 0.
+- 기존 공개곡 제목/장르/아티스트 검색 기능은 R2 검색 카탈로그로 유지.
+
+**실행한 1회 파생 카탈로그 백필**
+- 사용자 승인 후 기존 공개곡을 shared R2 검색 카탈로그에 1회 채움.
+- 대상 공개곡: **45곡**.
+- Run `37163637669`: **SUCCESS**.
+- 45/45 R2 marker + shared track-card 검증 PASS.
+- D1은 SELECT/read-only만 사용.
+- D1 write 0 / schema change 0.
+- 사용자 원본 데이터 write/delete/rewrite 0.
+- 임시 backfill Worker는 작업 완료 후 삭제.
+- product commit: `9c11b95cf4c95210011b1425cea23f3e51cbf34f`.
+
+**Worker 341 검색 구조**
+- PREVIEW hybrid mode의 `/v1/search` 일반 사용자 경로에서 legacy D1 search fallback 제거.
+- 검색 authority를 R2 catalog로 고정.
+- 제목 / 장르 / 아티스트 nickname·handle 검색은 R2 catalog prefix + shared R2 track-card/profile을 사용.
+- 없는 검색어/오타/랜덤 문자열도 빈 R2 결과만 반환하며 D1 query를 실행하지 않음.
+- 검색 Edge Cache 5분 유지.
+- app340의 동일 검색어 기기 로컬 캐시 2분 경로는 그대로 유지.
+- likes / save heart / folders / Split / Music Note batching 변경 없음.
+
+**검증**
+- app341 verifier:
+  - `APP341_SEARCH_R2_ONLY=PASS`
+  - `APP341_SEARCH_D1_R0_W0_CONTRACT=PASS`
+  - `APP341_RANDOM_QUERY_D1_R0_W0=PASS`
+  - TypeScript PASS / Build PASS.
+- Final Release System Audit Run `37164010278`: **SUCCESS**.
+
+**PREVIEW 배포**
+- PREVIEW Worker Release Run `37166719557`: **SUCCESS**.
+- active Worker version: `59ed42ea-f29a-4837-a9a7-20e70648e59c`.
+- PREVIEW release preflight PASS.
+- FEED smoke PASS / PROFILE smoke PASS.
+- public-like-card D1 R0/W0 PASS.
+- TEST / PRODUCTION Worker unchanged PASS.
+- Firebase Hosting은 변경 없음 — 앱 UI는 계속 **app340**.
+
+**실기기 최종 확인**
+1. CACHE LIVE 초기화.
+2. 처음 입력하는 정상 제목/ID/아티스트 검색 1회:
+   - Worker 1 가능 / D1 query R0 W0 / rows R0 W0.
+3. `힙합` 등 한글 장르 첫 검색:
+   - Worker 1 가능 / D1 R0 W0.
+4. 랜덤/오타 검색 예: `ㅁㄴㅇㄹ341`:
+   - Worker 1 가능 / D1 R0 W0.
+5. 같은 검색어를 2분 안에 재검색:
+   - app340 local cache hit이면 Worker 증가 0 / D1 증가 0.
+
 ## 0OP. PREVIEW app340 — 동일 검색 재실행 Worker 0 / D1 R0 로컬 캐시 (2026-10-04 KST)
 
 **사용자 요구**

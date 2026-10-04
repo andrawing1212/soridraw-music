@@ -114,7 +114,7 @@ if (process.argv[2] === 'cleanup') {
     });
     const isolatedEnv = { DB: { prepare } };
     const cutover = { mode: 'overlay348', cutoverToken: 'isolated-354-' + run };
-    async function mutate(actor, target, desired, at) {
+    async function mutate(actor, target, desired, at, expectedEffective = desired) {
       mutationResults = [];
       await context.mutateFollowOverlayRelation350(isolatedEnv,actor,target,Boolean(desired),at,cutover,{
         actor,target,following:Boolean(desired),revision:at,token:cutover.cutoverToken,id:'isolated_operation_' + at,
@@ -122,7 +122,7 @@ if (process.argv[2] === 'cleanup') {
       if (mutationResults.length !== 1) fail('actual fenced writer issued unexpected query count');
       const out = mutationResults[0];
       const final = await query("SELECT " + effectiveSql(actor, target) + " AS following");
-      if (Number(final.results?.[0]?.following || 0) !== Number(desired)) fail('effective relation mismatch');
+      if (Number(final.results?.[0]?.following || 0) !== Number(expectedEffective)) fail('effective relation mismatch');
       const written = Number(out.meta?.rows_written || 0);
       const read = Number(out.meta?.rows_read || 0);
       const changes = Number(out.meta?.changes || 0);
@@ -152,7 +152,7 @@ if (process.argv[2] === 'cleanup') {
     if (Number(baselineCount.results?.[0]?.n) !== 3) fail('legacy baseline mutated');
     const sparse = await query("SELECT COUNT(*) AS n FROM explore_follow_overrides_348");
     if (Number(sparse.results?.[0]?.n) !== 2) fail('touched-edge ordering fences were deleted');
-    const fenceWrites = await mutate('actor','new-target',true,200);
+    const fenceWrites = await mutate('actor','new-target',true,200,false);
     if (fenceWrites.written !== 0) fail('suspended old request wrote after return to baseline');
 
     // Recreate representative post-cutover overrides to verify both pagination directions.

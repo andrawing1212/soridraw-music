@@ -77,8 +77,8 @@ if (process.argv[2] === 'cleanup') {
       "('actor','legacy-target',100),('other','legacy-target',101),('actor','legacy-two',102)");
 
     // Candidate hot path: one WITHOUT ROWID sparse override row. Forward lookup
-    // uses the PK prefix; reverse discovery of *new* active followers uses the
-    // one partial index. State=0 rows do not occupy the reverse index.
+    // uses the PK prefix; reverse discovery and exact-count recovery share one
+    // full reverse index so both active and negative deltas remain indexed.
     await ddl("CREATE TABLE explore_follow_overrides_348 (" +
       "follower_uid TEXT NOT NULL, following_uid TEXT NOT NULL," +
       "following INTEGER NOT NULL CHECK(following IN(0,1))," +
@@ -150,7 +150,7 @@ if (process.argv[2] === 'cleanup') {
     if (Number(sparse.results?.[0]?.n) !== 0) fail('sparse overlay failed to collapse back to baseline');
 
     // Recreate representative post-cutover overrides to verify both pagination directions.
-    await query("INSERT INTO explore_follow_overrides_348(follower_uid,following_uid,following,updated_at,mutation_id) VALUES" +
+    await query("INSERT INTO explore_follow_overrides_348(follower_uid,following_uid,following,baseline_following,updated_at,mutation_id) VALUES" +
       "('actor','new-target',1,0,300,'m1'),('actor','legacy-target',0,1,301,'m2'),('new-follower','legacy-target',1,0,302,'m3')");
     const forwardSql =
       "SELECT following_uid,followed_at FROM (" +

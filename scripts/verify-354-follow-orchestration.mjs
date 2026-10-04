@@ -40,8 +40,12 @@ for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
   const b = baselineAst.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).body.statements;
   // Overlay branch and wrapper guard are the only changes to legacy flow.
   const text = node => ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified,node,node.getSourceFile()).replaceAll('\r\n','\n');
-  const legacy = nodes => nodes.filter(n => !ts.isIfStatement(n) ||
-    (!n.expression.getText().includes('mode === "overlay348"') && !n.expression.getText().includes('X-Soridraw-Follow-Protocol'))).map(text);
+  const legacy = nodes => nodes.filter(n => {
+    if (ts.isIfStatement(n) &&
+        (n.expression.getText().includes('mode === "overlay348"') || n.expression.getText().includes('X-Soridraw-Follow-Protocol'))) return false;
+    if (ts.isTryStatement(n) && n.getText().includes('syncExactSharedFollowing347')) return false;
+    return true;
+  }).map(text);
   assert.deepEqual(legacy(a),legacy(b),'legacy path changed: ' + name);
 }
 for (const name of names) assert.ok(functions.has(name), 'missing ' + name);

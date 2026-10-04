@@ -316,7 +316,7 @@ const applyMusicNoteMediaOverlaysToSnapshot = (
   let changed = false;
   let recordsChanged = false;
   const items = snapshot.items.map((item) => {
-    const id = String(item?.id || item?.firestoreId || '').trim();
+    const id = String(item?.firestoreId || item?.id || '').trim();
     const record = id ? records[id] : null;
     if (!record) return item;
 
@@ -360,7 +360,7 @@ export const rememberMusicNoteMediaPreview = (
   const safeUid = String(uid || '').trim();
   if (!safeUid || !sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return false;
   const projected = projectCatalogItemForSync('musicNote', sourceItem);
-  const id = String(projected?.id || projected?.firestoreId || '').trim();
+  const id = String(projected?.firestoreId || projected?.id || '').trim();
   if (!projected || !id) return false;
   const patch = projectMusicNoteMediaPatch(projected);
   if (Object.keys(patch).length === 0) return false;

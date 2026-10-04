@@ -7,8 +7,6 @@ const source = readFileSync(path, 'utf8');
 
 for (const marker of [
   'SORIDRAW_FOLLOW_EXACT_COUNT_AUTHORITY_347_20261004',
-  'SORIDRAW_FOLLOW_MONOTONIC_REVISION_347_20261004',
-  'SORIDRAW_FOLLOW_SHARED_FASTPATH_347_20261004',
   'SORIDRAW_FOLLOW_EXACT_COUNT_GUARD_347_20261004',
 ]) assert.ok(source.includes(marker), 'missing ' + marker);
 
@@ -129,24 +127,22 @@ assert.equal(await writeLegacy(env, 'x', new Set(['wrong'])), false);
 assert.equal(JSON.stringify(bucket.value(keyOf('x'))), before);
 
 const adjust = functionText('adjustExploreFollowCountersDelta');
-assert.match(adjust, /updated_at = MAX\(profile_stats\.updated_at \+ 1, excluded\.updated_at\)/);
-assert.match(adjust, /updated_at = MAX\(updated_at \+ 1, \?\)/);
-assert.match(adjust, /RETURNING uid, follower_count, following_count, updated_at/);
-assert.match(adjust, /SELECT uid, follower_count, following_count, updated_at/);
+assert.doesNotMatch(adjust, /SORIDRAW_FOLLOW_COMBINED_COUNTERS_345/);
+assert.doesNotMatch(adjust, /updated_at = MAX\(profile_stats\.updated_at \+ 1, excluded\.updated_at\)/);
+assert.doesNotMatch(adjust, /updated_at = MAX\(updated_at \+ 1, \?\)/);
 
 const fast = functionText('syncExploreFollowingR2AfterMutation');
-assert.match(fast, /source: 'shared-347'/);
-assert.ok(fast.indexOf('if (shared)') < fast.indexOf('syncExploreFollowingR2AfterMutationCore061'));
-assert.equal((fast.match(/writeExploreR2Json\(/g) || []).length, 1);
+assert.doesNotMatch(fast, /source: 'shared-347'/);
 
 const core = functionText('handleFollowR2Core');
-assert.match(core, /syncExactSharedFollowing347\([\s\S]*?stats\?\.follower[\s\S]*?stats\?\.delta/);
-assert.match(core, /exact following-count sync deferred/);
+assert.match(core, /const followCutover348 = await readFollowCutoverState348\(env\)/);
+assert.match(core, /followCutover348\.mode === "overlay348"[\s\S]*?handleFollowOverlay354/);
+assert.doesNotMatch(core, /syncExactSharedFollowing347/);
 
 console.log('FOLLOW347_EXACT_COUNT_MONOTONIC=PASS');
 console.log('FOLLOW347_STALE_REVISION_NO_ROLLBACK=PASS');
 console.log('FOLLOW347_TRUNCATED_MEMBERSHIP_NOT_FALSE_COMPLETE=PASS');
 console.log('FOLLOW347_LEGACY_WRITER_FENCED=PASS');
-console.log('FOLLOW347_SHARED_FASTPATH=PASS');
-console.log('FOLLOW347_D1_AUTHORITY_UNCHANGED=PASS');
-console.log('FOLLOW347_PHYSICAL_D1_COST=UNCHANGED_STAGE1');
+console.log('FOLLOW347_LEGACY_SHARED_FASTPATH_REMOVED=PASS');
+console.log('FOLLOW347_D1_AUTHORITY_HELPER_PRESERVED=PASS');
+console.log('FOLLOW347_LEGACY_MUTATION_DEFERRED_TO_WORKER341_PARITY_GATE');

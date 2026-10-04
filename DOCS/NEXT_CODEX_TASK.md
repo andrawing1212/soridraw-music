@@ -1,3 +1,34 @@
+## CURRENT NEXT GATE — Rows Written 우선: source-swap W3→W2 먼저, Worker 1 상한 동시 검증
+
+우선순위:
+1. **physical D1 Rows Written 감소가 최우선.**
+2. Rows Read 감소.
+3. Worker 요청 수: mutation당 1 이하 / idle 0.
+4. 기능/동기화 보존.
+
+source-swap 현재:
+- Worker 1 / D1 R11 W3 / Firestore W0.
+- W3 구성:
+  - canonical tracks W1 — 필수, 유지.
+  - legacy explore_derived_tracks mirror W1.
+  - shared revision W1.
+- 목표: 기능 유지하면서 후자 2개 중 하나를 안전하게 제거/대체하여 **W2 이하**.
+
+감사 요구:
+- PREVIEW/TEST/PRODUCTION 구 Worker가 legacy derived row / shared revision 중 무엇을 실제 read/freshness authority로 쓰는지 각각 확인.
+- Worker가 mutation 후 exact feed/profile R2를 이미 patch하므로 PREVIEW 새 경로에서 중복 D1 mirror/revision이 정말 필요한지 분리.
+- 제거 후보는 old TEST/PRODUCTION과 동시 동작 가능한 hybrid-read/cutover 조건을 충족해야 함.
+- physical Rows Written, Rows Read, Worker request count를 같은 fixture에서 baseline vs candidate로 비교.
+- Worker 요청이 1→2 이상 늘면 D1 W가 줄어도 FAIL.
+- first-public W12는 source-swap W2 설계 검증 뒤 같은 원칙으로 fanout 분해/축소.
+
+금지:
+- 좋아요/저장하트 즉시동기화 변경.
+- registered public/private W2 경로 변경.
+- 사용자 데이터 migration/backfill/delete.
+- shared trigger/schema 제거 또는 cutover를 감사/승인 없이 실행.
+- Worker 배포를 비용 실측 전에 진행.
+
 ## CURRENT NEXT GATE — publication 비용: W2 정상 경로 보호, source-swap W3 / first-public W12만 분리 최적화
 
 보호:

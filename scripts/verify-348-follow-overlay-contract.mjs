@@ -7,8 +7,7 @@ const sql=readFileSync(path,'utf8');
 assert.match(sql,/CREATE TABLE IF NOT EXISTS explore_follow_overrides_348/);
 assert.match(sql,/PRIMARY KEY \(follower_uid, following_uid\)[\s\S]*?WITHOUT ROWID/);
 assert.match(sql,/baseline_following INTEGER NOT NULL CHECK \(baseline_following IN \(0,1\)\)/);
-assert.match(sql,/CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_active_reverse/);
-assert.match(sql,/WHERE following = 1/);
+assert.match(sql,/CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_reverse/);
 assert.match(sql,/phase IN \('legacy','armed','overlay'\)/);
 assert.doesNotMatch(sql,/\b(?:UPDATE|DELETE)\s+(?:follows|profile_stats)\b/i,'candidate must not mutate legacy user rows');
 assert.doesNotMatch(sql,/INSERT\s+INTO\s+explore_follow_overrides_348\s+SELECT/i,'candidate must not backfill overlay');
@@ -28,7 +27,7 @@ INSERT INTO follows VALUES('a','legacy',1);
 db.exec(sql);
 const objects=db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name LIKE 'explore_follow_%348%' ORDER BY type,name").all();
 assert.ok(objects.some(x=>x.name==='explore_follow_overrides_348'&&/WITHOUT ROWID/i.test(x.sql)));
-assert.ok(objects.some(x=>x.name==='idx_explore_follow_overrides_348_active_reverse'&&/WHERE following = 1/i.test(x.sql)));
+assert.ok(objects.some(x=>x.name==='idx_explore_follow_overrides_348_reverse'&&/WHERE following = 1/i.test(x.sql)));
 assert.equal(db.prepare("SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1").get().phase,'legacy');
 
 const effective=(target)=>Number(db.prepare(`
@@ -47,8 +46,8 @@ assert.equal(effective('new'),1);
 
 const pairPlan=db.prepare("EXPLAIN QUERY PLAN SELECT following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").all().map(x=>String(x.detail)).join(' | ');
 assert.match(pairPlan,/SEARCH explore_follow_overrides_348 USING PRIMARY KEY/);
-const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_active_reverse WHERE following_uid='new' AND following=1").all().map(x=>String(x.detail)).join(' | ');
-assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_active_reverse/);
+const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explore_follow_overrides_348 INDEXED BY idx_explore_follow_overrides_348_reverse WHERE following_uid='new'").all().map(x=>String(x.detail)).join(' | ');
+assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_reverse/);
 
 console.log('FOLLOW348_SCHEMA_ADDITIVE_NO_BACKFILL=PASS');
 assert.equal(Number(db.prepare("SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").get().baseline_following),0);

@@ -174,13 +174,15 @@ jobs:
           )
           page = page[:sync_start] + sync_block + page[sync_end:]
 
-          old_draft = """        const sourceVersion = getMusicNoteDetailSourceVersion(song);
-                const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
-                if (!compatible) continue;
-                syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);"""
-          new_draft = """        const sourceVersion = getMusicNoteDetailSourceVersion(song);
-                const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
-                const draftMediaVersion = Math.max(
+          overlay_start = page.find('// A full R2 catalog can arrive after a local URL edit')
+          overlay_end = page.find('\n\n  const queueFavoriteDetailPatch', overlay_start)
+          if overlay_start < 0 or overlay_end <= overlay_start:
+              raise SystemExit('pending Suno card overlay block missing')
+          overlay_block = page[overlay_start:overlay_end]
+          overlay_anchor = "        if (!compatible) continue;\n        syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);"
+          if overlay_block.count(overlay_anchor) != 1:
+              raise SystemExit(f'draft overlay anchor count={overlay_block.count(overlay_anchor)}')
+          overlay_replacement = """        const draftMediaVersion = Math.max(
                   Number(draft.updates?.sunoShareUrlUpdatedAt || 0),
                   Number(draft.updates?.sunoCoverFetchedAt || 0),
                   Number(draft.updatedAtMs || 0),
@@ -197,17 +199,18 @@ jobs:
                 // user's newer durable Suno draft on reload.
                 if (!compatible && !mediaVersionCompatible) continue;
                 syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);"""
-          if page.count(old_draft) != 1:
-              raise SystemExit(f'draft overlay anchor count={page.count(old_draft)}')
-          page = page.replace(old_draft, new_draft, 1)
+          overlay_block = overlay_block.replace(overlay_anchor, overlay_replacement, 1)
+          page = page[:overlay_start] + overlay_block + page[overlay_end:]
 
-          # Detail recovery uses the same media-specific conflict rule so a generic
-          # version bump cannot hide a durable local Suno URL after restart.
-          old_open = """        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
-                if (compatible) {
-                  const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);"""
-          new_open = """        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
-                const recoveredMediaVersion = Math.max(
+          open_start = page.find('  const openFavoriteDetail = async')
+          open_end = page.find('\n\n  const executeFavoriteMenuAction', open_start)
+          if open_start < 0 or open_end <= open_start:
+              raise SystemExit('openFavoriteDetail block missing')
+          open_block = page[open_start:open_end]
+          open_anchor = "        if (compatible) {\n          const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);"
+          if open_block.count(open_anchor) != 1:
+              raise SystemExit(f'detail recovery anchor count={open_block.count(open_anchor)}')
+          open_replacement = """        const recoveredMediaVersion = Math.max(
                   Number(recovered.updates?.sunoShareUrlUpdatedAt || 0),
                   Number(recovered.updates?.sunoCoverFetchedAt || 0),
                   Number(recovered.updatedAtMs || 0),
@@ -220,9 +223,9 @@ jobs:
                   && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
                 if (compatible || mediaVersionCompatible) {
                   const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);"""
-          if page.count(old_open) != 1:
-              raise SystemExit(f'detail recovery anchor count={page.count(old_open)}')
-          page = page.replace(old_open, new_open, 1)
+          open_block = open_block.replace(open_anchor, open_replacement, 1)
+          page = page[:open_start] + open_block + page[open_end:]
+
           page_path.write_text(page)
 
           version = json.loads(version_path.read_text())

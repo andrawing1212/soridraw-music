@@ -95,11 +95,18 @@ assert.match(
   /getExploreFollowingUids312\(user\)[\s\S]*?setFollowingUids312\(new Set\(uids\)\)/,
   'Following tab must resolve the viewer following bundle once and keep it locally',
 );
-assert.match(
-  page,
-  /setExploreFollow\(user, profile\.uid, nextShouldFollow\)[\s\S]*?setFollowingUids312[\s\S]*?result\.isFollowing[\s\S]*?next\.add\(profile\.uid\)[\s\S]*?next\.delete\(profile\.uid\)/,
-  'Same-device follow/unfollow must patch the Following filter immediately',
+const toggleFollow312Start = page.indexOf('  const toggleFollow = async () => {');
+const toggleFollow312End = page.indexOf('  const closeMoreSheet = () => {', toggleFollow312Start);
+assert.ok(toggleFollow312Start >= 0 && toggleFollow312End > toggleFollow312Start, 'follow handler must remain discoverable');
+const toggleFollow312 = page.slice(toggleFollow312Start, toggleFollow312End);
+const followingOptimistic312 = toggleFollow312.indexOf('setFollowingUids312((previous) => {');
+const followAwait312 = toggleFollow312.indexOf('await setExploreFollow(user, targetUid, nextShouldFollow)');
+assert.ok(
+  followingOptimistic312 >= 0 && followAwait312 > followingOptimistic312,
+  'Same-device follow/unfollow must patch the Following filter before server settlement',
 );
+assert.match(toggleFollow312, /if \(nextShouldFollow\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
+assert.match(toggleFollow312, /if \(result\.isFollowing\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
 assert.match(socialService, /SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003/);
 const followingFilter312Start = socialService.indexOf('export const getExploreFollowingUids312');
 const followingFilter312End = socialService.indexOf('const toCount', followingFilter312Start);

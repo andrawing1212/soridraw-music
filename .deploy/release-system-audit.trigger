@@ -16,3 +16,6 @@ rerun=356d
 requested=2026-10-05T01:37KST
 rerun=356e
 requested=2026-10-05T01:41KST
+rerun=356f
+full-follow-gate=347-355
+requested=2026-10-05T01:45KST

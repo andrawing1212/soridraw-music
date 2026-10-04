@@ -1,3 +1,34 @@
+## 0OS. PREVIEW app343 — 장르별 추천 대분류/세부장르 2줄 구조 (2026-10-04 KST)
+
+**사용자 확정 기준**
+- 첫째 줄은 포괄적인 대분류 장르.
+- 둘째 줄은 세부 장르.
+- 첫째 줄 클릭으로 둘째 줄이 펼쳐지거나 교체되는 구조 금지. 두 줄은 독립.
+- `소울 / 펑크`, `포크 / 어쿠스틱`, `클래식 / 시네마틱`처럼 서로 다른 대분류를 한 칩으로 묶지 않음.
+- K-Pop / J-Pop은 대분류로 허용.
+- K-록 / K-발라드 / K-뉴잭스윙 / 얼터너티브 R&B 등은 세부장르 줄.
+
+**app343 변경**
+- 첫째 줄: 현재 Feed에 존재하는 곡을 broad family로 로컬 집계.
+  - 팝, K-Pop, J-Pop, 힙합, R&B, 소울, 펑크, 록, 메탈, EDM, 재즈, 포크, 어쿠스틱, 컨트리, 월드뮤직, 레게, 라틴, 아프로, 트로트, 7080 가요, 클래식, 시네마틱, 연주곡 중 해당되는 대분류만 고정 순서로 표시.
+- 둘째 줄: 현재 Feed의 실제 세부 장르를 canonical label로 독립 표시.
+- 대분류 클릭은 해당 broad family의 곡만 표시. 세부장르 줄 내용은 그 클릭 때문에 펼쳐지거나 교체되지 않음.
+- 세부장르 클릭은 해당 세부 장르 곡만 표시.
+- 기존 app342의 두 줄 독립 좌우 스크롤 유지.
+- 이미 로드된 Feed 40곡만 사용. Worker/D1/Firestore 추가 읽기 없음.
+
+**배포/검증**
+- product source `460f817da0bc7d9ecfa54c83c3275e4cfb6e87aa`.
+- release commit `fb31fd1faf0751e2ad39d2e92231c28bbace5391`.
+- Firebase PREVIEW Run `37168925936`: **SUCCESS**.
+- TypeScript PASS / Build PASS / PREVIEW Hosting PASS / exact build PASS.
+- shared RTDB Rules SKIPPED.
+- TEST / PRODUCTION unchanged PASS.
+- Worker / Functions / D1 / Firestore Rules / 사용자 데이터 변경 없음.
+
+**남은 확인**
+- 실제 PREVIEW에서 첫줄 대분류 / 둘째줄 세부장르가 의도대로 보이는지 실사용 확인 전.
+
 ## 0OR. PREVIEW app342 — 장르별 추천 정리 + 2줄 분리 + 가로 스크롤 복구 (2026-10-04 KST)
 
 **사용자 요청**

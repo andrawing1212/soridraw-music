@@ -288,11 +288,12 @@ jobs:
               raise SystemExit('own-device canonical write anchor missing')
           own_prefix = app[own_branch_start:own_local_write]
           if 'clearRemoteStudioHeartPreviewFromCanonical(' not in own_prefix:
-              insertion = """      clearRemoteStudioHeartPreviewFromCanonical(
-                uid,
-                Array.isArray(documentIds) ? documentIds : [],
-              );
-"""
+              insertion = (
+                  "      clearRemoteStudioHeartPreviewFromCanonical(\n"
+                  "        uid,\n"
+                  "        Array.isArray(documentIds) ? documentIds : [],\n"
+                  "      );\n"
+              )
               app = app[:own_local_write] + insertion + app[own_local_write:]
 
 

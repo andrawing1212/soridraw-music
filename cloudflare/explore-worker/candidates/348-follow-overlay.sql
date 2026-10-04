@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS explore_follow_overrides_348 (
   follower_uid TEXT NOT NULL,
   following_uid TEXT NOT NULL,
   following INTEGER NOT NULL CHECK (following IN (0,1)),
+  baseline_following INTEGER NOT NULL CHECK (baseline_following IN (0,1)),
   updated_at INTEGER NOT NULL,
   mutation_id TEXT NOT NULL,
   PRIMARY KEY (follower_uid, following_uid),

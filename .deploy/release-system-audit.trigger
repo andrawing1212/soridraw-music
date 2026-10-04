@@ -60,3 +60,7 @@ publication-source-swap-w2-readiness-357
 target=8bbaffeaae93d9cc79b1258451c436b79346681e
 focus=physical-writes-w2,worker-one,hybrid-read-cutover-gate,no-deploy
 requested=2026-10-05T05:14KST
+publication-source-swap-w2-readiness-357-rerun
+target=eed2d860495446c9709c5a1df16155244a443a6d
+focus=verifier-false-positive-fixed,physical-writes-w2,worker-one,no-deploy
+requested=2026-10-05T05:22KST

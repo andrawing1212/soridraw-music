@@ -1,3 +1,21 @@
+## NEXT TASK — app345 PREVIEW live follow compatibility verification
+
+Current deployed PREVIEW:
+- app 345 exact build PASS.
+- PREVIEW Worker version `2e544865-0392-4dbe-8cc0-28e1b8a01fb6`.
+- Worker Run `37213658493` SUCCESS; Hosting Run `37213744061` SUCCESS.
+- candidate355 compatibility code deployed, but shared follow cutover remains OFF. Legacy authority/data behavior must stay unchanged.
+
+Focused verification before any cutover:
+1. PC + mobile existing follow state remains identical to pre-deploy.
+2. Follow / unfollow in current legacy mode remains functionally normal.
+3. Existing 5,000-cap cache regression does not create false unfollow on a second device.
+4. No unexpected loading/spinner/profile count regression on Explore/public profile.
+5. Worker/D1/R2 diagnostics: page/revisit unchanged cost behavior; no new write on page entry.
+6. Confirm TEST/PRODUCTION and shared user data unchanged.
+
+Do NOT activate `explore_follow_overrides_348`, write shared cutover manifest, run backfill/migration, or promote main/TEST/PRODUCTION during this verification.
+
 ## NEXT TASK — candidate355 PREVIEW code-only compatibility deploy + live verification
 
 Current code audit status:

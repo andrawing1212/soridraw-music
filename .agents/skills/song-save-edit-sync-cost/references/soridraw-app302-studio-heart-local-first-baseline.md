@@ -1,3 +1,5 @@
+> SUPERSEDED FOR CROSS-DEVICE TIMING: app302's delayed-remote timing is historical only. The current protected behavior is app348: same-device immediate + PC↔mobile immediate heart/Music Note membership preview + canonical Firestore final-state persistence after the per-song latest-click +30 seconds. See `soridraw-app348-studio-heart-immediate-cross-device-baseline.md`. Do not use this file to remove immediate cross-device behavior.
+
 # SORIDRAW app302 — Studio Heart Local-First / Delayed-Remote Baseline
 
 Date: 2026-10-03 KST

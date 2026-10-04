@@ -1,3 +1,23 @@
+## CURRENT NEXT GATE — 좋아요 동기화 동결 유지 + 공개/비공개 registered W2 격리 확인
+
+절대 보호:
+- app348/app349의 PC↔모바일 즉시 저장하트 동기화 기능 변경 금지.
+- 비용 절감을 이유로 app302 방식(상대 기기 +30초 지연)으로 되돌리기 금지.
+- same-device/other-device 즉시 UI + canonical 마지막 클릭 +30초 W0/W1 계약 유지.
+
+현재 공개 비용 상태:
+- never-published first publish 사용자 실측: D1 R7/W12 = app335 known baseline, 여전히 HARD FAIL.
+- 같은 테스트에서 Browser SDK `users:write 1` 관측: publication 자체 write인지 delayed users batch인지 미분리.
+- 직후 private 캡처: Worker0/D1 R0W0. optimistic local-first 직후 캡처 가능성이 있어 server settlement PASS로 간주 금지.
+
+다음 실기기 최소 테스트:
+1. registered public 곡 → CACHE LIVE 초기화 → private → 성공 토스트 + 2~3초 대기.
+   기대: Worker1 / D1 W2 / Firestore W0.
+2. 같은 곡 same-source re-public → 성공 토스트 + 2~3초 대기.
+   기대: Worker1 / D1 W2 / Firestore W0.
+3. `users:write`가 두 테스트에서 반복되는지 확인.
+4. 결과 전에는 publication/like 코드를 수정하지 말고 진단만 진행.
+
 ## CURRENT NEXT GATE — app353 썸네일 경로 동결, follow 저비용 Worker 감사로 복귀
 
 현재 PREVIEW:

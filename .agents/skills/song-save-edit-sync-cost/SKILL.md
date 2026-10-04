@@ -81,11 +81,11 @@ The number of edited Recent songs inside that window must not multiply canonical
 - lyrics rendering may depend on both top-level `lyrics` and `appliedKeywords.lyricsByLanguage`; when a live lyric preview arrives, keep those local display representations coherent immediately;
 - do not add another RTDB mutation merely to repair display state.
 
-## app348 immediate cross-device freeze — supersedes app302 delayed-remote timing
+## app349 protected Studio heart baseline — immediate cross-device + stable settlement/media
 
-The current explicit user requirement and protected baseline are in `.agents/skills/song-save-edit-sync-cost/references/soridraw-app348-studio-heart-immediate-cross-device-baseline.md`.
+The current explicit user requirement and protected baseline are in `.agents/skills/song-save-edit-sync-cost/references/soridraw-app349-studio-heart-settlement-media-baseline.md`. The app348 reference remains the timing-contract history.
 
-**Hard rule:** same-device UI is immediate, PC↔mobile visible heart + Music Note membership is also immediate, while canonical Firestore persistence remains per-song latest-click +30 seconds. Do not remove or delay the cross-device preview to reduce cost. Preserve app347 stale-overwrite/media protection.
+**Hard rule:** same-device UI is immediate, PC↔mobile visible heart + Music Note membership is also immediate, while canonical Firestore persistence remains per-song latest-click +30 seconds. The initiating-device Music Note row must not disappear at canonical settlement, and valid Suno list media must survive refresh/restart without opening Detail. Do not remove or delay the cross-device preview to reduce cost. Preserve app347 stale-overwrite/media protection.
 
 ## 4. Save heart / Music Note membership rule
 

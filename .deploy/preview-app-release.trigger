@@ -1,9 +1,9 @@
-app342-explore-genre-canonical-rows
-target_source=735b01b428d04e3577bb6bfe4ca7cda0b1f60e8c
-app_version=342
-scope=hosting-only-explore-genre-canonical-two-row-scroll
+app343-explore-major-detail-genre-rows
+target_source=460f817da0bc7d9ecfa54c83c3275e4cfb6e87aa
+app_version=343
+scope=hosting-only-explore-major-detail-genre-rows
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app342-explore-genre-canonical-two-row-scroll
+release_request=app343-explore-major-detail-genre-rows
 worker_change=false
 functions_change=false

@@ -1,3 +1,60 @@
+## 0PE. app353 PC Music Note 썸네일 우선순위/Catalog 재진입 원인 확정 + PREVIEW 배포 (2026-10-05 KST)
+
+- 사용자 app352 실기기 영상 결과:
+  - Music Note 목록 최초 상태는 `빛속의 오답`, `무거운 발걸음` 모두 음표 placeholder.
+  - 같은 PC에서 Detail & Edit를 열면 해당 곡의 Suno URL 1/2 + cover image가 정상 존재.
+  - Detail을 연 직후 목록 thumbnail은 정상 표시됨.
+  - Explore로 이동했다가 Music Note로 돌아오면 다시 placeholder로 사라짐.
+- **정확한 원인 / 우선순위**
+  - 맞음. 목록의 임시 media patch보다 **V4 full Music Note Catalog가 상위 authority**였음.
+  - Detail open의 `syncFavoriteSunoCardMedia()`는 `favoritesStore` + 일반 favorites localStorage만 갱신했지만, Music Note 재진입 시 `subscribeListBundle -> readPreviewAdaptiveListIndexV2 -> readCatalogSnapshotCacheFirst`가 full Catalog를 다시 전달함.
+  - App의 full Catalog `onData`는 schema 1001 Catalog를 authoritative row로 채택하므로, media-only 변경이 dedicated Catalog overlay에 남지 않은 PC에서는 thumbnail이 다시 지워졌음.
+  - 즉 이미지 렌더 실패/다운로드 실패가 아니라 **Detail media → 임시 list state → Catalog authority 재적용** 순서의 우선순위 오류였음.
+- 추가로 확인된 canonical-id 원인:
+  - 일부 legacy/Catalog row는 내부 `id`와 실제 Music Note 문서 `firestoreId`가 다를 수 있음.
+  - `App.updateFavorite`, 즉시 cache patch 일부가 `item.id === documentId`만 사용해 실제 canonical row를 놓칠 수 있었음.
+  - 이 경우 Firestore Detail 저장은 성공해도 local list row / Catalog delta source가 갱신되지 않아 stale Catalog가 계속 남을 수 있었음.
+- app353 수정:
+  - `src/pages/FavoritesPage.tsx`
+    - Detail에서 이미 확인된 exact Suno media와 새 URL 저장 결과를 **기존 bounded Music Note media overlay**에 즉시 기록.
+    - stale Catalog가 다시 와도 overlay가 해당 media만 위에 유지.
+    - 서버 read/write 추가 없음.
+  - `src/App.tsx`
+    - `updateFavorite`, immediate cache patch, local row update/remove를 `firestoreId || id` canonical document identity 기준으로 통일.
+    - Detail media 저장이 실제 list row와 이후 Catalog delta source에도 반영될 수 있게 수정.
+  - generic `updatedAt`를 억지로 올려 우선순위를 속이는 방식, 전체 Music Note 재조회, cache reset은 사용하지 않음.
+- commits:
+  - Detail/save media durable overlay: `7c0d3cc83bab747ff202d801ab648c5ff14eeaa1`.
+  - canonical App local writeback: `b39e7f052ea92034bbf685aa822de8115fad89e6`.
+  - app353 version: `921ee914ce51a025325504623c59994ef595b702`.
+- Release System Audit Run `37228542810`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - release static groups A~D / syntax / final guards / regression PASS.
+  - TEST / PRODUCTION Worker dry-run PASS.
+  - shared D1 preflight 및 진단은 read-only PASS.
+- Firebase PREVIEW App Release Run `37228706933`: **SUCCESS**.
+  - release trigger: `0b71f526c214733bc016b09b672b2216b9f40322`.
+  - PREVIEW Hosting app **353** / exact build PASS.
+  - TEST / PRODUCTION unchanged PASS.
+  - shared RTDB Rules deploy 요청 없음.
+  - Worker / Functions / D1 / Firestore Rules 변경 없음.
+  - 사용자 데이터 migration/backfill/delete/rewrite 0.
+- 비용 영향:
+  - 추가 Firestore read/write 0.
+  - 추가 D1/R2 read/write 0.
+  - 추가 RTDB read/write 0.
+  - 기존 exact Detail data와 기존 local overlay/cache만 사용.
+- 실기기 다음 확인:
+  1. PC app353 로드.
+  2. 과거 overlay가 없던 기존 곡은 Detail을 **한 번 열었다 닫아** 정확한 media를 로컬 overlay에 심은 뒤 확인.
+  3. Explore 이동 → Music Note 복귀 후 thumbnail 유지.
+  4. 새로고침 후 유지.
+  5. 브라우저 완전 종료/재실행 후 유지.
+  6. app353 이후 새 Suno URL/media 저장은 저장 순간 overlay가 같이 생성되므로 다음 재진입부터 별도 Detail 재오픈 없이 유지되어야 함.
+- 보호:
+  - 정상 모바일 경로, app349 하트/Music Note membership 즉시 동기화, 마지막 클릭 +30초 canonical settlement는 변경하지 않음.
+  - 전체 Music Note reread/cache reset 금지 유지.
+
 ## 0PD. app352 PC Music Note 목록 썸네일 canonical-ID 매칭 수정 PREVIEW 배포 (2026-10-05 KST)
 
 - 사용자 app351 실기기 결과:

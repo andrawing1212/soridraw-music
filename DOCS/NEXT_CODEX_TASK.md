@@ -1,3 +1,20 @@
+## CURRENT NEXT GATE — app353 썸네일 경로 동결, follow 저비용 Worker 감사로 복귀
+
+현재 PREVIEW:
+- Hosting app **353** / Firebase Run `37228706933` SUCCESS / exact build PASS.
+- Release System Audit `37228542810` SUCCESS.
+- 사용자 PC 실기기에서 Music Note 썸네일 수정 PASS 확인.
+- 썸네일 경로는 보호 기준으로 동결.
+- 정상 모바일, app349 heart 즉시동기화, +30초 canonical settlement도 보호.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 변경 0.
+
+다음 작업:
+- 기존 계획대로 **follow 저비용 Worker 독립 감사**로 복귀.
+- 전체 조회/반복 read-write/불필요 fanout 여부를 먼저 감사하고, 문제를 확인한 경우에만 preview에서 최소 수정.
+- 썸네일, Music Note media overlay, canonical-id writeback은 회귀 증거 없이 변경 금지.
+- 배포 요청 전에는 PREVIEW 코드 검증까지만 진행.
+
 ## CURRENT NEXT GATE — app353 PC Catalog 재진입 우선순위 실기기 확인
 
 현재 PREVIEW:

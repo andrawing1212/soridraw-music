@@ -1,3 +1,29 @@
+## CURRENT NEXT GATE — app352 PC 목록↔Detail 동일곡 썸네일 확인
+
+현재 PREVIEW:
+- Hosting app **352** / Firebase Run `37227428264` SUCCESS / exact build PASS.
+- Release System Audit `37227306745` SUCCESS.
+- 핵심 수정: 목록 media patch/overlay를 `firestoreId` 우선 canonical document identity로 통일.
+- Worker / Functions / D1 / Firestore Rules 변경 없음.
+- TEST / PRODUCTION unchanged.
+- 사용자 데이터 migration/backfill/delete 0.
+
+이번에는 새 곡을 만들 필요 없음.
+1. PC에서 app352로 갱신.
+2. 사용자가 이미 보여준 `빛속의 오답` 또는 `무거운 발걸음`처럼 **Detail & Edit에서 Suno cover가 보이는 기존 곡**을 기준으로 확인.
+3. Detail을 닫았을 때 Music Note 목록 왼쪽 media slot에 같은 cover가 즉시 보이는지 확인.
+4. PC 새로고침 후 유지되는지 확인.
+5. 브라우저 완전 종료/재실행 후 유지되는지 확인.
+
+PASS면:
+- app349 heart settlement + app352 media canonical identity를 보호 기준으로 동결.
+- 이 썸네일 경로 종료 후 follow 저비용 Worker 감사로 복귀.
+
+FAIL이면:
+- 이제 데이터 수신 문제로 되돌아가지 말 것. Detail에 같은 PC에서 cover가 보이는 사실을 기준으로 **목록 row state/render 경로만** 추적.
+- 전체 Music Note reread/cache reset/Firestore per-song scan 금지.
+- 정상 모바일, 하트 즉시동기화, +30초 canonical, Detail hydration은 변경 금지.
+
 ## CURRENT NEXT GATE — app351 PC Suno thumbnail reload/restart 실기기 확인
 
 현재 PREVIEW:

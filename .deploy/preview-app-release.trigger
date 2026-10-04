@@ -1,10 +1,10 @@
-app352-pc-musicnote-canonical-media-identity
-target_source=d2ed99e54bae1d557be45ab73146328cfee9711d
-app_version=352
-scope=hosting-only-pc-musicnote-canonical-media-identity
+app353-pc-musicnote-media-catalog-priority
+target_source=cbe3e8757238b3b8b2486ae8c0ea885c45d01dd5
+app_version=353
+scope=hosting-only-pc-musicnote-media-catalog-priority
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app352-pc-musicnote-canonical-media-identity
+release_request=app353-pc-musicnote-media-catalog-priority
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

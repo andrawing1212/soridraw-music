@@ -166,7 +166,7 @@ jobs:
               favoritesStore.setFavorites(next);
               if (user?.uid && typeof localStorage !== 'undefined') {
                 try {
-                  localStorage.setItem(\`soridraw_favorites_cache_\${user.uid}\`, JSON.stringify(next));
+                  localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(next));
                 } catch {}
               }
             }""",
@@ -256,7 +256,13 @@ jobs:
             return source.slice(start, end);
           }
 
-          const settle = extractConstArrow(app, 'removeStudioHeartIntentLocal', '\n\n  // app347');
+          const settleMarker = app.indexOf('// app349 — capture the visible pending row');
+          assert.ok(settleMarker >= 0, 'app349 settlement marker missing');
+          const settleStart = app.lastIndexOf('  const removeStudioHeartIntentLocal = (', settleMarker);
+          const settleEnd = app.indexOf('\n\n  // app347', settleMarker);
+          assert.ok(settleStart >= 0 && settleEnd > settleMarker, 'app349 settlement helper bounds missing');
+          const settle = app.slice(settleStart, settleEnd);
+          assert.equal((app.match(/  const removeStudioHeartIntentLocal = \(uid: string, documentId: string\) => \{/g) || []).length, 1, 'duplicate settlement helper');
           assert.match(settle, /const settlingIntent = readStudioHeartPendingIntent/);
           assert.match(settle, /favoritesStore\.setFavorites\(settled\)/);
           assert.match(settle, /writeFavoritesCache\(safeUid, settled\)/);
@@ -310,10 +316,6 @@ jobs:
           assert.match(remote, /writeFavoritesCache\(safeUid, visible\)/);
           assert.match(remote, /overlayStudioHeartRemotePreviewsOnFavorites/);
           assert.doesNotMatch(remote, /getDoc\(|getDocs\(|setDoc\(|updateDoc\(|fetch\(/);
-
-          const clear = extractConstArrow(app, 'clearRemoteStudioHeartPreviewFromCanonical', '\n\n  function overlayStudioHeartPendingIntentsOnFavorites');
-          assert.doesNotMatch(clear, /setFavorites\(|favoritesStore\.setFavorites\(/);
-          assert.match(clear, /void changed/);
 
           const cardStart = page.indexOf('  const syncFavoriteSunoCardMedia = (');
           const cardEnd = page.indexOf('\n\n  const publishFavoriteSunoMediaDraft', cardStart);

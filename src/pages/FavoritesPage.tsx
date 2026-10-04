@@ -92,6 +92,7 @@ import {
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
 import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
 
@@ -3325,6 +3326,22 @@ updates: draft.updates,
         sunoCoverFetchedAt: now,
       };
 
+      // app353 — the full Catalog is authoritative on route re-entry. Persist the
+      // already-known exact Detail media into the dedicated bounded local overlay
+      // before that Catalog can replace the transient list row. This is local-only:
+      // no Firestore/D1/RTDB read/write is added.
+      if (user?.uid) {
+        const canonicalId = getFavoriteDocumentId(song) || String(song.id || '').trim();
+        if (canonicalId) {
+          rememberMusicNoteMediaPreview(user.uid, {
+            ...song,
+            ...updates,
+            id: canonicalId,
+            firestoreId: canonicalId,
+          }, now);
+        }
+      }
+
       if (source === 'detail') {
         queueFavoriteDetailPatch(song.id, updates);
         await publishFavoriteSunoMediaDraft(song.id, updates);
@@ -6218,6 +6235,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     setSelectedSong(nextSong);
+    // app353 — opening Detail proves the exact row already has this media. The list
+    // patch below is only transient; route re-entry reloads the authoritative Catalog.
+    // Promote only the bounded media fields into the existing local overlay so the
+    // same stale Catalog cannot erase the thumbnail again.
+    if (sourceId && user?.uid) {
+      const mediaVersion = Math.max(
+        Number(nextSong?.sunoShareUrlUpdatedAt || 0),
+        Number(nextSong?.sunoCoverFetchedAt || 0),
+        Number(getMusicNoteDetailSourceVersion(nextSong) || 0),
+        1,
+      );
+      rememberMusicNoteMediaPreview(user.uid, {
+        ...nextSong,
+        id: sourceId,
+        firestoreId: sourceId,
+      }, mediaVersion);
+    }
     // A catalog row can predate its detailed Suno metadata. Reuse the detail we just
     // loaded rather than fetching every list item or waiting for another server read.
     if (sourceId) syncFavoriteSunoCardMedia(sourceId, nextSong);

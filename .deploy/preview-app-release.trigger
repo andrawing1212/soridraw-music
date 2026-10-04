@@ -1,10 +1,10 @@
-app345-candidate355-follow-compatibility
-target_source=736645d999edc09518a88dca8d7564ede9929819
-app_version=345
-scope=hosting-only-follow-compatibility-client
+app346-explore-immediate-social-ux
+target_source=b711f1dba68aed2b97df92636c40d22bc7577767
+app_version=346
+scope=hosting-only-explore-immediate-follow-publication-ux
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app345-candidate355-follow-compatibility
-worker_change=true
+release_request=app346-explore-immediate-social-ux
+worker_change=false
 functions_change=false
 shared_follow_cutover=false

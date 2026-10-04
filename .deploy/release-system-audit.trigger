@@ -72,3 +72,7 @@ publication-r2-only-readiness-358-rerun
 target=1e8da96832e8b4d2ff15fb9ac438017d34af9e6a
 focus=follow-audit-offpath-strict,publication-r2-only-dormant,no-deploy
 requested=2026-10-05T05:45KST
+publication-r2-only-readiness-358-rerun2
+target=792271da150fa21219cd6f62a5e67fccb7096e98
+focus=canonical-checksum-pinned,follow-offpath-strict,no-deploy
+requested=2026-10-05T05:50KST

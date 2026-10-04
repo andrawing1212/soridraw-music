@@ -17,11 +17,11 @@ CREATE TABLE IF NOT EXISTS explore_follow_overrides_348 (
 ) WITHOUT ROWID;
 
 -- Forward list uses the WITHOUT ROWID PK prefix (follower_uid,...).
--- This single partial index is only for post-cutover active reverse discovery.
--- State=0 rows deliberately do not consume the reverse index.
-CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_active_reverse
-  ON explore_follow_overrides_348 (following_uid, follower_uid)
-  WHERE following = 1;
+-- One reverse index covers both active and removed overrides. This keeps
+-- follower-list reads and rare exact-count recovery indexed. The remote D1
+-- billing gate requires every relation mutation to remain <= W2 with it.
+CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_reverse
+  ON explore_follow_overrides_348 (following_uid, follower_uid);
 
 CREATE TABLE IF NOT EXISTS explore_follow_cutover_control_348 (
   id INTEGER PRIMARY KEY CHECK (id = 1),

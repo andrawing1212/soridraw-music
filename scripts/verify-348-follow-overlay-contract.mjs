@@ -27,7 +27,7 @@ INSERT INTO follows VALUES('a','legacy',1);
 db.exec(sql);
 const objects=db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name LIKE 'explore_follow_%348%' ORDER BY type,name").all();
 assert.ok(objects.some(x=>x.name==='explore_follow_overrides_348'&&/WITHOUT ROWID/i.test(x.sql)));
-assert.ok(objects.some(x=>x.name==='idx_explore_follow_overrides_348_reverse'&&/WHERE following = 1/i.test(x.sql)));
+assert.ok(objects.some(x=>x.name==='idx_explore_follow_overrides_348_reverse'&&/\(following_uid, follower_uid\)/i.test(x.sql)&&!/WHERE\s+following\s*=\s*1/i.test(x.sql)));
 assert.equal(db.prepare("SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1").get().phase,'legacy');
 
 const effective=(target)=>Number(db.prepare(`
@@ -52,6 +52,6 @@ assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_ex
 console.log('FOLLOW348_SCHEMA_ADDITIVE_NO_BACKFILL=PASS');
 assert.equal(Number(db.prepare("SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").get().baseline_following),0);
 console.log('FOLLOW348_EFFECTIVE_BASELINE_OVERLAY=PASS');
-console.log('FOLLOW348_FORWARD_PK_REVERSE_PARTIAL_INDEX=PASS');
+console.log('FOLLOW348_FORWARD_PK_REVERSE_FULL_INDEX=PASS');
 console.log('FOLLOW348_SHARED_MIGRATION_APPLIED=NO');
 console.log('FOLLOW348_REMOTE_BILLING_PROOF_RUN=37175419175');

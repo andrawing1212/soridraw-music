@@ -1,9 +1,10 @@
-app344-explore-filter-button-size
-target_source=8f3d8c78fa1e60596e02ac7271dde817d4416956
-app_version=344
-scope=hosting-only-explore-filter-button-size
+app345-candidate355-follow-compatibility
+target_source=736645d999edc09518a88dca8d7564ede9929819
+app_version=345
+scope=hosting-only-follow-compatibility-client
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app344-explore-filter-button-size
-worker_change=false
+release_request=app345-candidate355-follow-compatibility
+worker_change=true
 functions_change=false
+shared_follow_cutover=false

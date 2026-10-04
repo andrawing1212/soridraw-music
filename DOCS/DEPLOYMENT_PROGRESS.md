@@ -1,3 +1,14 @@
+## PREVIEW app345 candidate Worker rollback after live follow cost regression (2026-10-05 KST)
+
+- User CACHE LIVE samples on candidate Worker: physical R23/W14 and R17/W17 for follow changes; legacy cost was not preserved.
+- candidate overlay authority was OFF, so this was altered legacy-path cost, not the intended W1~W2 overlay.
+- PREVIEW Worker rollback Run `37214678869`: SUCCESS.
+- restored Worker341 product source `9c11b95cf4c95210011b1425cea23f3e51cbf34f`.
+- active Worker version `35a0bb0a-f547-4f4a-84ab-d55ba075ba13`.
+- feed/profile smoke PASS; warm revision D1 R0/W0 PASS; TEST/PRODUCTION Workers unchanged PASS.
+- Firebase Hosting remains app345; shared cutover/migration/user data change 0.
+- candidate Worker redeploy blocked until Worker341 legacy-path parity is proven.
+
 ## PREVIEW app345 candidate355 follow compatibility layer (2026-10-05 KST)
 
 - User-approved PREVIEW code-only compatibility release.

@@ -1737,7 +1737,7 @@ export default function FavoritesPage({
     const task = (async () => {
       try {
         await updateFavorite(pending.songId, pending.updates);
-        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === pending.songId);
+        const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
         const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
           uid: user.uid,
@@ -1837,7 +1837,7 @@ export default function FavoritesPage({
     const current = favoritesStore.getFavorites();
     let changed = false;
     const next = current.map((item: any) => {
-      if (String(item?.id || item?.firestoreId || '') !== safeSongId) return item;
+      if (getFavoriteDocumentId(item) !== safeSongId) return item;
       const hasChanged = Object.keys(mediaPatch).some((key) => (
         JSON.stringify(item[key] ?? null) !== JSON.stringify(mediaPatch[key] ?? null)
       ));
@@ -1859,7 +1859,7 @@ export default function FavoritesPage({
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !updates) return;
     const latest = favoritesStore.getFavorites().find((song: any) => (
-      String(song?.id || song?.firestoreId || '').trim() === safeSongId
+      getFavoriteDocumentId(song) === safeSongId
     ));
     try {
       await publishMusicNoteSunoMediaDelta(user.uid, safeSongId, {
@@ -1888,7 +1888,7 @@ export default function FavoritesPage({
       }
       const drafts = await listMusicNoteDetailDrafts(uid);
       if (cancelled || drafts.length === 0) return;
-      const byId = new Map(favoritesStore.getFavorites().map((song: any) => [String(song?.id || ''), song]));
+      const byId = new Map(favoritesStore.getFavorites().map((song: any) => [getFavoriteDocumentId(song), song]));
       for (const draft of drafts) {
         if (cancelled || String(user?.uid || '') !== uid) return;
         const song = byId.get(draft.sourceId);

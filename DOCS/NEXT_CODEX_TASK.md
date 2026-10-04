@@ -1,3 +1,26 @@
+## CURRENT TASK — verified follow overlay 348 compatibility implementation (2026-10-04 KST)
+
+확정 근거:
+- live schema read-only `37175284793`: current follows + counters + triggers가 physical amplification 원인.
+- isolated remote billing `37175419175`: sparse WITHOUT ROWID overlay가 actual D1 W1~W2 / duplicate W0 달성.
+- app347 exact following-count compatibility hard audit `37175153805`: PASS.
+
+다음 구현:
+1. additive `explore_follow_overrides_348` schema 후보 + cutover control/fence 작성. **실제 shared migration 아직 금지.**
+2. legacy follows를 immutable baseline으로 읽고 overlay를 합치는 effective follow reader 구현.
+3. follow-state / following list / follower list / Following Feed 관련 모든 reachable reader를 legacy mode와 overlay mode 둘 다 읽을 수 있게 호환.
+4. public profile counts는 정확한 R2 social count revision을 우선하고 legacy profile_stats fallback 유지.
+5. writer는 shared cutover manifest가 완전히 armed되기 전까지 legacy path만 사용. PREVIEW 단독으로 overlay authority 활성화 금지.
+6. 모든 환경 코드가 호환될 때만 user-approved TEST/PRODUCTION 호환층 승격 → 그 뒤 shared cutover 승인 단계.
+7. actual PREVIEW cutover 이후 follow/unfollow 3 cycle에서 queryR/W + Rows Read/Written + Worker + R2 A/B 증거 수집. Rows Written W3+면 FAIL.
+
+금지:
+- legacy follows/profile_stats delete/rewrite/backfill.
+- 현재 TEST/PRODUCTION이 모르는 shared authority 조기 활성화.
+- 전체 follows/profile scan.
+- 좋아요/공개/비공개/검색/크리에이터 추천 정상 경로 변경.
+- shared migration 실행 전 사용자에게 영향/순서 보고 없이 진행.
+
 ## 0OX. 9d10970 candidate continued — physical follow / cold-device release BLOCKED (2026-10-04)
 
 - Branch preview; basis 9d10970b44c072d16c4355fc868ea25f083d4eeb. app344 / deployed Worker341 unchanged. Candidate not deployed.

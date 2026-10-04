@@ -13018,6 +13018,13 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222222(
 async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   // SORIDRAW_FOLLOW_R2_TARGET_GUARD_246_20260930
   const authContext = await requireExploreAuth(request);
+  const followCutover348 = await readFollowCutoverState348(env);
+  if (followCutover348.mode === "overlay348") {
+    // Reader compatibility is intentionally deployable before the writer.
+    // If a shared manifest is armed too early, fail closed rather than write
+    // the frozen legacy follows/profile_stats path.
+    throwApi("FOLLOW_OVERLAY_WRITER_NOT_READY", "팔로우 저장 전환 준비 중입니다. 잠시 후 다시 시도해 주세요.", 503, { "Retry-After": "2" });
+  }
   await enforceUserRateLimit(env, authContext.uid, "follow", RATE_LIMITS.follow);
   if (!targetUid || targetUid === authContext.uid) throwApi("SELF_FOLLOW_NOT_ALLOWED", "\uC790\uAE30 \uC790\uC2E0\uC740 \uD314\uB85C\uC6B0\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 400);
 

@@ -1,10 +1,9 @@
-app340-repeat-search-local-zero
-target_source=5dfe5b0b9183c27b946136dc8d25bca11303606b
-app_version=340
-scope=hosting-only-explore-search-local-cache
+app342-explore-genre-canonical-rows
+target_source=735b01b428d04e3577bb6bfe4ca7cda0b1f60e8c
+app_version=342
+scope=hosting-only-explore-genre-canonical-two-row-scroll
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app340-repeat-search-local-zero
-required_audit_run=37161393974
+release_request=app342-explore-genre-canonical-two-row-scroll
 worker_change=false
 functions_change=false

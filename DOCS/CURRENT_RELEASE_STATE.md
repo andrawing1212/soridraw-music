@@ -1,3 +1,22 @@
+## 0P6. app345 live follow cost regression — PREVIEW Worker rolled back to Worker341 code (2026-10-05 KST)
+
+- User real-device CACHE LIVE after candidate355 compatibility deploy showed legacy follow physical amplification still high and one direction worse than prior baseline:
+  - sample A: D1 query R0/W2, physical Rows Read23 / Rows Written14.
+  - sample B: D1 query R0/W2, physical Rows Read17 / Rows Written17.
+- Prior documented legacy baseline was roughly physical R18~19 / W14~17. Therefore compatibility deployment did **not** satisfy “legacy behavior/cost unchanged”; low-cost overlay was not active.
+- Root cause confirmed in deployed source comparison:
+  - Worker341 legacy path used original 246 three-query counter mutation.
+  - candidate355 legacy branch also carried undeployed `SORIDRAW_FOLLOW_COMBINED_COUNTERS_345` W2 counter compaction + `syncExactSharedFollowing347` compatibility work.
+  - `readFollowCutoverState348` correctly left overlay OFF, so user was measuring this altered legacy path, not the W1~W2 overlay.
+- Safety action: PREVIEW Worker rolled back to exact Worker341 product source `9c11b95cf4c95210011b1425cea23f3e51cbf34f`.
+- Rollback Run `37214678869`: **SUCCESS**.
+  - canonical SHA256 `627c86f5499f754169ae43dec9062a621d94bd549e2c9c5fb2c48c75d8f07bbb`
+  - active PREVIEW Worker version after rollback: `35a0bb0a-f547-4f4a-84ab-d55ba075ba13`
+  - feed/profile smoke PASS; warm revision D1 R0/W0 PASS; TEST/PRODUCTION Workers unchanged PASS.
+- Hosting remains app345 for now. The app345 client compatibility/cache fix is backward-compatible with Worker341 and is not the source of physical D1 row amplification observed in the Worker mutation.
+- Shared follow cutover remains OFF; no migration/backfill/user-data mutation.
+- Next release blocker: candidate Worker must preserve the Worker341 legacy mutation path byte/behavior-equivalently while keeping overlay readers/writers dormant behind the cutover manifest. Re-audit + PREVIEW live cost comparison required before redeploying candidate Worker.
+
 ## 0P5. PREVIEW app345 + candidate355 compatibility Worker deployed — cutover OFF (2026-10-05 KST)
 
 - User approved PREVIEW deployment after Astra independent audit PASS.

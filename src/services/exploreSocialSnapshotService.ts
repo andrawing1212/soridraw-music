@@ -1,3 +1,4 @@
+import { rememberExploreViewerGenres } from './exploreCreatorProfileCache';
 import type { User } from 'firebase/auth';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { getFirebaseAppCheckToken } from '../firebase';
@@ -117,6 +118,7 @@ export const getExplorePersonalSocialSnapshot = async (
       const message = String(payload?.message || payload?.error?.message || payload?.error || '개인 Social Snapshot을 불러오지 못했습니다.').trim();
       throw new Error(message || '개인 Social Snapshot을 불러오지 못했습니다.');
     }
+    if (payload?.ok === true) rememberExploreViewerGenres(user.uid, payload?.data?.viewerProfile);
     const data = normalizeSnapshot(payload?.data || {});
     writeSnapshot(user.uid, { ...data, updatedAt: data.updatedAt || Date.now() });
     return data;

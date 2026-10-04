@@ -1,3 +1,4 @@
+import { EXPLORE_VIEWER_GENRES_EVENT, readExploreViewerGenres } from '../services/exploreCreatorProfileCache';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { rankExploreCreators } from '../services/exploreCreatorRecommendations';
 import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstViewService';
@@ -101,6 +102,7 @@ const EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304 = 20;
 const EXPLORE_POPULAR_FEED_REQUEST_URL_304 = `${EXPLORE_API_BASE}/v1/feed?sort=popular&limit=40`;
 
 type ExploreTrack = {
+  ownerProfileGenres?: string[] | null;
   id: string;
   ownerUid: string;
   ownerHandle: string;
@@ -520,6 +522,7 @@ const readNestedCount = (row: Record<string, unknown>, key: string) => {
 const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   id: safeText(row.id),
   ownerUid: safeText(row.ownerUid ?? row.owner_uid),
+  ownerProfileGenres: Array.isArray(row.ownerProfileGenres) ? row.ownerProfileGenres.filter((v): v is string => typeof v === 'string').slice(0, 5) : null,
   ownerHandle: safeText(row.ownerHandle ?? row.owner_handle).replace(/^@+/, ''),
   title: safeText(row.title, '제목 없는 곡'),
   displayName: safeText(row.ownerNickname ?? row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
@@ -3634,6 +3637,14 @@ export default function ExplorePage() {
 
   // Use the already-loaded three pools. Profile summaries are local reads only;
   // missing representative genres stay unknown, never inferred from song genres.
+  const [viewerGenresRevision346, setViewerGenresRevision346] = useState(0);
+  useEffect(() => {
+    const listener = (event: Event) => {
+      if ((event as CustomEvent<{ uid: string }>).detail?.uid === user?.uid) setViewerGenresRevision346(v => v + 1);
+    };
+    window.addEventListener(EXPLORE_VIEWER_GENRES_EVENT, listener);
+    return () => window.removeEventListener(EXPLORE_VIEWER_GENRES_EVENT, listener);
+  }, [user?.uid]);
   const recommendedCreators345 = useMemo(() => {
     if (sort !== 'recommended' || submittedQuery || profileUid) return [];
     const currentUid = user?.uid || '';
@@ -3646,6 +3657,9 @@ export default function ExplorePage() {
       const summary = profile?.uid === uid ? profile : readCachedExplorePublicProfile(uid);
       if (summary) profileGenres.set(uid, summary.genres);
     });
+    [...curatedTracks307.slice(0, 40), ...tracks.slice(0, 40), ...popularTracks.slice(0, 40)].forEach(track => {
+      if (!profileGenres.has(track.ownerUid) && Array.isArray(track.ownerProfileGenres)) profileGenres.set(track.ownerUid, track.ownerProfileGenres);
+    });
     const viewer = profile?.uid === currentUid ? profile : readCachedExplorePublicProfile(currentUid);
     const genreSignal = (raw: string) => {
       const normalized = normalizeExploreGenreCatalogKey342(raw);
@@ -3657,14 +3671,14 @@ export default function ExplorePage() {
       };
     };
     return rankExploreCreators({
-      currentUid, viewerGenres: viewer?.genres || [], profileGenres,
+      currentUid, viewerGenres: viewer?.genres ?? readExploreViewerGenres(currentUid) ?? [], profileGenres,
       curated: curatedTracks307, latest: tracks.filter((track) => !dislikedTrackIds.has(track.id)), popular: popularTracks,
       genreSignal, songGenre: (track) => track.primaryGenre || readExploreRecommendationGenre221(track),
     }).map((track) => ({
       id: track.ownerUid, displayName: track.displayName, handle: track.ownerHandle,
       avatarUrl: track.avatarUrl || null, track,
     }));
-  }, [sort, submittedQuery, profileUid, user?.uid, profile, curatedTracks307, tracks, popularTracks, dislikedTrackIds]);
+  }, [sort, submittedQuery, profileUid, user?.uid, profile, curatedTracks307, tracks, popularTracks, dislikedTrackIds, viewerGenresRevision346]);
   const recommendationModel221 = sort === 'recommended' && !submittedQuery
     ? { ...buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || ''), creators: recommendedCreators345 }
     : { picks: [], genres: [], creators: [] };

@@ -52,4 +52,4 @@ console.log('CREATOR_PROFILE_GENRE_PRIORITY=PASS');
 console.log('CREATOR_ACTUAL_CATALOG_KOREAN_ENGLISH_ALIAS=PASS');
 console.log('CREATOR_CURATED_LATEST_POPULAR_FALLBACK=PASS');
 console.log('CREATOR_SELF_DEDUP_BOUND_LOCAL_IO=PASS');
-console.log('CREATOR_COLD_PROFILE_GENRES=UNAVAILABLE (existing local summaries only; no N+1 hydration)');
+console.log('CREATOR_COLD_PROFILE_GENRES=PAYLOAD_SUPPORTED (legacy Feed payload/current live coverage unverified)');

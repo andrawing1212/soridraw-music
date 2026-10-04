@@ -1,3 +1,13 @@
+## 0OX. 9d10970 candidate continued — physical follow / cold-device release BLOCKED (2026-10-04)
+
+- Branch preview; basis 9d10970b44c072d16c4355fc868ea25f083d4eeb. app344 / deployed Worker341 unchanged. Candidate not deployed.
+- Prior W3-to-W2 compaction preserved. Synthetic total_changes remains9. Actual original Rows Read18–19 / Rows Written14–17 = FAIL. Candidate physical metrics unavailable; never declare completion from queryW2.
+- Runtime reader audit confirms current main/production consume both D1/derived counters. R2 membership has truncation/concurrency/failure holes. Shared authority/trigger cutover NOT executed; two-stage prerequisites and outstanding implementation recorded in FOLLOW_AUTHORITY_CREATOR_METADATA_AUDIT.md.
+- Feed existing bounded joins/publication/derived generation now carry ownerProfileGenres. Existing authenticated cold snapshot carries self profile genres from one direct R2 GET, no extra Worker/D1. Client caches/reranks without candidate N+1. Existing legacy R2 Feed coverage remains unresolved, so cold-device completion NOT declared.
+- TypeScript/Build/relevant functional verifiers PASS. Actual physical release gate FAIL; PC/mobile and live cold coverage unverified. Independent Work audit corrections applied; no release.
+- No migration/backfill/delete/data copy, main edit, TEST/PRODUCTION deployment, Firebase/Functions deployment or resource/config change.
+- Next: prepare safe exact/ordered per-actor following authority and all reader cutovers, live read-only index/trigger evidence, approved compatible stage2, bounded legacy Feed genre coverage; then six actual PREVIEW measurements and PC/mobile. Deploy neither service before both gates pass.
+
 ## 0OV. 비용 검증 기준 보강 — query W뿐 아니라 D1 Rows Read/Written 동시 합격 필수 (2026-10-04 KST)
 
 사용자 지적 반영.

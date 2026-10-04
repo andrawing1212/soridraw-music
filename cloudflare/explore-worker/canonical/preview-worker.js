@@ -1585,6 +1585,7 @@ function mapTrackRow(row) {
     ownerUid: row.owner_uid,
     ownerNickname: row.owner_nickname || "",
     ownerAvatarUrl: row.owner_avatar_url || "",
+    ownerProfileGenres: row.owner_profile_genres == null ? null : parseProfileGenres(row.owner_profile_genres),
     sourceType: row.source_type,
     sourceId: row.source_id,
     sourceParentId: row.source_parent_id || null,
@@ -4700,7 +4701,7 @@ async function handleFeed(url, env, cors) {
     SELECT
       t.*,
       p.nickname AS owner_nickname,
-      p.avatar_url AS owner_avatar_url,
+      p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count, 0) AS like_count,
       COALESCE(s.comment_count, 0) AS comment_count,
       COALESCE(s.play_count, 0) AS play_count
@@ -5191,7 +5192,7 @@ async function handleSearchCore066(url, env, cors) {
       SELECT
         t.*,
         p.nickname AS owner_nickname,
-        p.avatar_url AS owner_avatar_url,
+        p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
         COALESCE(s.like_count, 0) AS like_count,
         COALESCE(s.comment_count, 0) AS comment_count,
         COALESCE(s.play_count, 0) AS play_count,
@@ -5308,7 +5309,7 @@ async function handleIndexedGenreAlias338(url, genreAlias, env, cors) {
       SELECT
         t.*,
         p.nickname AS owner_nickname,
-        p.avatar_url AS owner_avatar_url,
+        p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
         COALESCE(s.like_count,0) AS like_count,
         COALESCE(s.comment_count,0) AS comment_count,
         COALESCE(s.play_count,0) AS play_count
@@ -5325,7 +5326,7 @@ async function handleIndexedGenreAlias338(url, genreAlias, env, cors) {
       SELECT
         t.*,
         p.nickname AS owner_nickname,
-        p.avatar_url AS owner_avatar_url,
+        p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
         COALESCE(s.like_count,0) AS like_count,
         COALESCE(s.comment_count,0) AS comment_count,
         COALESCE(s.play_count,0) AS play_count
@@ -5585,7 +5586,7 @@ async function handleTrackDetail(trackId, env, cors) {
     SELECT
       t.*,
       p.nickname AS owner_nickname,
-      p.avatar_url AS owner_avatar_url,
+      p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count, 0) AS like_count,
       COALESCE(s.comment_count, 0) AS comment_count,
       COALESCE(s.play_count, 0) AS play_count
@@ -6831,7 +6832,7 @@ __name22222222222222222222222222222222222222222222222222222222222(readPublicProf
 __name222222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewBaseProfile, "readPublicProfileFirstViewBaseProfile");
 async function readPublicProfileFirstViewTrackWindow(env, uid) {
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -7382,7 +7383,7 @@ __name22222222222222222222222222222222222222222222222222222222222(refreshPublicP
 __name222222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 async function readLatestOwnerTrackForFirstViewMutation(env, uid) {
   return await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -7431,7 +7432,7 @@ __name222222222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation
 async function syncExploreFeedR2PublicVisibility1028(env, trackId) {
   try {
     const row = await env.DB.prepare(`
-      SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+      SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
         COALESCE(s.like_count,0) AS like_count,
         COALESCE(s.comment_count,0) AS comment_count,
         COALESCE(s.play_count,0) AS play_count
@@ -9339,7 +9340,7 @@ async function handleProfileTracksCore066(url, profileRef, env, cors) {
     }
   }
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -10590,7 +10591,7 @@ async function handleGenreTracksCore066(url, genreValue, env, cors) {
     }
   }
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -10863,7 +10864,7 @@ async function handleTop10(url, env, cors) {
         AND c.user_uid <> owner_track.owner_uid
       GROUP BY c.track_id
     )
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count,
@@ -11048,7 +11049,7 @@ async function handleCurated(url, env, cors) {
   const rawLimit = Number(url.searchParams.get("limit") || 12);
   const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, Math.floor(rawLimit))) : 12;
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count,
@@ -14384,7 +14385,7 @@ async function handleMyPublications(request, url, env, cors) {
     }
   }
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -18070,7 +18071,7 @@ async function handleFollowingFeed(request, url, env, cors) {
     }
   }
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count
@@ -19004,7 +19005,7 @@ async function handlePublicProfileFolderTracks(url, uid, folderId, env, cors) {
   if (!folder) return apiError("NOT_FOUND", "\uACF5\uAC1C \uD3F4\uB354\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
   const limit = getPageSize(url);
   const result = await env.DB.prepare(`
-    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
+    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count,0) AS like_count,
       COALESCE(s.comment_count,0) AS comment_count,
       COALESCE(s.play_count,0) AS play_count,
@@ -19697,6 +19698,7 @@ function publicationBuildFeedItem016(source, authContext, profile, previous, opt
     owner_uid: authContext.uid,
     owner_nickname: profile?.nickname || authContext.displayName || "",
     owner_avatar_url: profile?.avatarUrl || authContext.picture || "",
+    owner_profile_genres: Array.isArray(profile?.genres) ? JSON.stringify(profile.genres) : profile?.genre_override ?? null,
     source_type: source.sourceType,
     source_id: source.sourceId,
     source_parent_id: source.sourceParentId,
@@ -22438,7 +22440,7 @@ async function handlePublicationR2CoreLegacy016(request, env, cors) {
     SELECT
       t.*,
       p.nickname AS owner_nickname,
-      p.avatar_url AS owner_avatar_url,
+      p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       COALESCE(s.like_count, 0) AS like_count,
       COALESCE(s.comment_count, 0) AS comment_count,
       COALESCE(s.play_count, 0) AS play_count
@@ -22661,6 +22663,7 @@ async function handleMusicNoteVisibility047(request, env, cors, authContext, bod
     ...nextRow,
     owner_nickname: String(profile?.nickname || authContext.displayName || ''),
     owner_avatar_url: String(profile?.avatarUrl || profile?.avatar_url || authContext.picture || ''),
+    owner_profile_genres: Array.isArray(profile?.genres) ? JSON.stringify(profile.genres) : profile?.genre_override ?? null,
     like_count: Number(row.like_count || 0),
     comment_count: Number(row.comment_count || 0),
     play_count: Number(row.play_count || 0),
@@ -24752,7 +24755,7 @@ async function readRequestedLikedTrackCardsD1161(env, trackIds) {
   const values = ids.map((_, index) => '(?,' + index + ')').join(',');
   const result = await env.DB.prepare(
     'WITH requested(id, sort_order) AS (VALUES ' + values + ') ' +
-    'SELECT t.id,t.owner_uid,p.nickname AS owner_nickname,p.avatar_url AS owner_avatar_url,' +
+    'SELECT t.id,t.owner_uid,p.nickname AS owner_nickname,p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,' +
     't.title,t.cover_url,t.suno_url_primary,t.suno_url_secondary,t.published_at,t.profile_pinned,' +
     'COALESCE(s.like_count,0) AS like_count,r.sort_order FROM requested r ' +
     'JOIN tracks t ON t.id=r.id LEFT JOIN public_profiles p ON p.uid=t.owner_uid ' +
@@ -24817,7 +24820,7 @@ async function handleMyLikedTracks052Core062(request, env, cors) {
       t.id,
       t.owner_uid,
       p.nickname AS owner_nickname,
-      p.avatar_url AS owner_avatar_url,
+      p.avatar_url AS owner_avatar_url, p.genre_override AS owner_profile_genres,
       t.title,
       t.cover_url,
       t.suno_url_primary,
@@ -25073,6 +25076,7 @@ async function verifyFreshPersonalLikeSettlement189(env, uid, targetedTrackIds19
 
 async function handleMySocialSnapshot042(request, env, cors) {
   const authContext = await requireExploreAuth(request);
+  const viewerProfilePromise346 = readExploreSharedProfileByUid247(env, authContext.uid).catch(() => null);
   let [likeState, followingUids] = await Promise.all([
     readSharedLikesState161(env, authContext.uid),
     readExploreFollowingR2Bundle(env, authContext.uid),
@@ -25127,6 +25131,7 @@ async function handleMySocialSnapshot042(request, env, cors) {
     if (settledLikeState189) likeState = settledLikeState189;
   }
 
+  const viewerBundle346 = await viewerProfilePromise346;
   return json({
     ok: true,
     data: {
@@ -25138,6 +25143,11 @@ async function handleMySocialSnapshot042(request, env, cors) {
       likesRepairStatus182,
       freshCanonicalSettlement,
       followingUids: [...followingUids],
+      viewerProfile: (() => {
+        const profile = viewerBundle346?.body?.data?.profile;
+        return profile?.uid === authContext.uid && Array.isArray(profile.genres)
+          ? { uid: authContext.uid, genres: profile.genres, updatedAt: Number(profile.updatedAt || 0) } : null;
+      })(),
       source: 'r2-social-042',
       updatedAt: Date.now(),
     },
@@ -25811,6 +25821,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
               ...nextRow,
               owner_nickname: String(profile?.nickname || authContext.displayName || ''),
               owner_avatar_url: String(profile?.avatarUrl || profile?.avatar_url || authContext.picture || ''),
+              owner_profile_genres: Array.isArray(profile?.genres) ? JSON.stringify(profile.genres) : profile?.genre_override ?? null,
               like_count: Number(stat.like_count || 0),
               comment_count: Number(stat.comment_count || 0),
               play_count: Number(stat.play_count || 0),
@@ -27546,6 +27557,7 @@ async function derivedItems032(env, ids) {
       profile_pinned: Number(row.canonical_profile_pinned || 0),
       owner_nickname: p.nickname || '',
       owner_avatar_url: p.avatar_url || '',
+      owner_profile_genres: p.genre_override ?? null,
     });
   });
 }
@@ -27640,7 +27652,7 @@ async function derivedNext032(env, previous, sort, uid, head) {
   if (changedOwners.length) {
     const rows = await env.DB.prepare(`SELECT uid,active,row_json FROM explore_derived_profiles WHERE uid IN (${changedOwners.map(() => "?").join(",")})`).bind(...changedOwners).all();
     const profiles = new Map(rows.results.map((row) => [row.uid, row.active ? JSON.parse(row.row_json) : {}]));
-    items = items.map((item) => profiles.has(item.ownerUid) ? { ...item, ownerNickname: profiles.get(item.ownerUid).nickname || "", ownerAvatarUrl: profiles.get(item.ownerUid).avatar_url || "" } : item);
+    items = items.map((item) => profiles.has(item.ownerUid) ? { ...item, ownerNickname: profiles.get(item.ownerUid).nickname || "", ownerAvatarUrl: profiles.get(item.ownerUid).avatar_url || "", ownerProfileGenres: profiles.get(item.ownerUid).genre_override == null ? null : parseProfileGenres(profiles.get(item.ownerUid).genre_override) } : item);
   }
   const derived032 = { contract: EXPLORE_DERIVED_CONTRACT_032, cursor: nextSeq };
   const now = Date.now();

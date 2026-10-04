@@ -1,3 +1,4 @@
+import { rememberExploreViewerGenres } from './exploreCreatorProfileCache';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { onValue, ref as databaseRef, set as setRealtimeValue, type Unsubscribe } from 'firebase/database';
@@ -676,6 +677,7 @@ const requestPersonalLikeBaseline127 = async (
   const payload = await response.json() as {
     ok?: boolean;
     data?: {
+      viewerProfile?: unknown;
       likedTrackIds?: unknown;
       likesComplete?: unknown;
       exactLikeCount?: unknown;
@@ -686,6 +688,7 @@ const requestPersonalLikeBaseline127 = async (
   if (payload?.ok !== true || !Array.isArray(payload?.data?.likedTrackIds)) {
     throw new Error('Personal like snapshot is invalid; preserving cached likes');
   }
+  rememberExploreViewerGenres(user.uid, payload.data.viewerProfile);
   const likedTrackIds = [...new Set(
     payload.data.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean),
   )];

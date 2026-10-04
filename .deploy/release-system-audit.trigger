@@ -36,3 +36,7 @@ app349-studio-heart-settlement-media
 target=53646fce918060f5bcb376af9a31a5e0acd05e6c
 focus=A-canonical-no-gap,B-immediate-membership,suno-list-cache-media-revision,no-extra-io
 requested=2026-10-05T03:33KST
+app350-pc-suno-media-durable-overlay
+target=1dde878ad61b68b75c15f1289797fa7dd8bcb28a
+focus=pc-reload-suno-media-overlay,catalog-refresh-preserve,no-extra-io
+requested=2026-10-05T03:49KST

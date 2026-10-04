@@ -85,8 +85,8 @@ if (process.argv[2] === 'cleanup') {
       "baseline_following INTEGER NOT NULL CHECK(baseline_following IN(0,1))," +
       "updated_at INTEGER NOT NULL, mutation_id TEXT NOT NULL," +
       "PRIMARY KEY(follower_uid,following_uid)) WITHOUT ROWID");
-    await ddl("CREATE INDEX idx_explore_follow_overrides_348_active_reverse " +
-      "ON explore_follow_overrides_348(following_uid,follower_uid) WHERE following=1");
+    await ddl("CREATE INDEX idx_explore_follow_overrides_348_reverse " +
+      "ON explore_follow_overrides_348(following_uid,follower_uid)");
 
     const q = (value) => "'" + String(value).replaceAll("'", "''") + "'";
     const effectiveSql = (actor, target) =>
@@ -165,7 +165,7 @@ if (process.argv[2] === 'cleanup') {
       "WHERE l.following_uid='legacy-target' AND NOT EXISTS(" +
       "SELECT 1 FROM explore_follow_overrides_348 o WHERE o.follower_uid=l.follower_uid AND o.following_uid=l.following_uid) " +
       "UNION ALL SELECT o.follower_uid,o.updated_at AS followed_at FROM explore_follow_overrides_348 o " +
-      "INDEXED BY idx_explore_follow_overrides_348_active_reverse " +
+      "INDEXED BY idx_explore_follow_overrides_348_reverse " +
       "WHERE o.following_uid='legacy-target' AND o.following=1) ORDER BY followed_at DESC,follower_uid DESC LIMIT 50";
     for (const [label,sql] of [['FORWARD',forwardSql],['REVERSE',reverseSql]]) {
       const plan = await query('EXPLAIN QUERY PLAN ' + sql);

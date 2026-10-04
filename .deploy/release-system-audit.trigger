@@ -64,3 +64,7 @@ publication-source-swap-w2-readiness-357-rerun
 target=eed2d860495446c9709c5a1df16155244a443a6d
 focus=verifier-false-positive-fixed,physical-writes-w2,worker-one,no-deploy
 requested=2026-10-05T05:22KST
+publication-r2-only-readiness-358
+target=a9bb99dab5bc5d3a89088712e7cdec0d247c69fc
+focus=dormant-r2-only-feed-profile-genre,worker-one,first-public-w2-enabler,no-deploy
+requested=2026-10-05T05:38KST

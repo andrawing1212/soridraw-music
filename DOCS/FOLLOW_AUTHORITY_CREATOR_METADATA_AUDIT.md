@@ -54,3 +54,15 @@ Existing unchanged R2 Feed objects can lack metadata. No forced rebuild, migrati
 TypeScript PASS; Build PASS (Node24 local, existing chunk warnings). verify-345 follow functional 3 cycles PASS but physical release FAIL. Creator rank/actual Korean-English catalog/self/dedupe/fallback PASS. verify-346 metadata actual function execution validates self one-R2/no extra D1, profile failure isolation, null/empty semantics and stale-response/UID rejection. Existing verify-197, verify-202 and deploy preflight PASS.
 
 Independent Work read-only audit found stale Feed overriding local profile and old self responses overwriting cache; both corrected and targeted verification added. Final independent read-only re-audit confirms both corrections and safe preparation scope; all live/release gates remain blocked. PC/mobile and live payload/cost evidence NOT VERIFIED. No Firebase/Functions/Cloudflare deployment. Main/TEST/PRODUCTION untouched; canonical user migration/backfill/delete/copy/write: NONE.
+
+## 2026-10-04 continuation — overlay writer relation layer prepared
+
+Current preview continuation commits after b5fed25:
+- 2de592428db6c7114535804936970a5f68a85a8a — verifier aligned to the full reverse override index.
+- f1c1c3f9c0e9eeeecf5a8761f07efb2576abfc2a — remote D1 billing fixture repaired for baseline_following and the full reverse index.
+- 409276ffc1ae7924d36c7005235635d505e0b30b — dormant sparse-overlay relation writer added.
+- 11b2ff2763f4ddf3b5481d6ed1d60962edb96f50 — writer contract verifier added.
+
+The new dormant relation writer keeps legacy follows immutable and changes at most one sparse override user row per requested state transition. Returning to the immutable baseline deletes the override; diverging from baseline inserts/updates the override; duplicate desired state is a no-op. The writer contains no profile_stats mutation. It is still unreachable because the shared cutover manifest is not armed.
+
+Release remains BLOCKED. Before any activation, exact follower/following count authority and failure recovery must be made concurrency-safe in R2, all PREVIEW/TEST/PRODUCTION readers and writers must understand the same contract, the shared schema/cutover must receive the required approval, remote Rows Read/Written must be remeasured on the actual candidate, and PC/mobile verification must pass. No shared migration, backfill, deployment, user-data mutation, TEST change or PRODUCTION change was performed in this continuation.

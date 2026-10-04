@@ -1,5 +1,5 @@
-app341-search-r2-only-d1-zero
-source=9c11b95cf4c95210011b1425cea23f3e51cbf34f
-scope=search-r2-only,approved-r2-derived-backfill,random-query-d1-zero,edge-cache,release-gates
-protect=likes,save-heart,folders,split,music-note-batching,test-production,shared-d1-schema,user-data
-requested=2026-10-04T09:08:00+09:00
+app347-follow-exact-count-stage1
+source=d108f9eb8a2b13f44b49a5ffcf005e51c6ba1347
+scope=follow-exact-count-stage1,monotonic-revision,shared-r2-fastpath,release-gate
+protect=likes,save-heart,folders,split,music-note-batching,creator-recommendation,test-production,shared-d1-schema,user-data
+requested=2026-10-04T12:45:00+09:00

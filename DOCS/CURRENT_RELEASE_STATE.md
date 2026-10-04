@@ -1,3 +1,33 @@
+## 0OU. app344 실사용 발견 — 팔로우 변경 실제 D1 row 증폭 + 크리에이터 추천 범위 확장 필요 (2026-10-04 KST)
+
+**사용자 실사용 발견**
+- 공개프로필에서 팔로우 해제를 1회 수행했을 때 CACHE LIVE의 팔로우 변경은 D1 W3로 보이지만 Cloudflare 실제 D1 rows read/written 증가가 더 큼.
+- "좋아할 만한 크리에이터"는 최신 공개곡 40개에 등장한 owner만 후보가 되는 현재 구조라 추천 범위가 너무 좁음.
+
+**코드 감사 결과 — 팔로우**
+- 현재 canonical Worker는 app245/246 최적화가 이미 들어 있어 follow 후 불필요한 profile 전체 재조회와 R2 counter D1 post-read는 제거된 상태이며, `adjustExploreFollowCountersDelta`도 `RETURNING` 기반 no-postread guard를 갖고 있음.
+- 그러나 실제 canonical mutation은 여전히 follows 1행 + 양쪽 `profile_stats` counter 2행을 변경하는 W3 구조.
+- `profile_stats` 두 변경은 shared D1의 `explore032_profile_stats_update` → `explore_derived_profiles` → `explore032_derived_profile_update` 경로를 깨우므로 Cloudflare 물리 row-write/read는 CACHE LIVE의 논리 W3보다 커질 수 있음.
+- PREVIEW wrangler는 shared canonical `DB=soridraw-explore-db`와 별도 `RATE_DB=soridraw-explore-preview-db`를 사용하므로 실제 계기판 감사 시 두 DB를 구분해야 함.
+- 결론: 사용자 관찰은 정상적인 "W3만 발생"으로 볼 수 없으며 physical row amplification까지 합격선에 포함해야 함.
+
+**다음 비용 목표**
+- 우선 non-destructive verifier에서 팔로우 1회 logical W와 physical row changes를 분리 계측.
+- follow canonical edge를 가능한 W1에 가깝게 만들되 follower/following 수 정확도, PC↔모바일, 공유 PREVIEW/TEST/PRODUCTION 데이터 호환성 보호.
+- shared D1 trigger 변경이 필요하면 코드만 먼저 준비/검증하고 실제 shared schema 변경은 별도 안전 확인 후 진행.
+
+**크리에이터 추천 확정 방향**
+1. 내 공개프로필 대표 장르와 비슷한 크리에이터 최우선.
+2. 부족하면 SORIDRAW 추천곡 owner.
+3. 다음 최신 공개곡 owner.
+4. 다음 인기곡 owner.
+5. 내 계정 제외 + creator UID 중복 제거.
+- 후보의 대표 장르 때문에 프로필을 N개씩 개별 서버 조회하는 구조 금지. R2/로컬 파생 요약을 사용해 D1 0 목표.
+
+**현재 배포 상태**
+- app344 PREVIEW는 그대로 유지.
+- 이 감사 기록만 추가. Worker/Firebase/Functions/Cloudflare/D1/user data 변경 없음.
+
 ## 0OT. PREVIEW app344 — Explore 필터 버튼 가독성 확대 (2026-10-04 KST)
 
 **변경**

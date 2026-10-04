@@ -1,3 +1,59 @@
+## 0PK. never-published first publication W12 live schema exact fanout 확정 — read-only (2026-10-05 KST)
+
+- 목적: first-public W12를 추측이 아니라 **현재 shared D1 실제 schema**로 정확히 분해.
+- 임시 read-only 진단 workflow:
+  - Run `37232092133`: SUCCESS.
+  - 보강 Run `37232155889`: SUCCESS.
+  - `REMOTE_D1_WRITES=0`.
+  - `USER_DATA_MUTATION=0`.
+  - 진단 완료 후 temp workflow 삭제 commit `4a3d32914e95553ec7fc6004085f2281856a27b9`.
+- 현재 live `tracks`:
+  - row count 70.
+  - music_note 70.
+  - public music_note 46.
+  - `id TEXT PRIMARY KEY`이며 `sqlite_autoindex_tracks_1` 존재.
+  - 명시 index 5개:
+    1. `idx_tracks_latest_order`
+    2. `idx_tracks_owner_latest`
+    3. `idx_tracks_owner_source` UNIQUE
+    4. `idx_tracks_primary_genre_latest`
+    5. `idx_tracks_legacy_global_nonempty` partial
+  - Music Note는 `legacy_global_id`가 비어 있으므로 5번 partial index에는 정상 first publish에서 entry를 만들지 않음.
+- **현재 사용자 실측 W12와 live schema가 정확히 맞음**:
+  1. canonical `tracks` INSERT:
+     - table row W1
+     - PK autoindex W1
+     - latest_order W1
+     - owner_latest W1
+     - owner_source W1
+     - primary_genre_latest W1
+     - subtotal **W6**
+  2. `explore032_track_insert` → `explore_derived_tracks`:
+     - derived table row W1
+     - derived PK autoindex W1
+     - rank_latest W1
+     - rank_popular W1
+     - rank_profile W1
+     - subtotal **W5**
+  3. `soridraw_shared_rev_tracks_ai_051` → `explore_shared_revision` W1
+  4. total **W6 + W5 + W1 = W12**
+- 따라서 first-public W12는 Worker 중복 호출이 아니라 **단일 Worker 1회 안에서 D1 table/index/trigger fanout**으로 설명됨.
+- 현재 Worker count:
+  - user 실측 first publication Worker 1.
+  - Worker 요청 중복이 W12의 원인이 아님.
+- 이론적 post-cutover 최저선:
+  - 현재 `tracks` table + TEXT PK 구조를 유지하면 canonical row W1 + PK autoindex W1 = **W2**가 현실적 floor.
+  - W2를 위해 Music Note first publish가 나머지 4 secondary index / legacy derived insert / shared revision D1 write를 더 이상 정상 hot path에서 만들지 않아야 함.
+- 그러나 현재 app336은 **hybrid**이며 Feed/Profile에서 아직 legacy path를 함께 읽음.
+  - Search는 app341에서 R2-only이나 Feed/Profile은 R2 + legacy merge.
+  - 따라서 first-public W2를 지금 shared D1에 적용하면 TEST/PRODUCTION 및 legacy recovery/query path를 깨뜨릴 위험.
+- 안전한 다음 구조:
+  1. 모든 환경에 R2 catalog/hybrid compatibility 승격.
+  2. Feed/Profile/Genre도 검증된 **R2-only cutover mode**를 dormant flag로 먼저 구현/감사.
+  3. R2-only가 실제 정확성을 보장한 뒤 Music Note 전용 secondary-index fanout과 derived/revision fanout을 단계적으로 종료.
+  4. shared D1 구조변경은 별도 사용자 승인 전 적용 금지.
+- 좋아요/저장하트 즉시동기화와 app353 Music Note thumbnail 경로는 이 작업과 완전히 분리/동결.
+
 ## 0PJ. publication source-swap W3→W2 후보 준비/감사 PASS — 적용은 cross-env hybrid 승격 전 차단 (2026-10-05 KST)
 
 - 사용자 지시 기준:

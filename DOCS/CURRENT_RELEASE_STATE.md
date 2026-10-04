@@ -1,3 +1,34 @@
+## 0P8. app346 immediate social UX PREVIEW 배포 + mandatory follow gate PASS (2026-10-05 KST)
+
+- branch: `preview`.
+- 현재 PREVIEW Hosting: **app346**.
+  - 제품 UX commit: `faf0b69faf017603311e92cd645a76c6b0034743`.
+  - Worker341 legacy parity candidate commit: `e312cfdea8b4c047aa8309506e8ebc78d9ed1bf2`.
+  - app version commit: `85e6c0dbc2f62e01ecb6499eb2e2a7193e339a77`.
+  - mandatory full follow gate source: `b711f1dba68aed2b97df92636c40d22bc7577767`.
+- Release System Audit Run `37217745269`: **SUCCESS**.
+  - TypeScript PASS / Build PASS.
+  - follow 347~355 chain + 356 Worker341 legacy parity PASS.
+  - app356 immediate follow/publication rollback + server cost calls unchanged PASS.
+  - 이전 diagnostic-only false-green 위험을 막기 위해 verify-347에서 348 전체 체인을 mandatory import하도록 변경했고, 의도적으로 Worker341로 되돌린 legacy 함수/347 sync 제거를 verify-354가 명시적으로 허용하도록 정리함.
+- Firebase PREVIEW Hosting Run `37217908194`: **SUCCESS**.
+  - release trigger commit: `93c5826a126bc61c61daf14cb61b404a9b305cd6`.
+  - remote `preview.soridraw.com` app version **346** / exact build PASS.
+  - TEST / PRODUCTION code+HTML unchanged PASS.
+  - shared RTDB rules deploy SKIPPED, Functions unchanged.
+- UX 변경:
+  - Explore 공개프로필 follow/unfollow는 클릭 즉시 버튼/카운트/Following 로컬 목록에 반영하고 서버는 뒤에서 settle.
+  - 실패 시 직전 follow 상태와 카운트를 정확 rollback + 기존 오류 notice.
+  - Explore publication settings save/private도 가능한 화면 상태는 즉시 반영하고 실패 시 exact rollback.
+  - Music Note app330/331 publication path는 변경하지 않음.
+  - focused verifier 기준 추가 backend call/read/write **0**.
+- **PREVIEW Worker는 배포하지 않음.** 현재 active Worker는 rollback된 Worker341 코드 source `9c11b95cf4c95210011b1425cea23f3e51cbf34f`, version `35a0bb0a-f547-4f4a-84ab-d55ba075ba13` 유지.
+- shared follow cutover OFF. `explore_follow_overrides_348` migration/backfill/cutover 실행 0. 사용자 데이터 write/delete/migration 0.
+- 다음 gate:
+  1. 사용자 PREVIEW PC/mobile에서 5~7초 체감 대기가 사라지고 즉시 follow/public-private 화면 반응이 보이는지 실사용 확인.
+  2. candidate Worker 재배포 전 Astra 독립 재감사 + Worker341 대비 legacy physical D1/R2 parity 근거 확보.
+  3. 그 전까지 candidate Worker deploy, shared cutover, main/TEST/PRODUCTION 승격 금지.
+
 ## 0P7. Worker341 rollback 실사용 확인 + 5~7초 UX 지연 확인 (2026-10-05 KST)
 
 - 사용자 동일 조건 재측정으로 rollback 정상 확인:

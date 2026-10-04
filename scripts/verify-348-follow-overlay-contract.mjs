@@ -6,6 +6,7 @@ const path='cloudflare/explore-worker/candidates/348-follow-overlay.sql';
 const sql=readFileSync(path,'utf8');
 assert.match(sql,/CREATE TABLE IF NOT EXISTS explore_follow_overrides_348/);
 assert.match(sql,/PRIMARY KEY \(follower_uid, following_uid\)[\s\S]*?WITHOUT ROWID/);
+assert.match(sql,/baseline_following INTEGER NOT NULL CHECK \(baseline_following IN \(0,1\)\)/);
 assert.match(sql,/CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_active_reverse/);
 assert.match(sql,/WHERE following = 1/);
 assert.match(sql,/phase IN \('legacy','armed','overlay'\)/);
@@ -37,11 +38,11 @@ SELECT COALESCE(
 ) AS following`).get(target,target).following);
 
 assert.equal(effective('legacy'),1);
-db.prepare("INSERT INTO explore_follow_overrides_348 VALUES('a','legacy',0,2,'m1')").run();
+db.prepare("INSERT INTO explore_follow_overrides_348 VALUES('a','legacy',0,1,2,'m1')").run();
 assert.equal(effective('legacy'),0);
 db.prepare("DELETE FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='legacy'").run();
 assert.equal(effective('legacy'),1);
-db.prepare("INSERT INTO explore_follow_overrides_348 VALUES('a','new',1,3,'m2')").run();
+db.prepare("INSERT INTO explore_follow_overrides_348 VALUES('a','new',1,0,3,'m2')").run();
 assert.equal(effective('new'),1);
 
 const pairPlan=db.prepare("EXPLAIN QUERY PLAN SELECT following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").all().map(x=>String(x.detail)).join(' | ');
@@ -50,6 +51,7 @@ const reversePlan=db.prepare("EXPLAIN QUERY PLAN SELECT follower_uid FROM explor
 assert.match(reversePlan,/SEARCH explore_follow_overrides_348 USING INDEX idx_explore_follow_overrides_348_active_reverse/);
 
 console.log('FOLLOW348_SCHEMA_ADDITIVE_NO_BACKFILL=PASS');
+assert.equal(Number(db.prepare("SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").get().baseline_following),0);
 console.log('FOLLOW348_EFFECTIVE_BASELINE_OVERLAY=PASS');
 console.log('FOLLOW348_FORWARD_PK_REVERSE_PARTIAL_INDEX=PASS');
 console.log('FOLLOW348_SHARED_MIGRATION_APPLIED=NO');

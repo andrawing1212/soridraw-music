@@ -81,6 +81,7 @@ import {
   getExploreMusicNotePublicationState,
   getExploreMusicNotePublicationStates,
   revalidateExploreMusicNotePublicationStates335,
+  applyExplorePublicationSyncSignalState,
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
   refreshExploreMusicNotePublicationSource,
@@ -89,6 +90,11 @@ import {
   type ExploreMusicNotePublicationState,
   type ExplorePublicationOptions,
 } from '../services/explorePublicationService';
+import {
+  EXPLORE_PUBLICATION_SYNC_EVENT,
+  readLatestExplorePublicationSyncSignal,
+  type ExplorePublicationSyncSignal,
+} from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
@@ -5892,6 +5898,36 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onPublicationResume335);
+    };
+  }, [user?.uid]);
+
+  // app355: publication changes on another device arrive through the existing
+  // UID-scoped RTDB channel. Apply the tiny confirmed state locally; no Worker
+  // request is needed merely to repaint the public/private state after reload.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return undefined;
+
+    const applySignal355 = (signal: ExplorePublicationSyncSignal | null) => {
+      if (!signal || explorePublicationMutationInFlightRef.current.has(signal.sourceId)) return;
+      const nextState = applyExplorePublicationSyncSignalState(uid, signal);
+      if (!nextState) return;
+      setExplorePublicationStateBySongId((prev) => ({
+        ...prev,
+        [signal.sourceId]: nextState,
+      }));
+    };
+
+    applySignal355(readLatestExplorePublicationSyncSignal(uid));
+
+    const onPublicationSync355 = (event: Event) => {
+      const detail = (event as CustomEvent<ExplorePublicationSyncSignal & { uid?: string }>).detail;
+      if (String(detail?.uid || uid).trim() !== uid) return;
+      applySignal355(detail || null);
+    };
+    window.addEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
+    return () => {
+      window.removeEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
     };
   }, [user?.uid]);
 

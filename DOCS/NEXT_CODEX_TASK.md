@@ -1,3 +1,24 @@
+## CURRENT NEXT GATE — A 한 곡 mutation Rows Read 1순위 감사/절감
+
+우선순위:
+1. A 공개 / 1->2 source 전환 / 비공개 **physical D1 Rows Read 최소화**.
+2. physical Rows Written <=2.
+3. Worker request <=1.
+4. Firestore hot path W0.
+5. 기능/UI/좋아요/저장하트/thumbnail 비변경.
+
+현재 실기기 캡처:
+- A-track mutation들에서 R11 / R8 / R3가 관측됨.
+- 현재 W3->W2 isolated candidate만으로는 product Rows Read 문제를 해결한 것으로 보지 않음.
+
+다음 작업:
+- 각 mutation의 D1 query 수와 meta.rows_read를 statement/trigger 단위로 분해.
+- PK exact lookup, track_stats join, public profile lookup, legacy derived trigger, shared revision trigger를 각각 분리 측정.
+- 불필요한 D1 lookup은 이미 전달된 inline source/R2/shared-card/device state로 대체 가능한지 검증.
+- 전체 collection/owner scan 금지.
+- read 감소가 기능/동기화/정확성을 깨면 적용 금지.
+- read 경로가 확정된 뒤에만 기존 357 W3->W2 write cutover를 함께 적용 판단.
+
 ## CURRENT NEXT GATE — A 한 곡 source 전환 W3를 실제 product W2로 cutover
 
 사용자 목표:

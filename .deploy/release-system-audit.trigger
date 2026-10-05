@@ -1,7 +1,8 @@
-app356-cross-env-user-catalog-release-engine-audit
-target=71d945a3fe0c9f8bc094d2162e4d945ff8292713
-scope=media-worker-promotion,shared-user-catalog-binding,rollback,manifest-identity
-protect=shared-user-data,studio-heart,music-note,library,folders,explore,production
+app356-shared-catalog-bounded-bootstrap-audit
+target=13028000db5585201a91f46eaf00c55780a44aa7
+scope=shared-user-catalog,lazy-legacy-seed,bounded-canonical-bootstrap,media-release-engine
+protect=warm-r0,studio-heart,music-note,library,folders,explore,shared-user-data
 shared-catalog-cutover=false
-user-data-copy=false
+mass-copy=false
+normal-entry-firestore-scan=false
 requested=2026-10-06

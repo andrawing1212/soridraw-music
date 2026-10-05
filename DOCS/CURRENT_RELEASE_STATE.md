@@ -1,3 +1,62 @@
+## 0QA. app355 PREVIEW — 공개곡 타기기 동기화 복구 + 새로고침 Worker 비증가 경로 배포 (2026-10-06 KST)
+
+사용자 발견 회귀:
+- 공개 동작 자체 비용은 **R4/W2**로 정상인데, 같은 계정의 다른 기기에서 공개곡이 즉시 보이지 않음.
+- 변경 없는 새로고침에서 CACHE LIVE Worker가 1씩 증가하는 현상 보고.
+- 비용 절감보다 정상 기능 보존을 우선하고 source 추가 절감 작업은 중단.
+
+원인/수정:
+- app335 이후 warm reload/route entry는 비용을 줄이기 위해 Cloudflare revision 확인을 막고 hidden→visible 때만 재검증했는데, 실제 공개 변경을 다른 기기에 알려주는 별도 change signal이 없어 warm cache가 오래 남을 수 있었음.
+- 기존 사용자별 RTDB 동기화 채널에 **전용 `userSync/{uid}/explorePublication` 신호**를 additive로 추가.
+- 공개/비공개가 canonical Explore에 성공한 뒤에만 작은 확정 상태를 1회 전달.
+- 공개는 Worker 응답의 compact `snapshotItem`을 같이 전달하여 다른 기기가 Feed/공개프로필/뮤직노트 공개상태 캐시를 **기기에서 직접 변경**.
+- 비공개는 해당 곡만 로컬 Feed/프로필 캐시에서 제거.
+- 신호 수신/재생만으로 Cloudflare Worker를 호출하지 않음.
+- 신호 실패는 이미 성공한 canonical 공개/비공개 동작을 실패 처리하지 않으며 기존 R2 revision 복구 경로를 유지.
+- 다른 기존 Music Note / Recent / Like RTDB 신호는 변경하지 않음.
+
+변경 파일:
+- `src/services/userDomainSyncService.ts`
+- `database.rules.json`
+- `src/services/explorePublicationService.ts`
+- `src/pages/FavoritesPage.tsx`
+- `src/pages/ExplorePage.tsx`
+- `public/app-version.json`
+- `.deploy/preview-app-release.trigger`
+
+검증/배포:
+- immutable preflight Run `37364316058`: **SUCCESS**.
+  - TypeScript / Build / release static checks / Worker dry-run / shared D1 read-only preflight PASS.
+  - 실제 배포 없음.
+- PREVIEW App Release Run `37365134850`: **SUCCESS**.
+  - deployed exact commit: `6a6c05981e3945d6e67cd7623c35680cd1c0abd4`.
+  - TypeScript PASS.
+  - Build PASS.
+  - shared RTDB Rules OAuth/PUT + exact source match PASS.
+  - `NO_USER_DATA_MIGRATION=true`.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` app **355** / exact build PASS.
+  - TEST / PRODUCTION Hosting unchanged PASS.
+- Cloudflare Worker code/deploy 변경 0.
+- Functions / Firestore Rules / D1 schema·trigger / 사용자 원본 데이터 변경 0.
+- shared RTDB Rules는 기존 규칙을 유지한 채 `explorePublication` owner-only bounded node만 추가.
+
+환경 상태:
+- PREVIEW: app355 fix 배포 완료.
+- TEST: 직전 중단 요청 전에 이미 app354 승격 Run `37362260739`가 완료되어 **TEST_VERIFIED** 상태. app355는 아직 TEST에 올리지 않음.
+- PRODUCTION: **비변경**. app355 또는 app354의 추가 PRODUCTION 승격 없음.
+
+현재 실사용 게이트:
+1. 기기 A에서 등록된 곡 공개 → 기존 D1 **R4/W2** 기능/비용 유지 확인.
+2. 같은 계정 기기 B의 Music Note/Explore에 공개 상태/곡이 자동 반영되는지 확인.
+3. 변경 없는 warm 새로고침에서 CACHE LIVE **Cloudflare Worker 0** 확인.
+4. 기기 A 비공개 → 기기 B에서 해당 곡 자동 제거 확인.
+5. 위 기능 PASS 전 source R6/W3 추가 절감 및 TEST/PRODUCTION 추가 승격 금지.
+
+주의:
+- app355의 "Worker 0"은 **정상 캐시가 있는 변경 없는 warm reload** 기준. 새 기기/캐시 없음은 필요한 최초 동기화를 할 수 있음.
+- 실제 PC↔모바일 실사용 결과는 아직 **사용자 검증 전**.
+
 ## 0PZ. 동일 세션 연속 3단계 재확인 — R4/W2 → R6/W3 → R3/W2 (2026-10-06 KST)
 
 사용자 확인 테스트를 같은 흐름에서 연속 실행:

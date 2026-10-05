@@ -1,3 +1,47 @@
+## 0PL. dormant R2-only publication read cutover 구현/감사 PASS — 아직 OFF, 배포/공유 D1 변경 없음 (2026-10-05 KST)
+
+- 기준 preview implementation:
+  - gate/runtime commit: `cec2411dc1afdf11a4ca37104089bc065aef1818`
+  - composer/verifier commits: `63ada6c2be3053b409b6d0624c00606e8ed9f217`, `1c4f21e995e17577aadd1759a67425a468b5af2a`
+  - canonical composed Worker: `38f56add6d5c1091b247a2b0838d2402f5439ca0`
+  - canonical checksum pin: `792271da150fa21219cd6f62a5e67fccb7096e98`
+  - final audit trigger HEAD: `35526001248414ec2b2cec76dbf22e12203a9df6`
+- Release System Audit Run `37233167868`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - static release-system verification PASS.
+  - TEST Worker dry-run PASS.
+  - PRODUCTION Worker dry-run PASS.
+  - live shared D1 preflight는 read-only PASS.
+  - branch refs unchanged PASS.
+- 신규 dormant flag:
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1`
+  - PREVIEW wrangler에는 **아직 값이 없으므로 default OFF**.
+  - gate는 catalog + hybrid + R2-only 세 조건이 모두 1일 때만 켜짐.
+- ON 경로 계약:
+  - Feed / Public Profile tracks / Genre는 R2 ordered catalog + shared track-card만 authority로 사용.
+  - legacy derived row와 merge하지 않음.
+  - Search는 기존 app341 R2-only authority를 그대로 보호.
+  - 정상 R2-only path D1 read/write = **R0/W0** 정적 검증 PASS.
+  - source swap은 shared track-card media authority를 사용.
+  - private 이후 stale legacy row가 R2-only list를 되살리는 경로 없음.
+- OFF 경로 계약:
+  - 현재 app336 hybrid behavior를 core358로 그대로 보존.
+  - flag OFF이면 기존 PREVIEW 실제 동작 변경 없음.
+- 공유 데이터/배포:
+  - Worker 배포 0.
+  - Firebase Hosting 배포 0.
+  - shared D1 migration/schema write 0.
+  - user data migration/backfill/delete/rewrite 0.
+  - TEST/PRODUCTION 변경 0.
+- 아직 CUTOVER READY 아님:
+  - audit 출력 `PUBLICATION_R2_ONLY_358_CUTOVER_READY=false`.
+  - main/TEST/PRODUCTION에는 app336/app341/358 read authority가 아직 승격되지 않음.
+  - default branch search에서도 336/341/358 markers 미탐지.
+  - shared D1 fanout 축소는 이 cross-env blocker가 해소되기 전 실행 금지.
+- 참고:
+  - 같은 HEAD의 오래된 `diagnose-069-live-like.yml` 자동 workflow는 job 생성 없이 failure로 남지만, 이번 release-system audit와 358 verifier는 별도로 SUCCESS이며 358 작업의 합격 판정에는 사용하지 않는다.
+
 ## 0PK. never-published first publication W12 live schema exact fanout 확정 — read-only (2026-10-05 KST)
 
 - 목적: first-public W12를 추측이 아니라 **현재 shared D1 실제 schema**로 정확히 분해.

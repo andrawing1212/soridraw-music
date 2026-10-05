@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — 365 live 재측정, source R10 이후 364 승인 판단
+
+현재 완료:
+- 사용자 실기기 361 결과: 공개 R5/W2, source 1->2 R11/W3, 비공개 R3/W2.
+- R11의 추가 D1 read 2개는 publication 후 Feed/Profile이 같은 canonical like_count를 각각 한 번 읽는 중복으로 확정.
+- 365는 canonical like authority를 유지하면서 같은 request/track의 두 번째 읽기만 제거.
+- Release Audit `37349479060` SUCCESS.
+- PREVIEW Worker Release `37349747533` SUCCESS.
+- active PREVIEW Worker `0badfdf8-597d-4f69-9a05-b6fb32612f01`.
+- TEST/PRODUCTION unchanged.
+- shared/user D1 mutation 0.
+- 좋아요 쓰기/저장하트/UI/thumbnail 변경 0.
+
+다음 사용자 실기기 테스트:
+1. 같은 A곡 공개.
+2. 같은 A곡 source 1->2.
+3. 비공개.
+4. CACHE LIVE D1 **행읽기 R / 행쓰기 W** 기록.
+예상:
+- 공개 R4/W2.
+- source R10/W3.
+- 비공개 R3/W2.
+
+다음 판단:
+- 예상대로면 Worker-only 중복 읽기 제거 완료.
+- source R10의 남은 큰 비용은 shared D1 legacy trigger fanout.
+- 364 compatibility candidate는 isolated 기준 trigger 부분 R9->R4를 증명했으며 old TEST/PRODUCTION 호환 유지.
+- 그러나 364는 shared D1 trigger 변경이므로 **사용자 명시 승인 전 적용 금지**.
+- 승인 시 exact rollback 준비 상태에서 2개 trigger만 교체 후 즉시 실기기 source 전환 재측정.
+- 목표: 364 적용 뒤 source **약 R5/W3**.
+- TEST/PRODUCTION 승격 후 legacy mirror 제거 357은 별도 승인으로 최종 R4/W2 수준 재검증.
+
 ## CURRENT NEXT GATE — PREVIEW 361 live 재측정 + 364 shared-D1 승인 대기
 
 현재 완료:

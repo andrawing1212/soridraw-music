@@ -4,6 +4,7 @@ import { controllerIdentity, parseReleaseCommand } from './release-controller-po
 
 const workflow = fs.readFileSync('.github/workflows/soridraw-release-promotion.yml', 'utf8');
 const runtime = fs.readFileSync('.deploy/release-worker-runtime.mjs', 'utf8');
+const mediaRuntime = fs.readFileSync('.deploy/release-media-worker-runtime.mjs', 'utf8');
 
 function step(source, name) {
   const marker = `      - name: ${name}\n`;
@@ -59,6 +60,11 @@ function validate(source = workflow) {
   assert.match(rollback, /release-worker-runtime\.mjs "\$stage" restore/);
   assert.doesNotMatch(rollback, /release-worker-runtime\.mjs "\$stage" activate/);
   assert.match(runtime, /if \(action === 'restore'\) \{\s*await restore\(\);\s*process\.exit\(0\);\s*\}/);
+  assert.match(mediaRuntime, /SORIDRAW_SHARED_CATALOG_V1/);
+  assert.match(mediaRuntime, /SHARED_CATALOG_BUCKET = 'soridraw-user-catalog'/);
+  assert.match(mediaRuntime, /MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS/);
+  assert.match(mediaRuntime, /MEDIA_WORKER_VERIFY=PASS/);
+  assert.match(mediaRuntime, /action === 'restore'/);
 
   assert.doesNotMatch(source, /git\s+push[^\n]*(?:--force|-f\b)/i);
   assert.doesNotMatch(source, /d1\s+(?:migrations?\s+apply|execute)[^\n]*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)/i);

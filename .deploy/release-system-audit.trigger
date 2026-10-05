@@ -106,3 +106,8 @@ publication-d1-read-compaction-361
 target=5036fdb175f933a303b03adb2a110db7186abc57
 focus=first-public-r2-precheck,source-swap-inline-update-returning,legacy-fallback-preserved,no-deploy
 requested=2026-10-06
+
+publication-d1-read-compaction-361-rerun
+target=bd1cfd91f7c94e5f71be220660d847c32d167646
+focus=361-read-compaction,strict-follow-audit-normalization,typescript-build,no-deploy
+requested=2026-10-06

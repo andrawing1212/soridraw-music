@@ -138,6 +138,8 @@ jobs:
           node scripts/verify-204-explore-next-song-parity.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-336-r2-hybrid-read.mjs
+          node scripts/verify-358-publication-r2-only-cutover.mjs
+          node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
 
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
@@ -156,6 +158,7 @@ jobs:
           grep -q '/v1/me/likes-revision' canonical/preview-worker.js
           grep -q 'SORIDRAW_R2_HYBRID_READ_336_20261004' canonical/preview-worker.js
           grep -q '"SORIDRAW_R2_HYBRID_READ_V1": "1"' canonical/wrangler.preview.jsonc
+          grep -q '"SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1"' canonical/wrangler.preview.jsonc
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..
@@ -177,6 +180,8 @@ jobs:
             node scripts/verify-192-cross-account-public-like-live.mjs
             node scripts/verify-204-explore-next-song-parity.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+            node scripts/verify-358-publication-r2-only-cutover.mjs
+            node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 
@@ -295,12 +300,49 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
           echo 'PREVIEW_FIXED_CRON_CLEAR=PASS'
 
-          feed_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
+          feed_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/feed-358.head" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__r2only358=$(date +%s)")"
           test "$feed_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/feed-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/feed-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/feed-358.head"
+          echo 'R2_ONLY_358_LATEST_FEED_R0_W0=PASS'
+
+          popular_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/popular-358.head" -o "$RUNNER_TEMP/popular-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=popular&limit=20&__r2only358=$(date +%s)")"
+          test "$popular_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/popular-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/popular-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/popular-358.head"
+          echo 'R2_ONLY_358_POPULAR_FEED_R0_W0=PASS'
+
           owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
           test -n "$owner"
           profile_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
           test "$profile_code" = 200
+
+          profile_tracks_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/profile-tracks-358.head" -o "$RUNNER_TEMP/profile-tracks-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/tracks?limit=20&__r2only358=$(date +%s)")"
+          test "$profile_tracks_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/profile-tracks-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/profile-tracks-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/profile-tracks-358.head"
+          echo 'R2_ONLY_358_PROFILE_TRACKS_R0_W0=PASS'
+
+          genre="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const items=p?.data?.items||[];for(const x of items){const direct=String(x?.primaryGenre||x?.primary_genre||'').trim();const fromBundle=String(x?.shareBundle?.selectedKeywords?.genres?.[0]||'').trim();const g=direct||fromBundle;if(g){process.stdout.write(g);process.exit(0)}}process.exit(1)")"
+          genre_path="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$genre")"
+          genre_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/genre-358.head" -o "$RUNNER_TEMP/genre-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/genres/${genre_path}/tracks?limit=20&__r2only358=$(date +%s)")"
+          test "$genre_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/genre-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/genre-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/genre-358.head"
+          echo 'R2_ONLY_358_GENRE_TRACKS_R0_W0=PASS'
+
+          title="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const x=(p?.data?.items||[]).find(v=>String(v?.title||'').trim());if(!x)process.exit(1);process.stdout.write(String(x.title).trim())")"
+          search_q="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$title")"
+          search_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/search-341.head" -o "$RUNNER_TEMP/search-341.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/search?q=${search_q}&limit=20&__r2only358=$(date +%s)")"
+          test "$search_code" = 200
+          grep -Eiq '^x-soridraw-search-authority:[[:space:]]*R2-ONLY-341' "$RUNNER_TEMP/search-341.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/search-341.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/search-341.head"
+          echo 'R2_ONLY_341_SEARCH_R0_W0=PASS'
 
           # 192: prove the deployed public changed-card endpoint uses the exact
           # already-published Feed IDs and returns no canonical D1 usage.
@@ -369,6 +411,7 @@ jobs:
           echo "PREVIEW_AFTER=$after"
           echo 'FEED_SMOKE=PASS'
           echo 'PROFILE_SMOKE=PASS'
+          echo 'R2_ONLY_358_DEPLOYED_READ_AUTHORITY=PASS'
           echo "LIKE_BATCH_ROUTE_HTTP=$batch_code"
           echo "LIKE_REVISION_ROUTE_HTTP=$like_revision_code"
           echo 'REVISION_HEAD_ONLY_036=PASS'

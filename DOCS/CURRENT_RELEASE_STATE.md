@@ -1,3 +1,42 @@
+## 0PM. dormant R2-only publication read integration hard-gate PASS (2026-10-05 KST)
+
+- 목표: 358 정적 source guard만 통과시키지 않고, 기존 R2 catalog Phase-B 기능 검증을 Release System Audit의 **hard gate**로 연결.
+- audit workflow 변경:
+  - `.github/workflows/soridraw-release-system-audit.yml`
+  - commit `b5174d4ec055aef29affb331f2fcfed8af306a49`
+  - hard `Static release-system verification` 단계에
+    `scripts/verify-publication-w2-r2-catalog-phase-b.mjs` 추가.
+- audit trigger HEAD:
+  - `ac65599e705a1fe8f6dae2f31c470c251513d92a`
+- Release System Audit Run `37247619845`: **SUCCESS**.
+- hard integration 확인:
+  - `PUBLICATION_R2_ONLY_358_SOURCE=PASS`
+  - `PUBLICATION_R2_ONLY_358_FLAG_DEFAULT_OFF=PASS`
+  - `W2_PHASE_B_R2_INTEGRATION=PASS`
+  - latest deep paging PASS
+  - popular deep paging PASS
+  - public profile deep paging PASS
+  - title search PASS
+  - genre search PASS
+  - artist search PASS
+  - private/republish catalog marker PASS
+  - first-publisher retry idempotency PASS
+  - TEST Worker dry-run PASS
+  - PRODUCTION Worker dry-run PASS
+- 안전 상태:
+  - 358 flag는 계속 OFF.
+  - Worker deploy 0 / Firebase deploy 0.
+  - shared D1 migration/schema write 0.
+  - user data migration/backfill/delete/rewrite 0.
+  - main/TEST/PRODUCTION branch 변경 0.
+- 현재 남은 blocker:
+  - main/TEST/production source는 아직 336/341/358 compatibility를 포함하지 않는 구 기준.
+  - 따라서 shared D1 secondary-index/derived/revision fanout 제거와 358 flag ON은 계속 금지.
+  - 다음 단계는 사용자 TEST 승격 승인 전까지 cross-env promotion readiness를 read-only로 유지하는 것.
+- 비차단 노트:
+  - `diagnose-069-live-like.yml`은 push마다 job 생성 없이 failure 상태를 남기는 오래된 진단 workflow 문제가 계속 보임.
+  - 이번 358 release-system audit와 hard integration gate는 별도 SUCCESS이며 제품/358 검증 결과에는 영향 없음.
+
 ## 0PL. dormant R2-only publication read cutover 구현/감사 PASS — 아직 OFF, 배포/공유 D1 변경 없음 (2026-10-05 KST)
 
 - 기준 preview implementation:

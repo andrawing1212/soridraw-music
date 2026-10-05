@@ -9,6 +9,7 @@ import {
 } from '../lib/soridrawPersistentCache';
 import {
   invalidateExploreFeedSessionCache,
+  invalidateExploreMorePageCache213,
   patchExploreFeedSessionCachesRow,
   removeExploreFeedSessionCacheRow,
   upsertExploreFeedSessionCacheRow,
@@ -35,6 +36,13 @@ export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {
   status: 'private' | 'public';
   trackId: string;
   registered: boolean;
+};
+
+export type ExplorePublicationSourceMedia = {
+  coverUrl: string;
+  durationSeconds: number | null;
+  sunoUrlPrimary: string;
+  sunoUrlSecondary: string | null;
 };
 
 class ExploreApiError extends Error {
@@ -68,6 +76,28 @@ const PUBLICATION_CACHE_SOURCE_TYPE = 'explore_publication_states';
 const publicationMemoryCache = new Map<string, Record<string, ExploreMusicNotePublicationState>>();
 const publicationInflight = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState>>>();
 const publicationServerValidatedUids = new Set<string>();
+// app334: keep the publication revision validation window across browser reloads.
+// A reload is not a publication change; real mutations/outbox state still bypass this gate.
+const PUBLICATION_REVISION_CHECK_MS_334 = 60_000;
+const PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:publication-revision-check-at:v1';
+const publicationRevisionCheckStorageKey334 = (uid: string) =>
+  `${PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334}:${encodeURIComponent(uid)}`;
+const readPublicationRevisionCheckAt334 = (uid: string) => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(publicationRevisionCheckStorageKey334(uid)) || 0);
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  } catch {
+    return 0;
+  }
+};
+const markPublicationServerValidated334 = (uid: string, checkedAt = Date.now()) => {
+  publicationServerValidatedUids.add(uid);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(publicationRevisionCheckStorageKey334(uid), String(checkedAt));
+  } catch {}
+};
 
 
 const EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION = 1;
@@ -428,12 +458,28 @@ const parseMusicNotePublicationBundle = (
 // SORIDRAW_EXPLORE_PUBLICATION_BATCH_STATE_965
 export const getExploreMusicNotePublicationStates = async (
   user: User,
+  options: { revalidate?: boolean } = {},
 ): Promise<Record<string, ExploreMusicNotePublicationState>> => {
   const uid = String(user.uid || '').trim();
   const cached = readPublicationStateCache(uid);
   const envelope = readPublicationStateEnvelope(uid);
   if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;
+  // app335: normal Music Note entry/reload renders the healthy persistent state
+  // without turning navigation into a Worker request. Explicit post-entry activity
+  // may request the bounded revision validation below.
+  if (cached && options.revalidate !== true) {
+    return cached;
+  }
   if (cached && publicationServerValidatedUids.has(uid)) return cached;
+  const lastPersistentValidationAt334 = readPublicationRevisionCheckAt334(uid);
+  if (
+    cached
+    && lastPersistentValidationAt334 > 0
+    && Date.now() - lastPersistentValidationAt334 < PUBLICATION_REVISION_CHECK_MS_334
+  ) {
+    publicationServerValidatedUids.add(uid);
+    return cached;
+  }
 
   const inFlight = publicationInflight.get(uid);
   if (inFlight) return inFlight;
@@ -460,7 +506,7 @@ export const getExploreMusicNotePublicationStates = async (
           knownRevision = '';
         }
         if (knownRevision && localRevision && knownRevision === localRevision) {
-          publicationServerValidatedUids.add(uid);
+          markPublicationServerValidated334(uid);
           return clonePublicationStates(cached);
         }
         // Upgrade a healthy 076 cache without downloading the whole state bundle.
@@ -468,12 +514,15 @@ export const getExploreMusicNotePublicationStates = async (
         // the cached data is already current; simply attach the current revision.
         if (knownRevision && !localRevision && remoteUpdatedAt > 0 && localSyncedAt >= remoteUpdatedAt) {
           writePublicationStateCache(uid, cached, knownRevision);
-          publicationServerValidatedUids.add(uid);
+          markPublicationServerValidated334(uid);
           return clonePublicationStates(cached);
         }
       } catch (revisionError) {
         console.warn('[Explore publication] revision validation unavailable; using persistent snapshot.', revisionError);
-        publicationServerValidatedUids.add(uid);
+        markPublicationServerValidated334(
+          uid,
+          Date.now() - PUBLICATION_REVISION_CHECK_MS_334 + 30_000,
+        );
         return clonePublicationStates(cached);
       }
     }
@@ -484,7 +533,10 @@ export const getExploreMusicNotePublicationStates = async (
     const bundledStates = parseMusicNotePublicationBundle(payload?.data);
     if (!bundledStates) {
       if (cached) {
-        publicationServerValidatedUids.add(uid);
+        markPublicationServerValidated334(
+          uid,
+          Date.now() - PUBLICATION_REVISION_CHECK_MS_334 + 30_000,
+        );
         return clonePublicationStates(cached);
       }
       throw new ExploreApiError(
@@ -495,7 +547,7 @@ export const getExploreMusicNotePublicationStates = async (
     const bundleRevision = String(payload?.data?.revision || knownRevision || '').trim() || null;
     const mergedStates = overlayPendingPublicationStates(uid, bundledStates);
     writePublicationStateCache(uid, mergedStates, bundleRevision);
-    publicationServerValidatedUids.add(uid);
+    markPublicationServerValidated334(uid);
     return clonePublicationStates(mergedStates);
   })().finally(() => {
     publicationInflight.delete(uid);
@@ -504,6 +556,12 @@ export const getExploreMusicNotePublicationStates = async (
   publicationInflight.set(uid, task);
   return task;
 };
+
+export const revalidateExploreMusicNotePublicationStates335 = async (
+  user: User,
+): Promise<Record<string, ExploreMusicNotePublicationState>> => (
+  getExploreMusicNotePublicationStates(user, { revalidate: true })
+);
 
 export const getExploreMusicNotePublicationState = async (
   user: User,
@@ -519,6 +577,95 @@ export const getExploreMusicNotePublicationState = async (
     registered: false,
     ...DEFAULT_PUBLICATION_OPTIONS,
   };
+};
+
+export const refreshExploreMusicNotePublicationSource = async (
+  user: User,
+  sourceId: string,
+  options?: Partial<ExplorePublicationOptions>,
+  registeredTrackId?: string | null,
+  sourceMedia?: ExplorePublicationSourceMedia | null,
+): Promise<ExploreMusicNotePublicationState> => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) {
+    throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
+  }
+  const expectedTrackId = getMusicNoteTrackId(user.uid, normalizedSourceId);
+  const normalizedOptions = normalizePublicationOptions(options);
+  const normalizedRegisteredTrackId = String(registeredTrackId || '').trim();
+
+  let data: any = null;
+  if (normalizedRegisteredTrackId) {
+    const payload = await requestExplore(user, '/v1/me/music-note-publications/batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        mutations: [{
+          sourceId: normalizedSourceId,
+          trackId: normalizedRegisteredTrackId,
+          status: 'public',
+          registered: true,
+          mutationAt: Date.now(),
+          refreshSourceMedia: true,
+          ...(sourceMedia ? {
+            sourceMedia: {
+              coverUrl: String(sourceMedia.coverUrl || '').trim().slice(0, 4096),
+              durationSeconds: sourceMedia.durationSeconds == null
+                ? null
+                : Math.max(0, Number(sourceMedia.durationSeconds) || 0),
+              sunoUrlPrimary: String(sourceMedia.sunoUrlPrimary || '').trim().slice(0, 4096),
+              sunoUrlSecondary: String(sourceMedia.sunoUrlSecondary || '').trim().slice(0, 4096) || null,
+            },
+          } : {}),
+          options: normalizedOptions,
+        }],
+      }),
+    });
+    const result = Array.isArray(payload?.data?.results) ? payload.data.results[0] : null;
+    if (!result?.ok) {
+      throw new ExploreApiError(
+        'PUBLICATION_SOURCE_REFRESH_FAILED',
+        String(result?.error || '공개 곡 연결을 갱신하지 못했습니다.'),
+      );
+    }
+    data = result;
+  } else {
+    const payload = await requestExplore(user, '/v1/publications', {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceType: 'music_note',
+        sourceId: normalizedSourceId,
+        ...(sourceMedia ? {
+          sourceMedia: {
+            coverUrl: String(sourceMedia.coverUrl || '').trim().slice(0, 4096),
+            durationSeconds: sourceMedia.durationSeconds == null
+              ? null
+              : Math.max(0, Number(sourceMedia.durationSeconds) || 0),
+            sunoUrlPrimary: String(sourceMedia.sunoUrlPrimary || '').trim().slice(0, 4096),
+            sunoUrlSecondary: String(sourceMedia.sunoUrlSecondary || '').trim().slice(0, 4096) || null,
+          },
+        } : {}),
+        ...normalizedOptions,
+      }),
+    });
+    data = payload?.data || {};
+  }
+
+  const nextState: ExploreMusicNotePublicationState = {
+    status: 'public',
+    trackId: String(data?.trackId || normalizedRegisteredTrackId || expectedTrackId),
+    registered: true,
+    allowNextSongApply: Boolean(data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
+    allowFollowerSave: Boolean(data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
+    profilePinned: Boolean(data?.profilePinned ?? normalizedOptions.profilePinned),
+  };
+
+  const outbox = readPublicationOutbox(user.uid);
+  if (outbox[normalizedSourceId]) {
+    delete outbox[normalizedSourceId];
+    persistPublicationOutbox(user.uid, outbox);
+  }
+  patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
+  return { ...nextState };
 };
 
 export const publishMusicNoteToExplore = async (
@@ -538,12 +685,15 @@ export const publishMusicNoteToExplore = async (
     ...DEFAULT_PUBLICATION_OPTIONS,
   }, trackId, false);
   const normalizedOptions = normalizePublicationOptions(options);
-  return queuePublicationMutation(user.uid, normalizedSourceId, current, {
+  const optimistic = queuePublicationMutation(user.uid, normalizedSourceId, current, {
     status: 'public',
     trackId,
     registered: current.registered,
     ...normalizedOptions,
   });
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[normalizedSourceId];
+  return confirmed ? { ...confirmed } : optimistic;
 };
 
 export const setExploreTrackVisibility = async (
@@ -562,12 +712,15 @@ export const setExploreTrackVisibility = async (
     allowFollowerSave: found.state.allowFollowerSave,
     profilePinned: found.state.profilePinned,
   };
-  return queuePublicationMutation(user.uid, found.sourceId, found.state, {
+  const optimistic = queuePublicationMutation(user.uid, found.sourceId, found.state, {
     ...found.state,
     status: isPublic ? 'public' : 'private',
     trackId: normalizedTrackId,
     ...requestedOptions,
   });
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[found.sourceId];
+  return confirmed ? { ...confirmed } : optimistic;
 };
 
 export const setExploreTrackPublicationOptions = async (
@@ -586,7 +739,13 @@ export const setExploreTrackPublicationOptions = async (
     ...normalizedOptions,
     trackId: normalizedTrackId,
   });
-  return normalizedOptions;
+  await flushPendingExplorePublicationsForPageExit(user);
+  const confirmed = readPublicationStateCache(user.uid)?.[found.sourceId];
+  return confirmed ? {
+    allowNextSongApply: confirmed.allowNextSongApply,
+    allowFollowerSave: confirmed.allowFollowerSave,
+    profilePinned: confirmed.profilePinned,
+  } : normalizedOptions;
 };
 
 export const flushPendingExplorePublicationsForPageExit = async (user: User): Promise<void> => {
@@ -603,6 +762,10 @@ export const flushPendingExplorePublicationsForPageExit = async (user: User): Pr
         trackId: pending.trackId,
         status: pending.desiredState.status,
         registered: pending.baseState.registered,
+        // app271: only an explicit public + follower-save mutation asks the Worker
+        // to refresh canonical source content. Page entry/revisit never sets this.
+        refreshSourceContent: pending.desiredState.status === 'public'
+          && pending.desiredState.allowFollowerSave,
         options: {
 allowNextSongApply: pending.desiredState.allowNextSongApply,
 allowFollowerSave: pending.desiredState.allowFollowerSave,
@@ -617,6 +780,7 @@ profilePinned: pending.desiredState.profilePinned,
   const latestOutbox = readPublicationOutbox(uid);
   const states = readPublicationStateCache(uid) || {};
   let failed = false;
+  let invalidateMorePages213 = false;
 
   for (const pending of entries) {
     const row: any = resultBySource.get(pending.sourceId);
@@ -647,6 +811,7 @@ profilePinned: pending.desiredState.profilePinned,
       delete latestOutbox[pending.sourceId];
     }
     states[pending.sourceId] = { ...visibleState };
+    invalidateMorePages213 = true;
 
     if (visibleState.status === 'private') {
       removeExploreFeedSessionCacheRow(visibleState.trackId);
@@ -657,10 +822,12 @@ profilePinned: pending.desiredState.profilePinned,
     }
   }
 
+  if (invalidateMorePages213) invalidateExploreMorePageCache213();
+
   persistPublicationOutbox(uid, latestOutbox);
   const revision = String(payload?.data?.revision || '').trim();
   writePublicationStateCache(uid, states, revision || undefined);
-  publicationServerValidatedUids.add(uid);
+  markPublicationServerValidated334(uid);
   if (failed || Object.keys(latestOutbox).length > 0) {
     throw new ExploreApiError('PUBLICATION_BATCH_PENDING', '일부 공개상태 변경을 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
   }

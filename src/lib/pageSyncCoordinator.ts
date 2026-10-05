@@ -76,6 +76,17 @@ export const readPageSyncDiagnostics = (): PageSyncDiagnosticState => {
   }
 };
 
+export const resetPageSyncDiagnostics = (): void => {
+  const next = { ...emptyDiagnostics(), updatedAt: Date.now() };
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.removeItem(PAGE_SYNC_DIAGNOSTICS_STORAGE_KEY); } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<PageSyncDiagnosticState>(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, { detail: next }));
+  }
+};
+
+
 const publishDiagnostics = (patch: Partial<PageSyncDiagnosticState>) => {
   const next = { ...readPageSyncDiagnostics(), ...patch, updatedAt: Date.now() };
   if (typeof sessionStorage !== 'undefined') {
@@ -158,11 +169,20 @@ export const flushSoridrawPageSync = async (
     const jobs: Promise<unknown>[] = [];
     if (pending.likes > 0) jobs.push(flushPendingExploreLikesForPageExit(user));
     if (pending.publications > 0) jobs.push(flushPendingExplorePublicationsForPageExit(user));
-    if (pending.catalogs > 0) jobs.push(flushPendingCatalogPublishes(uid));
     for (const handler of pending.handlers) jobs.push(Promise.resolve(handler.flush()));
 
     const settled = await Promise.allSettled(jobs);
-    const failed = settled.some((result) => result.status === 'rejected');
+    let failed = settled.some((result) => result.status === 'rejected');
+    // Catalog deltas are snapshots of successful mutations, not the optimistic
+    // pre-flush UI. Publish only after Music Note's batched Firestore write finishes
+    // (and schedules its own new catalog delta). Do not clear that delta on failure.
+    if (!failed && getPendingCatalogPublishCount(uid) > 0) {
+      try { await flushPendingCatalogPublishes(uid); }
+      catch (error) {
+        failed = true;
+        console.warn('Post-mutation catalog publish deferred.', error);
+      }
+    }
     const afterCloudflare = readCloudflareDiagnostics();
     const afterFirestore = readFirestoreActual();
     const previous = readPageSyncDiagnostics();

@@ -1,4 +1,5 @@
 name: TEMP 082 Publication D1 Hotpath Readonly
+# rerun-20261004-app335-postmigration-fanout-readonly
 
 on:
   push:
@@ -34,7 +35,7 @@ jobs:
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (tbl_name IN ('tracks','track_stats','public_profiles','profile_stats','explore_derived_tracks','explore_derived_profiles','explore_shared_revision') OR (type='trigger' AND (sql LIKE '%tracks%' OR sql LIKE '%explore_shared_revision%'))) ORDER BY type,tbl_name,name; PRAGMA index_list('tracks');" --json > "$RUNNER_TEMP/schema.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (tbl_name IN ('tracks','track_stats','public_profiles','profile_stats','explore_derived_tracks','explore_derived_profiles','explore_shared_revision','track_search_fts','profile_search_fts','track_tags') OR name LIKE 'track_search_fts%' OR name LIKE 'profile_search_fts%' OR (type='trigger' AND (sql LIKE '%tracks%' OR sql LIKE '%track_search_fts%' OR sql LIKE '%profile_search_fts%' OR sql LIKE '%explore_shared_revision%'))) ORDER BY type,tbl_name,name; PRAGMA index_list('tracks'); PRAGMA index_list('track_tags');" --json > "$RUNNER_TEMP/schema.json"
           node <<'NODE'
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/schema.json','utf8'));
@@ -52,5 +53,108 @@ jobs:
           const trackTriggers=rows.filter(r=>r.type==='trigger'&&r.tbl_name==='tracks').map(r=>({name:r.name,sql:r.sql}));
           console.log('TRACK_INDEXES='+JSON.stringify(trackIndexes));
           console.log('TRACK_TRIGGERS='+JSON.stringify(trackTriggers));
+          console.log('SEARCH_SCHEMA_AUDIT_20260918=PASS\nREMOTE_D1_WRITES=0');
+          NODE
+
+      - name: Audit candidate publication indexes and fallback plans only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN ('idx_tracks_latest_order','idx_tracks_legacy_global_nonempty','idx_tracks_owner_latest','idx_tracks_owner_source','idx_tracks_primary_genre_latest') ORDER BY name;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE owner_uid='__audit__' AND is_public=1 AND status='published' ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN SELECT id FROM tracks INDEXED BY idx_tracks_owner_latest WHERE owner_uid='__audit__' AND is_public=1 AND status='published' ORDER BY profile_pinned DESC,published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN SELECT id,source_id FROM tracks WHERE owner_uid='__audit__' AND source_type='music_note' AND source_id IS NOT NULL AND source_id<>'' LIMIT 200;
+            SELECT COALESCE(MAX(n),0) AS max_tracks_per_owner, COALESCE(AVG(n),0) AS avg_tracks_per_owner FROM (SELECT owner_uid,COUNT(*) AS n FROM tracks GROUP BY owner_uid);
+            SELECT COUNT(*) AS music_note_rows,
+                   SUM(CASE WHEN legacy_global_id IS NOT NULL AND TRIM(legacy_global_id)<>'' THEN 1 ELSE 0 END) AS music_note_legacy_nonempty
+            FROM tracks INDEXED BY idx_tracks_owner_source
+            WHERE source_type='music_note';
+            EXPLAIN QUERY PLAN
+              SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND (title LIKE '%__audit__%' OR search_text LIKE '%__audit__%')
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+            EXPLAIN QUERY PLAN
+              SELECT id FROM tracks
+              WHERE is_public=1 AND status='published'
+                AND primary_genre='__audit__'
+              ORDER BY published_at DESC,id DESC LIMIT 25;
+          " --json > "$RUNNER_TEMP/index-preflight.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/index-preflight.json','utf8'));
+          const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
+          sets.forEach((rows,i)=>console.log('INDEX_PREFLIGHT_SET_'+i+'='+JSON.stringify(rows)));
+          console.log('PUBLICATION_POST_MIGRATION_FANOUT_READONLY=PASS');
           console.log('REMOTE_D1_WRITES=0');
+          NODE
+
+      - name: Read live follow schema only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT type,name,tbl_name,sql
+            FROM sqlite_schema
+            WHERE sql IS NOT NULL
+              AND (
+                tbl_name IN ('follows','profile_stats','explore_derived_profiles','explore_derived_changes','explore_derived_state')
+                OR (type='trigger' AND (
+                  sql LIKE '%profile_stats%'
+                  OR sql LIKE '%explore_derived_profiles%'
+                  OR sql LIKE '%follows%'
+                ))
+              )
+            ORDER BY type,tbl_name,name;
+            PRAGMA index_list('follows');
+            PRAGMA index_list('profile_stats');
+            PRAGMA index_list('explore_derived_profiles');
+            PRAGMA index_list('explore_derived_changes');
+            EXPLAIN QUERY PLAN SELECT 1 FROM follows WHERE follower_uid='__audit_a__' AND following_uid='__audit_b__' LIMIT 1;
+            EXPLAIN QUERY PLAN SELECT following_uid FROM follows WHERE follower_uid='__audit_a__' ORDER BY created_at DESC,following_uid DESC LIMIT 50;
+            EXPLAIN QUERY PLAN SELECT follower_uid FROM follows WHERE following_uid='__audit_b__' ORDER BY created_at DESC,follower_uid DESC LIMIT 50;
+          " --json > "$RUNNER_TEMP/follow-schema.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/follow-schema.json','utf8'));
+          const sets=raw.flatMap(x=>Array.isArray(x.results)?[x.results]:[]);
+          sets.forEach((rows,i)=>console.log('FOLLOW_SCHEMA_SET_'+i+'='+JSON.stringify(rows)));
+          console.log('FOLLOW_LIVE_SCHEMA_READONLY=PASS');
+          console.log('REMOTE_D1_WRITES=0');
+          NODE
+
+      - name: Read D1 query insights only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 insights DB --config "$CFG" --sort-type=sum --sort-by=writes --sort-direction=DESC --limit=30 --time-period=1d --json > "$RUNNER_TEMP/insights.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/insights.json','utf8'));
+          const rows=Array.isArray(raw)?raw:(raw?.result||[]);
+          console.log('D1_TOP_WRITE_INSIGHTS='+JSON.stringify(rows));
+          console.log('REMOTE_D1_INSIGHTS_READONLY=PASS');
+          NODE
+
+          node "$WRANGLER" d1 insights DB --config "$CFG" --sort-type=avg --sort-by=writes --sort-direction=DESC --limit=100 --time-period=1d --json > "$RUNNER_TEMP/insights-avg.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/insights-avg.json','utf8'));
+          const rows=Array.isArray(raw)?raw:(raw?.result||[]);
+          const target=rows.filter((row)=>{
+            const q=String(row?.query||'');
+            return /(?:INSERT INTO tracks|UPDATE tracks SET|UPDATE explore_derived_tracks|UPDATE explore_shared_revision)/i.test(q);
+          });
+          console.log('D1_AVG_WRITE_TARGET_INSIGHTS='+JSON.stringify(target));
+          console.log('REMOTE_D1_AVG_INSIGHTS_READONLY=PASS');
           NODE

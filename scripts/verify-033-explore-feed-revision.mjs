@@ -23,8 +23,7 @@ for (const [needle, label] of [
   ['const cachedRows = readExploreFeedSessionCache(requestUrl);', 'cache-first render'],
   ['if (cachedRows) {', 'cached branch'],
   ['readExploreFeedSessionCacheRevision(requestUrl)', 'revision comparison'],
-  ["window.addEventListener('focus', requestRevisionCheck)", 'focus revalidation'],
-  ["document.addEventListener('visibilitychange', requestRevisionCheck)", 'visibility revalidation'],
+  ["document.addEventListener('visibilitychange', requestRevisionCheck)", 'real tab-resume revalidation'],
   ['feedRevisionSignal', 'event-driven revision signal'],
 ]) requireText(page, needle, label);
 
@@ -52,7 +51,14 @@ if (workerPatch.includes('setInterval(')) throw new Error('033 Worker must not p
 
 console.log('VERIFY_033_EXPLORE_FEED_REVISION=PASS');
 console.log('CACHE_FIRST_IMMEDIATE_RENDER=PASS');
-console.log('REVISION_ONLY_ON_ENTRY_FOCUS_VISIBILITY=PASS');
+if (
+  page.includes("window.addEventListener('pageshow', requestRevisionCheck)")
+  || page.includes("window.addEventListener('focus', requestRevisionCheck)")
+  || page.includes("window.addEventListener('pointerdown', requestActivityRevisionCheck")
+) {
+  throw new Error('033/app335 entry/reload/focus/ordinary clicks must not trigger Feed revision');
+}
+console.log('REVISION_ONLY_ON_REAL_TAB_RESUME=PASS');
 console.log('FULL_FEED_ONLY_ON_REVISION_CHANGE=PASS');
 console.log('REVISION_R2_HEAD_EDGE_CACHED=PASS');
 console.log('NO_D1_OR_FIRESTORE_WRITE_ADDED=PASS');

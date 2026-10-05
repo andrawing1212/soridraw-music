@@ -44,6 +44,122 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Diagnose audit static group A
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-release-controller.mjs
+          node scripts/verify-release-command-pipeline.mjs
+          node scripts/verify-shared-d1-release-system.mjs
+          npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-hard-ban-fallback.cjs
+
+      - name: Diagnose audit static group B
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-154-cross-account-like-sync.mjs
+          node scripts/verify-117-explore-public-count-cache-separation.mjs
+          node scripts/verify-110-explore-liked-public-count.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-181-personal-r2-exact-mutation.mjs
+          node scripts/verify-182-account-partial-like-repair.mjs
+          node scripts/verify-189-personal-like-settled-guard-release.mjs
+          node scripts/verify-190-like-card-authority.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-198-social-snapshot-diagnostic-reason.mjs
+
+      - name: Diagnose audit static group C
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-199-rap-auto-neutral.mjs
+          node scripts/verify-200-admin-gemini-mobile-header.mjs
+          node scripts/verify-201-explore-track-action-sheet.mjs
+          node scripts/verify-202-explore-action-cost-bounds.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-206-studio-split-create-classic-vertical.mjs
+          node scripts/verify-207-library-music-api-admin-persistence.mjs
+          node scripts/verify-208-gemini-adaptive-repair-routing.mjs
+          node scripts/verify-209-search-persistence-mobile.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          node scripts/verify-211-cross-device-publication-refresh.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
+          node scripts/verify-213-explore-more-page-cache.mjs
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
+          node scripts/verify-218-explore-title-display.mjs
+          node scripts/verify-219-account-menu-visual-parity.mjs
+          node scripts/verify-220-account-menu-content-parity.mjs
+
+      - name: Diagnose audit static group D
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-221-explore-feed-layout.mjs
+          node scripts/verify-307-explore-curation.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          node scripts/verify-357-publication-source-swap-w2-readiness.mjs
+          node scripts/verify-358-publication-r2-only-cutover.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
+          node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-365-publication-canonical-like-request-cache.mjs
+          node scripts/verify-360-publication-a-track-cost-target.mjs
+          node scripts/verify-347-follow-authority.mjs
+          node scripts/verify-348-follow-overlay-contract.mjs
+          node --check .deploy/release-worker-runtime.mjs
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected_worker_sha"
+          test "$expected_worker_sha" = "$actual_worker_sha"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-114-shared-social-parity.mjs
+
+      - name: Diagnose audit static syntax E1
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
+          node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
+          node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
+
+      - name: Diagnose audit static syntax E2
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
+          node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
+          node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
+          node --check cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs
+          node --check cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
+
+      - name: Diagnose audit static final guards E3
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
+          grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
+
       - name: Static release-system verification
         shell: bash
         run: |
@@ -52,12 +168,273 @@ jobs:
           node scripts/verify-release-controller.mjs
           node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
+          npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-hard-ban-fallback.cjs
+          node scripts/verify-154-cross-account-like-sync.mjs
+          node scripts/verify-117-explore-public-count-cache-separation.mjs
+          node scripts/verify-110-explore-liked-public-count.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-181-personal-r2-exact-mutation.mjs
+          node scripts/verify-182-account-partial-like-repair.mjs
+          node scripts/verify-189-personal-like-settled-guard-release.mjs
+          node scripts/verify-190-like-card-authority.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-198-social-snapshot-diagnostic-reason.mjs
+          node scripts/verify-199-rap-auto-neutral.mjs
+          node scripts/verify-200-admin-gemini-mobile-header.mjs
+          node scripts/verify-201-explore-track-action-sheet.mjs
+          node scripts/verify-202-explore-action-cost-bounds.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-206-studio-split-create-classic-vertical.mjs
+          node scripts/verify-207-library-music-api-admin-persistence.mjs
+          node scripts/verify-208-gemini-adaptive-repair-routing.mjs
+          node scripts/verify-209-search-persistence-mobile.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          node scripts/verify-211-cross-device-publication-refresh.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
+          node scripts/verify-213-explore-more-page-cache.mjs
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
+          node scripts/verify-218-explore-title-display.mjs
+          node scripts/verify-219-account-menu-visual-parity.mjs
+          node scripts/verify-220-account-menu-content-parity.mjs
+          node scripts/verify-221-explore-feed-layout.mjs
+          node scripts/verify-307-explore-curation.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
+          node scripts/verify-357-publication-source-swap-w2-readiness.mjs
+          node scripts/verify-358-publication-r2-only-cutover.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
+          node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-365-publication-canonical-like-request-cache.mjs
+          node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
+          node scripts/verify-347-follow-authority.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
+          node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
+          node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
+          node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
+          node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
+          node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
+          node --check cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs
+          node --check cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
+          expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
+          echo "CANONICAL_WORKER_ACTUAL_SHA256=$actual_worker_sha"
+          test -n "$expected_worker_sha"
+          test "$expected_worker_sha" = "$actual_worker_sha"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-114-shared-social-parity.mjs
           grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
           grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
           echo 'RELEASE_CONTROLLER_MANUAL_DISPATCH_ONLY=PASS'
           echo 'SHARED_D1_FIXED_PATH_STATIC_AUDIT=PASS'
+
+      - name: Like candidate regression, isolated only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-176-like-postwrite-ack.mjs
+          node scripts/verify-177-like-idle-retry-guard.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-178-final-like-architecture.mjs
+          node scripts/verify-179-like-live-ui-replay.mjs
+          node scripts/verify-180-like-live-signal-and-cached-paint.mjs
+          node scripts/verify-135-like-fenced-protocol.mjs
+          node scripts/verify-171-d1only-schema.mjs
+          node scripts/verify-172-d1only-adapter.mjs
+          node scripts/verify-172-d1only-route.mjs
+          node scripts/verify-173-like-r2-revision.mjs
+          node scripts/verify-173-d1only-precutover-proof.mjs
+          node scripts/verify-174-like-cutover-fence-schema.mjs
+          node scripts/verify-174-d1-cutover-proof.mjs
+          node scripts/verify-174-cutover-proof-gate.mjs
+          node scripts/verify-174-cutover-controller.mjs
+          python3 scripts/verify-174-like-cutover-fence.py
+
+          replay173="$RUNNER_TEMP/soridraw-like-r2-173"
+          mkdir -p "$replay173"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$replay173/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_GENERATED_WORKER="$replay173/worker.js" node scripts/verify-173-like-r2-route.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check "$replay173/worker.js"
+          SORIDRAW_GENERATED_WORKER="$replay173/worker.js" node scripts/verify-174-like-d1-atomic-fence-route.mjs
+          python3 scripts/verify-171-d1only-concurrency.py
+          python3 scripts/verify-167-like-atomic-fence.py
+          python3 scripts/verify-168-direct-atomic.py
+          python3 scripts/verify-132-like-d1-write-budget.py
+          python3 scripts/verify-133-like-direct-two-row.py
+          python3 scripts/verify-134-like-write-amplification.py
+
+          # 160 upgrade replay: emulate a Worker that already has 054 on the
+          # batch route but still has the legacy direct RATE_DB write, then
+          # prove the same 054 patch upgrades only the missing direct route.
+          replay160="$RUNNER_TEMP/soridraw-like-054-to-160"
+          mkdir -p "$replay160"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$replay160/worker.js"
+          REPLAY160="$replay160/worker.js" node - <<'NODE'
+          const fs = require('node:fs');
+          const p = process.env.REPLAY160;
+          let source = fs.readFileSync(p, 'utf8');
+          const start = source.indexOf('async function handleLikeD1Core(');
+          if (start < 0) throw Error('160 replay fixture direct handler missing');
+          const end = source.indexOf('\n}', start);
+          if (end < 0) throw Error('160 replay fixture direct handler end missing');
+          let body = source.slice(start, end + 2);
+          body = body.replace(
+            'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);',
+            'await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);'
+          );
+          body = body.replace('// SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921\n  ', '');
+          source = source.slice(0, start) + body + source.slice(end + 2);
+          fs.writeFileSync(p, source);
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$replay160" node cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs
+          REPLAY160="$replay160/worker.js" node - <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync(process.env.REPLAY160, 'utf8');
+          const start = source.indexOf('async function handleLikeD1Core(');
+          const end = source.indexOf('\n}', start);
+          const body = source.slice(start, end + 2);
+          if (!source.includes('SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921')) throw Error('160 replay marker missing');
+          if (!body.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)')) throw Error('160 replay edge limiter missing');
+          if (body.includes('enforceUserRateLimit(')) throw Error('160 replay legacy RATE_DB limiter remained');
+          console.log('160_054_EXISTING_WORKER_REPLAY=PASS');
+          NODE
+
+          # 078 replay proof: start from the exact pre-161 canonical Worker
+          # (061/062 already deployed, 161/162 absent), then prove one patch
+          # upgrades it without a second-pass diff.
+          replay078="$RUNNER_TEMP/soridraw-like-160-to-164"
+          mkdir -p "$replay078"
+          git fetch origin 21fa99cec7f393247b8bd3382c7a880ebfa343fc --depth=1
+          git show 21fa99cec7f393247b8bd3382c7a880ebfa343fc:cloudflare/explore-worker/canonical/preview-worker.js > "$replay078/worker.js"
+          grep -Fq 'SORIDRAW_SHARED_SOCIAL_R2_PARITY_061_20260917' "$replay078/worker.js"
+          grep -Fq 'SORIDRAW_SHARED_TRACK_CARD_R2_062_20260917' "$replay078/worker.js"
+          if grep -Fq 'SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921' "$replay078/worker.js"; then
+            echo 'pre-161 replay fixture unexpectedly already has 162' >&2
+            exit 1
+          fi
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check "$replay078/worker.js"
+          SORIDRAW_GENERATED_WORKER="$replay078/worker.js" node scripts/verify-114-shared-social-parity.mjs
+          hash078_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          hash078_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash078_before" = "$hash078_after"
+          grep -Fq 'SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921' "$replay078/worker.js"
+          echo '078_DEPLOYED_160_TO_164_REPLAY=PASS'
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs
+          node --check "$replay078/worker.js"
+          REPLAY165="$replay078/worker.js" node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const src = fs.readFileSync(process.env.REPLAY165, 'utf8');
+          for (const name of ['handleLikeD1Core', 'handleLikeBatch034']) {
+            const start = src.indexOf('async function ' + name + '(');
+            const end = src.indexOf('\n}', start);
+            assert.ok(start >= 0 && end > start);
+            const body = src.slice(start, end + 2);
+            assert.match(body, /await assertLegacyLikeIntakeOpen165\(env\)/);
+          }
+          assert.match(src, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
+          console.log('079_DEPLOYED_164_TO_165_REPLAY=PASS');
+          NODE
+          hash165_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs
+          hash165_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash165_before" = "$hash165_after"
+          echo '079_DRAIN_PATCH_IDEMPOTENT=PASS'
+
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/080-direct-like-atomic-batch.mjs
+          node --check "$replay078/worker.js"
+          REPLAY168="$replay078/worker.js" node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const source=fs.readFileSync(process.env.REPLAY168,'utf8');
+          const start=source.indexOf('async function adjustExploreLikeCounterDelta(');
+          const end=source.indexOf('\n}',start);
+          assert.ok(start>=0 && end>start);
+          const body=source.slice(start,end+2);
+          assert.match(body,/const result = await env\.DB\.batch\(\[/);
+          assert.match(body,/WHERE changes\(\) = 1/);
+          assert.doesNotMatch(body,/\.run\(\)|\.all\(\)/);
+          console.log('080_DEPLOYED_165_TO_168_REPLAY=PASS');
+          NODE
+          hash168_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/080-direct-like-atomic-batch.mjs
+          hash168_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash168_before" = "$hash168_after"
+          echo '080_DIRECT_ATOMIC_PATCH_IDEMPOTENT=PASS'
+
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs
+          node --check "$replay078/worker.js"
+          REPLAY169="$replay078/worker.js" node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const source=fs.readFileSync(process.env.REPLAY169,'utf8');
+          const start=source.indexOf('async function handleLikeBatch034(');
+          const end=source.indexOf('\n}',start);
+          assert.ok(start>=0 && end>start);
+          const body=source.slice(start,end+2);
+          const marker="await assertLegacyLikeWriterOpen163(env, 'batch-like-intake')";
+          assert.ok(body.indexOf(marker)>body.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
+          assert.ok(body.indexOf(marker)<body.indexOf('enqueueExploreLikeBatch035('));
+          console.log('081_DEPLOYED_168_TO_169_REPLAY=PASS');
+          NODE
+          hash169_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs
+          hash169_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash169_before" = "$hash169_after"
+          echo '081_BATCH_FREEZE_PATCH_IDEMPOTENT=PASS'
+
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check "$replay078/worker.js"
+          REPLAY172="$replay078/worker.js" node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const source=fs.readFileSync(process.env.REPLAY172,'utf8');
+          assert.match(source,/SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
+          const start=source.indexOf('async function handleLikeBatch034(');
+          const end=source.indexOf('\n}',start);
+          assert.ok(start>=0 && end>start);
+          const body=source.slice(start,end+2);
+          assert.match(body,/cutover172\.mode === 'd1only171'/);
+          assert.match(body,/createLikeD1OnlyCanonical171\(env\.DB, \{ cutoverVerified: true \}\)/);
+          assert.ok(body.indexOf("cutover172.mode === 'd1only171'") <
+            body.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
+          assert.match(body,/personalLikeSnapshot: 'pending'/);
+          console.log('082_DEPLOYED_169_TO_172_REPLAY=PASS');
+          NODE
+          hash172_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          hash172_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash172_before" = "$hash172_after"
+          echo '082_D1ONLY_ROUTE_PATCH_IDEMPOTENT=PASS'
+
+          generated="$RUNNER_TEMP/soridraw-like-candidate-071"
+          mkdir -p "$generated"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$generated/worker.js"
+          for patch in 072-personal-like-r2-revision 073-server-like-queue-order 074-personal-like-r2-cas; do
+            SORIDRAW_REMOTE_WORKER_DIR="$generated" node "cloudflare/explore-worker/patches/$patch.mjs"
+          done
+          SORIDRAW_GENERATED_WORKER="$generated/worker.js" node scripts/verify-128-like-concurrency.mjs
+          echo 'LIKE_SOURCE_AND_ISOLATED_REGRESSION=PASS'
+          echo 'LIKE_PRODUCT_RELEASE_GATE=NOT_VERIFIED_CROSS_ENV_D1_COST_AND_REAL_DEVICES'
 
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
@@ -91,6 +468,164 @@ jobs:
           NODE
           done
           echo 'D1_WRITE_MIGRATION_SEED=NONE'
+
+      - name: Diagnose current shared public like counts (bounded read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT d.id,COALESCE(s.like_count,0) AS canonical_count,d.likes AS derived_count FROM explore_derived_tracks d INDEXED BY idx_explore_rank_latest LEFT JOIN track_stats s ON s.track_id=d.id WHERE d.active=1 ORDER BY d.published_at DESC,d.id DESC LIMIT 40" --json > "$RUNNER_TEMP/like-parity-current.json"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path=process.env.RUNNER_TEMP + '/like-parity-current.json';
+          const d=JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x=>x?.results||[]);
+          const byId=new Map(d.map(r=>[String(r.id),r]));
+          const base='https://soridraw-explore-preview.andrawing1212.workers.dev';
+          let compared=0, mismatched=0, canonicalDerivedMismatch=0;
+          for (const row of d) if (Number(row.canonical_count)!==Number(row.derived_count)) canonicalDerivedMismatch++;
+          for (const sort of ['latest','popular']) {
+            const url=base+'/v1/feed?sort='+sort+'&limit=40&__soridraw_r2_only=108';
+            const response=await fetch(url,{headers:{Accept:'application/json'}});
+            if (!response.ok) throw Error('Public '+sort+' snapshot HTTP '+response.status);
+            const payload=await response.json();
+            if (!Array.isArray(payload?.data?.items)) throw Error('Public '+sort+' snapshot malformed');
+            let overlap=0, bad=0;
+            for (const item of payload.data.items) {
+              const expected=byId.get(String(item?.id||item?.trackId||''));
+              if (!expected) continue;
+              overlap++;
+              const count=Number(item?.likeCount??item?.stats?.likeCount??0);
+              if (count!==Number(expected.canonical_count)) bad++;
+            }
+            compared+=overlap;
+            mismatched+=bad;
+            console.log('PUBLIC_'+sort.toUpperCase()+'_CANONICAL_OVERLAP='+overlap+' COUNT_MISMATCH='+bad);
+          }
+          console.log('D1_CANONICAL_DERIVED_MISMATCH_TOP40='+canonicalDerivedMismatch);
+          console.log('PUBLIC_R2_CANONICAL_MISMATCH_TOTAL='+mismatched+' SAMPLED='+compared);
+          console.log('PUBLIC_LIKE_PARITY_READ_ONLY=PASS');
+          NODE
+          node --input-type=module <<'NODE'
+          const api='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+
+            '/workers/scripts/soridraw-explore-preview/deployments';
+          const response=await fetch(api,{headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+          const result=await response.json();
+          if(!response.ok||result.success!==true)throw Error('Cloudflare active version read failed');
+          const versions=result?.result?.deployments?.[0]?.versions||[];
+          const active=[...versions].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];
+          if(!active||Number(active.percentage||0)<99.99)throw Error('No single active PREVIEW Worker');
+          console.log('PREVIEW_ACTIVE_WORKER='+active.version_id);
+          NODE
+          marker="soridraw-profile-media/internal/explore/repair-v191/bounded-first40.json"
+          if node "$WRANGLER" r2 object get "$marker" --file "$RUNNER_TEMP/like191-marker-current.json" --remote >/dev/null 2>&1; then
+            node -e "const r=require(process.env.RUNNER_TEMP+'/like191-marker-current.json');console.log('191_LIVE_R2_REPAIR_MARKER=SET changed='+Number(r.changedTracks||0))"
+          else
+            echo '191_LIVE_R2_REPAIR_MARKER=ABSENT'
+          fi
+
+      - name: 164 shared cutover readiness report is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs --config "$cfg" | tee "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          grep -Fq '164_CUTOVER_PREFLIGHT_READY=NO' "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          ! grep -Fq '164_CUTOVER_PREFLIGHT_PROOF=' "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          echo '164_LIVE_CUTOVER_PREFLIGHT_REPORT_ONLY=PASS'
+
+      - name: Audit current shared D1 like write fanout (SELECT only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE (type='trigger' AND tbl_name IN ('likes','track_stats','explore_derived_tracks','explore_derived_state','explore_derived_changes')) OR (type='index' AND tbl_name IN ('likes','track_stats','explore_derived_tracks','explore_derived_changes','explore_like_batches_069')) OR (type='table' AND name IN ('likes','track_stats','explore_derived_tracks','explore_derived_changes','explore_like_batches_069')) ORDER BY type,tbl_name,name" --json > "$RUNNER_TEMP/like-fanout-live-schema.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-fanout-live-schema.json','utf8')).flatMap(x => x.results || []);
+          const wanted = ['explore032_stats_update','explore032_derived_track_update','idx_explore_rank_popular'];
+          for (const name of wanted) {
+            if (!rows.some(x => x.name === name)) throw Error('Missing expected live dependency: ' + name);
+          }
+          for (const row of rows) {
+            const hash = crypto.createHash('sha256').update(String(row.sql || '')).digest('hex').slice(0,16);
+            console.log('LIVE_LIKE_SCHEMA ' + row.type + ' ' + row.tbl_name + ' ' + row.name + ' sha256_16=' + hash);
+            // Schema SQL only: never print a user row or token. This is needed
+            // to verify which legacy indexes and revision triggers block W2.
+            if (row.tbl_name === 'likes' && (row.type === 'trigger' || row.type === 'index')) {
+              console.log('LIVE_LIKES_DDL ' + row.name + ' ' + String(row.sql || '(implicit primary key)').replace(/\\s+/g, ' ').trim());
+            }
+          }
+          console.log('LIKE_READONLY_SCHEMA_AUDIT=PASS objects=' + rows.length);
+          console.log('D1_LIVE_MUTATION_META_ROWS_WRITTEN=NOT_MEASURED');
+          NODE
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "EXPLAIN QUERY PLAN SELECT like_count FROM track_stats WHERE track_id='__soridraw_158_probe__' LIMIT 1" --json > "$RUNNER_TEMP/track-stats-158-plan.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/track-stats-158-plan.json','utf8')).flatMap(x => x.results || []);
+          const detail = rows.map(x => String(x.detail || '')).join(' | ');
+          if (!detail.includes('SEARCH') || !detail.includes('track_stats') || !detail.includes('track_id=?')) {
+            throw Error('158 track_stats baseline is not a keyed lookup: ' + detail);
+          }
+          console.log('158_TRACK_STATS_BASELINE_PK_PLAN=PASS ' + detail);
+          NODE
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "EXPLAIN QUERY PLAN SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id WHERE l.user_uid='__soridraw_161_probe__' AND l.track_id IN ('__soridraw_161_track__') AND t.is_public=1 AND t.status='published'" --json > "$RUNNER_TEMP/like-161-targeted-plan.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-161-targeted-plan.json','utf8')).flatMap(x => x.results || []);
+          const detail = rows.map(x => String(x.detail || '')).join(' | ');
+          if (!/SEARCH l /i.test(detail) || !/SEARCH t /i.test(detail) || /SCAN (?:l|t)\b/i.test(detail)) {
+            throw Error('161 targeted legacy membership is not keyed/bounded: ' + detail);
+          }
+          console.log('161_TARGETED_LEGACY_MEMBERSHIP_INDEX_PLAN=PASS ' + detail);
+          NODE
+
+      - name: Real remote D1 publication billing on isolated synthetic database
+        if: contains(github.event.head_commit.message, 'measure isolated publication D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-360-isolated-publication-d1.mjs
+          node scripts/measure-360-isolated-publication-d1.mjs
+
+      - name: Emergency cleanup of isolated publication D1
+        if: always() && contains(github.event.head_commit.message, 'measure isolated publication D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/measure-360-isolated-publication-d1.mjs cleanup
+
+      - name: Real remote D1 follow billing on isolated synthetic database
+        if: contains(github.event.head_commit.message, 'measure isolated follow D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-348-isolated-follow-d1.mjs
+          node scripts/measure-348-isolated-follow-d1.mjs
+
+      - name: Emergency cleanup of isolated follow D1
+        if: always() && contains(github.event.head_commit.message, 'measure isolated follow D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/measure-348-isolated-follow-d1.mjs cleanup
+
+      - name: Real remote D1 like billing on isolated synthetic database
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-153-isolated-d1.mjs
+          node scripts/measure-153-isolated-d1.mjs
+
+      - name: Emergency cleanup of isolated D1 (even after a failed measurement)
+        if: always() && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1'))
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/measure-153-isolated-d1.mjs cleanup
 
       - name: Verify current branch refs are unchanged by audit
         shell: bash

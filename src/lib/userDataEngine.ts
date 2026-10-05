@@ -1,4 +1,5 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
+import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 import { readUserProfileCache } from './userProfileCache';
 import {
   clearAdaptiveListIndexDirtyRevision,
@@ -109,13 +110,14 @@ const CATALOG_PREVIEW_HOSTS = new Set([
 ]);
 
 const MUSIC_NOTE_SUMMARY_KEYS = new Set([
-  'uid', 'soridrawSongId', 'favoriteKey',
+  'uid', 'soridrawSongId', 'favoriteKey', 'recentSongSyncKey', 'recentLegacySourceId', 'recentLegacyCreatedAtMs',
   'title', 'koreanTitle', 'englishTitle', 'genre', 'appliedKeywords', 'searchTokens',
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
   'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
-  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+  'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt', 'myNoteFolderId', 'favoriteFolderId',
+  'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt', 'sharedNoteFolder', 'noteSharedFolderId',
   'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
   'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
@@ -208,16 +210,9 @@ const cleanValue = (value: any, depth = 0): any => {
   return next;
 };
 
-const isMusicNoteCatalogItem = (item: any) => !(
-  item?.favoriteRemoved === true
-  || item?.saved === false
-  || item?.hidden === true
-  || item?.favoriteHidden === true
-  || item?.deletedAt
-  || item?.trashedAt
-);
+const isMusicNoteCatalogItem = (item: any) => !isMusicNoteItemRemoved(item);
 
-const projectCatalogItem = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
+export const projectCatalogItemForSync = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
   if (!sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return null;
   if (kind === 'musicNote' && !isMusicNoteCatalogItem(sourceItem)) return null;
   const id = String(sourceItem?.id || sourceItem?.firestoreId || '').trim();
@@ -238,12 +233,167 @@ const projectCatalogItem = (kind: SoridrawCatalogKind, sourceItem: any): any | n
   return projected;
 };
 
+const MUSIC_NOTE_MEDIA_OVERLAY_STORAGE_BASE = 'soridraw_music_note_media_overlay_v1';
+const MUSIC_NOTE_MEDIA_OVERLAY_MAX_ITEMS = 256;
+const MUSIC_NOTE_MEDIA_OVERLAY_KEYS = [
+  'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
+  'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+  'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+  'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',
+  'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+] as const;
+
+type MusicNoteMediaOverlayRecord = {
+  version: number;
+  mediaVersion: number;
+  patch: Record<string, any>;
+};
+
+const getMusicNoteMediaOverlayStorageKey = (uid: string) =>
+  `${MUSIC_NOTE_MEDIA_OVERLAY_STORAGE_BASE}_${String(uid || '').trim()}`;
+
+const getMusicNoteMediaVersion = (source: any): number => Math.max(
+  Math.max(0, Math.floor(Number(source?.sunoShareUrlUpdatedAt || 0))),
+  Math.max(0, Math.floor(Number(source?.sunoCoverFetchedAt || 0))),
+);
+
+const projectMusicNoteMediaPatch = (source: any): Record<string, any> => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+  const patch: Record<string, any> = {};
+  for (const key of MUSIC_NOTE_MEDIA_OVERLAY_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const cleaned = cleanValue(source[key]);
+    if (cleaned !== undefined) patch[key] = cleaned;
+  }
+  return patch;
+};
+
+const readMusicNoteMediaOverlays = (uid: string): Record<string, MusicNoteMediaOverlayRecord> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(getMusicNoteMediaOverlayStorageKey(safeUid));
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: Record<string, MusicNoteMediaOverlayRecord> = {};
+    for (const [id, value] of Object.entries(parsed as Record<string, any>)) {
+      const safeId = String(id || '').trim();
+      const patch = projectMusicNoteMediaPatch(value?.patch);
+      const version = Math.max(0, Math.floor(Number(value?.version || 0)));
+      const mediaVersion = Math.max(0, Math.floor(Number(value?.mediaVersion || 0)));
+      if (!safeId || !version || Object.keys(patch).length === 0) continue;
+      result[safeId] = { version, mediaVersion, patch };
+    }
+    return result;
+  } catch {
+    return {};
+  }
+};
+
+const writeMusicNoteMediaOverlays = (
+  uid: string,
+  records: Record<string, MusicNoteMediaOverlayRecord>,
+): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || typeof localStorage === 'undefined') return;
+  try {
+    const entries = Object.entries(records)
+      .filter(([id, value]) => Boolean(String(id || '').trim()) && Number(value?.version || 0) > 0)
+      .sort((left, right) => Number(right[1].version || 0) - Number(left[1].version || 0))
+      .slice(0, MUSIC_NOTE_MEDIA_OVERLAY_MAX_ITEMS);
+    localStorage.setItem(getMusicNoteMediaOverlayStorageKey(safeUid), JSON.stringify(Object.fromEntries(entries)));
+  } catch {}
+};
+
+const applyMusicNoteMediaOverlaysToSnapshot = (
+  uid: string,
+  snapshot: SoridrawCatalogSnapshot,
+): SoridrawCatalogSnapshot => {
+  if (!uid || snapshot.kind !== 'musicNote' || !Array.isArray(snapshot.items) || snapshot.items.length === 0) return snapshot;
+  const records = readMusicNoteMediaOverlays(uid);
+  if (Object.keys(records).length === 0) return snapshot;
+
+  let changed = false;
+  let recordsChanged = false;
+  const items = snapshot.items.map((item) => {
+    const id = String(item?.firestoreId || item?.id || '').trim();
+    const record = id ? records[id] : null;
+    if (!record) return item;
+
+    const currentMediaVersion = getMusicNoteMediaVersion(item);
+    if (
+      (currentMediaVersion > 0 && record.mediaVersion > 0 && currentMediaVersion > record.mediaVersion)
+      || (currentMediaVersion > 0 && record.mediaVersion <= 0)
+    ) {
+      delete records[id];
+      recordsChanged = true;
+      return item;
+    }
+
+    const covered = Object.entries(record.patch).every(([key, value]) => (
+      JSON.stringify(item?.[key] ?? null) === JSON.stringify(value ?? null)
+    ));
+    if (covered) {
+      // app351 — matching the local visible row is not proof that the server
+      // Catalog has caught up. Keep the bounded overlay until a strictly newer
+      // canonical media version arrives, otherwise the next stale Catalog GET
+      // can erase the thumbnail again after a PC reload/restart.
+      return item;
+    }
+
+    changed = true;
+    return { ...item, ...record.patch };
+  });
+
+  if (recordsChanged) writeMusicNoteMediaOverlays(uid, records);
+  return changed ? { ...snapshot, items } : snapshot;
+};
+
+// app350 — RTDB Suno/card media is a durable device-local overlay, not a
+// canonical write intent. This lets a receiving PC survive reload/restart even
+// when the server Catalog has not incorporated the Detail draft yet.
+export const rememberMusicNoteMediaPreview = (
+  uid: string,
+  sourceItem: unknown,
+  signalVersion = Date.now(),
+): boolean => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return false;
+  const projected = projectCatalogItemForSync('musicNote', sourceItem);
+  const id = String(projected?.firestoreId || projected?.id || '').trim();
+  if (!projected || !id) return false;
+  const patch = projectMusicNoteMediaPatch(projected);
+  if (Object.keys(patch).length === 0) return false;
+
+  const records = readMusicNoteMediaOverlays(safeUid);
+  const existing = records[id];
+  const mediaVersion = getMusicNoteMediaVersion(patch);
+  const version = Math.max(
+    1,
+    Math.floor(Number(signalVersion || 0)),
+    mediaVersion,
+  );
+  if (existing) {
+    if (existing.mediaVersion > 0 && mediaVersion > 0 && existing.mediaVersion > mediaVersion) return false;
+    if (existing.mediaVersion > 0 && mediaVersion <= 0) return false;
+    if (existing.mediaVersion === mediaVersion && existing.version > version) return false;
+  }
+
+  records[id] = { version, mediaVersion, patch };
+  writeMusicNoteMediaOverlays(safeUid, records);
+
+  const key = catalogKey('musicNote', safeUid);
+  const current = catalogMemory.get(key);
+  if (current) catalogMemory.set(key, applyMusicNoteMediaOverlaysToSnapshot(safeUid, current));
+  return true;
+};
+
 const normalizeCatalogItems = (kind: SoridrawCatalogKind, sourceItems: any[]): any[] => {
   const seen = new Set<string>();
   const normalized: any[] = [];
   for (const sourceItem of Array.isArray(sourceItems) ? sourceItems : []) {
     if (normalized.length >= CATALOG_MAX_ITEMS) break;
-    const projected = projectCatalogItem(kind, sourceItem);
+    const projected = projectCatalogItemForSync(kind, sourceItem);
     if (!projected || seen.has(projected.id)) continue;
     seen.add(projected.id);
     normalized.push(projected);
@@ -355,7 +505,10 @@ export const writeCatalogSnapshotToLocalCache = async (
 ): Promise<boolean> => {
   if (!uid || !isValidSnapshot(kind, snapshot)) return false;
   const key = catalogKey(kind, uid);
-  catalogMemory.set(key, snapshot);
+  const visibleSnapshot = kind === 'musicNote'
+    ? applyMusicNoteMediaOverlaysToSnapshot(uid, snapshot)
+    : snapshot;
+  catalogMemory.set(key, visibleSnapshot);
   const database = await openCatalogDb();
   if (!database) return false;
   try {
@@ -365,7 +518,7 @@ export const writeCatalogSnapshotToLocalCache = async (
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
       transaction.objectStore(CATALOG_DB_STORE).put({
-        key, uid, kind, cacheGeneration: kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION, snapshot,
+        key, uid, kind, cacheGeneration: kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION, snapshot: visibleSnapshot,
       });
     });
   } catch {
@@ -380,10 +533,20 @@ export const readCatalogSnapshotFromLocalCache = async (
   if (!uid) return null;
   const key = catalogKey(kind, uid);
   const memorySnapshot = catalogMemory.get(key);
-  if (memorySnapshot && isValidSnapshot(kind, memorySnapshot)) return memorySnapshot;
+  if (memorySnapshot && isValidSnapshot(kind, memorySnapshot)) {
+    const visibleMemory = kind === 'musicNote'
+      ? applyMusicNoteMediaOverlaysToSnapshot(uid, memorySnapshot)
+      : memorySnapshot;
+    if (visibleMemory !== memorySnapshot) catalogMemory.set(key, visibleMemory);
+    return visibleMemory;
+  }
   const indexedSnapshot = await readCatalogFromIndexedDb(kind, uid);
-  if (indexedSnapshot) catalogMemory.set(key, indexedSnapshot);
-  return indexedSnapshot;
+  if (!indexedSnapshot) return null;
+  const visibleIndexed = kind === 'musicNote'
+    ? applyMusicNoteMediaOverlaysToSnapshot(uid, indexedSnapshot)
+    : indexedSnapshot;
+  catalogMemory.set(key, visibleIndexed);
+  return visibleIndexed;
 };
 
 const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => (
@@ -467,7 +630,7 @@ const applyCatalogSyncResponse = (
     for (const rawItem of entry.upserts) {
       const id = String(rawItem?.id || rawItem?.firestoreId || '').trim();
       if (!id) return null;
-      const projected = projectCatalogItem(kind, rawItem);
+      const projected = projectCatalogItemForSync(kind, rawItem);
       if (!projected) byId.delete(id);
       else byId.set(id, projected);
     }
@@ -554,10 +717,13 @@ const readRemoteCatalogSnapshot = async (
         markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(localSnapshot.itemCount || 0), revision: Number(localSnapshot.revision || 0), errorCode: 'REMOTE_OLDER_THAN_LOCAL' });
         return localSnapshot;
       }
-      await writeCatalogSnapshotToLocalCache(kind, uid, resolved);
+      const visibleResolved = kind === 'musicNote'
+        ? applyMusicNoteMediaOverlaysToSnapshot(uid, resolved)
+        : resolved;
+      await writeCatalogSnapshotToLocalCache(kind, uid, visibleResolved);
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
-      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(resolved.itemCount || 0), revision: Number(resolved.revision || 0), errorCode: '' });
-      return resolved;
+      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(visibleResolved.itemCount || 0), revision: Number(visibleResolved.revision || 0), errorCode: '' });
+      return visibleResolved;
     } catch (error) {
       lastError = error;
       const errorCode = String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR');

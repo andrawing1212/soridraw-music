@@ -202,6 +202,21 @@ export const invalidateExploreLikedTrackCollection = (uid: string) => {
   writeCache(normalizedUid, cache);
 };
 
+// App129 candidate seeding only. A partial personal R2 bundle is NOT allowed to
+// decide liked/unliked state, but its IDs are still useful as bounded candidates.
+// Every candidate is rechecked by exploreLikeService before My Likes renders.
+export const seedExploreLikedTrackCandidates129 = (uid: string, trackIds: string[]) => {
+  const normalizedUid = normalizeId(uid);
+  if (!normalizedUid) return;
+  const candidates = normalizeIds(trackIds);
+  if (!candidates.length) return;
+  const cache = readCache(normalizedUid);
+  const next = new Set(cache.canonicalLikedTrackIds || []);
+  candidates.forEach((trackId) => next.add(trackId));
+  cache.canonicalLikedTrackIds = [...next];
+  writeCache(normalizedUid, cache);
+};
+
 export const rememberExploreLikedTrack = (
   uid: string,
   track: Record<string, unknown> | null,
@@ -240,6 +255,32 @@ export const patchExploreLikedTrackCachedCount091 = (
   writeCache(normalizedUid, cache);
 };
 
+// 127: A successfully authenticated personal R2 snapshot is the membership
+// authority for first-time legacy repair. Preserve cached card bodies and only
+// fetch missing IDs when the user's liked collection is actually opened.
+export const reconcileExploreLikedTrackCollectionSnapshot127 = (
+  uid: string,
+  serverLikedTrackIds: string[],
+  localPending: Record<string, boolean>,
+) => {
+  const normalizedUid = normalizeId(uid);
+  if (!normalizedUid) return;
+  const cache = readCache(normalizedUid);
+  const next = new Set(normalizeIds(serverLikedTrackIds));
+  Object.entries(localPending).forEach(([id, liked]) => {
+    const trackId = normalizeId(id);
+    if (!trackId) return;
+    if (liked) next.add(trackId); else next.delete(trackId);
+  });
+  cache.canonicalLikedTrackIds = [...next];
+  // A fresh, authenticated complete membership set supersedes old missing-card
+  // hints. Keep the card bodies, but let newly confirmed liked IDs fetch their
+  // missing cards once when My Likes opens; an old unavailable flag must not
+  // permanently hide a real liked song.
+  cache.unavailable = {};
+  writeCache(normalizedUid, cache);
+};
+
 export const getExploreLikedTrackCollectionIds = (uid: string): string[] | null => {
   const normalizedUid = normalizeId(uid);
   if (!normalizedUid) return null;
@@ -247,11 +288,20 @@ export const getExploreLikedTrackCollectionIds = (uid: string): string[] | null 
   return cache.canonicalLikedTrackIds === null ? null : normalizeIds(cache.canonicalLikedTrackIds);
 };
 
-export const getExploreLikedTracks = async (user: User): Promise<Array<Record<string, unknown>>> => {
+export const getExploreLikedTracks = async (
+  user: User,
+  authoritativeLikedTrackIds?: string[],
+): Promise<Array<Record<string, unknown>>> => {
   const cache = readCache(user.uid);
+  const explicitAuthority = Array.isArray(authoritativeLikedTrackIds);
   const hadCanonicalCache = cache.canonicalLikedTrackIds !== null;
 
-  if (cache.canonicalLikedTrackIds === null) {
+  // App129: when the personal-like service already resolved the effective
+  // membership set, this service is only a card cache/fetcher. Never replace
+  // that membership with its older collection cache.
+  if (explicitAuthority) {
+    cache.canonicalLikedTrackIds = normalizeIds(authoritativeLikedTrackIds);
+  } else if (cache.canonicalLikedTrackIds === null) {
     const verification = await requestLikedTracks(user, []);
     if (verification.canonicalLikedTrackIds === null) {
       throw new Error('좋아요 곡 상태를 확인하지 못했습니다.');
@@ -264,7 +314,7 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
     cache.unavailable = {};
     cache.canonicalLikedTrackIds = [];
     writeCache(user.uid, cache);
-    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
+    if (hadCanonicalCache || explicitAuthority) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
     return [];
   }
 
@@ -276,7 +326,7 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
   const missing = likedTrackIds.filter((trackId) => !cache.items[trackId] && !cache.unavailable[trackId]);
   if (!missing.length) {
     writeCache(user.uid, cache);
-    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
+    if (hadCanonicalCache || explicitAuthority) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
     return likedTrackIds.map((trackId) => cache.items[trackId]).filter(Boolean);
   }
 

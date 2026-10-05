@@ -24,6 +24,8 @@ export interface V1ProducerDirectionContext {
   atmosphere?: string;
   vocalMode?: 'solo' | 'duo' | 'group';
   isInstrumental?: boolean;
+  rapMode?: 'auto' | 'off' | 'on' | string;
+  preserveNoRapConstraint?: boolean;
 }
 
 const ROLE_DEFINITIONS: Array<{ pattern: RegExp; definition: V1SectionRoleDefinition }> = [
@@ -978,6 +980,21 @@ function buildProducerSlot(
   return registerProducerCandidate(selected, usedResources, usedActions);
 }
 
+function stripUnrequestedAutoNoRapConstraint(
+  value: string,
+  context: V1ProducerDirectionContext,
+): string {
+  const mode = String(context.rapMode || '').trim().toLowerCase();
+  if (mode !== 'auto' || context.preserveNoRapConstraint) return value;
+  return clean(String(value || '')
+    .replace(/\b(?:no|without|avoid(?:ing)?|exclude(?:d|ing)?|remove(?:d|ing)?)\s+(?:any\s+)?(?:rap|rapping|rapper)\b/gi, '')
+    .replace(/\brap[-\s]?free\b/gi, '')
+    .replace(/\s*,\s*;/g, '; ')
+    .replace(/;\s*;/g, '; ')
+    .replace(/,\s*,+/g, ', ')
+    .replace(/^[,;\s]+|[,;\s]+$/g, ''));
+}
+
 function extractProtectedConstraints(value: string): string[] {
   const entries = parseProducerCueEntries(value).entries;
   const protectedCues: string[] = [];
@@ -1004,11 +1021,14 @@ export function buildV1GuaranteedProducerDirectionMap(
   value: string,
   context: V1ProducerDirectionContext,
 ): string {
-  const raw = clean(value)
-    .replace(/\s*,\s*;/g, '; ')
-    .replace(/,\s*,+/g, ', ')
-    .replace(/;\s*;/g, '; ')
-    .replace(/^[,;\s]+|[,;\s]+$/g, '');
+  const raw = stripUnrequestedAutoNoRapConstraint(
+    clean(value)
+      .replace(/\s*,\s*;/g, '; ')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/;\s*;/g, '; ')
+      .replace(/^[,;\s]+|[,;\s]+$/g, ''),
+    context,
+  );
   const parsedTempo = parseProducerCueEntries(raw).tempo;
   const tempo = clean(context.tempo || parsedTempo).replace(/[,;\s]+$/g, '') || '80–110 BPM';
   const groove = compactProducerClause(stripAbstractProducerTail(pickGrooveCue(raw, context)), 11) || 'genre-shaped rhythmic flow';

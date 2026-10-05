@@ -49,6 +49,10 @@ const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>()
 const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113 = 60_000;
 const profileRevalidationInflight113 = new Map<string, Promise<void>>();
 
+// app334: a browser reload is not a profile-change signal. The persistent
+// validatedAt window already survives reloads, so warm reloads stay local and
+// the normal one-minute background revalidation cadence remains unchanged.
+
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
 
@@ -69,6 +73,7 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
     spotify: String(row?.socialLinks?.spotify || row?.spotifyUrl || row?.spotify_url || '').trim(),
     instagram: String(row?.socialLinks?.instagram || row?.instagramUrl || row?.instagram_url || '').trim(),
     tiktok: String(row?.socialLinks?.tiktok || row?.tiktokUrl || row?.tiktok_url || '').trim(),
+    youtube: String(row?.socialLinks?.youtube || row?.youtubeUrl || row?.youtube_url || '').trim(),
   },
   followerCount: normalizeCount(row?.followerCount ?? row?.follower_count),
   followingCount: normalizeCount(row?.followingCount ?? row?.following_count),
@@ -93,6 +98,12 @@ const readCache = (profileRef: string): ExploreProfileFirstViewData | null => {
   });
   if (!envelope?.data?.profile?.uid || !Array.isArray(envelope.data.tracks)) return null;
   return normalizeCachedData(envelope.data);
+};
+
+// Recommendation ranking must never fetch one profile per candidate.
+export const readCachedExplorePublicProfile = (uid: string): ExplorePublicProfile | null => {
+  const cached = readCache(uid);
+  return cached?.profile.uid === uid ? cached.profile : null;
 };
 
 const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
@@ -228,9 +239,10 @@ const revalidateCachedProfile113 = (
   normalizedRef: string,
   cached: ExploreProfileFirstViewData,
   options: ExploreProfileFirstViewOptions,
+  force = false,
 ) => {
   const age = Math.max(0, Date.now() - Math.max(0, Number(cached.validatedAt || 0)));
-  if (cached.validatedAt > 0 && age < PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113) return;
+  if (!force && cached.validatedAt > 0 && age < PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113) return;
   const key = normalizedRef.toLowerCase();
   if (profileRevalidationInflight113.has(key)) return;
 
@@ -381,6 +393,17 @@ export const patchExplorePublicProfileFirstViewTrack = (
   writeCache(cached.profile.uid || profileRef, { ...cached, tracks });
 };
 
+export const revalidateExplorePublicProfileFirstView335 = (
+  profileRef: string,
+  options: ExploreProfileFirstViewOptions = {},
+) => {
+  const normalizedRef = normalizeProfileRef(profileRef);
+  if (!normalizedRef) return;
+  const cached = readCache(normalizedRef);
+  if (!cached) return;
+  revalidateCachedProfile113(normalizedRef, cached, options);
+};
+
 export const getExplorePublicProfileFirstView = async (
   profileRef: string,
   options: ExploreProfileFirstViewOptions = {},
@@ -390,14 +413,13 @@ export const getExplorePublicProfileFirstView = async (
 
   const cached = readCache(normalizedRef);
   if (cached) {
-    // 113: render the warm snapshot immediately. At most once per minute on a
-    // revisit, verify its shared revision in the background. The Worker serves
-    // this conditional path from shared R2/edge; unchanged profiles never read D1.
+    // app335: route entry/reload is not a profile-change signal. Keep the warm
+    // profile entirely local; explicit post-entry activity can call the bounded
+    // shared-R2 revalidator exported below.
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      'LOCAL HIT · 즉시 표시 · D1 읽기 0',
+      'LOCAL HIT · 변경 없음 · Worker 0 · D1 읽기 0',
     );
-    revalidateCachedProfile113(normalizedRef, cached, options);
     return cached;
   }
 

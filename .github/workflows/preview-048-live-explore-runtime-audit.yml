@@ -14,47 +14,153 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
     steps:
-      - name: Audit live PREVIEW Explore Worker source shape
+      - name: Audit active Explore Workers read-only
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
           const crypto=require('crypto');
-          const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
-          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x;}
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN;
+          const targets=[
+            ['PREVIEW',process.env.PREVIEW_WORKER],
+            ['TEST',process.env.TEST_WORKER],
+            ['PRODUCTION',process.env.PRODUCTION_WORKER],
+          ];
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,500));return x.result||x;}
           (async()=>{
-            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
-            const ds=await g(base+'/deployments');
-            const d=(ds.deployments||ds||[])[0];
-            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
-            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`);
-            const mods=v.modules||[]; const m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
-            const s=Buffer.from(m.content_base64,'base64').toString('utf8');
-            const checks=[
-              'SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908',
-              'EXPLORE_MIRROR_ROUTE_020',
-              'EXPLORE_MIRROR_TARGETS_020',
-              'fanoutExploreMirror020',
-              'handleExploreMirrorRoute020',
-              'handleExploreMirrorSyncRoute020',
-              'X-SORIDRAW-Explore-Mirror',
-              'fanoutExploreMirror020(env, source.id, false)',
-              'SORIDRAW_EXPLORE_MIRROR_STRICT_SYNC_022_20260908',
-              'targetCount: settled.length',
-              'failures.length',
-              'SORIDRAW_EXPLORE_MIRROR_SERVICE_BINDINGS_023_20260908',
-              'EXPLORE_MIRROR_PREVIEW',
-              'EXPLORE_MIRROR_TEST',
-              'service.fetch(request)',
-              'SORIDRAW_EXPLORE_PUBLIC_PROFILE_R2_MIRROR_PARITY_029_20260909'
-            ];
-            console.log('ACTIVE_VERSION='+active.version_id);
-            console.log('SOURCE_SHA256='+crypto.createHash('sha256').update(s).digest('hex'));
-            for(const q of checks){const escaped=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const n=(s.match(new RegExp(escaped,'g'))||[]).length;console.log(q+'='+n);}
-            const settings=await g(base+'/settings');
-            const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
-            console.log('BINDINGS='+bindings.map(b=>`${b.name}:${b.type}`).sort().join(','));
-            console.log('COMPATIBILITY_DATE='+String(settings.compatibility_date||''));
+            for(const [stage,N] of targets){
+              const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+              const ds=await g(base+'/deployments');
+              const d=(ds.deployments||ds||[])[0];
+              const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+              if(!active?.version_id||Number(active.percentage||0)<99.99) throw Error(stage+' no single active Worker');
+              const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`);
+              const mods=v.modules||[]; const m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+              const s=Buffer.from(m.content_base64,'base64').toString('utf8');
+              console.log(`${stage}_ACTIVE_VERSION=${active.version_id}`);
+              console.log(`${stage}_SOURCE_SHA256=${crypto.createHash('sha256').update(s).digest('hex')}`);
+              for(const q of [
+                'readFeedR2Revision077',
+                '/v1/feed-revision',
+                'explore_shared_revision',
+                'explore_derived_tracks',
+                'syncExploreFeedR2Publication043',
+                'patchExploreProfileR2Publication043',
+                'refreshSourceMedia',
+                'suno_url_primary',
+                'suno_url_secondary',
+                'SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919',
+                'isExploreR2CatalogEnabled066',
+                'isExploreR2CatalogReadEnabled066',
+                'isExploreR2FirstPublisherEnabled066',
+                'handleCatalogFeed066',
+                'handleCatalogProfileTracks066',
+                'handleCatalogGenre066',
+                'handleCatalogSearch066',
+                'firstPublisherBootstrap066',
+              ]){
+                const escaped=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+                console.log(`${stage}_MARKER_${q.replace(/[^a-z0-9]+/gi,'_')}=${(s.match(new RegExp(escaped,'g'))||[]).length}`);
+              }
+              const settings=await g(base+'/settings');
+              const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+              const db=bindings.find(b=>b.type==='d1'&&b.name==='DB');
+              const media=bindings.find(b=>b.type==='r2_bucket'&&b.name==='PROFILE_MEDIA');
+              const catalogFlags=Object.fromEntries(bindings
+                .filter(b=>b.type==='plain_text' && /^SORIDRAW_R2_(CATALOG|FIRST_PUBLISHER)/.test(String(b.name||'')))
+                .map(b=>[String(b.name),String(b.text||b.value||'')]));
+              console.log(`${stage}_DB_ID=${String(db?.id||db?.database_id||db?.uuid||'')}`);
+              console.log(`${stage}_PROFILE_MEDIA=${String(media?.bucket_name||media?.bucket||media?.name||'')}`);
+              console.log(`${stage}_R2_CATALOG_FLAGS=${JSON.stringify(catalogFlags)}`);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Audit shared D1 track fanout read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,D=process.env.SHARED_D1_ID;
+          const sql=`
+            SELECT type,name,tbl_name,sql
+            FROM sqlite_schema
+            WHERE (type='trigger' AND (tbl_name='tracks' OR sql LIKE '%explore_shared_revision%'))
+               OR (type='index' AND tbl_name='tracks')
+            ORDER BY type,name
+          `;
+          (async()=>{
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${D}/query`,{
+              method:'POST',
+              headers:{Authorization:`Bearer ${T}`,Accept:'application/json','Content-Type':'application/json'},
+              body:JSON.stringify({sql})
+            });
+            const x=await r.json();
+            if(!r.ok||x.success===false) throw Error('D1 '+r.status+' '+JSON.stringify(x).slice(0,800));
+            const rows=(x.result||[]).flatMap(v=>v?.results||[]);
+            for(const row of rows){
+              const sqlText=String(row.sql||'').replace(/\s+/g,' ').trim();
+              console.log(`D1_${String(row.type||'').toUpperCase()} ${row.name} :: ${sqlText}`);
+            }
+            console.log('D1_READONLY_SCHEMA_AUDIT=PASS rows='+rows.length);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+
+      - name: Audit first-publication fanout layers read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,D=process.env.SHARED_D1_ID;
+          const sql=`
+            SELECT type,name,tbl_name,sql
+            FROM sqlite_schema
+            WHERE tbl_name IN (
+              'tracks',
+              'explore_derived_tracks',
+              'explore_derived_changes',
+              'explore_derived_state',
+              'explore_derived_profiles',
+              'explore_shared_revision'
+            )
+              AND type IN ('index','trigger','table')
+            ORDER BY tbl_name,type,name;
+            PRAGMA index_list('tracks');
+            PRAGMA index_list('explore_derived_tracks');
+            PRAGMA index_list('explore_derived_changes');
+            PRAGMA index_list('explore_derived_profiles');
+          `;
+          (async()=>{
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${D}/query`,{
+              method:'POST',
+              headers:{Authorization:`Bearer ${T}`,Accept:'application/json','Content-Type':'application/json'},
+              body:JSON.stringify({sql})
+            });
+            const x=await r.json();
+            if(!r.ok||x.success===false) throw Error('D1 '+r.status+' '+JSON.stringify(x).slice(0,800));
+            const sets=(x.result||[]).map(v=>v?.results||[]);
+            const schema=sets[0]||[];
+            const groups=new Map();
+            for(const row of schema){
+              const key=String(row.tbl_name||'');
+              if(!groups.has(key)) groups.set(key,[]);
+              groups.get(key).push({
+                type:String(row.type||''),
+                name:String(row.name||''),
+                sql:String(row.sql||'').replace(/\s+/g,' ').trim(),
+              });
+            }
+            for(const [table,rows] of groups) console.log('FANOUT_SCHEMA_'+table+'='+JSON.stringify(rows));
+            console.log('FANOUT_INDEX_LIST_tracks='+JSON.stringify(sets[1]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_tracks='+JSON.stringify(sets[2]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_changes='+JSON.stringify(sets[3]||[]));
+            console.log('FANOUT_INDEX_LIST_explore_derived_profiles='+JSON.stringify(sets[4]||[]));
+            console.log('FIRST_PUBLICATION_FANOUT_READONLY=PASS');
+            console.log('REMOTE_D1_WRITES=0');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

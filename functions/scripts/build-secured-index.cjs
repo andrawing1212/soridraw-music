@@ -89,10 +89,11 @@ function patchGeminiBoundedLatencyPolicy() {
   const helperBlock = `type GeminiLatencyPolicy = "bounded-v1" | null;
 
 const GEMINI_BOUNDED_ATTEMPT_TIMEOUT_MS: Record<string, number> = {
+  "gemini-3.8-flash": 35_000,
   "gemini-3.7-flash": 55_000,
-  "gemini-3.6-flash": 45_000,
-  "gemini-3.5-flash": 30_000,
-  "gemini-3.5-flash-lite": 20_000,
+  "gemini-3.6-flash": 120_000,
+  "gemini-3.5-flash": 90_000,
+  "gemini-3.5-flash-lite": 75_000,
   "gemini-3.1-flash-lite": 15_000,
 };
 
@@ -118,14 +119,14 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
 
   replaceFirst(
     'Gemini interaction timeout signal',
-    '      body: JSON.stringify(body),\n    },\n  );\n  const payload = await upstream.json().catch(() => null);',
-    '      body: JSON.stringify(body),\n      ...(attemptTimeoutMs ? { signal: AbortSignal.timeout(attemptTimeoutMs) } : {}),\n    },\n  );\n  const payload = await upstream.json().catch(() => null);',
+    '      body: JSON.stringify(body),\n    },\n  );\n  if (!upstream.ok) {',
+    '      body: JSON.stringify(body),\n      ...(attemptTimeoutMs ? { signal: AbortSignal.timeout(attemptTimeoutMs) } : {}),\n    },\n  );\n  if (!upstream.ok) {',
   );
 
   replaceOnce(
     'Gemini generateContent timeout signature',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
   );
 
   replaceOnce(
@@ -137,13 +138,13 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
   replaceOnce(
     'Gemini timeout attempt record',
     '  const statusCode = extractGeminiErrorStatus(error);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);',
-    '  const isAttemptTimeout = (anyError?.name === "TimeoutError" || anyError?.name === "AbortError") && /timeout|aborted/i.test(String(anyError?.message || ""));\n  const statusCode = isAttemptTimeout ? 504 : extractGeminiErrorStatus(error);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
+    '  const isAttemptTimeout = (anyError?.name === "TimeoutError" || anyError?.name === "AbortError") && /timeout|aborted/i.test(String(anyError?.message || ""));\n  const statusCode = isAttemptTimeout ? 504 : extractGeminiErrorStatus(error);\n  const rawErrorMessage = String(anyError?.message || "");\n  const isDailyQuotaExhausted = statusCode === 429 && /(?:requests?\\s+per\\s+day|per day on Free Tier|GenerateRequestsPerDay)/i.test(rawErrorMessage);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
   );
 
   replaceOnce(
     'Gemini timeout attempt code',
     '    code: anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
-    '    code: isAttemptTimeout ? "GEMINI_ATTEMPT_TIMEOUT" : anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(isAttemptTimeout ? { cooldownReason: "model_response_timeout" } : cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
+    '    code: isAttemptTimeout ? "GEMINI_ATTEMPT_TIMEOUT" : anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(isAttemptTimeout ? { cooldownReason: "model_response_timeout" } : cooldownMs > 0 ? { cooldownReason: isDailyQuotaExhausted ? "daily_quota_exhausted" : statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
   );
 
   replaceOnce(

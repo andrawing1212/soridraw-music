@@ -1,0 +1,247 @@
+name: Diagnose 155 Shared Like Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/diagnose-155-shared-like-readonly.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read-only D1 queue and public-count state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name FROM sqlite_schema
+            WHERE type='table' AND name LIKE 'explore_like%'
+            ORDER BY name;
+            SELECT 'processor' AS kind,id,lease_until,
+              CASE WHEN COALESCE(owner,'')='' THEN 0 ELSE 1 END AS owner_set
+            FROM explore_like_processor_035 WHERE id=1;
+            SELECT 'q069' AS kind,COUNT(*) AS rows,
+              COALESCE(SUM(mutation_count),0) AS mutations,
+              COALESCE(MIN(created_at),0) AS oldest_at,
+              COALESCE(MAX(created_at),0) AS newest_at
+            FROM explore_like_batches_069;
+          " --json > "$RUNNER_TEMP/base.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT
+              t.title,
+              COALESCE(s.like_count,0) AS canonical_count,
+              COALESCE(d.likes,-1) AS derived_count,
+              (SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,
+              COALESCE(s.updated_at,0) AS count_updated_at
+            FROM tracks t
+            LEFT JOIN track_stats s ON s.track_id=t.id
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.is_public=1 AND t.status='published'
+              AND (
+                t.title LIKE '%Leaving One Step Open%' OR
+                t.title LIKE '%Left Unsaid%' OR
+                t.title LIKE '%Through the Night%' OR
+                t.title LIKE '%Just Stay Here Awhile%'
+              )
+            ORDER BY t.title;
+          " --json > "$RUNNER_TEMP/counts.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            WITH expanded AS (
+              SELECT b.batch_id,b.created_at,
+                TRIM(CAST(json_extract(j.value,'$.trackId') AS TEXT)) AS track_id,
+                CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+              FROM explore_like_batches_069 b, json_each(b.mutations_json) j
+              WHERE json_type(j.value,'$.trackId')='text'
+            )
+            SELECT e.created_at,t.title,e.desired_liked,
+              COALESCE(s.like_count,0) AS canonical_count,
+              (SELECT COUNT(*) FROM likes l WHERE l.track_id=e.track_id) AS relation_count
+            FROM expanded e
+            LEFT JOIN tracks t ON t.id=e.track_id
+            LEFT JOIN track_stats s ON s.track_id=e.track_id
+            ORDER BY e.created_at DESC
+            LIMIT 20;
+          " --json > "$RUNNER_TEMP/pending.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const rows=(name)=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name,'utf8')).flatMap(x=>x.results||[]);
+          const now=Date.now();
+          console.log('=== SHARED LIKE READONLY DIAG ===');
+          for(const x of rows('base.json')){
+            if(x.kind==='processor') console.log('PROCESSOR lease_remaining_s='+Math.max(0,Math.floor((Number(x.lease_until||0)-now)/1000))+' owner_set='+Number(x.owner_set||0));
+            if(x.kind==='q069'){
+              const oldest=Number(x.oldest_at||0), newest=Number(x.newest_at||0);
+              console.log('Q069 rows='+Number(x.rows||0)+' mutations='+Number(x.mutations||0)+' oldest_age_s='+(oldest?Math.max(0,Math.floor((now-oldest)/1000)):0)+' newest_age_s='+(newest?Math.max(0,Math.floor((now-newest)/1000)):0));
+            }
+          }
+          for(const x of rows('counts.json')) console.log('D1 title='+JSON.stringify(String(x.title||''))+' canonical='+Number(x.canonical_count||0)+' relation='+Number(x.relation_count||0)+' derived='+Number(x.derived_count??-1));
+          const pending=rows('pending.json');
+          if(!pending.length) console.log('PENDING069 none');
+          for(const x of pending) console.log('PENDING069 age_s='+Math.max(0,Math.floor((now-Number(x.created_at||0))/1000))+' title='+JSON.stringify(String(x.title||''))+' desired='+Number(x.desired_liked||0)+' canonical='+Number(x.canonical_count||0)+' relation='+Number(x.relation_count||0));
+          console.log('D1_READ_ONLY=PASS');
+          NODE
+
+      - name: Read cutover guards only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT name FROM sqlite_schema
+            WHERE type='table' AND name='explore_like_cutover_control_174';
+          " --json > "$RUNNER_TEMP/control-schema.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/control-schema.json','utf8')).flatMap(x=>x.results||[]);
+          console.log('CUTOVER174_TABLE_EXISTS='+(r.some(x=>x.name==='explore_like_cutover_control_174')?'YES':'NO'));
+          NODE
+
+          set +e
+          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/like-cutover-v162/active.json" --remote --file "$RUNNER_TEMP/cutover162.json" >/tmp/r2-get.out 2>/tmp/r2-get.err
+          code=$?
+          set -e
+          echo "CUTOVER162_R2_GET_CODE=$code"
+          if [ "$code" = 0 ] && [ -s "$RUNNER_TEMP/cutover162.json" ]; then
+            node <<'NODE'
+          const fs=require('fs');
+          const v=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cutover162.json','utf8'));
+          console.log('CUTOVER162 schemaVersion='+Number(v.schemaVersion||0)
+            +' relationMode='+String(v.relationMode||'')
+            +' legacyRelationWritersFrozen='+Boolean(v.legacyRelationWritersFrozen)
+            +' legacyCountWritersFrozen='+Boolean(v.legacyCountWritersFrozen)
+            +' allEnvironmentReadersReady='+Boolean(v.allEnvironmentReadersReady)
+            +' allEnvironmentWritersReady='+Boolean(v.allEnvironmentWritersReady)
+            +' ownerProtocol='+String(v.ownerProtocol||''));
+          const q=v?.preCutoverProof172?.legacyQueueRows||v?.preCutoverProof164?.legacyQueueRows||{};
+          console.log('CUTOVER162_PROOF_QUEUES q035='+String(q['035']??'na')+' q066='+String(q['066']??'na')+' q069='+String(q['069']??'na')+' q075='+String(q['075']??'na'));
+          NODE
+          else
+            echo "CUTOVER162 unavailable"
+            cat /tmp/r2-get.err || true
+          fi
+          echo 'CUTOVER_GUARDS_READ_ONLY=PASS'
+
+      - name: Read active PREVIEW Worker identity only
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker="soridraw-explore-preview"
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json'             "$base/workers/scripts/$worker/deployments" > "$RUNNER_TEMP/deployments.json"
+          version="$(jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id' "$RUNNER_TEMP/deployments.json")"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json'             "$base/workers/workers/$worker/versions/$version?include=modules" > "$RUNNER_TEMP/version.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/version.json','utf8'));
+          const v=p?.result??p;
+          const modules=Array.isArray(v?.modules)?v.modules:[];
+          const main=modules.find(x=>x?.name===(v?.main_module||modules[0]?.name))||modules[0];
+          if(!main?.content_base64) throw new Error('active Worker source unavailable');
+          const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+          const allSrc=modules.map(m=>m?.content_base64?Buffer.from(m.content_base64,'base64').toString('utf8'):'').join('\n');
+          const sha=crypto.createHash('sha256').update(src).digest('hex');
+          const expected=fs.readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
+          console.log('ACTIVE_WORKER_VERSION='+String(v?.id||v?.version_id||'unknown'));
+          console.log('ACTIVE_WORKER_SHA='+sha);
+          console.log('REPO_CANONICAL_SHA='+expected);
+          console.log('ACTIVE_EQUALS_REPO_CANONICAL='+(sha===expected?'YES':'NO'));
+          for(const marker of [
+            'SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922',
+            'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916',
+            'SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919',
+            'SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918',
+          ]) console.log('ACTIVE_MARKER '+marker+'='+(allSrc.includes(marker)?'YES':'NO'));
+          NODE
+
+      - name: Inspect public normal Feed source vs shared first-page R2 without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            curl -fsS -D "$RUNNER_TEMP/normal-$sort.head" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40" -o /dev/null
+            curl -fsS -D "$RUNNER_TEMP/r2only-$sort.head" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" -o /dev/null
+            for mode in normal r2only; do
+              echo "SOURCE_HEADERS sort=$sort mode=$mode"
+              grep -iE '^x-soridraw-(d1-read|d1-write|r2-a|r2-b|feed-revision|feed-snapshot|feed-cache|source|cf-worker):' "$RUNNER_TEMP/$mode-$sort.head" | sed 's/\r$//' || true
+            done
+          done
+          echo 'NORMAL_VS_SHARED_SNAPSHOT_HEADERS=PASS'
+
+      - name: Compare revision and revision-keyed first-page R2 against direct R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed-revision?sort=$sort" > "$RUNNER_TEMP/revision-$sort.json"
+            revision="$(SORT="$sort" node -e "const x=require(process.env.RUNNER_TEMP+'/revision-'+process.env.SORT+'.json');process.stdout.write(String(x?.data?.revision||''))")"
+            test -n "$revision"
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/direct-$sort.json"
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" --get "$PREVIEW_BASE/v1/feed" \
+              --data-urlencode "sort=$sort" --data-urlencode "limit=40" \
+              --data-urlencode "__soridraw_r2_only=108" \
+              --data-urlencode "__soridraw_r2_revision=$revision" > "$RUNNER_TEMP/keyed-$sort.json"
+            SORT="$sort" node <<'NODE'
+          const fs=require('fs');
+          const sort=process.env.SORT, path=process.env.RUNNER_TEMP+'/';
+          const direct=JSON.parse(fs.readFileSync(path+'direct-'+sort+'.json'));
+          const keyed=JSON.parse(fs.readFileSync(path+'keyed-'+sort+'.json'));
+          const revision=JSON.parse(fs.readFileSync(path+'revision-'+sort+'.json'))?.data?.revision||'';
+          const selected=rows=>Object.fromEntries((rows||[]).filter(x=>/Leaving One Step Open|Left Unsaid|Through the Night|Just Stay Here Awhile/.test(String(x.title||''))).map(x=>[x.title,Number(x.likeCount??x.stats?.likeCount??0)]));
+          const d=selected(direct?.data?.items),k=selected(keyed?.data?.items);
+          console.log('PUBLIC_SNAPSHOT_'+sort.toUpperCase()+' revisionPresent='+Boolean(revision)+' direct='+JSON.stringify(d)+' keyed='+JSON.stringify(k)+' match='+(JSON.stringify(d)===JSON.stringify(k)));
+          if(direct?.ok!==true||keyed?.ok!==true||Object.keys(d).length!==4||Object.keys(k).length!==4||JSON.stringify(d)!==JSON.stringify(k)) throw Error('R2 first-page direct vs revision-keyed count mismatch');
+          NODE
+          done
+          echo 'REVISION_KEYED_SHARED_R2_PARITY=PASS'
+
+      - name: Read public shared Feed only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=40" > "$RUNNER_TEMP/feed.json"
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=popular&limit=40" > "$RUNNER_TEMP/popular.json"
+          node <<'NODE'
+          const fs=require('fs');
+          for(const name of ['feed','popular']){
+            const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name+'.json','utf8'));
+            const items=p?.data?.items||[];
+            for(const x of items){
+              const title=String(x.title||'');
+              if(/Leaving One Step Open|Left Unsaid|Through the Night|Just Stay Here Awhile/.test(title)){
+                console.log('SHARED_'+name.toUpperCase()+' title='+JSON.stringify(title)+' count='+Number(x.likeCount??x.like_count??x.stats?.likeCount??0));
+              }
+            }
+          }
+          console.log('PUBLIC_SHARED_FEED_READ=PASS');
+          NODE

@@ -1,5 +1,6 @@
 import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './firestoreMeasured';
 import { db } from '../firebase';
+import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
 import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
 import { USER_PROFILE_CACHE_EVENT } from './userProfileCache';
@@ -232,14 +233,7 @@ const normalizeDeletedIds = (value?: string[]) => Array.from(new Set(
 const prepareItems = (kind: ListBundleKind, sourceItems: any[], limit: number): any[] => {
   const sorted = [...(Array.isArray(sourceItems) ? sourceItems : [])]
     .filter(Boolean)
-    .filter((item) => kind !== 'musicNote' || !(
-      item?.favoriteRemoved === true
-      || item?.saved === false
-      || item?.hidden === true
-      || item?.favoriteHidden === true
-      || item?.deletedAt
-      || item?.trashedAt
-    ))
+    .filter((item) => kind !== 'musicNote' || !isMusicNoteItemRemoved(item))
     .sort((a, b) => getItemCreatedAtMs(b) - getItemCreatedAtMs(a))
     .slice(0, Math.max(1, limit));
 

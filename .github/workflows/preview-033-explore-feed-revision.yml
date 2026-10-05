@@ -75,8 +75,10 @@ jobs:
         if: github.ref_name == 'preview'
         run: git diff --exit-code -- src/pages/ExplorePage.tsx src/services/exploreSessionCache.ts
 
+  # Legacy 033 verification remains readable, but release deployment is now owned
+  # by the guarded SORIDRAW release controller. Never auto-deploy from this workflow.
   deploy-preview:
-    if: github.ref_name == 'preview'
+    if: ${{ false }}
     needs: verify-materialize
     runs-on: ubuntu-24.04
     timeout-minutes: 45

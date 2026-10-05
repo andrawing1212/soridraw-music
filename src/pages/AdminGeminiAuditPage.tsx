@@ -19,6 +19,7 @@ import {
   type GeminiAuditModelSkip,
   type GeminiAuditSession,
 } from '../services/geminiAuditLog';
+import { readPreviewGeminiModelAvailability, type GeminiModelAvailabilityResult } from '../services/geminiProxyClient';
 
 const CONTEXT_LABELS: Record<string, string> = {
   generateSong: '최초 곡 생성',
@@ -76,6 +77,84 @@ function dateText(value?: string): string {
   });
 }
 
+function geminiErrorText(value?: string): string {
+  const clean = String(value || '').trim();
+  if (!clean) return '';
+
+  const exactReasons: Record<string, string> = {
+    model_unavailable_or_overloaded: '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태',
+    daily_quota_exhausted: '무료 등급 일일 요청 한도 소진 · 태평양 시간 자정 리셋까지 건너뜀',
+    quota_or_rate_limit: '요청 한도 또는 할당량 초과',
+    model_not_found_or_rollout: '모델을 찾을 수 없거나 단계적 배포 중',
+    attempt_timeout: '응답 시간 초과',
+  };
+  if (exactReasons[clean]) return exactReasons[clean];
+
+  let translated = clean;
+
+  translated = translated.replace(
+    /Rate limit exceeded for model\s+([^\s(]+)\s*\(limit:\s*(\d+)\s+requests per day on Free Tier\)\.\s*(?:Please retry in\s*(\d+)s\s*or\s*)?(?:Please retry later\s*or\s*)?upgrade your tier at\s*https?:\/\/\S+\.?/gi,
+    (_match, model, limit, retrySeconds) =>
+      retrySeconds
+        ? `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. ${retrySeconds}초 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`
+        : `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. 태평양 시간 자정 리셋 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /Rate limit exceeded for model\s+([^\s(]+)(?:\s*\([^)]*\))?(?:\.\s*[^\n]*)?/gi,
+    (_match, model) => `${model}의 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /(gemini-[\w.-]+)\s+is currently experiencing high demand,?\s*spikes in demand are usually temporary\.?/gi,
+    (_match, model) =>
+      `${model}에 현재 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /This model is currently experiencing high demand\.\s*Spikes in demand are usually temporary\.\s*Please try again later\.?/gi,
+    '현재 해당 Gemini 모델에 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+  );
+
+  translated = translated.replace(
+    /The operation was aborted due to timeout\.?/gi,
+    '응답 시간이 초과되어 요청이 중단되었습니다.',
+  );
+
+  translated = translated.replace(
+    /Resource has been exhausted\.?/gi,
+    '현재 사용 가능한 요청 한도 또는 자원이 소진되었습니다.',
+  );
+
+  translated = translated.replace(
+    /Too many requests\.?/gi,
+    '요청이 너무 많아 일시적으로 처리할 수 없습니다.',
+  );
+
+  translated = translated.replace(
+    /Please retry in\s*(\d+)s\.?/gi,
+    (_match, retrySeconds) => `${retrySeconds}초 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /Please try again later\.?/gi,
+    '잠시 후 다시 시도해 주세요.',
+  );
+
+  translated = translated.replace(
+    /upgrade your tier/gi,
+    'API 요금제를 상향해 주세요',
+  );
+
+  translated = translated
+    .replace(/model_unavailable_or_overloaded/gi, '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태')
+    .replace(/daily_quota_exhausted/gi, '무료 등급 일일 요청 한도 소진 · 태평양 시간 자정 리셋까지 건너뜀')
+    .replace(/quota_or_rate_limit/gi, '요청 한도 또는 할당량 초과')
+    .replace(/model_not_found_or_rollout/gi, '모델을 찾을 수 없거나 단계적 배포 중');
+
+  return translated;
+}
+
 function modelSkipReasonText(skip: GeminiAuditModelSkip): string {
   if (skip.reason === 'in_flight') return '다른 생성이 같은 모델 시험 중';
   if (skip.reason === 'slow_success') return '같은 곡에서 느린 성공 모델 제외';
@@ -83,7 +162,7 @@ function modelSkipReasonText(skip: GeminiAuditModelSkip): string {
     const remaining = skip.remainingMs ? ` · ${durationText(skip.remainingMs)} 남음` : '';
     return `쿨다운${remaining}`;
   }
-  return skip.detail || '모델 상태 정책으로 제외';
+  return geminiErrorText(skip.detail) || '모델 상태 정책으로 제외';
 }
 
 function statusBadge(session: GeminiAuditSession) {
@@ -111,6 +190,23 @@ function statusBadge(session: GeminiAuditSession) {
 export default function AdminGeminiAuditPage() {
   const [sessions, setSessions] = useState<GeminiAuditSession[]>(() => getGeminiAuditSessions());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modelAvailability, setModelAvailability] = useState<GeminiModelAvailabilityResult | null>(null);
+  const [modelAvailabilityError, setModelAvailabilityError] = useState('');
+  const [checkingModels, setCheckingModels] = useState(false);
+
+  const checkModels = async () => {
+    if (checkingModels) return;
+    setCheckingModels(true);
+    setModelAvailability(null);
+    setModelAvailabilityError('');
+    try {
+      setModelAvailability(await readPreviewGeminiModelAvailability());
+    } catch (error) {
+      setModelAvailabilityError(error instanceof Error ? error.message : '모델 목록을 확인하지 못했습니다.');
+    } finally {
+      setCheckingModels(false);
+    }
+  };
 
   const refresh = () => setSessions(getGeminiAuditSessions());
 
@@ -149,9 +245,17 @@ export default function AdminGeminiAuditPage() {
   return (
     <AdminPageLayout
       title="Gemini 호출 기록"
-      description="일반 사용자에게는 보이지 않는 관리자용 호출·토큰 감사 화면입니다."
+      stackActionsOnMobile
+      keepTitleOnOneLine
       actions={(
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={checkModels}
+            disabled={checkingModels}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-btn-border bg-btn-bg px-3 text-xs font-black text-[var(--text-secondary)] transition hover:bg-btn-hover hover:text-[var(--text-primary)] disabled:cursor-wait disabled:opacity-50"
+          >
+            <Cpu className="h-3.5 w-3.5" /> {checkingModels ? '목록 확인 중' : '모델 목록 확인'}
+          </button>
           <button
             onClick={refresh}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-btn-border bg-btn-bg px-3 text-xs font-black text-[var(--text-secondary)] transition hover:bg-btn-hover hover:text-[var(--text-primary)]"
@@ -168,10 +272,25 @@ export default function AdminGeminiAuditPage() {
         </div>
       )}
     >
-      <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-xs leading-5 text-amber-100/75">
-        현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
-        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 5회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 추가 호출됩니다.
-      </div>
+      {(modelAvailability || modelAvailabilityError) && (
+        <div className="rounded-2xl border border-btn-border bg-[var(--bg-secondary)] px-4 py-3 text-xs leading-6 text-[var(--text-secondary)]">
+          {modelAvailabilityError ? (
+            <p className="text-red-400">{modelAvailabilityError}</p>
+          ) : (
+            <>
+              <strong className="text-[var(--text-primary)]">현재 API 키의 모델 목록 (생성 요청 없음)</strong>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {modelAvailability?.models.map((row) => (
+                  <span key={row.model}>{row.model}: {row.listed === true ? '목록에 있음' : row.listed === false ? '목록에 없음' : '확인 보류'}</span>
+                ))}
+              </div>
+              <p className="mt-1">목록에 있다는 사실은 실제 생성 성공이나 서버 가용성을 보장하지 않습니다.
+                {!modelAvailability?.complete ? ' 전체 목록이 여러 페이지여서 일부 항목은 확인 보류입니다.' : ''}
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
@@ -264,7 +383,7 @@ export default function AdminGeminiAuditPage() {
 
                     {session.errorMessage && (
                       <div className="mt-3 rounded-xl border border-red-500/15 bg-red-500/[0.07] px-3 py-2 text-xs leading-5 text-red-300">
-                        {session.errorMessage}
+                        {geminiErrorText(session.errorMessage)}
                       </div>
                     )}
 
@@ -278,7 +397,7 @@ export default function AdminGeminiAuditPage() {
                               <span className="text-[var(--text-secondary)]">· {contextLabel(skip.context)}</span>
                             </div>
                             {skip.detail && skip.reason !== 'in_flight' && (
-                              <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {skip.detail}</div>
+                              <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {geminiErrorText(skip.detail)}</div>
                             )}
                           </div>
                         ))}
@@ -316,7 +435,7 @@ export default function AdminGeminiAuditPage() {
                             <span>전체 {numberText(call.usage.totalTokens)}</span>
                           </div>
                           {call.errorMessage && (
-                            <p className="mt-2 break-words text-[10px] leading-4 text-red-300/80">{call.errorMessage}</p>
+                            <p className="mt-2 break-words text-[10px] leading-4 text-red-300/80">{geminiErrorText(call.errorMessage)}</p>
                           )}
                         </div>
                       ))}

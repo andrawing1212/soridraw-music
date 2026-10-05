@@ -12,18 +12,29 @@
 7. 과거 원인이 정말 필요할 때만 `DOCS/WORK_LOG.md`
 8. 실제 `preview` HEAD와 최근 commit을 확인해 문서와 실제 GitHub가 일치하는지 확인
 
+## 기능별 스킬
+- 좋아요/해제, 개인 좋아요 카탈로그, PC↔모바일 동기화, Explore 좋아요 비용 최적화 작업 전에는 반드시 `.agents/skills/local-first-like-sync/SKILL.md`를 읽는다.
+- **현재 좋아요 동결 기준은 `.agents/skills/local-first-like-sync/references/soridraw-app164-worker195-frozen.md`** (신규 공개곡 첫 좋아요 문제 사용자 해결 확인)이며, `references/soridraw-app160-worker195-frozen.md`는 기존 좋아요·PC↔모바일·타계정 공개 숫자의 이전 실기기 정상 기준이다. `references/soridraw-app141-baseline.md`는 수신 저장 순서의 역사적 기준이다. 정상인 좋아요 기능은 새 오류와 사용자 명시 수정 지시 없이 절대 변경하지 않는다.
+- 분할바/분할모드/Studio Black pane resize/PC·태블릿 경계/생성바 split tracking/분할 성능 작업 전에는 반드시 `.agents/skills/studio-split-behavior/SKILL.md`를 읽는다. 현재 보호 기준은 `.agents/skills/studio-split-behavior/references/soridraw-app198-split-frozen.md`이며, 현재 정상 분할 동작은 구체 오류나 사용자 명시 변경 지시 없이 리팩터링·대체하지 않는다.
+- 곡 저장/해제, Studio 저장 하트, Recent Song 제목·프롬프트·가사 수정, PC↔모바일 즉시 동기화, canonical Firestore 묶음 저장, `users.favoriteCount` 비용 구조를 변경하거나 감사할 때는 반드시 `.agents/skills/song-save-edit-sync-cost/SKILL.md`를 읽는다. 현재 Studio 저장하트 보호 기준은 `.agents/skills/song-save-edit-sync-cost/references/soridraw-app349-studio-heart-settlement-media-baseline.md`이다. **같은 기기 즉시 + PC↔모바일 즉시 하트·Music Note membership 동기화 + canonical Firestore는 곡별 마지막 클릭 +30초 최종 상태만 저장**을 사용자 승인 없는 최적화로 절대 늦추거나 제거하지 않는다. +30초 확정 시 저장곡이 화면에서 사라지는 전환도 금지하고, Detail에 정상 저장된 Suno 미디어/썸네일이 목록 캐시·재실행에서 사라지지 않게 보호한다. app347의 stale overwrite/media 보호도 함께 유지한다. Studio 저장 하트를 Explore 공개 좋아요와 같은 상태기로 취급하지 말고, 공통 하트/동기화 작업이면 `.agents/skills/local-first-like-sync/SKILL.md`의 Studio save-heart 구분 규칙도 함께 확인한다.
+- **Music Note / Library 폴더 생성·저장·이름변경·삭제·드래그 순서이동·PC↔모바일 동기화·Firestore 비용**을 변경하거나 감사할 때는 반드시 `.agents/skills/music-note-library-folder-sync-cost/SKILL.md`를 읽는다. 현재 보호 기준은 `.agents/skills/music-note-library-folder-sync-cost/references/soridraw-app301-folder-baseline.md`다. app301 정상 폴더 경로는 구체 오류나 사용자 명시 변경 지시 없이 다시 구조 변경하지 않는다.
+- 비용/캐시/동기화 변경이면 `references/cost-regression-checklist.md`도 함께 읽는다.
+- 이 스킬은 정상 기능을 비용 때문에 삭제하거나 약화하는 근거로 사용할 수 없다. 현재 사용자 지시와 `CURRENT_RELEASE_STATE.md`가 항상 우선한다.
+
 ## 절대 원칙
 - 현재 사용자 지시 → `CURRENT_RELEASE_STATE.md` → GitHub/Firebase/Cloudflare 실제 상태 순으로 판단한다.
 - `preview` = 개발/큰 수정/비용 최적화/배포 전 검증.
 - `main` = 검증 완료 후 TEST 승격 기준.
 - PRODUCTION은 사용자의 명확한 정식배포 승인 없이는 절대 승격하지 않는다.
 - GitHub push만으로 배포 완료라고 말하지 않는다.
+- 사용자가 수정 요청을 하면, 검증이 통과하고 안전하게 PREVIEW 배포 가능한 작업은 별도 재승인을 기다리지 말고 같은 작업 안에서 PREVIEW 배포까지 완료한다. 단 TEST/PRODUCTION 승격은 기존 명시 승인 규칙을 그대로 따른다.
 - PREVIEW/TEST/PRODUCTION은 **기능 코드와 실행 환경을 분리**한다.
 - SORIDRAW의 현재 운영 의도는 **사용자 데이터는 3개 앱에서 공유**하는 것이다. 기능만 PREVIEW → TEST → PRODUCTION 순으로 승격한다.
 - Explore의 사용자 원본 데이터는 공유 Canonical 저장소를 기준으로 하고, 환경별 파생 캐시/진단/속도제한은 분리한다.
 - 앱 버전 업데이트만으로 사용자 데이터 캐시를 무효화하거나 전체 데이터를 다시 읽게 만들지 않는다.
 - 페이지 진입/새로고침/재방문/업데이트만으로 서버 write 금지, 변경이 없으면 서버 data read 0을 목표로 한다.
 - 좋아요/공개/비공개/팔로우/프로필 수정 등 실제 변경은 **바뀐 항목만** 처리하고 전체 Feed/전체 프로필 재조회·재생성을 금지한다.
+- **D1 mutation 절대 합격선:** 좋아요/해제, 공개/비공개, 팔로우/해제 등 사용자 행동 1회에서 D1 `rows_written`은 **1~2만 허용**한다. `W3+`는 기능이 정상이어도 무조건 FAIL이며 원인을 줄이기 전 TEST/PRODUCTION 승격 금지. 최초 등록도 예외 없음.
 - Music Note의 현재 정상 동작(로컬 즉시 반영 + 여러 수정 60초 묶음 서버 저장)은 별도 승인 없이 깨지 않는다.
 - UI/반응형/간격/색상은 요청 없이 변경하지 않는다.
 - 데이터 삭제·대량수정·migration·PRODUCTION 데이터 변환은 승인 없이 실행하지 않는다.

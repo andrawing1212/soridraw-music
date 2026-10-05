@@ -229,6 +229,16 @@ export default function StudioSplitWorkspace({
   }, []);
 
   const syncResultTitleHeight = useCallback(() => {
+    // app219 — Music Note / Library result pages do not use the generated-title
+    // height parity contract. Do not let their large result trees participate in
+    // the Genre card's collapse ResizeObserver loop.
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
@@ -271,6 +281,7 @@ export default function StudioSplitWorkspace({
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     delete root.dataset.soridrawBuilderMode;
+    delete root.dataset.soridrawBuilderActionCompact;
     delete root.dataset.soridrawResultMode;
     root.style.removeProperty('--soridraw-studio-builder-left');
     root.style.removeProperty('--soridraw-studio-builder-right');
@@ -986,6 +997,17 @@ export default function StudioSplitWorkspace({
     if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
       root.dataset.soridrawBuilderMode = nextBuilderMode;
     }
+    // 1033 — Keep the floating Generate bar's visual composition full until
+    // the Builder reaches its already-existing Compact band (<=820px). Mobile
+    // remains compact too. This publishes only at that discrete boundary.
+    const builderActionCompact = nextBuilderMode === 'mobile' || builderCompactActive;
+    if (builderActionCompact) {
+      if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+        root.dataset.soridrawBuilderActionCompact = 'true';
+      }
+    } else if (root.dataset.soridrawBuilderActionCompact) {
+      delete root.dataset.soridrawBuilderActionCompact;
+    }
     if (root.dataset.soridrawResultMode !== nextResultMode) {
       root.dataset.soridrawResultMode = nextResultMode;
     }
@@ -1036,6 +1058,14 @@ export default function StudioSplitWorkspace({
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
+    if (workspaceView === 'create') {
+      const fullWidth = metricsRef.current.width;
+      commitRootMeasurements(fullWidth, metricsRef.current.left + fullWidth);
+      clearExternalMeasurements();
+      scheduleFooterBoundaryRefresh();
+      return;
+    }
+
     const nextProfile = getSplitProfile();
     const profileChanged = splitProfileRef.current !== nextProfile;
     const requestedPercent = profileChanged
@@ -1061,7 +1091,7 @@ export default function StudioSplitWorkspace({
     // writes and no geometry hand-off race at the Compact breakpoint.
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds, workspaceView]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;
@@ -1150,6 +1180,12 @@ export default function StudioSplitWorkspace({
     const result = resultRef.current;
     if (!builder || !result || typeof ResizeObserver === 'undefined') return;
 
+    if (workspaceView === 'music-note' || workspaceView === 'library') {
+      result.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     let observedCard: HTMLElement | null = null;
     const observer = new ResizeObserver(() => syncResultTitleHeight());
     const connect = () => {
@@ -1177,7 +1213,7 @@ export default function StudioSplitWorkspace({
       result.style.removeProperty('--soridraw-studio-top-card-height');
       lastTopCardHeightRef.current = null;
     };
-  }, [syncResultTitleHeight]);
+  }, [syncResultTitleHeight, workspaceView]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
@@ -1652,8 +1688,9 @@ export default function StudioSplitWorkspace({
     // single full-width workspace, while every lower WORKSPACE item starts
     // from a clean two-pane split even if either pane was previously folded.
     if (workspaceView === 'create') {
+      // 206: Split Create follows the Classic vertical flow.
       setIsBuilderCollapsed(false);
-      setIsResultCollapsed(true);
+      setIsResultCollapsed(false);
       return;
     }
 
@@ -1706,7 +1743,7 @@ export default function StudioSplitWorkspace({
       <div
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
-        className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        className={`soridraw-studio-split-workspace${workspaceView === 'create' ? ' is-create-vertical' : ''}${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
       >
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
@@ -1720,9 +1757,9 @@ export default function StudioSplitWorkspace({
         </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl)}
     </>
   );
 }

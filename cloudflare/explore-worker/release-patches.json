@@ -32,6 +32,22 @@
     "062-shared-track-card-r2.mjs",
     "063-public-profile-warm-edge-zero-read.mjs",
     "064-shared-feed-catchup-convergence.mjs",
-    "065-shared-like-count-targeted.mjs"
+    "065-shared-like-count-targeted.mjs",
+    "066-publication-r2-catalog-phase-a.mjs",
+    "067-like-075-shared-count-parity.mjs",
+    "068-catalog-publication-artist-parity.mjs",
+    "069-shared-feed-targeted-parity.mjs",
+    "070-shared-feed-legacy-writer-guard.mjs",
+    "071-publication-canonical-like-parity.mjs",
+    "091-publication-shared-profile-parity.mjs",
+    "078-shared-like-reader-cutover.mjs",
+    "079-like-intake-drain-barrier.mjs",
+    "080-direct-like-atomic-batch.mjs",
+    "081-batch-like-final-freeze.mjs",
+    "082-like-d1only-route.mjs",
+    "092-publication-media-source-cost.mjs",
+    "093-publication-inline-media-source.mjs",
+    "094-publication-d1-read-compaction.mjs",
+    "095-publication-canonical-like-request-cache.mjs"
   ]
 }

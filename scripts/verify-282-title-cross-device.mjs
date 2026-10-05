@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const app = fs.readFileSync('src/App.tsx', 'utf8');
+const page = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
+const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
+const boundary = fs.readFileSync('src/data/v1MutationBoundary.ts', 'utf8');
+const rules = fs.readFileSync('database.rules.json', 'utf8');
+const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
+
+assert.ok(Number(version.version) >= 282, 'app version must be 282 or newer');
+
+assert.match(boundary, /'detail-preview'/);
+assert.match(sync, /export const publishMusicNoteDetailPreviewDelta/);
+assert.match(sync, /__recentSongSync: true/);
+assert.match(sync, /__recentSongPartial: true/);
+assert.match(sync, /itemJson: signal\.itemJson \|\| ''/);
+assert.match(rules, /"recentSongs"[\s\S]*?"itemJson": \{[\s\S]*?length <= 24000/);
+
+const recentIdentityStart = app.indexOf('  const buildRecentSongSyncKey = (');
+const favoriteComparableStart = app.indexOf('  const getFavoriteComparableText', recentIdentityStart);
+const recentIdentity = app.slice(recentIdentityStart, favoriteComparableStart);
+assert.match(recentIdentity, /getRecentSongGenerationSyncKey/);
+assert.match(recentIdentity, /Final legacy bridge is deliberately title-independent/);
+assert.match(recentIdentity, /isSameRecentSongSyncItem/);
+
+const editBuildStart = app.indexOf('  const buildEditedRecentSong = (');
+const saveEditStart = app.indexOf('  const saveRecentSongEdit = async', editBuildStart);
+const editBuild = app.slice(editBuildStart, saveEditStart);
+assert.match(editBuild, /Freeze the pre-edit recent-song identity before title mutation/);
+assert.match(editBuild, /recentSongSyncKey: immutableRecentSongSyncKey/);
+
+const saveEditEnd = app.indexOf('  const handleRecentSongTitleInputKeyDown', saveEditStart);
+const saveEdit = app.slice(saveEditStart, saveEditEnd);
+assert.match(saveEdit, /queueRecentSongTextWrite/);
+assert.match(saveEdit, /await flushRecentSongTextWrite\(\)/);
+assert.match(saveEdit, /"수정 저장" is an actual user change/);
+
+const receiveStart = app.indexOf('    const applyRecentSongSignalItem = (');
+const receiveEnd = app.indexOf('    window.addEventListener\(RECENT_SONGS_SYNC_VERSION_EVENT', receiveStart);
+assert.ok(receiveStart >= 0 && receiveEnd > receiveStart, 'recent changed-item receiver missing');
+const receive = app.slice(receiveStart, receiveEnd);
+assert.match(receive, /writeRecentSongsLocalVersion/);
+assert.match(receive, /acknowledgeRecentSongsSignalVersion/);
+const itemFastStart = receive.indexOf('if (itemResult.applied');
+const itemFastEnd = receive.indexOf('if (signaledVersion > readRecentSongsLocalVersion', itemFastStart);
+assert.ok(itemFastStart >= 0 && itemFastEnd > itemFastStart);
+const itemFast = receive.slice(itemFastStart, itemFastEnd);
+assert.doesNotMatch(itemFast, /getDoc\(|getDocs\(/);
+
+const heartStart = app.indexOf('  const handleToggleCurrentStudioFavorite = async');
+const heartEnd = app.indexOf('  const isRecentSongSectionEditing', heartStart);
+const heart = app.slice(heartStart, heartEnd);
+assert.match(heart, /An edited saved recent song intentionally shows an empty heart/);
+assert.match(heart, /await updateFavorite\(existingEditedFavorite\.id,/);
+assert.match(heart, /else if \(wasDetachedBeforeToggle\)/);
+assert.match(heart, /operation: 'pre-favorite-edit'/);
+assert.match(heart, /await flushRecentSongTextWrite\(\)/);
+
+assert.match(page, /publishMusicNoteDetailPreviewDelta/);
+const detailCommitStart = page.indexOf('  const commitFavoriteDraftIfNeeded = async');
+const detailCommitEnd = page.indexOf('  const handleSave = async', detailCommitStart);
+const detailCommit = page.slice(detailCommitStart, detailCommitEnd);
+assert.match(detailCommit, /hasCatalogVisibleTitleChange/);
+assert.match(detailCommit, /await publishMusicNoteDetailPreviewDelta/);
+assert.match(page, /A remote title\/genre save should update an already-open Detail & Edit panel/);
+
+// Explicit title save adds RTDB-only UI sync. Canonical Music Note persistence
+// remains the existing queued draft path.
+assert.match(detailCommit, /queueFavoriteDetailPatch/);
+assert.doesNotMatch(detailCommit, /updateDoc\(|setDoc\(/);
+
+console.log('APP282_MUSIC_NOTE_TITLE_RTDB_PREVIEW_R0W0=PASS');
+console.log('APP282_RECENT_TITLE_IDENTITY_FROZEN=PASS');
+console.log('APP282_RECENT_TITLE_W1_REMOTE_R0=PASS');
+console.log('APP282_EDITED_RECENT_HEART_SAVES_NOT_UNSAVES=PASS');
+console.log('APP282_EXISTING_BATCH_PERSISTENCE_PRESERVED=PASS');

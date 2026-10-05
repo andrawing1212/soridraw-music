@@ -16,10 +16,11 @@ type SelectedKeyword = {
 
 type RecentSongScrollableCopyProps = {
   title: string;
+  genre: string;
   time: string;
 };
 
-function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps) {
+function RecentSongScrollableCopy({ title, genre, time }: RecentSongScrollableCopyProps) {
   const scrollRef = React.useRef<HTMLSpanElement>(null);
   const resetTimerRef = React.useRef<number | null>(null);
   const dragRef = React.useRef({
@@ -144,18 +145,23 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
   };
 
   return (
-    <span
-      ref={scrollRef}
-      className={`soridraw-studio-dashboard-song-copy ${isDragging ? 'is-dragging' : ''}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={finishPointerDrag}
-      onPointerCancel={finishPointerDrag}
-      onClickCapture={handleClickCapture}
-      onWheel={handleWheel}
-    >
-      <strong>{title}</strong>
-      <small>{time}</small>
+    <span className="soridraw-studio-dashboard-song-copy">
+      <span className="soridraw-studio-dashboard-song-meta">
+        <small>[{genre}]</small>
+        <small>{time}</small>
+      </span>
+      <span
+        ref={scrollRef}
+        className={`soridraw-studio-dashboard-song-title-scroll ${isDragging ? 'is-dragging' : ''}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointerDrag}
+        onPointerCancel={finishPointerDrag}
+        onClickCapture={handleClickCapture}
+        onWheel={handleWheel}
+      >
+        <strong>{title}</strong>
+      </span>
     </span>
   );
 }
@@ -168,10 +174,12 @@ type StudioRightRailProps = {
   selectedIndex: number;
   remainingCredits: number | null;
   creditsUpdatedAt?: unknown;
+  showMusicApiCredits: boolean;
   selectedKeywords: SelectedKeyword[];
   onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
   formatSongTitle: (song: RecentSong) => string;
+  formatSongGenre: (song: RecentSong) => string;
   onOpenGenerationOptions: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
   isSongUnread: (song: RecentSong) => boolean;
@@ -187,10 +195,12 @@ export default function StudioRightRail({
   selectedIndex,
   remainingCredits,
   creditsUpdatedAt,
+  showMusicApiCredits,
   selectedKeywords,
   onRemoveSelectedKeyword,
   formatTime,
   formatSongTitle,
+  formatSongGenre,
   onOpenGenerationOptions,
   onOpenSong,
   isSongUnread,
@@ -235,7 +245,7 @@ export default function StudioRightRail({
 
         <section className="soridraw-studio-dashboard-card">
           <div className="soridraw-studio-dashboard-heading">
-            <div><p>RECENT SONGS</p><h2>최근 생성곡</h2><CacheDiagnosticBadge domain="recentSongs" /></div>
+            <div><p>RECENT SONGS</p><h2>최근 생성곡</h2><CacheDiagnosticBadge domain="recentSongs" className="soridraw-studio-dashboard-cache-badge" /></div>
             <button
               type="button"
               className="soridraw-studio-dashboard-text-button"
@@ -268,6 +278,7 @@ export default function StudioRightRail({
                   </span>
                   <RecentSongScrollableCopy
                     title={formatSongTitle(song) || `생성곡 ${index + 1}`}
+                    genre={formatSongGenre(song) || 'Song'}
                     time={formatTime(song.updatedAt || song.createdAt)}
                   />
                   <ChevronRight className="h-4 w-4" />
@@ -279,18 +290,20 @@ export default function StudioRightRail({
           </div>
         </section>
 
-        <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
-          <div className="soridraw-studio-dashboard-heading compact">
-            <div><p>MUSIC API</p><h2>남은 크레딧</h2></div>
-            <Activity className="h-5 w-5" />
-          </div>
-          <div className="soridraw-studio-dashboard-credit-value">
-            <strong>{remainingCredits === null ? '—' : remainingCredits.toLocaleString()}</strong><span>credits</span>
-          </div>
-          <div className="soridraw-studio-dashboard-credit-footer">
-            <small>{formatTime(creditsUpdatedAt)}</small><button type="button" onClick={onOpenApiSettings}>설정</button>
-          </div>
-        </section>
+        {showMusicApiCredits && (
+          <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
+            <div className="soridraw-studio-dashboard-heading compact">
+              <div><p>MUSIC API</p><h2>남은 크레딧</h2></div>
+              <Activity className="h-5 w-5" />
+            </div>
+            <div className="soridraw-studio-dashboard-credit-value">
+              <strong>{remainingCredits === null ? '—' : remainingCredits.toLocaleString()}</strong><span>credits</span>
+            </div>
+            <div className="soridraw-studio-dashboard-credit-footer">
+              <small>{formatTime(creditsUpdatedAt)}</small><button type="button" onClick={onOpenApiSettings}>설정</button>
+            </div>
+          </section>
+        )}
 
         <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-keywords-card">
           <div className="soridraw-studio-dashboard-heading compact">

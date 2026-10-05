@@ -1,0 +1,33 @@
+name: Verify app303 Split Browser History
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-app303-split-browser-history.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Verify split browser history contract
+        run: node scripts/verify-303-studio-split-browser-history.mjs
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

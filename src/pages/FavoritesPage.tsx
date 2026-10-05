@@ -1,4 +1,17 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import {
+  MUSIC_NOTE_SYNC_EVENT,
+  publishMusicNoteDetailPreviewDelta,
+  publishMusicNoteStructureDelta,
+  publishMusicNoteSunoMediaDelta,
+  readPendingMusicNoteSyncSignal,
+} from '../services/userDomainSyncService';
+import {
+  flushMusicNoteFolderStructureBatch,
+  markMusicNoteFolderStructureCommitted,
+  queueMusicNoteFolderStructureBatch,
+  resumeMusicNoteFolderStructureBatch,
+} from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -67,8 +80,10 @@ import { favoritesStore } from '../hooks/useFavoritesStore';
 import {
   getExploreMusicNotePublicationState,
   getExploreMusicNotePublicationStates,
+  revalidateExploreMusicNotePublicationStates335,
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
+  refreshExploreMusicNotePublicationSource,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExploreMusicNotePublicationState,
@@ -77,6 +92,7 @@ import {
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
 import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
 
@@ -430,7 +446,20 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
         },
         musicNoteStructureVersion: structureVersion,
       };
-      await setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true });
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'structure-update',
+        uid,
+        affectedCount: 1,
+        syncStructure: {
+          musicNoteCardState: {
+            schemaVersion: 1,
+            items: snapshot.items,
+            updatedAtMs: snapshot.updatedAtMs,
+          },
+          musicNoteStructureVersion: structureVersion,
+        },
+      }, setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true }));
       publishMusicNoteStructureSession(uid, {
         musicNoteCardState: {
           schemaVersion: 1,
@@ -501,6 +530,27 @@ const fetchFavoriteSunoApiKeyStatus = async (user?: User | null): Promise<boolea
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+const MUSIC_NOTE_SEARCH_SESSION_KEY = 'soridraw:music-note:search:v1';
+
+const readMusicNoteSearchSession = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.sessionStorage.getItem(MUSIC_NOTE_SEARCH_SESSION_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeMusicNoteSearchSession = (value: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value) window.sessionStorage.setItem(MUSIC_NOTE_SEARCH_SESSION_KEY, value);
+    else window.sessionStorage.removeItem(MUSIC_NOTE_SEARCH_SESSION_KEY);
+  } catch {
+    // Search persistence is best-effort UI state only.
+  }
+};
 
 const mergeMusicNoteSearchSource = (base: any[], extra: any[]) => {
   if (!extra || extra.length === 0) return base || [];
@@ -1072,7 +1122,8 @@ export default function FavoritesPage({
   onLoadMoreFavorites,
   onServerSearchFavorites,
   onManualSyncFavorites,
-  onLogin
+  onLogin,
+  showMusicApiGeneration = true,
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void | Promise<void>; 
@@ -1092,6 +1143,7 @@ export default function FavoritesPage({
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
   onLogin?: () => void;
+  showMusicApiGeneration?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
@@ -1141,8 +1193,9 @@ export default function FavoritesPage({
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(readMusicNoteSearchSession);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const musicNoteSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
   const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
@@ -1576,6 +1629,10 @@ export default function FavoritesPage({
   // SORIDRAW_EXPLORE_PUBLICATION_UI_902
   const [explorePublicationStateBySongId, setExplorePublicationStateBySongId] = useState<Record<string, ExploreMusicNotePublicationState>>({});
   const [explorePublicationBusyId, setExplorePublicationBusyId] = useState<string | null>(null);
+  // app331: backend settlement must never hold the visible publication control in a
+  // spinner/busy state. Keep a hidden per-source guard so duplicate mutations remain blocked
+  // while the card/icon/dialog can reflect the optimistic state immediately.
+  const explorePublicationMutationInFlightRef = useRef<Set<string>>(new Set());
   // SORIDRAW_EXPLORE_8E4_MUSIC_NOTE_PUBLICATION_UI_956
   // SORIDRAW_EXPLORE_8E4_INTERACTION_BUTTON_FIX_957
   // SORIDRAW_EXPLORE_8E4_STATE_BUTTON_FILL_LIVE_LIKE_958
@@ -1585,6 +1642,8 @@ export default function FavoritesPage({
     sourceId: string;
     state: ExploreMusicNotePublicationState;
     options: ExplorePublicationOptions;
+    initialSunoIndex: 0 | 1;
+    selectedSunoIndex: 0 | 1;
   } | null>(null);
   const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
   // SORIDRAW_EXPLORE_PUBLICATION_STATE_HYDRATION_965
@@ -1679,7 +1738,7 @@ export default function FavoritesPage({
     const task = (async () => {
       try {
         await updateFavorite(pending.songId, pending.updates);
-        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === pending.songId);
+        const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
         const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
           uid: user.uid,
@@ -1755,6 +1814,110 @@ export default function FavoritesPage({
   const scheduleFavoriteDetailFlush = () => {
   };
 
+  // Keep the Music Note row's small Suno media summary in sync with Detail & Edit.
+  // Detail edits remain IndexedDB-drafted and are still sent to Firestore only on the
+  // existing page-exit/manual flush; reflecting a cover in the row must not create a write.
+  const syncFavoriteSunoCardMedia = (songId: string, source: Record<string, any> | null | undefined) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !source) return;
+    const mediaKeys = [
+      'sunoLinks', 'sunoShareLinks', 'mainSunoIndex', 'sunoLinkCount',
+      'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+      'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+      'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl',
+      'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+    ];
+    const mediaPatch: Record<string, any> = {};
+    for (const key of mediaKeys) {
+      if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+        mediaPatch[key] = source[key];
+      }
+    }
+    if (Object.keys(mediaPatch).length === 0) return;
+
+    const current = favoritesStore.getFavorites();
+    let changed = false;
+    const next = current.map((item: any) => {
+      if (getFavoriteDocumentId(item) !== safeSongId) return item;
+      const hasChanged = Object.keys(mediaPatch).some((key) => (
+        JSON.stringify(item[key] ?? null) !== JSON.stringify(mediaPatch[key] ?? null)
+      ));
+      if (!hasChanged) return item;
+      changed = true;
+      return { ...item, ...mediaPatch };
+    });
+    if (changed) {
+    favoritesStore.setFavorites(next);
+    if (user?.uid && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(next));
+      } catch {}
+    }
+  }
+  };
+
+  const publishFavoriteSunoMediaDraft = async (songId: string, updates: Record<string, any>) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !user?.uid || !updates) return;
+    const latest = favoritesStore.getFavorites().find((song: any) => (
+      getFavoriteDocumentId(song) === safeSongId
+    ));
+    try {
+      await publishMusicNoteSunoMediaDelta(user.uid, safeSongId, {
+        ...(latest || {}),
+        ...updates,
+        id: safeSongId,
+        firestoreId: safeSongId,
+      });
+    } catch (error) {
+      // Canonical detail save is still protected by the existing local draft +
+      // page-exit flush. A transient RTDB failure must never discard the edit.
+      console.warn('Music Note Suno media cross-device preview unavailable.', error);
+    }
+  };
+
+  // A full R2 catalog can arrive after a local URL edit and replace the row with
+  // an older server summary. Overlay only this device's durable, compatible Suno
+  // draft after each list source update; never fetch per-song details on list entry.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid || isMusicNoteSharedView || !Array.isArray(favorites) || favorites.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      if (favoriteDetailDraftPersistInFlightRef.current) {
+        await favoriteDetailDraftPersistInFlightRef.current;
+      }
+      const drafts = await listMusicNoteDetailDrafts(uid);
+      if (cancelled || drafts.length === 0) return;
+      const byId = new Map(favoritesStore.getFavorites().map((song: any) => [getFavoriteDocumentId(song), song]));
+      for (const draft of drafts) {
+        if (cancelled || String(user?.uid || '') !== uid) return;
+        const song = byId.get(draft.sourceId);
+        if (!song || !draft.updates) continue;
+        const sourceVersion = getMusicNoteDetailSourceVersion(song);
+        const compatible = draft.baseVersion <= 0 || sourceVersion <= 0 || sourceVersion <= draft.baseVersion;
+        const draftMediaVersion = Math.max(
+        Number(draft.updates?.sunoShareUrlUpdatedAt || 0),
+        Number(draft.updates?.sunoCoverFetchedAt || 0),
+        Number(draft.updatedAtMs || 0),
+      );
+      const currentMediaVersion = Math.max(
+        Number(song?.sunoShareUrlUpdatedAt || 0),
+        Number(song?.sunoCoverFetchedAt || 0),
+      );
+      const mediaVersionCompatible = draftMediaVersion <= 0
+        || currentMediaVersion <= 0
+        || currentMediaVersion <= draftMediaVersion;
+      // A heart/folder/card-state write can advance generic updatedAt
+      // without changing Suno media. Such a write must not hide the
+      // user's newer durable Suno draft on reload.
+      if (!compatible && !mediaVersionCompatible) continue;
+      syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);
+      }
+    })().catch((error) => console.warn('Music Note pending Suno card overlay unavailable.', error));
+    return () => { cancelled = true; };
+  }, [user?.uid, favorites, isMusicNoteSharedView]);
+
   const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
@@ -1778,6 +1941,8 @@ export default function FavoritesPage({
     });
 
     if (Object.keys(updates).length === 0) {
+      // A reverted URL edit must also restore the row's cached cover and play target.
+      if (baselineEntry?.songId === safeSongId) syncFavoriteSunoCardMedia(safeSongId, baselineEntry.data);
       favoriteDetailPendingPatchRef.current = null;
       setFavoriteDetailSaveStatus(favoriteDetailFlushInFlightRef.current ? 'saving' : 'idle');
       clearFavoriteDetailFlushTimer();
@@ -1791,6 +1956,8 @@ export default function FavoritesPage({
       return;
     }
 
+    // Paint the chosen Suno cover in the list as soon as the local draft is accepted.
+    syncFavoriteSunoCardMedia(safeSongId, patch);
     const pending: MusicNoteDetailPendingPatch = {
       songId: safeSongId,
       baseVersion,
@@ -2346,6 +2513,57 @@ updates: draft.updates,
 
 
   useEffect(() => {
+    if (!user?.uid || typeof window === 'undefined') return;
+    const uid = user.uid;
+
+    const applyStructurePayload = (itemJson: string, signalVersion = 0) => {
+      if (!itemJson) return;
+      try {
+        const parsed = JSON.parse(itemJson);
+        if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
+        const patch = parsed.data as Record<string, any>;
+
+        if (patch.musicNoteCardStateDelta && typeof patch.musicNoteCardStateDelta === 'object') {
+          const deltaId = String(patch.musicNoteCardStateDelta.id || '').trim();
+          const deltaItem = patch.musicNoteCardStateDelta.item;
+          if (deltaId && deltaItem && typeof deltaItem === 'object') {
+            const current = readMusicNoteCardStateLocal(uid);
+            const normalizedDelta = normalizeMusicNoteCardState({ items: { [deltaId]: deltaItem } }).items[deltaId];
+            if (normalizedDelta) {
+              const merged: MusicNoteCardStateSnapshot = {
+                schemaVersion: 1,
+                items: { ...current.items, [deltaId]: normalizedDelta },
+                updatedAtMs: Math.max(Number(current.updatedAtMs || 0), Number(normalizedDelta.updatedAtMs || 0)),
+              };
+              writeMusicNoteCardStateLocal(uid, merged);
+              patch.musicNoteCardState = merged;
+            }
+            delete patch.musicNoteCardStateDelta;
+          }
+        }
+
+        const structureVersion = Math.max(
+          Number(patch.musicNoteStructureVersion || 0),
+          Number(signalVersion || 0),
+          Number(readMusicNoteStructureCache(uid)?.version || 0),
+        );
+        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch), structureVersion, true);
+      } catch {}
+    };
+
+    const handleStructureSync = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; operation?: string; itemJson?: string }>).detail;
+      if (!detail || String(detail.uid || '') !== uid || String(detail.operation || '') !== 'structure-update') return;
+      applyStructurePayload(String(detail.itemJson || ''), Number((detail as any).version || 0));
+    };
+
+    window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    const pending = readPendingMusicNoteSyncSignal(uid);
+    if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''), Number(pending.version || 0));
+    return () => window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user?.uid) {
       setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
       setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
@@ -2381,34 +2599,86 @@ updates: draft.updates,
     sharedNoteFoldersRef.current = sharedNoteFolders;
   }, [sharedNoteFolders]);
 
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    resumeMusicNoteFolderStructureBatch(uid);
+    const flushOnPageHide = () => {
+      void flushMusicNoteFolderStructureBatch(uid);
+    };
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageHide);
+    };
+  }, [user?.uid]);
+
   useEffect(() => () => {
     if (musicNoteFolderPressTimerRef.current) window.clearTimeout(musicNoteFolderPressTimerRef.current);
     document.body.classList.remove('soridraw-folder-dragging');
   }, []);
 
-  const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
+  const persistMusicNoteFolders = async (
+    mode: MusicNoteFolderMode,
+    folders: MusicNoteFolder[],
+    options: { immediate?: boolean } = {},
+  ) => {
     if (!user?.uid) return;
-    const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
+    const normalized = normalizeMusicNoteFolders(
+      folders,
+      mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
+    );
     const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    const folderItems = normalized.map((folder, index) => ({
+      id: folder.id,
+      title: folder.title,
+      order: folder.order || index + 1,
+      isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+      createdAt: folder.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    }));
     const folderPatch = {
-      [mode]: normalized.map((folder, index) => ({
-        id: folder.id,
-        title: folder.title,
-        order: folder.order || index + 1,
-        isDefault: Boolean(folder.isDefault || folder.id === 'default'),
-        createdAt: folder.createdAt || Date.now(),
-        updatedAt: Date.now(),
-      })),
+      [mode]: folderItems,
       updatedAt: Date.now(),
     };
-    await setDoc(doc(db, 'user_structures', user.uid), {
+    const structureSyncPatch = {
       musicNoteFolders: folderPatch,
       musicNoteStructureVersion: structureVersion,
-    }, { merge: true });
-    publishMusicNoteStructureSession(user.uid, {
-      musicNoteFolders: folderPatch,
-      musicNoteStructureVersion: structureVersion,
-    }, structureVersion, true);
+    };
+
+    if (options.immediate) {
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'structure-update',
+        uid: user.uid,
+        affectedCount: 1,
+        syncStructure: structureSyncPatch,
+      }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
+      markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
+      publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+      return;
+    }
+
+    // app296 — folder metadata is local/RTDB-first. The other device sees this
+    // immediately, while Firestore canonical persistence collapses to the final
+    // My/Shared structure after 60 seconds of quiet.
+    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+    // Persist the pending final state before waiting on the network so reload,
+    // app backgrounding, or a failed RTDB request cannot lose the canonical intent.
+    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion);
+    let finalVersion = structureVersion;
+    try {
+      const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);
+      finalVersion = Math.max(finalVersion, Number(liveVersion || 0));
+    } catch (error) {
+      console.warn('Music Note folder live sync signal failed; canonical batch remains queued.', error);
+    }
+    if (finalVersion !== structureVersion) {
+      publishMusicNoteStructureSession(user.uid, {
+        ...structureSyncPatch,
+        musicNoteStructureVersion: finalVersion,
+      }, finalVersion, true);
+      queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
+    }
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {
@@ -2448,14 +2718,30 @@ updates: draft.updates,
     }
   };
 
-  const commitMusicNoteFolderUpdates = async (songIds: string[], updates: Record<string, any>) => {
+  const commitMusicNoteFolderUpdates = async (
+    songIds: string[],
+    updates: Record<string, any>,
+    operation: 'folder-update' | 'folder-rename' | 'folder-delete' = 'folder-update',
+  ) => {
+    const sourceFavorites = favoritesStore.getFavorites();
     for (let index = 0; index < songIds.length; index += MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT) {
       const chunk = songIds.slice(index, index + MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT);
       const batch = writeBatch(db);
       chunk.forEach((id) => {
         batch.update(doc(db, 'favorites', id), updates);
       });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-update', uid: user?.uid || '', documentIds: chunk, affectedCount: chunk.length }, batch.commit());
+      const syncItems = chunk.slice(0, 10).map((id) => {
+        const source = sourceFavorites.find((item: any) => String(item?.firestoreId || item?.id || '') === id);
+        return source ? { ...source, ...updates, id, firestoreId: id, updatedAtMs: Date.now() } : null;
+      }).filter(Boolean);
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation,
+        uid: user?.uid || '',
+        documentIds: chunk,
+        affectedCount: chunk.length,
+        syncItems,
+      }, batch.commit());
     }
   };
 
@@ -2764,6 +3050,30 @@ updates: draft.updates,
     return song?.isSharedMusicNote ? String(song?.audioUrl || '').trim() : '';
   };
 
+  const buildFavoriteSunoMainSelectionUpdates = (song: any, requestedIndex: 0 | 1) => {
+    const links = getFavoriteSunoLinks(song);
+    const mainIndex = (requestedIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
+    const selected = links[mainIndex] || links[0] || null;
+    const now = Date.now();
+    const rankedLinks = links.map((link, index) => ({
+      ...link,
+      rank: index === mainIndex ? 1 as const : 2 as const,
+    }));
+
+    return {
+      sunoLinks: rankedLinks,
+      mainSunoIndex: mainIndex,
+      sunoLinkCount: rankedLinks.length,
+      sunoShareUrl: selected?.url || null,
+      sunoShareUrlUpdatedAt: now,
+      sunoCoverUrl: selected?.coverUrl || null,
+      sunoTitle: selected?.title || null,
+      sunoDurationSeconds: selected?.durationSeconds ?? null,
+      sunoDurationText: selected?.durationText || null,
+      sunoCoverFetchedAt: selected?.fetchedAt || now,
+    };
+  };
+
   const normalizeFavoriteSunoShareUrl = (value: string): string => {
     const raw = String(value || '').trim();
     if (!raw) return '';
@@ -3016,8 +3326,28 @@ updates: draft.updates,
         sunoCoverFetchedAt: now,
       };
 
-      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
-      else await updateFavorite(song.id, updates);
+      // app353 — the full Catalog is authoritative on route re-entry. Persist the
+      // already-known exact Detail media into the dedicated bounded local overlay
+      // before that Catalog can replace the transient list row. This is local-only:
+      // no Firestore/D1/RTDB read/write is added.
+      if (user?.uid) {
+        const canonicalId = getFavoriteDocumentId(song) || String(song.id || '').trim();
+        if (canonicalId) {
+          rememberMusicNoteMediaPreview(user.uid, {
+            ...song,
+            ...updates,
+            id: canonicalId,
+            firestoreId: canonicalId,
+          }, now);
+        }
+      }
+
+      if (source === 'detail') {
+        queueFavoriteDetailPatch(song.id, updates);
+        await publishFavoriteSunoMediaDraft(song.id, updates);
+      } else {
+        await updateFavorite(song.id, updates);
+      }
 
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
@@ -3076,8 +3406,12 @@ updates: draft.updates,
         sunoDurationText: null,
         sunoCoverFetchedAt: null,
       };
-      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
-      else await updateFavorite(song.id, updates);
+      if (source === 'detail') {
+        queueFavoriteDetailPatch(song.id, updates);
+        await publishFavoriteSunoMediaDraft(song.id, updates);
+      } else {
+        await updateFavorite(song.id, updates);
+      }
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
         && activeFavoriteEditorSongIdRef.current === targetSongId
@@ -3290,6 +3624,76 @@ updates: draft.updates,
         : merged;
     });
   }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
+
+  // Cross-device Suno media can arrive while this exact Detail & Edit panel is
+  // already open. The selectedSong object is refreshed from the list above, but
+  // the editor intentionally skips same-song reinitialization. Refresh only the
+  // Suno URL controls when the user is not in the middle of a local URL edit.
+  useEffect(() => {
+    if (!selectedSong?.id || isMusicNoteSharedView) return;
+    const selectedSongId = String(selectedSong.id || '').trim();
+    const latestSong = (favorites || []).find((song: any) => (
+      String(song?.id || song?.firestoreId || '').trim() === selectedSongId
+    ));
+    if (!latestSong) return;
+
+    const pending = favoriteDetailPendingPatchRef.current;
+    const pendingHasSunoMedia = pending?.songId === selectedSongId && [
+      'sunoLinks', 'sunoShareUrl', 'mainSunoIndex', 'sunoCoverUrl',
+    ].some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key));
+    if (pendingHasSunoMedia) return;
+
+    const currentState = buildFavoriteSunoEditorState(selectedSong);
+    const editorHasUnsavedUrlInput = (
+      currentState.inputs[0] !== detailSunoUrlInputs[0]
+      || currentState.inputs[1] !== detailSunoUrlInputs[1]
+      || currentState.mainIndex !== detailSunoUrlMainIndex
+    );
+    if (editorHasUnsavedUrlInput) return;
+
+    const nextState = buildFavoriteSunoEditorState(latestSong);
+    setDetailSunoUrlInputs(nextState.inputs);
+    setDetailSunoUrlMainIndex(nextState.mainIndex);
+    setDetailSunoUrlError('');
+  }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
+
+  // A remote title/genre save should update an already-open Detail & Edit panel
+  // without forcing a route round-trip. Never overwrite a local editor or a
+  // locally pending title draft.
+  useEffect(() => {
+    if (!selectedSong?.id || isMusicNoteSharedView || isEditing) return;
+    const selectedSongId = String(selectedSong.id || '').trim();
+    const latestSong = (favorites || []).find((song: any) => (
+      String(song?.id || song?.firestoreId || '').trim() === selectedSongId
+    ));
+    if (!latestSong) return;
+
+    const pending = favoriteDetailPendingPatchRef.current;
+    const pendingHasTitle = pending?.songId === selectedSongId && [
+      'title', 'koreanTitle', 'englishTitle', 'displayGenre',
+    ].some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key));
+    if (pendingHasTitle) return;
+
+    const nextTitle = String(latestSong.title || '');
+    const nextTitleGenre = getEditableFavoriteTitleGenre(latestSong);
+    const nextKoreanTitle = cleanTitlePart(latestSong.koreanTitle || '');
+    const nextEnglishTitle = cleanTitlePart(latestSong.englishTitle || '');
+    if (
+      nextTitle === originalTitle
+      && nextTitleGenre === originalTitleGenre
+      && nextKoreanTitle === originalKoreanTitle
+      && nextEnglishTitle === originalEnglishTitle
+    ) return;
+
+    setOriginalTitle(nextTitle);
+    setOriginalTitleGenre(nextTitleGenre);
+    setOriginalKoreanTitle(nextKoreanTitle);
+    setOriginalEnglishTitle(nextEnglishTitle);
+    setEditedTitle(nextTitle);
+    setEditedTitleGenre(nextTitleGenre);
+    setEditedKoreanTitle(nextKoreanTitle);
+    setEditedEnglishTitle(nextEnglishTitle);
+  }, [favorites, selectedSong?.id, isMusicNoteSharedView, isEditing]);
 
   useEffect(() => {
     favoriteUserRef.current = user;
@@ -3624,6 +4028,19 @@ updates: draft.updates,
       // pending patch and only flushed after 60s idle or when the detail/page exits.
       queueFavoriteDetailPatch(payload.targetSongId, payload.updates);
 
+      const hasCatalogVisibleTitleChange = [
+        'title', 'koreanTitle', 'englishTitle', 'displayGenre',
+      ].some((key) => Object.prototype.hasOwnProperty.call(payload.updates, key));
+      if (hasCatalogVisibleTitleChange && user?.uid) {
+        try {
+          await publishMusicNoteDetailPreviewDelta(user.uid, payload.targetSongId, payload.nextSong);
+        } catch (error) {
+          // The local draft remains authoritative for this edit and will still
+          // reach Firestore through the existing 60s/page-exit batch.
+          console.warn('Music Note title cross-device preview unavailable.', error);
+        }
+      }
+
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);
       setOriginalTitleGenre(getEditableFavoriteTitleGenre(payload.nextSong));
@@ -3724,6 +4141,9 @@ updates: draft.updates,
     setMusicNoteCardState(nextSnapshot);
     writeMusicNoteCardStateLocal(user.uid, nextSnapshot);
     markMusicNoteCardStateDirty(user.uid);
+    void publishMusicNoteStructureDelta(user.uid, {
+      musicNoteCardStateDelta: { id, item: nextItem },
+    }).catch((error) => console.warn('Music Note card-state live sync signal failed.', error));
 
     // Keep legacy object consumers in this render/session consistent without a favorites write.
     song.isLiked = nextItem.liked;
@@ -4367,8 +4787,8 @@ updates: draft.updates,
     setEditedTitleGenre(getEditableFavoriteTitleGenre(selectedSong));
     setEditedKoreanTitle(cleanTitlePart(normalizedTitles.korean));
     setEditedEnglishTitle(cleanTitlePart(normalizedTitles.english));
-    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean));
-    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english));
+    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || ''));
+    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || ''));
     setEditedPrompt(normalizeFavoritePromptForDisplay(selectedSong.prompt || ''));
     const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
     setDetailSunoUrlInputs(nextSunoState.inputs);
@@ -5359,25 +5779,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const hasConnectedFavoriteSunoUrl = (song: any) => {
-    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
-    if (!mainUrl) return false;
-
-    const links = getFavoriteSunoLinks(song);
-    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
-      || links.find((link: any) => String(link?.url || '').trim());
-    if (!connectedLink) return false;
-
+  const isConnectedFavoriteSunoLink = (link: any) => {
+    if (!String(link?.url || '').trim()) return false;
     // URL text alone is not enough. A successful Suno metadata connection leaves
     // fetchedAt or usable metadata on the normalized link. The metadata fallback
     // keeps older successfully-linked Music Note records compatible.
     return Boolean(
-      connectedLink?.fetchedAt
-      || String(connectedLink?.title || '').trim()
-      || String(connectedLink?.coverUrl || '').trim()
-      || Number(connectedLink?.durationSeconds || 0) > 0
-      || String(connectedLink?.durationText || '').trim()
+      link?.fetchedAt
+      || String(link?.title || '').trim()
+      || String(link?.coverUrl || '').trim()
+      || Number(link?.durationSeconds || 0) > 0
+      || String(link?.durationText || '').trim()
     );
+  };
+
+  const hasConnectedFavoriteSunoUrl = (song: any) => {
+    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
+    if (!mainUrl) return false;
+    const links = getFavoriteSunoLinks(song);
+    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
+      || links.find((link: any) => String(link?.url || '').trim());
+    return isConnectedFavoriteSunoLink(connectedLink);
   };
 
   const canToggleFavoriteExplorePublication = (song: any) => {
@@ -5440,6 +5862,39 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       });
   }, [user?.uid, activeFavoriteSource.length]);
 
+  // app335: browser reload/route entry stays local. Once the tab is actually
+  // resumed after being hidden, run the existing bounded publication revision
+  // validation so cross-device changes still converge without charging reloads.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return undefined;
+    let cancelled = false;
+    const onPublicationResume335 = () => {
+      if (document.visibilityState !== 'visible') return;
+      void revalidateExploreMusicNotePublicationStates335(user)
+        .then((states) => {
+          if (cancelled) return;
+          setExplorePublicationStateBySongId((prev) => {
+            const next = { ...prev };
+            Object.entries(states).forEach(([sourceId, state]) => {
+              if (!explorePublicationMutationInFlightRef.current.has(sourceId)) {
+                next[sourceId] = state;
+              }
+            });
+            return next;
+          });
+        })
+        .catch((error) => {
+          console.warn('explore publication resume validation failed:', error);
+        });
+    };
+    document.addEventListener('visibilitychange', onPublicationResume335);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onPublicationResume335);
+    };
+  }, [user?.uid]);
+
   const openFavoriteExplorePublicationDialog = async (song: any) => {
     setActiveFavoriteMenuId(null);
     setExplorePublicationPrivateConfirm(false);
@@ -5461,12 +5916,39 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
     if (explorePublicationBusyId === sourceId) return;
 
+    // app331: a healthy local publication snapshot is the first paint. Opening the
+    // dialog must not wait for the revision/network validation that already runs in
+    // the page hydration path.
+    const localState = explorePublicationStateBySongId[sourceId];
+    const latestSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+      || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+      || song;
+    if (localState) {
+      setExplorePublicationDialog({
+        song: latestSong,
+        sourceId,
+        state: localState,
+        options: {
+          allowNextSongApply: Boolean(localState.allowNextSongApply),
+          allowFollowerSave: Boolean(localState.allowFollowerSave),
+          profilePinned: Boolean(localState.profilePinned),
+        },
+        initialSunoIndex: getFavoriteSunoMainIndex(latestSong),
+        selectedSunoIndex: getFavoriteSunoMainIndex(latestSong),
+      });
+      return;
+    }
+
+    // Cold/no-cache fallback only: accuracy is more important than inventing a state.
     setExplorePublicationBusyId(sourceId);
     try {
       const state = await getExploreMusicNotePublicationState(user, sourceId);
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+      const latestColdSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+        || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+        || latestSong;
       setExplorePublicationDialog({
-        song,
+        song: latestColdSong,
         sourceId,
         state,
         options: {
@@ -5474,6 +5956,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           allowFollowerSave: Boolean(state.allowFollowerSave),
           profilePinned: Boolean(state.profilePinned),
         },
+        initialSunoIndex: getFavoriteSunoMainIndex(latestColdSong),
+        selectedSunoIndex: getFavoriteSunoMainIndex(latestColdSong),
       });
     } catch (error) {
       console.error('explore publication dialog load failed:', error);
@@ -5491,43 +5975,130 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const submitFavoriteExplorePublicationDialog = async () => {
     if (!user?.uid || !explorePublicationDialog) return;
-    const { song, sourceId, state, options } = explorePublicationDialog;
+    const { song, sourceId, state, options, initialSunoIndex, selectedSunoIndex } = explorePublicationDialog;
     if (explorePublicationBusyId === sourceId) return;
-
-    if (state.status !== 'public' && !hasConnectedFavoriteSunoUrl(song)) {
-      showFavoriteToast('수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.');
+    if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
+      showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
 
-    setExplorePublicationBusyId(sourceId);
+    const links = getFavoriteSunoLinks(song);
+    const requestedIndex = (selectedSunoIndex === 1 && links[1] ? 1 : 0) as 0 | 1;
+    const selectedLink = links[requestedIndex] || links[0] || null;
+
+    // app332: the dialog can outlive a list-row object. Compare the selected media
+    // against the freshest local Music Note snapshot by URL, not a possibly stale
+    // mainSunoIndex. This keeps unchanged public/private transitions on the cheap
+    // visibility-only path while preserving the real source-media swap path.
+    const latestSong = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === sourceId)
+      || (selectedSong && getFavoriteDocumentId(selectedSong) === sourceId ? selectedSong : null)
+      || song;
+    const selectedUrl = String(selectedLink?.url || '').trim();
+    // app334: a source refresh is an explicit dialog choice, not an inference from
+    // whichever Music Note snapshot happens to win a reload/catalog race. This keeps
+    // same-source private→public on the visibility-only W2 path while preserving a
+    // real 1↔2 selection change.
+    const selectionChanged = Boolean(
+      links.length > 1
+      && selectedUrl
+      && selectedSunoIndex !== initialSunoIndex
+    );
+    if ((state.status !== 'public' || selectionChanged) && !isConnectedFavoriteSunoLink(selectedLink)) {
+      showFavoriteToast('공개할 수노 곡을 먼저 선택하고 정상 연결 상태를 확인해주세요.');
+      return;
+    }
+
+    // app330: public/save must feel instant. Reflect the requested state and close the
+    // dialog before waiting for Firestore/Worker settlement; the busy guard still
+    // prevents a duplicate mutation while the exact same backend path completes.
+    const optimisticState: ExploreMusicNotePublicationState = {
+      ...state,
+      ...options,
+      status: 'public',
+    };
+    explorePublicationMutationInFlightRef.current.add(sourceId);
+    setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }));
+    setExplorePublicationDialog(null);
+    setExplorePublicationPrivateConfirm(false);
+
     try {
+      let selectedPublicationMedia: {
+        coverUrl: string;
+        durationSeconds: number | null;
+        sunoUrlPrimary: string;
+        sunoUrlSecondary: string | null;
+      } | null = null;
+
+      if (selectionChanged) {
+        const latestLinks = getFavoriteSunoLinks(latestSong);
+        const latestRequestedIndex = Math.max(0, latestLinks.findIndex((link) => (
+          String(link?.url || '').trim() === selectedUrl
+        ))) as 0 | 1;
+        const primaryUpdates = buildFavoriteSunoMainSelectionUpdates(latestSong, latestRequestedIndex);
+        const projectedSong = { ...latestSong, ...primaryUpdates };
+        const projectedLinks = getFavoriteSunoLinks(projectedSong);
+        const projectedMainIndex = getFavoriteSunoMainIndex(projectedSong);
+        const projectedPrimary = projectedLinks[projectedMainIndex] || projectedLinks[0] || null;
+        const projectedSecondary = projectedLinks.find((_, index) => index !== projectedMainIndex) || null;
+
+        selectedPublicationMedia = {
+          coverUrl: String(projectedPrimary?.coverUrl || primaryUpdates.sunoCoverUrl || '').trim(),
+          durationSeconds: typeof projectedPrimary?.durationSeconds === 'number'
+            ? projectedPrimary.durationSeconds
+            : (typeof primaryUpdates.sunoDurationSeconds === 'number' ? primaryUpdates.sunoDurationSeconds : null),
+          sunoUrlPrimary: String(projectedPrimary?.url || primaryUpdates.sunoShareUrl || '').trim(),
+          sunoUrlSecondary: String(projectedSecondary?.url || '').trim() || null,
+        };
+
+        // app333: selecting the public Suno source is a normal Music Note edit.
+        // Keep it local-first and let the existing 60s/page-exit canonical batch settle
+        // Firestore once, instead of paying an immediate favorites write before Explore.
+        queueFavoriteDetailPatch(sourceId, primaryUpdates);
+        syncFavoriteSunoCardMedia(sourceId, primaryUpdates);
+        await publishFavoriteSunoMediaDraft(sourceId, primaryUpdates);
+        setSelectedSong((current: any) => (
+          current && getFavoriteDocumentId(current) === sourceId
+            ? { ...current, ...primaryUpdates }
+            : current
+        ));
+      }
+
       let nextState: ExploreMusicNotePublicationState;
-      if (state.status === 'public') {
+      if (selectionChanged) {
+        nextState = await refreshExploreMusicNotePublicationSource(
+          user,
+          sourceId,
+          options,
+          state.registered ? state.trackId : null,
+          selectedPublicationMedia,
+        );
+        showFavoriteToast(state.status === 'public'
+          ? '선택한 곡으로 공개 설정을 저장했습니다.'
+          : state.registered
+            ? '선택한 곡으로 Explore에 다시 공개했습니다.'
+            : '선택한 곡을 Explore에 공개했습니다.');
+      } else if (state.status === 'public') {
         const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
         nextState = { ...state, ...savedOptions, status: 'public' };
         showFavoriteToast('공개 설정을 저장했습니다.');
       } else if (state.registered) {
-
         nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
-
         showFavoriteToast('Explore에 다시 공개했습니다.');
-
       } else {
-
         nextState = await publishMusicNoteToExplore(user, sourceId, options);
-
         showFavoriteToast('Explore에 공개했습니다.');
-
       }
 
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
-      setExplorePublicationDialog(null);
-      setExplorePublicationPrivateConfirm(false);
     } catch (error) {
+      // The local-first preview is only provisional until the mutation is accepted.
+      // If settlement fails, restore the exact prior publication state and let the
+      // existing error toast explain the failure without leaving a false public flag.
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
       console.error('explore publication submit failed:', error);
       showFavoriteToast(getExplorePublicationErrorMessage(error));
     } finally {
-      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+      explorePublicationMutationInFlightRef.current.delete(sourceId);
     }
   };
 
@@ -5540,8 +6111,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       setExplorePublicationPrivateConfirm(true);
       return;
     }
+    if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
+      showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
-    setExplorePublicationBusyId(sourceId);
+    // app331: private conversion follows the same local-first rule as public.
+    // Hide/close immediately, then settle the exact existing backend mutation.
+    const optimisticState: ExploreMusicNotePublicationState = {
+      ...state,
+      ...options,
+      status: 'private',
+    };
+    explorePublicationMutationInFlightRef.current.add(sourceId);
+    setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: optimisticState }));
+    setExplorePublicationDialog(null);
+    setExplorePublicationPrivateConfirm(false);
+
     try {
       const visibilityState = await setExploreTrackVisibility(user, state.trackId, false);
       const nextState: ExploreMusicNotePublicationState = {
@@ -5550,19 +6136,31 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         status: 'private',
       };
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
-      setExplorePublicationDialog(null);
-      setExplorePublicationPrivateConfirm(false);
       showFavoriteToast('Explore에서 비공개로 전환했습니다.');
     } catch (error) {
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
       console.error('explore publication private transition failed:', error);
       showFavoriteToast(getExplorePublicationErrorMessage(error));
     } finally {
-      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+      explorePublicationMutationInFlightRef.current.delete(sourceId);
     }
   };
 
   const hydrateCatalogFavorite = async (song: any): Promise<any> => {
-    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
+    // app267 — shared-note rows are also compact Catalog summaries. Their full
+    // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
+    // that one document on explicit detail open. Page entry remains Catalog-only.
+    // app273 — old follower saves can still exist as full local cache rows
+    // (__catalogSummary=false) even though their legacy prompt/lyrics are empty.
+    // Only that incomplete shared-note case is allowed through the existing
+    // exact-document hydrator. Complete rows keep the warm zero-read path.
+    const legacySharedNoteNeedsHydration273 = isSharedMusicNoteItem(song)
+      && Number(song?.sharedDetailVersion || 0) < 273
+      && (
+        !String(song?.prompt || '').trim()
+        || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
+      );
+    if ((!song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
@@ -5604,8 +6202,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const recovered = await readMusicNoteDetailDraft(user.uid, sourceId);
       if (recovered?.updates && Object.keys(recovered.updates).length > 0) {
         const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
-        if (compatible) {
-          const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
+        const recoveredMediaVersion = Math.max(
+        Number(recovered.updates?.sunoShareUrlUpdatedAt || 0),
+        Number(recovered.updates?.sunoCoverFetchedAt || 0),
+        Number(recovered.updatedAtMs || 0),
+      );
+      const hydratedMediaVersion = Math.max(
+        Number(hydrated?.sunoShareUrlUpdatedAt || 0),
+        Number(hydrated?.sunoCoverFetchedAt || 0),
+      );
+      const mediaVersionCompatible = recoveredMediaVersion > 0
+        && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
+      if (compatible || mediaVersionCompatible) {
+        const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
           if (Object.keys(recoveredUpdates).length > 0) {
             nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
             favoriteDetailPendingPatchRef.current = {
@@ -5626,6 +6235,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     setSelectedSong(nextSong);
+    // app353 — opening Detail proves the exact row already has this media. The list
+    // patch below is only transient; route re-entry reloads the authoritative Catalog.
+    // Promote only the bounded media fields into the existing local overlay so the
+    // same stale Catalog cannot erase the thumbnail again.
+    if (sourceId && user?.uid) {
+      const mediaVersion = Math.max(
+        Number(nextSong?.sunoShareUrlUpdatedAt || 0),
+        Number(nextSong?.sunoCoverFetchedAt || 0),
+        Number(getMusicNoteDetailSourceVersion(nextSong) || 0),
+        1,
+      );
+      rememberMusicNoteMediaPreview(user.uid, {
+        ...nextSong,
+        id: sourceId,
+        firestoreId: sourceId,
+      }, mediaVersion);
+    }
+    // A catalog row can predate its detailed Suno metadata. Reuse the detail we just
+    // loaded rather than fetching every list item or waiting for another server read.
+    if (sourceId) syncFavoriteSunoCardMedia(sourceId, nextSong);
   };
 
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
@@ -5886,6 +6515,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   };
 
   useEffect(() => {
+    writeMusicNoteSearchSession(searchQuery);
     if (!searchQuery.trim()) {
       setServerSearchFavorites([]);
       setIsServerSearchLoading(false);
@@ -6012,12 +6642,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     else setMyNoteFolders(nextFolders);
 
     try {
+      // app293 — folder ID + structure is the canonical membership/title pair.
+      // Legacy per-song title copies remain untouched for backward readability,
+      // so rename is one structure write instead of rewriting every song.
       await persistMusicNoteFolders(mode, nextFolders);
-      const affectedSongs = favorites.filter((song) => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
-      const titleUpdates = mode === 'sharedNote'
-        ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
-        : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-rename', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates))));
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
@@ -6057,12 +6685,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     try {
-      await persistMusicNoteFolders(mode, nextFolders);
+      await persistMusicNoteFolders(mode, nextFolders, { immediate: true });
       const affectedSongs = favorites.filter((song) => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-delete', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates))));
+      await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), fallbackUpdates, 'folder-delete');
       setMusicNoteFolderDeleteArgs(null);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {
@@ -6549,12 +7177,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+          <div className={cn(
+            "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",
+            (isSearchFocused || Boolean(searchQuery)) && "is-search-active",
+            Boolean(searchQuery) && "has-search-value",
+          )}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
             <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF7A72] transition-colors" />
             </div>
             <input
+              ref={musicNoteSearchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -6566,8 +7199,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               }}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all"
+              className={cn(
+                "soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all",
+                searchQuery ? "pr-11" : "pr-4",
+              )}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#FF9A94]"
+                aria-label="검색어 지우기"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  setSearchQuery('');
+                  setIsSearchFocused(false);
+                  musicNoteSearchInputRef.current?.blur();
+                  event.currentTarget.blur();
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
             {!searchQuery && !isSearchFocused && (
               <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                 <div className="text-sm text-white/40 whitespace-nowrap">제목이나 키워드로 검색해보세요...</div>
@@ -7609,6 +8261,65 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   </button>
                 </div>
 
+                {getFavoriteSunoLinks(explorePublicationDialog.song).length > 1 && (
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between gap-3 px-0.5">
+                      <span className="text-[11px] font-black text-white/72">공개할 곡 선택</span>
+                      <span className="text-[10px] font-semibold text-white/30">2곡 중 1곡</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2.5">
+                      {getFavoriteSunoLinks(explorePublicationDialog.song).slice(0, 2).map((link, index) => {
+                        const safeIndex = (index === 1 ? 1 : 0) as 0 | 1;
+                        const selected = explorePublicationDialog.selectedSunoIndex === safeIndex;
+                        const connected = isConnectedFavoriteSunoLink(link);
+                        const label = String(link?.title || `수노 곡 ${index + 1}`).trim();
+                        return (
+                          <button
+                            key={String(link?.url || index)}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={explorePublicationBusyId === explorePublicationDialog.sourceId || !connected}
+                            onClick={() => {
+                              setExplorePublicationPrivateConfirm(false);
+                              setExplorePublicationDialog((current) => current
+                                ? { ...current, selectedSunoIndex: safeIndex }
+                                : current);
+                            }}
+                            className={cn(
+                              "overflow-hidden rounded-2xl border text-left transition-all disabled:cursor-not-allowed disabled:opacity-40",
+                              selected
+                                ? "border-[#FF7A72]/70 bg-[#FF7A72]/10 shadow-[0_8px_24px_rgba(255,122,114,0.12)]"
+                                : "border-white/[0.08] bg-white/[0.035] hover:border-white/[0.16] hover:bg-white/[0.055]"
+                            )}
+                          >
+                            <div className="relative aspect-[16/9] overflow-hidden bg-black/24">
+                              {String(link?.coverUrl || '').trim() ? (
+                                <img src={String(link.coverUrl)} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-white/28">
+                                  <Music className="h-6 w-6" />
+                                </div>
+                              )}
+                              <span className={cn(
+                                "absolute left-2 top-2 rounded-full px-2 py-1 text-[9px] font-black",
+                                selected ? "bg-[#FF7A72] text-white" : "bg-black/65 text-white/65"
+                              )}>
+                                {selected ? '선택' : `${index + 1}번`}
+                              </span>
+                            </div>
+                            <div className="px-3 py-2.5">
+                              <div className="truncate text-[11px] font-black text-white/82">{label}</div>
+                              <div className={cn("mt-1 text-[9px] font-bold", connected ? "text-white/30" : "text-red-300/65")}>
+                                {connected ? '공개 가능' : '연결 확인 필요'}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 space-y-2.5">
                   {([
                     { key: 'allowNextSongApply', label: '다음곡에 적용 허용', description: '다른 사용자가 이 곡의 공개 설정을 다음곡에 활용할 수 있습니다.' },
@@ -7646,12 +8357,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     );
                   })}
                 </div>
-
-                {explorePublicationDialog.state.status === 'public' && explorePublicationPrivateConfirm && (
-                  <div className="mt-4 rounded-2xl bg-red-500/10 px-4 py-3 text-xs font-semibold leading-5 text-red-200/85">
-                    비공개로 전환하면 Explore와 공개 프로필에서 즉시 숨겨집니다. D1 기록은 삭제하지 않습니다.
-                  </div>
-                )}
 
                 <div className="mt-6 grid gap-2">
                   <button
@@ -8258,9 +8963,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       >
                         {explorePublicationBusyId === getFavoriteDocumentId(selectedSong)
                           ? <Loader2 className="h-5 w-5 animate-spin" />
-                          : explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public'
-                            ? <Lock className="h-5 w-5" />
-                            : <Unlock className="h-5 w-5" />}
+                          : <Globe2 className="h-5 w-5" />}
                       </button>
                     )}
 
@@ -8697,7 +9400,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || ''), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -8717,7 +9420,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean)}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '')}
                       </div>
                     )}
                   </section>
@@ -8794,7 +9497,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || ''), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
@@ -8814,7 +9517,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english)}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '')}
                       </div>
                     )}
                   </section>
@@ -8886,6 +9589,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   )}
                 </section>
 
+                {showMusicApiGeneration && (
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-4 md:p-5">
                   <button
                     type="button"
@@ -8966,6 +9670,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     )}
                   </AnimatePresence>
                 </section>
+                )}
               </div>
             </motion.div>
           </div>
@@ -8974,7 +9679,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </StudioCenterModalPortal>
 
       <AnimatePresence>
-        {showFavoriteMusicApiModal && selectedSong && (
+        {showMusicApiGeneration && showFavoriteMusicApiModal && selectedSong && (
           <MusicApiGenerateModal
             variant="musicApi"
             hasApiKey={hasFavoriteSunoApiKey}

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import {
   Bell,
-  Check,
   ChevronDown,
   ChevronRight,
   Ellipsis,
@@ -13,13 +12,11 @@ import {
   PenTool,
   Search,
   Settings,
+  User,
+  Compass,
+  LogOut,
 } from 'lucide-react';
-import {
-  applySoridrawDisplayMode,
-  isSoridrawPhoneDevice,
-  readSoridrawDisplayMode,
-  type SoridrawDisplayMode,
-} from '../../services/themePreferences';
+import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
 
 export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 
@@ -33,9 +30,10 @@ type StudioLeftRailProps = {
   onApiSettings: () => void;
   onLab: () => void;
   onProfile: () => void;
+  onPublicProfile: () => void;
   onSettings: () => void;
-  onPlan: () => void;
-  onBilling: () => void;
+  onAdmin?: () => void;
+  showAdmin?: boolean;
   onLogout: () => void | Promise<void>;
   profileName: string;
   profileEmail?: string;
@@ -53,7 +51,7 @@ type RailTooltip = {
   left: number;
 };
 
-const PROFILE_MENU_WIDTH = 200;
+const PROFILE_MENU_WIDTH = 224;
 const PROFILE_MENU_GAP = 8;
 
 // SORIDRAW_NAV_PERMISSION_RAIL_953
@@ -67,9 +65,8 @@ export default function StudioLeftRail({
   onApiSettings,
   onLab,
   onProfile,
+  onPublicProfile,
   onSettings,
-  onPlan,
-  onBilling,
   onLogout,
   profileName,
   profileEmail = '',
@@ -79,14 +76,25 @@ export default function StudioLeftRail({
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-  const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
   const [railTooltip, setRailTooltip] = useState<RailTooltip | null>(null);
+  const [effectiveProfilePhotoURL, setEffectiveProfilePhotoURL] = useState(profilePhotoURL);
+
+  useEffect(() => {
+    setEffectiveProfilePhotoURL(profilePhotoURL);
+  }, [profilePhotoURL]);
+
+  useEffect(() => {
+    const handleAvatarAuthority = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string }>).detail;
+      setEffectiveProfilePhotoURL(String(detail?.url || ''));
+    };
+    window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+    return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+  }, []);
 
   const closeProfileMenu = useCallback(() => {
     setIsProfileMenuOpen(false);
-    setIsThemeMenuOpen(false);
   }, []);
 
   const showRailTooltip = useCallback((target: HTMLElement, label: string) => {
@@ -114,14 +122,17 @@ export default function StudioLeftRail({
 
     const rect = profileButton.getBoundingClientRect();
     const viewportPadding = 8;
-    const preferredLeft = rect.left;
+    const preferredLeft = rect.right + PROFILE_MENU_GAP;
     const left = Math.max(
       viewportPadding,
       Math.min(preferredLeft, window.innerWidth - PROFILE_MENU_WIDTH - viewportPadding),
     );
+    const menuHeight = menuRef.current?.getBoundingClientRect().height || 0;
+    const maxTop = Math.max(viewportPadding, window.innerHeight - menuHeight - viewportPadding);
+    const top = Math.max(viewportPadding, Math.min(rect.top, maxTop));
 
     setMenuPosition({
-      top: Math.round(rect.bottom + PROFILE_MENU_GAP),
+      top: Math.round(top),
       left: Math.round(left),
     });
   }, []);
@@ -130,16 +141,6 @@ export default function StudioLeftRail({
     if (!isProfileMenuOpen) return;
     updateMenuPosition();
   }, [isProfileMenuOpen, updateMenuPosition]);
-
-  useEffect(() => {
-    const refreshDisplayMode = () => setDisplayMode(readSoridrawDisplayMode());
-    window.addEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
-    window.addEventListener('storage', refreshDisplayMode);
-    return () => {
-      window.removeEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
-      window.removeEventListener('storage', refreshDisplayMode);
-    };
-  }, []);
 
   useEffect(() => {
     if (!isProfileMenuOpen) return;
@@ -191,93 +192,48 @@ export default function StudioLeftRail({
     action();
   };
 
-  const selectDisplayMode = (mode: SoridrawDisplayMode) => {
-    const appliedMode = applySoridrawDisplayMode(mode);
-    setDisplayMode(appliedMode);
-    closeProfileMenu();
-  };
-
   const profileMenu = isProfileMenuOpen && typeof document !== 'undefined'
     ? createPortal(
         <div
           ref={menuRef}
           className="soridraw-studio-profile-menu-portal"
           style={{ top: menuPosition.top, left: menuPosition.left }}
-          onMouseLeave={() => setIsThemeMenuOpen(false)}
         >
-          <div className="soridraw-studio-profile-menu" role="menu" aria-label="개인 메뉴">
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onProfile)}>
-              <span>내 프로필</span>
+          <div className="soridraw-studio-profile-menu soridraw-account-menu-surface" role="menu" aria-label="개인 메뉴">
+            <div className="soridraw-account-menu-header">
+              <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+              <p className="soridraw-account-menu-name">{profileName || 'SORiDRAW'}</p>
+              {profileEmail && <p className="soridraw-account-menu-email">{profileEmail}</p>}
+            </div>
+
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onProfile)}>
+              <User aria-hidden="true" />
+              <span>MY 페이지</span>
             </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onSettings)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="explore" className="soridraw-account-menu-row" onClick={() => runMenuAction(onPublicProfile)}>
+              <Compass aria-hidden="true" />
+              <span>MY 프로필</span>
+            </button>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" className="soridraw-account-menu-row" onClick={() => runMenuAction(onSettings)}>
+              <Settings aria-hidden="true" />
               <span>설정</span>
             </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onPlan)}>
-              <span>요금제</span>
-            </button>
-            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onBilling)}>
-              <span>결제 관리</span>
-            </button>
 
-            <div className="soridraw-studio-profile-menu-divider" aria-hidden="true" />
-
+            <div className="soridraw-studio-profile-menu-divider soridraw-account-menu-divider" aria-hidden="true" />
             <button
               type="button"
               role="menuitem"
-              aria-haspopup="menu"
-              aria-expanded={isThemeMenuOpen}
-              className={isThemeMenuOpen ? 'is-submenu-open' : undefined}
-              onMouseEnter={() => setIsThemeMenuOpen(true)}
-              onClick={() => setIsThemeMenuOpen((current) => !current)}
-            >
-              <span>테마</span>
-              <ChevronRight aria-hidden="true" />
-            </button>
-
-            <div className="soridraw-studio-profile-menu-divider" aria-hidden="true" />
-
-            <button type="button" role="menuitem" disabled>
-              <span>고객지원 · 준비중</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
+              className="soridraw-account-menu-row soridraw-account-menu-logout"
               onClick={() => {
                 closeProfileMenu();
                 void onLogout();
               }}
             >
+              <LogOut aria-hidden="true" />
               <span>로그아웃</span>
             </button>
           </div>
 
-          {isThemeMenuOpen && (
-            <div
-              className="soridraw-studio-profile-theme-menu"
-              role="menu"
-              aria-label="테마 선택"
-              onMouseEnter={() => setIsThemeMenuOpen(true)}
-            >
-              {([
-                { mode: 'dark' as const, label: '다크' },
-                { mode: 'light' as const, label: '라이트' },
-                ...(!isSoridrawPhoneDevice()
-                  ? [{ mode: 'studio-black' as const, label: '분할' }]
-                  : []),
-              ]).map((item) => (
-                <button
-                  key={item.mode}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={displayMode === item.mode}
-                  onClick={() => selectDisplayMode(item.mode)}
-                >
-                  <span>{item.label}</span>
-                  {displayMode === item.mode && <Check aria-hidden="true" />}
-                </button>
-              ))}
-            </div>
-          )}
         </div>,
         document.body,
       )
@@ -307,7 +263,6 @@ export default function StudioLeftRail({
             onClick={() => {
               if (!isProfileMenuOpen) updateMenuPosition();
               setIsProfileMenuOpen((current) => !current);
-              setIsThemeMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={isProfileMenuOpen}
@@ -317,8 +272,8 @@ export default function StudioLeftRail({
             onClickCapture={hideRailTooltip}
           >
             <span className="soridraw-studio-rail-profile-avatar" aria-hidden="true">
-              {profilePhotoURL ? (
-                <img src={profilePhotoURL} alt="" referrerPolicy="no-referrer" />
+              {effectiveProfilePhotoURL ? (
+                <img src={effectiveProfilePhotoURL} alt="" referrerPolicy="no-referrer" />
               ) : (
                 <span>{profileInitial}</span>
               )}

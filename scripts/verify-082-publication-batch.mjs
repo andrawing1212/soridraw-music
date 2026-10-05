@@ -5,6 +5,8 @@ const workerPath = process.env.SORIDRAW_GENERATED_WORKER || 'cloudflare/explore-
 const worker = readFileSync(workerPath, 'utf8');
 const client = readFileSync('src/services/explorePublicationService.ts', 'utf8');
 const patch = readFileSync('cloudflare/explore-worker/patches/049-publication-internal-batch-compaction.mjs', 'utf8');
+const mediaPatch = readFileSync('cloudflare/explore-worker/patches/092-publication-media-source-cost.mjs', 'utf8');
+const mediaMigration = readFileSync('cloudflare/explore-worker/migrations/20261004_01_publication_media_source_cost.sql', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
 
@@ -35,6 +37,7 @@ const p49 = manifest.patches.indexOf('049-publication-internal-batch-compaction.
 const p50 = manifest.patches.indexOf('050-publication-primary-key-batch-read.mjs');
 const p51 = manifest.patches.indexOf('051-publication-write-returning.mjs');
 assert.ok(p49 >= 0 && p50 >= 0 && p51 >= 0, 'publication patches 049/050/051 must remain in manifest');
+assert.ok(manifest.patches.includes('092-publication-media-source-cost.mjs'), 'publication media cost patch 092 must remain in manifest');
 assert.ok(p49 < p50 && p50 < p51, 'publication patch order 049 -> 050 -> 051 must remain intact');
 assert.match(worker,/SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914/);
 assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
@@ -50,6 +53,10 @@ assert.match(batch,/RETURNING \*/);
 assert.match(batch,/unresolvedTrackIds/);
 assert.match(batch,/env\.DB\.batch\(statements\)/);
 assert.match(batch,/String\(row\?\.owner_uid \|\| ''\) !== authContext\.uid/);
+assert.match(batch,/refreshSourceMedia: value\?\.refreshSourceMedia === true/);
+assert.match(batch,/buildMusicNoteExploreSource\(note, authContext\.uid, mutation\.sourceId\)/);
+assert.match(batch,/sets\.push\('suno_url_primary=\?'\)/);
+assert.match(batch,/refreshedMedia/);
 assert.doesNotMatch(batch,/FROM track_stats WHERE track_id IN/);
 assert.doesNotMatch(batch,/buildMusicNotePublicationR2Payload/);
 const batchR2=functionText(worker,'syncMusicNotePublicationR2Batch049');
@@ -62,4 +69,8 @@ const singleSync=functionText(worker,'syncMusicNotePublicationR2AfterMutation');
 assert.doesNotMatch(singleSync,/buildMusicNotePublicationR2Payload/,'mutation hot path must never owner-scan D1');
 assert.match(patch,/let canonicalReadOk = true;/);
 assert.match(patch,/PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED/);
-console.log('PASS 082: publication batching and missing-R2 self-heal remain protected; 084 warm writes use RETURNING with bounded cold/unresolved reads.');
+assert.match(mediaPatch,/SORIDRAW_PUBLICATION_MEDIA_SOURCE_COST_329_20261003/);
+assert.match(client,/refreshSourceMedia: true/);
+assert.match(mediaMigration,/UPDATE explore_derived_tracks[\s\S]*SET row_json = json_patch/);
+assert.match(mediaMigration,/OLD\.suno_url_primary IS NOT NEW\.suno_url_primary/);
+console.log('PASS 082: publication batching, media-source refresh and missing-R2 self-heal remain protected; registered source swaps use a narrow canonical media update.');

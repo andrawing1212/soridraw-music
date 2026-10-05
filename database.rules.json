@@ -73,6 +73,12 @@
               ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
             }
           },
+          "itemJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
+          "removed": {
+            ".validate": "newData.isBoolean()"
+          },
           "$other": {
             ".validate": false
           }
@@ -101,6 +107,39 @@
             "$index": {
               ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
             }
+          },
+          "itemJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "libraryPlaylist": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','syncVersion','previousSyncVersion','payloadJson','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "syncVersion": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "previousSyncVersion": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "payloadJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
           },
           "$other": {
             ".validate": false
@@ -136,6 +175,110 @@
                 ".validate": false
               }
             }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "publicSync": {
+      "exploreLike": {
+        ".read": "auth != null",
+        ".write": "auth != null && newData.child('actorUid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['version','at','actorUid','rows'])",
+        "version": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "at": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "actorUid": {
+          ".validate": "newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128"
+        },
+        "rows": {
+          "$index": {
+            ".validate": "$index.matches(/^(0|[1-9]|[1-4][0-9])$/) && newData.hasChildren(['trackId','ownerUid','at'])",
+            "trackId": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 512"
+            },
+            "ownerUid": {
+              ".validate": "newData.isString() && newData.val().length <= 128"
+            },
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "$other": {
+        ".validate": false
+      },
+      "navigationVisibility": {
+        ".read": "auth != null",
+        ".write": false,
+        "revision": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "menuVisibility": {
+          "home": {
+            ".validate": "newData.isBoolean()"
+          },
+          "explore": {
+            ".validate": "newData.isBoolean()"
+          },
+          "studio": {
+            ".validate": "newData.isBoolean()"
+          },
+          "musicNote": {
+            ".validate": "newData.isBoolean()"
+          },
+          "library": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lab": {
+            ".validate": "newData.isBoolean()"
+          },
+          "myPage": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "menuAdminOnly": {
+          "home": {
+            ".validate": "newData.isBoolean()"
+          },
+          "explore": {
+            ".validate": "newData.isBoolean()"
+          },
+          "studio": {
+            ".validate": "newData.isBoolean()"
+          },
+          "musicNote": {
+            ".validate": "newData.isBoolean()"
+          },
+          "library": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lab": {
+            ".validate": "newData.isBoolean()"
+          },
+          "myPage": {
+            ".validate": "newData.isBoolean()"
           },
           "$other": {
             ".validate": false

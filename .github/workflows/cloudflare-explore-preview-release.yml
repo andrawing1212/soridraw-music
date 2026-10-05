@@ -19,7 +19,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -56,6 +56,94 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
+      - name: Verify app245 canonical lock and syntax
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '[:space:]' < canonical/source-sha256.txt)"
+          actual="$(sha256sum canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          node --check canonical/preview-worker.js
+          node --check canonical/preview-entry.js
+          grep -q 'SORIDRAW_PROFILE_MUTATION_TARGETED_R2_245_20260930' canonical/preview-worker.js
+          grep -q 'SORIDRAW_PROFILE_SOCIAL_EXTRA_244_20260930' canonical/preview-entry.js
+          echo 'APP245_CANONICAL_LOCK_AND_SYNTAX=PASS'
+
+      - name: Verify app245 profile and follow cost bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo 'APP245_PROFILE_FOLLOW_COST_BOUNDS=PASS'
+
+      - name: Verify existing profile negative-cache regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-111-explore-profile-negative-cache.mjs
+
+      - name: Verify existing derived-cache regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+
+      - name: Verify existing publication regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-085-liked-profile.mjs
+
+      - name: Verify existing liked public-count regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-110-explore-liked-public-count.mjs
+
+      - name: Verify existing mobile feed refresh regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-109-mobile-feed-refresh-zero.mjs
+
+      - name: Verify existing feed cache recovery regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-108-explore-feed-cache-recovery.mjs
+
+      - name: Verify existing direct-count zero-read regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-107-explore-direct-count-zero-read.mjs
+
+      - name: Verify existing like and action regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-105-explore-like-1min.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-336-r2-hybrid-read.mjs
+          node scripts/verify-358-publication-r2-only-cutover.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-361-publication-read-compaction.mjs
+          node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-365-publication-canonical-like-request-cache.mjs
+          node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
+
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
         shell: bash
@@ -69,6 +157,11 @@ jobs:
           node --check canonical/preview-entry.js
           grep -q 'SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911' canonical/preview-entry.js
           grep -q 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916' canonical/preview-entry.js
+          grep -q 'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920' canonical/preview-worker.js
+          grep -q '/v1/me/likes-revision' canonical/preview-worker.js
+          grep -q 'SORIDRAW_R2_HYBRID_READ_336_20261004' canonical/preview-worker.js
+          grep -q '"SORIDRAW_R2_HYBRID_READ_V1": "1"' canonical/wrangler.preview.jsonc
+          grep -q '"SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1"' canonical/wrangler.preview.jsonc
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..
@@ -85,6 +178,16 @@ jobs:
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-105-explore-like-1min.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
             node scripts/verify-103-explore-like-event-batch.mjs
+            node scripts/verify-156-shared-like-snapshot-repair.mjs
+            node scripts/verify-191-bounded-public-like-convergence.mjs
+            node scripts/verify-192-cross-account-public-like-live.mjs
+            node scripts/verify-204-explore-next-song-parity.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
+            node scripts/verify-358-publication-r2-only-cutover.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-361-publication-read-compaction.mjs
+            node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-365-publication-canonical-like-request-cache.mjs
+            node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 
@@ -150,19 +253,49 @@ jobs:
           }
           trap restore_previous EXIT
 
-          # Transition guard: do not remove the old 10-minute cron while a 069
-          # batch is already waiting under the old Worker. Retry release after the
-          # old cron drains it instead of risking an unscheduled orphan row.
+          # 192 transition: the currently deployed Worker has a confirmed
+          # scheduled-aggregate crash (escaped newline commented out its owner
+          # declaration). Do not try to execute that broken runtime to drain an
+          # accepted 069 row. Deploy the audited fixed Worker first, then wake it
+          # with one temporary PREVIEW cron and require the queue to reach zero.
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
           pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-before-deploy.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
           echo "PRE_DEPLOY_PENDING_069=$pending069"
-          test "$pending069" = 0
+          test "$pending069" -le 50
+          needs_pending_drain=0
+          if [ "$pending069" != 0 ]; then
+            needs_pending_drain=1
+            echo "POST_DEPLOY_PENDING_069_DRAIN_REQUIRED=$pending069"
+          fi
 
           (
             cd canonical
             node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc
           )
           deployed=1
+
+          if [ "$needs_pending_drain" = 1 ]; then
+            echo 'POST_DEPLOY_PENDING_069_DRAIN=START'
+            printf '[{"cron":"*/1 * * * *"}]' > "$RUNNER_TEMP/preview-temp-drain-cron-192.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/preview-temp-drain-cron-192.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
+            echo 'POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED'
+
+            drained=0
+            for attempt in $(seq 1 36); do
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-postdeploy-drain.json"
+              current_pending="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-postdeploy-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
+              echo "POST_DEPLOY_PENDING_069_ATTEMPT=$attempt COUNT=$current_pending"
+              if [ "$current_pending" = 0 ]; then
+                drained=1
+                break
+              fi
+              sleep 10
+            done
+            test "$drained" = 1
+            echo 'POST_DEPLOY_PENDING_069_DRAIN=PASS'
+          fi
 
           # Wrangler does not delete a previously configured cron merely because the
           # new config omits triggers. 103 intentionally has no fixed like cron, so
@@ -173,16 +306,104 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
           echo 'PREVIEW_FIXED_CRON_CLEAR=PASS'
 
-          feed_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
+          # Cloudflare can report the new version deployed before every edge POP is
+          # serving it.  Probe one cheap R2 card first, then run the full smoke once.
+          ready358=0
+          for attempt in $(seq 1 20); do
+            ready_code="$(curl -sS --max-time 10 -D "$RUNNER_TEMP/ready-358.head" -o "$RUNNER_TEMP/ready-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=1&__r2ready358=$attempt" || true)"
+            ready_authority="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-publication-read-authority:/{gsub("\r","");print $2}' "$RUNNER_TEMP/ready-358.head" | tail -1)"
+            echo "R2_ONLY_358_PROPAGATION_ATTEMPT=$attempt HTTP=${ready_code:-curl-fail} AUTH=${ready_authority:-missing}"
+            if [ "$ready_code" = 200 ] && [ "$ready_authority" = 'R2-ONLY-358' ]; then
+              ready358=1
+              break
+            fi
+            if [ -f "$RUNNER_TEMP/ready-358.json" ]; then
+              head -c 500 "$RUNNER_TEMP/ready-358.json" || true
+              echo
+            fi
+            sleep 2
+          done
+          test "$ready358" = 1
+          echo 'R2_ONLY_358_PROPAGATION_READY=PASS'
+
+          feed_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/feed-358.head" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__r2only358=$(date +%s)")"
           test "$feed_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/feed-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/feed-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/feed-358.head"
+          echo 'R2_ONLY_358_LATEST_FEED_R0_W0=PASS'
+
+          popular_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/popular-358.head" -o "$RUNNER_TEMP/popular-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=popular&limit=20&__r2only358=$(date +%s)")"
+          test "$popular_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/popular-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/popular-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/popular-358.head"
+          echo 'R2_ONLY_358_POPULAR_FEED_R0_W0=PASS'
+
           owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
           test -n "$owner"
           profile_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
           test "$profile_code" = 200
+
+          profile_tracks_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/profile-tracks-358.head" -o "$RUNNER_TEMP/profile-tracks-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/tracks?limit=20&__r2only358=$(date +%s)")"
+          test "$profile_tracks_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/profile-tracks-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/profile-tracks-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/profile-tracks-358.head"
+          echo 'R2_ONLY_358_PROFILE_TRACKS_R0_W0=PASS'
+
+          genre="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const items=p?.data?.items||[];for(const x of items){const direct=String(x?.primaryGenre||x?.primary_genre||'').trim();const fromBundle=String(x?.shareBundle?.selectedKeywords?.genres?.[0]||'').trim();const g=direct||fromBundle;if(g){process.stdout.write(g);process.exit(0)}}process.exit(1)")"
+          genre_path="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$genre")"
+          genre_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/genre-358.head" -o "$RUNNER_TEMP/genre-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/genres/${genre_path}/tracks?limit=20&__r2only358=$(date +%s)")"
+          test "$genre_code" = 200
+          grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/genre-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/genre-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/genre-358.head"
+          echo 'R2_ONLY_358_GENRE_TRACKS_R0_W0=PASS'
+
+          title="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const x=(p?.data?.items||[]).find(v=>String(v?.title||'').trim());if(!x)process.exit(1);process.stdout.write(String(x.title).trim())")"
+          search_q="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$title")"
+          search_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/search-341.head" -o "$RUNNER_TEMP/search-341.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/search?q=${search_q}&limit=20&__r2only358=$(date +%s)")"
+          test "$search_code" = 200
+          grep -Eiq '^x-soridraw-search-authority:[[:space:]]*R2-ONLY-341' "$RUNNER_TEMP/search-341.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/search-341.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/search-341.head"
+          echo 'R2_ONLY_341_SEARCH_R0_W0=PASS'
+
+          # 192: prove the deployed public changed-card endpoint uses the exact
+          # already-published Feed IDs and returns no canonical D1 usage.
+          like192_ids="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json');const ids=(p?.data?.items||[]).map(x=>String(x?.id||x?.trackId||'').trim()).filter(Boolean).slice(0,3);if(!ids.length)process.exit(1);process.stdout.write(ids.join(','))")"
+          like192_query="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$like192_ids")"
+          curl --retry 3 --retry-delay 1 -fsS \
+            -D "$RUNNER_TEMP/like192-headers.txt" \
+            -o "$RUNNER_TEMP/like192.json" \
+            -H "Origin: ${PREVIEW_ORIGIN}" \
+            "${PREVIEW_BASE}/v1/public-like-cards?trackIds=${like192_query}"
+          LIKE192_IDS="$like192_ids" node <<'NODE'
+          const fs=require('fs');
+          const expected=new Set(String(process.env.LIKE192_IDS||'').split(',').filter(Boolean));
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/like192.json','utf8'));
+          const items=Array.isArray(payload?.data?.items)?payload.data.items:[];
+          if(payload?.ok!==true||items.length!==expected.size)throw Error('192 changed-card smoke missing items');
+          for(const item of items){
+            const id=String(item?.trackId||'');
+            if(!expected.has(id)||!Number.isSafeInteger(Number(item?.likeCount))||Number(item.likeCount)<0) {
+              throw Error('192 changed-card smoke invalid item');
+            }
+          }
+          console.log('PUBLIC_LIKE_CARD_192_ITEMS=PASS count='+items.length);
+          NODE
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/like192-headers.txt"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/like192-headers.txt"
+          echo 'PUBLIC_LIKE_CARD_192_D1_R0_W0=PASS'
           batch_code="$(curl -sS -o "$RUNNER_TEMP/batch.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "Origin: ${PREVIEW_ORIGIN}" --data '{"mutations":[]}' "${PREVIEW_BASE}/v1/me/likes/batch")"
           test "$batch_code" != 404
           test "$batch_code" -ge 400
           test "$batch_code" -lt 500
+          like_revision_code="$(curl -sS -o "$RUNNER_TEMP/likes-revision.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/me/likes-revision")"
+          test "$like_revision_code" != 404
+          test "$like_revision_code" -ge 400
+          test "$like_revision_code" -lt 500
 
           warm_ok=0
           revision_mode=''
@@ -216,10 +437,159 @@ jobs:
           echo "PREVIEW_AFTER=$after"
           echo 'FEED_SMOKE=PASS'
           echo 'PROFILE_SMOKE=PASS'
+          echo 'R2_ONLY_358_DEPLOYED_READ_AUTHORITY=PASS'
           echo "LIKE_BATCH_ROUTE_HTTP=$batch_code"
+          echo "LIKE_REVISION_ROUTE_HTTP=$like_revision_code"
           echo 'REVISION_HEAD_ONLY_036=PASS'
           echo 'WARM_REVISION_R0_W0=PASS'
           echo 'LIKE_AGGREGATE_FIXED_CRON_DISABLED=PASS'
           echo 'DURABLE_OBJECT_EVENT_SCHEDULER_DEPLOY=PASS'
           echo 'TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'
+
+          # 156 is an explicitly approved, one-time, four-track derived R2 repair.
+          # A temporary PREVIEW-only cron wakes the existing scheduled handler,
+          # then the original (empty) cron configuration is restored. No user
+          # record, schema, TEST or PRODUCTION environment is modified here.
+          # Inspect the triggering commit, NOT the pinned product-source commit.
+          # An earlier product source may retain a one-time repair flag even when
+          # the current release request explicitly disables it.
+          request_trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-worker-release.trigger"
+          if curl -fsSL "$request_trigger_url" | grep -Fxq 'repair_shared_like_snapshot_156=true'; then
+            test "$(cat "$RUNNER_TEMP/preview-crons-before.json")" = '[]'
+            marker_key="soridraw-profile-media/internal/explore/repair-v156/verified-first-page.json"
+            marker_file="$RUNNER_TEMP/like156-repair-marker.json"
+            printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/repair156-cron.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/repair156-cron.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
+              | jq -e '.success == true' >/dev/null
+            echo '156_PREVIEW_TEMP_CRON=ENABLED'
+            repaired=0
+            # Cloudflare documents that cron configuration changes can take up to
+            # 15 minutes to propagate. The previous 3x75s window rolled the Worker
+            # back before the temporary cron could run, leaving shared R2 at zero.
+            # Bound waiting to 18 minutes, verify marker and the actual shared R2
+            # before clearing the cron, then fail closed if it did not converge.
+            for attempt in $(seq 1 24); do
+              sleep 45
+              if node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote >/dev/null 2>&1; then
+                if node - "$marker_file" <<'NODE'
+          const fs=require('fs');
+          const marker=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(marker.schemaVersion!==1||marker.tracks!==4)process.exit(1);
+          console.log('156_R2_REPAIR_MARKER=PASS');
+          NODE
+                then repaired=1; break; fi
+              fi
+              echo "156_REPAIR_WAIT_ATTEMPT=$attempt"
+            done
+            printf '[]' > "$RUNNER_TEMP/repair156-original-cron.json"
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/repair156-original-cron.json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
+              | jq -e '.success == true' >/dev/null
+            echo '156_PREVIEW_CRON_RESTORED=PASS'
+            test "$repaired" = 1
+            for sort in latest popular; do
+              curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" \
+                "${PREVIEW_BASE}/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/repair156-$sort.json"
+              SORT="$sort" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair156-'+process.env.SORT+'.json','utf8'));
+          if(p?.ok!==true)throw Error('156 shared R2 not available');
+          for(const name of ['Leaving One Step Open','Left Unsaid','Through the Night','Just Stay Here Awhile']){
+            const x=(p?.data?.items||[]).filter(x=>String(x?.title||'').includes(name));
+            if(x.length!==1||Number(x[0].likeCount??x[0].stats?.likeCount??0)!==1)throw Error('156 shared R2 canonical count mismatch: '+name);
+          }
+          console.log('156_PUBLIC_SHARED_R2_'+process.env.SORT.toUpperCase()+'=PASS');
+          NODE
+            done
+            echo '156_BOUNDED_SHARED_R2_REPAIR=PASS'
+          fi
+
+          # 191: one-time repair of proven shared public like drift.
+          # Do not depend on a newly-created production cron propagating in time.
+          # Wrangler remote dev runs this exact scheduled handler once against the
+          # same remote D1/R2 bindings, then exits. Canonical D1 stays read-only.
+          if curl -fsSL "$request_trigger_url" | grep -Fxq 'repair_shared_like_snapshot_191=true'; then
+            test "$(cat "$RUNNER_TEMP/preview-crons-before.json")" = '[]'
+            marker_key="soridraw-profile-media/internal/explore/repair-v191/bounded-first40.json"
+            marker_file="$RUNNER_TEMP/like191-repair-marker.json"
+            rm -f "$marker_file"
+            dev_log="$RUNNER_TEMP/like191-remote-dev.log"
+            (
+              cd canonical
+              node ../node_modules/wrangler/bin/wrangler.js dev                 --remote                 --test-scheduled                 --config wrangler.preview.jsonc                 --ip 127.0.0.1                 --port 8791                 --log-level error                 --show-interactive-dev-session=false
+            ) >"$dev_log" 2>&1 &
+            dev_pid=$!
+            cleanup_191_dev() {
+              kill "$dev_pid" >/dev/null 2>&1 || true
+              wait "$dev_pid" >/dev/null 2>&1 || true
+            }
+            ready=0
+            for attempt in $(seq 1 30); do
+              if curl -sS "http://127.0.0.1:8791/" -o /dev/null >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              if ! kill -0 "$dev_pid" >/dev/null 2>&1; then
+                cat "$dev_log" || true
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" != 1 ]; then
+              cat "$dev_log" || true
+              cleanup_191_dev
+              false
+            fi
+            scheduled191=0
+            for scheduled_path in /__scheduled /cdn-cgi/handler/scheduled /cdn-cgi/local/scheduled; do
+              code="$(curl -sS --max-time 120 -o "$RUNNER_TEMP/like191-scheduled-response.txt" -w '%{http_code}'                 "http://127.0.0.1:8791${scheduled_path}?cron=*+*+*+*+*" || true)"
+              echo "191_REMOTE_SCHEDULED_PATH=${scheduled_path} HTTP=${code}"
+              if [ "${code#2}" != "${code}" ]; then
+                scheduled191=1
+                break
+              fi
+            done
+            cleanup_191_dev
+            dev_pid=0
+            test "$scheduled191" = 1
+            echo '191_REMOTE_SCHEDULED_EXECUTION=PASS'
+
+            node "$WRANGLER" r2 object get "$marker_key" --file "$marker_file" --remote
+            node - "$marker_file" <<'NODE'
+          const fs=require('fs');
+          const marker=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(marker.schemaVersion!==1||!Number.isSafeInteger(marker.changedTracks)||marker.changedTracks<0||marker.changedTracks>80)process.exit(1);
+          console.log('191_R2_REPAIR_MARKER=PASS changed='+marker.changedTracks);
+          NODE
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT d.id,COALESCE(s.like_count,0) AS canonical_count FROM explore_derived_tracks d INDEXED BY idx_explore_rank_latest LEFT JOIN track_stats s ON s.track_id=d.id WHERE d.active=1 ORDER BY d.published_at DESC,d.id DESC LIMIT 40" --json > "$RUNNER_TEMP/like191-canonical.json"
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/like191-canonical.json','utf8')).flatMap(x=>x?.results||[]);
+          const byId=new Map(rows.map(x=>[String(x.id),Number(x.canonical_count)]));
+          let sampled=0,bad=0;
+          for(const sort of ['latest','popular']) {
+            const url=process.env.PREVIEW_BASE+'/v1/feed?sort='+sort+'&limit=40&__soridraw_r2_only=108&__repair191_verify='+Date.now();
+            const response=await fetch(url,{headers:{Origin:process.env.PREVIEW_ORIGIN,'Cache-Control':'no-cache'}});
+            if(!response.ok)throw Error('191 '+sort+' HTTP '+response.status);
+            const payload=await response.json();
+            if(!Array.isArray(payload?.data?.items))throw Error('191 '+sort+' malformed');
+            let matches=0,mismatches=0;
+            for(const row of payload.data.items) {
+              const id=String(row?.id||row?.trackId||'');
+              if(!byId.has(id))continue;
+              matches++;
+              if(Number(row?.likeCount??row?.stats?.likeCount??0)!==byId.get(id))mismatches++;
+            }
+            console.log('191_'+sort.toUpperCase()+'_SAMPLED='+matches+' MISMATCH='+mismatches);
+            sampled+=matches;bad+=mismatches;
+          }
+          if(sampled<10||bad!==0)throw Error('191 shared public like still differs from canonical');
+          console.log('191_SHARED_PUBLIC_LIKE_CANONICAL_PARITY=PASS');
+          NODE
+          fi
           trap - EXIT

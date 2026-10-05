@@ -1,0 +1,2 @@
+product_code_target=a5568effd6be5639adce56bf2d48be877e2a58a4
+architecture=final_like_w1_hybrid_188_r2

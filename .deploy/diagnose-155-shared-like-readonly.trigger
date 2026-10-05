@@ -1,0 +1,6 @@
+requested_at=2026-09-24T04:26:00+09:00
+requested_by=app156_after_verified_shared_R2_repair
+purpose=verify_canonical_vs_direct_and_revision_keyed_shared_snapshot_four_tracks
+read_only=true
+no_user_mutation=true
+release_run=35908607512

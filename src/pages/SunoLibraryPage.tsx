@@ -18,7 +18,13 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, toggleTrackLike } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch, flushLibraryPlaylistOrderBatch, resumeLibraryPlaylistOrderBatch } from '../services/playlistService';
+import {
+  flushLibraryPlaylistRevisionBatch,
+  markLibraryPlaylistRevisionCommitted,
+  noteLibraryPlaylistRevisionSignal,
+  resumeLibraryPlaylistRevisionBatch,
+} from '../services/libraryPlaylistRevisionBatch';
 import { Playlist, PlaylistItem } from '../types';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
@@ -35,6 +41,28 @@ import {
   writeLibraryPlaylistItemsCache,
   writeLibraryPlaylistListCache,
 } from '../lib/libraryPlaylistCache';
+
+const LIBRARY_WORKSPACE_SEARCH_SESSION_KEY = 'soridraw:library:workspace-search:v1';
+const LIBRARY_PLAYLIST_SEARCH_SESSION_KEY = 'soridraw:library:playlist-search:v1';
+
+const readLibrarySearchSession = (key: string): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.sessionStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeLibrarySearchSession = (key: string, value: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value) window.sessionStorage.setItem(key, value);
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Search persistence is best-effort UI state only.
+  }
+};
 
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
@@ -780,6 +808,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     startX: number;
     startY: number;
     active: boolean;
+    originalOrders: Record<string, number>;
     target?: HTMLButtonElement | null;
     windowMoveHandler?: (event: PointerEvent) => void;
     windowEndHandler?: (event: PointerEvent) => void;
@@ -792,12 +821,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const playlistListRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
+  const loadedPlaylistItemsSnapshotRef = useRef<{ playlistId: string; itemIds: string[] } | null>(null);
   const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
-  const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
+  const [playlistSearchTerm, setPlaylistSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY));
   const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
@@ -1116,9 +1146,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, []);
 
   // UI States
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY));
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const librarySearchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    writeLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY, searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    writeLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY, playlistSearchTerm);
+  }, [playlistSearchTerm]);
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
@@ -1685,6 +1724,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
   };
 
+  // app293 — compact changed-item sync keeps warm Library playlist devices
+  // current without rereading an entire playlist collection.
+  useEffect(() => {
+    if (!user?.uid || isSharedView) return;
+    const uid = user.uid;
+    return subscribeLibraryPlaylistSync(uid, (signal) => {
+      noteLibraryPlaylistRevisionSignal(uid, signal.syncVersion);
+      if (['item-add', 'item-delete', 'item-move', 'item-color', 'item-swap', 'playlist-rename-batch', 'playlist-order-batch'].includes(signal.operation)) {
+        markLibraryPlaylistRevisionCommitted(uid, signal.syncVersion);
+      }
+      if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
+      void applyLibraryPlaylistSyncSignalToCache(uid, signal).then((applied) => {
+        if (applied) markCacheDiagnostic('library', 'CACHE', 0);
+      });
+    });
+  }, [user?.uid, isSharedView]);
+
+  // app296 — keep the full 60-second trailing window across ordinary tab and
+  // SPA route changes. The pending revision is durable; only a real page unload
+  // asks for a best-effort early flush so compatibility state is not stranded.
+  useEffect(() => {
+    if (!user?.uid || isSharedView) return;
+    const uid = user.uid;
+    resumeLibraryPlaylistRevisionBatch(uid);
+    resumeLibraryPlaylistRenameBatch(uid);
+    resumeLibraryPlaylistOrderBatch(uid);
+
+    const flushOnPageHide = () => {
+      // Metadata final-state batches settle before the compatibility-only
+      // revision batch. Ordinary SPA navigation still keeps the full 60-second
+      // trailing window.
+      void flushLibraryPlaylistRenameBatch(uid)
+        .then(() => flushLibraryPlaylistOrderBatch(uid))
+        .then(() => flushLibraryPlaylistRevisionBatch(uid));
+    };
+
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageHide);
+    };
+  }, [user?.uid, isSharedView]);
+
   const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
 
   useEffect(() => {
@@ -1696,6 +1777,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     let cancelled = false;
+    let profileFallbackTimer: number | null = null;
     const uid = user.uid;
     const readRemoteVersion = () => Number((readUserProfileCache(uid) as any)?.syncVersions?.playlists || 0);
 
@@ -1751,7 +1833,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const handleProfileChange = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (detail?.uid !== uid) return;
-      if (readRemoteVersion() > playlistListCacheVersionRef.current) void loadPlaylists(true);
+      const remoteVersion = readRemoteVersion();
+      markLibraryPlaylistRevisionCommitted(uid, remoteVersion);
+      if (remoteVersion <= playlistListCacheVersionRef.current) return;
+
+      if (profileFallbackTimer !== null) window.clearTimeout(profileFallbackTimer);
+      profileFallbackTimer = window.setTimeout(() => {
+        profileFallbackTimer = null;
+        void readLibraryPlaylistListCache(uid).then((cached) => {
+          if (cancelled) return;
+          const latestRemoteVersion = readRemoteVersion();
+          if (cached && cached.version >= latestRemoteVersion) {
+            playlistListCacheVersionRef.current = cached.version;
+            setPlaylists(cached.items);
+            markCacheDiagnostic('library', 'CACHE', 0);
+            return;
+          }
+          void loadPlaylists(true);
+        });
+      }, 650);
     };
 
     window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
@@ -1760,6 +1860,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return () => {
       cancelled = true;
+      if (profileFallbackTimer !== null) window.clearTimeout(profileFallbackTimer);
       window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
     };
@@ -1860,7 +1961,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       danger: true,
       onConfirm: async () => {
         try {
-          await deletePlaylist(user.uid, playlist.id!);
+          const loadedSnapshot = loadedPlaylistItemsSnapshotRef.current;
+          const knownItemIds = loadedSnapshot?.playlistId === playlist.id
+            ? loadedSnapshot.itemIds
+            : undefined;
+          const syncVersion = await deletePlaylist(user.uid, playlist.id!, knownItemIds);
+          playlistListCacheVersionRef.current = Math.max(playlistListCacheVersionRef.current, syncVersion);
           
           // Update selection if the deleted one was selected
           if (isNormal && selectedNormalPlaylistId === playlist.id) {
@@ -1913,6 +2019,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => {
     if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || !activePlaylistId) {
+      loadedPlaylistItemsSnapshotRef.current = null;
       setPlaylistItems([]);
       return;
     }
@@ -1920,6 +2027,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     let cancelled = false;
     const uid = user.uid;
     const playlistId = activePlaylistId;
+    loadedPlaylistItemsSnapshotRef.current = null;
     const expectedVersion = Number(playlists.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0);
 
     const loadItems = async () => {
@@ -1928,7 +2036,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const cacheIsCurrent = Boolean(cached && (expectedVersion <= 0 || cached.version >= expectedVersion));
       if (cacheIsCurrent && cached) {
         if (!cancelled) {
-          setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+          const sortedItems = [...cached.items].sort((a, b) => a.order - b.order);
+          loadedPlaylistItemsSnapshotRef.current = {
+            playlistId,
+            itemIds: sortedItems.map((item) => String(item.id || '').trim()).filter(Boolean),
+          };
+          setPlaylistItems(sortedItems);
           setLoadingPlaylistItems(false);
           markCacheDiagnostic('library', 'CACHE', 0);
         }
@@ -1941,7 +2054,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           .map((entry) => ({ id: entry.id, ...entry.data() } as PlaylistItem))
           .sort((a, b) => a.order - b.order);
         await writeLibraryPlaylistItemsCache(uid, playlistId, items, expectedVersion);
-        if (!cancelled) setPlaylistItems(items);
+        if (!cancelled) {
+          loadedPlaylistItemsSnapshotRef.current = {
+            playlistId,
+            itemIds: items.map((item) => String(item.id || '').trim()).filter(Boolean),
+          };
+          setPlaylistItems(items);
+        }
       } catch (error) {
         console.error('Failed to fetch playlist items:', error);
         if (!cancelled && cached) setPlaylistItems(cached.items);
@@ -1954,7 +2073,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const detail = (event as CustomEvent<{ uid?: string; scope?: string; playlistId?: string }>).detail;
       if (detail?.uid !== uid || detail.scope !== 'items' || detail.playlistId !== playlistId) return;
       void readLibraryPlaylistItemsCache(uid, playlistId).then((cached) => {
-        if (!cancelled && cached) setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+        if (!cancelled && cached) {
+          const sortedItems = [...cached.items].sort((a, b) => a.order - b.order);
+          const currentExpectedVersion = Number(
+            playlistsRef.current.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0
+          );
+          if (currentExpectedVersion <= 0 || cached.version >= currentExpectedVersion) {
+            loadedPlaylistItemsSnapshotRef.current = {
+              playlistId,
+              itemIds: sortedItems.map((item) => String(item.id || '').trim()).filter(Boolean),
+            };
+          }
+          setPlaylistItems(sortedItems);
+        }
       });
     };
 
@@ -6079,27 +6210,49 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const renderLibraryTopControls = () => {
     if (isSharedView) return null;
     const isWorkspaceMode = libraryViewMode === 'workspace';
+    const activeSearchTerm = isWorkspaceMode ? searchTerm : playlistSearchTerm;
+    const clearActiveLibrarySearch = () => {
+      if (isWorkspaceMode) setSearchTerm('');
+      else setPlaylistSearchTerm('');
+      setIsLibrarySearchFocused(false);
+      librarySearchInputRef.current?.blur();
+    };
 
     return (
       <>
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+          <div className={`soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2${isLibrarySearchFocused || activeSearchTerm ? ' is-search-active' : ''}${activeSearchTerm ? ' has-search-value' : ''}`}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
                 <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#A98BFF] transition-colors" />
               </div>
               <input
+                ref={librarySearchInputRef}
                 type="text"
-                value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
+                value={activeSearchTerm}
                 onChange={(e) => {
                   if (isWorkspaceMode) setSearchTerm(e.target.value);
                   else setPlaylistSearchTerm(e.target.value);
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="soridraw-responsive-search-input w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]"
+                className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
               />
-              {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
+              {activeSearchTerm && (
+                <button
+                  type="button"
+                  className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#C9BAFF]"
+                  aria-label="검색어 지우기"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    clearActiveLibrarySearch();
+                    event.currentTarget.blur();
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {!activeSearchTerm && !isLibrarySearchFocused && (
                 <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                   <div className="text-sm text-white/40 whitespace-nowrap">
                     {isWorkspaceMode ? '음악 제목이나 스타일 검색...' : '음악 제목이나 제작자 검색...'}
@@ -6395,21 +6548,50 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setPlaylists(nextPlaylists);
   };
 
-  const persistPlaylistOrder = async (section: 'normal' | 'shared') => {
+  const persistPlaylistOrder = async (
+    section: 'normal' | 'shared',
+    playlistId: string,
+    originalOrders: Record<string, number>,
+  ) => {
     if (!user?.uid) return;
-    const sectionList = getPlaylistsBySectionForDrag(section).map((playlist, index) => ({ ...playlist, order: index + 1 }));
-    const remoteVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.playlists || 0);
-    const syncVersion = nextLibraryPlaylistSyncVersion(user.uid, Math.max(playlistListCacheVersionRef.current, remoteVersion));
-    const batch = writeBatch(db);
-    sectionList
-      .filter((playlist) => playlist.id && !(playlist as any).isFallback)
-      .forEach((playlist) => batch.update(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }));
-    batch.update(doc(db, 'users', user.uid), { 'syncVersions.playlists': syncVersion });
-    await batch.commit();
-    const sectionById = new Map(sectionList.map((playlist) => [playlist.id, playlist]));
-    const next = playlistsRef.current.map((playlist) => sectionById.get(playlist.id) || playlist);
-    playlistListCacheVersionRef.current = syncVersion;
-    await writeLibraryPlaylistListCache(user.uid, next, syncVersion);
+    const sectionList = getPlaylistsBySectionForDrag(section);
+    const targetIndex = sectionList.findIndex((playlist) => playlist.id === playlistId);
+    if (targetIndex <= 0) return;
+
+    const previous = sectionList[targetIndex - 1];
+    const next = sectionList[targetIndex + 1];
+    const originalOrderFor = (playlist?: Playlist | null) => {
+      if (!playlist?.id) return Number(playlist?.order || 0);
+      const captured = originalOrders[playlist.id];
+      return Number.isFinite(captured) ? captured : Number(playlist.order || 0);
+    };
+    const previousOrder = originalOrderFor(previous);
+    const nextOrder = next ? originalOrderFor(next) : null;
+    const originalMovedOrder = Number(originalOrders[playlistId]);
+
+    let movedOrder = previousOrder + 1;
+    if (nextOrder !== null && Number.isFinite(nextOrder) && nextOrder > previousOrder) {
+      movedOrder = previousOrder + (nextOrder - previousOrder) / 2;
+    }
+    if (!Number.isFinite(movedOrder)) return;
+
+    // The drag renderer temporarily renumbers the row so the buttons move
+    // smoothly. Restore every untouched playlist to its captured canonical
+    // order and persist only the moved folder with a numeric fractional key.
+    // Existing TEST/PRODUCTION clients already sort numeric order values.
+    const restored = playlistsRef.current.map((playlist) => {
+      if (playlist.type !== section || !playlist.id) return playlist;
+      if (playlist.id === playlistId) return { ...playlist, order: movedOrder };
+      const captured = originalOrders[playlist.id];
+      return Number.isFinite(captured) ? { ...playlist, order: captured } : playlist;
+    });
+    playlistsRef.current = restored;
+    setPlaylists(restored);
+
+    if (Number.isFinite(originalMovedOrder) && Math.abs(originalMovedOrder - movedOrder) < 1e-9) return;
+
+    const syncVersion = await reorderPlaylist(user.uid, playlistId, movedOrder, originalMovedOrder);
+    playlistListCacheVersionRef.current = Math.max(playlistListCacheVersionRef.current, syncVersion);
   };
 
   const handlePlaylistPointerDown = (
@@ -6427,7 +6609,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const startX = event.clientX;
     const startY = event.clientY;
     const target = event.currentTarget;
-    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, target };
+    const originalOrders = Object.fromEntries(
+      getPlaylistsBySectionForDrag(section)
+        .filter((entry) => Boolean(entry.id))
+        .map((entry) => [entry.id!, Number(entry.order || 0)]),
+    );
+    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, originalOrders, target };
 
     playlistPressTimerRef.current = window.setTimeout(() => {
       const drag = playlistDragRef.current;
@@ -6538,7 +6725,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     setPlaylistDragging(null);
     try {
-      await persistPlaylistOrder(drag.section);
+      await persistPlaylistOrder(drag.section, drag.playlistId, drag.originalOrders);
       showToast('플레이리스트 순서를 변경했습니다.');
     } catch (error) {
       console.error('playlist reorder failed:', error);

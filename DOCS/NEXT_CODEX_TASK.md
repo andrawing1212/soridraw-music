@@ -1,3 +1,40 @@
+## CURRENT NEXT GATE — 공개 R6/W3 media-path 오진입 추적
+
+실기기 확정:
+- 공개 **R6/W3** — 회귀, FAIL.
+- source 1->2 **R6/W3** — R10에서 감소.
+- 비공개 **R3/W2** — 정상 유지.
+
+격리 재증명 Run `37356891372`:
+- 364 pure registered public = **R3/W2**.
+- 364 pure registered private = **R3/W2**.
+- 364 public + media = **R4/W3**.
+- 364 source/media = **R4/W3**.
+- temp D1 cleanup PASS, shared/user D1 변경 0.
+- 기존 364 visibility verifier gap 수정: 이제 actual 364 candidate public/private를 직접 검사.
+
+다음 작업은 공개 경로만:
+1. 제품 batch에서 순수 private->public이 `refreshSourceMedia/sourceMedia` 또는 media SET을 포함하는 조건을 추적.
+2. `registered`, `selectionChanged`, outbox baseState와 실제 batch payload를 대조.
+3. 사용자가 곡 선택을 바꾸지 않은 공개는 visibility/options만 보내도록 고정.
+4. 사용자가 실제로 source를 바꾼 경우의 media freshness 기능은 그대로 보존.
+5. source R6/W3 개선과 비공개 R3/W2는 회귀시키지 않음.
+6. 수정 전후 정적 검증 + ephemeral D1 proof 후 PREVIEW만 판단.
+
+합격선:
+- 순수 공개: 기존 **R4/W2 이하** 복구.
+- source 1->2: 현재 **R6/W3 이하** 유지(최종 W2는 legacy mirror 제거 승인 이후 별도).
+- 비공개: **R3/W2 유지**.
+- Worker 1회 / Firestore hot path W0.
+- 기능/thumbnail/Explore/공개프로필 media 일치.
+- 좋아요/저장하트/UI 비변경.
+
+금지:
+- 원인 확정 전 shared D1 재수정/rollback.
+- 전체 scan/rebuild.
+- 사용자 데이터 migration/backfill/delete/rewrite.
+- TEST/PRODUCTION 승격.
+
 ## CURRENT NEXT GATE — 364 live source 전환 재측정
 
 완료:

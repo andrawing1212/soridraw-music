@@ -81,6 +81,9 @@ function validate(source = workflow) {
   assert.match(mediaRuntime, /MEDIA_ACTIVE_VERSION_SETTLED=PASS/);
   assert.match(mediaRuntime, /MEDIA_HEALTH_SETTLED=PASS/);
   assert.match(mediaRuntime, /hashReleaseIdentity/);
+  const mediaIdentityBlock = mediaRuntime.slice(mediaRuntime.indexOf('function hashReleaseIdentity()'), mediaRuntime.indexOf('async function activeVersion()', mediaRuntime.indexOf('function hashReleaseIdentity()')));
+  assert.doesNotMatch(mediaIdentityBlock, /CONFIG_PATH/);
+  assert.match(mediaIdentityBlock, /shared_catalog_flag/);
   assert.match(mediaRuntime, /action === 'restore'/);
 
   assert.doesNotMatch(source, /git\s+push[^\n]*(?:--force|-f\b)/i);

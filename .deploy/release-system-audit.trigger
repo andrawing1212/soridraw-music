@@ -101,3 +101,8 @@ a-track-isolated-publication-d1-360
 target=6db6da363637b5b32c08956cb1eb885a32b640cf
 focus=remote-isolated-W2-W3-W2-candidate-W2
 requested=2026-10-05T20:14KST
+
+publication-d1-read-compaction-361
+target=5036fdb175f933a303b03adb2a110db7186abc57
+focus=first-public-r2-precheck,source-swap-inline-update-returning,legacy-fallback-preserved,no-deploy
+requested=2026-10-06

@@ -1,3 +1,51 @@
+## 0QD. app356 TEST 승격 완료 + Music Note/Library cross-env parity 신규 HARD GATE (2026-10-06 KST)
+
+TEST 승격:
+- Release Controller Run `37375259800`: **SUCCESS / TEST_VERIFIED**.
+- source PREVIEW SHA: `f2d9eb0ad0ff067ec0ccc14bd450784dfcf1ed2e`.
+- TEST Hosting: app **356**.
+- TEST Explore Worker: `370f4451-a23c-44ce-9386-9964c836260b`.
+- PREVIEW canonical Explore feature vars 3개가 TEST에도 exact-match PASS:
+  - `SORIDRAW_R2_CATALOG_V1=1`
+  - `SORIDRAW_R2_HYBRID_READ_V1=1`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+- TEST Worker smoke/verify PASS.
+- PRODUCTION은 비변경.
+
+최근생성곡 저장하트 / Music Note / Library 코드 parity:
+- TEST 승격 후 아래 파일 blob SHA가 PREVIEW source와 TEST(main)에서 **완전히 동일**:
+  - `src/App.tsx`
+  - `src/lib/userDataEngine.ts`
+  - `src/pages/FavoritesPage.tsx`
+  - `src/pages/SunoLibraryPage.tsx`
+  - `src/services/userDomainSyncService.ts`
+  - `public/app-version.json`
+- 따라서 TEST 승격 완료 이후에도 최근 생성곡 저장하트/Music Note/Library 결과가 다르면 **코드 버전 차이로 설명하면 안 됨**.
+
+확인된 구조적 parity 위험:
+- Firebase Auth/Firestore/RTDB canonical source는 PREVIEW/TEST/PRODUCTION 모두 동일 `soridraw-app-866a5`.
+- 하지만 private Music Note/Library R2 Catalog endpoint는 환경별로 분리:
+  - PREVIEW -> `soridraw-media-preview` / bucket `soridraw-media-preview`
+  - TEST -> `soridraw-media-test` / bucket `soridraw-media-test`
+  - PRODUCTION -> `soridraw-media` / bucket `soridraw-media`
+- ordinary Catalog GET은 비용 보호 때문에 Firestore full rebuild를 수행하지 않고 R2-only로 fail-closed.
+- 따라서 한 환경의 changed-item Catalog delta가 다른 환경의 R2 Catalog에 전달되지 않으면, canonical Firestore는 같아도 Music Note/Library 화면이 환경별 stale Catalog를 보여줄 수 있음.
+- 이 구조는 사용자 고정 원칙인 **승격은 코드만 이동하고 동일 사용자 원본 데이터는 모든 환경에서 같아야 함**을 화면 결과 수준에서 보장하기에 부족함.
+
+새 HARD GATE:
+- PRODUCTION 승격 중단.
+- Explore parity만 PASS로 보지 않음.
+- 동일 계정 기준 PREVIEW/TEST의:
+  1. Recent Song 저장하트 상태
+  2. Music Note membership/list
+  3. Library list
+  4. Music Note/Library folder metadata
+  5. 공개상태/Explore
+  가 동일하게 수렴해야 TEST 검증 PASS.
+- 해결은 사용자 데이터 복사/전체 backfill/full scan이 아니라, 변경분 O(1) 또는 shared canonical Catalog authority 방식이어야 함.
+- 기존 app349 저장하트 즉시동기화, app301 folder sync, 비용 기준을 보호.
+- 원인 확정 전 PRODUCTION/W2 shared-D1 cutover 금지.
+
 ## 0QC. 공개프로필 곡수 불일치 원인 확정 + app356 표시 교정 준비 (2026-10-06 KST)
 
 사용자 실기기:

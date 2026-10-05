@@ -1,3 +1,32 @@
+## CURRENT NEXT GATE — 364 live source 전환 재측정
+
+완료:
+- 사용자 명시 승인 후 shared D1 trigger 2개만 364 compatibility candidate로 교체.
+- 성공 Run `37352860772`.
+- post-cutover Release System Audit `37352997906` SUCCESS.
+- unrelated trigger / shared revision / Worker versions / main / production refs unchanged PASS.
+- 사용자 row migration/backfill/delete/rewrite 0.
+- exact rollback 준비 상태 유지.
+- TEMP apply workflow 삭제.
+
+다음 실기기 테스트:
+1. PREVIEW의 같은 A곡에서 source 1->2 한 번 전환.
+2. CACHE LIVE에서 D1 **행읽기 R / 행쓰기 W** 기록.
+3. thumbnail / Explore / 공개프로필의 선택된 media가 같은지 확인.
+4. 가능하면 공개/비공개도 한 번씩 확인하되 목표는 기존 **공개 R4/W2 / 비공개 R3/W2 유지**.
+
+비용 예상:
+- source 1->2: 직전 R10/W3 -> **약 R5/W3**.
+- 격리 trigger proof 자체는 R9/W3 -> R4/W3.
+- TEST/PRODUCTION Worker 호환용 legacy media mirror를 아직 유지하므로 W3는 정상.
+- 모든 환경이 새 R2 authority로 승격된 뒤에만 357 legacy-mirror removal을 별도 승인 받아 최종 약 R4/W2 product 후보 검증.
+
+실패 기준:
+- source R이 기대치보다 유의미하게 높음.
+- media freshness/thumbnail/Explore/public profile 불일치.
+- 공개/비공개 비용 또는 기능 회귀.
+- 위 항목 발생 시 다른 기능 수정 금지, 364 rollback 또는 해당 trigger 경로만 재분해.
+
 ## CURRENT NEXT GATE — source 1->2 R10/W3, 364 shared-D1 approval 대기
 
 365 PREVIEW 실기기 확정:

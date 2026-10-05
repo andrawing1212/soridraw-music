@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   measure:
@@ -29,7 +29,18 @@ jobs:
       - name: Static 364 verifier
         run: node scripts/verify-364-publication-read-compaction-compat.mjs
       - name: Measure isolated 364 paths
-        run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs
+        run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs | tee "$RUNNER_TEMP/measure-366.log"
+      - name: Persist measurement result
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/measure-366.log" .deploy/temp-366-publication-public-regression-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/temp-366-publication-public-regression-result.txt
+          git commit -m "test(publication): record isolated 366 measurement"
+          git push origin HEAD:preview
       - name: Cleanup temp D1
         if: always()
         run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs cleanup

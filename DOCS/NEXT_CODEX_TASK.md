@@ -1,3 +1,42 @@
+## CURRENT NEXT GATE — PRODUCTION dormant support approval before coordinated shared Catalog cutover
+
+완료:
+- PREVIEW + TEST app356 exact tree parity.
+- TEST Explore Worker/Media Worker/Hosting promotion complete.
+- TEST Media Worker uses environment-local `MEDIA=soridraw-media-test` plus common dormant `CATALOG=soridraw-user-catalog`.
+- `SORIDRAW_SHARED_CATALOG_V1=0` 유지.
+- TEST_VERIFIED Run `37383619935`, tag `soridraw-test-v356-0bab8cdb2492`.
+- user data copy/backfill/migration/delete/rewrite 0.
+- Release Controller now verifies Media Worker/Catalog and promotes branch refs only after environment verification.
+
+다음:
+1. **여기서 자동 진행 중단.** PRODUCTION은 사용자 명확한 정식배포 승인 필요.
+2. 승인 시 TEST_VERIFIED manifest `soridraw-test-v356-0bab8cdb2492`만 사용해 PRODUCTION에 dormant support 승격:
+   - app/Hosting
+   - Explore Worker
+   - Media Worker
+   - common `CATALOG=soridraw-user-catalog` binding
+   - `SORIDRAW_SHARED_CATALOG_V1=0` 유지
+3. PRODUCTION verify PASS 후 세 환경 runtime/source/binding parity 확인.
+4. 그 다음 별도 coordinated cutover에서만 shared Catalog flag를 세 환경 동일하게 ON.
+5. cutover 직후 동일 계정으로 PREVIEW/TEST/PRODUCTION:
+   - Recent save-heart
+   - Music Note membership/list
+   - Library list
+   - folders
+   - PC↔mobile/reload
+   - Explore/publication
+   실데이터 결과가 동일한지 확인.
+6. warm 정상 캐시 재진입 Worker/Firestore data read 0 목표 확인.
+7. parity PASS 후에만 first-publication W12->W2 작업 재개.
+
+금지:
+- PREVIEW/TEST만 shared flag ON.
+- 사용자 Catalog 일괄 복사/full scan/backfill.
+- 승인 없는 PRODUCTION 승격.
+- app349 save-heart/app301 folders/좋아요/UI/thumbnail 정상 기능 변경.
+- parity 완료 전 shared D1 W2 cutover.
+
 ## CURRENT NEXT GATE — shared private Catalog dormant support -> coordinated environment parity
 
 완료:

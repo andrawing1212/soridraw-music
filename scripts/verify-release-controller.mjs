@@ -73,6 +73,7 @@ function validate(source = workflow) {
   assert.doesNotMatch(rollback, /release-worker-runtime\.mjs "\$stage" activate/);
   assert.doesNotMatch(rollback, /release-media-worker-runtime\.mjs "\$stage" activate/);
   assert.match(runtime, /if \(action === 'restore'\) \{\s*await restore\(\);\s*process\.exit\(0\);\s*\}/);
+  assert.match(runtime, /hashReleaseIdentity/);
   assert.match(mediaRuntime, /SORIDRAW_SHARED_CATALOG_V1/);
   assert.match(mediaRuntime, /SHARED_CATALOG_BUCKET = 'soridraw-user-catalog'/);
   assert.match(mediaRuntime, /MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS/);

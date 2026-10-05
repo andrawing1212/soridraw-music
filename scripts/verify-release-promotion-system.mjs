@@ -105,6 +105,7 @@ forbidden(workerRuntime, /targetRevision\.revision !== referenceRevision\.revisi
 required(workerRuntime, 'sameProjection(profileProjection(targetProfile.payload), profileProjection(referenceProfile.payload))', 'public-profile projection equality');
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
+required(workerRuntime, 'hashReleaseIdentity', 'deterministic Worker release identity');
 required(workerRuntime, 'readRevision(target.referenceBase', 'PREVIEW/TEST revision endpoint diagnostics');
 required(workerRuntime, 'readRevision(target.base', 'target revision endpoint diagnostics');
 required(workerRuntime, 'readCurrentSharedSnapshot(target.referenceBase', 'reference current shared R2 read');

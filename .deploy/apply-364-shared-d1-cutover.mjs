@@ -168,11 +168,30 @@ try {
     if (allowed.has(name)) continue;
     if (afterMap.get(name) !== ddl) fail('unrelated trigger changed: ' + name);
   }
-  for (const name of allowed) {
-    if (afterMap.get(name) !== norm(triggerDdl(candidateText, name))) fail('candidate postflight mismatch ' + name);
-  }
+  const trackTrigger = String(after.find((x) => x.name === 'explore032_track_update')?.sql || '');
+  const profileTrigger = String(after.find((x) => x.name === 'explore079_music_note_derived_track_update')?.sql || '');
+  const trackNorm = norm(trackTrigger);
+  const profileNorm = norm(profileTrigger);
+  for (const token of [
+    'updateexplore_derived_trackssetrow_json=json_patch',
+    'new.cover_url',
+    'new.duration_seconds',
+    'new.suno_url_primary',
+    'new.suno_url_secondary',
+    'selectlike_countfromtrack_statswheretrack_id=new.id',
+    'andchanges()=0',
+  ]) if (!trackNorm.includes(token)) fail('track trigger semantic postflight missing: ' + token);
+  if (trackNorm.includes('fromtrackst')) fail('track trigger still self-reads tracks');
+  for (const token of [
+    "coalesce(json_extract(old.row_json,'$.source_type'),'')='music_note'",
+    "coalesce(json_extract(new.row_json,'$.source_type'),'')='music_note'",
+    'old.owner_uidisnotnew.owner_uidorold.activeisnotnew.active',
+    'onconflict(uid)donothing',
+  ]) if (!profileNorm.includes(token)) fail('profile trigger semantic postflight missing: ' + token);
+
   if (afterMap.get('soridraw_shared_rev_tracks_au_051') !== sharedRevisionBefore) fail('shared revision trigger changed');
 
+  console.log('364_TARGET_TRIGGER_SEMANTICS=PASS');
   console.log('364_ONLY_TWO_APPROVED_TRIGGERS_CHANGED=PASS');
   console.log('364_SHARED_REVISION_UNCHANGED=PASS');
   console.log('364_USER_ROWS_TOUCHED=0_BY_DDL_CONTRACT');

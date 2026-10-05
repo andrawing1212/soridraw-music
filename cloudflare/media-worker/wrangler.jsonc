@@ -17,6 +17,10 @@
     {
       "binding": "MEDIA",
       "bucket_name": "soridraw-media-preview"
+    },
+    {
+      "binding": "CATALOG",
+      "bucket_name": "soridraw-user-catalog"
     }
   ],
   "env": {
@@ -36,6 +40,10 @@
         {
           "binding": "MEDIA",
           "bucket_name": "soridraw-media-test"
+        },
+        {
+          "binding": "CATALOG",
+          "bucket_name": "soridraw-user-catalog"
         }
       ]
     },
@@ -55,6 +63,10 @@
         {
           "binding": "MEDIA",
           "bucket_name": "soridraw-media"
+        },
+        {
+          "binding": "CATALOG",
+          "bucket_name": "soridraw-user-catalog"
         }
       ]
     }

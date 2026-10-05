@@ -54,7 +54,8 @@ assert.match(
   'derived profile-count trigger lacks owner/active no-op guard',
 );
 
-// Existing isolated proof must explicitly cover normal, repair, content and the actual 364 visibility behavior.\n// The old generic visibility marker used the pre-364 trigger and is not sufficient.
+// Existing isolated proof must explicitly cover normal, repair, content and the actual 364 visibility behavior.
+// The old generic visibility marker used the pre-364 trigger and is not sufficient.
 for (const token of [
   "362_SWAP_364_COMPAT_RETURNING",
   "362_SWAP_364_MISSING_DERIVED_REPAIR",

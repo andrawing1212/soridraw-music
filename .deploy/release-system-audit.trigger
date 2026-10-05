@@ -121,3 +121,8 @@ publication-read-compaction-364-audit
 target=2ad2258dfd9817019ace226442477ce747570970
 focus=R4-W3-compat-candidate,legacy-media-preserved,no-shared-d1-write,no-deploy
 requested=2026-10-06
+
+publication-364-rollback-audit
+target=53f192d98e885697ef6c0a7103b04a1ce7939e29
+focus=364-rollback,compat-trigger-guard,no-shared-d1-write,no-deploy
+requested=2026-10-06

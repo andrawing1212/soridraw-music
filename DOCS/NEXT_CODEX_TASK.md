@@ -1,3 +1,39 @@
+## CURRENT NEXT GATE — A 한 곡 publication mutation W3 제거
+
+현재 사용자 목표만 본다:
+1. A 공개: physical D1 W2 이하.
+2. A 1번곡 -> 2번곡 전환: physical D1 **W3 -> W2 이하**.
+3. A 비공개: physical D1 W2 이하.
+4. 각 mutation Worker 1 이하.
+5. Firestore hot path W0.
+6. 좋아요/저장하트/UI/thumbnail 변경 금지.
+
+현재 실측:
+- 세 mutation 캡처에 W3 1건 + W2 2건.
+- 기존 분석상 W3는 source/media 전환:
+  canonical tracks W1 + legacy derived mirror W1 + shared revision W1.
+
+현재 작업:
+- 357 source-swap W2 candidate 유지.
+- 360 A-track scope verifier를 hard gate로 사용.
+- 불필요한 read 최적화는 이 작업에서 제외.
+- 다음 검증은 candidate의 실제 physical rows_written을 격리 D1에서 확인하고 W2인지 고정.
+- W2 두 정상 경로는 회귀검사만 하고 구조 변경 금지.
+
+실제 shared D1 cutover 전 필수:
+- TEST/PRODUCTION old read path 영향 해소 또는 동일 R2 compatibility 승격.
+- shared D1 trigger 변경은 사용자 승인 없이 실행 금지.
+- main/TEST 승격은 사용자의 테스트배포 승인 전 금지.
+- PRODUCTION은 명확한 정식배포 승인 전 금지.
+
+합격:
+- A 공개 W<=2.
+- 1->2 전환 W<=2.
+- 비공개 W<=2.
+- Worker<=1 each.
+- PC/mobile 기능 parity.
+- 사용자 데이터 migration/backfill/delete 0.
+
 ## CURRENT NEXT GATE — PREVIEW live backend PASS, 사용자 실사용 검증 후 TEST 판단
 
 현재 완료:

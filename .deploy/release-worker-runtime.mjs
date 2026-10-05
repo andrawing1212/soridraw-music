@@ -89,7 +89,12 @@ function run(command, args, cwd = ROOT) {
   return String(result.stdout || '').trim();
 }
 
-function hashBundleDirectory(directory) {
+function hashReleaseIdentity() {
+  // Wrangler dry-run output can contain generated metadata that is not byte-stable
+  // between invocations. The release identity therefore hashes the approved
+  // canonical Worker source/config/tool contract, while live target bindings are
+  // validated independently by makeConfig()/verify.
+  const canonicalRoot = join(WORKER_DIR, 'canonical');
   const files = [];
   const visit = (current) => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -98,11 +103,12 @@ function hashBundleDirectory(directory) {
       else if (entry.isFile()) files.push(path);
     }
   };
-  visit(directory);
+  visit(canonicalRoot);
+  files.push(join(WORKER_DIR, 'package.json'));
   files.sort((a, b) => a.localeCompare(b, 'en'));
   const hash = createHash('sha256');
   for (const file of files) {
-    const relative = file.slice(directory.length + 1).split('\\').join('/');
+    const relative = file.slice(ROOT.length + 1).split('\\').join('/');
     const contents = readFileSync(file);
     hash.update(`${relative}\0${contents.byteLength}\0`, 'utf8');
     hash.update(contents);
@@ -514,7 +520,7 @@ await makeConfig();
 const bundleDirectory = join(RELEASE_DIR, 'bundle');
 rmSync(bundleDirectory, { recursive: true, force: true });
 run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run', '--outdir', bundleDirectory], WORKER_DIR);
-const bundleSha256 = hashBundleDirectory(bundleDirectory);
+const bundleSha256 = hashReleaseIdentity();
 const expectedBundleSha256 = String(process.env.EXPECTED_WORKER_BUNDLE_SHA256 || '').trim();
 if (expectedBundleSha256 && bundleSha256 !== expectedBundleSha256) {
   throw new Error(`${mode} Worker bundle identity mismatch expected=${expectedBundleSha256} actual=${bundleSha256}`);

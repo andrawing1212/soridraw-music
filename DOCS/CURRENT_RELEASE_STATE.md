@@ -1,3 +1,41 @@
+## 0PO. 사용자 범위 재고정 — A 한 곡의 공개/2번곡 전환/비공개 비용만 최적화 (2026-10-05 KST)
+
+- 사용자 지시로 현재 우선순위를 다시 고정:
+  1. A 한 곡 공개.
+  2. 같은 A에서 생성 1번곡 -> 2번곡 source 전환.
+  3. A 비공개.
+- 최신 실기기 CACHE LIVE 캡처에서 mutation 3회는:
+  - Worker는 각 요청 1회.
+  - physical D1 writes는 **W3 한 건 + W2 두 건**.
+  - 관측 예: R11/W3, R8/W2, R3/W2.
+- 판정:
+  - W2 두 경로는 현재 합격선 안이므로 정상 기능 보호를 우선하고 불필요하게 다시 건드리지 않음.
+  - 남은 HARD FAIL은 **source/media 전환 W3 -> W2 이하**.
+  - 직전 358 R2-only 작업은 read prerequisite였고, 이 mutation physical-write 숫자를 직접 줄이지 않으므로 사용자 체감상 "변화 없음"이 맞음.
+- W3 원인 재확정:
+  1. canonical tracks media UPDATE W1.
+  2. legacy explore_derived_tracks media mirror W1.
+  3. shared revision W1.
+- 이미 준비된 357 candidate는 media-only legacy mirror만 제거하여 **W2**를 목표로 함.
+- 이번 범위를 코드/감사에서 다시 잠그기 위해:
+  - `scripts/verify-360-publication-a-track-cost-target.mjs`
+  - commit `09d78fa6f6c583771d18e5827c30aa11d846daac`
+  - Release System Audit hard gate 추가 commit `f63bbe94ef52c52d3ab48277b492617871d770bb`.
+- 중요한 안전 제한:
+  - shared D1은 PREVIEW/TEST/PRODUCTION 공용.
+  - 현재 TEST/PRODUCTION old Worker는 legacy derived/revision read path를 아직 사용하므로, W3->W2 trigger cutover를 PREVIEW만 위해 shared D1에 적용하면 구환경 카드/media freshness를 깨뜨릴 수 있음.
+  - 따라서 **사용자 승인 없는 shared D1 trigger 변경/PRODUCTION 승격은 금지**.
+- 현재 실제 다음 목표:
+  - A-track W2 candidate를 Release Audit + 격리 비용 검증으로 확정.
+  - 필요한 cross-env compatibility 승격 범위를 최소화.
+  - 실제 shared D1 cutover 전에는 사용자에게 정확한 영향/승인 필요 지점을 한 번만 보고.
+- 절대 보호:
+  - 좋아요/저장하트 즉시 동기화.
+  - +30초 canonical save.
+  - app353 thumbnail.
+  - UI/CSS/반응형.
+  - 사용자 원본 데이터 delete/backfill/rewrite 금지.
+
 ## 0PN. PREVIEW R2-only publication read 실제 배포/실API 검증 PASS — 사용자 실사용 확인 대기 (2026-10-05 KST)
 
 - 목적: dormant app358을 PREVIEW에서만 실제 활성화하고 Feed/Profile/Genre/Search가 shared D1 없이 동작하는지 live Worker에서 확인.

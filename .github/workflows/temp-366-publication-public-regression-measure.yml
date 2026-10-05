@@ -1,0 +1,35 @@
+name: TEMP 366 Publication Public Regression Measure
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-366-publication-public-regression-measure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Static 364 verifier
+        run: node scripts/verify-364-publication-read-compaction-compat.mjs
+      - name: Measure isolated 364 paths
+        run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs
+      - name: Cleanup temp D1
+        if: always()
+        run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs cleanup

@@ -32,6 +32,21 @@ const publication358Wrapped = new Map([
   ['handleProfileTracks', 'handleProfileTracksCore358'],
   ['handleGenreTracks', 'handleGenreTracksCore358'],
 ]);
+const normalizePublication361ForFollowAudit = (text, name) => {
+  if (name !== 'handleMusicNotePublicationSingleWrite016') return text;
+  assert.ok(source.includes('SORIDRAW_PUBLICATION_D1_READ_COMPACTION_361_20261005'),
+    'app361 marker missing while follow audit normalizes publication');
+  const start = text.indexOf('  let previous = null;\n  let publicationR2ProvedNew361 = false;');
+  const end = text.indexOf('  const resolvedOptions = {', start);
+  assert.ok(start >= 0 && end > start, 'app361 first-public read block missing');
+  const normalized = text.slice(0, start)
+    + '  const previous = await publicationReadState016(env, authContext.uid, source.id);\n'
+    + text.slice(end);
+  assert.ok(normalized.includes('const previous = await publicationReadState016(env, authContext.uid, source.id);'),
+    'app361 normalization failed');
+  return normalized;
+};
+
 for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
   const wrappedCore = publication358Wrapped.get(node.name?.text || '');
   if (wrappedCore) {
@@ -52,7 +67,11 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
       'handlePublicProfile(decodeURIComponent(segments[2]), env, cors)').replaceAll('\r\n','\n'),node.getText(baselineAst).replaceAll('\r\n','\n'));
     continue;
   }
-  if (!allowed.has(node.name?.text)) assert.equal(functions.get(node.name?.text)?.replaceAll('\r\n','\n'),node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
+  if (!allowed.has(node.name?.text)) {
+    const currentText = normalizePublication361ForFollowAudit(functions.get(node.name?.text) || '', node.name?.text || '')
+      .replaceAll('\r\n','\n');
+    assert.equal(currentText,node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
+  }
 }
 for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
   const a = ts.createSourceFile('a.js',functions.get(name),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements[0].body.statements;

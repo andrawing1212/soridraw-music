@@ -1,3 +1,48 @@
+## 0QG. app356 PRODUCTION dormant shared Catalog support 승격 완료 + Hosting clone fix (2026-10-06 KST)
+
+PRODUCTION 승격 최종 결과:
+- Release Controller Run `37387649369`: **SUCCESS / RELEASED**.
+- TEST_VERIFIED manifest: `soridraw-test-v356-77fdab283a90`.
+- exact source PREVIEW SHA: `77fdab283a906b50a7ce8233ff73a34e80b4ef42`.
+- main(TEST) SHA: `3a7fce2442ea15caf228e06a1a5c0299ee1b3dac`.
+- production SHA: `74de6362c743974078c7d40566706053ce11dfc7`.
+- PRODUCTION app version: **356**.
+- PRODUCTION Explore Worker: `39e28223-6200-463f-8e86-1a0a3b3475d8`.
+- PRODUCTION Media Worker: `c2fc9ac1-c79a-4b62-9a2a-1c6d09459e24`.
+- Firebase PRODUCTION Hosting은 검증된 TEST Hosting 버전에서 clone되어 PASS.
+- PRODUCTION Explore parity with TEST PASS.
+- PRODUCTION Media health/smoke/verify PASS.
+- PRODUCTION Media runtime:
+  - `MEDIA=soridraw-media`
+  - `CATALOG=soridraw-user-catalog`
+  - `SORIDRAW_SHARED_CATALOG_V1=0`
+- 따라서 PREVIEW / TEST / PRODUCTION 모두 **shared Catalog 코드를 이해하고 같은 private CATALOG binding을 가진 dormant 상태**가 됨.
+
+이번 승격 중 발견/수정한 Release Controller 오류:
+- 첫 PRODUCTION 시도 Run `37386436978`은 Firebase Hosting clone에서 실패.
+- 원인: 현재 firebase-tools의 version source 문법은 `<site>@<version>`인데 controller가 `<site>:@<version>`을 사용하여 version을 channel로 해석함.
+- 실패 시 Explore/Media Worker는 자동 rollback되어 기존 PRODUCTION 버전으로 복구됐고 production branch/Hosting은 승격되지 않음.
+- PREVIEW fix commit `3202a72b0fa2c26397fb296652990f9119261ac8`: clone 문법 수정 + verifier 강화 + 이전 one-shot dispatcher 정리.
+- Release System Audit Run `37387027945` at `77fdab283a906b50a7ce8233ff73a34e80b4ef42`: **SUCCESS**.
+- 수정된 controller identity로 TEST를 다시 고정한 Run `37387289891`: **SUCCESS / TEST_VERIFIED**.
+- one-shot TEST dispatcher는 최종적으로 PREVIEW에서 제거 완료; 현재 PREVIEW HEAD는 그 뒤 정리 commit 계열.
+
+데이터/비용 안전:
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- Firestore Rules / Functions / shared D1 schema·trigger 변경 **0**.
+- shared private Catalog flag는 세 환경 모두 아직 **0(OFF)**.
+- 따라서 이번 PRODUCTION 승격은 shared authority 실제 cutover가 아니라 **dormant support 통일**까지만 수행.
+- 정상 warm cache 0-read 목표와 app349 save-heart / app301 folder / public-like 보호선은 변경 없음.
+
+현재 HARD GATE / 다음 작업:
+- 세 환경 dormant runtime parity는 완료.
+- 다음은 `SORIDRAW_SHARED_CATALOG_V1`을 **PREVIEW/TEST/PRODUCTION에 coordinated 방식으로 함께 ON** 하는 별도 cutover.
+- 환경 하나만 먼저 장시간 ON 상태로 두는 방식 금지.
+- cutover 중 사용자 Catalog 전체 복사/full scan/backfill 금지.
+- cutover 후 동일 계정으로 Recent save-heart / Music Note / Library / folders / PC↔mobile/reload / Explore-publication 결과를 세 환경에서 비교.
+- 실제 revision gap/missing shared Catalog일 때만 bounded user+kind bootstrap 허용.
+- parity와 warm-cache 비용 검증이 모두 PASS한 뒤에만 first-publication W12->W2 shared-D1 작업 재개.
+
 ## 0QF. app356 TEST dormant shared Catalog support 승격 완료 + Release Controller 재강화 (2026-10-06 KST)
 
 TEST 승격 최종 결과:

@@ -1,3 +1,27 @@
+## CURRENT NEXT GATE — app356 profile count 확인 후 exact TEST parity 승격
+
+현재 확인:
+- 공개곡 목록은 shared R2 수렴 후 PREVIEW/TEST에서 다시 일치.
+- 헤더 공개곡 숫자는 stale maintained counter가 실제 first-view 목록보다 우선되어 24->23, 22->23 오류.
+- app356은 50곡 미만 complete first-view에서 실제 loaded 공개곡 수를 표시하도록 교정. 서버 IO 추가 0.
+- Live Audit `37368822795`: PREVIEW R2 catalog/hybrid/R2-only flags ON, TEST/PRODUCTION flags 없음.
+
+순서:
+1. app356 PREVIEW 배포 완료 확인.
+2. 실기기에서 24곡 프로필=24, 22곡 프로필=22 확인.
+3. 경고박스 제거 확인.
+4. 최신 Release Controller immutable preflight에서 canonical Worker feature-var 승격/verify hard gate PASS.
+5. 그 다음에만 PREVIEW 전체를 TEST로 승격.
+6. TEST에서 Feed/Profile/Search/Genre/공개/비공개/좋아요/썸네일과 PREVIEW parity 확인.
+7. 사용자의 기존 정식배포 승인 범위는 유지하되, TEST 검증 실패 시 PRODUCTION 자동 중단.
+8. PRODUCTION까지 동일 feature vars/Worker/app parity가 확인된 뒤에만 first-publication W12->W2 shared-D1 cutover 준비 재개.
+
+금지:
+- 현재 shared D1 W2 migration.
+- stale trackCount 수정을 위해 owner 전체 COUNT/scan 추가.
+- 사용자 데이터 backfill/rewrite.
+- 정상 publication/like/UI 기능 변경.
+
 ## CURRENT NEXT GATE — first-publication R6/W12 안전 cutover 준비만, 기능 보존 우선
 
 현재 실기기:

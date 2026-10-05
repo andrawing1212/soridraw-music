@@ -128,6 +128,9 @@ jobs:
           grep -q '"ok":true' "$RUNNER_TEMP/health.json"
           grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
           grep -q '"automaticWavGeneration":false' "$RUNNER_TEMP/health.json"
+          grep -q '"catalogBinding":true' "$RUNNER_TEMP/health.json"
+          grep -q '"catalogAuthorityMode":"legacy-media"' "$RUNNER_TEMP/health.json"
+          node ../../scripts/verify-356-shared-private-catalog-authority.mjs
 
           code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' -X OPTIONS \
             -H 'Origin: https://preview.soridraw.com' \

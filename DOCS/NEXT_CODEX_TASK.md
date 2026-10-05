@@ -1,3 +1,37 @@
+## CURRENT NEXT GATE — A 한 곡 source 전환 W3를 실제 product W2로 cutover
+
+사용자 목표:
+- A 공개 W<=2.
+- A 1번곡 -> 2번곡 전환 W<=2.
+- A 비공개 W<=2.
+- mutation당 Worker<=1.
+- Firestore hot path W0.
+- 좋아요/저장하트/UI/thumbnail 비변경.
+
+격리 실측 완료:
+- Run `37301210759` SUCCESS.
+- 공개 W2.
+- 현재 source swap W3.
+- 357 candidate source swap W2.
+- 비공개 W2.
+- 즉 목표 sequence **W2/W2/W2가 실제 Cloudflare D1 billing 기준으로 가능함을 확인**.
+- shared user data write 0, temp DB 삭제 PASS.
+
+남은 작업은 새로운 최적화가 아니라 **안전한 실제 cutover 순서**:
+1. 357 candidate 자체는 고정. 더 이상 A-track write 구조를 넓혀 수정하지 않음.
+2. shared D1 trigger는 3환경 공용이므로 old TEST/PRODUCTION이 legacy media mirror에 의존하는 동안 적용 금지.
+3. 사용자가 TEST 승격을 승인하면 exact PREVIEW R2 compatibility를 main/TEST로 승격하고 A-track/Explore parity 검증.
+4. PRODUCTION은 명확한 승인 전 변경 금지.
+5. 모든 active environment가 R2 media authority를 이해한 뒤에만 별도 승인으로 357 shared-D1 trigger cutover.
+6. cutover 직후 사용자 동일 fixture로 공개 -> 1->2 -> 비공개를 재측정하여 W2/W2/W2가 아니면 즉시 중단/rollback.
+
+금지:
+- read 최적화로 범위 이동.
+- first-public W12 작업과 섞기.
+- 좋아요/저장하트 변경.
+- 사용자 데이터 migration/backfill/delete.
+- 승인 없는 shared D1 / TEST / PRODUCTION 변경.
+
 ## CURRENT NEXT GATE — A 한 곡 publication mutation W3 제거
 
 현재 사용자 목표만 본다:

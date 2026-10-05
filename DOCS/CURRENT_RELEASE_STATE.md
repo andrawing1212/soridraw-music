@@ -1,3 +1,37 @@
+## 0PR. PREVIEW publication Rows Read 361 배포 완료 + 364 shared-D1 후보 준비 (2026-10-06 KST)
+
+- 사용자 기준: 모든 R/W 보고는 Cloudflare D1 **물리 행 기준**으로 표기.
+- 실제 원인 분해:
+  - source 1->2 현재 trigger chain 격리 실측: UPDATE RETURNING 포함 **R9 / W3**.
+  - current legacy track projection + Music Note derived trigger가 불필요한 read 대부분을 차지함.
+  - 357 구환경 호환 제거 후보는 **R3 / W2**까지 가능하지만 TEST/PRODUCTION old reader 보호 때문에 아직 shared D1에 미적용.
+- 호환 유지형 364 후보:
+  - legacy media mirror와 shared revision을 유지한 채 trigger 내부 redundant read만 줄이는 방식.
+  - 격리 Cloudflare D1 Run `37335417591`: **R9/W3 -> R4/W3 PASS**.
+  - missing-derived repair / content rebuild / registered public-private W2 guard PASS.
+  - shared/user D1 touched 0.
+  - candidate: `cloudflare/explore-worker/candidates/364-publication-read-compaction-compat.sql`.
+  - verifier: `scripts/verify-364-publication-read-compaction-compat.mjs`.
+  - 자동 적용 wiring 없음.
+- Worker-only 361:
+  - first-public R2 precheck + inline source/media authority 사용으로 불필요 canonical pre-read 제거.
+  - Release System Audit Run `37344089981`: **SUCCESS**.
+  - PREVIEW Worker Release Run `37344481780`: **SUCCESS**.
+  - active PREVIEW Worker before `afbb5d00-a489-4c48-8b02-9ad6f1795bb0`.
+  - active PREVIEW Worker after `368d64ac-6b66-4023-88ec-a3ed85068844`.
+  - Feed/Profile/R2-only smoke PASS, changed-card D1 R0/W0, warm revision R0/W0.
+  - TEST/PRODUCTION Workers unchanged PASS.
+- 변경하지 않은 것:
+  - Firebase Hosting 0.
+  - Functions/Rules 0.
+  - shared D1 schema/trigger 0.
+  - user data migration/backfill/delete/rewrite 0.
+  - UI/CSS/좋아요/저장하트/thumbnail 변경 0.
+- 현재 다음 게이트:
+  1. PREVIEW 실기기에서 A 공개 / source 1->2 / 비공개 D1 **행읽기 R / 행쓰기 W** 재측정.
+  2. 364 shared-D1 trigger 적용은 shared DB 변경이므로 사용자 명시 승인 전 실행 금지.
+  3. TEST/PRODUCTION 승격 후 legacy mirror 제거가 가능해지면 357로 최종 **R3/W2 후보**를 별도 승인 후 적용.
+
 ## 0PQ. 사용자 비용 우선순위 재고정 — Rows Read 1순위, Rows Written 2순위 (2026-10-05 KST)
 
 - 사용자 재지시:

@@ -32,8 +32,8 @@ Release Controller 보강:
 - 최종 TEST Run에서 Media Worker는 active version settle PASS, health는 7회 bounded retry 후 PASS, TEST_VERIFY 재확인에서는 1회에 PASS.
 
 현재 tree parity:
-- temp dispatcher 정리 후 PREVIEW HEAD `f1a949f1ced4e5ecb465226eb59e99dd647a9e28`.
-- PREVIEW current tree = TEST main tree = source target tree `c4a3cb4dc4179f67caa3d92d22cc048847330794`.
+- TEST에 승격된 source target tree = TEST main tree `c4a3cb4dc4179f67caa3d92d22cc048847330794`.
+- TEST 승격 뒤 PREVIEW에 추가된 차이는 상태 문서 `DOCS/CURRENT_RELEASE_STATE.md`, `DOCS/NEXT_CODEX_TASK.md` 갱신뿐이며 runtime code 차이 0.
 - temp dispatch workflow/trigger는 삭제 완료.
 - 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
 - shared Catalog cutover는 여전히 **OFF**.

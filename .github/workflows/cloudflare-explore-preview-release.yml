@@ -139,6 +139,8 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-336-r2-hybrid-read.mjs
           node scripts/verify-358-publication-r2-only-cutover.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-361-publication-read-compaction.mjs
+          node scripts/verify-364-publication-read-compaction-compat.mjs
           node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
 
       - name: One-shot preflight
@@ -181,6 +183,8 @@ jobs:
             node scripts/verify-204-explore-next-song-parity.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-210-targeted-personal-like-settlement.mjs
             node scripts/verify-358-publication-r2-only-cutover.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-361-publication-read-compaction.mjs
+            node scripts/verify-364-publication-read-compaction-compat.mjs
             node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )

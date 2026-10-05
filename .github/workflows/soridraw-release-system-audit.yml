@@ -51,6 +51,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node scripts/verify-356-shared-private-catalog-authority.mjs
           node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
           npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
@@ -166,6 +167,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node scripts/verify-356-shared-private-catalog-authority.mjs
           node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
           npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
@@ -437,8 +439,13 @@ jobs:
           echo 'LIKE_PRODUCT_RELEASE_GATE=NOT_VERIFIED_CROSS_ENV_D1_COST_AND_REAL_DEVICES'
 
       - name: Install Worker tooling
-        working-directory: cloudflare/explore-worker
-        run: npm install --no-audit --no-fund --package-lock=false
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          cd ../media-worker
+          npm install --no-audit --no-fund --package-lock=false
 
       - name: TEST and PRODUCTION Worker dry-run only
         shell: bash
@@ -446,7 +453,10 @@ jobs:
           set -euo pipefail
           node .deploy/release-worker-runtime.mjs test dry-run
           node .deploy/release-worker-runtime.mjs production dry-run
+          node .deploy/release-media-worker-runtime.mjs test dry-run
+          node .deploy/release-media-worker-runtime.mjs production dry-run
           echo 'WORKER_TARGETS_DRY_RUN=PASS'
+          echo 'MEDIA_WORKER_TARGETS_DRY_RUN=PASS'
 
       - name: Live shared D1 preflight is read-only
         shell: bash

@@ -4,6 +4,7 @@ import { controllerIdentity, parseReleaseCommand } from './release-controller-po
 
 const workflow = fs.readFileSync('.github/workflows/soridraw-release-promotion.yml', 'utf8');
 const runtime = fs.readFileSync('.deploy/release-worker-runtime.mjs', 'utf8');
+const mediaRuntime = fs.readFileSync('.deploy/release-media-worker-runtime.mjs', 'utf8');
 
 function step(source, name) {
   const marker = `      - name: ${name}\n`;
@@ -33,32 +34,53 @@ function validate(source = workflow) {
 
   const snapshot = step(source, 'Snapshot external state');
   const immutable = step(source, 'Finish immutable preflight_only');
-  for (const identity of ['preview-before', 'main-before', 'production-before', 'test-worker-before', 'production-worker-before', 'test-hosting-before', 'production-hosting-before', 'test-worker-schedules-before', 'production-worker-schedules-before']) {
+  for (const identity of ['preview-before', 'main-before', 'production-before', 'test-worker-before', 'production-worker-before', 'test-media-worker-before', 'production-media-worker-before', 'test-hosting-before', 'production-hosting-before', 'test-worker-schedules-before', 'production-worker-schedules-before']) {
     assert.ok(immutable.includes(identity), `preflight does not compare ${identity}`);
   }
   assert.match(snapshot, /sort_by\(\.cron\)/);
   assert.match(immutable, /sort_by\(\.cron\)/);
 
   const testDeploy = step(source, 'TEST_DEPLOY exact tree and uploaded Worker version');
-  before(testDeploy, 'test upload', 'refs/heads/main');
-  before(capability + testDeploy, 'testIamPermissions', 'refs/heads/main');
+  assert.match(testDeploy, /release-media-worker-runtime\.mjs test upload/);
+  assert.match(testDeploy, /release-media-worker-runtime\.mjs test activate/);
+  assert.doesNotMatch(testDeploy, /refs\/heads\/main/);
   const prodDeploy = step(source, 'PROD_DEPLOY verified identities only');
-  before(prodDeploy, 'production upload', 'refs/heads/production');
+  assert.match(prodDeploy, /release-media-worker-runtime\.mjs production upload/);
+  assert.match(prodDeploy, /release-media-worker-runtime\.mjs production activate/);
   assert.match(prodDeploy, /hosting:clone "soridraw-test:@\$test_hosting_version_id"/);
+  assert.doesNotMatch(prodDeploy, /refs\/heads\/production/);
   assert.doesNotMatch(prodDeploy, /soridraw-test:live/);
 
   const testVerify = step(source, 'TEST_VERIFY and freeze durable manifest');
   const prodPreflight = step(source, 'PROD_PREFLIGHT revalidate TEST manifest and live release');
   assert.match(testVerify, /identity "\$GITHUB_WORKSPACE"/);
+  assert.match(testVerify, /gh release create/);
+  assert.match(testVerify, /refs\/heads\/main/);
+  before(testVerify, 'release-media-worker-runtime.mjs test verify', 'refs/heads/main');
+  before(testVerify, 'gh release create', 'refs/heads/main');
+  const prodVerify = step(source, 'PROD_VERIFY');
+  assert.match(prodVerify, /refs\/heads\/production/);
+  before(prodVerify, 'release-media-worker-runtime.mjs production verify', 'refs/heads/production');
   assert.match(prodPreflight, /controllerIdentity\(process\.argv\[3\]\)/);
   assert.match(prodPreflight, /"\$GITHUB_WORKSPACE"/);
   assert.doesNotMatch(prodPreflight, /controllerIdentity\(process\.cwd\(\)\)/);
 
   const rollback = step(source, 'Rollback branch and Worker traffic after deployment failure');
-  for (const flag of ['test-worker-mutated', 'test-branch-mutated', 'test-hosting-mutated', 'production-worker-mutated', 'production-branch-mutated', 'production-hosting-mutated']) assert.ok(rollback.includes(flag));
+  for (const flag of ['test-worker-mutated', 'test-media-worker-mutated', 'test-branch-mutated', 'test-hosting-mutated', 'test-release-mutated', 'production-worker-mutated', 'production-media-worker-mutated', 'production-branch-mutated', 'production-hosting-mutated']) assert.ok(rollback.includes(flag));
+  assert.match(rollback, /gh release delete/);
   assert.match(rollback, /release-worker-runtime\.mjs "\$stage" restore/);
+  assert.match(rollback, /release-media-worker-runtime\.mjs "\$stage" restore/);
   assert.doesNotMatch(rollback, /release-worker-runtime\.mjs "\$stage" activate/);
+  assert.doesNotMatch(rollback, /release-media-worker-runtime\.mjs "\$stage" activate/);
   assert.match(runtime, /if \(action === 'restore'\) \{\s*await restore\(\);\s*process\.exit\(0\);\s*\}/);
+  assert.match(mediaRuntime, /SORIDRAW_SHARED_CATALOG_V1/);
+  assert.match(mediaRuntime, /SHARED_CATALOG_BUCKET = 'soridraw-user-catalog'/);
+  assert.match(mediaRuntime, /MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS/);
+  assert.match(mediaRuntime, /MEDIA_WORKER_VERIFY=PASS/);
+  assert.match(mediaRuntime, /MEDIA_ACTIVE_VERSION_SETTLED=PASS/);
+  assert.match(mediaRuntime, /MEDIA_HEALTH_SETTLED=PASS/);
+  assert.match(mediaRuntime, /hashReleaseIdentity/);
+  assert.match(mediaRuntime, /action === 'restore'/);
 
   assert.doesNotMatch(source, /git\s+push[^\n]*(?:--force|-f\b)/i);
   assert.doesNotMatch(source, /d1\s+(?:migrations?\s+apply|execute)[^\n]*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)/i);
@@ -78,6 +100,7 @@ for (const [index, mutate] of [
   s => s.replaceAll('firebasehosting.sites.update', 'firebasehosting.sites.get'),
   s => s.replace('test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"', ':'),
   s => s.replace('release-worker-runtime.mjs "$stage" restore', 'release-worker-runtime.mjs "$stage" activate'),
+  s => s.replace('release-media-worker-runtime.mjs "$stage" restore', 'release-media-worker-runtime.mjs "$stage" activate'),
 ].entries()) assert.throws(() => validate(mutate(workflow)), undefined, `mutation ${index} was not rejected`);
 
 console.log('RELEASE_CONTROLLER_TWELVE_HARDENING_INVARIANTS=PASS');

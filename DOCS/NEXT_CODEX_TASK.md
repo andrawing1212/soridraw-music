@@ -1,3 +1,69 @@
+## CURRENT NEXT GATE — shared private Catalog dormant support -> coordinated environment parity
+
+완료:
+- 공용 private R2 bucket `soridraw-user-catalog` + 세 환경 `CATALOG` binding 준비.
+- `SORIDRAW_SHARED_CATALOG_V1=0`으로 모든 환경에서 cutover OFF.
+- bounded user/kind bootstrap + revision fence 구현.
+- PREVIEW Media Worker Run `37379556479` SUCCESS.
+- final Release System Audit Run `37379712972` SUCCESS.
+- PREVIEW App Release Run `37381481452` SUCCESS, app356 exact build.
+- user data copy/backfill/migration/delete/rewrite 0.
+
+다음 순서:
+1. **PREVIEW 단독 shared flag ON 금지.**
+2. 사용자가 TEST 배포를 요청하면 현재 검증된 dormant support 전체를 main/TEST로 승격:
+   - app/client
+   - Media Worker
+   - shared `CATALOG` binding
+   - release controller parity checks
+   를 하나의 릴리스로 처리.
+3. TEST 승격 직후에도 `SORIDRAW_SHARED_CATALOG_V1=0`을 유지하고 PREVIEW/TEST runtime source/binding exact parity 확인.
+4. PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+5. 세 활성 환경이 shared Catalog 코드를 이해하는 상태가 된 뒤에만 coordinated flag cutover 계획을 실행.
+6. cutover 검증은 동일 계정으로 PREVIEW/TEST/PRODUCTION:
+   - Recent Song 저장하트
+   - Music Note membership/list
+   - Library list
+   - Music Note/Library folder metadata
+   - reload / PC↔mobile
+   - 공개상태/Explore
+   를 확인.
+7. warm 정상 캐시 재진입 Worker/Firestore data read 0 목표 유지.
+8. bootstrap은 실제 revision gap/missing shared Catalog 복구에서만 허용. 앱 업데이트/페이지 진입을 이유로 bootstrap 금지.
+9. parity가 모두 PASS한 뒤에만 first-publication W12->W2 작업 재개.
+
+금지:
+- environment-local Catalog를 shared bucket으로 일괄 복사.
+- 사용자 전체 backfill/full scan.
+- PREVIEW만 먼저 shared authority 활성화.
+- app349 save-heart / app301 folders / 좋아요 / UI / thumbnail 정상 기능 변경.
+- 승인 없는 TEST/PRODUCTION 승격.
+- parity 완료 전 shared D1 W2 cutover.
+
+## CURRENT NEXT GATE — Music Note/Library/Recent cross-env parity before PRODUCTION
+
+현재:
+- app356 TEST Run `37375259800` TEST_VERIFIED.
+- PREVIEW와 TEST의 Recent save-heart / Music Note / Library 관련 앱 코드는 exact same source.
+- 따라서 남은 차이는 앱 코드 승격 누락이 아니라 **환경별 private R2 Catalog 수렴 문제를 우선 의심**.
+- canonical Firebase/RTDB는 공유지만 Music Note/Library R2 buckets는 preview/test/production 별도.
+
+목표:
+- 동일 계정이면 PREVIEW/TEST/PRODUCTION 어느 앱에서도 Music Note/Library/Recent 저장 결과가 동일.
+- mutation은 실제 변경분만 O(1) 전달.
+- 앱 업데이트/재진입 때문에 Firestore 전체 reread/rebuild 금지.
+- 사용자 데이터 copy/backfill/delete/rewrite 금지.
+- app349 Recent save-heart/Music Note membership 동작, app301 folder behavior 보호.
+
+먼저 할 일:
+1. Recent save-heart canonical settlement + RTDB changed-item signal이 PREVIEW->TEST / TEST->PREVIEW에서 동일 item을 적용하는지 감사.
+2. Music Note/Library Catalog delta publish가 현재 host의 env-specific R2에만 남는지 실제 경로 확정.
+3. 환경별 Catalog가 drift할 수 있으면 shared catalog authority 또는 bounded cross-env changed-delta fanout 중 비용/안전 최선안 선택.
+4. 기존 stale 환경을 맞추기 위해 full Firestore scan/backfill을 추가하지 말 것.
+5. 수정 후 PC/모바일 + PREVIEW/TEST 2x2에서 save/unsave, Music Note, Library, folder, reload parity 확인.
+6. 모두 PASS 전 PRODUCTION 승격 금지.
+7. 이 gate 종료 후에만 W12->W2 작업 재개.
+
 ## CURRENT NEXT GATE — app356 profile count 확인 후 exact TEST parity 승격
 
 현재 확인:

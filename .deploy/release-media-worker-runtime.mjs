@@ -98,20 +98,18 @@ function makeConfig() {
   console.log(`${mode.toUpperCase()}_SHARED_CATALOG_FLAG=${expectedSharedFlag}`);
 }
 
-function hashBundleDirectory(directory) {
-  const files = [];
-  const visit = (current) => {
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) visit(path);
-      else if (entry.isFile()) files.push(path);
-    }
-  };
-  visit(directory);
-  files.sort((a, b) => a.localeCompare(b, 'en'));
+function hashReleaseIdentity() {
+  // Wrangler dry-run output may contain generated metadata that is not byte-stable
+  // across invocations. Release identity must instead describe the exact approved
+  // source + effective target config + pinned tool contract.
+  const files = [
+    join(WORKER_DIR, 'src', 'index.js'),
+    join(WORKER_DIR, 'package.json'),
+    CONFIG_PATH,
+  ];
   const hash = createHash('sha256');
   for (const file of files) {
-    const relative = file.slice(directory.length + 1).split('\\').join('/');
+    const relative = file.slice(ROOT.length + 1).split('\\').join('/');
     const contents = readFileSync(file);
     hash.update(`${relative}\0${contents.byteLength}\0`, 'utf8');
     hash.update(contents);
@@ -129,6 +127,23 @@ async function activeVersion() {
     throw new Error(`single active media Worker version missing for ${target.worker}`);
   }
   return String(active.version_id);
+}
+
+async function waitForActiveVersion(expected, attempts = 12) {
+  let last = '';
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      last = await activeVersion();
+      if (last === expected) {
+        console.log(`${mode.toUpperCase()}_MEDIA_ACTIVE_VERSION_SETTLED=PASS version=${last} attempt=${attempt}`);
+        return last;
+      }
+    } catch (error) {
+      last = String(error?.message || error);
+    }
+    if (attempt < attempts) await sleep(1_500);
+  }
+  throw new Error(`${mode}: media Worker active version did not settle expected=${expected} actual=${last || '(unknown)'}`);
 }
 
 async function verifyLiveBindings() {
@@ -149,22 +164,49 @@ async function verifyLiveBindings() {
 }
 
 async function smoke() {
-  const healthResponse = await fetch(`${target.base}/health`, { headers: { 'Cache-Control': 'no-cache' } });
-  if (!healthResponse.ok) throw new Error(`${mode}: media health HTTP ${healthResponse.status}`);
-  const health = await healthResponse.json();
-  if (health?.ok !== true || health?.r2Binding !== true || health?.catalogBinding !== true) {
-    throw new Error(`${mode}: media health binding check failed`);
-  }
   const expectedMode = expectedSharedFlag === '1' ? 'shared-catalog' : 'legacy-media';
-  if (String(health?.catalogAuthorityMode || '') !== expectedMode) {
-    throw new Error(`${mode}: catalog authority mode mismatch ${health?.catalogAuthorityMode || '(missing)'} expected=${expectedMode}`);
+  let health = null;
+  let healthStatus = 0;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    try {
+      const healthResponse = await fetch(`${target.base}/health?release_probe=${attempt}`, {
+        headers: { 'Cache-Control': 'no-cache, no-store', Pragma: 'no-cache' },
+      });
+      healthStatus = healthResponse.status;
+      if (healthResponse.ok) {
+        health = await healthResponse.json();
+        const ready = (
+          health?.ok === true
+          && health?.r2Binding === true
+          && health?.catalogBinding === true
+          && String(health?.catalogAuthorityMode || '') === expectedMode
+        );
+        if (ready) {
+          console.log(`${mode.toUpperCase()}_MEDIA_HEALTH_SETTLED=PASS attempt=${attempt} mode=${expectedMode}`);
+          break;
+        }
+      }
+    } catch (error) {
+      health = { error: String(error?.message || error) };
+    }
+    if (attempt < 12) await sleep(1_500);
   }
+  if (
+    health?.ok !== true
+    || health?.r2Binding !== true
+    || health?.catalogBinding !== true
+    || String(health?.catalogAuthorityMode || '') !== expectedMode
+  ) {
+    throw new Error(`${mode}: media health did not settle status=${healthStatus} expectedMode=${expectedMode} payload=${JSON.stringify(health).slice(0, 600)}`);
+  }
+
   const options = await fetch(`${target.base}/v1/catalog/musicNote`, {
     method: 'OPTIONS',
     headers: {
       Origin: target.origin,
       'Access-Control-Request-Method': 'GET',
       'Access-Control-Request-Headers': 'authorization,content-type,x-firebase-appcheck',
+      'Cache-Control': 'no-cache, no-store',
     },
   });
   if (options.status !== 204) throw new Error(`${mode}: media catalog OPTIONS HTTP ${options.status}`);
@@ -179,9 +221,7 @@ async function restore() {
   const version = String(process.env.RELEASE_MEDIA_WORKER_VERSION || '').trim();
   if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_MEDIA_WORKER_VERSION is required for restore');
   run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
-  await sleep(2_500);
-  const active = await activeVersion();
-  if (active !== version) throw new Error(`${mode}: media Worker restore active version mismatch expected=${version} actual=${active}`);
+  const active = await waitForActiveVersion(version);
   console.log(`${mode.toUpperCase()}_MEDIA_WORKER_RESTORE=PASS version=${active}`);
 }
 
@@ -189,7 +229,7 @@ makeConfig();
 const bundleDirectory = join(RELEASE_DIR, 'bundle');
 rmSync(bundleDirectory, { recursive: true, force: true });
 run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run', '--outdir', bundleDirectory], WORKER_DIR);
-const bundleSha256 = hashBundleDirectory(bundleDirectory);
+const bundleSha256 = hashReleaseIdentity();
 const expectedBundleSha256 = String(process.env.EXPECTED_MEDIA_WORKER_BUNDLE_SHA256 || '').trim();
 if (expectedBundleSha256 && bundleSha256 !== expectedBundleSha256) {
   throw new Error(`${mode} media Worker bundle identity mismatch expected=${expectedBundleSha256} actual=${bundleSha256}`);
@@ -228,7 +268,7 @@ try {
   if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_MEDIA_WORKER_VERSION is required for activate');
   run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
   deployed = true;
-  await sleep(2_500);
+  await waitForActiveVersion(version);
   await smoke();
   const after = await activeVersion();
   if (after !== version || after === before) throw new Error(`${mode}: media Worker traffic did not activate the uploaded version`);

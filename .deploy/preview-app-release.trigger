@@ -1,10 +1,10 @@
-app355-publication-cross-device-zero-refresh
-target_source=86a19d5db46532ae30ecffe373780c71c2f5634f
-app_version=355
-scope=publication-cross-device-signal-and-refresh-worker-zero
-deploy_shared_rtdb_rules=true
+app356-profile-public-count-warning-cleanup
+target_source=6f558796ce016c8f189653f77bea261b9c23592c
+app_version=356
+scope=profile-public-track-count-and-explore-private-warning
+deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app355-publication-cross-device-fix
+release_request=app356-profile-count-fix
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

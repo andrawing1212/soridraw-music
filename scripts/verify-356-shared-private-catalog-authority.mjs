@@ -10,7 +10,10 @@ assert.match(worker, /SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356/);
 assert.match(worker, /const catalogBucket = \(env\) =>/);
 assert.match(worker, /env\?\.CATALOG \? env\.CATALOG : env\.MEDIA/);
 assert.match(worker, /catalogAuthorityMode/);
-assert.match(worker, /\/v1\\\/catalog\\\/(musicNote\|library).*delta\|bootstrap/);
+assert.ok(
+  worker.includes("match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap))?$/)"),
+  'catalog bootstrap route missing',
+);
 
 for (const token of [
   'return catalogBucket(env).put(key, encoded, {',

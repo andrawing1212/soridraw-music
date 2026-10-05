@@ -76,3 +76,8 @@ publication-r2-only-readiness-358-rerun2
 target=792271da150fa21219cd6f62a5e67fccb7096e98
 focus=canonical-checksum-pinned,follow-offpath-strict,no-deploy
 requested=2026-10-05T05:50KST
+
+publication-r2-only-integration-358
+target=b5174d4ec055aef29affb331f2fcfed8af306a49
+focus=r2-catalog-phase-b-hard-gate,no-deploy,no-shared-d1-write
+requested=2026-10-05T09:25KST

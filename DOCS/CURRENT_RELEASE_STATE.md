@@ -1,3 +1,34 @@
+## 0PV. app354 PREVIEW UI warning removal + 365 live measurement confirmed (2026-10-06 KST)
+
+사용자 실기기 CACHE LIVE 재측정:
+- 공개: D1 **행읽기 R4 / 행쓰기 W2**.
+- source 1->2: D1 **행읽기 R10 / 행쓰기 W3**.
+- 비공개: D1 **행읽기 R3 / 행쓰기 W2**.
+- 365 예상값과 정확히 일치. 같은 request의 중복 canonical like read 1회를 제거한 효과가 실제 제품에서 확인됨.
+
+source 1->2만 R10/W3인 이유:
+- 공개/비공개는 visibility 상태만 바꾸므로 heavy legacy media projection trigger를 깨우지 않음.
+- source/media 전환은 cover/duration/Suno URL 등 media field를 바꾸므로 old TEST/PRODUCTION 호환용 legacy derived mirror trigger가 실행됨.
+- 현재 source 전환 physical writes:
+  1. canonical `tracks` W1.
+  2. legacy `explore_derived_tracks` media mirror W1.
+  3. shared revision W1.
+  = **W3**.
+- current trigger chain의 격리 UPDATE RETURNING 비용 R9에 publication 후 canonical like 확인 R1이 더해져 실제 product **R10**.
+- 364 compatibility candidate는 old TEST/PRODUCTION 호환을 유지하면서 trigger read를 줄이는 후보이며 isolated target은 source 전환 약 **R5/W3** product 수준.
+- legacy mirror를 제거하는 357은 모든 환경이 새 R2 authority로 승격된 뒤 별도 승인 시 최종 **R4/W2** 수준 재검증 후보.
+
+사용자 UI 요청:
+- 비공개 확인 모달의 경고 문구
+  `비공개로 전환하면 Explore와 공개 프로필에서 즉시 숨겨집니다. D1 기록은 삭제하지 않습니다.`
+  를 제거.
+- 확인 버튼/비공개 동작/배치 로직/데이터 처리는 변경하지 않음.
+- 변경 파일: `src/pages/FavoritesPage.tsx`.
+- app version: **354**.
+- Firebase PREVIEW Hosting Run `37350776803`: **SUCCESS**.
+- TypeScript PASS / Build PASS / PREVIEW exact build PASS / TEST-PRODUCTION unchanged PASS.
+- Worker/Functions/Rules/shared D1/user data 변경 0.
+
 ## 0PU. 사용자 실기기 R5/R11/R3 분석 후 365 PREVIEW 배포 완료 (2026-10-06 KST)
 
 사용자 동일 A곡 실기기 CACHE LIVE 결과:

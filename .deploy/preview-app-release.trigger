@@ -1,10 +1,10 @@
-app354-remove-private-publication-warning
-target_source=084c2c6b4eee0494df3496c661c4ee4ecc62dce6
-app_version=354
-scope=hosting-only-remove-private-publication-warning
-deploy_shared_rtdb_rules=false
+app355-publication-cross-device-zero-refresh
+target_source=86a19d5db46532ae30ecffe373780c71c2f5634f
+app_version=355
+scope=publication-cross-device-signal-and-refresh-worker-zero
+deploy_shared_rtdb_rules=true
 no_user_data_migration=true
-release_request=app354-remove-private-publication-warning
+release_request=app355-publication-cross-device-fix
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

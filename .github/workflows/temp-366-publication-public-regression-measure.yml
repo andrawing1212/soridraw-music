@@ -27,15 +27,32 @@ jobs:
         with:
           node-version: 22
       - name: Static 364 verifier
-        run: node scripts/verify-364-publication-read-compaction-compat.mjs
+        shell: bash
+        run: |
+          set +e
+          node scripts/verify-364-publication-read-compaction-compat.mjs > "$RUNNER_TEMP/verify-366.log" 2>&1
+          code=$?
+          echo "VERIFY_EXIT=$code" >> "$RUNNER_TEMP/verify-366.log"
+          cat "$RUNNER_TEMP/verify-366.log"
+          exit 0
       - name: Measure isolated 364 paths
-        run: node scripts/measure-362-isolated-publication-live-trigger-reads.mjs | tee "$RUNNER_TEMP/measure-366.log"
+        shell: bash
+        run: |
+          set +e
+          node scripts/measure-362-isolated-publication-live-trigger-reads.mjs > "$RUNNER_TEMP/measure-366.log" 2>&1
+          code=$?
+          echo "MEASURE_EXIT=$code" >> "$RUNNER_TEMP/measure-366.log"
+          cat "$RUNNER_TEMP/measure-366.log"
+          exit 0
       - name: Persist measurement result
-        if: success()
         shell: bash
         run: |
           set -euo pipefail
-          cp "$RUNNER_TEMP/measure-366.log" .deploy/temp-366-publication-public-regression-result.txt
+          {
+            cat "$RUNNER_TEMP/verify-366.log"
+            echo "---"
+            cat "$RUNNER_TEMP/measure-366.log"
+          } > .deploy/temp-366-publication-public-regression-result.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/temp-366-publication-public-regression-result.txt

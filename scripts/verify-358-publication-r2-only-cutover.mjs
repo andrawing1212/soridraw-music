@@ -115,16 +115,16 @@ const search = extractFunction(worker, 'handleSearch');
 assert.ok(search.includes('SORIDRAW_SEARCH_R2_ONLY_341_20261004'), 'search R2-only authority lost');
 assert.doesNotMatch(search, /handleSearchCore336\(url, env, cors\)[\s\S]*isExplorePublicationR2OnlyReadEnabled358/, '358 must not weaken app341 search');
 
-assert.equal(
-  wrangler.includes('SORIDRAW_PUBLICATION_R2_ONLY_READ_V1'),
-  false,
-  'R2-only cutover flag must remain OFF in PREVIEW config until explicit cutover approval',
+assert.match(
+  wrangler,
+  /"SORIDRAW_PUBLICATION_R2_ONLY_READ_V1"\s*:\s*"1"/,
+  'PREVIEW R2-only cutover flag must be active for live validation',
 );
 
 console.log('PUBLICATION_R2_ONLY_358_SOURCE=PASS');
-console.log('PUBLICATION_R2_ONLY_358_FLAG_DEFAULT_OFF=PASS');
+console.log('PUBLICATION_R2_ONLY_358_PREVIEW_FLAG_ACTIVE=PASS');
 console.log('PUBLICATION_R2_ONLY_358_NORMAL_PATH_D1_READ=0');
 console.log('PUBLICATION_R2_ONLY_358_NORMAL_PATH_D1_WRITE=0');
 console.log('PUBLICATION_R2_ONLY_358_FEED_PROFILE_GENRE=R2_ONLY');
 console.log('PUBLICATION_R2_ONLY_358_SEARCH_APP341_PROTECTED=PASS');
-console.log('PUBLICATION_R2_ONLY_358_CUTOVER_READY=false');
+console.log('PUBLICATION_R2_ONLY_358_CROSS_ENV_CUTOVER_READY=false');

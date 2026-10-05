@@ -1,3 +1,25 @@
+## CURRENT NEXT GATE — 연속 실기기 기준 고정, source R6만 분석
+
+동일 세션 연속 확인 완료:
+- 공개 **R4/W2**.
+- source 1->2 **R6/W3**.
+- 비공개 **R3/W2**.
+- Worker 1 each / Firestore hot path R0/W0.
+
+의미:
+- 공개/비공개는 source 전환 전후에도 정상 비용 유지.
+- 공개 회귀 가설 종료.
+- 다음 수정 범위는 source 전환의 남은 physical Rows Read 6만.
+- 공개/비공개/좋아요/저장하트/UI/thumbnail은 변경 금지.
+
+다음 분석:
+1. source R6 = Worker request 내부 D1 읽기를 statement/trigger 단위로 재분해.
+2. 이미 필요한 canonical/legacy mirror/shared revision은 보존.
+3. 기능 손상 없이 제거 가능한 read만 후보화.
+4. W3는 legacy TEST/PRODUCTION 호환 mirror 때문에 현재 유지.
+5. 후보가 R5 이하를 격리 증명한 경우에만 PREVIEW Worker 코드 변경 판단.
+6. shared D1 추가 변경, TEST/PRODUCTION 승격은 사용자 승인 전 금지.
+
 ## CURRENT NEXT GATE — source 1->2 R6/W3만 남김
 
 사용자 실기기 최신 확정:

@@ -100,14 +100,16 @@ function makeConfig() {
 
 function hashReleaseIdentity() {
   // Wrangler dry-run output may contain generated metadata that is not byte-stable
-  // across invocations. Release identity must instead describe the exact approved
-  // source + effective target config + pinned tool contract.
+  // across invocations. TEST and PRODUCTION intentionally use different MEDIA
+  // buckets/origins, so release identity covers the common approved code/tool
+  // contract while target-specific bindings/CORS are verified independently.
   const files = [
     join(WORKER_DIR, 'src', 'index.js'),
     join(WORKER_DIR, 'package.json'),
-    CONFIG_PATH,
   ];
   const hash = createHash('sha256');
+  hash.update(`compatibility_date=${String(SOURCE_CONFIG.compatibility_date || '').slice(0, 10)}\0`, 'utf8');
+  hash.update(`shared_catalog_flag=${expectedSharedFlag}\0`, 'utf8');
   for (const file of files) {
     const relative = file.slice(ROOT.length + 1).split('\\').join('/');
     const contents = readFileSync(file);

@@ -1,3 +1,18 @@
+## 0PT. PREVIEW 361 사용자 실기기 CACHE LIVE 결과 — 공개 개선, source 전환 미해결 (2026-10-06 KST)
+
+사용자 동일 A곡 순서 실측:
+1. 공개: D1 **행읽기 R5 / 행쓰기 W2**, D1 쿼리 읽기 2 / 쓰기 1.
+2. source 1->2 전환: D1 **행읽기 R11 / 행쓰기 W3**, D1 쿼리 읽기 2 / 쓰기 1.
+3. 비공개: D1 **행읽기 R3 / 행쓰기 W2**, D1 쿼리 읽기 0 / 쓰기 1.
+
+판정:
+- 361 PREVIEW Worker 배포 효과는 공개 경로에서 확인됨: 직전 사용자 실기기 공개 R11 계열 -> 현재 **R5/W2**.
+- 비공개는 **R3/W2 유지**, 회귀 없음.
+- source 전환은 **R11/W3로 여전히 FAIL**. 361의 inline media preselect 제거만으로 실제 product source-swap의 두 D1 read query 및 legacy trigger fanout이 해소되지 않았음.
+- 따라서 다음 작업은 source 전환 R11/W3만 집중. 공개/비공개/좋아요/저장하트/UI/thumbnail은 변경 금지.
+- 364 shared-D1 candidate는 isolated R4/W3까지 증명됐지만 아직 shared trigger 미적용. 사용자 승인 전 적용 금지.
+- TEST/PRODUCTION unchanged.
+
 ## 0PS. 361 PREVIEW live 완료 / 364 rollback·최종 감사 PASS (2026-10-06 KST)
 
 - PREVIEW Worker 361 실제 배포:

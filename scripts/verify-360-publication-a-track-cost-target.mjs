@@ -38,12 +38,14 @@ const extractFunction = (source, name) => {
 
 const publish = extractFunction(worker, 'handleMusicNotePublicationSingleWrite016');
 const privateHandler = extractFunction(worker, 'handleMusicNotePrivate017');
+const privateCore = extractFunction(worker, 'handleMusicNotePrivate017Core045');
 const visibilityTransition = extractFunction(worker, 'applyPublicationVisibilityTransition021');
 
 assert.ok(publish.includes('const visibilityOnly = Boolean(previous?.id)'), 'registered publish guard missing');
 assert.ok(publish.includes('SET is_public = 1'), 'same-source publish transition missing');
 assert.ok(publish.includes('updated_at = ?'), 'same-source publish targeted update missing');
-assert.ok(privateHandler.includes('applyPublicationVisibilityTransition021'), 'private targeted transition missing');
+assert.ok(privateHandler.includes('handleMusicNotePrivate017Core045'), 'private error-boundary wrapper missing');
+assert.ok(privateCore.includes('applyPublicationVisibilityTransition021'), 'private targeted transition missing');
 assert.ok(visibilityTransition.includes('SET is_public = 0'), 'private one-row transition missing');
 
 // The current W3 source swap is one canonical media write plus two physical trigger

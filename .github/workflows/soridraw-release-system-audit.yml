@@ -110,6 +110,7 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
           node scripts/verify-357-publication-source-swap-w2-readiness.mjs
           node scripts/verify-358-publication-r2-only-cutover.mjs
+          node scripts/verify-360-publication-a-track-cost-target.mjs
           node scripts/verify-347-follow-authority.mjs
           node scripts/verify-348-follow-overlay-contract.mjs
           node --check .deploy/release-worker-runtime.mjs

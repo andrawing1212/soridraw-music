@@ -1,3 +1,20 @@
+## 0PQ. 사용자 비용 우선순위 재고정 — Rows Read 1순위, Rows Written 2순위 (2026-10-05 KST)
+
+- 사용자 재지시:
+  1. **D1 physical Rows Read 최소화가 1순위**.
+  2. D1 physical Rows Written W1~W2가 2순위.
+  3. mutation Worker 요청 1 이하.
+  4. 기능/UI/좋아요/저장하트/thumbnail 보존.
+- 최신 실기기 CACHE LIVE 캡처에는 A 한 곡 mutation에서 행읽기 **R11 / R8 / R3**가 관측됨.
+- 직전 360 isolated proof는 W3->W2 가능성 확인 목적이라 synthetic rows_read 2/3/2만 확인했으며, 실제 product R11/R8/R3를 설명/감축한 검증은 아니었음.
+- 따라서 현재 작업은 쓰기 W2 cutover보다 먼저:
+  - A 공개 / source 1->2 / 비공개 각각의 product D1 Rows Read를 query/trigger 단위로 분해.
+  - exact PK lookup 외 불필요한 profile/stats/legacy-derived/revision read를 제거 또는 R2/local payload로 대체 가능한지 검증.
+  - whole table/owner collection scan은 즉시 FAIL.
+- TEST/PRODUCTION 미승격 자체가 추가 읽기/쓰기를 직접 발생시키는 것은 아님.
+  - 다만 shared D1이 구 TEST/PRODUCTION 코드와 동시에 호환되어야 해서 legacy mirror/revision을 아직 유지하고 있고, 그 호환용 trigger/projection이 PREVIEW mutation의 추가 비용에 포함됨.
+- shared D1 / user data mutation은 사용자 승인 전 계속 금지.
+
 ## 0PP. A 한 곡 publication 비용 후보 실측 PASS — W2/W2/W2, 아직 shared D1 미적용 (2026-10-05 KST)
 
 - 사용자 현재 목표를 A 한 곡의 세 동작으로 한정:

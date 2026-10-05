@@ -1,3 +1,56 @@
+## 0PN. PREVIEW R2-only publication read 실제 배포/실API 검증 PASS — 사용자 실사용 확인 대기 (2026-10-05 KST)
+
+- 목적: dormant app358을 PREVIEW에서만 실제 활성화하고 Feed/Profile/Genre/Search가 shared D1 없이 동작하는지 live Worker에서 확인.
+- 활성화:
+  - `cloudflare/explore-worker/canonical/wrangler.preview.jsonc`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+  - activation commit `5f5085689549c456056fd9d0d373c1e86d7f6532`.
+- verifier/release guard:
+  - active-flag verifier commit `d97351407d42d83e28ec36c0f6f3d8b88bd6fb86`.
+  - live smoke guard commit `c572b7c5611fb4de2e9617b84cdcb771fc99df9b`.
+  - propagation-safe smoke fix `4d162ea6587f0355af89a12a97731e0fbe2884aa`.
+  - temporary remote-dev diagnostic은 완료 후 삭제 commit `7c4af5e4131490fe95c120c43cf2ac36bacef2da`.
+- Release System Audit:
+  - Run `37292378308`: SUCCESS — active flag / TypeScript / Build / Phase-B / TEST·PROD dry-run PASS.
+  - propagation fix 후 Run `37293416600`: SUCCESS.
+- 첫 PREVIEW Worker deploy Run `37292714110`:
+  - candidate Worker version `59181b26-26c3-4041-9676-77b2dd3fc62c` 업로드/배포까지 성공.
+  - 배포 직후 첫 edge request가 아직 구 Worker를 응답하여 358 authority header가 없어서 smoke FAIL.
+  - 자동 rollback이 즉시 동작하여 기존 정상 version `35a0bb0a-f547-4f4a-84ab-d55ba075ba13`로 100% 복구 SUCCESS.
+  - shared D1/R2/user data rollback 작업은 없었음.
+- 원인 분리:
+  - read-only remote-dev Run `37293014067`: R2-only latest/popular HTTP 200, `R2-ONLY-358`, D1 R0/W0 확인.
+  - full first-page read Run `37293243993`: latest limit40 HTTP 200 / D1 R0W0, popular limit20 HTTP 200 / D1 R0W0.
+  - 따라서 source/runtime 오류가 아니라 **Cloudflare deploy 완료 직후 edge propagation 시간차**로 확정.
+  - 재배포 smoke는 cheap limit1 probe로 새 authority가 실제 edge에 도달할 때까지 bounded wait 후 full test하도록 수정.
+- 최종 PREVIEW deploy:
+  - trigger commit `a7573ea1b15541158e6f8c8a2e5b9e7b2f68ec53`.
+  - Run `37293663953`: **SUCCESS**.
+  - before `35a0bb0a-f547-4f4a-84ab-d55ba075ba13`.
+  - active after `afbb5d00-a489-4c48-8b02-9ad6f1795bb0`.
+  - propagation attempt 1: HTTP 200 / authority missing = old edge.
+  - attempt 2: HTTP 200 / `R2-ONLY-358` = new edge active.
+- 최종 live API PASS:
+  - latest Feed: R2-only / D1 **R0 W0**.
+  - popular Feed: R2-only / D1 **R0 W0**.
+  - public profile tracks: R2-only / D1 **R0 W0**.
+  - genre tracks: R2-only / D1 **R0 W0**.
+  - title Search app341: R2-only / D1 **R0 W0**.
+  - public-like changed-card: D1 **R0 W0**.
+  - warm feed revision: D1 **R0 W0**.
+  - `TEST_PRODUCTION_WORKERS_UNCHANGED=PASS`.
+- 변경 범위:
+  - Firebase Hosting 변경 0.
+  - Functions/Rules 변경 0.
+  - shared D1 migration/schema write 0.
+  - user data migration/backfill/delete/rewrite 0.
+  - TEST/PRODUCTION deploy 0.
+- 현재 판정:
+  - PREVIEW backend read cutover는 실제 live Worker 검증까지 PASS.
+  - PC/모바일 UI 실사용 및 사용자가 직접 수행하는 공개/비공개/source-swap/좋아요 조작은 **실사용 검증 전**.
+  - shared D1 first-public W12→W2 fanout cutover는 아직 적용 금지.
+  - TEST 승격은 사용자 PREVIEW 실사용 확인 후에만 진행.
+
 ## 0PM. dormant R2-only publication read integration hard-gate PASS (2026-10-05 KST)
 
 - 목표: 358 정적 source guard만 통과시키지 않고, 기존 R2 catalog Phase-B 기능 검증을 Release System Audit의 **hard gate**로 연결.

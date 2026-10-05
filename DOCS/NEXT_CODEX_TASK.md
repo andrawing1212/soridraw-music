@@ -1,3 +1,38 @@
+## CURRENT NEXT GATE — coordinated shared Catalog cutover + real-account parity
+
+완료:
+- PREVIEW / TEST / PRODUCTION app356 dormant shared Catalog support 승격 완료.
+- 세 환경 Media Worker 모두 common private `CATALOG=soridraw-user-catalog` binding 보유.
+- 세 환경 `SORIDRAW_SHARED_CATALOG_V1=0` 확인.
+- TEST_VERIFIED manifest `soridraw-test-v356-77fdab283a90`.
+- PRODUCTION Release Controller Run `37387649369`: SUCCESS / RELEASED.
+- production SHA `74de6362c743974078c7d40566706053ce11dfc7`.
+- 사용자 데이터 copy/backfill/migration/delete/rewrite 0.
+- Firebase Hosting exact TEST->PRODUCTION clone 문법 오류 수정 및 Release System Audit PASS.
+
+다음:
+1. shared Catalog flag cutover 전 Media Worker shared-mode 경로와 rollback 조건을 다시 정적 감사.
+2. `SORIDRAW_SHARED_CATALOG_V1=1`을 PREVIEW / TEST / PRODUCTION에 **coordinated cutover**로 적용.
+3. 각 환경에서 active Media Worker health가 `shared-catalog`, `CATALOG=soridraw-user-catalog`, flag=1인지 확인.
+4. 한 환경이라도 실패하면 즉시 세 환경을 기존 flag=0 active version으로 rollback.
+5. cutover 직후 동일 계정으로 PREVIEW / TEST / PRODUCTION 실데이터 parity 검증:
+   - Recent save-heart
+   - Music Note membership/list
+   - Library list
+   - folders
+   - PC↔mobile/reload
+   - Explore/publication
+6. warm 정상 캐시 재진입 Worker/Firestore data read 0 목표 확인.
+7. missing/revision-gap일 때만 bounded user+kind bootstrap이 동작하고 앱 업데이트/일반 재진입에서는 bootstrap이 발생하지 않는지 확인.
+8. parity + 비용 PASS 후에만 first-publication W12->W2 shared-D1 cutover 작업 재개.
+
+금지:
+- PREVIEW/TEST만 flag ON한 채 방치.
+- 환경별 private Catalog 전체 복사 또는 공용 bucket 전체 backfill/full scan.
+- 사용자 데이터 삭제/강제 재생성.
+- app349 save-heart / app301 folders / public-like / UI / thumbnail 정상 기능 변경.
+- parity 완료 전 first-publication shared D1 W2 승격.
+
 ## CURRENT NEXT GATE — PRODUCTION dormant support approval before coordinated shared Catalog cutover
 
 완료:

@@ -1,6 +1,6 @@
 user_approved=true
 approved_scope=364_shared_d1_two_trigger_read_compaction_only
-product_code_target=69057cd604f841344917abf7278ec98cd901dc1f
+product_code_target=182f928f2349a8391e5b9a112f10d33967fac49e
 candidate=cloudflare/explore-worker/candidates/364-publication-read-compaction-compat.sql
 candidate_blob=7ca0229633501c29311bc97d539f2497fabf845c
 rollback=cloudflare/explore-worker/candidates/364-publication-read-compaction-compat-rollback.sql
@@ -11,4 +11,5 @@ user_row_migration=false
 backfill=false
 delete=false
 test_production_worker_change=false
-approved_at=2026-10-06T02:56:00+09:00
+attempt=2
+approved_at=2026-10-06T03:03:00+09:00

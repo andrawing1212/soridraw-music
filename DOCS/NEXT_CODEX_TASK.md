@@ -1,3 +1,44 @@
+## CURRENT NEXT GATE — PREVIEW 361 live 재측정 + 364 shared-D1 승인 대기
+
+현재 완료:
+- PREVIEW Worker 361 read compaction 배포 완료.
+- Release Audit `37344089981` SUCCESS.
+- PREVIEW Worker Release `37344481780` SUCCESS.
+- active PREVIEW Worker: `368d64ac-6b66-4023-88ec-a3ed85068844`.
+- TEST/PRODUCTION Worker unchanged.
+- shared/user D1 mutation 0.
+- UI/좋아요/저장하트/thumbnail 변경 0.
+
+비용 기준은 모두 D1 물리 행:
+- 현재 source swap exact trigger chain isolated: **R9/W3**.
+- 364 legacy-compatible candidate: **R4/W3** PASS.
+- all-new-environment 357 candidate: **R3/W2** 가능하지만 TEST/PRODUCTION old reader 때문에 아직 미적용.
+- registered 공개/비공개 trigger path: **R2/W2** guard PASS.
+
+다음 작업:
+1. 사용자 PREVIEW 실기기에서 정확히 같은 A 곡으로
+   - 공개,
+   - source 1->2,
+   - 비공개
+   를 한 번씩 수행하고 CACHE LIVE의 **D1 행읽기 R / 행쓰기 W**를 기록.
+2. 361 배포 후 product 값과 isolated 값의 차이가 남으면 request-level D1 query count와 trigger rows를 다시 분리.
+3. 364 shared-D1 candidate는 **사용자 명시 승인 전 적용 금지**.
+4. 364 적용 승인 시:
+   - 적용 전 exact trigger DDL backup.
+   - shared D1 trigger 2개만 교체.
+   - 사용자 row/backfill/delete 0.
+   - 즉시 source swap 실측.
+   - 목표 R4/W3 이하가 아니거나 기능 차이 있으면 즉시 rollback.
+5. TEST/PRODUCTION이 새 R2 authority로 승격된 뒤에만 357 legacy-mirror removal을 별도 승인 받아 최종 R3/W2 후보 검증.
+
+절대 금지:
+- 좋아요/저장하트 수정.
+- UI/CSS/반응형 수정.
+- 전체 scan/rebuild.
+- 사용자 데이터 migration/backfill/delete.
+- 승인 없는 shared D1 trigger 적용.
+- 승인 없는 TEST/PRODUCTION 승격.
+
 ## CURRENT NEXT GATE — A 한 곡 mutation Rows Read 1순위 감사/절감
 
 우선순위:

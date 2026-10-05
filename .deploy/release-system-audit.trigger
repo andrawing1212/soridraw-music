@@ -116,3 +116,8 @@ publication-d1-read-compaction-361-rerun2
 target=6830c2929baf3a1b660552c346d108331f092be2
 focus=361-read-compaction,follow-audit-exact-normalization,360-private-wrapper,no-deploy
 requested=2026-10-06
+
+publication-read-compaction-364-audit
+target=2ad2258dfd9817019ace226442477ce747570970
+focus=R4-W3-compat-candidate,legacy-media-preserved,no-shared-d1-write,no-deploy
+requested=2026-10-06

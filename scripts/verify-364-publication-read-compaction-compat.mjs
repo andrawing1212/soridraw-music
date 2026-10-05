@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const candidatePath = 'cloudflare/explore-worker/candidates/364-publication-read-compaction-compat.sql';
+const rollbackPath = 'cloudflare/explore-worker/candidates/364-publication-read-compaction-compat-rollback.sql';
 const proofPath = 'scripts/measure-362-isolated-publication-live-trigger-reads.mjs';
 const candidate = readFileSync(candidatePath, 'utf8');
+const rollback = readFileSync(rollbackPath, 'utf8');
 const proof = readFileSync(proofPath, 'utf8');
 
 assert.match(candidate, /SORIDRAW 364 candidate/i, '364 marker missing');
@@ -63,6 +65,20 @@ for (const token of [
   assert.ok(proof.includes(token), `isolated 364 proof coverage missing: ${token}`);
 }
 
+// Rollback must restore the old tracks self-read projection and ungated Music Note
+// profile-count trigger. This is the exact safety escape hatch before any shared-D1 apply.
+assert.match(rollback, /CREATE TRIGGER explore032_track_update/i, '364 rollback track trigger missing');
+assert.match(rollback, /FROM tracks t\s+LEFT JOIN track_stats s ON s\.track_id=t\.id/i, '364 rollback old projection missing');
+assert.match(rollback, /NOT EXISTS \(\s*SELECT 1 FROM explore_derived_tracks d WHERE d\.id=NEW\.id\s*\)/i, '364 rollback missing-derived repair missing');
+assert.match(rollback, /CREATE TRIGGER explore079_music_note_derived_track_update/i, '364 rollback derived trigger missing');
+const rollbackDerived = rollback.slice(rollback.indexOf('CREATE TRIGGER explore079_music_note_derived_track_update'));
+assert.doesNotMatch(
+  rollbackDerived,
+  /AND\s*\(\s*OLD\.owner_uid IS NOT NEW\.owner_uid OR\s*OLD\.active IS NOT NEW\.active\s*\)\s*BEGIN/i,
+  '364 rollback unexpectedly keeps the candidate no-op WHEN guard',
+);
+assert.doesNotMatch(rollback.replace(/--.*$/gm,''), /UPDATE\s+explore_shared_revision\b/i, '364 rollback must not touch shared revision directly');
+
 // PREP ONLY: no workflow may apply this candidate automatically.
 const workflowNames = readdirSync('.github/workflows').filter((name) => /\.ya?ml$/i.test(name));
 const wired = [];
@@ -78,5 +94,6 @@ console.log('PUBLICATION_364_LEGACY_MEDIA_MIRROR=PRESERVED');
 console.log('PUBLICATION_364_SHARED_REVISION=PRESERVED');
 console.log('PUBLICATION_364_MISSING_DERIVED_REPAIR=PRESERVED');
 console.log('PUBLICATION_364_CONTENT_REBUILD=PRESERVED');
+console.log('PUBLICATION_364_ROLLBACK=PASS');
 console.log('PUBLICATION_364_AUTO_APPLY_WIRED=false');
 console.log('PUBLICATION_364_SHARED_USER_DATA_TOUCHED=0');

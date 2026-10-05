@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — 358 hard integration PASS, TEST 승격 전 cross-env blocker 유지
+
+확정 완료:
+- dormant 358 R2-only read source 구현 완료.
+- flag default OFF.
+- Feed/Profile/Genre R2-only normal authority 정적 PASS.
+- app341 Search R2-only 보호 PASS.
+- R2 catalog Phase-B integration을 release audit hard gate로 연결.
+- Run `37247619845` SUCCESS:
+  - TypeScript PASS
+  - Build PASS
+  - latest/popular/profile deep paging PASS
+  - title/genre/artist search PASS
+  - private/republish marker PASS
+  - first-publisher idempotency PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+- Worker/Hosting/shared D1/user data 변경 0.
+
+현재 blocker:
+- main/TEST/production은 336/341/358 read compatibility가 아직 승격되지 않음.
+- 사용자 TEST 승격 승인 전 main 변경 금지.
+- PRODUCTION 명확한 승인 전 production 변경 금지.
+- 358 flag ON 금지.
+- shared D1 fanout 축소 migration 적용 금지.
+
+다음 실제 작업:
+1. PREVIEW source는 이 상태로 고정.
+2. 사용자가 TEST 승격을 승인하면 exact PREVIEW tree 전체를 main/TEST로 승격하고 실제 parity 검증.
+3. TEST에서 336/341/358 compatibility와 기존 좋아요/저장하트/follow/thumbnail/publication W2 경로가 모두 정상인지 확인.
+4. 그 뒤에도 PRODUCTION 승인 전에는 shared D1 cutover를 적용하지 않음.
+5. PRODUCTION까지 같은 read compatibility가 승격·검증된 이후에만 source-swap W2 candidate와 first-public W12→W2 fanout cutover 적용 여부를 다시 판단.
+
 ## CURRENT NEXT GATE — dormant 358 PASS 후 cross-env R2 read compatibility 승격 준비 감사
 
 현재 완료:

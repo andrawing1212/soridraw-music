@@ -1,3 +1,55 @@
+## 0PP. A 한 곡 publication 비용 후보 실측 PASS — W2/W2/W2, 아직 shared D1 미적용 (2026-10-05 KST)
+
+- 사용자 현재 목표를 A 한 곡의 세 동작으로 한정:
+  1. 공개.
+  2. 생성 1번곡 -> 2번곡 source/media 전환.
+  3. 비공개.
+- 사용자 CACHE LIVE 캡처의 현재 product 비용은 physical D1 **W3 1건 + W2 2건**이며, 변화가 없다는 지적이 맞음.
+  - 직전 app358은 read authority 전환이어서 이 mutation fanout을 직접 줄이지 않았음.
+- 범위 고정 verifier:
+  - `scripts/verify-360-publication-a-track-cost-target.mjs`
+  - commit `09d78fa6f6c583771d18e5827c30aa11d846daac`.
+  - release audit hard gate commit `f63bbe94ef52c52d3ab48277b492617871d770bb`.
+- 실제 Cloudflare 원격 **격리 D1** 비용 실측:
+  - script `scripts/measure-360-isolated-publication-d1.mjs`
+  - commit `e66413faba1b3941eceefc51bfc5d7722c408ac7`.
+  - audit wiring commit `6db6da363637b5b32c08956cb1eb885a32b640cf`.
+  - audit Run `37301210759`: **SUCCESS**.
+- Run 37301210759 정확한 결과:
+  - A 공개: `rows_written=2`, `rows_read=2`.
+  - 현재 A 1->2 source 전환: `rows_written=3`, `rows_read=3`.
+  - 357 candidate 적용 상태 A 1->2 source 전환: `rows_written=2`, `rows_read=2`.
+  - A 비공개: `rows_written=2`, `rows_read=2`.
+  - 최종 isolated sequence: **W2 / W2 / W2 PASS**.
+  - temporary D1는 완료 후 삭제 PASS.
+  - shared/user D1 touched = 0.
+- W3 원인과 제거 지점:
+  1. canonical `tracks` media UPDATE W1 — 유지.
+  2. legacy `explore_derived_tracks` media mirror W1 — **media-only일 때 제거 후보**.
+  3. `soridraw_shared_rev_tracks_au_051` shared revision W1 — 현재 유지.
+  - 따라서 357 candidate는 기능을 없애지 않고 legacy media-only mirror만 생략해 W3 -> W2로 줄임.
+- 현재 제품에는 아직 미적용:
+  - `PRODUCT_SHARED_D1_CUTOVER=NOT_APPLIED`.
+  - 따라서 지금 PREVIEW 실기기에서 다시 누르면 source 전환은 여전히 W3가 나오는 것이 정상.
+- 적용 차단 이유:
+  - shared D1은 PREVIEW/TEST/PRODUCTION 공용.
+  - 현재 main/TEST/PRODUCTION old Worker는 336/341/358 R2-only compatibility가 없고 legacy derived/revision 경로를 계속 사용.
+  - shared trigger만 먼저 바꾸면 구환경 공개곡 media freshness를 깨뜨릴 수 있음.
+  - 사용자 승인 없이 shared D1 trigger 변경, main/TEST 승격, PRODUCTION 승격 금지.
+- 검증:
+  - TypeScript PASS.
+  - Build PASS.
+  - static audit PASS.
+  - TEST/PRODUCTION Worker dry-run PASS.
+  - live shared D1 preflight read-only PASS.
+  - branch refs unchanged PASS.
+- 절대 보호:
+  - 좋아요/저장하트 즉시동기화.
+  - +30초 canonical save.
+  - app353 thumbnail.
+  - UI/CSS.
+  - 사용자 데이터 delete/backfill/rewrite 없음.
+
 ## 0PO. 사용자 범위 재고정 — A 한 곡의 공개/2번곡 전환/비공개 비용만 최적화 (2026-10-05 KST)
 
 - 사용자 지시로 현재 우선순위를 다시 고정:

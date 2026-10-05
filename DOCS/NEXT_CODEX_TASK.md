@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — dormant 358 PASS 후 cross-env R2 read compatibility 승격 준비 감사
+
+현재 완료:
+- PREVIEW source에 dormant `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1` 구현 완료.
+- Feed/Profile/Genre R2-only normal path D1 R0/W0 정적 검증 PASS.
+- Search app341 R2-only 보호 PASS.
+- Release System Audit `37233167868` SUCCESS.
+- flag default OFF, Worker/Hosting/shared D1 배포 0.
+- user data 변경 0.
+
+다음은 **배포/branch 승격 없이 read-only 준비 감사**:
+1. main/TEST/production source에 336 hybrid + 341 search R2-only + 358 dormant gate가 없는 현재 blocker를 정확히 고정.
+2. TEST 승격 시 기존 기능/좋아요/저장하트/follow/thumbnail과 충돌 없이 동일 Worker tree를 받을 수 있는지 release promotion dry-run 기준으로 확인.
+3. 358 flag는 모든 환경에서 코드 호환이 확인될 때까지 OFF 유지.
+4. source-swap W2 candidate migration과 first-public W12→W2 shared-D1 fanout 축소는 계속 PREP ONLY.
+5. 사용자가 TEST 승격을 승인하기 전 main 변경/TEST 배포 금지.
+6. PRODUCTION은 명시적 정식배포 승인 전 변경 금지.
+
+통과 기준:
+- TypeScript/Build/Release System Audit PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- 336/341/358 code가 같은 tree로 승격 가능.
+- shared canonical D1/R2 binding 유지.
+- 좋아요/저장하트 즉시동기화 및 +30초 canonical 경로 비변경.
+- registered private/re-public W2 경로 비변경.
+- shared D1/user data write 0.
+
+차단:
+- main/production이 358 이전 source이므로 지금 shared D1 trigger/index fanout 제거 금지.
+- 358 flag ON 금지.
+- TEST 승격 승인 없이 main 변경 금지.
+
 ## CURRENT NEXT GATE — first-public W12→W2를 위한 dormant R2-only publication read cutover 설계/구현
 
 확정된 physical fanout:

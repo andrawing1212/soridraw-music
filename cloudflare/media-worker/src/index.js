@@ -964,7 +964,7 @@ const compactCatalogJournal = async (env, uid, kind) => {
 
 const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null) => {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const state = await getCatalogState(identity, kind, 0, env);
+    const state = await getCatalogState(identity, kind, delta.baseRevision, env);
     const head = state.head;
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     const sanitizedUpserts = [];

@@ -371,7 +371,7 @@ jobs:
           RELEASE_MEDIA_WORKER_VERSION="$media_version" EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-media-worker-mutated"
           test_hosting_version_id="${TEST_HOSTING_VERSION##*/}"
           test -n "$test_hosting_version_id"
-          npx --yes firebase-tools@latest hosting:clone "soridraw-test:@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
+          npx --yes firebase-tools@latest hosting:clone "soridraw-test@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
           printf true > "$RUNNER_TEMP/production-hosting-mutated"
           echo FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS
 

@@ -1,3 +1,81 @@
+## CURRENT NEXT GATE — app356 profile count 확인 후 exact TEST parity 승격
+
+현재 확인:
+- 공개곡 목록은 shared R2 수렴 후 PREVIEW/TEST에서 다시 일치.
+- 헤더 공개곡 숫자는 stale maintained counter가 실제 first-view 목록보다 우선되어 24->23, 22->23 오류.
+- app356은 50곡 미만 complete first-view에서 실제 loaded 공개곡 수를 표시하도록 교정. 서버 IO 추가 0.
+- Live Audit `37368822795`: PREVIEW R2 catalog/hybrid/R2-only flags ON, TEST/PRODUCTION flags 없음.
+
+순서:
+1. app356 PREVIEW 배포 완료 확인.
+2. 실기기에서 24곡 프로필=24, 22곡 프로필=22 확인.
+3. 경고박스 제거 확인.
+4. 최신 Release Controller immutable preflight에서 canonical Worker feature-var 승격/verify hard gate PASS.
+5. 그 다음에만 PREVIEW 전체를 TEST로 승격.
+6. TEST에서 Feed/Profile/Search/Genre/공개/비공개/좋아요/썸네일과 PREVIEW parity 확인.
+7. 사용자의 기존 정식배포 승인 범위는 유지하되, TEST 검증 실패 시 PRODUCTION 자동 중단.
+8. PRODUCTION까지 동일 feature vars/Worker/app parity가 확인된 뒤에만 first-publication W12->W2 shared-D1 cutover 준비 재개.
+
+금지:
+- 현재 shared D1 W2 migration.
+- stale trackCount 수정을 위해 owner 전체 COUNT/scan 추가.
+- 사용자 데이터 backfill/rewrite.
+- 정상 publication/like/UI 기능 변경.
+
+## CURRENT NEXT GATE — first-publication R6/W12 안전 cutover 준비만, 기능 보존 우선
+
+현재 실기기:
+- registered 공개 **R4/W2** PASS.
+- registered source 1->2 **R6/W3** known compatibility cost.
+- registered 비공개 **R3/W2** PASS.
+- never-published 최초 공개 **R6/W12** HARD FAIL.
+- 신규 등록 직후 source 전환 **R6/W3**.
+
+목표:
+- 최초 공개만 **W2**로 내리는 cutoff 기반 shared-D1 candidate를 최종화하되, 다른 기능/기존 등록곡 비용을 증가시키지 않는다.
+- existing rows는 legacy 경로 유지.
+- cutoff 이후 new Music Note rows만 R2 catalog/shared-card authority를 사용.
+- user-row migration/backfill/delete/rewrite 0.
+
+선행 게이트:
+1. TEST active Worker의 R2 hybrid/R2-only flags + Feed/Profile/Search/Genre authority를 read-only로 확인.
+2. PRODUCTION 현재 active Worker/flags가 cutover 호환인지 read-only 확인.
+3. PRODUCTION이 미호환이면 shared D1 변경 금지. 먼저 검증된 코드 승격이 필요.
+4. 세 환경 모두 호환된 뒤에만 exact cutoff SQL + rollback/fail-safe를 isolated D1에서 다시 측정.
+5. first publication W2, title/genre/artist search, latest/popular, public profile, cross-device publication, likes, source/thumbnail 모두 PASS해야 shared-D1 승인 요청 가능.
+
+금지:
+- 지금 shared D1 migration 적용.
+- registered 공개/비공개 path 수정.
+- 좋아요/저장하트/UI/thumbnail 수정.
+- 전체 scan/rebuild.
+- 사용자 row rewrite/backfill.
+- 기능을 줄여 W2 맞추기.
+
+## CURRENT NEXT GATE — app355 기능 복구 실기기 검증 우선
+
+PREVIEW app355 배포:
+- exact deployed commit `6a6c05981e3945d6e67cd7623c35680cd1c0abd4`.
+- Preflight `37364316058` SUCCESS.
+- Firebase PREVIEW Run `37365134850` SUCCESS.
+- app355 exact build PASS.
+- shared RTDB `explorePublication` additive owner-only signal rules exact-match PASS.
+- Worker/Functions/Firestore Rules/D1/user data 변경 0.
+
+현재 목표는 비용 추가 절감이 아니라 기능 정상화 확인:
+1. 기기 A 공개 후 같은 계정 기기 B에서 자동으로 공개곡/공개상태가 보이는지.
+2. 기기 B warm 새로고침만으로 Cloudflare Worker가 증가하지 않는지.
+3. 기기 A 비공개 후 기기 B에서 자동 제거되는지.
+4. 공개 R4/W2 / source R6/W3 / 비공개 R3/W2 기존 D1 비용이 회귀하지 않는지.
+5. thumbnail/선택 source/좋아요/저장하트/UI 정상 유지.
+
+판정:
+- 위 1~5가 모두 PASS하기 전 source R6→R5/R4 최적화 금지.
+- 새로고침 Worker가 아직 +1이면 CACHE LIVE의 **요청 상세 path**로 원인 endpoint 하나만 특정한 뒤 그 경로만 수정. 추측 수정 금지.
+- cross-device가 실패하면 RTDB signal publish/receive/rules부터 확인하고 Cloudflare/D1 비용을 먼저 건드리지 않음.
+- TEST는 현재 app354까지 승격된 상태. app355 검증 전 재승격 금지.
+- PRODUCTION 비변경. 사용자 별도 정식배포 승인 전 승격 금지.
+
 ## CURRENT NEXT GATE — 연속 실기기 기준 고정, source R6만 분석
 
 동일 세션 연속 확인 완료:

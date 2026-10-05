@@ -1,3 +1,150 @@
+## 0QC. 공개프로필 곡수 불일치 원인 확정 + app356 표시 교정 준비 (2026-10-06 KST)
+
+사용자 실기기:
+- 프로필 A 실제 공개곡 **24곡**: PREVIEW 헤더 23 / TEST 헤더 24.
+- 프로필 B 실제 공개곡 **22곡**: PREVIEW/TEST 헤더 모두 23.
+- 곡 목록 자체는 잠시 차이가 났다가 shared cache가 수렴하며 PREVIEW/TEST가 다시 일치함.
+
+원인 분리:
+1. 공개프로필 화면은 이미 받아온 실제 `profileTracks` 목록과 별도로 유지되는 `profile.trackCount` 값을 표시하고 있었음.
+2. 렌더가 `profile.trackCount || profileTracks.length`라서, 유지 카운터가 1만 stale이어도 실제 목록 길이보다 stale 숫자가 우선 표시됨.
+3. app355 타기기 공개/비공개 신호는 목록/로컬 profile cache를 changed-item으로 즉시 고치지만, 이미 렌더된 React `profile.trackCount` state는 별도라 PREVIEW 한쪽에서 23/24 차이가 보일 수 있음.
+4. PREVIEW/TEST 모두 23인데 실제 목록 22인 사례는 shared profile R2의 유지 카운터가 과거 delta 누락으로 +1 drift한 상태와 일치. 곡 목록 자체를 다시 읽는 문제와는 별개.
+
+안전 수정:
+- `src/pages/ExplorePage.tsx`: first-view window가 **50곡 미만이면 이미 전체 공개곡 목록을 기기에 가지고 있으므로** 서버 카운터 대신 실제 `profileTracks.length`를 표시.
+- 50곡 이상이면 기존 maintained `profile.trackCount`를 유지하되 loaded length보다 작아지지 않게 보호.
+- 추가 Worker / D1 / R2 / Firestore read/write **0**.
+- 공개/비공개/좋아요/저장하트/thumbnail/정렬/목록 자체 변경 0.
+- commit `4b8830e8662d28ab7d6f9a8c5f5b8c9998c6f3a8`.
+- app version **356** 준비.
+- Explore 비공개 경고박스 제거 commit `ebdbe7cb9e9ce224c59ba900346329a78c6c4bc4`도 app356에 포함.
+
+환경 격차 read-only 감사:
+- Live Explore Runtime Audit Run `37368822795`: **SUCCESS**, shared/user D1 write 0.
+- PREVIEW Worker `0badfdf8-597d-4f69-9a05-b6fb32612f01`:
+  - `SORIDRAW_R2_CATALOG_V1=1`
+  - `SORIDRAW_R2_HYBRID_READ_V1=1`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+- TEST Worker `6a0315db-8e17-46e6-b946-03133a4364f7`: 위 release feature flags **없음**.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`: 위 release feature flags **없음**.
+- 세 환경 DB는 모두 shared canonical `217ef5b1-5d80-4f7c-afc7-9e07eb05c06b`, PROFILE_MEDIA도 모두 `soridraw-profile-media`.
+- 따라서 곡 목록이 잠시 후 일치한 것은 shared R2 데이터 수렴이며, **환경 실행 설정까지 같다는 뜻은 아님**.
+- 기존 Release Controller가 target Worker의 live vars를 `keep_vars`로 보존만 해서 PREVIEW의 새 feature flags를 TEST/PRODUCTION으로 승격하지 못하는 gap 확인.
+- `.deploy/release-worker-runtime.mjs`를 수정해 TEST/PRODUCTION 승격 시 canonical PREVIEW release vars도 함께 승격하고 verify 단계에서 exact parity를 강제.
+- static verifier도 동일 규칙을 hard gate로 추가.
+- 이 release-controller 수정은 아직 TEST/PRODUCTION에 적용되지 않았으며 다음 immutable preflight PASS가 선행되어야 함.
+
+## 0QB. app355 실기기 publication 재측정 — never-published 첫 공개 R6/W12만 HARD FAIL (2026-10-06 KST)
+
+사용자 CACHE LIVE 실측:
+- 이미 공개 이력이 있는 곡의 공개: Worker 1 / D1 query R1-W1 / physical **R4/W2**.
+- 이미 등록된 곡의 source 1->2 전환: Worker 1 / D1 query R2-W1 / physical **R6/W3**.
+- 한 번도 공개한 적 없는 Music Note 곡의 최초 공개: Worker 1 / D1 query R1-W1 / physical **R6/W12**.
+- 그 신규 등록곡에서 이어진 source 전환: Worker 1 / D1 query R1-W1 / physical **R6/W3**.
+- 따라서 app355 기준 신규 회귀가 아니라, 기존에 남아 있던 **first-publication INSERT fanout W12**가 정확히 재현됨.
+- read는 과거 R7에서 현재 R6으로 줄었지만 write W12는 그대로라 hard gate FAIL.
+
+W12 원인 — 기존 live schema read-only audit와 이번 실측이 일치:
+1. canonical `tracks` INSERT **W6**
+   - table row W1
+   - PK autoindex W1
+   - Music Note에도 적용되는 secondary index W4
+2. legacy `explore_derived_tracks` INSERT **W5**
+   - table row W1
+   - PK autoindex W1
+   - latest/popular/profile rank index W3
+3. global `explore_shared_revision` UPDATE **W1**
+= 총 **W12**.
+
+이미 증명된 저비용 후보:
+- isolated RATE_DB Run `37150337923`에서 cutoff 기반 candidate로:
+  - first publication **W12 -> W2**
+  - source/media swap **W3 -> W1**
+  - visibility change **W2 -> W1**
+  를 실제 D1 billing meta로 증명.
+- 방식은 기존 사용자 row를 수정하지 않고, release cutoff 이후 새 Music Note row만:
+  - legacy tracks secondary indexes 대상에서 제외
+  - legacy derived mirror 대상에서 제외
+  - legacy global shared-revision 대상에서 제외
+  - canonical tracks row + PK만 유지
+  하는 구조.
+- 기존 row는 cutoff 이전 legacy 경로를 그대로 유지하므로 기존 등록곡의 기능/비용 경로를 건드리지 않는 설계가 가능.
+
+현재 적용 차단:
+- shared D1은 PREVIEW/TEST/PRODUCTION 공용.
+- PREVIEW source/Worker는 R2 hybrid/R2-only publication authority가 준비돼 있음.
+- TEST는 app354 승격으로 최신 Worker source는 올라갔지만 live environment flag/authority parity를 shared cutover 전에 별도 확인해야 함.
+- PRODUCTION은 아직 이전 release라 새 Music Note row를 legacy derived/shared-revision 없이 안전하게 읽는 전체 parity가 보장되지 않음.
+- 따라서 지금 W2 cutover를 shared D1에 바로 적용하면 정식앱의 Feed/profile/search/media freshness를 깨뜨릴 위험이 있어 **미적용 유지**.
+
+보호 기준:
+- 현재 registered 공개 **R4/W2**, source **R6/W3**, 비공개 **R3/W2** 경로는 추가 원인 없이 수정 금지.
+- app355 PC↔모바일 공개/비공개 즉시 동기화 보호.
+- 좋아요/저장하트/thumbnail/UI/Music Note/Library 정상 기능 보호.
+- 새 구조는 비용이 기존보다 증가하면 FAIL.
+- 사용자 row migration/backfill/delete/rewrite 금지.
+- shared D1 변경은 3환경 read-authority parity 확인 + 사용자 승인 전 금지.
+
+## 0QA. app355 PREVIEW — 공개곡 타기기 동기화 복구 + 새로고침 Worker 비증가 경로 배포 (2026-10-06 KST)
+
+사용자 발견 회귀:
+- 공개 동작 자체 비용은 **R4/W2**로 정상인데, 같은 계정의 다른 기기에서 공개곡이 즉시 보이지 않음.
+- 변경 없는 새로고침에서 CACHE LIVE Worker가 1씩 증가하는 현상 보고.
+- 비용 절감보다 정상 기능 보존을 우선하고 source 추가 절감 작업은 중단.
+
+원인/수정:
+- app335 이후 warm reload/route entry는 비용을 줄이기 위해 Cloudflare revision 확인을 막고 hidden→visible 때만 재검증했는데, 실제 공개 변경을 다른 기기에 알려주는 별도 change signal이 없어 warm cache가 오래 남을 수 있었음.
+- 기존 사용자별 RTDB 동기화 채널에 **전용 `userSync/{uid}/explorePublication` 신호**를 additive로 추가.
+- 공개/비공개가 canonical Explore에 성공한 뒤에만 작은 확정 상태를 1회 전달.
+- 공개는 Worker 응답의 compact `snapshotItem`을 같이 전달하여 다른 기기가 Feed/공개프로필/뮤직노트 공개상태 캐시를 **기기에서 직접 변경**.
+- 비공개는 해당 곡만 로컬 Feed/프로필 캐시에서 제거.
+- 신호 수신/재생만으로 Cloudflare Worker를 호출하지 않음.
+- 신호 실패는 이미 성공한 canonical 공개/비공개 동작을 실패 처리하지 않으며 기존 R2 revision 복구 경로를 유지.
+- 다른 기존 Music Note / Recent / Like RTDB 신호는 변경하지 않음.
+
+변경 파일:
+- `src/services/userDomainSyncService.ts`
+- `database.rules.json`
+- `src/services/explorePublicationService.ts`
+- `src/pages/FavoritesPage.tsx`
+- `src/pages/ExplorePage.tsx`
+- `public/app-version.json`
+- `.deploy/preview-app-release.trigger`
+
+검증/배포:
+- immutable preflight Run `37364316058`: **SUCCESS**.
+  - TypeScript / Build / release static checks / Worker dry-run / shared D1 read-only preflight PASS.
+  - 실제 배포 없음.
+- PREVIEW App Release Run `37365134850`: **SUCCESS**.
+  - deployed exact commit: `6a6c05981e3945d6e67cd7623c35680cd1c0abd4`.
+  - TypeScript PASS.
+  - Build PASS.
+  - shared RTDB Rules OAuth/PUT + exact source match PASS.
+  - `NO_USER_DATA_MIGRATION=true`.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` app **355** / exact build PASS.
+  - TEST / PRODUCTION Hosting unchanged PASS.
+- Cloudflare Worker code/deploy 변경 0.
+- Functions / Firestore Rules / D1 schema·trigger / 사용자 원본 데이터 변경 0.
+- shared RTDB Rules는 기존 규칙을 유지한 채 `explorePublication` owner-only bounded node만 추가.
+
+환경 상태:
+- PREVIEW: app355 fix 배포 완료.
+- TEST: 직전 중단 요청 전에 이미 app354 승격 Run `37362260739`가 완료되어 **TEST_VERIFIED** 상태. app355는 아직 TEST에 올리지 않음.
+- PRODUCTION: **비변경**. app355 또는 app354의 추가 PRODUCTION 승격 없음.
+
+현재 실사용 게이트:
+1. 기기 A에서 등록된 곡 공개 → 기존 D1 **R4/W2** 기능/비용 유지 확인.
+2. 같은 계정 기기 B의 Music Note/Explore에 공개 상태/곡이 자동 반영되는지 확인.
+3. 변경 없는 warm 새로고침에서 CACHE LIVE **Cloudflare Worker 0** 확인.
+4. 기기 A 비공개 → 기기 B에서 해당 곡 자동 제거 확인.
+5. 위 기능 PASS 전 source R6/W3 추가 절감 및 TEST/PRODUCTION 추가 승격 금지.
+
+주의:
+- app355의 "Worker 0"은 **정상 캐시가 있는 변경 없는 warm reload** 기준. 새 기기/캐시 없음은 필요한 최초 동기화를 할 수 있음.
+- 실제 PC↔모바일 실사용 결과는 아직 **사용자 검증 전**.
+
 ## 0PZ. 동일 세션 연속 3단계 재확인 — R4/W2 → R6/W3 → R3/W2 (2026-10-06 KST)
 
 사용자 확인 테스트를 같은 흐름에서 연속 실행:

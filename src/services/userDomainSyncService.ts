@@ -9,6 +9,21 @@ import {
 
 export type UserDomainSyncKind = 'musicNote' | 'recentSongs';
 
+export type ExplorePublicationSyncSignal = {
+  version: number;
+  at: number;
+  originDeviceId: string;
+  sourceId: string;
+  trackId: string;
+  status: 'public' | 'private';
+  allowNextSongApply: boolean;
+  allowFollowerSave: boolean;
+  profilePinned: boolean;
+  snapshotJson?: string;
+};
+
+export const EXPLORE_PUBLICATION_SYNC_EVENT = 'soridraw:explore-publication-sync';
+
 export type UserDomainSyncSignal = {
   version: number;
   at: number;
@@ -35,6 +50,8 @@ export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
 const MAX_SYNC_ITEM_JSON_CHARS = 24000;
+const EXPLORE_PUBLICATION_MAX_SNAPSHOT_JSON_CHARS = 24000;
+const latestExplorePublicationSignalByUid = new Map<string, ExplorePublicationSyncSignal>();
 
 const getStoredDeviceId = (storageKey: string, prefix: string): string => {
   if (typeof window === 'undefined') return 'server';
@@ -654,6 +671,70 @@ export const publishMusicNoteDetailPreviewDelta = async (
   }, null);
 };
 
+const normalizeExplorePublicationSignal = (raw: unknown): ExplorePublicationSyncSignal | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const version = Math.max(0, Math.floor(Number(value.version || 0)));
+  const at = Math.max(0, Math.floor(Number(value.at || 0)));
+  const originDeviceId = String(value.originDeviceId || '').trim();
+  const sourceId = String(value.sourceId || '').trim();
+  const trackId = String(value.trackId || '').trim();
+  const status = value.status === 'public' ? 'public' : value.status === 'private' ? 'private' : '';
+  const snapshotJsonRaw = typeof value.snapshotJson === 'string' ? value.snapshotJson : '';
+  const snapshotJson = snapshotJsonRaw.length <= EXPLORE_PUBLICATION_MAX_SNAPSHOT_JSON_CHARS ? snapshotJsonRaw : '';
+  if (!version || !at || !originDeviceId || !sourceId || !trackId || !status) return null;
+  return {
+    version,
+    at,
+    originDeviceId,
+    sourceId,
+    trackId,
+    status,
+    allowNextSongApply: value.allowNextSongApply === true,
+    allowFollowerSave: value.allowFollowerSave === true,
+    profilePinned: value.profilePinned === true,
+    ...(snapshotJson ? { snapshotJson } : {}),
+  };
+};
+
+export const readLatestExplorePublicationSyncSignal = (uid: string): ExplorePublicationSyncSignal | null => {
+  const safeUid = String(uid || '').trim();
+  const signal = safeUid ? latestExplorePublicationSignalByUid.get(safeUid) : null;
+  return signal ? { ...signal } : null;
+};
+
+export const publishExplorePublicationSyncSignal = async (
+  uid: string,
+  signal: Omit<ExplorePublicationSyncSignal, 'version' | 'at' | 'originDeviceId'>,
+): Promise<number> => {
+  const safeUid = String(uid || '').trim();
+  const sourceId = String(signal?.sourceId || '').trim();
+  const trackId = String(signal?.trackId || '').trim();
+  if (!safeUid || !sourceId || !trackId) return 0;
+  const status = signal.status === 'public' ? 'public' : 'private';
+  const snapshotJsonRaw = String(signal.snapshotJson || '');
+  const snapshotJson = snapshotJsonRaw.length <= EXPLORE_PUBLICATION_MAX_SNAPSHOT_JSON_CHARS ? snapshotJsonRaw : '';
+  const originDeviceId = getStoredDeviceId(GENERIC_DEVICE_STORAGE_KEY, 'd');
+  const signalRef = ref(realtimeDb, `userSync/${safeUid}/explorePublication`);
+  const transaction = await runTransaction(signalRef, (current) => {
+    const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
+    const now = Date.now();
+    return {
+      version: Math.max(now, currentVersion + 1),
+      at: now,
+      originDeviceId,
+      sourceId,
+      trackId,
+      status,
+      allowNextSongApply: signal.allowNextSongApply === true,
+      allowFollowerSave: signal.allowFollowerSave === true,
+      profilePinned: signal.profilePinned === true,
+      ...(snapshotJson ? { snapshotJson } : {}),
+    };
+  }, { applyLocally: true });
+  return Math.max(0, Math.floor(Number(transaction.snapshot.val()?.version || 0)));
+};
+
 const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Record<string, unknown>;
@@ -754,12 +835,15 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
 let activeUid = '';
 let unsubscribeMusicNote: Unsubscribe | null = null;
 let unsubscribeRecentSongs: Unsubscribe | null = null;
+let unsubscribeExplorePublication: Unsubscribe | null = null;
 
 const stopDomainSubscriptions = () => {
   unsubscribeMusicNote?.();
   unsubscribeRecentSongs?.();
+  unsubscribeExplorePublication?.();
   unsubscribeMusicNote = null;
   unsubscribeRecentSongs = null;
+  unsubscribeExplorePublication = null;
   activeUid = '';
 };
 
@@ -781,6 +865,22 @@ const startDomainSubscriptions = (uid: string) => {
     if (signal) dispatchSignal(safeUid, 'recentSongs', signal);
   }, (error) => {
     console.warn('Recent-song RTDB sync signal unavailable; Firestore fallback remains active.', error);
+  });
+
+  // app355: publication changes reuse a dedicated UID-scoped RTDB signal.
+  // A reload only replays this tiny state; it never performs a Cloudflare request.
+  unsubscribeExplorePublication = onValue(ref(realtimeDb, `userSync/${safeUid}/explorePublication`), (snapshot) => {
+    const signal = normalizeExplorePublicationSignal(snapshot.val());
+    if (!signal) return;
+    latestExplorePublicationSignalByUid.set(safeUid, { ...signal });
+    if (signal.originDeviceId === getStoredDeviceId(GENERIC_DEVICE_STORAGE_KEY, 'd')) return;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(EXPLORE_PUBLICATION_SYNC_EVENT, {
+        detail: { uid: safeUid, ...signal },
+      }));
+    }
+  }, (error) => {
+    console.warn('Explore publication RTDB sync signal unavailable; existing R2 revision recovery remains active.', error);
   });
 
   // App 119: Explore likes no longer subscribe to historical RTDB replay state.

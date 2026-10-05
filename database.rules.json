@@ -180,6 +180,42 @@
             ".validate": false
           }
         },
+        "explorePublication": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','sourceId','trackId','status','allowNextSongApply','allowFollowerSave','profilePinned'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "sourceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
+          },
+          "trackId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 512"
+          },
+          "status": {
+            ".validate": "newData.isString() && (newData.val() === 'public' || newData.val() === 'private')"
+          },
+          "allowNextSongApply": {
+            ".validate": "newData.isBoolean()"
+          },
+          "allowFollowerSave": {
+            ".validate": "newData.isBoolean()"
+          },
+          "profilePinned": {
+            ".validate": "newData.isBoolean()"
+          },
+          "snapshotJson": {
+            ".validate": "newData.isString() && newData.val().length <= 24000"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
         "$other": {
           ".validate": false
         }

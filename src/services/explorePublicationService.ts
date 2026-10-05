@@ -20,6 +20,10 @@ import {
   removeExplorePublicProfileFirstViewTrack,
   upsertExplorePublicProfileFirstViewTrack,
 } from './exploreProfileFirstViewService';
+import {
+  publishExplorePublicationSyncSignal,
+  type ExplorePublicationSyncSignal,
+} from './userDomainSyncService';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
 // SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913
@@ -338,6 +342,60 @@ const patchPublicationStateByTrackId = (
     changed = true;
   });
   if (changed) writePublicationStateCache(uid, next);
+};
+
+export const applyExplorePublicationSyncSignalState = (
+  uid: string,
+  signal: Pick<ExplorePublicationSyncSignal,
+    'sourceId' | 'trackId' | 'status' | 'allowNextSongApply' | 'allowFollowerSave' | 'profilePinned'
+  >,
+): ExploreMusicNotePublicationState | null => {
+  const safeUid = String(uid || '').trim();
+  const sourceId = String(signal?.sourceId || '').trim();
+  const trackId = String(signal?.trackId || '').trim();
+  if (!safeUid || !sourceId || !trackId) return null;
+  const nextState: ExploreMusicNotePublicationState = {
+    status: signal.status === 'public' ? 'public' : 'private',
+    trackId,
+    registered: true,
+    allowNextSongApply: signal.allowNextSongApply === true,
+    allowFollowerSave: signal.allowFollowerSave === true,
+    profilePinned: signal.profilePinned === true,
+  };
+  patchPublicationStateBySourceId(safeUid, sourceId, nextState);
+  return { ...nextState };
+};
+
+const publishPublicationSyncBestEffort = async (
+  uid: string,
+  sourceId: string,
+  state: ExploreMusicNotePublicationState,
+  snapshotItem?: unknown,
+): Promise<void> => {
+  try {
+    let snapshotJson = '';
+    if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+      const encoded = JSON.stringify(snapshotItem);
+      if (encoded.length <= 24_000) snapshotJson = encoded;
+    }
+    // Public signals without a compact snapshot are skipped instead of forcing the
+    // receiving device to spend a Worker request on every reload. Existing bounded
+    // R2 revision recovery remains the fallback for those rare paths.
+    if (state.status === 'public' && !snapshotJson) return;
+    await publishExplorePublicationSyncSignal(uid, {
+      sourceId,
+      trackId: state.trackId,
+      status: state.status,
+      allowNextSongApply: state.allowNextSongApply,
+      allowFollowerSave: state.allowFollowerSave,
+      profilePinned: state.profilePinned,
+      ...(snapshotJson ? { snapshotJson } : {}),
+    });
+  } catch (error) {
+    // Canonical Explore mutation already succeeded. A signal outage must never turn
+    // a real public/private change into a failed user action.
+    console.warn('Explore publication cross-device signal skipped:', error);
+  }
 };
 
 export const clearExplorePublicationSessionCache = (uid?: string | null) => {
@@ -665,6 +723,12 @@ export const refreshExploreMusicNotePublicationSource = async (
     persistPublicationOutbox(user.uid, outbox);
   }
   patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
+  await publishPublicationSyncBestEffort(
+    user.uid,
+    normalizedSourceId,
+    nextState,
+    data?.snapshotItem,
+  );
   return { ...nextState };
 };
 
@@ -779,6 +843,7 @@ profilePinned: pending.desiredState.profilePinned,
   const resultBySource = new Map(rows.map((row: any) => [String(row?.sourceId || ''), row]));
   const latestOutbox = readPublicationOutbox(uid);
   const states = readPublicationStateCache(uid) || {};
+  const publicationSignals: Array<Promise<void>> = [];
   let failed = false;
   let invalidateMorePages213 = false;
 
@@ -812,6 +877,12 @@ profilePinned: pending.desiredState.profilePinned,
     }
     states[pending.sourceId] = { ...visibleState };
     invalidateMorePages213 = true;
+    publicationSignals.push(publishPublicationSyncBestEffort(
+      uid,
+      pending.sourceId,
+      confirmed,
+      row.snapshotItem,
+    ));
 
     if (visibleState.status === 'private') {
       removeExploreFeedSessionCacheRow(visibleState.trackId);
@@ -828,6 +899,9 @@ profilePinned: pending.desiredState.profilePinned,
   const revision = String(payload?.data?.revision || '').trim();
   writePublicationStateCache(uid, states, revision || undefined);
   markPublicationServerValidated334(uid);
+  if (publicationSignals.length > 0) {
+    await Promise.all(publicationSignals);
+  }
   if (failed || Object.keys(latestOutbox).length > 0) {
     throw new ExploreApiError('PUBLICATION_BATCH_PENDING', '일부 공개상태 변경을 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
   }

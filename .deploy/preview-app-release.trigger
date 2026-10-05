@@ -1,10 +1,10 @@
-app354-remove-private-publication-warning
-target_source=084c2c6b4eee0494df3496c661c4ee4ecc62dce6
-app_version=354
-scope=hosting-only-remove-private-publication-warning
+app356-profile-public-count-warning-cleanup
+target_source=6f558796ce016c8f189653f77bea261b9c23592c
+app_version=356
+scope=profile-public-track-count-and-explore-private-warning
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app354-remove-private-publication-warning
+release_request=app356-profile-count-fix
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

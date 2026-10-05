@@ -832,7 +832,7 @@ const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevisi
   if (!legacyState) return null;
   const legacyPayload = materializeCatalogState(legacyState, kind);
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
-  if (required > 0 && legacyPayload.revision < required) return null;
+  if (required <= 0 || legacyPayload.revision < required) return null;
 
   const baseKey = catalogCompactedBaseKey(identity.uid, kind, legacyPayload.revision);
   await putCatalogObjectAtKey(env, baseKey, identity.uid, legacyPayload);

@@ -42,7 +42,8 @@ const seedEnd = worker.indexOf('const getCatalogState = async', seedStart);
 assert.ok(seedStart > 0 && seedEnd > seedStart, 'legacy seed block missing');
 const seedBlock = worker.slice(seedStart, seedEnd);
 assert.match(seedBlock, /readCatalogStateFromBucket\(env\.MEDIA/);
-assert.match(seedBlock, /legacyPayload\.revision < required/);
+assert.match(seedBlock, /required <= 0 \|\| legacyPayload\.revision < required/,
+  'legacy seed must require a positive shared revision fence before it can become shared authority');
 assert.doesNotMatch(seedBlock, /firestoreCatalogQuery\(|buildCanonicalCatalog\(/,
   'legacy R2 seed unexpectedly scans Firestore');
 

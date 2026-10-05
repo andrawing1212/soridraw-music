@@ -32,7 +32,12 @@ assert.match(stateBlock, /CATALOG_NOT_MATERIALIZED/);
 
 for (const vars of [cfg.vars, cfg?.env?.test?.vars, cfg?.env?.production?.vars]) {
   assert.equal(String(vars?.SORIDRAW_SHARED_CATALOG_V1 || ''), '0',
-    'stage-1 shared catalog flag must remain OFF');
+    'stage-2 shared catalog flag must remain OFF');
+}
+for (const bindings of [cfg.r2_buckets, cfg?.env?.test?.r2_buckets, cfg?.env?.production?.r2_buckets]) {
+  const catalog = (bindings || []).find((item) => item?.binding === 'CATALOG');
+  assert.equal(catalog?.bucket_name, 'soridraw-user-catalog',
+    'all release environments must point CATALOG at the same shared private bucket');
 }
 
 console.log('SHARED_PRIVATE_CATALOG_AUTHORITY_356=PASS');

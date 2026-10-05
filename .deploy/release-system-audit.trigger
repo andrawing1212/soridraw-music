@@ -111,3 +111,8 @@ publication-d1-read-compaction-361-rerun
 target=bd1cfd91f7c94e5f71be220660d847c32d167646
 focus=361-read-compaction,strict-follow-audit-normalization,typescript-build,no-deploy
 requested=2026-10-06
+
+publication-d1-read-compaction-361-rerun2
+target=6830c2929baf3a1b660552c346d108331f092be2
+focus=361-read-compaction,follow-audit-exact-normalization,360-private-wrapper,no-deploy
+requested=2026-10-06

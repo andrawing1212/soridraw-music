@@ -46,6 +46,7 @@
     "081-batch-like-final-freeze.mjs",
     "082-like-d1only-route.mjs",
     "092-publication-media-source-cost.mjs",
-    "093-publication-inline-media-source.mjs"
+    "093-publication-inline-media-source.mjs",
+    "094-publication-d1-read-compaction.mjs"
   ]
 }

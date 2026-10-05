@@ -617,6 +617,21 @@ const isOpenableUrl = (value?: string | null) => {
   }
 };
 
+const EXPLORE_PUBLIC_PROFILE_COMPLETE_WINDOW_LIMIT = 50;
+
+const resolveExplorePublicTrackCount = (
+  profileTrackCount: number,
+  loadedTracks: ExploreTrack[],
+) => {
+  // The first-view profile window returns at most 50 public tracks. If fewer
+  // than 50 are loaded, the device already has the complete public-track set,
+  // so its exact length is safer than a stale maintained counter.
+  if (loadedTracks.length < EXPLORE_PUBLIC_PROFILE_COMPLETE_WINDOW_LIMIT) {
+    return loadedTracks.length;
+  }
+  return Math.max(safeCount(profileTrackCount), loadedTracks.length);
+};
+
 const formatCount = (value: number) => {
   if (value >= 10000) return `${Math.round(value / 1000)}K`;
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1).replace('.0', '')}K`;
@@ -4252,7 +4267,7 @@ export default function ExplorePage() {
                   <div className="soridraw-explore-profile-stats">
                     <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
                     <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
-                    <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
+                    <span>공개곡 <strong>{formatCount(resolveExplorePublicTrackCount(profile.trackCount, profileTracks))}</strong></span>
                   </div>
                   {profile.genres.length > 0 && <div className="soridraw-explore-profile-genres">{profile.genres.map((genre) => <span key={genre}>{genre}</span>)}</div>}
                   {profileSocialLinks244.length > 0 && (

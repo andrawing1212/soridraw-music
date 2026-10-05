@@ -33,17 +33,48 @@ const publication358Wrapped = new Map([
   ['handleGenreTracks', 'handleGenreTracksCore358'],
 ]);
 const normalizePublication361ForFollowAudit = (text, name) => {
-  if (name !== 'handleMusicNotePublicationSingleWrite016') return text;
+  if (!['handleMusicNotePublicationSingleWrite016','handleMusicNotePublicationBatch048'].includes(name)) return text;
   assert.ok(source.includes('SORIDRAW_PUBLICATION_D1_READ_COMPACTION_361_20261005'),
     'app361 marker missing while follow audit normalizes publication');
-  const start = text.indexOf('  let previous = null;\n  let publicationR2ProvedNew361 = false;');
-  const end = text.indexOf('  const resolvedOptions = {', start);
-  assert.ok(start >= 0 && end > start, 'app361 first-public read block missing');
-  const normalized = text.slice(0, start)
-    + '  const previous = await publicationReadState016(env, authContext.uid, source.id);\n'
-    + text.slice(end);
-  assert.ok(normalized.includes('const previous = await publicationReadState016(env, authContext.uid, source.id);'),
-    'app361 normalization failed');
+
+  if (name === 'handleMusicNotePublicationSingleWrite016') {
+    const start = text.indexOf('  let previous = null;\n  let publicationR2ProvedNew361 = false;');
+    const end = text.indexOf('  const resolvedOptions = {', start);
+    assert.ok(start >= 0 && end > start, 'app361 first-public read block missing');
+    const normalized = text.slice(0, start)
+      + '  const previous = await publicationReadState016(env, authContext.uid, source.id);\n'
+      + text.slice(end);
+    assert.ok(normalized.includes('const previous = await publicationReadState016(env, authContext.uid, source.id);'),
+      'app361 first-public normalization failed');
+    return normalized;
+  }
+
+  const gate361 = `          const inlineMediaFast361 = mutation.refreshSourceMedia && mutation.sourceMedia
+            ? mutation.sourceMedia
+            : null;
+          if (mutation.refreshSourceContent || (mutation.refreshSourceMedia && !inlineMediaFast361)) {`;
+  assert.equal(text.split(gate361).length - 1, 1, 'app361 inline-media gate missing');
+  let normalized = text.replace(gate361,
+    `          if (mutation.refreshSourceContent || mutation.refreshSourceMedia) {`);
+
+  const media361 = `          if (inlineMediaFast361) {
+            const mediaColumns = [
+              ['cover_url', String(inlineMediaFast361.coverUrl || '')],
+              ['duration_seconds', inlineMediaFast361.durationSeconds == null ? null : Number(inlineMediaFast361.durationSeconds)],
+              ['suno_url_primary', String(inlineMediaFast361.sunoUrlPrimary || '')],
+              ['suno_url_secondary', inlineMediaFast361.sunoUrlSecondary ? String(inlineMediaFast361.sunoUrlSecondary) : null],
+            ];
+            for (const [column, value] of mediaColumns) {
+              sets.push(\`\${column}=?\`);
+              values.push(value);
+              guards.push(\`\${column} IS NOT ?\`);
+              guardValues.push(value);
+            }
+          }
+`;
+  assert.equal(normalized.split(media361).length - 1, 1, 'app361 media UPDATE block missing');
+  normalized = normalized.replace(media361, '');
+  assert.equal(normalized.includes('inlineMediaFast361'), false, 'app361 batch normalization incomplete');
   return normalized;
 };
 

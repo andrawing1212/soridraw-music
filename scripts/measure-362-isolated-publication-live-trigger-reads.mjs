@@ -325,6 +325,17 @@ if (process.argv[2] === 'cleanup') {
     await createShared({ update: true }); await createTrackUpdate357(); await createDerivedMusicNoteUpdate();
     const swap357 = metric('362_SWAP_357_CANDIDATE_FULL_CHAIN', await query(sourceSql));
 
+    // Exact Worker hot path uses UPDATE ... RETURNING *. Measure that separately:
+    // RETURNING can add a physical row read even when no extra SELECT exists.
+    const sourceReturningSql = sourceSql + ' RETURNING *';
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 1, media: 1 });
+    await createShared({ update: true }); await createTrackUpdateCurrent(); await createDerivedMusicNoteUpdate();
+    const swapFullReturning = metric('362_SWAP_FULL_LIVE_RETURNING', await query(sourceReturningSql));
+
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 1, media: 1 });
+    await createShared({ update: true }); await createTrackUpdate357(); await createDerivedMusicNoteUpdate();
+    const swap357Returning = metric('362_SWAP_357_CANDIDATE_RETURNING', await query(sourceReturningSql));
+
     // ---- Registered visibility transitions: heavy media trigger must stay asleep. ----
     await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 0, media: 1 });
     await createShared({ update: true }); await createTrackUpdateCurrent(); await createDerivedMusicNoteUpdate();
@@ -367,11 +378,12 @@ if (process.argv[2] === 'cleanup') {
     console.log('362_ATTR_SWAP_TRACK_TRIGGER=' + JSON.stringify(delta(swapShared,swapTrackProjection)));
     console.log('362_ATTR_SWAP_MUSIC_NOTE_DERIVED_TRIGGER=' + JSON.stringify(delta(swapTrackProjection,swapFull)));
     console.log('362_ATTR_SWAP_357_VS_CURRENT=' + JSON.stringify({ r: swap357.r-swapFull.r, w: swap357.w-swapFull.w }));
+    console.log('362_ATTR_SWAP_RETURNING_OVERHEAD=' + JSON.stringify({ current: swapFullReturning.r-swapFull.r, candidate: swap357Returning.r-swap357.r }));
     console.log('362_ATTR_FIRST_SHARED_REV=' + JSON.stringify(delta(firstBase,firstShared)));
     console.log('362_ATTR_FIRST_DERIVED_PROJECTION=' + JSON.stringify(delta(firstShared,firstProjection)));
     console.log('362_ATTR_FIRST_MUSIC_NOTE_DERIVED_TRIGGER=' + JSON.stringify(delta(firstProjection,firstFull)));
 
-    if (swap357.w > 2) fail('357 source swap must stay <=W2, got W' + swap357.w);
+    if (swap357.w > 2 || swap357Returning.w > 2) fail('357 source swap must stay <=W2');
     if (republish.w > 2 || privateResult.w > 2) fail('registered visibility transitions exceeded W2');
     if (swap357.r >= swapFull.r) fail('357 candidate did not reduce current source-swap reads');
     console.log('362_SOURCE_SWAP_READ_REDUCTION_PROVED=PASS currentR' + swapFull.r + '->candidateR' + swap357.r);

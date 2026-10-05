@@ -78,6 +78,30 @@ const normalizePublication361ForFollowAudit = (text, name) => {
   return normalized;
 };
 
+const normalizePublication365ForFollowAudit = (text, name) => {
+  if (name !== 'readCanonicalPublicationLike071') return text;
+  assert.ok(source.includes('SORIDRAW_PUBLICATION_CANONICAL_LIKE_REQUEST_CACHE_365_20261006'),
+    'app365 marker missing while follow audit normalizes publication canonical-like reader');
+  for (const required of [
+    'canonicalPublicationLikeRequestCache365.get(env)',
+    'if (requestCache.has(id)) return requestCache.get(id)',
+    'requestCache.set(id, pending)',
+    'requestCache.delete(id)',
+  ]) assert.ok(text.includes(required), 'app365 canonical-like cache invariant missing: ' + required);
+
+  return `async function readCanonicalPublicationLike071(env, trackId) {
+  const id = String(trackId || '').trim();
+  if (!id || !env?.DB) throw new Error('[071] invalid canonical track');
+  const row = await env.DB.prepare(
+    "SELECT COALESCE(s.like_count,0) AS like_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id=? AND t.is_public=1 AND t.status='published' LIMIT 1"
+  ).bind(id).first();
+  if (!row) throw new Error('[071] canonical public track unavailable');
+  const count = Number(row.like_count);
+  if (!Number.isFinite(count) || count < 0) throw new Error('[071] invalid canonical like count');
+  return Math.floor(count);
+}`;
+};
+
 for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
   const wrappedCore = publication358Wrapped.get(node.name?.text || '');
   if (wrappedCore) {
@@ -99,8 +123,10 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
     continue;
   }
   if (!allowed.has(node.name?.text)) {
-    const currentText = normalizePublication361ForFollowAudit(functions.get(node.name?.text) || '', node.name?.text || '')
-      .replaceAll('\r\n','\n');
+    const currentText = normalizePublication365ForFollowAudit(
+      normalizePublication361ForFollowAudit(functions.get(node.name?.text) || '', node.name?.text || ''),
+      node.name?.text || '',
+    ).replaceAll('\r\n','\n');
     assert.equal(currentText,node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
   }
 }

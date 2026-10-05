@@ -67,6 +67,12 @@ assert.match(handleBlock, /bootstrapSharedCatalogFromCanonical/);
 assert.match(handleBlock, /route\.action === 'delta'/);
 assert.match(handleBlock, /CATALOG_REPAIR_REQUIRED/);
 
+const deltaStart = worker.indexOf('const applyCatalogDelta = async');
+const deltaEnd = worker.indexOf('const handleCatalog = async', deltaStart);
+const deltaBlock = worker.slice(deltaStart, deltaEnd);
+assert.match(deltaBlock, /getCatalogState\(identity, kind, delta\.baseRevision, env\)/,
+  'shared seed can ignore mutation base revision');
+
 const readStart = client.indexOf('const readRemoteCatalogSnapshot = async');
 const readEnd = client.indexOf('export const readCatalogSnapshotCacheFirst', readStart);
 assert.ok(readStart > 0 && readEnd > readStart, 'client remote Catalog block missing');

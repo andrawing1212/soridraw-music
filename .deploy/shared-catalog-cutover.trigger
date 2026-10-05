@@ -1,0 +1,6 @@
+shared_catalog_cutover_target=afc836f89eb457e5b56dd5d66bac4c6b09a1bed2
+approved_scope=preview,test,production
+flag=1
+catalog=soridraw-user-catalog
+mass_copy=false
+requested=2026-10-06-coordinated-cutover

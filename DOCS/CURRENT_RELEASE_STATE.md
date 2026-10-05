@@ -1,3 +1,29 @@
+## 0PS. 361 PREVIEW live 완료 / 364 rollback·최종 감사 PASS (2026-10-06 KST)
+
+- PREVIEW Worker 361 실제 배포:
+  - source lock: `ed2458cff29b978960d1169141ca16f076243272`.
+  - deploy trigger: `7031afcb713bf3ba21d83317600e36e871c85e30`.
+  - Worker Release Run `37344481780`: **SUCCESS**.
+  - active PREVIEW Worker: `368d64ac-6b66-4023-88ec-a3ed85068844`.
+  - Feed/Profile smoke PASS.
+  - public-like changed-card D1 **R0/W0**.
+  - warm revision D1 **R0/W0**.
+  - TEST/PRODUCTION Workers unchanged PASS.
+- 364 compatibility candidate safety:
+  - target: normal source 1->2 D1 **행읽기 R4 / 행쓰기 W3**.
+  - legacy media mirror 유지.
+  - shared revision 유지.
+  - missing-derived repair / content rebuild 유지.
+  - exact rollback SQL 추가:
+    `cloudflare/explore-worker/candidates/364-publication-read-compaction-compat-rollback.sql`.
+  - rollback verifier 추가 및 Release System Audit Run `37344906830`: **SUCCESS**.
+  - shared/user D1 write 0, migration/backfill/delete/rewrite 0.
+- 완료된 임시 진단 workflow 3개는 삭제함. 재현용 측정 script/verifier/candidate/rollback은 저장소에 유지.
+- 현재 실제 blocker:
+  - 364는 **shared D1 trigger 변경**이므로 사용자 명시 승인 전 적용 금지.
+  - 지금 사용자 실기기에서 먼저 A 공개 / source 1->2 / 비공개의 D1 행읽기 R / 행쓰기 W를 다시 측정하면 361 live 효과를 확인할 수 있음.
+  - TEST/PRODUCTION이 새 R2 authority로 승격된 뒤에는 legacy mirror 제거 357 후보로 **R3/W2** 추가 절감 가능.
+
 ## 0PR. PREVIEW publication Rows Read 361 배포 완료 + 364 shared-D1 후보 준비 (2026-10-06 KST)
 
 - 사용자 기준: 모든 R/W 보고는 Cloudflare D1 **물리 행 기준**으로 표기.

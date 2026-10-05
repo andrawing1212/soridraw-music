@@ -670,6 +670,7 @@ const readRemoteCatalogSnapshot = async (
   const retryDelays = [0, 350, 1000];
   let lastError: unknown = null;
   let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0);
+  let sharedBootstrapAttempted = false;
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
     try {
@@ -679,16 +680,51 @@ const readRemoteCatalogSnapshot = async (
       // into the old partial-list path.
       const headers = await authenticatedHeaders(false);
       if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
-      // Catalog reads are R2-only. Profile revisions are soft invalidation hints;
-      // ordinary app traffic never asks the Worker to rebuild from Firestore.
-      const hardMinimumRevision = 0;
+      // The shared Firebase profile revision is an invalidation fence only.
+      // Healthy warm cache still returns before this request. When a remote read is
+      // genuinely required, pass the fence so the Worker cannot accept an older
+      // environment-local legacy Catalog as the new shared authority.
+      const hardMinimumRevision = Math.max(0, Math.floor(Number(minimumRevision || 0)));
+      if (hardMinimumRevision > 0) headers['X-Soridraw-Require-Revision'] = String(hardMinimumRevision);
       if (allowDeltaSync && localSnapshot) headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision);
-      markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
-      const response = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/${kind}`, {
+      const requestCatalog = () => fetch(`${resolveCatalogEndpoint()}/v1/catalog/${kind}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
+      markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
+      let response = await requestCatalog();
+
+      // Shared-Catalog cutover repair is explicit and bounded. The Worker returns
+      // 409 only when its shared R2 state cannot satisfy the already-known profile
+      // revision. Only then may this user/kind perform one authenticated canonical
+      // bootstrap. App-version changes and healthy warm entry never reach this path.
+      if (response.status === 409 && !sharedBootstrapAttempted) {
+        const repair = await response.json().catch(() => ({}));
+        if (String(repair?.code || '') === 'CATALOG_REPAIR_REQUIRED') {
+          sharedBootstrapAttempted = true;
+          const bootstrapHeaders = await authenticatedHeaders(true);
+          if (!bootstrapHeaders) throw new Error('CATALOG_BOOTSTRAP_AUTH_NOT_READY');
+          if (hardMinimumRevision > 0) bootstrapHeaders['X-Soridraw-Require-Revision'] = String(hardMinimumRevision);
+          const bootstrapResponse = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/${kind}/bootstrap`, {
+            method: 'POST',
+            headers: bootstrapHeaders,
+            body: JSON.stringify({ requiredRevision: hardMinimumRevision }),
+            cache: 'no-store',
+          });
+          if (!bootstrapResponse.ok) {
+            let detail = '';
+            try { detail = String(await bootstrapResponse.text()).slice(0, 180); } catch {}
+            throw new Error(`CATALOG_BOOTSTRAP_${bootstrapResponse.status}${detail ? `:${detail}` : ''}`);
+          }
+          // Read the server-authored snapshot back through the normal path so the
+          // client never treats its own local list as complete server authority.
+          response = await requestCatalog();
+        } else {
+          throw new Error(`CATALOG_READ_409:${String(repair?.code || 'UNKNOWN')}`);
+        }
+      }
+
       markCatalogRuntimeDiagnostic(kind, { stage: 'HTTP', attempt: attempt + 1, httpStatus: response.status });
       if (response.status === 404) throw new Error('CATALOG_NOT_MATERIALIZED');
       if (!response.ok) {
@@ -760,10 +796,11 @@ export const readCatalogSnapshotCacheFirst = async (
       return local;
     }
 
-    // The profile revision is only an invalidation hint. A fresh device must fetch the
-    // already-materialized R2 Catalog once; it must never turn a revision gap into
-    // a full Firestore reconstruction request.
-    const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
+    // The profile revision is only an invalidation hint. A healthy warm Catalog
+    // above already returned with zero Worker/Firestore work. A cold/missing/stale
+    // device passes this revision fence; only an explicit shared-Catalog 409 may
+    // trigger one bounded canonical bootstrap for this user/kind.
+    const remote = await readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision, local);
     if (remote) {
       catalogLastReadSources.set(key, 'remote');
       return remote;

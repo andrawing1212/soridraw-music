@@ -24,6 +24,8 @@ import {
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
   patchExploreFeedSessionCachesRow,
+  upsertExploreFeedSessionCacheRow,
+  removeExploreFeedSessionCacheRow,
   readExploreSearchCache340,
   writeExploreSearchCache340,
 } from '../services/exploreSessionCache';
@@ -48,7 +50,7 @@ import {
   patchExploreLikedTrackCachedCount091,
   rememberExploreLikedTrack,
 } from '../services/exploreLikedTracksService';
-import { getExplorePublicProfileFirstView, revalidateExplorePublicProfileFirstView335, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
+import { getExplorePublicProfileFirstView, revalidateExplorePublicProfileFirstView335, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, upsertExplorePublicProfileFirstViewTrack, removeExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   fetchExplorePublicLikeCards192,
   subscribeExplorePublicLikeInvalidation192,
@@ -86,6 +88,11 @@ import {
   setExploreTrackVisibility,
   type ExplorePublicationOptions,
 } from '../services/explorePublicationService';
+import {
+  EXPLORE_PUBLICATION_SYNC_EVENT,
+  readLatestExplorePublicationSyncSignal,
+  type ExplorePublicationSyncSignal,
+} from '../services/userDomainSyncService';
 import {
   getExploreCurationAccess307,
   getManagedSoridrawCuratedTracks307,
@@ -2347,6 +2354,84 @@ export default function ExplorePage() {
       );
     });
   };
+
+  // app355: same-account public/private/source changes arrive through one tiny
+  // UID-scoped RTDB signal. Apply the returned compact public card directly to the
+  // device cache/UI. This restores cross-device visibility without turning reload
+  // or ordinary re-entry into a Cloudflare Worker request.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return undefined;
+
+    const applyPublicationSignal355 = (signal: ExplorePublicationSyncSignal | null) => {
+      if (!signal) return;
+      const trackId = String(signal.trackId || '').trim();
+      if (!trackId) return;
+
+      let snapshotRow: Record<string, unknown> | null = null;
+      if (signal.status === 'public' && signal.snapshotJson) {
+        try {
+          const parsed = JSON.parse(signal.snapshotJson);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            snapshotRow = parsed as Record<string, unknown>;
+          }
+        } catch {}
+      }
+
+      if (signal.status === 'private') {
+        removeExploreFeedSessionCacheRow(trackId);
+        removeExplorePublicProfileFirstViewTrack(uid, trackId);
+        setTracks((previous) => previous.filter((track) => track.id !== trackId));
+        setPopularTracks((previous) => previous.filter((track) => track.id !== trackId));
+        if (profileUid === uid) {
+          setProfileTracks((previous) => previous.filter((track) => track.id !== trackId));
+        }
+        return;
+      }
+
+      if (!snapshotRow) return;
+      upsertExploreFeedSessionCacheRow(trackId, snapshotRow);
+      upsertExplorePublicProfileFirstViewTrack(uid, snapshotRow);
+      const normalized = normalizeTrack(snapshotRow);
+      if (!normalized.id) return;
+
+      if (!profileUid && isExploreFeedRequest(requestUrl)) {
+        setTracks((previous) => {
+          const index = previous.findIndex((track) => track.id === normalized.id);
+          if (index >= 0) {
+            const next = [...previous];
+            next[index] = { ...next[index], ...normalized };
+            return overlayActorLikeCounts120(next);
+          }
+          return overlayActorLikeCounts120([normalized, ...previous].slice(0, 40));
+        });
+        setPopularTracks((previous) => previous.map((track) => (
+          track.id === normalized.id ? { ...track, ...normalized } : track
+        )));
+      }
+
+      if (profileUid === uid) {
+        setProfileTracks((previous) => {
+          const without = previous.filter((track) => track.id !== normalized.id);
+          const next = [normalized, ...without];
+          next.sort(comparePublicProfileTracks);
+          return overlayActorLikeCounts120(next.slice(0, 50));
+        });
+      }
+    };
+
+    applyPublicationSignal355(readLatestExplorePublicationSyncSignal(uid));
+
+    const onPublicationSync355 = (event: Event) => {
+      const detail = (event as CustomEvent<ExplorePublicationSyncSignal & { uid?: string }>).detail;
+      if (String(detail?.uid || uid).trim() !== uid) return;
+      applyPublicationSignal355(detail || null);
+    };
+    window.addEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
+    return () => {
+      window.removeEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
+    };
+  }, [user?.uid, requestUrl, profileUid]);
 
   useEffect(() => {
     // SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004

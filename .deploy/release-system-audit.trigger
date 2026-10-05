@@ -81,3 +81,8 @@ publication-r2-only-integration-358
 target=b5174d4ec055aef29affb331f2fcfed8af306a49
 focus=r2-catalog-phase-b-hard-gate,no-deploy,no-shared-d1-write
 requested=2026-10-05T09:25KST
+
+publication-r2-only-preview-activation-359
+target=c572b7c5611fb4de2e9617b84cdcb771fc99df9b
+focus=preview-flag-active,live-deploy-smoke-guard,no-shared-d1-write
+requested=2026-10-05T18:45KST

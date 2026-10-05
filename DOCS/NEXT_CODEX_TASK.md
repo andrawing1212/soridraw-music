@@ -1,3 +1,34 @@
+## CURRENT NEXT GATE — source 1->2 R10/W3, 364 shared-D1 approval 대기
+
+365 PREVIEW 실기기 확정:
+- 공개: D1 **행읽기 R4 / 행쓰기 W2**.
+- source 1->2: D1 **행읽기 R10 / 행쓰기 W3**.
+- 비공개: D1 **행읽기 R3 / 행쓰기 W2**.
+- Worker request 각 1.
+- 365 same-request canonical-like read dedupe 제품 효과 확인 완료.
+
+원인:
+- source/media 전환만 cover/duration/Suno URL 등을 바꿔 legacy `explore_derived_tracks` media projection trigger를 실행.
+- source 전환 W3 = canonical tracks W1 + legacy media mirror W1 + shared revision W1.
+- 격리 current UPDATE RETURNING trigger chain R9 + canonical like parity R1 = product R10.
+- 공개/비공개는 heavy media projection trigger를 깨우지 않아 각각 R4/W2, R3/W2.
+
+다음:
+1. 364 compatibility candidate 적용 전 사용자 명시 승인 필요.
+2. 승인 시 shared D1 trigger 2개만 교체하고 exact rollback 준비 상태 유지.
+3. migration/backfill/delete/user-row rewrite 0.
+4. 적용 직후 같은 A곡 source 1->2 실기기 재측정.
+5. product 목표: 약 **R5/W3**.
+6. 기능/미디어 freshness/공개프로필/Explore 차이 있거나 목표보다 비용이 크면 즉시 rollback.
+7. TEST/PRODUCTION이 새 R2 authority로 승격된 뒤에만 357 legacy-mirror removal 별도 승인.
+8. 최종 후보 목표: 약 **R4/W2** product 수준 재검증.
+
+보호:
+- 공개 R4/W2와 비공개 R3/W2 경로 변경 금지.
+- 좋아요/저장하트/UI/thumbnail 변경 금지.
+- 전체 scan/rebuild 금지.
+- 승인 없는 shared D1 / TEST / PRODUCTION 변경 금지.
+
 ## CURRENT NEXT GATE — 365 live 재측정, source R10 이후 364 승인 판단
 
 현재 완료:

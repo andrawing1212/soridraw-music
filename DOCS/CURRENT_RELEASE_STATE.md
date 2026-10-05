@@ -1,3 +1,54 @@
+## 0QB. app355 실기기 publication 재측정 — never-published 첫 공개 R6/W12만 HARD FAIL (2026-10-06 KST)
+
+사용자 CACHE LIVE 실측:
+- 이미 공개 이력이 있는 곡의 공개: Worker 1 / D1 query R1-W1 / physical **R4/W2**.
+- 이미 등록된 곡의 source 1->2 전환: Worker 1 / D1 query R2-W1 / physical **R6/W3**.
+- 한 번도 공개한 적 없는 Music Note 곡의 최초 공개: Worker 1 / D1 query R1-W1 / physical **R6/W12**.
+- 그 신규 등록곡에서 이어진 source 전환: Worker 1 / D1 query R1-W1 / physical **R6/W3**.
+- 따라서 app355 기준 신규 회귀가 아니라, 기존에 남아 있던 **first-publication INSERT fanout W12**가 정확히 재현됨.
+- read는 과거 R7에서 현재 R6으로 줄었지만 write W12는 그대로라 hard gate FAIL.
+
+W12 원인 — 기존 live schema read-only audit와 이번 실측이 일치:
+1. canonical `tracks` INSERT **W6**
+   - table row W1
+   - PK autoindex W1
+   - Music Note에도 적용되는 secondary index W4
+2. legacy `explore_derived_tracks` INSERT **W5**
+   - table row W1
+   - PK autoindex W1
+   - latest/popular/profile rank index W3
+3. global `explore_shared_revision` UPDATE **W1**
+= 총 **W12**.
+
+이미 증명된 저비용 후보:
+- isolated RATE_DB Run `37150337923`에서 cutoff 기반 candidate로:
+  - first publication **W12 -> W2**
+  - source/media swap **W3 -> W1**
+  - visibility change **W2 -> W1**
+  를 실제 D1 billing meta로 증명.
+- 방식은 기존 사용자 row를 수정하지 않고, release cutoff 이후 새 Music Note row만:
+  - legacy tracks secondary indexes 대상에서 제외
+  - legacy derived mirror 대상에서 제외
+  - legacy global shared-revision 대상에서 제외
+  - canonical tracks row + PK만 유지
+  하는 구조.
+- 기존 row는 cutoff 이전 legacy 경로를 그대로 유지하므로 기존 등록곡의 기능/비용 경로를 건드리지 않는 설계가 가능.
+
+현재 적용 차단:
+- shared D1은 PREVIEW/TEST/PRODUCTION 공용.
+- PREVIEW source/Worker는 R2 hybrid/R2-only publication authority가 준비돼 있음.
+- TEST는 app354 승격으로 최신 Worker source는 올라갔지만 live environment flag/authority parity를 shared cutover 전에 별도 확인해야 함.
+- PRODUCTION은 아직 이전 release라 새 Music Note row를 legacy derived/shared-revision 없이 안전하게 읽는 전체 parity가 보장되지 않음.
+- 따라서 지금 W2 cutover를 shared D1에 바로 적용하면 정식앱의 Feed/profile/search/media freshness를 깨뜨릴 위험이 있어 **미적용 유지**.
+
+보호 기준:
+- 현재 registered 공개 **R4/W2**, source **R6/W3**, 비공개 **R3/W2** 경로는 추가 원인 없이 수정 금지.
+- app355 PC↔모바일 공개/비공개 즉시 동기화 보호.
+- 좋아요/저장하트/thumbnail/UI/Music Note/Library 정상 기능 보호.
+- 새 구조는 비용이 기존보다 증가하면 FAIL.
+- 사용자 row migration/backfill/delete/rewrite 금지.
+- shared D1 변경은 3환경 read-authority parity 확인 + 사용자 승인 전 금지.
+
 ## 0QA. app355 PREVIEW — 공개곡 타기기 동기화 복구 + 새로고침 Worker 비증가 경로 배포 (2026-10-06 KST)
 
 사용자 발견 회귀:

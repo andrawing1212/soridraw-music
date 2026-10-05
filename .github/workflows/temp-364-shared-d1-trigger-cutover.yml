@@ -1,0 +1,40 @@
+name: TEMP 364 Shared D1 Trigger Cutover
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/shared-d1-364.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-364-shared-d1-trigger-cutover
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout approved trigger commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Apply approved 364 shared-D1 trigger cutover
+        run: node .deploy/apply-364-shared-d1-cutover.mjs

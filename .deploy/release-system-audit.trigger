@@ -86,3 +86,8 @@ publication-r2-only-preview-activation-359
 target=c572b7c5611fb4de2e9617b84cdcb771fc99df9b
 focus=preview-flag-active,live-deploy-smoke-guard,no-shared-d1-write
 requested=2026-10-05T18:45KST
+
+publication-r2-only-preview-smoke-retry-359
+target=7c4af5e4131490fe95c120c43cf2ac36bacef2da
+focus=propagation-ready-smoke,preview-only,no-shared-d1-write
+requested=2026-10-05T18:58KST

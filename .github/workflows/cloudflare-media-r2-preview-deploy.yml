@@ -22,7 +22,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       BUCKET: soridraw-media-preview
-      CATALOG_BUCKET: soridraw-user-catalog
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
     steps:
       - name: Checkout preview
@@ -66,27 +65,6 @@ jobs:
           console.log(`R2_STORAGE_CLASS=${storageClass || 'Standard'}`);
           NODE
 
-      - name: Ensure shared private Catalog R2 bucket exists
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
-          if npx wrangler r2 bucket info "$CATALOG_BUCKET" --json > "$RUNNER_TEMP/catalog-r2-info.json" 2> "$RUNNER_TEMP/catalog-r2-info.err"; then
-            echo 'CATALOG_R2_BUCKET_ALREADY_EXISTS=true'
-          else
-            echo 'Shared Catalog R2 bucket not found; creating APAC Standard bucket.'
-            npx wrangler r2 bucket create "$CATALOG_BUCKET" --location apac --storage-class Standard
-            npx wrangler r2 bucket info "$CATALOG_BUCKET" --json > "$RUNNER_TEMP/catalog-r2-info.json"
-          fi
-          node - "$RUNNER_TEMP/catalog-r2-info.json" <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const name = data.name || data.result?.name;
-          if (name !== 'soridraw-user-catalog') throw new Error(`Unexpected Catalog bucket: ${name}`);
-          console.log(`CATALOG_R2_BUCKET=${name}`);
-          NODE
-
       - name: Deploy preview media Worker with R2 binding
         working-directory: cloudflare/media-worker
         run: npm run deploy
@@ -128,9 +106,6 @@ jobs:
           grep -q '"ok":true' "$RUNNER_TEMP/health.json"
           grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
           grep -q '"automaticWavGeneration":false' "$RUNNER_TEMP/health.json"
-          grep -q '"catalogBinding":true' "$RUNNER_TEMP/health.json"
-          grep -q '"catalogAuthorityMode":"legacy-media"' "$RUNNER_TEMP/health.json"
-          node scripts/verify-356-shared-private-catalog-authority.mjs
 
           code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' -X OPTIONS \
             -H 'Origin: https://preview.soridraw.com' \
@@ -145,9 +120,7 @@ jobs:
         run: |
           echo 'TARGET_ENV=PREVIEW'
           echo 'R2_BUCKET=soridraw-media-preview'
-          echo 'CATALOG_R2_BUCKET=soridraw-user-catalog'
           echo 'R2_PUBLIC_BUCKET=false'
-          echo 'CATALOG_SHARED_CUTOVER=false'
           echo 'LAZY_ARCHIVE_MIN_AGE_DAYS=14'
           echo 'AUTOMATIC_WAV_GENERATION=false'
           echo 'NO_MUSIC_API_CALL=true'

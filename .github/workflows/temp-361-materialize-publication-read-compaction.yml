@@ -1,5 +1,5 @@
 name: TEMP 361 Materialize Publication Read Compaction
-# trigger v2
+# trigger v3
 
 on:
   push:

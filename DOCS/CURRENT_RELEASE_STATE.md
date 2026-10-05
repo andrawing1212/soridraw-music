@@ -1,3 +1,40 @@
+## 0QC. 공개프로필 곡수 불일치 원인 확정 + app356 표시 교정 준비 (2026-10-06 KST)
+
+사용자 실기기:
+- 프로필 A 실제 공개곡 **24곡**: PREVIEW 헤더 23 / TEST 헤더 24.
+- 프로필 B 실제 공개곡 **22곡**: PREVIEW/TEST 헤더 모두 23.
+- 곡 목록 자체는 잠시 차이가 났다가 shared cache가 수렴하며 PREVIEW/TEST가 다시 일치함.
+
+원인 분리:
+1. 공개프로필 화면은 이미 받아온 실제 `profileTracks` 목록과 별도로 유지되는 `profile.trackCount` 값을 표시하고 있었음.
+2. 렌더가 `profile.trackCount || profileTracks.length`라서, 유지 카운터가 1만 stale이어도 실제 목록 길이보다 stale 숫자가 우선 표시됨.
+3. app355 타기기 공개/비공개 신호는 목록/로컬 profile cache를 changed-item으로 즉시 고치지만, 이미 렌더된 React `profile.trackCount` state는 별도라 PREVIEW 한쪽에서 23/24 차이가 보일 수 있음.
+4. PREVIEW/TEST 모두 23인데 실제 목록 22인 사례는 shared profile R2의 유지 카운터가 과거 delta 누락으로 +1 drift한 상태와 일치. 곡 목록 자체를 다시 읽는 문제와는 별개.
+
+안전 수정:
+- `src/pages/ExplorePage.tsx`: first-view window가 **50곡 미만이면 이미 전체 공개곡 목록을 기기에 가지고 있으므로** 서버 카운터 대신 실제 `profileTracks.length`를 표시.
+- 50곡 이상이면 기존 maintained `profile.trackCount`를 유지하되 loaded length보다 작아지지 않게 보호.
+- 추가 Worker / D1 / R2 / Firestore read/write **0**.
+- 공개/비공개/좋아요/저장하트/thumbnail/정렬/목록 자체 변경 0.
+- commit `4b8830e8662d28ab7d6f9a8c5f5b8c9998c6f3a8`.
+- app version **356** 준비.
+- Explore 비공개 경고박스 제거 commit `ebdbe7cb9e9ce224c59ba900346329a78c6c4bc4`도 app356에 포함.
+
+환경 격차 read-only 감사:
+- Live Explore Runtime Audit Run `37368822795`: **SUCCESS**, shared/user D1 write 0.
+- PREVIEW Worker `0badfdf8-597d-4f69-9a05-b6fb32612f01`:
+  - `SORIDRAW_R2_CATALOG_V1=1`
+  - `SORIDRAW_R2_HYBRID_READ_V1=1`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+- TEST Worker `6a0315db-8e17-46e6-b946-03133a4364f7`: 위 release feature flags **없음**.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`: 위 release feature flags **없음**.
+- 세 환경 DB는 모두 shared canonical `217ef5b1-5d80-4f7c-afc7-9e07eb05c06b`, PROFILE_MEDIA도 모두 `soridraw-profile-media`.
+- 따라서 곡 목록이 잠시 후 일치한 것은 shared R2 데이터 수렴이며, **환경 실행 설정까지 같다는 뜻은 아님**.
+- 기존 Release Controller가 target Worker의 live vars를 `keep_vars`로 보존만 해서 PREVIEW의 새 feature flags를 TEST/PRODUCTION으로 승격하지 못하는 gap 확인.
+- `.deploy/release-worker-runtime.mjs`를 수정해 TEST/PRODUCTION 승격 시 canonical PREVIEW release vars도 함께 승격하고 verify 단계에서 exact parity를 강제.
+- static verifier도 동일 규칙을 hard gate로 추가.
+- 이 release-controller 수정은 아직 TEST/PRODUCTION에 적용되지 않았으며 다음 immutable preflight PASS가 선행되어야 함.
+
 ## 0QB. app355 실기기 publication 재측정 — never-published 첫 공개 R6/W12만 HARD FAIL (2026-10-06 KST)
 
 사용자 CACHE LIVE 실측:

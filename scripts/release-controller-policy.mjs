@@ -19,6 +19,7 @@ export function controllerIdentity(root) {
   return {
     workflowSha256: hash('.github/workflows/soridraw-release-promotion.yml'),
     workerRuntimeSha256: hash('.deploy/release-worker-runtime.mjs'),
+    mediaWorkerRuntimeSha256: hash('.deploy/release-media-worker-runtime.mjs'),
     controllerVerifierSha256: hash('scripts/verify-release-controller.mjs'),
   };
 }

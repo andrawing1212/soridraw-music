@@ -1,5 +1,5 @@
 name: TEMP 362 Isolated Publication Live Trigger Reads
-# rerun compatibility v3
+# rerun NEW-value compatibility v4
 
 on:
   push:

@@ -41,26 +41,33 @@ function validate(source = workflow) {
   assert.match(immutable, /sort_by\(\.cron\)/);
 
   const testDeploy = step(source, 'TEST_DEPLOY exact tree and uploaded Worker version');
-  before(testDeploy, 'test upload', 'refs/heads/main');
-  before(testDeploy, 'release-media-worker-runtime.mjs test upload', 'refs/heads/main');
+  assert.match(testDeploy, /release-media-worker-runtime\.mjs test upload/);
   assert.match(testDeploy, /release-media-worker-runtime\.mjs test activate/);
-  before(capability + testDeploy, 'testIamPermissions', 'refs/heads/main');
+  assert.doesNotMatch(testDeploy, /refs\/heads\/main/);
   const prodDeploy = step(source, 'PROD_DEPLOY verified identities only');
-  before(prodDeploy, 'production upload', 'refs/heads/production');
-  before(prodDeploy, 'release-media-worker-runtime.mjs production upload', 'refs/heads/production');
+  assert.match(prodDeploy, /release-media-worker-runtime\.mjs production upload/);
   assert.match(prodDeploy, /release-media-worker-runtime\.mjs production activate/);
   assert.match(prodDeploy, /hosting:clone "soridraw-test:@\$test_hosting_version_id"/);
+  assert.doesNotMatch(prodDeploy, /refs\/heads\/production/);
   assert.doesNotMatch(prodDeploy, /soridraw-test:live/);
 
   const testVerify = step(source, 'TEST_VERIFY and freeze durable manifest');
   const prodPreflight = step(source, 'PROD_PREFLIGHT revalidate TEST manifest and live release');
   assert.match(testVerify, /identity "\$GITHUB_WORKSPACE"/);
+  assert.match(testVerify, /gh release create/);
+  assert.match(testVerify, /refs\/heads\/main/);
+  before(testVerify, 'release-media-worker-runtime.mjs test verify', 'refs/heads/main');
+  before(testVerify, 'gh release create', 'refs/heads/main');
+  const prodVerify = step(source, 'PROD_VERIFY');
+  assert.match(prodVerify, /refs\/heads\/production/);
+  before(prodVerify, 'release-media-worker-runtime.mjs production verify', 'refs/heads/production');
   assert.match(prodPreflight, /controllerIdentity\(process\.argv\[3\]\)/);
   assert.match(prodPreflight, /"\$GITHUB_WORKSPACE"/);
   assert.doesNotMatch(prodPreflight, /controllerIdentity\(process\.cwd\(\)\)/);
 
   const rollback = step(source, 'Rollback branch and Worker traffic after deployment failure');
-  for (const flag of ['test-worker-mutated', 'test-media-worker-mutated', 'test-branch-mutated', 'test-hosting-mutated', 'production-worker-mutated', 'production-media-worker-mutated', 'production-branch-mutated', 'production-hosting-mutated']) assert.ok(rollback.includes(flag));
+  for (const flag of ['test-worker-mutated', 'test-media-worker-mutated', 'test-branch-mutated', 'test-hosting-mutated', 'test-release-mutated', 'production-worker-mutated', 'production-media-worker-mutated', 'production-branch-mutated', 'production-hosting-mutated']) assert.ok(rollback.includes(flag));
+  assert.match(rollback, /gh release delete/);
   assert.match(rollback, /release-worker-runtime\.mjs "\$stage" restore/);
   assert.match(rollback, /release-media-worker-runtime\.mjs "\$stage" restore/);
   assert.doesNotMatch(rollback, /release-worker-runtime\.mjs "\$stage" activate/);
@@ -70,6 +77,9 @@ function validate(source = workflow) {
   assert.match(mediaRuntime, /SHARED_CATALOG_BUCKET = 'soridraw-user-catalog'/);
   assert.match(mediaRuntime, /MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS/);
   assert.match(mediaRuntime, /MEDIA_WORKER_VERIFY=PASS/);
+  assert.match(mediaRuntime, /MEDIA_ACTIVE_VERSION_SETTLED=PASS/);
+  assert.match(mediaRuntime, /MEDIA_HEALTH_SETTLED=PASS/);
+  assert.match(mediaRuntime, /hashReleaseIdentity/);
   assert.match(mediaRuntime, /action === 'restore'/);
 
   assert.doesNotMatch(source, /git\s+push[^\n]*(?:--force|-f\b)/i);

@@ -1,3 +1,45 @@
+## CURRENT NEXT GATE — shared private Catalog dormant support -> coordinated environment parity
+
+완료:
+- 공용 private R2 bucket `soridraw-user-catalog` + 세 환경 `CATALOG` binding 준비.
+- `SORIDRAW_SHARED_CATALOG_V1=0`으로 모든 환경에서 cutover OFF.
+- bounded user/kind bootstrap + revision fence 구현.
+- PREVIEW Media Worker Run `37379556479` SUCCESS.
+- final Release System Audit Run `37379712972` SUCCESS.
+- PREVIEW App Release Run `37381481452` SUCCESS, app356 exact build.
+- user data copy/backfill/migration/delete/rewrite 0.
+
+다음 순서:
+1. **PREVIEW 단독 shared flag ON 금지.**
+2. 사용자가 TEST 배포를 요청하면 현재 검증된 dormant support 전체를 main/TEST로 승격:
+   - app/client
+   - Media Worker
+   - shared `CATALOG` binding
+   - release controller parity checks
+   를 하나의 릴리스로 처리.
+3. TEST 승격 직후에도 `SORIDRAW_SHARED_CATALOG_V1=0`을 유지하고 PREVIEW/TEST runtime source/binding exact parity 확인.
+4. PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+5. 세 활성 환경이 shared Catalog 코드를 이해하는 상태가 된 뒤에만 coordinated flag cutover 계획을 실행.
+6. cutover 검증은 동일 계정으로 PREVIEW/TEST/PRODUCTION:
+   - Recent Song 저장하트
+   - Music Note membership/list
+   - Library list
+   - Music Note/Library folder metadata
+   - reload / PC↔mobile
+   - 공개상태/Explore
+   를 확인.
+7. warm 정상 캐시 재진입 Worker/Firestore data read 0 목표 유지.
+8. bootstrap은 실제 revision gap/missing shared Catalog 복구에서만 허용. 앱 업데이트/페이지 진입을 이유로 bootstrap 금지.
+9. parity가 모두 PASS한 뒤에만 first-publication W12->W2 작업 재개.
+
+금지:
+- environment-local Catalog를 shared bucket으로 일괄 복사.
+- 사용자 전체 backfill/full scan.
+- PREVIEW만 먼저 shared authority 활성화.
+- app349 save-heart / app301 folders / 좋아요 / UI / thumbnail 정상 기능 변경.
+- 승인 없는 TEST/PRODUCTION 승격.
+- parity 완료 전 shared D1 W2 cutover.
+
 ## CURRENT NEXT GATE — Music Note/Library/Recent cross-env parity before PRODUCTION
 
 현재:

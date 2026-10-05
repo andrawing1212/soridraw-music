@@ -272,6 +272,97 @@ if (process.argv[2] === 'cleanup') {
         WHERE row_json IS NOT excluded.row_json;
       END`);
 
+    const createDerivedMusicNoteInsert363 = async () => ddl(`CREATE TRIGGER explore079_music_note_derived_track_insert
+      AFTER INSERT ON explore_derived_tracks
+      WHEN COALESCE(json_extract(NEW.row_json,'$.source_type'),'')='music_note'
+      BEGIN
+        INSERT INTO explore_derived_profiles(uid) VALUES(NEW.owner_uid)
+        ON CONFLICT(uid) DO NOTHING;
+      END`);
+    const createDerivedMusicNoteUpdate363 = async () => ddl(`CREATE TRIGGER explore079_music_note_derived_track_update
+      AFTER UPDATE ON explore_derived_tracks
+      WHEN COALESCE(json_extract(OLD.row_json,'$.source_type'),'')='music_note'
+       AND COALESCE(json_extract(NEW.row_json,'$.source_type'),'')='music_note'
+       AND (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)
+      BEGIN
+        INSERT INTO explore_derived_profiles(uid) VALUES(OLD.owner_uid) ON CONFLICT(uid) DO NOTHING;
+        INSERT INTO explore_derived_profiles(uid) VALUES(NEW.owner_uid) ON CONFLICT(uid) DO NOTHING;
+        UPDATE explore_derived_profiles SET track_count=MAX(0,track_count-OLD.active)
+          WHERE uid=OLD.owner_uid AND OLD.owner_uid IS NOT NEW.owner_uid;
+        UPDATE explore_derived_profiles SET track_count=track_count+NEW.active
+          WHERE uid=NEW.owner_uid AND OLD.owner_uid IS NOT NEW.owner_uid;
+        UPDATE explore_derived_profiles SET track_count=MAX(0,track_count+NEW.active-OLD.active)
+          WHERE uid=NEW.owner_uid AND OLD.owner_uid IS NEW.owner_uid AND OLD.active IS NOT NEW.active;
+      END`);
+
+    const createTrackUpdate363 = async () => ddl(`CREATE TRIGGER explore032_track_update
+      AFTER UPDATE OF owner_uid,source_type,source_id,source_parent_id,legacy_global_id,
+        source_subtrack_key,source_subtrack_index,source_subtrack_id,title,description,cover_url,duration_seconds,
+        lyrics,style,prompt,suno_url_primary,suno_url_secondary,search_text,status,published_at,created_at,
+        share_schema_version,share_payload_json,primary_genre
+      ON tracks
+      BEGIN
+        UPDATE explore_derived_tracks
+        SET row_json=json_patch(row_json,json_object(
+          'cover_url',NEW.cover_url,'duration_seconds',NEW.duration_seconds,
+          'suno_url_primary',NEW.suno_url_primary,'suno_url_secondary',NEW.suno_url_secondary,'updated_at',NEW.updated_at
+        ))
+        WHERE id=NEW.id
+          AND (OLD.cover_url IS NOT NEW.cover_url OR OLD.duration_seconds IS NOT NEW.duration_seconds
+            OR OLD.suno_url_primary IS NOT NEW.suno_url_primary OR OLD.suno_url_secondary IS NOT NEW.suno_url_secondary)
+          AND NOT (
+            OLD.owner_uid IS NOT NEW.owner_uid OR OLD.source_type IS NOT NEW.source_type OR OLD.source_id IS NOT NEW.source_id
+            OR OLD.source_parent_id IS NOT NEW.source_parent_id OR OLD.legacy_global_id IS NOT NEW.legacy_global_id
+            OR OLD.source_subtrack_key IS NOT NEW.source_subtrack_key OR OLD.source_subtrack_index IS NOT NEW.source_subtrack_index
+            OR OLD.source_subtrack_id IS NOT NEW.source_subtrack_id OR OLD.title IS NOT NEW.title
+            OR OLD.description IS NOT NEW.description OR OLD.lyrics IS NOT NEW.lyrics OR OLD.style IS NOT NEW.style
+            OR OLD.prompt IS NOT NEW.prompt OR OLD.search_text IS NOT NEW.search_text OR OLD.status IS NOT NEW.status
+            OR OLD.published_at IS NOT NEW.published_at OR OLD.created_at IS NOT NEW.created_at
+            OR OLD.share_schema_version IS NOT NEW.share_schema_version OR OLD.share_payload_json IS NOT NEW.share_payload_json
+            OR OLD.primary_genre IS NOT NEW.primary_genre
+          );
+
+        INSERT INTO explore_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
+        SELECT t.id,t.owner_uid,(t.is_public=1 AND t.status='published'),t.published_at,t.profile_pinned,
+          COALESCE(s.like_count,0),
+          json_patch(
+            json_object(
+              'id',t.id,'owner_uid',t.owner_uid,'source_type',t.source_type,'source_id',t.source_id,
+              'source_parent_id',t.source_parent_id,'legacy_global_id',t.legacy_global_id,
+              'source_subtrack_key',t.source_subtrack_key,'source_subtrack_index',t.source_subtrack_index,
+              'source_subtrack_id',t.source_subtrack_id,'title',t.title,'description',t.description,
+              'cover_url',t.cover_url,'duration_seconds',t.duration_seconds,'lyrics',t.lyrics,'style',t.style,'prompt',t.prompt,
+              'suno_url_primary',t.suno_url_primary,'suno_url_secondary',t.suno_url_secondary,'search_text',t.search_text,
+              'is_public',t.is_public,'status',t.status,'published_at',t.published_at,'created_at',t.created_at,'updated_at',t.updated_at,
+              'allow_next_song_apply',t.allow_next_song_apply,'allow_follower_save',t.allow_follower_save,
+              'profile_pinned',t.profile_pinned,'share_schema_version',t.share_schema_version,
+              'share_payload_json',t.share_payload_json,'primary_genre',t.primary_genre
+            ),
+            json_object('like_count',COALESCE(s.like_count,0),'comment_count',COALESCE(s.comment_count,0),'play_count',COALESCE(s.play_count,0))
+          )
+        FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id
+        WHERE t.id=NEW.id AND (
+          OLD.owner_uid IS NOT NEW.owner_uid OR OLD.source_type IS NOT NEW.source_type OR OLD.source_id IS NOT NEW.source_id
+          OR OLD.source_parent_id IS NOT NEW.source_parent_id OR OLD.legacy_global_id IS NOT NEW.legacy_global_id
+          OR OLD.source_subtrack_key IS NOT NEW.source_subtrack_key OR OLD.source_subtrack_index IS NOT NEW.source_subtrack_index
+          OR OLD.source_subtrack_id IS NOT NEW.source_subtrack_id OR OLD.title IS NOT NEW.title
+          OR OLD.description IS NOT NEW.description OR OLD.lyrics IS NOT NEW.lyrics OR OLD.style IS NOT NEW.style
+          OR OLD.prompt IS NOT NEW.prompt OR OLD.search_text IS NOT NEW.search_text OR OLD.status IS NOT NEW.status
+          OR OLD.published_at IS NOT NEW.published_at OR OLD.created_at IS NOT NEW.created_at
+          OR OLD.share_schema_version IS NOT NEW.share_schema_version OR OLD.share_payload_json IS NOT NEW.share_payload_json
+          OR OLD.primary_genre IS NOT NEW.primary_genre
+          OR (
+            (OLD.cover_url IS NOT NEW.cover_url OR OLD.duration_seconds IS NOT NEW.duration_seconds
+              OR OLD.suno_url_primary IS NOT NEW.suno_url_primary OR OLD.suno_url_secondary IS NOT NEW.suno_url_secondary)
+            AND changes()=0
+          )
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          owner_uid=excluded.owner_uid,active=excluded.active,published_at=excluded.published_at,
+          pinned=excluded.pinned,likes=excluded.likes,row_json=excluded.row_json
+        WHERE row_json IS NOT excluded.row_json;
+      END`);
+
     const createTrackUpdate357 = async () => ddl(`CREATE TRIGGER explore032_track_update
       AFTER UPDATE OF owner_uid,source_type,source_id,source_parent_id,legacy_global_id,
         source_subtrack_key,source_subtrack_index,source_subtrack_id,title,description,cover_url,duration_seconds,
@@ -336,6 +427,29 @@ if (process.argv[2] === 'cleanup') {
     await createShared({ update: true }); await createTrackUpdate357(); await createDerivedMusicNoteUpdate();
     const swap357Returning = metric('362_SWAP_357_CANDIDATE_RETURNING', await query(sourceReturningSql));
 
+    // 363 compatibility-safe candidate keeps the legacy media mirror for old
+    // TEST/PRODUCTION readers, but removes no-op projection/profile reads.
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 1, media: 1 });
+    await createShared({ update: true }); await createTrackUpdate363(); await createDerivedMusicNoteUpdate363();
+    const swap363Returning = metric('362_SWAP_363_COMPAT_RETURNING', await query(sourceReturningSql));
+
+    // Missing-derived recovery must remain intact for old readers.
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 1, media: 1 });
+    await ddl("DELETE FROM explore_derived_tracks WHERE id='A'");
+    await createShared({ update: true }); await createTrackUpdate363(); await createDerivedMusicNoteUpdate363();
+    const swap363Repair = metric('362_SWAP_363_MISSING_DERIVED_REPAIR', await query(sourceReturningSql));
+    const repaired363 = await query("SELECT json_extract(row_json,'$.suno_url_primary') AS url FROM explore_derived_tracks WHERE id='A'");
+    if (String(repaired363.results?.[0]?.url || '') !== 'https://suno/2') fail('363 missing-derived media repair failed');
+
+    // Non-media content changes must still rebuild the legacy projection.
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 1, media: 1 });
+    await createShared({ update: true }); await createTrackUpdate363(); await createDerivedMusicNoteUpdate363();
+    const content363 = metric('362_CONTENT_363_COMPAT_RETURNING', await query(
+      "UPDATE tracks SET title='A title 2',updated_at=203 WHERE id='A' AND owner_uid='user-a' RETURNING *"
+    ));
+    const contentCheck363 = await query("SELECT json_extract(row_json,'$.title') AS title FROM explore_derived_tracks WHERE id='A'");
+    if (String(contentCheck363.results?.[0]?.title || '') !== 'A title 2') fail('363 content projection rebuild failed');
+
     // ---- Registered visibility transitions: heavy media trigger must stay asleep. ----
     await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 0, media: 1 });
     await createShared({ update: true }); await createTrackUpdateCurrent(); await createDerivedMusicNoteUpdate();
@@ -373,20 +487,29 @@ if (process.argv[2] === 'cleanup') {
     await resetFirst(); await createShared({ insert: true }); await createTrackInsert(); await createDerivedMusicNoteInsert();
     const firstFull = metric('362_FIRST_INSERT_FULL_LIVE_TRIGGER_CHAIN', await query(firstInsertSql));
 
+    await resetFirst(); await createShared({ insert: true }); await createTrackInsert(); await createDerivedMusicNoteInsert363();
+    const first363 = metric('362_FIRST_INSERT_363_COMPAT_CHAIN', await query(firstInsertSql));
+
     const delta = (a,b) => ({ r: b.r-a.r, w: b.w-a.w });
     console.log('362_ATTR_SWAP_SHARED_REV=' + JSON.stringify(delta(swapBase,swapShared)));
     console.log('362_ATTR_SWAP_TRACK_TRIGGER=' + JSON.stringify(delta(swapShared,swapTrackProjection)));
     console.log('362_ATTR_SWAP_MUSIC_NOTE_DERIVED_TRIGGER=' + JSON.stringify(delta(swapTrackProjection,swapFull)));
     console.log('362_ATTR_SWAP_357_VS_CURRENT=' + JSON.stringify({ r: swap357.r-swapFull.r, w: swap357.w-swapFull.w }));
     console.log('362_ATTR_SWAP_RETURNING_OVERHEAD=' + JSON.stringify({ current: swapFullReturning.r-swapFull.r, candidate: swap357Returning.r-swap357.r }));
+    console.log('362_ATTR_SWAP_363_COMPAT_VS_CURRENT=' + JSON.stringify({ r: swap363Returning.r-swapFullReturning.r, w: swap363Returning.w-swapFullReturning.w }));
     console.log('362_ATTR_FIRST_SHARED_REV=' + JSON.stringify(delta(firstBase,firstShared)));
     console.log('362_ATTR_FIRST_DERIVED_PROJECTION=' + JSON.stringify(delta(firstShared,firstProjection)));
     console.log('362_ATTR_FIRST_MUSIC_NOTE_DERIVED_TRIGGER=' + JSON.stringify(delta(firstProjection,firstFull)));
+    console.log('362_ATTR_FIRST_363_COMPAT_VS_CURRENT=' + JSON.stringify({ r: first363.r-firstFull.r, w: first363.w-firstFull.w }));
 
     if (swap357.w > 2 || swap357Returning.w > 2) fail('357 source swap must stay <=W2');
+    if (swap363Returning.w !== swapFullReturning.w) fail('363 compatibility candidate changed normal source-swap writes');
     if (republish.w > 2 || privateResult.w > 2) fail('registered visibility transitions exceeded W2');
     if (swap357.r >= swapFull.r) fail('357 candidate did not reduce current source-swap reads');
     console.log('362_SOURCE_SWAP_READ_REDUCTION_PROVED=PASS currentR' + swapFull.r + '->candidateR' + swap357.r);
+    console.log('362_COMPAT_READ_REDUCTION_PROVED=PASS currentReturningR' + swapFullReturning.r + '->compatR' + swap363Returning.r);
+    console.log('362_COMPAT_MISSING_DERIVED_REPAIR=PASS R' + swap363Repair.r + ' W' + swap363Repair.w);
+    console.log('362_COMPAT_CONTENT_REBUILD=PASS R' + content363.r + ' W' + content363.w);
     console.log('362_REGISTERED_VISIBILITY_W2_GUARD=PASS');
     console.log('362_SHARED_USER_DATA_TOUCHED=0');
     console.log('362_PRODUCT_SHARED_D1_CUTOVER=NOT_APPLIED');

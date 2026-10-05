@@ -1,0 +1,14 @@
+user_approved=true
+approved_scope=364_shared_d1_two_trigger_read_compaction_only
+product_code_target=69057cd604f841344917abf7278ec98cd901dc1f
+candidate=cloudflare/explore-worker/candidates/364-publication-read-compaction-compat.sql
+candidate_blob=7ca0229633501c29311bc97d539f2497fabf845c
+rollback=cloudflare/explore-worker/candidates/364-publication-read-compaction-compat-rollback.sql
+rollback_blob=5033e63d56b9756382ebf341fca1c10f1c599571
+verifier=scripts/verify-364-publication-read-compaction-compat.mjs
+verifier_blob=e19c609c157e93bd2b437fd630e9895c3faeed9f
+user_row_migration=false
+backfill=false
+delete=false
+test_production_worker_change=false
+approved_at=2026-10-06T02:56:00+09:00

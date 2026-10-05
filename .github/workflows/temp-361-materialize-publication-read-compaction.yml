@@ -6,6 +6,10 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/temp-361-materialize-publication-read-compaction.yml'
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-361-pr.trigger'
 
 permissions:
   contents: write

@@ -55,15 +55,17 @@ jobs:
 
           for sort in latest popular; do
             code="$(curl -sS -D "$RUNNER_TEMP/359-$sort.head" -o "$RUNNER_TEMP/359-$sort.json" -w '%{http_code}'               -H 'Origin: https://preview.soridraw.com'               "http://127.0.0.1:8793/v1/feed?sort=$sort&limit=3&__diag359=1")"
-            echo "359_FEED_SORT=$sort HTTP=$code"
+            echo "359_FEED_SORT=$sort HTTP=$code ELAPSED_MS=$elapsed_ms"
             sed -n '1,80p' "$RUNNER_TEMP/359-$sort.head"
             node - "$RUNNER_TEMP/359-$sort.json" <<'NODE'
           const fs=require('fs');
           const p=process.argv[2];
           const raw=fs.readFileSync(p,'utf8');
           let payload=null; try{payload=JSON.parse(raw)}catch{}
-          console.log('359_BODY='+JSON.stringify(payload ?? raw.slice(0,1000)));
-          console.log('359_ITEM_COUNT='+(Array.isArray(payload?.data?.items)?payload.data.items.length:-1));
+          const items=Array.isArray(payload?.data?.items)?payload.data.items:[];
+          console.log('359_OK='+String(payload?.ok===true));
+          console.log('359_ITEM_COUNT='+items.length);
+          console.log('359_FIRST_IDS='+items.slice(0,3).map(x=>String(x?.id||'')).join(','));
           NODE
           done
 

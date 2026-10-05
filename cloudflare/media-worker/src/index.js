@@ -467,6 +467,16 @@ const CATALOG_MAX_ITEMS = 100000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5000;
 const CATALOG_JOURNAL_ENGINE_1053 = true;
+// SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356
+// Dormant until every release environment is wired to the same private CATALOG
+// bucket. MEDIA remains environment-local for media/archive objects.
+const isSharedCatalogEnabled = (env) => text(env?.SORIDRAW_SHARED_CATALOG_V1) === '1';
+const catalogBucket = (env) => (
+  isSharedCatalogEnabled(env) && env?.CATALOG ? env.CATALOG : env.MEDIA
+);
+const catalogAuthorityMode = (env) => (
+  isSharedCatalogEnabled(env) && env?.CATALOG ? 'shared-catalog' : 'legacy-media'
+);
 const CATALOG_KINDS = new Set(['musicNote', 'library']);
 
 const MUSIC_NOTE_CATALOG_FIELDS = [
@@ -711,7 +721,7 @@ const buildCanonicalCatalog = async (identity, kind, minimumRevision, env) => {
 const putCatalogObjectAtKey = async (env, key, uid, payload) => {
   const encoded = JSON.stringify(payload);
   if (new TextEncoder().encode(encoded).length > CATALOG_MAX_BYTES) throw new Error('CATALOG_TOO_LARGE');
-  return env.MEDIA.put(key, encoded, {
+  return catalogBucket(env).put(key, encoded, {
     httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
     customMetadata: {
       uid,
@@ -729,7 +739,7 @@ const putCatalogObject = async (env, uid, payload) => (
 );
 
 const readCatalogObjectAtKey = async (env, key, kind) => {
-  const object = await env.MEDIA.get(key);
+  const object = await catalogBucket(env).get(key);
   if (!object) return null;
   try {
     const payload = JSON.parse(await object.text());
@@ -744,7 +754,7 @@ const readCatalogObject = async (env, uid, kind) => (
 );
 
 const readCatalogJournalObject = async (env, uid, kind) => {
-  const object = await env.MEDIA.get(catalogJournalKey(uid, kind));
+  const object = await catalogBucket(env).get(catalogJournalKey(uid, kind));
   if (!object) return null;
   try {
     const payload = JSON.parse(await object.text());
@@ -771,7 +781,7 @@ const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null)
       ? { etagMatches: currentObject.etag }
       : { etagDoesNotMatch: '*' },
   };
-  return env.MEDIA.put(catalogJournalKey(uid, kind), encoded, options);
+  return catalogBucket(env).put(catalogJournalKey(uid, kind), encoded, options);
 };
 
 const getCatalogState = async (identity, kind, requiredRevision, env) => {
@@ -1016,6 +1026,8 @@ export default {
         catalogSchemaVersion: CATALOG_SCHEMA_VERSION,
         catalogDeltaMode: 'base+journal',
         catalogCompactionAfter: 200,
+        catalogBinding: Boolean(env.CATALOG),
+        catalogAuthorityMode: catalogAuthorityMode(env),
       }, 200, origin);
     }
 

@@ -1,7 +1,30 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import {
+  acknowledgeRecentSongsSignalVersion,
+  publishMusicNoteSaveStateDelta,
+  publishMusicNoteHeartPreviewDelta,
+  publishRecentSongEditPreviewDelta,
+  readPendingMusicNoteSyncSignal,
+  readRecentSongsAcknowledgedSignalVersion,
+  readRecentSongsPendingSignalVersion,
+  rememberRecentSongsPendingSignalVersion,
+} from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
+import {
+  queueMusicNoteFavoriteCountDelta,
+  resumeMusicNoteFavoriteCountDelta,
+} from './services/musicNoteFavoriteCountBatch';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
+import {
+  listStudioHeartPendingIntents,
+  readStudioHeartPendingIntent,
+  removeStudioHeartPendingIntent,
+  updateStudioHeartPendingIntent,
+  writeStudioHeartPendingIntent,
+  type StudioHeartPendingIntent,
+} from './lib/studioHeartBatch';
 
 const SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951 = true;
 const getLiveSoridrawSongId = (song: any): string | null => {
@@ -14,6 +37,19 @@ const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => 
   const soridrawSongId = createSoridrawSongId();
   try { (song as any).soridrawSongId = soridrawSongId; return song; }
   catch { return { ...song, soridrawSongId }; }
+};
+
+const STUDIO_HEART_BATCH_MS = 30_000;
+const STUDIO_HEART_RETRY_MS = 60_000;
+const buildBatchedRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
+  const raw = `${uid}|${stableIdentity}`;
+  let hash = 2166136261;
+  for (let index = 0; index < raw.length; index += 1) {
+    hash ^= raw.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const safeIdentity = stableIdentity.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+  return `rs_${safeIdentity}_${(hash >>> 0).toString(36)}`;
 };
 
 const buildRecentMirrorTargets = (songs: readonly any[], operation: 'upsert' | 'recent-hide', sourceUpdatedAtMs = Date.now()): V1MutationMirrorTarget[] => {
@@ -137,6 +173,7 @@ import {
   writeSeenUserControlRevision,
 } from './services/userControlRevisionService';
 import { observeExploreLikeAccountSyncSignal } from './services/exploreLikeService';
+import { SORIDRAW_PROFILE_AVATAR_EVENT } from './services/profileAvatarAuthority';
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
@@ -307,6 +344,40 @@ const recentSongsSessionVerifiedUids = new Set<string>();
 const recentSongsSessionReadInFlightUids = new Set<string>();
 const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
+const RECENT_SONG_TEXT_BATCH_MS = 150_000;
+const RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text_pending_v2';
+type RecentSongTextPendingMarker = {
+  operation: 'regenerate' | 'edit' | 'pre-favorite-edit';
+  activeIndex: number;
+  mutationEpoch: number;
+  updatedAtMs: number;
+};
+const getRecentSongTextPendingStorageKey = (uid: string) => `${RECENT_SONG_TEXT_PENDING_STORAGE_BASE}_${uid}`;
+const readRecentSongTextPendingMarker = (uid: string): RecentSongTextPendingMarker | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getRecentSongTextPendingStorageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const operation = String(parsed?.operation || '');
+    if (!['regenerate', 'edit', 'pre-favorite-edit'].includes(operation)) return null;
+    return {
+      operation: operation as RecentSongTextPendingMarker['operation'],
+      activeIndex: Math.floor(Number(parsed?.activeIndex ?? -1)),
+      mutationEpoch: Math.max(0, Math.floor(Number(parsed?.mutationEpoch || 0))),
+      updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
+    };
+  } catch { return null; }
+};
+const writeRecentSongTextPendingMarker = (uid: string, marker: RecentSongTextPendingMarker) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(getRecentSongTextPendingStorageKey(uid), JSON.stringify(marker)); } catch {}
+};
+const clearRecentSongTextPendingMarker = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try { localStorage.removeItem(getRecentSongTextPendingStorageKey(uid)); } catch {}
+};
+const hasRecentSongTextPendingMarker = (uid: string) => Boolean(readRecentSongTextPendingMarker(uid));
 
 const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
 const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
@@ -344,6 +415,42 @@ const writeRecentSongsLocalVersion = (uid: string, version: number) => {
   try {
     const previous = readRecentSongsLocalVersion(uid);
     localStorage.setItem(getRecentSongsVersionStorageKey(uid), String(Math.max(previous, Math.floor(version))));
+  } catch {}
+};
+
+// SORIDRAW_RECENT_GENERATION_UNCONFIRMED_LOCAL_196_20260925
+// Only IDs of newly generated, not-yet-confirmed songs. Never recover deleted
+// tracks by merging a full cached catalog into an older remote snapshot.
+const RECENT_UNCONFIRMED_SONGS_KEY_BASE = 'soridraw_recent_unconfirmed_generated_v1';
+const recentUnconfirmedKey = (uid: string) => `${RECENT_UNCONFIRMED_SONGS_KEY_BASE}_${uid}`;
+const readRecentUnconfirmedGeneratedIds = (uid: string): string[] => {
+  if (!uid || typeof localStorage === 'undefined') return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(recentUnconfirmedKey(uid)) || '[]');
+    return Array.isArray(raw)
+      ? raw.filter((value: unknown): value is string => typeof value === 'string' && isSoridrawSongId(value)).slice(0, 10)
+      : [];
+  } catch { return []; }
+};
+const markRecentGeneratedUnconfirmed = (uid: string, songs: any[]): void => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  const ids = songs.map((song) => getLiveSoridrawSongId(song)).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return;
+  try {
+    localStorage.setItem(recentUnconfirmedKey(uid), JSON.stringify([...new Set([...ids, ...readRecentUnconfirmedGeneratedIds(uid)])].slice(0, 10)));
+  } catch { console.warn('Recent generated song sync marker could not be stored.'); }
+};
+const hasUnconfirmedSongMissingFromServer = (uid: string, serverSongs: any[]): boolean => {
+  const confirmed = new Set(serverSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+  return readRecentUnconfirmedGeneratedIds(uid).some((id) => !confirmed.has(id));
+};
+const acknowledgeRecentGeneratedSongs = (uid: string, persistedSongs: any[]): void => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  const confirmed = new Set(persistedSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+  const remaining = readRecentUnconfirmedGeneratedIds(uid).filter((id) => !confirmed.has(id));
+  try {
+    if (remaining.length > 0) localStorage.setItem(recentUnconfirmedKey(uid), JSON.stringify(remaining));
+    else localStorage.removeItem(recentUnconfirmedKey(uid));
   } catch {}
 };
 
@@ -413,6 +520,10 @@ const SORIDRAW_901_MUSIC_NOTE_SYNC_PERMISSION_HARDENING = true;
 const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_local_sync_version_v1';
 const MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_remote_sync_version_v1';
+// app288 — RTDB delivery acknowledgement must never share the catalog/data
+// timestamp key. Catalog generatedAtMs and RTDB signal version are different
+// version domains; mixing them can make a healthy changed-item signal look stale.
+const MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE = 'soridraw_music_note_rtdb_ack_version_v1';
 const MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE = 'soridraw_music_note_pagination_cursor_v1';
 const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
@@ -571,6 +682,19 @@ const rememberFavoriteDeletedTombstones = (uid: string, ids: string[]) => {
   if (Array.isArray(cached)) {
     favoritesInMemoryCache.set(uid, cached.filter((favorite) => !safeIds.includes(String(favorite?.id || ''))));
   }
+};
+
+// app280 — this set is also the local Catalog exclusion guard for soft unsave.
+// A later explicit save/restore of the same document must clear it first.
+const forgetFavoriteDeletedTombstones = (uid: string, ids: string[]) => {
+  const safeIds = Array.from(new Set((ids || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!uid || safeIds.length === 0) return;
+  const tombstones = getFavoriteDeletedTombstoneIds(uid);
+  let changed = false;
+  safeIds.forEach((id) => {
+    if (tombstones.delete(id)) changed = true;
+  });
+  if (changed) writeFavoriteDeletedTombstoneIds(uid, tombstones);
 };
 
 const isFavoriteDeletedTombstoned = (uid: string, id: string): boolean => {
@@ -740,6 +864,7 @@ import {
   type NavigationVisibilitySettings,
   writeStoredNavigationVisibilitySettings,
 } from './constants/navigationVisibility';
+import { subscribeNavigationVisibilitySync } from './services/navigationVisibilitySyncService';
 import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 import {
@@ -1006,6 +1131,7 @@ import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
+import { isMusicNoteItemRemoved } from './lib/musicNoteSavedState';
 import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
@@ -2909,6 +3035,7 @@ function HistoryRouteWrapper({
   lockAllFavorites,
   user,
   handleLogin,
+  showMusicApiGeneration = true,
 }: any) {
   const favorites = useFavorites();
   const location = useLocation();
@@ -2941,6 +3068,7 @@ function HistoryRouteWrapper({
       onLoadMoreFavorites={loadMoreFavorites}
       onServerSearchFavorites={searchFavoritesOnServer}
       onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
+      showMusicApiGeneration={showMusicApiGeneration}
       toggleFavorite={toggleFavorite}
       updateFavorite={updateFavorite}
       clearAllFavorites={clearAllFavorites}
@@ -3743,11 +3871,32 @@ function Navigation({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
-  const headerIdentity = user
+  const [authoritativePhotoURL216, setAuthoritativePhotoURL216] = useState('');
+
+  useEffect(() => {
+    setAuthoritativePhotoURL216('');
+    const handleAvatarAuthority = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; url?: string }>).detail;
+      if (!detail || !user?.uid || detail.uid !== user.uid) return;
+      const nextPhotoURL = String(detail.url || '');
+      setAuthoritativePhotoURL216(nextPhotoURL);
+      writeCachedHeaderIdentity({
+        ...getHeaderIdentityFromUser(user),
+        photoURL: nextPhotoURL,
+      });
+    };
+    window.addEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+    return () => window.removeEventListener(SORIDRAW_PROFILE_AVATAR_EVENT, handleAvatarAuthority as EventListener);
+  }, [user?.uid]);
+
+  const baseHeaderIdentity216 = user
     ? getHeaderIdentityFromUser(user)
     : !isAuthReady
       ? cachedHeaderIdentity
       : null;
+  const headerIdentity = baseHeaderIdentity216 && authoritativePhotoURL216
+    ? { ...baseHeaderIdentity216, photoURL: authoritativePhotoURL216 }
+    : baseHeaderIdentity216;
   const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
   const isActivePath = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -3854,7 +4003,7 @@ function Navigation({
 
     const openCompactStudioWorkspace = (view: StudioWorkspaceView) => {
       onStudioWorkspaceSelect(view);
-      if (location.pathname !== '/studio') navigate('/studio');
+      if (location.pathname !== '/studio') navigate(`/studio?view=${view}`);
       else scrollToTop();
     };
 
@@ -4099,37 +4248,68 @@ function Navigation({
                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    className="soridraw-profile-menu absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                    className="soridraw-profile-menu soridraw-account-menu-surface absolute right-5 top-[68px] z-[90] w-56 max-h-[calc(100vh-84px)] overflow-y-auto"
                   >
-                    <div className="border-b border-white/10 px-3 py-2.5">
-                      <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
-                      <p className="truncate text-xs text-white/45">{user.email || ''}</p>
+                    <div className="soridraw-account-menu-header">
+                      <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+                      <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
+                    {isAdminUser && (
+                      <button
+                        type="button"
+                        onClick={() => { navigate('/admin/users'); setIsProfileOpen(false); }}
+                        className="soridraw-account-menu-row"
+                      >
+                        <Users aria-hidden="true" />
+                        <span>관리자메뉴</span>
+                      </button>
+                    )}
                     {[
-                      { label: '내 프로필', path: '/my-page' },
-                      { label: '설정', path: '/my-page?tab=settings' },
-                      { label: '요금제', path: '/my-page?tab=plan' },
-                      { label: '결제 관리', path: '/my-page?tab=billing' },
-                    ].map((item) => (
-                      <button key={item.label} type="button" onClick={() => { navigate(item.path); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/72 transition-all hover:bg-[#ffb400]/10 hover:text-[#ffb400]">{item.label}</button>
-                    ))}
-                    <div className="my-1 border-t border-white/10" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                      { label: 'MY 페이지', path: '/my-page', icon: UserIcon },
+                      { label: 'MY 프로필', path: `/explore?profile=${encodeURIComponent(user.uid)}`, icon: Compass },
+                      { label: '설정', path: '/my-page?tab=settings', icon: Settings },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => { navigate(item.path); setIsProfileOpen(false); }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Icon aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    <div className="soridraw-account-menu-divider" />
+                    <p className="soridraw-account-menu-section-label">디자인 모드</p>
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#ffb400]/10"
+                      className="soridraw-theme-cycle-button soridraw-account-menu-mode"
                     >
-                      <Palette className="h-5 w-5 shrink-0 text-[#ffb400]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-black text-white/82">모드 변경</span>
-                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      <Palette aria-hidden="true" />
+                      <span className="soridraw-account-menu-mode-copy">
+                        <strong>모드 변경</strong>
+                        <small>{displayModeCycleText}</small>
                       </span>
-                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#ffb400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
-                    <div className="my-1 border-t border-white/10" />
-                    <button type="button" disabled className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/30">고객지원 · 준비중</button>
-                    <button type="button" onClick={() => { handleLogout(); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-black text-[#ffb400] transition-all hover:bg-[#ffb400]/10">로그아웃</button>
+                    <div className="soridraw-account-menu-divider" />
+                    <button type="button" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
+                      <Info aria-hidden="true" />
+                      <span>고객지원 · 준비중</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { handleLogout(); setIsProfileOpen(false); }}
+                      className="soridraw-account-menu-row soridraw-account-menu-logout"
+                    >
+                      <LogOut aria-hidden="true" />
+                      <span>로그아웃</span>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -4241,12 +4421,12 @@ function Navigation({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
                     transition={{ duration: 0.16 }}
-                    className="soridraw-profile-menu absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#181818]/96 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                    className="soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto"
                   >
-                    <div className="border-b border-white/10 px-3 py-2.5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FFB400]">계정 메뉴</p>
-                      <p className="mt-1 truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
-                      <p className="truncate text-[11px] text-white/42">{user.email || ''}</p>
+                    <div className="soridraw-account-menu-header">
+                      <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+                      <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
                     {isAdminUser && (
                       <button
@@ -4256,25 +4436,51 @@ function Navigation({
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="soridraw-account-menu-row"
                       >
-                        <Users className="h-5 w-5" />
-                        관리자메뉴
+                        <Users aria-hidden="true" />
+                        <span>관리자메뉴</span>
                       </button>
                     )}
                     {canShowMenu('myPage') && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigate('/my-page');
-                          setIsProfileOpen(false);
-                          setIsExpanded(false);
-                        }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
-                      >
-                        <UserIcon className="h-5 w-5" />
-                        마이페이지
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/my-page');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <UserIcon aria-hidden="true" />
+                          <span>MY 페이지</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Compass aria-hidden="true" />
+                          <span>MY 프로필</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/my-page?tab=settings');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="soridraw-account-menu-row"
+                        >
+                          <Settings aria-hidden="true" />
+                          <span>설정</span>
+                        </button>
+                      </>
                     )}
                     {isRailLessNavigationViewport && canShowMenu('lab') && (
                       <button
@@ -4284,27 +4490,31 @@ function Navigation({
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="soridraw-account-menu-row"
                       >
-                        <FlaskConical className="h-5 w-5" />
-                        실험실
+                        <FlaskConical aria-hidden="true" />
+                        <span>실험실</span>
                       </button>
                     )}
-                    <div className="my-1 border-t border-white/10" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                    <div className="soridraw-account-menu-divider" />
+                    <p className="soridraw-account-menu-section-label">디자인 모드</p>
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#FFB400]/12"
+                      className="soridraw-theme-cycle-button soridraw-account-menu-mode"
                     >
-                      <Palette className="h-5 w-5 shrink-0 text-[#FFB400]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-black text-white/82">모드 변경</span>
-                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      <Palette aria-hidden="true" />
+                      <span className="soridraw-account-menu-mode-copy">
+                        <strong>모드 변경</strong>
+                        <small>{displayModeCycleText}</small>
                       </span>
-                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#FFB400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
-                    <div className="my-1 border-t border-white/10" />
+                    <div className="soridraw-account-menu-divider" />
+                    <button type="button" disabled className="soridraw-account-menu-row soridraw-account-menu-muted">
+                      <Info aria-hidden="true" />
+                      <span>고객지원 · 준비중</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -4314,10 +4524,10 @@ function Navigation({
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#FFB400] transition-all hover:bg-[#FFB400]/12"
+                      className="soridraw-account-menu-row soridraw-account-menu-logout"
                     >
-                      <LogOut className="h-5 w-5" />
-                      로그아웃
+                      <LogOut aria-hidden="true" />
+                      <span>로그아웃</span>
                     </button>
                   </motion.div>
                 )}
@@ -5029,6 +5239,39 @@ function App() {
     setStudioWorkspaceLayoutRequestId((current) => current + 1);
   }, []);
 
+  // app303: Split keeps all four Studio workspaces on /studio, so a plain
+  // state-only rail switch was invisible to browser Back/Forward. Record the
+  // workspace in the URL history only for user navigation while preserving
+  // every existing split geometry/query option.
+  const navigateStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
+    const previousView = studioWorkspaceView;
+    selectStudioWorkspaceView(view);
+    if (previousView === view) return;
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
+
+    const nextParams = new URLSearchParams(location.search);
+    if (nextParams.get('view') === view) return;
+    nextParams.set('view', view);
+    const query = nextParams.toString();
+    navigate(`/studio${query ? `?${query}` : ''}`);
+  }, [location.pathname, location.search, navigate, selectStudioWorkspaceView, studioWorkspaceView]);
+
+  // Browser Back/Forward (including mouse thumb buttons) restores the exact
+  // split workspace represented by that history entry. /studio without an
+  // explicit view remains the canonical Create entry.
+  useEffect(() => {
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
+    const requestedView = new URLSearchParams(location.search).get('view');
+    const nextView: StudioWorkspaceView = requestedView === 'recent'
+      || requestedView === 'music-note'
+      || requestedView === 'library'
+      || requestedView === 'create'
+      ? requestedView
+      : 'create';
+    if (nextView === studioWorkspaceView) return;
+    selectStudioWorkspaceView(nextView);
+  }, [location.pathname, location.search, selectStudioWorkspaceView, studioWorkspaceView]);
+
   // 951: A Classic Music Note/Library route is a standalone page. When the
   // user switches that live page into Split, move into the canonical Studio
   // workspace route instead of wrapping the old standalone route in split rails.
@@ -5210,15 +5453,25 @@ function App() {
   const [, setFavoriteUiVersion] = useState(0);
   useEffect(() => favoritesStore.subscribe(() => setFavoriteUiVersion((version) => version + 1)), []);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
-  // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
+  // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change.
+  // app302: Studio-heart pending intent is an initiating-device-only optimistic layer.
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
-    if (typeof list === 'function') {
-      const current = favoritesStore.getFavorites();
-      favoritesStore.setFavorites(list(current));
-    } else {
-      favoritesStore.setFavorites(list);
-    }
-  }, []);
+    const uid = String(user?.uid || auth.currentUser?.uid || '').trim();
+    const current = favoritesStore.getFavorites();
+    const canonicalCurrent = uid
+      ? stripStudioHeartPendingLayerFromFavorites(
+          uid,
+          stripStudioHeartRemotePreviewLayerFromFavorites(uid, current),
+        )
+      : current;
+    const resolved = typeof list === 'function' ? list(canonicalCurrent) : list;
+    const withRemotePreview = uid
+      ? overlayStudioHeartRemotePreviewsOnFavorites(uid, resolved)
+      : resolved;
+    favoritesStore.setFavorites(
+      uid ? overlayStudioHeartPendingIntentsOnFavorites(uid, withRemotePreview) : withRemotePreview,
+    );
+  }, [user?.uid]);
   const favorites = favoritesStore.getFavorites();
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const FAVORITES_PAGE_SIZE = 20;
@@ -5228,13 +5481,7 @@ function App() {
   const favoritePaginationFallbackModeRef = useRef(false);
   const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
   const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
-  const isFavoriteSoftRemoved = (favorite: any) => Boolean(
-    favorite?.favoriteRemoved === true
-    || favorite?.saved === false
-    || favorite?.favoriteRemovedAt
-    || favorite?.unlikedAt
-    || favorite?.unsavedAt
-  );
+  const isFavoriteSoftRemoved = (favorite: any) => isMusicNoteItemRemoved(favorite);
 
   const sortFavoriteList = (list: any[]) => {
     return [...list].sort((a: any, b: any) => {
@@ -5434,6 +5681,315 @@ function App() {
     return `song_${(hash >>> 0).toString(36)}`;
   };
 
+  const getRecentSongGenerationSyncKey = (song: any): string => {
+    if (!song || typeof song !== 'object') return '';
+    const generationBatchId = String((song?.appliedKeywords as any)?.generationBatchId || '').trim();
+    const generationIndex = Math.floor(Number((song?.appliedKeywords as any)?.generationIndex || 0));
+    if (!generationBatchId || !Number.isFinite(generationIndex) || generationIndex <= 0) return '';
+    return `generation:${generationBatchId}:${generationIndex}`;
+  };
+
+  const buildRecentSongSyncKey = (song: any): string => {
+    if (!song || typeof song !== 'object') return '';
+
+    // app279 — generationBatchId + generationIndex are the immutable cross-device
+    // identity for generated Studio results. app278 preferred a locally assigned
+    // soridrawSongId first, which can differ between devices for old cached songs.
+    const generationKey = getRecentSongGenerationSyncKey(song);
+    if (generationKey) return generationKey;
+
+    const explicit = String(song?.recentSongSyncKey || '').trim();
+    if (explicit) return explicit;
+
+    const stableSongId = getLiveSoridrawSongId(song);
+    if (stableSongId) return `sid:${stableSongId}`;
+
+    const sourceId = String(song?.id || song?.taskId || song?.sourceId || '').trim();
+    const createdAtMs = Number(song?.createdAtMs || 0)
+      || getTimestampMs(song?.createdAt)
+      || Number(song?.updatedAtMs || 0)
+      || getTimestampMs(song?.updatedAt)
+      || 0;
+    const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
+    const sourceText = [sourceId, String(createdAtMs || ''), titlePart].join('|');
+    if (!sourceText.replace(/\|/g, '').trim()) return '';
+
+    let hash = 2166136261;
+    for (let index = 0; index < sourceText.length; index += 1) {
+      hash ^= sourceText.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `legacy:${(hash >>> 0).toString(36)}`;
+  };
+
+  const getRecentSongSourceIdentity = (song: any): { sourceId: string; createdAtMs: number } => ({
+    sourceId: String(song?.id || song?.taskId || song?.sourceId || '').trim(),
+    createdAtMs: Number(song?.createdAtMs || 0)
+      || getTimestampMs(song?.createdAt)
+      || 0,
+  });
+
+  const buildLegacyRecentFavoriteBridge = (song: any): { recentLegacySourceId?: string; recentLegacyCreatedAtMs?: number } => {
+    // app283 — Only legacy Recent Songs need this bridge. Modern generated songs
+    // already have generationBatchId + generationIndex and stay on that stronger identity.
+    if (getRecentSongGenerationSyncKey(song)) return {};
+    const sourceIdentity = getRecentSongSourceIdentity(song);
+    if (!sourceIdentity.sourceId) return {};
+    return {
+      recentLegacySourceId: sourceIdentity.sourceId,
+      ...(sourceIdentity.createdAtMs > 0 ? { recentLegacyCreatedAtMs: sourceIdentity.createdAtMs } : {}),
+    };
+  };
+
+  const isSameRecentSongSyncItem = (left: any, right: any): boolean => {
+    if (!left || !right) return false;
+    const leftGeneration = getRecentSongGenerationSyncKey(left);
+    const rightGeneration = getRecentSongGenerationSyncKey(right);
+    if (leftGeneration && rightGeneration && leftGeneration === rightGeneration) return true;
+
+    const leftStable = getLiveSoridrawSongId(left);
+    const rightStable = getLiveSoridrawSongId(right);
+    if (leftStable && rightStable && leftStable === rightStable) return true;
+
+    const leftExplicit = String(left?.recentSongSyncKey || '').trim();
+    const rightExplicit = String(right?.recentSongSyncKey || '').trim();
+    const leftKey = leftExplicit || buildRecentSongSyncKey(left);
+    const rightKey = rightExplicit || buildRecentSongSyncKey(right);
+    if (leftKey && rightKey && leftKey === rightKey) return true;
+
+    // Final legacy bridge is deliberately title-independent. Once a legacy song
+    // is renamed, its title can no longer participate in cross-device identity.
+    const leftSource = getRecentSongSourceIdentity(left);
+    const rightSource = getRecentSongSourceIdentity(right);
+    if (!leftSource.sourceId || !rightSource.sourceId || leftSource.sourceId !== rightSource.sourceId) return false;
+    if (leftSource.createdAtMs > 0 && rightSource.createdAtMs > 0) {
+      return leftSource.createdAtMs === rightSource.createdAtMs;
+    }
+    return true;
+  };
+
+  type RecentHeartAuthorityEntry = {
+    saved: boolean;
+    favoriteId: string;
+    version: number;
+  };
+  const RECENT_HEART_AUTHORITY_STORAGE_BASE = 'soridraw_recent_heart_authority_v1';
+  const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
+  const recentHeartAuthorityUidRef = useRef('');
+  const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+  const studioHeartRemotePreviewRef = useRef<Map<string, {
+    documentId: string;
+    identityKey: string;
+    desiredSaved: boolean;
+    baselineFavorite: any | null;
+    song: any;
+    version: number;
+  }>>(new Map());
+
+  const clearStudioHeartIntentTimer = (documentId: string) => {
+    const safeDocumentId = String(documentId || '').trim();
+    if (!safeDocumentId) return;
+    const timer = studioHeartIntentTimersRef.current.get(safeDocumentId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    studioHeartIntentTimersRef.current.delete(safeDocumentId);
+  };
+
+  const removeStudioHeartIntentLocal = (uid: string, documentId: string) => {
+  const safeUid = String(uid || '').trim();
+  const safeDocumentId = String(documentId || '').trim();
+  if (!safeUid || !safeDocumentId) return;
+
+  // app349 — capture the visible pending row before removing the durable
+  // intent. The pending overlay occupied the same list slot as the newly
+  // committed canonical row; removing the intent first used to drop both
+  // from the in-memory list until a reload rehydrated Firestore.
+  const settlingIntent = readStudioHeartPendingIntent(safeUid, safeDocumentId);
+  const current = favoritesStore.getFavorites();
+  const currentVisible = current.find((favorite: any) => (
+    String(favorite?.firestoreId || favorite?.id || '').trim() === safeDocumentId
+  )) || null;
+
+  clearStudioHeartIntentTimer(safeDocumentId);
+  removeStudioHeartPendingIntent(safeUid, safeDocumentId);
+
+  if (!settlingIntent) {
+    setFavorites((previous) => previous);
+    return;
+  }
+
+  let next = current.filter((favorite: any) => (
+    String(favorite?.firestoreId || favorite?.id || '').trim() !== safeDocumentId
+  ));
+
+  if (settlingIntent.desiredSaved) {
+    const source = normalizeFavoriteTitleFields({
+      ...(settlingIntent.baselineFavorite || {}),
+      ...(settlingIntent.song || {}),
+      ...(currentVisible || {}),
+    } as any) as any;
+    const canonicalRow: any = {
+      ...source,
+      id: safeDocumentId,
+      firestoreId: safeDocumentId,
+      uid: safeUid,
+      saved: true,
+      hidden: false,
+      favoriteHidden: false,
+      favoriteRemoved: false,
+      favoriteRemovedAt: null,
+      unlikedAt: null,
+      unsavedAt: null,
+      deletedAt: null,
+      trashedAt: null,
+      updatedAtMs: Math.max(
+        Number(source?.updatedAtMs || 0),
+        Number(settlingIntent.updatedAtMs || 0),
+      ),
+    };
+    delete canonicalRow.__studioHeartPendingLocal;
+    delete canonicalRow.__studioHeartRemotePreviewLocal;
+    delete canonicalRow.__studioHeartRemotePreview;
+    next = mergeFavoritePages([canonicalRow], next);
+  }
+
+  const settled = sortFavoriteList(next);
+  favoritesStore.setFavorites(settled);
+  writeFavoritesCache(safeUid, settled);
+};
+
+  // app347 — a canonical save/unsave from either device may complete the exact
+  // membership a local pending intent was waiting for. If the canonical result
+  // already equals the local desired state, the pending layer is redundant and
+  // must be removed before it can mask the canonical Music Note row.
+  const reconcileStudioHeartPendingFromCanonicalSignal = (
+    uid: string,
+    remoteItem: any,
+    remoteFavoriteId: string,
+    remoteSaved: boolean,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeRemoteId = String(remoteFavoriteId || '').trim();
+    const remoteIdentityKey = remoteItem
+      ? String(buildRecentSongSyncKey(remoteItem) || getLiveSoridrawSongId(remoteItem) || safeRemoteId || '').trim()
+      : safeRemoteId;
+    if (!safeUid || (!safeRemoteId && !remoteIdentityKey)) return;
+
+    for (const pending of listStudioHeartPendingIntents(safeUid)) {
+      const sameDocument = Boolean(safeRemoteId && pending.documentId === safeRemoteId);
+      const sameIdentity = Boolean(remoteIdentityKey && pending.identityKey === remoteIdentityKey);
+      if (!sameDocument && !sameIdentity) continue;
+      if (pending.desiredSaved !== remoteSaved) continue;
+      removeStudioHeartIntentLocal(safeUid, pending.documentId);
+    }
+  };
+
+  const rememberStudioHeartPreviewVersion = (
+    uid: string,
+    documentId: string,
+    version: number,
+    desiredSaved?: boolean,
+    expectedUpdatedAtMs?: number,
+  ) => {
+    if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
+    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => {
+      if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return current;
+      if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return current;
+      return {
+        ...current,
+        signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
+      };
+    });
+    if (!updated) return;
+    if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
+    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
+    if (
+      updated.pendingRemotePreviewVersion > 0
+      && updated.pendingRemotePreviewVersion > updated.signalVersion
+    ) {
+      removeStudioHeartIntentLocal(uid, documentId);
+    }
+  };
+
+  const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
+    if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+    const pending = readStudioHeartPendingIntent(uid, documentId);
+    if (!pending) return;
+    if (pending.signalVersion > 0) {
+      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
+      return;
+    }
+    updateStudioHeartPendingIntent(uid, documentId, (current) => ({
+      ...current,
+      pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
+    }));
+  };
+
+  const persistRecentHeartAuthority = (uid: string) => {
+    if (!uid || typeof window === 'undefined') return;
+    try {
+      const entries = Array.from(recentHeartAuthorityRef.current.entries())
+        .map(([key, value]) => ({ key, ...value }))
+        .sort((left, right) => right.version - left.version)
+        .slice(0, 120);
+      window.localStorage.setItem(
+        `${RECENT_HEART_AUTHORITY_STORAGE_BASE}_${uid}`,
+        JSON.stringify(entries),
+      );
+    } catch {}
+  };
+
+  const rememberRecentHeartAuthority = (
+    uid: string,
+    song: any,
+    saved: boolean,
+    favoriteId = '',
+    version = Date.now(),
+  ) => {
+    if (!uid || !song) return;
+    const identityKey = buildRecentSongSyncKey(song);
+    if (!identityKey) return;
+    const safeVersion = Math.max(1, Math.floor(Number(version || Date.now())));
+    const previous = recentHeartAuthorityRef.current.get(identityKey);
+    if (previous && previous.version > safeVersion) return;
+    recentHeartAuthorityRef.current.set(identityKey, {
+      saved,
+      favoriteId: String(favoriteId || previous?.favoriteId || '').trim(),
+      version: safeVersion,
+    });
+    persistRecentHeartAuthority(uid);
+    setFavoriteUiVersion((current) => current + 1);
+  };
+
+  const readRecentHeartAuthority = (song: any): RecentHeartAuthorityEntry | null => {
+    const identityKey = buildRecentSongSyncKey(song);
+    if (!identityKey) return null;
+    return recentHeartAuthorityRef.current.get(identityKey) || null;
+  };
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    recentHeartAuthorityRef.current = new Map();
+    recentHeartAuthorityUidRef.current = uid;
+    if (!uid || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(`${RECENT_HEART_AUTHORITY_STORAGE_BASE}_${uid}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        parsed.slice(0, 120).forEach((entry: any) => {
+          const key = String(entry?.key || '').trim();
+          const version = Math.floor(Number(entry?.version || 0));
+          if (!key || !Number.isFinite(version) || version <= 0 || typeof entry?.saved !== 'boolean') return;
+          recentHeartAuthorityRef.current.set(key, {
+            saved: entry.saved,
+            favoriteId: String(entry?.favoriteId || '').trim(),
+            version,
+          });
+        });
+      }
+    } catch {}
+    setFavoriteUiVersion((current) => current + 1);
+  }, [user?.uid]);
+
   const getFavoriteComparableText = (song: any) => ({
     title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
     prompt: normalizeFavoriteSearchValue(song?.prompt),
@@ -5464,6 +6020,15 @@ function App() {
   const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
     if (!favorite || !song) return false;
     if (song?.id && favorite?.id && song.id === favorite.id) return true;
+    const favoriteGenerationKey = getRecentSongGenerationSyncKey(favorite);
+    const songGenerationKey = getRecentSongGenerationSyncKey(song);
+    if (favoriteGenerationKey && songGenerationKey && favoriteGenerationKey === songGenerationKey) return true;
+    const favoriteStableSongId = getLiveSoridrawSongId(favorite);
+    const songStableSongId = getLiveSoridrawSongId(song);
+    if (favoriteStableSongId && songStableSongId && favoriteStableSongId === songStableSongId) return true;
+    const favoriteRecentSyncKey = String(favorite?.recentSongSyncKey || '').trim();
+    const songRecentSyncKey = buildRecentSongSyncKey(song);
+    if (favoriteRecentSyncKey && songRecentSyncKey && favoriteRecentSyncKey === songRecentSyncKey) return true;
     const favoriteIdentityKey = favorite?.favoriteKey || buildFavoriteIdentityKey(favorite);
     if (songIdentityKey && favoriteIdentityKey && songIdentityKey === favoriteIdentityKey) return true;
 
@@ -5477,6 +6042,278 @@ function App() {
     || favorite?.deletedAt
     || favorite?.trashedAt
   );
+
+  function stripStudioHeartPendingLayerFromFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    const source = Array.isArray(list) ? list : [];
+    if (!safeUid) return [...source];
+
+    const pendingById = new Map(
+      listStudioHeartPendingIntents(safeUid)
+        .map((intent) => [String(intent.documentId || '').trim(), intent] as const),
+    );
+    const next: any[] = [];
+
+    for (const favorite of source) {
+      if (favorite?.__studioHeartPendingLocal !== true) {
+        next.push(favorite);
+        continue;
+      }
+
+      const documentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+      const intent = pendingById.get(documentId);
+      if (intent?.baselineSaved && intent.baselineFavorite) {
+        const restored = { ...intent.baselineFavorite };
+        delete restored.__studioHeartPendingLocal;
+        next.push(restored);
+      }
+    }
+
+    return sortFavoriteList(next);
+  }
+
+
+  function buildStudioHeartPreviewIdentity(source: any, fallbackDocumentId = ''): string {
+    return String(
+      buildRecentSongSyncKey(source)
+      || getLiveSoridrawSongId(source)
+      || fallbackDocumentId
+      || '',
+    ).trim();
+  }
+
+  function matchesStudioHeartPreviewIdentity(
+    favorite: any,
+    documentId: string,
+    identityKey: string,
+  ): boolean {
+    const favoriteDocumentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+    if (documentId && favoriteDocumentId === documentId) return true;
+    if (!identityKey) return false;
+    return buildStudioHeartPreviewIdentity(favorite, favoriteDocumentId) === identityKey;
+  }
+
+  function stripStudioHeartRemotePreviewLayerFromFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    const source = Array.isArray(list) ? list : [];
+    if (!safeUid) return [...source];
+
+    let next = source.filter((favorite: any) => favorite?.__studioHeartRemotePreviewLocal !== true);
+    for (const preview of studioHeartRemotePreviewRef.current.values()) {
+      const baseline = preview.baselineFavorite;
+      if (!baseline || isFavoriteSoftRemoved(baseline)) continue;
+      const exists = next.some((favorite: any) => matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      ));
+      if (exists) continue;
+      const restored = { ...baseline };
+      delete restored.__studioHeartRemotePreviewLocal;
+      next = mergeFavoritePages([restored], next);
+    }
+    return sortFavoriteList(next);
+  }
+
+  function overlayStudioHeartRemotePreviewsOnFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    let next = stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, list);
+    if (!safeUid) return next;
+
+    const previews = [...studioHeartRemotePreviewRef.current.values()]
+      .sort((left, right) => left.version - right.version);
+
+    for (const preview of previews) {
+      const currentFavorite = next.find((favorite: any) => matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      )) || null;
+      next = next.filter((favorite: any) => !matchesStudioHeartPreviewIdentity(
+        favorite,
+        preview.documentId,
+        preview.identityKey,
+      ));
+
+      if (!preview.desiredSaved) continue;
+
+      const source = normalizeFavoriteTitleFields({
+        ...(preview.baselineFavorite || {}),
+        ...(preview.song || {}),
+        ...(currentFavorite || {}),
+      } as any) as any;
+      const createdAtMs = Number(
+        preview.baselineFavorite?.createdAtMs
+        || source?.createdAtMs
+        || 0,
+      ) || Math.max(1, Number(source?.updatedAtMs || Date.now()));
+      const optimisticFavorite = {
+        ...source,
+        id: preview.documentId,
+        firestoreId: preview.documentId,
+        uid: safeUid,
+        saved: true,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        unsavedAt: null,
+        unlikedAt: null,
+        deletedAt: null,
+        trashedAt: null,
+        isPublic: source?.isPublic === true,
+        isLocked: source?.isLocked === true,
+        createdAtMs,
+        updatedAtMs: Math.max(createdAtMs, Number(source?.updatedAtMs || 0)),
+        favoriteKey: source?.favoriteKey || buildFavoriteIdentityKey(source),
+        searchTokens: source?.searchTokens || buildFavoriteSearchTokens(source),
+        __studioHeartRemotePreviewLocal: true,
+      };
+      next = mergeFavoritePages([optimisticFavorite], next);
+    }
+
+    return sortFavoriteList(next);
+  }
+
+  const applyRemoteStudioHeartPreview = (
+    uid: string,
+    remoteItem: any,
+    remoteFavoriteId: string,
+    desiredSaved: boolean,
+    remoteVersion: number,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeDocumentId = String(remoteFavoriteId || remoteItem?.firestoreId || remoteItem?.id || '').trim();
+    if (!safeUid || !safeDocumentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+
+    const identityKey = buildStudioHeartPreviewIdentity(remoteItem, safeDocumentId);
+    const existing = studioHeartRemotePreviewRef.current.get(safeDocumentId);
+    if (existing && existing.version >= remoteVersion) return;
+
+    const canonicalBase = stripStudioHeartPendingLayerFromFavorites(
+      safeUid,
+      stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, favoritesStore.getFavorites()),
+    );
+    const baselineFavorite = existing?.baselineFavorite ?? canonicalBase.find((favorite: any) => (
+      !isFavoriteSoftRemoved(favorite)
+      && matchesStudioHeartPreviewIdentity(favorite, safeDocumentId, identityKey)
+    )) ?? null;
+
+    studioHeartRemotePreviewRef.current.set(safeDocumentId, {
+      documentId: safeDocumentId,
+      identityKey,
+      desiredSaved,
+      baselineFavorite,
+      song: remoteItem || {},
+      version: Math.floor(remoteVersion),
+    });
+    // app349 — materialize the non-canonical preview synchronously. This
+  // keeps Music Note membership as immediate as the Recent heart and also
+  // lets a route opened before canonical settlement reuse the local cache.
+  const previewBase = stripStudioHeartPendingLayerFromFavorites(
+    safeUid,
+    stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, favoritesStore.getFavorites()),
+  );
+  const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
+  const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
+  favoritesStore.setFavorites(visible);
+  writeFavoritesCache(safeUid, visible);
+  };
+
+  const clearRemoteStudioHeartPreviewFromCanonical = (
+    uid: string,
+    documentIds: readonly string[],
+    remoteItem?: any,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    if (!safeUid || studioHeartRemotePreviewRef.current.size === 0) return;
+    const exactIds = new Set((Array.isArray(documentIds) ? documentIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean));
+    const remoteIdentityKey = remoteItem
+      ? buildStudioHeartPreviewIdentity(
+          remoteItem,
+          String(remoteItem?.firestoreId || remoteItem?.id || '').trim(),
+        )
+      : '';
+
+    let changed = false;
+    for (const [key, preview] of studioHeartRemotePreviewRef.current.entries()) {
+      if (
+        exactIds.has(preview.documentId)
+        || (remoteIdentityKey && preview.identityKey === remoteIdentityKey)
+      ) {
+        studioHeartRemotePreviewRef.current.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) setFavorites((previous) => previous);
+  };
+
+  function overlayStudioHeartPendingIntentsOnFavorites(uid: string, list: any[]): any[] {
+    const safeUid = String(uid || '').trim();
+    let next = stripStudioHeartPendingLayerFromFavorites(safeUid, list);
+    if (!safeUid) return next;
+
+    const pending = listStudioHeartPendingIntents(safeUid)
+      .slice()
+      .sort((left, right) => left.updatedAtMs - right.updatedAtMs);
+
+    for (const intent of pending) {
+      const documentId = String(intent.documentId || '').trim();
+      if (!documentId) continue;
+
+      // app347 — pending controls membership only. If a newer canonical/local row
+      // already exists for this document (for example Detail Suno media changed),
+      // preserve that row's title/media fields instead of replacing it with the
+      // older song snapshot captured when the heart was clicked.
+      const currentFavorite = next.find((favorite: any) => (
+        String(favorite?.firestoreId || favorite?.id || '').trim() === documentId
+      )) || null;
+      next = next.filter((favorite: any) => (
+        String(favorite?.firestoreId || favorite?.id || '').trim() !== documentId
+      ));
+
+      if (!intent.desiredSaved) continue;
+
+      const source = normalizeFavoriteTitleFields({
+        ...(intent.baselineFavorite || {}),
+        ...(intent.song || {}),
+        ...(currentFavorite || {}),
+      } as any) as any;
+      const createdAtMs = Number(
+        intent.baselineFavorite?.createdAtMs
+        || source?.createdAtMs
+        || 0,
+      ) || Math.max(1, Number(intent.updatedAtMs || Date.now()));
+      const optimisticFavorite = {
+        ...source,
+        id: documentId,
+        firestoreId: documentId,
+        uid: safeUid,
+        saved: true,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        unsavedAt: null,
+        unlikedAt: null,
+        deletedAt: null,
+        trashedAt: null,
+        isPublic: source?.isPublic === true,
+        isLocked: source?.isLocked === true,
+        createdAtMs,
+        updatedAtMs: Math.max(createdAtMs, Number(intent.updatedAtMs || Date.now())),
+        favoriteKey: source?.favoriteKey || buildFavoriteIdentityKey(source),
+        searchTokens: source?.searchTokens || buildFavoriteSearchTokens(source),
+        __studioHeartPendingLocal: true,
+      };
+
+      next = mergeFavoritePages([optimisticFavorite], next);
+    }
+
+    return sortFavoriteList(next);
+  }
 
   const getFavoriteCreatedSortTime = (favorite: any): number => {
     return Number(favorite?.createdAtMs || 0)
@@ -5505,11 +6342,24 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
-    if ((song as any)?.recentFavoriteDetachedAt) return false;
+    // Canonical RTDB heart state from another device outranks stale device-local
+    // Recent/Music Note cache. app302 no longer emits pre-canonical Studio-heart
+    // previews; legacy preview signals remain readable during mixed-version rollout.
+    const recentHeartAuthority = readRecentHeartAuthority(song);
+    if (recentHeartAuthority) return recentHeartAuthority.saved;
+    if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
-    if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
+    // app284 — Once a Recent Song carries an explicit Music Note document link,
+    // that exact document is the heart authority. Do not let an older duplicate
+    // with the same generation/recent key relight the heart after the linked row
+    // was unsaved. Normal songs already follow this one-link/one-active-row shape.
+    if (linkedFavoriteId) return statusMap.has(linkedFavoriteId);
     if (song.id && statusMap.has(song.id)) return true;
+    const stableSongId = getLiveSoridrawSongId(song);
+    if (stableSongId && statusMap.has(`soridraw:${stableSongId}`)) return true;
+    const recentSongSyncKey = buildRecentSongSyncKey(song);
+    if (recentSongSyncKey && statusMap.has(`recent:${recentSongSyncKey}`)) return true;
     const key = buildFavoriteIdentityKey(song);
     if (key && statusMap.has(key)) return true;
     return false;
@@ -5674,23 +6524,31 @@ function App() {
     return mergeFavoritePages(firstPageFavs, retainedCached);
   };
 
-  const writeFavoritesCache = (uid: string, list: any[]) => {
+  const writeFavoritesCache = (
+    uid: string,
+    list: any[],
+    options: { publishDerived?: boolean } = {},
+  ) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
-    // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
+    // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date.
+    // Remote RTDB replay must never echo the same mutation back into Catalog/R2.
     favoritesInMemoryCache.set(uid, safeList);
-    const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
-    schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
-      hasMore: fullCatalogReady ? false : undefined,
-      complete: fullCatalogReady,
-      deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
-    });
-    if (musicNoteBundleActiveUids.has(uid)) {
-      scheduleListBundleWrite('musicNote', uid, safeList, {
-        limit: 20,
-        hasMore: safeList.length >= 20,
+    const publishDerived = options.publishDerived !== false;
+    if (publishDerived) {
+      const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
+      schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
+        hasMore: fullCatalogReady ? false : undefined,
+        complete: fullCatalogReady,
         deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
       });
+      if (musicNoteBundleActiveUids.has(uid)) {
+        scheduleListBundleWrite('musicNote', uid, safeList, {
+          limit: 20,
+          hasMore: safeList.length >= 20,
+          deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+        });
+      }
     }
 
     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
@@ -5749,7 +6607,7 @@ function App() {
 
       let updated = false;
       const newList = list.map((item) => {
-        if (item.id !== songId) return item;
+        if (String(item?.firestoreId || item?.id || '').trim() !== String(songId || '').trim()) return item;
         updated = true;
 
         const isSunoDeletion = Array.isArray(updates.sunoLinks) && updates.sunoLinks.length === 0 && updates.sunoShareUrl === null;
@@ -5784,8 +6642,13 @@ function App() {
 
     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
       if (!savedFavorite?.id) return;
-      if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+      const savedFavoriteId = String(savedFavorite.id);
       const isExplicitSaveSignal = signal.action === 'save';
+      if (isExplicitSaveSignal) {
+        forgetFavoriteDeletedTombstones(uid, [savedFavoriteId]);
+      } else if (isFavoriteDeletedTombstoned(uid, savedFavoriteId)) {
+        return;
+      }
       const normalizedFavorite = sanitizeForFirestore({
         ...savedFavorite,
         uid: savedFavorite.uid || uid,
@@ -5835,9 +6698,14 @@ function App() {
 
     if (signal.action !== 'unsave' && signal.action !== 'delete') return;
 
-    if (signal.action === 'delete') {
-      const deletedIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
-      rememberFavoriteDeletedTombstones(uid, deletedIds);
+    const removedFavoriteIds = Array.from(new Set([
+      ...(Array.isArray(signal.favoriteIds) ? signal.favoriteIds : []),
+      signal.favoriteId,
+    ].map((id) => String(id || '').trim()).filter(Boolean)));
+    if (removedFavoriteIds.length > 0) {
+      // Soft unsave must suppress the stale full Catalog row on reload just like
+      // permanent delete. This is local-only metadata; it is cleared by save/restore.
+      rememberFavoriteDeletedTombstones(uid, removedFavoriteIds);
     }
 
     // Clean localStorage directly as well as React state.
@@ -6012,6 +6880,29 @@ function App() {
       window.removeEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
     };
   }, []);
+
+  // SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
+  // Existing local cache stays the zero-read bootstrap. Signed-in members also
+  // receive one tiny shared RTDB settings mirror so an admin change converges
+  // without polling or a Firestore read on app start/route change.
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeNavigationVisibilitySync(
+      (payload) => {
+        if (!payload) return;
+        const nextSettings = normalizeNavigationVisibilitySettings(
+          payload.settings,
+          readStoredNavigationVisibilitySettings(),
+        );
+        setNavigationVisibilitySettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
+      },
+      (error) => {
+        console.warn('Navigation visibility RTDB sync unavailable. Keeping last local cache:', error);
+      },
+    );
+  }, [user?.uid]);
 
   const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
     try {
@@ -6513,7 +7404,10 @@ function App() {
           cachedAt: Date.now(),
         })
       );
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const applyRecentSongsState = (songs: SongResult[], options?: { preferredIndex?: number | null; latestBatchId?: string | null }) => {
@@ -7680,6 +8574,7 @@ function App() {
   const generationQueueRef = useRef<StudioGenerationQueueTask[]>([]);
   const generationRunningTasksRef = useRef<Map<string, StudioGenerationQueueTask>>(new Map());
   const recentSongSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const recentSongsSaveInFlightRef = useRef(0);
   const resultAreaRef = useRef<HTMLDivElement | null>(null);
   const MAX_STUDIO_GENERATION_QUEUE_JOBS = 5;
   const MAX_CONCURRENT_STUDIO_GENERATIONS = 2;
@@ -8735,6 +9630,7 @@ const toggleCycleVariantSelection = (
   }, [isAdminUser, menuAdminOnly, menuVisibility]);
   const menuVisibilityForCurrentUser = useMemo<NavigationMenuVisibility>(() => ({
     home: menuVisibility.home && (!menuAdminOnly.home || isAdminMenuUser),
+    explore: (menuVisibility.explore ?? true) && (!(menuAdminOnly.explore ?? false) || isAdminMenuUser),
     studio: menuVisibility.studio && (!menuAdminOnly.studio || isAdminMenuUser),
     musicNote: menuVisibility.musicNote && (!menuAdminOnly.musicNote || isAdminMenuUser),
     library: menuVisibility.library && (!menuAdminOnly.library || isAdminMenuUser),
@@ -8744,6 +9640,7 @@ const toggleCycleVariantSelection = (
   const navigationFallbackPath = useMemo(() => {
     const accessibleVisibility: NavigationMenuVisibility = {
       home: menuVisibility.home && !menuAdminOnly.home,
+      explore: (menuVisibility.explore ?? true) && !(menuAdminOnly.explore ?? false),
       studio: menuVisibility.studio && !menuAdminOnly.studio,
       musicNote: menuVisibility.musicNote && !menuAdminOnly.musicNote,
       library: menuVisibility.library && !menuAdminOnly.library,
@@ -8905,6 +9802,7 @@ const toggleCycleVariantSelection = (
         musicNoteActiveUiUid = nextMusicNoteUiUid;
       }
       if (currentUser) {
+        resumeMusicNoteFavoriteCountDelta(currentUser.uid);
         const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
         setCachedHeaderIdentity(nextHeaderIdentity);
         writeCachedHeaderIdentity(nextHeaderIdentity);
@@ -9091,28 +9989,6 @@ const toggleCycleVariantSelection = (
             });
             writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
-            applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
-            const musicNoteRemoteVersion = Number(data?.syncVersions?.musicNote || data?.favoriteSyncSignalUpdatedAt || 0);
-            if (musicNoteRemoteVersion > 0) {
-              const musicNoteOriginDeviceId = String(data?.favoriteSyncSignal?.originDeviceId || '');
-              writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
-              // 1010 — the latest Music Note mutation came from this browser, so its
-              // local cache already contains that mutation. Advance the local version
-              // immediately even while Studio is open; otherwise the next heart click
-              // performs a redundant favorites duplicate-check query.
-              if (musicNoteOriginDeviceId && musicNoteOriginDeviceId === getMusicNoteDeviceId()) {
-                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
-              }
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_VERSION_EVENT, {
-                  detail: {
-                    uid: currentUser.uid,
-                    version: musicNoteRemoteVersion,
-                    originDeviceId: musicNoteOriginDeviceId,
-                  },
-                }));
-              }
-            }
 
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
@@ -9223,7 +10099,6 @@ const toggleCycleVariantSelection = (
           });
           writeGeminiAutoModelFallback(cachedUserProfileForRefresh.generationPreferences?.autoModelFallback !== false, currentUser.uid);
           setIsUserLyricClicheGuardReady(true);
-          applyFavoriteSyncSignal(currentUser.uid, cachedUserProfileForRefresh.favoriteSyncSignal);
           if (cachedUserProfileForRefresh.accountStatus) {
             const cachedStatus = cachedUserProfileForRefresh.accountStatus as AccountStatus;
             setUserStatus(cachedStatus);
@@ -9405,6 +10280,7 @@ const toggleCycleVariantSelection = (
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+                  if (favorite?.__studioHeartPendingLocal === true) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -9493,31 +10369,293 @@ const toggleCycleVariantSelection = (
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
     originDeviceId = '',
+    documentIds: string[] = [],
+    truncated = false,
+    operation = '',
+    itemJson = '',
+    removed = false,
   ) => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
 
     const uid = currentUser.uid;
-    // 1010 — own-device invalidation does not need a server delta query and is
-    // safe to acknowledge on every route because the successful local mutation
-    // already updated the cache before publishing the sync signal.
+    const normalizedOperation = String(operation || '').trim();
+    const isHeartPreviewSave = normalizedOperation === 'heart-preview-save';
+    const isHeartPreviewUnsave = normalizedOperation === 'heart-preview-unsave';
+    const isHeartPreview = isHeartPreviewSave || isHeartPreviewUnsave;
+
+    // 1010 — own-device canonical invalidation does not need a server delta query.
+    // app290 heart preview is different: it is only a live UI signal and must not
+    // advance the Firestore/catalog document version before the 30s batch commits.
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+      if (isHeartPreview) {
+        const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+        markCacheDiagnostic('musicNote', 'CACHE', 0);
+        return;
+      }
+      clearRemoteStudioHeartPreviewFromCanonical(
+        uid,
+        Array.isArray(documentIds) ? documentIds : [],
+      );
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
-    if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
+
+    // app288 — Reject only an RTDB signal we have actually acknowledged.
+    // The old localVersion can be advanced by Catalog generatedAtMs and may be
+    // numerically ahead of a perfectly new RTDB SAVE/UNSAVE signal.
+    const signalAckVersion = readMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid);
+    if (signalAckVersion >= remoteVersion) return;
+    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+
+    const exactDocumentIds = [...new Set(
+      (Array.isArray(documentIds) ? documentIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )].slice(0, 10);
+
+    // app277 — normal changed-item UI state rides the tiny RTDB signal.
+    // Receiving devices patch the local Music Note catalog directly, so save,
+    // unsave and shared-note sync add no Firestore read on the other device.
+    let parsedItemPayload: any = null;
+    if (itemJson) {
+      try { parsedItemPayload = JSON.parse(itemJson); } catch {}
+    }
+    // app278 — folder/card-state structure changes use the same UID-scoped RTDB
+    // channel. FavoritesPage consumes the structure payload; App only advances
+    // the watermark so this path never falls through to a Firestore query.
+    if (
+      normalizedOperation === 'structure-update'
+      && parsedItemPayload?.__musicNoteStructureSync === true
+    ) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'SYNC', 0);
       return;
     }
+
+    if (exactDocumentIds.length > 0 && truncated !== true) {
+      const remoteItems: any[] = Array.isArray(parsedItemPayload)
+        ? parsedItemPayload.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+        : parsedItemPayload && typeof parsedItemPayload === 'object'
+          ? [parsedItemPayload]
+          : [];
+      const remoteItem: any = remoteItems[0] || null;
+      const isRemovalOperation = normalizedOperation === 'unsave'
+        || normalizedOperation === 'permanent-delete'
+        || normalizedOperation === 'bulk-delete';
+
+      // app285 — Save and unsave must identify the Recent Song the same way.
+      // Previously save carried the song identity, but modern unsave often carried
+      // only a favorite document id. With two historical favorite rows this let
+      // one device fall back to a different same-generation row until the next save.
+      // Keep the exact favorite link on both states, using the already-existing
+      // RTDB changed-item payload and zero Firestore reads on the receiver.
+      const recentLegacySourceId = String(remoteItem?.recentLegacySourceId || '').trim();
+      const recentLegacyCreatedAtMs = Number(remoteItem?.recentLegacyCreatedAtMs || 0);
+      const remoteFavoriteId = String(
+        remoteItem?.firestoreId || remoteItem?.id || exactDocumentIds[0] || '',
+      ).trim();
+      const remoteHeartSaved = (isRemovalOperation || isHeartPreviewUnsave)
+        ? false
+        : (
+            normalizedOperation === 'save'
+            || normalizedOperation === 'restore'
+            || normalizedOperation === 'shared-note-save'
+            || isHeartPreviewSave
+            || (remoteItem && !isFavoriteSoftRemoved(remoteItem))
+          )
+          ? true
+          : null;
+
+      // app286 — Record the latest heart direction before trying to patch a
+      // possibly stale Recent Songs row. The immutable song key in the RTDB
+      // payload is enough to update the open Studio heart without Firestore IO.
+      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean') {
+        rememberRecentHeartAuthority(
+          uid,
+          remoteItem,
+          remoteHeartSaved,
+          remoteFavoriteId,
+          remoteVersion,
+        );
+      }
+
+      const canPatchRecentFavoriteLink = Boolean(
+        remoteItem
+        && remoteFavoriteId
+        && (
+          normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'update'
+          || isRemovalOperation
+          || isHeartPreview
+        )
+      );
+      if (canPatchRecentFavoriteLink) {
+        const currentHistory = historyRef.current;
+        const targetIndex = currentHistory.findIndex((song: any) => {
+          const localFavoriteId = String(
+            song?.favoriteFirestoreId || song?.musicNoteFavoriteId || '',
+          ).trim();
+          if (localFavoriteId && localFavoriteId === remoteFavoriteId) return true;
+          if (isSameRecentSongSyncItem(song, remoteItem)) return true;
+          if (!recentLegacySourceId) return false;
+          const sourceIdentity = getRecentSongSourceIdentity(song);
+          if (!sourceIdentity.sourceId || sourceIdentity.sourceId !== recentLegacySourceId) return false;
+          if (sourceIdentity.createdAtMs > 0 && recentLegacyCreatedAtMs > 0) {
+            return sourceIdentity.createdAtMs === recentLegacyCreatedAtMs;
+          }
+          return true;
+        });
+
+        if (targetIndex >= 0) {
+          const currentSong = currentHistory[targetIndex] as any;
+          const nextSong = { ...currentSong } as any;
+          const remoteRecentSongSyncKey = String(remoteItem?.recentSongSyncKey || '').trim();
+          const remoteSoridrawSongId = String(remoteItem?.soridrawSongId || '').trim();
+
+          if (remoteRecentSongSyncKey) nextSong.recentSongSyncKey = remoteRecentSongSyncKey;
+          if (isSoridrawSongId(remoteSoridrawSongId)) nextSong.soridrawSongId = remoteSoridrawSongId;
+
+          // Empty heart and filled heart are two states of the same exact Music
+          // Note identity. Never delete this link merely because the favorite was unsaved.
+          nextSong.favoriteFirestoreId = remoteFavoriteId;
+          nextSong.musicNoteFavoriteId = remoteFavoriteId;
+
+          if (isRemovalOperation || isHeartPreviewUnsave) {
+            if (recentLegacySourceId) {
+              nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
+                remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
+              );
+            }
+          } else {
+            delete nextSong.recentFavoriteExplicitlyUnsavedAt;
+            delete nextSong.recentFavoriteDetachedAt;
+          }
+
+          const nextHistory = currentHistory.map((song: any, index: number) =>
+            index === targetIndex ? nextSong : song,
+          );
+          historyRef.current = nextHistory;
+          setHistory(nextHistory);
+          recentSongsReadyToCacheRef.current = true;
+          saveRecentSongsCache(uid, {
+            history: nextHistory,
+            historyIndex: historyIndexRef.current,
+            latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+          });
+          if (historyIndexRef.current === targetIndex) {
+            resultRef.current = nextSong as SongResult;
+            setResult(nextSong as SongResult);
+          }
+          markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
+        }
+      }
+
+      if (isHeartPreview) {
+      applyRemoteStudioHeartPreview(
+        uid,
+        remoteItem,
+        remoteFavoriteId,
+        isHeartPreviewSave,
+        remoteVersion,
+      );
+      if (remoteFavoriteId) {
+        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
+      }
+      // app348: every signed-in device updates immediately; only the
+      // canonical favorite write waits for the per-song 30s final state.
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
+      return;
+    }
+
+      if (remoteItem || removed || isRemovalOperation) {
+        // app347 — only canonical membership signals may settle a local pending
+        // heart. Detail/Suno preview signals are deliberately excluded.
+        const isCanonicalMembershipSignal = normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'shared-note-save'
+          || isRemovalOperation;
+        if (isCanonicalMembershipSignal) {
+          const canonicalRemoteSaved = !isRemovalOperation
+            && !removed
+            && Boolean(remoteItem && !isFavoriteSoftRemoved(remoteItem));
+          reconcileStudioHeartPendingFromCanonicalSignal(
+            uid,
+            remoteItem,
+            remoteFavoriteId || exactDocumentIds[0] || '',
+            canonicalRemoteSaved,
+          );
+          clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
+        }
+
+        if (isRemovalOperation) {
+          rememberFavoriteDeletedTombstones(uid, exactDocumentIds);
+        } else if (
+          normalizedOperation === 'save'
+          || normalizedOperation === 'restore'
+          || normalizedOperation === 'shared-note-save'
+        ) {
+          forgetFavoriteDeletedTombstones(uid, exactDocumentIds);
+        }
+        setFavorites((prev) => {
+          const changedIds = new Set(exactDocumentIds);
+          const previousItems = Array.isArray(prev) ? prev : [];
+          const previousById = new Map(
+            previousItems
+              .map((item) => [String(item?.id || item?.firestoreId || '').trim(), item] as const)
+              .filter(([id]) => Boolean(id))
+          );
+          let next = previousItems.filter(
+            (item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim())
+          );
+          for (const item of remoteItems) {
+            if (isFavoriteSoftRemoved(item)) continue;
+            const itemId = String(item?.id || item?.firestoreId || '').trim();
+            const previousItem = itemId ? previousById.get(itemId) : null;
+            const incomingItem = item?.__musicNoteCompactActiveSync === true && previousItem
+              ? {
+                  ...previousItem,
+                  ...item,
+                  appliedKeywords: {
+                    ...(previousItem?.appliedKeywords || {}),
+                    ...(item?.appliedKeywords || {}),
+                  },
+                }
+              : item;
+            next = mergeFavoritePages([incomingItem], next);
+          }
+          const sorted = sortFavoriteList(next);
+          writeFavoritesCache(uid, sorted, { publishDerived: false });
+          return sorted;
+        });
+        writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+        markCacheDiagnostic('musicNote', 'SYNC', 0);
+        return;
+      }
+    }
+
+    // Signals without exact ids are legacy/bulk fallback only. Keep the old
+    // bounded query route-gated so ordinary app entry/navigation never creates
+    // a Music Note Firestore read.
+    const musicNotePageActive = typeof window !== 'undefined'
+      && ((window as any).__soridrawMusicNotePageActive === true || window.location.pathname === '/history');
+    if (!musicNotePageActive) return;
+
     if (musicNoteBundleActiveUids.has(uid)) {
       markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
-    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
-    if (localVersion >= remoteVersion) return;
 
     if (musicNoteFreshBootstrapUids.has(uid)) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       return;
     }
 
@@ -9555,6 +10693,7 @@ const toggleCycleVariantSelection = (
 
       if (snapshot.docs.length < FAVORITES_PAGE_SIZE || maxSeenVersion >= remoteVersion) {
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+        writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       } else if (maxSeenVersion > localVersion) {
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, maxSeenVersion);
       }
@@ -9568,18 +10707,48 @@ const toggleCycleVariantSelection = (
     if (!currentUser?.uid || typeof window === 'undefined') return;
 
     const handleMusicNoteSyncVersion = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; version?: number; originDeviceId?: string }>).detail;
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        version?: number;
+        originDeviceId?: string;
+        documentIds?: string[];
+        truncated?: boolean;
+        operation?: string;
+        itemJson?: string;
+        removed?: boolean;
+      }>).detail;
       if (!detail || detail.uid !== currentUser.uid) return;
       void syncMusicNoteIncrementalFromRemoteVersion(
         Number(detail.version || 0),
         String(detail.originDeviceId || ''),
+        Array.isArray(detail.documentIds) ? detail.documentIds : [],
+        detail.truncated === true,
+        String(detail.operation || ''),
+        String(detail.itemJson || ''),
+        detail.removed === true,
       );
     };
 
     window.addEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
-    const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
-    if (pendingRemoteVersion > 0) {
-      void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+    // app276 — the RTDB listener can replay before this React effect mounts.
+    // Recover the persisted exact signal so Studio/Recent routes do not lose the
+    // document ids and fall back to a route-gated legacy refresh.
+    const pendingSignal = readPendingMusicNoteSyncSignal(currentUser.uid);
+    if (pendingSignal?.version) {
+      void syncMusicNoteIncrementalFromRemoteVersion(
+        pendingSignal.version,
+        pendingSignal.originDeviceId,
+        pendingSignal.documentIds,
+        pendingSignal.truncated,
+        pendingSignal.operation,
+        pendingSignal.itemJson || '',
+        pendingSignal.removed === true,
+      );
+    } else {
+      const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+      if (pendingRemoteVersion > 0) {
+        void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+      }
     }
     return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
@@ -9658,6 +10827,7 @@ const toggleCycleVariantSelection = (
       const bundleVersion = Number(bundle.updatedAtMs || 0);
       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+        if (favorite?.__studioHeartPendingLocal === true) return false;
         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -9722,7 +10892,12 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
+  const toggleFavorite = async (song: SongResult, options?: {
+    trustedRecentStudio?: boolean;
+    intendedAction?: 'save' | 'unsave';
+    canonicalBaseline?: { saved: boolean; favorite: any | null };
+    suppressSuccessToast?: boolean;
+  }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -9731,10 +10906,22 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    const notifyFavoriteSuccess = (message: string) => {
+      if (!options?.suppressSuccessToast) showToast(message);
+    };
+
     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
+    // Capture the legacy recent-song identity before ensureLiveSoridrawSongId can
+    // assign a new local UUID. Old recent songs must resolve to the same favorite
+    // on PC and mobile even when they predate soridrawSongId.
+    const recentSongSyncKey = options?.trustedRecentStudio ? buildRecentSongSyncKey(song) : '';
     const findLocalExistingFavorite = () => {
+      if (options?.canonicalBaseline) {
+        if (!options.canonicalBaseline.saved) return null;
+        return options.canonicalBaseline.favorite || null;
+      }
       if ((song as any)?.recentFavoriteDetachedAt) return null;
       const latestFavorites = favoritesStore.getFavorites();
       const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
@@ -9742,7 +10929,10 @@ const toggleCycleVariantSelection = (
         const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
           String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
         );
-        if (exactLinkedFavorite) return exactLinkedFavorite;
+        // app284 — explicit linked id is a hard boundary. If its active row is
+        // absent locally, this is a save/restore action; never reinterpret a
+        // different duplicate with the same generation key as the current row.
+        return exactLinkedFavorite || null;
       }
       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
       if (byId) return byId;
@@ -9876,7 +11066,8 @@ const toggleCycleVariantSelection = (
         && remoteMusicNoteVersion <= localMusicNoteVersion
       );
       const serverExistingFav = (
-        localExistingFav
+        options?.canonicalBaseline
+        || localExistingFav
         || (song as any)?.recentFavoriteDetachedAt
         || canTrustRecentStudioLocalIdentity
       ) ? null : await findServerExistingFavorite().catch((error) => {
@@ -9884,6 +11075,7 @@ const toggleCycleVariantSelection = (
         return null;
       });
       const existingFav = localExistingFav || serverExistingFav;
+      const intendedAction = options?.intendedAction;
 
       if (existingFav) {
         if (existingFav.isLocked && !forceDeleteFavoriteById) {
@@ -9922,12 +11114,56 @@ const toggleCycleVariantSelection = (
             },
           });
           applyFavoriteSyncSignal(user.uid, deleteSignal);
-          await updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: deleteSignal,
-            favoriteSyncSignalUpdatedAt: deletedAt,
-            favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to decrement favoriteCount or publish favorite delete signal:", err));
-          showToast('곡이 삭제 되었습니다.');
+          queueMusicNoteFavoriteCountDelta(user.uid, -1);
+          notifyFavoriteSuccess('곡이 삭제 되었습니다.');
+          return;
+        }
+
+        // app286 — A Studio heart click has an explicit direction from the UI.
+        // Never reinterpret an empty-heart SAVE click as UNSAVE just because a
+        // fresher server lookup found an active copy from the other device.
+        if (intendedAction === 'save' && !isFavoriteHidden(existingFav)) {
+          const activeAt = Date.now();
+          const activeUpdates = {
+            hidden: false,
+            favoriteHidden: false,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            unlikedAt: null,
+            unsavedAt: null,
+            deletedAt: null,
+            trashedAt: null,
+            saved: true,
+            updatedAtMs: Math.max(Number(existingFav.updatedAtMs || 0), activeAt),
+          };
+          forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+          patchLocalFavorite(existingFav.id, activeUpdates, existingFav);
+          // app287 — If the visible heart was empty but this device already has
+          // an active canonical row, SAVE is idempotent and must still publish
+          // the changed-item state. Otherwise the local heart fills with no RTDB
+          // event, so the other device remains empty until another mutation.
+          await publishMusicNoteSaveStateDelta(
+            user.uid,
+            existingFav.id,
+            sanitizeForFirestore({
+              ...existingFav,
+              ...activeUpdates,
+              soridrawSongId: getLiveSoridrawSongId(song) || existingFav.soridrawSongId,
+              recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song) || existingFav.recentSongSyncKey,
+              appliedKeywords: song.appliedKeywords || existingFav.appliedKeywords,
+              ...buildLegacyRecentFavoriteBridge(song),
+              id: existingFav.id,
+              firestoreId: existingFav.id,
+            }),
+          );
+          notifyFavoriteSuccess('저장되었습니다.');
+          return;
+        }
+
+        if (intendedAction === 'unsave' && isFavoriteHidden(existingFav)) {
+          rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+          removeLocalFavorite(existingFav.id);
+          notifyFavoriteSuccess('저장이 해제되었습니다.');
           return;
         }
 
@@ -9946,16 +11182,22 @@ const toggleCycleVariantSelection = (
             saved: true,
             restoredAt: Date.now(),
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
+            recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song) || existingFav.recentSongSyncKey,
+            ...buildLegacyRecentFavoriteBridge(song),
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
           };
-          await runV1MutationBoundary({ domain: 'musicNote', operation: 'restore', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
+          await runV1MutationBoundary({
+            domain: 'musicNote',
+            operation: 'restore',
+            uid: user.uid,
+            documentIds: [existingFav.id],
+            affectedCount: 1,
+            syncItem: sanitizeForFirestore({ ...existingFav, ...restoreUpdates, id: existingFav.id, firestoreId: existingFav.id }),
+          }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
+          forgetFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
-          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
-          updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: saveSignal,
-            favoriteSyncSignalUpdatedAt: saveSignal.at,
-          }).catch(err => console.error("Failed to publish favorite restore sync signal:", err));
-          showToast('보관함에 다시 저장되었습니다.');
+          // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
+          notifyFavoriteSuccess('보관함에 다시 저장되었습니다.');
           return;
         }
 
@@ -9989,22 +11231,41 @@ const toggleCycleVariantSelection = (
         });
         try {
           if (unsaveTargets.length > 0) {
-            await Promise.all(unsaveTargets.map((targetFavorite) => runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [targetFavorite.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
-              ...unsaveUpdates,
-              favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
-            })))));
+            await Promise.all(unsaveTargets.map((targetFavorite) => {
+              const targetUpdates = sanitizeForFirestore({
+                ...unsaveUpdates,
+                favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
+              });
+              return runV1MutationBoundary({
+                domain: 'musicNote',
+                operation: 'unsave',
+                uid: user.uid,
+                documentIds: [targetFavorite.id],
+                affectedCount: 1,
+                syncItem: sanitizeForFirestore({ ...targetFavorite, ...targetUpdates, ...buildLegacyRecentFavoriteBridge(song), id: targetFavorite.id, firestoreId: targetFavorite.id }),
+              }, updateDoc(doc(db, 'favorites', targetFavorite.id), targetUpdates));
+            }));
           } else if (existingFav?.id) {
-            await runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
+            await runV1MutationBoundary({
+              domain: 'musicNote',
+              operation: 'unsave',
+              uid: user.uid,
+              documentIds: [existingFav.id],
+              affectedCount: 1,
+              syncItem: sanitizeForFirestore({ ...existingFav, ...unsaveUpdates, ...buildLegacyRecentFavoriteBridge(song), id: existingFav.id, firestoreId: existingFav.id }),
+            }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
           }
 
+          const unsaveCatalogRemovalIds = Array.from(new Set(
+            (unsaveTargets.length > 0 ? unsaveTargets : [existingFav])
+              .map((favorite) => String(favorite?.id || '').trim())
+              .filter(Boolean)
+          ));
+          rememberFavoriteDeletedTombstones(user.uid, unsaveCatalogRemovalIds);
           removeLocalFavorite(existingFav.id);
           applyFavoriteSyncSignal(user.uid, unsaveSignal);
-          await updateDoc(doc(db, 'users', user.uid), {
-            favoriteSyncSignal: unsaveSignal,
-            favoriteSyncSignalUpdatedAt: unsavedAt,
-            favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to publish favorite unsave sync signal:", err));
-          showToast('저장이 해제되었습니다.');
+          queueMusicNoteFavoriteCountDelta(user.uid, -1);
+          notifyFavoriteSuccess('저장이 해제되었습니다.');
           return;
         } catch (unsaveError: any) {
           const code = String(unsaveError?.code || '');
@@ -10013,31 +11274,89 @@ const toggleCycleVariantSelection = (
             || code === 'invalid-argument'
             || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
+            rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
             removeLocalFavorite(existingFav.id);
             applyFavoriteSyncSignal(user.uid, unsaveSignal);
-            await updateDoc(doc(db, 'users', user.uid), {
-              favoriteSyncSignal: unsaveSignal,
-              favoriteSyncSignalUpdatedAt: unsavedAt,
-            }).catch(err => console.error("Failed to publish local favorite cleanup signal:", err));
-            showToast('저장이 해제되었습니다.');
+            // No canonical document changed here, so do not emit a server sync write.
+            notifyFavoriteSuccess('저장이 해제되었습니다.');
             return;
           }
           throw unsaveError;
         }
       }
 
+      if (intendedAction === 'unsave') {
+        const exactFavoriteId = String(
+          (song as any)?.favoriteFirestoreId
+          || (song as any)?.musicNoteFavoriteId
+          || (song as any)?.firestoreId
+          || '',
+        ).trim();
+
+        if (exactFavoriteId) {
+          const unsavedAt = Date.now();
+          const exactUnsaveUpdates = sanitizeForFirestore({
+            favoriteRemoved: true,
+            favoriteRemovedAt: unsavedAt,
+            unlikedAt: unsavedAt,
+            unsavedAt,
+            updatedAtMs: unsavedAt,
+            saved: false,
+            hidden: false,
+            favoriteHidden: false,
+            deletedAt: null,
+            trashedAt: null,
+            isPublic: false,
+            updatedAt: serverTimestamp(),
+          });
+          let canonicalChanged = false;
+          try {
+            await runV1MutationBoundary({
+              domain: 'musicNote',
+              operation: 'unsave',
+              uid: user.uid,
+              documentIds: [exactFavoriteId],
+              affectedCount: 1,
+              syncItem: sanitizeForFirestore({
+                ...song,
+                ...exactUnsaveUpdates,
+                ...buildLegacyRecentFavoriteBridge(song),
+                id: exactFavoriteId,
+                firestoreId: exactFavoriteId,
+              }),
+            }, updateDoc(doc(db, 'favorites', exactFavoriteId), exactUnsaveUpdates));
+            canonicalChanged = true;
+          } catch (exactUnsaveError: any) {
+            const code = String(exactUnsaveError?.code || '');
+            const message = String(exactUnsaveError?.message || exactUnsaveError || '');
+            const alreadyAbsent = code === 'not-found'
+              || /No document to update|not[- ]found/i.test(message);
+            if (!alreadyAbsent) throw exactUnsaveError;
+          }
+
+          rememberFavoriteDeletedTombstones(user.uid, [exactFavoriteId]);
+          removeLocalFavorite(exactFavoriteId);
+          if (canonicalChanged) queueMusicNoteFavoriteCountDelta(user.uid, -1);
+        }
+
+        // Explicit UNSAVE is idempotent: it may turn off the exact canonical row,
+        // but it can never fall through into the save/create path.
+        notifyFavoriteSuccess('저장이 해제되었습니다.');
+        return;
+      }
+
       const createdAtMs = Date.now();
       song = ensureLiveSoridrawSongId(song as any) as SongResult;
       const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
-      const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
-        const raw = `${uid}|${stableSongId}`;
+      const buildRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
+        const raw = `${uid}|${stableIdentity}`;
         let hash = 2166136261;
         for (let index = 0; index < raw.length; index += 1) {
           hash ^= raw.charCodeAt(index);
           hash = Math.imul(hash, 16777619);
         }
-        const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
-        return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+        const safeIdentity = stableIdentity.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+        return `rs_${safeIdentity}_${(hash >>> 0).toString(36)}`;
       };
       const resolvedGenre = getResolvedGenre(song);
       const favoriteMediaKeys = [
@@ -10059,6 +11378,8 @@ const toggleCycleVariantSelection = (
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
+        recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song),
+        ...buildLegacyRecentFavoriteBridge(song),
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',
@@ -10074,6 +11395,10 @@ const toggleCycleVariantSelection = (
         favoriteHidden: false,
         favoriteRemoved: false,
         favoriteRemovedAt: null,
+        unlikedAt: null,
+        unsavedAt: null,
+        deletedAt: null,
+        trashedAt: null,
         saved: true,
         createdAtMs,
         updatedAtMs: createdAtMs,
@@ -10081,22 +11406,31 @@ const toggleCycleVariantSelection = (
         favoriteKey: songIdentityKey,
         searchTokens: buildFavoriteSearchTokens(song)
       });
+      const deterministicRecentIdentity = recentSongSyncKey || buildRecentSongSyncKey(song) || favoriteSoridrawSongId || '';
+      const linkedFavoriteAuthorityId = String((song as any)?.favoriteFirestoreId || '').trim();
       const useDeterministicRecentFavoriteDoc = Boolean(
-        canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+        canTrustRecentStudioLocalIdentity && deterministicRecentIdentity
       );
-      const favoriteDocRef = useDeterministicRecentFavoriteDoc
-        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
-        : null;
+      // app284 — preserve the exact Recent Song -> Music Note link first.
+      // This turns an empty-heart click on a soft-removed linked document into
+      // one exact W1 restore instead of creating/finding a duplicate row.
+      const favoriteDocRef = linkedFavoriteAuthorityId
+        ? doc(db, 'favorites', linkedFavoriteAuthorityId)
+        : useDeterministicRecentFavoriteDoc
+          ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, deterministicRecentIdentity))
+          : null;
       if (favoriteDocRef) {
         await runV1MutationBoundary(
-          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1, syncItem: { ...favoritePayload, id: favoriteDocRef.id, firestoreId: favoriteDocRef.id } },
           setDoc(favoriteDocRef, favoritePayload, { merge: true }),
         );
       }
       const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
-        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1, syncItem: favoritePayload },
         addDoc(collection(db, 'favorites'), favoritePayload),
       );
+
+      forgetFavoriteDeletedTombstones(user.uid, [createdFavoriteDocRef.id]);
 
       const localFavorite = sanitizeForFirestore({
         ...song,
@@ -10120,22 +11454,163 @@ const toggleCycleVariantSelection = (
         return merged;
       });
 
-      const saveSignal = buildFavoriteSyncSignal('save', localFavorite, [localFavorite], createdAtMs);
-      await updateDoc(doc(db, 'users', user.uid), {
-        favoriteSyncSignal: saveSignal,
-        favoriteSyncSignalUpdatedAt: createdAtMs,
-        favoriteCount: increment(1)
-      }).catch(err => console.error("Failed to increment favoriteCount or publish save signal:", err));
+      queueMusicNoteFavoriteCountDelta(user.uid, 1);
 
-      showToast('저장되었습니다.');
+      notifyFavoriteSuccess('저장되었습니다.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
       throw error;
     }
   };
 
+  const flushStudioHeartPendingIntent = async (documentId: string) => {
+    const uid = String(user?.uid || '').trim();
+    const safeDocumentId = String(documentId || '').trim();
+    if (!uid || !safeDocumentId) return;
+
+    clearStudioHeartIntentTimer(safeDocumentId);
+    const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
+    if (!intent) return;
+
+    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
+      removeStudioHeartPendingIntent(uid, safeDocumentId);
+      return;
+    }
+
+    // Multiple toggles inside the trailing window collapse to their final state.
+    // If the final state equals the canonical baseline, there is nothing to write.
+    if (intent.desiredSaved === intent.baselineSaved) {
+      removeStudioHeartIntentLocal(uid, safeDocumentId);
+      return;
+    }
+
+    try {
+      const commitSong = normalizeFavoriteTitleFields({
+        ...(intent.song || {}),
+        favoriteFirestoreId: safeDocumentId,
+        musicNoteFavoriteId: safeDocumentId,
+      } as SongResult) as SongResult;
+      await toggleFavorite(commitSong, {
+        trustedRecentStudio: true,
+        intendedAction: intent.desiredSaved ? 'save' : 'unsave',
+        canonicalBaseline: {
+          saved: intent.baselineSaved,
+          favorite: intent.baselineFavorite,
+        },
+        suppressSuccessToast: true,
+      });
+
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
+        removeStudioHeartIntentLocal(uid, safeDocumentId);
+      }
+    } catch (error) {
+      console.warn('Studio heart canonical batch commit failed.', error);
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (!latest || latest.updatedAtMs !== intent.updatedAtMs) return;
+      const previousRetryCount = Math.max(0, Number(latest.retryCount || 0));
+      const retryCount = Math.min(2, previousRetryCount + 1);
+      writeStudioHeartPendingIntent({ ...latest, retryCount });
+      if (previousRetryCount < 2) {
+        const retryTimer = window.setTimeout(() => {
+          studioHeartIntentTimersRef.current.delete(safeDocumentId);
+          void flushStudioHeartPendingIntent(safeDocumentId);
+        }, STUDIO_HEART_RETRY_MS);
+        studioHeartIntentTimersRef.current.set(safeDocumentId, retryTimer);
+      }
+    }
+  };
+
+  const scheduleStudioHeartPendingIntent = (documentId: string, delayMs = STUDIO_HEART_BATCH_MS) => {
+    const safeDocumentId = String(documentId || '').trim();
+    if (!safeDocumentId) return;
+    clearStudioHeartIntentTimer(safeDocumentId);
+    const timer = window.setTimeout(() => {
+      studioHeartIntentTimersRef.current.delete(safeDocumentId);
+      void flushStudioHeartPendingIntent(safeDocumentId);
+    }, Math.max(1_000, Math.floor(delayMs)));
+    studioHeartIntentTimersRef.current.set(safeDocumentId, timer);
+  };
+
+  const queueStudioHeartPendingIntent = (
+    song: SongResult,
+    documentId: string,
+    desiredSaved: boolean,
+    baselineSaved: boolean,
+    baselineFavorite: any | null,
+  ) => {
+    const uid = String(user?.uid || '').trim();
+    const safeDocumentId = String(documentId || '').trim();
+    const identityKey = buildRecentSongSyncKey(song) || getLiveSoridrawSongId(song) || safeDocumentId;
+    if (!uid || !safeDocumentId || !identityKey) return false;
+
+    const existing = readStudioHeartPendingIntent(uid, safeDocumentId);
+    const now = Date.now();
+    const intent: StudioHeartPendingIntent = {
+      schemaVersion: 1,
+      uid,
+      documentId: safeDocumentId,
+      identityKey,
+      baselineSaved: existing ? existing.baselineSaved : baselineSaved,
+      desiredSaved,
+      baselineFavorite: existing ? existing.baselineFavorite : baselineFavorite,
+      song: {
+        ...(song as any),
+        favoriteFirestoreId: safeDocumentId,
+        musicNoteFavoriteId: safeDocumentId,
+      },
+      updatedAtMs: now,
+      signalVersion: 0,
+      pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
+      retryCount: 0,
+    };
+    writeStudioHeartPendingIntent(intent);
+    scheduleStudioHeartPendingIntent(safeDocumentId);
+
+    // app302 option-2:
+    // this device gets immediate local Music Note visibility, while another
+    // device waits for the successful canonical mutation after latest click +30s.
+    // Same-song clicks keep the original canonical baseline and replace only
+    // desiredSaved, so final == baseline still settles at W0.
+    rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
+    setFavorites((previous) => previous);
+    void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
+      .then((version) => {
+        if (version > 0) rememberStudioHeartPreviewVersion(
+          uid,
+          safeDocumentId,
+          version,
+          desiredSaved,
+          now,
+        );
+      })
+      .catch((error) => console.warn('Studio heart live preview unavailable.', error));
+    return true;
+  };
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    const pendingIntents = listStudioHeartPendingIntents(uid);
+    for (const intent of pendingIntents) {
+      const age = Math.max(0, Date.now() - intent.updatedAtMs);
+      const delay = Math.max(1_000, STUDIO_HEART_BATCH_MS - age);
+      scheduleStudioHeartPendingIntent(intent.documentId, delay);
+    }
+    if (pendingIntents.length > 0) {
+      setFavorites((previous) => previous);
+    }
+    return () => {
+      for (const timer of studioHeartIntentTimersRef.current.values()) window.clearTimeout(timer);
+      studioHeartIntentTimersRef.current.clear();
+    };
+  }, [user?.uid]);
+
   const updateFavorite = async (id: string, updates: Partial<any>) => {
-    const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
+    const safeFavoriteDocumentId = String(id || '').trim();
+    const currentFavorite = favoritesStore.getFavorites().find((favorite) => (
+      String(favorite?.firestoreId || favorite?.id || '').trim() === safeFavoriteDocumentId
+    ));
     let sanitizedUpdates = sanitizeForFirestore(updates);
     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
       const mergedForSearch = {
@@ -10169,9 +11644,10 @@ const toggleCycleVariantSelection = (
       const removeIdSet = new Set(localIdsToRemove.filter(Boolean));
       setFavorites((prev) => {
         const next = (prev || [])
-          .filter((favorite) => !removeIdSet.has(favorite.id))
+          .filter((favorite) => !removeIdSet.has(String(favorite?.firestoreId || favorite?.id || '').trim()))
           .map((favorite) => {
-            if (!targetIdSet.has(favorite.id)) return favorite;
+            const favoriteDocumentId = String(favorite?.firestoreId || favorite?.id || '').trim();
+            if (!targetIdSet.has(favoriteDocumentId)) return favorite;
             return {
               ...favorite,
               ...sanitizedUpdates,
@@ -10190,7 +11666,9 @@ const toggleCycleVariantSelection = (
 
     const removeLocalFavoriteOnly = (localId: string) => {
       setFavorites((prev) => {
-        const next = (prev || []).filter((favorite) => favorite.id !== localId);
+        const next = (prev || []).filter((favorite) => (
+          String(favorite?.firestoreId || favorite?.id || '').trim() !== String(localId || '').trim()
+        ));
         if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
         return next;
       });
@@ -10258,7 +11736,14 @@ const toggleCycleVariantSelection = (
     try {
       const favoriteUpdatedAtMs = Date.now();
       sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'update',
+        uid: user?.uid || currentFavorite?.uid || '',
+        documentIds: [id],
+        affectedCount: 1,
+        syncItem: sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id }),
+      }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
       const updatedFavoriteSnapshot = sanitizeForFirestore({
         ...(currentFavorite || {}),
         ...sanitizedUpdates,
@@ -10271,11 +11756,7 @@ const toggleCycleVariantSelection = (
       if (!isRemovalLikeUpdate) applyFavoriteUpdateToLocalState([id]);
       if (user?.uid) {
         patchFavoriteCacheImmediately(user.uid, id, updates);
-        const updateSignal = buildFavoriteSyncSignal('update', updatedFavoriteSnapshot, [updatedFavoriteSnapshot], favoriteUpdatedAtMs);
-        updateDoc(doc(db, 'users', user.uid), {
-          favoriteSyncSignal: updateSignal,
-          favoriteSyncSignalUpdatedAt: favoriteUpdatedAtMs,
-        }).catch(err => console.error('Failed to publish favorite update sync signal:', err));
+        // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
       }
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
@@ -11019,63 +12500,269 @@ const unlockAllFavorites = async () => {
     const ref = doc(db, "user_recent_songs", user.uid);
     let cancelledRecentSongsRead = false;
 
+    // SORIDRAW_RECENT_SONGS_SIGNAL_ACK_196_20260925
+    // The RTDB event and the canonical document can use different clocks on
+    // older clients. The event is an invalidation token, never a document
+    // syncVersion. Acknowledge only after applying and caching a server read.
     const runRecentSongsServerSyncIfNeeded = () => {
       if (cancelledRecentSongsRead) return;
 
+      const latestCache = loadRecentSongsCache(user.uid);
       const cachedProfile = readUserProfileCache(user.uid);
       const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0);
       const localVersion = readRecentSongsLocalVersion(user.uid);
-      const hasLocalState = Boolean(cached);
-      const needsServerRead = !hasLocalState || remoteVersion > localVersion;
+      const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
+      const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
+      const needsServerRead = needsRecentSongsServerRead({
+        hasLocalCache: Boolean(latestCache),
+        profileVersion: remoteVersion,
+        localDocumentVersion: localVersion,
+        pendingSignalVersion,
+        acknowledgedSignalVersion,
+      });
 
       if (!needsServerRead) {
         recentSongsSessionVerifiedUids.add(user.uid);
         markCacheDiagnostic('recentSongs', 'CACHE', 0, 0);
         return;
       }
+      // In-flight local mutations and locally saved text edits must never be
+      // overwritten by an older remote snapshot.
+      if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
+      const readSignalVersion = pendingSignalVersion;
 
       void getDocFromServer(ref)
         .then((snap) => {
-          recentSongsSessionReadInFlightUids.delete(user.uid);
-          if (cancelledRecentSongsRead) return;
+          if (cancelledRecentSongsRead || snap.metadata.fromCache) return;
           if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
-          recentSongsSessionVerifiedUids.add(user.uid);
+          if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
+
+          const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
-          const verifiedVersion = Math.max(remoteVersion, localVersion, documentVersion);
-          if (verifiedVersion > 0) writeRecentSongsLocalVersion(user.uid, verifiedVersion);
-        markCacheDiagnostic('recentSongs', snap.metadata.fromCache ? 'CACHE' : 'SYNC', snap.metadata.fromCache ? 0 : 1);
-        const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
-        preserveHistoryIndexOnNextSnapshotRef.current = null;
+          const currentCache = loadRecentSongsCache(user.uid);
+          const confirmedSongIds = new Set(firestoreSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
+          const legacyUnconfirmedSong = (currentCache?.history || []).some((song: any) => {
+            const songId = getLiveSoridrawSongId(song);
+            const createdAt = Number(song?.createdAt || 0);
+            // Protect results created by pre-163 clients, before local
+            // unsynced-ID tracking existed, if the authoritative snapshot is
+            // demonstrably older than both the song and the device's last
+            // acknowledged document version.
+            return Boolean(songId && createdAt > 0
+              && createdAt > documentVersion && createdAt > readRecentSongsLocalVersion(user.uid)
+              && !confirmedSongIds.has(songId));
+          });
+          if (legacyUnconfirmedSong) {
+            console.warn('Recent generated song newer than canonical snapshot; preserving original local cache.');
+            return;
+          }
+          if (hasUnconfirmedSongMissingFromServer(user.uid, firestoreSongs)) {
+            // The PC may have generated a song before its async server write
+            // failed. An older canonical snapshot must not erase that only copy.
+            console.warn('Unconfirmed recent song preserved locally; server is still missing it.');
+            return;
+          }
+          acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
+          // A PC-generated song can be visible locally before its background
+          // save reaches Firestore. Preserve it if there is no canonical doc.
+          if (!snap.exists() && Array.isArray(currentCache?.history) && currentCache.history.length > 0) {
+            console.warn('Recent songs server document missing; preserving local cache.');
+            return;
+          }
 
-        const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
-        const preferredIndex = preservedIndex ?? cached?.historyIndex ?? 0;
+          const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
+          const preferredIndex = preservedIndex ?? currentCache?.historyIndex ?? 0;
+          const nextIndex = firestoreSongs.length ? preferredIndex : -1;
+          const latestBatchId = (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
+          const cachedSuccessfully = saveRecentSongsCache(user.uid, {
+            history: firestoreSongs,
+            historyIndex: nextIndex,
+            latestGenerationBatchId: latestBatchId,
+          });
 
-        applyRecentSongsState(firestoreSongs, {
-          preferredIndex: firestoreSongs.length ? preferredIndex : -1,
-          latestBatchId: (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
-        });
+          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
+          applyRecentSongsState(firestoreSongs, { preferredIndex: nextIndex, latestBatchId });
+          recentSongsReadyToCacheRef.current = true;
+          recentSongsSessionVerifiedUids.add(user.uid);
 
-        recentSongsReadyToCacheRef.current = true;
+          if (cachedSuccessfully && readSignalVersion > 0) {
+            acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion);
+          }
         })
         .catch((error) => {
-          recentSongsSessionReadInFlightUids.delete(user.uid);
           if (cancelledRecentSongsRead) return;
-        // If Firestore fails, keep the account-scoped local cache as a temporary fallback.
-        recentSongsReadyToCacheRef.current = cachedHistory.length > 0;
-        if (cachedHistory.length === 0) {
-          console.error('Failed to subscribe recent songs:', error);
-        }
+          // Keep the last local cache and unacknowledged signal for retry.
+          recentSongsReadyToCacheRef.current = Boolean(loadRecentSongsCache(user.uid));
+          if (!recentSongsReadyToCacheRef.current) {
+            console.error('Failed to subscribe recent songs:', error);
+          }
+        })
+        .finally(() => {
+          recentSongsSessionReadInFlightUids.delete(user.uid);
+          const newestSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
+          if (cancelledRecentSongsRead) {
+            // An effect mounted while this read was in flight must get a chance
+            // to verify even if the old page was already unmounted.
+            window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+              detail: { uid: user.uid, version: newestSignalVersion, resumeAfterRead: true },
+            }));
+          } else if (needsRecentSongsSignalRecheck({
+            newestSignalVersion,
+            signalVersionAtRead: readSignalVersion,
+            acknowledgedSignalVersion: readRecentSongsAcknowledgedSignalVersion(user.uid),
+          })) {
+            // Exactly one bounded follow-up for a new signal that arrived
+            // during this read; never poll while nothing changed.
+            queueMicrotask(runRecentSongsServerSyncIfNeeded);
+          }
         });
     };
 
+    const applyRecentSongSignalItem = (itemJson: string): { applied: boolean; partial: boolean } => {
+      if (!itemJson) return { applied: false, partial: false };
+      let incoming: any = null;
+      try { incoming = JSON.parse(itemJson); } catch {}
+      if (!incoming || incoming.__recentSongSync !== true || Array.isArray(incoming)) {
+        return { applied: false, partial: false };
+      }
+
+      const localPending = recentSongTextWritePendingRef.current;
+      if (
+        localPending?.uid === user.uid
+        && localPending.syncItem
+        && isSameRecentSongSyncItem(localPending.syncItem, incoming)
+      ) {
+        // Preserve the newest local draft/outbox. Remote preview/canonical state
+        // can reconcile after this pending local edit commits; it must not replace
+        // the durable cache that crash recovery depends on.
+        return { applied: false, partial: incoming.__recentSongPartial === true };
+      }
+
+      const currentHistory = historyRef.current;
+      const targetIndex = currentHistory.findIndex((song) => isSameRecentSongSyncItem(song, incoming));
+      if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
+
+      const currentSong = currentHistory[targetIndex] as any;
+      const incomingApplied = incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
+        ? incoming.appliedKeywords as Record<string, any>
+        : null;
+      let mergedAppliedKeywords = incomingApplied
+        ? { ...(currentSong.appliedKeywords || {}), ...incomingApplied }
+        : currentSong.appliedKeywords;
+
+      if (
+        incoming.__recentSongEditPreview === true
+        && incoming.lyrics
+        && typeof incoming.lyrics === 'object'
+      ) {
+        // app291 — Studio renders lyrics from appliedKeywords.lyricsByLanguage first.
+        // The compact edit preview already carries the freshly edited top-level
+        // korean/secondary lyrics, so mirror those two strings into the local
+        // language map on the receiving device. This is local-only: no extra RTDB
+        // payload and no Firestore read/write are added.
+        const currentApplied = (currentSong.appliedKeywords || {}) as Record<string, any>;
+        const currentLanguages = Array.isArray(mergedAppliedKeywords?.lyricLanguages)
+          ? mergedAppliedKeywords.lyricLanguages.filter(Boolean)
+          : Array.isArray(currentApplied.lyricLanguages)
+            ? currentApplied.lyricLanguages.filter(Boolean)
+            : [];
+        const secondaryLanguage = String(
+          incomingApplied?.secondaryLanguage
+          || mergedAppliedKeywords?.secondaryLanguage
+          || currentLanguages.find((lang: string) => lang !== 'ko')
+          || 'en',
+        ).trim() || 'en';
+        const nextLyricsByLanguage: Record<string, string> = {
+          ...((mergedAppliedKeywords?.lyricsByLanguage && typeof mergedAppliedKeywords.lyricsByLanguage === 'object')
+            ? mergedAppliedKeywords.lyricsByLanguage
+            : {}),
+        };
+        if (typeof incoming.lyrics.korean === 'string') {
+          nextLyricsByLanguage.ko = incoming.lyrics.korean;
+        }
+        if (typeof incoming.lyrics.english === 'string') {
+          nextLyricsByLanguage[secondaryLanguage] = incoming.lyrics.english;
+        }
+        mergedAppliedKeywords = {
+          ...(mergedAppliedKeywords || {}),
+          secondaryLanguage,
+          lyricsByLanguage: nextLyricsByLanguage,
+        };
+      }
+
+      const merged = normalizeFavoriteTitleFields({
+        ...currentSong,
+        ...incoming,
+        lyrics: incoming.lyrics && typeof incoming.lyrics === 'object'
+          ? { ...(currentSong.lyrics || {}), ...(incoming.lyrics || {}) }
+          : currentSong.lyrics,
+        appliedKeywords: mergedAppliedKeywords,
+      } as SongResult) as SongResult;
+      const nextHistory = currentHistory.map((song, index) => index === targetIndex ? merged : song);
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
+      recentSongsReadyToCacheRef.current = true;
+      saveRecentSongsCache(user.uid, {
+        history: nextHistory,
+        historyIndex: historyIndexRef.current,
+        latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+      });
+      if (historyIndexRef.current === targetIndex) {
+        resultRef.current = merged;
+        setResult(merged);
+      }
+      markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
+      return { applied: true, partial: incoming.__recentSongPartial === true };
+    };
+
     const handleRecentSongsVersionSignal = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; version?: number }>).detail;
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        version?: number;
+        resumeAfterRead?: boolean;
+        originDeviceId?: string;
+        operation?: string;
+        itemJson?: string;
+      }>).detail;
       if (!detail || detail.uid !== user.uid) return;
+      if (detail.resumeAfterRead === true) {
+        runRecentSongsServerSyncIfNeeded();
+        return;
+      }
       const signaledVersion = Number(detail.version || 0);
-      if (signaledVersion <= readRecentSongsLocalVersion(user.uid)) return;
+      const isEditPreview = String(detail.operation || '') === 'edit-preview';
+      const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
+
+      if (isEditPreview) {
+        // Preview is RTDB-only by design. Whether the item was applied, missing
+        // from this device, or fenced by a newer local draft, it must never fall
+        // through to the canonical Firestore aggregate read path.
+        return;
+      }
+
+      if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
+        // A canonical recent-song mutation carried the changed item itself, so
+        // the receiving device can acknowledge it without rereading the aggregate
+        // user_recent_songs document.
+        writeRecentSongsLocalVersion(user.uid, signaledVersion);
+        acknowledgeRecentSongsSignalVersion(user.uid, signaledVersion);
+        return;
+      }
+      if (!Number.isFinite(signaledVersion) || signaledVersion <= 0) return;
+      if (signaledVersion > readRecentSongsLocalVersion(user.uid)) {
+        // Profile-cache notification can arrive independently of the RTDB
+        // callback; keep its evidence until a canonical read is cached.
+        rememberRecentSongsPendingSignalVersion(user.uid, signaledVersion);
+      }
+      if (
+        signaledVersion <= readRecentSongsLocalVersion(user.uid)
+        && readRecentSongsPendingSignalVersion(user.uid) <= readRecentSongsAcknowledgedSignalVersion(user.uid)
+      ) return;
       runRecentSongsServerSyncIfNeeded();
     };
 
@@ -11625,6 +13312,7 @@ const unlockAllFavorites = async () => {
       try {
         const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
         recentSongTextWritePendingRef.current = null;
+        clearRecentSongTextPendingMarker(user.uid);
         if (recentSongTextWriteTimerRef.current !== null) {
           window.clearTimeout(recentSongTextWriteTimerRef.current);
           recentSongTextWriteTimerRef.current = null;
@@ -11658,6 +13346,7 @@ const unlockAllFavorites = async () => {
         try {
           const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
           recentSongTextWritePendingRef.current = null;
+          clearRecentSongTextPendingMarker(user.uid);
           if (recentSongTextWriteTimerRef.current !== null) {
             window.clearTimeout(recentSongTextWriteTimerRef.current);
             recentSongTextWriteTimerRef.current = null;
@@ -11867,6 +13556,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
   const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
   const recentMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
+  let savedCanonically = false;
   const saveOperation = async () => {
     try {
       const ref = doc(db, "user_recent_songs", user.uid);
@@ -11887,6 +13577,8 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
     );
     if (!persistedVersion) return;
+    acknowledgeRecentGeneratedSongs(user.uid, updatedSongs);
+    savedCanonically = true;
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
@@ -11895,15 +13587,28 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       });
     } catch (e) {
       console.error("Failed to save recent songs:", e);
+      // The PC result is locally cached; never report a failed server write
+      // as a successful cross-device sync.
+      throw e;
     }
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
   // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
   // A multi-song generation is persisted with one read + one write instead of one pair per song.
+  recentSongsSaveInFlightRef.current += 1;
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
-  await chainedSave;
+  try {
+    await chainedSave;
+  } finally {
+    recentSongsSaveInFlightRef.current = Math.max(0, recentSongsSaveInFlightRef.current - 1);
+    if (savedCanonically && recentSongsSaveInFlightRef.current === 0) {
+      window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+        detail: { uid: user.uid, version: readRecentSongsPendingSignalVersion(user.uid), resumeAfterRead: true },
+      }));
+    }
+  }
 };
 
 const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
@@ -12726,6 +14431,21 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         setGenerationModelNotice(`생성 모델 ${usedModelLabel}${fallbackNotice}`);
       }
 
+      // Keep the freshly generated result in the UID-scoped local cache
+      // before starting its separate background server save.
+      if (user) {
+        generatedResults.forEach((song) => ensureLiveSoridrawSongId(song));
+        markRecentGeneratedUnconfirmed(user.uid, generatedResults);
+        const existingLocal = loadRecentSongsCache(user.uid)?.history || [];
+        const localHistory = [...generatedResults, ...existingLocal].slice(0, 10);
+        if (!saveRecentSongsCache(user.uid, {
+          history: localHistory,
+          historyIndex: 0,
+          latestGenerationBatchId: generationBatchId,
+        })) {
+          console.warn('Completed song could not be cached locally before server save.');
+        }
+      }
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
@@ -12745,6 +14465,7 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         }
       })().catch((error) => {
         console.error('Failed to persist completed generation in background:', error);
+        showToast('곡은 PC 화면에 있지만 최근 생성곡 서버 저장에 실패했습니다. PC 캐시를 지우지 말고 연결을 확인해 주세요.');
       });
 
       return {
@@ -13519,31 +15240,44 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number; syncItem?: any } | null>(null);
 
   const flushRecentSongTextWrite = useCallback(async () => {
     const pending = recentSongTextWritePendingRef.current;
     if (!pending?.uid || !Array.isArray(pending.songs)) return;
 
-    recentSongTextWritePendingRef.current = null;
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
       recentSongTextWriteTimerRef.current = null;
     }
 
+    const clearPendingIfCurrent = () => {
+      // A second edit can be queued while this Firestore batch is in flight.
+      // Never let the older flush erase the newer durable marker/outbox.
+      if (recentSongTextWritePendingRef.current !== pending) return;
+      recentSongTextWritePendingRef.current = null;
+      clearRecentSongTextPendingMarker(pending.uid);
+    };
+
     try {
-      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
+      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) {
+        clearPendingIfCurrent();
+        return;
+      }
       const ref = doc(db, "user_recent_songs", pending.uid);
       const persistedVersion = await runV1MutationBoundary(
-        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets },
+        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: pending.syncItem },
         persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
       );
-      if (!persistedVersion) return;
+      if (!persistedVersion) {
+        clearPendingIfCurrent();
+        return;
+      }
+      clearPendingIfCurrent();
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
-      // Keep the newest pending value so a later edit/flush can retry instead of
-      // dropping a locally saved text change.
-      recentSongTextWritePendingRef.current = pending;
+      // The same pending payload stays in memory + local cache/marker. A later
+      // edit, explicit flush, or reload can retry it without losing the draft.
       console.error('Failed to flush batched recent-song text edits:', error);
     }
   }, []);
@@ -13573,8 +15307,83 @@ ${normalizePromptForDisplay(result.prompt)}
       historyIndex: activeIndex,
       latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
     });
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets, mutationEpoch: readRecentSongsMutationEpoch(uid) };
-  }, []);
+    const mutationEpoch = readRecentSongsMutationEpoch(uid);
+    const syncItem = activeIndex >= 0 && activeIndex < nextSongs.length ? nextSongs[activeIndex] : undefined;
+    recentSongTextWritePendingRef.current = {
+      uid,
+      songs: nextSongs,
+      operation,
+      mirrorTargets,
+      mutationEpoch,
+      syncItem,
+    };
+    writeRecentSongTextPendingMarker(uid, {
+      operation,
+      activeIndex,
+      mutationEpoch,
+      updatedAtMs: Date.now(),
+    });
+
+    if (syncItem) {
+      void publishRecentSongEditPreviewDelta(uid, syncItem)
+        .catch((error) => console.warn('Recent song edit live preview unavailable.', error));
+    }
+
+    if (recentSongTextWriteTimerRef.current !== null) {
+      window.clearTimeout(recentSongTextWriteTimerRef.current);
+    }
+    recentSongTextWriteTimerRef.current = window.setTimeout(() => {
+      recentSongTextWriteTimerRef.current = null;
+      void flushRecentSongTextWrite();
+    }, RECENT_SONG_TEXT_BATCH_MS);
+  }, [flushRecentSongTextWrite]);
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    if (recentSongTextWritePendingRef.current?.uid === uid) return;
+
+    const marker = readRecentSongTextPendingMarker(uid);
+    if (!marker) return;
+    if (marker.mutationEpoch !== readRecentSongsMutationEpoch(uid)) {
+      clearRecentSongTextPendingMarker(uid);
+      return;
+    }
+    const cache = loadRecentSongsCache(uid);
+    if (!cache?.history?.length) {
+      clearRecentSongTextPendingMarker(uid);
+      return;
+    }
+    const activeIndex = marker.activeIndex >= 0 && marker.activeIndex < cache.history.length
+      ? marker.activeIndex
+      : Math.min(Math.max(Number(cache.historyIndex || 0), 0), cache.history.length - 1);
+    const syncItem = cache.history[activeIndex];
+    recentSongTextWritePendingRef.current = {
+      uid,
+      songs: cache.history,
+      operation: marker.operation,
+      mirrorTargets: syncItem ? buildRecentMirrorTargets([syncItem], 'upsert') : undefined,
+      mutationEpoch: marker.mutationEpoch,
+      syncItem,
+    };
+
+    const age = Math.max(0, Date.now() - marker.updatedAtMs);
+    const delay = Math.max(1_000, RECENT_SONG_TEXT_BATCH_MS - age);
+    if (recentSongTextWriteTimerRef.current !== null) {
+      window.clearTimeout(recentSongTextWriteTimerRef.current);
+    }
+    recentSongTextWriteTimerRef.current = window.setTimeout(() => {
+      recentSongTextWriteTimerRef.current = null;
+      void flushRecentSongTextWrite();
+    }, delay);
+
+    return () => {
+      if (recentSongTextWriteTimerRef.current !== null) {
+        window.clearTimeout(recentSongTextWriteTimerRef.current);
+        recentSongTextWriteTimerRef.current = null;
+      }
+    };
+  }, [user?.uid, flushRecentSongTextWrite]);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
     const currentIndex = historyIndexRef.current;
@@ -13911,6 +15720,11 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const buildEditedRecentSong = (song: SongResult, draft: RecentSongEditDraft): SongResult => {
+    // Freeze the pre-edit recent-song identity before title mutation. Legacy
+    // fallback identity used the title, so changing the name could otherwise
+    // make the same generated song look like a different item forever.
+    const immutableRecentSongSyncKey = String((song as any)?.recentSongSyncKey || '').trim()
+      || buildRecentSongSyncKey(song);
     const koreanTitle = draft.koreanTitle.trim();
     const secondaryTitle = draft.secondaryTitle.trim();
     const secondaryLanguage = (draft.secondaryLanguage || 'en') as LanguageCode;
@@ -13949,6 +15763,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
     const editedSong = {
       ...song,
+      ...(immutableRecentSongSyncKey ? { recentSongSyncKey: immutableRecentSongSyncKey } : {}),
       title: (shouldEditKoreanTitle ? koreanTitle : '') || (shouldEditSecondaryTitle ? secondaryTitle : '') || song.title || 'Untitled',
       koreanTitle: shouldEditKoreanTitle ? koreanTitle : (song.koreanTitle || ''),
       englishTitle: shouldEditSecondaryTitle ? secondaryTitle : (song.englishTitle || ''),
@@ -13998,6 +15813,9 @@ ${normalizePromptForDisplay(result.prompt)}
       recentSongsReadyToCacheRef.current = true;
 
       if (user?.uid) {
+        // Local UI/cache updates immediately. A compact RTDB preview keeps the
+        // other device current, while the canonical aggregate waits for the
+        // 150-second trailing batch so title/prompt/lyrics edits collapse.
         queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
       }
 
@@ -14094,29 +15912,198 @@ ${normalizePromptForDisplay(result.prompt)}
         : (snapshot as any);
       const wasDetachedBeforeToggle = Boolean(currentSongBeforeToggle?.recentFavoriteDetachedAt);
       const heartSnapshot = ({ ...snapshot } as any);
+      const authorityBeforeToggle = readRecentHeartAuthority(heartSnapshot);
 
       if (wasDetachedBeforeToggle) {
         delete heartSnapshot.favoriteFirestoreId;
         delete heartSnapshot.musicNoteFavoriteId;
+      } else if (authorityBeforeToggle?.favoriteId) {
+        // app286 — The latest RTDB per-song authority also carries the exact
+        // Music Note id. Use it for the mutation even when this device's Recent
+        // cache is stale, so a filled-heart UNSAVE cannot become a no-op.
+        heartSnapshot.favoriteFirestoreId = authorityBeforeToggle.favoriteId;
+        heartSnapshot.musicNoteFavoriteId = authorityBeforeToggle.favoriteId;
       }
       delete heartSnapshot.recentFavoriteDetachedAt;
 
       const wasFavoritedBeforeToggle = wasDetachedBeforeToggle
         ? false
         : isSongFavorited(heartSnapshot);
+      const intendedFavoriteAction: 'save' | 'unsave' = wasFavoritedBeforeToggle ? 'unsave' : 'save';
 
-      await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
-
-      const linkedFavorite = wasFavoritedBeforeToggle
+      // app285 — Keep the exact Music Note document identity even while the
+      // heart is empty. The broken song had two historical favorite documents;
+      // removing this link on unsave made each device fall back to a different
+      // same-generation row. A normal song keeps one stable Recent -> Music Note
+      // identity, so preserve or recover that exact id before the mutation.
+      const activeFavoriteBeforeToggle = wasDetachedBeforeToggle
         ? null
         : findBestMatchingFavorite(
             favoritesStore.getFavorites(),
             heartSnapshot,
             buildFavoriteIdentityKey(heartSnapshot),
           );
-      const linkedFavoriteId = String(
-        (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
+      const favoriteLinkBeforeToggle = String(
+        heartSnapshot?.favoriteFirestoreId
+        || heartSnapshot?.musicNoteFavoriteId
+        || currentSongBeforeToggle?.favoriteFirestoreId
+        || currentSongBeforeToggle?.musicNoteFavoriteId
+        || activeFavoriteBeforeToggle?.firestoreId
+        || activeFavoriteBeforeToggle?.id
+        || '',
       ).trim();
+
+      if (!wasDetachedBeforeToggle && user?.uid) {
+        const canonicalFavorites = favoritesStore.getFavorites();
+        const exactCanonicalFavorite = favoriteLinkBeforeToggle
+          ? canonicalFavorites.find((favorite: any) => (
+              String(favorite?.firestoreId || favorite?.id || '').trim() === favoriteLinkBeforeToggle
+            )) || null
+          : findBestMatchingFavorite(
+              canonicalFavorites,
+              heartSnapshot,
+              buildFavoriteIdentityKey(heartSnapshot),
+            );
+        const canonicalFavoriteId = String(
+          favoriteLinkBeforeToggle
+          || exactCanonicalFavorite?.firestoreId
+          || exactCanonicalFavorite?.id
+          || '',
+        ).trim();
+        const stableBatchIdentity = buildRecentSongSyncKey(heartSnapshot) || getLiveSoridrawSongId(heartSnapshot) || '';
+        const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+        const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+        const canDeriveFirstSaveId = Boolean(
+          stableBatchIdentity
+          && hasMusicNotePayloadCache(user.uid)
+          && localMusicNoteVersion > 0
+          && remoteMusicNoteVersion <= localMusicNoteVersion
+        );
+        const batchDocumentId = canonicalFavoriteId || (
+          canDeriveFirstSaveId
+            ? buildBatchedRecentFavoriteDocumentId(user.uid, stableBatchIdentity)
+            : ''
+        );
+
+        if (batchDocumentId) {
+          const existingIntent = readStudioHeartPendingIntent(user.uid, batchDocumentId);
+          const baselineFavorite = existingIntent?.baselineFavorite
+            ?? (exactCanonicalFavorite && !isFavoriteHidden(exactCanonicalFavorite) ? exactCanonicalFavorite : null);
+          const baselineSaved = existingIntent
+            ? existingIntent.baselineSaved
+            : Boolean(baselineFavorite && !isFavoriteHidden(baselineFavorite));
+          const batchBlockedByLock = Boolean(baselineFavorite?.isLocked);
+          if (batchBlockedByLock) {
+            // Preserve the established locked-song guard; do not preview an action
+            // that the canonical mutation is not allowed to perform.
+          } else {
+          const batchedSong = normalizeFavoriteTitleFields({
+            ...heartSnapshot,
+            favoriteFirestoreId: batchDocumentId,
+            musicNoteFavoriteId: batchDocumentId,
+          } as SongResult) as SongResult;
+
+          if (queueStudioHeartPendingIntent(
+            batchedSong,
+            batchDocumentId,
+            intendedFavoriteAction === 'save',
+            baselineSaved,
+            baselineFavorite,
+          )) {
+            if (currentIndex >= 0) {
+              const nextSong = { ...(historyRef.current[currentIndex] || batchedSong) } as any;
+              nextSong.favoriteFirestoreId = batchDocumentId;
+              nextSong.musicNoteFavoriteId = batchDocumentId;
+              if (intendedFavoriteAction === 'unsave') {
+                nextSong.recentFavoriteExplicitlyUnsavedAt = Date.now();
+              } else {
+                delete nextSong.recentFavoriteExplicitlyUnsavedAt;
+                delete nextSong.recentFavoriteDetachedAt;
+              }
+              const nextHistory = historyRef.current.map((item, index) => index === currentIndex ? nextSong : item);
+              historyRef.current = nextHistory;
+              resultRef.current = nextSong as SongResult;
+              setHistory(nextHistory);
+              setResult(nextSong as SongResult);
+              recentSongsReadyToCacheRef.current = true;
+              saveRecentSongsCache(user.uid, {
+                history: nextHistory,
+                historyIndex: currentIndex,
+                latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+              });
+            }
+            showToast(intendedFavoriteAction === 'save' ? '저장되었습니다.' : '저장이 해제되었습니다.');
+            return;
+          }
+          }
+        }
+      }
+
+      let linkedFavoriteId = '';
+      let linkedFavoriteForRecentBridge: any = null;
+      if (wasDetachedBeforeToggle) {
+        // An edited saved recent song intentionally shows an empty heart. Clicking
+        // it means "save this edited version", not "unsave the old title".
+        const existingEditedFavorite = findBestMatchingFavorite(
+          favoritesStore.getFavorites(),
+          heartSnapshot,
+          buildFavoriteIdentityKey(heartSnapshot),
+        );
+        if (existingEditedFavorite && !isFavoriteHidden(existingEditedFavorite)) {
+          await updateFavorite(existingEditedFavorite.id, {
+            title: heartSnapshot.title,
+            koreanTitle: (heartSnapshot as any).koreanTitle ?? '',
+            englishTitle: (heartSnapshot as any).englishTitle ?? '',
+            displayGenre: (heartSnapshot as any).displayGenre ?? null,
+            genre: getResolvedGenre(heartSnapshot),
+            prompt: heartSnapshot.prompt,
+            lyrics: heartSnapshot.lyrics,
+            appliedKeywords: heartSnapshot.appliedKeywords,
+            userInput: (heartSnapshot as any).userInput ?? (heartSnapshot.appliedKeywords as any)?.userInput ?? '',
+            situationSummary: (heartSnapshot as any).situationSummary ?? (heartSnapshot.appliedKeywords as any)?.situationSummary ?? '',
+            recentSongSyncKey: buildRecentSongSyncKey(heartSnapshot) || existingEditedFavorite.recentSongSyncKey,
+            soridrawSongId: getLiveSoridrawSongId(heartSnapshot) || existingEditedFavorite.soridrawSongId,
+            ...buildLegacyRecentFavoriteBridge(heartSnapshot),
+            saved: true,
+            hidden: false,
+            favoriteHidden: false,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            unsavedAt: null,
+            unlikedAt: null,
+          } as any);
+          linkedFavoriteId = String(existingEditedFavorite.firestoreId || existingEditedFavorite.id || '').trim();
+          linkedFavoriteForRecentBridge = existingEditedFavorite;
+        } else {
+          await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true, intendedAction: 'save' });
+        }
+      } else {
+        await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true, intendedAction: intendedFavoriteAction });
+      }
+
+      if (!linkedFavoriteId && !wasFavoritedBeforeToggle) {
+        const linkedFavorite = findBestMatchingFavorite(
+          favoritesStore.getFavorites(),
+          heartSnapshot,
+          buildFavoriteIdentityKey(heartSnapshot),
+        );
+        linkedFavoriteForRecentBridge = linkedFavorite;
+        linkedFavoriteId = String(
+          (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
+        ).trim();
+      }
+
+      if (user?.uid) {
+        rememberRecentHeartAuthority(
+          user.uid,
+          heartSnapshot,
+          intendedFavoriteAction === 'save',
+          intendedFavoriteAction === 'save'
+            ? (linkedFavoriteId || favoriteLinkBeforeToggle)
+            : favoriteLinkBeforeToggle,
+          Date.now(),
+        );
+      }
 
       if (currentIndex >= 0) {
         const currentSongAfterToggle = (historyRef.current[currentIndex] || heartSnapshot) as any;
@@ -14124,12 +16111,40 @@ ${normalizePromptForDisplay(result.prompt)}
         delete nextCommittedSong.recentFavoriteDetachedAt;
         delete nextCommittedSong.musicNoteFavoriteId;
 
+        const legacyFavoriteBridge = buildLegacyRecentFavoriteBridge(nextCommittedSong);
+        const legacyIdentityWasHealed = Number(nextCommittedSong.recentFavoriteIdentityHealedAt || 0) > 0;
+        const linkedBridgeSoridrawSongId = getLiveSoridrawSongId(linkedFavoriteForRecentBridge);
+        const linkedBridgeRecentSongSyncKey = String(linkedFavoriteForRecentBridge?.recentSongSyncKey || '').trim();
+
+        if (!wasFavoritedBeforeToggle && legacyFavoriteBridge.recentLegacySourceId && linkedFavoriteId) {
+          if (linkedBridgeSoridrawSongId) nextCommittedSong.soridrawSongId = linkedBridgeSoridrawSongId;
+          if (linkedBridgeRecentSongSyncKey) nextCommittedSong.recentSongSyncKey = linkedBridgeRecentSongSyncKey;
+          if (!legacyIdentityWasHealed) nextCommittedSong.recentFavoriteIdentityHealedAt = Date.now();
+        }
+
+        if (wasFavoritedBeforeToggle && legacyFavoriteBridge.recentLegacySourceId) {
+          nextCommittedSong.recentFavoriteExplicitlyUnsavedAt = Date.now();
+        } else {
+          delete nextCommittedSong.recentFavoriteExplicitlyUnsavedAt;
+        }
+
         if (wasFavoritedBeforeToggle) {
-          delete nextCommittedSong.favoriteFirestoreId;
+          // app285 — Empty heart is a state, not a new song identity.
+          // Preserve the exact linked favorite document across unsave so the next
+          // save cannot jump to an older duplicate with the same generation key.
+          if (favoriteLinkBeforeToggle) {
+            nextCommittedSong.favoriteFirestoreId = favoriteLinkBeforeToggle;
+            nextCommittedSong.musicNoteFavoriteId = favoriteLinkBeforeToggle;
+          } else {
+            delete nextCommittedSong.favoriteFirestoreId;
+            delete nextCommittedSong.musicNoteFavoriteId;
+          }
         } else if (linkedFavoriteId) {
           nextCommittedSong.favoriteFirestoreId = linkedFavoriteId;
+          nextCommittedSong.musicNoteFavoriteId = linkedFavoriteId;
         } else {
           delete nextCommittedSong.favoriteFirestoreId;
+          delete nextCommittedSong.musicNoteFavoriteId;
         }
 
         const nextCommittedHistory = historyRef.current.map((song, index) =>
@@ -14159,8 +16174,62 @@ ${normalizePromptForDisplay(result.prompt)}
               uid: user.uid,
               songs: nextCommittedHistory,
               mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              syncItem: nextCommittedSong,
             };
             await flushRecentSongTextWrite();
+          } else if (wasDetachedBeforeToggle) {
+            // The edit itself was already persisted by "수정 저장". Saving that
+            // edited version now clears the detached-heart marker durably with
+            // one changed recent-song write, so reload/new-device state cannot
+            // fall back to the pre-save empty heart.
+            recentSongTextWritePendingRef.current = {
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              operation: 'pre-favorite-edit',
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+              syncItem: nextCommittedSong,
+            };
+            await flushRecentSongTextWrite();
+          } else if (
+            !wasFavoritedBeforeToggle
+            && legacyFavoriteBridge.recentLegacySourceId
+            && linkedFavoriteId
+            && !legacyIdentityWasHealed
+          ) {
+            // app283 one-time legacy repair: persist the converged favorite link
+            // and identity exactly once. This is a real save mutation, capped at
+            // one additional user_recent_songs W1; later heart toggles stay on
+            // the normal Music Note mutation path with zero Recent reads.
+            recentSongTextWritePendingRef.current = {
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              operation: 'pre-favorite-edit',
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+              mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+              syncItem: nextCommittedSong,
+            };
+            await flushRecentSongTextWrite();
+          } else {
+            const favoriteLinkAfterToggle = String(
+              nextCommittedSong.favoriteFirestoreId || nextCommittedSong.musicNoteFavoriteId || '',
+            ).trim();
+            if (favoriteLinkAfterToggle && favoriteLinkAfterToggle !== String(
+              currentSongBeforeToggle?.favoriteFirestoreId || currentSongBeforeToggle?.musicNoteFavoriteId || '',
+            ).trim()) {
+              // app285 one-time identity repair. Persist only when this device had
+              // lost the exact link and the real heart mutation resolved it.
+              // This is W1 once for user_recent_songs, never a page-entry/read repair.
+              recentSongTextWritePendingRef.current = {
+                uid: user.uid,
+                songs: nextCommittedHistory,
+                operation: 'pre-favorite-edit',
+                mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+                mutationEpoch: readRecentSongsMutationEpoch(user.uid),
+                syncItem: nextCommittedSong,
+              };
+              await flushRecentSongTextWrite();
+            }
           }
         }
       }
@@ -15635,6 +17704,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
   };
 
+  const formatStudioDashboardGenre = (song: SongResult) =>
+    getResolvedGenre(song) || getSubGenre(song) || 'Song';
+
 
   const getStudioSongGenerationBatchId = (song: SongResult | null | undefined) =>
     String((song?.appliedKeywords as any)?.generationBatchId || '');
@@ -16158,7 +18230,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         clearSunoLibrarySignal={clearSunoLibrarySignal}
         studioCompactMobileLayout={isStudioCompactMobileLayout}
         studioWorkspaceView={studioWorkspaceView}
-        onStudioWorkspaceSelect={selectStudioWorkspaceView}
+        onStudioWorkspaceSelect={navigateStudioWorkspaceView}
       />
 
       <SplitPerformanceDiagnostics isAdmin={isMasterDiagnosticsUser} />
@@ -16174,7 +18246,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
           )
         } />
-        <Route path="/explore" element={<ExploreShellLazy />} />
+        <Route path="/explore" element={
+          canAccessNavigationMenu('explore') ? (
+            <ExploreShellLazy isAdminUser={isAdminUser} />
+          ) : (
+            <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
+          )
+        } />
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
           <StudioPageFrame
@@ -16184,19 +18262,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <StudioLeftRail
                 activeWorkspace={studioWorkspaceView}
                 onCreate={() => {
-                  selectStudioWorkspaceView('create');
+                  navigateStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
                 }}
-                onRecentSongs={() => selectStudioWorkspaceView('recent')}
-                onMusicNote={() => selectStudioWorkspaceView('music-note')}
-                onLibrary={() => selectStudioWorkspaceView('library')}
+                onRecentSongs={() => navigateStudioWorkspaceView('recent')}
+                onMusicNote={() => navigateStudioWorkspaceView('music-note')}
+                onLibrary={() => navigateStudioWorkspaceView('library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
                 onProfile={() => navigate('/my-page')}
+                onPublicProfile={() => {
+                  if (user?.uid) navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                }}
                 onSettings={() => navigate('/my-page?tab=settings')}
-                onPlan={() => navigate('/my-page?tab=plan')}
-                onBilling={() => navigate('/my-page?tab=billing')}
+                onAdmin={() => navigate('/admin/users')}
+                showAdmin={isAdminUser}
                 onLogout={handleLogout}
                 profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
                 profileEmail={user?.email || ''}
@@ -16212,13 +18293,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 selectedIndex={historyIndex}
                 remainingCredits={sunoRemainingCredits}
                 creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                showMusicApiCredits={menuVisibility.library}
                 selectedKeywords={liveSelectedKeywordItems}
                 onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                 formatTime={formatStudioDashboardTime}
-                formatSongTitle={formatUnifiedTitle}
+                formatSongTitle={formatTitleWithoutGenre}
+                formatSongGenre={formatStudioDashboardGenre}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={(song, index) => {
-                  selectStudioWorkspaceView('recent');
+                  navigateStudioWorkspaceView('recent');
                   openStudioDashboardSong(song, index);
                 }}
                 isSongUnread={isStudioDashboardSongUnread}
@@ -17450,6 +19533,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               })}
             </div>
           </div>
+
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>
@@ -17476,6 +19560,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               lockAllFavorites={lockAllFavorites}
                               user={user || auth.currentUser}
                               handleLogin={handleLogin}
+
+                              showMusicApiGeneration={menuVisibility.library}
                             />
                           </Suspense>
                         ) : (
@@ -17490,7 +19576,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </section>
                     ) : (
                       <>
-                    {liveSelectedKeywordItems.length > 0 && (
+                    {studioWorkspaceView !== 'create' && liveSelectedKeywordItems.length > 0 && (
                       <Portal>
                         <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
                           <div className="soridraw-live-keywords-row">
@@ -17529,7 +19615,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => selectStudioWorkspaceView('music-note')}
+                      onClick={() => navigateStudioWorkspaceView('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -18851,6 +20937,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
                 )}
+                  {menuVisibility.library && (
                   <div className="soridraw-result-music-api-card mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
                     <button
                       type="button"
@@ -18896,7 +20983,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            selectStudioWorkspaceView('library');
+                            navigateStudioWorkspaceView('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"
@@ -18909,6 +20996,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     )}
                   </div>
+                  )}
               </div>
             </div>
           )}
@@ -18961,10 +21049,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onApiSettings={() => navigate('/suno-api-settings')}
                       onLab={() => navigate('/lab')}
                       onProfile={() => navigate('/my-page')}
-                      onSettings={() => navigate('/my-page?tab=settings')}
-                      onPlan={() => navigate('/my-page?tab=plan')}
-                      onBilling={() => navigate('/my-page?tab=billing')}
-                      onLogout={handleLogout}
+                onPublicProfile={() => {
+                  if (user?.uid) navigate(`/explore?profile=${encodeURIComponent(user.uid)}`);
+                }}
+                onSettings={() => navigate('/my-page?tab=settings')}
+                onAdmin={() => navigate('/admin/users')}
+                showAdmin={isAdminUser}
+                onLogout={handleLogout}
                       profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
                       profileEmail={user?.email || ''}
                       profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
@@ -18979,10 +21070,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       selectedIndex={historyIndex}
                       remainingCredits={sunoRemainingCredits}
                       creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                      showMusicApiCredits={menuVisibility.library}
                       selectedKeywords={liveSelectedKeywordItems}
                       onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                       formatTime={formatStudioDashboardTime}
-                      formatSongTitle={formatUnifiedTitle}
+                      formatSongTitle={formatTitleWithoutGenre}
+                      formatSongGenre={formatStudioDashboardGenre}
                       onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                       onOpenSong={(song, index) => {
                         selectStudioWorkspaceView('recent');
@@ -19010,6 +21103,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       lockAllFavorites={lockAllFavorites}
                       user={user || auth.currentUser}
                       handleLogin={handleLogin}
+
+                      showMusicApiGeneration={menuVisibility.library}
                     />
                   </Suspense>
                 </StudioPageFrame>
@@ -19029,6 +21124,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     lockAllFavorites={lockAllFavorites}
                     user={null}
                     handleLogin={handleLogin}
+
+                    showMusicApiGeneration={menuVisibility.library}
                   />
                 </Suspense>
               )

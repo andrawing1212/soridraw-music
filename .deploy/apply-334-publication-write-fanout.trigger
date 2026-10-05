@@ -1,0 +1,13 @@
+requested_at=2026-10-04T02:44:00+09:00
+requested_by=user_explicit_shared_d1_migration_approval
+scope=publication-write-fanout-only
+preflight_run=37141297366
+max_tracks_per_owner=42
+music_note_legacy_nonempty=0
+drop_indexes=idx_tracks_owner_suno_url,idx_tracks_source_type_latest,idx_tracks_owner_profile_order,idx_tracks_title
+replace_legacy_index=idx_tracks_legacy_global->idx_tracks_legacy_global_nonempty
+music_note_derived_profile_track_count_write=retire
+user_row_delete=false
+user_row_backfill=false
+test_production_worker_change=false
+rollback_required=true

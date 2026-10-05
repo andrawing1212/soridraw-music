@@ -38,16 +38,48 @@ assert(commit.includes('queueFavoriteDetailPatch(payload.targetSongId, payload.u
 assert(!commit.includes('await updateFavorite('), 'title/lyrics/prompt still write Firestore immediately');
 
 const sunoSave = block('  const saveFavoriteSunoShareUrls = async', '\n\n  const saveFavoriteSunoShareUrl');
-assert(sunoSave.includes("if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);"), 'detail Suno URL save does not use batch queue');
-assert(sunoSave.includes('else await updateFavorite(song.id, updates);'), 'non-detail Suno URL behavior changed unexpectedly');
+assert(
+  sunoSave.includes("if (source === 'detail')") && sunoSave.includes('queueFavoriteDetailPatch(song.id, updates);'),
+  'detail Suno URL save does not use batch queue'
+);
+assert(
+  sunoSave.includes('else {') && sunoSave.includes('await updateFavorite(song.id, updates);'),
+  'non-detail Suno URL behavior changed unexpectedly'
+);
 
 const sunoRemove = block('  const removeFavoriteSunoShareUrl = async', '\n\n  const COLOR_SYNC_USAGE_KEY');
-assert(sunoRemove.includes("if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);"), 'detail Suno URL remove does not use batch queue');
+assert(
+  sunoRemove.includes("if (source === 'detail')") && sunoRemove.includes('queueFavoriteDetailPatch(song.id, updates);'),
+  'detail Suno URL remove does not use batch queue'
+);
 
 const queue = block('  const queueFavoriteDetailPatch = (songId: string', '\n\n  const flushAllMusicNoteLocalChangesForPageExit');
 assert(queue.includes('writeMusicNoteDetailDraft(user.uid'), 'pending changes are not persisted to IndexedDB');
 assert(queue.includes('Object.keys(updates).length === 0'), 'net-zero edits do not collapse to zero writes');
 assert(!queue.includes('patchMusicNoteDetailCache({'), 'pre-flush detail cache is mutated asynchronously');
+assert(queue.includes('syncFavoriteSunoCardMedia(safeSongId, patch);'), 'Suno URL draft does not update its Music Note list cover');
+assert(queue.includes('syncFavoriteSunoCardMedia(safeSongId, baselineEntry.data)'), 'reverting Suno URL does not restore list cover');
+
+const cardSync = block('  const syncFavoriteSunoCardMedia = (songId: string', '\n\n  const queueFavoriteDetailPatch');
+assert(cardSync.includes("'sunoLinks'") && cardSync.includes("'sunoCoverUrl'") && cardSync.includes("'mainSunoIndex'"), 'Suno list preview must preserve both URLs and chosen cover');
+assert(cardSync.includes('favoritesStore.setFavorites(next);'), 'Suno list preview does not notify the existing local-first store');
+assert(!cardSync.includes('updateFavorite(') && !cardSync.includes('getDoc('), 'Suno list preview must not add Firestore reads/writes');
+
+const detailOpen = block('  const openFavoriteDetail = async', '\n\n  const executeFavoriteMenuAction');
+assert(detailOpen.includes('syncFavoriteSunoCardMedia(sourceId, nextSong);'), 'a hydrated existing Suno cover is not reused for its list row');
+
+const draftOverlay = block('  // A full R2 catalog can arrive after a local URL edit', '\n\n  const queueFavoriteDetailPatch');
+assert(draftOverlay.includes('listMusicNoteDetailDrafts(uid)'), 'a reload does not recover local Suno media drafts');
+assert(draftOverlay.includes('getMusicNoteDetailSourceVersion(song)'), 'local draft compatibility is not checked');
+assert(draftOverlay.includes('sourceVersion <= draft.baseVersion'), 'a stale local draft could override newer server media');
+assert(draftOverlay.includes('syncFavoriteSunoCardMedia(draft.sourceId, draft.updates);'), 'incoming catalog summary hides the unflushed Suno cover');
+assert(!draftOverlay.includes('getDoc(') && !draftOverlay.includes('updateFavorite('), 'list draft overlay must stay local-only');
+
+const coordinator = fs.readFileSync('src/lib/pageSyncCoordinator.ts', 'utf8');
+const handlerFlush = coordinator.indexOf('for (const handler of pending.handlers) jobs.push(Promise.resolve(handler.flush()));');
+const catalogFlush = coordinator.indexOf('await flushPendingCatalogPublishes(uid);');
+assert(handlerFlush >= 0 && catalogFlush > handlerFlush, 'catalog delta can publish before Music Note Firestore draft flush');
+assert(coordinator.includes('if (!failed && getPendingCatalogPublishCount(uid) > 0)'), 'catalog must be checked after mutation success, not only at page-exit entry');
 
 const flush = block('  const flushFavoriteDetailPendingPatch = async', '\n\n  const scheduleFavoriteDetailFlush');
 assert(flush.includes('await updateFavorite(pending.songId, pending.updates);'), 'single batched Firestore flush missing');

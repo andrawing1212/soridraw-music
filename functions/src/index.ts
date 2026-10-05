@@ -1,6 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import { consumeGeminiInteractionSse } from "./geminiInteractionSse";
 import {
   buildLibraryOversizeFallbackMarker,
   buildRebuiltLibraryBundle,
@@ -704,6 +705,61 @@ export const getAdminPresence = onCall(
   }
 );
 
+// SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
+const NAVIGATION_VISIBILITY_KEYS_214 = [
+  "home",
+  "explore",
+  "studio",
+  "musicNote",
+  "library",
+  "lab",
+  "myPage",
+] as const;
+
+const parseNavigationVisibilityMap214 = (raw: unknown, label: string) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new HttpsError("invalid-argument", label + " 설정이 올바르지 않습니다.");
+  }
+  const source = raw as Record<string, unknown>;
+  const parsed: Record<string, boolean> = {};
+  NAVIGATION_VISIBILITY_KEYS_214.forEach((key) => {
+    if (typeof source[key] !== "boolean") {
+      throw new HttpsError("invalid-argument", label + "." + key + " 값이 필요합니다.");
+    }
+    parsed[key] = source[key] === true;
+  });
+  return parsed;
+};
+
+export const adminSetNavigationVisibility = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db } = await requireAdminCaller(request, "appSettings");
+    const rawSettings = request.data?.settings;
+    const menuVisibility = parseNavigationVisibilityMap214(rawSettings?.menuVisibility, "menuVisibility");
+    const menuAdminOnly = parseNavigationVisibilityMap214(rawSettings?.menuAdminOnly, "menuAdminOnly");
+    const now = Date.now();
+    const revision = now.toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+    await db.collection("app_settings").doc("navigation_visibility").set({
+      menuVisibility,
+      menuAdminOnly,
+      showSunoLibraryMenu: menuVisibility.library,
+      sunoLibraryMenuAdminOnly: menuAdminOnly.library,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await admin.database().ref("publicSync/navigationVisibility").set({
+      revision,
+      updatedAt: now,
+      menuVisibility,
+      menuAdminOnly,
+    });
+
+    return { ok: true, revision, updatedAt: now };
+  }
+);
+
 export const adminSignalUserControlRevision = onCall(
   { region: "us-central1" },
   async (request) => {
@@ -995,6 +1051,7 @@ const verifyAppCheckForRequest = async (
 };
 
 const GEMINI_ALLOWED_MODELS = new Set([
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
@@ -1260,17 +1317,6 @@ const geminiSystemInstructionToText = (value: any): string => {
   return "";
 };
 
-const extractGeminiInteractionText = (payload: any): string => {
-  if (typeof payload?.output_text === "string") return payload.output_text;
-  if (!Array.isArray(payload?.steps)) return "";
-  return payload.steps
-    .filter((step: any) => step?.type === "model_output")
-    .flatMap((step: any) => Array.isArray(step?.content) ? step.content : [])
-    .filter((item: any) => item?.type === "text")
-    .map((item: any) => String(item?.text || ""))
-    .join("");
-};
-
 const parseGeminiRetryAfterMs = (headerValue: string | null, message: unknown): number => {
   const header = String(headerValue || "").trim();
   if (header) {
@@ -1355,10 +1401,12 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
   const responseMimeType = String(config.responseMimeType || "").trim();
   const responseSchema = config.responseSchema;
 
+  const requestedThinkingLevel = String(config?.thinkingConfig?.thinkingLevel || "").trim().toLowerCase();
+  const interactionThinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
+    ? requestedThinkingLevel
+    : "medium";
   const generationConfig: Record<string, any> = {
-    // AI Studio currently emits Gemini 3.7 Flash with medium thinking by default.
-    // Keep it explicit so the production proxy matches the model's current default profile.
-    thinking_level: "medium",
+    thinking_level: interactionThinkingLevel,
   };
   if (Number.isFinite(Number(config.maxOutputTokens)) && Number(config.maxOutputTokens) > 0) {
     generationConfig.max_output_tokens = Math.round(Number(config.maxOutputTokens));
@@ -1373,6 +1421,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     input: geminiTextContentToInteractionInput(requestPayload?.contents),
     generation_config: generationConfig,
     store: false,
+    stream: true,
   };
   if (systemInstruction) body.system_instruction = systemInstruction;
   if (responseMimeType || responseSchema) {
@@ -1389,13 +1438,14 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "text/event-stream",
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify(body),
     },
   );
-  const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
+    const payload = await upstream.json().catch(() => null);
     const error = new Error(String(payload?.error?.message || `Gemini interaction failed (${upstream.status})`));
     const upstreamReason = Array.isArray(payload?.error?.details)
       ? String(payload.error.details.find((detail: any) => typeof detail?.reason === "string")?.reason || "")
@@ -1407,8 +1457,9 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     throw error;
   }
 
-  const text = extractGeminiInteractionText(payload);
-  const usage = payload?.usage || {};
+  const completed = await consumeGeminiInteractionSse(upstream, model);
+  const text = completed.text;
+  const usage = completed.usage;
   return {
     candidates: [{ content: { role: "model", parts: [{ text }] } }],
     usageMetadata: {
@@ -1420,14 +1471,14 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
       cachedContentTokenCount: Number(usage.total_cached_tokens || 0) || undefined,
       totalTokenCount: Number(usage.total_tokens || 0) || undefined,
     },
-    modelVersion: String(payload?.model || model),
-    responseId: String(payload?.id || "") || undefined,
+    modelVersion: completed.model,
+    responseId: completed.responseId,
   };
 };
 
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
-  if (model === "gemini-3.7-flash") {
+  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {
     return callGeminiInteraction(apiKey, requestPayload);
   }
   const config = requestPayload?.config && typeof requestPayload.config === "object"
@@ -1515,7 +1566,7 @@ const normalizeGeminiServerAttemptRequest = (
       : requestPayload?.config,
   };
 
-  if ((model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
+  if ((model === "gemini-3.8-flash" || model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
     delete next.config.temperature;
     delete next.config.topP;
     delete next.config.topK;
@@ -2304,15 +2355,15 @@ export const getGoogleGeminiApiKey = onRequest(
   }
 );
 
-export const generateGeminiContent = onRequest(
-  {
-    region: "us-central1",
-    timeoutSeconds: 180,
-    memory: "512MiB",
-    concurrency: 20,
-    maxInstances: 30,
-  },
-  async (req, res) => {
+const GEMINI_CONTENT_FUNCTION_OPTIONS = {
+  region: "us-central1",
+  timeoutSeconds: 330,
+  memory: "512MiB",
+  concurrency: 20,
+  maxInstances: 30,
+} as const;
+
+const generateGeminiContentHandler = async (req: any, res: any) => {
     if (handleCors(req, res)) return;
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method Not Allowed", ok: false });
@@ -2326,6 +2377,62 @@ export const generateGeminiContent = onRequest(
     const serializedLength = Buffer.byteLength(JSON.stringify(req.body || {}), "utf8");
     if (serializedLength > GEMINI_MAX_REQUEST_BYTES) {
       res.status(413).json({ error: "Gemini request is too large", code: "REQUEST_TOO_LARGE", ok: false });
+      return;
+    }
+
+    // SORIDRAW_GEMINI_READONLY_MODEL_AVAILABILITY_162
+    // Explicit, authenticated admin action only. No generation or guard write.
+    // Return fixed booleans, never user API keys, raw model listings, or prompts.
+    if (req.body?.diagnostic === "model-availability") {
+      try {
+        const db = admin.firestore();
+        const account = await db.collection("users").doc(uid).get();
+        const role = String(account.data()?.role || "").toLowerCase();
+        if (role !== "admin" && role !== "master") {
+          res.status(403).json({ ok: false, code: "GEMINI_MODEL_DIAG_ADMIN_ONLY" });
+          return;
+        }
+        const keySnap = await db.collection("user_api_keys").doc(uid).get();
+        const userApiKey = String(keySnap.data()?.googleGeminiApiKey || "").trim();
+        if (!userApiKey) {
+          res.status(404).json({ ok: false, code: "GEMINI_KEY_NOT_FOUND" });
+          return;
+        }
+        const upstream = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+          { headers: { "x-goog-api-key": userApiKey }, signal: AbortSignal.timeout(12_000) },
+        );
+        if (!upstream.ok) {
+          res.status(502).json({ ok: false, code: "GEMINI_MODEL_DIAG_UPSTREAM", providerStatus: upstream.status });
+          return;
+        }
+        const payload = await upstream.json().catch(() => null);
+        if (!payload || !Array.isArray(payload.models)) {
+          res.status(502).json({ ok: false, code: "GEMINI_MODEL_DIAG_INVALID" });
+          return;
+        }
+        const complete = !payload.nextPageToken;
+        const available = new Set(payload.models
+          .map((item: any) => String(item?.name || "").replace("models/", ""))
+          .filter(Boolean));
+        res.status(200).json({
+          ok: true,
+          complete,
+          models: [
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+          ].map((model) => ({
+            model,
+            listed: available.has(model) ? true : (complete ? false : null),
+          })),
+        });
+      } catch (error) {
+        const isTimeout = (error as any)?.name === "TimeoutError" || (error as any)?.name === "AbortError";
+        res.status(502).json({ ok: false, code: isTimeout ? "GEMINI_MODEL_DIAG_TIMEOUT" : "GEMINI_MODEL_DIAG_NETWORK" });
+      }
       return;
     }
 
@@ -2491,7 +2598,18 @@ export const generateGeminiContent = onRequest(
     } finally {
       if (guardAcquired) await releaseGeminiRequestGuard(uid);
     }
-  }
+};
+
+export const generateGeminiContent = onRequest(
+  GEMINI_CONTENT_FUNCTION_OPTIONS,
+  generateGeminiContentHandler,
+);
+
+// PREVIEW-only endpoint. Deploying this export does not mutate the shared
+// TEST/PRODUCTION generateGeminiContent runtime.
+export const generateGeminiContentPreview = onRequest(
+  GEMINI_CONTENT_FUNCTION_OPTIONS,
+  generateGeminiContentHandler,
 );
 
 export const saveSunoApiKey = onRequest(

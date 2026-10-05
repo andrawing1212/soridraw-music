@@ -24,6 +24,8 @@ export type FirestoreActualState = {
 
 export const CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY = 'soridraw_cache_diagnostics_enabled_v1';
 export const CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY = 'soridraw_cache_diagnostics_owner_uid_v1';
+export const CACHE_DIAGNOSTICS_PERSISTENT_ENABLED_STORAGE_KEY = 'soridraw_admin_cache_diagnostics_enabled_persistent';
+export const CACHE_DIAGNOSTICS_PERSISTENT_OWNER_UID_STORAGE_KEY = 'soridraw_admin_cache_diagnostics_owner_uid_persistent';
 export const CACHE_DIAGNOSTICS_TOGGLE_EVENT = 'soridraw:cache-diagnostics-toggle';
 export const CACHE_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:cache-diagnostics-update';
 export const FIRESTORE_ACTUAL_UPDATE_EVENT = 'soridraw:firestore-actual-update';
@@ -73,10 +75,14 @@ const addFirestoreSourceCount = (map: Record<string, number>, source: string, co
 export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
   if (typeof localStorage === 'undefined') return false;
   try {
-    if (localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) !== 'true') return false;
+    const enabledValue = localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY)
+      ?? localStorage.getItem(CACHE_DIAGNOSTICS_PERSISTENT_ENABLED_STORAGE_KEY);
+    if (enabledValue !== 'true') return false;
     if (uid === undefined) return true;
     if (!uid) return false;
-    return localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) === uid;
+    const ownerUid = localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY)
+      ?? localStorage.getItem(CACHE_DIAGNOSTICS_PERSISTENT_OWNER_UID_STORAGE_KEY);
+    return ownerUid === uid;
   } catch {
     return false;
   }
@@ -85,7 +91,8 @@ export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
 export function readCacheDiagnosticsGloballyEnabled(): boolean {
   if (typeof localStorage === 'undefined') return false;
   try {
-    return localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) === 'true';
+    return (localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY)
+      ?? localStorage.getItem(CACHE_DIAGNOSTICS_PERSISTENT_ENABLED_STORAGE_KEY)) === 'true';
   } catch {
     return false;
   }
@@ -94,7 +101,11 @@ export function readCacheDiagnosticsGloballyEnabled(): boolean {
 export function readCacheDiagnosticsOwnerUid(): string {
   if (typeof localStorage === 'undefined') return '';
   try {
-    return String(localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) || '');
+    return String(
+      localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY)
+      ?? localStorage.getItem(CACHE_DIAGNOSTICS_PERSISTENT_OWNER_UID_STORAGE_KEY)
+      ?? ''
+    );
   } catch {
     return '';
   }
@@ -207,11 +218,15 @@ export function setCacheDiagnosticsEnabled(enabled: boolean, ownerUid?: string |
   if (typeof localStorage !== 'undefined') {
     try {
       const wasEnabled = localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) === 'true';
-      localStorage.setItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+      const enabledText = enabled ? 'true' : 'false';
+      localStorage.setItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY, enabledText);
+      localStorage.setItem(CACHE_DIAGNOSTICS_PERSISTENT_ENABLED_STORAGE_KEY, enabledText);
       if (enabled && ownerUid) {
         localStorage.setItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY, ownerUid);
+        localStorage.setItem(CACHE_DIAGNOSTICS_PERSISTENT_OWNER_UID_STORAGE_KEY, ownerUid);
       } else if (!enabled) {
         localStorage.removeItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY);
+        localStorage.removeItem(CACHE_DIAGNOSTICS_PERSISTENT_OWNER_UID_STORAGE_KEY);
       }
       if (enabled && !wasEnabled) resetCacheDiagnostics();
     } catch {}

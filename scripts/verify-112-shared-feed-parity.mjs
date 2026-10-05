@@ -42,7 +42,10 @@ if (!mirrorBody.includes('env?.PROFILE_MEDIA') || !mirrorBody.includes('exploreC
 }
 if (/env\.DB|\.prepare\(/.test(mirrorBody)) fail('mirror must not read D1');
 
-const aggregateStart = worker.indexOf('async function processExploreLikeBatches035(env');
+const aggregateNeedle = worker.includes('SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918')
+  ? 'async function processExploreLikeBatches035Core065(env'
+  : 'async function processExploreLikeBatches035(env';
+const aggregateStart = worker.indexOf(aggregateNeedle);
 const aggregateEnd = worker.indexOf('\n}', aggregateStart);
 const aggregate = aggregateStart >= 0 ? worker.slice(aggregateStart, aggregateEnd > aggregateStart ? aggregateEnd + 2 : aggregateStart + 1800) : '';
 if (!aggregate.includes('changedTracks') || !aggregate.includes('mirrorExploreSharedFeeds059')) {

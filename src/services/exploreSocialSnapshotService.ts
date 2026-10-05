@@ -1,3 +1,4 @@
+import { rememberExploreViewerGenres } from './exploreCreatorProfileCache';
 import type { User } from 'firebase/auth';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { getFirebaseAppCheckToken } from '../firebase';
@@ -17,6 +18,9 @@ const SOCIAL_SNAPSHOT_PATH = '/v1/me/social-snapshot';
 export type ExplorePersonalSocialSnapshot = {
   likedTrackIds: string[];
   followingUids: string[];
+  followingComplete?: boolean;
+  followProtocol?: number;
+  followRevision?: number;
   updatedAt: number;
 };
 
@@ -37,6 +41,9 @@ const normalizeSnapshot = (value: unknown): ExplorePersonalSocialSnapshot => {
   return {
     likedTrackIds: normalizeIds(row.likedTrackIds),
     followingUids: normalizeIds(row.followingUids),
+    followingComplete: typeof row.followingComplete === 'boolean' ? row.followingComplete : normalizeIds(row.followingUids).length < 5000,
+    followProtocol: Number(row.followProtocol || 0),
+    followRevision: Number(row.followRevision || 0),
     updatedAt: Math.max(0, Number(row.updatedAt || 0)),
   };
 };
@@ -105,13 +112,19 @@ export const getExplorePersonalSocialSnapshot = async (
       method: 'GET',
       headers,
     });
-    recordCloudflareResponse(response, SOCIAL_SNAPSHOT_PATH);
+    // Only a missing local follow/social snapshot reaches this request. Unlike
+    // private like recovery 182/189, this call must be distinguishable in the
+    // admin cost meter without emitting UID or personal follow/like membership.
+    recordCloudflareResponse(response, SOCIAL_SNAPSHOT_PATH, {
+      outcome: `${response.ok ? `FULL ${response.status}` : `HTTP ${response.status}`} · SOCIAL CACHE MISS`,
+    });
     let payload: any = null;
     try { payload = await response.json(); } catch { payload = null; }
     if (!response.ok) {
       const message = String(payload?.message || payload?.error?.message || payload?.error || '개인 Social Snapshot을 불러오지 못했습니다.').trim();
       throw new Error(message || '개인 Social Snapshot을 불러오지 못했습니다.');
     }
+    if (payload?.ok === true) rememberExploreViewerGenres(user.uid, payload?.data?.viewerProfile);
     const data = normalizeSnapshot(payload?.data || {});
     writeSnapshot(user.uid, { ...data, updatedAt: data.updatedAt || Date.now() });
     return data;

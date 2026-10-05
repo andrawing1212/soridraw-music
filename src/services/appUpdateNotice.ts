@@ -7,6 +7,36 @@ const COMPLETED_NOTICE_VERSION_KEY = 'soridraw.app-update.completed-notice-versi
 const MIN_CHECK_INTERVAL_MS = 30_000;
 const ACTIVE_CHECK_INTERVAL_MS = 60_000;
 const COMPLETED_NOTICE_DURATION_MS = 8_000;
+// SORIDRAW_CACHE_LIVE_UPDATE_RESET_217_20260928
+// Diagnostic counters are observation-only. A real app version upgrade starts a
+// fresh diagnostic window without touching user caches, auth, drafts, or product data.
+const UPDATE_DIAGNOSTIC_SESSION_KEYS = new Set([
+  'soridraw_cloudflare_diagnostics_v1',
+  'soridraw_firestore_sdk_actual_v1',
+  'soridraw_page_sync_diagnostics_v1',
+]);
+const UPDATE_DIAGNOSTIC_SESSION_PREFIXES = [
+  'soridraw_cache_diagnostics_state_v1_',
+  'soridraw_catalog_runtime_diagnostics_v1_',
+];
+
+const resetRuntimeDiagnosticsAfterUpgrade = () => {
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index);
+      if (!key) continue;
+      if (
+        UPDATE_DIAGNOSTIC_SESSION_KEYS.has(key)
+        || UPDATE_DIAGNOSTIC_SESSION_PREFIXES.some((prefix) => key.startsWith(prefix))
+      ) keys.push(key);
+    }
+    keys.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Diagnostics are optional and must never block an app update.
+  }
+};
+
 const UPDATE_NOTICE_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
@@ -223,6 +253,7 @@ const rememberLaunchVersionAndMaybeShowCompletedNotice = () => {
     : hadExistingState;
   if (!upgraded || completedVersion === CURRENT_APP_VERSION) return;
 
+  resetRuntimeDiagnosticsAfterUpgrade();
   try { window.localStorage.setItem(COMPLETED_NOTICE_VERSION_KEY, CURRENT_APP_VERSION); } catch { /* optional */ }
   showCompletedNotice();
 };

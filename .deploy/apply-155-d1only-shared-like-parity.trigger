@@ -1,0 +1,6 @@
+requested_at=2026-09-24T02:09:00+09:00
+requested_by=restore_cross_account_shared_like_publication
+target=preview
+purpose=apply_083_d1only_shared_like_parity_to_canonical_worker
+source_commit=2dc3c90f18cb723bd630a0b0a9ee73d8f8353f33
+no_deploy=true

@@ -7,7 +7,11 @@ import StudioLeftRail, { type StudioWorkspaceView } from '../studio/StudioLeftRa
 import ExplorePage from '../../pages/ExplorePage';
 import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 
-export default function ExploreShell() {
+type ExploreShellProps = {
+  isAdminUser?: boolean;
+};
+
+export default function ExploreShell({ isAdminUser = false }: ExploreShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -53,9 +57,12 @@ export default function ExploreShell() {
       onApiSettings={() => go('/suno-api-settings')}
       onLab={() => go('/lab')}
       onProfile={() => go('/my-page')}
+      onPublicProfile={() => {
+        if (user?.uid) void go(`/explore?profile=${encodeURIComponent(user.uid)}`);
+      }}
       onSettings={() => go('/my-page?tab=settings')}
-      onPlan={() => go('/my-page?tab=plan')}
-      onBilling={() => go('/my-page?tab=billing')}
+      onAdmin={() => go('/admin/users')}
+      showAdmin={isAdminUser}
       onLogout={async () => {
         if (user?.uid) {
           await flushSoridrawPageSync(user, 'route-change')

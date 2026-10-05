@@ -43,11 +43,13 @@ function sanitizeCooldownMap(value: unknown): GeminiModelCooldownMap {
     // legacy quota entries. Other timeout/overload cooldowns are preserved.
     const isLegacy37BusyCooldown = model === "gemini-3.7-flash"
       && ["model_response_timeout", "model_unavailable_or_overloaded", "temporary_model_cooldown"].includes(reason);
-    const safeUntil = reason === "quota_or_rate_limit"
-      ? Math.min(until, now + 60_000)
-      : isLegacy37BusyCooldown
-        ? Math.min(until, now + 45_000)
-        : until;
+    const safeUntil = reason === "daily_quota_exhausted"
+      ? Math.min(until, now + 26 * 60 * 60_000)
+      : reason === "quota_or_rate_limit"
+        ? Math.min(until, now + 60_000)
+        : isLegacy37BusyCooldown
+          ? Math.min(until, now + 45_000)
+          : until;
     next[model] = {
       until: safeUntil,
       reason,
@@ -174,17 +176,22 @@ export function setGeminiModelCooldown(
   const normalizedModel = String(model || "").trim();
   if (!normalizedModel) return;
   const normalizedReason = String(reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown";
-  const requestedDurationMs = Math.max(1_000, Math.min(30 * 60_000, Math.round(Number(durationMs) || 0)));
+  const maxRequestedDurationMs = normalizedReason === "daily_quota_exhausted"
+    ? 26 * 60 * 60_000
+    : 30 * 60_000;
+  const requestedDurationMs = Math.max(1_000, Math.min(maxRequestedDurationMs, Math.round(Number(durationMs) || 0)));
   // 853 safety net: the Function now returns Retry-After based quota cooldowns.
   // Never let an older/fallback client path inflate quota_or_rate_limit back into
   // the legacy multi-minute lock; provider-guided cooldowns are capped at 60s.
   const is37BusyCooldown = normalizedModel === "gemini-3.7-flash"
     && ["model_response_timeout", "model_unavailable_or_overloaded", "temporary_model_cooldown"].includes(normalizedReason);
-  const safeDurationMs = normalizedReason === "quota_or_rate_limit"
-    ? Math.min(60_000, requestedDurationMs)
-    : is37BusyCooldown
-      ? Math.min(45_000, requestedDurationMs)
-      : requestedDurationMs;
+  const safeDurationMs = normalizedReason === "daily_quota_exhausted"
+    ? requestedDurationMs
+    : normalizedReason === "quota_or_rate_limit"
+      ? Math.min(60_000, requestedDurationMs)
+      : is37BusyCooldown
+        ? Math.min(45_000, requestedDurationMs)
+        : requestedDurationMs;
   const nextUntil = Date.now() + safeDurationMs;
   const existing = readGeminiModelCooldownMap(uid)[normalizedModel];
   const nextEntry: GeminiModelCooldownEntry = {

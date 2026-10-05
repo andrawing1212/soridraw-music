@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Link2, Loader2, Pencil, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
-  getExplorePublicProfile,
+  saveExplorePublicProfileUnified,
   updateExplorePublicProfile,
   uploadExploreProfileMedia,
+  uploadExploreProfileMediaBatch,
   type ExploreProfileDraft,
   type ExploreProfileMediaKind,
   type ExplorePublicProfile,
 } from '../../services/exploreSocialService';
 import { suggestExploreProfileGenres } from '../../services/exploreProfileGenreSuggestionService';
+import { syncSoridrawProfileAvatarAuthority } from '../../services/profileAvatarAuthority';
 import ExploreImageCropModal from './ExploreImageCropModal';
 
 type Props = {
@@ -25,6 +27,13 @@ type CropEditorState = {
 } | null;
 
 const genericNames = new Set(['SORIDRAW 사용자', 'SORIDRAW User', 'SORiDRAW', 'SORIDRAW']);
+const PROFILE_GENRE_LIMIT_317 = 5;
+const PROFILE_BIO_MAX_LENGTH_317 = 150;
+const PROFILE_BIO_MAX_LINES_317 = 4;
+
+const normalizeProfileBio317 = (value: string) => String(value || '')
+  .replace(/\r\n?/g, '\n')
+  .slice(0, PROFILE_BIO_MAX_LENGTH_317);
 
 const suggestedNickname = (user: User, profile: ExplorePublicProfile) => {
   const current = String(profile.nickname || '').trim();
@@ -45,12 +54,13 @@ const suggestedHandle = (user: User, profile: ExplorePublicProfile) => {
 export default function ExploreProfileEditModal({ user, profile, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState<ExploreProfileDraft>(() => ({
     nickname: suggestedNickname(user, profile),
-    bio: profile.bio || '',
+    bio: normalizeProfileBio317(profile.bio || ''),
     handle: suggestedHandle(user, profile),
-    genres: profile.genres || [],
+    genres: (profile.genres || []).slice(0, PROFILE_GENRE_LIMIT_317),
     spotifyUrl: profile.socialLinks?.spotify || '',
     instagramUrl: profile.socialLinks?.instagram || '',
     tiktokUrl: profile.socialLinks?.tiktok || '',
+    youtubeUrl: profile.socialLinks?.youtube || '',
   }));
   const [genreInput, setGenreInput] = useState('');
   const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
@@ -61,6 +71,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
   const [genreRefreshing, setGenreRefreshing] = useState(false);
   const [genreNotice, setGenreNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [handleValidationVisible, setHandleValidationVisible] = useState(false);
   const [error, setError] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +113,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
   const addGenre = () => {
     const value = genreInput.trim().slice(0, 20);
-    if (!value || draft.genres.length >= 5) return;
+    if (!value || draft.genres.length >= PROFILE_GENRE_LIMIT_317) return;
     if (draft.genres.some((item) => item.toLowerCase() === value.toLowerCase())) {
       setGenreInput('');
       return;
@@ -128,7 +139,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
         setGenreNotice(`최근 ${result.recentSongCount}곡에서 장르 정보를 찾지 못했어요.`);
         return;
       }
-      setDraft((prev) => ({ ...prev, genres: result.genres }));
+      setDraft((prev) => ({ ...prev, genres: result.genres.slice(0, PROFILE_GENRE_LIMIT_317) }));
       setGenreNotice(`최근 ${result.recentSongCount}곡 기준으로 대표 장르를 갱신했어요. 서버 읽기 ${result.firestoreReads}회.`);
     } catch (reason) {
       console.error('Explore profile genre refresh failed:', reason);
@@ -146,17 +157,76 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
       return;
     }
     if (!handleValid) {
-      setError('핸들은 영문 소문자, 숫자, 점(.), 밑줄(_)로 3~24자만 사용할 수 있습니다.');
+      setHandleValidationVisible(true);
+      setError('');
       return;
     }
+    setHandleValidationVisible(false);
+
+    const normalizedDraft = {
+      nickname,
+      bio: normalizeProfileBio317(draft.bio).trim(),
+      handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, PROFILE_GENRE_LIMIT_317),
+      spotifyUrl: draft.spotifyUrl.trim(),
+      instagramUrl: draft.instagramUrl.trim(),
+      tiktokUrl: draft.tiktokUrl.trim(),
+      youtubeUrl: draft.youtubeUrl.trim(),
+    };
+    const youtubeChanged252 = normalizedDraft.youtubeUrl !== String(profile.socialLinks?.youtube || '').trim();
+    const profileFieldsChanged247 = normalizedDraft.nickname !== String(profile.nickname || '').trim().replace(/\s+/g, ' ')
+      || normalizedDraft.bio !== String(profile.bio || '').trim()
+      || normalizedDraft.handle !== String(profile.handle || '').trim().replace(/^@+/, '').toLowerCase()
+      || JSON.stringify(normalizedDraft.genres) !== JSON.stringify((profile.genres || []).map((value) => String(value || '').trim()).filter(Boolean).slice(0, PROFILE_GENRE_LIMIT_317))
+      || normalizedDraft.spotifyUrl !== String(profile.socialLinks?.spotify || '').trim()
+      || normalizedDraft.instagramUrl !== String(profile.socialLinks?.instagram || '').trim()
+      || normalizedDraft.tiktokUrl !== String(profile.socialLinks?.tiktok || '').trim()
+      || youtubeChanged252;
 
     setSaving(true);
     setError('');
     try {
-      await updateExplorePublicProfile(user, { ...draft, nickname });
-      if (backgroundBlob) await uploadExploreProfileMedia(user, 'background', backgroundBlob);
-      if (avatarBlob) await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
-      const refreshed = await getExplorePublicProfile(user.uid);
+      // SORIDRAW_UNIFIED_PROFILE_SAVE_UI_252_20260930
+      const hasProfileMedia252 = Boolean(avatarBlob || backgroundBlob);
+      const useUnifiedProfileSave252 = profileFieldsChanged247 && hasProfileMedia252;
+      const saved = useUnifiedProfileSave252
+        ? await saveExplorePublicProfileUnified(
+            user,
+            normalizedDraft,
+            { avatar: avatarBlob, background: backgroundBlob },
+            { youtubeChanged: youtubeChanged252 },
+          )
+        : profileFieldsChanged247
+          ? await updateExplorePublicProfile(user, normalizedDraft, { youtubeChanged: youtubeChanged252 })
+          : profile;
+
+      let backgroundUrl = saved.backgroundUrl;
+      let avatarUrl = saved.avatarUrl;
+      if (!useUnifiedProfileSave252) {
+        if (backgroundBlob && avatarBlob) {
+          // SORIDRAW_PROFILE_MEDIA_BATCH_248_20260930
+          const media = await uploadExploreProfileMediaBatch(user, {
+            background: backgroundBlob,
+            avatar: avatarBlob,
+          });
+          backgroundUrl = media.backgroundUrl || backgroundUrl;
+          avatarUrl = media.avatarUrl || avatarUrl;
+        } else {
+          if (backgroundBlob) backgroundUrl = await uploadExploreProfileMedia(user, 'background', backgroundBlob);
+          if (avatarBlob) avatarUrl = await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
+        }
+      }
+
+      const refreshed: ExplorePublicProfile = {
+        ...saved,
+        backgroundUrl: backgroundUrl || saved.backgroundUrl,
+        avatarUrl: avatarUrl || saved.avatarUrl,
+      };
+      try {
+        await syncSoridrawProfileAvatarAuthority(user, refreshed.avatarUrl);
+      } catch (avatarSyncError) {
+        console.warn('SORIDRAW profile avatar authority sync failed; public profile save remains valid.', avatarSyncError);
+      }
       onSaved(refreshed);
       onClose();
     } catch (reason) {
@@ -205,19 +275,48 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
           <label className="soridraw-explore-profile-edit-label" htmlFor="soridraw-profile-bio">소개</label>
           <div className="soridraw-explore-profile-edit-textarea-wrap">
-            <textarea id="soridraw-profile-bio" value={draft.bio} maxLength={200} onChange={(event) => setDraft((prev) => ({ ...prev, bio: event.target.value }))} placeholder="음악과 작업을 간단히 소개해보세요." />
-            <span>{draft.bio.length}/200</span>
+            <textarea
+              id="soridraw-profile-bio"
+              value={draft.bio}
+              maxLength={PROFILE_BIO_MAX_LENGTH_317}
+              rows={PROFILE_BIO_MAX_LINES_317}
+              onChange={(event) => {
+                const nextBio = normalizeProfileBio317(event.currentTarget.value);
+                setDraft((prev) => ({ ...prev, bio: nextBio }));
+              }}
+              placeholder="음악과 작업을 간단히 소개해보세요."
+            />
+            <span>{draft.bio.length}/{PROFILE_BIO_MAX_LENGTH_317}</span>
           </div>
 
           <label className="soridraw-explore-profile-edit-label" htmlFor="soridraw-profile-handle">고유 핸들</label>
-          <div className={`soridraw-explore-profile-handle-wrap${handleValid ? '' : ' is-invalid'}`}>
+          <div className={`soridraw-explore-profile-handle-wrap${handleValidationVisible && !handleValid ? ' is-invalid' : ''}`}>
             <span>@</span>
-            <input id="soridraw-profile-handle" value={draft.handle} maxLength={24} autoCapitalize="none" spellCheck={false} onChange={(event) => setDraft((prev) => ({ ...prev, handle: event.target.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9._]/g, '') }))} />
+            <input
+              id="soridraw-profile-handle"
+              value={draft.handle}
+              autoCapitalize="none"
+              spellCheck={false}
+              aria-invalid={handleValidationVisible && !handleValid}
+              aria-describedby={handleValidationVisible && !handleValid ? 'soridraw-profile-handle-warning' : undefined}
+              onChange={(event) => {
+                const nextHandle = event.target.value;
+                setDraft((prev) => ({ ...prev, handle: nextHandle }));
+                if (/^[a-z0-9._]{3,24}$/.test(nextHandle) && !nextHandle.startsWith('.') && !nextHandle.endsWith('.') && !nextHandle.includes('..')) {
+                  setHandleValidationVisible(false);
+                }
+              }}
+            />
           </div>
+          {handleValidationVisible && !handleValid && (
+            <p id="soridraw-profile-handle-warning" className="soridraw-explore-profile-handle-warning" role="alert">
+              영문 소문자, 숫자, 밑줄만 사용할 수 있으며 3~24자로 입력해주세요.
+            </p>
+          )}
           <p className="soridraw-explore-profile-edit-help">페이지를 구분하는 고유 이름입니다. 중복 확인은 저장할 때 한 번만 합니다.</p>
 
           <div className="soridraw-explore-profile-genre-heading">
-            <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/5</span></label>
+            <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/{PROFILE_GENRE_LIMIT_317}</span></label>
             <button
               type="button"
               className="soridraw-explore-profile-genre-refresh"
@@ -237,7 +336,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
               type="button"
               className="soridraw-explore-profile-genre-plus"
               onClick={addGenre}
-              disabled={!genreInput.trim() || draft.genres.length >= 5}
+              disabled={!genreInput.trim() || draft.genres.length >= PROFILE_GENRE_LIMIT_317}
               aria-label="장르 추가"
               title="장르 추가"
             ><Plus aria-hidden="true" /></button>
@@ -253,6 +352,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
             ['spotifyUrl', 'Spotify', 'https://open.spotify.com/...'],
             ['instagramUrl', 'Instagram', 'https://www.instagram.com/...'],
             ['tiktokUrl', 'TikTok', 'https://www.tiktok.com/@...'],
+            ['youtubeUrl', 'YouTube', 'https://www.youtube.com/@...'],
           ] as const).map(([key, label, placeholder]) => (
             <div className="soridraw-explore-profile-social-input" key={key}>
               <Link2 aria-hidden="true" />
@@ -266,7 +366,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
         <footer className="soridraw-explore-profile-edit-footer">
           <button type="button" className="is-cancel" onClick={onClose} disabled={saving}>취소</button>
-          <button type="button" className="is-save" onClick={() => void save()} disabled={saving || !handleValid || !draft.nickname.trim()}>
+          <button type="button" className="is-save" onClick={() => void save()} disabled={saving || !draft.nickname.trim()}>
             {saving ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 저장 중</> : '저장'}
           </button>
         </footer>

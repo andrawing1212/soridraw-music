@@ -1,4 +1,13 @@
 import { useState, useEffect } from 'react';
+import { isMusicNoteItemRemoved } from '../lib/musicNoteSavedState';
+
+const getRecentGenerationSyncKey = (song: any): string => {
+  if (!song || typeof song !== 'object') return '';
+  const generationBatchId = String(song?.appliedKeywords?.generationBatchId || '').trim();
+  const generationIndex = Math.floor(Number(song?.appliedKeywords?.generationIndex || 0));
+  if (!generationBatchId || !Number.isFinite(generationIndex) || generationIndex <= 0) return '';
+  return `generation:${generationBatchId}:${generationIndex}`;
+};
 
 // Pub/Sub store to keep the 400+ favorites out of App's main state
 class FavoritesStore {
@@ -23,6 +32,10 @@ class FavoritesStore {
       if (!this.isFavoriteHidden(fav)) {
         if (fav.id) map.set(fav.id, fav);
         if (fav.firestoreId) map.set(String(fav.firestoreId), fav);
+        if (fav.soridrawSongId) map.set(`soridraw:${String(fav.soridrawSongId)}`, fav);
+        const generationKey = getRecentGenerationSyncKey(fav);
+        if (generationKey) map.set(`recent:${generationKey}`, fav);
+        if (fav.recentSongSyncKey) map.set(`recent:${String(fav.recentSongSyncKey)}`, fav);
         const key = fav.favoriteKey || this.buildFavoriteIdentityKey(fav);
         if (key) map.set(key, fav);
       }
@@ -33,18 +46,7 @@ class FavoritesStore {
   }
 
   private isFavoriteHidden(favorite: any) {
-    if (!favorite) return true;
-    return Boolean(
-      favorite.favoriteRemoved === true
-      || favorite.saved === false
-      || favorite.favoriteRemovedAt
-      || favorite.unlikedAt
-      || favorite.unsavedAt
-      || favorite.hidden === true
-      || favorite.favoriteHidden === true
-      || favorite.deletedAt
-      || favorite.trashedAt
-    );
+    return isMusicNoteItemRemoved(favorite);
   }
 
   private buildFavoriteIdentityKey(song: any) {
@@ -97,6 +99,10 @@ export function useIsSongFavorited(song: any) {
     if (!song) return false;
     const statusMap = favoritesStore.getStatusMap();
     if (song.id && statusMap.has(song.id)) return true;
+    if (song.soridrawSongId && statusMap.has(`soridraw:${String(song.soridrawSongId)}`)) return true;
+    const generationKey = getRecentGenerationSyncKey(song);
+    if (generationKey && statusMap.has(`recent:${generationKey}`)) return true;
+    if (song.recentSongSyncKey && statusMap.has(`recent:${String(song.recentSongSyncKey)}`)) return true;
     const key = song.favoriteKey || (song.title ? `${song.title}_${song.createdAtMs || ''}` : null);
     if (key && statusMap.has(key)) return true;
     return false;
@@ -107,6 +113,10 @@ export function useIsSongFavorited(song: any) {
       if (!song) return false;
       const statusMap = favoritesStore.getStatusMap();
       if (song.id && statusMap.has(song.id)) return true;
+      if (song.soridrawSongId && statusMap.has(`soridraw:${String(song.soridrawSongId)}`)) return true;
+      const generationKey = getRecentGenerationSyncKey(song);
+      if (generationKey && statusMap.has(`recent:${generationKey}`)) return true;
+      if (song.recentSongSyncKey && statusMap.has(`recent:${String(song.recentSongSyncKey)}`)) return true;
       const key = song.favoriteKey || (song.title ? `${song.title}_${song.createdAtMs || ''}` : null);
       if (key && statusMap.has(key)) return true;
       return false;

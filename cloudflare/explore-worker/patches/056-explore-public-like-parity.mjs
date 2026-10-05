@@ -211,6 +211,7 @@ async function reconcileExplorePublicLikes056(env) {
   return {
     feeds: feedResults.map((result) => ({ sort: result.sort, changed: Boolean(result.changed), deferred: Boolean(result.deferred) })),
     visibleChangedTracks: changedByTrack.size,
+    changedItems: [...changedByTrack.values()],
     updatedProfiles,
   };
 }

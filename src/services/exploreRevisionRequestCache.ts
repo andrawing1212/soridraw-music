@@ -3,6 +3,8 @@ import {
   readExploreFeedSessionCache,
   readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
+  readExploreMorePageCache213,
+  writeExploreMorePageCache213,
 } from './exploreSessionCache';
 import {
   hasRecentExploreAccountLikePatch,
@@ -13,6 +15,7 @@ import {
 // SORIDRAW_EXPLORE_FEED_DELTA_068_20260912
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916
 // SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916
+// SORIDRAW_EXPLORE_MORE_PAGE_CACHE_213_20260927
 // Public aggregate work is now event-driven and can complete at any wall-clock time.
 // Keep one tiny Edge/R2 revision check at most every one minute while PREVIEW Explore is
 // active; D1 remains R0/W0 on this path. A new cache namespace prevents a previously
@@ -76,6 +79,10 @@ type WindowWithRevisionCacheFlag = Window & {
 
 const memoryCache = new Map<string, RevisionCacheEntry>();
 const pendingDeltas = new Map<string, PendingDelta>();
+
+// app334: the one-minute revision response cache survives browser reloads.
+// Reload itself is not a publication/like change signal; real cache expiry and
+// existing mutation signals still trigger the normal bounded revision request.
 
 const storageKeyFor = (url: string) => `${STORAGE_PREFIX}${encodeURIComponent(url)}`;
 
@@ -367,7 +374,57 @@ export const installExploreRevisionRequestCache = () => {
           if (synthetic) return synthetic;
         }
       }
-      return originalFetch(input, init);
+
+      // 213: "More" is an explicit user-demand cursor read. Reuse a recently
+      // viewed cursor page from browser CacheStorage only when it still belongs
+      // to this device's current first-page revision. The two-minute TTL matches
+      // Explore's existing viewer freshness gate, so this cannot turn a bounded
+      // read optimization into a long-lived stale public Feed.
+      const cursor = safeText(feedTarget.searchParams.get('cursor'));
+      const limit = Number(feedTarget.searchParams.get('limit') || 40);
+      const morePageUrl = cursor && limit === 40 ? feedTarget.toString() : '';
+      const sort = feedTarget.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
+      const firstPageUrl = feedUrlForSort(feedTarget.origin, sort);
+      const baseRevision = safeText(readExploreFeedSessionCacheRevision(firstPageUrl));
+
+      if (morePageUrl && baseRevision) {
+        const cachedMore = await readExploreMorePageCache213(morePageUrl, baseRevision);
+        if (cachedMore) {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              items: cachedMore.rows,
+              sort,
+              nextCursor: cachedMore.nextCursor,
+            },
+          }), {
+            status: 200,
+            headers: localHeaders('/v1/feed?cursor=more', 'application/json; charset=utf-8', 'MORE-213'),
+          });
+        }
+      }
+
+      const response = await originalFetch(input, init);
+      if (morePageUrl && baseRevision && response.ok) {
+        try {
+          const payload = await response.clone().json() as {
+            ok?: boolean;
+            data?: { items?: Array<Record<string, unknown>>; nextCursor?: string | null };
+          };
+          const rows = Array.isArray(payload?.data?.items) ? payload.data.items : null;
+          if (payload?.ok === true && rows && rows.length <= 40) {
+            void writeExploreMorePageCache213(
+              morePageUrl,
+              baseRevision,
+              rows,
+              safeText(payload?.data?.nextCursor) || null,
+            );
+          }
+        } catch {
+          // A malformed response is never cached; the caller still receives it normally.
+        }
+      }
+      return response;
     }
 
     return originalFetch(input, init);

@@ -390,6 +390,19 @@ export default function LiteStudioSplitWorkspace({
       || builderCollapsedRef.current
       || resultCollapsedRef.current
     ) return;
+
+    // app219 — Music Note / Library do not use the generated-result title-height
+    // parity contract. Keeping this stale cross-pane sync active made the Genre
+    // card's ResizeObserver fire on every collapse-animation frame, then forced a
+    // layout read and an inherited custom-property write across the large result
+    // tree. Recent keeps the existing title-height sync unchanged.
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
@@ -407,6 +420,14 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
     if (typeof ResizeObserver === 'undefined' || draggingRef.current) return;
+
+    const activeWorkspace = workspaceViewRef.current;
+    if (activeWorkspace === 'music-note' || activeWorkspace === 'library') {
+      resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
+      return;
+    }
+
     const genreCard = builderRef.current?.querySelector<HTMLElement>('[data-studio-menu="genre"]') || null;
     if (!genreCard) {
       syncResultTitleHeight();
@@ -666,6 +687,20 @@ export default function LiteStudioSplitWorkspace({
       const root = document.documentElement;
       if (!skipBuilder && root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
         root.dataset.soridrawBuilderMode = modeRef.current.builder;
+      }
+      if (!skipBuilder) {
+        // 1033 — Generate-bar visual breakpoint follows the Builder's existing
+        // Compact boundary, not the broader 1080px content-tablet band.
+        // This is a threshold-only root marker: no per-pixel state or geometry.
+        const actionCompact = modeRef.current.builder === 'mobile'
+          || builder.dataset.soridrawPaneCompact === 'true';
+        if (actionCompact) {
+          if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+            root.dataset.soridrawBuilderActionCompact = 'true';
+          }
+        } else if (root.dataset.soridrawBuilderActionCompact) {
+          delete root.dataset.soridrawBuilderActionCompact;
+        }
       }
       if (!skipResult && root.dataset.soridrawResultMode !== modeRef.current.result) {
         root.dataset.soridrawResultMode = modeRef.current.result;
@@ -1130,6 +1165,15 @@ export default function LiteStudioSplitWorkspace({
         if (builderContentMode && root.dataset.soridrawBuilderContentMode !== builderContentMode) {
           root.dataset.soridrawBuilderContentMode = builderContentMode;
         }
+        const builderActionCompact = modeRef.current.builder === 'mobile'
+          || builder.dataset.soridrawPaneCompact === 'true';
+        if (builderActionCompact) {
+          if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+            root.dataset.soridrawBuilderActionCompact = 'true';
+          }
+        } else if (root.dataset.soridrawBuilderActionCompact) {
+          delete root.dataset.soridrawBuilderActionCompact;
+        }
 
         dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
       }
@@ -1157,6 +1201,15 @@ export default function LiteStudioSplitWorkspace({
           }
           if (root.dataset.soridrawResultMode !== modeRef.current.result) {
             root.dataset.soridrawResultMode = modeRef.current.result;
+          }
+          const builderActionCompact = modeRef.current.builder === 'mobile'
+            || builder.dataset.soridrawPaneCompact === 'true';
+          if (builderActionCompact) {
+            if (root.dataset.soridrawBuilderActionCompact !== 'true') {
+              root.dataset.soridrawBuilderActionCompact = 'true';
+            }
+          } else if (root.dataset.soridrawBuilderActionCompact) {
+            delete root.dataset.soridrawBuilderActionCompact;
           }
         }
       }
@@ -1316,6 +1369,26 @@ export default function LiteStudioSplitWorkspace({
         : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
+    const createVertical = workspaceViewRef.current === 'create';
+    if (createVertical) {
+      // 206: Classic parity. Both existing panes consume the same center-column
+      // width and stack vertically. This keeps responsive consumers on the true
+      // full width instead of the old synthetic 50/50 split width.
+      const fullWidth = metricsRef.current.width;
+      syncPaneModes(fullWidth, fullWidth, { rootSync: true, hysteresisPx: 0 });
+      if (!nativeWindowResize) {
+        broadcastLitePaneResponsiveWidths(fullWidth, fullWidth, true, { rootSync: true, hysteresisPx: 0 });
+      }
+      const rightEdge = metricsRef.current.left + fullWidth;
+      commitRootMeasurements(fullWidth, rightEdge);
+      if (!nativeWindowResize) {
+        readExternalControls();
+        syncExternalGeometry(fullWidth, rightEdge);
+        clearLiveExternalGeometry();
+      }
+      return;
+    }
+
     const nextProfile = getSplitProfile();
     if (splitProfileRef.current !== nextProfile) {
       splitProfileRef.current = nextProfile;
@@ -1343,7 +1416,7 @@ export default function LiteStudioSplitWorkspace({
       syncExternalGeometry(builderWidth, splitterLeft);
       clearLiveExternalGeometry();
     }
-  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost, syncPaneModes]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -2030,8 +2103,10 @@ export default function LiteStudioSplitWorkspace({
       return;
     }
     if (workspaceView === 'create') {
+      // 206: Split Create now follows Classic's vertical composition:
+      // full Builder first, then the existing Recent/result pane below it.
       setIsBuilderCollapsed(false);
-      setIsResultCollapsed(true);
+      setIsResultCollapsed(false);
       return;
     }
     if (workspaceView) {
@@ -2147,6 +2222,7 @@ export default function LiteStudioSplitWorkspace({
       clearLiveExternalGeometry();
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
+      delete root.dataset.soridrawBuilderActionCompact;
       delete root.dataset.soridrawResultMode;
       delete root.dataset.soridrawBuilderContentMode;
       delete root.dataset.soridrawResultContentMode;
@@ -2259,7 +2335,7 @@ export default function LiteStudioSplitWorkspace({
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
         data-v2-drag-perf-mode={v2DragPerfMode}
-        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${workspaceView === 'create' ? ' is-create-vertical' : ''}${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}
@@ -2290,9 +2366,9 @@ export default function LiteStudioSplitWorkspace({
         </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
+      {viewMode === 'split' && workspaceView !== 'create' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
+      {viewMode === 'split' && workspaceView !== 'create' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>
   );
 }

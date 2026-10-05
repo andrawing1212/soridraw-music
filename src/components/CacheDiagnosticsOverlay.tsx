@@ -24,7 +24,7 @@ import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfi
 import { hasAdminPermission } from '../constants/adminPermissions';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
-import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
+import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, resetPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
 const SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000 = true;
 const SORIDRAW_CACHE_LIVE_CLOUDFLARE_MOBILE_DOCK_977 = true;
@@ -136,6 +136,7 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/feed-revision') return '피드 변경 확인';
   if (path === '/v1/me/likes') return '좋아요 상태';
   if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
+  if (path === '/v1/me/social-snapshot') return '개인 소셜 스냅샷';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
   if (path === '/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태';
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';
@@ -253,6 +254,19 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       setServerLoading(false);
     }
   }, [canUseDiagnostics, enabled]);
+
+  const resetDiagnosticsView = useCallback(() => {
+    resetCacheDiagnostics();
+    resetCloudflareDiagnostics();
+    resetCatalogRuntimeDiagnostics();
+    resetPageSyncDiagnostics();
+    setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
+    setFavoriteStoreCount(favoritesStore.getFavorites().length);
+    setStates(readAllStates());
+    setActual(readFirestoreActual());
+    setCloudflare(readCloudflareDiagnostics());
+    setPageSync(readPageSyncDiagnostics());
+  }, []);
 
   useEffect(() => {
     const syncEnabled = () => setEnabled(readCacheDiagnosticsEnabled(auth.currentUser?.uid));
@@ -468,16 +482,27 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
 
         <div className="flex shrink-0 items-center gap-1">
           {!collapsed ? (
-            <button
-              type="button"
-              title="Cloud 서버 지표 새로고침"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => void loadServerUsage()}
-              className="border-0 bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-black text-white/60 outline-none transition hover:bg-white/[0.10] hover:text-white/80 disabled:opacity-40"
-              disabled={serverLoading}
-            >
-              {serverLoading ? '…' : '↻'}
-            </button>
+            <>
+              <button
+                type="button"
+                title="Firestore 실제 서버 지표 새로고침"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => void loadServerUsage()}
+                className="border-0 bg-white/[0.06] px-2 py-1.5 text-[10px] font-black text-white/60 outline-none transition hover:bg-white/[0.10] hover:text-white/80 disabled:opacity-40"
+                disabled={serverLoading}
+              >
+                {serverLoading ? '서버 …' : '서버 ↻'}
+              </button>
+              <button
+                type="button"
+                title="이번 실행 진단값만 0으로 초기화"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={resetDiagnosticsView}
+                className="border-0 bg-white/[0.06] px-2 py-1.5 text-[10px] font-black text-white/60 outline-none transition hover:bg-white/[0.10] hover:text-white/80"
+              >
+                초기화
+              </button>
+            </>
           ) : null}
           <button
             type="button"
@@ -494,6 +519,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       {!collapsed ? (
         <>
           <div className="space-y-0.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold">
+              <span className="text-white/70">이번 실행 진단</span>
+              <span className="text-white/38">업데이트 적용 시 자동 초기화</span>
+            </div>
             <div className="mb-1.5 rounded-xl bg-[#9fddb9]/[0.07] px-2.5 py-2">
               <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#9fddb9]/80">무료한도 기준 · 30일 값은 단순 환산</div>
               <div className="text-[11px] font-bold leading-4 text-white/72">
@@ -514,7 +543,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             </div>
             {cloudflareMetered ? (
               <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/62">
-                현재 진단 누적 · D1 읽기 무료한도의 {formatQuotaPercent(cloudflare.d1RowsRead, D1_FREE_DAILY_READS)} · 쓰기 {formatQuotaPercent(cloudflare.d1RowsWritten, D1_FREE_DAILY_WRITES)}
+                이번 실행 누적 · D1 읽기 무료한도의 {formatQuotaPercent(cloudflare.d1RowsRead, D1_FREE_DAILY_READS)} · 쓰기 {formatQuotaPercent(cloudflare.d1RowsWritten, D1_FREE_DAILY_WRITES)}
               </div>
             ) : null}
             <div className="mt-1 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold text-white/70">
@@ -529,7 +558,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   </div>
             {cloudflarePathEntries.length > 0 ? (
               <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
-                <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 발생처 · 요청당 평균 무료 가능 횟수</div>
+                <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 요청 상세 · 이번 실행</div>
                 {cloudflarePathEntries.map(([path, state]) => {
                   const requestCount = Math.max(1, state.workerRequests);
                   const avgRead = Math.ceil(state.d1RowsRead / requestCount);
@@ -544,7 +573,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                       </div>
                       <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
                         <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 R {formatNumber(state.d1ReadQueries)} · W {formatNumber(state.d1WriteQueries)}</span>
-                        <span className="shrink-0 whitespace-nowrap tabular-nums">누적 행 R {formatNumber(state.d1RowsRead)} · W {formatNumber(state.d1RowsWritten)}</span>
+                        <span className="shrink-0 whitespace-nowrap tabular-nums">이번 실행 행 R {formatNumber(state.d1RowsRead)} · W {formatNumber(state.d1RowsWritten)}</span>
                       </div>
                       <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-black">
                         <span className="shrink-0 whitespace-nowrap tabular-nums text-white/52">요청당 평균 R {formatNumber(avgRead)} · W {formatNumber(avgWrite)}</span>
@@ -601,6 +630,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                 </div>
               </div>
             ) : null}
+            <div className="mt-1.5 border-t border-white/[0.06] pt-1.5 text-[10px] font-black tracking-[0.04em] text-[#9fc7ff]/62">
+              실제 서버 지표 · 오늘 / 최근 {CLOUD_WINDOW_MINUTES}분
+            </div>
             {serverUsage ? (
               <>
                 <div className="text-[12px] font-bold text-[#9fc7ff]">
@@ -618,7 +650,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               </>
             ) : (
               <div className="whitespace-nowrap text-[10px] font-bold text-white/42">
-                {serverLoading ? 'Cloud 서버 지표 불러오는 중…' : serverError || 'Cloud 서버 지표 대기'}
+                {serverLoading ? 'Firestore 서버 지표 불러오는 중…' : serverError || 'Firestore 서버 지표 대기'}
               </div>
             )}
             {serverError && serverUsage ? (
@@ -652,26 +684,6 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             })}
           </div>
 
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => {
-                resetCacheDiagnostics();
-                resetCloudflareDiagnostics();
-                resetCatalogRuntimeDiagnostics();
-                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
-                setFavoriteStoreCount(favoritesStore.getFavorites().length);
-                setStates(readAllStates());
-                setActual(readFirestoreActual());
-                setCloudflare(readCloudflareDiagnostics());
-    setPageSync(readPageSyncDiagnostics());
-              }}
-              className="border-0 bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-black text-white/60 outline-none transition hover:bg-white/[0.10] hover:text-white/80"
-            >
-              진단 초기화
-            </button>
-          </div>
         </>
       ) : null}
     </div>

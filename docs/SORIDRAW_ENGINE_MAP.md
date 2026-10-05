@@ -476,9 +476,9 @@
   - `src/components/MusicApiGenerateModal.tsx`
   - `src/App.tsx`
 - 동작:
-  - OFF: Rap Section 없음
-  - AUTO: 래퍼 역할 선택 시 Rap Section 자동 적용
-  - ON: 래퍼가 없어도 Rap Section 강제 적용
+  - OFF: Rap Section 없음. 최종 [Arrangement]에 `no rap`을 명시해 랩을 금지한다.
+  - AUTO: **중립 모드**. 래퍼 역할 선택, Custom의 Rap Section, 또는 사용자의 직접 랩 요청이 있을 때만 Blueprint가 Rap Section을 사용한다. Rap Section이 없다는 이유만으로 최종 [Arrangement]에 `no rap` / `without rap` / `rap-free`를 자동 생성·보존하지 않는다. 단, 사용자가 직접 "랩 없이/no rap"를 요청한 경우는 그 지시를 보존한다.
+  - ON: 래퍼가 없어도 Rap Section을 적용한다(Stable/정확한 Custom 구조의 기존 예외 규칙은 유지).
 - Stable: 화면에 표시된 `Intro → Verse 1 → Pre-Chorus 1 → Chorus 1 → Verse 2 → Pre-Chorus 2 → Chorus 2 → Bridge → Final Chorus → Outro`를 절대 변경하지 않는다. 래퍼가 선택되어도 `Verse 2` 라벨을 유지한 채 그 보컬이 리드미컬한 Verse 2를 담당한다. 실제 `Rap Section`이 필요하면 Recommended/Experimental/Custom을 사용한다.
 - Recommended/Experimental: ON과 강한 랩 장르 조건에서만 더 강한 랩 구조를 허용한다.
 

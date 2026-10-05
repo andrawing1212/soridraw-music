@@ -24,7 +24,9 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["canonicalLikedTrackIds", 'canonical personal liked-ID cache'],
-  ["explore-liked-track-collection-085", 'persistent local cache'],
+  ["SORIDRAW_EXPLORE_LIKED_TRACK_LATEST_CACHE_120_20260918", 'latest-cache marker'],
+  ["LIKED_TRACK_CACHE_SCHEMA_VERSION = 120", 'current liked-track cache schema'],
+  ["explore-liked-track-collection-120", 'current persistent local cache'],
   ["LOCAL HIT · 좋아요 곡 전체 캐시", 'warm local zero-read path'],
   ["/v1/me/liked-tracks", 'bounded missing-details route'],
   ["LIKED_TRACK_BATCH_MAX = 200", 'bounded request size'],

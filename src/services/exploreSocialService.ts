@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
+import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
 import {
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialFollow,
@@ -75,7 +76,7 @@ const requestAuthed = async (user: User, path: string, init: RequestInit = {}) =
         ? '프로필 이미지 저장소 연결이 필요합니다.'
         : 'Explore 요청을 처리하지 못했습니다.';
     const message = String(payload?.message || payload?.error?.message || payload?.error || fallback).trim();
-    throw new Error(message || fallback);
+    throw Object.assign(new Error(message || fallback), { code });
   }
   return payload;
 };
@@ -92,6 +93,7 @@ export type ExplorePublicProfile = {
     spotify: string;
     instagram: string;
     tiktok: string;
+    youtube: string;
   };
   followerCount: number;
   followingCount: number;
@@ -106,6 +108,7 @@ export type ExploreProfileDraft = {
   spotifyUrl: string;
   instagramUrl: string;
   tiktokUrl: string;
+  youtubeUrl: string;
 };
 
 export type ExploreFollowState = {
@@ -130,7 +133,10 @@ const normalizeExploreFollowCache = (value: unknown): ExploreFollowCacheData => 
     if (normalizedUid) acc[normalizedUid] = Boolean(state);
     return acc;
   }, {});
-  return { complete: Boolean(row?.complete), states };
+  // Legacy schema2 marked a capped 5,000-member list complete. Preserve its
+  // known states, but absence cannot certify a negative membership.
+  const capped = Object.values(states).filter((following) => following).length >= 5000;
+  return { complete: Boolean(row?.complete) && !capped, states };
 };
 
 const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
@@ -161,8 +167,7 @@ const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData
   });
 };
 
-const readCachedExploreFollowState = (viewerUid: string, targetUid: string): boolean | null => {
-  const data = readExploreFollowCache(viewerUid);
+const readCachedExploreFollowState = (viewerUid: string, targetUid: string, data = readExploreFollowCache(viewerUid)): boolean | null => {
   if (Object.prototype.hasOwnProperty.call(data.states, targetUid)) return Boolean(data.states[targetUid]);
   return data.complete ? false : null;
 };
@@ -182,20 +187,24 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
 
   const task = (async () => {
     let rawUids: unknown[] = [];
+    let complete = false;
     try {
       const snapshot = await getExplorePersonalSocialSnapshot(user);
       rawUids = snapshot.followingUids;
+      complete = snapshot.followingComplete !== false && rawUids.length < 5000;
     } catch (snapshotError) {
       console.warn('[Explore follow] Social Snapshot unavailable; using following bundle recovery.', snapshotError);
       const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
       rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
+      complete = typeof payload?.data?.followingComplete === 'boolean'
+        ? payload.data.followingComplete : rawUids.length < 5000;
     }
     const states: Record<string, boolean> = rawUids.reduce<Record<string, boolean>>((acc, value: unknown) => {
       const uid = String(value || '').trim();
       if (uid) acc[uid] = true;
       return acc;
     }, {} as Record<string, boolean>);
-    const next: ExploreFollowCacheData = { complete: true, states };
+    const next: ExploreFollowCacheData = { complete, states };
     writeExploreFollowCache(user.uid, next);
     return next;
   })().finally(() => {
@@ -204,6 +213,17 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
 
   exploreFollowBundleInflight.set(user.uid, task);
   return task;
+};
+
+// SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003
+// Reuse the existing local/R2 social snapshot. The Latest Following filter must
+// never create a second D1-backed feed or re-read one profile per followed user.
+export const getExploreFollowingUids312 = async (user: User): Promise<string[]> => {
+  const bundle = await loadExploreFollowingBundle(user);
+  return Object.entries(bundle.states)
+    .filter(([, following]) => following === true)
+    .map(([uid]) => uid)
+    .filter(Boolean);
 };
 
 const toCount = (value: unknown) => {
@@ -223,6 +243,7 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
     spotify: String(row?.socialLinks?.spotify || row?.spotifyUrl || row?.spotify_url || '').trim(),
     instagram: String(row?.socialLinks?.instagram || row?.instagramUrl || row?.instagram_url || '').trim(),
     tiktok: String(row?.socialLinks?.tiktok || row?.tiktokUrl || row?.tiktok_url || '').trim(),
+    youtube: String(row?.socialLinks?.youtube || row?.youtubeUrl || row?.youtube_url || '').trim(),
   },
   followerCount: toCount(row?.followerCount ?? row?.follower_count),
   followingCount: toCount(row?.followingCount ?? row?.following_count),
@@ -247,19 +268,27 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
 
-  const cached = readCachedExploreFollowState(user.uid, normalizedUid);
+  const cachedBundle = readExploreFollowCache(user.uid);
+  const cached = readCachedExploreFollowState(user.uid, normalizedUid, cachedBundle);
   if (cached !== null) {
     recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 전체 팔로우 묶음');
     return { isFollowing: cached, followerCount: 0, followingCount: 0 };
   }
 
-  try {
-    const bundle = await loadExploreFollowingBundle(user);
-    const isFollowing = Boolean(bundle.states[normalizedUid]);
-    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
-    return { isFollowing, followerCount: 0, followingCount: 0 };
-  } catch (bundleError) {
-    console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
+  // An existing partial list needs only this missing target, not another list
+  // hydration that could reintroduce an older snapshot's complete flag.
+  const partialCache = !cachedBundle.complete && Object.keys(cachedBundle.states).length > 0;
+  if (!partialCache) {
+    try {
+      const bundle = await loadExploreFollowingBundle(user);
+      if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
+        const isFollowing = Boolean(bundle.states[normalizedUid]);
+        recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
+        return { isFollowing, followerCount: 0, followingCount: 0 };
+      }
+    } catch (bundleError) {
+      console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
+    }
   }
 
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);
@@ -276,10 +305,9 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
 export const setExploreFollow = async (user: User, uid: string, follow: boolean): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
-  const payload = await requestAuthed(
-    user,
-    `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow`,
-    { method: follow ? 'PUT' : 'DELETE' },
+  const payload = await requestOrderedExploreFollow354(
+    user.uid, normalizedUid, follow,
+    (path, init) => requestAuthed(user, path, init),
   );
   const row = payload?.data || {};
   const result = {
@@ -295,20 +323,37 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
 export const updateExplorePublicProfile = async (
   user: User,
   draft: ExploreProfileDraft,
+  options: { youtubeChanged?: boolean } = {},
 ): Promise<ExplorePublicProfile> => {
+  const includeYoutube252 = options.youtubeChanged !== false;
+  const body252 = {
+    nickname: draft.nickname.trim(),
+    bio: draft.bio.trim(),
+    handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+    genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+    spotifyUrl: draft.spotifyUrl.trim(),
+    instagramUrl: draft.instagramUrl.trim(),
+    tiktokUrl: draft.tiktokUrl.trim(),
+    profileMutationVersion: 252,
+    ...(includeYoutube252 ? {
+      youtubeUrl: draft.youtubeUrl.trim(),
+      ...(options.youtubeChanged === true ? { youtubeChanged: true } : {}),
+    } : {}),
+  };
   const payload = await requestAuthed(user, '/v1/me/profile', {
     method: 'PATCH',
-    body: JSON.stringify({
-      nickname: draft.nickname.trim(),
-      bio: draft.bio.trim(),
-      handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
-      genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
-      spotifyUrl: draft.spotifyUrl.trim(),
-      instagramUrl: draft.instagramUrl.trim(),
-      tiktokUrl: draft.tiktokUrl.trim(),
-    }),
+    body: JSON.stringify(body252),
   });
-  return normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  const saved = normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  return {
+    ...saved,
+    socialLinks: {
+      spotify: draft.spotifyUrl.trim(),
+      instagram: draft.instagramUrl.trim(),
+      tiktok: draft.tiktokUrl.trim(),
+      youtube: draft.youtubeUrl.trim(),
+    },
+  };
 };
 
 export type ExploreProfileMediaKind = 'avatar' | 'background';
@@ -376,6 +421,66 @@ export const uploadExploreProfileMedia = async (
     body: blob,
   });
   return String(payload?.data?.url || '').trim();
+};
+
+export const uploadExploreProfileMediaBatch = async (
+  user: User,
+  media: { avatar: Blob; background: Blob },
+): Promise<{ avatarUrl: string; backgroundUrl: string }> => {
+  const form = new FormData();
+  form.set('avatar', media.avatar, 'avatar.webp');
+  form.set('background', media.background, 'background.webp');
+  const payload = await requestAuthed(user, '/v1/me/profile-media', {
+    method: 'PUT',
+    body: form,
+  });
+  return {
+    avatarUrl: String(payload?.data?.avatarUrl || '').trim(),
+    backgroundUrl: String(payload?.data?.backgroundUrl || '').trim(),
+  };
+};
+
+// SORIDRAW_UNIFIED_PROFILE_SAVE_CLIENT_252_20260930
+export const saveExplorePublicProfileUnified = async (
+  user: User,
+  draft: ExploreProfileDraft,
+  media: { avatar?: Blob | null; background?: Blob | null },
+  options: { youtubeChanged?: boolean } = {},
+): Promise<ExplorePublicProfile> => {
+  if (!media.avatar && !media.background) {
+    throw new Error('통합 프로필 저장에는 변경된 이미지가 필요합니다.');
+  }
+  const profilePayload252 = {
+    nickname: draft.nickname.trim(),
+    bio: draft.bio.trim(),
+    handle: draft.handle.trim().replace(/^@+/, '').toLowerCase(),
+    genres: draft.genres.map((value) => value.trim()).filter(Boolean).slice(0, 5),
+    spotifyUrl: draft.spotifyUrl.trim(),
+    instagramUrl: draft.instagramUrl.trim(),
+    tiktokUrl: draft.tiktokUrl.trim(),
+    profileMutationVersion: 252,
+    ...(options.youtubeChanged === true
+      ? { youtubeUrl: draft.youtubeUrl.trim(), youtubeChanged: true }
+      : {}),
+  };
+  const form = new FormData();
+  form.set('profile', JSON.stringify(profilePayload252));
+  if (media.avatar) form.set('avatar', media.avatar, 'avatar.webp');
+  if (media.background) form.set('background', media.background, 'background.webp');
+  const payload = await requestAuthed(user, '/v1/me/profile-save', {
+    method: 'PUT',
+    body: form,
+  });
+  const saved = normalizeProfile(payload?.data?.profile || payload?.data || {}, user.uid);
+  return {
+    ...saved,
+    socialLinks: {
+      spotify: draft.spotifyUrl.trim(),
+      instagram: draft.instagramUrl.trim(),
+      tiktok: draft.tiktokUrl.trim(),
+      youtube: draft.youtubeUrl.trim(),
+    },
+  };
 };
 
 const loadBitmap = async (file: Blob): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dw: number, dh: number) => void; close: () => void }> => {

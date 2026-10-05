@@ -1,0 +1,92 @@
+name: SORIDRAW PREVIEW Gemini Function Source Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'functions/src/index.ts'
+      - 'functions/scripts/build-secured-index.cjs'
+      - 'functions/scripts/apply-gemini-latency.cjs'
+      - 'functions/src/geminiInteractionSse.ts'
+      - 'functions/scripts/test-gemini-interaction-sse.cjs'
+      - '.github/workflows/verify-preview-gemini-function-source.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-gemini-function-source-audit
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Functions without deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd functions
+          npm ci --no-audit --no-fund
+          npm run build
+          npm run test:gemini-sse
+
+      - name: Verify Gemini fallback route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const src = fs.readFileSync('functions/src/securedIndex.ts', 'utf8');
+          const route = '["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)';
+          if (!src.includes(route)) throw new Error('Unified Interactions fallback route missing');
+          if (!src.includes('return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);')) throw new Error('Interactions timeout-preserving call missing');
+          if (!src.includes('const GEMINI_MAX_REQUESTS_PER_SESSION = 5;')) throw new Error('5-attempt ceiling changed');
+          if (!src.includes('"gemini-3.6-flash": 120_000')) throw new Error('3.6 initial song timeout must be 120s');
+          if (!src.includes('"gemini-3.5-flash": 90_000')) throw new Error('3.5 initial song timeout must be 90s');
+          if (!src.includes('"gemini-3.5-flash-lite": 75_000')) throw new Error('3.5-lite initial song timeout must be 75s');
+          if (!src.includes('timeoutSeconds: 330')) throw new Error('Gemini Function timeout must be 330s');
+          if (!src.includes('SORIDRAW_GEMINI_READONLY_MODEL_AVAILABILITY_162')) throw new Error('Read-only model diagnostic missing');
+          if (!src.includes('db.collection("user_api_keys").doc(uid).get()')) throw new Error('User-scoped key retrieval missing');
+          if (!src.includes('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000')) throw new Error('Non-generating models.list route missing');
+          const adminAudit = fs.readFileSync('src/pages/AdminGeminiAuditPage.tsx', 'utf8');
+          if (!adminAudit.includes('readPreviewGeminiModelAvailability')) throw new Error('Existing admin audit model check missing');
+          const diagnosticProxy = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
+          if (!diagnosticProxy.includes("body: JSON.stringify({ diagnostic: 'model-availability' })")) throw new Error('Read-only diagnostic client missing');
+          if (!src.includes('const geminiTotalDeadlineMs = Date.now() + 300_000;')) throw new Error('Gemini total deadline missing');
+          if (!src.includes('Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs)')) throw new Error('Gemini fallback budget clamp missing');
+          if (!src.includes('consumeGeminiInteractionSse(upstream, model)')) throw new Error('SSE parser not connected');
+          if (!src.includes('store: false,') || !src.includes('stream: true,')) throw new Error('store=false streaming not enabled');
+          if (src.includes('background: true,')) throw new Error('Forbidden Gemini background data-retention change');
+          const proxy = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
+          const initial = proxy.match(/const INITIAL_SONG_MODEL_CHAIN = \[([\s\S]*?)\] as const;/);
+          if (!initial) throw new Error('Initial song model chain missing');
+          const actualChain = [...initial[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+          const approvedChain = ['gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'];
+          if (JSON.stringify(actualChain) !== JSON.stringify(approvedChain)) throw new Error('Approved initial song model order changed');
+          const contextGuard = proxy.includes("if (isInitialSongGenerationContext(context) && requested.length > 1)")
+            && proxy.includes("INITIAL_SONG_MODEL_CHAIN.filter((model) => !getGeminiModelCooldown(model))");
+          if (!contextGuard) throw new Error('Initial song fallback context routing changed');
+          console.log('PREVIEW_GEMINI_APPROVED_INITIAL_MODEL_ORDER=PASS');
+          for (const model of ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite']) {
+            if (!src.includes(model)) throw new Error('Model missing: ' + model);
+          }
+          if (!src.includes('daily_quota_exhausted')) throw new Error('Daily quota cooldown detection missing');
+          if (!src.includes('GEMINI_ATTEMPT_TIMEOUT')) throw new Error('Bounded timeout contract missing');
+          console.log('PREVIEW_GEMINI_INTERACTIONS_FALLBACK_ROUTE=PASS');
+          console.log('PREVIEW_GEMINI_FIVE_ATTEMPT_CEILING=PASS');
+          console.log('PREVIEW_GEMINI_DAILY_QUOTA_GUARD=PASS');
+          console.log('PREVIEW_GEMINI_FUNCTION_SOURCE_AUDIT_NO_DEPLOY=PASS');
+          NODE

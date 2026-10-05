@@ -34,13 +34,70 @@ const getGeminiAttemptTimeoutMs = (`,
   "gemini-3.1-flash-lite": 10_000,
 };
 
+const GEMINI_38_BUSY_SKIP_MS = 45_000;
 const GEMINI_37_BUSY_SKIP_MS = 45_000;
 const GEMINI_36_BUSY_SKIP_MS = 5 * 60_000;
 const GEMINI_RETRY_AFTER_SAFETY_MS = 1_500;
 const GEMINI_RATE_LIMIT_NO_HINT_COOLDOWN_MS = 15_000;
 const GEMINI_RATE_LIMIT_MAX_COOLDOWN_MS = 60_000;
+const GEMINI_DAILY_QUOTA_MAX_COOLDOWN_MS = 26 * 60 * 60_000;
+
+const getGeminiPacificTimeParts = (date: Date): Record<string, number> => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const out: Record<string, number> = {};
+  for (const part of parts) {
+    if (part.type === "literal") continue;
+    const value = Number(part.value);
+    if (Number.isFinite(value)) out[part.type] = value;
+  }
+  return out;
+};
+
+const getGeminiPacificOffsetMs = (date: Date): number => {
+  const parts = getGeminiPacificTimeParts(date);
+  const reconstructedUtc = Date.UTC(
+    parts.year,
+    Math.max(0, Number(parts.month || 1) - 1),
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+  return reconstructedUtc - date.getTime();
+};
+
+const getGeminiDailyQuotaCooldownMs = (): number => {
+  const nowMs = Date.now();
+  const now = new Date(nowMs);
+  const parts = getGeminiPacificTimeParts(now);
+  const nextLocalMidnightAsUtc = Date.UTC(
+    parts.year,
+    Math.max(0, Number(parts.month || 1) - 1),
+    Number(parts.day || 1) + 1,
+    0,
+    0,
+    0,
+  );
+  let candidateMs = nextLocalMidnightAsUtc - getGeminiPacificOffsetMs(new Date(nextLocalMidnightAsUtc));
+  candidateMs = nextLocalMidnightAsUtc - getGeminiPacificOffsetMs(new Date(candidateMs));
+  return Math.max(
+    60_000,
+    Math.min(GEMINI_DAILY_QUOTA_MAX_COOLDOWN_MS, candidateMs - nowMs + 60_000),
+  );
+};
+
 const GEMINI_SERVER_INFLIGHT_LEASE_MS = 70_000;
 const GEMINI_SERVER_INFLIGHT_COORDINATED_MODELS = new Set([
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
@@ -109,6 +166,7 @@ const getGeminiPolicyBusyCooldownMs = (
   }
   const isBusyFailure = isAttemptTimeout || [500, 502, 503, 504].includes(statusCode);
   if (!isBusyFailure) return 0;
+  if (model === "gemini-3.8-flash") return GEMINI_38_BUSY_SKIP_MS;
   if (model === "gemini-3.7-flash") return GEMINI_37_BUSY_SKIP_MS;
   if (model === "gemini-3.6-flash") return GEMINI_36_BUSY_SKIP_MS;
   return 0;
@@ -140,7 +198,7 @@ const getGeminiAttemptTimeoutMs = (`,
 replaceOnce(
   'model-aware busy cooldown duration',
   '  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
-  '  const policyCooldownMs = getGeminiPolicyBusyCooldownMs(model, statusCode, isAttemptTimeout, retryAfterMs);\n  const cooldownMs = policyCooldownMs || (isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs));',
+  '  const policyCooldownMs = isDailyQuotaExhausted ? getGeminiDailyQuotaCooldownMs() : getGeminiPolicyBusyCooldownMs(model, statusCode, isAttemptTimeout, retryAfterMs);\n  const cooldownMs = policyCooldownMs || (isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs));',
 );
 
 replaceOnce(
@@ -167,7 +225,10 @@ replaceOnce(
           || context === "generateSongCompactFallback"
           || context.startsWith("languageMixLockedWholeRewrite")
           || context.startsWith("generateSong v2");
-        const useInitial36LowThinking = (thinkingPolicy === "initial-36-low-v1" || thinkingPolicy === "initial-36-low-small-35-low-v2")
+        const useInitialFlashLowThinking = thinkingPolicy === "initial-36-low-small-35-low-v2"
+          && ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"].includes(attemptModel)
+          && isInitialSongContext;
+        const useLegacyInitial36LowThinking = thinkingPolicy === "initial-36-low-v1"
           && attemptModel === "gemini-3.6-flash"
           && isInitialSongContext;
         const isSmall35LowThinkingContext = context === "repairV1FinalProductionCues"
@@ -178,7 +239,7 @@ replaceOnce(
         const useSmall35LowThinking = thinkingPolicy === "initial-36-low-small-35-low-v2"
           && attemptModel === "gemini-3.5-flash"
           && isSmall35LowThinkingContext;
-        if (useInitial36LowThinking || useSmall35LowThinking) {
+        if (useInitialFlashLowThinking || useLegacyInitial36LowThinking || useSmall35LowThinking) {
           const existingConfig = attemptPayload?.config && typeof attemptPayload.config === "object"
             ? attemptPayload.config
             : {};
@@ -194,7 +255,7 @@ replaceOnce(
           };
           console.info(useSmall35LowThinking
             ? "[Gemini 854 Thinking] small 3.5 correction request uses low thinking"
-            : "[Gemini 850 Thinking] initial 3.6 request uses low thinking", {
+            : "[Gemini 143 Initial Thinking] initial Flash request uses low thinking", {
             context,
             sessionId,
             model: attemptModel,
@@ -217,13 +278,15 @@ replaceOnce(
             : null;`,
   `          const status = attemptRecord.statusCode || 500;
           const isPolicyTimeout = String(attemptRecord.code || "").trim() === "GEMINI_ATTEMPT_TIMEOUT";
-          const policyCooldownMs = getGeminiPolicyBusyCooldownMs(
-            attemptModel,
-            status,
-            isPolicyTimeout,
-            Number(attemptRecord.retryAfterMs || 0),
-          );
           const cooldownReason = String(attemptRecord.cooldownReason || (status === 429 ? "quota_or_rate_limit" : status === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded"));
+          const policyCooldownMs = cooldownReason === "daily_quota_exhausted"
+            ? getGeminiDailyQuotaCooldownMs()
+            : getGeminiPolicyBusyCooldownMs(
+                attemptModel,
+                status,
+                isPolicyTimeout,
+                Number(attemptRecord.retryAfterMs || 0),
+              );
           const serverCooldown = policyCooldownMs > 0
             ? setGeminiPolicyBusyCooldown(uid, attemptModel, status, cooldownReason, policyCooldownMs)
             : isGeminiServerFallbackStatus(status) && !isPolicyTimeout
@@ -243,7 +306,9 @@ replaceOnce(
   `      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
         const attemptModel = runtimeServerModelChain[index];
         if (index > 0) {`,
-  `      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
+  `      // Reserve cleanup headroom under the 330s Function hard limit.
+      const geminiTotalDeadlineMs = Date.now() + 300_000;
+      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
         const attemptModel = runtimeServerModelChain[index];
         const coordinateInFlight = latencyPolicy === "bounded-v1"
           && runtimeServerModelChain.length > 1
@@ -275,7 +340,20 @@ replaceOnce(
           continue;
         }
         const attemptStartedAt = Date.now();
-        const attemptTimeoutMs = getGeminiAttemptTimeoutMs(latencyPolicy, context, attemptModel);
+        const policyTimeoutMs = getGeminiAttemptTimeoutMs(latencyPolicy, context, attemptModel);
+        const remainingBudgetMs = latencyPolicy === "bounded-v1"
+          ? geminiTotalDeadlineMs - Date.now() - 10_000
+          : policyTimeoutMs;
+        if (latencyPolicy === "bounded-v1" && remainingBudgetMs < 10_000) {
+          releaseGeminiServerModelInFlight(uid, attemptModel, inFlightOwner);
+          const budgetError = new Error("Gemini total generation time budget exhausted");
+          (budgetError as any).status = 504;
+          (budgetError as any).code = "GEMINI_TOTAL_BUDGET";
+          throw budgetError;
+        }
+        const attemptTimeoutMs = latencyPolicy === "bounded-v1"
+          ? Math.max(1, Math.min(policyTimeoutMs || remainingBudgetMs, remainingBudgetMs))
+          : policyTimeoutMs;
         try {
           let response;
           try {
@@ -286,4 +364,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(securedPath, source, 'utf8');
-console.log('Applied SORIDRAW 861 Gemini policy: 854 small-correction low-thinking + selected-language recovery + 853 Retry-After cooldown + 849 in-flight.');
+console.log('Applied SORIDRAW Gemini policy: daily-quota skip + bounded fallback timing + low-thinking + Retry-After + in-flight.');

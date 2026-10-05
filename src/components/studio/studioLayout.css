@@ -564,14 +564,10 @@
   transition-timing-function: ease-out;
 }
 
-/* 802 — Genre has a much taller full-width reveal than the other keyword cards.
- * With the literal same 220ms max-height duration it still reads visually slower,
- * even though it is on the shared motion path. Keep the same max-height/opacity
- * owner and the same ease-out curve, but shorten only Genre's travel time so the
- * perceived close/open cadence matches Style / Sound / Mood / Theme. */
-[data-studio-menu="genre"] .soridraw-keyword-expand-motion {
-  transition-duration: 180ms;
-}
+/* 1034 — Genre uses the exact same keyword expand/collapse motion as the
+ * other four keyword menus. The old Genre-only 180ms override made collapse
+ * visibly step faster than Style / Sound / Mood / Theme in the current split
+ * layout. Keep the shared 220ms ease-out owner above; no Genre-only timing. */
 
 /* 519 — collapsed keyword-card height follows the builder pane itself.
  * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
@@ -15118,6 +15114,13 @@ body > .soridraw-live-keywords-fixed {
   pointer-events: none !important;
 }
 
+/* 1021 — Classic Dark only: match the split Create breathing room under
+ * selected keyword chips. Light and Studio Black are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-builder-live-keywords {
+  padding-bottom: 12px !important;
+}
+
 /* 1016 — Classic mobile keyword spacing, light divider and softer light chips. */
 @media (max-width: 767px) {
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
@@ -15156,3 +15159,770 @@ body > .soridraw-live-keywords-fixed {
     background-color: rgb(35 58 44 / 0.70) !important;
   }
 }
+
+
+/* 1020 — Split Create exact Classic vertical composition.
+ * "곡 만들기" keeps the existing full Builder, then the EXISTING generated
+ * Result/Recent content continues directly below it in one vertical scroll.
+ * This does not build a second recent-song list. Recent workspace itself keeps
+ * the approved two-pane splitter. Compact mobile keeps its existing component. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"] {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: var(--soridraw-studio-isolated-height, 720px) !important;
+    min-height: 0 !important;
+    max-height: var(--soridraw-studio-isolated-height, 720px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: auto !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: #626266 transparent !important;
+    contain: layout paint style !important;
+    isolation: isolate !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    contain: none !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    padding-top: 0 !important;
+    padding-bottom: 96px !important;
+  }
+
+  /* 1022 — Split Create reuses the real Result pane, but its empty split
+   * masthead still reserved the normal 84px pane-header slot above the first
+   * generated-song card. Classic has no visible masthead in this transition.
+   * Collapse only this empty Result masthead so the divider-to-card breathing
+   * room matches Classic Dark without touching Recent/Music Note/Library. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-pane-masthead-host {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Same selected-keyword location as Classic: immediately below command. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical
+  .soridraw-builder-live-keywords {
+    display: block !important;
+    padding-bottom: 12px !important;
+    border-bottom: 2px solid #4f3b1c !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar {
+    width: 4px !important;
+    height: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-thumb {
+    min-height: 28px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #626266 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]::-webkit-scrollbar-thumb:hover {
+    background: #77777b !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  /* Preserve the approved one-pane Create content width while the real Result
+   * continues below it. Both halves share the same visual horizontal guide. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  > * {
+    width: min(calc(100% - 84px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}
+
+
+/* 1023 — Right dashboard readability.
+ * The 292px Studio Black rail stays the same width; only text hierarchy grows
+ * so Generation / Recent Songs / Credits / Selected Keywords remain readable.
+ * No center workspace, rail geometry, or mobile Classic styling changes. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-heading p {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-heading h2 {
+    font-size: 16px !important;
+    line-height: 1.22 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-state strong {
+    font-size: 14px !important;
+    line-height: 1.3 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-state small {
+    font-size: 10.5px !important;
+    line-height: 1.45 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-metrics small {
+    font-size: 9.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-metrics strong {
+    font-size: 13.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-primary {
+    font-size: 13px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel :is(
+    .soridraw-studio-dashboard-text-button,
+    .soridraw-studio-dashboard-credit-footer button
+  ) {
+    font-size: 10.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy strong {
+    font-size: 13.5px !important;
+    line-height: 1.3 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy small {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-cache-badge {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-credit-value strong {
+    font-size: 31px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-credit-value span {
+    font-size: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-credit-footer small {
+    font-size: 9.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-keyword-count {
+    font-size: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-keyword {
+    font-size: 11.5px !important;
+    line-height: 1.3 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-empty {
+    font-size: 10.5px !important;
+  }
+}
+
+
+/* 1024 — Recent Songs right-rail two-line hierarchy.
+ * Keep the current time typography/color as the metadata source of truth:
+ * first line = [genre] + generation time, second line = title.
+ * The existing horizontal drag/scroll owner remains the same copy container. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    display: flex !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    align-items: center !important;
+    gap: 7px !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta small {
+    color: #66666f !important;
+    -webkit-text-fill-color: currentColor !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy strong {
+    color: #dedee2 !important;
+  }
+}
+
+
+/* 1025 — Recent Songs fixed metadata + title-only horizontal drag.
+ * [genre] and generation time stay together at the left edge and never move.
+ * Only the title row owns horizontal overflow/drag, so long bilingual titles
+ * can still be inspected without pushing metadata off-screen. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-copy {
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+    cursor: default !important;
+    user-select: auto !important;
+    touch-action: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 7px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta small {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0 !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+    cursor: grab !important;
+    user-select: none !important;
+    touch-action: pan-y !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll.is-dragging {
+    cursor: grabbing !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-title-scroll strong {
+    display: block !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+}
+
+
+/* 1026 — Widen Recent Songs copy area inside the fixed right rail.
+ * Keep the 292px rail itself unchanged. Let only the Recent Songs rows use a
+ * little more of the card's side space: heart/music glyph moves left, chevron
+ * moves right, and the text starts closer to the glyph. Metadata remains fixed;
+ * only the title row keeps horizontal drag from 1025. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-list {
+    margin-left: -6px !important;
+    margin-right: -6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song {
+    gap: 5px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel .soridraw-studio-dashboard-song-meta {
+    gap: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song
+  > svg:last-child {
+    flex: 0 0 auto !important;
+    margin-left: 1px !important;
+    margin-right: 0 !important;
+  }
+}
+
+
+/* 1027 — Music Note / Library persistent mobile search.
+ * Search text is UI-only session state: no server read/write is added.
+ * On standalone mobile pages the compact 42px search button grows farther to
+ * the right while focused or while a query exists, and stays expanded after
+ * page navigation until the query is explicitly cleared. */
+.soridraw-responsive-search-clear {
+  color: var(--text-secondary) !important;
+}
+
+@media (max-width: 660px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot {
+    transition: width 140ms ease, flex-basis 140ms ease, max-width 140ms ease !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    flex: 1.6 1 190px !important;
+    width: auto !important;
+    min-width: min(180px, calc(100vw - 150px)) !important;
+    max-width: min(260px, 68vw) !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-icon {
+    left: 16px !important;
+    right: auto !important;
+    transform: none !important;
+    justify-content: center !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-input {
+    padding-left: 40px !important;
+    padding-right: 9px !important;
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: currentColor !important;
+    caret-color: currentColor !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active.has-search-value
+  .soridraw-responsive-search-input {
+    padding-right: 40px !important;
+  }
+
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-responsive-search-slot.is-search-active
+  .soridraw-responsive-search-clear {
+    display: flex !important;
+  }
+}
+
+
+/* SORIDRAW_STUDIO_ACCOUNT_MENU_PARITY_219_20260929
+ * Match the split left-rail account popup to the canonical mobile account menu.
+ * Split geometry/divider/panes are untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface {
+    width: 224px !important;
+    min-width: 224px !important;
+    padding: 8px !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    border-radius: 18px !important;
+    background: #242426 !important;
+    background-color: #242426 !important;
+    box-shadow: 0 16px 38px rgba(0,0,0,.42) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button {
+    min-height: 40px !important;
+    height: 40px !important;
+    gap: 12px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    color: rgba(255,255,255,.78) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button.soridraw-account-menu-mode {
+    height: 52px !important;
+    min-height: 52px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button > svg {
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    flex-basis: 19px !important;
+    color: rgba(255,255,255,.48) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > button.soridraw-account-menu-mode > svg {
+    color: #ffb400 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-menu.soridraw-account-menu-surface > .soridraw-account-menu-divider {
+    width: calc(100% - 8px) !important;
+    margin: 5px 4px !important;
+    background: rgba(255,255,255,.10) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-profile-menu-portal
+  .soridraw-studio-profile-theme-menu {
+    border-radius: 14px !important;
+    background: #242426 !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.36) !important;
+  }
+}
+
+
+/* 1030 — Split Recent horizontal breathing room.
+ * Recent is already approved by hand. Keep its app206 spacing frozen. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="recent"]
+  body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace:not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 1031 — Split Builder common black-gutter reduction.
+ * User correction: the target is the BLACK outer breathing room, not narrower
+ * cards/content. App213 used 24px per side; the approved result-to-divider gap
+ * is 12px, so REDUCE the black gutter by that amount: 12px per side / 24px
+ * total. Apply the same expansion to Recent, Music Note and Library split views.
+ * Builder scroll shell, divider, result panes, Create scrollbar correction and
+ * mobile stay unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-lite-workspace="recent"],
+    [data-soridraw-lite-workspace="music-note"],
+    [data-soridraw-lite-workspace="library"]
+  )
+  body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace:not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-builder-pane
+  > :is(
+    .soridraw-studio-builder-pane-masthead-host,
+    :not(.soridraw-studio-pane-masthead-host)
+  ) {
+    width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 1032 — Create vertical scrollbar reaches the right-rail divider.
+ * The remaining 18px gap is the base Studio main right padding. Release only
+ * that RIGHT gutter while Create is active, then return the same 18px as
+ * padding INSIDE the Create scroll shell. This moves only the native scrollbar
+ * edge to the right-rail separator while preserving the existing Create content
+ * width/position. Left gutter, cards, responsive rules and other workspaces are
+ * unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"]
+  body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"]
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-create-vertical[data-scroll-isolated="true"] {
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 1033 — Delay split Generate-bar compact design to the Builder Compact band.
+ * User reference: keep the full bar from screenshot 1 through the former
+ * screenshot-3 width, and switch to the three-button bar only around the
+ * screenshot-4 width. Reuse the existing Builder Compact boundary (<=820px)
+ * instead of the broader 1080px content-tablet / 1599px viewport bands.
+ *
+ * The split engine publishes data-soridraw-builder-action-compact only when
+ * that discrete boundary changes. This block changes Generate-bar composition
+ * only; its live X/width tracking, split geometry, Create scrollbar, cards,
+ * Recent/Music Note/Library content and mobile <1100 behavior stay unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"]) {
+    --soridraw-action-control-height: 90px;
+    --soridraw-action-row-gap: 12px;
+    --soridraw-action-row-padding: 10px;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 18px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 12px !important;
+    padding: 10px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel
+  > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: flex !important;
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    min-width: 48px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: block !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    box-sizing: border-box !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 90px !important;
+    min-height: 90px !important;
+    max-height: 90px !important;
+    padding-inline: 24px !important;
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    display: block !important;
+    flex: 1 1 240px !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 90px !important;
+    min-height: 90px !important;
+    max-height: 90px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 12px !important;
+    font-size: 34px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-action-compact="true"])
+  .soridraw-studio-action-bar--tracking
+  :is(
+    .soridraw-action-collapse,
+    .soridraw-action-generate-button,
+    .soridraw-action-random > button,
+    .soridraw-action-reset > button
+  ) > svg {
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"] {
+    --soridraw-action-control-height: 69px;
+    --soridraw-action-row-gap: 8px;
+    --soridraw-action-row-padding: 8px;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel
+  > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    box-sizing: border-box !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding: 0 !important;
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 8px !important;
+    font-size: 25px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-action-compact="true"]
+  .soridraw-studio-action-bar--tracking
+  :is(
+    .soridraw-action-generate-button,
+    .soridraw-action-random > button,
+    .soridraw-action-reset > button
+  ) > svg {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 auto !important;
+  }
+}
+

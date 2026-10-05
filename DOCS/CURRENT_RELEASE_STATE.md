@@ -1,3 +1,50 @@
+## 0QF. app356 TEST dormant shared Catalog support 승격 완료 + Release Controller 재강화 (2026-10-06 KST)
+
+TEST 승격 최종 결과:
+- Release Controller Run `37383619935`: **SUCCESS / TEST_VERIFIED**.
+- exact source PREVIEW SHA: `0bab8cdb2492021cb35b5ee9d38fd92472d6f3e7`.
+- durable TEST release tag: `soridraw-test-v356-0bab8cdb2492`.
+- main promoted SHA: `751acbd9441023dc150403507b1c64232bc0f637`.
+- TEST app version: **356**.
+- TEST Explore Worker: `f45a7081-6b0b-4670-ba18-c9e58ce2287a`.
+- TEST Media Worker: `faf933b6-d2d6-4599-9561-5596f593da4a`.
+- TEST Media runtime exact checks:
+  - `MEDIA=soridraw-media-test`
+  - `CATALOG=soridraw-user-catalog`
+  - `SORIDRAW_SHARED_CATALOG_V1=0`
+  - media health/catalog binding PASS.
+- Firebase TEST Hosting deploy PASS.
+- TEST Explore environment parity with PREVIEW PASS.
+- PRODUCTION branch/Explore Worker/Media Worker/Hosting 비변경.
+
+Release Controller 보강:
+- 첫 시도 Run `37382314963`은 TEST Media Worker 활성 직후 health 확인이 Cloudflare edge 전파보다 빨라 `media health binding check failed`로 중단.
+- 해당 실행은 Explore Worker와 Media Worker를 이전 버전으로 되돌렸고 Hosting은 변경 전 중단.
+- main rollback은 GitHub Actions token의 workflow-file rollback 권한 한계로 자동 push가 거절되어, connector의 workflow 권한으로 **원래 TEST tree를 유지하는 fast-forward rollback commit** `ca2ce92f88ca6f2d21c80f94d5e98f853eaa9fab`을 만들어 복구.
+- 이후 Release Controller를 수정:
+  - Media Worker active version/health가 실제 edge에 수렴할 때까지 bounded retry.
+  - Media release identity를 비결정적 Wrangler outdir hash가 아니라 승인된 source + effective config + pinned tool contract로 고정.
+  - Media Worker Wrangler를 `4.147.0` exact pin.
+  - TEST/PRODUCTION branch ref는 Worker/Media Worker/Hosting 실제 검증이 모두 끝난 **마지막 단계에서만** 승격.
+  - TEST release manifest도 먼저 생성하고, main push 실패 시 release/tag를 자동 정리하도록 rollback 강화.
+  - 따라서 검증 실패가 branch에 반쪽 승격을 남기기 어려운 구조로 변경.
+- Release System Audit Run `37383318153`: **SUCCESS**.
+- 최종 TEST Run에서 Media Worker는 active version settle PASS, health는 7회 bounded retry 후 PASS, TEST_VERIFY 재확인에서는 1회에 PASS.
+
+현재 tree parity:
+- temp dispatcher 정리 후 PREVIEW HEAD `f1a949f1ced4e5ecb465226eb59e99dd647a9e28`.
+- PREVIEW current tree = TEST main tree = source target tree `c4a3cb4dc4179f67caa3d92d22cc048847330794`.
+- temp dispatch workflow/trigger는 삭제 완료.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- shared Catalog cutover는 여전히 **OFF**.
+
+현재 HARD GATE:
+- PREVIEW와 TEST는 앱 + Explore Worker + Media Worker + shared `CATALOG` binding까지 동일 release 구조를 갖춤.
+- 하지만 PRODUCTION은 아직 이전 release이므로 `SORIDRAW_SHARED_CATALOG_V1`을 PREVIEW/TEST만 먼저 ON 하면 안 됨.
+- **PRODUCTION dormant support 승격은 사용자의 명확한 정식배포 승인 전 금지.**
+- 세 환경 모두 shared Catalog 코드를 이해한 뒤에만 coordinated flag cutover를 진행하고, 그 뒤 Music Note/Library/Recent/folder 실데이터 parity를 검증.
+- parity 완료 전 first-publication W12->W2 shared-D1 cutover 금지.
+
 ## 0QE. app356 PREVIEW shared private Catalog dormant support 배포 + 최종 감사 PASS (2026-10-06 KST)
 
 이번 작업의 목적:

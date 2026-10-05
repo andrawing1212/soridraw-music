@@ -1,10 +1,10 @@
-app353-pc-musicnote-media-catalog-priority
-target_source=cbe3e8757238b3b8b2486ae8c0ea885c45d01dd5
-app_version=353
-scope=hosting-only-pc-musicnote-media-catalog-priority
+app354-remove-private-publication-warning
+target_source=084c2c6b4eee0494df3496c661c4ee4ecc62dce6
+app_version=354
+scope=hosting-only-remove-private-publication-warning
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app353-pc-musicnote-media-catalog-priority
+release_request=app354-remove-private-publication-warning
 worker_change=false
 functions_change=false
 shared_follow_cutover=false

@@ -1,3 +1,27 @@
+## CURRENT NEXT GATE — app355 기능 복구 실기기 검증 우선
+
+PREVIEW app355 배포:
+- exact deployed commit `6a6c05981e3945d6e67cd7623c35680cd1c0abd4`.
+- Preflight `37364316058` SUCCESS.
+- Firebase PREVIEW Run `37365134850` SUCCESS.
+- app355 exact build PASS.
+- shared RTDB `explorePublication` additive owner-only signal rules exact-match PASS.
+- Worker/Functions/Firestore Rules/D1/user data 변경 0.
+
+현재 목표는 비용 추가 절감이 아니라 기능 정상화 확인:
+1. 기기 A 공개 후 같은 계정 기기 B에서 자동으로 공개곡/공개상태가 보이는지.
+2. 기기 B warm 새로고침만으로 Cloudflare Worker가 증가하지 않는지.
+3. 기기 A 비공개 후 기기 B에서 자동 제거되는지.
+4. 공개 R4/W2 / source R6/W3 / 비공개 R3/W2 기존 D1 비용이 회귀하지 않는지.
+5. thumbnail/선택 source/좋아요/저장하트/UI 정상 유지.
+
+판정:
+- 위 1~5가 모두 PASS하기 전 source R6→R5/R4 최적화 금지.
+- 새로고침 Worker가 아직 +1이면 CACHE LIVE의 **요청 상세 path**로 원인 endpoint 하나만 특정한 뒤 그 경로만 수정. 추측 수정 금지.
+- cross-device가 실패하면 RTDB signal publish/receive/rules부터 확인하고 Cloudflare/D1 비용을 먼저 건드리지 않음.
+- TEST는 현재 app354까지 승격된 상태. app355 검증 전 재승격 금지.
+- PRODUCTION 비변경. 사용자 별도 정식배포 승인 전 승격 금지.
+
 ## CURRENT NEXT GATE — 연속 실기기 기준 고정, source R6만 분석
 
 동일 세션 연속 확인 완료:

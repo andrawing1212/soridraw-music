@@ -1,3 +1,23 @@
+## CURRENT NEXT GATE — source 1->2 R6/W3만 남김
+
+사용자 실기기 최신 확정:
+- 순수 공개(설정 열고 아무것도 건드리지 않고 즉시 공개): **R4/W2**, Worker 1, Firestore R0/W0 — PASS.
+- source 1->2: **R6/W3** — 직전 R10/W3 대비 개선, 추가 절감 후보.
+- 비공개: **R3/W2** — PASS.
+
+판정:
+- 공개 R6/W3 회귀 가설은 최신 no-touch 재테스트로 해제.
+- 순수 공개/비공개는 더 이상 수정 금지.
+- 다음 작업은 source/media 전환 R6/W3만 대상으로 한다.
+- 364 rollback 금지. 현재 source read 개선을 유지한다.
+
+다음:
+1. source 1->2의 남은 product R6를 request-level R1 + 364 trigger R4 + 기타 1행으로 정확히 분해.
+2. 기능/thumbnail/Explore/공개프로필 media freshness를 그대로 유지하면서 마지막 불필요 read 1행 제거 가능성만 검토.
+3. W3는 TEST/PRODUCTION legacy media mirror 호환 때문에 현재 정상 범위. W2 제거는 모든 환경 승격 후 357 별도 승인 전 금지.
+4. source R5 이하가 기능 손상 없이 가능할 때만 PREVIEW 변경.
+5. 좋아요/저장하트/UI/순수 공개/비공개 변경 금지.
+
 ## CURRENT NEXT GATE — 공개 R6/W3 media-path 오진입 추적
 
 실기기 확정:

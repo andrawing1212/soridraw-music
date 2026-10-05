@@ -240,7 +240,8 @@ jobs:
           schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '.result | if type == "array" then . elif ((.schedules // null) | type) == "array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'; }
           schedules "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-schedules-before"
           schedules "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-schedules-before"
-          printf false > "$RUNNER_TEMP/test-branch-mutated"; printf false > "$RUNNER_TEMP/test-worker-mutated"; printf false > "$RUNNER_TEMP/test-media-worker-mutated"; printf false > "$RUNNER_TEMP/test-hosting-mutated"
+          printf false > "$RUNNER_TEMP/test-branch-mutated"; printf false > "$RUNNER_TEMP/test-worker-mutated"; printf false > "$RUNNER_TEMP/test-media-worker-mutated"; printf false > "$RUNNER_TEMP/test-hosting-mutated"; printf false > "$RUNNER_TEMP/test-release-mutated"
+          : > "$RUNNER_TEMP/test-release-tag"
           printf false > "$RUNNER_TEMP/production-branch-mutated"; printf false > "$RUNNER_TEMP/production-worker-mutated"; printf false > "$RUNNER_TEMP/production-media-worker-mutated"; printf false > "$RUNNER_TEMP/production-hosting-mutated"
           curl -fsS -H 'Cache-Control: no-cache' "$TEST_FIREBASE_URL/" | sha256sum | cut -d' ' -f1 > "$RUNNER_TEMP/test-host-before"
           curl -fsS -H 'Cache-Control: no-cache' "$PRODUCTION_FIREBASE_URL/" | sha256sum | cut -d' ' -f1 > "$RUNNER_TEMP/production-host-before"
@@ -277,7 +278,7 @@ jobs:
           node .deploy/release-media-worker-runtime.mjs test upload | tee "$RUNNER_TEMP/test-media-upload"
           tree="$(git rev-parse HEAD^{tree})"; before="$(cat "$RUNNER_TEMP/main-before")"
           promoted="$(printf 'release: promote app %s to TEST\n\nsource-preview: %s\n' "$RELEASE_APP_VERSION" "$RELEASE_TARGET"|git commit-tree "$tree" -p "$before")"
-          git push origin "$promoted:refs/heads/main"; printf true > "$RUNNER_TEMP/test-branch-mutated"; echo "$promoted" > "$RUNNER_TEMP/main-promoted"
+          echo "$promoted" > "$RUNNER_TEMP/main-promoted"
           version="$(sed -n 's/^TEST_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/test-upload"|tail -1)"; test -n "$version"
           bundle="$(sed -n 's/^TEST_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/test-upload"|tail -1)"; test -n "$bundle"
           media_version="$(sed -n 's/^TEST_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/test-media-upload"|tail -1)"; test -n "$media_version"
@@ -317,8 +318,15 @@ jobs:
           SOURCE_TREE="$(git rev-parse "$RELEASE_TARGET^{tree}")" MAIN_SHA="$(cat "$RUNNER_TEMP/main-promoted")" MAIN_TREE="$(git rev-parse "$(cat "$RUNNER_TEMP/main-promoted")^{tree}")" TAG="$tag" node - <<'NODE'
           const fs=require('fs'); const m={schema:3,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
           NODE
-          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" --repo "$GITHUB_REPOSITORY" --target "$(cat "$RUNNER_TEMP/main-promoted")" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
-          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_VERIFIED
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "TEST_RELEASE_TAG_ALREADY_EXISTS=$tag"
+            exit 1
+          fi
+          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
+          echo "$tag" > "$RUNNER_TEMP/test-release-tag"; printf true > "$RUNNER_TEMP/test-release-mutated"
+          test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$(cat "$RUNNER_TEMP/main-before")"
+          git push origin "$(cat "$RUNNER_TEMP/main-promoted"):refs/heads/main"; printf true > "$RUNNER_TEMP/test-branch-mutated"
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_VERIFIED || echo 'RELEASE_STATUS_TEST_VERIFIED_UPDATE=WARNING'
 
       - name: PROD_PREFLIGHT revalidate TEST manifest and live release
         if: steps.request.outputs.mode == 'production'
@@ -356,7 +364,7 @@ jobs:
           EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-media-upload"
           before="$(cat "$RUNNER_TEMP/production-before")"; tree="$(git rev-parse "$MANIFEST_MAIN^{tree}")"
           promoted="$(printf 'release: promote TEST_VERIFIED app %s to PRODUCTION\n\ntested-main: %s\nmanifest: %s\n' "$RELEASE_APP_VERSION" "$MANIFEST_MAIN" "${{ steps.request.outputs.manifest_tag }}"|git commit-tree "$tree" -p "$before")"
-          git push origin "$promoted:refs/heads/production"; printf true > "$RUNNER_TEMP/production-branch-mutated"; echo "$promoted" > "$RUNNER_TEMP/production-promoted"
+          echo "$promoted" > "$RUNNER_TEMP/production-promoted"
           version="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload"|tail -1)"; test -n "$version"
           media_version="$(sed -n 's/^PRODUCTION_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-media-upload"|tail -1)"; test -n "$media_version"
           RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-worker-mutated"
@@ -384,7 +392,9 @@ jobs:
           test "$(cat "$RUNNER_TEMP/test-media-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEST_MEDIA_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
           test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$expected_test_hosting"
-          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED
+          test "$(git ls-remote origin refs/heads/production|cut -f1)" = "$(cat "$RUNNER_TEMP/production-before")"
+          git push origin "$(cat "$RUNNER_TEMP/production-promoted"):refs/heads/production"; printf true > "$RUNNER_TEMP/production-branch-mutated"
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED || echo 'RELEASE_STATUS_RELEASED_UPDATE=WARNING'
 
       - name: Rollback branch and Worker traffic after deployment failure
         if: failure() && steps.request.outputs.mode != 'preflight_only'
@@ -398,10 +408,12 @@ jobs:
           [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update ROLLED_BACK || true
           rollback_worker(){ stage="$1"; version="$2"; schedules="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_WORKER_VERSION="$version" RELEASE_WORKER_SCHEDULES_JSON="$(cat "$schedules")" node .deploy/release-worker-runtime.mjs "$stage" restore; }
           rollback_media_worker(){ stage="$1"; version="$2"; flag="$3"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_MEDIA_WORKER_VERSION="$version" node .deploy/release-media-worker-runtime.mjs "$stage" restore; }
+          rollback_release(){ flag="$1"; tag_file="$2"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; tag="$(cat "$tag_file" 2>/dev/null)"; [ -n "$tag" ] || return; gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; }
           rollback_branch(){ branch="$1"; original="$2"; promoted_file="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; [ -f "$promoted_file" ] || return; current="$(git ls-remote origin "refs/heads/$branch"|cut -f1)"; test "$current" = "$(cat "$promoted_file")" || return; tree="$(git rev-parse "$original^{tree}")"; rollback="$(printf 'rollback: restore %s after failed controlled release\n' "$branch"|git commit-tree "$tree" -p "$current")"; git push origin "$rollback:refs/heads/$branch"; }
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
             rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated"
             rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated"
+            rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag"
             rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated"
             if [ "$(cat "$RUNNER_TEMP/test-hosting-mutated" 2>/dev/null)" = true ]; then
               rm -rf "$RUNNER_TEMP/hosting-rollback"; git worktree add --detach "$RUNNER_TEMP/hosting-rollback" "$(cat "$RUNNER_TEMP/main-before")"

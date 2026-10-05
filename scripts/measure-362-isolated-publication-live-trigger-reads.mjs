@@ -583,6 +583,29 @@ if (process.argv[2] === 'cleanup') {
       "UPDATE tracks SET is_public=0,updated_at=202 WHERE id='A' AND owner_uid='user-a' AND source_type='music_note' AND is_public<>0"
     ));
 
+    // 366 regression guard: the previous visibility check above exercises the
+    // pre-364/current trigger. Repeat the same registered public/private transitions
+    // with the actual 364 candidate triggers and UPDATE ... RETURNING *, matching
+    // the Worker warm mutation shape. This is isolated ephemeral D1 only.
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 0, media: 1 });
+    await createShared({ update: true }); await createTrackUpdate364(); await createDerivedMusicNoteUpdate363();
+    const republish364 = metric('362_REGISTERED_PUBLIC_364_COMPAT', await query(
+      "UPDATE tracks SET is_public=1,updated_at=211 WHERE id='A' AND owner_uid='user-a' AND source_type='music_note' AND is_public<>1 RETURNING *"
+    ));
+    const private364 = metric('362_PRIVATE_364_COMPAT', await query(
+      "UPDATE tracks SET is_public=0,updated_at=212 WHERE id='A' AND owner_uid='user-a' AND source_type='music_note' AND is_public<>0 RETURNING *"
+    ));
+
+    // Product-shape discriminator for the user's R6/W3 public regression: if a
+    // public action also changes media, 364 is expected to wake the legacy media
+    // mirror. Keep this measurement separate from pure visibility so the two paths
+    // can never be confused again.
+    await dropTriggers(); await seedRevisionProfile(); await clearTrack(); await insertAWithoutTriggers({ publicFlag: 0, media: 1 });
+    await createShared({ update: true }); await createTrackUpdate364(); await createDerivedMusicNoteUpdate363();
+    const republishMedia364 = metric('362_REGISTERED_PUBLIC_MEDIA_364_COMPAT', await query(
+      "UPDATE tracks SET is_public=1,cover_url='cover-2',duration_seconds=181,suno_url_primary='https://suno/2',updated_at=213 WHERE id='A' AND owner_uid='user-a' AND source_type='music_note' AND is_public<>1 RETURNING *"
+    ));
+
     // ---- First insert: reproduce current W12 fanout and split its read sources. ----
     const firstInsertSql = `INSERT INTO tracks(
       id,owner_uid,source_type,source_id,source_parent_id,legacy_global_id,
@@ -634,6 +657,7 @@ if (process.argv[2] === 'cleanup') {
     if (swap364Returning.w !== swapFullReturning.w) fail('364 compatibility candidate changed normal source-swap writes');
     if (swap363Returning.w !== swapFullReturning.w) fail('363 compatibility candidate changed normal source-swap writes');
     if (republish.w > 2 || privateResult.w > 2) fail('registered visibility transitions exceeded W2');
+    if (republish364.w > 2 || private364.w > 2) fail('364 registered visibility transitions exceeded W2');
     if (swap357.r >= swapFull.r) fail('357 candidate did not reduce current source-swap reads');
     console.log('362_SOURCE_SWAP_READ_REDUCTION_PROVED=PASS currentR' + swapFull.r + '->candidateR' + swap357.r);
     console.log('362_COMPAT_READ_REDUCTION_PROVED=PASS currentReturningR' + swapFullReturning.r + '->compatR' + swap363Returning.r);
@@ -643,6 +667,8 @@ if (process.argv[2] === 'cleanup') {
     console.log('362_COMPAT_364_MISSING_DERIVED_REPAIR=PASS R' + swap364Repair.r + ' W' + swap364Repair.w);
     console.log('362_COMPAT_364_CONTENT_REBUILD=PASS R' + content364.r + ' W' + content364.w);
     console.log('362_REGISTERED_VISIBILITY_W2_GUARD=PASS');
+    console.log('362_364_REGISTERED_VISIBILITY_W2_GUARD=PASS publicR' + republish364.r + '/W' + republish364.w + ' privateR' + private364.r + '/W' + private364.w);
+    console.log('362_364_REGISTERED_PUBLIC_MEDIA_METRIC=R' + republishMedia364.r + '/W' + republishMedia364.w);
     console.log('362_SHARED_USER_DATA_TOUCHED=0');
     console.log('362_PRODUCT_SHARED_D1_CUTOVER=NOT_APPLIED');
   } finally {

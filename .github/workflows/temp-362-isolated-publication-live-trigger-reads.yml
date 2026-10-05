@@ -1,4 +1,5 @@
 name: TEMP 362 Isolated Publication Live Trigger Reads
+# rerun returning v2
 
 on:
   push:

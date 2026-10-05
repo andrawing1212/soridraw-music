@@ -1,3 +1,33 @@
+## CURRENT NEXT GATE — first-publication R6/W12 안전 cutover 준비만, 기능 보존 우선
+
+현재 실기기:
+- registered 공개 **R4/W2** PASS.
+- registered source 1->2 **R6/W3** known compatibility cost.
+- registered 비공개 **R3/W2** PASS.
+- never-published 최초 공개 **R6/W12** HARD FAIL.
+- 신규 등록 직후 source 전환 **R6/W3**.
+
+목표:
+- 최초 공개만 **W2**로 내리는 cutoff 기반 shared-D1 candidate를 최종화하되, 다른 기능/기존 등록곡 비용을 증가시키지 않는다.
+- existing rows는 legacy 경로 유지.
+- cutoff 이후 new Music Note rows만 R2 catalog/shared-card authority를 사용.
+- user-row migration/backfill/delete/rewrite 0.
+
+선행 게이트:
+1. TEST active Worker의 R2 hybrid/R2-only flags + Feed/Profile/Search/Genre authority를 read-only로 확인.
+2. PRODUCTION 현재 active Worker/flags가 cutover 호환인지 read-only 확인.
+3. PRODUCTION이 미호환이면 shared D1 변경 금지. 먼저 검증된 코드 승격이 필요.
+4. 세 환경 모두 호환된 뒤에만 exact cutoff SQL + rollback/fail-safe를 isolated D1에서 다시 측정.
+5. first publication W2, title/genre/artist search, latest/popular, public profile, cross-device publication, likes, source/thumbnail 모두 PASS해야 shared-D1 승인 요청 가능.
+
+금지:
+- 지금 shared D1 migration 적용.
+- registered 공개/비공개 path 수정.
+- 좋아요/저장하트/UI/thumbnail 수정.
+- 전체 scan/rebuild.
+- 사용자 row rewrite/backfill.
+- 기능을 줄여 W2 맞추기.
+
 ## CURRENT NEXT GATE — app355 기능 복구 실기기 검증 우선
 
 PREVIEW app355 배포:

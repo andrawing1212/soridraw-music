@@ -8358,12 +8358,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   })}
                 </div>
 
-                {explorePublicationDialog.state.status === 'public' && explorePublicationPrivateConfirm && (
-                  <div className="mt-4 rounded-2xl bg-red-500/10 px-4 py-3 text-xs font-semibold leading-5 text-red-200/85">
-                    비공개로 전환하면 Explore와 공개 프로필에서 즉시 숨겨집니다. D1 기록은 삭제하지 않습니다.
-                  </div>
-                )}
-
                 <div className="mt-6 grid gap-2">
                   <button
                     type="button"

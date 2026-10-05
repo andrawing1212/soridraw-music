@@ -22933,7 +22933,33 @@ async function patchExploreProfileR2Publication043(...args) {
 
 async function handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions) {
   const now = Date.now();
-  const previous = await publicationReadState016(env, authContext.uid, source.id);
+  let previous = null;
+  let publicationR2ProvedNew361 = false;
+  try {
+    const [publicationPayload, profileBundle] = await Promise.all([
+      readMusicNotePublicationR2Payload(env, authContext.uid),
+      readExploreProfileCanonicalR2Bundle020(env, authContext.uid),
+    ]);
+    const states = publicationPayload?.states && typeof publicationPayload.states === 'object'
+      ? publicationPayload.states
+      : null;
+    const existingState = states ? states[source.sourceId] : null;
+    const r2Profile = profileBundle?.body?.data?.profile || null;
+    if (states && !existingState && r2Profile && String(r2Profile.uid || authContext.uid) === authContext.uid) {
+      previous = {
+        profile_uid: authContext.uid,
+        profile_nickname: String(r2Profile.nickname || authContext.displayName || ''),
+        profile_avatar_url: String(r2Profile.avatarUrl || r2Profile.avatar_url || authContext.picture || ''),
+        profile_is_public: 1,
+      };
+      publicationR2ProvedNew361 = true;
+    }
+  } catch (error) {
+    console.warn('[SORIDRAW 361] first-public R2 preflight unavailable; using canonical D1 fallback:', String(error?.message || error || 'unknown'));
+  }
+  if (!publicationR2ProvedNew361) {
+    previous = await publicationReadState016(env, authContext.uid, source.id);
+  }
   const resolvedOptions = {
     allowNextSongApply: publicationBool016(publicationOptions.allowNextSongApply, Number(previous?.allow_next_song_apply || 0) === 1),
     allowFollowerSave: publicationBool016(publicationOptions.allowFollowerSave, Number(previous?.allow_follower_save || 0) === 1),
@@ -26521,7 +26547,10 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           // app271: when the owner explicitly changes a public follower-save setting,
           // bypass the no-read warm UPDATE so the same single canonical write can also
           // refresh legacy structured lyrics from the owner's canonical Music Note.
-          if (mutation.refreshSourceContent || mutation.refreshSourceMedia) {
+          const inlineMediaFast361 = mutation.refreshSourceMedia && mutation.sourceMedia
+            ? mutation.sourceMedia
+            : null;
+          if (mutation.refreshSourceContent || (mutation.refreshSourceMedia && !inlineMediaFast361)) {
             unresolvedTrackIds.add(mutation.trackId);
             continue;
           }
@@ -26548,6 +26577,20 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
             values.push(nextValues[column]);
             guards.push(`${column}<>?`);
             guardValues.push(nextValues[column]);
+          }
+          if (inlineMediaFast361) {
+            const mediaColumns = [
+              ['cover_url', String(inlineMediaFast361.coverUrl || '')],
+              ['duration_seconds', inlineMediaFast361.durationSeconds == null ? null : Number(inlineMediaFast361.durationSeconds)],
+              ['suno_url_primary', String(inlineMediaFast361.sunoUrlPrimary || '')],
+              ['suno_url_secondary', inlineMediaFast361.sunoUrlSecondary ? String(inlineMediaFast361.sunoUrlSecondary) : null],
+            ];
+            for (const [column, value] of mediaColumns) {
+              sets.push(`${column}=?`);
+              values.push(value);
+              guards.push(`${column} IS NOT ?`);
+              guardValues.push(value);
+            }
           }
           if (!sets.length) {
             unresolvedTrackIds.add(mutation.trackId);
@@ -30188,3 +30231,5 @@ export {
 // SORIDRAW_PUBLICATION_MEDIA_SOURCE_COST_329_20261003
 
 // SORIDRAW_PUBLICATION_MEDIA_INLINE_SOURCE_333_20261004
+
+// SORIDRAW_PUBLICATION_D1_READ_COMPACTION_361_20261005

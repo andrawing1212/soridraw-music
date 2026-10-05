@@ -126,3 +126,8 @@ publication-364-rollback-audit
 target=53f192d98e885697ef6c0a7103b04a1ce7939e29
 focus=364-rollback,compat-trigger-guard,no-shared-d1-write,no-deploy
 requested=2026-10-06
+
+publication-365-canonical-like-read-dedupe
+target=749c45ff9fe90256f59280a9834dd757f2df8954
+focus=publication-like-read-dedupe,canonical-authority-preserved,no-like-write-change,no-shared-d1-write,no-deploy
+requested=2026-10-06

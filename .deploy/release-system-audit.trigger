@@ -136,3 +136,8 @@ publication-365-canonical-like-read-dedupe-rerun
 target=25e720c41612abcc2b0b1f9cc4f809c7efdec81f
 focus=publication-like-read-dedupe,follow-audit-normalization,no-like-write-change,no-shared-d1-write,no-deploy
 requested=2026-10-06
+
+publication-364-shared-d1-postcutover-audit
+target=27ebf7768b6b690bf1314ce261ea81080d249ebb
+focus=shared-d1-two-trigger-cutover,legacy-media-preserved,shared-revision-unchanged,workers-unchanged,no-user-row-mutation,no-deploy
+requested=2026-10-06

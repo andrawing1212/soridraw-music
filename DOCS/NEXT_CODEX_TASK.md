@@ -1,3 +1,27 @@
+## CURRENT NEXT GATE — Music Note/Library/Recent cross-env parity before PRODUCTION
+
+현재:
+- app356 TEST Run `37375259800` TEST_VERIFIED.
+- PREVIEW와 TEST의 Recent save-heart / Music Note / Library 관련 앱 코드는 exact same source.
+- 따라서 남은 차이는 앱 코드 승격 누락이 아니라 **환경별 private R2 Catalog 수렴 문제를 우선 의심**.
+- canonical Firebase/RTDB는 공유지만 Music Note/Library R2 buckets는 preview/test/production 별도.
+
+목표:
+- 동일 계정이면 PREVIEW/TEST/PRODUCTION 어느 앱에서도 Music Note/Library/Recent 저장 결과가 동일.
+- mutation은 실제 변경분만 O(1) 전달.
+- 앱 업데이트/재진입 때문에 Firestore 전체 reread/rebuild 금지.
+- 사용자 데이터 copy/backfill/delete/rewrite 금지.
+- app349 Recent save-heart/Music Note membership 동작, app301 folder behavior 보호.
+
+먼저 할 일:
+1. Recent save-heart canonical settlement + RTDB changed-item signal이 PREVIEW->TEST / TEST->PREVIEW에서 동일 item을 적용하는지 감사.
+2. Music Note/Library Catalog delta publish가 현재 host의 env-specific R2에만 남는지 실제 경로 확정.
+3. 환경별 Catalog가 drift할 수 있으면 shared catalog authority 또는 bounded cross-env changed-delta fanout 중 비용/안전 최선안 선택.
+4. 기존 stale 환경을 맞추기 위해 full Firestore scan/backfill을 추가하지 말 것.
+5. 수정 후 PC/모바일 + PREVIEW/TEST 2x2에서 save/unsave, Music Note, Library, folder, reload parity 확인.
+6. 모두 PASS 전 PRODUCTION 승격 금지.
+7. 이 gate 종료 후에만 W12->W2 작업 재개.
+
 ## CURRENT NEXT GATE — app356 profile count 확인 후 exact TEST parity 승격
 
 현재 확인:

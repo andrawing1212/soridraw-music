@@ -4,6 +4,7 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const workflow = read('.github/workflows/soridraw-release-promotion.yml');
 const workerRuntime = read('.deploy/release-worker-runtime.mjs');
 const mediaWorkerRuntime = read('.deploy/release-media-worker-runtime.mjs');
+const mediaWorkerPackage = JSON.parse(read('cloudflare/media-worker/package.json'));
 const updateNotice = read('src/services/appUpdateNotice.ts');
 const revisionEntry = read('cloudflare/explore-worker/canonical/preview-entry.js');
 const prodHosting = JSON.parse(read('firebase.hosting-production.json'));
@@ -83,11 +84,15 @@ for (const token of [
   "MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS",
   "MEDIA_WORKER_VERIFY=PASS",
   "MEDIA_WORKER_RESTORE=PASS",
+  "MEDIA_ACTIVE_VERSION_SETTLED=PASS",
+  "MEDIA_HEALTH_SETTLED=PASS",
+  "hashReleaseIdentity",
   "CATALOG",
   "SORIDRAW_SHARED_CATALOG_V1",
   "catalogAuthorityMode",
   "catalogBinding",
 ]) required(mediaWorkerRuntime, token, 'Media Worker runtime');
+if (mediaWorkerPackage?.devDependencies?.wrangler !== '4.147.0') throw new Error('Media Worker wrangler must be exactly pinned');
 forbidden(mediaWorkerRuntime, /firestore\.googleapis\.com|runQuery/i, 'Media release runtime user-data read');
 forbidden(mediaWorkerRuntime, /r2\s+object\s+(?:put|delete)/i, 'Media release runtime user-data mutation');
 required(workerRuntime, "if (!revisionSource.includes('SHARED'))", 'shared revision authority rejection');

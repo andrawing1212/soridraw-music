@@ -1,3 +1,33 @@
+## 0PX. 364 실기기 재측정 — source 개선 / 공개 회귀로 현재 게이트 FAIL (2026-10-06 KST)
+
+사용자 실기기 CACHE LIVE 순서:
+- 공개: D1 **행읽기 R6 / 행쓰기 W3**.
+- source 1->2: D1 **행읽기 R6 / 행쓰기 W3**.
+- 비공개: D1 **행읽기 R3 / 행쓰기 W2**.
+- Firestore hot path R0/W0, Worker 1회씩.
+
+판정:
+- source 1->2는 직전 **R10/W3 -> R6/W3**로 유의미하게 감소.
+- 비공개는 기존 **R3/W2 유지**.
+- 공개는 직전 **R4/W2 -> R6/W3**로 회귀했으므로 현재 릴리스 게이트는 **FAIL**.
+- TEST/PRODUCTION 승격 금지. 좋아요/저장하트/UI/thumbnail은 건드리지 않음.
+
+원인 분리용 격리 Cloudflare D1 재측정:
+- Run `37356891372` — ephemeral D1 only, cleanup PASS.
+- 364 candidate 순수 registered 공개: **R3/W2**.
+- 364 candidate 순수 registered 비공개: **R3/W2**.
+- 364 candidate 공개 + media field 변경: **R4/W3**.
+- 364 source/media 전환: **R4/W3**.
+- verifier PASS / shared-user D1 touched 0.
+- 기존 364 검증의 `REGISTERED_VISIBILITY_W2_GUARD`는 pre-364/current trigger를 검사하고 있어 candidate 자체 visibility 보장이 아니었던 coverage gap을 수정함.
+
+현재 결론:
+- 364 trigger 자체의 **순수 visibility 공개는 W2**로 재증명됨.
+- 사용자 공개 R6/W3의 쓰기 형태는 순수 공개가 아니라 **media-capable path가 함께 깨어난 경우와 같은 W3 signature**임.
+- 따라서 지금 즉시 364를 rollback하면 source read 개선만 잃고 공개 원인을 못 고칠 가능성이 높아 rollback은 실행하지 않음.
+- 다음은 실제 제품 공개 batch가 왜 media path를 깨우는지 `registered / selectionChanged / refreshSourceMedia / sourceMedia` 경계를 정확히 추적하고, 순수 공개가 media update를 절대 포함하지 않도록 원인 지점만 수정한다.
+- 추가 shared D1 trigger 변경/rollback은 사용자 승인 전 실행 금지.
+
 ## 0PW. 사용자 승인 364 shared D1 trigger cutover 완료 (2026-10-06 KST)
 
 사용자 승인 범위:

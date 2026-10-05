@@ -91,17 +91,17 @@ replaceOnce(
 replaceOnce(
 `          for (const column of ['is_public', 'allow_next_song_apply', 'allow_follower_save', 'profile_pinned']) {
             if (previousValues[column] === nextValues[column]) continue;
-            sets.push(\`${column}=?\`);
+            sets.push(\`\${column}=?\`);
             values.push(nextValues[column]);
-            guards.push(\`${column}<>?\`);
+            guards.push(\`\${column}<>?\`);
             guardValues.push(nextValues[column]);
           }
           if (!sets.length) {`,
 `          for (const column of ['is_public', 'allow_next_song_apply', 'allow_follower_save', 'profile_pinned']) {
             if (previousValues[column] === nextValues[column]) continue;
-            sets.push(\`${column}=?\`);
+            sets.push(\`\${column}=?\`);
             values.push(nextValues[column]);
-            guards.push(\`${column}<>?\`);
+            guards.push(\`\${column}<>?\`);
             guardValues.push(nextValues[column]);
           }
           if (inlineMediaFast361) {
@@ -112,9 +112,9 @@ replaceOnce(
               ['suno_url_secondary', inlineMediaFast361.sunoUrlSecondary ? String(inlineMediaFast361.sunoUrlSecondary) : null],
             ];
             for (const [column, value] of mediaColumns) {
-              sets.push(\`${column}=?\`);
+              sets.push(\`\${column}=?\`);
               values.push(value);
-              guards.push(\`${column} IS NOT ?\`);
+              guards.push(\`\${column} IS NOT ?\`);
               guardValues.push(value);
             }
           }

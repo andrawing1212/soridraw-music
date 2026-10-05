@@ -939,7 +939,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   // Missing local state is repaired only from the already-materialized R2 Catalog.
   // Never convert a missing/stale local cache into a Firestore collection rebuild.
   if (!previous) {
-    const refreshed = await readRemoteCatalogSnapshot(kind, uid, 0, null);
+    const refreshed = await readRemoteCatalogSnapshot(kind, uid, readKnownRemoteCatalogRevision(kind, uid), null);
     if (!refreshed) {
       console.warn(`[userDataEngine] ${kind} catalog publish deferred: server catalog not materialized.`);
       return;
@@ -976,11 +976,11 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   const published = await publishRemoteCatalogDelta(uid, built.delta);
   if (!published) throw new Error(`catalog ${kind} delta publish failed`);
   if (published.conflict) {
-    await readRemoteCatalogSnapshot(kind, uid, 0, previous);
+    await readRemoteCatalogSnapshot(kind, uid, readKnownRemoteCatalogRevision(kind, uid), previous);
     return;
   }
   if (published.itemCount !== built.nextSnapshot.itemCount) {
-    await readRemoteCatalogSnapshot(kind, uid, 0, previous);
+    await readRemoteCatalogSnapshot(kind, uid, readKnownRemoteCatalogRevision(kind, uid), previous);
     return;
   }
 

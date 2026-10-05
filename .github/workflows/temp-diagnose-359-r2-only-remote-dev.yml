@@ -1,0 +1,71 @@
+name: TEMP 359 Diagnose R2-only Remote Dev
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-diagnose-359-r2-only-remote-dev.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read-only remote-dev diagnosis
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG="$RUNNER_TEMP/359-remote-dev.log"
+          (
+            cd canonical
+            node ../node_modules/wrangler/bin/wrangler.js dev               --remote               --config wrangler.preview.jsonc               --ip 127.0.0.1               --port 8793               --log-level debug               --show-interactive-dev-session=false
+          ) >"$LOG" 2>&1 &
+          pid=$!
+          cleanup(){ kill "$pid" >/dev/null 2>&1 || true; wait "$pid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl -sS "http://127.0.0.1:8793/" -o /dev/null >/dev/null 2>&1; then ready=1; break; fi
+            if ! kill -0 "$pid" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            echo 'REMOTE_DEV_READY=FAIL'
+            tail -200 "$LOG" || true
+            exit 1
+          fi
+          echo 'REMOTE_DEV_READY=PASS'
+
+          for sort in latest popular; do
+            code="$(curl -sS -D "$RUNNER_TEMP/359-$sort.head" -o "$RUNNER_TEMP/359-$sort.json" -w '%{http_code}'               -H 'Origin: https://preview.soridraw.com'               "http://127.0.0.1:8793/v1/feed?sort=$sort&limit=3&__diag359=1")"
+            echo "359_FEED_SORT=$sort HTTP=$code"
+            sed -n '1,80p' "$RUNNER_TEMP/359-$sort.head"
+            node - "$RUNNER_TEMP/359-$sort.json" <<'NODE'
+          const fs=require('fs');
+          const p=process.argv[2];
+          const raw=fs.readFileSync(p,'utf8');
+          let payload=null; try{payload=JSON.parse(raw)}catch{}
+          console.log('359_BODY='+JSON.stringify(payload ?? raw.slice(0,1000)));
+          console.log('359_ITEM_COUNT='+(Array.isArray(payload?.data?.items)?payload.data.items.length:-1));
+          NODE
+          done
+
+          echo '--- REMOTE DEV LOG TAIL ---'
+          tail -250 "$LOG" || true

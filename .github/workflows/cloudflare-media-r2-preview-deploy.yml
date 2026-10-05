@@ -5,8 +5,9 @@ on:
   push:
     branches: [preview]
     paths:
-      - 'cloudflare/media-worker/**'
-      - '.github/workflows/cloudflare-media-r2-preview-deploy.yml'
+      - 'cloudflare/media-worker/src/**'
+      - 'cloudflare/media-worker/package.json'
+      - 'cloudflare/media-worker/package-lock.json'
 
 permissions:
   contents: read
@@ -129,7 +130,11 @@ jobs:
           grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
           grep -q '"automaticWavGeneration":false' "$RUNNER_TEMP/health.json"
           grep -q '"catalogBinding":true' "$RUNNER_TEMP/health.json"
-          grep -q '"catalogAuthorityMode":"legacy-media"' "$RUNNER_TEMP/health.json"
+          shared_flag="$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));process.stdout.write(String(c.vars.SORIDRAW_SHARED_CATALOG_V1||''))")"
+          test "$shared_flag" = '0' -o "$shared_flag" = '1'
+          expected_mode='legacy-media'
+          [ "$shared_flag" = '1' ] && expected_mode='shared-catalog'
+          grep -q "\"catalogAuthorityMode\":\"$expected_mode\"" "$RUNNER_TEMP/health.json"
           node scripts/verify-356-shared-private-catalog-authority.mjs
 
           code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' -X OPTIONS \
@@ -147,7 +152,8 @@ jobs:
           echo 'R2_BUCKET=soridraw-media-preview'
           echo 'CATALOG_R2_BUCKET=soridraw-user-catalog'
           echo 'R2_PUBLIC_BUCKET=false'
-          echo 'CATALOG_SHARED_CUTOVER=false'
+          shared_flag="$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));process.stdout.write(String(c.vars.SORIDRAW_SHARED_CATALOG_V1||''))")"
+          echo "CATALOG_SHARED_CUTOVER=$([ "$shared_flag" = '1' ] && echo true || echo false)"
           echo 'LAZY_ARCHIVE_MIN_AGE_DAYS=14'
           echo 'AUTOMATIC_WAV_GENERATION=false'
           echo 'NO_MUSIC_API_CALL=true'

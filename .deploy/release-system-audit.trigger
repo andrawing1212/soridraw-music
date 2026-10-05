@@ -131,3 +131,8 @@ publication-365-canonical-like-read-dedupe
 target=749c45ff9fe90256f59280a9834dd757f2df8954
 focus=publication-like-read-dedupe,canonical-authority-preserved,no-like-write-change,no-shared-d1-write,no-deploy
 requested=2026-10-06
+
+publication-365-canonical-like-read-dedupe-rerun
+target=25e720c41612abcc2b0b1f9cc4f809c7efdec81f
+focus=publication-like-read-dedupe,follow-audit-normalization,no-like-write-change,no-shared-d1-write,no-deploy
+requested=2026-10-06

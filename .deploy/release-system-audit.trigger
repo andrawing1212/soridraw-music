@@ -96,3 +96,8 @@ a-track-publication-cost-360
 target=a5d6e29ad58333236f9a14544064b3f4255e63e2
 focus=public-w2,source-swap-w3-to-w2,private-w2,worker1
 requested=2026-10-05T20:10KST
+
+a-track-isolated-publication-d1-360
+target=6db6da363637b5b32c08956cb1eb885a32b640cf
+focus=remote-isolated-W2-W3-W2-candidate-W2
+requested=2026-10-05T20:14KST

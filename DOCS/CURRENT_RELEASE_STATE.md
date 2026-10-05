@@ -1,3 +1,39 @@
+## 0PW. 사용자 승인 364 shared D1 trigger cutover 완료 (2026-10-06 KST)
+
+사용자 승인 범위:
+- source 1->2 D1 행읽기 절감용 364 shared-D1 trigger 2개 교체.
+- 다른 기능/좋아요/저장하트/UI/thumbnail/사용자 데이터는 변경 금지.
+
+적용 결과:
+- 첫 적용 Run `37352653590`: postflight exact-text 비교가 Cloudflare D1의 trigger SQL 정규화와 달라 **FAIL**, 즉시 자동 rollback 실행.
+  - `364_EXACT_ROLLBACK_VERIFIED=PASS`.
+  - 사용자 row 변경 0.
+- postflight를 exact text가 아닌 고정된 trigger semantic invariant + unrelated trigger exact comparison으로 보강.
+- 재적용 Run `37352860772`: **SUCCESS**.
+  - `364_LIVE_BASELINE_MATCH_ROLLBACK=PASS`.
+  - `364_TARGET_TRIGGER_SEMANTICS=PASS`.
+  - `364_ONLY_TWO_APPROVED_TRIGGERS_CHANGED=PASS`.
+  - `364_SHARED_REVISION_UNCHANGED=PASS`.
+  - `364_USER_ROWS_TOUCHED=0_BY_DDL_CONTRACT`.
+  - PREVIEW / TEST / PRODUCTION feed smoke PASS.
+  - Worker versions unchanged PASS:
+    - PREVIEW `0badfdf8-597d-4f69-9a05-b6fb32612f01`
+    - TEST `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`
+    - PRODUCTION `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`
+  - main / production refs unchanged PASS.
+- post-cutover Release System Audit Run `37352997906`: **SUCCESS**.
+- 완료된 TEMP 364 apply workflow는 삭제하여 비의도 재실행 경로 제거.
+- exact rollback SQL 및 guarded runner는 저장소에 유지.
+- migration/backfill/delete/user-row rewrite 0.
+- Firebase Hosting/Functions/Rules 추가 변경 0.
+- TEST/PRODUCTION Worker code 변경 0.
+
+현재 비용 목표:
+- 직전 실기기 source 1->2: **D1 행읽기 R10 / 행쓰기 W3**.
+- 364 격리 증명: trigger 부분 R9 -> R4, 따라서 현재 제품 source 전환 예상 **약 R5/W3**.
+- 공개 **R4/W2**, 비공개 **R3/W2** 경로는 이번 trigger가 media/source change에만 작동하도록 보호.
+- 다음은 같은 A곡 source 1->2 실기기 CACHE LIVE 재측정. 기능 차이 또는 비용 목표 미달이면 rollback 기준으로 원인 재분해.
+
 ## 0PV. app354 PREVIEW UI warning removal + 365 live measurement confirmed (2026-10-06 KST)
 
 사용자 실기기 CACHE LIVE 재측정:

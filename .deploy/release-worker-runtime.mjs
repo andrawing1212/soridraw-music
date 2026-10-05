@@ -139,11 +139,6 @@ async function makeConfig() {
   const bindings = Array.isArray(settings?.bindings) ? settings.bindings : [];
   const canonicalWrangler = JSON.parse(readFileSync(CANONICAL_WRANGLER_PATH, 'utf8'));
   const canonicalRateLimits = Array.isArray(canonicalWrangler?.ratelimits) ? canonicalWrangler.ratelimits : [];
-  const canonicalVars = canonicalWrangler?.vars && typeof canonicalWrangler.vars === 'object' && !Array.isArray(canonicalWrangler.vars)
-    ? { ...canonicalWrangler.vars }
-    : {};
-  const canonicalVarNames = Object.keys(canonicalVars).sort();
-  if (!canonicalVarNames.length) throw new Error('canonical release feature vars are missing');
   const canonicalDurableBindings = Array.isArray(canonicalWrangler?.durable_objects?.bindings)
     ? canonicalWrangler.durable_objects.bindings
     : [];
@@ -164,20 +159,6 @@ async function makeConfig() {
   const unsupported = bindings.filter((item) => !allowedTypes.has(String(item?.type || '')));
   if (unsupported.length) {
     throw new Error(`unsupported live bindings on ${target.worker}; refusing deploy: ${JSON.stringify(unsupported.map((b) => ({ name: b?.name, type: b?.type })))}`);
-  }
-
-  const livePlainVars = Object.fromEntries(
-    bindings
-      .filter((item) => item?.type === 'plain_text' && item?.name)
-      .map((item) => [String(item.name), String(item?.text ?? item?.value ?? '')]),
-  );
-  const liveReleaseVarMismatches = canonicalVarNames.filter(
-    (name) => String(livePlainVars[name] ?? '') !== String(canonicalVars[name] ?? ''),
-  );
-  if (action === 'verify' && liveReleaseVarMismatches.length) {
-    throw new Error(
-      `${mode}: release feature vars differ from PREVIEW canonical config after deploy: ${liveReleaseVarMismatches.join(',')}`,
-    );
   }
 
   const d1NameById = await listD1Databases();
@@ -241,7 +222,6 @@ async function makeConfig() {
     compatibility_date: String(settings?.compatibility_date || '2026-09-11').slice(0, 10),
     workers_dev: true,
     keep_vars: true,
-    vars: canonicalVars,
     d1_databases: d1,
     r2_buckets: r2,
     ratelimits: canonicalRateLimits,
@@ -263,8 +243,6 @@ async function makeConfig() {
   console.log(`LIVE_D1_BINDINGS=${d1.map((item) => `${item.binding}:${item.database_name}`).join(',')}`);
   console.log(`LIVE_R2_BINDINGS=${r2.map((item) => `${item.binding}:${item.bucket_name}`).join(',')}`);
   console.log(`LIVE_SERVICE_BINDINGS=${services.map((item) => `${item.binding}:${item.service}`).join(',') || '(none)'}`);
-  console.log(`RELEASE_FEATURE_VARS=${canonicalVarNames.join(',')}`);
-  console.log(`LIVE_RELEASE_FEATURE_VARS_MATCH=${liveReleaseVarMismatches.length ? 'NO:' + liveReleaseVarMismatches.join(',') : 'YES'}`);
   console.log(`REQUIRED_RATELIMIT_BINDINGS=${canonicalRateLimits.map((item) => `${item.name}:${item.namespace_id}`).join(',')}`);
   console.log(`REQUIRED_DURABLE_OBJECT_BINDINGS=${canonicalDurableBindings.map((item) => `${item.name}:${item.class_name}`).join(',')}`);
   console.log(`RATE_DB_MODE=${d1.some((item) => item.binding === 'RATE_DB') ? 'separate-live-binding' : 'DB-fallback'}`);

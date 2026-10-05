@@ -1,3 +1,46 @@
+## 0PU. 사용자 실기기 R5/R11/R3 분석 후 365 PREVIEW 배포 완료 (2026-10-06 KST)
+
+사용자 동일 A곡 실기기 CACHE LIVE 결과:
+- 공개: D1 **행읽기 R5 / 행쓰기 W2**, D1 쿼리 읽기 2 / 쓰기 1.
+- source 1->2: D1 **행읽기 R11 / 행쓰기 W3**, D1 쿼리 읽기 2 / 쓰기 1.
+- 비공개: D1 **행읽기 R3 / 행쓰기 W2**, D1 쿼리 읽기 0 / 쓰기 1.
+
+원인 확정:
+- 공개/source 전환에서 남은 D1 읽기 쿼리 2개는 publication 후 Feed R2와 Public Profile R2를 갱신할 때
+  같은 곡의 canonical like_count를 `readCanonicalPublicationLike071`로 각각 한 번씩 중복 확인하는 경로.
+- source 전환 R11은 current trigger chain UPDATE RETURNING 기준 격리 R9 + canonical like 확인 R1 + R1과 일치.
+- 비공개는 item 제거 경로라 canonical like 재확인이 없어 D1 query read 0.
+
+365 수정:
+- `readCanonicalPublicationLike071`의 정확한 D1 canonical authority는 그대로 유지.
+- 같은 Worker request / 같은 trackId 안에서 첫 canonical like read Promise만 request-local WeakMap으로 공유.
+- 두 번째 Feed/Profile 확인만 제거. 다른 request 간 cache 공유 없음.
+- 좋아요 쓰기 경로, like_count 의미, 하트, UI, 저장하트 변경 0.
+- patch: `095-publication-canonical-like-request-cache.mjs`.
+- verifier: `verify-365-publication-canonical-like-request-cache.mjs`.
+- 첫 Audit Run `37349153504` FAIL은 기존 follow strict-audit가 365의 의도된 publication helper 변경을 unrelated change로 판단한 검사식 문제였고, 제품 기능 실패 아님.
+- follow audit normalization 보강 후 Release System Audit Run `37349479060`: **SUCCESS**.
+- PREVIEW Worker Release Run `37349747533`: **SUCCESS**.
+- active PREVIEW Worker:
+  - before `368d64ac-6b66-4023-88ec-a3ed85068844`
+  - after `0badfdf8-597d-4f69-9a05-b6fb32612f01`
+- 배포 후 smoke:
+  - Feed PASS.
+  - Profile PASS.
+  - changed-card D1 R0/W0 PASS.
+  - warm revision R0/W0 PASS.
+  - TEST/PRODUCTION Workers unchanged PASS.
+- shared D1 schema/trigger, user data, Firebase Hosting, Functions, Rules 변경 0.
+- 364 shared-D1 candidate는 여전히 미적용.
+
+다음 실기기 목표:
+- 동일 순서 재측정:
+  1. 공개: 기존 R5/W2에서 **R4/W2 예상**.
+  2. source 1->2: 기존 R11/W3에서 **R10/W3 예상**.
+  3. 비공개: 기존 **R3/W2 유지 예상**.
+- 이후 source R10의 대부분은 shared D1 legacy trigger fanout이므로, 사용자 승인 시 364 shared-D1 trigger 적용으로 isolated 기준 추가 절감 후보 **R5/W3**.
+- TEST/PRODUCTION이 새 authority로 승격된 뒤 legacy mirror 제거 357 후보는 최종 **R4/W2 수준**을 목표로 재검증.
+
 ## 0PT. PREVIEW 361 사용자 실기기 CACHE LIVE 결과 — 공개 개선, source 전환 미해결 (2026-10-06 KST)
 
 사용자 동일 A곡 순서 실측:

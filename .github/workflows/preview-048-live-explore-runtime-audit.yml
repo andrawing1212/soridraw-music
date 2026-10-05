@@ -71,7 +71,7 @@ jobs:
               const db=bindings.find(b=>b.type==='d1'&&b.name==='DB');
               const media=bindings.find(b=>b.type==='r2_bucket'&&b.name==='PROFILE_MEDIA');
               const catalogFlags=Object.fromEntries(bindings
-                .filter(b=>b.type==='plain_text' && /^SORIDRAW_R2_(CATALOG|FIRST_PUBLISHER)/.test(String(b.name||'')))
+                .filter(b=>b.type==='plain_text' && /^(?:SORIDRAW_R2_(?:CATALOG|FIRST_PUBLISHER|HYBRID_READ)_V1|SORIDRAW_PUBLICATION_R2_ONLY_READ_V1)$/.test(String(b.name||'')))
                 .map(b=>[String(b.name),String(b.text||b.value||'')]));
               console.log(`${stage}_DB_ID=${String(db?.id||db?.database_id||db?.uuid||'')}`);
               console.log(`${stage}_PROFILE_MEDIA=${String(media?.bucket_name||media?.bucket||media?.name||'')}`);

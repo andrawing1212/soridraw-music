@@ -1,3 +1,55 @@
+## 0QE. app356 PREVIEW shared private Catalog dormant support 배포 + 최종 감사 PASS (2026-10-06 KST)
+
+이번 작업의 목적:
+- TEST 승격 후 드러난 Music Note / Library 환경별 R2 Catalog drift를 사용자 데이터 복사나 전체 backfill 없이 해결하기 위한 **공용 private Catalog authority**를 준비.
+- 실제 cutover는 아직 하지 않고, 먼저 세 환경이 같은 공용 Catalog를 읽을 수 있는 코드/배포 경로만 안전하게 준비.
+
+구현:
+- 공용 private R2 bucket `soridraw-user-catalog` 생성.
+- Media Worker에 `CATALOG` binding 추가:
+  - PREVIEW / TEST / PRODUCTION 설정이 모두 같은 `soridraw-user-catalog`를 가리킴.
+  - 기존 실제 media/archive용 `MEDIA` bucket은 환경별 분리를 그대로 유지.
+- `SORIDRAW_SHARED_CATALOG_V1` feature flag 추가.
+  - PREVIEW / TEST / PRODUCTION 설정 모두 현재 **0(OFF)**.
+  - 따라서 현재 일반 사용자 Catalog authority는 아직 기존 environment-local `MEDIA`이며, 공용 Catalog cutover는 발생하지 않음.
+- shared mode용 bounded recovery 구현:
+  - 정상 warm local cache는 기존처럼 먼저 반환되어 Worker/Firestore 추가 사용 없음.
+  - remote read가 실제 필요하고 shared Catalog가 known revision을 만족하지 못할 때만 Worker가 `409 CATALOG_REPAIR_REQUIRED`를 반환.
+  - 그 경우에만 클라이언트가 **해당 사용자 + 해당 kind(Music Note 또는 Library) 1개**에 대해 authenticated bootstrap을 1회 요청.
+  - bootstrap은 전체 사용자/전체 collection scan이 아니라 해당 user/kind canonical source만 복구 대상으로 제한.
+  - delta 적용 시 mutation `baseRevision` fence를 지켜 오래된 environment-local seed가 shared authority를 덮지 못하도록 보강.
+- Release Controller에 Media Worker 승격/검증 경로를 포함해 앱 + Explore Worker만 승격되고 private Catalog runtime이 누락되는 gap을 차단.
+
+검증:
+- PREVIEW Media Worker Run `37379556479`: **SUCCESS**.
+  - shared private Catalog bucket 존재/연결 PASS.
+  - Worker build / deploy / R2 write-read / health / PREVIEW CORS PASS.
+- 최종 Release System Audit Run `37379712972` at `d37f21390a5085cfcc4b4801208808861a2fdda8`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - release-system static verifier PASS.
+  - TEST / PRODUCTION Worker dry-run only PASS.
+  - shared D1 live preflight read-only PASS.
+  - branch refs unchanged PASS.
+- PREVIEW App Release Run `37381481452`: **SUCCESS**.
+  - deployed commit `f87f863b40a59b7e9ec6de883f326904afe81ab6`.
+  - app version **356**.
+  - TypeScript PASS / Build PASS.
+  - Firebase PREVIEW Hosting PASS.
+  - `preview.soridraw.com` exact build PASS.
+  - TEST / PRODUCTION Hosting 및 protected refs unchanged PASS.
+- 사용자 데이터 migration / copy / backfill / delete / rewrite: **0**.
+- shared Catalog cutover: **아직 OFF**.
+- Functions / Firestore Rules / shared D1 schema·trigger 변경: **0**.
+
+현재 판단:
+- cross-env parity 해결 방식은 **shared private Catalog authority**로 고정.
+- 구현/검증/프리뷰 배포는 완료했지만 feature flag가 OFF이므로 아직 실제 parity 문제를 해결했다고 판정하면 안 됨.
+- PREVIEW만 단독으로 shared flag를 켜면 TEST/PRODUCTION과 다시 다른 authority를 보게 되므로 금지.
+- 다음은 TEST 승격 승인 시 dormant Media Worker + client support를 main/TEST로 함께 승격하고, TEST에서도 동일 `CATALOG` binding + flag OFF를 확인하는 것.
+- PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+- 모든 활성 환경이 shared authority 코드를 이해하기 전 shared flag ON / W12->W2 shared-D1 cutover 금지.
+
 ## 0QD. app356 TEST 승격 완료 + Music Note/Library cross-env parity 신규 HARD GATE (2026-10-06 KST)
 
 TEST 승격:

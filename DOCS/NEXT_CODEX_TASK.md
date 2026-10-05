@@ -1,3 +1,30 @@
+## CURRENT NEXT GATE — PREVIEW live backend PASS, 사용자 실사용 검증 후 TEST 판단
+
+현재 완료:
+- PREVIEW Worker app358 R2-only read flag 실제 ON.
+- active PREVIEW Worker version `afbb5d00-a489-4c48-8b02-9ad6f1795bb0`.
+- deploy Run `37293663953` SUCCESS.
+- latest/popular/profile tracks/genre/search live D1 R0/W0 PASS.
+- public-like changed-card 및 warm revision D1 R0/W0 PASS.
+- TypeScript / Build / Phase-B integration / release audit PASS.
+- TEST/PRODUCTION Worker unchanged.
+- shared D1/user data migration 0.
+
+다음은 사용자 PREVIEW 실사용 최소 확인:
+1. PC와 모바일에서 Explore 최신/인기 진입 후 목록/썸네일/좋아요 표시가 기존과 동일한지.
+2. 공개프로필 진입 및 곡 목록이 누락/중복 없이 보이는지.
+3. 제목/장르/아티스트 검색 정상인지.
+4. 본인 곡 1개로 공개→비공개→같은 source 재공개가 정상인지.
+5. 가능하면 공개곡 source 1↔2 전환 후 카드 음원/썸네일이 바로 맞는지.
+6. 좋아요/저장하트 PC↔모바일 즉시동기화가 기존 정상 상태인지.
+7. CACHE LIVE에서 idle/re-entry 불필요 Worker/D1 증가가 없는지.
+
+실사용에서 이상이 없으면:
+- 그 다음에만 TEST 승격 판단.
+- TEST 승격 승인 전 main 변경 금지.
+- PRODUCTION 명확한 승인 전 production 변경 금지.
+- cross-env read compatibility가 PRODUCTION까지 검증되기 전 shared D1 W12→W2 migration 적용 금지.
+
 ## CURRENT NEXT GATE — 358 hard integration PASS, TEST 승격 전 cross-env blocker 유지
 
 확정 완료:

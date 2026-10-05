@@ -91,3 +91,8 @@ publication-r2-only-preview-smoke-retry-359
 target=7c4af5e4131490fe95c120c43cf2ac36bacef2da
 focus=propagation-ready-smoke,preview-only,no-shared-d1-write
 requested=2026-10-05T18:58KST
+
+a-track-publication-cost-360
+target=a5d6e29ad58333236f9a14544064b3f4255e63e2
+focus=public-w2,source-swap-w3-to-w2,private-w2,worker1
+requested=2026-10-05T20:10KST

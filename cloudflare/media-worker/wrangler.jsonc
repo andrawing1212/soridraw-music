@@ -11,7 +11,7 @@
     "ARCHIVE_MIN_AGE_DAYS": "14",
     "SIGNED_URL_TTL_SECONDS": "1800",
     "ALLOWED_ORIGINS": "https://preview.soridraw.com,https://soridraw-preview.web.app,https://soridraw-preview.firebaseapp.com",
-    "SORIDRAW_SHARED_CATALOG_V1": "0"
+    "SORIDRAW_SHARED_CATALOG_V1": "1"
   },
   "r2_buckets": [
     {
@@ -34,7 +34,7 @@
         "ARCHIVE_MIN_AGE_DAYS": "14",
         "SIGNED_URL_TTL_SECONDS": "1800",
         "ALLOWED_ORIGINS": "https://test.soridraw.com,https://soridraw-test.web.app,https://soridraw-test.firebaseapp.com",
-        "SORIDRAW_SHARED_CATALOG_V1": "0"
+        "SORIDRAW_SHARED_CATALOG_V1": "1"
       },
       "r2_buckets": [
         {
@@ -57,7 +57,7 @@
         "ARCHIVE_MIN_AGE_DAYS": "14",
         "SIGNED_URL_TTL_SECONDS": "1800",
         "ALLOWED_ORIGINS": "https://soridraw.com,https://www.soridraw.com,https://soridraw.web.app,https://soridraw.firebaseapp.com,https://soridraw-app-866a5.web.app,https://soridraw-app-866a5.firebaseapp.com",
-        "SORIDRAW_SHARED_CATALOG_V1": "0"
+        "SORIDRAW_SHARED_CATALOG_V1": "1"
       },
       "r2_buckets": [
         {

@@ -58,6 +58,7 @@
   },
   "vars": {
     "SORIDRAW_R2_CATALOG_V1": "1",
-    "SORIDRAW_R2_HYBRID_READ_V1": "1"
+    "SORIDRAW_R2_HYBRID_READ_V1": "1",
+    "SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1"
   }
 }

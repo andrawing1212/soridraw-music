@@ -112,6 +112,7 @@ jobs:
           node scripts/verify-358-publication-r2-only-cutover.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
           node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-365-publication-canonical-like-request-cache.mjs
           node scripts/verify-360-publication-a-track-cost-target.mjs
           node scripts/verify-347-follow-authority.mjs
           node scripts/verify-348-follow-overlay-contract.mjs
@@ -208,6 +209,7 @@ jobs:
           node scripts/verify-358-publication-r2-only-cutover.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
           node scripts/verify-364-publication-read-compaction-compat.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-365-publication-canonical-like-request-cache.mjs
           node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
           node scripts/verify-347-follow-authority.mjs
           node --check .deploy/release-worker-runtime.mjs

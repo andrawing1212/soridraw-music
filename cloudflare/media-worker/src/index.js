@@ -517,7 +517,7 @@ const MUSIC_NOTE_MEDIA_FIELDS = [
 ];
 
 const catalogRouteFromPath = (pathname) => {
-  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta))?$/);
+  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap))?$/);
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
@@ -738,8 +738,9 @@ const putCatalogObject = async (env, uid, payload) => (
   putCatalogObjectAtKey(env, catalogObjectKey(uid, payload.kind), uid, payload)
 );
 
-const readCatalogObjectAtKey = async (env, key, kind) => {
-  const object = await catalogBucket(env).get(key);
+const readCatalogObjectAtKeyFromBucket = async (bucket, key, kind) => {
+  if (!bucket?.get) return null;
+  const object = await bucket.get(key);
   if (!object) return null;
   try {
     const payload = JSON.parse(await object.text());
@@ -749,12 +750,17 @@ const readCatalogObjectAtKey = async (env, key, kind) => {
   }
 };
 
+const readCatalogObjectAtKey = async (env, key, kind) => (
+  readCatalogObjectAtKeyFromBucket(catalogBucket(env), key, kind)
+);
+
 const readCatalogObject = async (env, uid, kind) => (
   readCatalogObjectAtKey(env, catalogObjectKey(uid, kind), kind)
 );
 
-const readCatalogJournalObject = async (env, uid, kind) => {
-  const object = await catalogBucket(env).get(catalogJournalKey(uid, kind));
+const readCatalogJournalObjectFromBucket = async (bucket, uid, kind) => {
+  if (!bucket?.get) return null;
+  const object = await bucket.get(catalogJournalKey(uid, kind));
   if (!object) return null;
   try {
     const payload = JSON.parse(await object.text());
@@ -763,6 +769,10 @@ const readCatalogJournalObject = async (env, uid, kind) => {
     return null;
   }
 };
+
+const readCatalogJournalObject = async (env, uid, kind) => (
+  readCatalogJournalObjectFromBucket(catalogBucket(env), uid, kind)
+);
 
 const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null) => {
   const encoded = JSON.stringify(head);
@@ -784,33 +794,84 @@ const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null)
   return catalogBucket(env).put(catalogJournalKey(uid, kind), encoded, options);
 };
 
-const getCatalogState = async (identity, kind, requiredRevision, env) => {
-  const journalRecord = await readCatalogJournalObject(env, identity.uid, kind);
+const readCatalogStateFromBucket = async (bucket, uid, kind) => {
+  const journalRecord = await readCatalogJournalObjectFromBucket(bucket, uid, kind);
   if (journalRecord) {
-    const base = await readCatalogObjectAtKey(env, journalRecord.payload.baseKey, kind);
+    const base = await readCatalogObjectAtKeyFromBucket(bucket, journalRecord.payload.baseKey, kind);
     if (base && base.revision === journalRecord.payload.baseRevision && base.itemCount === journalRecord.payload.baseItemCount) {
       return { base, head: journalRecord.payload, journalObject: journalRecord.object };
     }
   }
 
-  const legacyBase = await readCatalogObject(env, identity.uid, kind);
+  const legacyBase = await readCatalogObjectAtKeyFromBucket(bucket, catalogObjectKey(uid, kind), kind);
   if (legacyBase) {
     return {
       base: legacyBase,
       head: createEmptyCatalogJournal({
         kind,
-        baseKey: catalogObjectKey(identity.uid, kind),
+        baseKey: catalogObjectKey(uid, kind),
         baseRevision: legacyBase.revision,
         itemCount: legacyBase.itemCount,
       }),
       journalObject: null,
     };
   }
+  return null;
+};
+
+const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevision, env) => {
+  if (!isSharedCatalogEnabled(env) || !env?.CATALOG || !env?.MEDIA) return null;
+  const existingShared = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (existingShared) return existingShared;
+
+  // One user/kind at a time: reuse the current environment's already-materialized
+  // private R2 Catalog only when its server revision proves it is not older than
+  // the shared Firebase invalidation token supplied by the client. No Firestore
+  // traversal and no cross-user list/copy is allowed here.
+  const legacyState = await readCatalogStateFromBucket(env.MEDIA, identity.uid, kind);
+  if (!legacyState) return null;
+  const legacyPayload = materializeCatalogState(legacyState, kind);
+  const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
+  if (required > 0 && legacyPayload.revision < required) return null;
+
+  const baseKey = catalogCompactedBaseKey(identity.uid, kind, legacyPayload.revision);
+  await putCatalogObjectAtKey(env, baseKey, identity.uid, legacyPayload);
+  const head = createEmptyCatalogJournal({
+    kind,
+    baseKey,
+    baseRevision: legacyPayload.revision,
+    itemCount: legacyPayload.itemCount,
+  });
+  const stored = await putCatalogJournalHead(env, identity.uid, kind, head, null);
+  if (!stored) return readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  return { base: legacyPayload, head, journalObject: stored };
+};
+
+const getCatalogState = async (identity, kind, requiredRevision, env) => {
+  const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
+  let state = await readCatalogStateFromBucket(catalogBucket(env), identity.uid, kind);
+
+  if (!state && isSharedCatalogEnabled(env)) {
+    state = await seedSharedCatalogFromCurrentLegacy(identity, kind, required, env);
+  }
+
+  if (state) {
+    if (required <= 0 || Number(state.head?.headRevision || 0) >= required) return state;
+    if (isSharedCatalogEnabled(env)) {
+      const error = new Error('CATALOG_REPAIR_REQUIRED');
+      error.requiredRevision = required;
+      error.currentRevision = Number(state.head?.headRevision || 0);
+      throw error;
+    }
+    return state;
+  }
 
   // Ordinary GET/delta traffic is never allowed to traverse Firestore collections.
-  // A missing R2 Catalog is an explicit repair/bootstrap condition, not a page-entry rebuild.
-  const error = new Error('CATALOG_NOT_MATERIALIZED');
-  error.requiredRevision = Math.max(0, Math.floor(Number(requiredRevision || 0)));
+  // A missing shared Catalog is repaired only by the explicit authenticated
+  // bootstrap endpoint, and only for the requesting user/kind.
+  const error = new Error(isSharedCatalogEnabled(env) ? 'CATALOG_REPAIR_REQUIRED' : 'CATALOG_NOT_MATERIALIZED');
+  error.requiredRevision = required;
+  error.currentRevision = 0;
   throw error;
 };
 
@@ -823,6 +884,50 @@ const materializeCatalogState = (state, kind) => {
   });
   if (!payload || !validateCatalogPayload(payload, kind)) throw new Error('CATALOG_JOURNAL_MATERIALIZE_INVALID');
   return payload;
+};
+
+const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevision, env) => {
+  if (!isSharedCatalogEnabled(env) || !env?.CATALOG) {
+    throw new Error('SHARED_CATALOG_BOOTSTRAP_DISABLED');
+  }
+  const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
+  const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (current && (required <= 0 || Number(current.head?.headRevision || 0) >= required)) {
+    return materializeCatalogState(current, kind);
+  }
+
+  // This is the only path allowed to scan canonical Firestore. It is explicit,
+  // authenticated, per-user/per-kind and reached only when a cold/missing/stale
+  // shared Catalog cannot satisfy the shared profile revision.
+  const canonical = await buildCanonicalCatalog(identity, kind, required, env);
+  const baseKey = catalogCompactedBaseKey(identity.uid, kind, canonical.revision);
+  await putCatalogObjectAtKey(env, baseKey, identity.uid, canonical);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const latest = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+    if (latest && Number(latest.head?.headRevision || 0) >= canonical.revision) {
+      return materializeCatalogState(latest, kind);
+    }
+
+    const currentJournal = await readCatalogJournalObjectFromBucket(env.CATALOG, identity.uid, kind);
+    if (currentJournal && Number(currentJournal.payload?.headRevision || 0) > canonical.revision) {
+      const newer = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+      if (newer) return materializeCatalogState(newer, kind);
+    }
+
+    const head = createEmptyCatalogJournal({
+      kind,
+      baseKey,
+      baseRevision: canonical.revision,
+      itemCount: canonical.itemCount,
+    });
+    const stored = await putCatalogJournalHead(env, identity.uid, kind, head, currentJournal?.object || null);
+    if (stored) return canonical;
+  }
+
+  const settled = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (settled) return materializeCatalogState(settled, kind);
+  throw new Error('CATALOG_BOOTSTRAP_CONFLICT');
 };
 
 const getOrBuildCatalog = async (identity, kind, requiredRevision, env) => {
@@ -930,6 +1035,22 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       return new Response(JSON.stringify(payload), { status: 200, headers });
     }
 
+    if (request.method === 'POST' && route.action === 'bootstrap') {
+      const body = await request.json().catch(() => ({}));
+      const requiredRevision = Math.max(
+        catalogRequiredRevision(request),
+        Math.max(0, Math.floor(Number(body?.requiredRevision || 0))),
+      );
+      const payload = await bootstrapSharedCatalogFromCanonical(identity, route.kind, requiredRevision, env);
+      return jsonResponse({
+        ok: true,
+        kind: route.kind,
+        revision: payload.revision,
+        itemCount: payload.itemCount,
+        bootstrap: 'canonical-user-kind',
+      }, 200, origin);
+    }
+
     if (request.method === 'POST' && route.action === 'delta') {
       const declaredLength = Number(request.headers.get('content-length') || 0);
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
@@ -949,8 +1070,17 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
 
     return jsonResponse({ ok: false, code: 'METHOD_NOT_ALLOWED' }, 405, origin);
   } catch (error) {
-    console.error('catalog request failed', { kind: route.kind, action: route.action, error: String(error?.message || error) });
-    return jsonResponse({ ok: false, code: text(error?.message) || 'CATALOG_FAILED' }, 503, origin);
+    const code = text(error?.message) || 'CATALOG_FAILED';
+    console.error('catalog request failed', { kind: route.kind, action: route.action, error: code });
+    if (isSharedCatalogEnabled(env) && code === 'CATALOG_REPAIR_REQUIRED') {
+      return jsonResponse({
+        ok: false,
+        code,
+        requiredRevision: Math.max(0, Math.floor(Number(error?.requiredRevision || 0))),
+        currentRevision: Math.max(0, Math.floor(Number(error?.currentRevision || 0))),
+      }, 409, origin);
+    }
+    return jsonResponse({ ok: false, code }, 503, origin);
   }
 };
 

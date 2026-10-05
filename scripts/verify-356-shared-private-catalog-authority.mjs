@@ -55,8 +55,9 @@ assert.match(bootstrapBlock, /buildCanonicalCatalog\(identity, kind, required, e
 assert.match(bootstrapBlock, /currentJournal\?\.object \|\| null/);
 assert.match(bootstrapBlock, /headRevision \|\| 0\) > canonical\.revision/);
 
+assert.match(worker, /const buildCanonicalCatalog = async \(/, 'canonical Catalog builder definition missing');
 const buildCalls = [...worker.matchAll(/buildCanonicalCatalog\(/g)].length;
-assert.equal(buildCalls, 2, 'canonical full Catalog build must be reachable only from its definition + explicit bootstrap');
+assert.equal(buildCalls, 1, 'canonical full Catalog build must have exactly one executable call site');
 
 const handleStart = worker.indexOf('const handleCatalog = async');
 const handleEnd = worker.indexOf('const handleMedia = async', handleStart);

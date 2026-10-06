@@ -1,3 +1,32 @@
+## CURRENT NEXT GATE — TEST 실사용 확인 후 SORIDRAW 추천 PRODUCTION 승격 승인 대기
+
+현재 완료:
+- TEST Release Controller Run `37394592522`: SUCCESS / TEST_VERIFIED.
+- source PREVIEW `86872e778695f199923f88b56481ee3ff7064a4a`.
+- main(TEST) `cca8c2c4fedf88da4c14ff85331ad6c00c128098`.
+- TEST manifest `soridraw-test-v356-86872e778695`.
+- TEST Explore Worker `85e9821a-c2d4-4dcc-a5c5-8f06ee6600ae`.
+- TEST Media Worker `979e09c0-fc05-47fe-9522-91a46a004ef6`.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- latest/popular/public-profile/environment parity, Worker/Media smoke/verify PASS.
+- TEST shared Catalog flag=1 / authority=shared-catalog PASS.
+- PRODUCTION 전체 비변경.
+
+다음:
+1. 사용자 실기기에서 `test.soridraw.com` Explore의 `SORIDRAW 추천` 섹션이 12곡으로 정상 표시되는지 확인.
+2. CACHE LIVE에서 `/v1/curated`가 HTTP 200인지 확인.
+3. 같은 세션 warm 재진입에서 curated D1 R0/W0인지 확인.
+4. 이상 없으면 사용자 명확한 정식배포 승인 후 **manifest `soridraw-test-v356-86872e778695`만** 사용해 PRODUCTION 승격.
+5. PRODUCTION 승격 시 TEST vs PRODUCTION curated parity 실패 또는 503이면 자동 중단/rollback.
+6. 정식앱 실사용 확인 후 curated 이슈 종료.
+7. 그 다음 큰 작업은 first-publication D1 W12 -> W1~W2 비용 절감 재개.
+
+금지:
+- 사용자 승인 없는 PRODUCTION 승격.
+- 추천 복구를 이유로 좋아요/공개/비공개/Music Note/Library/UI/thumbnail 변경.
+- curated 전체 tracks scan/rebuild.
+- 사용자 데이터 migration/backfill.
+
 ## CURRENT NEXT GATE — SORIDRAW 추천 fix의 TEST/PRODUCTION 승격
 
 현재 완료:

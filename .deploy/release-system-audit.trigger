@@ -1,9 +1,9 @@
-app360-my-likes-navigation-zero-audit
-target=8af0d4e182b4a087a3a6e94cf8b5020396a79bc1
-scope=my-likes-tab-worker-zero-after-cache,heart-hydration-no-timed-revision-read,resume-only-fallback-preserved
+app361-music-note-publication-origin-parity-gate
+target=b2ce5fe2ca5e7a4444bef76134c6d61ac4d3cfae
+scope=release-controller,preview-audit,preview-app-release,music-note-publication-origin-parity
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-app360-my-likes-navigation-zero-audit
+requested=2026-10-07-app361-publication-parity-permanent-gate

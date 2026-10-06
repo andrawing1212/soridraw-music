@@ -1,9 +1,9 @@
-app357-production-first-release-controller-audit-v2
-target=62d94e27782b36777ba6e7a4d95e3ef9a4252943
-scope=production-environment-contract,compiled-worker-code-identity,browser-upgrade-contract,test-verified-manifest-v4
+app358-profile-like-convergence-audit
+target=1521ad99a3d2b1a1bcd23f70e2b1977a5a9c860d
+scope=profile-publication-signal-bypass,my-likes-one-shot-repair,cross-environment-shared-profile-like-convergence
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-production-first-release-controller-audit-v2
+requested=2026-10-06-app358-profile-like-convergence-audit

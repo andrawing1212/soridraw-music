@@ -1,0 +1,185 @@
+name: Cloudflare Media Shared Catalog Coordinated Cutover
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/shared-catalog-cutover.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-media-shared-catalog-cutover
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+
+    steps:
+      - name: Checkout exact cutover source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install exact Media Worker tooling
+        working-directory: cloudflare/media-worker
+        run: npm install --no-audit --no-fund
+
+      - name: Static coordinated-cutover guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-356-shared-private-catalog-authority.mjs
+          node scripts/verify-356-shared-catalog-cutover.mjs
+          node - <<'NODE'
+          const fs = require('fs');
+          const cfg = JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc', 'utf8'));
+          const flags = [cfg.vars, cfg.env.test.vars, cfg.env.production.vars]
+            .map((vars) => String(vars.SORIDRAW_SHARED_CATALOG_V1 || ''));
+          if (flags.some((flag) => flag !== '1')) throw new Error('CUTOVER_SOURCE_FLAGS_MUST_ALL_BE_1');
+          const bindings = [cfg.r2_buckets, cfg.env.test.r2_buckets, cfg.env.production.r2_buckets];
+          for (const list of bindings) {
+            const catalog = list.find((item) => item.binding === 'CATALOG');
+            if (catalog?.bucket_name !== 'soridraw-user-catalog') throw new Error('SHARED_CATALOG_BINDING_MISMATCH');
+          }
+          console.log('CUTOVER_SOURCE_FLAGS=1,1,1');
+          console.log('CUTOVER_SHARED_CATALOG_BINDINGS=PASS');
+          NODE
+
+      - name: Confirm all live environments are still dormant
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Accept: application/json")
+          check_live() {
+            stage="$1"; worker="$2"; base="$3"; media_bucket="$4"
+            settings="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/settings")"
+            flag="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="plain_text" and .name=="SORIDRAW_SHARED_CATALOG_V1") | (.text // .value)')"
+            catalog="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="r2_bucket" and .name=="CATALOG") | (.bucket_name // .bucket)')"
+            media="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="r2_bucket" and .name=="MEDIA") | (.bucket_name // .bucket)')"
+            test "$flag" = '0'
+            test "$catalog" = 'soridraw-user-catalog'
+            test "$media" = "$media_bucket"
+            health="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_preflight=$GITHUB_RUN_ID")"
+            printf '%s' "$health" | jq -e '.ok==true and .catalogBinding==true and .catalogAuthorityMode=="legacy-media"' >/dev/null
+            echo "${stage^^}_CUTOVER_LIVE_DORMANT=PASS"
+          }
+          check_live preview soridraw-media-preview https://soridraw-media-preview.andrawing1212.workers.dev soridraw-media-preview
+          check_live test soridraw-media-test https://soridraw-media-test.andrawing1212.workers.dev soridraw-media-test
+          check_live production soridraw-media https://soridraw-media.andrawing1212.workers.dev soridraw-media
+          echo 'CUTOVER_PREMUTATION_LIVE_PARITY=PASS'
+
+      - name: Dry-run all three shared Catalog variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in preview test production; do
+            node .deploy/release-media-worker-runtime.mjs "$stage" dry-run | tee "$RUNNER_TEMP/$stage-dry"
+          done
+          preview_sha="$(sed -n 's/^PREVIEW_MEDIA_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/preview-dry" | tail -1)"
+          test_sha="$(sed -n 's/^TEST_MEDIA_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/test-dry" | tail -1)"
+          prod_sha="$(sed -n 's/^PRODUCTION_MEDIA_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/production-dry" | tail -1)"
+          test -n "$preview_sha" && test "$preview_sha" = "$test_sha" && test "$test_sha" = "$prod_sha"
+          echo "CUTOVER_COMMON_MEDIA_IDENTITY=$preview_sha"
+
+      - name: Upload all three versions without traffic change
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in preview test production; do
+            prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
+            node .deploy/release-media-worker-runtime.mjs "$stage" upload | tee "$RUNNER_TEMP/$stage-upload"
+            before="$(sed -n "s/^${prefix}_MEDIA_WORKER_BEFORE=//p" "$RUNNER_TEMP/$stage-upload" | tail -1)"
+            uploaded="$(sed -n "s/^${prefix}_MEDIA_WORKER_UPLOADED_VERSION=//p" "$RUNNER_TEMP/$stage-upload" | tail -1)"
+            test -n "$before" && test -n "$uploaded" && test "$before" != "$uploaded"
+            echo "${prefix}_BEFORE=$before" >> "$GITHUB_ENV"
+            echo "${prefix}_UPLOADED=$uploaded" >> "$GITHUB_ENV"
+          done
+          echo 'CUTOVER_UPLOADS_NO_TRAFFIC_CHANGE=PASS'
+
+      - name: Activate all three or roll all three back
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Accept: application/json")
+
+          restore_all() {
+            set +e
+            rollback_failed=0
+            for stage in production test preview; do
+              prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
+              before_var="${prefix}_BEFORE"
+              before="${!before_var:-}"
+              [ -n "$before" ] || { rollback_failed=1; continue; }
+              RELEASE_MEDIA_WORKER_VERSION="$before" node .deploy/release-media-worker-runtime.mjs "$stage" restore || rollback_failed=1
+            done
+
+            check_legacy() {
+              worker="$1"; base="$2"
+              settled=false
+              for attempt in $(seq 1 12); do
+                settings="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/settings" 2>/dev/null || true)"
+                flag="$(printf '%s' "$settings" | jq -r '.result.bindings[]? | select(.type=="plain_text" and .name=="SORIDRAW_SHARED_CATALOG_V1") | (.text // .value)' 2>/dev/null)"
+                mode="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_rollback=$attempt" 2>/dev/null | jq -r '.catalogAuthorityMode // empty' 2>/dev/null)"
+                if [ "$flag" = '0' ] && [ "$mode" = 'legacy-media' ]; then settled=true; break; fi
+                sleep 2
+              done
+              [ "$settled" = true ] || rollback_failed=1
+            }
+            check_legacy soridraw-media-preview https://soridraw-media-preview.andrawing1212.workers.dev
+            check_legacy soridraw-media-test https://soridraw-media-test.andrawing1212.workers.dev
+            check_legacy soridraw-media https://soridraw-media.andrawing1212.workers.dev
+            [ "$rollback_failed" -eq 0 ] && echo 'CUTOVER_GLOBAL_ROLLBACK=PASS' || echo 'CUTOVER_GLOBAL_ROLLBACK=FAILED'
+            return "$rollback_failed"
+          }
+
+          on_exit() {
+            status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then
+              restore_all || true
+            fi
+            exit "$status"
+          }
+          trap on_exit EXIT
+
+          for stage in preview test production; do
+            prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
+            uploaded_var="${prefix}_UPLOADED"
+            uploaded="${!uploaded_var}"
+            RELEASE_MEDIA_WORKER_VERSION="$uploaded" node .deploy/release-media-worker-runtime.mjs "$stage" activate
+          done
+
+          for stage in preview test production; do
+            node .deploy/release-media-worker-runtime.mjs "$stage" verify
+          done
+
+          trap - EXIT
+          echo 'SHARED_CATALOG_COORDINATED_CUTOVER=PASS'
+          echo 'SHARED_CATALOG_ACTIVE_ENVS=PREVIEW,TEST,PRODUCTION'
+          echo 'USER_DATA_BULK_OPERATION=false'
+
+      - name: Cutover result
+        run: |
+          echo 'TARGET=PREVIEW_TEST_PRODUCTION_MEDIA_WORKERS'
+          echo 'SHARED_CATALOG_BUCKET=soridraw-user-catalog'
+          echo 'SHARED_CATALOG_FLAG=1'
+          echo 'CATALOG_AUTHORITY_MODE=shared-catalog'
+          echo 'FIRESTORE_MIGRATION=false'
+          echo 'D1_MUTATION=false'
+          echo 'CATALOG_BULK_COPY=false'
+          echo 'APP_HOSTING_CHANGE=false'

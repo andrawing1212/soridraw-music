@@ -1,8 +1,9 @@
-app356-release-engine-hosting-clone-syntax-audit
-target=3202a72b0fa2c26397fb296652990f9119261ac8
-scope=firebase-hosting-version-clone,release-controller,rollback,production-preflight
-protect=warm-r0,studio-heart,music-note,library,folders,explore,shared-user-data
-shared-catalog-cutover=false
-mass-copy=false
-normal-entry-firestore-scan=false
-requested=2026-10-06-production-hosting-clone-fix-preflight
+app356-curated-production-r2-fallback-audit
+target=59160a2deccdf4694606f1b173d7943cc2b4588b
+scope=curated-production-profile-media-fallback,bounded-cold-recovery,release-curated-gate
+protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
+d1_schema_write=false
+d1_migration=false
+user_data_backfill=false
+production_deploy=false
+requested=2026-10-06-curated-production-fallback-audit

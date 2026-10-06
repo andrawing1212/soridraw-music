@@ -52,6 +52,7 @@ jobs:
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
           node scripts/verify-356-shared-private-catalog-authority.mjs
+          node scripts/verify-356-shared-catalog-cutover.mjs
           node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
           npx tsx scripts/verify-147-gemini-prompt-and-cues.ts
@@ -475,6 +476,16 @@ jobs:
           if (Number(r.explore032_triggers) < 10) throw new Error(`${process.env.MODE}: explore032 triggers missing`);
           if (Number(r.seeded) !== 1) throw new Error(`${process.env.MODE}: seeded!=1`);
           console.log(`${process.env.MODE.toUpperCase()}_LIVE_D1_READONLY=PASS tables=${r.required_tables} triggers=${r.explore032_triggers}`);
+          NODE
+            now_ms="$(date +%s%3N)"
+            node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT COUNT(*) AS curated_rows FROM curated_picks WHERE collection_key='soridraw' AND (starts_at IS NULL OR starts_at<=${now_ms}) AND (ends_at IS NULL OR ends_at>${now_ms})" --json > "$RUNNER_TEMP/$mode-curated-read.json"
+            MODE="$mode" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+process.env.MODE+'-curated-read.json','utf8'));
+          const rows=p.flatMap(x=>x.results||[]);
+          const r=rows.find(x=>'curated_rows' in x);
+          if (!r) throw new Error(process.env.MODE+': curated_picks bounded read missing');
+          console.log(process.env.MODE.toUpperCase()+'_CURATED_D1_BOUNDED_READ=PASS rows='+Number(r.curated_rows));
           NODE
           done
           echo 'D1_WRITE_MIGRATION_SEED=NONE'

@@ -1,3 +1,125 @@
+## CURRENT NEXT GATE — fixed-controller TEST manifest 재생성 후 승인된 PRODUCTION 승격
+
+현재:
+- PRODUCTION 첫 시도 Run `37395223571`은 deployment 전 controller identity drift로 안전 차단; PRODUCTION 비변경.
+- promoted-source identity fix Audit `37395497639` SUCCESS.
+- controller bootstrap TEST Run `37395703347` SUCCESS.
+- main은 수정된 controller를 포함한 `00b5ee7b4eaac7ef8a9ec1d7ee7a0328223c76b8`.
+- 추천 parity 12곡 PASS 유지.
+- 사용자는 SORIDRAW 추천 복구 검증본의 PRODUCTION 승격을 명확히 승인한 상태.
+
+다음:
+1. controller identity 파일을 더 변경하지 않은 문서-only 최신 PREVIEW SHA로 TEST를 한 번 재검증.
+2. 새 TEST_VERIFIED manifest의 controller identity가 현재 main controller와 exact-match 하는지 확인.
+3. curated 12곡 parity / warm D1 R0/W0 / shared Catalog=1 / Hosting exact build 모두 PASS 확인.
+4. 그 manifest만 사용해 승인된 PRODUCTION 승격 실행.
+5. TEST vs PRODUCTION curated parity 실패나 503이면 자동 중단/rollback.
+6. PRODUCTION 실제 `/v1/curated` 200, warm R0/W0 및 production ref/Worker/Hosting 확인 후 종료.
+
+금지:
+- 이번 재검증 사이에 controller identity 파일 추가 변경.
+- 사용자 데이터 migration/backfill.
+- 좋아요/공개/비공개/Music Note/Library/UI 변경.
+
+## CURRENT NEXT GATE — TEST 실사용 확인 후 SORIDRAW 추천 PRODUCTION 승격 승인 대기
+
+현재 완료:
+- TEST Release Controller Run `37394592522`: SUCCESS / TEST_VERIFIED.
+- source PREVIEW `86872e778695f199923f88b56481ee3ff7064a4a`.
+- main(TEST) `cca8c2c4fedf88da4c14ff85331ad6c00c128098`.
+- TEST manifest `soridraw-test-v356-86872e778695`.
+- TEST Explore Worker `85e9821a-c2d4-4dcc-a5c5-8f06ee6600ae`.
+- TEST Media Worker `979e09c0-fc05-47fe-9522-91a46a004ef6`.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- latest/popular/public-profile/environment parity, Worker/Media smoke/verify PASS.
+- TEST shared Catalog flag=1 / authority=shared-catalog PASS.
+- PRODUCTION 전체 비변경.
+
+다음:
+1. 사용자 실기기에서 `test.soridraw.com` Explore의 `SORIDRAW 추천` 섹션이 12곡으로 정상 표시되는지 확인.
+2. CACHE LIVE에서 `/v1/curated`가 HTTP 200인지 확인.
+3. 같은 세션 warm 재진입에서 curated D1 R0/W0인지 확인.
+4. 이상 없으면 사용자 명확한 정식배포 승인 후 **manifest `soridraw-test-v356-86872e778695`만** 사용해 PRODUCTION 승격.
+5. PRODUCTION 승격 시 TEST vs PRODUCTION curated parity 실패 또는 503이면 자동 중단/rollback.
+6. 정식앱 실사용 확인 후 curated 이슈 종료.
+7. 그 다음 큰 작업은 first-publication D1 W12 -> W1~W2 비용 절감 재개.
+
+금지:
+- 사용자 승인 없는 PRODUCTION 승격.
+- 추천 복구를 이유로 좋아요/공개/비공개/Music Note/Library/UI/thumbnail 변경.
+- curated 전체 tracks scan/rebuild.
+- 사용자 데이터 migration/backfill.
+
+## CURRENT NEXT GATE — SORIDRAW 추천 fix의 TEST/PRODUCTION 승격
+
+현재 완료:
+- 원인: 환경별 Explore curated R2가 비었을 때 wrapper-only `/v1/curated`를 base Worker에 재호출해 503이 되던 cold bootstrap 오류.
+- fix source `ff3c87ba797551beb9afbc8241ee5fca03f4680e`.
+- 배포엔진 강화 source `d0811e400c74fe8c81c6f3a0bc494321388da71c`.
+- Audit `37392970196` SUCCESS: TypeScript/Build/curation/release-controller/static+d1-readonly checks PASS.
+- PREVIEW Worker Run `37393213974` SUCCESS.
+- PREVIEW active Worker `193d7c1c-7471-44d0-bd1f-2315b0121eed`.
+- live `/v1/curated`: first 200 count=12, warm 200 count=12, warm D1 R0/W0, EDGE/R2 authority PASS.
+- TEST / PRODUCTION Explore Worker 비변경.
+- UI / likes / publication / Studio save-heart / Music Note / Library / folders / thumbnail 비변경.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite 0.
+
+다음:
+1. 사용자 `테스트배포` 승인 시 이 curated fix + 강화된 release gate만 포함한 검증본을 main/TEST로 승격.
+2. TEST 승격 자체에서 새 hard gate가 PREVIEW vs TEST `/v1/curated` HTTP 200, warm D1 R0/W0, 추천 projection equality를 확인.
+3. TEST 실기기에서 `SORIDRAW 추천` 섹션과 추천곡 목록 확인.
+4. 사용자의 명확한 정식배포 승인 후에만 같은 검증본을 PRODUCTION으로 승격.
+5. PRODUCTION 승격에서도 TEST vs PRODUCTION curated parity가 실패하면 자동 중단/rollback.
+6. 정식앱에서 `/v1/curated` 200 + SORIDRAW 추천 표시 + warm D1 R0/W0 확인 후 이 이슈 종료.
+
+금지:
+- 추천 복구를 이유로 좋아요/Feed/Public Profile/Music Note/Library/UI 구조 변경.
+- curated 복구에서 전체 tracks scan/rebuild.
+- 사용자 데이터 backfill/migration.
+- 승인 없는 TEST/PRODUCTION 승격.
+
+## CURRENT RUNTIME NOTE — shared Catalog cutover는 이미 ON
+
+- Run `37389139136` SUCCESS.
+- PREVIEW / TEST / PRODUCTION 모두 `SORIDRAW_SHARED_CATALOG_V1=1`, common `CATALOG=soridraw-user-catalog`, authority `shared-catalog`.
+- bulk copy / Firestore migration / D1 mutation 없이 coordinated cutover 완료.
+- 아래 과거 `flag=0 / dormant` 섹션은 이 cutover 이전 기록이므로 현재 기준으로 사용하지 않는다.
+
+## CURRENT NEXT GATE — coordinated shared Catalog cutover + real-account parity
+
+완료:
+- PREVIEW / TEST / PRODUCTION app356 dormant shared Catalog support 승격 완료.
+- 세 환경 Media Worker 모두 common private `CATALOG=soridraw-user-catalog` binding 보유.
+- 세 환경 `SORIDRAW_SHARED_CATALOG_V1=0` 확인.
+- TEST_VERIFIED manifest `soridraw-test-v356-77fdab283a90`.
+- PRODUCTION Release Controller Run `37387649369`: SUCCESS / RELEASED.
+- production SHA `74de6362c743974078c7d40566706053ce11dfc7`.
+- 사용자 데이터 copy/backfill/migration/delete/rewrite 0.
+- Firebase Hosting exact TEST->PRODUCTION clone 문법 오류 수정 및 Release System Audit PASS.
+
+다음:
+1. shared Catalog flag cutover 전 Media Worker shared-mode 경로와 rollback 조건을 다시 정적 감사.
+2. `SORIDRAW_SHARED_CATALOG_V1=1`을 PREVIEW / TEST / PRODUCTION에 **coordinated cutover**로 적용.
+3. 각 환경에서 active Media Worker health가 `shared-catalog`, `CATALOG=soridraw-user-catalog`, flag=1인지 확인.
+4. 한 환경이라도 실패하면 즉시 세 환경을 기존 flag=0 active version으로 rollback.
+5. cutover 직후 동일 계정으로 PREVIEW / TEST / PRODUCTION 실데이터 parity 검증:
+   - Recent save-heart
+   - Music Note membership/list
+   - Library list
+   - folders
+   - PC↔mobile/reload
+   - Explore/publication
+6. warm 정상 캐시 재진입 Worker/Firestore data read 0 목표 확인.
+7. missing/revision-gap일 때만 bounded user+kind bootstrap이 동작하고 앱 업데이트/일반 재진입에서는 bootstrap이 발생하지 않는지 확인.
+8. parity + 비용 PASS 후에만 first-publication W12->W2 shared-D1 cutover 작업 재개.
+
+금지:
+- PREVIEW/TEST만 flag ON한 채 방치.
+- 환경별 private Catalog 전체 복사 또는 공용 bucket 전체 backfill/full scan.
+- 사용자 데이터 삭제/강제 재생성.
+- app349 save-heart / app301 folders / public-like / UI / thumbnail 정상 기능 변경.
+- parity 완료 전 first-publication shared D1 W2 승격.
+
 ## CURRENT NEXT GATE — PRODUCTION dormant support approval before coordinated shared Catalog cutover
 
 완료:

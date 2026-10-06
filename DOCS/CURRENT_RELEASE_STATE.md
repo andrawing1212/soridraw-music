@@ -1,3 +1,176 @@
+## 0QK. SORIDRAW 추천 PRODUCTION 1차 시도 preflight 차단 + Release Controller identity bootstrap 완료 (2026-10-06 KST)
+
+PRODUCTION 1차 시도:
+- 사용자가 `soridraw-test-v356-86872e778695` 기준 정식앱 승격을 명확히 승인.
+- Release Controller Run `37395223571`: **FAIL / PROD_PREFLIGHT에서 차단**.
+- 실패 지점: `Release Controller identity drift`.
+- 원인: TEST manifest가 TEST 승격 전 default-branch controller(`GITHUB_WORKSPACE`) identity를 기록했고, 같은 TEST 승격이 main에 새 release-controller 파일을 올린 뒤 PRODUCTION run은 새 controller identity를 사용해 서로 달라짐.
+- `PROD_DEPLOY`는 실행되지 않았고 PRODUCTION branch / Explore Worker / Media Worker / Hosting은 변경되지 않음.
+
+Release Controller 수정:
+- `.github/workflows/soridraw-release-promotion.yml`: TEST manifest의 controller identity를 **실제로 승격되는 exact `RELEASE_ROOT` source**에서 계산하도록 변경.
+- `scripts/verify-release-controller.mjs`: manifest identity가 promoted source에서 계산되는지 정적 검사 + mutation test 추가.
+- 제품/UI/Explore 사용자 기능/데이터 경로 변경 0.
+- Release System Audit Run `37395497639`: **SUCCESS**.
+
+controller bootstrap TEST:
+- Run `37395703347`: **SUCCESS / TEST_VERIFIED**.
+- source PREVIEW `69991e94f731eb3ff0943a2864608301423d1645`.
+- main(TEST) `00b5ee7b4eaac7ef8a9ec1d7ee7a0328223c76b8`.
+- TEST Explore Worker `28257181-78df-4feb-8938-c74d0a448d38`.
+- TEST Media Worker `ab5d9faf-dc43-4e57-9454-8cc87f797692`.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- 이 bootstrap run 자체 manifest는 이전 default-branch workflow가 실행한 run이므로 PRODUCTION 근거로 사용하지 않음.
+- 다음 TEST는 이미 수정된 main controller가 실행하며, controller identity 파일은 그대로 두고 문서-only 새 PREVIEW SHA를 대상으로 새 TEST_VERIFIED manifest를 생성한다.
+
+안전:
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- D1 schema/trigger mutation 0.
+- PRODUCTION mutation 0.
+- 좋아요/공개/비공개/Music Note/Library/폴더/UI/thumbnail 변경 0.
+
+## 0QJ. SORIDRAW 추천 TEST 승격 완료 / curated release hard gate 실제 PASS (2026-10-06 KST)
+
+TEST 승격:
+- Release Controller Run `37394592522`: **SUCCESS / TEST_VERIFIED**.
+- exact source PREVIEW SHA: `86872e778695f199923f88b56481ee3ff7064a4a`.
+- main(TEST) SHA: `cca8c2c4fedf88da4c14ff85331ad6c00c128098`.
+- durable TEST manifest tag: `soridraw-test-v356-86872e778695`.
+- TEST app version: **356**.
+- TEST Explore Worker: `85e9821a-c2d4-4dcc-a5c5-8f06ee6600ae`.
+- TEST Media Worker: `979e09c0-fc05-47fe-9522-91a46a004ef6`.
+- Firebase TEST Hosting deploy PASS; `test.soridraw.com` / `soridraw-test.web.app` exact app-version/build verification PASS.
+- PRODUCTION branch / Explore Worker / Media Worker / Hosting unchanged.
+
+이번 승격에서 새 hard gate가 실제로 확인한 것:
+- `TEST_CURATED_PARITY=PASS count=12`.
+- PREVIEW와 TEST의 `SORIDRAW 추천` projection exact parity PASS.
+- TEST latest/popular shared Feed parity PASS.
+- TEST public profile parity PASS.
+- TEST release environment parity PASS on attempt 1.
+- TEST Media Worker `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`, health `shared-catalog` PASS.
+- Explore Worker / Media Worker smoke + verify PASS.
+- D1 schema migration / 사용자 데이터 backfill / bulk copy / delete / rewrite **0**.
+
+현재 판단:
+- PREVIEW와 TEST에서는 추천 backend와 배포 hard gate가 검증 완료.
+- TEST 실제 화면에서 `SORIDRAW 추천` 섹션 표시 여부는 사용자 실사용 최종 확인만 남음.
+- PRODUCTION은 아직 기존 Explore Worker이며 이번 TEST 승격에서 비변경. 정식앱의 기존 curated 503/추천 누락은 아직 복구 완료로 판정하지 않음.
+- 사용자의 명확한 정식배포 승인 후에만 `soridraw-test-v356-86872e778695` manifest를 사용해 PRODUCTION 승격.
+
+## 0QI. SORIDRAW 추천 cold-cache 복구 + 배포 엔진 hard gate PREVIEW 완료 (2026-10-06 KST)
+
+사용자 실기기에서 확인된 문제:
+- PRODUCTION Explore에서 기존 `SORIDRAW 추천` 섹션이 사라짐.
+- CACHE LIVE에 `/v1/curated HTTP 503` 확인.
+- 같은 시점 최신/인기 Feed 및 warm Explore D1 R0/W0은 정상이라 추천 경로만 별도 격리.
+
+원인:
+- `SORIDRAW 추천`은 사용자 원본이 아니라 환경별 `EXPLORE_CACHE` R2의 파생 curated snapshot을 사용.
+- R2 snapshot이 없는 환경에서 wrapper의 `materializeCuratedR2FromBase307()`가 wrapper 전용 `/v1/curated`를 base Worker에 다시 요청하고 있었음.
+- base Worker는 해당 wrapper route를 소유하지 않아 cold bootstrap이 실패하고 503을 반환.
+- 기존 Release Controller parity는 latest/popular Feed와 public profile은 비교했지만 `/v1/curated`를 확인하지 않아 PRODUCTION의 추천 누락을 놓침.
+
+수정 범위 — 다른 기능 비변경:
+- 제품 fix commit `ff3c87ba797551beb9afbc8241ee5fca03f4680e`.
+- release-engine 보강 commit `d0811e400c74fe8c81c6f3a0bc494321388da71c`.
+- `cloudflare/explore-worker/canonical/preview-entry.js`
+  - cold curated recovery를 shared canonical `curated_picks` 최대 40개 + 해당 exact track detail만 읽는 bounded 복구로 교체.
+  - 전체 tracks scan/rebuild 없음.
+  - D1 write 0, 사용자 데이터 write 0.
+  - 정상 R2/Edge warm 경로는 기존 그대로.
+- `.deploy/release-worker-runtime.mjs`
+  - TEST/PRODUCTION 승격 시 `/v1/curated` HTTP 200 + warm D1 R0/W0 + 이전 단계와 curated projection parity를 필수 확인.
+  - 실패 시 기존 release rollback 경로로 승격 중단.
+- `.github/workflows/cloudflare-explore-preview-release.yml`
+  - PREVIEW Worker 배포 자체도 curated first/warm live smoke를 필수화.
+  - warm 응답 D1 R0/W0 및 R2/Edge authority가 아니면 배포 실패/rollback.
+
+검증/배포:
+- Release System Audit Run `37392337700`: SUCCESS.
+- 강화된 최종 Audit Run `37392970196`: SUCCESS.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore curation verifier PASS.
+  - release promotion verifier PASS.
+  - Worker dry-run / shared D1 read-only preflight PASS.
+- PREVIEW Worker Release Run `37393213974`: SUCCESS.
+- active PREVIEW Explore Worker: `193d7c1c-7471-44d0-bd1f-2315b0121eed`.
+- live curated smoke:
+  - first response HTTP 200 / 추천 12곡 PASS.
+  - immediate warm response HTTP 200 / 추천 12곡 PASS.
+  - warm D1 R0/W0 PASS.
+  - source `EDGE-CURATED-BODY-307` PASS.
+- 기존 latest/popular/profile/genre/search/like smokes도 PASS.
+- TEST / PRODUCTION Explore Workers unchanged PASS.
+- Firebase Hosting 변경 0.
+- Functions / Firestore Rules / D1 schema·trigger 변경 0.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite 0.
+
+현재 상태:
+- PREVIEW에서는 `SORIDRAW 추천` backend가 정상 복구되고 실제 live endpoint까지 확인 완료.
+- PRODUCTION은 사용자가 보고한 기존 Explore Worker 상태를 아직 유지하므로 **정식앱 복구 완료라고 판정하지 않음**.
+- TEST/PRODUCTION 승격은 기존 승인 규칙을 유지. 사용자 명시 TEST 승격 전 main 변경 금지, 명확한 PRODUCTION 배포 승인 전 production 변경 금지.
+- UI, 좋아요, 공개/비공개, Music Note, Library, 저장하트, 폴더, thumbnail 코드는 이번 수정에서 변경하지 않음.
+
+## 0QH. shared private Catalog coordinated cutover 실제 완료 (2026-10-06 KST)
+
+- coordinated cutover Run `37389139136`: SUCCESS.
+- PREVIEW / TEST / PRODUCTION Media Worker 모두 `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`.
+- health authority mode: `shared-catalog` PASS.
+- active cutover versions:
+  - PREVIEW Media `5e258a0c-2e17-4fcb-bacc-11b2a5a608f2`.
+  - TEST Media `6a890d63-d924-4199-a0ef-bd884430ff8f`.
+  - PRODUCTION Media `f2fa815e-d38d-4e17-b2f5-4495efe00672`.
+- Firestore migration 0 / D1 mutation 0 / Catalog bulk copy 0 / Hosting 변경 0.
+- 따라서 아래 0QG의 `flag=0 dormant` 설명은 당시 시점 기록이며, **현재 실제 runtime은 세 환경 모두 shared Catalog ON**이 최신 기준.
+- 사용자 실기기에서 이번 cutover 이후 Music Note 곡 목록이 거의 동일하게 맞춰졌다고 확인됨. 전체 parity/비용 검증은 계속 별도 확인 대상.
+
+## 0QG. app356 PRODUCTION dormant shared Catalog support 승격 완료 + Hosting clone fix (2026-10-06 KST)
+
+PRODUCTION 승격 최종 결과:
+- Release Controller Run `37387649369`: **SUCCESS / RELEASED**.
+- TEST_VERIFIED manifest: `soridraw-test-v356-77fdab283a90`.
+- exact source PREVIEW SHA: `77fdab283a906b50a7ce8233ff73a34e80b4ef42`.
+- main(TEST) SHA: `3a7fce2442ea15caf228e06a1a5c0299ee1b3dac`.
+- production SHA: `74de6362c743974078c7d40566706053ce11dfc7`.
+- PRODUCTION app version: **356**.
+- PRODUCTION Explore Worker: `39e28223-6200-463f-8e86-1a0a3b3475d8`.
+- PRODUCTION Media Worker: `c2fc9ac1-c79a-4b62-9a2a-1c6d09459e24`.
+- Firebase PRODUCTION Hosting은 검증된 TEST Hosting 버전에서 clone되어 PASS.
+- PRODUCTION Explore parity with TEST PASS.
+- PRODUCTION Media health/smoke/verify PASS.
+- PRODUCTION Media runtime:
+  - `MEDIA=soridraw-media`
+  - `CATALOG=soridraw-user-catalog`
+  - `SORIDRAW_SHARED_CATALOG_V1=0`
+- 따라서 PREVIEW / TEST / PRODUCTION 모두 **shared Catalog 코드를 이해하고 같은 private CATALOG binding을 가진 dormant 상태**가 됨.
+
+이번 승격 중 발견/수정한 Release Controller 오류:
+- 첫 PRODUCTION 시도 Run `37386436978`은 Firebase Hosting clone에서 실패.
+- 원인: 현재 firebase-tools의 version source 문법은 `<site>@<version>`인데 controller가 `<site>:@<version>`을 사용하여 version을 channel로 해석함.
+- 실패 시 Explore/Media Worker는 자동 rollback되어 기존 PRODUCTION 버전으로 복구됐고 production branch/Hosting은 승격되지 않음.
+- PREVIEW fix commit `3202a72b0fa2c26397fb296652990f9119261ac8`: clone 문법 수정 + verifier 강화 + 이전 one-shot dispatcher 정리.
+- Release System Audit Run `37387027945` at `77fdab283a906b50a7ce8233ff73a34e80b4ef42`: **SUCCESS**.
+- 수정된 controller identity로 TEST를 다시 고정한 Run `37387289891`: **SUCCESS / TEST_VERIFIED**.
+- one-shot TEST dispatcher는 최종적으로 PREVIEW에서 제거 완료; 현재 PREVIEW HEAD는 그 뒤 정리 commit 계열.
+
+데이터/비용 안전:
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- Firestore Rules / Functions / shared D1 schema·trigger 변경 **0**.
+- shared private Catalog flag는 세 환경 모두 아직 **0(OFF)**.
+- 따라서 이번 PRODUCTION 승격은 shared authority 실제 cutover가 아니라 **dormant support 통일**까지만 수행.
+- 정상 warm cache 0-read 목표와 app349 save-heart / app301 folder / public-like 보호선은 변경 없음.
+
+현재 HARD GATE / 다음 작업:
+- 세 환경 dormant runtime parity는 완료.
+- 다음은 `SORIDRAW_SHARED_CATALOG_V1`을 **PREVIEW/TEST/PRODUCTION에 coordinated 방식으로 함께 ON** 하는 별도 cutover.
+- 환경 하나만 먼저 장시간 ON 상태로 두는 방식 금지.
+- cutover 중 사용자 Catalog 전체 복사/full scan/backfill 금지.
+- cutover 후 동일 계정으로 Recent save-heart / Music Note / Library / folders / PC↔mobile/reload / Explore-publication 결과를 세 환경에서 비교.
+- 실제 revision gap/missing shared Catalog일 때만 bounded user+kind bootstrap 허용.
+- parity와 warm-cache 비용 검증이 모두 PASS한 뒤에만 first-publication W12->W2 shared-D1 작업 재개.
+
 ## 0QF. app356 TEST dormant shared Catalog support 승격 완료 + Release Controller 재강화 (2026-10-06 KST)
 
 TEST 승격 최종 결과:

@@ -9,6 +9,7 @@ const explore = read('src/pages/ExplorePage.tsx');
 const master = read('src/pages/MasterPermissionsPage.tsx');
 const service = read('src/services/exploreCurationService.ts');
 const worker = read('cloudflare/explore-worker/canonical/preview-entry.js');
+const previewRelease = read('.github/workflows/cloudflare-explore-preview-release.yml');
 
 assert(explore.includes("'추천곡 승격'") || explore.includes('추천곡 승격'), 'Explore More must expose the promotion action.');
 assert(explore.includes('승격 곡 관리'), 'Explore must expose the promoted-track manager entry.');
@@ -39,6 +40,18 @@ assert(!service.includes("from 'firebase/firestore'"), 'Curated public reads mus
 
 assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Worker curation marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker R2 local-first marker is missing.');
+assert(worker.includes('SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006'), 'Cold curated cache must use bounded canonical bootstrap.');
+assert(worker.includes('SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006'), 'Curated cache must document the PRODUCTION R2 fallback.');
+assert(worker.includes('const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;'), 'Curated cache must follow the release runtime EXPLORE_CACHE -> PROFILE_MEDIA fallback contract.');
+const bootstrapAt356 = worker.indexOf('async function materializeCuratedR2FromBase307');
+const bootstrapEnd356 = worker.indexOf('async function readCuratedObject307', bootstrapAt356);
+const bootstrapSlice356 = worker.slice(bootstrapAt356, bootstrapEnd356);
+assert(bootstrapSlice356.includes('FROM curated_picks'), 'Curated cold recovery must read only explicit curated membership.');
+assert(bootstrapSlice356.includes('LIMIT 40'), 'Curated cold recovery must stay bounded to 40 memberships.');
+assert(bootstrapSlice356.includes('ORDER BY sort_order ASC, updated_at DESC, track_id ASC'), 'Curated bootstrap ordering must be deterministic.');
+assert(bootstrapSlice356.includes('/v1/tracks/'), 'Curated bootstrap must resolve only exact selected track details.');
+assert(!bootstrapSlice356.includes("new URL('/v1/curated'"), 'Curated bootstrap must not recurse into the wrapper-only curated route.');
+assert(!bootstrapSlice356.includes('FROM tracks'), 'Curated bootstrap must not scan the tracks table.');
 assert(worker.includes('curatedStableBodyEdgeKey307'), 'Shared edge body cache is missing.');
 assert(worker.includes('EDGE-CURATED-BODY-307'), 'Edge curated response path is missing.');
 assert(worker.includes('SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003'), 'Targeted publication/privacy sync is missing.');
@@ -54,6 +67,11 @@ assert(worker.includes('syncCuratedPublicationResults307(request, env, results30
 assert(worker.includes('DELETE FROM curated_picks WHERE collection_key=? AND track_id=?'), 'Explicit recommendation removal must stay single-row targeted.');
 assert(worker.includes('INSERT INTO curated_picks(collection_key,track_id'), 'Explicit recommendation promotion must stay single-row targeted.');
 assert(!worker.includes("if (isTrackVisibilityMutation307 && response.ok) {\n      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307)"), 'Visibility changes must not invalidate the whole curated snapshot.');
+
+assert(previewRelease.includes('SORIDRAW_PREVIEW_CURATED_RELEASE_SMOKE_356_20261006'), 'PREVIEW Worker release must smoke the curated recommendation route.');
+assert(previewRelease.includes('/v1/curated?collection=soridraw&limit=20'), 'PREVIEW Worker release must probe the public curated endpoint.');
+assert(previewRelease.includes('CURATED_RECOMMENDATION_WARM_R0_W0=PASS'), 'PREVIEW Worker release must require warm curated D1 R0/W0.');
+assert(previewRelease.includes("x-soridraw-curated-source"), 'PREVIEW Worker release must verify curated R2/Edge authority.');
 
 console.log('APP307_EXPLORE_CURATION_VERIFY=PASS');
 console.log('CURATED_PUBLIC_READ=LOCAL_FIRST_PLUS_EDGE_R2');

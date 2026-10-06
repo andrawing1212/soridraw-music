@@ -54,7 +54,8 @@ function validate(source = workflow) {
 
   const testVerify = step(source, 'TEST_VERIFY and freeze durable manifest');
   const prodPreflight = step(source, 'PROD_PREFLIGHT revalidate TEST manifest and live release');
-  assert.match(testVerify, /identity "\$GITHUB_WORKSPACE"/);
+  assert.match(testVerify, /node "\$RELEASE_ROOT\/scripts\/release-controller-policy\.mjs" identity "\$RELEASE_ROOT"/);
+  assert.doesNotMatch(testVerify, /release-controller-policy\.mjs" identity "\$GITHUB_WORKSPACE"/);
   assert.match(testVerify, /gh release create/);
   assert.match(testVerify, /refs\/heads\/main/);
   before(testVerify, 'release-media-worker-runtime.mjs test verify', 'refs/heads/main');
@@ -101,6 +102,7 @@ assert.equal(Object.values(controllerIdentity(process.cwd())).every(value => /^[
 for (const [index, mutate] of [
   s => s.replace('ref: ${{ github.workflow_sha }}', 'ref: preview'),
   s => s.replace('parsed="$(node scripts/release-controller-policy.mjs parse-command)"', 'read -r command argument value approval extra <<< "$COMMENT_BODY"'),
+  s => s.replace('node "$RELEASE_ROOT/scripts/release-controller-policy.mjs" identity "$RELEASE_ROOT"', 'node "$GITHUB_WORKSPACE/scripts/release-controller-policy.mjs" identity "$GITHUB_WORKSPACE"'),
   s => s.replace('"$GITHUB_WORKSPACE" <<\'NODE\'', '"$RELEASE_ROOT" <<\'NODE\''),
   s => s.replaceAll('firebasehosting.sites.update', 'firebasehosting.sites.get'),
   s => s.replace('test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"', ':'),

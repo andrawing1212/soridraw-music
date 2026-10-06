@@ -1,3 +1,59 @@
+## 0QR. app358 PREVIEW 배포 완료 / 공개프로필 지연·My Likes 반복 Worker 회귀 수정 검증 단계 (2026-10-06 KST)
+
+사용자 실사용에서 app357 TEST_VERIFIED 이후 추가 회귀가 발견되어 **기존 app357 TEST manifest는 PRODUCTION 승격 근거로 폐기**:
+- PREVIEW와 TEST의 own-profile 좋아요 곡 목록이 서로 달랐음.
+- 좋아요 곡 탭을 반복 클릭할 때 새로고침 없이도 Worker 요청이 반복 상승하는 현상 관찰.
+- 공개/비공개 전환 뒤 공개프로필 공개곡 목록이 약 20분 동안 이전 상태로 남고 이후에야 수렴.
+- 따라서 `soridraw-test-v357-32c85eded45c`는 더 이상 PRODUCTION 승격에 사용 금지.
+
+app358 PREVIEW 수정:
+1. **공개프로필 변경 신호 즉시 수렴**
+   - 실제 publication RTDB 신호가 있을 때만 origin-local positive Edge shell을 우회.
+   - shared `PROFILE_MEDIA`의 public-profile R2 authority를 직접 확인.
+   - change-driven 경로는 D1 R0/W0 유지.
+   - 일반 재진입/페이지 이동은 기존 local-first 캐시 유지.
+2. **My Likes 반복 Worker 차단**
+   - retained like signal 하나당 cross-origin repair 시도는 최대 1회.
+   - 같은 signal에서 탭 재클릭/페이지 재진입은 repair Worker를 반복 호출하지 않음.
+   - 오래된 partial shared-like R2가 canonical D1과 달라진 계정은 그 1회 bounded account repair에서 shared derived R2 catalog를 exact 상태로 복구.
+   - D1은 read-only canonical comparison만 허용하며 relation/user source data 변경 없음.
+3. UI/좋아요 토글/공개·비공개/Music Note/Library/폴더 정상 기능은 변경하지 않음.
+
+검증/배포:
+- Release System Audit Run `37413168427`: **SUCCESS**.
+- TypeScript PASS / Vite Build PASS.
+- app358 executable regression:
+  - `APP358_PROFILE_SIGNAL_SHARED_R2_BYPASS=PASS`
+  - `APP358_MY_LIKES_ONE_REPAIR_PER_SIGNAL=PASS`
+  - `APP358_PERSONAL_LIKE_REPAIR_D1_READONLY=PASS`
+- PREVIEW Explore Worker Run `37413466047`: **SUCCESS**.
+  - before `39602152-bbf9-400c-9076-18c6c1d2b0b8`
+  - active after `117d5f65-e34d-4c58-8030-498193deb1b4`
+  - live `APP358_PROFILE_SIGNAL_SHARED_R2_LIVE=PASS`
+  - profile signal path D1 R0/W0 PASS.
+  - TEST Worker `ef64f24d-8e65-4921-a96d-b52e1d8db62d` unchanged.
+  - PRODUCTION Worker `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa` unchanged.
+- Firebase PREVIEW Hosting Run `37413571015`: **SUCCESS**.
+  - locked source `8bd79632c7c232216da62271634429dedf4c3aee`.
+  - `PREVIEW_APP_VERSION=358`.
+  - `PREVIEW_EXACT_BUILD=PASS`.
+  - `TEST_PRODUCTION_UNCHANGED=PASS`.
+  - shared RTDB rules deploy SKIPPED (변경 없음).
+- main(TEST) ref remains `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- production ref remains `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- user data migration/backfill/copy/delete/rewrite 0.
+- D1 schema migration/write 0.
+- Functions 변경 0.
+
+현재 합격 대기:
+1. 사용자 PREVIEW 실기기에서 own-profile → 좋아요 곡을 연속 여러 번 전환해 **첫 stale repair 이후 반복 Worker 증가가 없는지** 확인.
+2. PREVIEW에서 공개↔비공개 변경 후 프로필 공개곡 목록이 **20분 대기 없이 바로 수렴**하는지 확인.
+3. PREVIEW 좋아요 곡 목록이 실제 좋아요 membership과 일치하는지 확인.
+4. 위 3개 PASS 전 TEST 승격 금지.
+5. PASS 후 app358 전체 PREVIEW를 TEST로 새 승격하여 새 TEST_VERIFIED manifest 생성.
+6. 기존 app357 manifest/태그로 PRODUCTION 승격 금지.
+7. 사용자 명확한 정식배포 승인 전 PRODUCTION 변경 금지.
+
 ## 0QQ. schema4 TEST_VERIFIED 최종 재검증 완료 / TEST 실사용 확인 단계 (2026-10-06 KST)
 
 사용자 승인된 TEST 승격 흐름의 2차 검증 완료:

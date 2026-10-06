@@ -1,3 +1,43 @@
+## 0QQ. schema4 TEST_VERIFIED 최종 재검증 완료 / TEST 실사용 확인 단계 (2026-10-06 KST)
+
+사용자 승인된 TEST 승격 흐름의 2차 검증 완료:
+- Release Controller Run `37407657202`: **SUCCESS / TEST_VERIFIED**.
+- 고정 source PREVIEW SHA: `32c85eded45c49e0e735c685a05b2efe8702c8ce`.
+- TEST main promoted SHA: `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- app version: **357**.
+- immutable release tag: `soridraw-test-v357-32c85eded45c`.
+- manifest: **schema 4 / TEST_VERIFIED**.
+- TEST Explore Worker active version: `ef64f24d-8e65-4921-a96d-b52e1d8db62d`.
+- TEST Media Worker active version: `3c167990-7194-4301-81da-791a21989156`.
+- Firebase TEST Hosting deploy + exact index/app-version verify PASS.
+- latest/popular shared Feed parity PASS.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- shared Catalog flag=1 / Media health+bindings+smoke PASS.
+- TEST↔PRODUCTION 허용 환경 차이 계약 PASS.
+- Explore compiled code SHA TEST=PRODUCTION `13d809a3eca35366e25d85fefda3ebc0faa6a88968157a8afbf81a0e8178cf03`.
+- Media compiled code SHA TEST=PRODUCTION `f0507a8464a1147e2bc914b6cd681ee1f1531ecfc3afb40ab7a73b8e55990bc9`.
+- production environment contract SHA `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7`.
+- app366 cross-environment profile/My Likes parity verifier PASS.
+- app367 old-production-cache upgrade verifier PASS.
+- TypeScript PASS / Vite Build PASS / release static+mutation guard PASS.
+- D1 preflight SELECT-only PASS. migration/backfill/seed/delete/rewrite 없음.
+- PRODUCTION branch/Hosting/Explore Worker/Media Worker **비변경**.
+- 현재 PRODUCTION ref: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+
+중요:
+- 직전 bootstrap schema3 tag `soridraw-test-v357-8ad97e799c24`는 계속 PRODUCTION 사용 금지.
+- PRODUCTION 승격 근거는 오직 schema4 tag `soridraw-test-v357-32c85eded45c`.
+- 이후 PREVIEW의 docs-only HEAD가 바뀌더라도 이번 TEST_VERIFIED source는 위 SHA로 고정한다.
+- 사용자 별도 명확한 정식배포 승인 전 PRODUCTION 변경 금지.
+
+다음:
+1. 사용자가 `test.soridraw.com`에서 app357 실사용 확인.
+2. Explore Feed / SORIDRAW 추천 / 공개프로필 공개곡·핀 / own-profile 좋아요 곡 / shared Catalog 기반 Music Note·Library의 핵심 체감 확인.
+3. 이상 없으면 사용자의 명확한 정식배포 승인 후 위 schema4 manifest **그 하나만** 사용해 PRODUCTION 승격.
+4. PRODUCTION 승격은 재build/reassembly 없이 TEST 검증 artifact exact promotion만 허용.
+5. app357 parity 종료 전 first-publication W12→W1~W2 비용 작업 재개 금지.
+
 ## 0QP. TEST bootstrap 1차 완료 / schema4 TEST_VERIFIED 재검증 진행 단계 (2026-10-06 KST)
 
 사용자 `테스트배포` 승인 후 one-time bootstrap 1차 완료:

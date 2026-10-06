@@ -1,3 +1,75 @@
+## CURRENT NEXT GATE — app360 PRODUCTION Music Note 공개상태 회귀 + 영구 승격 parity gate
+
+사용자 실기기 발견:
+- 같은 곡의 Music Note 공개 버튼이 PREVIEW/TEST 쪽에서는 활성인데 PRODUCTION에서는 비활성으로 표시되는 회귀 확인.
+- app360 Release Controller는 Feed/curated/public-profile/My Likes/browser-upgrade를 검사했지만 Music Note 카드의 publication-state 버튼 parity를 직접 검사하지 못함.
+- 따라서 현재 상태는 제품 데이터 손상으로 단정하지 않고 **Release System FAIL + origin-local Music Note publication cache 수렴 누락** 후보로 다룬다.
+
+이번 작업 우선순위:
+1. `src/services/explorePublicationService.ts`의 기존 `explore-publication-states` persistent cache가 오래된 PRODUCTION origin에서도 실제 shared publication authority로 안전하게 수렴하도록 최소 수정.
+2. 앱 버전 변경만으로 전체 cache 삭제/전체 publication 목록 DB read 금지. 변경 신호 또는 작은 revision 증거가 있을 때만 필요한 bundle을 갱신.
+3. 정상 좋아요/저장하트/잠금/공개·비공개 mutation, Music Note 60초 저장, Library, Feed, 공개프로필 UI는 비변경.
+4. 영구 Release Gate에 같은 곡 기준 상태 parity를 추가:
+   - 최근 생성곡 저장/하트 상태
+   - Explore 좋아요 상태와 숫자
+   - Music Note 잠금 상태
+   - Music Note 공개/비공개 버튼 상태
+   - Music Note/Library membership
+   - media/thumbnail
+5. PREVIEW→TEST→PRODUCTION뿐 아니라 **기존 PRODUCTION persistent cache → 새 버전 업그레이드**에서도 위 상태가 같은지 검증.
+6. 서버/API parity만 맞고 실제 브라우저 버튼 fill/active가 다르면 승격 FAIL.
+7. 이 회귀가 해결되고 Release System Audit까지 PASS하기 전 first-publication W12→W1~W2 비용 최적화 재개 금지.
+
+금지:
+- 사용자 데이터 migration/backfill/delete/rewrite.
+- 전체 publication/full Feed scan.
+- 앱 버전 기반 cache bust.
+- 정상 상태형 버튼 UI 디자인/위치/색상 변경.
+- 사용자 별도 승인 없는 TEST/PRODUCTION 재승격.
+
+## CURRENT NEXT GATE — app360 RELEASED / next PREVIEW task selection
+
+정식배포 완료:
+- PRODUCTION Run `37461102504`: SUCCESS / RELEASED.
+- final manifest `soridraw-test-v360-d4c9d57cea80`.
+- production SHA `78691ec733d7efcb254b904dc512af49124641cc`.
+- production Explore Worker `4e845257-2fc5-46a0-9f46-04396ca729dc`.
+- production Media Worker `a710fd22-8aa6-4386-b22a-d5510125fb2e`.
+- Hosting exact clone + `soridraw.com` exact release index PASS.
+- curated/public-profile/environment parity + Worker/Media smoke/verify PASS.
+- user data / D1 schema / Functions / Rules destructive mutation 없음.
+
+다음 개발은 새 PREVIEW 작업으로만 시작:
+- 기존 예정 작업인 first-publication D1 W12 -> W1~W2 비용 최적화를 재개할 수 있음.
+- app360 좋아요/프로필/Music Note/Library/UI 정상 동작은 frozen baseline으로 보호.
+- PRODUCTION hotfix가 아니라 PREVIEW 설계→구현→감사→실사용→TEST 순서로 다시 진행.
+### app360 TEST user validation — PASS
+- User confirmed TEST app360 is now okay.
+- Next gate is **explicit PRODUCTION approval only**.
+- On `정식배포`, promote exact immutable TEST_VERIFIED tag `soridraw-test-v360-d4c9d57cea80`; do not rebuild latest PREVIEW and do not use the bootstrap tag.
+## CURRENT NEXT GATE — app360 TEST 실사용 확인 / PRODUCTION 승인 대기
+
+최종 TEST 기준:
+- source `d4c9d57cea80944853e41c0911c21a24c88752ba`
+- main `208cc8949dc60cb056066828ce78ef2fce764e0c`
+- app360
+- final Run `37436812301` SUCCESS / TEST_VERIFIED
+- final tag `soridraw-test-v360-d4c9d57cea80`
+- TEST Explore Worker `9835f91b-4c86-43db-ba30-bd8e5eaeffb8`
+- TEST Media Worker `f947084a-15a7-4549-a921-09d32595f5ba`
+- PRODUCTION unchanged
+
+사용자 TEST 확인:
+1. own-profile `좋아요 곡`이 canonical membership과 일치하는지.
+2. 캐시가 정상인 상태에서 `공개곡 ↔ 좋아요 곡` 반복 이동이 Worker를 반복 증가시키지 않는지.
+3. 실제 좋아요 추가/해제 때만 bounded Worker + canonical W1이 발생하는지.
+4. 공개/비공개 후 프로필 공개곡이 기존 20분 stale 상태 없이 약 1분 bounded window 안에서 수렴하는지.
+5. Feed / 추천 / 하트+숫자 / Music Note / Library / folders / PC·모바일 기본 회귀 확인.
+
+PASS 후:
+- 사용자의 명확한 `정식배포` 승인 시 final tag `soridraw-test-v360-d4c9d57cea80` exact artifact만 PRODUCTION 승격.
+- production에서 rebuild/reassembly/latest preview 사용 금지.
+- bootstrap tag `soridraw-test-v360-0d27ac79c2d8` 사용 금지.
 ## CURRENT NEXT GATE — app360 final TEST_VERIFIED 재검증
 
 1차 TEST bootstrap:

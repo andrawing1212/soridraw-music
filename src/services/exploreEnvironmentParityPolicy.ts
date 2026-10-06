@@ -58,3 +58,15 @@ export const shouldAttemptPersonalLikeOriginSettlement359 = (input: {
   const attempted = normalizeEnvironmentParityVersion(input.attemptedSignalVersion);
   return latest > 0 && settled < latest && attempted < latest;
 };
+
+// app361 incident recovery: a Music Note publication snapshot is origin-local.
+// Reconcile only when the retained UID publication signal proves that this
+// browser origin has not certified the newest publication generation.
+export const shouldRepairMusicNotePublicationOrigin361 = (input: {
+  hasLocalState: boolean;
+  latestSignalVersion: unknown;
+  certifiedSignalVersion: unknown;
+}): boolean => Boolean(input.hasLocalState)
+  && normalizeEnvironmentParityVersion(input.latestSignalVersion) > 0
+  && normalizeEnvironmentParityVersion(input.certifiedSignalVersion)
+    < normalizeEnvironmentParityVersion(input.latestSignalVersion);

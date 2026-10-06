@@ -1,9 +1,9 @@
-app357-cross-environment-profile-like-parity-audit
-target=fa60aefb8fdfe0899cbe9a93bc769a4a61572e10
+app357-cross-environment-profile-like-parity-audit-v2
+target=d54c08d0647435d96a1f50149625ebdd65c1d9f1
 scope=public-profile-publications,my-likes-origin-parity,release-hard-gate
 protect=feed,curated,like-click-batching,publication,studio-heart,music-note,library,folders,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-cross-environment-profile-like-parity
+requested=2026-10-06-cross-environment-profile-like-parity-v2

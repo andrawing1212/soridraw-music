@@ -557,7 +557,6 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
 const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => {
   const lastSeen = readSeenLikeSignal127(uid);
   if (signal.version <= lastSeen) return;
-  const certifiedAtStart357 = readCrossOriginLikeCertified357(uid);
   // If an initial retained signal arrives after the R2 baseline, its rows
   // could predate that snapshot. Reconcile once rather than accepting it as
   // a newer personal state solely because no local signal version was stored.
@@ -621,11 +620,6 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
   markLocalLikeCatalogReady135(uid);
   markSeenLikeSignal127(uid, signal.version);
-  // Once an origin was fully certified, a contiguous exact changed-item signal
-  // advances that certificate without another snapshot read.
-  if (!needsRepair && lastSeen > 0 && certifiedAtStart357 >= lastSeen) {
-    markCrossOriginLikeCertified357(uid, signal.version);
-  }
   // App141: publish to the mounted/replayable UI only AFTER its authoritative
   // local membership read can observe this entire accepted changed-track batch.
   // No new server request, extra listener, retry, or layout change is involved.
@@ -662,7 +656,15 @@ const startLikeSignal127 = (uid: string) => {
       const signal = normalizeLikeSignal127(snapshot.val());
       if (signal) {
         rememberLastRetainedLikeSignal357(uid, signal.version);
+        const seenBefore357 = readSeenLikeSignal127(uid);
+        const certifiedBefore357 = readCrossOriginLikeCertified357(uid);
+        const continuousCertified357 = seenBefore357 > 0
+          && signal.previousVersion === seenBefore357
+          && certifiedBefore357 >= seenBefore357;
         applyRemoteLikeSignal127(uid, signal);
+        if (continuousCertified357 && readRepairTarget127(uid) <= 0) {
+          markCrossOriginLikeCertified357(uid, signal.version);
+        }
       }
     },
     (error) => console.warn('[127] Personal like signal unavailable; local cache preserved:', error),

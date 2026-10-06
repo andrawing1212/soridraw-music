@@ -5,6 +5,7 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { shouldReconcilePublicProfileOriginCache357 } from './exploreEnvironmentParityPolicy';
 import {
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
@@ -32,11 +33,14 @@ type ExploreProfileFirstViewData = {
   revision: string | null;
   etag: string | null;
   validatedAt: number;
+  // app357: newest same-account publication signal reconciled into this snapshot.
+  publicationSignalVersion?: number;
 };
 
 export type ExploreProfileFirstViewOptions = {
   onRevalidated?: (data: ExploreProfileFirstViewData) => void;
   onInvalidated?: (message: string) => void;
+  expectedPublicationSignalVersion?: number;
 };
 
 type MaterializedRequestResult =
@@ -85,6 +89,9 @@ const normalizeCachedData = (value: ExploreProfileFirstViewData): ExploreProfile
   revision: String(value?.revision || '').trim() || null,
   etag: String(value?.etag || '').trim() || null,
   validatedAt: Number.isFinite(Number(value?.validatedAt)) ? Math.max(0, Number(value.validatedAt)) : 0,
+  publicationSignalVersion: Number.isFinite(Number(value?.publicationSignalVersion))
+    ? Math.max(0, Math.floor(Number(value.publicationSignalVersion)))
+    : 0,
 });
 
 const readCache = (profileRef: string): ExploreProfileFirstViewData | null => {
@@ -161,6 +168,7 @@ const parseJsonText = (value: string) => {
 const requestMaterializedFirstView = async (
   profileRef: string,
   knownRevision: string | null = null,
+  forceSharedPublicationSignal358 = false,
 ): Promise<MaterializedRequestResult> => {
   const normalizedRef = normalizeProfileRef(profileRef);
   const url = new URL(`${EXPLORE_API_BASE}/v1/profiles/${encodeURIComponent(normalizedRef)}/first-view`);
@@ -168,6 +176,12 @@ const requestMaterializedFirstView = async (
   const revision = String(knownRevision || '').trim();
   if (revision) {
     url.searchParams.set('knownRevision', revision);
+  }
+  // app358: a retained publication signal is proof that shared profile state
+  // may be newer than this origin's 20-minute positive Edge entry. Only the
+  // change-driven reconciliation request bypasses that origin-local Edge shell.
+  if (forceSharedPublicationSignal358) {
+    url.searchParams.set('__soridraw_publication_signal', '358');
   }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -248,7 +262,7 @@ const revalidateCachedProfile113 = (
 
   const task = (async () => {
     try {
-      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
+      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision, true);
       if (materialized.kind === 'updated') {
         writeCache(normalizedRef, materialized.data);
         options.onRevalidated?.(materialized.data);
@@ -412,10 +426,45 @@ export const getExplorePublicProfileFirstView = async (
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
 
   const cached = readCache(normalizedRef);
+  const expectedPublicationSignalVersion = Math.max(
+    0,
+    Math.floor(Number(options.expectedPublicationSignalVersion || 0)),
+  );
   if (cached) {
-    // app335: route entry/reload is not a profile-change signal. Keep the warm
-    // profile entirely local; explicit post-entry activity can call the bounded
-    // shared-R2 revalidator exported below.
+    // app357: a newer retained publication signal is a real change proof.
+    // Only then reconcile this origin's profile cache once against shared R2.
+    const appliedPublicationSignalVersion = Math.max(
+      0,
+      Math.floor(Number(cached.publicationSignalVersion || 0)),
+    );
+    if (shouldReconcilePublicProfileOriginCache357(appliedPublicationSignalVersion, expectedPublicationSignalVersion)) {
+      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
+      if (materialized.kind === 'updated') {
+        const next = normalizeCachedData({
+          ...materialized.data,
+          publicationSignalVersion: expectedPublicationSignalVersion,
+        });
+        writeCache(normalizedRef, next);
+        return next;
+      }
+      if (materialized.kind === 'not-modified') {
+        const next = normalizeCachedData({
+          ...cached,
+          revision: materialized.revision || cached.revision,
+          etag: materialized.etag || cached.etag,
+          validatedAt: Date.now(),
+          publicationSignalVersion: expectedPublicationSignalVersion,
+        });
+        writeCache(normalizedRef, next);
+        return next;
+      }
+      if (materialized.kind === 'not-found') {
+        clearCache(normalizedRef, cached);
+        throw new Error(materialized.message);
+      }
+      throw new Error('공개 프로필 최신 상태를 확인하지 못했습니다.');
+    }
+
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
       'LOCAL HIT · 변경 없음 · Worker 0 · D1 읽기 0',
@@ -435,12 +484,23 @@ export const getExplorePublicProfileFirstView = async (
 
   const task = (async () => {
     try {
-      const materialized = await requestMaterializedFirstView(normalizedRef);
+      const materialized = await requestMaterializedFirstView(
+        normalizedRef,
+        null,
+        expectedPublicationSignalVersion > 0,
+      );
       if (materialized.kind === 'updated') {
-        writeCache(normalizedRef, materialized.data);
-        return materialized.data;
+        const next = normalizeCachedData({
+          ...materialized.data,
+          publicationSignalVersion: expectedPublicationSignalVersion,
+        });
+        writeCache(normalizedRef, next);
+        return next;
       }
       if (materialized.kind === 'not-found') throw new Error(materialized.message);
+      if (expectedPublicationSignalVersion > 0) {
+        throw new Error('공개 프로필 최신 상태를 확인하지 못했습니다.');
+      }
     } catch (error) {
       if (error instanceof Error && /찾을 수 없습니다/.test(error.message)) throw error;
       console.warn('[Explore profile first-view] materialized snapshot unavailable; compatibility fallback used.', error);
@@ -459,6 +519,7 @@ export const getExplorePublicProfileFirstView = async (
       revision: null,
       etag: null,
       validatedAt: Date.now(),
+      publicationSignalVersion: expectedPublicationSignalVersion,
     };
     writeCache(normalizedRef, fallback);
     return fallback;

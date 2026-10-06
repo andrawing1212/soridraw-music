@@ -11,6 +11,12 @@ import {
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
+  canAdvancePersonalLikeOriginCertificate357,
+  shouldAttemptPersonalLikeOriginRepair358,
+  shouldAttemptPersonalLikeOriginSettlement359,
+  shouldRepairPersonalLikeOrigin357,
+} from './exploreEnvironmentParityPolicy';
+import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
   writeSoridrawPersistentCache,
@@ -68,6 +74,20 @@ const EXPLORE_LIKE_SNAPSHOT_PENDING_127 = 'soridraw:explore:like-snapshot-pendin
 // App135: once this device owns a durable personal-like catalog, revision changes
 // refresh that catalog from R2/deltas but must never fall back to visible-track D1 scans.
 const EXPLORE_LIKE_LOCAL_CATALOG_READY_135 = 'soridraw:explore:like-local-catalog-ready:135';
+// app357: browser origins have independent persistent caches even though personal
+// likes are shared. Remember the retained RTDB signal version without adding a
+// backend request, and certify a stale origin only after one bounded reconciliation.
+const EXPLORE_LIKE_LAST_RETAINED_SIGNAL_357 = 'soridraw:explore:like-last-retained-signal:357';
+const EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357 = 'soridraw:explore:like-cross-origin-certified:357';
+// app358: one repair attempt per retained signal. A partial legacy snapshot must
+// never turn My Likes tab navigation into a repeated /v1/me/social-snapshot read.
+const EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358 = 'soridraw:explore:like-cross-origin-attempted:358';
+// app359: app358 could repair shared R2 to canonical truth while historical
+// accepted-but-unsettled local guards still painted extra My Likes cards.
+// One new per-origin, per-retained-signal upgrade runs the proven app189 fresh
+// settlement proof and then stays local on later tab/page navigation.
+const EXPLORE_LIKE_CROSS_ORIGIN_SETTLEMENT_ATTEMPTED_359 = 'soridraw:explore:like-cross-origin-settlement-attempted:359';
+const EXPLORE_LIKE_CROSS_ORIGIN_SETTLED_359 = 'soridraw:explore:like-cross-origin-settled:359';
 const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922
@@ -192,6 +212,7 @@ const signalRevisionByUid127 = new Map<string, number>();
 const signalPublishInFlight127 = new Map<string, Promise<void>>();
 const revisionCheckAtByUid127 = new Map<string, number>();
 const revisionCheckInFlight127 = new Map<string, Promise<void>>();
+const crossOriginParityInFlight357 = new Map<string, Promise<void>>();
 // app334: the existing five-minute private-like revision cadence must survive a
 // browser reload. Reload is not a like change, so do not restart the Worker clock.
 const EXPLORE_LIKE_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:like-revision-check-at:v1';
@@ -497,6 +518,52 @@ const requestRepair127 = (uid: string, version: number) => {
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
 };
 
+const readLastRetainedLikeSignal357 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_LAST_RETAINED_SIGNAL_357, uid))) || 0);
+const rememberLastRetainedLikeSignal357 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_LAST_RETAINED_SIGNAL_357, uid),
+    String(Math.max(readLastRetainedLikeSignal357(uid), Math.floor(version))),
+  );
+};
+const readCrossOriginLikeCertified357 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357, uid))) || 0);
+const markCrossOriginLikeCertified357 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357, uid),
+    String(Math.max(readCrossOriginLikeCertified357(uid), Math.floor(version))),
+  );
+};
+const readCrossOriginLikeAttempted358 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358, uid))) || 0);
+const markCrossOriginLikeAttempted358 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358, uid),
+    String(Math.max(readCrossOriginLikeAttempted358(uid), Math.floor(version))),
+  );
+};
+const readCrossOriginLikeSettlementAttempted359 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_SETTLEMENT_ATTEMPTED_359, uid))) || 0);
+const markCrossOriginLikeSettlementAttempted359 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_SETTLEMENT_ATTEMPTED_359, uid),
+    String(Math.max(readCrossOriginLikeSettlementAttempted359(uid), Math.floor(version))),
+  );
+};
+const readCrossOriginLikeSettled359 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_SETTLED_359, uid))) || 0);
+const markCrossOriginLikeSettled359 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_SETTLED_359, uid),
+    String(Math.max(readCrossOriginLikeSettled359(uid), Math.floor(version))),
+  );
+};
+
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
 type ExploreLikeSignal127 = {
   version: number;
@@ -604,6 +671,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     if (current?.uid === uid) {
       void ensurePersonalLikeBaseline127(current)
         .then(() => {
+          if (readRepairTarget127(uid) <= 0) markCrossOriginLikeCertified357(uid, signal.version);
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
               detail: { uid, reason: 'personal-like-repair-complete' },
@@ -628,7 +696,20 @@ const startLikeSignal127 = (uid: string) => {
     (snapshot) => {
       if (activeLikeSignalUid127 !== uid || auth.currentUser?.uid !== uid) return;
       const signal = normalizeLikeSignal127(snapshot.val());
-      if (signal) applyRemoteLikeSignal127(uid, signal);
+      if (signal) {
+        rememberLastRetainedLikeSignal357(uid, signal.version);
+        const seenBefore357 = readSeenLikeSignal127(uid);
+        const certifiedBefore357 = readCrossOriginLikeCertified357(uid);
+        applyRemoteLikeSignal127(uid, signal);
+        if (canAdvancePersonalLikeOriginCertificate357({
+          seenBefore: seenBefore357,
+          signalPreviousVersion: signal.previousVersion,
+          certifiedBefore: certifiedBefore357,
+          repairTargetAfter: readRepairTarget127(uid),
+        })) {
+          markCrossOriginLikeCertified357(uid, signal.version);
+        }
+      }
     },
     (error) => console.warn('[127] Personal like signal unavailable; local cache preserved:', error),
   );
@@ -649,6 +730,7 @@ const requestPersonalLikeBaseline127 = async (
     : [];
   const recoveryParams = new URLSearchParams();
   if (repairPartial182) recoveryParams.set('__soridraw_personal_repair', '182');
+  if (repairPartial182) recoveryParams.set('__soridraw_cross_origin_repair', '358');
   else if (verifySettlement189) {
     recoveryParams.set('__soridraw_personal_settlement', '189');
     if (targetedSettlementIds190.length) {
@@ -865,6 +947,91 @@ export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
 };
 
 export const ensureExplorePersonalLikeBaseline127 = ensurePersonalLikeBaseline127;
+
+// app357: repair only when the user actually opens My Likes on an origin whose
+// durable personal catalog has never been certified against the retained RTDB
+// signal. This is not an app-update/global bootstrap and never clears the local
+// catalog before the bounded authenticated reconciliation succeeds.
+export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User): Promise<void> => {
+  const uid = String(user?.uid || '').trim();
+  if (!uid) return;
+  const hasLocalState357 = hasLikedStateStorage127(uid);
+  const latestSignalVersion = readLastRetainedLikeSignal357(uid);
+  const certifiedSignalVersion357 = readCrossOriginLikeCertified357(uid);
+  const legacyNeedsRepair357 = shouldRepairPersonalLikeOrigin357({
+    hasLocalState: hasLocalState357,
+    latestSignalVersion,
+    certifiedSignalVersion: certifiedSignalVersion357,
+  });
+
+  // app359 upgrade: app358 may already have certified the shared R2 repair for
+  // this exact retained signal, but that certificate did not prove that old
+  // accepted-but-unsettled local guards were released. Give each origin one
+  // additional bounded settlement opportunity for this same retained signal.
+  const settledSignalVersion359 = readCrossOriginLikeSettled359(uid);
+  const settlementAttemptedSignalVersion359 = readCrossOriginLikeSettlementAttempted359(uid);
+  const needsSettlementUpgrade359 = shouldAttemptPersonalLikeOriginSettlement359({
+    hasLocalState: hasLocalState357,
+    latestSignalVersion,
+    settledSignalVersion: settledSignalVersion359,
+    attemptedSignalVersion: settlementAttemptedSignalVersion359,
+  });
+
+  if (!legacyNeedsRepair357 && !needsSettlementUpgrade359) return;
+
+  const existing = crossOriginParityInFlight357.get(uid);
+  if (existing) return existing;
+  const task = (async () => {
+    if (legacyNeedsRepair357) {
+      const attemptedSignalVersion358 = readCrossOriginLikeAttempted358(uid);
+      if (shouldAttemptPersonalLikeOriginRepair358({
+        latestSignalVersion,
+        certifiedSignalVersion: certifiedSignalVersion357,
+        attemptedSignalVersion: attemptedSignalVersion358,
+      })) {
+        markCrossOriginLikeAttempted358(uid, latestSignalVersion);
+      }
+    }
+    if (needsSettlementUpgrade359) {
+      // Persist BEFORE any network request so ordinary tab/page navigation can
+      // never turn a broken connection into an unbounded repair loop.
+      markCrossOriginLikeSettlementAttempted359(uid, latestSignalVersion);
+    }
+
+    requestRepair127(uid, latestSignalVersion);
+
+    // Reuse the existing bounded account repair route. If shared R2 is already
+    // exact this is a cheap no-op; if app358 left an old partial object it is
+    // rebuilt from the account-scoped canonical public/published set.
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '');
+    await ensurePersonalLikeBaseline127(user);
+
+    // If an exact canonical snapshot still has historical accepted-but-unsettled
+    // guards, run the already-proven app189 queue-empty + canonical/R2 + ETag
+    // settlement proof once against the NEW shared-R2 revision. This is what
+    // removes stale extra My Likes cards without ever dropping a current outbox.
+    if (Object.keys(readSnapshotPending127(uid)).length > 0) {
+      const repairedRevision359 = await requestPersonalLikeRevision127(user);
+      writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189, uid), '');
+      invalidateExplorePersonalLikeBaseline127(uid);
+      await ensurePersonalLikeBaseline127(user, repairedRevision359);
+    }
+
+    if (readRepairTarget127(uid) > 0) {
+      throw new Error('Personal like cross-origin parity is not yet certified');
+    }
+    if (Object.keys(readSnapshotPending127(uid)).length > 0) {
+      throw new Error('Personal like historical guards are not yet settled');
+    }
+
+    markCrossOriginLikeCertified357(uid, latestSignalVersion);
+    markCrossOriginLikeSettled359(uid, latestSignalVersion);
+  })().finally(() => {
+    crossOriginParityInFlight357.delete(uid);
+  });
+  crossOriginParityInFlight357.set(uid, task);
+  return task;
+};
 
 // SORIDRAW_EXPLORE_LIKE_LEGACY_R2_COMPAT_072_20260920
 // All old and new app generations share one user R2 like bundle. Check its
@@ -1575,7 +1742,10 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   if (!normalized.length) return [];
   installLikeSignalRetry127();
   try {
-    await checkExplorePersonalLikeRevision127(user);
+    // app360: visible-track heart hydration is not a freshness trigger.
+    // Healthy cached navigation must not spend a periodic Worker HEAD simply
+    // because five minutes elapsed. RTDB change signals own live convergence;
+    // the legacy private-R2 HEAD remains only on true browser resume.
     await ensurePersonalLikeBaseline127(user);
   } catch (reason) {
     // The existing account cache is still usable while an R2 repair is retried.

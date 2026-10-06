@@ -126,6 +126,29 @@ function hashReleaseIdentity() {
   return hash.digest('hex');
 }
 
+function hashBundleCode(directory) {
+  const files = [];
+  const visit = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const p = join(current, entry.name);
+      if (entry.isDirectory()) visit(p);
+      else if (entry.isFile() && /\.(?:m?js|cjs|wasm)$/.test(entry.name)) files.push(p);
+    }
+  };
+  visit(directory);
+  if (!files.length) throw new Error('compiled Worker code artifact missing from dry-run bundle');
+  files.sort((a, b) => a.localeCompare(b, 'en'));
+  const hash = createHash('sha256');
+  for (const file of files) {
+    const relative = file.slice(directory.length + 1).split('\\').join('/');
+    const contents = readFileSync(file);
+    hash.update(`${relative}\0${contents.byteLength}\0`, 'utf8');
+    hash.update(contents);
+    hash.update('\0', 'utf8');
+  }
+  return hash.digest('hex');
+}
+
 async function activeVersion() {
   const deployments = await cfGet(`${apiBase}/workers/scripts/${target.worker}/deployments`);
   const deployment = (deployments?.deployments || deployments || [])[0];
@@ -238,11 +261,17 @@ const bundleDirectory = join(RELEASE_DIR, 'bundle');
 rmSync(bundleDirectory, { recursive: true, force: true });
 run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run', '--outdir', bundleDirectory], WORKER_DIR);
 const bundleSha256 = hashReleaseIdentity();
+const bundleCodeSha256 = hashBundleCode(bundleDirectory);
 const expectedBundleSha256 = String(process.env.EXPECTED_MEDIA_WORKER_BUNDLE_SHA256 || '').trim();
+const expectedBundleCodeSha256 = String(process.env.EXPECTED_MEDIA_WORKER_CODE_SHA256 || '').trim();
 if (expectedBundleSha256 && bundleSha256 !== expectedBundleSha256) {
   throw new Error(`${mode} media Worker bundle identity mismatch expected=${expectedBundleSha256} actual=${bundleSha256}`);
 }
+if (expectedBundleCodeSha256 && bundleCodeSha256 !== expectedBundleCodeSha256) {
+  throw new Error(`${mode} media Worker compiled code mismatch expected=${expectedBundleCodeSha256} actual=${bundleCodeSha256}`);
+}
 console.log(`${mode.toUpperCase()}_MEDIA_WORKER_BUNDLE_SHA256=${bundleSha256}`);
+console.log(`${mode.toUpperCase()}_MEDIA_WORKER_CODE_SHA256=${bundleCodeSha256}`);
 console.log(`${mode.toUpperCase()}_MEDIA_WORKER_DRY_RUN=PASS`);
 
 if (action === 'dry-run') process.exit(0);

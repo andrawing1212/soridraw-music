@@ -26,6 +26,10 @@
 - `preview` = 개발/큰 수정/비용 최적화/배포 전 검증.
 - `main` = 검증 완료 후 TEST 승격 기준.
 - PRODUCTION은 사용자의 명확한 정식배포 승인 없이는 절대 승격하지 않는다.
+- **최종 목표는 항상 PRODUCTION이다.** PREVIEW/TEST에서 기능을 만들고 검증할 때부터 PRODUCTION의 실제 binding, 환경변수, R2/Edge/브라우저 persistent cache, 기존 사용자 업그레이드 상태까지 함께 설계·검증한다. PRODUCTION 승격 뒤에 처음 발견되는 환경 차이를 "정식에서만 생긴 별도 문제"로 미루는 것을 금지한다.
+- **TEST_VERIFIED는 단순 코드 PASS가 아니다.** 동일 release artifact가 PRODUCTION의 실제 환경 계약과 기존 사용자 상태에서도 같은 결과를 낼 수 있음이 사전 검증된 상태만 TEST_VERIFIED로 인정한다.
+- **TEST → PRODUCTION은 새 개발/재해석/재빌드 단계가 아니다.** TEST에서 검증한 exact Hosting artifact / Worker bundle / Media bundle / Functions artifact를 동일 identity로 승격하고, 환경별 값은 사전에 선언·검증된 차이만 허용한다.
+- TEST에서 정상인데 PRODUCTION에서 기능 결과가 달라지면 제품팀이 뒤늦게 기능을 다시 고치는 정상 절차로 취급하지 않고 **Release System FAIL**로 기록한다. 같은 릴리스에서 PRODUCTION 수정→재배포를 반복하는 것을 정상 승격으로 인정하지 않는다.
 - GitHub push만으로 배포 완료라고 말하지 않는다.
 - 사용자가 수정 요청을 하면, 검증이 통과하고 안전하게 PREVIEW 배포 가능한 작업은 별도 재승인을 기다리지 말고 같은 작업 안에서 PREVIEW 배포까지 완료한다. 단 TEST/PRODUCTION 승격은 기존 명시 승인 규칙을 그대로 따른다.
 - PREVIEW/TEST/PRODUCTION은 **기능 코드와 실행 환경을 분리**한다.

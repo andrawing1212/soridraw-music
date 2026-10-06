@@ -1672,6 +1672,247 @@ async function attachPublicLikeAcceptedAt193(request, response, acceptedAt) {
   });
 }
 
+
+// SORIDRAW_CROSS_ORIGIN_PROFILE_LIKE_CONVERGENCE_358_20261006
+// A retained same-account change signal is allowed to spend one bounded shared-R2
+// reconciliation. Ordinary profile/likes revisits remain local and never enter
+// these routes.
+const PROFILE_PUBLICATION_SIGNAL_QUERY_358 = '__soridraw_publication_signal';
+const PERSONAL_LIKE_REPAIR_QUERY_358 = '__soridraw_cross_origin_repair';
+const SHARED_PROFILE_PREFIX_358 = 'internal/explore/shared-profile-v113';
+const SHARED_PROFILE_ALIAS_PREFIX_358 = 'internal/explore/shared-profile-alias-v113';
+const SHARED_LIKES_PREFIX_358 = 'internal/explore/shared-social-v114/likes';
+const LIKE_CUTOVER_KEY_358 = 'internal/explore/like-cutover-v162/active.json';
+
+const sharedProfileKey358 = (uid) =>
+  `${SHARED_PROFILE_PREFIX_358}/${encodeURIComponent(String(uid || '').trim())}.json`;
+const sharedProfileAliasKey358 = (handle) =>
+  `${SHARED_PROFILE_ALIAS_PREFIX_358}/${encodeURIComponent(String(handle || '').trim().replace(/^@+/, '').toLowerCase())}.json`;
+const sharedLikesKey358 = (uid) =>
+  `${SHARED_LIKES_PREFIX_358}/${encodeURIComponent(String(uid || '').trim())}.json`;
+
+function validSharedProfileBundle358(bundle) {
+  const data = bundle?.body?.data;
+  const profile = data?.profile || data?.snapshot?.profile;
+  const items = Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.tracks?.items)
+      ? data.tracks.items
+      : Array.isArray(data?.snapshot?.items)
+        ? data.snapshot.items
+        : null;
+  return Boolean(profile?.uid) && Array.isArray(items);
+}
+
+async function readSharedProfileSignal358(env, profileRef) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  const normalized = String(profileRef || '').trim().replace(/^@+/, '');
+  if (!bucket || !normalized) return { bundle: null, r2Reads: 0 };
+
+  let r2Reads = 0;
+  const directObject = await bucket.get(sharedProfileKey358(normalized));
+  r2Reads += 1;
+  if (directObject) {
+    try {
+      const direct = JSON.parse(await directObject.text());
+      if (validSharedProfileBundle358(direct)) return { bundle: direct, r2Reads };
+    } catch {}
+  }
+
+  const aliasObject = await bucket.get(sharedProfileAliasKey358(normalized));
+  r2Reads += 1;
+  if (!aliasObject) return { bundle: null, r2Reads };
+  let alias = null;
+  try { alias = JSON.parse(await aliasObject.text()); } catch {}
+  const uid = String(alias?.uid || '').trim();
+  if (!uid) return { bundle: null, r2Reads };
+
+  const targetObject = await bucket.get(sharedProfileKey358(uid));
+  r2Reads += 1;
+  if (!targetObject) return { bundle: null, r2Reads };
+  try {
+    const bundle = JSON.parse(await targetObject.text());
+    return { bundle: validSharedProfileBundle358(bundle) ? bundle : null, r2Reads };
+  } catch {
+    return { bundle: null, r2Reads };
+  }
+}
+
+function profileSignalHeaders358(request, revision, r2Reads) {
+  const origin = String(request.headers.get('Origin') || '');
+  const headers = new Headers();
+  if (RELEASE_ALLOWED_ORIGINS_036.has(origin)) {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.set('Vary', 'Origin');
+  }
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('X-SORIDRAW-CF-Worker', '1');
+  headers.set('X-SORIDRAW-D1-Read', '0');
+  headers.set('X-SORIDRAW-D1-Write', '0');
+  headers.set('X-SORIDRAW-R2-B', String(Math.max(0, Number(r2Reads || 0))));
+  headers.set('X-SORIDRAW-Profile-Edge-Cache', 'SHARED-SIGNAL-358');
+  if (revision) headers.set('X-SORIDRAW-Profile-Revision', revision);
+  headers.set('Access-Control-Expose-Headers', [
+    'X-SORIDRAW-CF-Worker',
+    'X-SORIDRAW-D1-Read',
+    'X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-R2-B',
+    'X-SORIDRAW-Profile-Edge-Cache',
+    'X-SORIDRAW-Profile-Revision',
+  ].join(', '));
+  return headers;
+}
+
+async function handlePublicationSignalProfile358(request, env) {
+  const url = new URL(request.url);
+  const match = url.pathname.match(/^\/v1\/profiles\/([^/]+)\/first-view$/);
+  if (!match) return null;
+  const ref = decodeURIComponent(match[1] || '');
+  const selected = await readSharedProfileSignal358(env, ref);
+  if (!selected.bundle) return null;
+
+  const revision = String(
+    selected.bundle?.revision
+    || selected.bundle?.body?.data?.revision
+    || selected.bundle?.body?.data?.snapshot?.revision
+    || '',
+  ).trim();
+  const knownRevision = String(url.searchParams.get('knownRevision') || '').trim();
+  const headers = profileSignalHeaders358(request, revision, selected.r2Reads);
+  if (knownRevision && revision && knownRevision === revision) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(JSON.stringify(selected.bundle.body), { status: 200, headers });
+}
+
+function isExactSharedLike358(bundle, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized || !bundle || Number(bundle.schemaVersion) !== 1
+      || String(bundle.uid || '').trim() !== normalized
+      || !Array.isArray(bundle.likedTrackIds)) return false;
+  const ids = bundle.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean);
+  return bundle.canonicalComplete156 === true
+    && Boolean(String(bundle.canonicalSource156 || '').trim())
+    && Number.isSafeInteger(Number(bundle.exactLikeCount156))
+    && Number(bundle.exactLikeCount156) === ids.length
+    && new Set(ids).size === ids.length;
+}
+
+async function readLikeCutoverMode358(env) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) return 'unavailable';
+  const object = await bucket.get(LIKE_CUTOVER_KEY_358);
+  if (!object) return 'legacy';
+  try {
+    const value = JSON.parse(await object.text());
+    const mode = String(value?.relationMode || '').trim();
+    if (mode === 'overlay157' || mode === 'd1only171') return mode;
+    return 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+async function repairSharedPersonalLike358(env, uid) {
+  const normalizedUid = String(uid || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalizedUid || !bucket || !env?.DB) return 'unavailable';
+
+  const key = sharedLikesKey358(normalizedUid);
+  const object = await bucket.get(key);
+  let previous = null;
+  if (object) {
+    try { previous = JSON.parse(await object.text()); } catch {}
+  }
+  if (isExactSharedLike358(previous, normalizedUid)) return 'already-exact';
+
+  // The current live product is still on the proven legacy relation authority.
+  // Never guess across a future overlay/D1-only cutover from this compatibility
+  // repair path; a future cutover must ship its own exact catalog reader.
+  const cutoverMode = await readLikeCutoverMode358(env);
+  if (cutoverMode !== 'legacy') return 'cutover-not-supported';
+
+  const queued = await env.DB.prepare(
+    'SELECT ' +
+    '(SELECT COUNT(*) FROM explore_like_batches_069 WHERE user_uid=?) AS q069, ' +
+    '(SELECT COUNT(*) FROM explore_like_user_queue_075 q ' +
+      'CROSS JOIN explore_like_user_queue_state_075 s ' +
+      'WHERE q.user_uid=? AND ' +
+      '(q.updated_at>s.processed_at OR ' +
+       '(q.updated_at=s.processed_at AND q.user_uid>s.processed_uid))) AS q075'
+  ).bind(normalizedUid, normalizedUid).first();
+  if (!queued || Number(queued.q069 || 0) || Number(queued.q075 || 0)) return 'pending';
+
+  const raw = await env.DB.prepare(
+    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id ' +
+    "WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' " +
+    'ORDER BY l.created_at DESC LIMIT 2001'
+  ).bind(normalizedUid).all();
+  if (!Array.isArray(raw?.results) || raw.results.length > 2000) return 'unverifiable';
+
+  const actual = raw.results.map((row) => String(row?.track_id || '').trim()).filter(Boolean);
+  if (actual.length !== raw.results.length || new Set(actual).size !== actual.length) return 'unverifiable';
+
+  const next = {
+    ...(previous && typeof previous === 'object' ? previous : {}),
+    schemaVersion: 1,
+    uid: normalizedUid,
+    likedTrackIds: actual,
+    canonicalComplete156: true,
+    canonicalSource156: 'verified-cross-origin-d1-358',
+    exactLikeCount156: actual.length,
+    updatedAt: Date.now(),
+  };
+  const options = {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: {
+      ...(object?.customMetadata || {}),
+      metadataRepair: '358',
+      updatedAt: String(next.updatedAt),
+    },
+  };
+  const saved = object
+    ? await bucket.put(key, JSON.stringify(next), {
+        ...options,
+        onlyIf: { etagMatches: object.etag },
+      })
+    : await bucket.put(key, JSON.stringify(next), {
+        ...options,
+        onlyIf: { etagDoesNotMatch: '*' },
+      });
+  return saved ? 'canonical-repaired' : 'concurrent-change';
+}
+
+async function handleCrossOriginPersonalLikeRepair358(request, env, ctx) {
+  const actor = await validateExploreAuth307(request, env, ctx);
+  if (!actor.ok) return baseWorker.fetch(request, env, ctx);
+
+  let repairStatus = 'skipped';
+  try {
+    repairStatus = await repairSharedPersonalLike358(env, actor.uid);
+  } catch (error) {
+    console.warn('[358] bounded personal-like repair deferred:', String(error?.message || error || 'unknown'));
+    repairStatus = 'error';
+  }
+
+  const response = await baseWorker.fetch(request, env, ctx);
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Length');
+  headers.set('X-SORIDRAW-Personal-Like-Repair', repairStatus);
+  const expose = new Set(
+    String(headers.get('Access-Control-Expose-Headers') || '')
+      .split(',').map((item) => item.trim()).filter(Boolean),
+  );
+  expose.add('X-SORIDRAW-Personal-Like-Repair');
+  headers.set('Access-Control-Expose-Headers', Array.from(expose).join(', '));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -1704,6 +1945,31 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // app358: only a real retained publication signal may bypass an origin-local
+    // positive profile Edge entry. Shared PROFILE_MEDIA is the cross-environment
+    // derived authority, so this path remains D1 R0/W0.
+    if (
+      request.method === 'GET'
+      && /^\/v1\/profiles\/[^/]+\/first-view$/.test(url.pathname)
+      && url.searchParams.get(PROFILE_PUBLICATION_SIGNAL_QUERY_358) === '358'
+    ) {
+      const sharedSignalResponse358 = await handlePublicationSignalProfile358(request, env);
+      if (sharedSignalResponse358) {
+        return attachProfileSocialExtra244(sharedSignalResponse358, env);
+      }
+    }
+
+    // app358: one authenticated, account-scoped canonical repair may rebuild a
+    // legacy partial personal-like R2 catalog. The client persists the retained
+    // signal attempt, so tab/page navigation cannot repeat this bounded read.
+    if (
+      request.method === 'GET'
+      && url.pathname === '/v1/me/social-snapshot'
+      && url.searchParams.get(PERSONAL_LIKE_REPAIR_QUERY_358) === '358'
+    ) {
+      return handleCrossOriginPersonalLikeRepair358(request, env, ctx);
+    }
     if (
       request.method === 'GET'
       && url.pathname === '/v1/feed'

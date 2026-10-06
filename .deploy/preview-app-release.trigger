@@ -1,10 +1,12 @@
-app356-shared-catalog-dormant-client-support
-target_source=d37f21390a5085cfcc4b4801208808861a2fdda8
-app_version=356
-scope=shared-private-catalog-dormant-client-support
+app360-my-likes-navigation-zero
+target_source=1f3f35603b00429d8b8d252949099e9ca116970a
+app_version=360
+scope=my-likes-tab-worker-zero-after-cache,heart-hydration-no-timed-revision-read,resume-only-fallback-preserved
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app356-cross-env-catalog-prep
+release_request=app360-my-likes-navigation-zero
 worker_change=false
+worker_release_run=37413466047
 functions_change=false
 shared_follow_cutover=false
+release_audit=37435667192

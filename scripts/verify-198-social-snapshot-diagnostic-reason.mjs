@@ -44,7 +44,9 @@ const run = async (repair, settlement, status = 200) => {
 };
 
 const recovery = await run(true, false);
-assert.ok(recovery.url.endsWith('?__soridraw_personal_repair=182'));
+const recoveryUrl = new URL(recovery.url);
+assert.equal(recoveryUrl.searchParams.get('__soridraw_personal_repair'), '182');
+assert.equal(recoveryUrl.searchParams.get('__soridraw_cross_origin_repair'), '358');
 assert.equal(recovery.reason, 'FULL 200 · PERSONAL REPAIR 182');
 const settlement = await run(false, true);
 assert.ok(settlement.url.endsWith('?__soridraw_personal_settlement=189'));

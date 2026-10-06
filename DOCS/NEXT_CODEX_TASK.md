@@ -1,20 +1,104 @@
-## CURRENT NEXT GATE — schema4 TEST_VERIFIED 최종 재검증
+### app359 PREVIEW verification progress — Worker behavior
+- PASS candidate: Worker/social-snapshot activity now follows **actual like membership changes**, not mere tab navigation.
+- This is acceptable under the local-first cost rule: real like changes may use bounded Worker/read work and W1; unchanged revisit must remain Worker 0 / D1 R0 target.
+- Final remaining user check before TEST promotion: public/private change must update the public-profile song list without the former ~20 minute delay.
+### app359 PREVIEW user check progress
+- PASS: own-profile `좋아요 곡` count converged to **16**, matching canonical D1/R2 proof.
+- Still required before TEST promotion:
+  1. after one-time settlement, repeated `공개곡 ↔ 좋아요 곡` switching must not keep increasing Worker repair requests;
+  2. public/private change must update the public-profile list without waiting ~20 minutes.
+## CURRENT NEXT GATE — app359 PREVIEW 실사용 확인 후 TEST 재승격
 
-bootstrap 완료:
-- Run `37407282504` SUCCESS.
-- main `66ad632afab1259009efae387c0f41ccea2b4b26`에 새 production-first controller 설치 완료.
-- bootstrap schema3 manifest `soridraw-test-v357-8ad97e799c24`는 **PRODUCTION 사용 금지**.
-- TEST app357 / curated 12 / public-profile / shared Catalog / Worker·Media smoke PASS.
-- PRODUCTION unchanged.
+확정된 실제 상태:
+- canonical D1 all like relations=30.
+- current public+published My Likes authority=16.
+- hidden/unpublished relations=14.
+- shared personal-like R2 exact count=16.
+- app358 화면 20곡은 canonical limit가 아니라 historical local guard overlay 문제.
+- app359은 canonical repair 후 fresh settlement를 1회 실행하여 stale guard를 정리하도록 수정.
+- Audit `37415142727` SUCCESS.
+- PREVIEW App Run `37415347786` SUCCESS / app359.
+- TEST/PRODUCTION unchanged.
 
 지금 할 일:
-1. docs-only latest PREVIEW SHA를 새 main controller로 TEST 재검증.
-2. schema4 TEST_VERIFIED manifest 생성.
-3. frozen production environment contract / compiled Explore+Media code SHA / browser-upgrade contract hash 포함 확인.
-4. TEST Hosting exact build / Feed / curated / public-profile / shared Catalog parity PASS 확인.
-5. PRODUCTION 비변경 확인.
-6. 이후 사용자에게 TEST 실사용 확인을 요청.
-7. 정식배포는 사용자의 별도 명확한 승인 전 금지.
+1. 사용자 PREVIEW app359에서 `좋아요 곡` 목록 확인.
+2. 별도 현재 pending click이 없다면 16곡으로 수렴하는지 확인.
+3. 공개곡↔좋아요 곡을 여러 번 눌러도 최초 upgrade 이후 Worker가 반복 증가하지 않는지 확인.
+4. 공개/비공개 뒤 공개프로필이 20분 TTL을 기다리지 않는지 확인.
+5. 모두 PASS하면 app359을 TEST로 새 승격.
+
+금지:
+- app359 PREVIEW 실사용 확인 전 TEST 승격.
+- app357 manifest 재사용.
+- user-data backfill/migration.
+- canonical D1 30 relation을 임의 삭제하거나 hidden/unpublished 14 relation을 정리하지 않음.
+
+## CURRENT NEXT GATE — app358 PREVIEW 실사용 검증 / TEST 재승격 대기
+
+현재 기준:
+- PREVIEW app358 deployed.
+- Firebase PREVIEW Run `37413571015`: SUCCESS / exact build PASS.
+- PREVIEW Explore Worker Run `37413466047`: SUCCESS.
+- active PREVIEW Explore Worker `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- Audit Run `37413168427`: SUCCESS.
+- main(TEST) app357 / production unchanged.
+- 기존 app357 schema4 TEST manifest는 사용자 실사용 회귀 발견으로 **promotion-invalid**.
+
+사용자 실사용에서 반드시 확인:
+1. own profile의 `좋아요 곡` 탭을 짧은 간격으로 여러 번 왕복.
+   - 첫 stale-origin repair가 필요한 경우 1회 Worker 요청은 허용.
+   - 같은 retained signal에서 이후 반복 탭 클릭은 Worker 추가 상승 금지.
+   - 목록 membership이 PREVIEW/실제 좋아요 상태와 일치해야 함.
+2. 공개곡 하나를 비공개→공개 또는 공개→비공개 전환.
+   - 프로필 공개곡 목록이 약 20분 Edge TTL을 기다리지 않고 실제 change signal 뒤 즉시 수렴해야 함.
+   - 일반 프로필 재진입은 Worker 0 우선.
+3. 기존 정상 기능 최소 확인:
+   - Feed / SORIDRAW 추천 / 하트+숫자 / Music Note / Library / 폴더 / PC·모바일 UI.
+
+합격 후:
+- app358 PREVIEW 완성본 전체를 TEST로 새 승격.
+- 새 TEST_VERIFIED manifest를 새로 생성.
+- app357 tag `soridraw-test-v357-32c85eded45c`는 PRODUCTION에 절대 사용하지 않음.
+- 새 TEST 실사용까지 PASS해야 PRODUCTION 후보가 됨.
+
+금지:
+- 현재 단계에서 main/TEST/PRODUCTION 수정.
+- 사용자 승인 없는 PRODUCTION 배포.
+- 데이터 migration/backfill/full scan.
+- D1 schema 변경.
+- 좋아요/공개/비공개 정상 UX 또는 UI 재설계.
+- app358 실사용 PASS 전 first-publication 비용 최적화 재개.
+
+## CURRENT NEXT GATE — schema4 TEST_VERIFIED 완료 / TEST 실사용 확인 및 PRODUCTION 승인 대기
+
+완료:
+- Release Controller Run `37407657202`: SUCCESS / TEST_VERIFIED.
+- source PREVIEW `32c85eded45c49e0e735c685a05b2efe8702c8ce`.
+- main(TEST) `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- app357.
+- schema4 manifest `soridraw-test-v357-32c85eded45c`.
+- TEST Explore Worker `ef64f24d-8e65-4921-a96d-b52e1d8db62d`.
+- TEST Media Worker `3c167990-7194-4301-81da-791a21989156`.
+- TEST Hosting exact build / latest+popular Feed / curated 12 / public-profile / shared Catalog parity PASS.
+- production environment contract / compiled Explore+Media code identity / old-browser-cache upgrade gate PASS.
+- PRODUCTION unchanged.
+- user data migration/backfill/copy/delete/rewrite 0.
+
+지금 할 일:
+1. 사용자 실기기에서 `test.soridraw.com` app357 최종 확인.
+2. 특히 PREVIEW와 달랐던 공개프로필 공개곡·핀 / own-profile 좋아요 곡 membership 확인.
+3. Feed / SORIDRAW 추천 / 좋아요 / 공개·비공개 / Music Note / Library / 폴더가 기존 정상 동작을 유지하는지 최소 확인.
+4. 문제가 없으면 사용자 명확한 `정식배포` 승인 후 schema4 manifest `soridraw-test-v357-32c85eded45c`만 PRODUCTION에 exact promotion.
+5. PRODUCTION preflight에서 environment contract drift 또는 artifact/code SHA mismatch가 1개라도 나오면 mutation 전 중단.
+6. app357 parity 릴리스 종료 전 first-publication W12→W1~W2 비용 최적화 재개 금지.
+
+금지:
+- 최신 preview HEAD를 임의로 다시 빌드해 PRODUCTION에 사용.
+- bootstrap schema3 manifest 사용.
+- PRODUCTION에서 새 build/reassembly.
+- 사용자 승인 없는 PRODUCTION 변경.
+- 데이터 migration/backfill/full scan.
+- 정상 좋아요/공개/비공개/Music Note/Library/UI 변경.
 
 ## CURRENT NEXT GATE — one-time 새 Release Controller TEST bootstrap 승인 대기
 

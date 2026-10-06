@@ -1,9 +1,9 @@
-app357-production-first-release-controller-audit-v2
-target=62d94e27782b36777ba6e7a4d95e3ef9a4252943
-scope=production-environment-contract,compiled-worker-code-identity,browser-upgrade-contract,test-verified-manifest-v4
+app360-my-likes-navigation-zero-audit
+target=8af0d4e182b4a087a3a6e94cf8b5020396a79bc1
+scope=my-likes-tab-worker-zero-after-cache,heart-hydration-no-timed-revision-read,resume-only-fallback-preserved
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-production-first-release-controller-audit-v2
+requested=2026-10-06-app360-my-likes-navigation-zero-audit

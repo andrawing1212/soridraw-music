@@ -1,3 +1,157 @@
+### 2026-10-06 user verification — app359 changed-like Worker behavior
+- User observed that after app359, Worker/personal social snapshot counters rise only when an actual like membership changes (a track is added to or removed from My Likes).
+- Screenshot evidence: like mutation path shows bundled like save Worker 1 / D1 W1, public-like-card refresh Worker 1 / D1 R0 W0, private likes-revision Worker 1 / D1 R0 W0, and personal social snapshot reconciliation during the actual change.
+- This is consistent with the intended cost contract: unchanged tab/page navigation should stay local, while a real membership change may spend bounded Worker/read work and one canonical write.
+- Treat the prior `공개곡 ↔ 좋아요 곡` repeated-repair regression as PASS **provided counters no longer rise on unchanged repeated tab switching**.
+- Remaining release gate: confirm publication visibility/profile list no longer waits ~20 minutes after public/private change.
+### 2026-10-06 user verification — app359 My Likes count
+- User refreshed/updated PREVIEW app359 and confirmed own-profile `좋아요 곡` now shows **16 tracks**.
+- This matches the read-only canonical proof: D1 public+published liked relations=16 and shared personal-like R2 exact count=16.
+- Prior PREVIEW/TEST/PRODUCTION screens showing >20 were therefore display/cache-settlement drift, not proof that canonical shared user data contained >20 public+published likes.
+- TEST/PRODUCTION remain unchanged at this point; app359 has not yet been promoted.
+- Remaining PREVIEW ship gate before TEST: confirm repeated `공개곡 ↔ 좋아요 곡` navigation no longer causes repeated Worker repair after the one-time settlement, and confirm publication visibility reaches profile without the old ~20 minute delay.
+## 0QS. app359 PREVIEW 배포 완료 / My Likes 20곡 원인 확정 및 stale local guard 정리 (2026-10-06 KST)
+
+사용자 관찰:
+- app358 PREVIEW의 own-profile `좋아요 곡`이 이전 스물몇 곡에서 정확히 20곡으로 바뀜.
+- 이 상태를 그대로 TEST에 올리지 않고 read-only 실데이터 진단 후 원인을 확정.
+
+read-only 실데이터 진단 Run `37414720890`: SUCCESS / no mutation.
+- target public profile resolve: 1.
+- canonical D1 like relation 전체: **30**.
+- 그중 현재 공개+published 곡: **16**.
+- 비공개 또는 unpublished 관계: **14**.
+- pending q069=0 / q075=0.
+- shared personal-like R2 likedTrackIds: **16**.
+- R2 `canonicalComplete156=true`, `exactLikeCount156=16`.
+- R2 source=`verified-cross-origin-d1-358`.
+- 즉 서버 canonical/공유 R2 기준은 16인데 브라우저가 20곡을 보인 것은 서버 20곡 제한이 아니라 **과거 accepted-but-unsettled local guard가 4곡을 추가로 보호하던 현상**으로 판단.
+
+app359 수정:
+- app358의 canonical R2 repair 뒤에도 남을 수 있는 historical local snapshot guards를 app189의 기존 fresh settlement proof로 1회 정리.
+- settlement은 새 shared-R2 revision에 묶여 queue-empty + canonical/R2 + ETag 검증을 통과해야만 guard를 해제.
+- 현재 사용자의 실제 미전송 outbox는 기존 app189 보호 규칙 그대로 보존.
+- 같은 retained signal에 대한 app359 settlement upgrade는 origin당 1회만 허용; 이후 탭/페이지 왕복은 반복 Worker 금지.
+- 새 실제 like signal이 생긴 경우에만 다음 bounded settlement 기회가 열림.
+
+검증/배포:
+- Release System Audit Run `37415142727`: **SUCCESS**.
+- TypeScript PASS / Vite Build PASS / 기존 회귀검사 PASS.
+- `APP359_CANONICAL_R2_THEN_FRESH_SETTLEMENT=PASS`.
+- `APP359_SAME_SIGNAL_REPEAT_WORKER_BLOCKED=PASS`.
+- `APP359_CURRENT_OUTBOX_PROTECTED_BY_EXISTING_189_LOGIC=PASS`.
+- Firebase PREVIEW App Release Run `37415347786`: **SUCCESS**.
+- PREVIEW app version: **359**.
+- PREVIEW Explore Worker는 app358 Worker `117d5f65-e34d-4c58-8030-498193deb1b4` 그대로 사용(Worker 재배포 불필요).
+- TEST/main 및 PRODUCTION 비변경.
+- user data migration/backfill/copy/delete/rewrite 0.
+- D1/R2 진단은 read-only; app359은 사용자 원본 데이터 변경 없음.
+
+현재 gate:
+1. `preview.soridraw.com` app359에서 own-profile `좋아요 곡` 재확인.
+2. 정상 기준은 현재 canonical public/published membership **16곡** + 현재 미전송 사용자 의도가 있다면 그 의도만 임시 overlay.
+3. 앱359 최초 정리 뒤 `좋아요 곡 ↔ 공개곡` 반복 왕복 시 같은 Worker repair가 반복 증가하면 FAIL.
+4. 공개/비공개 후 프로필은 20분 대기 없이 change signal로 수렴해야 함.
+5. 위 확인 전 TEST 승격 금지.
+6. 확인 PASS 후 app359 전체를 TEST로 새 승격하고 새 TEST_VERIFIED manifest 생성.
+7. app357 TEST manifest는 계속 PRODUCTION 사용 금지.
+
+## 0QR. app358 PREVIEW 배포 완료 / 공개프로필 지연·My Likes 반복 Worker 회귀 수정 검증 단계 (2026-10-06 KST)
+
+사용자 실사용에서 app357 TEST_VERIFIED 이후 추가 회귀가 발견되어 **기존 app357 TEST manifest는 PRODUCTION 승격 근거로 폐기**:
+- PREVIEW와 TEST의 own-profile 좋아요 곡 목록이 서로 달랐음.
+- 좋아요 곡 탭을 반복 클릭할 때 새로고침 없이도 Worker 요청이 반복 상승하는 현상 관찰.
+- 공개/비공개 전환 뒤 공개프로필 공개곡 목록이 약 20분 동안 이전 상태로 남고 이후에야 수렴.
+- 따라서 `soridraw-test-v357-32c85eded45c`는 더 이상 PRODUCTION 승격에 사용 금지.
+
+app358 PREVIEW 수정:
+1. **공개프로필 변경 신호 즉시 수렴**
+   - 실제 publication RTDB 신호가 있을 때만 origin-local positive Edge shell을 우회.
+   - shared `PROFILE_MEDIA`의 public-profile R2 authority를 직접 확인.
+   - change-driven 경로는 D1 R0/W0 유지.
+   - 일반 재진입/페이지 이동은 기존 local-first 캐시 유지.
+2. **My Likes 반복 Worker 차단**
+   - retained like signal 하나당 cross-origin repair 시도는 최대 1회.
+   - 같은 signal에서 탭 재클릭/페이지 재진입은 repair Worker를 반복 호출하지 않음.
+   - 오래된 partial shared-like R2가 canonical D1과 달라진 계정은 그 1회 bounded account repair에서 shared derived R2 catalog를 exact 상태로 복구.
+   - D1은 read-only canonical comparison만 허용하며 relation/user source data 변경 없음.
+3. UI/좋아요 토글/공개·비공개/Music Note/Library/폴더 정상 기능은 변경하지 않음.
+
+검증/배포:
+- Release System Audit Run `37413168427`: **SUCCESS**.
+- TypeScript PASS / Vite Build PASS.
+- app358 executable regression:
+  - `APP358_PROFILE_SIGNAL_SHARED_R2_BYPASS=PASS`
+  - `APP358_MY_LIKES_ONE_REPAIR_PER_SIGNAL=PASS`
+  - `APP358_PERSONAL_LIKE_REPAIR_D1_READONLY=PASS`
+- PREVIEW Explore Worker Run `37413466047`: **SUCCESS**.
+  - before `39602152-bbf9-400c-9076-18c6c1d2b0b8`
+  - active after `117d5f65-e34d-4c58-8030-498193deb1b4`
+  - live `APP358_PROFILE_SIGNAL_SHARED_R2_LIVE=PASS`
+  - profile signal path D1 R0/W0 PASS.
+  - TEST Worker `ef64f24d-8e65-4921-a96d-b52e1d8db62d` unchanged.
+  - PRODUCTION Worker `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa` unchanged.
+- Firebase PREVIEW Hosting Run `37413571015`: **SUCCESS**.
+  - locked source `8bd79632c7c232216da62271634429dedf4c3aee`.
+  - `PREVIEW_APP_VERSION=358`.
+  - `PREVIEW_EXACT_BUILD=PASS`.
+  - `TEST_PRODUCTION_UNCHANGED=PASS`.
+  - shared RTDB rules deploy SKIPPED (변경 없음).
+- main(TEST) ref remains `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- production ref remains `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- user data migration/backfill/copy/delete/rewrite 0.
+- D1 schema migration/write 0.
+- Functions 변경 0.
+
+현재 합격 대기:
+1. 사용자 PREVIEW 실기기에서 own-profile → 좋아요 곡을 연속 여러 번 전환해 **첫 stale repair 이후 반복 Worker 증가가 없는지** 확인.
+2. PREVIEW에서 공개↔비공개 변경 후 프로필 공개곡 목록이 **20분 대기 없이 바로 수렴**하는지 확인.
+3. PREVIEW 좋아요 곡 목록이 실제 좋아요 membership과 일치하는지 확인.
+4. 위 3개 PASS 전 TEST 승격 금지.
+5. PASS 후 app358 전체 PREVIEW를 TEST로 새 승격하여 새 TEST_VERIFIED manifest 생성.
+6. 기존 app357 manifest/태그로 PRODUCTION 승격 금지.
+7. 사용자 명확한 정식배포 승인 전 PRODUCTION 변경 금지.
+
+## 0QQ. schema4 TEST_VERIFIED 최종 재검증 완료 / TEST 실사용 확인 단계 (2026-10-06 KST)
+
+사용자 승인된 TEST 승격 흐름의 2차 검증 완료:
+- Release Controller Run `37407657202`: **SUCCESS / TEST_VERIFIED**.
+- 고정 source PREVIEW SHA: `32c85eded45c49e0e735c685a05b2efe8702c8ce`.
+- TEST main promoted SHA: `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- app version: **357**.
+- immutable release tag: `soridraw-test-v357-32c85eded45c`.
+- manifest: **schema 4 / TEST_VERIFIED**.
+- TEST Explore Worker active version: `ef64f24d-8e65-4921-a96d-b52e1d8db62d`.
+- TEST Media Worker active version: `3c167990-7194-4301-81da-791a21989156`.
+- Firebase TEST Hosting deploy + exact index/app-version verify PASS.
+- latest/popular shared Feed parity PASS.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- shared Catalog flag=1 / Media health+bindings+smoke PASS.
+- TEST↔PRODUCTION 허용 환경 차이 계약 PASS.
+- Explore compiled code SHA TEST=PRODUCTION `13d809a3eca35366e25d85fefda3ebc0faa6a88968157a8afbf81a0e8178cf03`.
+- Media compiled code SHA TEST=PRODUCTION `f0507a8464a1147e2bc914b6cd681ee1f1531ecfc3afb40ab7a73b8e55990bc9`.
+- production environment contract SHA `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7`.
+- app366 cross-environment profile/My Likes parity verifier PASS.
+- app367 old-production-cache upgrade verifier PASS.
+- TypeScript PASS / Vite Build PASS / release static+mutation guard PASS.
+- D1 preflight SELECT-only PASS. migration/backfill/seed/delete/rewrite 없음.
+- PRODUCTION branch/Hosting/Explore Worker/Media Worker **비변경**.
+- 현재 PRODUCTION ref: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+
+중요:
+- 직전 bootstrap schema3 tag `soridraw-test-v357-8ad97e799c24`는 계속 PRODUCTION 사용 금지.
+- PRODUCTION 승격 근거는 오직 schema4 tag `soridraw-test-v357-32c85eded45c`.
+- 이후 PREVIEW의 docs-only HEAD가 바뀌더라도 이번 TEST_VERIFIED source는 위 SHA로 고정한다.
+- 사용자 별도 명확한 정식배포 승인 전 PRODUCTION 변경 금지.
+
+다음:
+1. 사용자가 `test.soridraw.com`에서 app357 실사용 확인.
+2. Explore Feed / SORIDRAW 추천 / 공개프로필 공개곡·핀 / own-profile 좋아요 곡 / shared Catalog 기반 Music Note·Library의 핵심 체감 확인.
+3. 이상 없으면 사용자의 명확한 정식배포 승인 후 위 schema4 manifest **그 하나만** 사용해 PRODUCTION 승격.
+4. PRODUCTION 승격은 재build/reassembly 없이 TEST 검증 artifact exact promotion만 허용.
+5. app357 parity 종료 전 first-publication W12→W1~W2 비용 작업 재개 금지.
+
 ## 0QP. TEST bootstrap 1차 완료 / schema4 TEST_VERIFIED 재검증 진행 단계 (2026-10-06 KST)
 
 사용자 `테스트배포` 승인 후 one-time bootstrap 1차 완료:

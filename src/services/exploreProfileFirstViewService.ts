@@ -168,6 +168,7 @@ const parseJsonText = (value: string) => {
 const requestMaterializedFirstView = async (
   profileRef: string,
   knownRevision: string | null = null,
+  forceSharedPublicationSignal358 = false,
 ): Promise<MaterializedRequestResult> => {
   const normalizedRef = normalizeProfileRef(profileRef);
   const url = new URL(`${EXPLORE_API_BASE}/v1/profiles/${encodeURIComponent(normalizedRef)}/first-view`);
@@ -175,6 +176,12 @@ const requestMaterializedFirstView = async (
   const revision = String(knownRevision || '').trim();
   if (revision) {
     url.searchParams.set('knownRevision', revision);
+  }
+  // app358: a retained publication signal is proof that shared profile state
+  // may be newer than this origin's 20-minute positive Edge entry. Only the
+  // change-driven reconciliation request bypasses that origin-local Edge shell.
+  if (forceSharedPublicationSignal358) {
+    url.searchParams.set('__soridraw_publication_signal', '358');
   }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -255,7 +262,7 @@ const revalidateCachedProfile113 = (
 
   const task = (async () => {
     try {
-      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
+      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision, true);
       if (materialized.kind === 'updated') {
         writeCache(normalizedRef, materialized.data);
         options.onRevalidated?.(materialized.data);
@@ -477,7 +484,11 @@ export const getExplorePublicProfileFirstView = async (
 
   const task = (async () => {
     try {
-      const materialized = await requestMaterializedFirstView(normalizedRef);
+      const materialized = await requestMaterializedFirstView(
+        normalizedRef,
+        null,
+        expectedPublicationSignalVersion > 0,
+      );
       if (materialized.kind === 'updated') {
         const next = normalizeCachedData({
           ...materialized.data,

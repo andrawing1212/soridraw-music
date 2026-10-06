@@ -1,3 +1,71 @@
+## 0QI. SORIDRAW 추천 cold-cache 복구 + 배포 엔진 hard gate PREVIEW 완료 (2026-10-06 KST)
+
+사용자 실기기에서 확인된 문제:
+- PRODUCTION Explore에서 기존 `SORIDRAW 추천` 섹션이 사라짐.
+- CACHE LIVE에 `/v1/curated HTTP 503` 확인.
+- 같은 시점 최신/인기 Feed 및 warm Explore D1 R0/W0은 정상이라 추천 경로만 별도 격리.
+
+원인:
+- `SORIDRAW 추천`은 사용자 원본이 아니라 환경별 `EXPLORE_CACHE` R2의 파생 curated snapshot을 사용.
+- R2 snapshot이 없는 환경에서 wrapper의 `materializeCuratedR2FromBase307()`가 wrapper 전용 `/v1/curated`를 base Worker에 다시 요청하고 있었음.
+- base Worker는 해당 wrapper route를 소유하지 않아 cold bootstrap이 실패하고 503을 반환.
+- 기존 Release Controller parity는 latest/popular Feed와 public profile은 비교했지만 `/v1/curated`를 확인하지 않아 PRODUCTION의 추천 누락을 놓침.
+
+수정 범위 — 다른 기능 비변경:
+- 제품 fix commit `ff3c87ba797551beb9afbc8241ee5fca03f4680e`.
+- release-engine 보강 commit `d0811e400c74fe8c81c6f3a0bc494321388da71c`.
+- `cloudflare/explore-worker/canonical/preview-entry.js`
+  - cold curated recovery를 shared canonical `curated_picks` 최대 40개 + 해당 exact track detail만 읽는 bounded 복구로 교체.
+  - 전체 tracks scan/rebuild 없음.
+  - D1 write 0, 사용자 데이터 write 0.
+  - 정상 R2/Edge warm 경로는 기존 그대로.
+- `.deploy/release-worker-runtime.mjs`
+  - TEST/PRODUCTION 승격 시 `/v1/curated` HTTP 200 + warm D1 R0/W0 + 이전 단계와 curated projection parity를 필수 확인.
+  - 실패 시 기존 release rollback 경로로 승격 중단.
+- `.github/workflows/cloudflare-explore-preview-release.yml`
+  - PREVIEW Worker 배포 자체도 curated first/warm live smoke를 필수화.
+  - warm 응답 D1 R0/W0 및 R2/Edge authority가 아니면 배포 실패/rollback.
+
+검증/배포:
+- Release System Audit Run `37392337700`: SUCCESS.
+- 강화된 최종 Audit Run `37392970196`: SUCCESS.
+  - TypeScript PASS.
+  - Build PASS.
+  - Explore curation verifier PASS.
+  - release promotion verifier PASS.
+  - Worker dry-run / shared D1 read-only preflight PASS.
+- PREVIEW Worker Release Run `37393213974`: SUCCESS.
+- active PREVIEW Explore Worker: `193d7c1c-7471-44d0-bd1f-2315b0121eed`.
+- live curated smoke:
+  - first response HTTP 200 / 추천 12곡 PASS.
+  - immediate warm response HTTP 200 / 추천 12곡 PASS.
+  - warm D1 R0/W0 PASS.
+  - source `EDGE-CURATED-BODY-307` PASS.
+- 기존 latest/popular/profile/genre/search/like smokes도 PASS.
+- TEST / PRODUCTION Explore Workers unchanged PASS.
+- Firebase Hosting 변경 0.
+- Functions / Firestore Rules / D1 schema·trigger 변경 0.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite 0.
+
+현재 상태:
+- PREVIEW에서는 `SORIDRAW 추천` backend가 정상 복구되고 실제 live endpoint까지 확인 완료.
+- PRODUCTION은 사용자가 보고한 기존 Explore Worker 상태를 아직 유지하므로 **정식앱 복구 완료라고 판정하지 않음**.
+- TEST/PRODUCTION 승격은 기존 승인 규칙을 유지. 사용자 명시 TEST 승격 전 main 변경 금지, 명확한 PRODUCTION 배포 승인 전 production 변경 금지.
+- UI, 좋아요, 공개/비공개, Music Note, Library, 저장하트, 폴더, thumbnail 코드는 이번 수정에서 변경하지 않음.
+
+## 0QH. shared private Catalog coordinated cutover 실제 완료 (2026-10-06 KST)
+
+- coordinated cutover Run `37389139136`: SUCCESS.
+- PREVIEW / TEST / PRODUCTION Media Worker 모두 `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`.
+- health authority mode: `shared-catalog` PASS.
+- active cutover versions:
+  - PREVIEW Media `5e258a0c-2e17-4fcb-bacc-11b2a5a608f2`.
+  - TEST Media `6a890d63-d924-4199-a0ef-bd884430ff8f`.
+  - PRODUCTION Media `f2fa815e-d38d-4e17-b2f5-4495efe00672`.
+- Firestore migration 0 / D1 mutation 0 / Catalog bulk copy 0 / Hosting 변경 0.
+- 따라서 아래 0QG의 `flag=0 dormant` 설명은 당시 시점 기록이며, **현재 실제 runtime은 세 환경 모두 shared Catalog ON**이 최신 기준.
+- 사용자 실기기에서 이번 cutover 이후 Music Note 곡 목록이 거의 동일하게 맞춰졌다고 확인됨. 전체 parity/비용 검증은 계속 별도 확인 대상.
+
 ## 0QG. app356 PRODUCTION dormant shared Catalog support 승격 완료 + Hosting clone fix (2026-10-06 KST)
 
 PRODUCTION 승격 최종 결과:

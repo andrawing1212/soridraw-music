@@ -1,3 +1,26 @@
+## 0QT. app360 TEST 1차 승격 완료 / 새 controller identity로 최종 TEST 재검증 필요 (2026-10-06 KST)
+
+사용자 TEST 승격 승인 후 app360 1차 TEST 승격 완료:
+- PREVIEW app360 exact Hosting Run `37436007480`: SUCCESS.
+- frozen PREVIEW source: `0d27ac79c2d8fed053fc2949cbfdad05fff794b7`.
+- app360 regression PASS:
+  - `APP360_MY_LIKES_TAB_WORKER_ZERO_AFTER_CACHE=PASS`
+  - `APP360_HEART_HYDRATION_NO_TIMED_REVISION_READ=PASS`
+  - `APP360_RESUME_ONLY_REVISION_FALLBACK_PRESERVED=PASS`
+  - `APP360_RTDB_LIVE_CHANGE_PATH_PRESERVED=PASS`
+- Release Controller TEST Run `37436278070`: SUCCESS / TEST_VERIFIED.
+- first TEST tag: `soridraw-test-v360-0d27ac79c2d8`.
+- main promoted to `d42444e85efae30a6915e64b9604e8c81b3f9306`.
+- TEST curated parity PASS / public-profile parity PASS / environment parity PASS.
+- production environment contract PASS.
+- PRODUCTION ref unchanged: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+
+중요:
+- 이번 app360에서 Release Controller workflow 자체에 app358/359/360 executable gates가 추가됨.
+- 위 1차 TEST Run은 issue_comment 특성상 당시 default `main`의 직전 controller identity로 실행됨.
+- 따라서 첫 tag `soridraw-test-v360-0d27ac79c2d8`는 **TEST bootstrap 증거로만 유지하고 PRODUCTION 승격 근거로 사용 금지**.
+- 현재 main에는 app360 controller가 승격되었으므로, docs-only PREVIEW SHA를 새로 만들고 새 main controller로 TEST를 1회 재검증하여 최종 schema4 TEST_VERIFIED manifest를 생성한다.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음. D1 schema 변경 없음.
 ### 2026-10-06 user verification — app359 changed-like Worker behavior
 - User observed that after app359, Worker/personal social snapshot counters rise only when an actual like membership changes (a track is added to or removed from My Likes).
 - Screenshot evidence: like mutation path shows bundled like save Worker 1 / D1 W1, public-like-card refresh Worker 1 / D1 R0 W0, private likes-revision Worker 1 / D1 R0 W0, and personal social snapshot reconciliation during the actual change.

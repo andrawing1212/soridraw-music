@@ -1,3 +1,17 @@
+## CURRENT NEXT GATE — app360 final TEST_VERIFIED 재검증
+
+1차 TEST bootstrap:
+- source `0d27ac79c2d8fed053fc2949cbfdad05fff794b7`
+- Run `37436278070` SUCCESS
+- main `d42444e85efae30a6915e64b9604e8c81b3f9306`
+- app360 TEST deployed
+- first tag `soridraw-test-v360-0d27ac79c2d8`는 production 사용 금지
+
+다음:
+- 이 docs-only PREVIEW HEAD를 exact target으로 새 main app360 controller에서 TEST 재검증.
+- TypeScript / Build / app358-360 executable gates / production env contract / TEST Worker+Media+Hosting / Feed / curated / public profile / shared catalog 모두 PASS 필요.
+- 새 schema4 TEST_VERIFIED tag만 향후 PRODUCTION 후보.
+- PRODUCTION은 사용자 명확한 정식배포 승인 전 변경 금지.
 ### app359 PREVIEW verification progress — Worker behavior
 - PASS candidate: Worker/social-snapshot activity now follows **actual like membership changes**, not mere tab navigation.
 - This is acceptable under the local-first cost rule: real like changes may use bounded Worker/read work and W1; unchanged revisit must remain Worker 0 / D1 R0 target.

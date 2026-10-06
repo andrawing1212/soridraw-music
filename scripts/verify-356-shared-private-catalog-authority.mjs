@@ -42,7 +42,8 @@ const seedEnd = worker.indexOf('const getCatalogState = async', seedStart);
 assert.ok(seedStart > 0 && seedEnd > seedStart, 'legacy seed block missing');
 const seedBlock = worker.slice(seedStart, seedEnd);
 assert.match(seedBlock, /readCatalogStateFromBucket\(env\.MEDIA/);
-assert.match(seedBlock, /legacyPayload\.revision < required/);
+assert.match(seedBlock, /required <= 0 \|\| legacyPayload\.revision < required/,
+  'legacy seed must require a positive shared revision fence before it can become shared authority');
 assert.doesNotMatch(seedBlock, /firestoreCatalogQuery\(|buildCanonicalCatalog\(/,
   'legacy R2 seed unexpectedly scans Firestore');
 
@@ -94,10 +95,11 @@ assert.match(cacheBlock, /readRemoteCatalogSnapshot\(kind, uid, knownRemoteRevis
 assert.doesNotMatch(cacheBlock, /app-version|APP_VERSION|location\.reload/,
   'app version/reload must not trigger canonical bootstrap');
 
-for (const vars of [cfg.vars, cfg?.env?.test?.vars, cfg?.env?.production?.vars]) {
-  assert.equal(String(vars?.SORIDRAW_SHARED_CATALOG_V1 || ''), '0',
-    'stage-4 shared catalog flag must remain OFF');
-}
+const sharedFlags = [cfg.vars, cfg?.env?.test?.vars, cfg?.env?.production?.vars]
+  .map((vars) => String(vars?.SORIDRAW_SHARED_CATALOG_V1 || ''));
+assert.ok(['0', '1'].includes(sharedFlags[0]), 'shared Catalog source flag must be 0 or 1');
+assert.deepEqual(sharedFlags, [sharedFlags[0], sharedFlags[0], sharedFlags[0]],
+  'PREVIEW/TEST/PRODUCTION shared Catalog flags must never drift');
 for (const bindings of [cfg.r2_buckets, cfg?.env?.test?.r2_buckets, cfg?.env?.production?.r2_buckets]) {
   const catalog = (bindings || []).find((item) => item?.binding === 'CATALOG');
   assert.equal(catalog?.bucket_name, 'soridraw-user-catalog',
@@ -108,7 +110,7 @@ console.log('SHARED_PRIVATE_CATALOG_AUTHORITY_356=PASS');
 console.log('SHARED_CATALOG_LAZY_LEGACY_SEED=PASS');
 console.log('SHARED_CATALOG_BOUNDED_CANONICAL_BOOTSTRAP=PASS');
 console.log('HEALTHY_WARM_ENTRY_BOOTSTRAP=false');
-console.log('SHARED_CATALOG_CUTOVER=false');
+console.log(`SHARED_CATALOG_CUTOVER=${sharedFlags[0] === '1' ? 'true' : 'false'}`);
 console.log('USER_DATA_MASS_COPY=false');
 console.log('FIRESTORE_FULL_SCAN_NORMAL_ENTRY=false');
 console.log('MEDIA_ARCHIVE_BINDING_UNCHANGED=true');

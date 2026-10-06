@@ -5,8 +5,8 @@ import { spawnSync } from 'node:child_process';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
-if (!['test', 'production'].includes(mode)) {
-  throw new Error('usage: node .deploy/release-media-worker-runtime.mjs <test|production> <dry-run|upload|activate|verify|restore>');
+if (!['preview', 'test', 'production'].includes(mode)) {
+  throw new Error('usage: node .deploy/release-media-worker-runtime.mjs <preview|test|production> <dry-run|upload|activate|verify|restore>');
 }
 if (!['dry-run', 'upload', 'activate', 'verify', 'restore'].includes(action)) {
   throw new Error(`unsupported action: ${action}`);
@@ -16,10 +16,16 @@ const ROOT = resolve(process.cwd());
 const WORKER_DIR = join(ROOT, 'cloudflare', 'media-worker');
 const SOURCE_CONFIG_PATH = join(WORKER_DIR, 'wrangler.jsonc');
 const SOURCE_CONFIG = JSON.parse(readFileSync(SOURCE_CONFIG_PATH, 'utf8'));
-const SOURCE_ENV = SOURCE_CONFIG?.env?.[mode];
+const SOURCE_ENV = mode === 'preview' ? SOURCE_CONFIG : SOURCE_CONFIG?.env?.[mode];
 if (!SOURCE_ENV || typeof SOURCE_ENV !== 'object') throw new Error(`media Worker source env missing: ${mode}`);
 
 const TARGETS = {
+  preview: {
+    worker: 'soridraw-media-preview',
+    base: 'https://soridraw-media-preview.andrawing1212.workers.dev',
+    origin: 'https://preview.soridraw.com',
+    mediaBucket: 'soridraw-media-preview',
+  },
   test: {
     worker: 'soridraw-media-test',
     base: 'https://soridraw-media-test.andrawing1212.workers.dev',

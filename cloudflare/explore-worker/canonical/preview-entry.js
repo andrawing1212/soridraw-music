@@ -261,22 +261,78 @@ async function handleExploreManagerMutation307(request, env, ctx, targetUid, ena
 }
 
 async function materializeCuratedR2FromBase307(request, env, ctx) {
+  // SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006
+  // EXPLORE_CACHE is intentionally environment-local. If one environment loses
+  // this derived object, rebuild only the explicit curated membership (max 40)
+  // from the shared canonical D1 and resolve only those exact track details.
+  // Never call the wrapper-only /v1/curated route through baseWorker: the base
+  // Worker does not own that route and would return 404/503 on a cold environment.
   const bucket = curatedBucket307(env);
-  if (!bucket) return { object: null, payload: null, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
-  const target = new URL('/v1/curated', request.url);
-  target.searchParams.set('collection', SORIDRAW_CURATED_COLLECTION_307);
-  target.searchParams.set('limit', '40');
-  const baseResponse = await baseWorker.fetch(new Request(target.toString(), {
-    method: 'GET',
-    headers: { Origin: request.headers.get('Origin') || '' },
-  }), env, ctx);
-  const payload = await baseResponse.clone().json().catch(() => null);
-  if (!baseResponse.ok || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
-    return { object: null, payload: null, d1Read: 0, source: 'D1-BOOTSTRAP-FAILED-307' };
+  if (!bucket) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'R2-BINDING-MISSING-307' };
+  if (!env?.DB) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'D1-BINDING-MISSING-356' };
+
+  const now = Date.now();
+  let rows = [];
+  try {
+    const result = await env.DB.prepare(`
+      SELECT track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at
+      FROM curated_picks
+      WHERE collection_key=?
+        AND (starts_at IS NULL OR starts_at<=?)
+        AND (ends_at IS NULL OR ends_at>?)
+      ORDER BY sort_order ASC, updated_at DESC, track_id ASC
+      LIMIT 40
+    `).bind(SORIDRAW_CURATED_COLLECTION_307, now, now).all();
+    rows = Array.isArray(result?.results) ? result.results : [];
+  } catch (error) {
+    console.warn('[app356] curated bounded bootstrap membership read failed:', String(error?.message || error || 'unknown'));
+    return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'D1-BOOTSTRAP-FAILED-356' };
   }
-  const memberIds = payload.data.items
-    .map((item) => String(item?.track?.id || '').trim())
+
+  const memberIds = rows
+    .map((row) => String(row?.track_id || '').trim())
     .filter(Boolean);
+  const items = [];
+  let d1Read = rows.length;
+
+  for (const row of rows) {
+    const trackId = String(row?.track_id || '').trim();
+    if (!trackId) continue;
+    const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
+    let detailResponse = null;
+    try {
+      detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
+        method: 'GET',
+        headers: { Origin: request.headers.get('Origin') || '' },
+      }), env, ctx);
+    } catch {
+      continue;
+    }
+    const detailD1Read = Number(detailResponse.headers.get('X-SORIDRAW-D1-Read') || 0);
+    if (Number.isFinite(detailD1Read) && detailD1Read > 0) d1Read += detailD1Read;
+    if (!detailResponse.ok) continue;
+    const detail = await detailResponse.clone().json().catch(() => null);
+    const track = detail?.data?.track;
+    if (!track?.id) continue;
+    items.push({
+      track,
+      curation: {
+        curatorUid: String(row?.curator_uid || ''),
+        curatorRole: String(row?.curator_role || ''),
+        sortOrder: Number(row?.sort_order || 0),
+        startsAt: row?.starts_at ?? null,
+        endsAt: row?.ends_at ?? null,
+      },
+    });
+  }
+
+  const payload = {
+    ok: true,
+    data: {
+      collection: SORIDRAW_CURATED_COLLECTION_307,
+      items,
+    },
+  };
   const stored = {
     schemaVersion: 1,
     collection: SORIDRAW_CURATED_COLLECTION_307,
@@ -294,8 +350,8 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
     object,
     payload,
     memberIds,
-    d1Read: Math.max(1, Number(payload.data.items.length || 0)),
-    source: 'D1-BOOTSTRAP-307',
+    d1Read,
+    source: 'D1-BOUNDED-BOOTSTRAP-356',
   };
 }
 

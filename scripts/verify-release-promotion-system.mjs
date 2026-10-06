@@ -74,6 +74,9 @@ for (const token of [
   'RELEASE_ENVIRONMENT_PARITY=PASS',
   'SHARED_FEED_PARITY=PASS',
   'PUBLIC_PROFILE_PARITY=PASS',
+  'CURATED_PARITY=PASS',
+  'readCuratedWarmSnapshot',
+  'curatedProjection',
 ]) required(workerRuntime, token, 'Worker runtime');
 
 forbidden(workerRuntime, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b[^\n]*env\.DB/i, 'Worker runtime D1 mutation');
@@ -103,6 +106,9 @@ required(workerRuntime, 'sameProjection(targetSnapshotProjection, referenceSnaps
 forbidden(workerRuntime, /direct Feed projection differs from/, 'legacy direct first-page parity gate');
 forbidden(workerRuntime, /targetRevision\.revision !== referenceRevision\.revision/, 'independent edge revision exact-equality gate');
 required(workerRuntime, 'sameProjection(profileProjection(targetProfile.payload), profileProjection(referenceProfile.payload))', 'public-profile projection equality');
+required(workerRuntime, "const path = '/v1/curated?collection=soridraw&limit=20'", 'SORIDRAW curated release probe');
+required(workerRuntime, 'requireZeroD1(warm', 'curated warm zero-D1 gate');
+required(workerRuntime, 'sameProjection(targetCuratedProjection, referenceCuratedProjection)', 'curated recommendation projection equality');
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
 required(workerRuntime, 'hashReleaseIdentity', 'deterministic Worker release identity');

@@ -320,6 +320,20 @@ function profileProjection(payload) {
   };
 }
 
+function curatedProjection(payload) {
+  const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  return items.map((item) => {
+    const track = item?.track || {};
+    return {
+      ...trackProjection(track),
+      coverUrl: String(track?.coverUrl ?? track?.cover_url ?? ''),
+      publishedAt: numberValue(track?.publishedAt ?? track?.published_at),
+      sourceType: String(track?.sourceType ?? track?.source_type ?? ''),
+      sourceId: String(track?.sourceId ?? track?.source_id ?? ''),
+    };
+  });
+}
+
 function sameProjection(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -386,6 +400,30 @@ async function readCurrentSharedSnapshot(base, origin, sort, label) {
   return { ...result, revision, snapshotSource };
 }
 
+// SORIDRAW_RELEASE_CURATED_PARITY_356_20261006
+// Curated recommendation cache is environment-local derived state. A release may
+// hydrate a missing target cache once, but the immediately repeated read must be
+// R2/Edge-only and the visible recommendation projection must match the previous
+// validated stage. This prevents a successful release with /v1/curated HTTP 503.
+async function readCuratedWarmSnapshot(base, origin, label) {
+  const path = '/v1/curated?collection=soridraw&limit=20';
+  const hydrate = await getPublicJson(base, origin, path);
+  requireCors(hydrate, origin, `${label} SORIDRAW curated hydrate`);
+  const hydrateWrite = hydrate.response.headers.get('x-soridraw-d1-write');
+  if (hydrateWrite !== null && String(hydrateWrite).trim() !== '0') {
+    throw new Error(`${label} SORIDRAW curated hydrate D1 write must be 0, got ${hydrateWrite}`);
+  }
+
+  const warm = await getPublicJson(base, origin, path);
+  requireCors(warm, origin, `${label} SORIDRAW curated warm`);
+  requireZeroD1(warm, `${label} SORIDRAW curated warm`);
+  const source = String(warm.response.headers.get('x-soridraw-curated-source') || '');
+  if (!source.includes('R2') && !source.includes('EDGE')) {
+    throw new Error(`${label} SORIDRAW curated warm source must be R2/Edge, got ${source || '(none)'}`);
+  }
+  return warm;
+}
+
 async function environmentParityOnce() {
   let ownerUid = '';
   for (const sort of ['latest', 'popular']) {
@@ -427,6 +465,17 @@ async function environmentParityOnce() {
       + `revision=${referenceSnapshot.revision}`,
     );
   }
+
+  const [referenceCurated, targetCurated] = await Promise.all([
+    readCuratedWarmSnapshot(target.referenceBase, target.referenceOrigin, target.referenceStage),
+    readCuratedWarmSnapshot(target.base, target.origin, mode.toUpperCase()),
+  ]);
+  const referenceCuratedProjection = curatedProjection(referenceCurated.payload);
+  const targetCuratedProjection = curatedProjection(targetCurated.payload);
+  if (!sameProjection(targetCuratedProjection, referenceCuratedProjection)) {
+    throw new Error(`${mode} SORIDRAW curated projection differs from ${target.referenceStage}`);
+  }
+  console.log(`${mode.toUpperCase()}_CURATED_PARITY=PASS count=${targetCuratedProjection.length}`);
 
   if (!ownerUid) throw new Error(`${mode}: parity probe owner missing from shared Feed`);
   const profilePath = `/v1/profiles/${encodeURIComponent(ownerUid)}/first-view?limit=50`;

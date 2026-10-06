@@ -96,6 +96,8 @@
 - PRODUCTION은 위 TEST_VERIFIED artifact를 **재빌드하지 않고 그대로** 활성화/복제한다. source가 같더라도 다시 build/upload해 다른 artifact가 생기면 동일 릴리스로 인정하지 않는다.
 - 브라우저 origin별 localStorage/IndexedDB/PWA cache처럼 서버 parity만으로 보이지 않는 상태도 릴리스 계약이다. 최소한 **현재 PRODUCTION 캐시 → 새 릴리스 업그레이드**와 **새 기기/빈 캐시** 두 경로를 TEST 단계에서 검증한다.
 - 핵심 사용자 결과 parity는 서버 응답만이 아니라 실제 앱 상태 기준으로 본다. 최소 기준: Explore Feed, SORIDRAW 추천, 공개프로필 공개곡/핀, own-profile 좋아요 곡 membership, 공개/비공개 상태, 좋아요 상태/숫자, Music Note, Library, folders, media/thumbnail.
+- **핵심 상태형 UI 불변조건:** 최근 생성곡 / Music Note / Library처럼 같은 사용자 곡을 보여주는 화면의 저장(하트)·좋아요·잠금·공개/비공개 버튼은 앱 버전이나 환경이 바뀌어도 같은 canonical 사용자 상태를 같은 활성/비활성 표시로 보여야 한다. 버튼 fill/active, 목록 membership, 잠금 여부, 공개 여부를 같은 곡 기준으로 PREVIEW↔TEST↔PRODUCTION 및 기존 PRODUCTION persistent cache 업그레이드 경로에서 반드시 검증한다.
+- 위 상태형 UI는 release verifier와 실사용 검증 매트릭스의 상시 항목이다. 서버/API parity만 PASS하고 브라우저 버튼 상태가 다르면 RELEASED 금지.
 - 릴리스에 포함되지 않은 기능도 기존 정상 기준이 유지되는지 최소 회귀 검사를 한다. "수정한 기능만 정상"은 TEST_VERIFIED가 아니다.
 - **정식배포 후 사용자가 처음 발견해야 하는 필수 검사는 없어야 한다.** 사용자 확인은 체감/최종 확인이지 핵심 데이터 정합성 검사의 대체가 아니다.
 - PRODUCTION 승격 후 위 핵심 결과 중 하나라도 TEST와 달라지면 RELEASED 금지, 자동 rollback 또는 트래픽 미전환이 우선이다. 이를 제품 hotfix 반복으로 정상화하지 않는다.

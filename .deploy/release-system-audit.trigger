@@ -1,9 +1,9 @@
-app356-curated-production-r2-fallback-audit
-target=59160a2deccdf4694606f1b173d7943cc2b4588b
-scope=curated-production-profile-media-fallback,bounded-cold-recovery,release-curated-gate
-protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
+app357-cross-environment-profile-like-parity-audit
+target=fa60aefb8fdfe0899cbe9a93bc769a4a61572e10
+scope=public-profile-publications,my-likes-origin-parity,release-hard-gate
+protect=feed,curated,like-click-batching,publication,studio-heart,music-note,library,folders,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-curated-production-fallback-audit
+requested=2026-10-06-cross-environment-profile-like-parity

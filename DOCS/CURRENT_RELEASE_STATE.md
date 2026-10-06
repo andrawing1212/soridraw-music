@@ -1,3 +1,25 @@
+## 0QN. PRODUCTION-first 릴리스 절대 규칙 고정 (2026-10-06 KST)
+
+사용자 최우선 운영 지시:
+- 최종 목표는 항상 정식앱(PRODUCTION).
+- PREVIEW에서 기능을 개발할 때부터 PRODUCTION의 환경 차이와 기존 사용자 상태까지 염두에 두고 구현.
+- TEST는 "테스트용"이 아니라 **정식에 그대로 복붙될 완성본**을 검증하는 단계.
+- TEST에서 모든 기능이 정상이라면 PRODUCTION은 같은 결과가 **단 한 번에** 나와야 함.
+- TEST PASS 후 PRODUCTION에서 binding/cache/origin 차이 때문에 새 오류가 나고 다시 제품 코드를 고치는 반복을 정상 운영으로 인정하지 않음.
+- 정식배포 뒤 "아, 이 환경만 달랐다"는 식의 누락을 금지.
+- 사용자가 정식배포 후 핵심 정합성 오류를 찾아주는 것을 배포 검증의 일부로 의존하지 않음.
+
+영구 기준 반영:
+- `AGENTS.md`: PRODUCTION-first / TEST_VERIFIED 의미 / exact artifact 승격 / Release System FAIL 기준 추가.
+- `DOCS/WORKFLOW_GUARDRAILS.md`: PRODUCTION-first 릴리스 절대 규칙 신설.
+- `DOCS/WORK_AUDIT_CHECKLIST.md`: production live contract, old-production-cache upgrade, browser-visible parity, exact artifact identity를 필수 감사 항목으로 추가.
+- 이 규칙은 앞으로 기능별 임시 판단보다 상위 release invariant로 사용.
+
+현재 배포 상태:
+- PREVIEW app357만 배포됨.
+- TEST / PRODUCTION은 app357 미승격.
+- 다음 큰 작업은 app357을 밀어 올리는 것이 아니라, **Release Controller가 이 새 절대 규칙을 실제 코드로 강제하도록 보강하는 것**.
+- 보강이 완료되어 Audit PASS하기 전 app357 TEST/PRODUCTION 승격 금지.
 ## 0QM. app357 PREVIEW 공개프로필/좋아요곡 cross-environment parity 복구 + 승격 hard gate 추가 (2026-10-06 KST)
 
 사용자 실기기 발견:

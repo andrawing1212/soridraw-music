@@ -1,3 +1,32 @@
+## CURRENT NEXT GATE — app360 PRODUCTION Music Note 공개상태 회귀 + 영구 승격 parity gate
+
+사용자 실기기 발견:
+- 같은 곡의 Music Note 공개 버튼이 PREVIEW/TEST 쪽에서는 활성인데 PRODUCTION에서는 비활성으로 표시되는 회귀 확인.
+- app360 Release Controller는 Feed/curated/public-profile/My Likes/browser-upgrade를 검사했지만 Music Note 카드의 publication-state 버튼 parity를 직접 검사하지 못함.
+- 따라서 현재 상태는 제품 데이터 손상으로 단정하지 않고 **Release System FAIL + origin-local Music Note publication cache 수렴 누락** 후보로 다룬다.
+
+이번 작업 우선순위:
+1. `src/services/explorePublicationService.ts`의 기존 `explore-publication-states` persistent cache가 오래된 PRODUCTION origin에서도 실제 shared publication authority로 안전하게 수렴하도록 최소 수정.
+2. 앱 버전 변경만으로 전체 cache 삭제/전체 publication 목록 DB read 금지. 변경 신호 또는 작은 revision 증거가 있을 때만 필요한 bundle을 갱신.
+3. 정상 좋아요/저장하트/잠금/공개·비공개 mutation, Music Note 60초 저장, Library, Feed, 공개프로필 UI는 비변경.
+4. 영구 Release Gate에 같은 곡 기준 상태 parity를 추가:
+   - 최근 생성곡 저장/하트 상태
+   - Explore 좋아요 상태와 숫자
+   - Music Note 잠금 상태
+   - Music Note 공개/비공개 버튼 상태
+   - Music Note/Library membership
+   - media/thumbnail
+5. PREVIEW→TEST→PRODUCTION뿐 아니라 **기존 PRODUCTION persistent cache → 새 버전 업그레이드**에서도 위 상태가 같은지 검증.
+6. 서버/API parity만 맞고 실제 브라우저 버튼 fill/active가 다르면 승격 FAIL.
+7. 이 회귀가 해결되고 Release System Audit까지 PASS하기 전 first-publication W12→W1~W2 비용 최적화 재개 금지.
+
+금지:
+- 사용자 데이터 migration/backfill/delete/rewrite.
+- 전체 publication/full Feed scan.
+- 앱 버전 기반 cache bust.
+- 정상 상태형 버튼 UI 디자인/위치/색상 변경.
+- 사용자 별도 승인 없는 TEST/PRODUCTION 재승격.
+
 ## CURRENT NEXT GATE — app360 RELEASED / next PREVIEW task selection
 
 정식배포 완료:

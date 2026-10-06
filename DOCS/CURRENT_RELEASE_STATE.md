@@ -1,3 +1,83 @@
+## 0QO. PRODUCTION-first Release Controller 구현·감사 PASS / one-time main bootstrap 대기 (2026-10-06 KST)
+
+완료된 배포 시스템 보강:
+- 제품 기준 PREVIEW HEAD: `83a90ce42c85fe59d4fe588a8c4fd719256361df`.
+- Release System Audit Run `37406340564`: **SUCCESS / NO DEPLOY**.
+- TypeScript PASS / Build PASS / 기존 like/publication/cache regression PASS.
+- TEST/PRODUCTION branch, Hosting, Worker, Media Worker 비변경.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- D1 schema/trigger/write 0.
+
+새 hard gate:
+1. **PRODUCTION live environment contract**
+   - TEST 단계에서 실제 TEST/PRODUCTION Worker/Media binding과 Firebase Hosting config를 read-only로 읽어 계약을 생성.
+   - 허용된 차이만 명시:
+     - Explore worker name
+     - TEST 전용 `RATE_DB=soridraw-explore-test-db`
+     - TEST 전용 `EXPLORE_CACHE=soridraw-profile-media-test`
+     - PRODUCTION 전용 mirror service bindings
+     - Media worker name / 환경별 MEDIA bucket / ALLOWED_ORIGINS
+     - Firebase Hosting site name
+   - 그 외 차이는 TEST_VERIFIED 금지.
+   - Audit contract SHA: `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7`.
+   - `TEST_PRODUCTION_ALLOWED_ENVIRONMENT_DIFFS=PASS`.
+2. **실제 컴파일 코드 identity**
+   - Explore TEST code SHA = PRODUCTION code SHA = `13d809a3eca35366e25d85fefda3ebc0faa6a88968157a8afbf81a0e8178cf03`.
+   - Media TEST code SHA = PRODUCTION code SHA = `f0507a8464a1147e2bc914b6cd681ee1f1531ecfc3afb40ab7a73b8e55990bc9`.
+   - 앞으로 TEST manifest에 이 compiled-code SHA를 고정하고 PRODUCTION upload/activate/verify에서 exact match가 아니면 중단.
+   - Firebase Hosting은 기존처럼 TEST verified Hosting version을 PRODUCTION으로 clone하며 PRODUCTION 재build 금지.
+3. **기존 PRODUCTION 브라우저 캐시 업그레이드 계약**
+   - `src/services/exploreEnvironmentParityPolicy.ts`로 공개프로필/개인 좋아요 origin 수렴 판단을 순수 함수로 분리.
+   - `verify-367-production-browser-upgrade-contract.ts`에서 old-production-cache → new-release, unchanged/empty cache, like signal certificate continuity를 실행 검증.
+   - Audit:
+     - `APP367_PRODUCTION_BROWSER_UPGRADE_CONTRACT=PASS`
+     - `OLD_PRODUCTION_CACHE_TO_NEW_RELEASE=PASS`
+     - `EMPTY_OR_UNCHANGED_CACHE_NO_FORCED_SERVER_READ=PASS`
+     - `PERSONAL_LIKE_ORIGIN_CERTIFICATE_CONTINUITY=PASS`
+   - app366 공개프로필/My Likes cross-origin verifier도 PASS.
+4. **TEST_VERIFIED manifest schema 4**
+   - source/tree + Hosting identity
+   - Explore Worker source identity + compiled code identity
+   - Media Worker source identity + compiled code identity
+   - browser-upgrade contract hash
+   - PRODUCTION environment contract hash
+   - Release Controller identity
+   를 하나의 immutable release manifest에 고정.
+   - PRODUCTION preflight는 TEST에서 얼린 environment-contract asset과 현재 PRODUCTION live contract가 exact match인지 다시 확인.
+5. **TEST Hosting과 PRODUCTION Hosting config parity**
+   - TEST에도 `/app-version.json` no-cache/no-store/must-revalidate header를 추가하여 site name 외 Hosting 계약 차이를 제거.
+
+감사 실측:
+- Explore bundle source identity TEST/PRODUCTION: `65a2f5b39f91f15d328657d12b4dc1a99cab9e638c37b7bd7056e3e6494dcb9a` 동일.
+- Media bundle source identity TEST/PRODUCTION: `041be5815c4398311c476276cda7c19cebf42e72ee29066aee0839f5f55ee50b` 동일.
+- TEST/PRODUCTION shared D1 read-only preflight: tables=6, triggers=18 PASS.
+- curated bounded read: TEST 12 / PRODUCTION 12 PASS.
+- `D1_WRITE_MIGRATION_SEED=NONE`.
+- `RELEASE_CONTROLLER_EXECUTABLE_MUTATION_TESTS=PASS`.
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`.
+
+중요 bootstrap 사실:
+- GitHub `issue_comment` Release Controller는 default branch인 **main의 workflow**로 실행된다.
+- read-only command `/soridraw preflight 83a90ce...` Run `37406635596`은 SUCCESS / PREFLIGHT_NO_MUTATION이었지만, 실행 workflow 자체의 head는 현재 main `bca5864db427f6fdc635e547f573588e9628be0b`의 이전 controller이다.
+- target PREVIEW source 안의 새 verifier는 읽고 검사했지만, **새 schema4 controller orchestration 자체가 live issue-command controller가 되는 것은 main 승격 후**다.
+- 따라서 사용자 TEST 승인 전 main을 몰래 바꾸지 않는다.
+- 최초 TEST 승격 때는 **one-time controller bootstrap**이 필요:
+  1. 기존 main controller가 검증된 app357 tree를 TEST/main으로 승격해 새 controller를 main에 설치.
+  2. 그 첫 manifest는 구 controller가 만든 것이므로 PRODUCTION 근거로 사용 금지.
+  3. 새 main controller로 product behavior가 동일한 최신 PREVIEW SHA를 다시 TEST 검증하여 schema4 TEST_VERIFIED manifest를 생성.
+  4. 이후부터 모든 릴리스는 새 controller의 단일 TEST_VERIFIED → 단일 PRODUCTION 승격 경로 사용.
+- 이 bootstrap 동안 PRODUCTION은 변경하지 않는다.
+
+현재 refs:
+- preview `83a90ce42c85fe59d4fe588a8c4fd719256361df`
+- main `bca5864db427f6fdc635e547f573588e9628be0b`
+- production `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`
+
+현재 상태:
+- Release Controller 보강 구현 + 독립 Audit는 **완료**.
+- app357 TEST/PRODUCTION은 아직 미승격.
+- 다음 mutation은 사용자 명확한 `테스트배포` 승인 후에만 시작.
+
 ## 0QN. PRODUCTION-first 릴리스 절대 규칙 고정 (2026-10-06 KST)
 
 사용자 최우선 운영 지시:

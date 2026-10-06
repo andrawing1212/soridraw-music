@@ -1,3 +1,63 @@
+## 0QX. app361 PRODUCTION incident 역반영 완료 — TEST + PREVIEW 동기화 (2026-10-07 KST)
+
+사용자 확인:
+- 정식앱 app361에서 Music Note 공개 체크가 실제 공개 상태와 정상 수렴하는 것을 사용자 실기기에서 확인.
+- 이 건은 정상 개발 승격이 아니라 `incident recovery` 후 역반영으로 처리: **PRODUCTION hotfix → TEST → PREVIEW** 런타임 순서 유지.
+
+역반영 소스:
+- PRODUCTION app361 기준 HEAD: `b20c20a2a1a10a794806474e2b84c6b08b5faf63`.
+- PREVIEW 준비 commit: `3019b20bc7d3f4f7a21ce0b2658ccf3a4997af92`.
+- PRODUCTION에서 정확히 역반영한 제품 파일:
+  - `public/app-version.json`
+  - `src/pages/FavoritesPage.tsx`
+  - `src/services/exploreEnvironmentParityPolicy.ts`
+  - `src/services/explorePublicationService.ts`
+  - `scripts/verify-371-music-note-publication-origin-parity.ts`
+- PRODUCTION incident 전용 임시 Hosting workflow/trigger는 PREVIEW/TEST 제품 소스로 복사하지 않음.
+
+TEST 역반영:
+- Release Controller Run `37485002429`: **SUCCESS / TEST_VERIFIED**.
+- source PREVIEW: `3019b20bc7d3f4f7a21ce0b2658ccf3a4997af92`.
+- main(TEST) SHA: `21b2ac98370e0644c4ab245fc3fd9965d1cc4fb6`.
+- immutable tag: `soridraw-test-v361-3019b20bc7d3`.
+- app version: **361**.
+- TEST Explore Worker active: `7c91d7bb-3e34-4bf0-91ca-62c9de930c6f`.
+- TEST Media Worker active: `d80fdd58-3857-4314-a8d4-f35023971588`.
+- Worker/Media code identity는 app360과 동일 code SHA이며 기능 코드 변경 없음.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`.
+- `TEST_WORKER_VERIFY=PASS` / `TEST_MEDIA_WORKER_VERIFY=PASS`.
+- old-production-cache upgrade contract / app358-360 regressions PASS.
+- PRODUCTION 비변경 확인.
+
+PREVIEW 역반영:
+- deploy trigger commit: `21d57b00a917e173a47223783c6caab22636138d`.
+- Firebase PREVIEW App Run `37485563687`: **SUCCESS**.
+- `PREVIEW_APP_VERSION=361`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- TypeScript PASS / Build PASS / app358-360 regression PASS.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- PREVIEW Worker / Functions 변경 및 재배포 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+데이터/비용 안전:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**.
+- D1 schema migration: **0**.
+- Firebase Functions/Rules 변경: **0**.
+- app361 수정은 브라우저 origin별 오래된 Music Note 공개상태 cache가 최신 UID publication signal을 놓친 경우에만 bounded 수렴시키는 클라이언트 복구이며, 앱 버전만으로 전체 공개상태를 다시 읽는 구조를 추가하지 않음.
+
+현재 기준:
+- PRODUCTION = app361.
+- TEST = app361.
+- PREVIEW = app361.
+- Music Note 공개상태 수렴 hotfix는 세 환경에 역반영 완료.
+- 정상 좋아요 / 저장하트 / 잠금 / Music Note / Library / 공개·비공개 mutation UI는 frozen baseline으로 계속 보호.
+
+다음:
+- first-publication D1 W12 → W1~W2 비용 최적화 재개 전, `verify-371-music-note-publication-origin-parity.ts`를 일반 Release Gate/감사 경로에 영구 연결하는 소규모 릴리스 시스템 보강을 먼저 완료한다.
+- 이후 새 PREVIEW 작업으로 first-publication W12 → W1~W2 최적화를 재개한다.
+
 ## 0QW. app360 PRODUCTION Music Note 공개버튼 parity 회귀 / 영구 승격 gate 강화 (2026-10-06 KST)
 
 사용자 실기기 발견:

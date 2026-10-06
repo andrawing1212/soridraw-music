@@ -22,8 +22,10 @@ import {
 } from './exploreProfileFirstViewService';
 import {
   publishExplorePublicationSyncSignal,
+  readLatestExplorePublicationSyncSignal,
   type ExplorePublicationSyncSignal,
 } from './userDomainSyncService';
+import { shouldRepairMusicNotePublicationOrigin361 } from './exploreEnvironmentParityPolicy';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
 // SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913
@@ -86,6 +88,37 @@ const PUBLICATION_REVISION_CHECK_MS_334 = 60_000;
 const PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334 = 'soridraw:explore:publication-revision-check-at:v1';
 const publicationRevisionCheckStorageKey334 = (uid: string) =>
   `${PUBLICATION_REVISION_CHECK_STORAGE_PREFIX_334}:${encodeURIComponent(uid)}`;
+
+// app361 production incident recovery. This certificate is local-only metadata:
+// it never changes user source data and never invalidates the publication cache
+// merely because the app version changed.
+const PUBLICATION_ORIGIN_CERT_STORAGE_PREFIX_361 = 'soridraw:explore:publication-origin-certified:361';
+const publicationOriginCertStorageKey361 = (uid: string) =>
+  `${PUBLICATION_ORIGIN_CERT_STORAGE_PREFIX_361}:${encodeURIComponent(uid)}`;
+const publicationOriginRepairAttemptedSignal361 = new Map<string, number>();
+const publicationOriginRepairInflight361 = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState> | null>>();
+
+const readPublicationOriginCertifiedSignal361 = (uid: string): number => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const value = Number(window.localStorage.getItem(publicationOriginCertStorageKey361(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const markPublicationOriginCertifiedSignal361 = (uid: string, version: number): void => {
+  const safeVersion = Math.max(0, Math.floor(Number(version || 0)));
+  if (!safeVersion || typeof window === 'undefined') return;
+  try {
+    const key = publicationOriginCertStorageKey361(uid);
+    const current = Number(window.localStorage.getItem(key) || 0);
+    if (!Number.isFinite(current) || safeVersion > current) {
+      window.localStorage.setItem(key, String(safeVersion));
+    }
+  } catch {}
+};
 const readPublicationRevisionCheckAt334 = (uid: string) => {
   if (typeof window === 'undefined') return 0;
   try {
@@ -404,11 +437,15 @@ export const clearExplorePublicationSessionCache = (uid?: string | null) => {
     publicationMemoryCache.delete(normalizedUid);
     publicationInflight.delete(normalizedUid);
     publicationServerValidatedUids.delete(normalizedUid);
+    publicationOriginRepairAttemptedSignal361.delete(normalizedUid);
+    publicationOriginRepairInflight361.delete(normalizedUid);
     return;
   }
   publicationMemoryCache.clear();
   publicationInflight.clear();
   publicationServerValidatedUids.clear();
+  publicationOriginRepairAttemptedSignal361.clear();
+  publicationOriginRepairInflight361.clear();
 };
 
 const readResponsePayload = async (response: Response): Promise<any> => {
@@ -528,10 +565,20 @@ export const getExploreMusicNotePublicationStates = async (
   if (cached && options.revalidate !== true) {
     return cached;
   }
-  if (cached && publicationServerValidatedUids.has(uid)) return cached;
+  const latestPublicationSignalVersion361 = Math.max(
+    0,
+    Math.floor(Number(readLatestExplorePublicationSyncSignal(uid)?.version || 0)),
+  );
+  const publicationOriginRepairNeeded361 = shouldRepairMusicNotePublicationOrigin361({
+    hasLocalState: Boolean(cached),
+    latestSignalVersion: latestPublicationSignalVersion361,
+    certifiedSignalVersion: readPublicationOriginCertifiedSignal361(uid),
+  });
+  if (cached && publicationServerValidatedUids.has(uid) && !publicationOriginRepairNeeded361) return cached;
   const lastPersistentValidationAt334 = readPublicationRevisionCheckAt334(uid);
   if (
     cached
+    && !publicationOriginRepairNeeded361
     && lastPersistentValidationAt334 > 0
     && Date.now() - lastPersistentValidationAt334 < PUBLICATION_REVISION_CHECK_MS_334
   ) {
@@ -565,6 +612,7 @@ export const getExploreMusicNotePublicationStates = async (
         }
         if (knownRevision && localRevision && knownRevision === localRevision) {
           markPublicationServerValidated334(uid);
+          markPublicationOriginCertifiedSignal361(uid, latestPublicationSignalVersion361);
           return clonePublicationStates(cached);
         }
         // Upgrade a healthy 076 cache without downloading the whole state bundle.
@@ -573,6 +621,7 @@ export const getExploreMusicNotePublicationStates = async (
         if (knownRevision && !localRevision && remoteUpdatedAt > 0 && localSyncedAt >= remoteUpdatedAt) {
           writePublicationStateCache(uid, cached, knownRevision);
           markPublicationServerValidated334(uid);
+          markPublicationOriginCertifiedSignal361(uid, latestPublicationSignalVersion361);
           return clonePublicationStates(cached);
         }
       } catch (revisionError) {
@@ -606,6 +655,7 @@ export const getExploreMusicNotePublicationStates = async (
     const mergedStates = overlayPendingPublicationStates(uid, bundledStates);
     writePublicationStateCache(uid, mergedStates, bundleRevision);
     markPublicationServerValidated334(uid);
+    markPublicationOriginCertifiedSignal361(uid, latestPublicationSignalVersion361);
     return clonePublicationStates(mergedStates);
   })().finally(() => {
     publicationInflight.delete(uid);
@@ -620,6 +670,37 @@ export const revalidateExploreMusicNotePublicationStates335 = async (
 ): Promise<Record<string, ExploreMusicNotePublicationState>> => (
   getExploreMusicNotePublicationStates(user, { revalidate: true })
 );
+
+// app361: receiving the retained RTDB signal is proof that this origin may have
+// missed one or more historical publication mutations. Repair at most once per
+// signal per page lifetime, and only that case may spend the tiny revision HEAD.
+// If the revision changed, the existing single R2 bundle path restores the map.
+export const ensureExploreMusicNotePublicationOriginParity361 = async (
+  user: User,
+): Promise<Record<string, ExploreMusicNotePublicationState> | null> => {
+  const uid = String(user.uid || '').trim();
+  if (!uid) return null;
+  const cached = readPublicationStateCache(uid);
+  const latestSignalVersion = Math.max(
+    0,
+    Math.floor(Number(readLatestExplorePublicationSyncSignal(uid)?.version || 0)),
+  );
+  if (!shouldRepairMusicNotePublicationOrigin361({
+    hasLocalState: Boolean(cached),
+    latestSignalVersion,
+    certifiedSignalVersion: readPublicationOriginCertifiedSignal361(uid),
+  })) return null;
+  if ((publicationOriginRepairAttemptedSignal361.get(uid) || 0) >= latestSignalVersion) return null;
+  const inFlight = publicationOriginRepairInflight361.get(uid);
+  if (inFlight) return inFlight;
+  publicationOriginRepairAttemptedSignal361.set(uid, latestSignalVersion);
+  const task = getExploreMusicNotePublicationStates(user, { revalidate: true })
+    .finally(() => {
+      publicationOriginRepairInflight361.delete(uid);
+    });
+  publicationOriginRepairInflight361.set(uid, task);
+  return task;
+};
 
 export const getExploreMusicNotePublicationState = async (
   user: User,

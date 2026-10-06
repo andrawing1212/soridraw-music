@@ -309,7 +309,7 @@ jobs:
           curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv' > "$RUNNER_TEMP/test-hosting-verified"
           export TEST_HOSTING_RELEASE="$(cut -f1 "$RUNNER_TEMP/test-hosting-verified")"
           export TEST_HOSTING_VERSION="$(cut -f2 "$RUNNER_TEMP/test-hosting-verified")"
-          controller_identity="$(node "$GITHUB_WORKSPACE/scripts/release-controller-policy.mjs" identity "$GITHUB_WORKSPACE")"
+          controller_identity="$(node "$RELEASE_ROOT/scripts/release-controller-policy.mjs" identity "$RELEASE_ROOT")"
           export CONTROLLER_WORKFLOW_SHA="$(jq -r .workflowSha256 <<<"$controller_identity")"
           export CONTROLLER_RUNTIME_SHA="$(jq -r .workerRuntimeSha256 <<<"$controller_identity")"
           export CONTROLLER_MEDIA_RUNTIME_SHA="$(jq -r .mediaWorkerRuntimeSha256 <<<"$controller_identity")"

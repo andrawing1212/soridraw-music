@@ -1,3 +1,29 @@
+## CURRENT NEXT GATE — app359 PREVIEW 실사용 확인 후 TEST 재승격
+
+확정된 실제 상태:
+- canonical D1 all like relations=30.
+- current public+published My Likes authority=16.
+- hidden/unpublished relations=14.
+- shared personal-like R2 exact count=16.
+- app358 화면 20곡은 canonical limit가 아니라 historical local guard overlay 문제.
+- app359은 canonical repair 후 fresh settlement를 1회 실행하여 stale guard를 정리하도록 수정.
+- Audit `37415142727` SUCCESS.
+- PREVIEW App Run `37415347786` SUCCESS / app359.
+- TEST/PRODUCTION unchanged.
+
+지금 할 일:
+1. 사용자 PREVIEW app359에서 `좋아요 곡` 목록 확인.
+2. 별도 현재 pending click이 없다면 16곡으로 수렴하는지 확인.
+3. 공개곡↔좋아요 곡을 여러 번 눌러도 최초 upgrade 이후 Worker가 반복 증가하지 않는지 확인.
+4. 공개/비공개 뒤 공개프로필이 20분 TTL을 기다리지 않는지 확인.
+5. 모두 PASS하면 app359을 TEST로 새 승격.
+
+금지:
+- app359 PREVIEW 실사용 확인 전 TEST 승격.
+- app357 manifest 재사용.
+- user-data backfill/migration.
+- canonical D1 30 relation을 임의 삭제하거나 hidden/unpublished 14 relation을 정리하지 않음.
+
 ## CURRENT NEXT GATE — app358 PREVIEW 실사용 검증 / TEST 재승격 대기
 
 현재 기준:

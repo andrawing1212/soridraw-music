@@ -81,6 +81,7 @@ import {
   getExploreMusicNotePublicationState,
   getExploreMusicNotePublicationStates,
   revalidateExploreMusicNotePublicationStates335,
+  ensureExploreMusicNotePublicationOriginParity361,
   applyExplorePublicationSyncSignalState,
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
@@ -5908,6 +5909,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const uid = String(user?.uid || '').trim();
     if (!uid) return undefined;
 
+    let cancelled361 = false;
+    const mergePublicationOriginParity361 = (states: Record<string, ExploreMusicNotePublicationState> | null) => {
+      if (cancelled361 || !states) return;
+      setExplorePublicationStateBySongId((prev) => {
+        const next = { ...prev };
+        Object.entries(states).forEach(([sourceId, state]) => {
+          if (!explorePublicationMutationInFlightRef.current.has(sourceId)) next[sourceId] = state;
+        });
+        return next;
+      });
+    };
+
     const applySignal355 = (signal: ExplorePublicationSyncSignal | null) => {
       if (!signal || explorePublicationMutationInFlightRef.current.has(signal.sourceId)) return;
       const nextState = applyExplorePublicationSyncSignalState(uid, signal);
@@ -5916,6 +5929,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         ...prev,
         [signal.sourceId]: nextState,
       }));
+      // app361: one retained signal can represent the newest mutation while an
+      // older origin may have missed earlier mutations. Reconcile the full local
+      // publication map once for that signal; unchanged revisits remain local.
+      void ensureExploreMusicNotePublicationOriginParity361(user)
+        .then(mergePublicationOriginParity361)
+        .catch((error) => console.warn('Music Note publication origin parity recovery unavailable.', error));
     };
 
     applySignal355(readLatestExplorePublicationSyncSignal(uid));
@@ -5927,6 +5946,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     };
     window.addEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
     return () => {
+      cancelled361 = true;
       window.removeEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
     };
   }, [user?.uid]);

@@ -12,6 +12,7 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
   canAdvancePersonalLikeOriginCertificate357,
+  shouldAttemptPersonalLikeOriginRepair358,
   shouldRepairPersonalLikeOrigin357,
 } from './exploreEnvironmentParityPolicy';
 import {
@@ -944,8 +945,12 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
   // repair that later clears the target can certify here without another Worker
   // request; a newer retained signal naturally opens one new attempt.
   const attemptedSignalVersion358 = readCrossOriginLikeAttempted358(uid);
-  if (attemptedSignalVersion358 >= latestSignalVersion) {
-    if (readRepairTarget127(uid) <= 0) {
+  if (!shouldAttemptPersonalLikeOriginRepair358({
+    latestSignalVersion,
+    certifiedSignalVersion: certifiedSignalVersion357,
+    attemptedSignalVersion: attemptedSignalVersion358,
+  })) {
+    if (attemptedSignalVersion358 >= latestSignalVersion && readRepairTarget127(uid) <= 0) {
       markCrossOriginLikeCertified357(uid, latestSignalVersion);
     }
     return;

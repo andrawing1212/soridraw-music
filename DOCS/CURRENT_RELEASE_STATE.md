@@ -1,3 +1,32 @@
+## 0QJ. SORIDRAW 추천 TEST 승격 완료 / curated release hard gate 실제 PASS (2026-10-06 KST)
+
+TEST 승격:
+- Release Controller Run `37394592522`: **SUCCESS / TEST_VERIFIED**.
+- exact source PREVIEW SHA: `86872e778695f199923f88b56481ee3ff7064a4a`.
+- main(TEST) SHA: `cca8c2c4fedf88da4c14ff85331ad6c00c128098`.
+- durable TEST manifest tag: `soridraw-test-v356-86872e778695`.
+- TEST app version: **356**.
+- TEST Explore Worker: `85e9821a-c2d4-4dcc-a5c5-8f06ee6600ae`.
+- TEST Media Worker: `979e09c0-fc05-47fe-9522-91a46a004ef6`.
+- Firebase TEST Hosting deploy PASS; `test.soridraw.com` / `soridraw-test.web.app` exact app-version/build verification PASS.
+- PRODUCTION branch / Explore Worker / Media Worker / Hosting unchanged.
+
+이번 승격에서 새 hard gate가 실제로 확인한 것:
+- `TEST_CURATED_PARITY=PASS count=12`.
+- PREVIEW와 TEST의 `SORIDRAW 추천` projection exact parity PASS.
+- TEST latest/popular shared Feed parity PASS.
+- TEST public profile parity PASS.
+- TEST release environment parity PASS on attempt 1.
+- TEST Media Worker `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`, health `shared-catalog` PASS.
+- Explore Worker / Media Worker smoke + verify PASS.
+- D1 schema migration / 사용자 데이터 backfill / bulk copy / delete / rewrite **0**.
+
+현재 판단:
+- PREVIEW와 TEST에서는 추천 backend와 배포 hard gate가 검증 완료.
+- TEST 실제 화면에서 `SORIDRAW 추천` 섹션 표시 여부는 사용자 실사용 최종 확인만 남음.
+- PRODUCTION은 아직 기존 Explore Worker이며 이번 TEST 승격에서 비변경. 정식앱의 기존 curated 503/추천 누락은 아직 복구 완료로 판정하지 않음.
+- 사용자의 명확한 정식배포 승인 후에만 `soridraw-test-v356-86872e778695` manifest를 사용해 PRODUCTION 승격.
+
 ## 0QI. SORIDRAW 추천 cold-cache 복구 + 배포 엔진 hard gate PREVIEW 완료 (2026-10-06 KST)
 
 사용자 실기기에서 확인된 문제:

@@ -326,6 +326,34 @@ jobs:
           test "$ready358" = 1
           echo 'R2_ONLY_358_PROPAGATION_READY=PASS'
 
+          # SORIDRAW_PREVIEW_CURATED_RELEASE_SMOKE_356_20261006
+          # A cold environment may hydrate this one derived recommendation snapshot once.
+          # The immediately repeated request must be healthy R2/Edge, D1 R0/W0.
+          curated_url="${PREVIEW_BASE}/v1/curated?collection=soridraw&limit=20"
+          curated_first_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/curated-first-356.head" -o "$RUNNER_TEMP/curated-first-356.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "$curated_url")"
+          test "$curated_first_code" = 200
+          node - "$RUNNER_TEMP/curated-first-356.json" <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(payload?.ok!==true||!Array.isArray(payload?.data?.items)) throw Error('356 curated first response malformed');
+          console.log('CURATED_RECOMMENDATION_FIRST_RESPONSE=PASS count='+payload.data.items.length);
+          NODE
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/curated-first-356.head"
+
+          curated_warm_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/curated-warm-356.head" -o "$RUNNER_TEMP/curated-warm-356.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "$curated_url")"
+          test "$curated_warm_code" = 200
+          node - "$RUNNER_TEMP/curated-warm-356.json" <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(payload?.ok!==true||!Array.isArray(payload?.data?.items)) throw Error('356 curated warm response malformed');
+          console.log('CURATED_RECOMMENDATION_WARM_RESPONSE=PASS count='+payload.data.items.length);
+          NODE
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/curated-warm-356.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/curated-warm-356.head"
+          curated_source="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-curated-source:/{gsub("\r","");print $2}' "$RUNNER_TEMP/curated-warm-356.head" | tail -1)"
+          case "$curated_source" in *R2*|*EDGE*) ;; *) echo "CURATED_SOURCE_INVALID=$curated_source"; exit 1;; esac
+          echo "CURATED_RECOMMENDATION_WARM_R0_W0=PASS source=$curated_source"
+
           feed_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/feed-358.head" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__r2only358=$(date +%s)")"
           test "$feed_code" = 200
           grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/feed-358.head"

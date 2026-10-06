@@ -122,6 +122,7 @@ jobs:
           node scripts/verify-307-explore-curation.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
           node scripts/verify-357-publication-source-swap-w2-readiness.mjs
+          node scripts/verify-372-first-publication-w2-cutover-readiness.mjs
           node scripts/verify-358-publication-r2-only-cutover.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
           node scripts/verify-364-publication-read-compaction-compat.mjs
@@ -221,6 +222,7 @@ jobs:
           node scripts/verify-307-explore-curation.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-336-r2-hybrid-read.mjs
           node scripts/verify-357-publication-source-swap-w2-readiness.mjs
+          node scripts/verify-372-first-publication-w2-cutover-readiness.mjs
           node scripts/verify-358-publication-r2-only-cutover.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-361-publication-read-compaction.mjs
           node scripts/verify-364-publication-read-compaction-compat.mjs
@@ -622,7 +624,9 @@ jobs:
         run: |
           set -euo pipefail
           node --check scripts/measure-360-isolated-publication-d1.mjs
+          node --check scripts/measure-372-isolated-first-publication-w2.mjs
           node scripts/measure-360-isolated-publication-d1.mjs
+          node scripts/measure-372-isolated-first-publication-w2.mjs
 
       - name: Emergency cleanup of isolated publication D1
         if: always() && contains(github.event.head_commit.message, 'measure isolated publication D1')
@@ -630,6 +634,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/measure-360-isolated-publication-d1.mjs cleanup
+          node scripts/measure-372-isolated-first-publication-w2.mjs cleanup
 
       - name: Real remote D1 follow billing on isolated synthetic database
         if: contains(github.event.head_commit.message, 'measure isolated follow D1')

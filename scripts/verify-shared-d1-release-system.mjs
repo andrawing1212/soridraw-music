@@ -24,6 +24,10 @@ for (const required of [
   'ALL_WORKER_VERSIONS_UNCHANGED=PASS',
   'MAIN_PRODUCTION_REFS_UNCHANGED=PASS',
   'SHARED_D1_ADDITIVE_RELEASE=PASS',
+  "mode=publication_w2_cutover_373",
+  "APP373_LIVE_FIRST_PUBLIC_REMOTE_D1_W2=PASS",
+  "APP373_SHARED_D1_CUTOVER=PASS",
+  "APP373_ALL_WORKERS_UNCHANGED=PASS",
 ]) {
   assert.ok(workflow.includes(required), `shared D1 workflow missing guard: ${required}`);
 }
@@ -195,4 +199,4 @@ console.log('166_SELF_ATTESTED_CUTOVER_PROOF_FAILS_CLOSED=PASS');
 console.log('166_SHARED_ATOMIC_FENCE_NOT_IMPLEMENTED_PRODUCT_RELEASE_BLOCKED=PASS');
 
 console.log('164_READONLY_CUTOVER_PREFLIGHT_MODEL=PASS');
-console.log('PASS shared D1 release system: fixed trigger-driven additive schema path, exact SHA/blob pinning, no per-release hardcoded migration, rollback of newly-created objects only');
+console.log('PASS shared D1 release system: additive path preserved + exact approved app373 controlled replacement path, hash pinning and rollback guards');

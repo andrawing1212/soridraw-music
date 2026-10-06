@@ -1,3 +1,80 @@
+## 0QM. app357 PREVIEW 공개프로필/좋아요곡 cross-environment parity 복구 + 승격 hard gate 추가 (2026-10-06 KST)
+
+사용자 실기기 발견:
+- PRODUCTION Explore Feed 자체는 PREVIEW와 정상 일치.
+- 같은 계정 공개프로필의 **공개곡 목록/개수/핀 상태가 PREVIEW와 PRODUCTION에서 서로 다름**.
+- 같은 own-profile의 **좋아요 곡 목록도 PREVIEW와 PRODUCTION에서 서로 다름**.
+- 직전 Release Controller는 server-side public-profile projection 1개를 비교해 PASS했지만, 실제 브라우저 persistent cache 결과 차이는 잡지 못함. 따라서 이전 public-profile parity PASS는 서버 응답 parity이지 클라이언트 표시 parity까지 증명한 것이 아님.
+
+원인:
+1. 공개프로필
+   - PREVIEW/TEST/PRODUCTION은 서로 다른 origin/localStorage를 사용.
+   - app335 이후 warm public-profile route entry/reload는 비용 절감을 위해 local first-view cache를 그대로 반환하고 Worker 0을 유지.
+   - 같은 계정 공개/비공개 RTDB 신호는 최신 mutation 1개만 보관하므로, 특정 origin이 과거 여러 변경을 놓친 상태에서는 최신 1개 patch만으로 전체 공개곡 목록을 복구할 수 없음.
+   - shared server profile R2 자체는 Release Run `37397953411`에서 TEST↔PRODUCTION 동일 owner parity PASS였으므로 이번 실제 차이는 우선 origin-local stale first-view cache 문제로 격리.
+2. 좋아요 곡
+   - 개인 좋아요 역시 각 origin에 durable local catalog/watermark를 가짐.
+   - retained RTDB signal은 작은 changed-track batch만 담으므로, 과거 origin이 이전 변경을 놓친 상태에서 이미 최신 signal watermark를 본 것으로 기록되면 일부 과거 membership이 남을 수 있는 recovery gap이 존재.
+   - 좋아요 클릭/30초 batching/W1 queue/공개 숫자 경로 자체는 기존 frozen baseline을 유지.
+
+app357 수정:
+- `src/services/userDomainSyncService.ts`
+  - 기존 같은-account `explorePublication` RTDB signal의 최신 작은 상태를 origin localStorage에도 보존. 추가 RTDB/Firestore/D1 요청 없음.
+- `src/services/exploreProfileFirstViewService.ts`
+  - 기존 cache schema version **6 유지**; 앱 업데이트를 이유로 전체 cache bust 금지.
+  - cached first-view에 마지막으로 반영한 publication signal version만 additive 보존.
+  - **실제 publication signal version이 cached profile보다 최신일 때만** shared first-view를 conditional 1회 확인.
+  - 최신이면 현재 full first-view로 교체, 304면 기존 cache를 그대로 인증.
+  - 변경 신호가 있는데 최신 상태를 확인할 수 없으면 과거 목록을 조용히 표시하지 않고 fail-closed.
+  - 변경 없는 재진입은 기존 Worker 0 / D1 R0 유지.
+- `src/services/exploreLikeService.ts`
+  - retained personal-like signal version과 origin certification을 local-only로 추가.
+  - 앱 시작/업데이트만으로 personal snapshot을 읽지 않음.
+  - **사용자가 own-profile의 좋아요 곡 탭을 실제로 열었고**, 기존 durable like catalog가 있으면서 해당 origin이 retained signal까지 인증되지 않은 경우에만 기존 bounded personal baseline 경로로 1회 reconcile.
+  - 성공 전 local catalog 삭제 없음.
+  - 정상 30초 batching / W1 queue / heart-count atomic state / changed-track live signal 보호.
+- `src/pages/ExplorePage.tsx`
+  - own public-profile load에 retained publication version을 전달.
+  - 늦게 도착한 publication signal도 own-profile을 다시 bounded reconcile하도록 version state로 연결.
+  - My Likes 진입 시에만 cross-origin parity repair gate 실행.
+- 배포엔진:
+  - 신규 `scripts/verify-366-cross-environment-profile-like-parity.mjs`.
+  - Release Controller TEST preflight에서 위 verifier를 **필수 실행**.
+  - Release System Audit에도 동일 verifier 포함.
+  - profile cache schema bump/global invalidation, like 30초 batching 변경, My Likes second authority 생성이 있으면 FAIL.
+
+검증:
+- 첫 Audit Run `37400910389`: FAIL.
+  - 원인: 기존 isolated verifier 180이 `applyRemoteLikeSignal127` 함수만 VM으로 분리 실행하는데 새 certificate helper를 함수 내부 dependency로 추가해 test harness 계약을 깨뜨림.
+  - 제품 기능 문제로 숨기지 않고 FAIL 유지.
+- 수정:
+  - certificate advancement를 RTDB subscription 경계로 이동하여 `applyRemoteLikeSignal127` frozen isolated contract 복구.
+- 최종 Release System Audit Run `37401266952`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - existing like regression suite PASS.
+  - app211/335 zero-read regression PASS.
+  - app366 cross-env profile/My Likes parity verifier PASS.
+  - Worker dry-run/read-only D1 checks PASS.
+- PREVIEW App Release Run `37401610271`: **SUCCESS**.
+  - deployed exact PREVIEW SHA `aafacbe6af07a3a6919c01c0512b123b2a44ba6b`.
+  - PREVIEW app version **357**.
+  - `preview.soridraw.com` exact build PASS.
+  - shared RTDB Rules 변경 없음.
+  - TEST / PRODUCTION branch + Hosting unchanged PASS.
+- Explore Worker / Media Worker / Functions / Firestore Rules / D1 schema·trigger 변경 **0**.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- UI/CSS 변경 **0**.
+
+현재 HARD GATE:
+- PREVIEW app357 실기기에서 같은 계정 기준:
+  1. 공개프로필 공개곡 개수/목록/핀 순서가 현재 실제 공개상태와 일치.
+  2. own-profile 좋아요 곡 membership/list가 실제 하트 상태와 일치.
+  3. PREVIEW 재진입 시 변경이 없으면 profile Worker 0 / D1 R0 유지.
+  4. Explore Feed / SORIDRAW 추천 / 좋아요 클릭 / 공개·비공개 기존 동작 회귀 없음.
+- 위 항목 확인 전 TEST/PRODUCTION 승격 금지.
+- first-publication W12->W1~W2 작업은 이 parity 이슈 종료 뒤로 연기.
+
 ## 0QL. SORIDRAW 추천 PRODUCTION 정상복구 + release gate 실전 검증 완료 (2026-10-06 KST)
 
 최종 PRODUCTION:

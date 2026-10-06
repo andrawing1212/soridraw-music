@@ -52,6 +52,7 @@ jobs:
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
           node scripts/verify-356-shared-private-catalog-authority.mjs
           node scripts/verify-356-shared-catalog-cutover.mjs
           node scripts/verify-release-command-pipeline.mjs
@@ -97,6 +98,7 @@ jobs:
           node scripts/verify-211-cross-device-publication-refresh.mjs
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs

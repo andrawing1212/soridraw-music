@@ -1,3 +1,54 @@
+## 0QV. app360 PRODUCTION 정식배포 완료 / RELEASED (2026-10-06 KST)
+
+사용자 명확한 `정식배포` 승인 후 final TEST_VERIFIED artifact를 exact promotion:
+- Release Controller PRODUCTION Run `37461102504`: **SUCCESS / RELEASED**.
+- manifest/tag: `soridraw-test-v360-d4c9d57cea80`.
+- tested main: `208cc8949dc60cb056066828ce78ef2fce764e0c`.
+- production promoted SHA: `78691ec733d7efcb254b904dc512af49124641cc`.
+- production commit: `release: promote TEST_VERIFIED app 360 to PRODUCTION`.
+- app version: **360**.
+- bootstrap tag `soridraw-test-v360-0d27ac79c2d8` was not used.
+- latest PREVIEW was not rebuilt/reinterpreted for PRODUCTION.
+
+PRODUCTION preflight:
+- production environment contract SHA `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7`: PASS.
+- TEST↔PRODUCTION allowed environment differences: PASS.
+- app360 executable gates PASS:
+  - `APP360_MY_LIKES_TAB_WORKER_ZERO_AFTER_CACHE=PASS`
+  - `APP360_HEART_HYDRATION_NO_TIMED_REVISION_READ=PASS`
+  - `APP360_RESUME_ONLY_REVISION_FALLBACK_PRESERVED=PASS`
+  - `APP360_RTDB_LIVE_CHANGE_PATH_PRESERVED=PASS`
+
+PRODUCTION deployment:
+- Explore Worker before `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa` -> after `4e845257-2fc5-46a0-9f46-04396ca729dc`.
+- Explore Worker bundle SHA `7165d23c93a8f9b602118305f3ee3a32a82c497fe46e1ef867c29cc67139daa8`.
+- Explore Worker code SHA `f6e1802f859b800cd245eb5c806a5e6ef4124ed42fcdc6799c89a004bb5bc3a2`.
+- Media Worker before `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44` -> after `a710fd22-8aa6-4386-b22a-d5510125fb2e`.
+- Media Worker bundle/code identity exact PASS.
+- Firebase PRODUCTION Hosting cloned from verified TEST Hosting: PASS.
+- live Firebase URL `https://soridraw.web.app` deployed.
+- `https://soridraw.web.app/` and `https://soridraw.com/` exact release index SHA verification: PASS.
+
+PRODUCTION verification:
+- `PRODUCTION_CURATED_PARITY=PASS count=12`.
+- `PRODUCTION_PUBLIC_PROFILE_PARITY=PASS`.
+- `PRODUCTION_RELEASE_ENVIRONMENT_PARITY=PASS reference=TEST attempt=1`.
+- `PRODUCTION_WORKER_SMOKE=PASS` / `PRODUCTION_WORKER_VERIFY=PASS`.
+- `PRODUCTION_MEDIA_WORKER_SMOKE=PASS` / `PRODUCTION_MEDIA_WORKER_VERIFY=PASS`.
+- Worker schedules preserved.
+- release control final state: `RELEASED`.
+
+Data / backend safety:
+- user source data copy/migration/backfill/delete/rewrite: **0**.
+- D1 schema migration: **0**.
+- Firebase Functions/Rules change: **0**.
+- production promotion was code/artifact promotion only; shared user data remained in place.
+
+Current stable release:
+- PREVIEW branch may now move independently for new work.
+- TEST main remains validated app360 baseline.
+- PRODUCTION is app360 at `78691ec733d7efcb254b904dc512af49124641cc`.
+- next development focus may resume first-publication D1 W12 -> W1~W2 optimization only as a new PREVIEW task, without touching the frozen app360 production baseline.
 ### 2026-10-06 user TEST validation — app360 PASS
 - User confirmed TEST app360 behavior is now okay after real-device validation.
 - This closes the current app360 TEST user-validation gate for the My Likes/public-profile convergence regression.

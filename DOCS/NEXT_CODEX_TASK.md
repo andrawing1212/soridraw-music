@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — app372 shared D1 first-publication W12→W2 cutover 명확한 승인 대기
+
+완료된 안전증명:
+- 371 Music Note publication parity 영구 Release Gate: Run `37489891135` PASS.
+- app372 static/cost audit: Run `37492203345` PASS.
+- 실제 격리 Cloudflare D1:
+  - first public W12 → **W2**
+  - source/media swap → **W1**
+  - private → **W1**
+  - republish → **W1**
+  - no-op → **W0**
+  - pre-cutover Music Note / non-Music-Note 기존 동작 유지
+  - rollback 복원 PASS
+- 세 환경 live R2 authority + 현재 pre-cutover shared D1 read-only audit:
+  - Run `37493247036` SUCCESS
+  - PREVIEW/TEST/PRODUCTION R2 catalog/hybrid/publication-only authority PASS
+  - shared D1 cutover 미적용 확인 PASS
+  - remote D1 writes 0
+
+다음 단계는 **공유 D1 schema cutover**:
+- post-cutover 새 Music Note 첫 공개만 legacy 4개 secondary index + derived/revision fanout에서 제외.
+- 기존 사용자 row / 기존 공개곡 / non-Music-Note는 기존 경로 유지.
+- user data migration/backfill/delete/rewrite 없음.
+- 전체 Feed/profile/search rebuild 없음.
+- rollback SQL 준비 완료.
+
+중요:
+- 이 단계는 shared D1 index/trigger를 실제 변경하므로 **사용자의 명확한 승인 전 실행 금지**.
+- 승인 전 TEST/PRODUCTION/Worker/Hosting/Functions 추가 배포 금지.
+- 승인 시에도 먼저 exact shared-D1 preflight → cutoff 고정 → schema apply → 즉시 schema/parity/cost 확인 → W3+ 또는 parity FAIL이면 중단/rollback.
+- 최종 합격: 실제 post-cutover 첫 공개 W1~W2, private/republish W1~W2, no-op W0, Explore/public-profile/search/Music Note parity PASS.
+
 ## CURRENT NEXT GATE — app361 역반영 완료 / 371 영구 parity gate 후 first-publication W12 → W1~W2
 
 완료:

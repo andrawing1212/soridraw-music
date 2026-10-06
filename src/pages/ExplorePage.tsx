@@ -37,6 +37,7 @@ import {
   getExploreLikedTrackIds,
   checkExplorePersonalLikeRevision127,
   ensureExplorePersonalLikeBaseline127,
+  ensureExplorePersonalLikeCrossOriginParity357,
   readExploreTrackLikeMembership127,
   normalizeExploreLikeDisplayPair129,
   overlayExploreLikeDisplayCounts,
@@ -1889,6 +1890,9 @@ export default function ExplorePage() {
   const likeHydrationKeyRef = useRef('');
   const popularLikeHydrationKeyRef304 = useRef('');
   const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
+  // app357: a retained same-account publication signal wakes only the affected
+  // own-profile cache; unchanged profile entries remain local/Worker 0.
+  const [profilePublicationSyncVersion357, setProfilePublicationSyncVersion357] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
@@ -2382,6 +2386,9 @@ export default function ExplorePage() {
       if (!signal) return;
       const trackId = String(signal.trackId || '').trim();
       if (!trackId) return;
+      if (profileUid === uid) {
+        setProfilePublicationSyncVersion357((current) => Math.max(current, Number(signal.version || 0)));
+      }
 
       let snapshotRow: Record<string, unknown> | null = null;
       if (signal.status === 'public' && signal.snapshotJson) {
@@ -2831,7 +2838,16 @@ export default function ExplorePage() {
       }
     };
 
+    const retainedPublicationSignal357 = user?.uid === profileUid
+      ? readLatestExplorePublicationSyncSignal(profileUid)
+      : null;
+    const expectedPublicationSignalVersion357 = Math.max(
+      profilePublicationSyncVersion357,
+      Number(retainedPublicationSignal357?.version || 0),
+    );
+
     getExplorePublicProfileFirstView(profileUid, {
+      expectedPublicationSignalVersion: expectedPublicationSignalVersion357,
       onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
         applyProfileFirstView(refreshedProfile, refreshedRows, true);
       },
@@ -2871,7 +2887,7 @@ export default function ExplorePage() {
       });
 
     return () => { cancelled = true; };
-  }, [profileUid, user]);
+  }, [profileUid, user, profilePublicationSyncVersion357]);
 
   // app335: warm public-profile entry/reload is Worker 0. Preserve eventual
   // cross-device freshness by doing the existing 60s shared-R2 check only after
@@ -2915,6 +2931,10 @@ export default function ExplorePage() {
     setProfileLikedError('');
     (async () => {
       try {
+        // app357: only My Likes entry may repair an origin-specific historical
+        // catalog gap, and only when a retained RTDB signal proves such history
+        // exists. Normal Explore/app re-entry does not pay this reconciliation.
+        await ensureExplorePersonalLikeCrossOriginParity357(user);
         await checkExplorePersonalLikeRevision127(user);
         await ensureExplorePersonalLikeBaseline127(user);
       } catch (reason) {

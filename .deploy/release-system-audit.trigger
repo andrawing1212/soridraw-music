@@ -1,9 +1,9 @@
-app359-my-likes-settlement-audit
-target=65f1ef678a176e3c44d667d4a2e4ceebb80d8657
-scope=canonical-r2-count-vs-local-guard-settlement,my-likes-no-repeat-worker,profile-publication-immediate-convergence
+app360-my-likes-navigation-zero-audit
+target=8af0d4e182b4a087a3a6e94cf8b5020396a79bc1
+scope=my-likes-tab-worker-zero-after-cache,heart-hydration-no-timed-revision-read,resume-only-fallback-preserved
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-app359-my-likes-settlement-audit
+requested=2026-10-06-app360-my-likes-navigation-zero-audit

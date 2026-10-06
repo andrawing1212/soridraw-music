@@ -1,3 +1,55 @@
+## 0QL. SORIDRAW 추천 PRODUCTION 정상복구 + release gate 실전 검증 완료 (2026-10-06 KST)
+
+최종 PRODUCTION:
+- 사용자 명확 승인 후 Release Controller Run `37397953411`: **SUCCESS / RELEASED**.
+- TEST_VERIFIED manifest: `soridraw-test-v356-884bf33c99eb`.
+- exact source PREVIEW SHA: `884bf33c99eb67a8c06c8720f518a55b6f2ce27c`.
+- main(TEST) SHA: `bca5864db427f6fdc635e547f573588e9628be0b`.
+- production SHA: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- PRODUCTION app version: **356**.
+- PRODUCTION Explore Worker: `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa`.
+- PRODUCTION Media Worker: `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44`.
+- Firebase PRODUCTION Hosting: verified TEST Hosting version clone PASS.
+- `soridraw.com` / Firebase production Hosting exact build verify PASS.
+
+SORIDRAW 추천 최종 검증:
+- `PRODUCTION_CURATED_PARITY=PASS count=12`.
+- TEST ↔ PRODUCTION 추천 projection parity PASS.
+- latest / popular shared Feed parity PASS.
+- public profile parity PASS.
+- production release environment parity PASS on attempt 1.
+- Production Media Worker shared Catalog flag=1 / authority=`shared-catalog` PASS.
+- Worker / Media Worker smoke + verify PASS.
+- 따라서 배포엔진은 추천이 503이거나 TEST와 불일치하면 승격을 중단하고, 정상 12곡일 때만 RELEASED 처리하도록 실제 release에서 검증됨.
+
+이번 PRODUCTION 승격 전 발견된 두 차단과 수정:
+1. Run `37395223571`: PROD_PREFLIGHT의 controller identity drift로 배포 전 차단.
+   - TEST manifest controller identity를 default branch가 아니라 실제 승격 source `RELEASE_ROOT`에서 계산하도록 수정.
+   - Audit `37395497639` SUCCESS.
+2. Run `37396335517`: 새 production Explore Worker 활성 뒤 curated HTTP 503이 13회 지속되어 자동 rollback.
+   - 기존 PRODUCTION Explore Worker `39e28223-6200-463f-8e86-1a0a3b3475d8`로 자동 복구되어 반쪽 배포 방지.
+   - read-only Audit `37396796197`: TEST/PRODUCTION 공통 D1 `curated_picks` 모두 현재 12 rows PASS, schema/data 문제 아님 확인.
+   - 실제 원인: PREVIEW/TEST는 명시적 `EXPLORE_CACHE` R2 binding이 있지만 PRODUCTION은 release runtime 계약상 `PROFILE_MEDIA`를 Explore cache fallback으로 사용. curated helper만 이 fallback을 따르지 않고 `EXPLORE_CACHE`만 요구해 production에서 R2 binding missing 503.
+   - `curatedBucket307`을 `EXPLORE_CACHE || PROFILE_MEDIA`로 최소 수정.
+   - 전체 tracks scan/rebuild, 데이터 copy/backfill 없이 canonical `curated_picks` 최대 40개 cold recovery 유지.
+   - Audit `37397307521` SUCCESS.
+   - PREVIEW Worker Release `37397493810` SUCCESS.
+   - TEST Run `37397621274` SUCCESS / TEST_VERIFIED, curated 12 parity PASS.
+   - 이후 최종 PRODUCTION Run `37397953411` SUCCESS.
+
+데이터/비용/기능 안전:
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- D1 schema/trigger migration **0**.
+- curated cold recovery는 추천 membership 최대 40개에만 bounded.
+- warm 추천은 R2/Edge 경로, D1 R0/W0 gate 유지.
+- 좋아요 / 공개·비공개 / Music Note / Library / 저장하트 / 폴더 / UI / thumbnail 변경 0.
+- shared Catalog는 PREVIEW/TEST/PRODUCTION 모두 계속 ON.
+
+현재 다음:
+- 정식앱 `soridraw.com` 실사용에서 `SORIDRAW 추천` 표시와 CACHE LIVE `/v1/curated HTTP 200`만 사용자 최종 확인.
+- 이상 없으면 curated 이슈 종료.
+- 이후 큰 비용 작업은 기존 HARD GATE였던 **never-published 최초 공개 D1 W12 -> W1~W2**를 기능 보존 조건으로 재개.
+
 ## 0QK. SORIDRAW 추천 PRODUCTION 1차 시도 preflight 차단 + Release Controller identity bootstrap 완료 (2026-10-06 KST)
 
 PRODUCTION 1차 시도:

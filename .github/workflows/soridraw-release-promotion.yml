@@ -160,6 +160,7 @@ jobs:
           npm run build
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node scripts/verify-366-cross-environment-profile-like-parity.mjs
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/index-sha"
           node -e "const v=require('./public/app-version.json').version;if(!v)process.exit(2);process.stdout.write(String(v))" > "$RUNNER_TEMP/app-version"

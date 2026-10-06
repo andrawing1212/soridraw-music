@@ -37,6 +37,7 @@ for (const token of [
   'TEST_VERIFY',
   'PROD_VERIFY',
   'Rollback branch and Worker traffic after deployment failure',
+  'node scripts/verify-366-cross-environment-profile-like-parity.mjs',
 ]) required(workflow, token, 'promotion workflow');
 
 forbidden(workflow, /git\s+push[^\n]*(?:--force|-f\b)/i, 'force push');

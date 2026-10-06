@@ -94,6 +94,7 @@ jobs:
           node scripts/verify-209-search-persistence-mobile.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
           node scripts/verify-211-cross-device-publication-refresh.mjs
+          node scripts/verify-366-cross-environment-profile-like-parity.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs
@@ -198,6 +199,7 @@ jobs:
           node scripts/verify-209-search-persistence-mobile.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
           node scripts/verify-211-cross-device-publication-refresh.mjs
+          node scripts/verify-366-cross-environment-profile-like-parity.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs

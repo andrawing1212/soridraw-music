@@ -1,3 +1,48 @@
+## 0QU. app360 최종 TEST_VERIFIED 완료 / TEST 실사용 검증 단계 (2026-10-06 KST)
+
+사용자 승인된 app360 TEST 승격 최종 완료:
+- 최종 frozen PREVIEW source: `d4c9d57cea80944853e41c0911c21a24c88752ba` (app360 code + docs-only controller bootstrap record).
+- final Release Controller Run `37436812301`: **SUCCESS / TEST_VERIFIED**.
+- final main SHA: `208cc8949dc60cb056066828ce78ef2fce764e0c`.
+- final immutable TEST tag: `soridraw-test-v360-d4c9d57cea80`.
+- app version: **360**.
+- TEST Explore Worker active version: `9835f91b-4c86-43db-ba30-bd8e5eaeffb8`.
+- TEST Explore Worker bundle SHA: `7165d23c93a8f9b602118305f3ee3a32a82c497fe46e1ef867c29cc67139daa8`.
+- TEST Explore Worker code SHA: `f6e1802f859b800cd245eb5c806a5e6ef4124ed42fcdc6799c89a004bb5bc3a2`.
+- TEST Media Worker active version: `f947084a-15a7-4549-a921-09d32595f5ba`.
+- TEST Media bundle/code identities PASS.
+- Firebase TEST Hosting deployed and actual `https://soridraw-test.web.app` + custom TEST URL app-version/exact index verification PASS.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`.
+- `TEST_WORKER_SMOKE=PASS` / `TEST_WORKER_VERIFY=PASS`.
+- `TEST_MEDIA_WORKER_SMOKE=PASS` / `TEST_MEDIA_WORKER_VERIFY=PASS`.
+- production environment contract SHA `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7` PASS.
+- TEST↔PRODUCTION allowed environment diff contract PASS.
+- PRODUCTION branch/Worker/Media Worker/Hosting non-mutation checks PASS; production ref remains `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+
+app360 My Likes cost regression fixed before TEST:
+- app359에서 사용자가 일정 시간이 지난 뒤 `공개곡 ↔ 좋아요 곡` 왕복 시 1회 Worker +2와 새로고침 같은 갱신을 관찰.
+- 원인: 5분 legacy private like revision HEAD가 My Likes tab entry 및 visible-heart hydration에서도 호출될 수 있었음.
+- app360은 timed revision HEAD를 **실제 hidden→visible browser resume fallback에만 유지**.
+- My Likes tab navigation 및 cached heart hydration에서는 timed revision Worker read 제거.
+- 실제 same-account like change는 기존 RTDB change signal로 동기화.
+- `APP360_MY_LIKES_TAB_WORKER_ZERO_AFTER_CACHE=PASS`.
+- `APP360_HEART_HYDRATION_NO_TIMED_REVISION_READ=PASS`.
+- `APP360_RESUME_ONLY_REVISION_FALLBACK_PRESERVED=PASS`.
+- `APP360_RTDB_LIVE_CHANGE_PATH_PRESERVED=PASS`.
+
+공개/비공개 프로필 반영:
+- 사용자 체감은 기존 약 20분 stale Edge 상태에서 약 **1분 내외**로 축소 확인.
+- 현재 구조에는 publication/profile fallback의 60초 bounded revalidation window가 존재하며, 실제 mutation signal 경로는 캐시 우회를 사용.
+- 따라서 20분 stale-cache 회귀는 해소되었고, 약 1분 fallback 수렴은 현재 설계 범위로 기록.
+
+릴리스 주의:
+- bootstrap TEST tag `soridraw-test-v360-0d27ac79c2d8`는 **PRODUCTION 사용 금지**.
+- 향후 PRODUCTION 후보는 오직 final tag `soridraw-test-v360-d4c9d57cea80`.
+- 이후 PREVIEW docs HEAD가 바뀌더라도 production은 latest preview를 rebuild하면 안 됨.
+- 사용자 명확한 `정식배포` 승인 전 PRODUCTION 승격 금지.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0. D1 schema migration 0. Firebase Functions 변경 0.
 ## 0QT. app360 TEST 1차 승격 완료 / 새 controller identity로 최종 TEST 재검증 필요 (2026-10-06 KST)
 
 사용자 TEST 승격 승인 후 app360 1차 TEST 승격 완료:

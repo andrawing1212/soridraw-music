@@ -1,3 +1,9 @@
+### 2026-10-06 user verification — app359 changed-like Worker behavior
+- User observed that after app359, Worker/personal social snapshot counters rise only when an actual like membership changes (a track is added to or removed from My Likes).
+- Screenshot evidence: like mutation path shows bundled like save Worker 1 / D1 W1, public-like-card refresh Worker 1 / D1 R0 W0, private likes-revision Worker 1 / D1 R0 W0, and personal social snapshot reconciliation during the actual change.
+- This is consistent with the intended cost contract: unchanged tab/page navigation should stay local, while a real membership change may spend bounded Worker/read work and one canonical write.
+- Treat the prior `공개곡 ↔ 좋아요 곡` repeated-repair regression as PASS **provided counters no longer rise on unchanged repeated tab switching**.
+- Remaining release gate: confirm publication visibility/profile list no longer waits ~20 minutes after public/private change.
 ### 2026-10-06 user verification — app359 My Likes count
 - User refreshed/updated PREVIEW app359 and confirmed own-profile `좋아요 곡` now shows **16 tracks**.
 - This matches the read-only canonical proof: D1 public+published liked relations=16 and shared personal-like R2 exact count=16.

@@ -1,9 +1,9 @@
-app356-curated-live-d1-cold-source-diagnosis
-target=85647965d522ab821d94c2f44b7f4b8085ab6eab
-scope=read-only-curated-picks-schema-and-bounded-read
+app356-curated-production-r2-fallback-audit
+target=59160a2deccdf4694606f1b173d7943cc2b4588b
+scope=curated-production-profile-media-fallback,bounded-cold-recovery,release-curated-gate
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-curated-live-d1-diagnosis
+requested=2026-10-06-curated-production-fallback-audit

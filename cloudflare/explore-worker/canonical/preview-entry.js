@@ -84,7 +84,10 @@ function curationHeaders307(request, {
   return headers;
 }
 
-const curatedBucket307 = (env) => env?.EXPLORE_CACHE || null;
+// SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006
+// PREVIEW/TEST have an environment-local EXPLORE_CACHE binding. PRODUCTION
+// intentionally uses PROFILE_MEDIA as its derived Explore-cache fallback.
+const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;
 const curatedRevision307 = (object) => String(
   object?.httpEtag
   || object?.etag

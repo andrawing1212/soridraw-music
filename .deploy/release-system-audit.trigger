@@ -1,9 +1,9 @@
-app356-release-controller-source-identity-audit
-target=a7e63af049439126c2ff373929f828fdfbaf0495
-scope=release-controller-manifest-source-identity,curated-release-gate
+app356-curated-production-r2-fallback-audit
+target=59160a2deccdf4694606f1b173d7943cc2b4588b
+scope=curated-production-profile-media-fallback,bounded-cold-recovery,release-curated-gate
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-release-controller-source-identity-audit
+requested=2026-10-06-curated-production-fallback-audit

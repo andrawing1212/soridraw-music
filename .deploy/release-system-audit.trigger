@@ -1,9 +1,9 @@
-app361-music-note-publication-origin-parity-gate
-target=b2ce5fe2ca5e7a4444bef76134c6d61ac4d3cfae
-scope=release-controller,preview-audit,preview-app-release,music-note-publication-origin-parity
-protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
-d1_schema_write=false
-d1_migration=false
-user_data_backfill=false
+app372-first-publication-w2-isolated-proof
+target=1fd6d5d5e7116908ff73574adc95e9885ee559a4
+scope=first-publication-w12-to-w2,isolated-d1,prep-only-shared-cutover,app361-parity-gate
+shared_d1_apply=false
+shared_user_data_write=false
+user_data_migration=false
+test_deploy=false
 production_deploy=false
-requested=2026-10-07-app361-publication-parity-permanent-gate
+requested=2026-10-07-app372-isolated-first-publication-cost-proof

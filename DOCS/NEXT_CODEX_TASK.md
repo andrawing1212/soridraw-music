@@ -1,3 +1,46 @@
+## CURRENT NEXT GATE — one-time 새 Release Controller TEST bootstrap 승인 대기
+
+완료:
+- PRODUCTION-first Release Controller source 구현 완료.
+- final Audit Run `37406340564`: SUCCESS / no deployment.
+- production live environment contract PASS.
+- TEST↔PRODUCTION Explore compiled code SHA exact match PASS.
+- TEST↔PRODUCTION Media compiled code SHA exact match PASS.
+- old PRODUCTION browser cache upgrade executable test PASS.
+- TEST_VERIFIED schema4 manifest + frozen production environment contract 구현 완료.
+- user data / D1 schema / Functions / Rules / TEST / PRODUCTION mutation 0.
+
+왜 bootstrap이 1회 필요한가:
+- GitHub issue-comment controller는 현재 default branch `main`의 workflow를 실행한다.
+- main에는 아직 이전 controller가 있으므로 새 controller를 먼저 main에 승격해야 한다.
+- 사용자 TEST 승인 없이 main 변경 금지.
+
+사용자가 `테스트배포`를 승인하면:
+1. 현재 검증된 app357 + hardened controller exact tree를 기존 controller로 TEST/main에 1회 bootstrap.
+2. 첫 TEST manifest는 **PRODUCTION 사용 금지**.
+3. main에 새 controller가 들어온 것을 exact SHA/identity로 확인.
+4. product behavior가 동일한 최신 PREVIEW SHA로 새 controller를 다시 실행해 **schema4 TEST_VERIFIED** manifest 생성.
+5. 두 번째 run에서 반드시 확인:
+   - production environment contract freeze PASS
+   - Explore/Media compiled code exact identity PASS
+   - app366 + app367 browser-origin upgrade gate PASS
+   - Feed / curated / public-profile server projection parity PASS
+   - shared Catalog=1
+   - TEST Hosting exact build
+6. 여기까지 모두 PASS한 후 TEST 실사용 최종 확인.
+7. 별도 명확한 정식배포 승인 전 PRODUCTION 변경 금지.
+8. PRODUCTION 승인 시 schema4 manifest 하나만 사용해 Hosting clone + exact code-identity Worker/Media promotion. contract drift면 mutation 전 차단.
+
+이 one-time bootstrap 이후 정상 릴리스:
+`PREVIEW 개발 → TEST 단일 완성 검증 → PRODUCTION 단일 승격`.
+
+금지:
+- bootstrap 첫 구-controller manifest를 PRODUCTION에 사용.
+- 사용자 승인 없는 main/TEST/PRODUCTION 변경.
+- 새 controller 검증 실패를 우회한 수동 production deploy.
+- user data migration/backfill/full scan.
+- app357 parity 종료 전 first-publication W12→W2 재개.
+
 ## CURRENT NEXT GATE — Release Controller PRODUCTION-first 강제화
 
 목표:

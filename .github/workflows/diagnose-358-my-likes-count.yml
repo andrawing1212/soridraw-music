@@ -1,0 +1,105 @@
+name: Diagnose 358 My Likes Count Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/diagnose-358-my-likes-count.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Compare canonical D1 and shared R2 counts only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            WITH target AS (
+              SELECT uid FROM public_profiles
+              WHERE lower(handle)=lower('soridraw')
+              LIMIT 1
+            )
+            SELECT
+              (SELECT COUNT(*) FROM target) AS target_rows,
+              (SELECT COUNT(*) FROM likes l WHERE l.user_uid=(SELECT uid FROM target)) AS all_like_relations,
+              (SELECT COUNT(*) FROM likes l
+                JOIN tracks t ON t.id=l.track_id
+                WHERE l.user_uid=(SELECT uid FROM target)
+                  AND t.is_public=1 AND t.status='published') AS public_published_likes,
+              (SELECT COUNT(*) FROM likes l
+                JOIN tracks t ON t.id=l.track_id
+                WHERE l.user_uid=(SELECT uid FROM target)
+                  AND NOT (t.is_public=1 AND t.status='published')) AS hidden_or_unpublished_likes,
+              (SELECT COUNT(*) FROM explore_like_batches_069 b
+                WHERE b.user_uid=(SELECT uid FROM target)) AS pending_q069,
+              (SELECT COUNT(*) FROM explore_like_user_queue_075 q
+                CROSS JOIN explore_like_user_queue_state_075 s
+                WHERE q.user_uid=(SELECT uid FROM target)
+                  AND (q.updated_at>s.processed_at OR
+                    (q.updated_at=s.processed_at AND q.user_uid>s.processed_uid))) AS pending_q075;
+          " --json > "$RUNNER_TEMP/counts.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT uid FROM public_profiles
+            WHERE lower(handle)=lower('soridraw')
+            LIMIT 1;
+          " --json > "$RUNNER_TEMP/uid.json"
+
+          uid="$(node -e "const x=require(process.env.RUNNER_TEMP+'/uid.json').flatMap(v=>v.results||[])[0];process.stdout.write(String(x?.uid||''))")"
+          test -n "$uid"
+          encoded_uid="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$uid")"
+
+          set +e
+          node "$WRANGLER" r2 object get             "soridraw-profile-media/internal/explore/shared-social-v114/likes/${encoded_uid}.json"             --remote --file "$RUNNER_TEMP/shared-like.json" >/tmp/r2-358.out 2>/tmp/r2-358.err
+          r2_code=$?
+          set -e
+
+          R2_CODE="$r2_code" node <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/counts.json','utf8')).flatMap(x=>x.results||[]);
+          const c=rows[0]||{};
+          console.log('APP358_MY_LIKES_COUNT_DIAG');
+          console.log('TARGET_PROFILE_ROWS='+Number(c.target_rows||0));
+          console.log('D1_ALL_LIKE_RELATIONS='+Number(c.all_like_relations||0));
+          console.log('D1_PUBLIC_PUBLISHED_LIKES='+Number(c.public_published_likes||0));
+          console.log('D1_HIDDEN_OR_UNPUBLISHED_LIKES='+Number(c.hidden_or_unpublished_likes||0));
+          console.log('D1_PENDING_Q069='+Number(c.pending_q069||0));
+          console.log('D1_PENDING_Q075='+Number(c.pending_q075||0));
+          const code=Number(process.env.R2_CODE||1);
+          console.log('R2_OBJECT_READ_CODE='+code);
+          if(code===0 && fs.existsSync(process.env.RUNNER_TEMP+'/shared-like.json')){
+            const v=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/shared-like.json','utf8'));
+            const ids=Array.isArray(v?.likedTrackIds)?v.likedTrackIds:[];
+            console.log('R2_LIKED_TRACK_IDS_COUNT='+ids.length);
+            console.log('R2_CANONICAL_COMPLETE='+String(v?.canonicalComplete156===true));
+            console.log('R2_EXACT_LIKE_COUNT='+String(Number.isSafeInteger(Number(v?.exactLikeCount156))?Number(v.exactLikeCount156):'na'));
+            console.log('R2_CANONICAL_SOURCE='+String(v?.canonicalSource156||''));
+          }
+          if(Number(c.target_rows||0)!==1) throw new Error('target public profile not uniquely resolved');
+          console.log('READ_ONLY_NO_MUTATION=PASS');
+          NODE

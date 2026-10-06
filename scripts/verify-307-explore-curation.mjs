@@ -39,6 +39,16 @@ assert(!service.includes("from 'firebase/firestore'"), 'Curated public reads mus
 
 assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Worker curation marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker R2 local-first marker is missing.');
+assert(worker.includes('SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006'), 'Cold curated cache must use bounded canonical bootstrap.');
+const bootstrapAt356 = worker.indexOf('async function materializeCuratedR2FromBase307');
+const bootstrapEnd356 = worker.indexOf('async function readCuratedObject307', bootstrapAt356);
+const bootstrapSlice356 = worker.slice(bootstrapAt356, bootstrapEnd356);
+assert(bootstrapSlice356.includes('FROM curated_picks'), 'Curated cold recovery must read only explicit curated membership.');
+assert(bootstrapSlice356.includes('LIMIT 40'), 'Curated cold recovery must stay bounded to 40 memberships.');
+assert(bootstrapSlice356.includes('ORDER BY sort_order ASC, updated_at DESC, track_id ASC'), 'Curated bootstrap ordering must be deterministic.');
+assert(bootstrapSlice356.includes('/v1/tracks/'), 'Curated bootstrap must resolve only exact selected track details.');
+assert(!bootstrapSlice356.includes("new URL('/v1/curated'"), 'Curated bootstrap must not recurse into the wrapper-only curated route.');
+assert(!bootstrapSlice356.includes('FROM tracks'), 'Curated bootstrap must not scan the tracks table.');
 assert(worker.includes('curatedStableBodyEdgeKey307'), 'Shared edge body cache is missing.');
 assert(worker.includes('EDGE-CURATED-BODY-307'), 'Edge curated response path is missing.');
 assert(worker.includes('SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003'), 'Targeted publication/privacy sync is missing.');

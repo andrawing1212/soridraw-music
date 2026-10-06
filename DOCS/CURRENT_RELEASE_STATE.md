@@ -1,3 +1,112 @@
+## 0QY. app371 영구 승격 gate 완료 + app372 first-publication W12→W2 안전증명 완료 (2026-10-07 KST)
+
+### 1. Music Note 공개상태 parity 371 영구 gate
+
+app361 incident에서 발견된 “서버/프로필은 공개인데 Music Note 공개 버튼만 오래된 origin cache로 비활성” 회귀를 다시 통과시키지 않도록 `verify-371-music-note-publication-origin-parity.ts`를 일반 릴리스 경로에 영구 연결했다.
+
+preview commit:
+- `b2ce5fe2ca5e7a4444bef76134c6d61ac4d3cfae`
+
+영구 연결 위치:
+- Release Controller PREFLIGHT
+- TEST_VERIFY
+- PROD_PREFLIGHT
+- Release System Audit
+- PREVIEW App Release
+- `verify-release-promotion-system.mjs` 자체 정적 gate
+
+Release System Audit Run `37489891135`: **SUCCESS**
+- TypeScript PASS
+- Build PASS
+- `RELEASE_PROMOTION_SYSTEM_STATIC=PASS`
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`
+- `UNCHANGED_MUSIC_NOTE_REENTRY_WORKER_ZERO_CONTRACT=PRESERVED`
+- `RETAINED_PUBLICATION_SIGNAL_BOUNDED_REPAIR=PASS`
+- `PUBLIC_AND_LOCK_BUTTON_RENDER_CONTRACT=PRESERVED`
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+- TEST/PRODUCTION 배포 없음
+- 사용자 데이터 변경 없음
+
+### 2. first-publication W12→W1~W2 app372 prep-only 후보
+
+현재 shared D1의 never-published Music Note 첫 공개 물리 쓰기 **W12**를 줄이기 위한 새 cutover 후보와 rollback을 PREVIEW에 준비했다.
+
+핵심 설계:
+- 기존 사용자/기존 Music Note row는 기존 D1 index/trigger 동작을 그대로 유지.
+- non-Music-Note row도 기존 동작 유지.
+- cutover 이후 새로 최초 공개되는 Music Note row만:
+  - canonical `tracks` + PK는 유지
+  - legacy secondary index / derived mirror / shared revision fanout에서 제외
+  - Feed/profile/search 조회는 이미 세 환경에 존재하는 shared R2 authority 사용
+- 사용자 원본 row 삭제/변환/backfill 없음.
+- 전체 Feed/profile/search rebuild 없음.
+- cutover SQL은 `__SORIDRAW_PUBLICATION_W2_CUTOVER_MS__` placeholder가 남아 있어 승인된 release 경로에서 고정 cutoff를 찍기 전에는 직접 실행 불가.
+- rollback은 기존 index/trigger 동작을 복원.
+
+준비 commit:
+- `1fd6d5d5e7116908ff73574adc95e9885ee559a4`
+- verifier syntax 수정: `d5cffa5ae341345e060dfb3b2a5648c394b02ece`
+- 측정 trigger: `dde5bb6c5cf5e5335cf2e7b2f7fa20e13027c4fa`
+
+Release System Audit Run `37492203345`: **SUCCESS**
+- TypeScript PASS / Build PASS
+- `APP372_FIRST_PUBLICATION_W2_CUTOVER_STATIC=PASS`
+- `APP372_CANONICAL_TRACK_ROW_PRESERVED=PASS`
+- `APP372_PRECUTOVER_AND_NON_MUSIC_NOTE_COMPAT=PASS`
+- `APP372_R2_AUTHORITY_FLAGS=PASS`
+- `APP372_AUTO_APPLY_WIRED=false`
+- `APP372_USER_DATA_MIGRATION=false`
+- `APP372_SHARED_D1_APPLIED=false`
+
+실제 Cloudflare **격리 임시 D1** 물리 비용 측정:
+- 현재 first-publication 재현: **W12 / R2**
+- 후보 적용 후 first-publication: **W2 / R0**
+- 후보 적용 후 source/media swap: **W1 / R1**
+- 후보 적용 후 private: **W1 / R1**
+- 후보 적용 후 republish: **W1 / R1**
+- no-op: **W0 / R1**
+- pre-cutover Music Note: 기존 **W12 / R2** 보존
+- non-Music-Note: 기존 **W12 / R2** 보존
+- rollback 후 first-publication: 기존 **W12 / R2** 복구
+- 임시 D1 삭제 PASS
+- shared 실제 사용자 D1 write **0**
+
+### 3. 실제 세 환경 live readiness read-only 확인
+
+PREVIEW / TEST / PRODUCTION의 현재 Explore Worker와 shared D1을 쓰기 없이 직접 감사하는 gate를 추가했다.
+- audit workflow update commits: `d7e5d9bb6f7dfd9f92497f5cf1e40522993e7129`, `507b062eb1ca7800425bff127663a1f63a1641ba`
+- 첫 시도 `37493057422`는 live Worker marker 검사 방식이 너무 엄격해 FAIL; **데이터/배포 변경 없음**.
+- 실제 composed function 기준으로 수정 후 Run `37493247036`: **SUCCESS**.
+
+live 확인:
+- PREVIEW / TEST / PRODUCTION 모두 같은 shared D1 ID 사용 PASS.
+- 세 환경 모두 shared `PROFILE_MEDIA=soridraw-profile-media` PASS.
+- 세 환경 모두:
+  - `SORIDRAW_R2_CATALOG_V1=1`
+  - `SORIDRAW_R2_HYBRID_READ_V1=1`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+- R2 catalog / hybrid / publication R2-only composed functions 세 환경 모두 존재 PASS.
+- `PREVIEW_APP372_R2_CUTOVER_READINESS=PASS`
+- `TEST_APP372_R2_CUTOVER_READINESS=PASS`
+- `PRODUCTION_APP372_R2_CUTOVER_READINESS=PASS`
+- 현재 shared D1은 아직 기존 pre-cutover schema 그대로:
+  - `APP372_LIVE_PRECUTOVER_SCHEMA=PASS`
+  - `APP372_SHARED_D1_CUTOVER_APPLIED=false`
+  - `REMOTE_D1_WRITES=0`
+
+### 현재 gate
+
+기술적으로는 **first-publication W12→W2 shared-D1 cutover 직전까지 준비/증명 완료**.
+
+하지만 다음 단계는 shared D1의 index/trigger를 실제 변경하는 schema cutover다. 사용자 원본 row를 바꾸지는 않지만 **공유 운영 D1 구조 변경**이므로 기존 안전 규칙에 따라 **사용자의 명확한 별도 승인 전 실행 금지**.
+
+현재 실제 서비스:
+- PRODUCTION app361 정상 유지.
+- TEST app361 정상 유지.
+- PREVIEW app361 제품 런타임 정상 유지.
+- 이번 app372 작업은 아직 shared D1 / Hosting / Worker / Functions에 배포하지 않음.
+- 사용자 데이터 변경 0.
+
 ## 0QX. app361 PRODUCTION incident 역반영 완료 — TEST + PREVIEW 동기화 (2026-10-07 KST)
 
 사용자 확인:

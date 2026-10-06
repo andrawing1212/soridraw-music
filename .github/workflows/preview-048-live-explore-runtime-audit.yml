@@ -181,6 +181,7 @@ jobs:
             console.log('FANOUT_INDEX_LIST_explore_derived_changes='+JSON.stringify(sets[3]||[]));
             console.log('FANOUT_INDEX_LIST_explore_derived_profiles='+JSON.stringify(sets[4]||[]));
             const byName=new Map(schema.map(row=>[String(row.name||''),String(row.sql||'').replace(/\s+/g,' ').trim()]));
+            const cutoff='1791309600000';
             for(const name of [
               'idx_tracks_latest_order',
               'idx_tracks_owner_latest',
@@ -192,13 +193,14 @@ jobs:
               'soridraw_shared_rev_tracks_au_051',
             ]){
               const ddl=byName.get(name);
-              if(!ddl) throw Error('APP372 live pre-cutover object missing: '+name);
-              if(ddl.includes('__SORIDRAW_PUBLICATION_W2_CUTOVER_MS__') || /source_type\s*<>\s*'music_note'\s+OR\s+created_at\s*</i.test(ddl)){
-                throw Error('APP372 cutover already applied unexpectedly: '+name);
+              if(!ddl) throw Error('APP373 live post-cutover object missing: '+name);
+              if(!ddl.includes(cutoff)) throw Error('APP373 locked cutoff missing: '+name);
+              if(!/source_type\s*<>\s*'music_note'\s+OR\s+(?:NEW\.)?created_at\s*</i.test(ddl)){
+                throw Error('APP373 Music Note cutoff predicate missing: '+name);
               }
             }
-            console.log('APP372_LIVE_PRECUTOVER_SCHEMA=PASS');
-            console.log('APP372_SHARED_D1_CUTOVER_APPLIED=false');
+            console.log('APP373_LIVE_POSTCUTOVER_SCHEMA=PASS');
+            console.log('APP373_SHARED_D1_CUTOVER_APPLIED=true');
             console.log('FIRST_PUBLICATION_FANOUT_READONLY=PASS');
             console.log('REMOTE_D1_WRITES=0');
           })().catch(e=>{console.error(e);process.exit(1)});

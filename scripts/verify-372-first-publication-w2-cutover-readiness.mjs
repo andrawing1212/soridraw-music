@@ -31,7 +31,7 @@ for (const name of [
   'idx_tracks_owner_source',
   'idx_tracks_primary_genre_latest',
 ]) {
-  assert.match(candidate, new RegExp('CREATE(?: UNIQUE)? INDEX ' + name + '[\\s\\S]*?WHERE source_type <> \\'music_note\\' OR created_at < ' + placeholder));
+  assert.match(candidate, new RegExp("CREATE(?: UNIQUE)? INDEX " + name + "[\\s\\S]*?WHERE source_type <> 'music_note' OR created_at < " + placeholder));
   assert.match(rollback, new RegExp('CREATE(?: UNIQUE)? INDEX ' + name + '[\\s\\S]*?ON tracks'));
 }
 assert.doesNotMatch(candidate, /DROP INDEX IF EXISTS idx_tracks_legacy_global_nonempty/i, 'bounded legacy-id uniqueness must stay intact');

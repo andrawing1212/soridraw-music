@@ -1,3 +1,7 @@
+### app360 TEST user validation — PASS
+- User confirmed TEST app360 is now okay.
+- Next gate is **explicit PRODUCTION approval only**.
+- On `정식배포`, promote exact immutable TEST_VERIFIED tag `soridraw-test-v360-d4c9d57cea80`; do not rebuild latest PREVIEW and do not use the bootstrap tag.
 ## CURRENT NEXT GATE — app360 TEST 실사용 확인 / PRODUCTION 승인 대기
 
 최종 TEST 기준:

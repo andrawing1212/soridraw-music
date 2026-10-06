@@ -69,6 +69,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify app358 profile and My Likes convergence
+        run: npx tsx scripts/verify-368-live-profile-like-convergence.ts
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

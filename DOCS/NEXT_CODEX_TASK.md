@@ -1,3 +1,38 @@
+## CURRENT NEXT GATE — SORIDRAW 추천 fix의 TEST/PRODUCTION 승격
+
+현재 완료:
+- 원인: 환경별 Explore curated R2가 비었을 때 wrapper-only `/v1/curated`를 base Worker에 재호출해 503이 되던 cold bootstrap 오류.
+- fix source `ff3c87ba797551beb9afbc8241ee5fca03f4680e`.
+- 배포엔진 강화 source `d0811e400c74fe8c81c6f3a0bc494321388da71c`.
+- Audit `37392970196` SUCCESS: TypeScript/Build/curation/release-controller/static+d1-readonly checks PASS.
+- PREVIEW Worker Run `37393213974` SUCCESS.
+- PREVIEW active Worker `193d7c1c-7471-44d0-bd1f-2315b0121eed`.
+- live `/v1/curated`: first 200 count=12, warm 200 count=12, warm D1 R0/W0, EDGE/R2 authority PASS.
+- TEST / PRODUCTION Explore Worker 비변경.
+- UI / likes / publication / Studio save-heart / Music Note / Library / folders / thumbnail 비변경.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite 0.
+
+다음:
+1. 사용자 `테스트배포` 승인 시 이 curated fix + 강화된 release gate만 포함한 검증본을 main/TEST로 승격.
+2. TEST 승격 자체에서 새 hard gate가 PREVIEW vs TEST `/v1/curated` HTTP 200, warm D1 R0/W0, 추천 projection equality를 확인.
+3. TEST 실기기에서 `SORIDRAW 추천` 섹션과 추천곡 목록 확인.
+4. 사용자의 명확한 정식배포 승인 후에만 같은 검증본을 PRODUCTION으로 승격.
+5. PRODUCTION 승격에서도 TEST vs PRODUCTION curated parity가 실패하면 자동 중단/rollback.
+6. 정식앱에서 `/v1/curated` 200 + SORIDRAW 추천 표시 + warm D1 R0/W0 확인 후 이 이슈 종료.
+
+금지:
+- 추천 복구를 이유로 좋아요/Feed/Public Profile/Music Note/Library/UI 구조 변경.
+- curated 복구에서 전체 tracks scan/rebuild.
+- 사용자 데이터 backfill/migration.
+- 승인 없는 TEST/PRODUCTION 승격.
+
+## CURRENT RUNTIME NOTE — shared Catalog cutover는 이미 ON
+
+- Run `37389139136` SUCCESS.
+- PREVIEW / TEST / PRODUCTION 모두 `SORIDRAW_SHARED_CATALOG_V1=1`, common `CATALOG=soridraw-user-catalog`, authority `shared-catalog`.
+- bulk copy / Firestore migration / D1 mutation 없이 coordinated cutover 완료.
+- 아래 과거 `flag=0 / dormant` 섹션은 이 cutover 이전 기록이므로 현재 기준으로 사용하지 않는다.
+
 ## CURRENT NEXT GATE — coordinated shared Catalog cutover + real-account parity
 
 완료:

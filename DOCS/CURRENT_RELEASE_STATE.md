@@ -1,3 +1,8 @@
+### 2026-10-06 user TEST validation — app360 PASS
+- User confirmed TEST app360 behavior is now okay after real-device validation.
+- This closes the current app360 TEST user-validation gate for the My Likes/public-profile convergence regression.
+- Final production candidate remains immutable tag `soridraw-test-v360-d4c9d57cea80` only.
+- PRODUCTION is still unchanged and must not be promoted until the user gives an explicit `정식배포` approval.
 ## 0QU. app360 최종 TEST_VERIFIED 완료 / TEST 실사용 검증 단계 (2026-10-06 KST)
 
 사용자 승인된 app360 TEST 승격 최종 완료:

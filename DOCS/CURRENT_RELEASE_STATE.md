@@ -1,3 +1,46 @@
+## 0QL. SORIDRAW 추천 PRODUCTION 복구 최종 완료 / app356 RELEASED (2026-10-06 KST)
+
+최종 정식배포:
+- 사용자의 명확한 PRODUCTION 승격 승인에 따라 검증된 TEST manifest `soridraw-test-v356-884bf33c99eb`를 사용.
+- TEST 재검증 Release Controller Run `37397621274`: **SUCCESS / TEST_VERIFIED**.
+- exact source PREVIEW SHA: `884bf33c99eb67a8c06c8720f518a55b6f2ce27c`.
+- main(TEST) SHA: `bca5864db427f6fdc635e547f573588e9628be0b`.
+- TEST Explore Worker: `f7a68e38-d25e-4205-81b3-45da5461b9df`.
+- TEST Media Worker: `1677a4aa-645d-4272-8a52-df3dd39c300f`.
+- TEST curated parity: **PASS / 12곡**.
+- TEST shared Catalog health: **PASS / shared-catalog**.
+
+PRODUCTION Release:
+- Release Controller Run `37397953411`: **SUCCESS / RELEASED**.
+- production branch SHA: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- app version: **356**.
+- PRODUCTION Explore Worker: `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa`.
+- PRODUCTION Media Worker: `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44`.
+- Firebase PRODUCTION Hosting: 검증된 TEST Hosting version `d10e8bcd93e90f6a`에서 live clone PASS.
+- `PRODUCTION_CURATED_PARITY=PASS count=12`.
+- latest/popular shared Feed parity PASS.
+- public profile parity PASS.
+- TEST → PRODUCTION release environment parity PASS.
+- Explore Worker smoke/verify PASS.
+- Media Worker health/smoke/verify PASS, `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`.
+- curated warm 재조회는 release hard gate에서 D1 R0/W0 + R2/Edge source가 아니면 실패하도록 되어 있으며 이번 PRODUCTION verify가 PASS.
+
+이번에 최종 수정된 추천 복구:
+- PRODUCTION은 PREVIEW/TEST와 달리 별도 `EXPLORE_CACHE` binding이 없고 `PROFILE_MEDIA`를 파생 Explore cache fallback으로 사용하므로, curated R2 bucket 선택을 `EXPLORE_CACHE || PROFILE_MEDIA`로 맞춤.
+- cold recovery는 bounded `curated_picks` + exact track detail만 사용. 전체 tracks scan/rebuild 없음.
+- 추천 외 좋아요/공개/비공개/Music Note/Library/폴더/UI/thumbnail 변경 0.
+
+데이터/비용 안전:
+- 사용자 데이터 migration/backfill/copy/delete/rewrite **0**.
+- D1 schema/trigger mutation **0**.
+- Firestore Rules / Functions 변경 **0**.
+- warm curated D1 data read/write 0 hard gate 유지.
+
+현재 판단:
+- 정식앱의 `SORIDRAW 추천` 503/누락 이슈는 배포 기준으로 **복구 완료**.
+- 남은 것은 사용자 실기기에서 `soridraw.com` 추천 섹션이 실제 12곡으로 보이는지 최종 화면 확인.
+- 다음 큰 비용 작업은 기존 보류 중인 **never-published 최초 공개 R6/W12 → W1~W2** 절감 재개. 추천/좋아요/공개 정상 기능은 건드리지 않는다.
+
 ## 0QL. SORIDRAW 추천 PRODUCTION 정상복구 + release gate 실전 검증 완료 (2026-10-06 KST)
 
 최종 PRODUCTION:

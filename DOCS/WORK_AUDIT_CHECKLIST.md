@@ -34,6 +34,14 @@
 13. PRODUCTION 변경/배포 없음
 14. FCM/WebSocket/새 외부 서비스 등 이번 범위 밖 인프라가 임의 추가되지 않았는지 확인
 15. 불필요한 임시 패치/진단 파일이 새로 누적되지 않았는지 확인
+16. **PRODUCTION-first 검증:** 이번 기능이 PRODUCTION에서 만날 실제 binding/vars/R2/Edge/origin cache/PWA cache 차이가 PREVIEW 단계부터 식별됐는지 확인
+17. TEST에서 PRODUCTION live 환경 계약을 read-only로 사전검사하고, 허용되지 않은 차이가 0인지 확인
+18. TEST_VERIFIED artifact와 PRODUCTION에 승격될 artifact의 source/build/bundle identity가 exact-match인지 확인. PRODUCTION 재빌드/재조립이면 FAIL
+19. 현재 PRODUCTION 브라우저 캐시를 보존한 업그레이드 경로와 빈 캐시 경로 둘 다 결과 parity를 검증했는지 확인
+20. 실제 앱 결과 기준으로 Feed/추천/공개프로필 공개곡·핀/좋아요 곡 membership/공개상태/좋아요 상태가 이전 단계와 같은지 확인
+21. "서버 API parity PASS"만으로 브라우저 표시 parity PASS라고 판정하지 않았는지 확인
+22. 사용자가 정식배포 후 수동으로 발견해야만 알 수 있는 핵심 검증 항목이 남아 있으면 FAIL
+23. TEST PASS 후 PRODUCTION에서 새 기능 오류가 발생했던 릴리스라면 제품 수정 완료가 아니라 Release System 회귀로 기록했는지 확인
 
 ## RED TEAM 질문
 - 사용자 수가 10만 명이어도 앱 업데이트 직후 10만 번 DB 읽기가 발생하지 않는가?

@@ -99,11 +99,19 @@ jobs:
           source .deploy/production-incident-recovery.trigger
           expected="$(cat "$RUNNER_TEMP/index.sha")"
           for base in "$PRODUCTION_FIREBASE_URL" "$PRODUCTION_URL"; do
-            version="$(curl -fsS --retry 4 --retry-delay 2 -H 'Cache-Control: no-cache' "$base/app-version.json" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version")"
-            test "$version" = 361
-            curl -fsS --retry 4 --retry-delay 2 -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/live.html"
-            actual="$(sha256sum "$RUNNER_TEMP/live.html" | cut -d' ' -f1)"
-            test "$actual" = "$expected"
+            matched=false
+            for attempt in $(seq 1 12); do
+              version="$(curl -fsS --retry 3 --retry-delay 2 -H 'Cache-Control: no-cache' "$base/app-version.json" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || true)"
+              curl -fsS --retry 3 --retry-delay 2 -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/live.html" || true
+              actual="$(sha256sum "$RUNNER_TEMP/live.html" 2>/dev/null | cut -d' ' -f1 || true)"
+              echo "LIVE_CHECK base=$base attempt=$attempt version=$version index=$actual expected=$expected"
+              if [ "$version" = 361 ] && [ "$actual" = "$expected" ]; then
+                matched=true
+                break
+              fi
+              sleep 5
+            done
+            test "$matched" = true
           done
           git fetch origin preview main production --no-tags
           test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"

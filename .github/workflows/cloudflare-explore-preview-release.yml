@@ -375,6 +375,23 @@ jobs:
           profile_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
           test "$profile_code" = 200
 
+          # app358: a real publication-change signal must bypass the origin-local
+          # positive profile Edge shell and read the shared profile R2 authority.
+          signal_profile_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/profile-signal-358.head" -o "$RUNNER_TEMP/profile-signal-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50&__soridraw_publication_signal=358")"
+          test "$signal_profile_code" = 200
+          grep -Eiq '^x-soridraw-profile-edge-cache:[[:space:]]*SHARED-SIGNAL-358' "$RUNNER_TEMP/profile-signal-358.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/profile-signal-358.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/profile-signal-358.head"
+          signal_revision="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-profile-revision:/{gsub("\r","");sub(/^[^:]+:[[:space:]]*/,"");print}' "$RUNNER_TEMP/profile-signal-358.head" | tail -1)"
+          test -n "$signal_revision"
+          signal_revision_q="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$signal_revision")"
+          signal_profile_304="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/profile-signal-358-304.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50&__soridraw_publication_signal=358&knownRevision=${signal_revision_q}")"
+          test "$signal_profile_304" = 304
+          grep -Eiq '^x-soridraw-profile-edge-cache:[[:space:]]*SHARED-SIGNAL-358' "$RUNNER_TEMP/profile-signal-358-304.head"
+          grep -Eiq '^x-soridraw-d1-read:[[:space:]]*0' "$RUNNER_TEMP/profile-signal-358-304.head"
+          grep -Eiq '^x-soridraw-d1-write:[[:space:]]*0' "$RUNNER_TEMP/profile-signal-358-304.head"
+          echo 'APP358_PROFILE_SIGNAL_SHARED_R2_LIVE=PASS'
+
           profile_tracks_code="$(curl -sS --max-time 20 -D "$RUNNER_TEMP/profile-tracks-358.head" -o "$RUNNER_TEMP/profile-tracks-358.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/tracks?limit=20&__r2only358=$(date +%s)")"
           test "$profile_tracks_code" = 200
           grep -Eiq '^x-soridraw-publication-read-authority:[[:space:]]*R2-ONLY-358' "$RUNNER_TEMP/profile-tracks-358.head"

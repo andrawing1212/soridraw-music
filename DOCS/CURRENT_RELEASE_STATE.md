@@ -1,3 +1,76 @@
+## 0QZ. app373 shared D1 first-publication W12→W2 컷오버 적용 완료 (2026-10-07 KST)
+
+사용자 명확한 승인:
+- 2026-10-07 01:13 KST: **공유 D1 컷오버 승인**.
+- 승인 범위: Music Note first-publication D1 W12 → W1~W2 비용 절감용 shared D1 index/trigger cutover.
+- user row delete/backfill/rewrite, Worker/Hosting/Functions 배포는 승인 범위에 포함하지 않음.
+
+릴리스 준비 / 안전성:
+- app373 approved cutover source 준비 commit: `b320b57d11403def3b87d870ec00b5c7cdeac675`.
+- release plumbing 재구성/future cutoff 고정 commit: `84a7dc12025cd72a64618f865495c3166e2891ab`.
+- locked cutoff: **2026-10-07 03:00:00 KST** / `1791309600000`.
+- migration blob: `f3a84c6abf20e33619507c48c55f30fae21db86e`.
+- rollback blob: `d323b64cd29bd479d6fcf3577b55f84681905bf6`.
+- verifier blob: `8d75d742959017401e1e046dfe19dcd98d361cce`.
+- Release System Audit Run `37496811955`: **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - Static release-system verification PASS
+  - critical shared-D1 workflow bash syntax gate PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - live shared D1 read-only preflight PASS
+  - main/production refs unchanged PASS
+
+1차 shared-D1 release 시도:
+- Run `37496079634`: **FAIL before any D1 mutation**.
+- 원인: release workflow resolve shell의 rollback SHA 정규식 문자열 누락.
+- migration/apply step까지 도달하지 않았으므로 shared D1 / user data / Worker / Hosting / Functions 변경 **0**.
+- 동일 승인 범위에서 workflow를 main 기준으로 깨끗하게 재구성하고 bash `-n` 영구 gate를 추가한 뒤 재감사.
+
+최종 shared-D1 cutover:
+- trigger commit: `64bfc58c6408049fabf368727382dbdacad35d57`.
+- canonical Shared D1 Release Run `37497179294`: **SUCCESS**.
+- exact migration / rollback / verifier hash pinning PASS.
+- pre-cutover live schema PASS.
+- cutoff 이후 Music Note row 사전 존재: **0**.
+- schema postflight PASS.
+- canonical/derived user row counts before/after 동일: **PASS**.
+- `PRAGMA quick_check` PASS.
+- 실제 shared D1 synthetic first-publication probe:
+  - **rows_written = 2**
+  - **rows_read = 0**
+  - `APP373_LIVE_FIRST_PUBLIC_REMOTE_D1_W2=PASS`
+  - probe cleanup PASS.
+- PREVIEW latest/popular feed post-cutover PASS.
+- TEST latest/popular feed post-cutover PASS.
+- PRODUCTION latest/popular feed post-cutover PASS.
+- PREVIEW / TEST / PRODUCTION Explore Worker version 변경 없음 PASS.
+- main / production branch ref 변경 없음 PASS.
+- rollback 미실행; `APP373_SHARED_D1_CUTOVER=PASS`.
+
+독립 live read-only post-audit:
+- workflow update commit: `18fce8495973f79194590009be6cc00fbeda0b55`.
+- Run `37497440023`: **SUCCESS**.
+- PREVIEW / TEST / PRODUCTION R2 catalog/hybrid/publication authority PASS.
+- `APP373_LIVE_POSTCUTOVER_SCHEMA=PASS`.
+- `APP373_SHARED_D1_CUTOVER_APPLIED=true`.
+- audit remote D1 writes: **0**.
+
+실제 동작 기준:
+- 컷오버 schema는 이미 shared D1에 설치됨.
+- **2026-10-07 03:00 KST 이후 D1에 처음 생성되는 Music Note publication row**부터 low-cost 경로 적용.
+- first-publication의 `tracks.created_at`은 기존 row가 없으면 publication 순간의 `Date.now()`이므로, 과거에 Music Note에서 만든 곡이라도 D1에 한 번도 공개 row가 없었다면 03:00 이후 첫 공개 시 새 경로 대상.
+- 기존 D1 Music Note row와 non-Music-Note row는 legacy compatibility 유지.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음.
+- Worker / Firebase Hosting / Functions / Rules 배포 없음.
+- app version은 PREVIEW / TEST / PRODUCTION 모두 **361** 그대로.
+
+다음 실사용 gate:
+- 03:00 KST 이후 **한 번도 공개한 적 없는 Music Note 곡 1개**를 공개하여 실제 Worker 전체 경로를 확인.
+- 목표: D1 first-publication W1~W2, 공개 버튼 즉시 정상, MY프로필/Explore 정상, 검색/프로필 parity 정상.
+- W3+ 또는 UI/parity 이상이면 추가 승격/확대 중단하고 원인 분석.
+- 이미 shared D1 공용 schema가 적용되었으므로 이 검증을 위해 TEST/PRODUCTION 코드 재배포는 하지 않는다.
+
 ## 0QY. app371 영구 승격 gate 완료 + app372 first-publication W12→W2 안전증명 완료 (2026-10-07 KST)
 
 ### 1. Music Note 공개상태 parity 371 영구 gate

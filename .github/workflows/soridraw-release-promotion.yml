@@ -165,6 +165,7 @@ jobs:
           node scripts/verify-release-controller.mjs
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/index-sha"
           node -e "const v=require('./public/app-version.json').version;if(!v)process.exit(2);process.stdout.write(String(v))" > "$RUNNER_TEMP/app-version"
@@ -325,6 +326,7 @@ jobs:
           node .deploy/release-media-worker-runtime.mjs production dry-run > "$RUNNER_TEMP/production-contract-media-dry-run"
           node scripts/release-production-environment-contract.mjs snapshot "$RUNNER_TEMP/production-environment-contract.json"
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
           export PRODUCTION_ENVIRONMENT_CONTRACT_SHA256="$(sha256sum "$RUNNER_TEMP/production-environment-contract.json" | cut -d' ' -f1)"
           export BROWSER_UPGRADE_CONTRACT_SHA256="$(cat src/services/exploreEnvironmentParityPolicy.ts scripts/verify-366-cross-environment-profile-like-parity.mjs scripts/verify-367-production-browser-upgrade-contract.ts | sha256sum | cut -d' ' -f1)"
           controller_identity="$(node "$RELEASE_ROOT/scripts/release-controller-policy.mjs" identity "$RELEASE_ROOT")"
@@ -369,6 +371,7 @@ jobs:
           current_browser_upgrade_hash="$(cat src/services/exploreEnvironmentParityPolicy.ts scripts/verify-366-cross-environment-profile-like-parity.mjs scripts/verify-367-production-browser-upgrade-contract.ts | sha256sum | cut -d' ' -f1)"
           test "$current_browser_upgrade_hash" = "$EXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256"
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
           node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$GITHUB_WORKSPACE" <<'NODE'
           const m=require(process.argv[2]); const {pathToFileURL}=require('url');
           (async()=>{const {controllerIdentity}=await import(pathToFileURL(process.argv[3]+'/scripts/release-controller-policy.mjs')); const actual=controllerIdentity(process.argv[3]); const c=m.controllerIdentity;

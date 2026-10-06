@@ -32,3 +32,15 @@ export const canAdvancePersonalLikeOriginCertificate357 = (input: {
   const repair = normalizeEnvironmentParityVersion(input.repairTargetAfter);
   return seen > 0 && previous === seen && certified >= seen && repair === 0;
 };
+
+
+export const shouldAttemptPersonalLikeOriginRepair358 = (input: {
+  latestSignalVersion: unknown;
+  certifiedSignalVersion: unknown;
+  attemptedSignalVersion: unknown;
+}): boolean => {
+  const latest = normalizeEnvironmentParityVersion(input.latestSignalVersion);
+  const certified = normalizeEnvironmentParityVersion(input.certifiedSignalVersion);
+  const attempted = normalizeEnvironmentParityVersion(input.attemptedSignalVersion);
+  return latest > 0 && certified < latest && attempted < latest;
+};

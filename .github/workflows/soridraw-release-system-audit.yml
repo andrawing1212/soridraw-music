@@ -51,6 +51,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           node scripts/verify-356-shared-private-catalog-authority.mjs
           node scripts/verify-356-shared-catalog-cutover.mjs
           node scripts/verify-release-command-pipeline.mjs
@@ -95,6 +96,7 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-210-targeted-personal-like-settlement.mjs
           node scripts/verify-211-cross-device-publication-refresh.mjs
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
+          npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-212-publication-shared-profile-parity.mjs
           node scripts/verify-213-explore-more-page-cache.mjs
           node scripts/verify-214-navigation-visibility-sync.mjs
@@ -458,6 +460,7 @@ jobs:
           node .deploy/release-worker-runtime.mjs production dry-run
           node .deploy/release-media-worker-runtime.mjs test dry-run
           node .deploy/release-media-worker-runtime.mjs production dry-run
+          node scripts/release-production-environment-contract.mjs snapshot "$RUNNER_TEMP/audit-production-environment-contract.json"
           echo 'WORKER_TARGETS_DRY_RUN=PASS'
           echo 'MEDIA_WORKER_TARGETS_DRY_RUN=PASS'
 

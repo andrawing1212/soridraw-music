@@ -43,6 +43,8 @@ function validate(source = workflow) {
   const testDeploy = step(source, 'TEST_DEPLOY exact tree and uploaded Worker version');
   assert.match(testDeploy, /release-media-worker-runtime\.mjs test upload/);
   assert.match(testDeploy, /release-media-worker-runtime\.mjs test activate/);
+  assert.match(testDeploy, /TEST_WORKER_CODE_SHA256/);
+  assert.match(testDeploy, /TEST_MEDIA_WORKER_CODE_SHA256/);
   assert.doesNotMatch(testDeploy, /refs\/heads\/main/);
   const prodDeploy = step(source, 'PROD_DEPLOY verified identities only');
   assert.match(prodDeploy, /release-media-worker-runtime\.mjs production upload/);
@@ -57,6 +59,10 @@ function validate(source = workflow) {
   assert.match(testVerify, /node "\$RELEASE_ROOT\/scripts\/release-controller-policy\.mjs" identity "\$RELEASE_ROOT"/);
   assert.doesNotMatch(testVerify, /release-controller-policy\.mjs" identity "\$GITHUB_WORKSPACE"/);
   assert.match(testVerify, /gh release create/);
+  assert.match(testVerify, /schema:4/);
+  assert.match(testVerify, /production-environment-contract\.json/);
+  assert.match(testVerify, /BROWSER_UPGRADE_CONTRACT_SHA256/);
+  assert.match(testVerify, /release-production-environment-contract\.mjs snapshot/);
   assert.match(testVerify, /refs\/heads\/main/);
   before(testVerify, 'release-media-worker-runtime.mjs test verify', 'refs/heads/main');
   before(testVerify, 'gh release create', 'refs/heads/main');
@@ -64,6 +70,10 @@ function validate(source = workflow) {
   assert.match(prodVerify, /refs\/heads\/production/);
   before(prodVerify, 'release-media-worker-runtime.mjs production verify', 'refs/heads/production');
   assert.match(prodPreflight, /controllerIdentity\(process\.argv\[3\]\)/);
+  assert.match(prodPreflight, /release-production-environment-contract\.mjs verify/);
+  assert.match(prodPreflight, /EXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256/);
+  assert.match(prodDeploy, /EXPECTED_WORKER_CODE_SHA256/);
+  assert.match(prodDeploy, /EXPECTED_MEDIA_WORKER_CODE_SHA256/);
   assert.match(prodPreflight, /"\$GITHUB_WORKSPACE"/);
   assert.doesNotMatch(prodPreflight, /controllerIdentity\(process\.cwd\(\)\)/);
 
@@ -76,6 +86,8 @@ function validate(source = workflow) {
   assert.doesNotMatch(rollback, /release-media-worker-runtime\.mjs "\$stage" activate/);
   assert.match(runtime, /if \(action === 'restore'\) \{\s*await restore\(\);\s*process\.exit\(0\);\s*\}/);
   assert.match(runtime, /hashReleaseIdentity/);
+  assert.match(runtime, /hashBundleCode/);
+  assert.match(runtime, /EXPECTED_WORKER_CODE_SHA256/);
   assert.match(mediaRuntime, /SORIDRAW_SHARED_CATALOG_V1/);
   assert.match(mediaRuntime, /SHARED_CATALOG_BUCKET = 'soridraw-user-catalog'/);
   assert.match(mediaRuntime, /MEDIA_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS/);
@@ -83,6 +95,8 @@ function validate(source = workflow) {
   assert.match(mediaRuntime, /MEDIA_ACTIVE_VERSION_SETTLED=PASS/);
   assert.match(mediaRuntime, /MEDIA_HEALTH_SETTLED=PASS/);
   assert.match(mediaRuntime, /hashReleaseIdentity/);
+  assert.match(mediaRuntime, /hashBundleCode/);
+  assert.match(mediaRuntime, /EXPECTED_MEDIA_WORKER_CODE_SHA256/);
   const mediaIdentityBlock = mediaRuntime.slice(mediaRuntime.indexOf('function hashReleaseIdentity()'), mediaRuntime.indexOf('async function activeVersion()', mediaRuntime.indexOf('function hashReleaseIdentity()')));
   assert.doesNotMatch(mediaIdentityBlock, /CONFIG_PATH/);
   assert.match(mediaIdentityBlock, /shared_catalog_flag/);
@@ -108,6 +122,7 @@ for (const [index, mutate] of [
   s => s.replace('test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"', ':'),
   s => s.replace('release-worker-runtime.mjs "$stage" restore', 'release-worker-runtime.mjs "$stage" activate'),
   s => s.replace('release-media-worker-runtime.mjs "$stage" restore', 'release-media-worker-runtime.mjs "$stage" activate'),
+  s => s.replace('node scripts/release-production-environment-contract.mjs verify "$RUNNER_TEMP/manifest/production-environment-contract.json"', ':'),
 ].entries()) assert.throws(() => validate(mutate(workflow)), undefined, `mutation ${index} was not rejected`);
 
 console.log('RELEASE_CONTROLLER_TWELVE_HARDENING_INVARIANTS=PASS');

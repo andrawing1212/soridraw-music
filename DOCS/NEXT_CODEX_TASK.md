@@ -1,3 +1,39 @@
+## CURRENT NEXT GATE — Release Controller PRODUCTION-first 강제화
+
+목표:
+- TEST에서 검증된 완성본이 PRODUCTION에서 환경 차이 때문에 다시 깨지는 구조를 끝낸다.
+- TEST_VERIFIED가 "코드 PASS"가 아니라 "PRODUCTION 실제 조건에서도 동일 결과가 사전 증명됨"을 의미하게 만든다.
+- PRODUCTION 승격은 재개발/재빌드가 아니라 TEST 검증 artifact의 exact promotion이 되게 한다.
+
+필수 구현:
+1. TEST 승격 시 PRODUCTION live environment contract를 read-only snapshot으로 수집:
+   - Worker/Media bindings
+   - vars/feature flags
+   - canonical DB/R2/Catalog identity
+   - environment-local cache binding/fallback contract
+   - Hosting/PWA 관련 production-only 차이
+2. 허용된 환경 차이를 명시적 allowlist로 고정하고, 미등록 차이 1개라도 TEST_VERIFIED 금지.
+3. TEST_VERIFIED manifest에 source + Hosting artifact + Worker/Media bundle + controller + production environment contract hash를 고정.
+4. PRODUCTION에서 artifact 재빌드 금지. TEST에서 검증한 exact artifact만 clone/activate.
+5. server parity와 별개로 browser-visible parity 검증 추가:
+   - existing PRODUCTION persistent cache -> new release upgrade
+   - empty/new-device cache
+   - Feed
+   - SORIDRAW 추천
+   - 공개프로필 공개곡/핀
+   - own-profile 좋아요 곡 membership
+   - 공개/비공개/좋아요 상태
+   - Music Note / Library / folders
+6. 위 결과가 TEST와 다르면 traffic 전환/RELEASED 금지.
+7. PRODUCTION에서 새 환경차이 오류가 나오면 제품 수정 재배포 반복 대신 Release System FAIL로 기록하고 자동 rollback/중단.
+8. 사용자 실기기 확인은 최종 체감 확인만 남기고 핵심 정합성 PASS의 근거로 사용하지 않음.
+
+합격선:
+- TypeScript / Build / release verifiers PASS.
+- Release System Audit PASS.
+- destructive DB/data action 0.
+- TEST/PRODUCTION 실제 배포 없이 dry-run/read-only로 새 gate가 실패/성공 조건을 증명.
+- app357 TEST/PRODUCTION 승격은 위 Release Controller 보강이 끝난 뒤에만 재개.
 ## CURRENT NEXT GATE — app357 PREVIEW 공개프로필 + 좋아요 곡 실기기 parity 검증
 
 현재:

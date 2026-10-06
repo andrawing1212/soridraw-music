@@ -2935,7 +2935,9 @@ export default function ExplorePage() {
         // catalog gap, and only when a retained RTDB signal proves such history
         // exists. Normal Explore/app re-entry does not pay this reconciliation.
         await ensureExplorePersonalLikeCrossOriginParity357(user);
-        await checkExplorePersonalLikeRevision127(user);
+        // app360: My Likes tab navigation must stay local. The 5-minute
+        // private-R2 revision fallback runs only on a real hidden->visible
+        // browser resume; actual same-account changes arrive through RTDB.
         await ensureExplorePersonalLikeBaseline127(user);
       } catch (reason) {
         console.warn('[129] Personal like baseline pending; verifying known candidates directly:', reason);

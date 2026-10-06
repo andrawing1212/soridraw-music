@@ -1,31 +1,3 @@
-## CURRENT NEXT GATE — 추천 PRODUCTION 실기기 확인 후 first-publication W12 비용 작업 재개
-
-현재 완료:
-- SORIDRAW 추천 복구 PRODUCTION Release Controller Run `37397953411`: SUCCESS / RELEASED.
-- production SHA `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`, app356.
-- PRODUCTION Explore Worker `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa`.
-- PRODUCTION Media Worker `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44`, shared Catalog flag=1.
-- TEST→PRODUCTION curated parity 12곡, latest/popular/public-profile/environment parity, Worker/Media verify 모두 PASS.
-- Firebase PRODUCTION Hosting TEST exact version clone PASS.
-- 사용자 데이터 migration/backfill/copy/delete/rewrite 0, D1 schema/trigger mutation 0.
-
-바로 남은 확인:
-1. 사용자 실기기에서 `soridraw.com` Explore의 `SORIDRAW 추천`이 12곡으로 정상 표시되는지 확인.
-2. 이상 없으면 curated 복구 이슈 종료.
-
-그 다음 개발 작업:
-1. PREVIEW에서 기존 보류 중인 never-published 최초 공개 **R6/W12** 원인을 다시 고정.
-2. 정상 공개/비공개 R2/W2 계열과 좋아요/추천/Music Note/Library/UI는 변경하지 않는다.
-3. 사용자 행동 1회 D1 rows_written **W1~W2** hard gate를 유지한다.
-4. 전체 Feed/profile/catalog scan/rebuild, 사용자 데이터 backfill/migration 없이 O(1) delta만 허용.
-5. Codex 구현 → Work 독립 감사 → PREVIEW 실측 후에만 다음 승격 판단.
-
-금지:
-- 추천 복구 직후 정상 좋아요/공개/비공개/Studio save-heart/Music Note/Library/폴더/UI 재수정.
-- W3+ 상태를 정상 기능이라는 이유로 PASS 처리.
-- 사용자 데이터 대량변경/migration/backfill.
-- 다음 코드 작업을 TEST/PRODUCTION에서 직접 시작.
-
 ## CURRENT NEXT GATE — 정식앱 SORIDRAW 추천 실사용 확인 후 first-publication W12 -> W1~W2 재개
 
 완료:

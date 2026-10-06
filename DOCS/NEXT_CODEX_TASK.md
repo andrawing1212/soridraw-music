@@ -1,3 +1,29 @@
+## CURRENT NEXT GATE — app373 적용 완료 / 03:00 KST 이후 실제 Music Note first-publication 1곡 검증
+
+완료:
+- 사용자 shared D1 cutover 명확한 승인 완료.
+- Shared D1 Release Run `37497179294`: **SUCCESS**.
+- locked cutoff: **2026-10-07 03:00:00 KST**.
+- 실제 shared D1 synthetic probe: **W2 / R0**.
+- schema/user-row count/quick_check/feed/Worker identity/main-production ref 전부 PASS.
+- live post-audit Run `37497440023`: **SUCCESS**, shared D1 cutover 적용 확인.
+- 사용자 원본 row migration/backfill/delete/rewrite: 0.
+- Worker/Hosting/Functions 배포: 0.
+- app361 제품 UI/기능 코드 비변경.
+
+사용자 실사용 확인:
+1. 03:00 KST 이후 한 번도 공개한 적 없는 Music Note 곡 1개를 공개.
+2. 공개 버튼이 즉시 활성 상태로 유지되는지 확인.
+3. MY프로필 공개곡 및 Explore에 정상 노출되는지 확인.
+4. 가능하면 비용 진단에서 해당 first-publication D1 rows_written이 W1~W2인지 확인.
+5. PC/모바일 동일 계정에서 공개상태가 기존 app361 parity 규칙대로 수렴하는지 확인.
+
+주의:
+- 03:00 이전 첫 공개는 의도적으로 legacy 경로가 유지되므로 비용 검증 표본으로 사용하지 않는다.
+- 기존에 D1 공개 row가 있었던 곡의 재공개도 first-publication 표본으로 사용하지 않는다.
+- W3+ / 공개상태 불일치 / MY프로필 누락이 있으면 즉시 다음 비용 작업 중단.
+- 정상 PASS 후 다음 비용 최적화 항목을 선택한다.
+
 ## CURRENT NEXT GATE — app372 shared D1 first-publication W12→W2 cutover 명확한 승인 대기
 
 완료된 안전증명:

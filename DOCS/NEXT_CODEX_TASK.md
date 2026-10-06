@@ -1,3 +1,7 @@
+### app359 PREVIEW verification progress — Worker behavior
+- PASS candidate: Worker/social-snapshot activity now follows **actual like membership changes**, not mere tab navigation.
+- This is acceptable under the local-first cost rule: real like changes may use bounded Worker/read work and W1; unchanged revisit must remain Worker 0 / D1 R0 target.
+- Final remaining user check before TEST promotion: public/private change must update the public-profile song list without the former ~20 minute delay.
 ### app359 PREVIEW user check progress
 - PASS: own-profile `좋아요 곡` count converged to **16**, matching canonical D1/R2 proof.
 - Still required before TEST promotion:

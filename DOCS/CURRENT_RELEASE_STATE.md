@@ -1,3 +1,23 @@
+## 0QW. app360 PRODUCTION Music Note 공개버튼 parity 회귀 / 영구 승격 gate 강화 (2026-10-06 KST)
+
+사용자 실기기 발견:
+- 동일 곡의 Music Note 공개 버튼이 한 환경에서는 활성인데 정식앱에서는 비활성으로 표시되는 불일치 확인.
+- app360 PRODUCTION 자체는 exact TEST_VERIFIED artifact 승격이었으나, 기존 Release Gate가 Music Note 카드의 publication-state 버튼을 browser-visible parity 항목으로 직접 검사하지 못한 누락이 확인됨.
+- 이 건은 **Release System FAIL**로 기록한다. 서버/API parity PASS만으로 실제 버튼 상태 parity를 PASS 처리하지 않는다.
+
+영구 승격 불변조건 추가:
+- 최근 생성곡 / Music Note / Library 등 같은 사용자 곡의 상태형 UI는 버전·환경과 무관하게 동일 canonical 상태를 보여야 한다.
+- 상시 비교 대상: 저장/하트, Explore 좋아요+숫자, 잠금, 공개/비공개, Music Note/Library membership, media/thumbnail.
+- PREVIEW↔TEST↔PRODUCTION뿐 아니라 기존 PRODUCTION persistent cache → 새 릴리스 업그레이드에서도 같은 곡 기준 버튼 fill/active 및 membership 일치를 검증한다.
+- 하나라도 다르면 TEST_VERIFIED/RELEASED 금지.
+
+현재 판단:
+- `src/services/explorePublicationService.ts`는 정상 Music Note 진입에서 기존 `explore-publication-states` persistent cache가 있으면 `options.revalidate !== true`일 때 즉시 반환한다.
+- 따라서 오래된 PRODUCTION-origin cache가 남은 경우 실제 shared publication 상태와 다른 버튼 표시가 유지될 수 있는 경로가 존재한다.
+- 다음 PREVIEW 작업은 이 수렴 gap만 최소 수정하고, 앱 버전 기반 cache bust/전체 DB 조회/정상 좋아요·잠금·공개 mutation 변경은 금지한다.
+- first-publication D1 W12→W1~W2 최적화는 이 회귀와 Release Gate 보강이 끝난 뒤 재개한다.
+- 사용자 데이터 migration/backfill/delete/rewrite 0. 현재 문서 변경만 수행하며 TEST/PRODUCTION 추가 배포 없음.
+
 ## 0QV. app360 PRODUCTION 정식배포 완료 / RELEASED (2026-10-06 KST)
 
 사용자 명확한 `정식배포` 승인 후 final TEST_VERIFIED artifact를 exact promotion:

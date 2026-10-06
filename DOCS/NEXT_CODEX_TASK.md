@@ -1,3 +1,24 @@
+## CURRENT NEXT GATE — app361 역반영 완료 / 371 영구 parity gate 후 first-publication W12 → W1~W2
+
+완료:
+- PRODUCTION app361 사용자 실기기 정상 확인.
+- TEST reverse sync Run `37485002429`: SUCCESS / TEST_VERIFIED.
+- main(TEST) `21b2ac98370e0644c4ab245fc3fd9965d1cc4fb6`, tag `soridraw-test-v361-3019b20bc7d3`.
+- PREVIEW reverse sync Run `37485563687`: SUCCESS / app361 exact build PASS.
+- PREVIEW HEAD(배포 기준) `21d57b00a917e173a47223783c6caab22636138d`.
+- TEST / PREVIEW / PRODUCTION 모두 app361 기준.
+- user data / D1 schema / Functions / RTDB rules destructive mutation 없음.
+
+다음 작업 순서:
+1. app361의 `scripts/verify-371-music-note-publication-origin-parity.ts`를 일반 PREVIEW audit + Release Controller의 영구 승격 gate에 연결한다.
+   - 서버/API parity만 맞고 Music Note 공개 버튼 fill/active가 다르면 FAIL.
+   - 기존 PRODUCTION persistent cache → 새 release upgrade 경로도 검사.
+   - 제품 UI/데이터 mutation 없음.
+2. 위 Release System Audit PASS 후 원래 예정 작업인 **first-publication D1 rows_written W12 → W1~W2** 최적화를 새 PREVIEW 작업으로 시작한다.
+3. 정상 좋아요/저장하트/잠금/공개·비공개/Music Note/Library/폴더/미디어는 동결 보호.
+4. 전체 publication/feed/profile scan, 앱 버전 기반 cache bust, 사용자 데이터 migration/backfill 금지.
+5. first-publication 1회에서 D1 W3+이면 기능이 정상이어도 FAIL; W1~W2 확인 전 TEST 승격 금지.
+
 ## CURRENT NEXT GATE — app360 PRODUCTION Music Note 공개상태 회귀 + 영구 승격 parity gate
 
 사용자 실기기 발견:

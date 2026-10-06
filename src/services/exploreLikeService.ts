@@ -1742,7 +1742,10 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   if (!normalized.length) return [];
   installLikeSignalRetry127();
   try {
-    await checkExplorePersonalLikeRevision127(user);
+    // app360: visible-track heart hydration is not a freshness trigger.
+    // Healthy cached navigation must not spend a periodic Worker HEAD simply
+    // because five minutes elapsed. RTDB change signals own live convergence;
+    // the legacy private-R2 HEAD remains only on true browser resume.
     await ensurePersonalLikeBaseline127(user);
   } catch (reason) {
     // The existing account cache is still usable while an R2 repair is retried.

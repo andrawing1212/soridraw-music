@@ -1,3 +1,19 @@
+## CURRENT NEXT GATE — app360 RELEASED / next PREVIEW task selection
+
+정식배포 완료:
+- PRODUCTION Run `37461102504`: SUCCESS / RELEASED.
+- final manifest `soridraw-test-v360-d4c9d57cea80`.
+- production SHA `78691ec733d7efcb254b904dc512af49124641cc`.
+- production Explore Worker `4e845257-2fc5-46a0-9f46-04396ca729dc`.
+- production Media Worker `a710fd22-8aa6-4386-b22a-d5510125fb2e`.
+- Hosting exact clone + `soridraw.com` exact release index PASS.
+- curated/public-profile/environment parity + Worker/Media smoke/verify PASS.
+- user data / D1 schema / Functions / Rules destructive mutation 없음.
+
+다음 개발은 새 PREVIEW 작업으로만 시작:
+- 기존 예정 작업인 first-publication D1 W12 -> W1~W2 비용 최적화를 재개할 수 있음.
+- app360 좋아요/프로필/Music Note/Library/UI 정상 동작은 frozen baseline으로 보호.
+- PRODUCTION hotfix가 아니라 PREVIEW 설계→구현→감사→실사용→TEST 순서로 다시 진행.
 ### app360 TEST user validation — PASS
 - User confirmed TEST app360 is now okay.
 - Next gate is **explicit PRODUCTION approval only**.

@@ -44,3 +44,17 @@ export const shouldAttemptPersonalLikeOriginRepair358 = (input: {
   const attempted = normalizeEnvironmentParityVersion(input.attemptedSignalVersion);
   return latest > 0 && certified < latest && attempted < latest;
 };
+
+
+export const shouldAttemptPersonalLikeOriginSettlement359 = (input: {
+  hasLocalState: boolean;
+  latestSignalVersion: unknown;
+  settledSignalVersion: unknown;
+  attemptedSignalVersion: unknown;
+}): boolean => {
+  if (!input.hasLocalState) return false;
+  const latest = normalizeEnvironmentParityVersion(input.latestSignalVersion);
+  const settled = normalizeEnvironmentParityVersion(input.settledSignalVersion);
+  const attempted = normalizeEnvironmentParityVersion(input.attemptedSignalVersion);
+  return latest > 0 && settled < latest && attempted < latest;
+};

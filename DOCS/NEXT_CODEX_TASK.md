@@ -1,3 +1,39 @@
+## CURRENT NEXT GATE — app358 PREVIEW 실사용 검증 / TEST 재승격 대기
+
+현재 기준:
+- PREVIEW app358 deployed.
+- Firebase PREVIEW Run `37413571015`: SUCCESS / exact build PASS.
+- PREVIEW Explore Worker Run `37413466047`: SUCCESS.
+- active PREVIEW Explore Worker `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- Audit Run `37413168427`: SUCCESS.
+- main(TEST) app357 / production unchanged.
+- 기존 app357 schema4 TEST manifest는 사용자 실사용 회귀 발견으로 **promotion-invalid**.
+
+사용자 실사용에서 반드시 확인:
+1. own profile의 `좋아요 곡` 탭을 짧은 간격으로 여러 번 왕복.
+   - 첫 stale-origin repair가 필요한 경우 1회 Worker 요청은 허용.
+   - 같은 retained signal에서 이후 반복 탭 클릭은 Worker 추가 상승 금지.
+   - 목록 membership이 PREVIEW/실제 좋아요 상태와 일치해야 함.
+2. 공개곡 하나를 비공개→공개 또는 공개→비공개 전환.
+   - 프로필 공개곡 목록이 약 20분 Edge TTL을 기다리지 않고 실제 change signal 뒤 즉시 수렴해야 함.
+   - 일반 프로필 재진입은 Worker 0 우선.
+3. 기존 정상 기능 최소 확인:
+   - Feed / SORIDRAW 추천 / 하트+숫자 / Music Note / Library / 폴더 / PC·모바일 UI.
+
+합격 후:
+- app358 PREVIEW 완성본 전체를 TEST로 새 승격.
+- 새 TEST_VERIFIED manifest를 새로 생성.
+- app357 tag `soridraw-test-v357-32c85eded45c`는 PRODUCTION에 절대 사용하지 않음.
+- 새 TEST 실사용까지 PASS해야 PRODUCTION 후보가 됨.
+
+금지:
+- 현재 단계에서 main/TEST/PRODUCTION 수정.
+- 사용자 승인 없는 PRODUCTION 배포.
+- 데이터 migration/backfill/full scan.
+- D1 schema 변경.
+- 좋아요/공개/비공개 정상 UX 또는 UI 재설계.
+- app358 실사용 PASS 전 first-publication 비용 최적화 재개.
+
 ## CURRENT NEXT GATE — schema4 TEST_VERIFIED 완료 / TEST 실사용 확인 및 PRODUCTION 승인 대기
 
 완료:

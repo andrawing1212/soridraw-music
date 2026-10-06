@@ -1,9 +1,8 @@
-app372-first-publication-w2-isolated-proof
-target=1fd6d5d5e7116908ff73574adc95e9885ee559a4
-scope=first-publication-w12-to-w2,isolated-d1,prep-only-shared-cutover,app361-parity-gate
+app373-approved-shared-d1-cutover-release-system-audit
+target=b320b57d11403def3b87d870ec00b5c7cdeac675
+scope=shared-d1-release-workflow,app373-exact-cutover,rollback,live-w2-probe
+approval=user_explicit_shared_d1_cutover_approved_2026-10-07T01:13:29+09:00
 shared_d1_apply=false
-shared_user_data_write=false
-user_data_migration=false
-test_deploy=false
+user_data_write=false
 production_deploy=false
-requested=2026-10-07-app372-isolated-first-publication-cost-proof-retry1
+requested=2026-10-07-app373-release-system-audit

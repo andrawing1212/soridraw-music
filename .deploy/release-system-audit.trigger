@@ -1,9 +1,9 @@
-app358-profile-like-convergence-audit-v2
-target=c2bcfdc551fced779c7245874c15d12a08c93116
+app358-profile-like-convergence-audit-v3
+target=a4da6fcff3ec9d52366f94b1df00769b20a6efe2
 scope=profile-publication-signal-bypass,my-likes-one-shot-repair,cross-environment-shared-profile-like-convergence
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-app358-profile-like-convergence-audit-v2
+requested=2026-10-06-app358-profile-like-convergence-audit-v3

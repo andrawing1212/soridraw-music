@@ -1,3 +1,33 @@
+## CURRENT NEXT GATE — 정식앱 SORIDRAW 추천 실사용 확인 후 first-publication W12 -> W1~W2 재개
+
+완료:
+- 최종 PRODUCTION Run `37397953411`: SUCCESS / RELEASED.
+- source PREVIEW `884bf33c99eb67a8c06c8720f518a55b6f2ce27c`.
+- main(TEST) `bca5864db427f6fdc635e547f573588e9628be0b`.
+- production `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- manifest `soridraw-test-v356-884bf33c99eb`.
+- PRODUCTION Explore Worker `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa`.
+- PRODUCTION Media Worker `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44`.
+- `PRODUCTION_CURATED_PARITY=PASS count=12`.
+- TEST ↔ PRODUCTION latest/popular/public-profile/environment parity PASS.
+- Firebase PRODUCTION Hosting clone + exact build verify PASS.
+- shared Catalog flag=1 / shared-catalog PASS.
+- user data migration/backfill/copy/delete/rewrite 0.
+- likes/publication/Music Note/Library/folders/UI/thumbnail 비변경.
+
+최종 사용자 확인:
+1. `soridraw.com` Explore에서 `SORIDRAW 추천` 섹션 정상 표시.
+2. CACHE LIVE `/v1/curated` HTTP 200.
+3. warm 재진입 추천 D1 R0/W0.
+4. 문제 없으면 curated 복구 이슈 종료.
+
+그 다음 개발:
+- never-published 최초 공개의 현재 D1 R6/W12 HARD FAIL 경로만 다시 분석.
+- 기능은 현재 공개/검색/프로필/Feed/좋아요/thumbnail 결과 100% 보존.
+- 목표 W1~W2; 불가능하면 기능을 삭제하지 말고 원인/현실적 최소 비용을 먼저 보고.
+- existing registered public/private 정상 경로와 좋아요/저장하트/Music Note/Library/UI는 건드리지 않음.
+- 전체 scan/rebuild/backfill 금지.
+
 ## CURRENT NEXT GATE — fixed-controller TEST manifest 재생성 후 승인된 PRODUCTION 승격
 
 현재:

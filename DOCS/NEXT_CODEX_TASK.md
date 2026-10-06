@@ -1,3 +1,26 @@
+## CURRENT NEXT GATE — app360 TEST 실사용 확인 / PRODUCTION 승인 대기
+
+최종 TEST 기준:
+- source `d4c9d57cea80944853e41c0911c21a24c88752ba`
+- main `208cc8949dc60cb056066828ce78ef2fce764e0c`
+- app360
+- final Run `37436812301` SUCCESS / TEST_VERIFIED
+- final tag `soridraw-test-v360-d4c9d57cea80`
+- TEST Explore Worker `9835f91b-4c86-43db-ba30-bd8e5eaeffb8`
+- TEST Media Worker `f947084a-15a7-4549-a921-09d32595f5ba`
+- PRODUCTION unchanged
+
+사용자 TEST 확인:
+1. own-profile `좋아요 곡`이 canonical membership과 일치하는지.
+2. 캐시가 정상인 상태에서 `공개곡 ↔ 좋아요 곡` 반복 이동이 Worker를 반복 증가시키지 않는지.
+3. 실제 좋아요 추가/해제 때만 bounded Worker + canonical W1이 발생하는지.
+4. 공개/비공개 후 프로필 공개곡이 기존 20분 stale 상태 없이 약 1분 bounded window 안에서 수렴하는지.
+5. Feed / 추천 / 하트+숫자 / Music Note / Library / folders / PC·모바일 기본 회귀 확인.
+
+PASS 후:
+- 사용자의 명확한 `정식배포` 승인 시 final tag `soridraw-test-v360-d4c9d57cea80` exact artifact만 PRODUCTION 승격.
+- production에서 rebuild/reassembly/latest preview 사용 금지.
+- bootstrap tag `soridraw-test-v360-0d27ac79c2d8` 사용 금지.
 ## CURRENT NEXT GATE — app360 final TEST_VERIFIED 재검증
 
 1차 TEST bootstrap:

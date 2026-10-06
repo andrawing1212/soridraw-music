@@ -1,9 +1,9 @@
-app357-cross-environment-profile-like-parity-audit-v2
-target=d54c08d0647435d96a1f50149625ebdd65c1d9f1
-scope=public-profile-publications,my-likes-origin-parity,release-hard-gate
-protect=feed,curated,like-click-batching,publication,studio-heart,music-note,library,folders,ui
+app357-production-first-release-controller-audit
+target=aef4d61a8c6d3ac40d3ff0798511813e471c387f
+scope=production-environment-contract,compiled-worker-code-identity,browser-upgrade-contract,test-verified-manifest-v4
+protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-cross-environment-profile-like-parity-v2
+requested=2026-10-06-production-first-release-controller-audit

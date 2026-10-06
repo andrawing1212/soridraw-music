@@ -1,3 +1,9 @@
+### 2026-10-06 user verification — app359 My Likes count
+- User refreshed/updated PREVIEW app359 and confirmed own-profile `좋아요 곡` now shows **16 tracks**.
+- This matches the read-only canonical proof: D1 public+published liked relations=16 and shared personal-like R2 exact count=16.
+- Prior PREVIEW/TEST/PRODUCTION screens showing >20 were therefore display/cache-settlement drift, not proof that canonical shared user data contained >20 public+published likes.
+- TEST/PRODUCTION remain unchanged at this point; app359 has not yet been promoted.
+- Remaining PREVIEW ship gate before TEST: confirm repeated `공개곡 ↔ 좋아요 곡` navigation no longer causes repeated Worker repair after the one-time settlement, and confirm publication visibility reaches profile without the old ~20 minute delay.
 ## 0QS. app359 PREVIEW 배포 완료 / My Likes 20곡 원인 확정 및 stale local guard 정리 (2026-10-06 KST)
 
 사용자 관찰:

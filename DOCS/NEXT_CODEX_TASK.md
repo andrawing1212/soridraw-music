@@ -1,3 +1,21 @@
+## CURRENT NEXT GATE — schema4 TEST_VERIFIED 최종 재검증
+
+bootstrap 완료:
+- Run `37407282504` SUCCESS.
+- main `66ad632afab1259009efae387c0f41ccea2b4b26`에 새 production-first controller 설치 완료.
+- bootstrap schema3 manifest `soridraw-test-v357-8ad97e799c24`는 **PRODUCTION 사용 금지**.
+- TEST app357 / curated 12 / public-profile / shared Catalog / Worker·Media smoke PASS.
+- PRODUCTION unchanged.
+
+지금 할 일:
+1. docs-only latest PREVIEW SHA를 새 main controller로 TEST 재검증.
+2. schema4 TEST_VERIFIED manifest 생성.
+3. frozen production environment contract / compiled Explore+Media code SHA / browser-upgrade contract hash 포함 확인.
+4. TEST Hosting exact build / Feed / curated / public-profile / shared Catalog parity PASS 확인.
+5. PRODUCTION 비변경 확인.
+6. 이후 사용자에게 TEST 실사용 확인을 요청.
+7. 정식배포는 사용자의 별도 명확한 승인 전 금지.
+
 ## CURRENT NEXT GATE — one-time 새 Release Controller TEST bootstrap 승인 대기
 
 완료:

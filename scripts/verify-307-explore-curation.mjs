@@ -41,6 +41,8 @@ assert(!service.includes("from 'firebase/firestore'"), 'Curated public reads mus
 assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Worker curation marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker R2 local-first marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006'), 'Cold curated cache must use bounded canonical bootstrap.');
+assert(worker.includes('SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006'), 'Curated cache must document the PRODUCTION R2 fallback.');
+assert(worker.includes('const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;'), 'Curated cache must follow the release runtime EXPLORE_CACHE -> PROFILE_MEDIA fallback contract.');
 const bootstrapAt356 = worker.indexOf('async function materializeCuratedR2FromBase307');
 const bootstrapEnd356 = worker.indexOf('async function readCuratedObject307', bootstrapAt356);
 const bootstrapSlice356 = worker.slice(bootstrapAt356, bootstrapEnd356);

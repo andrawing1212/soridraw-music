@@ -1,9 +1,9 @@
-app356-release-controller-source-identity-audit
-target=a7e63af049439126c2ff373929f828fdfbaf0495
-scope=release-controller-manifest-source-identity,curated-release-gate
+app356-curated-live-d1-cold-source-diagnosis
+target=85647965d522ab821d94c2f44b7f4b8085ab6eab
+scope=read-only-curated-picks-schema-and-bounded-read
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-release-controller-source-identity-audit
+requested=2026-10-06-curated-live-d1-diagnosis

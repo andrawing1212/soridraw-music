@@ -1,20 +1,33 @@
-## CURRENT NEXT GATE — schema4 TEST_VERIFIED 최종 재검증
+## CURRENT NEXT GATE — schema4 TEST_VERIFIED 완료 / TEST 실사용 확인 및 PRODUCTION 승인 대기
 
-bootstrap 완료:
-- Run `37407282504` SUCCESS.
-- main `66ad632afab1259009efae387c0f41ccea2b4b26`에 새 production-first controller 설치 완료.
-- bootstrap schema3 manifest `soridraw-test-v357-8ad97e799c24`는 **PRODUCTION 사용 금지**.
-- TEST app357 / curated 12 / public-profile / shared Catalog / Worker·Media smoke PASS.
+완료:
+- Release Controller Run `37407657202`: SUCCESS / TEST_VERIFIED.
+- source PREVIEW `32c85eded45c49e0e735c685a05b2efe8702c8ce`.
+- main(TEST) `d4852c7b85955effd0714b88c62ec10a4c96bb2e`.
+- app357.
+- schema4 manifest `soridraw-test-v357-32c85eded45c`.
+- TEST Explore Worker `ef64f24d-8e65-4921-a96d-b52e1d8db62d`.
+- TEST Media Worker `3c167990-7194-4301-81da-791a21989156`.
+- TEST Hosting exact build / latest+popular Feed / curated 12 / public-profile / shared Catalog parity PASS.
+- production environment contract / compiled Explore+Media code identity / old-browser-cache upgrade gate PASS.
 - PRODUCTION unchanged.
+- user data migration/backfill/copy/delete/rewrite 0.
 
 지금 할 일:
-1. docs-only latest PREVIEW SHA를 새 main controller로 TEST 재검증.
-2. schema4 TEST_VERIFIED manifest 생성.
-3. frozen production environment contract / compiled Explore+Media code SHA / browser-upgrade contract hash 포함 확인.
-4. TEST Hosting exact build / Feed / curated / public-profile / shared Catalog parity PASS 확인.
-5. PRODUCTION 비변경 확인.
-6. 이후 사용자에게 TEST 실사용 확인을 요청.
-7. 정식배포는 사용자의 별도 명확한 승인 전 금지.
+1. 사용자 실기기에서 `test.soridraw.com` app357 최종 확인.
+2. 특히 PREVIEW와 달랐던 공개프로필 공개곡·핀 / own-profile 좋아요 곡 membership 확인.
+3. Feed / SORIDRAW 추천 / 좋아요 / 공개·비공개 / Music Note / Library / 폴더가 기존 정상 동작을 유지하는지 최소 확인.
+4. 문제가 없으면 사용자 명확한 `정식배포` 승인 후 schema4 manifest `soridraw-test-v357-32c85eded45c`만 PRODUCTION에 exact promotion.
+5. PRODUCTION preflight에서 environment contract drift 또는 artifact/code SHA mismatch가 1개라도 나오면 mutation 전 중단.
+6. app357 parity 릴리스 종료 전 first-publication W12→W1~W2 비용 최적화 재개 금지.
+
+금지:
+- 최신 preview HEAD를 임의로 다시 빌드해 PRODUCTION에 사용.
+- bootstrap schema3 manifest 사용.
+- PRODUCTION에서 새 build/reassembly.
+- 사용자 승인 없는 PRODUCTION 변경.
+- 데이터 migration/backfill/full scan.
+- 정상 좋아요/공개/비공개/Music Note/Library/UI 변경.
 
 ## CURRENT NEXT GATE — one-time 새 Release Controller TEST bootstrap 승인 대기
 

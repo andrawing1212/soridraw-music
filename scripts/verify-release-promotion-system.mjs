@@ -37,6 +37,12 @@ for (const token of [
   'TEST_VERIFY',
   'PROD_VERIFY',
   'Rollback branch and Worker traffic after deployment failure',
+  'node scripts/verify-366-cross-environment-profile-like-parity.mjs',
+  'npx tsx scripts/verify-367-production-browser-upgrade-contract.ts',
+  'release-production-environment-contract.mjs',
+  'production-environment-contract.json',
+  'EXPECTED_WORKER_CODE_SHA256',
+  'EXPECTED_MEDIA_WORKER_CODE_SHA256',
 ]) required(workflow, token, 'promotion workflow');
 
 forbidden(workflow, /git\s+push[^\n]*(?:--force|-f\b)/i, 'force push');
@@ -112,6 +118,8 @@ required(workerRuntime, 'sameProjection(targetCuratedProjection, referenceCurate
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
 required(workerRuntime, 'hashReleaseIdentity', 'deterministic Worker release identity');
+required(workerRuntime, 'hashBundleCode', 'compiled Worker code identity');
+required(workerRuntime, 'EXPECTED_WORKER_CODE_SHA256', 'compiled Worker code promotion guard');
 required(workerRuntime, 'readRevision(target.referenceBase', 'PREVIEW/TEST revision endpoint diagnostics');
 required(workerRuntime, 'readRevision(target.base', 'target revision endpoint diagnostics');
 required(workerRuntime, 'readCurrentSharedSnapshot(target.referenceBase', 'reference current shared R2 read');
@@ -119,6 +127,8 @@ required(workerRuntime, 'readCurrentSharedSnapshot(target.base', 'target current
 required(workerRuntime, 'automatic ${mode} rollback after release smoke failure', 'Worker rollback on parity failure');
 required(workerRuntime, 'WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS', 'Worker version upload before traffic');
 required(workerRuntime, 'Worker bundle identity mismatch', 'Worker bundle identity verification');
+required(mediaWorkerRuntime, 'hashBundleCode', 'compiled Media Worker code identity');
+required(mediaWorkerRuntime, 'EXPECTED_MEDIA_WORKER_CODE_SHA256', 'compiled Media Worker code promotion guard');
 
 const releaseHosts = [
   'preview.soridraw.com',

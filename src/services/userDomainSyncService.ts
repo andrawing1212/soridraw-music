@@ -52,6 +52,13 @@ const MAX_DOCUMENT_IDS = 10;
 const MAX_SYNC_ITEM_JSON_CHARS = 24000;
 const EXPLORE_PUBLICATION_MAX_SNAPSHOT_JSON_CHARS = 24000;
 const latestExplorePublicationSignalByUid = new Map<string, ExplorePublicationSyncSignal>();
+// app357 — PREVIEW/TEST/PRODUCTION are separate browser origins. Persist only the
+// latest tiny RTDB publication signal locally so an older origin-specific public
+// profile cache can prove whether it has seen the newest publication change.
+const EXPLORE_PUBLICATION_LAST_SIGNAL_STORAGE_BASE_357 = 'soridraw:explore:publication-last-signal:357';
+const explorePublicationLastSignalStorageKey357 = (uid: string) =>
+  `${EXPLORE_PUBLICATION_LAST_SIGNAL_STORAGE_BASE_357}:${encodeURIComponent(String(uid || '').trim())}`;
+
 
 const getStoredDeviceId = (storageKey: string, prefix: string): string => {
   if (typeof window === 'undefined') return 'server';
@@ -699,8 +706,35 @@ const normalizeExplorePublicationSignal = (raw: unknown): ExplorePublicationSync
 
 export const readLatestExplorePublicationSyncSignal = (uid: string): ExplorePublicationSyncSignal | null => {
   const safeUid = String(uid || '').trim();
-  const signal = safeUid ? latestExplorePublicationSignalByUid.get(safeUid) : null;
-  return signal ? { ...signal } : null;
+  if (!safeUid) return null;
+  const memorySignal = latestExplorePublicationSignalByUid.get(safeUid);
+  if (memorySignal) return { ...memorySignal };
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(explorePublicationLastSignalStorageKey357(safeUid));
+    const stored = raw ? normalizeExplorePublicationSignal(JSON.parse(raw)) : null;
+    if (!stored) return null;
+    latestExplorePublicationSignalByUid.set(safeUid, { ...stored });
+    return { ...stored };
+  } catch {
+    return null;
+  }
+};
+
+const persistLatestExplorePublicationSignal357 = (
+  uid: string,
+  signal: ExplorePublicationSyncSignal,
+): void => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return;
+  latestExplorePublicationSignalByUid.set(safeUid, { ...signal });
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      explorePublicationLastSignalStorageKey357(safeUid),
+      JSON.stringify(signal),
+    );
+  } catch {}
 };
 
 export const publishExplorePublicationSyncSignal = async (
@@ -872,7 +906,7 @@ const startDomainSubscriptions = (uid: string) => {
   unsubscribeExplorePublication = onValue(ref(realtimeDb, `userSync/${safeUid}/explorePublication`), (snapshot) => {
     const signal = normalizeExplorePublicationSignal(snapshot.val());
     if (!signal) return;
-    latestExplorePublicationSignalByUid.set(safeUid, { ...signal });
+    persistLatestExplorePublicationSignal357(safeUid, signal);
     if (signal.originDeviceId === getStoredDeviceId(GENERIC_DEVICE_STORAGE_KEY, 'd')) return;
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(EXPLORE_PUBLICATION_SYNC_EVENT, {

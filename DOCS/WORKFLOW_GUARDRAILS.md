@@ -87,6 +87,20 @@
 - TEST parity FAIL이면 PRODUCTION은 절대 실행하지 않는다. PRODUCTION parity FAIL이면 정식배포 성공으로 보고하지 않는다.
 - 이 불변조건은 `scripts/verify-release-promotion-system.mjs`와 `.deploy/release-worker-runtime.mjs`의 고정 검증 대상이며 임의로 약화하지 않는다.
 
+### PRODUCTION-first 릴리스 절대 규칙 — 2026-10-06 고정
+- **PREVIEW의 목적은 PRODUCTION 기능을 먼저 개발하는 것**, **TEST의 목적은 PRODUCTION 직전 완성본을 실제 운영 조건까지 포함해 검증하는 것**이다. 세 환경을 서로 다른 제품처럼 다루지 않는다.
+- 모든 기능 설계/수정 시 "이 코드가 PRODUCTION에서 어떤 binding/cache/origin/기존 사용자 상태를 만나게 되는가"를 PREVIEW 단계부터 문서화한다. 이 검토가 없으면 구현 완료로 보지 않는다.
+- TEST 승격 전에 PRODUCTION의 실제 live binding/vars/resource identity를 read-only로 읽어, TEST와 다른 점을 **허용된 환경 차이 목록**과 대조한다. 목록에 없는 차이는 즉시 FAIL.
+- 허용된 환경 차이라도 결과가 달라질 수 있으면 TEST 단계에서 PRODUCTION 조건을 모사하거나 exact production preflight를 수행한다. 정식 트래픽을 연 뒤 처음 확인하는 것을 금지한다.
+- TEST_VERIFIED manifest는 source tree, Hosting artifact hash, Explore Worker bundle hash/version, Media Worker bundle hash/version, 필요한 Functions artifact hash, release-controller identity, production environment contract hash를 고정한다.
+- PRODUCTION은 위 TEST_VERIFIED artifact를 **재빌드하지 않고 그대로** 활성화/복제한다. source가 같더라도 다시 build/upload해 다른 artifact가 생기면 동일 릴리스로 인정하지 않는다.
+- 브라우저 origin별 localStorage/IndexedDB/PWA cache처럼 서버 parity만으로 보이지 않는 상태도 릴리스 계약이다. 최소한 **현재 PRODUCTION 캐시 → 새 릴리스 업그레이드**와 **새 기기/빈 캐시** 두 경로를 TEST 단계에서 검증한다.
+- 핵심 사용자 결과 parity는 서버 응답만이 아니라 실제 앱 상태 기준으로 본다. 최소 기준: Explore Feed, SORIDRAW 추천, 공개프로필 공개곡/핀, own-profile 좋아요 곡 membership, 공개/비공개 상태, 좋아요 상태/숫자, Music Note, Library, folders, media/thumbnail.
+- 릴리스에 포함되지 않은 기능도 기존 정상 기준이 유지되는지 최소 회귀 검사를 한다. "수정한 기능만 정상"은 TEST_VERIFIED가 아니다.
+- **정식배포 후 사용자가 처음 발견해야 하는 필수 검사는 없어야 한다.** 사용자 확인은 체감/최종 확인이지 핵심 데이터 정합성 검사의 대체가 아니다.
+- PRODUCTION 승격 후 위 핵심 결과 중 하나라도 TEST와 달라지면 RELEASED 금지, 자동 rollback 또는 트래픽 미전환이 우선이다. 이를 제품 hotfix 반복으로 정상화하지 않는다.
+- 이미 사용자에게 장애가 난 경우 정상 개발 승격과 분리해 **incident recovery**로 처리한다: 즉시 rollback 또는 최소 PRODUCTION hotfix로 정상화 → 이후 PREVIEW/TEST에 동일 수정 역반영. 단 사용자 데이터 파괴/migration은 별도 승인 규칙 유지.
+- 같은 릴리스에서 PRODUCTION 재시도가 1회를 넘기거나 새로운 환경 차이가 연속 발견되면 기능 개발을 중단하고 Release System 자체를 수정·감사한 뒤 재개한다.
 ### 릴리스 중 금지
 - 활성 릴리스 실패를 우회하려고 Workflow 파일을 즉흥 수정
 - 임의 migration/seed 추가

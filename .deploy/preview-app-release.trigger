@@ -1,10 +1,11 @@
-app356-shared-catalog-dormant-client-support
-target_source=d37f21390a5085cfcc4b4801208808861a2fdda8
-app_version=356
-scope=shared-private-catalog-dormant-client-support
+app357-cross-environment-profile-like-parity
+target_source=225db1fc393cacf4dda647efafb33bfa87b0e92a
+app_version=357
+scope=own-public-profile-and-my-likes-cross-origin-convergence
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
-release_request=app356-cross-env-catalog-prep
+release_request=app357-profile-like-parity
 worker_change=false
 functions_change=false
 shared_follow_cutover=false
+release_audit=37401266952

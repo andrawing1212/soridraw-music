@@ -128,17 +128,20 @@ jobs:
           if [ "$MODE" = production ]; then
             mkdir -p "$RUNNER_TEMP/manifest"
             gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern soridraw-release-manifest.json --dir "$RUNNER_TEMP/manifest"
+            gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern production-environment-contract.json --dir "$RUNNER_TEMP/manifest"
             node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$MANIFEST_TAG" <<'NODE'
           const fs=require('fs'); const [path,tag]=process.argv.slice(2); const m=JSON.parse(fs.readFileSync(path));
-          if(m.schema<2||m.state!=='TEST_VERIFIED'||m.tag!==tag) throw Error('manifest is not TEST_VERIFIED');
-          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerVersionId','controllerIdentity','verifiedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
-          for(const k of ['sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testMediaWorkerBundleSha256']) if(!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(String(m[k]))) throw Error(`manifest invalid identity ${k}`);
+          if(m.schema<4||m.state!=='TEST_VERIFIED'||m.tag!==tag) throw Error('manifest is not TEST_VERIFIED');
+          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','testMediaWorkerVersionId','browserUpgradeContractSha256','productionEnvironmentContract','controllerIdentity','verifiedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
+          for(const k of ['sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','browserUpgradeContractSha256']) if(!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(String(m[k]))) throw Error(`manifest invalid identity ${k}`);
           if(!m.controllerIdentity||typeof m.controllerIdentity!=='object') throw Error('manifest invalid controller identity');
           for(const k of ['workflowSha256','workerRuntimeSha256','mediaWorkerRuntimeSha256','controllerVerifierSha256']) if(!/^[0-9a-f]{64}$/.test(String(m.controllerIdentity[k]))) throw Error(`manifest invalid controller identity ${k}`);
           if(!/^[0-9a-f-]{36}$/i.test(String(m.testWorkerVersionId))) throw Error('manifest invalid TEST Worker version id');
           if(!/^[0-9a-f-]{36}$/i.test(String(m.testMediaWorkerVersionId))) throw Error('manifest invalid TEST Media Worker version id');
           if(m.canonical?.d1!=='soridraw-explore-db'||m.canonical?.profileMedia!=='soridraw-profile-media'||m.canonical?.userCatalog!=='soridraw-user-catalog'||m.parity?.status!=='PASS') throw Error('manifest canonical/parity invariant failed');
-          if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nEXPECTED_MEDIA_WORKER_BUNDLE_SHA256=${m.testMediaWorkerBundleSha256}\nTEST_MEDIA_WORKER_VERSION_ID=${m.testMediaWorkerVersionId}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
+          if(!m.productionEnvironmentContract||m.productionEnvironmentContract.policy!=='soridraw-production-first-2026-10-06'||!/^[0-9a-f]{64}$/.test(String(m.productionEnvironmentContract.sha256||''))) throw Error('manifest missing production environment contract');
+          const contractPath=process.env.RUNNER_TEMP+'/manifest/production-environment-contract.json'; const contractRaw=fs.readFileSync(contractPath); const contractSha=require('crypto').createHash('sha256').update(contractRaw).digest('hex'); if(contractSha!==m.productionEnvironmentContract.sha256) throw Error('production environment contract asset hash mismatch');
+          if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nEXPECTED_WORKER_CODE_SHA256=${m.testWorkerCodeSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nEXPECTED_MEDIA_WORKER_BUNDLE_SHA256=${m.testMediaWorkerBundleSha256}\nEXPECTED_MEDIA_WORKER_CODE_SHA256=${m.testMediaWorkerCodeSha256}\nTEST_MEDIA_WORKER_VERSION_ID=${m.testMediaWorkerVersionId}\nEXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256=${m.browserUpgradeContractSha256}\nEXPECTED_PRODUCTION_ENVIRONMENT_CONTRACT_SHA256=${m.productionEnvironmentContract.sha256}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
           NODE
             git fetch origin "$(node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').promotedMainSha")" --no-tags
           else
@@ -160,6 +163,8 @@ jobs:
           npm run build
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node scripts/verify-366-cross-environment-profile-like-parity.mjs
+          npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/index-sha"
           node -e "const v=require('./public/app-version.json').version;if(!v)process.exit(2);process.stdout.write(String(v))" > "$RUNNER_TEMP/app-version"
@@ -212,14 +217,19 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RELEASE_ROOT"
-          test_mode_expected=''
-          [ "${{ steps.request.outputs.mode }}" = production ] && test_mode_expected="EXPECTED_WORKER_BUNDLE_SHA256=$EXPECTED_WORKER_BUNDLE_SHA256"
           node .deploy/release-worker-runtime.mjs test dry-run | tee "$RUNNER_TEMP/test-dry-run"
-          env $test_mode_expected node .deploy/release-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-dry-run"
-          media_mode_expected=''
-          [ "${{ steps.request.outputs.mode }}" = production ] && media_mode_expected="EXPECTED_MEDIA_WORKER_BUNDLE_SHA256=$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256"
+          if [ "${{ steps.request.outputs.mode }}" = production ]; then
+            EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-dry-run"
+          else
+            node .deploy/release-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-dry-run"
+          fi
           node .deploy/release-media-worker-runtime.mjs test dry-run | tee "$RUNNER_TEMP/test-media-dry-run"
-          env $media_mode_expected node .deploy/release-media-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-media-dry-run"
+          if [ "${{ steps.request.outputs.mode }}" = production ]; then
+            EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-media-dry-run"
+          else
+            node .deploy/release-media-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/production-media-dry-run"
+          fi
+          node scripts/release-production-environment-contract.mjs snapshot "$RUNNER_TEMP/live-production-environment-contract.json"
           WRANGLER="$RELEASE_ROOT/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           for stage in test production; do
             cfg="$RELEASE_ROOT/cloudflare/explore-worker/.release-system/$stage/wrangler.jsonc"
@@ -281,10 +291,12 @@ jobs:
           echo "$promoted" > "$RUNNER_TEMP/main-promoted"
           version="$(sed -n 's/^TEST_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/test-upload"|tail -1)"; test -n "$version"
           bundle="$(sed -n 's/^TEST_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/test-upload"|tail -1)"; test -n "$bundle"
+          code="$(sed -n 's/^TEST_WORKER_CODE_SHA256=//p' "$RUNNER_TEMP/test-upload"|tail -1)"; test -n "$code"
           media_version="$(sed -n 's/^TEST_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/test-media-upload"|tail -1)"; test -n "$media_version"
           media_bundle="$(sed -n 's/^TEST_MEDIA_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/test-media-upload"|tail -1)"; test -n "$media_bundle"
-          echo "$version" > "$RUNNER_TEMP/test-worker-version"; echo "$bundle" > "$RUNNER_TEMP/worker-bundle"
-          echo "$media_version" > "$RUNNER_TEMP/test-media-worker-version"; echo "$media_bundle" > "$RUNNER_TEMP/media-worker-bundle"
+          media_code="$(sed -n 's/^TEST_MEDIA_WORKER_CODE_SHA256=//p' "$RUNNER_TEMP/test-media-upload"|tail -1)"; test -n "$media_code"
+          echo "$version" > "$RUNNER_TEMP/test-worker-version"; echo "$bundle" > "$RUNNER_TEMP/worker-bundle"; echo "$code" > "$RUNNER_TEMP/worker-code"
+          echo "$media_version" > "$RUNNER_TEMP/test-media-worker-version"; echo "$media_bundle" > "$RUNNER_TEMP/media-worker-bundle"; echo "$media_code" > "$RUNNER_TEMP/media-worker-code"
           RELEASE_WORKER_VERSION="$version" node .deploy/release-worker-runtime.mjs test activate; printf true > "$RUNNER_TEMP/test-worker-mutated"
           RELEASE_MEDIA_WORKER_VERSION="$media_version" node .deploy/release-media-worker-runtime.mjs test activate; printf true > "$RUNNER_TEMP/test-media-worker-mutated"
           npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive; printf true > "$RUNNER_TEMP/test-hosting-mutated"
@@ -309,6 +321,12 @@ jobs:
           curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv' > "$RUNNER_TEMP/test-hosting-verified"
           export TEST_HOSTING_RELEASE="$(cut -f1 "$RUNNER_TEMP/test-hosting-verified")"
           export TEST_HOSTING_VERSION="$(cut -f2 "$RUNNER_TEMP/test-hosting-verified")"
+          node .deploy/release-worker-runtime.mjs production dry-run > "$RUNNER_TEMP/production-contract-worker-dry-run"
+          node .deploy/release-media-worker-runtime.mjs production dry-run > "$RUNNER_TEMP/production-contract-media-dry-run"
+          node scripts/release-production-environment-contract.mjs snapshot "$RUNNER_TEMP/production-environment-contract.json"
+          npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
+          export PRODUCTION_ENVIRONMENT_CONTRACT_SHA256="$(sha256sum "$RUNNER_TEMP/production-environment-contract.json" | cut -d' ' -f1)"
+          export BROWSER_UPGRADE_CONTRACT_SHA256="$(cat src/services/exploreEnvironmentParityPolicy.ts scripts/verify-366-cross-environment-profile-like-parity.mjs scripts/verify-367-production-browser-upgrade-contract.ts | sha256sum | cut -d' ' -f1)"
           controller_identity="$(node "$RELEASE_ROOT/scripts/release-controller-policy.mjs" identity "$RELEASE_ROOT")"
           export CONTROLLER_WORKFLOW_SHA="$(jq -r .workflowSha256 <<<"$controller_identity")"
           export CONTROLLER_RUNTIME_SHA="$(jq -r .workerRuntimeSha256 <<<"$controller_identity")"
@@ -316,13 +334,13 @@ jobs:
           export CONTROLLER_VERIFIER_SHA="$(jq -r .controllerVerifierSha256 <<<"$controller_identity")"
           tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"
           SOURCE_TREE="$(git rev-parse "$RELEASE_TARGET^{tree}")" MAIN_SHA="$(cat "$RUNNER_TEMP/main-promoted")" MAIN_TREE="$(git rev-parse "$(cat "$RUNNER_TEMP/main-promoted")^{tree}")" TAG="$tag" node - <<'NODE'
-          const fs=require('fs'); const m={schema:3,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
+          const fs=require('fs'); const m={schema:4,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-code','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-code','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),browserUpgradeContractSha256:process.env.BROWSER_UPGRADE_CONTRACT_SHA256,productionEnvironmentContract:{policy:'soridraw-production-first-2026-10-06',sha256:process.env.PRODUCTION_ENVIRONMENT_CONTRACT_SHA256},controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
           NODE
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "TEST_RELEASE_TAG_ALREADY_EXISTS=$tag"
             exit 1
           fi
-          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
+          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" "$RUNNER_TEMP/production-environment-contract.json#production-environment-contract.json" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
           echo "$tag" > "$RUNNER_TEMP/test-release-tag"; printf true > "$RUNNER_TEMP/test-release-mutated"
           test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$(cat "$RUNNER_TEMP/main-before")"
           git push origin "$(cat "$RUNNER_TEMP/main-promoted"):refs/heads/main"; printf true > "$RUNNER_TEMP/test-branch-mutated"
@@ -340,13 +358,17 @@ jobs:
             curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/test-current"
             test "$(sha256sum "$RUNNER_TEMP/test-current"|cut -d' ' -f1)" = "$RELEASE_INDEX_SHA"
           done
-          cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs test verify
-          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs test verify
+          cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs test verify
+          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs test verify
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$TEST_WORKER_VERSION_ID"
           test "$(cat "$RUNNER_TEMP/test-media-worker-before")" = "$TEST_MEDIA_WORKER_VERSION_ID"
           current_test_hosting="$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')"
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
           test "$current_test_hosting" = "$expected_test_hosting"
+          node scripts/release-production-environment-contract.mjs verify "$RUNNER_TEMP/manifest/production-environment-contract.json"
+          current_browser_upgrade_hash="$(cat src/services/exploreEnvironmentParityPolicy.ts scripts/verify-366-cross-environment-profile-like-parity.mjs scripts/verify-367-production-browser-upgrade-contract.ts | sha256sum | cut -d' ' -f1)"
+          test "$current_browser_upgrade_hash" = "$EXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256"
+          npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$GITHUB_WORKSPACE" <<'NODE'
           const m=require(process.argv[2]); const {pathToFileURL}=require('url');
           (async()=>{const {controllerIdentity}=await import(pathToFileURL(process.argv[3]+'/scripts/release-controller-policy.mjs')); const actual=controllerIdentity(process.argv[3]); const c=m.controllerIdentity;
@@ -360,15 +382,15 @@ jobs:
           set -euo pipefail
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_DEPLOY
           cd "$RELEASE_ROOT"
-          EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
-          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-media-upload"
+          EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
+          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-media-upload"
           before="$(cat "$RUNNER_TEMP/production-before")"; tree="$(git rev-parse "$MANIFEST_MAIN^{tree}")"
           promoted="$(printf 'release: promote TEST_VERIFIED app %s to PRODUCTION\n\ntested-main: %s\nmanifest: %s\n' "$RELEASE_APP_VERSION" "$MANIFEST_MAIN" "${{ steps.request.outputs.manifest_tag }}"|git commit-tree "$tree" -p "$before")"
           echo "$promoted" > "$RUNNER_TEMP/production-promoted"
           version="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload"|tail -1)"; test -n "$version"
           media_version="$(sed -n 's/^PRODUCTION_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-media-upload"|tail -1)"; test -n "$media_version"
-          RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-worker-mutated"
-          RELEASE_MEDIA_WORKER_VERSION="$media_version" EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-media-worker-mutated"
+          RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-worker-mutated"
+          RELEASE_MEDIA_WORKER_VERSION="$media_version" EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-media-worker-mutated"
           test_hosting_version_id="${TEST_HOSTING_VERSION##*/}"
           test -n "$test_hosting_version_id"
           npx --yes firebase-tools@latest hosting:clone "soridraw-test@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
@@ -381,8 +403,8 @@ jobs:
         run: |
           set -euo pipefail
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_VERIFY
-          cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production verify
-          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" node .deploy/release-media-worker-runtime.mjs production verify
+          cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production verify
+          EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production verify
           for base in "$PRODUCTION_FIREBASE_URL" "$PRODUCTION_URL"; do
             curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/prod-current"
             test "$(sha256sum "$RUNNER_TEMP/prod-current"|cut -d' ' -f1)" = "$RELEASE_INDEX_SHA"

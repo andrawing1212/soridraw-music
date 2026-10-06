@@ -1,3 +1,234 @@
+## 0QO. PRODUCTION-first Release Controller 구현·감사 PASS / one-time main bootstrap 대기 (2026-10-06 KST)
+
+완료된 배포 시스템 보강:
+- 제품 기준 PREVIEW HEAD: `83a90ce42c85fe59d4fe588a8c4fd719256361df`.
+- Release System Audit Run `37406340564`: **SUCCESS / NO DEPLOY**.
+- TypeScript PASS / Build PASS / 기존 like/publication/cache regression PASS.
+- TEST/PRODUCTION branch, Hosting, Worker, Media Worker 비변경.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- D1 schema/trigger/write 0.
+
+새 hard gate:
+1. **PRODUCTION live environment contract**
+   - TEST 단계에서 실제 TEST/PRODUCTION Worker/Media binding과 Firebase Hosting config를 read-only로 읽어 계약을 생성.
+   - 허용된 차이만 명시:
+     - Explore worker name
+     - TEST 전용 `RATE_DB=soridraw-explore-test-db`
+     - TEST 전용 `EXPLORE_CACHE=soridraw-profile-media-test`
+     - PRODUCTION 전용 mirror service bindings
+     - Media worker name / 환경별 MEDIA bucket / ALLOWED_ORIGINS
+     - Firebase Hosting site name
+   - 그 외 차이는 TEST_VERIFIED 금지.
+   - Audit contract SHA: `f198d262d73bd1973450f65c94a705a8bb1c9f6dd57dc517fd162349106f1de7`.
+   - `TEST_PRODUCTION_ALLOWED_ENVIRONMENT_DIFFS=PASS`.
+2. **실제 컴파일 코드 identity**
+   - Explore TEST code SHA = PRODUCTION code SHA = `13d809a3eca35366e25d85fefda3ebc0faa6a88968157a8afbf81a0e8178cf03`.
+   - Media TEST code SHA = PRODUCTION code SHA = `f0507a8464a1147e2bc914b6cd681ee1f1531ecfc3afb40ab7a73b8e55990bc9`.
+   - 앞으로 TEST manifest에 이 compiled-code SHA를 고정하고 PRODUCTION upload/activate/verify에서 exact match가 아니면 중단.
+   - Firebase Hosting은 기존처럼 TEST verified Hosting version을 PRODUCTION으로 clone하며 PRODUCTION 재build 금지.
+3. **기존 PRODUCTION 브라우저 캐시 업그레이드 계약**
+   - `src/services/exploreEnvironmentParityPolicy.ts`로 공개프로필/개인 좋아요 origin 수렴 판단을 순수 함수로 분리.
+   - `verify-367-production-browser-upgrade-contract.ts`에서 old-production-cache → new-release, unchanged/empty cache, like signal certificate continuity를 실행 검증.
+   - Audit:
+     - `APP367_PRODUCTION_BROWSER_UPGRADE_CONTRACT=PASS`
+     - `OLD_PRODUCTION_CACHE_TO_NEW_RELEASE=PASS`
+     - `EMPTY_OR_UNCHANGED_CACHE_NO_FORCED_SERVER_READ=PASS`
+     - `PERSONAL_LIKE_ORIGIN_CERTIFICATE_CONTINUITY=PASS`
+   - app366 공개프로필/My Likes cross-origin verifier도 PASS.
+4. **TEST_VERIFIED manifest schema 4**
+   - source/tree + Hosting identity
+   - Explore Worker source identity + compiled code identity
+   - Media Worker source identity + compiled code identity
+   - browser-upgrade contract hash
+   - PRODUCTION environment contract hash
+   - Release Controller identity
+   를 하나의 immutable release manifest에 고정.
+   - PRODUCTION preflight는 TEST에서 얼린 environment-contract asset과 현재 PRODUCTION live contract가 exact match인지 다시 확인.
+5. **TEST Hosting과 PRODUCTION Hosting config parity**
+   - TEST에도 `/app-version.json` no-cache/no-store/must-revalidate header를 추가하여 site name 외 Hosting 계약 차이를 제거.
+
+감사 실측:
+- Explore bundle source identity TEST/PRODUCTION: `65a2f5b39f91f15d328657d12b4dc1a99cab9e638c37b7bd7056e3e6494dcb9a` 동일.
+- Media bundle source identity TEST/PRODUCTION: `041be5815c4398311c476276cda7c19cebf42e72ee29066aee0839f5f55ee50b` 동일.
+- TEST/PRODUCTION shared D1 read-only preflight: tables=6, triggers=18 PASS.
+- curated bounded read: TEST 12 / PRODUCTION 12 PASS.
+- `D1_WRITE_MIGRATION_SEED=NONE`.
+- `RELEASE_CONTROLLER_EXECUTABLE_MUTATION_TESTS=PASS`.
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`.
+
+중요 bootstrap 사실:
+- GitHub `issue_comment` Release Controller는 default branch인 **main의 workflow**로 실행된다.
+- read-only command `/soridraw preflight 83a90ce...` Run `37406635596`은 SUCCESS / PREFLIGHT_NO_MUTATION이었지만, 실행 workflow 자체의 head는 현재 main `bca5864db427f6fdc635e547f573588e9628be0b`의 이전 controller이다.
+- target PREVIEW source 안의 새 verifier는 읽고 검사했지만, **새 schema4 controller orchestration 자체가 live issue-command controller가 되는 것은 main 승격 후**다.
+- 따라서 사용자 TEST 승인 전 main을 몰래 바꾸지 않는다.
+- 최초 TEST 승격 때는 **one-time controller bootstrap**이 필요:
+  1. 기존 main controller가 검증된 app357 tree를 TEST/main으로 승격해 새 controller를 main에 설치.
+  2. 그 첫 manifest는 구 controller가 만든 것이므로 PRODUCTION 근거로 사용 금지.
+  3. 새 main controller로 product behavior가 동일한 최신 PREVIEW SHA를 다시 TEST 검증하여 schema4 TEST_VERIFIED manifest를 생성.
+  4. 이후부터 모든 릴리스는 새 controller의 단일 TEST_VERIFIED → 단일 PRODUCTION 승격 경로 사용.
+- 이 bootstrap 동안 PRODUCTION은 변경하지 않는다.
+
+현재 refs:
+- preview `83a90ce42c85fe59d4fe588a8c4fd719256361df`
+- main `bca5864db427f6fdc635e547f573588e9628be0b`
+- production `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`
+
+현재 상태:
+- Release Controller 보강 구현 + 독립 Audit는 **완료**.
+- app357 TEST/PRODUCTION은 아직 미승격.
+- 다음 mutation은 사용자 명확한 `테스트배포` 승인 후에만 시작.
+
+## 0QN. PRODUCTION-first 릴리스 절대 규칙 고정 (2026-10-06 KST)
+
+사용자 최우선 운영 지시:
+- 최종 목표는 항상 정식앱(PRODUCTION).
+- PREVIEW에서 기능을 개발할 때부터 PRODUCTION의 환경 차이와 기존 사용자 상태까지 염두에 두고 구현.
+- TEST는 "테스트용"이 아니라 **정식에 그대로 복붙될 완성본**을 검증하는 단계.
+- TEST에서 모든 기능이 정상이라면 PRODUCTION은 같은 결과가 **단 한 번에** 나와야 함.
+- TEST PASS 후 PRODUCTION에서 binding/cache/origin 차이 때문에 새 오류가 나고 다시 제품 코드를 고치는 반복을 정상 운영으로 인정하지 않음.
+- 정식배포 뒤 "아, 이 환경만 달랐다"는 식의 누락을 금지.
+- 사용자가 정식배포 후 핵심 정합성 오류를 찾아주는 것을 배포 검증의 일부로 의존하지 않음.
+
+영구 기준 반영:
+- `AGENTS.md`: PRODUCTION-first / TEST_VERIFIED 의미 / exact artifact 승격 / Release System FAIL 기준 추가.
+- `DOCS/WORKFLOW_GUARDRAILS.md`: PRODUCTION-first 릴리스 절대 규칙 신설.
+- `DOCS/WORK_AUDIT_CHECKLIST.md`: production live contract, old-production-cache upgrade, browser-visible parity, exact artifact identity를 필수 감사 항목으로 추가.
+- 이 규칙은 앞으로 기능별 임시 판단보다 상위 release invariant로 사용.
+
+현재 배포 상태:
+- PREVIEW app357만 배포됨.
+- TEST / PRODUCTION은 app357 미승격.
+- 다음 큰 작업은 app357을 밀어 올리는 것이 아니라, **Release Controller가 이 새 절대 규칙을 실제 코드로 강제하도록 보강하는 것**.
+- 보강이 완료되어 Audit PASS하기 전 app357 TEST/PRODUCTION 승격 금지.
+## 0QM. app357 PREVIEW 공개프로필/좋아요곡 cross-environment parity 복구 + 승격 hard gate 추가 (2026-10-06 KST)
+
+사용자 실기기 발견:
+- PRODUCTION Explore Feed 자체는 PREVIEW와 정상 일치.
+- 같은 계정 공개프로필의 **공개곡 목록/개수/핀 상태가 PREVIEW와 PRODUCTION에서 서로 다름**.
+- 같은 own-profile의 **좋아요 곡 목록도 PREVIEW와 PRODUCTION에서 서로 다름**.
+- 직전 Release Controller는 server-side public-profile projection 1개를 비교해 PASS했지만, 실제 브라우저 persistent cache 결과 차이는 잡지 못함. 따라서 이전 public-profile parity PASS는 서버 응답 parity이지 클라이언트 표시 parity까지 증명한 것이 아님.
+
+원인:
+1. 공개프로필
+   - PREVIEW/TEST/PRODUCTION은 서로 다른 origin/localStorage를 사용.
+   - app335 이후 warm public-profile route entry/reload는 비용 절감을 위해 local first-view cache를 그대로 반환하고 Worker 0을 유지.
+   - 같은 계정 공개/비공개 RTDB 신호는 최신 mutation 1개만 보관하므로, 특정 origin이 과거 여러 변경을 놓친 상태에서는 최신 1개 patch만으로 전체 공개곡 목록을 복구할 수 없음.
+   - shared server profile R2 자체는 Release Run `37397953411`에서 TEST↔PRODUCTION 동일 owner parity PASS였으므로 이번 실제 차이는 우선 origin-local stale first-view cache 문제로 격리.
+2. 좋아요 곡
+   - 개인 좋아요 역시 각 origin에 durable local catalog/watermark를 가짐.
+   - retained RTDB signal은 작은 changed-track batch만 담으므로, 과거 origin이 이전 변경을 놓친 상태에서 이미 최신 signal watermark를 본 것으로 기록되면 일부 과거 membership이 남을 수 있는 recovery gap이 존재.
+   - 좋아요 클릭/30초 batching/W1 queue/공개 숫자 경로 자체는 기존 frozen baseline을 유지.
+
+app357 수정:
+- `src/services/userDomainSyncService.ts`
+  - 기존 같은-account `explorePublication` RTDB signal의 최신 작은 상태를 origin localStorage에도 보존. 추가 RTDB/Firestore/D1 요청 없음.
+- `src/services/exploreProfileFirstViewService.ts`
+  - 기존 cache schema version **6 유지**; 앱 업데이트를 이유로 전체 cache bust 금지.
+  - cached first-view에 마지막으로 반영한 publication signal version만 additive 보존.
+  - **실제 publication signal version이 cached profile보다 최신일 때만** shared first-view를 conditional 1회 확인.
+  - 최신이면 현재 full first-view로 교체, 304면 기존 cache를 그대로 인증.
+  - 변경 신호가 있는데 최신 상태를 확인할 수 없으면 과거 목록을 조용히 표시하지 않고 fail-closed.
+  - 변경 없는 재진입은 기존 Worker 0 / D1 R0 유지.
+- `src/services/exploreLikeService.ts`
+  - retained personal-like signal version과 origin certification을 local-only로 추가.
+  - 앱 시작/업데이트만으로 personal snapshot을 읽지 않음.
+  - **사용자가 own-profile의 좋아요 곡 탭을 실제로 열었고**, 기존 durable like catalog가 있으면서 해당 origin이 retained signal까지 인증되지 않은 경우에만 기존 bounded personal baseline 경로로 1회 reconcile.
+  - 성공 전 local catalog 삭제 없음.
+  - 정상 30초 batching / W1 queue / heart-count atomic state / changed-track live signal 보호.
+- `src/pages/ExplorePage.tsx`
+  - own public-profile load에 retained publication version을 전달.
+  - 늦게 도착한 publication signal도 own-profile을 다시 bounded reconcile하도록 version state로 연결.
+  - My Likes 진입 시에만 cross-origin parity repair gate 실행.
+- 배포엔진:
+  - 신규 `scripts/verify-366-cross-environment-profile-like-parity.mjs`.
+  - Release Controller TEST preflight에서 위 verifier를 **필수 실행**.
+  - Release System Audit에도 동일 verifier 포함.
+  - profile cache schema bump/global invalidation, like 30초 batching 변경, My Likes second authority 생성이 있으면 FAIL.
+
+검증:
+- 첫 Audit Run `37400910389`: FAIL.
+  - 원인: 기존 isolated verifier 180이 `applyRemoteLikeSignal127` 함수만 VM으로 분리 실행하는데 새 certificate helper를 함수 내부 dependency로 추가해 test harness 계약을 깨뜨림.
+  - 제품 기능 문제로 숨기지 않고 FAIL 유지.
+- 수정:
+  - certificate advancement를 RTDB subscription 경계로 이동하여 `applyRemoteLikeSignal127` frozen isolated contract 복구.
+- 최종 Release System Audit Run `37401266952`: **SUCCESS**.
+  - TypeScript PASS.
+  - Build PASS.
+  - existing like regression suite PASS.
+  - app211/335 zero-read regression PASS.
+  - app366 cross-env profile/My Likes parity verifier PASS.
+  - Worker dry-run/read-only D1 checks PASS.
+- PREVIEW App Release Run `37401610271`: **SUCCESS**.
+  - deployed exact PREVIEW SHA `aafacbe6af07a3a6919c01c0512b123b2a44ba6b`.
+  - PREVIEW app version **357**.
+  - `preview.soridraw.com` exact build PASS.
+  - shared RTDB Rules 변경 없음.
+  - TEST / PRODUCTION branch + Hosting unchanged PASS.
+- Explore Worker / Media Worker / Functions / Firestore Rules / D1 schema·trigger 변경 **0**.
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- UI/CSS 변경 **0**.
+
+현재 HARD GATE:
+- PREVIEW app357 실기기에서 같은 계정 기준:
+  1. 공개프로필 공개곡 개수/목록/핀 순서가 현재 실제 공개상태와 일치.
+  2. own-profile 좋아요 곡 membership/list가 실제 하트 상태와 일치.
+  3. PREVIEW 재진입 시 변경이 없으면 profile Worker 0 / D1 R0 유지.
+  4. Explore Feed / SORIDRAW 추천 / 좋아요 클릭 / 공개·비공개 기존 동작 회귀 없음.
+- 위 항목 확인 전 TEST/PRODUCTION 승격 금지.
+- first-publication W12->W1~W2 작업은 이 parity 이슈 종료 뒤로 연기.
+
+## 0QL. SORIDRAW 추천 PRODUCTION 정상복구 + release gate 실전 검증 완료 (2026-10-06 KST)
+
+최종 PRODUCTION:
+- 사용자 명확 승인 후 Release Controller Run `37397953411`: **SUCCESS / RELEASED**.
+- TEST_VERIFIED manifest: `soridraw-test-v356-884bf33c99eb`.
+- exact source PREVIEW SHA: `884bf33c99eb67a8c06c8720f518a55b6f2ce27c`.
+- main(TEST) SHA: `bca5864db427f6fdc635e547f573588e9628be0b`.
+- production SHA: `1a2de5c4408f4ce501e49b76d32b706f90b97b7f`.
+- PRODUCTION app version: **356**.
+- PRODUCTION Explore Worker: `1fcd199a-c89f-4669-aeb5-12f3a4b0a9aa`.
+- PRODUCTION Media Worker: `a3b87bbc-af2d-41eb-9e26-99dda0dbfc44`.
+- Firebase PRODUCTION Hosting: verified TEST Hosting version clone PASS.
+- `soridraw.com` / Firebase production Hosting exact build verify PASS.
+
+SORIDRAW 추천 최종 검증:
+- `PRODUCTION_CURATED_PARITY=PASS count=12`.
+- TEST ↔ PRODUCTION 추천 projection parity PASS.
+- latest / popular shared Feed parity PASS.
+- public profile parity PASS.
+- production release environment parity PASS on attempt 1.
+- Production Media Worker shared Catalog flag=1 / authority=`shared-catalog` PASS.
+- Worker / Media Worker smoke + verify PASS.
+- 따라서 배포엔진은 추천이 503이거나 TEST와 불일치하면 승격을 중단하고, 정상 12곡일 때만 RELEASED 처리하도록 실제 release에서 검증됨.
+
+이번 PRODUCTION 승격 전 발견된 두 차단과 수정:
+1. Run `37395223571`: PROD_PREFLIGHT의 controller identity drift로 배포 전 차단.
+   - TEST manifest controller identity를 default branch가 아니라 실제 승격 source `RELEASE_ROOT`에서 계산하도록 수정.
+   - Audit `37395497639` SUCCESS.
+2. Run `37396335517`: 새 production Explore Worker 활성 뒤 curated HTTP 503이 13회 지속되어 자동 rollback.
+   - 기존 PRODUCTION Explore Worker `39e28223-6200-463f-8e86-1a0a3b3475d8`로 자동 복구되어 반쪽 배포 방지.
+   - read-only Audit `37396796197`: TEST/PRODUCTION 공통 D1 `curated_picks` 모두 현재 12 rows PASS, schema/data 문제 아님 확인.
+   - 실제 원인: PREVIEW/TEST는 명시적 `EXPLORE_CACHE` R2 binding이 있지만 PRODUCTION은 release runtime 계약상 `PROFILE_MEDIA`를 Explore cache fallback으로 사용. curated helper만 이 fallback을 따르지 않고 `EXPLORE_CACHE`만 요구해 production에서 R2 binding missing 503.
+   - `curatedBucket307`을 `EXPLORE_CACHE || PROFILE_MEDIA`로 최소 수정.
+   - 전체 tracks scan/rebuild, 데이터 copy/backfill 없이 canonical `curated_picks` 최대 40개 cold recovery 유지.
+   - Audit `37397307521` SUCCESS.
+   - PREVIEW Worker Release `37397493810` SUCCESS.
+   - TEST Run `37397621274` SUCCESS / TEST_VERIFIED, curated 12 parity PASS.
+   - 이후 최종 PRODUCTION Run `37397953411` SUCCESS.
+
+데이터/비용/기능 안전:
+- 사용자 데이터 migration/copy/backfill/delete/rewrite **0**.
+- D1 schema/trigger migration **0**.
+- curated cold recovery는 추천 membership 최대 40개에만 bounded.
+- warm 추천은 R2/Edge 경로, D1 R0/W0 gate 유지.
+- 좋아요 / 공개·비공개 / Music Note / Library / 저장하트 / 폴더 / UI / thumbnail 변경 0.
+- shared Catalog는 PREVIEW/TEST/PRODUCTION 모두 계속 ON.
+
+현재 다음:
+- 정식앱 `soridraw.com` 실사용에서 `SORIDRAW 추천` 표시와 CACHE LIVE `/v1/curated HTTP 200`만 사용자 최종 확인.
+- 이상 없으면 curated 이슈 종료.
+- 이후 큰 비용 작업은 기존 HARD GATE였던 **never-published 최초 공개 D1 W12 -> W1~W2**를 기능 보존 조건으로 재개.
+
 ## 0QK. SORIDRAW 추천 PRODUCTION 1차 시도 preflight 차단 + Release Controller identity bootstrap 완료 (2026-10-06 KST)
 
 PRODUCTION 1차 시도:

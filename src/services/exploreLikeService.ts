@@ -703,8 +703,10 @@ const requestPersonalLikeBaseline127 = async (
     ? [...new Set(settlementTrackIds190.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 200)
     : [];
   const recoveryParams = new URLSearchParams();
-  if (repairPartial182) recoveryParams.set('__soridraw_personal_repair', '182');
-  else if (verifySettlement189) {
+  if (repairPartial182) {
+    recoveryParams.set('__soridraw_personal_repair', '182');
+    recoveryParams.set('__soridraw_cross_origin_repair', '358');
+  } else if (verifySettlement189) {
     recoveryParams.set('__soridraw_personal_settlement', '189');
     if (targetedSettlementIds190.length) {
       recoveryParams.set('trackIds', targetedSettlementIds190.join(','));

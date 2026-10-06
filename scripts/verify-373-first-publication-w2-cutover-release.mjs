@@ -66,7 +66,7 @@ assert.match(rollback, /CREATE TRIGGER explore032_track_insert/);
 assert.match(rollback, /CREATE TRIGGER soridraw_shared_rev_tracks_ai_051/);
 
 for (const required of [
-  "mode=publication_w2_cutover_373",
+  "publication_w2_cutover_373",
   "20261007_01_first_publication_w2_cutover.sql",
   "20261007_01_first_publication_w2_cutover_rollback.sql",
   "scripts/verify-373-first-publication-w2-cutover-release.mjs",

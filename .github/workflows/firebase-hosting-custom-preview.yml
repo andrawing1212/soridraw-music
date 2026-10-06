@@ -75,6 +75,9 @@ jobs:
       - name: Verify app359 My Likes settlement upgrade
         run: npx tsx scripts/verify-369-my-likes-settlement-upgrade.ts
 
+      - name: Verify app360 My Likes navigation stays local
+        run: npx tsx scripts/verify-370-my-likes-navigation-worker-zero.ts
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

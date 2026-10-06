@@ -5,6 +5,7 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { shouldReconcilePublicProfileOriginCache357 } from './exploreEnvironmentParityPolicy';
 import {
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
@@ -429,7 +430,7 @@ export const getExplorePublicProfileFirstView = async (
       0,
       Math.floor(Number(cached.publicationSignalVersion || 0)),
     );
-    if (expectedPublicationSignalVersion > appliedPublicationSignalVersion) {
+    if (shouldReconcilePublicProfileOriginCache357(appliedPublicationSignalVersion, expectedPublicationSignalVersion)) {
       const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
       if (materialized.kind === 'updated') {
         const next = normalizeCachedData({

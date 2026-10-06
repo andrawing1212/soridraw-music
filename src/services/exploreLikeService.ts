@@ -11,6 +11,10 @@ import {
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
+  canAdvancePersonalLikeOriginCertificate357,
+  shouldRepairPersonalLikeOrigin357,
+} from './exploreEnvironmentParityPolicy';
+import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
   writeSoridrawPersistentCache,
@@ -658,11 +662,13 @@ const startLikeSignal127 = (uid: string) => {
         rememberLastRetainedLikeSignal357(uid, signal.version);
         const seenBefore357 = readSeenLikeSignal127(uid);
         const certifiedBefore357 = readCrossOriginLikeCertified357(uid);
-        const continuousCertified357 = seenBefore357 > 0
-          && signal.previousVersion === seenBefore357
-          && certifiedBefore357 >= seenBefore357;
         applyRemoteLikeSignal127(uid, signal);
-        if (continuousCertified357 && readRepairTarget127(uid) <= 0) {
+        if (canAdvancePersonalLikeOriginCertificate357({
+          seenBefore: seenBefore357,
+          signalPreviousVersion: signal.previousVersion,
+          certifiedBefore: certifiedBefore357,
+          repairTargetAfter: readRepairTarget127(uid),
+        })) {
           markCrossOriginLikeCertified357(uid, signal.version);
         }
       }
@@ -909,9 +915,15 @@ export const ensureExplorePersonalLikeBaseline127 = ensurePersonalLikeBaseline12
 // catalog before the bounded authenticated reconciliation succeeds.
 export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User): Promise<void> => {
   const uid = String(user?.uid || '').trim();
-  if (!uid || !hasLikedStateStorage127(uid)) return;
+  if (!uid) return;
+  const hasLocalState357 = hasLikedStateStorage127(uid);
   const latestSignalVersion = readLastRetainedLikeSignal357(uid);
-  if (!latestSignalVersion || readCrossOriginLikeCertified357(uid) >= latestSignalVersion) return;
+  const certifiedSignalVersion357 = readCrossOriginLikeCertified357(uid);
+  if (!shouldRepairPersonalLikeOrigin357({
+    hasLocalState: hasLocalState357,
+    latestSignalVersion,
+    certifiedSignalVersion: certifiedSignalVersion357,
+  })) return;
 
   const existing = crossOriginParityInFlight357.get(uid);
   if (existing) return existing;

@@ -1,9 +1,9 @@
-app356-curated-recovery-preview-smoke-audit
-target=d0811e400c74fe8c81c6f3a0bc494321388da71c
-scope=explore-curated-cold-recovery,preview-curated-smoke,release-curated-parity
+app356-release-controller-source-identity-audit
+target=a7e63af049439126c2ff373929f828fdfbaf0495
+scope=release-controller-manifest-source-identity,curated-release-gate
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-curated-preview-smoke-audit
+requested=2026-10-06-release-controller-source-identity-audit

@@ -39,6 +39,7 @@ for (const token of [
   'Rollback branch and Worker traffic after deployment failure',
   'node scripts/verify-366-cross-environment-profile-like-parity.mjs',
   'npx tsx scripts/verify-367-production-browser-upgrade-contract.ts',
+  'npx tsx scripts/verify-368-live-profile-like-convergence.ts',
   'release-production-environment-contract.mjs',
   'production-environment-contract.json',
   'EXPECTED_WORKER_CODE_SHA256',

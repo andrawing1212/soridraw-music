@@ -32,6 +32,36 @@ for (const required of [
   assert.ok(workflow.includes(required), `shared D1 workflow missing guard: ${required}`);
 }
 
+const countStep = (name) => workflow.split('      - name: ' + name).length - 1;
+for (const name of [
+  'Checkout exact approved source',
+  'Apply exact additive migration with rollback guard',
+  'Capture app373 live consumers and pre-cutover schema',
+  'Apply app373 approved shared D1 cutover with rollback',
+]) assert.equal(countStep(name), 1, 'shared D1 workflow duplicated step: ' + name);
+
+function bashRunBlock(name) {
+  const marker = '      - name: ' + name;
+  const start = workflow.indexOf(marker);
+  assert.ok(start >= 0, 'missing bash step: ' + name);
+  const run = workflow.indexOf('\n        run: |\n', start);
+  assert.ok(run >= 0, 'missing run block: ' + name);
+  const next = workflow.indexOf('\n      - name:', run + 1);
+  const raw = workflow.slice(run + '\n        run: |\n'.length, next >= 0 ? next : workflow.length);
+  return raw.split('\n').map((line) => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+}
+for (const name of [
+  'Resolve exact shared D1 release',
+  'Verify exact app373 approved cutover sources',
+  'Capture app373 live consumers and pre-cutover schema',
+  'Apply app373 approved shared D1 cutover with rollback',
+]) {
+  const syntax = spawnSync('bash', ['-n'], { input: bashRunBlock(name), encoding: 'utf8' });
+  assert.equal(syntax.status, 0, 'bash -n failed for ' + name + ': ' + String(syntax.stderr || syntax.stdout || ''));
+}
+assert.ok(workflow.includes('[[ "$rollback_blob" =~ ^[0-9a-f]{40}$ ]]'), 'rollback blob SHA guard malformed');
+console.log('APP373_SHARED_D1_WORKFLOW_BASH_SYNTAX=PASS');
+
 for (const forbidden of [
   'APPROVED_MIGRATION:',
   'APPROVED_MIGRATION_BLOB:',

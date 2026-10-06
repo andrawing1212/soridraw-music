@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const cutoff = '1791306000000';
+const cutoff = '1791309600000';
 const approval = 'user_explicit_shared_d1_cutover_approved_2026-10-07T01:13:29+09:00';
 const migrationPath = 'cloudflare/explore-worker/migrations/20261007_01_first_publication_w2_cutover.sql';
 const rollbackPath = 'cloudflare/explore-worker/migrations/20261007_01_first_publication_w2_cutover_rollback.sql';
@@ -76,6 +76,7 @@ for (const required of [
   "APP373_ALL_WORKERS_UNCHANGED=PASS",
 ]) assert.ok(workflow.includes(required), 'shared D1 workflow missing app373 guard: ' + required);
 
+assert.ok(readFileSync('scripts/verify-shared-d1-release-system.mjs','utf8').includes('APP373_SHARED_D1_WORKFLOW_BASH_SYNTAX=PASS'));
 console.log('APP373_APPROVED_CUTOVER_STATIC=PASS');
 console.log('APP373_LOCKED_CUTOVER_MS=' + cutoff);
 console.log('APP373_CANONICAL_USER_ROW_REWRITE=0');

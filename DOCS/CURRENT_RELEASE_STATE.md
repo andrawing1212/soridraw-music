@@ -1,3 +1,34 @@
+## 0QP. TEST bootstrap 1차 완료 / schema4 TEST_VERIFIED 재검증 진행 단계 (2026-10-06 KST)
+
+사용자 `테스트배포` 승인 후 one-time bootstrap 1차 완료:
+- Release Controller Run `37407282504`: **SUCCESS**.
+- target PREVIEW SHA: `8ad97e799c2418443f2a39e722152622fdaf8f39`.
+- TEST app version: **357**.
+- TEST Explore Worker: `833debce-7179-4353-88f7-e920743512f7`.
+- TEST Media Worker: `217c81c6-bfef-48c6-8a07-e8c028be7b11`.
+- TEST latest/popular shared Feed parity PASS.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- TEST shared Catalog flag=1 / Media smoke PASS.
+- Firebase TEST Hosting deploy SUCCESS.
+- main promoted to `66ad632afab1259009efae387c0f41ccea2b4b26`.
+- PRODUCTION branch/Hosting/Workers는 변경하지 않음.
+
+중요:
+- 이 Run은 이전 main controller가 실행한 **bootstrap 전용** Run.
+- 생성 tag `soridraw-test-v357-8ad97e799c24`의 manifest는 schema3이므로 **PRODUCTION 승격 근거로 사용 금지**.
+- bootstrap 결과 main에는 새 production-first controller가 설치됨.
+- main ↔ preview controller workflow blob exact-match PASS:
+  - workflow blob `b0a879b2bc70150653fc621c10008708faefba3f`
+  - verifier blob `20ccf0dfeb3b9c203c27200dbb6bed1c99d3e810`
+  - schema4 / production environment contract / compiled code SHA gate 존재 확인.
+
+다음:
+- 제품 동작은 그대로 둔 docs-only PREVIEW SHA를 생성한 뒤,
+- 새 main controller로 TEST를 **한 번 더** 검증하여 schema4 `TEST_VERIFIED` manifest를 생성.
+- 두 번째 Run이 최종 TEST 기준이며 첫 bootstrap manifest는 폐기 취급.
+- 별도 정식배포 승인 전 PRODUCTION 변경 금지.
+
 ## 0QO. PRODUCTION-first Release Controller 구현·감사 PASS / one-time main bootstrap 대기 (2026-10-06 KST)
 
 완료된 배포 시스템 보강:

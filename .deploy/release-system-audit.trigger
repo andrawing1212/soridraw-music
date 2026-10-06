@@ -6,4 +6,4 @@ shared_user_data_write=false
 user_data_migration=false
 test_deploy=false
 production_deploy=false
-requested=2026-10-07-app372-isolated-first-publication-cost-proof
+requested=2026-10-07-app372-isolated-first-publication-cost-proof-retry1

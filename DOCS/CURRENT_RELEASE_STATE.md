@@ -1,3 +1,34 @@
+## 0QK. SORIDRAW 추천 PRODUCTION 1차 시도 preflight 차단 + Release Controller identity bootstrap 완료 (2026-10-06 KST)
+
+PRODUCTION 1차 시도:
+- 사용자가 `soridraw-test-v356-86872e778695` 기준 정식앱 승격을 명확히 승인.
+- Release Controller Run `37395223571`: **FAIL / PROD_PREFLIGHT에서 차단**.
+- 실패 지점: `Release Controller identity drift`.
+- 원인: TEST manifest가 TEST 승격 전 default-branch controller(`GITHUB_WORKSPACE`) identity를 기록했고, 같은 TEST 승격이 main에 새 release-controller 파일을 올린 뒤 PRODUCTION run은 새 controller identity를 사용해 서로 달라짐.
+- `PROD_DEPLOY`는 실행되지 않았고 PRODUCTION branch / Explore Worker / Media Worker / Hosting은 변경되지 않음.
+
+Release Controller 수정:
+- `.github/workflows/soridraw-release-promotion.yml`: TEST manifest의 controller identity를 **실제로 승격되는 exact `RELEASE_ROOT` source**에서 계산하도록 변경.
+- `scripts/verify-release-controller.mjs`: manifest identity가 promoted source에서 계산되는지 정적 검사 + mutation test 추가.
+- 제품/UI/Explore 사용자 기능/데이터 경로 변경 0.
+- Release System Audit Run `37395497639`: **SUCCESS**.
+
+controller bootstrap TEST:
+- Run `37395703347`: **SUCCESS / TEST_VERIFIED**.
+- source PREVIEW `69991e94f731eb3ff0943a2864608301423d1645`.
+- main(TEST) `00b5ee7b4eaac7ef8a9ec1d7ee7a0328223c76b8`.
+- TEST Explore Worker `28257181-78df-4feb-8938-c74d0a448d38`.
+- TEST Media Worker `ab5d9faf-dc43-4e57-9454-8cc87f797692`.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- 이 bootstrap run 자체 manifest는 이전 default-branch workflow가 실행한 run이므로 PRODUCTION 근거로 사용하지 않음.
+- 다음 TEST는 이미 수정된 main controller가 실행하며, controller identity 파일은 그대로 두고 문서-only 새 PREVIEW SHA를 대상으로 새 TEST_VERIFIED manifest를 생성한다.
+
+안전:
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- D1 schema/trigger mutation 0.
+- PRODUCTION mutation 0.
+- 좋아요/공개/비공개/Music Note/Library/폴더/UI/thumbnail 변경 0.
+
 ## 0QJ. SORIDRAW 추천 TEST 승격 완료 / curated release hard gate 실제 PASS (2026-10-06 KST)
 
 TEST 승격:

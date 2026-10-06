@@ -1,3 +1,26 @@
+## CURRENT NEXT GATE — fixed-controller TEST manifest 재생성 후 승인된 PRODUCTION 승격
+
+현재:
+- PRODUCTION 첫 시도 Run `37395223571`은 deployment 전 controller identity drift로 안전 차단; PRODUCTION 비변경.
+- promoted-source identity fix Audit `37395497639` SUCCESS.
+- controller bootstrap TEST Run `37395703347` SUCCESS.
+- main은 수정된 controller를 포함한 `00b5ee7b4eaac7ef8a9ec1d7ee7a0328223c76b8`.
+- 추천 parity 12곡 PASS 유지.
+- 사용자는 SORIDRAW 추천 복구 검증본의 PRODUCTION 승격을 명확히 승인한 상태.
+
+다음:
+1. controller identity 파일을 더 변경하지 않은 문서-only 최신 PREVIEW SHA로 TEST를 한 번 재검증.
+2. 새 TEST_VERIFIED manifest의 controller identity가 현재 main controller와 exact-match 하는지 확인.
+3. curated 12곡 parity / warm D1 R0/W0 / shared Catalog=1 / Hosting exact build 모두 PASS 확인.
+4. 그 manifest만 사용해 승인된 PRODUCTION 승격 실행.
+5. TEST vs PRODUCTION curated parity 실패나 503이면 자동 중단/rollback.
+6. PRODUCTION 실제 `/v1/curated` 200, warm R0/W0 및 production ref/Worker/Hosting 확인 후 종료.
+
+금지:
+- 이번 재검증 사이에 controller identity 파일 추가 변경.
+- 사용자 데이터 migration/backfill.
+- 좋아요/공개/비공개/Music Note/Library/UI 변경.
+
 ## CURRENT NEXT GATE — TEST 실사용 확인 후 SORIDRAW 추천 PRODUCTION 승격 승인 대기
 
 현재 완료:

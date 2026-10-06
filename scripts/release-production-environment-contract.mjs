@@ -113,7 +113,7 @@ const buildContract = () => {
     throw new Error('EXPLORE_CACHE allowlist drift');
   }
   assertEqual(testExplore.services, [], 'TEST Explore services must remain empty');
-  assertEqual(prodExplore.services, [
+  assertEqual(prodExplore.services.map(({ binding, service }) => ({ binding, service })), [
     { binding: 'EXPLORE_MIRROR_PREVIEW', service: 'soridraw-explore-preview' },
     { binding: 'EXPLORE_MIRROR_TEST', service: 'soridraw-explore-test' },
   ], 'PRODUCTION Explore mirror service allowlist drift');

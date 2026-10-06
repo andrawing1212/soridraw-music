@@ -1,3 +1,38 @@
+## CURRENT NEXT GATE — app357 PREVIEW 공개프로필 + 좋아요 곡 실기기 parity 검증
+
+현재:
+- 사용자 영상/실기기에서 PRODUCTION Feed는 정상이나 공개프로필 공개곡 및 own-profile 좋아요 곡이 PREVIEW와 다름을 확인.
+- server-side TEST↔PRODUCTION public-profile parity는 직전 release에서 PASS였으므로 browser origin별 persistent cache 수렴 gap을 수정.
+- PREVIEW app357 deployed SHA `aafacbe6af07a3a6919c01c0512b123b2a44ba6b`.
+- Release System Audit `37401266952` SUCCESS.
+- Firebase PREVIEW Run `37401610271` SUCCESS / app357 exact build PASS.
+- TEST / PRODUCTION unchanged.
+- user data migration/backfill/copy/delete/rewrite 0.
+- Worker/Functions/Rules/D1 변경 0.
+
+사용자 실기기 테스트:
+1. `preview.soridraw.com` 업데이트 후 Explore → 본인 프로필 → **공개 곡**.
+   - 실제 현재 공개곡 개수/목록/핀 곡 확인.
+2. 같은 프로필 → **좋아요 곡**.
+   - 현재 실제 좋아요 membership과 카드 목록 일치 확인.
+3. Explore로 나갔다가 같은 프로필 재진입.
+   - 변경이 없으면 추가 profile data read가 반복되지 않는지 CACHE LIVE 확인.
+4. PC/모바일 중 기존에 stale했던 기기에서도 1~2를 확인.
+5. Feed / SORIDRAW 추천 / 하트 클릭 / 공개·비공개가 기존처럼 정상인지 최소 확인.
+
+승격:
+- 위 실기기 PASS 후 사용자 `테스트배포` 요청 시 app357 전체를 TEST로 승격.
+- TEST에서도 공개곡 + 좋아요 곡 + Feed + curated parity 확인.
+- 사용자의 별도 명확한 정식배포 승인 후에만 PRODUCTION 승격.
+- Release Controller TEST preflight는 `verify-366-cross-environment-profile-like-parity.mjs`를 필수 실행하므로 이 보호가 빠진 릴리스는 승격 불가.
+
+금지:
+- profile/like cache 전체 삭제 또는 앱버전 기반 cache bust.
+- 전체 D1/Firestore scan/backfill.
+- 좋아요 30초 batching/W1 queue/heart-count frozen behavior 변경.
+- UI 변경.
+- parity 확인 전 first-publication W12->W2 작업 재개.
+
 ## CURRENT NEXT GATE — 정식앱 SORIDRAW 추천 실사용 확인 후 first-publication W12 -> W1~W2 재개
 
 완료:

@@ -77,6 +77,9 @@ const EXPLORE_LIKE_LOCAL_CATALOG_READY_135 = 'soridraw:explore:like-local-catalo
 // backend request, and certify a stale origin only after one bounded reconciliation.
 const EXPLORE_LIKE_LAST_RETAINED_SIGNAL_357 = 'soridraw:explore:like-last-retained-signal:357';
 const EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357 = 'soridraw:explore:like-cross-origin-certified:357';
+// app358: one repair attempt per retained signal. A partial legacy snapshot must
+// never turn My Likes tab navigation into a repeated /v1/me/social-snapshot read.
+const EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358 = 'soridraw:explore:like-cross-origin-attempted:358';
 const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922
@@ -525,6 +528,15 @@ const markCrossOriginLikeCertified357 = (uid: string, version: number): void => 
     String(Math.max(readCrossOriginLikeCertified357(uid), Math.floor(version))),
   );
 };
+const readCrossOriginLikeAttempted358 = (uid: string): number =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358, uid))) || 0);
+const markCrossOriginLikeAttempted358 = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358, uid),
+    String(Math.max(readCrossOriginLikeAttempted358(uid), Math.floor(version))),
+  );
+};
 
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
 type ExploreLikeSignal127 = {
@@ -925,10 +937,29 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
     certifiedSignalVersion: certifiedSignalVersion357,
   })) return;
 
+  // app358: if this exact retained signal already received its one bounded
+  // reconciliation attempt, page/tab navigation must stay local. A background
+  // repair that later clears the target can certify here without another Worker
+  // request; a newer retained signal naturally opens one new attempt.
+  const attemptedSignalVersion358 = readCrossOriginLikeAttempted358(uid);
+  if (attemptedSignalVersion358 >= latestSignalVersion) {
+    if (readRepairTarget127(uid) <= 0) {
+      markCrossOriginLikeCertified357(uid, latestSignalVersion);
+    }
+    return;
+  }
+
   const existing = crossOriginParityInFlight357.get(uid);
   if (existing) return existing;
   const task = (async () => {
+    markCrossOriginLikeAttempted358(uid, latestSignalVersion);
     requestRepair127(uid, latestSignalVersion);
+
+    // Force the existing bounded account repair route once for this retained
+    // signal, even when an older app182 attempt marker exists. The PREVIEW
+    // wrapper now repairs a mismatched legacy shared-R2 catalog from the exact
+    // canonical account set before the base snapshot is returned.
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '');
     await ensurePersonalLikeBaseline127(user);
     if (readRepairTarget127(uid) > 0) {
       throw new Error('Personal like cross-origin parity is not yet certified');

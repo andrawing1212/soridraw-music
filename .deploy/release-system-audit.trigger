@@ -1,9 +1,9 @@
-app356-curated-recovery-release-parity-audit
-target=ff3c87ba797551beb9afbc8241ee5fca03f4680e
-scope=explore-curated-cold-recovery,release-curated-parity
+app356-curated-recovery-preview-smoke-audit
+target=d0811e400c74fe8c81c6f3a0bc494321388da71c
+scope=explore-curated-cold-recovery,preview-curated-smoke,release-curated-parity
 protect=likes,publication,studio-heart,music-note,library,folders,shared-user-data,ui
 d1_schema_write=false
 d1_migration=false
 user_data_backfill=false
 production_deploy=false
-requested=2026-10-06-curated-recovery-audit
+requested=2026-10-06-curated-preview-smoke-audit

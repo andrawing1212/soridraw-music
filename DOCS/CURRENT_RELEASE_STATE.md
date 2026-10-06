@@ -1,3 +1,49 @@
+## 0QS. app359 PREVIEW 배포 완료 / My Likes 20곡 원인 확정 및 stale local guard 정리 (2026-10-06 KST)
+
+사용자 관찰:
+- app358 PREVIEW의 own-profile `좋아요 곡`이 이전 스물몇 곡에서 정확히 20곡으로 바뀜.
+- 이 상태를 그대로 TEST에 올리지 않고 read-only 실데이터 진단 후 원인을 확정.
+
+read-only 실데이터 진단 Run `37414720890`: SUCCESS / no mutation.
+- target public profile resolve: 1.
+- canonical D1 like relation 전체: **30**.
+- 그중 현재 공개+published 곡: **16**.
+- 비공개 또는 unpublished 관계: **14**.
+- pending q069=0 / q075=0.
+- shared personal-like R2 likedTrackIds: **16**.
+- R2 `canonicalComplete156=true`, `exactLikeCount156=16`.
+- R2 source=`verified-cross-origin-d1-358`.
+- 즉 서버 canonical/공유 R2 기준은 16인데 브라우저가 20곡을 보인 것은 서버 20곡 제한이 아니라 **과거 accepted-but-unsettled local guard가 4곡을 추가로 보호하던 현상**으로 판단.
+
+app359 수정:
+- app358의 canonical R2 repair 뒤에도 남을 수 있는 historical local snapshot guards를 app189의 기존 fresh settlement proof로 1회 정리.
+- settlement은 새 shared-R2 revision에 묶여 queue-empty + canonical/R2 + ETag 검증을 통과해야만 guard를 해제.
+- 현재 사용자의 실제 미전송 outbox는 기존 app189 보호 규칙 그대로 보존.
+- 같은 retained signal에 대한 app359 settlement upgrade는 origin당 1회만 허용; 이후 탭/페이지 왕복은 반복 Worker 금지.
+- 새 실제 like signal이 생긴 경우에만 다음 bounded settlement 기회가 열림.
+
+검증/배포:
+- Release System Audit Run `37415142727`: **SUCCESS**.
+- TypeScript PASS / Vite Build PASS / 기존 회귀검사 PASS.
+- `APP359_CANONICAL_R2_THEN_FRESH_SETTLEMENT=PASS`.
+- `APP359_SAME_SIGNAL_REPEAT_WORKER_BLOCKED=PASS`.
+- `APP359_CURRENT_OUTBOX_PROTECTED_BY_EXISTING_189_LOGIC=PASS`.
+- Firebase PREVIEW App Release Run `37415347786`: **SUCCESS**.
+- PREVIEW app version: **359**.
+- PREVIEW Explore Worker는 app358 Worker `117d5f65-e34d-4c58-8030-498193deb1b4` 그대로 사용(Worker 재배포 불필요).
+- TEST/main 및 PRODUCTION 비변경.
+- user data migration/backfill/copy/delete/rewrite 0.
+- D1/R2 진단은 read-only; app359은 사용자 원본 데이터 변경 없음.
+
+현재 gate:
+1. `preview.soridraw.com` app359에서 own-profile `좋아요 곡` 재확인.
+2. 정상 기준은 현재 canonical public/published membership **16곡** + 현재 미전송 사용자 의도가 있다면 그 의도만 임시 overlay.
+3. 앱359 최초 정리 뒤 `좋아요 곡 ↔ 공개곡` 반복 왕복 시 같은 Worker repair가 반복 증가하면 FAIL.
+4. 공개/비공개 후 프로필은 20분 대기 없이 change signal로 수렴해야 함.
+5. 위 확인 전 TEST 승격 금지.
+6. 확인 PASS 후 app359 전체를 TEST로 새 승격하고 새 TEST_VERIFIED manifest 생성.
+7. app357 TEST manifest는 계속 PRODUCTION 사용 금지.
+
 ## 0QR. app358 PREVIEW 배포 완료 / 공개프로필 지연·My Likes 반복 Worker 회귀 수정 검증 단계 (2026-10-06 KST)
 
 사용자 실사용에서 app357 TEST_VERIFIED 이후 추가 회귀가 발견되어 **기존 app357 TEST manifest는 PRODUCTION 승격 근거로 폐기**:

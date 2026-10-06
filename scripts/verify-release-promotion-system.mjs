@@ -40,6 +40,7 @@ for (const token of [
   'node scripts/verify-366-cross-environment-profile-like-parity.mjs',
   'npx tsx scripts/verify-367-production-browser-upgrade-contract.ts',
   'npx tsx scripts/verify-368-live-profile-like-convergence.ts',
+  'npx tsx scripts/verify-369-my-likes-settlement-upgrade.ts',
   'release-production-environment-contract.mjs',
   'production-environment-contract.json',
   'EXPECTED_WORKER_CODE_SHA256',

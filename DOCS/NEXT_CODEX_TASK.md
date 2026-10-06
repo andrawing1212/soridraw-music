@@ -1,3 +1,8 @@
+### app359 PREVIEW user check progress
+- PASS: own-profile `좋아요 곡` count converged to **16**, matching canonical D1/R2 proof.
+- Still required before TEST promotion:
+  1. after one-time settlement, repeated `공개곡 ↔ 좋아요 곡` switching must not keep increasing Worker repair requests;
+  2. public/private change must update the public-profile list without waiting ~20 minutes.
 ## CURRENT NEXT GATE — app359 PREVIEW 실사용 확인 후 TEST 재승격
 
 확정된 실제 상태:

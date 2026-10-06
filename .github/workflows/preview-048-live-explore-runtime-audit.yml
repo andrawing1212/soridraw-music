@@ -57,6 +57,8 @@ jobs:
                 'isExploreR2CatalogEnabled066',
                 'isExploreR2CatalogReadEnabled066',
                 'isExploreR2FirstPublisherEnabled066',
+                'isExploreR2HybridReadEnabled336',
+                'isExplorePublicationR2OnlyReadEnabled358',
                 'handleCatalogFeed066',
                 'handleCatalogProfileTracks066',
                 'handleCatalogGenre066',
@@ -83,8 +85,15 @@ jobs:
               for(const flag of ['SORIDRAW_R2_CATALOG_V1','SORIDRAW_R2_HYBRID_READ_V1','SORIDRAW_PUBLICATION_R2_ONLY_READ_V1']){
                 if(String(catalogFlags[flag]||'')!=='1') throw Error(stage+' live cutover flag missing: '+flag);
               }
-              for(const marker of ['SORIDRAW_R2_HYBRID_READ_336_20261004','SORIDRAW_PUBLICATION_R2_ONLY_READ_CUTOVER_358_20261005']){
-                if(!s.includes(marker)) throw Error(stage+' live Worker marker missing: '+marker);
+              for(const marker of [
+                'isExploreR2CatalogReadEnabled066',
+                'handleCatalogFeed066',
+                'handleCatalogProfileTracks066',
+                'handleCatalogSearch066',
+                'isExploreR2HybridReadEnabled336',
+                'isExplorePublicationR2OnlyReadEnabled358',
+              ]){
+                if(!s.includes(marker)) throw Error(stage+' live Worker R2 authority missing: '+marker);
               }
               console.log(`${stage}_APP372_R2_CUTOVER_READINESS=PASS`);
             }

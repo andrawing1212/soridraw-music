@@ -1,3 +1,49 @@
+## 0RC. app374 TEST 승격 완료 — TEST_VERIFIED (2026-10-07 KST)
+
+사용자 승인:
+- PREVIEW app374 실사용 PASS 후 사용자가 TEST 배포 진행을 명확히 승인.
+
+승격 기준:
+- source PREVIEW SHA: `b572a5dd9f18c054f27e6557380a7c6066d46adf`
+- PREVIEW app: **374**
+- Release Controller Run `37552538672`: **SUCCESS**
+- main(TEST) promoted SHA: `396a9862533e7e4f683a99cafe777c2fa40725c3`
+- TEST_VERIFIED tag: `soridraw-test-v374-b572a5dd9f18`
+
+TEST 배포/검증:
+- TypeScript PASS
+- Build PASS
+- immutable preflight PASS
+- TEST Explore Worker upload/activate/verify PASS
+  - active version: `56828853-cf62-4552-a569-680ee34e9134`
+- TEST Media Worker upload/activate/verify PASS
+  - active version: `2f4a22c1-a4be-4e41-a8e1-98755becda14`
+- Firebase TEST Hosting deploy + exact TEST verification PASS
+- `TEST_CURATED_PARITY=PASS count=12`
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`
+- browser upgrade contract PASS
+- old production cache → new release contract PASS
+- Release Control final state: `TEST_VERIFIED`
+
+보호 범위:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**
+- 이번 TEST 승격에서 shared D1 schema/data 추가 mutation: **0**
+- Firebase Functions/Rules 변경: **0**
+- PRODUCTION branch / Hosting / Worker / Media Worker 비변경 확인.
+- PRODUCTION은 app361 그대로 유지.
+
+현재 환경:
+- PREVIEW = app374
+- TEST = **app374 / TEST_VERIFIED**
+- PRODUCTION = app361
+- shared D1 app373 first-publication W2 cutover는 공용 데이터 계층에 이미 적용되어 있음.
+
+다음:
+- TEST에서 사용자 실사용으로 공개 메인 음원 1↔2 전환 시 노란 제목/equalizer 초기화가 PREVIEW와 동일한지 확인.
+- 공개상태 / MY프로필 / Explore 노출 정상 여부 확인.
+- 이상 없으면 app374는 PRODUCTION 승격 후보이나, **정식배포는 사용자 별도 명확한 승인 전 금지**.
+
 ## 0RB. app374 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
 
 사용자 확인:

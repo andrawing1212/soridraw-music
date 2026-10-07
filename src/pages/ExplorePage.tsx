@@ -77,7 +77,11 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
-import { queueExploreFollowFinalState380 } from '../services/exploreFollowBatchService380';
+import {
+  EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
+  queueExploreFollowFinalState380,
+  readPendingExploreFollowIntents380,
+} from '../services/exploreFollowBatchService380';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
@@ -2966,6 +2970,151 @@ export default function ExplorePage() {
 
     return () => { cancelled = true; };
   }, [profileUid, user, profilePublicationSyncVersion357]);
+
+  // app380: a real pending follow choice survives browser reload/update. Resume
+  // only persisted user mutations; ordinary startup with no pending edge stays
+  // Worker0/D1 R0 and does not create any follow request.
+  useEffect(() => {
+    const activeUser380 = user;
+    const viewerUid380 = String(activeUser380?.uid || '').trim();
+    if (!activeUser380 || !viewerUid380) return;
+
+    const pending380 = readPendingExploreFollowIntents380(viewerUid380);
+    for (const record380 of pending380) {
+      const targetUid380 = String(record380.targetUid || '').trim();
+      if (!targetUid380 || targetUid380 === viewerUid380) continue;
+
+      patchExploreFollowLocalState377(
+        viewerUid380,
+        targetUid380,
+        record380.desiredFollowing,
+        record380.targetProfile,
+        { deferTargetFollowers: true },
+      );
+
+      const remainingIdle380 = Math.max(
+        0,
+        EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Math.max(0, Date.now() - Number(record380.updatedAt || 0)),
+      );
+      const remainingCooldown380 = Math.max(0, Number(record380.notBefore || 0) - Date.now());
+
+      queueExploreFollowFinalState380({
+        ...record380,
+        initialDelayMs: Math.max(remainingIdle380, remainingCooldown380),
+        restoredNotBefore: record380.notBefore,
+        commit: (following380) => setExploreFollow(
+          activeUser380,
+          targetUid380,
+          following380,
+          record380.targetProfile,
+        ),
+        onSettled: (settlement380) => {
+          const confirmed380 = Boolean(settlement380.result.isFollowing);
+          const delta380 = Number(confirmed380) - Number(settlement380.baseFollowing);
+          const exactActor380 =
+            readExploreProfileConnectionExactCount379(viewerUid380, 'following')
+            ?? readExploreFollowingExactCount379(viewerUid380);
+          const actorCount380 = exactActor380 !== null
+            ? exactActor380
+            : settlement380.baseActorFollowingCount === null
+              ? null
+              : Math.max(0, Math.floor(settlement380.baseActorFollowingCount) + delta380);
+          const targetFollower380 = Math.max(
+            0,
+            Math.floor(settlement380.baseTargetFollowerCount) + delta380,
+          );
+          const targetFollowing380 = Math.max(
+            0,
+            Math.floor(settlement380.baseTargetFollowingCount),
+          );
+
+          patchExplorePublicProfileFirstViewProfile(targetUid380, {
+            followerCount: targetFollower380,
+            followingCount: targetFollowing380,
+          });
+          if (actorCount380 !== null) {
+            patchExplorePublicProfileFirstViewProfile(viewerUid380, {
+              followingCount: actorCount380,
+            });
+          }
+
+          if (auth.currentUser?.uid === viewerUid380) {
+            setFollowingUids312((previous) => {
+              const next = new Set(previous);
+              if (confirmed380) next.add(targetUid380);
+              else next.delete(targetUid380);
+              return next;
+            });
+            setFollowState((previous) => {
+              if (activeProfileUidRef.current !== targetUid380) return previous;
+              return {
+                isFollowing: confirmed380,
+                followerCount: targetFollower380,
+                followingCount: targetFollowing380,
+                ...(actorCount380 === null ? {} : { actorFollowingCount: actorCount380 }),
+              };
+            });
+            setProfile((previous) => {
+              if (!previous) return previous;
+              if (previous.uid === targetUid380) {
+                return {
+                  ...previous,
+                  followerCount: targetFollower380,
+                  followingCount: targetFollowing380,
+                };
+              }
+              if (previous.uid === viewerUid380 && actorCount380 !== null) {
+                return { ...previous, followingCount: actorCount380 };
+              }
+              return previous;
+            });
+          }
+
+          void publishExploreFollowSync377(viewerUid380, {
+            targetUid: targetUid380,
+            following: confirmed380,
+            actorFollowingCount: actorCount380
+              ?? Math.max(0, Math.floor(Number(settlement380.result.actorFollowingCount || 0))),
+            targetFollowerCount: targetFollower380,
+          }).catch((reason) => {
+            console.warn('[app380] resumed follow final-state live sync deferred:', reason);
+          });
+        },
+        onError: (failure380) => {
+          patchExploreFollowLocalState377(
+            viewerUid380,
+            targetUid380,
+            failure380.baseFollowing,
+            record380.targetProfile,
+          );
+          patchExplorePublicProfileFirstViewProfile(targetUid380, {
+            followerCount: failure380.baseTargetFollowerCount,
+            followingCount: failure380.baseTargetFollowingCount,
+          });
+          if (failure380.baseActorFollowingCount !== null) {
+            patchExplorePublicProfileFirstViewProfile(viewerUid380, {
+              followingCount: failure380.baseActorFollowingCount,
+            });
+          }
+          if (auth.currentUser?.uid === viewerUid380 && activeProfileUidRef.current === targetUid380) {
+            setFollowState({
+              isFollowing: failure380.baseFollowing,
+              followerCount: failure380.baseTargetFollowerCount,
+              followingCount: failure380.baseTargetFollowingCount,
+              ...(failure380.baseActorFollowingCount === null
+                ? {}
+                : { actorFollowingCount: failure380.baseActorFollowingCount }),
+            });
+            setSocialNotice(
+              failure380.error instanceof Error
+                ? failure380.error.message
+                : '팔로우 처리에 실패했어요.',
+            );
+          }
+        },
+      });
+    }
+  }, [user?.uid]);
 
   // app377: same-account PC/mobile follow convergence is driven by one bounded
   // RTDB signal. Receiving it patches only local caches/UI; D1/Firestore I/O is 0.

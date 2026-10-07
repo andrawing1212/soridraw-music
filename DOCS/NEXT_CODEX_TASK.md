@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — PREVIEW cutover-OFF 실사용 follow 검증
+
+현재 배포 상태:
+- PREVIEW Worker candidate 배포 완료.
+- Release Run `37565145301`: SUCCESS.
+- active PREVIEW Worker `bc8cc09e-4210-46e2-bdb7-72796e2798e4`.
+- shared follow cutover OFF / overlay activation OFF.
+- TEST/PRODUCTION unchanged.
+- app375 Hosting unchanged.
+
+지금 확인할 것:
+1. PC follow 1회 / unfollow 1회.
+2. mobile follow 1회 / unfollow 1회.
+3. PC→mobile, mobile→PC 상태가 페이지 이동/새로고침 없이 정상 수렴하는지.
+4. followerCount/followingCount, MY following membership, follower-save permission, public profile parity.
+5. live physical D1 Rows Written:
+   - 이 단계는 **legacy parity 확인**이 목적이므로 Worker341 실사용 baseline과 비용/동작이 같아야 함.
+   - cutover OFF인데 비용/동작이 달라지면 즉시 rollback.
+6. R2 Class A/B/latency도 가능한 범위에서 기록.
+
+아직 하지 말 것:
+- shared follow schema migration.
+- follow overlay activation/cutover.
+- TEST/PRODUCTION 승격.
+- 사용자 데이터 backfill/rewrite.
+- 다른 정상 기능 수정.
+
+다음 판단:
+- cutover-OFF live parity PASS → overlay 활성화에 필요한 shared schema/cutover/rollback 영향 보고 후 사용자 승인 요청.
+- parity FAIL → 즉시 Worker rollback 및 원인 분석.
+- overlay live 검증에서 W1~W2/Duplicate W0가 확인되기 전 TEST 승격 금지.
+
 ## CURRENT NEXT GATE — follow PREVIEW live 검증 대기 / 배포 요청 전
 
 완료:

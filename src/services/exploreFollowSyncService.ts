@@ -2,20 +2,12 @@ import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'f
 import { realtimeDb } from '../firebase';
 
 // SORIDRAW_EXPLORE_FOLLOW_LIVE_SYNC_377_20261007
-// Same-account follow convergence uses one tiny UID-scoped RTDB delta.
-// app378 adds only the changed target's compact {uid,nickname,avatar,handle}
-// card so another device can patch its cached Following page without D1.
-// It never carries a whole list and never triggers D1 itself.
+// Same-account follow convergence uses one tiny UID-scoped RTDB invalidation.
+// It carries only the exact counts already returned by the canonical follow
+// mutation. It never carries a whole profile/list and never triggers D1 itself.
 export const EXPLORE_FOLLOW_SYNC_EVENT_377 = 'soridraw:explore-follow-sync-377';
 const EXPLORE_FOLLOW_SIGNAL_RETENTION_MS_377 = 10 * 60_000;
 const EXPLORE_FOLLOW_DEVICE_KEY_377 = 'soridraw_explore_follow_device_377';
-
-export type ExploreFollowProfileCard378 = {
-  uid: string;
-  nickname: string;
-  avatarUrl: string;
-  handle: string;
-};
 
 export type ExploreFollowSyncSignal377 = {
   version: number;
@@ -25,7 +17,6 @@ export type ExploreFollowSyncSignal377 = {
   following: boolean;
   actorFollowingCount: number;
   targetFollowerCount: number;
-  targetProfile: ExploreFollowProfileCard378 | null;
 };
 
 const getFollowDeviceId377 = (): string => {
@@ -44,24 +35,6 @@ const getFollowDeviceId377 = (): string => {
 const normalizeCount377 = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
-};
-
-const normalizeFollowProfileCard378 = (raw: unknown, expectedUid = ''): ExploreFollowProfileCard378 | null => {
-  let row = raw;
-  if (typeof raw === 'string') {
-    try { row = JSON.parse(raw); } catch { return null; }
-  }
-  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
-  const value = row as Record<string, unknown>;
-  const uid = String(value.uid || '').trim().slice(0, 128);
-  const wantedUid = String(expectedUid || '').trim();
-  if (!uid || (wantedUid && uid !== wantedUid)) return null;
-  return {
-    uid,
-    nickname: (String(value.nickname || 'SORiDRAW').trim() || 'SORiDRAW').slice(0, 160),
-    avatarUrl: String(value.avatarUrl || '').trim().slice(0, 2048),
-    handle: String(value.handle || '').trim().replace(/^@+/, '').slice(0, 128),
-  };
 };
 
 const normalizeFollowSignal377 = (raw: unknown): ExploreFollowSyncSignal377 | null => {
@@ -83,22 +56,17 @@ const normalizeFollowSignal377 = (raw: unknown): ExploreFollowSyncSignal377 | nu
     following: row.following,
     actorFollowingCount: normalizeCount377(row.actorFollowingCount),
     targetFollowerCount: normalizeCount377(row.targetFollowerCount),
-    targetProfile: normalizeFollowProfileCard378(row.targetProfileJson, targetUid),
   };
 };
 
 export const publishExploreFollowSync377 = async (
   viewerUid: string,
-  change: Omit<ExploreFollowSyncSignal377, 'version' | 'at' | 'originDeviceId' | 'targetProfile'> & {
-    targetProfile?: ExploreFollowProfileCard378 | null;
-  },
+  change: Omit<ExploreFollowSyncSignal377, 'version' | 'at' | 'originDeviceId'>,
 ): Promise<ExploreFollowSyncSignal377 | null> => {
   const uid = String(viewerUid || '').trim();
   const targetUid = String(change.targetUid || '').trim();
   if (!uid || !targetUid) return null;
   const originDeviceId = getFollowDeviceId377();
-  const targetProfile = normalizeFollowProfileCard378(change.targetProfile, targetUid);
-  const targetProfileJson = targetProfile ? JSON.stringify(targetProfile) : '';
   const signalRef = databaseRef(realtimeDb, `userSync/${uid}/exploreFollow`);
   const transaction = await runTransaction(signalRef, (current) => {
     const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
@@ -111,7 +79,6 @@ export const publishExploreFollowSync377 = async (
       following: change.following === true,
       actorFollowingCount: normalizeCount377(change.actorFollowingCount),
       targetFollowerCount: normalizeCount377(change.targetFollowerCount),
-      ...(targetProfileJson ? { targetProfileJson } : {}),
     };
   }, { applyLocally: true });
   return normalizeFollowSignal377(transaction.snapshot.val());

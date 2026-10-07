@@ -197,17 +197,82 @@ export const invalidateExploreProfileConnections377 = (
   removeSoridrawPersistentCache(profileConnectionCacheKey377(uid, direction), null);
 };
 
+type ExploreProfileConnectionSeed378 = Pick<
+  ExplorePublicProfile,
+  'uid' | 'nickname' | 'avatarUrl' | 'handle'
+>;
+
+const patchExploreFollowingConnectionCache378 = (
+  viewerUid: string,
+  targetUid: string,
+  following: boolean,
+  targetProfile?: ExploreProfileConnectionSeed378 | null,
+): boolean => {
+  const viewer = String(viewerUid || '').trim();
+  const target = String(targetUid || '').trim();
+  if (!viewer || !target) return false;
+
+  const envelope = readSoridrawPersistentCache<ExploreProfileConnectionPage>({
+    cacheKey: profileConnectionCacheKey377(viewer, 'following'),
+    sourceType: EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377,
+    schemaVersion: EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377,
+    uid: null,
+  });
+  const page = envelope?.data;
+  if (!page || !Array.isArray(page.items)) return false;
+
+  const previous = page.items.find((item) => item.uid === target) || null;
+  let items = page.items.filter((item) => item.uid !== target);
+
+  if (following) {
+    const seedUid = String(targetProfile?.uid || '').trim();
+    if (seedUid !== target) return false;
+    const card: ExploreProfileConnection = {
+      uid: target,
+      nickname: String(targetProfile?.nickname || previous?.nickname || 'SORiDRAW').trim() || 'SORiDRAW',
+      avatarUrl: String(targetProfile?.avatarUrl || previous?.avatarUrl || '').trim(),
+      backgroundUrl: previous?.backgroundUrl || '',
+      bio: previous?.bio || '',
+      handle: String(targetProfile?.handle || previous?.handle || '').trim().replace(/^@+/, ''),
+      genres: previous?.genres || [],
+      socialLinks: previous?.socialLinks || { spotify: '', instagram: '', tiktok: '', youtube: '' },
+      followerCount: previous?.followerCount || 0,
+      followingCount: previous?.followingCount || 0,
+      trackCount: previous?.trackCount || 0,
+      followedAt: Date.now(),
+    };
+    items = [card, ...items];
+    if (page.nextCursor && items.length > 30) items = items.slice(0, 30);
+  }
+
+  writeProfileConnectionCache377(viewer, 'following', {
+    items,
+    nextCursor: page.nextCursor,
+  });
+  return true;
+};
+
 export const patchExploreFollowLocalState377 = (
   viewerUid: string,
   targetUid: string,
   following: boolean,
+  targetProfile?: ExploreProfileConnectionSeed378 | null,
 ) => {
   const viewer = String(viewerUid || '').trim();
   const target = String(targetUid || '').trim();
   if (!viewer || !target) return;
   rememberExploreFollowState(viewer, target, following);
   patchExplorePersonalSocialFollow(viewer, target, following);
-  invalidateExploreProfileConnections377(viewer, 'following');
+
+  // app378: a real relation change patches the already-cached Following page
+  // by one card instead of throwing the whole page away. App upgrades/reloads
+  // therefore remain Worker 0 / D1 R0 after the first list hydration.
+  if (!patchExploreFollowingConnectionCache378(viewer, target, following, targetProfile)) {
+    invalidateExploreProfileConnections377(viewer, 'following');
+  }
+  // The target account's Followers page belongs to another account and this
+  // UID-scoped signal does not carry the actor card. Keep the existing safe
+  // changed-only invalidation for that separate surface.
   invalidateExploreProfileConnections377(target, 'followers');
 };
 
@@ -438,7 +503,12 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
   return result;
 };
 
-export const setExploreFollow = async (user: User, uid: string, follow: boolean): Promise<ExploreFollowState> => {
+export const setExploreFollow = async (
+  user: User,
+  uid: string,
+  follow: boolean,
+  targetProfile?: ExploreProfileConnectionSeed378 | null,
+): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const payload = await requestOrderedExploreFollow354(
@@ -452,7 +522,7 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
     followingCount: toCount(row?.followingCount ?? row?.following_count),
     actorFollowingCount: toCount(row?.actorFollowingCount ?? row?.actor_following_count),
   };
-  patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing);
+  patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing, targetProfile);
   return result;
 };
 

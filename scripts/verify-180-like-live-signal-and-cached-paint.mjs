@@ -78,6 +78,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     readRepairTarget127: () => 0,
     requestRepair127: () => { throw new Error('unexpected gap repair'); },
     readLikeOutbox: () => outbox,
+    persistLikeOutbox: (_uid, value) => { outbox = value; },
     readSnapshotPending127: () => ({ ...persistentPending }),
     getLikedStateCache: () => cache,
     readLikeDisplayLocks: () => ({}),
@@ -114,6 +115,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   });
   assert.equal(rendered.length, 1, 'an unresolved local click must retain precedence');
   assert.equal(persistentPending['track-a'], true, 'remote change must not erase unresolved local click');
+  assert.equal(outbox['track-a'].deferredSignal390.version, 12, 'defer the received row without painting over the local click');
   console.log('APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS');
   console.log('APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS');
   console.log('APP141_RECEIVER_ADDITIONAL_SERVER_IO=0');

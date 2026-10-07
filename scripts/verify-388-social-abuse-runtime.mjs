@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { DatabaseSync } from 'node:sqlite';
 import { webcrypto } from 'node:crypto';
+import { schema390 } from './lib/like-receipt-390-fixture.mjs';
 
 const temp = mkdtempSync(join(tmpdir(), 'social380-'));
 try {
@@ -27,7 +28,8 @@ try {
   const ast = ts.createSourceFile('worker.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const names = ['socialAbusePolicy380', 'socialAbuseUnavailable380', 'socialAbuseLimited380',
     'consumeSocialAbuse380', 'enforceFollowEdgeRateLimit355', 'enforceExploreLikeBatchEdgeRateLimit054',
-    'handleFollowOverlay354', 'handleLikeBatch034', 'handleLikeD1Core'];
+    'handleFollowOverlay354', 'handleLikeBatch034', 'handleLikeD1Core',
+    'likeReceiptError390', 'likeReceiptDigest390', 'prepareLikeReceipt390', 'readLikeReceipt390', 'acceptLikeReceipt390'];
   const functions = ast.statements.filter(ts.isFunctionDeclaration).filter(n => names.includes(n.name?.text));
   assert.equal(functions.length, names.length);
   const canonical = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
@@ -66,15 +68,24 @@ try {
   assert.equal(sqlite.prepare('SELECT total_changes() AS n').get().n - beforeQueue, 2);
   sqlite.close();
   let now = 1_800_000_000_000;
-  let d1 = 0, enqueues = 0;
-  const context = vm.createContext({ Date: { now: () => now }, console,
+  let d1 = 0, r2Deltas = 0;
+  const receiptDb = new DatabaseSync(':memory:');
+  receiptDb.exec(readFileSync('cloudflare/explore-worker/migrations/20260912_01_explore_like_w1_queue.sql', 'utf8'));
+  receiptDb.exec("CREATE TABLE explore_like_cutover_control_174(id INTEGER PRIMARY KEY,phase TEXT); INSERT INTO explore_like_cutover_control_174 VALUES(1,'open');");
+  for (const sql of schema390()) receiptDb.exec(sql);
+  const prepared = (sql, params = []) => ({ bind: (...values) => prepared(sql, values),
+    async first() { d1++; return receiptDb.prepare(sql).get(...params) || null; },
+    async all() { d1++; return { success: true, results: receiptDb.prepare(sql).all(...params) }; },
+  });
+  const queueCount = () => receiptDb.prepare('SELECT count(*) n FROM explore_like_batches_069').get().n;
+  const writes = () => receiptDb.prepare('SELECT total_changes() n').get().n;
+  const context = vm.createContext({ Date: { now: () => now }, console, crypto: webcrypto, TextEncoder,
     throwApi: (code, message, status, headers) => { throw Object.assign(new Error(message), { code, status, headers }); },
     EXPLORE_LIKE_BATCH_MAX_034: 50,
     requireExploreAuth: async () => ({ uid: 'actor' }), clampExploreSocialCount: Number,
     json: (body, status) => ({ body, status }),
     assertLegacyLikeIntakeOpen165: async () => {},
-    enqueueExploreLikeBatch035: async () => { d1++; enqueues++; return { batchId: 'fixture', queue: '069' }; },
-    syncExploreLikeR2AfterBatch074: async () => ({ ok: true }),
+    syncExploreLikeR2AfterBatch074: async () => { r2Deltas++; return { ok: true }; },
   });
   vm.runInContext(functions.map(n => n.getText(ast)).join('\n'), context);
   const bucket = () => {
@@ -95,7 +106,7 @@ try {
   };
   const environment = (r2 = bucket()) => ({ SORIDRAW_ENVIRONMENT: 'preview', PROFILE_MEDIA: r2,
     LIKE_RATE_LIMITER: { limit: async () => ({ success: true }) },
-    DB: { prepare() { d1++; throw Error('unexpected D1 access'); } },
+    DB: { prepare: prepared },
   });
   const intent = (target, desired = true, operation = 1) => ({ target, desired, operationId: 'operation_' + String(operation).padStart(16, '0') });
   const consume = (env, domain, rows) => context.consumeSocialAbuse380(env, 'actor', domain, rows);
@@ -126,7 +137,7 @@ try {
       await consume(env, domain, [intent('pair', true, 10)]);
       await consume(env, domain, [intent('pair', true, 11)]);
     } else {
-      await reject(() => consume(env, domain, [intent('pair', true, 10)]), 'RATE_LIMITED');
+      await consume(env, domain, [intent('pair', true, 10)]);
       await reject(() => consume(env, domain, [intent('pair', true, 11)]), 'RATE_LIMITED');
     }
     assert.equal(env.PROFILE_MEDIA.writes, before, 'same desired and replay spend no extra receipt');
@@ -153,7 +164,8 @@ try {
   await consume(staleReplay, 'like', [intent('t', false, 2)]);
   now += 60_000;
   const replayWrites = staleReplay.PROFILE_MEDIA.writes;
-  await reject(() => consume(staleReplay, 'like', [intent('t', true, 1)]), 'RATE_LIMITED');
+  await consume(staleReplay, 'like', [intent('t', true, 1)]);
+  assert.equal(d1, 0, 'R2 never acknowledges or writes intake');
   assert.equal(staleReplay.PROFILE_MEDIA.writes, replayWrites);
   const shared = bucket();
   for (const name of ['preview', 'test', 'production']) for (const domain of ['follow', 'like']) {
@@ -180,13 +192,48 @@ try {
   await reject(() => consume(corrupt, 'like', [intent('other', true, 99)]), 'RATE_LIMIT_UNAVAILABLE');
 
   const request = mutations => ({ json: async () => ({ mutations }) });
-  const likeRow = (trackId, liked = true, operation = 1) => ({ trackId, liked, operationId: intent(trackId, liked, operation).operationId });
+  const likeRow = (trackId, liked = true, operation = 1) => ({ trackId, liked, operationId: intent(trackId, liked, operation).operationId, expectedRevision: 0, mutationAt: now });
   const batchEnv = environment();
-  await context.handleLikeBatch034(request([likeRow('a', false), likeRow('a'), likeRow('b')]), batchEnv, {});
-  assert.equal(enqueues, 1, 'one frozen queue intake per accepted HTTP batch');
+  const exactRows = [likeRow('a'), likeRow('b', true, 2)];
+  const beforeNew = writes();
+  const accepted = await context.handleLikeBatch034(request([likeRow('a', false), ...exactRows]), batchEnv, {});
+  assert.equal(accepted.body.data.results[0].liked, true);
+  assert.equal(writes() - beforeNew, 2, 'receipt + queue atomic fixture writes');
+  assert.equal(queueCount(), 1);
   assert.equal(JSON.parse([...batchEnv.PROFILE_MEDIA.rows.values()][0].body).events.length, 2);
-  const replayRejection = await reject(() => context.handleLikeBatch034(request([likeRow('a')]), batchEnv, {}), 'RATE_LIMITED');
-  assert.equal(enqueues, 1, 'replay must not enqueue a new timestamped batch');
+  const beforeReplay = writes();
+  const replayAck = await context.handleLikeBatch034(request([...exactRows].reverse()), batchEnv, {});
+  assert.equal(replayAck.status, 200);
+  assert.equal(replayAck.body.data.acceptanceReplay390, true);
+  assert.equal(replayAck.body.data.results, undefined, 'receipt never supplies membership/count/revision');
+  assert.equal(writes(), beforeReplay);
+  assert.equal(queueCount(), 1);
+  assert.equal(r2Deltas, 1, 'old replay never republishes a personal R2 delta');
+  receiptDb.exec('DELETE FROM explore_like_batches_069');
+  const afterProcessor = writes();
+  await context.handleLikeBatch034(request(exactRows), batchEnv, {});
+  assert.equal(writes(), afterProcessor);
+  assert.equal(queueCount(), 0);
+  // R2 reservation before a failed queue transaction cannot become success.
+  now += 600_001;
+  const crashRows = [likeRow('crash', true, 99)];
+  receiptDb.exec("UPDATE explore_like_cutover_control_174 SET phase='closed'");
+  await assert.rejects(() => context.handleLikeBatch034(request(crashRows), batchEnv, {}), /LIKE_RECEIPT_FENCE_CLOSED/);
+  receiptDb.exec("UPDATE explore_like_cutover_control_174 SET phase='open'");
+  const beforeRetry = writes();
+  const retry = await context.handleLikeBatch034(request(crashRows), batchEnv, {});
+  assert.equal(retry.body.data.acceptanceReplay390, undefined);
+  assert.equal(writes() - beforeRetry, 2, 'reservation-only crash recovers as actual new acceptance');
+  // app160/app164 stable batch fields remain supported; only the old direct
+  // endpoint is refresh-required. No normal batch is forced onto that endpoint.
+  const compatible = await context.handleLikeBatch034(request([{
+    trackId: 'supported-client', liked: true, baseLiked: false, mutationAt: now,
+    operationId: '00000000-0000-4000-8000-000000000164', expectedRevision: 0,
+  }]), batchEnv, {});
+  assert.equal(compatible.status, 200);
+  assert.equal(compatible.body.data.results[0].status, 'legacy-queued');
+  assert.equal(compatible.body.data.personalLikeProtocol, 'w1-queue-changed-track-188');
+
   for (const env of [{ ...environment(), LIKE_RATE_LIMITER: null },
     { ...environment(), LIKE_RATE_LIMITER: { limit: async () => { throw Error('offline'); } } }]) {
     await reject(() => context.handleLikeBatch034(request([likeRow('a')]), env, {}), 'RATE_LIMIT_UNAVAILABLE');
@@ -200,19 +247,20 @@ try {
     assert.equal(env.PROFILE_MEDIA.writes, 0);
   }
   await reject(() => context.handleLikeD1Core({}, environment(), {}, 'target', true), 'LIKE_CLIENT_REFRESH_REQUIRED');
-  assert.equal(d1, 1, 'all rejected HTTP paths D1 0, accepted W1 queue stub once');
+  receiptDb.close();
   const manifest = readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8');
   assert.doesNotMatch(manifest, /097-follow-abuse|098-like-abuse/);
   console.log('APP380_FROZEN_WORKER_FUNCTIONS_EXACT_AND_SQLITE_LIKE_INTAKE_W1_EACH=PASS');
   console.log('APP380_SOCIAL_RUNTIME_POLICIES_CAPS_ISOLATION_CAS_FAILURES=PASS');
-  console.log('APP380_HTTP_REJECTION_D1_R0_W0_NORMALIZED_QUEUE_INTAKE=PASS');
-  console.log('APP380_LIKE_REPLAY_REJECTED_NO_SYNTHETIC_CANONICAL_ACK=PASS');
+  console.log('APP380_HTTP_REJECTION_D1_R0_W0_AND_RECEIPT_INTAKE=PASS');
+  console.log('APP380_LIKE_REPLAY_W0_ACCEPTANCE_ONLY_ACK=PASS');
+  console.log('APP380_RESERVATION_CRASH_RETRY_AND_PROCESSED_QUEUE_REPLAY=PASS');
   console.log('APP380_CANDIDATE_PATCH_IDEMPOTENCE_NO_RELEASE_REGISTRATION=PASS');
-  // W0 rejection is not successful replay recovery. Do not turn the source
-  // safety tests into a false-green release of a changed normal retry contract.
   if (process.argv.includes('--release')) {
-    assert.equal(replayRejection, undefined,
-      'APP380_RELEASE_BLOCKED: like replay is rejected 429/W0, not recovered with a canonical accepted ACK; frozen timestamped/deleted queue has no durable replay proof');
+    // Successful replay is necessary but not sufficient: execute client ordering
+    // and transaction proofs too. Live/Work gates remain separate from this suite.
+    execFileSync(process.execPath, ['scripts/verify-390-like-acceptance-receipt.mjs'], { stdio: 'inherit' });
+    execFileSync(process.execPath, ['scripts/verify-391-like-replay-ordering.mjs'], { stdio: 'inherit' });
+    console.log('APP380_RELEASE_SOURCE_REPLAY_BLOCKER_CLEARED=PASS');
   }
-  console.log('APP380_RELEASE_READY=NO_LIKE_CANONICAL_REPLAY_PROOF_MISSING');
 } finally { rmSync(temp, { recursive: true, force: true }); }

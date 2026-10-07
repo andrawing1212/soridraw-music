@@ -114,7 +114,7 @@ assert.match(membership127, /readTargetedVerifiedLikeTracks127\(uid\)\.has\(id\)
 assert.match(membership127, /return getLikedStateCache\(uid\)\.get\(id\)/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
-assert.match(listener, /if \(pending\[item\.trackId\]\) continue/);
+assert.match(listener, /if \(pending\[item\.trackId\]\) \{[\s\S]*?deferredSignal390 = \{ \.\.\.signal, results: \[item\] \};[\s\S]*?continue;/);
 assert.doesNotMatch(listener, /pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)/,
   'a previous accepted-but-unsettled value must not suppress a newer cross-device ACK');
 assert.match(listener, /cache\.set\(item\.trackId, item\.liked\)/);
@@ -138,11 +138,11 @@ assert.match(listener, /onValue\(/);
 assert.match(listener, /onAuthStateChanged\(auth/);
 assert.doesNotMatch(listener, /\.prepare\(|firebase\/firestore|setInterval\(/);
 assert.match(listener, /signal\.previousVersion !== lastSeen/);
-assert.match(listener, /const needsRepair = gap \|\| readRepairTarget127\(uid\) > 0;/);
-assert.ok(listener.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;') < listener.indexOf('const pending = readLikeOutbox(uid)'),
+assert.match(listener, /const needsRepair = !deferred390 && \(gap \|\| readRepairTarget127\(uid\) > 0\);/);
+assert.ok(listener.indexOf('const needsRepair = !deferred390 && (gap || readRepairTarget127(uid) > 0);') < listener.indexOf('const pending = readLikeOutbox(uid)'),
   'gap must be recorded before applying retained exact rows');
 assert.doesNotMatch(
-  listener.slice(listener.indexOf('const needsRepair = gap ||'), listener.indexOf('const pending = readLikeOutbox(uid)')),
+  listener.slice(listener.indexOf('const needsRepair = !deferred390'), listener.indexOf('const pending = readLikeOutbox(uid)')),
   /\breturn\s*;/,
   'current retained exact rows must not be discarded merely because an older interval was missed',
 );
@@ -206,8 +206,8 @@ assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight
 assert.match(flush, /current && current\.updatedAt > pending\.updatedAt/);
 assert.equal(
   (flush.match(/rebaseExploreLikeAfterInFlight127\(current, pending\)/g) || []).length,
-  2,
-  'successful ACK and ambiguous failure must both preserve a newer explicit intent',
+  4,
+  'normal ACK/ambiguous failure plus receipt replay/expiry must preserve a newer explicit intent',
 );
 assert.match(flush, /const canonicalLikeSettled127 =\s*\n\s*payload\?\.data\?\.canonicalD1 === 'settled' \|\|\s*\n\s*canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/,
   'canonical D1 settlement must outrank derived R2 publication state');

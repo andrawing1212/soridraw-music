@@ -62,7 +62,8 @@ async function consumeSocialAbuse380(env, uid, domain, intents) {
         if (replay.target !== intent.target || replay.desired !== intent.desired) {
           throwApi('SOCIAL_OPERATION_CONFLICT', '요청 ID가 다른 변경에 사용되었습니다.', 409);
         }
-        if (domain === 'like') blockedUntil = Math.max(blockedUntil, replay.at + 86_400_000);
+        // An R2 reservation is not acceptance. Exact retries must reach the
+        // atomic D1 receipt, including a crash between reservation and intake.
         continue;
       }
       const prior = pairs.get(intent.target);
@@ -71,8 +72,8 @@ async function consumeSocialAbuse380(env, uid, domain, intents) {
       }
       if (prior?.desired === intent.desired) {
         // Follow's canonical ordered protocol safely replays/settles W0 itself.
-        // Like queue IDs include receive time. Never fabricate an accepted ACK
-        // from a rate receipt or enqueue the same intent again on a lost ACK.
+        // A fresh ID with the same desired state is not an exact retry.
+        // Only durable D1 receipts may acknowledge a prior like acceptance.
         if (domain === 'like') blockedUntil = Math.max(blockedUntil, prior.at + policy.quietMs);
         continue;
       }

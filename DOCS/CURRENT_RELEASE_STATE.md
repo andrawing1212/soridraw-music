@@ -1,11 +1,40 @@
-## 0RZA. app380 focused receipt proof 진행 중 — 배포 금지 (2026-10-08 KST)
+## 0RZA. app380 focused receipt/ACK 구현·최종 검증 완료 — 미배포 (2026-10-08 KST)
 
-- 작업 시작 preview SHA: `9110cc808065988f1121aa590210e55f8ca911eb` (구현 기준 `3ea51da5641e7c5bcf8668be6d9414d319a6964e`).
-- additive candidate `390-like-acceptance-receipt.sql`: UID당 WITHOUT ROWID 1행, secondary index 0, 최근 24시간 mutation identity 최대 1200개/600000자. 기존 abuse 600/day 상한과 미래 clock allowance를 포함하는 제한이며 receipt는 membership/count authority가 아니다.
-- 단일 receipt UPSERT + AFTER trigger queue INSERT로 원자성 후보를 구성했다. canonical Worker/기본 release manifest/shared schema는 변경하지 않았다.
-- SQLite 실행형 검증: 신규 2행, exact/처리 후 replay 0행, payload conflict 0행, 동시 duplicate 큐 1회, fence/queue 실패 시 receipt rollback PASS. **Cloudflare billing 증거 아님.**
-- 기존 Release System Audit에 새 owned ephemeral D1 증명/항상 삭제 단계를 연결했다. remote 수치 및 client ordering/통합은 아직 검증 전이며 기존 `388 --release` 차단은 유지한다.
-- 배포 0, shared 사용자 데이터/schema 변경 0. 다음 단계는 remote 실제 W2 확인 후 좁은 ACK adapter 검증이다.
+- 이번 재개 기준: `d25890f68e8acd15b8f619e5326d4bb5292a233c`. 기존 `33663e9e` receipt 후보와 `d25890f6` D1-compatible fence를 그대로 사용했다. 최종 결과는 이 절을 갱신한 preview commit 기준이다.
+- **source candidate 완료**: `verify-388-social-abuse-runtime.mjs --release` PASS. 과거 429-only replay blocker 제거. Work 독립 감사/실기기 PREVIEW gate 또는 배포 승인까지 완료했다는 뜻은 아니다.
+- PREVIEW 실제 배포는 app379 유지. Worker/Hosting/Functions/Rules 배포 0, shared PREVIEW/TEST/PRODUCTION schema·사용자 데이터 변경 0. main/TEST/PRODUCTION 변경 0. UI hotfix `79374d59f7f9d251ef73a15089d4040288fde2bb` 병합 0; UI/CSS 변경 0.
+
+### 원격 Cloudflare D1 실측 — 실제 과금 메타데이터
+
+- 증거: [run 37649466762, like-receipt job 112888698709 — SUCCESS](https://github.com/andrawing1212/soridraw-music/actions/runs/37649466762/job/112888698709).
+- 측정 소스 `d25890f6`. 최종 candidate의 `390-like-acceptance-receipt.sql` 및 `like-acceptance-390.js`는 이 측정 소스와 **동일**하다. 이미 확인한 구조를 재생성/반복 측정하지 않았다.
+- owned ephemeral DB `soridraw-like-receipt-390-37649466762-1`만 생성·사용했고 `390_EPHEMERAL_D1_DELETED=PASS` 확인. shared DB 바인딩/쓰기 없음.
+- 실제 `meta.rows_written`: new batch **2**; ACK-loss exact replay **0**; 처리 후 queue row 삭제 뒤 replay **0**; trackId/liked/expectedRevision/mutationAt payload conflict 각각 **0**; partial-batch conflict **0**.
+- concurrent same batch 두 요청 합계 **2**, inserted 1 / replay 1, queue row **1**.
+- fence closed: 신규 receipt INSERT와 기존 receipt UPDATE 모두 queue와 함께 rollback. queue INSERT collision도 receipt 없음. 오류 응답에는 billing meta가 없으므로 오류의 과금 수치를 만들지 않고 **durable 잔존 row 0 / 기존 receipt 원상 보존**으로 검증했다.
+- proof eviction 후 동일 오래된 payload replay **0** reject, 이후 새 명시적 operation **2**로 정상 접수. 로컬 최종 검사는 1200 identity 상한과 만료 뒤 회복도 확인.
+- 위 run의 별도 `audit` job은 당시 미통합 소스의 기존 release blocker로 FAIL했다. **전체 과거 run을 PASS로 표시하지 않는다.** 이번 최종 소스 검증 결과는 아래와 같다.
+
+### 최종 변경
+
+- `098-like-abuse-guard.mjs`: stable payload validation → durable receipt lookup → 새 요청만 기존 abuse guard → atomic receipt/queue acceptance. R2 reservation은 acceptance authority가 아니며, reservation 이후 D1 전 장애는 같은 operation으로 실제 접수 재시도 가능.
+- UID당 WITHOUT ROWID receipt 1행, secondary index 0, 최근 identity 최대 1200개/JSON 600000자. deterministic digest는 UID + sorted operationId/trackId/desired/expectedRevision/mutationAt. 보존 중 동일 operation payload 변경은 conflict/W0. 만료되어 proof가 사라진 **동일 payload**는 timestamp admission 경계에서 W0 fail-closed; 무제한 operation-ID 이력 보관은 주장하지 않는다.
+- receipt UPSERT + AFTER trigger queue INSERT 한 SQL 문장으로 W2/원자성 유지. canonical Worker/queue processor/aggregate 및 기본 `release-patches.json` 변경 0. 실제 schema 적용 0.
+- replay 응답은 accepted operation IDs와 원래 acceptedAt만 전달한다. receipt에서 membership/count/revision을 합성하거나 오래된 personal R2 delta를 다시 쓰지 않는다. queue scheduler가 기존 durable intake를 이어갈 수 있도록 queued/batchId는 유지한다.
+- `exploreLikeService.ts`: receipt replay는 일치한 outbox만 완료하고 오래된 desired를 새 확정/공개 신호로 발행하지 않는다. newer intent/deadline/revision 보존. 대기 중 수신되어 건너뛴 최신 기기 신호는 기존 outbox 안에 1행만 보관하며, receipt 이후 최신 신호만 기존 persist-before-UI 수신 경로로 적용한다. 새 server read/write/listener 또는 cache key/epoch 없음.
+- 만료 proof는 자동으로 재전송하지 않는다. 새 명시적 undo가 기존 ACK 유실 전 baseline과 net-zero로 잘못 제거되지 않도록 기존 in-flight rebase helper를 사용한다. 429/RATE_LIMITED와 ambiguous network failure 구분, 실패 outbox의 idle/navigation 자동 재시도 금지, 30초 batching/net-zero 유지.
+- supported app160/app164 batch request 필드로 generated handler 200/legacy-queued 호환 검증. 이전 per-track direct route의 refresh-required 방어는 유지. 후속 실제 활성화 전 구버전/신버전 혼재 및 receipt-aware app380 rollout은 Work/live gate에서 확인한다.
+
+### 최종 검증
+
+- PASS: 387, 389, **388 --release** (388 기본 검사 + 390 receipt/상한·만료 + 391 실제 client ACK/receiver ordering 포함).
+- PASS: like 127/175/176/177/178/179/180/192/197; follow 377/378 및 app379의 385/386.
+- PASS: TypeScript `npm run lint`; Build `npm run build -- --outDir /tmp/soridraw-app380-final-build` (기존 bundle-size 경고만).
+- PASS: release-promotion-system / release-controller / release-command-pipeline / shared-d1-release-system; patch idempotence/generated Worker syntax/frozen Worker 함수 보존; `git diff --check`.
+- 최종 묶음 실행에서 127의 기존 단일-line `continue` static assertion만 새 deferred block에 맞춰 보강 후 해당 verifier만 재확인했다. 나머지 이미 PASS한 전체 test/build는 반복하지 않았다.
+- 변경 파일: `cloudflare/explore-worker/candidates/social-abuse-380.js`, `cloudflare/explore-worker/patches/098-like-abuse-guard.mjs`, `src/services/exploreLikeService.ts`, `scripts/verify-{127,175,180,388,390,391}-*.mjs`, 이 문서.
+- 이번 재개에서 branch 생성/삭제 0, Workflow 추가/삭제 0. 기존 로컬 `work` 보존. GitHub preview HEAD/protected=true 확인; 관리 권한이 필요한 force-push 세부 설정은 변경하거나 재인증하지 않았다.
+- 남은 gate: Work 독립 감사, 실제 PC↔모바일 및 구버전 혼재 PREVIEW live 검증, 별도 승인된 additive schema/Worker/client 활성화 순서. **이번 task에서 배포하지 않는다.**
 
 ## 0RZ. ChatGPT 검토 — app380 1차 commit 확인 / 좋아요 replay blocker 실재 / W2 receipt 방향 확정 (2026-10-08 KST)
 

@@ -1,7 +1,7 @@
-app378-following-list-update-r0-retry
-target_source=4b0bb0d2c22e14a3335fea470c25f97755ec5114
-app_version=378
-scope=follow-write-w1,persistent-following-list-delta,update-stable-cache,cross-device-sync-preserved
+app379-follow-profile-counter-overlay-fix
+target_source=db5788d79540fabe0aa6baf56f07d3573e804331
+app_version=379
+scope=follow-profile-counts,follower-count,following-count,cross-device-count-parity
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false

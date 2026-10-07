@@ -22,8 +22,8 @@ assert.match(page, /openProfileConnections376\('following'\)/);
 assert.match(page, /soridraw-explore-connections-modal-376/);
 assert.match(page, /profileConnectionsCache376Ref/);
 assert.match(page, /getExploreProfileConnections\(targetUid, direction/);
-assert.match(page, /profileConnectionsCache376Ref\.current\.delete\(profileConnectionCacheKey376\(targetUid, 'followers'\)\)/);
-assert.match(page, /profileConnectionsCache376Ref\.current\.delete\(profileConnectionCacheKey376\(viewerUid, 'following'\)\)/);
+assert.match(page, /profileConnectionsCache376Ref\.current\.delete\(\`\$\{activeUid\}:followers\`\)/);
+assert.match(page, /profileConnectionsCache376Ref\.current\.delete\(\`\$\{user\.uid\}:following\`\)/);
 
 const statsAt = page.indexOf('className="soridraw-explore-profile-stats"');
 const modalAt = page.indexOf('const renderProfileConnectionsModal376');

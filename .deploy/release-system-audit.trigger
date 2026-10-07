@@ -1,5 +1,5 @@
-follow-w1w2-cutover-readiness-readonly
-target=a914d5d7fbd9f1e61272241b18090d2ebaad87a5
+follow-w1w2-cutover-readiness-readonly-v2
+target=e26d4a71c5db114ff4c44b3558535ea7feca71bc
 scope=protocol354-355-active-worker-contract,shared-follow-overlay-schema-state,legacy-parity,rollback-negotiation
 shared_d1_apply=false
 shared_follow_cutover=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow-w1w2-readonly-gate
+requested=2026-10-07-follow-w1w2-readonly-gate-v2

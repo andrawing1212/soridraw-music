@@ -1,3 +1,31 @@
+## CURRENT NEXT GATE — 팔로우 비용만 W14~W17 → W1~W2
+
+사용자 확인:
+- app377 숫자 / 실제 목록 / PC↔모바일 동기화 정상 적용 PASS.
+- 기능 정합성 단계 종료. 지금부터 **팔로우 mutation 비용만** 수정.
+
+현재 근거:
+- dormant overlay 348 + ordered writer protocol354/355 구현/감사 완료 상태.
+- isolated actual D1 evidence: follow W2 / unfollow W1 / duplicate W0 / same-state W0.
+- app377 active PREVIEW Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- shared follow cutover OFF.
+
+작업 순서:
+1. PREVIEW/TEST/PRODUCTION active Worker가 protocol354/355 reader/writer 계약을 실제로 포함하는지 read-only 재고정.
+2. shared D1에 overlay 348 schema가 현재 미적용인지/legacy인지 SELECT-only 확인.
+3. cutover activation 전 rollback 절차와 구버전 앱 요청 negotiation을 다시 검증.
+4. 사용자 데이터 backfill/rewrite 없이 additive schema + per-environment manifest만으로 안전한지 확인.
+5. 안전 증명 PASS 후에만 PREVIEW 실제 overlay 비용 검증 단계로 이동.
+6. 실제 PREVIEW follow/unfollow D1 rows_written W1~W2, duplicate/same-state W0 확인.
+7. 동시에 app377 숫자/목록/PC↔모바일/follower-save/public-profile parity 재확인.
+
+절대 합격선:
+- follow/unfollow physical D1 W1~W2.
+- W3+ 즉시 FAIL.
+- 정상 기능 변화 0.
+- 전체 relation/profile/feed rebuild 0.
+- 사용자 데이터 migration/backfill/delete/rewrite 0.
+- TEST/PRODUCTION 비의도 변경 0.
 ## CURRENT NEXT GATE — app377 PREVIEW 팔로우 숫자·목록·R0 실사용 검증
 
 현재 배포 완료:

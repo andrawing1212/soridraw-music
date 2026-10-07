@@ -1,3 +1,16 @@
+## CURRENT NEXT GATE — app374 PREVIEW PASS / TEST 승격 승인 대기
+
+완료:
+- PREVIEW app374 배포 Run `37551851974` SUCCESS.
+- 사용자 실사용에서 신규/기존 공개곡 모두 메인 음원 전환 후 노란 제목/equalizer 초기화 정상 확인.
+- first-publication 실제 W2 유지 확인.
+- TEST/PRODUCTION 비변경.
+
+다음:
+- 사용자가 TEST 배포를 요청하면 app374 전체 PREVIEW 완성본을 main(TEST)으로 승격.
+- TEST에서 같은 공개곡 음원 전환 표시 + publication parity + 비용 회귀검사 확인.
+- PRODUCTION은 별도 명확한 승인 전 승격 금지.
+
 ## CURRENT NEXT GATE — PREVIEW app374 실사용 확인
 
 현재:

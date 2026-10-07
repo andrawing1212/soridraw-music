@@ -37,8 +37,12 @@ jobs:
           mode="$(sed -n 's/^mode=//p' <<<"$body" | tail -1 | tr -d '\r')"
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
           test "$approval" = 'user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z'
-          test "$mode" = 'test-production-explore-worker-lifecycle-only'
+          case "$mode" in
+            test-production-explore-worker-lifecycle-only|test-production-explore-worker-lifecycle-resume-readonly) ;;
+            *) echo "unsupported lifecycle mode: $mode" >&2; exit 1 ;;
+          esac
           echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo 'FOLLOW382_APPROVAL_LOCK=PASS'
 
       - uses: actions/checkout@v4
@@ -84,7 +88,7 @@ jobs:
           echo "FOLLOW382_EXPECTED_CODE=$test_code" >> "$GITHUB_ENV"
           echo 'FOLLOW382_TEST_PROD_EXACT_DRYRUN=PASS'
 
-      - name: Require PREVIEW lifecycle already live and cutover still dormant
+      - name: Require PREVIEW lifecycle live and shared authority safe for rollout
         shell: bash
         run: |
           set -euo pipefail
@@ -102,21 +106,31 @@ jobs:
           W="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           C="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
           node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/follow382-state.json"
-          STATE="$RUNNER_TEMP/follow382-state.json" node <<'NODE'
-          const p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
-          const s=rows.find(x=>Number(x.id)===1), c=rows.find(x=>'override_rows' in x);
-          if(!s||s.phase!=='legacy'||Number(s.schema_version)!==1||String(s.cutover_token||'')!=='')throw Error('shared follow control not dormant legacy');
-          if(Number(c?.override_rows||0)!==0)throw Error('shared follow overlay rows exist before lifecycle rollout');
-          console.log('FOLLOW382_D1_CONTROL_DORMANT=PASS');
-          NODE
           marker="$RUNNER_TEMP/follow382-manifest.json"
           set +e
           node "$W" r2 object get "soridraw-profile-media/internal/explore/follow-cutover-v348/active.json" --remote --file "$marker" >/dev/null 2>&1
           marker_code=$?
           set -e
-          test "$marker_code" -ne 0
-          echo 'FOLLOW382_R2_ACTIVE_MANIFEST=ABSENT'
-
+          MODE="${{ steps.source.outputs.mode }}" STATE="$RUNNER_TEMP/follow382-state.json" MANIFEST="$marker" MARKER_CODE="$marker_code" node <<'NODE'
+          const fs=require('fs');
+          const p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
+          const s=rows.find(x=>Number(x.id)===1), c=rows.find(x=>'override_rows' in x);
+          if(!s||Number(s.schema_version)!==1)throw Error('shared follow control missing/schema mismatch');
+          if(Number(c?.override_rows||0)!==0)throw Error('shared follow overlay rows exist before lifecycle rollout');
+          if(process.env.MODE==='test-production-explore-worker-lifecycle-only'){
+            if(s.phase!=='legacy'||String(s.cutover_token||'')!=='')throw Error('shared follow control not dormant legacy');
+            if(Number(process.env.MARKER_CODE)===0)throw Error('active manifest unexpectedly exists in dormant rollout');
+            console.log('FOLLOW382_D1_CONTROL_DORMANT=PASS');
+            console.log('FOLLOW382_R2_ACTIVE_MANIFEST=ABSENT');
+          }else{
+            if(s.phase!=='overlay'||!String(s.cutover_token||''))throw Error('shared follow control is not one-way overlay latch');
+            if(Number(process.env.MARKER_CODE)!==0)throw Error('readonly manifest missing during lifecycle resume');
+            const m=JSON.parse(fs.readFileSync(process.env.MANIFEST,'utf8'));
+            if(m.relationMode!=='overlay348-readonly'||m.writeMode!=='readonly'||m.oneWayAuthority348!==true||m.cutoverToken!==s.cutover_token)throw Error('readonly manifest/control mismatch');
+            console.log('FOLLOW382_D1_CONTROL_OVERLAY_LATCH=PASS');
+            console.log('FOLLOW382_R2_READONLY_MANIFEST=PASS');
+          }
+          NODE
       - name: Snapshot active Worker versions
         shell: bash
         run: |
@@ -150,7 +164,7 @@ jobs:
           echo "FOLLOW382_PRODUCTION_AFTER=$version" >> "$GITHUB_ENV"
           echo 'FOLLOW382_PRODUCTION_LIFECYCLE_DEPLOY=PASS'
 
-      - name: Verify all environments lifecycle live and cutover still dormant
+      - name: Verify all environments lifecycle live and shared authority unchanged
         shell: bash
         run: |
           set -euo pipefail
@@ -171,11 +185,25 @@ jobs:
           W="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           C="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
           node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/final-state.json"
-          STATE="$RUNNER_TEMP/final-state.json" node <<'NODE'
+          marker="$RUNNER_TEMP/follow382-final-manifest.json"
+          set +e
+          node "$W" r2 object get "soridraw-profile-media/internal/explore/follow-cutover-v348/active.json" --remote --file "$marker" >/dev/null 2>&1
+          marker_code=$?
+          set -e
+          MODE="${{ steps.source.outputs.mode }}" STATE="$RUNNER_TEMP/final-state.json" MANIFEST="$marker" MARKER_CODE="$marker_code" node <<'NODE'
+          const fs=require('fs');
           const p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
           const s=rows.find(x=>Number(x.id)===1),c=rows.find(x=>'override_rows' in x);
-          if(!s||s.phase!=='legacy'||String(s.cutover_token||'')!==''||Number(c?.override_rows||0)!==0)throw Error('cutover mutated during lifecycle rollout');
-          console.log('FOLLOW382_CUTOVER_STILL_DORMANT=PASS');
+          if(!s||Number(c?.override_rows||0)!==0)throw Error('follow user data changed during lifecycle rollout');
+          if(process.env.MODE==='test-production-explore-worker-lifecycle-only'){
+            if(s.phase!=='legacy'||String(s.cutover_token||'')!==''||Number(process.env.MARKER_CODE)===0)throw Error('dormant authority changed during rollout');
+            console.log('FOLLOW382_CUTOVER_STILL_DORMANT=PASS');
+          }else{
+            if(s.phase!=='overlay'||!String(s.cutover_token||'')||Number(process.env.MARKER_CODE)!==0)throw Error('readonly authority state changed during rollout');
+            const m=JSON.parse(fs.readFileSync(process.env.MANIFEST,'utf8'));
+            if(m.relationMode!=='overlay348-readonly'||m.writeMode!=='readonly'||m.cutoverToken!==s.cutover_token)throw Error('readonly authority manifest changed during rollout');
+            console.log('FOLLOW382_READONLY_LATCH_UNCHANGED=PASS');
+          }
           NODE
           echo 'FOLLOW382_HOSTING_CHANGE=0'
           echo 'FOLLOW382_MEDIA_WORKER_CHANGE=0'

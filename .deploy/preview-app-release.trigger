@@ -1,8 +1,8 @@
-app374-explore-media-switch-visual-reset
-target_source=cce0ec1d0190f897e96f6f42284460216ee022af
-app_version=374
-scope=explore-published-media-switch,reset-stale-yellow-title,reset-stale-equalizer
-release_system_audit_run=37551651930
+app375-explore-latest-new-publication-immediate
+target_source=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
+app_version=375
+scope=explore-latest,new-publication-immediate,latest-first-visible,origin-local-signal
+release_system_audit_run=37556209976
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false

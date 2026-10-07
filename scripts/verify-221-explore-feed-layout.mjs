@@ -862,7 +862,30 @@ console.log('APP236_EXPLORE_LIKED_TRACK_PUBLISHER_PRESERVED=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_THREE_MINUTES_THIRTY_SECONDS=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ROUTE_PERSISTENCE=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ABSOLUTE_EXPIRY_PRESERVED=PASS');
+
+assert.match(
+  page,
+  /resetToStartKey\?: string[\s\S]*?previousResetToStartKey375[\s\S]*?scroller\.scrollTo\(\{ left: 0, behavior: 'auto' \}\)/,
+  'opt-in recommendation rails must be able to return to the first card when their first item changes',
+);
+assert.match(
+  page,
+  /title="최신 공개곡"[\s\S]*?resetToStartKey=\{\`\$\{latestPublicScope312\}:\$\{latestPublicTracks312\[0\]\?\.id \|\| ''\}\`\}/,
+  'Latest public rail must reset to its newest first item when a newly published track is prepended',
+);
+assert.equal(
+  (page.match(/resetToStartKey=\{/g) || []).length,
+  1,
+  'only the chronological Latest public rail should opt into automatic first-card reset',
+);
+
 console.log('APP374_EXPLORE_MEDIA_SWITCH_RESETS_PLAY_VISUAL=PASS');
+assert.match(
+  page,
+  /useLayoutEffect\(\(\) => \{[\s\S]*?resetToStartKey[\s\S]*?scroller\.scrollTo\(\{ left: 0, behavior: 'auto' \}\)/,
+  'Latest public rail reset must happen before paint so a newly prepended track is immediately visible',
+);
+console.log('APP375_EXPLORE_LATEST_NEW_PUBLICATION_FIRST_VISIBLE=PASS');
 
 console.log('APP238_EXPLORE_PROFILE_PC_GUTTERS_INCREASED=PASS');
 

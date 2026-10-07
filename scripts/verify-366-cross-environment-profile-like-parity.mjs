@@ -23,6 +23,14 @@ assert.match(profile, /LOCAL HIT · 변경 없음 · Worker 0 · D1 읽기 0/);
 
 assert.match(domain, /EXPLORE_PUBLICATION_LAST_SIGNAL_STORAGE_BASE_357/);
 assert.match(domain, /persistLatestExplorePublicationSignal357\(safeUid, signal\)/);
+assert.match(
+  domain,
+  /const localSignal = normalizeExplorePublicationSignal\(transaction\.snapshot\.val\(\)\);[\s\S]*?persistLatestExplorePublicationSignal357\(safeUid, localSignal\);[\s\S]*?window\.dispatchEvent\(new CustomEvent\(EXPLORE_PUBLICATION_SYNC_EVENT/,
+);
+assert.match(
+  domain,
+  /if \(signal\.originDeviceId === getStoredDeviceId\(GENERIC_DEVICE_STORAGE_KEY, 'd'\)\) return;/,
+);
 assert.match(domain, /normalizeExplorePublicationSignal\(JSON\.parse\(raw\)\)/);
 assert.match(page, /profilePublicationSyncVersion357/);
 assert.match(page, /readLatestExplorePublicationSyncSignal\(profileUid\)/);
@@ -51,3 +59,4 @@ console.log('APP366_CROSS_ENV_PROFILE_LIKE_PARITY=PASS');
 console.log('PROFILE_CHANGE_SIGNAL_RECONCILIATION=PASS');
 console.log('MY_LIKES_BOUNDED_ORIGIN_REPAIR=PASS');
 console.log('UNCHANGED_REENTRY_ZERO_READ_CONTRACT=PRESERVED');
+console.log('APP375_PUBLICATION_ORIGIN_IMMEDIATE_LOCAL_SIGNAL=PASS');

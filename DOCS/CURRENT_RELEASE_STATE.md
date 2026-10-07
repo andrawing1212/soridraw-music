@@ -1,3 +1,125 @@
+## 0RE. app375 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
+
+사용자 확인:
+- PREVIEW app375에서 새로 공개한 Music Note 곡이 Explore `최신 공개곡`의 첫 번째 카드로 즉시 표시됨.
+- 기다렸다가 왼쪽 `<` 화살표를 눌러야만 보이던 증상 해결 확인.
+- app374 공개 메인 음원 전환 시 노란 제목/equalizer 초기화 정상 동작 유지.
+- app373 first-publication W12→W2 비용 절감 구조 유지.
+- 추가 D1/Worker/Functions/Firebase Rules/user data 변경 없음.
+
+현재 기준:
+- PREVIEW app375 = 사용자 실사용 PASS / TEST 승격 가능 후보.
+- TEST app374.
+- PRODUCTION app361.
+- 다음 승격은 사용자 요청 시 TEST(main)으로 진행.
+- PRODUCTION 승격은 TEST 검증 후 별도 명확한 승인 필요.
+
+## 0RD. PREVIEW app375 배포 완료 — 새 공개곡 최신 목록 첫 칸 즉시 노출 (2026-10-07 KST)
+
+사용자 TEST 실사용에서 발견:
+- 새로 공개한 곡은 공개프로필에는 정상 노출됐지만 Explore 홈 `최신 공개곡`에서 바로 첫 칸에 보이지 않았음.
+- 일정 시간이 지난 뒤 왼쪽 `<` 화살표가 활성화되고, 사용자가 화살표를 눌러야 새 공개곡이 보였음.
+- 동일 증상은 PREVIEW에도 재현 가능성이 높은 공통 클라이언트 경로 문제로 판단.
+
+원인:
+1. 같은 기기에서 공개한 publication RTDB 신호는 global `onValue` listener가 self-echo 방지를 위해 **저장만 하고 화면 이벤트는 dispatch하지 않음**.
+2. 사용자가 Music Note 공개 직후 빠르게 Explore로 이동하면, retained signal이 로컬에 저장되기 전에 Explore가 mount될 수 있고 이후 같은 기기 signal은 이벤트가 생략되어 즉시 repaint를 놓칠 수 있었음.
+3. 새 카드가 나중에 `tracks` 앞쪽에 prepend되어도 최신 rail은 기존 horizontal `scrollLeft`를 유지하여 새 첫 카드가 왼쪽 화살표 뒤에 숨을 수 있었음.
+
+app375 수정:
+- `src/services/userDomainSyncService.ts`
+  - canonical publication RTDB transaction 성공 직후 그 결과 signal을 같은 브라우저의 memory/localStorage에 즉시 저장.
+  - 같은 브라우저에 `EXPLORE_PUBLICATION_SYNC_EVENT`를 즉시 dispatch.
+  - cross-device RTDB listener의 기존 self-echo 차단은 그대로 유지하여 중복 이벤트를 만들지 않음.
+  - 추가 D1/Worker 요청 없음. 기존 publication signal write 외 서버 비용 증가 없음.
+- `src/pages/ExplorePage.tsx`
+  - `최신 공개곡` rail만 첫 track ID가 바뀌면 scroll position을 **left=0**으로 즉시 복귀.
+  - `useLayoutEffect`로 paint 전에 적용하여 새로 prepend된 곡이 왼쪽 밖에 숨지 않도록 함.
+  - 추천/인기/크리에이터 등 다른 rail의 사용자가 보고 있던 위치는 유지.
+- app version: **375**.
+
+코드 / 감사:
+- 기능 commit: `9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409`.
+- audit trigger commit: `9200b020a6ef200903215d5d4c1ace3cc5e9dd90`.
+- Release System Audit Run `37556209976`: **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - `APP375_PUBLICATION_ORIGIN_IMMEDIATE_LOCAL_SIGNAL=PASS`
+  - `APP375_EXPLORE_LATEST_NEW_PUBLICATION_FIRST_VISIBLE=PASS`
+  - release/static/like/shared-D1 read-only audits PASS
+  - `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+
+PREVIEW 배포:
+- deploy trigger commit: `4e05ea1f0af6279feb614ec960838e9846aeeeff`.
+- Firebase PREVIEW Run `37556423502`: **SUCCESS**.
+- `PREVIEW_APP_VERSION=375`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- app361 publication parity gate PASS.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / shared D1 추가 변경 없음.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음.
+
+현재 환경:
+- PREVIEW = **app375**
+- TEST = app374
+- PRODUCTION = app361
+- shared D1 app373 W2 cutover는 기존 상태 그대로.
+
+다음 실사용 gate:
+- PREVIEW에서 한 번도 공개한 적 없는 Music Note 곡 1개를 공개.
+- 공개 완료 후 Explore `최신 공개곡` 진입/복귀 시 **왼쪽 화살표를 누르지 않아도 새 곡이 첫 번째에 바로 보이는지** 확인.
+- 기존 공개곡을 다른 메인 음원으로 전환했을 때 app374의 노란 제목/equalizer 초기화도 그대로 유지되는지 확인.
+- PASS 시 app375를 TEST로 다시 승격 가능.
+- FAIL 시 TEST/PRODUCTION 승격 중단, latest rail/local publication signal 경로만 추가 수정.
+
+## 0RC. app374 TEST 승격 완료 — TEST_VERIFIED (2026-10-07 KST)
+
+사용자 승인:
+- PREVIEW app374 실사용 PASS 후 사용자가 TEST 배포 진행을 명확히 승인.
+
+승격 기준:
+- source PREVIEW SHA: `b572a5dd9f18c054f27e6557380a7c6066d46adf`
+- PREVIEW app: **374**
+- Release Controller Run `37552538672`: **SUCCESS**
+- main(TEST) promoted SHA: `396a9862533e7e4f683a99cafe777c2fa40725c3`
+- TEST_VERIFIED tag: `soridraw-test-v374-b572a5dd9f18`
+
+TEST 배포/검증:
+- TypeScript PASS
+- Build PASS
+- immutable preflight PASS
+- TEST Explore Worker upload/activate/verify PASS
+  - active version: `56828853-cf62-4552-a569-680ee34e9134`
+- TEST Media Worker upload/activate/verify PASS
+  - active version: `2f4a22c1-a4be-4e41-a8e1-98755becda14`
+- Firebase TEST Hosting deploy + exact TEST verification PASS
+- `TEST_CURATED_PARITY=PASS count=12`
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`
+- browser upgrade contract PASS
+- old production cache → new release contract PASS
+- Release Control final state: `TEST_VERIFIED`
+
+보호 범위:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**
+- 이번 TEST 승격에서 shared D1 schema/data 추가 mutation: **0**
+- Firebase Functions/Rules 변경: **0**
+- PRODUCTION branch / Hosting / Worker / Media Worker 비변경 확인.
+- PRODUCTION은 app361 그대로 유지.
+
+현재 환경:
+- PREVIEW = app374
+- TEST = **app374 / TEST_VERIFIED**
+- PRODUCTION = app361
+- shared D1 app373 first-publication W2 cutover는 공용 데이터 계층에 이미 적용되어 있음.
+
+다음:
+- TEST에서 사용자 실사용으로 공개 메인 음원 1↔2 전환 시 노란 제목/equalizer 초기화가 PREVIEW와 동일한지 확인.
+- 공개상태 / MY프로필 / Explore 노출 정상 여부 확인.
+- 이상 없으면 app374는 PRODUCTION 승격 후보이나, **정식배포는 사용자 별도 명확한 승인 전 금지**.
+
 ## 0RB. app374 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
 
 사용자 확인:

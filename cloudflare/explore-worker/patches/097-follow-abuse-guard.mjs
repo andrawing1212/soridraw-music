@@ -172,6 +172,7 @@ const oldSequence = [
   '  // JSON uses the existing Content-Type CORS contract; no auth/CORS change.',
   '  let payload = null;',
   '  try { payload = await request.json(); } catch {}',
+  '  const expected = payload?.followExpectedRevision;',
 ].join('\n');
 const newSequence = [
   '  // Parse ordered identity before the abuse gate. Unordered negotiation has no R2 receipt.',
@@ -188,7 +189,6 @@ const newSequence = [
   '    const row = await env.DB.prepare("SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1").bind(target).first();',
   '    if (!row) throwApi("NOT_FOUND", "공개 크리에이터를 찾을 수 없습니다.", 404);',
   '  }',
-  '  const expected = payload?.followExpectedRevision;',
 ].join('\n');
 if (!overlay.text.includes(oldSequence)) throw new Error('[097] overlay limiter/body anchor missing');
 const nextOverlay = overlay.text.replace(oldSequence, newSequence);

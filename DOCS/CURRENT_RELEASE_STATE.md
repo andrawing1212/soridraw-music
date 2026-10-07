@@ -1,3 +1,26 @@
+## 0RI. follow PREVIEW Worker release gate 보강 완료 / 배포 전 (2026-10-07 KST)
+
+배포 안전장치 보강:
+- `.github/workflows/cloudflare-explore-preview-release.yml`에 Worker341 legacy parity 검사를 PREVIEW Worker 배포의 필수 선행 gate로 추가.
+- release source에 Worker341 기준 commit이 없으면 해당 commit만 bounded fetch한 뒤 `scripts/verify-356-follow-worker341-legacy-parity.mjs`를 실행.
+- legacy counter/post-sync/core가 Worker341과 다르면 PREVIEW Worker 배포가 시작되기 전에 실패하도록 고정.
+- pipeline change commit: `ed918db4a14fe158f46f6e861dd82bdf135eb9d9`.
+
+독립 재감사:
+- trigger commit: `a61a585f96b44429365beb3a670d646a24c9011b`.
+- Release System Audit Run `37564622518`: **SUCCESS**.
+- TypeScript PASS / Build PASS / static release-system verification PASS.
+- TEST + PRODUCTION Worker dry-run PASS.
+- live shared D1 preflight read-only PASS.
+- branch refs unchanged audit PASS.
+- main(TEST) `2314589357ec52b27ed785229f77a808c5673202` / production `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0` unchanged.
+
+현재 상태:
+- PREVIEW 코드에는 dormant follow overlay candidate가 있으나 shared follow cutover는 OFF.
+- PREVIEW active Worker는 아직 기존 배포본 `117d5f65-e34d-4c58-8030-498193deb1b4`; 이번 작업에서 Worker 배포하지 않음.
+- 사용자/shared 데이터 mutation, migration, backfill, delete, rewrite 0.
+- 다음 단계는 사용자 PREVIEW 배포 요청 전까지 배포하지 않음. 배포 시에도 cutover OFF 후보부터 legacy parity를 live 확인하고, 그 후에만 overlay 활성화 여부를 별도 판단.
+
 ## 0RH. follow W14~W17 → W1~W2 재개 1차 독립 감사 PASS / PREVIEW 배포 전 (2026-10-07 KST)
 
 현재 작업:

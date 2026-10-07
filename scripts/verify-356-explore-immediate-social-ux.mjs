@@ -38,69 +38,91 @@ function setter(ctx,key) {
   return (value) => { ctx[key] = typeof value === 'function' ? value(ctx[key]) : value; };
 }
 
-// Follow: immediate paint before delayed settlement + exact rollback.
+// Follow app380: this account paints immediately, public target counters wait
+// for one final accepted settlement, and a hard failure restores the local edge.
 {
-  const d = deferred();
+  let membership = false;
   const ctx = {
     console, Error, Set, Number, Boolean, Math,
     profileUid:'target',
-    profile:{ uid:'target', followerCount:4, followingCount:2 },
+    profile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target', followerCount:4, followingCount:2 },
     user:{ uid:'viewer' },
     followState:{ isFollowing:false, followerCount:4, followingCount:2 },
     followingLoadedUid312:'viewer',
     followingUids312:new Set(),
-    followInFlightTargetsRef:{ current:new Set() },
     activeProfileUidRef:{ current:'target' },
     auth:{ currentUser:{ uid:'viewer' } },
     followBusyUid:'',
     socialNotice:'',
+    queued:null,
     setFollowBusyUid:null, setFollowState:null, setFollowingUids312:null, setProfile:null, setSocialNotice:null,
+    readCachedExplorePublicProfile:()=>({ uid:'viewer', followingCount:2 }),
+    readExploreProfileConnectionExactCount379:()=>null,
+    readExploreFollowingExactCount379:()=>membership ? 3 : 2,
+    patchExploreFollowLocalState377:(_viewer,_target,following)=>{ membership=Boolean(following); },
     patchExplorePublicProfileFirstViewProfile:()=>{},
-    setExploreFollow:async()=>d.promise,
+    queueExploreFollowFinalState380:(request)=>{ ctx.queued=request; },
+    setExploreFollow:async()=>({ isFollowing:true, followerCount:5, followingCount:2, actorFollowingCount:3 }),
+    publishExploreFollowSync377:async()=>{},
   };
   for (const key of ['followBusyUid','followState','followingUids312','profile','socialNotice']) {
     ctx['set'+key[0].toUpperCase()+key.slice(1)] = setter(ctx,key);
   }
   const handler = loadHandler('toggleFollow',ctx);
-  const pending = handler();
+  await handler();
   assert.equal(ctx.followState.isFollowing,true);
-  assert.equal(ctx.profile.followerCount,5);
+  assert.equal(ctx.profile.followerCount,4,'public target count must stay canonical during 30s local window');
   assert.equal(ctx.followingUids312.has('target'),true);
-  assert.equal(ctx.followInFlightTargetsRef.current.has('target'),true);
-  d.resolve({ isFollowing:true, followerCount:5, followingCount:2 });
-  await pending;
-  assert.equal(ctx.followInFlightTargetsRef.current.has('target'),false);
-  assert.equal(ctx.profile.followerCount,5);
+  assert.ok(ctx.queued,'final-state batch request missing');
+  assert.equal(ctx.queued.desiredFollowing,true);
+  ctx.queued.onSettled({
+    viewerUid:'viewer', targetUid:'target', desiredFollowing:true,
+    baseFollowing:false, baseTargetFollowerCount:4, baseTargetFollowingCount:2,
+    baseActorFollowingCount:2,
+    targetProfile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target' },
+    result:{ isFollowing:true, followerCount:0, followingCount:0, actorFollowingCount:0 },
+  });
+  assert.equal(ctx.profile.followerCount,5,'public target count must change only after final settlement');
 }
 {
-  const d = deferred();
+  let membership = true;
   const ctx = {
     console, Error, Set, Number, Boolean, Math,
     profileUid:'target',
-    profile:{ uid:'target', followerCount:5, followingCount:2 },
+    profile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target', followerCount:5, followingCount:2 },
     user:{ uid:'viewer' },
     followState:{ isFollowing:true, followerCount:5, followingCount:2 },
     followingLoadedUid312:'viewer',
     followingUids312:new Set(['target']),
-    followInFlightTargetsRef:{ current:new Set() },
     activeProfileUidRef:{ current:'target' },
     auth:{ currentUser:{ uid:'viewer' } },
     followBusyUid:'',
     socialNotice:'',
+    queued:null,
     setFollowBusyUid:null, setFollowState:null, setFollowingUids312:null, setProfile:null, setSocialNotice:null,
+    readCachedExplorePublicProfile:()=>({ uid:'viewer', followingCount:3 }),
+    readExploreProfileConnectionExactCount379:()=>null,
+    readExploreFollowingExactCount379:()=>membership ? 3 : 2,
+    patchExploreFollowLocalState377:(_viewer,_target,following)=>{ membership=Boolean(following); },
     patchExplorePublicProfileFirstViewProfile:()=>{},
-    setExploreFollow:async()=>d.promise,
+    queueExploreFollowFinalState380:(request)=>{ ctx.queued=request; },
+    setExploreFollow:async()=>({ isFollowing:false, followerCount:4, followingCount:2, actorFollowingCount:2 }),
+    publishExploreFollowSync377:async()=>{},
   };
   for (const key of ['followBusyUid','followState','followingUids312','profile','socialNotice']) {
     ctx['set'+key[0].toUpperCase()+key.slice(1)] = setter(ctx,key);
   }
   const handler = loadHandler('toggleFollow',ctx);
-  const pending = handler();
+  await handler();
   assert.equal(ctx.followState.isFollowing,false);
-  assert.equal(ctx.profile.followerCount,4);
+  assert.equal(ctx.profile.followerCount,5,'public target count must not drop before final settlement');
   assert.equal(ctx.followingUids312.has('target'),false);
-  d.reject(new Error('follow rejected'));
-  await pending;
+  ctx.queued.onError({
+    viewerUid:'viewer', targetUid:'target', desiredFollowing:false,
+    baseFollowing:true, baseTargetFollowerCount:5, baseTargetFollowingCount:2,
+    baseActorFollowingCount:3,
+    error:new Error('follow rejected'),
+  });
   assert.equal(ctx.followState.isFollowing,true);
   assert.equal(ctx.profile.followerCount,5);
   assert.equal(ctx.followingUids312.has('target'),true);

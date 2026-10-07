@@ -45,6 +45,10 @@ assert.ok(baseCore.includes(anchor));
 const expectedCore=baseCore.replace(anchor,anchor+
   '  const followCutover348 = await readFollowCutoverState348(env);\n'+
   '  if (followCutover348.mode === "overlay348") {\n'+
+  '    if (followCutover348.readOnly === true) {\n'+
+  '      throwApi("FOLLOW_OVERLAY_READONLY", "팔로우 저장을 안전하게 잠시 중지했습니다. 잠시 후 다시 시도해 주세요.", 503,\n'+
+  '        { "Retry-After": "5", "X-Soridraw-Follow-Protocol": "354" });\n'+
+  '    }\n'+
   '    return handleFollowOverlay354(request, env, cors, authContext.uid, targetUid, shouldFollow, followCutover348);\n'+
   '  }\n');
 const currentCore=extract('handleFollowR2Core',current);
@@ -72,5 +76,6 @@ assert.ok(protocol>=0 && legacySync>protocol,'overlay must exit before Worker341
 console.log('FOLLOW356_WORKER341_LEGACY_COUNTER_PARITY=PASS');
 console.log('FOLLOW356_WORKER341_POSTSYNC_PARITY=PASS');
 console.log('FOLLOW356_OVERLAY_ROUTER_DORMANT_LEGACY=PASS');
+console.log('FOLLOW378_READONLY_CANNOT_FALL_THROUGH_LEGACY=PASS');
 console.log('FOLLOW377_ACTOR_COUNT_RESPONSE_NO_EXTRA_D1=PASS');
 console.log('FOLLOW356_LEGACY_347_COMPAT_WRITE=ABSENT');

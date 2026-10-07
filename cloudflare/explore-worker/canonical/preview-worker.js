@@ -13048,6 +13048,10 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   const authContext = await requireExploreAuth(request);
   const followCutover348 = await readFollowCutoverState348(env);
   if (followCutover348.mode === "overlay348") {
+    if (followCutover348.readOnly === true) {
+      throwApi("FOLLOW_OVERLAY_READONLY", "팔로우 저장을 안전하게 잠시 중지했습니다. 잠시 후 다시 시도해 주세요.", 503,
+        { "Retry-After": "5", "X-Soridraw-Follow-Protocol": "354" });
+    }
     return handleFollowOverlay354(request, env, cors, authContext.uid, targetUid, shouldFollow, followCutover348);
   }
   await enforceUserRateLimit(env, authContext.uid, "follow", RATE_LIMITS.follow);
@@ -14037,29 +14041,93 @@ __name2222222222222222222222222222222222222222222222(handleProfileConnections, "
 // every environment is explicitly marked reader/writer compatible.
 const EXPLORE_FOLLOW_CUTOVER_KEY_348 = "internal/explore/follow-cutover-v348/active.json";
 
+// SORIDRAW_FOLLOW_ROLLBACK_SAFE_AUTHORITY_378_20261007
+// Healthy R2 manifest is the normal authority fast path. D1 control is read
+// only when the manifest is missing/unreadable/ambiguous, so normal overlay
+// traffic never adds a D1 latch read. Once D1 says overlay/readonly, loss of
+// the manifest can only fall back to effective overlay reads with new writes
+// blocked; it can never silently return to the immutable legacy baseline.
+async function readFollowCutoverControl348(env) {
+  const db = env?.DB || null;
+  if (!db) return null;
+  try {
+    const row = await db.prepare(`
+      SELECT phase, schema_version, cutover_token
+      FROM explore_follow_cutover_control_348
+      WHERE id = 1
+      LIMIT 1
+    `).first();
+    if (!row) return null;
+    const phase = String(row.phase || "").trim();
+    const schemaVersion = Number(row.schema_version || 0);
+    const cutoverToken = String(row.cutover_token || "").trim();
+    if (schemaVersion !== 1 || !["legacy", "armed", "overlay", "readonly"].includes(phase)) {
+      throw new Error("[SORIDRAW 378] invalid follow authority control");
+    }
+    if ((phase === "overlay" || phase === "readonly") &&
+        (!cutoverToken || cutoverToken.length > 128)) {
+      throw new Error("[SORIDRAW 378] active follow authority token missing");
+    }
+    return { phase, schemaVersion, cutoverToken };
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (/no such table|does not exist/i.test(message)) return null;
+    throw error;
+  }
+}
+
 async function readFollowCutoverState348(env) {
   const bucket = env?.PROFILE_MEDIA || null;
-  if (!bucket) return { mode: "legacy", cutoverToken: null };
-  const object = await bucket.get(EXPLORE_FOLLOW_CUTOVER_KEY_348);
-  if (!object) return { mode: "legacy", cutoverToken: null };
-  let value = null;
-  try { value = JSON.parse(await object.text()); }
-  catch { throw new Error("[SORIDRAW 348] follow cutover manifest unreadable"); }
-  const token = String(value?.cutoverToken || "").trim();
-  const armed = Number(value?.schemaVersion) === 1 &&
-    value?.relationMode === "overlay348" &&
-    value?.relationTable === "explore_follow_overrides_348" &&
-    value?.legacyRelationWritersFrozen === true &&
-    value?.legacyCounterWritersFrozen === true &&
-    value?.allEnvironmentReadersReady === true &&
-    value?.allEnvironmentWritersReady === true &&
-    value?.profileCountsR2Exact === true &&
-    value?.ownerProtocol === "follow-overlay-348" &&
-    value?.crashConsistentWriter354 === true &&
-    value?.orderedClientRequests354 === true &&
-    token.length > 0 && token.length <= 128;
-  if (!armed) throw new Error("[SORIDRAW 348] follow cutover manifest present but not fully armed");
-  return { mode: "overlay348", cutoverToken: token };
+  let object = null;
+  let manifestError = null;
+  if (bucket) {
+    try { object = await bucket.get(EXPLORE_FOLLOW_CUTOVER_KEY_348); }
+    catch (error) { manifestError = error; }
+  }
+
+  if (object) {
+    try {
+      const value = JSON.parse(await object.text());
+      const relationMode = String(value?.relationMode || "").trim();
+      const writeMode = String(value?.writeMode || "").trim();
+      if (Number(value?.schemaVersion) === 1 &&
+          relationMode === "legacy" &&
+          writeMode === "legacy" &&
+          value?.authorityLifecycle378 === true) {
+        return { mode: "legacy", cutoverToken: null, readOnly: false, source: "r2-manifest" };
+      }
+      const token = String(value?.cutoverToken || "").trim();
+      const armed = Number(value?.schemaVersion) === 1 &&
+        relationMode === "overlay348" &&
+        value?.relationTable === "explore_follow_overrides_348" &&
+        value?.legacyRelationWritersFrozen === true &&
+        value?.legacyCounterWritersFrozen === true &&
+        value?.allEnvironmentReadersReady === true &&
+        value?.allEnvironmentWritersReady === true &&
+        value?.profileCountsR2Exact === true &&
+        value?.ownerProtocol === "follow-overlay-348" &&
+        value?.crashConsistentWriter354 === true &&
+        value?.orderedClientRequests354 === true &&
+        value?.oneWayAuthority348 === true &&
+        (writeMode === "active" || writeMode === "readonly") &&
+        token.length > 0 && token.length <= 128;
+      if (!armed) throw new Error("[SORIDRAW 348] follow cutover manifest present but not fully armed");
+      return { mode: "overlay348", cutoverToken: token,
+        readOnly: writeMode === "readonly", source: "r2-manifest" };
+    } catch (error) {
+      manifestError = error;
+    }
+  }
+
+  const control = await readFollowCutoverControl348(env);
+  if (control?.phase === "overlay" || control?.phase === "readonly") {
+    return { mode: "overlay348", cutoverToken: control.cutoverToken,
+      readOnly: true, source: "d1-one-way-latch" };
+  }
+  if (object || manifestError) {
+    throw manifestError || new Error("[SORIDRAW 378] follow authority manifest unavailable");
+  }
+  return { mode: "legacy", cutoverToken: null, readOnly: false, source: "legacy" };
 }
 
 // SORIDRAW_FOLLOW_CRASH_CONSISTENT_WRITER_354_20261004
@@ -14323,6 +14391,10 @@ async function orchestrateFollowOverlay354(env, actor, target, following, id, ex
   if (cutover?.mode !== "overlay348" || !cutover.cutoverToken || !actor || !target || actor === target) {
     throwApi("FOLLOW_OVERLAY_WRITER_NOT_READY", "팔로우 저장 정보를 확인해 주세요.", 503);
   }
+  if (cutover?.readOnly === true) {
+    throwApi("FOLLOW_OVERLAY_READONLY", "팔로우 저장을 안전하게 잠시 중지했습니다. 잠시 후 다시 시도해 주세요.", 503,
+      { "Retry-After": "5", "X-Soridraw-Follow-Protocol": "354" });
+  }
   if (!/^[a-zA-Z0-9_-]{16,128}$/.test(id || "") ||
       !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
     throwApi("FOLLOW_ORDER_REQUIRED", "팔로우 상태를 확인한 후 다시 시도해 주세요.", 409);
@@ -14369,6 +14441,10 @@ async function orchestrateFollowOverlay354(env, actor, target, following, id, ex
 
 async function handleFollowOverlay354(request, env, cors, actor, target, following, cutover) {
   if (!target || target === actor) throwApi("SELF_FOLLOW_NOT_ALLOWED", "자기 자신은 팔로우할 수 없습니다.", 400);
+  if (cutover?.readOnly === true) {
+    throwApi("FOLLOW_OVERLAY_READONLY", "팔로우 저장을 안전하게 잠시 중지했습니다. 잠시 후 다시 시도해 주세요.", 503,
+      { "Retry-After": "5", "X-Soridraw-Follow-Protocol": "354" });
+  }
   await enforceFollowEdgeRateLimit355(env, actor);
   if (following) {
     const row = await env.DB.prepare("SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1").bind(target).first();

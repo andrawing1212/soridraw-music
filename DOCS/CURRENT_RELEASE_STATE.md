@@ -1,3 +1,70 @@
+## 0RS. app377 PRODUCTION 승격 완료 / follow378 전 환경 호환성 준비 완료 / shared cutover OFF (2026-10-07 KST)
+
+사용자 승인:
+- 사용자가 명확히 정식앱 승격을 승인.
+- TEST_VERIFIED manifest `soridraw-test-v377-9f51660d8174`를 source of truth로 사용.
+
+PRODUCTION Release:
+- Release Controller Run `37585161258`: **SUCCESS / RELEASED**.
+- app version: `377`.
+- production commit: `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`.
+- tested main: `b13360df1bab52e2d3b746ea47dc4e3718eef85c`.
+- source PREVIEW release commit: `9f51660d81746a619c185da845221b0888021020`.
+- production message references exact TEST manifest `soridraw-test-v377-9f51660d8174`.
+- `soridraw.com` / Firebase PRODUCTION Hosting은 TEST verified Hosting artifact를 clone하여 exact app377 검증 PASS.
+- 별도 PRODUCTION rebuild로 재조립하지 않음.
+
+PRODUCTION Explore Worker:
+- before: `efb8508e-d63a-4839-a7c8-a5c89572f4c7`.
+- after: `391c4d88-5186-480b-ae53-042bac301ce2`.
+- bundle SHA256: `2de2f423a791de7d109b54c063bb3b61c8574eeb8a577f4b388acea3b03ad9da`.
+- code SHA256: `ea3b26d5b2270f16120ea6527c4d33fa2c0241b9f0e7ffad6320a97bebf9a440`.
+- TEST Worker와 exact bundle/code identity PASS.
+- Worker smoke/verify PASS.
+- latest/popular shared Feed parity PASS.
+- curated parity PASS.
+- public profile parity PASS.
+- TEST↔PRODUCTION environment parity PASS attempt=1.
+- Functions OPTIONS CORS PASS.
+- shared D1 preflight SELECT-only PASS.
+
+PRODUCTION Media Worker:
+- before: `66b85b60-6c00-4c9c-bde8-df4f836a3ea8`.
+- after: `2c2e3236-d9a6-4771-b2ba-7baff496145c`.
+- bundle SHA256: `041be5815c4398311c476276cda7c19cebf42e72ee29066aee0839f5f55ee50b`.
+- code SHA256: `f0507a8464a1147e2bc914b6cd681ee1f1531ecfc3afb40ab7a73b8e55990bc9`.
+- smoke/verify PASS.
+
+follow W1~W2 상태:
+- shared D1 additive overlay348 schema 적용 완료.
+- PREVIEW / TEST / PRODUCTION active Explore Worker 모두 app377/follow378 rollback-safe source line에 도달.
+- follow lifecycle flag: **OFF**.
+- shared R2 active cutover manifest: **OFF / 없음**.
+- D1 one-way authority control activation: **OFF**.
+- 따라서 정식앱 승격 자체로 사용자 follow relation authority는 바뀌지 않았고 기존 legacy runtime을 계속 사용.
+- 실제 shared follow overlay activation 및 physical W1~W2 측정은 아직 미실행.
+
+데이터 / 백엔드:
+- 이 PRODUCTION 승격에서 user data migration/backfill/delete/rewrite/copy 0.
+- Firebase Functions/Rules 변경 0.
+- shared D1 추가 schema mutation 0 (기존 승인 단계에서 이미 적용된 dormant schema 그대로).
+- follow legacy rows/profile_stats bulk rewrite 0.
+
+다음 gate:
+1. 전 환경 active Worker가 rollback-safe authority reader를 이해하는 상태를 read-only로 다시 고정 확인.
+2. 별도 shared follow cutover 승인 후 coordinated order:
+   - D1 control을 one-way latch 준비 상태로 arm.
+   - lifecycle gate를 모든 환경에서 호환 상태로 고정.
+   - shared R2 active manifest 활성화.
+3. 즉시 실제 follow / unfollow / duplicate / same-state physical D1 Rows Written 측정.
+4. 합격선:
+   - follow W1~W2.
+   - unfollow W1~W2.
+   - duplicate / same-state W0.
+   - W3+ 즉시 FAIL.
+5. 동시에 PC↔mobile count/list/membership, follower-save permission, public-profile parity 확인.
+6. 이상 발생 시 legacy로 자동 fallback 금지. effective overlay read는 유지하고 새 mutation만 overlay-readonly로 fail-closed.
+
 ## 0RR. app377 TEST 승격 완료 / follow378 TEST Worker 호환성 PASS / PRODUCTION 비변경 (2026-10-07 KST)
 
 사용자 승인:

@@ -138,6 +138,7 @@ jobs:
           node scripts/verify-354-follow-orchestration.mjs
           node scripts/verify-355-follow-audit-repairs.mjs
           node scripts/verify-356-follow-worker341-legacy-parity.mjs
+          node scripts/verify-378-follow-rollback-blocker.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
@@ -247,6 +248,7 @@ jobs:
           node scripts/verify-354-follow-orchestration.mjs
           node scripts/verify-355-follow-audit-repairs.mjs
           node scripts/verify-356-follow-worker341-legacy-parity.mjs
+          node scripts/verify-378-follow-rollback-blocker.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

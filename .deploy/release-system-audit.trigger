@@ -1,10 +1,10 @@
-follow-w14-w17-to-w1-w2-independent-audit
-target=0c9336a9871e348a4e05230b4e44742c92ec060d
-scope=worker341-legacy-parity,dormant-follow-overlay,isolated-http-d1-r2-cost
+follow-preview-worker-release-gate-audit
+target=ed918db4a14fe158f46f6e861dd82bdf135eb9d9
+scope=preview-worker-release,worker341-legacy-parity,follow-cost-bounds
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-follow-cost-independent-audit
+requested=2026-10-07-follow-preview-release-gate-audit

@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS explore_like_intake_receipts_390 (
 CREATE TRIGGER IF NOT EXISTS explore_like_receipt_insert_390
 AFTER INSERT ON explore_like_intake_receipts_390
 BEGIN
-  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM explore_like_cutover_control_174
-    WHERE id = 1 AND phase = 'open') THEN RAISE(ABORT, 'LIKE_RECEIPT_FENCE_CLOSED') END;
+  SELECT RAISE(ABORT, 'LIKE_RECEIPT_FENCE_CLOSED') WHERE NOT EXISTS(
+    SELECT 1 FROM explore_like_cutover_control_174 WHERE id = 1 AND phase = 'open');
   INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json)
     VALUES(NEW.queue_id,NEW.user_uid,NEW.accepted_at,NEW.mutation_count,NEW.mutations_json);
 END;
@@ -26,8 +26,8 @@ END;
 CREATE TRIGGER IF NOT EXISTS explore_like_receipt_update_390
 AFTER UPDATE ON explore_like_intake_receipts_390
 BEGIN
-  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM explore_like_cutover_control_174
-    WHERE id = 1 AND phase = 'open') THEN RAISE(ABORT, 'LIKE_RECEIPT_FENCE_CLOSED') END;
+  SELECT RAISE(ABORT, 'LIKE_RECEIPT_FENCE_CLOSED') WHERE NOT EXISTS(
+    SELECT 1 FROM explore_like_cutover_control_174 WHERE id = 1 AND phase = 'open');
   INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json)
     VALUES(NEW.queue_id,NEW.user_uid,NEW.accepted_at,NEW.mutation_count,NEW.mutations_json);
 END;

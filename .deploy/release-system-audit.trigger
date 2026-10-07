@@ -1,4 +1,4 @@
-like380-durable-receipt390-isolated-proof-r1
+like380-durable-receipt390-isolated-proof-r2
 base=9110cc808065988f1121aa590210e55f8ca911eb
 scope=owned-ephemeral-d1-receipt-W2-replay-W0-proof
 shared_d1_apply=false

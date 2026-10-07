@@ -407,6 +407,14 @@ const readCachedExploreFollowState = (viewerUid: string, targetUid: string, data
   return data.complete ? false : null;
 };
 
+export const readExploreFollowMembership379 = (
+  viewerUid: string,
+  targetUid: string,
+): boolean | null => readCachedExploreFollowState(
+  String(viewerUid || '').trim(),
+  String(targetUid || '').trim(),
+);
+
 const rememberExploreFollowState = (viewerUid: string, targetUid: string, isFollowing: boolean) => {
   const data = readExploreFollowCache(viewerUid);
   data.states[targetUid] = Boolean(isFollowing);

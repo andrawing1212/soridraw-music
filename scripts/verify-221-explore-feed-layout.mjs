@@ -880,6 +880,11 @@ assert.equal(
 );
 
 console.log('APP374_EXPLORE_MEDIA_SWITCH_RESETS_PLAY_VISUAL=PASS');
+assert.match(
+  page,
+  /useLayoutEffect\(\(\) => \{[\s\S]*?resetToStartKey[\s\S]*?scroller\.scrollTo\(\{ left: 0, behavior: 'auto' \}\)/,
+  'Latest public rail reset must happen before paint so a newly prepended track is immediately visible',
+);
 console.log('APP375_EXPLORE_LATEST_NEW_PUBLICATION_FIRST_VISIBLE=PASS');
 
 console.log('APP238_EXPLORE_PROFILE_PC_GUTTERS_INCREASED=PASS');

@@ -8,7 +8,7 @@ import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstV
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -1263,7 +1263,7 @@ function ExploreRecommendationRail({
     };
   }, [itemCount]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (resetToStartKey == null) return;
     const previousKey = previousResetToStartKey375.current;
     previousResetToStartKey375.current = resetToStartKey;

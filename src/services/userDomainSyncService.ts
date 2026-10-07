@@ -766,7 +766,16 @@ export const publishExplorePublicationSyncSignal = async (
       ...(snapshotJson ? { snapshotJson } : {}),
     };
   }, { applyLocally: true });
-  return Math.max(0, Math.floor(Number(transaction.snapshot.val()?.version || 0)));
+  const localSignal = normalizeExplorePublicationSignal(transaction.snapshot.val());
+  if (localSignal) {
+    persistLatestExplorePublicationSignal357(safeUid, localSignal);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(EXPLORE_PUBLICATION_SYNC_EVENT, {
+        detail: { uid: safeUid, ...localSignal },
+      }));
+    }
+  }
+  return Math.max(0, Math.floor(Number(localSignal?.version || transaction.snapshot.val()?.version || 0)));
 };
 
 const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {

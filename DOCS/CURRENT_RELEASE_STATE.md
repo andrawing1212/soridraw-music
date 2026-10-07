@@ -1,3 +1,79 @@
+## 0RP. follow W1~W2 rollback-safe authority source 구현 + 전체 audit PASS (2026-10-07 KST)
+
+현재 결론:
+- app377 팔로우 숫자/목록/PC↔모바일 정합성은 사용자 PASS 기준 그대로 동결.
+- 기존 blocker였던 “overlay 변경 후 manifest OFF 시 legacy baseline으로 잘못 복귀” 문제를 PREVIEW source에서 해결.
+- one-way authority latch + emergency overlay-readonly를 추가하여, 한 번 overlay authority가 실제 활성화된 뒤에는 legacy relation authority로 자동 하강하지 못하게 함.
+- pre-cutover/cutover-OFF에서는 기존 legacy 경로와 비용을 유지하며, **manifest 없음 상태 추가 D1 read 0**을 실행형 검사로 고정.
+- healthy overlay manifest도 추가 D1 latch read 0.
+- manifest missing/corrupt 예외에서만 D1 one-way latch를 읽고, 이미 활성화된 authority면 effective overlay read를 유지하면서 새 follow/unfollow mutation만 fail-closed.
+- old Worker가 readonly manifest를 overlay-active로 오인하지 않도록 readonly relationMode는 별도 fail-closed 계약으로 분리.
+- shared D1 schema/apply, R2 cutover manifest, 실제 overlay activation은 아직 실행하지 않음.
+
+구현 commit:
+- source commit `572249ce4e04a41095bcf764e0d3de7649ac2842`: rollback-safe authority 1차 구현.
+- safety refinement commit `7d0f9b38798e066b83f9842c8397866b761447bd`:
+  - pre-cutover missing manifest D1 R0 유지.
+  - lifecycle feature flag 없이는 기존 legacy exact behavior.
+  - emergency readonly manifest는 old Worker가 fail-closed 하도록 별도 relationMode.
+- audit trigger commit `0ba04c6ab49560640c567ec5b07e03fbd6b728fb`.
+- canonical PREVIEW Worker source SHA256 `43b71e2892cbade0ce33911b7157286bd4c84eb7b516575769130412df34e673`.
+
+변경:
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+  - `readFollowCutoverControl348` one-way latch fallback.
+  - `readFollowCutoverState348` zero-cost pre-cutover + active/read-only authority lifecycle.
+  - `handleFollowR2Core` / `handleFollowOverlay354` / orchestration에서 readonly mutation fail-closed.
+- `cloudflare/explore-worker/candidates/348-follow-overlay.sql`
+  - candidate-only `readonly` phase.
+  - active/readonly → legacy/armed downgrade 차단 trigger.
+  - active/readonly control row 삭제 차단 trigger.
+- follow 348/349/354/356/378 verifier 보강.
+
+최종 Audit:
+- Release System Audit Run `37579261599`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- static release audit PASS.
+- TEST + PRODUCTION Worker dry-run PASS.
+- PREVIEW / TEST / PRODUCTION current active Worker protocol354/355 compatibility PASS.
+- live shared follow D1 SELECT-only preflight PASS / shared D1 write 0.
+- deployment 0.
+
+핵심 verifier:
+- `FOLLOW378_PRECUTOVER_MISSING_MANIFEST_D1_R0=PASS`.
+- `FOLLOW378_HEALTHY_MANIFEST_D1_LATCH_R0=PASS`.
+- `FOLLOW378_MISSING_OR_CORRUPT_MANIFEST_RECOVERS_READONLY_OVERLAY=PASS`.
+- `FOLLOW378_BASELINE0_FOLLOW1_EFFECTIVE=PASS`.
+- `FOLLOW378_BASELINE1_UNFOLLOW0_EFFECTIVE=PASS`.
+- `FOLLOW378_ONCE_ACTIVE_CANNOT_DOWNGRADE_OR_DELETE_LATCH=PASS`.
+- `FOLLOW378_READONLY_NEW_MUTATION_FAILS_BEFORE_LEGACY_OR_RATE_WRITE=PASS`.
+- `FOLLOW378_READONLY_MANIFEST_OLD_WORKER_FAIL_CLOSED_CONTRACT=PASS`.
+- `FOLLOW378_CUTOVER_ACTIVATION_BLOCKER=RESOLVED_SOURCE_ONLY`.
+- Worker341 legacy counter/post-sync parity PASS.
+- protocol354 crash/retry/order/duplicate tests PASS.
+- app377 actorFollowingCount no-extra-D1 PASS.
+- user/shared DB deployment data change 0.
+
+비용 근거:
+- fixture HTTP path: new follow relation D1 change 1 row / unfollow 1 row / duplicate 0 / same-state 0.
+- 기존 isolated remote physical proof는 follow W2 / unfollow W1 / duplicate W0 / same-state W0 유지.
+- 실제 shared PREVIEW overlay를 아직 켜지 않았으므로 **live PREVIEW physical W1~W2는 아직 미검증**.
+
+보호/비변경:
+- app377 count/list/persistent follower/following cache/RTDB PC↔mobile signal 변경 없음.
+- 좋아요 / 공개·비공개 / Music Note / Library / profile UI/CSS 변경 없음.
+- shared D1 user data migration/backfill/copy/delete/rewrite 0.
+- Firebase / Functions / Rules / Hosting 변경 0.
+- TEST/PRODUCTION 실제 배포 변경 0.
+
+다음 gate:
+1. 현재 commit을 독립 검증 기준으로 고정.
+2. shared D1 additive overlay348 schema 적용 + lifecycle/cutover는 **실제 shared backend 변경**이므로 별도 승인 후 진행.
+3. 승인 후에도 순서는 schema additive 적용 → 모든 환경 read compatibility 재확인 → PREVIEW-only active manifest → 실제 follow/unfollow physical D1 W1~W2 측정.
+4. W3+ / count mismatch / membership mismatch / permission/public-profile mismatch가 하나라도 나오면 즉시 activation 중단하고 overlay-readonly로 fail-closed.
+5. PREVIEW 실기기 PC↔mobile까지 PASS해야 TEST 판단.
+
 ## 0RO. follow W1~W2 전환 전 롤백 안전성 BLOCKER 실증 / shared cutover 계속 OFF (2026-10-07 KST)
 
 현재 판단:

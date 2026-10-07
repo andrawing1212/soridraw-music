@@ -1,11 +1,9 @@
-follow380-local-final-state-abuse-guard-audit-r8
-target=29b1baf1d819d4a3d0816fb50cd7e8a1caf396c4
-scope=follow380-client-30s-final-state,follow380-reload-outbox,follow380-progressive-pair-cooldown,follow380-account-day-cap,unordered-d1-zero,like-existing-defense-audit,active-overlay-readonly-audit,no-auto-worker-release
+like380-durable-receipt390-isolated-proof-r1
+base=9110cc808065988f1121aa590210e55f8ca911eb
+scope=owned-ephemeral-d1-receipt-W2-replay-W0-proof
 shared_d1_apply=false
-shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow380-final-state-abuse-audit-r8

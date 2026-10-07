@@ -1,3 +1,12 @@
+## 0RZA. app380 focused receipt proof 진행 중 — 배포 금지 (2026-10-08 KST)
+
+- 작업 시작 preview SHA: `9110cc808065988f1121aa590210e55f8ca911eb` (구현 기준 `3ea51da5641e7c5bcf8668be6d9414d319a6964e`).
+- additive candidate `390-like-acceptance-receipt.sql`: UID당 WITHOUT ROWID 1행, secondary index 0, 최근 24시간 mutation identity 최대 1200개/600000자. 기존 abuse 600/day 상한과 미래 clock allowance를 포함하는 제한이며 receipt는 membership/count authority가 아니다.
+- 단일 receipt UPSERT + AFTER trigger queue INSERT로 원자성 후보를 구성했다. canonical Worker/기본 release manifest/shared schema는 변경하지 않았다.
+- SQLite 실행형 검증: 신규 2행, exact/처리 후 replay 0행, payload conflict 0행, 동시 duplicate 큐 1회, fence/queue 실패 시 receipt rollback PASS. **Cloudflare billing 증거 아님.**
+- 기존 Release System Audit에 새 owned ephemeral D1 증명/항상 삭제 단계를 연결했다. remote 수치 및 client ordering/통합은 아직 검증 전이며 기존 `388 --release` 차단은 유지한다.
+- 배포 0, shared 사용자 데이터/schema 변경 0. 다음 단계는 remote 실제 W2 확인 후 좁은 ACK adapter 검증이다.
+
 ## 0RZ. ChatGPT 검토 — app380 1차 commit 확인 / 좋아요 replay blocker 실재 / W2 receipt 방향 확정 (2026-10-08 KST)
 
 검토 대상:

@@ -1,3 +1,27 @@
+## CURRENT NEXT GATE — app374 TEST_VERIFIED / 사용자 TEST 실사용 확인
+
+현재:
+- Release Controller Run `37552538672` SUCCESS.
+- TEST main `396a9862533e7e4f683a99cafe777c2fa40725c3`.
+- TEST tag `soridraw-test-v374-b572a5dd9f18`.
+- TEST app374 / PREVIEW app374 / PRODUCTION app361.
+- PRODUCTION 비변경.
+
+사용자 TEST 확인:
+1. `test.soridraw.com`에서 기존 공개곡 중앙 링크 → 노란 제목/equalizer 활성.
+2. 공개 설정에서 메인 음원 1↔2 전환.
+3. 전환 즉시 이전 노란 제목/equalizer가 사라지는지 확인.
+4. 신규 공개곡에서도 동일 동작 확인.
+5. 공개상태 / MY프로필 / Explore 노출이 PREVIEW와 동일한지 확인.
+
+PASS 시:
+- app374 TEST_VERIFIED frozen.
+- 정식배포는 사용자의 별도 명확한 PRODUCTION 승인 대기.
+
+FAIL 시:
+- TEST→PRODUCTION 승격 금지.
+- PREVIEW에서 해당 UI/호환 경로만 수정 후 다시 TEST 승격.
+
 ## CURRENT NEXT GATE — app374 PREVIEW PASS / TEST 승격 승인 대기
 
 완료:

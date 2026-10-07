@@ -1,3 +1,38 @@
+## 0RX. 좋아요 + 팔로우 최종상태 묶음/악성 반복 방어 통합 설계 승인 / 구현 handoff (2026-10-07 KST)
+
+사용자 결정:
+- 좋아요와 팔로우 모두 정상 UX는 **로컬 즉시 → 마지막 클릭 기준 30초 → 최종 상태만 서버 반영**으로 통일.
+- 기능별 정상 사용 빈도에 맞춰 서버 abuse threshold는 분리.
+- 좋아요의 기존 app164/app160 정상 기능은 재설계하지 않고 서버 방어층만 additive로 보강.
+- 팔로우는 현재 preview HEAD의 app380 후보를 이어서 완성.
+
+GitHub 확인:
+- deployed PREVIEW는 app379.
+- design handoff 시 preview HEAD `365e41f06c8ff169a3b762dd527498f6813d335f`.
+- HEAD의 follow380 candidate는 미배포.
+- `097-follow-abuse-guard.mjs`는 default Worker release manifest에서 제외돼 있어 우발 배포 차단 상태.
+- 좋아요는 이미 30초 final-state outbox + net-zero W0 + W1 queue + `like:<uid>` Cloudflare 60/min edge limiter가 존재.
+
+확정 정책:
+- follow: 30초 final-state; same-target escalation 30s→2m→10m→1h; 10m 30 / day 120; quiet reset 24h.
+- like: 기존 30초 final-state 보호; same-track escalation 30s→1m→5m→30m; 10m 120 normalized final intents / day 600; quiet reset 6h.
+- same desired / duplicate / operation replay는 canonical W0.
+- abuse guard는 D1 전에 차단. D1 rate-limit receipt 금지.
+- accepted user mutation physical D1 W1~W2만 PASS, W3+ FAIL.
+- abuse state는 environment-scoped R2 internal state로만 저장하며 PREVIEW/TEST/PRODUCTION cooldown state를 섞지 않는다.
+- normal page entry/re-entry/navigation은 write 0, healthy cache D1 R0 목표 유지.
+
+중요 추가 발견:
+- 현재 follow380 candidate의 R2 abuse receipt가 shared `PROFILE_MEDIA`를 사용할 수 있으므로 **환경 prefix 없는 key는 금지**.
+- implementation에서 `SORIDRAW_ENVIRONMENT || ENV_NAME` 기반 namespace를 강제하고 environment 미확정 시 fail-closed.
+- 좋아요/팔로우 abuse state는 서로 quota/state를 공유하지 않는다.
+
+다음:
+- `DOCS/NEXT_CODEX_TASK.md`의 CURRENT IMPLEMENTATION TASK 기준으로 Codex High 구현.
+- Codex는 배포 금지.
+- 구현 commit 고정 → Work 독립 감사 → ChatGPT 최종 확인 → 안전할 때 PREVIEW 배포.
+- main/TEST/PRODUCTION 및 사용자 원본 데이터 변경 금지.
+
 ## 0RW. app379 PREVIEW 팔로우 후 MY 프로필 팔로워/팔로잉 숫자 0 오염 수정 완료 (2026-10-07 KST)
 
 사용자 발견 증상:

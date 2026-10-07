@@ -139,6 +139,7 @@ jobs:
           node scripts/verify-355-follow-audit-repairs.mjs
           node scripts/verify-356-follow-worker341-legacy-parity.mjs
           node scripts/verify-378-follow-rollback-blocker.mjs
+          node scripts/verify-380-follow-cutover-config.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js

@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_reverse
 CREATE TABLE IF NOT EXISTS explore_follow_cutover_control_348 (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   phase TEXT NOT NULL DEFAULT 'legacy'
-    CHECK (phase IN ('legacy','armed','overlay')),
+    CHECK (phase IN ('legacy','armed','overlay','readonly')),
   schema_version INTEGER NOT NULL DEFAULT 1,
   cutover_token TEXT NOT NULL DEFAULT '',
   updated_at INTEGER NOT NULL DEFAULT 0
@@ -41,3 +41,26 @@ INSERT INTO explore_follow_cutover_control_348(
 )
 VALUES(1, 'legacy', 1, '', 0)
 ON CONFLICT(id) DO NOTHING;
+
+-- SORIDRAW_FOLLOW_ONE_WAY_AUTHORITY_378_20261007
+-- Once effective overlay authority is live, emergency rollback may only disable
+-- new mutations. It must never expose the immutable legacy baseline as current.
+CREATE TRIGGER IF NOT EXISTS explore_follow_cutover_control_348_no_downgrade
+BEFORE UPDATE OF phase, schema_version, cutover_token
+ON explore_follow_cutover_control_348
+WHEN OLD.phase IN ('overlay','readonly')
+  AND (
+    NEW.phase IN ('legacy','armed')
+    OR NEW.schema_version <> OLD.schema_version
+    OR NEW.cutover_token <> OLD.cutover_token
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'follow authority downgrade blocked');
+END;
+
+CREATE TRIGGER IF NOT EXISTS explore_follow_cutover_control_348_no_delete
+BEFORE DELETE ON explore_follow_cutover_control_348
+WHEN OLD.phase IN ('overlay','readonly')
+BEGIN
+  SELECT RAISE(ABORT, 'follow authority latch delete blocked');
+END;

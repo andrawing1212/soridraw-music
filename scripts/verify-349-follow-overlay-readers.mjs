@@ -42,12 +42,20 @@ for(const required of [
   'allEnvironmentWritersReady === true',
   'profileCountsR2Exact === true',
   'ownerProtocol === "follow-overlay-348"',
+  'oneWayAuthority348 === true',
+  'relationMode === "overlay348" && writeMode === "active"',
+  'relationMode === "overlay348-readonly" && writeMode === "readonly"',
+  'SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378',
 ]) assert.ok(cutover.includes(required), 'cutover manifest missing '+required);
-assert.match(cutover,/if \(!object\) return \{ mode: "legacy"/);
+assert.match(cutover,/readFollowCutoverControl348\(env\)/);
+assert.match(cutover,/source: "d1-one-way-latch"/);
+assert.match(cutover,/readOnly: true/);
 
 const core=fn('handleFollowR2Core');
 assert.ok(core.indexOf('readFollowCutoverState348') < core.indexOf('adjustExploreFollowCountersDelta'));
+assert.match(core,/FOLLOW_OVERLAY_READONLY/);
 assert.match(core,/return handleFollowOverlay354/);
+assert.ok(core.indexOf('FOLLOW_OVERLAY_READONLY') < core.indexOf('return handleFollowOverlay354'));
 assert.ok(core.indexOf('return handleFollowOverlay354') < core.indexOf('enforceUserRateLimit'));
 
 const state=fn('handleFollowState');

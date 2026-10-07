@@ -1,3 +1,591 @@
+## 0RQ. follow W1~W2 shared schema 적용 + PREVIEW rollback-safe Worker 배포 완료 / cutover OFF (2026-10-07 KST)
+
+실제 완료:
+- 사용자 승인 후 shared canonical D1 `soridraw-explore-db`에 dormant follow overlay schema를 additive 방식으로 적용.
+- Shared D1 Release Run `37582930962`: **SUCCESS**.
+- 적용 객체:
+  - `explore_follow_overrides_348`
+  - `idx_explore_follow_overrides_348_reverse`
+  - `explore_follow_cutover_control_348`
+- 적용 전 세 객체 모두 ABSENT였고, postflight에서 exact schema PASS.
+- user row rewrite/backfill/delete/copy 0.
+- runtime follow overlay activation 0.
+- D1 schema 적용 뒤 PREVIEW/TEST/PRODUCTION Feed smoke PASS.
+- D1-only release 동안 Worker version 변경 0 / main·production ref 변경 0.
+
+PREVIEW Worker:
+- rollback-safe follow378 source를 PREVIEW Worker에 cutover-OFF 상태로 배포.
+- PREVIEW Worker Release Run `37583095947`: **SUCCESS**.
+- 이전 PREVIEW Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- 현재 PREVIEW Worker `cf78f8cb-a108-4362-a6e7-a0c90eff12a0`.
+- canonical Worker SHA256 `43b71e2892cbade0ce33911b7157286bd4c84eb7b516575769130412df34e673`.
+- Worker341 legacy follow parity PASS.
+- app377 actorFollowingCount no-extra-D1 PASS.
+- Feed / curated / public profile / profile tracks / genre read smoke PASS.
+- TEST Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65` unchanged.
+- PRODUCTION Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7` unchanged.
+- follow lifecycle flag / shared R2 cutover manifest / D1 control row activation은 아직 OFF.
+
+중요 새 확인:
+- `DB`와 `PROFILE_MEDIA`는 PREVIEW/TEST/PRODUCTION이 같은 shared canonical resource를 사용한다.
+- follow cutover manifest key도 shared `PROFILE_MEDIA`의 동일 authority key다.
+- 따라서 shared overlay relation을 실제로 활성화하면 PREVIEW에서 생긴 follow 변경을 TEST/PRODUCTION도 같은 canonical 상태로 읽어야 하므로 **PREVIEW만 따로 authority를 켜는 방식은 허용할 수 없음**.
+- 현재 TEST/PRODUCTION active Worker는 protocol354/355 active-overlay 호환은 있지만, 이번 378 rollback-safe one-way lifecycle source는 아직 배포되지 않음.
+- 이 상태에서 shared authority를 먼저 켜면 정상 active path는 읽을 수 있어도 manifest loss/corrupt emergency path에서 구 Worker가 immutable legacy로 fallback할 수 있으므로 activation 금지.
+- emergency readonly manifest만으로는 구 Worker read parity까지 보장되지 않으므로 우회 금지.
+
+현재 결론:
+- shared schema apply: PASS / 완료.
+- PREVIEW compatibility Worker deploy: PASS / 완료.
+- 실제 follow W1~W2 shared authority activation: **아직 OFF**.
+- 실제 shared PREVIEW physical W1~W2 측정: **activation 전이라 미실행**.
+- 다음 안전 조건은 TEST/PRODUCTION active Worker도 378 rollback-safe authority reader를 이해하도록 compatibility를 먼저 승격하는 것.
+- TEST/PRODUCTION 실제 Worker 변경은 기존 승격 규칙대로 별도 승인 없이 실행 금지.
+- full user-data foldback/migration/backfill은 여전히 금지.
+
+## 0RP. follow W1~W2 rollback-safe authority source 구현 + 전체 audit PASS (2026-10-07 KST)
+
+현재 결론:
+- app377 팔로우 숫자/목록/PC↔모바일 정합성은 사용자 PASS 기준 그대로 동결.
+- 기존 blocker였던 “overlay 변경 후 manifest OFF 시 legacy baseline으로 잘못 복귀” 문제를 PREVIEW source에서 해결.
+- one-way authority latch + emergency overlay-readonly를 추가하여, 한 번 overlay authority가 실제 활성화된 뒤에는 legacy relation authority로 자동 하강하지 못하게 함.
+- pre-cutover/cutover-OFF에서는 기존 legacy 경로와 비용을 유지하며, **manifest 없음 상태 추가 D1 read 0**을 실행형 검사로 고정.
+- healthy overlay manifest도 추가 D1 latch read 0.
+- manifest missing/corrupt 예외에서만 D1 one-way latch를 읽고, 이미 활성화된 authority면 effective overlay read를 유지하면서 새 follow/unfollow mutation만 fail-closed.
+- old Worker가 readonly manifest를 overlay-active로 오인하지 않도록 readonly relationMode는 별도 fail-closed 계약으로 분리.
+- shared D1 schema/apply, R2 cutover manifest, 실제 overlay activation은 아직 실행하지 않음.
+
+구현 commit:
+- source commit `572249ce4e04a41095bcf764e0d3de7649ac2842`: rollback-safe authority 1차 구현.
+- safety refinement commit `7d0f9b38798e066b83f9842c8397866b761447bd`:
+  - pre-cutover missing manifest D1 R0 유지.
+  - lifecycle feature flag 없이는 기존 legacy exact behavior.
+  - emergency readonly manifest는 old Worker가 fail-closed 하도록 별도 relationMode.
+- audit trigger commit `0ba04c6ab49560640c567ec5b07e03fbd6b728fb`.
+- canonical PREVIEW Worker source SHA256 `43b71e2892cbade0ce33911b7157286bd4c84eb7b516575769130412df34e673`.
+
+변경:
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+  - `readFollowCutoverControl348` one-way latch fallback.
+  - `readFollowCutoverState348` zero-cost pre-cutover + active/read-only authority lifecycle.
+  - `handleFollowR2Core` / `handleFollowOverlay354` / orchestration에서 readonly mutation fail-closed.
+- `cloudflare/explore-worker/candidates/348-follow-overlay.sql`
+  - candidate-only `readonly` phase.
+  - active/readonly → legacy/armed downgrade 차단 trigger.
+  - active/readonly control row 삭제 차단 trigger.
+- follow 348/349/354/356/378 verifier 보강.
+
+최종 Audit:
+- Release System Audit Run `37579261599`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- static release audit PASS.
+- TEST + PRODUCTION Worker dry-run PASS.
+- PREVIEW / TEST / PRODUCTION current active Worker protocol354/355 compatibility PASS.
+- live shared follow D1 SELECT-only preflight PASS / shared D1 write 0.
+- deployment 0.
+
+핵심 verifier:
+- `FOLLOW378_PRECUTOVER_MISSING_MANIFEST_D1_R0=PASS`.
+- `FOLLOW378_HEALTHY_MANIFEST_D1_LATCH_R0=PASS`.
+- `FOLLOW378_MISSING_OR_CORRUPT_MANIFEST_RECOVERS_READONLY_OVERLAY=PASS`.
+- `FOLLOW378_BASELINE0_FOLLOW1_EFFECTIVE=PASS`.
+- `FOLLOW378_BASELINE1_UNFOLLOW0_EFFECTIVE=PASS`.
+- `FOLLOW378_ONCE_ACTIVE_CANNOT_DOWNGRADE_OR_DELETE_LATCH=PASS`.
+- `FOLLOW378_READONLY_NEW_MUTATION_FAILS_BEFORE_LEGACY_OR_RATE_WRITE=PASS`.
+- `FOLLOW378_READONLY_MANIFEST_OLD_WORKER_FAIL_CLOSED_CONTRACT=PASS`.
+- `FOLLOW378_CUTOVER_ACTIVATION_BLOCKER=RESOLVED_SOURCE_ONLY`.
+- Worker341 legacy counter/post-sync parity PASS.
+- protocol354 crash/retry/order/duplicate tests PASS.
+- app377 actorFollowingCount no-extra-D1 PASS.
+- user/shared DB deployment data change 0.
+
+비용 근거:
+- fixture HTTP path: new follow relation D1 change 1 row / unfollow 1 row / duplicate 0 / same-state 0.
+- 기존 isolated remote physical proof는 follow W2 / unfollow W1 / duplicate W0 / same-state W0 유지.
+- 실제 shared PREVIEW overlay를 아직 켜지 않았으므로 **live PREVIEW physical W1~W2는 아직 미검증**.
+
+보호/비변경:
+- app377 count/list/persistent follower/following cache/RTDB PC↔mobile signal 변경 없음.
+- 좋아요 / 공개·비공개 / Music Note / Library / profile UI/CSS 변경 없음.
+- shared D1 user data migration/backfill/copy/delete/rewrite 0.
+- Firebase / Functions / Rules / Hosting 변경 0.
+- TEST/PRODUCTION 실제 배포 변경 0.
+
+다음 gate:
+1. 현재 commit을 독립 검증 기준으로 고정.
+2. shared D1 additive overlay348 schema 적용 + lifecycle/cutover는 **실제 shared backend 변경**이므로 별도 승인 후 진행.
+3. 승인 후에도 순서는 schema additive 적용 → 모든 환경 read compatibility 재확인 → PREVIEW-only active manifest → 실제 follow/unfollow physical D1 W1~W2 측정.
+4. W3+ / count mismatch / membership mismatch / permission/public-profile mismatch가 하나라도 나오면 즉시 activation 중단하고 overlay-readonly로 fail-closed.
+5. PREVIEW 실기기 PC↔mobile까지 PASS해야 TEST 판단.
+
+## 0RO. follow W1~W2 전환 전 롤백 안전성 BLOCKER 실증 / shared cutover 계속 OFF (2026-10-07 KST)
+
+현재 판단:
+- app377 팔로우 숫자/목록/PC↔모바일 정합성은 사용자 PASS 기준 그대로 동결.
+- protocol354/355 저비용 후보 자체와 all-environment active Worker 호환성은 read-only 감사에서 PASS.
+- 그러나 **overlay가 한 번 실제 관계를 변경한 뒤 manifest를 제거/비활성화하면 runtime이 legacy `follows`로 되돌아가 변경된 관계를 무시할 수 있음**을 실행형 verifier로 재현.
+- 따라서 shared follow cutover 활성화는 **one-way authority 또는 overlay-readonly rollback**이 먼저 구현·감사되기 전까지 BLOCKED.
+
+Read-only readiness 근거:
+- Audit Run `37574090023`: SUCCESS.
+- PREVIEW active Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`: protocol354/355 markers PASS.
+- TEST active Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`: protocol354/355 markers PASS.
+- PRODUCTION active Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7`: protocol354/355 markers PASS.
+- shared canonical D1의 follow overlay 348 schema는 현재 **ABSENT / NOT_APPLIED**.
+- shared D1 write 0 / Worker deploy 0 / Hosting deploy 0 / Functions deploy 0 / RTDB Rules deploy 0.
+
+Rollback blocker 실증:
+- verifier commit `8549ded75d56fce8b09cac57b3637d1e17bdf1fe`: `scripts/verify-378-follow-rollback-blocker.mjs`.
+- release audit hard gate commit `815398f93164c9c00ac55ac3c4542fd719677107`.
+- read-only audit source/trigger `06d982756552ce6e3e56ecf0250646a3df535fd9`.
+- Audit Run `37576098525`: **SUCCESS**.
+- `FOLLOW378_OVERLAY_EFFECTIVE_STATE_DIFFERS_FROM_IMMUTABLE_BASELINE=PASS`.
+- `FOLLOW378_MISSING_MANIFEST_FALLS_BACK_TO_LEGACY=PASS`.
+- `FOLLOW378_D1_CONTROL_NOT_RUNTIME_LATCH=PASS`.
+- `FOLLOW378_MANIFEST_REMOVAL_AFTER_OVERLAY_MUTATION=UNSAFE_REPRODUCED`.
+- `FOLLOW378_SHARED_USER_DATA_WRITE=0`.
+- `FOLLOW378_CUTOVER_ACTIVATION=BLOCKED_UNTIL_ONE_WAY_OR_READONLY_ROLLBACK`.
+- 같은 Run에서 TypeScript / Build / follow 347~378 / TEST+PRODUCTION Worker dry-run / live shared D1 SELECT-only preflight / no-deploy gate PASS.
+
+왜 중요한가:
+- overlay 348은 기존 `follows`를 immutable baseline으로 두고 변경된 edge만 overlay에 기록한다.
+- 현재 `readFollowCutoverState348`은 R2 manifest가 없으면 `legacy`로 돌아가며 D1의 `explore_follow_cutover_control_348`을 runtime latch로 읽지 않는다.
+- 따라서 실제 overlay 변경 이후 단순 manifest OFF 또는 구형 legacy-only rollback은 기능 롤백이 아니라 **사용자 팔로우 상태를 과거 baseline처럼 보이게 만드는 정합성 오류**가 될 수 있다.
+- 과거 Worker341 rollback은 overlay authority가 OFF였기 때문에 안전했던 것이며, post-cutover rollback 증거로 사용할 수 없다.
+
+다음 설계 고정:
+- 정상 overlay 상태에서 steady-state마다 D1 latch를 읽게 만들지 않는다.
+- healthy R2 manifest가 정상 authority source이고, D1 control은 manifest 손상/부재 같은 예외 복구에서만 one-way latch/fallback으로 사용한다.
+- overlay authority가 한 번 실제 write를 허용한 뒤에는 legacy writer/read authority로 자동 복귀 금지.
+- 안전한 긴급 롤백은 **effective overlay reader는 유지 + follow mutation만 fail-closed(overlay-readonly)**가 기본.
+- 완전한 legacy 복귀가 필요하면 overlay 변경분을 legacy에 합치는 별도 migration/foldback가 필요하므로 사용자 명확한 승인 없는 현재 작업 범위 밖.
+- 구버전/무본문 client는 기존처럼 `FOLLOW_ORDER_REQUIRED` → protocol354 negotiation을 유지하고, readonly 상태에서는 legacy fallback 없이 실패 차단.
+- schema는 additive/no-backfill 원칙 유지.
+
+보호/비변경:
+- app377 count/list/persistent cache/RTDB PC↔mobile sync 변경 0.
+- 좋아요 / 공개·비공개 / Music Note / Library / profile UI/CSS 변경 0.
+- shared D1 schema/migration/cutover/manifest write 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- TEST/PRODUCTION 코드·Worker·Hosting 비의도 변경 0.
+- 실제 PREVIEW overlay W1~W2 live 검증은 **아직 미실행**. rollback-safe lifecycle 구현/감사 후에만 진행.
+
+## 0RN. app377 팔로우 정합성 사용자 실사용 PASS / 비용 최적화만 남음 (2026-10-07 KST)
+
+사용자 실사용 확인:
+- app377 팔로우 숫자 / 실제 팔로워·팔로잉 목록 / PC↔모바일 동기화 정상 적용 확인.
+- app377 정합성 수정은 사용자 기준 PASS로 동결.
+- 이후 작업 범위는 **팔로우 mutation 비용 W14~W17 → W1~W2**만 남김.
+
+보호:
+- app377 숫자/목록/persistent list cache/RTDB cross-device sync 재설계 금지.
+- 공개/비공개, 좋아요, Music Note, Library, profile UI/CSS 변경 금지.
+- unchanged popup reload/reopen D1 R0 목표 유지.
+
+다음 비용 단계:
+- 기존 dormant follow overlay 348 + ordered protocol354/355 후보를 기준으로 진행.
+- 이미 격리 actual D1에서 follow W2 / unfollow W1 / duplicate W0 / same-state W0 증거 있음.
+- shared cutover는 아직 OFF. 실제 PREVIEW 활성화 전 all-environment compatibility / rollback / shared schema 상태를 다시 고정.
+- 실제 PREVIEW에서 W1~W2와 기능 정합성이 동시에 PASS하기 전 TEST/PRODUCTION 승격 금지.
+## 0RM. app377 팔로우 숫자/목록/PC↔모바일 정합성 수정 PREVIEW 배포 완료 (2026-10-07 KST)
+
+사용자 실사용 근거:
+- app376에서 실제 following popup은 2명을 보여주는데 프로필/탭 숫자는 `팔로잉 1`로 남는 불일치 확인.
+- PC에서 unfollow → follow를 다시 했어도 following count가 1→2로 갱신되지 않았고, 모바일은 기존 2가 1로 내려가지 않는 반대 방향 stale count 확인.
+- CACHE LIVE에서 팔로워/팔로잉 목록을 새로 불러올 때 각각 D1 R2/W0, 두 목록 합계 R4가 관찰됨. app376 목록 cache는 React mount memory-only라 새로고침 뒤 재조회가 발생하던 구조였음.
+
+확정 원인:
+- 공개 프로필 first-view count cache는 reload를 변경 신호로 보지 않는 정상 R0 구조인데, follow 변경 신호가 별도로 없어서 follower/following count가 PC↔모바일에 전달되지 않았음.
+- 기존 follow HTTP 응답은 이미 D1 mutation에서 계산된 actor의 정확한 `following_count`를 가지고도 target profile count만 반환해 MY profile followingCount를 정확히 고칠 수 없었음.
+- app376 follower/following popup의 first page cache가 persistent가 아니라 mount memory-only여서 browser refresh 후 같은 목록이 D1 R2로 다시 조회됐음.
+
+app377 수정:
+- Worker follow 응답에 기존 `stats.follower.following_count`를 `actorFollowingCount`로 추가. **추가 D1 query/write 0**.
+- Worker341 legacy relation/counter mutation과 post-sync는 그대로 유지; response field만 additive.
+- follow 성공 즉시:
+  - target `followerCount` cache 갱신,
+  - actor MY profile `followingCount` cache를 exact count로 갱신,
+  - 개인 follow membership cache/social snapshot 갱신.
+- 같은 계정 PC↔모바일은 `userSync/{uid}/exploreFollow` RTDB 1개 최신 신호로 변경된 target/count만 전달. 수신 기기는 D1/Firestore read 0으로 local cache/UI만 갱신.
+- follower/following first page(최대 30명)를 persistent local cache로 저장. 변경 없는 browser refresh/재진입/팝업 재열기는 Worker 0 / D1 R0 목표.
+- 실제 follow/unfollow 성공 또는 수신 signal에서만 actor following + target followers 두 cache만 무효화. 전체 목록/전체 profile 무효화 없음.
+- 30명 이하 complete popup은 실제 relation rows 수를 exact count로 사용해 기존 stale profile count를 로컬에서 즉시 self-heal.
+- CACHE LIVE에 persistent relation cache hit를 별도 표시.
+
+검증:
+- 1차 Audit `37568753767`: TypeScript/Build PASS. response-only field를 허용하지 않던 기존 `verify-354-follow-orchestration` exact legacy assertion으로 FAIL; 제품 오류가 아니라 verifier 계약 미갱신. 배포 0.
+- verifier는 Worker341 mutation/post-sync는 계속 exact 비교하고, app377 response-only field만 normalize하도록 수정.
+- 재감사 `37568966361`: SUCCESS.
+- 최종 release-gate 감사 `37569220320`: **SUCCESS**.
+- APP377 exact actor count response / no extra D1 PASS.
+- APP377 persistent reload R0 contract PASS.
+- APP377 changed-only list invalidation PASS.
+- APP377 cross-device RTDB signal PASS.
+- APP377 small-profile count self-heal PASS.
+- Worker341 legacy counter/post-sync parity PASS.
+- canonical Worker SHA256 exact match `e311f5f97160057b9f3be29d83a716bbd15f00782fd6f60ce6c447be8bfcfdc4`.
+- TEST/PRODUCTION Worker dry-run PASS.
+
+PREVIEW 배포:
+- Worker source commit: `b8dfc9e6baf27c4a17eac528f38ba0525e42d568`.
+- Worker release trigger: `bcb880375175095b18a0fe1f2fa0ddda25d66cc1`.
+- PREVIEW Worker Run `37569420282`: **SUCCESS**.
+- PREVIEW Worker before `bc8cc09e-4210-46e2-bdb7-72796e2798e4` → after `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- feed/profile smoke PASS; warm revision D1 R0/W0 PASS; automatic rollback 없음.
+- TEST Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65` / PRODUCTION Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7` unchanged PASS.
+- App release trigger / locked source `8f0efd593c60e9d0c8ca4795ceb674abc437cf6c`.
+- Firebase PREVIEW Hosting Run `37569563139`: **SUCCESS**.
+- remote `preview.soridraw.com` app version **377** / exact build PASS.
+- shared RTDB Rules exact-match deploy PASS: additive `userSync/$uid/exploreFollow` only.
+- Firebase Functions / Firestore Rules 변경 0.
+- shared D1 schema/migration/cutover 변경 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- main(TEST) / production branches + Hosting unchanged PASS.
+
+비용 상태:
+- follower/following popup: 첫 cold list click은 기존 bounded D1 R2 가능. 이후 변경 없는 refresh/reopen은 persistent local cache로 D1 R0 목표.
+- 실제 relation 변경 때만 관련 2개 list cache를 무효화하므로 다음 필요 시 해당 list만 bounded 재조회.
+- cross-device count sync는 작은 RTDB signal 1개/실제 follow mutation; 수신 D1/Firestore 0.
+- follow mutation 자체의 legacy physical D1 W14~W17은 **아직 해결 전**. 이번 app377은 숫자/목록 정합성과 반복 read 문제를 먼저 분리 해결한 단계이며 shared W1~W2 cutover는 여전히 OFF.
+
+실사용 검증:
+1. app377로 PC/Mobile 모두 갱신 후 MY profile following count와 popup 실제 rows가 같은지 확인.
+2. PC follow → 모바일 숫자/버튼이 페이지 이동 없이 수렴하는지, 반대 방향도 확인.
+3. follow/unfollow 후 actor following list와 target followers list membership이 일치하는지 확인.
+4. popup 첫 cold click D1 R2 확인 후 새로고침/재진입 같은 목록은 `팔로우 목록 캐시` LOCAL HIT / Worker0 / D1 R0인지 확인.
+5. 위 정합성 PASS 후에만 기존 W14~W17 → W1~W2 shared follow cutover 단계 재개.
+## 0RL. app376 PREVIEW 배포 완료 / 팔로워·팔로잉 실사용 검증 대기 (2026-10-07 KST)
+
+사용자 승인:
+- 사용자가 `배포해줘`로 app376 PREVIEW 배포를 명확히 승인.
+- 승인 범위는 app376 client/Firebase PREVIEW Hosting만. Worker/shared D1/Functions/Rules/TEST/PRODUCTION 변경 없음.
+
+배포:
+- app version commit: `bbbf8ade85cce6bd49ea646c85b2b9b38a4e8393`.
+- release trigger / locked source: `e928cddaeed721227a24b1f2184777b029a030ab`.
+- Firebase PREVIEW Hosting Run `37567143109`: **SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- remote `preview.soridraw.com` app version **376**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- TypeScript PASS / Build PASS.
+- app358 profile+My Likes convergence PASS.
+- app359 My Likes settlement upgrade PASS.
+- app360 My Likes navigation local PASS.
+- app361 Music Note publication origin parity PASS.
+- shared RTDB Rules: SKIPPED.
+- TEST/PRODUCTION unchanged PASS.
+
+app376 기능:
+- 공개 프로필 `팔로워` / `팔로잉` 숫자를 클릭하면 실제 사용자 목록 팝업.
+- PC 중앙 popup / 모바일 bottom-sheet.
+- 30명 bounded page + 더 보기.
+- 프로필 진입만으로 목록 서버 read 추가 0; 사용자가 숫자를 눌렀을 때만 조회.
+- 동일 mount 재열기는 memory cache.
+- 사용자별 N+1 profile read 없음.
+- CACHE LIVE 요청명 `팔로워 목록` / `팔로잉 목록` 표시.
+
+현재 Worker/데이터:
+- PREVIEW Explore Worker는 기존 `bc8cc09e-4210-46e2-bdb7-72796e2798e4` 유지. 이번 app376 배포에서 Worker 재배포 없음.
+- shared follow cutover OFF.
+- shared D1 schema/migration/write 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- Functions / Firestore Rules / RTDB Rules 변경 0.
+
+실사용 검증:
+1. MY프로필에서 팔로워/팔로잉 숫자를 눌러 실제 목록 확인.
+2. A→B 팔로우 후 B의 팔로워 목록에 A, A의 팔로잉 목록에 B가 보이는지 확인.
+3. 팔로우 해제 후 두 목록에서 사라지는지 확인.
+4. 숫자(count) / 목록 / 팔로우 버튼 상태가 PC와 모바일에서 일치하는지 확인.
+5. CACHE LIVE에서 첫 목록 클릭 비용과 같은 목록 재열기 비용 확인.
+6. 현재 follow mutation W14~W17은 legacy cutover-OFF 경로이므로 이 정합성 확인 전 W1~W2 cutover 활성화 금지.
+## 0RK. app376 팔로워/팔로잉 목록 팝업 준비 완료 / PREVIEW 배포 전 (2026-10-07 KST)
+
+사용자 실사용 관찰:
+- PREVIEW cutover-OFF Worker에서 follow / unfollow 반복 후 숫자와 상태가 기대대로 반영되는지 확신하기 어려움.
+- CACHE LIVE에서 follow mutation physical Rows Written은 여전히 legacy 수준 W14~W17 구간이 관찰됨. 현재 shared follow cutover가 OFF이므로 W1~W2 후보 경로가 실제 활성화된 결과가 아님.
+- 사용자가 팔로워/팔로잉 숫자만 보고 실제 관계 상대를 확인할 수 없어, 관계 정합성을 검증할 UI가 먼저 필요하다고 지적.
+
+app376 구현:
+- 공개 프로필의 `팔로워`, `팔로잉` 숫자를 클릭 가능한 버튼으로 변경하되 기존 위치/간격/표시 스타일은 유지.
+- 클릭 시 팝업:
+  - 팔로워 / 팔로잉 탭
+  - 아바타, 닉네임, @handle
+  - 사용자 행 클릭 시 해당 공개프로필 이동
+  - 빈 목록 / 로딩 / 오류 상태
+  - 30명 단위 bounded pagination + `더 보기`
+  - PC 중앙 팝업 / 모바일 bottom-sheet형.
+- 기존 Worker의 `/v1/profiles/:id/followers`, `/v1/profiles/:id/following`을 그대로 재사용.
+- 프로필 진입만으로 목록 서버 요청을 추가하지 않음. **사용자가 숫자를 눌렀을 때만 1회 조회**.
+- 목록 API 한 번이 card 표시용 profile fields를 함께 반환하므로 사용자마다 profile을 다시 읽는 N+1 조회 없음.
+- 같은 프로필/방향을 다시 열면 현재 Explore mount 동안 메모리 cache 사용.
+- follow count가 바뀌면 해당 followers/following popup cache만 무효화하고, follow mutation 함수 자체에는 새 서버/캐시 의존성을 넣지 않음.
+- CACHE LIVE에 `팔로워 목록` / `팔로잉 목록` 요청명을 추가해 실제 조회 비용을 바로 확인 가능하게 함.
+
+변경 파일:
+- `src/services/exploreSocialService.ts`
+- `src/pages/ExplorePage.tsx`
+- `src/components/explore/exploreSocial.css`
+- `src/components/CacheDiagnosticsOverlay.tsx`
+- `scripts/verify-376-profile-connections-popup.mjs`
+- `scripts/verify-explore-deploy-preflight.mjs`
+
+검증:
+- 최초 Audit Run `37566115459`: TypeScript/Build PASS 후 기존 follow UI 실행형 verifier에서 popup cache ref가 추출된 `toggleFollow` 외부에 없어 FAIL. 제품 배포/데이터 변경 없이 중단.
+- 수정: popup cache invalidation을 `toggleFollow`에서 완전히 분리하여 component effect로 이동. 기존 follow mutation contract 보존.
+- 재감사 Run `37566319687`: **SUCCESS**.
+- 최종 deploy-preflight 연결 후 Audit Run `37566557303`: **SUCCESS**.
+- TypeScript PASS / Build PASS / static release-system verification PASS.
+- Worker341 legacy counter/post-sync parity PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- live shared D1 preflight read-only PASS.
+- active PREVIEW Worker `bc8cc09e-4210-46e2-bdb7-72796e2798e4` 확인; 이번 app376 UI 작업에서는 Worker 재배포하지 않음.
+
+데이터/환경:
+- shared follow cutover: OFF.
+- shared D1 schema/migration/write: 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite: 0.
+- Firebase Hosting 배포: 아직 0 (app376 미배포).
+- Functions / Worker 추가 배포: 0.
+- TEST / PRODUCTION: 변경 없음.
+
+다음:
+1. 사용자가 PREVIEW 배포를 요청하면 app376 client/Hosting만 PREVIEW에 배포.
+2. 실제 프로필에서 팔로워/팔로잉 팝업으로 relation 상대를 확인.
+3. 숫자(count) ↔ 실제 목록 ↔ 팔로우 버튼 상태를 같은 계정/PC/모바일에서 대조.
+4. CACHE LIVE에서 목록 첫 클릭 비용과 같은 팝업 재열기 비용을 확인.
+5. relation 자체가 틀린지, 숫자/cache 표시만 틀린지 분리한 뒤 follow 동기화 수정.
+6. 이 정합성이 해결되기 전 W1~W2 shared cutover 활성화 금지.
+## 0RJ. follow candidate PREVIEW Worker 배포 완료 / cutover OFF 실사용 검증 대기 (2026-10-07 KST)
+
+사용자 승인:
+- 사용자가 “배포해서 확인해보자”로 PREVIEW Worker 배포를 승인.
+- 승인 범위는 **PREVIEW Worker candidate 배포 + cutover OFF legacy parity 확인**.
+- shared follow schema/migration/cutover 활성화, TEST/PRODUCTION 승격은 승인 범위 아님.
+
+배포:
+- trigger commit: `a22d27e389c646908347f812859799e4ec1dc111`.
+- product source: `f6b63eb0ecb6322d531b19bbb01c6fd0c2555c04`.
+- PREVIEW Worker Release Run `37565145301`: **SUCCESS**.
+- PREVIEW Worker before: `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- PREVIEW Worker after: `bc8cc09e-4210-46e2-bdb7-72796e2798e4`.
+- TEST Worker before/after 동일: `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`.
+- PRODUCTION Worker before/after 동일: `efb8508e-d63a-4839-a7c8-a5c89572f4c7`.
+
+배포 전 hard gate:
+- Worker341 legacy counter exact parity PASS.
+- Worker341 legacy post-sync exact parity PASS.
+- dormant overlay router / legacy path parity PASS.
+- legacy 347 compatibility extra write ABSENT.
+- PREVIEW release legacy parity gate PASS.
+- profile/follow cost bounds PASS.
+
+배포 후 live smoke:
+- Worker propagation ready PASS.
+- curated first/warm PASS / warm D1 R0 W0 PASS.
+- latest feed D1 R0 W0 PASS.
+- popular feed D1 R0 W0 PASS.
+- public profile signal shared R2 live PASS.
+- profile tracks D1 R0 W0 PASS.
+- genre tracks D1 R0 W0 PASS.
+- search D1 R0 W0 PASS.
+- public like cards D1 R0 W0 PASS.
+- feed smoke PASS / profile smoke PASS.
+- warm revision D1 R0 W0 PASS.
+- TEST/PRODUCTION Workers unchanged PASS.
+- automatic rollback 미발생.
+
+중요:
+- 이번 release trigger는 `shared_follow_cutover=false`, `follow_overlay_activation=false`.
+- shared follow migration/cutover/user data mutation 없음.
+- Firebase Hosting / Functions 배포 없음.
+- 따라서 지금 PREVIEW에서 먼저 확인해야 하는 것은 **새 Worker가 cutover OFF 상태에서 기존 Worker341 팔로우 기능/비용을 그대로 보존하는지**임.
+
+다음 실사용 체크:
+1. PC에서 follow 1회 → 즉시 UI/팔로워 수 확인.
+2. PC에서 unfollow 1회 → 즉시 원복 확인.
+3. 모바일에서도 동일 1회씩.
+4. PC에서 follow 후 모바일에서 페이지 이동/새로고침 없이 상태 정합 확인, 반대 방향도 확인.
+5. MY프로필 following membership, 상대 프로필 followerCount/followingCount, follower-save permission 확인.
+6. 가능하면 Cloudflare live physical D1 Rows Written을 follow/unfollow 각각 기록.
+7. cutover OFF 비용/동작이 Worker341 baseline과 다르면 즉시 rollback.
+
+## 0RI. follow PREVIEW Worker release gate 보강 완료 / 배포 전 (2026-10-07 KST)
+
+배포 안전장치 보강:
+- `.github/workflows/cloudflare-explore-preview-release.yml`에 Worker341 legacy parity 검사를 PREVIEW Worker 배포의 필수 선행 gate로 추가.
+- release source에 Worker341 기준 commit이 없으면 해당 commit만 bounded fetch한 뒤 `scripts/verify-356-follow-worker341-legacy-parity.mjs`를 실행.
+- legacy counter/post-sync/core가 Worker341과 다르면 PREVIEW Worker 배포가 시작되기 전에 실패하도록 고정.
+- pipeline change commit: `ed918db4a14fe158f46f6e861dd82bdf135eb9d9`.
+
+독립 재감사:
+- trigger commit: `a61a585f96b44429365beb3a670d646a24c9011b`.
+- Release System Audit Run `37564622518`: **SUCCESS**.
+- TypeScript PASS / Build PASS / static release-system verification PASS.
+- TEST + PRODUCTION Worker dry-run PASS.
+- live shared D1 preflight read-only PASS.
+- branch refs unchanged audit PASS.
+- main(TEST) `2314589357ec52b27ed785229f77a808c5673202` / production `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0` unchanged.
+
+현재 상태:
+- PREVIEW 코드에는 dormant follow overlay candidate가 있으나 shared follow cutover는 OFF.
+- PREVIEW active Worker는 아직 기존 배포본 `117d5f65-e34d-4c58-8030-498193deb1b4`; 이번 작업에서 Worker 배포하지 않음.
+- 사용자/shared 데이터 mutation, migration, backfill, delete, rewrite 0.
+- 다음 단계는 사용자 PREVIEW 배포 요청 전까지 배포하지 않음. 배포 시에도 cutover OFF 후보부터 legacy parity를 live 확인하고, 그 후에만 overlay 활성화 여부를 별도 판단.
+
+## 0RH. follow W14~W17 → W1~W2 재개 1차 독립 감사 PASS / PREVIEW 배포 전 (2026-10-07 KST)
+
+현재 작업:
+- app375 릴리스 종료 후 follow/unfollow 저비용 backend 작업을 다시 시작.
+- 시작 기준 PREVIEW `0c9336a9871e348a4e05230b4e44742c92ec060d`.
+- 감사 trigger commit `2cc95dc69a72c230bca4c59e9d8d5c4633528524`.
+- Release System Audit Run `37564169142`: **SUCCESS**.
+- 제품 앱/Worker 배포는 하지 않았고 app375 공개/비공개/최신곡/좋아요/Music Note/Library/UI는 비변경.
+
+핵심 감사 결과:
+- Worker341 legacy counter mutation exact parity: **PASS**.
+- Worker341 legacy post-sync exact parity: **PASS**.
+- dormant overlay router가 legacy 경로보다 먼저 분기되고 cutover OFF에서 legacy 경로를 바꾸지 않는 계약: **PASS**.
+- 347 legacy compatibility 추가 write 부재: **PASS**.
+- crash/replay, suspended writer, duplicate/reverse/shared-target, ordered client retry: **PASS**.
+- shared follow migration: **미적용 / overlay authority OFF**.
+- TypeScript PASS / Build PASS / TEST+PRODUCTION Worker dry-run PASS / live shared D1 preflight SELECT-only PASS.
+- audit 종료 후 branch refs unchanged PASS.
+- 격리용 임시 D1 cleanup PASS.
+
+실제 격리 Cloudflare D1 + actual HTTP handler 물리 비용:
+- 새 follow: **R2 / W2**.
+- duplicate operation id: **R1 / W0**.
+- same-state + new operation id: **R4 / W0**.
+- unfollow: **R6 / W1**.
+- stale revision reject: **R1 / W0**.
+- relation 저장 후 R2 실패: **R5 / W1**.
+- recovery retry: **R16 / W0**.
+- 따라서 정상 follow/unfollow physical D1 hard gate **W1~W2 PASS**, duplicate/same-state **W0 PASS**.
+- 위 수치는 새로 만든 격리 D1의 실제 `rows_read/rows_written`이며 shared 사용자 D1을 변경하지 않음.
+
+아직 남은 게이트:
+- R2는 이번 격리 시험에서 실제 live billing이 아니라 fixture get/put 시도 횟수로 검증됨.
+  - 정상 follow: R2 get 12 / put 7.
+  - 정상 unfollow: R2 get 12 / put 7.
+- 실제 PREVIEW Worker + R2 환경의 비용/지연/충돌 계측은 아직 **미검증**.
+- PC↔모바일 실기기 follow/unfollow, profile follower/following count, following membership, follower-save permission, public-profile parity도 **실사용 검증 전**.
+- 따라서 지금 바로 shared follow cutover/migration을 켜거나 TEST/PRODUCTION으로 승격하지 않는다.
+
+다음 안전 단계:
+1. 현재 검증된 dormant overlay candidate를 **cutover OFF** 상태의 PREVIEW Worker 후보로 고정한다.
+2. PREVIEW 배포 전 release source identity + Worker341 legacy parity gate를 다시 고정한다.
+3. 사용자가 PREVIEW Worker 배포를 요청하면 PREVIEW만 배포하고, 먼저 cutover OFF legacy 실사용 비용이 Worker341 baseline과 동일한지 확인한다.
+4. 그 다음 별도 안전 경계에서 overlay 활성화가 필요하면 shared schema/cutover 영향·rollback을 보고하고 명확한 승인을 받은 뒤 진행한다.
+5. PREVIEW live에서 follow/unfollow W1~W2 + PC↔모바일/프로필 정합성까지 확인되기 전 TEST 승격 금지.
+
+데이터/환경:
+- 사용자 데이터 migration/backfill/copy/delete/rewrite: **0**.
+- shared follow schema/cutover mutation: **0**.
+- Firebase Hosting/Functions/Rules 변경: **0**.
+- Cloudflare Worker 배포: **0**.
+- TEST/PRODUCTION 변경: **0**.
+
+## 0RG. app375 PRODUCTION 사용자 smoke PASS / 릴리스 종료 (2026-10-07 KST)
+
+사용자 정식앱 확인:
+- 새 Music Note 곡 공개 후 Explore `최신 공개곡` 첫 번째 카드에 즉시 표시 PASS.
+- 왼쪽 `<` 화살표를 눌러야만 보이던 지연 증상 없음 PASS.
+- 기존/신규 공개곡 메인 음원 1↔2 전환 시 이전 노란 제목/equalizer 즉시 초기화 PASS.
+- Music Note 공개상태 / MY프로필 / Explore 노출 정상 확인.
+- app373 first-publication W12→W2 비용 구조 유지.
+
+릴리스 최종 상태:
+- PREVIEW app375
+- TEST app375 / TEST_VERIFIED
+- PRODUCTION app375 / RELEASED
+- production SHA `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0`
+- app375 릴리스 **CLOSED / PASS**
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 없음.
+- Functions / Rules / shared D1 추가 mutation 없음.
+
+다음 개발 우선순위:
+- 공개/비공개/최신곡 경로는 동결 보호.
+- 다음 큰 비용 작업은 2026-10-05에 rollback된 **follow 저비용 backend**로 복귀.
+- 현재 legacy follow 실사용 baseline은 physical D1 Rows Written 약 **W14~W17**, 목표는 **W1~W2**.
+- 기존 candidate355는 cutover OFF 상태에서도 legacy path 비용을 바꿔 rollback된 이력이 있으므로 바로 재배포 금지.
+- 먼저 Worker341 legacy parity + dormant overlay candidate를 독립 감사하고, 실제 HTTP 경로 D1/R2 비용을 격리 환경에서 다시 증명한 뒤 PREVIEW Worker 후보를 만든다.
+- shared follow migration/cutover/user data mutation은 별도 명확한 승인 전 금지.
+
+## 0RF. app375 TEST + PRODUCTION 승격 완료 — RELEASED (2026-10-07 KST)
+
+사용자 승인:
+- PREVIEW app375 실사용 PASS 후 사용자가 “테스트, 정식까지 승격”을 명확히 승인.
+- 승인 범위: 검증된 app375 전체 릴리스의 TEST 승격 후, TEST_VERIFIED 동일본을 PRODUCTION까지 승격.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite는 승인 범위가 아니며 실행하지 않음.
+
+TEST 승격:
+- source PREVIEW SHA: `24d600fd1597db9d4d10d7257a2b6911a3e721c4`
+- Release Controller Run `37559055085`: **SUCCESS / TEST_VERIFIED**
+- main(TEST) promoted SHA: `2314589357ec52b27ed785229f77a808c5673202`
+- immutable TEST tag: `soridraw-test-v375-24d600fd1597`
+- app version: **375**
+- TEST Explore Worker active/uploaded version: `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`
+- TEST Media Worker active/uploaded version: `cfb741e3-a255-49ed-8801-cb21f7f53938`
+- TypeScript PASS / Build PASS
+- Firebase TEST Hosting exact verification PASS
+- `TEST_WORKER_VERIFY=PASS`
+- `TEST_MEDIA_WORKER_VERIFY=PASS`
+- `TEST_CURATED_PARITY=PASS count=12`
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`
+- browser-upgrade / app361 publication parity / old-cache release gates PASS
+- TEST 단계에서 PRODUCTION branch/Hosting/Worker/Media Worker 비변경 PASS
+
+PRODUCTION 승격:
+- production approval command consumed immutable TEST_VERIFIED tag `soridraw-test-v375-24d600fd1597`
+- Release Controller Run `37559345127`: **SUCCESS / RELEASED**
+- tested main: `2314589357ec52b27ed785229f77a808c5673202`
+- production promoted SHA: `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0`
+- app version: **375**
+- PRODUCTION Explore Worker active/uploaded version: `efb8508e-d63a-4839-a7c8-a5c89572f4c7`
+- PRODUCTION Media Worker active/uploaded version: `66b85b60-6c00-4c9c-bde8-df4f836a3ea8`
+- Firebase PRODUCTION Hosting: TEST verified Hosting exact clone PASS
+- `FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS`
+- `PRODUCTION_WORKER_VERIFY=PASS`
+- `PRODUCTION_MEDIA_WORKER_VERIFY=PASS`
+- `PRODUCTION_CURATED_PARITY=PASS count=12`
+- `PRODUCTION_PUBLIC_PROFILE_PARITY=PASS`
+- `PRODUCTION_RELEASE_ENVIRONMENT_PARITY=PASS reference=TEST`
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`
+- Release Control final state: **RELEASED**
+- `soridraw.com` + Firebase production URL exact release verification step PASS
+- main(TEST) ref / TEST Worker / TEST Media Worker / TEST Hosting은 PRODUCTION 승격 중 비변경 확인.
+
+이번 릴리스에 포함된 app374/app375 핵심:
+- 공개 메인 음원 1↔2 전환 시 이전 노란 제목/equalizer 즉시 초기화.
+- 새 공개곡 publication signal을 same-origin 브라우저에 즉시 전달.
+- Explore `최신 공개곡` 첫 track이 바뀌면 해당 rail만 paint 전에 left=0으로 복귀.
+- 새 공개곡이 기다림/왼쪽 화살표 클릭 없이 첫 번째 카드로 즉시 노출.
+- 다른 추천/인기 rail의 사용자가 보던 위치는 자동 변경하지 않음.
+- app373 shared D1 first-publication W12→W2 구조 유지.
+
+데이터 / 비용 / 백엔드:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**
+- 이번 app375 TEST/PRODUCTION 승격에서 shared D1 schema/data 추가 mutation: **0**
+- Firebase Functions/Rules 변경: **0**
+- app375 local publication signal dispatch는 기존 canonical publication signal transaction의 결과를 같은 브라우저에 즉시 전달하는 것이며 추가 D1 read/write를 만들지 않음.
+- shared D1 app373 cutover는 기존 적용 상태 유지.
+- 실사용 first-publication 비용 기준: **W2**.
+
+현재 환경:
+- PREVIEW = app375
+- TEST = **app375 / TEST_VERIFIED**
+- PRODUCTION = **app375 / RELEASED**
+
+다음:
+- 정식앱에서 사용자 smoke test:
+  1. 새 공개곡이 Explore `최신 공개곡` 첫 칸에 즉시 보이는지.
+  2. 기존/신규 공개곡 메인 음원 1↔2 전환 시 노란 제목/equalizer 초기화가 정상인지.
+  3. Music Note 공개상태 / MY프로필 / Explore 노출이 동일한지.
+- 이상 없으면 app375 릴리스 종료.
+- 이상 시 PRODUCTION 추가 변경을 바로 하지 말고 PREVIEW에서 해당 경로만 수정 후 다시 승격.
+
 ## 0RE. app375 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
 
 사용자 확인:

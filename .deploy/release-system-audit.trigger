@@ -1,9 +1,11 @@
-app375-latest-new-publication-immediate
-target=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
-scope=explore-latest,new-publication,origin-local-signal,first-visible
+follow-w1w2-rollback-safe-source-audit
+target=7d0f9b38798e066b83f9842c8397866b761447bd
+scope=rollback-safe-one-way-authority,precutover-d1-r0,old-worker-readonly-failclosed,protocol354-355,legacy-parity
 shared_d1_apply=false
+shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app375-immediate-latest-publication-audit
+rtdb_rules_deploy=false
+requested=2026-10-07-follow-w1w2-rollback-safe-source-audit-v2

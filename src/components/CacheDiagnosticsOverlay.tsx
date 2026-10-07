@@ -136,6 +136,9 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/feed-revision') return '피드 변경 확인';
   if (path === '/v1/me/likes') return '좋아요 상태';
   if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
+  if (/^\/v1\/profiles\/[^/]+\/followers$/.test(path)) return '팔로워 목록';
+  if (/^\/v1\/profiles\/[^/]+\/following$/.test(path)) return '팔로잉 목록';
+  if (path === '/v1/profiles/:id/connections') return '팔로우 목록 캐시';
   if (path === '/v1/me/social-snapshot') return '개인 소셜 스냅샷';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
   if (path === '/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태';

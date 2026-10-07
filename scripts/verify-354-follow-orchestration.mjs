@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 const source = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const ast = ts.createSourceFile('worker.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 const names = [
-  'readFollowCutoverState348', 'followIntentKey354', 'readFollowIntent354',
+  'readFollowCutoverControl348', 'readFollowCutoverState348', 'followIntentKey354', 'readFollowIntent354',
   'readFollowProfile354', 'saveFollowProfile354', 'registerFollowPending354',
   'repairFollowProfile354', 'completeFollowIntent354', 'orchestrateFollowOverlay354',
   'handleFollowOverlay354', 'readFollowStateSnapshot354', 'mutateFollowOverlayRelation350', 'readEffectiveFollowMembership348',
@@ -131,7 +131,13 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
   }
 }
 for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
-  const a = ts.createSourceFile('a.js',functions.get(name),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements[0].body.statements;
+  const currentFunction354 = name === 'handleFollowR2Core'
+    ? functions.get(name).replace(
+        ',\n    actorFollowingCount: clampExploreSocialCount(stats?.follower?.following_count)',
+        '',
+      )
+    : functions.get(name);
+  const a = ts.createSourceFile('a.js',currentFunction354,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements[0].body.statements;
   const b = baselineAst.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).body.statements;
   // Overlay branch and wrapper guard are the only changes to legacy flow.
   const text = node => ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified,node,node.getSourceFile()).replaceAll('\r\n','\n');
@@ -145,7 +151,7 @@ for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
 }
 for (const name of names) assert.ok(functions.has(name), 'missing ' + name);
 const code = names.map(n => functions.get(n)).join('\n');
-const cutover = { mode: 'overlay348', cutoverToken: 'isolated-354' };
+const cutover = { mode: 'overlay348', cutoverToken: 'isolated-354', readOnly: false, source: 'fixture' };
 const id = n => 'operation_' + String(n).padStart(16, '0');
 
 function fixture() {
@@ -322,6 +328,10 @@ assert.equal((await response.json()).data.following,true);
 const absent = fixture();
 assert.equal((await absent.ctx.readFollowCutoverState348(absent.env)).mode,'legacy');
 assert.equal(absent.metrics().writes,0);
+const readonly = fixture();
+readonly.ctx.readFollowCutoverState348 = async () => ({ ...cutover, readOnly: true, source: 'fixture-readonly' });
+await assert.rejects(readonly.ctx.handleFollow({ json: async () => ({}) },readonly.env,{},'target',true), { code: 'FOLLOW_OVERLAY_READONLY' });
+assert.equal(readonly.metrics().changed,0);
 
 const client = {};
 vm.createContext(client);

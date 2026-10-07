@@ -8,7 +8,9 @@ assert.match(sql,/CREATE TABLE IF NOT EXISTS explore_follow_overrides_348/);
 assert.match(sql,/PRIMARY KEY \(follower_uid, following_uid\)[\s\S]*?WITHOUT ROWID/);
 assert.match(sql,/baseline_following INTEGER NOT NULL CHECK \(baseline_following IN \(0,1\)\)/);
 assert.match(sql,/CREATE INDEX IF NOT EXISTS idx_explore_follow_overrides_348_reverse/);
-assert.match(sql,/phase IN \('legacy','armed','overlay'\)/);
+assert.match(sql,/phase IN \('legacy','armed','overlay','readonly'\)/);
+assert.match(sql,/explore_follow_cutover_control_348_no_downgrade/);
+assert.match(sql,/explore_follow_cutover_control_348_no_delete/);
 assert.doesNotMatch(sql,/\b(?:UPDATE|DELETE)\s+(?:follows|profile_stats)\b/i,'candidate must not mutate legacy user rows');
 assert.doesNotMatch(sql,/INSERT\s+INTO\s+explore_follow_overrides_348\s+SELECT/i,'candidate must not backfill overlay');
 
@@ -29,6 +31,13 @@ const objects=db.prepare("SELECT type,name,sql FROM sqlite_schema WHERE name LIK
 assert.ok(objects.some(x=>x.name==='explore_follow_overrides_348'&&/WITHOUT ROWID/i.test(x.sql)));
 assert.ok(objects.some(x=>x.name==='idx_explore_follow_overrides_348_reverse'&&/\(following_uid, follower_uid\)/i.test(x.sql)&&!/WHERE\s+following\s*=\s*1/i.test(x.sql)));
 assert.equal(db.prepare("SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1").get().phase,'legacy');
+db.prepare("UPDATE explore_follow_cutover_control_348 SET phase='armed',cutover_token='cutover-378',updated_at=1 WHERE id=1").run();
+db.prepare("UPDATE explore_follow_cutover_control_348 SET phase='overlay',updated_at=2 WHERE id=1").run();
+assert.throws(() => db.prepare("UPDATE explore_follow_cutover_control_348 SET phase='legacy' WHERE id=1").run(),/follow authority downgrade blocked/);
+assert.throws(() => db.prepare("DELETE FROM explore_follow_cutover_control_348 WHERE id=1").run(),/follow authority latch delete blocked/);
+db.prepare("UPDATE explore_follow_cutover_control_348 SET phase='readonly',updated_at=3 WHERE id=1").run();
+assert.equal(db.prepare("SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1").get().phase,'readonly');
+db.prepare("UPDATE explore_follow_cutover_control_348 SET phase='overlay',updated_at=4 WHERE id=1").run();
 
 const effective=(target)=>Number(db.prepare(`
 SELECT COALESCE(
@@ -53,6 +62,7 @@ console.log('FOLLOW348_SCHEMA_ADDITIVE_NO_BACKFILL=PASS');
 assert.equal(Number(db.prepare("SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid='a' AND following_uid='new'").get().baseline_following),0);
 console.log('FOLLOW348_EFFECTIVE_BASELINE_OVERLAY=PASS');
 console.log('FOLLOW348_FORWARD_PK_REVERSE_FULL_INDEX=PASS');
+console.log('FOLLOW378_ONE_WAY_CONTROL_LATCH=PASS');
 console.log('FOLLOW348_SHARED_MIGRATION_APPLIED=NO');
 console.log('FOLLOW348_REMOTE_BILLING_PROOF_RUN=37175419175');
 

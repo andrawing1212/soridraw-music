@@ -1,9 +1,10 @@
-app375-explore-latest-new-publication-immediate
-target_source=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
-app_version=375
-scope=explore-latest,new-publication-immediate,latest-first-visible,origin-local-signal
-release_system_audit_run=37556209976
-deploy_shared_rtdb_rules=false
+app377-follow-count-list-cross-device-convergence
+target_source=bcb880375175095b18a0fe1f2fa0ddda25d66cc1
+app_version=377
+scope=follow-count,following-count,persistent-follow-list-cache,cross-device-follow-signal
+release_system_audit_run=37569220320
+worker_release_run=37569420282
+deploy_shared_rtdb_rules=true
 no_user_data_migration=true
 worker_change=false
 functions_change=false

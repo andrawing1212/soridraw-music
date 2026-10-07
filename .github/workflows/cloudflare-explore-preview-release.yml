@@ -75,7 +75,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          worker341_base='9c11b95cf4c95210011b1425cea23f3e51cbf34f'
+          git cat-file -e "${worker341_base}^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "${worker341_base}"
+          node scripts/verify-356-follow-worker341-legacy-parity.mjs
+          node scripts/verify-377-follow-count-list-sync.mjs
           node scripts/verify-explore-deploy-preflight.mjs
+          echo 'FOLLOW356_PREVIEW_RELEASE_LEGACY_PARITY_GATE=PASS'
+          echo 'APP377_FOLLOW_CONVERGENCE_RELEASE_GATE=PASS'
           echo 'APP245_PROFILE_FOLLOW_COST_BOUNDS=PASS'
 
       - name: Verify existing profile negative-cache regression

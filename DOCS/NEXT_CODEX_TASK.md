@@ -1,3 +1,45 @@
+## CURRENT NEXT GATE — follow W1~W2 shared authority cutover 승인 대기
+
+현재 완료:
+- shared D1 additive overlay348 schema 적용 완료.
+- PREVIEW / TEST / PRODUCTION app377/follow378 compatibility line 완료.
+- TEST Release Run `37584516018` SUCCESS.
+- PRODUCTION Release Run `37585161258` SUCCESS / RELEASED.
+- PRODUCTION Explore Worker `391c4d88-5186-480b-ae53-042bac301ce2`.
+- PRODUCTION Media Worker `2c2e3236-d9a6-4771-b2ba-7baff496145c`.
+- production commit `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`.
+- `soridraw.com` app377 exact TEST artifact clone verification PASS.
+- shared user data migration/backfill/delete/rewrite/copy 0.
+- follow lifecycle flag / D1 authority control activation / shared R2 active manifest 모두 OFF.
+- 현재 사용자 follow relation은 기존 legacy authority를 계속 사용.
+
+다음 단계는 shared follow authority의 실제 활성화이므로 별도 명확한 승인 전 실행 금지:
+1. active PREVIEW/TEST/PRODUCTION Worker follow378 read-only readiness 재고정.
+2. D1 `explore_follow_cutover_control_348`을 one-way latch 준비 상태로 arm.
+3. 모든 환경 lifecycle gate compatibility를 동시에 보장.
+4. shared R2 follow cutover manifest를 active overlay로 전환.
+5. 실제 follow 1회 / unfollow 1회 / duplicate / same-state 측정.
+6. physical D1 합격선:
+   - follow W1~W2
+   - unfollow W1~W2
+   - duplicate / same-state W0
+   - W3+ 즉시 FAIL
+7. 기능 parity:
+   - followerCount/followingCount
+   - follower/following 실제 membership
+   - PC↔mobile no-navigation convergence
+   - follower-save permission
+   - public-profile parity
+   - unchanged revisit/cache path R0 목표
+8. 이상 시 overlay-readonly로 새 mutation만 중지. effective overlay read authority는 유지하고 legacy fallback 금지.
+9. full legacy foldback은 user-data migration이므로 별도 명확한 승인 없이는 금지.
+
+절대 금지:
+- shared cutover 승인 없이 D1 control/manifest activation.
+- legacy follows/profile_stats backfill/rewrite/foldback.
+- 좋아요/publication/Music Note/Library/UI 변경.
+- W3+ 상태에서 계속 진행.
+
 ## CURRENT NEXT GATE — PRODUCTION app377/follow378 compatibility 승인 대기 / shared cutover OFF
 
 완료:

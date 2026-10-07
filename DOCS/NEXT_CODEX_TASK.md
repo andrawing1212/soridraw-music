@@ -1,3 +1,46 @@
+## CURRENT NEXT GATE — app379 팔로워/팔로잉 상단 숫자 실기기 parity 확인
+
+현재 완료:
+- app379 PREVIEW 배포 완료: Run `37599728937` SUCCESS.
+- `preview.soridraw.com` app379 exact build PASS.
+- root cause: active overlay 이후 legacy follow counters는 freeze됐지만 app377/378이 mutation compatibility response의 stale counter를 profile cache authority로 사용.
+- app379은 follow relation exact local cache/delta를 social count authority로 사용하고 stale legacy response가 상단 숫자를 0으로 덮지 못하게 차단.
+- MY following: complete Following page 또는 complete follow bundle exact count 우선.
+- MY follower: complete Followers page가 있으면 exact local self-heal; 자기 follow/unfollow 작업에서는 기존 값 보호.
+- target follower: confirmed relation delta만 ±1.
+- target following: 다른 사람이 follow/unfollow해도 불변.
+- same-account PC↔mobile signal도 local exact relation count를 우선.
+- profile edit/revalidation로 social count가 다시 덮이지 않도록 보호.
+- 추가 Worker/D1/RTDB Rules/Functions 변경 0.
+- 추가 server read/write 0.
+- app378 Following popup reopen R0 경로 유지.
+- TEST/PRODUCTION unchanged.
+
+사용자 실기기 확인:
+1. MY profile의 follower/following 현재 값 기록.
+2. 다른 프로필 follow → 팝업을 열지 않고 바로 MY profile.
+   - follower 불변
+   - following +1
+3. unfollow → 팝업을 열지 않고 바로 MY profile.
+   - follower 불변
+   - following -1
+4. target profile:
+   - follow 시 follower +1
+   - unfollow 시 follower -1
+   - target following은 전후 동일
+5. PC에서 변경했을 때 mobile의 MY profile 숫자도 navigation/reload 없이 맞는지 확인.
+6. 팔로잉/팔로워 팝업 목록 membership과 상단 count가 동일한지 확인.
+7. popup reopen CACHE LIVE는 Worker0 / D1 R0 유지 확인.
+
+합격 후:
+- app379 PREVIEW follow count/list/sync gate 완료 처리.
+- TEST 승격은 사용자 테스트배포 승인 전 금지.
+
+실패 시:
+- 어떤 숫자가 잘못됐는지 actor follower / actor following / target follower / target following을 분리해 해당 local authority만 수정.
+- list 전체 재조회나 app update 강제 rehydrate 금지.
+- W3+ mutation 또는 list reopen D1 read 재발 시 즉시 중단.
+
 ## CURRENT NEXT GATE — app378 실기기 Following 목록 R0 재검증
 
 현재 완료:

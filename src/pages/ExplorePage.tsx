@@ -3084,7 +3084,22 @@ export default function ExplorePage() {
           const normalizedTracks = refreshedRows.map(normalizeTrack).filter((track) => track.id);
           normalizedTracks.sort(comparePublicProfileTracks);
           syncSharedPublicCountsToLocal110(normalizedTracks);
-          setProfile(refreshedProfile);
+          let displayRefreshedProfile379 = refreshedProfile;
+          if (user?.uid === refreshedProfile.uid) {
+            const exactFollowing379 =
+              readExploreProfileConnectionExactCount379(refreshedProfile.uid, 'following')
+              ?? readExploreFollowingExactCount379(refreshedProfile.uid);
+            const exactFollowers379 =
+              readExploreProfileConnectionExactCount379(refreshedProfile.uid, 'followers');
+            const socialPatch379: Partial<ExplorePublicProfile> = {};
+            if (exactFollowing379 !== null) socialPatch379.followingCount = exactFollowing379;
+            if (exactFollowers379 !== null) socialPatch379.followerCount = exactFollowers379;
+            if (Object.keys(socialPatch379).length > 0) {
+              displayRefreshedProfile379 = { ...refreshedProfile, ...socialPatch379 };
+              patchExplorePublicProfileFirstViewProfile(refreshedProfile.uid, socialPatch379);
+            }
+          }
+          setProfile(displayRefreshedProfile379);
           setProfileTracks(overlayActorLikeCounts120(normalizedTracks));
         },
         onInvalidated: (message) => {
@@ -4794,7 +4809,14 @@ export default function ExplorePage() {
                 profile={profile}
                 onClose={() => setProfileEditOpen(false)}
                 onSaved={(nextProfile) => {
-                  setProfile(nextProfile);
+                  // Profile editing cannot change social relations. Preserve the
+                  // already-displayed exact follower/following counters.
+                  const nextProfile379 = {
+                    ...nextProfile,
+                    followerCount: profile.followerCount,
+                    followingCount: profile.followingCount,
+                  };
+                  setProfile(nextProfile379);
 
                   const ownerCardPatch = {
                     ownerHandle: nextProfile.handle,
@@ -4818,8 +4840,8 @@ export default function ExplorePage() {
                     patchExplorePublicProfileFirstViewTrack(nextProfile.uid, trackId, ownerCardPatch);
                   });
 
-                  rememberExplorePublicProfileFirstViewProfile(nextProfile);
-                  if (nextProfile.handle) setSearchParams({ profile: `@${nextProfile.handle}` }, { replace: true });
+                  rememberExplorePublicProfileFirstViewProfile(nextProfile379);
+                  if (nextProfile379.handle) setSearchParams({ profile: `@${nextProfile379.handle}` }, { replace: true });
                 }}
               />
             )}

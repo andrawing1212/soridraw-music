@@ -1,5 +1,5 @@
-app377-follow-count-list-sync-audit
-target=c496a429db939ddc09b45820c18a99d452c255b0
+app377-follow-count-list-sync-audit-v2
+target=dbcf5a5cd4d9305b552fab01041ce83e8dd578db
 scope=follow-count,following-count,persistent-connection-cache,cross-device-rtdb,worker-response-no-extra-d1
 shared_d1_apply=false
 shared_follow_cutover=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-app377-follow-count-list-sync-audit
+requested=2026-10-07-app377-follow-count-list-sync-audit-v2

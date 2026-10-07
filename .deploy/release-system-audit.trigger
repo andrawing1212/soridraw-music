@@ -1,6 +1,6 @@
-app377-follow-count-list-sync-final-audit
-target=d67c76ed976a8dcd8f35da92a5a7acfdd9c2e1cb
-scope=follow-count,following-count,persistent-connection-cache,cross-device-rtdb,worker-response-no-extra-d1,release-gates
+follow-w1w2-cutover-readiness-readonly
+target=a914d5d7fbd9f1e61272241b18090d2ebaad87a5
+scope=protocol354-355-active-worker-contract,shared-follow-overlay-schema-state,legacy-parity,rollback-negotiation
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-app377-follow-count-list-sync-final-audit
+requested=2026-10-07-follow-w1w2-readonly-gate

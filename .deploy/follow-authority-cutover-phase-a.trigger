@@ -1,4 +1,4 @@
-target=c6f4b3c22b9a65a497f2eaf2a3682c0302709e86
+target=99bb31c6fb595512ae26db7c4865eacb648d25e3
 mode=readonly-manifest-then-one-way-latch
 approval=user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z
 preview_lifecycle_run=37588379126
@@ -7,4 +7,5 @@ reason=protect_zero_read_and_fail_closed_during_all_environment_lifecycle_rollou
 user_data_migration=false
 legacy_relation_rewrite=false
 overlay_user_rows_write=false
-requested=2026-10-07T16:42:00+09:00
+requested=2026-10-07T16:45:00+09:00
+retry=2

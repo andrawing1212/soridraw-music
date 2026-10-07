@@ -48,6 +48,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
       - name: Static guard verification
         shell: bash
         run: |

@@ -1,3 +1,61 @@
+## 0RU. app378 PREVIEW 팔로잉 목록 업데이트/재진입 R0 보강 배포 완료 (2026-10-07 KST)
+
+사용자 실기기 결과:
+- follow/unfollow 실시간 PC↔mobile 동기화 정상 PASS.
+- 실제 follow/unfollow mutation은 CACHE LIVE에서 D1 write **W1~W2 범위** 확인.
+- 다만 관계 변경 뒤 팔로잉 목록을 다시 열 때 mobile/PC에서 bounded list D1 read가 재발:
+  - 사용자 캡처 예: D1 query R5 / row R12, D1 query R2 / row R11.
+- 원인 확인: 앱 버전 업데이트 자체가 product localStorage를 비우는 것이 아니라, 실제 follow/unfollow 변경 시 viewer의 persistent Following page를 통째로 invalidate하던 app377 changed-only 경로 때문에 다음 목록 확인이 cold read로 바뀜.
+- `appUpdateNotice.ts`는 product persistent cache를 clear하지 않으며 기존 `verify-217-cache-live-update-reset.mjs` 계약 유지.
+
+app378 수정:
+- `src/services/exploreSocialService.ts`
+  - 이미 한 번 받은 viewer Following first page가 있으면 follow/unfollow 1건 변경을 해당 로컬 page에 직접 반영.
+  - unfollow 시 제거되는 target card의 compact seed를 기기에 보존하여, 같은 관계를 다시 follow해도 서버 목록 재조회 없이 first page를 복원.
+  - 안전하게 patch할 기존 page/seed가 없는 진짜 cold device/cache-missing 상황만 기존 bounded server recovery 허용.
+  - target account의 Followers page는 actor card authority가 없으므로 기존 changed-only invalidation 유지.
+- RTDB follow signal 구조/Rules는 변경하지 않음. 기존 tiny UID-scoped count/relation signal 유지.
+- Worker/D1 schema/Functions/UI 변경 없음.
+- 앱 버전 **378**.
+
+검증/배포:
+- 최초 release Run `37596276504`: 제품 TypeScript/Build 및 app377 검증 PASS 후 신규 verifier의 주석 문자열 false-positive로 중단. Firebase 배포 전 중단되어 실제 Hosting 변경 0.
+- verifier false-positive 수정 commit `4b0bb0d2c22e14a3335fea470c25f97755ec5114`.
+- 최종 PREVIEW release trigger/source commit `a132e92abd816443dd30bf83053202b959866b14`.
+- Firebase PREVIEW Run `37596588786`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- app358 / app359 / app360 / app361 regression PASS.
+- app377 follow count/list/cross-device regression PASS.
+- app378:
+  - `APP378_FOLLOW_MUTATION_PATCHES_CACHED_FOLLOWING_PAGE=PASS`
+  - `APP378_FOLLOW_TOGGLE_CARD_SEED_PERSISTS=PASS`
+  - `APP378_APP_UPDATE_DOES_NOT_INVALIDATE_CONNECTION_CACHE=PASS`
+  - `APP378_FOLLOW_RTDB_SIGNAL_REMAINS_TINY=PASS`
+  - `APP378_UNCHANGED_REOPEN_TARGET=WORKER0_D1_R0`
+- Shared RTDB Rules deploy: **SKIPPED**.
+- Firebase PREVIEW Hosting: PASS.
+- `preview.soridraw.com`: app **378** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+데이터/비용:
+- user data migration/backfill/delete/rewrite/copy 0.
+- follow shared overlay authority는 기존 active 상태 유지.
+- app378 자체 D1/Worker mutation 0.
+- 목표:
+  - 실제 follow/unfollow: 기존 확인 W1~W2 유지.
+  - 한번 hydrate된 Following 목록의 관계 변경 후 재오픈: Worker0 / D1 R0.
+  - 단순 앱 업데이트/새로고침/재진입: 기존 persistent page가 있으면 Worker0 / D1 R0.
+  - 새 기기·브라우저 저장소 삭제·해당 목록을 한 번도 연 적 없는 진짜 cold cache는 최초 bounded read 1회 허용.
+
+실사용 재검증:
+1. app378 적용 후 각 기기에서 기존 팔로잉 목록을 한 번 열어 cache를 확보.
+2. follow → unfollow 또는 unfollow → follow 수행.
+3. 목록을 다시 열어 CACHE LIVE가 `팔로잉 목록 캐시 · LOCAL 1 · Worker 0 · D1 R0/W0`인지 확인.
+4. 새로고침 또는 다음 앱 업데이트 뒤에도 동일 cache가 남아 D1 R0인지 확인.
+5. PC↔mobile 실시간 동기화가 그대로 즉시 동작하는지 재확인.
+6. 진짜 cold device에서 최초 1회 read는 정상이며, 그 다음 변경 없는 재진입은 R0이어야 함.
+
 ## 0RT. follow shared authority Phase A+B 활성화 완료 / 실제 live mutation 비용 측정 대기 (2026-10-07 KST)
 
 완료:

@@ -1,9 +1,9 @@
-app373-approved-shared-d1-cutover-release-system-audit-retry2
-target=84a7dc12025cd72a64618f865495c3166e2891ab
-scope=shared-d1-release-workflow-clean-rebuild,app373-exact-cutover,rollback,live-w2-probe,bash-syntax
-approval=user_explicit_shared_d1_cutover_approved_2026-10-07T01:13:29+09:00
-cutover_ms=1791309600000
+app374-explore-media-switch-visual-reset
+target=e9cbd68d3908de47b3dc1bbc11195e70ee28aa97
+scope=explore-visual-only,media-switch-reset,app361-publication-parity
 shared_d1_apply=false
-user_data_write=false
-production_deploy=false
-requested=2026-10-07-app373-release-system-audit-after-workflow-rebuild
+shared_user_data_write=false
+worker_deploy=false
+hosting_deploy=false
+functions_deploy=false
+requested=2026-10-07-app374-explore-visual-reset-audit

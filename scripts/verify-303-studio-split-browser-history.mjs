@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const app = readFileSync('src/App.tsx', 'utf8');
+const explore = readFileSync('src/components/explore/ExploreShell.tsx', 'utf8');
+const splitEngine = readFileSync('src/components/studio/StudioSplitEngineWorkspace.tsx', 'utf8');
 
 assert.match(
   app,
@@ -57,3 +59,21 @@ assert.match(app, /\{ key: 'library', path: '\/suno-library'/, 'classic Library 
 assert.match(app, /onMusicNote=\{\(\) => navigate\('\/history'\)\}/, 'classic Music Note rail route changed');
 
 console.log('VERIFY_303_STUDIO_SPLIT_BROWSER_HISTORY=PASS');
+
+
+assert.match(
+  explore,
+  /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
+  'Explore Recent Songs must route to the exact Recent workspace',
+);
+assert.doesNotMatch(
+  explore,
+  /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
+  'Explore Recent Songs must not fall back to Create',
+);
+assert.match(splitEngine, /useLayoutEffect/, 'workspace switch must reconcile in layout phase');
+assert.match(splitEngine, /soridraw-studio-frame-resize/, 'workspace switch must reuse the existing Lite frame-resize owner');
+assert.match(splitEngine, /props\.workspaceRequestId/, 'workspace request id must drive pre-paint reconciliation');
+assert.match(splitEngine, /props\.workspaceView/, 'workspace view must drive pre-paint reconciliation');
+
+console.log('VERIFY_381_RECENT_WORKSPACE_TRANSITION=PASS');

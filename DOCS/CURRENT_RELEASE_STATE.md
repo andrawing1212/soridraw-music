@@ -1,3 +1,19 @@
+## 0RE. app375 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
+
+사용자 확인:
+- PREVIEW app375에서 새로 공개한 Music Note 곡이 Explore `최신 공개곡`의 첫 번째 카드로 즉시 표시됨.
+- 기다렸다가 왼쪽 `<` 화살표를 눌러야만 보이던 증상 해결 확인.
+- app374 공개 메인 음원 전환 시 노란 제목/equalizer 초기화 정상 동작 유지.
+- app373 first-publication W12→W2 비용 절감 구조 유지.
+- 추가 D1/Worker/Functions/Firebase Rules/user data 변경 없음.
+
+현재 기준:
+- PREVIEW app375 = 사용자 실사용 PASS / TEST 승격 가능 후보.
+- TEST app374.
+- PRODUCTION app361.
+- 다음 승격은 사용자 요청 시 TEST(main)으로 진행.
+- PRODUCTION 승격은 TEST 검증 후 별도 명확한 승인 필요.
+
 ## 0RD. PREVIEW app375 배포 완료 — 새 공개곡 최신 목록 첫 칸 즉시 노출 (2026-10-07 KST)
 
 사용자 TEST 실사용에서 발견:

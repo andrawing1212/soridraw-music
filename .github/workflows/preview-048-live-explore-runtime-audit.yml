@@ -57,6 +57,8 @@ jobs:
                 'isExploreR2CatalogEnabled066',
                 'isExploreR2CatalogReadEnabled066',
                 'isExploreR2FirstPublisherEnabled066',
+                'isExploreR2HybridReadEnabled336',
+                'isExplorePublicationR2OnlyReadEnabled358',
                 'handleCatalogFeed066',
                 'handleCatalogProfileTracks066',
                 'handleCatalogGenre066',
@@ -73,9 +75,27 @@ jobs:
               const catalogFlags=Object.fromEntries(bindings
                 .filter(b=>b.type==='plain_text' && /^(?:SORIDRAW_R2_(?:CATALOG|FIRST_PUBLISHER|HYBRID_READ)_V1|SORIDRAW_PUBLICATION_R2_ONLY_READ_V1)$/.test(String(b.name||'')))
                 .map(b=>[String(b.name),String(b.text||b.value||'')]));
-              console.log(`${stage}_DB_ID=${String(db?.id||db?.database_id||db?.uuid||'')}`);
-              console.log(`${stage}_PROFILE_MEDIA=${String(media?.bucket_name||media?.bucket||media?.name||'')}`);
+              const dbId=String(db?.id||db?.database_id||db?.uuid||'');
+              const mediaName=String(media?.bucket_name||media?.bucket||media?.name||'');
+              console.log(`${stage}_DB_ID=${dbId}`);
+              console.log(`${stage}_PROFILE_MEDIA=${mediaName}`);
               console.log(`${stage}_R2_CATALOG_FLAGS=${JSON.stringify(catalogFlags)}`);
+              if(dbId!==process.env.SHARED_D1_ID) throw Error(stage+' DB is not shared canonical D1');
+              if(mediaName!=='soridraw-profile-media') throw Error(stage+' PROFILE_MEDIA is not shared canonical R2');
+              for(const flag of ['SORIDRAW_R2_CATALOG_V1','SORIDRAW_R2_HYBRID_READ_V1','SORIDRAW_PUBLICATION_R2_ONLY_READ_V1']){
+                if(String(catalogFlags[flag]||'')!=='1') throw Error(stage+' live cutover flag missing: '+flag);
+              }
+              for(const marker of [
+                'isExploreR2CatalogReadEnabled066',
+                'handleCatalogFeed066',
+                'handleCatalogProfileTracks066',
+                'handleCatalogSearch066',
+                'isExploreR2HybridReadEnabled336',
+                'isExplorePublicationR2OnlyReadEnabled358',
+              ]){
+                if(!s.includes(marker)) throw Error(stage+' live Worker R2 authority missing: '+marker);
+              }
+              console.log(`${stage}_APP372_R2_CUTOVER_READINESS=PASS`);
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
@@ -160,6 +180,27 @@ jobs:
             console.log('FANOUT_INDEX_LIST_explore_derived_tracks='+JSON.stringify(sets[2]||[]));
             console.log('FANOUT_INDEX_LIST_explore_derived_changes='+JSON.stringify(sets[3]||[]));
             console.log('FANOUT_INDEX_LIST_explore_derived_profiles='+JSON.stringify(sets[4]||[]));
+            const byName=new Map(schema.map(row=>[String(row.name||''),String(row.sql||'').replace(/\s+/g,' ').trim()]));
+            const cutoff='1791309600000';
+            for(const name of [
+              'idx_tracks_latest_order',
+              'idx_tracks_owner_latest',
+              'idx_tracks_owner_source',
+              'idx_tracks_primary_genre_latest',
+              'explore032_track_insert',
+              'explore032_track_update',
+              'soridraw_shared_rev_tracks_ai_051',
+              'soridraw_shared_rev_tracks_au_051',
+            ]){
+              const ddl=byName.get(name);
+              if(!ddl) throw Error('APP373 live post-cutover object missing: '+name);
+              if(!ddl.includes(cutoff)) throw Error('APP373 locked cutoff missing: '+name);
+              if(!/source_type\s*<>\s*'music_note'\s+OR\s+(?:NEW\.)?created_at\s*</i.test(ddl)){
+                throw Error('APP373 Music Note cutoff predicate missing: '+name);
+              }
+            }
+            console.log('APP373_LIVE_POSTCUTOVER_SCHEMA=PASS');
+            console.log('APP373_SHARED_D1_CUTOVER_APPLIED=true');
             console.log('FIRST_PUBLICATION_FANOUT_READONLY=PASS');
             console.log('REMOTE_D1_WRITES=0');
           })().catch(e=>{console.error(e);process.exit(1)});

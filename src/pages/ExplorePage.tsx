@@ -8,7 +8,7 @@ import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstV
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -1091,6 +1091,7 @@ function ExploreRecommendationRail({
   trackClassName = '',
   itemLabel = '곡',
   mobileGroupSize = 3,
+  resetToStartKey,
   children,
 }: {
   title: string;
@@ -1100,6 +1101,7 @@ function ExploreRecommendationRail({
   trackClassName?: string;
   itemLabel?: string;
   mobileGroupSize?: 1 | 2 | 3;
+  resetToStartKey?: string;
   children: React.ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -1117,6 +1119,7 @@ function ExploreRecommendationRail({
     startScrollLeft: number;
   } | null>(null);
   const suppressRailClickUntilRef241 = useRef(0);
+  const previousResetToStartKey375 = useRef<string | undefined>(resetToStartKey);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [railControlsVisible251, setRailControlsVisible251] = useState(true);
@@ -1259,6 +1262,28 @@ function ExploreRecommendationRail({
       clearRailControlsTimer251();
     };
   }, [itemCount]);
+
+  useLayoutEffect(() => {
+    if (resetToStartKey == null) return;
+    const previousKey = previousResetToStartKey375.current;
+    previousResetToStartKey375.current = resetToStartKey;
+    if (previousKey === resetToStartKey) return;
+
+    // app375 — when a newly published track becomes the first item in the
+    // chronological Latest rail, the browser may preserve the old horizontal
+    // scroll offset and leave that new first card just outside the left edge.
+    // Reset only rails that explicitly opt in; other recommendation rails keep
+    // the user's current position.
+    const frame = window.requestAnimationFrame(() => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      clearRailAlignTimer251();
+      scroller.scrollTo({ left: 0, behavior: 'auto' });
+      syncScrollButtons();
+      syncRailVisualCenter256();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resetToStartKey]);
 
   const getRailCards241 = () => {
     const scroller = scrollerRef.current;
@@ -3595,6 +3620,14 @@ export default function ExplorePage() {
     };
 
     setPublicationSettingsBusy(true);
+    if (selectionChanged && activeExplorePreviewTrackId224 === pendingSettings.track.id) {
+      // app374 — the yellow title / center equalizer are local feedback for the
+      // exact Suno link the user opened. Switching the published song changes
+      // that playback target, so stale "playing" feedback must end immediately.
+      clearExplorePreviewTimer224();
+      setActiveExplorePreviewTrackId224('');
+      clearExplorePreviewVisualState237(pendingSettings.track.id);
+    }
     patchExplorePublicationTrack(pendingSettings.track, optimisticPatch);
     setPublicationSettings(null);
     setPublicationPrivateConfirm(false);
@@ -4553,6 +4586,7 @@ export default function ExplorePage() {
                   subtitle="새로 공개된 곡"
                   itemCount={Math.min(EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304, latestPublicTracks312.length)}
                   mobileGroupSize={3}
+                  resetToStartKey={`${latestPublicScope312}:${latestPublicTracks312[0]?.id || ''}`}
                   toolbar={(
                     <div className="soridraw-explore-recommend-keywords" aria-label="최신 공개곡 범위 선택">
                       <button

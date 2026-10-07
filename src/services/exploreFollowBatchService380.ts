@@ -22,6 +22,20 @@ export type ExploreFollowBatchBase380 = {
   baseActorFollowingCount: number | null;
 };
 
+export type ExploreFollowPendingRecord380 = ExploreFollowBatchBase380 & {
+  viewerUid: string;
+  targetUid: string;
+  desiredFollowing: boolean;
+  targetProfile: {
+    uid: string;
+    nickname: string;
+    avatarUrl: string;
+    handle: string;
+  };
+  updatedAt: number;
+  notBefore: number;
+};
+
 export type ExploreFollowBatchSettlement380 = ExploreFollowBatchBase380 & {
   viewerUid: string;
   targetUid: string;
@@ -56,6 +70,8 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
   onBusy?: (busy: boolean) => void;
   onSettled: (settlement: ExploreFollowBatchSettlement380) => void;
   onError: (failure: ExploreFollowBatchError380) => void;
+  initialDelayMs?: number;
+  restoredNotBefore?: number;
 };
 
 type ExploreFollowBatchEntry380 = ExploreFollowBatchRequest380 & {
@@ -64,12 +80,83 @@ type ExploreFollowBatchEntry380 = ExploreFollowBatchRequest380 & {
   updatedAt: number;
   timer: ReturnType<typeof setTimeout> | null;
   inflight: boolean;
+  notBefore: number;
 };
 
 const pending380 = new Map<string, ExploreFollowBatchEntry380>();
+const EXPLORE_FOLLOW_OUTBOX_KEY_380 = 'soridraw:explore:follow-outbox:380:';
 
 const key380 = (viewerUid: string, targetUid: string) =>
   JSON.stringify([String(viewerUid || '').trim(), String(targetUid || '').trim()]);
+
+const storageKey380 = (viewerUid: string) =>
+  `${EXPLORE_FOLLOW_OUTBOX_KEY_380}${String(viewerUid || '').trim()}`;
+
+const readStored380 = (viewerUid: string): Record<string, ExploreFollowPendingRecord380> => {
+  if (typeof localStorage === 'undefined') return {};
+  const uid = String(viewerUid || '').trim();
+  if (!uid) return {};
+  try {
+    const raw = localStorage.getItem(storageKey380(uid));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as Record<string, ExploreFollowPendingRecord380>;
+  } catch {
+    return {};
+  }
+};
+
+const writeStored380 = (
+  viewerUid: string,
+  rows: Record<string, ExploreFollowPendingRecord380>,
+) => {
+  if (typeof localStorage === 'undefined') return;
+  const uid = String(viewerUid || '').trim();
+  if (!uid) return;
+  try {
+    const key = storageKey380(uid);
+    if (Object.keys(rows).length === 0) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(rows));
+  } catch {}
+};
+
+const toRecord380 = (entry: ExploreFollowBatchEntry380): ExploreFollowPendingRecord380 => ({
+  viewerUid: entry.viewerUid,
+  targetUid: entry.targetUid,
+  baseFollowing: entry.baseFollowing,
+  baseTargetFollowerCount: entry.baseTargetFollowerCount,
+  baseTargetFollowingCount: entry.baseTargetFollowingCount,
+  baseActorFollowingCount: entry.baseActorFollowingCount,
+  desiredFollowing: entry.desiredFollowing,
+  targetProfile: { ...entry.targetProfile },
+  updatedAt: entry.updatedAt,
+  notBefore: entry.notBefore,
+});
+
+const persistEntry380 = (entry: ExploreFollowBatchEntry380) => {
+  const rows = readStored380(entry.viewerUid);
+  rows[entry.targetUid] = toRecord380(entry);
+  writeStored380(entry.viewerUid, rows);
+};
+
+const removeStored380 = (viewerUid: string, targetUid: string) => {
+  const rows = readStored380(viewerUid);
+  if (!Object.prototype.hasOwnProperty.call(rows, targetUid)) return;
+  delete rows[targetUid];
+  writeStored380(viewerUid, rows);
+};
+
+export const readPendingExploreFollowIntents380 = (
+  viewerUid: string,
+): ExploreFollowPendingRecord380[] => {
+  const uid = String(viewerUid || '').trim();
+  if (!uid) return [];
+  const rows = readStored380(uid);
+  return Object.values(rows)
+    .filter((row) => row?.viewerUid === uid && String(row?.targetUid || '').trim())
+    .sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0));
+};
 
 const safeCount380 = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -91,10 +178,15 @@ const retryAfterMs380 = (error: unknown) => {
 
 const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) => {
   clearTimer380(entry);
+  const requestedDelay = Math.max(0, delayMs);
+  const cooldownDelay = entry.desiredFollowing === entry.baseFollowing
+    ? 0
+    : Math.max(0, entry.notBefore - Date.now());
+  const finalDelay = Math.max(requestedDelay, cooldownDelay);
   entry.timer = setTimeout(() => {
     entry.timer = null;
     void flushExploreFollowPair380(entry.key);
-  }, Math.max(0, delayMs));
+  }, finalDelay);
 };
 
 export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
@@ -106,6 +198,7 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
   if (entry.desiredFollowing === entry.baseFollowing) {
     clearTimer380(entry);
     pending380.delete(key);
+    removeStored380(entry.viewerUid, entry.targetUid);
     entry.onBusy?.(false);
     return;
   }
@@ -151,25 +244,34 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
         );
       }
       current.inflight = false;
+      current.notBefore = 0;
+      current.updatedAt = Date.now();
+      persistEntry380(current);
       current.onBusy?.(false);
       schedule380(current);
       return;
     }
 
     pending380.delete(key);
+    removeStored380(entry.viewerUid, entry.targetUid);
   } catch (error) {
     const current = pending380.get(key) || entry;
     const code = String((error as { code?: unknown })?.code || '').trim();
     if (code === 'RATE_LIMITED') {
       // Abuse/cooldown rejection happens before D1 mutation. Keep the newest
       // desired state local and retry only after the server-provided window.
+      const retryDelay = retryAfterMs380(error);
       current.inflight = false;
+      current.notBefore = Date.now() + retryDelay;
+      current.updatedAt = Date.now();
+      persistEntry380(current);
       current.onBusy?.(false);
-      schedule380(current, retryAfterMs380(error));
+      schedule380(current, retryDelay);
       return;
     }
 
     pending380.delete(key);
+    removeStored380(current.viewerUid, current.targetUid);
     current.onError({
       viewerUid: current.viewerUid,
       targetUid: current.targetUid,
@@ -207,6 +309,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     existing.onError = request.onError;
     existing.version += 1;
     existing.updatedAt = Date.now();
+    persistEntry380(existing);
     if (!existing.inflight) schedule380(existing);
     return;
   }
@@ -228,9 +331,11 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     updatedAt: Date.now(),
     timer: null,
     inflight: false,
+    notBefore: Math.max(0, Math.floor(Number(request.restoredNotBefore || 0))),
   };
   pending380.set(key, entry);
-  schedule380(entry);
+  persistEntry380(entry);
+  schedule380(entry, request.initialDelayMs ?? EXPLORE_FOLLOW_IDLE_FLUSH_MS_380);
 };
 
 export const getPendingExploreFollowMutationCount380 = (viewerUid = '') => {

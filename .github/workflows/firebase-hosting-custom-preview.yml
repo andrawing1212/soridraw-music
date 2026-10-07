@@ -81,6 +81,9 @@ jobs:
       - name: Verify app361 Music Note publication origin parity
         run: npx tsx scripts/verify-371-music-note-publication-origin-parity.ts
 
+      - name: Verify app377 follow count and list convergence
+        run: node scripts/verify-377-follow-count-list-sync.mjs
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

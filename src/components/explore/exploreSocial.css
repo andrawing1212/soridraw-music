@@ -323,3 +323,58 @@
 :root[data-soridraw-theme="light"] .soridraw-explore-more-rows button.is-available strong{color:#d94d74}
 
 @media (max-width:480px){.soridraw-explore-profile-bio{font-size:9px;line-height:1.46}}
+
+
+/* SORIDRAW_EXPLORE_PROFILE_CONNECTIONS_376_20261007 */
+.soridraw-explore-profile-stat-button-376{display:inline-flex;align-items:center;gap:4px;margin:0;padding:0;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;color:inherit;font:inherit;font-weight:inherit;cursor:pointer}
+.soridraw-explore-profile-stat-button-376 strong{color:rgba(255,255,255,.88);font-weight:850}
+.soridraw-explore-profile-stat-button-376:hover{color:rgba(255,255,255,.72)}
+.soridraw-explore-profile-stat-button-376:focus-visible{outline:2px solid #ffb400!important;outline-offset:4px!important;border-radius:4px}
+
+.soridraw-explore-connections-backdrop-376{position:fixed;z-index:220;inset:0;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58);backdrop-filter:blur(3px)}
+.soridraw-explore-connections-modal-376{display:flex;width:min(430px,calc(100vw - 28px));max-height:min(72vh,660px);overflow:hidden;flex-direction:column;border:1px solid rgba(255,255,255,.09);border-radius:22px;background:#1a1a1d;box-shadow:0 24px 72px rgba(0,0,0,.48);color:#f5f5f6}
+.soridraw-explore-connections-head-376{display:flex;align-items:center;gap:10px;padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.soridraw-explore-connections-tabs-376{display:grid;min-width:0;flex:1;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.soridraw-explore-connections-tabs-376 button{height:38px;padding:0 10px;border:0!important;outline:0!important;border-radius:12px;background:transparent!important;box-shadow:none!important;color:rgba(235,235,240,.48);font-size:12px;font-weight:760;cursor:pointer}
+.soridraw-explore-connections-tabs-376 button strong{margin-left:3px;color:inherit;font-weight:900}
+.soridraw-explore-connections-tabs-376 button.is-active{background:rgba(255,255,255,.08)!important;color:#fff}
+.soridraw-explore-connections-close-376{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0!important;outline:0!important;border-radius:12px;background:rgba(255,255,255,.06)!important;box-shadow:none!important;color:rgba(255,255,255,.68);cursor:pointer}
+.soridraw-explore-connections-close-376:hover{background:rgba(255,255,255,.1)!important;color:#fff}
+.soridraw-explore-connections-close-376 svg{width:17px;height:17px}
+.soridraw-explore-connections-body-376{min-height:180px;overflow:auto;padding:8px 10px 12px}
+.soridraw-explore-connections-list-376{display:flex;flex-direction:column}
+.soridraw-explore-connection-person-376{display:flex;width:100%;min-width:0;align-items:center;gap:12px;padding:10px;border:0!important;outline:0!important;border-radius:14px;background:transparent!important;box-shadow:none!important;color:#fff;text-align:left;cursor:pointer}
+.soridraw-explore-connection-person-376:hover{background:rgba(255,255,255,.055)!important}
+.soridraw-explore-connection-person-376>svg{width:16px;height:16px;margin-left:auto;color:rgba(235,235,240,.28)}
+.soridraw-explore-connection-avatar-376{display:grid;place-items:center;width:44px;height:44px;min-width:44px;overflow:hidden;border-radius:50%;background:rgba(255,255,255,.075);color:rgba(255,255,255,.72);font-size:14px;font-weight:900}
+.soridraw-explore-connection-avatar-376 img{width:100%;height:100%;object-fit:cover}
+.soridraw-explore-connection-copy-376{display:flex;min-width:0;flex:1;flex-direction:column;gap:3px}
+.soridraw-explore-connection-copy-376 strong,.soridraw-explore-connection-copy-376>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.soridraw-explore-connection-copy-376 strong{color:rgba(255,255,255,.93);font-size:13px;font-weight:850}
+.soridraw-explore-connection-copy-376>span{color:rgba(235,235,240,.42);font-size:11px;font-weight:650}
+.soridraw-explore-connections-state-376{display:flex;min-height:180px;align-items:center;justify-content:center;gap:8px;padding:26px;color:rgba(235,235,240,.48);font-size:12px;font-weight:700;text-align:center}
+.soridraw-explore-connections-inline-error-376{padding:8px 10px;color:#ff9aa7;font-size:11px;font-weight:700;text-align:center}
+.soridraw-explore-connections-more-376{display:flex;width:100%;height:40px;align-items:center;justify-content:center;gap:7px;margin-top:6px;border:0!important;outline:0!important;border-radius:12px;background:rgba(255,255,255,.06)!important;box-shadow:none!important;color:rgba(255,255,255,.78);font-size:12px;font-weight:800;cursor:pointer}
+.soridraw-explore-connections-more-376:hover:not(:disabled){background:rgba(255,255,255,.1)!important;color:#fff}
+.soridraw-explore-connections-more-376:disabled{cursor:wait;opacity:.6}
+
+:root[data-soridraw-theme="light"] .soridraw-explore-profile-stat-button-376 strong{color:rgba(20,20,22,.88)}
+:root[data-soridraw-theme="light"] .soridraw-explore-profile-stat-button-376:hover{color:rgba(20,20,22,.72)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-backdrop-376{background:rgba(20,20,24,.35)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-modal-376{border-color:rgba(20,20,24,.1);background:#fff;color:#161619;box-shadow:0 24px 72px rgba(20,20,24,.18)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-head-376{border-bottom-color:rgba(20,20,24,.08)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-tabs-376 button{color:rgba(25,25,28,.46)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-tabs-376 button.is-active{background:rgba(20,20,24,.065)!important;color:#161619}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-close-376{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.64)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-person-376{color:#161619}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-person-376:hover{background:rgba(20,20,24,.045)!important}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-avatar-376{background:rgba(20,20,24,.065);color:rgba(20,20,22,.7)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-copy-376 strong{color:rgba(20,20,22,.92)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-copy-376>span,:root[data-soridraw-theme="light"] .soridraw-explore-connections-state-376{color:rgba(25,25,28,.46)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connection-person-376>svg{color:rgba(25,25,28,.28)}
+:root[data-soridraw-theme="light"] .soridraw-explore-connections-more-376{background:rgba(20,20,24,.055)!important;color:rgba(20,20,22,.72)}
+
+@media (max-width:600px){
+  .soridraw-explore-connections-backdrop-376{place-items:end center;padding:0}
+  .soridraw-explore-connections-modal-376{width:100%;max-height:76vh;border-width:1px 0 0;border-radius:22px 22px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+}

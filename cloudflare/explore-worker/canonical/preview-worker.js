@@ -13068,11 +13068,13 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   const now = Date.now();
   const stats = await adjustExploreFollowCountersDelta(env, authContext.uid, targetUid, shouldFollow, now);
   await patchExploreFirstViewFollowCounts(env, authContext.uid, targetUid, stats, now);
+  // SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007
   return json({ ok: true, data: {
     uid: targetUid,
     following: shouldFollow,
     followerCount: clampExploreSocialCount(stats?.following?.follower_count),
-    followingCount: clampExploreSocialCount(stats?.following?.following_count)
+    followingCount: clampExploreSocialCount(stats?.following?.following_count),
+    actorFollowingCount: clampExploreSocialCount(stats?.follower?.following_count)
   } }, 200, cors);
 }
 __name(handleFollowR2Core, "handleFollowR2Core");

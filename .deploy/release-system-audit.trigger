@@ -1,9 +1,9 @@
-app374-explore-media-switch-visual-reset-release-audit
-target=cce0ec1d0190f897e96f6f42284460216ee022af
-scope=explore-visual-only,media-switch-reset,app-version-374,app361-publication-parity,app373-cutover-poststate
+app375-explore-latest-first-visible
+target=081e0b9455406d0ee992b4f274a33fd7f8a91a07
+scope=explore-latest-rail,new-publication-first-visible,scroll-position-only
 shared_d1_apply=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app374-final-preview-release-audit
+requested=2026-10-07-app375-latest-first-visible-audit

@@ -1,6 +1,6 @@
-follow-w1w2-cutover-control-live-audit
-target=009e04044e0f9687a5b56e8511eab84624c1e2bb
-scope=follow381-control-live,follow380-lifecycle-config,rollback-safe-one-way-authority,protocol354-355,legacy-parity,isolated-physical-w1w2
+follow380-local-final-state-abuse-guard-audit
+target=33bb335ad6fd99082e4ee43ed8f87ea17a4b936e
+scope=follow380-client-30s-final-state,follow380-reload-outbox,follow380-progressive-pair-cooldown,follow380-account-day-cap,like-existing-defense-audit
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow-w1w2-cutover-control-live-audit
+requested=2026-10-07-follow380-final-state-abuse-audit

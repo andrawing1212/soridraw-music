@@ -1,3 +1,56 @@
+## 0RH. follow W14~W17 → W1~W2 재개 1차 독립 감사 PASS / PREVIEW 배포 전 (2026-10-07 KST)
+
+현재 작업:
+- app375 릴리스 종료 후 follow/unfollow 저비용 backend 작업을 다시 시작.
+- 시작 기준 PREVIEW `0c9336a9871e348a4e05230b4e44742c92ec060d`.
+- 감사 trigger commit `2cc95dc69a72c230bca4c59e9d8d5c4633528524`.
+- Release System Audit Run `37564169142`: **SUCCESS**.
+- 제품 앱/Worker 배포는 하지 않았고 app375 공개/비공개/최신곡/좋아요/Music Note/Library/UI는 비변경.
+
+핵심 감사 결과:
+- Worker341 legacy counter mutation exact parity: **PASS**.
+- Worker341 legacy post-sync exact parity: **PASS**.
+- dormant overlay router가 legacy 경로보다 먼저 분기되고 cutover OFF에서 legacy 경로를 바꾸지 않는 계약: **PASS**.
+- 347 legacy compatibility 추가 write 부재: **PASS**.
+- crash/replay, suspended writer, duplicate/reverse/shared-target, ordered client retry: **PASS**.
+- shared follow migration: **미적용 / overlay authority OFF**.
+- TypeScript PASS / Build PASS / TEST+PRODUCTION Worker dry-run PASS / live shared D1 preflight SELECT-only PASS.
+- audit 종료 후 branch refs unchanged PASS.
+- 격리용 임시 D1 cleanup PASS.
+
+실제 격리 Cloudflare D1 + actual HTTP handler 물리 비용:
+- 새 follow: **R2 / W2**.
+- duplicate operation id: **R1 / W0**.
+- same-state + new operation id: **R4 / W0**.
+- unfollow: **R6 / W1**.
+- stale revision reject: **R1 / W0**.
+- relation 저장 후 R2 실패: **R5 / W1**.
+- recovery retry: **R16 / W0**.
+- 따라서 정상 follow/unfollow physical D1 hard gate **W1~W2 PASS**, duplicate/same-state **W0 PASS**.
+- 위 수치는 새로 만든 격리 D1의 실제 `rows_read/rows_written`이며 shared 사용자 D1을 변경하지 않음.
+
+아직 남은 게이트:
+- R2는 이번 격리 시험에서 실제 live billing이 아니라 fixture get/put 시도 횟수로 검증됨.
+  - 정상 follow: R2 get 12 / put 7.
+  - 정상 unfollow: R2 get 12 / put 7.
+- 실제 PREVIEW Worker + R2 환경의 비용/지연/충돌 계측은 아직 **미검증**.
+- PC↔모바일 실기기 follow/unfollow, profile follower/following count, following membership, follower-save permission, public-profile parity도 **실사용 검증 전**.
+- 따라서 지금 바로 shared follow cutover/migration을 켜거나 TEST/PRODUCTION으로 승격하지 않는다.
+
+다음 안전 단계:
+1. 현재 검증된 dormant overlay candidate를 **cutover OFF** 상태의 PREVIEW Worker 후보로 고정한다.
+2. PREVIEW 배포 전 release source identity + Worker341 legacy parity gate를 다시 고정한다.
+3. 사용자가 PREVIEW Worker 배포를 요청하면 PREVIEW만 배포하고, 먼저 cutover OFF legacy 실사용 비용이 Worker341 baseline과 동일한지 확인한다.
+4. 그 다음 별도 안전 경계에서 overlay 활성화가 필요하면 shared schema/cutover 영향·rollback을 보고하고 명확한 승인을 받은 뒤 진행한다.
+5. PREVIEW live에서 follow/unfollow W1~W2 + PC↔모바일/프로필 정합성까지 확인되기 전 TEST 승격 금지.
+
+데이터/환경:
+- 사용자 데이터 migration/backfill/copy/delete/rewrite: **0**.
+- shared follow schema/cutover mutation: **0**.
+- Firebase Hosting/Functions/Rules 변경: **0**.
+- Cloudflare Worker 배포: **0**.
+- TEST/PRODUCTION 변경: **0**.
+
 ## 0RG. app375 PRODUCTION 사용자 smoke PASS / 릴리스 종료 (2026-10-07 KST)
 
 사용자 정식앱 확인:

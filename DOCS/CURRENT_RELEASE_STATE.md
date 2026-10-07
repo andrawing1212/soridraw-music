@@ -1,3 +1,47 @@
+## 0RL. app376 PREVIEW 배포 완료 / 팔로워·팔로잉 실사용 검증 대기 (2026-10-07 KST)
+
+사용자 승인:
+- 사용자가 `배포해줘`로 app376 PREVIEW 배포를 명확히 승인.
+- 승인 범위는 app376 client/Firebase PREVIEW Hosting만. Worker/shared D1/Functions/Rules/TEST/PRODUCTION 변경 없음.
+
+배포:
+- app version commit: `bbbf8ade85cce6bd49ea646c85b2b9b38a4e8393`.
+- release trigger / locked source: `e928cddaeed721227a24b1f2184777b029a030ab`.
+- Firebase PREVIEW Hosting Run `37567143109`: **SUCCESS**.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- remote `preview.soridraw.com` app version **376**.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- TypeScript PASS / Build PASS.
+- app358 profile+My Likes convergence PASS.
+- app359 My Likes settlement upgrade PASS.
+- app360 My Likes navigation local PASS.
+- app361 Music Note publication origin parity PASS.
+- shared RTDB Rules: SKIPPED.
+- TEST/PRODUCTION unchanged PASS.
+
+app376 기능:
+- 공개 프로필 `팔로워` / `팔로잉` 숫자를 클릭하면 실제 사용자 목록 팝업.
+- PC 중앙 popup / 모바일 bottom-sheet.
+- 30명 bounded page + 더 보기.
+- 프로필 진입만으로 목록 서버 read 추가 0; 사용자가 숫자를 눌렀을 때만 조회.
+- 동일 mount 재열기는 memory cache.
+- 사용자별 N+1 profile read 없음.
+- CACHE LIVE 요청명 `팔로워 목록` / `팔로잉 목록` 표시.
+
+현재 Worker/데이터:
+- PREVIEW Explore Worker는 기존 `bc8cc09e-4210-46e2-bdb7-72796e2798e4` 유지. 이번 app376 배포에서 Worker 재배포 없음.
+- shared follow cutover OFF.
+- shared D1 schema/migration/write 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- Functions / Firestore Rules / RTDB Rules 변경 0.
+
+실사용 검증:
+1. MY프로필에서 팔로워/팔로잉 숫자를 눌러 실제 목록 확인.
+2. A→B 팔로우 후 B의 팔로워 목록에 A, A의 팔로잉 목록에 B가 보이는지 확인.
+3. 팔로우 해제 후 두 목록에서 사라지는지 확인.
+4. 숫자(count) / 목록 / 팔로우 버튼 상태가 PC와 모바일에서 일치하는지 확인.
+5. CACHE LIVE에서 첫 목록 클릭 비용과 같은 목록 재열기 비용 확인.
+6. 현재 follow mutation W14~W17은 legacy cutover-OFF 경로이므로 이 정합성 확인 전 W1~W2 cutover 활성화 금지.
 ## 0RK. app376 팔로워/팔로잉 목록 팝업 준비 완료 / PREVIEW 배포 전 (2026-10-07 KST)
 
 사용자 실사용 관찰:

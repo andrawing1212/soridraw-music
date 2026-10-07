@@ -69,6 +69,7 @@ const hosting = (file) => stable(readJson(file).hosting || {});
 const omitExploreAllowed = (c) => stable({
   ...c,
   name: undefined,
+  vars: Object.fromEntries(Object.entries(c.vars || {}).filter(([key]) => key !== 'SORIDRAW_ENVIRONMENT')),
   d1: c.d1.filter((x) => x.binding !== 'RATE_DB'),
   r2: c.r2.filter((x) => x.binding !== 'EXPLORE_CACHE'),
   services: [],
@@ -94,6 +95,9 @@ const buildContract = () => {
 
   if (testExplore.name !== 'soridraw-explore-test' || prodExplore.name !== 'soridraw-explore-api') {
     throw new Error('Explore target names drifted');
+  }
+  if (testExplore.vars.SORIDRAW_ENVIRONMENT !== 'test' || prodExplore.vars.SORIDRAW_ENVIRONMENT !== 'production') {
+    throw new Error('Explore abuse environment identity mismatch');
   }
   assertEqual(omitExploreAllowed(testExplore), omitExploreAllowed(prodExplore), 'Unapproved TEST/PRODUCTION Explore contract difference');
   const testDb = one(testExplore.d1, 'DB');

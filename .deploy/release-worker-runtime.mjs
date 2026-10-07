@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { assertReceiptReady390, verifySocialConfig380 } from '../cloudflare/explore-worker/scripts/receipt390-release.mjs';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
@@ -171,6 +172,7 @@ async function makeConfig() {
   const canonicalVars = canonicalWrangler?.vars && typeof canonicalWrangler.vars === 'object' && !Array.isArray(canonicalWrangler.vars)
     ? { ...canonicalWrangler.vars }
     : {};
+  canonicalVars.SORIDRAW_ENVIRONMENT = mode;
   const canonicalVarNames = Object.keys(canonicalVars).sort();
   if (!canonicalVarNames.length) throw new Error('canonical release feature vars are missing');
   const canonicalDurableBindings = Array.isArray(canonicalWrangler?.durable_objects?.bindings)
@@ -231,6 +233,9 @@ async function makeConfig() {
   });
 
   const liveRateLimits = bindings.filter((item) => item?.type === 'ratelimit');
+  if (action !== 'restore' && !liveRateLimits.some(item => item?.name === 'LIKE_RATE_LIMITER')) {
+    throw new Error(`${mode}: live LIKE_RATE_LIMITER binding missing`);
+  }
   for (const item of liveRateLimits) {
     const canonical = canonicalRateLimits.find((row) => row?.name === item?.name);
     if (!canonical) throw new Error(`unexpected live ratelimit binding on ${target.worker}: ${item?.name || '(unnamed)'}`);
@@ -589,6 +594,10 @@ async function restore() {
 }
 
 await makeConfig();
+if (action !== 'restore') {
+  verifySocialConfig380(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')), mode);
+  assertReceiptReady390(CONFIG_PATH);
+}
 const bundleDirectory = join(RELEASE_DIR, 'bundle');
 rmSync(bundleDirectory, { recursive: true, force: true });
 run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run', '--outdir', bundleDirectory], WORKER_DIR);

@@ -14218,35 +14218,15 @@ async function readOverlayFollowing355(request, env, uid, cutover) {
   throwApi('FOLLOW_RECOVERY_BUSY', '팔로우 목록을 다시 확인해 주세요.', 503);
 }
 
-async function enforceFollowEdgeRateLimit355(env, uid) {
+async function enforceFollowEdgeRateLimit355(env, uid, targetUid, following, operationId) {
+  // SORIDRAW_FOLLOW_ABUSE_GUARD_380_20261007
   const limiter = env?.LIKE_RATE_LIMITER;
-  if (!limiter || typeof limiter.limit !== 'function' || !env?.PROFILE_MEDIA) {
-    throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 기능을 확인하는 중입니다.', 503);
-  }
-  if (!(await limiter.limit({ key: 'follow:' + uid }))?.success) {
-    throwApi('RATE_LIMITED', '잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });
-  }
-  // Keep the original per-user follow window/limit using one bounded R2 CAS.
-  // The native limiter is an additional burst guard with a separate action key.
-  const key = 'internal/explore/follow-rate-v355/' + encodeURIComponent(uid) + '.json';
-  const windowStart = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS) * RATE_LIMIT_WINDOW_MS;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const object = await env.PROFILE_MEDIA.get(key);
-    const old = object ? JSON.parse(await object.text()) : null;
-    if (object && (!old || !Number.isSafeInteger(old.windowStart) || !Number.isSafeInteger(old.count) || old.count < 1 || old.windowStart > windowStart)) {
-      // A suspended request must never roll a newer window back to its old one.
-      throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 상태를 다시 확인해 주세요.', 503);
-    }
-    const count = old?.windowStart === windowStart ? Number(old.count) + 1 : 1;
-    if (!Number.isSafeInteger(count) || count < 1) throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 상태를 확인하는 중입니다.', 503);
-    if (count > RATE_LIMITS.follow) throwApi('RATE_LIMITED', '잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });
-    const saved = await env.PROFILE_MEDIA.put(key, JSON.stringify({ windowStart, count }), {
-      onlyIf: object ? { etagMatches: object.etag } : { etagDoesNotMatch: '*' },
-      httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    });
-    if (saved) return;
-  }
-  throwApi('RATE_LIMIT_UNAVAILABLE', '팔로우 보호 상태를 다시 확인해 주세요.', 503);
+  if (!limiter || typeof limiter.limit !== 'function') socialAbuseUnavailable380();
+  let allowed;
+  try { allowed = await limiter.limit({ key: 'follow:' + uid }); }
+  catch { socialAbuseUnavailable380(); }
+  if (!allowed?.success) socialAbuseLimited380(60_000);
+  await consumeSocialAbuse380(env, uid, 'follow', [{ target: targetUid, desired: following, operationId }]);
 }
 
 async function handleOverlayFirstView355(request, profileRef, env, cors, cutover) {
@@ -14456,15 +14436,20 @@ async function handleFollowOverlay354(request, env, cors, actor, target, followi
     throwApi("FOLLOW_OVERLAY_READONLY", "팔로우 저장을 안전하게 잠시 중지했습니다. 잠시 후 다시 시도해 주세요.", 503,
       { "Retry-After": "5", "X-Soridraw-Follow-Protocol": "354" });
   }
-  await enforceFollowEdgeRateLimit355(env, actor);
+  // Parse ordered identity before the abuse gate. Unordered negotiation has no R2 receipt.
+  let payload = null;
+  try { payload = await request.json(); } catch {}
+  const expected = payload?.followExpectedRevision;
+  if (typeof payload?.followOperationId !== "string" || !/^[a-zA-Z0-9_-]{16,128}$/.test(payload.followOperationId) ||
+      !Number.isSafeInteger(expected) || expected < 0) {
+    throwApi("FOLLOW_ORDER_REQUIRED", "팔로우 상태를 확인한 후 다시 시도해 주세요.", 409,
+      { "X-Soridraw-Follow-Protocol": "354" });
+  }
+  await enforceFollowEdgeRateLimit355(env, actor, target, following, payload.followOperationId);
   if (following) {
     const row = await env.DB.prepare("SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1").bind(target).first();
     if (!row) throwApi("NOT_FOUND", "공개 크리에이터를 찾을 수 없습니다.", 404);
   }
-  // JSON uses the existing Content-Type CORS contract; no auth/CORS change.
-  let payload = null;
-  try { payload = await request.json(); } catch {}
-  const expected = payload?.followExpectedRevision;
   const result = await orchestrateFollowOverlay354(env, actor, target, following,
     payload?.followOperationId, expected, cutover, request);
   const state = await readFollowProfile354(env, target, cutover);
@@ -24457,6 +24442,7 @@ function createLikeD1OnlyCanonical171(db, options = {}) {
 // SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921
 async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {
   const authContext = await requireExploreAuth(request);
+  throwApi('LIKE_CLIENT_REFRESH_REQUIRED', '좋아요 저장 방식을 업데이트했습니다. 새로고침 후 다시 시도해 주세요.', 409);
   // SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921
   // Retire the legacy RATE_DB write from the direct PUT/DELETE like route.
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
@@ -27122,9 +27108,11 @@ async function enforceExploreLikeBatchEdgeRateLimit054(env, uid) {
     console.error('[SORIDRAW 054] LIKE_RATE_LIMITER binding missing');
     throwApi('RATE_LIMIT_UNAVAILABLE', '좋아요 보호 기능을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.', 503);
   }
-  const result = await limiter.limit({ key: 'like:' + normalizedUid });
+  let result;
+  try { result = await limiter.limit({ key: 'like:' + normalizedUid }); }
+  catch { socialAbuseUnavailable380(); }
   if (!result?.success) {
-    throwApi('RATE_LIMITED', '좋아요 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });
+    socialAbuseLimited380(60_000);
   }
 }
 
@@ -27462,9 +27450,10 @@ async function handleLikeBatch034(request, env, cors) {
       throwApi('INVALID_TRACK_ID', '좋아요 묶음에 올바르지 않은 곡이 있습니다.', 400);
     }
     const rawMutationAt = Math.floor(Number(row?.mutationAt || 0));
-    const mutationAt = Number.isFinite(rawMutationAt) && rawMutationAt > 0 && rawMutationAt <= receivedAt + 5 * 60 * 1000
-      ? rawMutationAt
-      : receivedAt;
+    if (!Number.isSafeInteger(rawMutationAt) || rawMutationAt <= 0) {
+      likeReceiptError390('INVALID_SOCIAL_INTENT', 400);
+    }
+    const mutationAt = rawMutationAt;
     const baseLiked = typeof row?.baseLiked === 'boolean' ? row.baseLiked : null;
     const likeCount = clampExploreSocialCount(row?.likeCount);
     const operationId = String(row?.operationId || '').trim();
@@ -27477,12 +27466,21 @@ async function handleLikeBatch034(request, env, cors) {
     });
   }
   const mutations = [...byTrack.values()];
+  // SORIDRAW_LIKE_ABUSE_GUARD_390_20261008: validate before any D1; count unique final track intents, not HTTP batches.
+  if (mutations.some(row => !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId))) {
+    throwApi('INVALID_SOCIAL_INTENT', '좋아요 요청 순서를 확인해 주세요.', 400);
+  }
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
+  const intent390 = await prepareLikeReceipt390(authContext.uid, mutations);
+  const state390 = await readLikeReceipt390(env, authContext.uid, intent390);
+  if (!state390.receipt) await consumeSocialAbuse380(env, authContext.uid, 'like', mutations.map(row => ({
+    target: row.trackId, desired: row.liked, operationId: row.operationId,
+  })));
   // SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922
   // Final contract: 30s client batch -> one durable 069 queue row.
   // No per-track likes/track_stats direct settlement on the interactive request.
   // Personal R2 is changed-track best-effort only; it may never force a D1 scan or replay.
-  await assertLegacyLikeIntakeOpen165(env);
+  if (!state390.receipt) await assertLegacyLikeIntakeOpen165(env);
   const results = mutations.map((mutation) => ({
     trackId: mutation.trackId,
     liked: mutation.liked,
@@ -27490,12 +27488,24 @@ async function handleLikeBatch034(request, env, cors) {
   }));
   let queued = { batchId: '', inserted: false, queue: 'none' };
   if (mutations.length) {
-    queued = await enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt);
+    queued = await acceptLikeReceipt390(env, authContext.uid, mutations, intent390, state390, receivedAt);
+    if (queued.replay) {
+      // Receipt proves only intake. No membership/count/revision or fresh R2 delta.
+      const legacyResults379 = body?.acceptanceProtocol390 === 1 ? null
+        : await readLegacyLikeReplay379(env, authContext.uid, mutations, queued);
+      return json({ ok: true, data: {
+        ...(legacyResults379 ? { results: legacyResults379 } : {}),
+        acceptanceReplay390: true, acceptedOperations390: mutations.map(row => ({
+          trackId: row.trackId, operationId: row.operationId,
+        })), acceptedAt390: queued.acceptedAt,
+        queued: true, batchId: queued.batchId, queue: '069', canonicalD1: 'queued',
+      } }, 200, cors);
+    }
   }
   let personalR2 = { ok: false, repairNeeded: true, reason: 'not-attempted' };
   if (mutations.length && queued.batchId) {
     try {
-      personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);
+      personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, queued.acceptedAt, queued.batchId);
     } catch (error) {
       console.warn('[188] queued like accepted; personal R2 delta deferred:', String(error?.message || error || 'unknown'));
     }
@@ -30347,3 +30357,246 @@ export {
 // SORIDRAW_PUBLICATION_MEDIA_INLINE_SOURCE_333_20261004
 
 // SORIDRAW_PUBLICATION_D1_READ_COMPACTION_361_20261005
+
+// SORIDRAW_SOCIAL_ABUSE_STATE_380_20261008
+// Operational receipts only. Never return membership/counts from this object.
+function socialAbusePolicy380(domain) {
+  if (domain === 'follow') return { windowLimit: 30, dayLimit: 120,
+    cooldowns: [30_000, 120_000, 600_000, 3_600_000], quietMs: 86_400_000, pairMax: 120 };
+  if (domain === 'like') return { windowLimit: 120, dayLimit: 600,
+    cooldowns: [30_000, 60_000, 300_000, 1_800_000], quietMs: 21_600_000, pairMax: 600 };
+  throwApi('RATE_LIMIT_UNAVAILABLE', '요청 보호 설정을 확인 중입니다.', 503);
+}
+function socialAbuseUnavailable380() {
+  throwApi('RATE_LIMIT_UNAVAILABLE', '요청 보호 상태를 확인 중입니다.', 503,
+    { 'Retry-After': '60', 'Access-Control-Expose-Headers': 'Retry-After' });
+}
+function socialAbuseLimited380(delayMs) {
+  throwApi('RATE_LIMITED', '변경 요청을 잠시 모아 반영하고 있습니다. 나중에 다시 시도해 주세요.', 429,
+    { 'Retry-After': String(Math.max(1, Math.ceil(delayMs / 1000))),
+      'Access-Control-Expose-Headers': 'Retry-After' });
+}
+async function consumeSocialAbuse380(env, uid, domain, intents) {
+  const policy = socialAbusePolicy380(domain);
+  const environment = String(env?.SORIDRAW_ENVIRONMENT || env?.ENV_NAME || '').trim().toLowerCase();
+  if (!['preview', 'test', 'production'].includes(environment) || !uid || !env?.PROFILE_MEDIA) {
+    socialAbuseUnavailable380();
+  }
+  if (!Array.isArray(intents) || !intents.length || intents.length > 50 ||
+      new Set(intents.map(row => row.target)).size !== intents.length ||
+      intents.some(row => typeof row.target !== 'string' || !row.target || row.target.length > 512 ||
+        typeof row.desired !== 'boolean' || typeof row.operationId !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId))) {
+    throwApi('INVALID_SOCIAL_INTENT', '변경 요청 순서를 확인해 주세요.', 400);
+  }
+  const key = 'internal/explore/abuse/' + environment + '/' + domain + '/' + encodeURIComponent(uid) + '.json';
+  // Rolling timestamps enforce the limits across clock-window boundaries too.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const now = Date.now();
+    let object, old;
+    try {
+      object = await env.PROFILE_MEDIA.get(key);
+      old = object ? JSON.parse(await object.text()) : { schemaVersion: 380, events: [], pairs: [], operations: [] };
+    } catch { socialAbuseUnavailable380(); }
+    if (object && (typeof object.etag !== 'string' || !object.etag)) socialAbuseUnavailable380();
+    const integer = n => Number.isSafeInteger(n) && n >= 0;
+    if (old?.schemaVersion !== 380 || !Array.isArray(old.events) || old.events.length > policy.dayLimit ||
+        old.events.some(n => !integer(n) || n > now) ||
+        !Array.isArray(old.operations) || old.operations.length > policy.dayLimit ||
+        old.operations.some(row => !row || typeof row.target !== 'string' || !row.target || row.target.length > 512 ||
+          typeof row.desired !== 'boolean' || typeof row.operationId !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId) ||
+          !integer(row.at) || row.at > now) ||
+        !Array.isArray(old.pairs) || old.pairs.length > policy.pairMax ||
+        old.pairs.some(row => !row || typeof row.target !== 'string' || !row.target || row.target.length > 512 ||
+          typeof row.desired !== 'boolean' || typeof row.operationId !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId) ||
+          !integer(row.at) || row.at > now || !integer(row.level) || row.level > 3 ||
+          !integer(row.nextAllowedAt) || row.nextAllowedAt !== row.at + policy.cooldowns[row.level]) ||
+        new Set(old.pairs.map(row => row.target)).size !== old.pairs.length) socialAbuseUnavailable380();
+    const events = old.events.filter(at => now - at < 86_400_000).sort((a, b) => a - b);
+    const pairs = new Map(old.pairs.filter(row => now - row.at < policy.quietMs).map(row => [row.target, row]));
+    const operations = old.operations.filter(row => now - row.at < 86_400_000);
+    const changes = [];
+    let blockedUntil = 0;
+    for (const intent of intents) {
+      const replay = operations.find(row => row.operationId === intent.operationId);
+      if (replay) {
+        if (replay.target !== intent.target || replay.desired !== intent.desired) {
+          throwApi('SOCIAL_OPERATION_CONFLICT', '요청 ID가 다른 변경에 사용되었습니다.', 409);
+        }
+        // An R2 reservation is not acceptance. Exact retries must reach the
+        // atomic D1 receipt, including a crash between reservation and intake.
+        continue;
+      }
+      const prior = pairs.get(intent.target);
+      if (prior && prior.operationId === intent.operationId && prior.desired !== intent.desired) {
+        throwApi('SOCIAL_OPERATION_CONFLICT', '요청 ID가 다른 변경에 사용되었습니다.', 409);
+      }
+      if (prior?.desired === intent.desired) {
+        // Follow's canonical ordered protocol safely replays/settles W0 itself.
+        // A fresh ID with the same desired state is not an exact retry.
+        // Only durable D1 receipts may acknowledge a prior like acceptance.
+        if (domain === 'like') blockedUntil = Math.max(blockedUntil, prior.at + policy.quietMs);
+        continue;
+      }
+      if (prior && prior.nextAllowedAt > now) blockedUntil = Math.max(blockedUntil, prior.nextAllowedAt);
+      const level = prior ? Math.min(3, prior.level + 1) : 0;
+      changes.push({ ...intent, at: now, level, nextAllowedAt: now + policy.cooldowns[level] });
+    }
+    const recent = events.filter(at => now - at < 600_000);
+    if (recent.length + changes.length > policy.windowLimit) {
+      blockedUntil = Math.max(blockedUntil, recent[recent.length + changes.length - policy.windowLimit - 1] + 600_000);
+    }
+    if (events.length + changes.length > policy.dayLimit) {
+      blockedUntil = Math.max(blockedUntil, events[events.length + changes.length - policy.dayLimit - 1] + 86_400_000);
+    }
+    if (blockedUntil > now) socialAbuseLimited380(blockedUntil - now);
+    if (!changes.length) return;
+    for (const row of changes) pairs.set(row.target, row);
+    const next = { schemaVersion: 380, events: [...events, ...changes.map(() => now)],
+      operations: [...operations, ...changes.map(({ target, desired, operationId, at }) => ({ target, desired, operationId, at }))],
+      pairs: [...pairs.values()].sort((a, b) => b.at - a.at).slice(0, policy.pairMax) };
+    let saved;
+    try {
+      saved = await env.PROFILE_MEDIA.put(key, JSON.stringify(next), {
+        onlyIf: object ? { etagMatches: object.etag } : { etagDoesNotMatch: '*' },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      });
+    } catch { socialAbuseUnavailable380(); }
+    if (saved) return;
+  }
+  socialAbuseUnavailable380();
+}
+
+// SORIDRAW_LIKE_ACCEPTANCE_RECEIPT_390_20261008
+// Only intake identity lives here. Never synthesize canonical state from it.
+function likeReceiptError390(code, status = 409) {
+  throwApi(code, '좋아요 접수 상태를 확인해 주세요. 오래된 변경은 최신 상태 확인 후 다시 조작해 주세요.', status);
+}
+async function likeReceiptDigest390(value) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
+  return [...new Uint8Array(bytes)].map(n => n.toString(16).padStart(2, '0')).join('');
+}
+async function prepareLikeReceipt390(uid, mutations) {
+  if (!uid || !Array.isArray(mutations) || !mutations.length || mutations.length > 50 ||
+      new Set(mutations.map(row => row.trackId)).size !== mutations.length ||
+      new Set(mutations.map(row => row.operationId)).size !== mutations.length ||
+      mutations.some(row => typeof row.trackId !== 'string' || !row.trackId || row.trackId.length > 512 ||
+        typeof row.liked !== 'boolean' || !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId || '') ||
+        !Number.isSafeInteger(row.expectedRevision) || row.expectedRevision < 0 ||
+        !Number.isSafeInteger(row.mutationAt) || row.mutationAt <= 0)) {
+    likeReceiptError390('INVALID_SOCIAL_INTENT', 400);
+  }
+  const canonical = mutations.map(row => [row.operationId, row.trackId, row.liked, row.expectedRevision, row.mutationAt])
+    .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  return {
+    id: await likeReceiptDigest390([uid, canonical]),
+    operations: await Promise.all(canonical.map(async row => [row[0], await likeReceiptDigest390(row)])),
+    minAt: Math.min(...mutations.map(row => row.mutationAt)),
+    maxAt: Math.max(...mutations.map(row => row.mutationAt)),
+    payload: JSON.stringify(mutations.map(({ trackId, liked }) => ({ trackId, liked }))),
+  };
+}
+async function readLikeReceipt390(env, uid, intent) {
+  const row = await env.DB.prepare('SELECT generation,receipts_json FROM explore_like_intake_receipts_390 WHERE user_uid=?')
+    .bind(uid).first();
+  let entries = [];
+  if (row) {
+    try { entries = JSON.parse(row.receipts_json); } catch { likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503); }
+    if (!Number.isSafeInteger(row.generation) || row.generation < 1 || !Array.isArray(entries) || entries.length > 1200 ||
+        entries.some(entry => !/^[a-f0-9]{64}$/.test(entry.id || '') || !Number.isSafeInteger(entry.acceptedAt) ||
+          !Number.isSafeInteger(entry.expiresAt) || !/^l069_\d{13}_[a-f0-9]{64}$/.test(entry.batchId || '') ||
+          !Array.isArray(entry.operations) || entry.operations.length < 1 || entry.operations.length > 50 ||
+          entry.operations.some(op => !Array.isArray(op) || op.length !== 2 ||
+            !/^[a-zA-Z0-9_-]{16,128}$/.test(op[0]) || !/^[a-f0-9]{64}$/.test(op[1]))) ||
+        entries.reduce((sum, entry) => sum + entry.operations.length, 0) > 1200) {
+      likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503);
+    }
+  }
+  const operations = new Map(entries.flatMap(entry => entry.operations));
+  for (const [id, hash] of intent.operations) {
+    if (operations.has(id) && operations.get(id) !== hash) likeReceiptError390('SOCIAL_OPERATION_CONFLICT');
+  }
+  const receipt = entries.find(entry => entry.id === intent.id);
+  if (!receipt && intent.operations.some(([id]) => operations.has(id))) likeReceiptError390('LIKE_RECEIPT_BATCH_CONFLICT');
+  return { generation: row?.generation || 0, entries, receipt };
+}
+async function acceptLikeReceipt390(env, uid, mutations, intent, initial, now = Date.now()) {
+  let state = initial;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (state.receipt) return { ...state.receipt, inserted: false, replay: true, queue: '069' };
+    // Check AFTER exact receipt lookup: a retained proof still acknowledges an
+    // old batch. Once pruned, its unchanged timestamp can never become new work.
+    if (intent.minAt <= now - 86_400_000) likeReceiptError390('LIKE_RECEIPT_EXPIRED');
+    if (intent.maxAt > now + 300_000) likeReceiptError390('LIKE_RECEIPT_CLOCK_SKEW');
+    const entries = state.entries.filter(entry => entry.expiresAt >= now);
+    if (entries.reduce((sum, entry) => sum + entry.operations.length, 0) + mutations.length > 1200) {
+      likeReceiptError390('LIKE_RECEIPT_CAPACITY', 429);
+    }
+    const acceptedAt = Math.max(now, ...state.entries.map(entry => entry.acceptedAt + 1));
+    const receipt = { id: intent.id, operations: intent.operations, acceptedAt,
+      expiresAt: intent.maxAt + 86_400_000,
+      batchId: 'l069_' + String(acceptedAt).padStart(13, '0') + '_' + intent.id };
+    const result = await env.DB.prepare(`INSERT INTO explore_like_intake_receipts_390
+      (user_uid,generation,receipts_json,queue_id,accepted_at,mutation_count,mutations_json)
+      VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_uid) DO UPDATE SET
+      generation=excluded.generation,receipts_json=excluded.receipts_json,queue_id=excluded.queue_id,
+      accepted_at=excluded.accepted_at,mutation_count=excluded.mutation_count,mutations_json=excluded.mutations_json
+      WHERE explore_like_intake_receipts_390.generation=?
+      RETURNING generation`).bind(uid, state.generation + 1, JSON.stringify([...entries, receipt]),
+        receipt.batchId, acceptedAt, mutations.length, intent.payload, state.generation).all();
+    if (result?.success !== true) likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503);
+    if (result.results?.length === 1) return { ...receipt, inserted: true, replay: false, queue: '069' };
+    state = await readLikeReceipt390(env, uid, intent);
+  }
+  likeReceiptError390('LIKE_RECEIPT_CONTESTED', 503);
+}
+
+// SORIDRAW_LIKE_REPLAY_COMPAT_379_20261008
+// Legacy ACK recovery reads current relation/queue authority, never receipt
+// desired state. All queue seeks use receipt-proven PKs (<=1200 operations).
+// One statement gives a consistent snapshot across queue settlement/deletion.
+async function readLegacyLikeReplay379(env, uid, mutations, receipt) {
+  const ids = mutations.map(row => row.trackId);
+  if (!ids.length || ids.length > 50) {
+    likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503);
+  }
+  const result = await env.DB.prepare(`
+    WITH requested(track_id) AS (SELECT value FROM json_each(?)),
+    pending AS MATERIALIZED (
+      SELECT q.created_at, q.batch_id, json_extract(m.value,'$.trackId') AS track_id,
+        json_extract(m.value,'$.liked') AS liked
+      FROM explore_like_intake_receipts_390 proof
+      JOIN json_each(proof.receipts_json) ids
+      JOIN explore_like_batches_069 q ON q.batch_id = json_extract(ids.value,'$.batchId') AND q.user_uid = proof.user_uid
+      JOIN json_each(q.mutations_json) m
+      WHERE proof.user_uid=? AND json_extract(ids.value,'$.acceptedAt') >= ?
+        AND json_extract(m.value,'$.trackId') IN (SELECT track_id FROM requested)
+    ), ranked AS (
+      SELECT track_id, liked, ROW_NUMBER() OVER (
+        PARTITION BY track_id ORDER BY created_at DESC, batch_id DESC) AS n
+      FROM pending
+    )
+    SELECT r.track_id,
+      CASE WHEN t.is_public=1 AND t.status='published'
+        THEN COALESCE(p.liked, CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END)
+        ELSE 0 END AS liked,
+      MAX(0, COALESCE(s.like_count,0) + CASE
+        WHEN t.is_public=1 AND t.status='published' AND p.track_id IS NOT NULL
+        THEN p.liked - CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END
+        ELSE 0 END) AS like_count
+    FROM requested r
+    LEFT JOIN tracks t ON t.id=r.track_id
+    LEFT JOIN likes l ON l.track_id=r.track_id AND l.user_uid=?
+    LEFT JOIN track_stats s ON s.track_id=r.track_id
+    LEFT JOIN ranked p ON p.track_id=r.track_id AND p.n=1
+  `).bind(JSON.stringify(ids), uid, receipt.acceptedAt, uid).all();
+  if (result?.success !== true || !Array.isArray(result.results) || result.results.length !== ids.length ||
+      new Set(result.results.map(row => row.track_id)).size !== ids.length ||
+      result.results.some(row => !ids.includes(row.track_id) || ![0, 1].includes(row.liked) ||
+        !Number.isSafeInteger(row.like_count) || row.like_count < 0)) {
+    likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503);
+  }
+  // app379's frozen conflict branch clears the matching outbox without sending
+  // personal/public signals. Omit revision: legacy likes has no revision owner.
+  return result.results.map(row => ({ trackId: row.track_id, liked: row.liked === 1,
+    likeCount: row.like_count, status: 'revision-conflict' }));
+}

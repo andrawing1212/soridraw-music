@@ -26,7 +26,15 @@ function functionRange(source, name) {
 
 const batch = functionRange(worker, 'handleLikeBatch034');
 assert.match(batch, /SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922/);
-assert.match(batch, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+if (batch.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008')) {
+  assert.match(batch, /acceptLikeReceipt390\(env, authContext\.uid, mutations, intent390, state390, receivedAt\)/);
+  assert.match(batch, /if \(queued\.replay\)/);
+  assert.match(batch, /acceptanceReplay390: true/);
+  assert.match(worker, /SORIDRAW_LIKE_ACCEPTANCE_RECEIPT_390_20261008/);
+  assert.doesNotMatch(batch, /enqueueExploreLikeBatch035\(/);
+} else {
+  assert.match(batch, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+}
 assert.match(batch, /canonicalD1: 'queued'/);
 assert.match(batch, /personalLikeProtocol: 'w1-queue-changed-track-188'/);
 assert.match(batch, /syncExploreLikeR2AfterBatch074\(/);
@@ -48,7 +56,8 @@ assert.match(client, /const missing = baselineReady127 \? \[\] : normalized\.fil
 assert.match(client, /return !cache\.has\(trackId\);/);
 assert.match(client, /Page\/profile navigation itself must never create a server read\/write/);
 
-console.log('FINAL_LIKE_W1_QUEUE_INTAKE=PASS');
+console.log(batch.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008')
+  ? 'FINAL_LIKE_W2_RECEIPT_QUEUE_INTAKE_W0_REPLAY=PASS' : 'FINAL_LIKE_W1_QUEUE_INTAKE=PASS');
 console.log('FINAL_LIKE_INTERACTIVE_DIRECT_D1_SETTLEMENT=0');
 console.log('FINAL_LIKE_NORMAL_LOCAL_CATALOG_REENTRY_D1_MEMBERSHIP=0_CONTRACT');
 console.log('FINAL_LIKE_CHANGED_TRACK_ACCOUNT_SIGNAL=PASS');

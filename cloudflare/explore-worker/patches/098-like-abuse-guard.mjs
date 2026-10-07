@@ -37,7 +37,10 @@ replaceOnce('  await assertLegacyLikeIntakeOpen165(env);\n  const results = muta
 replaceOnce('    queued = await enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt);', `    queued = await acceptLikeReceipt390(env, authContext.uid, mutations, intent390, state390, receivedAt);
     if (queued.replay) {
       // Receipt proves only intake. No membership/count/revision or fresh R2 delta.
+      const legacyResults379 = body?.acceptanceProtocol390 === 1 ? null
+        : await readLegacyLikeReplay379(env, authContext.uid, mutations, queued);
       return json({ ok: true, data: {
+        ...(legacyResults379 ? { results: legacyResults379 } : {}),
         acceptanceReplay390: true, acceptedOperations390: mutations.map(row => ({
           trackId: row.trackId, operationId: row.operationId,
         })), acceptedAt390: queued.acceptedAt,
@@ -58,5 +61,6 @@ if (!source.includes('SORIDRAW_SOCIAL_ABUSE_STATE_380_20261008')) {
   source += '\n' + readFileSync(new URL('../candidates/social-abuse-380.js', import.meta.url), 'utf8');
 }
 source += '\n' + readFileSync(new URL('../candidates/like-acceptance-390.js', import.meta.url), 'utf8');
+source += '\n' + readFileSync(new URL('../candidates/like-replay-379.js', import.meta.url), 'utf8');
 writeFileSync(path, source);
-console.log('[098/380] Candidate-only normalized like abuse gate applied.');
+console.log('[098/380] Normalized like abuse gate with receipt acceptance/replay compatibility applied.');

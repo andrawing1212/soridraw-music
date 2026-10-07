@@ -31,7 +31,15 @@ function functionRange(source, name) {
 
 const batch = functionRange(worker, 'handleLikeBatch034');
 if (batch.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
-  assert.ok(batch.includes('enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)'));
+  if (batch.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008')) {
+    assert.ok(batch.includes('acceptLikeReceipt390(env, authContext.uid, mutations, intent390, state390, receivedAt)'));
+    assert.ok(batch.includes('if (queued.replay)'));
+    assert.ok(batch.includes('acceptanceReplay390: true'));
+    assert.ok(worker.includes('SORIDRAW_LIKE_ACCEPTANCE_RECEIPT_390_20261008'));
+    assert.ok(!batch.includes('enqueueExploreLikeBatch035('), 'receipt path must own queue acceptance');
+  } else {
+    assert.ok(batch.includes('enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)'));
+  }
   assert.ok(batch.includes("canonicalD1: 'queued'"));
   assert.ok(batch.includes("personalLikeProtocol: 'w1-queue-changed-track-188'"));
   assert.ok(batch.includes('syncExploreLikeR2AfterBatch074('), 'changed-track R2 delta missing');

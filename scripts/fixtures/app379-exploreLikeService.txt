@@ -104,7 +104,6 @@ type ExploreLikePendingMutation = {
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
-  deferredSignal390?: ExploreLikeSignal127; // one received row held behind this operation
 };
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
@@ -597,9 +596,9 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
   return { version, previousVersion, results };
 };
 
-const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, deferred390 = false) => {
+const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => {
   const lastSeen = readSeenLikeSignal127(uid);
-  if (!deferred390 && signal.version <= lastSeen) return;
+  if (signal.version <= lastSeen) return;
   // If an initial retained signal arrives after the R2 baseline, its rows
   // could predate that snapshot. Reconcile once rather than accepting it as
   // a newer personal state solely because no local signal version was stored.
@@ -608,7 +607,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   // transitions merely because this device has no prior signal watermark.
   // An actual missing interval (a previously seen version) still requires repair.
   const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
-  const needsRepair = !deferred390 && (gap || readRepairTarget127(uid) > 0);
+  const needsRepair = gap || readRepairTarget127(uid) > 0;
   if (needsRepair) {
     // The retained signal rows are exact changed-track final states. Apply them
     // immediately even when an older notification interval was missed; then use
@@ -625,19 +624,10 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   let unresolvedChanged = false;
   let locksChanged = false;
   const acceptedForUi141: ExploreLikeSyncEventDetail[] = [];
-  let deferredChanged390 = false;
   for (const item of signal.results) {
     // A newer unsent local click must win. An older accepted-but-unsettled
     // intention must NOT permanently block a newer server-accepted device state.
-    if (pending[item.trackId]) {
-      // Keep only the latest already-received row behind this pending operation.
-      // A receipt ACK must not lose it just because the RTDB watermark advanced.
-      if (!deferred390) {
-        pending[item.trackId].deferredSignal390 = { ...signal, results: [item] };
-        deferredChanged390 = true;
-      }
-      continue;
-    }
+    if (pending[item.trackId]) continue;
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
       changed = true;
@@ -667,12 +657,11 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
     // exact remote change until the next page/tab visit.
     acceptedForUi141.push({ ...item, uid, source: 'remote' });
   }
-  if (deferredChanged390) persistLikeOutbox(uid, pending);
   if (changed) persistLikedStateCache(uid, cache);
   if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
   markLocalLikeCatalogReady135(uid);
-  if (!deferred390) markSeenLikeSignal127(uid, signal.version);
+  markSeenLikeSignal127(uid, signal.version);
   // App141: publish to the mounted/replayable UI only AFTER its authoritative
   // local membership read can observe this entire accepted changed-track batch.
   // No new server request, extra listener, retry, or layout change is involved.
@@ -1192,7 +1181,6 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
   const trackId = String(row.trackId || '').trim();
   if (!trackId || typeof row.baseLiked !== 'boolean' || typeof row.desiredLiked !== 'boolean') return null;
   const updatedAt = Math.max(0, Number(row.updatedAt || 0));
-  const deferred390 = normalizeLikeSignal127(row.deferredSignal390);
   return {
     trackId,
     ownerUid: String(row.ownerUid || '').trim(),
@@ -1207,8 +1195,6 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? row.operationId : undefined,
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
-    ...(deferred390?.results.length === 1 && deferred390.results[0].trackId === trackId
-      ? { deferredSignal390: deferred390 } : {}),
   };
 };
 
@@ -1394,13 +1380,7 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) {
     const message = String(payload?.message || payload?.error?.message || payload?.error || '좋아요 요청을 처리하지 못했습니다.').trim();
-    const code = String(payload?.code || payload?.error?.code || '').trim();
-    const retryAfterSeconds = Number(response.headers.get('Retry-After') || 0);
-    throw Object.assign(new Error(message || '좋아요 요청을 처리하지 못했습니다.'), {
-      code, status: response.status,
-      retryAfterMs: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-        ? Math.floor(retryAfterSeconds * 1000) : 0,
-    });
+    throw new Error(message || '좋아요 요청을 처리하지 못했습니다.');
   }
   return payload;
 };
@@ -1544,7 +1524,6 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const payload = await requestExploreLike(user, '/v1/me/likes/batch', {
         method: 'POST',
         body: JSON.stringify({
-          acceptanceProtocol390: 1,
           mutations: batchEntries.map((pending) => ({
             trackId: pending.trackId,
             liked: pending.desiredLiked,
@@ -1555,43 +1534,6 @@ flushPendingLikes = async (user: User): Promise<void> => {
           })),
         }),
       });
-      // 390: a replay proves durable intake only. Repainting/publishing its old
-      // desired state would announce it as a NEW account change after another
-      // device's newer intent. First-acceptance ACKs keep the frozen path below.
-      if (payload?.data?.acceptanceReplay390 === true) {
-        const accepted = payload.data.acceptedOperations390;
-        const acceptedAt390 = Number(payload.data.acceptedAt390);
-        if (!Number.isSafeInteger(acceptedAt390) || acceptedAt390 <= 0 || !Array.isArray(accepted) || accepted.length !== batchEntries.length ||
-            batchEntries.some(pending => !accepted.some((row: { trackId?: string; operationId?: string }) =>
-              row.trackId === pending.trackId && row.operationId === pending.operationId))) {
-          throw new Error('좋아요 재접수 증명이 전송한 변경과 일치하지 않습니다.');
-        }
-        const latest = readLikeOutbox(uid);
-        const revisions = readLikeCanonicalRevisions172(uid);
-        const deferred390: ExploreLikeSignal127[] = [];
-        for (const pending of batchEntries) {
-          const current = latest[pending.trackId];
-          if (!current) continue;
-          if (current.operationId === pending.operationId && current.updatedAt === pending.updatedAt) {
-            const received = current.deferredSignal390;
-            if (received && received.version > acceptedAt390 &&
-                (revisions[pending.trackId] ?? 0) <= (pending.expectedRevision ?? 0)) deferred390.push(received);
-            delete latest[pending.trackId];
-          } else if (current.updatedAt > pending.updatedAt &&
-              (revisions[pending.trackId] ?? 0) <= (pending.expectedRevision ?? 0) &&
-              (current.expectedRevision ?? 0) <= (pending.expectedRevision ?? 0)) {
-            // Preserve an explicit undo while its preceding acceptance was in
-            // flight. Never replace a newer revision, desired state or deadline.
-            latest[pending.trackId] = rebaseExploreLikeAfterInFlight127(current, pending);
-          }
-        }
-        persistLikeOutbox(uid, latest);
-        // Reuse the existing receiver's persist-before-UI order. No network call,
-        // synthetic RTDB version, canonical revision or receipt-derived heart.
-        deferred390.forEach(signal => applyRemoteLikeSignal127(uid, signal, true));
-        succeeded = true;
-        return;
-      }
       const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
       // An accepted response must match the specific mutation sent in THIS
       // request. A stale/mixed response is not proof of that intent; retaining
@@ -1750,14 +1692,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
         const current = latest[pending.trackId];
         if (current?.updatedAt === pending.updatedAt) {
           current.retryCount = Math.min(8, current.retryCount + 1);
-          latest[pending.trackId] = (reason as { code?: string })?.code === 'LIKE_RECEIPT_EXPIRED'
-            ? rebaseExploreLikeAfterInFlight127(current, pending)
-            : current;
-        } else if (current && current.updatedAt > pending.updatedAt &&
-            !((reason as { status?: number; code?: string })?.status === 429 &&
-              (reason as { code?: string })?.code === 'RATE_LIMITED')) {
-          // A deterministic 429 was rejected before canonical D1. Its older
-          // desired state must NOT become the baseline of a newer local click.
+          latest[pending.trackId] = current;
+        } else if (current && current.updatedAt > pending.updatedAt) {
           // The first request MAY have reached the server before the network
           // error. Explicitly retain the last click instead of deleting it as
           // an apparent no-op against the old baseline.

@@ -169,6 +169,7 @@ jobs:
           grep -q 'SORIDRAW_R2_HYBRID_READ_336_20261004' canonical/preview-worker.js
           grep -q '"SORIDRAW_R2_HYBRID_READ_V1": "1"' canonical/wrangler.preview.jsonc
           grep -q '"SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1"' canonical/wrangler.preview.jsonc
+          node scripts/receipt390-release.mjs preflight canonical/wrangler.preview.jsonc preview
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..

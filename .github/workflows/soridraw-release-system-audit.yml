@@ -320,6 +320,8 @@ jobs:
           test "$before" = "$after"
           node scripts/verify-389-social-client-batching.mjs
           node scripts/verify-388-social-abuse-runtime.mjs --release
+          node scripts/verify-392-app379-like-replay.mjs
+          node scripts/verify-393-receipt390-activation.mjs
           echo 'SOCIAL380_PATCH_IDEMPOTENT=PASS'
           echo 'FOLLOW380_NO_DEPLOY=PASS'
 

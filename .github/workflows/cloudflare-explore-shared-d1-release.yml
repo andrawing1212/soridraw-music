@@ -72,6 +72,14 @@ jobs:
               test -z "$rollback_blob"
               test -z "$cutover_ms"
               ;;
+            receipt390)
+              test "$migration" = '20261008_01_like_intake_receipt_390_additive.sql'
+              test "$verifier" = 'scripts/verify-393-receipt390-activation.mjs'
+              test "$approval" = 'user_explicit_receipt390_schema_apply'
+              test -z "$rollback"
+              test -z "$rollback_blob"
+              test -z "$cutover_ms"
+              ;;
             publication_w2_cutover_373)
               test "$migration" = '20261007_01_first_publication_w2_cutover.sql'
               test "$rollback" = '20261007_01_first_publication_w2_cutover_rollback.sql'
@@ -117,6 +125,10 @@ jobs:
       - name: Install pinned Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Install receipt390 verifier tooling
+        if: steps.resolve.outputs.mode == 'receipt390'
+        run: npm ci --no-audit --no-fund
 
       - name: Verify exact migration source and additive-only contract
         if: steps.resolve.outputs.mode == 'additive'
@@ -221,6 +233,27 @@ jobs:
           echo 'APP373_EXACT_SOURCE_HASHES=PASS'
 
 
+      - name: Verify exact receipt390 migration source
+        if: steps.resolve.outputs.mode == 'receipt390'
+        shell: bash
+        env:
+          MIGRATION_NAME: ${{ steps.resolve.outputs.migration }}
+          MIGRATION_BLOB: ${{ steps.resolve.outputs.migration_blob }}
+          VERIFIER_BLOB: ${{ steps.resolve.outputs.verifier_blob }}
+        run: |
+          set -euo pipefail
+          migration_path="cloudflare/explore-worker/migrations/$MIGRATION_NAME"
+          test "$(git hash-object "$migration_path")" = "$MIGRATION_BLOB"
+          test "$(git hash-object scripts/verify-393-receipt390-activation.mjs)" = "$VERIFIER_BLOB"
+          node cloudflare/explore-worker/scripts/receipt390-release.mjs verify-source "$migration_path"
+          node scripts/verify-393-receipt390-activation.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {receiptObjects390} from './cloudflare/explore-worker/scripts/receipt390-release.mjs';
+          fs.mkdirSync('.shared-d1-release',{recursive:true});
+          fs.writeFileSync('.shared-d1-release/objects.json',JSON.stringify(receiptObjects390));
+          NODE
+
       - name: Prepare shared D1 config and base read-only preflight
         working-directory: cloudflare/explore-worker
         shell: bash
@@ -241,7 +274,7 @@ jobs:
           echo 'SHARED_D1_BASE_READONLY_PREFLIGHT=PASS'
 
       - name: Capture Worker consumers and live schema baseline
-        if: steps.resolve.outputs.mode == 'additive'
+        if: steps.resolve.outputs.mode == 'additive' || steps.resolve.outputs.mode == 'receipt390'
         shell: bash
         run: |
           set -euo pipefail
@@ -379,6 +412,66 @@ jobs:
           echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'
           trap - EXIT
           echo 'SHARED_D1_ADDITIVE_RELEASE=PASS'
+
+      - name: Apply exact receipt390 dormant schema with guarded partial-failure cleanup
+        if: steps.resolve.outputs.mode == 'receipt390'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {applyReceiptSchema390} from './cloudflare/explore-worker/scripts/receipt390-release.mjs';
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const headers={Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'};
+          const root=`https://api.cloudflare.com/client/v4/accounts/${account}`;
+          const consumers=[['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]];
+          async function active(name) {
+            const response=await fetch(`${root}/workers/scripts/${name}/deployments`,{headers});
+            const body=await response.json();if(!response.ok||body.success===false)throw Error('Worker version read failed');
+            const versions=(body.result.deployments||body.result||[])[0]?.versions||[];
+            if(versions.length!==1||Number(versions[0].percentage)<99.99)throw Error('Single active Worker required');
+            return versions[0].version_id;
+          }
+          async function unchanged() {
+            for(const [key,name] of consumers) {
+              const before=fs.readFileSync(`cloudflare/explore-worker/.shared-d1-release/${key}-worker-before.txt`,'utf8').trim();
+              if(await active(name)!==before)throw Error('Worker changed during dormant receipt release');
+            }
+          }
+          async function dormant() {
+            await unchanged();
+            for(const [,name] of consumers) {
+              const response=await fetch(`${root}/workers/scripts/${name}/content`,{headers});
+              if(!response.ok)throw Error('Dormant Worker source read failed');
+              if((await response.text()).includes('explore_like_intake_receipts_390'))throw Error('Receipt-aware Worker already active; preserve schema');
+            }
+          }
+          async function query(sql) {
+            const response=await fetch(`${root}/d1/database/${process.env.SHARED_D1_ID}/query`,{
+              method:'POST',headers,body:JSON.stringify({sql,params:[]})});
+            const body=await response.json();
+            if(!response.ok||body.success===false||!Array.isArray(body.result)||body.result.length!==1||
+              body.result.some(row=>row.success!==true||!Array.isArray(row.results)))throw Error('Receipt D1 statement failed');
+            return body.result.flatMap(row=>row.results||[]);
+          }
+          await applyReceiptSchema390(query,dormant);
+          await unchanged();
+          console.log('RECEIPT390_DORMANT_EXACT_SCHEMA=PASS');
+          console.log('ALL_WORKER_VERSIONS_UNCHANGED=PASS');
+          NODE
+          for pair in \
+            "preview|${PREVIEW_BASE}|https://preview.soridraw.com" \
+            "test|${TEST_BASE}|https://test.soridraw.com" \
+            "production|${PRODUCTION_BASE}|https://soridraw.com"; do
+            name="${pair%%|*}"; rest="${pair#*|}"; base="${rest%%|*}"; origin="${rest#*|}"
+            code="$(curl -sS -o "$RUNNER_TEMP/${name}-receipt-feed.json" -w '%{http_code}' -H "Origin: ${origin}" "${base}/v1/feed?sort=latest&limit=40")"
+            test "$code" = 200
+          done
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'
+          echo 'SHARED_D1_RECEIPT390_RELEASE=PASS'
 
       - name: Capture app373 live consumers and pre-cutover schema
         if: steps.resolve.outputs.mode == 'publication_w2_cutover_373'

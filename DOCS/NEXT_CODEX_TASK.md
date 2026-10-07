@@ -1,4 +1,14 @@
-## CURRENT FOCUSED TASK — app380 release blocker 2개만 해결: app379 replay 호환 + receipt390 활성화 경로 완성 (2026-10-08 KST)
+## CURRENT NEXT GATE — 두 blocker 구현 commit의 Work 독립 재감사 (2026-10-08 KST)
+
+- 기준: 아래 두 blocker 구현을 완료한 **0RZD를 포함하는 preview commit**. 시작 HEAD는 `37a7f3e299ebb3d4232a1276817f2490698c96d0`.
+- `CURRENT_RELEASE_STATE.md` 최상단 0RZD를 먼저 읽는다. 실제 PREVIEW는 app379이며 배포/실제 shared schema apply는 아직 0.
+- actual app379 replay verifier `392`, receipt390 exact activation verifier `393`, 097→098 canonical registration/hash/env wiring, 새 legacy read의 indexed bound/과금 미측정 범위를 독립 감사한다.
+- 특히 receipt를 상태 authority로 사용하지 않는지, old/new client replay 재발행 0/최신 intent 보존, partial failure 시 새 empty dormant 객체만 정리하고 populated/active proof는 보존하는지 확인한다.
+- schema→Worker→Hosting을 직렬로 진행해야 한다. 구 TEST/PRODUCTION Worker의 receipt 없는 pending queue와 PREVIEW의 혼재는 아직 live gate이며 source fixture PASS를 실기기 PASS로 과장하지 않는다.
+- app380 W2/W0 receipt/ACK core와 app381 UI는 재설계하지 않는다. 이미 PASS한 TypeScript/Build/app303을 이유 없이 반복하지 않는다.
+- 독립 감사/배포 판단 전 **배포 금지, shared D1 실제 apply 금지, main/TEST/PRODUCTION 변경 금지**.
+
+## COMPLETED FOCUSED TASK — app380 release blocker 2개만 해결: app379 replay 호환 + receipt390 활성화 경로 완성 (2026-10-08 KST)
 
 기준:
 - branch: `preview`

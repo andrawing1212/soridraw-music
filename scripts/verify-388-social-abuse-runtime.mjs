@@ -191,7 +191,7 @@ try {
   corrupt.PROFILE_MEDIA.rows.set(key, { etag: 'bad', body: '{"schemaVersion":380,"events":[],"pairs":[{}]}' });
   await reject(() => consume(corrupt, 'like', [intent('other', true, 99)]), 'RATE_LIMIT_UNAVAILABLE');
 
-  const request = mutations => ({ json: async () => ({ mutations }) });
+  const request = mutations => ({ json: async () => ({ mutations, acceptanceProtocol390: 1 }) });
   const likeRow = (trackId, liked = true, operation = 1) => ({ trackId, liked, operationId: intent(trackId, liked, operation).operationId, expectedRevision: 0, mutationAt: now });
   const batchEnv = environment();
   const exactRows = [likeRow('a'), likeRow('b', true, 2)];
@@ -249,13 +249,15 @@ try {
   await reject(() => context.handleLikeD1Core({}, environment(), {}, 'target', true), 'LIKE_CLIENT_REFRESH_REQUIRED');
   receiptDb.close();
   const manifest = readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8');
-  assert.doesNotMatch(manifest, /097-follow-abuse|098-like-abuse/);
+  const patches380 = JSON.parse(manifest).patches;
+  assert.ok(patches380.indexOf('097-follow-abuse-guard.mjs') >= 0);
+  assert.equal(patches380.indexOf('098-like-abuse-guard.mjs'), patches380.indexOf('097-follow-abuse-guard.mjs') + 1);
   console.log('APP380_FROZEN_WORKER_FUNCTIONS_EXACT_AND_SQLITE_LIKE_INTAKE_W1_EACH=PASS');
   console.log('APP380_SOCIAL_RUNTIME_POLICIES_CAPS_ISOLATION_CAS_FAILURES=PASS');
   console.log('APP380_HTTP_REJECTION_D1_R0_W0_AND_RECEIPT_INTAKE=PASS');
   console.log('APP380_LIKE_REPLAY_W0_ACCEPTANCE_ONLY_ACK=PASS');
   console.log('APP380_RESERVATION_CRASH_RETRY_AND_PROCESSED_QUEUE_REPLAY=PASS');
-  console.log('APP380_CANDIDATE_PATCH_IDEMPOTENCE_NO_RELEASE_REGISTRATION=PASS');
+  console.log('APP380_PATCH_IDEMPOTENCE_ORDERED_RELEASE_REGISTRATION=PASS');
   if (process.argv.includes('--release')) {
     // Successful replay is necessary but not sufficient: execute client ordering
     // and transaction proofs too. Live/Work gates remain separate from this suite.

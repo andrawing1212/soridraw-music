@@ -1,3 +1,40 @@
+## 0RZD. app380 두 release blocker 구현·검증 완료 — Work 재감사 대기 / 미배포 (2026-10-08 KST)
+
+- 구현 시작/재확인한 remote preview HEAD: `37a7f3e299ebb3d4232a1276817f2490698c96d0` (0RZC/task 문서 포함). 제품 기준은 `b15d7d88deb17ab76b247799ed4fd5a6b12c88b4`와 같다.
+- 최종 source는 **이 절을 포함하는 preview 구현 commit**. 다음 Work는 이 commit 전체를 독립 감사한다. 구현 검증 PASS를 독립 감사/배포 승인/live 검증 PASS로 표시하지 않는다.
+- source app381 유지, 실제 PREVIEW app379 유지. 배포/실제 shared D1 apply/사용자 데이터 migration·backfill·rewrite·delete **0**. main/TEST/PRODUCTION 변경 0. release/Hosting/audit trigger 변경 0.
+
+### blocker A — actual app379 replay 호환
+
+- `098` replay에 legacy 전용 `results`를 추가한다. app379의 frozen `revision-conflict` branch로 matching operation outbox를 종료하고 personal RTDB/public invalidation을 재발행하지 않는다. revision authority가 없는 legacy relation에 revision을 합성하지 않는다.
+- 결과 상태는 같은 SQL snapshot의 canonical `tracks`/`likes`/`track_stats` 및 현재 pending queue intent에서 읽는다. receipt는 bounded queue PK를 찾는 acceptance metadata로만 사용한다. receipt/R2 abuse state의 desired 값에서 membership/count를 만들지 않는다.
+- app381은 batch에 `acceptanceProtocol390: 1`만 추가하여 legacy compatibility read를 생략한다. 이미 PASS한 receipt replay/ACK/deferred receiver ordering은 그대로다.
+- `392`는 실제 app379 `aa1bac7636651fdf94598f0d5ef502955a60bc0f` 서비스 원문을 SHA256 고정 fixture로 실행한다. first ACK, queue pending, newer device queue, canonical applied/newer false, newer explicit undo/revision을 old/new client로 검증한다. newer device의 요청도 실제 현재 client flush에서 생성한다.
+- replay D1 write **W0**, personal/public 재발행 **각 0**, matching outbox 종료/더 최신 outbox·deadline·revision·cache 보존 PASS.
+- legacy replay에만 추가 SELECT **1회**: UID receipt PK 1행, receipt에 연결된 queue PK 후보/intent <=1200, 요청 track <=50, per-track canonical PK lookup. EXPLAIN에서 authority full scan 0. 기존 receipt lookup은 별도다. 이 새 read의 Cloudflare `rows_read` 과금은 실측하지 않았으며 R0으로 주장하지 않는다. modern compatibility 추가 read 0.
+
+### blocker B — exact receipt390 activation source
+
+- generic additive mode의 TRIGGER/VIEW 금지 계약은 그대로다. `cloudflare-explore-shared-d1-release.yml`에 전용 `receipt390` exact mode만 추가: 승인값 `user_explicit_receipt390_schema_apply`, 고정 migration/verifier 이름·git blob hash, 측정 candidate와 byte-identical SQL 검증.
+- migration `20261008_01_like_intake_receipt_390_additive.sql`: 허용 객체는 receipt WITHOUT ROWID table 1개 + insert/update trigger 2개뿐. migration blob `f04d10e7a5981b1da735e266cfeeff5f46d3486e`, SQL SHA256 `9dce709548e56188cfd7906be89053a207f3b04663c4fa00ffa75d99ba099f96`.
+- DDL REST batch의 atomicity를 가정하지 않는다. 각 DDL의 실행 전/후 실패·lost ACK를 SQLite에서 주입하여 새 empty dormant 객체의 reverse-order cleanup을 검증했다. preexisting partial/drifted/populated schema 또는 activated Worker는 자동 DROP 금지/FAIL로 보존한다. cleanup 자체의 원격 실패는 manual audit 대상이며 성공으로 숨기지 않는다.
+- schema apply 전과 실패 cleanup 전에 세 환경의 active Worker identity/source를 검사한다. 실제 old canonical Worker 원문 hash를 고정하고 dormant receipt schema에서 frozen enqueue W1/receipt 접근 0을 실행 검증했다.
+- canonical Worker에 **097 → 098** 등록·적용 완료. SHA256 `514b5cc6a412075a285c74946f62d9ccdade0ee7adff2ff2359606798211a743`. idempotence/syntax/hash 및 기존 queue processor/aggregate 등 허용된 5개 intake/guard 함수 외 baseline 함수 동일성 PASS.
+- PREVIEW=`preview`, TEST=`test`, PRODUCTION=`production`을 명시적으로 고정. PROFILE_MEDIA/LIKE_RATE_LIMITER binding은 fail-closed 검증한다. 각 환경 receipt preflight는 **schema SELECT 1회만** 실행하며 자동 생성하지 않는다. TEST/PRODUCTION runtime의 restore는 새 receipt preflight에서 제외하여 이전 Worker rollback을 막지 않는다.
+- schema 적용 완료 뒤 Worker smoke 실패는 이전 Worker로 rollback한다. 성공 적용한 additive schema/receipt proof는 자동 DROP/delete하지 않는다.
+
+### 검증과 남은 gate
+
+- PASS: 387/388/389/390/391, `388 --release`, 새 **392/393**. `388 --release`가 390/391 실행을 포함한다.
+- PASS: like 127/175/176/177/178/179/180/192/197; follow 377/378/385/386. 176/178의 옛 enqueue-call assertion만 canonical receipt 경로의 acceptance/replay proof 검사로 보강했다.
+- PASS: shared-D1/release-promotion/release-controller/release-command-pipeline; deploy-preflight/356 follow parity 및 관련 canonical like 102/105/107/110/156/191/210.
+- PASS: TypeScript `npm run lint`, Build `npm run build -- --outDir /tmp/soridraw-app381-blockers-build`, `git diff --check`. 기존 bundle-size/dynamic import 경고만 있다. package/lockfile 변경 0.
+- 추가로 실행한 historical `verify-explore-like-cost-optimization.mjs`는 기존에 삭제된 `exploreLikeDisplayStateService.ts`를 요구하여 실행 불가. 현재 canonical release/task 필수 suite가 아니며 이 task에서 옛 workflow/서비스를 복원하지 않았다.
+- app381 UI owner/route/CSS 변경 0. 이미 PASS한 app303 run `37686878661`을 반복하지 않았다. 측정된 receipt SQL/JS 및 follow patch 097 byte 변경 0; 기존 W2/W0 원격 측정 증거는 0RZA 그대로다.
+- branch 생성/삭제 0, Workflow 추가/삭제 0 (기존 workflow wiring만 변경). protected preview의 기존 상태는 이전 감사 기록 그대로이며 force-push/보호 설정 변경 0.
+- 아직 Work 독립 재감사, 실제 PREVIEW old/new client·PC↔모바일·타계정/live 비용 검증 전이다. legacy snapshot의 pending projection은 receipt-backed queue에 한정된다. 아직 구 Worker인 TEST/PRODUCTION이 접수한 receipt 없는 pending queue와 PREVIEW의 동시 혼재는 별도 live gate에서 확인해야 하며 이번 fixture PASS로 주장하지 않는다.
+- 배포 판단 후의 순서는 **별도 승인한 shared receipt390 dormant schema → PREVIEW canonical Worker → app381 Hosting**. schema workflow 성공 전에 Worker를 병행 활성화하지 않는다. 현재 task에서는 어떤 trigger도 실행하지 않았다.
+
 ## 0RZC. Work 독립 감사 FAIL — app380+381 PREVIEW 배포 차단 / legacy replay + activation wiring 수정 필요 (2026-10-08 KST)
 
 감사 기준:

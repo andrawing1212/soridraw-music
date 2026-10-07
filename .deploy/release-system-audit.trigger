@@ -1,10 +1,10 @@
-follow-preview-worker-release-gate-audit
-target=ed918db4a14fe158f46f6e861dd82bdf135eb9d9
-scope=preview-worker-release,worker341-legacy-parity,follow-cost-bounds
+app376-profile-connections-popup-audit
+target=e1c9dbfd7caff1d5e0f262a75741675bfc2e4ea4
+scope=profile-connections,followers,following,click-only-bounded-read,pc-mobile
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-follow-preview-release-gate-audit
+requested=2026-10-07-app376-profile-connections-popup-audit

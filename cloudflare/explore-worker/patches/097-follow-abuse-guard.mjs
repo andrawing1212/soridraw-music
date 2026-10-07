@@ -76,7 +76,7 @@ const newLimiter = [
   '  const dayMs = 24 * 60 * 60 * 1000;',
   '  const windowLimit = 30;',
   '  const dayLimit = 120;',
-  '  const pairCooldowns = [2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];',
+  '  const pairCooldowns = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];',
   '  const pairQuietResetMs = 24 * 60 * 60 * 1000;',
   '  const pairMax = 32;',
   "  const key = 'internal/explore/follow-rate-v355/' + encodeURIComponent(normalizedUid) + '.json';",
@@ -136,8 +136,8 @@ const newLimiter = [
   '    const quiet = !prior || now - Number(prior.lastAcceptedAt || 0) >= pairQuietResetMs;',
   '    const desiredChanged = !prior || Boolean(prior.lastDesired) !== Boolean(following);',
   '    const rawLevel = Number(prior?.level);',
-  '    const priorLevel = Number.isSafeInteger(rawLevel) ? Math.max(0, Math.min(2, rawLevel)) : 0;',
-  '    const level = quiet ? 0 : desiredChanged ? Math.min(2, priorLevel + 1) : priorLevel;',
+  '    const priorLevel = Number.isSafeInteger(rawLevel) ? Math.max(0, Math.min(3, rawLevel)) : 0;',
+  '    const level = quiet ? 0 : desiredChanged ? Math.min(3, priorLevel + 1) : priorLevel;',
   '    const cooldownMs = pairCooldowns[level];',
   '    pairs[normalizedTarget] = {',
   '      lastAcceptedAt: now, updatedAt: now, lastDesired: Boolean(following),',
@@ -172,13 +172,18 @@ const oldSequence = [
   '  // JSON uses the existing Content-Type CORS contract; no auth/CORS change.',
   '  let payload = null;',
   '  try { payload = await request.json(); } catch {}',
-  '  const expected = payload?.followExpectedRevision;',
 ].join('\n');
 const newSequence = [
   '  // Parse ordered identity before the abuse gate. Unordered negotiation has no R2 receipt.',
   '  let payload = null;',
   '  try { payload = await request.json(); } catch {}',
   '  await enforceFollowEdgeRateLimit355(env, actor, target, following, payload?.followOperationId);',
+  '  const expected = payload?.followExpectedRevision;',
+  '  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(payload?.followOperationId || "") ||',
+  '      !Number.isSafeInteger(expected) || expected < 0) {',
+  '    throwApi("FOLLOW_ORDER_REQUIRED", "팔로우 상태를 확인한 후 다시 시도해 주세요.", 409,',
+  '      { "X-Soridraw-Follow-Protocol": "354" });',
+  '  }',
   '  if (following) {',
   '    const row = await env.DB.prepare("SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1").bind(target).first();',
   '    if (!row) throwApi("NOT_FOUND", "공개 크리에이터를 찾을 수 없습니다.", 404);',
@@ -193,7 +198,7 @@ const finalLimiter = functionRange('enforceFollowEdgeRateLimit355').text;
 const finalOverlay = functionRange('handleFollowOverlay354').text;
 for (const required of [
   marker, 'const windowLimit = 30', 'const dayLimit = 120',
-  'pairCooldowns = [2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000]',
+  'pairCooldowns = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000]',
   "key: 'follow:' + normalizedUid", 'internal/explore/follow-rate-v355/',
   "String(prior.lastOperationId || '') === normalizedOperationId",
   'nextAllowedAt > now', "'Retry-After'",
@@ -206,6 +211,10 @@ if (finalLimiter.includes('env.DB') || finalLimiter.includes('RATE_DB')) {
 if (!finalOverlay.includes('payload?.followOperationId') ||
     finalOverlay.indexOf('try { payload = await request.json(); }') > finalOverlay.indexOf('enforceFollowEdgeRateLimit355(')) {
   throw new Error('[097] ordered operation must be parsed before abuse guard');
+}
+if (finalOverlay.indexOf('FOLLOW_ORDER_REQUIRED') < 0 ||
+    finalOverlay.indexOf('FOLLOW_ORDER_REQUIRED') > finalOverlay.indexOf('env.DB.prepare("SELECT uid FROM public_profiles')) {
+  throw new Error('[097] unordered follow must fail before target D1 lookup');
 }
 
 writeFileSync(workerPath, source, 'utf8');

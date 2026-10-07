@@ -199,6 +199,7 @@ jobs:
           node scripts/verify-190-like-card-authority.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-198-social-snapshot-diagnostic-reason.mjs
+          node scripts/verify-377-follow-count-list-sync.mjs
           node scripts/verify-199-rap-auto-neutral.mjs
           node scripts/verify-200-admin-gemini-mobile-header.mjs
           node scripts/verify-201-explore-track-action-sheet.mjs

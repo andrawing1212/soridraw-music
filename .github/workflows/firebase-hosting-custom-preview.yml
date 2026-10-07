@@ -84,6 +84,11 @@ jobs:
       - name: Verify app377 follow count and list convergence
         run: node scripts/verify-377-follow-count-list-sync.mjs
 
+      - name: Verify app378 update-stable following list cache
+        run: |
+          node scripts/verify-385-follow-list-update-r0.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

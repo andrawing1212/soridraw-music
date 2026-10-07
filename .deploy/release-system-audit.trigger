@@ -1,9 +1,10 @@
-app375-latest-new-publication-immediate
-target=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
-scope=explore-latest,new-publication,origin-local-signal,first-visible
+follow-w14-w17-to-w1-w2-independent-audit
+target=0c9336a9871e348a4e05230b4e44742c92ec060d
+scope=worker341-legacy-parity,dormant-follow-overlay,isolated-http-d1-r2-cost
 shared_d1_apply=false
+shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app375-immediate-latest-publication-audit
+requested=2026-10-07-follow-cost-independent-audit

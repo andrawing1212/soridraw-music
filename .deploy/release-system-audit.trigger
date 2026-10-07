@@ -1,6 +1,6 @@
-follow380-local-final-state-abuse-guard-audit-r3
-target=325d737369355f32654d9f9a9d4028ef5a5794e7
-scope=follow380-client-30s-final-state,follow380-reload-outbox,follow380-progressive-pair-cooldown,follow380-account-day-cap,like-existing-defense-audit
+follow380-local-final-state-abuse-guard-audit-r4
+target=a86fcb3d6b8d288f05a42838d232c05d6fe91342
+scope=follow380-client-30s-final-state,follow380-reload-outbox,follow380-progressive-pair-cooldown,follow380-account-day-cap,like-existing-defense-audit,active-overlay-readonly-audit
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow380-final-state-abuse-audit-r3
+requested=2026-10-07-follow380-final-state-abuse-audit-r4

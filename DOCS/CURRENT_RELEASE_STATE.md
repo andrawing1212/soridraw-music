@@ -1,3 +1,70 @@
+## 0RM. app377 팔로우 숫자/목록/PC↔모바일 정합성 수정 PREVIEW 배포 완료 (2026-10-07 KST)
+
+사용자 실사용 근거:
+- app376에서 실제 following popup은 2명을 보여주는데 프로필/탭 숫자는 `팔로잉 1`로 남는 불일치 확인.
+- PC에서 unfollow → follow를 다시 했어도 following count가 1→2로 갱신되지 않았고, 모바일은 기존 2가 1로 내려가지 않는 반대 방향 stale count 확인.
+- CACHE LIVE에서 팔로워/팔로잉 목록을 새로 불러올 때 각각 D1 R2/W0, 두 목록 합계 R4가 관찰됨. app376 목록 cache는 React mount memory-only라 새로고침 뒤 재조회가 발생하던 구조였음.
+
+확정 원인:
+- 공개 프로필 first-view count cache는 reload를 변경 신호로 보지 않는 정상 R0 구조인데, follow 변경 신호가 별도로 없어서 follower/following count가 PC↔모바일에 전달되지 않았음.
+- 기존 follow HTTP 응답은 이미 D1 mutation에서 계산된 actor의 정확한 `following_count`를 가지고도 target profile count만 반환해 MY profile followingCount를 정확히 고칠 수 없었음.
+- app376 follower/following popup의 first page cache가 persistent가 아니라 mount memory-only여서 browser refresh 후 같은 목록이 D1 R2로 다시 조회됐음.
+
+app377 수정:
+- Worker follow 응답에 기존 `stats.follower.following_count`를 `actorFollowingCount`로 추가. **추가 D1 query/write 0**.
+- Worker341 legacy relation/counter mutation과 post-sync는 그대로 유지; response field만 additive.
+- follow 성공 즉시:
+  - target `followerCount` cache 갱신,
+  - actor MY profile `followingCount` cache를 exact count로 갱신,
+  - 개인 follow membership cache/social snapshot 갱신.
+- 같은 계정 PC↔모바일은 `userSync/{uid}/exploreFollow` RTDB 1개 최신 신호로 변경된 target/count만 전달. 수신 기기는 D1/Firestore read 0으로 local cache/UI만 갱신.
+- follower/following first page(최대 30명)를 persistent local cache로 저장. 변경 없는 browser refresh/재진입/팝업 재열기는 Worker 0 / D1 R0 목표.
+- 실제 follow/unfollow 성공 또는 수신 signal에서만 actor following + target followers 두 cache만 무효화. 전체 목록/전체 profile 무효화 없음.
+- 30명 이하 complete popup은 실제 relation rows 수를 exact count로 사용해 기존 stale profile count를 로컬에서 즉시 self-heal.
+- CACHE LIVE에 persistent relation cache hit를 별도 표시.
+
+검증:
+- 1차 Audit `37568753767`: TypeScript/Build PASS. response-only field를 허용하지 않던 기존 `verify-354-follow-orchestration` exact legacy assertion으로 FAIL; 제품 오류가 아니라 verifier 계약 미갱신. 배포 0.
+- verifier는 Worker341 mutation/post-sync는 계속 exact 비교하고, app377 response-only field만 normalize하도록 수정.
+- 재감사 `37568966361`: SUCCESS.
+- 최종 release-gate 감사 `37569220320`: **SUCCESS**.
+- APP377 exact actor count response / no extra D1 PASS.
+- APP377 persistent reload R0 contract PASS.
+- APP377 changed-only list invalidation PASS.
+- APP377 cross-device RTDB signal PASS.
+- APP377 small-profile count self-heal PASS.
+- Worker341 legacy counter/post-sync parity PASS.
+- canonical Worker SHA256 exact match `e311f5f97160057b9f3be29d83a716bbd15f00782fd6f60ce6c447be8bfcfdc4`.
+- TEST/PRODUCTION Worker dry-run PASS.
+
+PREVIEW 배포:
+- Worker source commit: `b8dfc9e6baf27c4a17eac528f38ba0525e42d568`.
+- Worker release trigger: `bcb880375175095b18a0fe1f2fa0ddda25d66cc1`.
+- PREVIEW Worker Run `37569420282`: **SUCCESS**.
+- PREVIEW Worker before `bc8cc09e-4210-46e2-bdb7-72796e2798e4` → after `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- feed/profile smoke PASS; warm revision D1 R0/W0 PASS; automatic rollback 없음.
+- TEST Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65` / PRODUCTION Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7` unchanged PASS.
+- App release trigger / locked source `8f0efd593c60e9d0c8ca4795ceb674abc437cf6c`.
+- Firebase PREVIEW Hosting Run `37569563139`: **SUCCESS**.
+- remote `preview.soridraw.com` app version **377** / exact build PASS.
+- shared RTDB Rules exact-match deploy PASS: additive `userSync/$uid/exploreFollow` only.
+- Firebase Functions / Firestore Rules 변경 0.
+- shared D1 schema/migration/cutover 변경 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- main(TEST) / production branches + Hosting unchanged PASS.
+
+비용 상태:
+- follower/following popup: 첫 cold list click은 기존 bounded D1 R2 가능. 이후 변경 없는 refresh/reopen은 persistent local cache로 D1 R0 목표.
+- 실제 relation 변경 때만 관련 2개 list cache를 무효화하므로 다음 필요 시 해당 list만 bounded 재조회.
+- cross-device count sync는 작은 RTDB signal 1개/실제 follow mutation; 수신 D1/Firestore 0.
+- follow mutation 자체의 legacy physical D1 W14~W17은 **아직 해결 전**. 이번 app377은 숫자/목록 정합성과 반복 read 문제를 먼저 분리 해결한 단계이며 shared W1~W2 cutover는 여전히 OFF.
+
+실사용 검증:
+1. app377로 PC/Mobile 모두 갱신 후 MY profile following count와 popup 실제 rows가 같은지 확인.
+2. PC follow → 모바일 숫자/버튼이 페이지 이동 없이 수렴하는지, 반대 방향도 확인.
+3. follow/unfollow 후 actor following list와 target followers list membership이 일치하는지 확인.
+4. popup 첫 cold click D1 R2 확인 후 새로고침/재진입 같은 목록은 `팔로우 목록 캐시` LOCAL HIT / Worker0 / D1 R0인지 확인.
+5. 위 정합성 PASS 후에만 기존 W14~W17 → W1~W2 shared follow cutover 단계 재개.
 ## 0RL. app376 PREVIEW 배포 완료 / 팔로워·팔로잉 실사용 검증 대기 (2026-10-07 KST)
 
 사용자 승인:

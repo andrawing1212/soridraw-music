@@ -1,3 +1,30 @@
+## 0RZ. ChatGPT 검토 — app380 1차 commit 확인 / 좋아요 replay blocker 실재 / W2 receipt 방향 확정 (2026-10-08 KST)
+
+검토 대상:
+- preview `3ea51da5641e7c5bcf8668be6d9414d319a6964e`
+- base `ae68e3dc21f4bacab16a6d3536f097aed8357481`
+- 14 files 변경, 배포 0.
+
+판정:
+- Codex가 구현 실패를 숨기지 않고 release verifier를 의도적으로 FAIL시킨 판단은 맞다.
+- follow380 30초 final-state 및 progressive abuse candidate, like/follow 환경분리 R2 guard, 429 retry 보호는 source candidate로 유지.
+- 하지만 현재 like guard는 동일 accepted operation replay를 429/W0로 막기만 하므로 **정상 ACK 유실 재시도까지 보존하지 못한다.**
+- 따라서 app380은 아직 PREVIEW 배포 불가.
+
+다음 설계 결정:
+- 기존 timestamped/deleted W1 queue만으로는 처리 완료 후 동일 operation의 durable acceptance proof가 사라지므로 안전한 성공 replay W0를 보장하기 어렵다.
+- 정상 기능을 희생해 W1을 유지하지 않는다.
+- 사용자 hard gate가 W1~W2이므로 다음 후보는 **기존 queue W1 + bounded durable acceptance receipt W1 = 정상 새 batch 최대 W2**, exact accepted replay W0를 목표로 한다.
+- acceptance receipt는 membership/count authority가 아니며 R2 abuse receipt와 분리.
+- 실제 shared D1 schema apply는 하지 않고 candidate additive schema + remote ephemeral D1 실측만 수행한다.
+- 상세 구현/중단 조건은 `NEXT_CODEX_TASK.md` 맨 위 focused task 기준.
+
+현재 실제 환경:
+- PREVIEW 배포본 app379 유지.
+- Worker/Hosting/Functions/Rules 변경 0.
+- main/TEST/PRODUCTION 변경 0.
+- 사용자 원본 데이터 변경 0.
+
 ## 0RY. app380 통합 방어 source candidate / 좋아요 정상 replay 계약 BLOCKED / 배포 0 (2026-10-08 KST)
 
 작업:

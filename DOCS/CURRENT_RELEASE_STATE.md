@@ -1,3 +1,57 @@
+## 0RJ. follow candidate PREVIEW Worker 배포 완료 / cutover OFF 실사용 검증 대기 (2026-10-07 KST)
+
+사용자 승인:
+- 사용자가 “배포해서 확인해보자”로 PREVIEW Worker 배포를 승인.
+- 승인 범위는 **PREVIEW Worker candidate 배포 + cutover OFF legacy parity 확인**.
+- shared follow schema/migration/cutover 활성화, TEST/PRODUCTION 승격은 승인 범위 아님.
+
+배포:
+- trigger commit: `a22d27e389c646908347f812859799e4ec1dc111`.
+- product source: `f6b63eb0ecb6322d531b19bbb01c6fd0c2555c04`.
+- PREVIEW Worker Release Run `37565145301`: **SUCCESS**.
+- PREVIEW Worker before: `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- PREVIEW Worker after: `bc8cc09e-4210-46e2-bdb7-72796e2798e4`.
+- TEST Worker before/after 동일: `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`.
+- PRODUCTION Worker before/after 동일: `efb8508e-d63a-4839-a7c8-a5c89572f4c7`.
+
+배포 전 hard gate:
+- Worker341 legacy counter exact parity PASS.
+- Worker341 legacy post-sync exact parity PASS.
+- dormant overlay router / legacy path parity PASS.
+- legacy 347 compatibility extra write ABSENT.
+- PREVIEW release legacy parity gate PASS.
+- profile/follow cost bounds PASS.
+
+배포 후 live smoke:
+- Worker propagation ready PASS.
+- curated first/warm PASS / warm D1 R0 W0 PASS.
+- latest feed D1 R0 W0 PASS.
+- popular feed D1 R0 W0 PASS.
+- public profile signal shared R2 live PASS.
+- profile tracks D1 R0 W0 PASS.
+- genre tracks D1 R0 W0 PASS.
+- search D1 R0 W0 PASS.
+- public like cards D1 R0 W0 PASS.
+- feed smoke PASS / profile smoke PASS.
+- warm revision D1 R0 W0 PASS.
+- TEST/PRODUCTION Workers unchanged PASS.
+- automatic rollback 미발생.
+
+중요:
+- 이번 release trigger는 `shared_follow_cutover=false`, `follow_overlay_activation=false`.
+- shared follow migration/cutover/user data mutation 없음.
+- Firebase Hosting / Functions 배포 없음.
+- 따라서 지금 PREVIEW에서 먼저 확인해야 하는 것은 **새 Worker가 cutover OFF 상태에서 기존 Worker341 팔로우 기능/비용을 그대로 보존하는지**임.
+
+다음 실사용 체크:
+1. PC에서 follow 1회 → 즉시 UI/팔로워 수 확인.
+2. PC에서 unfollow 1회 → 즉시 원복 확인.
+3. 모바일에서도 동일 1회씩.
+4. PC에서 follow 후 모바일에서 페이지 이동/새로고침 없이 상태 정합 확인, 반대 방향도 확인.
+5. MY프로필 following membership, 상대 프로필 followerCount/followingCount, follower-save permission 확인.
+6. 가능하면 Cloudflare live physical D1 Rows Written을 follow/unfollow 각각 기록.
+7. cutover OFF 비용/동작이 Worker341 baseline과 다르면 즉시 rollback.
+
 ## 0RI. follow PREVIEW Worker release gate 보강 완료 / 배포 전 (2026-10-07 KST)
 
 배포 안전장치 보강:

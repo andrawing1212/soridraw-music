@@ -62,6 +62,9 @@ import {
   getExploreFollowingUids312,
   getExploreProfileConnections,
   patchExploreFollowLocalState377,
+  readExploreFollowMembership379,
+  readExploreFollowingExactCount379,
+  readExploreProfileConnectionExactCount379,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
@@ -2885,10 +2888,30 @@ export default function ExplorePage() {
       normalizedTracks.sort(comparePublicProfileTracks);
       const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       if (authoritative) syncSharedPublicCountsToLocal110(normalizedTracks);
-      setProfile(nextProfile);
-      setProfileTracks(displayTracks);
+
+      // app379: follow overlay freezes legacy D1 counters, so a stale response
+      // must never overwrite an exact device-local count. Reconcile both own
+      // social counters from complete local relation caches when available.
+      let displayProfile379 = nextProfile;
       if (user?.uid === nextProfile.uid) {
-        void syncSoridrawProfileAvatarAuthority(user, nextProfile.avatarUrl)
+        const exactFollowing379 =
+          readExploreProfileConnectionExactCount379(nextProfile.uid, 'following')
+          ?? readExploreFollowingExactCount379(nextProfile.uid);
+        const exactFollowers379 =
+          readExploreProfileConnectionExactCount379(nextProfile.uid, 'followers');
+        const socialPatch379: Partial<ExplorePublicProfile> = {};
+        if (exactFollowing379 !== null) socialPatch379.followingCount = exactFollowing379;
+        if (exactFollowers379 !== null) socialPatch379.followerCount = exactFollowers379;
+        if (Object.keys(socialPatch379).length > 0) {
+          displayProfile379 = { ...nextProfile, ...socialPatch379 };
+          patchExplorePublicProfileFirstViewProfile(nextProfile.uid, socialPatch379);
+        }
+      }
+
+      setProfile(displayProfile379);
+      setProfileTracks(displayTracks);
+      if (user?.uid === displayProfile379.uid) {
+        void syncSoridrawProfileAvatarAuthority(user, displayProfile379.avatarUrl)
           .catch((avatarSyncError) => console.warn('Explore own profile avatar authority sync failed.', avatarSyncError));
       }
     };
@@ -2953,16 +2976,36 @@ export default function ExplorePage() {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
 
+      const previousMembership379 = readExploreFollowMembership379(
+        viewerUid377,
+        signal377.targetUid,
+      );
+      const previousTargetProfile379 = readCachedExplorePublicProfile(signal377.targetUid);
       patchExploreFollowLocalState377(
         viewerUid377,
         signal377.targetUid,
         signal377.following,
       );
+      const exactActorFollowing379 =
+        readExploreProfileConnectionExactCount379(viewerUid377, 'following')
+        ?? readExploreFollowingExactCount379(viewerUid377);
+      const resolvedSignalActorFollowing379 = exactActorFollowing379
+        ?? signal377.actorFollowingCount;
+      const signalDelta379 = previousMembership379 === null
+        ? 0
+        : Number(signal377.following) - Number(previousMembership379);
+      const resolvedSignalTargetFollower379 = previousMembership379 !== null && previousTargetProfile379
+        ? Math.max(
+          0,
+          Math.floor(Number(previousTargetProfile379.followerCount || 0)) + signalDelta379,
+        )
+        : signal377.targetFollowerCount;
+
       patchExplorePublicProfileFirstViewProfile(viewerUid377, {
-        followingCount: signal377.actorFollowingCount,
+        followingCount: resolvedSignalActorFollowing379,
       });
       patchExplorePublicProfileFirstViewProfile(signal377.targetUid, {
-        followerCount: signal377.targetFollowerCount,
+        followerCount: resolvedSignalTargetFollower379,
       });
 
       profileConnectionsCache376Ref.current.delete(`${viewerUid377}:following`);
@@ -2978,18 +3021,18 @@ export default function ExplorePage() {
         if (activeProfileUidRef.current !== signal377.targetUid) return previous;
         return {
           isFollowing: signal377.following,
-          followerCount: signal377.targetFollowerCount,
+          followerCount: resolvedSignalTargetFollower379,
           followingCount: previous?.followingCount || 0,
-          actorFollowingCount: signal377.actorFollowingCount,
+          actorFollowingCount: resolvedSignalActorFollowing379,
         };
       });
       setProfile((previous) => {
         if (!previous) return previous;
         if (previous.uid === viewerUid377) {
-          return { ...previous, followingCount: signal377.actorFollowingCount };
+          return { ...previous, followingCount: resolvedSignalActorFollowing379 };
         }
         if (previous.uid === signal377.targetUid) {
-          return { ...previous, followerCount: signal377.targetFollowerCount };
+          return { ...previous, followerCount: resolvedSignalTargetFollower379 };
         }
         return previous;
       });
@@ -3549,6 +3592,7 @@ export default function ExplorePage() {
     const nextShouldFollow = !Boolean(followState?.isFollowing);
     const previousFollowState = followState;
     const previousProfile = profile;
+    const previousViewerProfile379 = readCachedExplorePublicProfile(viewerUid);
     const previousFollowingIncluded = followingLoadedUid312 === viewerUid
       ? followingUids312.has(targetUid)
       : null;
@@ -3582,43 +3626,74 @@ export default function ExplorePage() {
       const result = await setExploreFollow(user, targetUid, nextShouldFollow);
       if (auth.currentUser?.uid !== viewerUid) return;
 
-      if (activeProfileUidRef.current === targetUid) setFollowState(result);
+      const previousMembership379 = Boolean(previousFollowState?.isFollowing);
+      const confirmedMembership379 = Boolean(result.isFollowing);
+      const relationDelta379 = Number(confirmedMembership379) - Number(previousMembership379);
+      const exactActorFollowing379 =
+        readExploreProfileConnectionExactCount379(viewerUid, 'following')
+        ?? readExploreFollowingExactCount379(viewerUid);
+      const previousActorFollowing379 = Number(previousViewerProfile379?.followingCount);
+      const resolvedActorFollowing379 = exactActorFollowing379 !== null
+        ? exactActorFollowing379
+        : Number.isFinite(previousActorFollowing379)
+          ? Math.max(0, Math.floor(previousActorFollowing379) + relationDelta379)
+          : null;
+      const resolvedTargetFollower379 = Math.max(
+        0,
+        Math.floor(Number(previousProfile.followerCount || 0)) + relationDelta379,
+      );
+      const resolvedTargetFollowing379 = Math.max(
+        0,
+        Math.floor(Number(previousProfile.followingCount || 0)),
+      );
+
+      if (activeProfileUidRef.current === targetUid) {
+        setFollowState({
+          ...result,
+          followerCount: resolvedTargetFollower379,
+          followingCount: resolvedTargetFollowing379,
+          ...(resolvedActorFollowing379 === null
+            ? {}
+            : { actorFollowingCount: resolvedActorFollowing379 }),
+        });
+      }
       if (followingLoadedUid312 === viewerUid) {
         setFollowingUids312((previous) => {
           const next = new Set(previous);
-          if (result.isFollowing) next.add(targetUid);
+          if (confirmedMembership379) next.add(targetUid);
           else next.delete(targetUid);
           return next;
         });
       }
       patchExplorePublicProfileFirstViewProfile(targetUid, {
-        followerCount: result.followerCount,
-        followingCount: result.followingCount,
+        followerCount: resolvedTargetFollower379,
+        // Following somebody never changes the target user's following count.
+        followingCount: resolvedTargetFollowing379,
       });
-      if (Number.isFinite(Number(result.actorFollowingCount))) {
+      if (resolvedActorFollowing379 !== null) {
         patchExplorePublicProfileFirstViewProfile(viewerUid, {
-          followingCount: Math.max(0, Math.floor(Number(result.actorFollowingCount || 0))),
+          followingCount: resolvedActorFollowing379,
         });
       }
       setProfile((previous) => previous?.uid === targetUid ? {
         ...previous,
-        followerCount: result.followerCount,
-        followingCount: result.followingCount,
+        followerCount: resolvedTargetFollower379,
+        followingCount: resolvedTargetFollowing379,
       } : previous);
 
-      // app377: canonical mutation already succeeded. Broadcast only the tiny
-      // changed relation/count signal; a transient RTDB failure must not roll
-      // back the accepted follow mutation.
-      if (Number.isFinite(Number(result.actorFollowingCount))) {
-        void publishExploreFollowSync377(viewerUid, {
-          targetUid,
-          following: result.isFollowing,
-          actorFollowingCount: Math.max(0, Math.floor(Number(result.actorFollowingCount || 0))),
-          targetFollowerCount: Math.max(0, Math.floor(Number(result.followerCount || 0))),
-        }).catch((reason) => {
-          console.warn('[app377] follow live sync publish deferred:', reason);
-        });
-      }
+      // app379: the active overlay intentionally freezes legacy counters.
+      // Publish local exact/delta counts, never the stale legacy stats returned
+      // by the mutation compatibility response.
+      const signalActorFollowing379 = resolvedActorFollowing379
+        ?? Math.max(0, Math.floor(Number(result.actorFollowingCount || 0)));
+      void publishExploreFollowSync377(viewerUid, {
+        targetUid,
+        following: confirmedMembership379,
+        actorFollowingCount: signalActorFollowing379,
+        targetFollowerCount: resolvedTargetFollower379,
+      }).catch((reason) => {
+        console.warn('[app379] follow live sync publish deferred:', reason);
+      });
     } catch (reason) {
       if (auth.currentUser?.uid === viewerUid) {
         if (activeProfileUidRef.current === targetUid) setFollowState(previousFollowState);

@@ -1,3 +1,28 @@
+## CURRENT NEXT GATE — PREVIEW app374 실사용 확인
+
+현재:
+- PREVIEW app374 배포 Run `37551851974`: SUCCESS / exact build PASS.
+- TEST/PRODUCTION은 app361 그대로.
+- first-publication 실제 사용자 테스트 W2 확인 완료.
+- 기존 공개곡 상태 변경 D1 W1 확인.
+- app374는 비용 구조가 아니라 “공개 메인 음원 변경 후 오래된 노란 제목/equalizer가 남는 표시 버그”만 수정.
+
+사용자 확인 항목:
+1. PREVIEW에서 신규 공개곡 카드 중앙 버튼을 눌러 노란 제목/equalizer 활성.
+2. 공개 설정에서 메인 음원 1↔2 전환.
+3. 썸네일/링크가 바뀌는 순간 기존 노란 제목/equalizer가 즉시 사라지는지 확인.
+4. 새 음원 중앙 버튼을 다시 눌렀을 때만 새 노란 제목/equalizer가 켜지는지 확인.
+5. 동일 테스트를 **기존 공개 이력 곡**에서도 한 번 확인.
+
+합격 시:
+- app374 PREVIEW frozen.
+- 사용자 요청/승인 시 TEST(main) 승격.
+- 사용자 데이터 복사/변환 없음.
+
+불합격 시:
+- Explore local visual marker/timer path만 수정.
+- shared D1 app373 W2 cutover, publication parity, 좋아요, Music Note/Library 정상 기능은 동결 보호.
+
 ## CURRENT NEXT GATE — app373 적용 완료 / 03:00 KST 이후 실제 Music Note first-publication 1곡 검증
 
 완료:

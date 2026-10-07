@@ -1,3 +1,20 @@
+## 0RN. app377 팔로우 정합성 사용자 실사용 PASS / 비용 최적화만 남음 (2026-10-07 KST)
+
+사용자 실사용 확인:
+- app377 팔로우 숫자 / 실제 팔로워·팔로잉 목록 / PC↔모바일 동기화 정상 적용 확인.
+- app377 정합성 수정은 사용자 기준 PASS로 동결.
+- 이후 작업 범위는 **팔로우 mutation 비용 W14~W17 → W1~W2**만 남김.
+
+보호:
+- app377 숫자/목록/persistent list cache/RTDB cross-device sync 재설계 금지.
+- 공개/비공개, 좋아요, Music Note, Library, profile UI/CSS 변경 금지.
+- unchanged popup reload/reopen D1 R0 목표 유지.
+
+다음 비용 단계:
+- 기존 dormant follow overlay 348 + ordered protocol354/355 후보를 기준으로 진행.
+- 이미 격리 actual D1에서 follow W2 / unfollow W1 / duplicate W0 / same-state W0 증거 있음.
+- shared cutover는 아직 OFF. 실제 PREVIEW 활성화 전 all-environment compatibility / rollback / shared schema 상태를 다시 고정.
+- 실제 PREVIEW에서 W1~W2와 기능 정합성이 동시에 PASS하기 전 TEST/PRODUCTION 승격 금지.
 ## 0RM. app377 팔로우 숫자/목록/PC↔모바일 정합성 수정 PREVIEW 배포 완료 (2026-10-07 KST)
 
 사용자 실사용 근거:

@@ -1,3 +1,87 @@
+## CURRENT FOCUSED TASK — app380 release blocker 2개만 해결: app379 replay 호환 + receipt390 활성화 경로 완성 (2026-10-08 KST)
+
+기준:
+- branch: `preview`
+- base HEAD: `b15d7d88deb17ab76b247799ed4fd5a6b12c88b4`
+- 실제 PREVIEW: app379.
+- app380 W2/W0 receipt/ACK core와 app381 UI는 이미 검증된 부분을 재설계하지 않는다.
+- 목표는 Work 감사에서 발견한 **두 blocker만** 해결하고 source/release wiring을 commit하는 것.
+- **배포 금지. shared D1 실제 apply 금지. main/TEST/PRODUCTION 변경 금지.**
+
+### A. app379 exact replay compatibility — 최우선
+
+문제:
+- replay response에 legacy `data.results`가 없어 app379 exact client가 error/outbox retryCount=1로 정지한다.
+- old desired를 그대로 legacy success로 반환하면 app379가 이를 새 ACK로 보고 RTDB/public invalidation을 다시 발행해 stale intent가 최신 기기 상태를 덮을 수 있다.
+
+필수 계약:
+1. **actual app379 source `aa1bac7636651fdf94598f0d5ef502955a60bc0f`의 `exploreLikeService.ts` 동작을 fixture로 실행**한다. 문자열 추측 verifier 금지.
+2. exact receipt replay는 canonical D1 write **W0**를 유지한다.
+3. app379은 replay 뒤 해당 old operation outbox를 안전하게 종료해야 한다.
+4. app379 replay 처리에서 personal RTDB publish 0, public invalidation publish 0, 오래된 operation이 newer local intent/revision/device state를 덮지 않음을 증명한다.
+5. app381 receipt-aware ordering contract는 그대로 유지한다.
+6. receipt/R2 abuse state에서 membership/count/revision 합성 금지.
+7. legacy compatibility에 canonical state가 필요하면 기존 indexed/bounded per-track authority read만 허용. full scan 금지. replay batch <=50.
+8. 권장 방향: replay 응답에 app379이 파싱 가능한 `results`를 추가하되, legacy client가 fresh accepted signal로 재발행하지 않는 기존 non-publish status path(`revision-conflict` 또는 동등한 frozen path)를 사용한다. queue pending / canonical applied / newer revision 세 경우를 따로 검증한다. exact state 결정은 receipt가 아니라 canonical authority/queue state를 사용한다.
+9. legacy direct per-track endpoint refresh-required 보호는 유지하되 지원 중인 app379 batch client가 깨지면 FAIL.
+
+필수 mixed tests:
+- app379 first acceptance normal.
+- app379 ACK-loss exact replay -> outbox cleared, W0, personal/public republish 0.
+- app379 replay while accepted queue still pending.
+- app379 replay after canonical applied.
+- app379 replay after another device newer revision/state.
+- app379 replay while same device has newer explicit undo.
+- app381 same cases ordering unchanged.
+- app379/app381 simultaneously on same account: newest intent wins.
+
+### B. receipt390 schema/Worker activation wiring — 실제 배포 가능 source까지만
+
+1. **generic additive D1 mode를 느슨하게 만들지 말 것.**
+2. shared-D1 workflow에 receipt390 전용 exact mode를 추가한다. 허용 객체는 `explore_like_intake_receipts_390` table + `explore_like_receipt_insert_390` + `explore_like_receipt_update_390` triggers뿐이다.
+3. INSERT/UPDATE/DELETE/backfill/user row rewrite 금지. reserved/canonical 기존 table redefine 금지. table/trigger SQL exact verification.
+4. migration partial failure 시 partial object가 남지 않는 transaction/rollback proof. old Worker가 dormant schema를 전혀 사용하지 않음을 검증.
+5. candidate SQL을 승인 가능한 migration source 위치로 승격하되 실제 release trigger 실행 금지.
+6. canonical Worker build/release source에 097/098을 올바른 순서로 포함하고 canonical hash 갱신. release verifier PASS 후에만 manifest/source registration.
+7. canonical environment configs에 PREVIEW=`preview`, TEST=`test`, PRODUCTION=`production`의 `SORIDRAW_ENVIRONMENT`를 명시적으로 고정.
+8. 각 환경 release preflight에서 `PROFILE_MEDIA`와 `LIKE_RATE_LIMITER` binding 존재를 fail-closed 검증.
+9. PREVIEW Worker release preflight는 receipt table+2 triggers 존재를 확인만 하고 자동 생성 금지.
+10. Worker smoke 실패 시 이전 Worker로 rollback. additive receipt schema는 old Worker가 참조하지 않으므로 자동 DROP/delete 금지.
+11. `.deploy/shared-d1-release.trigger`, `.deploy/preview-worker-release.trigger`, Hosting trigger를 이번 task에서 실행용 값으로 갱신 금지.
+
+### C. 비용/기능 hard gate
+- 새 normal like batch physical D1 W<=2.
+- exact replay D1 writes W0.
+- legacy replay compatibility read가 필요하면 bounded/indexed read 수치를 별도 보고. full scan 0.
+- page entry/re-entry/navigation write0.
+- abuse reject canonical D1 W0.
+- 30초 final-state/net-zero W0 유지.
+- follow380 behavior와 app381 UI 변경 금지.
+- shared user data migration/backfill/delete/rewrite 0.
+
+### D. 최종 검증
+- new app379 exact replay verifier.
+- app381 391 ordering.
+- 387/388/389/390/391 및 `388 --release`.
+- like 127/175/176/177/178/179/180/192/197.
+- follow 377/378/379(385/386).
+- shared-D1 receipt390 exact mode verifier.
+- canonical Worker patch idempotence/source hash/syntax.
+- PREVIEW/TEST/PRODUCTION environment/binding static verifier.
+- TypeScript PASS / Build PASS / `git diff --check`.
+- actual Cloudflare shared D1/Worker/Hosting mutation **0**.
+
+### E. 완료 보고
+- 기준 SHA / 최종 SHA.
+- app379 replay blocker 해결 방식.
+- app379 replay personal/public republish 0 증거.
+- replay W0 및 compatibility bounded read 비용.
+- receipt390 exact schema release mode와 partial-failure proof.
+- canonical 097/098 inclusion과 hash.
+- three env identity/binding preflight 결과.
+- TypeScript/Build/Test.
+- user data 변경 0 / deploy 0.
+- 다음 Work 재감사에서 볼 정확한 commit.
 ## CURRENT NEXT GATE — app380+381 통합 source 독립 감사 후 PREVIEW 릴리스 판단 (2026-10-08 KST)
 
 현재 기준:

@@ -1,3 +1,17 @@
+## 0RB. app374 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
+
+사용자 확인:
+- PREVIEW app374에서 공개 메인 음원 1↔2 전환 시 기존 노란 제목/equalizer가 즉시 초기화되는 동작이 정상 적용됨.
+- 신규 공개곡 / 기존 공개 이력 곡 모두 사용자 실사용 기준 정상.
+- app373 first-publication W12→W2 비용 절감 구조는 그대로 유지.
+- 추가 D1/Worker/Functions/Firebase Rules/user data 변경 없음.
+
+현재 기준:
+- PREVIEW app374 = 사용자 실사용 PASS / TEST 승격 가능 후보.
+- TEST app361, PRODUCTION app361 유지.
+- 다음 승격은 사용자 요청 시에만 TEST(main)으로 진행.
+- PRODUCTION 승격은 TEST 검증 후 별도 명확한 승인 필요.
+
 ## 0RA. PREVIEW app374 배포 완료 — 공개곡 음원 전환 시 재생 표시 초기화 (2026-10-07 KST)
 
 사용자 실사용에서 확인된 별도 UI 회귀:

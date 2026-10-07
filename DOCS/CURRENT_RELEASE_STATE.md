@@ -1,3 +1,54 @@
+## 0RT. follow shared authority Phase A+B 활성화 완료 / 실제 live mutation 비용 측정 대기 (2026-10-07 KST)
+
+완료:
+- app377 Hosting/앱 코드는 그대로 유지하면서 follow authority lifecycle만 전 환경에 수렴.
+- Lifecycle resume Run `37592392310`: **SUCCESS**.
+- PREVIEW Explore Worker lifecycle=1: `61f1fa6e-ef93-478b-b06f-4a64e3e337d9`.
+- TEST Explore Worker lifecycle=1: `bc01f091-b9e6-43b7-ac82-73385ea24e52`.
+- PRODUCTION Explore Worker lifecycle=1: `4d82f107-ae7e-4985-b955-8c889807c888`.
+- TEST public-profile cold retry에서 일시 D1 R2가 있었지만 attempt=2 warm parity에서 D1 R0로 수렴했고 Release PASS.
+- PRODUCTION environment parity는 attempt=1 PASS.
+
+Shared authority cutover:
+- Phase A one-way readonly latch Run `37589232698`: SUCCESS.
+- Phase B active overlay Run `37592857479`: **SUCCESS**.
+- D1 `explore_follow_cutover_control_348`: `phase=overlay`.
+- one-way cutover token: `follow-w1w2-37589232698-1`.
+- shared R2 manifest `internal/explore/follow-cutover-v348/active.json`:
+  - `relationMode=overlay348`
+  - `writeMode=active`
+  - `oneWayAuthority348=true`
+- activation 직전/직후 `explore_follow_overrides_348` user rows = **0**.
+- activation 과정 legacy relation/profile user-row write = **0**.
+- user migration/backfill/delete/rewrite/copy = **0**.
+- TEST/PRODUCTION latest/popular/curated/public-profile parity PASS.
+- TEST Worker verify PASS / PRODUCTION Worker verify PASS.
+- active overlay 검증 실패 시 shared manifest를 `overlay348-readonly`로 되돌려 새 mutation만 fail-closed 하는 안전 경로 유지.
+- legacy authority로 자동 fallback하는 경로는 one-way latch 이후 금지.
+
+현재 중요한 상태:
+- 이제 follow/unfollow의 실제 shared canonical authority는 overlay348 active 상태.
+- 기존 관계 전체를 복사하지 않았고, 기존 legacy baseline 위에 실제 변경분만 override로 기록하는 구조.
+- **아직 실제 사용자 follow/unfollow를 발생시킨 뒤 Cloudflare physical D1 Rows Written을 측정하지 않았으므로 W1~W2 최종 합격 선언은 보류.**
+
+다음 gate:
+1. 실제 사용자 계정으로 follow 1회 → 안정화 후 unfollow 1회.
+2. 같은 상태 재요청/중복 요청도 확인.
+3. physical D1 합격선:
+   - follow W1~W2
+   - unfollow W1~W2
+   - duplicate/same-state W0
+   - W3+ 즉시 FAIL 및 overlay-readonly fail-closed.
+4. 동시에 PC↔mobile no-navigation count/list/membership, follower-save permission, public-profile parity 확인.
+5. unchanged revisit/cache path D1 R0 확인.
+6. 실제 비용/기능 PASS 후에만 follow W1~W2 작업을 완료 처리.
+
+비변경:
+- Firebase Hosting/Functions/Firestore Rules 변경 0.
+- Media Worker 변경 0.
+- Music Note / Library / 좋아요 / 공개·비공개 / UI 변경 0.
+- app version은 계속 377.
+
 ## 0RS. app377 PRODUCTION 승격 완료 / follow378 전 환경 호환성 준비 완료 / shared cutover OFF (2026-10-07 KST)
 
 사용자 승인:

@@ -1,3 +1,31 @@
+## 0RZB. app381 UI hotfix 통합 완료 / 정적 검증 PASS / 미배포 (2026-10-08 KST)
+
+- 기준 app380 source candidate: `7aa711af0f0f8577893298dd5d84ada4f7d857ce`.
+- UI hotfix 통합 commit: `1857c346aa40f2f6dec0e6570d439d2514473f82`.
+- app379 기반 격리 hotfix `79374d59f7f9d251ef73a15089d4040288fde2bb`를 통째로 merge하지 않고, 현재 app380 HEAD 위에 필요한 UI 변경만 직접 이식했다.
+- app380 like/follow Worker/D1/receipt/ACK 소스는 되돌리지 않았고, 통합 commit은 UI/route/version/verifier/trigger만 변경한다.
+- app version source: **381**. 실제 PREVIEW 배포본은 여전히 app379.
+
+수정:
+- `ExploreShell.tsx`: Explore의 최근 생성곡 메뉴가 `/studio`(Create)로 가던 버그를 `/studio?view=recent`로 수정.
+- `StudioSplitEngineWorkspace.tsx`: Create 또는 Music Note에서 Recent로 전환할 때 이전 workspace geometry가 한 프레임 남는 문제를, 기존 Lite V2 `soridraw-studio-frame-resize` owner를 layout phase에서 1회 재사용하는 방식으로 수정. 새 geometry owner/per-frame listener/page 전용 split engine 없음.
+- 분할바 크기/위치/드래그/반응형 threshold/CSS 변경 0.
+
+정적 검증:
+- GitHub Actions `Verify app303 Split Browser History` run **37686878661 SUCCESS**.
+- Recent exact route verifier PASS.
+- workspace pre-paint geometry reconciliation verifier PASS.
+- TypeScript PASS.
+- Build PASS.
+- Worker/Functions/Rules/D1/user data 변경 0.
+- main/TEST/PRODUCTION 변경 0.
+
+남은 gate:
+- app380+381 통합 source는 아직 PREVIEW에 배포하지 않았다.
+- app380 문서에 남은 **Work 독립 감사** 및 Worker/schema/client 활성화 순서 검토가 먼저다.
+- PREVIEW 배포 후 실제 PC에서 ① Music Note→Recent 겹침 ② Create→Recent 폭 축소 플래시 ③ Explore→Recent exact 이동을 실사용 검증한다.
+- 모바일/태블릿은 이 hotfix가 compact mobile path를 건드리지 않지만, 최종 PREVIEW에서 기본 회귀 확인 전 PASS로 표시하지 않는다.
+
 ## 0RZA. app380 focused receipt/ACK 구현·최종 검증 완료 — 미배포 (2026-10-08 KST)
 
 - 이번 재개 기준: `d25890f68e8acd15b8f619e5326d4bb5292a233c`. 기존 `33663e9e` receipt 후보와 `d25890f6` D1-compatible fence를 그대로 사용했다. 최종 결과는 이 절을 갱신한 preview commit 기준이다.

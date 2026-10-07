@@ -56,7 +56,7 @@ for (const token of [
   'SORIDRAW_FOLLOW_ABUSE_GUARD_380_20261007',
   'const windowLimit = 30',
   'const dayLimit = 120',
-  'pairCooldowns = [2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000]',
+  'pairCooldowns = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000]',
   "key: 'follow:' + normalizedUid",
   'nextAllowedAt > now',
   'lastOperationId',
@@ -105,6 +105,12 @@ if (generatedPath) {
   assert.match(limiter, /windowLimit = 30/);
   assert.match(limiter, /dayLimit = 120/);
   assert.match(limiter, /pairCooldowns/);
+  assert.match(overlay, /FOLLOW_ORDER_REQUIRED/);
+  assert.ok(
+    overlay.indexOf('FOLLOW_ORDER_REQUIRED')
+      < overlay.indexOf('env.DB.prepare("SELECT uid FROM public_profiles'),
+    'unordered follow negotiation must fail before any target D1 lookup',
+  );
   const overlay = fn('handleFollowOverlay354');
   assert.ok(
     overlay.indexOf('try { payload = await request.json(); }')

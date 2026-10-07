@@ -1,6 +1,6 @@
-follow-w1w2-cutover-lifecycle-config-audit
-target=7474f4047f92cdf1fe892f649864524d5247ca7c
-scope=follow380-lifecycle-var,rollback-safe-one-way-authority,protocol354-355,legacy-parity,cutover-config
+follow-w1w2-cutover-control-live-audit
+target=009e04044e0f9687a5b56e8511eab84624c1e2bb
+scope=follow381-control-live,follow380-lifecycle-config,rollback-safe-one-way-authority,protocol354-355,legacy-parity,isolated-physical-w1w2
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow-w1w2-cutover-lifecycle-config-audit
+requested=2026-10-07-follow-w1w2-cutover-control-live-audit

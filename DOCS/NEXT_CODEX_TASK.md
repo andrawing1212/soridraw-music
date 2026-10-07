@@ -1,3 +1,96 @@
+## CURRENT FOCUSED TASK — app380 좋아요 정상 재시도 W0 + durable acceptance receipt 해결 (2026-10-08 KST)
+
+기준:
+- branch: `preview`
+- base commit: `3ea51da5641e7c5bcf8668be6d9414d319a6964e`
+- 현재 app380 candidate는 **배포 금지 상태**.
+- `verify-388-social-abuse-runtime.mjs --release`가 정상 retry/idempotency blocker 때문에 의도적으로 FAIL하는 것이 현재 정확한 상태다.
+- follow380 및 abuse 정책 전체를 다시 설계하지 말고, **좋아요의 성공 ACK 유실/동일 operation 재전송 계약만 좁혀서 해결**한다.
+
+### 문제
+현재 frozen W1 queue `explore_like_batches_069`는 batch ID에 server receive time이 들어가고 처리 후 row가 삭제된다.
+따라서:
+- 첫 요청이 실제 queue에 durable acceptance 되었지만 ACK가 유실된 경우,
+- 같은 operation을 다시 보내면 새 queue row W1이 생길 수 있다.
+반대로 R2 abuse receipt만 보고 성공 ACK를 합성하면 operational guard를 사용자/acceptance authority로 오용하게 된다.
+
+### 결정
+**W1을 억지로 유지하지 않는다. 정상 새 like batch의 interactive D1 합격선은 W2를 허용한다.**
+- row 1: 기존 frozen queue acceptance
+- row 1: bounded durable acceptance receipt
+- 새 정상 batch: D1 W2
+- 동일 accepted batch replay: D1 W0
+- net-zero local batch: Worker/D1 W0
+- W3+ 즉시 FAIL
+
+이 선택은 사용자 고정 합격선 W1~W2 안이며, 정상 재시도 기능을 희생해 W1을 맞추는 것을 금지한다.
+
+### 구현 후보 계약
+1. **additive candidate schema만 작성. 실제 shared D1 apply 금지.**
+   - 예: `explore_like_intake_receipts_390`.
+   - user data/membership/count가 아니라 **queue acceptance proof 전용 operational table**.
+   - 기존 `likes`, overlay, count, revision, R2 abuse state와 의미를 섞지 않는다.
+2. storage가 사용자 행동 수만큼 무한히 증가하는 per-operation row 구조를 기본 답으로 채택하지 말 것.
+   - 우선 **UID당 bounded receipt state 1 row** 후보를 검증한다.
+   - 최근 accepted batch receipt IDs를 bounded ring/JSON 또는 동등한 bounded 표현으로 유지.
+   - secondary index 없이 UID PK `WITHOUT ROWID` 우선.
+3. receipt ID는 server receive time에 의존하지 않고 동일 HTTP retry에서 안정적이어야 한다.
+   - 현재 client의 stable `operationId` + trackId + desired + expectedRevision + stable mutationAt를 정규화/정렬하여 deterministic batch digest를 만든다.
+   - 같은 operationId를 다른 payload에 재사용하면 conflict/W0 fail-closed.
+4. Worker intake는 **receipt update + queue insert를 하나의 D1 transaction/batch로 묶는다.**
+   - receipt가 새로 기록된 경우에만 queue INSERT.
+   - receipt가 이미 존재하면 queue INSERT 0, D1 W0.
+   - queue INSERT/fence가 실패하면 receipt도 rollback되어 acceptance proof가 남으면 안 된다.
+   - D1 `batch()` + `changes()` 또는 더 안전한 동등 원리가 실제 Cloudflare 격리 D1에서 성립하는지 먼저 측정하고, 성립하지 않으면 다른 W2 원리를 설계.
+5. duplicate accepted replay 응답:
+   - receipt는 **이 batch가 durable intake 됐다는 사실만** 증명.
+   - receipt에서 canonical membership/likeCount를 만들지 않는다.
+   - 기존 요청의 desired state를 acceptance replay로 돌려줄 수 있는지 client/app160/app164 ordering contract를 실행형 테스트로 검증.
+   - newer local intent / newer revision / cross-device state를 오래된 replay가 덮으면 FAIL.
+6. bounded storage:
+   - UID receipt row가 정한 상한을 넘지 않게 한다.
+   - receipt ring에서 오래된 entry가 사라져도 R2 abuse state를 성공 ACK authority로 쓰지 않는다.
+   - 오래된 replay가 receipt proof를 잃은 경우 **새 canonical write를 만들지 않는 fail-closed W0 경로**를 설계하고 정상 사용자가 영구 잠기지 않는 복구 계약을 테스트한다.
+7. 기존 30초 client batch, W1 queue processor, background aggregate, app164/app160 heart/cache/sync는 가능한 한 변경하지 않는다.
+8. direct legacy like endpoint 차단의 기존 사용자/구버전 영향도 함께 감사. 정상 지원 버전이 refresh-required 때문에 깨지면 release FAIL.
+
+### 반드시 실행할 검증
+- 새 remote ephemeral Cloudflare D1에서 실제 `meta.rows_written`:
+  - new accepted batch = W2 이하.
+  - exact accepted replay = W0.
+  - same receipt + payload conflict = W0 reject.
+  - queue/fence failure = transaction rollback / receipt W0 남김 없음.
+  - concurrent same receipt from 2 clients = queue 1회만.
+- local/SQLite fixture만으로 Cloudflare billing PASS라고 보고 금지.
+- 기존 like regressions 127/175/176/177/178/179/180/192/197 PASS.
+- app377/378/379 follow regressions PASS.
+- app380 387/388/389 PASS.
+- `verify-388-social-abuse-runtime.mjs --release`가 blocker 제거 후에만 PASS.
+- TypeScript PASS / Build PASS.
+- page/navigation/unchanged revisit server write 0.
+- product cache key/epoch 변경 0.
+- shared user data migration/backfill/delete/rewrite 0.
+- default release patch manifest 등록 0.
+- Worker/Hosting/Functions/Rules 배포 0.
+- main/TEST/PRODUCTION 변경 0.
+
+### 중단 조건
+- W2로도 안전한 durable replay proof를 만들 수 없으면 구조를 더 밀어붙이지 말고 FAIL 이유를 기록.
+- W3+가 필요하면 구현/배포 중단 후 보고.
+- app164/app160 좋아요 정상 기능 변경이 필요하면 중단 후 보고.
+- shared schema actual apply나 환경 cutover가 필요해지는 순간 중단. 이번 task는 **candidate + isolated proof + commit까지만**.
+
+### 완료 보고
+- 기준 SHA / 최종 SHA
+- 변경 파일
+- acceptance receipt 구조와 bounded storage 설명
+- isolated remote D1 W2/W0 실제 수치
+- concurrent/rollback/replay 결과
+- 기존 like/follow regression
+- TypeScript/Build
+- 배포 0 / 사용자 데이터 변경 0
+- 남은 Work 독립 감사 및 PREVIEW live gate
+
 ## CURRENT IMPLEMENTATION TASK — app380 좋아요 + 팔로우 최종상태 묶음/악성 반복 방어 통합 (2026-10-07 KST)
 
 사용자 승인:

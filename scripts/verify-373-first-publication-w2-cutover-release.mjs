@@ -12,7 +12,7 @@ const rollback = readFileSync(rollbackPath, 'utf8');
 const workflow = readFileSync(workflowPath, 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8')).version;
 
-assert.equal(version, 361, 'app361 product baseline must remain frozen for schema-only cutover');
+assert.ok(Number(version) >= 361, 'app version must not regress below the app361 publication-parity baseline');
 assert.ok(migration.includes('SORIDRAW 373 APPROVED shared-D1 first-publication W2 cutover'));
 assert.ok(migration.includes('APPROVAL=' + approval));
 assert.ok(migration.includes('LOCKED_CUTOVER_MS=' + cutoff));

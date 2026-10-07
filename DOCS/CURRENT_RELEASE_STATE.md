@@ -1,3 +1,77 @@
+## 0RF. app375 TEST + PRODUCTION 승격 완료 — RELEASED (2026-10-07 KST)
+
+사용자 승인:
+- PREVIEW app375 실사용 PASS 후 사용자가 “테스트, 정식까지 승격”을 명확히 승인.
+- 승인 범위: 검증된 app375 전체 릴리스의 TEST 승격 후, TEST_VERIFIED 동일본을 PRODUCTION까지 승격.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite는 승인 범위가 아니며 실행하지 않음.
+
+TEST 승격:
+- source PREVIEW SHA: `24d600fd1597db9d4d10d7257a2b6911a3e721c4`
+- Release Controller Run `37559055085`: **SUCCESS / TEST_VERIFIED**
+- main(TEST) promoted SHA: `2314589357ec52b27ed785229f77a808c5673202`
+- immutable TEST tag: `soridraw-test-v375-24d600fd1597`
+- app version: **375**
+- TEST Explore Worker active/uploaded version: `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`
+- TEST Media Worker active/uploaded version: `cfb741e3-a255-49ed-8801-cb21f7f53938`
+- TypeScript PASS / Build PASS
+- Firebase TEST Hosting exact verification PASS
+- `TEST_WORKER_VERIFY=PASS`
+- `TEST_MEDIA_WORKER_VERIFY=PASS`
+- `TEST_CURATED_PARITY=PASS count=12`
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`
+- browser-upgrade / app361 publication parity / old-cache release gates PASS
+- TEST 단계에서 PRODUCTION branch/Hosting/Worker/Media Worker 비변경 PASS
+
+PRODUCTION 승격:
+- production approval command consumed immutable TEST_VERIFIED tag `soridraw-test-v375-24d600fd1597`
+- Release Controller Run `37559345127`: **SUCCESS / RELEASED**
+- tested main: `2314589357ec52b27ed785229f77a808c5673202`
+- production promoted SHA: `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0`
+- app version: **375**
+- PRODUCTION Explore Worker active/uploaded version: `efb8508e-d63a-4839-a7c8-a5c89572f4c7`
+- PRODUCTION Media Worker active/uploaded version: `66b85b60-6c00-4c9c-bde8-df4f836a3ea8`
+- Firebase PRODUCTION Hosting: TEST verified Hosting exact clone PASS
+- `FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS`
+- `PRODUCTION_WORKER_VERIFY=PASS`
+- `PRODUCTION_MEDIA_WORKER_VERIFY=PASS`
+- `PRODUCTION_CURATED_PARITY=PASS count=12`
+- `PRODUCTION_PUBLIC_PROFILE_PARITY=PASS`
+- `PRODUCTION_RELEASE_ENVIRONMENT_PARITY=PASS reference=TEST`
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`
+- Release Control final state: **RELEASED**
+- `soridraw.com` + Firebase production URL exact release verification step PASS
+- main(TEST) ref / TEST Worker / TEST Media Worker / TEST Hosting은 PRODUCTION 승격 중 비변경 확인.
+
+이번 릴리스에 포함된 app374/app375 핵심:
+- 공개 메인 음원 1↔2 전환 시 이전 노란 제목/equalizer 즉시 초기화.
+- 새 공개곡 publication signal을 same-origin 브라우저에 즉시 전달.
+- Explore `최신 공개곡` 첫 track이 바뀌면 해당 rail만 paint 전에 left=0으로 복귀.
+- 새 공개곡이 기다림/왼쪽 화살표 클릭 없이 첫 번째 카드로 즉시 노출.
+- 다른 추천/인기 rail의 사용자가 보던 위치는 자동 변경하지 않음.
+- app373 shared D1 first-publication W12→W2 구조 유지.
+
+데이터 / 비용 / 백엔드:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**
+- 이번 app375 TEST/PRODUCTION 승격에서 shared D1 schema/data 추가 mutation: **0**
+- Firebase Functions/Rules 변경: **0**
+- app375 local publication signal dispatch는 기존 canonical publication signal transaction의 결과를 같은 브라우저에 즉시 전달하는 것이며 추가 D1 read/write를 만들지 않음.
+- shared D1 app373 cutover는 기존 적용 상태 유지.
+- 실사용 first-publication 비용 기준: **W2**.
+
+현재 환경:
+- PREVIEW = app375
+- TEST = **app375 / TEST_VERIFIED**
+- PRODUCTION = **app375 / RELEASED**
+
+다음:
+- 정식앱에서 사용자 smoke test:
+  1. 새 공개곡이 Explore `최신 공개곡` 첫 칸에 즉시 보이는지.
+  2. 기존/신규 공개곡 메인 음원 1↔2 전환 시 노란 제목/equalizer 초기화가 정상인지.
+  3. Music Note 공개상태 / MY프로필 / Explore 노출이 동일한지.
+- 이상 없으면 app375 릴리스 종료.
+- 이상 시 PRODUCTION 추가 변경을 바로 하지 말고 PREVIEW에서 해당 경로만 수정 후 다시 승격.
+
 ## 0RE. app375 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
 
 사용자 확인:

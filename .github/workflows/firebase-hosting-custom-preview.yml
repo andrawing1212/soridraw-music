@@ -89,6 +89,9 @@ jobs:
           node scripts/verify-385-follow-list-update-r0.mjs
           node scripts/verify-217-cache-live-update-reset.mjs
 
+      - name: Verify app379 overlay-safe profile follow counters
+        run: node scripts/verify-386-follow-overlay-count-display.mjs
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

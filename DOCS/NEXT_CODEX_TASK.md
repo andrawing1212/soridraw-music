@@ -1,3 +1,28 @@
+## CURRENT NEXT GATE — app375 PRODUCTION RELEASED / 정식앱 smoke 확인
+
+현재:
+- PREVIEW app375.
+- TEST app375 / TEST_VERIFIED Run `37559055085`.
+- PRODUCTION app375 / RELEASED Run `37559345127`.
+- production SHA `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0`.
+- immutable TEST manifest/tag `soridraw-test-v375-24d600fd1597`.
+- 사용자 데이터 / shared D1 추가 schema mutation / Functions / Rules 변경 없음.
+
+정식앱 최소 확인:
+1. 새 Music Note 곡 공개 후 Explore `최신 공개곡` 첫 번째 카드에 즉시 표시.
+2. 왼쪽 `<` 화살표를 눌러야만 보이는 지연이 없어야 함.
+3. 기존/신규 공개곡 메인 음원 1↔2 전환 시 이전 노란 제목/equalizer 즉시 초기화.
+4. 공개상태 / MY프로필 / Explore 노출 parity 정상.
+5. 비용 진단에서 first-publication W1~W2 기준 유지.
+
+PASS 시:
+- app375 릴리스 종료.
+- 다음 비용/기능 작업은 새 PREVIEW 작업으로 시작.
+
+FAIL 시:
+- PRODUCTION에서 직접 임의 수정 금지.
+- PREVIEW에서 문제 경로 최소 수정 → audit → PREVIEW 실사용 → TEST → 명확한 PRODUCTION 승인 순서 재개.
+
 ## CURRENT NEXT GATE — app375 PREVIEW PASS / TEST 승격 승인 대기
 
 완료:

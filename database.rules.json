@@ -180,6 +180,33 @@
             ".validate": false
           }
         },
+        "exploreFollow": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','targetUid','following','actorFollowingCount','targetFollowerCount'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "targetUid": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+          },
+          "following": {
+            ".validate": "newData.isBoolean()"
+          },
+          "actorFollowingCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+          },
+          "targetFollowerCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
         "explorePublication": {
           ".validate": "newData.hasChildren(['version','at','originDeviceId','sourceId','trackId','status','allowNextSongApply','allowFollowerSave','profilePinned'])",
           "version": {

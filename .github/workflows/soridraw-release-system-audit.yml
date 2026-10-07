@@ -595,10 +595,13 @@ jobs:
           const state=flat(process.env.STATE_JSON)[0];
           const rows=flat(process.env.ROWS_JSON)[0];
           if(!state) throw new Error(process.env.MODE+': follow cutover control row missing');
-          if(String(state.phase)!=='legacy') throw new Error(process.env.MODE+': follow overlay unexpectedly active phase='+state.phase);
-          if(String(state.cutover_token||'')!=='') throw new Error(process.env.MODE+': follow legacy phase has nonempty cutover token');
-          if(Number(rows?.override_rows||0)!==0) throw new Error(process.env.MODE+': follow overrides exist before activation');
-          console.log(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_STATE=LEGACY rows=0');
+          if(String(state.phase)!=='overlay') throw new Error(process.env.MODE+': follow one-way overlay authority missing phase='+state.phase);
+          if(Number(state.schema_version)!==1) throw new Error(process.env.MODE+': follow overlay schema version mismatch');
+          const token=String(state.cutover_token||'').trim();
+          if(!token) throw new Error(process.env.MODE+': active follow overlay has empty cutover token');
+          const overrideRows=Number(rows?.override_rows||0);
+          if(!Number.isSafeInteger(overrideRows)||overrideRows<0) throw new Error(process.env.MODE+': follow override count invalid');
+          console.log(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_STATE=ACTIVE rows='+overrideRows+' token='+token);
           NODE
             elif [ "$schema_status" -eq 10 ]; then
               echo "${mode^^}_FOLLOW_OVERLAY_STATE=NOT_APPLIED"

@@ -1,8 +1,8 @@
-app375-explore-latest-new-publication-immediate
-target_source=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
-app_version=375
-scope=explore-latest,new-publication-immediate,latest-first-visible,origin-local-signal
-release_system_audit_run=37556209976
+app376-profile-connections-popup
+target_source=bbbf8ade85cce6bd49ea646c85b2b9b38a4e8393
+app_version=376
+scope=profile-connections,followers,following,click-only-bounded-read,pc-mobile-popup
+release_system_audit_run=37566557303
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false

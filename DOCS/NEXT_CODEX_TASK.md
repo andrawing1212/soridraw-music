@@ -1,3 +1,120 @@
+## CURRENT NEXT GATE — app374 PREVIEW PASS / TEST 승격 승인 대기
+
+완료:
+- PREVIEW app374 배포 Run `37551851974` SUCCESS.
+- 사용자 실사용에서 신규/기존 공개곡 모두 메인 음원 전환 후 노란 제목/equalizer 초기화 정상 확인.
+- first-publication 실제 W2 유지 확인.
+- TEST/PRODUCTION 비변경.
+
+다음:
+- 사용자가 TEST 배포를 요청하면 app374 전체 PREVIEW 완성본을 main(TEST)으로 승격.
+- TEST에서 같은 공개곡 음원 전환 표시 + publication parity + 비용 회귀검사 확인.
+- PRODUCTION은 별도 명확한 승인 전 승격 금지.
+
+## CURRENT NEXT GATE — PREVIEW app374 실사용 확인
+
+현재:
+- PREVIEW app374 배포 Run `37551851974`: SUCCESS / exact build PASS.
+- TEST/PRODUCTION은 app361 그대로.
+- first-publication 실제 사용자 테스트 W2 확인 완료.
+- 기존 공개곡 상태 변경 D1 W1 확인.
+- app374는 비용 구조가 아니라 “공개 메인 음원 변경 후 오래된 노란 제목/equalizer가 남는 표시 버그”만 수정.
+
+사용자 확인 항목:
+1. PREVIEW에서 신규 공개곡 카드 중앙 버튼을 눌러 노란 제목/equalizer 활성.
+2. 공개 설정에서 메인 음원 1↔2 전환.
+3. 썸네일/링크가 바뀌는 순간 기존 노란 제목/equalizer가 즉시 사라지는지 확인.
+4. 새 음원 중앙 버튼을 다시 눌렀을 때만 새 노란 제목/equalizer가 켜지는지 확인.
+5. 동일 테스트를 **기존 공개 이력 곡**에서도 한 번 확인.
+
+합격 시:
+- app374 PREVIEW frozen.
+- 사용자 요청/승인 시 TEST(main) 승격.
+- 사용자 데이터 복사/변환 없음.
+
+불합격 시:
+- Explore local visual marker/timer path만 수정.
+- shared D1 app373 W2 cutover, publication parity, 좋아요, Music Note/Library 정상 기능은 동결 보호.
+
+## CURRENT NEXT GATE — app373 적용 완료 / 03:00 KST 이후 실제 Music Note first-publication 1곡 검증
+
+완료:
+- 사용자 shared D1 cutover 명확한 승인 완료.
+- Shared D1 Release Run `37497179294`: **SUCCESS**.
+- locked cutoff: **2026-10-07 03:00:00 KST**.
+- 실제 shared D1 synthetic probe: **W2 / R0**.
+- schema/user-row count/quick_check/feed/Worker identity/main-production ref 전부 PASS.
+- live post-audit Run `37497440023`: **SUCCESS**, shared D1 cutover 적용 확인.
+- 사용자 원본 row migration/backfill/delete/rewrite: 0.
+- Worker/Hosting/Functions 배포: 0.
+- app361 제품 UI/기능 코드 비변경.
+
+사용자 실사용 확인:
+1. 03:00 KST 이후 한 번도 공개한 적 없는 Music Note 곡 1개를 공개.
+2. 공개 버튼이 즉시 활성 상태로 유지되는지 확인.
+3. MY프로필 공개곡 및 Explore에 정상 노출되는지 확인.
+4. 가능하면 비용 진단에서 해당 first-publication D1 rows_written이 W1~W2인지 확인.
+5. PC/모바일 동일 계정에서 공개상태가 기존 app361 parity 규칙대로 수렴하는지 확인.
+
+주의:
+- 03:00 이전 첫 공개는 의도적으로 legacy 경로가 유지되므로 비용 검증 표본으로 사용하지 않는다.
+- 기존에 D1 공개 row가 있었던 곡의 재공개도 first-publication 표본으로 사용하지 않는다.
+- W3+ / 공개상태 불일치 / MY프로필 누락이 있으면 즉시 다음 비용 작업 중단.
+- 정상 PASS 후 다음 비용 최적화 항목을 선택한다.
+
+## CURRENT NEXT GATE — app372 shared D1 first-publication W12→W2 cutover 명확한 승인 대기
+
+완료된 안전증명:
+- 371 Music Note publication parity 영구 Release Gate: Run `37489891135` PASS.
+- app372 static/cost audit: Run `37492203345` PASS.
+- 실제 격리 Cloudflare D1:
+  - first public W12 → **W2**
+  - source/media swap → **W1**
+  - private → **W1**
+  - republish → **W1**
+  - no-op → **W0**
+  - pre-cutover Music Note / non-Music-Note 기존 동작 유지
+  - rollback 복원 PASS
+- 세 환경 live R2 authority + 현재 pre-cutover shared D1 read-only audit:
+  - Run `37493247036` SUCCESS
+  - PREVIEW/TEST/PRODUCTION R2 catalog/hybrid/publication-only authority PASS
+  - shared D1 cutover 미적용 확인 PASS
+  - remote D1 writes 0
+
+다음 단계는 **공유 D1 schema cutover**:
+- post-cutover 새 Music Note 첫 공개만 legacy 4개 secondary index + derived/revision fanout에서 제외.
+- 기존 사용자 row / 기존 공개곡 / non-Music-Note는 기존 경로 유지.
+- user data migration/backfill/delete/rewrite 없음.
+- 전체 Feed/profile/search rebuild 없음.
+- rollback SQL 준비 완료.
+
+중요:
+- 이 단계는 shared D1 index/trigger를 실제 변경하므로 **사용자의 명확한 승인 전 실행 금지**.
+- 승인 전 TEST/PRODUCTION/Worker/Hosting/Functions 추가 배포 금지.
+- 승인 시에도 먼저 exact shared-D1 preflight → cutoff 고정 → schema apply → 즉시 schema/parity/cost 확인 → W3+ 또는 parity FAIL이면 중단/rollback.
+- 최종 합격: 실제 post-cutover 첫 공개 W1~W2, private/republish W1~W2, no-op W0, Explore/public-profile/search/Music Note parity PASS.
+
+## CURRENT NEXT GATE — app361 역반영 완료 / 371 영구 parity gate 후 first-publication W12 → W1~W2
+
+완료:
+- PRODUCTION app361 사용자 실기기 정상 확인.
+- TEST reverse sync Run `37485002429`: SUCCESS / TEST_VERIFIED.
+- main(TEST) `21b2ac98370e0644c4ab245fc3fd9965d1cc4fb6`, tag `soridraw-test-v361-3019b20bc7d3`.
+- PREVIEW reverse sync Run `37485563687`: SUCCESS / app361 exact build PASS.
+- PREVIEW HEAD(배포 기준) `21d57b00a917e173a47223783c6caab22636138d`.
+- TEST / PREVIEW / PRODUCTION 모두 app361 기준.
+- user data / D1 schema / Functions / RTDB rules destructive mutation 없음.
+
+다음 작업 순서:
+1. app361의 `scripts/verify-371-music-note-publication-origin-parity.ts`를 일반 PREVIEW audit + Release Controller의 영구 승격 gate에 연결한다.
+   - 서버/API parity만 맞고 Music Note 공개 버튼 fill/active가 다르면 FAIL.
+   - 기존 PRODUCTION persistent cache → 새 release upgrade 경로도 검사.
+   - 제품 UI/데이터 mutation 없음.
+2. 위 Release System Audit PASS 후 원래 예정 작업인 **first-publication D1 rows_written W12 → W1~W2** 최적화를 새 PREVIEW 작업으로 시작한다.
+3. 정상 좋아요/저장하트/잠금/공개·비공개/Music Note/Library/폴더/미디어는 동결 보호.
+4. 전체 publication/feed/profile scan, 앱 버전 기반 cache bust, 사용자 데이터 migration/backfill 금지.
+5. first-publication 1회에서 D1 W3+이면 기능이 정상이어도 FAIL; W1~W2 확인 전 TEST 승격 금지.
+
 ## CURRENT NEXT GATE — app360 PRODUCTION Music Note 공개상태 회귀 + 영구 승격 parity gate
 
 사용자 실기기 발견:

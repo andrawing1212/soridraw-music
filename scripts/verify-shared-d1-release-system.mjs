@@ -24,9 +24,43 @@ for (const required of [
   'ALL_WORKER_VERSIONS_UNCHANGED=PASS',
   'MAIN_PRODUCTION_REFS_UNCHANGED=PASS',
   'SHARED_D1_ADDITIVE_RELEASE=PASS',
+  "publication_w2_cutover_373",
+  "APP373_LIVE_FIRST_PUBLIC_REMOTE_D1_W2=PASS",
+  "APP373_SHARED_D1_CUTOVER=PASS",
+  "APP373_ALL_WORKERS_UNCHANGED=PASS",
 ]) {
   assert.ok(workflow.includes(required), `shared D1 workflow missing guard: ${required}`);
 }
+
+const countStep = (name) => workflow.split('      - name: ' + name).length - 1;
+for (const name of [
+  'Checkout exact approved source',
+  'Apply exact additive migration with rollback guard',
+  'Capture app373 live consumers and pre-cutover schema',
+  'Apply app373 approved shared D1 cutover with rollback',
+]) assert.equal(countStep(name), 1, 'shared D1 workflow duplicated step: ' + name);
+
+function bashRunBlock(name) {
+  const marker = '      - name: ' + name;
+  const start = workflow.indexOf(marker);
+  assert.ok(start >= 0, 'missing bash step: ' + name);
+  const run = workflow.indexOf('\n        run: |\n', start);
+  assert.ok(run >= 0, 'missing run block: ' + name);
+  const next = workflow.indexOf('\n      - name:', run + 1);
+  const raw = workflow.slice(run + '\n        run: |\n'.length, next >= 0 ? next : workflow.length);
+  return raw.split('\n').map((line) => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+}
+for (const name of [
+  'Resolve exact shared D1 release',
+  'Verify exact app373 approved cutover sources',
+  'Capture app373 live consumers and pre-cutover schema',
+  'Apply app373 approved shared D1 cutover with rollback',
+]) {
+  const syntax = spawnSync('bash', ['-n'], { input: bashRunBlock(name), encoding: 'utf8' });
+  assert.equal(syntax.status, 0, 'bash -n failed for ' + name + ': ' + String(syntax.stderr || syntax.stdout || ''));
+}
+assert.ok(workflow.includes('[[ "$rollback_blob" =~ ^[0-9a-f]{40}$ ]]'), 'rollback blob SHA guard malformed');
+console.log('APP373_SHARED_D1_WORKFLOW_BASH_SYNTAX=PASS');
 
 for (const forbidden of [
   'APPROVED_MIGRATION:',
@@ -195,4 +229,4 @@ console.log('166_SELF_ATTESTED_CUTOVER_PROOF_FAILS_CLOSED=PASS');
 console.log('166_SHARED_ATOMIC_FENCE_NOT_IMPLEMENTED_PRODUCT_RELEASE_BLOCKED=PASS');
 
 console.log('164_READONLY_CUTOVER_PREFLIGHT_MODEL=PASS');
-console.log('PASS shared D1 release system: fixed trigger-driven additive schema path, exact SHA/blob pinning, no per-release hardcoded migration, rollback of newly-created objects only');
+console.log('PASS shared D1 release system: additive path preserved + exact approved app373 controlled replacement path, hash pinning and rollback guards');

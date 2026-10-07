@@ -78,6 +78,9 @@ jobs:
       - name: Verify app360 My Likes navigation stays local
         run: npx tsx scripts/verify-370-my-likes-navigation-worker-zero.ts
 
+      - name: Verify app361 Music Note publication origin parity
+        run: npx tsx scripts/verify-371-music-note-publication-origin-parity.ts
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

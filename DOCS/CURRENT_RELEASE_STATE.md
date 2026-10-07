@@ -1,3 +1,324 @@
+## 0RB. app374 PREVIEW 사용자 실사용 검증 PASS (2026-10-07 KST)
+
+사용자 확인:
+- PREVIEW app374에서 공개 메인 음원 1↔2 전환 시 기존 노란 제목/equalizer가 즉시 초기화되는 동작이 정상 적용됨.
+- 신규 공개곡 / 기존 공개 이력 곡 모두 사용자 실사용 기준 정상.
+- app373 first-publication W12→W2 비용 절감 구조는 그대로 유지.
+- 추가 D1/Worker/Functions/Firebase Rules/user data 변경 없음.
+
+현재 기준:
+- PREVIEW app374 = 사용자 실사용 PASS / TEST 승격 가능 후보.
+- TEST app361, PRODUCTION app361 유지.
+- 다음 승격은 사용자 요청 시에만 TEST(main)으로 진행.
+- PRODUCTION 승격은 TEST 검증 후 별도 명확한 승인 필요.
+
+## 0RA. PREVIEW app374 배포 완료 — 공개곡 음원 전환 시 재생 표시 초기화 (2026-10-07 KST)
+
+사용자 실사용에서 확인된 별도 UI 회귀:
+- 공개곡 카드 중앙 Suno 링크를 눌러 노란 제목 + 중앙 equalizer 피드백이 활성된 상태에서,
+- 같은 공개곡의 공개 설정에서 메인 음원을 1번→2번(또는 반대)으로 바꾸면 썸네일/링크는 새 음원으로 바뀌지만 기존 재생 피드백이 최대 3분30초 남아 있었음.
+- 원인: 시각 피드백 session marker가 공개곡 `track.id`만 기억하고, 같은 track의 실제 Suno 링크가 바뀐 사실을 종료 조건으로 보지 않았음.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - 공개 메인 음원 선택이 실제 변경되었고 해당 카드가 현재 previewing 상태면,
+  - 기존 visual timer 종료,
+  - active preview track 해제,
+  - sessionStorage preview visual marker 삭제,
+  - 그 다음 새 썸네일/링크를 optimistic patch.
+- 따라서 신규 공개곡/기존 공개곡 구분 없이 같은 `selectionChanged` 경로에서 동작.
+- 실제 오디오 엔진/서버 playback 상태는 건드리지 않으며 기존의 “Suno 링크 열기 + 로컬 시각 피드백” 구조 유지.
+- 관련 회귀검사 `APP374_EXPLORE_MEDIA_SWITCH_RESETS_PLAY_VISUAL` 추가.
+
+코드:
+- 기능 commit: `e9cbd68d3908de47b3dc1bbc11195e70ee28aa97`.
+- app374/version gate commit: `cce0ec1d0190f897e96f6f42284460216ee022af`.
+- Release System Audit Run `37551651930`: **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - static/release-system regression PASS
+  - shared D1 read-only preflight PASS
+  - TEST/PRODUCTION 비변경
+
+PREVIEW 배포:
+- deploy trigger commit: `0513c32506d915acd8fa1ca7cc57938f43bb0954`.
+- Firebase PREVIEW App Run `37551851974`: **SUCCESS**.
+- locked source: `0513c32506d915acd8fa1ca7cc57938f43bb0954`.
+- `PREVIEW_APP_VERSION=374`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / shared D1 추가 변경 없음.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음.
+
+비용 작업 실사용 확인:
+- 사용자가 shared D1 cutover 이후 “한 번도 공개한 적 없는 Music Note 곡” 실제 최초 공개를 수행.
+- 진단 화면 기준 first-publication:
+  - D1 query write 1
+  - physical rows_written **2**
+  - Firestore R0/W0
+  - page sync D1 R0/W0
+- 즉 실제 앱 경로에서도 **W12 → W2** 목표 확인.
+- 기존에 이미 공개 이력이 있는 곡의 공개 설정/음원 전환은 legacy compatibility row를 유지하지만 사용자 진단에서 해당 D1 mutation은 **W1**로 확인되어 비용 gate 합격 범위.
+- 기존 공개곡을 새 schema로 강제 backfill/migration하지 않음.
+
+현재 환경:
+- PREVIEW = **app374**
+- TEST = app361
+- PRODUCTION = app361
+- shared D1 app373 first-publication cutover는 세 환경 공용 데이터 계층에 적용된 상태.
+- TEST/PRODUCTION 앱 코드는 이번 app374 배포에서 변경하지 않음.
+
+다음:
+- 사용자 PREVIEW에서 신규 공개곡 + 기존 공개곡 각각 한 번씩 메인 음원을 전환.
+- 전환 즉시 이전 노란 제목/equalizer가 사라지고, 새 음원 중앙 버튼을 다시 눌렀을 때만 새 visual이 켜지는지 확인.
+- PASS면 app374 TEST 승격 후보.
+- FAIL이면 이 UI path만 재수정하고 D1 비용 구조/정상 publication 기능은 건드리지 않음.
+
+## 0QZ. app373 shared D1 first-publication W12→W2 컷오버 적용 완료 (2026-10-07 KST)
+
+사용자 명확한 승인:
+- 2026-10-07 01:13 KST: **공유 D1 컷오버 승인**.
+- 승인 범위: Music Note first-publication D1 W12 → W1~W2 비용 절감용 shared D1 index/trigger cutover.
+- user row delete/backfill/rewrite, Worker/Hosting/Functions 배포는 승인 범위에 포함하지 않음.
+
+릴리스 준비 / 안전성:
+- app373 approved cutover source 준비 commit: `b320b57d11403def3b87d870ec00b5c7cdeac675`.
+- release plumbing 재구성/future cutoff 고정 commit: `84a7dc12025cd72a64618f865495c3166e2891ab`.
+- locked cutoff: **2026-10-07 03:00:00 KST** / `1791309600000`.
+- migration blob: `f3a84c6abf20e33619507c48c55f30fae21db86e`.
+- rollback blob: `d323b64cd29bd479d6fcf3577b55f84681905bf6`.
+- verifier blob: `8d75d742959017401e1e046dfe19dcd98d361cce`.
+- Release System Audit Run `37496811955`: **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - Static release-system verification PASS
+  - critical shared-D1 workflow bash syntax gate PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - live shared D1 read-only preflight PASS
+  - main/production refs unchanged PASS
+
+1차 shared-D1 release 시도:
+- Run `37496079634`: **FAIL before any D1 mutation**.
+- 원인: release workflow resolve shell의 rollback SHA 정규식 문자열 누락.
+- migration/apply step까지 도달하지 않았으므로 shared D1 / user data / Worker / Hosting / Functions 변경 **0**.
+- 동일 승인 범위에서 workflow를 main 기준으로 깨끗하게 재구성하고 bash `-n` 영구 gate를 추가한 뒤 재감사.
+
+최종 shared-D1 cutover:
+- trigger commit: `64bfc58c6408049fabf368727382dbdacad35d57`.
+- canonical Shared D1 Release Run `37497179294`: **SUCCESS**.
+- exact migration / rollback / verifier hash pinning PASS.
+- pre-cutover live schema PASS.
+- cutoff 이후 Music Note row 사전 존재: **0**.
+- schema postflight PASS.
+- canonical/derived user row counts before/after 동일: **PASS**.
+- `PRAGMA quick_check` PASS.
+- 실제 shared D1 synthetic first-publication probe:
+  - **rows_written = 2**
+  - **rows_read = 0**
+  - `APP373_LIVE_FIRST_PUBLIC_REMOTE_D1_W2=PASS`
+  - probe cleanup PASS.
+- PREVIEW latest/popular feed post-cutover PASS.
+- TEST latest/popular feed post-cutover PASS.
+- PRODUCTION latest/popular feed post-cutover PASS.
+- PREVIEW / TEST / PRODUCTION Explore Worker version 변경 없음 PASS.
+- main / production branch ref 변경 없음 PASS.
+- rollback 미실행; `APP373_SHARED_D1_CUTOVER=PASS`.
+
+독립 live read-only post-audit:
+- workflow update commit: `18fce8495973f79194590009be6cc00fbeda0b55`.
+- Run `37497440023`: **SUCCESS**.
+- PREVIEW / TEST / PRODUCTION R2 catalog/hybrid/publication authority PASS.
+- `APP373_LIVE_POSTCUTOVER_SCHEMA=PASS`.
+- `APP373_SHARED_D1_CUTOVER_APPLIED=true`.
+- audit remote D1 writes: **0**.
+
+실제 동작 기준:
+- 컷오버 schema는 이미 shared D1에 설치됨.
+- **2026-10-07 03:00 KST 이후 D1에 처음 생성되는 Music Note publication row**부터 low-cost 경로 적용.
+- first-publication의 `tracks.created_at`은 기존 row가 없으면 publication 순간의 `Date.now()`이므로, 과거에 Music Note에서 만든 곡이라도 D1에 한 번도 공개 row가 없었다면 03:00 이후 첫 공개 시 새 경로 대상.
+- 기존 D1 Music Note row와 non-Music-Note row는 legacy compatibility 유지.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음.
+- Worker / Firebase Hosting / Functions / Rules 배포 없음.
+- app version은 PREVIEW / TEST / PRODUCTION 모두 **361** 그대로.
+
+다음 실사용 gate:
+- 03:00 KST 이후 **한 번도 공개한 적 없는 Music Note 곡 1개**를 공개하여 실제 Worker 전체 경로를 확인.
+- 목표: D1 first-publication W1~W2, 공개 버튼 즉시 정상, MY프로필/Explore 정상, 검색/프로필 parity 정상.
+- W3+ 또는 UI/parity 이상이면 추가 승격/확대 중단하고 원인 분석.
+- 이미 shared D1 공용 schema가 적용되었으므로 이 검증을 위해 TEST/PRODUCTION 코드 재배포는 하지 않는다.
+
+## 0QY. app371 영구 승격 gate 완료 + app372 first-publication W12→W2 안전증명 완료 (2026-10-07 KST)
+
+### 1. Music Note 공개상태 parity 371 영구 gate
+
+app361 incident에서 발견된 “서버/프로필은 공개인데 Music Note 공개 버튼만 오래된 origin cache로 비활성” 회귀를 다시 통과시키지 않도록 `verify-371-music-note-publication-origin-parity.ts`를 일반 릴리스 경로에 영구 연결했다.
+
+preview commit:
+- `b2ce5fe2ca5e7a4444bef76134c6d61ac4d3cfae`
+
+영구 연결 위치:
+- Release Controller PREFLIGHT
+- TEST_VERIFY
+- PROD_PREFLIGHT
+- Release System Audit
+- PREVIEW App Release
+- `verify-release-promotion-system.mjs` 자체 정적 gate
+
+Release System Audit Run `37489891135`: **SUCCESS**
+- TypeScript PASS
+- Build PASS
+- `RELEASE_PROMOTION_SYSTEM_STATIC=PASS`
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`
+- `UNCHANGED_MUSIC_NOTE_REENTRY_WORKER_ZERO_CONTRACT=PRESERVED`
+- `RETAINED_PUBLICATION_SIGNAL_BOUNDED_REPAIR=PASS`
+- `PUBLIC_AND_LOCK_BUTTON_RENDER_CONTRACT=PRESERVED`
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+- TEST/PRODUCTION 배포 없음
+- 사용자 데이터 변경 없음
+
+### 2. first-publication W12→W1~W2 app372 prep-only 후보
+
+현재 shared D1의 never-published Music Note 첫 공개 물리 쓰기 **W12**를 줄이기 위한 새 cutover 후보와 rollback을 PREVIEW에 준비했다.
+
+핵심 설계:
+- 기존 사용자/기존 Music Note row는 기존 D1 index/trigger 동작을 그대로 유지.
+- non-Music-Note row도 기존 동작 유지.
+- cutover 이후 새로 최초 공개되는 Music Note row만:
+  - canonical `tracks` + PK는 유지
+  - legacy secondary index / derived mirror / shared revision fanout에서 제외
+  - Feed/profile/search 조회는 이미 세 환경에 존재하는 shared R2 authority 사용
+- 사용자 원본 row 삭제/변환/backfill 없음.
+- 전체 Feed/profile/search rebuild 없음.
+- cutover SQL은 `__SORIDRAW_PUBLICATION_W2_CUTOVER_MS__` placeholder가 남아 있어 승인된 release 경로에서 고정 cutoff를 찍기 전에는 직접 실행 불가.
+- rollback은 기존 index/trigger 동작을 복원.
+
+준비 commit:
+- `1fd6d5d5e7116908ff73574adc95e9885ee559a4`
+- verifier syntax 수정: `d5cffa5ae341345e060dfb3b2a5648c394b02ece`
+- 측정 trigger: `dde5bb6c5cf5e5335cf2e7b2f7fa20e13027c4fa`
+
+Release System Audit Run `37492203345`: **SUCCESS**
+- TypeScript PASS / Build PASS
+- `APP372_FIRST_PUBLICATION_W2_CUTOVER_STATIC=PASS`
+- `APP372_CANONICAL_TRACK_ROW_PRESERVED=PASS`
+- `APP372_PRECUTOVER_AND_NON_MUSIC_NOTE_COMPAT=PASS`
+- `APP372_R2_AUTHORITY_FLAGS=PASS`
+- `APP372_AUTO_APPLY_WIRED=false`
+- `APP372_USER_DATA_MIGRATION=false`
+- `APP372_SHARED_D1_APPLIED=false`
+
+실제 Cloudflare **격리 임시 D1** 물리 비용 측정:
+- 현재 first-publication 재현: **W12 / R2**
+- 후보 적용 후 first-publication: **W2 / R0**
+- 후보 적용 후 source/media swap: **W1 / R1**
+- 후보 적용 후 private: **W1 / R1**
+- 후보 적용 후 republish: **W1 / R1**
+- no-op: **W0 / R1**
+- pre-cutover Music Note: 기존 **W12 / R2** 보존
+- non-Music-Note: 기존 **W12 / R2** 보존
+- rollback 후 first-publication: 기존 **W12 / R2** 복구
+- 임시 D1 삭제 PASS
+- shared 실제 사용자 D1 write **0**
+
+### 3. 실제 세 환경 live readiness read-only 확인
+
+PREVIEW / TEST / PRODUCTION의 현재 Explore Worker와 shared D1을 쓰기 없이 직접 감사하는 gate를 추가했다.
+- audit workflow update commits: `d7e5d9bb6f7dfd9f92497f5cf1e40522993e7129`, `507b062eb1ca7800425bff127663a1f63a1641ba`
+- 첫 시도 `37493057422`는 live Worker marker 검사 방식이 너무 엄격해 FAIL; **데이터/배포 변경 없음**.
+- 실제 composed function 기준으로 수정 후 Run `37493247036`: **SUCCESS**.
+
+live 확인:
+- PREVIEW / TEST / PRODUCTION 모두 같은 shared D1 ID 사용 PASS.
+- 세 환경 모두 shared `PROFILE_MEDIA=soridraw-profile-media` PASS.
+- 세 환경 모두:
+  - `SORIDRAW_R2_CATALOG_V1=1`
+  - `SORIDRAW_R2_HYBRID_READ_V1=1`
+  - `SORIDRAW_PUBLICATION_R2_ONLY_READ_V1=1`
+- R2 catalog / hybrid / publication R2-only composed functions 세 환경 모두 존재 PASS.
+- `PREVIEW_APP372_R2_CUTOVER_READINESS=PASS`
+- `TEST_APP372_R2_CUTOVER_READINESS=PASS`
+- `PRODUCTION_APP372_R2_CUTOVER_READINESS=PASS`
+- 현재 shared D1은 아직 기존 pre-cutover schema 그대로:
+  - `APP372_LIVE_PRECUTOVER_SCHEMA=PASS`
+  - `APP372_SHARED_D1_CUTOVER_APPLIED=false`
+  - `REMOTE_D1_WRITES=0`
+
+### 현재 gate
+
+기술적으로는 **first-publication W12→W2 shared-D1 cutover 직전까지 준비/증명 완료**.
+
+하지만 다음 단계는 shared D1의 index/trigger를 실제 변경하는 schema cutover다. 사용자 원본 row를 바꾸지는 않지만 **공유 운영 D1 구조 변경**이므로 기존 안전 규칙에 따라 **사용자의 명확한 별도 승인 전 실행 금지**.
+
+현재 실제 서비스:
+- PRODUCTION app361 정상 유지.
+- TEST app361 정상 유지.
+- PREVIEW app361 제품 런타임 정상 유지.
+- 이번 app372 작업은 아직 shared D1 / Hosting / Worker / Functions에 배포하지 않음.
+- 사용자 데이터 변경 0.
+
+## 0QX. app361 PRODUCTION incident 역반영 완료 — TEST + PREVIEW 동기화 (2026-10-07 KST)
+
+사용자 확인:
+- 정식앱 app361에서 Music Note 공개 체크가 실제 공개 상태와 정상 수렴하는 것을 사용자 실기기에서 확인.
+- 이 건은 정상 개발 승격이 아니라 `incident recovery` 후 역반영으로 처리: **PRODUCTION hotfix → TEST → PREVIEW** 런타임 순서 유지.
+
+역반영 소스:
+- PRODUCTION app361 기준 HEAD: `b20c20a2a1a10a794806474e2b84c6b08b5faf63`.
+- PREVIEW 준비 commit: `3019b20bc7d3f4f7a21ce0b2658ccf3a4997af92`.
+- PRODUCTION에서 정확히 역반영한 제품 파일:
+  - `public/app-version.json`
+  - `src/pages/FavoritesPage.tsx`
+  - `src/services/exploreEnvironmentParityPolicy.ts`
+  - `src/services/explorePublicationService.ts`
+  - `scripts/verify-371-music-note-publication-origin-parity.ts`
+- PRODUCTION incident 전용 임시 Hosting workflow/trigger는 PREVIEW/TEST 제품 소스로 복사하지 않음.
+
+TEST 역반영:
+- Release Controller Run `37485002429`: **SUCCESS / TEST_VERIFIED**.
+- source PREVIEW: `3019b20bc7d3f4f7a21ce0b2658ccf3a4997af92`.
+- main(TEST) SHA: `21b2ac98370e0644c4ab245fc3fd9965d1cc4fb6`.
+- immutable tag: `soridraw-test-v361-3019b20bc7d3`.
+- app version: **361**.
+- TEST Explore Worker active: `7c91d7bb-3e34-4bf0-91ca-62c9de930c6f`.
+- TEST Media Worker active: `d80fdd58-3857-4314-a8d4-f35023971588`.
+- Worker/Media code identity는 app360과 동일 code SHA이며 기능 코드 변경 없음.
+- `TEST_CURATED_PARITY=PASS count=12`.
+- `TEST_PUBLIC_PROFILE_PARITY=PASS`.
+- `TEST_RELEASE_ENVIRONMENT_PARITY=PASS reference=PREVIEW`.
+- `TEST_WORKER_VERIFY=PASS` / `TEST_MEDIA_WORKER_VERIFY=PASS`.
+- old-production-cache upgrade contract / app358-360 regressions PASS.
+- PRODUCTION 비변경 확인.
+
+PREVIEW 역반영:
+- deploy trigger commit: `21d57b00a917e173a47223783c6caab22636138d`.
+- Firebase PREVIEW App Run `37485563687`: **SUCCESS**.
+- `PREVIEW_APP_VERSION=361`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- TypeScript PASS / Build PASS / app358-360 regression PASS.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- PREVIEW Worker / Functions 변경 및 재배포 없음.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+
+데이터/비용 안전:
+- 사용자 원본 데이터 migration/backfill/copy/delete/rewrite: **0**.
+- D1 schema migration: **0**.
+- Firebase Functions/Rules 변경: **0**.
+- app361 수정은 브라우저 origin별 오래된 Music Note 공개상태 cache가 최신 UID publication signal을 놓친 경우에만 bounded 수렴시키는 클라이언트 복구이며, 앱 버전만으로 전체 공개상태를 다시 읽는 구조를 추가하지 않음.
+
+현재 기준:
+- PRODUCTION = app361.
+- TEST = app361.
+- PREVIEW = app361.
+- Music Note 공개상태 수렴 hotfix는 세 환경에 역반영 완료.
+- 정상 좋아요 / 저장하트 / 잠금 / Music Note / Library / 공개·비공개 mutation UI는 frozen baseline으로 계속 보호.
+
+다음:
+- first-publication D1 W12 → W1~W2 비용 최적화 재개 전, `verify-371-music-note-publication-origin-parity.ts`를 일반 Release Gate/감사 경로에 영구 연결하는 소규모 릴리스 시스템 보강을 먼저 완료한다.
+- 이후 새 PREVIEW 작업으로 first-publication W12 → W1~W2 최적화를 재개한다.
+
 ## 0QW. app360 PRODUCTION Music Note 공개버튼 parity 회귀 / 영구 승격 gate 강화 (2026-10-06 KST)
 
 사용자 실기기 발견:

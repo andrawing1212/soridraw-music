@@ -99,5 +99,14 @@ console.log('SHARED_REVISION_WRITE=1');
 console.log('PREVIEW_R2_HYBRID_AUTHORITY=PASS');
 console.log('AUTO_APPLY_WIRED=false');
 console.log('USER_DATA_MIGRATION=false');
-console.log('CUTOVER_READY=false');
-console.log('BLOCKER=TEST_PRODUCTION_HYBRID_READ_NOT_YET_PROMOTED');
+const releaseRuntime = readFileSync('.deploy/release-worker-runtime.mjs', 'utf8');
+const wrangler = readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8');
+for (const flag of ['SORIDRAW_R2_CATALOG_V1','SORIDRAW_R2_HYBRID_READ_V1','SORIDRAW_PUBLICATION_R2_ONLY_READ_V1']) {
+  assert.match(wrangler, new RegExp('"'+flag+'"\\s*:\\s*"1"'), 'canonical release flag missing: '+flag);
+}
+for (const token of ['const canonicalVars =','vars: canonicalVars',"action === 'verify' && liveReleaseVarMismatches.length"]) {
+  assert.ok(releaseRuntime.includes(token), 'cross-environment release var contract missing: '+token);
+}
+console.log('CROSS_ENVIRONMENT_HYBRID_RELEASE_CONTRACT=PASS');
+console.log('CUTOVER_READY=PREP_ONLY');
+console.log('BLOCKER=EXPLICIT_SHARED_D1_CUTOVER_APPROVAL_REQUIRED');

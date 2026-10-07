@@ -1,3 +1,38 @@
+## CURRENT NEXT GATE — follow378 all-environment compatibility 선행 / shared cutover 계속 OFF
+
+현재 완료:
+- shared D1 additive overlay348 schema 적용 완료: Run `37582930962` SUCCESS.
+- PREVIEW rollback-safe follow378 Worker 배포 완료: Run `37583095947` SUCCESS.
+- PREVIEW active Worker `cf78f8cb-a108-4362-a6e7-a0c90eff12a0`.
+- TEST / PRODUCTION Worker unchanged.
+- shared follow cutover / lifecycle flag / R2 active manifest / D1 control activation 모두 OFF.
+- user data migration/backfill/delete/rewrite/copy 0.
+
+새 필수 조건:
+- PREVIEW / TEST / PRODUCTION은 shared canonical D1 + shared PROFILE_MEDIA를 사용하므로 follow relation authority도 하나의 shared truth여야 한다.
+- 실제 overlay authority를 켜기 전에 TEST와 PRODUCTION active Worker도 follow378 rollback-safe reader/readonly fail-closed를 이해해야 한다.
+- protocol354/355만으로는 normal active path는 호환되지만 manifest-loss emergency rollback safety가 부족하다.
+- 따라서 현재 상태에서 PREVIEW-only manifest activation 금지.
+
+다음 작업:
+1. 현재 PREVIEW follow378 exact Worker source/환경 계약을 고정.
+2. TEST compatibility 승격 시 앱/UI 변경 없이 동일 rollback-safe Worker contract가 유지되는지 dry-run + actual TEST Worker 검증.
+3. TEST PASS 후에만 PRODUCTION Worker compatibility 승격을 별도 명확한 승인 대상으로 보고.
+4. 세 active Worker 모두 follow378 lifecycle + overlay-readonly contract PASS 후:
+   - D1 one-way latch guard/control activation.
+   - shared R2 active manifest.
+   - actual follow/unfollow W1~W2 live measurement.
+5. 합격선은 follow W1~W2 / unfollow W1~W2 / duplicate·same-state W0.
+6. PC↔mobile count/list/membership/follower-save/public-profile parity 동시 확인.
+
+절대 금지:
+- current TEST/PRODUCTION approval 없이 Worker 실제 배포.
+- TEST/PRODUCTION이 follow378을 이해하기 전 shared manifest activation.
+- environment-local follow authority로 shared user truth를 분리.
+- legacy follows/profile_stats user data rewrite/backfill/foldback.
+- W3+ 상태에서 진행.
+- 좋아요/publication/Music Note/Library/UI 변경.
+
 ## CURRENT NEXT GATE — follow W1~W2 shared PREVIEW activation approval 대기
 
 완료:

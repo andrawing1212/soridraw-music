@@ -3595,6 +3595,14 @@ export default function ExplorePage() {
     };
 
     setPublicationSettingsBusy(true);
+    if (selectionChanged && activeExplorePreviewTrackId224 === pendingSettings.track.id) {
+      // app374 — the yellow title / center equalizer are local feedback for the
+      // exact Suno link the user opened. Switching the published song changes
+      // that playback target, so stale "playing" feedback must end immediately.
+      clearExplorePreviewTimer224();
+      setActiveExplorePreviewTrackId224('');
+      clearExplorePreviewVisualState237(pendingSettings.track.id);
+    }
     patchExplorePublicationTrack(pendingSettings.track, optimisticPatch);
     setPublicationSettings(null);
     setPublicationPrivateConfirm(false);

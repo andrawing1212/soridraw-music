@@ -696,6 +696,11 @@ assert.match(
 );
 assert.match(
   page,
+  /selectionChanged && activeExplorePreviewTrackId224 === pendingSettings\.track\.id[\s\S]*?clearExplorePreviewTimer224\(\)[\s\S]*?setActiveExplorePreviewTrackId224\(''\)[\s\S]*?clearExplorePreviewVisualState237\(pendingSettings\.track\.id\)[\s\S]*?patchExplorePublicationTrack\(pendingSettings\.track, optimisticPatch\)/,
+  'switching the published Suno song must clear stale yellow-title/equalizer feedback before painting the new artwork',
+);
+assert.match(
+  page,
   /expiresAt = Date\.now\(\) \+ EXPLORE_PREVIEW_MAX_MS_222[\s\S]*?writeExplorePreviewVisualState237\(\{ trackId: track\.id, expiresAt \}\)[\s\S]*?scheduleExplorePreviewVisualExpiry237\(track\.id, expiresAt\)/,
   'Explore equalizer must persist the original absolute expiration when play is clicked',
 );
@@ -857,6 +862,7 @@ console.log('APP236_EXPLORE_LIKED_TRACK_PUBLISHER_PRESERVED=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_THREE_MINUTES_THIRTY_SECONDS=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ROUTE_PERSISTENCE=PASS');
 console.log('APP237_EXPLORE_EQUALIZER_ABSOLUTE_EXPIRY_PRESERVED=PASS');
+console.log('APP374_EXPLORE_MEDIA_SWITCH_RESETS_PLAY_VISUAL=PASS');
 
 console.log('APP238_EXPLORE_PROFILE_PC_GUTTERS_INCREASED=PASS');
 

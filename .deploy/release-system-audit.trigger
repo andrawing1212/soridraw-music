@@ -1,10 +1,10 @@
-app376-profile-connections-popup-audit-v2
-target=ce3f2dc53b6953b4479932162170cd56b463a17b
-scope=profile-connections,followers,following,click-only-bounded-read,follow-contract
+app376-profile-connections-popup-final-audit
+target=e5e6a33c77502a4fe1955e6a56ee1ea294e7056b
+scope=profile-connections,followers,following,deploy-preflight,click-only-bounded-read
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app376-profile-connections-popup-audit-v2
+requested=2026-10-07-app376-profile-connections-popup-final-audit

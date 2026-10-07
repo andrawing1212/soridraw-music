@@ -78,8 +78,10 @@ jobs:
           const expectedDb=process.env.SHARED_D1_ID;
           const workers={preview:process.env.PREVIEW_WORKER,test:process.env.TEST_WORKER,production:process.env.PRODUCTION_WORKER};
           const required=[
-            'SORIDRAW_FOLLOW_ROLLBACK_SAFE_AUTHORITY_378_20261007',
-            'overlay348-readonly','FOLLOW_OVERLAY_READONLY'
+            'overlay348-readonly',
+            'FOLLOW_OVERLAY_READONLY',
+            'd1-one-way-latch',
+            'SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378'
           ];
           async function get(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const p=await r.json();if(!r.ok||p?.success===false)throw Error('Cloudflare read failed '+r.status+' '+JSON.stringify(p).slice(0,300));return p.result??p;}
           async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('single active Worker missing '+name);return String(v.version_id);}

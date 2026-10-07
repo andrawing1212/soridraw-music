@@ -1,10 +1,11 @@
-app376-profile-connections-popup-final-audit
-target=e5e6a33c77502a4fe1955e6a56ee1ea294e7056b
-scope=profile-connections,followers,following,deploy-preflight,click-only-bounded-read
+app377-follow-count-list-sync-audit
+target=c496a429db939ddc09b45820c18a99d452c255b0
+scope=follow-count,following-count,persistent-connection-cache,cross-device-rtdb,worker-response-no-extra-d1
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app376-profile-connections-popup-final-audit
+rtdb_rules_deploy=false
+requested=2026-10-07-app377-follow-count-list-sync-audit

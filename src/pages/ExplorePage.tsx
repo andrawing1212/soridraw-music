@@ -3618,11 +3618,11 @@ export default function ExplorePage() {
       : Number.isFinite(cachedActorBefore380)
         ? Math.max(0, Math.floor(cachedActorBefore380))
         : null;
-    const optimisticFollowerCount380 = Math.max(
+    const canonicalTargetFollowerCount380 = Math.max(
       0,
-      Math.floor(Number(previousProfile380.followerCount || 0)) + relationDelta380,
+      Math.floor(Number(previousProfile380.followerCount || 0)),
     );
-    const optimisticTargetFollowing380 = Math.max(
+    const canonicalTargetFollowing380 = Math.max(
       0,
       Math.floor(Number(previousProfile380.followingCount || 0)),
     );
@@ -3634,6 +3634,7 @@ export default function ExplorePage() {
       targetUid,
       nextShouldFollow380,
       previousProfile380,
+      { deferTargetFollowers: true },
     );
     const exactActorAfter380 =
       readExploreProfileConnectionExactCount379(viewerUid, 'following')
@@ -3646,8 +3647,8 @@ export default function ExplorePage() {
 
     setFollowState({
       isFollowing: nextShouldFollow380,
-      followerCount: optimisticFollowerCount380,
-      followingCount: optimisticTargetFollowing380,
+      followerCount: canonicalTargetFollowerCount380,
+      followingCount: canonicalTargetFollowing380,
       ...(optimisticActorFollowing380 === null
         ? {}
         : { actorFollowingCount: optimisticActorFollowing380 }),
@@ -3660,24 +3661,16 @@ export default function ExplorePage() {
         return next;
       });
     }
-    patchExplorePublicProfileFirstViewProfile(targetUid, {
-      followerCount: optimisticFollowerCount380,
-      followingCount: optimisticTargetFollowing380,
-    });
     if (optimisticActorFollowing380 !== null) {
       patchExplorePublicProfileFirstViewProfile(viewerUid, {
         followingCount: optimisticActorFollowing380,
       });
     }
-    setProfile((previous) => previous?.uid === targetUid
-      ? {
-        ...previous,
-        followerCount: optimisticFollowerCount380,
-        followingCount: optimisticTargetFollowing380,
-      }
-      : previous?.uid === viewerUid && optimisticActorFollowing380 !== null
-        ? { ...previous, followingCount: optimisticActorFollowing380 }
-        : previous);
+    // Public/target counters stay canonical until the final accepted state.
+    // Only this account's own following cache/count is optimistic during batching.
+    setProfile((previous) => previous?.uid === viewerUid && optimisticActorFollowing380 !== null
+      ? { ...previous, followingCount: optimisticActorFollowing380 }
+      : previous);
 
     queueExploreFollowFinalState380({
       viewerUid,

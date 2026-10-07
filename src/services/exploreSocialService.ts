@@ -332,6 +332,7 @@ export const patchExploreFollowLocalState377 = (
   targetUid: string,
   following: boolean,
   targetProfile?: ExploreProfileConnectionSeed378 | null,
+  options: { deferTargetFollowers?: boolean } = {},
 ) => {
   const viewer = String(viewerUid || '').trim();
   const target = String(targetUid || '').trim();
@@ -345,10 +346,14 @@ export const patchExploreFollowLocalState377 = (
   if (!patchExploreFollowingConnectionCache378(viewer, target, following, targetProfile)) {
     invalidateExploreProfileConnections377(viewer, 'following');
   }
-  // The target account's Followers page belongs to another account and this
-  // UID-scoped signal does not carry the actor card. Keep the existing safe
-  // changed-only invalidation for that separate surface.
-  invalidateExploreProfileConnections377(target, 'followers');
+  // app380 local-first follow batching may keep the public/target side canonical
+  // until the final server settlement. In that pending window do not invalidate
+  // the target Followers page and accidentally turn an optimistic click into a
+  // cold server list read. The final canonical setExploreFollow call still runs
+  // this invalidation normally.
+  if (options.deferTargetFollowers !== true) {
+    invalidateExploreProfileConnections377(target, 'followers');
+  }
 };
 
 type ExploreFollowCacheData = {

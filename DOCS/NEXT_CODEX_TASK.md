@@ -1,3 +1,42 @@
+## CURRENT NEXT GATE — app378 실기기 Following 목록 R0 재검증
+
+현재 완료:
+- follow shared overlay active.
+- 사용자 CACHE LIVE에서 follow/unfollow mutation W1~W2 범위 확인.
+- PC↔mobile follow 실시간 동기화 PASS.
+- 관계 변경 후 viewer Following 목록 persistent cache 전체 invalidation 때문에 다음 목록 확인이 D1 R2~R5 / row R11~R12 수준으로 cold read 되는 문제 확인.
+- app378 PREVIEW 수정 및 배포 완료: Run `37596588786` SUCCESS.
+- `preview.soridraw.com` app378 exact build PASS.
+- app update는 product persistent cache를 지우지 않음.
+- hydrated Following first page는 relation 1건만 local patch하고 compact target-card seed를 보존.
+- RTDB signal / Rules / Worker / D1 schema / Functions / UI 변경 0.
+- TEST / PRODUCTION unchanged PASS.
+
+사용자 실기기 확인:
+1. PC와 모바일 각각 app378 적용 확인.
+2. 각 기기에서 자신의 팔로잉 목록을 한 번 열어 local first-page cache 확보.
+   - 이전 app377 mutation이 cache를 이미 지운 기기는 이 최초 1회에만 bounded D1 read가 나올 수 있음.
+3. 다른 프로필에서 follow/unfollow 1회 수행.
+4. 다시 자신의 팔로잉 목록 열기.
+5. 합격선:
+   - 팔로잉 목록: `LOCAL 1 · Worker 0 · D1 R0/W0`.
+   - follow/unfollow mutation: W1~W2 유지.
+   - PC↔mobile no-navigation sync 유지.
+6. 새로고침/앱 업데이트 후 unchanged list 재오픈도 R0 확인.
+7. 위 조건 PASS 후 follow W1~W2 + list R0 작업 완료 처리.
+
+실패 시:
+- Following 목록 D1 read가 다시 나오면 어떤 동작 직후 cache가 사라졌는지 CACHE LIVE 요청명과 함께 좁혀서 해당 invalidation만 제거/patch.
+- mutation W3+ 또는 관계/숫자 불일치가 생기면 즉시 중단.
+- shared overlay legacy fallback 금지; backend authority 문제면 overlay-readonly fail-closed 사용.
+
+금지:
+- 전체 following/follower backfill.
+- 앱 업데이트를 이유로 전체 관계 재조회.
+- Worker/D1 schema/RTDB Rules 불필요 변경.
+- 좋아요/publication/Music Note/Library/UI 변경.
+- TEST/PRODUCTION 승격은 별도 사용자 승인 전 금지.
+
 ## CURRENT NEXT GATE — active follow overlay 실제 physical W1~W2 측정 + 실기기 parity
 
 현재 완료:

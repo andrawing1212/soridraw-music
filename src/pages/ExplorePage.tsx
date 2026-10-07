@@ -1910,6 +1910,16 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+
+  useEffect(() => {
+    const activeUid = String(profile?.uid || '').trim();
+    if (!activeUid) return;
+    // A successful local follow mutation changes the displayed count first.
+    // Invalidate only the two potentially stale on-click pages; do not add any
+    // server request or disturb the proven follow mutation function contract.
+    profileConnectionsCache376Ref.current.delete(`${activeUid}:followers`);
+    if (user?.uid) profileConnectionsCache376Ref.current.delete(`${user.uid}:following`);
+  }, [profile?.followerCount, profile?.followingCount, profile?.uid, user?.uid]);
   const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
   // app272 — keep the authorized full follower-save snapshot outside the lightweight
   // Feed card state. Folder selection must save this exact server-authorized object,
@@ -3484,8 +3494,6 @@ export default function ExplorePage() {
         followerCount: result.followerCount,
         followingCount: result.followingCount,
       });
-      profileConnectionsCache376Ref.current.delete(profileConnectionCacheKey376(targetUid, 'followers'));
-      profileConnectionsCache376Ref.current.delete(profileConnectionCacheKey376(viewerUid, 'following'));
       setProfile((previous) => previous?.uid === targetUid ? {
         ...previous,
         followerCount: result.followerCount,

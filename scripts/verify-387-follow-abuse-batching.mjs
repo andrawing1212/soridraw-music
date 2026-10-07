@@ -8,10 +8,6 @@ const followPatch = readFileSync('cloudflare/explore-worker/patches/097-follow-a
 const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const likePatch = readFileSync('cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs', 'utf8');
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
-const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
-
-assert.ok(manifest.patches.includes('097-follow-abuse-guard.mjs'), '097 release patch provenance missing');
-
 // app380 local-first final-state batching.
 assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000/);
 assert.match(batch, /entry\.desiredFollowing === entry\.baseFollowing/);

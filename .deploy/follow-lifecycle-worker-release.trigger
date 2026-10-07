@@ -1,0 +1,12 @@
+target=b9ea65f71b190ac34632cbcc5ef48c23084b80d1
+mode=test-production-explore-worker-lifecycle-only
+approval=user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z
+preview_lifecycle_run=37588379126
+preview_worker=61f1fa6e-ef93-478b-b06f-4a64e3e337d9
+shared_follow_cutover=false
+shared_d1_control=legacy
+hosting_deploy=false
+media_worker_deploy=false
+functions_rules_deploy=false
+user_data_write=false
+requested=2026-10-07T16:38:00+09:00

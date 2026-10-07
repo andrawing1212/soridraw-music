@@ -1,9 +1,10 @@
-app376-profile-connections-popup
-target_source=bbbf8ade85cce6bd49ea646c85b2b9b38a4e8393
-app_version=376
-scope=profile-connections,followers,following,click-only-bounded-read,pc-mobile-popup
-release_system_audit_run=37566557303
-deploy_shared_rtdb_rules=false
+app377-follow-count-list-cross-device-convergence
+target_source=bcb880375175095b18a0fe1f2fa0ddda25d66cc1
+app_version=377
+scope=follow-count,following-count,persistent-follow-list-cache,cross-device-follow-signal
+release_system_audit_run=37569220320
+worker_release_run=37569420282
+deploy_shared_rtdb_rules=true
 no_user_data_migration=true
 worker_change=false
 functions_change=false

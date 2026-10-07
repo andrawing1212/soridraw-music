@@ -43,7 +43,9 @@ for(const required of [
   'profileCountsR2Exact === true',
   'ownerProtocol === "follow-overlay-348"',
   'oneWayAuthority348 === true',
-  'writeMode === "active" || writeMode === "readonly"',
+  'relationMode === "overlay348" && writeMode === "active"',
+  'relationMode === "overlay348-readonly" && writeMode === "readonly"',
+  'SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378',
 ]) assert.ok(cutover.includes(required), 'cutover manifest missing '+required);
 assert.match(cutover,/readFollowCutoverControl348\(env\)/);
 assert.match(cutover,/source: "d1-one-way-latch"/);

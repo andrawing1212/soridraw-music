@@ -35,6 +35,8 @@ const overlayFn=fn('handleFollowOverlay354');
 assert.match(cutoverFn,/readFollowCutoverControl348\(env\)/);
 assert.match(cutoverFn,/source: "d1-one-way-latch"/);
 assert.match(cutoverFn,/readOnly: true/);
+assert.match(cutoverFn,/relationMode === "overlay348-readonly"/);
+assert.match(cutoverFn,/SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378/);
 assert.match(coreFn,/FOLLOW_OVERLAY_READONLY/);
 assert.ok(coreFn.indexOf('FOLLOW_OVERLAY_READONLY') < coreFn.indexOf('handleFollowOverlay354'));
 assert.match(orchestrateFn,/FOLLOW_OVERLAY_READONLY/);
@@ -75,6 +77,8 @@ ctx.EXPLORE_FOLLOW_CUTOVER_KEY_348='manifest';
 let state=await ctx.readFollowCutoverState348(env);
 assert.equal(state.mode,'legacy');
 assert.equal(state.readOnly,false);
+assert.equal(d1Reads,0,'pre-cutover missing manifest must not add D1 reads');
+env.SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378='1';
 
 const activeManifest={
   schemaVersion:1,relationMode:'overlay348',relationTable:'explore_follow_overrides_348',
@@ -92,7 +96,7 @@ assert.equal(state.readOnly,false);
 assert.equal(state.source,'r2-manifest');
 assert.equal(d1Reads,0,'healthy manifest must not read D1 latch');
 
-records.set('manifest',JSON.stringify({...activeManifest,writeMode:'readonly'}));
+records.set('manifest',JSON.stringify({...activeManifest,relationMode:'overlay348-readonly',writeMode:'readonly'}));
 d1Reads=0;
 state=await ctx.readFollowCutoverState348(env);
 assert.equal(state.mode,'overlay348');
@@ -135,11 +139,13 @@ assert.equal(state.readOnly,true);
 assert.ok(coreFn.indexOf('FOLLOW_OVERLAY_READONLY') < coreFn.indexOf('enforceUserRateLimit'));
 assert.ok(overlayFn.indexOf('FOLLOW_OVERLAY_READONLY') < overlayFn.indexOf('enforceFollowEdgeRateLimit355'));
 
+console.log('FOLLOW378_PRECUTOVER_MISSING_MANIFEST_D1_R0=PASS');
 console.log('FOLLOW378_HEALTHY_MANIFEST_D1_LATCH_R0=PASS');
 console.log('FOLLOW378_MISSING_OR_CORRUPT_MANIFEST_RECOVERS_READONLY_OVERLAY=PASS');
 console.log('FOLLOW378_BASELINE0_FOLLOW1_EFFECTIVE=PASS');
 console.log('FOLLOW378_BASELINE1_UNFOLLOW0_EFFECTIVE=PASS');
 console.log('FOLLOW378_ONCE_ACTIVE_CANNOT_DOWNGRADE_OR_DELETE_LATCH=PASS');
 console.log('FOLLOW378_READONLY_NEW_MUTATION_FAILS_BEFORE_LEGACY_OR_RATE_WRITE=PASS');
+console.log('FOLLOW378_READONLY_MANIFEST_OLD_WORKER_FAIL_CLOSED_CONTRACT=PASS');
 console.log('FOLLOW378_SHARED_USER_DATA_WRITE=0');
 console.log('FOLLOW378_CUTOVER_ACTIVATION_BLOCKER=RESOLVED_SOURCE_ONLY');

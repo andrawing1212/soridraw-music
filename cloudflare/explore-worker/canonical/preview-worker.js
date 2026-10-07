@@ -14078,6 +14078,7 @@ async function readFollowCutoverControl348(env) {
 
 async function readFollowCutoverState348(env) {
   const bucket = env?.PROFILE_MEDIA || null;
+  const lifecycleEnabled = String(env?.SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378 || "").trim() === "1";
   let object = null;
   let manifestError = null;
   if (bucket) {
@@ -14097,8 +14098,12 @@ async function readFollowCutoverState348(env) {
         return { mode: "legacy", cutoverToken: null, readOnly: false, source: "r2-manifest" };
       }
       const token = String(value?.cutoverToken || "").trim();
-      const armed = Number(value?.schemaVersion) === 1 &&
-        relationMode === "overlay348" &&
+      const modeCompatible =
+        (relationMode === "overlay348" && writeMode === "active") ||
+        (relationMode === "overlay348-readonly" && writeMode === "readonly");
+      const armed = lifecycleEnabled &&
+        Number(value?.schemaVersion) === 1 &&
+        modeCompatible &&
         value?.relationTable === "explore_follow_overrides_348" &&
         value?.legacyRelationWritersFrozen === true &&
         value?.legacyCounterWritersFrozen === true &&
@@ -14109,7 +14114,6 @@ async function readFollowCutoverState348(env) {
         value?.crashConsistentWriter354 === true &&
         value?.orderedClientRequests354 === true &&
         value?.oneWayAuthority348 === true &&
-        (writeMode === "active" || writeMode === "readonly") &&
         token.length > 0 && token.length <= 128;
       if (!armed) throw new Error("[SORIDRAW 348] follow cutover manifest present but not fully armed");
       return { mode: "overlay348", cutoverToken: token,
@@ -14117,6 +14121,13 @@ async function readFollowCutoverState348(env) {
     } catch (error) {
       manifestError = error;
     }
+  }
+
+  // Pre-cutover workers keep exact legacy behavior and do not add a D1 read.
+  // The coordinated cutover must enable this flag on every environment before
+  // the D1 one-way latch is moved to overlay.
+  if (!object && !manifestError && !lifecycleEnabled) {
+    return { mode: "legacy", cutoverToken: null, readOnly: false, source: "legacy" };
   }
 
   const control = await readFollowCutoverControl348(env);

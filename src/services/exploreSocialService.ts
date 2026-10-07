@@ -136,6 +136,8 @@ export type ExploreProfileConnectionPage = {
 const EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377 = 1;
 const EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377 = 'explore_profile_connections';
 const EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377 = '/v1/profiles/:id/connections';
+const EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SCHEMA_VERSION_378 = 1;
+const EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SOURCE_TYPE_378 = 'explore_follow_connection_card';
 
 const profileConnectionCacheKey377 = (
   profileUid: string,
@@ -202,6 +204,52 @@ type ExploreProfileConnectionSeed378 = Pick<
   'uid' | 'nickname' | 'avatarUrl' | 'handle'
 >;
 
+const profileConnectionSeedCacheKey378 = (targetUid: string) =>
+  `explore-follow-connection-card:378:${String(targetUid || '').trim()}`;
+
+const readProfileConnectionSeed378 = (targetUid: string): ExploreProfileConnectionSeed378 | null => {
+  const target = String(targetUid || '').trim();
+  if (!target) return null;
+  const envelope = readSoridrawPersistentCache<ExploreProfileConnectionSeed378>({
+    cacheKey: profileConnectionSeedCacheKey378(target),
+    sourceType: EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SOURCE_TYPE_378,
+    schemaVersion: EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SCHEMA_VERSION_378,
+    uid: null,
+  });
+  const row = envelope?.data;
+  if (!row || String(row.uid || '').trim() !== target) return null;
+  return {
+    uid: target,
+    nickname: String(row.nickname || 'SORiDRAW').trim() || 'SORiDRAW',
+    avatarUrl: String(row.avatarUrl || '').trim(),
+    handle: String(row.handle || '').trim().replace(/^@+/, ''),
+  };
+};
+
+const writeProfileConnectionSeed378 = (seed: ExploreProfileConnectionSeed378) => {
+  const target = String(seed?.uid || '').trim();
+  if (!target) return;
+  writeSoridrawPersistentCache<ExploreProfileConnectionSeed378>({
+    cacheKey: profileConnectionSeedCacheKey378(target),
+    sourceType: EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SOURCE_TYPE_378,
+    schemaVersion: EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SCHEMA_VERSION_378,
+    dataVersion: 0,
+    uid: null,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: {
+      uid: target,
+      nickname: String(seed.nickname || 'SORiDRAW').trim() || 'SORiDRAW',
+      avatarUrl: String(seed.avatarUrl || '').trim(),
+      handle: String(seed.handle || '').trim().replace(/^@+/, ''),
+    },
+  });
+};
+
 const patchExploreFollowingConnectionCache378 = (
   viewerUid: string,
   targetUid: string,
@@ -222,18 +270,28 @@ const patchExploreFollowingConnectionCache378 = (
   if (!page || !Array.isArray(page.items)) return false;
 
   const previous = page.items.find((item) => item.uid === target) || null;
+  if (previous) {
+    writeProfileConnectionSeed378({
+      uid: previous.uid,
+      nickname: previous.nickname,
+      avatarUrl: previous.avatarUrl,
+      handle: previous.handle,
+    });
+  }
   let items = page.items.filter((item) => item.uid !== target);
 
   if (following) {
-    const seedUid = String(targetProfile?.uid || '').trim();
+    const seed = targetProfile || previous || readProfileConnectionSeed378(target);
+    const seedUid = String(seed?.uid || '').trim();
     if (seedUid !== target) return false;
+    writeProfileConnectionSeed378(seed);
     const card: ExploreProfileConnection = {
       uid: target,
-      nickname: String(targetProfile?.nickname || previous?.nickname || 'SORiDRAW').trim() || 'SORiDRAW',
-      avatarUrl: String(targetProfile?.avatarUrl || previous?.avatarUrl || '').trim(),
+      nickname: String(seed.nickname || previous?.nickname || 'SORiDRAW').trim() || 'SORiDRAW',
+      avatarUrl: String(seed.avatarUrl || previous?.avatarUrl || '').trim(),
       backgroundUrl: previous?.backgroundUrl || '',
       bio: previous?.bio || '',
-      handle: String(targetProfile?.handle || previous?.handle || '').trim().replace(/^@+/, ''),
+      handle: String(seed.handle || previous?.handle || '').trim().replace(/^@+/, ''),
       genres: previous?.genres || [],
       socialLinks: previous?.socialLinks || { spotify: '', instagram: '', tiktok: '', youtube: '' },
       followerCount: previous?.followerCount || 0,

@@ -164,6 +164,15 @@ const readProfileConnectionCache377 = (
   };
 };
 
+export const readExploreProfileConnectionExactCount379 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+): number | null => {
+  const cached = readProfileConnectionCache377(profileUid, direction);
+  if (!cached || cached.nextCursor) return null;
+  return cached.items.length;
+};
+
 const writeProfileConnectionCache377 = (
   profileUid: string,
   direction: ExploreProfileConnectionDirection,
@@ -364,6 +373,15 @@ const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
     uid: viewerUid,
   });
   return normalizeExploreFollowCache(envelope?.data);
+};
+
+export const readExploreFollowingExactCount379 = (viewerUid: string): number | null => {
+  const data = readExploreFollowCache(viewerUid);
+  if (!data.complete) return null;
+  return Object.values(data.states).reduce(
+    (count, following) => count + (following ? 1 : 0),
+    0,
+  );
 };
 
 const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData) => {

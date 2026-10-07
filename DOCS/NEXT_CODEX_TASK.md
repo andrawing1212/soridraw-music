@@ -1,3 +1,22 @@
+## CURRENT NEXT GATE — PREVIEW app375 새 공개곡 첫 칸 즉시 노출 실사용 확인
+
+현재:
+- PREVIEW app375 Run `37556423502`: SUCCESS / exact build PASS.
+- TEST app374 / PRODUCTION app361 비변경.
+- shared D1 / Worker / Functions / Rules / 사용자 데이터 추가 변경 없음.
+
+사용자 확인:
+1. PREVIEW에서 지금까지 한 번도 공개하지 않은 Music Note 곡 1개 공개.
+2. Explore 홈 `최신 공개곡` 확인.
+3. **기다렸다가 왼쪽 화살표가 활성화되는 과정 없이**, 공개한 곡이 첫 번째 카드로 바로 보여야 함.
+4. 왼쪽 `<` 버튼을 눌러야만 보이는 상태면 FAIL.
+5. 기존 app374 메인 음원 전환 시 노란 제목/equalizer 초기화가 계속 정상인지 함께 확인.
+
+PASS 시:
+- app375 PREVIEW frozen.
+- 사용자가 TEST 배포 요청 시 app375 전체 완성본을 main(TEST)으로 승격.
+- PRODUCTION은 TEST 확인 후 별도 명확한 승인 전 금지.
+
 ## CURRENT NEXT GATE — app374 TEST_VERIFIED / 사용자 TEST 실사용 확인
 
 현재:

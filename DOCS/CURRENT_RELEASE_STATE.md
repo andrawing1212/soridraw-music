@@ -1,3 +1,84 @@
+## 0RW. app379 PREVIEW 팔로우 후 MY 프로필 팔로워/팔로잉 숫자 0 오염 수정 완료 (2026-10-07 KST)
+
+사용자 발견 증상:
+- follow/unfollow 직후 MY 공개프로필 상단 `팔로잉` 숫자가 실제 2명이어도 0으로 표시됨.
+- 팔로잉 팝업 목록 자체는 실제 membership 2명을 정상 표시.
+- 팝업을 열어 exact list count가 계산된 뒤에야 상단 숫자가 다시 2로 복구.
+- 같은 계열 오류가 follower/following 양쪽 social count에 재발할 수 있는지 감사 요청.
+
+원인:
+- shared follow authority는 이미 `overlay348 active`로 전환되어 legacy D1 relation/profile counter writer가 freeze된 상태.
+- Worker compatibility follow response는 여전히 legacy `profile_stats` 계열 값
+  - target `followerCount`
+  - target `followingCount`
+  - actor `actorFollowingCount`
+  를 반환.
+- app377/378 client가 follow mutation 성공 뒤 이 compatibility count를 public-profile persistent cache의 exact 값처럼 덮어써서 stale 0이 MY profile에 저장됨.
+- 팔로우 목록 팝업은 effective overlay membership을 읽으므로 목록은 맞고, complete list를 열었을 때만 `items.length`로 상단 count가 self-heal되어 증상이 사라졌던 것.
+- 즉 membership/실시간 sync 문제가 아니라 **새 overlay authority와 옛 compatibility counter를 UI authority로 혼용한 문제**.
+
+app379 수정:
+- `src/services/exploreSocialService.ts`
+  - complete persistent Followers/Following page의 exact local count reader 추가.
+  - complete personal follow bundle의 exact Following count reader 추가.
+  - mutation/signal 처리 전 previous membership local reader 추가.
+  - 서버 추가 요청 없음.
+- `src/pages/ExplorePage.tsx`
+  - actor MY `followingCount`: complete local Following list 또는 complete personal follow bundle을 우선 exact authority로 사용.
+  - exact local list가 없으면 기존 MY cached count + 실제 relation delta만 사용.
+  - target `followerCount`: 현재 target profile count + confirmed relation delta로 계산.
+  - target `followingCount`: 다른 사용자가 follow/unfollow해도 변하면 안 되므로 기존 값 그대로 보호.
+  - Worker mutation response의 stale `result.followerCount/result.followingCount/result.actorFollowingCount`를 public-profile count authority로 직접 덮어쓰지 않음.
+  - same-account PC↔mobile RTDB signal 수신 시에도 각 기기의 local exact relation cache를 우선해 count를 재결정.
+  - MY profile 진입/재검증 시 complete local Followers/Following cache가 있으면 상단 두 숫자를 즉시 local exact 값으로 self-heal.
+  - 프로필 편집 저장은 social relation을 바꾸지 않으므로 기존 exact follower/following 숫자를 보존.
+- 기존 tiny RTDB follow signal schema/Rules 변경 없음.
+- Worker/D1 schema/Functions/UI 디자인 변경 없음.
+- 추가 D1 read/write 없음.
+- 앱 버전 **379**.
+
+검증/배포:
+- source commits:
+  - exact local count helpers `f980ac25780c14841f1f1a4d7212b43e89b7053c`
+  - cached membership helper `f11b93ea70f6531dd1c016065f591693b6fbede1`
+  - follow count authority fix `69d1cd49823710ccdaeff3f970bbeb6b7e6bdb06`
+  - refresh/edit count protection `8df4c018d295b6cfbcb98403a96c7f95646a3b32`
+  - verifier `63d2dad8fb8e3385e7083fa99db58c5fb1f57ed1`
+  - app379 version `3c9409d2c47bc12d47c19702a28ff51fbc9492e7`
+  - release workflow gate `db5788d79540fabe0aa6baf56f07d3573e804331`
+  - PREVIEW release trigger `aa1bac7636651fdf94598f0d5ef502955a60bc0f`.
+- Firebase PREVIEW Run `37599728937`: **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- app358/app359/app360/app361 regression PASS.
+- app377 follow regression PASS.
+- app378 Following R0 regression PASS.
+- app379:
+  - `APP379_OVERLAY_LEGACY_COUNTERS_NOT_UI_AUTHORITY=PASS`
+  - `APP379_OWN_FOLLOWING_COUNT_LOCAL_EXACT=PASS`
+  - `APP379_OWN_FOLLOWER_COUNT_LOCAL_EXACT_WHEN_CACHED=PASS`
+  - `APP379_TARGET_FOLLOWER_COUNT_DELTA=PASS`
+  - `APP379_TARGET_FOLLOWING_COUNT_PRESERVED=PASS`
+  - `APP379_CROSS_DEVICE_COUNT_RECONCILIATION=PASS`
+  - `APP379_NO_EXTRA_SERVER_READ_FOR_COUNT_FIX=PASS`
+- Shared RTDB Rules deploy: SKIPPED.
+- Firebase PREVIEW Hosting: PASS.
+- `preview.soridraw.com`: app379 / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+실사용 확인 gate:
+1. MY profile에서 현재 follower/following 숫자 확인.
+2. 다른 프로필 follow 1회 → MY profile로 즉시 이동.
+   - MY follower 숫자는 그대로.
+   - MY following 숫자만 +1.
+3. 같은 프로필 unfollow → MY profile로 즉시 이동.
+   - MY follower 숫자는 그대로.
+   - MY following 숫자만 -1.
+4. target profile에서는 follow 시 follower +1 / unfollow 시 -1, target following 숫자는 불변.
+5. 팝업을 열지 않아도 상단 숫자가 바로 맞아야 함.
+6. 팝업 재오픈은 기존 app378 기준 Worker0 / D1 R0 유지.
+7. PC↔mobile 실시간 숫자/membership 수렴 유지 확인.
+
 ## 0RV. app378 사용자 실기기 Following R0 최종 확인 PASS (2026-10-07 KST)
 
 사용자 재검증 결과:

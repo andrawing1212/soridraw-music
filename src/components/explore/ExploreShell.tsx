@@ -50,7 +50,7 @@ export default function ExploreShell({ isAdminUser = false }: ExploreShellProps)
     <StudioLeftRail
       activeWorkspace={'__explore__' as StudioWorkspaceView}
       onCreate={() => go('/studio')}
-      onRecentSongs={() => go('/studio')}
+      onRecentSongs={() => go('/studio?view=recent')}
       onMusicNote={() => go('/history')}
       onLibrary={() => go('/suno-library')}
       onSearch={() => go('/')}

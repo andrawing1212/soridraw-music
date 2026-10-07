@@ -1,3 +1,40 @@
+## CURRENT NEXT GATE — active follow overlay 실제 physical W1~W2 측정 + 실기기 parity
+
+현재 완료:
+- all-environment follow lifecycle=1 수렴 완료: Run `37592392310` SUCCESS.
+- shared one-way D1 authority latch 완료.
+- shared R2 follow manifest active 완료: Run `37592857479` SUCCESS.
+- `relationMode=overlay348`, `writeMode=active`.
+- activation 시 overlay user rows 0 / legacy user row rewrite 0.
+- TEST/PRODUCTION Feed·curated·public-profile parity 및 Worker verify PASS.
+- app377 Hosting/Functions/Rules/UI 변경 없음.
+
+지금부터 새 구현보다 **실제 live mutation 검증이 우선**:
+1. 실제 사용자 계정에서 follow 1회.
+2. 충분히 안정화된 뒤 unfollow 1회.
+3. duplicate/same-state 요청 확인.
+4. Cloudflare physical D1 Rows Written을 요청 단위로 확인:
+   - follow W1~W2 PASS
+   - unfollow W1~W2 PASS
+   - duplicate/same-state W0 PASS
+   - W3+ 즉시 FAIL
+5. 동시에 같은 계정 PC↔mobile에서:
+   - following/follower 숫자 즉시 수렴
+   - 실제 목록 membership 일치
+   - 페이지 이동/새로고침 의존 없음
+   - follower-save permission 정상
+   - public profile parity 정상
+6. unchanged popup/revisit/cache D1 R0 목표 확인.
+7. 실패 시 legacy로 되돌리지 말고 shared manifest를 `overlay348-readonly`로 전환하여 새 mutation만 fail-closed. effective overlay reads는 유지.
+8. live evidence PASS 전 follow 비용 작업 완료 선언 금지.
+
+금지:
+- legacy follows/profile_stats backfill/rewrite/foldback.
+- 사용자 관계 전체 복제.
+- W3+ 상태에서 계속 mutation.
+- 좋아요/publication/Music Note/Library/UI 임의 변경.
+- 이번 live 검증 때문에 Hosting/Functions/Rules를 다시 배포하지 않음.
+
 ## CURRENT NEXT GATE — follow W1~W2 shared authority cutover 승인 대기
 
 현재 완료:

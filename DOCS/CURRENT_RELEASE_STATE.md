@@ -1,3 +1,29 @@
+## 0RG. app375 PRODUCTION 사용자 smoke PASS / 릴리스 종료 (2026-10-07 KST)
+
+사용자 정식앱 확인:
+- 새 Music Note 곡 공개 후 Explore `최신 공개곡` 첫 번째 카드에 즉시 표시 PASS.
+- 왼쪽 `<` 화살표를 눌러야만 보이던 지연 증상 없음 PASS.
+- 기존/신규 공개곡 메인 음원 1↔2 전환 시 이전 노란 제목/equalizer 즉시 초기화 PASS.
+- Music Note 공개상태 / MY프로필 / Explore 노출 정상 확인.
+- app373 first-publication W12→W2 비용 구조 유지.
+
+릴리스 최종 상태:
+- PREVIEW app375
+- TEST app375 / TEST_VERIFIED
+- PRODUCTION app375 / RELEASED
+- production SHA `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0`
+- app375 릴리스 **CLOSED / PASS**
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 없음.
+- Functions / Rules / shared D1 추가 mutation 없음.
+
+다음 개발 우선순위:
+- 공개/비공개/최신곡 경로는 동결 보호.
+- 다음 큰 비용 작업은 2026-10-05에 rollback된 **follow 저비용 backend**로 복귀.
+- 현재 legacy follow 실사용 baseline은 physical D1 Rows Written 약 **W14~W17**, 목표는 **W1~W2**.
+- 기존 candidate355는 cutover OFF 상태에서도 legacy path 비용을 바꿔 rollback된 이력이 있으므로 바로 재배포 금지.
+- 먼저 Worker341 legacy parity + dormant overlay candidate를 독립 감사하고, 실제 HTTP 경로 D1/R2 비용을 격리 환경에서 다시 증명한 뒤 PREVIEW Worker 후보를 만든다.
+- shared follow migration/cutover/user data mutation은 별도 명확한 승인 전 금지.
+
 ## 0RF. app375 TEST + PRODUCTION 승격 완료 — RELEASED (2026-10-07 KST)
 
 사용자 승인:

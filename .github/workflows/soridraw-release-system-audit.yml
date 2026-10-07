@@ -131,6 +131,13 @@ jobs:
           node scripts/verify-360-publication-a-track-cost-target.mjs
           node scripts/verify-347-follow-authority.mjs
           node scripts/verify-348-follow-overlay-contract.mjs
+          node scripts/verify-349-follow-overlay-readers.mjs
+          node scripts/verify-350-follow-overlay-writer.mjs
+          node scripts/verify-351-follow-count-recovery.mjs
+          node scripts/verify-352-follow-r2-delta.mjs
+          node scripts/verify-354-follow-orchestration.mjs
+          node scripts/verify-355-follow-audit-repairs.mjs
+          node scripts/verify-356-follow-worker341-legacy-parity.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
@@ -232,6 +239,14 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-365-publication-canonical-like-request-cache.mjs
           node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
           node scripts/verify-347-follow-authority.mjs
+          node scripts/verify-348-follow-overlay-contract.mjs
+          node scripts/verify-349-follow-overlay-readers.mjs
+          node scripts/verify-350-follow-overlay-writer.mjs
+          node scripts/verify-351-follow-count-recovery.mjs
+          node scripts/verify-352-follow-r2-delta.mjs
+          node scripts/verify-354-follow-orchestration.mjs
+          node scripts/verify-355-follow-audit-repairs.mjs
+          node scripts/verify-356-follow-worker341-legacy-parity.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
@@ -476,6 +491,101 @@ jobs:
           node scripts/release-production-environment-contract.mjs snapshot "$RUNNER_TEMP/audit-production-environment-contract.json"
           echo 'WORKER_TARGETS_DRY_RUN=PASS'
           echo 'MEDIA_WORKER_TARGETS_DRY_RUN=PASS'
+
+      - name: Follow W1-W2 active Worker contract is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const targets={
+            preview:'soridraw-explore-preview',
+            test:'soridraw-explore-test',
+            production:'soridraw-explore-api',
+          };
+          const required=[
+            'overlay348',
+            'FOLLOW_ORDER_REQUIRED',
+            'X-Soridraw-Follow-Protocol',
+            'follow-overlay-348',
+            'explore_follow_overrides_348',
+          ];
+          for (const [mode,script] of Object.entries(targets)) {
+            const dep=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${script}/deployments`,{
+              headers:{Authorization:`Bearer ${token}`},
+            });
+            const depJson=await dep.json();
+            if(!dep.ok||depJson?.success!==true) throw new Error(mode+': deployment read failed');
+            const versions=depJson?.result?.deployments?.[0]?.versions||[];
+            const active=[...versions].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];
+            if(!active||Number(active.percentage||0)<99.99) throw new Error(mode+': no single active Worker');
+            const contentResponse=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${script}/content`,{
+              headers:{Authorization:`Bearer ${token}`},
+            });
+            if(!contentResponse.ok) throw new Error(mode+': active Worker content read failed HTTP '+contentResponse.status);
+            const content=await contentResponse.text();
+            const missing=required.filter(marker=>!content.includes(marker));
+            console.log(mode.toUpperCase()+'_ACTIVE_WORKER='+active.version_id);
+            console.log(mode.toUpperCase()+'_FOLLOW_PROTOCOL_MARKERS='+(missing.length?'MISSING:'+missing.join(','):'PASS'));
+            if(missing.length) throw new Error(mode+': protocol354/355 contract missing from active Worker');
+          }
+          console.log('FOLLOW_ACTIVE_WORKER_CONTRACT_READ_ONLY=PASS');
+          NODE
+
+      - name: Live shared follow overlay state is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          for mode in test production; do
+            cfg="$PWD/cloudflare/explore-worker/.release-system/$mode/wrangler.jsonc"
+            schema_json="$RUNNER_TEMP/$mode-follow-overlay-schema.json"
+            node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT type,name,tbl_name FROM sqlite_schema WHERE name IN ('explore_follow_overrides_348','idx_explore_follow_overrides_348_reverse','explore_follow_cutover_control_348') ORDER BY type,name" --json > "$schema_json"
+            set +e
+            MODE="$mode" SCHEMA_JSON="$schema_json" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.SCHEMA_JSON,'utf8'));
+          const rows=p.flatMap(x=>x.results||[]);
+          const names=new Set(rows.map(x=>String(x.name||'')));
+          const required=['explore_follow_overrides_348','idx_explore_follow_overrides_348_reverse','explore_follow_cutover_control_348'];
+          const present=required.filter(x=>names.has(x));
+          if (present.length===0) {
+            console.log(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_SCHEMA=ABSENT');
+            process.exit(10);
+          }
+          if (present.length!==required.length) {
+            console.error(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_SCHEMA=PARTIAL '+present.join(','));
+            process.exit(2);
+          }
+          console.log(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_SCHEMA=PRESENT');
+          NODE
+            schema_status=$?
+            set -e
+            if [ "$schema_status" -eq 0 ]; then
+              state_json="$RUNNER_TEMP/$mode-follow-overlay-state.json"
+              rows_json="$RUNNER_TEMP/$mode-follow-overlay-rows.json"
+              node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT id,phase,schema_version,cutover_token,updated_at FROM explore_follow_cutover_control_348 WHERE id=1" --json > "$state_json"
+              node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$rows_json"
+              MODE="$mode" STATE_JSON="$state_json" ROWS_JSON="$rows_json" node - <<'NODE'
+          const fs=require('fs');
+          const flat=(path)=>JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x=>x.results||[]);
+          const state=flat(process.env.STATE_JSON)[0];
+          const rows=flat(process.env.ROWS_JSON)[0];
+          if(!state) throw new Error(process.env.MODE+': follow cutover control row missing');
+          if(String(state.phase)!=='legacy') throw new Error(process.env.MODE+': follow overlay unexpectedly active phase='+state.phase);
+          if(String(state.cutover_token||'')!=='') throw new Error(process.env.MODE+': follow legacy phase has nonempty cutover token');
+          if(Number(rows?.override_rows||0)!==0) throw new Error(process.env.MODE+': follow overrides exist before activation');
+          console.log(process.env.MODE.toUpperCase()+'_FOLLOW_OVERLAY_STATE=LEGACY rows=0');
+          NODE
+            elif [ "$schema_status" -eq 10 ]; then
+              echo "${mode^^}_FOLLOW_OVERLAY_STATE=NOT_APPLIED"
+            else
+              exit "$schema_status"
+            fi
+          done
+          echo 'FOLLOW_SHARED_D1_READ_ONLY=PASS'
+          echo 'FOLLOW_SHARED_D1_WRITE=0'
 
       - name: Live shared D1 preflight is read-only
         shell: bash

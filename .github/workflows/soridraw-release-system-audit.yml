@@ -520,7 +520,7 @@ jobs:
             const versions=depJson?.result?.deployments?.[0]?.versions||[];
             const active=[...versions].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];
             if(!active||Number(active.percentage||0)<99.99) throw new Error(mode+': no single active Worker');
-            const contentResponse=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${script}/content`,{
+            const contentResponse=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${script}/content/v2`,{
               headers:{Authorization:`Bearer ${token}`},
             });
             if(!contentResponse.ok) throw new Error(mode+': active Worker content read failed HTTP '+contentResponse.status);

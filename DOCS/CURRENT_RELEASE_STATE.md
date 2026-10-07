@@ -1,3 +1,48 @@
+## 0RQ. follow W1~W2 shared schema 적용 + PREVIEW rollback-safe Worker 배포 완료 / cutover OFF (2026-10-07 KST)
+
+실제 완료:
+- 사용자 승인 후 shared canonical D1 `soridraw-explore-db`에 dormant follow overlay schema를 additive 방식으로 적용.
+- Shared D1 Release Run `37582930962`: **SUCCESS**.
+- 적용 객체:
+  - `explore_follow_overrides_348`
+  - `idx_explore_follow_overrides_348_reverse`
+  - `explore_follow_cutover_control_348`
+- 적용 전 세 객체 모두 ABSENT였고, postflight에서 exact schema PASS.
+- user row rewrite/backfill/delete/copy 0.
+- runtime follow overlay activation 0.
+- D1 schema 적용 뒤 PREVIEW/TEST/PRODUCTION Feed smoke PASS.
+- D1-only release 동안 Worker version 변경 0 / main·production ref 변경 0.
+
+PREVIEW Worker:
+- rollback-safe follow378 source를 PREVIEW Worker에 cutover-OFF 상태로 배포.
+- PREVIEW Worker Release Run `37583095947`: **SUCCESS**.
+- 이전 PREVIEW Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- 현재 PREVIEW Worker `cf78f8cb-a108-4362-a6e7-a0c90eff12a0`.
+- canonical Worker SHA256 `43b71e2892cbade0ce33911b7157286bd4c84eb7b516575769130412df34e673`.
+- Worker341 legacy follow parity PASS.
+- app377 actorFollowingCount no-extra-D1 PASS.
+- Feed / curated / public profile / profile tracks / genre read smoke PASS.
+- TEST Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65` unchanged.
+- PRODUCTION Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7` unchanged.
+- follow lifecycle flag / shared R2 cutover manifest / D1 control row activation은 아직 OFF.
+
+중요 새 확인:
+- `DB`와 `PROFILE_MEDIA`는 PREVIEW/TEST/PRODUCTION이 같은 shared canonical resource를 사용한다.
+- follow cutover manifest key도 shared `PROFILE_MEDIA`의 동일 authority key다.
+- 따라서 shared overlay relation을 실제로 활성화하면 PREVIEW에서 생긴 follow 변경을 TEST/PRODUCTION도 같은 canonical 상태로 읽어야 하므로 **PREVIEW만 따로 authority를 켜는 방식은 허용할 수 없음**.
+- 현재 TEST/PRODUCTION active Worker는 protocol354/355 active-overlay 호환은 있지만, 이번 378 rollback-safe one-way lifecycle source는 아직 배포되지 않음.
+- 이 상태에서 shared authority를 먼저 켜면 정상 active path는 읽을 수 있어도 manifest loss/corrupt emergency path에서 구 Worker가 immutable legacy로 fallback할 수 있으므로 activation 금지.
+- emergency readonly manifest만으로는 구 Worker read parity까지 보장되지 않으므로 우회 금지.
+
+현재 결론:
+- shared schema apply: PASS / 완료.
+- PREVIEW compatibility Worker deploy: PASS / 완료.
+- 실제 follow W1~W2 shared authority activation: **아직 OFF**.
+- 실제 shared PREVIEW physical W1~W2 측정: **activation 전이라 미실행**.
+- 다음 안전 조건은 TEST/PRODUCTION active Worker도 378 rollback-safe authority reader를 이해하도록 compatibility를 먼저 승격하는 것.
+- TEST/PRODUCTION 실제 Worker 변경은 기존 승격 규칙대로 별도 승인 없이 실행 금지.
+- full user-data foldback/migration/backfill은 여전히 금지.
+
 ## 0RP. follow W1~W2 rollback-safe authority source 구현 + 전체 audit PASS (2026-10-07 KST)
 
 현재 결론:

@@ -1380,7 +1380,13 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) {
     const message = String(payload?.message || payload?.error?.message || payload?.error || '좋아요 요청을 처리하지 못했습니다.').trim();
-    throw new Error(message || '좋아요 요청을 처리하지 못했습니다.');
+    const code = String(payload?.code || payload?.error?.code || '').trim();
+    const retryAfterSeconds = Number(response.headers.get('Retry-After') || 0);
+    throw Object.assign(new Error(message || '좋아요 요청을 처리하지 못했습니다.'), {
+      code, status: response.status,
+      retryAfterMs: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.floor(retryAfterSeconds * 1000) : 0,
+    });
   }
   return payload;
 };
@@ -1693,7 +1699,11 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (current?.updatedAt === pending.updatedAt) {
           current.retryCount = Math.min(8, current.retryCount + 1);
           latest[pending.trackId] = current;
-        } else if (current && current.updatedAt > pending.updatedAt) {
+        } else if (current && current.updatedAt > pending.updatedAt &&
+            !((reason as { status?: number; code?: string })?.status === 429 &&
+              (reason as { code?: string })?.code === 'RATE_LIMITED')) {
+          // A deterministic 429 was rejected before canonical D1. Its older
+          // desired state must NOT become the baseline of a newer local click.
           // The first request MAY have reached the server before the network
           // error. Explicitly retain the last click instead of deleting it as
           // an apparent no-op against the old baseline.

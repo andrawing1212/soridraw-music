@@ -282,7 +282,7 @@ jobs:
           echo 'RELEASE_CONTROLLER_MANUAL_DISPATCH_ONLY=PASS'
           echo 'SHARED_D1_FIXED_PATH_STATIC_AUDIT=PASS'
 
-      - name: Follow380 final-state abuse guard candidate replay
+      - name: App380 social final-state abuse guard candidate replay
         shell: bash
         run: |
           set -euo pipefail
@@ -290,13 +290,17 @@ jobs:
           mkdir -p "$candidate"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$candidate/worker.js"
           SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/098-like-abuse-guard.mjs
           node --check "$candidate/worker.js"
           SORIDRAW_GENERATED_WORKER="$candidate/worker.js" node scripts/verify-387-follow-abuse-batching.mjs
           before="$(sha256sum "$candidate/worker.js" | awk '{print $1}')"
           SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/098-like-abuse-guard.mjs
           after="$(sha256sum "$candidate/worker.js" | awk '{print $1}')"
           test "$before" = "$after"
-          echo 'FOLLOW380_PATCH_IDEMPOTENT=PASS'
+          node scripts/verify-389-social-client-batching.mjs
+          node scripts/verify-388-social-abuse-runtime.mjs --release
+          echo 'SOCIAL380_PATCH_IDEMPOTENT=PASS'
           echo 'FOLLOW380_NO_DEPLOY=PASS'
 
       - name: Like candidate regression, isolated only

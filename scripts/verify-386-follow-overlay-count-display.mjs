@@ -25,13 +25,13 @@ const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
 
-assert.match(toggle, /relationDelta379/);
+assert.match(toggle, /relationDelta380/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(viewerUid, 'following'\)/);
 assert.match(toggle, /readExploreFollowingExactCount379\(viewerUid\)/);
-assert.match(toggle, /resolvedTargetFollower379/);
-assert.match(toggle, /resolvedTargetFollowing379/);
-assert.match(toggle, /Following somebody never changes the target user's following count/);
-assert.match(toggle, /targetFollowerCount: resolvedTargetFollower379/);
+assert.match(toggle, /resolvedTargetFollower380/);
+assert.match(toggle, /resolvedTargetFollowing380/);
+assert.match(toggle, /Math.floor\(settlement380.baseTargetFollowingCount\)/);
+assert.match(toggle, /targetFollowerCount: resolvedTargetFollower380/);
 assert.doesNotMatch(
   toggle,
   /patchExplorePublicProfileFirstViewProfile\(targetUid,[\s\S]{0,260}followerCount:\s*result\.followerCount/,

@@ -30,6 +30,7 @@ export const requestOrderedExploreFollow354 = (
           pending354.delete(key);
           return payload;
         } catch (error) {
+          if ((error as { code?: string })?.code === 'RATE_LIMITED') pending354.delete(key);
           if (['FOLLOW_REVISION_CONFLICT', 'FOLLOW_OPERATION_CONFLICT'].includes(String((error as { code?: string })?.code))) {
             pending354.delete(key);
             revisions354.delete(key);

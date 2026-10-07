@@ -46,31 +46,19 @@ assert.match(social, /deferTargetFollowers\?: boolean/);
 assert.match(social, /if \(options\.deferTargetFollowers !== true\)/);
 assert.match(social, /retryAfterMs/);
 
-// Server guard: native burst limiter + R2 account/day cap + progressive same-pair cooldown.
-// It must remain D1/RATE_DB-free so abuse rejection itself cannot create D1 cost.
-for (const token of [
-  'SORIDRAW_FOLLOW_ABUSE_GUARD_380_20261007',
-  'const windowLimit = 30',
-  'const dayLimit = 120',
-  'pairCooldowns = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000]',
-  "key: 'follow:' + normalizedUid",
-  'nextAllowedAt > now',
-  'lastOperationId',
-  "'Retry-After'",
-]) {
-  assert.ok(followPatch.includes(token), 'follow guard missing: ' + token);
-}
-const newLimiterStart = followPatch.indexOf("const newLimiter = [");
-const newLimiterEnd = followPatch.indexOf("source = source.slice(0, oldLimiter.start)", newLimiterStart);
-assert.ok(newLimiterStart >= 0 && newLimiterEnd > newLimiterStart);
-const newLimiterSource = followPatch.slice(newLimiterStart, newLimiterEnd);
-assert.doesNotMatch(newLimiterSource, /env\.DB|RATE_DB/);
+// Executable policies/CAS/cost rejection coverage lives in verify-388.
+const guard = readFileSync('cloudflare/explore-worker/candidates/social-abuse-380.js', 'utf8');
+assert.match(followPatch, /consumeSocialAbuse380/);
+assert.match(guard, /windowLimit: 30, dayLimit: 120/);
+assert.match(guard, /cooldowns: \[30_000, 120_000, 600_000, 3_600_000\]/);
+assert.doesNotMatch(guard, /env\.DB|RATE_DB/);
+assert.match(guard, /etagMatches/);
 assert.match(followPatch, /payload\?\.followOperationId/);
 
 // Likes already have their own cost defenses: 30s local final-state batching,
 // stable outbox/operation ordering, same-state no-op elimination, and an edge
 // rate limiter that avoids D1/RATE_DB writes. Do not silently claim a progressive
-// same-track cooldown: that is not present in the current like path.
+// same-track cooldown in the old limiter: the additive candidate is verified separately.
 assert.match(like, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(like, /desiredLiked === pending\.baseLiked/);
 assert.match(like, /operationId/);
@@ -98,9 +86,7 @@ if (generatedPath) {
   };
   const limiter = fn('enforceFollowEdgeRateLimit355');
   assert.doesNotMatch(limiter, /env\.DB|RATE_DB/);
-  assert.match(limiter, /windowLimit = 30/);
-  assert.match(limiter, /dayLimit = 120/);
-  assert.match(limiter, /pairCooldowns/);
+  assert.match(limiter, /consumeSocialAbuse380/);
   const overlay = fn('handleFollowOverlay354');
   assert.match(overlay, /FOLLOW_ORDER_REQUIRED/);
   assert.ok(
@@ -124,4 +110,4 @@ console.log('APP380_FOLLOW_ACCOUNT_WINDOW_DAY_CAP=PASS');
 console.log('APP380_FOLLOW_ABUSE_GUARD_D1_RATE_DB_ZERO=PASS');
 console.log('LIKE_EXISTING_30S_FINAL_STATE_BATCH=PASS');
 console.log('LIKE_EXISTING_EDGE_RATE_LIMIT_D1_RATE_DB_ZERO=PASS');
-console.log('LIKE_PROGRESSIVE_SAME_TRACK_COOLDOWN=NOT_PRESENT');
+console.log('LIKE_PROGRESSIVE_SAME_TRACK_COOLDOWN=CANDIDATE_098_RUNTIME_388');

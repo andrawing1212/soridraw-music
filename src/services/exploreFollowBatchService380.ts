@@ -34,6 +34,8 @@ export type ExploreFollowPendingRecord380 = ExploreFollowBatchBase380 & {
   };
   updatedAt: number;
   notBefore: number;
+  retryUsed: boolean;
+  suspended: boolean;
 };
 
 export type ExploreFollowBatchSettlement380 = ExploreFollowBatchBase380 & {
@@ -72,6 +74,9 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
   onError: (failure: ExploreFollowBatchError380) => void;
   initialDelayMs?: number;
   restoredNotBefore?: number;
+  restoredUpdatedAt?: number;
+  restoredRetryUsed?: boolean;
+  restoredSuspended?: boolean;
 };
 
 type ExploreFollowBatchEntry380 = ExploreFollowBatchRequest380 & {
@@ -81,6 +86,8 @@ type ExploreFollowBatchEntry380 = ExploreFollowBatchRequest380 & {
   timer: ReturnType<typeof setTimeout> | null;
   inflight: boolean;
   notBefore: number;
+  retryUsed: boolean;
+  suspended: boolean;
 };
 
 const pending380 = new Map<string, ExploreFollowBatchEntry380>();
@@ -132,6 +139,8 @@ const toRecord380 = (entry: ExploreFollowBatchEntry380): ExploreFollowPendingRec
   targetProfile: { ...entry.targetProfile },
   updatedAt: entry.updatedAt,
   notBefore: entry.notBefore,
+  retryUsed: entry.retryUsed,
+  suspended: entry.suspended,
 });
 
 const persistEntry380 = (entry: ExploreFollowBatchEntry380) => {
@@ -171,13 +180,14 @@ const clearTimer380 = (entry: ExploreFollowBatchEntry380) => {
 const retryAfterMs380 = (error: unknown) => {
   const retryAfterMs = Number((error as { retryAfterMs?: unknown })?.retryAfterMs);
   if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
-    return Math.min(60 * 60_000, Math.max(1_000, Math.floor(retryAfterMs)));
+    return Math.min(24 * 60 * 60_000, Math.max(1_000, Math.floor(retryAfterMs)));
   }
   return 60_000;
 };
 
 const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) => {
   clearTimer380(entry);
+  if (entry.suspended) return;
   const requestedDelay = Math.max(0, delayMs);
   const cooldownDelay = entry.desiredFollowing === entry.baseFollowing
     ? 0
@@ -191,7 +201,10 @@ const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW
 
 export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
   const entry = pending380.get(key);
-  if (!entry || entry.inflight) return;
+  if (!entry || entry.inflight || entry.suspended) return;
+  const dueAt = Math.max(entry.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
+    entry.desiredFollowing === entry.baseFollowing ? 0 : entry.notBefore);
+  if (Date.now() < dueAt) { schedule380(entry, dueAt - Date.now()); return; }
 
   // The user's final local state returned to the state that existed before the
   // window opened. No Worker request, R2 write, D1 read or D1 write is needed.
@@ -224,7 +237,8 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       targetProfile: { ...entry.targetProfile },
       result,
     };
-    entry.onSettled(settlement);
+    // A UI/notification callback failure must never replay a committed write.
+    try { entry.onSettled(settlement); } catch (error) { console.warn('[380] follow settled callback', error); }
 
     if (current && current.version !== sentVersion) {
       // A click landed while the canonical request was in flight. The settled
@@ -245,10 +259,9 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       }
       current.inflight = false;
       current.notBefore = 0;
-      current.updatedAt = Date.now();
       persistEntry380(current);
       current.onBusy?.(false);
-      schedule380(current);
+      schedule380(current, Math.max(0, current.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Date.now()));
       return;
     }
 
@@ -263,7 +276,8 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       const retryDelay = retryAfterMs380(error);
       current.inflight = false;
       current.notBefore = Date.now() + retryDelay;
-      current.updatedAt = Date.now();
+      current.suspended = current.retryUsed;
+      current.retryUsed = true;
       persistEntry380(current);
       current.onBusy?.(false);
       schedule380(current, retryDelay);
@@ -301,14 +315,18 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
   const key = key380(viewerUid, targetUid);
   const existing = pending380.get(key);
   if (existing) {
-    existing.desiredFollowing = request.desiredFollowing === true;
-    existing.targetProfile = { ...request.targetProfile };
     existing.commit = request.commit;
     existing.onBusy = request.onBusy;
     existing.onSettled = request.onSettled;
     existing.onError = request.onError;
+    // Remount/re-entry only refreshes callbacks; it is not another user click.
+    if (request.restoredUpdatedAt !== undefined) return;
+    existing.desiredFollowing = request.desiredFollowing === true;
+    existing.targetProfile = { ...request.targetProfile };
     existing.version += 1;
     existing.updatedAt = Date.now();
+    existing.retryUsed = false;
+    existing.suspended = false;
     persistEntry380(existing);
     if (!existing.inflight) schedule380(existing);
     return;
@@ -328,10 +346,12 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     targetProfile: { ...request.targetProfile, uid: targetUid },
     key,
     version: 1,
-    updatedAt: Date.now(),
+    updatedAt: request.restoredUpdatedAt ?? Date.now(),
     timer: null,
     inflight: false,
     notBefore: Math.max(0, Math.floor(Number(request.restoredNotBefore || 0))),
+    retryUsed: request.restoredRetryUsed === true,
+    suspended: request.restoredSuspended === true,
   };
   pending380.set(key, entry);
   persistEntry380(entry);
@@ -348,10 +368,6 @@ export const getPendingExploreFollowMutationCount380 = (viewerUid = '') => {
   return count;
 };
 
-export const flushPendingExploreFollowsForPageExit380 = async (viewerUid = '') => {
-  const uid = String(viewerUid || '').trim();
-  const keys = [...pending380.entries()]
-    .filter(([, entry]) => !uid || entry.viewerUid === uid)
-    .map(([key]) => key);
-  await Promise.all(keys.map((key) => flushExploreFollowPair380(key)));
+export const flushPendingExploreFollowsForPageExit380 = async (_viewerUid = '') => {
+  // Navigation never flushes. The module timer and durable outbox own settlement.
 };

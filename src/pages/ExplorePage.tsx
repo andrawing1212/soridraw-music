@@ -3002,6 +3002,9 @@ export default function ExplorePage() {
         ...record380,
         initialDelayMs: Math.max(remainingIdle380, remainingCooldown380),
         restoredNotBefore: record380.notBefore,
+        restoredUpdatedAt: record380.updatedAt,
+        restoredRetryUsed: record380.retryUsed,
+        restoredSuspended: record380.suspended,
         commit: (following380) => setExploreFollow(
           activeUser380,
           targetUid380,

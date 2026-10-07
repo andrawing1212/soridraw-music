@@ -1,3 +1,61 @@
+## 0RY. app380 통합 방어 source candidate / 좋아요 정상 replay 계약 BLOCKED / 배포 0 (2026-10-08 KST)
+
+작업:
+- branch: `preview`; 기준 SHA `ae68e3dc21f4bacab16a6d3536f097aed8357481`.
+- `AGENTS.md` → 이 문서 → `NEXT_CODEX_TASK.md`의 app380 지시 및 like freeze 참조를 확인하고 후보 구현/로컬 검증.
+- **전체 task 완료·PREVIEW 배포 가능 판정 아님.** 아래 좋아요 정상 재전송 blocker가 남는다.
+- source app version 380; 실제 배포는 기존 app379 유지. Worker/Hosting/Functions/Rules 배포 0.
+
+구현한 범위:
+- follow380 30초 sliding timer/outbox 유지. page-exit flush no-op, 재진입 시 기존 deadline 보존, in-flight 새 클릭은 마지막 클릭 +30초 유지.
+- 429 Retry-After를 최대 24시간까지 보존. 자동 재시도 1회 후 다시 거부되면 최신 pair intent를 suspended 상태로 보존하며 reload로 예산을 초기화하지 않음. 명시적 새 클릭만 다시 활성화.
+- follow ordered protocol은 명백한 RATE_LIMITED의 이전 operation만 버려 최신 desired를 재시도할 때 거부됐던 반대 방향을 먼저 보내지 않음. 일반 ambiguous error 경로는 그대로 유지.
+- like client는 code/status/retryAfterMs만 추가하고, 명백한 429가 전송 중 새 클릭의 canonical baseline으로 잘못 rebase되는 것만 차단. 기존 failed-outbox 자동 재시도 금지 유지.
+- `097-follow-abuse-guard.mjs` + 신규 `098-like-abuse-guard.mjs`는 candidate-only. 공통 구현은 `candidates/social-abuse-380.js`.
+- follow: 30s/2m/10m/1h, quiet reset 24h, rolling 10m 30 / 24h 120.
+- like: 30s/1m/5m/30m, quiet reset 6h, rolling 10m 120 / 24h 600 normalized unique track final intents. batch max50, 기존 `like:<uid>` 60/min edge limiter 유지.
+- R2 키 `internal/explore/abuse/<preview|test|production>/<follow|like>/<uid>.json`로 환경·도메인 분리. `SORIDRAW_ENVIRONMENT || ENV_NAME` 미확정은 fail-closed.
+- 계정/도메인당 bounded 1 object; quiet prune/LRU, rolling events 및 최근 24h operation receipt 상한. ETag CAS 최대6회. 손상·누락 binding·R2/limiter 장애는 D1 전 차단.
+- malformed/unordered follow는 대상 D1 lookup 전에 409. like malformed operation은 D1 전에 400.
+- 구형 direct like endpoint가 batch guard/W1 queue를 우회하지 않도록 candidate에서 refresh-required 409로 차단. 현재 client는 기존 batch route 사용. 구버전 호환 영향은 독립 감사 대상.
+- canonical Worker/entry, shared schema/control/cutover, 기본 `release-patches.json`, 모든 release trigger 수정 0.
+- 새 Workflow 추가/삭제 0. 기존 release-system audit의 격리 후보 검사만 보강.
+
+**남은 구현 blocker — 좋아요 성공 응답 재전송과 W0:**
+- 실제 `exploreLikeW1Batch040`의 queue ID는 서버 receive timestamp를 포함한다. `processExploreLikeAggregateWave035`는 처리한 queue row를 삭제한다.
+- 따라서 기존 queue를 그대로 유지하면서 동일 operation을 다시 통과시키면 새 queue write가 발생할 수 있다. 반대로 abuse receipt만 보고 성공/개인 membership ACK를 만들면 operational state를 사용자 authority로 오용한다.
+- 현재 안전 후보는 같은 desired 요청을 pair quiet window 내, 같은 operation을 receipt 보존 24h 내 **429/W0로 거부**한다. receipt는 canonical 성공을 보증하지 않으므로 성공 ACK를 합성하지 않는다.
+- 이 방식은 악성 반복의 canonical W0는 지키지만, 첫 요청이 guard 이후 D1 전 실패했거나 ACK가 유실된 정상 재시도를 지연시킬 수 있다. 따라서 **정상 retry/idempotency 보존까지 PASS라고 보고하지 않는다.** 보존 기간 밖 무제한 replay W0도 주장하지 않는다.
+- `verify-388-social-abuse-runtime.mjs --release`는 이 실제 429 재현 결과로 **의도적으로 FAIL**한다. release-system audit도 같은 명령을 사용하므로 false-green 없음.
+- 완료하려면 frozen W1 queue를 유지하면서 canonical 접수/처리 완료를 판별할 영속 operation receipt와 안전한 retry 계약을 먼저 설계해야 한다. 이를 abuse counter에 섞거나 정상 좋아요 상태기를 임의로 교체하지 않았다.
+- Work 독립 감사에서 이 제약과 구형 direct-route 호환 영향을 먼저 검토. **성공 replay 계약을 해결하기 전 새 abuse patch 등록/배포 금지.**
+
+검증:
+- TypeScript `npm run lint`: PASS.
+- Vite production build: PASS; 기존 chunk size / mixed dynamic-static import 경고만 존재.
+- 기존 like regressions 127/175/176/177/178/179/180/192/197: PASS. app164 신규 공개곡 첫 좋아요, app160 개인/공용/수신 순서 보호.
+- follow 347/348/349/350/351/352/354/355/356/378 및 app377/app378/app379(377/385/386): PASS.
+- app379 verifier는 이전 app380 후보가 바꾼 변수명에 맞추되 exact local count/delta/no stale server counter assertion 유지.
+- 387 static + 신규 388 runtime/389 fake clock: PASS (안전 후보 검사).
+- 388은 실제 patch 재생·문법·idempotence, 변경 허용 외 canonical 함수 byte equality, 실제 queue intake 함수의 SQLite 각 W1, unique normalization, pair escalation/quiet reset, window/day cap, 환경·도메인 격리, CAS 동시성, 장애/malformed/blocked D1 R0/W0를 검사.
+- 389는 follow net-zero/last-click deadline/inflight/reload/429 retry budget, like 기존 flush의 net-zero 및 deterministic 429 false-rebase 방지, ordered follow 최신 intent만 재시도를 실행.
+- **388 --release: FAIL / 위 정상 replay blocker. 이는 해결 전 task 완료 또는 릴리스 PASS로 바꿀 수 없음.**
+
+비용 구분:
+- 신규 abuse guard 자체: canonical D1/RATE_DB R0/W0; 정상 새 batch account R2 get1 + conditional put1, 거부/duplicate는 보통 get1/put0. CAS 충돌은 최대6회 bounded.
+- 기존 like interactive queue 함수 SQLite fixture: like/unlike 각 logical row W1. background aggregate의 전체 lifecycle 비용/Cloudflare physical billing까지 W1이라고 주장하지 않음.
+- follow canonical ordered protocol/writer는 그대로이며 기존 local SQLite 및 회귀 근거 유지. 새 live physical W1~W2 측정은 실행하지 않음.
+- net-zero client window: Worker/D1/R2 canonical mutation 0.
+
+PRODUCTION-first/남은 검증:
+- shared DB/PROFILE_MEDIA authority는 그대로; abuse namespace만 환경별 분리.
+- 저장소의 preview wrangler vars에는 환경 identity가 명시되어 있지 않음. 실제 preserved live vars는 미확인. 향후 배포 전 세 환경의 `SORIDRAW_ENVIRONMENT` 또는 `ENV_NAME`, LIKE_RATE_LIMITER, PROFILE_MEDIA identity를 read-only 확인해야 함. 추측한 namespace fallback 금지.
+- 기존 캐시 업그레이드: product cache key/epoch 초기화 없음. follow outbox 새 retry 필드는 기존 레코드에서 false 기본값. 정상 빈 outbox 재진입 write0.
+- live PREVIEW physical like/follow W1~W2, blocked W0, PC↔mobile membership/count, Following popup/My Likes/Explore R0는 미실행.
+- 원격 branch protection 조회는 환경 API 접근에서 Forbidden; 보호 상태 미확인으로 기록. 이를 보호 PASS로 보고하지 않음.
+- 사용자 D1/Firestore/RTDB/R2 원본 mutation/migration/backfill/delete/rewrite 0; main/production 코드/배포 변경 0.
+- 로컬 `preview` 체크아웃만 생성. 기존 `work`는 이전 main 기준으로 보존; 임시 원격 branch 생성/삭제 및 미병합 branch 정리 없음.
+
 ## 0RX. 좋아요 + 팔로우 최종상태 묶음/악성 반복 방어 통합 설계 승인 / 구현 handoff (2026-10-07 KST)
 
 사용자 결정:

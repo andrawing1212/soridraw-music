@@ -1,3 +1,68 @@
+## 0RA. PREVIEW app374 배포 완료 — 공개곡 음원 전환 시 재생 표시 초기화 (2026-10-07 KST)
+
+사용자 실사용에서 확인된 별도 UI 회귀:
+- 공개곡 카드 중앙 Suno 링크를 눌러 노란 제목 + 중앙 equalizer 피드백이 활성된 상태에서,
+- 같은 공개곡의 공개 설정에서 메인 음원을 1번→2번(또는 반대)으로 바꾸면 썸네일/링크는 새 음원으로 바뀌지만 기존 재생 피드백이 최대 3분30초 남아 있었음.
+- 원인: 시각 피드백 session marker가 공개곡 `track.id`만 기억하고, 같은 track의 실제 Suno 링크가 바뀐 사실을 종료 조건으로 보지 않았음.
+
+수정:
+- `src/pages/ExplorePage.tsx`
+  - 공개 메인 음원 선택이 실제 변경되었고 해당 카드가 현재 previewing 상태면,
+  - 기존 visual timer 종료,
+  - active preview track 해제,
+  - sessionStorage preview visual marker 삭제,
+  - 그 다음 새 썸네일/링크를 optimistic patch.
+- 따라서 신규 공개곡/기존 공개곡 구분 없이 같은 `selectionChanged` 경로에서 동작.
+- 실제 오디오 엔진/서버 playback 상태는 건드리지 않으며 기존의 “Suno 링크 열기 + 로컬 시각 피드백” 구조 유지.
+- 관련 회귀검사 `APP374_EXPLORE_MEDIA_SWITCH_RESETS_PLAY_VISUAL` 추가.
+
+코드:
+- 기능 commit: `e9cbd68d3908de47b3dc1bbc11195e70ee28aa97`.
+- app374/version gate commit: `cce0ec1d0190f897e96f6f42284460216ee022af`.
+- Release System Audit Run `37551651930`: **SUCCESS**.
+  - TypeScript PASS
+  - Build PASS
+  - static/release-system regression PASS
+  - shared D1 read-only preflight PASS
+  - TEST/PRODUCTION 비변경
+
+PREVIEW 배포:
+- deploy trigger commit: `0513c32506d915acd8fa1ca7cc57938f43bb0954`.
+- Firebase PREVIEW App Run `37551851974`: **SUCCESS**.
+- locked source: `0513c32506d915acd8fa1ca7cc57938f43bb0954`.
+- `PREVIEW_APP_VERSION=374`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`.
+- `SHARED_RTDB_RULES_DEPLOY=SKIPPED`.
+- `APP371_MUSIC_NOTE_PUBLICATION_ORIGIN_PARITY=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker / Functions / shared D1 추가 변경 없음.
+- 사용자 데이터 migration/backfill/delete/rewrite 없음.
+
+비용 작업 실사용 확인:
+- 사용자가 shared D1 cutover 이후 “한 번도 공개한 적 없는 Music Note 곡” 실제 최초 공개를 수행.
+- 진단 화면 기준 first-publication:
+  - D1 query write 1
+  - physical rows_written **2**
+  - Firestore R0/W0
+  - page sync D1 R0/W0
+- 즉 실제 앱 경로에서도 **W12 → W2** 목표 확인.
+- 기존에 이미 공개 이력이 있는 곡의 공개 설정/음원 전환은 legacy compatibility row를 유지하지만 사용자 진단에서 해당 D1 mutation은 **W1**로 확인되어 비용 gate 합격 범위.
+- 기존 공개곡을 새 schema로 강제 backfill/migration하지 않음.
+
+현재 환경:
+- PREVIEW = **app374**
+- TEST = app361
+- PRODUCTION = app361
+- shared D1 app373 first-publication cutover는 세 환경 공용 데이터 계층에 적용된 상태.
+- TEST/PRODUCTION 앱 코드는 이번 app374 배포에서 변경하지 않음.
+
+다음:
+- 사용자 PREVIEW에서 신규 공개곡 + 기존 공개곡 각각 한 번씩 메인 음원을 전환.
+- 전환 즉시 이전 노란 제목/equalizer가 사라지고, 새 음원 중앙 버튼을 다시 눌렀을 때만 새 visual이 켜지는지 확인.
+- PASS면 app374 TEST 승격 후보.
+- FAIL이면 이 UI path만 재수정하고 D1 비용 구조/정상 publication 기능은 건드리지 않음.
+
 ## 0QZ. app373 shared D1 first-publication W12→W2 컷오버 적용 완료 (2026-10-07 KST)
 
 사용자 명확한 승인:

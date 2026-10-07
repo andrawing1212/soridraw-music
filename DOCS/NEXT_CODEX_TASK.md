@@ -1,3 +1,28 @@
+## CURRENT NEXT GATE — follow PREVIEW live 검증 대기 / 배포 요청 전
+
+완료:
+- isolated actual HTTP D1 physical cost: follow W2 / unfollow W1 / duplicate W0 / same-state W0.
+- Worker341 legacy parity 347~356 PASS.
+- PREVIEW Worker release workflow에 Worker341 parity hard gate 추가.
+- release-system re-audit Run `37564622518` SUCCESS.
+- app375/publication/like/Music Note/Library/UI 비변경.
+- Worker/Hosting/Functions/shared follow schema 배포·mutation 0.
+- main/production unchanged.
+
+현재 남은 핵심:
+1. 실제 PREVIEW Worker + R2 환경에서 legacy cutover-OFF parity를 먼저 확인.
+2. PC↔mobile follow/unfollow, profile follower/following count, following membership, follower-save permission, public-profile parity 실기기 확인.
+3. 실제 R2 Class A/B 사용량과 지연을 확인. 현재 fixture 기준 정상 mutation은 R2 get 12 / put 7이므로 실제 비용을 숨기지 말고 기록.
+4. 위 legacy 검증이 PASS하기 전 overlay 활성화/shared migration/cutover 금지.
+5. overlay activation이 필요하면 schema 영향, rollback, TEST/PRODUCTION 구버전 호환을 먼저 보고하고 별도 승인 대기.
+6. live overlay에서 D1 W1~W2 / duplicate W0가 확인되기 전 TEST 승격 금지.
+
+배포 규칙:
+- 사용자가 PREVIEW 배포를 요청하지 않은 현재 상태에서는 배포하지 않는다.
+- 다음 PREVIEW 배포는 **cutover OFF 후보**만 허용.
+- 배포 직후 legacy path 비용/동작이 Worker341과 다르면 자동/즉시 rollback 판단.
+- W3+ / count mismatch / membership mismatch / permission mismatch / public-profile mismatch 발생 시 중단.
+
 ## CURRENT NEXT GATE — follow candidate PREVIEW 배포 전 최종 고정
 
 완료된 1차 독립 감사:

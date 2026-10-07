@@ -1,3 +1,51 @@
+## CURRENT NEXT GATE — follow candidate PREVIEW 배포 전 최종 고정
+
+완료된 1차 독립 감사:
+- audit commit: `2cc95dc69a72c230bca4c59e9d8d5c4633528524`.
+- Release System Audit Run `37564169142`: **SUCCESS**.
+- TypeScript / Build / static follow 347~356 / TEST+PRODUCTION Worker dry-run / shared D1 SELECT-only preflight PASS.
+- current PREVIEW active Worker 확인: `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- Worker341 legacy counter/post-sync exact parity PASS.
+- cutover OFF dormant router legacy parity PASS.
+- shared follow migration/cutover는 여전히 OFF.
+
+실제 격리 D1 + actual HTTP handler:
+- follow **W2**.
+- unfollow **W1**.
+- duplicate **W0**.
+- same-state/new operation **W0**.
+- stale reject **W0**.
+- recovery retry physical D1 **W0**.
+- W3+ 없음.
+- 격리 D1 cleanup PASS.
+- 사용자/shared D1 mutation 0.
+
+중요 제한:
+- R2는 fixture 기준 정상 follow/unfollow 각각 get 12 / put 7 시도. 실제 live R2 billing/latency는 아직 미검증.
+- PREVIEW PC↔mobile 실기기 follow/unfollow와 profile/following/follower-save/public-profile parity는 배포 전이므로 미검증.
+- 이 단계의 PASS는 **PREVIEW Worker 후보를 만들 수 있다는 뜻**이지 shared cutover나 TEST/PRODUCTION 승격 승인 아님.
+
+다음 구현/릴리스 준비:
+1. current canonical Worker source + source SHA를 follow candidate source로 고정.
+2. PREVIEW Worker release gate에 Worker341 legacy parity verifier가 반드시 포함되는지 재확인하고, cutover OFF를 release 조건으로 고정.
+3. 제품 코드/UI/publication/like/Music Note/Library는 변경하지 않는다.
+4. 배포 요청 전에는 Worker/Hosting/Functions/shared D1을 배포·변경하지 않는다.
+5. 사용자가 PREVIEW 배포를 요청하면 **cutover OFF 후보만 PREVIEW Worker에 배포**.
+6. 배포 직후 첫 검증은 legacy path:
+   - 현재 Worker341과 동일 기능/비용인지,
+   - Feed/profile warm R0/W0,
+   - PC↔mobile follow/unfollow,
+   - follower/following count와 membership,
+   - follower-save permission/public-profile parity.
+7. cutover OFF legacy parity PASS 후에만 overlay 활성화 단계의 필요 schema/cutover/rollback을 별도 보고하고 명확한 승인 대기.
+8. 실제 PREVIEW overlay에서 follow/unfollow W1~W2 + duplicate/same-state W0가 확인되기 전 TEST 승격 금지.
+
+중단 조건:
+- PREVIEW candidate의 cutover OFF legacy 비용이 Worker341 baseline과 달라지면 즉시 rollback.
+- W3+면 즉시 FAIL.
+- R2 비용/지연이 예상보다 크거나 원인이 불명확하면 cutover 진행 금지.
+- profile count / membership / permission / public-profile parity 하나라도 깨지면 cutover 및 승격 금지.
+
 ## CURRENT NEXT GATE — follow backend 비용 W14~W17 → W1~W2 재개
 
 목표:

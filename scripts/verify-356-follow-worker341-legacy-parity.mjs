@@ -47,8 +47,21 @@ const expectedCore=baseCore.replace(anchor,anchor+
   '  if (followCutover348.mode === "overlay348") {\n'+
   '    return handleFollowOverlay354(request, env, cors, authContext.uid, targetUid, shouldFollow, followCutover348);\n'+
   '  }\n');
-assert.equal(extract('handleFollowR2Core',current),expectedCore,'legacy core may differ only by the overlay router');
-assert.doesNotMatch(extract('handleFollowR2Core',current),/syncExactSharedFollowing347/);
+const currentCore=extract('handleFollowR2Core',current);
+const actorCountMarker='  // SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007\n';
+const actorCountField='    actorFollowingCount: clampExploreSocialCount(stats?.follower?.following_count)\n';
+const normalizedCurrentCore=currentCore
+  .replace(actorCountMarker,'')
+  .replace(
+    '    followingCount: clampExploreSocialCount(stats?.following?.following_count),\n'+actorCountField,
+    '    followingCount: clampExploreSocialCount(stats?.following?.following_count)\n',
+  );
+assert.equal(normalizedCurrentCore,expectedCore,'legacy core may differ only by overlay router + response-only actor count');
+assert.match(currentCore,/SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007/);
+assert.match(currentCore,/actorFollowingCount: clampExploreSocialCount\(stats\?\.follower\?\.following_count\)/);
+const actorCountTail=currentCore.slice(currentCore.indexOf('SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007'));
+assert.doesNotMatch(actorCountTail,/env\.DB|\.prepare\(|\.batch\(/,'actor count response must add no D1 work');
+assert.doesNotMatch(currentCore,/syncExactSharedFollowing347/);
 assert.doesNotMatch(extract('adjustExploreFollowCountersDelta',current),/SORIDRAW_FOLLOW_COMBINED_COUNTERS_345/);
 
 const outer=extract('handleFollow',current);
@@ -59,4 +72,5 @@ assert.ok(protocol>=0 && legacySync>protocol,'overlay must exit before Worker341
 console.log('FOLLOW356_WORKER341_LEGACY_COUNTER_PARITY=PASS');
 console.log('FOLLOW356_WORKER341_POSTSYNC_PARITY=PASS');
 console.log('FOLLOW356_OVERLAY_ROUTER_DORMANT_LEGACY=PASS');
+console.log('FOLLOW377_ACTOR_COUNT_RESPONSE_NO_EXTRA_D1=PASS');
 console.log('FOLLOW356_LEGACY_347_COMPAT_WRITE=ABSENT');

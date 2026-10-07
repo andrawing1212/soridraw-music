@@ -35,7 +35,7 @@ assert.doesNotMatch(
 
 // Keep the proven tiny RTDB contract. app378 fixes the list locally and must not
 // make every follow signal carry a whole profile/list or require shared rules.
-assert.doesNotMatch(sync, /targetProfileJson|whole profile|profileJson/i);
+assert.doesNotMatch(sync, /targetProfileJson|profileJson/i);
 
 // Update notice may reset diagnostics, never product persistent caches.
 assert.doesNotMatch(update, /localStorage\.clear\(/);

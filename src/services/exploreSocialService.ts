@@ -2,7 +2,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
-import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
+import { readSoridrawPersistentCache, removeSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
 import {
   getExplorePersonalSocialSnapshot,
@@ -115,6 +115,7 @@ export type ExploreFollowState = {
   isFollowing: boolean;
   followerCount: number;
   followingCount: number;
+  actorFollowingCount?: number;
 };
 
 export type ExploreProfileConnectionDirection = 'followers' | 'following';
@@ -126,6 +127,88 @@ export type ExploreProfileConnection = ExplorePublicProfile & {
 export type ExploreProfileConnectionPage = {
   items: ExploreProfileConnection[];
   nextCursor: string | null;
+};
+
+// SORIDRAW_EXPLORE_CONNECTION_PERSISTENT_CACHE_377_20261007
+// Relation pages are change-driven. A browser refresh is not a relation change,
+// so keep the first bounded page device-local until a real follow mutation/signal
+// invalidates only the two affected directions.
+const EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377 = 1;
+const EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377 = 'explore_profile_connections';
+const EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377 = '/v1/profiles/:id/connections';
+
+const profileConnectionCacheKey377 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+) => `explore-profile-connections:377:${direction}:${String(profileUid || '').trim()}`;
+
+const readProfileConnectionCache377 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+): ExploreProfileConnectionPage | null => {
+  const uid = String(profileUid || '').trim();
+  if (!uid) return null;
+  const envelope = readSoridrawPersistentCache<ExploreProfileConnectionPage>({
+    cacheKey: profileConnectionCacheKey377(uid, direction),
+    sourceType: EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377,
+    schemaVersion: EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377,
+    uid: null,
+  });
+  const data = envelope?.data;
+  if (!data || !Array.isArray(data.items)) return null;
+  return {
+    items: data.items.map((item) => ({ ...item })),
+    nextCursor: String(data.nextCursor || '').trim() || null,
+  };
+};
+
+const writeProfileConnectionCache377 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+  page: ExploreProfileConnectionPage,
+) => {
+  const uid = String(profileUid || '').trim();
+  if (!uid) return;
+  writeSoridrawPersistentCache<ExploreProfileConnectionPage>({
+    cacheKey: profileConnectionCacheKey377(uid, direction),
+    sourceType: EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377,
+    schemaVersion: EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377,
+    dataVersion: Date.now(),
+    uid: null,
+    syncCursor: page.nextCursor,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: {
+      items: page.items.map((item) => ({ ...item })),
+      nextCursor: page.nextCursor,
+    },
+  });
+};
+
+export const invalidateExploreProfileConnections377 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+) => {
+  const uid = String(profileUid || '').trim();
+  if (!uid) return;
+  removeSoridrawPersistentCache(profileConnectionCacheKey377(uid, direction), null);
+};
+
+export const patchExploreFollowLocalState377 = (
+  viewerUid: string,
+  targetUid: string,
+  following: boolean,
+) => {
+  const viewer = String(viewerUid || '').trim();
+  const target = String(targetUid || '').trim();
+  if (!viewer || !target) return;
+  rememberExploreFollowState(viewer, target, following);
+  patchExplorePersonalSocialFollow(viewer, target, following);
+  invalidateExploreProfileConnections377(viewer, 'following');
+  invalidateExploreProfileConnections377(target, 'followers');
 };
 
 type ExploreFollowCacheData = {
@@ -280,20 +363,34 @@ export const getExploreProfileConnections = async (
   const normalizedRef = String(profileRef || '').trim();
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const normalizedDirection: ExploreProfileConnectionDirection = direction === 'following' ? 'following' : 'followers';
-  const params = new URLSearchParams({ limit: '30' });
   const normalizedCursor = String(cursor || '').trim();
+
+  if (!normalizedCursor) {
+    const cached = readProfileConnectionCache377(normalizedRef, normalizedDirection);
+    if (cached) {
+      recordCloudflareLocalCacheHit(
+        EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377,
+        `LOCAL HIT · ${normalizedDirection === 'followers' ? '팔로워' : '팔로잉'} 목록 · Worker 0 · D1 R0`,
+      );
+      return cached;
+    }
+  }
+
+  const params = new URLSearchParams({ limit: '30' });
   if (normalizedCursor) params.set('cursor', normalizedCursor);
   const payload = await requestPublic(
     `/v1/profiles/${encodeURIComponent(normalizedRef)}/${normalizedDirection}?${params.toString()}`,
   );
   const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-  return {
+  const page: ExploreProfileConnectionPage = {
     items: rows.map((row: any) => ({
       ...normalizeProfile(row, String(row?.uid || '').trim()),
       followedAt: Math.max(0, Number(row?.followedAt ?? row?.followed_at ?? 0) || 0),
     })).filter((row: ExploreProfileConnection) => Boolean(row.uid)),
     nextCursor: String(payload?.data?.nextCursor || '').trim() || null,
   };
+  if (!normalizedCursor) writeProfileConnectionCache377(normalizedRef, normalizedDirection, page);
+  return page;
 };
 
 export const getExplorePublicProfileTracks = async (profileRef: string): Promise<Array<Record<string, unknown>>> => {
@@ -353,9 +450,9 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed ?? follow),
     followerCount: toCount(row?.followerCount ?? row?.follower_count),
     followingCount: toCount(row?.followingCount ?? row?.following_count),
+    actorFollowingCount: toCount(row?.actorFollowingCount ?? row?.actor_following_count),
   };
-  rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
-  patchExplorePersonalSocialFollow(user.uid, normalizedUid, result.isFollowing);
+  patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing);
   return result;
 };
 

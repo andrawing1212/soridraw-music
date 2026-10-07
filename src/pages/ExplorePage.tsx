@@ -3743,7 +3743,7 @@ export default function ExplorePage() {
     }
   };
 
-  const toggleFollow = () => {
+  const toggleFollow = async () => {
     if (!profileUid || !profile) return;
     if (!user) {
       setSocialNotice('팔로우는 로그인 후 사용할 수 있어요.');

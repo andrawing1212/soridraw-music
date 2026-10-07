@@ -1,3 +1,37 @@
+## CURRENT NEXT GATE — follow backend 비용 W14~W17 → W1~W2 재개
+
+목표:
+- 현재 정상 app375 제품 기능/UI를 그대로 유지하면서 follow/unfollow 서버 비용만 축소.
+- legacy 실사용 baseline physical D1 Rows Written 약 W14~W17.
+- 최종 목표 physical W1~W2, duplicate/same-state W0.
+
+고정 보호:
+- app375 공개/비공개, 최신 공개곡 첫칸 즉시 노출, 공개 메인 음원 visual reset 변경 금지.
+- app373 first-publication W2 구조 변경 금지.
+- 좋아요 / Music Note / Library 정상 경로 변경 금지.
+- UI/CSS/반응형 변경 금지.
+- 사용자 데이터 migration/backfill/delete/rewrite 금지.
+- shared follow cutover OFF 유지.
+- TEST/PRODUCTION 변경 금지.
+
+첫 작업:
+1. 현재 PREVIEW/TEST/PRODUCTION Worker 및 shared follow schema를 read-only로 다시 고정.
+2. Worker341 legacy follow 경로와 dormant 347~355 candidate를 diff/독립 감사.
+3. 이전 rollback 원인이었던 “cutover OFF인데 legacy 비용이 달라지는 코드”가 완전히 차단되는지 실행형 검증.
+4. 격리 Cloudflare D1 + R2 fixture에서 실제 HTTP follow/unfollow 전체 경로 비용 측정:
+   - follow W1~W2
+   - unfollow W1~W2
+   - duplicate/same-state W0
+   - no full profile/feed rebuild
+5. PC↔mobile ordering/crash/retry/profile count/following membership compatibility PASS 전 PREVIEW Worker 배포 금지.
+6. 위 증거가 모두 PASS한 뒤에만 PREVIEW Worker candidate 배포 판단.
+
+중단 조건:
+- legacy path 비용/동작이 Worker341과 다르면 즉시 중단.
+- W3+면 비용 FAIL.
+- profile count / following membership / follower-save permission / public profile parity 하나라도 깨지면 FAIL.
+- shared migration/cutover가 필요하면 먼저 사용자에게 영향·복구·비용을 보고하고 별도 승인 대기.
+
 ## CURRENT NEXT GATE — app375 PRODUCTION RELEASED / 정식앱 smoke 확인
 
 현재:

@@ -100,13 +100,13 @@ const toggleFollow312End = page.indexOf('  const closeMoreSheet = () => {', togg
 assert.ok(toggleFollow312Start >= 0 && toggleFollow312End > toggleFollow312Start, 'follow handler must remain discoverable');
 const toggleFollow312 = page.slice(toggleFollow312Start, toggleFollow312End);
 const followingOptimistic312 = toggleFollow312.indexOf('setFollowingUids312((previous) => {');
-const followAwait312 = toggleFollow312.indexOf('await setExploreFollow(user, targetUid, nextShouldFollow)');
+const followQueue380 = toggleFollow312.indexOf('queueExploreFollowFinalState380({');
 assert.ok(
-  followingOptimistic312 >= 0 && followAwait312 > followingOptimistic312,
-  'Same-device follow/unfollow must patch the Following filter before server settlement',
+  followingOptimistic312 >= 0 && followQueue380 > followingOptimistic312,
+  'Same-device follow/unfollow must patch the Following filter before final-state server settlement',
 );
-assert.match(toggleFollow312, /if \(nextShouldFollow\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
-assert.match(toggleFollow312, /if \(result\.isFollowing\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
+assert.match(toggleFollow312, /if \(nextShouldFollow380\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
+assert.match(toggleFollow312, /if \(confirmedMembership380\) next\.add\(targetUid\);[\s\S]*?else next\.delete\(targetUid\);/);
 assert.match(socialService, /SORIDRAW_EXPLORE_LATEST_FOLLOWING_FILTER_312_20261003/);
 const followingFilter312Start = socialService.indexOf('export const getExploreFollowingUids312');
 const followingFilter312End = socialService.indexOf('const toCount', followingFilter312Start);

@@ -1,3 +1,141 @@
+## CURRENT IMPLEMENTATION TASK — app380 좋아요 + 팔로우 최종상태 묶음/악성 반복 방어 통합 (2026-10-07 KST)
+
+사용자 승인:
+- 좋아요와 팔로우 모두 정상 사용은 **로컬 즉시 반영 → 마지막 클릭 기준 30초 → 최종 상태만 서버 반영** 원칙으로 통일한다.
+- 단, 좋아요와 팔로우의 정상 사용 빈도가 다르므로 서버 악성 반복 방어 임계값은 분리한다.
+- 기존 정상 좋아요 기능(app164/app160 freeze), app379 follow count/list/sync, UI/반응형은 반드시 보호한다.
+- 구현은 preview에서만 한다. Codex는 배포하지 않는다. 구현/검증 commit 고정 후 Work 독립 감사, 그 뒤 ChatGPT가 PREVIEW 배포 여부를 판단한다.
+
+현재 기준:
+- deployed PREVIEW: app379.
+- preview HEAD at design handoff: `365e41f06c8ff169a3b762dd527498f6813d335f`.
+- HEAD에는 follow380 후보가 있으나 **미배포**이며 `097-follow-abuse-guard.mjs`는 기본 Worker release patch 목록에서 의도적으로 제외돼 있다.
+- follow380 후보의 30초 final-state batching / reload outbox / progressive guard를 재사용하되, 아래 통합 정책에 맞게 감사·수정한다.
+- 좋아요는 이미 `EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000`, per-track durable outbox, net-zero 제거, W1 queue intake, Cloudflare `like:<uid>` 60/min edge limiter가 있다. 좋아요 client batching 자체를 새로 재작성하지 않는다.
+
+### 1. 공통 정상 UX — 기능 보존
+- 클릭 즉시 현재 기기 화면에 반영.
+- 같은 대상의 여러 클릭은 마지막 클릭 기준 30초 sliding window로 합친다.
+- 30초 뒤 **최종 상태 1회만** canonical mutation 후보가 된다.
+- final == window 시작 canonical baseline이면 Worker/D1/R2 canonical mutation **0**.
+- 같은 desired state 재요청/동일 operation replay는 idempotent W0.
+- 페이지 이동/탭 이동/재진입 자체가 flush/write를 만들면 FAIL.
+- 정상 cross-device sync는 canonical accepted state 뒤 기존 작은 RTDB signal 경로를 유지.
+- rate-limit/abuse state는 public follower/likeCount 또는 사용자 원본 데이터의 authority가 아니다.
+
+### 2. 팔로우 정책 — 저빈도/관계 스팸 방어를 강하게
+기존 follow380 후보를 기준으로:
+- local final-state window: 30초.
+- same target alternating final-state 반복 단계:
+  - 30초 → 2분 → 10분 → 1시간.
+  - 24시간 조용하면 escalation reset.
+- account-wide ordered mutation cap:
+  - 10분 30회.
+  - 24시간 120회.
+- malformed/unordered 요청은 D1 전에 차단.
+- same-state/duplicate는 canonical W0.
+- 실제 accepted follow/unfollow는 physical D1 W1~W2 hard gate. W3+ FAIL.
+- cooldown 응답은 Retry-After를 주고, client는 같은 pair의 최신 final intent 하나만 유지한다. 자동 busy-loop 금지.
+- follower/following count/list, PC↔mobile no-navigation convergence, app378 R0 popup reopen, app379 exact count authority를 변경하지 않는다.
+
+### 3. 좋아요 정책 — 정상 대량 탐색은 허용하되 같은 곡 토글 공격 차단
+기존 좋아요 30초/W1 queue 구조는 freeze 보호하고 **Worker abuse gate만 additive**로 붙인다.
+- fast edge limiter: 기존 `like:<uid>` 60 requests/min 유지. D1 rate-limit table 재도입 금지.
+- same track alternating final-state escalation:
+  - 30초 → 1분 → 5분 → 30분.
+  - 6시간 조용하면 pair escalation reset.
+- account-wide normalized final-mutation cap:
+  - 10분 120개.
+  - 24시간 600개.
+- batch HTTP 횟수가 아니라 **정규화된 unique track final intents**를 cap에 반영한다.
+- 동일 track 중복/같은 desired state/같은 operation replay는 canonical mutation W0.
+- batch max 50 유지.
+- abuse 거부는 canonical D1 전에 끝나야 한다.
+- 정상 like/unlike, 개인 filled heart, public likeCount, My Likes, 신규 공개곡 app164 초기 판정, PC↔mobile app160/app164 경로는 변경 금지.
+- 좋아요 1회 accepted path D1 rows_written W1~W2 hard gate; W3+ FAIL.
+
+### 4. 악성 방어 상태 저장 — 사용자 원본과 완전 분리
+- **D1에 rate/abuse receipt를 쓰지 않는다.**
+- 기존 shared `PROFILE_MEDIA`를 사용하더라도 키에 환경을 반드시 포함:
+  - `internal/explore/abuse/<environment>/follow/<uid>.json`
+  - `internal/explore/abuse/<environment>/like/<uid>.json`
+- environment는 `SORIDRAW_ENVIRONMENT || ENV_NAME`에서 fail-closed로 확정. PREVIEW 테스트가 TEST/PRODUCTION cooldown state에 영향을 주면 FAIL.
+- follow/like counters와 pair history는 서로 다른 object/key. 서로 quota 공유 금지.
+- object는 계정당 도메인별 1개 bounded state로 유지하고 pair history는 LRU/quiet prune로 상한을 둔다.
+- concurrent PC/mobile mutation은 R2 ETag/conditional write 또는 동등한 optimistic concurrency로 lost-update를 막는다. bounded retry만 허용.
+- abuse state는 파생 운영 상태이며 user data migration/backfill 대상이 아니다.
+- shared canonical D1/Firestore user rows, profile media, feed/catalog 원본 의미 변경 0.
+
+### 5. 거부/오류 처리
+- `RATE_LIMITED`는 Worker가 canonical D1 전에 결정한 명확한 거부여야 한다.
+- response에 Retry-After 또는 retryAfterMs를 제공.
+- follow client는 현재 후보처럼 최신 pair final intent 1개만 유지하고 cooldown 종료 시 최대 1회 재시도. 새 클릭이 오면 다시 최종 상태로 합친다.
+- like client는 기존 ambiguous network failure와 deterministic 429를 구분할 수 있게 최소한의 typed error/status 전달만 추가한다.
+- 429 때문에 idle/navigation 자동 retry loop가 생기면 FAIL.
+- 정상 네트워크 실패의 기존 outbox/idempotency/revision 보호는 변경하지 않는다.
+
+### 6. 구현 범위
+우선 확인/수정:
+- `src/services/exploreFollowBatchService380.ts`
+- `src/pages/ExplorePage.tsx`
+- `src/services/exploreSocialService.ts`
+- `src/services/exploreLikeService.ts` — 429 구분이 정말 필요할 때만 최소 수정
+- `cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs`
+- 신규 like abuse Worker patch (번호 충돌 없는 다음 patch)
+- 관련 verifier
+- release-system audit verifier
+- `DOCS/CURRENT_RELEASE_STATE.md`
+
+금지:
+- 좋아요 핵심 상태기 리팩터링.
+- app164/app160 freeze 경로 재설계.
+- follow overlay authority 롤백.
+- shared user data migration/backfill/delete/rewrite.
+- 전체 Feed/profile/likes/follows scan.
+- UI 위치/색/반응형 변경.
+- 기본 release patch manifest에 새 abuse patch를 조기 등록.
+- Worker/Hosting/Functions/Rules 배포.
+- main/TEST/PRODUCTION 변경.
+
+### 7. 필수 검증
+정적/fixture:
+- TypeScript PASS.
+- Vite Build PASS.
+- 기존 app164/app160 like regressions PASS.
+- app377/app378/app379 follow regressions PASS.
+- follow 30초 final-state: follow→unfollow within window = server W0.
+- like 30초 final-state: like→unlike within window = 기존 server W0 보호.
+- same desired replay W0.
+- progressive pair cooldown sequence 정확.
+- account 10m/day cap 정확.
+- malformed/unordered abuse request D1 R0/W0.
+- guard state environment isolation.
+- concurrent guard update lost-update 없음.
+- guard R2 failure/limiter missing 정책이 fail-closed이며 D1 mutation 0.
+- page/tab/navigation write 0.
+- unchanged revisit D1 R0 target.
+
+live PREVIEW는 구현+Work 감사 후 별도 단계:
+- follow/unfollow actual W1~W2.
+- like/unlike actual W1~W2.
+- blocked abuse request D1 W0.
+- PC↔mobile membership/count parity.
+- Following popup reopen D1 R0.
+- My Likes/Explore revisit D1 R0.
+- TEST/PRODUCTION unchanged.
+
+### 8. Codex 완료 보고 필수
+- 작업 branch: preview
+- 기준 commit
+- 최종 commit SHA
+- 변경 파일
+- TypeScript / Build / Test
+- 기존 like/follow freeze regression 결과
+- D1/R2 예상 및 fixture 비용
+- 배포 안 했음을 명시
+- 사용자 데이터 변경 0 확인
+- 남은 live PREVIEW 미검증 항목
+
 ## CURRENT NEXT GATE — app379 팔로워/팔로잉 상단 숫자 실기기 parity 확인
 
 현재 완료:

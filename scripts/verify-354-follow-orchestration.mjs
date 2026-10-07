@@ -131,7 +131,13 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
   }
 }
 for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
-  const a = ts.createSourceFile('a.js',functions.get(name),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements[0].body.statements;
+  const currentFunction354 = name === 'handleFollowR2Core'
+    ? functions.get(name).replace(
+        ',\n    actorFollowingCount: clampExploreSocialCount(stats?.follower?.following_count)',
+        '',
+      )
+    : functions.get(name);
+  const a = ts.createSourceFile('a.js',currentFunction354,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS).statements[0].body.statements;
   const b = baselineAst.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).body.statements;
   // Overlay branch and wrapper guard are the only changes to legacy flow.
   const text = node => ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified,node,node.getSourceFile()).replaceAll('\r\n','\n');

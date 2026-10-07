@@ -1,3 +1,33 @@
+## CURRENT NEXT GATE — app377 PREVIEW 팔로우 숫자·목록·R0 실사용 검증
+
+현재 배포 완료:
+- `preview.soridraw.com` app377 exact build PASS.
+- PREVIEW Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`.
+- Firebase PREVIEW Hosting Run `37569563139` SUCCESS.
+- Cloudflare PREVIEW Worker Run `37569420282` SUCCESS.
+- shared RTDB Rules exact-match deploy PASS; additive `userSync/$uid/exploreFollow` only.
+- shared follow cutover는 여전히 OFF.
+- TEST / PRODUCTION unchanged.
+
+실사용 검증 순서:
+1. PC와 모바일 모두 app377로 갱신.
+2. MY프로필 `팔로잉`과 상대 프로필 `팔로워`를 각각 한 번 열어 현재 실제 relation 목록과 숫자가 맞는지 확인.
+3. 첫 cold popup은 기존 bounded D1 R2 허용. 같은 목록을 닫고 다시 열거나 새로고침 후 다시 열 때 `팔로우 목록 캐시` LOCAL HIT / Worker0 / D1 R0인지 확인.
+4. PC에서 follow/unfollow 후 모바일에서 페이지 이동·새로고침 없이 버튼과 숫자가 수렴하는지 확인. 모바일→PC도 동일 확인.
+5. A→B follow 시 A following 목록에 B, B followers 목록에 A가 있고, unfollow 후 양쪽에서 사라지는지 확인.
+6. 30명 이하 complete popup에서는 실제 relation row 수가 profile count를 즉시 self-heal하는지 확인.
+
+판단:
+- 숫자 / 목록 / 버튼 / PC↔모바일 수렴 + unchanged popup R0가 PASS하면 app377 정합성 단계 완료.
+- relation 목록 자체가 틀리면 W1~W2 cutover로 넘어가지 말고 canonical follow relation writer/reader부터 수정.
+- app377이 PASS한 뒤에만 기존 follow mutation W14~W17 → W1~W2 shared overlay cutover 작업을 재개.
+- shared follow cutover / migration은 현재 OFF이며 별도 안전 검증 없이 켜지 않는다.
+- TEST/PRODUCTION 승격 금지.
+
+비용 기준:
+- 변경 없는 reload/reopen: list Worker0 / D1 R0 목표.
+- 실제 follow 변경: tiny RTDB signal 1개로 같은 계정 타기기 수렴; 수신 D1/Firestore 0.
+- follow mutation 자체는 아직 legacy W14~W17. 이 비용은 다음 단계에서 W1~W2로 줄인다.
 ## CURRENT NEXT GATE — app376 팔로워/팔로잉 팝업 PREVIEW 실사용 검증
 
 완료:

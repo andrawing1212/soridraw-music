@@ -250,6 +250,8 @@ jobs:
           node scripts/verify-355-follow-audit-repairs.mjs
           node scripts/verify-356-follow-worker341-legacy-parity.mjs
           node scripts/verify-378-follow-rollback-blocker.mjs
+          node scripts/verify-387-follow-abuse-batching.mjs
+          node --check cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
@@ -279,6 +281,23 @@ jobs:
           grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
           echo 'RELEASE_CONTROLLER_MANUAL_DISPATCH_ONLY=PASS'
           echo 'SHARED_D1_FIXED_PATH_STATIC_AUDIT=PASS'
+
+      - name: Follow380 final-state abuse guard candidate replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$RUNNER_TEMP/soridraw-follow380"
+          mkdir -p "$candidate"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$candidate/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs
+          node --check "$candidate/worker.js"
+          SORIDRAW_GENERATED_WORKER="$candidate/worker.js" node scripts/verify-387-follow-abuse-batching.mjs
+          before="$(sha256sum "$candidate/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$candidate" node cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs
+          after="$(sha256sum "$candidate/worker.js" | awk '{print $1}')"
+          test "$before" = "$after"
+          echo 'FOLLOW380_PATCH_IDEMPOTENT=PASS'
+          echo 'FOLLOW380_NO_DEPLOY=PASS'
 
       - name: Like candidate regression, isolated only
         shell: bash

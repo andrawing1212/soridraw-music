@@ -1,3 +1,55 @@
+## 0RO. follow W1~W2 전환 전 롤백 안전성 BLOCKER 실증 / shared cutover 계속 OFF (2026-10-07 KST)
+
+현재 판단:
+- app377 팔로우 숫자/목록/PC↔모바일 정합성은 사용자 PASS 기준 그대로 동결.
+- protocol354/355 저비용 후보 자체와 all-environment active Worker 호환성은 read-only 감사에서 PASS.
+- 그러나 **overlay가 한 번 실제 관계를 변경한 뒤 manifest를 제거/비활성화하면 runtime이 legacy `follows`로 되돌아가 변경된 관계를 무시할 수 있음**을 실행형 verifier로 재현.
+- 따라서 shared follow cutover 활성화는 **one-way authority 또는 overlay-readonly rollback**이 먼저 구현·감사되기 전까지 BLOCKED.
+
+Read-only readiness 근거:
+- Audit Run `37574090023`: SUCCESS.
+- PREVIEW active Worker `f3a305cc-72ef-49da-94ec-d2b00db8ea47`: protocol354/355 markers PASS.
+- TEST active Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`: protocol354/355 markers PASS.
+- PRODUCTION active Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7`: protocol354/355 markers PASS.
+- shared canonical D1의 follow overlay 348 schema는 현재 **ABSENT / NOT_APPLIED**.
+- shared D1 write 0 / Worker deploy 0 / Hosting deploy 0 / Functions deploy 0 / RTDB Rules deploy 0.
+
+Rollback blocker 실증:
+- verifier commit `8549ded75d56fce8b09cac57b3637d1e17bdf1fe`: `scripts/verify-378-follow-rollback-blocker.mjs`.
+- release audit hard gate commit `815398f93164c9c00ac55ac3c4542fd719677107`.
+- read-only audit source/trigger `06d982756552ce6e3e56ecf0250646a3df535fd9`.
+- Audit Run `37576098525`: **SUCCESS**.
+- `FOLLOW378_OVERLAY_EFFECTIVE_STATE_DIFFERS_FROM_IMMUTABLE_BASELINE=PASS`.
+- `FOLLOW378_MISSING_MANIFEST_FALLS_BACK_TO_LEGACY=PASS`.
+- `FOLLOW378_D1_CONTROL_NOT_RUNTIME_LATCH=PASS`.
+- `FOLLOW378_MANIFEST_REMOVAL_AFTER_OVERLAY_MUTATION=UNSAFE_REPRODUCED`.
+- `FOLLOW378_SHARED_USER_DATA_WRITE=0`.
+- `FOLLOW378_CUTOVER_ACTIVATION=BLOCKED_UNTIL_ONE_WAY_OR_READONLY_ROLLBACK`.
+- 같은 Run에서 TypeScript / Build / follow 347~378 / TEST+PRODUCTION Worker dry-run / live shared D1 SELECT-only preflight / no-deploy gate PASS.
+
+왜 중요한가:
+- overlay 348은 기존 `follows`를 immutable baseline으로 두고 변경된 edge만 overlay에 기록한다.
+- 현재 `readFollowCutoverState348`은 R2 manifest가 없으면 `legacy`로 돌아가며 D1의 `explore_follow_cutover_control_348`을 runtime latch로 읽지 않는다.
+- 따라서 실제 overlay 변경 이후 단순 manifest OFF 또는 구형 legacy-only rollback은 기능 롤백이 아니라 **사용자 팔로우 상태를 과거 baseline처럼 보이게 만드는 정합성 오류**가 될 수 있다.
+- 과거 Worker341 rollback은 overlay authority가 OFF였기 때문에 안전했던 것이며, post-cutover rollback 증거로 사용할 수 없다.
+
+다음 설계 고정:
+- 정상 overlay 상태에서 steady-state마다 D1 latch를 읽게 만들지 않는다.
+- healthy R2 manifest가 정상 authority source이고, D1 control은 manifest 손상/부재 같은 예외 복구에서만 one-way latch/fallback으로 사용한다.
+- overlay authority가 한 번 실제 write를 허용한 뒤에는 legacy writer/read authority로 자동 복귀 금지.
+- 안전한 긴급 롤백은 **effective overlay reader는 유지 + follow mutation만 fail-closed(overlay-readonly)**가 기본.
+- 완전한 legacy 복귀가 필요하면 overlay 변경분을 legacy에 합치는 별도 migration/foldback가 필요하므로 사용자 명확한 승인 없는 현재 작업 범위 밖.
+- 구버전/무본문 client는 기존처럼 `FOLLOW_ORDER_REQUIRED` → protocol354 negotiation을 유지하고, readonly 상태에서는 legacy fallback 없이 실패 차단.
+- schema는 additive/no-backfill 원칙 유지.
+
+보호/비변경:
+- app377 count/list/persistent cache/RTDB PC↔mobile sync 변경 0.
+- 좋아요 / 공개·비공개 / Music Note / Library / profile UI/CSS 변경 0.
+- shared D1 schema/migration/cutover/manifest write 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite 0.
+- TEST/PRODUCTION 코드·Worker·Hosting 비의도 변경 0.
+- 실제 PREVIEW overlay W1~W2 live 검증은 **아직 미실행**. rollback-safe lifecycle 구현/감사 후에만 진행.
+
 ## 0RN. app377 팔로우 정합성 사용자 실사용 PASS / 비용 최적화만 남음 (2026-10-07 KST)
 
 사용자 실사용 확인:

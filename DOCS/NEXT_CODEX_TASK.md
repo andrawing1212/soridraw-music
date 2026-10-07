@@ -1,3 +1,35 @@
+## CURRENT NEXT GATE — app376 팔로워/팔로잉 팝업 PREVIEW 실사용 검증
+
+완료:
+- 팔로워/팔로잉 숫자를 누르면 실제 사용자 목록을 볼 수 있는 popup client 구현 완료.
+- 기존 `/v1/profiles/:id/followers|following` bounded backend 재사용; 새 Worker/backend/schema 없음.
+- profile entry 추가 read 0; 숫자를 눌렀을 때만 최대 30명 1 page 조회.
+- same mounted Explore session popup 재열기 memory cache.
+- 사용자별 N+1 profile read 없음.
+- CACHE LIVE 요청명 `팔로워 목록` / `팔로잉 목록` 추가.
+- TypeScript / Build / full release-system audit PASS.
+- 최종 Audit Run `37566557303`: SUCCESS.
+- shared follow cutover OFF / active PREVIEW Worker `bc8cc09e-4210-46e2-bdb7-72796e2798e4` 유지.
+- app376은 아직 Hosting 배포 전.
+
+다음 순서:
+1. 사용자 PREVIEW 배포 승인 시 app376 client/Hosting만 배포한다. Worker/shared D1/Functions는 변경하지 않는다.
+2. MY프로필과 상대 프로필에서 `팔로워` / `팔로잉`을 각각 클릭한다.
+3. 숫자와 실제 목록 수/멤버십을 비교한다.
+4. A가 B를 팔로우 → B의 followers에 A가 보이는지, A의 following에 B가 보이는지 PC/모바일 양쪽 확인.
+5. unfollow 후 양쪽 목록에서 사라지는지 확인.
+6. CACHE LIVE에서 첫 목록 조회의 D1 R/W와 같은 목록 재열기의 추가 Worker/D1 여부를 확인한다.
+7. 관계 목록은 맞는데 숫자/버튼만 틀리면 cache/count 동기화만 수정한다.
+8. 관계 목록 자체가 틀리면 follow relation writer/reader를 우선 수정한다.
+9. 이 정합성 PASS 전에는 W1~W2 overlay/shared follow cutover를 켜지 않는다.
+
+보호:
+- app375 공개/비공개/최신 공개곡/메인음원 visual reset 건드리지 않음.
+- app373 first-publication W2 건드리지 않음.
+- 좋아요 / Music Note / Library 정상 경로 건드리지 않음.
+- UI 기존 프로필 레이아웃은 유지하고 follower/following 텍스트 영역만 click target으로 사용.
+- TEST/PRODUCTION 변경 금지.
+- 사용자 데이터 migration/backfill/delete/rewrite 금지.
 ## CURRENT NEXT GATE — PREVIEW cutover-OFF 실사용 follow 검증
 
 현재 배포 상태:

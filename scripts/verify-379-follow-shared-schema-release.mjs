@@ -12,9 +12,10 @@ for (const required of [
   "phase IN ('legacy','armed','overlay','readonly')",
 ]) assert.ok(migration.includes(required), 'missing additive follow schema: '+required);
 
-assert.doesNotMatch(migration,/\b(?:INSERT|UPDATE|DELETE|REPLACE|ALTER|DROP|TRIGGER|VIEW|PRAGMA|ATTACH|DETACH)\b/i,
+const cleaned=migration.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/--.*$/gm,' ');
+assert.doesNotMatch(cleaned,/\b(?:INSERT|UPDATE|DELETE|REPLACE|ALTER|DROP|TRIGGER|VIEW|PRAGMA|ATTACH|DETACH)\b/i,
   'shared additive migration must not mutate rows or create trigger/view');
-assert.doesNotMatch(migration,/\b(?:follows|profile_stats)\s*\(/i,
+assert.doesNotMatch(cleaned,/\b(?:follows|profile_stats)\s*\(/i,
   'legacy user relation/stat tables must not be redefined');
 assert.match(worker,/SORIDRAW_FOLLOW_ROLLBACK_SAFE_AUTHORITY_378_20261007/);
 assert.match(worker,/SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378/);

@@ -117,6 +117,17 @@ export type ExploreFollowState = {
   followingCount: number;
 };
 
+export type ExploreProfileConnectionDirection = 'followers' | 'following';
+
+export type ExploreProfileConnection = ExplorePublicProfile & {
+  followedAt: number;
+};
+
+export type ExploreProfileConnectionPage = {
+  items: ExploreProfileConnection[];
+  nextCursor: string | null;
+};
+
 type ExploreFollowCacheData = {
   complete: boolean;
   states: Record<string, boolean>;
@@ -255,6 +266,34 @@ export const getExplorePublicProfile = async (profileRef: string): Promise<Explo
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const payload = await requestPublic(`/v1/profiles/${encodeURIComponent(normalizedRef)}`);
   return normalizeProfile(payload?.data?.profile || payload?.data || {}, normalizedRef);
+};
+
+// SORIDRAW_EXPLORE_PROFILE_CONNECTIONS_376_20261007
+// Followers/following are loaded only after an explicit stats click. One bounded
+// connection query already returns the card fields, so never re-read one profile
+// per row and never add a profile-entry server request.
+export const getExploreProfileConnections = async (
+  profileRef: string,
+  direction: ExploreProfileConnectionDirection,
+  cursor: string | null = null,
+): Promise<ExploreProfileConnectionPage> => {
+  const normalizedRef = String(profileRef || '').trim();
+  if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
+  const normalizedDirection: ExploreProfileConnectionDirection = direction === 'following' ? 'following' : 'followers';
+  const params = new URLSearchParams({ limit: '30' });
+  const normalizedCursor = String(cursor || '').trim();
+  if (normalizedCursor) params.set('cursor', normalizedCursor);
+  const payload = await requestPublic(
+    `/v1/profiles/${encodeURIComponent(normalizedRef)}/${normalizedDirection}?${params.toString()}`,
+  );
+  const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  return {
+    items: rows.map((row: any) => ({
+      ...normalizeProfile(row, String(row?.uid || '').trim()),
+      followedAt: Math.max(0, Number(row?.followedAt ?? row?.followed_at ?? 0) || 0),
+    })).filter((row: ExploreProfileConnection) => Boolean(row.uid)),
+    nextCursor: String(payload?.data?.nextCursor || '').trim() || null,
+  };
 };
 
 export const getExplorePublicProfileTracks = async (profileRef: string): Promise<Array<Record<string, unknown>>> => {

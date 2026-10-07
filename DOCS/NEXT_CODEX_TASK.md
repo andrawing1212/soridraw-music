@@ -1,3 +1,50 @@
+## CURRENT NEXT GATE — follow W1~W2 shared PREVIEW activation approval 대기
+
+완료:
+- app377 팔로우 숫자/목록/PC↔mobile 정합성 사용자 PASS.
+- rollback-safe one-way authority lifecycle source 구현 완료.
+- final source commit `7d0f9b38798e066b83f9842c8397866b761447bd`.
+- final Audit Run `37579261599`: SUCCESS.
+- TypeScript / Build / follow 347~378 / TEST+PRODUCTION Worker dry-run / active Worker protocol compatibility / live shared D1 SELECT-only preflight PASS.
+- pre-cutover missing manifest D1 R0 PASS.
+- healthy overlay manifest D1 latch R0 PASS.
+- missing/corrupt manifest after activation → overlay-readonly recovery PASS.
+- active/readonly → legacy downgrade/delete 차단 PASS.
+- old Worker readonly-manifest fail-closed contract PASS.
+- shared D1 write 0 / deployment 0.
+- isolated remote physical proof remains follow W2 / unfollow W1 / duplicate W0 / same-state W0.
+
+다음 단계는 실제 shared backend 변경이므로 사용자 승인 전 실행 금지:
+1. candidate `348-follow-overlay.sql` additive schema만 shared canonical D1에 적용.
+   - legacy rows rewrite/backfill/delete 금지.
+   - schema/control/index/trigger only.
+2. 적용 직후 SELECT-only로 exact object/phase=`legacy` 확인.
+3. PREVIEW/TEST/PRODUCTION active Worker protocol354/355 + lifecycle compatibility 재확인.
+4. lifecycle flag / one-way latch / manifest를 coordinated order로 준비하되 TEST/PRODUCTION 앱/Hosting/Worker 승격은 하지 않는다.
+5. PREVIEW overlay authority 활성화 후 실제 follow 1회 / unfollow 1회 / duplicate / same-state physical D1 rows_written 측정.
+6. 합격선:
+   - follow W1~W2.
+   - unfollow W1~W2.
+   - duplicate/same-state W0.
+   - W3+ 즉시 FAIL.
+7. 동시에 app377 기능 parity:
+   - follower/following count.
+   - 실제 목록 membership.
+   - PC↔mobile no-navigation sync.
+   - follower-save permission.
+   - public profile parity.
+   - unchanged popup/cache R0.
+8. 이상 시 overlay-readonly로 새 mutation만 중지하고 effective overlay reads는 유지. legacy fallback 금지.
+9. PREVIEW 실사용 PASS 전 TEST 승격 금지.
+
+절대 금지:
+- 사용자 승인 없이 shared schema/cutover mutation.
+- user data migration/backfill/delete/rewrite/copy.
+- legacy follows/profile_stats 일괄 수정.
+- 좋아요/publication/Music Note/Library/UI 수정.
+- TEST/PRODUCTION 실제 배포.
+- W3+ 상태에서 계속 진행.
+
 ## CURRENT NEXT GATE — follow W1~W2 rollback-safe authority lifecycle 구현 (PREVIEW source only)
 
 현재 결론:

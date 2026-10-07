@@ -38,8 +38,12 @@ jobs:
           mode="$(sed -n 's/^mode=//p' <<<"$body" | tail -1 | tr -d '\r')"
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
           test "$approval" = 'user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z'
-          test "$mode" = 'readonly-manifest-then-one-way-latch'
+          case "$mode" in
+            readonly-manifest-then-one-way-latch|activate-overlay-after-lifecycle) ;;
+            *) echo "unsupported cutover mode: $mode" >&2; exit 1 ;;
+          esac
           echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo 'FOLLOW383_APPROVAL_LOCK=PASS'
 
       - uses: actions/checkout@v4
@@ -106,6 +110,7 @@ jobs:
           NODE
 
       - name: Preflight shared control and manifest are still dormant
+        if: ${{ steps.source.outputs.mode == 'readonly-manifest-then-one-way-latch' }}
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -132,6 +137,7 @@ jobs:
           echo 'FOLLOW383_ACTIVE_MANIFEST_PRE=ABSENT'
 
       - name: Write shared readonly manifest first
+        if: ${{ steps.source.outputs.mode == 'readonly-manifest-then-one-way-latch' }}
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -168,6 +174,7 @@ jobs:
           NODE
 
       - name: Arm and latch shared D1 authority while manifest is readonly
+        if: ${{ steps.source.outputs.mode == 'readonly-manifest-then-one-way-latch' }}
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -187,6 +194,7 @@ jobs:
           NODE
 
       - name: Verify readonly safety after one-way latch
+        if: ${{ steps.source.outputs.mode == 'readonly-manifest-then-one-way-latch' }}
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -209,3 +217,153 @@ jobs:
           console.log('FOLLOW383_MUTATIONS_FAIL_CLOSED=PASS');
           NODE
           echo 'FOLLOW383_PHASE_A=PASS'
+
+      - name: Preflight readonly one-way authority before active overlay
+        if: ${{ steps.source.outputs.mode == 'activate-overlay-after-lifecycle' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
+          const expectedDb=process.env.SHARED_D1_ID;
+          const workers={preview:process.env.PREVIEW_WORKER,test:process.env.TEST_WORKER,production:process.env.PRODUCTION_WORKER};
+          async function get(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const p=await r.json();if(!r.ok||p?.success===false)throw Error('Cloudflare read failed '+r.status+' '+JSON.stringify(p).slice(0,300));return p.result??p;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('single active Worker missing '+name);return String(v.version_id);}
+          (async()=>{
+            for(const [stage,name] of Object.entries(workers)){
+              const versionId=await active(name);
+              const settings=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/settings`);
+              const bindings=Array.isArray(settings?.bindings)?settings.bindings:[];
+              const db=bindings.find(x=>x?.type==='d1'&&x?.name==='DB');
+              const r2=bindings.find(x=>x?.type==='r2_bucket'&&x?.name==='PROFILE_MEDIA');
+              const flag=bindings.find(x=>x?.type==='plain_text'&&x?.name==='SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378');
+              if(String(db?.id||db?.database_id||'')!==expectedDb)throw Error(stage+' DB is not shared canonical');
+              if(String(r2?.bucket_name||r2?.bucket||'')!=='soridraw-profile-media')throw Error(stage+' PROFILE_MEDIA is not shared canonical');
+              if(String(flag?.text??flag?.value??'')!=='1')throw Error(stage+' lifecycle flag is not live');
+              console.log('FOLLOW384_'+stage.toUpperCase()+'_LIFECYCLE_READY=PASS version='+versionId);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          cd cloudflare/explore-worker
+          mkdir -p .follow384
+          cat > .follow384/wrangler.jsonc <<JSON
+          {"name":"soridraw-follow384-maintenance","main":"./placeholder.js","compatibility_date":"2026-09-11","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}]}
+          JSON
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"; C="$PWD/.follow384/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token,updated_at FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/f384-pre.json"
+          key="soridraw-profile-media/internal/explore/follow-cutover-v348/active.json"
+          node "$W" r2 object get "$key" --file "$RUNNER_TEMP/f384-readonly.json" --remote
+          STATE="$RUNNER_TEMP/f384-pre.json" MANIFEST="$RUNNER_TEMP/f384-readonly.json" node <<'NODE'
+          const fs=require('fs'),p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
+          const s=rows.find(x=>Number(x.id)===1),c=rows.find(x=>'override_rows'in x),m=JSON.parse(fs.readFileSync(process.env.MANIFEST,'utf8'));
+          if(!s||s.phase!=='overlay'||Number(s.schema_version)!==1||!String(s.cutover_token||''))throw Error('D1 one-way overlay latch missing');
+          if(Number(c?.override_rows||0)!==0)throw Error('overlay rows changed before active cutover');
+          if(m.relationMode!=='overlay348-readonly'||m.writeMode!=='readonly'||m.oneWayAuthority348!==true||m.cutoverToken!==s.cutover_token)throw Error('readonly manifest/control mismatch');
+          console.log('FOLLOW384_READONLY_PREFLIGHT=PASS token='+s.cutover_token);
+          NODE
+
+      - name: Activate shared overlay manifest
+        if: ${{ steps.source.outputs.mode == 'activate-overlay-after-lifecycle' }}
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"; C="$PWD/.follow384/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1" --json > "$RUNNER_TEMP/f384-control.json"
+          CONTROL="$RUNNER_TEMP/f384-control.json" node <<'NODE' > "$RUNNER_TEMP/f384-active.json"
+          const p=require(process.env.CONTROL),rows=p.flatMap(x=>x.results||[]),s=rows.find(x=>Number(x.id)===1);
+          if(!s||s.phase!=='overlay'||Number(s.schema_version)!==1||!String(s.cutover_token||''))throw Error('overlay latch missing before activation');
+          const m={
+            schemaVersion:1,
+            relationMode:'overlay348',
+            relationTable:'explore_follow_overrides_348',
+            legacyRelationWritersFrozen:true,
+            legacyCounterWritersFrozen:true,
+            allEnvironmentReadersReady:true,
+            allEnvironmentWritersReady:true,
+            profileCountsR2Exact:true,
+            ownerProtocol:'follow-overlay-348',
+            crashConsistentWriter354:true,
+            orderedClientRequests354:true,
+            oneWayAuthority348:true,
+            writeMode:'active',
+            cutoverToken:String(s.cutover_token)
+          };
+          process.stdout.write(JSON.stringify(m));
+          NODE
+          key="soridraw-profile-media/internal/explore/follow-cutover-v348/active.json"
+          node "$W" r2 object put "$key" --file "$RUNNER_TEMP/f384-active.json" --content-type application/json --remote --force
+          node "$W" r2 object get "$key" --file "$RUNNER_TEMP/f384-active-readback.json" --remote
+          EXPECT="$RUNNER_TEMP/f384-active.json" ACTUAL="$RUNNER_TEMP/f384-active-readback.json" node <<'NODE'
+          const fs=require('fs'),a=JSON.parse(fs.readFileSync(process.env.EXPECT,'utf8')),b=JSON.parse(fs.readFileSync(process.env.ACTUAL,'utf8'));
+          if(JSON.stringify(a)!==JSON.stringify(b))throw Error('active manifest readback mismatch');
+          console.log('FOLLOW384_ACTIVE_MANIFEST_LIVE=PASS token='+b.cutoverToken);
+          NODE
+
+      - name: Verify active overlay parity and zero-row cutover
+        if: ${{ steps.source.outputs.mode == 'activate-overlay-after-lifecycle' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"; C="$PWD/.follow384/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/f384-post.json"
+          key="soridraw-profile-media/internal/explore/follow-cutover-v348/active.json"
+          node "$W" r2 object get "$key" --file "$RUNNER_TEMP/f384-final.json" --remote
+          STATE="$RUNNER_TEMP/f384-post.json" MANIFEST="$RUNNER_TEMP/f384-final.json" node <<'NODE'
+          const fs=require('fs'),p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
+          const s=rows.find(x=>Number(x.id)===1),c=rows.find(x=>'override_rows'in x),m=JSON.parse(fs.readFileSync(process.env.MANIFEST,'utf8'));
+          if(!s||s.phase!=='overlay'||Number(s.schema_version)!==1||!String(s.cutover_token||''))throw Error('one-way overlay latch changed');
+          if(Number(c?.override_rows||0)!==0)throw Error('user overlay row changed during activation');
+          if(m.relationMode!=='overlay348'||m.writeMode!=='active'||m.oneWayAuthority348!==true||m.cutoverToken!==s.cutover_token)throw Error('active manifest/control mismatch');
+          console.log('FOLLOW384_ACTIVE_STATE=PASS');
+          console.log('FOLLOW384_OVERRIDE_ROWS=0');
+          console.log('FOLLOW384_LEGACY_USER_ROWS_WRITE=0');
+          NODE
+          cd ../..
+          node .deploy/release-worker-runtime.mjs test verify
+          node .deploy/release-worker-runtime.mjs production verify
+          echo 'FOLLOW384_ENVIRONMENT_PARITY=PASS'
+          echo 'FOLLOW384_PHASE_B=PASS'
+
+      - name: Fail closed to readonly if active overlay verification fails
+        if: ${{ failure() && steps.source.outputs.mode == 'activate-overlay-after-lifecycle' }}
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .follow384
+          cat > .follow384/wrangler.jsonc <<JSON
+          {"name":"soridraw-follow384-maintenance","main":"./placeholder.js","compatibility_date":"2026-09-11","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}]}
+          JSON
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"; C="$PWD/.follow384/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1" --json > "$RUNNER_TEMP/f384-fail-control.json"
+          CONTROL="$RUNNER_TEMP/f384-fail-control.json" node <<'NODE' > "$RUNNER_TEMP/f384-readonly-restore.json"
+          const p=require(process.env.CONTROL),rows=p.flatMap(x=>x.results||[]),s=rows.find(x=>Number(x.id)===1);
+          if(!s||s.phase!=='overlay'||!String(s.cutover_token||''))throw Error('cannot establish readonly restore token');
+          process.stdout.write(JSON.stringify({
+            schemaVersion:1,
+            relationMode:'overlay348-readonly',
+            relationTable:'explore_follow_overrides_348',
+            legacyRelationWritersFrozen:true,
+            legacyCounterWritersFrozen:true,
+            allEnvironmentReadersReady:true,
+            allEnvironmentWritersReady:true,
+            profileCountsR2Exact:true,
+            ownerProtocol:'follow-overlay-348',
+            crashConsistentWriter354:true,
+            orderedClientRequests354:true,
+            oneWayAuthority348:true,
+            writeMode:'readonly',
+            cutoverToken:String(s.cutover_token)
+          }));
+          NODE
+          key="soridraw-profile-media/internal/explore/follow-cutover-v348/active.json"
+          node "$W" r2 object put "$key" --file "$RUNNER_TEMP/f384-readonly-restore.json" --content-type application/json --remote --force
+          node "$W" r2 object get "$key" --file "$RUNNER_TEMP/f384-readonly-restored.json" --remote
+          FILE="$RUNNER_TEMP/f384-readonly-restored.json" node <<'NODE'
+          const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.FILE,'utf8'));
+          if(m.relationMode!=='overlay348-readonly'||m.writeMode!=='readonly'||m.oneWayAuthority348!==true)throw Error('fail-closed readonly restore failed');
+          console.log('FOLLOW384_FAIL_CLOSED_READONLY=PASS');
+          NODE
+

@@ -1,3 +1,32 @@
+## CURRENT NEXT GATE — app380+381 통합 source 독립 감사 후 PREVIEW 릴리스 판단 (2026-10-08 KST)
+
+현재 기준:
+- preview HEAD: `7bbe881378700407beaf3457f55d3f10f93c2f66`
+- app380 완료 source: `7aa711af0f0f8577893298dd5d84ada4f7d857ce`
+- app381 UI integration: `1857c346aa40f2f6dec0e6570d439d2514473f82`
+- app381 state-doc commit 포함 현재 HEAD 기준으로 감사한다.
+- 실제 PREVIEW는 app379 유지. 아직 배포하지 않는다.
+
+다음 작업은 **구현이 아니라 독립 감사**다.
+- app380 like/follow abuse guard, durable receipt, ACK ordering, activation ordering을 감사.
+- app381 UI diff가 app380을 되돌리거나 Worker/D1/user-data 코드를 변경하지 않았는지 확인.
+- app381 변경은 Explore exact Recent route + 기존 Lite geometry owner의 pre-paint 1회 reconciliation만 허용.
+- TypeScript/Build/app303 verifier run 37686878661은 이미 PASS. 같은 검증을 의미 없이 반복하지 않는다.
+- 감사 PASS 전 Worker/schema/Hosting 배포 금지.
+- 감사에서 문제 발견 시 TEST/PRODUCTION은 물론 PREVIEW 활성화도 중단.
+
+Work 감사 기준:
+- `DOCS/WORK_AUDIT_CHECKLIST.md`
+- `DOCS/CURRENT_RELEASE_STATE.md` 최상단 0RZB/0RZA
+- app380 base `d25890f68e8acd15b8f619e5326d4bb5292a233c` → current HEAD diff
+- 특히 shared D1 schema 실제 적용 0, default release patch manifest 미등록, R2 abuse state environment isolation, W2/W0 proof, old/new client compatibility, activation order rollback 가능성 확인.
+- UI는 Recent/Music Note/Create round-trip과 Explore→Recent routing만 감사하며 split engine 리팩터링 금지.
+
+PASS 후:
+- ChatGPT가 정확한 활성화/배포 순서를 고정한다.
+- 필요한 additive schema / Worker / Hosting만 canonical workflow로 PREVIEW에 배포한다.
+- 실제 PREVIEW에서 app380 like/follow + app381 UI 3개 증상을 함께 검증한다.
+
 ## CURRENT FOCUSED TASK — app380 좋아요 정상 재시도 W0 + durable acceptance receipt 해결 (2026-10-08 KST)
 
 기준:

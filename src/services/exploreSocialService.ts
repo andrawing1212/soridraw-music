@@ -76,7 +76,15 @@ const requestAuthed = async (user: User, path: string, init: RequestInit = {}) =
         ? '프로필 이미지 저장소 연결이 필요합니다.'
         : 'Explore 요청을 처리하지 못했습니다.';
     const message = String(payload?.message || payload?.error?.message || payload?.error || fallback).trim();
-    throw Object.assign(new Error(message || fallback), { code });
+    const retryAfterSeconds = Number(response.headers.get('Retry-After') || 0);
+    const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? Math.floor(retryAfterSeconds * 1000)
+      : 0;
+    throw Object.assign(new Error(message || fallback), {
+      code,
+      status: response.status,
+      ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
+    });
   }
   return payload;
 };

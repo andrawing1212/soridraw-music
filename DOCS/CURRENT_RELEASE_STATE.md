@@ -1,3 +1,60 @@
+## 0RR. app377 TEST 승격 완료 / follow378 TEST Worker 호환성 PASS / PRODUCTION 비변경 (2026-10-07 KST)
+
+사용자 승인:
+- TEST 배포 승인 후 fixed Release Controller로 exact PREVIEW source `9f51660d81746a619c185da845221b0888021020` 승격.
+
+Release:
+- Release Controller Run `37584516018`: **SUCCESS**.
+- app version: `377`.
+- TEST_VERIFIED tag: `soridraw-test-v377-9f51660d8174`.
+- main promoted commit: `b13360df1bab52e2d3b746ea47dc4e3718eef85c`.
+- production branch remains `663a6b820135a140ac35b7e8a88bdd0ed4cc26e0` (app375 production baseline) unchanged.
+- PRODUCTION deploy stage skipped.
+
+TEST Worker:
+- before: `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65`.
+- after: `a70593bb-2bc9-4a41-a05a-47332a4f7660`.
+- Worker bundle SHA256: `2de2f423a791de7d109b54c063bb3b61c8574eeb8a577f4b388acea3b03ad9da`.
+- Worker code SHA256: `ea3b26d5b2270f16120ea6527c4d33fa2c0241b9f0e7ffad6320a97bebf9a440`.
+- TEST Worker smoke/verify PASS.
+- latest/popular shared Feed parity PASS.
+- curated parity PASS.
+- public profile parity PASS.
+- PREVIEW↔TEST environment parity PASS attempt=1.
+- Functions OPTIONS CORS PASS.
+- shared D1 preflight SELECT-only PASS.
+
+TEST Media Worker / Hosting:
+- fixed TEST promotion controller also produced exact TEST media/Hosting artifacts.
+- TEST media Worker before `cfb741e3-a255-49ed-8801-cb21f7f53938`.
+- TEST media Worker after `f0a86688-5ffc-42ed-aecd-c01f8c17c636`.
+- TEST media Worker smoke/verify PASS.
+- `test.soridraw.com` / Firebase TEST exact app377 verification PASS.
+- 이 승격은 TEST 완성본 전체 승격 규칙에 따른 것이며 PRODUCTION에는 반영되지 않음.
+
+follow W1~W2 상태:
+- shared additive overlay348 schema: 적용 완료.
+- PREVIEW Worker follow378 rollback-safe reader: 배포 완료.
+- TEST Worker follow378 rollback-safe reader: 배포 완료.
+- PRODUCTION active Worker: 아직 app375 baseline / follow378 미승격.
+- follow authority lifecycle flag: OFF.
+- shared R2 active cutover manifest: 없음/OFF.
+- D1 control activation: 없음/OFF.
+- 실제 shared follow W1~W2 authority activation 및 live physical billing 측정: 아직 미실행.
+- 따라서 현재 사용자 팔로우 runtime은 기존 legacy authority를 계속 사용하며 app377 정상 동작 기준을 유지.
+
+비변경:
+- PRODUCTION branch/Hosting/Explore Worker/Media Worker 비변경.
+- Firebase Functions/Rules 비변경.
+- shared user data migration/backfill/delete/rewrite/copy 0.
+- follow overlay schema 적용 이후에도 기존 user relation rows 자체 변경 0.
+
+다음 gate:
+- PRODUCTION active Worker도 follow378 rollback-safe reader/readonly fail-closed를 이해해야 shared authority activation 가능.
+- PRODUCTION 승격은 `soridraw-test-v377-9f51660d8174` TEST_VERIFIED manifest를 사용해야 하며, 사용자 명확한 정식배포 승인 없이는 실행 금지.
+- PRODUCTION compatibility PASS 뒤에만 D1 control + shared R2 manifest를 coordinated cutover로 활성화하고 실제 follow/unfollow physical W1~W2를 측정.
+- W3+ / membership mismatch / count mismatch 발생 시 즉시 fail-closed 및 다음 승격 금지.
+
 ## 0RQ. follow W1~W2 shared schema 적용 + PREVIEW rollback-safe Worker 배포 완료 / cutover OFF (2026-10-07 KST)
 
 실제 완료:

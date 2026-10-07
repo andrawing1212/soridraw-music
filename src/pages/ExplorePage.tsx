@@ -60,10 +60,13 @@ import {
 import {
   getExploreFollowState,
   getExploreFollowingUids312,
+  getExploreProfileConnections,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
   type ExploreFollowState,
+  type ExploreProfileConnection,
+  type ExploreProfileConnectionDirection,
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
@@ -1895,6 +1898,17 @@ export default function ExplorePage() {
   const activeProfileUidRef = useRef('');
   activeProfileUidRef.current = profile?.uid || profileUid || '';
   const followBusy = Boolean(profile?.uid && followBusyUid === profile.uid);
+  // SORIDRAW_EXPLORE_PROFILE_CONNECTIONS_376_20261007
+  // Connection cards are fetched only after an explicit followers/following click.
+  // Reopening the same list in this mounted Explore session reuses the bounded page.
+  const [profileConnectionsOpen376, setProfileConnectionsOpen376] = useState<ExploreProfileConnectionDirection | null>(null);
+  const [profileConnectionsItems376, setProfileConnectionsItems376] = useState<ExploreProfileConnection[]>([]);
+  const [profileConnectionsNextCursor376, setProfileConnectionsNextCursor376] = useState<string | null>(null);
+  const [profileConnectionsLoading376, setProfileConnectionsLoading376] = useState(false);
+  const [profileConnectionsLoadingMore376, setProfileConnectionsLoadingMore376] = useState(false);
+  const [profileConnectionsError376, setProfileConnectionsError376] = useState('');
+  const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
+  const profileConnectionsRequest376Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [moreTrack, setMoreTrack] = useState<ExploreTrack | null>(null);
   // app272 — keep the authorized full follower-save snapshot outside the lightweight
@@ -3221,7 +3235,106 @@ export default function ExplorePage() {
 
   const closeProfile = async () => {
     await flushExploreLikeBoundary094();
+    setProfileConnectionsOpen376(null);
+    profileConnectionsRequest376Ref.current += 1;
     setSearchParams({});
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const profileConnectionCacheKey376 = (
+    uid: string,
+    direction: ExploreProfileConnectionDirection,
+  ) => `${uid}:${direction}`;
+
+  const closeProfileConnections376 = () => {
+    profileConnectionsRequest376Ref.current += 1;
+    setProfileConnectionsOpen376(null);
+    setProfileConnectionsError376('');
+    setProfileConnectionsLoading376(false);
+    setProfileConnectionsLoadingMore376(false);
+  };
+
+  const openProfileConnections376 = async (direction: ExploreProfileConnectionDirection) => {
+    const targetUid = String(profile?.uid || '').trim();
+    if (!targetUid) return;
+
+    setProfileConnectionsOpen376(direction);
+    setProfileConnectionsError376('');
+    const key = profileConnectionCacheKey376(targetUid, direction);
+    const cached = profileConnectionsCache376Ref.current.get(key);
+    if (cached) {
+      setProfileConnectionsItems376(cached.items);
+      setProfileConnectionsNextCursor376(cached.nextCursor);
+      setProfileConnectionsLoading376(false);
+      return;
+    }
+
+    const requestId = ++profileConnectionsRequest376Ref.current;
+    setProfileConnectionsItems376([]);
+    setProfileConnectionsNextCursor376(null);
+    setProfileConnectionsLoading376(true);
+    try {
+      const page = await getExploreProfileConnections(targetUid, direction);
+      if (
+        requestId !== profileConnectionsRequest376Ref.current
+        || activeProfileUidRef.current !== targetUid
+      ) return;
+      profileConnectionsCache376Ref.current.set(key, page);
+      setProfileConnectionsItems376(page.items);
+      setProfileConnectionsNextCursor376(page.nextCursor);
+    } catch (reason) {
+      if (requestId !== profileConnectionsRequest376Ref.current) return;
+      console.warn('[app376] profile connections load failed:', reason);
+      setProfileConnectionsError376(
+        reason instanceof Error ? reason.message : '팔로우 목록을 불러오지 못했어요.',
+      );
+    } finally {
+      if (requestId === profileConnectionsRequest376Ref.current) {
+        setProfileConnectionsLoading376(false);
+      }
+    }
+  };
+
+  const loadMoreProfileConnections376 = async () => {
+    const targetUid = String(profile?.uid || '').trim();
+    const direction = profileConnectionsOpen376;
+    const cursor = profileConnectionsNextCursor376;
+    if (!targetUid || !direction || !cursor || profileConnectionsLoadingMore376) return;
+
+    setProfileConnectionsLoadingMore376(true);
+    setProfileConnectionsError376('');
+    try {
+      const page = await getExploreProfileConnections(targetUid, direction, cursor);
+      if (activeProfileUidRef.current !== targetUid || profileConnectionsOpen376 !== direction) return;
+      const seen = new Set(profileConnectionsItems376.map((item) => item.uid));
+      const merged = [...profileConnectionsItems376];
+      page.items.forEach((item) => {
+        if (!seen.has(item.uid)) {
+          seen.add(item.uid);
+          merged.push(item);
+        }
+      });
+      const key = profileConnectionCacheKey376(targetUid, direction);
+      const next = { items: merged, nextCursor: page.nextCursor };
+      profileConnectionsCache376Ref.current.set(key, next);
+      setProfileConnectionsItems376(merged);
+      setProfileConnectionsNextCursor376(page.nextCursor);
+    } catch (reason) {
+      console.warn('[app376] profile connections next page failed:', reason);
+      setProfileConnectionsError376(
+        reason instanceof Error ? reason.message : '팔로우 목록을 더 불러오지 못했어요.',
+      );
+    } finally {
+      setProfileConnectionsLoadingMore376(false);
+    }
+  };
+
+  const openProfileConnectionPerson376 = async (uid: string) => {
+    const targetUid = String(uid || '').trim();
+    if (!targetUid) return;
+    closeProfileConnections376();
+    await flushExploreLikeBoundary094();
+    setSearchParams({ profile: targetUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -3371,6 +3484,8 @@ export default function ExplorePage() {
         followerCount: result.followerCount,
         followingCount: result.followingCount,
       });
+      profileConnectionsCache376Ref.current.delete(profileConnectionCacheKey376(targetUid, 'followers'));
+      profileConnectionsCache376Ref.current.delete(profileConnectionCacheKey376(viewerUid, 'following'));
       setProfile((previous) => previous?.uid === targetUid ? {
         ...previous,
         followerCount: result.followerCount,
@@ -4262,11 +4377,122 @@ export default function ExplorePage() {
     );
   }
 
+  const renderProfileConnectionsModal376 = () => {
+    const direction = profileConnectionsOpen376;
+    if (!direction || !profile) return null;
+    const emptyLabel = direction === 'followers' ? '아직 팔로워가 없어요.' : '아직 팔로잉한 사람이 없어요.';
+
+    return (
+      <div
+        className="soridraw-explore-connections-backdrop-376"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.currentTarget === event.target) closeProfileConnections376();
+        }}
+      >
+        <section
+          className="soridraw-explore-connections-modal-376"
+          role="dialog"
+          aria-modal="true"
+          aria-label={direction === 'followers' ? '팔로워 목록' : '팔로잉 목록'}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header className="soridraw-explore-connections-head-376">
+            <div className="soridraw-explore-connections-tabs-376" role="tablist" aria-label="팔로우 목록">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={direction === 'followers'}
+                className={direction === 'followers' ? 'is-active' : undefined}
+                onClick={() => void openProfileConnections376('followers')}
+              >
+                팔로워 <strong>{formatCount(profile.followerCount)}</strong>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={direction === 'following'}
+                className={direction === 'following' ? 'is-active' : undefined}
+                onClick={() => void openProfileConnections376('following')}
+              >
+                팔로잉 <strong>{formatCount(profile.followingCount)}</strong>
+              </button>
+            </div>
+            <button
+              type="button"
+              className="soridraw-explore-connections-close-376"
+              onClick={closeProfileConnections376}
+              aria-label="팔로우 목록 닫기"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </header>
+
+          <div className="soridraw-explore-connections-body-376">
+            {profileConnectionsLoading376 ? (
+              <div className="soridraw-explore-connections-state-376" role="status">
+                <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
+                목록을 불러오는 중
+              </div>
+            ) : profileConnectionsError376 && profileConnectionsItems376.length === 0 ? (
+              <div className="soridraw-explore-connections-state-376">{profileConnectionsError376}</div>
+            ) : profileConnectionsItems376.length === 0 ? (
+              <div className="soridraw-explore-connections-state-376">{emptyLabel}</div>
+            ) : (
+              <>
+                <div className="soridraw-explore-connections-list-376">
+                  {profileConnectionsItems376.map((person) => (
+                    <button
+                      key={person.uid}
+                      type="button"
+                      className="soridraw-explore-connection-person-376"
+                      onClick={() => void openProfileConnectionPerson376(person.uid)}
+                    >
+                      <span className="soridraw-explore-connection-avatar-376" aria-hidden="true">
+                        {person.avatarUrl
+                          ? <img src={person.avatarUrl} alt="" referrerPolicy="no-referrer" />
+                          : (person.nickname || 'S').charAt(0).toUpperCase()}
+                      </span>
+                      <span className="soridraw-explore-connection-copy-376">
+                        <strong>{person.nickname || 'SORiDRAW'}</strong>
+                        {person.handle && <span>@{person.handle}</span>}
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+                {profileConnectionsError376 && (
+                  <div className="soridraw-explore-connections-inline-error-376">{profileConnectionsError376}</div>
+                )}
+                {profileConnectionsNextCursor376 && (
+                  <button
+                    type="button"
+                    className="soridraw-explore-connections-more-376"
+                    onClick={() => void loadMoreProfileConnections376()}
+                    disabled={profileConnectionsLoadingMore376}
+                  >
+                    {profileConnectionsLoadingMore376 ? (
+                      <>
+                        <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
+                        불러오는 중
+                      </>
+                    ) : '더 보기'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  };
+
   if (profileUid) {
     return (
       <main className="soridraw-explore-page soridraw-explore-page--profile">
         {renderMoreSheet()}
         {renderPublicationSettingsModal()}
+        {renderProfileConnectionsModal376()}
         <section className="soridraw-explore-profile-toolbar">
           <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
             <ArrowLeft aria-hidden="true" />
@@ -4320,8 +4546,22 @@ export default function ExplorePage() {
                   </div>
                   {profile.handle && <div className="soridraw-explore-profile-handle">@{profile.handle}</div>}
                   <div className="soridraw-explore-profile-stats">
-                    <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
-                    <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
+                    <button
+                      type="button"
+                      className="soridraw-explore-profile-stat-button-376"
+                      onClick={() => void openProfileConnections376('followers')}
+                      aria-label={`팔로워 ${formatCount(profile.followerCount)}명 보기`}
+                    >
+                      팔로워 <strong>{formatCount(profile.followerCount)}</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className="soridraw-explore-profile-stat-button-376"
+                      onClick={() => void openProfileConnections376('following')}
+                      aria-label={`팔로잉 ${formatCount(profile.followingCount)}명 보기`}
+                    >
+                      팔로잉 <strong>{formatCount(profile.followingCount)}</strong>
+                    </button>
                     <span>공개곡 <strong>{formatCount(resolveExplorePublicTrackCount(profile.trackCount, profileTracks))}</strong></span>
                   </div>
                   {profile.genres.length > 0 && <div className="soridraw-explore-profile-genres">{profile.genres.map((genre) => <span key={genre}>{genre}</span>)}</div>}

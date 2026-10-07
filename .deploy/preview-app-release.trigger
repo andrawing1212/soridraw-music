@@ -1,10 +1,8 @@
-app377-follow-count-list-cross-device-convergence
-target_source=bcb880375175095b18a0fe1f2fa0ddda25d66cc1
-app_version=377
-scope=follow-count,following-count,persistent-follow-list-cache,cross-device-follow-signal
-release_system_audit_run=37569220320
-worker_release_run=37569420282
-deploy_shared_rtdb_rules=true
+app378-following-list-update-r0
+target_source=608aeaa4cafb157008c2819773f689f97415539b
+app_version=378
+scope=follow-write-w1,persistent-following-list-delta,update-stable-cache,cross-device-sync-preserved
+deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
 functions_change=false

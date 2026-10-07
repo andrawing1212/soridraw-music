@@ -5,5 +5,5 @@ shared_user_data_write=false
 legacy_relation_write=false
 profile_stats_write=false
 overlay_activation=false
-requested=2026-10-07T16:30:00+09:00
-retry=2
+requested=2026-10-07T16:31:00+09:00
+retry=3

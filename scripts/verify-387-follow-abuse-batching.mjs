@@ -23,7 +23,7 @@ assert.match(batch, /retryAfterMs380/);
 assert.match(batch, /persistEntry380\(current\)/);
 assert.match(batch, /existing\.desiredFollowing = request\.desiredFollowing === true/);
 
-const toggleStart = page.indexOf('  const toggleFollow = () =>');
+const toggleStart = page.indexOf('  const toggleFollow = async () =>');
 const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);

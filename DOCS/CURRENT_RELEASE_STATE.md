@@ -1,3 +1,60 @@
+## 0RK. app376 팔로워/팔로잉 목록 팝업 준비 완료 / PREVIEW 배포 전 (2026-10-07 KST)
+
+사용자 실사용 관찰:
+- PREVIEW cutover-OFF Worker에서 follow / unfollow 반복 후 숫자와 상태가 기대대로 반영되는지 확신하기 어려움.
+- CACHE LIVE에서 follow mutation physical Rows Written은 여전히 legacy 수준 W14~W17 구간이 관찰됨. 현재 shared follow cutover가 OFF이므로 W1~W2 후보 경로가 실제 활성화된 결과가 아님.
+- 사용자가 팔로워/팔로잉 숫자만 보고 실제 관계 상대를 확인할 수 없어, 관계 정합성을 검증할 UI가 먼저 필요하다고 지적.
+
+app376 구현:
+- 공개 프로필의 `팔로워`, `팔로잉` 숫자를 클릭 가능한 버튼으로 변경하되 기존 위치/간격/표시 스타일은 유지.
+- 클릭 시 팝업:
+  - 팔로워 / 팔로잉 탭
+  - 아바타, 닉네임, @handle
+  - 사용자 행 클릭 시 해당 공개프로필 이동
+  - 빈 목록 / 로딩 / 오류 상태
+  - 30명 단위 bounded pagination + `더 보기`
+  - PC 중앙 팝업 / 모바일 bottom-sheet형.
+- 기존 Worker의 `/v1/profiles/:id/followers`, `/v1/profiles/:id/following`을 그대로 재사용.
+- 프로필 진입만으로 목록 서버 요청을 추가하지 않음. **사용자가 숫자를 눌렀을 때만 1회 조회**.
+- 목록 API 한 번이 card 표시용 profile fields를 함께 반환하므로 사용자마다 profile을 다시 읽는 N+1 조회 없음.
+- 같은 프로필/방향을 다시 열면 현재 Explore mount 동안 메모리 cache 사용.
+- follow count가 바뀌면 해당 followers/following popup cache만 무효화하고, follow mutation 함수 자체에는 새 서버/캐시 의존성을 넣지 않음.
+- CACHE LIVE에 `팔로워 목록` / `팔로잉 목록` 요청명을 추가해 실제 조회 비용을 바로 확인 가능하게 함.
+
+변경 파일:
+- `src/services/exploreSocialService.ts`
+- `src/pages/ExplorePage.tsx`
+- `src/components/explore/exploreSocial.css`
+- `src/components/CacheDiagnosticsOverlay.tsx`
+- `scripts/verify-376-profile-connections-popup.mjs`
+- `scripts/verify-explore-deploy-preflight.mjs`
+
+검증:
+- 최초 Audit Run `37566115459`: TypeScript/Build PASS 후 기존 follow UI 실행형 verifier에서 popup cache ref가 추출된 `toggleFollow` 외부에 없어 FAIL. 제품 배포/데이터 변경 없이 중단.
+- 수정: popup cache invalidation을 `toggleFollow`에서 완전히 분리하여 component effect로 이동. 기존 follow mutation contract 보존.
+- 재감사 Run `37566319687`: **SUCCESS**.
+- 최종 deploy-preflight 연결 후 Audit Run `37566557303`: **SUCCESS**.
+- TypeScript PASS / Build PASS / static release-system verification PASS.
+- Worker341 legacy counter/post-sync parity PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- live shared D1 preflight read-only PASS.
+- active PREVIEW Worker `bc8cc09e-4210-46e2-bdb7-72796e2798e4` 확인; 이번 app376 UI 작업에서는 Worker 재배포하지 않음.
+
+데이터/환경:
+- shared follow cutover: OFF.
+- shared D1 schema/migration/write: 0.
+- 사용자 데이터 migration/backfill/copy/delete/rewrite: 0.
+- Firebase Hosting 배포: 아직 0 (app376 미배포).
+- Functions / Worker 추가 배포: 0.
+- TEST / PRODUCTION: 변경 없음.
+
+다음:
+1. 사용자가 PREVIEW 배포를 요청하면 app376 client/Hosting만 PREVIEW에 배포.
+2. 실제 프로필에서 팔로워/팔로잉 팝업으로 relation 상대를 확인.
+3. 숫자(count) ↔ 실제 목록 ↔ 팔로우 버튼 상태를 같은 계정/PC/모바일에서 대조.
+4. CACHE LIVE에서 목록 첫 클릭 비용과 같은 팝업 재열기 비용을 확인.
+5. relation 자체가 틀린지, 숫자/cache 표시만 틀린지 분리한 뒤 follow 동기화 수정.
+6. 이 정합성이 해결되기 전 W1~W2 shared cutover 활성화 금지.
 ## 0RJ. follow candidate PREVIEW Worker 배포 완료 / cutover OFF 실사용 검증 대기 (2026-10-07 KST)
 
 사용자 승인:

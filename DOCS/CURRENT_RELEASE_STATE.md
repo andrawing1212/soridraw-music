@@ -1,3 +1,31 @@
+## 0RV. app378 사용자 실기기 Following R0 최종 확인 PASS (2026-10-07 KST)
+
+사용자 재검증 결과:
+- 모바일 app378 업데이트 직후 최초 팔로잉 목록: D1 query R2 / row R11 / W0.
+  - 이전 app377에서 이미 지워진 cache가 없는 상태의 최초 bounded hydration으로 판단.
+- PC 같은 시점 팔로잉 목록: R0/W0 확인.
+- 이후 PC에서 unfollow:
+  - 초기 진단은 follow-state 확인 R1/W0 등이 먼저 표시되고,
+  - 약 2~3초 뒤 canonical follow mutation 누적이 반영되어 최종 W1로 수렴.
+- 이후 PC에서 follow:
+  - D1 query R2 / row R10 / W1.
+- 마지막 팔로잉 목록 재오픈:
+  - `팔로우 목록 캐시 · LOCAL 3 · Worker 0`
+  - D1 query R0 / W0
+  - row R0 / W0
+  - 공개프로필/curated도 LOCAL / Worker0 / D1 R0.
+- 즉 **실제 relation 변경 후 Following 목록 재오픈 R0 목표 달성**.
+- PC↔mobile 실시간 동기화는 이전 사용자 검증에서 정상이며 이번 수정으로 깨지지 않음.
+
+판정:
+- 업데이트/재진입 때문에 반복되는 Following 목록 D1 폭증 문제: **해결 PASS**.
+- 실제 follow/unfollow mutation은 변경 시에만 bounded server 사용:
+  - W1 확인.
+  - read는 R1~R2 수준의 실제 mutation/상태확인 경로이며 사용자 수/앱 업데이트에 비례해 자동 반복되는 목록 read가 아님.
+- 이 범위에서는 추가 최적화보다 현재 기능/동기화 안정성 보호를 우선. follow cost gate 완료 처리.
+- app378 추가 코드 수정/재배포 필요 없음.
+- TEST/PRODUCTION 추가 승격 없음.
+
 ## 0RU. app378 PREVIEW 팔로잉 목록 업데이트/재진입 R0 보강 배포 완료 (2026-10-07 KST)
 
 사용자 실기기 결과:

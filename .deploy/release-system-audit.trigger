@@ -1,9 +1,9 @@
-app375-explore-latest-first-visible
-target=081e0b9455406d0ee992b4f274a33fd7f8a91a07
-scope=explore-latest-rail,new-publication-first-visible,scroll-position-only
+app375-latest-new-publication-immediate
+target=9a0bcaf4257fd4f423ee47c01d59bf3efb6d4409
+scope=explore-latest,new-publication,origin-local-signal,first-visible
 shared_d1_apply=false
 shared_user_data_write=false
 worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
-requested=2026-10-07-app375-latest-first-visible-audit
+requested=2026-10-07-app375-immediate-latest-publication-audit

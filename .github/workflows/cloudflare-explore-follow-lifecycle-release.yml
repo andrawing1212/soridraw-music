@@ -1,0 +1,183 @@
+name: SORIDRAW Follow Lifecycle Worker Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/follow-lifecycle-worker-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-follow-lifecycle-worker-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+
+    steps:
+      - name: Resolve exact approved source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/follow-lifecycle-worker-release.trigger"
+          body="$(curl -fsSL "$trigger_url")"
+          target="$(sed -n 's/^target=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          approval="$(sed -n 's/^approval=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          mode="$(sed -n 's/^mode=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          test "$approval" = 'user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z'
+          test "$mode" = 'test-production-explore-worker-lifecycle-only'
+          echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo 'FOLLOW382_APPROVAL_LOCK=PASS'
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Static follow lifecycle contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-356-follow-worker341-legacy-parity.mjs
+          node scripts/verify-378-follow-rollback-blocker.mjs
+          node scripts/verify-380-follow-cutover-config.mjs
+          grep -Fq '"SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378": "1"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+          echo 'FOLLOW382_STATIC_LIFECYCLE_CONTRACT=PASS'
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Dry-run exact TEST and PRODUCTION Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-worker-runtime.mjs test dry-run | tee "$RUNNER_TEMP/test-dry-run.txt"
+          node .deploy/release-worker-runtime.mjs production dry-run | tee "$RUNNER_TEMP/prod-dry-run.txt"
+          test_bundle="$(sed -n 's/^TEST_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/test-dry-run.txt" | tail -1)"
+          prod_bundle="$(sed -n 's/^PRODUCTION_WORKER_BUNDLE_SHA256=//p' "$RUNNER_TEMP/prod-dry-run.txt" | tail -1)"
+          test_code="$(sed -n 's/^TEST_WORKER_CODE_SHA256=//p' "$RUNNER_TEMP/test-dry-run.txt" | tail -1)"
+          prod_code="$(sed -n 's/^PRODUCTION_WORKER_CODE_SHA256=//p' "$RUNNER_TEMP/prod-dry-run.txt" | tail -1)"
+          test -n "$test_bundle" && test "$test_bundle" = "$prod_bundle"
+          test -n "$test_code" && test "$test_code" = "$prod_code"
+          echo "FOLLOW382_EXPECTED_BUNDLE=$test_bundle" >> "$GITHUB_ENV"
+          echo "FOLLOW382_EXPECTED_CODE=$test_code" >> "$GITHUB_ENV"
+          echo 'FOLLOW382_TEST_PROD_EXACT_DRYRUN=PASS'
+
+      - name: Require PREVIEW lifecycle already live and cutover still dormant
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID, token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const p=await r.json();if(!r.ok||p?.success===false)throw Error('Cloudflare read failed '+r.status);return p.result??p;}
+          (async()=>{
+            const settings=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/settings`);
+            const bindings=Array.isArray(settings?.bindings)?settings.bindings:[];
+            const flag=bindings.find(x=>x?.type==='plain_text'&&x?.name==='SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378');
+            if(String(flag?.text??flag?.value??'')!=='1') throw Error('PREVIEW follow lifecycle flag is not live');
+            console.log('FOLLOW382_PREVIEW_LIFECYCLE_LIVE=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          W="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/follow382-state.json"
+          STATE="$RUNNER_TEMP/follow382-state.json" node <<'NODE'
+          const p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
+          const s=rows.find(x=>Number(x.id)===1), c=rows.find(x=>'override_rows' in x);
+          if(!s||s.phase!=='legacy'||Number(s.schema_version)!==1||String(s.cutover_token||'')!=='')throw Error('shared follow control not dormant legacy');
+          if(Number(c?.override_rows||0)!==0)throw Error('shared follow overlay rows exist before lifecycle rollout');
+          console.log('FOLLOW382_D1_CONTROL_DORMANT=PASS');
+          NODE
+          marker="$RUNNER_TEMP/follow382-manifest.json"
+          set +e
+          node "$W" r2 object get "soridraw-profile-media/internal/explore/follow-cutover-v348/active.json" --remote --file "$marker" >/dev/null 2>&1
+          marker_code=$?
+          set -e
+          test "$marker_code" -ne 0
+          echo 'FOLLOW382_R2_ACTIVE_MANIFEST=ABSENT'
+
+      - name: Snapshot active Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const p=await r.json();if(!r.ok||p?.success===false)throw Error('CF read '+r.status);return p.result??p;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('active missing '+name);return String(v.version_id);}
+          (async()=>{for(const [k,n] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){const v=await active(n);fs.writeFileSync(process.env.RUNNER_TEMP+'/'+k+'-before.txt',v);console.log('FOLLOW382_'+k.toUpperCase()+'_BEFORE='+v)}})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Deploy lifecycle-compatible TEST Explore Worker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-worker-runtime.mjs test upload | tee "$RUNNER_TEMP/test-upload.txt"
+          version="$(sed -n 's/^TEST_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/test-upload.txt" | tail -1)"
+          test -n "$version"
+          RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$FOLLOW382_EXPECTED_BUNDLE" EXPECTED_WORKER_CODE_SHA256="$FOLLOW382_EXPECTED_CODE" node .deploy/release-worker-runtime.mjs test activate
+          echo "FOLLOW382_TEST_AFTER=$version" >> "$GITHUB_ENV"
+          echo 'FOLLOW382_TEST_LIFECYCLE_DEPLOY=PASS'
+
+      - name: Deploy exact lifecycle-compatible PRODUCTION Explore Worker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_WORKER_BUNDLE_SHA256="$FOLLOW382_EXPECTED_BUNDLE" EXPECTED_WORKER_CODE_SHA256="$FOLLOW382_EXPECTED_CODE" node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload.txt"
+          version="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload.txt" | tail -1)"
+          test -n "$version"
+          RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$FOLLOW382_EXPECTED_BUNDLE" EXPECTED_WORKER_CODE_SHA256="$FOLLOW382_EXPECTED_CODE" node .deploy/release-worker-runtime.mjs production activate
+          echo "FOLLOW382_PRODUCTION_AFTER=$version" >> "$GITHUB_ENV"
+          echo 'FOLLOW382_PRODUCTION_LIFECYCLE_DEPLOY=PASS'
+
+      - name: Verify all environments lifecycle live and cutover still dormant
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const p=await r.json();if(!r.ok||p?.success===false)throw Error('CF read '+r.status);return p.result??p;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('active missing '+name);return String(v.version_id);}
+          (async()=>{
+            for(const [stage,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){
+              const settings=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/settings`);
+              const bindings=Array.isArray(settings?.bindings)?settings.bindings:[];
+              const flag=bindings.find(x=>x?.type==='plain_text'&&x?.name==='SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378');
+              if(String(flag?.text??flag?.value??'')!=='1')throw Error(stage+' lifecycle flag missing after rollout');
+              console.log('FOLLOW382_'+stage.toUpperCase()+'_LIFECYCLE=1 version='+await active(name));
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          W="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT id,phase,schema_version,cutover_token FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/final-state.json"
+          STATE="$RUNNER_TEMP/final-state.json" node <<'NODE'
+          const p=require(process.env.STATE),rows=p.flatMap(x=>x.results||[]);
+          const s=rows.find(x=>Number(x.id)===1),c=rows.find(x=>'override_rows' in x);
+          if(!s||s.phase!=='legacy'||String(s.cutover_token||'')!==''||Number(c?.override_rows||0)!==0)throw Error('cutover mutated during lifecycle rollout');
+          console.log('FOLLOW382_CUTOVER_STILL_DORMANT=PASS');
+          NODE
+          echo 'FOLLOW382_HOSTING_CHANGE=0'
+          echo 'FOLLOW382_MEDIA_WORKER_CHANGE=0'
+          echo 'FOLLOW382_FUNCTIONS_RULES_CHANGE=0'
+          echo 'FOLLOW382_USER_DATA_CHANGE=0'

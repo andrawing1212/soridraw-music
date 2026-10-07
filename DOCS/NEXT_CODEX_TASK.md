@@ -1,3 +1,67 @@
+## CURRENT NEXT GATE — follow W1~W2 rollback-safe authority lifecycle 구현 (PREVIEW source only)
+
+현재 결론:
+- app377 팔로우 기능 정합성은 사용자 PASS로 동결.
+- all-environment active Worker protocol354/355 compatibility PASS.
+- shared follow overlay 348 schema는 아직 ABSENT / shared cutover OFF.
+- isolated physical D1 근거는 follow W2 / unfollow W1 / duplicate·same-state W0.
+- **새 blocker:** overlay가 실제 edge를 변경한 뒤 R2 cutover manifest를 제거하면 현재 runtime은 legacy `follows`로 fallback하여 overlay 변경분을 무시할 수 있음.
+- verifier `scripts/verify-378-follow-rollback-blocker.mjs` / Audit Run `37576098525`에서 UNSAFE_REPRODUCED.
+- 따라서 실제 shared schema 적용/overlay 활성화/PREVIEW live mutation은 아직 금지.
+
+이번 구현 목표:
+1. **one-way effective authority lifecycle**을 PREVIEW source에만 추가한다.
+   - pre-activation: 기존 legacy behavior 100% 동일.
+   - active overlay: protocol354/355 effective reader/writer 사용.
+   - emergency rollback: legacy로 돌아가지 않고 **overlay-readonly**로 전환하여 effective overlay reads는 유지하고 follow/unfollow mutation만 fail-closed.
+2. 정상 동작 중 매 페이지/요청마다 새 D1 control read를 추가하지 않는다.
+   - healthy R2 follow manifest가 정상 fast-path authority.
+   - D1 `explore_follow_cutover_control_348`은 manifest missing/corrupt/ambiguous 같은 예외에서만 one-way latch/fallback으로 확인한다.
+3. D1 control은 authority가 실제 overlay write 가능 상태까지 올라간 뒤 자동으로 `legacy`로 내려갈 수 없게 한다.
+   - overlay → legacy 직접 복귀 금지.
+   - rollback은 overlay-readonly 또는 동등한 fail-closed 상태만 허용.
+4. **완전 legacy 복귀용 사용자 데이터 foldback/migration은 만들거나 실행하지 않는다.**
+   - 필요 시 별도 사용자 승인 작업으로만 제안.
+5. 구버전 client 호환:
+   - pre-activation legacy one-request behavior 유지.
+   - active overlay에서 bodyless/legacy request는 기존 `FOLLOW_ORDER_REQUIRED` → follow-state protocol354 negotiation 유지.
+   - overlay-readonly에서는 legacy writer로 fallback 금지, 명확한 retriable 503/fail-closed.
+6. app377의 `actorFollowingCount`, persistent follower/following page cache, changed-only invalidation, RTDB PC↔mobile signal을 변경하지 않는다.
+
+필수 실행형 검증:
+- baseline 0 + overlay follow 1 → emergency readonly/missing-manifest recovery에서도 effective=1.
+- baseline 1 + overlay unfollow 0 → emergency readonly/missing-manifest recovery에서도 effective=0.
+- readonly 상태에서 follow/unfollow D1 user-row write 0.
+- once-active control이 overlay/readonly → legacy로 직접 하강하지 못함.
+- malformed/missing manifest + one-way latch 존재 시 legacy fallback 금지.
+- pre-activation manifest 없음 + latch 미활성은 기존 legacy path exact parity.
+- healthy manifest normal path는 추가 steady-state D1 latch read 0.
+- duplicate/same-state ordering / crash replay / R2 CAS / follower-save / social snapshot / public profile / connection list reader parity 유지.
+- app377 response-only actor count + persistent list cache + cross-device sync 회귀 0.
+- TypeScript / Build / follow 347~378 및 관련 기존 release regression PASS.
+
+작업 범위:
+- `cloudflare/explore-worker/canonical/preview-worker.js` follow authority/cutover reader·router 최소 수정.
+- 필요 시 additive **candidate-only** control SQL/rollback specification 보강.
+- 필요한 verifier 추가/수정.
+- `DOCS/CURRENT_RELEASE_STATE.md` 결과 기록.
+- UI/CSS/App 정상 경로 수정 금지.
+- 좋아요/publication/Music Note/Library 수정 금지.
+
+절대 금지:
+- shared D1 schema apply.
+- R2 active cutover manifest write.
+- 실제 follow overlay activation.
+- Worker/Hosting/Functions/Rules 배포.
+- 사용자 데이터 migration/backfill/delete/rewrite/copy.
+- main/production 수정.
+- 정상 app377 기능을 비용 때문에 늦추거나 제거.
+
+완료 판단:
+- source + 실행형 verifier에서 rollback-safe lifecycle이 PASS하고 독립 감사 준비가 완료되면 commit 고정.
+- 그 다음 Work 독립 감사 후에만 shared schema/cutover 영향과 실제 PREVIEW W1~W2 live 검증 승인 단계로 이동.
+- W3+ 가능성, legacy fallback 가능성, count/membership/list/permission/public-profile 불일치가 하나라도 남으면 활성화 금지.
+
 ## CURRENT NEXT GATE — 팔로우 비용만 W14~W17 → W1~W2
 
 사용자 확인:

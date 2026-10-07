@@ -1,3 +1,21 @@
+## PREVIEW follow candidate cutover-OFF Worker release (2026-10-07 KST)
+
+- User-approved PREVIEW Worker validation release.
+- Trigger commit `a22d27e389c646908347f812859799e4ec1dc111`.
+- Locked product source `f6b63eb0ecb6322d531b19bbb01c6fd0c2555c04`.
+- PREVIEW Worker Release Run `37565145301`: **SUCCESS**.
+- Worker before `117d5f65-e34d-4c58-8030-498193deb1b4`.
+- Worker after `bc8cc09e-4210-46e2-bdb7-72796e2798e4`.
+- Worker341 legacy counter/post-sync/core parity gate PASS before deployment.
+- Feed/profile smoke PASS.
+- latest/popular/profile-tracks/genre/search/public-like warm D1 R0/W0 PASS where applicable.
+- shared follow cutover **OFF** / overlay activation **OFF** / no follow schema migration.
+- Firebase Hosting/Functions unchanged.
+- TEST Worker `bb1b6c9b-11f7-4b29-ae1f-75e87ca6ad65` unchanged.
+- PRODUCTION Worker `efb8508e-d63a-4839-a7c8-a5c89572f4c7` unchanged.
+- User/shared data migration/backfill/delete/rewrite 0.
+- Next gate: real PC/mobile follow/unfollow + live physical D1/R2 cost validation. If cutover-OFF legacy behavior or cost differs from Worker341 baseline, rollback.
+
 ## PREVIEW app345 candidate Worker rollback after live follow cost regression (2026-10-05 KST)
 
 - User CACHE LIVE samples on candidate Worker: physical R23/W14 and R17/W17 for follow changes; legacy cost was not preserved.

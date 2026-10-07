@@ -1,0 +1,129 @@
+name: SORIDRAW Follow Control Guard Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/follow-control-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-follow-control-guard-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+
+    steps:
+      - name: Resolve exact approved source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/follow-control-release.trigger"
+          body="$(curl -fsSL "$trigger_url")"
+          target="$(sed -n 's/^target=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          approval="$(sed -n 's/^approval=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          mode="$(sed -n 's/^mode=//p' <<<"$body" | tail -1 | tr -d '\r')"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          test "$approval" = 'user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z'
+          test "$mode" = 'legacy-control-guard-only'
+          echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "FOLLOW381_APPROVAL_LOCK=PASS"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Static guard verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-348-follow-overlay-contract.mjs
+          node scripts/verify-378-follow-rollback-blocker.mjs
+          node scripts/verify-380-follow-cutover-config.mjs
+          node scripts/verify-381-follow-control-release.mjs
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Prepare exact shared D1 config
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .follow381
+          cat > .follow381/wrangler.jsonc <<JSON
+          {
+            "name":"soridraw-follow381-maintenance",
+            "main":"./placeholder.js",
+            "compatibility_date":"2026-09-11",
+            "d1_databases":[{"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}]
+          }
+          JSON
+
+      - name: Read-only preflight
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/.follow381/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT type,name,tbl_name FROM sqlite_schema WHERE name IN ('explore_follow_overrides_348','idx_explore_follow_overrides_348_reverse','explore_follow_cutover_control_348') ORDER BY type,name; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348; SELECT id,phase,schema_version,cutover_token,updated_at FROM explore_follow_cutover_control_348 WHERE id=1" --json > "$RUNNER_TEMP/pre.json"
+          PRE="$RUNNER_TEMP/pre.json" node <<'NODE'
+          const p=require(process.env.PRE); const rows=p.flatMap(x=>x.results||[]);
+          const names=new Set(rows.map(x=>String(x.name||'')));
+          for(const n of ['explore_follow_overrides_348','idx_explore_follow_overrides_348_reverse','explore_follow_cutover_control_348']) if(!names.has(n)) throw Error('missing follow348 object '+n);
+          const count=rows.find(x=>'override_rows' in x); if(Number(count?.override_rows||0)!==0) throw Error('overlay rows exist before activation');
+          const state=rows.find(x=>Number(x.id)===1);
+          if(state && (String(state.phase)!=='legacy'||String(state.cutover_token||'')!==''||Number(state.schema_version)!==1)) throw Error('unexpected pre-cutover control state');
+          console.log('FOLLOW381_PREFLIGHT_SCHEMA=PASS');
+          console.log('FOLLOW381_PREFLIGHT_OVERRIDE_ROWS=0');
+          console.log('FOLLOW381_PREFLIGHT_CONTROL='+(state?'LEGACY':'ABSENT'));
+          NODE
+
+      - name: Apply control row and one-way guards
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/.follow381/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --file "$PWD/migrations/20261007_03_follow_overlay_378_control_guard.sql" --json > "$RUNNER_TEMP/apply.json"
+          echo 'FOLLOW381_CONTROL_GUARD_APPLY=PASS'
+
+      - name: Postflight exact dormant state
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          C="$PWD/.follow381/wrangler.jsonc"
+          node "$W" d1 execute DB --remote --config "$C" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name IN ('explore_follow_cutover_control_348_no_downgrade','explore_follow_cutover_control_348_no_delete') ORDER BY name; SELECT id,phase,schema_version,cutover_token,updated_at FROM explore_follow_cutover_control_348 WHERE id=1; SELECT COUNT(*) AS override_rows FROM explore_follow_overrides_348" --json > "$RUNNER_TEMP/post.json"
+          POST="$RUNNER_TEMP/post.json" node <<'NODE'
+          const p=require(process.env.POST); const rows=p.flatMap(x=>x.results||[]);
+          const triggers=rows.filter(x=>x.type==='trigger').map(x=>String(x.name)).sort();
+          const expected=['explore_follow_cutover_control_348_no_delete','explore_follow_cutover_control_348_no_downgrade'];
+          if(JSON.stringify(triggers)!==JSON.stringify(expected)) throw Error('follow378 trigger set mismatch '+JSON.stringify(triggers));
+          const state=rows.find(x=>Number(x.id)===1);
+          if(!state||state.phase!=='legacy'||Number(state.schema_version)!==1||String(state.cutover_token||'')!=='') throw Error('control row not dormant legacy');
+          const count=rows.find(x=>'override_rows' in x); if(Number(count?.override_rows||0)!==0) throw Error('overlay rows changed');
+          console.log('FOLLOW381_CONTROL_STATE=LEGACY');
+          console.log('FOLLOW381_ONE_WAY_GUARDS_LIVE=PASS');
+          console.log('FOLLOW381_OVERRIDE_ROWS=0');
+          console.log('FOLLOW381_USER_DATA_MIGRATION=0');
+          NODE

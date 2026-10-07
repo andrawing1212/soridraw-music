@@ -1,6 +1,6 @@
-follow-w1w2-rollback-safety-readonly
-target=815398f93164c9c00ac55ac3c4542fd719677107
-scope=protocol354-355-active-worker-contract,shared-follow-overlay-schema-state,legacy-parity,rollback-blocker-proof
+follow-w1w2-rollback-safe-source-audit
+target=572249ce4e04a41095bcf764e0d3de7649ac2842
+scope=rollback-safe-one-way-authority,overlay-readonly,protocol354-355,legacy-parity,shared-no-write
 shared_d1_apply=false
 shared_follow_cutover=false
 shared_user_data_write=false
@@ -8,4 +8,4 @@ worker_deploy=false
 hosting_deploy=false
 functions_deploy=false
 rtdb_rules_deploy=false
-requested=2026-10-07-follow-w1w2-rollback-safety-readonly
+requested=2026-10-07-follow-w1w2-rollback-safe-source-audit

@@ -1,3 +1,39 @@
+## 0RZC. Work 독립 감사 FAIL — app380+381 PREVIEW 배포 차단 / legacy replay + activation wiring 수정 필요 (2026-10-08 KST)
+
+감사 기준:
+- preview HEAD: `b15d7d88deb17ab76b247799ed4fd5a6b12c88b4`
+- app380 source: `7aa711af0f0f8577893298dd5d84ada4f7d857ce`
+- app381 UI integration: `1857c346aa40f2f6dec0e6570d439d2514473f82`
+- 실제 PREVIEW 배포본: app379 유지.
+
+Work 판정:
+- durable receipt 신규 W2 / exact replay W0 / concurrent 1 queue / rollback: PASS.
+- app381 Recent exact route + 기존 Lite owner pre-paint 1회 재사용: PASS.
+- UI hotfix가 app380 코드 되돌림 없음: PASS.
+- **legacy/new client mixed compatibility: FAIL.**
+- **실제 schema/Worker activation wiring: 미완료.**
+- 따라서 PREVIEW 배포 금지 유지.
+
+차단 원인 1 — app379 replay 응답 호환:
+- 현재 098 replay 응답은 `acceptanceReplay390`/receipt proof만 주고 legacy `data.results`를 주지 않는다.
+- app381 client는 이를 정상 ACK proof로 처리하지만, 실제 app379 client는 `normalizeBatchResults()`에서 실패하여 outbox를 남기고 retryCount=1로 정지한다.
+- 단순히 old desired를 legacy `results`로 되돌리는 방식은 금지: app379는 이를 새 성공 ACK처럼 처리해 새 RTDB/public invalidation을 발행할 수 있어 다른 기기의 더 최신 intent를 오래된 replay가 덮을 위험이 있다.
+- 다음 수정은 **app379 exact client 실행형 fixture**에서 replay가 outbox를 안전하게 종료하면서 stale personal/public signal을 새로 발행하지 않는 것을 증명해야 한다.
+- receipt 자체를 membership/count/revision authority로 쓰는 것은 계속 금지.
+
+차단 원인 2 — activation path:
+- receipt SQL은 현재 `cloudflare/explore-worker/candidates/390-like-acceptance-receipt.sql` candidate-only.
+- generic shared D1 additive workflow는 `TRIGGER`를 의도적으로 금지하므로 현재 schema를 실제 적용할 canonical mode가 없다.
+- 097/098은 default canonical Worker release source에 아직 포함되지 않아 현재 Worker release만 실행해도 app380 guard가 활성화되지 않는다.
+- canonical PREVIEW config에는 현재 `SORIDRAW_ENVIRONMENT`/`ENV_NAME`이 명시되어 있지 않아, preserved live var가 없으면 새 guard가 fail-closed로 정상 요청을 막는다.
+- 실제 PREVIEW/TEST/PRODUCTION environment identity와 LIKE_RATE_LIMITER / PROFILE_MEDIA binding을 release preflight에서 명시적으로 고정·검증해야 한다.
+
+다음 방향:
+- `NEXT_CODEX_TASK.md` 최상단 focused task 하나로 legacy compatibility와 activation wiring만 좁혀서 해결.
+- generic additive D1 gate를 느슨하게 만들지 않는다. receipt390 전용 exact release mode/검증 경로를 만든다.
+- canonical Worker/환경 config/release source를 준비하되 **실제 shared D1 apply, Worker deploy, Hosting deploy는 하지 않는다.**
+- app379/app381 혼재 verifier와 release-system verifier가 모두 PASS한 뒤 Work 재감사.
+- 사용자 데이터 migration/backfill/delete/rewrite 0, TEST/PRODUCTION 배포 0.
 ## 0RZB. app381 UI hotfix 통합 완료 / 정적 검증 PASS / 미배포 (2026-10-08 KST)
 
 - 기준 app380 source candidate: `7aa711af0f0f8577893298dd5d84ada4f7d857ce`.

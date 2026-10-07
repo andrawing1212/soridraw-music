@@ -1,0 +1,8 @@
+target=a266c7429dd86410d41ea303f9ad0ba39f053ebc
+mode=legacy-control-guard-only
+approval=user_explicit_follow_w1w2_shared_authority_approved_2026-10-07T07:18:24Z
+shared_user_data_write=false
+legacy_relation_write=false
+profile_stats_write=false
+overlay_activation=false
+requested=2026-10-07T16:28:00+09:00

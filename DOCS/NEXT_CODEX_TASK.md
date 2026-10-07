@@ -1,3 +1,43 @@
+## CURRENT NEXT GATE — PRODUCTION app377/follow378 compatibility 승인 대기 / shared cutover OFF
+
+완료:
+- shared D1 overlay348 additive schema 적용 완료.
+- PREVIEW follow378 rollback-safe Worker 배포 완료.
+- TEST full promotion 완료: Release Controller Run `37584516018` SUCCESS.
+- TEST source `9f51660d81746a619c185da845221b0888021020`.
+- TEST_VERIFIED tag `soridraw-test-v377-9f51660d8174`.
+- main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`.
+- TEST Worker `a70593bb-2bc9-4a41-a05a-47332a4f7660`.
+- TEST app377 / Feed / curated / public profile / Worker / media / Hosting parity PASS.
+- PRODUCTION unchanged.
+- shared follow cutover / lifecycle flag / active manifest / D1 control activation 모두 OFF.
+
+다음 단계는 PRODUCTION 실제 변경이므로 사용자 명확한 승인 전 실행 금지:
+1. TEST_VERIFIED manifest `soridraw-test-v377-9f51660d8174`를 source of truth로 사용.
+2. production mode 고정 Release Controller preflight.
+3. exact TEST_VERIFIED app377 tree/artifact를 PRODUCTION에 승격.
+4. PRODUCTION Explore Worker가 follow378 rollback-safe authority + overlay-readonly fail-closed 계약 PASS인지 확인.
+5. TEST↔PRODUCTION Feed/curated/public-profile/browser upgrade parity PASS.
+6. Firebase Functions/Rules/shared user data migration은 수행하지 않음.
+7. PRODUCTION compatibility 승격이 완전히 PASS한 뒤에도 follow overlay authority는 즉시 켜지 않음.
+8. 별도 cutover 단계에서만:
+   - D1 control one-way latch arm.
+   - shared R2 active manifest.
+   - 실제 follow / unfollow / duplicate / same-state billing 측정.
+9. 비용 합격선:
+   - follow W1~W2.
+   - unfollow W1~W2.
+   - duplicate / same-state W0.
+   - W3+ 즉시 FAIL.
+10. PC↔mobile count/list/membership, follower-save, public-profile parity를 함께 검증.
+
+금지:
+- 정식배포 명확한 승인 없이 production mode 실행.
+- PRODUCTION follow378 준비 전 shared manifest activation.
+- legacy follows/profile_stats user row rewrite/backfill/foldback.
+- 좋아요/publication/Music Note/Library/UI 임의 변경.
+- W3+ 상태에서 계속 진행.
+
 ## CURRENT NEXT GATE — follow378 all-environment compatibility 선행 / shared cutover 계속 OFF
 
 현재 완료:

@@ -61,6 +61,7 @@ import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
+  patchExploreFollowLocalState377,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
@@ -69,6 +70,10 @@ import {
   type ExploreProfileConnectionDirection,
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
+import {
+  publishExploreFollowSync377,
+  subscribeExploreFollowSync377,
+} from '../services/exploreFollowSyncService';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
@@ -1909,6 +1914,7 @@ export default function ExplorePage() {
   const [profileConnectionsError376, setProfileConnectionsError376] = useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
+  const followSignalVersion377Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
 
   useEffect(() => {
@@ -2938,6 +2944,89 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [profileUid, user, profilePublicationSyncVersion357]);
 
+  // app377: same-account PC/mobile follow convergence is driven by one bounded
+  // RTDB signal. Receiving it patches only local caches/UI; D1/Firestore I/O is 0.
+  useEffect(() => {
+    const viewerUid377 = String(user?.uid || '').trim();
+    if (!viewerUid377) return undefined;
+    return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
+      if (signal377.version <= followSignalVersion377Ref.current) return;
+      followSignalVersion377Ref.current = signal377.version;
+
+      patchExploreFollowLocalState377(
+        viewerUid377,
+        signal377.targetUid,
+        signal377.following,
+      );
+      patchExplorePublicProfileFirstViewProfile(viewerUid377, {
+        followingCount: signal377.actorFollowingCount,
+      });
+      patchExplorePublicProfileFirstViewProfile(signal377.targetUid, {
+        followerCount: signal377.targetFollowerCount,
+      });
+
+      profileConnectionsCache376Ref.current.delete(`${viewerUid377}:following`);
+      profileConnectionsCache376Ref.current.delete(`${signal377.targetUid}:followers`);
+
+      setFollowingUids312((previous) => {
+        const next = new Set(previous);
+        if (signal377.following) next.add(signal377.targetUid);
+        else next.delete(signal377.targetUid);
+        return next;
+      });
+      setFollowState((previous) => {
+        if (activeProfileUidRef.current !== signal377.targetUid) return previous;
+        return {
+          isFollowing: signal377.following,
+          followerCount: signal377.targetFollowerCount,
+          followingCount: previous?.followingCount || 0,
+          actorFollowingCount: signal377.actorFollowingCount,
+        };
+      });
+      setProfile((previous) => {
+        if (!previous) return previous;
+        if (previous.uid === viewerUid377) {
+          return { ...previous, followingCount: signal377.actorFollowingCount };
+        }
+        if (previous.uid === signal377.targetUid) {
+          return { ...previous, followerCount: signal377.targetFollowerCount };
+        }
+        return previous;
+      });
+
+      // Only an actually changed relation may spend this bounded list refresh.
+      // Ordinary reopen/reload stays persistent-cache local.
+      const openDirection377 = profileConnectionsOpen376;
+      const openUid377 = activeProfileUidRef.current;
+      const affectedOpen377 =
+        (openDirection377 === 'following' && openUid377 === viewerUid377) ||
+        (openDirection377 === 'followers' && openUid377 === signal377.targetUid);
+      if (affectedOpen377) {
+        const request377 = ++profileConnectionsRequest376Ref.current;
+        setProfileConnectionsLoading376(true);
+        void getExploreProfileConnections(openUid377, openDirection377)
+          .then((page377) => {
+            if (request377 !== profileConnectionsRequest376Ref.current) return;
+            profileConnectionsCache376Ref.current.set(
+              `${openUid377}:${openDirection377}`,
+              page377,
+            );
+            setProfileConnectionsItems376(page377.items);
+            setProfileConnectionsNextCursor376(page377.nextCursor);
+          })
+          .catch((reason) => {
+            if (request377 !== profileConnectionsRequest376Ref.current) return;
+            console.warn('[app377] changed follow list refresh deferred:', reason);
+          })
+          .finally(() => {
+            if (request377 === profileConnectionsRequest376Ref.current) {
+              setProfileConnectionsLoading376(false);
+            }
+          });
+      }
+    });
+  }, [user?.uid, profileConnectionsOpen376]);
+
   // app335: warm public-profile entry/reload is Worker 0. Preserve eventual
   // cross-device freshness by doing the existing 60s shared-R2 check only after
   // actual profile interaction or a real hidden→visible tab resume.
@@ -3292,6 +3381,18 @@ export default function ExplorePage() {
       profileConnectionsCache376Ref.current.set(key, page);
       setProfileConnectionsItems376(page.items);
       setProfileConnectionsNextCursor376(page.nextCursor);
+      // app377: a complete bounded relation page is exact authority for small
+      // profiles. Repair a stale cached count locally without another server read.
+      if (!page.nextCursor) {
+        const exactCount377 = page.items.length;
+        const exactPatch377 = direction === 'followers'
+          ? { followerCount: exactCount377 }
+          : { followingCount: exactCount377 };
+        patchExplorePublicProfileFirstViewProfile(targetUid, exactPatch377);
+        setProfile((previous) => previous?.uid === targetUid
+          ? { ...previous, ...exactPatch377 }
+          : previous);
+      }
     } catch (reason) {
       if (requestId !== profileConnectionsRequest376Ref.current) return;
       console.warn('[app376] profile connections load failed:', reason);
@@ -3494,11 +3595,30 @@ export default function ExplorePage() {
         followerCount: result.followerCount,
         followingCount: result.followingCount,
       });
+      if (Number.isFinite(Number(result.actorFollowingCount))) {
+        patchExplorePublicProfileFirstViewProfile(viewerUid, {
+          followingCount: Math.max(0, Math.floor(Number(result.actorFollowingCount || 0))),
+        });
+      }
       setProfile((previous) => previous?.uid === targetUid ? {
         ...previous,
         followerCount: result.followerCount,
         followingCount: result.followingCount,
       } : previous);
+
+      // app377: canonical mutation already succeeded. Broadcast only the tiny
+      // changed relation/count signal; a transient RTDB failure must not roll
+      // back the accepted follow mutation.
+      if (Number.isFinite(Number(result.actorFollowingCount))) {
+        void publishExploreFollowSync377(viewerUid, {
+          targetUid,
+          following: result.isFollowing,
+          actorFollowingCount: Math.max(0, Math.floor(Number(result.actorFollowingCount || 0))),
+          targetFollowerCount: Math.max(0, Math.floor(Number(result.followerCount || 0))),
+        }).catch((reason) => {
+          console.warn('[app377] follow live sync publish deferred:', reason);
+        });
+      }
     } catch (reason) {
       if (auth.currentUser?.uid === viewerUid) {
         if (activeProfileUidRef.current === targetUid) setFollowState(previousFollowState);

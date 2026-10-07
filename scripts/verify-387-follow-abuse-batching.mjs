@@ -105,13 +105,13 @@ if (generatedPath) {
   assert.match(limiter, /windowLimit = 30/);
   assert.match(limiter, /dayLimit = 120/);
   assert.match(limiter, /pairCooldowns/);
+  const overlay = fn('handleFollowOverlay354');
   assert.match(overlay, /FOLLOW_ORDER_REQUIRED/);
   assert.ok(
     overlay.indexOf('FOLLOW_ORDER_REQUIRED')
       < overlay.indexOf('env.DB.prepare("SELECT uid FROM public_profiles'),
     'unordered follow negotiation must fail before any target D1 lookup',
   );
-  const overlay = fn('handleFollowOverlay354');
   assert.ok(
     overlay.indexOf('try { payload = await request.json(); }')
       < overlay.indexOf('enforceFollowEdgeRateLimit355('),

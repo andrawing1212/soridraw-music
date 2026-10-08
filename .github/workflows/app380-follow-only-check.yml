@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/app380-follow-only-check.yml'
       - 'src/services/exploreLikeService.ts'
+      - 'src/services/explorePublicLikeSyncService.ts'
+      - 'src/components/CacheDiagnosticsOverlay.tsx'
       - 'src/services/exploreFollowBatchService380.ts'
       - 'src/services/exploreFollowOrdering354.ts'
       - 'src/pages/ExplorePage.tsx'
@@ -21,6 +23,7 @@ on:
       - 'scripts/verify-354-follow-orchestration.mjs'
       - 'scripts/verify-394-follow-only-worker-freeze.mjs'
       - 'scripts/verify-395-follow-only-release-scope.mjs'
+      - 'scripts/verify-396-public-like-reload-and-diagnostics.mjs'
       - 'scripts/verify-303-studio-split-browser-history.mjs'
       - 'scripts/verify-389-social-client-batching.mjs'
 
@@ -63,6 +66,7 @@ jobs:
           grep -q '"SORIDRAW_ENVIRONMENT": "preview"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
           node scripts/verify-394-follow-only-worker-freeze.mjs
           node scripts/verify-395-follow-only-release-scope.mjs
+          node scripts/verify-396-public-like-reload-and-diagnostics.mjs
       - name: Existing follow regressions
         run: |
           set -euo pipefail

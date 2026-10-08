@@ -1,8 +1,8 @@
-app382-client-like-signal-refresh-hotfix-approved
-target_source=6c5fa3fdb3f898b62fffacbba54e7bd63013f95a
-app_version=382
-scope=public-like-settled-ack-reload-dedupe,cache-live-Korean-titles,app379-like-and-ui-frozen,follow380-unchanged
-focused_ci_run=37721869633
+app383-explore-like-5s-mobile-exit-flush-preview
+target_source=80221fa5ccfff38edfe5364a19343047cd49d470
+app_version=383
+scope=explore-public-like-5s-trailing-save,pending-only-background-visibility-pagehide-flush,batch-post-keepalive,interrupted-exit-outbox-resume,app382-like-follow-ui-protected
+focused_ci_run=37848247242
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -10,4 +10,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_explicit_preview_deploy_2026-10-08T03:13:48Z
+approval=user_requested_prioritize_exit-like-sync_and_try_5s_2026-10-08T21:32Z

@@ -8,15 +8,16 @@ const need = (needle, label) => {
 
 need("EXPLORE_LIKE_LOCAL_CATALOG_READY_135", '135 local catalog marker');
 need("const hasLocalLikeCatalog135 =", '135 local catalog readiness helper');
-need("const needsRepair = !deferred390 && (gap || readRepairTarget127(uid) > 0);", 'gap repair flag');
+need("const needsRepair = gap || readRepairTarget127(uid) > 0;", 'gap repair flag');
 need("requestRepair127(uid, signal.version);", 'gap repair request');
-need("markLocalLikeCatalogReady135(uid);\n  if (!deferred390) markSeenLikeSignal127(uid, signal.version);", 'remote delta catalog persist');
+need("if (pending[item.trackId]) continue;", 'local unsent like must win');
+need("markLocalLikeCatalogReady135(uid);\n  markSeenLikeSignal127(uid, signal.version);", 'remote delta catalog persist');
 need("const missing = baselineReady127 ? [] : normalized.filter", 'verified complete catalog must remain local-first');
 need("return !cache.has(trackId);", 'partial catalog may verify only an unknown visible ID');
 need("cache.set(trackId, false);", 'complete catalog initializes only a new negative ID');
 need("markLocalLikeCatalogReady135(user.uid);", 'one-time bootstrap promotion');
 
-const gapStart = source.indexOf('const needsRepair = !deferred390 && (gap || readRepairTarget127(uid) > 0);');
+const gapStart = source.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;');
 const pendingStart = source.indexOf('const pending = readLikeOutbox(uid);', gapStart);
 if (gapStart < 0 || pendingStart < 0) throw new Error('gap signal flow missing');
 const gapBlock = source.slice(gapStart, pendingStart);

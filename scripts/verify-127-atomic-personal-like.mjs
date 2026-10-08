@@ -114,7 +114,10 @@ assert.match(membership127, /readTargetedVerifiedLikeTracks127\(uid\)\.has\(id\)
 assert.match(membership127, /return getLikedStateCache\(uid\)\.get\(id\)/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
-assert.match(listener, /if \(pending\[item\.trackId\]\) \{[\s\S]*?deferredSignal390 = \{ \.\.\.signal, results: \[item\] \};[\s\S]*?continue;/);
+// The frozen app382 listener skips an unsent LOCAL intention; a historical
+// deferredSignal390 branch was removed before Stage408 and is not an authority.
+assert.match(listener, /if \(pending\[item\.trackId\]\) continue;/);
+assert.match(listener, /const pending = readLikeOutbox\(uid\)/);
 assert.doesNotMatch(listener, /pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)/,
   'a previous accepted-but-unsettled value must not suppress a newer cross-device ACK');
 assert.match(listener, /cache\.set\(item\.trackId, item\.liked\)/);
@@ -138,11 +141,11 @@ assert.match(listener, /onValue\(/);
 assert.match(listener, /onAuthStateChanged\(auth/);
 assert.doesNotMatch(listener, /\.prepare\(|firebase\/firestore|setInterval\(/);
 assert.match(listener, /signal\.previousVersion !== lastSeen/);
-assert.match(listener, /const needsRepair = !deferred390 && \(gap \|\| readRepairTarget127\(uid\) > 0\);/);
-assert.ok(listener.indexOf('const needsRepair = !deferred390 && (gap || readRepairTarget127(uid) > 0);') < listener.indexOf('const pending = readLikeOutbox(uid)'),
+assert.match(listener, /const needsRepair = gap \|\| readRepairTarget127\(uid\) > 0;/);
+assert.ok(listener.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;') < listener.indexOf('const pending = readLikeOutbox(uid)'),
   'gap must be recorded before applying retained exact rows');
 assert.doesNotMatch(
-  listener.slice(listener.indexOf('const needsRepair = !deferred390'), listener.indexOf('const pending = readLikeOutbox(uid)')),
+  listener.slice(listener.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;'), listener.indexOf('const pending = readLikeOutbox(uid)')),
   /\breturn\s*;/,
   'current retained exact rows must not be discarded merely because an older interval was missed',
 );

@@ -5,6 +5,8 @@ on:
     paths:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
+      - 'scripts/verify-127-atomic-personal-like.mjs'
+      - 'scripts/verify-175-explore-like-catalog-reentry.mjs'
       - '.github/workflows/verify-408-like-repair-code.yml'
   workflow_dispatch:
 permissions:
@@ -34,12 +36,12 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
-      - name: Historical 127 verifier alignment check (known-existing failure, release blocker)
-        continue-on-error: true
-        run: node scripts/verify-127-atomic-personal-like.mjs
-      - name: Historical 175 verifier alignment check (known-existing failure, release blocker)
-        continue-on-error: true
-        run: node scripts/verify-175-explore-like-catalog-reentry.mjs
+      - name: Strict existing personal-like and catalog contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
       - name: 191 and remaining frozen like contracts
         shell: bash
         run: |

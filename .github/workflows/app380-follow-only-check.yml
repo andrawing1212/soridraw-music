@@ -9,6 +9,9 @@ on:
       - 'src/services/exploreFollowBatchService380.ts'
       - 'src/services/exploreFollowOrdering354.ts'
       - 'src/pages/ExplorePage.tsx'
+      - 'src/components/explore/ExploreShell.tsx'
+      - 'src/components/studio/StudioSplitEngineWorkspace.tsx'
+      - 'public/app-version.json'
       - 'cloudflare/explore-worker/canonical/preview-worker.js'
       - 'cloudflare/explore-worker/canonical/source-sha256.txt'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
@@ -17,6 +20,8 @@ on:
       - 'cloudflare/explore-worker/candidates/social-abuse-380.js'
       - 'scripts/verify-354-follow-orchestration.mjs'
       - 'scripts/verify-394-follow-only-worker-freeze.mjs'
+      - 'scripts/verify-395-follow-only-release-scope.mjs'
+      - 'scripts/verify-303-studio-split-browser-history.mjs'
       - 'scripts/verify-389-social-client-batching.mjs'
 
 permissions:
@@ -57,6 +62,7 @@ jobs:
           node --check cloudflare/explore-worker/canonical/preview-worker.js
           grep -q '"SORIDRAW_ENVIRONMENT": "preview"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
           node scripts/verify-394-follow-only-worker-freeze.mjs
+          node scripts/verify-395-follow-only-release-scope.mjs
       - name: Existing follow regressions
         run: |
           set -euo pipefail
@@ -67,6 +73,7 @@ jobs:
           node scripts/verify-386-follow-overlay-count-display.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
           node scripts/verify-389-social-client-batching.mjs --follow-only
+          node scripts/verify-303-studio-split-browser-history.mjs
           # The current 127 verifier targets excluded receipt390 logic.
           # The exact original app379 like client + all non-follow Worker code
           # are instead enforced byte-for-byte by verify-394 above.

@@ -4,6 +4,10 @@ on:
     branches: [preview]
     paths:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/canonical/preview-worker.js'
+      - 'cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs'
+      - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
+      - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-175-explore-like-catalog-reentry.mjs'
@@ -31,7 +35,13 @@ jobs:
       - name: Install app
         run: npm ci --no-audit --no-fund
       - name: Check exact entry syntax
-        run: node --check cloudflare/explore-worker/canonical/preview-entry.js
+        run: |
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs
+          node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
+          node --check scripts/verify-412-shared-projection-cas.mjs
+          node scripts/verify-412-shared-projection-cas.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

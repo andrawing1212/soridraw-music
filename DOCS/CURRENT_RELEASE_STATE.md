@@ -1,3 +1,10 @@
+## 0S17. Stage412 독립 실함수 회귀검사 8종 추가 / CI 실행 대기 (2026-10-09 KST)
+
+- 제품 수정 SHA `ed7e33112a5c6a8cd5d50bbafe9af9ab7b9aafbb`. `scripts/verify-412-shared-projection-cas.mjs`는 실제 `preview-worker.js`의 060/062 함수를 추출해 격리 실행하고, 오래된 프로필·카드에 의한 숫자 역행, 좋아요 해제 1→0, ETag 경쟁 재시도, 최초 신규 R2 생성, D1 추가 W0를 8항목 검증. 408 품질 workflow에서 generated Worker/patch 두 원본 구문·TypeScript·Build·기존 개인 좋아요/팔로우 검사까지 필수화. 기존 398 Miniflare에도 병행 연결.
+- 이 검사는 local synthetic R2이며 실제 Cloudflare R2·PC↔모바일·실청구 증명이 아니다. Stage412 배포는 CI/독립 감사와 실환경 확인 후 판단. main·TEST·PRODUCTION, 공유 D1/R2 원본 변경 없음.
+
+---
+
 ## 0S16. Stage412 기존 공유 R2 작성자 CAS 보완 — PREVIEW 검사 전 (2026-10-09 KST)
 
 - Stage411 재현 원인 060 공유 프로필과 062 공유 곡 카드의 무조건 R2 PUT을 bounded ETag CAS(8회 제한)로 변경. 191에서 복구된 곡의 likeCount를 오래된 mirror가 덮지 못하게 보호. 공개곡 실제 likeCount patch만 명시적 authoritative 경로로 허용, 공유 프로필 최신 revision이 구형 mirror보다 높거나 같으면 이전 좋아요 숫자를 보존.

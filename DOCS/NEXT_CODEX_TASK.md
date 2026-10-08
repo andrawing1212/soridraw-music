@@ -1,3 +1,9 @@
+## Stage412 release gate: actual 060/062 isolated 8-case + TypeScript/Build required
+
+- Product fix `ed7e33112a5c6a8cd5d50bbafe9af9ab7b9aafbb`. Required CI runs: 408 strict product quality, 398 isolated D1 including new 412 8-case. Verify follow355 overlay and all like/follow regressions, and distinguish test success from LIVE R2 cost. Only use normal frozen PREVIEW Worker release route after safety gates. No main/TEST/PRODUCTION promotion.
+
+---
+
 ## CURRENT GATE — Stage412 공유 R2 writer CAS 보완 / CI 및 독립 감사 전 (2026-10-09 KST)
 
 - 두 작성자 060/062가 구형 R2 projection을 되돌리지 않도록 bounded ETag compare/조건부 저장. 기존 069/075 W1·30초 좋아요/해제, 팔로우 overlay, Music Note/Library, 신규곡 첫 좋아요 모두 보호.

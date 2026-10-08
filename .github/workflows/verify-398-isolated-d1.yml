@@ -14,6 +14,7 @@ on:
       - 'scripts/verify-406-existing-repair-read-audit.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-411-existing-r2-writers-restore-race.mjs'
+      - 'scripts/verify-412-shared-projection-cas.mjs'
       - '.github/workflows/verify-398-isolated-d1.yml'
   workflow_dispatch:
 permissions:
@@ -65,3 +66,5 @@ jobs:
           node scripts/verify-407-exact-191-replay-recovery.mjs
           node --check scripts/verify-411-existing-r2-writers-restore-race.mjs
           node scripts/verify-411-existing-r2-writers-restore-race.mjs
+          node --check scripts/verify-412-shared-projection-cas.mjs
+          node scripts/verify-412-shared-projection-cas.mjs

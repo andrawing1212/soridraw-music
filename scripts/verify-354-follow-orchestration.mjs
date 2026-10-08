@@ -144,10 +144,9 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
         assert.equal(currentText.split(insertedGuard).length, 2,
           'app380 direct-like guard missing or duplicated');
         currentText = currentText.replace(insertedGuard, initialLine);
-      } else {
-        assert.equal(currentText.includes("LIKE_CLIENT_REFRESH_REQUIRED"), false,
-          'follow-only source must not contain new forced like refresh');
       }
+      // Without 098, the exact historical direct-like function is compared
+      // against the frozen baseline below, including its existing safeguards.
     }
     assert.equal(currentText,node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
   }

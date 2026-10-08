@@ -1,3 +1,13 @@
+## CURRENT GATE — RTDB 10만 회원 비용·남용 안전 감사, 순서 1 진행 중 (2026-10-08 KST)
+
+- **현재 최우선 작업:** 새 채팅에서도 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md를 먼저 읽는다. 순서 1 RTDB 사용량/실제 Rules/구독자 수 감사 → 순서 2 공개 좋아요 fanout 및 남용 차단 → 순서 3 30초 창 종료/타기기 미전송 복구 → 순서 4 통합 PC·모바일·비용 검증. 건너뛰지 않는다.
+- **이미 확인:** GitHub source 기준 publicSync/exploreLike는 Explore 전체 구독자에게 최신 최대 50곡 변경 묶음을 전달. database.rules.json은 로그인 actorUid 같으면 전역 경로 쓰기 허용(실제 적용 Rules는 미검증). 좋아요·팔로우 개인 신호는 서버 30초 묶음 확정 뒤 발행되며 송신 기기 조기 종료 시 다른 기기의 인지가 불가능할 수 있다. 정상 app382 기능 보호.
+- **미검증/차단:** Firebase Usage 실제 24h/30d 다운로드/동시 연결, LIVE 적용 RTDB Rules, 생산 환경 구성, 실기기 재현 및 10만명 예측의 실제 입력값. 해당 실측 없이 금액/안전 최종 PASS 선언 금지.
+- **이번 작업 유형:** 정적 감사 및 영구 문서만 수정. 코드/Rules/배포/공유 데이터/main/production 미변경. 현재 PREVIEW app382 배포 유지.
+- **다음 실행:** Firebase RTDB Usage/Profiler 측정 가능 여부 확인, 활성 Rules와 GitHub database.rules.json READ-ONLY 비교, 일상/좋아요/팔로우/백그라운드 재구독의 실제 KB·fanout 샘플. 이후 설계/비용 비교에서 정상 공개숫자/본인 하트/PC·모바일 동기화/D1 W1~W2 보호.
+
+---
+
 ## CURRENT GATE — app382 PREVIEW 배포 SUCCESS, 좋아요 알림 중복 Worker 실기기 검증 (2026-10-08 KST)
 
 - **사용자 지시:** ChatGPT가 기본 구현자. 안전한 수정 요청은 검사 통과 시 **PREVIEW 배포까지 자동 진행**. Codex는 사용자가 요청하거나 실제 구현이 막힐 때만 사용. TEST/PRODUCTION 승격은 기존 명시 승인 필요.

@@ -1,3 +1,14 @@
+## 0RZR. RTDB 10만 회원 비용·남용 및 30초 종료 동기화 복구 — 영구 작업 순서 고정 (2026-10-08 KST)
+
+- **새 사용자 지시:** 채팅 변경 후에도 GitHub 현재 상태에서 동일 작업을 이어간다. 순서: (1) RTDB 비용/보안/남용 위험 감사 및 실제 비용 측정 → (2) 공개 좋아요 공통 신호 fanout/임의 쓰기 차단, 정상 기능 보호 → (3) 좋아요·팔로우 30초 전 창 종료/기기 간 미전송 복구 → (4) PC/모바일/업데이트/비용 통합 검증. 단계 건너뛰기 금지.
+- **이번 작업:** GitHub preview HEAD 95a87755d68d28f33003e72dc7e5fdfe2392c2f0의 app382 소스 기준 read-only 1차 감사 및 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md 신규 작성. 공통 신호 publicSync/exploreLike의 전체 Explore onValue 구독/최근 50곡 fanout, database.rules.json에서 로그인 actorUid 일치만으로 공통 쓰기 가능, 현재 30초 확정 전에 창 종료 시 개인 신호 미발행 갭을 확인.
+- **중요:** 월 수천~수만 달러 예시는 실측 비용 아닌 가정 스트레스 모델. Firebase 공식 가격상 RTDB는 다운로드·연결 비용이 중요. 실제 Console Usage(24h/30d)/활성 Rules/프로젝트 경계와 트래픽 분석은 미검증, 따라서 비용 최적화 구현 전 감사 게이트 열려 있음.
+- **코드·사용자 데이터·배포:** 이번 기록 작업은 docs-only. Explore 좋아요 app379 W1/본인 하트, 팔로우 app380 30초/W1, Studio 저장 하트 app349 및 app382 공개곡 Worker 중복 수정은 보호. Cloudflare/Firebase/Functions/RTDB Rules/공유 D1/main/production 변경·배포 없음.
+- **정확한 다음 작업:** RTDB LIVE 사용량/구독자당 실제 메시지 크기/호출 횟수/적용 Rules를 READ-ONLY로 감사해 공개 fanout 비용·악용 상한을 확정한다. 공통 방송을 중지해 공개 숫자 갱신을 깨거나 D1 반복 조회로 이전하는 설계 금지. 이후 확정 설계로만 preview 구현/검증. 세부 체크리스트는 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md.
+- **브랜치/배포 기준:** preview 기존 app382 Hosting Firebase Run 37722012753 SUCCESS, Worker c4c51b19-818a-4eaf-8be1-aca0b241d50a 유지; 이번 문서 커밋은 새 릴리스가 아니다.
+
+---
+
 ## 0RZQ. app382 클라이언트 HOTFIX — Firebase PREVIEW 실배포 성공 (2026-10-08 KST)
 
 - **최신 사용자 운영 지시 (2026-10-08T03:13:48Z):** 앞으로 수정 요청은 ChatGPT가 기본 작업자로 직접 수정·TypeScript/Build/관련 테스트 확인 후 **안전하다면 같은 작업 내 PREVIEW 배포까지 진행**한다. 별도 배포 승인 반복 요구하지 않는다. 테스트 실패/공유 데이터 위험 시 배포 중단하고 명확히 보고. TEST는 별도 사용자의 테스트배포 승인, PRODUCTION은 명시적 정식 승인 필수.

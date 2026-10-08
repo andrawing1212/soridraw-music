@@ -1,3 +1,16 @@
+## 0RZQ. app382 클라이언트 HOTFIX — Firebase PREVIEW 실배포 성공 (2026-10-08 KST)
+
+- **최신 사용자 운영 지시 (2026-10-08T03:13:48Z):** 앞으로 수정 요청은 ChatGPT가 기본 작업자로 직접 수정·TypeScript/Build/관련 테스트 확인 후 **안전하다면 같은 작업 내 PREVIEW 배포까지 진행**한다. 별도 배포 승인 반복 요구하지 않는다. 테스트 실패/공유 데이터 위험 시 배포 중단하고 명확히 보고. TEST는 별도 사용자의 테스트배포 승인, PRODUCTION은 명시적 정식 승인 필수.
+- **이번 범위:** 기존 정상 app380 팔로우/해제 최종상태 30초·Cloudflare Worker 097, app379 좋아요 W1·UI 동결 보호. RTDB 공개 좋아요 변경신호 3분 유지로 인해, 새로고침 시 이미 반영한 public-like-cards R2 카드를 Worker에서 다시 가져오던 중복 경로만 단말별/계정별 settled watermark로 차단. 실제 새로운 변경 신호는 그대로 조회하고 일정 횟수 재시도 유지. CACHE LIVE 사용자가 보는 Cloudflare 요청 상세 항목은 한글 이름으로 표시 (공개곡 좋아요 숫자 확인, SORIDRAW 추천곡, 추천곡 관리 권한 확인 등), API 경로/진단 집계 키는 원형 유지. 신규 좋아요 receipt390/098 적용·데이터 변경 없음.
+- **업데이트 표시:** app380과 같은 버전이면 사용자 업데이트 알림이 발생하지 않으므로 `public/app-version.json`을 **382**로 승격. 과거 별도 app381 Recent/split UI hotfix는 포함하지 않고 보존. `verify-303` 검사는 버전번호가 아니라 실제 UI 라우팅 기능 존재 여부에 따라 기존 app381 검증을 적용, `verify-395`로 app379 UI blob 원본을 고정. 버전 변경은 앱 사용자 원본/카탈로그 캐시를 전체 무효화하지 않으며 기존 진단 세션만 앱 업데이트 정책대로 리셋.
+- **코드/검사 고정 commit:** `6c5fa3fdb3f898b62fffacbba54e7bd63013f95a`. Focused GitHub Actions `37721869633` **SUCCESS** (TypeScript, Build, app379 frozen like + non-follow Worker, app382 UI frozen, 396 public-like settled signal reload/new mutation/TTL/한글 표시, 기존 follow 354/355/356/377/386/387/389와 303 모두 PASS).
+- **PREVIEW Hosting 배포 trigger commit:** `178e72c51effbd867ea6f6e45f5df9370723a31f`. `.deploy/preview-app-release.trigger`에 `deploy_shared_rtdb_rules=false`, `worker_change=false`, `functions_change=false`, `shared_d1_change=false`; Cloudflare Worker bundle/config, DB 스키마 및 공유 데이터, Rules/Functions 미변경.
+- **Firebase PREVIEW App Release Run `37722012753` SUCCESS** — `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=382`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. 실제 목표 주소 https://preview.soridraw.com. GitHub runner가 실제 도메인 exact artifact를 검증했으며 ChatGPT는 사용자 계정으로 앱 브라우저 조작하지 않음.
+- **Worker 상태:** 기존 PREVIEW Cloudflare Worker `c4c51b19-818a-4eaf-8be1-aca0b241d50a` 유지 목표; 이번 Hotfix에서 Worker deploy workflow 실행하지 않음. 기존 shared D1/RTDB 원본 수정 0. `main` b13360df1bab52e2d3b746ea47dc4e3718eef85c, `production` fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4 유지.
+- **사용자 실사용 검증 전:** 같은 RTDB 좋아요 변경 알림을 이미 확인한 뒤 앱 새로고침 2~3회 → `공개곡 좋아요 숫자 확인` Worker 추가 증가 0 목표; 새로운 타계정 좋아요/해제 이벤트는 정상 R2 읽어 하트 공개 숫자 반영, D1 실제 행 R0/W0 유지. R2 사용/실행 비용과 물리 rows_read/written은 사용자 실기기/실서버 새 후보 측정 전. 팔로우 W1 및 모바일↔PC 최종상태 정상도 유지 확인 필요. 첫 변경 신호/로컬 캐시 삭제/다른 계정 접근에는 최초 조회 1회가 정상.
+- **다음 단계:** app382 실사용 중복 Worker 0 및 새 좋아요 변경 감지·한글 항목 확인. 오류 있을 때만 좁게 수정·검사·PREVIEW Hosting 재배포. 정상이라면 불필요한 새 개발 없이 TEST 릴리스 preflight(`receipt390` unconditional) 호환성 별도 검토하고 테스트배포 승인 대기. 이전 069 자동 진단 workflow 실패는 별도 기존 문제로 계속 존재하며 이번 Hosting SUCCESS와 무관.
+
+---
 ## 0RZP. app380 후속 PREVIEW 미배포 후보 — 공개 좋아요 알림 재생 Worker 중복 차단 + CACHE LIVE 한글 표기 (2026-10-08 KST)
 
 - **사용자 실사용 발견:** app380 PREVIEW 좋아요 자체 정상. 앱 새로고침 시 `/v1/public-like-cards` Worker 요청이 증가. 사용자 캡처 기준 공개 좋아요 카드 요청의 D1 실제 행 R0/W0, Worker 1; 공개 추천곡·관리 권한 등 다른 URL이 진단 패널 제목으로 노출되는 것도 사용자 명시 수정 요청.

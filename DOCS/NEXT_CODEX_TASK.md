@@ -1,3 +1,12 @@
+## CURRENT GATE — Stage409 품질·격리검증 엄격 PASS / 라이브 독립 감사·PREVIEW 배포 전 (2026-10-09 KST)
+
+- 최신 기록 `DOCS/LIKE_REPAIR_191_RELEASE_AUDIT_409_2026-10-09.md`. Stage408 191 Feed-last 최소 복구 수정, Stage409 127/175 오래된 검사 경로 수정 및 엄격 CI 복구. [Run 37835339279](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339279) TypeScript/Build/127·175·178·191·192·197·390 strict PASS; [Run 37835339341](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339341) 191 정확 원본 함수 + 가상 R2/CAS 15/15 및 전체 격리 PASS.
+- **다음 한 단계:** Stage408/409 완성 commit 고정 → `DOCS/WORK_AUDIT_CHECKLIST.md`에 따른 Work 독립 검증 또는 동등한 read-only 감사. 좋아요/해제/기기/구형 앱·R2 공개 카드 CAS/동시성·D1 W1~W2과 전체 비용, PREVIEW active Worker parity를 확인하고, 미검증은 표시. 구조 재작성·outbox/RTDB fanout·D1 migration 금지.
+- **남은 FAIL:** 과거 이미 R2 Feed 최신/카드·프로필만 구형인 orphan은 기존 bounded 191에서 미검출. 기존 별도 `diagnose-069-live-like.yml` 자동 실행 실패 미해결. 전체 CI green이라고 말하지 않음.
+- 제품 코드 최신 191 함수 외 동결. GitHub push ≠ 배포; PREVIEW Worker/Functions/Hosting 미배포, TEST/main/PRODUCTION 변경 없음. 독립 검증·사용자 PREVIEW 실사용 전까지 릴리스 승격 금지.
+
+---
+
 ## CURRENT GATE — Stage408 191 복구 순서 개선 코드 있음 / 릴리스 감사 BLOCK (2026-10-09 KST)
 
 - 읽기 `DOCS/LIKE_REPAIR_191_FEED_LAST_FIX_408_2026-10-09.md`. 기존 Worker entry의 191 함수만 **카드·프로필 먼저→Feed 마지막**으로 최소 변경. 원본 함수 10/10 격리 재시도 PASS Run `37833820477`. TypeScript·Build, 기존 178/191/192/197/390 PASS Run `37834477289`.

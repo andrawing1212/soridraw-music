@@ -1,3 +1,12 @@
+## 0S12. Stage409 정상 구조 보존 + 127/175 엄격검사 정상화 + 실제 191 CAS 15/15 PASS (2026-10-09 KST)
+
+- Stage408부터 유지 중인 제품 191 **카드/프로필→Feed 마지막** 복구 수정은 변경하지 않음. Stage409 추가한 것은 **역사적 127/175 정적 verifier 기대값을 현재 로컬 우선 정상 코드에 맞춰 정정**하고 CI에서 두 검사를 **필수 PASS로 재설정**, 실제 191 함수 격리 CAS 경쟁/연속 실패 케이스 추가뿐.
+- [최신 품질 Run 37835339279](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339279) **SUCCESS**: TypeScript·Build + 127/175/178/191/192/197/390 회귀 **모두 엄격 PASS**. [격리 Run 37835339341](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339341) **SUCCESS**: 191 실제 함수 Miniflare + R2 가상 CAS 15/15 PASS, 경쟁 필드 보존/8회 실패 후 Feed 미완료·복구 대상 유지/정상 비용 경계.
+- 여전히: 구형 R2 Feed 최신/카드만 구형 orphan, 라이브 Worker parity, PC↔모바일/타계정 실사용, 전역 비용 미검증. `diagnose-069-live-like.yml` push 자동 FAIL 별개 미해결. **Worker/Functions/Firebase/공유 D1/R2/Hosting/main/TEST/PRODUCTION 배포·데이터 변경 0**.
+- 상세 `DOCS/LIKE_REPAIR_191_RELEASE_AUDIT_409_2026-10-09.md`; 다음 독립 audit·배포 전 원본 비용 확인, 정상 30초 좋아요 W1·팔로우/캐시/UI 보호. GitHub 문서·검사 외 제품 변경 없음.
+
+---
+
 ## 0S11. Stage408 191 복구 함수 최소 코드 수정 / 실패 재시도 10/10 PASS, 배포 전 (2026-10-09 KST)
 
 - **실제 제품 코드 최소 수정:** `cloudflare/explore-worker/canonical/preview-entry.js`의 `repairSharedPublicLikeCounts191`에서 이미 받아온 Feed R2로 변경곡을 선택하고 **공개 카드·프로필 먼저 → Feed 마지막** 순서. 카드/프로필 중간 PUT 실패 시 Feed를 먼저 성공으로 표시하지 않으므로 다음 DO alarm 복구에서 변경 ID가 남음. 069 W1/30초/개인 하트·팔로우·UI·캐시·원본 데이터 불변.

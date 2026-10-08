@@ -1,3 +1,14 @@
+## CURRENT GATE — Stage A-398 격리 D1 계측 PASS, 실제 전체 Worker W1~W2는 미검증 (2026-10-08 KST)
+
+- 첫 실제 Miniflare D1 테스트는 `.github/workflows/verify-398-isolated-d1.yml` 자동 Run **37741253004 SUCCESS**, GitHub 소스 commit `d20fb8407b35871fb70e18746af5c8d91b4b6435`. 데이터베이스 2개 모두 LOCAL/격리. `scripts/verify-398-miniflare-d1-returning.mjs` 4/4 PASS.
+- 실제 LOCAL D1 meta: 새 좋아요 old R1 W3 / RETURNING R2 W3, 중복 old R1 W1 / new R2 W1, 해제 old R2 W2 / new R3 W2, 중복해제 old R1 W1 / new R2 W1. 즉 **RETURNING마다 R+1, W+0**. 기존 W3은 축약형 membership+queue 모델의 측정이므로 실제 Worker 물리 W3로 확정 금지. 상세 `DOCS/RTDB_LOCAL_D1_COST_PROBE_398_2026-10-08.md`.
+- Full patch039/040 CTE 토폴로지 기반 Node22 SQLite 격리 8-case baseline/candidate 결과 일치 PASS. **이 8-case는 D1 meta를 측정한 것은 아님**.
+- **다음 High 구현:** frozen/현재 Worker canonical generated aggregate 실제 파일과 현재 실배포 Worker 동일 여부, 035/066/069/075/157·trigger/index·R2 현황부터 조사. 그 후 격리 Miniflare에서 실제 전체 CTE+queue/stat/index 구조로 `meta.rows_read/rows_written` 계측. 이 작업에서는 remote D1·공유 사용자 데이터 호출 금지.
+- 이 전체 비용 게이트 PASS 전 서버 신뢰 RTDB publisher/Functions/Rules/client fanout 변경 금지. 변경 대상 UI 없음. 기존 app382/팔로우/개인 하트/실사용 PC/모바일 정상 기능 보호. Stage A live 적용/비용 절감 완성 아님.
+- 기존 TEST/PRODUCTION/배포/RTDB/Cloudflare 변경 없음. 이번 GitHub Actions 테스트는 새로운 격리 검증만 수행.
+
+---
+
 ## CURRENT GATE — 코드 프로토타입 12/12 PASS / D1·서버 발행 실제 검증 대기 (2026-10-08 KST)
 
 - 새 런타임 비연결 순수 모듈 `cloudflare/explore-worker/runtime/like-confirmed-event-397.mjs`: 기존 patch040 batch에 미래 `RETURNING track_id`가 포함되면 meta.changes와 행 수를 대조하여 모든 changedTrackId를 50곡 이내에서 중복제거. 결과 누락·위조·초과는 fail-closed. GitHub commit `216fdb1202f4d533761c10abf929850cacb2a738`. 아직 Worker import/실제 발행 없음.

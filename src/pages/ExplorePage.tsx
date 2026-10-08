@@ -54,6 +54,8 @@ import {
 import { getExplorePublicProfileFirstView, revalidateExplorePublicProfileFirstView335, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, upsertExplorePublicProfileFirstViewTrack, removeExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   fetchExplorePublicLikeCards192,
+  hasSettledExplorePublicLikeSignal396,
+  rememberSettledExplorePublicLikeSignal396,
   subscribeExplorePublicLikeInvalidation192,
   type ExplorePublicLikeSignalRow192,
 } from '../services/explorePublicLikeSyncService';
@@ -2192,6 +2194,8 @@ export default function ExplorePage() {
               patchExplorePublicProfileFirstViewTrack(ownerUid, row.trackId, { likeCount: card.likeCount });
             }
             patchExploreLikedTrackCachedCount091(user.uid, row.trackId, card.likeCount);
+            // Persist only after the settled R2 card has patched device caches.
+            rememberSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at);
           }
 
           if (settled.size) {
@@ -2232,6 +2236,9 @@ export default function ExplorePage() {
       let relevant = false;
       for (const row of signal.rows) {
         if (!visible.has(row.trackId)) continue;
+        // The RTDB node retains old events for 3 minutes. A normal reload
+        // must not repeatedly read an R2 card already applied on this device.
+        if (hasSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at)) continue;
         relevant = true;
         const previous = publicLikePendingRowsRef192.current.get(row.trackId);
         if (!previous || row.at >= previous.at) {

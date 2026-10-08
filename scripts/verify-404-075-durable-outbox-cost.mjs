@@ -67,6 +67,7 @@ const mf = new Miniflare({
     BASELINE: '00000000-0000-4000-8000-000000000400',
     CANDIDATE: '00000000-0000-4000-8000-000000000401',
     OUTBOX: '00000000-0000-4000-8000-000000000405',
+    WAVE: '00000000-0000-4000-8000-000000000407',
   },
 });
 const totals = results => {
@@ -89,12 +90,13 @@ async function open(name) {
     'CREATE TABLE IF NOT EXISTS explore_like_user_queue_state_075(id INTEGER PRIMARY KEY,processed_at INTEGER,processed_uid TEXT)',
     'CREATE TABLE IF NOT EXISTS like_notification_outbox_404(track_id TEXT PRIMARY KEY,revision INTEGER,confirmed_count INTEGER,updated_at INTEGER)',
     'CREATE INDEX IF NOT EXISTS outbox_404_updated ON like_notification_outbox_404(updated_at,track_id)',
+    'CREATE TABLE IF NOT EXISTS like_notification_wave_405(seq INTEGER PRIMARY KEY AUTOINCREMENT,payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),event_at INTEGER NOT NULL)',
   ];
   for (const sql of schema) await db.prepare(sql).run();
   return db;
 }
 async function setup(db, likedUsers, mutations) {
-  for (const table of ['like_notification_outbox_404','likes','track_stats','explore_like_user_queue_075','explore_like_user_queue_state_075','tracks','public_profiles']) {
+  for (const table of ['like_notification_wave_405','like_notification_outbox_404','likes','track_stats','explore_like_user_queue_075','explore_like_user_queue_state_075','tracks','public_profiles']) {
     await db.prepare('DELETE FROM ' + table).run();
   }
   await db.prepare("INSERT INTO tracks VALUES ('song','owner',1,'published')").run();
@@ -110,7 +112,7 @@ async function setup(db, likedUsers, mutations) {
       .bind(user,time++,1,JSON.stringify({song:{liked,mutationAt:time}})).run();
   }
 }
-async function wave(db, returning, outbox=false) {
+async function wave(db, returning, outbox=false, withWave=false) {
   const args = [9999, 50_000];
   const p = await db.prepare(projection).bind(...args).all();
   const statements = [
@@ -133,6 +135,14 @@ async function wave(db, returning, outbox=false) {
       'WHERE id=1 AND EXISTS (SELECT 1 FROM eligible)',
     ].join(' ')).bind(...args),
   ];
+  if(withWave) statements.unshift(db.prepare(cte + [
+    'INSERT INTO like_notification_wave_405(payload_json,event_at)',
+    "SELECT json_group_array(json_object('trackId',track_id,'count',next_count)),9999",
+    'FROM (SELECT track_id,next_count,CAST((ROW_NUMBER() OVER(ORDER BY track_id)-1)/50 AS INTEGER) AS grp',
+    'FROM (SELECT d.track_id AS track_id,MAX(0,COALESCE(s.like_count,0)+SUM(d.delta)) AS next_count',
+    'FROM deltas d LEFT JOIN track_stats s ON s.track_id=d.track_id',
+    'GROUP BY d.track_id,s.like_count HAVING SUM(d.delta)<>0)) GROUP BY grp',
+  ].join(' ')).bind(...args));
   if(outbox) statements.unshift(db.prepare(cte + [
     'INSERT INTO like_notification_outbox_404(track_id,revision,confirmed_count,updated_at)',
     'SELECT d.track_id,1,MAX(0,COALESCE(s.like_count,0)+SUM(d.delta)),9999',
@@ -142,7 +152,7 @@ async function wave(db, returning, outbox=false) {
     'confirmed_count=excluded.confirmed_count,updated_at=excluded.updated_at',
   ].join(' ')).bind(...args));
   const batch = await db.batch(statements);
-  const rows = outbox ? batch.slice(1) : batch;
+  const rows = (outbox||withWave) ? batch.slice(1) : batch;
   const actual = [2,3].flatMap(i => rows[i]?.results || []).map(r => r.track_id).sort();
   if (returning) for (const i of [2,3]) {
     assert.equal(rows[i]?.meta?.changes, rows[i]?.results?.length, 'RETURNING count mismatch');
@@ -165,7 +175,7 @@ async function canonical(db) {
 
 let error=null;const report=[];
 try{
-  const base=await open('BASELINE'), returning=await open('CANDIDATE'), outbox=await open('OUTBOX');
+  const base=await open('BASELINE'), returning=await open('CANDIDATE'), outbox=await open('OUTBOX'), batchdb=await open('WAVE');
   const scenarios=[
     ['FIRST_LIKE',[],[['A',true]],['song']],
     ['DUPLICATE_LIKE',['A'],[['A',true]],[]],
@@ -174,31 +184,40 @@ try{
     ['TWO_USERS_ONE_TRACK',[],[['A',true],['B',true]],['song','song']],
   ];
   for(const [name,seed,mutation,expected] of scenarios) {
-    for(const d of [base,returning,outbox]) await setup(d,seed,mutation);
-    const b=await wave(base,false),r=await wave(returning,true),o=await wave(outbox,true,true);
+    for(const d of [base,returning,outbox,batchdb]) await setup(d,seed,mutation);
+    const b=await wave(base,false),r=await wave(returning,true),o=await wave(outbox,true,true),w=await wave(batchdb,true,false,true);
     const canonicalBefore=await canonical(base);
     assert.deepEqual(await canonical(returning),canonicalBefore,'RETURNING parity '+name);
     assert.deepEqual(await canonical(outbox),canonicalBefore,'outbox canonical parity '+name);
+    assert.deepEqual(await canonical(batchdb),canonicalBefore,'wave canonical parity '+name);
     assert.deepEqual(o.actual,expected,'outbox confirmed IDs '+name);
+    assert.deepEqual(w.actual,expected,'wave confirmed IDs '+name);
     assert.equal(r.cost.written,b.cost.written,'returning adds no writes');
     const ids=(await outbox.prepare('SELECT track_id FROM like_notification_outbox_404 ORDER BY track_id').all()).results.map(x=>x.track_id);
     assert.deepEqual(ids,[...new Set(expected)],'typed outbox unique changed tracks '+name);
+    const waves=(await batchdb.prepare('SELECT seq,payload_json FROM like_notification_wave_405 ORDER BY seq').all()).results.map(v=>JSON.parse(v.payload_json));
+    assert.equal(waves.length,Math.ceil(new Set(expected).size/50));
+    assert.deepEqual(waves.flatMap(a=>a.map(x=>x.trackId)).sort(),[...new Set(expected)].sort());
+    assert.ok(waves.every(a=>a.length>0&&a.length<=50),'wave payload max50');
+    const waveDelta=w.cost.written-r.cost.written;
     const addedWrites=o.cost.written-r.cost.written;
     assert.ok(addedWrites>=ids.length,'outbox must cost write per changed track '+name);
-    if(ids.length===0)assert.equal(addedWrites,0,'no-op extra writes '+name);
-    report.push({name,base:b.cost,returning:r.cost,outbox:o.cost,addedWrites});
-    console.log('404_075_'+name+'=PASS baseline='+JSON.stringify(b.cost)+' returning='+JSON.stringify(r.cost)+' outbox='+JSON.stringify(o.cost)+' extraW='+addedWrites);
+    if(ids.length===0){assert.equal(addedWrites,0,'no-op extra writes '+name);assert.equal(waveDelta,0,'no-op wave writes '+name)}
+    else assert.ok(waveDelta>0&&waveDelta<=addedWrites,'one wave cost bounded by indexed outbox: '+name);
+    report.push({name,base:b.cost,returning:r.cost,outbox:o.cost,addedWrites,wave:w.cost,waveDelta,waveRows:waves.length});
+    console.log('404_075_'+name+'=PASS baseline='+JSON.stringify(b.cost)+' returning='+JSON.stringify(r.cost)+' outbox='+JSON.stringify(o.cost)+' extraW='+addedWrites+' wave='+JSON.stringify(w.cost)+' waveExtraW='+waveDelta);
   }
   console.log('404_075_DURABLE_OUTBOX_PHYSICAL_COST=PASS '+report.length+'/'+scenarios.length);
+  console.log('405_075_BATCHED_WAVE_COST=PASS '+JSON.stringify(report.map(x=>[x.name,x.addedWrites,x.waveDelta])));
   console.log('404_075_W1_W2_RELEASE_GATE=BLOCKED: background aggregate W baseline exceeds 2; live per-click cost not demonstrated');
 }catch(e){error=String(e.stack||e);console.error('404_075_FAIL',error)}
 finally{
   if(process.env.GITHUB_STEP_SUMMARY)appendFileSync(process.env.GITHUB_STEP_SUMMARY,[
     '# Stage404 075 user queue CTE + durable typed outbox',
     'LOCAL Miniflare only. This is NOT deployed Worker billing or complete trigger/schema.',
-    '| Case | base R/W | RETURNING R/W | outbox R/W | extra W |',
-    '|---|---:|---:|---:|---:|',
-    ...report.map(x=>'| '+x.name+' | '+x.base.read+'/'+x.base.written+' | '+x.returning.read+'/'+x.returning.written+' | '+x.outbox.read+'/'+x.outbox.written+' | +'+x.addedWrites+' |'),
+    '| Case | base R/W | RETURNING R/W | per-track outbox R/W | extra W | batched-wave R/W | extra W |',
+    '|---|---:|---:|---:|---:|---:|---:|',
+    ...report.map(x=>'| '+x.name+' | '+x.base.read+'/'+x.base.written+' | '+x.returning.read+'/'+x.returning.written+' | '+x.outbox.read+'/'+x.outbox.written+' | +'+x.addedWrites+' | '+x.wave.read+'/'+x.wave.written+' | +'+x.waveDelta+' |'),
     '',error?'**FAIL**':'**ISOLATED MEASUREMENT PASS / LIVE RELEASE BLOCKED**',''
   ].join('\n'));
   await mf.dispose().catch(()=>{});

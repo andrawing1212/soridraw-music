@@ -1,3 +1,12 @@
+## CURRENT GATE — RTDB 공개 좋아요 팬아웃·보안 LIVE 규칙 검증 필요 (2026-10-08 KST)
+
+- 2차 read-only 정적 감사 보고 `DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md` 우선 확인. publicSync/exploreLike 전역 onValue, 50곡/3분 retention, source rules auth actor만 확인, live 적용 Rules 아직 미검증.
+- 가장 먼저 해야 할 일: WIF PRIVATE ops 전용 읽기 권한으로 RTDB live 규칙 GET 가능 여부 확인(사용자 권한 부여 전 기존 Monitoring Viewer는 변경 권한 없음), 정확한 배포 rules/git diff 정리. 실제 데이터 수집/수정·보안 규칙 PUT 금지.
+- 다음: 전역 이벤트 server-ACK 인증, 해당 곡/샤드만 bounded 수신, 구형 client 및 앱382 396/192 안정 동작 공존과 비용 전가 없는 설계. 가짜 신호 emulator 테스트, 물리 RTDB 바이트 및 R2/Worker 실측.
+- NORMAL 앱382 좋아요·팔로우/스튜디오 heart 보호. docs-only 범위이며 배포 없음; TEST/PRODUCTION 승격 승인 없음.
+
+---
+
 ## CURRENT GATE — RTDB LIVE metrics 첫 측정 PASS / 공개 like fanout 집중 감사 (2026-10-08 KST)
 
 - 비공개 운영 진단 37734211971 성공. 실제 24h/30d 다운로드와 활성 연결/응답 횟수 측정 완료. 원본 실측 요약(비공개): `andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md`.

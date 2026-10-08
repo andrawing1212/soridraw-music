@@ -1,3 +1,13 @@
+## 0RZV. 공개 좋아요 RTDB fanout/남용 2차 정적 감사 — 설계 위험 확인 (2026-10-08 KST)
+
+- preview 기준 `39e6734ea29ec83f64806886f6635eae9326359c`에서 `src/services/explorePublicLikeSyncService.ts`, `src/pages/ExplorePage.tsx`, `src/services/exploreLikeService.ts`, `database.rules.json`, 앱160/164 frozen/test192/396 확인. 추가 보고 `DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md`.
+- 확정: 전역 `publicSync/exploreLike` onValue+merged 3분/최대 50곡을 모든 활성 Explore 구독자가 받고 화면 내 곡만 추후 R2 조회. 앱382 settled ACK는 Worker 재조회만 차단하고 RTDB 다운로드 fanout은 해결하지 못함. GitHub rules는 auth.uid=actorUid만 확인해 canonical D1 ACK 없이 인증 클라이언트가 전역 알림을 재기록할 수 있는 소스 수준 P0 위험.
+- 앱/사용자데이터는 그대로. PRIVATE GitHub RTDB 실제 총 다운로드 baseline 측정 run 37734211971 성공; 구체 사업 지표는 private 보고서에만 유지. LIVE RTDB 적용 Rules, 공통 경로별 다운로드, 공격 발생 여부, 10만 회원 청구액은 **미검증**.
+- 권장 다음: 실제 공유 RTDB Rules를 읽기 전용 GET(필요 시 사용자에게 Firebase Realtime Database Viewer 역할 요청)하여 소스와 대조. 서버 ACK 신뢰 경계와 bounded 곡/영역 수신 설계 후 비용·보호 테스트 계획 고정; 구형 앱이 살아 있으므로 Rules 선차단 금지.
+- 이후 순서: 안전한 공개 fanout/남용 차단 → 좋아요·팔로우 30초 전 창 종료 복구 → 통합 PC/모바일 비용 검증. 앱382 Hosting·Worker, Firebase, Cloudflare, RTDB Rules, 원본 데이터, main, production 변경·배포 없음.
+
+---
+
 ## 0RZU. Firebase RTDB 사용량 LIVE 읽기 연결 성공 / 첫 24h·30d 실측 (2026-10-08 KST)
 
 - PRIVATE ops Github Actions 최초 수동 진단 run **37734211971 SUCCESS**; auth@v3 WIF PASS, Cloud Monitoring GET PASS, 7일 보관 artifact 업로드 PASS. Google Cloud 서비스 계정과 OIDC 연결이 실제로 작동함.

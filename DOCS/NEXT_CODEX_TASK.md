@@ -1,3 +1,13 @@
+## CURRENT GATE — Stage401 기존 변경 저널 활용 가능성 PASS, likes-only/재전송 차단 (2026-10-09 KST)
+
+- 최우선 근거 `DOCS/RTDB_EXISTING_DERIVED_JOURNAL_401_2026-10-09.md`. 격리 CI [37823762282](https://github.com/andrawing1212/soridraw-music/actions/runs/37823762282) 성공. 기존 398/399/400 PASS 유지; Stage401 단순화 D1 저널 경로 6/6, 동일 곡 최신 값 병합, 67곡 50+17 bounded paging PASS.
+- 신규 실험 코드 `scripts/verify-401-existing-derived-journal.mjs`는 런타임에 import되지 않으며 운영 D1/Worker와 분리됨. `explore_derived_changes(feed,track,id,seq)` 기존 trigger journal을 읽는 SELECT는 모형 R1/W0, **mutation 추가 쓰기 0 가능성**을 보였으나 실서비스 완성 아님.
+- 다음 **P0**: live schema의 032 derived triggers/seq index (read-only)와 Worker current bundle 정확성 확인, 변경 저널의 *좋아요 외 곡 변화* 구분 방법을 신규 DB W 없이 격리 검증, 같은 곡 다중 변경/커서 역전/50개 초과/실패 후 durable notification-only replay 안전성 확인. **불확실 신호는 발행 금지, 정상 바뀐 곡 누락도 금지.**
+- 069/075 저장 전에 예상한 `changedRows`를 확정 이벤트로 쓰지 않는다. 191 first-page repair도 신뢰 이벤트 원본 금지. Worker→Functions HMAC/idempotency/R2 settle ordering/RTDB V2 scope 및 구형 legacy 이중 발행 비용은 후속 분리 검증; 현재 배포/Rules 변경 금지.
+- 전체 좋아요 동기화 기능·팔로우·Music Note·Studio 하트·30초 W1 queue 기존 정상 보호. 10만 회원 fanout/실시간 비용 및 LIVE D1 W1~W2, TypeScript/Build/PC↔모바일 미검증. FAIL/STOP 시 사용자 보고하고 공유 데이터·main/TEST/PRODUCTION 변경하지 않음.
+
+---
+
 ## CURRENT GATE — Stage400 069/075 격리 검증 PASS / 실제 알림 구현 STOP (2026-10-09 KST)
 
 - 최신 시험 `DOCS/RTDB_069_075_ISOLATED_GATE_400_2026-10-09.md` 필독. 격리 CI Run `37822533579` SUCCESS. 기존 398 4/4 + 399 8/8 + 신규 400 075 5/5 + source guard/race 재현 PASS.

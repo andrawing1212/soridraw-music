@@ -1,0 +1,60 @@
+name: SORIDRAW Follow-only Candidate Check
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app380-follow-only-check.yml'
+      - 'src/services/exploreLikeService.ts'
+      - 'src/services/exploreFollowBatchService380.ts'
+      - 'src/services/exploreFollowOrdering354.ts'
+      - 'src/pages/ExplorePage.tsx'
+      - 'cloudflare/explore-worker/canonical/preview-worker.js'
+      - 'cloudflare/explore-worker/canonical/source-sha256.txt'
+      - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs'
+      - 'cloudflare/explore-worker/candidates/social-abuse-380.js'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Follow-only release boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          grep -q 'SORIDRAW_FOLLOW_ABUSE_GUARD_380_20261007' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -q 'SORIDRAW_SOCIAL_ABUSE_STATE_380_20261008' cloudflare/explore-worker/canonical/preview-worker.js
+          ! grep -q 'SORIDRAW_LIKE_ABUSE_GUARD_390_20261008' cloudflare/explore-worker/canonical/preview-worker.js
+          ! grep -q 'acceptLikeReceipt390' cloudflare/explore-worker/canonical/preview-worker.js
+          ! grep -q 'readLegacyLikeReplay379' cloudflare/explore-worker/canonical/preview-worker.js
+          ! grep -q '098-like-abuse-guard.mjs' cloudflare/explore-worker/release-patches.json
+          grep -q '097-follow-abuse-guard.mjs' cloudflare/explore-worker/release-patches.json
+          ! grep -Eq 'acceptanceProtocol390|acceptedOperations390|receipt390' src/services/exploreLikeService.ts
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+      - name: Existing follow regressions
+        run: |
+          set -euo pipefail
+          node scripts/verify-354-follow-orchestration.mjs
+          node scripts/verify-355-follow-audit-repairs.mjs
+          node scripts/verify-377-follow-count-list-sync.mjs
+          node scripts/verify-386-follow-overlay-count-display.mjs
+          node scripts/verify-389-social-client-batching.mjs

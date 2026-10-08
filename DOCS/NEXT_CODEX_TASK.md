@@ -1,3 +1,14 @@
+## CURRENT GATE — 단계 A 안전한 서버 알림 구현 / D1 실측 게이트 (2026-10-08 KST)
+
+- 이번에 실행 가능한 코드 프로토타입 추가: `scripts/verify-rtdb-public-like-returning-prototype.mjs` (GitHub commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`). Node22 in-memory SQLite 4/4 PASS; D1/Worker 실제 실행, TypeScript/Build/앱 테스트는 미실행. `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md`의 단계 A 결과 확인.
+- 기존 Worker 040 aggregator는 INSERT/DELETE 성공 건수만 리턴. 현재 모든 실제 변경 `trackId`는 수신 가능하게 반환되지 않음. 첫 화면 상위 80곡 R2 repair를 이벤트 검출기로 재사용하면 누락되므로 금지.
+- 다음 개발 실증: **격리 D1 또는 로컬 D1 런타임에서 기존 batch SQL에 `RETURNING track_id` 적용 시 모든 곡(신규/오래된 곡·중복/순서 뒤집힘 포함)·D1 `rows_read/rows_written` 정확 확인**. W1~W2 hard gate. 변경곡 IDs가 기본 결과에 포함되지 않거나 D1 읽기 비용 증가가 무제한이면 STOP 후 별도 설계.
+- 이후 서버 신뢰 연결: Cloudflare canonical 최종 aggregate 시점(클라이언트 선 ACK X)에 bounded event 생성, Firebase Functions Admin RTDB로 서버 인증된 발행, 분실/중복 알림 전용 재시도. 사용자 데이터·D1 mutation 반복 금지. Server-to-server HMAC 및 replay-proof, legacy-v2 동시 안전 검증. 이 조건 충족 전 새 Rules/Worker/Firebase Functions 배포·클라이언트 전역 방송 차단 금지.
+- **아직 해결되지 않음:** 실제 active publicSync/exploreLike 쓰기 개방 상태, 모든 Explore 사용자 전역 다운로드, 클릭 후 30초 미만 닫기 개인 서버 미전송 문제. 비용 절감/남용 차단·동기화 정상화 완료라고 주장 금지.
+- TEST/PRODUCTION/main 및 공유 데이터 변경 없음. Codex High 구현→Work 독립 검증→ChatGPT 최종 판정→PREVIEW 사용자 실사용 순서.
+
+---
+
 ## CURRENT GATE — RTDB 공개 좋아요 설계 완료 / 구현 가능성 검증 단계 A (2026-10-08 KST)
 
 - 새 확정 설계 문서: `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md`. 실행 순서 고정: A 서버 ACK 기반 신뢰 가능한 게시·중복/실패 설계 → B 화면 필요 곡 범위 V2 구독 방식 비교 및 계측 → C 기존 앱 서버 호환 보장 후 일반 클라이언트 전역 쓰기 차단 → D 독립 검증/실사용/승격. **규칙 선차단 및 앱 전체 방송 즉시 제거 금지**.

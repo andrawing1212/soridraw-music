@@ -1,3 +1,13 @@
+## CURRENT GATE — RTDB live rules GET 검증 실패 (2026-10-08 KST)
+
+- PRIVATE ops read-only run 37736055786: Google 인증 PASS, RTDB 규칙 조회 HTTP 401 FAIL.
+- READ-ONLY 대조는 미완료. 관리자/쓰기 권한을 추가하지 않는다.
+- 소스 기준 publicSync/exploreLike fanout 보안 설계 감사 진행. 실제 Rules는 Firebase Console에서 별도 확인.
+- 신규 RTDB Viewer 역할은 원본 데이터 읽기 범위가 넓을 수 있으므로 회수 권장. Monitoring Viewer는 유지.
+- 배포/앱/사용자 데이터 변경 없음. 순서: fanout 비용 및 남용 방지 → 30초 창 종료 복구 → 통합 검증.
+
+---
+
 ## CURRENT GATE — RTDB 운영 Security Rules GET 전용 검사 최초 실행 대기 (2026-10-08 KST)
 
 - 사용자 `Firebase Realtime Database Viewer` 역할 추가 완료 보고. PRIVATE ops/main workflow `.github/workflows/firebase-rtdb-live-rules-readonly.yml` commit `0802c763ab3b1d4e4b7e39bd33d9d3c9740e7701` 설치 완료.

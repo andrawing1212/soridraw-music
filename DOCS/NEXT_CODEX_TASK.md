@@ -1,6 +1,7 @@
 ## CURRENT GATE — RTDB 공개 좋아요 설계 완료 / 구현 가능성 검증 단계 A (2026-10-08 KST)
 
 - 새 확정 설계 문서: `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md`. 실행 순서 고정: A 서버 ACK 기반 신뢰 가능한 게시·중복/실패 설계 → B 화면 필요 곡 범위 V2 구독 방식 비교 및 계측 → C 기존 앱 서버 호환 보장 후 일반 클라이언트 전역 쓰기 차단 → D 독립 검증/실사용/승격. **규칙 선차단 및 앱 전체 방송 즉시 제거 금지**.
+- **새 P0 구현 차단선:** `preview-entry.js`의 `repairSharedPublicLikeCounts191`는 latest/popular 앞 40곡씩 최대 80곡만 검사하는 복구 경로다. 이것을 새 신뢰된 RTDB 알림의 변경곡 추출 소스로 사용하면 다른 곡을 누락하므로 금지. `publicSignalAcceptedAt` 단독으로 개별 곡의 canonical 정착을 인증하지 못함. 기존 069 큐의 **실제 변경곡/확정 op ID**와 생성 파이프라인을 확인하고, 추가 D1 scan/write 없이 안전한 게시가 가능한지 검증해야 단계 A 구현 가능.
 - 사용자 제공 Firebase Console 활성 RTDB rules 전체 텍스트의 publicSync/exploreLike 구간이 GitHub `database.rules.json`과 일치함을 확인. 로그인한 사용자가 actorUid 일치 조건만으로 global 알림을 쓸 수 있는 **구조적 남용 위험 확인**, 실제 악용 여부 미확인. 이전 private GET은 401이고 전체 live rule byte match는 미검증.
 - Codex High / 다음 작업자는 먼저 `cloudflare/explore-worker/canonical/preview-entry.js` W1/DO 정착 flow + `functions/src/index.ts` Admin RTDB publisher 기존 기능을 읽고 **추가 D1 R/W 없이 서버가 어떤 accepted changed-row를 안전하게 받는지, Cloudflare→Functions 인증/서명, replay/중복, durable retry, 호출/RTDB 비용**을 증명·보고한다. 해당 신뢰 경계가 성립하기 전 서버/Rules/클라이언트를 동시에 수정하지 않는다.
 - 정상 app382 30초 W1, 개인 좋아요 PC↔모바일/타계정 공개 숫자, app164 신규 곡, Studio 저장하트, 팔로우 30초 보호. 공유 데이터·TEST/PRODUCTION 비변경.

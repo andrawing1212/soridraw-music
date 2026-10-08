@@ -276,14 +276,27 @@ export async function measureHttp355(query = null, prefix = '') {
   return samples;
 }
 await measureHttp355();
-const limits=consumerFixture();limits.ctx.RATE_LIMITS.follow=1;
-await limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'actor');
-await assert.rejects(limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'actor'),{code:'RATE_LIMITED'});
+// App380: native limiter and ordered abuse guard replace old follow-rate-v355.
+// Actual durable R2/CAS/rolling rate limits are independently tested by 388.
+const limits=consumerFixture();let nativeCalls=0;
+limits.env.LIKE_RATE_LIMITER.limit=async({key})=>{
+  assert.equal(key,'follow:actor');
+  nativeCalls++;return{success:nativeCalls===1};
+};
+await limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'actor','target',true,id(1400));
+await assert.rejects(
+  limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'actor','target',true,id(1401)),
+  {code:'RATE_LIMITED'});
+assert.equal(nativeCalls,2);
 limits.env.LIKE_RATE_LIMITER.limit=async()=>({success:false});
-await assert.rejects(limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'other'),{code:'RATE_LIMITED'});
+await assert.rejects(
+  limits.ctx.enforceFollowEdgeRateLimit355(limits.env,'other','target',true,id(1402)),
+  {code:'RATE_LIMITED'});
 const newerWindow=consumerFixture();
-newerWindow.records.set('internal/explore/follow-rate-v355/actor.json',{etag:'future-window',body:JSON.stringify({windowStart:600000,count:1})});
+newerWindow.env.LIKE_RATE_LIMITER.limit=async()=>{throw Error('native limiter offline')};
 const rateBefore=newerWindow.metrics().writes;
-await assert.rejects(newerWindow.ctx.enforceFollowEdgeRateLimit355(newerWindow.env,'actor'),{code:'RATE_LIMIT_UNAVAILABLE'});
-assert.equal(newerWindow.metrics().writes,rateBefore,'suspended rate request rewound a newer window');
+await assert.rejects(
+  newerWindow.ctx.enforceFollowEdgeRateLimit355(newerWindow.env,'actor','target',false,id(1403)),
+  {code:'RATE_LIMIT_UNAVAILABLE'});
+assert.equal(newerWindow.metrics().writes,rateBefore,'limiter outage must not write unrelated R2');
 console.log('FOLLOW355_EIGHT_AUDIT_REPAIRS_ACTUAL_CONSUMERS_AND_HTTP_COST=PASS');

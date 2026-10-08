@@ -1,3 +1,11 @@
+## 0RZH. app380 follow355 과거 속도제한 검사 입력 교정 / 전체 감사 대기 (2026-10-08 KST)
+
+- GitHub audit 3차 `37710485386`: 독립 D1 W2/W0, TypeScript, Build PASS. `Static release-system verification` 단계에서 구 follow355 테스트가 새 abuse guard에 target/desired/operationId를 전달하지 않고 이전 `RATE_LIMITS.follow` 방식으로 호출해 FAIL. 이후 388/392/393 및 live read-only gate는 SKIPPED.
+- 이번 변경은 기존 `verify-354-follow-orchestration.mjs` / `verify-355-follow-audit-repairs.mjs`의 **격리 VM 및 오래된 limiter 테스트 입력만** 수정. 성공·429 제한·503 장애를 새 Cloudflare native limiter contract로 검증하며, 실제 영구 R2 악용 보호는 388 --release가 담당.
+- UI/Worker/Functions/실제 D1 스키마·데이터 변경 없음. 이전 2차 감사의 consumeSocialAbuse380 missing fixture를 수정한 뒤 최신 호출 인자가 빠진 다음 지점을 발견한 것. 신규 기능을 느슨하게 만들지 않음.
+- 전체 릴리스 감사 및 Work 독립 감사 PASS 전 배포 금지. 069 전역 대기열 LIMIT 65 포화 시 정상 재전송 503 위험은 별도 운영 범위 문제로 남음.
+- 실제 PREVIEW app379 그대로. main/TEST/PRODUCTION 비변경, shared D1 schema apply·데이터 마이그레이션·원본 쓰기 0.
+
 ## 0RZG. app380 audit-only follow354 fixture 연결 보완 / 재감사 전 배포 금지 (2026-10-08 KST)
 
 - 감사 2차 `37710252515`: isolated D1 신규 W2/replay W0 PASS, TypeScript PASS, Build PASS. `Static release-system verification` 단계에서 기존 follow354 격리 VM에 최신 097 abuse hook `consumeSocialAbuse380`가 등록되지 않아 ReferenceError로 FAIL, 이후 388/392/393 및 live read-only gate는 SKIPPED.

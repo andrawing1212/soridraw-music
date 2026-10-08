@@ -237,11 +237,19 @@ function fixture() {
     // App380 has a separately audited persistent abuse guard (388 --release).
     // Follow354 tests only overlay orchestration, not R2 abuse-budget storage.
     consumeSocialAbuse380: async (_env, uid, domain, rows) => {
+      // Persistent R2/CAS/abuse limits are independently verified by app388.
       assert.equal(domain, 'follow');
-      assert.equal(uid, 'actor');
+      assert.ok(typeof uid === 'string' && uid.endsWith('actor'));
       assert.equal(rows.length, 1);
       assert.equal(typeof rows[0].desired, 'boolean');
       assert.match(rows[0].operationId, /^[a-zA-Z0-9_-]{16,128}$/);
+    },
+    socialAbuseLimited380: (delayMs) => {
+      assert.ok(Number.isFinite(delayMs) && delayMs > 0);
+      throw Object.assign(Error('social limit'), {code:'RATE_LIMITED',status:429});
+    },
+    socialAbuseUnavailable380: () => {
+      throw Object.assign(Error('social limiter unavailable'), {code:'RATE_LIMIT_UNAVAILABLE',status:503});
     },
     invalidatePublicProfileFirstViewEdgeCache: async () => {},
     syncExploreFollowingR2AfterMutation: async () => { throw Error('overlay touched legacy sync'); },

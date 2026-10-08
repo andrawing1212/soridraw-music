@@ -1,3 +1,9 @@
+## CURRENT NEXT GATE — 0RZE old/new Worker mixed replay 독립 재감사 (2026-10-08 KST)
+
+- preview의 0RZE 수정 commit 대상: 034167367 Work FAIL의 receipt-less old Worker newer unlike 재현과 예방을 확인한다.
+- 실제 frozen Worker 040/073 enqueue + app379 클라이언트 replay, newer unlike 우선, outbox 종료, personal/public 재발행 0, canonical read W0, 069 time PK LIMIT 65 overflow 시 typed 503, rows_read 추가량을 독립 검증한다. 035/066 혼재·과밀 사용자 영향도 FAIL 판정에 포함한다.
+- 392/393, 388 --release, 기타 like/follow 회귀, TypeScript/Build 및 canonical Worker hash/idempotence 확인. **실제 shared D1 apply·Worker/Hosting 배포·main/TEST/PRODUCTION 변경 금지**. Work PASS 전 배포 금지.
+
 ## CURRENT NEXT GATE — 두 blocker 구현 commit의 Work 독립 재감사 (2026-10-08 KST)
 
 - 기준: 아래 두 blocker 구현을 완료한 **0RZD를 포함하는 preview commit**. 시작 HEAD는 `37a7f3e299ebb3d4232a1276817f2490698c96d0`.

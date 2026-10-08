@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -73,6 +73,32 @@ try {
     return reply;
   }
   await verifyReplay('QUEUE_PENDING',true,9);
+  // Frozen old-worker enqueue has no receipt. Its newer unlike wins.
+  const frozenAst=ts.createSourceFile('frozen-worker.js',
+    readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8'),
+    ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  const frozenFunctions=frozenAst.statements.filter(ts.isFunctionDeclaration)
+    .filter(n=>['exploreLikeW1Batch040','enqueueExploreLikeBatch035'].includes(n.name?.text));
+  assert.equal(frozenFunctions.length,2);
+  const frozenCtx=vm.createContext({crypto:webcrypto,TextEncoder,Date,
+    isMissingLikeCutoverControl174:()=>false,
+    throwLikeCutoverFenceClosed174:()=>{throw Error('old Worker cutover closed');}});
+  vm.runInContext(frozenFunctions.map(n=>n.getText(frozenAst)).join('\n'),frozenCtx);
+  const legacyDB={DB:{
+    prepare:sql=>({bind:(...params)=>({sql,params})}),
+    batch:async statements=>statements.map(({sql,params=[]})=>{
+      if(/^\\s*SELECT/i.test(sql))return {success:true,results:db.prepare(sql).all(...params)};
+      return {success:true,meta:{changes:Number(db.prepare(sql).run(...params).changes)}};
+    }),
+  }};
+  const preOld=written();
+  const legacy=await frozenCtx.enqueueExploreLikeBatch035(legacyDB,'viewer',
+    [{trackId:'t',liked:false,mutationAt:now+32_000}],now+32_000);
+  assert.equal(legacy.queue,'069');
+  assert.equal(written()-preOld,1,'old Worker W1 with no receipt');
+  await verifyReplay('FROZEN_OLD_WORKER_NEWER_UNLIKE',false,8);
+  db.prepare('DELETE FROM explore_like_batches_069 WHERE batch_id=?').run(legacy.batchId);
+  console.log('392_FROZEN_OLD_WORKER_RECEIPTLESS_NEWER_UNLIKE=PASS');
   // Another device's newer accepted queue wins even before materialization.
   const newerDevice=clientFixture379(current).fixture();
   newerDevice.setState({outbox:{t:{...original,baseLiked:true,baseLikeCount:9,
@@ -109,10 +135,20 @@ try {
   }
   // Receipt-aware clients opt out of compatibility reads; no old protocol changes.
   const aware=await handle([mutation],true);assert.equal(aware.data.results,undefined);
+  // Saturation is an ambiguous state: never return the stale receipt desired.
+  const preSaturated=written();
+  for(let n=0;n<65;n++)db.prepare('INSERT INTO explore_like_batches_069 VALUES(?,?,?,?,?)').run(
+    'l069_'+String(now+100_000+n).padStart(13,'0')+'_'+n.toString(16).padStart(64,'0'),
+    'other',now+100_000+n,1,JSON.stringify([{trackId:'unrelated',liked:true}]));
+  await assert.rejects(()=>handle(),e=>e.code==='LIKE_RECEIPT_UNAVAILABLE');
+  assert.equal(written(),preSaturated+65,'saturated replay W0');
+  console.log('392_LEGACY_QUEUE_PK_WINDOW_LIMIT_65_FAIL_CLOSED=PASS');
   const details=queryPlans.map(row=>row.detail).join('\n');
   assert.match(details,/SEARCH proof USING PRIMARY KEY/);assert.match(details,/SEARCH q USING PRIMARY KEY/);
   assert.match(details,/SEARCH t USING PRIMARY KEY/);assert.match(details,/SEARCH l USING PRIMARY KEY/);
-  assert.doesNotMatch(details,/SCAN (?:proof|q|t|l|s)\b/);
+  assert.match(details,/SEARCH explore_like_batches_069 USING PRIMARY KEY/);
+  // q is a materialized LIMIT 65 scan; the D1 table itself must be PK-seek.
+  assert.doesNotMatch(details,/SCAN (?:proof|t|l|s)\b/);
   console.log('392_EXACT_APP379_FIRST_ACK_AND_APP381_MIXED_NEWER_UNDO_REVISION=PASS');
   console.log('392_REPLAY_READ_ONE_SNAPSHOT_UID_PK_QUEUE_PK_TRACK_PK_NO_FULL_SCAN=PASS');
   console.log('392_LEGACY_READ_BOUNDS=receipt_row1_queue_rows<=1200_queue_intents<=1200_requested_tracks<=50');

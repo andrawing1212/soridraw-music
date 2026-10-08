@@ -9,6 +9,14 @@ async function readLegacyLikeReplay379(env, uid, mutations, receipt) {
   }
   const result = await env.DB.prepare(`
     WITH requested(track_id) AS (SELECT value FROM json_each(?)),
+    -- Legacy 040/073 Worker batches have no receipt. Only a chronological
+    -- batch_id PK range is allowed. At LIMIT 65 saturation fail closed.
+    legacy_window AS MATERIALIZED (
+      SELECT batch_id, user_uid, created_at, mutations_json
+      FROM explore_like_batches_069
+      WHERE batch_id >= ?
+      ORDER BY batch_id ASC LIMIT 65
+    ),
     pending AS MATERIALIZED (
       SELECT q.created_at, q.batch_id, json_extract(m.value,'$.trackId') AS track_id,
         json_extract(m.value,'$.liked') AS liked
@@ -18,6 +26,11 @@ async function readLegacyLikeReplay379(env, uid, mutations, receipt) {
       JOIN json_each(q.mutations_json) m
       WHERE proof.user_uid=? AND json_extract(ids.value,'$.acceptedAt') >= ?
         AND json_extract(m.value,'$.trackId') IN (SELECT track_id FROM requested)
+      UNION ALL
+      SELECT q.created_at, q.batch_id, json_extract(m.value,'$.trackId') AS track_id,
+        json_extract(m.value,'$.liked') AS liked
+      FROM legacy_window q JOIN json_each(q.mutations_json) m
+      WHERE q.user_uid=? AND json_extract(m.value,'$.trackId') IN (SELECT track_id FROM requested)
     ), ranked AS (
       SELECT track_id, liked, ROW_NUMBER() OVER (
         PARTITION BY track_id ORDER BY created_at DESC, batch_id DESC) AS n
@@ -30,16 +43,19 @@ async function readLegacyLikeReplay379(env, uid, mutations, receipt) {
       MAX(0, COALESCE(s.like_count,0) + CASE
         WHEN t.is_public=1 AND t.status='published' AND p.track_id IS NOT NULL
         THEN p.liked - CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END
-        ELSE 0 END) AS like_count
+        ELSE 0 END) AS like_count,
+      (SELECT COUNT(*) FROM legacy_window) AS legacy_window_count
     FROM requested r
     LEFT JOIN tracks t ON t.id=r.track_id
     LEFT JOIN likes l ON l.track_id=r.track_id AND l.user_uid=?
     LEFT JOIN track_stats s ON s.track_id=r.track_id
     LEFT JOIN ranked p ON p.track_id=r.track_id AND p.n=1
-  `).bind(JSON.stringify(ids), uid, receipt.acceptedAt, uid).all();
+  `).bind(JSON.stringify(ids), 'l069_' + String(receipt.acceptedAt).padStart(13, '0') + '_',
+    uid, receipt.acceptedAt, uid, uid).all();
   if (result?.success !== true || !Array.isArray(result.results) || result.results.length !== ids.length ||
       new Set(result.results.map(row => row.track_id)).size !== ids.length ||
-      result.results.some(row => !ids.includes(row.track_id) || ![0, 1].includes(row.liked) ||
+      result.results.some(row => row.legacy_window_count >= 65 ||
+        !Number.isSafeInteger(row.legacy_window_count) || !ids.includes(row.track_id) || ![0, 1].includes(row.liked) ||
         !Number.isSafeInteger(row.like_count) || row.like_count < 0)) {
     likeReceiptError390('LIKE_RECEIPT_UNAVAILABLE', 503);
   }

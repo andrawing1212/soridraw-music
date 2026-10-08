@@ -15397,24 +15397,19 @@ ${normalizePromptForDisplay(result.prompt)}
     };
   }, [user?.uid, flushRecentSongTextWrite]);
 
-  // Stage414: foreground editing retains the existing 150-second trailing
-  // aggregate; only a REAL pending edit can settle early at app background/exit.
-  // pagehide is best-effort, never a guarantee of an acknowledged Firestore write.
+  // Preserve the 150-second trailing aggregate during ordinary app switching.
+  // Only an actual page exit attempts an early pending-only flush.
+  // pagehide is best-effort and cannot guarantee a server acknowledgement.
   useEffect(() => {
     const uid = String(user?.uid || '').trim();
     if (!uid) return;
-    const flushOnPendingBackground = () => {
+    const flushOnPendingPageExit = () => {
       if (recentSongTextWritePendingRef.current?.uid !== uid) return;
       void flushRecentSongTextWrite();
     };
-    const onHidden = () => {
-      if (document.visibilityState === 'hidden') flushOnPendingBackground();
-    };
-    document.addEventListener('visibilitychange', onHidden);
-    window.addEventListener('pagehide', flushOnPendingBackground);
+    window.addEventListener('pagehide', flushOnPendingPageExit);
     return () => {
-      document.removeEventListener('visibilitychange', onHidden);
-      window.removeEventListener('pagehide', flushOnPendingBackground);
+      window.removeEventListener('pagehide', flushOnPendingPageExit);
     };
   }, [user?.uid, flushRecentSongTextWrite]);
 

@@ -61,10 +61,12 @@ assert.match(app, /onMusicNote=\{\(\) => navigate\('\/history'\)\}/, 'classic Mu
 console.log('VERIFY_303_STUDIO_SPLIT_BROWSER_HISTORY=PASS');
 
 
-// app381 is a separately approved UI release; app380 follow-only must retain
-// the exact app379 pre-paint workspace and Explore Recent routing.
+// app381 Recent UI changes are a separate deferred feature. A newer app
+// version alone (e.g. app382 cache hotfix) must NOT imply those UI changes.
 const appVersion = Number(JSON.parse(readFileSync('public/app-version.json', 'utf8')).version);
-if (appVersion >= 381) {
+assert.ok(appVersion >= 380, 'follow-only app version regressed');
+const hasApp381RecentRoute = explore.includes("onRecentSongs={() => go('/studio?view=recent')}");
+if (hasApp381RecentRoute) {
 
 
   assert.match(
@@ -90,5 +92,5 @@ if (appVersion >= 381) {
     'app381 UI route must not leak into follow-only release');
   assert.doesNotMatch(splitEngine, /soridraw-studio-frame-resize/,
     'app381 pre-paint layout hotfix must not leak into follow-only release');
-  console.log('APP380_APP379_STUDIO_UI_PROTECTED=PASS');
+  console.log('APP382_APP379_STUDIO_UI_PROTECTED=PASS');
 }

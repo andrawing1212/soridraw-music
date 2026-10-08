@@ -61,19 +61,34 @@ assert.match(app, /onMusicNote=\{\(\) => navigate\('\/history'\)\}/, 'classic Mu
 console.log('VERIFY_303_STUDIO_SPLIT_BROWSER_HISTORY=PASS');
 
 
-assert.match(
-  explore,
-  /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
-  'Explore Recent Songs must route to the exact Recent workspace',
-);
-assert.doesNotMatch(
-  explore,
-  /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
-  'Explore Recent Songs must not fall back to Create',
-);
-assert.match(splitEngine, /useLayoutEffect/, 'workspace switch must reconcile in layout phase');
-assert.match(splitEngine, /soridraw-studio-frame-resize/, 'workspace switch must reuse the existing Lite frame-resize owner');
-assert.match(splitEngine, /props\.workspaceRequestId/, 'workspace request id must drive pre-paint reconciliation');
-assert.match(splitEngine, /props\.workspaceView/, 'workspace view must drive pre-paint reconciliation');
+// app381 is a separately approved UI release; app380 follow-only must retain
+// the exact app379 pre-paint workspace and Explore Recent routing.
+const appVersion = Number(JSON.parse(readFileSync('public/app-version.json', 'utf8')).version);
+if (appVersion >= 381) {
 
-console.log('VERIFY_381_RECENT_WORKSPACE_TRANSITION=PASS');
+
+  assert.match(
+    explore,
+    /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
+    'Explore Recent Songs must route to the exact Recent workspace',
+  );
+  assert.doesNotMatch(
+    explore,
+    /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
+    'Explore Recent Songs must not fall back to Create',
+  );
+  assert.match(splitEngine, /useLayoutEffect/, 'workspace switch must reconcile in layout phase');
+  assert.match(splitEngine, /soridraw-studio-frame-resize/, 'workspace switch must reuse the existing Lite frame-resize owner');
+  assert.match(splitEngine, /props\.workspaceRequestId/, 'workspace request id must drive pre-paint reconciliation');
+  assert.match(splitEngine, /props\.workspaceView/, 'workspace view must drive pre-paint reconciliation');
+
+  console.log('VERIFY_381_RECENT_WORKSPACE_TRANSITION=PASS');
+} else {
+  assert.match(explore, /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
+    'pre-app381 Explore Recent routing must remain as deployed app379');
+  assert.doesNotMatch(explore, /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
+    'app381 UI route must not leak into follow-only release');
+  assert.doesNotMatch(splitEngine, /soridraw-studio-frame-resize/,
+    'app381 pre-paint layout hotfix must not leak into follow-only release');
+  console.log('APP380_APP379_STUDIO_UI_PROTECTED=PASS');
+}

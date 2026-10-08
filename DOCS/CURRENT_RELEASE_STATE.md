@@ -1,3 +1,13 @@
+## 0RZO. app380 PREVIEW 사용자 실기기 팔로우·해제 비용/동기화 관찰 PASS (2026-10-08 KST)
+
+- 실배포 source `b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2` (app380), PREVIEW Worker `c4c51b19-818a-4eaf-8be1-aca0b241d50a`. 사용자 2026-10-08T02:55:14Z에 실제 앱 PC→모바일 팔로우/해제 결과 및 CACHE LIVE 캡처 2장 제출.
+- **사용자 관찰 PASS:** 팔로우·해제 각각 마지막 클릭 후 약 30초에 서버 반영, 모바일 공개 팔로우 숫자도 약 30초 뒤 갱신. 30초 이내 여러 번 눌러서 **최종 상태가 최초 상태와 같으면 서버 비용 발생하지 않음**(사용자 직접 실사용 관찰). 같은 상태의 중간 클릭을 따로 저장하지 않는 final-state batching 의도와 부합.
+- **CACHE LIVE 스크린샷:** 첫 번째 팔로우 해제 실행 D1 query R2/W1, query rows_read 11/rows_written 1. 둘째 팔로우 실행 D1 query R2/W1, query rows_read 10/rows_written 1. 양쪽 PAGE SYNC D1 R0/W0 및 Firestore R0/W0. 이는 각 캡처 내 '이번 실행'의 화면 수치이며 전체 DB physical billing/모든 경로 PASS로 과장하지 않음. R2 Class A/B 숫자는 별도 지표이고 팔로우 1회당 순증분 비용 확정 근거가 아님.
+- **이번 실사용 범위 판단:** follow/unfollow W1 사례, PC→모바일 30초 수렴, net-zero W0 사용자 관찰 **PASS**. 반대 방향 모바일→PC, 새로고침/로그아웃·캐시 업그레이드, 공격성 429/503에서 정상 상태 복구, 다계정/장시간 반복, 정상 좋아요/해제 개인 membership 및 W1, R2 get/put 물리 비용 **아직 별도 실사용 미검증**.
+- **보호 결정:** 정상 동작을 확인했으므로 제품 코드·Worker·Hosting·shared D1/RTDB를 추가 변경하지 않는다. 결과만 GitHub 상태 문서에 기록. TEST/main 및 PRODUCTION 승격은 사용자 승인 전 금지.
+- **정확한 다음 단계:** (1) 모바일→PC 팔로우/해제 최종상태 수렴, (2) 기존 좋아요·해제 W1 및 내 좋아요/공개 숫자 확인, (3) 미변경 재진입·새로고침/30초 net-zero 유지, (4) 필요한 경우 R2 비용과 거부/복구 경로 읽기 전용 점검. 이상이 없으면 TEST 승격 전 390 preflight 별도 호환성 문제를 안전하게 검증하여 사용자에게 승격 승인 요청.
+
+---
 ## 0RZN. app380 팔로우 전용 PREVIEW Worker + Firebase Hosting 실배포 SUCCESS (2026-10-08 KST)
 
 - 사용자 2026-10-08T02:44:39Z 승인: 이미 완성된 `app380` 팔로우 30초 최종상태 묶음/097 제한만 PREVIEW 배포. 신규 좋아요 098/receipt390 및 shared D1 migration, TEST/PRODUCTION 배포는 승인하지 않음.

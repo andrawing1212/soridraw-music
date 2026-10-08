@@ -2053,10 +2053,18 @@ updates: draft.updates,
       void flushMusicNoteLocalPendingSingleFlight()
         .catch((error) => console.warn('[414] Music Note background save retained for retry:', error));
     };
+    const flushOnPageHide = () => {
+      // Direct best-effort exit attempt; the coordinator intentionally skips
+      // page-close network work, while the durable IndexedDB draft remains safe.
+      void flushMusicNoteLocalPendingSingleFlight()
+        .catch((error) => console.warn('[414] Music Note closing draft retained for retry:', error));
+    };
     document.addEventListener('visibilitychange', flushOnHidden);
+    window.addEventListener('pagehide', flushOnPageHide);
 
     return () => {
       document.removeEventListener('visibilitychange', flushOnHidden);
+      window.removeEventListener('pagehide', flushOnPageHide);
       clearFavoriteDetailFlushTimer();
       void flushSoridrawPageSync(activeUser, 'music-note-exit')
         .catch((error) => console.warn('[081] Music Note page sync pending:', error))

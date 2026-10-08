@@ -1,3 +1,11 @@
+## 0RZI. app380 GitHub audit 최초 핵심 검사 진입 / 392 DB mock 보완 — 미배포 (2026-10-08 KST)
+
+- 4차 감사 `37710877493`: isolated D1 접수 W2/replay W0, TypeScript, Build, Static release-system verification **PASS**. `verify-387`, `verify-389`, `verify-388-social-abuse-runtime.mjs --release`, 390/391 receipt contract PASS.
+- 실제 392 mixed old Worker 검사는 `legacyDB.DB.prepare(SELECT phase)` mock가 `sql` 속성 없는 객체를 돌려주어 `TypeError: The "sql" argument must be a string`로 중단. **제품 버그 PASS/FAIL로 오인 금지**. 393 및 나머지 like/follow 회귀검사는 이 중단으로 SKIPPED.
+- 오직 `verify-392-app379-like-replay.mjs`의 bounded frozen Worker DB statement fixture를 `prepare:sql => ({ sql, params:[], bind(...) })`로 수정하여 실제 frozen old Worker의 unbound SELECT statement shape을 재현. 제품 Worker/runtime/UI 및 receipt D1 구조 변경 0.
+- 4차 감사에서 배포 안전성 이전 오류와 follow354/355 obsolete fixture 오류는 더 이상 나타나지 않았다. 392/393 및 기존 좋아요·팔로우 전체 PASS를 확인하기 전까지 배포 금지.
+- 실제 PREVIEW app379 유지. shared D1 데이터/마이그레이션/Worker/Hosting 적용 0, main/TEST/PRODUCTION 비변경. 전역 069 LIMIT 65 운영 위험/Cloudflare 실제 rows_read/실기기·Work 감사 미완료.
+
 ## 0RZH. app380 follow355 과거 속도제한 검사 입력 교정 / 전체 감사 대기 (2026-10-08 KST)
 
 - GitHub audit 3차 `37710485386`: 독립 D1 W2/W0, TypeScript, Build PASS. `Static release-system verification` 단계에서 구 follow355 테스트가 새 abuse guard에 target/desired/operationId를 전달하지 않고 이전 `RATE_LIMITS.follow` 방식으로 호출해 FAIL. 이후 388/392/393 및 live read-only gate는 SKIPPED.

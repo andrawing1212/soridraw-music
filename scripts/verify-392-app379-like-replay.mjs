@@ -85,7 +85,7 @@ try {
     throwLikeCutoverFenceClosed174:()=>{throw Error('old Worker cutover closed');}});
   vm.runInContext(frozenFunctions.map(n=>n.getText(frozenAst)).join('\n'),frozenCtx);
   const legacyDB={DB:{
-    prepare:sql=>({bind:(...params)=>({sql,params})}),
+    prepare:sql=>({sql,params:[],bind:(...params)=>({sql,params})}),
     batch:async statements=>statements.map(({sql,params=[]})=>{
       if(/^\s*SELECT/i.test(sql))return {success:true,results:db.prepare(sql).all(...params)};
       return {success:true,meta:{changes:Number(db.prepare(sql).run(...params).changes)}};

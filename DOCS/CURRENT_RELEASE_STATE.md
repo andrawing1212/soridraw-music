@@ -1,3 +1,18 @@
+## 0RZM. app380 팔로우 전용 PREVIEW 후보 분리·전체 집중검사 PASS — 배포 보류 (2026-10-08 KST)
+
+- **사용자 승인 작업:** ChatGPT 직접 최소 수정. PREVIEW에만 commit/push; 배포·공유 D1/R2 실사용 데이터 변경·TEST/PRODUCTION 변경 금지.
+- **작업 시작** `c9745879d6a303063004011f4f222b61ecac4a4d`; **제품·검사 후보 검증 commit** `25b84ebec75a754fcde7647b4084ec819e2df820`. 배포 전에 기준 SHA를 최신 문서 commit으로 고정할 것.
+- **app381 UI 제외:** `src/components/explore/ExploreShell.tsx`와 `src/components/studio/StudioSplitEngineWorkspace.tsx`를 실제 배포 app379 기준 `aa1bac7636651fdf94598f0d5ef502955a60bc0f`와 blob exact-match로 복구. `public/app-version.json`은 **380**. app381 화면 전환 hotfix는 별도 commit `79374d59f7f9d251ef73a15089d4040288fde2bb`에 이력 보존, 이번 릴리스에는 미포함. `src/pages/ExplorePage.tsx`의 follow380 복구/묶음 코드는 **그대로 보존**.
+- **좋아요/Worker 보호:** app379 `src/services/exploreLikeService.ts` exact frozen. canonical Worker도 app379 계열 대비 팔로우 함수 2개 변경/팔로우 전용 4개 함수 추가 외 **전부 동일**. `097`만 활성, 좋아요 `098`/receipt390/65 global queue replay는 릴리스 미포함. 새 공유 D1 스키마 적용 없음.
+- **PREVIEW release gate:** `cloudflare-explore-preview-release.yml`의 receipt390 필수 preflight를 새 좋아요 Worker에만 적용하고, follow-only는 `verifySocialConfig380`으로 config/preflight 유지하는 분기를 정적 확인. `wrangler.preview.jsonc`은 `SORIDRAW_ENVIRONMENT=preview`, 공유 `DB=soridraw-explore-db`, `PROFILE_MEDIA=soridraw-profile-media`. 기존 배포용 trigger 파일 미변경.
+- **검사 코드:** `scripts/verify-303-studio-split-browser-history.mjs`를 버전별로 분리(380은 원래 UI 보호, 381 이상은 기존 app381 UX 검사 그대로 유지). 신규 `scripts/verify-395-follow-only-release-scope.mjs`는 old UI blob equality, version380, 097-only, 390 absence, PREVIEW release gate·binding을 검증. Focused workflow에 UI/version 변경 경로와 두 검사 추가.
+- **최종 GitHub CI:** `37719123137` **SUCCESS** — TypeScript PASS, Build PASS, Worker SHA/JS syntax PASS, 394 non-follow Worker/likes freeze PASS, 395 UI·version·release scope PASS, 303 legacy browser history PASS, follow354/355/356/377/386/387/389-follow-only PASS. 실제 PREVIEW Worker deploy workflow dry-run/full preflight를 실행한 것은 아님.
+- **남은 검증:** 새 후보 실제 Cloudflare physical D1 W1~W2, R2 get/put 비용, 429/reload 실사용, app379→380 브라우저 캐시 업데이트, PC↔mobile 실시간 follow/unfollow, 실제 Preview Hosting+Worker active versions **미측정/미배포**. 069 legacy diagnostic push 실패는 별도 기존 문제.
+- **별도 TEST/PRODUCTION 준비 blocker:** `.deploy/release-worker-runtime.mjs`는 아직 receipt390 D1 preflight를 unconditional 실행하므로, 팔로우-only로 TEST/PRODUCTION 승격 전에 별도 안전 검증/최소 수정 필요. 이번 PREVIEW 범위 밖이라 손대지 않음.
+- **실배포 상태:** GitHub 마지막 확인 PREVIEW Hosting app379, 새 PREVIEW Worker/Hosting 배포 0. 사용자 데이터 원본 D1/R2/Firestore/RTDB mutation 0; main/production ref 비변경.
+- **정확한 다음 단계(사용자 별도 승인 필요):** 완료 후보 exact preview SHA 고정 → PREVIEW Worker 097-only release 실 preflight/배포/rollback gate → 성공 시 Firebase PREVIEW Hosting app380만 배포(공유 RTDB Rules OFF) → 실제 주소/비용/PC·모바일 검증. TEST/PRODUCTION 승격 금지. app381 UI hotfix는 별도 승인 릴리스로 유지.
+
+---
 ## 0RZL. ChatGPT 직접 구현 — app379 좋아요 동결 / app380 팔로우 전용 최소 방어 후보 완성 (2026-10-08 KST)
 
 - 사용자 직접 지시: Codex는 사용자가 요청하거나 ChatGPT가 실제로 막힐 때만 사용. **기본 수정자는 ChatGPT**. 현재 승인 작업은 팔로우 30초 최종상태 묶음 + 반복 공격 방어만 구현·검사; 배포나 공유 D1 변경 금지.

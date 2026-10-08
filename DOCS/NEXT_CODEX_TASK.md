@@ -1,3 +1,15 @@
+## CURRENT GATE — app380 PREVIEW 배포 성공, 실제 PC·모바일 및 비용 검증 대기 (2026-10-08 KST)
+
+- 기본 작업자 ChatGPT. Codex는 사용자 명시 요청 또는 직접 구현이 실제로 막힐 때만 활용.
+- 사용자 승인 PREVIEW app380 Worker+Hosting **배포 성공**. Worker Run `37719453033` SUCCESS (new version `c4c51b19-818a-4eaf-8be1-aca0b241d50a`), Firebase Hosting Run `37719570071` SUCCESS (`preview.soridraw.com` exact app-version=380/build PASS).
+- 제품 source `b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2`. 두 release trigger commit 외 소스 수정 없이 배포. 앱380에 app381 별도 UI hotfix·좋아요 receipt390/098 미포함.
+- Firebase Rules/Functions, shared D1 schema/cutover, user data, TEST/PRODUCTION 승격 변경 없음. TEST/PRODUCTION Worker/Hosting 비변경 확인.
+- **바로 다음 사용자 검증:** PC↔모바일 같은 계정으로 팔로우→해제, 30초 이내 net-zero, 30초 뒤 최종상태 반영, 새로고침/페이지 이동/다른 기기 숫자·목록, 좋아요/해제 W1 보호, CACHE LIVE D1 R/W 및 R2 비용. 결과 기록 후 비정상 때만 최소 수정/rollback 판단. 실사용 물리 비용은 아직 미검증.
+- **중단 조건:** 팔로우 W3+, 좋아요 W1/상태 이상, app379 UI 회귀, 다른 기기 수렴 실패가 확인되면 TEST 논의 중단. app381 Recent UI는 별도 저장.
+- TEST/PRODUCTION용 `.deploy/release-worker-runtime.mjs`의 unconditional receipt390 readiness는 별도 preflight blocker. TEST 승격 전 검증하고 최소 범위만 수정할 것. 사용자의 TEST 승인 전 main 변경 금지.
+- 세부 데이터 및 GitHub release 기록은 `DOCS/CURRENT_RELEASE_STATE.md` 최상단 0RZN 참조.
+
+---
 ## CURRENT NEXT GATE — app380 팔로우 전용 PREVIEW 사용자 배포 승인 대기 (2026-10-08 KST)
 
 - **ChatGPT가 직접 구현**. Codex는 요청 시/정말 막혔을 때만 사용. GitHub 현재 상태는 `DOCS/CURRENT_RELEASE_STATE.md` 0RZM 참조.

@@ -169,7 +169,15 @@ jobs:
           grep -q 'SORIDRAW_R2_HYBRID_READ_336_20261004' canonical/preview-worker.js
           grep -q '"SORIDRAW_R2_HYBRID_READ_V1": "1"' canonical/wrangler.preview.jsonc
           grep -q '"SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1"' canonical/wrangler.preview.jsonc
-          node scripts/receipt390-release.mjs preflight canonical/wrangler.preview.jsonc preview
+          # Exact 390 preflight is required only for receipt-aware like releases.
+          # Follow-only releases preserve the frozen app379 W1 like route and
+          # must not require a new shared user-data schema.
+          if grep -q 'SORIDRAW_LIKE_ABUSE_GUARD_390_20261008' canonical/preview-worker.js; then
+            node scripts/receipt390-release.mjs preflight canonical/wrangler.preview.jsonc preview
+          else
+            node --input-type=module -e "import{verifySocialConfig380}from './scripts/receipt390-release.mjs';import{readFileSync}from 'node:fs';verifySocialConfig380(JSON.parse(readFileSync('canonical/wrangler.preview.jsonc','utf8')),'preview')"
+            echo 'FOLLOW_ONLY_380_NO_RECEIPT_SCHEMA_PREFLIGHT=PASS'
+          fi
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..

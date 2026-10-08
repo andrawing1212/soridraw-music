@@ -1,3 +1,14 @@
+## CURRENT GATE — Stage400 069/075 격리 검증 PASS / 실제 알림 구현 STOP (2026-10-09 KST)
+
+- 최신 시험 `DOCS/RTDB_069_075_ISOLATED_GATE_400_2026-10-09.md` 필독. 격리 CI Run `37822533579` SUCCESS. 기존 398 4/4 + 399 8/8 + 신규 400 075 5/5 + source guard/race 재현 PASS.
+- 075은 queue cursor 갱신 전 `changedRows`를 별도 SELECT하므로, **저장 전에 계산한 곡 ID를 서버 RTDB 게시 확정 근거로 사용 금지**. 069은 현재 canonical membership batch 반환값이 건수뿐이라 곡 ID 누락. 069/075 모두 커버하는 단일 safe result source가 필요.
+- Miniflare 모델의 RETURNING 추가는 background D1 writes 0 증가, reads 075 +3~+5 / 039/040 +3~+7 증가. 실제 deployed Worker bundle, LIVE D1, 10만 유저 RTDB 전송 비용을 아직 증명하지 못함.
+- 다음 단계 P0: 변경곡 실제 membership commit ID 확인(069/075 모두), 중복·순서·batch 경계·상쇄·실패 시 알림 누락 대응, 비용 상한 증명. 필요하면 기존 397 fail-closed 추출기를 재사용하되, 서버 발행과 retry가 실제 정착보다 앞서면 안 됨.
+- 구현이 W1 intake, 기존 반영시간/PC↔모바일/타계정 공개 likeCount, 구버전 호환, D1 W1~W2 예산 또는 읽기 0 재방문을 해치면 즉시 FAIL/STOP. Worker→Firebase server-auth/idempotency/durable notification-only retry 불증명 시 Functions/Rules/V2 client 전환 금지.
+- Stage400은 코드 테스트·Workflow·문서만 변경. 공유 사용자 데이터/Rules/Worker/Functions/Hosting/main/production 변경·배포 없음. 앱382 TypeScript/Build/실기기 LIVE 비용 검증 전. `diagnose-069-live-like.yml`의 push 실패는 별개이며 성공 상태로 간주하지 않는다.
+
+---
+
 ## CURRENT GATE — 069/075 서버 확정 변경곡 결합 P0 / 실사용 비용 검사 대기 (2026-10-08 KST)
 
 - `DOCS/RTDB_FULL_AGGREGATE_COST_399_2026-10-08.md` 필독. 격리 Miniflare 399 8/8 PASS run `37744086289`: patch039/040 배경 정산 후보 `RETURNING`은 쓰기 증분 0, 읽기 +3~+7. 접수 사용자 진단 R0/W1은 별도.

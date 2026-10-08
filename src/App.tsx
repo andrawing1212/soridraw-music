@@ -15242,10 +15242,14 @@ ${normalizePromptForDisplay(result.prompt)}
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
   const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number; syncItem?: any } | null>(null);
 
+  // Stage414: hidden + pagehide + trailing timer must share one canonical write.
+  const recentSongTextFlushInFlightRef = useRef<Promise<void> | null>(null);
   const flushRecentSongTextWrite = useCallback(async () => {
+    if (recentSongTextFlushInFlightRef.current) return recentSongTextFlushInFlightRef.current;
     const pending = recentSongTextWritePendingRef.current;
     if (!pending?.uid || !Array.isArray(pending.songs)) return;
 
+    const task = (async () => {
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
       recentSongTextWriteTimerRef.current = null;
@@ -15280,6 +15284,13 @@ ${normalizePromptForDisplay(result.prompt)}
       // edit, explicit flush, or reload can retry it without losing the draft.
       console.error('Failed to flush batched recent-song text edits:', error);
     }
+    })();
+    recentSongTextFlushInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (recentSongTextFlushInFlightRef.current === task) recentSongTextFlushInFlightRef.current = null;
+    }
   }, []);
 
   const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
@@ -15301,7 +15312,8 @@ ${normalizePromptForDisplay(result.prompt)}
       setResult(detachedSong as SongResult);
     }
 
-    // Local persistence only. No timer and no pagehide Firestore flush.
+    // Persist the durable local snapshot before scheduling; Stage414 may
+    // flush this exact pending aggregate early on hidden/pagehide.
     saveRecentSongsCache(uid, {
       history: nextSongs,
       historyIndex: activeIndex,
@@ -15382,6 +15394,27 @@ ${normalizePromptForDisplay(result.prompt)}
         window.clearTimeout(recentSongTextWriteTimerRef.current);
         recentSongTextWriteTimerRef.current = null;
       }
+    };
+  }, [user?.uid, flushRecentSongTextWrite]);
+
+  // Stage414: foreground editing retains the existing 150-second trailing
+  // aggregate; only a REAL pending edit can settle early at app background/exit.
+  // pagehide is best-effort, never a guarantee of an acknowledged Firestore write.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    const flushOnPendingBackground = () => {
+      if (recentSongTextWritePendingRef.current?.uid !== uid) return;
+      void flushRecentSongTextWrite();
+    };
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flushOnPendingBackground();
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', flushOnPendingBackground);
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', flushOnPendingBackground);
     };
   }, [user?.uid, flushRecentSongTextWrite]);
 

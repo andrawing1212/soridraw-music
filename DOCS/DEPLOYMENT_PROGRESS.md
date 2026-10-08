@@ -1,3 +1,15 @@
+## 0S18. Stage412 PREVIEW Worker 실배포 성공 — app382 유지 / 2026-10-09 KST
+
+- **배포 대상 제품 SHA:** `4989c5aaf70c141b8ef73c1376a780cc58e6dbc0` (Stage412 060/062 guarded R2 writer + Stage410 191), SHA256 source lock `7e62d5537c1330bbcb77ad29e431328579bdd91e3c1f05f5f7f43011b99625fc`. 트리거 commit `f082914d7b74d843d6e122cce3ea85bbfab79479`.
+- **공식 Cloudflare PREVIEW Worker 배포 [Run 37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377) SUCCESS.** PREVIEW active Worker `c4c51b19-818a-4eaf-8be1-aca0b241d50a` → `dc8b4311-b4d0-45c5-8854-52680c39e19d`. TEST Worker `bc01f091-b9e6-43b7-ac82-73385ea24e52`, PRODUCTION Worker `4d82f107-ae7e-4985-b955-8c889807c888` 유지, `TEST_PRODUCTION_WORKERS_UNCHANGED=PASS`.
+- 품질 CI [37841000690](https://github.com/andrawing1212/soridraw-music/actions/runs/37841000690) **SUCCESS** (TypeScript/Build, 기존 127/175/178/191/192/197/390, Stage412 실제 Worker writer CAS **8/8**). 격리 D1 [37841189109](https://github.com/andrawing1212/soridraw-music/actions/runs/37841189109) **SUCCESS** (191 17/17 및 Stage412 8/8, 기존 398~406 경로). 최초 398 검사 [37841000613](https://github.com/andrawing1212/soridraw-music/actions/runs/37841000613) 는 역사적 411 정적 테스트 기대 오류로 FAIL; 검사 기대를 정정한 후 [37841189109] 성공.
+- 배포 preflight: Worker SHA256 exact PASS, `LIVE_LIKE_D1_SCHEMA=PASS`, `LIVE_LIKE_D1_STATE=PASS`(pending035=0, pending069=0), 기존 follow worker341/377 회귀 PASS, PREVIEW_RELEASE_PREFLIGHT PASS. 실제 배포 후 R2-only latest/popular/profile/genre/search D1 **R0/W0 smoke PASS**, changed-card 192 D1 R0/W0 PASS, Feed/Profile smoke PASS, Worker DO scheduler PASS, 고정 like cron 비활성 PASS. `preview.soridraw.com` 앱 Hosting은 기존 app382 유지, 앱/Functions/RTDB Rules 비배포.
+- **제품 수정 범위:** `canonical/preview-worker.js`, 생성 원본 `patches/060-shared-profile-r2-parity.mjs`, `patches/062-shared-track-card-r2.mjs`, 191 `preview-entry.js`; 테스트/문서/Workflow 추가. 사용자 Canonical D1/Firestore/RTDB 원본·migration/backfill 없음, 데이터 복사 없음, Worker PREVIEW만 승격.
+- **남은 제한:** 좋아요 1회/해제 1회 실제 D1 physical W1~W2, Stage412 추가 R2 GET 전체 청구, 사용자 PC↔모바일 / 타계정 like & follow 실사용, 기존 Feed 정상·카드만 구형 orphan 교정, 오래된 클라이언트 캐시 upgrade 미검증. `diagnose-069-live-like.yml` 자동 push workflow FAIL(실행 잡 생성 실패) 기존 별도 문제. 이들을 PASS라고 선언하지 않음. **TEST/PRODUCTION 승격 금지**.
+- 다음은 현재 배포 버전의 **소수곡 좋아요·해제 양방향 실사용 + D1/R2 비용 확인**. 정상 동작이 확인되면 구조 변경 없이 TEST 전 승격 게이트를 검토. 이상이 발견되면 로그 근거로 해당 경로만 최소 수정.
+
+---
+
 ## PREVIEW app377 follow count/list convergence (2026-10-07 KST)
 
 - User-reported app376 mismatch: following popup showed 2 actual relations while profile/tab count could remain 1; PC/mobile counts diverged after follow/unfollow.

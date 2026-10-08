@@ -1,3 +1,11 @@
+## CURRENT GATE — Stage412 PREVIEW Worker 배포 SUCCESS / 사용자 실사용 검증 (2026-10-09 KST)
+
+- 최신 PREVIEW Worker 버전 `dc8b4311-b4d0-45c5-8854-52680c39e19d`, 제품 lock SHA `4989c5aaf70c141b8ef73c1376a780cc58e6dbc0`. [배포 37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377) SUCCESS. Stage412 8/8 + 191 17/17, TypeScript/Build/좋아요/팔로우, 실제 R2-only API smoke PASS.
+- 다음은 **새 기능 개발이 아님.** preview.soridraw.com 기존 app382의 PC→모바일·모바일→PC 동일 계정, 타 계정 공개 숫자, 좋아요/해제, 팔로우 정상 확인과 D1 mutation physical W1/W2, R2 GET 비용 확인. 기존 Feed 최신·카드만 구형 orphan은 아직 미복구; 전체 캐시 강제 reset/전역 backfill 금지. 069 자동 workflow 장기 실패 별도.
+- 사용자 승인 없이 main/TEST/PRODUCTION 승격 금지. Firebase Hosting/Functions/Rules 배포 없음. 구형 앱 및 실제 사용자 캐시 호환 미검증. 앱/Worker 기능을 추가 변경하지 말고 실제 확인 결과가 필요할 때만 좁혀 작업.
+
+---
+
 ## Stage412 release gate: actual 060/062 isolated 8-case + TypeScript/Build required
 
 - Product fix `ed7e33112a5c6a8cd5d50bbafe9af9ab7b9aafbb`. Required CI runs: 408 strict product quality, 398 isolated D1 including new 412 8-case. Verify follow355 overlay and all like/follow regressions, and distinguish test success from LIVE R2 cost. Only use normal frozen PREVIEW Worker release route after safety gates. No main/TEST/PRODUCTION promotion.

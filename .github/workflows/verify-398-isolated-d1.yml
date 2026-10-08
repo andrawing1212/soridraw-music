@@ -1,0 +1,36 @@
+name: SORIDRAW 398 Isolated D1 Returning Cost
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-398-miniflare-d1-returning.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-398-local-d1-readonly
+  cancel-in-progress: false
+jobs:
+  isolated-d1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Miniflare outside the repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/soridraw-d1-test"
+          cd "$RUNNER_TEMP/soridraw-d1-test"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --save-exact miniflare@4
+          ln -s "$RUNNER_TEMP/soridraw-d1-test/node_modules" "$GITHUB_WORKSPACE/node_modules"
+      - name: Validate no-credential local D1 read/write counters
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-398-miniflare-d1-returning.mjs
+          node scripts/verify-398-miniflare-d1-returning.mjs

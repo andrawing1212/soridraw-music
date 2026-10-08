@@ -43,6 +43,8 @@ const createHarness = ({ complete, existing = {}, pending = {}, unresolved = {},
     persistTargetedVerifiedLikeTracks127: () => {},
     markLocalLikeCatalogReady135: () => {},
     schedulePendingFlush: () => {},
+    // Stage413 tests the actual exit handler separately; membership hydration must stay isolated.
+    installExitFlush413: () => {},
     requestExploreLike: async (_user, route) => {
       calls.push(route);
       return { data: { likedTrackIds: serverLiked } };

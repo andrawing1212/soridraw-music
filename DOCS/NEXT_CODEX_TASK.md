@@ -1,3 +1,9 @@
+## Stage413 app383 QA fixture alignment (2026-10-09 KST)
+
+- Initial Stage413 `c14c66ffa12567c24b74e4b27386a4f38d5691f0` passes Typescript/Build and new close-event local test but standalone APP197 test fixture lacks installed exit handler. Inject only no-op into APP197 isolated harness; do not change runtime behavior. App383 version update. Historical app380 Follow-only exact-byte CI naturally fails on newer Worker and like source; retain for app380 checks, do not bypass actual current strict like tests. Run 408 QA again; only if PASS start PREVIEW Hosting exact version release. No Cloudflare Worker/Functions/Rules/DB deployment.
+
+---
+
 ## CURRENT — Stage413 app-exit-like delivery preview candidate (2026-10-09 KST)
 
 - 실제 사용자 주요 장애: 좋아요 후 모바일 즉시 종료 → 다른 디바이스 미전달, 모바일 재실행 뒤 30초 전송. **동기화 안정성이 먼저**, D1 비용은 시나리오 PASS 뒤 실측; 불가·비용폭증을 미리 단정하지 않음.

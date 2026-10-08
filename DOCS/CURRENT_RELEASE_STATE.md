@@ -1,3 +1,11 @@
+## 0S21. Stage413 app383 검증 단계: QA fixture 정합성 수정, legacy Follow-only 별도 (2026-10-09 KST)
+
+- 최초 후보 SHA `c14c66ffa12567c24b74e4b27386a4f38d5691f0`. 빌드 TypeScript 성공, Stage413 5초/백그라운드 실행 격리 PASS. 기존 APP197 독립 fake context가 신규 `installExitFlush413`를 주입하지 않아 ReferenceError 발생: 제품 로직이 아닌 테스트 격리 하네스에 정확한 no-op 추가(실제 종료 핸들러 검증은 413 테스트에서 별도 실행).
+- 구형 `SORIDRAW Follow-only Candidate Check`는 app379의 클라이언트와 Worker byte-for-byte 동결 및 app382 version을 요구하는 과거 app380 전용 검사. Stage412 Worker와 이후 Explore 좋아요 변경을 포함한 현재 전체 preview를 검사할 때 **구조상 FAIL**이며, 신규 기능 자체 실패 증거가 아님. 이를 제품 안정성 PASS 근거로 사용하지 않음. Stage413의 적용 가능한 408 strict QA와 Hosting release preflight를 별도로 확인한다.
+- PREVIEW 표시 버전 `public/app-version.json` app382→**app383** (기존 정상 로컬 캐시 리셋/전체 조회 금지). 최종 CI 아직 대기, 배포 전. 제품 Worker/Firebase Functions/공유 D1/RTDB Rules 변경 없음. 즉시 강제종료 신뢰성·물리 W 비용은 미검증.
+
+---
+
 ## 0S20. Stage413 Explore 좋아요 앱 종료 유실 PREVIEW 실험 — 기능 우선 / 미검증 (2026-10-09 KST)
 
 - 실제 사용자 오류: 모바일에서 공개곡 좋아요 후 30초 전 즉시 종료하면 PC에 반영되지 않고, 모바일 재실행 시 로컬 하트 복구→대기 후 전달. 30초 장기 client idle timer와 종료 시 미전송 구조가 직접 원인 후보. 기존 Stage412 좋아요 정상 실사용 3/3은 이 즉시종료 시나리오를 검사하지 않았으므로 해당 결함 해결 PASS가 아님.

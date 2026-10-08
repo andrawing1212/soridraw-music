@@ -1,3 +1,13 @@
+## CURRENT GATE — 코드 프로토타입 12/12 PASS / D1·서버 발행 실제 검증 대기 (2026-10-08 KST)
+
+- 새 런타임 비연결 순수 모듈 `cloudflare/explore-worker/runtime/like-confirmed-event-397.mjs`: 기존 patch040 batch에 미래 `RETURNING track_id`가 포함되면 meta.changes와 행 수를 대조하여 모든 changedTrackId를 50곡 이내에서 중복제거. 결과 누락·위조·초과는 fail-closed. GitHub commit `216fdb1202f4d533761c10abf929850cacb2a738`. 아직 Worker import/실제 발행 없음.
+- 검증 `scripts/verify-rtdb-public-like-aggregate-extract-397.mjs` 8/8 PASS + `scripts/verify-rtdb-public-like-returning-prototype.mjs` 4/4 PASS, 총 12/12 Node22 로컬 격리 환경에서 PASS. TypeScript·Build·Worker 통합·D1 실제 row 메타 검증 미실행.
+- **다음 구현 게이트:** 실제 patch040 canonical wave에서 `RETURNING track_id`을 추가한 *격리 실행* 및 D1 `meta.rows_read/rows_written`, retry/동시성, W1~W2 예산을 확인한다. 체크 PASS 전에 queue SQL, 배포, 공유 RTDB Rules 변경 금지.
+- 서버 공개 신호는 canonical 정착 이후만 발행. Worker→Functions 인증·보안·idempotent delivery, 서버 전용 원장/재시도, 구버전 호환 RTDB legacy+V2 비용까지 검증이 필요. UI/Studio 하트/팔로우/개인 하트 untouched.
+- 원본 공유 데이터/Worker/Functions/RTDB/Hosting/TEST/PRODUCTION 변경 없음. 위험 게이트 미해결이므로 실사용 개선 완료 아님.
+
+---
+
 ## CURRENT GATE — 단계 A 안전한 서버 알림 구현 / D1 실측 게이트 (2026-10-08 KST)
 
 - 이번에 실행 가능한 코드 프로토타입 추가: `scripts/verify-rtdb-public-like-returning-prototype.mjs` (GitHub commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`). Node22 in-memory SQLite 4/4 PASS; D1/Worker 실제 실행, TypeScript/Build/앱 테스트는 미실행. `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md`의 단계 A 결과 확인.

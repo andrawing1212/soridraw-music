@@ -1,3 +1,13 @@
+## 0RZZ. 공개 좋아요 서버 발행 단계 A — 실제 SQL ID 검출 프로토타입 PASS / LIVE 연결 전 (2026-10-08 KST)
+
+- 사용자 "니가 작업해봐" 지시에 따라 설계 후속으로 최초 실제 코드 프로토타입 개발: `scripts/verify-rtdb-public-like-returning-prototype.mjs`. GitHub commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`, Node.js 22 인메모리 SQLite 순수 SQL `RETURNING track_id` 테스트 4/4 PASS (중복 삽입·삭제, 미존재 해제, 목록 밖 다른 곡, 변경 없는 묶음).
+- 실제 Worker 040 집계 `processExploreLikeAggregateWave035`는 기존 `env.DB.batch`에서 실제 좋아요 membership INSERT OR IGNORE/DELETE를 수행하지만 응답은 행 **건수만** 반환. 단일 W1 intake/069와 지연 aggregate 구조는 정상 유지. 동작 중 코드에 아직 `RETURNING` 수정·배포 없음.
+- **명확한 미검증/STOP:** SQLite mock는 실제 Cloudflare D1 SQL CTE 및 `meta.rows_read/rows_written` 검증 아님; 실제 비용 합격 보장 안 됨. Canonical settled track IDs/server eventId/ownerUid 및 Worker→Functions 인증·idempotency·notification-only retry 설계가 확정되지 않아 SERVER PUBLIC LIKE publisher는 아직 미구현. 단계 A 설계 `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md` 갱신. 10만 회원 비용·남용 원천 차단 PASS 아님.
+- 앱382 좋아요·팔로우/개인 하트, RTDB Rules, Worker/Functions, Firebase Hosting, 공유 D1/Firestore/R2 사용자 데이터, TEST/main, PRODUCTION 변화 없음. 단독 수동 테스트·문서 commit만; TypeScript/Build/Worker 통합/PC·모바일 실사용 및 배포 미실행.
+- **다음:** 격리 D1에서 `RETURNING` + 실제 W1 집계 CTE·원본 의미 동일성·rows R/W 정확 측정 → 인증된 Functions publisher feature OFF 시범 → scope fanout 비용 비교 → 구버전 공존 후 Rules 최종 차단. 어떤 단계도 공유 Rules 선차단 금지.
+
+---
+
 ## 0RZY. RTDB 공개 좋아요 안전 컷오버 4단 설계 기록 (2026-10-08 KST)
 
 - 사용자 동의에 따라 app382의 공개 좋아요 전역 알림 비용/남용 방지 설계를 진행하고 `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md` 신규 추가. 코드/서버/Rules 수정 없이 계획 확정 후보만 작성.

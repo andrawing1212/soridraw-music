@@ -1,3 +1,13 @@
+## 0RZX. RTDB 적용 규칙 자동 조회 401 — 안전한 콘솔 대조로 전환 (2026-10-08 KST)
+
+- PRIVATE 운영 검사 Run 37736055786: GitHub WIF 인증 PASS, RTDB 보안 규칙 GET HTTP 401 FAIL. 운영 보안 규칙은 아직 미확인.
+- Firebase RTDB Viewer 역할로는 규칙 GET이 허용되지 않을 수 있으며 규칙 관리는 데이터 변경 가능 권한과 묶여 있음. 관리자/쓰기 권한 추가 금지.
+- 운영 지표 수집 계정의 Monitoring Viewer 유지. 추가한 RTDB Viewer는 불필요한 원본 데이터 읽기 권한을 확대하므로 회수 권장.
+- LIVE Rules는 사용자가 Firebase Console에서 직접 확인한 화면으로 GitHub database.rules.json과 비교한다. 보안 위험/비용 최적화 순서는 기존 감사 문서 유지.
+- 앱 코드, 클라우드 설정, 사용자 데이터, RTDB 규칙, TEST, PRODUCTION, Hosting 배포 변경 없음.
+
+---
+
 ## 0RZW. LIVE RTDB Security Rules READ-ONLY 검사 준비 완료 (2026-10-08 KST)
 
 - 사용자가 Google Cloud `soridraw-ops-metrics-reader`에 `Firebase Realtime Database Viewer` 읽기 권한을 추가하고 저장했다고 확인.

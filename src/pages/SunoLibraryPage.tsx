@@ -1760,8 +1760,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         .then(() => flushLibraryPlaylistRevisionBatch(uid));
     };
 
+    // Stage414: preserve the existing rename -> order -> revision ordering
+    // while also settling pending folder changes on mobile backgrounding.
+    // Existing per-UID in-flight guards and empty-pending checks are reused.
+    const flushOnHidden = () => {
+      if (document.visibilityState === 'hidden') flushOnPageHide();
+    };
+    document.addEventListener('visibilitychange', flushOnHidden);
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
+      document.removeEventListener('visibilitychange', flushOnHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
     };
   }, [user?.uid, isSharedView]);

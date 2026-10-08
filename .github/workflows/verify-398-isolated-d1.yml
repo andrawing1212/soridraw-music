@@ -9,6 +9,8 @@ on:
       - 'scripts/verify-401-existing-derived-journal.mjs'
       - 'scripts/verify-402-like-notification-trust-recovery.mjs'
       - 'scripts/verify-403-global-notification-model.mjs'
+      - 'scripts/verify-404-069-durable-outbox-cost.mjs'
+      - 'scripts/verify-404-075-durable-outbox-cost.mjs'
       - '.github/workflows/verify-398-isolated-d1.yml'
   workflow_dispatch:
 permissions:
@@ -50,3 +52,7 @@ jobs:
           node scripts/verify-402-like-notification-trust-recovery.mjs
           node --check scripts/verify-403-global-notification-model.mjs
           node scripts/verify-403-global-notification-model.mjs
+          node --check scripts/verify-404-069-durable-outbox-cost.mjs
+          node scripts/verify-404-069-durable-outbox-cost.mjs
+          node --check scripts/verify-404-075-durable-outbox-cost.mjs
+          node scripts/verify-404-075-durable-outbox-cost.mjs

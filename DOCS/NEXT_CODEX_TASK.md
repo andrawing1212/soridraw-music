@@ -1,3 +1,15 @@
+## CURRENT NEXT GATE — app380 팔로우 전용 PREVIEW 사용자 배포 승인 대기 (2026-10-08 KST)
+
+- **ChatGPT가 직접 구현**. Codex는 요청 시/정말 막혔을 때만 사용. GitHub 현재 상태는 `DOCS/CURRENT_RELEASE_STATE.md` 0RZM 참조.
+- **현재 배포 아님**. 마지막 실제 PREVIEW app379, 소스 후보는 **app380**(app379 UI/좋아요 frozen, 팔로우 30초 최종상태 + Worker 097 점진 제한).
+- 버전381 Recent/split UI fix는 commit `79374d59f7f9d251ef73a15089d4040288fde2bb`에 보존하고 app380에서 제외. 신규 좋아요 098/receipt390/65 global queue도 완전 제외.
+- 집중 PASS commit `25b84ebec75a754fcde7647b4084ec819e2df820`, CI Run `37719123137` **SUCCESS**: TypeScript/Build/394/395/303/354/355/356/377/386/387/389-follow-only. 이후 문서만 commit; 배포 SHA는 실제 최신 preview HEAD를 다시 고정.
+- **승인 전 금지**: preview Hosting/Worker 실배포·shared D1 migration/schema/cutover/사용자 데이터 변경, TEST/PRODUCTION 변경·승격. 문서 commit은 배포 승인 아님.
+- **다음 작업 정확한 순서:** 사용자 PREVIEW 배포 명시 승인 → Worker 097-only 실 read-only preflight/변경 전 active version snapshot → Worker PREVIEW 배포/실 smoke → 정상 확인 후 Firebase PREVIEW Hosting app380(공유 RTDB Rules/Functions 변경 0) → 앱/Worker exact version과 likes/follow 비용, PC/mobile, R2 상태·cache 확인. 하나라도 실패하면 중단/복구 후 보고.
+- **남은 위험/미검증:** 새 버전 실제 R2 get/put, physical D1 W1~W2, PC/mobile 동기화, 429/503, 브라우저 업그레이드, PREVIEW Worker+Hosting live release 게이트 미실행. TEST/PRODUCTION runtime의 receipt390 필수 preflight는 나중에 별도 고쳐야 함. app381 UX hotfix는 이번 릴리스에 없음.
+- 사용자 지시: 중요한 작업은 완료 내용·미완료·정확한 다음 작업을 보고하고 **배포는 승인 받아 수행**.
+
+---
 ## CURRENT NEXT GATE — ChatGPT 직접 작업: 팔로우-only PREVIEW 배포 전 읽기 전용 최종 확인 (2026-10-08 KST)
 
 - **사용자 최신 운영 지시**: 기본 개발·수정자는 ChatGPT. Codex는 사용자가 직접 요청하거나 ChatGPT가 실제로 구현에 막혔을 때만 사용. 이전 'Codex High' handoff는 현재 작업의 실행 지시로 사용하지 않음.

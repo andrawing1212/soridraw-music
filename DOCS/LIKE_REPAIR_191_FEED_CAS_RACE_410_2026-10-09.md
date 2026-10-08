@@ -16,3 +16,9 @@
 - 자동 검사(TypeScript, Build, 127/175/178/191/192/197/390, 398~407 Miniflare)와 Work 독립감사/활성 PREVIEW Worker parity/PC↔모바일/실사용 D1 W1~W2 확인 전 **릴리스 불가**. 해당 검증은 신규 CI 결과를 확인하고 따로 기록해야 한다.
 - 오래된 상태에서 이미 Feed만 최신·카드/프로필만 구형인 기존 orphan은 여전히 이 guard로 복구하지 못한다. 전체 카드 일괄 읽기로 해결하지 않는다.
 - 069 live like push 진단 실패 미해결. 보안/Rules/migration 없음. 공유 사용자 D1·R2 데이터 변경·Worker/Hosting/Functions 배포 및 main/TEST/PRODUCTION 변경 금지.
+
+## Stage410 검증 후 확인 (2026-10-09 KST)
+
+- [품질 CI 37837114180](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114180): SUCCESS — TypeScript/Build/127/175/178/191/192/197/390 엄격 PASS.
+- [격리 CI 37837114190](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114190): SUCCESS — Stage410 동시 Feed CAS 보류→다음 실행 복구 포함 실제 191 함수 17/17 PASS.
+- [별도 069 진단 37837112309](https://github.com/andrawing1212/soridraw-music/actions/runs/37837112309): FAIL — 장기 자동진단 미해결. 기존 orphan/실제 live 비용/활성 Worker parity/PC·모바일 사용자 테스트 미검증. 배포 없음.

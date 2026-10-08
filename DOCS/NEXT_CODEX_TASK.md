@@ -1,3 +1,11 @@
+## CURRENT GATE — Stage410 TypeScript/Build·격리 17/17 PASS / LIVE 독립 감사 및 PREVIEW 배포 차단 (2026-10-09 KST)
+
+- 고정 제품 SHA `40c20516fc58ea35fe7e58b30e4843254380e2aa`. 품질 [37837114180](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114180) **SUCCESS** (TypeScript, Build, 127/175/178/191/192/197/390 엄격 회귀), 격리 [37837114190](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114190) **SUCCESS** (191 실제 함수 + Miniflare D1/모의 R2 동시 Feed drift 및 재복구 17/17). 관련 `DOCS/LIKE_REPAIR_191_FEED_CAS_RACE_410_2026-10-09.md`.
+- 단 전체 작업 green 아님: `diagnose-069-live-like.yml` 자동 FAIL 미해결. PREVIEW active Worker parity/실사용 D1·DO·RTDB 비용/PC↔모바일·구형 앱·R2 orphan 미검증. 따라서 추가 구조 수정·DB/R2 사용자 데이터 변경·Worker deploy·TEST/PRODUCTION 승격 금지.
+- 다음: 해당 SHA 독립 read-only Work 감사 → active PREVIEW Worker 환경/bundle 계약 read-only 대조 → 실비용 및 실기기 검증. W1/W2·30초 묶음·좋아요/해제·팔로우 정상 코드 보존; 기존 유효 cache 전면 초기화 금지.
+
+---
+
 ## CURRENT GATE — Stage410 191 새 Feed CAS 변경곡 누락 방지 수정 / 검증 전 배포 차단 (2026-10-09 KST)
 
 - Stage409에서 찾은 새 동시경쟁 재현: 191이 선정된 곡만 card/profile에 반영한 후 Feed CAS 도중 *다른 곡*의 불일치가 나타나면 Feed 숫자만 완료되어 다음 회차에는 card/profile이 영구 미복구될 수 있음. Stage410은 Feed 완료 전 `changed`에 없는 새 불일치를 발견하면 fail-closed하여 DO alarm 재실행에서 복구하도록 최소 guard 1곳만 추가.

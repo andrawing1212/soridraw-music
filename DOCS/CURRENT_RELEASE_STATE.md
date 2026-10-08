@@ -1,3 +1,12 @@
+## 0S14. Stage410 CI 결과 — strict TypeScript/Build·회귀 PASS, 운영 게이트 유지 (2026-10-09 KST)
+
+- 제품 코드 SHA `40c20516fc58ea35fe7e58b30e4843254380e2aa` 기준 [품질 Run 37837114180](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114180) **SUCCESS**: Node22 entry 문법/TypeScript(`npm run lint`)/Vite Build, 127/175 엄격 개인 좋아요, 178/191/192/197/390 기존 좋아요·팔로우 보호 검사 모두 PASS.
+- [격리 Run 37837114190](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114190) **SUCCESS**: 실제 191 함수 + 로컬 Miniflare D1/모의 R2 CAS **17/17 PASS**, 신규 `CONCURRENT_NEW_DIRTY_ROW_DEFERS_FEED_COMMIT` 및 `CONCURRENT_NEW_DIRTY_ROW_REPAIRS_ON_REPLAY` PASS. 기존 398~406 격리검사 통과.
+- 별도 `diagnose-069-live-like.yml` push [Run 37837112309](https://github.com/andrawing1212/soridraw-music/actions/runs/37837112309) **FAIL**, 기존 장기 문제 그대로. **전체 GitHub CI green 아님.** Live PREVIEW active Worker/parity·운영 D1/DO/RTDB 비용·PC↔모바일·구형 캐시·미해결 과거 orphan은 미검증/차단. PREVIEW/TEST/PRODUCTION 승격 보류.
+- 검사만 실행; **Worker/Hosting/Functions/Rules/D1/R2/Firestore/사용자 데이터 배포·변경 0**. 다음은 Work 독립감사 및 실제 live read-only parity/비용 확인 후 안전한 PREVIEW Worker 릴리스 여부 결정.
+
+---
+
 ## 0S13. Stage410 191 동시 Feed CAS 새 변경곡 누락 방지 — PREVIEW 코드·격리 재검증 대기 (2026-10-09 KST)
 
 - 독립 감사에서 Stage409의 191이 **카드·프로필 먼저** 복구한 뒤 Feed CAS 재시도 중 *처음 복구 대상으로 선정하지 않았던 다른 곡*을 새로 발견해도 목록에만 정답 숫자를 적고 카드·프로필은 구형으로 남기는 회귀를 재현했다. 이전 기준 `bdcc0410aa50`은 같은 가상 시나리오에서 누락 없이 수렴했으며 Stage409는 두 번째 실행해도 카드가 구형으로 남았다.

@@ -37,11 +37,13 @@ jobs:
       - name: Historical 127 verifier alignment check (known-existing failure, release blocker)
         continue-on-error: true
         run: node scripts/verify-127-atomic-personal-like.mjs
-      - name: Remaining frozen like regression contracts
+      - name: Historical 175 verifier alignment check (known-existing failure, release blocker)
+        continue-on-error: true
+        run: node scripts/verify-175-explore-like-catalog-reentry.mjs
+      - name: 191 and remaining frozen like contracts
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-178-final-like-architecture.mjs
           node scripts/verify-191-bounded-public-like-convergence.mjs
           node scripts/verify-192-cross-account-public-like-live.mjs

@@ -1,3 +1,16 @@
+## 0RZN. app380 팔로우 전용 PREVIEW Worker + Firebase Hosting 실배포 SUCCESS (2026-10-08 KST)
+
+- 사용자 2026-10-08T02:44:39Z 승인: 이미 완성된 `app380` 팔로우 30초 최종상태 묶음/097 제한만 PREVIEW 배포. 신규 좋아요 098/receipt390 및 shared D1 migration, TEST/PRODUCTION 배포는 승인하지 않음.
+- **제품 소스 고정:** `b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2` (app380, app379 UI/좋아요 원본 고정, follow-only 097 Worker). GitHub 상태 기록 이후 실제 Hosting 실행 ref는 `e9c2ee9f4b86bd28e00fd90b246cf1fbb50dae34`, 제품 코드 차이는 Worker/Hosting release trigger 두 파일뿐. GitHub Worker trigger push commit `6856ab6f2ea0bbc6ddae108968b0a854f566c8bb`.
+- **Cloudflare PREVIEW Worker Release Run `37719453033` SUCCESS**. 제품 target 정확 `b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2`. PREVIEW active Worker version `61f1fa6e-ef93-478b-b06f-4a64e3e337d9` → `c4c51b19-818a-4eaf-8be1-aca0b241d50a`. `PREVIEW_RELEASE_PREFLIGHT=PASS`, `FOLLOW_ONLY_380_NO_RECEIPT_SCHEMA_PREFLIGHT=PASS`, `LIVE_LIKE_D1_STATE=PASS pending035=0 pending069=0` 및 `PRE_DEPLOY_PENDING_069=0`. Feed/Profile smoke PASS, R2 read authority PASS, warm revision D1 R0/W0 PASS, TEST/PRODUCTION Workers unchanged PASS. No pending queue drain or like snapshot repair requested.
+- **Firebase PREVIEW Hosting Release Run `37719570071` SUCCESS**. TypeScript PASS, Build PASS, frozen prior likes/profile/follow regression PASS; `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `FIREBASE_PREVIEW_DEPLOY=PASS`. GitHub workflow가 `preview.soridraw.com/app-version.json`의 **380**과 배포한 exact build hash를 대조해 `PREVIEW_EXACT_BUILD=PASS` 기록. `TEST_PRODUCTION_UNCHANGED=PASS`. Firebase Functions/Rules와 shared D1 schema 변경 없음.
+- 앱 실제 주소: https://preview.soridraw.com (app380). Web 독립 접속은 이번 ChatGPT 환경에서 불가하여 **GitHub 배포 runner가 실제 URL에서 읽어 성공한 검증**으로 분명히 구분한다.
+- **실사용 검증 전 항목:** 새 PREVIEW Worker 팔로우/해제 실제 D1 physical rows_read/rows_written W1~W2, R2 get/put 비용 및 쿨다운, 30초 내 net-zero 서버 요청 0, 429/503 정상 복구, 같은 계정 PC↔모바일 팔로우 상태/카운트/목록, 이전 app379 브라우저 캐시 업그레이드. 기존 좋아요/해제 W1과 좋아요 숫자·내 좋아요 회원 상태도 실기기에서 재확인해야 함. 실사용 미검증 항목을 PASS로 보고하지 않음.
+- app381 Recent/split UI hotfix는 이번 앱380에 **미포함**, 원본 git commit `79374d59f7f9d251ef73a15089d4040288fde2bb`에 보존. 신규 receipt390/098/65 global pending 조회 릴리스 미포함. 기존 069 diagnostic workflow는 문서/trigger push 후 실패 알림을 별도로 생성하나 이번 Worker/Hosting 배포 성공과는 다른 오래된 진단 작업.
+- **다음 정확한 단계:** 사용자 PREVIEW PC + 모바일에서 팔로우/해제/짧은 반복 최종상태/30초 W0/W1, 좋아요·해제 상태/숫자와 캐시업데이트, CACHE LIVE 서버 물리 비용 스크린샷 확인. 비정상이나 W3+가 나오면 TEST 승격 중단하고 원인 분석; 필요 시 Worker rollback. 별도 사용자 승인 전 TEST/PRODUCTION 승격/새 D1 migration/대량변환 금지.
+- `main` 고정 `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, `production` 고정 `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`; 승격 전 재확인 필요.
+
+---
 ## 0RZM. app380 팔로우 전용 PREVIEW 후보 분리·전체 집중검사 PASS — 배포 보류 (2026-10-08 KST)
 
 - **사용자 승인 작업:** ChatGPT 직접 최소 수정. PREVIEW에만 commit/push; 배포·공유 D1/R2 실사용 데이터 변경·TEST/PRODUCTION 변경 금지.

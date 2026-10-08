@@ -1,3 +1,13 @@
+## 0RZF. app380 최종 GitHub 릴리스 감사 1차 실행 결과 및 감사 기준 교정 — 배포 금지 (2026-10-08 KST)
+
+- 감사 트리거 commit `c92bb036fdb16ab11065b08881dffcd1df7bd617` / GitHub Run `37709943353`, 기준 제품 commit `b4d7e3188e8f04dc4004f55719380efcf3f6c8c8`.
+- 실제 독립 임시 D1에서 receipt 신규접수 W2 / exact 재전송 W0 **PASS**. TypeScript **PASS**, Build **PASS**. 간이 정적 검사 A~E는 continue-on-error이므로 PASS 집계 근거로 삼지 않음.
+- 릴리스 감사의 `Static release-system verification`에서 기존 `verify-354-follow-orchestration.mjs`가 app380의 의도된 `handleLikeD1Core` 직접 경로 차단 1줄을 unrelated-function 변경으로 잘못 판정, **FAIL**. 이 단계에서 뒤의 388/392/393 및 좋아요·팔로우 전체 회귀검사는 **SKIPPED**, PASS라 기록 금지.
+- 코드 수정은 제품 로직 0. 해당 감사에서 `handleLikeD1Core`의 정확한 direct-guard 한 줄만 감사 비교 시 되돌려 baseline 전체를 비교. 098의 `handleLikeBatch034`, `enforceExploreLikeBatchEdgeRateLimit054` 2개만 독립 388/392/393 계약 검증 범위에 맡김. 나머지 unrelated 함수의 exact baseline 비교는 유지.
+- 기존 069 진단 워크플로의 YAML 오류로 인한 자동 FAIL은 별개이며 이번 감사 FAIL을 가리거나 배포 승인으로 처리하지 않음.
+- 이후 전체 GitHub audit 재실행 PASS 및 Work 독립 감사 필요. 특히 글로벌 069 대기열 LIMIT 65로 인한 503·실측 rows_read 운영 위험은 그대로 배포 차단 후보.
+- 실제 PREVIEW app379 유지. shared D1 원본/마이그레이션, Hosting/Worker, TEST/PRODUCTION 변경 0.
+
 ## 0RZE. Work FAIL 원인 069 혼재 재전송 제한 범위 수정 — 재감사 전 미배포 (2026-10-08 KST)
 
 - 감사 대상 `03416736780346d44372a71f5a3d95eb5c580801`에서 **Work FAIL**: receipt 없이 구 Worker가 받은 newer unlike가 새 379 replay의 receipt-only 조회에서 누락되어 하트가 이전 like로 복귀했다. 기존 392는 신 Worker끼리만 테스트했다.

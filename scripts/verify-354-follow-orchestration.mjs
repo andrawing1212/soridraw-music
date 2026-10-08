@@ -26,7 +26,10 @@ const allowed = new Set(['readFollowCutoverState348','handleFollowR2Core','handl
   'patchPublicProfileBundle245','writeExploreSharedProfile060','handlePublicProfile',
   'readSharedProfileConnection348','handlePublicProfileFirstViewWithEdgeCache',
   'handleMyFollowingR2Bundle','handleFollowerSaveAccess','handleMySocialSnapshot042',
-  'handleProfileConnections','handleMyFollowing']);
+  'handleProfileConnections','handleMyFollowing',
+  // App380: only these two like functions are intentionally changed by 098;
+  // 388 --release + 392/393 independently prove their safety.
+  'handleLikeBatch034','enforceExploreLikeBatchEdgeRateLimit054']);
 const publication358Wrapped = new Map([
   ['handleFeedWithEdgeCache', 'handleFeedWithEdgeCacheCore358'],
   ['handleProfileTracks', 'handleProfileTracksCore358'],
@@ -123,10 +126,23 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
     continue;
   }
   if (!allowed.has(node.name?.text)) {
-    const currentText = normalizePublication365ForFollowAudit(
+    let currentText = normalizePublication365ForFollowAudit(
       normalizePublication361ForFollowAudit(functions.get(node.name?.text) || '', node.name?.text || ''),
       node.name?.text || '',
     ).replaceAll('\r\n','\n');
+    if (node.name?.text === 'handleLikeD1Core') {
+      // 098 intentionally inserts one early refresh-required guard to retire
+      // unsafe old direct likes. The old d1only guard later in this function
+      // must remain byte-identical to the historical baseline.
+      assert.ok(source.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008'),
+        'app380 like patch marker required');
+      const insertedGuard = "  const authContext = await requireExploreAuth(request);\n"
+        + "  throwApi('LIKE_CLIENT_REFRESH_REQUIRED', '좋아요 저장 방식을 업데이트했습니다. 새로고침 후 다시 시도해 주세요.', 409);\n";
+      const initialLine = "  const authContext = await requireExploreAuth(request);\n";
+      assert.equal(currentText.split(insertedGuard).length, 2,
+        'app380 direct-like guard missing or duplicated');
+      currentText = currentText.replace(insertedGuard, initialLine);
+    }
     assert.equal(currentText,node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
   }
 }

@@ -1,11 +1,13 @@
-app379-follow-profile-counter-overlay-fix
-target_source=db5788d79540fabe0aa6baf56f07d3573e804331
-app_version=379
-scope=follow-profile-counts,follower-count,following-count,cross-device-count-parity
+app380-follow-only-approved
+target_source=b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2
+app_version=380
+scope=follow-30s-final-state,follow-abuse-guard-097,app379-ui-and-like-frozen
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
+worker_preview_verified_run=37719453033
 functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
+approval=user_explicit_preview_app380_follow_only_2026-10-08T02:44:39Z

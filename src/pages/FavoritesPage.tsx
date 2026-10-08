@@ -2613,8 +2613,16 @@ updates: draft.updates,
     const flushOnPageHide = () => {
       void flushMusicNoteFolderStructureBatch(uid);
     };
+    // Stage414: save an actual pending folder structure when the app is
+    // backgrounded, rather than waiting for the original 60-second timer.
+    // The existing per-UID in-flight guard prevents hidden + pagehide duplicates.
+    const flushOnHidden = () => {
+      if (document.visibilityState === 'hidden') flushOnPageHide();
+    };
+    document.addEventListener('visibilitychange', flushOnHidden);
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
+      document.removeEventListener('visibilitychange', flushOnHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
     };
   }, [user?.uid]);

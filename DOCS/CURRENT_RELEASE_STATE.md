@@ -3,6 +3,7 @@
 - 감사 대상 `03416736780346d44372a71f5a3d95eb5c580801`에서 **Work FAIL**: receipt 없이 구 Worker가 받은 newer unlike가 새 379 replay의 receipt-only 조회에서 누락되어 하트가 이전 like로 복귀했다. 기존 392는 신 Worker끼리만 테스트했다.
 - 변경 범위: replay의 069 시간순 batch_id PK 범위를 LIMIT 65(64 + overflow sentinel)로 제한해 다른 Worker가 접수한 newer pending 상태를 같은 snapshot의 기존 receipt/canonical 조회와 병합한다. 한계 도달 시 typed 503 fail closed. 사용자 UID 조건으로 전체 테이블 탐색/스캔 금지. modern acceptanceProtocol390 신규 조회 0.
 - 392에 frozen Worker 040/073 receipt-less enqueue → app379 재전송 및 65행 포화 시 503 회귀검사 추가. canonical Worker와 candidate를 일치시키고 SHA256 갱신. 원본 좋아요 W2/W0 접수, 097 follow, schema390, UI·기타 구조 변경 없음.
+- 후속 독립 SQL/클라이언트 smoke: 구 Worker newer unlike 및 old like queue 이미 처리된 경우 모두 결과 false·하트 false·outbox 종료·신호 재발행 0 PASS. 기존 392의 SQL SELECT 판정 정규식 오류를 바로잡고, receipt 원본 큐 처리 후에도 old unlike 보존되는 검사를 추가함. 전체 npm 검사는 여전히 미실행.
 - **검증**: 격리 SQLite SQL smoke에서 newer old Worker pending unlike, newer canonical false, PK range, 65행 포화 동작 PASS. 전체 392/393, TypeScript, Build, 실기기와 Cloudflare D1 rows_read **미검증**. Work 독립 재감사와 확정된 비용/호환 확인 전 배포 금지.
 - 실제 PREVIEW app379 유지. Hosting/Worker 배포, 공유 D1 schema apply·원본 사용자 데이터 변경, main/TEST/PRODUCTION 변경 모두 0. 구 035/066 큐 혼재와 과밀 시 503 발생은 남은 위험이며 live gate에서 추가 검증 필요.
 

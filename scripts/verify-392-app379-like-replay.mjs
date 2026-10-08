@@ -87,7 +87,7 @@ try {
   const legacyDB={DB:{
     prepare:sql=>({bind:(...params)=>({sql,params})}),
     batch:async statements=>statements.map(({sql,params=[]})=>{
-      if(/^\\s*SELECT/i.test(sql))return {success:true,results:db.prepare(sql).all(...params)};
+      if(/^\s*SELECT/i.test(sql))return {success:true,results:db.prepare(sql).all(...params)};
       return {success:true,meta:{changes:Number(db.prepare(sql).run(...params).changes)}};
     }),
   }};
@@ -97,6 +97,9 @@ try {
   assert.equal(legacy.queue,'069');
   assert.equal(written()-preOld,1,'old Worker W1 with no receipt');
   await verifyReplay('FROZEN_OLD_WORKER_NEWER_UNLIKE',false,8);
+  // Original acceptance may have settled and disappeared while old newer unlike is pending.
+  db.prepare('DELETE FROM explore_like_batches_069 WHERE batch_id=?').run(normal.data.batchId);
+  await verifyReplay('FROZEN_OLD_WORKER_ONLY_NEWER_UNLIKE_PENDING',false,8);
   db.prepare('DELETE FROM explore_like_batches_069 WHERE batch_id=?').run(legacy.batchId);
   console.log('392_FROZEN_OLD_WORKER_RECEIPTLESS_NEWER_UNLIKE=PASS');
   // Another device's newer accepted queue wins even before materialization.

@@ -2015,6 +2015,21 @@ updates: draft.updates,
     if (firstError) throw firstError;
   };
 
+  // Stage414: a hidden event and the existing page-exit sync must not race
+  // each other into committing the same IndexedDB detail/card draft twice.
+  const musicNoteExitFlushInFlightRef = useRef<Promise<void> | null>(null);
+  const flushMusicNoteLocalPendingSingleFlight = (): Promise<void> => {
+    const existing = musicNoteExitFlushInFlightRef.current;
+    if (existing) return existing;
+    const task = flushAllMusicNoteLocalChangesForPageExit();
+    musicNoteExitFlushInFlightRef.current = task;
+    void task.then(
+      () => { if (musicNoteExitFlushInFlightRef.current === task) musicNoteExitFlushInFlightRef.current = null; },
+      () => { if (musicNoteExitFlushInFlightRef.current === task) musicNoteExitFlushInFlightRef.current = null; },
+    );
+    return task;
+  };
+
   useEffect(() => {
     if (!user?.uid) return;
     const activeUser = user;
@@ -2029,9 +2044,19 @@ updates: draft.updates,
         const detailCount = drafts.length + (inMemoryPending && !ids.has(inMemoryPending) ? 1 : 0);
         return detailCount + (isMusicNoteCardStateDirty(uid) ? 1 : 0);
       },
-      flush: flushAllMusicNoteLocalChangesForPageExit,
+      flush: flushMusicNoteLocalPendingSingleFlight,
     });
+
+    const flushOnHidden = () => {
+      if (document.visibilityState !== 'hidden') return;
+      // Local draft reads are allowed; Firestore is touched only for dirty rows.
+      void flushMusicNoteLocalPendingSingleFlight()
+        .catch((error) => console.warn('[414] Music Note background save retained for retry:', error));
+    };
+    document.addEventListener('visibilitychange', flushOnHidden);
+
     return () => {
+      document.removeEventListener('visibilitychange', flushOnHidden);
       clearFavoriteDetailFlushTimer();
       void flushSoridrawPageSync(activeUser, 'music-note-exit')
         .catch((error) => console.warn('[081] Music Note page sync pending:', error))

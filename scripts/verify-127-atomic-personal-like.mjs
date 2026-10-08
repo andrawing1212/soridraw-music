@@ -363,7 +363,7 @@ assert.match(legacyPatch, /\/v1\/me\/likes-revision/);
 const legacyHandler = legacyPatch.slice(legacyPatch.indexOf('const handler = ['), legacyPatch.indexOf('const anchorCount ='));
 assert.doesNotMatch(legacyHandler, /env\.DB\.prepare\(|caches\.default|rebuildExploreLikeR2Bundle/);
 assert.doesNotMatch(service.slice(service.indexOf('const applyRemoteLikeSignal127'),service.indexOf('let activeLikeSignalUid127')), /likeCount:\s*item\.liked\s*\?\s*1/);
-assert.match(service, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
+assert.match(service, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
 assert.match(service, /EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000/);
 assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
 console.log('127_PERSONAL_LIKE_SINGLE_MEMBERSHIP=PASS');

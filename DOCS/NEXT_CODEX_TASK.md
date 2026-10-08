@@ -1,3 +1,11 @@
+## CURRENT — Stage413 app-exit-like delivery preview candidate (2026-10-09 KST)
+
+- 실제 사용자 주요 장애: 좋아요 후 모바일 즉시 종료 → 다른 디바이스 미전달, 모바일 재실행 뒤 30초 전송. **동기화 안정성이 먼저**, D1 비용은 시나리오 PASS 뒤 실측; 불가·비용폭증을 미리 단정하지 않음.
+- PREVIEW 한정: client 30초 idle flush → 5초, pending outbox 존재 시 background hidden/pagehide 즉시 전송 시도 및 POST keepalive. 30초→5초 변경은 사용자 직접 요청에 따른 실험. 서버 Worker/DB/RTDB Rules/Firebase Functions 수정 금지. 정상 liked heart·카운트·팔로우·UI·리비전 보호. 브라우저 강제종료는 별도 실사용 검증 전 **미검증**.
+- 검증: Stage413 실제 설치 handler/timer/keepalive, 기존 127/175/178/192/197/390/191, TypeScript/Build. 실제 모바일 0~1초 창 종료/백그라운드/PC 확인, 재실행/재클릭 상태 역행 없음. 미통과 시 전체 완료라고 보고하지 않고 server-accepted quick intent 대안 검토. TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT GATE — Stage412 USER LIVE 3/3 PASS, cost/parity audit next (2026-10-09 KST)
 
 - 사용자 실기기 보고: PC→모바일 좋아요, 모바일→PC 해제, 공개프로필 숫자 유지 **3/3 PASS**, 추가 오류 없음. Stage412 기존 Worker PREVIEW 실배포 성공 [37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377), app382 유지. 동일 기능 추가 변경 금지.

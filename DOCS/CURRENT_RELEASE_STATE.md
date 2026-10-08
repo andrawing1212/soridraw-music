@@ -1,3 +1,13 @@
+## 0S20. Stage413 Explore 좋아요 앱 종료 유실 PREVIEW 실험 — 기능 우선 / 미검증 (2026-10-09 KST)
+
+- 실제 사용자 오류: 모바일에서 공개곡 좋아요 후 30초 전 즉시 종료하면 PC에 반영되지 않고, 모바일 재실행 시 로컬 하트 복구→대기 후 전달. 30초 장기 client idle timer와 종료 시 미전송 구조가 직접 원인 후보. 기존 Stage412 좋아요 정상 실사용 3/3은 이 즉시종료 시나리오를 검사하지 않았으므로 해당 결함 해결 PASS가 아님.
+- **이번 작업 목표**: 동작을 먼저 검증하기 위한 PREVIEW 단독 실험. Explore 공개 좋아요 묶음 전송을 30초→**5초**로 축소하고, 명시적인 미전송 outbox가 있을 때만 `visibilitychange(hidden)`/`pagehide`에서 즉시 전송 시도, 기존 `/v1/me/likes/batch`만 fetch `keepalive`. 이미 저장한 operation ID, 서버 수신 처리, RTDB 변경곡 알림, 이전/다른 기기 하트·숫자 순서, 피드·프로필·Music Note·Library·팔로우, UI는 그대로 둔다.
+- **중요한 한계**: 5초만으로 1초 만의 강제종료 문제를 해결했다고 볼 수 없음. hidden/pagehide callback이 모바일 OS 강제종료 때 실행되지 않거나 비동기 auth 준비가 끝나지 못할 수 있음. 앱 종료 0~1초·5초·백그라운드·재실행·PC↔모바일, 빠른 like→unlike/동시 다곡의 실제 사용자 검증이 PASS해야 해결 판정. Keepalive도 강제종료 전달 성공을 보증하지 않음.
+- 서버 D1/R2/Firestore 원본 코드/스키마·계정 데이터 직접 수정 없음. 묶음 시간이 줄어드는 만큼 빠른 반복 토글은 서버 접수 횟수가 늘 수 있음. Stage413 비용은 **미검증**, 기존 비용 기준이 무조건 유지된다고 주장 금지. 기능 관찰 먼저, 비용 다음. W3+ 및 비의도 중복행·데이터 불일치 발생 시 TEST 승격 차단.
+- 예상 수정 파일: client `src/services/exploreLikeService.ts`, 기존 127/178/192 타이밍 검증 정합, 신규 실함수 `scripts/verify-413-like-exit-flush.mjs`, 408 QA workflow, 상태 문서. QA TypeScript/Build/기존 like/follow 회귀 PASS 및 배포 게이트 전에 서버 배포 없음. 전체 TEST/PRODUCTION 승격 금지.
+
+---
+
 ## 0S19. Stage412 사용자 실사용 3/3 PASS — 기능 수정 중단 / 비용·환경 최종검증 (2026-10-09 KST)
 
 - 사용자 본인 실사용 확인 (2026-10-09 06:04 KST): **TEST 1 PC→모바일 좋아요 정상, TEST 2 모바일→PC 좋아요 해제 정상, TEST 3 공개프로필 좋아요 숫자 유지 정상**, 추가 관찰 오류 없음. 사용자가 지정한 3개 항목에 대한 PREVIEW app382 + Worker `dc8b4311-b4d0-45c5-8854-52680c39e19d`의 **실기기 기능 검증 PASS**. 서버 진단 CI 및 실제 배포 검증 [37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377) PASS 기록과 구분한다.

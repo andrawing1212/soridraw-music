@@ -49,7 +49,7 @@ assert.match(enqueue, /INSERT OR IGNORE INTO explore_like_batches_069/);
 assert.doesNotMatch(enqueue, /FROM likes/);
 assert.doesNotMatch(enqueue, /JOIN likes/);
 
-assert.match(client, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
+assert.match(client, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
 assert.match(client, /await publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
 assert.match(client, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
 assert.match(client, /const missing = baselineReady127 \? \[\] : normalized\.filter/);

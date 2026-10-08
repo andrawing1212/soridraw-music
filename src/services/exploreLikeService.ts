@@ -41,7 +41,7 @@ const EXPLORE_LIKE_CANONICAL_REVISION_SCHEMA_VERSION_172 = 1;
 const EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172 = 'explore-like-canonical-revision-172';
 const EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172 = 'explore_like_canonical_revision_172';
 const EXPLORE_LIKE_BATCH_MAX = 50;
-const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;
+const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // Stage413: shorten only Explore public-like batching.
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
@@ -1369,6 +1369,8 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
   const authHeaders = await buildAuthHeaders(user);
   const response = await fetch(`${EXPLORE_API_BASE}${path}`, {
     ...init,
+    // Stage413: permit an already-started short like batch to finish during page shutdown.
+    ...(path === '/v1/me/likes/batch' ? { keepalive: true } : {}),
     headers: {
       ...authHeaders,
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
@@ -1723,6 +1725,32 @@ flushPendingLikes = async (user: User): Promise<void> => {
   await task;
 };
 
+// Stage413: a 5-second timer cannot run after the browser is closed.
+// Only an actual pending user's explicit like/unlike is eligible for this
+// background/exit flush. Never write due to navigation alone.
+let exitFlushInstalled413 = false;
+const installExitFlush413 = () => {
+  if (exitFlushInstalled413 || typeof window === 'undefined' || typeof document === 'undefined') return;
+  exitFlushInstalled413 = true;
+  const flushOnExit413 = () => {
+    const current = auth.currentUser;
+    if (!current?.uid) return;
+    const eligible = Object.values(readLikeOutbox(current.uid))
+      .some((pending) => (pending.retryCount || 0) === 0);
+    if (!eligible) return;
+    clearFlushTimer(current.uid);
+    // Local outbox is durable. If mobile suspends before the request can start,
+    // do not discard the pending click: it remains eligible on next app open.
+    void flushPendingLikes(current).catch((error) => {
+      console.warn('[413] Background like flush deferred; local intent retained:', error);
+    });
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushOnExit413();
+  });
+  window.addEventListener('pagehide', flushOnExit413);
+};
+
 // App 120 deliberately ignores historical RTDB Explore-like replay payloads.
 // Personal heart state is recovered from the 120 cache, pending outbox, or one
 // targeted canonical request for missing visible track IDs.
@@ -1809,6 +1837,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const outbox = readLikeOutbox(user.uid);
   const unresolved = readSnapshotPending127(user.uid);
   if (Object.values(outbox).some((pending) => (pending.retryCount || 0) === 0)) {
+    installExitFlush413();
     schedulePendingFlush(user);
   }
 
@@ -1903,8 +1932,9 @@ export const setExploreTrackLike = async (
       readLikeCanonicalRevisions172(uid)[normalizedTrackId] ?? 0,
   };
   persistLikeOutbox(uid, outbox);
+  installExitFlush413();
 
-  // Sliding idle window: every click restarts the same 30-second timer. One song
+  // Sliding idle window: every click restarts the same 5-second timer. One song
   // or many songs therefore leave as one final-state batch after the last click.
   schedulePendingFlush(user);
 

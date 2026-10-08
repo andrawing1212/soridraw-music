@@ -54,6 +54,7 @@ const mf = new Miniflare({
     BEFORE: '00000000-0000-4000-8000-000000000399',
     AFTER: '00000000-0000-4000-8000-000000000400',
     OUTBOX: '00000000-0000-4000-8000-000000000404',
+    WAVE: '00000000-0000-4000-8000-000000000406',
   },
 });
 const b = (q,u,t,k,rows) => ({
@@ -77,12 +78,14 @@ async function database(name) {
   for(const q of pools) await db.prepare('CREATE TABLE IF NOT EXISTS explore_like_batches_'+q+'(batch_id TEXT PRIMARY KEY,user_uid TEXT,created_at INTEGER,mutation_count INTEGER,mutations_json TEXT)').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS like_notification_outbox_404(track_id TEXT PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 1, confirmed_count INTEGER NOT NULL, updated_at INTEGER NOT NULL)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS outbox_404_updated ON like_notification_outbox_404(updated_at,track_id)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS like_notification_wave_405(seq INTEGER PRIMARY KEY AUTOINCREMENT,payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),event_at INTEGER NOT NULL)').run();
   return db;
 }
 async function reset(db,batches,liked) {
   await db.prepare('DELETE FROM likes').run();
   await db.prepare('DELETE FROM track_stats').run();
   await db.prepare('DELETE FROM like_notification_outbox_404').run();
+  await db.prepare('DELETE FROM like_notification_wave_405').run();
   for(const q of pools) await db.prepare('DELETE FROM explore_like_batches_'+q).run();
   for(const [uid,track] of liked) {
     await db.prepare('INSERT INTO likes(track_id,user_uid,created_at) VALUES(?,?,0)').bind(track,uid).run();
@@ -100,6 +103,15 @@ function totals(results) {
   },{read:0,written:0});
 }
 
+const waveWriteSQL = [
+  'INSERT INTO like_notification_wave_405(payload_json,event_at)',
+  "SELECT json_group_array(json_object('trackId',track_id,'count',next_count)),1000",
+  'FROM (SELECT track_id,next_count,CAST((ROW_NUMBER() OVER(ORDER BY track_id)-1)/50 AS INTEGER) AS grp',
+  'FROM (SELECT d.track_id AS track_id,MAX(0,COALESCE(s.like_count,0)+SUM(d.delta)) AS next_count',
+  'FROM deltas d LEFT JOIN track_stats s ON s.track_id=d.track_id',
+  'GROUP BY d.track_id,s.like_count HAVING SUM(d.delta)<>0))',
+  'GROUP BY grp'
+].join(' ');
 const outboxWriteSQL = [
   'INSERT INTO like_notification_outbox_404(track_id,revision,confirmed_count,updated_at)',
   'SELECT d.track_id,1,MAX(0,COALESCE(s.like_count,0)+SUM(d.delta)),1000',
@@ -109,16 +121,17 @@ const outboxWriteSQL = [
   'revision=like_notification_outbox_404.revision+1,',
   'confirmed_count=excluded.confirmed_count,updated_at=excluded.updated_at'
 ].join(' ');
-async function execute(db,batches,returnIds,withOutbox){
+async function execute(db,batches,returnIds,withOutbox,withWave=false){
   const order=[...batches].sort((a,b)=>a.time-b.time||a.id.localeCompare(b.id)||a.q.localeCompare(b.q));
   const last=order.at(-1);
   const params=[last.time,last.id,last.q,1000];
   const original=updates.map((sql,i)=>db.prepare(cte+' '+sql+(returnIds&&(i===2||i===3)?' RETURNING track_id':''))
     .bind(...params,...(i<2?[1000]:[])));
   // Typed outbox write is BEFORE membership/stats and in SAME D1 atomic batch.
-  const statements=withOutbox ? [db.prepare(cte+' '+outboxWriteSQL).bind(...params), ...original] : original;
+  const statements=withWave ? [db.prepare(cte+' '+waveWriteSQL).bind(...params), ...original] :
+    withOutbox ? [db.prepare(cte+' '+outboxWriteSQL).bind(...params), ...original] : original;
   const all=await db.batch(statements);
-  const core=withOutbox?all.slice(1):all;
+  const core=(withOutbox||withWave)?all.slice(1):all;
   const ids=new Set();
   if(returnIds)for(const i of [2,3]){
     assert.equal(core[i]?.results?.length,core[i]?.meta?.changes,'RETURNING count mismatch');
@@ -127,43 +140,55 @@ async function execute(db,batches,returnIds,withOutbox){
   const likes=(await db.prepare('SELECT track_id,user_uid FROM likes ORDER BY track_id,user_uid').all()).results;
   const stats=(await db.prepare('SELECT track_id,like_count FROM track_stats ORDER BY track_id').all()).results;
   const outbox=(await db.prepare('SELECT track_id,revision,confirmed_count FROM like_notification_outbox_404 ORDER BY track_id').all()).results;
+  const waves=(await db.prepare('SELECT seq,payload_json FROM like_notification_wave_405 ORDER BY seq').all()).results.map(x=>({seq:x.seq,items:JSON.parse(x.payload_json)}));
   const remaining=[];
   for(const q of pools)remaining.push((await db.prepare('SELECT COUNT(*) AS n FROM explore_like_batches_'+q).first()).n);
   return {meta:totals(all),counts:core.map(x=>x.meta.changes),
-    ids:[...ids].sort(),likes,stats,remaining,outbox};
+    ids:[...ids].sort(),likes,stats,remaining,outbox,waves};
 }
 let error=null; const report=[];
 try{
-  const base=await database('BEFORE'), returning=await database('AFTER'), outbox=await database('OUTBOX');
+  const base=await database('BEFORE'), returning=await database('AFTER'), outbox=await database('OUTBOX'), wave=await database('WAVE');
   for(const [name,rows,initial,expected] of cases){
-    await reset(base,rows,initial);await reset(returning,rows,initial);await reset(outbox,rows,initial);
+    await reset(base,rows,initial);await reset(returning,rows,initial);await reset(outbox,rows,initial);await reset(wave,rows,initial);
     const a=await execute(base,rows,false,false);
     const b=await execute(returning,rows,true,false);
     const c=await execute(outbox,rows,true,true);
+    const d=await execute(wave,rows,true,false,true);
     for(const check of ['likes','stats','remaining','counts'])assert.deepEqual(c[check],a[check],'outbox canonical mismatch '+name+' '+check);
     assert.deepEqual(b.likes,a.likes,'RETURNING canonical regression '+name);
     assert.deepEqual(c.ids,expected,'confirmed track IDs '+name);
+    for(const key of ['likes','stats','remaining','counts'])assert.deepEqual(d[key],a[key],'wave canonical mismatch '+name+' '+key);
+    assert.deepEqual(d.ids,expected,'wave confirmed track IDs '+name);
+    const waveTracks=d.waves.flatMap(w=>w.items.map(x=>x.trackId)).sort();
+    assert.deepEqual(waveTracks,[...new Set(expected)].sort(),'batched outbox lost a track '+name);
+    assert.ok(d.waves.every(w=>w.items.length>=1&&w.items.length<=50),'wave size bound '+name);
+    assert.equal(d.waves.length,Math.ceil(new Set(expected).size/50),'wave count '+name);
     assert.deepEqual(c.outbox.map(x=>x.track_id),expected,'typed outbox ids '+name);
     assert.equal(b.meta.written,a.meta.written,'RETURNING changed W: '+name);
     const delta=c.meta.written-b.meta.written;
     assert.ok(delta>=expected.length,'outbox should write >=1 row per affected track: '+name);
     if(expected.length===0)assert.equal(delta,0,'no-op queued request must not add outbox writes');
-    report.push({name,base:a.meta,ret:b.meta,out:c.meta,delta});
-    console.log('404_069_'+name+'=PASS baseline='+JSON.stringify(a.meta)+' returning='+JSON.stringify(b.meta)+' outbox='+JSON.stringify(c.meta)+' extraW='+delta);
+    const waveDelta=d.meta.written-b.meta.written;
+    if(d.waves.length===0)assert.equal(waveDelta,0,'no-op wave adds writes');
+    else assert.ok(waveDelta>0&&waveDelta<=delta,'wave must cost <= indexed outbox: '+name);
+    report.push({name,base:a.meta,ret:b.meta,out:c.meta,delta,wave:d.meta,waveDelta,waveRows:d.waves.length});
+    console.log('404_069_'+name+'=PASS baseline='+JSON.stringify(a.meta)+' returning='+JSON.stringify(b.meta)+' outbox='+JSON.stringify(c.meta)+' indexedExtraW='+delta+' wave='+JSON.stringify(d.meta)+' waveExtraW='+waveDelta+' waveRows='+d.waves.length);
   }
   console.log('404_069_DURABLE_OUTBOX_PHYSICAL_COST=PASS '+report.length+'/'+cases.length);
   const costly=report.filter(x=>x.delta>0);
   assert.ok(costly.length>=3);
   console.log('404_069_OUTBOX_EXTRA_D1_WRITES=CONFIRMED '+JSON.stringify(costly.map(x=>[x.name,x.delta])));
+  console.log('405_069_BATCHED_WAVE_COST=PASS '+JSON.stringify(report.map(x=>[x.name,x.delta,x.waveDelta])));
   console.log('404_069_W1_W2_RELEASE_GATE=BLOCKED: historical aggregate baseline already W>2; full live per-action accounting and trigger/index parity absent');
 }catch(ex){error=String(ex?.stack||ex);console.error('404_069_MINIFLARE_FAIL',error)}
 finally{
   if(process.env.GITHUB_STEP_SUMMARY)appendFileSync(process.env.GITHUB_STEP_SUMMARY,[
     '# Stage404 069 full patch039/040-era CTE + outbox',
     'LOCAL Miniflare only. These costs are background aggregate, NOT per-click W1 or live Worker billing.',
-    '| Case | baseline R/W | RETURNING R/W | +outbox R/W | extra D1 writes |',
-    '|---|---:|---:|---:|---:|',
-    ...report.map(x=>'| '+x.name+' | '+x.base.read+'/'+x.base.written+' | '+x.ret.read+'/'+x.ret.written+' | '+x.out.read+'/'+x.out.written+' | +'+x.delta+' |'),
+    '| Case | baseline R/W | RETURNING R/W | +indexed outbox R/W | extra D1 W | +one wave R/W | wave extra W |',
+    '|---|---:|---:|---:|---:|---:|---:|',
+    ...report.map(x=>'| '+x.name+' | '+x.base.read+'/'+x.base.written+' | '+x.ret.read+'/'+x.ret.written+' | '+x.out.read+'/'+x.out.written+' | +'+x.delta+' | '+x.wave.read+'/'+x.wave.written+' | +'+x.waveDelta+' |'),
     '',error?'**FAIL**':'**PHYSICAL D1 DELTA MEASURED. W1-W2 RELEASE NOT CERTIFIED.**',''
   ].join('\n'));
   await mf.dispose().catch(()=>{});

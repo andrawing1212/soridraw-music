@@ -1,3 +1,13 @@
+## 0S04. Stage401 기존 D1 변경 저널 재활용 격리 6/6 PASS / 제품 알림 BLOCKED (2026-10-09 KST)
+
+- 사용자 계속 개발 지시로 `scripts/verify-401-existing-derived-journal.mjs` 추가, `.github/workflows/verify-398-isolated-d1.yml` 연동, `preview` 격리 CI Run [37823762282](https://github.com/andrawing1212/soridraw-music/actions/runs/37823762282) **SUCCESS**. 기존 Stage398 4/4, 399 8/8, 400 5/5 유지; Stage401 6/6 + 67곡 50/17 페이징 + 같은 곡 변경 합치기 PASS.
+- **새 비용 방향:** 이미 있는 `explore_derived_changes(feed,track,id,seq)` 목록을 사용하면 알림 전용 D1 새 레코드/쓰기 추가 없이 변경곡을 읽는 방향이 가능함. 간소화된 Miniflare 저널 선택 R1/W0, 쓰기 증분 0. 실제 정산 W6/W7 모델은 사용자 접수 W1이 아니며 운영 비용과 비교 불가.
+- **결정적인 남은 위험:** 이 목록은 좋아요뿐 아니라 곡 정보/공개 상태 수정도 기록하고, seq는 같은 곡마다 최근 값으로 덮임. 그대로 좋아요 서버 알림으로 발행 불가. durable checkpoint/트리거 LIVE parity/Functions 인증·재전송/구버전 호환/RTDB 10만 명 수신량 미검증.
+- 근거 문서 `DOCS/RTDB_EXISTING_DERIVED_JOURNAL_401_2026-10-09.md`. 코드는 런타임 import되지 않는 격리 스크립트뿐. 기존 PREVIEW app382/Worker/Functions/Rules/공유 D1·R2·Firestore 데이터/Hosting/main/TEST/PRODUCTION 수정·배포 0. TypeScript/Build/PC·모바일/실제 D1 비용 미검증.
+- 다음은 저널 track만으로 좋아요 변화임을 단정하지 않고 R2/canonical 확정과 실사용 비용을 보존하는 **like-specific + durable retry** 최소 절차 검증. 조건 불충족 시 중단하며 LIVE 발행/Rules 변경 금지.
+
+---
+
 ## 0S03. Stage400 069/075 확정 이벤트 격리 검사 PASS / 서버 게시 BLOCKED (2026-10-09 KST)
 
 - 사용자 계속 진행 지시에 따라 preview에 격리 검사 `scripts/verify-400-069-075-confirmed-event-gate.mjs` 추가 + 기존 `.github/workflows/verify-398-isolated-d1.yml`에 자동 연결. GitHub isolated CI Run [37822533579](https://github.com/andrawing1212/soridraw-music/actions/runs/37822533579) **SUCCESS**: 이전 398 4/4, 399 8/8, 신규 400 075 5/5 + 069/075 source guard + 모의 겹침 실험 PASS.

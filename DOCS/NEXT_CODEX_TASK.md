@@ -1,3 +1,31 @@
+## CURRENT — Stage414: Pending-only lifecycle flush of delayed server saves (2026-10-09 KST)
+
+사용자 최우선 신규 지시: app383에서 모바일 좋아요 후 즉시 종료 동작을 직접 확인함. 좋아요 외 현재 묶음 지연 저장도 앱 종료/창 내림(백그라운드) 시 기다리지 말고 현재 pending 최종 상태만 조기 서버 저장 시도. 기존 정상 좋아요 app383/Stage412 Worker는 동결. 이 문서는 Codex 구현 명령이며, 작성만으로 구현/배포 완료가 아님.
+
+기준: preview SHA 2d3936b53515298b4abac09a8c487f04195210a0. 실행 전 HEAD 재확인, AGENTS 및 Work/비용/기능 스킬 우선.
+
+1. 먼저 모든 지연 canonical 저장 주체·타이머·durable pending·기존 종료 hook을 인벤토리로 확인. 대표:
+- src/App.tsx: Recent Song 제목/프롬프트/가사 한 UID aggregate +150초 (canonical W2, RTDB 즉시 preview), Studio save-heart 개별 곡 +30초 (net zero W0, 변경곡 W1, app349 즉시 PC↔모바일 하트·Music Note membership, 썸네일 보호).
+- src/pages/FavoritesPage.tsx, src/lib/pageSyncCoordinator.ts, src/lib/musicNoteDetailDraft.ts: Music Note Detail/카드 변경 저장, 기존 page-exit와 durable IndexedDB. coordinator의 pageClosing local-only 우회 및 Detail 기존 flush 계약 검사. 불필요한 전체 draft flush/타이머 추가 금지.
+- src/services/musicNoteFolderStructureBatch.ts: Music Note 폴더 생성/이름/순서 +60초, 기존 pagehide 있음. 폴더 삭제/곡 이동의 정상 즉시 서버 저장은 건드리지 말 것.
+- src/services/playlistService.ts, src/services/libraryPlaylistRevisionBatch.ts, src/pages/SunoLibraryPage.tsx: Library 이름/순서/호환 revision +60초, 기존 pagehide rename→order→revision 존재. create/delete 즉시 canonical과 warm-cache, 다곡 문서 안전성 동결.
+- src/services/musicNoteFavoriteCountBatch.ts: UID 파생 favoriteCount delta +30초. canonical favorite 성공 후 일관성 있게 settle, net-zero W0, 중복 increment 금지.
+- 추가 지연 canonical 저장 소유자를 좁혀 탐색하고 해당 사항만 포함. Explore 공개 좋아요 5초+hidden/pagehide/keepalive는 app383 기능 보존, 불필요한 수정 금지.
+
+2. 오직 실제 pending이 있는 경우에만 document visibilitychange(hidden) 및 window pagehide에서 각 저장 주체의 마지막 상태 조기 flush를 시도. 일반 앱 사용 중 기존 +150/+60/+30초 묶음과 즉시 로컬·RTDB 미리보기 유지. route change, 재진입, 리렌더, 무변경 background의 신규 Firestore/D1 read/write 0. 백그라운드 자주 전환 시 비용 증가와 묶음 감소 실제 검사.
+
+3. hidden과 pagehide 연속 이벤트, 기존 timer 및 in-flight flush는 한 상태/UID/곡 기준 dedupe. 더 새로운 의도는 이전 완료에 덮어써지거나 지워지지 않음. 같은 곡 원상복귀 W0, 같은 폴더 여러 수정 최종 상태만, Recent aggregate 단일 final snapshot. 이름/순서/호환 revision·favoriteCount는 기존 안전한 canonical 의존 순서 보존.
+
+4. 서버 도달·성공 확인 전 durable outbox/IndexedDB를 절대 비우지 않음. 모바일 강제종료·오프라인·Firestore SDK 비동기 취소 시 즉시 확정은 무조건 보장할 수 없음. pending 보존→다음 인증 실행/온라인 복귀 시 bounded 복구. Firestore SDK에 fetch keepalive와 동일한 보장을 가정 금지. 로그인 uid 격리 및 기존 다른 기기 newer state fence 유지.
+
+5. 절대 금지: pageSyncCoordinator의 종료 skip을 무차별 제거하고 모든 큐를 무조건 저장, 전체 목록 read/rebuild, 버전 업데이트로 cache 초기화, 새 서버/Worker/Functions/D1 schema, 데이터 백필·삭제, 정상 디자인/반응형 변경, 좋아요·팔로우·저장하트 기존 표시 변경, main/TEST/PRODUCTION 수정.
+
+6. 검증: pending 없음 hidden/pagehide R0/W0, 단건 pending, 중복 hidden+pagehide, 150/60/30초 타이머 경합, 여러 곡 변경, undo net-zero, offline/0~1초 종료/재실행 복구, cross-device 즉시 UI와 최종 canonical, PC/mobile 비교. 기존 290/291/292/301/349/413 및 영향을 받은 Music Note/Library, 좋아요/팔로우 회귀, TypeScript/Build PASS. W1~W2 D1 hard gate, 실제 Firestore/RTDB 비용 비교. 정적 테스트 결과를 실제 종료 기기 PASS라고 보고 금지.
+
+7. Codex High로 분석→한 소유 단위씩 최소 구현→테스트→preview commit/push. 변경·최종 SHA·TypeScript/Build/Test·미검증/위험 보고. Codex 배포 금지. 구현 후 독립 Work 감사, ChatGPT 확인 후 안전하면 공식 PREVIEW Hosting 배포, 실제 사용자 검증. 일부만 구현됐으면 Stage414 전체 완료 선언 금지.
+
+---
+
 ## CURRENT — Stage413 app383 PREVIEW deployed; FIRST test immediate mobile close (2026-10-09 KST)
 
 - PREVIEW Hosting Run 37848460721 SUCCESS, app383, client source `80221fa5ccfff38edfe5364a19343047cd49d470`, user-visible Worker Stage412 unchanged. Stage413 strict QA 37848247242 PASS.

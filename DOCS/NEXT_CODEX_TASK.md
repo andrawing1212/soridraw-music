@@ -1,3 +1,11 @@
+## CURRENT GATE — Stage406 측정 PASS, Stage407 복구 안전망 유지형 병목 확인 (2026-10-09 KST)
+
+- [CI 37831877230](https://github.com/andrawing1212/soridraw-music/actions/runs/37831877230) 성공. 정상 191이 정산 뒤 최대80 공개곡을 읽는 현행 SELECT의 LOCAL Miniflare D1 비용: 1곡 R2, 40곡 R120, 80곡 R240/W0. **LIVE 비용/실기기 동작은 아직 확인하지 않음.**
+- **Stage407 우선은 새 구조 도입이 아니라 191 실제 복구 필요 빈도·기존 DO 알람/과거 오류 복구 의존성 등 소스/운영 read-only 감사**. 단순 `changedTracks=0` 즉시 skip은 과거 R2 미정착 복구를 깨뜨릴 수 있으므로 금지. 069/075 정상 경로·UI/개인 membership/팔로우/PC↔모바일·구버전 호환 유지.
+- 실사용 비용·기능 품질 모두 개선 증거 없으면 제품 코드는 그대로 둔다. 새 D1 outbox·Functions/RTDB 서버 알림을 무조건 붙이지 않는다. 공유 D1/Worker/Functions/Rules/Hosting/main/TEST/PRODUCTION 수정·배포 승인 없음.
+
+---
+
 ## CURRENT GATE — Stage406 현행 191 복구 D1 읽기 점검 / 보호 우선 (2026-10-09 KST)
 
 - `DOCS/LIKE_REPAIR_191_READ_AUDIT_406_2026-10-09.md` 확인. 191은 매 **좋아요 배치 정산** 뒤 기존 공유 공개 좋아요 숫자를 상위 최대 80곡 기준 D1에서 확인한다. 페이지 이동/재진입마다 읽는 흐름 아님. 실제 결함이 확정되지 않은 상태에서 제거하지 않는다.

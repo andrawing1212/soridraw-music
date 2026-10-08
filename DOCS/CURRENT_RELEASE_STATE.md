@@ -1,3 +1,11 @@
+## 0S09A. Stage406 격리 비용 실측 PASS / 191 복구 삭제 STOP (2026-10-09 KST)
+
+- [GitHub Run 37831877230](https://github.com/andrawing1212/soridraw-music/actions/runs/37831877230) **SUCCESS**, 격리 실제 D1 `rows_read`: 기존 191 SQL 1곡 R2, 40곡 R120, 80곡 R240, 전부 W0. **페이지 진입마다 읽는 것이 아니라 좋아요 묶음 정산 이후** 최대 80곡 공유 R2 상태 복구 경로. live 청구 아님.
+- 191은 과거 서버 R2 투영 실패 후 정상 숫자 복구를 보호한다. 단순 no-op 또는 이번 곡만 확인하는 생략 후보는 이전 실패 상태 방치 위험을 재현했으므로 **기존 보호 기능 변경 금지**. Stage406 진단 스크립트/CI/문서만 변경.
+- 근거 `DOCS/LIKE_REPAIR_191_READ_AUDIT_406_2026-10-09.md`. 다음은 읽기 전용으로 복구 부채/실제 발생빈도를 확인 후 **기존 시스템 대비 명확한 총비용 개선이 가능할 때만** 최소 코드 수정. 원본 D1/R2, Worker/Functions/Rules/Hosting, main/TEST/PRODUCTION 미변경·미배포. TS/Build·PC·모바일/실청구 미검증.
+
+---
+
 ## 0S09. Stage406 기존 좋아요 안전 복구 read-path 집중 검사 (2026-10-09 KST)
 
 - **보존 우선:** 신규 알림 구조 구현 중단. `ExploreLikeBatchScheduler103.runAggregate194` 후 `repairSharedPublicLikeCounts191`가 매 정산마다 실행되는 기존 소스 경로를 확인했다. 상위 최대 80곡의 D1 count 조회이지만 사용자 재진입마다 수행하는 코드 아님. 이전 R2 실패를 복구하는 역할이 있으므로 **성급히 제거/skip 금지**.

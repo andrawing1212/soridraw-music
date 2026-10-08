@@ -2047,23 +2047,15 @@ updates: draft.updates,
       flush: flushMusicNoteLocalPendingSingleFlight,
     });
 
-    const flushOnHidden = () => {
-      if (document.visibilityState !== 'hidden') return;
-      // Local draft reads are allowed; Firestore is touched only for dirty rows.
-      void flushMusicNoteLocalPendingSingleFlight()
-        .catch((error) => console.warn('[414] Music Note background save retained for retry:', error));
-    };
     const flushOnPageHide = () => {
       // Direct best-effort exit attempt; the coordinator intentionally skips
       // page-close network work, while the durable IndexedDB draft remains safe.
       void flushMusicNoteLocalPendingSingleFlight()
         .catch((error) => console.warn('[414] Music Note closing draft retained for retry:', error));
     };
-    document.addEventListener('visibilitychange', flushOnHidden);
     window.addEventListener('pagehide', flushOnPageHide);
 
     return () => {
-      document.removeEventListener('visibilitychange', flushOnHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
       clearFavoriteDetailFlushTimer();
       void flushSoridrawPageSync(activeUser, 'music-note-exit')
@@ -2646,16 +2638,10 @@ updates: draft.updates,
     const flushOnPageHide = () => {
       void flushMusicNoteFolderStructureBatch(uid);
     };
-    // Stage414: save an actual pending folder structure when the app is
-    // backgrounded, rather than waiting for the original 60-second timer.
-    // The existing per-UID in-flight guard prevents hidden + pagehide duplicates.
-    const flushOnHidden = () => {
-      if (document.visibilityState === 'hidden') flushOnPageHide();
-    };
-    document.addEventListener('visibilitychange', flushOnHidden);
+    // Preserve app301's 60-second batching while the app is simply hidden.
+    // An actual page exit still uses the original pending-only pagehide path.
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
-      document.removeEventListener('visibilitychange', flushOnHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
     };
   }, [user?.uid]);

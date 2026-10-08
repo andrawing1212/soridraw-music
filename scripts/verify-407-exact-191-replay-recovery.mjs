@@ -133,12 +133,29 @@ try {
   const bad=makeBucket({feed:0,card:0,profile:0,failOnce:keys.profile});
   await assert.rejects(repair(env(bad)),/injected R2 put failure/);
   const partial=bad.counts();
-  verify('PARTIAL_FAILURE_LEFT_DEBT',()=>partial.feed===1&&partial.popular===1&&partial.card===1&&partial.profile===0);
-  // Existing 191 decides changed IDs only by feed mismatch. Once feed is
-  // updated, retry loses the id and cannot revisit a stale profile.
+  verify('PARTIAL_FAILURE_KEEPS_FEED_STALE_FOR_RETRY',()=>partial.feed===0&&partial.popular===0&&partial.card===1&&partial.profile===0);
+  // Unlike previous Stage407, the feed has NOT been committed yet.
+  // A retry reselects the track and repairs exactly the missing projection.
+  const beforeRetryCardWrites=bad.writes.filter(x=>x===keys.card).length;
   const retried=await repair(env(bad));
   const final=bad.counts();
-  verify('RETRY_STILL_LEAVES_STALE_PROFILE',()=>retried.changedTracks===0&&final.profile===0);
+  verify('RETRY_COMPLETES_PARTIAL_PROFILE',()=>retried.changedTracks===1&&final.profile===1&&final.feed===1&&final.popular===1);
+  verify('RETRY_NO_DUPLICATE_CARD_PUT',()=>bad.writes.filter(x=>x===keys.card).length===beforeRetryCardWrites);
+
+  // If the Feed PUT itself fails, card+profile have already settled. Retry
+  // must not write those objects again, only update the remaining Feed.
+  const failFeed=makeBucket({feed:0,card:0,profile:0,failOnce:keys.latest});
+  await assert.rejects(repair(env(failFeed)),/injected R2 put failure/);
+  const first=failFeed.counts();
+  verify('FEED_FAILURE_RETAINS_RETRY_SIGNAL',()=>first.feed===0&&first.card===1&&first.profile===1);
+  const priorDerived=failFeed.writes.filter(x=>x===keys.card||x===keys.profile).length;
+  await repair(env(failFeed));
+  const after=failFeed.counts();
+  verify('FEED_RETRY_NO_EXTRA_DERIVED_WRITES',()=>after.feed===1&&after.popular===1&&after.card===1&&after.profile===1
+    &&priorDerived===failFeed.writes.filter(x=>x===keys.card||x===keys.profile).length);
+
+  // Pre-existing stale card+profile while both Feeds are already current
+  // remains out of scope: finding it requires debt history or per-card reads.
   const cardOnly=makeBucket({feed:1,card:0,profile:0});
   const third=await repair(env(cardOnly));
   verify('ALREADY_CORRECT_FEED_DOES_NOT_REPAIR_CARD',()=>third.changedTracks===0
@@ -147,16 +164,16 @@ try {
   // This is not a total service-failure assertion: other write paths may
   // repair those cards. It is a gap in this exact 191 isolated recovery path.
   console.log('407_EXACT_FUNCTION_ISOLATED_CASES=PASS '+cases.length+'/'+cases.length);
-  console.log('407_PROTECTED_PRODUCT_FIX=NOT_IMPLEMENTED');
-  console.log('407_DEPLOY_GATE=BLOCKED (repair-order recovery gap and live/fanout costs need review)');
+  console.log('408_FEED_LAST_RECOVERY_FIX=VERIFIED_IN_ISOLATION');
+  console.log('408_DEPLOY_GATE=BLOCKED (legacy card-only debt, live parity and multi-account/PC/mobile verification remain)');
 }catch(error){failed=String(error?.stack||error);console.error('407_EXACT_191_VERIFIER_FAIL',failed)}
 finally{
   if(process.env.GITHUB_STEP_SUMMARY)appendFileSync(process.env.GITHUB_STEP_SUMMARY,[
    '# Stage407 exact source 191 recovery replay audit','',
    'Actual 191 source evaluated in isolated VM with Miniflare local D1 and fake R2; NO deployment.',
    ...cases.map(x=>'- '+x+': PASS'), '',
-   failed?'**FAIL**':'**EXISTING GAP REPRODUCED; PRODUCT UNCHANGED / LIVE GATE BLOCKED**','',
-   'If feed repair succeeds but profile/card R2 put fails, replay can lose changed track selection. Do not disable/skip 191.', ''
+   failed?'**FAIL**':'**FEED-LAST FIX PASS IN ISOLATION / LIVE GATE BLOCKED**','',
+   'Feed-last fixes injected failure/retry without extra D1 writes; pre-existing orphaned card-only debt is unresolved.', ''
   ].join('\n'));
   await mf.dispose().catch(()=>{});
 }

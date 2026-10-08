@@ -1283,46 +1283,25 @@ async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
   // Fail closed and let the existing publication path handle the visibility change.
   if (canonical.size !== ids.length) throw new Error('[191] canonical public membership changed during repair');
 
+  // SORIDRAW_191_REPLAY_SAFE_ORDER_408: choose only cards whose published
+  // Feed projection differs. Stage selection uses already-loaded R2 snapshots,
+  // so healthy waves still perform zero per-card R2 reads and no new D1 reads.
   const changed = new Map();
-  for (const [sort, snapshot] of snapshots) {
-    let complete = false;
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const object = attempt === 0 ? snapshot.object : await shared.get(snapshot.key);
-      if (!object) throw new Error('[191] shared Feed disappeared: ' + sort);
-      const bundle = attempt === 0 ? snapshot.bundle : JSON.parse(await object.text());
-      const data = bundle?.payload?.data;
-      if (!Array.isArray(data?.items) || data.items.length > 40) throw new Error('[191] invalid concurrent Feed');
-      let dirty = false;
-      const items = data.items.map(item => {
-        const id = String(item?.id || item?.trackId || '').trim();
-        const expected = canonical.get(id);
-        if (!expected) throw new Error('[191] Feed membership raced: ' + sort);
-        const count = Number(item?.likeCount ?? item?.stats?.likeCount ?? 0);
-        const nested = item?.stats && typeof item.stats === 'object'
-          ? Number(item.stats.likeCount ?? expected.count) : expected.count;
-        if (count === expected.count && nested === expected.count) return item;
-        dirty = true;
-        changed.set(id, expected);
-        return { ...item, likeCount: expected.count,
-          ...(item?.stats && typeof item.stats === 'object'
-            ? { stats: { ...item.stats, likeCount: expected.count } } : {}) };
-      });
-      if (!dirty) { complete = true; break; }
-      const now = Date.now();
-      const saved = await shared.put(snapshot.key, JSON.stringify({
-        ...bundle, updatedAt: now,
-        payload: { ...bundle.payload, data: { ...data, items } },
-      }), {
-        onlyIf: { etagMatches: object.etag },
-        httpMetadata: { contentType: 'application/json; charset=utf-8' },
-        customMetadata: { ...(object.customMetadata || {}), targetedLikeRepair: '191',
-          mirroredAt: String(now) },
-      });
-      if (saved) { complete = true; break; }
+  for (const snapshot of snapshots.values()) {
+    for (const item of snapshot.bundle.payload.data.items) {
+      const id = String(item?.id || item?.trackId || '').trim();
+      const expected = canonical.get(id);
+      if (!expected) throw new Error('[191] Feed membership raced: ' + id);
+      const count = Number(item?.likeCount ?? item?.stats?.likeCount ?? 0);
+      const nested = item?.stats && typeof item.stats === 'object'
+        ? Number(item.stats.likeCount ?? expected.count) : expected.count;
+      if (count !== expected.count || nested !== expected.count) changed.set(id, expected);
     }
-    if (!complete) throw new Error('[191] shared Feed CAS contention: ' + sort);
   }
 
+  // Finish changed-card/profile R2 repairs BEFORE marking a Feed as current.
+  // A failed CAS/PUT leaves at least one old Feed entry to select on retry.
+  // Never scan cards not selected by a mismatched Feed.
   // Update only corresponding profile and track-card projections. If a CAS
   // fails, the alarm retries; canonical user data is never written here.
   for (const [id, state] of changed) {
@@ -1374,6 +1353,46 @@ async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
       }
       if (!complete) throw new Error('[191] derived CAS contention: ' + kind);
     }
+  }
+
+  // Publish Feed last: no completed-feed marker before dependent cards settle.
+  for (const [sort, snapshot] of snapshots) {
+    let complete = false;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const object = attempt === 0 ? snapshot.object : await shared.get(snapshot.key);
+      if (!object) throw new Error('[191] shared Feed disappeared: ' + sort);
+      const bundle = attempt === 0 ? snapshot.bundle : JSON.parse(await object.text());
+      const data = bundle?.payload?.data;
+      if (!Array.isArray(data?.items) || data.items.length > 40) throw new Error('[191] invalid concurrent Feed');
+      let dirty = false;
+      const items = data.items.map(item => {
+        const id = String(item?.id || item?.trackId || '').trim();
+        const expected = canonical.get(id);
+        if (!expected) throw new Error('[191] Feed membership raced: ' + sort);
+        const count = Number(item?.likeCount ?? item?.stats?.likeCount ?? 0);
+        const nested = item?.stats && typeof item.stats === 'object'
+          ? Number(item.stats.likeCount ?? expected.count) : expected.count;
+        if (count === expected.count && nested === expected.count) return item;
+        dirty = true;
+        changed.set(id, expected);
+        return { ...item, likeCount: expected.count,
+          ...(item?.stats && typeof item.stats === 'object'
+            ? { stats: { ...item.stats, likeCount: expected.count } } : {}) };
+      });
+      if (!dirty) { complete = true; break; }
+      const now = Date.now();
+      const saved = await shared.put(snapshot.key, JSON.stringify({
+        ...bundle, updatedAt: now,
+        payload: { ...bundle.payload, data: { ...data, items } },
+      }), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: { ...(object.customMetadata || {}), targetedLikeRepair: '191',
+          mirroredAt: String(now) },
+      });
+      if (saved) { complete = true; break; }
+    }
+    if (!complete) throw new Error('[191] shared Feed CAS contention: ' + sort);
   }
 
   if (oneTime) {

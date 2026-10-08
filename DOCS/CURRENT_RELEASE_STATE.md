@@ -1,3 +1,11 @@
+## 0S09. Stage406 기존 좋아요 안전 복구 read-path 집중 검사 (2026-10-09 KST)
+
+- **보존 우선:** 신규 알림 구조 구현 중단. `ExploreLikeBatchScheduler103.runAggregate194` 후 `repairSharedPublicLikeCounts191`가 매 정산마다 실행되는 기존 소스 경로를 확인했다. 상위 최대 80곡의 D1 count 조회이지만 사용자 재진입마다 수행하는 코드 아님. 이전 R2 실패를 복구하는 역할이 있으므로 **성급히 제거/skip 금지**.
+- 읽기만 계측하는 `scripts/verify-406-existing-repair-read-audit.mjs` 추가 + 기존 격리 Workflow 연결. 결과 `DOCS/LIKE_REPAIR_191_READ_AUDIT_406_2026-10-09.md`. 정상 기능·현재 Worker·공유 D1/RTDB/Rules/Functions/Hosting 변경 0. Run 결과는 해당 CI 참고.
+- 다음은 191 복구를 해치지 않는 안전한 회피 조건/과거 실패 부채 표시가 원래 존재하는지 추가 확인. 없는 경우 기존 정상 기능 유지, Stage405 새 outbox 적용 금지. PC·모바일·실비용·TS/Build는 제품 코드 미수정 및 미검증.
+
+---
+
 ## 0S08. 사용자 확정: 정상 구조 보존·병목 최소 최적화 우선 (2026-10-09 KST)
 
 - 사용자 지시: 잘 설계된 정상 구조를 깨거나 재초기화하지 말고, **부족한 구간의 비용만 집중 개선하면서 정상 기능을 보존**할 것. 상세 `DOCS/PRESERVE_WORKING_SYSTEMS_406_2026-10-09.md`.

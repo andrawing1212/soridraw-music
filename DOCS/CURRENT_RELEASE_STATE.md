@@ -1,3 +1,13 @@
+## 0S01. 격리 Cloudflare Miniflare D1 행읽기·행쓰기 실제 로컬 측정 PASS / 운영 전체 비용 미검증 (2026-10-08 KST)
+
+- 개발 단계 A-398 진행: `scripts/verify-398-miniflare-d1-returning.mjs`, 자동 격리 CI `.github/workflows/verify-398-isolated-d1.yml`. 테스트 외부 Credential/Cloudflare 계정/운영 D1 연결·데이터변경 없음. Run `37741253004` SUCCESS; 첫 Run `37741152524`은 runtime compatibilityDate가 workerd 지원 범위를 초과해 실패한 설정오류로 수정 후 통과.
+- **실제 Miniflare LOCAL D1 meta 증거:** membership + queue 삭제의 축약형 실험에서 신규 좋아요 기존 R1/W3 → RETURNING R2/W3, 중복 좋아요 R1/W1 → R2/W1, 해제 R2/W2 → R3/W2, 중복 해제 R1/W1 → R2/W1. ID 정확성/DB 정합성 4/4 PASS, **읽기 증분 +1/이벤트, 쓰기 증분 0**. 전체 SORIDRAW canonical Worker W1~W2 합격으로 해석 금지.
+- 별도 Node22 in-memory SQLite patch039/040 CTE 구조·트리거 없는 격리 비교 8/8 PASS, D1 물리 R/W 계측 아님. 코드/결과 근거를 `DOCS/RTDB_LOCAL_D1_COST_PROBE_398_2026-10-08.md`에 보존.
+- **다음 gate:** 배포된 정확한 Worker bundle, 실제 current canonical 035/066/069/075 및 157 overlap, 인덱스·트리거와 전체 batch 처리 경로 검증 후 LOCAL D1 전체 CTE 비용을 재현. 반환된 ID 실측만으로 서버 RTDB publisher 구현 불가. 공유 LIVE Rules는 직접 클라이언트 전역 write 허용 상태이며 fanout/좋아요 30초 종료 문제 미해결.
+- **제품/데이터/배포:** 기존 PREVIEW app382, 기존 Worker, Firebase Functions, RTDB Rules, Firestore/D1/R2 공유 원본, TEST/main, PRODUCTION 변경 없음. 새로운 코드 파일들은 제품 런타임에 import되지 않음. TypeScript/Build/PC·모바일 실사용 변경/검증 없음. 변경된 것은 preview 테스트·문서·자동 검사 Workflow만.
+
+---
+
 ## 0S00. 단계 A 실제 코드 2개 + SQL 프로토타입 — 격리 12/12 PASS (2026-10-08 KST)
 
 - 사용자 "니가 작업해봐" 요청의 실제 `preview` 코드 결과: `scripts/verify-rtdb-public-like-returning-prototype.mjs` + `cloudflare/explore-worker/runtime/like-confirmed-event-397.mjs` + `scripts/verify-rtdb-public-like-aggregate-extract-397.mjs`. 첫 코드 commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`, 추가 모듈·검증 commit `216fdb1202f4d533761c10abf929850cacb2a738`. 기밀 값/실사용 데이터 접근 없음. 기능 플래그 OFF 이전 단계: 신규 코드 **아직 어디에도 호출/배포하지 않음**.

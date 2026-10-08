@@ -69,7 +69,6 @@ const mf = new Miniflare({
     OUTBOX: '00000000-0000-4000-8000-000000000405',
   },
 });
-const report = [];
 const totals = results => {
   const sum = key => results.reduce((n, r) => {
     const v = r?.meta?.[key];

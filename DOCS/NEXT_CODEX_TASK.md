@@ -1,3 +1,12 @@
+## CURRENT GATE — 사용자 지시: 정상 구조 재초기화·전면 교체 금지 (2026-10-09 KST)
+
+- **반드시 먼저 읽기:** `DOCS/PRESERVE_WORKING_SYSTEMS_406_2026-10-09.md`. 사용자가 명시적으로 정상 설계 보존, 부족한 비용 구간 최소 최적화, 좋아요/팔로우 동작 보존을 요구. 새 알림 구조를 구현하기 위해 잘 작동하는 app382/069 W1/30초 묶음/개인 캐시/DO/R2/PC↔모바일을 리팩터링·대체·재초기화하지 말 것.
+- Stage406을 새 outbox 구현 단계로 바로 해석하지 말고 **읽기 전용 병목 확인 및 현행 시스템 대비 총비용/품질 검증부터** 실행. 405 후보는 67곡 기준 indexed outbox W+201 → batched outbox W+3이지만 기존 대비 새 알림 비용 **R+817/W+3**, RETURNING-only 대비 **R+682/W+3**; 제품 총비용 개선이 증명되지 않음.
+- 정상 로직 소스는 변경 전후 파일·호출 경로를 최소 범위로 대조하고 원복 계획 마련. D1 R/W·DO/RTDB 전송·실기기 양방향 수렴 동등성 중 하나라도 FAIL/미검증이면 제품 Worker/Functions/Rules/공유 데이터 적용하지 않는다. TEST/PRODUCTION 별도 승인 필수.
+- 문서가 현재 기준, 재작성/병렬 수정/무차별 신규 플랫폼 생성 금지. 측정 가능한 이득이 없으면 **정상 경로 그대로 유지**가 성공적인 선택이다.
+
+---
+
 ## CURRENT GATE — Stage405 묶음 알림 D1 추가 쓰기 절감 PASS / Stage406 읽기·실운영 호환성 P0 (2026-10-09 KST)
 
 - 현 시점 기준 `DOCS/RTDB_BATCHED_OUTBOX_D1_404_405_2026-10-09.md`. [GitHub 격리 Run 37829847377](https://github.com/andrawing1212/soridraw-music/actions/runs/37829847377) SUCCESS. 기존 stage398~403 regressions PASS. Stage404 069 9/9 + 075 5/5, Stage405 67곡 50+17 두 경로 PASS, 069 오류 rollback PASS.

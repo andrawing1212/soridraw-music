@@ -1,3 +1,12 @@
+## 0S08. 사용자 확정: 정상 구조 보존·병목 최소 최적화 우선 (2026-10-09 KST)
+
+- 사용자 지시: 잘 설계된 정상 구조를 깨거나 재초기화하지 말고, **부족한 구간의 비용만 집중 개선하면서 정상 기능을 보존**할 것. 상세 `DOCS/PRESERVE_WORKING_SYSTEMS_406_2026-10-09.md`.
+- Stage405 실험은 현재 제품 app382/Worker/공유 데이터 변경 **0**이며, 후보 알림 간 비교 `W+201→W+3`을 기존 앱 대비 비용 절감으로 해석하면 안 됨. 묶음 후보의 069 67곡 추가 `R+682`가 존재하므로 새 알림 구조를 무조건 이어서 도입하지 않는다.
+- **다음 Stage406 판단 전** 현재 정상 기능 동결 → 문제 경로 특정 → 최소 diff 설계 → 기존 대비 원본 D1·DO·RTDB 총비용 및 좋아요/해제·PC↔모바일/팔로우 회귀 동등성 증명. 개선 증거 부족 시 새 아키텍처 적용 STOP. 기존 앱 정상 경로 보호가 비용 숫자보다 우선.
+- 이번 변경은 GitHub 상태·작업 지침 **문서만**. 제품 코드/Functions/Worker/Rules/DB/Hosting/TEST/PRODUCTION 미변경·미배포. 문서 추가만으로 TS/Build/실기기 검증 PASS 주장 금지.
+
+---
+
 ## 0S07. Stage404·405 격리 D1: 67곡 알림 추가 W201 → W3 절감 / 운영 전환 차단 (2026-10-09 KST)
 
 - 최신 [CI Run 37829847377](https://github.com/andrawing1212/soridraw-music/actions/runs/37829847377) **SUCCESS**. `scripts/verify-404-069-durable-outbox-cost.mjs`(069 9/9 + atomic rollback)와 `scripts/verify-404-075-durable-outbox-cost.mjs`(075 5/5 + 67곡 chunk)로 실제 격리 Miniflare D1 물리행 메타 계측. 기존 398~403 PASS 유지.

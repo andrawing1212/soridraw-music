@@ -1,3 +1,12 @@
+## 0S10. Stage407 원본 191 R2 부분실패 재시도 누락 재현 / 제품 원본 보호 (2026-10-09 KST)
+
+- [GitHub CI 37832572556](https://github.com/andrawing1212/soridraw-music/actions/runs/37832572556) **SUCCESS**. `scripts/verify-407-exact-191-replay-recovery.mjs`로 현행 `repairSharedPublicLikeCounts191` **원본 함수 직접 실행**(LOCAL Miniflare D1 + 메모리 R2 ETag/CAS), 7/7 PASS. 이전 398~406 검증 유지.
+- **찾은 실제 코드상 회복 공백:** Feed 최신/인기 숫자 저장 후 card/profile R2 put이 1회 실패하면 alarm 재시도 때 Feed는 이미 최신이어서 `changed` 맵이 비어 기존에 실패한 카드/프로필 수정을 건너뜀. Feed는 최신인데 카드만 구형인 경우도 191은 인지 못함. 이는 고장 **재현 PASS**, 제품 오류 수정 PASS가 아니다. 실제 live 환경 발현 여부/다른 복구 경로는 미확인.
+- **Stage408 P0:** 정상 069 W1/30초·PC↔모바일·팔로우·191 비용 구조 보존하며 부분 실패 복구 순서/전달 근거 최소 변경 후보를 격리 검증. 대량 R2 GET/PUT 또는 새 D1 W 추가가 필요하면 비용 FAIL. 충분한 근거가 없으면 제품 코드 변경 금지.
+- 근거 `DOCS/LIKE_REPAIR_191_PARTIAL_REPLAY_407_2026-10-09.md`. 제품 Worker/Functions/Rules/Hosting·공유 D1/R2/Firestore·계정 데이터·main/TEST/PRODUCTION 미변경/미배포. TS/Build/실기기 및 라이브 비용 미검증. 기존 069 진단 CI 실패 별도.
+
+---
+
 ## 0S09A. Stage406 격리 비용 실측 PASS / 191 복구 삭제 STOP (2026-10-09 KST)
 
 - [GitHub Run 37831877230](https://github.com/andrawing1212/soridraw-music/actions/runs/37831877230) **SUCCESS**, 격리 실제 D1 `rows_read`: 기존 191 SQL 1곡 R2, 40곡 R120, 80곡 R240, 전부 W0. **페이지 진입마다 읽는 것이 아니라 좋아요 묶음 정산 이후** 최대 80곡 공유 R2 상태 복구 경로. live 청구 아님.

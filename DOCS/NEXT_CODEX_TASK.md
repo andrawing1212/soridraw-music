@@ -1,3 +1,12 @@
+## CURRENT GATE — Stage407 실제 191 함수 부분실패 재현 PASS / Stage408 최소 회복 보완 P0 (2026-10-09 KST)
+
+- 먼저 `DOCS/LIKE_REPAIR_191_PARTIAL_REPLAY_407_2026-10-09.md` 참조. [CI 37832572556](https://github.com/andrawing1212/soridraw-music/actions/runs/37832572556) Stage407 7/7 PASS. **PASS는 현행 복구 취약점을 실제 함수 격리 실행으로 재현했다는 의미**, 제품 동작 수정 완료가 아님.
+- P0 최소 목표: R2 Feed가 먼저 좋아진 후 카드/프로필 CAS 한 번 실패하면 재시도에서 `changed`가 사라지는 상황을 개선할 수 있는 **보수적 단일 수정 후보**만 격리 설계. Feed 정확/카드 구형인 상황도 처리 가능한지 검토. 기존 정상 191 구현/복구 성능을 실비용과 비교, 정상 배치 R2 per-card 전체조회가 생기면 FAIL.
+- **금지**: 기존 191 삭제/무조건 skip, 069/075 정산·W1 클릭 큐 변경, 앱382 클라이언트/Studio/Music Note/팔로우/기기 캐시 초기화, 새 outbox/RTDB 전역 방송 강행. 공유 D1/Rules/Functions/Worker deploy, main/TEST/PRODUCTION 승격 없음.
+- 테스트 필수: 기존 407 원본 함수 건강/정상복구/한 번 실패/다음 재시도/동시 CAS 충돌 + 읽기·쓰기·R2 호출 수 비교, 실제 069/075 전체 TypeScript/Build/검사, 가능하면 Work 독립 감사 및 사용자 PREVIEW PC·모바일 실사용. 미검증 기능·실청구 PASS 주장 금지.
+
+---
+
 ## CURRENT GATE — Stage406 측정 PASS, Stage407 복구 안전망 유지형 병목 확인 (2026-10-09 KST)
 
 - [CI 37831877230](https://github.com/andrawing1212/soridraw-music/actions/runs/37831877230) 성공. 정상 191이 정산 뒤 최대80 공개곡을 읽는 현행 SELECT의 LOCAL Miniflare D1 비용: 1곡 R2, 40곡 R120, 80곡 R240/W0. **LIVE 비용/실기기 동작은 아직 확인하지 않음.**

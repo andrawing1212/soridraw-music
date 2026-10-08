@@ -1429,6 +1429,9 @@ const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbo
   .reduce((latest, pending) => Math.max(latest, pending.updatedAt || 0), 0);
 
 let flushPendingLikes: (user: User) => Promise<void>;
+// Stage413: an exit-triggered network attempt may be interrupted by mobile suspension.
+// Preserve a retry-eligible durable outbox for the next app launch.
+const exitFlushArmed413 = new Set<string>();
 
 const schedulePendingFlush = (user: User) => {
   const uid = String(user?.uid || '').trim();
@@ -1693,7 +1696,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
       for (const pending of batchEntries) {
         const current = latest[pending.trackId];
         if (current?.updatedAt === pending.updatedAt) {
-          current.retryCount = Math.min(8, current.retryCount + 1);
+          // A mobile background/exit request may never receive its response.
+          // Retain the same operationId and allow ONE normal 5s resume attempt.
+          current.retryCount = exitFlushArmed413.has(uid)
+            ? 0 : Math.min(8, current.retryCount + 1);
           latest[pending.trackId] = current;
         } else if (current && current.updatedAt > pending.updatedAt) {
           // The first request MAY have reached the server before the network
@@ -1717,6 +1723,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       }
     }
   })().finally(() => {
+    exitFlushArmed413.delete(uid);
     inflightByUid.delete(uid);
     if (succeeded && getPendingExploreLikeMutationCount(uid) > 0) schedulePendingFlush(user);
   });
@@ -1738,6 +1745,7 @@ const installExitFlush413 = () => {
     const eligible = Object.values(readLikeOutbox(current.uid))
       .some((pending) => (pending.retryCount || 0) === 0);
     if (!eligible) return;
+    exitFlushArmed413.add(current.uid);
     clearFlushTimer(current.uid);
     // Local outbox is durable. If mobile suspends before the request can start,
     // do not discard the pending click: it remains eligible on next app open.

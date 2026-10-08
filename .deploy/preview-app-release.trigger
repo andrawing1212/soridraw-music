@@ -1,9 +1,12 @@
-app384-stage414-pending-only-lifecycle-part1-preview
-target_source=386c5a263c06ca8b932965d947e54a9aa30123ea
-app_version=384
-scope=recent-song-text-150s-pending-hidden-pagehide-singleflight,music-note-detail-card-durable-draft-hidden-pagehide-singleflight,music-note-folder-60s-pending-hidden,library-folder-60s-rename-order-revision-hidden,app383-explore-public-likes-unmodified,studio-heart-and-favorite-count-unmodified
-focused_ci_run=37854707932
+app385-cost-first-60s-final-state-restore-preview
+target_source=c742a467e0c80a63cfc27ceb47b6990d0db5134f
+app_version=385
+scope=restore-60s-music-note-library-final-state-on-background,keep-existing-rtbd-immediate-cross-device,keep-actual-pagehide-pending-only,restore-150s-recent-on-hidden,keep-studio-30s-heart-and-favoritecount,app383-explore-like-protected
+focused_ci_run=37857349808
 focused_ci_conclusion=success
+focused_ci_product_commit=07725ed0ef3c533de540a86ea7e1b45ce06d6245
+version_only_diff_after_product_ci=true
+exact_app385_ci_run=37857370230
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -11,4 +14,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_requested_stage414_continue_2026-10-08T22:29Z
+approval=user_requested_revert-unnecessary-background-flush_cost_first_2026-10-08T23:03Z

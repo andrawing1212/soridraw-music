@@ -10,7 +10,7 @@ import { appendFileSync } from 'node:fs';
 const mf = new Miniflare({
   modules: true,
   script: 'export default { fetch() { return new Response("isolated"); } };',
-  compatibilityDate: '2026-10-01',
+  compatibilityDate: '2026-08-01',
   d1Databases: {
     ORIGINAL: '00000000-0000-4000-8000-000000000398',
     RETURNING: '00000000-0000-4000-8000-000000000399',
@@ -87,6 +87,6 @@ try {
       '',failure?'**FAIL** — inspect job logs':'**PASS** for isolated SQL only'];
     appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
   }
-  await mf.dispose();
+  await mf.dispose().catch(error => console.warn('Miniflare cleanup:',String(error?.message||error)));
 }
 if(failure) process.exitCode=1;

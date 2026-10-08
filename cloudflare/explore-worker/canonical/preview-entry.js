@@ -1373,8 +1373,12 @@ async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
         const nested = item?.stats && typeof item.stats === 'object'
           ? Number(item.stats.likeCount ?? expected.count) : expected.count;
         if (count === expected.count && nested === expected.count) return item;
+        // Stage410: a mismatch discovered after dependent R2 projections were
+        // repaired must not be marked complete in Feed. Replay in the next alarm.
+        if (!changed.has(id)) {
+          throw new Error('[191] concurrent Feed drift requires replay: ' + sort);
+        }
         dirty = true;
-        changed.set(id, expected);
         return { ...item, likeCount: expected.count,
           ...(item?.stats && typeof item.stats === 'object'
             ? { stats: { ...item.stats, likeCount: expected.count } } : {}) };

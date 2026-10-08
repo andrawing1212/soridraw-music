@@ -1,3 +1,12 @@
+## 0S13. Stage410 191 동시 Feed CAS 새 변경곡 누락 방지 — PREVIEW 코드·격리 재검증 대기 (2026-10-09 KST)
+
+- 독립 감사에서 Stage409의 191이 **카드·프로필 먼저** 복구한 뒤 Feed CAS 재시도 중 *처음 복구 대상으로 선정하지 않았던 다른 곡*을 새로 발견해도 목록에만 정답 숫자를 적고 카드·프로필은 구형으로 남기는 회귀를 재현했다. 이전 기준 `bdcc0410aa50`은 같은 가상 시나리오에서 누락 없이 수렴했으며 Stage409는 두 번째 실행해도 카드가 구형으로 남았다.
+- **Stage410 최소 수정:** `cloudflare/explore-worker/canonical/preview-entry.js` 191 Feed CAS 재시도 중 미선정 곡 불일치를 발견하면 해당 Feed 완료 PUT 전에 fail-closed하여 후속 DO alarm 재시도에서 기존 bounded 대상 검사·카드/프로필 선정착을 수행. `scripts/verify-407-exact-191-replay-recovery.mjs`에 새 곡 CAS 경합·재시도 회귀 2건 추가. 정상 Feed 추가 D1/R2 조회·기존 069/075 queue·30초 W1·팔로우·개인 좋아요·UI 변경 없음. 경쟁 발생 시 재시도 bounded R 비용 가능성은 실운영 미측정.
+- 로컬 원본함수 격리 조건에서 발견→보류→재실행 전체 정합성 확인. **전체 TypeScript·Build·GitHub Miniflare CI/실제 active Worker parity·실운영 비용·PC↔모바일는 이 기록 시점 미검증.** 기존 Feed 최신/카드 구형 orphan과 069 진단 push 실패는 미해결. 추후 CI 결과 별도 확인 전 PASS나 배포 가능 판정 금지.
+- GitHub `preview` 코드·검사·문서만 수정. **Cloudflare Worker / Firebase Hosting / Functions / Rules / 공유 D1·R2·Firestore / main·TEST·PRODUCTION 변경·배포 없음.** 다음 단계는 변경 commit SHA 고정, 자동 검사 상태 확인, 독립 감사 및 실제 비용·환경 검증. 릴리스 승격 금지.
+
+---
+
 ## 0S12. Stage409 정상 구조 보존 + 127/175 엄격검사 정상화 + 실제 191 CAS 15/15 PASS (2026-10-09 KST)
 
 - Stage408부터 유지 중인 제품 191 **카드/프로필→Feed 마지막** 복구 수정은 변경하지 않음. Stage409 추가한 것은 **역사적 127/175 정적 verifier 기대값을 현재 로컬 우선 정상 코드에 맞춰 정정**하고 CI에서 두 검사를 **필수 PASS로 재설정**, 실제 191 함수 격리 CAS 경쟁/연속 실패 케이스 추가뿐.

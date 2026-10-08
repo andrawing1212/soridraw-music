@@ -1,3 +1,11 @@
+## CURRENT GATE — Stage410 191 새 Feed CAS 변경곡 누락 방지 수정 / 검증 전 배포 차단 (2026-10-09 KST)
+
+- Stage409에서 찾은 새 동시경쟁 재현: 191이 선정된 곡만 card/profile에 반영한 후 Feed CAS 도중 *다른 곡*의 불일치가 나타나면 Feed 숫자만 완료되어 다음 회차에는 card/profile이 영구 미복구될 수 있음. Stage410은 Feed 완료 전 `changed`에 없는 새 불일치를 발견하면 fail-closed하여 DO alarm 재실행에서 복구하도록 최소 guard 1곳만 추가.
+- `scripts/verify-407-exact-191-replay-recovery.mjs`에 다중곡/실패/다음 회차 복구 2건 추가. 기존 127/175/178/191/192/197/390·TypeScript·Build·격리 Miniflare는 새 SHA에서 다시 검증 필수. 외부 실제 계측과 Work 독립 감사 전 PREVIEW Worker 배포 금지.
+- 변경 금지: 좋아요 W1/30초 묶음·069/075 집계/공유 D1 원본·개인 membership·팔로우·Music Note·Library·UI·새 outbox/RTDB fanout. 기존 orphan/069 진단 CI 실패는 별도 미해결. main/TEST/PRODUCTION/공유 데이터 변경 금지.
+
+---
+
 ## CURRENT GATE — Stage409 품질·격리검증 엄격 PASS / 라이브 독립 감사·PREVIEW 배포 전 (2026-10-09 KST)
 
 - 최신 기록 `DOCS/LIKE_REPAIR_191_RELEASE_AUDIT_409_2026-10-09.md`. Stage408 191 Feed-last 최소 복구 수정, Stage409 127/175 오래된 검사 경로 수정 및 엄격 CI 복구. [Run 37835339279](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339279) TypeScript/Build/127·175·178·191·192·197·390 strict PASS; [Run 37835339341](https://github.com/andrawing1212/soridraw-music/actions/runs/37835339341) 191 정확 원본 함수 + 가상 R2/CAS 15/15 및 전체 격리 PASS.

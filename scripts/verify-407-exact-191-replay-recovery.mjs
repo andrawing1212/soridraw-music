@@ -186,6 +186,53 @@ try {
   verify('EXHAUSTED_CAS_KEEPS_FEED_RETRYABLE',()=>blocked.counts().feed===0
     &&blocked.counts().popular===0&&blocked.counts().profile===0);
 
+  // Stage410: if another writer introduces a different stale track while a
+  // Feed CAS is retried, that track was never repaired in the staged derived
+  // pass. The Feed must NOT publish it as done before the next alarm replay.
+  await d.prepare("INSERT INTO tracks VALUES('song-race','owner',1,'published')").run();
+  await d.prepare("INSERT INTO track_stats VALUES('song-race',1)").run();
+  const driftId='song-race';
+  const driftCardKey='internal/explore/shared-track-card-v115/'+driftId+'.json';
+  const drift=makeBucket({feed:0,card:0,profile:0});
+  const driftRow={id:driftId,ownerUid:'owner',likeCount:1,stats:{likeCount:1}};
+  for(const key of [keys.latest,keys.popular]) {
+    drift.records.get(key).body.payload.data.items.push(JSON.parse(JSON.stringify(driftRow)));
+  }
+  drift.records.set(driftCardKey,{
+    etag:'drift-card-original',body:{card:JSON.parse(JSON.stringify(driftRow))},customMetadata:{}
+  });
+  drift.records.get(keys.profile).body.body.data.items.push(JSON.parse(JSON.stringify(driftRow)));
+  const originalDriftPut=drift.bucket.put;
+  let driftInjected=false;
+  drift.bucket.put=async(...args)=>{
+    if(!driftInjected && args[0]===keys.latest){
+      driftInjected=true;
+      const latestObj=drift.records.get(keys.latest);
+      const feedRow=latestObj.body.payload.data.items.find(item=>item.id===driftId);
+      feedRow.likeCount=0;
+      feedRow.stats.likeCount=0;
+      latestObj.etag='concurrent-drift-latest';
+      const cardRow=drift.records.get(driftCardKey).body.card;
+      cardRow.likeCount=0;
+      cardRow.stats.likeCount=0;
+      const profileRow=drift.records.get(keys.profile).body.body.data.items.find(item=>item.id===driftId);
+      profileRow.likeCount=0;
+      profileRow.stats.likeCount=0;
+      return false;
+    }
+    return originalDriftPut(...args);
+  };
+  await assert.rejects(repair(env(drift)), /\[191\] concurrent Feed drift requires replay: latest/);
+  verify('CONCURRENT_NEW_DIRTY_ROW_DEFERS_FEED_COMMIT',()=>driftInjected &&
+    drift.records.get(keys.latest).body.payload.data.items.every(item=>item.likeCount===0) &&
+    drift.records.get(driftCardKey).body.card.likeCount===0);
+  const replay=await repair(env(drift));
+  verify('CONCURRENT_NEW_DIRTY_ROW_REPAIRS_ON_REPLAY',()=>replay.changedTracks===2 &&
+    drift.records.get(keys.latest).body.payload.data.items.every(item=>item.likeCount===1) &&
+    drift.records.get(keys.popular).body.payload.data.items.every(item=>item.likeCount===1) &&
+    drift.records.get(driftCardKey).body.card.likeCount===1 &&
+    drift.records.get(keys.profile).body.body.data.items.every(item=>item.likeCount===1));
+
   // Pre-existing stale card+profile while both Feeds are already current
   // remains out of scope: finding it requires debt history or per-card reads.
   const cardOnly=makeBucket({feed:1,card:0,profile:0});

@@ -1,3 +1,37 @@
+## CURRENT FOCUSED TASK — app380 범위 정상화: app379 보호 + 팔로우 최소 방어만 분리 (2026-10-08 KST, 사용자 직접 지시)
+
+### 우선 결정 / STOP
+- 사용자 원래 목적은 **이미 정상인 좋아요를 유지**하고, 팔로우의 클릭 즉시 화면 반응은 그대로 두되 마지막 클릭 기준 30초 묶음/악의적 반복 요청만 서버 앞에서 제한하는 것이다. 추가 좋아요 아키텍처 연구가 아니다.
+- **app380 receipt390, 098 like guard, like-replay-379 전역 65건 조회, 새 좋아요 D1 schema, W2 intake 구조는 이번 릴리스 범위에서 제외/동결.** 소스 기록은 삭제할 필요 없지만 어떠한 릴리스 대상에도 섞이면 안 된다. 현재 preview HEAD의 release-patches.json/canonical Worker에 097+098이 들어 있으므로 **098만 manifest에서 제거하거나 current canonical Worker를 그대로 배포하는 행위 금지**.
+- **정상 배포본 PREVIEW app379가 제품·비용 보호 기준.** 마지막 확인 source HEAD `3e768eb2150d1fc5f51637ff9ff096ba6a5f3619`는 미배포된 복합 후보이고, 반드시 현재 실제 배포된 app379 Worker/Hosting artifact와 구별한다.
+- 완료 목표는 범용 고가용성 재설계가 아니라 **팔로우 전용 최소 패치 한 건**. 구현 불가/안전 격리 불가 시 즉시 중단하고 기술적 원인 + 최소 대안을 보고. 대규모 구조 재설계, 무한 테스트 반복 금지.
+- **공유 D1 schema/cutover, 실제 사용자 데이터, main/TEST/PRODUCTION, Worker/Hosting/Firebase/Cloudflare 배포 변경 금지**. 공유 D1 변경이 반드시 필요하면 이 작업에서 실행하지 않고 사전 보고/별도 승인.
+- 사용자는 매 단계 **완료 결과 + 다음 정확한 작업과 영향/승인 요청**을 요구한다. 자동 릴리스 활성화 금지.
+
+### 고정 기준과 비교 출발점
+- branch preview; 범위 확정 기준 HEAD: `3e768eb2150d1fc5f51637ff9ff096ba6a5f3619`.
+- app380 Codex handoff 직전 preview SHA `365e41f06c8ff169a3b762dd527498f6813d335f`에는 이미 팔로우 30초 묶음 후보가 존재하고, 좋아요 새 receipt390/098은 없었다. 비교의 출발점으로만 사용한다. 코드 승격이나 브랜치 rollback은 임의로 하지 않는다.
+- `src/services/exploreFollowBatchService380.ts`의 30초 sliding final-state, 동일 baseline 복귀 W0, durable outbox/리로드/페이지 이동 시 강제 flush 0을 가능한 한 재사용.
+- `cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs`의 팔로우 반복 제한은 후보로만 취급. 기존 Cloudflare/native limiter·현재 Worker의 운영 정책을 먼저 확인하고 과잉 차단/R2 반복 쓰기 위험이 없는 **최소 차이**만 허용.
+- 실제 사용자가 제시한 CACHE LIVE 표시는 좋아요/해제 쿼리 D1 R0/W1 및 팔로우/해제 이번 실행 쓰기 W1 사례. 전체 물리 비용 합격의 증거로 과장하지 말고 해당 행 수치/동작 보호.
+- app379/app377의 like·follow 개인 membership/공개 count/팔로워 목록·팔로잉 목록/동일계정 PC↔모바일 동기화, Music Note/Library, UI/CSS, app381 별도 recent/split UI 수정은 작업 대상이 아니다.
+
+### Codex High의 단 하나 구현 범위
+1. 배포된 app379 baseline과 `365e41`, current HEAD를 비교해 팔로우 기능만 독립 배포 가능한 **최소 변경 파일** 및 source/manifest/hash 결합을 식별. 불필요하게 380/390 전체 기능을 다시 설계하지 않는다.
+2. 기존 정상 app379에 팔로우 30초 최종상태 묶음 + 기기 즉시 UI 유지, 서버 악용 방어를 **추가 D1 조회/쓰기 없이** 격리한다. 동일 사용자/대상에 대한 정상 반복 요청은 30초 동안 최종상태만 서버에 도달; 원점 복귀는 요청 0; 반복 악용은 점진적 cooldown/시간당 또는 일일 상한으로 D1 전에 제한. 제한 규칙은 기존 380 후보에서 실사용 정상 범위에 맞춰 보수적으로 선택하고, 실제 필요하지 않은 신규 인프라·악용 기록 무한 저장은 금지.
+3. 이미 존재하는 097 팔로우 방어 기능을 사용할 경우 098, receipt390, 65건 legacy replay SQL 등 **좋아요 기능이 절대 배포 묶음에 포함되지 않음**을 canonical Worker byte/source 및 release manifest로 증명. 필요한 경우 검증용 후보 생성 방식만 최소 수정. 소스 안전 격리가 어렵다면 변경을 멈추고 보고.
+4. 429/503 및 네트워크 장애에서 정상 팔로우 outbox·마지막 선택을 잃지 않고, navigation/idle 재시도 폭주가 없도록 기존 380 검증 범위만 유지. 기존 W1~W2 팔로우 비용이 W3+로 증가하거나 좋아요 W1이 바뀌면 FAIL.
+5. **제품 코드 변경은 preview에만, 최소 patch로.** 정상 좋아요 클라이언트/Worker/cache/D1/schema/receipt path는 수정 금지. app381 UI와 기타 기능은 분리 유지.
+
+### 합격선 / 테스트
+- app379 좋아요·해제 W1 구조/30초 outbox/net-zero/local-first/PC↔모바일, 기존 app164/app160 관련 회귀 PASS. 새 receipt390/098이 릴리스 대상에 없는지 검사.
+- 팔로우: 1회, 해제, 30초 안에 follow→unfollow=W0, 빠른 연속 클릭 마지막 선택 1번, 리로드/다른 페이지/기기 동기화, 오래된 ACK 후 새 클릭, 429/503 오류·복구, 악의적 반복 D1 R0/W0. 팔로워·팔로잉 count 및 목록 보존.
+- 실제 비용: 확인 가능한 격리 시험으로 follow/unfollow physical W1~W2, net-zero W0, abuse reject D1 R0/W0; 무변경 페이지 진입 R0/W0 목표. 원격 실측이 없으면 ‘미실측’, 거짓 PASS 금지.
+- TypeScript, Build, focused like/follow Test PASS, Worker baseline/patch idempotence/hash, 기존 main/production 비변경 확인.
+- Work 독립 감사 전 release PASS 아님. **Codex는 배포 절대 금지**. branch/base SHA/final SHA/변경 파일/검사 결과/남은 위험을 보고.
+- 작업이 복잡해져 receipt390·새 DB 인덱스·공유 schema/cutover/대량 데이터 수정을 요구하면 즉시 중단하고 ChatGPT/사용자에게 사전 승인 요청.
+
+---
 ## CURRENT NEXT GATE — 0RZE old/new Worker mixed replay 독립 재감사 (2026-10-08 KST)
 
 - preview의 0RZE 수정 commit 대상: 034167367 Work FAIL의 receipt-less old Worker newer unlike 재현과 예방을 확인한다.

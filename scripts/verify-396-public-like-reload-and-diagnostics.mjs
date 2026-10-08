@@ -74,5 +74,5 @@ assert.equal(render('/v1/me/explore-management-access'), '추천곡 관리 권�
 assert.equal(render('/v1/curated-revision'), '추천곡 변경 확인');
 assert.equal(render('/v1/tracks/:id/like'), '좋아요 변경');
 assert.equal(render('/v1/example-undocumented-endpoint'), '기타 서버 요청');
-assert.doesNotMatch(render('/v1/example-undocumented-endpoint'), /\\/v1\\//);
+assert.ok(!render('/v1/example-undocumented-endpoint').includes('/v1/'));
 console.log('CACHE_LIVE_396_KOREAN_ENDPOINT_TITLES=PASS');

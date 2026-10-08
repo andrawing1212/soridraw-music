@@ -1688,7 +1688,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   if (batch185.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
     assert.equal(countCalls163('adjustExploreLikeCounterDelta('), 2,
       'final W1 architecture must remove the batch direct relation/count writer');
-    assert.match(batch185, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+    if (batch185.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008')) {
+      // App380 receipt intake intentionally supersedes the old W1 queue call.
+      // The exact durable/W2-W0 behavior is verified by 388 --release + 392/393.
+      assert.match(batch185, /acceptLikeReceipt390\(env, authContext\.uid, mutations, intent390, state390, receivedAt\)/);
+      assert.match(batch185, /acceptanceReplay390: true/);
+      assert.doesNotMatch(batch185, /enqueueExploreLikeBatch035\(/);
+    } else {
+      assert.match(batch185, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+    }
     assert.match(batch185, /syncExploreLikeR2AfterBatch074\(/);
     assert.match(batch185, /canonicalD1: 'queued'/);
     assert.match(batch185, /personalLikeProtocol: 'w1-queue-changed-track-188'/);

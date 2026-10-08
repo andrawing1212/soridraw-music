@@ -1,7 +1,7 @@
-# app380 focused 392 frozen-worker statement fixture fix
-previous_run=37710877493
-product_base=b4d7e3188e8f04dc4004f55719380efcf3f6c8c8
-scope=verify-388-392-393-plus-regression
+# app380 collect all isolated like regression failures once
+prior_run=37711245036
+source=b4d7e3188e8f04dc4004f55719380efcf3f6c8c8
+audit_only=true
 shared_d1_apply=false
 worker_deploy=false
 hosting_deploy=false

@@ -328,7 +328,11 @@ jobs:
       - name: Like candidate regression, isolated only
         shell: bash
         run: |
-          set -euo pipefail
+          # Collect every isolated verifier failure in one CI run, without
+          # ever allowing a partial or false-positive release PASS.
+          set -Euo pipefail
+          failed=0
+          trap 'code=$?; echo "LIKE_REGRESSION_FAILED exit=$code line=$LINENO cmd=$BASH_COMMAND"; failed=1' ERR
           node scripts/verify-127-atomic-personal-like.mjs
           node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-176-like-postwrite-ack.mjs
@@ -516,6 +520,10 @@ jobs:
             SORIDRAW_REMOTE_WORKER_DIR="$generated" node "cloudflare/explore-worker/patches/$patch.mjs"
           done
           SORIDRAW_GENERATED_WORKER="$generated/worker.js" node scripts/verify-128-like-concurrency.mjs
+          if [ "$failed" -ne 0 ]; then
+            echo 'LIKE_SOURCE_AND_ISOLATED_REGRESSION=FAIL'
+            exit 1
+          fi
           echo 'LIKE_SOURCE_AND_ISOLATED_REGRESSION=PASS'
           echo 'LIKE_PRODUCT_RELEASE_GATE=NOT_VERIFIED_CROSS_ENV_D1_COST_AND_REAL_DEVICES'
 

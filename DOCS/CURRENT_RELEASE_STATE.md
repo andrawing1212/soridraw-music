@@ -1,3 +1,12 @@
+## 0RZJ. app380 핵심 혼재 검증 PASS / 구 좋아요 회귀검사 기대값 및 단일실패 감사 루프 수정 (2026-10-08 KST)
+
+- GitHub Run `37711245036` audit: 실제 임시 D1 W2/W0, TypeScript, Build, 릴리스 정적 안전성 및 app380 387/388 --release/389/390/391 **PASS**.
+- **392 PASS**: frozen app379 old Worker receipt-less newer unlike, original receipt queue processed case, newer device, queue pending, 65 saturation 503 fail-closed, indexed reads, outbox/heart/no republishes.
+- **393 PASS**: exact receipt390 additive object 3개, partial-failure cleanup, worker env/bindings, 097→098 canonical byte-match, old worker dormant schema W1/receipt access0.
+- 전체 회귀 단계 `Like candidate regression, isolated only`는 오래된 `verify-135-like-fenced-protocol.mjs`가 app380에서 퇴역한 `enqueueExploreLikeBatch035` 직접 호출만 요구해 실패. 해당 테스트는 신규 390 접수 경로가 발견될 때 검증된 390 gate를 확인하되, 과거 Worker에서는 기존 queue 조건을 유지하도록 분기.
+- 반복 전체 CI 실행 없이 독립 회귀 테스트들의 추가 실패를 한 번에 모으도록 **감사용 GitHub Actions 단계만** ERR trap + 실패 누적, 종료 시 fail-closed 유지로 개선. **배포용 워크플로는 변경하지 않음.**
+- 주의: 이전 392의 65 global pending cap은 운영 규모에서 정상 사용 503 가능성이 높아 근본적 고가용성 해법으로 PASS 미판정. 실제 preview app379 유지. shared user D1/Hosting/Worker/main/TEST/PRODUCTION 변경 0. 비용 실측은 isolated receipt W2/W0일 뿐 mixed replay read D1 billing 아님.
+
 ## 0RZI. app380 GitHub audit 최초 핵심 검사 진입 / 392 DB mock 보완 — 미배포 (2026-10-08 KST)
 
 - 4차 감사 `37710877493`: isolated D1 접수 W2/replay W0, TypeScript, Build, Static release-system verification **PASS**. `verify-387`, `verify-389`, `verify-388-social-abuse-runtime.mjs --release`, 390/391 receipt contract PASS.

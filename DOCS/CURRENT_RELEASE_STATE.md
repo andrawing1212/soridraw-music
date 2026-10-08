@@ -1,3 +1,15 @@
+## 0S25. Stage414 1차 app384 PREVIEW Hosting 배포 SUCCESS — Studio 하트/통계는 2차 게이트 (2026-10-09 KST)
+
+- **배포 완료 범위:** PREVIEW app384. 앱/버전 기준 commit `386c5a263c06ca8b932965d947e54a9aa30123ea`; 최종 제품 코드 `1104f151565110723f78fdcc8e21b7854d90a0b3`; 공식 배포 트리거 SHA `7a487204de2d10680fea92cca5c1e445ec76d00a`.
+- 공식 Firebase PREVIEW [Run 37854817598](https://github.com/andrawing1212/soridraw-music/actions/runs/37854817598) **SUCCESS**: TypeScript PASS, Build PASS, 기존 app358/359/360/361/377/378/379 회귀 PASS, Hosting PASS, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`. Cloudflare Explore Worker는 기존 Stage412 `dc8b4311-b4d0-45c5-8854-52680c39e19d` 그대로; Functions/Rules/공유 D1 schema·데이터 직접 변경 0. RTDB Rules 배포 skipped.
+- 적용 기능: Recent Song 제목·프롬프트·가사 +150초 pending의 hidden/pagehide 단일 조기 flush; Music Note Detail/카드 초안과 Music Note folder +60초 pending의 hidden/pagehide 단일 조기 flush; Library rename/order/revision +60초 pending의 hidden 조기 flush(기존 pagehide 유지). 일반 사용중 타이머/기기 로컬/즉시 RTDB preview 및 app383 Explore 좋아요 5초 코어 유지. 변경 없는 종료에서 서버 호출 0 목표.
+- 고정 소스 QA [Run 37854493646](https://github.com/andrawing1212/soridraw-music/actions/runs/37854493646) **SUCCESS**, 앱 버전 포함 최종 QA [Run 37854707932](https://github.com/andrawing1212/soridraw-music/actions/runs/37854707932) **SUCCESS**: TypeScript/Build/Stage414 source-level lifecycle guard/127/175/178/191/192/197/390 PASS. app380용 구형 Follow-only exact-byte workflow 및 기존 069 자동 진단은 여전히 FAIL이며 Stage414 제품 승인과 별도로 추적.
+- **실사용 미검증 유지:** PC·모바일 실제 앱 최소화/즉시 종료 시 Firestore 서버 확정, 0~1초 OS 강제종료, 성공 후 새 기기 반영, 계정 전환·장기 오프라인, Firestore 추가 hidden 비용/하트·좋아요 관련 D1 physical W1~W2. 비동기 저장 요청은 OS 강제종료 시 보증되지 않으며 pending local draft로 복구해야 함. CI PASS만으로 실기기 PASS 선언 금지.
+- **미적용 기능:** Studio Recent 저장하트/저장해제 곡별 +30초와 users.favoriteCount 파생 통계 +30초 조기 flush는 **중복 increment/ambiguous-ack 위험** 때문에 2차 고위험 설계 전까지 보호·동결. app349 정상 PC↔모바일 즉시 하트/멤버십·정확한 final W0/W1·Suno 미디어 보호. Stage414 **부분 완료**, 전체 DONE 아님.
+- **릴리스 정책:** preview만 변경. TEST/main/PRODUCTION 변경·승격 금지, 공유 사용자 데이터 복제/백필/마이그레이션 없음. 다음: 사용자 PREVIEW app384 실제 즉시 종료 테스트 + Codex High Stage414 phase 2 idempotent save-heart/stat ledger 설계→검증→별도 PREVIEW 단계.
+
+---
+
 ## 0S24. Stage414 코드 1차분 preview 기록 — Recent·Music Note·Library hidden/pagehide (2026-10-09 KST)
 
 - 사용자 app383 Explore 좋아요 빠른 종료 동작 확인 후 Stage414를 시작. 이번 1차 제품 코드 고정 대상 SHA `1104f151565110723f78fdcc8e21b7854d90a0b3` (기준 `bb3d4eff54397876e0c91d0a38861e3c5514d9ef`).

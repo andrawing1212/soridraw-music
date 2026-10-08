@@ -9,6 +9,10 @@ on:
       - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
       - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'src/services/exploreLikeService.ts'
+      - 'src/App.tsx'
+      - 'src/pages/FavoritesPage.tsx'
+      - 'src/pages/SunoLibraryPage.tsx'
+      - 'scripts/verify-414-pending-only-lifecycle.mjs'
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
       - 'public/app-version.json'
@@ -49,6 +53,8 @@ jobs:
           node scripts/verify-412-shared-projection-cas.mjs
           node --check scripts/verify-413-like-exit-flush.mjs
           node scripts/verify-413-like-exit-flush.mjs
+          node --check scripts/verify-414-pending-only-lifecycle.mjs
+          node scripts/verify-414-pending-only-lifecycle.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

@@ -1,3 +1,14 @@
+## CURRENT GATE — app382 PREVIEW 배포 SUCCESS, 좋아요 알림 중복 Worker 실기기 검증 (2026-10-08 KST)
+
+- **사용자 지시:** ChatGPT가 기본 구현자. 안전한 수정 요청은 검사 통과 시 **PREVIEW 배포까지 자동 진행**. Codex는 사용자가 요청하거나 실제 구현이 막힐 때만 사용. TEST/PRODUCTION 승격은 기존 명시 승인 필요.
+- **현재 실제 PREVIEW:** app382 Hosting exact build PASS, Firebase Run 37722012753 SUCCESS, 승인된 코드 SHA 6c5fa3fdb3f898b62fffacbba54e7bd63013f95a, trigger 178e72c51effbd867ea6f6e45f5df9370723a31f. 기존 Worker c4c51b19-818a-4eaf-8be1-aca0b241d50a 유지; Worker 재배포·D1·RTDB Rules·Functions·TEST·PRODUCTION 변경 없음.
+- **수정 내용:** 공개 좋아요 알림 3분 동안 이전 settled 카드 신호를 새로고침마다 Worker에서 재요청하던 문제를 계정별/기기별 기한 제한 ACK로 억제. 새로운 좋아요/미해결 알림·PC↔모바일 정상 흐름 보존. CACHE LIVE 상세 요청 경로를 한글 표시, 내부 카운터 경로는 변경 없음. 별도 app381 UI 변경은 제외.
+- **검사:** focused Run 37721869633 SUCCESS, TypeScript/Build/396 new-signal safety/한글 label/기존 like/follow freeze 회귀 PASS. Hosting PREVIEW_APP_VERSION=382, PREVIEW_EXACT_BUILD=PASS, SHARED_RTDB_RULES_DEPLOY=SKIPPED 및 TEST/PROD 비변경 PASS.
+- **다음 실사용:** 이미 확인된 좋아요 알림이 존재한 상태에서 새로고침 2~3회: 공개곡 좋아요 숫자 확인 Worker 추가 0, 실제 새 좋아요 이벤트는 갱신 정상, 변경 없음 D1 행 R0/W0. PC·모바일 좋아요 숫자/팔로우 W1·30초 묶음 유지. 실기기 미측정 결과를 PASS로 오인하지 않는다.
+- TEST 승격 전 .deploy/release-worker-runtime.mjs 의 follow-only 환경에서 불필요한 receipt390 필수 preflight 문제는 별도 확인. TEST/PRODUCTION 코드 승격 임의 실행 금지.
+- 세부 최신 상태 DOCS/CURRENT_RELEASE_STATE.md 0RZQ 참조.
+
+---
 ## CURRENT GATE — app380 PREVIEW 배포 성공, 실제 PC·모바일 및 비용 검증 대기 (2026-10-08 KST)
 
 - 기본 작업자 ChatGPT. Codex는 사용자 명시 요청 또는 직접 구현이 실제로 막힐 때만 활용.

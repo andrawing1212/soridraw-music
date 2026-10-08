@@ -1,3 +1,14 @@
+## CURRENT NEXT GATE — ChatGPT 직접 작업: 팔로우-only PREVIEW 배포 전 읽기 전용 최종 확인 (2026-10-08 KST)
+
+- **사용자 최신 운영 지시**: 기본 개발·수정자는 ChatGPT. Codex는 사용자가 직접 요청하거나 ChatGPT가 실제로 구현에 막혔을 때만 사용. 이전 'Codex High' handoff는 현재 작업의 실행 지시로 사용하지 않음.
+- 실제 배포는 app379. follow-only candidate 코드/검사 PASS commit `2bf0eac515947f126b26da0739907bf739c81b59`, focused CI `37718020848` SUCCESS. 추가 preview Worker release YAML 분기 commit `dfe531f676b6cbdf476634c1ab1e7a0f66f2b41b`는 실배포 미검증. 현재 최신 HEAD/기록은 CURRENT_RELEASE_STATE 0RZL 참조.
+- scope: 기존 app379 좋아요 클라이언트/Worker 원본 복원, 097 팔로우 보호 + 30초 최종상태 묶음; 098/receipt390/65건 replay/새 D1 schema **전부 릴리스 제외**. app381 별도 Recent UI 변경은 혼입 금지, Hosting 포함 시 사전 보고.
+- 다음 단계는 배포 자체가 아니라 먼저 **읽기 전용** PREVIEW release gate 검증: canonical SHA/config env, 097-only Worker, 098/390 비포함, 기존 receipt390 조건부 preflight shell의 안전성, Cloudflare 실제 Worker/R2 binding·overlay 현재 authority 변경 없음, 사용자 데이터/TEST/PRODUCTION 비변경, 캐시 업그레이드 영향.
+- live R2/D1 물리 비용/실기기 PC↔모바일/Preview 배포 결과는 아직 미검증. 격리 테스트 PASS를 실제 배포 PASS라고 표시하지 않는다.
+- 새로운 구조 설계, shared D1 migration/cutover, 데이터 대량변경, Firebase/Worker/Hosting 배포는 이번 읽기 전용 단계 범위 아님. 승인 전 배포 금지.
+- 확인 후 **검증 결과, PREVIEW 배포 범위(Worker/Hosting/UI 버전), 예상 위험, 최소 실사용 테스트**를 사용자에게 보고하고 승인 요청. 작업이 막히면 원인 보고 후 사용자 동의 없이 Codex 전환 금지.
+
+---
 ## CURRENT FOCUSED TASK — app380 범위 정상화: app379 보호 + 팔로우 최소 방어만 분리 (2026-10-08 KST, 사용자 직접 지시)
 
 ### 우선 결정 / STOP

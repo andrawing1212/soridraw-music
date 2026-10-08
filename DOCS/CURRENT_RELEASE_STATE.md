@@ -1,3 +1,15 @@
+## 0S24. Stage414 코드 1차분 preview 기록 — Recent·Music Note·Library hidden/pagehide (2026-10-09 KST)
+
+- 사용자 app383 Explore 좋아요 빠른 종료 동작 확인 후 Stage414를 시작. 이번 1차 제품 코드 고정 대상 SHA `1104f151565110723f78fdcc8e21b7854d90a0b3` (기준 `bb3d4eff54397876e0c91d0a38861e3c5514d9ef`).
+- 변경: `src/App.tsx` Recent 제목/프롬프트/가사 pending aggregate의 hidden/pagehide 조기 flush 및 single-flight(일반 150초 보존). `src/pages/FavoritesPage.tsx` Music Note folder 기존 60초 pending의 hidden flush, Music Note detail/card IndexedDB pending의 hidden/pagehide 직접 flush와 single-flight, 기존 route-exit 보호 유지. `src/pages/SunoLibraryPage.tsx` Library rename→order→revision 60초 pending 순서를 보존한 hidden flush(기존 pagehide 유지).
+- `scripts/verify-414-pending-only-lifecycle.mjs` static pending-only 검사 추가. 기존 `verify-408-like-repair-code.yml` 품질 게이트에 해당 세 앱 파일/신규 검증을 포함(배포 Workflow 자체 변경 없음).
+- Scope: 총 5개 파일. Cloudflare Worker/D1/Functions/Rules/공유 원본 데이터/기존 app383 좋아요·팔로우/Studio 저장하트/derived favoriteCount는 **수정하지 않음**. 일반 정상 시간 묶음/RTDB 미리보기/UI 그대로. 장기 W1~W2/숨김 이벤트에서 Firestore 실제 비용은 **미검증**.
+- GitHub Stage414 1차 QA Run [37854403060](https://github.com/andrawing1212/soridraw-music/actions/runs/37854403060) SUCCESS TypeScript/Build/기존 좋아요/새 static source PASS. 마지막 detail pagehide 보강 SHA `1104f151...`에 대한 동일 품질 검사 Run [37854493646](https://github.com/andrawing1212/soridraw-music/actions/runs/37854493646) **대기/진행 중** (완료 확인 전 PASS 금지).
+- **아직 PREVIEW 배포하지 않음.** 실제 활성 앱 app383 유지. TEST/PRODUCTION 변경 금지. 이후 앱 버전 고정/독립 검증/공식 Hosting 후 PC↔모바일 실사용 확인.
+- **미완료(Stage414 2차):** Studio 저장 하트 개별곡 +30초와 users.favoriteCount 파생 통계 +30초의 hidden/pagehide canonical 조기 확정. 이 둘은 서버 성공 후 브라우저 응답 유실 시 outbox 재생으로 같은 곡 write·count increment 중복 가능. 함부로 timer 강제 호출 불가. Codex 고위험 idempotency/최종상태 복구 구조 감사 후 기존 app349 즉시 동기화/미디어·W0/W1 보호 조건에서 별도 구현. 전체 Stage414 DONE 주장 금지.
+
+---
+
 ## 0S23. Stage414 종료/백그라운드 pending 저장 확대 요구 — 설계 확정, 구현 전 (2026-10-09 KST)
 
 - 사용자 보고: app383 Explore 좋아요 모바일 빠른 종료 반영은 직접 성공 확인. 해당 관찰 케이스 PASS이며 모든 강제종료/비용 PASS는 아직 아님.

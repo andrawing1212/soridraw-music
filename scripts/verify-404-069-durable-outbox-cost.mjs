@@ -70,6 +70,10 @@ const cases = [
   ['LAST_WINS',[b('069','u1',100,'7',[{trackId:'t',liked:true}]),b('069','u1',101,'8',[{trackId:'t',liked:false}])],[],[]],
   ['THREE_QUEUES',[b('035','u1',100,'9',[{trackId:'a',liked:true}]),b('066','u2',101,'10',[{trackId:'b',liked:true}]),b('069','u3',102,'11',[{trackId:'c',liked:true}])],[],['a','b','c']],
   ['TWO_CHANGES_CANCEL',[b('069','u1',100,'12',[{trackId:'t',liked:true}]),b('069','u2',101,'13',[{trackId:'t',liked:false}])],[],['t']],
+  ['SIXTY_SEVEN_DISTINCT',[
+    b('069','u1',200,'14',Array.from({length:34},(_,i)=>({trackId:'bulk_'+String(i).padStart(3,'0'),liked:true}))),
+    b('069','u2',201,'15',Array.from({length:33},(_,i)=>({trackId:'bulk_'+String(i+34).padStart(3,'0'),liked:true}))),
+  ],[],Array.from({length:67},(_,i)=>'bulk_'+String(i).padStart(3,'0'))],
 ];
 async function database(name) {
   const db=await mf.getD1Database(name);
@@ -176,6 +180,15 @@ try{
     console.log('404_069_'+name+'=PASS baseline='+JSON.stringify(a.meta)+' returning='+JSON.stringify(b.meta)+' outbox='+JSON.stringify(c.meta)+' indexedExtraW='+delta+' wave='+JSON.stringify(d.meta)+' waveExtraW='+waveDelta+' waveRows='+d.waves.length);
   }
   console.log('404_069_DURABLE_OUTBOX_PHYSICAL_COST=PASS '+report.length+'/'+cases.length);
+  // A D1 batch must roll back both event writes if a subsequent statement fails.
+  const before=(await wave.prepare('SELECT COUNT(*) AS n FROM like_notification_wave_405').first()).n;
+  await assert.rejects(wave.batch([
+    wave.prepare('INSERT INTO like_notification_wave_405(payload_json,event_at) VALUES(?,1000)').bind('[{"trackId":"rollback"}]'),
+    wave.prepare('INSERT INTO like_notification_wave_405(payload_json,event_at) VALUES(?,1000)').bind('{invalid-json'),
+  ]),'outbox transaction should reject invalid JSON');
+  const after=(await wave.prepare('SELECT COUNT(*) AS n FROM like_notification_wave_405').first()).n;
+  assert.equal(after,before,'atomic outbox wave transaction leaked on failure');
+  console.log('405_069_ATOMIC_ROLLBACK=PASS');
   const costly=report.filter(x=>x.delta>0);
   assert.ok(costly.length>=3);
   console.log('404_069_OUTBOX_EXTRA_D1_WRITES=CONFIRMED '+JSON.stringify(costly.map(x=>[x.name,x.delta])));

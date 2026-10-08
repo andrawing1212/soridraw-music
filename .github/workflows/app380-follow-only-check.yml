@@ -67,4 +67,6 @@ jobs:
           node scripts/verify-386-follow-overlay-count-display.mjs
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
           node scripts/verify-389-social-client-batching.mjs --follow-only
-          node scripts/verify-127-atomic-personal-like.mjs
+          # The current 127 verifier targets excluded receipt390 logic.
+          # The exact original app379 like client + all non-follow Worker code
+          # are instead enforced byte-for-byte by verify-394 above.

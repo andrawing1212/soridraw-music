@@ -1,3 +1,13 @@
+## CURRENT GATE — Stage405 묶음 알림 D1 추가 쓰기 절감 PASS / Stage406 읽기·실운영 호환성 P0 (2026-10-09 KST)
+
+- 현 시점 기준 `DOCS/RTDB_BATCHED_OUTBOX_D1_404_405_2026-10-09.md`. [GitHub 격리 Run 37829847377](https://github.com/andrawing1212/soridraw-music/actions/runs/37829847377) SUCCESS. 기존 stage398~403 regressions PASS. Stage404 069 9/9 + 075 5/5, Stage405 67곡 50+17 두 경로 PASS, 069 오류 rollback PASS.
+- **실제 증거:** indexed per-track typed outbox 추가 D1 write 1곡 +3, 3곡 +9, 67곡 +201 → batched wave(+seq AUTOINCREMENT, 50곡 JSON) 1곡 +2, 3곡 +2, 67곡 +3. 변화 없는 재요청 +0. **이 개선만 제품에 연결하면 안 됨.**
+- **Stage406 P0 하나에 집중:** 기존 039/040/069·075 source CTE를 읽기 횟수와 재평가 비용 면에서 프로파일링하고, 동일 commit/membership/queue 정합성에서 배치 outbox 추가 read **069 67곡 +682**를 크게 낮추는 정확한 SQL/Worker 후보를 격리 Miniflare에서 시험. 새 전체 scan/재방문 polling 금지. Failing SQL/queue/batch는 outbox까지 원자 롤백, 50+곡 무누락·중복/동시성 테스트.
+- 다음 운영 gate: 실제 deployed Worker 버전·D1 trigger/index/live binding SELECT-only preflight, 소비 알람/DO durable checkpoint, R2 공개 카드 선정착, 서버 HMAC/idempotency/notification-only retry, old-client RTDB 병행 비용, 실제 D1 사용자 액션 W1~W2 **모두 검증 전 배포 금지**. outbox 영속청소 비용도 포함.
+- 기존 정상 app382 30초 로컬 좋아요·팔로우·개인 하트·Studio 저장하트·Music Note/Library UI 변화 금지. `main`/TEST/PRODUCTION 승격/공유 D1 migration/실사용 데이터 갱신 금지. 테스트·문서 코드만 `preview`에 commit.
+
+---
+
 ## CURRENT GATE — Stage403 글로벌 패턴에 기반한 최소 복구형 알림 / Stage404 물리비용 확인 (2026-10-09 KST)
 
 - 실무 근거 `DOCS/RTDB_GLOBAL_PATTERN_DECISION_403_2026-10-09.md`. AWS 공식 outbox/CDC, Cloudflare DO 영속/alarm, Firebase 좁은 구독 공식 가이드와 실제 069/075 소스 대조.

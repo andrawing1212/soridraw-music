@@ -1,3 +1,13 @@
+## 0S07. Stage404·405 격리 D1: 67곡 알림 추가 W201 → W3 절감 / 운영 전환 차단 (2026-10-09 KST)
+
+- 최신 [CI Run 37829847377](https://github.com/andrawing1212/soridraw-music/actions/runs/37829847377) **SUCCESS**. `scripts/verify-404-069-durable-outbox-cost.mjs`(069 9/9 + atomic rollback)와 `scripts/verify-404-075-durable-outbox-cost.mjs`(075 5/5 + 67곡 chunk)로 실제 격리 Miniflare D1 물리행 메타 계측. 기존 398~403 PASS 유지.
+- **유의미한 개선 후보:** 한 번의 정산에서 changedTrack ID/likeCount를 50개까지 단일 JSON outbox row로 모아 저장. indexed per-track outbox는 변경 1곡 W+3, 3곡 W+9, 67곡 W+201. **묶음** outbox는 1곡 W+2, 3곡 W+2, 67곡(50+17) W+3. 중복 좋아요/상쇄는 W+0. 069·075 모두 DB batch 정합성 확인; 069 rollback PASS.
+- **부작용 / 다음 차단:** 069 67곡 배경정산에서 RETURNING R1667/W270 → 묶음 R2349/W273(**추가 읽기 +682, 추가 쓰기 +3**). 이것은 원본 운영 과금/사용자 W1 접수 단위 아님. 실제 정산 전체 W1~W2 합격, 우회 없는 069/075 경로, Worker live trigger/index parity, R2 정착, 알림 인증/재전송, 구버전 수신과 10만 팬아웃 **미검증**. D1 outbox 청소/ack/write 비용도 빠짐. **배포 STOP**.
+- 상세 `DOCS/RTDB_BATCHED_OUTBOX_D1_404_405_2026-10-09.md`. 다음 Stage406은 알림 SQL에서 반복 CTE를 줄여 **읽기 비용** 절감부터 설계·검증. 전체 read/write·DO/RTDB 비용/호환 조건 PASS 전 서버/Rules 변경 금지.
+- 변경 내용은 GitHub preview 격리 test script 2개 및 기존 CI + DOCS뿐. app382/Worker/Functions/Rules/공유 D1·R2·Firestore/Hosting/main/TEST/PRODUCTION 변경·배포 **0**. TS/Build/실기기 검증 전. 기존 069 진단 workflow push 실패는 별도.
+
+---
+
 ## 0S06. Stage403 글로벌 운영 원칙 조사 → SORIDRAW 안전한 알림 아키텍처 결정 (2026-10-09 KST)
 
 - [AWS Transactional Outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html), [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/api/alarms/), [Firebase RTDB 수신 범위 최적화](https://firebase.google.com/docs/database/usage/optimize) 공식 자료 대조. 비용은 RTDB 다운로드/연결, D1 인덱스·트리거 포함 row writes, DO/Functions까지 측정. 상세 `DOCS/RTDB_GLOBAL_PATTERN_DECISION_403_2026-10-09.md`.

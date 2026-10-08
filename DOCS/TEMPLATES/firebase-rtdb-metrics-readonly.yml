@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: andrawing1212/soridraw-music
-          ref: PINNED_SORIDRAW_DIAGNOSTIC_SHA
+          ref: 81940357eaba404a210c3d1303b853f6868b33f7
           path: source
           persist-credentials: false
       - uses: actions/setup-python@v5

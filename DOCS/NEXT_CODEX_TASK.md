@@ -1,3 +1,14 @@
+## CURRENT GATE — Stage402 journal-only FAIL, Stage403 dual-queue confirmed + retry P0 (2026-10-09 KST)
+
+- **기준** `DOCS/RTDB_JOURNAL_ONLY_TRUST_GAP_402_2026-10-09.md`. 격리 [Run 37824899801](https://github.com/andrawing1212/soridraw-music/actions/runs/37824899801) 성공. Stage402 10/10 안전성 반례/실패 모형 PASS, 제품 서버 발행 **아직 FAIL/BLOCKED**.
+- 기존 `explore_derived_changes(feed,track,id,seq)` 단독으로 좋아요/제목 변경 구분 불가; seq가 곡별 마지막 값으로 덮여 변경 원인 소실; D1 확정 ≠ R2 공개 카드 정착; cursor-before-publish 누락·publish-before-checkpoint 중복. journal-only 방식 반복 금지.
+- 다음 단일 P0 후보는 **실제 069와 075 canonical batch commit 결과**를 함께 포착하고, 오류/죽음 후 복구 가능한 bounded notification-only 영속 pending을 확보하는 최소 구조. 기존 399/400 시험상 RETURNING은 새 D1 쓰기 0, aggregate D1 read 증가는 069 +3~+7, 075 +3~+5이므로 현행 실비용 + Worker 정확한 generated bundle과 현재 LIVE trigger/binding 조건 검증 전 적용 금지.
+- 구체 실패 구간: DB batch 성공→DO 이벤트 저장 전 중단, R2 아직 이전 수치/실패, Firebase Functions HMAC/replay/idempotency, 50곡+ 분할·같은 곡 상쇄, 구형 RTDB legacy 2중 신호 비용. 이들 하나라도 잃으면 알림 누락/비용 폭증이므로 **실제 배포·Rules 잠금 금지**.
+- 제품 동결: app382/기존 좋아요/팔로우 30초, 개인 하트·타계정 숫자, W1 접수, 페이지 재진입 R0, Studio Music Note 정상 기능. TEST/PRODUCTION/main/공유 D1 migration·데이터 변경 사용자 승인 없이 하지 않는다. 실서비스 Worker/Functions/RTDB 코드 적용·배포 전 별도 독립 검증.
+- 사용자에게 기능 W1~W2와 충돌하는 추가 D1 writes, 비용 감당 불가/구버전 호환 불가가 확인되면 구현 중단해 비용 근거·대안을 보고. 비검증은 PASS 표시 금지.
+
+---
+
 ## CURRENT GATE — Stage401 기존 변경 저널 활용 가능성 PASS, likes-only/재전송 차단 (2026-10-09 KST)
 
 - 최우선 근거 `DOCS/RTDB_EXISTING_DERIVED_JOURNAL_401_2026-10-09.md`. 격리 CI [37823762282](https://github.com/andrawing1212/soridraw-music/actions/runs/37823762282) 성공. 기존 398/399/400 PASS 유지; Stage401 단순화 D1 저널 경로 6/6, 동일 곡 최신 값 병합, 67곡 50+17 bounded paging PASS.

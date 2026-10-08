@@ -1,3 +1,12 @@
+## 0S05. Stage402 기존 저널-only 좋아요 서버 알림 신뢰성 차단 / 격리 증명 PASS (2026-10-09 KST)
+
+- 사용자 계속 진행 지시로 `scripts/verify-402-like-notification-trust-recovery.mjs` 추가, 기존 398 격리 Workflow 연결. [Run 37824899801](https://github.com/andrawing1212/soridraw-music/actions/runs/37824899801) **SUCCESS**: 398 4/4, 399 8/8, 400 5/5, 401 6/6, 신규 402 위험 검출 10/10 PASS.
+- **제품 판단 FAIL/STOP — journal-only**: 동일한 최종 `explore_derived_changes(feed,track,id,seq)`+likeCount로 좋아요 수정 이력과 제목 수정 이력을 구별하지 못하는 격리 D1 반례 확인. 같은 곡 seq overwrite, D1 확정 후 R2 미정착, cursor-first 누락과 send-first 중복을 분리 검증. 즉 기존 저널만 보고 좋아요 변경을 확정 발행하는 것은 불가. retry in-memory 모형은 LIVE 신뢰성 증명 아님.
+- 보고서 `DOCS/RTDB_JOURNAL_ONLY_TRUST_GAP_402_2026-10-09.md`. **다음 최소 방향**: 069/075 실제 commit의 반환 곡 ID + R2 정착 보장 + 영속 notification-only retry/인증/중복방지 조합을 독립 검증. 배경 D1 R 증가(039/040 +3~+7, 075 +3~+5) 및 DO/Functions/RTDB 비용이 정상 기준을 해치면 중단·보고. 저널-only 설계 반복 금지.
+- app382/Cloudflare Worker/Functions/RTDB Rules/공유 데이터/Hosting/main/TEST/PRODUCTION 변경·배포 0. 격리 테스트 코드/Workflow/문서 GitHub push만 수행. TypeScript/Build/운영 D1 청구/Worker bundle parity/PC·모바일 실사용 미검증. 기존 069 자동 진단 push 실패는 별도 미해결.
+
+---
+
 ## 0S04. Stage401 기존 D1 변경 저널 재활용 격리 6/6 PASS / 제품 알림 BLOCKED (2026-10-09 KST)
 
 - 사용자 계속 개발 지시로 `scripts/verify-401-existing-derived-journal.mjs` 추가, `.github/workflows/verify-398-isolated-d1.yml` 연동, `preview` 격리 CI Run [37823762282](https://github.com/andrawing1212/soridraw-music/actions/runs/37823762282) **SUCCESS**. 기존 Stage398 4/4, 399 8/8, 400 5/5 유지; Stage401 6/6 + 67곡 50/17 페이징 + 같은 곡 변경 합치기 PASS.

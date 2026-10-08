@@ -1,3 +1,12 @@
+## 0S15. Stage411 사용자 정상보호: 오래된 R2 작성자 덮어쓰기 원인 확정 후보 / 제품 수정·배포 STOP (2026-10-09 KST)
+
+- Stage410 Worker 191 복구 함수 원본과 기존 생산자 `patches/060-shared-profile-r2-parity.mjs`, `patches/062-shared-track-card-r2.mjs`를 연결해 검토. 두 기존 공유 R2 작성자의 `bucket.put`은 CAS `onlyIf`가 없어서 **191이 정확한 공개 카드/프로필을 복구한 직후 구형 복제본이 다시 덮어쓸 수 있음**. 191은 Feed가 이미 최신일 경우 해당 orphan을 다음 알람에서도 선택하지 못함. Stage410 전용 신규 결함이 아닌 기존 저장 경로 교차 경쟁. 
+- 신규 read-only `scripts/verify-411-existing-r2-writers-restore-race.mjs`: 현재 실제 191 함수를 독립 격리 실행해 구형 profile PUT 후 Feed=1, card=1, profile=0; 재실행도 profile=0인 반례 검증. 이는 **재현 성공이지 안전성 PASS 아님**. 비용을 발생시키는 일반경로 R2 읽기 추가나 대규모 refactor 없이 원인을 고정하는 목적. 
+- 제품 코드, 공유 사용자 원본, R2, D1, Firestore, RTDB Rules, Worker/Hosting/Functions, main/TEST/PRODUCTION 변경·배포 **0**. 기존 30초 W1 좋아요·팔로우·Music Note·Library·UI 보호. Stage410 TypeScript/Build/기존 회귀 17/17 PASS는 유지하나 **Stage411 release gate=BLOCKED**, 실제 PC/모바일·운영 비용 미검증. 069 push 진단 FAIL 별도.
+- 다음 하나: 두 R2 작성자와 191 간 **발행 순서/비조건부 덮어쓰기의 최소 보호 계약**을 설계하고, 기존 쓰기에서 최신 좋아요 숫자를 거꾸로 돌리지 않으면서 정상 프로필/곡 발행을 유지할 수 있는지 전후 비교. 추가 R2 GET이 매 화면 진입마다 발생하거나 D1 W3+가 되면 FAIL. 충분히 증명 전 PREVIEW 배포 보류.
+
+---
+
 ## 0S14. Stage410 CI 결과 — strict TypeScript/Build·회귀 PASS, 운영 게이트 유지 (2026-10-09 KST)
 
 - 제품 코드 SHA `40c20516fc58ea35fe7e58b30e4843254380e2aa` 기준 [품질 Run 37837114180](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114180) **SUCCESS**: Node22 entry 문법/TypeScript(`npm run lint`)/Vite Build, 127/175 엄격 개인 좋아요, 178/191/192/197/390 기존 좋아요·팔로우 보호 검사 모두 PASS.

@@ -13,6 +13,7 @@ on:
       - 'scripts/verify-404-075-durable-outbox-cost.mjs'
       - 'scripts/verify-406-existing-repair-read-audit.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
+      - 'scripts/verify-411-existing-r2-writers-restore-race.mjs'
       - '.github/workflows/verify-398-isolated-d1.yml'
   workflow_dispatch:
 permissions:
@@ -62,3 +63,5 @@ jobs:
           node scripts/verify-406-existing-repair-read-audit.mjs
           node --check scripts/verify-407-exact-191-replay-recovery.mjs
           node scripts/verify-407-exact-191-replay-recovery.mjs
+          node --check scripts/verify-411-existing-r2-writers-restore-race.mjs
+          node scripts/verify-411-existing-r2-writers-restore-race.mjs

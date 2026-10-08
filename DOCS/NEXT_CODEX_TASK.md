@@ -1,3 +1,10 @@
+## CURRENT GATE — Stage411 공유 R2 구형 작성자와 191 충돌 재현 / 안전한 PREVIEW 배포 전 (2026-10-09 KST)
+
+- 제품 수정 기준 `40c20516fc58ea35fe7e58b30e4843254380e2aa`, 문서 기준 `cfc6d52446fc869f71e18d7ce4b7af2f08b20d55`. 소스 재검토에서 `060` 공유 프로필 및 `062` 공유 카드 작성자 모두 unconditional R2 PUT. 구형 profile writer가 191 후 Feed 저장 사이에 들어오면 **Feed=1/card=1/profile=0**이고 다음 191 재실행에서도 미검출; 기존 복구 누락의 특정 교차 경로. 새 `verify-411-existing-r2-writers-restore-race.mjs` 독립 소스 기반 시뮬레이션과 격리 CI 증거로 재확인. 실제 운영 발현/빈도는 미검증.
+- 다음 작업은 **191에 무조건 R2 per-card 추가조회·전역 폴링을 붙이는 것이 아님**. 060/062 실제 발행 경로가 최신 likeCount를 거꾸로 쓰지 않도록 provenance/revision/ETag 보호를 기존 정상 발행·구형 앱 호환·비용과 함께 최소 시험. 코어 069/075·앱 좋아요·팔로우·저장하트/카탈로그 수정 금지. D1 W1~W2와 R0 재진입 유지. 안전 증명 후에만 PREVIEW Worker release; TEST/PRODUCTION 금지.
+
+---
+
 ## CURRENT GATE — Stage410 TypeScript/Build·격리 17/17 PASS / LIVE 독립 감사 및 PREVIEW 배포 차단 (2026-10-09 KST)
 
 - 고정 제품 SHA `40c20516fc58ea35fe7e58b30e4843254380e2aa`. 품질 [37837114180](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114180) **SUCCESS** (TypeScript, Build, 127/175/178/191/192/197/390 엄격 회귀), 격리 [37837114190](https://github.com/andrawing1212/soridraw-music/actions/runs/37837114190) **SUCCESS** (191 실제 함수 + Miniflare D1/모의 R2 동시 Feed drift 및 재복구 17/17). 관련 `DOCS/LIKE_REPAIR_191_FEED_CAS_RACE_410_2026-10-09.md`.

@@ -1,3 +1,12 @@
+## 0RZU. Firebase RTDB 사용량 LIVE 읽기 연결 성공 / 첫 24h·30d 실측 (2026-10-08 KST)
+
+- PRIVATE ops Github Actions 최초 수동 진단 run **37734211971 SUCCESS**; auth@v3 WIF PASS, Cloud Monitoring GET PASS, 7일 보관 artifact 업로드 PASS. Google Cloud 서비스 계정과 OIDC 연결이 실제로 작동함.
+- 세부 운영 사용량/동시접속/월별 수치는 **PRIVATE** 저장소 `andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md`에만 기록. 공개 소스 저장소에는 수치를 복제하지 않는다.
+- 이번 성공은 사용량 수집 성공이며 **RTDB 전역 publicSync/exploreLike fanout 보안/비용 안전 PASS를 뜻하지 않는다.** 10만 명 부하/남용, live rules 비교, Cloud Billing 청구액은 계속 미검증.
+- 다음 작업 우선순위: 공개 좋아요 공통 신호의 무관 시청자 다운로드 증폭/보안 정책 점검 및 안전한 제한 설계 → PC↔모바일 30초 전 창 종료 문제 → 통합 앱/Worker/D1/RTDB 검증. 기존 정상 app382 코드/RTDB Rules/데이터 및 배포는 변경하지 않음.
+
+---
+
 ## 0RZT. RTDB 진단 비공개 GitHub Actions 설치 완료 / 최초 실측 대기 (2026-10-08 KST)
 
 - 사용자가 PRIVATE GitHub repo andrawing1212/soridraw-ops-private 생성하고 ChatGPT GitHub Connector에 해당 repo 추가, 연결 확인.

@@ -1,3 +1,12 @@
+## CURRENT GATE — RTDB LIVE metrics 첫 측정 PASS / 공개 like fanout 집중 감사 (2026-10-08 KST)
+
+- 비공개 운영 진단 37734211971 성공. 실제 24h/30d 다운로드와 활성 연결/응답 횟수 측정 완료. 원본 실측 요약(비공개): `andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md`.
+- **다음 목표:** `publicSync/exploreLike` 공통 onValue 구독자당 전달되는 수신량과 인증 클라이언트 임의쓰기 위험을 코드/실측 근거로 평가. 10만 사용자 확장 가정 명시. 사용자 데이터 직접 변경 없이 필요한 최소 계측 설계.
+- 합격 전 금지: 공개 숫자 수렴/개인 하트/팔로우 동기화를 깨는 RTDB Rules 선적용, D1 조회로 전가, TEST/PRODUCTION 비승인 변경.
+- READ-ONLY Monitoring 결과가 실청구액 혹은 10만 사용자 위험 해소를 보장하지 않는다. 앱382 정상기능 보호하며 상세 순서 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md 참고.
+
+---
+
 ## CURRENT GATE — private RTDB read-only workflow 최초 실행 대기 (2026-10-08 KST)
 
 - PRIVATE repo andrawing1212/soridraw-ops-private/main 생성·연결 확인, Google Cloud WIF + Monitoring Viewer 사용자가 설정. private ops workflow .github/workflows/firebase-rtdb-metrics-readonly.yml 추가 commit 5fa5036e3577067422a9fcaa1fead44c8e139e60.

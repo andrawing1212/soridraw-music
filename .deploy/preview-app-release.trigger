@@ -1,8 +1,9 @@
-app383-explore-like-5s-mobile-exit-flush-preview
-target_source=80221fa5ccfff38edfe5364a19343047cd49d470
-app_version=383
-scope=explore-public-like-5s-trailing-save,pending-only-background-visibility-pagehide-flush,batch-post-keepalive,interrupted-exit-outbox-resume,app382-like-follow-ui-protected
-focused_ci_run=37848247242
+app384-stage414-pending-only-lifecycle-part1-preview
+target_source=386c5a263c06ca8b932965d947e54a9aa30123ea
+app_version=384
+scope=recent-song-text-150s-pending-hidden-pagehide-singleflight,music-note-detail-card-durable-draft-hidden-pagehide-singleflight,music-note-folder-60s-pending-hidden,library-folder-60s-rename-order-revision-hidden,app383-explore-public-likes-unmodified,studio-heart-and-favorite-count-unmodified
+focused_ci_run=37854707932
+focused_ci_conclusion=success
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -10,4 +11,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_requested_prioritize_exit-like-sync_and_try_5s_2026-10-08T21:32Z
+approval=user_requested_stage414_continue_2026-10-08T22:29Z

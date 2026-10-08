@@ -1,3 +1,12 @@
+## CURRENT GATE — Stage408 191 복구 순서 개선 코드 있음 / 릴리스 감사 BLOCK (2026-10-09 KST)
+
+- 읽기 `DOCS/LIKE_REPAIR_191_FEED_LAST_FIX_408_2026-10-09.md`. 기존 Worker entry의 191 함수만 **카드·프로필 먼저→Feed 마지막**으로 최소 변경. 원본 함수 10/10 격리 재시도 PASS Run `37833820477`. TypeScript·Build, 기존 178/191/192/197/390 PASS Run `37834477289`.
+- **실서비스/배포 승인 아님**. 같은 품질 Run 안에서 127/175 기존 verifier FAIL을 별도 표시하고 nonblocking으로 다음 테스트 실행했으므로, **전체 회귀 PASS 선언 금지**. 현재 소스 vs 127/175 테스트 기대의 원인을 제품 기능을 재작성하지 않고 독립 검토. 필요 시 테스트만 최소 정합화하며 사용자 기능 변경 금지.
+- 미해결: 과거 R2 Feed 최신/카드 구형 orphan, 두 Worker 병행 R2 CAS, 실제 PREVIEW 버전/Worker·D1/R2 비용·기기 테스트. 이들 해결 전 Worker 배포, RTDB/Functions/Rules/DB migration, TEST/PRODUCTION 금지.
+- 다음 단일 P0: `bdcc0410aa50` 대비 Stage408 191 함수 exact 변경 diff 독립 감사, 실패 주입 + 병행 쓰기/카드 유실 복구 여부를 제한된 가상 모델에서 검증. 비용·기능 동등성 입증 전 다른 구조 확장 금지.
+
+---
+
 ## CURRENT GATE — Stage407 실제 191 함수 부분실패 재현 PASS / Stage408 최소 회복 보완 P0 (2026-10-09 KST)
 
 - 먼저 `DOCS/LIKE_REPAIR_191_PARTIAL_REPLAY_407_2026-10-09.md` 참조. [CI 37832572556](https://github.com/andrawing1212/soridraw-music/actions/runs/37832572556) Stage407 7/7 PASS. **PASS는 현행 복구 취약점을 실제 함수 격리 실행으로 재현했다는 의미**, 제품 동작 수정 완료가 아님.

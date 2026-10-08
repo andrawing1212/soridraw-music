@@ -1,3 +1,13 @@
+## 0S11. Stage408 191 복구 함수 최소 코드 수정 / 실패 재시도 10/10 PASS, 배포 전 (2026-10-09 KST)
+
+- **실제 제품 코드 최소 수정:** `cloudflare/explore-worker/canonical/preview-entry.js`의 `repairSharedPublicLikeCounts191`에서 이미 받아온 Feed R2로 변경곡을 선택하고 **공개 카드·프로필 먼저 → Feed 마지막** 순서. 카드/프로필 중간 PUT 실패 시 Feed를 먼저 성공으로 표시하지 않으므로 다음 DO alarm 복구에서 변경 ID가 남음. 069 W1/30초/개인 하트·팔로우·UI·캐시·원본 데이터 불변.
+- [격리 Run 37833820477](https://github.com/andrawing1212/soridraw-music/actions/runs/37833820477) **SUCCESS**, 실제 191 함수 가상 R2 실패/복구 포함 10/10 PASS, 기존 Stage398~406 검사 유지. [품질 Run 37834477289](https://github.com/andrawing1212/soridraw-music/actions/runs/37834477289) **TypeScript/Build PASS**, 178/191/192/197/390 회귀 PASS.
+- **릴리스 차단/미검증:** 역사적 `verify-127`(기대 문구 `deferredSignal390` 부재), `verify-175`(`gap repair flag missing`)은 현재 소스와 정적 테스트 불일치 FAIL — 진단에만 `continue-on-error` 사용, 절대 전체 PASS라고 해석하지 않음. 191도 기존에 Feed가 이미 최신·카드만 구형인 orphan은 자동 감지하지 못함. 실서비스 Worker parity·복합 CAS 경쟁·PC↔모바일·라이브 D1/R2/RTDB 비용/별도 069 진단 CI 실패 미확인.
+- 상세 `DOCS/LIKE_REPAIR_191_FEED_LAST_FIX_408_2026-10-09.md`. **제품 Worker 코드 GitHub preview commit만 완료; Firebase/Cloudflare 배포 0, 공유 DB/R2 원본 변경 0, main/TEST/PRODUCTION 변경 0.**
+- 다음: Stage408 소규모 수정의 Work/독립 감사, 실패된 127/175 verifier baseline 일치 검사, 실제 비용·실기기 호환 게이트 전 배포/승격 금지.
+
+---
+
 ## 0S10. Stage407 원본 191 R2 부분실패 재시도 누락 재현 / 제품 원본 보호 (2026-10-09 KST)
 
 - [GitHub CI 37832572556](https://github.com/andrawing1212/soridraw-music/actions/runs/37832572556) **SUCCESS**. `scripts/verify-407-exact-191-replay-recovery.mjs`로 현행 `repairSharedPublicLikeCounts191` **원본 함수 직접 실행**(LOCAL Miniflare D1 + 메모리 R2 ETag/CAS), 7/7 PASS. 이전 398~406 검증 유지.

@@ -4,6 +4,7 @@
 - Firebase Console 사용자 제공 활성 Rules: `publicSync/exploreLike`에서 auth.uid 일치만으로 일반 클라이언트가 global RTDB node를 발행할 수 있음을 GitHub rules와 직접 대조 확인. Global onValue는 화면과 관계없는 최근 50곡 변경묶음까지 다운로드할 수 있음. 실제 악용 발생·10만 사용자 실제 비용/전체 규칙 exact match 미검증.
 - **고정 전환 순서:** A 서버 canonical ACK 기반 인증된 RTDB publisher(기존 Functions Admin SDK 선례·Worker W1/DO 종료 이벤트 재사용 가능성 확인, 비밀/서명·중복·bounded durable notification-only retry 검증) → B 화면 관련 곡/버킷에만 V2 구독 및 비용 측정 → C 구형 앱 호환용 legacy 게시를 서버가 대신 한 뒤에야 live client write 최종 차단 → D PC/모바일/기능/비용 독립 검증. 기존 RTDB Rules 단독 선변경 금지.
 - **중요 비용/안전 트레이드오프:** 공유 RTDB를 사용하는 PREVIEW/TEST/PRODUCTION+브라우저 구버전 동시 보존 시, 서버가 legacy 전역 이벤트를 계속 발행하는 동안 fanout 비용은 완전히 제거되지 않음. 기존 RTDB 비용을 Functions/Worker/R2/D1 per-user poll로 이전하면 FAIL. 단계별 실측 후 결정.
+- **새 차단 조건:** `preview-entry.js`의 `repairSharedPublicLikeCounts191`는 latest/popular 상위 최대 80곡의 복구 작업일 뿐 모든 곡의 확정 이벤트가 아님. 이 경로를 publisher의 유일한 변경곡 검출기로 쓰면 누락 발생. 또한 브라우저에 주는 `publicSignalAcceptedAt`는 W1 ACK 시각 메타데이터로 개별 곡 정착 증거 아님. 구현 전 069 queue 실제 변경곡/operation ID 흐름 및 worker 생성 파이프라인 확인 필수. 상세 설계 문서 업데이트.
 - **코드·배포:** docs-only, 앱 app382 배포/Worker 버전 그대로. RTDB Rules, Firebase Functions, Cloudflare, 공유 D1/Firestore/미디어, main, production 변경 없음. TypeScript/Build/관련 tests 미실행(코드 수정 전).
 - **다음 실제 목표:** 단계 A의 신뢰 가능한 최소 publisher를 기존 Worker 확정 경로·Functions 인증 경로로 구현 가능한지 먼저 증명하고, Codex High → Work 독립검증을 거쳐 안전한 preview 구현 여부 결정. 이후 단계 B→C→D. 30초 이내 창 완전 종료 후 타기기 미전송은 별도 후속 문제로 그대로 남음.
 

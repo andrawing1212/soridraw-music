@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/verify-398-miniflare-d1-returning.mjs'
       - 'scripts/verify-399-full-aggregate-d1-cost.mjs'
+      - 'scripts/verify-400-069-075-confirmed-event-gate.mjs'
       - '.github/workflows/verify-398-isolated-d1.yml'
   workflow_dispatch:
 permissions:
@@ -38,3 +39,5 @@ jobs:
           node scripts/verify-398-miniflare-d1-returning.mjs
           node --check scripts/verify-399-full-aggregate-d1-cost.mjs
           node scripts/verify-399-full-aggregate-d1-cost.mjs
+          node --check scripts/verify-400-069-075-confirmed-event-gate.mjs
+          node scripts/verify-400-069-075-confirmed-event-gate.mjs

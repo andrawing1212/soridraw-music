@@ -1,3 +1,10 @@
+## 0RZG. app380 audit-only follow354 fixture 연결 보완 / 재감사 전 배포 금지 (2026-10-08 KST)
+
+- 감사 2차 `37710252515`: isolated D1 신규 W2/replay W0 PASS, TypeScript PASS, Build PASS. `Static release-system verification` 단계에서 기존 follow354 격리 VM에 최신 097 abuse hook `consumeSocialAbuse380`가 등록되지 않아 ReferenceError로 FAIL, 이후 388/392/393 및 live read-only gate는 SKIPPED.
+- 안전 제품 코드 변경 **0**. `verify-354-follow-orchestration.mjs`의 isolated follow overlay fixture에 follow 전용 abuse hook 가짜 호출을 등록하고 UID, domain, desired, operation ID 유효성을 검증한다. 실제 R2 abuse persistence/replay/limits 동작은 별도 `verify-388-social-abuse-runtime.mjs --release`에서 독립 검사한다. 일반 Worker의 fail-closed 검증을 완화하지 않는다.
+- 1차 `37709943353`의 unrelated direct-like guard baseline 비교 오류를 바로잡은 결과 해당 오류는 2차에서 재발하지 않았다.
+- 현재 PREVIEW 실제 app379 유지, shared D1 apply/원본 데이터 변화/배포/TEST/PRODUCTION 변경 없음. 운영 규모에서 069 global LIMIT 65 read/replay fail-closed 위험과 최종 Work 감사는 여전히 미해결.
+
 ## 0RZF. app380 최종 GitHub 릴리스 감사 1차 실행 결과 및 감사 기준 교정 — 배포 금지 (2026-10-08 KST)
 
 - 감사 트리거 commit `c92bb036fdb16ab11065b08881dffcd1df7bd617` / GitHub Run `37709943353`, 기준 제품 commit `b4d7e3188e8f04dc4004f55719380efcf3f6c8c8`.

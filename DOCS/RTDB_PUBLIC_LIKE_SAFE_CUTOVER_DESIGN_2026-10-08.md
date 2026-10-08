@@ -21,6 +21,16 @@
 - 단계 A에서 반드시 확인할 것: canonical queue/aggregation에서 **모든 실제 변경 trackId + ownerUid + 확정 event/op ID + 서버 기준 acceptedAt**를 기존 비용 계약 안에서 직접 얻을 수 있는가? GitHub의 `canonical/preview-worker.js` 원본이 빈 상태로 반환되어 이를 확인하지 못했으므로 Worker 실제 생성/patch pipeline과 069 writer 경로를 확인하기 전 구현 금지.
 - 추가 D1 전체/곡별 스캔, 모든 사용자 좋아요 재조회, bounded Feed repair를 이벤트 검출기로 대체, 브라우저의 임의 Track ID를 신뢰하는 우회 중 하나라도 필요하면 설계 **FAIL**로 되돌려 대안 검토.
 
+## 단계 A 착수 결과: 실제 변경곡 ID 검출 SQL 프로토타입 (2026-10-08)
+
+- GitHub `preview` 코드 신규: `scripts/verify-rtdb-public-like-returning-prototype.mjs`, commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`. 외부 네트워크·실 DB·Firebase 없음. Node.js 22 `node:sqlite` in-memory만 실행. **Worker / Functions / Rules 어디에도 연결되지 않음**.
+- 현재 Worker의 `cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs` `processExploreLikeAggregateWave035`는 현재 SQL에 `INSERT OR IGNORE INTO likes` / `DELETE FROM likes` 문장이 이미 포함됨(기존 D1 batch). 각각의 기존 쓰기에 SQL `RETURNING track_id`를 결합하는 후보를 개발자 PC의 격리 SQLite에서 테스트함.
+- 실제 Node22 실행 출력: `RETURNING_INSERT_ONLY_REAL_CHANGE=PASS`, `RETURNING_DELETE_ONLY_EXISTING=PASS`, `RETURNING_BOUNDED_CHANGED_TRACKS_NOT_FIRST_PAGE=PASS`, `RETURNING_NO_EXTRA_SELECT_SQL=PASS`. 전체 4/4 PASS. 목록 밖의 곡도 이벤트 대상, 중복 쓰기·없는 좋아요 해제는 결과 0 확인.
+- **증명의 정확한 한계:** 기존 스케줄러/069 병합 쿼리·Cloudflare D1 batch `RETURNING` 호환성·성능·기존 R1/W1~W2 물리계측은 확인하지 않음. Node `sqlite`의 mock SQL은 실제 Worker aggregate에서 쓰는 CTE·트랜잭션 전체 복제가 아님. 결과가 있을 때 `rows_read`가 0이란 뜻 아님. 새 source code는 runtime에 import/실행되지 않으므로 서비스 개선이 배포된 것도 아님.
+- 특히 현행 aggregate는 `positiveTracks/negativeTracks/insertedLikes/deletedLikes/processedBatches` **숫자만 반환**하고 확정 `trackId`, 서버 eventId 및 ownerUid를 모든 곡에 대해 노출하지 않음. Worker scheduled processing이 여러 전송을 합치므로 사용자 ACK 시각에 있는 정보만 서버 신뢰 이벤트로 서명하면 안 됨.
+- **다음 게이트:** (1) 기존 aggregate CTE가 모든 변경곡 ID를 바로 결과로 반환할 때의 정합성/실제 D1 meta 비용을 *격리* 런타임에서 확인; (2) 마지막 canonical 정착과 R2 공개 숫자 생성 시점 보장; (3) Worker→Firebase Functions 서버 인증, 자동 재시도 및 idempotent 수신 경로를 추가 D1 W 없이 설계·검증. (1) 불합격이면 `RETURNING`을 현행 운영 코드에 도입하지 않음.
+- 운영 공유 RTDB 규칙·원본 데이터·Worker·Functions·Hosting·TEST·PRODUCTION 전부 그대로 둠. 이 프로토타입을 배포 기능으로 오해하지 않는다.
+
 ## 디렉터 승인 목표 — 정상 기능 전부 보존
 
 1. 기존 공개 좋아요·해제, 공개 likeCount, 내 꽉찬 하트, 같은 계정 PC↔모바일, 서로 다른 계정의 공개 숫자 갱신, 30초 마지막 클릭 묶음, W1 queue, 5초 R2 정착 경로 보호. Studio 저장 하트·Music Note·Library·팔로우는 이 작업에서 변경 금지.

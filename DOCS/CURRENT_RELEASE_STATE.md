@@ -1,3 +1,15 @@
+## 0S27. app385 PREVIEW 정상 배포 — 기존 60초 묶음 저장 비용 구조 복원 (2026-10-09 KST)
+
+- 사용자 최우선 수정 지시: app384의 과도한 백그라운드 조기 저장을 되돌리고 기존 정상·비용 효율 구조를 우선 유지. app385 **PREVIEW Firebase Hosting 배포 성공**.
+- 제품 최종 소스 `c742a467e0c80a63cfc27ceb47b6990d0db5134f` (3개 TSX 파일 + app385 + Stage414 static verifier 수정), 릴리스 트리거 SHA `8cc2eba8bfaa5dc55b1442d0ad566af4abe46c02`, 공식 배포 [Run 37857584293](https://github.com/andrawing1212/soridraw-music/actions/runs/37857584293) **SUCCESS**. TypeScript PASS, Build PASS, 기존 app358/359/360/361/377/378/379 PASS, Firebase Hosting PASS, PREVIEW exact build PASS, TEST/PRODUCTION unchanged PASS. 소스 및 앱버전 QA [Run 37857370230](https://github.com/andrawing1212/soridraw-music/actions/runs/37857370230) **SUCCESS**. 이전 동일 코드(버전만 제외) QA 37857349808도 PASS.
+- **변경 후 정상 계약:** Music Note 폴더/Library rename·order·revision은 로컬/RTDB로 PC↔모바일 즉시 전달, 60초 trailing canonical 저장 유지. 다른 앱 전환/탭 숨김(`visibilitychange:hidden`)에 따른 추가 Firestore flush 제거. 기존 실제 `pagehide`에서만 이미 대기 중인 folder batch final state 저장 시도, 실패 시 로컬 pending 남김. Library rename→order→revision 순서 유지. Recent Song title/prompt/lyrics 기본 150초 aggregate 저장, Music Note detail/card 기존 로컬 draft 보존 및 pagehide 단일 미저장 저장 시도 유지. app383 Explore 공개 좋아요 hidden+pagehide 5초 경로는 별개로 동결.
+- Studio save-heart +30초 / favoriteCount +30초 안정화는 기존 상태로 동결. 안전성이 입증되지 않은 빠른 종료 연산 재전송으로 double increment 위험 증가 금지. UI, 테마, React RTDB 표시·Suno 미디어, Worker/Functions/D1/Firestore Rules/RTDB Rules/공유 사용자 데이터 변경 0.
+- **비용 결론(구조상):** 이번 복원은 단순 백그라운드 전환으로 인한 추가 조기 canonical write 경로를 없애므로 app384 대비 서버 저장 호출이 늘지 않도록 함. 원래 60초 마지막 상태 W 목표 복원. 정확한 Firestore R/W 실사용 수치는 미계측, 강제 종료 실제 서버 확정 및 PC↔모바일 체감은 실사용 미검증. 소스/QA PASS ≠ 물리 청구액 PASS.
+- main/TEST/PRODUCTION 승격·변경 없음. 배포 시작 기준에서 GitHub 069 자동 diagnose 및 app380용 Follow-only frozen-check 기존 실패 별도, app385 코어 QA/Hosting PASS에 혼동하지 말 것.
+- 차후 작업: 사용자 PREVIEW 실기기 이름/폴더 여러 번 변경 후 RTDB PC↔모바일 즉시 확인, 60초 단일 canonical W 목표 측정, 최소화 60초 전 Firestore 쓰기 없는지 확인, 앱 종료 뒤 재실행 pending 복구 확인. 그 외 기능은 사용자 요청 없이는 건드리지 않음.
+
+---
+
 ## 0S26. app385 비용 우선 복원 — 창 숨김 시 조기 서버 저장 제거, 기존 final-state batching 보호 (2026-10-09 KST)
 
 - 사용자 지시: 새 기능보다 기존 정상 구조/비용 판단을 우선. app384 Music Note·Library의 hidden 시 조기 Firestore flush는 빈번한 앱 전환마다 canonical W를 늘릴 수 있고, 기존 app301 60초 + RTDB 즉시 동기화를 이미 갖고 있었음. 이를 사전 비교 없이 배포한 판단을 시정.

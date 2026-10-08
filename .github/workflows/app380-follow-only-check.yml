@@ -17,6 +17,7 @@ on:
       - 'cloudflare/explore-worker/candidates/social-abuse-380.js'
       - 'scripts/verify-354-follow-orchestration.mjs'
       - 'scripts/verify-394-follow-only-worker-freeze.mjs'
+      - 'scripts/verify-389-social-client-batching.mjs'
 
 permissions:
   contents: read
@@ -61,6 +62,9 @@ jobs:
           set -euo pipefail
           node scripts/verify-354-follow-orchestration.mjs
           node scripts/verify-355-follow-audit-repairs.mjs
+          node scripts/verify-356-follow-worker341-legacy-parity.mjs
           node scripts/verify-377-follow-count-list-sync.mjs
           node scripts/verify-386-follow-overlay-count-display.mjs
-          node scripts/verify-389-social-client-batching.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
+          node scripts/verify-389-social-client-batching.mjs --follow-only
+          node scripts/verify-127-atomic-personal-like.mjs

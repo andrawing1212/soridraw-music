@@ -1,4 +1,4 @@
-import React, { type ReactNode, useLayoutEffect } from 'react';
+import React, { type ReactNode } from 'react';
 import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
 import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
@@ -29,14 +29,6 @@ export default function StudioSplitEngineWorkspace({
   v2DragPerfMode = 'pure-pane-hybrid',
   ...props
 }: Props) {
-  // app381 UI hotfix: Create/Music Note -> Recent can reuse the same Lite shell.
-  // Reuse Lite's existing synchronous frame-resize owner once before paint so
-  // the new workspace never inherits the previous page's root geometry.
-  useLayoutEffect(() => {
-    if (engine !== 'lite' || props.viewMode !== 'split' || compactMobileMode || typeof window === 'undefined') return;
-    window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
-  }, [compactMobileMode, engine, props.viewMode, props.workspaceRequestId, props.workspaceView]);
-
   // 646: below the mobile threshold Studio Black is no longer a squeezed split
   // canvas. It renders the same information hierarchy as the phone UI and does
   // not mount either split engine, so no divider/rail geometry can leak into it.

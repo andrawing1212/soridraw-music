@@ -1,3 +1,11 @@
+## CURRENT GATE — private RTDB read-only workflow 최초 실행 대기 (2026-10-08 KST)
+
+- PRIVATE repo andrawing1212/soridraw-ops-private/main 생성·연결 확인, Google Cloud WIF + Monitoring Viewer 사용자가 설정. private ops workflow .github/workflows/firebase-rtdb-metrics-readonly.yml 추가 commit 5fa5036e3577067422a9fcaa1fead44c8e139e60.
+- **지금 할 일:** 비공개 저장소 Actions에서 SORIDRAW Firebase RTDB Metrics (Private Readonly) 수동 실행. PRIVATE run 결과를 읽어 WIF IAM/Monitoring API/24h+30d sent_bytes_count 확인. 오류 시 이 진단만 수정. Cloud Monitoring 실측 없이는 비용 합격 판정 금지.
+- RTDB code/rules/데이터·앱·Worker·Hosting·Functions·TEST/PRODUCTION 미변경. README/개발·정식 앱에 운영 사용량 로그 공개 금지. 전체 순서는 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md 유지.
+
+---
+
 ## CURRENT GATE — 비공개 RTDB Monitoring 읽기 연결 사용자 설정 대기 (2026-10-08 KST)
 
 - 공개 GitHub repo에 Firebase 운영 수치를 노출하지 않도록 PRIVATE 운영 repo + Google WIF + Monitoring Viewer 설계.

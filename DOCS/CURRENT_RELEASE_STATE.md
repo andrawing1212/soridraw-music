@@ -1,3 +1,14 @@
+## 0RZT. RTDB 진단 비공개 GitHub Actions 설치 완료 / 최초 실측 대기 (2026-10-08 KST)
+
+- 사용자가 PRIVATE GitHub repo andrawing1212/soridraw-ops-private 생성하고 ChatGPT GitHub Connector에 해당 repo 추가, 연결 확인.
+- 사용자가 Google Cloud project soridraw-app-866a5에 soridraw-ops-metrics-reader 서비스 계정 생성 및 project Monitoring Viewer 권한을 IAM 화면에서 확인.
+- 사용자가 Workload Identity Pool soridraw-github-metrics, GitHub OIDC provider github-private-metrics 생성, mapping google.subject/assertion.sub, attribute.repository/assertion.repository, attribute.ref/assertion.ref, 조건 GitHub repo andrawing1212/soridraw-ops-private + main branch 고정. repo attribute에만 service-account impersonation 허용을 Google Console UI에서 저장. **해당 정책의 live IAM API 검증은 최초 workflow 인증 시 확인**.
+- ChatGPT가 PRIVATE ops repo main에 수동 workflow .github/workflows/firebase-rtdb-metrics-readonly.yml 생성: commit 5fa5036e3577067422a9fcaa1fead44c8e139e60. 기존 PUBLIC preview script 81940357eaba404a210c3d1303b853f6868b33f7를 exact pin, read-only GCP Monitoring API GET, 고정 WIF provider/Monitoring Viewer 서비스 계정, 키/비밀번호/JSON 없음. private repo 내에서만 Actions Summary/artifact 보관. 클라이언트 앱/RTDB Rules/Worker/Functions/Firestore/D1/Hosting/배포/main/production 변경 없음.
+- 현재 gate: 사용자가 PRIVATE ops repo > Actions > SORIDRAW Firebase RTDB Metrics (Private Readonly) > Run workflow (main)으로 최초 수동 실행. Run ID/결과를 ChatGPT가 API로 확인, 인증/API/측정 오류라면 이 읽기 전용 진단만 교정. **LIVE RTDB 다운로드/동시 연결·메시지 팬아웃/실제 Cloud Billing 수치는 아직 미검증**.
+- 최초 측정 완료 후 단계 순서 유지: 1) RTDB 비용/남용 감사 → 2) 공개 좋아요 공통 fanout 및 남용 차단 → 3) 30초 전 앱 종료 좋아요·팔로우 동기화 복구 → 4) PC/모바일 실측 통합 검증.
+
+---
+
 ## 0RZS. Firebase RTDB 사용량 Private GitHub 읽기전용 진단 준비 (2026-10-08 KST)
 
 - 사용자가 승인: SORIDRAW 프로젝트 채팅과 GitHub를 이용해 Firebase 실제 운영 지표를 확인하는 구조. 기존 소스 repo는 PUBLIC이므로 실측 운영 데이터는 신규 PRIVATE ops repo에만 기록.

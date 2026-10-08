@@ -1760,16 +1760,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         .then(() => flushLibraryPlaylistRevisionBatch(uid));
     };
 
-    // Stage414: preserve the existing rename -> order -> revision ordering
-    // while also settling pending folder changes on mobile backgrounding.
-    // Existing per-UID in-flight guards and empty-pending checks are reused.
-    const flushOnHidden = () => {
-      if (document.visibilityState === 'hidden') flushOnPageHide();
-    };
-    document.addEventListener('visibilitychange', flushOnHidden);
+    // Preserve app301's 60-second quiet window on tab hide/app switching.
+    // The existing pending-only pagehide path stays available at real exit.
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
-      document.removeEventListener('visibilitychange', flushOnHidden);
       window.removeEventListener('pagehide', flushOnPageHide);
     };
   }, [user?.uid, isSharedView]);

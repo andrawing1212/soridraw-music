@@ -134,6 +134,13 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/me/music-note-publications/batch') return '공개상태 묶음';
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/feed-revision') return '피드 변경 확인';
+  if (path === '/v1/public-like-cards') return '공개곡 좋아요 숫자 확인';
+  if (path === '/v1/curated') return 'SORIDRAW 추천곡';
+  if (path === '/v1/curated-revision') return '추천곡 변경 확인';
+  if (path === '/v1/me/explore-management-access') return '추천곡 관리 권한 확인';
+  if (path === '/v1/me/likes-revision') return '내 좋아요 변경 확인';
+  if (path === '/v1/me/liked-tracks') return '내 좋아요 곡 확인';
+  if (path === '/v1/me/likes/batch') return '좋아요 변경 묶음 저장';
   if (path === '/v1/me/likes') return '좋아요 상태';
   if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
   if (/^\/v1\/profiles\/[^/]+\/followers$/.test(path)) return '팔로워 목록';
@@ -145,6 +152,9 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';
   if (path === '/v1/tracks/:id/visibility') return '공개상태 변경';
   if (path === '/v1/profiles/:id/first-view') return '공개프로필';
+  // The diagnostic key stays untouched for accounting, but endpoint
+  // addresses must never be exposed as user-facing section headings.
+  if (path.startsWith('/v1/')) return '기타 서버 요청';
   return path || '기타';
 };
 

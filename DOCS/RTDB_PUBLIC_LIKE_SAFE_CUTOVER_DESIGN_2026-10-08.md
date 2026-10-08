@@ -31,6 +31,13 @@
 - **다음 게이트:** (1) 기존 aggregate CTE가 모든 변경곡 ID를 바로 결과로 반환할 때의 정합성/실제 D1 meta 비용을 *격리* 런타임에서 확인; (2) 마지막 canonical 정착과 R2 공개 숫자 생성 시점 보장; (3) Worker→Firebase Functions 서버 인증, 자동 재시도 및 idempotent 수신 경로를 추가 D1 W 없이 설계·검증. (1) 불합격이면 `RETURNING`을 현행 운영 코드에 도입하지 않음.
 - 운영 공유 RTDB 규칙·원본 데이터·Worker·Functions·Hosting·TEST·PRODUCTION 전부 그대로 둠. 이 프로토타입을 배포 기능으로 오해하지 않는다.
 
+## 단계 A 추가 구현: 배치 결과 검증기 (2026-10-08)
+
+- `cloudflare/explore-worker/runtime/like-confirmed-event-397.mjs` **신규 순수 함수** `extractChangedLikeTrackIds397(batchResults, maxTracks=50)`. Worker/Functions에서 **아직 import하지 않으며**, 런타임 코드/배포 변화 없음. GitHub commit `216fdb1202f4d533761c10abf929850cacb2a738`.
+- 실제 patch040의 `env.DB.batch` 배열 인덱스 2(좋아요 INSERT), 3(좋아요 DELETE)에서 SQL `RETURNING track_id`가 결과를 반환했다는 것을 전제로 **정확한 changed track IDs**만 합친다. `meta.changes !== results.length`, 결과 누락, 비정상 ID, 50개 초과면 명시적으로 FAIL. 변경 0이면 빈 목록.
+- `scripts/verify-rtdb-public-like-aggregate-extract-397.mjs` 신규. Node22 순수 검사: 정확한 변경 1/2, 중복, W0, RETURNING 누락, null 결과, 비정상 ID, 초과 건수, metadata 누락 등 **8/8 PASS**. 앞선 인메모리 SQLite `RETURNING` 검증 **4/4 PASS**, 합계 **12/12 PASS**. Node22 `--check` 문법 확인 PASS.
+- **엄격한 한계:** 인메모리 단위 테스트와 실제 D1 메타는 별개. 본 모듈은 쓸 수 있는 신호만 판별할 뿐 RTDB 발행·서버 인증·중복 수신 방지·실제 Cloudflare Worker D1 통합은 아직 없다. W1/W2 물리 비용·PC↔모바일 변경 수렴·10만명 팬아웃 해결은 미검증. 불완전 결과는 알림을 발행하지 않고 정지해야 하며, 실제 retry/복구 구현 전에 운영 경로에 연결 금지.
+
 ## 디렉터 승인 목표 — 정상 기능 전부 보존
 
 1. 기존 공개 좋아요·해제, 공개 likeCount, 내 꽉찬 하트, 같은 계정 PC↔모바일, 서로 다른 계정의 공개 숫자 갱신, 30초 마지막 클릭 묶음, W1 queue, 5초 R2 정착 경로 보호. Studio 저장 하트·Music Note·Library·팔로우는 이 작업에서 변경 금지.

@@ -1,3 +1,14 @@
+## 0S26. app385 비용 우선 복원 — 창 숨김 시 조기 서버 저장 제거, 기존 final-state batching 보호 (2026-10-09 KST)
+
+- 사용자 지시: 새 기능보다 기존 정상 구조/비용 판단을 우선. app384 Music Note·Library의 hidden 시 조기 Firestore flush는 빈번한 앱 전환마다 canonical W를 늘릴 수 있고, 기존 app301 60초 + RTDB 즉시 동기화를 이미 갖고 있었음. 이를 사전 비교 없이 배포한 판단을 시정.
+- **확정 운영 결정:** 폴더 create/rename/reorder Music Note +60초, Library rename/order/revision +60초 **그대로 유지**. PC↔모바일 RTDB 즉시 반영 유지. 단순 최소화/탭 숨김으로 canonical Firestore 조기 flush 하지 않음. 실제 pagehide에서 기존 pending-only 저장 시도(폴더 기존 동작) 보존. Music Note Detail/카드 draft 및 Recent title/lyrics/prompt는 app384가 도입한 pagehide 시도/로컬 durable 재실행 복구 유지, 일반 변경 시 원래 60초/150초 batching 유지. Explore app383 5초 like hidden/pagehide 별도 정상 경로 보호. Studio 저장 하트 30초/파생 favoriteCount 30초 원래 동작 보호, 2차 조기 flush는 추진하지 않음(ambiguous ack 중복 위험).
+- 제품 수정: `src/pages/FavoritesPage.tsx`, `src/pages/SunoLibraryPage.tsx`, `src/App.tsx`에서 **visibilitychange(hidden) 조기 canonical flush만 제거**, 남은 pagehide/durable/single-flight 기존 경로 보존. `scripts/verify-414-pending-only-lifecycle.mjs` static cost 계약을 'no hidden writer'로 변경. `public/app-version.json` app384→**app385**. 기준 HEAD `076f7df6bd7eaedaaf468f78e8ad06b920c023e5`, 앱 버전 고정 SHA `c742a467e0c80a63cfc27ceb47b6990d0db5134f`.
+- 데이터 구조/공유 사용자 원본/Functions/Cloudflare Worker/D1/RTDB Rules/디자인 변경 **0**. main/TEST/PRODUCTION 변경 금지. 코드 PASS/실기기 비용 추정 구분: 숨김 조기 저장 제거로 **그 경로 추가 W는 0**이지만 실제 운영 Firestore 청구량 비교는 아직 미측정.
+- 품질검사/공식 PREVIEW Hosting 배포 상태: **진행 중, 확인 전 PASS 선언 금지**. 안전검사 통과 후 app385 PREVIEW Hosting only 배포, exact build + TEST/PRODUCTION 비변경 확인 필요. 기존 069/구형 app380 Follow-only 실패는 별도 구형 워크플로 문제.
+- 운영 교훈: 비용 절감이 목표인 기존 기능을 변경하기 전에 '이미 해결되어 있는가', RTDB/서버 확정 분리, 기존 저장 횟수 대안 비교, 빈번한 최소화 비용, 안전성/복구를 먼저 보고하고 최소 변경.
+
+---
+
 ## 0S25. Stage414 1차 app384 PREVIEW Hosting 배포 SUCCESS — Studio 하트/통계는 2차 게이트 (2026-10-09 KST)
 
 - **배포 완료 범위:** PREVIEW app384. 앱/버전 기준 commit `386c5a263c06ca8b932965d947e54a9aa30123ea`; 최종 제품 코드 `1104f151565110723f78fdcc8e21b7854d90a0b3`; 공식 배포 트리거 SHA `7a487204de2d10680fea92cca5c1e445ec76d00a`.

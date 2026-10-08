@@ -134,14 +134,20 @@ for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
       // 098 intentionally inserts one early refresh-required guard to retire
       // unsafe old direct likes. The old d1only guard later in this function
       // must remain byte-identical to the historical baseline.
-      assert.ok(source.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008'),
-        'app380 like patch marker required');
+      // Follow-only release protects the frozen app379 direct-like function;
+      // the legacy 098 branch remains audit-compatible, but is not required.
+      const hasLike098 = source.includes('SORIDRAW_LIKE_ABUSE_GUARD_390_20261008');
       const insertedGuard = "  const authContext = await requireExploreAuth(request);\n"
         + "  throwApi('LIKE_CLIENT_REFRESH_REQUIRED', '좋아요 저장 방식을 업데이트했습니다. 새로고침 후 다시 시도해 주세요.', 409);\n";
       const initialLine = "  const authContext = await requireExploreAuth(request);\n";
-      assert.equal(currentText.split(insertedGuard).length, 2,
-        'app380 direct-like guard missing or duplicated');
-      currentText = currentText.replace(insertedGuard, initialLine);
+      if (hasLike098) {
+        assert.equal(currentText.split(insertedGuard).length, 2,
+          'app380 direct-like guard missing or duplicated');
+        currentText = currentText.replace(insertedGuard, initialLine);
+      } else {
+        assert.equal(currentText.includes("LIKE_CLIENT_REFRESH_REQUIRED"), false,
+          'follow-only source must not contain new forced like refresh');
+      }
     }
     assert.equal(currentText,node.getText(baselineAst).replaceAll('\r\n','\n'),'unrelated function changed: ' + node.name?.text);
   }

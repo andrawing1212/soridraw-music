@@ -1,3 +1,12 @@
+## 0S23. Stage414 종료/백그라운드 pending 저장 확대 요구 — 설계 확정, 구현 전 (2026-10-09 KST)
+
+- 사용자 보고: app383 Explore 좋아요 모바일 빠른 종료 반영은 직접 성공 확인. 해당 관찰 케이스 PASS이며 모든 강제종료/비용 PASS는 아직 아님.
+- 신규 요구: 다른 묶음 저장도 앱 닫기·창 내리기 시 타이머 완료를 기다리지 않고 현재 pending 최종 상태만 서버 저장 시도. 평시 batching 및 모든 정상 UI·PC↔모바일 RTDB 미리보기·로컬 durable pending·무변경 R0/W0 보존.
+- 코드 확인: Music Note Folder/Library 폴더 일부 pagehide flush는 있으나 hidden 범위와 브라우저 중단 시 성공 보장은 미검증. src/lib/pageSyncCoordinator.ts는 pageClosing 시 일반 page sync 전송 생략. Recent 150초, Studio save-heart 곡별 30초, Music Note/Library 60초, 통계 30초 각각 고유 지연 확정 계약 보호.
+- DOCS/NEXT_CODEX_TASK.md Stage414를 구현 기준으로 등록. Codex 분석/구현·독립 검증·PREVIEW 실기기 전까지 **Stage414 기능 미구현 / 배포 전**, 기존 활성 PREVIEW는 app383/Stage412 Worker 그대로. 메인/TEST/PRODUCTION, 공유 사용자 데이터 변경 없음. Firebase/Cloudflare 변경 없음.
+- app383 실측 W1~W2 및 R2 비용과 구형 069 진단 실패는 별도 과제로 계속 남음. 종료 중 Firestore 비동기 전송은 100% 보장할 수 없으므로 다음 실행 durable 복구도 합격선.
+---
+
 ## 0S22. Stage413 PREVIEW app383 공식 Firebase Hosting 배포 성공 — 사용자 즉시 종료 실사용 검증 대기 (2026-10-09 KST)
 
 - **유저 최우선 핵심 오류:** 모바일에서 Explore 좋아요 후 앱/창을 바로 닫으면 다른 디바이스가 반영되지 않음. 모바일 재실행 후 대기해야 반영됨. Stage412 좋아요 3/3 기능 PASS는 해당 단기종료 오류의 PASS가 아니며, 개인 스냅샷 반복 D1 읽기 문제도 별도로 남음.

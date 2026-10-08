@@ -13,6 +13,14 @@
 - `cloudflare/explore-worker/canonical/preview-entry.js`는 기존 W1 배치 접수 및 약 5초 R2 정착·변경곡 처리 흐름을 관리한다. 원본 D1 외 불필요한 D1 write/read를 추가하지 않는다.
 - RTDB 현재 운영 사용량 최초 READ-ONLY PASS: private `andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md`; 10만 명 스트레스 계산은 아직 가정이고 실제 청구액이 아니다.
 
+## 추가 코드 현장 확인: 알림을 연결하면 안 되는 위치 (2026-10-08)
+
+- `cloudflare/explore-worker/canonical/preview-entry.js` 1106~1133행의 `ExploreLikeBatchScheduler103.runAggregate194()`는 기존 canonical scheduled batch를 실행한 다음 `repairSharedPublicLikeCounts191()`를 호출한다.
+- **해당 repair는 변화된 모든 곡 목록이 아니다.** `repairSharedPublicLikeCounts191()`는 최신/인기 Feed의 각각 최대 40곡(합집합 최대 80곡)을 읽어 기존 R2 카드와 canonical 좋아요 집계를 고치는 bounded recovery 경로다. 이를 공개 신호의 유일한 이벤트 출처로 사용하면 첫 40곡 밖의 변경이 누락될 수 있다.
+- `preview-entry.js` 2105~2107행의 `publicSignalAcceptedAt`는 현재 W1 POST의 ACK 시간 메타데이터일 뿐, **개별 곡의 정착 완료·최종 공개 count를 증명하지 않는다**. 시간이 기록됐다고 신뢰할 수 있는 서버 발행 증명으로 쓰면 안 된다.
+- 단계 A에서 반드시 확인할 것: canonical queue/aggregation에서 **모든 실제 변경 trackId + ownerUid + 확정 event/op ID + 서버 기준 acceptedAt**를 기존 비용 계약 안에서 직접 얻을 수 있는가? GitHub의 `canonical/preview-worker.js` 원본이 빈 상태로 반환되어 이를 확인하지 못했으므로 Worker 실제 생성/patch pipeline과 069 writer 경로를 확인하기 전 구현 금지.
+- 추가 D1 전체/곡별 스캔, 모든 사용자 좋아요 재조회, bounded Feed repair를 이벤트 검출기로 대체, 브라우저의 임의 Track ID를 신뢰하는 우회 중 하나라도 필요하면 설계 **FAIL**로 되돌려 대안 검토.
+
 ## 디렉터 승인 목표 — 정상 기능 전부 보존
 
 1. 기존 공개 좋아요·해제, 공개 likeCount, 내 꽉찬 하트, 같은 계정 PC↔모바일, 서로 다른 계정의 공개 숫자 갱신, 30초 마지막 클릭 묶음, W1 queue, 5초 R2 정착 경로 보호. Studio 저장 하트·Music Note·Library·팔로우는 이 작업에서 변경 금지.

@@ -1,3 +1,11 @@
+## CURRENT — app385 PREVIEW confirmed; cost-first freeze & user live checks (2026-10-09 KST)
+
+- **Active PREVIEW app385**, exact Firebase Hosting [Run 37857584293](https://github.com/andrawing1212/soridraw-music/actions/runs/37857584293) SUCCESS, source `c742a467e0c80a63cfc27ceb47b6990d0db5134f`, trigger `8cc2eba8bfaa5dc55b1442d0ad566af4abe46c02`; strict quality [Run 37857370230](https://github.com/andrawing1212/soridraw-music/actions/runs/37857370230) SUCCESS. TEST/PRODUCTION unchanged.
+- **Frozen decision:** preserve Music Note/Library app301 immediate RTDB preview and 60-second canonical final state; simple backgrounding/hidden event does not rush write. Preexisting pending-only pagehide and retry remain. Recent edits stay 150s/one aggregate; extra pending-only pagehide attempts remain. Studio heart/derived user.favoriteCount existing +30s protected; do NOT implement speculative early flush. app383 Explore public like 5s hidden/pagehide remains unmodified.
+- Next (read-only/low-risk verification): real PC↔mobile immediate rename/order without navigation; 3 quick renames within 60s collapse to one final document write; minimize/return does not increase Firestore W before 60s; true close/restore retains last durable draft; 0 changed item = R0/W0; monitor admin diagnostic numbers without D1 global scans. If fail, isolate exact owner and correct only that path, preserve frozen designs. No TEST/PRODUCTION action absent explicit user request.
+
+---
+
 ## CURRENT — app385 cost-first batching restoration; QA and PREVIEW release gate (2026-10-09 KST)
 
 - User-approved correction: keep app301 Music Note and Library immediate RTDB cross-device synchronization + trailing 60s final-state canonical batch. Remove *only* app384-added background visibilitychange(hidden) early Firestore flush for Music Note folders, Library rename/order/revision, Music Note detail/card, and Recent title/prompt/lyrics. Keep preexisting Music Note/Library pagehide pending-only handlers. Keep new Recent/Detail actual pagehide pending-only attempt and durable recovery/single-flight. Preserve original Recent 150s timer and Music Note details behavior; preserve app383 Explore like 5s hidden/pagehide separately.

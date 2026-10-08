@@ -1,0 +1,49 @@
+name: SORIDRAW 408 Targeted Like Repair Quality
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'scripts/verify-407-exact-191-replay-recovery.mjs'
+      - '.github/workflows/verify-408-like-repair-code.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-408-preview-safe-repair
+  cancel-in-progress: false
+jobs:
+  product-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout pinned code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install app
+        run: npm ci --no-audit --no-fund
+      - name: Check exact entry syntax
+        run: node --check cloudflare/explore-worker/canonical/preview-entry.js
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Frozen like regression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-178-final-like-architecture.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-390-like-acceptance-receipt.mjs
+      - name: Confirm no product deployment
+        run: echo '408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

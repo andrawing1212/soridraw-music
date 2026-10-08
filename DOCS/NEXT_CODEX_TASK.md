@@ -1,3 +1,11 @@
+## CURRENT GATE — Stage412 USER LIVE 3/3 PASS, cost/parity audit next (2026-10-09 KST)
+
+- 사용자 실기기 보고: PC→모바일 좋아요, 모바일→PC 해제, 공개프로필 숫자 유지 **3/3 PASS**, 추가 오류 없음. Stage412 기존 Worker PREVIEW 실배포 성공 [37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377), app382 유지. 동일 기능 추가 변경 금지.
+- 다음 검증만 실행: D1 like/unlike 1행동 physical rows_written **W1~W2**(W3+ 즉시 FAIL), Stage412 추가 R2 GET 비용 및 화면 진입 때 반복 비용 여부, 타 계정 공개숫자·팔로우/해제·구 캐시 호환 최소 검증, `diagnose-069-live-like.yml` 기존 비정상 push의 범위/영향. 실계측 없는 비용 수치는 상상하지 말 것. 개인 좋아요/팔로우/캐시 정상 동작 코드를 오히려 변경하지 말 것.
+- 전역 백필/마이그레이션/사용자 데이터 변환 금지, 데이터 복제 없음. 이 문서 업데이트만으로 TEST 승격 승인되지 않음. 모든 핵심 PASS 후 TEST 배포 승인을 요청하고, PRODUCTION은 그 후 명확한 승인 별도.
+
+---
+
 ## CURRENT GATE — Stage412 PREVIEW Worker 배포 SUCCESS / 사용자 실사용 검증 (2026-10-09 KST)
 
 - 최신 PREVIEW Worker 버전 `dc8b4311-b4d0-45c5-8854-52680c39e19d`, 제품 lock SHA `4989c5aaf70c141b8ef73c1376a780cc58e6dbc0`. [배포 37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377) SUCCESS. Stage412 8/8 + 191 17/17, TypeScript/Build/좋아요/팔로우, 실제 R2-only API smoke PASS.

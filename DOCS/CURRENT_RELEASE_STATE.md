@@ -1,3 +1,13 @@
+## 0S19. Stage412 사용자 실사용 3/3 PASS — 기능 수정 중단 / 비용·환경 최종검증 (2026-10-09 KST)
+
+- 사용자 본인 실사용 확인 (2026-10-09 06:04 KST): **TEST 1 PC→모바일 좋아요 정상, TEST 2 모바일→PC 좋아요 해제 정상, TEST 3 공개프로필 좋아요 숫자 유지 정상**, 추가 관찰 오류 없음. 사용자가 지정한 3개 항목에 대한 PREVIEW app382 + Worker `dc8b4311-b4d0-45c5-8854-52680c39e19d`의 **실기기 기능 검증 PASS**. 서버 진단 CI 및 실제 배포 검증 [37841611377](https://github.com/andrawing1212/soridraw-music/actions/runs/37841611377) PASS 기록과 구분한다.
+- 검증된 정상 코드 **동결**: 060/062 공유 R2 저장 보호, 191 좋아요 공개 집계, 069/075 묶음 처리, 기존 개인 membership/팔로우, app382 UI·뮤직노트·라이브러리. 오류 제보나 명확한 새로운 실패 근거 없이 추가 구조 수정 금지. 필요 없는 사용자 재시험 금지.
+- **미검증 유지**: 실제 한 행동 단위 physical D1 W1~W2 / R2 GET 비용, 별도 계정(타 사용자) 공개 하트/수치, 실제 팔로우·해제 양방향 및 기존 사용자 캐시 업그레이드, 과거 Feed 정상·카드만 구형 orphan, `diagnose-069-live-like.yml` 자동 push FAIL. 사용자가 3개 기능 테스트를 PASS한 사실만으로 비용/타 계정/오래된 캐시까지 PASS로 간주하지 않음.
+- **다음 작업**: 제품 코드 변경 없이 (1) 기존 서버 진단/요청별 비용 계측으로 좋아요·해제의 physical D1 W1~W2와 Stage412 새 R2 GET 증가율 확인, 불가능한 값은 미검증으로 명시, (2) 타 계정 공개숫자/팔로우 및 기존 캐시 호환 최소 검증, (3) 069 자동 진단 실패가 릴리스 품질에 미치는 영향 분리 판단. 해당 게이트 충족 후에만 전체 PREVIEW 완성본의 TEST 승격을 사용자에게 제안. **TEST/PRODUCTION 배포 승인 아님**.
+- 이 기록은 문서만 변경; Worker/Hosting/Functions/Rules/공유 원본 D1·R2·Firestore 및 main/TEST/PRODUCTION 변경·배포 0.
+
+---
+
 ## 0S18. Stage412 PREVIEW Worker 실배포 성공 — app382 유지 / 2026-10-09 KST
 
 - **배포 대상 제품 SHA:** `4989c5aaf70c141b8ef73c1376a780cc58e6dbc0` (Stage412 060/062 guarded R2 writer + Stage410 191), SHA256 source lock `7e62d5537c1330bbcb77ad29e431328579bdd91e3c1f05f5f7f43011b99625fc`. 트리거 commit `f082914d7b74d843d6e122cce3ea85bbfab79479`.

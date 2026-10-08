@@ -1,3 +1,12 @@
+## CURRENT — app385 cost-first batching restoration; QA and PREVIEW release gate (2026-10-09 KST)
+
+- User-approved correction: keep app301 Music Note and Library immediate RTDB cross-device synchronization + trailing 60s final-state canonical batch. Remove *only* app384-added background visibilitychange(hidden) early Firestore flush for Music Note folders, Library rename/order/revision, Music Note detail/card, and Recent title/prompt/lyrics. Keep preexisting Music Note/Library pagehide pending-only handlers. Keep new Recent/Detail actual pagehide pending-only attempt and durable recovery/single-flight. Preserve original Recent 150s timer and Music Note details behavior; preserve app383 Explore like 5s hidden/pagehide separately.
+- Candidate version app385 source SHA `c742a467e0c80a63cfc27ceb47b6990d0db5134f`. Changed only App.tsx, FavoritesPage.tsx, SunoLibraryPage.tsx, Stage414 regression verifier, app-version.json. Verify code scopes and no unexpected write from minimizing or hidden tab. TypeScript, Build, Stage414 static guard, 127/175/178/191/192/197/390, follow and folder 60s invariants. Existing QA `SORIDRAW 408 Targeted Like Repair Quality` should PASS for exact app385. Workflow shouldn't deploy by itself.
+- On PASS, official PREVIEW Hosting only release through existing `.deploy/preview-app-release.trigger`, exact build check, main/test/prod unchanged. Do not change shared data, Functions, Rules, Worker, D1, or production. Real PC↔mobile and cost measurements remain user/independent verification (never claim static tests prove mobile forced close).
+- Studio save-heart/favoriteCount 30s background flush **halted until a concrete product need plus idempotent safety proof**; no speculative cost-increasing follow-on edits. App384 background flush decision superseded. Keep old baseline.
+
+---
+
 ## CURRENT — Stage414 app384 PREVIEW deployed; NEXT gated studio-heart/count phase 2 (2026-10-09 KST)
 
 - 1차 app384 PREVIEW Firebase Hosting Run 37854817598 **SUCCESS**; exact build + TEST/PRODUCTION unchanged. CI 37854707932 SUCCESS TypeScript/Build/Stage414 lifecycle + 127/175/178/191/192/197/390. Active Worker Stage412 same. Product code `1104f151565110723f78fdcc8e21b7854d90a0b3`, app-version source `386c5a263c06ca8b932965d947e54a9aa30123ea`, release trigger `7a487204de2d10680fea92cca5c1e445ec76d00a`.

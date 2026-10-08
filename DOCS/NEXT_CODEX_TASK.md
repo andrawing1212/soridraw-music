@@ -1,3 +1,11 @@
+## CURRENT — Stage413 app383 PREVIEW deployed; FIRST test immediate mobile close (2026-10-09 KST)
+
+- PREVIEW Hosting Run 37848460721 SUCCESS, app383, client source `80221fa5ccfff38edfe5364a19343047cd49d470`, user-visible Worker Stage412 unchanged. Stage413 strict QA 37848247242 PASS.
+- 핵심 실사용 검증: 같은 계정 PC 화면 그대로, 모바일 공개곡 좋아요 후 0~1초 종료(앱 강제종료와 browser/tab close 구분), PC 변경 수신 여부; 모바일 다시 실행 전 대기 + 다시 실행 후 5초 내 복구; 빠른 like/unlike 최종 상태. 실패하면 고쳐야 할 구체 오류이고, Stage413 개선 PASS 금지.
+- 다음 순서는 비용이 아니라 **유실되지 않는 빠른 전달의 실제 검증**. 합격하면 D1 W1~W2 실측과 타 화면 불필요 스냅샷 행읽기 분리. 모바일 background keepalive/token 처리의 한계를 무조건 성공/불가능으로 단정 금지. 기존 좋아요·팔로우·UI 보호, main/PRODUCTION 변경·사용자 데이터 파괴 금지. 추가 Worker 배포 근거 없음.
+
+---
+
 ## Stage413 app383 QA fixture alignment (2026-10-09 KST)
 
 - Initial Stage413 `c14c66ffa12567c24b74e4b27386a4f38d5691f0` passes Typescript/Build and new close-event local test but standalone APP197 test fixture lacks installed exit handler. Inject only no-op into APP197 isolated harness; do not change runtime behavior. App383 version update. Historical app380 Follow-only exact-byte CI naturally fails on newer Worker and like source; retain for app380 checks, do not bypass actual current strict like tests. Run 408 QA again; only if PASS start PREVIEW Hosting exact version release. No Cloudflare Worker/Functions/Rules/DB deployment.

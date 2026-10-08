@@ -1,3 +1,17 @@
+## 0S22. Stage413 PREVIEW app383 공식 Firebase Hosting 배포 성공 — 사용자 즉시 종료 실사용 검증 대기 (2026-10-09 KST)
+
+- **유저 최우선 핵심 오류:** 모바일에서 Explore 좋아요 후 앱/창을 바로 닫으면 다른 디바이스가 반영되지 않음. 모바일 재실행 후 대기해야 반영됨. Stage412 좋아요 3/3 기능 PASS는 해당 단기종료 오류의 PASS가 아니며, 개인 스냅샷 반복 D1 읽기 문제도 별도로 남음.
+- Stage413 앱 실제 변경 기준 commit `80221fa5ccfff38edfe5364a19343047cd49d470`; 배포 트리거 HEAD `99f28a660ff2ee42c41e77f16779c13902a1fcbf`.
+- **좋아요 client 30초 trailing→5초**. 실제 pending outbox가 있을 때만 `visibilitychange(hidden)` / `pagehide`로 `flushPendingLikes` 시도, 해당 POST에 `keepalive`. 실제 클릭 데이터가 없으면 background/navigation에서 write 0. 종료 중 전송 실패는 기존 operationId를 보존하고 retryCount를 0으로 유지하여 앱 재실행 시 5초 복구 가능하게 보호. Worker/Server/W1 mutation path/RTDB 변경 신호, 기존 UI·개인 캐시·좋아요·팔로우·뮤직노트·라이브러리 변경 없음. 앱 버전 `public/app-version.json` 382→383.
+- 실제 함수 경로 `scripts/verify-413-like-exit-flush.mjs`에서 5초 타이머, only-pending hidden/pagehide, POST keepalive, retry-eligible exit guard 검증 PASS. 기존 APP197 격리 fixture `installExitFlush413` no-op 수정(실제 종료 핸들러 별도 검사), 기존 127/175/178/191/192/197/390 통합 QA [Run 37848247242](https://github.com/andrawing1212/soridraw-music/actions/runs/37848247242) **SUCCESS** TypeScript·Build PASS.
+- Firebase PREVIEW Hosting 공식 [Run 37848460721](https://github.com/andrawing1212/soridraw-music/actions/runs/37848460721) **SUCCESS**. `PREVIEW_APP_VERSION=383`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Cloudflare Worker는 기존 Stage412 `dc8b4311-b4d0-45c5-8854-52680c39e19d` 그대로. D1/Functions/User data schema·백필 0. 정상 공유 사용자 데이터 원본은 복제·삭제하지 않음.
+- **릴리스 미완료:** 모바일 실제 강제 종료 0~1초, 모바일 홈/백그라운드 전환, PC 다른 화면 유지 반영, like→unlike 5초 내 마지막 상태, PC↔모바일 데이터/비용 실사용 미검증. 브라우저/OS가 hidden 이벤트 전 async token/fetch를 죽이면 즉시 전달 실패 가능. 앱 재실행 복구는 동작 목표이지만 실제 검증 전 PASS 아님. 이 케이스 실패 시 단순 timer 5초로 충분하지 않으므로 **서버에 변경 의도를 더 일찍 접수하는 별도 대안**을 비용과 함께 조사. 로컬 결함을 프레임워크 한계라고 미리 단정하지 않음.
+- **비용 순서 변경(사용자 명시):** 정상 동기화·즉시 종료 동작 우선, 그 다음 Stage413 실제 D1 W1~W2/스냅샷 read 및 R2 비용 계측. 5초 전송으로 반복토글 접수 수가 늘 가능성이 있으므로 비용 PASS 선언 금지. 정상 기능을 비용 줄이려고 삭제·비활성화 금지.
+- 기존 app380 Follow-only exact-byte workflow는 새 Stage412 Worker 및 app383 클라이언트를 app379/382와 byte-equal 비교하므로 FAIL, **Stage413 제품 품질 검사 아님**. push `diagnose-069-live-like.yml` 자동 FAIL 기존 별도 진단 이슈 유지. 실제 408 strict QA 및 공식 Hosting release는 성공.
+- **TEST/PRODUCTION 승격 금지.** 사용자 즉시 종료 테스트가 핵심 blocker. 문제 재현·개선 입증 전 Stage413 DONE 선언 금지.
+
+---
+
 ## 0S21. Stage413 app383 검증 단계: QA fixture 정합성 수정, legacy Follow-only 별도 (2026-10-09 KST)
 
 - 최초 후보 SHA `c14c66ffa12567c24b74e4b27386a4f38d5691f0`. 빌드 TypeScript 성공, Stage413 5초/백그라운드 실행 격리 PASS. 기존 APP197 독립 fake context가 신규 `installExitFlush413`를 주입하지 않아 ReferenceError 발생: 제품 로직이 아닌 테스트 격리 하네스에 정확한 no-op 추가(실제 종료 핸들러 검증은 413 테스트에서 별도 실행).

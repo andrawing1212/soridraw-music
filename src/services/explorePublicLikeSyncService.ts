@@ -12,6 +12,78 @@ const PUBLIC_LIKE_SIGNAL_MAX_192 = 50;
 const PUBLIC_LIKE_SIGNAL_RETENTION_MS_192 = 3 * 60_000;
 const PUBLIC_LIKE_CARD_ROUTE_192 = '/v1/public-like-cards';
 
+ 
+// A received RTDB value remains visible for three minutes. Re-subscribing
+// after reload must not fetch the same already-confirmed R2 card again.
+// Keep only settled changed-track acknowledgements, scoped to the signed-in
+// viewer, so a new account/device can still reconcile its own cached feed.
+const PUBLIC_LIKE_SETTLED_ACK_KEY_396 = 'soridraw_public_like_settled_ack_396';
+const PUBLIC_LIKE_SETTLED_ACK_TTL_MS_396 = PUBLIC_LIKE_SIGNAL_RETENTION_MS_192 + 60_000;
+type SettledPublicLikeAck396 = { at: number; checkedAt: number };
+type SettledPublicLikeLedger396 = {
+  viewerUid: string;
+  rows: Record<string, SettledPublicLikeAck396>;
+};
+
+const readSettledPublicLikeLedger396 = (
+  viewerUid: string,
+  now: number,
+): SettledPublicLikeLedger396 => {
+  const empty: SettledPublicLikeLedger396 = { viewerUid, rows: {} };
+  if (!viewerUid || typeof window === 'undefined') return empty;
+  try {
+    const raw = window.localStorage.getItem(PUBLIC_LIKE_SETTLED_ACK_KEY_396);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as SettledPublicLikeLedger396;
+    if (!parsed || parsed.viewerUid !== viewerUid || !parsed.rows || typeof parsed.rows !== 'object') return empty;
+    for (const [trackId, row] of Object.entries(parsed.rows)) {
+      const checkedAt = Number(row?.checkedAt);
+      const at = Number(row?.at);
+      if (!Number.isSafeInteger(checkedAt) || checkedAt > now + 60_000 ||
+          now - checkedAt > PUBLIC_LIKE_SETTLED_ACK_TTL_MS_396 ||
+          !Number.isSafeInteger(at) || at <= 0) continue;
+      empty.rows[trackId] = { at, checkedAt };
+    }
+  } catch { /* browser storage can be disabled */ }
+  return empty;
+};
+
+export const hasSettledExplorePublicLikeSignal396 = (
+  viewerUid: string,
+  trackId: string,
+  acceptedAt: number,
+  now = Date.now(),
+): boolean => {
+  const uid = normalizeId192(viewerUid, 128);
+  const id = normalizeId192(trackId);
+  if (!uid || !id || !Number.isSafeInteger(acceptedAt) || acceptedAt <= 0) return false;
+  return (readSettledPublicLikeLedger396(uid, now).rows[id]?.at || 0) >= acceptedAt;
+};
+
+export const rememberSettledExplorePublicLikeSignal396 = (
+  viewerUid: string,
+  trackId: string,
+  acceptedAt: number,
+  now = Date.now(),
+): void => {
+  const uid = normalizeId192(viewerUid, 128);
+  const id = normalizeId192(trackId);
+  if (!uid || !id || !Number.isSafeInteger(acceptedAt) || acceptedAt <= 0 ||
+      typeof window === 'undefined') return;
+  const ledger = readSettledPublicLikeLedger396(uid, now);
+  ledger.rows[id] = {
+    at: Math.max(acceptedAt, ledger.rows[id]?.at || 0),
+    checkedAt: now,
+  };
+  const entries = Object.entries(ledger.rows)
+    .sort((a, b) => b[1].checkedAt - a[1].checkedAt)
+    .slice(0, PUBLIC_LIKE_SIGNAL_MAX_192 * 2);
+  try {
+    window.localStorage.setItem(PUBLIC_LIKE_SETTLED_ACK_KEY_396,
+      JSON.stringify({ viewerUid: uid, rows: Object.fromEntries(entries) }));
+  } catch { /* never block public-count updates for diagnostics/cache storage */ }
+};
+
 export type ExplorePublicLikeSignalRow192 = {
   trackId: string;
   ownerUid: string;

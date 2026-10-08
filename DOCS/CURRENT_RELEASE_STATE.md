@@ -1,3 +1,15 @@
+## 0RZK. 사용자 방향 재확정 — app379 보호·app380 범위 축소 / 배포 없음 (2026-10-08 KST)
+
+- 사용자 직접 지시: 본래 목적은 팔로우 30초 최종 상태 묶음 + 공격성 반복 요청 시간 규칙으로 서버 폭증 방지. 이미 정상 작동하고 저비용인 좋아요를 다시 설계하는 것이 아니다. 기존 팔로우 비용/숫자/동기화도 보호.
+- 현재 **제품 배포 PREVIEW app379** 유지. 소스 기준 preview HEAD `3e768eb2150d1fc5f51637ff9ff096ba6a5f3619`에는 복잡한 app380/381 미배포 후보가 함께 남아 있으므로 전체 배포 금지.
+- **범위 제외/동결:** 신규 좋아요 receipt390 및 098, 65 global queue SQL/503, shared receipt D1 migration/activation, 새 좋아요 W2 접수 경로의 릴리스 적용. 기록된 후보 코드를 제거하거나 shared 데이터를 변경할 필요는 없다.
+- **최소 작업 후보:** 30초 follow final-state, net-zero W0, 기존 즉시 UI, 서버 반복 요청의 시간/횟수 제한. 기존 팔로우 patch 097과 app379 이전 `365e41f`의 후보를 비교하여 **좋아요에 영향 없는 독립 팔로우 패치**만 선택. 현재 Worker canonical/manifest에 097+098이 함께 있어 단순 patch flag 변경이나 전체 앱380 배포는 위험하다.
+- 비용 근거: 사용자 CACHE LIVE 이번 실행 스크린샷 좋아요/해제 쿼리 R0/W1, 팔로우/해제 쓰기 W1 사례. 과거 레거시 팔로우 physical R18~19/W14~17 기록과 구분하며, 새 릴리스의 실측 통과로 오인하지 않는다.
+- 구현 전 최신 app379 실제 배포 아티팩트/현재 Worker/기존 방어를 확인. 기존 정상 좋아요 및 app377 팔로우 숫자·목록·PC/mobile, Music Note/Library/UX 보호. 새 DB 구조·full scan·대규모 재설계 중단.
+- 다음 Codex High 범위와 합격선은 `DOCS/NEXT_CODEX_TASK.md` 최상단 ‘범위 정상화’ 참조. **이 문서 갱신은 작업 지시 정리만 완료한 것이며 제품 코드 변경, CI 실행, actual Worker/Hosting 배포, shared D1 적용·사용자 원본 데이터 변경은 없음.** 
+- 다음 단계: Codex가 최소 팔로우-only 후보 구현·focused 테스트·commit 고정 → Work 독립 감사 → ChatGPT 최종 확인 → 사용자에게 PREVIEW 배포 승인 요청. 안전 분리가 안 되면 PASS 주장 금지하고 사전 보고.
+
+---
 ## 0RZJ. app380 핵심 혼재 검증 PASS / 구 좋아요 회귀검사 기대값 및 단일실패 감사 루프 수정 (2026-10-08 KST)
 
 - GitHub Run `37711245036` audit: 실제 임시 D1 W2/W0, TypeScript, Build, 릴리스 정적 안전성 및 app380 387/388 --release/389/390/391 **PASS**.

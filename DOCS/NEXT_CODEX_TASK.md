@@ -1,3 +1,11 @@
+## CURRENT — Stage414 app384 PREVIEW deployed; NEXT gated studio-heart/count phase 2 (2026-10-09 KST)
+
+- 1차 app384 PREVIEW Firebase Hosting Run 37854817598 **SUCCESS**; exact build + TEST/PRODUCTION unchanged. CI 37854707932 SUCCESS TypeScript/Build/Stage414 lifecycle + 127/175/178/191/192/197/390. Active Worker Stage412 same. Product code `1104f151565110723f78fdcc8e21b7854d90a0b3`, app-version source `386c5a263c06ca8b932965d947e54a9aa30123ea`, release trigger `7a487204de2d10680fea92cca5c1e445ec76d00a`.
+- 사용자 PREVIEW 실기기 확인 필요: 최근 생성곡 편집 후 150초 전 앱 숨김/종료, Music Note Detail/카드 초안 및 폴더, Library rename/order, 재실행 전/후 PC↔모바일 결과, 변경 없음 R0/W0, 잦은 숨김에서 write 증가, 오프라인 복구. CI는 OS 강제종료 성공을 입증하지 못함.
+- 2차는 **Studio 저장하트 / derived favoriteCount**. 현재 코어 정상 기능은 동결. 브라우저 종료 중 응답 유실→로컬 outbox replay가 favoriteCount increment 중복/누락을 야기할 수 있으니, idempotency/서버 성공 확인/순서 보장 안전안을 Codex High에서 먼저 검증. 설계 불충분이면 제품 코드 수정/배포 금지; 사용자에게 위험 설명. 정상 app349 하트·Music Note membership 즉시, net-zero W0 및 변경곡 W1, 30초 trailing 일반 동작 유지. No shared data destructive changes, main/TEST/PRODUCTION promotion, or Worker deployment.
+
+---
+
 ## CURRENT — Stage414 phase 2: Studio heart/favoriteCount on hidden is NOT yet safe (2026-10-09 KST)
 
 - Stage414 phase 1 product snapshot `1104f151565110723f78fdcc8e21b7854d90a0b3`: Recent + Music Note (details/cards/folders) + Library (rename/order/revision) pending-only lifecycle flush. QA run 37854403060 PASS, final delta 37854493646 pending. PREVIEW Hosting **미배포**, 활성 app383. All protected like/follow/Worker paths untouched.

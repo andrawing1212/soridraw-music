@@ -90,6 +90,8 @@ remount.queueExploreFollowFinalState380({ ...request('remount'), restoredUpdated
 await remount.advance(10_000); assert.equal(calls.at(-1), true);
 assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
 
+const followOnly389 = process.argv.includes('--follow-only');
+if (!followOnly389) {
 // Execute the existing like flush with isolated dependencies. No production state-machine rewrite.
 const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const ast = ts.createSourceFile('like.ts', like, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -124,6 +126,8 @@ await likeContext.flush({ uid: 'viewer' }); assert.equal(posts, 2);
 assert.equal(outbox.t.retryCount, 1);
 await likeContext.flush({ uid: 'viewer' }); assert.equal(posts, 2, '429 is not automatically replayed');
 
+}
+
 // The ordered protocol must discard only a known rejected operation. Otherwise
 // a cooldown retry for the newest intent would send the old opposite intent first.
 const protocolContext = vm.createContext({ exports: {}, crypto: { randomUUID: () => 'operation_' + now++ } });
@@ -142,5 +146,5 @@ await assert.rejects(() => protocolContext.exports.requestOrderedExploreFollow35
 await protocolContext.exports.requestOrderedExploreFollow354('v', 't', false, protocolRequest);
 assert.deepEqual(methods, ['PUT', 'DELETE']);
 console.log('APP380_FOLLOW_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
-console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
+if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
 console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');

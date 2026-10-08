@@ -117,22 +117,7 @@ async function readSharedTrackCard062(env, trackId) {
   }
 }
 
-async function writeSharedTrackCard062(env, item) {
-  const card = normalizeSharedTrackCard062(item);
-  const bucket = env?.PROFILE_MEDIA || null;
-  if (!card?.id || !bucket) return false;
-  const now = Date.now();
-  await bucket.put(exploreSharedTrackCardKey062(card.id), JSON.stringify({
-    schemaVersion: EXPLORE_SHARED_TRACK_CARD_SCHEMA_062,
-    trackId: card.id,
-    updatedAt: now,
-    card,
-  }), {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: { soridrawSharedTrackCard: '115', updatedAt: String(now) },
-  });
-  return true;
-}
+async function writeSharedTrackCard062(env, item, options412 = {}) {\n  const card = normalizeSharedTrackCard062(item);\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!card?.id || !bucket) return false;\n  const key412 = exploreSharedTrackCardKey062(card.id);\n  for (let attempt412 = 0; attempt412 < 8; attempt412++) {\n    const oldObject412 = await bucket.get(key412);\n    let next412 = card;\n    if (oldObject412 && !options412.authoritativeLikeCount) {\n      const prior412 = JSON.parse(await oldObject412.text());\n      const existing412 = prior412?.card;\n      if (String(existing412?.id || existing412?.trackId || '') === card.id) {\n        const count412 = Number(existing412?.likeCount ?? existing412?.stats?.likeCount);\n        if (Number.isSafeInteger(count412) && count412 >= 0) {\n          next412 = { ...card, likeCount: count412,\n            ...(card.stats && typeof card.stats === 'object'\n              ? { stats: { ...card.stats, likeCount: count412 } } : {}) };\n        }\n      }\n    }\n    const now412 = Date.now();\n    const saved412 = await bucket.put(key412, JSON.stringify({\n      schemaVersion: EXPLORE_SHARED_TRACK_CARD_SCHEMA_062,\n      trackId: card.id, updatedAt: now412, card: next412,\n    }), {\n      onlyIf: oldObject412 ? { etagMatches: oldObject412.etag } : { etagDoesNotMatch: '*' },\n      httpMetadata: { contentType: 'application/json; charset=utf-8' },\n      customMetadata: { ...(oldObject412?.customMetadata || {}),\n        soridrawSharedTrackCard: '115', updatedAt: String(now412) },\n    });\n    if (saved412) return true;\n  }\n  throw new Error('[412] shared track card CAS contention');\n}
 
 async function deleteSharedTrackCard062(env, trackId) {
   const normalizedId = String(trackId || '').trim();
@@ -154,7 +139,7 @@ async function patchSharedTrackCard062(env, trackId, patch) {
     next.likeCount = likeCount;
     if (next.stats && typeof next.stats === 'object') next.stats = { ...next.stats, likeCount };
   }
-  return await writeSharedTrackCard062(env, next);
+  return await writeSharedTrackCard062(env, next, { authoritativeLikeCount: Object.prototype.hasOwnProperty.call(nextPatch, 'likeCount') });
 }
 
 async function readSharedFeedCards062(env, trackIds) {

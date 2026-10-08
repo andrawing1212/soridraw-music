@@ -1,3 +1,10 @@
+## CURRENT GATE — Stage412 공유 R2 writer CAS 보완 / CI 및 독립 감사 전 (2026-10-09 KST)
+
+- 두 작성자 060/062가 구형 R2 projection을 되돌리지 않도록 bounded ETag compare/조건부 저장. 기존 069/075 W1·30초 좋아요/해제, 팔로우 overlay, Music Note/Library, 신규곡 첫 좋아요 모두 보호.
+- 필수: 실제 제품 generated worker + patch generator 일관성, TypeScript, Build, 기존 좋아요/팔로우 + 191 17/17, 새 writer 동시 CAS/하락 likeCount/프로필 revision 검증, 라이브 R2 GET 추가 비용 검사. legacy synthetic 411은 안전성 PASS 근거가 아님. 전체 검증 전 배포·TEST/PRODUCTION 금지.
+
+---
+
 ## CURRENT GATE — Stage411 공유 R2 구형 작성자와 191 충돌 재현 / 안전한 PREVIEW 배포 전 (2026-10-09 KST)
 
 - 제품 수정 기준 `40c20516fc58ea35fe7e58b30e4843254380e2aa`, 문서 기준 `cfc6d52446fc869f71e18d7ce4b7af2f08b20d55`. 소스 재검토에서 `060` 공유 프로필 및 `062` 공유 카드 작성자 모두 unconditional R2 PUT. 구형 profile writer가 191 후 Feed 저장 사이에 들어오면 **Feed=1/card=1/profile=0**이고 다음 191 재실행에서도 미검출; 기존 복구 누락의 특정 교차 경로. 새 `verify-411-existing-r2-writers-restore-race.mjs` 독립 소스 기반 시뮬레이션과 격리 CI 증거로 재확인. 실제 운영 발현/빈도는 미검증.

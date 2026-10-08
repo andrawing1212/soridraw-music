@@ -1,3 +1,11 @@
+## 0S16. Stage412 기존 공유 R2 작성자 CAS 보완 — PREVIEW 검사 전 (2026-10-09 KST)
+
+- Stage411 재현 원인 060 공유 프로필과 062 공유 곡 카드의 무조건 R2 PUT을 bounded ETag CAS(8회 제한)로 변경. 191에서 복구된 곡의 likeCount를 오래된 mirror가 덮지 못하게 보호. 공개곡 실제 likeCount patch만 명시적 authoritative 경로로 허용, 공유 프로필 최신 revision이 구형 mirror보다 높거나 같으면 이전 좋아요 숫자를 보존.
+- 수정: 기존 제품 `canonical/preview-worker.js` + 작성 원본 `patches/060`, `patches/062`, 역사적 재현 verifier의 새 CAS 존재 확인. 기존 follow355 overlay348 우회·좋아요 W1/30초·D1/Firestore·UI 그대로. 신규 R2 GET은 기존 R2 write에만 발생; 실제 빈도·비용은 미검증.
+- TypeScript/Build/새 412 writer 실행 회귀, 동시성, 실제 R2 비용/PC 모바일 모두 **검증 전**. GitHub 코드만 변경, 실제 PREVIEW/TEST/PRODUCTION·공유 사용자 데이터 변경 없음. 검증 전 Worker 배포 금지.
+
+---
+
 ## 0S15. Stage411 사용자 정상보호: 오래된 R2 작성자 덮어쓰기 원인 확정 후보 / 제품 수정·배포 STOP (2026-10-09 KST)
 
 - Stage410 Worker 191 복구 함수 원본과 기존 생산자 `patches/060-shared-profile-r2-parity.mjs`, `patches/062-shared-track-card-r2.mjs`를 연결해 검토. 두 기존 공유 R2 작성자의 `bucket.put`은 CAS `onlyIf`가 없어서 **191이 정확한 공개 카드/프로필을 복구한 직후 구형 복제본이 다시 덮어쓸 수 있음**. 191은 Feed가 이미 최신일 경우 해당 orphan을 다음 알람에서도 선택하지 못함. Stage410 전용 신규 결함이 아닌 기존 저장 경로 교차 경쟁. 

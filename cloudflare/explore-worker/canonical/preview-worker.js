@@ -25820,21 +25820,39 @@ async function readSharedTrackCard062(env, trackId) {
   }
 }
 
-async function writeSharedTrackCard062(env, item) {
+async function writeSharedTrackCard062(env, item, options412 = {}) {
   const card = normalizeSharedTrackCard062(item);
   const bucket = env?.PROFILE_MEDIA || null;
   if (!card?.id || !bucket) return false;
-  const now = Date.now();
-  await bucket.put(exploreSharedTrackCardKey062(card.id), JSON.stringify({
-    schemaVersion: EXPLORE_SHARED_TRACK_CARD_SCHEMA_062,
-    trackId: card.id,
-    updatedAt: now,
-    card,
-  }), {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: { soridrawSharedTrackCard: '115', updatedAt: String(now) },
-  });
-  return true;
+  const key412 = exploreSharedTrackCardKey062(card.id);
+  for (let attempt412 = 0; attempt412 < 8; attempt412++) {
+    const oldObject412 = await bucket.get(key412);
+    let next412 = card;
+    if (oldObject412 && !options412.authoritativeLikeCount) {
+      const prior412 = JSON.parse(await oldObject412.text());
+      const existing412 = prior412?.card;
+      if (String(existing412?.id || existing412?.trackId || '') === card.id) {
+        const count412 = Number(existing412?.likeCount ?? existing412?.stats?.likeCount);
+        if (Number.isSafeInteger(count412) && count412 >= 0) {
+          next412 = { ...card, likeCount: count412,
+            ...(card.stats && typeof card.stats === 'object'
+              ? { stats: { ...card.stats, likeCount: count412 } } : {}) };
+        }
+      }
+    }
+    const now412 = Date.now();
+    const saved412 = await bucket.put(key412, JSON.stringify({
+      schemaVersion: EXPLORE_SHARED_TRACK_CARD_SCHEMA_062,
+      trackId: card.id, updatedAt: now412, card: next412,
+    }), {
+      onlyIf: oldObject412 ? { etagMatches: oldObject412.etag } : { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { ...(oldObject412?.customMetadata || {}),
+        soridrawSharedTrackCard: '115', updatedAt: String(now412) },
+    });
+    if (saved412) return true;
+  }
+  throw new Error('[412] shared track card CAS contention');
 }
 
 async function deleteSharedTrackCard062(env, trackId) {
@@ -25857,7 +25875,7 @@ async function patchSharedTrackCard062(env, trackId, patch) {
     next.likeCount = likeCount;
     if (next.stats && typeof next.stats === 'object') next.stats = { ...next.stats, likeCount };
   }
-  return await writeSharedTrackCard062(env, next);
+  return await writeSharedTrackCard062(env, next, { authoritativeLikeCount: Object.prototype.hasOwnProperty.call(nextPatch, 'likeCount') });
 }
 
 async function readSharedFeedCards062(env, trackIds) {
@@ -29703,10 +29721,47 @@ async function writeExploreSharedProfile060(env, bundle) {
   if (cutover355.mode === 'overlay348') bundle = await mergeSharedProfile355(env, bundle, cutover355);
   const handle = String(bundle.handle || bundle.body?.data?.profile?.handle || '').trim().replace(/^@+/, '');
   const now = Date.now();
-  if (cutover355.mode !== 'overlay348') await bucket.put(exploreSharedProfileR2Key060(uid), JSON.stringify(bundle), {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: { soridrawSharedProfile: '113', mirroredAt: String(now) },
-  });
+  if (cutover355.mode !== 'overlay348') {
+  // Stage412: preserve repaired counts when an older profile mirror arrives.
+  const key412 = exploreSharedProfileR2Key060(uid);
+  let done412 = false;
+  for (let attempt412 = 0; attempt412 < 8; attempt412++) {
+    const oldObject412 = await bucket.get(key412);
+    let candidate412 = bundle;
+    if (oldObject412) {
+      const stored412 = JSON.parse(await oldObject412.text());
+      const oldRevision412 = Number(stored412?.revision ?? stored412?.body?.data?.revision ?? 0);
+      const newRevision412 = Number(bundle?.revision ?? bundle?.body?.data?.revision ?? 0);
+      if (validExploreProfileR2Bundle020(stored412) &&
+          Number.isFinite(oldRevision412) && oldRevision412 >= newRevision412 &&
+          Array.isArray(stored412?.body?.data?.items) &&
+          Array.isArray(bundle?.body?.data?.items)) {
+        const counts412 = new Map(stored412.body.data.items.map(item => [
+          String(item?.id || item?.trackId || '').trim(),
+          Number(item?.likeCount ?? item?.stats?.likeCount),
+        ]));
+        const items412 = bundle.body.data.items.map(item => {
+          const count412 = counts412.get(String(item?.id || item?.trackId || '').trim());
+          if (!Number.isSafeInteger(count412) || count412 < 0) return item;
+          return { ...item, likeCount: count412,
+            ...(item?.stats && typeof item.stats === 'object'
+              ? { stats: { ...item.stats, likeCount: count412 } } : {}) };
+        });
+        candidate412 = { ...bundle, revision: oldRevision412,
+          body: { ...bundle.body, data: { ...bundle.body.data,
+            revision: oldRevision412, items: items412 } } };
+      }
+    }
+    const saved412 = await bucket.put(key412, JSON.stringify(candidate412), {
+      onlyIf: oldObject412 ? { etagMatches: oldObject412.etag } : { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { ...(oldObject412?.customMetadata || {}),
+        soridrawSharedProfile: '113', mirroredAt: String(Date.now()) },
+    });
+    if (saved412) { done412 = true; break; }
+  }
+  if (!done412) throw new Error('[412] shared profile CAS contention');
+  }
   if (handle) {
     await bucket.put(exploreSharedProfileAliasR2Key060(handle), JSON.stringify({ schemaVersion: 1, uid, handle, updatedAt: now }), {
       httpMetadata: { contentType: 'application/json; charset=utf-8' },

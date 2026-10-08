@@ -1,3 +1,14 @@
+## CURRENT GATE — Stage403 글로벌 패턴에 기반한 최소 복구형 알림 / Stage404 물리비용 확인 (2026-10-09 KST)
+
+- 실무 근거 `DOCS/RTDB_GLOBAL_PATTERN_DECISION_403_2026-10-09.md`. AWS 공식 outbox/CDC, Cloudflare DO 영속/alarm, Firebase 좁은 구독 공식 가이드와 실제 069/075 소스 대조.
+- **1순위 P0:** 069/075 실제 membership 변경만 정확히 같은 D1 batch 안에 남기는 *typed outbox*의 최소 안전 SQL을 **isolated Miniflare**에서 비교. 임의 schema 변경·LIVE outbox INSERT 금지. 기존 399/400 RETURNING만 R+3~+7/+3~+5 W+0까지 확인; 새 영속 기록 W 측정 전 W1~W2 합격 주장 금지.
+- 비용 측정 시 실제 index/trigger/069+075 동일 곡 충돌/queue flush/rollback 포함하고 사용자 행동 단위 전·후 `rows_written` 및 DO/RTDB 총비용을 구분. W3+면 FAIL STOP하고 사용자에게 가능한 대안(일반 track invalidation, 선별적 재검증 등) 설명.
+- DB commit→R2 정착→server-only publisher→도착 ACK 후 체크포인트 영속화 순서를 보호. post-send crash replay는 eventId+revision 멱등성으로 대응하고, journal-only like 발행/037 예측값/191 첫 40곡으로 증명 대체 금지.
+- 구형 RTDB 글로벌 수신·클라이언트 쓰기는 서비스 보호상 바로 막지 않고 비용/보안 병행 설계 및 실기기 확인 후 Rules 마지막 적용. 앱382 좋아요·팔로우/Studio 저장·Music Note/30초 W1/PC↔모바일/레거시 사용자 데이터 하위 호환 동결.
+- Stage403은 `scripts/verify-403-global-notification-model.mjs` 순수 시뮬레이션과 CI/문서만 추가, 제품 파일·데이터·Worker·Functions·Rules·Hosting/TEST/PRODUCTION 변경/배포 없음. TypeScript/Build/실비용/실기기 미검증.
+
+---
+
 ## CURRENT GATE — Stage402 journal-only FAIL, Stage403 dual-queue confirmed + retry P0 (2026-10-09 KST)
 
 - **기준** `DOCS/RTDB_JOURNAL_ONLY_TRUST_GAP_402_2026-10-09.md`. 격리 [Run 37824899801](https://github.com/andrawing1212/soridraw-music/actions/runs/37824899801) 성공. Stage402 10/10 안전성 반례/실패 모형 PASS, 제품 서버 발행 **아직 FAIL/BLOCKED**.

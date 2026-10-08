@@ -1,3 +1,13 @@
+## 0S06. Stage403 글로벌 운영 원칙 조사 → SORIDRAW 안전한 알림 아키텍처 결정 (2026-10-09 KST)
+
+- [AWS Transactional Outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html), [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/api/alarms/), [Firebase RTDB 수신 범위 최적화](https://firebase.google.com/docs/database/usage/optimize) 공식 자료 대조. 비용은 RTDB 다운로드/연결, D1 인덱스·트리거 포함 row writes, DO/Functions까지 측정. 상세 `DOCS/RTDB_GLOBAL_PATTERN_DECISION_403_2026-10-09.md`.
+- **결정:** 제품 W1 069/075 큐/30초 묶음 유지. 실제 canonical 정산과 같은 D1 트랜잭션 안의 *typed durable outbox* 후보를 독립 평가 → R2 정착 → server-only authenticated scoped signal → at-least-once/버전 멱등성. `journal-only` like 발행은 Stage402 결론대로 중단.
+- 새 `scripts/verify-403-global-notification-model.mjs` + 기존 격리 CI 연결. 데이터 영속성/메시지 중복/정산/R2/crash/cost/fanout 10개 순수 시뮬레이션으로 테스트. **이 코드는 제품으로 연결되지 않으며 LIVE 물리 비용·D1 transaction/RTDB 배포 검증과 다름**. Run은 이번 푸시에서 기록할 것.
+- 다음 **Stage404**: 실제 069/075 full D1 SQL+현재 trigger/index 구조에서 typed outbox 추가 W1~W2 가능 여부를 Miniflare로 검증. W3+면 배포 금지·대안 보고. DO storage billing·Firebase 연결/대역폭과 구형 앱 이중 발송/Rules 최후 전환 필수.
+- 기존 PREVIEW app382/Worker/Functions/Rules/공유 사용자 D1/Firestore/R2·데이터/Hosting/main/TEST/PRODUCTION 변경·배포 0. 격리 CI 외 TypeScript/Build/실기기/운영 청구 미검증. GitHub의 기존 진단 069 push 실패 문제는 별도.
+
+---
+
 ## 0S05. Stage402 기존 저널-only 좋아요 서버 알림 신뢰성 차단 / 격리 증명 PASS (2026-10-09 KST)
 
 - 사용자 계속 진행 지시로 `scripts/verify-402-like-notification-trust-recovery.mjs` 추가, 기존 398 격리 Workflow 연결. [Run 37824899801](https://github.com/andrawing1212/soridraw-music/actions/runs/37824899801) **SUCCESS**: 398 4/4, 399 8/8, 400 5/5, 401 6/6, 신규 402 위험 검출 10/10 PASS.

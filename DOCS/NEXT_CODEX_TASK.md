@@ -1,3 +1,12 @@
+## CURRENT — Stage414 phase 2: Studio heart/favoriteCount on hidden is NOT yet safe (2026-10-09 KST)
+
+- Stage414 phase 1 product snapshot `1104f151565110723f78fdcc8e21b7854d90a0b3`: Recent + Music Note (details/cards/folders) + Library (rename/order/revision) pending-only lifecycle flush. QA run 37854403060 PASS, final delta 37854493646 pending. PREVIEW Hosting **미배포**, 활성 app383. All protected like/follow/Worker paths untouched.
+- Phase 2 P0: `src/App.tsx` Studio save-heart +30s per song and `src/services/musicNoteFavoriteCountBatch.ts` users.favoriteCount +30s derived increment. **Stop before simply calling flush from hidden**. Existing Studio canonical `flushStudioHeartPendingIntent` can lose Firestore acknowledgement during app close while outbox remains. An on-restart replay against stale `canonicalBaseline` can repeat W1 or +/-1 user count. Derived `increment` also has ambiguous-ack double-count risk. Must first prove an idempotent canonical save/unsave and derived count settlement without compromising immediate RTDB preview, net-zero W0, no-disappearing Music Note membership and app349 thumbnail baseline. Keep old correct code if proof fails.
+- Design/evaluate durable intent ID + server-recognizable receipt/transactional replay or exact bounded canonical reconciliation; show reads/writes in normal case, background, ambiguous ack, offline recovery. No global read, fanout, full scan, new infrastructure by default. Initial update normal pending-free = Firestore R0/W0.
+- Develop/verify one owner at a time, typecheck/build/related 290/301/349/413/live like/follow regressions, Work independent audit, only then PREVIEW deploy. Do not change main/TEST/PRODUCTION or any shared data schema/migration without permission.
+
+---
+
 ## CURRENT — Stage414: Pending-only lifecycle flush of delayed server saves (2026-10-09 KST)
 
 사용자 최우선 신규 지시: app383에서 모바일 좋아요 후 즉시 종료 동작을 직접 확인함. 좋아요 외 현재 묶음 지연 저장도 앱 종료/창 내림(백그라운드) 시 기다리지 말고 현재 pending 최종 상태만 조기 서버 저장 시도. 기존 정상 좋아요 app383/Stage412 Worker는 동결. 이 문서는 Codex 구현 명령이며, 작성만으로 구현/배포 완료가 아님.

@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/verify-398-miniflare-d1-returning.mjs'
       - 'scripts/verify-399-full-aggregate-d1-cost.mjs'
+      - '.github/workflows/verify-398-isolated-d1.yml'
   workflow_dispatch:
 permissions:
   contents: read

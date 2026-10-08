@@ -1,3 +1,13 @@
+## 0S00. 단계 A 실제 코드 2개 + SQL 프로토타입 — 격리 12/12 PASS (2026-10-08 KST)
+
+- 사용자 "니가 작업해봐" 요청의 실제 `preview` 코드 결과: `scripts/verify-rtdb-public-like-returning-prototype.mjs` + `cloudflare/explore-worker/runtime/like-confirmed-event-397.mjs` + `scripts/verify-rtdb-public-like-aggregate-extract-397.mjs`. 첫 코드 commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`, 추가 모듈·검증 commit `216fdb1202f4d533761c10abf929850cacb2a738`. 기밀 값/실사용 데이터 접근 없음. 기능 플래그 OFF 이전 단계: 신규 코드 **아직 어디에도 호출/배포하지 않음**.
+- Node.js22 격리 SQLite 기존 INSERT OR IGNORE/DELETE에 `RETURNING track_id` 후보 검증 4/4 PASS. 기존 patch040 D1 `env.DB.batch` 결과에서 정확한 changes 행을 추출하고 missing/초과를 fail-closed하는 모듈 8/8 PASS. 12/12는 **격리 코드 후보 PASS**이지 D1/RTDB 10만 사용자/앱 기능 PASS 아님.
+- **실제 비용 게이트 미통과:** Cloudflare D1 `meta.rows_read` / `meta.rows_written`, 현재 실제 CTE/queued W1 aggregate, Functions 인증/재전송, legacy-V2 공존을 검증하지 않음. 기존 Worker는 변경곡 ID를 결과에 노출하지 않으므로 신뢰 server publisher 아직 완성 안 됨. 공유 Rules의 공통 신호 클라이언트 쓰기 위험과 전역 다운로드 비용은 지금도 존재함.
+- 2026-10-08 현재: app382 PREVIEW 실앱, 공유 RTDB Rules, Firebase Functions, Worker, D1/Firestore/R2 사용자 원본, TEST/main, PRODUCTION 모두 변경/배포 없음. TypeScript/Build/앱/Worker 실제 통합/PC·모바일 실사용은 미검증.
+- 다음 작업: 안전한 격리 D1 `RETURNING` 메타 R/W 실측→신뢰 서버 발행 인증·중복방지의 최소 구현 및 테스트→관련 곡 수신 범위 V2 실측→구버전 동기화 보호 후 Rules 마지막에 변경. `DOCS/RTDB_PUBLIC_LIKE_SAFE_CUTOVER_DESIGN_2026-10-08.md`와 `DOCS/NEXT_CODEX_TASK.md` 참고.
+
+---
+
 ## 0RZZ. 공개 좋아요 서버 발행 단계 A — 실제 SQL ID 검출 프로토타입 PASS / LIVE 연결 전 (2026-10-08 KST)
 
 - 사용자 "니가 작업해봐" 지시에 따라 설계 후속으로 최초 실제 코드 프로토타입 개발: `scripts/verify-rtdb-public-like-returning-prototype.mjs`. GitHub commit `8caedb742ed0a5812fde0b44d8544a78d80b772f`, Node.js 22 인메모리 SQLite 순수 SQL `RETURNING track_id` 테스트 4/4 PASS (중복 삽입·삭제, 미존재 해제, 목록 밖 다른 곡, 변경 없는 묶음).

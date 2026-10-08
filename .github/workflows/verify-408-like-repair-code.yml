@@ -10,6 +10,8 @@ on:
       - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'src/services/exploreLikeService.ts'
       - 'scripts/verify-413-like-exit-flush.mjs'
+      - 'scripts/verify-197-new-public-track-like.mjs'
+      - 'public/app-version.json'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'

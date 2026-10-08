@@ -49,7 +49,7 @@ const keys={
   card:'internal/explore/shared-track-card-v115/song.json',
   profile:'internal/explore/shared-profile-v113/owner.json'
 };
-function makeBucket({feed=0,card=0,profile=0,failOnce=null}={}){
+function makeBucket({feed=0,card=0,profile=0,failOnce=null,casOnce=null,casAlways=null}={}){
   const records=new Map();
   let rev=0;
   const stats=(count)=>({likeCount:count});
@@ -64,6 +64,7 @@ function makeBucket({feed=0,card=0,profile=0,failOnce=null}={}){
   ])records.set(key,{etag:'etag_'+(++rev),body:val,customMetadata:{}});
   const writes=[],reads=[];
   let failed=false;
+  let raced=false;
   return {
     writes,reads,records,
     bucket:{
@@ -82,6 +83,17 @@ function makeBucket({feed=0,card=0,profile=0,failOnce=null}={}){
           failed=true;
           throw new Error('injected R2 put failure: '+key);
         }
+        if(casOnce===key&&!raced){
+          raced=true;
+          const prev=records.get(key);
+          const next=JSON.parse(JSON.stringify(prev.body));
+          // Simulate another writer updating an unrelated profile field
+          // between shared.get and CAS. Exact 191 must re-read and preserve.
+          next.creatorLabel='concurrent-creator-update';
+          records.set(key,{...prev,etag:'etag_'+(++rev),body:next});
+          return false;
+        }
+        if(casAlways===key)return false;
         const current=records.get(key);
         if(onlyIf?.etagMatches && current?.etag!==onlyIf.etagMatches)return false;
         if(onlyIf?.etagDoesNotMatch==='*'&&current)return false;
@@ -122,6 +134,7 @@ try {
   verify('HEALTHY_NO_WRITE',()=>a.changedTracks===0&&healthy.writes.length===0
     &&JSON.stringify(healthy.counts())===JSON.stringify(zero));
   verify('HEALTHY_STILL_D1_READ',()=>dbMeter.R>0&&dbMeter.W===0);
+  verify('HEALTHY_ONLY_TWO_FEED_R2_GETS',()=>healthy.reads.length===2&&dbMeter.queries===1);
   const normal=makeBucket({feed:0,card:0,profile:0});
   const b=await repair(env(normal));
   verify('FULL_REPAIR_SUCESSS',()=>b.changedTracks===1&&normal.writes.length===4
@@ -154,6 +167,25 @@ try {
   verify('FEED_RETRY_NO_EXTRA_DERIVED_WRITES',()=>after.feed===1&&after.popular===1&&after.card===1&&after.profile===1
     &&priorDerived===failFeed.writes.filter(x=>x===keys.card||x===keys.profile).length);
 
+  // Two concurrent projection writers: first profile CAS loses to a
+  // concurrent unrelated edit. The existing 8-attempt loop must re-read the
+  // fresh ETag, retain the other writer's metadata and finish Feed LAST.
+  const concurrent=makeBucket({feed:0,card:0,profile:0,casOnce:keys.profile});
+  const race=await repair(env(concurrent));
+  verify('PROFILE_CAS_CONFLICT_RETRIES_AND_CONVERGES',()=>race.changedTracks===1
+    &&JSON.stringify(concurrent.counts())===JSON.stringify(zero));
+  verify('PROFILE_CAS_PRESERVES_OTHER_WRITER',()=>
+    concurrent.records.get(keys.profile).body.creatorLabel==='concurrent-creator-update');
+  verify('PROFILE_CAS_DOES_NOT_REPEAT_CARD_PUT',()=>
+    concurrent.writes.filter(x=>x===keys.card).length===1);
+
+  // Exhausted CAS attempts leave the Feed old instead of falsely completing
+  // a repair. A later alarm can replay after contention subsides.
+  const blocked=makeBucket({feed:0,card:0,profile:0,casAlways:keys.profile});
+  await assert.rejects(repair(env(blocked)),/derived CAS contention: profile/);
+  verify('EXHAUSTED_CAS_KEEPS_FEED_RETRYABLE',()=>blocked.counts().feed===0
+    &&blocked.counts().popular===0&&blocked.counts().profile===0);
+
   // Pre-existing stale card+profile while both Feeds are already current
   // remains out of scope: finding it requires debt history or per-card reads.
   const cardOnly=makeBucket({feed:1,card:0,profile:0});
@@ -165,6 +197,7 @@ try {
   // repair those cards. It is a gap in this exact 191 isolated recovery path.
   console.log('407_EXACT_FUNCTION_ISOLATED_CASES=PASS '+cases.length+'/'+cases.length);
   console.log('408_FEED_LAST_RECOVERY_FIX=VERIFIED_IN_ISOLATION');
+  console.log('409_191_CAS_RETRY_COST_BOUND=PASS');
   console.log('408_DEPLOY_GATE=BLOCKED (legacy card-only debt, live parity and multi-account/PC/mobile verification remain)');
 }catch(error){failed=String(error?.stack||error);console.error('407_EXACT_191_VERIFIER_FAIL',failed)}
 finally{

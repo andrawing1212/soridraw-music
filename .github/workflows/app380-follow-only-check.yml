@@ -15,6 +15,8 @@ on:
       - 'cloudflare/explore-worker/release-patches.json'
       - 'cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs'
       - 'cloudflare/explore-worker/candidates/social-abuse-380.js'
+      - 'scripts/verify-354-follow-orchestration.mjs'
+      - 'scripts/verify-394-follow-only-worker-freeze.mjs'
 
 permissions:
   contents: read
@@ -52,6 +54,8 @@ jobs:
           grep -q '097-follow-abuse-guard.mjs' cloudflare/explore-worker/release-patches.json
           ! grep -Eq 'acceptanceProtocol390|acceptedOperations390|receipt390' src/services/exploreLikeService.ts
           node --check cloudflare/explore-worker/canonical/preview-worker.js
+          grep -q '"SORIDRAW_ENVIRONMENT": "preview"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+          node scripts/verify-394-follow-only-worker-freeze.mjs
       - name: Existing follow regressions
         run: |
           set -euo pipefail

@@ -1,3 +1,13 @@
+## 0S03. Stage400 069/075 확정 이벤트 격리 검사 PASS / 서버 게시 BLOCKED (2026-10-09 KST)
+
+- 사용자 계속 진행 지시에 따라 preview에 격리 검사 `scripts/verify-400-069-075-confirmed-event-gate.mjs` 추가 + 기존 `.github/workflows/verify-398-isolated-d1.yml`에 자동 연결. GitHub isolated CI Run [37822533579](https://github.com/andrawing1212/soridraw-music/actions/runs/37822533579) **SUCCESS**: 이전 398 4/4, 399 8/8, 신규 400 075 5/5 + 069/075 source guard + 모의 겹침 실험 PASS.
+- 075 배경 aggregate Miniflare 모델에서 membership INSERT/DELETE `RETURNING track_id` 제안은 canonical 결과 동일, 쓰기 증가 0, 읽기 증가 첫 좋아요/중복/해제/중복 해제 +3, 2계정 동일곡 +5. 원래 399 069/039/040 모델은 R+3~+7 / W+0. **이 값은 LIVE D1 청구 및 사용자 화면 069 접수 W1과 별개**.
+- **핵심 차단:** 실제 069 queue 040 배치는 변경곡 ID를 반환하지 않음. 075 `changedRows`는 D1 batch 전 별도 예측이어서 두 예측 후 한 성공만 발생하는 모의 overlap에서 두 번째 값이 stale. server-confirmed publisher가 069+075 모두를 신뢰할 수 있도록 현재 구조만으로 연결하는 것은 FAIL. 191 first-page repair도 이벤트 출처로 금지.
+- 검증보고 `DOCS/RTDB_069_075_ISOLATED_GATE_400_2026-10-09.md`. 제품 런타임 import/배포 없음. 기존 PREVIEW app382, Worker, Firebase Functions/Rules, 공유 D1/R2/Firestore/계정 데이터, main/TEST, PRODUCTION 변경 없음. TypeScript/Build/실기기/운영 요금/Worker live parity 미검증.
+- 다음: 두 큐 모두 실제 committed rows만 잡는 **single minimal** notification-only 설계 + 비용 상한/중복·정착 실패 인증 보호가 성공하기 전 LIVE 게시/RTDB Rules 변경/서비스 배포 금지. 기존 app382 좋아요·팔로우 정상 기능 보호.
+
+---
+
 ## 0S02. 실제 Worker 069/075 분기 확인 + 격리 정산 D1 8/8 PASS (2026-10-08 KST)
 
 - GitHub preview 생성 Worker 전체 소스 직접 확인: `handleLikeBatch034` W1 **069 큐** 접수; 039/040 legacy aggregate는 변경곡 ID 반환 없음; 별도 075 aggregate만 `changedRows` SELECT로 곡 ID/owner/count를 R2에 전달. **075 단독 서버 알림은 069 좋아요 누락** 위험. DO 191은 첫 40곡씩 복구일 뿐 전체 곡 이벤트가 아님.

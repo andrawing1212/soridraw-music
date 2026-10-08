@@ -15,7 +15,7 @@ for (const file of [
     'unapproved app381 UI leaked into app380 follow-only release: ' + file);
 }
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-assert.equal(version.version, 380, 'follow-only app must build as app380, not app381');
+assert.equal(version.version, 382, 'app382 client-only hotfix version must be exact');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 assert.match(page, /queueExploreFollowFinalState380\(/);
 assert.match(page, /readPendingExploreFollowIntents380\(/);
@@ -40,6 +40,6 @@ assert.match(hostRelease, /--only hosting/);
 const workerRelease = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
 assert.match(workerRelease, /\.deploy\/preview-worker-release\.trigger/);
 console.log('APP380_UI_MATCHES_DEPLOYED_APP379_EXACT=PASS');
-console.log('APP380_FOLLOW_ONLY_VERSION=380_PASS');
+console.log('APP382_FOLLOW_ONLY_VERSION=382_PASS');
 console.log('APP380_FOLLOW_WORKER_NO_RECEIPT390=PASS');
 console.log('APP380_PREVIEW_RELEASE_GATES_READONLY=PASS');

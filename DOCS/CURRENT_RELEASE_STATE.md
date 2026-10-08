@@ -1,3 +1,15 @@
+## 0RZP. app380 후속 PREVIEW 미배포 후보 — 공개 좋아요 알림 재생 Worker 중복 차단 + CACHE LIVE 한글 표기 (2026-10-08 KST)
+
+- **사용자 실사용 발견:** app380 PREVIEW 좋아요 자체 정상. 앱 새로고침 시 `/v1/public-like-cards` Worker 요청이 증가. 사용자 캡처 기준 공개 좋아요 카드 요청의 D1 실제 행 R0/W0, Worker 1; 공개 추천곡·관리 권한 등 다른 URL이 진단 패널 제목으로 노출되는 것도 사용자 명시 수정 요청.
+- **확인 원인:** `publicSync/exploreLike` RTDB changed-track signal 3분 retention 중, 화면 마운트/새로고침마다 `subscribeExplorePublicLikeInvalidation192`의 seen map 초기화로 이미 R2 settle 확인·캐시 반영한 옛 신호까지 다시 `fetchExplorePublicLikeCards192` 호출. 공유 D1 read/write는 없지만 Worker 반복 요청이 발생함.
+- **최소 수정:** `src/services/explorePublicLikeSyncService.ts`에 브라우저별/계정별 **확정 카드 반영 신호 watermark**를 4분 TTL·최대 100곡으로 제한해 저장. `src/pages/ExplorePage.tsx`에서 settled R2 응답(`card.updatedAt >= row.at`)을 각 로컬 캐시에 적용한 후에만 기억하며, 재진입 시 이미 확인된 동일 track/at은 Worker 재요청을 건너뛴다. 새로운/미확정 track signal 및 다른 계정은 기존처럼 요청하고 5초 bounded retry 유지. 기존 좋아요 queue/membership/W1 Worker/RTDB Rules 변경 없음.
+- **진단 표시:** `src/components/CacheDiagnosticsOverlay.tsx`에서 `/v1/public-like-cards`→`공개곡 좋아요 숫자 확인`, `/v1/curated`→`SORIDRAW 추천곡`, `/v1/me/explore-management-access`→`추천곡 관리 권한 확인`, 개별 revision 등 한글 표시. 아직 미등록된 `/v1/` 경로는 내부 원본 카운터 key는 보존하면서 제목 `기타 서버 요청`으로만 표시. 배치 카운터·서버 코드는 손대지 않음.
+- **Focused 테스트:** 신규 `scripts/verify-396-public-like-reload-and-diagnostics.mjs`는 실제 TS 유틸을 가짜 storage에서 실행해 reload 동일 signal 재조회 방지, 다른 계정·새 signal 통과, TTL 만료, 실제 클라이언트 확인 후 watermark 저장 순서, 한글 label 출력 확인. 기존 `.github/workflows/app380-follow-only-check.yml`의 TypeScript/Build/Worker frozen/팔로우 회귀와 함께 **Run `37721479290` SUCCESS**, 확인된 코드 HEAD `0c1d176475fbca148332200fcf0987aeedfc5f49`.
+- **현재 실제 배포:** 아직 **app380 기존 Worker/Hosting 유지**. 수정사항은 preview GitHub 소스에만 있고 Firebase/Cloudflare, 공유 D1/RTDB 사용자 데이터, main(TEST), production 변경/배포 **없음**. 반복 Worker 0 달성은 코드/격리 재생 검사는 PASS지만 실제 PC/모바일 브라우저 새로고침 검증 **전**.
+- **주의:** 브라우저 기기 저장소가 차단/손상되거나 신호가 처음 보이는 진입에서는 changed-track 확인 1회가 정당하게 발생할 수 있다. 이 수정은 확인 완료한 신호의 중복 Worker 호출만 억제하며 새 실제 변경 감지를 늦추지 않는다.
+- **다음:** 사용자 PREVIEW 배포 승인 후 기존 app380 정상 기능을 보존한 Hosting-only 후보의 앱 버전/업데이트 검증을 고정하고 실제 배포 → 동일 RTDB 신호 3분 내 여러 번 새로고침 시 공개 좋아요 카드 Worker 추가 요청 0, 새 좋아요 발생 시 갱신 1회 및 D1 물리 R0/W0, 팔로우 행쓰기 W1/30초 net-zero, PC↔모바일 실기기 확인. Worker/R2/D1 배포 불필요. TEST/PRODUCTION 승격 금지.
+
+---
 ## 0RZO. app380 PREVIEW 사용자 실기기 팔로우·해제 비용/동기화 관찰 PASS (2026-10-08 KST)
 
 - 실배포 source `b767b9cd3dbaba067e1d9df77fb703d1fe7cfae2` (app380), PREVIEW Worker `c4c51b19-818a-4eaf-8be1-aca0b241d50a`. 사용자 2026-10-08T02:55:14Z에 실제 앱 PC→모바일 팔로우/해제 결과 및 CACHE LIVE 캡처 2장 제출.

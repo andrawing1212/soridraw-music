@@ -1,3 +1,13 @@
+## 0S02. 실제 Worker 069/075 분기 확인 + 격리 정산 D1 8/8 PASS (2026-10-08 KST)
+
+- GitHub preview 생성 Worker 전체 소스 직접 확인: `handleLikeBatch034` W1 **069 큐** 접수; 039/040 legacy aggregate는 변경곡 ID 반환 없음; 별도 075 aggregate만 `changedRows` SELECT로 곡 ID/owner/count를 R2에 전달. **075 단독 서버 알림은 069 좋아요 누락** 위험. DO 191은 첫 40곡씩 복구일 뿐 전체 곡 이벤트가 아님.
+- `scripts/verify-399-full-aggregate-d1-cost.mjs` + 기존 `.github/workflows/verify-398-isolated-d1.yml` 연동, 격리 Miniflare CI run `37744086289` **PASS** (398 4/4 + 399 8/8). 039/040 전체 CTE 경로 모델에서 `RETURNING` 시 쓰기 증분 0, 읽기 +3~+7 측정. 예시 단일 첫 좋아요 R72/W5 → R75/W5(격리 배경 처리 모델). **실제 운영 청구액/현재 Worker와 혼동 금지**. 정확한 근거 `DOCS/RTDB_FULL_AGGREGATE_COST_399_2026-10-08.md`.
+- 사용자 CACHE LIVE R0/W1은 069 **접수 단계**이고, 격리 W5 정산은 다른 단계. 좋아요 W1 정상 기능은 보호. 10만 사용자 비용, 구버전 호환, Worker live deploy parity, 069+075 신뢰 서버 알림은 미검증.
+- 앱382/Worker/Functions/RTDB Rules/공유 D1/R2/Firestore/Hosting/TEST/PRODUCTION 변경·배포 0. TypeScript/Build/실사용 미검증. Stage 399는 CI/진단 추가뿐.
+- 다음 코드는 069+075 양쪽의 서버 확정 이벤트를 안전하게 확보하는 **single minimal solution**만 시도하고, 구버전 public likeCount 실시간 유지 + Worker/D1 비용 합격 전 실제 배포 금지.
+
+---
+
 ## 0S01. 격리 Cloudflare Miniflare D1 행읽기·행쓰기 실제 로컬 측정 PASS / 운영 전체 비용 미검증 (2026-10-08 KST)
 
 - 개발 단계 A-398 진행: `scripts/verify-398-miniflare-d1-returning.mjs`, 자동 격리 CI `.github/workflows/verify-398-isolated-d1.yml`. 테스트 외부 Credential/Cloudflare 계정/운영 D1 연결·데이터변경 없음. Run `37741253004` SUCCESS; 첫 Run `37741152524`은 runtime compatibilityDate가 workerd 지원 범위를 초과해 실패한 설정오류로 수정 후 통과.

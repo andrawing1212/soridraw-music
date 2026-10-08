@@ -1,3 +1,13 @@
+## CURRENT GATE — 069/075 서버 확정 변경곡 결합 P0 / 실사용 비용 검사 대기 (2026-10-08 KST)
+
+- `DOCS/RTDB_FULL_AGGREGATE_COST_399_2026-10-08.md` 필독. 격리 Miniflare 399 8/8 PASS run `37744086289`: patch039/040 배경 정산 후보 `RETURNING`은 쓰기 증분 0, 읽기 +3~+7. 접수 사용자 진단 R0/W1은 별도.
+- 실제 GitHub current generated Worker `handleLikeBatch034`는 069 queue 사용. 075 `changedRows` projection이 존재하지만 별도 경로이므로 **075만 연결하면 실제 069 좋아요가 빠진다.**
+- 구현 P0: **069+075 모두** 서버 aggregate 후 신뢰할 수 있는 변경곡 알림을 생성하는 방식부터 결정. 039/040 RETURNING 직접 연결은 R+3~+7 비용 게이트와 프로젝션 순서·타계정·구형 클라이언트 보호를 통과한 경우만 사용. 첫 페이지 191 repair / 접수 ACK를 신뢰 이벤트로 사용 금지.
+- 이후 feature-OFF Firebase Functions server-auth publisher + replay/idempotency, V2 제한구독/비용/구버전 legacy 호환 감사 → 마지막 단계 규칙 차단. 공유 데이터·Rules 임의 수정 불허, 사용자 실사용 확인 없는 배포 금지.
+- Stage 399 테스트 GitHub Actions는 SUCCESS. app382 앱 UI/TypeScript/Build/PC·모바일 실사용 시험은 변화 없음/미검증.
+
+---
+
 ## CURRENT GATE — Stage A-398 격리 D1 계측 PASS, 실제 전체 Worker W1~W2는 미검증 (2026-10-08 KST)
 
 - 첫 실제 Miniflare D1 테스트는 `.github/workflows/verify-398-isolated-d1.yml` 자동 Run **37741253004 SUCCESS**, GitHub 소스 commit `d20fb8407b35871fb70e18746af5c8d91b4b6435`. 데이터베이스 2개 모두 LOCAL/격리. `scripts/verify-398-miniflare-d1-returning.mjs` 4/4 PASS.

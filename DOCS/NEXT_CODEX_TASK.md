@@ -1,3 +1,12 @@
+## CURRENT GATE — 비공개 RTDB Monitoring 읽기 연결 사용자 설정 대기 (2026-10-08 KST)
+
+- 공개 GitHub repo에 Firebase 운영 수치를 노출하지 않도록 PRIVATE 운영 repo + Google WIF + Monitoring Viewer 설계.
+- 준비 파일: DOCS/PRIVATE_FIREBASE_METRICS_SETUP.md, DOCS/TEMPLATES/firebase-rtdb-metrics-readonly.yml, scripts/audit-firebase-rtdb-metrics-readonly.py. 테스트 후 commit SHA를 workflow placeholder에 채우고 비공개 repo에 설치.
+- 사용자는 private repo 생성·GitHub 연결/Google IAM 권한만 부여. 이 단계 배포 및 앱 코드/공유 데이터/보안 규칙 수정 없음. Live 24h/30d RTDB 계측 미완료.
+- 이후 순서는 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md의 1→2→3→4 그대로.
+
+---
+
 ## CURRENT GATE — RTDB 10만 회원 비용·남용 안전 감사, 순서 1 진행 중 (2026-10-08 KST)
 
 - **현재 최우선 작업:** 새 채팅에서도 DOCS/RTDB_SCALE_COST_SECURITY_AUDIT_2026-10-08.md를 먼저 읽는다. 순서 1 RTDB 사용량/실제 Rules/구독자 수 감사 → 순서 2 공개 좋아요 fanout 및 남용 차단 → 순서 3 30초 창 종료/타기기 미전송 복구 → 순서 4 통합 PC·모바일·비용 검증. 건너뛰지 않는다.

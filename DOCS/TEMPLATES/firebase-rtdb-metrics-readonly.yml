@@ -1,0 +1,43 @@
+# Copy to PRIVATE andrawing1212/soridraw-ops-private/.github/workflows/firebase-rtdb-metrics-readonly.yml
+name: SORIDRAW Firebase RTDB Metrics (Private Readonly)
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  readonly-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: andrawing1212/soridraw-music
+          ref: PINNED_SORIDRAW_DIAGNOSTIC_SHA
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline smoke test
+        run: python source/scripts/audit-firebase-rtdb-metrics-readonly.py --self-test
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.SORIDRAW_METRICS_WIF_PROVIDER }}
+          service_account: ${{ vars.SORIDRAW_METRICS_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/monitoring.read
+          create_credentials_file: false
+      - name: Read Cloud Monitoring metrics only
+        env:
+          SORIDRAW_MONITORING_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python source/scripts/audit-firebase-rtdb-metrics-readonly.py --out "$RUNNER_TEMP/rtdb-report"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: private-rtdb-readonly-report
+          path: ${{ runner.temp }}/rtdb-report/
+          retention-days: 7
+          if-no-files-found: error

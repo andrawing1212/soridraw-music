@@ -1,3 +1,13 @@
+## 0RZS. Firebase RTDB 사용량 Private GitHub 읽기전용 진단 준비 (2026-10-08 KST)
+
+- 사용자가 승인: SORIDRAW 프로젝트 채팅과 GitHub를 이용해 Firebase 실제 운영 지표를 확인하는 구조. 기존 소스 repo는 PUBLIC이므로 실측 운영 데이터는 신규 PRIVATE ops repo에만 기록.
+- 준비: scripts/audit-firebase-rtdb-metrics-readonly.py (Cloud Monitoring timeSeries.list GET, self-test, 24시간/30일 sent_bytes 등), DOCS/TEMPLATES/firebase-rtdb-metrics-readonly.yml (비공개 저장소 전용 수동 workflow 템플릿), DOCS/PRIVATE_FIREBASE_METRICS_SETUP.md (사용자 WIF/권한 설정).
+- 사용자가 필요한 1회 작업: GitHub 비공개 andrawing1212/soridraw-ops-private 생성, Google Cloud project soridraw-app-866a5의 별도 Monitoring Viewer service account + GitHub repository/branch 제한 WIF 연결, private repo에 pinned SHA 기반 수동 workflow 설치, ChatGPT GitHub connector private repo access 추가. 기존 배포용 Firebase 서비스 계정 키 재사용 금지.
+- 현재 실제 LIVE RTDB 사용량/Rules 비교는 **미검증**. 스크립트는 PRIVATE repo에서 인증될 때까지 실행하지 못함. 이 단계에 Firebase/Cloudflare/Rules/공유 데이터/Hosting/main/production 변경 0.
+- 계속 진행 순서: RTDB 실측 감사 → global like fanout·남용 차단 → 30초 조기 종료 좋아요/팔로우 복구 → 통합 성능·비용 실사용 검증.
+
+---
+
 ## 0RZR. RTDB 10만 회원 비용·남용 및 30초 종료 동기화 복구 — 영구 작업 순서 고정 (2026-10-08 KST)
 
 - **새 사용자 지시:** 채팅 변경 후에도 GitHub 현재 상태에서 동일 작업을 이어간다. 순서: (1) RTDB 비용/보안/남용 위험 감사 및 실제 비용 측정 → (2) 공개 좋아요 공통 신호 fanout/임의 쓰기 차단, 정상 기능 보호 → (3) 좋아요·팔로우 30초 전 창 종료/기기 간 미전송 복구 → (4) PC/모바일/업데이트/비용 통합 검증. 단계 건너뛰기 금지.

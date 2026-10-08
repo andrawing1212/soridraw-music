@@ -1,3 +1,18 @@
+## 0RZL. ChatGPT 직접 구현 — app379 좋아요 동결 / app380 팔로우 전용 최소 방어 후보 완성 (2026-10-08 KST)
+
+- 사용자 직접 지시: Codex는 사용자가 요청하거나 ChatGPT가 실제로 막힐 때만 사용. **기본 수정자는 ChatGPT**. 현재 승인 작업은 팔로우 30초 최종상태 묶음 + 반복 공격 방어만 구현·검사; 배포나 공유 D1 변경 금지.
+- 기준 preview 작업 시작 `de352a5cb506e2fa0e8dea23527a48f37431dd81`; **제품/검사 후보 검증 commit `2bf0eac515947f126b26da0739907bf739c81b59`**, GitHub read-only follow-only CI Run `37718020848` **SUCCESS**.
+- 배포 게이트 후속 단일 수정 `dfe531f676b6cbdf476634c1ab1e7a0f66f2b41b`: PREVIEW Worker release workflow가 like390 활성화 marker가 있을 때만 receipt390 D1 SELECT-only preflight를 실행하고, follow-only 후보에서는 environment/binding config 검증만 실행하도록 좁게 분기. **이는 PASS한 CI 이후 YAML 변경**이며 실제 PREVIEW Worker release workflow 실행/배포는 **미검증/미실행**. 배포 승인 아님.
+- 좋아요: `src/services/exploreLikeService.ts`를 진짜 app379 클라이언트 `aa1bac7636651fdf94598f0d5ef502955a60bc0f`와 blob 완전 일치로 복구. canonical Worker의 다른 모든 기존 함수·비함수 문장은 app380 이전 `365e41f06c8ff169a3b762dd527498f6813d335f`와 일치하며 바뀐 함수는 `enforceFollowEdgeRateLimit355`, `handleFollowOverlay354` 단 두 곳뿐 (실행형 verifier394 PASS).
+- canonical Worker/patch manifest는 follow `097`만 활성, like `098` 및 receipt390 intake/replay, 65 global queue read 없음. additive 390 스키마 후보 파일/실험 기록은 보존하되 **릴리스 대상 제외**. `SORIDRAW_ENVIRONMENT=preview` 명시해 R2 방어 누락 설정에서 정상 follow 503 되는 사고 차단.
+- 팔로우 client 30초 sliding final-state, 원점 복귀 W0, outbox/리로드/미승인 재시도 폭주 방지, 선반영 UI 보존. 기존 097의 Cloudflare native limiter + 계정별/대상별 R2 조건부 제한 재사용. D1/RATE_DB 조회·쓰기 경로 추가 0. 이미 동작하는 팔로우 authority 348/354, 목록·카운트·PC↔모바일 신호 수정 0.
+- focused CI PASS: TypeScript, Build, Worker SHA256 lock, JS syntax, no098/no390, app379 like exact freeze, Worker non-follow exact freeze, verify354/355/356/377/386, static 387 및 fake-clock follow 389 `--follow-only`. 전체 app380 like-specific 127/389/390/391/392/393은 **이 릴리스 대상 아님**; 구 테스트의 receipt390 필수 기대값을 실제 like 코드에 강요하지 않음.
+- 비용: 격리 follow 355 fixture D1 1행 mutation/W0 duplicate 확인, live Cloudflare physical rows_written / R2 get/put 새 후보 기준 **미측정**. 사용자 이전 PREVIEW CACHE LIVE R/W는 기준 관찰일 뿐 **새 코드 실측 아님**. PC↔모바일 실제 PREVIEW 작동도 **배포 전/미검증**.
+- 실제 PREVIEW 배포는 app379 유지. Firebase Hosting/Functions/Rules, Cloudflare Worker, shared D1/R2 사용자 데이터, main(TEST)/production 코드·배포 **이번 작업 변경 0**. 069 진단 workflow가 push별 별도 failure 생성 (기존 문제), 이번 focused CI PASS와 구분.
+- 현재 소스에는 과거 별도 app381 Recent UI hotfix가 여전히 포함돼 있으나 이번 팔로우 범위에서 손대지 않았음. 향후 Hosting 배포 전 포함 범위를 사용자에게 사전 보고.
+- **다음 게이트:** 현재 source 최종 SHA 고정 → PREVIEW Worker/Hosting 릴리스의 097-only 정적/환경/binding preflight 읽기 전용 확인 및 필요 시 독립 감사 → 사용자 승인 전 실제 preview 배포·공유 D1 적용 금지. 실사용 Preview에서 R/W·PC/mobile 확인 후에만 TEST 논의.
+
+---
 ## 0RZK. 사용자 방향 재확정 — app379 보호·app380 범위 축소 / 배포 없음 (2026-10-08 KST)
 
 - 사용자 직접 지시: 본래 목적은 팔로우 30초 최종 상태 묶음 + 공격성 반복 요청 시간 규칙으로 서버 폭증 방지. 이미 정상 작동하고 저비용인 좋아요를 다시 설계하는 것이 아니다. 기존 팔로우 비용/숫자/동기화도 보호.

@@ -208,6 +208,34 @@ try{
     console.log('404_075_'+name+'=PASS baseline='+JSON.stringify(b.cost)+' returning='+JSON.stringify(r.cost)+' outbox='+JSON.stringify(o.cost)+' extraW='+addedWrites+' wave='+JSON.stringify(w.cost)+' waveExtraW='+waveDelta);
   }
   console.log('404_075_DURABLE_OUTBOX_PHYSICAL_COST=PASS '+report.length+'/'+scenarios.length);
+  // Test chunking beyond the 50-track RTDB transport limit using the 075 CTE.
+  for(const d of [base,returning,outbox,batchdb]){
+    await setup(d,[],[]);
+    for(let i=0;i<67;i++){
+      const tid='bulk_'+String(i).padStart(3,'0');
+      const uid='u'+String(i).padStart(3,'0');
+      await d.prepare('INSERT INTO tracks VALUES(?,?,1,?)').bind(tid,'owner','published').run();
+      await d.prepare('INSERT INTO explore_like_user_queue_075 VALUES(?,?,1,?)')
+        .bind(uid,100+i,JSON.stringify({[tid]:{liked:true,mutationAt:100+i}})).run();
+    }
+  }
+  const first67=await wave(base,false),return67=await wave(returning,true),out67=await wave(outbox,true,true),wave67=await wave(batchdb,true,false,true);
+  const canonical67=await canonical(base);
+  assert.deepEqual(await canonical(returning),canonical67,'67 returning parity');
+  assert.deepEqual(await canonical(outbox),canonical67,'67 indexed parity');
+  assert.deepEqual(await canonical(batchdb),canonical67,'67 wave parity');
+  const items67=(await batchdb.prepare('SELECT seq,payload_json FROM like_notification_wave_405 ORDER BY seq').all()).results
+    .flatMap(x=>JSON.parse(x.payload_json));
+  assert.equal(items67.length,67,'67 track ids must all be preserved');
+  assert.equal(new Set(items67.map(x=>x.trackId)).size,67);
+  const n67=(await batchdb.prepare('SELECT COUNT(*) AS n FROM like_notification_wave_405').first()).n;
+  assert.equal(n67,2,'67 tracks must chunk as 50+17');
+  assert.equal(return67.cost.written,first67.cost.written);
+  const extraIndexed=out67.cost.written-return67.cost.written;
+  const extraWave=wave67.cost.written-return67.cost.written;
+  assert.ok(extraIndexed>=67 && extraWave>0&&extraWave<extraIndexed);
+  console.log('405_075_CHUNK_67=PASS rows=2 extraIndexedW='+extraIndexed+' extraWaveW='+extraWave);
+
   console.log('405_075_BATCHED_WAVE_COST=PASS '+JSON.stringify(report.map(x=>[x.name,x.addedWrites,x.waveDelta])));
   console.log('404_075_W1_W2_RELEASE_GATE=BLOCKED: background aggregate W baseline exceeds 2; live per-click cost not demonstrated');
 }catch(e){error=String(e.stack||e);console.error('404_075_FAIL',error)}

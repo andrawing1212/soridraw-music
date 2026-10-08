@@ -1,3 +1,11 @@
+## CURRENT GATE — RTDB 운영 Security Rules GET 전용 검사 최초 실행 대기 (2026-10-08 KST)
+
+- 사용자 `Firebase Realtime Database Viewer` 역할 추가 완료 보고. PRIVATE ops/main workflow `.github/workflows/firebase-rtdb-live-rules-readonly.yml` commit `0802c763ab3b1d4e4b7e39bd33d9d3c9740e7701` 설치 완료.
+- 비공개 Actions > `SORIDRAW RTDB Live Rules Readonly` > Run workflow (main). READ-ONLY OAuth/GET `/.settings/rules.json` + pinned GitHub `database.rules.json` 비교. **LIVE 실행 미검증**; HTTP 403이면 최소 권한 재검토, Admin/Editor 추가 요구 금지. 실제 기존 Rules 변경 금지.
+- 후속: publicSync/exploreLike 소스 위험이 LIVE에서도 존재하는지 확인한 뒤 팬아웃·남용 제한 설계/구버전 안전성 감사. 기존 app382·Worker·공유 원본 보호. 비용 실측 PRIVATE ops baseline 37734211971 유지.
+
+---
+
 ## CURRENT GATE — RTDB 공개 좋아요 팬아웃·보안 LIVE 규칙 검증 필요 (2026-10-08 KST)
 
 - 2차 read-only 정적 감사 보고 `DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md` 우선 확인. publicSync/exploreLike 전역 onValue, 50곡/3분 retention, source rules auth actor만 확인, live 적용 Rules 아직 미검증.

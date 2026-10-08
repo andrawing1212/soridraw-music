@@ -1,3 +1,13 @@
+## 0RZW. LIVE RTDB Security Rules READ-ONLY 검사 준비 완료 (2026-10-08 KST)
+
+- 사용자가 Google Cloud `soridraw-ops-metrics-reader`에 `Firebase Realtime Database Viewer` 읽기 권한을 추가하고 저장했다고 확인.
+- PRIVATE ops repo `andrawing1212/soridraw-ops-private/main`에 **`.github/workflows/firebase-rtdb-live-rules-readonly.yml`** 수동 실행 진단 생성, commit `0802c763ab3b1d4e4b7e39bd33d9d3c9740e7701`. GitHub PUBLIC preview audit source `1fc082854d16541c010e49d1a046194336c26141` exact pin. Google WIF 인증 후 공식 Firebase `/.settings/rules.json` GET만 수행하고 canonical 보안 규칙 변경/사용자 데이터 읽기/배포는 하지 않음.
+- **중요:** `roles/firebasedatabase.viewer` 공식 권한 목록은 인스턴스 get/list만 확인되므로 RTDB `/.settings/rules.json` GET을 허용할지는 **미검증**. HTTP 403이면 FAIL, Admin/Editor 권한 자동 확대 금지, 사용자에게 읽기 전용 대안을 보고. 실제 규칙이 로그인 클라이언트 쓰기를 허용하거나 GitHub 버전과 다르면 Audit job FAIL(원인 확인 목적).
+- 다음 순서: PRIVATE repo Actions > **SORIDRAW RTDB Live Rules Readonly** > Run workflow (main) 1회 수동 실행, run ID/HTTP status/비공개 Summary 확인. 이후 운영 Rules과 소스 규칙 일치/공개 fanout 악용 위험 판정 → 안전한 최소 변경 설계 → 기존 app382 정상 기능 보호한 PREVIEW 구현·검증.
+- **변경 범위:** PRIVATE ops workflow 1개 + PUBLIC 상태 문서만. 앱 코드, Cloudflare, Functions, Firebase Hosting, LIVE RTDB Rules, 사용자 데이터, main/PRODUCTION 앱 변경 없음.
+
+---
+
 ## 0RZV. 공개 좋아요 RTDB fanout/남용 2차 정적 감사 — 설계 위험 확인 (2026-10-08 KST)
 
 - preview 기준 `39e6734ea29ec83f64806886f6635eae9326359c`에서 `src/services/explorePublicLikeSyncService.ts`, `src/pages/ExplorePage.tsx`, `src/services/exploreLikeService.ts`, `database.rules.json`, 앱160/164 frozen/test192/396 확인. 추가 보고 `DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md`.

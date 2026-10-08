@@ -207,10 +207,17 @@ assert.match(flush, /source: 'remote'/);
 assert.match(flush, /hasNewerPending && current/);
 assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight127\(current, pending\)/);
 assert.match(flush, /current && current\.updatedAt > pending\.updatedAt/);
-assert.equal(
-  (flush.match(/rebaseExploreLikeAfterInFlight127\(current, pending\)/g) || []).length,
-  4,
-  'normal ACK/ambiguous failure plus receipt replay/expiry must preserve a newer explicit intent',
+// Current canonical-revision ACK rebases from the server-returned liked/count/revision.
+ // The legacy fallback helper remains for revisionless ACK and ambiguous failure;
+ // requiring four textual helper calls would reject the safer revision-based path.
+assert.match(flush, /if \(hasNewerPending && current\) \{/);
+assert.match(flush, /expectedRevision: Number\(result\.revision\)/);
+assert.match(flush, /baseLiked = result\.liked/);
+assert.match(flush, /baseLikeCount = canonicalLikeCount/);
+assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight127\(current, pending\)/);
+assert.ok(
+  (flush.match(/rebaseExploreLikeAfterInFlight127\(current, pending\)/g) || []).length >= 2,
+  'revisionless ACK and ambiguous failure must still preserve a newer explicit click',
 );
 assert.match(flush, /const canonicalLikeSettled127 =\s*\n\s*payload\?\.data\?\.canonicalD1 === 'settled' \|\|\s*\n\s*canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/,
   'canonical D1 settlement must outrank derived R2 publication state');

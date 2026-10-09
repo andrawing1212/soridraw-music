@@ -243,6 +243,7 @@ async function main() {
     /422_NOT_AUTHORIZED_TO_SWITCH_SHARED_LIKE_WRITER/);
   const integrated=createCandidateLikeBatch422({
     db:combined.db,sharedR2:r2,allEnvironmentCutoverVerified:true,
+    authenticatedUid:'422-user',
     resolveOwnerUid:async()=> 'owner',
     persistPersonalSnapshot:async x=>({persisted:true,trackId:x.trackId,revision:x.revision}),
     queueSameAccountSignal:async x=>{signals422++;return {
@@ -250,6 +251,9 @@ async function main() {
     };},
   });
   const batch422={mutations:[mutation('song',true,0,'422-like-a')]};
+  await assert.rejects(integrated.acceptAuthenticatedBatch('wrong-user',batch422),
+    /422_AUTH_UID_MISMATCH/);
+  assert.equal(rows(combined.sqlite,'explore_like_overrides_171'),0);
   let published=await integrated.acceptAuthenticatedBatch('422-user',batch422);
   assert.equal(published.data.canonicalD1,'settled');
   assert.deepEqual([published.data.rowsWritten,published.data.results[0].likeCount],[2,1]);

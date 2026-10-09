@@ -1,3 +1,13 @@
+## 0S45. Stage419 Cloudflare 격리 D1 실제 물리 W2/W0·구형 writer 차단 검증 PASS / 제품 배포 HOLD (2026-10-09 KST)
+
+- **진짜 Cloudflare 원격 D1 물리 과금 검증 완료:** 신규 `scripts/measure-419-isolated-171-d1.mjs` 및 `.github/workflows/measure-419-isolated-like-d1.yml`. GitHub 419 격리 run [37897476777](https://github.com/andrawing1212/soridraw-music/actions/runs/37897476777) SUCCESS, 추가 Phase gate 검증 run [37897692901](https://github.com/andrawing1212/soridraw-music/actions/runs/37897692901) SUCCESS. 매번 고유 임시 `soridraw-like-419-<run>-<attempt>` Cloudflare D1 신설, `171` 원본 adapter SQL을 REST `batch`로 실행해 `meta.rows_written` 합산. **실측**: 새 좋아요 W2, 해제 W2, 같은 요청 중복 W0, 예전 revision/operation 재전송 W0, 다른 UID 동일곡 좋아요 W2, legacy baseline 해제/재좋아요 W2, 비공개 W0. `419_EPHEMERAL_D1_DELETED=PASS`, 실 사용자 공유 D1 사용 0.
+- **새 안전성 소스/검사:** `cloudflare/explore-worker/candidates/like-writer-phase-fence-419.sql` **SOURCE ONLY, 절대 shared DB 적용 금지**. 격리 D1에서 legacy phase는 구형 likes INSERT/DELETE 허용, overlay phase 변경 뒤 likes INSERT/DELETE와 track_stats.like_count 변경을 DB 트리거로 거절하는 반례 차단을 확인. overlay 171 writer는 활성 fence가 있어도 **물리 W2**; old/new 같은 회원 중복 숫자 2 생성 차단. Run 37897692901에서 `419_REMOTE_LEGACY_PHASE_FENCE_BLOCKS_DUPLICATE_OLD_WRITES=PASS`, `419_REMOTE_NEW_171_W2_WITH_FENCE=PASS` 및 생성 DB 자동 삭제 PASS.
+- **중요 STOP:** 이 fence를 현재 실제 공유 DB에 켜면 구형 PREVIEW/TEST/PRODUCTION Worker의 정상 좋아요 변경을 거절하며 기존 035/066/069/075 대기열 재처리도 막을 수 있다. **실서비스 배포 가능하다는 뜻 절대 아님.** 모든 환경 Reader/Writer 전환 준비, old 큐 drain 및 운영 안전 전환 승인, 공개 프로필/Feed 숫자 R2 전파/기기간 동기화/복구·성능·Work 독립검증 미완. Stage418 앱/Worker 여전히 미배포, 활성 PREVIEW app386 문서상 유지.
+- **범위/검사:** 이번 GitHub 변경은 독립 원격 측정 script + 안전한 미적용 phase SQL 후보 + CI workflow + 상태 문서만. React·actual Worker bundle·Rules·Functions·공유 D1 schema/data·Hosting 배포 **0**, main/TEST/PRODUCTION 변경 없음. D1 사용량 W2 **격리 후보 PASS**, 앱 전체 배포 W2/R0/정합성 **HOLD**. 기존 408 CI `37896238401` TypeScript/Build/기존 회귀 PASS 유지.
+- **다음 작업:** Codex High/ExtraHigh로 구형 3환경 클라이언트/Worker의 요청 수용·old queue 035/066/069/075 완료·DB writer phase atomically switch / 전환 실패 롤백까지 완전 실행형 시나리오 구현·검증. old clients를 갑자기 거절하는 phase fence를 현재 shared DB에 적용하지 말 것. 기존 191 first80 D1 읽기·R4/17·R4/19·서버 상태 정착 proof 문제도 분리 해결 필요.
+
+---
+
 ## 0S44. Stage419 실제 171 후보 SQL 실행 회귀 코드 + 408 CI PASS, 구형 Worker 충돌 재현·전환 HOLD (2026-10-09 KST)
 
 - **코드 결과:** `scripts/verify-419-like-w2-cutover.mjs` 신규. Node 22 `node:sqlite` 메모리 DB에서 미적용 `20260921_03_explore_like_d1only_v171_additive.sql`을 생성하고 실제 `createLikeD1OnlyCanonical171` 소스 함수/SQL을 그대로 실행. LIKE/UNLIKE, 동일 재전송 W0 모형, 역순 revision 충돌, 여러 UID 같은 곡 수 집계, 구형 legacy baseline, 비공개곡 차단 검사. **D1 rows_written은 메모리 논리 rows proxy이며 Cloudflare 물리비용 PASS 주장 아님.**

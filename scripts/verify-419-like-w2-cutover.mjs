@@ -54,9 +54,8 @@ function isolatedFixture() {
         const outputs=[];
         for (const command of statements) {
           const stmt=sqlite.prepare(command.sql);
-          if (command.sql.trimStart().startsWith('SELECT ')) {
+          if (/^SELECT\b/i.test(command.sql.trimStart())) {
             const queryRows=stmt.all(...command.values);
-            if (outputs.length === 0 && queryRows[0]) console.log('419_SQLITE_SNAPSHOT_DEBUG',JSON.stringify(queryRows[0]));
             outputs.push({success:true,results:queryRows,
               meta:{changes:0,rows_written:0}});
           } else {

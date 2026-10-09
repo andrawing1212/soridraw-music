@@ -1,3 +1,13 @@
+## 0S59. 사용자 보고: 같은 UID PC 좋아요 해제 10분 이상 모바일 미반영 — RTDB 전송실패 재시도 최소 수정, 소스 검증 PASS (2026-10-09 KST)
+
+- **실사용 관찰/판정:** 현재 배포된 PREVIEW app387에서 PC 좋아요 해제 후 모바일 하트가 같은 계정인데도 10분 이상 바뀌지 않음. 기존 app160/164에서 검증한 양방향 자동 동기화의 사용자 관찰 회귀 **FAIL**. 서버 전송 실패인지, 모바일 RTDB 수신/미완료 outbox 충돌인지 실제 런타임 원인은 아직 특정되지 않음. 이 코드를 PC↔mobile 완전 수정 PASS라고 주장 금지.
+- **좁은 수정:** `src/services/exploreLikeService.ts`, commit `dc0e9fdad869e62bea8a9b556983a6b043926c06`. D1 batch ACK 성공 후 **UID 전용 RTDB 변경 알림 set()이 실패한 경우에만** PC 탭이 활성 상태일 때 2초→10초→30초 최대 3회 자동 재전송. 기존 durable 알림 잔여와 focus/online 재시도 유지. 성공 시 타이머 제거, 같은 재시도 이벤트 반복으로 재시도 횟수 무한 초기화 금지. 새로운 좋아요 변경은 새 제한된 재시도 예산. 알림만 재시도하며 기존 Canonical D1 likes/069 큐 재전송·Firestore read/write·R2 전체 재생성·정상 페이지 폴링 0. 다른 계정의 공개 likeCount, 팔로우, UI, Music Note, Library, RTDB Rules 변경 없음.
+- **회귀 테스트:** `scripts/verify-127-atomic-personal-like.mjs`에 중복 타이머 0, 2/10/30초 제한, 성공 시 취소, 4회째 자동 재전송 0을 격리 테스트로 추가. commit `87787d2752536296b4b2d93c99983977bfc8d7dd`. 실제 [GitHub 408 QA Run 37928430490](https://github.com/andrawing1212/soridraw-music/actions/runs/37928430490) **SUCCESS**; TypeScript, Build, 기존 개인 좋아요·공개 좋아요 회귀, LIVE 공유 RTDB Rules 읽기전용 일치 모두 PASS. 별도 구형 follow-only 후보/069 진단 push 실패와 혼동하지 말 것.
+- **배포/환경:** GitHub `preview` 소스 수정 + 테스트만 수행. Firebase PREVIEW Hosting 현재 app387 기존 배포 **변경 없음**, Worker 03af0cc6-1336-4ed2-98ff-4983e1b21a44 유지. 공유 D1/RTDB/Firestore 사용자 원본·Rules·Functions, main/TEST/PRODUCTION 변경 없음. 사용자의 이번 발화는 수정 지시이고 명시적인 배포 명령은 없었으므로 PREVIEW 배포도 하지 않음.
+- **남은 위험/다음:** 서버가 실제 RTDB 알림을 정상 발행했는데 모바일이 미완료 outbox/구형 watermark/수신 UI 때문에 건너뛰는 경우에는 이 전송 실패 재시도만으로 해결되지 않음. 최종 배포/실기기 PC→모바일/모바일→PC like/unlike·내 좋아요 membership·공개 숫자 확인 전까지 전체 기능 FAIL/미검증. 원인 파악 없이 171/174/419 구조 전환·W2 강제 재설계 금지.
+
+---
+
 ## 0S58. app387 PREVIEW DEPLOYED — no-op Recent Song edit canonical/RTDB W0 (2026-10-09 KST)
 
 - **실제 PREVIEW 배포 완료 확인:** GitHub Actions [Run 37922223887](https://github.com/andrawing1212/soridraw-music/actions/runs/37922223887), preview commit `974051a341c3c2e4b2e52759cda0bbc9c3b14b28`, completed `success` at 2026-10-09T11:13Z. Job 113792622742에서 Install, TypeScript, Build, existing app358/359/360/361 + 377/378/379 like/follow regressions 모두 `success`. Firebase Hosting `FIREBASE_PREVIEW_DEPLOY=PASS`; `PREVIEW_APP_VERSION=387`; `PREVIEW_EXACT_BUILD=PASS` (preview.soridraw.com fetched and SHA256 equality verified by Actions). `TEST_PRODUCTION_UNCHANGED=PASS`; `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Cloudflare Worker, Functions, shared D1 migration/data/RTDB rules release was NOT part of this release.

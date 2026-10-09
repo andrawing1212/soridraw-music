@@ -255,7 +255,23 @@ if (process.argv[2] === 'cleanup') {
       await requireTransitionDenied('LIKE_CUTOVER_'+q.kind+'_PENDING_419','pending '+q.kind);
       await query('DELETE FROM '+q.table+' WHERE '+q.key+'=?',[q.id]);
     }
-    console.log('419_REMOTE_CUTOVER_EMPTY_ALL_FOUR_QUEUES_GUARD=PASS');
+    // 075 is a durable high-water queue, not a delete-on-processed queue:
+    // its historical processed rows remain forever. They must not block
+    // promotion after the same official processing cursor has advanced.
+    await query(
+      'INSERT INTO explore_like_user_queue_075(user_uid,updated_at,pending_count,mutations_json) VALUES(?,?,?,?)',
+      ['synthetic-history-075',1,1,'[]']);
+    await query(
+      'UPDATE explore_like_user_queue_state_075 SET processed_at=?,processed_uid=? WHERE id=1',
+      [1,'synthetic-history-075']);
+    const effective075=await query(
+      'SELECT 1 AS pending FROM explore_like_user_queue_075 q '+
+      'JOIN explore_like_user_queue_state_075 s ON s.id=1 '+
+      'WHERE q.updated_at>s.processed_at OR '+
+      '(q.updated_at=s.processed_at AND q.user_uid>s.processed_uid) LIMIT 1');
+    assert.equal((effective075.results||[]).length,0);
+    console.log('419_REMOTE_075_PROCESSED_HISTORY_MUST_NOT_BLOCK_CUTOVER=PASS');
+    console.log('419_REMOTE_CUTOVER_ALL_FOUR_EFFECTIVE_QUEUES_DRAINED=PASS');
     console.log('419_REMOTE_CUTOVER_THREE_ENV_PROTOCOL_SHA_AND_EXPIRY_GUARD=PASS');
     console.log('419_STAGED_PREVIEW_TEST_PRODUCTION_ARTIFACT_SHA_MAY_DIFFER=PASS');
 

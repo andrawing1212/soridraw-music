@@ -45,6 +45,8 @@ const groups = [
     ['node', 'scripts/verify-423-personal-like-r2.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-rtdb-user-signal-424.mjs'],
     ['node', 'scripts/verify-424-like-rtdb-signal.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-cold-personal-bootstrap-430.mjs'],
+    ['node', 'scripts/verify-430-cold-personal-bootstrap.mjs'],
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],

@@ -571,3 +571,81 @@ assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 4,
 assert.equal(retryCertified416, 102, '416 newer signal must be certified');
 console.log('416_FAILED_GAP_REPEAT_READ_COOLDOWN=PASS');
 console.log('416_NEW_SIGNAL_BYPASS_AND_BOUNDED_RECOVERY=PASS');
+
+
+// A FULL repair can finish before the later app189 targeted proof fails.
+// On recovery do not rebuild that already-complete FULL baseline again.
+const runCompletedFullTargetedFailure416 = async (priorAttempt, initialBaseline, expectedFull) => {
+  const store = new Map([['test-member:baseline', initialBaseline]]);
+  let now = 1_000_000;
+  let attempted = priorAttempt;
+  let repairTarget = 0;
+  let certified = 0;
+  let settled = 0;
+  let pending = { 'old-like': true };
+  let proofFails = true;
+  let fullCalls = 0;
+  let proofCalls = 0;
+  const context = {
+    ...retryContext416,
+    Date: { now: () => now },
+    EXPLORE_LIKE_BASELINE_127: 'baseline',
+    scopedLikeKey127: (key, uid) => uid + ':' + key,
+    readLikeLocal127: key => store.get(key) || '',
+    writeLikeLocal127: (key, value) => store.set(key, value),
+    readCrossOriginLikeCertified357: () => certified,
+    readCrossOriginLikeSettled359: () => settled,
+    readCrossOriginLikeAttempted358: () => attempted,
+    readCrossOriginLikeSettlementAttempted359: () => 100,
+    markCrossOriginLikeAttempted358: (_uid, version) => { attempted = version; },
+    requestRepair127: () => {
+      repairTarget = 100;
+      fullCalls++;
+      store.set('test-member:baseline', '');
+    },
+    readRepairTarget127: () => repairTarget,
+    ensurePersonalLikeBaseline127: async (_user, revision) => {
+      if (repairTarget) {
+        repairTarget = 0;
+        store.set('test-member:baseline', '1');
+      }
+      if (revision) {
+        pending = {};
+        store.set('test-member:baseline', '1');
+      }
+    },
+    readSnapshotPending127: () => pending,
+    requestPersonalLikeRevision127: async () => {
+      proofCalls++;
+      if (proofFails) throw new Error('simulated targeted proof failure');
+      return 'verified-revision';
+    },
+    invalidateExplorePersonalLikeBaseline127: () => store.set('test-member:baseline', ''),
+    markCrossOriginLikeCertified357: (_uid, version) => { certified = version; },
+    markCrossOriginLikeSettled359: (_uid, version) => { settled = version; },
+  };
+  const { visit } = new Function(...Object.keys(context),
+    helperJS416 + '\n' + parityJS416 +
+    '\nreturn {visit: ensureExplorePersonalLikeCrossOriginParity357};'
+  )(...Object.values(context));
+  let firstFailed = false;
+  try { await visit({ uid: 'test-member' }); }
+  catch { firstFailed = true; }
+  assert.equal(firstFailed, true, '416 first targeted proof failure must remain visible');
+  const firstFullCalls = fullCalls;
+  await visit({ uid: 'test-member' }); // cooldown: no extra FULL read
+  assert.equal(fullCalls, firstFullCalls, '416 immediate retry must be suppressed');
+  now += 60_001;
+  proofFails = false;
+  await visit({ uid: 'test-member' });
+  assert.equal(fullCalls, expectedFull,
+    '416 must not repeat a FULL baseline that already succeeded');
+  assert.equal(proofCalls, 2, '416 should retry only targeted proof once after cooldown');
+  assert.equal(certified, 100);
+  assert.equal(settled, 100);
+  assert.deepEqual(pending, {});
+};
+await runCompletedFullTargetedFailure416(0, '1', 1);
+await runCompletedFullTargetedFailure416(100, '', 1);
+await runCompletedFullTargetedFailure416(100, '1', 0);
+console.log('416_COMPLETED_FULL_TARGETED_PROOF_RETRY_NO_REBUILD=PASS');

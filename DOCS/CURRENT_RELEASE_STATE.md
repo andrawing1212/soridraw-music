@@ -1,3 +1,13 @@
+## 0S48. 검사엔진 1차 적용 — 반복 GitHub 검사 단축용 Quick/Full/Focus, 기존 릴리스 게이트 보호 (2026-10-09 KST)
+
+- **동기/범위:** 최근 Stage419/420 수정 때마다 여러 개의 전체 GitHub Actions 및 격리 Cloudflare 비용 CI를 자동 재실행하여 실제 코드 수정과 디렉터 검토 사이 시간 지연이 반복됨. 사용자 요청으로 **검사 방식**만 효율화, 안전 합격선 자체는 유지.
+- **추가 파일:** `scripts/soridraw-qa-engine.mjs` (Node22, `fast|full|focus`, 빠른 오프라인 7그룹: syntax/171·420 SQL 직접 실행/개인 카탈로그/공개 숫자/영수증/파생 R2 CAS/lifecycle). `.github/workflows/qa-engine-preview.yml` (엔진·워크플로 변경 때만 push fast 검사, 수동 workflow_dispatch에서 `fast` 또는 `full` 선택, release deploy 비포함). `full`에는 기존 127/197/413의 typescript/esbuild 의존 deep 3그룹 및 TypeScript/Build 1회 추가. 실패 영역만 `focus group` 지원.
+- **실제 속도/검사:** 최초 구성 run 37900441787은 `npm ci`가 필요한 TypeScript 검사까지 fast에 포함하여 FAIL → 즉시 `fast`는 무의존 검사로 교정. [GitHub Run 37900535645](https://github.com/andrawing1212/soridraw-music/actions/runs/37900535645) **SUCCESS**, 7그룹 `QA_ENGINE=PASS total_ms=624` (순수 테스트 실행시간으로 Runner 준비/Checkout/큐 대기는 제외). Workflow fast/full 선택 추가 후 [Run 37900626205](https://github.com/andrawing1212/soridraw-music/actions/runs/37900626205) **SUCCESS**, npm install 스킵, 배포·shared DB 변형 없음.
+- **중요 경계:** 이 빠른 검사는 **408 전체 GitHub release QA, live RTDB Rules read-only audit, 419 실 Cloudflare ephemeral D1 W2 계측, Work 독립 감사 및 PC/모바일 실사용 검증을 대신하지 않음.** `full` GitHub 선택지는 추가했으나 그 옵션의 단독 실행은 아직 미확인. 빠른 QA PASS를 Stage420 앱 배포 PASS로 오인 금지. 실제 제품 R2/RTDB publisher, 구형 앱 호환 여전히 미완; Stage420 제품 배포 HOLD 유지.
+- **GitHub 작업 기준:** 시작 commit `236ea0e7dc4fbdac41556fb1452153371ea46a5b`, 이번 수정 `scripts/soridraw-qa-engine.mjs`, `.github/workflows/qa-engine-preview.yml` 및 NEXT/CURRENT 문서만. Preview 브랜치 검사용 소스 변경, Cloudflare/Firebase/Functions/Hosting/PRODUCTION/shared user 데이터 전혀 변경/배포 없음. 다음 Codex 구현부터 실패 부분 `focus`→한 번의 후보 `full`→필요시 408/419 remote로 검증 시간 줄인다.
+
+---
+
 ## 0S47. Stage420 실제 app164+ 요청 계약용 D1 W2 어댑터·재시도 보호 구현, 격리 QA / 전체 앱 PREVIEW 배포 HOLD (2026-10-09 KST)
 
 - **사용자 배포 가속 지시:** Stage419 신중 반복 조사 대신 기존 PREVIEW 클라이언트 및 2026-09-25 app164 동결 코드의 POST `/v1/me/likes/batch` 실제 요청 본문 검증: `trackId,liked,baseLiked,mutationAt,operationId,expectedRevision` 모두 전송. app164부터는 171 writer에 필요한 revision/operation ID가 이미 있어 클라이언트 대규모 재작업 불필요.

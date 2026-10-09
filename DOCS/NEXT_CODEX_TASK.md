@@ -1,3 +1,11 @@
+## IMMEDIATE VIDEO CORRECTION — FIRST TEST: UNLIKE 75s R4/17 AND LIKE 105s R4/19 (2026-10-09 KST)
+
+**This supersedes any claim in prior task notes that the 75-second event was merely My Likes navigation or the 105-second event was user-idle.** User verified two opposite actions in the same real video: **~75s UNLIKE → PERSONAL SETTLEMENT 189 D1 SQL R4, rows_read17 (separate intake W1)**; **~105s LIKE → PERSONAL SETTLEMENT 189 D1 SQL R4, rows_read19 (separate intake W1)**. See `DOCS/CURRENT_RELEASE_STATE.md 0S39` and user screenshots `image(20261009-044729).png`, `image(20261009-044731).png`. Their separate reports of occasional truly idle Feed R increases and mobile stepwise increase remain **additional** cases, not reinterpretations of ~105s.
+
+**Codex High regression gate:** directly reproduce *both* queued ACK transitions (true→false and false→true), then subsequent Feed/My Likes membership hydrate and post-ACK personal-snapshot 189 query cost. Target extra D1 SQL R0/rows_read0 per normal like or unlike, W1–W2 intake unchanged. Do not mask instrumentation or delete unresolved outbox before true server settlement; keep own heart + other-device truth. Test action-vs-idle separately, exact page transitions not proxy for click direction. Build/TypeScript + original personal like regressions and real PREVIEW on-device cost required before marking PASS. Phase2/3/4 HOLD.
+
+---
+
 ## CURRENT CRITICAL — app386 Stage416 PHASE1: VIDEO가 입증한 Feed IDLE + My Likes 189 반복 D1, 모바일 계단식 증가 (2026-10-09 KST)
 
 - **고정 대상:** preview app386, 문서상 `DOCS/CURRENT_RELEASE_STATE.md 0S38`. 제공 영상 `20261009-0420-49.6843949.mp4` (~117.7s): 좋아요 batch W1 (~64s) → 약 75s My Likes 계열에서 `PERSONAL SETTLEMENT 189` **D1 query R4 / rows_read17**, 진단 reset (~80s) → 피드 화면 유지(~100s) 중 좋아요 저장 W1 **및 별도 189 R4 / rows_read19**(~105s). 모바일 후속 사용자 화면에서는 개인 소셜 스냅샷 숫자가 3~4단계로 증가, final screenshot 보고; 각 단계당 HTTP count는 별도 URL/counter 없이 단정하지 말 것. 정상 무변경 페이지만 왕복 R0은 별개. **좋아요 변경 후 Feed idle에서도 발생**하므로 My Likes mount-only patch 금지.

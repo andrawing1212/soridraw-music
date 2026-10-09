@@ -1,0 +1,46 @@
+name: SORIDRAW 426 Dormant Worker Bundle Check
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'
+      - 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'
+      - 'cloudflare/explore-worker/runtime/like-batch-composition-422.mjs'
+      - 'cloudflare/explore-worker/runtime/like-personal-r2-publisher-423.mjs'
+      - 'cloudflare/explore-worker/runtime/like-rtdb-user-signal-424.mjs'
+      - 'scripts/verify-426-dormant-cutover-worker.mjs'
+      - '.github/workflows/qa-426-dormant-worker-bundle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-426-worker-dry-run
+  cancel-in-progress: true
+jobs:
+  never-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify compiled-off path and existing historical Worker contract
+        run: |
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node scripts/verify-426-dormant-cutover-worker.mjs
+      - name: Install pinned Wrangler for local dry-run ONLY
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Bundle exact PREVIEW source into temporary artifact without deploying
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config canonical/wrangler.preview.jsonc --outdir "$RUNNER_TEMP/soridraw-426-preview"
+          echo '426_WORKER_BUNDLE_DRY_RUN=PASS'
+          echo '426_DEPLOYMENT=NONE'
+      - name: Confirm shared data and all hosting remain unchanged
+        run: echo '426_ALL_SHARED_D1_R2_RTDB_WRITES=0;PREVIEW_MAIN_PRODUCTION_DEPLOYS=0'

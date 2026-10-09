@@ -1,3 +1,13 @@
+## 0S60. app388 Firebase PREVIEW 배포 성공 — 좋아요 계정별 RTDB 알림 실패 재전송 (2026-10-10 KST)
+
+- **실제 배포 완료:** GitHub Actions [SORIDRAW PREVIEW App Release Run 37976809576](https://github.com/andrawing1212/soridraw-music/actions/runs/37976809576) SUCCESS, locked release SHA `00bb577b38df3cf211c2c430c762cd131c226e56`, 2026-10-09T18:58Z. Firebase Hosting 배포 `FIREBASE_PREVIEW_DEPLOY=PASS`, 실제 `https://preview.soridraw.com/`에서 index.html SHA256 일치 및 `PREVIEW_APP_VERSION=388`, `PREVIEW_EXACT_BUILD=PASS`.
+- **릴리스 구성:** 기존 app387에 추가된 `src/services/exploreLikeService.ts`의 개인 UID 전용 RTDB 알림 실패 시 2/10/30초 최대 3회 재전송만 포함. `scripts/verify-127-atomic-personal-like.mjs` 회귀 검증 보강. source `dc0e9fda...`, regression `87787d27...`, version 388 `d075357805b218d7b1da1c2d592204d5f31f5bfe`, GitHub 릴리스 트리거 `00bb577b38df3cf211c2c430c762cd131c226e56`.
+- **실제 QA:** [408 preflight Run 37976643238](https://github.com/andrawing1212/soridraw-music/actions/runs/37976643238) SUCCESS; 배포 workflow 자체 TypeScript, Build, app358/359/360/361 + 377/378/379 좋아요·팔로우 회귀검사 모두 SUCCESS. [Run 37976809576](https://github.com/andrawing1212/soridraw-music/actions/runs/37976809576) live log confirms `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`; Workers/Functions/shared D1 schema and user originals untouched.
+- **엄격한 미검증:** 같은 계정 PC→모바일 및 모바일→PC 좋아요/해제 실기기 자동 동기화는 **아직 미검증**. 사용자의 PC 해제 후 모바일 10분 미반영을 만든 정확한 원인이 알림 발신 실패인지, 수신 앱의 캐시/outbox/watermark인지 아직 특정되지 않음. 이번 수정으로 전체 오류가 해결되었다고 주장하지 말 것. 실제 화면 대조에서 문제가 계속되면 RTDB 전송 성공 여부와 수신 최신화부터 좁혀서 재감사하며 새 비용 아키텍처 재설계·rollback 반복 금지.
+- **범위:** PREVIEW app388 Hosting만 갱신; TEST/main/PRODUCTION 비변경, Shared RTDB rules/Workers/Functions/D1/Firestore 사용자 데이터 변경 없음. 목표 URL `https://preview.soridraw.com/`. 배포 완료와 실사용 좋아요 기능 PASS는 별개.
+
+---
+
 ## 0S59. 사용자 보고: 같은 UID PC 좋아요 해제 10분 이상 모바일 미반영 — RTDB 전송실패 재시도 최소 수정, 소스 검증 PASS (2026-10-09 KST)
 
 - **실사용 관찰/판정:** 현재 배포된 PREVIEW app387에서 PC 좋아요 해제 후 모바일 하트가 같은 계정인데도 10분 이상 바뀌지 않음. 기존 app160/164에서 검증한 양방향 자동 동기화의 사용자 관찰 회귀 **FAIL**. 서버 전송 실패인지, 모바일 RTDB 수신/미완료 outbox 충돌인지 실제 런타임 원인은 아직 특정되지 않음. 이 코드를 PC↔mobile 완전 수정 PASS라고 주장 금지.

@@ -1,3 +1,24 @@
+## CURRENT — Stage416 Phase2 개인 provisional RTDB 즉시 동기화, 안전한 구현 단위부터 (2026-10-09 KST)
+
+**상태: Phase2 설계/작업 명령 확정, 제품 코드 미수정.** 사용자 실기기 `image(20261009-040623).png`에서 app386 정상 warm My Likes 왕복 **LOCAL9/Worker0, My Likes LOCAL2/Worker0, PAGE SYNC R0/W0** PASS. 이전 PC like 클라이언트 진단 intake W1, 모바일 public count D1 R0/W0. Phase1 정상 경로 보존; 서버 canonical 전체 rows_written/PC↔모바일 private 즉시 완전 PASS는 별개. **Codex High 단일 구현 작업** 이후 Work 독립 검증→ChatGPT 실제 PREVIEW 판단/배포→사용자 실기기 테스트 순서.
+
+### 사용자 목표 및 현재 실소스 근거
+- **오직 Explore 공개곡 좋아요 개인 membership** 클릭 시 현재 기기 + 같은 UID PC↔모바일에 잠정 최종 하트 상태 **즉시** 반영. 서버 intake 완료/공동 public likeCount 갱신과 별개. 앱 내부 '내 좋아요 곡'에도 페이지 왕복 없이 개인 pending 선택 반영. 다른 사용자의 하트는 바꾸지 않는다.
+- 현 `src/services/exploreLikeService.ts` `setExploreTrackLike`는 local cache/outbox에 즉시 저장하고 **5초 서버 전송 뒤** `publishConfirmedLikeSignal127`을 호출. `userSync/$uid/exploreLike`은 이전 클라이언트가 **확정된 changed-track signal**로 해석하는 frozen 계약이며, 여기에 provisional 신호를 쓰거나 `canonicalD1=settled`로 위장 **절대 금지**. `src/pages/ExplorePage.tsx` remote replay/pending 우선 보호, `exploreLikedTracksService.ts` collection 후보 동기화/accepted guard 및 app141 수신 저장→notify 순서 유지.
+- 현재 `database.rules.json`에서 `userSync/$uid/.read,.write`는 auth UID로 제한되고 자식 `$other.validate=false`. 따라서 새 private provisional channel 추가는 별도 **명시적인 additive rules 설계/legacy client 호환 감사/원본 공유 RTDB read-only preflight** 필요. 기존 채널 구조 변경 없이 새 channel만 안전하게 추가할 수 있음을 증명해야 한다. Rules 배포는 세 환경이 공유하는 사용자 데이터 접근 정책에 영향을 주므로 단순 APP PREVIEW release와 무작정 묶지 않는다.
+
+### Codex High 실행 순서
+1. `AGENTS.md` → `CURRENT_RELEASE_STATE.md` → `NEXT_CODEX_TASK.md` → `WORK_AUDIT_CHECKLIST.md` → `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md` → `.agents/skills/local-first-like-sync/SKILL.md`/app141·app160·app164 보호 기준. HEAD 고정 후 실제 `exploreLikeService.ts` click/outbox→RTDB confirmed sender/receiver→ExplorePage/likedCollection 경로와 정확한 existing Rules 계약만 조사. READ ONLY 설계 체크 먼저.
+2. 기존 confirmed RTDB `exploreLike` 대신 **분리된 같은 UID의 provisional transport**를 설계하되 새 service/FCM/WebSocket/Firestore/D1/R2 호출 추가 금지. 최초 구현은 preview code에 동작이 격리되는 feature flag OFF 또는 순수 판정 함수 + 실제 test harness를 사용해 기존 app386을 보호. Shared Rules 변경이 필요하면 additive + strict UID ACL + bounded validation + legacy-compatible, **자동 rules 배포 전 독립 승인/실제 preflight**를 반드시 요구. Preflight가 안전하지 않으면 제품 활성화 STOP(별도 사용자가 테스트 배포 명령을 다시 할 필요는 없으나 공유 Rules 원본 정책 변경은 별도 검토).
+3. **강제 정합성:** old ACK 신호, delayed/out-of-order confirmed, 동일 곡 PC↔모바일 거의 동시 클릭, 서로 다른 곡 두 기기 동시 클릭, 같은 기기 여러 클릭 후 원복, offline/forceclose/reconnect, RTDB set 충돌, local outbox latest, cross-origin persisted cache replay. provisional은 private UI overlay이지 canonical/accepted proof가 아니다. 다른 origin은 provisional 수신만으로 D1 쓰기를 실행하지 않고 승인 전 다른 계정으로 public invalidation을 보내지 않는다. ACK 최신성과 revised operationId fence를 증명할 수 없으면 **stale override 차단 설계부터 재검토**, 시간기반 마지막 도착이 맞는 정책이라고 가정 금지.
+4. **비용:** provisional 전달 1클릭 당 추가 Cloudflare D1 R0/W0·Firestore read/write0. RTDB 비용은 송·수신/재연결/바이트 수로 구체 측정, 기기수와 공개곡 수에 비례하는 listener 증가 금지(UID-scoped 1 listener 목표). 미변경 페이지 이동/업데이트 R0/W0, 서버 canonical batch의 D1 물리 W1~W2 합격선을 넘으면 FAIL. 30초/5초 기존 인입 타이밍은 Phase2에서 바꾸지 말고 Phase3 개인 trailing 300s, Phase4 public fixed 300s와 분리.
+5. 신규 회귀는 기존 `scripts/verify-127-atomic-personal-like.mjs`/197/175/178/192/390 및 앱 기본 페이지 진입 검사 재활용, 새로운 영구 Workflow 난립 금지. Codex는 `preview`만 코드 수정→TypeScript/Build/관련 Node verifier→commit/push exact SHA·변경파일·계측 가능한 것과 미측정·남은 위험 기록, **Codex 직접 배포 금지**. Work가 `WORK_AUDIT_CHECKLIST.md` 독립 read-only PASS한 후보만 ChatGPT가 PREVIEW 앱 배포, 해당 앱에서 PC↔모바일 같은 곡 실시간 진입 없이/양방향/빠른 like/unlike + cache warm R0/W0 + D1 W1~W2 실제 확인.
+6. **STOP 조건:** 현재 old client가 provisional을 confirmed로 해석할 여지, canonical 서버 정착 전 개인 provisional이 public 숫자에 섞임, 상대 기기의 최신 로컬 outbox를 덮음, 공유 rules의 권한 범위 확대, UID 데이터 노출, RTDB channel 비용 unbounded, 테스트/프로덕션 회귀 위험, Worker/Rules migration 또는 공유 사용자의 원본 변경. 제품 기능 문제를 묵살하고 비용만 줄이는 구현 금지.
+
+**변경 금지:** app386 Explore warm-reentry local first, `PERSONAL SETTLEMENT 189` 정확성 확인, 첫 공개곡 좋아요, public likeCount Worker/R2 경로, follow, Studio save-heart/Music Note/Library, UI 디자인/반응형, main/TEST/PRODUCTION 배포, 공유 사용자 데이터 삭제/백필/변환. 현재 app386은 배포 유지.
+
+---
+
 ## CURRENT — app386 사용자 실측 Stage416 Phase1: 좋아요 W1, 모바일 public R0, My Likes R4 1회 재진입 검증만 우선 (2026-10-09 KST)
 
 - 사용자 3장 실사용 사진과 상세 수치는 `DOCS/CURRENT_RELEASE_STATE.md 0S35` 기준. PC 내 좋아요 첫 진입 D1 query R4/W0 (last `PERSONAL SETTLEMENT 189`). 같은 실행 좋아요 약10초 후 Worker2→3, D1 query **R4 유지**, W0→W1; liked batch intake D1 R0/W1. 모바일 public like count GET Worker1, R2 Class B2, **D1 R0 W0**, 숫자 2 표시.

@@ -1,3 +1,13 @@
+## CURRENT AUDIT GATE — 실제 Stage416 Stage417 후보 구현 후 물리 비용·공유 RTDB Rule 호환 감사 (2026-10-09 KST)
+
+- **기준:** `preview` 제품/검사 코드 exact SHA `64c66f21e645311ac925df831ddfc9981cfc3ea3`, QA 408 `37890205404 SUCCESS`. 상세 변경 및 검사 `DOCS/CURRENT_RELEASE_STATE.md 0S41`. 추가 문서 commit 뒤 실제 최종 HEAD는 다시 확인. active PREVIEW app386 유지; 제품 코드 아직 **미배포**. 이전에 구현 지시만 있던 상태가 아니며 **실제 Worker/React/RTDB additive rules/test 소스 구현 완료**. Codex가 같은 부분 중복 작성하지 말 것.
+- **다음 작업 우선 Work READ-ONLY:** Work audit checklist로 Worker source `verifyQueuedLikeCanonical417`/DO proof scheduling 5초·join window·active 075/069 pending, canonical GET endpoint exact 20 IDs/cutover modes/physical R/W·CORS diagnostics, mobile & app141 event ordering, optional RTDB bool Rules live compatibility, backward app386/client, first like/unlike/concurrent/stale, Worker/R2 cache and shared user data safety 검증. 408 mock PASS로 비용/정합성 PASS 판정 금지.
+- **비용 STOP/재설계 조건:** Worker bounded canonical GET는 정상 클릭마다 추가 D1 read를 발생시키므로 실제 R4 절감보다 **총 D1 read가 더 증가할 가능성** 존재; user goal is actual changed-ID canonical completion receipts from queue drain/DO with normal R0. Work가 1회/배치 비용을 못 낮춘다고 판단하면 제품 활성화/배포 **중지**, Codex High가 기존 canonical aggregate wave 결과에서 추가 원본 조회 없이 안전 changed-ID+last operationId receipt 발행 가능한지 우선 수정. `queued` or R2 CAS alone must never be misrepresented as canonical settled.
+- **shared Rules STOP:** `database.rules.json` bool optional field is code only. actual RTDB Rules may differ; release workflow currently PUTs the entire source JSON. Existing live remote JSON의 **전체 의미 차이가 선택적 `canonicalSettled417` 추가 이외 0인지** authenticated read-only compare 필수. 그 증거 없이 `deploy_shared_rtdb_rules=true` 실행 금지. No user's canonical original data migration/replay.
+- **릴리스:** audit & real cost PASS 후 Worker PREVIEW canonical release → shared RTDB Rule safe additive preflight → Firebase PREVIEW app387 exact build/version and 2-device like/unlike/MY LIKES warm + idle, D1 SQL queries AND rows_read physical, R2 A/B, DO invocations/RTDB bandwidth verify; stop at first FAIL. No TEST/main/PRODUCTION/user data change without explicit approval. Stage416 Phase2 provisional instant, trailing 300s/private and fixed 300s/public only after Phase1 video cases PASS.
+
+---
+
 ## CURRENT CODEx HIGH — 사용자 승인 Stage416 카탈로그 + Cloudflare 저비용 재배치 / 첫 구현 A (2026-10-09 KST)
 
 **설계 확정 문서:** `DOCS/EXPLORE_CATALOG_CLOUDFLARE_COST_ARCHITECTURE_STAGE416.md`. 사용자 명령: "최종 판단대로 그렇게 진행해. 클라우드플레어에서 제공되는 각각의 기능들을 내 앱에 접목해서 무료한도를 분산하면서 장기적으로 비용이 적게들수 있도록 잘 분산해서 관리했으면 해". 실제 `preview` 앱 app386, 사용자 영상(75s unlike R4/rows17, 105s like R4/rows19), 모바일 계단형·Feed idle R 추가. **현재 Phase1 FAIL.**

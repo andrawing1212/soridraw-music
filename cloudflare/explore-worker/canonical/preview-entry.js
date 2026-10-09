@@ -1107,12 +1107,16 @@ async function verifyQueuedLikeCanonical417(request, env, ctx, payload) {
     );
     // 409 (another active queue), 503 (uncertain authority) and all failures
     // remain queued. Neither the optimistic catalog nor the guard is erased.
-    if (!response.ok) return null;
-    const body = await response.json();
-    if (body?.ok !== true || !Array.isArray(body?.data?.likedTrackIds)) return null;
+    if (!response.ok) return { verified: false, headers: response.headers };
+    const body = await response.json().catch(() => null);
+    if (body?.ok !== true || !Array.isArray(body?.data?.likedTrackIds)) {
+      return { verified: false, headers: response.headers };
+    }
     const confirmed = new Set(body.data.likedTrackIds.map((id) => String(id || '').trim()));
-    if (!rows.every((r) => confirmed.has(r.trackId) === r.liked)) return null;
-    return response;
+    return {
+      verified: rows.every((r) => confirmed.has(r.trackId) === r.liked),
+      headers: response.headers,
+    };
   } catch {
     return null;
   }
@@ -1131,12 +1135,12 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
     if (schedule?.newlyScheduled === true && schedule?.settled === true &&
         payload?.data?.canonicalD1 === 'queued') {
       const canonicalProof = await verifyQueuedLikeCanonical417(request, env, ctx, payload);
-      if (canonicalProof) {
+      // Even failed, mismatched or queue-busy reads consume D1 usage. Surface
+      // the same counters before returning a fail-closed QUEUED response.
+      if (canonicalProof?.headers) {
         const headers = new Headers(response.headers);
         headers.set('Content-Type', 'application/json; charset=utf-8');
         headers.set('Cache-Control', 'no-store');
-        // The added canonical GET costs D1 reads. Preserve complete physical
-        // diagnostic counters instead of hiding those reads in an internal call.
         for (const name of [
           'X-SORIDRAW-D1-Read',
           'X-SORIDRAW-D1-Write',
@@ -1151,6 +1155,11 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
           if (Number.isFinite(extra) && extra > 0) {
             headers.set(name, String(Math.max(0, Number.isFinite(before) ? before : 0) + extra));
           }
+        }
+        if (!canonicalProof.verified) {
+          return new Response(JSON.stringify(payload), {
+            status: response.status, statusText: response.statusText, headers,
+          });
         }
         return new Response(JSON.stringify({
           ...payload,

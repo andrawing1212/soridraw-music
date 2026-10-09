@@ -1625,7 +1625,14 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // proof, and never releases a pending local or remote guard.
       const trustedCanonicalReceipt417 =
         payload?.data?.canonicalD1 === 'settled' &&
-        payload?.data?.canonicalProof === 'atomic-drain-batch-418';
+        (payload?.data?.canonicalProof === 'atomic-drain-batch-418' ||
+          // 171 is a coordinated three-environment cutover. This second proof
+          // exists only after exact D1 W2/W0 settlement AND changed-track
+          // public/personal R2 and same-account signal publication. The
+          // legacy 418 proof and all pending/queued behavior stay unchanged.
+          (payload?.data?.canonicalProof === 'isolated-171-publication-confirmed-420' &&
+            payload?.data?.queued === false &&
+            payload?.data?.personalLikeSnapshot === 'changed-track-r2'));
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);

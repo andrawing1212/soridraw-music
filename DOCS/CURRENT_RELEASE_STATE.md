@@ -1,3 +1,14 @@
+## 0S49. Stage421/422 실제 D1 W2 → R2 곡별 CAS 발행 코드 결합 + 실패·재전송 검증 PASS / PREVIEW 배포 HOLD (2026-10-09 KST)
+
+- **실제 제품 후보 구현 진전:** `cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs` 신규. 기존 shared R2 경로 `shared-track-card-v115/<track>`, `shared-profile-v113/<owner>`, `shared-feed-v112/latest/popular-40`에 특정 changed-track **1개만** ETag CAS로 갱신. `likeGeneration421`을 per-row로 기록하여 늦게 도착한 낮은 generation이 최신 숫자·개인 상태를 덮어쓰지 못하도록 fail-closed. 개인 R2 지속 저장과 동일 UID RTDB 신호는 주입된 실제 구현에서 `persisted/queued`를 증명해야 성공 처리 (현재 테스트에서는 mock).
+- **연결:** `cloudflare/explore-worker/runtime/like-batch-composition-422.mjs`는 기존 `createLikeD1OnlyBatchAdapter420` 171 D1 writer와 위 421 R2 publisher를 결합. 실제 요청의 stable operationId/expectedRevision 기반 성공·중복·재전송·오류 경로 사용. **아직 canonical Worker에서 import/활성화되지 않은 source-only 후보, 공유 migration 미적용/feature OFF**.
+- **실행형 테스트:** `scripts/verify-421-like-r2-publisher.mjs`가 실제 421 모듈의 card/profile/latest/popular targeted CAS, 동시 ETag 충돌 retry, 공개 프로필 PUT 실패 후 재송, 개인 snapshot 실패 시 거짓 ACK 방지, 계정 신호 실패 시 거짓 ACK 방지, 오래된 generation 역행 차단 검사. `scripts/verify-419-like-w2-cutover.mjs`에 **실제 SQLite 171 → source 420 → source 421** 통합 실행/동일 operationId duplicate R2 W0 추가. 421/422 실행 시험 **독립 in-memory R2 simulator/Node SQLite**이며 Firebase/운영 R2 직접 테스트가 아님.
+- **빠른 QA 실제 결과:** [GitHub fast QA Run 37902221342](https://github.com/andrawing1212/soridraw-music/actions/runs/37902221342) **SUCCESS**, 7 그룹 `QA_ENGINE=PASS total_ms=649` (Runner 설정 제외). `422_ACTUAL_171_SQL_AND_ACTUAL_421_R2_PUBLISHER_COMPOSED=PASS`, `421_REAL_SOURCE_R2_CARD_PROFILE_FEED_BOUNDED=PASS`, `421_R2_CAS_CONFLICT_AND_FAILURE_RECOVERY=PASS`, `421_GENERATION_STALE_CANNOT_REPAINT_PERSONAL_STATE=PASS`. 408 전체 TypeScript/Build/기존 회귀 run [37902229363](https://github.com/andrawing1212/soridraw-music/actions/runs/37902229363) 마지막 결과를 확인해 PASS/FAIL을 별도 기록할 것. 기존 419 Cloudflare 원격 physical W2 합격 run `37899834329`는 본 R2 후보 변경 이전의 격리 증거이므로 운영 전체 W2 증명으로 확대하지 말 것.
+- **정확한 남은 차단:** 실제 3환경 구형 worker가 공유 legacy `likes/track_stats`를 계속 쓰며 191 first80 repair도 `track_stats` legacy count를 사용하므로 **171 overlay를 PREVIEW 단독으로 활성화하면 데이터 정합성이 깨짐**. 앱144 이전 캐시 클라이언트 missing revision/opId, shared D1 단계 전환, 실 Worker HTTP route/owner UID 조회, 실제 개인 R2 지속/RTDB 전송 callback, 191 legacy 재조회 대체, Work 독립감사 및 PC/모바일 계측 **미완**. `421/422`는 real Cloudflare R2 실제 시뮬레이션 단계가 아니라 source-only QA; 바로 PREVIEW 배포하면 안 됨.
+- **수정 파일:** 421/422 신규 2파일, 테스트 `verify-421` 신규 및 `verify-419` 수정, 빠른 QA/408 검증대상 확대, 본 문서/Next Task. React/기존 canonical Worker generated 코드/Hosting/Functions/RTDB Rules/실 Cloudflare D1/사용자 데이터/TEST/PRODUCTION 전혀 변경/배포 없음. UI 동결 보호. 다음 작업은 **실제 개인 R2 및 RTDB 신호 진짜 구현 + 구형 active Worker/old client 호환성 최종 해결**만 집중.
+
+---
+
 ## 0S48. 검사엔진 1차 적용 — 반복 GitHub 검사 단축용 Quick/Full/Focus, 기존 릴리스 게이트 보호 (2026-10-09 KST)
 
 - **동기/범위:** 최근 Stage419/420 수정 때마다 여러 개의 전체 GitHub Actions 및 격리 Cloudflare 비용 CI를 자동 재실행하여 실제 코드 수정과 디렉터 검토 사이 시간 지연이 반복됨. 사용자 요청으로 **검사 방식**만 효율화, 안전 합격선 자체는 유지.

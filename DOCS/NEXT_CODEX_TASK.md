@@ -1,3 +1,11 @@
+## CURRENT — Stage430 narrow source fix committed; NEXT: old-client + cold public bootstrap (2026-10-09 KST)
+
+- Stage430 `cloudflare/explore-worker/runtime/like-cold-personal-bootstrap-430.mjs` adds a **dormant**, verified-empty-user-only personal R2 initializer. Stage429 pre-write readiness now invokes it only after authenticated, all-environment cutover verified. It requires indexed absence of BOTH legacy likes and 171 overrides. Old membership / old revision / partial existing R2 / full-table scan all fail closed before mutation. GitHub `scripts/verify-430-cold-personal-bootstrap.mjs` added to QA engine; see CURRENT_RELEASE_STATE 0S54.
+- **Do not rebuild 430.** NEXT focused Codex High/Extra High on preview: (A) cold R2 public card/Feed missing before D1 mutation -> bounded verified-track targeted initializer with cross-environment old projection writer/generation CAS proof; avoid full Feed/member scan; (B) old cached app (<144) lacking operationId/expectedRevision -> prove no false ACK, preserve pending click and exact recovery or explicit fail-safe client-upgrade protocol (do NOT guess revision/order); (C) cold **nonempty** personal R2 using bounded indexed canonical relation+overlay exact recovery or identify an unavoidable user cap tradeoff. Explicitly prove concurrent PC/mobile/stale and legacy Worker 035/066/069/075 behaviors. Treat any unresolved old writer same shared DB as release STOP.
+- Test once with existing fast QA plus new executable targeted fixture; one final TypeScript/Build/408; isolated remote D1 W2/W0; Work independent read-only audit. Never enable `STAGE426_COMPILED_OPEN`, 174/419 phase, mutate shared D1, deploy Worker/TEST/PRODUCTION without separate authorization and all three environments proved safe. Existing PREVIEW Worker 03af0cc6 and app386 unchanged.
+
+---
+
 ## CURRENT — Stage426 dormant PREVIEW Worker has been deployed; focus exclusively on safe 171 activation readiness (2026-10-09 KST)
 
 - PREVIEW active Worker version 03af0cc6-1336-4ed2-98ff-4983e1b21a44, verified GitHub release Run 37909211630 SUCCESS; source SHA 2ea53aa8d5737276d5cc1e1152a14d9883af53cd. Stage426 stays COMPILED_OFF, current likes run legacy, app386 Hosting unchanged. TEST/PRODUCTION Worker untouched.

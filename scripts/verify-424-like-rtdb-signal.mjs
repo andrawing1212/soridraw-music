@@ -39,20 +39,26 @@ assert.deepEqual(state.results,[{
   trackId:'song',ownerUid:'owner',liked:true,likeCount:1,canonicalSettled417:true,
 }]);
 assert.equal(putCount,2);
+// The legacy RTDB schema lacks operationId/revision, so identical payload
+// MUST NOT be treated as proof of identical accepted mutation. A second real
+// same-state click may need its own notification (even if counts cancel out).
 out=await publish({uid,trackId:'song',ownerUid:'owner',liked:true,
-  likeCount:1,revision:1});
-assert.equal(out.unchanged,true);assert.equal(putCount,2);
-out=await publish({uid,trackId:'song',ownerUid:'owner',liked:false,
-  likeCount:0,revision:2});
+  likeCount:1,revision:2});
+assert.equal(out.queued,true);
+assert.equal(putCount,3);
 assert.equal(state.previousVersion,424000);
 assert.equal(state.version,424001);
+out=await publish({uid,trackId:'song',ownerUid:'owner',liked:false,
+  likeCount:0,revision:3});
+assert.equal(state.previousVersion,424001);
+assert.equal(state.version,424002);
 assert.equal(out.queued,true);
 deny=true;
 await assert.rejects(publish({uid,trackId:'song',ownerUid:'owner',liked:true,
-  likeCount:1,revision:3}),/424_RTDB_SIGNAL_NOT_PERSISTED/);
+  likeCount:1,revision:4}),/424_RTDB_SIGNAL_NOT_PERSISTED/);
 assert.equal(state.results[0].liked,false);
 console.log('424_EXACT_EXISTING_FIREBASE_RULES_SIGNAL_SCHEMA=PASS');
 console.log('424_VERIFIED_UID_BOUNDARY_AND_ETAG_RACE_RETRY=PASS');
-console.log('424_DUPLICATE_ZERO_RTDB_WRITE_AND_DENIED_NO_ACK=PASS');
+console.log('424_EQUAL_PAYLOAD_NEW_REVISION_STILL_SIGNALS_AND_DENIED_NO_ACK=PASS');
 console.log('424_REAL_FIREBASE_EXTERNAL_SIGNAL=NOT_TESTED');
 console.log('424_DIRECT_RTDB_WRITE_ON_PREVIEW=DISABLED');

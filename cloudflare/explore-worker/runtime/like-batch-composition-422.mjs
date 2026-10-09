@@ -7,6 +7,54 @@ import {createLikeProjectionPublisher421} from './like-public-r2-publisher-421.m
 import {createPersonalLikeR2Publisher423} from './like-personal-r2-publisher-423.mjs';
 import {createLikeUserRtdbSignal424} from './like-rtdb-user-signal-424.mjs';
 
+// Stage429 pre-write readiness for the verified modern 171-only path.
+// Cold/partial R2 must never be discovered only AFTER a D1 W2 mutation:
+// otherwise a new account or newly published track gets stranded with an
+// accepted canonical click and no durable personal/public publication.
+// This performs bounded R2 reads only on an authenticated, validated mutation;
+// there is no navigation read, D1 query, backfill, or shared database write.
+export async function verifyLikeR2Readiness429(r2, uid, entries) {
+  if(!r2?.get||typeof uid!=='string'||!uid.trim()||
+      !Array.isArray(entries)||entries.length<1||entries.length>50)
+    throw new Error('429_PREWRITE_REQUEST_INVALID');
+  const privateKey='internal/explore/shared-social-v114/likes/'+encodeURIComponent(uid)+'.json';
+  const privateObject=await r2.get(privateKey);
+  if(!privateObject)throw new Error('429_PRIVATE_COLD_BEFORE_D1');
+  let catalog;
+  try{catalog=JSON.parse(await privateObject.text());}
+  catch{throw new Error('429_PRIVATE_CORRUPT_BEFORE_D1');}
+  if(catalog?.schemaVersion!==1||catalog?.uid!==uid||
+     catalog?.canonicalComplete156!==true||
+     !catalog?.canonicalSource156||
+     !Array.isArray(catalog.likedTrackIds)||catalog.likedTrackIds.length>2000||
+     new Set(catalog.likedTrackIds).size!==catalog.likedTrackIds.length||
+     catalog?.exactLikeCount156!==catalog.likedTrackIds.length)
+    throw new Error('429_PRIVATE_PARTIAL_BEFORE_D1');
+  for(const item of entries){
+    const id=item.trackId;
+    const key='internal/explore/shared-track-card-v115/'+encodeURIComponent(id)+'.json';
+    const obj=await r2.get(key);
+    if(!obj)throw new Error('429_CARD_COLD_BEFORE_D1');
+    let payload;
+    try{payload=JSON.parse(await obj.text());}
+    catch{throw new Error('429_CARD_CORRUPT_BEFORE_D1');}
+    if(payload?.schemaVersion!==1||
+       String(payload?.card?.id||payload?.card?.trackId||'')!==id)
+      throw new Error('429_CARD_WRONG_SNAPSHOT_BEFORE_D1');
+  }
+  for(const sort of ['latest','popular']){
+    const obj=await r2.get('internal/explore/shared-feed-v112/'+sort+'-40.json');
+    if(!obj)throw new Error('429_FEED_COLD_BEFORE_D1');
+    let payload;
+    try{payload=JSON.parse(await obj.text());}
+    catch{throw new Error('429_FEED_CORRUPT_BEFORE_D1');}
+    if(!Array.isArray(payload?.payload?.data?.items)||
+       payload.payload.data.items.length>40)
+      throw new Error('429_FEED_WRONG_SNAPSHOT_BEFORE_D1');
+  }
+  return {ready:true};
+}
+
 export function createCandidateLikeBatch422({
   db, sharedR2, allEnvironmentCutoverVerified = false,
   authenticatedUid, firebaseIdToken, firebaseTokenVerified = false,
@@ -32,6 +80,8 @@ export function createCandidateLikeBatch422({
   });
   const handler=createLikeD1OnlyBatchAdapter420(db,{
     allEnvironmentCutoverVerified:true,publishChangedTrack:publisher,
+    beforeCanonicalMutation:typeof persistPersonalSnapshot==='function'
+      ? null : (uid,entries)=>verifyLikeR2Readiness429(sharedR2,uid,entries),
   });
   return {
     async acceptAuthenticatedBatch(uid,body){

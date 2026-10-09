@@ -6,6 +6,15 @@ on:
       - 'scripts/soridraw-qa-engine.mjs'
       - '.github/workflows/qa-engine-preview.yml'
   workflow_dispatch:
+    inputs:
+      profile:
+        description: 'fast (offline) or full (includes TypeScript/Build; still no deployment)'
+        required: true
+        default: fast
+        type: choice
+        options:
+          - fast
+          - full
 permissions:
   contents: read
 concurrency:
@@ -24,7 +33,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run fast offline SORIDRAW regressions
-        run: node scripts/soridraw-qa-engine.mjs fast
+      - name: Install app only for explicitly selected full check
+        if: github.event_name == 'workflow_dispatch' && inputs.profile == 'full'
+        run: npm ci --no-audit --no-fund
+      - name: Run SORIDRAW QA engine
+        env:
+          QA_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'fast' }}
+        run: node scripts/soridraw-qa-engine.mjs "$QA_PROFILE"
       - name: Confirm no deployment or shared-data changes
         run: echo 'FAST_QA_ONLY;RELEASE_UNVERIFIED;NO_DEPLOYMENT;NO_SHARED_MUTATION'

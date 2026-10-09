@@ -1,3 +1,14 @@
+## 0S47. Stage420 실제 app164+ 요청 계약용 D1 W2 어댑터·재시도 보호 구현, 격리 QA / 전체 앱 PREVIEW 배포 HOLD (2026-10-09 KST)
+
+- **사용자 배포 가속 지시:** Stage419 신중 반복 조사 대신 기존 PREVIEW 클라이언트 및 2026-09-25 app164 동결 코드의 POST `/v1/me/likes/batch` 실제 요청 본문 검증: `trackId,liked,baseLiked,mutationAt,operationId,expectedRevision` 모두 전송. app164부터는 171 writer에 필요한 revision/operation ID가 이미 있어 클라이언트 대규모 재작업 불필요.
+- **제품 후보 코드 진전:** `cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs` 새 source-only, **not wired / flag OFF / un-deployed**. 인증된 UID를 받아 기존 171 atomic D1 W2 writer로 batch 상태를 바꾸는 구현; 요청 전체를 먼저 검사하고 구형 revision/operation ID 누락 또는 mixed batch는 write 0으로 거절. 낡은/역순 요청과 중복은 171에서 revision 기반 W0. D1 확정 이후 개인 snapshot R2/공개 feed/card/profile R2/동일 UID RTDB 변경신호의 세 가지 영속 발행 증명이 없으면 **settled 응답을 금지**, 같은 ID 재시도 시 D1 W0이 되도록 설계.
+- **검사:** `scripts/verify-419-like-w2-cutover.mjs`에 실제 171 SQL + 420 어댑터 실행, 혼합 구형 요청 0 write, revision 충돌, publisher 실패→동일 ID 복구, 분산 UID 공개 count 회귀 포함. `scripts/measure-419-isolated-171-d1.mjs`에서도 독립 임시 Cloudflare D1에 `420` 실제 코드 실행, `meta.rows_written` W2/W0, publisher 실패→복구 W0 측정 추가. 공개 publisher는 **검사 스텁**이며 운영 R2/RTDB 실제 연결을 검증한 것으로 간주 금지.
+- **배포 핵심 차단:** 420 실제 canonical Worker HTTP 라우팅·프로필/Feed/개인 R2·RTDB publisher 미연결. app144 이전 캐시 클라이언트의 missing revision/operationId 무중단 호환 경로 미구현. TEST/PRODUCTION 기존 worker가 baseline을 쓰는 동안 공유 D1 171 cutover 절대 금지. 035/066/069/075 queue 및 three-env cutover fixture gate는 기존 419 PASS이지만 실제 live 배포 동등성 미검증. 기존 191 first80 반복 D1 read, 189 recovery/PC-mobile 정상검증도 미완. 따라서 **Stage420 PREVIEW 제품 배포는 아직 안전기준 미충족**. 개별 source-only module 테스트 PASS는 배포 PASS가 아님.
+- **안전 범위:** React/CSS/UI, 생성곡/Library/Music Note, 기존 Worker 실제 코드, Firebase Rules/Hosting/Functions, Cloudflare 실제 공유 D1/Worker, 사용자 데이터, TEST/PRODUCTION 모두 변경 0. 코드 후보·QA와 문서만 preview commit. 같은 SHA에서 최종 408 QA와 419 isolated remote CI 두 성공을 독립 확인한 뒤 다음 단계.
+- **다음 한 작업:** 현재 `preview-entry.js` 191 조회형 전체 first80 복구를 재사용하지 않고 변경 ID 하나에 대한 CAS 공개 card/feed/profile + 개인 snapshot + RTDB 신호 저장을 원자적 완료 증명할 실제 publisher/응답 보호를 source-only로 구현. 이후 구형 legacy old-worker routing 호환, 비용 W2 지속, 전 환경 freeze/사후 legacy intake 정책, Work/실기기 검증 뒤 PREVIEW 배포 판단. **검증 없이 배포 일자를 약속하거나 shared cutover하지 않음.**
+
+---
+
 ## 0S46. Stage419 3환경·4개 대기열 전환 안전 차단 SQL 격리 D1 검증 PASS / 구형 앱 요청 호환 미검증 (2026-10-09 KST)
 
 - **이번 실행:** preview baseline `c0e7bb756524a2843bacc6430e87ac38a2a6f353`. 신규 source-only `cloudflare/explore-worker/candidates/like-writer-cutover-preconditions-419.sql`와 기존 `like-writer-phase-fence-419.sql`를 *합쳐* `scripts/measure-419-isolated-171-d1.mjs`의 임시 원격 Cloudflare D1에서 실행. **공유 canonical D1·실 앱/Worker/Rules/Functions/Cache 변경 없음.**

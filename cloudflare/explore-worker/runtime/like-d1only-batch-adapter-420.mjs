@@ -88,7 +88,10 @@ export function createLikeD1OnlyBatchAdapter420(db, {
             generation:row.generation,operationId:row.operationId,
           });
           if (published?.settled !== true || published?.trackId !== item.trackId ||
-              published?.generation !== row.generation) {
+              published?.generation !== row.generation ||
+              published?.personalSnapshotPersisted !== true ||
+              published?.publicProjectionPersisted !== true ||
+              published?.sameAccountSignalQueued !== true) {
             throw inputError('420_PUBLIC_PROJECTION_NOT_SETTLED_RETRY_SAME_ID');
           }
         }

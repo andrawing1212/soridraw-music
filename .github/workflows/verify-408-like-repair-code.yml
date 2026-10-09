@@ -15,6 +15,8 @@ on:
       - 'scripts/verify-414-pending-only-lifecycle.mjs'
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
+      - 'scripts/verify-191-bounded-public-like-convergence.mjs'
+      - 'scripts/verify-426-dormant-cutover-worker.mjs'
       - 'scripts/verify-419-like-w2-cutover.mjs'
       - 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'
       - 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'

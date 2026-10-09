@@ -2083,6 +2083,8 @@ function like426Headers(request) {
 // exact server revisions; never invoked during normal Feed/page re-entry.
 async function handleLikeReconcile433(request,env,ctx) {
   const headers=like426Headers(request);
+  headers.set('Access-Control-Allow-Methods','GET, OPTIONS');
+  headers.set('Access-Control-Allow-Headers','Authorization, X-Firebase-AppCheck, Content-Type');
   try {
     const actor=await validateExploreAuth307(request,env,ctx);
     if(!actor.ok)return actor.response;
@@ -2192,6 +2194,14 @@ export default {
     }
     // Dormant upgrade-only read route: never changes an old client request,
     // and cannot open until the SAME verified three-environment freeze.
+    if(request.method==='OPTIONS'&&url.pathname==='/v1/me/likes/reconcile'&&
+       STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1'){
+      const headers=like426Headers(request);
+      headers.set('Access-Control-Allow-Methods','GET, OPTIONS');
+      headers.set('Access-Control-Allow-Headers','Authorization, X-Firebase-AppCheck, Content-Type');
+      headers.set('Access-Control-Max-Age','600');
+      return new Response(null,{status:204,headers});
+    }
     if(request.method==='GET'&&url.pathname==='/v1/me/likes/reconcile'&&
        STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1'){
       return handleLikeReconcile433(request,env,ctx);

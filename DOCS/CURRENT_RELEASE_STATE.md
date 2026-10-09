@@ -1,3 +1,15 @@
+## 0S34. app386 PREVIEW 실제 배포 SUCCESS / Stage416 Phase1 라이브 사용·D1 비용 QA 대기 (2026-10-09 KST)
+
+- **실제 GitHub 기준:** `preview` app386 release SHA `9b2d303c6adc2ebbec2b57952cad949e29d3dde2` (`public/app-version.json` bump `f3f9d09418383ae55d6fc68460a16c3314647004`), 이전 app385 → app386. Stage416 제품 수정 최종 `b8ab60a9bec2718eb135b1755c32c274c6792523`; 최종 관련 verifier 코드 `cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344`. 제품 변경 영역은 `src/services/exploreLikeService.ts` 한 파일, 기존 `scripts/verify-127-atomic-personal-like.mjs` 회귀 보강; 다른 사용자 기능/UI/Worker/canonical 변경 없음.
+- **실제 품질 CI:** `SORIDRAW 408 Targeted Like Repair Quality` Run **37870912569 SUCCESS**, exact source `f3f9d09418383ae55d6fc68460a16c3314647004`. Node22 npm ci, syntax, TypeScript, Build, 실제 node 127/175/178/191/192/197/390 + app412/413/414 등 steps 모두 SUCCESS. 이전 V8 mock PASS와 별개로 실제 Node CI 증거 확보.
+- **PREVIEW Firebase Hosting release:** `SORIDRAW PREVIEW App Release` Run **37871046504 SUCCESS**, checked-out **LOCKED_PREVIEW_SHA=9b2d303c6adc2ebbec2b57952cad949e29d3dde2**. Node20 TypeScript + Build + app358/359/360/361/377/378/379/385 regressions PASS; `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=386`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS` 실제 workflow stdout 기록 확인. 대상 **https://preview.soridraw.com/**.
+- **배포 범위:** Firebase PREVIEW Hosting만 변경. `SHARED_RTDB_RULES_DEPLOY=SKIPPED` 로그 확인. Worker/Cloudflare, Functions, Shared D1/Firestore/R2 canonical/schema/migration/사용자 데이터/TEST/PRODUCTION 변경·배포 **0**. 기존 app385 안전 기능 유지, 복구 스냅샷의 불필요 반복 재무장·FULL 중복 억제만 Stage416 Phase1.
+- **별도 CI 소음:** `diagnose-069-live-like.yml`가 preview push 때에도 실패/0 jobs 로그를 보이나 앱 릴리스 CI/Hosting exact smoke는 별도로 모두 SUCCESS. 진단 Workflow 실패 자체를 전체 플랫폼 장애 혹은 app386 실패라고 혼동 금지; 필요 시 별도 원인 진단.
+- **다음 실제 검증 필수:** 로그인 실기기 캐시 warm/cold에서 My Likes 재진입(변경 없음) personal Social Snapshot D1 R0 목표, 좋아요/해제 후 숫자/내 membership PC↔mobile 양방향, 신규곡 첫 좋아요, page-return 전후 캐시/RTDB 동기화, 복구 실패 후 60초 제한/자동 수렴(가능할 때), 각 행동 물리 D1 rows_read·rows_written(W1~W2/W3 FAIL), 기존 follow 유지. **이런 실계정·서버물리 검증은 이 채팅에서 아직 실행하지 않음**, 이를 PASS로 주장하지 않음. 공유 사용자의 로그인 세션이 없어 실제 Like 클릭·수치 관찰을 자동 실행할 수 없음.
+- **다음 단계 정책:** 사용자는 앞으로 별도 PREVIEW 배포 지시를 반복하지 않고, 안정성을 확인한 단계별 수정은 ChatGPT 판단으로 자동 PREVIEW 배포하여 실검증 진행하라고 승인. TEST 승격/PRODUCTION 정식배포는 여전히 사용자 명확한 별도 승인 필요. Stage416 Phase2 개인 즉시·Phase3 trailing300s·Phase4 공개 fixed300s는 아직 미구현, 1단계 실사용 오류/비용 먼저 확인하고 다음 수정.
+
+---
+
 ## 0S33. Stage416 Phase1 독립 회귀감사 추가 수정 — FULL 완료 후 targeted 실패 재복구 차단 / 6개 격리 PASS, CI·실측 HOLD (2026-10-09 KST)
 
 - **감사/수정 기준:** `preview` `b948e01a999466ccead874920cd6c27965f8e94a`에서 추가 소스 감사 시작. 이전 60초 동일 gap retry cooldown 후보는 정상 경로 격리 PASS지만, FULL canonical baseline 성공→app189 targeted proof 네트워크 실패→60초 뒤 재진입 때 **기존 FULL 복구를 다시 요청**하는 별도 회귀가 재현됨(원본 함수 자체 mock: FULL 2회/targeted 2회). 이는 정상 기기 개인 snapshot 불필요 R 증가 가능성 및 정확성 지연 위험.

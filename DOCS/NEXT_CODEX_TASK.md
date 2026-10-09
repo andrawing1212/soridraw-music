@@ -1,3 +1,13 @@
+## CURRENT — Stage420 앱 배포 직결 마지막 결손: 영속 R2/RTDB publisher + 구형 클라이언트 호환 [배포 HOLD]
+
+- **새 구현 확인:** preview `cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs`는 앱164+와 현재 앱의 `/v1/me/likes/batch` 실제 `expectedRevision, operationId` 계약을 받아 171 D1 writer 호출. `scripts/verify-419-like-w2-cutover.mjs`와 `scripts/measure-419-isolated-171-d1.mjs`는 SQL/원격 W2/W0 및 publisher FAIL 재시도 검사를 수행한다. 기존 419 3환경·035/066/069/075 gate를 또 중복 만들지 말 것.
+- **가장 먼저 구현할 것:** NEW `420`의 `publishChangedTrack` 실제 바인딩. 171처럼 D1이 W2로 확정된 그 ID만 R2 개인 catalog/공개 card/Feed/profile에 revision/generation CAS로 갱신, 동일 UID RTDB 변경신호 발행. 각 단계 지속 확인(현재 callback 계약: `personalSnapshotPersisted`, `publicProjectionPersisted`, `sameAccountSignalQueued` 셋 모두 true) 전 `canonicalD1:'settled'` ACK 금지. CAS 실패·R2 PUT 실패·RTDB 실패/ACK 유실→*동일 operationId* W0 재발행 복구, 다른 기기 늦은 이벤트가 새 숫자 덮어쓰기 금지. 전체 Feed/첫80 D1 조회/전체 계정 스캔 금지.
+- **둘째:** 구형 캐시 앱(<app144)에서 `expectedRevision` 또는 `operationId` 빠진 요청을 수용 가능하게 만드는 실제 재전송/두 기기 경쟁 의미 모델 증명. 현재 420은 mixed old request 전체를 zero-write 거절하는 fail-closed 보호일 뿐, 구형 UX 무중단 PASS 아님. 일괄 같은 user/track ordering 검증과 3환경 Worker old queue 요청 전환/실제 APP shadow comparison 필요. 불가능하면 명확하게 배포 BLOCKER 보고.
+- **절대 금지:** shared 171 migration 또는 phase flip, 미호환 TEST/PRODUCTION Worker 변경, 빌드 산출물/Hosting/Cloudflare 제품 배포, 사용자 데이터 복제/삭제/백필. 오직 preview 소스 후보와 합성/remote ephemeral D1 검증. 418 미검증 Worker를 혼합 승격 금지.
+- **최종 게이트:** Node 419/420 old/new/W2/W0 + 408 TypeScript/Build/개인 카탈로그/좋아요/팔로우/RTDB Rules read-only + 419 원격 격리 W2 + Work 독립 감사 + 실제 PREVIEW PC/모바일 첫 하트/재진입/다른 기기 같은 곡/공개 R2 숫자. 전부 통과한 완성본만 PREVIEW 배포.
+
+---
+
 ## CURRENT — Stage419 후속 구현: 구형 앱 좋아요 요청의 무손실 171 호환 라우터 실증 [공유 전환·배포 STOP]
 
 - **실제 비용/안전 검증 완료:** `DOCS/CURRENT_RELEASE_STATE.md 0S46`, `scripts/measure-419-isolated-171-d1.mjs` / 419 Run `37898502450` 성공. 합성 원격 D1에서 `171` 좋아요/해제 physical W2, 중복·stale W0, 3환경 준비조건, 035/066/069/075 큐 미정산 차단, 뒤늦은 구형 queue intake 거절, 불안전 legacy rollback 거절. 재시험보다 **남은 기능 호환성 구현**에 집중.

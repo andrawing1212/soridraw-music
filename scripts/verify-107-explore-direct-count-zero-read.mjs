@@ -39,7 +39,7 @@ if (atomicPairCard129 && !likes.includes('likeCount: Math.max(clampLikeCount(pub
 
 if (appVersion >= 120) {
   if (!likes.includes('SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918')) fail('current actor-count lock marker missing');
-  if (!likes.includes('EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000')) fail('current 30-second like window missing');
+  if (!likes.includes('EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000')) fail('current 30-second like window missing');
   if (!likes.includes('const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);')) {
     fail('actor optimistic count baseline missing');
   }

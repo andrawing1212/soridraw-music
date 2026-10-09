@@ -75,6 +75,10 @@ assert.ok(part.indexOf('validateExploreAuth307')<
   part.indexOf('await proveLikeBatchCutover426'));
 assert.ok(part.indexOf('await proveLikeBatchCutover426')<
   part.indexOf('await readAuthoritativeLikeIntents433'));
+assert.match(part,/Access-Control-Allow-Methods/);
+assert.match(part,/Access-Control-Allow-Headers/);
+assert.match(entry,/request.method==='OPTIONS'&&url.pathname==='\/v1\/me\/likes\/reconcile'/);
+assert.match(entry,/STAGE426_COMPILED_OPEN&&env\?\.SORIDRAW_LIKE_171_READY==='1'/);
 console.log('433_ALL_ENV_FENCE_AND_AUTH_BEFORE_CANONICAL_READ=PASS');
 console.log('433_OLD_INTENT_REBASE_WITH_EXACT_REVISION_NO_FALSE_ACK=PASS');
 console.log('433_CAPPED_USER_SCOPED_D1_READ_AND_NO_WRITES=PASS');

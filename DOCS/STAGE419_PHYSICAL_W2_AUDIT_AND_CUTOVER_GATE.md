@@ -43,3 +43,14 @@
 - Work 감사/실측 전 Stage418 또는 Stage419 PREVIEW 배포, 사용자 승인 없는 공유 migration, main/production 승격.
 
 **현재 결과:** Stage418 QA 408 `37892639404` SUCCESS 및 shared RTDB Rules read-only diff PASS는 유지. 그러나 **전체 W2 FAIL/HOLD**, Stage419 저장 구조 전환 실코드·공유 D1 실측·2기기 검증 아직 없음. 이 문서는 설계/감사 기록이며 기능 업데이트 또는 배포가 아니다.
+
+## 5. 별도 독립 SQLite 메모리 재현 (2026-10-09, 실제 D1 아님)
+
+Stage419 감사 도중 **새로 작성한 두 개의 독립 메모리 SQLite 재현**을 실행했다. 원격 GitHub clone이 네트워크 DNS 제한으로 불가하여 원본 스크립트를 실행한 것은 아니고, GitHub에서 읽은 069/032/033/171의 핵심 SQL 경로를 별도 단순화한 테스트다. **운영 공유 D1, 테스트 계정, 임시 원격 D1 모두 사용하지 않았다.**
+
+- `STAGE419_INDEPENDENT_SQLITE_MODEL=PASS`: 069 INSERT→likes INSERT/DELETE→track_stats UPDATE→derived_tracks→derived_state+feed/profile journal→069 DELETE, 좋아요 **8 논리 행 변경**, 해제 **8**, 이미 해제된 상태를 새로운 batch ID로 재처리하면 relation/count 0임에도 queue INSERT/DELETE **2 논리 행 변경**. 해당 모델에는 D1 인덱스 물리 청구가 빠져 있다. 이는 운영 DB `rows_written=8`이라는 계측이 아니다.
+- `STAGE419_171_REVISION_DUPLICATE_STALE_SQLITE_MODEL=PASS`: revision/operationId 형태의 source-only overlay+delta 모델에서 LIKE 논리2, 같은 op 재송 0, UNLIKE 논리2, 이전 revision의 다른 stale op 0이며 개인 상태/곡 수 정확. 이는 D1 API 원자성·원격 비용·개인 full recovery까지 검증한 것은 아니다.
+- **실패 반례를 독립 재현:** new writer가 `user2/song` 좋아요를 overlay 1 + delta 1로 반영한 다음, **구형 Worker가 legacy likes에 같은 관계를 쓰고 기존 track_stats를 +1**하면 최종 effective 좋아요 회원 1명인데 표시 count가 **2**가 된다. `STAGE419_OLD_WRITER_CONCURRENT_COUNTEREXAMPLE=PASS`. 따라서 **공유 legacy writer baseline freeze 없이 171 또는 157을 PREVIEW에서만 활성화하는 계획은 즉시 FAIL**이다.
+- 실제 Cloudflare `meta.rows_written`과 `rows_read`, 모든 현행 live trigger/index, cross-DB durability, Work/실기기 검증은 여전히 **미실행**. 이 테스트를 제품 PASS 근거로 사용 금지.
+
+**Codex 우선 회귀 추가:** legacy writer가 sparse overlay 뒤에 같은 membership/count를 다시 변경해 수가 이중 집계되는 시나리오, old/new worker race, old reader/public Feed/cold user cache가 서로 다른 수를 보여주는 시나리오를 정적 설명이 아닌 *실행형*으로 먼저 실패 재현. 무손실 all-environment 공통 phase-fence 없이는 어떤 실서비스 writer cutover도 금지.

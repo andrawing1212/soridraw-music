@@ -209,7 +209,7 @@ assert.ok(apply.indexOf('if (unresolvedChanged) writeSnapshotPending127') <
 console.log('418_EXISTING_RTDB_141_ORDERING_AND_LEGACY_COMPAT=PASS');
 const receipt420Segment = stageSource(client,
   'const trustedCanonicalReceipt417 =', 'const resultByTrack =');
-const match420 = receipt420Segment.match(/const trustedCanonicalReceipt417 =([\\s\\S]*?);\\s*$/);
+const match420 = receipt420Segment.match(/const trustedCanonicalReceipt417 =([\s\S]*?);\s*$/);
 assert.ok(match420, '417/420 trusted receipt parser must remain exact');
 const receipt420 = new Function('payload','return ('+match420[1]+');');
 const data420 = {

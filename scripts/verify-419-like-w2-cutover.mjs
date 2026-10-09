@@ -156,7 +156,8 @@ async function main() {
   const publishChangedTrack=async (e)=>{
     publishCount++;
     if(failNextPublish) {failNextPublish=false;return {settled:false};}
-    return {settled:true,trackId:e.trackId,generation:e.generation};
+    return {settled:true,trackId:e.trackId,generation:e.generation,
+      personalSnapshotPersisted:true,publicProjectionPersisted:true,sameAccountSignalQueued:true};
   };
   const router=createLikeD1OnlyBatchAdapter420(bridge.db,{
     allEnvironmentCutoverVerified:true,publishChangedTrack,

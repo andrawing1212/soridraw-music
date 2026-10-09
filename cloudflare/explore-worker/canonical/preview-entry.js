@@ -2081,9 +2081,17 @@ function like426Headers(request) {
 async function handleVerifiedLikeBatch426(request,env,ctx) {
   const headers=like426Headers(request);
   try {
-    await proveLikeBatchCutover426(env);
+    // Authorize FIRST: an unauthenticated POST must never touch D1 or R2.
     const actor=await validateExploreAuth307(request,env,ctx);
     if(!actor.ok)return actor.response;
+    // The existing legacy Worker limits accepted like batches. The new
+    // branch must preserve a bounded per-UID cost, not bypass abuse limits.
+    if(!env?.LIKE_RATE_LIMITER?.limit)
+      throw new Error('426_LIKE_RATE_LIMITER_UNAVAILABLE');
+    const quota=await env.LIKE_RATE_LIMITER.limit({key:actor.uid});
+    if(quota?.success!==true)
+      throw new Error('426_AUTHENTICATED_LIKE_RATE_LIMIT_REACHED');
+    await proveLikeBatchCutover426(env);
     const body=await request.json().catch(()=>null);
     const router=createCandidateLikeBatch422({
       db:env.DB,sharedR2:env.PROFILE_MEDIA,allEnvironmentCutoverVerified:true,

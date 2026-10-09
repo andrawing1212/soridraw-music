@@ -1,0 +1,41 @@
+name: SORIDRAW 419 Remote Isolated Like D1 Billing
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/measure-419-isolated-171-d1.mjs'
+      - '.github/workflows/measure-419-isolated-like-d1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-419-ephemeral-like-d1
+  cancel-in-progress: false
+jobs:
+  owned-synthetic-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout exact immutable PREVIEW SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check isolated billing source syntax and ownership fence
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-419-isolated-171-d1.mjs
+          node --check cloudflare/explore-worker/runtime/like-d1only-171.mjs
+      - name: Measure actual 171 physical rows on newly owned synthetic D1
+        run: node scripts/measure-419-isolated-171-d1.mjs
+      - name: Emergency delete owned synthetic D1 after any failure
+        if: always()
+        run: node scripts/measure-419-isolated-171-d1.mjs cleanup
+      - name: Confirm no deployment or real user database writes
+        run: echo '419_REMOTE_COST_ONLY;NO_SHARED_D1;NO_DEPLOYMENT'

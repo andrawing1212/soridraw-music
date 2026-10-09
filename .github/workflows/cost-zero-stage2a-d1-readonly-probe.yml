@@ -9,7 +9,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN }}
     steps:
@@ -23,28 +23,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Prepare exact live Worker settings
-        working-directory: cloudflare/explore-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_READONLY_TOKEN unavailable'; exit 2; }
-          npm install --no-audit --no-fund --package-lock=false
-          npm run cf:prepare
-          node --check .remote-worker/worker.js
-
-      - name: Read-only D1 capability probe
-        working-directory: cloudflare/explore-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler d1 execute soridraw-explore-db \
-            --remote \
-            --command 'SELECT 1 AS ok;' \
-            --config .remote-worker/wrangler.jsonc
-          echo 'D1_READONLY_EXECUTE=PASS'
-          echo 'D1_WRITE_REQUESTED=false'
-
+      # Only Cloudflare GraphQL usage analytics: no generated Worker, Wrangler,
+      # D1 SQL, user records, migrations, credentials printed, or deployment.
       - name: Account-wide D1 usage and shared D1 cost estimate (GraphQL, read-only)
         shell: bash
         env:

@@ -1,3 +1,18 @@
+## CURRENT — Stage419: 실물리 W1–W2 확보 가능성 판정 및 Stage418 정확성 독립 감사 [PREVIEW 배포 STOP] (2026-10-09 KST)
+
+**현재 소스 기준:** Stage418 코드 최초 SHA 27be98d575014d0f0498a146c63812a66f2db4dd; shared RTDB read-only 안전검사/배포 전 diff 게이트 포함 9c79874431039a46faec685c518aa3c28f1bd9a9; 이후 문서 commit은 HEAD 재확인. GitHub 408 Run 37892639404 SUCCESS, LIVE shared RTDB Rules read-only comparison PASS. 하지만 제품 배포 0. PREVIEW 실제 app386이고 Stage416 Phase1 실사용 R4/17 및 R4/19 FAIL 지속. 추가 요구: 총 Cloudflare physical D1 writes W1–W2 per mutation, W3+ FAIL (intake W1 진단만으로 입증 불가).
+
+**우선 Codex High/ExtraHigh + Work 독립 READ-ONLY 감사 업무, 구현 전 1회 예산 판단:**
+1. AGENTS → CURRENT_RELEASE_STATE 0S42 → NEXT_CODEX_TASK → WORK_AUDIT_CHECKLIST → frozen local-first-like-sync reference → Stage416 cloud architecture. 실제 checked-out Worker 2.08MB 전체 파일에서 processExploreLikeAggregateWave035, canonical 069 queue, DO scheduler 103, src/services/exploreLikeService.ts, app141/160/164 protection만 집중 확인. Stage418 변경 diff 범위만 먼저 검사.
+2. 사용자 영상의 75초 좋아요 해제 R4/rows17 및 105초 좋아요 R4/rows19, 모바일 단계형, 변경 후 My Likes, Feed mounted/idle 실제 read가 어디서 시작되는지 코드 수신/전송과 서버 event 순으로 재검토. 앱 synthetic 418 tests PASS를 Cloudflare 실제 결과라고 주장 금지. 417 nonexistent likes-confirmed GET 경로로 돌아가지 않음.
+3. **절대 비용 게이트:** 좋아요 1회에 D1 069 INSERT + 이후 likes INSERT/DELETE + track_stats UPDATE/INSERT + 069 DELETE(RETURNING)가 실행되는 기존 SQL의 physical rows_written 및 triggers 관여를 read-only으로 정확 추적. 사용자에게 보여준 W1이 intake만인지, DO worker 별도 physical W 몇인지 현존 Cloudflare metrics/remote read-only EXPLAIN/scoped synthetic test-account 변경 전 승인된 범위로 구분. Shared user D1 원본 대량 데이터/전체 백필/임의 schema mutation 금지. 변경당 physical 총 W3+ 예상이면 기존 418 product PREVIEW 배포 HOLD 유지.
+4. **Stage419 구조 탐색:** 새 서비스 추가보다 기존 event-driven SQLite Durable Object 103의 durable storage로 per-UID 최종 좋아요 의도/중복방지/서버 receive ordering을 관리하여 069 D1 queue W1+DELETE W1를 줄이는 설계. 동시에 D1 likes 및 track_stats 1행씩 변경(W2 목표), 다른 사용자 같은 곡 concurrent updates, crash halfway between DO and D1, legacy queue 035/066/069 및 user075/older apps compatibility, exactly-once/canonical idempotency, W1–W2 physical including triggers, DO requests/storage duration, R2 A/B writes, RTDB bandwidth 비교. Durable Object SQLite와 shared D1은 하나의 트랜잭션으로 묶이지 않음 — partial failure recovery·idempotency 없이 대체하지 말 것.
+5. 만약 W2 설계가 하위호환·데이터 손실 없이 불가능하다면 무엇이 최소 physical writes인지 각 케이스를 수치로 제시하고 사용자에게 선보고, 기능을 지우거나 pending guard를 삭제하거나 app386 안정성을 깨서 W2에 맞추지 말 것. Stage418 atomic 069 receipt는 비용 측면에서 R4 후보 경로지만 069 queue로 인해 목표 W 초과 가능.
+6. 작은 제품 변경 후 Node Stage418 + TypeScript + Build + 127/175/178/191/192/197/390, first-like, public count/follow regressions + Work independent audit exact SHA. Live shared RTDB rules auth comparison 418 additive-only 유지, 다른 ACL 변경 시 **배포 차단**. PREVIEW 배포는 full W2 and R0 failure-path 안전 증거 후 Worker→shared rules safe update→Firebase PREVIEW Hosting exact build, 실제 PC↔mobile A/B testing. 모든 단계 중 FAIL 발견 시 배포 정지, main/TEST/PRODUCTION 변경 절대 금지.
+
+**현재 완료:** Stage418 product code/QA PASS, live RTDB rules diff READ-ONLY PASS, cost gate FLAGGED. **현재 미완:** physical D1 W1–W2, independently audited canonical failure recovery, signed/nonforgeable same-UID settlement signal, actual PREVIEW release and real PC/mobile R4/17/19 regression. Codex 직접 배포 금지.
+
+---
 ## CURRENT AUDIT GATE — 실제 Stage416 Stage417 후보 구현 후 물리 비용·공유 RTDB Rule 호환 감사 (2026-10-09 KST)
 
 - **기준:** `preview` 제품/검사 코드 exact SHA `64c66f21e645311ac925df831ddfc9981cfc3ea3`, QA 408 `37890205404 SUCCESS`. 상세 변경 및 검사 `DOCS/CURRENT_RELEASE_STATE.md 0S41`. 추가 문서 commit 뒤 실제 최종 HEAD는 다시 확인. active PREVIEW app386 유지; 제품 코드 아직 **미배포**. 이전에 구현 지시만 있던 상태가 아니며 **실제 Worker/React/RTDB additive rules/test 소스 구현 완료**. Codex가 같은 부분 중복 작성하지 말 것.

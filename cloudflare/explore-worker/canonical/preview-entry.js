@@ -1084,14 +1084,84 @@ async function scheduleExploreLikeAggregate103(env) {
   return response.json().catch(() => ({}));
 }
 
-async function ensureQueuedLikeBatchScheduled103(request, env, response) {
+// SORIDRAW_BOUND_CANONICAL_LIKE_PROOF_417_20261009
+// Proof is emitted only after the existing scheduler reports a completed
+// canonical wave and an authenticated read of the EXACT changed IDs matches.
+// An accepted queue or speculative personal R2 object is not proof.
+async function verifyQueuedLikeCanonical417(request, env, ctx, payload) {
+  const rows = payload?.data?.results;
+  if (!Array.isArray(rows) || !rows.length || rows.length > 20 ||
+      payload?.data?.personalLikeSnapshot !== 'changed-track-r2' ||
+      rows.some((r) => !r || typeof r.trackId !== 'string' || !r.trackId ||
+        r.trackId.length > 512 || typeof r.liked !== 'boolean' ||
+        (r.status && r.status !== 'legacy-queued'))) return null;
+  const ids = rows.map((r) => r.trackId);
+  if (new Set(ids).size !== ids.length) return null;
+  const target = new URL('/v1/me/likes-confirmed', request.url);
+  target.searchParams.set('trackIds', ids.join(','));
+  try {
+    const response = await baseWorker.fetch(
+      new Request(target.toString(), { method: 'GET', headers: request.headers }),
+      env,
+      ctx,
+    );
+    // 409 (another active queue), 503 (uncertain authority) and all failures
+    // remain queued. Neither the optimistic catalog nor the guard is erased.
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (body?.ok !== true || !Array.isArray(body?.data?.likedTrackIds)) return null;
+    const confirmed = new Set(body.data.likedTrackIds.map((id) => String(id || '').trim()));
+    if (!rows.every((r) => confirmed.has(r.trackId) === r.liked)) return null;
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
   const url = new URL(request.url);
   if (request.method !== 'POST' || url.pathname !== EXPLORE_LIKE_BATCH_ROUTE_103 || !response.ok) return response;
   const payload = await response.clone().json().catch(() => null);
   if (!payload?.data?.queued) return response;
 
   try {
-    await scheduleExploreLikeAggregate103(env);
+    const schedule = await scheduleExploreLikeAggregate103(env);
+    // Existing DO completion alone does not prove THIS user's membership.
+    // It is a gate for one bounded canonical read, not a settled declaration.
+    if (schedule?.newlyScheduled === true && schedule?.settled === true &&
+        payload?.data?.canonicalD1 === 'queued') {
+      const canonicalProof = await verifyQueuedLikeCanonical417(request, env, ctx, payload);
+      if (canonicalProof) {
+        const headers = new Headers(response.headers);
+        headers.set('Content-Type', 'application/json; charset=utf-8');
+        headers.set('Cache-Control', 'no-store');
+        // The added canonical GET costs D1 reads. Preserve complete physical
+        // diagnostic counters instead of hiding those reads in an internal call.
+        for (const name of [
+          'X-SORIDRAW-D1-Read',
+          'X-SORIDRAW-D1-Write',
+          'X-SORIDRAW-D1-Read-Queries',
+          'X-SORIDRAW-D1-Write-Queries',
+          'X-SORIDRAW-D1-Other-Queries',
+          'X-SORIDRAW-R2-A',
+          'X-SORIDRAW-R2-B',
+        ]) {
+          const before = Number(headers.get(name) || 0);
+          const extra = Number(canonicalProof.headers.get(name) || 0);
+          if (Number.isFinite(extra) && extra > 0) {
+            headers.set(name, String(Math.max(0, Number.isFinite(before) ? before : 0) + extra));
+          }
+        }
+        return new Response(JSON.stringify({
+          ...payload,
+          data: {
+            ...payload.data,
+            canonicalD1: 'settled',
+            canonicalProof: 'bounded-membership-after-queue-417',
+          },
+        }), { status: response.status, statusText: response.statusText, headers });
+      }
+    }
     return response;
   } catch (error) {
     // The canonical queue may already contain the desired-state mutation. Returning
@@ -2126,7 +2196,7 @@ export default {
     }
 
     const publicLikeAcceptedAt193 = Date.now();
-    const scheduledResponse = await ensureQueuedLikeBatchScheduled103(request, env, response);
+    const scheduledResponse = await ensureQueuedLikeBatchScheduled103(request, env, response, ctx);
     return attachPublicLikeAcceptedAt193(request, scheduledResponse, publicLikeAcceptedAt193);
   },
 };

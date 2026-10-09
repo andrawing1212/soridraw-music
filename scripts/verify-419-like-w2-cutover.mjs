@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLikeD1OnlyCanonical171 } from '../cloudflare/explore-worker/runtime/like-d1only-171.mjs';
+import { createLikeD1OnlyBatchAdapter420 } from '../cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs';
 
 const schemaPath = 'cloudflare/explore-worker/migrations/20260921_03_explore_like_d1only_v171_additive.sql';
 const schema = readFileSync(schemaPath, 'utf8');
@@ -145,6 +146,64 @@ async function main() {
   console.log('419_CUTOVER_BEFORE_OLD_WRITERS_FROZEN=BLOCKED');
   console.log('419_PHYSICAL_CLOUDFLARE_D1_COST=NOT_MEASURED');
   console.log('419_LIVE_SHARED_DATA_AND_DEPLOYMENT=UNTOUCHED');
+  // Source-only 420 adapter preserves the *already existing* app164+ wire
+  // contract (revision/opId) and refuses to guess for old cached clients.
+  const bridge=isolatedFixture();
+  assert.throws(()=>createLikeD1OnlyBatchAdapter420(bridge.db),/420_SHARED_PHASE_NOT_VERIFIED/);
+  assert.throws(()=>createLikeD1OnlyBatchAdapter420(bridge.db,{allEnvironmentCutoverVerified:true}),
+    /420_PUBLIC_PROJECTION_PUBLISHER_REQUIRED/);
+  let publishCount=0, failNextPublish=false;
+  const publishChangedTrack=async (e)=>{
+    publishCount++;
+    if(failNextPublish) {failNextPublish=false;return {settled:false};}
+    return {settled:true,trackId:e.trackId,generation:e.generation};
+  };
+  const router=createLikeD1OnlyBatchAdapter420(bridge.db,{
+    allEnvironmentCutoverVerified:true,publishChangedTrack,
+  });
+  const mutation=(trackId,liked,expectedRevision,operationId)=>({
+    trackId,liked,baseLiked:!liked,mutationAt:420000,expectedRevision,operationId,
+  });
+  const modern=mutation('song',true,0,'420-like-a');
+  const old={trackId:'legacy',liked:false,baseLiked:true,mutationAt:420001};
+  await assert.rejects(router.acceptAuthenticatedBatch('user-a',{mutations:[modern,old]}),
+    /420_LEGACY_MUTATION_NEEDS_COMPATIBILITY_GATE/);
+  assert.equal(rows(bridge.sqlite,'explore_like_overrides_171'),0);
+  assert.equal(publishCount,0);
+  let sent=await router.acceptAuthenticatedBatch('user-a',{mutations:[modern]});
+  assert.deepEqual([sent.data.results[0].status,sent.data.rowsWritten,sent.data.canonicalD1],
+    ['applied',2,'settled']);
+  sent=await router.acceptAuthenticatedBatch('user-a',{mutations:[modern]});
+  assert.deepEqual([sent.data.results[0].status,sent.data.rowsWritten],
+    ['duplicate',0]);
+  sent=await router.acceptAuthenticatedBatch('user-b',{
+    mutations:[mutation('song',true,0,'420-like-b')],
+  });
+  assert.equal(sent.data.results[0].likeCount,2);
+  sent=await router.acceptAuthenticatedBatch('user-a',{
+    mutations:[mutation('song',false,0,'420-stale-a')],
+  });
+  assert.deepEqual([sent.data.results[0].status,sent.data.rowsWritten],
+    ['revision-conflict',0]);
+  assert.equal(publishCount,3);
+  // D1 may commit successfully and the public publisher may fail; a 503-style
+  // failure must retain the app outbox so retrying the SAME ID costs W0.
+  failNextPublish=true;
+  const unlike=mutation('song',false,1,'420-unlike-a');
+  await assert.rejects(router.acceptAuthenticatedBatch('user-a',{mutations:[unlike]}),
+    /420_PUBLIC_PROJECTION_NOT_SETTLED_RETRY_SAME_ID/);
+  assert.equal((await createLikeD1OnlyCanonical171(bridge.db,{cutoverVerified:true})
+    .readSnapshot('user-a','song')).liked,false);
+  sent=await router.acceptAuthenticatedBatch('user-a',{mutations:[unlike]});
+  assert.deepEqual([sent.data.results[0].status,sent.data.rowsWritten,
+    sent.data.results[0].likeCount],['duplicate',0,1]);
+  assert.equal(sent.data.canonicalProof,'isolated-171-publication-confirmed-420');
+  console.log('420_MODERN_APP164_PLUS_BATCH_WIRE_REAL_171_SQL=PASS');
+  console.log('420_MIXED_UNTRUSTED_OLD_CLIENT_BATCH_WRITES_ZERO=PASS');
+  console.log('420_DUPLICATE_AND_REVISION_CONFLICT_W0=PASS');
+  console.log('420_PUBLIC_PROJECTION_FAILURE_RETRY_SAME_OPID_W0=PASS');
+  console.log('420_LEGACY_PRE_APP144_COMPATIBILITY=NOT_IMPLEMENTED_RELEASE_HOLD');
+  bridge.sqlite.close();
   sqlite.close(); other.sqlite.close();
 }
 await main();

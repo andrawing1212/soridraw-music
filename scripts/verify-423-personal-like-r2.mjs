@@ -74,6 +74,19 @@ readyItems.get(preflightKey).canonicalComplete156=false;
 await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
   /429_PRIVATE_PARTIAL_BEFORE_D1/);
 readyItems.get(preflightKey).canonicalComplete156=true;
+readyItems.get(preflightKey).likedTrackIds=
+  Array.from({length:2000},(_,i)=>'existing-track-'+i);
+readyItems.get(preflightKey).exactLikeCount156=2000;
+await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
+  /429_PRIVATE_CAPACITY_BEFORE_D1/);
+readyItems.get(preflightKey).likedTrackIds=[];
+readyItems.get(preflightKey).exactLikeCount156=0;
+readyItems.get(preflightKey).likeRevisions423=Object.fromEntries(
+  Array.from({length:2000},(_,i)=>['r'+i,{revision:1,
+    operationId:'op-'+i,liked:false}]));
+await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
+  /429_PRIVATE_REVISION_CAPACITY_BEFORE_D1/);
+readyItems.get(preflightKey).likeRevisions423={};
 readyItems.delete(preflightPopular);
 await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
   /429_FEED_COLD_BEFORE_D1/);

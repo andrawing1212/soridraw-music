@@ -394,3 +394,70 @@ assert.doesNotMatch(resume134, /likeHydrationKeyRef\.current = ''/,
   'cached tab resume must not reset like hydration and trigger another D1 membership read');
 assert.match(resume134, /checkExplorePersonalLikeRevision127\(user\)/,
   'real tab resume may check only the tiny private revision');
+
+
+// Stage416: exercise the real app357/359 parity orchestrator in isolation.
+// A known-contiguous like signal must not turn a settlement-only My Likes
+// navigation into a second authenticated full-repair snapshot. Genuine gaps
+// still take the original repair path and keep all fail-closed guards.
+const parityStart416 = service.indexOf('export const ensureExplorePersonalLikeCrossOriginParity357 = async (');
+const parityEnd416 = service.indexOf('// SORIDRAW_EXPLORE_LIKE_LEGACY_R2_COMPAT_072_20260920', parityStart416);
+assert.ok(parityStart416 > 0 && parityEnd416 > parityStart416, '416 parity owner missing');
+const parityJS416 = ts.transpileModule(
+  service.slice(parityStart416, parityEnd416).replace('export const ensureExplorePersonalLikeCrossOriginParity357', 'const ensureExplorePersonalLikeCrossOriginParity357'),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText;
+const runParity416 = async ({ certified = 100, settled = 0, pending = true } = {}) => {
+  const calls = [];
+  let guards = pending ? { 'track-pending': true } : {};
+  const latest = 100;
+  const context = {
+    hasLikedStateStorage127: () => true,
+    readLastRetainedLikeSignal357: () => latest,
+    readCrossOriginLikeCertified357: () => certified,
+    readCrossOriginLikeSettled359: () => settled,
+    readCrossOriginLikeSettlementAttempted359: () => 0,
+    readCrossOriginLikeAttempted358: () => 0,
+    shouldRepairPersonalLikeOrigin357: ({ latestSignalVersion, certifiedSignalVersion }) =>
+      certifiedSignalVersion < latestSignalVersion,
+    shouldAttemptPersonalLikeOriginSettlement359: ({ latestSignalVersion, settledSignalVersion, attemptedSignalVersion }) =>
+      latestSignalVersion > settledSignalVersion && latestSignalVersion > attemptedSignalVersion,
+    shouldAttemptPersonalLikeOriginRepair358: () => true,
+    markCrossOriginLikeAttempted358: () => calls.push('mark-358'),
+    markCrossOriginLikeSettlementAttempted359: () => calls.push('mark-359'),
+    crossOriginParityInFlight357: new Map(),
+    requestRepair127: () => calls.push('repair-target'),
+    writeLikeLocal127: (key, value) => calls.push('write:' + key + ':' + value),
+    scopedLikeKey127: (key) => key,
+    EXPLORE_LIKE_REPAIR_ATTEMPTED_182: 'repair-182',
+    EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189: 'settlement-189',
+    ensurePersonalLikeBaseline127: async (_user, revision) => {
+      calls.push(revision ? 'baseline:settlement' : 'baseline:normal');
+      if (revision) guards = {};
+    },
+    readSnapshotPending127: () => guards,
+    requestPersonalLikeRevision127: async () => { calls.push('revision'); return 'rev-confirmed'; },
+    invalidateExplorePersonalLikeBaseline127: () => calls.push('invalidate'),
+    readRepairTarget127: () => 0,
+    markCrossOriginLikeCertified357: () => calls.push('certified'),
+    markCrossOriginLikeSettled359: () => calls.push('settled'),
+  };
+  const make = new Function(...Object.keys(context),
+    parityJS416 + '\nreturn ensureExplorePersonalLikeCrossOriginParity357;');
+  await make(...Object.values(context))({ uid: 'test-member' });
+  return calls;
+};
+const settlementOnly416 = await runParity416({ certified: 100, settled: 0 });
+assert.ok(settlementOnly416.includes('baseline:settlement'), '416 targeted settlement must remain');
+assert.ok(!settlementOnly416.includes('repair-target'), '416 settlement-only must not request full canonical repair');
+assert.ok(!settlementOnly416.includes('write:repair-182:'), '416 settlement-only must not rearm repair 182');
+assert.ok(settlementOnly416.includes('settled'), '416 successful proof remains certified');
+const genuineGap416 = await runParity416({ certified: 0, settled: 0 });
+assert.ok(genuineGap416.includes('repair-target'), '416 genuine remote signal gap needs repair');
+assert.ok(genuineGap416.includes('write:repair-182:'), '416 genuine gap retains full repair eligibility');
+assert.ok(genuineGap416.includes('baseline:settlement'), '416 genuine gap also retains unsettled guard proof');
+const healthy416 = await runParity416({ certified: 100, settled: 100 });
+assert.equal(healthy416.length, 0, '416 healthy account re-entry must never recheck snapshot');
+console.log('416_SETTLEMENT_ONLY_NO_EXTRA_FULL_REPAIR=PASS');
+console.log('416_GENUINE_SIGNAL_GAP_STILL_REPAIRS=PASS');
+console.log('416_HEALTHY_REENTRY_ZERO_REQUESTS=PASS');

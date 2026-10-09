@@ -590,6 +590,7 @@ const runCompletedFullTargetedFailure416 = async (priorAttempt, initialBaseline,
   const context = {
     ...retryContext416,
     Date: { now: () => now },
+    readLastRetainedLikeSignal357: () => 100,
     EXPLORE_LIKE_BASELINE_127: 'baseline',
     scopedLikeKey127: (key, uid) => uid + ':' + key,
     readLikeLocal127: key => store.get(key) || '',

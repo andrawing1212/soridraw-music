@@ -38,6 +38,8 @@ const groups = [
   { name: 'projection', commands: [
     ['node', '--check', 'scripts/verify-412-shared-projection-cas.mjs'],
     ['node', 'scripts/verify-412-shared-projection-cas.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'],
+    ['node', 'scripts/verify-421-like-r2-publisher.mjs'],
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],

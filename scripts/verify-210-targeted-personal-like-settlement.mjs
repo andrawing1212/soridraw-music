@@ -92,8 +92,8 @@ assert(
   'Existing five-minute revision check window changed',
 );
 assert(
-  like.includes('const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;'),
-  'Frozen 30-second like batching changed',
+  like.includes('const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000;'),
+  'Frozen Stage413 5-second Explore like batching changed',
 );
 
 console.log('APP210_SETTLEMENT_TARGETED_D1=PASS');

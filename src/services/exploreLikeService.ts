@@ -998,12 +998,15 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
       markCrossOriginLikeSettlementAttempted359(uid, latestSignalVersion);
     }
 
-    requestRepair127(uid, latestSignalVersion);
-
-    // Reuse the existing bounded account repair route. If shared R2 is already
-    // exact this is a cheap no-op; if app358 left an old partial object it is
-    // rebuilt from the account-scoped canonical public/published set.
-    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '');
+    // Stage416: app359's settlement-only check must not re-arm the older
+    // app358 cross-origin FULL repair. A contiguous/certified RTDB signal
+    // needs only the guarded app189 settlement proof, not a second account
+    // repair snapshot and canonical rebuild attempt. Genuine signal gaps
+    // retain the original app358 repair path, unchanged.
+    if (legacyNeedsRepair357) {
+      requestRepair127(uid, latestSignalVersion);
+      writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '');
+    }
     await ensurePersonalLikeBaseline127(user);
 
     // If an exact canonical snapshot still has historical accepted-but-unsettled

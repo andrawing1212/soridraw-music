@@ -1,3 +1,12 @@
+## CURRENT — Stage419 후속 구현: 구형 앱 좋아요 요청의 무손실 171 호환 라우터 실증 [공유 전환·배포 STOP]
+
+- **실제 비용/안전 검증 완료:** `DOCS/CURRENT_RELEASE_STATE.md 0S46`, `scripts/measure-419-isolated-171-d1.mjs` / 419 Run `37898502450` 성공. 합성 원격 D1에서 `171` 좋아요/해제 physical W2, 중복·stale W0, 3환경 준비조건, 035/066/069/075 큐 미정산 차단, 뒤늦은 구형 queue intake 거절, 불안전 legacy rollback 거절. 재시험보다 **남은 기능 호환성 구현**에 집중.
+- **이제 Codex High/ExtraHigh 1순위:** 실제 구형 `preview/test/production` Worker 경로와 035/066/069/075, 구형 앱 요청 body(`mutationAt`/stable `batchId`/`operationId` 유무), 신규 171 `expectedRevision` 요구를 exact source와 read-only active versions로 대조. **과거 클릭 지연 도착, ACK 유실 재시도, 양기기 서로 다른 클릭 순서**를 영속 처리할 수 있는 compatible writer/adapter를 **source-only, flag OFF**로 설계·작성해 synthetic test로 검증. 예전 클라이언트가 부족한 revision을 보낼 때 임의 추정하거나 stale을 최종 상태로 덮어쓰면 FAIL. 불가능하면 불가능 원인을 명확히 기록.
+- **주의:** SQL readiness marker만 채우고 live shared D1 `phase='overlay'` UPDATE 금지. 기존 TEST/PRODUCTION은 사용자 승인 없는 코드/Worker 변경 금지. DB 트리거가 늦은 옛 요청을 거부하면 사용자 클릭은 실패하므로 이것을 무중단 호환 PASS로 보고 금지. 모든 환경 실제 요청 수용·queued/settled semantics·공개 Feed/R2·My Likes/첫 좋아요·PC↔모바일·오류 복구 및 Work 독립 검증 필요. 분할바/Studio/Music Note/Library/UI 등 보호.
+- **검증:** 신규 old-client contract regression, 127/175/178/189/191/192/197/390/419, TypeScript/Build/remote synthetic W2 + DB 자동삭제, 임의 배포 0. 검사 전 공유 D1 schema/migration/seeding 금지.
+
+---
+
 ## CURRENT ADDENDUM — Stage419 069→DO 단독 교체는 W2 해결책 아님 / 157·171 무백필 후보 우선 (2026-10-09 KST)
 
 - **반드시 먼저 읽기:** [Stage419 물리 비용 감사·전환 게이트](STAGE419_PHYSICAL_W2_AUDIT_AND_CUTOVER_GATE.md). Stage418 069 queue 기존 canonical+032/033 파생 trigger 그대로라면 단순 DO SQLite로 queue INSERT/DELETE만 제거해도 D1 전체 W2는 미달. 격리 145 소스·SQLite 논리 변경 069 포함 8개(인덱스 미포함); 실 Cloudflare 운영 `rows_written` 숫자로 단정 금지.

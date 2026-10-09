@@ -64,24 +64,38 @@ async function select(sql) {
 const expect=[
   'explore_like_batches_035','explore_like_batches_066',
   'explore_like_batches_069','explore_like_user_queue_075',
-  'explore_like_overrides_171','explore_like_count_deltas_171',
+  'explore_like_user_queue_state_075','explore_like_overrides_171','explore_like_count_deltas_171',
   'explore_like_cutover_control_174','explore_like_writer_phase_419',
 ];
-const names=(await select("SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_batches_035','explore_like_batches_066','explore_like_batches_069','explore_like_user_queue_075','explore_like_overrides_171','explore_like_count_deltas_171','explore_like_cutover_control_174','explore_like_writer_phase_419')")).map(r=>r.name);
+const names=(await select("SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_batches_035','explore_like_batches_066','explore_like_batches_069','explore_like_user_queue_075','explore_like_user_queue_state_075','explore_like_overrides_171','explore_like_count_deltas_171','explore_like_cutover_control_174','explore_like_writer_phase_419')")).map(r=>r.name);
 for(const name of expect)console.log('425_SHARED_SCHEMA_'+name+'='+(names.includes(name)?'PRESENT':'MISSING'));
-if(!expect.slice(4).every(x=>names.includes(x)))allReady=false;
+if(!names.includes('explore_like_user_queue_state_075'))throw Error('425_075_PROCESSING_CURSOR_SCHEMA_MISSING');
+if(!expect.slice(5).every(x=>names.includes(x)))allReady=false;
 for(const [type,table] of [
   ['035','explore_like_batches_035'],['066','explore_like_batches_066'],
   ['069','explore_like_batches_069'],['075','explore_like_user_queue_075'],
 ]){
   if(!names.includes(table)){allReady=false;console.log('425_QUEUE_'+type+'=SCHEMA_MISSING');continue;}
-  const list=await select('SELECT 1 AS pending FROM '+table+' LIMIT 1');
+  // 075 deliberately retains processed historical rows. Use the exact
+  // persisted high-water cursor from existing 164/174 production preflight.
+  const pending075='SELECT 1 AS pending FROM explore_like_user_queue_075 q '+
+    'JOIN explore_like_user_queue_state_075 s ON s.id=1 '+
+    'WHERE q.updated_at > s.processed_at OR '+
+    '(q.updated_at = s.processed_at AND q.user_uid > s.processed_uid) LIMIT 1';
+  const list=await select(type==='075'?pending075:
+    'SELECT 1 AS pending FROM '+table+' LIMIT 1');
   const status=list.length?'PENDING':'EMPTY';
   console.log('425_QUEUE_'+type+'='+status);
   if(list.length)allReady=false;
 }
 if(names.includes('explore_like_user_queue_075')) {
-  const oldest=await select('SELECT updated_at,pending_count FROM explore_like_user_queue_075 ORDER BY updated_at ASC LIMIT 1');
+  const history=await select('SELECT 1 AS old_row FROM explore_like_user_queue_075 LIMIT 1');
+  const oldest=await select('SELECT q.updated_at,q.pending_count FROM explore_like_user_queue_075 q '+
+    'JOIN explore_like_user_queue_state_075 s ON s.id=1 '+
+    'WHERE q.updated_at > s.processed_at OR '+
+    '(q.updated_at = s.processed_at AND q.user_uid > s.processed_uid) '+
+    'ORDER BY q.updated_at ASC LIMIT 1');
+  if(history.length&&!oldest.length)console.log('425_075_HISTORY_ROWS=PROCESSED_NOT_PENDING');
   if(oldest.length) {
     const at=Number(oldest[0].updated_at);
     const now=Date.now();

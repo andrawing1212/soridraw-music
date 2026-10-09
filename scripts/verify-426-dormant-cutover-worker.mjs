@@ -11,6 +11,13 @@ assert.match(stage,/if \(!STAGE426_COMPILED_OPEN\|\|env\?\.SORIDRAW_LIKE_171_REA
 assert.match(stage,/env\?\.SORIDRAW_LIKE_171_READY==='1'\)/);
 assert.match(stage,/await proveLikeBatchCutover426\(env\);/);
 assert.match(stage,/await validateExploreAuth307\(request,env,ctx\);/);
+const route426=stage.slice(stage.indexOf('async function handleVerifiedLikeBatch426('),
+  stage.indexOf('export default {'));
+const authPos=route426.indexOf('await validateExploreAuth307(request,env,ctx)');
+const limitPos=route426.indexOf('await env.LIKE_RATE_LIMITER.limit({key:actor.uid})');
+const proofPos=route426.indexOf('await proveLikeBatchCutover426(env)');
+assert.ok(authPos>=0&&limitPos>authPos&&proofPos>limitPos,
+  'D1 cutover must be authenticated and rate-limited FIRST');
 assert.match(stage,/authenticatedUid:actor\.uid,firebaseIdToken:actor\.idToken/);
 assert.match(stage,/firebaseTokenVerified:true/);
 assert.match(stage,/SELECT phase FROM explore_like_writer_phase_419 WHERE id=1/);

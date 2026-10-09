@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
+import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -1996,6 +1997,111 @@ async function handleCrossOriginPersonalLikeRepair358(request, env, ctx) {
   });
 }
 
+// SORIDRAW_426_DORMANT_LIKE_BATCH_V171_ROUTE_20261009
+// Fail-closed only. Wrangler does NOT define SORIDRAW_LIKE_171_READY.
+// Legacy /v1/me/likes/batch remains the EXACT previous Worker path.
+// Even with the explicit var, all 3 environment/DB/manifest/legacy-fence
+// proofs must agree before accepting a canonical mutation.
+const likeCutoverManifestKey426='internal/explore/like-cutover-v162/active.json';
+async function proveLikeBatchCutover426(env) {
+  if (env?.SORIDRAW_LIKE_171_READY!=='1') throw new Error('426_FLAG_NOT_ENABLED');
+  if(!env?.DB?.prepare||!env?.PROFILE_MEDIA?.get)throw new Error('426_BINDINGS_MISSING');
+  const manifest=await env.PROFILE_MEDIA.get(likeCutoverManifestKey426);
+  if(!manifest)throw new Error('426_CUTOVER_MANIFEST_ABSENT');
+  let value;
+  try{value=JSON.parse(await manifest.text());}catch{throw new Error('426_CUTOVER_MANIFEST_INVALID');}
+  const proof=value?.preCutoverProof172;
+  const names=['preview','test','production'];
+  const sha=String(proof?.approvedWorkerSha256||'').toLowerCase();
+  const validSha=/^[0-9a-f]{64}$/.test(sha)&&names.every(name=>
+    String(proof?.workerSha256ByEnvironment?.[name]||'').toLowerCase()===sha&&
+    Boolean(proof?.workerVersionByEnvironment?.[name])&&
+    proof?.workerMarkerReadyByEnvironment?.[name]===true);
+  const drained=['035','066','069','075'].every(name=>
+    proof?.legacyQueueRows?.[name]===0);
+  if(value?.schemaVersion!==2||value?.relationMode!=='d1only171'||
+     value?.ownerProtocol!=='d1-only-171'||
+     value?.legacyRelationWritersFrozen!==true||
+     value?.legacyCountWritersFrozen!==true||
+     value?.allEnvironmentReadersReady!==true||
+     value?.allEnvironmentWritersReady!==true||
+     proof?.schemaVersion!==1||
+     proof?.proofAuthority!=='release-controller-174'||
+     proof?.legacyIntakeClosed!==true||
+     proof?.legacyProcessorIdle!==true||
+     proof?.allEnvironmentWorkerShaVerified!==true||
+     proof?.d1AtomicFenceReady!==true||
+     proof?.d1FenceTable!=='explore_like_cutover_control_174'||
+     proof?.d1FencePhase!=='frozen'||
+     proof?.d1OnlySchemaOwnerReady!==true||
+     proof?.d1OnlySchemaOwner!=='shared-d1'||
+     proof?.relationTable!=='explore_like_overrides_171'||
+     proof?.countTable!=='explore_like_count_deltas_171'||
+     proof?.ownerProtocol!=='d1-only-171'||!validSha||!drained) {
+    throw new Error('426_CUTOVER_MANIFEST_NOT_FULLY_ARMED');
+  }
+  const [phase,legacyFence,schema]=await Promise.all([
+    env.DB.prepare('SELECT phase FROM explore_like_writer_phase_419 WHERE id=1').first(),
+    env.DB.prepare('SELECT phase,approved_worker_sha256,drain_token_hash FROM explore_like_cutover_control_174 WHERE id=1').first(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_overrides_171','explore_like_count_deltas_171')").first(),
+  ]);
+  if(phase?.phase!=='overlay'||legacyFence?.phase!=='frozen'||
+     String(legacyFence?.approved_worker_sha256||'').toLowerCase()!==sha||
+     String(legacyFence?.drain_token_hash||'').toLowerCase()!==
+       String(proof?.drainTokenHash||'').toLowerCase()||
+     Number(schema?.n)!==2) {
+    throw new Error('426_SHARED_D1_FENCE_OR_SCHEMA_NOT_READY');
+  }
+  return true;
+}
+
+function like426Headers(request) {
+  const origin=request.headers.get('Origin')||'';
+  const headers=new Headers({
+    'Content-Type':'application/json; charset=utf-8',
+    'Cache-Control':'no-store',
+    Vary:'Origin',
+  });
+  if(['https://preview.soridraw.com','https://test.soridraw.com',
+      'https://soridraw.com','http://localhost:5173'].includes(origin)){
+    headers.set('Access-Control-Allow-Origin',origin);
+  }
+  return headers;
+}
+
+async function handleVerifiedLikeBatch426(request,env,ctx) {
+  const headers=like426Headers(request);
+  try {
+    await proveLikeBatchCutover426(env);
+    const actor=await validateExploreAuth307(request,env,ctx);
+    if(!actor.ok)return actor.response;
+    const body=await request.json().catch(()=>null);
+    const router=createCandidateLikeBatch422({
+      db:env.DB,sharedR2:env.PROFILE_MEDIA,allEnvironmentCutoverVerified:true,
+      authenticatedUid:actor.uid,firebaseIdToken:actor.idToken,
+      firebaseTokenVerified:true,
+      resolveOwnerUid:async id=>{
+        const row=await env.DB.prepare(
+          "SELECT owner_uid FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1"
+        ).bind(id).first();
+        return String(row?.owner_uid||'');
+      },
+    });
+    const result=await router.acceptAuthenticatedBatch(actor.uid,body);
+    return new Response(JSON.stringify({
+      ...result,data:{...result.data,publicSignalAcceptedAt:Date.now()},
+    }),{status:200,headers});
+  } catch(error) {
+    const code=String(error?.code||error?.message||'426_SETTLEMENT_UNAVAILABLE');
+    const status=code.includes('INVALID')||code.includes('NEEDS_COMPATIBILITY')||
+      code.includes('AUTH_UID_MISMATCH')?409:503;
+    return new Response(JSON.stringify({
+      ok:false,error:{code:'LIKE_426_SAFE_RETRY',message:
+        '좋아요 저장을 확인 중입니다. 변경 상태를 유지하고 다시 시도해 주세요.'},
+    }),{status,headers});
+  }
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -2028,6 +2134,14 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Stage426: only an explicitly armed all-environment DB cutover takes
+    // this path. Ordinary PREVIEW and ALL existing TEST/PRODUCTION requests
+    // retain the previous Worker implementation byte-for-byte.
+    if(request.method==='POST'&&url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103&&
+       env?.SORIDRAW_LIKE_171_READY==='1'){
+      return handleVerifiedLikeBatch426(request,env,ctx);
+    }
+
 
     // app358: only a real retained publication signal may bypass an origin-local
     // positive profile Edge entry. Shared PROFILE_MEDIA is the cross-environment

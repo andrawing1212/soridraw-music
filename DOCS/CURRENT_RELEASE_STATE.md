@@ -1,3 +1,14 @@
+## 0S28. Stage415 착수 — 동일계정 개인 좋아요 즉시 + 공개곡 10분 이벤트 집계 설계 승인 (2026-10-09 KST)
+
+- 사용자 확정: 우선 **Explore 공개곡 좋아요**. 개인 하트는 클릭 즉시 같은 계정 PC↔모바일 양방향 반영·앱 종료에도 최종 확정; **공개 likeCount는 10~20분까지 늦어도 됨**. 첫 실제 변경 발생 시 공동 10분 고정 창을 열어 여러 사용자/곡의 변경을 모아 마지막 공개 숫자만 갱신; 추가 변화 없으면 alarm/cron/원본 data 읽기·쓰기·공개 알림 0. 공개 완료 후 **팔로우** 적용 검토. 변경 없는 앱 진입/업데이트 0 read/write.
+- 설계 근거: 현재 `exploreLikeService.ts` 개인 ACK 전송 +5초/종료 flush, `publishConfirmedLikeSignal127`은 queue ACK *이후* 같은 계정 RTDB, `publishExplorePublicLikeInvalidation192`은 ACK 이후 **브라우저**가 공개 전역 RTDB 알림. `preview-entry.js` DO 5초 alarm은 canonical `likes`+`track_stats` 처리와 bounded `repairSharedPublicLikeCounts191`를 동시에 실행. `patches/040` 직접 canonical 관계+count batch는 **분리 안 됨**; repair191은 첫 latest/popular 최대80곡만이어서 전체 변경곡 event ID 출처 아님. 개인 즉시 + 10분 공개는 **단순 타이머 5초→10분 치환 불가**.
+- **설계 문서:** `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md` (초기 설계 commit `d99ba2eb4e17fdddd245582e6d69f6763daa9e64`). Codex Phase A private immediate + canonical/public 권위·event IDs/구형 앱 호환성·D1/R2/RTDB/DO 총비용 감사 먼저, 이후 proof가 서면 feature-flag OFF 후보/격리 테스트 단계, 독립 Work 검증 전 실제 배포 금지.
+- **현재 실제 앱 상태:** PREVIEW app385 Hosting 활성, Explore 좋아요 +5초와 현재 공유 +5초 집계 **변경 없음**. Studio 저장하트/팔로우/Music Note/Library/Worker/Functions/Rules/D1 공유 사용자 데이터/main/production 모두 변경·배포 없음. **기능 구현/타이밍 변경/서버 실측 아직 하지 않음**.
+- 절대 보호: 기존 개인 좋아요/해제·같은 계정 동기화·개인 카탈로그 R0, 첫 공개곡 좋아요, 공개프로필·Feed 구형 reader, Studio 미디어·30초 하트, app380 follow +30s, app385 folders +60s. 10분 window가 live D1 원본 반영까지 늦추거나 10분에 새로운 global D1 scan/R2 fanout/DO 비용 증폭하면 불합격. 공유 스키마/Rules 변경은 별도 명확한 승인 필요.
+- 다음: Codex High 구현/격리 검증 → Work 독립 감사 → 비용/호환성 PASS 시 PREVIEW 단계적 릴리스 → 사용자 PC↔mobile 실사용 → 팔로우 후속. FAIL은 코드 수정/배포 중단하고 비용·정합성 장애 보고.
+
+---
+
 ## 0S27. app385 PREVIEW 정상 배포 — 기존 60초 묶음 저장 비용 구조 복원 (2026-10-09 KST)
 
 - 사용자 최우선 수정 지시: app384의 과도한 백그라운드 조기 저장을 되돌리고 기존 정상·비용 효율 구조를 우선 유지. app385 **PREVIEW Firebase Hosting 배포 성공**.

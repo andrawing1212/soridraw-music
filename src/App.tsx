@@ -5424,6 +5424,18 @@ function App() {
     koreanLyrics: string;
     secondaryLyrics: string;
   };
+  // A no-change Save should not write RTDB or queue a Firestore batch.
+  // Only the edited draft fields are compared; a changed song follows the
+  // existing immediate preview and 150-second canonical persistence path.
+  const sameRecentSongDraft = (a: RecentSongEditDraft, b: RecentSongEditDraft): boolean =>
+    a.koreanTitle === b.koreanTitle &&
+    a.secondaryTitle === b.secondaryTitle &&
+    a.secondaryLanguage === b.secondaryLanguage &&
+    a.showKoreanTitleInput === b.showKoreanTitleInput &&
+    a.showSecondaryTitleInput === b.showSecondaryTitleInput &&
+    a.prompt === b.prompt &&
+    a.koreanLyrics === b.koreanLyrics &&
+    a.secondaryLyrics === b.secondaryLyrics;
   type RecentSongLocalVersionTarget = 'title' | `lyrics-${LanguageCode}`;
   type RecentSongLocalTitleVersion = {
     type: 'title';
@@ -5447,6 +5459,12 @@ function App() {
   const [isRecentSongEditOpen, setIsRecentSongEditOpen] = useState(false);
   const [recentSongInlineEditMode, setRecentSongInlineEditMode] = useState<RecentSongEditFocus | null>(null);
   const [recentSongEditDraft, setRecentSongEditDraft] = useState<RecentSongEditDraft | null>(null);
+  const recentSongEditOpenedRef = useRef<{
+    uid: string;
+    historyIndex: number;
+    songKey: string;
+    draft: RecentSongEditDraft;
+  } | null>(null);
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
   const [isTogglingCurrentStudioFavorite, setIsTogglingCurrentStudioFavorite] = useState(false);
@@ -15723,7 +15741,7 @@ ${normalizePromptForDisplay(result.prompt)}
     const initialKoreanTitle = stripDisplayTitlePart(titleMap.ko || result.koreanTitle || '');
     const initialSecondaryTitle = stripDisplayTitlePart(titleMap[secondaryLanguage] || result.englishTitle || '');
 
-    setRecentSongEditDraft({
+    const openedDraft: RecentSongEditDraft = {
       koreanTitle: initialKoreanTitle,
       secondaryTitle: initialSecondaryTitle,
       secondaryLanguage,
@@ -15734,7 +15752,14 @@ ${normalizePromptForDisplay(result.prompt)}
       prompt: normalizePromptForDisplay(result.prompt || ''),
       koreanLyrics: normalizeLyricsForDisplay(lyricsMap.ko || result.lyrics?.korean || ''),
       secondaryLyrics: normalizeLyricsForDisplay(lyricsMap[secondaryLanguage] || result.lyrics?.english || ''),
-    });
+    };
+    recentSongEditOpenedRef.current = {
+      uid: String(user?.uid || '').trim(),
+      historyIndex: historyIndexRef.current,
+      songKey: buildRecentSongSyncKey(result),
+      draft: openedDraft,
+    };
+    setRecentSongEditDraft(openedDraft);
     setRecentSongEditFocus(focus);
     setRecentSongInlineEditMode(focus);
     setIsRecentSongEditOpen(false);
@@ -15742,6 +15767,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
   const closeRecentSongEditor = () => {
     if (isSavingRecentSongEdit) return;
+    recentSongEditOpenedRef.current = null;
     setIsRecentSongEditOpen(false);
     setRecentSongInlineEditMode(null);
     setRecentSongEditDraft(null);
@@ -15826,6 +15852,19 @@ ${normalizePromptForDisplay(result.prompt)}
       return;
     }
 
+    const opened = recentSongEditOpenedRef.current;
+    // Save with no field changes is not a mutation. In particular do not
+    // bump editedInStudioAt or publish RTDB / pending Firestore W2.
+    if (opened &&
+        opened.uid === String(user?.uid || '').trim() &&
+        opened.historyIndex === currentIndex &&
+        opened.songKey === buildRecentSongSyncKey(currentHistory[currentIndex]) &&
+        sameRecentSongDraft(opened.draft, recentSongEditDraft)) {
+      closeRecentSongEditor();
+      showToast('변경한 내용이 없습니다.');
+      return;
+    }
+
     const nextSong = buildEditedRecentSong(currentHistory[currentIndex], recentSongEditDraft);
     const nextHistory = currentHistory.map((song, index) => index === currentIndex ? nextSong : song);
 
@@ -15850,6 +15889,7 @@ ${normalizePromptForDisplay(result.prompt)}
       setIsRecentSongEditOpen(false);
       setRecentSongInlineEditMode(null);
       setRecentSongEditDraft(null);
+      recentSongEditOpenedRef.current = null;
       showToast('생성곡 수정본이 저장되었습니다.');
     } catch (error) {
       console.error('Failed to update recent generated song:', error);

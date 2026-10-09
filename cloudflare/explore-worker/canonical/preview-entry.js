@@ -2002,9 +2002,11 @@ async function handleCrossOriginPersonalLikeRepair358(request, env, ctx) {
 // Legacy /v1/me/likes/batch remains the EXACT previous Worker path.
 // Even with the explicit var, all 3 environment/DB/manifest/legacy-fence
 // proofs must agree before accepting a canonical mutation.
+const STAGE426_COMPILED_OPEN = false; // explicit later release commit required
 const likeCutoverManifestKey426='internal/explore/like-cutover-v162/active.json';
 async function proveLikeBatchCutover426(env) {
-  if (env?.SORIDRAW_LIKE_171_READY!=='1') throw new Error('426_FLAG_NOT_ENABLED');
+  if (!STAGE426_COMPILED_OPEN||env?.SORIDRAW_LIKE_171_READY!=='1')
+    throw new Error('426_FLAG_NOT_ENABLED');
   if(!env?.DB?.prepare||!env?.PROFILE_MEDIA?.get)throw new Error('426_BINDINGS_MISSING');
   const manifest=await env.PROFILE_MEDIA.get(likeCutoverManifestKey426);
   if(!manifest)throw new Error('426_CUTOVER_MANIFEST_ABSENT');
@@ -2138,7 +2140,7 @@ export default {
     // this path. Ordinary PREVIEW and ALL existing TEST/PRODUCTION requests
     // retain the previous Worker implementation byte-for-byte.
     if(request.method==='POST'&&url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103&&
-       env?.SORIDRAW_LIKE_171_READY==='1'){
+       STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1'){
       return handleVerifiedLikeBatch426(request,env,ctx);
     }
 

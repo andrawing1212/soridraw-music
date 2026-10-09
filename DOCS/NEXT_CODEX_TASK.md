@@ -5,6 +5,8 @@
 - **기존 최상단 Stage419의 '069을 기존 DO SQLite queue로 대체' 지시는 오직 비교 대안이며 이를 구현 완료 조건으로 삼지 않는다.** D1 relation/count/derived/index 구조 자체를 먼저 해결하고, 동기화·공개숫자·PC↔mobile·구형 활성 Worker를 동시에 보존할 수 없는 경우 FAIL/배포 HOLD. 실제 shared DB mutation 및 RTDB Rules PUT, 배포, main/TEST/PRODUCTION 변경 금지.
 - **확인된 읽기 비용 범위:** Stage418이 417 추가 인증 GET을 없애더라도 DO `repairSharedPublicLikeCounts191`가 매 처리창 최신/인기 최대80 IDs D1 SELECT, `finalizeAggregate195`가 큐 SELECT를 할 수 있으며 합류 batch는 418 직접 영수증을 못 받을 수 있음. 변경 정상 R0 전체/스냅샷 189 해결했다고 주장하지 말 것.
 
+- **추가 독립 FAIL 반례:** standalone SQLite에서 171 overlay like + delta=1 반영 후 **구형 Worker가 legacy likes + track_stats를 쓰면** effective membership 1인데 count가 2로 부풀 수 있음을 재현. `DOCS/STAGE419_PHYSICAL_W2_AUDIT_AND_CUTOVER_GATE.md §5`. 첫 작업에 이 old/new writer 동시 실행 반례를 regression으로 추가하고, TEST/PRODUCTION 구형 Worker가 baseline을 바꿀 수 있으면 임시·영구 배포를 모두 멈춘다. 현행 069/032/033 메모리 모형은 like/unlike 각각 논리 8행, 새 큐 ID 중복 2행; live D1 청구는 미측정.
+
 ---
 
 ## CURRENT — Stage419: 실물리 W1–W2 확보 가능성 판정 및 Stage418 정확성 독립 감사 [PREVIEW 배포 STOP] (2026-10-09 KST)

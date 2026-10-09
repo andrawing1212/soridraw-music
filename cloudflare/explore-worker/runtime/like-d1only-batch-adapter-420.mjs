@@ -17,6 +17,7 @@ const inputError = (code) => Object.assign(new Error(code), { code, status: 409 
 export function createLikeD1OnlyBatchAdapter420(db, {
   allEnvironmentCutoverVerified = false,
   publishChangedTrack = null,
+  beforeCanonicalMutation = null,
 } = {}) {
   if (allEnvironmentCutoverVerified !== true) {
     throw inputError('420_SHARED_PHASE_NOT_VERIFIED');
@@ -59,8 +60,14 @@ export function createLikeD1OnlyBatchAdapter420(db, {
           expectedRevision:item.expectedRevision,
         };
       });
-      // Validate ENTIRE batch before the first mutation. Reject mixed old
-      // and modern envelopes with zero writes.
+      // Validate ENTIRE batch before any R2 preflight or D1 write.
+      // This optional hook is only for audited, bounded pre-write canonical
+      // readiness (e.g. cold new-user R2) and must never write D1.
+      if(beforeCanonicalMutation !== null){
+        if(typeof beforeCanonicalMutation !== 'function')
+          throw inputError('420_INVALID_PREWRITE_HOOK');
+        await beforeCanonicalMutation(uid,entries);
+      }
       const results=[];
       let physicalRowsWritten=0;
       for(const item of entries) {

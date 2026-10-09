@@ -17,7 +17,7 @@ function projectRow421(item, id, count, generation) {
     throw barrier('421_UNSAFE_GENERATION_METADATA');
   }
   if (known !== undefined && known > generation) {
-    return item; // stale R2 request must never repaint backward
+    throw barrier('421_STALE_GENERATION_REJECTED'); // never notify stale membership
   }
   if (known === generation) {
     if (Number(item?.likeCount ?? item?.stats?.likeCount ?? 0) !== count) {

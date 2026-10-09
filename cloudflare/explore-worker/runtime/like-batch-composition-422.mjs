@@ -7,6 +7,7 @@ import {createLikeProjectionPublisher421} from './like-public-r2-publisher-421.m
 import {createPersonalLikeR2Publisher423} from './like-personal-r2-publisher-423.mjs';
 import {createLikeUserRtdbSignal424} from './like-rtdb-user-signal-424.mjs';
 import {bootstrapVerifiedEmptyPrivate430} from './like-cold-personal-bootstrap-430.mjs';
+import {verifyLikeBatchCatalogCapacity431} from './like-batch-capacity-431.mjs';
 
 // Stage429 pre-write readiness for the verified modern 171-only path.
 // Cold/partial R2 must never be discovered only AFTER a D1 W2 mutation:
@@ -41,22 +42,11 @@ export async function verifyLikeR2Readiness429(r2, uid, entries, {db,cutoverVeri
      catalog.likedTrackIds.some(id=>typeof id!=='string'||!id||
        id.length>512||id.trim()!==id))
     throw new Error('429_PRIVATE_PARTIAL_BEFORE_D1');
-  const revisions=catalog.likeRevisions423||{};
-  if(!revisions||typeof revisions!=='object'||Array.isArray(revisions))
-    throw new Error('429_PRIVATE_REVISION_METADATA_INVALID');
-  for(const item of entries){
-    const prior=revisions[item.trackId];
-    if(prior!==undefined&&(
-      !Number.isSafeInteger(prior?.revision)||prior.revision<0||
-      typeof prior?.operationId!=='string'||!prior.operationId||
-      prior.operationId.length>128||typeof prior?.liked!=='boolean'))
-      throw new Error('429_PRIVATE_TRACK_REVISION_INVALID');
-    const newlyLiked=item.liked&&!catalog.likedTrackIds.includes(item.trackId);
-    if(newlyLiked&&catalog.likedTrackIds.length>=2000)
-      throw new Error('429_PRIVATE_CAPACITY_BEFORE_D1');
-    if(prior===undefined&&Object.keys(revisions).length>=2000)
-      throw new Error('429_PRIVATE_REVISION_CAPACITY_BEFORE_D1');
-  }
+  // Stage431: account for the ENTIRE batch in order. Per-item checks against
+  // the original catalog can permit 1999+2 likes, leaving a partly committed
+  // canonical batch when personal R2 publication reaches its 2000 item cap.
+  // Throw before any D1 canonical write, retaining every pending intention.
+  verifyLikeBatchCatalogCapacity431(catalog,entries);
   for(const item of entries){
     const id=item.trackId;
     const key='internal/explore/shared-track-card-v115/'+encodeURIComponent(id)+'.json';

@@ -28,8 +28,26 @@ export async function verifyLikeR2Readiness429(r2, uid, entries) {
      !catalog?.canonicalSource156||
      !Array.isArray(catalog.likedTrackIds)||catalog.likedTrackIds.length>2000||
      new Set(catalog.likedTrackIds).size!==catalog.likedTrackIds.length||
-     catalog?.exactLikeCount156!==catalog.likedTrackIds.length)
+     catalog?.exactLikeCount156!==catalog.likedTrackIds.length||
+     catalog.likedTrackIds.some(id=>typeof id!=='string'||!id||
+       id.length>512||id.trim()!==id))
     throw new Error('429_PRIVATE_PARTIAL_BEFORE_D1');
+  const revisions=catalog.likeRevisions423||{};
+  if(!revisions||typeof revisions!=='object'||Array.isArray(revisions))
+    throw new Error('429_PRIVATE_REVISION_METADATA_INVALID');
+  for(const item of entries){
+    const prior=revisions[item.trackId];
+    if(prior!==undefined&&(
+      !Number.isSafeInteger(prior?.revision)||prior.revision<0||
+      typeof prior?.operationId!=='string'||!prior.operationId||
+      prior.operationId.length>128||typeof prior?.liked!=='boolean'))
+      throw new Error('429_PRIVATE_TRACK_REVISION_INVALID');
+    const newlyLiked=item.liked&&!catalog.likedTrackIds.includes(item.trackId);
+    if(newlyLiked&&catalog.likedTrackIds.length>=2000)
+      throw new Error('429_PRIVATE_CAPACITY_BEFORE_D1');
+    if(prior===undefined&&Object.keys(revisions).length>=2000)
+      throw new Error('429_PRIVATE_REVISION_CAPACITY_BEFORE_D1');
+  }
   for(const item of entries){
     const id=item.trackId;
     const key='internal/explore/shared-track-card-v115/'+encodeURIComponent(id)+'.json';

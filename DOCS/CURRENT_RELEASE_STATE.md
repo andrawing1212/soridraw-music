@@ -1,3 +1,13 @@
+## 0S44. Stage419 실제 171 후보 SQL 실행 회귀 코드 + 408 CI PASS, 구형 Worker 충돌 재현·전환 HOLD (2026-10-09 KST)
+
+- **코드 결과:** `scripts/verify-419-like-w2-cutover.mjs` 신규. Node 22 `node:sqlite` 메모리 DB에서 미적용 `20260921_03_explore_like_d1only_v171_additive.sql`을 생성하고 실제 `createLikeD1OnlyCanonical171` 소스 함수/SQL을 그대로 실행. LIKE/UNLIKE, 동일 재전송 W0 모형, 역순 revision 충돌, 여러 UID 같은 곡 수 집계, 구형 legacy baseline, 비공개곡 차단 검사. **D1 rows_written은 메모리 논리 rows proxy이며 Cloudflare 물리비용 PASS 주장 아님.**
+- **핵심 FAIL 재현:** 새 overlay가 좋아요 +1을 반영한 뒤 기존 Worker가 `likes`/`track_stats`의 baseline을 동일 계정/곡에서 또 변경하면 개인 membership 1, 공개 likeCount 2 오류가 실행형 테스트로 재현. `419_OLD_NEW_WRITER_DOUBLE_COUNT_COUNTEREXAMPLE=REPRODUCED`, 기존 writer freeze 없이 live 전환 **BLOCKED**. 소스-only 후보 `171` 실서비스 활성화/기준 변경 없음.
+- **검증:** `.github/workflows/verify-408-like-repair-code.yml`에 해당 독립 회귀를 고정하여 최초 SQLite shim 검사 실패 원인(`SELECT\n`을 조회로 분류하지 않던 테스트 코드)을 고친 뒤 최종 SHA `dd7388071712d6c0189109461f8f15d641cdd288`, Actions [408 Run 37896238401](https://github.com/andrawing1212/soridraw-music/actions/runs/37896238401) **SUCCESS**: Stage419 실제 171 함수/SQL 테스트, TypeScript, Build, 기존 127/175/178/191/192/197/390, 실제 공유 RTDB Rules **읽기 전용** 대조 모두 PASS. 이전 실패 Run 37896044916 / 37896145271는 test harness `SELECT` 분류 오류였고 제품 코드 오류로 확정된 것이 아님.
+- **변경 범위:** 신규 테스트 `scripts/verify-419-like-w2-cutover.mjs` + 408 테스트 Workflow만 변경, 제품 React/Worker/migration/schema/Rules/공유 D1/사용자 데이터/Functions/R2/Hosting 변경 및 배포 **0**. 활성 PREVIEW는 문서상 app386 유지, main/TEST/PRODUCTION 비변경.
+- **남은 업무:** 원격 Cloudflare 격리 임시 D1에서 171 실제 `meta.rows_written` 측정/자동삭제, 구형 writer를 3환경에서 차단할 원자적 공유 phase fence 검증, Work 독립 감사, 정상/실패 R0, 실제 like/unlike·모바일 실계측. 비용·정합성 전체 **HOLD**, Stage418·419 PREVIEW 배포 금지.
+
+---
+
 ## 0S43. Stage419 독립 소스·기존 실측 재검토: 069→DO 대기열 단독 교체 불충분 / 157·171 안전 전환 감사 지시 확정 (2026-10-09 KST)
 
 - **기준:** Stage418 제품 `27be98d575014d0f0498a146c63812a66f2db4dd`, rules/preflight `9c79874431039a46faec685c518aa3c28f1bd9a9`, 시작 당시 preview HEAD `050bd0dec6b0fd0ef2a6b588ad9e60b56d66ca86`. `AGENTS.md`/`NEXT_CODEX_TASK.md`/`WORK_AUDIT_CHECKLIST.md`, 실제 Stage418 diff/DO scheduler/191 repair, 069·390 migration, 과거 133/134/145/153/157 및 171 source-only 후보를 read-only 재검토.

@@ -1,3 +1,12 @@
+## CURRENT ADDENDUM — Stage419 069→DO 단독 교체는 W2 해결책 아님 / 157·171 무백필 후보 우선 (2026-10-09 KST)
+
+- **반드시 먼저 읽기:** [Stage419 물리 비용 감사·전환 게이트](STAGE419_PHYSICAL_W2_AUDIT_AND_CUTOVER_GATE.md). Stage418 069 queue 기존 canonical+032/033 파생 trigger 그대로라면 단순 DO SQLite로 queue INSERT/DELETE만 제거해도 D1 전체 W2는 미달. 격리 145 소스·SQLite 논리 변경 069 포함 8개(인덱스 미포함); 실 Cloudflare 운영 `rows_written` 숫자로 단정 금지.
+- **이미 수행한 원격 격리 실험 재사용:** 153 user-first `WITHOUT ROWID` W2, 157/158 sparse override 실제 변경 W1~W2/중복 W0, 171 revision/operationId+count delta **제품 미연결 소스 후보**. 전체 사용자 백필이나 구형 TEST/PRODUCTION writer 무시한 단독 PREVIEW 활성화 금지. 우선 157 vs 171 synthetic ephemeral D1의 *전체* `meta.rows_written` 및 장애·역순·병렬·파생 숫자/Feed 호환을 검증한다.
+- **기존 최상단 Stage419의 '069을 기존 DO SQLite queue로 대체' 지시는 오직 비교 대안이며 이를 구현 완료 조건으로 삼지 않는다.** D1 relation/count/derived/index 구조 자체를 먼저 해결하고, 동기화·공개숫자·PC↔mobile·구형 활성 Worker를 동시에 보존할 수 없는 경우 FAIL/배포 HOLD. 실제 shared DB mutation 및 RTDB Rules PUT, 배포, main/TEST/PRODUCTION 변경 금지.
+- **확인된 읽기 비용 범위:** Stage418이 417 추가 인증 GET을 없애더라도 DO `repairSharedPublicLikeCounts191`가 매 처리창 최신/인기 최대80 IDs D1 SELECT, `finalizeAggregate195`가 큐 SELECT를 할 수 있으며 합류 batch는 418 직접 영수증을 못 받을 수 있음. 변경 정상 R0 전체/스냅샷 189 해결했다고 주장하지 말 것.
+
+---
+
 ## CURRENT — Stage419: 실물리 W1–W2 확보 가능성 판정 및 Stage418 정확성 독립 감사 [PREVIEW 배포 STOP] (2026-10-09 KST)
 
 **현재 소스 기준:** Stage418 코드 최초 SHA 27be98d575014d0f0498a146c63812a66f2db4dd; shared RTDB read-only 안전검사/배포 전 diff 게이트 포함 9c79874431039a46faec685c518aa3c28f1bd9a9; 이후 문서 commit은 HEAD 재확인. GitHub 408 Run 37892639404 SUCCESS, LIVE shared RTDB Rules read-only comparison PASS. 하지만 제품 배포 0. PREVIEW 실제 app386이고 Stage416 Phase1 실사용 R4/17 및 R4/19 FAIL 지속. 추가 요구: 총 Cloudflare physical D1 writes W1–W2 per mutation, W3+ FAIL (intake W1 진단만으로 입증 불가).

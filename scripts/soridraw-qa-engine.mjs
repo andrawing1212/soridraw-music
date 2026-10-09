@@ -41,6 +41,10 @@ const groups = [
     ['node', 'scripts/verify-412-shared-projection-cas.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'],
     ['node', 'scripts/verify-421-like-r2-publisher.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-personal-r2-publisher-423.mjs'],
+    ['node', 'scripts/verify-423-personal-like-r2.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-rtdb-user-signal-424.mjs'],
+    ['node', 'scripts/verify-424-like-rtdb-signal.mjs'],
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],

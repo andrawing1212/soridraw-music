@@ -1007,6 +1007,10 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
   const existing = crossOriginParityInFlight357.get(uid);
   if (existing) return existing;
   const task = (async () => {
+    // Capture the prior attempt BEFORE this visit records its own attempt.
+    // A first genuine gap must still perform the initial FULL repair.
+    const alreadyAttemptedFullRepair416 = legacyNeedsRepair357 &&
+      readCrossOriginLikeAttempted358(uid) >= latestSignalVersion;
     if (legacyNeedsRepair357) {
       const attemptedSignalVersion358 = readCrossOriginLikeAttempted358(uid);
       if (shouldAttemptPersonalLikeOriginRepair358({
@@ -1029,7 +1033,13 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
     // repair snapshot and canonical rebuild attempt. No new D1 write is added.
     // Genuine signal gaps
     // retain the original app358 repair path, unchanged.
-    if (legacyNeedsRepair357) {
+    // A prior FULL repair may already have completed while its later app189
+    // targeted guard proof failed. Preserve the exact settled baseline rather
+    // than paying to rebuild it a second time on recovery.
+    const fullRepairAlreadyCompleted416 = alreadyAttemptedFullRepair416 &&
+      readRepairTarget127(uid) === 0 &&
+      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+    if (legacyNeedsRepair357 && !fullRepairAlreadyCompleted416) {
       requestRepair127(uid, latestSignalVersion);
       writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_ATTEMPTED_182, uid), '');
     }

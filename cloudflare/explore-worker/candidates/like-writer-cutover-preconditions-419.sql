@@ -39,8 +39,16 @@ BEGIN
   SELECT RAISE(ABORT,'LIKE_CUTOVER_069_PENDING_419')
   WHERE EXISTS(SELECT 1 FROM explore_like_batches_069 LIMIT 1);
 
+  -- Historical 075 records are retained even after processing.
+  -- Only strictly beyond the persistent processing cursor are pending.
   SELECT RAISE(ABORT,'LIKE_CUTOVER_075_PENDING_419')
-  WHERE EXISTS(SELECT 1 FROM explore_like_user_queue_075 LIMIT 1);
+  WHERE EXISTS(
+    SELECT 1 FROM explore_like_user_queue_075 q
+    JOIN explore_like_user_queue_state_075 s ON s.id=1
+    WHERE q.updated_at>s.processed_at
+       OR (q.updated_at=s.processed_at AND q.user_uid>s.processed_uid)
+    LIMIT 1
+  );
 END;
 
 -- DO NOT silently "rollback" to old writers after overlays were written:

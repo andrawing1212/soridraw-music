@@ -1,3 +1,12 @@
+## CURRENT — app386 사용자 실측 Stage416 Phase1: 좋아요 W1, 모바일 public R0, My Likes R4 1회 재진입 검증만 우선 (2026-10-09 KST)
+
+- 사용자 3장 실사용 사진과 상세 수치는 `DOCS/CURRENT_RELEASE_STATE.md 0S35` 기준. PC 내 좋아요 첫 진입 D1 query R4/W0 (last `PERSONAL SETTLEMENT 189`). 같은 실행 좋아요 약10초 후 Worker2→3, D1 query **R4 유지**, W0→W1; liked batch intake D1 R0/W1. 모바일 public like count GET Worker1, R2 Class B2, **D1 R0 W0**, 숫자 2 표시.
+- **빠른 다음 판별, 새 코드/배포 필요 없음:** app386 PC 관리자 진단 RESET 후 변경 없는 My Likes 첫 진입 → Feed → My Likes → Feed → My Likes 왕복, 각 단계 top-level `Cloudflare Worker`, `D1 query R/W`와 `개인 소셜 스냅샷` last reason 기록. 최초 R4 허용 가능한 1회 legacy settlement vs 왕복당 반복 FULL canonical R4를 구별. 모바일 개인 하트 PC와 같은 한 곡 검증은 public count와 별도. 사용자의 로그인 실기기 측정을 도구 없이 PASS로 가정 금지.
+- **판단:** 첫 스냅샷 후 추가 Worker/D1 read 0 확인 시 Stage416 Phase1 실사용 비용 판정 진행→Phase2 private optimistic device signal 설계/구현, 합격선 W1~W2와 개인 상태 정확성 유지. 2/3번째 My Likes에서도 R4 추가되면 먼저 residual `readSnapshotPending127` + `EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189` marker + `ensureExplorePersonalLikeCrossOriginParity357` gate 호출 추적하고 중복만 최소 수정·CI→PREVIEW 자동 배포. 기존 app189 canonical settlement 보호 로직 제거 금지. 첫 진입 R4를 좋아요 1회 비용으로 계산 금지.
+- **환경:** app386 PREVIEW 유지, Worker/Functions/RTDB Rules/공유 D1 데이터/main/production 비변경. 새로운 앱버전 및 배포는 근거 없는 추가 가상 테스트로 만들지 않음.
+
+---
+
 ## CURRENT — Stage416 Phase1 실제 PREVIEW app386 배포 성공, 실사용 좋아요/D1 비용 검증 우선 (2026-10-09 KST)
 
 - **실제 배포:** `preview.soridraw.com` Firebase Hosting app386 릴리스 **37871046504 SUCCESS**, immutable target SHA `9b2d303c6adc2ebbec2b57952cad949e29d3dde2`; exact build/version 386 and TEST/PRODUCTION nonchange PASS. Quality 408 `37870912569 SUCCESS` (Node 22 TypeScript/Build/127/175/178/191/192/197/390 등). Worker/RTDB Rules/Functions/공유 D1/데이터와 TEST/PRODUCTION 미변경. 사용자 이후 PREVIEW 자동 판단 배포 승인(명확한 사용자 TEST·PRODUCTION 승인 별개).

@@ -10,6 +10,10 @@ assert.ok(from > 0 && to > from, '191 production helper missing');
 const source = entry.slice(from, to);
 const ctx = {
   sharedFeedR2Key112: sort => 'feed/' + sort,
+  // Stage426 compilation defaults OFF. The 191 legacy regression must
+  // exercise its original branch, not an unbound symbol in the VM fixture.
+  STAGE426_COMPILED_OPEN: false,
+  proveLikeBatchCutover426: async()=>{throw Error('426 unexpectedly enabled in 191 fixture');},
   Date, Map, Set, JSON, Number, String, Error, Array,
 };
 vm.runInNewContext(source + '\nthis.repair191=repairSharedPublicLikeCounts191;', ctx);

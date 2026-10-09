@@ -1,3 +1,14 @@
+## 0S37. app386 Phase1 사용자가 반복 측정한 NEW LIKE→MY LIKES D1 R4/rows_read17 — 비용 FAIL, Phase2 중단 (2026-10-09 KST)
+
+- **이전 판단 명시 정정:** 0S36 정상 warm-cache 페이지 왕복 Worker0/D1 R0은 좋아요 변경 없는 **별개** 시나리오. 사용자는 여러 번 **새 좋아요/해제 후 My Likes 방문 때마다 `개인 소셜 스냅샷 PERSONAL SETTLEMENT 189` D1 SQL query R4 / rows_read17**이 발생한다고 보고. 이 보고를 하나의 cold bootstrap, 과거 표시 잔상으로 취급하며 Phase1 PASS 선언한 것은 잘못. **Stage416 Phase1 목표(좋아요 새 변경 뒤 My Likes에서 원본 DB 재조회 0) FAIL, 해결 전 2단계 진입/TEST 승격 금지**.
+- **실제 코드 연결 확인:** 기존 Worker W1 batch 성공은 `canonicalD1:'queued'` + R2 best-effort changed-track (`cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs`); 클라이언트 `flushPendingLikes`는 `canonicalLikeSettled127=false`라 클릭마다 `snapshotPending127[trackId]` guard 생성, 원격 RTDB confirmed 역시 guard. My Likes 진입 `ensureExplorePersonalLikeCrossOriginParity357`/ `ensurePersonalLikeBaseline127`에서 미해결 guard와 새 revision으로 `PERSONAL SETTLEMENT 189` 요청, Worker patch 090가 D1 queue empty + canonical likes indexed read + R2 ETag 검증을 실행. 이 정상 신규 ACK → 기존 historical settlement proof 혼합이 반복 R4의 직접적인 코드 연결. 이전 app386 개선은 app358 FULL 재무장만 막았고 **189 정착 확인 비용은 해결하지 못함**.
+- **신뢰도:** 사용자 실측 '변경→진입마다 R4/rows17'을 현재 FAIL 증거로 반영. D1 Query 수와 rows 수는 사용자가 제공한 diagnostic 기준이며 별도 Cloudflare 청구 로그 SQL-by-SQL은 아직 없음. 단순 SQL 결과는 특정 track count에 비례한다는 주장을 하지 않음. D1 query R4와 물리 rows_read17을 혼동하지 않음.
+- **해결 원칙:** 신규 queued ACK/RTDB guard와 과거 복구 대상을 명확히 분리하고, 페이지 진입만으로 매 변경마다 canonical D1 189 검증하지 않는다. 단순 guard 삭제/queued를 settled로 사칭/검사 결과 숨김은 오류 은폐로 금지. 구형 클라이언트·다른 기기·canonical conflict에서 membership 역전 방지, eventual canonical settled 증명 유지. 정상 새 좋아요→My Likes 재진입 D1 read 0, mutation W1–W2, 정상 익스플로어/프로필/팔로우/음악노트/Studio 보호. 기존 Worker/DO/R2 revision으로 저비용 safe proof 없으면 Phase1 구현 전에 구조/비용 결정부터 보고.
+- **현재 repo:** 이전 app386 Firebase Hosting deploy Run 37871046504 SUCCESS/Worker shared data unchanged. 이 기록은 `preview` 문서만 수정, 앱/Worker/RTDB Rules/공유 D1/TEST/PRODUCTION 배포 없음.
+- **Codex High 작업 지시:** `DOCS/NEXT_CODEX_TASK.md` 상단 0S37 HOTFIX 자세한 실패 재현/합격선/가드 전이/데이터 안전/검증 기준; Phase2 즉시 RTDB 설계는 이 FIX 이후 순서로 밀림. Work read-only 검증→ChatGPT PREVIEW 자동배포→사용자 동일 조건 실측. 반복 추가 사진 요청보다 이 결함 먼저 구현.
+
+---
+
 ## 0S36. app386 연속 My Likes 실사용 warm-cache 서버 요청 0 — Stage416 Phase1 비용 경로 합격 (2026-10-09 KST)
 
 - **사용자 실기기 검증:** screenshot `image(20261009-040623).png`. 이전 사용자 지시에 따른 진단 RESET 후 `내 좋아요 곡 → Explore Feed → 내 좋아요 곡 → Explore Feed → 내 좋아요 곡` 왕복 결과로 제출. 이번 실행 총 **Cloudflare LOCAL 9 / Worker 0**, 항목 `내 좋아요 곡 LOCAL 2 / Worker 0`, 공개프로필 LOCAL 3/Worker 0, SORIDRAW 추천곡 LOCAL 3/Worker 0, 추천곡 관리 권한 LOCAL 1/Worker 0. D1 query/rows는 새 요청 없음으로 `—` 표기이며 `PAGE SYNC R0 W0`; Firestore page sync R0/W0. **warm-cache 변경 없는 페이지 왕복에서 네트워크 Worker 0, 새 D1 R/W 0** 해당 실사용 조건 PASS. 이는 이전 사진의 첫 `PERSONAL SETTLEMENT 189 R4/W0` 이후 정상 캐시 조회가 재발하지 않았다는 긍정적 비교 근거.

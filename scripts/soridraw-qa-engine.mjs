@@ -25,6 +25,11 @@ const groups = [
   { name: 'catalog', commands: [
     ['node', 'scripts/verify-175-explore-like-catalog-reentry.mjs'],
   ] },
+  { name: 'recent-edit-cost', commands: [
+    ['node', 'scripts/verify-290-recent-edit-batch.mjs'],
+    ['node', 'scripts/verify-291-recent-lyrics-live-preview.mjs'],
+    ['node', 'scripts/verify-recent-noop-edit-cost.mjs'],
+  ] },
   { name: 'catalog-deep', commands: [
     ['node', 'scripts/verify-197-new-public-track-like.mjs'],
   ] },
@@ -67,7 +72,7 @@ const groups = [
 ];
 
 const byName = new Map(groups.map(group => [group.name, group]));
-const offlineNames = ['syntax','like','catalog','public','receipt','projection','lifecycle'];
+const offlineNames = ['syntax','like','catalog','recent-edit-cost','public','receipt','projection','lifecycle'];
 const mode = process.argv[2] || 'fast';
 let names = [];
 if (mode === 'fast') names = offlineNames;

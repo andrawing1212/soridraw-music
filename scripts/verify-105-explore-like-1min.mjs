@@ -11,7 +11,7 @@ const appVersion = Number(version.version);
 assert.ok(Number.isFinite(appVersion) && appVersion >= 105, `105 one-minute contract incompatible with app ${version.version}`);
 
 // Shared publication remains event-driven with no fixed cron. App159 keeps the
-// protected 30-second client batch, then shortens only the post-accept shared
+// protected Stage413 5-second client batch, with bounded post-accept shared
 // projection delay so a cross-account changed-track signal can converge quickly.
 assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916/);
 if (appVersion >= 159) {
@@ -41,7 +41,7 @@ assert.match(worker, /ExploreLikeBatchScheduler103 extends DurableObject/);
 assert.doesNotMatch(worker, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 \* 60 \* 1000/);
 assert.doesNotMatch(worker, /event-like-batch-5m-103/);
 
-// Current actor path is app120+: one trailing 30-second local batch, not the obsolete
+// Current actor path is app413+: one trailing 5-second local batch, not the obsolete
 // app105 client one-minute window. This changes only intake timing; shared aggregate stays 1m.
 if (appVersion >= 120) {
   assert.match(like, /SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918/);
@@ -89,7 +89,7 @@ assert.doesNotMatch(revision, /const REVISION_CACHE_TTL_MS = 5 \* 60 \* 1000;/);
 
 console.log('105_EXPLORE_LIKE_1MIN=PASS');
 console.log(appVersion >= 159 ? 'SERVER_AGGREGATE_WINDOW=5SEC_AFTER_W1_EVENT' : 'SERVER_AGGREGATE_WINDOW=1MIN_EVENT_DRIVEN');
-console.log(appVersion >= 120 ? 'ACTOR_BATCH_IDLE=30_SECONDS' : 'CLIENT_EVENT_WINDOW=1MIN');
+console.log(appVersion >= 120 ? 'ACTOR_BATCH_IDLE=5_SECONDS' : 'CLIENT_EVENT_WINDOW=1MIN');
 console.log(appVersion >= 335 ? 'VIEWER_RESUME_GATE=VISIBILITY_ONLY_120_SECONDS' : (appVersion >= 121 ? 'VIEWER_ACTIVITY_GATE=120_SECONDS' : 'VIEWER_REFRESH=LEGACY_105'));
 console.log('REVISION_CACHE_TTL=1MIN');
 console.log('IDLE_PERIODIC_CRON=0');

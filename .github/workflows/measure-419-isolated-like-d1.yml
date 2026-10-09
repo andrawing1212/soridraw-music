@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/measure-419-isolated-171-d1.mjs'
       - 'cloudflare/explore-worker/candidates/like-writer-phase-fence-419.sql'
+      - 'cloudflare/explore-worker/candidates/like-writer-cutover-preconditions-419.sql'
       - '.github/workflows/measure-419-isolated-like-d1.yml'
   workflow_dispatch:
 permissions:

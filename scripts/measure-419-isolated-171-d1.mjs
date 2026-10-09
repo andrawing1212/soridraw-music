@@ -310,18 +310,23 @@ if (process.argv[2] === 'cleanup') {
       if(!error.includes('LIKE_OLD_QUEUE_INTAKE_FROZEN_419')) {
         fail('late legacy '+queue.kind+' intake not blocked '+error.slice(0,150));
       }
-      const n=(await query('SELECT COUNT(*) AS n FROM '+queue.table))
-        .results?.[0]?.n;
-      if(n!==0) fail('old queue '+queue.kind+' accepted pending after overlay');
+      // 075 retains processed history: it is not an unprocessed queue.
+      const rows=queue.kind==='075'
+        ? (await query('SELECT 1 AS pending FROM explore_like_user_queue_075 q '+
+          'JOIN explore_like_user_queue_state_075 s ON s.id=1 '+
+          'WHERE q.updated_at>s.processed_at OR '+
+          '(q.updated_at=s.processed_at AND q.user_uid>s.processed_uid) LIMIT 1')).results
+        : (await query('SELECT 1 AS pending FROM '+queue.table+' LIMIT 1')).results;
+      if((rows||[]).length!==0)
+        fail('old queue '+queue.kind+' accepted pending after overlay');
     }
     let lateUpdate='';
     try {
       await query('UPDATE explore_like_user_queue_075 SET updated_at=? WHERE user_uid=?',
-        [Date.now(),'synthetic-075']);
+        [Date.now(),'synthetic-history-075']);
     } catch(e) { lateUpdate=String(e); }
-    // Synthetic update of a non-existent row is a no-op; a later read/write
-    // route must still be compatible. All INSERT paths are blocked above.
-    if(lateUpdate && !lateUpdate.includes('LIKE_OLD_QUEUE_INTAKE_FROZEN_419')) {
+    // UPDATE of a retained historical 075 row must be rejected as well.
+    if(!lateUpdate.includes('LIKE_OLD_QUEUE_INTAKE_FROZEN_419')) {
       fail('unexpected post-cutover queue update result: '+lateUpdate.slice(0,150));
     }
     console.log('419_REMOTE_LATE_035_066_069_075_INTAKE_FAIL_CLOSED=PASS');

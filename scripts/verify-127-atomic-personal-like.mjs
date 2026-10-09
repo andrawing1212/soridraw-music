@@ -557,5 +557,17 @@ assert.equal(retryStore416.get('test-member:retry-416'), '',
 await retryVisit416();
 assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 2,
   '416 healthy revisit must remain network-free');
+// A new retained event must escape an existing failed-event cooldown
+// immediately, not wait for its old 60-second clock.
+retryLatest416 = 101;
+retryFail416 = true;
+await retryVisit416();
+assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 3);
+retryLatest416 = 102;
+retryFail416 = false;
+await retryVisit416();
+assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 4,
+  '416 newer signal must trigger repair immediately even during older cooldown');
+assert.equal(retryCertified416, 102, '416 newer signal must be certified');
 console.log('416_FAILED_GAP_REPEAT_READ_COOLDOWN=PASS');
 console.log('416_NEW_SIGNAL_BYPASS_AND_BOUNDED_RECOVERY=PASS');

@@ -1,3 +1,30 @@
+## CURRENT — Stage415 Explore 개인 좋아요 즉시 / 공개 좋아요 10분 이벤트 집계 — Codex High 우선 (2026-10-09 KST)
+
+**사용자 구현 승인:** 좋아요 우선, 팔로우는 좋아요 정상/비용 PASS 이후. SORIDRAW public social likes ONLY. 요구/설계 상세는 [DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md](LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md). 기준 preview 설계 시작 `8391035d1720eb992265272f13f94378d0d2c163`, 활성 app385. 이 문서는 **Codex 구현 명령**, 문서 갱신만으로 제품 개발·배포 완료 아님.
+
+**Codex 실행 범위:** preview HEAD 최신 확인 → AGENTS/CURRENT/NEXT/WORK_AUDIT/LIKE Stage415 신규 문서 + `.agents/skills/local-first-like-sync/SKILL.md`, app164/app141 보호 기준 읽기 → 실제 소유 경로의 얇은 호출 추적 → 검증 가능한 최소 구현/격리 테스트→한 작업자의 commit SHA 고정. 배포는 Codex가 하지 않음. 커밋 단위는 안전 증명 단위로 분리, 고위험/실환경 수정은 STOP 보고.
+
+**P0 기능 요구:**
+1. 내 클릭 시 내 화면 및 같은 계정 **다른 기기의 하트 membership 즉시**(현재 5초 서버 접수 전에도), PC↔mobile 양방향, 페이지 이동/새로고침 불필요. Private RTDB signal이 서버 canonical로 거짓 승격되거나 이전 클릭/두 기기 역전으로 stale 덮어쓰기 금지. 개인 원본 queue/W1~W2 및 durable outbox/앱 즉시 종료 보호는 현재 검증 구조를 보존. 새 optimistic private signal로 추가 RTDB 비용 발생 시 실제 측정.
+2. 공개 곡의 **공용 likeCount**는 서버 원본 정착과 완전히 별도: **첫 확정된 새 변경 → 고정 600초 공유 창 → 해당 창에서 변한 곡만 한 번 공개 R2/Feed/profile/cards + 필요한 공개 알림 갱신 → 유휴**. 9:59 새 클릭으로 마감 시간 연장 금지. 다음 변경 전에는 cron/alarm/DB/R2/RTDB 공개 집계 조회/쓰기 0. 초기 원본 D1 like relation 정착을 600초로 지연하지 않음.
+3. 공개 숫자와 개인 하트는 UI 상태가 분리되어야 함. 공개 숫자는 10분 전 값도 정상, 개인 하트는 동일 계정 모든 기기에 즉시 최종 상태 표시. old shared R2 or browser profile/public Feed GET이 10분 전에 새 count를 조기 노출하면 FAIL.
+4. 한 계정·곡 중복/좋아요→해제, 여러 계정 같은 곡, 두 기기 동시 클릭, operationId ACK 유실, Worker retry, 1000곡 이상, top40/80 밖 곡, epoch 경계, 기존 PRODUCTION/TEST 코드/공유 RTDB 구독자 모두 안전. W1-W2 physical rows_written/gate; total D1/R2/Worker/DO/RTDB/Functions 월운영비 비교. 스키마 추가/공유 Rules 변경/백필/데이터 쓰기·배포는 별도 승인 전 금지.
+5. Studio 30초 저장하트/파생 favoriteCount, app383 likes 현재 정상 fallback, app380 30초 팔로우, Music Note/Library app385/기타 UI, public follow/Feed/search/ranking 기능 모두 보호.
+
+**Codex Phase A (우선 실행, 실환경 수정 금지):**
+- `src/services/exploreLikeService.ts`의 `setExploreTrackLike` → outbox → `publishConfirmedLikeSignal127` → public signal 192 순서, RTDB 수신 캐시 최신성·동시성 정확성 재현.
+- Worker `cloudflare/explore-worker/canonical/preview-entry.js` DO 103/194/195 + `patches/040` 실제 SQL CTE, Like W1 queue 069 + `track_stats`, `likes`, R2 cards/feed/profile, 기존 repair191 first80 제한, direct reader와 TEST/PRODUCTION 구형 writer가 카운트를 일찍 업데이트하는지 작성 원본까지 확인.
+- 사전 존재 `like-confirmed-event-397.mjs`/RTDB 안전 전환 설계/isolated fixture 재사용. 10분에 실제 변경 IDs를 누락 없이 durable 보관/정산 가능한지와 현재처럼 먼저 canonical만 확정해도 되돌아온 다른 기기에서 정확한 개인 상태가 보장되는지 **격리 실행 검증**. 필요한 신뢰 server publisher/구형 client 동시 수신은 추가 서비스 없이 가능하면 재사용, 불가능하면 STOP 이유 및 비용 비교.
+- **기능·비용 위험 발견 시 오작동하는 반쪽 Worker·Rules·schema 코드 활성 금지**. 5초→600초 상수만 치환 또는 브라우저 public signal 단순 제거 금지. 변경 없는 idleness 0 및 오래된 data repair/notification-only 재전송 계약 확인.
+
+**Phase B (A의 안전성 증명 뒤에만):** private immediate path + fixed 600s public projection in PREVIEW feature-flag OFF isolated candidate로 구현 → fake-clock/intake/public race/legacy compatibility/physical cost 테스트 → TS Build/127/175/178/191/192/197/397/413/Follow 354/380/Studio/Folder 회귀. 베이스 대비 D1 W3+ 또는 새 읽기 반복, 알림 누락이면 FAIL하고 정상 기능 원복. 절대 `.deploy/preview-*.trigger` 변경 금지.
+
+**Phase C:** Codex 완료 SHA + 변경 파일 및 실제 검증 → Work 독립 감사 → ChatGPT 비변경 코드·데이터/비용 확인 → 안전할 때만 승인 범위 PREVIEW 단계적 배포 → 사용자 PC·모바일 실사용 → 그 후에만 팔로우 후속 작업 착수. main/TEST/PRODUCTION 승격은 명시 승인 전 금지.
+
+**상태:** 현재 Stage415 설계 문서 작성. Phase A 구현/격리 실행·배포/실측 **미완료**. 추가 코드/배포 여부를 문서와 엄격히 분리하여 기록.
+
+---
+
 ## CURRENT — app385 PREVIEW confirmed; cost-first freeze & user live checks (2026-10-09 KST)
 
 - **Active PREVIEW app385**, exact Firebase Hosting [Run 37857584293](https://github.com/andrawing1212/soridraw-music/actions/runs/37857584293) SUCCESS, source `c742a467e0c80a63cfc27ceb47b6990d0db5134f`, trigger `8cc2eba8bfaa5dc55b1442d0ad566af4abe46c02`; strict quality [Run 37857370230](https://github.com/andrawing1212/soridraw-music/actions/runs/37857370230) SUCCESS. TEST/PRODUCTION unchanged.

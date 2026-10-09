@@ -146,6 +146,58 @@ if (process.argv[2] === 'cleanup') {
     assert.equal((await act('HIDDEN_NOOP','a-419','hidden-419',true,0,'hidden1',0)).status,'ineligible');
     const last=await adapter.readSnapshot('a-419','song-419');
     assert.equal(last.liked,false);assert.equal(last.likeCount,0);
+    // Candidate phase gate lives in a SOURCE-ONLY file, NOT in a deployed
+    // migration. Prove its exact SQL against only this owned synthetic D1.
+    const candidate=await readFile(
+      'cloudflare/explore-worker/candidates/like-writer-phase-fence-419.sql','utf8');
+    const clean=candidate.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+    const tableSql=clean.match(/CREATE TABLE IF NOT EXISTS[\s\S]*?\);/)?.[0];
+    const initSql=clean.match(/INSERT OR IGNORE INTO explore_like_writer_phase_419[^;]*;/)?.[0];
+    const triggerSql=[...clean.matchAll(/CREATE TRIGGER IF NOT EXISTS[\s\S]*?\nEND;/g)]
+      .map(m=>m[0]);
+    if (!tableSql || !initSql || triggerSql.length!==3 ||
+        triggerSql.some(t=>!/RAISE\(ABORT,/.test(t)) ||
+        !clean.includes("phase IN ('legacy','overlay')") ||
+        clean.includes('DROP TABLE')) {
+      fail('reject unreviewed legacy phase candidate');
+    }
+    await query(tableSql);
+    await query(initSql);
+    for (const statement of triggerSql) await query(statement);
+    // Legacy writes still work in the initial legacy phase; no premature freeze.
+    await query('INSERT INTO likes(track_id,user_uid) VALUES(?,?)',['song-419','fixture-only']);
+    await query('DELETE FROM likes WHERE track_id=? AND user_uid=?',
+      ['song-419','fixture-only']);
+    assert.equal((await query('SELECT phase FROM explore_like_writer_phase_419 WHERE id=1'))
+      .results?.[0]?.phase,'legacy');
+    await query("UPDATE explore_like_writer_phase_419 SET phase='overlay' WHERE id=1");
+
+    async function expectLegacyReject(label,sql,params) {
+      let caught='';
+      try { await query(sql,params); }
+      catch(e) { caught=String(e); }
+      if(!/LIKE_OLD_(?:WRITER|COUNT)_FROZEN_419/.test(caught)) {
+        fail(label+' expected phase fence rejection, got '+caught.slice(0,150));
+      }
+    }
+    await expectLegacyReject('INSERT','INSERT INTO likes(track_id,user_uid) VALUES(?,?)',
+      ['song-419','fixture-only']);
+    await expectLegacyReject('DELETE','DELETE FROM likes WHERE track_id=? AND user_uid=?',
+      ['legacy-419','old-419']);
+    await expectLegacyReject('COUNT',
+      'UPDATE track_stats SET like_count=like_count+1 WHERE track_id=?',['song-419']);
+    const postFence=await act('FENCED_NEW_LIKE','fenced-419','song-419',true,0,
+      'fenced-like1',2);
+    assert.equal(postFence.likeCount,1);
+    await expectLegacyReject('SAME_UID_OLD_REPLAY',
+      'INSERT INTO likes(track_id,user_uid) VALUES(?,?)',
+      ['song-419','fenced-419']);
+    assert.equal((await adapter.readSnapshot('fenced-419','song-419')).likeCount,1);
+    assert.equal((await query('SELECT like_count FROM track_stats WHERE track_id=?',
+      ['song-419'])).results?.[0]?.like_count,0);
+    console.log('419_REMOTE_LEGACY_PHASE_FENCE_BLOCKS_DUPLICATE_OLD_WRITES=PASS');
+    console.log('419_REMOTE_NEW_171_W2_WITH_FENCE=PASS');
+    console.log('419_FENCE_DEPLOYMENT=NOT_APPROVED_SOURCE_ONLY');
     console.log('419_REMOTE_171_COMPLETE_ISOLATED_PHYSICAL_W2_W0=PASS');
     console.log('419_SHARED_DB_QUERIES_AND_WRITES=0');
     console.log('419_WORKER_HOSTING_AND_RULES_DEPLOY=0');

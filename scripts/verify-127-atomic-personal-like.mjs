@@ -655,3 +655,8 @@ console.log('416_COMPLETED_FULL_TARGETED_PROOF_RETRY_NO_REBUILD=PASS');
 // Stage416/417: run Worker and RTDB optional canonical proof safety gates with
 // the existing personal-like workflow; never treat queued/R2 as settled.
 await import('./verify-417-bounded-like-proof.mjs');
+
+// Stage418: release's shared RTDB Rules preflight must be purely additive.
+// Keep this self-test in the existing like CI rather than a new workflow.
+const { execFileSync: runRules418 } = await import('node:child_process');
+runRules418(process.execPath, ['scripts/verify-418-rtdb-rules-delta.mjs', '--self-test'], { stdio: 'inherit' });

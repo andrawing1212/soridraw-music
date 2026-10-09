@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createLikeD1OnlyCanonical171 } from '../cloudflare/explore-worker/runtime/like-d1only-171.mjs';
+import { createLikeD1OnlyBatchAdapter420 } from '../cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs';
 
 const account = process.env.CLOUDFLARE_ACCOUNT_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -321,6 +322,49 @@ if (process.argv[2] === 'cleanup') {
     console.log('419_REMOTE_LEGACY_PHASE_FENCE_BLOCKS_DUPLICATE_OLD_WRITES=PASS');
     console.log('419_REMOTE_NEW_171_W2_WITH_FENCE=PASS');
     console.log('419_FENCE_DEPLOYMENT=NOT_APPROVED_SOURCE_ONLY');
+    // Stage420 SOURCE-ONLY authenticated batch adapter: exercise the exact
+    // app164+ request contract against the same REAL remote D1. Stubbed public
+    // R2/RTDB publisher below is not evidence of product integration.
+    let failProjection420=false;
+    const router420=createLikeD1OnlyBatchAdapter420(remote,{
+      allEnvironmentCutoverVerified:true,
+      async publishChangedTrack(row) {
+        if(failProjection420) {failProjection420=false;return {settled:false};}
+        return {settled:true,trackId:row.trackId,generation:row.generation};
+      },
+    });
+    const intent420=(trackId,liked,baseLiked,expectedRevision,operationId)=>({
+      trackId,liked,baseLiked,expectedRevision,operationId,mutationAt:420000,
+    });
+    const like420=intent420('song-419',true,false,0,'420-like-owner');
+    const old420={trackId:'legacy-419',liked:false,baseLiked:true,mutationAt:420001};
+    await assert.rejects(
+      router420.acceptAuthenticatedBatch('owner-420',{mutations:[like420,old420]}),
+      /420_LEGACY_MUTATION_NEEDS_COMPATIBILITY_GATE/,
+    );
+    assert.equal((await adapter.readSnapshot('owner-420','song-419')).liked,false);
+    const response420=await router420.acceptAuthenticatedBatch('owner-420',{mutations:[like420]});
+    assert.equal(response420.data.canonicalD1,'settled');
+    assert.equal(response420.data.results[0].status,'applied');
+    assert.equal(response420.data.rowsWritten,2);
+    const replay420=await router420.acceptAuthenticatedBatch('owner-420',{mutations:[like420]});
+    assert.equal(replay420.data.rowsWritten,0);
+    assert.equal(replay420.data.results[0].status,'duplicate');
+    failProjection420=true;
+    const unlike420=intent420('song-419',false,true,1,'420-unlike-owner');
+    await assert.rejects(
+      router420.acceptAuthenticatedBatch('owner-420',{mutations:[unlike420]}),
+      /420_PUBLIC_PROJECTION_NOT_SETTLED_RETRY_SAME_ID/,
+    );
+    assert.equal((await adapter.readSnapshot('owner-420','song-419')).liked,false);
+    const resumed420=await router420.acceptAuthenticatedBatch('owner-420',{mutations:[unlike420]});
+    assert.equal(resumed420.data.rowsWritten,0);
+    assert.equal(resumed420.data.results[0].status,'duplicate');
+    console.log('420_REMOTE_APP164_PLUS_AUTH_BATCH_W2_AND_IDEMPOTENT_W0=PASS');
+    console.log('420_REMOTE_OLD_CLIENT_MIXED_REQUEST_FAIL_CLOSED_W0=PASS');
+    console.log('420_REMOTE_PUBLIC_PROJECTION_RETRY_AFTER_D1_COMMIT_W0=PASS');
+    console.log('420_PUBLIC_PUBLISHER_REAL_R2_RTDB=STUB_ONLY_NOT_VERIFIED');
+    console.log('420_OLDER_PRE_APP144_CLIENT_COMPAT=NOT_IMPLEMENTED');
     console.log('419_REMOTE_171_COMPLETE_ISOLATED_PHYSICAL_W2_W0=PASS');
     console.log('419_SHARED_DB_QUERIES_AND_WRITES=0');
     console.log('419_WORKER_HOSTING_AND_RULES_DEPLOY=0');

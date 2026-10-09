@@ -6,7 +6,10 @@
 -- Requires the four historical queue tables to exist; missing schema FAILS.
 CREATE TABLE IF NOT EXISTS explore_like_cutover_ready_419 (
   environment TEXT PRIMARY KEY CHECK (environment IN ('preview','test','production')),
-  -- Same reader/writer wire contract, not the same environment release commit.\n  protocol_sha TEXT NOT NULL CHECK (length(protocol_sha)=40),\n  -- The three deployed artifact SHAs may differ while staged on preview/test/prod.\n  deployed_sha TEXT NOT NULL CHECK (length(deployed_sha)=40),
+  -- Same reader/writer wire contract, not the same environment release commit.
+  protocol_sha TEXT NOT NULL CHECK (length(protocol_sha)=40),
+  -- The three deployed artifact SHAs may differ while staged on preview/test/prod.
+  deployed_sha TEXT NOT NULL CHECK (length(deployed_sha)=40),
   reader_ready INTEGER NOT NULL CHECK (reader_ready IN (0,1)),
   writer_compatible INTEGER NOT NULL CHECK (writer_compatible IN (0,1)),
   verified_until_ms INTEGER NOT NULL CHECK (verified_until_ms > 0)

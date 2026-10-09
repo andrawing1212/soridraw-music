@@ -660,3 +660,64 @@ await import('./verify-417-bounded-like-proof.mjs');
 // Keep this self-test in the existing like CI rather than a new workflow.
 const { execFileSync: runRules418 } = await import('node:child_process');
 runRules418(process.execPath, ['scripts/verify-418-rtdb-rules-delta.mjs', '--self-test'], { stdio: 'inherit' });
+
+
+// Regression: a private RTDB alert can fail AFTER an accepted like/unlike.
+// Only the alert is retried, at bounded delays, without replaying D1 mutations.
+const failedSignalRetrySource127 = service.slice(
+  service.indexOf('const failedLikeSignalTimers127 ='),
+  service.indexOf('const publishConfirmedLikeSignal127 ='),
+);
+assert.ok(failedSignalRetrySource127.includes('scheduleFailedLikeSignalRetry127'),
+  'bounded RTDB alert retry helper missing');
+assert.match(publish, /scheduleFailedLikeSignalRetry127\(uid\)/,
+  'failed account-private RTDB sends must schedule automatic retry without waiting for focus');
+assert.match(publish, /await publish;[\s\S]*?clearFailedLikeSignalRetry127\(uid\)/,
+  'successful account-private RTDB notification must cancel old retry timers');
+assert.doesNotMatch(failedSignalRetrySource127, /requestExploreLike\(|env\.DB|fetch\(|firebase\/firestore/,
+  'RTDB retry must not replay a like mutation or add D1/Firestore reads');
+
+const retryJobs127 = new Map();
+const retriedAlerts127 = [];
+let nextRetryJob127 = 0;
+const retryWindow127 = {
+  setTimeout: (fn, delay) => {
+    const id = ++nextRetryJob127;
+    retryJobs127.set(id, { fn, delay });
+    return id;
+  },
+  clearTimeout: (id) => retryJobs127.delete(id),
+};
+let pendingAlertRows127 = [{ trackId: 'song', liked: false }];
+const retryHarness127 = new Function(
+  'window', 'auth', 'readSignalRetry127', 'publishConfirmedLikeSignal127', 'console',
+  ts.transpileModule(failedSignalRetrySource127, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+  }).outputText +
+  '\nreturn { schedule: scheduleFailedLikeSignalRetry127, clear: clearFailedLikeSignalRetry127 };',
+)(
+  retryWindow127,
+  { currentUser: { uid: 'same-account' } },
+  () => pendingAlertRows127,
+  async (uid, rows) => { retriedAlerts127.push({ uid, rows }); },
+  { warn: () => {} },
+);
+for (const expectedDelay of [2_000, 10_000, 30_000]) {
+  retryHarness127.schedule('same-account');
+  retryHarness127.schedule('same-account');
+  assert.equal(retryJobs127.size, 1, 'same UID must never schedule duplicate alert retry timers');
+  const [id, job] = [...retryJobs127.entries()][0];
+  assert.equal(job.delay, expectedDelay, 'failed alert should use bounded retry backoff');
+  retryJobs127.delete(id);
+  job.fn();
+  await Promise.resolve();
+}
+assert.equal(retriedAlerts127.length, 3, 'only three automatic retry attempts are allowed');
+retryHarness127.schedule('same-account');
+assert.equal(retryJobs127.size, 0, 'retry must stop after its bounded budget');
+pendingAlertRows127 = [];
+retryHarness127.clear('same-account');
+retryHarness127.schedule('same-account');
+assert.equal(retryJobs127.size, 1, 'new accepted event must have a fresh retry budget');
+retryHarness127.clear('same-account');
+assert.equal(retryJobs127.size, 0, 'successful publication must cancel its pending timer');

@@ -1155,6 +1155,33 @@ const readSignalRetry127 = (uid: string): ExploreLikeAcceptedRow127[] => {
 const saveSignalRetry127 = (uid: string, rows: ExploreLikeAcceptedRow127[]) =>
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid), JSON.stringify(rows));
 
+// Retry only a server-accepted like/unlike notification whose private RTDB
+// publication actually failed. No D1/Firestore write, page poll, or cache reset.
+const failedLikeSignalTimers127 = new Map<string, number>();
+const failedLikeSignalAttempts127 = new Map<string, number>();
+const clearFailedLikeSignalRetry127 = (uid: string): void => {
+  const timer = failedLikeSignalTimers127.get(uid);
+  if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
+  failedLikeSignalTimers127.delete(uid);
+  failedLikeSignalAttempts127.delete(uid);
+};
+const scheduleFailedLikeSignalRetry127 = (uid: string): void => {
+  if (typeof window === 'undefined' || !uid || failedLikeSignalTimers127.has(uid)) return;
+  const attempt = failedLikeSignalAttempts127.get(uid) || 0;
+  const retryDelays = [2_000, 10_000, 30_000];
+  if (attempt >= retryDelays.length) return; // focus/online keeps the durable fallback
+  failedLikeSignalAttempts127.set(uid, attempt + 1);
+  const timer = window.setTimeout(() => {
+    failedLikeSignalTimers127.delete(uid);
+    if (auth.currentUser?.uid !== uid) return;
+    const retained = readSignalRetry127(uid);
+    if (!retained.length) return;
+    void publishConfirmedLikeSignal127(uid, retained)
+      .catch((error) => console.warn('[127] Bounded same-account like signal retry failed:', error));
+  }, retryDelays[attempt]);
+  failedLikeSignalTimers127.set(uid, timer);
+};
+
 const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcceptedRow127[]): Promise<void> => {
   if (!fresh.length) return;
   // Serialize before touching the durable retry: an in-flight successful
@@ -1165,7 +1192,15 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
     return publishConfirmedLikeSignal127(uid, fresh);
   }
   const pending = new Map<string, ExploreLikeAcceptedRow127>();
-  for (const row of [...fresh, ...readSignalRetry127(uid)]) {
+  const previousRetained127 = readSignalRetry127(uid);
+  // A new accepted click starts a fresh bounded notification retry budget.
+  // Replaying the exact old retained event does not restart a failed timer forever.
+  if (fresh.some((row) => !previousRetained127.some((old) =>
+    old.trackId === row.trackId && old.liked === row.liked
+  ))) {
+    clearFailedLikeSignalRetry127(uid);
+  }
+  for (const row of [...fresh, ...previousRetained127]) {
     if (row.trackId && !pending.has(row.trackId)) pending.set(row.trackId, row);
   }
   if (pending.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
@@ -1202,7 +1237,15 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
     writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid), '');
   })().finally(() => { signalPublishInFlight127.delete(uid); });
   signalPublishInFlight127.set(uid, publish);
-  await publish;
+  try {
+    await publish;
+    clearFailedLikeSignalRetry127(uid);
+  } catch (error) {
+    // The accepted D1 mutation remains untouched; retry only its UID-private
+    // changed-track alert while this tab is open, then retain focus/online fallback.
+    scheduleFailedLikeSignalRetry127(uid);
+    throw error;
+  }
 };
 
 let likeSignalRetryListenerInstalled127 = false;

@@ -82,6 +82,9 @@ const EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357 = 'soridraw:explore:like-cross-ori
 // app358: one repair attempt per retained signal. A partial legacy snapshot must
 // never turn My Likes tab navigation into a repeated /v1/me/social-snapshot read.
 const EXPLORE_LIKE_CROSS_ORIGIN_ATTEMPTED_358 = 'soridraw:explore:like-cross-origin-attempted:358';
+// Stage416: failed FULL origin repair must not restart on every My Likes visit.
+const EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416 = 'soridraw:explore:like-cross-origin-retry-after:416';
+const EXPLORE_LIKE_CROSS_ORIGIN_RETRY_WAIT_MS_416 = 60_000;
 // app359: app358 could repair shared R2 to canonical truth while historical
 // accepted-but-unsettled local guards still painted extra My Likes cards.
 // One new per-origin, per-retained-signal upgrade runs the proven app189 fresh
@@ -527,6 +530,22 @@ const rememberLastRetainedLikeSignal357 = (uid: string, version: number): void =
     String(Math.max(readLastRetainedLikeSignal357(uid), Math.floor(version))),
   );
 };
+const isCrossOriginLikeRetryDeferred416 = (uid: string, version: number): boolean => {
+  if (!uid || version <= 0) return false;
+  const [rawVersion, rawUntil] = readLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416, uid),
+  ).split(':');
+  const remaining = (Number(rawUntil) || 0) - Date.now();
+  // New retained signals bypass stale cooldowns; clock jumps cannot lock recovery forever.
+  return Number(rawVersion) === version && remaining > 0 &&
+    remaining <= EXPLORE_LIKE_CROSS_ORIGIN_RETRY_WAIT_MS_416;
+};
+const deferCrossOriginLikeRetry416 = (uid: string, version: number): void => {
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416, uid),
+    `${version}:${Date.now() + EXPLORE_LIKE_CROSS_ORIGIN_RETRY_WAIT_MS_416}`,
+  );
+};
 const readCrossOriginLikeCertified357 = (uid: string): number =>
   Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_CERTIFIED_357, uid))) || 0);
 const markCrossOriginLikeCertified357 = (uid: string, version: number): void => {
@@ -795,6 +814,10 @@ const requestPersonalLikeBaseline127 = async (
 const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 = ''): Promise<void> => {
   const uid = user.uid;
   if (!uid) return;
+  // A failed historical gap stays pending without repeating its FULL snapshot
+  // on every My Likes route entry. This does not affect healthy personal caches.
+  if (readRepairTarget127(uid) > 0 &&
+      isCrossOriginLikeRetryDeferred416(uid, readLastRetainedLikeSignal357(uid))) return;
   // Preserve healthy local-first behavior. Only a previously partial account
   // receives ONE extra account-scoped metadata verification after deployment.
   const partial182 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1';
@@ -978,6 +1001,8 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
   });
 
   if (!legacyNeedsRepair357 && !needsSettlementUpgrade359) return;
+  if (legacyNeedsRepair357 &&
+      isCrossOriginLikeRetryDeferred416(uid, latestSignalVersion)) return;
 
   const existing = crossOriginParityInFlight357.get(uid);
   if (existing) return existing;
@@ -1030,7 +1055,11 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
 
     markCrossOriginLikeCertified357(uid, latestSignalVersion);
     markCrossOriginLikeSettled359(uid, latestSignalVersion);
-  })().finally(() => {
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416, uid), '');
+  })().catch((error) => {
+    if (legacyNeedsRepair357) deferCrossOriginLikeRetry416(uid, latestSignalVersion);
+    throw error;
+  }).finally(() => {
     crossOriginParityInFlight357.delete(uid);
   });
   crossOriginParityInFlight357.set(uid, task);

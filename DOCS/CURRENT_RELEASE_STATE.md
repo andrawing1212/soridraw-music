@@ -1,3 +1,14 @@
+## 0S33. Stage416 Phase1 독립 회귀감사 추가 수정 — FULL 완료 후 targeted 실패 재복구 차단 / 6개 격리 PASS, CI·실측 HOLD (2026-10-09 KST)
+
+- **감사/수정 기준:** `preview` `b948e01a999466ccead874920cd6c27965f8e94a`에서 추가 소스 감사 시작. 이전 60초 동일 gap retry cooldown 후보는 정상 경로 격리 PASS지만, FULL canonical baseline 성공→app189 targeted proof 네트워크 실패→60초 뒤 재진입 때 **기존 FULL 복구를 다시 요청**하는 별도 회귀가 재현됨(원본 함수 자체 mock: FULL 2회/targeted 2회). 이는 정상 기기 개인 snapshot 불필요 R 증가 가능성 및 정확성 지연 위험.
+- **최소 제품 수정:** `b8ab60a9bec2718eb135b1755c32c274c6792523` — `src/services/exploreLikeService.ts` 1파일. 이전 app358 attempt 여부를 **현 방문 mark 이전에 기록**, 기존 완전 baseline=1, repairTarget=0일 때만 FULL rearm 생략. 첫 신규 gap / prior failed+baseline missing은 FULL 실행, 기존 app189 targeted proof만 재시도. 기존 Stage416 UID+signal 60초 실패 cooldown·새 signal bypass·성공 marker 정리는 그대로. 별도 Worker·DB·Rules·UI 변경 없음.
+- **검증:** 기존 `scripts/verify-127-atomic-personal-like.mjs`에 세 실패회복 시나리오 추가/fixture 초기값 독립화. 검사 파일 최종 commit `cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344`. GitHub exact source를 다시 불러 실제 함수/도우미 추출한 V8 격리 JS 6개 표식 **PASS**: settlement-only 추가 full0, genuine gap repair, healthy reentry, 동일 실패 gap 재방문 rearm0, 새 신호 및 60초 후 복구, FULL 완료→targeted 실패 뒤 중복 FULL 방지. V8 mock은 **TypeScript 전체/Build/기존 회귀/실서비스 과금/PC-mobile QA 증명이 아님**.
+- **환경/배포:** 현재 배포된 것으로 문서상 확인된 PREVIEW는 **app385** (정식 Firebase Hosting Run 37857584293, 이전 보고 SUCCESS). 이번 Stage416 후보는 GitHub 소스/검사만, **Hosting·Explore Worker·Functions·Rules·D1 공유데이터·R2·main/TEST/PRODUCTION 전부 배포/변경 없음**. `.deploy` trigger 변경 0.
+- **현재 판정:** **QA HOLD / PREVIEW 배포 불가 / TEST 승격 불가**. GitHub Actions 408 실행의 정확한 Success+TypeScript/Build/127/175/178/191/192/197/390 로그가 현재 연결에서 확인되지 않음(커밋 status 0개, PR-only workflow run 0개). Firebase/Cloudflare 물리 계측, 실제 warm-cache R0, D1 W1~W2, 오래된 Origin/browser cache, PC↔mobile 및 Work 별도 독립 감사 미확인. 60초 지연이 실제 정확성을 해치지 않는지 남은 위험.
+- **다음 작업:** GitHub 408 exact SHA 완성 로그 확보→FAIL이면 배포 중단/최소 오류 수리→Work read-only 독립 audit→제한된 계정으로 실제 R/W·복구/parity 검사→통과 때만 PREVIEW release. Stage416 개인 private 즉시 동기화 Phase2/개인 trailing300초 Phase3/공동 공개 fixed300초 Phase4와 팔로우는 아직 착수 금지. 정상 app385 보호.
+
+---
+
 ## 0S32. Stage416 Phase1 반복 FULL 복구 비용 방지 후보 구현 — 격리 5/5 PASS, 배포/실 D1/CI 대기 (2026-10-09 KST)
 
 - **기준 branch:** `preview`, 시작 `1fef63d4da6b023960da7a2cbdc5744634af6787`. 이전 0S31 독립 감사에서 358 attempted 동일 신호가 실패했는데도 My Likes 왕복으로 182 FULL repair를 재무장하는 문제 재현.

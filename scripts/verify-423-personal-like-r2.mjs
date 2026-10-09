@@ -46,6 +46,21 @@ assert.equal(puts,2);
 console.log('423_ACTUAL_EXISTING_SHARED_SOCIAL_V114_PERSONAL_CAS=PASS');
 console.log('423_IDEMPOTENT_RETRY_AND_STALE_REVISION_NO_OVERWRITE=PASS');
 console.log('423_LEGACY_COMPLETE_METADATA_PRESERVED=PASS');
+// Stage431: unusual track identifiers must never resolve inherited
+// metadata properties and fail AFTER D1 has already committed.
+object={schemaVersion:1,uid,canonicalComplete156:true,
+  canonicalSource156:'verified',likedTrackIds:[],exactLikeCount156:0,
+  updatedAt:100};
+for(const special of ['constructor','__proto__']){
+  const beforePuts=puts;
+  result=await persist({uid,trackId:special,liked:true,
+    revision:1,operationId:'special-'+special});
+  assert.equal(result.persisted,true);
+  assert.equal(puts,beforePuts+1);
+  assert.equal(Object.prototype.hasOwnProperty.call(object.likeRevisions423,special),true);
+  assert.equal(object.likeRevisions423[special].revision,1);
+}
+console.log('423_PROTOTYPE_LOOKING_IDS_DO_NOT_CAUSE_POST_D1_FAILURE=PASS');
 console.log('423_PARTIAL_COLD_CATALOG_FAIL_CLOSED_NO_USER_BACKFILL=PASS');
 
 const preflightKey='internal/explore/shared-social-v114/likes/'+uid+'.json';
@@ -78,14 +93,14 @@ readyItems.get(preflightKey).likedTrackIds=
   Array.from({length:2000},(_,i)=>'existing-track-'+i);
 readyItems.get(preflightKey).exactLikeCount156=2000;
 await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
-  /429_PRIVATE_CAPACITY_BEFORE_D1/);
+  /431_BATCH_MEMBERSHIP_CAPACITY/);
 readyItems.get(preflightKey).likedTrackIds=[];
 readyItems.get(preflightKey).exactLikeCount156=0;
 readyItems.get(preflightKey).likeRevisions423=Object.fromEntries(
   Array.from({length:2000},(_,i)=>['r'+i,{revision:1,
     operationId:'op-'+i,liked:false}]));
 await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),
-  /429_PRIVATE_REVISION_CAPACITY_BEFORE_D1/);
+  /431_REVISION_METADATA_CAPACITY/);
 readyItems.get(preflightKey).likeRevisions423={};
 readyItems.delete(preflightPopular);
 await assert.rejects(verifyLikeR2Readiness429(readyR2,uid,request),

@@ -69,6 +69,19 @@ const expect=[
 ];
 const names=(await select("SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_batches_035','explore_like_batches_066','explore_like_batches_069','explore_like_user_queue_075','explore_like_user_queue_state_075','explore_like_overrides_171','explore_like_count_deltas_171','explore_like_cutover_control_174','explore_like_writer_phase_419')")).map(r=>r.name);
 for(const name of expect)console.log('425_SHARED_SCHEMA_'+name+'='+(names.includes(name)?'PRESENT':'MISSING'));
+// Stage427: after the explicitly approved inert two-table 171 schema addition,
+// verify no live Worker accidentally seeded/modified any overlay rows.
+if(names.includes('explore_like_overrides_171')&&names.includes('explore_like_count_deltas_171')) {
+  const relations=await select('SELECT 1 AS row FROM explore_like_overrides_171 LIMIT 1');
+  const deltas=await select('SELECT 1 AS row FROM explore_like_count_deltas_171 LIMIT 1');
+  console.log('427_SHARED_171_TABLES=EXIST');
+  console.log('427_171_RELATIONS='+(relations.length?'NONEMPTY':'EMPTY'));
+  console.log('427_171_COUNT_DELTAS='+(deltas.length?'NONEMPTY':'EMPTY'));
+  if(relations.length||deltas.length){
+    console.log('427_PREMATURE_171_WRITES_DETECTED=YES');
+    allReady=false;
+  }
+}
 if(!names.includes('explore_like_user_queue_state_075'))throw Error('425_075_PROCESSING_CURSOR_SCHEMA_MISSING');
 if(!expect.slice(5).every(x=>names.includes(x)))allReady=false;
 for(const [type,table] of [

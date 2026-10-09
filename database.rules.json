@@ -171,6 +171,9 @@
               "displayLikeCount": {
                 ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
               },
+              "canonicalSettled417": {
+                ".validate": "newData.isBoolean()"
+              },
               "$other": {
                 ".validate": false
               }

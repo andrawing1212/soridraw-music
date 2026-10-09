@@ -51,3 +51,45 @@ WHEN OLD.phase='overlay' AND NEW.phase='legacy'
 BEGIN
   SELECT RAISE(ABORT,'LIKE_OVERLAY_ROLLBACK_REQUIRES_RECONCILIATION_419');
 END;
+
+-- CRITICAL: a zero-queue check at the phase flip is NOT enough.
+-- Old PREVIEW/TEST/PRODUCTION workers may enqueue 035/066/069/075 AFTER
+-- overlay activates. These gates fail the intake itself rather than allowing
+-- queued: true followed by an unsatisfiable canonical settlement.
+-- In live service this would still show an error on unupgraded workers.
+-- Therefore the old-client->new-writer compatibility router MUST be deployed
+-- to all 3 environments before activation; this is not a release migration.
+CREATE TRIGGER IF NOT EXISTS explore_like_no_035_after_overlay_419
+BEFORE INSERT ON explore_like_batches_035
+WHEN (SELECT phase FROM explore_like_writer_phase_419 WHERE id=1)='overlay'
+BEGIN
+  SELECT RAISE(ABORT,'LIKE_OLD_QUEUE_INTAKE_FROZEN_419');
+END;
+
+CREATE TRIGGER IF NOT EXISTS explore_like_no_066_after_overlay_419
+BEFORE INSERT ON explore_like_batches_066
+WHEN (SELECT phase FROM explore_like_writer_phase_419 WHERE id=1)='overlay'
+BEGIN
+  SELECT RAISE(ABORT,'LIKE_OLD_QUEUE_INTAKE_FROZEN_419');
+END;
+
+CREATE TRIGGER IF NOT EXISTS explore_like_no_069_after_overlay_419
+BEFORE INSERT ON explore_like_batches_069
+WHEN (SELECT phase FROM explore_like_writer_phase_419 WHERE id=1)='overlay'
+BEGIN
+  SELECT RAISE(ABORT,'LIKE_OLD_QUEUE_INTAKE_FROZEN_419');
+END;
+
+CREATE TRIGGER IF NOT EXISTS explore_like_no_075_insert_after_overlay_419
+BEFORE INSERT ON explore_like_user_queue_075
+WHEN (SELECT phase FROM explore_like_writer_phase_419 WHERE id=1)='overlay'
+BEGIN
+  SELECT RAISE(ABORT,'LIKE_OLD_QUEUE_INTAKE_FROZEN_419');
+END;
+
+CREATE TRIGGER IF NOT EXISTS explore_like_no_075_update_after_overlay_419
+BEFORE UPDATE ON explore_like_user_queue_075
+WHEN (SELECT phase FROM explore_like_writer_phase_419 WHERE id=1)='overlay'
+BEGIN
+  SELECT RAISE(ABORT,'LIKE_OLD_QUEUE_INTAKE_FROZEN_419');
+END;

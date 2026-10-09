@@ -1,12 +1,12 @@
-app385-cost-first-60s-final-state-restore-preview
-target_source=c742a467e0c80a63cfc27ceb47b6990d0db5134f
-app_version=385
-scope=restore-60s-music-note-library-final-state-on-background,keep-existing-rtbd-immediate-cross-device,keep-actual-pagehide-pending-only,restore-150s-recent-on-hidden,keep-studio-30s-heart-and-favoritecount,app383-explore-like-protected
-focused_ci_run=37857349808
+app386-stage416-phase1-cross-origin-like-repair-preview
+target_source=f3f9d09418383ae55d6fc68460a16c3314647004
+app_version=386
+scope=stage416-phase1-repeated-personal-snapshot-repair-guard,maintain-existing-like-and-follow,protect-existing-cache-and-outbox,preview-only-hosting
+focused_ci_run=37870912569
 focused_ci_conclusion=success
-focused_ci_product_commit=07725ed0ef3c533de540a86ea7e1b45ce06d6245
+focused_ci_product_commit=cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344
 version_only_diff_after_product_ci=true
-exact_app385_ci_run=37857370230
+exact_app386_ci_run=37870912569
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -14,4 +14,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_requested_revert-unnecessary-background-flush_cost_first_2026-10-08T23:03Z
+approval=user_2026-10-09_authorized_automatic_preview_deploy_for_real_verification

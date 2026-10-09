@@ -1,3 +1,12 @@
+## CURRENT — Stage416 Phase1 최소 수리 후 QA/실사용 비용 검증 (2026-10-09 KST)
+
+- 기준 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`; 사용자가 지시한 1단계 스냅샷 진단에서 **실제 중복 FULL repair 재활성 조건** 발견. `exploreLikeService.ts`의 app357/359 함수: legacy signal gap이 없고 settlement-only인데도 unconditional repair182 reset하던 경로를 **실제 legacyNeedsRepair357 조건으로만 이동**. 정상 remote membership guard/targeted app189 proof 유지, worker/membership canonical 배치/전역 RTDB unchanged.
+- 커밋 `1980a9bcd9487f7e8126219f3e509cb8de1efe16` 제품 수정, `42738dab933ba2e13a2995ca0fded8bb19106c12` 기존 127 verifier에 격리 416 테스트, QA trigger `e480d24fb12888d101d62060864755eb87689be0`. 실제 함수 mock 3/3 PASS; 소스 호출 경계 10/10 PASS. 최종 TypeScript/Build/CI 및 physical cost 미검증. 이번 phase 제품 배포 금지; 사용자 앱 app385 그대로.
+- **우선 다음 일:** exact preview SHA의 408 GitHub quality CI 결과 확인. FAIL이면 어디인지 파악하고 stop/수정. CI PASS와 독립 검증 후 user TEST 계정/browser cache warm & cold로 각 실행의 진단 RESET 비교: (a) healthy My Likes reentry D1 snapshot 0, (b) like1/3/6 누르고 page return 시 app358 FULL snapshot 추가 0, (c) stale cross-origin gap이면 기존 repair 358/targeted proof189 성공과 이전 좋아요 목록 정확성, (d) R5/W0 이슈가 남으면 snapshot 내 작업 비용 분해. UI/Worker/Rules/실데이터 변경 없이 실측하거나, 사용자가 PC·모바일 정상 비교로 보완.
+- **좋아요 Phase2 private instant/Phase3 user trailing300s+exit/Phase4 event public fixed300s는 Phase1 비용·회귀 게이트 확인 뒤 각각 분리.** 팔로우는 좋아요 전체 PASS 후. 5초/5분 타이머 단순 변경/스키마 migration/RTDB Rules 변경/TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — Stage416 Phase 1 개인 스냅샷 비용 조사부터, 5분+5분 구조 단계 구현 (2026-10-09 KST)
 
 **이 섹션이 이전 Stage415 10분 지시를 대체한다.** 현재 기준 문서 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`. `preview` 활성 app385, 새 문서 추가 SHA `dc3cc934ace7803ef1397b6b0e5094cd431ffd55`. 구현/배포 미실행.

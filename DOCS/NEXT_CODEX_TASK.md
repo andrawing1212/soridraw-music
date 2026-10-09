@@ -1,3 +1,12 @@
+## CURRENT — Stage416 Phase1: targeted proof 실패 후 FULL 재복구 회귀 수정, 전체 CI·실기기 게이트 (2026-10-09 KST)
+
+- **최신 제품 수정:** `b8ab60a9bec2718eb135b1755c32c274c6792523` — `src/services/exploreLikeService.ts` app357/358/359. 실제 FULL baseline은 성공하여 `EXPLORE_LIKE_BASELINE_127=1`, repairTarget=0 이지만 후속 app189 targeted proof만 실패한 경우에 예전 FULL canonical 복구를 다시 시작하는 오류를 격리 재현. 같은 signal의 **이전** app358 attempt가 있고 완전한 baseline/비어 있는 repairTarget이 증명되면 새 FULL 재무장을 생략하고 targeted proof만 재시도. 첫 신호 gap은 mark하기 전 previousAttempt를 확인하므로 첫 FULL 복구를 반드시 진행하며, 과거 FULL 실패/baseline 결손에서는 기존 FULL 복구를 유지.
+- **추가 회귀 테스트:** `scripts/verify-127-atomic-personal-like.mjs`의 Stage416 함수 추출 격리 3계열(첫 FULL 정상 실행/이미 attempt했지만 baseline 불완전/이미 FULL 성공 후 targeted 실패) 및 기존 cooldown/new signal/healthy/settlement-only; 최종 검사 파일 commit `cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344`. 소스와 테스트를 GitHub exact SHA로 재조회해 V8 격리 JS 실행한 **Stage416 6개 로그 PASS**. **Node TypeScript transpile, 전체 127 verifier, npm lint/build, 175·178·191·192·197·390, 실제 D1 청구·PC/모바일 실기기는 미검증**; V8 모의 검사를 전체 CI라고 표기 금지.
+- **남은 긴급 게이트:** 이미 변경한 408 Workflow가 `preview` push를 감지하는지 확인 → Node 22 `npm ci`/TypeScript/Build/127·175·178·191·192·197·390의 **정확한 최종 제품 SHA** 성공 로그 확보. 이 연결의 GitHub combined status 및 PR-only workflow lookup 결과는 모두 0건이라 최종 CI 성공/실패 판단 불가. 이후 Work 독립 감사(읽기전용), 실제 PREVIEW warm-cache My Likes 재진입/복구 실패→60초 뒤 재진입, 개인 snapshot endpoint D1 row metric 분리 및 두 기기 좋아요 parity 시험. **한 항목이라도 FAIL이면 PREVIEW 배포·Stage416 Phase2 시작 금지.**
+- **동결:** active PREVIEW app385 유지. 5초 좋아요 서버 처리/공동 숫자/팔로우/Studio heart/Music Note/Library/UI/Worker/Functions/Rules/D1 canonical/R2/Firestore shared 사용자 데이터 안 건드림. .deploy trigger/main/TEST/PRODUCTION 변경·배포 금지. 최종 목표인 private 즉시 + 마지막 클릭 개인 +300초 + 서버 접수 후 공개 공동 fixed +300초는 아직 미구현.
+  
+---
+
 ## CURRENT — Stage416 Phase1 bounded gap-retry 후보 구현됨 / 최종 CI·비용 감사 대기 (2026-10-09 KST)
 
 - **실제 제품 소스 수정:** `dc8457dd963a70818cd5c90af24d39b5dbd9a93f` `src/services/exploreLikeService.ts` 한 파일. `readRepairTarget127>0`이고 해당 retained signal의 FULL origin repair가 실패한 경우에만, UID+signal 버전별 local retry marker로 **60초 재시도 간격**을 적용. 재방문 parity뿐 아니라 이어서 호출되는 `ensurePersonalLikeBaseline127`도 같은 cooldown을 존중. 새 retained signal이면 즉시 bypass, 60초 만료되면 회복 가능, 성공 시 marker 삭제. 정상 healthy cache / app359 settlement-only / 5초 좋아요·Worker/RTDB/좋아요/팔로우/Studio 등 기존 정상 경로를 변경하지 않음.

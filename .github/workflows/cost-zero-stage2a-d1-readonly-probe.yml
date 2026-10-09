@@ -23,6 +23,17 @@ jobs:
         with:
           node-version: 22
 
+      - name: Account-wide D1 usage and shared D1 cost estimate (GraphQL, read-only)
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+          SORIDRAW_D1_COST_DAYS: '7'
+        run: |
+          set -euo pipefail
+          # Existing scoped token: no SQL, no user data, no Worker deployment.
+          # If GraphQL Analytics Read permission is missing, fail honestly.
+          node scripts/report-cloudflare-d1-usage-readonly.mjs
+
       - name: Prepare exact live Worker settings
         working-directory: cloudflare/explore-worker
         shell: bash

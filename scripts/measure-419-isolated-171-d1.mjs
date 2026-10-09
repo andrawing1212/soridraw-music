@@ -170,7 +170,104 @@ if (process.argv[2] === 'cleanup') {
       ['song-419','fixture-only']);
     assert.equal((await query('SELECT phase FROM explore_like_writer_phase_419 WHERE id=1'))
       .results?.[0]?.phase,'legacy');
+    // Load the four REAL historical additive migrations in this EPHEMERAL DB
+    // so the transition guard is proved against the real queue table names.
+    for (const migration of [
+      '20260911_01_explore_like_deferred_batches.sql',
+      '20260911_02_explore_like_compact_queue.sql',
+      '20260912_01_explore_like_w1_queue.sql',
+      '20260913_01_explore_like_user_queue.sql',
+    ]) {
+      const raw=await readFile('cloudflare/explore-worker/migrations/'+migration,'utf8');
+      const stripped=raw.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+      const statements=stripped.split(';').map(statement=>statement.trim()).filter(Boolean);
+      if (statements.length<1 || statements.some(q=>!/^(CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|INSERT OR IGNORE INTO)/.test(q))) {
+        fail('unreviewed queue fixture DDL: '+migration);
+      }
+      for(const statement of statements) await query(statement);
+    }
+    const preflight=await readFile(
+      'cloudflare/explore-worker/candidates/like-writer-cutover-preconditions-419.sql','utf8');
+    const preflightClean=preflight.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+    const preflightTable=preflightClean.match(/CREATE TABLE IF NOT EXISTS[\s\S]*?\) WITHOUT ROWID;/)?.[0];
+    const preflightTriggers=[...preflightClean.matchAll(/CREATE TRIGGER IF NOT EXISTS[\s\S]*?\nEND;/g)].map(x=>x[0]);
+    if(!preflightTable || preflightTriggers.length!==2 ||
+       !preflightTriggers[0].includes('explore_like_batches_035') ||
+       !preflightTriggers[0].includes('explore_like_batches_066') ||
+       !preflightTriggers[0].includes('explore_like_batches_069') ||
+       !preflightTriggers[0].includes('explore_like_user_queue_075') ||
+       !preflightTriggers[1].includes('LIKE_OVERLAY_ROLLBACK_REQUIRES_RECONCILIATION_419') ||
+       preflightClean.includes('DROP TABLE')) {
+      fail('unsafe cutover preflight fixture contract');
+    }
+    await query(preflightTable);
+    for(const statement of preflightTriggers) await query(statement);
+
+    async function requireTransitionDenied(code,label) {
+      let reason='';
+      try { await query("UPDATE explore_like_writer_phase_419 SET phase='overlay' WHERE id=1"); }
+      catch(error) { reason=String(error); }
+      if(!reason.includes(code)) fail('cutover was not blocked by '+label+': '+reason.slice(0,220));
+      const state=(await query('SELECT phase FROM explore_like_writer_phase_419 WHERE id=1')).results?.[0]?.phase;
+      if(state!=='legacy') fail('partial phase mutation after '+label);
+    }
+    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','missing all readiness');
+
+    const releaseA='a'.repeat(40), releaseB='b'.repeat(40);
+    const expiry=Date.now()+15*60*1000;
+    for (const env of ['preview','test','production']) {
+      await query(
+        'INSERT INTO explore_like_cutover_ready_419(environment,release_sha,reader_ready,writer_compatible,verified_until_ms) VALUES(?,?,?,?,?)',
+        [env,releaseA,env==='production'?0:1,1,expiry]);
+    }
+    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','production reader not ready');
+    await query("UPDATE explore_like_cutover_ready_419 SET reader_ready=1,release_sha=? WHERE environment='production'",[releaseB]);
+    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','release SHA mismatch');
+    await query("UPDATE explore_like_cutover_ready_419 SET release_sha=?,verified_until_ms=? WHERE environment='production'",[releaseA,1]);
+    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','expired proof');
+    await query("UPDATE explore_like_cutover_ready_419 SET verified_until_ms=? WHERE environment='production'",[expiry]);
+
+    const pendingQueues=[
+      {
+        kind:'035',table:'explore_like_batches_035',key:'batch_id',
+        add:'INSERT INTO explore_like_batches_035(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES(?,?,?,?,?)',
+        args:['batch-035','synthetic',1,1,'[]'],id:'batch-035',
+      },
+      {
+        kind:'066',table:'explore_like_batches_066',key:'batch_id',
+        add:'INSERT INTO explore_like_batches_066(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES(?,?,?,?,?)',
+        args:['batch-066','synthetic',1,1,'[]'],id:'batch-066',
+      },
+      {
+        kind:'069',table:'explore_like_batches_069',key:'batch_id',
+        add:'INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES(?,?,?,?,?)',
+        args:['batch-069','synthetic',1,1,'[]'],id:'batch-069',
+      },
+      {
+        kind:'075',table:'explore_like_user_queue_075',key:'user_uid',
+        add:'INSERT INTO explore_like_user_queue_075(user_uid,updated_at,pending_count,mutations_json) VALUES(?,?,?,?)',
+        args:['synthetic-075',1,1,'[]'],id:'synthetic-075',
+      },
+    ];
+    for(const q of pendingQueues) {
+      await query(q.add,q.args);
+      await requireTransitionDenied('LIKE_CUTOVER_'+q.kind+'_PENDING_419','pending '+q.kind);
+      await query('DELETE FROM '+q.table+' WHERE '+q.key+'=?',[q.id]);
+    }
+    console.log('419_REMOTE_CUTOVER_EMPTY_ALL_FOUR_QUEUES_GUARD=PASS');
+    console.log('419_REMOTE_CUTOVER_THREE_ENV_SHA_AND_EXPIRY_GUARD=PASS');
+
+    // Only synthetic readiness + zero queued rows may flip the phase.
     await query("UPDATE explore_like_writer_phase_419 SET phase='overlay' WHERE id=1");
+    assert.equal((await query('SELECT phase FROM explore_like_writer_phase_419 WHERE id=1')).results?.[0]?.phase,'overlay');
+    let rollbackError='';
+    try { await query("UPDATE explore_like_writer_phase_419 SET phase='legacy' WHERE id=1"); }
+    catch(error) { rollbackError=String(error); }
+    if(!rollbackError.includes('LIKE_OVERLAY_ROLLBACK_REQUIRES_RECONCILIATION_419')) {
+      fail('unsafe rollback to mutable old baseline was allowed');
+    }
+    console.log('419_REMOTE_UNRECONCILED_LEGACY_ROLLBACK_REJECTED=PASS');
+
 
     async function expectLegacyReject(label,sql,params) {
       let caught='';

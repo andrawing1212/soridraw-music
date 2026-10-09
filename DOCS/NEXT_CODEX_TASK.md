@@ -1,3 +1,25 @@
+## CURRENT HOTFIX — Stage416 Phase1 FAIL: 좋아요 변경 뒤 My Likes 진입마다 PERSONAL SETTLEMENT 189 D1 R4 / rows_read17 반복 (2026-10-09 KST)
+
+**우선순위 최고. 기존 Phase2 provisional RTDB 즉시 구현은 보류.** 사용자는 app386에서 **좋아요를 새로 변경할 때마다** '내 좋아요 곡'으로 들어가면 진단 '개인 소셜 스냅샷'에 **D1 SQL query R4, rows_read 17**이 발생한다고 반복 보고했다. 이 사용자 실측 사실을 단발성 cold-miss/과거 진단 잔상/단순 정상 복구 가능성으로 축소하거나 다시 같은 화면을 요구하지 말 것. `image(20261009-035435).png` 및 `image(20261009-035543).png`; 변경 없이 반복 페이지 이동 R0인 `image(20261009-040623).png`은 **다른 시나리오**, 이 버그 합격 근거가 아님. Phase1 전체 PASS 철회, 비용 기능 **FAIL**.
+
+### 실제 소스에서 확인된 연결 (app386 및 Worker 코드)
+1. `cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs`: 승인된 W1 intake는 `canonicalD1:'queued'`, `personalLikeSnapshot:'changed-track-r2'|'repair-needed'`을 반환. **확정 canonical settlement ACK가 아님**. Queue Worker는 최종 D1 정착을 뒤에 수행.
+2. `src/services/exploreLikeService.ts` `flushPendingLikes`: `canonicalLikeSettled127 = (canonicalD1==='settled'||canBroadcastExploreLikeSnapshot127(...))`이 false여서 일반적인 성공한 좋아요도 `snapshotPending127[trackId]=result.liked`으로 기록. 원격 confirmed RTDB `applyRemoteLikeSignal127` 역시 동일 guard를 생성. 이는 기존/다른 기기 R2 캐시가 늦어도 개인 하트를 정확히 보이도록 하는 안전 장치.
+3. `src/pages/ExplorePage.tsx` My Likes 진입: `ensureExplorePersonalLikeCrossOriginParity357(user)` → `ensureExplorePersonalLikeBaseline127(user)`. `ensurePersonalLikeBaseline127`이 `snapshotPending127` guard + 새로운 개인 R2 revision/189 marker 조합을 보고 `verifySettlement189`로 `/v1/me/social-snapshot?__soridraw_personal_settlement=189&trackIds=...` 인증 요청. `ensureExplorePersonalLikeCrossOriginParity357`도 새 RTDB retained version마다 `requestPersonalLikeRevision127` + 189 marker reset/invalidate/reverify 가능.
+4. `cloudflare/explore-worker/patches/090-targeted-personal-like-settlement.mjs`의 `verifyFreshPersonalLikeSettlement189`는 **정확한 canonical queue-empty + D1 changed membership + R2 ETag** 증명으로 설계됐음. 유저의 R4 / rows17이 이 요청에 대응. 새로운 좋아요 1개마다 일어나는 정상 UI 이동을 역사적 복구 이벤트로 취급하면 비용이 반복됨. app386에서 수정한 것은 `app358 FULL repair rearm`과 retry뿐이며 **이번 원인 미해결**.
+5. 앱 진단 상세의 endpoint card에는 '마지막 · PERSONAL SETTLEMENT 189' 누적도 보일 수 있으나, 사용자 반복 재현한 **좋아요 변경 → My Likes 진입마다 R4/rows17**을 실제 버그로 인정. 좋아요 직후 찍은 한 스냅샷의 R4 고정은 이 진입 동작을 부정하지 않음.
+
+### Codex High 작업 — 작은 단위, 안전 우선
+- 해당 **정확한 전이**를 첫 failing regression으로: healthy warm local baseline + 클릭 → W1 queued ACK + RTDB accepted signal/guard + My Likes 진입에서 D1 R4 발생. 좋아요 변경 없는 My Likes 재진입 0과 비교. 첫/이후 3곡 변경, 반복 W1 ACK, like→unlike net-zero, 두 기기, unresolved historical guard, truncated/partial R2, old client cached state 포함.
+- 비용 합격선은 **정상 ACK된 신규 좋아요·해제 후 My Likes 진입 D1 R0 / rows_read0 (새 조회 없음)**. 사용자가 좋아요 1곡당 D1 R4씩 쓰게 하지 않으며 full snapshot/수백 ID 검증/무한 revision polling 금지. 기존 intake D1 W1~2, W3 FAIL. `LOCAL HIT` 여부는 진단 숨김이 아니라 실제 호출·계측으로 확인.
+- **중요 정확성:** ACK `queued`를 `settled`로 위조하거나 `snapshotPending127` guard를 단순 삭제해 비용만 0으로 만들지 말 것. pending/outbox의 최신 클릭이 우선, historical *미확정* 복구는 보존, canonical rejection/conflict와 PC↔mobile 동시 클릭/누락 signal에도 유실·ghost/역전 금지. Fresh queued guard와 역사적 settlement/repair guard가 같은 경로로 반복 D1을 호출하지 않도록 분리할 것. 최신 상태가 최종 canonical 정착됐다는 것은 **서버가 증명한 신호** 또는 적법한 bounded 장치로만 판정. R2 changed-track best-effort를 canonical proof로 오해하지 말 것. 영구 stale guard/가짜 내좋아요 카드 누적 금지.
+- 적절한 저비용 변경 감지·정확성 프로토콜이 기존 Worker/API에서 충분한지 먼저 확인. 불충분하면 **클라이언트 코드만으로 억지 PASS를 만들지 않고** 변경분 기반 server-proven async settlement(기존 Worker/DO/R2 활용, 전체 D1 반복 조회 없음) 구조와 물리 D1/R2/Worker 예상 비용을 설계/보고한 뒤 구현. 공유 원본 스키마 변경/마이그레이션/대량 변환은 사용자 별도 승인 없이 금지.
+- 구현 `preview`만, 현재 정상 Explore feed/public likeCount, 첫 공개곡 좋아요, 팔로우, Studio save-heart, Music Note/Library, UI, app386 warm-cache reentry R0 보호. 기존 127/175/178/189/190/191/192/197/390/412/413/414 + TypeScript/Build/Work independent audit 후에만 ChatGPT 판단으로 자동 PREVIEW 배포. PC→모바일/모바일→PC 개인 하트 자동 수렴과 D1 R/W 실측 이전에는 전체 기능 PASS 불가.
+- **배포 정책:** 앱 app386 활성 상태 유지하고 미검증 구조를 섞어 배포하지 않는다. user approved automatic PREVIEW *after quality gates*. TEST/main/PRODUCTION/공유 원본 데이터 변경 금지.
+- **Codex 완료 보고:** branch, base/final SHA, changed files, TypeScript, Build, each test, physical cost evidence or explicitly 未검증, remaining risks, deployed=no.
+
+---
+
 ## CURRENT — Stage416 Phase2 개인 provisional RTDB 즉시 동기화, 안전한 구현 단위부터 (2026-10-09 KST)
 
 **상태: Phase2 설계/작업 명령 확정, 제품 코드 미수정.** 사용자 실기기 `image(20261009-040623).png`에서 app386 정상 warm My Likes 왕복 **LOCAL9/Worker0, My Likes LOCAL2/Worker0, PAGE SYNC R0/W0** PASS. 이전 PC like 클라이언트 진단 intake W1, 모바일 public count D1 R0/W0. Phase1 정상 경로 보존; 서버 canonical 전체 rows_written/PC↔모바일 private 즉시 완전 PASS는 별개. **Codex High 단일 구현 작업** 이후 Work 독립 검증→ChatGPT 실제 PREVIEW 판단/배포→사용자 실기기 테스트 순서.

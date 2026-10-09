@@ -191,7 +191,7 @@ if (process.argv[2] === 'cleanup') {
     const preflightClean=preflight.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
     const preflightTable=preflightClean.match(/CREATE TABLE IF NOT EXISTS[\s\S]*?\) WITHOUT ROWID;/)?.[0];
     const preflightTriggers=[...preflightClean.matchAll(/CREATE TRIGGER IF NOT EXISTS[\s\S]*?\nEND;/g)].map(x=>x[0]);
-    if(!preflightTable || preflightTriggers.length!==2 ||
+    if(!preflightTable || preflightTriggers.length!==7 ||
        !preflightTriggers[0].includes('explore_like_batches_035') ||
        !preflightTriggers[0].includes('explore_like_batches_066') ||
        !preflightTriggers[0].includes('explore_like_batches_069') ||
@@ -284,6 +284,31 @@ if (process.argv[2] === 'cleanup') {
       ['legacy-419','old-419']);
     await expectLegacyReject('COUNT',
       'UPDATE track_stats SET like_count=like_count+1 WHERE track_id=?',['song-419']);
+    // A late legacy worker can still attempt to enqueue after the phase
+    // flip. That intake must fail rather than receive queued:true forever.
+    for(const queue of pendingQueues) {
+      let error='';
+      try { await query(queue.add,queue.args); }
+      catch(e) { error=String(e); }
+      if(!error.includes('LIKE_OLD_QUEUE_INTAKE_FROZEN_419')) {
+        fail('late legacy '+queue.kind+' intake not blocked '+error.slice(0,150));
+      }
+      const n=(await query('SELECT COUNT(*) AS n FROM '+queue.table))
+        .results?.[0]?.n;
+      if(n!==0) fail('old queue '+queue.kind+' accepted pending after overlay');
+    }
+    let lateUpdate='';
+    try {
+      await query('UPDATE explore_like_user_queue_075 SET updated_at=? WHERE user_uid=?',
+        [Date.now(),'synthetic-075']);
+    } catch(e) { lateUpdate=String(e); }
+    // Synthetic update of a non-existent row is a no-op; a later read/write
+    // route must still be compatible. All INSERT paths are blocked above.
+    if(lateUpdate && !lateUpdate.includes('LIKE_OLD_QUEUE_INTAKE_FROZEN_419')) {
+      fail('unexpected post-cutover queue update result: '+lateUpdate.slice(0,150));
+    }
+    console.log('419_REMOTE_LATE_035_066_069_075_INTAKE_FAIL_CLOSED=PASS');
+    console.log('419_LEGACY_CLIENTS_STILL_REQUIRE_COMPATIBLE_ROUTER=UNVERIFIED');
     const postFence=await act('FENCED_NEW_LIKE','fenced-419','song-419',true,0,
       'fenced-like1',2);
     assert.equal(postFence.likeCount,1);

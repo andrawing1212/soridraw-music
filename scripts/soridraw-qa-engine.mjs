@@ -1,5 +1,5 @@
 // SORIDRAW PREVIEW QA engine v1.
-// Fast: focused, offline, dependency-free checks (Node 22).
+// Fast: focused checks requiring only Node 22 (no npm install).
 // Full: the same frozen regressions + TypeScript and Vite build (npm ci needed).
 // Focus: rerun only named check groups after a small correction.
 // This is NOT a deployment or a substitute for live RTDB/D1/PC/mobile release gates.
@@ -17,10 +17,14 @@ const groups = [
   ] },
   { name: 'like', commands: [
     ['node', 'scripts/verify-419-like-w2-cutover.mjs'],
+  ] },
+  { name: 'like-deep', commands: [
     ['node', 'scripts/verify-127-atomic-personal-like.mjs'],
   ] },
   { name: 'catalog', commands: [
     ['node', 'scripts/verify-175-explore-like-catalog-reentry.mjs'],
+  ] },
+  { name: 'catalog-deep', commands: [
     ['node', 'scripts/verify-197-new-public-track-like.mjs'],
   ] },
   { name: 'public', commands: [
@@ -37,9 +41,11 @@ const groups = [
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],
-    ['node', 'scripts/verify-413-like-exit-flush.mjs'],
     ['node', '--check', 'scripts/verify-414-pending-only-lifecycle.mjs'],
     ['node', 'scripts/verify-414-pending-only-lifecycle.mjs'],
+  ] },
+  { name: 'lifecycle-deep', commands: [
+    ['node', 'scripts/verify-413-like-exit-flush.mjs'],
   ] },
   { name: 'typecheck', commands: [['npm', 'run', 'lint']] },
   { name: 'build', commands: [['npm', 'run', 'build']] },
@@ -50,7 +56,7 @@ const offlineNames = ['syntax','like','catalog','public','receipt','projection',
 const mode = process.argv[2] || 'fast';
 let names = [];
 if (mode === 'fast') names = offlineNames;
-else if (mode === 'full') names = [...offlineNames,'typecheck','build'];
+else if (mode === 'full') names = [...offlineNames,'like-deep','catalog-deep','lifecycle-deep','typecheck','build'];
 else if (mode === 'focus') names = process.argv.slice(3).flatMap(x => x.split(',')).filter(Boolean);
 else {
   console.error('Usage: node scripts/soridraw-qa-engine.mjs fast|full|focus <group[,group]...>');

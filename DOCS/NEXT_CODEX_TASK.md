@@ -1,3 +1,14 @@
+## CURRENT — Stage416 Phase 1 개인 스냅샷 비용 조사부터, 5분+5분 구조 단계 구현 (2026-10-09 KST)
+
+**이 섹션이 이전 Stage415 10분 지시를 대체한다.** 현재 기준 문서 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`. `preview` 활성 app385, 새 문서 추가 SHA `dc3cc934ace7803ef1397b6b0e5094cd431ffd55`. 구현/배포 미실행.
+
+**Codex High 1단계만 먼저:** `AGENTS.md`, `CURRENT_RELEASE_STATE`, `NEXT_CODEX_TASK`, `WORK_AUDIT_CHECKLIST`, Stage416, local-first-like-sync SKILL 검토 → 업로드된 60초 영상 진단에 기록된 개인 snapshot endpoint `/v1/me/social-snapshot`의 실제 호출 관계 검사. 영상 48초 '내 좋아요 곡' 이동 뒤 53초 `D1 query R5, rows read11, W0` 관찰; 곡을 누를 때마다 발생했다는 증거 아직 없음. `src/services/exploreSocialSnapshotService.ts` first cache miss GET + `src/services/exploreSocialService.ts` following bundle 의존과 실제 Worker SQL 비용을 추적. 계정 건강 캐시→좋아요 1/3/6/해제/페이지 전환/재로그인/PC↔mobile 각 행위에 대해 Worker/D1 rows-read/queries/R2 API 의도된 호출 수 정의; 조기 캐시 무효화/중복 전체 GET 있으면 최소 수정 후 targeted verifier로 재현. **실측 없이는 비용 PASS 주장 금지**. 정상 snapshot 최초 한번이면 기능 파괴적 제거 금지. 제품 손대면 최소 단위 preview commit SHA/report, 배포 금지.
+
+**순서 고정:** Phase2 클릭 시 private RTDB 2기기 즉시 provisional state(오래된 sync/동시기기 conflict 보호); Phase3 마지막 변경 trailing 300s intake W1/W2, 조기 실제 종료 pending-only, net-zero W0 및 durable retry (OS 강제종료/hidden 불확실성); Phase4 유효 서버 접수/정착 후 고정 공동 공개 300s window, no change no alarm/read/write, changed tracks 전부 R2/Feed/profiles targeted, 공개 알림 서버 확인 후만; Phase5 독립 Work 감사 → 사용자 PREVIEW → 좋아요 PASS 뒤 팔로우 설계/수정.
+**절대 금지:** Step1에서 5초 DO timer 또는 client 5초를 300초로 상수 치환, 원본 D1/공유 RTDB/Rules/D1 migration 등 위험 코드/실데이터 변경, Studio save heart/기존 follow/미디어/UI 변경, old client 호환 검증 없이 전역 공개 알림 제거, 사전 승격/배포. Worker→canonical `likes`+`track_stats` 결합과 first80 repair 한계를 분리하지 못하면 구현 STOP. TEST/PRODUCTION 변경 금지.
+
+---
+
 ## CURRENT — Stage415 Explore 개인 좋아요 즉시 / 공개 좋아요 10분 이벤트 집계 — Codex High 우선 (2026-10-09 KST)
 
 **사용자 구현 승인:** 좋아요 우선, 팔로우는 좋아요 정상/비용 PASS 이후. SORIDRAW public social likes ONLY. 요구/설계 상세는 [DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md](LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md). 기준 preview 설계 시작 `8391035d1720eb992265272f13f94378d0d2c163`, 활성 app385. 이 문서는 **Codex 구현 명령**, 문서 갱신만으로 제품 개발·배포 완료 아님.

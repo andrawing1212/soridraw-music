@@ -48,7 +48,7 @@ assert.match(like, /markCrossOriginLikeCertified357\(uid, latestSignalVersion\);
 assert.match(page, /profileCollection !== 'liked'/);
 assert.match(page, /await ensureExplorePersonalLikeCrossOriginParity357\(user\);/);
 
-assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;/);
+assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000;/);
 assert.match(like, /const deadline = latestEligibleUpdatedAt \+ EXPLORE_LIKE_IDLE_FLUSH_MS_120;/);
 assert.match(like, /pending click > accepted-unsettled intent > verified/);
 assert.match(like, /reconcileExploreLikedTrackCollectionState/);

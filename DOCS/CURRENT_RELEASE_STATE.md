@@ -1,3 +1,14 @@
+## 0S43. Stage419 독립 소스·기존 실측 재검토: 069→DO 대기열 단독 교체 불충분 / 157·171 안전 전환 감사 지시 확정 (2026-10-09 KST)
+
+- **기준:** Stage418 제품 `27be98d575014d0f0498a146c63812a66f2db4dd`, rules/preflight `9c79874431039a46faec685c518aa3c28f1bd9a9`, 시작 당시 preview HEAD `050bd0dec6b0fd0ef2a6b588ad9e60b56d66ca86`. `AGENTS.md`/`NEXT_CODEX_TASK.md`/`WORK_AUDIT_CHECKLIST.md`, 실제 Stage418 diff/DO scheduler/191 repair, 069·390 migration, 과거 133/134/145/153/157 및 171 source-only 후보를 read-only 재검토.
+- **실제 새 발견의 적용 범위:** Stage418 `DELETE FROM explore_like_batches_069 ... RETURNING batch_id`는 조회 추가를 없애지만 기존 DELETE write는 남음. DO 103 `runAggregate194()`의 공개 `repairSharedPublicLikeCounts191`는 최신/인기 first80 canonical D1 조회 가능, `finalizeAggregate195`는 대기열 확인 D1 SELECT. 동시 요청이 합류한 `newlyScheduled=false` 경우 418 즉시 정확 완료 영수증이 발행되지 않으므로 전체 정상 좋아요·해제 D1 R0 PASS 불가.
+- **비용 결론:** 과거 실제 SQL/trigger 기준 145 격리 논리행 모델은 069 queue 2 + likes/track_stats 2 + derived/seq/feed/profile 4 = **8행 변경**. 인덱스·실 Cloudflare 운영 physical `rows_written`은 별도이며 이번 작업에서 실측하지 않았음. **DO SQLite로 069 queue만 대체해도 기존 트리거·인덱스가 남아 W2 해결이 불충분**. 과거 임시 원격 D1 run `35563565716`의 153 user-first W2, run `35568696258`의 157/158 W1~W2/중복 W0 근거 재확인. 171은 revision/opId+곡 delta W2 **소스 전용·미적용** 후보; 실제 운영 합격 오인 금지.
+- **산출물:** [`DOCS/STAGE419_PHYSICAL_W2_AUDIT_AND_CUTOVER_GATE.md`](STAGE419_PHYSICAL_W2_AUDIT_AND_CUTOVER_GATE.md) 신규 및 `NEXT_CODEX_TASK.md` 최상단 Stage419 보정. 이 문서가 기존 '069→DO 교체' 지시를 보완하여 *157/171 무백필 경로 격리 검증+구형 3환경 writer/reader 컷오버 증명*을 먼저 수행하도록 고정. 사용자 데이터/실 Worker/D1을 바꾸지 않는 Codex High/Extra High 검증 단계가 다음.
+- **검증·환경:** 이번에는 외부 런타임·원격 D1 실물리 계측·Work 독립 테스트 미실행. 이전 QA 408 Run `37892639404` TypeScript/Build/like-regression/shared Rules read-only PASS는 기존 증거로만 유지. Stage418 제품 소스/React/Worker/Functions/Rules/공유 D1/Firestore/R2/Hosting 변경 및 배포 **0**, main/TEST/PRODUCTION 비변경 의도. PREVIEW 활성 app386 문서상 유지(실제 HTTP exact-version 신규 검증은 안 함). Stage418과 Stage419 전체 D1 W2/R0 게이트 **미충족·PREVIEW 배포 HOLD**.
+- **다음:** Codex는 이 문서의 전체 read/write 비용표와 157·171 기존 격리 실행 결과를 활용, synthetic ephemeral D1 & failure/replay/concurrency/old-worker gates를 먼저 검증. **시스템 전체 W2 불가능하면 기능 약화하지 말고 중단**. 이후 Work 독립 감사, 비용/정확성/배포 승인 gate. user real 75s unlike R4/rows17, 105s like R4/rows19, mobile stepwise·idle 복구 미해결 그대로.
+
+---
+
 ## 0S42. Stage418 실제 코드·자동검사·실제 공유 RTDB 읽기전용 안전감사 PASS / 전체 D1 W2 기준 미충족 위험으로 배포 HOLD (2026-10-09 KST)
 
 - **고정 기준:** preview Stage418 제품 코드 commit 27be98d575014d0f0498a146c63812a66f2db4dd. RTDB rules 배포 전 비교 장치와 라이브 Rules read-only CI까지 반영된 기준 commit 9c79874431039a46faec685c518aa3c28f1bd9a9. 이 범위에서 PREVIEW 앱·Worker·RTDB 규칙의 실제 배포는 **0회**, 기존 app386 활성 유지, main/TEST/PRODUCTION 변경 없음.

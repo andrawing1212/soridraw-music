@@ -144,6 +144,10 @@ jobs:
             exit 1
           fi
           python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
+          # Stage418: live Rules are shared by all 3 apps. Refuse to overwrite
+          # even one unrelated ACL with the checked-in snapshot. This verifies
+          # the ONLY permitted change is the optional canonicalSettled417 bool.
+          node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-rules-before.json"
 
           code="$(curl -sS --max-time 30 -X PUT \
             -H 'Content-Type: application/json' \

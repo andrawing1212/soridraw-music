@@ -207,3 +207,28 @@ assert.ok(apply.indexOf('if (pending[item.trackId]) continue;') <
 assert.ok(apply.indexOf('if (unresolvedChanged) writeSnapshotPending127') <
   apply.indexOf('acceptedForUi141.forEach(dispatchLikeSync)'));
 console.log('418_EXISTING_RTDB_141_ORDERING_AND_LEGACY_COMPAT=PASS');
+const receipt420Segment = stageSource(client,
+  'const trustedCanonicalReceipt417 =', 'const resultByTrack =');
+const match420 = receipt420Segment.match(/const trustedCanonicalReceipt417 =([\\s\\S]*?);\\s*$/);
+assert.ok(match420, '417/420 trusted receipt parser must remain exact');
+const receipt420 = new Function('payload','return ('+match420[1]+');');
+const data420 = {
+  queued:false,canonicalD1:'settled',
+  canonicalProof:'isolated-171-publication-confirmed-420',
+  personalLikeSnapshot:'changed-track-r2',
+};
+assert.equal(receipt420({data:data420}),true);
+assert.equal(receipt420({data:{...data420,canonicalProof:'atomic-drain-batch-418'}}),true);
+for(const bad of [
+  {queued:true},
+  {personalLikeSnapshot:'pending'},
+  {personalLikeSnapshot:'repair-needed'},
+  {canonicalD1:'queued'},
+  {canonicalProof:'unverified'},
+  {canonicalProof:undefined},
+]) {
+  assert.equal(Boolean(receipt420({data:{...data420,...bad}})),false,
+    'untrusted or pending 420 receipt accepted: '+JSON.stringify(bad));
+}
+console.log('420_MODERN_CLIENT_TRUSTS_ONLY_FULLY_SETTLED_171_PROOF=PASS');
+

@@ -1001,7 +1001,8 @@ export const ensureExplorePersonalLikeCrossOriginParity357 = async (user: User):
     // Stage416: app359's settlement-only check must not re-arm the older
     // app358 cross-origin FULL repair. A contiguous/certified RTDB signal
     // needs only the guarded app189 settlement proof, not a second account
-    // repair snapshot and canonical rebuild attempt. Genuine signal gaps
+    // repair snapshot and canonical rebuild attempt. No new D1 write is added.
+    // Genuine signal gaps
     // retain the original app358 repair path, unchanged.
     if (legacyNeedsRepair357) {
       requestRepair127(uid, latestSignalVersion);

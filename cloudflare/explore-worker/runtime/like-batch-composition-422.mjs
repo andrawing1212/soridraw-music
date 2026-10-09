@@ -8,6 +8,7 @@ import {createPersonalLikeR2Publisher423} from './like-personal-r2-publisher-423
 import {createLikeUserRtdbSignal424} from './like-rtdb-user-signal-424.mjs';
 import {bootstrapVerifiedEmptyPrivate430} from './like-cold-personal-bootstrap-430.mjs';
 import {verifyLikeBatchCatalogCapacity431} from './like-batch-capacity-431.mjs';
+import {recoverVerifiedColdCard432} from './like-cold-public-card-432.mjs';
 
 // Stage429 pre-write readiness for the verified modern 171-only path.
 // Cold/partial R2 must never be discovered only AFTER a D1 W2 mutation:
@@ -50,8 +51,16 @@ export async function verifyLikeR2Readiness429(r2, uid, entries, {db,cutoverVeri
   for(const item of entries){
     const id=item.trackId;
     const key='internal/explore/shared-track-card-v115/'+encodeURIComponent(id)+'.json';
-    const obj=await r2.get(key);
-    if(!obj)throw new Error('429_CARD_COLD_BEFORE_D1');
+    let obj=await r2.get(key);
+    if(!obj){
+      // Stage432 only when the 3-environment shared writer freeze was
+      // proven before entering this batch. One indexed public track lookup;
+      // never reconstruct a whole Feed or create a speculative count.
+      if(!db||cutoverVerified!==true)throw new Error('429_CARD_COLD_BEFORE_D1');
+      await recoverVerifiedColdCard432({db,sharedR2:r2,trackId:id,cutoverVerified});
+      obj=await r2.get(key);
+      if(!obj)throw new Error('432_CARD_NOT_DURABLE_BEFORE_D1');
+    }
     let payload;
     try{payload=JSON.parse(await obj.text());}
     catch{throw new Error('429_CARD_CORRUPT_BEFORE_D1');}

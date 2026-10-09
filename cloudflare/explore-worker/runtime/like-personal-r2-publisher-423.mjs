@@ -40,7 +40,11 @@ export function createPersonalLikeR2Publisher423({r2, now=()=>Date.now()}={}) {
       const metadata=prior.likeRevisions423||{};
       if(typeof metadata!=='object'||Array.isArray(metadata)||!metadata)
         throw error423('423_BAD_REVISION_METADATA');
-      const prev=metadata[trackId];
+      // Prototype-looking song IDs must not resolve to inherited Object keys.
+      // Such an inherited 'constructor' / '__proto__' value can otherwise
+      // throw only AFTER canonical D1 has committed W2.
+      const prev=Object.prototype.hasOwnProperty.call(metadata,trackId)
+        ? metadata[trackId] : undefined;
       if(prev!==undefined && (!goodRevision423(prev?.revision)||
           !goodId423(prev?.operationId,128)||typeof prev?.liked!=='boolean')) {
         throw error423('423_BAD_TRACK_REVISION');

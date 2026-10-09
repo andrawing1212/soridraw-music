@@ -49,6 +49,8 @@ const groups = [
     ['node', 'scripts/verify-430-cold-personal-bootstrap.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-batch-capacity-431.mjs'],
     ['node', 'scripts/verify-431-like-batch-capacity.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-cold-public-card-432.mjs'],
+    ['node', 'scripts/verify-432-cold-public-card.mjs'],
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],

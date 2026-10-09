@@ -651,3 +651,7 @@ await runCompletedFullTargetedFailure416(0, '1', 1);
 await runCompletedFullTargetedFailure416(100, '', 1);
 await runCompletedFullTargetedFailure416(100, '1', 0);
 console.log('416_COMPLETED_FULL_TARGETED_PROOF_RETRY_NO_REBUILD=PASS');
+
+// Stage416: always execute the exact Worker canonical proof safety gates with
+// the existing personal-like workflow; never treat queued/R2 as settled.
+await import('./verify-417-bounded-like-proof.mjs');

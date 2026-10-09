@@ -1,3 +1,13 @@
+## CURRENT — Stage426 dormant PREVIEW Worker has been deployed; focus exclusively on safe 171 activation readiness (2026-10-09 KST)
+
+- PREVIEW active Worker version 03af0cc6-1336-4ed2-98ff-4983e1b21a44, verified GitHub release Run 37909211630 SUCCESS; source SHA 2ea53aa8d5737276d5cc1e1152a14d9883af53cd. Stage426 stays COMPILED_OFF, current likes run legacy, app386 Hosting unchanged. TEST/PRODUCTION Worker untouched.
+- Already-applied shared D1 inert 171 tables are EMPTY and no 174/419 phase/fences exist. Do not reapply 171. No user migration or new writer activation is authorized.
+- Next implementation to unblock release (no more duplicate CI): (1) first-time cold/private v114 and public card/Feed targeted bootstrap without whole-user scan and without orphaned W2 commit, (2) legacy pre-app144 clients lacking operationId/revision: retain verified current state, fail-closed with coherent recovery rather than falsely acknowledged likes, (3) all-3-environment old/new source contract and old worker writers must be freeze-safe under one shared 174/419 fence, (4) staged independent audit and PC/mobile end-to-end R2/RTDB/canonical likes W2.
+- Verified regression references: 408 Run 37908349886 SUCCESS, 426 Wrangler Run 37908325800 SUCCESS, LIVE PREVIEW deployment Run 37909211630 SUCCESS. Stage413 existing five-second Explore batching preserved; old verifier 30s assertions already corrected. Protect app164 Worker195 liked states, Music Note/Library/Studio save heart, warm D1 R0.
+- Do not activate Stage426 or deploy TEST/PRODUCTION or mutate shared 174/419 schema/phase without separate narrow approval and Work independent proof. Safe PREVIEW read-only inspections and code-only fixes can proceed.
+
+---
+
 ## CURRENT — Stage427 live 171 inert schema APPLIED; next coordinated old-client cutover audit (2026-10-09 KST)
 
 - **Do not repeat the inert 171 migration.** [GitHub Shared D1 Run 37906261656](https://github.com/andrawing1212/soridraw-music/actions/runs/37906261656) SUCCESS actually added the two legacy-independent empty 171 tables to the shared original D1, no activation/no rows written to old user data. [425+427 live postflight 37906472687](https://github.com/andrawing1212/soridraw-music/actions/runs/37906472687) SUCCESS confirms both existing and EMPTY, queues 035/066/069/075 all effective pending ZERO. Old Preview/Test/Production Worker SHA versions unchanged; main/production refs unchanged.

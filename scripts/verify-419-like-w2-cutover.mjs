@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLikeD1OnlyCanonical171 } from '../cloudflare/explore-worker/runtime/like-d1only-171.mjs';
 import { createLikeD1OnlyBatchAdapter420 } from '../cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs';
+import { createCandidateLikeBatch422 } from '../cloudflare/explore-worker/runtime/like-batch-composition-422.mjs';
 
 const schemaPath = 'cloudflare/explore-worker/migrations/20260921_03_explore_like_d1only_v171_additive.sql';
 const schema = readFileSync(schemaPath, 'utf8');
@@ -204,6 +205,66 @@ async function main() {
   console.log('420_DUPLICATE_AND_REVISION_CONFLICT_W0=PASS');
   console.log('420_PUBLIC_PROJECTION_FAILURE_RETRY_SAME_OPID_W0=PASS');
   console.log('420_LEGACY_PRE_APP144_COMPATIBILITY=NOT_IMPLEMENTED_RELEASE_HOLD');
+  // 422 connects actual 171 D1 SQL -> actual bounded 421 R2 generation CAS.
+  // Caller-supplied personal R2/RTDB implementations are fixture stubs only.
+  const combined=isolatedFixture();
+  const cache=new Map([
+    ['internal/explore/shared-track-card-v115/song.json',{card:{id:'song',likeCount:0}}],
+    ['internal/explore/shared-profile-v113/owner.json',{revision:1,
+      body:{data:{revision:1,items:[{id:'song',likeCount:0}]}}}],
+    ['internal/explore/shared-feed-v112/latest-40.json',{payload:{data:{
+      items:[{id:'song',likeCount:0}],
+    }}}],
+    ['internal/explore/shared-feed-v112/popular-40.json',{payload:{data:{
+      items:[{id:'song',likeCount:0}],
+    }}}],
+  ]);
+  let etag=0, r2puts=0, signals422=0;
+  const storage=new Map([...cache].map(([key,value])=>[key,{
+    document:value,etag:'test-'+(++etag),
+  }]));
+  const r2={
+    async get(key){
+      const obj=storage.get(key);
+      return obj ? {
+        etag:obj.etag,customMetadata:{},
+        text:async()=>JSON.stringify(obj.document),
+      } : null;
+    },
+    async put(key,payload,options){
+      const obj=storage.get(key);
+      if(!obj || obj.etag!==options?.onlyIf?.etagMatches)return null;
+      storage.set(key,{document:JSON.parse(payload),etag:'test-'+(++etag)});
+      r2puts++;
+      return {etag:'test-'+etag};
+    },
+  };
+  assert.throws(()=>createCandidateLikeBatch422({db:combined.db}),
+    /422_NOT_AUTHORIZED_TO_SWITCH_SHARED_LIKE_WRITER/);
+  const integrated=createCandidateLikeBatch422({
+    db:combined.db,sharedR2:r2,allEnvironmentCutoverVerified:true,
+    resolveOwnerUid:async()=> 'owner',
+    persistPersonalSnapshot:async x=>({persisted:true,trackId:x.trackId,revision:x.revision}),
+    queueSameAccountSignal:async x=>{signals422++;return {
+      queued:true,trackId:x.trackId,revision:x.revision,
+    };},
+  });
+  const batch422={mutations:[mutation('song',true,0,'422-like-a')]};
+  let published=await integrated.acceptAuthenticatedBatch('422-user',batch422);
+  assert.equal(published.data.canonicalD1,'settled');
+  assert.deepEqual([published.data.rowsWritten,published.data.results[0].likeCount],[2,1]);
+  const projected=storage.get('internal/explore/shared-feed-v112/latest-40.json')
+    .document.payload.data.items[0];
+  assert.deepEqual([projected.likeCount,projected.likeGeneration421],[1,1]);
+  const beforeR2=r2puts;
+  published=await integrated.acceptAuthenticatedBatch('422-user',batch422);
+  assert.equal(published.data.rowsWritten,0);
+  assert.equal(r2puts,beforeR2,'duplicate must not mutate already-settled R2');
+  assert.equal(signals422,2,'caller must dedupe same-user signals on receiving side');
+  console.log('422_ACTUAL_171_SQL_AND_ACTUAL_421_R2_PUBLISHER_COMPOSED=PASS');
+  console.log('422_PHYSICAL_D1_W2=REMOTE_419_ONLY;LOCAL_FIXTURE_LOGICAL_W2');
+  console.log('422_PERSONAL_R2_AND_RTDB_BINDINGS=STUB_ONLY_DEPLOYMENT_HOLD');
+  combined.sqlite.close();
   bridge.sqlite.close();
   sqlite.close(); other.sqlite.close();
 }

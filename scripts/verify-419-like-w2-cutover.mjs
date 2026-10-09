@@ -172,6 +172,25 @@ async function main() {
     /420_LEGACY_MUTATION_NEEDS_COMPATIBILITY_GATE/);
   assert.equal(rows(bridge.sqlite,'explore_like_overrides_171'),0);
   assert.equal(publishCount,0);
+  // 429: even a real modern first-like must not commit D1 W2 if the
+  // only complete personal/public R2 projection is cold or unverified.
+  const cold=isolatedFixture();
+  let prewrite429=0;
+  const guarded=createLikeD1OnlyBatchAdapter420(cold.db,{
+    allEnvironmentCutoverVerified:true,publishChangedTrack,
+    beforeCanonicalMutation:async()=>{prewrite429++;
+      throw new Error('429_R2_PREFLIGHT_NOT_READY');},
+  });
+  await assert.rejects(guarded.acceptAuthenticatedBatch('user-z',
+    {mutations:[modern,old]}),/420_LEGACY_MUTATION_NEEDS_COMPATIBILITY_GATE/);
+  assert.equal(prewrite429,0,'invalid mixed batch must not reach R2');
+  await assert.rejects(guarded.acceptAuthenticatedBatch('user-z',
+    {mutations:[modern]}),/429_R2_PREFLIGHT_NOT_READY/);
+  assert.equal(prewrite429,1);
+  assert.equal(rows(cold.sqlite,'explore_like_overrides_171'),0);
+  assert.equal(rows(cold.sqlite,'explore_like_count_deltas_171'),0);
+  cold.sqlite.close();
+  console.log('429_R2_COLD_OR_INVALID_BATCH_PREVENTS_CANONICAL_D1_W2=PASS');
   let sent=await router.acceptAuthenticatedBatch('user-a',{mutations:[modern]});
   assert.deepEqual([sent.data.results[0].status,sent.data.rowsWritten,sent.data.canonicalD1],
     ['applied',2,'settled']);

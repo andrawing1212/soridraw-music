@@ -1,5 +1,9 @@
 ## CURRENT — 비용 실측 우선, 기존 좋아요 보호, W2 강제 작업 중단 (2026-10-09 KST)
 
+- **실제 D1 계측 완료:** 2026-10-09 `Cost Zero Stage 2A D1 Readonly Probe #4` 성공. UTC 2026-10-03~09 공유 Explore D1 R372699/W2059, 전체 Cloudflare 계정 D1 R400396/W8203 (7일). 30일 환산 전체 R1715983/W35156, Workers 유료 D1 초과예상 $0. 상세 검증/한계: `DOCS/CURRENT_RELEASE_STATE.md` 0S57. **이제 이 수동 D1 검사 재실행을 사용자에게 반복 요청하지 않는다.**
+- **다음 Codex/Work 좁은 범위 — 무조건 소스 감사부터:** 실제 런타임의 Workers 요청 수, R2 Class A/B 호출, DO 요청·기간, Firebase Firestore 및 RTDB 사용량/청구를 확보할 기존 읽기전용 장치만 검토. Cloudflare Analytics 권한·메트릭 필드를 추측해 신규 운영 변경을 하지 말 것. 수치를 확보하지 못한 비용은 `미측정`으로 표시. `Explore` 정상 캐시 재진입의 D1 데이터 R0 목표와 좋아요 처리 이후 `repair191` 최대 80건 제한이 실제 필요하게만 실행되는지 확인하되 검증 없이 제거/비활성화 금지.
+- **개발 방향:** 청구상 유의미하고 실제 반복되는 비용 문제를 확인한 경우에만 **기존 정상 사용자 기능을 보호하는 좁은 수정**. W2 하드 게이트/legacy writer 전면 cutover/171 overlay/새 Stage 작업 재개 금지. TEST/PRODUCTION 승격은 별도 사용자 승인; PREVIEW 배포는 필요한 코드와 모든 검증/승인을 충족한 릴리스에 한정.
+
 - **Cost probe repair 2026-10-09:** User ran manual probe #3 on `7220b9b`; it FAILED *before* any GraphQL query at obsolete `cf:prepare` patch001 (`.remote-worker/worker.js` ENOENT). The workflow no longer contains `cf:prepare`, Worker generation, or D1 `SELECT 1` and now invokes **only** `scripts/report-cloudflare-d1-usage-readonly.mjs` after checkout/Node setup. Use the **new** `preview` workflow_dispatch run, not old-run `Re-run jobs`. An Analytics permission error means Cloudflare API token scope must be checked; do not silently switch to deployment token. Exact mocked GraphQL response and denied permission fixtures PASS; actual Cloudflare metrics still unavailable until a new Actions run.
 
 - **사용자 승인:** 이전 W2 하드 게이트를 넘어 10만 명 기준 실제 월 총비용과 정상 기능/공유 데이터 안전으로 결정. `AGENTS.md`와 `DOCS/CURRENT_RELEASE_STATE.md` 0S57 최우선 참고. 역사적 Stage419/430~433 계획은 W2 전환 지시가 아니다. 지금부터 171/174/419 cutover, old-client migration, cold Feed/개인 카탈로그 전면 재설계 중단. 새 Stage를 더 만들지 않는다.

@@ -1,3 +1,13 @@
+## 0S30. Stage416 1단계 개인 스냅샷 불필요 복구 조회 최소 수정 — 소스/격리 검증, PREVIEW 배포 전 (2026-10-09 KST)
+
+- **영상+소스 확정:** 사용자 영상 38–43초 Explore like-card Worker1/D1 R0, 48초 My Likes 이동 후 53초 `개인 소셜 스냅샷` Worker2/D1 조회 SQL 5회, rows_read11, write0, 마지막 `PERSONAL SETTLEMENT 189`. 스냅샷 R5가 좋아요 클릭당 고정 5 SQL 비용이라고 단정 금지; 복구/정착 GET을 묶은 진단 경로.
+- 원인: `ExplorePage` My Likes entry→`ensureExplorePersonalLikeCrossOriginParity357`. `exploreLikeService.ts` 정상 연속 계정 RTDB 신호로 app359 settlement-only가 실행되어도 `requestRepair127` + repair182 marker reset이 무조건 실행돼 app358 FULL repair까지 재활성화할 수 있었음. 변경곡 최종 상태 보호/기기간 단절 복구를 위해 app189 정착 검증 자체는 여전히 필요.
+- **최소 제품 수정:** `src/services/exploreLikeService.ts`에서 app358 repair 재활성은 **실제 `legacyNeedsRepair357`에만** 실행. app359 정상 연속 신호는 existing app189 targeted settlement proof만 사용. 실행 순서/Worker DB/좋아요 5초·공개 ~5초/팔로우·Studio/캐시/UI/Rules/서버 스키마 변경 없음. 소스 `1980a9bcd9487f7e8126219f3e509cb8de1efe16`, 테스트 포함 최종 트리거 `e480d24fb12888d101d62060864755eb87689be0`. 검증 보강 `scripts/verify-127-atomic-personal-like.mjs` commit `42738dab933ba2e13a2995ca0fded8bb19106c12`. 문서 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md` 갱신.
+- **현재 검증:** 실제 제품 함수 본문을 격리/mock 실행하여 settlement-only 추가 FULL repair 0 / 진짜 신호 gap old repair 유지 / 정상 캐시 재진입 0 **3/3 PASS**. HTTP 호출 경계·snapshot 경로 read-only source 10/10 PASS. **GitHub Actions 전체 quality TypeScript/Build/127/175 등 final run 결과·Cloudflare D1 실계측·PC↔모바일 physical QA는 미확인**, PASS 과장 금지. 정상 앱 app385 보호를 위해 아직 **배포 안 함**.
+- **배포·데이터:** preview GitHub 코드+검증만 변경. Firebase/Functions/Cloudflare Worker/Rules/공유 D1 사용자 데이터/main/TEST/PRODUCTION 전부 비변경. 다음에는 QA exact SHA 확인 및 실제 warm cache 화면 My Likes 반복 snapshot R0, gap만 실제 recovery, 요청수/물리 rows 검증 후 PREVIEW 적용 여부 결정. Phase2 개인 즉시 / Phase3 5분 개인저장 / Phase4 5분 공개집계 및 팔로우는 아직 변경 안 함.
+
+---
+
 ## 0S29. Stage416 승인 방향 변경 — 개인 +5분 최종 저장 / 서버 접수 후 공개 +5분 / 스냅샷 진단 우선 (2026-10-09 KST)
 
 - **최신 사용자 확정:** Stage415의 공개 +10분 설계를 **개인 마지막 변경 +5분 서버 접수, 최초 유효 접수 뒤 별도 공개 공동 고정 +5분**으로 대체. 단, 실제 종료 시 대기 내용 서버 전송 조기 시도 성공하면 그 성공한 접수부터 공개 5분 시작. 개인은 같은 계정 PC↔모바일 즉시 표시(서버 미확정 draft vs ACK/권위 구분), 서버 확정 전 클릭/원상회복은 공개 집계에 포함 금지. 변경 없으면 공개 alarm/폴링 0. 좋아요 PASS 후에만 팔로우 변경.

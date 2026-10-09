@@ -69,6 +69,16 @@ const expect=[
 ];
 const names=(await select("SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_batches_035','explore_like_batches_066','explore_like_batches_069','explore_like_user_queue_075','explore_like_user_queue_state_075','explore_like_overrides_171','explore_like_count_deltas_171','explore_like_cutover_control_174','explore_like_writer_phase_419')")).map(r=>r.name);
 for(const name of expect)console.log('425_SHARED_SCHEMA_'+name+'='+(names.includes(name)?'PRESENT':'MISSING'));
+// Stage432/433 cold private recovery readiness: check only schema metadata.
+// Never scan a user's legacy likes or print any rows/account identifiers.
+const likesIndexRows=await select("SELECT name,sql FROM sqlite_schema WHERE type='index' AND tbl_name='likes'");
+const hasUserLeadingLikeIndex=likesIndexRows.some(row=>
+  /\bON\s+["`]?likes["`]?\s*\(\s*["`]?user_uid["`]?\b/i.test(String(row.sql||'')));
+console.log('425_LEGACY_LIKES_UID_PREFIX_INDEX='+(
+  hasUserLeadingLikeIndex?'PRESENT':'MISSING_OR_NOT_PROVEN'));
+if(!hasUserLeadingLikeIndex)
+  console.log('425_COLD_NONEMPTY_PRIVATE_BOOTSTRAP=HOLD_NO_BOUNDED_USER_LOOKUP');
+
 // Stage427: after the explicitly approved inert two-table 171 schema addition,
 // verify no live Worker accidentally seeded/modified any overlay rows.
 if(names.includes('explore_like_overrides_171')&&names.includes('explore_like_count_deltas_171')) {

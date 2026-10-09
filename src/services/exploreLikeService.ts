@@ -583,7 +583,11 @@ const markCrossOriginLikeSettled359 = (uid: string, version: number): void => {
   );
 };
 
-type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
+// An optional server-proven receipt rides along with the existing changed-ID
+// signal. Old clients ignore it and still use their original reconciliation.
+type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail & {
+  canonicalSettled417?: boolean;
+};
 type ExploreLikeSignal127 = {
   version: number;
   previousVersion: number;
@@ -610,6 +614,7 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
       ownerUid: String(value.ownerUid || '').trim(),
       liked: value.liked,
       likeCount: clampLikeCount(value.likeCount),
+      ...(value.canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
     });
   }
   return { version, previousVersion, results };
@@ -657,7 +662,15 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     // The same accepted state must remain visible even on partial legacy R2
     // accounts, where a targeted D1 read can still lag behind the intake queue.
     // It is not an extra write to the shared user database.
-    if (unresolved[item.trackId] !== item.liked) {
+    // Stage417: only an authenticated Worker receipt, relayed on the UID-only
+    // RTDB channel, can release this exact changed-track guard. Old/missing
+    // receipts remain guarded for historical recovery; local outbox wins.
+    if (item.canonicalSettled417 === true && !needsRepair) {
+      if (Object.prototype.hasOwnProperty.call(unresolved, item.trackId)) {
+        delete unresolved[item.trackId];
+        unresolvedChanged = true;
+      }
+    } else if (unresolved[item.trackId] !== item.liked) {
       unresolved[item.trackId] = item.liked;
       unresolvedChanged = true;
     }
@@ -1175,11 +1188,12 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
       {
         version,
         previousVersion: forceGap ? 0 : previousVersion,
-        results: rows.map(({ trackId, ownerUid, liked, likeCount }) => ({
+        results: rows.map(({ trackId, ownerUid, liked, likeCount, canonicalSettled417 }) => ({
           trackId,
           ownerUid,
           liked,
           likeCount: clampLikeCount(likeCount),
+          ...(canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
         })),
       },
     );
@@ -1605,6 +1619,12 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const canonicalLikeSettled127 =
         payload?.data?.canonicalD1 === 'settled' ||
         canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
+      // The exact canonical GET proof is distinct from the optimistic R2 CAS.
+      // Do not stamp older ACKs with this flag: a remote device would otherwise
+      // clear its protection before D1 finishes the queued mutation.
+      const trustedCanonicalReceipt417 =
+        payload?.data?.canonicalD1 === 'settled' &&
+        payload?.data?.canonicalProof === 'bounded-membership-after-queue-417';
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);
@@ -1680,6 +1700,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
             liked: result.liked,
             likeCount: canonicalLikeCount,
             source: 'confirmed',
+            ...(trustedCanonicalReceipt417 ? { canonicalSettled417: true } : {}),
           };
           // Cross-device membership follows the server-accepted account state,
           // not the later public aggregate. Keep the local snapshot-pending guard

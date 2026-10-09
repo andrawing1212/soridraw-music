@@ -496,6 +496,7 @@ const retryContext416 = {
   Date: { now: () => retryClock416 },
   EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416: 'retry-416',
   EXPLORE_LIKE_CROSS_ORIGIN_RETRY_WAIT_MS_416: 60_000,
+  EXPLORE_LIKE_BASELINE_127: 'baseline-127',
   scopedLikeKey127: (key, uid) => uid + ':' + key,
   readLikeLocal127: key => retryStore416.get(key) || '',
   writeLikeLocal127: (key, value) => retryStore416.set(key, value),

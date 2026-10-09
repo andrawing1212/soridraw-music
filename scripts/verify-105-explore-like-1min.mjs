@@ -45,7 +45,7 @@ assert.doesNotMatch(worker, /event-like-batch-5m-103/);
 // app105 client one-minute window. This changes only intake timing; shared aggregate stays 1m.
 if (appVersion >= 120) {
   assert.match(like, /SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918/);
-  assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;/);
+  assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000;/);
   assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) => \(pending\.retryCount \|\| 0\) === 0\)/);
   assert.match(like, /latestEligibleUpdatedAt \+ EXPLORE_LIKE_IDLE_FLUSH_MS_120/);
   assert.match(like, /schedulePendingFlush\(user\)/);

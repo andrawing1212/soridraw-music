@@ -19,6 +19,10 @@ on:
       - 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'
       - 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'
       - 'cloudflare/explore-worker/runtime/like-batch-composition-422.mjs'
+      - 'cloudflare/explore-worker/runtime/like-personal-r2-publisher-423.mjs'
+      - 'cloudflare/explore-worker/runtime/like-rtdb-user-signal-424.mjs'
+      - 'scripts/verify-423-personal-like-r2.mjs'
+      - 'scripts/verify-424-like-rtdb-signal.mjs'
       - 'scripts/verify-421-like-r2-publisher.mjs'
       - 'public/app-version.json'
       - 'scripts/verify-127-atomic-personal-like.mjs'
@@ -68,6 +72,8 @@ jobs:
           node --check cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs
           node --check cloudflare/explore-worker/runtime/like-batch-composition-422.mjs
           node scripts/verify-421-like-r2-publisher.mjs
+          node scripts/verify-423-personal-like-r2.mjs
+          node scripts/verify-424-like-rtdb-signal.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

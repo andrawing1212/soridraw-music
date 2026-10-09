@@ -1,12 +1,11 @@
-app386-stage416-phase1-cross-origin-like-repair-preview
-target_source=f3f9d09418383ae55d6fc68460a16c3314647004
-app_version=386
-scope=stage416-phase1-repeated-personal-snapshot-repair-guard,maintain-existing-like-and-follow,protect-existing-cache-and-outbox,preview-only-hosting
-focused_ci_run=37870912569
-focused_ci_conclusion=success
-focused_ci_product_commit=cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344
-version_only_diff_after_product_ci=true
-exact_app386_ci_run=37870912569
+app387-recent-noop-edit-cost-preview
+target_source=9c9bb16fc6d3434b91a8b45131b57a034b1ebf89
+app_version=387
+scope=recent-song-unchanged-save-skips-RTDB-and-Firestore,real-edits-150s-batch-unchanged,preview-hosting-only
+source_test_290=PASS_exact_source_isolated
+source_test_291=PASS_exact_source_isolated
+source_test_noop=PASS_exact_source_isolated
+ci_typecheck_build_tests=must_PASS_before_deployment
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -14,4 +13,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_2026-10-09_authorized_automatic_preview_deploy_for_real_verification
+approval=user_2026-10-09_requested_cost_optimization_and_apply_to_preview

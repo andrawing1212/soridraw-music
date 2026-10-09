@@ -1,0 +1,30 @@
+name: SORIDRAW QA Engine — Fast Preview
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/soridraw-qa-engine.mjs'
+      - '.github/workflows/qa-engine-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-qa-engine-fast-preview
+  cancel-in-progress: true
+jobs:
+  fast-no-network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Node 22 for isolated SQLite and syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run fast offline SORIDRAW regressions
+        run: node scripts/soridraw-qa-engine.mjs fast
+      - name: Confirm no deployment or shared-data changes
+        run: echo 'FAST_QA_ONLY;RELEASE_UNVERIFIED;NO_DEPLOYMENT;NO_SHARED_MUTATION'

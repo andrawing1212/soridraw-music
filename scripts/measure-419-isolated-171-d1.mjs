@@ -213,17 +213,17 @@ if (process.argv[2] === 'cleanup') {
     }
     await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','missing all readiness');
 
-    const releaseA='a'.repeat(40), releaseB='b'.repeat(40);
+    const protocolA='a'.repeat(40), protocolB='b'.repeat(40);
     const expiry=Date.now()+15*60*1000;
     for (const env of ['preview','test','production']) {
       await query(
-        'INSERT INTO explore_like_cutover_ready_419(environment,release_sha,reader_ready,writer_compatible,verified_until_ms) VALUES(?,?,?,?,?)',
-        [env,releaseA,env==='production'?0:1,1,expiry]);
+        'INSERT INTO explore_like_cutover_ready_419(environment,protocol_sha,deployed_sha,reader_ready,writer_compatible,verified_until_ms) VALUES(?,?,?,?,?,?)',
+        [env,protocolA,({preview:'c',test:'d',production:'e'})[env].repeat(40),env==='production'?0:1,1,expiry]);
     }
     await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','production reader not ready');
-    await query("UPDATE explore_like_cutover_ready_419 SET reader_ready=1,release_sha=? WHERE environment='production'",[releaseB]);
-    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','release SHA mismatch');
-    await query("UPDATE explore_like_cutover_ready_419 SET release_sha=?,verified_until_ms=? WHERE environment='production'",[releaseA,1]);
+    await query("UPDATE explore_like_cutover_ready_419 SET reader_ready=1,protocol_sha=? WHERE environment='production'",[protocolB]);
+    await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','protocol SHA mismatch');
+    await query("UPDATE explore_like_cutover_ready_419 SET protocol_sha=?,verified_until_ms=? WHERE environment='production'",[protocolA,1]);
     await requireTransitionDenied('LIKE_CUTOVER_3_ENVS_NOT_READY_419','expired proof');
     await query("UPDATE explore_like_cutover_ready_419 SET verified_until_ms=? WHERE environment='production'",[expiry]);
 
@@ -255,7 +255,8 @@ if (process.argv[2] === 'cleanup') {
       await query('DELETE FROM '+q.table+' WHERE '+q.key+'=?',[q.id]);
     }
     console.log('419_REMOTE_CUTOVER_EMPTY_ALL_FOUR_QUEUES_GUARD=PASS');
-    console.log('419_REMOTE_CUTOVER_THREE_ENV_SHA_AND_EXPIRY_GUARD=PASS');
+    console.log('419_REMOTE_CUTOVER_THREE_ENV_PROTOCOL_SHA_AND_EXPIRY_GUARD=PASS');
+    console.log('419_STAGED_PREVIEW_TEST_PRODUCTION_ARTIFACT_SHA_MAY_DIFFER=PASS');
 
     // Only synthetic readiness + zero queued rows may flip the phase.
     await query("UPDATE explore_like_writer_phase_419 SET phase='overlay' WHERE id=1");

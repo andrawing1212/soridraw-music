@@ -1,3 +1,12 @@
+## CURRENT — Stage416 Phase1 bounded gap-retry 후보 구현됨 / 최종 CI·비용 감사 대기 (2026-10-09 KST)
+
+- **실제 제품 소스 수정:** `dc8457dd963a70818cd5c90af24d39b5dbd9a93f` `src/services/exploreLikeService.ts` 한 파일. `readRepairTarget127>0`이고 해당 retained signal의 FULL origin repair가 실패한 경우에만, UID+signal 버전별 local retry marker로 **60초 재시도 간격**을 적용. 재방문 parity뿐 아니라 이어서 호출되는 `ensurePersonalLikeBaseline127`도 같은 cooldown을 존중. 새 retained signal이면 즉시 bypass, 60초 만료되면 회복 가능, 성공 시 marker 삭제. 정상 healthy cache / app359 settlement-only / 5초 좋아요·Worker/RTDB/좋아요/팔로우/Studio 등 기존 정상 경로를 변경하지 않음.
+- **회귀 보강:** `scripts/verify-127-atomic-personal-like.mjs` 테스트 commit `c9ed1890bce7b3f01b4a7cb07d130fa348ea0763`, 후속 새 signal bypass `279efb76ac4b1d95bc2347e8faf3a0490423ee2c`. GitHub 실제 파일에서 parity 함수/신규 helper를 뽑아 격리 JS mock 실행한 **Stage416 5개 체크 PASS**: settlement-only FULL repair0, genuine gap recovery, healthy revisit0, 동일 실패 gap 반복 진입 추가 rearm0, cooldown 후 복구·새 신호 즉시 bypass. 테스트 내 별도 baseline 호출 cooldown은 정적 검사로 보호. 기존 전체 127/175/178/191/192/197/390, TypeScript·Build는 **아직 실행결과 미확인**.
+- **배포 차단:** app385 활성 그대로. GitHub 408 workflow의 새 exact SHA 성공 확인, Work 독립 감사, 실제 D1 쿼리/rows_read/rows_written 계측, PC↔모바일 오류/복구 실사용 이전에는 PREVIEW 릴리스 트리거 변경 금지. 60초 미복구 상황에 stale UI 위험이 없는지 사용자 캐시 warm/cold 모두 확인. 정상 cached reentry D1 R0 / D1 mutation W1~W2 물리 PASS를 가정 금지. Phase2 개인 즉시, Phase3/4 각 +5분, 팔로우는 **미착수**.
+- **다음 행동:** 408 quality TypeScript/Build/127/175/178/191/192/197/390 exact SHA 확인 → 실패 시 수정/중단 → Work read-only 독립 검증 → 실제 캐시 warm/failed gap 재방문 0 extra R 및 60s 뒤 정확 복구 계측 → 모두 PASS 후 사용자 PREVIEW 배포 판단. 새 공유 데이터/schema/Worker/Functions/Rules, TEST/PRODUCTION 변화 없음.
+
+---
+
 ## CURRENT — Stage416 Phase1 독립 감사 발견: 신호 gap 실패 후 반복 FULL repair 재시작 차단 (2026-10-09 KST)
 
 - **고정 감사 SHA:** `ca8687b48ce6a8b3039d96e18f604cc4e59fc879`. Stage416 정상 settlement-only에서 예전 FULL repair 재활성을 막는 기존 제품 수정은 보존. 이전 사용자 승인 구조(개인 즉시, 마지막 변경 +300초 개인 저장, 서버 유효 접수 뒤 공동 +300초 공개)와 활성 PREVIEW app385 변경 금지.

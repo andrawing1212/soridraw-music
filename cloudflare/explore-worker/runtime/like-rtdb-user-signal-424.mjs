@@ -45,13 +45,13 @@ export function createLikeUserRtdbSignal424({
       const prev=Number(prior?.version||0);
       if(!Number.isSafeInteger(prev)||prev<0||prev>=maxVersion424)
         throw err424('424_RTDB_VERSION_INVALID');
-      if(Array.isArray(prior?.results) && prior.results.length===1 &&
-         prior.results[0]?.trackId===trackId &&
-         prior.results[0]?.liked===liked &&
-         prior.results[0]?.likeCount===likeCount &&
-         prior.results[0]?.canonicalSettled417===true) {
-        return {queued:true,trackId,revision,unchanged:true};
-      }
+      // The existing RTDB rules do NOT store an operationId or canonical
+      // revision. Identical liked+count payloads may represent TWO DIFFERENT
+      // accepted clicks (other users can cancel count changes). Treating
+      // equality as a durable receipt can silently omit a PC/mobile update.
+      // Until an additive, versioned receipt field is approved and deployed,
+      // publish each confirmed revision; retries may create an extra RTDB
+      // signal, but will NEVER add D1 writes or miss a real change.
       const version=Math.max(1,Math.floor(Number(now())||0),prev+1);
       if(!Number.isSafeInteger(version)||version>=maxVersion424)
         throw err424('424_RTDB_NEXT_VERSION_INVALID');

@@ -116,6 +116,12 @@ for (const [label, args] of [
   assert.equal(result.writes, 1, label + ' queued intake preserved');
   if (['QUEUE_RUNNING', 'JOINED_WINDOW', 'CACHE_PARTIAL', 'TOO_MANY_IDS'].includes(label)) {
     assert.equal(result.queryCount, 0, label + ' unnecessary canonical query');
+    assert.equal(result.readCount, 0, label + ' no extra canonical D1 read');
+  }
+  if (['MISMATCH', 'D1_PENDING'].includes(label)) {
+    assert.equal(result.queryCount, 1);
+    assert.equal(result.readCount, 2, label + ' must not hide unsuccessful D1 read');
+    assert.equal(result.readQueries, 1, label + ' must not hide unsuccessful D1 query');
   }
 }
 console.log('417_QUEUED_LIKE_UNLIKE_CANONICAL_PROOF=PASS');

@@ -1,3 +1,12 @@
+## CURRENT — Stage422 다음 핵심 구현: 실제 개인 R2/RTDB 저장 + active 3환경 구형 worker 프로토콜 호환 완료 전 배포 HOLD
+
+- **완료 재사용:** source-only `like-d1only-batch-adapter-420.mjs`, `like-public-r2-publisher-421.mjs`, `like-batch-composition-422.mjs`; 생성/중복/역순 D1 SQL와 changed-card/profile/latest/popular R2 CAS, 실패 복구 in-memory Node fixture PASS; `node scripts/soridraw-qa-engine.mjs focus projection,like`로 초단위 재검 가능. 408 전체 TypeScript/Build/개인 좋아요/공개 숫자/RTDB Rules read-only [37902229363](https://github.com/andrawing1212/soridraw-music/actions/runs/37902229363) **PASS**.
+- **구현 1순위:** 기존 `preview-entry.js`와 생성 Worker `preview-worker.js`에서 사용 중인 실제 UID별 좋아요 R2 snapshot/전파 RTDB 경로를 좁게 추적하고 `422`의 주입 함수 `persistPersonalSnapshot`, `queueSameAccountSignal`을 **실제 보안 인증·권한·ETag CAS/단일 UID changed-track 의미**로 구현. 동기화는 app141 수신 저장→notify 순서를 보호하고, RTDB 불가 시 D1 mutation 재실행 없이 재발행; 소스 전용/flag OFF로 먼저 검증. 421 `resolveOwnerUid`도 검증된 owner 조회에서만 주입하고 임의 클라이언트 supplied UID를 신뢰 금지.
+- **구현 2순위:** 현재 191 first80 `track_stats` repair와 새 overlay effective count 충돌을 없애기 전 프로덕션 공유 코드 phase 전환 금지. active PREVIEW/TEST/PRODUCTION legacy 035/066/069/075 요청을 안전하게 받아 171으로 연결할 계약 또는 안전 구형 지원 종료 정책 확인. 옛 앱 missing `operationId`/`expectedRevision`를 임의 추정하여 timestamp skew/cross-device 상태 역전시키지 말 것.
+- **검증/승격:** 한 번 수정→`node scripts/soridraw-qa-engine.mjs fast`→고정 코드→`full` 또는 408, 격리 419 W2, Work, PC/모바일/타계정 검증. 공유 데이터 schema/R2 원본 migration/old writer 중단은 무조건 사전 승인·3환경 준비 증거 후에만. 정상 UI/Music Note/Library/Studio/팔로우 보호. 승인 없이 배포하는 대신 **진짜 PREVIEW 배포 전 마지막 소유 경로 구현에 집중**.
+
+---
+
 ## CURRENT QA ENGINE — 반복검사 비용 절감 운영 (2026-10-09 KST)
 
 - **매번 npm ci/TypeScript/Build/원격 D1 재검증 금지:** 작은 소스 변경이 끝날 때마다 먼저 `node scripts/soridraw-qa-engine.mjs fast` 실행. Node22 표준 도구만 사용하며 최신 GitHub [QA Run 37900535645](https://github.com/andrawing1212/soridraw-music/actions/runs/37900535645) 자체 검사 7그룹 624ms PASS. 대상은 syntax, 좋아요 W2 후보/역순, local catalog, public count, receipt, R2 CAS, lifecycle. 설치 불필요.

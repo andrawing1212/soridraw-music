@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import ts from 'typescript';
 import { readFileSync } from 'node:fs';
 
 // Test the actual PREVIEW Worker helper and reply wrapper with real Request/
@@ -127,3 +128,54 @@ for (const [label, args] of [
 console.log('417_QUEUED_LIKE_UNLIKE_CANONICAL_PROOF=PASS');
 console.log('417_UNCERTAIN_R2_AND_QUEUE_FAIL_CLOSED=PASS');
 console.log('417_PHYSICAL_D1_DIAGNOSTICS_VISIBLE=PASS');
+
+// An optional same-UID RTDB receipt is allowed without changing old payloads,
+// required fields or the app141 persist-before-notify invariant.
+const rtdbRules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
+const likeRule417 = rtdbRules.rules.userSync.$uid.exploreLike;
+assert.match(likeRule417['.validate'], /hasChildren\(\['version','previousVersion','results'\]\)/);
+assert.equal(
+  likeRule417.results.$index.canonicalSettled417['.validate'],
+  'newData.isBoolean()',
+);
+assert.equal(likeRule417.results.$index.$other['.validate'], false);
+const normalizeStart417 = service.indexOf('const normalizeLikeSignal127 = ');
+const normalizeEnd417 = service.indexOf('const applyRemoteLikeSignal127 = ', normalizeStart417);
+assert.ok(normalizeStart417 > 0 && normalizeEnd417 > normalizeStart417);
+const normalizedJS417 = ts.transpileModule(
+  service.slice(normalizeStart417, normalizeEnd417),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText;
+const normalizeSignal417 = new Function('EXPLORE_LIKE_SIGNAL_MAX_127', 'clampLikeCount',
+  normalizedJS417 + '\nreturn normalizeLikeSignal127;'
+)(50, (v) => Math.max(0, Number(v) || 0));
+const fakeRow417 = { trackId: 'song-A', ownerUid: 'owner-1', liked: true, likeCount: 1 };
+const legacy417 = normalizeSignal417({
+  version: 100, previousVersion: 99, results: [fakeRow417],
+});
+assert.equal(legacy417.results[0].canonicalSettled417, undefined);
+const verified417 = normalizeSignal417({
+  version: 101, previousVersion: 100,
+  results: [{ ...fakeRow417, canonicalSettled417: true }],
+});
+assert.equal(verified417.results[0].canonicalSettled417, true);
+const forged417 = normalizeSignal417({
+  version: 102, previousVersion: 101,
+  results: [{ ...fakeRow417, canonicalSettled417: 'true' }],
+});
+assert.equal(forged417.results[0].canonicalSettled417, undefined);
+assert.match(service, /payload\?\.data\?\.canonicalProof === 'bounded-membership-after-queue-417'/);
+assert.match(service, /\.\.\.\(trustedCanonicalReceipt417 \? \{ canonicalSettled417: true \} : \{\}\)/);
+assert.match(service, /\.\.\.\(canonicalSettled417 === true \? \{ canonicalSettled417: true \} : \{\}\)/);
+const applyStart417 = service.indexOf('const applyRemoteLikeSignal127 = ');
+const applyEnd417 = service.indexOf('let activeLikeSignalUid127', applyStart417);
+const apply417 = service.slice(applyStart417, applyEnd417);
+assert.ok(apply417.indexOf('if (pending[item.trackId]) continue;') <
+  apply417.indexOf('if (item.canonicalSettled417 === true && !needsRepair)'),
+  '417 local newer outbox wins before remote receipt');
+assert.match(apply417, /delete unresolved\[item\.trackId\]/);
+assert.ok(apply417.indexOf('if (unresolvedChanged) writeSnapshotPending127') <
+  apply417.indexOf('acceptedForUi141.forEach\(dispatchLikeSync\)'),
+  '417 app141 guard persist must happen before notifying UI');
+console.log('417_RTDB_OPTIONAL_CANONICAL_RECEIPT=PASS');
+console.log('417_LEGACY_AND_PENDING_PRIORITY_PROTECTED=PASS');

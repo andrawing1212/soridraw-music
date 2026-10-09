@@ -51,6 +51,8 @@ const groups = [
     ['node', 'scripts/verify-431-like-batch-capacity.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-cold-public-card-432.mjs'],
     ['node', 'scripts/verify-432-cold-public-card.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-legacy-intent-reconcile-433.mjs'],
+    ['node', 'scripts/verify-433-legacy-intent-reconcile.mjs'],
   ] },
   { name: 'lifecycle', commands: [
     ['node', '--check', 'scripts/verify-413-like-exit-flush.mjs'],

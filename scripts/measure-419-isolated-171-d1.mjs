@@ -330,7 +330,8 @@ if (process.argv[2] === 'cleanup') {
       allEnvironmentCutoverVerified:true,
       async publishChangedTrack(row) {
         if(failProjection420) {failProjection420=false;return {settled:false};}
-        return {settled:true,trackId:row.trackId,generation:row.generation};
+        return {settled:true,trackId:row.trackId,generation:row.generation,
+          personalSnapshotPersisted:true,publicProjectionPersisted:true,sameAccountSignalQueued:true};
       },
     });
     const intent420=(trackId,liked,baseLiked,expectedRevision,operationId)=>({
@@ -363,7 +364,7 @@ if (process.argv[2] === 'cleanup') {
     console.log('420_REMOTE_APP164_PLUS_AUTH_BATCH_W2_AND_IDEMPOTENT_W0=PASS');
     console.log('420_REMOTE_OLD_CLIENT_MIXED_REQUEST_FAIL_CLOSED_W0=PASS');
     console.log('420_REMOTE_PUBLIC_PROJECTION_RETRY_AFTER_D1_COMMIT_W0=PASS');
-    console.log('420_PUBLIC_PUBLISHER_REAL_R2_RTDB=STUB_ONLY_NOT_VERIFIED');
+    console.log('420_PERSONAL_R2_PUBLIC_R2_AND_RTDB_PUBLISHER=STUB_ONLY_NOT_VERIFIED');
     console.log('420_OLDER_PRE_APP144_CLIENT_COMPAT=NOT_IMPLEMENTED');
     console.log('419_REMOTE_171_COMPLETE_ISOLATED_PHYSICAL_W2_W0=PASS');
     console.log('419_SHARED_DB_QUERIES_AND_WRITES=0');

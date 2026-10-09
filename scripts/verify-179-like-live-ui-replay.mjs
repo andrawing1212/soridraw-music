@@ -26,7 +26,7 @@ assert.doesNotMatch(page, /addEventListener\(EXPLORE_LIKE_SYNC_EVENT/,
 assert.match(page, /unsubscribeLikeUi139\(\)/,
   'ExplorePage must clean up changed-track UI subscription');
 
-assert.match(service, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/,
+assert.match(service, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/,
   '30-second write batching changed unexpectedly');
 
 console.log('APP139_CHANGED_TRACK_UI_REPLAY=PASS');

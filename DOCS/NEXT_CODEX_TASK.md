@@ -1,3 +1,12 @@
+## CURRENT — Stage416 Phase1 실제 PREVIEW app386 배포 성공, 실사용 좋아요/D1 비용 검증 우선 (2026-10-09 KST)
+
+- **실제 배포:** `preview.soridraw.com` Firebase Hosting app386 릴리스 **37871046504 SUCCESS**, immutable target SHA `9b2d303c6adc2ebbec2b57952cad949e29d3dde2`; exact build/version 386 and TEST/PRODUCTION nonchange PASS. Quality 408 `37870912569 SUCCESS` (Node 22 TypeScript/Build/127/175/178/191/192/197/390 등). Worker/RTDB Rules/Functions/공유 D1/데이터와 TEST/PRODUCTION 미변경. 사용자 이후 PREVIEW 자동 판단 배포 승인(명확한 사용자 TEST·PRODUCTION 승인 별개).
+- **지금 작업:** 더 이상의 가상 검증 반복보다 app386 실제 로그인 PC/모바일/관리자 계정으로 필수 계측 1) 좋아요 변경 없는 정상 캐시 My Likes 재진입 D1 R0/W0, 2) cold first snapshot R5/W0 한 번인지/계속 반복인지, 3) like/unlike 1/3/6 횟수 및 페이지 왕복 각 physical D1 rows_read/rows_written (like W1~W2, W3 FAIL), 4) 개인 하트·내 좋아요 카드 PC↔모바일 실동기/첫 좋아요/해제, 5) 일반 사용자의 공개 likeCount와 팔로우, 6) stale signal exceptional repair 후 60초 내 바른 수렴(이 경우 기존 정상 membership 보호). 사용자 데이터 보존, 로그에는 계정 UID·개별 곡 목록 출력 금지.
+- **증거 분리:** app386 배포/Build = 실제 PASS. 실제 인증 계정 동작 및 D1 물리값 = **미측정**, 로그인 세션 없이 임의 좋아요를 실행하거나 PASS 주장 금지. 실계정 결과가 확인되면 Phase1 PASS/FAIL 결정. 결함이면 app386 범위에서 최소 수정→CI→PREVIEW 자동 배포→재실측; 정상이면 Phase2 private RTDB instant, Phase3 individual trailing300s, Phase4 public fixed300s 각각 작은 안전 단위로 구현·CI·PREVIEW 실검증. 오류/비용 W3+ 발생 시 TEST 금지. Independent Work 별도 read-only audit은 아직 미실행.
+- **절대 보호:** 좋아요·팔로우 정합성, 로컬/개인 outbox/ACK·신호순서, Music Note/Library/Studio 30초 save heart, UI/반응형, canonical 사용자 데이터 하위호환. 5초 서버/공개 타이머를 300초로 단순 상수 치환 금지. 공유 원본 data migration/overwrite/deletion, main/TEST/PRODUCTION 승격은 사용자의 별도 승인 없이 금지.
+
+---
+
 ## CURRENT — Stage416 Phase1: targeted proof 실패 후 FULL 재복구 회귀 수정, 전체 CI·실기기 게이트 (2026-10-09 KST)
 
 - **최신 제품 수정:** `b8ab60a9bec2718eb135b1755c32c274c6792523` — `src/services/exploreLikeService.ts` app357/358/359. 실제 FULL baseline은 성공하여 `EXPLORE_LIKE_BASELINE_127=1`, repairTarget=0 이지만 후속 app189 targeted proof만 실패한 경우에 예전 FULL canonical 복구를 다시 시작하는 오류를 격리 재현. 같은 signal의 **이전** app358 attempt가 있고 완전한 baseline/비어 있는 repairTarget이 증명되면 새 FULL 재무장을 생략하고 targeted proof만 재시도. 첫 신호 gap은 mark하기 전 previousAttempt를 확인하므로 첫 FULL 복구를 반드시 진행하며, 과거 FULL 실패/baseline 결손에서는 기존 FULL 복구를 유지.

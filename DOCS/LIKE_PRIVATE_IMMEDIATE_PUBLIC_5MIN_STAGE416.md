@@ -1,6 +1,6 @@
 # Stage416 — 개인 좋아요 최종상태 5분 + 공동 공개숫자 5분 + 개인 즉시 동기화
 
-상태: **설계/단계 분할 진행. 코드/배포 미변경. 1단계 영상·코드 1차 진단 완료, 실제 반복 비용 원인 미확정.**
+상태: **1단계 코드 원인 특정 + 최소 수정 commit / 격리 동작 재현 PASS. 전체 CI, 실제 PREVIEW 브라우저/Cloudflare D1 비용은 확인 전; 배포 없음.**
 기준 preview `65f9947387c9bb37b90081cf3d1e1c92e0f20a57` (활성 Firebase PREVIEW app385), 2026-10-09 KST. 이 문서는 기존 `LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md`의 **10분 지연 기준을 모두 대체**한다. 보호 기능은 유지. 사용자 승인 순서: Explore 좋아요 먼저 → 실사용 PASS 이후 팔로우.
 
 ## 사용자 확정 계약 (두 개의 서로 다른 5분)
@@ -51,3 +51,15 @@
 
 - preview 앱 app385, 좋아요는 기존 +5초, 공개 숫자 기존 ~5초. **코드 수정·Worker/Firebase/RTDB Rules/Functions/D1 구조·데이터 변경·배포 0** (이 문서는 계획 전용).
 - Phase1 가설 확인 후 코드 변경/실측 지원 불가·안전성 미입증이면 STOP + 구체 blocker 보고, 아무것도 모르고 5분 타이머 치환 금지.
+
+---
+
+## 1단계 실제 추가 감사·최소 수정 결과 (2026-10-09 KST)
+
+- **영상 근거 상세:** 사용자가 캡처한 정상 Explore 목록 구간 38~43초 `Cloudflare LOCAL0 Worker1 / D1 R0/W0` 및 `공개곡 좋아요 숫자 확인 LOCAL0 Worker1 D1 R0/W0` 확인. 약48초 `내 좋아요 곡` 탭 이동 후 53초 `개인 소셜 스냅샷 LOCAL0 Worker2, D1 query R5/W0, D1 rows_read 11/rows_written 0`, 마지막 사유 `FULL 200 · PERSONAL SETTLE...` 확인. 총계 `Worker4, D1 query R5, rows_read21`은 다른 endpoint 포함이며 `R5`를 좋아요 **클릭 1회 비용 또는 5개 HTTP 요청**이라고 해석하면 안 됨.
+- **호출 원인 정확히 특정:** `ExplorePage.tsx` My Likes mount에서 `ensureExplorePersonalLikeCrossOriginParity357` 호출. `exploreLikeService.ts`의 RTDB accepted-signal 수신이 각 변경곡에 `snapshotPending127` guard를 만들고, app359이 signalVersion 미정착이면 서버 `PERSONAL SETTLEMENT 189` 안전검증 가능. **추가 비용 결함:** `legacyNeedsRepair357=false`인데 `needsSettlementUpgrade359=true`인 경우에도 이전에는 `requestRepair127` 및 `EXPLORE_LIKE_REPAIR_ATTEMPTED_182=''`를 무조건 적용해 과거 app358 **FULL repair**까지 다시 켰음. 이 조합은 My Likes 방문 및 새 RTDB accepted signal마다 중복 개인 snapshot/원본 확인을 유도할 수 있음. 정상 캐시 첫 진입 GET 경로와 혼동하지 말 것.
+- **수정 커밋:** `src/services/exploreLikeService.ts`에서 실제 **legacyNeedsRepair357**인 경우에만 app358 repair target/attempt reset. app359 **settlement-only**에서는 기존 app189 targeted/queue-empty/ETag proof만 유지. 서버 Worker·쿼리·수신 UI·RTDB signal·좋아요 저장 타이머 수정 없음. 코드 최초 commit `1980a9bcd9487f7e8126219f3e509cb8de1efe16`, 후속 품질 트리거 `e480d24fb12888d101d62060864755eb87689be0`.
+- **회귀검증 추가:** `scripts/verify-127-atomic-personal-like.mjs` 기존 frozen 테스트 끝에 실제 app357/359 parity 함수 소스를 TypeScript transpile로 격리 실행한 세 조건 검증을 append, commit `42738dab933ba2e13a2995ca0fded8bb19106c12`. 같은 원본 함수를 함수-의존성 mock에 넣어 수동 독립 재현 결과 **3/3 PASS**: (1) settlement-only → no app358 repair; (2) 진짜 legacy gap → app358 + app189 그대로; (3) healthy revisit → 호출 0. 상위 read-only 호출 그래프/경계 10/10 PASS. GitHub Actions TypeScript/Build/전체 frozen 회귀 **최종 커밋 결과 미확인**.
+- **한계와 리스크:** 이 변경은 **불필요하게 재가동되던 과거 FULL repair**만 차단한다. 현재 `snapshotPending127` 중 아직 확정 안 된 값의 **app189 targeted settlement**는 정확성 보호 때문에 남아 있다. 따라서 영상의 모든 R5가 0이 된다고 주장하지 않음. 계정 간 RTDB 단절/실제 오래된 원본 교정에서 D1 R은 여전히 가능하고 올바른 행동. 실제 로그인 test account에서 각각 매 실행 별 RESET 후 비용 계측 및 PC↔모바일/구형 앱 실사용 필수.
+- **배포 상태:** preview **소스 commit만 변경**, 제품 배포 app385 그대로. Firebase Hosting/Functions/Rules, Cloudflare Worker/D1/R2, 공유 사용자 원본, main/TEST/production 변경 0. Stage416 Phase 2/3/4는 미착수.
+- **다음 게이트:** 408 GitHub QA exact HEAD TypeScript/Build/127/175/178/191/192/197/390 및 416 포함 확인 → Work 독립 감사 → pending guard가 없는 warm 계정에서 My Likes 반복 D1 R0 및 실제 snapshot `PERSONAL REPAIR 182` 추가 0 측정 → 앱 배포 안전성 판단; Phase2 개인 즉시동기화는 이 기준 PASS 후.

@@ -1,3 +1,13 @@
+## 0S36. app386 연속 My Likes 실사용 warm-cache 서버 요청 0 — Stage416 Phase1 비용 경로 합격 (2026-10-09 KST)
+
+- **사용자 실기기 검증:** screenshot `image(20261009-040623).png`. 이전 사용자 지시에 따른 진단 RESET 후 `내 좋아요 곡 → Explore Feed → 내 좋아요 곡 → Explore Feed → 내 좋아요 곡` 왕복 결과로 제출. 이번 실행 총 **Cloudflare LOCAL 9 / Worker 0**, 항목 `내 좋아요 곡 LOCAL 2 / Worker 0`, 공개프로필 LOCAL 3/Worker 0, SORIDRAW 추천곡 LOCAL 3/Worker 0, 추천곡 관리 권한 LOCAL 1/Worker 0. D1 query/rows는 새 요청 없음으로 `—` 표기이며 `PAGE SYNC R0 W0`; Firestore page sync R0/W0. **warm-cache 변경 없는 페이지 왕복에서 네트워크 Worker 0, 새 D1 R/W 0** 해당 실사용 조건 PASS. 이는 이전 사진의 첫 `PERSONAL SETTLEMENT 189 R4/W0` 이후 정상 캐시 조회가 재발하지 않았다는 긍정적 비교 근거.
+- **앞선 실측과 합산 판단:** 0S35 PC 좋아요의 클라이언트 진단 intake `W1`, R4 총쿼리 유지(좋아요 직후 추가 R0), 모바일 공개 likeCount GET `D1 R0/W0`는 그대로 보호. 이것만으로 D1 실제 서버 전체 canonical settlement W1~2 청구나 계정 PC↔모바일 **개인 하트 즉시** 검증 완료가 아님.
+- **Stage416 Phase1 상태:** 정상 warm-cache/My Likes 반복 조회 비용 PASS, app386 PREVIEW release successful, TypeScript/Build/frozen regressions PASS. 다만 cold/new device, 예외 복구 뒤 60초, 장기 서버 D1 physical billing, PC↔모바일 private membership 실측은 별도 검증 영역. Stage416 전체 완료 아님. 불필요 FULL/targeted 복구 루프가 재현되지 않는 동안 app386 클라이언트/Worker 정상 경로는 수정하지 말 것.
+- **Phase2 착수 설계:** 새로운 같은 계정 optimistic/provisional private signal은 현 `userSync/$uid/exploreLike` **ACK 확정 전용**과 분리. 기존 RTDB rules `userSync/$uid/$other.validate=false`이므로 새로운 sibling 경로는 additive rules update + live preflight 없이 바로 쓰지 못함. 기기간 동시 클릭, 늦게 온 구형 ACK, outbox/provisional 구분, server canonical 대비 수렴, old client compatibility, userSync RTDB 비용과 잠정 신호 무효화 복구를 Codex High가 먼저 증명해야 함. 기존 `exploreLike` 확정 payload에 provisional을 담으면 구형 클라이언트가 이를 서버 확정으로 오판하므로 금지. Studio song-save-heart 별개.
+- **현재 HEAD/배포:** audit 착수 `preview` `d645d936eb9842046fcc369fbde5f4ee8139857f` app386 active. 이번 결과는 GitHub 문서 반영만; 새 앱/Worker/Functions/RTDB Rules/공유 D1/R2 데이터 변경·배포 없음. TEST/PRODUCTION 변경 없음.
+
+---
+
 ## 0S35. app386 사용자 실사용 화면 3장 — 개인 settlement read R4, PC W1, 모바일 공개 R0 (2026-10-09 KST)
 
 - **실사용 근거:** 사용자 제공 `image(20261009-035435).png`('내 좋아요 곡' 진입), `image(20261009-035543).png`(PC 피드 좋아요 약10초 후), `image(20261009-035623).png`(모바일 같은 상태). 사용자 제공 화면만 관찰; 앱 내부 인증·실물리 D1 사용량 청구서와 구분.

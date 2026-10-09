@@ -25018,7 +25018,7 @@ function exploreLikeAggregateSnapshotCte039(includeQueue066 = false, includeQueu
 async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue066 = false, includeQueue069 = false) {
   const max = EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035;
   const boundary = await selectExploreLikeAggregateBoundary039(env, cutoff, max, includeQueue066, includeQueue069);
-  if (!boundary) return { positiveTracks: 0, negativeTracks: 0, insertedLikes: 0, deletedLikes: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0 };
+  if (!boundary) return { positiveTracks: 0, negativeTracks: 0, insertedLikes: 0, deletedLikes: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0, settledBatchIds418: [] };
 
   const cte = exploreLikeAggregateSnapshotCte039(includeQueue066, includeQueue069, cutoff);
   const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
@@ -25056,6 +25056,7 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     w1Index = statements.length;
     statements.push(env.DB.prepare(cte + `
       DELETE FROM explore_like_batches_069 WHERE batch_id IN (SELECT batch_id FROM eligible WHERE queue_kind = '069')
+      RETURNING batch_id
     `).bind(...prefix));
   }
   const result = await env.DB.batch(statements);
@@ -25068,7 +25069,13 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     insertedLikes: Number(result?.[2]?.meta?.changes || 0),
     deletedLikes: Number(result?.[3]?.meta?.changes || 0),
     processedBatches: oldProcessed + compactProcessed + w1Processed,
-    oldProcessed, compactProcessed, w1Processed
+    oldProcessed, compactProcessed, w1Processed,
+    // SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009
+    // The D1.batch transaction commits canonical rows and queue deletion
+    // together; RETURNING costs no additional SQL SELECT.
+    settledBatchIds418: w1Index >= 0 && Array.isArray(result?.[w1Index]?.results)
+      ? result[w1Index].results.map((row) => String(row?.batch_id || '').trim()).filter(Boolean).slice(0, 2)
+      : []
   };
 }
 __name(processExploreLikeAggregateWave035, "processExploreLikeAggregateWave035");
@@ -25300,7 +25307,8 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
     changedTracks: 0,
     compactQueue: includeQueue066,
     w1Queue: includeQueue069,
-    userQueue: userQueuePending
+    userQueue: userQueuePending,
+    settledBatchIds418: []
   };
   try {
     if (legacyBoundary) {
@@ -25311,6 +25319,8 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
         totals.oldProcessed += current.oldProcessed;
         totals.compactProcessed += current.compactProcessed;
         totals.w1Processed += current.w1Processed;
+        totals.settledBatchIds418.push(...(current.settledBatchIds418 || []));
+        if (totals.settledBatchIds418.length > 2) totals.settledBatchIds418.length = 2;
         totals.insertedLikes += current.insertedLikes;
         totals.deletedLikes += current.deletedLikes;
         totals.changedTracks += current.positiveTracks + current.negativeTracks;
@@ -27510,6 +27520,8 @@ async function handleLikeBatch034(request, env, cors) {
       queued: Boolean(mutations.length),
       batchId: queued.batchId || null,
       queue: queued.queue || '069',
+      // 418: only newly inserted 069 rows may receive an atomic-drain receipt.
+      batchInserted418: queued.inserted === true,
       canonicalD1: 'queued',
       personalLikeSnapshot: personalR2?.ok ? 'changed-track-r2' : 'repair-needed',
       personalLikeProtocol: 'w1-queue-changed-track-188',
@@ -28575,7 +28587,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222222(h
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleExploreRequest, "handleExploreRequest");
 var worker_default = {
   async scheduled(controller, env, ctx) {
-    await processExploreLikeBatches035(env, Number(controller?.scheduledTime || Date.now()));
+    return await processExploreLikeBatches035(env, Number(controller?.scheduledTime || Date.now()));
   },
   async fetch(request, env) {
     const usage = createCloudflareUsageMeter();

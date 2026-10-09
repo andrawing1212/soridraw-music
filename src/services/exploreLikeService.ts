@@ -1619,12 +1619,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const canonicalLikeSettled127 =
         payload?.data?.canonicalD1 === 'settled' ||
         canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
-      // The exact canonical GET proof is distinct from the optimistic R2 CAS.
-      // Do not stamp older ACKs with this flag: a remote device would otherwise
-      // clear its protection before D1 finishes the queued mutation.
+      // Stage418: an exact batch ID returned from the same atomic D1
+      // transaction that applied likes and deleted the 069 queue is required.
+      // Best-effort R2, optimistic queued ACK or unmatched DO window is not
+      // proof, and never releases a pending local or remote guard.
       const trustedCanonicalReceipt417 =
         payload?.data?.canonicalD1 === 'settled' &&
-        payload?.data?.canonicalProof === 'bounded-membership-after-queue-417';
+        payload?.data?.canonicalProof === 'atomic-drain-batch-418';
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);

@@ -1074,52 +1074,21 @@ async function handlePublicLikeCards192(request, env) {
   });
 }
 
-async function scheduleExploreLikeAggregate103(env) {
+// SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009
+// Queue intake is NOT final state. Only an atomic D1.batch DELETE RETURNING
+// identifying the exact accepted batch can prove canonical completion.
+async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
   const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
   if (!namespace) throw new Error('Explore like scheduler binding unavailable');
   const id = namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
   const stub = namespace.get(id);
-  const response = await stub.fetch('https://soridraw.internal/schedule', { method: 'POST' });
+  const response = await stub.fetch('https://soridraw.internal/schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expectedBatchId418 }),
+  });
   if (!response.ok) throw new Error(`Explore like scheduler rejected: ${response.status}`);
   return response.json().catch(() => ({}));
-}
-
-// SORIDRAW_BOUND_CANONICAL_LIKE_PROOF_417_20261009
-// Proof is emitted only after the existing scheduler reports a completed
-// canonical wave and an authenticated read of the EXACT changed IDs matches.
-// An accepted queue or speculative personal R2 object is not proof.
-async function verifyQueuedLikeCanonical417(request, env, ctx, payload) {
-  const rows = payload?.data?.results;
-  if (!Array.isArray(rows) || !rows.length || rows.length > 20 ||
-      payload?.data?.personalLikeSnapshot !== 'changed-track-r2' ||
-      rows.some((r) => !r || typeof r.trackId !== 'string' || !r.trackId ||
-        r.trackId.length > 512 || typeof r.liked !== 'boolean' ||
-        (r.status && r.status !== 'legacy-queued'))) return null;
-  const ids = rows.map((r) => r.trackId);
-  if (new Set(ids).size !== ids.length) return null;
-  const target = new URL('/v1/me/likes-confirmed', request.url);
-  target.searchParams.set('trackIds', ids.join(','));
-  try {
-    const response = await baseWorker.fetch(
-      new Request(target.toString(), { method: 'GET', headers: request.headers }),
-      env,
-      ctx,
-    );
-    // 409 (another active queue), 503 (uncertain authority) and all failures
-    // remain queued. Neither the optimistic catalog nor the guard is erased.
-    if (!response.ok) return { verified: false, headers: response.headers };
-    const body = await response.json().catch(() => null);
-    if (body?.ok !== true || !Array.isArray(body?.data?.likedTrackIds)) {
-      return { verified: false, headers: response.headers };
-    }
-    const confirmed = new Set(body.data.likedTrackIds.map((id) => String(id || '').trim()));
-    return {
-      verified: rows.every((r) => confirmed.has(r.trackId) === r.liked),
-      headers: response.headers,
-    };
-  } catch {
-    return null;
-  }
 }
 
 async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
@@ -1128,54 +1097,46 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
   const payload = await response.clone().json().catch(() => null);
   if (!payload?.data?.queued) return response;
 
+  // A new 069 primary-key queue row + an exact changed-track R2 CAS are
+  // prerequisites for zero-extra-SELECT settlement. Legacy/partial/duplicate
+  // intake paths retain the old guarded behavior. This flag is NOT authority.
+  const rows418 = payload?.data?.results;
+  const id418 = String(payload?.data?.batchId || '');
+  const expectedBatchId418 =
+    payload?.data?.queue === '069' &&
+    payload?.data?.batchInserted418 === true &&
+    payload?.data?.canonicalD1 === 'queued' &&
+    payload?.data?.personalLikeSnapshot === 'changed-track-r2' &&
+    /^l069_[0-9]{13}_[0-9a-f]{64}$/.test(id418) &&
+    Array.isArray(rows418) && rows418.length > 0 && rows418.length <= 50 &&
+    rows418.every((row) =>
+      row && typeof row.trackId === 'string' && row.trackId.length > 0 &&
+      row.trackId.length <= 512 && typeof row.liked === 'boolean' &&
+      row.status === 'legacy-queued')
+      ? id418 : '';
+
   try {
-    const schedule = await scheduleExploreLikeAggregate103(env);
-    // Existing DO completion alone does not prove THIS user's membership.
-    // It is a gate for one bounded canonical read, not a settled declaration.
-    if (schedule?.newlyScheduled === true && schedule?.settled === true &&
-        payload?.data?.canonicalD1 === 'queued') {
-      const canonicalProof = await verifyQueuedLikeCanonical417(request, env, ctx, payload);
-      // Even failed, mismatched or queue-busy reads consume D1 usage. Surface
-      // the same counters before returning a fail-closed QUEUED response.
-      if (canonicalProof?.headers) {
-        const headers = new Headers(response.headers);
-        headers.set('Content-Type', 'application/json; charset=utf-8');
-        headers.set('Cache-Control', 'no-store');
-        for (const name of [
-          'X-SORIDRAW-D1-Read',
-          'X-SORIDRAW-D1-Write',
-          'X-SORIDRAW-D1-Read-Queries',
-          'X-SORIDRAW-D1-Write-Queries',
-          'X-SORIDRAW-D1-Other-Queries',
-          'X-SORIDRAW-R2-A',
-          'X-SORIDRAW-R2-B',
-        ]) {
-          const before = Number(headers.get(name) || 0);
-          const extra = Number(canonicalProof.headers.get(name) || 0);
-          if (Number.isFinite(extra) && extra > 0) {
-            headers.set(name, String(Math.max(0, Number.isFinite(before) ? before : 0) + extra));
-          }
-        }
-        if (!canonicalProof.verified) {
-          return new Response(JSON.stringify(payload), {
-            status: response.status, statusText: response.statusText, headers,
-          });
-        }
-        return new Response(JSON.stringify({
-          ...payload,
-          data: {
-            ...payload.data,
-            canonicalD1: 'settled',
-            canonicalProof: 'bounded-membership-after-queue-417',
-          },
-        }), { status: response.status, statusText: response.statusText, headers });
-      }
+    const schedule = await scheduleExploreLikeAggregate103(env, expectedBatchId418);
+    if (expectedBatchId418 &&
+        schedule?.newlyScheduled === true &&
+        schedule?.settled === true &&
+        schedule?.settledBatchId418 === expectedBatchId418) {
+      const headers = new Headers(response.headers);
+      headers.set('Content-Type', 'application/json; charset=utf-8');
+      headers.set('Cache-Control', 'no-store');
+      // No secondary D1 SELECT or snapshot R4; the canonical relation writes
+      // and 069 DELETE RETURNING shared one committed D1.batch transaction.
+      return new Response(JSON.stringify({
+        ...payload,
+        data: {
+          ...payload.data,
+          canonicalD1: 'settled',
+          canonicalProof: 'atomic-drain-batch-418',
+        },
+      }), { status: response.status, statusText: response.statusText, headers });
     }
     return response;
   } catch (error) {
-    // The canonical queue may already contain the desired-state mutation. Returning
-    // retryable 503 keeps the client outbox instead of acknowledging work that has
-    // no durable wake-up. Replays are safe because canonical likes are set semantics.
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'application/json; charset=utf-8');
     headers.set('Cache-Control', 'no-store');
@@ -1201,7 +1162,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       throw new Error('Canonical Explore like aggregate handler unavailable');
     }
 
-    await baseWorker.scheduled({
+    const settledAggregate418 = await baseWorker.scheduled({
       scheduledTime: Date.now(),
       cron: 'event-like-batch-1m-105',
       type: 'scheduled',
@@ -1210,6 +1171,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // or page view. Canonical mutation stays authoritative; this only repairs
     // the bounded public R2 projections for the changed window.
     await repairSharedPublicLikeCounts191(this.env);
+    return settledAggregate418;
   }
 
   // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924
@@ -1252,6 +1214,8 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       return new Response('Not found', { status: 404 });
     }
 
+    const body418 = await request.json().catch(() => null);
+    const expectedBatchId418 = String(body418?.expectedBatchId418 || '');
     const now = Date.now();
     const activeAt = Number(await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194) || 0);
     if (
@@ -1282,9 +1246,26 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // periodic D1 polling or per-viewer server work.
     await waitExploreLikeDelay194(scheduledAt - Date.now());
     try {
-      await this.runAggregate194();
+      const aggregate418 = await this.runAggregate194();
       const pending = await this.finalizeAggregate195();
-      return Response.json({ ok: true, scheduledAt, newlyScheduled: true, settled: !pending, activeRecovery194: true });
+      const settledBatchId418 =
+        !pending &&
+        expectedBatchId418 &&
+        /^l069_[0-9]{13}_[0-9a-f]{64}$/.test(expectedBatchId418) &&
+        aggregate418?.w1Processed === 1 &&
+        aggregate418?.processedBatches === 1 &&
+        aggregate418?.oldProcessed === 0 &&
+        aggregate418?.compactProcessed === 0 &&
+        aggregate418?.processedUserWaves === 0 &&
+        aggregate418?.userQueue === false &&
+        Array.isArray(aggregate418?.settledBatchIds418) &&
+        aggregate418.settledBatchIds418.length === 1 &&
+        aggregate418.settledBatchIds418[0] === expectedBatchId418
+          ? expectedBatchId418 : '';
+      return Response.json({
+        ok: true, scheduledAt, newlyScheduled: true, settled: !pending,
+        activeRecovery194: true, settledBatchId418,
+      });
     } catch (error) {
       // Keep the fallback alarm. If Cloudflare delays or loses that retry, the
       // active marker ages out and the next real batch takes over instead of

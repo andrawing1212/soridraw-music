@@ -1,3 +1,12 @@
+## 0S29. Stage416 승인 방향 변경 — 개인 +5분 최종 저장 / 서버 접수 후 공개 +5분 / 스냅샷 진단 우선 (2026-10-09 KST)
+
+- **최신 사용자 확정:** Stage415의 공개 +10분 설계를 **개인 마지막 변경 +5분 서버 접수, 최초 유효 접수 뒤 별도 공개 공동 고정 +5분**으로 대체. 단, 실제 종료 시 대기 내용 서버 전송 조기 시도 성공하면 그 성공한 접수부터 공개 5분 시작. 개인은 같은 계정 PC↔모바일 즉시 표시(서버 미확정 draft vs ACK/권위 구분), 서버 확정 전 클릭/원상회복은 공개 집계에 포함 금지. 변경 없으면 공개 alarm/폴링 0. 좋아요 PASS 후에만 팔로우 변경.
+- **영상 1차 검토:** 사용자 `20261009-0008-08.2339219.mp4` 약60.7초, 48초 부근 '내 좋아요 곡' 이동 후 53초 '개인 소셜 스냅샷' D1 쿼리 **R5/W0**, rows read **11/W0**, `LOCAL 0·Worker 2` 진단. 앞선 좋아요 클릭에서 같은 endpoint 증가 반복이 명백하지 않음. **영상만으로 클릭당 5D1 query 증가 확정 금지**. `exploreSocialSnapshotService.ts`는 로컬 캐시 있으면 LOCAL HIT, 없으면 1회 GET; `exploreSocialService.ts` following cache miss일 때 snapshot GET. 캐시 결손/최초 cold social snapshot이 우선 가설이나 실제 요청 원인·1분 반복/물리 비용 **미검증**. 진단 표시 삭제 대신 클릭/이동/캐시 warm 매트릭스로 endpoint R/W 계측해야 함.
+- **새 최신 명령문:** `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md` (설계 문서 commit `dc3cc934ace7803ef1397b6b0e5094cd431ffd55`). 기존 `LIKE_PRIVATE_IMMEDIATE_PUBLIC_10MIN_STAGE415.md`의 타이밍을 대체, 보호 원칙 재사용. 순서 **1) snapshot 반복 GET/호출 주체·비용 증명 → 2) 개인 private RTDB 즉시 → 3) 개인 trailing 5분+종료 pending-only → 4) canonical과 분리된 공동 공개 fixed 5분 → 5) Work 비용 독립감사/실사용 PREVIEW → 그 후 팔로우**.
+- **착수 결과:** Step1 영상+클라이언트 코드 원인 1차 분류 및 문서화 완료. **제품 코드/Cloudflare Worker/Firebase/Rules/Functions/공유 D1/사용자 데이터/Hosting/main(TEST)/PRODUCTION 변경 0**, 활성 PREVIEW app385 그대로. 타이밍 변경/비용 실제 최적화/기기간 완전 즉시 동기화는 **미구현·미검증**. 5초를 5분으로 단순 교체/안전성 확인 없이 배포 금지. 기존 W1~W2/W3 FAIL 및 앱 기본 기능 보호.
+
+---
+
 ## 0S28. Stage415 착수 — 동일계정 개인 좋아요 즉시 + 공개곡 10분 이벤트 집계 설계 승인 (2026-10-09 KST)
 
 - 사용자 확정: 우선 **Explore 공개곡 좋아요**. 개인 하트는 클릭 즉시 같은 계정 PC↔모바일 양방향 반영·앱 종료에도 최종 확정; **공개 likeCount는 10~20분까지 늦어도 됨**. 첫 실제 변경 발생 시 공동 10분 고정 창을 열어 여러 사용자/곡의 변경을 모아 마지막 공개 숫자만 갱신; 추가 변화 없으면 alarm/cron/원본 data 읽기·쓰기·공개 알림 0. 공개 완료 후 **팔로우** 적용 검토. 변경 없는 앱 진입/업데이트 0 read/write.

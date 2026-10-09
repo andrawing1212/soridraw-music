@@ -1,3 +1,15 @@
+## 0S35. app386 사용자 실사용 화면 3장 — 개인 settlement read R4, PC W1, 모바일 공개 R0 (2026-10-09 KST)
+
+- **실사용 근거:** 사용자 제공 `image(20261009-035435).png`('내 좋아요 곡' 진입), `image(20261009-035543).png`(PC 피드 좋아요 약10초 후), `image(20261009-035623).png`(모바일 같은 상태). 사용자 제공 화면만 관찰; 앱 내부 인증·실물리 D1 사용량 청구서와 구분.
+- **PC 1번:** 관리자 `CACHE LIVE` 이번 실행 LOCAL10/Worker2, D1 SQL query **R4 W0**, D1 rows **R17 W0**. `개인 소셜 스냅샷` 마지막 `FULL 200 · PERSONAL SETTLEMENT 189`, 해당 카드 Worker1/D1 query R4/W0. 이는 실제 authenticated one-time legacy targeted settlement 가능성이 있으며, 정상 warm-reentry에서 불필요하게 반복되는 것인지는 사진 한 장으로 확정 불가.
+- **PC 2번:** 동일 실행 사진 기준 LOCAL10/Worker3, 총 D1 SQL **R4 W1**, rows **R19 W1**. `좋아요 변경 묶음 저장` Worker1/D1 query R0 W1, rows R0 W1. 첫 사진과 비교해 **좋아요 추가 실행에 D1 SQL query R은 증가하지 않았고 W만 +1**, Worker +1. `개인 소셜 스냅샷` 카드에는 이전 `PERSONAL SETTLEMENT 189` 진단 R4/W0 표기가 남아 있음. 서로 다른 행 읽기 수(R17→R19)는 실제 질의가 추가 실행됐다는 결론으로 확대하지 말 것; 진단 지표의 누적/최종표시 방식 확인 필요. W1은 해당 클라이언트 수신/diagnostic에 표시된 값; canonical 최종 settled 전체 배치 물리 W 수와 동일시 금지.
+- **모바일 3번:** `CACHE LIVE` LOCAL0 Worker1, 공개곡 좋아요 숫자 확인 `FULL 200` D1 query **R0 W0**, rows R0/W0; R2 Class A0 Class B2, 카드 좋아요 숫자 2 표시. **공개 숫자 확인은 D1 원본 조회/쓰기를 추가하지 않음**(해당 화면). 하지만 PC의 정확히 어떤 곡을 클릭했는지/이전 개인 하트 상태가 무엇인지 사진에는 없어 **PC↔모바일 개인 membership 즉시 일치 PASS는 아직 불가**.
+- **현재 판단:** 이번 스크린샷은 Stage416 Phase1의 **좋아요 때 추가 FULL 조회가 발생하지 않는 방향을 지지**하며 W1/R0 공개값의 긍정적 실사용 증거. 반면 (a) 변화 없는 따뜻한 캐시로 My Likes 2~3회 왕복하는 동안 `개인 소셜 스냅샷` Worker count 및 D1 R이 +0인지, (b) PC↔모바일 같은 곡 개인 하트 채움·해제와 내 좋아요 목록이 자동 일치하는지, (c) 실제 canonical 069/075 최종 rows_written이 W1~W2인지까지는 **미검증**. 첫 entry R4 자체를 장애나 사용자 클릭당 R4로 오해하지 않음.
+- **다음 행동:** app386 배포 그대로 유지; 사용자 캡처 세션에서 진단 RESET 뒤 My Likes 첫 entry→피드→My Likes 반복 2회까지 **같은 실행 누적 query/Worker delta**, 좋아요 없음에서 W0, 그 다음 동일 곡 PC↔모바일 개인 하트/내좋아요 카드 맞춤 확인. R4가 최초 1회만이면 Phase1 기능 안전/기본 비용 잠정 PASS 후 Phase2 private 즉시 구조 착수; 왕복마다 R4가 쌓이면 호출 주체·settlement marker/guard 잔존을 좁혀 최소 패치 후 자동 PREVIEW 재배포. D1/Worker/RTDB 데이터 구조 변경·TEST/PRODUCTION 승격 금지.
+- **작업 환경:** 사용자 실사용 결과 문서 반영만. Firebase Hosting app386 유지, Cloudflare Worker/Functions/Rules/공유 D1/Firestore/R2 사용자 데이터/main/production 비변경.
+
+---
+
 ## 0S34. app386 PREVIEW 실제 배포 SUCCESS / Stage416 Phase1 라이브 사용·D1 비용 QA 대기 (2026-10-09 KST)
 
 - **실제 GitHub 기준:** `preview` app386 release SHA `9b2d303c6adc2ebbec2b57952cad949e29d3dde2` (`public/app-version.json` bump `f3f9d09418383ae55d6fc68460a16c3314647004`), 이전 app385 → app386. Stage416 제품 수정 최종 `b8ab60a9bec2718eb135b1755c32c274c6792523`; 최종 관련 verifier 코드 `cd2750bdb9eaadf5b3a09b2df6c03f2f8ee08344`. 제품 변경 영역은 `src/services/exploreLikeService.ts` 한 파일, 기존 `scripts/verify-127-atomic-personal-like.mjs` 회귀 보강; 다른 사용자 기능/UI/Worker/canonical 변경 없음.

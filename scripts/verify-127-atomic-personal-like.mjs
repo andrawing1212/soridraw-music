@@ -418,6 +418,9 @@ const runParity416 = async ({ certified = 100, settled = 0, pending = true } = {
     readCrossOriginLikeSettled359: () => settled,
     readCrossOriginLikeSettlementAttempted359: () => 0,
     readCrossOriginLikeAttempted358: () => 0,
+    isCrossOriginLikeRetryDeferred416: () => false,
+    deferCrossOriginLikeRetry416: () => calls.push('defer-416'),
+    EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416: 'retry-416',
     shouldRepairPersonalLikeOrigin357: ({ latestSignalVersion, certifiedSignalVersion }) =>
       certifiedSignalVersion < latestSignalVersion,
     shouldAttemptPersonalLikeOriginSettlement359: ({ latestSignalVersion, settledSignalVersion, attemptedSignalVersion }) =>
@@ -461,3 +464,98 @@ assert.equal(healthy416.length, 0, '416 healthy account re-entry must never rech
 console.log('416_SETTLEMENT_ONLY_NO_EXTRA_FULL_REPAIR=PASS');
 console.log('416_GENUINE_SIGNAL_GAP_STILL_REPAIRS=PASS');
 console.log('416_HEALTHY_REENTRY_ZERO_REQUESTS=PASS');
+
+
+// Stage416: exercise the real failed-gap cooldown helper and parity function,
+// including the already-attempted app358 marker and repeated My Likes visits.
+// The separate ensureBaseline call after parity must also honor the local gate.
+const baselineGuard416 = service.slice(
+  service.indexOf('const ensurePersonalLikeBaseline127 = async ('),
+  service.indexOf('export const invalidateExplorePersonalLikeBaseline127'),
+);
+assert.match(baselineGuard416,
+  /readRepairTarget127\(uid\) > 0 &&\s+isCrossOriginLikeRetryDeferred416\(uid, readLastRetainedLikeSignal357\(uid\)\)/,
+  '416 follow-up baseline must not bypass failed-gap cooldown');
+const helperStart416 = service.indexOf('const isCrossOriginLikeRetryDeferred416 = ');
+const helperEnd416 = service.indexOf('const readCrossOriginLikeCertified357 = ', helperStart416);
+assert.ok(helperStart416 > 0 && helperEnd416 > helperStart416);
+const helperJS416 = ts.transpileModule(
+  service.slice(helperStart416, helperEnd416),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText;
+const retryStore416 = new Map();
+const retryCalls416 = [];
+let retryClock416 = 1_000_000;
+let retryLatest416 = 100;
+let retryCertified416 = 0;
+let retrySettled416 = 0;
+let retryAttempted416 = 100; // the same signal was already attempted
+let retryRepairTarget416 = 0;
+let retryFail416 = true;
+const retryContext416 = {
+  Date: { now: () => retryClock416 },
+  EXPLORE_LIKE_CROSS_ORIGIN_RETRY_AFTER_416: 'retry-416',
+  EXPLORE_LIKE_CROSS_ORIGIN_RETRY_WAIT_MS_416: 60_000,
+  scopedLikeKey127: (key, uid) => uid + ':' + key,
+  readLikeLocal127: key => retryStore416.get(key) || '',
+  writeLikeLocal127: (key, value) => retryStore416.set(key, value),
+  hasLikedStateStorage127: () => true,
+  readLastRetainedLikeSignal357: () => retryLatest416,
+  readCrossOriginLikeCertified357: () => retryCertified416,
+  shouldRepairPersonalLikeOrigin357: ({ latestSignalVersion, certifiedSignalVersion }) =>
+    latestSignalVersion > certifiedSignalVersion,
+  readCrossOriginLikeSettled359: () => retrySettled416,
+  readCrossOriginLikeSettlementAttempted359: () => 100,
+  shouldAttemptPersonalLikeOriginSettlement359: ({ latestSignalVersion, settledSignalVersion, attemptedSignalVersion }) =>
+    latestSignalVersion > settledSignalVersion && latestSignalVersion > attemptedSignalVersion,
+  crossOriginParityInFlight357: new Map(),
+  readCrossOriginLikeAttempted358: () => retryAttempted416,
+  shouldAttemptPersonalLikeOriginRepair358: ({ latestSignalVersion, attemptedSignalVersion }) =>
+    latestSignalVersion > attemptedSignalVersion,
+  markCrossOriginLikeAttempted358: (_uid, v) => { retryAttempted416 = v; },
+  markCrossOriginLikeSettlementAttempted359: () => {},
+  requestRepair127: () => { retryRepairTarget416 = retryLatest416; retryCalls416.push('full-rearm'); },
+  EXPLORE_LIKE_REPAIR_ATTEMPTED_182: 'repair-182',
+  EXPLORE_LIKE_SETTLEMENT_ATTEMPTED_189: 'settlement-189',
+  ensurePersonalLikeBaseline127: async () => {
+    retryCalls416.push('baseline');
+    if (retryFail416) throw new Error('simulated transient network failure');
+    retryRepairTarget416 = 0;
+  },
+  readSnapshotPending127: () => ({}),
+  requestPersonalLikeRevision127: async () => 'revision',
+  invalidateExplorePersonalLikeBaseline127: () => {},
+  readRepairTarget127: () => retryRepairTarget416,
+  markCrossOriginLikeCertified357: (_uid, v) => { retryCertified416 = v; },
+  markCrossOriginLikeSettled359: (_uid, v) => { retrySettled416 = v; },
+};
+const retryFn416 = new Function(...Object.keys(retryContext416),
+  helperJS416 + '\n' + parityJS416 +
+  '\nreturn { visit: ensureExplorePersonalLikeCrossOriginParity357, deferred: isCrossOriginLikeRetryDeferred416 };'
+)(...Object.values(retryContext416));
+const retryVisit416 = async () => {
+  try { await retryFn416.visit({ uid: 'test-member' }); } catch { /* offline-like failure */ }
+};
+await retryVisit416();
+await retryVisit416();
+await retryVisit416();
+assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 1,
+  '416 same signal must not rearm FULL repair on every page entry');
+assert.equal(retryCalls416.filter(x => x === 'baseline').length, 1,
+  '416 same signal must not repeatedly fetch baseline');
+assert.equal(retryFn416.deferred('test-member', 101), false,
+  '416 newer signal must bypass old retry cooldown');
+retryClock416 += 60_001;
+retryFail416 = false;
+await retryVisit416();
+assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 2,
+  '416 genuine failure must become retryable after cooldown');
+assert.equal(retryCertified416, 100, '416 recovered gap must certify signal');
+assert.equal(retrySettled416, 100, '416 recovered gap must settle signal');
+assert.equal(retryStore416.get('test-member:retry-416'), '',
+  '416 successful recovery must clear retry marker');
+await retryVisit416();
+assert.equal(retryCalls416.filter(x => x === 'full-rearm').length, 2,
+  '416 healthy revisit must remain network-free');
+console.log('416_FAILED_GAP_REPEAT_READ_COOLDOWN=PASS');
+console.log('416_NEW_SIGNAL_BYPASS_AND_BOUNDED_RECOVERY=PASS');

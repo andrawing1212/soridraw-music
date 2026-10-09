@@ -18,6 +18,7 @@ on:
       - 'scripts/verify-419-like-w2-cutover.mjs'
       - 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'
       - 'cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs'
+      - 'cloudflare/explore-worker/runtime/like-batch-composition-422.mjs'
       - 'scripts/verify-421-like-r2-publisher.mjs'
       - 'public/app-version.json'
       - 'scripts/verify-127-atomic-personal-like.mjs'
@@ -65,6 +66,7 @@ jobs:
           node --check scripts/verify-419-like-w2-cutover.mjs
           node scripts/verify-419-like-w2-cutover.mjs
           node --check cloudflare/explore-worker/runtime/like-public-r2-publisher-421.mjs
+          node --check cloudflare/explore-worker/runtime/like-batch-composition-422.mjs
           node scripts/verify-421-like-r2-publisher.mjs
       - name: TypeScript
         run: npm run lint

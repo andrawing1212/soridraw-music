@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
+import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -2078,6 +2079,37 @@ function like426Headers(request) {
   return headers;
 }
 
+// Stage433: only upgraded clients with legacy pending intents ask for these
+// exact server revisions; never invoked during normal Feed/page re-entry.
+async function handleLikeReconcile433(request,env,ctx) {
+  const headers=like426Headers(request);
+  try {
+    const actor=await validateExploreAuth307(request,env,ctx);
+    if(!actor.ok)return actor.response;
+    const raw=new URL(request.url).searchParams.get('trackIds')||'';
+    const ids=raw.split(',').map(x=>x.trim()).filter(Boolean);
+    if(ids.length<1||ids.length>10||ids.some(x=>x.length>512)||
+       new Set(ids).size!==ids.length)
+      return new Response(JSON.stringify({ok:false,error:{code:'433_INVALID_TARGETS'}}),
+        {status:400,headers});
+    if(!env?.LIKE_RATE_LIMITER?.limit)
+      throw new Error('433_RATE_LIMITER_UNAVAILABLE');
+    const quota=await env.LIKE_RATE_LIMITER.limit({key:actor.uid});
+    if(quota?.success!==true)throw new Error('433_RATE_LIMIT_REACHED');
+    await proveLikeBatchCutover426(env);
+    const payload=await readAuthoritativeLikeIntents433({
+      db:env.DB,uid:actor.uid,trackIds:ids,
+      allEnvironmentCutoverVerified:true,
+    });
+    return new Response(JSON.stringify(payload),{status:200,headers});
+  }catch(error){
+    return new Response(JSON.stringify({ok:false,error:{
+      code:'433_AUTHORITATIVE_RECONCILIATION_UNAVAILABLE',
+      message:'기존 좋아요 상태를 안전하게 확인하지 못했습니다. 이전 변경 기록은 유지합니다.',
+    }}),{status:503,headers});
+  }
+}
+
 async function handleVerifiedLikeBatch426(request,env,ctx) {
   const headers=like426Headers(request);
   try {
@@ -2157,6 +2189,12 @@ export default {
     if(request.method==='POST'&&url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103&&
        STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1'){
       return handleVerifiedLikeBatch426(request,env,ctx);
+    }
+    // Dormant upgrade-only read route: never changes an old client request,
+    // and cannot open until the SAME verified three-environment freeze.
+    if(request.method==='GET'&&url.pathname==='/v1/me/likes/reconcile'&&
+       STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1'){
+      return handleLikeReconcile433(request,env,ctx);
     }
 
 

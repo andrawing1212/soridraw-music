@@ -1,3 +1,13 @@
+## 0S31. Stage416 Phase1 독립 재검토 — 실제 gap 복구 실패 뒤 반복 재무장 위험 / QA HOLD (2026-10-09 KST)
+
+- **검토 기준:** 제품 기준 `ca8687b48ce6a8b3039d96e18f604cc4e59fc879` (Stage416 소스 수정 `1980a9bcd9487f7e8126219f3e509cb8de1efe16`). 정상 app359 settlement-only → FULL app358 repair 재활성 제거는 원본 코드에서 확인됨. 현재 PREVIEW 앱은 여전히 app385; Stage416 수정 배포 안 함.
+- **독립 실함수 격리 재현:** 실제 `ensureExplorePersonalLikeCrossOriginParity357` 함수 몸체로 `latestSignal=100 / certified357=0 / attempted358=100 / settlementAttempted359=100` 조건에서 baseline 일시 실패 후 두 번 진입. 이미 이전 버전 시도한 동일 gap임에도 `requestRepair127` 및 `EXPLORE_LIKE_REPAIR_ATTEMPTED_182` marker reset **각 2회 재실행**. `shouldAttemptPersonalLikeOriginRepair358`는 mark만 제어하고 repair 재시작은 제어하지 않음. 이 mock은 실제 HTTP/D1 과금 측정이 아니며 실제 모바일 현상 확정 아님. 다만 실패·반복 진입 때 불필요 FULL snapshot 루프 위험으로 분류.
+- **기존 Stage416 테스트 누락:** `verify-127-atomic-personal-like.mjs` Stage416 mock의 `readCrossOriginLikeAttempted358:()=>0`만 검사. 동일 신호 이미 시도한 뒤 일시 실패/재진입/복구되는 실제 경계는 검증하지 않음.
+- **조치:** `DOCS/NEXT_CODEX_TASK.md` 상단에 Codex High 재현·bounded retry 안전수정·실 D1 비용 검증 지시 기록. 코드/CI 전체 TypeScript/Build 및 408 Actions 최종 결과는 미확인. Stage416 Phase1 릴리스 **HOLD**, Phase2/3/4 착수 금지; TEST 승격 금지. 기존 안정적 app385에는 영향을 주지 않음.
+- **환경 변경:** 해당 독립 감사에서 GitHub `preview` 문서만 갱신. 앱 코드, Hosting, Cloudflare Worker, D1/공유 사용자 데이터, Functions, Rules, main/TEST/PRODUCTION 변경 0.
+
+---
+
 ## 0S30. Stage416 1단계 개인 스냅샷 불필요 복구 조회 최소 수정 — 소스/격리 검증, PREVIEW 배포 전 (2026-10-09 KST)
 
 - **영상+소스 확정:** 사용자 영상 38–43초 Explore like-card Worker1/D1 R0, 48초 My Likes 이동 후 53초 `개인 소셜 스냅샷` Worker2/D1 조회 SQL 5회, rows_read11, write0, 마지막 `PERSONAL SETTLEMENT 189`. 스냅샷 R5가 좋아요 클릭당 고정 5 SQL 비용이라고 단정 금지; 복구/정착 GET을 묶은 진단 경로.

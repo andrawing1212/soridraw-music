@@ -1,11 +1,13 @@
-app387-recent-noop-edit-cost-preview
-target_source=9c9bb16fc6d3434b91a8b45131b57a034b1ebf89
-app_version=387
-scope=recent-song-unchanged-save-skips-RTDB-and-Firestore,real-edits-150s-batch-unchanged,preview-hosting-only
-source_test_290=PASS_exact_source_isolated
-source_test_291=PASS_exact_source_isolated
-source_test_noop=PASS_exact_source_isolated
-ci_typecheck_build_tests=must_PASS_before_deployment
+app388-explore-liked-cross-device-RTDB-alert-failure-retry-preview
+target_source=d075357805b218d7b1da1c2d592204d5f31f5bfe
+app_version=388
+scope=uid-private-like-alert-only-bounded-2s-10s-30s-retry,canonical-unchanged,preview-hosting-only
+qa_408_run=37976643238
+qa_408=SUCCESS
+typecheck=PASS
+build=PASS
+like_follow_regression=PASS
+live_shared_rtdb_rules_readonly_check=PASS
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -13,4 +15,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_2026-10-09_requested_cost_optimization_and_apply_to_preview
+approval=user_2026-10-09_explicit_preview_deploy

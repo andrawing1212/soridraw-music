@@ -1,3 +1,12 @@
+## CURRENT — Stage426 ready-for-independent-audit, shared-data activation explicitly NOT approved
+
+- Source code now exists in canonical/preview-entry.js behind STAGE426_COMPILED_OPEN=false. 171/420/421/422/423/424 run only after validated Firebase auth, UID rate limit, 3-environment 172 manifest, existing 174 frozen fence and 419 overlay phase. All user GET/navigation and prior /v1/me/likes/batch preserve old mode until intentional release.
+- Full QA 408 Run 37905079455, real Worker dry-run 426 Run 37905079464, isolated remote Cloudflare D1 W2/W0 419 Run 37904662074 PASS. Live Worker/D1 inventory 425 Run 37904099653: current 3 active Workers have no 171/174/420 version, shared 171/174/419 schema absent. Effective queue 035/066/069/075 **all drained**. 075 physically retains already processed historic rows, so do not use SELECT 1 FROM queue_075 without comparing its durable processed_at/processed_uid high-water cursor.
+- Next Codex High/Extra High in one implementation flow: independently audit Stage426 auth-before-D1, shared R2 generation rules and partial/cold v114, D1 171/174/419 mixed writer atomicity, existing read paths for latest/popular/public-profile/My Likes after overlay, old cached clients, receipt semantics, Firebase 424 token/ETag and auth validation. Produce a fail-closed three-environment upgrade/rollback proposal and exact Work audit artifact. Do not add redundant candidate writers or create new CI workflows for already verified cases.
+- Release blocker not solved by another syntax test: actual PREVIEW/TEST/PRODUCTION old Workers are live and all share the canonical original D1, whose 171/174/419 schema is not present. Any shared migration/phase cutover requires explicit user approval and 3-env compatibility proof; PRODUCTION requires explicit promotion approval. Deployment exact build and PC/mobile multi-account parity have not been run. Preserve Studio save hearts, personal music note, UI and existing like/follow behavior.
+
+---
+
 ## CURRENT — Stage422 다음 핵심 구현: 실제 개인 R2/RTDB 저장 + active 3환경 구형 worker 프로토콜 호환 완료 전 배포 HOLD
 
 - **완료 재사용:** source-only `like-d1only-batch-adapter-420.mjs`, `like-public-r2-publisher-421.mjs`, `like-batch-composition-422.mjs`; 생성/중복/역순 D1 SQL와 changed-card/profile/latest/popular R2 CAS, 실패 복구 in-memory Node fixture PASS; `node scripts/soridraw-qa-engine.mjs focus projection,like`로 초단위 재검 가능. 408 전체 TypeScript/Build/개인 좋아요/공개 숫자/RTDB Rules read-only [37902229363](https://github.com/andrawing1212/soridraw-music/actions/runs/37902229363) **PASS**.

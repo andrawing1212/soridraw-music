@@ -1,3 +1,13 @@
+## 0S40. 사용자 승인 — 로컬 카탈로그 중심 + R2 복구 + changed-ID, Cloudflare 서비스별 총비용 최소화 (2026-10-09 KST)
+
+- **사용자 확정 방향:** 개인 Explore 좋아요는 Music Note처럼 `local-first 카탈로그 + 변경곡만 동기화`, 전체/개인 R2 스냅샷은 최초·캐시손상·실제 history gap 복구에 사용, 공유 D1은 최종 원본. Cloudflare Workers/R2/DO/Edge Cache/KV/Queues의 무료한도와 장기 지출을 비교해 서비스별로 역할 분배하되, 필요하지 않은 새 서비스는 도입하지 않음. 사용자 지시 `최종 판단대로 그렇게 진행해` 승인.
+- **설계 산출물 commit:** `DOCS/EXPLORE_CATALOG_CLOUDFLARE_COST_ARCHITECTURE_STAGE416.md` `9e3865885b820beef7ae411e50542b23b156193c`, 실제 preview wrangler/DO 코드 및 2026-10 공식 Cloudflare 비용 기준 대조. 현재 D1 DB+Rate DB, R2 공유/환경별 캐시, 기존 SQLite DO 103, Workers Cache, Firebase RTDB confirmed signal 재사용을 우선. **KV(Free write 1000/day), Queues(10k operations/day, 일반 메시지 3ops)는 새로운 좋아요 hot path에 무작정 추가하지 않음**. 무료 tier는 서비스별 제한, 여러 계층을 한 요청에 쓰면 각 서비스 비용이 모두 누적됨. 개인 user data global edge cache 공유 불가.
+- **핵심 구현 기준:** app386 사용자 영상 `75s unlike R4/rows17, 105s like R4/rows19` 실제 실패. 069 queued W1 응답과 canonical settled 분리 유지, existing DO alarm canonical commit 완료 시점에서 changed-track user-scoped receipt/cursor(가능한 기존 R2/Worker 경로) 증명. 일반 likes/unlikes, Feed idle receiver, My Likes에서 새 요청 D1 R0/rows0, W1~W2, 정확한 private membership/outbox/new first-like/old clients 안정성. 역사적/실제 누락만 bounded 복구 스냅샷, 신규 ACK를 무조건 189로 확인하지 않음. 같은 사용자/공개곡 수 증대에 비례한 D1 read/write 폭증 금지.
+- **Codex 구현 경로:** `DOCS/NEXT_CODEX_TASK.md` 최상단 Codex High A단계 작업 명령 commit `4e867553e8f3eb1208bbde8e4614a39160f0dd80`: ① queue drain source inspect+실제 동작 FAIL 재현 → ② changed-ID canonical 완료 증명/저비용 카탈로그 수신 최소 구현 → ③ TS/build/likes/follow regression → ④ Work read-only audit → ⑤ ChatGPT PREVIEW 부분 배포 → ⑥ 사용자 PC/mobile 실제 D1 R/W / R2 A/B / DO metric. 비용/안전성 미증명 상태에서 가짜 R0 생성 안 함. 개인 즉시·개인 trailing300초·public fixed300초는 A 완료 후.
+- **릴리스 현황:** **PREVIEW app386 유지, Stage416 Phase1 비용 FAIL**, 현재 작업은 문서 설계/명령 commit만; React/Worker/D1/RTDB Rules/Functions/Hosting/공유 사용자 데이터 코드 변경/배포 0; main/TEST/PRODUCTION 비변경. Codex 구현 실행·Work 검증·라이브 D1 재측정은 **아직 미시작**으로 투명하게 표기.
+
+---
+
 ## 0S39. 사용자 정정 — 영상 75초=좋아요 **해제**, 105초=좋아요 **누르기**, 둘 다 개인 스냅샷 R4 (2026-10-09 KST)
 
 - **정확한 재현:** 원본 `20261009-0420-49.6843949.mp4`와 사용자의 정확한 조작 설명·캡처 `image(20261009-044729).png`, `image(20261009-044731).png`에 따라 **약 75초: 좋아요 해제 후 D1 SQL query R4 / rows_read17 / likes intake W1**; 진단 리셋 뒤 **약 105초: 좋아요 누른 후 D1 SQL query R4 / rows_read19 / likes intake W1**. R4는 SQL 쿼리 수, 행 17/19는 D1 실제 읽은 행 수이며 HTTP 요청 4회와 같지 않음. 양쪽 모두 `PERSONAL SETTLEMENT 189` 카드.

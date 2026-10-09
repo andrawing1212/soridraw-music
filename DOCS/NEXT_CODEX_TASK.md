@@ -1,3 +1,13 @@
+## CURRENT QA ENGINE — 반복검사 비용 절감 운영 (2026-10-09 KST)
+
+- **매번 npm ci/TypeScript/Build/원격 D1 재검증 금지:** 작은 소스 변경이 끝날 때마다 먼저 `node scripts/soridraw-qa-engine.mjs fast` 실행. Node22 표준 도구만 사용하며 최신 GitHub [QA Run 37900535645](https://github.com/andrawing1212/soridraw-music/actions/runs/37900535645) 자체 검사 7그룹 624ms PASS. 대상은 syntax, 좋아요 W2 후보/역순, local catalog, public count, receipt, R2 CAS, lifecycle. 설치 불필요.
+- **실패 재검:** `node scripts/soridraw-qa-engine.mjs focus like` 또는 `focus catalog,public` 등 실패 영역만 재실행. `like-deep`/`catalog-deep`/`lifecycle-deep`는 `typescript` 또는 `esbuild` 의존성이 있으므로 한 번 `npm ci` 후 실행.
+- **최종 소스 후보 한 번:** `npm ci --no-audit --no-fund` 후 `node scripts/soridraw-qa-engine.mjs full` (fast 7그룹 + deep 3그룹 + TypeScript + Build). `full` 자체는 네트워크/실 공유 사용자 데이터에 접근하지 않으며 Firebase Rules·원격 Cloudflare D1·실기기를 확인하지 않음. GitHub **408 release QA live Rules read-only**, **419 remote ephemeral physical W2/W0**, Work 독립감사, PREVIEW 실제 PC/모바일 검증은 승격 게이트로 계속 유지한다.
+- **GitHub 직접 실행:** [SORIDRAW QA Engine — Fast Preview](https://github.com/andrawing1212/soridraw-music/actions/workflows/qa-engine-preview.yml)에서 수동 Run workflow 및 `fast`/`full` 선택. `preview`의 검사엔진 파일 변경 시 빠른 검사만 자동 실행. 실제 Hosting/Worker/RTDB/D1 배포는 전혀 수행하지 않음.
+- **핵심 운영 방식:** 분석→한 번 수정→`focus` 또는 `fast`→후보 고정→`full`/408/419→Work 최종감사. 작은 수정마다 GitHub commit/push와 full/remote 검사를 반복하지 않는다. 단 실제 배포 전 전체 검사를 줄이거나 생략하는 의미가 아님.
+
+---
+
 ## CURRENT — Stage420 앱 배포 직결 마지막 결손: 영속 R2/RTDB publisher + 구형 클라이언트 호환 [배포 HOLD]
 
 - **새 구현 확인:** preview `cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs`는 앱164+와 현재 앱의 `/v1/me/likes/batch` 실제 `expectedRevision, operationId` 계약을 받아 171 D1 writer 호출. `scripts/verify-419-like-w2-cutover.mjs`와 `scripts/measure-419-isolated-171-d1.mjs`는 SQL/원격 W2/W0 및 publisher FAIL 재시도 검사를 수행한다. 기존 419 3환경·035/066/069/075 gate를 또 중복 만들지 말 것.

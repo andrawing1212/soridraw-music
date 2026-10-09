@@ -15,6 +15,7 @@ on:
       - 'scripts/verify-414-pending-only-lifecycle.mjs'
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
+      - 'scripts/verify-419-like-w2-cutover.mjs'
       - 'public/app-version.json'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
@@ -55,6 +56,10 @@ jobs:
           node scripts/verify-413-like-exit-flush.mjs
           node --check scripts/verify-414-pending-only-lifecycle.mjs
           node scripts/verify-414-pending-only-lifecycle.mjs
+      - name: Stage419 isolated actual-171 SQL cutover regression
+        run: |
+          node --check scripts/verify-419-like-w2-cutover.mjs
+          node scripts/verify-419-like-w2-cutover.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

@@ -1301,6 +1301,13 @@ const PUBLIC_LIKE_PROFILE_KEY_191 = (uid) =>
   `internal/explore/shared-profile-v113/${encodeURIComponent(uid)}.json`;
 
 async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
+  // Stage426: legacy first-80 track_stats count is NOT canonical after
+  // the globally verified 171 overlay cutover. In that mode exact changed
+  // tracks are already published through 421 R2 CAS. Never roll them back.
+  if(STAGE426_COMPILED_OPEN&&env?.SORIDRAW_LIKE_171_READY==='1') {
+    await proveLikeBatchCutover426(env);
+    return {skippedForCanonical171:true,changedTracks:0};
+  }
   const shared = env?.PROFILE_MEDIA;
   if (!shared || !env?.DB) throw new Error('[191] shared R2 or canonical D1 binding unavailable');
   if (oneTime && await shared.head(PUBLIC_LIKE_REPAIR_MARKER_191)) {

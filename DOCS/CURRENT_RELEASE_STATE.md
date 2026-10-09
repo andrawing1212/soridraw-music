@@ -1,3 +1,13 @@
+## 0S32. Stage416 Phase1 반복 FULL 복구 비용 방지 후보 구현 — 격리 5/5 PASS, 배포/실 D1/CI 대기 (2026-10-09 KST)
+
+- **기준 branch:** `preview`, 시작 `1fef63d4da6b023960da7a2cbdc5744634af6787`. 이전 0S31 독립 감사에서 358 attempted 동일 신호가 실패했는데도 My Likes 왕복으로 182 FULL repair를 재무장하는 문제 재현.
+- **실제 소스 commit:** `dc8457dd963a70818cd5c90af24d39b5dbd9a93f`. `src/services/exploreLikeService.ts`에 **UID+retained signal 버전별 60초 로컬 실패 재시도 cooldown** 추가. 실패한 실제 gap의 `ensureExplorePersonalLikeCrossOriginParity357`와 이후 `ensurePersonalLikeBaseline127` 양쪽에 가드. 갱신된 신호는 즉시 복구 우선, 만료 뒤 재시도, 성공 시 표식 제거. 정상 app359 settlement-only에는 별도 cooldown 없음. 기존 정확한 membership·pending·outbox·캐시 손실 방지, 5초 like/public, Worker·팔로우·Music Note/Library 등 전부 의도적으로 비변경.
+- **기존 127 verifier 보강:** `c9ed1890bce7b3f01b4a7cb07d130fa348ea0763` + `279efb76ac4b1d95bc2347e8faf3a0490423ee2c`. GitHub 실제 소스 함수/검증 시나리오를 별도 JS mock으로 실행한 Stage416 5/5 **격리 PASS**: settlement-only FULL repair 차단 / 첫 genuine gap repair 유지 / healthy reentry R0 목표 경로 / 이미 attempted 동일 실패 신호 연속 My Likes 추가 FULL rearm 없음 / 60초 후 및 새 신호 즉시 복구. baseline 별도 entry는 verifier 정적 regex 검사. **Node+TypeScript Build/전체 CI 408/실기기 물리 D1 계측 PASS를 뜻하지 않음.**
+- **상태:** QA HOLD. `preview.soridraw.com` 활성 app385 변함없음. 이번 기록까지 제품 코드 1개 + 기존 테스트 1개 + 현재 상태/다음 작업 문서만 수정. 새 Workflow/브랜치/DB/Worker/Hosting/Functions/Rules/공유 사용자 데이터/migration/MAIN/TEST/PRODUCTION 변경·배포 **0**.
+- **남은 위험/다음:** 실패 후 최대 60초 재시도 지연이 실제 잘못된 개인 좋아요 표시에 영향을 주지 않는지 사용자 캐시 실사용 검사; 리로드·복수 탭·동시 신호·localStorage 실패 조건; 실제 /v1/me/social-snapshot과 182/189 D1 비용 분해/physical W1~W2. 408 CI exact HEAD TypeScript/Build/기존 회귀 결과를 확보하고 Work 독립 감사까지 통과할 때만 PREVIEW 배포 판단. Phase2 개인 RTDB 즉시 / Phase3 개인 trailing 300초 / Phase4 공개 fixed 300초·팔로우 **미구현**.
+
+---
+
 ## 0S31. Stage416 Phase1 독립 재검토 — 실제 gap 복구 실패 뒤 반복 재무장 위험 / QA HOLD (2026-10-09 KST)
 
 - **검토 기준:** 제품 기준 `ca8687b48ce6a8b3039d96e18f604cc4e59fc879` (Stage416 소스 수정 `1980a9bcd9487f7e8126219f3e509cb8de1efe16`). 정상 app359 settlement-only → FULL app358 repair 재활성 제거는 원본 코드에서 확인됨. 현재 PREVIEW 앱은 여전히 app385; Stage416 수정 배포 안 함.

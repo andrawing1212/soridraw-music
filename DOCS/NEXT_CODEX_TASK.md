@@ -1,3 +1,14 @@
+## CURRENT — Stage416 Phase1 독립 감사 발견: 신호 gap 실패 후 반복 FULL repair 재시작 차단 (2026-10-09 KST)
+
+- **고정 감사 SHA:** `ca8687b48ce6a8b3039d96e18f604cc4e59fc879`. Stage416 정상 settlement-only에서 예전 FULL repair 재활성을 막는 기존 제품 수정은 보존. 이전 사용자 승인 구조(개인 즉시, 마지막 변경 +300초 개인 저장, 서버 유효 접수 뒤 공동 +300초 공개)와 활성 PREVIEW app385 변경 금지.
+- **독립 소스 함수 격리 실행으로 재현한 새 위험:** `ensureExplorePersonalLikeCrossOriginParity357`에 진짜 gap(`latestSignal=100, certified=0`)이 남고 `attempted358=100`인 상태에서 일시적인 baseline 실패 후 My Likes에 2번 진입하면, `shouldAttemptPersonalLikeOriginRepair358=false`임에도 `requestRepair127`와 repair182 marker reset이 **각 진입마다 실행되어 2회 재무장**. 실 D1 과금/브라우저에서의 재현은 미검증; 반복 전체 조회 위험을 해소하기 전 비용 PASS 금지. 현재 `verify-127-atomic-personal-like.mjs`는 attempted358=0만 가정하고 이 예외를 검사하지 않음.
+- **Codex High 다음 범위:** 먼저 위 실제 함수의 2회 재진입 + 실패 + recovery 조건을 실소스 기반 격리 regression으로 추가해 실패 재현. 기존 정상 app359 settlement-only, genuine gap 정상 성공, app189 targeted proof, stale personal heart/outbox 보호를 반드시 유지하면서 **실제 gap의 반복 페이지 이동이 FULL repair / D1 full snapshot 재시작으로 이어지지 않는 bounded retry 방법**을 최소 수정 설계 및 구현. 네트워크 임시 실패 뒤 영원히 복구 불가능한 one-shot lockout도 금지; 신호 새 버전 또는 제한된 재시도 시간 이후 정확한 복구 보장. 다른 계정/캐시 혼동·중복 동기화 금지.
+- **검증 합격선:** 정상 캐시 re-entry R0, settlement-only FULL rearm 0, genuine gap 1차 정상 복구, 동일 gap 실패→연속 재진입의 무제한 full rearm 0, bounded retry 후 정확한 재복구, pending/ACK/stale 보호, 127·175·178·191·192·197·390 관련 회귀 + TypeScript + Build 성공. 실계정 Cloudflare D1 rows_read/rows_written 및 PC↔모바일 cold/warm 확인은 별도 미검증으로 표기. 검증 없이 W1~W2/R0 PASS 금지.
+- **금지:** 5초를 300초로 상수 치환, Worker/Functions/RTDB Rules/공유 D1 schema·데이터/마이그레이션, 기존 좋아요·팔로우·Studio·Music Note·Library/UI 변경, .deploy trigger 변경, PREVIEW 배포, main/TEST/PRODUCTION 변경. 변경 코드는 오직 preview, Codex 구현→최종 commit 고정→독립 감사→사용자 PREVIEW 검증 순서.
+- **현재 실행 상태:** 독립 코드 검토 및 격리 재현 완료. 최종 408 GitHub Actions 실행 결과는 현재 연결에서 조회되지 않아 CI PASS 미확인. 새 제품 코드 수정·배포 0.
+
+---
+
 ## CURRENT — Stage416 Phase1 최소 수리 후 QA/실사용 비용 검증 (2026-10-09 KST)
 
 - 기준 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`; 사용자가 지시한 1단계 스냅샷 진단에서 **실제 중복 FULL repair 재활성 조건** 발견. `exploreLikeService.ts`의 app357/359 함수: legacy signal gap이 없고 settlement-only인데도 unconditional repair182 reset하던 경로를 **실제 legacyNeedsRepair357 조건으로만 이동**. 정상 remote membership guard/targeted app189 proof 유지, worker/membership canonical 배치/전역 RTDB unchanged.

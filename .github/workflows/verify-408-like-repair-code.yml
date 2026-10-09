@@ -16,6 +16,7 @@ on:
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
       - 'scripts/verify-191-bounded-public-like-convergence.mjs'
+      - 'scripts/verify-417-bounded-like-proof.mjs'
       - 'scripts/verify-426-dormant-cutover-worker.mjs'
       - 'scripts/verify-419-like-w2-cutover.mjs'
       - 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'
@@ -95,6 +96,7 @@ jobs:
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs
+          node scripts/verify-417-bounded-like-proof.mjs
       # Stage418: a release will edit shared RTDB rules only after comparing
       # the actual remote policy. Check the same condition here READ ONLY,
       # before any Worker/Hosting version is promoted.

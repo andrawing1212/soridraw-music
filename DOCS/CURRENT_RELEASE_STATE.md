@@ -1,3 +1,13 @@
+## 0S46. Stage419 3환경·4개 대기열 전환 안전 차단 SQL 격리 D1 검증 PASS / 구형 앱 요청 호환 미검증 (2026-10-09 KST)
+
+- **이번 실행:** preview baseline `c0e7bb756524a2843bacc6430e87ac38a2a6f353`. 신규 source-only `cloudflare/explore-worker/candidates/like-writer-cutover-preconditions-419.sql`와 기존 `like-writer-phase-fence-419.sql`를 *합쳐* `scripts/measure-419-isolated-171-d1.mjs`의 임시 원격 Cloudflare D1에서 실행. **공유 canonical D1·실 앱/Worker/Rules/Functions/Cache 변경 없음.**
+- **실제 Cloudflare 원격 격리 검사:** [419 Run 37898502450](https://github.com/andrawing1212/soridraw-music/actions/runs/37898502450) SUCCESS. PREVIEW/TEST/PRODUCTION 중 하나라도 읽기/쓰기 프로토콜 준비 누락·다른 protocol SHA·만료되면 원자적 phase 전환 실패; 배포 artifact SHA는 환경별 서로 달라도 동일 호환 프로토콜이면 허용. 기존 `035`, `066`, `069`, `075` 각 대기열에 처리 안 된 합성 항목 한 건이라도 있으면 전환 FAIL, 큐 해소 후에만 전환 가능. 전환 뒤 구형 Worker가 같은 대기열에 새 batch INSERT(075 포함)를 시도하면 *queued 응답을 주기 전* 데이터베이스 트리거로 실패(유령 pending 방지). 정산된 overlay를 기존 legacy baseline으로 무검증 롤백하는 경로도 거절. 기존 source-only 171 좋아요/해제 물리 W2·중복/역순 W0 유지, 임시 DB `419_EPHEMERAL_D1_DELETED=PASS`.
+- **위험과 한계:** 준비 테이블의 synthetic `reader_ready/writer_compatible`만으로 실제 3개 환경의 활성 Worker/Hosting/client 호환을 입증하지 못함. 새 phase가 구형 intake를 DB에서 거절하는 것은 **데이터 보존/안전 차단**이지 구형 사용자에게 좋아요 오류가 발생하지 않는다는 증명이 아님. 오래된 클라이언트 요청을 각 환경에서 **171 revision/operationId 규칙에 안전하게 변환할 라우터·영속 중복방지**, 각 환경의 old writer 퇴역 인증 및 서명된 운영 전환/중단/복구는 **미구현**. 그런 호환성/Work/실기기/비용 검증과 승격 승인 전 공유 DB phase trigger 배포 **절대 금지**, Stage418 PREVIEW 배포도 HOLD.
+- **변경 파일:** `cloudflare/explore-worker/candidates/like-writer-cutover-preconditions-419.sql` 추가, `scripts/measure-419-isolated-171-d1.mjs` 격리 검증 확장, `.github/workflows/measure-419-isolated-like-d1.yml` 변경 감지 추가. source-only SQL과 synthetic remote QA만. TEST/PRODUCTION 브랜치·데이터·배포 비변경.
+- **다음:** old apps가 171의 required `expectedRevision`/stable `operationId` 없이 요청하는 경로의 사용중 버전·중복/재시도 의미를 추적하고, 구형 클라이언트도 같은 사용자 좋아요·공개 카운트가 유지되는 전환경 호환 라우터를 **소스 후보+격리 실패 테스트**로 먼저 증명. 실제 공유 migration/phase flip/배포는 승인 및 독립 검증 뒤 별개.
+
+---
+
 ## 0S45. Stage419 Cloudflare 격리 D1 실제 물리 W2/W0·구형 writer 차단 검증 PASS / 제품 배포 HOLD (2026-10-09 KST)
 
 - **진짜 Cloudflare 원격 D1 물리 과금 검증 완료:** 신규 `scripts/measure-419-isolated-171-d1.mjs` 및 `.github/workflows/measure-419-isolated-like-d1.yml`. GitHub 419 격리 run [37897476777](https://github.com/andrawing1212/soridraw-music/actions/runs/37897476777) SUCCESS, 추가 Phase gate 검증 run [37897692901](https://github.com/andrawing1212/soridraw-music/actions/runs/37897692901) SUCCESS. 매번 고유 임시 `soridraw-like-419-<run>-<attempt>` Cloudflare D1 신설, `171` 원본 adapter SQL을 REST `batch`로 실행해 `meta.rows_written` 합산. **실측**: 새 좋아요 W2, 해제 W2, 같은 요청 중복 W0, 예전 revision/operation 재전송 W0, 다른 UID 동일곡 좋아요 W2, legacy baseline 해제/재좋아요 W2, 비공개 W0. `419_EPHEMERAL_D1_DELETED=PASS`, 실 사용자 공유 D1 사용 0.

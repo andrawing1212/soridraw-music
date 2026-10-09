@@ -80,6 +80,21 @@ for(const [type,table] of [
   console.log('425_QUEUE_'+type+'='+status);
   if(list.length)allReady=false;
 }
+if(names.includes('explore_like_user_queue_075')) {
+  const oldest=await select('SELECT updated_at,pending_count FROM explore_like_user_queue_075 ORDER BY updated_at ASC LIMIT 1');
+  if(oldest.length) {
+    const at=Number(oldest[0].updated_at);
+    const now=Date.now();
+    if(!Number.isSafeInteger(at)||at<=0||at>now+300000)
+      throw Error('425_075_PENDING_TIMESTAMP_INVALID');
+    const ageMinutes=Math.floor((now-at)/60000);
+    const band=ageMinutes<10?'UNDER_10_MIN':
+      ageMinutes<60?'UNDER_60_MIN':ageMinutes<1440?'UNDER_24_HOURS':'OVER_24_HOURS';
+    console.log('425_075_OLDEST_PENDING_AGE='+band);
+    console.log('425_075_OLDEST_PENDING_MUTATION_COUNT='+Number(oldest[0].pending_count));
+    if(ageMinutes>=60)console.log('425_075_STALE_QUEUE_RECOVERY_REQUIRED=YES');
+  }
+}
 console.log('425_REAL_SHARED_DATA_WRITES=0');
 console.log('425_RELEASE_DEPLOYMENT=0');
 console.log('425_CUTOVER_RELEASE_GATE='+(allReady?'REQUIRES_INDEPENDENT_PROOF':'HOLD'));

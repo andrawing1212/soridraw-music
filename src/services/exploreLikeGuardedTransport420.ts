@@ -41,8 +41,8 @@ const isRow = (row: unknown): row is GuardedLikeEvent420 => {
     typeof r.ownerUid === 'string' && r.ownerUid.length <= 128 &&
     typeof r.liked === 'boolean' && typeof r.operationId === 'string' &&
     operationIdValid(r.operationId) &&
-    Number.isSafeInteger(r.version) && Number(r.version) > 0 &&
-    Number.isSafeInteger(r.at) && Number(r.at) > 0 &&
+    Number.isSafeInteger(Number(r.version)) && Number(r.version) > 0 &&
+    Number.isSafeInteger(Number(r.at)) && Number(r.at) > 0 &&
     (r.status === 'pending' || r.status === 'accepted' || r.status === 'rejected');
 };
 

@@ -1,3 +1,12 @@
+## CURRENT — PREVIEW app393 배포 PASS, PC·모바일 첫 실행과 분할바 실측 단계 (2026-10-10)
+
+- 정확한 PREVIEW 릴리스 `0ed690d392440e3024815209e7bc4035786e6600`, [GitHub Firebase Run 38036146314](https://github.com/andrawing1212/soridraw-music/actions/runs/38036146314) SUCCESS. `preview.soridraw.com` 버전393/원격 exact build PASS, TypeScript·Build·좋아요·팔로우 377~379 PASS, TEST/PRODUCTION 변경 없음, RTDB shared Rules SKIPPED; Worker/Functions/D1/R2/사용자 원본 미변경. 잠금 420 및 Master 미배포 설정 메뉴 hard OFF.
+- 지금부터 PC/모바일 첫 생성 모달 main/musicApi 열기·재오픈/뒤로가기/느린 네트워크 확인, 최초 Gemini 생성·번역 chunk 실패시 회복, 앱 re-entry, PC/태블릿 분할바 long-task 측정. 앱393에서 아직 기능/성능의 실사용 PASS 없음. 필요 시 Work Cloud Browser/사용자 실제 PC 모바일 검증, 결과 미확보 시 미검증으로 기록.
+- 배포 전 Stage217 stale verifier failure를 `CacheDiagnosticsOverlayImpl.tsx` 점검으로 고쳐 408 Run 38036041146 PASS 후 정상 릴리스. 옛 380 Follow-only Candidate Check workflow는 별도 legacy-freeze FAIL이지만 배포 단계의 377/378/379 모두 PASS; 향후 독립 정리 필요. 기능 정상 경로 약화하거나 진단을 억지 삭제하지 않는다.
+- Stage416 1/5 20%, 속도개선 3/5 60%, 현 검증 3/4 75%. **사용자 요청 항상 3개 진행률 표시**. 속도 개선 5단계는 실제 hotspot 입증 후 한 가지에 한정; 디자인·좋아요·분할 엔진·비용 안전 최우선. 앱393 실사용 PASS 전 TEST/PROD 승격 없음.
+
+---
+
 ## CURRENT — 로딩 3차: 생성 설정창 지연 분리 PASS, 브라우저 속도 검증/배포 전 (2026-10-10)
 
 - `DOCS/CURRENT_RELEASE_STATE.md 0S92`가 현재 기준. 작업 커밋 `preview` `1e55957492077235f5d70ee6f917bfc996c395d2`; [408 CI 38034254164](https://github.com/andrawing1212/soridraw-music/actions/runs/38034254164) TypeScript/Build/Like PASS, [Fast QA 38034310097](https://github.com/andrawing1212/soridraw-music/actions/runs/38034310097) PASS.

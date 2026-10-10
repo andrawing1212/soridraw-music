@@ -1,3 +1,13 @@
+## 0S95. PREVIEW app393 초기 실행 경량화 실제 Hosting 배포 PASS, 실사용 성능 검증 대기 (2026-10-10 KST)
+
+- **배포 완료:** GitHub `preview` 배포 대상 exact SHA `0ed690d392440e3024815209e7bc4035786e6600`, [Firebase PREVIEW Release 38036146314](https://github.com/andrawing1212/soridraw-music/actions/runs/38036146314) **SUCCESS**. `https://preview.soridraw.com/` 원격 `app-version.json=393`, 실제 `index.html` 빌드 SHA 일치 **PREVIEW_EXACT_BUILD=PASS**. `TEST_PRODUCTION_UNCHANGED=PASS`, shared RTDB 배포 **SKIPPED**, Worker/Functions/D1/R2 및 사용자 원본 변경 없음.
+- **자동검증:** 앱393 버전후보 408 `38035745690` PASS, Stage217 lazy Impl 검사 수정 포함 408 [38036041146](https://github.com/andrawing1212/soridraw-music/actions/runs/38036041146) PASS. 최종 릴리스 TypeScript·Build 및 app377/378/379 팔로우·app358~361 회귀 검사는 릴리스 안에서 PASS. 첫 시도 [38035850653](https://github.com/andrawing1212/soridraw-music/actions/runs/38035850653)는 이전 217 검사기 stale path로 **배포 이전 FAIL**; 검사기를 기존 Master lazy 구조에 맞게 복구 후 재시도 성공. 별개의 구 `app380 Follow-only Candidate Check` 고정동결 비교 Workflow는 이번 릴리스의 app377~379 PASS와 다르게 과거 소스만 전제하므로 여전히 FAIL; 무시하거나 정상으로 기록하지 않음.
+- **실제 적용:** 경량화 1차 Master 진단 lazy, 2차 Gemini 생성/번역 엔진 lazy, 3차 생성 설정 모달 lazy. 초기 메인 index JS gzip 848.42→428.97KB (약 49.4% 감소, pre-deployment CI Build 대비). 기기 다운로드·FCP·프레임·분할바 p95 개선은 미측정, **체감 속도 PASS 아님**. 새 Master Stage420 메뉴는 `STAGE420_MASTER_PANEL_ACTIVE=false`, Like cutover도 false; 기존 app392 정상 좋아요/공개 숫자/팔로우/캐시/원본을 보호함.
+- **다음 작업:** PC/모바일 `preview.soridraw.com` 앱393에서 main/musicApi 생성 모달 첫/재오픈·Back·느린 연결, Gemini 첫 실제 실행 및 오류 복구, Explore/Music Note/Library 재진입, split 660/820/1080 경계·태블릿 손 조작, p95 long-task/FPS 실측. 실패 재현 전 App.tsx·studioLayout.css/기존 split 엔진 구조 변경 금지. 비용 데이터 읽기/쓰기 증가 없어야 함. 기능 이상 시 app392 원래 릴리스 tree로 안전한 forward rollback 계획 적용 (사용자 원본 이동 없음).
+- **진척도 고정:** 전체 Stage416 **1/5=20%** (남용 방어/개인+공개 5분/전체 비용 검증 별개); 속도 개선 **3/5=60%** (3차 코드+PREVIEW 배포 완료, 4단계 실사용 속도 검증/5단계 hotspot 추가 최적화 미완); 현 배포·검증 묶음 **3/4=75%** (최종 PC/모바일 실사용 검증 미완). PREVIEW 배포는 사용자가 자율 판단을 허용한 범위, TEST/PRODUCTION은 명시 승인 전 승격 금지.
+
+---
+
 ## 0S94. 앱393 PREVIEW 배포 첫 검사 중단 원인 확정·검사기 하위호환 복구 (2026-10-10 KST)
 
 - app393 후보 `061692e7d57f2483f9f37f174fbc13f45f157a9d` [408 38035745690](https://github.com/andrawing1212/soridraw-music/actions/runs/38035745690) PASS. PREVIEW Hosting-only trigger `0bf55dcf1a8f0549c81bfa7256710cc044ebd511` 발행 후 [Release Run 38035850653](https://github.com/andrawing1212/soridraw-music/actions/runs/38035850653)이 **Firebase deploy 전 FAIL**. 정확히 `Verify app378 update-stable following list cache`의 `scripts/verify-217-cache-live-update-reset.mjs`가 `src/components/CacheDiagnosticsOverlay.tsx` 내 `resetPageSyncDiagnostics();`를 요구하나, 초기 경량화 1차로 실제 진단 함수/UI가 `CacheDiagnosticsOverlayImpl.tsx`로 옮겨져 있었음. 구현 파일에 호출·모든 진단 문구가 살아 있음을 독립 소스 대조. 팔로우 기능 테스트에서 FAIL한 것이 아님.

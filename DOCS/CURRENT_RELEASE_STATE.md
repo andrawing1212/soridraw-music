@@ -1,3 +1,13 @@
+## 0S67. app391 좋아요 RTDB 실시간 알림 전송 실패 원인 규칙 불일치 수정·공유 규칙 배포 완료 (2026-10-10 KST)
+
+- 사용자 스크린샷: '좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.' 표시. 해당 메시지는 Explore 좋아요 서버 ACK 이후 RTDB set(userSync/{uid}/exploreLike) 실패에서만 발생. 좋아요 숫자 접수와 계정별 실시간 알림은 별개이다.
+- 확인된 결함: 앱은 optional canonicalSettled417=true를 전송할 수 있지만 live 공유 RTDB rules에서 이 optional boolean이 빠져 있었다. QA Run 38012744090 실제 read-only 규칙 diff는 additive-bool-only. 2026-10-10 Run 38014448252 live rules GET 200, exploreLike node 비교 FALSE. 이 필드 전송은 서버에 거부될 수 있다. 실제 사용자 Firebase 오류코드 미확보, App Check 강제 여부 조회 403으로 미검증.
+- 수정: GitHub database.rules.json은 이미 boolean 허용 상태. 공유 RTDB에 기존 권한 및 사용자 데이터 불변으로 optional boolean 한 개 추가, 사전 additive-only 강제 비교와 배포 후 exact-match 확인 수행.
+- Firebase PREVIEW Release Run 38014558975 SUCCESS: 418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS additive-bool-only, SHARED_RTDB_RULES_EXACT_MATCH=PASS, SHARED_RTDB_RULES_DEPLOY=PASS, FIREBASE_PREVIEW_DEPLOY=PASS, PREVIEW_APP_VERSION=391, PREVIEW_EXACT_BUILD=PASS, TEST_PRODUCTION_UNCHANGED=PASS. Pinned preview SHA 742f8d0714fa17a17d3c2b55626b62ad149f829b.
+- 공유 RTDB 규칙은 Preview/Test/Production 공통이므로 선택값 허용은 3환경에 공통 적용되나 기존 계정 권한 규칙·데이터는 그대로. 클라이언트 여전히 app391, Cloudflare Worker/Functions/D1/R2/Firestore 원본 변경 0. main/TEST/PRODUCTION Hosting 비변경.
+- 기능 판정: 배포 PASS, 실제 기기 좋아요/해제·개인 빈 하트·동일계정 PC↔모바일 하트 실시간 확인은 여전히 미검증/이전 FAIL 유지. 추가 원인이 있을 수 있으므로 E2E 해결됐다고 주장하지 않는다.
+
+---
 ## 0S66. app391 1단계 실사용 FAIL 추가 확인 — 원본 모바일 하트 소실 + 다른 기기 신호 부재 / PREVIEW 069 실측 정상이지만 UID 상태 미확인 (2026-10-10 KST)
 
 - **사용자 확인(최우선):** 빈 하트가 나온 곳은 PC가 아니라 **좋아요를 직접 누른 모바일 자체**. 최근 업데이트에서는 **한 기기에서 좋아요 클릭해도 같은 계정의 다른 기기에 반응이 없음**. 따라서 app391의 두 증상 모두 실사용 **FAIL**. PC 알림만의 문제라고 가정하거나 숫자 1만 보고 개인 canonical 좋아요가 확정됐다고 주장 금지.

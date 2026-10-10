@@ -1,3 +1,13 @@
+## CURRENT — Stage416 ② ChatGPT 직접 구현: app392 배포 전 최종 QA/실사용 검증 (2026-10-10 KST)
+
+- **Codex 실행 금지 / ChatGPT 직접 작업**(사용자 최신 지시). 제품 소스 후보와 검증 진척도는 `DOCS/CURRENT_RELEASE_STATE.md 0S73`을 따른다.
+- 목표 ②: 같은 계정 PC↔모바일 개인 하트 5~10초, 서버 원본/공개 숫자와 별개 private provisional `userSync/$uid/exploreLikeIntent416`. 기존 앱391 정상 기능·확정 `userSync/$uid/exploreLike` 및 `canonicalSettled417`, canonical 5초 batch, UI/팔로우/Music Note 전부 보호.
+- 기존 Fast QA 38021097439 PASS, 408 QA 38021100838 PASS. `public/app-version.json=392` 준비 source `fd74739064ede1dfae9d77ab8b77b2ad084026ff`; app392 별도 408 Run 38021216836 결과 확정 전까지 PREVIEW 배포 HOLD.
+- 공유 RTDB 실제 규칙은 한 private node additive-only allowed. 배포 시 기존 모든 node/권한 exact-match preflight, 기존 TEST/PRODUCTION 앱 하위호환 검증. source-only additive 규칙을 곧바로 공유 데이터에 적용하지 않는다. Worker/Functions/D1 원본 변경 금지.
+- 다음: app392 408 최종 PASS→Firebase PREVIEW rules+Hosting 고정 릴리스→exact URL/version 확인→사용자에게 PC/모바일 실제 검증 최소 세트 안내. 작업 성공 전 전체 진척도는 0/5, ① 반복 읽기 요청 보류, ③/④ Master 독립 5분 타이머 구현 대기, ⑤ 최종 검증 대기. 테스트 앱/정식 앱 승격 별도 승인.
+
+---
+
 ## CURRENT — Stage416 ② ChatGPT 직접 코드 후보 완성 / 검증 전 HOLD (2026-10-10 KST)
 
 - **사용자 최신 지시:** 이번 구현은 Codex가 아니라 **ChatGPT 직접 수정**. 더 이상 Codex에 재위임하지 않는다. 이 파일명은 역사적 작업 접수 위치이며 실제 실행자는 사용자 최신 지시에 따른다.

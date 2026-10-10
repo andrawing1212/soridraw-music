@@ -11,6 +11,7 @@ import { readCacheDiagnosticsEnabled, readCacheDiagnosticsGloballyEnabled, readC
 const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_ADMIN_SCOPE = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
+const STAGE420_MASTER_PANEL_ACTIVE = false; // Keep dormant until callable/Rules/Worker release is approved and deployed.
 import {
   getNavigationFirestorePayload,
   getNavigationMenuAccessMode,
@@ -390,7 +391,7 @@ export default function AdminAppSettingsPage() {
           </div>
         </div>
 
-        <ExploreLikeAbuseMasterPanel420 />
+        {STAGE420_MASTER_PANEL_ACTIVE && <ExploreLikeAbuseMasterPanel420 />}
 
         <div className="flex items-center justify-between gap-4 rounded-3xl bg-[var(--bg-secondary)] px-5 py-4 shadow-sm md:px-6">
           <div className="min-w-0">

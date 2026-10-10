@@ -28,6 +28,10 @@ assert.doesNotMatch(ui, /setDoc\(|updateDoc\(|\.ref\(/,
   'Master policy client must never bypass server');
 assert.match(page, /<ExploreLikeAbuseMasterPanel420\s*\/>/,
   'existing app settings route must contain only the protected panel');
+assert.match(page,/const STAGE420_MASTER_PANEL_ACTIVE = false;/,
+  'unreleased Master panel must remain disabled while backend callables are absent');
+assert.match(page,/\{STAGE420_MASTER_PANEL_ACTIVE && <ExploreLikeAbuseMasterPanel420\s*\/>\}/,
+  'Master panel must be gated from PREVIEW app startup while Stage420 cutover is off');
 assert.equal(rules.rules.privateLikeSync420, undefined,
   'shared live rules must remain unchanged until final gate');
 console.log('STAGE420_MASTER_UI_ONLY_AND_SERVER_MASTER_GUARDS=PASS');

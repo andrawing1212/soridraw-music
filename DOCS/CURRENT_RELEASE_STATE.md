@@ -1,3 +1,12 @@
+## 0S93. 미배포 Master 420 패널 진입 차단 + 3중 진행률 고정 (2026-10-10 KST)
+
+- 이전 `preview` HEAD `07687d9c0a93c60b7e1bfaf9eb3f123b1a88a969`에서 배포 안전 감사: app392 이후 소스에 `ExploreLikeAbuseMasterPanel420`이 Admin 설정에 그대로 표시되어 있었음. Functions `masterGetExploreLikePolicy420` 등은 미배포이므로 이 패널을 실행하면 실패한 callable을 요청할 위험. 실제 app392의 Master 화면과 서버 호출은 변경하지 않고 해당 **신규 후보 UI만 `STAGE420_MASTER_PANEL_ACTIVE=false`로 감쌈**. 정책·Master 서버 로직·기존 UI/좋아요/Worker/Rules/데이터 불변.
+- `verify-420-master-ui.mjs`에 패널이 OFF 상태인 동안 렌더되지 않는다는 정적 회귀검사 추가. AGENTS.md에 사용자 요청 3중 진행률 보고 방식 및 PREVIEW 안전 판단 위임을 영구 작업 규칙으로 기록.
+- 이 항목을 포함하는 최종 TypeScript/Build/Like/QA, 실제 브라우저 느린 네트워크/PC·모바일 검증은 **이 commit 생성 시 미검증**. CI 결과는 실행 확인 후 갱신. PREVIEW app392 유지, 신규 경량화 및 Stage420 LIVE 배포 0. 전체 Stage416 **1/5=20%**, 속도 개선 **3/5=60%** (현재 4단계 검증 2/4) 유지.
+- 다음: 이 commit의 새 408 자동 CI 및 Fast QA PASS, 앱393 PREVIEW Hosting-only 별도 릴리스 안전 확인, 메인/뮤직API 생성창 첫/재오픈·뒤로가기·느린 네트워크 확인. RTDB Rules/Worker/Functions는 배포하지 않음.
+
+---
+
 ## 0S92. 앱 시작 경량화 3차: 음악 생성 설정창 7.67KB 지연 다운로드 — TS/Build/QA PASS, UI·기능 동결 (2026-10-10 KST)
 
 - 출발 `preview` `339fc665cd2cc85e8cdfd2a89d53fc74add8fa4d`. 이번 기능/검사 기준 고정 SHA `1e55957492077235f5d70ee6f917bfc996c395d2`. 전체 변경 파일 **6개**: `src/App.tsx` 1개 static-import 변경, 신규 `src/components/musicApiLyricWritingPreference.ts` (가벼운 저장 설정), `src/components/MusicApiGenerateModalLazy.tsx` (props 보존 React.lazy/Suspense), 기존 `src/components/MusicApiGenerateModal.tsx`에서 정확히 같은 read/write 함수만 shared module로 이동·기존 export 유지, 신규 `scripts/verify-studio-generation-modal-lazy.mjs`, `scripts/soridraw-qa-engine.mjs` fast 그룹 연결. `App.tsx` 나머지 수만 줄, 원본 뮤직노트/생성기 로직/스타일/CSS/분할 엔진과 backend 전혀 변경하지 않음.

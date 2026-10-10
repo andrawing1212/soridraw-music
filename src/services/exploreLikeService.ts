@@ -795,7 +795,10 @@ const startLikeIntent416 = (uid: string) => {
     const liked = readExploreTrackLikeMembership127(uid, trackId);
     if (typeof liked !== 'boolean') return;
     patchExploreLikedTrackMembership(uid, trackId, liked);
-    dispatchLikeSync({ uid, trackId, ownerUid: '', liked, likeCount: 0, source: 'remote-intent' });
+    // Do not fire the historical window event: unrelated consumers may treat
+    // it as an accepted/public count update. Explore's replayable subscriber
+    // alone receives this personal, provisional repaint.
+    notifyExploreLikeUiSync139({ uid, trackId, ownerUid: '', liked, likeCount: 0, source: 'remote-intent' });
   });
 };
 // This listener does not read Firestore/D1 and subscribes once for the signed-in

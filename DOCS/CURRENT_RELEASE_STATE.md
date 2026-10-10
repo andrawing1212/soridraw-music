@@ -1,3 +1,14 @@
+## CURRENT — Stage416 2/5 보안 전환 후보의 257+ 중복 승인·서버 전송량 실제 코드 재현: 운영 Cutover FAIL/HOLD (2026-10-10)
+
+- **완료한 작업:** `scripts/verify-420-journal-cost-envelope.mjs` 신설, 기존 408 QA workflow 한 단계로 연결. `preview` source `5e43ba11ad2ef213a75a319744d498842ebde5c8`, 비용 사례 보정 `7180ea3ca7a4b2349f285681a48e8a240e8a31d4`. [CI Run 38082111398](https://github.com/andrawing1212/soridraw-music/actions/runs/38082111398) **SUCCESS**: 실제 `functions/src/exploreLikeAbuseGate420.ts`를 Node 실행, 메모리 Firebase mock에서 260개 연속 승인·같은 opId 재생·변조·256 eviction 검사. 모든 기존 like/follow/TS/Build PASS, 실제 운영 사용자 데이터 사용 0.
+- **재현된 제품 위험:** journal 256 안에 남은 동일 operationId는 재승인 write 0, 다른 action으로 바꾸면 거절. **260개 승인 후 journal에서 제외된 첫 opId가 재전송되면** `duplicate=false`로 새 승인 트랜잭션이 commit됨 → **257건 이후 전면 idempotent W0 계약 불만족 확정**. 앱 정상 경로는 `sent-unconfirmed` 재호출을 거절하지만, 유효 UID의 구형/악성 Callable·오래된 재요청까지 영구 W0로 막지는 못함. W0 완전 보장을 주장하거나 cutover ON 금지.
+- **원문 직렬화 비용(실제 gate 함수 모형):** 1건 551B, 5건 1,646B, 20건 5,741B, 50건 13,946B, 100건 19,558B, **256건 37,128B=36.3KiB/UID root**. RTDB 원본 구조는 root transaction이므로 quota 승인마다 **50개 UI hints + 최대256개 proof**가 같은 트랜잭션 대상이 됨. 이 수치는 모형의 JSON 크기일 뿐 실제 청구 transfer·RTDB 트랜잭션 재시도 횟수·다운로드 비용과 동일하다고 주장 금지.
+- **10만 DAU 가상 월 직렬화 write 규모(실청구 아님):** 계정별 최초 5건/일을 각기 새로 시작하는 낙관적 모형 **15.36 GiB/월**, 최초 20건/일 **175.73 GiB/월**, 이미 승인 기록 200~260개가 유지되는 포화 계정에서 5건/일 **478.63 GiB/월**. 이 서로 다른 패턴을 혼동하거나 전체 사용자 평균 비용으로 둔갑시키지 말 것. 실제 Firebase RTDB 다운로드 요금은 [Firebase 공식 가격](https://firebase.google.com/pricing) 참조(유료 구간 $1/GB egress, GB 저장 $5/월); 본 mock write bytes로 청구액을 직접 계산할 수 없음. Functions CPU/호출/네트워크·RTDB Admin 전송 실측 별도 필요.
+- **판정:** `Stage420/426` 컷오버 **BLOCKED**, `Stage416` 총5단계 중 2단계 진행 중(**1/5 완료·20%**). 보안 성능 문제가 정상 좋아요를 파괴할 수 있으므로 비용·동시성 위험을 감수하며 무작정 256을 키우지 말 것. 실서비스 활성화에 앞서 서버가 과거 opId 재승인을 막으면서도 계정 root payload에 이력 전체를 실어나르지 않는 **원자적 인증 저장 설계**가 필요. 검증 불가능한 재시도는 fail-closed; 차단 시 사용자가 다시 확인할 수 있는 안전 UX까지 설계. 이 보안 범위 확대가 필요하면 공유 Rules/데이터 변경 승인 전 위험·비용 보고.
+- **현재 배포/보호:** 앱396 Firebase PREVIEW 그대로. 이번 작업은 QA 스크립트·워크플로·문서만; Functions/Worker/RTDB Rules/공유 DB/TEST/PRODUCTION **변경 없음**. 좋아요 앱 cutover false, Worker 426 compiled OFF. ② 앱 속도 5/5, ③ 기기 실사용 4/4 완료 상태 유지. 다음 개발 목표는 위 한 가지 idempotence+cost 충돌 해결에 한정한다.
+
+---
+
 ## CURRENT — Stage416 2/5: ACK 유실 이후 51건 초과 승인 기록 복구 원자적 256건·24h 후보 PASS, 비용 실측·실환경 Cutover HOLD (2026-10-10)
 
 - **사용자 요청:** 중간 승인을 반복하지 않고 안전한 후보 작업을 한 흐름으로 완성하고, 공유 Rules/TEST/PRODUCTION 등 위험 승격 시에만 승인 필요. 앱396 속도/물리기기 확인 범위 ② 5/5·100%, ③ 4/4·100% 종료 유지; 임의 추가 작업 금지.

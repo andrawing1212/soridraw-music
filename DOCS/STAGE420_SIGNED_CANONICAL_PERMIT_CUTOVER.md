@@ -65,3 +65,10 @@
 - Candidate SHA `f24295b30f3b1cf69f3a31ca20cd733dfb040c6f`. 408 품질 [Run 38080477525](https://github.com/andrawing1212/soridraw-music/actions/runs/38080477525) SUCCESS.
 - Source-only Firebase Admin 루트 트랜잭션 한 번에 기존 rate counter + 최근50 UI events + UID별 최대256 compact digest receipt를 원자 저장. 승인 ACK/HMAC 완전 소실 후 화면 이벤트 51+가 지나도 24h 이내 정확한 기록이 journal에 있으면 서버 point GET으로 복구하고 최초 승인 재전송과 RTDB 쓰기 증가 0. 원본 opId·trackId·ownerUid·liked SHA256 fingerprint를 비교하므로 맞지 않으면 서명 발급 금지.
 - Receipt TTL 24h/UID 최대256, 256보다 오래된 승인·만료는 safe pending (영구 복구 보장 아님). 새 승인 transaction에 최대256 receipt가 포함되어 RTDB 전송량이 커질 수 있으므로 10만 사용 비용과 p95 실측 전 운영/커트오버 보류. 426/420 비활성, existing direct416/구형 앱 호환성 미해결, shared Rules·배포·실제 데이터 변경 없음.
+
+## 2026-10-10 Stage420 승인 기록 비용/257 경계: 실제 함수 재현 결과 — 운영 차단
+
+- `preview` code `7180ea3ca7a4b2349f285681a48e8a240e8a31d4`; [408 CI 38082111398](https://github.com/andrawing1212/soridraw-music/actions/runs/38082111398) SUCCESS. 실제 서버 승인 함수를 메모리 Firebase transaction mock에서 260회 호출.
+- 정량: 256개 root 직렬화 **37,128B / 36.3KiB**. 처음5회 1,646B, 처음20회 5,741B, 처음50회 13,946B. 10만 DAU 가상 월 write serializations 저활동 5/일 15.36GiB, 20/일 175.73GiB, 256개 포화 5/일 478.63GiB. **실제 Firebase 청구액 아님**, client 동시 연결/RTDB egress/Functions 비용 별도 계측 필요.
+- 심각한 경계: 256개의 receipt를 넘겨 과거 operationId가 eviction 된 후 **서버 Callable 단독 동일 명령 재호출은 새 승인 commit**. 기존 앱 후보 transport가 durable first-send marker로 자동 중복 재전송을 막아도, 서버 수준 영구 W0·악성 SDK 우회 저항은 성립하지 않음. 더 큰 무한 journal 비용으로 임시 해결 금지.
+- 실서비스 Stage420/426 ON, 구형 direct416 차단, 공유 Rules 수정은 **HOLD**. 실제 user data migration/deploy 없음. 다음 후보는 O(1) 원자 승인 증명과 사용자 회복 UX를 함께 설계한 뒤 독립 보안·비용 감사 필요.

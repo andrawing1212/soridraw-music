@@ -1,3 +1,11 @@
+## CURRENT — Stage416 2/5: 256 receipt 서버 루트 재검증 결과 비용·257회 재승인 위험 확정, 운영 ON 금지 (2026-10-10)
+
+- **검증 소스:** `preview` code `7180ea3ca7a4b2349f285681a48e8a240e8a31d4`, [408 Run 38082111398](https://github.com/andrawing1212/soridraw-music/actions/runs/38082111398) SUCCESS. 서버 함수 260개 승인 실제 실행/RTDB mock: 256 포화 root 37,128 bytes, root read/write는 변경 단위마다 사용자저널 전체 동반. 첫 승인 opId가 257+로 빠져 재전송되면 **새 승인 commit** 발생해 W0 불합격. 서버 전송량 100k DAU write-only 시나리오 15.36~478.63 GiB/월(모형이며 실제 DB billing 아님).
+- **다음 한 작업:** 방금 확인한 두 문제(과거 중복 승인 + 256건 root transfer)를 **동시에** 줄일 수 있는 서버 원자성·비용 모델을 후보 한 개로 비교/검증. 구형 앱 direct416, old signed-outbox, 2시간 잠금, 모바일 stale/ack loss가 정상인지 동시에 확인. 더 큰 bounded array나 전 사용자 백필, 공유 D1 migration, 실제 User DB 변경을 임의로 시작하지 말 것. 기술적으로 불가능한 idempotency 보장이라면 안전한 FAIL-CLOSED 및 재시도 UX 정책을 명확히 한 뒤 사용자에 단 하나의 구조적 선택 요청.
+- **진척도 유지:** ① Stage416 총5단계 중 **2단계 진행, 완료 1/5=20%**. ② 앱 속도 5/5=100%, ③ 실기기 4/4=100%. 현재 앱396 PREVIEW 배포 유지, cutover OFF. 사용자 반복 승인 없이 GitHub source-only 작업 계속 가능; shared Rules/TEST/PRODUCTION 승격은 승인 필요.
+
+---
+
 ## CURRENT — Stage416 2/5: Atomic 256 approval journal source QA PASS, 100k 비용/호환성 검증 후 단계 종료 판단 (2026-10-10)
 
 - 기준 branch `preview`, 소스 commit `f24295b30f3b1cf69f3a31ca20cd733dfb040c6f`, [408 Run 38080477525](https://github.com/andrawing1212/soridraw-music/actions/runs/38080477525) SUCCESS; Firebase Functions/app TS, Build, 기존 좋아요·팔로우, 51번째 이벤트 뒤 exact replay W0, journal ACK 복구 PASS.

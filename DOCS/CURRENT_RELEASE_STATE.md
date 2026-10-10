@@ -1,3 +1,14 @@
+## 0S91. 초기 로딩 경량화 2차: AI 생성 엔진 실행시 다운로드, 메인 JS gzip −47.6% 실측 / 프리뷰 미배포 (2026-10-10 KST)
+
+- 사용자 지시: 느린 진행·무거운 앱을 빠르게 개선하되 정상 좋아요/UI/데이터 보호. 출발 `preview` `d0aeaa3d740f68d5a300f09499de3550fe1c7f37`. 작업한 **코드 고정 commit `353ddabbe41ddb459a7a3a82131ff9e7a6af4c82`**. 변경 파일 4개: `src/App.tsx` import 한 줄, 신규 `src/services/geminiServiceLazy.ts`, 신규 `scripts/verify-gemini-lazy-entry.mjs`, `scripts/soridraw-qa-engine.mjs` QA 그룹 추가.
+- **큰 절감 실제 코드 구현:** `App.tsx`가 약 **1,802,753 chars/38,279줄**의 `geminiService.ts` 전체 생성 엔진을 앱 진입부터 import하지 않도록 하여, 기존 `generateSong`, `translateTitleAndLyrics`, `translateLyrics`, `generateCustomSectionMetadata`, `regenerateLyricsOnly` 함수 5개만 얇은 지연 import facade로 연결. 최초 실제 생성/번역/재생성 클릭 시 원본 엔진을 1회 다운로드하고 재사용, Chunk 오류면 Promise를 재설정하여 다음 명시적 호출에서 재시도할 수 있게 함. **원본 `geminiService.ts` SHA `e948a91cdf9617cbc8e99436096b5eadba826866` BYTE-EXACT 불변** → 음악 생성 로직/프롬프트/모델 선택·가격·번역 결과 코드 무변경. HTML/CSS·Studio 분할바·뮤직노트/라이브러리/Explore Like UI/Cache/Backend 영향 없음.
+- **실제 CI Build 비교:** 전 `preview` [408 Run 38032821201](https://github.com/andrawing1212/soridraw-music/actions/runs/38032821201) `index JS 2,800.46KB / gzip 830.22KB`, `vendor gzip 283.37KB`. 후 [408 Run 38033744153](https://github.com/andrawing1212/soridraw-music/actions/runs/38033744153) **SUCCESS**: `index JS 1,590.74KB / gzip 435.33KB`, `vendor gzip 283.38KB`. 메인 gzip **−394.89 KB, −47.6%**, 앱 진입 메인+vendor gzip **1,113.59→718.71KB (−35.5%)**. 지연 로드 AI 전용 chunk `geminiService-*.js 1,176.97KB / gzip 384.12KB`는 실제 AI 작업을 누를 때 필요하며, 기존 모델 자체는 사라지지 않음. 메인 CSS **910.90KB/gzip 97.53KB**, 스튜디오 CSS 그대로 → 렌더 FPS 자체 개선은 실측 전.
+- **자동검사:** [408 Run 38033744153](https://github.com/andrawing1212/soridraw-music/actions/runs/38033744153) **SUCCESS** = 앱 TypeScript, Vite Build, Stage420 Functions TS, 좋아요 127/390/197 보호, Firebase live Rules read-only. 신규 source regression `verify-gemini-lazy-entry.mjs`가 App의 eager import 재발과 5개 async 함수 계약을 확인; [Fast QA 38033913903](https://github.com/andrawing1212/soridraw-music/actions/runs/38033913903) **SUCCESS**. 브라우저 PC/모바일 최초 생성 클릭, chunk 오류/새로고침, 네트워크 워터폴·long-task·실제 장치 체감은 **실사용 미검증**. 지연 다운로드 자체로 최초 생성 클릭이 약간 늦어질 수 있으나 이후 재사용하며, 생성 처리 중 앱 데이터/원본을 다시 읽지 않음.
+- `preview.soridraw.com` Hosting app392 그대로. `main`/TEST/PRODUCTION 및 Firebase Hosting/Functions/Cloudflare Worker/D1/R2/shared RTDB, 사용자 데이터 변경 없음. **실배포 0**. 현재 Stage416 **1/5=20% 유지**, Stage420 보안 스위치 `false` 유지, Follow-only 옛 freeze 감사 FAIL 별개. 사용자 배포 요청 없으면 배포 금지.
+- **다음 빠른 실용 단계:** 실제 브라우저로 최초 생성 클릭 시 AI chunk와 스피너/모달 상태 실기기 확인 → FPS·PC/태블릿/모바일 분할바 실측(별개 병목). 이어 App 큰 스튜디오 입력 패널과 665KB 레이아웃 CSS에서 기능·디자인 완전 동일을 증명할 수 있는 단일 분리 대상을 선택. QA 전 UI를 임의 재구성하거나 빈 화면 만들지 않음.
+
+---
+
 ## 0S90. 최초 로딩 경량화 1차: Master 전용 진단 모듈 지연 로딩, 실측 소폭 개선 / 실제 배포 전 (2026-10-10 KST)
 
 - 사용자가 앱의 무거움과 지나치게 느린 작업 속도를 지적. 직전 `preview` 기준 `5d74643e7a475be48ad9c5746a974a61090df204`. Stage420 보안 후보는 **일시 중단**, 앱 성능을 우선하고 작은 실험을 정확히 비교함.

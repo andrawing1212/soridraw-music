@@ -136,8 +136,13 @@ export const publishGuardedLikeSignal420 = async (
     if (!decision.allowed) return;
     const row: PrivateRow420 = { ...input, version: previousVersion + 1,
       at: serverNowMs, status: 'pending' };
+    // Keep recent distinct operations even when several clicks target the
+    // same track. Otherwise a new click erases the prior operationId, allowing
+    // a delayed retry to be charged and broadcast again as a fresh action.
+    // The receiver applies strictly increasing versions, so the last event
+    // for a track remains its most recent provisional state.
     const bounded = prior.filter((item) =>
-      !!item && item.status === 'pending' && item.trackId !== input.trackId &&
+      !!item && item.status === 'pending' &&
       typeof item.at === 'number' && serverNowMs - item.at <= 60 * 60_000
     ).slice(-(MAX_RESULTS - 1));
     // Keep the Master-only audit beside, but never inside the user-readable

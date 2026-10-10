@@ -3,10 +3,7 @@
 // NEVER publish again or change a rate counter. Records evicted from display
 // are NOT proof and must stay pending (fail closed).
 import type { Database } from 'firebase-admin/database';
-import {
-  type LikePrivateCommand420,
-  matchesApprovedLikeReceipt420,
-} from './exploreLikeAbuseGate420';
+import { type LikePrivateCommand420, matchesApprovedLikeReceipt420 } from './exploreLikeAbuseGate420';
 
 export const LIKE_APPROVAL_RECOVERY_MAX_AGE_MS_420 = 60 * 60_000;
 const operationValid = (x: LikePrivateCommand420): boolean =>

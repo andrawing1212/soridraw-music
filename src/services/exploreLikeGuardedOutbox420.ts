@@ -15,6 +15,7 @@ export type GuardedOutboxReply420 = {
   allowed: boolean;
   ok: true;
   lockedUntilMs: number;
+  guardPermit420?: string;
 };
 export type GuardedCanonicalEvidence420 = {
   uid: string;
@@ -28,7 +29,7 @@ export type GuardedResolution420 =
   | { action: 'superseded'; canFlush: false }
   | { action: 'await-reply'; canFlush: false }
   | { action: 'await-proof'; canFlush: false }
-  | { action: 'approved'; canFlush: true }
+  | { action: 'approved'; canFlush: true; guardPermit420: string }
   | { action: 'rollback'; canFlush: false; liked: boolean; evidenceVersion: number };
 
 // No asynchronous gap is permitted between reading the newest outbox row
@@ -49,7 +50,17 @@ export const resolveGuardedOutbox420 = (
     return { action: 'superseded', canFlush: false };
   }
   if (!reply || reply.ok !== true) return { action: 'await-reply', canFlush: false };
-  if (reply.allowed) return { action: 'approved', canFlush: true };
+  if (reply.allowed) {
+    // Authentication and rate approval alone do NOT authorize Worker intake.
+    // No signed permit => no canonical flush; wait for safe retry. Actual
+    // signature/UID/track/action verification happens in the Worker.
+    if (typeof reply.guardPermit420 !== 'string' ||
+        !/^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
+        reply.guardPermit420.length > 2400) {
+      return { action: 'await-reply', canFlush: false };
+    }
+    return { action: 'approved', canFlush: true, guardPermit420: reply.guardPermit420 };
+  }
   if (!evidence || evidence.uid !== sent.uid ||
       evidence.trackId !== sent.trackId ||
       !Number.isSafeInteger(evidence.version) || evidence.version < 0 ||
@@ -66,8 +77,11 @@ export const resolveGuardedOutbox420 = (
 };
 
 export const canFlushGuardedOutbox420 = (
-  entry: GuardedOutboxEntry420,
-): boolean => entry.guardStatus === 'approved';
+  entry: GuardedOutboxEntry420 & { guardPermit420?: string },
+): boolean => entry.guardStatus === 'approved' &&
+  typeof entry.guardPermit420 === 'string' &&
+  /^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(entry.guardPermit420) &&
+  entry.guardPermit420.length <= 2400;
 
 // The outer caller supplies read/apply to guarantee a fresh synchronous
 // comparison. It must commit outbox+personal-cache before notifying the UI.

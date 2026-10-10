@@ -1,3 +1,13 @@
+## 0S76. 좋아요 실시간 신호 반복 공격·비용 방어 추가 요구 — ③ 선행 보안 게이트 (2026-10-10 KST)
+
+- **사용자 신규 요구:** app392 PC↔모바일 개인 하트 거의 즉시 반영을 **느리게 하지 말 것**. 빠른 반복 좋아요/해제가 매번 RTDB 실시간 통신 비용을 증가시키므로, **1분당 사용자 최대 횟수 및 2분 이상 반복 공격 시 경고·해당 계정 약 1시간 좋아요/해제 제한**을 추가하는 방어 수단이 필요. 정상 UI 지연/좋아요 기능 삭제는 요구 아님.
+- **현재 실제 비용:** `src/services/exploreLikeIntent416.ts`는 실제 클릭마다 RTDB `runTransaction(userSync/$uid/exploreLikeIntent416)`를 호출, Worker canonical ACK 후 추가 `settleExploreLikeIntent416` transaction 가능, 송수신 payload는 pending 최대50개. RTDB는 Firestore 문서 쓰기당 과금과 달리 **저장량·전송 다운로드·연결 프로토콜 overhead**가 핵심(공식 Firebase RTDB 문서 확인), 서버 쓰기/성능 사용이 0은 아님. 거부 요청도 통신 비용을 유발할 수 있음.
+- **기존 방어 일부 발견:** Cloudflare `handleVerifiedLikeBatch426`은 `LIKE_RATE_LIMITER.limit({key:actor.uid})`를 사용, `wrangler.preview.jsonc`는 **limit60 / period60**. 이것은 **Worker 원본 batch 요청 제한**이고 RTDB 임시 좋아요 클릭 신호 한도가 아니다. `database.rules.json` 현재 UID 접근 통제/50항목/버전 검증만 있음. **UID당 RTDB 쓰기 60초 한도, 2분 지속 인지·1시간 서버 잠금 부재**.
+- **방어 초안 추가:** `DOCS/STAGE416_LIKE_REALTIME_ABUSE_COST_GUARD.md` 신규. 사용자별 모든 기기 합산, 30회/60초 경고·40회/60초 1분 제한·두 연속 60초 창에서 임계치 반복 시 1시간 잠금 **초기 추천 가설**(테스트 계정/정상사용 실측 후 조정). 처음 클릭 즉시 반영; 여러 번 초고속 토글은 최종 결과만 묶는 최소 병합 가능. **UI 잠금만 불가**: 직접 RTDB/REST 및 canonical Worker 요청까지 서버가 차단해야 보안 완료. 영속 outbox 기존 pending 삭제 금지, server UID 원자적 상태/TTL/동시기기/구버전 호환, Master 설정/조기해제/로그 필요. per-click 새 Worker/Firestore 조회를 무분별하게 추가해 방어비용이 본래 비용보다 높아지면 FAIL.
+- **현재 상태:** 이번 턴은 GitHub 현재 소스·공식 Firebase 가격 조회 + 보안 요구 문서 기록 **전용**, 제품 코드/RTDB rules/Worker/Functions/공유 사용자 데이터 변경 및 어떤 환경 배포도 **없음**. app392 현 배포와 ② 실사용 PASS 보호. 기존 Stage416 완료 **1/5** 유지; ① 보류, ③ 보안 게이트 포함 직접 개발 착수 전, ④ 대기, ⑤ 대기. 본 방어는 구현/실제 공격 테스트 전 **보안 PASS가 아니다**.
+
+---
+
 ## 0S75. Stage416 ② app392 PC↔모바일 실사용 합격 — ③ 직접 개발 착수 기준 (2026-10-10 KST)
 
 - **사용자 실사용 확인 (2026-10-10 12:47 KST):** "거의 즉시 변경돼. pc에서든 모바일에서든 a에서 누르면 바로 b에도 좋아요가 바뀜." PREVIEW **app392**, 동일 계정 PC↔모바일 양 방향 개인 하트 동기화가 사용자의 목표 5~10초보다 체감상 빠르게 작동함을 사용자 확인. 테스트 화면 전환/새로고침 없이 양방향 반영을 목표로 한 Stage② **실사용 PASS**로 승격. 정확한 ms, 장기 오프라인/복구/과금량은 별도 Stage⑤ 검증으로 유지; 미측정 항목까지 PASS 주장하지 않는다.

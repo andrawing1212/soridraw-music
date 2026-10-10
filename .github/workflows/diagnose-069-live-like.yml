@@ -45,6 +45,19 @@ jobs:
             SELECT 'q066' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_066;
             SELECT 'q069' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_069;
           " --json > "$RUNNER_TEMP/like-queues-readonly.json"
+          # The report contains aggregate counts only; track/owner IDs stay inside
+          # this ephemeral query and are never emitted to Actions logs.
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT COUNT(*) AS matched_tracks,
+              COALESCE(SUM(COALESCE(s.like_count,0)),0) AS public_count,
+              COALESCE(SUM((SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id)),0) AS canonical_like_rows,
+              COALESCE(SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM likes l WHERE l.track_id=t.id AND l.user_uid=t.owner_uid
+              ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks
+            FROM tracks t
+            LEFT JOIN track_stats s ON s.track_id=t.id
+            WHERE t.title = '성적표 내소동';
+          " --json > "$RUNNER_TEMP/specified-track-readonly.json"
           node - <<'NODE'
           const fs = require('fs');
           const a = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-queues-readonly.json','utf8'));
@@ -62,5 +75,12 @@ jobs:
             }
           }
           if (!rows.some(x=>x.kind==='q069')) throw Error('q069 report unavailable');
+          const trackReports=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/specified-track-readonly.json','utf8'));
+          const one=trackReports.flatMap(part=>part.results||[])[0]||{};
+          console.log('TARGET_TITLE_MATCHES=' + Number(one.matched_tracks||0));
+          console.log('TARGET_CANONICAL_PUBLIC_COUNT=' + Number(one.public_count||0));
+          console.log('TARGET_CANONICAL_LIKE_RELATIONS=' + Number(one.canonical_like_rows||0));
+          console.log('TARGET_OWNER_HAS_LIKED=' + Number(one.owner_liked_tracks||0));
+          console.log('NOTE_VIEWER_MAY_NOT_BE_OWNER=TRUE');
           console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE

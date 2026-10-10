@@ -709,8 +709,8 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   if (changed) persistLikedStateCache(uid, cache);
   if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
-  markLocalLikeCatalogReady135(uid);
   // Monotonic max: replaying an already-seen deferred row cannot advance the RTDB watermark.
+  markLocalLikeCatalogReady135(uid);
   markSeenLikeSignal127(uid, signal.version);
   // App141: publish to the mounted/replayable UI only AFTER its authoritative
   // local membership read can observe this entire accepted changed-track batch.

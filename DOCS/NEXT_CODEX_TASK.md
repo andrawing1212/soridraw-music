@@ -1,3 +1,11 @@
+## CURRENT — PREVIEW app395 50:50 첫 분할 버그 수정·Chrome 검증·Hosting 배포 PASS; 실제 장치 검증 대기 (2026-10-10)
+
+- 배포된 최신 앱은 **app395**, exact 릴리스 `2fb614b9a82d5eceda93a1ccbdca7d4d36244819` / [Run 38040824155](https://github.com/andrawing1212/soridraw-music/actions/runs/38040824155) SUCCESS. 395 원격 버전 및 index exact checksum PASS, TEST/PROD unchanged PASS, Cloudflare/Functions/RTDB Rules/shared user source unchanged.
+- 이번 원인확인과 해결: 신규 세션 localStorage missing→Number(null)=0→Splitter min24% 버그. `readStoredPercent()` 하나만 고쳐 새 PC/태블릿 첫 split 50:50, 기존 저장 비율 보존. [Chrome Run 38040562510](https://github.com/andrawing1212/soridraw-music/actions/runs/38040562510) PC+tablet-emulation 양측 140곡 drag/release/scroll freeze PASS. TypeScript+Build+좋아요/팔로우 회귀 [408 38040721206](https://github.com/andrawing1212/soridraw-music/actions/runs/38040721206) PASS. Studio CSS/시각 디자인/기타 데이터 기능 손대지 않음.
+- 지금 해야 할 다음 작업: 계정 로그인 PREVIEW PC/모바일에서 Studio 첫 split 50:50/실제 저장된 비율 유지·실사용 Library/Music Note 대량 목록 드래그·360°/방향 왕복, generation bar와 pointer-up, 느린 네트워크 생성 모달 AI/번역 실제 사용자 검증. PC·태블릿 실제 체감이 이상 없으면 속도 4단계 실사용 검증 완료 결정, 5단계 추가 최적화는 실측 hotspot 증거가 없으면 강제로 만들지 않음. Stage420 방어 cutover OFF, Master 서버 미배포 UI OFF.
+- 3중 보고: Stage416 1/5=20%, 속도개선 3/5=60%, 현 실사용 검증 3/4=75%. 별도 이번 50:50 버그 4/4=100% 완료. 지속 문서 갱신.
+
+---
 ## CURRENT — app394 PREVIEW 출시 및 공개 첫 화면/모달 격리 Chrome 검사 PASS; 인증 실기기/태블릿 분할바 검증 진행 (2026-10-10)
 
 - 최종 PREVIEW Hosting app394 `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5` / [Release 38038414857](https://github.com/andrawing1212/soridraw-music/actions/runs/38038414857) PASS. 이후 [Chrome Run 38038600721](https://github.com/andrawing1212/soridraw-music/actions/runs/38038600721) PASS: 실제 preview 버전394, guest PC/mobile emulation 첫 화면·JS/CSS 0에러, 초기 무단 AI/modal 청크 0, 모달 별도 1000ms chunk 지연 로딩 상태 + main/musicApi/Back/재오픈 모두 PASS. 앱 본체 UI 스타일·좋아요/팔로우·Studio 분할 엔진 불변. TEST/PRODUCTION/Worker/Functions/RTDB/D1 원본 미변경.

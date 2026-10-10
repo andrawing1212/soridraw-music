@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-react';
 import { getLanguageMixRatioBand, LANGUAGE_MIX_RATIO_OPTIONS, normalizeLanguageMixRatioOption } from '../constants/languageMixRatios';
+import { readStoredV1LyricWritingStyle } from './musicApiLyricWritingPreference';
+export { readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './musicApiLyricWritingPreference';
 
 declare global {
   interface Window {
@@ -156,7 +158,6 @@ const GENERATION_ENGINE_OPTIONS: { id: GenerationEngineVersion; label: string; s
 ];
 
 const GENERATION_ENGINE_STORAGE_KEY = 'soridraw.main.generationEngineVersion';
-const V1_LYRIC_WRITING_STYLE_STORAGE_KEY = 'soridraw.main.v1LyricWritingStyle';
 const SUNO_MODEL_STORAGE_KEY = 'soridraw.musicApi.sunoModelVersion';
 
 const isSunoModelVersion = (value: unknown): value is SunoModelVersion =>
@@ -220,32 +221,6 @@ const writeStoredGenerationEngineVersion = (value: GenerationEngineVersion) => {
   }
 };
 
-
-const isV1LyricWritingStyle = (value: unknown): value is V1LyricWritingStyle =>
-  value === 'default' || value === 'kimEana';
-
-export const readStoredV1LyricWritingStyle = (): V1LyricWritingStyle => {
-  if (typeof window === 'undefined') return 'default';
-  try {
-    const stored = window.localStorage.getItem(V1_LYRIC_WRITING_STYLE_STORAGE_KEY);
-    if (isV1LyricWritingStyle(stored)) return stored;
-  } catch {
-    // Keep the default when storage is unavailable.
-  }
-  return isV1LyricWritingStyle(window.__soridrawV1LyricWritingStyle)
-    ? window.__soridrawV1LyricWritingStyle
-    : 'default';
-};
-
-export const writeStoredV1LyricWritingStyle = (value: V1LyricWritingStyle) => {
-  if (typeof window === 'undefined') return;
-  window.__soridrawV1LyricWritingStyle = value;
-  try {
-    window.localStorage.setItem(V1_LYRIC_WRITING_STYLE_STORAGE_KEY, value);
-  } catch {
-    // Runtime copy keeps the selection for the current page session.
-  }
-};
 
 const getSunoModelMeta = (id: SunoModelVersion) => SUNO_MODEL_OPTIONS.find((item) => item.id === id) || SUNO_MODEL_OPTIONS[0];
 const getGenerationEngineMeta = (id: GenerationEngineVersion) => GENERATION_ENGINE_OPTIONS.find((item) => item.id === id) || GENERATION_ENGINE_OPTIONS.find((item) => item.id === 'classic') || GENERATION_ENGINE_OPTIONS[0];

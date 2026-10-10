@@ -139,3 +139,114 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   console.log('APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS');
   console.log('APP141_RECEIVER_ADDITIONAL_SERVER_IO=0');
 }
+
+
+// The actual batch-ACK receiver (not a copied algorithm) must NOT notify
+// Explore about a server revision-conflict while the device still persists its
+// older optimistic outbox. On a real mounted ExplorePage, that early event is
+// discarded by readExploreTrackLikeMembership127 and never re-emitted.
+{
+  const { default: ts } = await import('typescript');
+  const { default: vm } = await import('node:vm');
+  const start = service.indexOf('flushPendingLikes = async (user: User): Promise<void> => {');
+  const end = service.indexOf('// Stage413: a 5-second timer', start);
+  assert.ok(start > 0 && end > start, 'exact flushPendingLikes body missing');
+  const flush = service.slice(start, end);
+  const executable = ts.transpileModule(
+    'let flushPendingLikes;\n' + flush + '\n(globalThis.__flush = flushPendingLikes);',
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const trackId = 'canonical-conflict-song';
+  const ownerUid = 'owner-one';
+  const pending = {
+    trackId, ownerUid, baseLiked: false, desiredLiked: true,
+    baseLikeCount: 0, optimisticLikeCount: 1,
+    queuedAt: 100, updatedAt: 200, retryCount: 0,
+    operationId: '00000000-0000-4000-8000-000000000001',
+    expectedRevision: 0,
+  };
+  let storedOutbox = { [trackId]: pending };
+  let storedSnapshot = { [trackId]: true };
+  const cache = new Map([[trackId, true]]);
+  const remoteRepaints = [];
+  const patchedMembership = [];
+  const calls = [];
+  const env = {
+    console, Date, Map, Set,
+    EXPLORE_LIKE_BATCH_MAX: 50,
+    EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    inflightByUid: new Map(),
+    exitFlushArmed413: new Set(),
+    readLikeOutbox: () => structuredClone(storedOutbox),
+    persistLikeOutbox: (_uid, next) => {
+      storedOutbox = structuredClone(next);
+      calls.push('persistOutbox');
+    },
+    getPendingExploreLikeMutationCount: () => Object.keys(storedOutbox).length,
+    readLikeCanonicalRevisions172: () => ({}),
+    persistLikeCanonicalRevisions172: () => {},
+    createExploreLikeOperationId144: () => pending.operationId,
+    clearFlushTimer: () => {},
+    schedulePendingFlush: () => { throw new Error('no additional pending mutation expected'); },
+    requestExploreLike: async (_user, route) => {
+      assert.equal(route, '/v1/me/likes/batch');
+      calls.push('POST');
+      return { data: { canonicalD1: 'settled' } };
+    },
+    normalizeBatchResults: () => [{
+      trackId, liked: false, likeCount: 0,
+      revision: 1, status: 'revision-conflict',
+    }],
+    canBroadcastExploreLikeSnapshot127: () => false,
+    computeExploreLikeAction127: () => { throw new Error('unexpected rebase'); },
+    rebaseExploreLikeAfterInFlight127: () => { throw new Error('unexpected rebase'); },
+    readSnapshotPending127: () => ({ ...storedSnapshot }),
+    writeSnapshotPending127: (_uid, next) => {
+      storedSnapshot = { ...next };
+      calls.push('persistSnapshot');
+    },
+    readLikeDisplayLocks: () => ({}),
+    persistLikeDisplayLocks: () => {},
+    getLikedStateCache: () => cache,
+    persistLikedStateCache: () => { calls.push('persistCache'); },
+    patchExploreLikedTrackMembership: (_uid, id, liked) => {
+      patchedMembership.push({ id, liked });
+      calls.push('patchMembership');
+    },
+    clampLikeCount: (n) => Math.max(0, Math.floor(Number(n) || 0)),
+    dispatchLikeSync: (detail) => {
+      if (detail.source !== 'remote') return;
+      calls.push('notifyRemote');
+      const effective = storedOutbox[detail.trackId]?.desiredLiked ??
+        storedSnapshot[detail.trackId] ?? cache.get(detail.trackId);
+      if (effective === detail.liked) remoteRepaints.push(detail);
+    },
+    publishConfirmedLikeSignal127: async (_uid, rows) => {
+      assert.equal(rows.length, 0, 'conflict must not publish an accepted new mutation');
+    },
+    publishExplorePublicLikeInvalidation192: async () => {
+      throw new Error('conflict must not rebroadcast shared public invalidation');
+    },
+    dispatchLikeSyncError: () => { throw new Error('unexpected error'); },
+  };
+  vm.runInNewContext(executable, env, { timeout: 1200 });
+  await env.__flush({ uid: 'same-account' });
+  assert.equal(Object.keys(storedOutbox).length, 0,
+    'settled canonical conflict must clear the stale optimistic outbox');
+  assert.equal(storedSnapshot[trackId], undefined,
+    'conflict must drop stale accepted-but-unsettled snapshot guard');
+  assert.equal(cache.get(trackId), false, 'cache must match server-returned membership');
+  assert.equal(remoteRepaints.length, 1, 'mounted Explore must not drop server-conflict heart change');
+  assert.equal(remoteRepaints[0].liked, false);
+  assert.equal(remoteRepaints[0].likeCount, 0);
+  assert.equal(patchedMembership.length, 1, 'My Likes card membership must follow canonical result');
+  assert.equal(patchedMembership[0].liked, false);
+  assert.ok(calls.indexOf('persistSnapshot') < calls.indexOf('notifyRemote'),
+    'old snapshot guard must be cleared before listener reads it');
+  assert.ok(calls.lastIndexOf('persistOutbox') < calls.indexOf('notifyRemote'),
+    'old optimistic outbox must be cleared before listener reads it');
+  assert.equal(calls.filter((event) => event === 'POST').length, 1,
+    'canonical ACK conflict must not trigger another server write');
+  console.log('APP389_CONFLICT_ACK_DURABLE_BEFORE_REPAINT=PASS');
+  console.log('APP389_CONFLICT_MY_LIKES_MEMBERSHIP_AND_W0_RETRY=PASS');
+}

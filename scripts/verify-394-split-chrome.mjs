@@ -48,6 +48,8 @@ try {
     dragActive:document.documentElement.classList.contains('soridraw-lite-split-dragging')};
   });
   const before=await sample();
+  assert.ok(Math.abs(before.builderWidth-profile.width/2)<65,
+    profile.name+' missing saved preference must start at intended 50:50, not 24% minimum');
   const scroll=await page.evaluate(()=>{
    document.querySelector('#builder-list').scrollTop=260;
    document.querySelector('#result-list').scrollTop=330;
@@ -68,7 +70,7 @@ try {
   const sorted=[...longs].sort((a,b)=>a-b);
   console.log('APP394_SPLIT_CHROME='+JSON.stringify({device:profile.name,before,during,after,
    longTaskCount:longs.length,longTaskP95Ms:sorted.length?Math.round(sorted[Math.ceil(sorted.length*.95)-1]):0,
-   errors}));
+   errors,initialDefaultPercent:'50'}));
   assert.ok(Math.abs(after.builderWidth-before.builderWidth)>8,profile.name+' drag did not move the real pane');
   assert.ok(Math.abs(after.builderWidth-during.builderWidth)<35,profile.name+' release snap');
   assert.ok(Math.abs(after.scrollBuilder-scroll.builder)<6 && Math.abs(after.scrollResult-scroll.result)<6,

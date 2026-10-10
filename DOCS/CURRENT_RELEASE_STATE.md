@@ -1,3 +1,11 @@
+## 0S104. PC/태블릿 실제 Chrome 엔진 검사에서 새 기기 기본 분할비율 버그 확정·최소 수정 (2026-10-10 KST)
+
+- [Run 38040363509](https://github.com/andrawing1212/soridraw-music/actions/runs/38040363509) 모든 408 CI PASS. 실제 Lite Pure Pane Hybrid 격리 Chrome wide 1800/tablet-emulated 1280 (Library형 양측 140개 항목)에서 mouse pointer drag/release, 260/330 스크롤 유지, no release snap PASS, long-task 0, pageerror 0. *실제 Galaxy Tab 손 드래그·사용자 목록·Studio 생성바 검증과 동일하지 않음.*
+- **구체 오류 재현:** 빈 localStorage 새 세션에서 PC 첫 Builder 너비 450px/1800px, Tablet 448px/1280px. `LiteStudioSplitWorkspace.tsx`의 `readStoredPercent()`가 `Number(localStorage.getItem(...))`로 비어 있는 `null`을 `0`으로 해석→`clampToBounds(0)`→사용자 의도 50:50 기본값 대신 좌측 최소 24%/태블릿 430px 근처를 반환함. 구조/디자인을 바꾼 게 아니라 **실제 기존 코드의 저장 기본값 처리 버그**.
+- **국소 수정:** 현재/legacy key가 없거나 빈 값이면 NaN으로 처리해 `DEFAULT_PERCENT=50` 또는 실제 이전 저장비율을 복구. 유효한 현재·legacy 저장값/24~76 bounds/태블릿 safe 430px/Drag hot path/CSS/외곽선/색상/다른 사용자 데이터 불변. PC/tablet Chrome 첫 위치 50±허용폭 검증을 기존 408 browser-smoke에 추가. 실제 손 사용 및 배포 전 CI PASS 확인 필수.
+- Stage416 1/5=20%, 속도 개선 3/5=60%, 현 검증 3/4=75%는 배포+실사용 검증 전 그대로. 공유 DB, Worker, Functions, TEST, PRODUCTION 미변경.
+
+---
 ## 0S103. 장시간 정체된 split 실제 엔진 Chrome 드래그 검사 시행 (2026-10-10 KST)
 
 - 현재 app394 PREVIEW 성능 잔여 이슈 확인 목적. 코드 변경 없이 원본 `StudioSplitEngineWorkspace` Pure Pane Hybrid를 Chrome PC 1800px/태블릿 모의 1280px에서 140행 Builder/Result 목록으로 렌더 후 실제 pointer drag/release/scrollTop/no-snap/JS errors/long-task 측정하는 테스트를 기존 408 `[browser-smoke]`에 추가.

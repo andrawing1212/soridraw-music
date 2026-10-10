@@ -122,9 +122,13 @@ const clampToBounds = (value: number, bounds: SplitBounds) => Math.min(bounds.ma
 const readStoredPercent = (profile: SplitProfile = getSplitProfile()) => {
   if (typeof window === 'undefined') return DEFAULT_PERCENT;
   try {
-    const current = Number(window.localStorage.getItem(getStorageKey(profile)));
+    // Number(null) is 0, not NaN. Missing keys must use the intended 50/50
+    // default (or a valid legacy preference), never the 24% minimum.
+    const currentRaw = window.localStorage.getItem(getStorageKey(profile));
+    const current = currentRaw === null || !currentRaw.trim() ? NaN : Number(currentRaw);
     if (Number.isFinite(current)) return clampToBounds(current, { min: MIN_PERCENT, max: MAX_PERCENT });
-    const legacy = Number(window.localStorage.getItem(getLegacyStorageKey(profile)));
+    const legacyRaw = window.localStorage.getItem(getLegacyStorageKey(profile));
+    const legacy = legacyRaw === null || !legacyRaw.trim() ? NaN : Number(legacyRaw);
     return Number.isFinite(legacy) ? clampToBounds(legacy, { min: MIN_PERCENT, max: MAX_PERCENT }) : DEFAULT_PERCENT;
   } catch {
     return DEFAULT_PERCENT;

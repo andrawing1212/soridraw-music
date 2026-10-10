@@ -3,6 +3,7 @@ on:
   push:
     branches: [preview]
     paths:
+      - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/canonical/preview-worker.js'
       - 'cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs'

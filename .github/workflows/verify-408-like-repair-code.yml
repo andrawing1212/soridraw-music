@@ -11,6 +11,8 @@ on:
       - 'src/services/exploreLikeService.ts'
       - 'src/services/exploreLikeAbusePolicy420.ts'
       - 'scripts/verify-420-like-abuse-policy.mjs'
+      - 'functions/src/exploreLikeAbuseGate420.ts'
+      - 'scripts/verify-420-server-like-abuse-gate.mjs'
       - 'src/App.tsx'
       - 'src/pages/FavoritesPage.tsx'
       - 'src/pages/SunoLibraryPage.tsx'

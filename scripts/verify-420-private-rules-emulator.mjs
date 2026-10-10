@@ -56,9 +56,19 @@ try {
   await assertFails(owner.ref('userSync/uid-A/unauthorizedOther').set('bad'));
   await assertFails(owner.ref('privateLikeSync420/uid-A').set({ version: 1 }));
   await assertFails(owner.ref('privateLikeSync420/uid-A').remove());
-  await assertFails(other.ref('privateLikeSync420/uid-A').get());
-  await assertFails(noUser.ref('privateLikeSync420/uid-A').get());
-  await assertSucceeds(owner.ref('privateLikeSync420/uid-A').get());
+  // Master-only audit records must never be visible to an ordinary UID.
+  // Populate them using bypassRules only inside this demo emulator.
+  await environment.withSecurityRulesDisabled(async (adminContext) => {
+    await adminContext.database().ref('privateLikeSync420/uid-A').set({
+      display: { version: 1, rate: { lockedUntilMs: 0 }, results: [] },
+      adminUnlockAudit: [{ actorUid: 'master-secret-uid', reason: 'private reason', at: 12 }],
+    });
+  });
+  await assertFails(owner.ref('privateLikeSync420/uid-A').get());
+  await assertFails(owner.ref('privateLikeSync420/uid-A/adminUnlockAudit').get());
+  await assertFails(other.ref('privateLikeSync420/uid-A/display').get());
+  await assertFails(noUser.ref('privateLikeSync420/uid-A/display').get());
+  await assertSucceeds(owner.ref('privateLikeSync420/uid-A/display').get());
   // Legacy confirmed signal 127 and five other channels remain authorized.
   console.log('STAGE420_EMULATOR_DIRECT_LIKE_WRITE_AND_ROOT_DELETE_DENIED=PASS');
   console.log('STAGE420_EMULATOR_SIX_LEGACY_SIGNAL_CHANNELS_AND_UID_ISOLATION=PASS');

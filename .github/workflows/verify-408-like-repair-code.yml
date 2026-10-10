@@ -27,6 +27,7 @@ on:
       - 'functions/src/exploreLikePermitRenew420.ts'
       - 'functions/src/exploreLikeApprovalRecovery420.ts'
       - 'scripts/verify-420-approval-recovery.mjs'
+      - 'scripts/verify-420-journal-cost-envelope.mjs'
       - 'scripts/verify-420-permit-renewal.mjs'
       - 'scripts/build-420-private-rules-candidate.mjs'
       - 'scripts/verify-420-private-rules-candidate.mjs'
@@ -116,6 +117,7 @@ jobs:
           node scripts/verify-420-server-like-abuse-gate.mjs
           node scripts/verify-420-permit-renewal.mjs
           node scripts/verify-420-approval-recovery.mjs
+          node scripts/verify-420-journal-cost-envelope.mjs
           node scripts/verify-420-permit-expiry-replay.mjs
           node scripts/verify-420-private-rules-candidate.mjs
           node scripts/verify-420-guarded-transport.mjs

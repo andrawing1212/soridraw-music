@@ -1,3 +1,16 @@
+## 0S72. Stage416 ② ChatGPT 직접 구현 소스 후보 — PREVIEW 배포/검증 HOLD (2026-10-10 KST)
+
+- **사용자 지시 변경:** Codex에 맡기지 말고 ChatGPT가 직접 구현. 사용자 명령을 우선해 `preview`에서만 직접 작업했고, 별도 Codex 작업 없음. 원래 GitHub 기록 `DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`는 구현 조건 참조용이며 실행 주체는 변경.
+- **시작 소스 기준:** `preview 0b6742a4e6d9dde4865d06f42da11a334adb9da5`, 기존 활성 Firebase PREVIEW **app391** + 공유 RTDB optional `canonicalSettled417` 정상 좋아요/해제 보호. 새 소스 후보 최초 구현 `7b60fa085df6c6e46cf16a3d1fd50c70a90448f0`, 후속 국소 보정 진행. 현재 최종 SHA는 보고 시 `preview HEAD` 고정 재확인.
+- **이번에 실제 수정한 범위 (제품 4 / 검사 2 파일):** `src/services/exploreLikeIntent416.ts` 신규(UID-private 잠정 신호, 최대 50건, 1시간 유효, 온라인 전송 10초 이상 지연 시 폐기, Firebase RTDB transaction 버전); `src/services/exploreLikeService.ts`(로컬/다른 기기 개인 잠정 membership overlay, 기존 5초 idle 서버 batch 및 확정 `127` RTDB 그대로 유지, ACK/거절 뒤 해당 operation hint 정리, My Likes 로컬 카탈로그·새 곡 bounded 확인 보강); `src/pages/ExplorePage.tsx`(잠정 신호는 개인 하트/내 좋아요만 반영, 공용 숫자 알림 미발행); `database.rules.json`(기존 각 node/권한은 exact unchanged, 신규 `userSync/$uid/exploreLikeIntent416` 1개 additive validation); `scripts/verify-416-private-like-intent.mjs`(Node22 격리 두 기기 시뮬레이션 신규); `scripts/soridraw-qa-engine.mjs`(기존 fast like 그룹에 416 검증 추가). UI CSS/레이아웃, Worker/D1/Firestore/Functions/프로필/팔로우/뮤직노트 코드 변경 없음.
+- **확인된 정적 근거:** 기본 서버 대기 `EXPLORE_LIKE_IDLE_FLUSH_MS_120=5_000` 유지; 기존 `publishConfirmedLikeSignal127` 호출 유지; 기존 `userSync/$uid/exploreLike` 수신/송신·`canonicalSettled417` 유지. 기존 database.rules.json `userSync/$uid`의 read/write/8개 자식 및 $other subtree를 전부 JSON 구조 기준 대조하여 **동일**, 새 잠정 노드만 추가됨. GitHub 파일 diff 범위는 위 6개 외 제품 변경 0.
+- **중요 미검증:** TypeScript, Build, 신규 416 실행형 fixture 실제 종료 코드, 기존 127/175/180/191/192/197/390/391 회귀, live shared RTDB rules validation/preflight/실배포, PC↔모바일 5~10초, 실제 RTDB 비용/전송량, 서로 다른 기기 같은 곡 역순·오프라인/강제종료 등은 **PASS 아님**. GitHub 기존 fast QA 자동트리거는 설정됐지만 해당 실행 로그/성공 확인 불가이므로 PASS 주장 금지.
+- **배포/데이터:** Firebase Hosting/RTDB 실제 Rules/Cloudflare Worker/D1/R2/Functions/공유 원본 사용자 데이터 **실제 변경 0**, main/TEST/PRODUCTION 변경·배포 없음. 제품 소스 후보는 GitHub `preview`에만 있음. PREVIEW 실서비스 여전히 app391.
+- **고위험 게이트:** 개인 임시 알림과 서버 확정 상태를 서로 오인하거나 누락/역순 클릭·구형 앱과 충돌하거나, RTDB transaction 추가 비용이 경제적으로 불리하거나, RTDB 규칙 실제 추가가 기존 정상 기능을 위협할 경우 배포 중단. 특히 실제 모바일 통신 조건에서 5~10초 달성은 미증명. `CURRENT_RELEASE_STATE`의 W2 강제 해제/총 월비용 판단 우선.
+- **다음 작업:** 위 416 격리 fixture와 Node22 QA 실행 로그 확보 → `npm ci`, TypeScript, Build, 127/175/180/191/192/197/390 등 회귀 → live rules additive-only exact 사전감사 → 읽기전용 독립 감사·RTDB 비용 산정 → 안전 판정 뒤 Firebase PREVIEW rules 선행/Hosting 정확 배포 → 실제 PC↔모바일 5~10초 사용자 확인. 검증 이전 **② 완료 판정 금지**, 전체 **0/5 완료**. ① 반복 읽기는 사용자 지시에 따라 보류; ③/④ Master 두 독립 시간 설정 설계만 완료/제품 미구현; ⑤ 대기.
+
+---
+
 ## 0S71. Stage416 ② 개인 좋아요 5~10초 — 실제 코드 경로 확인 및 Codex 구현 계약 기록 (2026-10-10 KST)
 
 - **현재 결과:** 코드·RTDB 규칙 **읽기 전용** 확인 완료, Codex 구현 명령을 `DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`에 신규 기록. preview 문서 commit `7df37c49c46177cbf0dcf21a868727419a3b8a57`. **② 실제 제품 구현 전**이며 전체 진행 **0/5 완료**.

@@ -1,3 +1,14 @@
+## 0S78. Stage420 2시간 RTDB 클릭 공격 방어: 서버 단독 후보·Master 해제 작성, 실제 차단 배포 전 HOLD (2026-10-10)
+
+- **사용자 고정 정책**: 60초 30회 경고 / 60초 40회 제한 / 2개 연속 60초 한도 도달하면 같은 UID 좋아요·해제 **120분 잠금** / 자동해제 / Master 상태 조회·조기해제·기준 조정. 1시간은 기존 초안으로 무효. ② app392 실사용 PC↔모바일 거의 즉시 좋아요는 절대 보호.
+- **직접 만든 신규 구현(아직 실행 서비스 아님)**: `src/services/exploreLikeAbusePolicy420.ts` 순수 정책, `functions/src/exploreLikeAbuseGate420.ts` 서버 UID atomic rate/120min state + 중복 요청 idempotent + 한꺼번에 최대50 changed rows, `functions/src/index.ts`의 `publishExploreLikeIntent420`, `masterGetExploreLikeLimit420`, `masterUnlockExploreLike420` (requireMasterCaller 강제, 잠금해제 감사 이력 bounded). `scripts/build-420-private-rules-candidate.mjs`는 공유 live file 미수정의 별도 보안 후보 generator, `scripts/verify-420-private-rules-candidate.mjs`, `scripts/verify-420-server-like-abuse-gate.mjs`, `scripts/verify-420-like-abuse-policy.mjs` 자동QA 테스트.
+- **검증**: Fast QA 38023304221/38023788058/38023881344 SUCCESS. 408 38023594858 / 38023800939 SUCCESS. 최신 Functions 실제 TypeScript Build 포함 408 [38024059885](https://github.com/andrawing1212/soridraw-music/actions/runs/38024059885) 진행 상태의 완료 결과는 별도 확인 전. 실행형 서버 mock은 PC/모바일 같은 UID 원자적 정책 모델·30/40·2시간 잠금·자동해제·operationId 중복·다른 사용자 격리 PASS. **Emulator/실제 서버/AppCheck/마스터 UI/실제 비용/지연은 미검증**.
+- **가장 중요한 현재 차단 결함**: 현재 공유 RTDB `userSync/$uid`의 **부모 .write grant**가 하위 `exploreLikeIntent416` SDK/REST 직접 쓰기를 허용함. 공식 Firebase 문서상 child deny로 revocation 불가, validation은 deletion에 적용되지 않음. 따라서 서버 callable 후보를 만들었어도 **old direct path 권한이 live 허용인 동안 악용 가능**. 후보는 `userSync` 부모 broad write를 제거하며 기존 6개 자식과 기본 read/validate를 각각 보존 + 새로운 `privateLikeSync420/$uid`는 server-only write. 실제 Rules 배포에는 RTDB emulator와 구버전 TEST/PRODUCTION/열려 있는 app392 동시 호환 검증 필요. 기존 live Rules **미변경**.
+- **다음 중단 게이트**: (1) 테스트용 Rules Emulator 직접 REST/SDK bypass 거절, 다른 userSync 기능 보존 (2) 함수 정상 1회 호출의 실제 지연·월 100k 사용자비용 vs RTDB 현재 비용 (3) 새 private writer/receiver를 앱393에 안전 연결, ② 빠른 동기화 유지 (4) Cloudflare canonical batch 직통 요청도 2시간 잠금 준수 (5) Master 기준 조정/잠금 알림 UI 및 조기해제/감사, 기존 outbox 안전 (6) QA/독립 감사 후 PREVIEW만 배포. 어느 하나 불합격이면 릴리스 HOLD.
+- **배포 영향**: `preview` 코드 및 문서만 변경, 실제 Firebase PREVIEW Hosting **app392 그대로**, Firebase shared RTDB/Functions/Cloudflare Worker/Firestore/D1/R2 원본 데이터 **실제 배포·삭제·백필·migrate 전혀 없음**, main/TEST/production 영향 없음. **이번 보안 작업은 구현 부분진행/보안 서버 활성화 전**, Stage416 **1/5** (① 보류/② app392 PASS/③·④·⑤ 대기).
+
+---
+
 ## 0S77. 사용자 최종 수정: 반복 좋아요 잠금 2시간 · 서버 방어 우선 직접개발 (2026-10-10 KST)
 
 - **사용자 최종 승인 정책:** 계정당 PC/모바일/모든 탭 합산 좋아요·해제 30회/60초 도달 경고, 40회/60초 도달 추가 클릭 차단, 2개 연속 60초 제한 도달 시 **120분(2시간) 잠금**, 시간 만료 자동해제. Master 잠금 현황/조기해제/기준 수정. 기존 문서의 1시간 제안은 이전 초안으로 대체. **Stage③ 개인 5분 서버 접수보다 이 abuse/cost 방어가 우선**. 정상 앱392 개인 실시간 하트 거의 즉시 유지.

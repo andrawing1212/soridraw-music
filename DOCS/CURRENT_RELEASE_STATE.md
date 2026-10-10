@@ -1,3 +1,15 @@
+## 0S77. 사용자 최종 수정: 반복 좋아요 잠금 2시간 · 서버 방어 우선 직접개발 (2026-10-10 KST)
+
+- **사용자 최종 승인 정책:** 계정당 PC/모바일/모든 탭 합산 좋아요·해제 30회/60초 도달 경고, 40회/60초 도달 추가 클릭 차단, 2개 연속 60초 제한 도달 시 **120분(2시간) 잠금**, 시간 만료 자동해제. Master 잠금 현황/조기해제/기준 수정. 기존 문서의 1시간 제안은 이전 초안으로 대체. **Stage③ 개인 5분 서버 접수보다 이 abuse/cost 방어가 우선**. 정상 앱392 개인 실시간 하트 거의 즉시 유지.
+- **실제 코드:** `src/services/exploreLikeAbusePolicy420.ts`에 순수 정책 구현(30 경고, 40 제한, 2개 연속 UTC 60초 window, 잠금 120min, 정시 자동해제, 거절 시 state 변경 없음) 신규; `scripts/verify-420-like-abuse-policy.mjs` 테스트 신규; `scripts/soridraw-qa-engine.mjs` 기존 fast like 그룹에 검사 연결. **실사용 코드에 아직 연결하지 않음**, 서버 방어가 없는 앱 버튼만 잠그고 보안 완료 오인시키지 않기 위해 제품 배포 HOLD.
+- **GitHub QA 실제:** [Fast QA run 38023304221](https://github.com/andrawing1212/soridraw-music/actions/runs/38023304221) SUCCESS, `STAGE420_30_WARN_40_LIMIT=PASS`, `STAGE420_TWO_CONSECUTIVE_MINUTES_LOCK_120_MIN=PASS`, `STAGE420_SAME_UID_TWO_DEVICE_ATOMIC_MODEL=PASS`, `STAGE420_AUTO_RELEASE_AND_UNRELATED_MINUTES=PASS`. `STAGE420_NO_SERVER_ENFORCEMENT_YET=EXPECTED`는 **보안 미완료를 명시적으로 확인한 상태**이지 보안 PASS 아님.
+- **우선 발견한 서버 차단의 필수 조건:** 기존 `database.rules.json` `userSync/$uid`에 UID용 부모 `.write` 허용; 해당 부모 허가가 하위 경로까지 전파되므로 신규 child 한정 `.write:false`만 추가해서 보호하는 방법은 불충분. 현재 `userSync/$uid/exploreLikeIntent416` 사용자는 Firebase SDK/REST로 직접 변경 가능. 앱에만 카운터·2시간 배너를 두면 SDK/REST 스크립트·구형 앱이 우회할 수 있음. 직접 쓰기 revocation은 다른 `musicNote/recentSongs/libraryPlaylist/exploreLike/exploreFollow/explorePublication`의 정상 권한까지 고려한 shared RTDB 부모 규칙 재설계 또는 읽기전용 server-owned 새 경로와 구형 경로 차단이 필요. **하위호환/실제 live Rules exact preflight/RTDB emulator 테스트 전 규칙 변경 금지.**
+- **비용 의사결정:** 지금까지 보안 모듈은 서버 조회·쓰기·구독 비용을 추가하지 않는 pure logic. 진짜 서버 검증을 하려면 신규 per-click Functions/Worker 호출 비용 대 Firebase RTDB 정상 클릭 RTT 및 다운로드 용량을 실측/비교해야 함. 기존 Worker 60/60s는 canonical batch에만 적용돼 RTDB 즉시 신호를 막지 않음. 악의적 거절 요청도 네트워크 비용이 생길 수 있으므로 '완전 무료 차단' 주장 금지.
+- **현재 환경:** `preview` 소스/QA/문서만 수정. Firebase PREVIEW 실제 Hosting **app392 그대로**, Firebase shared RTDB 기존 노드 유지; Firebase Functions/Cloudflare Worker/RTDB Rules/D1/Firestore/공유 사용자 원본/main/TEST/PRODUCTION **이번 작업에서 실제 변경·배포 0**. 안전한 원격 서버 차단 경로 미검증이므로 2시간 제한 실서비스 활성화 PASS 금지. 전체 Stage416 **1/5 완료**(① 반복 읽기 보류, ② 사용자 실사용 PASS, ③/④/⑤ 대기).
+- **다음 작업 우선순위:** server-owned UID atomic rate/lock gate + direct SDK/REST bypass deny 설계 → 다른 userSync 자식·TEST/PRODUCTION 호환성 검증/RTDB emulator → 30/40/2min/120min 및 앱392 latency/cost 실행형 QA → Master UX/조기해제 실제 서버 권한과 감사 로그 → 정확히 PREVIEW만 배포 → 사용자 정상 하트 속도 테스트. 배포/승격 PASS가 나올 때까지 ③ timer·④ 공개 집계 구현으로 넘어가지 않는다.
+
+---
+
 ## 0S76. 좋아요 실시간 신호 반복 공격·비용 방어 추가 요구 — ③ 선행 보안 게이트 (2026-10-10 KST)
 
 - **사용자 신규 요구:** app392 PC↔모바일 개인 하트 거의 즉시 반영을 **느리게 하지 말 것**. 빠른 반복 좋아요/해제가 매번 RTDB 실시간 통신 비용을 증가시키므로, **1분당 사용자 최대 횟수 및 2분 이상 반복 공격 시 경고·해당 계정 약 1시간 좋아요/해제 제한**을 추가하는 방어 수단이 필요. 정상 UI 지연/좋아요 기능 삭제는 요구 아님.

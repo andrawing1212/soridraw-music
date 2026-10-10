@@ -24,6 +24,7 @@ const groups = [
     ['node', 'scripts/verify-420-server-like-abuse-gate.mjs'],
     ['node', 'scripts/verify-420-private-rules-candidate.mjs'],
     ['node', 'scripts/verify-420-guarded-transport.mjs'],
+    ['node', 'scripts/verify-420-guarded-outbox.mjs'],
     ['node', 'scripts/verify-420-master-policy.mjs'],
     ['node', 'scripts/verify-420-master-ui.mjs'],
   ] },

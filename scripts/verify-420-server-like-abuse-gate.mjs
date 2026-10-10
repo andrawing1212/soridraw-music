@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 function loadModule(file, exportedNames) {
   let source = stripTypeScriptTypes(readFileSync(file, 'utf8'), { mode: 'strip' });
-  source = source.replace(/^import\\s+.*?from\\s+'[^']+';\\s*$/gm, '')
+  source = source.replace(/^import\s+.*?from\s+'[^']+';\s*$/gm, '')
     .replaceAll('export const ', 'const ');
   source += '\nmodule.exports = {' + exportedNames.join(',') + '};';
   const module = { exports: {} };

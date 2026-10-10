@@ -1,6 +1,6 @@
 // Source-only risk audit. Real Firebase/Cloudflare/identity/data are never touched.
 import assert from 'node:assert/strict';
-import { randomBytes, createHmac, webcrypto } from 'node:crypto';
+import { randomBytes, createHmac, createHash, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
@@ -11,7 +11,7 @@ const load=(path,names,more={})=>{
     .replace(/^import .*?;\s*$/gm,'').replaceAll('export const ','const ');
   src+='\nmodule.exports={'+names.join(',')+'};';
   const m={exports:{}};
-  vm.runInNewContext(src,{module:m,Buffer,Number,Date,Error,Math,createHmac,...more},{timeout:2000});
+  vm.runInNewContext(src,{module:m,Buffer,Number,Date,Error,Math,createHmac,createHash,...more},{timeout:2000});
   return m.exports;
 };
 const policy={warningPerMinute:30,limitPerMinute:40,suspensionMinutes:120};
@@ -72,7 +72,7 @@ assert.equal(root.display.results.some(x=>x.operationId===mk(101).operationId),f
 const beforeEvictedReplay=writes;
 const replay=await pub(crowded,mk(101),base+ttl+60_000);
 assert.equal(replay.allowed,true);
-assert.equal(replay.duplicate,false,'evicted replay is counted as a new click');
-assert.equal(writes,beforeEvictedReplay+1);
-console.log('STAGE420_OFFLINE_EVICTED_REPLAY_EXTRA_RTDB_WRITE=CONFIRMED');
+assert.equal(replay.duplicate,true,'atomic approval journal survives 51st display eviction');
+assert.equal(writes,beforeEvictedReplay,'old approved operation must not increase RTDB writes');
+console.log('STAGE420_OFFLINE_51_EVENT_EVICTED_REPLAY_RTDB_W0=PASS');
 console.log('STAGE420_OLD_CLIENT_AND_LIVE_CUTOVER=HOLD');

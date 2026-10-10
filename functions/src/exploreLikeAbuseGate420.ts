@@ -3,6 +3,7 @@
 // userSync/$uid/exploreLikeIntent416 path until the shared ancestor .write
 // permission is migrated safely; do not claim this closes abuse by itself.
 import type { Database } from 'firebase-admin/database';
+import { createHash } from 'node:crypto';
 import { DEFAULT_LIKE_ABUSE_SETTINGS_420, type LikeAbuseSettings420 } from './exploreLikeAbuseSettings420';
 
 export const LIKE_420_WARNING = 30;
@@ -10,6 +11,42 @@ export const LIKE_420_MINUTE_LIMIT = 40;
 export const LIKE_420_TWO_HOURS_MS = 120 * 60_000;
 const MINUTE_MS = 60_000;
 const MAX_RESULTS = 50;
+// Capped per-account journal; no unbounded root growth or whole-account scan.
+export const MAX_APPROVAL_JOURNAL_420 = 256;
+export const APPROVAL_JOURNAL_TTL_MS_420 = 24 * 60 * 60_000;
+type LikeApprovalReceipt420 = { at: number; digest: string };
+type LikeApprovalJournal420 = Record<string, LikeApprovalReceipt420>;
+
+export const digestApprovedLikeCommand420 = (action: LikePrivateCommand420): string =>
+  createHash('sha256')
+    .update(JSON.stringify([action.trackId, action.ownerUid, action.liked, action.operationId]), 'utf8')
+    .digest('base64url');
+
+export const matchesApprovedLikeReceipt420 = (
+  receipt: LikeApprovalReceipt420 | undefined, action: LikePrivateCommand420,
+  nowMs: number,
+): boolean => !!receipt && Number.isSafeInteger(receipt.at) &&
+  receipt.at > 0 && receipt.at <= nowMs &&
+  nowMs - receipt.at <= APPROVAL_JOURNAL_TTL_MS_420 &&
+  receipt.digest === digestApprovedLikeCommand420(action);
+
+const keepBoundedApprovalJournal420 = (
+  existing: LikeApprovalJournal420 | undefined,
+  action: LikePrivateCommand420,
+  nowMs: number,
+): LikeApprovalJournal420 => {
+  const recent = Object.entries(existing || {}).filter(([id, receipt]) =>
+    /^[0-9a-f-]{36}$/i.test(id) &&
+    !!receipt && Number.isSafeInteger(receipt.at) &&
+    receipt.at > 0 && receipt.at <= nowMs &&
+    nowMs - receipt.at <= APPROVAL_JOURNAL_TTL_MS_420 &&
+    typeof receipt.digest === 'string' && receipt.digest.length === 43,
+  ).sort((a, b) => a[1].at - b[1].at || a[0].localeCompare(b[0]))
+    .slice(-(MAX_APPROVAL_JOURNAL_420 - 1));
+  return Object.fromEntries([...recent, [action.operationId, {
+    at: nowMs, digest: digestApprovedLikeCommand420(action),
+  }]]);
+};
 
 export type LikePrivateCommand420 = {
   trackId: string;
@@ -37,6 +74,7 @@ type ServerOwnedSignal420 = {
 };
 type ServerOwnedRoot420 = {
   display?: ServerOwnedSignal420;
+  approvalJournal420?: LikeApprovalJournal420;
   adminUnlockAudit?: Array<Record<string, unknown>>;
 };
 export type GuardedLikeResult420 = {
@@ -131,7 +169,8 @@ export const publishGuardedLikeSignal420 = async (
     const previousVersion = Number(visible.version || 0);
     if (!Number.isSafeInteger(previousVersion) || previousVersion >= Number.MAX_SAFE_INTEGER) return;
     const prior = Array.isArray(visible.results) ? visible.results : [];
-    if (prior.some((row) => row?.operationId === input.operationId)) return;
+    if (prior.some((row) => row?.operationId === input.operationId) ||
+        Object.prototype.hasOwnProperty.call(current.approvalJournal420 || {}, input.operationId)) return;
     const decision = decide(normalizeState(visible.rate), serverNowMs, configuredPolicy);
     if (!decision.allowed) return;
     const row: PrivateRow420 = { ...input, version: previousVersion + 1,
@@ -147,10 +186,16 @@ export const publishGuardedLikeSignal420 = async (
     ).slice(-(MAX_RESULTS - 1));
     // Keep the Master-only audit beside, but never inside the user-readable
     // display subtree. One atomic root transaction preserves either side.
-    return { ...current, display: {
-      version: previousVersion + 1, rate: decision.rate,
-      results: [...bounded, row],
-    } } as ServerOwnedRoot420;
+    // The matching approval proof is inserted IN THE SAME root transaction
+    // as quota increment + visible event. An ACK can disappear safely after
+    // commit; no second non-atomic receipt write or new rate transaction.
+    return { ...current,
+      approvalJournal420: keepBoundedApprovalJournal420(current.approvalJournal420, input, serverNowMs),
+      display: {
+        version: previousVersion + 1, rate: decision.rate,
+        results: [...bounded, row],
+      },
+    } as ServerOwnedRoot420;
   }, undefined, false);
   const root = transaction.snapshot.val() as ServerOwnedRoot420 | null;
   const snapshot = root?.display;
@@ -162,10 +207,11 @@ export const publishGuardedLikeSignal420 = async (
   const duplicateRow = Array.isArray(snapshot?.results)
     ? snapshot.results.find((row) => row?.operationId === input.operationId)
     : undefined;
-  const duplicate = !!duplicateRow &&
+  const duplicate = (!!duplicateRow &&
     duplicateRow.trackId === input.trackId &&
     duplicateRow.ownerUid === input.ownerUid &&
-    duplicateRow.liked === input.liked;
+    duplicateRow.liked === input.liked) ||
+    matchesApprovedLikeReceipt420(root?.approvalJournal420?.[input.operationId], input, serverNowMs);
   const allowed = transaction.committed || duplicate;
   return {
     allowed,

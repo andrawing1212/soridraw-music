@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 
@@ -10,7 +11,7 @@ const mockModule = (path, names, context = {}) => {
     .replaceAll('export const ', 'const ');
   code += '\nmodule.exports = {' + names.join(',') + '};';
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, Number, Math, Date, Error, console, ...context }, { timeout: 1000 });
+  vm.runInNewContext(code, { module, Number, Math, Date, Error, console, createHash, ...context }, { timeout: 1000 });
   return module.exports;
 };
 const settings = mockModule('functions/src/exploreLikeAbuseSettings420.ts', [

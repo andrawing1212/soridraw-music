@@ -4,6 +4,7 @@
 // is revoked safely after account-private rules migration.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 
@@ -14,7 +15,7 @@ function loadModule(file, exportedNames) {
   source += '\nmodule.exports = {' + exportedNames.join(',') + '};';
   const module = { exports: {} };
   vm.runInNewContext(source, {
-    module, console, Number, Math, Date, Error,
+    module, console, Number, Math, Date, Error, createHash,
     DEFAULT_LIKE_ABUSE_SETTINGS_420: {
       warningPerMinute: 30, limitPerMinute: 40, suspensionMinutes: 120,
     },

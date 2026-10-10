@@ -3,7 +3,10 @@
 // NEVER publish again or change a rate counter. Records evicted from display
 // are NOT proof and must stay pending (fail closed).
 import type { Database } from 'firebase-admin/database';
-import type { LikePrivateCommand420 } from './exploreLikeAbuseGate420';
+import {
+  type LikePrivateCommand420,
+  matchesApprovedLikeReceipt420,
+} from './exploreLikeAbuseGate420';
 
 export const LIKE_APPROVAL_RECOVERY_MAX_AGE_MS_420 = 60 * 60_000;
 const operationValid = (x: LikePrivateCommand420): boolean =>
@@ -24,8 +27,19 @@ export const hasExactRecentApprovedLike420 = async (
       !operationValid(input) || !Number.isSafeInteger(nowMs) || nowMs <= 0) {
     throw new Error('420_APPROVAL_RECOVERY_INVALID');
   }
-  // One bounded, read-only path. Do not read account collections, D1 receipts,
-  // or unbounded per-operation history. No new mutation or quota event.
+  // Exact one-operation point read from the 256-entry journal. The journal
+  // was committed atomically with the original rate approval and survives
+  // eviction of display's last-50 events. No quota write or history scan.
+  const proof = await database.ref(
+    `privateLikeSync420/${authenticatedUid}/approvalJournal420/${input.operationId}`,
+  ).get();
+  const receipt = proof.val();
+  if (receipt !== null && receipt !== undefined) {
+    return !!receipt && typeof receipt === 'object' && !Array.isArray(receipt) &&
+      matchesApprovedLikeReceipt420(receipt, input, nowMs);
+  }
+  // Compatibility for old source-only state predating the atomic journal:
+  // one bounded <=50 fallback read, never a fresh approval transaction.
   const snapshot = await database.ref(
     `privateLikeSync420/${authenticatedUid}/display/results`,
   ).get();

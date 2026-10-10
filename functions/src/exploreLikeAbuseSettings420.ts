@@ -24,12 +24,12 @@ export const validateLikeAbuseSettings420 = (value: unknown): LikeAbuseSettings4
     throw new Error('INVALID_LIKE_ABUSE_SETTINGS');
   }
   const raw = value as Partial<LikeAbuseSettings420>;
-  if (!Number.isInteger(raw.warningPerMinute) ||
+  if (!Number.isInteger(Number(raw.warningPerMinute)) ||
       Number(raw.warningPerMinute) < 5 || Number(raw.warningPerMinute) > 100 ||
-      !Number.isInteger(raw.limitPerMinute) ||
+      !Number.isInteger(Number(raw.limitPerMinute)) ||
       Number(raw.limitPerMinute) <= Number(raw.warningPerMinute) ||
       Number(raw.limitPerMinute) > 200 ||
-      !Number.isInteger(raw.suspensionMinutes) ||
+      !Number.isInteger(Number(raw.suspensionMinutes)) ||
       Number(raw.suspensionMinutes) < 15 || Number(raw.suspensionMinutes) > 1440) {
     throw new Error('INVALID_LIKE_ABUSE_SETTINGS');
   }

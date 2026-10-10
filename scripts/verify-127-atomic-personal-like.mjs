@@ -233,7 +233,15 @@ assert.ok(
   flush.indexOf('acceptedForSignal127.push(accepted)') < flush.indexOf('if (canonicalLikeSettled127) {'),
   'accepted account state must be queued for cross-device sync before canonical aggregate settlement gating',
 );
-assert.match(flush, /dispatchLikeSync\(\{ \.\.\.accepted, source: canonicalLikeSettled127 \? 'confirmed' : 'local' \}\)/);
+assert.match(flush, /canonicalAcceptedUiAfterPersist127\.push\(\{ \.\.\.accepted, source: 'remote' \}\)/,
+  'server-confirmed own heart needs a replayable UI repaint');
+assert.ok(
+  flush.indexOf('persistLikeOutbox(uid, latest);', flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')) <
+    flush.indexOf('canonicalAcceptedUiAfterPersist127.forEach(dispatchLikeSync)'),
+  'accepted UI repaint must observe durable local membership after the old outbox is gone',
+);
+assert.match(flush, /canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/,
+  'D1 settled is not sufficient to drop an accepted private R2 guard');
 assert.match(flush, /persistLikedStateCache\(uid, cache\)/);
 assert.match(flush, /persistLikeOutbox\(uid, latest\)/);
 assert.ok(flush.indexOf('persistLikeOutbox(uid, latest);') < flush.indexOf('await publishConfirmedLikeSignal127(uid, acceptedForSignal127)'), 'publish only after durable batch ACK');

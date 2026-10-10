@@ -145,6 +145,44 @@
             ".validate": false
           }
         },
+        "exploreLikeIntent416": {
+          ".validate": "newData.hasChildren(['version','results']) && ((!data.exists() && newData.child('version').val() === 1) || (data.exists() && newData.child('version').val() === data.child('version').val() + 1))",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991"
+          },
+          "results": {
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9]|[1-4][0-9])$/) && newData.hasChildren(['trackId','ownerUid','liked','operationId','version','at','status'])",
+              "trackId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 512"
+              },
+              "ownerUid": {
+                ".validate": "newData.isString() && newData.val().length <= 128"
+              },
+              "liked": {
+                ".validate": "newData.isBoolean()"
+              },
+              "operationId": {
+                ".validate": "newData.isString() && newData.val().matches(/^[0-9a-fA-F-]{36}$/)"
+              },
+              "version": {
+                ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= newData.parent().parent().parent().child('version').val()"
+              },
+              "at": {
+                ".validate": "newData.isNumber() && newData.val() > 0"
+              },
+              "status": {
+                ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'rejected')"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
         "exploreLike": {
           ".validate": "newData.hasChildren(['version','previousVersion','results']) && newData.child('version').val() > newData.child('previousVersion').val()",
           "version": {

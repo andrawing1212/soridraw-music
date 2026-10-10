@@ -76,11 +76,11 @@ try {
     await page.getByText('생성 준비 완료', { exact: true }).waitFor({ timeout: 5000 });
     await page.evaluate(() => history.back());
     await page.getByText('생성 옵션 선택', { exact: true }).waitFor({ timeout: 5000 });
-    await page.locator('button[title="닫기"]').click();
+    await page.locator('.music-api-generate-modal button[title="닫기"]').last().click();
     await page.locator('.music-api-generate-modal').waitFor({ state: 'detached' });
     await page.locator('#open-main').click();
     await page.getByText('생성 옵션 선택', { exact: true }).waitFor({ timeout: 5000 });
-    await page.locator('button[title="닫기"]').click();
+    await page.locator('.music-api-generate-modal button[title="닫기"]').last().click();
     await page.locator('.music-api-generate-modal').waitFor({ state: 'detached' });
     await page.locator('#open-musicapi').click();
     await page.getByText('Music API로 보낼 대상과 가사를 선택합니다.',

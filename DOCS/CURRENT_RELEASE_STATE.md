@@ -1,3 +1,10 @@
+## 0S98. app393 모달 격리 브라우저 검사 첫 실패 원인=테스트 선택자 중복, 제품 오류 아님 (2026-10-10 KST)
+
+- [408 Run 38037513582](https://github.com/andrawing1212/soridraw-music/actions/runs/38037513582) TypeScript/Build 및 live PREVIEW Guest Chrome desktop/mobile first load PASS, **격리 modal test 도중 FAIL**. 로그: `locator('button[title="닫기"]') resolved to 2 elements`. 모달 1단계 왼쪽 뒤로/닫기와 오른쪽 X 닫기가 같은 title을 사용하기 때문. 최초 chunk 다운로드/첫 렌더/다음 2단계/브라우저 Back 1단계 복귀는 모두 실패 없이 실행됐고, 닫기 클릭 직전 검사기 선택자가 중복이라 정지함. 제품 소스 버그 아님.
+- `verify-393-modal-component-browser.mjs`에서 X 버튼을 `.music-api-generate-modal button[title="닫기"]`의 마지막 버튼으로 명시하는 검사 코드만 2곳 정정. 실제 UI, 모달, App, 캐시/Backend/Worker/RTDB/Hosting **변경 없음**, 실배포 app393 유지. 수정된 검사도 반드시 최종 CI PASS를 확인하기 전까지 완료 판정 금지.
+- 진척도 Stage416 1/5 20%, 속도 개선 3/5 60%, 현재 검증 3/4 75% 유지.
+
+---
 ## 0S97. app393 생성 설정창 실 Chrome 격리 테스트 (2026-10-10 KST)
 
 - app393 실제 PREVIEW Guest [408 Run 38037254837](https://github.com/andrawing1212/soridraw-music/actions/runs/38037254837) SUCCESS. Chrome desktop/mobile emulation 양쪽 첫 화면 렌더, app-version393, JS/CSS 0실패, 앱 시작 불필요 Gemini/Modal chunk 0 확인. Runner 실측 desktop DOM content loaded 1617ms/longtask 2/p95 95ms, mobile emulated 643ms/2/p95 65ms. 로그인 계정/손 드래그 실기기와 동일하지 않음.

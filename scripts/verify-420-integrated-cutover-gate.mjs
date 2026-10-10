@@ -33,6 +33,10 @@ assert.match(service, /startLikeSignal127\(uid\);[\s\S]*?if \(EXPLORE_LIKE_STAGE
   'legacy and guarded listeners must not both write provisional state');
 assert.match(service, /clearExploreLikeIntent416\(uid, item\.trackId, item\.liked\);[\s\S]*?guardedLikeHintsByUid420/,
   'accepted canonical 127 signal must retire matching guarded hints');
+assert.match(service, /const GUARDED_HINT_MAX_AGE_420 = 30_000;/,
+  'provisional 420 remote heart must never pin a stale state indefinitely');
+assert.match(service, /Date\.now\(\) - hint\.receivedAt > GUARDED_HINT_MAX_AGE_420/,
+  'unconfirmed private hints expire without remote reads');
 assert.match(service, /persistLikeOutbox\(uid, latest\);[\s\S]*?const currentCache = getLikedStateCache\(uid\);/,
   'outbox guard must be retired before optimistic cache rollback');
 assert.match(guarded, /return settleGuardedOutbox420\(/);

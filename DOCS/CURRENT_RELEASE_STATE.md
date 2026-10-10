@@ -1,3 +1,12 @@
+## CURRENT — PREVIEW 앱396 Music Note 대량 목록 속도 개선 실제 배포 PASS (2026-10-10)
+
+- **실제 결과:** `preview` 배포 commit `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, 앱버전 **396**, Firebase Hosting [Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) **SUCCESS**. 실제 `preview.soridraw.com` 버전396·정확한 index 빌드 일치·TEST/PRODUCTION 비변경 확인. Hosting ONLY; Worker/Functions/공유 Rules/DB/사용자 원본 변화 없음.
+- **제품 변경:** 공유 Music Note 목록의 O(N²) 중복키 재검색→O(N) 첫 항목 보존. 2,400곡 원래 표시 결과 동일, 키 처리 2,400회; TypeScript/Build·핵심 좋아요/팔로우 회귀 PASS. 소스 QA [Run 38057424314](https://github.com/andrawing1212/soridraw-music/actions/runs/38057424314) SUCCESS. Stage420/426 컷오버 OFF. 과거 Worker 기준 Follow-only [Run 38057424275](https://github.com/andrawing1212/soridraw-music/actions/runs/38057424275) FAIL은 같은 오래된 assertion 재현, 현재 Worker 소스 앱395 대비 불변·별도 보존.
+- **작업 목표/진척도:** 앱 속도 개선 **총 5단계 중 4단계 진행 중(3/5 완료·60%)**. 실기기 검증 **총 4단계 중 4단계 진행 중(3/4 완료·75%)**. Stage416 **총 5단계 중 2단계 진행 중(1/5 완료·20%)**. 이번에 실제 앱배포까지 끝났지만, 로그인 사용자 Music Note/Library/Studio 실제 PC·물리 모바일·태블릿 FPS/재진입/캐시 R0 및 체감 검증 전 4단계 완료 처리 금지.
+- **다음 한 가지:** 더 작은 QA/새 개발을 벌리지 않고 **로그인 실사용 PC·모바일·갤럭시탭 app396 체감 확인**으로 이미 배포된 성능 패치를 검증. 이 채팅에는 기기·계정 인증 세션 접근 권한이 없어 물리기기 검사는 임의 PASS 불가. 확인 결과 이상 없으면 4단계 완료, 재현 문제만 좁게 수정. TEST/PRODUCTION 승격은 별도 승인.
+
+---
+
 ## 0S116. Music Note 실코드 대량 공유노트 중복 처리 O(N²)→O(N) 최소 수정 및 2400곡 검증 PASS (2026-10-10)
 
 - **우선순위 교정:** 사용자가 반복 지적한 앱 속도 3/5(60%) 및 물리기기 검증 3/4(75%)를 단지 표에 남겨둔 채 guest Chrome/보안 후보 검사만 반복했던 우선순위 오류를 인정. **이번에는 실제 Music Note 렌더 경로 소스를 직접 수정**하고 품질검사·원래 결과 비교를 완료.

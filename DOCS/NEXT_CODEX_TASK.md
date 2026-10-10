@@ -1,3 +1,11 @@
+## CURRENT — 앱396 PREVIEW 배포 검증 완료, 속도·실기기 최종 실사용 확인 우선 (2026-10-10)
+
+- GitHub `preview` 앱396 Hosting commit `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, 배포 [Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) SUCCESS. 실제 PREVIEW index exact·version396·TEST/PRODUCTION unchanged. Music Note 공유 노트 O(N²) 중복 검사→O(N), 2,400곡 원래 결과 보존, 408 검증 SUCCESS. Worker/Functions/RTDB Rules/공유 사용자 DB 미변경. Stage420/426 후보 OFF.
+- **현재 단계:** ① Stage416 총5단계 중 2단계(완료 1/5·20%); ② 앱 속도 개선 총5단계 중 4단계(완료 3/5·60%); ③ 실기기 검증 총4단계 중 4단계(완료 3/4·75%). **다음 한 가지는 로그인 PC·스마트폰·Galaxy Tab에서 app396 Music Note/Library/Studio 실사용 결과 확인**. 자동 브라우저 테스트·GitHub CI를 물리 기기 테스트라고 하지 말고, 이 채팅의 인증/기기 접근 부재는 그대로 기재. 통과해야 해당 단계 완료 처리.
+- 기존 Follow-only 레거시 Worker-freeze CI [Run 38057424275](https://github.com/andrawing1212/soridraw-music/actions/runs/38057424275) FAIL (app379 Worker statement mismatch), 앱396 변경 영역과 무관한 기지 이슈를 숨기지 말 것. 새로운 부수 작업/워크플로/테스트 코드를 불필요하게 추가하지 말 것.
+
+---
+
 ## CURRENT — 실제 Music Note 공유 폴더 중복 계산 성능 수정 검증 완료, 로그인/기기 테스트가 속도 4단계 차단 (2026-10-10)
 
 - 제품 소스 `35c51ca6744ba615947ba810bfb7cb02b96f5dc4`, [408 Run 38056610071](https://github.com/andrawing1212/soridraw-music/actions/runs/38056610071) SUCCESS. `FavoritesPage.tsx` sharedNote local dedup: 매 곡마다 `findIndex` 전체 재검색(O(N²))을 같은 첫 곡 우선 결과 유지 Set(O(N))으로 교체. 소스 구간 실행 테스트에서 2,400곡 duplicate key 계산 정확히 2,400회, 첫 곡/비공유 기존 결과 PASS. 앱/Functions TS, Build, existing like regression PASS. 사용자 데이터/디자인/서버 비용 변경 없음; PREVIEW app395 운영본 그대로.

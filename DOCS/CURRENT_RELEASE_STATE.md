@@ -1,3 +1,13 @@
+## 0S62. app389 Firebase PREVIEW 배포 완료 — 수정 요청 시 검증 후 PREVIEW 배포까지 한 작업 (2026-10-10 KST)
+
+- **최신 사용자 운영 지시(상시 적용):** 사용자가 앞으로 SORIDRAW 수정 지시를 하면 안전 검증을 통과한 완성 수정본을 별도 '배포' 재요청 없이 **같은 작업에서 Firebase PREVIEW 배포·실제 주소 확인까지 진행한 뒤 최종 결과를 보고**할 것. 검사만 또는 커밋만 완료한 것을 끝이라고 보고하지 않는다. TEST 승격/PRODUCTION은 각각 기존 명시 승인 필요. 위험/검증 실패 시 배포·승격 중단하고 실패 이유와 현재 상태만 보고. `AGENTS.md`에도 동일 방침 이미 명시돼 있으므로 정합 유지.
+- **실제 PREVIEW app389 배포 성공:** source/version commit `418ba5ca7d681718560db620336d61a8afa2281c`, 릴리스 트리거/locked preview SHA `ef591fa22323bd44a2c0fdd055422e235cd1d37d`. [SORIDRAW PREVIEW App Release Run 38010738789](https://github.com/andrawing1212/soridraw-music/actions/runs/38010738789) **SUCCESS**. 2026-10-10T00:51Z logs에 `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=389`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED` 각각 실제 값 확인. target `https://preview.soridraw.com/`.
+- **QA:** source/version pinned [408 targeted QA Run 38010633782](https://github.com/andrawing1212/soridraw-music/actions/runs/38010633782) SUCCESS (TypeScript, Build, 기존 127/175/178/180/191/192/197/390 개인좋아요·공개숫자·팔로우 관련 회귀, shared live RTDB Rules 읽기 전용 비교 PASS). App Hosting workflow 자체 TypeScript/Build/358/359/360/361/377/378/379 검사 성공. 이전 069 자동진단 및 구형 follow-only 후보 push FAIL은 그대로 별도 추적, 이번 앱 배포 SUCCESS와 혼동하지 않음.
+- **실제 수정:** 0S61의 같은 계정 RTDB accepted 하트 이벤트가 기기별 미전송 outbox에 막혔을 때 보관, outbox가 net-zero로 사라지면 보관된 신호를 로컬에서 복구하는 좁은 코드 수정만 앱 반영. 기존 로컬 최신 클릭 우선, 화면 저장/알림 순서 보호, changed-track only; 서버/Worker/RTDB Rules/Functions/공유 D1·R2/Firestore 사용자 원본 데이터 변경·복사·백필·migration 없음. main/TEST/PRODUCTION 비변경.
+- **제품 판정:** **배포 PASS이지만 좋아요 1단계의 실제 PC↔모바일 하트·숫자·내 좋아요 동시 일치 E2E는 미검증이며 이전 실사용 오류 FAIL 해제 불가**. app389 수정은 net-zero guard가 있는 일부 경로만 보호한다. `retryCount>0` 장기 남음, 복합 stale ACK 및 최초 좋아요 불일치 문제는 미해결 가능. 실제 문제를 재현·해결하지 않고 자동 테스트 PASS만으로 기능 완료/서비스 출시 가능이라고 말하지 않는다.
+
+---
+
 ## 0S61. 좋아요 1단계 실사용 FAIL 유지 — 수신 중 미전송 로컬 클릭에 막힌 RTDB 하트 알림의 안전 보관/제한적 재생 후보 (2026-10-10 KST)
 
 - **사용자 실사용 판정 최우선:** PREVIEW app388은 최초 개인 좋아요 하트가 PC/모바일에서 다르고, 한동안 반응하지 않다가 간헐적으로 반영되며 공개 likeCount만 동기화되고 개인 하트가 동기화되지 않는 현상. **1단계 좋아요/해제/내 좋아요 PC↔모바일 parity FAIL**. CI 성공은 이 FAIL을 덮지 못함. 재시험을 계속 사용자에게 떠넘기지 말 것.

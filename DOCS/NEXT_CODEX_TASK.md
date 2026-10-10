@@ -1,3 +1,10 @@
+## CURRENT — renewal source 후보 CI 게이트 추가 / 24h+·ACK 소실은 HOLD (2026-10-10)
+
+- Fast QA 38042365466 PASS, 이전 TS/Build 408 38042277445 PASS. 새 renewal source-only 검사를 동일 408 Workflow에 넣어 함수 빌드+원본 좋아요·팔로우 회귀와 한 번에 확인한다.
+- 원래 승인 증표가 분실된 장기 오프라인 outbox는 이 수단만으로 복구 불가능; 승인 내역이 최근 50건에서 밀려나면 원본 데이터를 더 조회하지 않고 확정적 재발급 불가. 복구 시 원본 확인이 어렵다면 fail-closed, 무단 새 클릭 금지. Stage420 기능 활성화/배포 자체는 HOLD, app395 유지.
+- Stage416 1/5 20%, 속도 3/5 60%, 현 실기기 3/4 75%.
+
+---
 ## CURRENT — Stage420 HMAC 승인 증표 무DB 재발급 후보 실테스트 / 소실 ACK 복구 설계 (2026-10-10)
 
 - 정확한 정상 코드 영역은 보존하고 dormant Functions 후보 2파일만 수정. 새 함수 renewExploreLikePermit420은 이전 서명증표가 본인 exact operationId와 24시간 범위까지 맞을 때만 새 15분 증표 발급. Firebase/RTDB/D1 조회/쓰기 0 설계, 사용량 측정은 필요.

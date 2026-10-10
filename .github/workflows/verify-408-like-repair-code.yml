@@ -22,6 +22,8 @@ on:
       - 'scripts/verify-420-master-ui.mjs'
       - 'functions/src/index.ts'
       - 'scripts/verify-420-server-like-abuse-gate.mjs'
+      - 'functions/src/exploreLikePermitRenew420.ts'
+      - 'scripts/verify-420-permit-renewal.mjs'
       - 'scripts/build-420-private-rules-candidate.mjs'
       - 'scripts/verify-420-private-rules-candidate.mjs'
       - 'src/App.tsx'
@@ -107,6 +109,7 @@ jobs:
         run: |
           node scripts/verify-420-like-abuse-policy.mjs
           node scripts/verify-420-server-like-abuse-gate.mjs
+          node scripts/verify-420-permit-renewal.mjs
           node scripts/verify-420-private-rules-candidate.mjs
           node scripts/verify-420-guarded-transport.mjs
           node scripts/verify-420-master-policy.mjs

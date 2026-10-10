@@ -1,3 +1,10 @@
+## 0S109. Stage420 재전송 재인증 코드/테스트 CI 증거 (2026-10-10)
+
+- 추가 시험: [Fast QA 38042365466](https://github.com/andrawing1212/soridraw-music/actions/runs/38042365466) SUCCESS. 실제 Firebase Functions 발급기와 새 갱신기, 실제 Cloudflare Worker WebCrypto 인증기를 연결한 소스 실행 테스트 PASS: 만료된 15분 승인 서명 재발급 성공, UID/곡/좋아요 상태/작업 ID 불일치·서명 위조·잘못된 키·24h 초과 요청 모두 거절, 서명된 새 exact-op은 canonical 진입 인증 PASS. 실제 영수증171 W0/과금 및 최초 승인 ACK 분실은 미검증/보류.
+- [408 Run 38042277445](https://github.com/andrawing1212/soridraw-music/actions/runs/38042277445) SOURCE TypeScript·Firebase Functions TypeScript·Build·기존 좋아요/팔로우 PASS. 새 재발급 검사를 기존 릴리스 408 게이트에도 추가하여 다음 실행에 포함, 별도 Workflow 신설 없음.
+- stage420/426 cutover OFF, shared RTDB Rules/D1/Functions/Worker/Hosting 실제 배포 없음; PREVIEW app395 운영 유지. Stage416 1/5·20%, 속도 개선 3/5·60%, 실사용 3/4·75%.
+
+---
 ## 0S108. Stage420 승인 증표 재발급 Source-only 후보 구현 (2026-10-10)
 
 - 판단: 최근 50건 신호 기록을 24시간 무한 확장하지 않는다. 기존 UID·곡·상태·operationId에 대한 서버 서명된 옛 15분 승인증표를 확인한 경우에만 새 15분 증표를 발행. 같은 요청을 새 클릭으로 세지 않고 함수 내부 Firebase/RTDB/D1/Worker 쓰기 및 읽기 없음. Functions 호출 1회와 서명 검증 CPU는 발생.

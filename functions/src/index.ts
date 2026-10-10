@@ -19,6 +19,7 @@ import {
   type LibraryTrackMutation,
 } from "./libraryBundleFreshness";
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
+import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
@@ -3934,5 +3935,48 @@ export const processMusicNoteBulkPage = onCall(
       nextCursor: hasAnotherPage && lastDoc ? lastDoc.id : null,
       done: !hasAnotherPage,
     };
+  },
+);
+
+// Stage420 secured candidate, not deployed: same-account private provisional
+// like signal from verified Firebase Auth through a server-owned RTDB root.
+// The app392 direct channel remains live until the complete RTDB ancestor
+// permission cutover is independently validated; DO NOT enable a new client
+// while the legacy route can still be directly written by authenticated bots.
+export const publishExploreLikeIntent420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const uid = String(request.auth?.uid || "").trim();
+    if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    const raw = request.data && typeof request.data === "object"
+      ? request.data as Record<string, unknown> : {};
+    const input = {
+      trackId: raw.trackId,
+      ownerUid: raw.ownerUid,
+      liked: raw.liked,
+      operationId: raw.operationId,
+    };
+    if (typeof input.trackId !== "string" || !input.trackId.trim() ||
+        input.trackId.length > 512 ||
+        typeof input.ownerUid !== "string" || input.ownerUid.length > 128 ||
+        typeof input.liked !== "boolean" ||
+        typeof input.operationId !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(input.operationId)) {
+      throw new HttpsError("invalid-argument", "좋아요 요청 형식이 올바르지 않습니다.");
+    }
+    try {
+      const outcome = await publishGuardedLikeSignal420(admin.database(), uid, {
+        trackId: input.trackId.trim(),
+        ownerUid: input.ownerUid.trim(),
+        liked: input.liked,
+        operationId: input.operationId,
+      });
+      return { ok: true, ...outcome };
+    } catch (error) {
+      console.error("[420] Authenticated private-like guard failed:",
+        error instanceof Error ? error.message : "unknown");
+      throw new HttpsError("unavailable",
+        "일시적으로 좋아요를 안전하게 처리하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
   },
 );

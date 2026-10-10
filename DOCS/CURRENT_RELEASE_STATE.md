@@ -1,3 +1,14 @@
+## 0S61. 좋아요 1단계 실사용 FAIL 유지 — 수신 중 미전송 로컬 클릭에 막힌 RTDB 하트 알림의 안전 보관/제한적 재생 후보 (2026-10-10 KST)
+
+- **사용자 실사용 판정 최우선:** PREVIEW app388은 최초 개인 좋아요 하트가 PC/모바일에서 다르고, 한동안 반응하지 않다가 간헐적으로 반영되며 공개 likeCount만 동기화되고 개인 하트가 동기화되지 않는 현상. **1단계 좋아요/해제/내 좋아요 PC↔모바일 parity FAIL**. CI 성공은 이 FAIL을 덮지 못함. 재시험을 계속 사용자에게 떠넘기지 말 것.
+- **구체 코드 결함:** `applyRemoteLikeSignal127`는 로컬 outbox가 남은 곡의 신규 계정별 RTDB 알림을 건너뛰면서 계정 signal version을 처리 완료로 저장한다. 신규 알림은 같은 화면/다음 mount에서 사라질 수 있고 공용 숫자는 독립 채널에서 반영되어 하트와 숫자가 다르게 보일 수 있음. 앱160/164의 정상 outbox 우선 원칙 자체는 보존 필수. 이 특정 경로가 사용자의 전체 증상을 실제로 일으켰는지는 E2E 미검증.
+- **좁은 GitHub 후보:** `src/services/exploreLikeService.ts`에서 blocked remote changed-track row를 UID/곡별 로컬 outbox의 bounded optional `deferredSignal390`으로 보존하고, 로컬 클릭이 `baseLiked === desiredLiked`인 **net-zero** 상태로 확정되어 outbox guard가 제거된 경우에만 신호를 로컬 재생. 미전송/성공한 local intent를 임의 삭제하거나 신호로 덮어쓰지 않음. 기존 보호된 수신 저장→watermark→UI 순서 유지. 스키마 변경은 기기 저장 캐시의 선택 필드만 추가. **retryCount>0의 장기 미정산 outbox는 여전히 보존되므로 모든 초기 하트 불일치가 해결됐다고 판정 금지.**
+- **파일:** `src/services/exploreLikeService.ts`, `scripts/verify-180-like-live-signal-and-cached-paint.mjs`, `.github/workflows/verify-408-like-repair-code.yml`. 최종 제품 후보/QA 대상 `preview` commit **`e27369b152d8b9962e1802e0a30e070cfdf93437`**. 기존 verify-180에는 remote deferred 보관을 요구하지만 408 검사에서 누락되는 혼선이 있었음. 이를 408 필수 검사에 등록하고 net-zero after-watermark 로컬 재생을 실행형 fixture로 확인.
+- **검증:** [SORIDRAW 408 QA Run 38010138006](https://github.com/andrawing1212/soridraw-music/actions/runs/38010138006) **SUCCESS**: TypeScript, Build, 127/175/178/191/192/197/390 기존 회귀 + 이제 필수 180, LIVE 공유 RTDB Rules 읽기전용 검사 PASS. `APP390_DEFERRED_REMOTE_UNLIKE_REPLAY_NO_SERVER_IO=PASS`, `APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS`, `127_LOCAL_OUTBOX_OVERRIDES_OLD_REMOTE=PASS` 실제 job log 확인. 중간 후보 0be9649/2de5ea3/4646a820/210cc84b CI FAIL은 원래 테스트 기대식 정합성 미충족으로 최종 승격 근거 아님. 역사적인 `diagnose-069-live-like.yml` 등 push 실패는 별도 미해결.
+- **환경·다음:** 이것은 **GitHub preview 코드 후보 및 격리 QA PASS**일 뿐, **Firebase PREVIEW 배포 안 함**. 현재 실제 Hosting app388, Worker `03af0cc6-1336-4ed2-98ff-4983e1b21a44` 유지. Cloudflare/Rules/Functions/공유 D1·Firestore/R2/실사용 데이터/main·TEST·PRODUCTION 변경 없음. 다음은 반복적으로 남는 ambiguous retryCount>0 outbox와 최초 개인 하트 불일치에 대해 원본 canonical/RTDB/수신 화면을 실제 사용자 데이터 오염 없이 독립 검증; 전체 1단계 PASS 전 출시 성공 주장·TEST/PRODUCTION 승격 금지. 결론은 **부분 회귀 수정 QA PASS / 실제 1단계 FAIL / 배포 전**.
+
+---
+
 ## 0S60. app388 Firebase PREVIEW 배포 성공 — 좋아요 계정별 RTDB 알림 실패 재전송 (2026-10-10 KST)
 
 - **실제 배포 완료:** GitHub Actions [SORIDRAW PREVIEW App Release Run 37976809576](https://github.com/andrawing1212/soridraw-music/actions/runs/37976809576) SUCCESS, locked release SHA `00bb577b38df3cf211c2c430c762cd131c226e56`, 2026-10-09T18:58Z. Firebase Hosting 배포 `FIREBASE_PREVIEW_DEPLOY=PASS`, 실제 `https://preview.soridraw.com/`에서 index.html SHA256 일치 및 `PREVIEW_APP_VERSION=388`, `PREVIEW_EXACT_BUILD=PASS`.

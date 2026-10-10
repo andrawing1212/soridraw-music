@@ -1,3 +1,12 @@
+## 0S65. 사용자 app391 실제 빈 하트 지속 — 실사용 FAIL 확정, 원인 분기 추가 확인 필요 (2026-10-10 KST)
+
+- **사용자 최신 피드백:** app391 Firebase PREVIEW 반영 뒤에도 같은 곡 하트가 여전히 비어 있음. 이전 앱390과 동일하게 실사용 좋아요 상태 FAIL. app391의 QA 실행형 ACK fixture PASS는 이 결과를 뒤집지 못함. 좋아요 1단계 합격·TEST/PRODUCTION 승격 금지.
+- **현재 코드 판독:** `ExplorePage`는 렌더 시 `likedTrackIds[id] === true`로 하트 fill을 결정하고, `onRemote`는 `source=remote`, UID/ID, 그리고 `readExploreTrackLikeMembership127(uid,id) === detail.liked`가 모두 맞을 때만 React map을 바꿈. 별도 `getExploreLikedTrackIds` 비동기 hydration도 같은 map을 갱신. 다른 기기에서 accepted RTDB 신호가 오지 않거나 로컬 outbox 및 오래된 canonical 스냅샷이 신호를 막으면 공개 likeCount와 개인 하트가 다를 수 있음. **어느 기기에서 빈 하트인지(행동한 모바일 자체 vs 같은 계정의 PC)가 아직 확인되지 않아, 발신/수신 중 어느 경로인지 단정할 수 없음**.
+- **조치:** 추정으로 앱392를 만들거나 강제로 하트를 채워 canonical을 가리는 새 패치/배포는 보류. 원인 구분에 필요한 질문은 한 가지: 빈 하트를 보여주는 화면이 좋아요를 누른 모바일인지, 같은 계정 PC인지. 사용자 확인 이후 정확한 경로에서 최소수정→검증→Firebase PREVIEW 배포(수정 요청에 배포 포함)로 처리할 것. 앱391 현재 배포 상태 유지. 실사용 사용자 데이터·공유 D1/Worker/Rules·main/TEST/PRODUCTION 변경 없음.
+- **기준:** PREVIEW app391 QA source `1cff14712003cc2cbf24a5d3bca53d114e8248a7`, locked release `877c50a1666eb6e090f4578a523eac2a85a873ce`, Firebase Run `38012860289` SUCCESS *배포만*. 사용자 기능은 FAIL.
+
+---
+
 ## 0S64. 사용자 app390 모바일 직접 좋아요 후 빈 하트 실사용 FAIL → app391 PREVIEW 릴리스 (2026-10-10 KST)
 
 - **사용자가 올린 실사용 증거:** 같은 로그인 계정의 모바일 Explore에서 [Jazz Hip-hop] `성적표 내소동`에 좋아요를 누른 뒤 약 1분 후 곡 카드 **공개 좋아요 숫자 1, 개인 하트 빈 외곽선**. 앱390은 **실사용 FAIL**, 이전 자동검사 PASS나 배포 성공으로 성공 처리 금지. 숫자 1은 다른 계정의 참여도 가능하므로 canonical 해당 UID의 좋아요 여부는 이 사진만으로 확정 불가. 실제 원인 경로는 서버 ACK 이후 오래된 개인 R2 응답에 캐시가 덮이거나 UI ACK 통지가 누락될 수 있다는 소스 증거; 해당 사용자 데이터가 정확히 그 경로였는지는 원격 로그/실기기 재현 전에는 미확정.

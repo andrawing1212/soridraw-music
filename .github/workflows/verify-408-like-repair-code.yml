@@ -9,6 +9,8 @@ on:
       - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
       - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'src/services/exploreLikeService.ts'
+      - 'src/services/exploreLikeAbusePolicy420.ts'
+      - 'scripts/verify-420-like-abuse-policy.mjs'
       - 'src/App.tsx'
       - 'src/pages/FavoritesPage.tsx'
       - 'src/pages/SunoLibraryPage.tsx'
@@ -78,6 +80,9 @@ jobs:
           node scripts/verify-421-like-r2-publisher.mjs
           node scripts/verify-423-personal-like-r2.mjs
           node scripts/verify-424-like-rtdb-signal.mjs
+      - name: Stage420 two-hour like abuse policy (pure source; not server enforcement)
+        run: |
+          node scripts/verify-420-like-abuse-policy.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

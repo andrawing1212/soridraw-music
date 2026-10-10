@@ -25,6 +25,7 @@ const groups = [
     ['node', 'scripts/verify-420-private-rules-candidate.mjs'],
     ['node', 'scripts/verify-420-guarded-transport.mjs'],
     ['node', 'scripts/verify-420-master-policy.mjs'],
+    ['node', 'scripts/verify-420-master-ui.mjs'],
   ] },
   { name: 'like-deep', commands: [
     ['node', 'scripts/verify-127-atomic-personal-like.mjs'],

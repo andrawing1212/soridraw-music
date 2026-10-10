@@ -1,3 +1,12 @@
+## CURRENT — 실제 첫 화면 메인 JS gzip 47.6% 절감 완료, PC/모바일 성능 실사용 검증 전 (2026-10-10)
+
+- GitHub 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S91`. 소스 안정 검증 대상 `preview` `353ddabbe41ddb459a7a3a82131ff9e7a6af4c82`; 개발자 아닌 디렉터에게 실측 수치·결과 1~2줄로 요약. 사용자 요청 없으면 배포하지 않는다.
+- `App.tsx`에서 `geminiService.ts` 정적 import → `geminiServiceLazy.ts`의 단일 비동기 import 교체. 기존 AI 생성·작사·번역·섹션 API 5개 그대로, 원본 `geminiService.ts` SHA 불변. 메인 JavaScript gzip 830.22→435.33KB(−47.6%, 실제 [408 Run 38033744153](https://github.com/andrawing1212/soridraw-music/actions/runs/38033744153) PASS), 진입 메인+vendor 1113.59→718.71KB(−35.5%). 초기 앱 로딩만 줄였으며, AI 요청 때 gzip 384.12KB 엔진 chunk를 최초 1회 다운받음. [Fast QA 38033913903](https://github.com/andrawing1212/soridraw-music/actions/runs/38033913903) PASS. PREVIEW 앱 실제 운영 app392 그대로.
+- **다음 묶음:** ① 최초 AI 생성 버튼에서 Suspense/스피너/네트워크 느린 환경의 실제 UX 확인 및 열지 않은 페이지 코드 미다운로드 확인 ② 브라우저 long-task 및 분할바·태블릿 구간 FPS 실측, 먼저 DOM/React 반복 리렌더 확인 ③ `App.tsx` 29,577줄과 `studioLayout.css` 665KB 대상에서 UI 완전 동일 + 서버 R0/W0를 입증하는 최적화 1개만 선택, 스냅샷/QA 후 반영. 실제 효과 없으면 원복. 기존 성능 기준 1차 마스터 진단 lazy 유지, 빌드용 `vite.config.ts` 바이트 불변.
+- `Stage420` 안전 보안 cutover는 꺼진 상태로 대기, 공유 RTDB/Worker/Functions, main/TEST/PRODUCTION, 사용자 원본 데이터·좋아요·팔로우·뮤직노트/라이브러리 정상 동작 변경 금지. Stage416 1/5=20% 유지. 배포 요청 전 Hosting 배포 금지.
+
+---
+
 ## CURRENT — 앱 속도/다운로드 경량화 우선, Stage420 보안 전환은 OFF로 일시 대기 (2026-10-10)
 
 - 현 작업 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S90`. 사용자는 앱이 무겁다고 보고했고 느린 검토/보고를 줄이고 실질적 개선을 빨리 원함. ChatGPT 직접 처리, 기능·UI·반응형·캐시·PC모바일·정상 좋아요 무변경.

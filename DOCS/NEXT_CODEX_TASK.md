@@ -1,3 +1,13 @@
+## CURRENT — Stage416 ③ 전 실시간 좋아요 공격·비용 방어 선행 게이트 (2026-10-10 KST)
+
+- 사용자 확정 요청: **앱392 양방향 거의 즉시 하트를 느리게 만드는 게 아니라**, 반복 클릭으로 누적되는 **Firebase RTDB 비용/과부하 방지**. 분당 제한, 2분간 과다 반복 시 경고 및 계정 좋아요·해제 **약1시간 금지**. 디자인/기존 동기화/원본 정확성 훼손 불가.
+- 상세 읽기: `DOCS/STAGE416_LIKE_REALTIME_ABUSE_COST_GUARD.md` (GitHub `preview` 신규). 기존 Worker에 UID 기준 `60 requests / 60 sec` limiter는 존재하지만 **RTDB 직접 신호 click limit 아님**. 새 보호는 반드시 RTDB 원본 write와 Worker canonical 경로 **서버 강제**해야 함. 사용자 클릭 최초 즉시, 비정상 지속 input만 제한. 30회/분 경고·40회/분 상한·2개 연속 분간 반복 시 1시간 제한은 **제안 초기값**이며 비용·정상 사용 계측 후 조절; Master 운영/감사 및 자동 만료.
+- GitHub 출처: `src/services/exploreLikeIntent416.ts` `publishExploreLikeIntent416` / `settleExploreLikeIntent416`, `database.rules.json` `userSync/$uid/exploreLikeIntent416`, `cloudflare/explore-worker/canonical/preview-entry.js` `handleVerifiedLikeBatch426`, `cloudflare/explore-worker/canonical/wrangler.preview.jsonc` `LIKE_RATE_LIMITER`.
+- 현재 **문서/위험 분석 완료, 실행 코드 변경/QA/배포 미실시**. 앱392 사용자 실사용 동기화 PASS 유지, 전체 1/5 완료. Stage③ 개인5분 서버접수와 Master 설정은 위험 해결 또는 명확한 서버쪽 방어 계획의 검증 전 배포 금지. Codex로 재위임하지 말고 ChatGPT 직접 작업. TEST/PRODUCTION 변경 금지.
+- 다음 실제 작업: 현재 RTDB sent/download bytes per click+settle 및 Worker rate limiter 실제 비용 감시 → 인증/직접 REST 우회도 막을 수 있는 저비용 UID atomic enforcement 설계 → mock/RTDB emulator/red-team+old client 호환 QA → 필요시 preview-only code/rules 배포 → 기존 app392 개인 즉시 실사용 PASS 보호. 앱에서 버튼만 disabled 처리한 것으로 보안 완료라고 하지 말 것.
+
+---
+
 ## CURRENT — Stage416 ② 사용자 실사용 PASS / ③ 직접 개발 시작 (2026-10-10 KST)
 
 - **사용자 확인:** 2026-10-10 12:47 KST PREVIEW app392에서 동일계정 PC→모바일 / 모바일→PC 개인 좋아요 하트가 거의 즉시 자동 반영됨. 사용자 목표 5~10초 **Stage② 실사용 PASS**, 전체 고정 **1/5 완료**. 엄밀한 ms·오프라인 복구·과금량은 ⑤ 별도 미검증.

@@ -1,3 +1,11 @@
+## CURRENT — Stage420 승인증표 없는 최초 ACK 소실/51건 기록 소멸 복구, 신뢰성·비용 독립검증 (2026-10-10)
+
+- 기준 preview commit 83977aa740ff8c754c5c8d9a9304e4bff1c4c7f6, 최종 408 CI Run 38042699563 SUCCESS. 원래 증표가 존재하는 승인 opId 재발급 서버+클라이언트 후보 구현/테스트 PASS. Stage420, 426 OFF / 기존 app395 좋아요·팔로우 정상 동결 유지.
+- **다음 구현 우선순위:** 최초 Firebase 서버 승인 ACK가 유실된 요청(증표 없음)과 51회 후 원본 표시 기록 밀림의 동시 위험 해결. 최초 송신을 local durable marker에 기록하고, 다시 요청할 때 마커가 존재하면 신규 rate/click 트랜잭션을 무조건 호출하지 않음. O(1) changed-item verified canonical evidence / 서버 과거 승인증거가 있을 때만 원본 같은 opId 복구. 인증 근거가 없는 경우 사용자 outbox를 보호하며 새 operationId 생성 금지, 별도 안전 reconciliation 수립. 현재는 격리 후보/Mock Firebase 테스트 우선.
+- **릴리스 게이트:** Worker171 physical D1 W0, 실제 10만 DAU 월 비용(Functions/RTDB/D1/DO), 24h+와 키교체, Master 120m Lock, 구 앱/TEST/PROD/공유 RTDB Rules 호환성 및 원자적 Worker 전환을 독립 입증하기 전에는 보안 기능 활성화·배포 금지. 이번에는 사용자에게 선택을 반복 묻지 않고 저위험 소스/QA 진행, 공유 Rules/PRODUCTION은 기존 명시 승인 정책 준수.
+- Stage416 1/5=20%; 앱 속도개선 3/5=60%; 현재 실사용 3/4=75%; PREVIEW live app395 변경 없음.
+
+---
 ## CURRENT — renewal source 후보 CI 게이트 추가 / 24h+·ACK 소실은 HOLD (2026-10-10)
 
 - Fast QA 38042365466 PASS, 이전 TS/Build 408 38042277445 PASS. 새 renewal source-only 검사를 동일 408 Workflow에 넣어 함수 빌드+원본 좋아요·팔로우 회귀와 한 번에 확인한다.

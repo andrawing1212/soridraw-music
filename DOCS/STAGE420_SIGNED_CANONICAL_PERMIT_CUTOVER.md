@@ -47,3 +47,9 @@
 
 - 기존 서버 HMAC 승인증표가 단말에 남아있으면 15분 만료 후에도 원래 인증된 UID·trackId·liked·operationId와 발급시간 24시간 이내인지 확인한 뒤 새로운 15분 인증서를 갱신 가능. 기록 최근 50건을 늘리거나 중복 클릭으로 집계하지 않음. RTDB/D1 read/write 0 목표, Functions 호출·서명 CPU 비용만 발생.
 - 인증증표가 없거나 키가 바뀌었거나 24시간을 초과하면 항상 거절하고 기존 미처리 outbox를 지킨다. 이전 승인 ACK 손실·오프라인 장기복구는 이번 방식만으로 완결되지 않는다. app395 client 및 Stage420/426 ON 변경 없음.
+
+## 후보 통합검증 (2026-10-10)
+
+- Commit 83977aa740ff8c754c5c8d9a9304e4bff1c4c7f6까지 신규 서명증표 재발급 Callable + 후보 outbox 응답 경로를 source-only로 연결. [408 Run 38042699563](https://github.com/andrawing1212/soridraw-music/actions/runs/38042699563) Functions TS/app TS/Build/기존 좋아요·팔로우+재전송 거부 테스트 SUCCESS.
+- 승인 증표가 존재하면 최초 서명된 exact opId만 재발급, 50건 이벤트 슬라이딩/쿼터 재소모를 우회. 증표 미존재 approved outbox는 fail closed. 하지만 원래 ACK 손실로 아직 awaiting 상태인 것은 재시도 시 최초 허용 경로를 다시 탈 수 있어 51개 뒤 문제가 여전히 남는다. Cutover를 활성화하지 않는 구체적인 이유다.
+- 공유 사용자 데이터, D1/RTDB Rules, Firebase Functions, Cloudflare Worker, main/TEST/PRODUCTION 전부 미변경. PREVIEW 앱395 그대로.

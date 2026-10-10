@@ -1,3 +1,12 @@
+## 0S111. Stage420 서명 승인 재발급 / 구 클라이언트 무변경 보호 — 통합 소스 검증 PASS (2026-10-10)
+
+- **완료된 후보 구현:** 신규 Functions src/exploreLikePermitRenew420.ts 및 Functions index.ts의 서버 인증 Callable renewExploreLikePermit420: 같은 UID/곡/상태/opId, 기존 HMAC, 24시간 이내 발급을 확인하면 새 15분 증표만 발급. 서버 반복 좋아요 카운트 또는 RTDB transaction/Worker/D1 조회·쓰기 없음(소스 구조). 갱신 경로는 Firebase Functions 호출·서명연산 비용 발생하며 물리 요금 검증은 별도.
+- **앱 후보 연결:** src/services/exploreLikeGuardedTransport420.ts에서 승인증표가 있는 구 outbox는 원래 rate/click 허용 재요청 대신 authenticated renewal Callable을 사용. 증표가 사라진 approved outbox는 새로운 좋아요 요청으로 전환하지 않고 await-reply 보존. src/services/exploreLikeGuardedOutbox420.ts에 optional guardPermit420 저장 타입 추가. 현재 EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false 및 Worker STAGE426_COMPILED_OPEN=false로 app395 실제 사용자 경로 변경 없음.
+- **PASS 증거:** [Fast QA 38042365466](https://github.com/andrawing1212/soridraw-music/actions/runs/38042365466) (초기 서명 증표 검증), [408 Full Run 38042509122](https://github.com/andrawing1212/soridraw-music/actions/runs/38042509122) (Functions/app TypeScript, Build, 기존 like/follow, 서명갱신 테스트 PASS), [최종 408 Full Run 38042699563](https://github.com/andrawing1212/soridraw-music/actions/runs/38042699563) SUCCESS. 최종 런에서 Stage420 DORMANT_APPROVED_RENEWAL_NO_RATE_REPLAY=PASS, MISSING_PROOF_RENEWAL_FAIL_CLOSED=PASS, WORKER_ACCEPTS_RENEWED_EXACT_OP=PASS, 타 UID/곡/상태/요청ID/서명 위조/24h 초과 거부 PASS. 실제 사용자의 좋아요를 원격으로 변경하는 테스트는 수행하지 않음.
+- **남은 본질적 차단:** 최초 승인 후 응답 손실로 증표가 아예 저장되지 않은 awaiting outbox는 50건 이후 재전송 중복 승인 위험이 남아 있음. 향후 최초 송신 전에 durable attempt marker를 쓰고, 재전송 시 단건 canonical 증거 또는 서버 최초 승인 증빙을 확인하는 안전한 복구가 필요; 아직 자동 복구와 장기오프라인·키교체/LOCK·다중기기·실제 171 receipt W0·전체 월비용 증거가 없음. Stage420 서버 2시간 잠금과 직접 416 RTDB/구형 app 우회 차단은 운영 미완료 → 컷오버 HOLD.
+- **배포 상태:** PREVIEW app395 Firebase Hosting 기존 그대로. 작업자는 GitHub preview 소스+테스트+문서만 변경, RTDB Rules/Cloudflare Worker/Firebase Functions/공유 Firestore/D1/R2 원본/TEST/PRODUCTION 실배포 및 사용자 데이터 변경 없음. Stage416 1/5·20%, 속도개선 3/5·60%, 현재 실기기 검증 3/4·75%. 이번 재발급 source-only 후보/QA는 완료, 보안 활성화는 미완료.
+
+---
 ## 0S110. 재전송 클라이언트 후보 연결 — 기존 서명 증표가 있을 때 새 클릭 경로 차단 (2026-10-10)
 
 - 미배포 Stage420 transport에서 기존 GuardedOutboxEntry420.guardPermit420을 선택적으로 보존. 승인된 오래된 outbox 요청은 최초 publishExploreLikeIntent420 rate-transaction callable을 다시 호출하지 않고 새 renewExploreLikePermit420 Callable에 이전 서명증표를 전송. 새로 발급한 증표만 durable reducer가 exact op에 적용.

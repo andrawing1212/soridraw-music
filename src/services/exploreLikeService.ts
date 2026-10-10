@@ -2258,13 +2258,15 @@ export const setExploreTrackLike = async (
   const baseLiked = existing?.baseLiked ?? previousVisibleLiked;
   // Capture verified pre-click truth BEFORE local optimism changes the cache.
   // A post-click cache value is never safe evidence for server-denied rollback.
-  const authoritativeBeforeClick420 = existing?.guardCanonicalLiked420 ??
-    (!existing && typeof readExploreLikeIntent416(uid, normalizedTrackId) !== 'boolean' &&
-     (readTargetedVerifiedLikeTracks127(uid).has(normalizedTrackId) ||
-       baselineCompleted127.has(uid) ||
-       (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' &&
-        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '')) &&
-     cache.has(normalizedTrackId) ? cache.get(normalizedTrackId) : undefined);
+  const authoritativeBeforeClick420 = !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE
+    ? undefined
+    : (existing?.guardCanonicalLiked420 ??
+      (!existing && typeof readExploreLikeIntent416(uid, normalizedTrackId) !== 'boolean' &&
+       (readTargetedVerifiedLikeTracks127(uid).has(normalizedTrackId) ||
+         baselineCompleted127.has(uid) ||
+         (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' &&
+          readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '')) &&
+       cache.has(normalizedTrackId) ? cache.get(normalizedTrackId) : undefined));
   const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
   const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);
   const optimisticLikeCount = optimisticAction127.likeCount;

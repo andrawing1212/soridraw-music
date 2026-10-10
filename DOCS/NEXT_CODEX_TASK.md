@@ -1,3 +1,14 @@
+## CURRENT — Stage420 2시간 좋아요 방어: 서버+Master 소스 준비, 실사용 cutover/비용 검증 먼저 (2026-10-10)
+
+- **최신 사용자 지시:** Codex 금지, ChatGPT 직접 계속 진행. 사용자 확정 값 `30회/분 경고, 40회/분 차단, 2분 연속 한도 도달 → 2시간 정지, 자동해제, Master 조회·조기해제·횟수 기준조정`.
+- 소스 후보 `preview`: `functions/src/exploreLikeAbuseGate420.ts` UID 인증/server Admin atomic state+`display`/Master 비공개 감사, `functions/src/exploreLikeAbuseSettings420.ts` 30/40/120 Master 설정(60초 캐시+현재 minute snapshot), `functions/src/index.ts` publish/get/set/masterUnlock callable, `src/services/exploreLikeGuardedTransport420.ts` Firebase Callable+only UID display listener(미연결), `src/components/ExploreLikeAbuseMasterPanel420.tsx` Master-only 설정·조기해제(페이지 소스 추가), `scripts/build-420-private-rules-candidate.mjs` shared live `database.rules.json` 미수정 별도 후보, 실행형 verification과 workflow들.
+- **Firebase Emulator 권한검사 PASS** [38025863205](https://github.com/andrawing1212/soridraw-music/actions/runs/38025863205): old 416 direct write bypass reproduced → candidate rule rejects; old 6 signal children preserved; UID-private display allowed/Master audit denied. Fast QA 38026736068 PASS; 408 38026596531 PASS. Master UI 최신 [408 38026745607](https://github.com/andrawing1212/soridraw-music/actions/runs/38026745607)는 최종 결과 다시 확인하고 기록.
+- **배포 HOLD:** app392 실제 PREVIEW 사용자 양방향 실시간 PASS 그대로. source 420 Functions 및 Master UI는 운영에 연결·배포되지 않음, shared RTDB existing `userSync/$uid` parent write는 여전히 직접 악용 가능. Cloudflare Worker canonical batch가 2시간 서버잠금 검증하지 않음. 신호 420 accepted settlement/old 392 upgrade+outbox rollback 아직 미완성. 기존 6채널/TEST/PRODUCTION legacy 영향을 끊지 않고 shared Rules 먼저 배포 금지.
+- **비용 핵심:** Firebase 420 callable은 정상 클릭당 새 Functions 호출 하나와 RTDB Admin transaction 하나라서 기존 RTDB direct 대비 HTTP·CPU·지연이 증가. `DOCS/STAGE420_LIKE_ABUSE_COST_LATENCY_GATE.md` 10만 DAU 가정 월 호출량 및 미포함 비용 필독. 한국 모바일 PC↔모바일 거의즉시 p95 확인 이전 기능활성화 금지.
+- **다음:** Readonly 마무리 감사와 latest QA → 기능보호 가능한 client cutover+Worker lock 저비용 경로 구현 → 서버거절/중복/다기기/열린 구형탭 emulator+실기기 시험 → 필요하면 PREVIEW 한정 안전 배포. ③/④ 개인/공개 5분 기능은 이 security prerequisite 완료 후. **Stage416 전체 1/5 완료**, Stage420 보안 운영 미완료. 공유 사용자 원본/PRODUCTION 변경·배포 0.
+
+---
+
 ## CURRENT — Stage420 Firebase 서버 남용 방어 구현 후보 PASS / 실제 활성화 전 (2026-10-10)
 
 - **Codex 사용 금지, ChatGPT 직접 진행**(사용자 지시). 사용자 최종 `30회/60초 경고 → 40회/60초 추가 차단 → 2개 연속 60초 제한 도달 시 120분 잠금 → 자동 해제`. Master 상태 조회·조기해제·기준조정 목표. 기존 1시간 문구는 옛 기록.

@@ -130,6 +130,21 @@ await A.api.publishExploreLikeIntent416(uid, like(
 assert.equal(database.get(`userSync/${uid}/exploreLikeIntent416`).results.some(
   (row) => row.trackId === track,
 ), false, 'settled old hint must not be retransmitted with unrelated future likes');
+const beforeLate = B.notices.length;
+await sdk.runTransaction(`userSync/${uid}/exploreLikeIntent416`, (previous) => {
+  const version = previous.version + 1;
+  return {
+    version,
+    results: [...previous.results, {
+      trackId: 'stale-offline-track', ownerUid: 'owner',
+      liked: true, operationId: '77777777-7777-4777-a777-777777777777',
+      version, at: Date.now() - 90_000, status: 'pending',
+    }],
+  };
+});
+assert.equal(B.api.readExploreLikeIntent416(uid, 'stale-offline-track'), undefined,
+  'late replay beyond 30 seconds must not impersonate a fresh user click');
+assert.equal(B.notices.length, beforeLate, 'stale offline replay cannot repaint hearts');
 
 const beforeDenied = writes;
 rejectWrites = true;

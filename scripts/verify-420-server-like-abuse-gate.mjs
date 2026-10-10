@@ -118,8 +118,12 @@ assert.match(callable, /export const publishExploreLikeIntent420 = onCall\(/,
   'server-only endpoint must be authenticated Firebase Callable');
 assert.match(callable, /request\.auth\?\.uid/,
   'UID must come from verified caller auth, never from untrusted input');
-assert.match(callable, /publishGuardedLikeSignal420\(admin\.database\(\), uid/,
-  'server only uses Admin SDK to publish into the new private root');
+assert.match(callable, /const database = admin\.database\(\)/,
+  'only Admin SDK may access server-owned rate and signal state');
+assert.match(callable, /readLikeAbuseSettings420\(database\)/,
+  'Master settings must be cached from server-owned configuration');
+assert.match(callable, /publishGuardedLikeSignal420\(database, uid/,
+  'verified UID and cached settings feed the atomic server rate guard');
 assert.doesNotMatch(callable.slice(callable.indexOf('// Stage420 secured candidate')), /raw\.uid/,
   'untrusted UID must never select another account');
 const masterUnlock = callable.slice(callable.indexOf('export const masterUnlockExploreLike420 = onCall('),

@@ -74,7 +74,10 @@ export default defineConfig({
             return 'utils';
           }
 
-          return 'vendor';
+          // Allow Rollup to keep route-only libraries with their lazy pages.
+          // The previous catch-all vendor chunk eagerly loaded dependencies
+          // belonging only to pages that the visitor had not opened.
+          return undefined;
         },
       },
     },

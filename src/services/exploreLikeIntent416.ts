@@ -42,8 +42,8 @@ const validRow416 = (value: unknown): value is IntentRow416 => {
   return typeof row.trackId === 'string' && row.trackId.length > 0 && row.trackId.length <= 512 &&
     typeof row.ownerUid === 'string' && row.ownerUid.length <= 128 &&
     typeof row.liked === 'boolean' && validOperation416(row.operationId) &&
-    Number.isSafeInteger(row.version) && Number(row.version) > 0 &&
-    Number.isSafeInteger(row.at) && Number(row.at) > 0 &&
+    Number.isSafeInteger(Number(row.version)) && Number(row.version) > 0 &&
+    Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0 &&
     (row.status === 'pending' || row.status === 'accepted' || row.status === 'rejected');
 };
 const readLocal416 = (uid: string): Record<string, LocalIntent416> => {
@@ -57,8 +57,8 @@ const readLocal416 = (uid: string): Record<string, LocalIntent416> => {
         const v = value as Partial<LocalIntent416> | null;
         return id.length > 0 && id.length <= 512 && !!v &&
           typeof v.liked === 'boolean' && validOperation416(v.operationId) &&
-          Number.isSafeInteger(v.version) && Number(v.version) > 0 &&
-          Number.isSafeInteger(v.at) && Number(v.at) > 0 &&
+          Number.isSafeInteger(Number(v.version)) && Number(v.version) > 0 &&
+          Number.isSafeInteger(Number(v.at)) && Number(v.at) > 0 &&
           Date.now() - Number(v.at) <= INTENT_TTL_MS_416;
       })) as Record<string, LocalIntent416>;
     }

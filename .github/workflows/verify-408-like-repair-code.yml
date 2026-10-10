@@ -43,6 +43,9 @@ on:
       - 'scripts/verify-424-like-rtdb-signal.mjs'
       - 'scripts/verify-421-like-r2-publisher.mjs'
       - 'public/app-version.json'
+      - 'scripts/verify-217-cache-live-update-reset.mjs'
+      - 'src/components/CacheDiagnosticsOverlay.tsx'
+      - 'src/components/CacheDiagnosticsOverlayImpl.tsx'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
@@ -105,6 +108,8 @@ jobs:
         run: |
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
+      - name: Verify lazy Master diagnostics original reset behavior
+        run: node scripts/verify-217-cache-live-update-reset.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

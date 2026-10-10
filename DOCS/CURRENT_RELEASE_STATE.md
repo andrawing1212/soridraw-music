@@ -1,3 +1,11 @@
+## 0S94. 앱393 PREVIEW 배포 첫 검사 중단 원인 확정·검사기 하위호환 복구 (2026-10-10 KST)
+
+- app393 후보 `061692e7d57f2483f9f37f174fbc13f45f157a9d` [408 38035745690](https://github.com/andrawing1212/soridraw-music/actions/runs/38035745690) PASS. PREVIEW Hosting-only trigger `0bf55dcf1a8f0549c81bfa7256710cc044ebd511` 발행 후 [Release Run 38035850653](https://github.com/andrawing1212/soridraw-music/actions/runs/38035850653)이 **Firebase deploy 전 FAIL**. 정확히 `Verify app378 update-stable following list cache`의 `scripts/verify-217-cache-live-update-reset.mjs`가 `src/components/CacheDiagnosticsOverlay.tsx` 내 `resetPageSyncDiagnostics();`를 요구하나, 초기 경량화 1차로 실제 진단 함수/UI가 `CacheDiagnosticsOverlayImpl.tsx`로 옮겨져 있었음. 구현 파일에 호출·모든 진단 문구가 살아 있음을 독립 소스 대조. 팔로우 기능 테스트에서 FAIL한 것이 아님.
+- 기능 소스·CSS·UI·백엔드 수정 없이 Stage217 검사기는 **lazy wrapper가 관리자만 Impl을 로드함을 함께 검사하고 실제 Impl에서 기존 reset 함수·기존 문구를 검증**하도록 정확히 변경. 고정 408 QA 경로에 wrapper/Impl/검사기를 추가하고 Stage217 verifier를 실행하도록 추가. 다음 배포는 새 SHA 408 PASS + 릴리스 Workflow의 나머지 follow 회귀검사 PASS 후에만 허용.
+- 현재 `preview.soridraw.com`은 app392로 유지, app393 Firebase 배포 **미실시**. 공유 RTDB Rules/Worker/Functions/D1/R2, 사용자 원본, TEST/PRODUCTION 변경 0. 옛 별개 app380 follow-only freeze workflow 실패는 여전히 독립 미해결 상태. **Stage416 1/5=20%, 속도개선 3/5=60%, 현 검증 3/4=75% 유지.**
+
+---
+
 ## 0S93. 미배포 Master 420 패널 진입 차단 + 3중 진행률 고정 (2026-10-10 KST)
 
 - 이전 `preview` HEAD `07687d9c0a93c60b7e1bfaf9eb3f123b1a88a969`에서 배포 안전 감사: app392 이후 소스에 `ExploreLikeAbuseMasterPanel420`이 Admin 설정에 그대로 표시되어 있었음. Functions `masterGetExploreLikePolicy420` 등은 미배포이므로 이 패널을 실행하면 실패한 callable을 요청할 위험. 실제 app392의 Master 화면과 서버 호출은 변경하지 않고 해당 **신규 후보 UI만 `STAGE420_MASTER_PANEL_ACTIVE=false`로 감쌈**. 정책·Master 서버 로직·기존 UI/좋아요/Worker/Rules/데이터 불변.

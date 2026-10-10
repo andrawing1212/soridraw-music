@@ -2,7 +2,8 @@ import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 const update = read('src/services/appUpdateNotice.ts');
-const overlay = read('src/components/CacheDiagnosticsOverlay.tsx');
+const overlayWrapper = read('src/components/CacheDiagnosticsOverlay.tsx');
+const overlay = read('src/components/CacheDiagnosticsOverlayImpl.tsx');
 const pageSync = read('src/lib/pageSyncCoordinator.ts');
 
 const requireText = (source, token, label) => {
@@ -22,6 +23,8 @@ if (update.includes('localStorage.clear(')) throw new Error('update reset must n
 if (update.includes('sessionStorage.clear(')) throw new Error('update reset must not clear unrelated sessionStorage');
 
 requireText(pageSync, 'export const resetPageSyncDiagnostics', 'page sync reset export');
+requireText(overlayWrapper, "lazy(() => import('./CacheDiagnosticsOverlayImpl'))", 'Master lazy overlay entry');
+requireText(overlayWrapper, 'if (!isAdmin) return null;', 'non-Admin must not load diagnostics');
 requireText(overlay, 'resetPageSyncDiagnostics();', 'manual reset page sync');
 requireText(overlay, '이번 실행 진단', 'run scope label');
 requireText(overlay, '업데이트 적용 시 자동 초기화', 'upgrade reset label');

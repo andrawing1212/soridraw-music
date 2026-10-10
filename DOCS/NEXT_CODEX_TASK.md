@@ -1,3 +1,13 @@
+## CURRENT — Stage416 남용 방어 최우선 / **잠금 120분 확정** / 서버 강제 검증 전 배포 HOLD (2026-10-10 KST)
+
+- **최신 사용자 정책**: 좋아요/해제 합산 동일 UID **60초 30회 경고, 40회부터 추가 입력 금지, 2개 연속 60초 제한 도달 시 120분(2시간) 잠금, 만료 자동 해제**. 기존 모든 1시간 기재는 이전 제안이며 사용 금지. Master가 잠금 상태/조기해제/기준을 운영. PC/모바일 정상 빠른 하트 실시간성 유지.
+- GitHub `preview`에 `src/services/exploreLikeAbusePolicy420.ts` 정책과 `scripts/verify-420-like-abuse-policy.mjs` 실행형 검증, QA engine 연결 완료. **Fast QA run 38023304221 SUCCESS**. 30/40, 연속 2개 창, 120분 잠금, 자동해제, 서로 다른 기기 동일 UID state model PASS. 그러나 **클라이언트/RTDB/Worker 서버에 연결하지 않아 실제 제한 비활성**, 기존 app392 현재 정상 서비스 보존.
+- **서버 차단 blocker:** Firebase RTDB `userSync/$uid`의 조상 `.write`가 직접 쓰기를 허용함. child `.write:false`는 부모가 허용하면 무효이며 `.validate`는 삭제 시 실행되지 않음 (Firebase 공식 Rules core syntax + rules conditions). 그러므로 단순 child 규칙/버튼 비활성만으로 실제 공격 방어 불가. 기존 userSync musicNote/recentSongs/libraryPlaylist/exploreLike/exploreFollow/explorePublication 등 기존 권한 보존과 부모 grant revocation을 포함한 서버 소유 쓰기 경로를 emulator에서 검증해야 함. 이전 TEST/PRODUCTION 및 아직 실행 중인 app392 옛 버전과 호환성·RTDB/Functions/Worker 비용 실측 없이는 공유 Rules 적용 금지.
+- **다음 실행 작업:** Firebase Rules Emulator 기반 direct SDK/REST 우회 테스트 → per-UID trusted-time atomic rate-lock store 및 Firebase event writer server-only 설계/구현 → 기존 canonical Worker batch 60/60s limiter와 독립 120min lock 검사 → UI 경고/남은 시간/Master 조기해제 → TypeScript/Build/QA 및 기존 app392 PC↔모바일 응답속도·실비용 비교 → PREVIEW에서만 단계적 안전 배포. **③ 개인 +5분 서버접수 개발은 이 방어 완료 뒤 재개**.
+- 전체 Stage416 **1/5 완료**(① 보류, ② app392 실기기 즉시 동기화 PASS, ③·④·⑤ 대기), 남용 방어 별도 작업 **정책/테스트 PASS, 서버 enforcement 미구현**. Codex로 위임하지 말고 ChatGPT 직접 개발. 사용자 데이터 원본/Worker/TEST/PRODUCTION 변형 금지.
+
+---
+
 ## CURRENT — Stage416 ③ 전 실시간 좋아요 공격·비용 방어 선행 게이트 (2026-10-10 KST)
 
 - 사용자 확정 요청: **앱392 양방향 거의 즉시 하트를 느리게 만드는 게 아니라**, 반복 클릭으로 누적되는 **Firebase RTDB 비용/과부하 방지**. 분당 제한, 2분간 과다 반복 시 경고 및 계정 좋아요·해제 **약1시간 금지**. 디자인/기존 동기화/원본 정확성 훼손 불가.

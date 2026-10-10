@@ -21,6 +21,7 @@ const groups = [
     ['node', 'scripts/verify-419-like-w2-cutover.mjs'],
     ['node', 'scripts/verify-416-private-like-intent.mjs'],
     ['node', 'scripts/verify-420-like-abuse-policy.mjs'],
+    ['node', 'scripts/verify-420-server-like-abuse-gate.mjs'],
   ] },
   { name: 'like-deep', commands: [
     ['node', 'scripts/verify-127-atomic-personal-like.mjs'],

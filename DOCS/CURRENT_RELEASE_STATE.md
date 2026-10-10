@@ -1,3 +1,13 @@
+## 0S68. app391 + 공유 RTDB 선택 필드 추가 뒤 사용자 실사용 정상 확인 — 현재 정상 기준 보호 (2026-10-10 KST)
+
+- **사용자 실사용 결과:** 공유 Firebase RTDB 규칙의 `canonicalSettled417` 선택 boolean 허용 추가 후, 사용자가 "이번엔 제대로 작동돼"라고 명시적으로 보고. 직전 테스트에서 같은 계정 모바일 자기 하트 빈 상태 + 다른 기기 반응 없음 + "다른 기기 알림은 재시도 중" 경고였으며, 사용자가 수정 뒤 정상 동작을 확인. 해당 보고를 **이번 실사용 재현 시나리오 PASS**로 기록. 양방향 모든 조합, 새 기기, 여러 계정, 앱 재설치, 장시간 지속성까지 포괄적으로 검사했다는 의미는 아님.
+- **작동 기준:** Firebase PREVIEW Hosting **app391**, release pinned `742f8d0714fa17a17d3c2b55626b62ad149f829b`, [Release Run 38014558975](https://github.com/andrawing1212/soridraw-music/actions/runs/38014558975) SUCCESS, 공유 RTDB `userSync/$uid/exploreLike/results/$index/canonicalSettled417` optional boolean 추가 / 서버 rules exact match PASS. 실제 문제는 코드 패치 389~391만으로 해결되지 않았고 **누락된 실제 RTDB 서버 규칙 배포 후 정상화**되었다는 시간적 선후관계 명확히 보존.
+- **보호 결정:** 별도 새 결함 근거 없이 이번 정상화된 좋아요 송신/수신·개인 하트·동일 계정 동기화·규칙을 리팩터링/다시 최적화하거나 불필요한 Worker/Rules 재배포 금지. 현재 Local-First/30초 묶음 전송, 변경곡 단위 처리, 데이터 하위호환 및 비용 보호 유지. TEST/PRODUCTION Hosting 승격은 별도 승인, 원본 데이터 미변경.
+- **남은 확인:** 사용자가 관찰한 이번 실제 상황은 PASS. 광범위 회귀 시나리오 및 PC·모바일 장기 안정성은 별도 실사용 검증 전. 더 이상 이 정상 경로를 추정만으로 건드리지 않는다.
+- **이 문서 commit은 기록 전용:** 코드·환경·Firebase/Cloudflare/공유 사용자 데이터 변경이나 재배포 없음.
+
+---
+
 ## 0S67. app391 좋아요 RTDB 실시간 알림 전송 실패 원인 규칙 불일치 수정·공유 규칙 배포 완료 (2026-10-10 KST)
 
 - 사용자 스크린샷: '좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.' 표시. 해당 메시지는 Explore 좋아요 서버 ACK 이후 RTDB set(userSync/{uid}/exploreLike) 실패에서만 발생. 좋아요 숫자 접수와 계정별 실시간 알림은 별개이다.

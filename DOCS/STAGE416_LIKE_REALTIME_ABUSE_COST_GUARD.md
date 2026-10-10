@@ -1,3 +1,15 @@
+## Stage420 실구현 작업 진행 업데이트 — 서버 소유 경로 작성 / 실제 차단 활성화 전 (2026-10-10)
+
+- **요구값 최종 고정:** **30회/60초 경고**, **40회/60초 제한**, **2개 연속 60초 구간에서 40회 도달 시 120분(2시간) 잠금**, 자동해제, Master 상태 조회·조기해제·기준 조정. 1시간 초안은 적용 금지.
+- **소스 구현:** `src/services/exploreLikeAbusePolicy420.ts` 앱/비용 정책의 순수 검사; `functions/src/exploreLikeAbuseGate420.ts` Firebase Admin 전용 계정별 원자적 40/min → 120분 제한 판단·operationId 재전송 중복 방지·최대 50개 신호 payload; `functions/src/index.ts`의 **아직 미배포** `publishExploreLikeIntent420` callable(verified `request.auth.uid` 기반), `masterGetExploreLikeLimit420` Master 전용 조회, `masterUnlockExploreLike420` Master 전용 원자적 잠금 해제 및 동일 RTDB transaction에 감사내역 최대10건 기록.
+- **새 보안 경로:** `privateLikeSync420/$uid` 서버 단독 write + auth.uid self read 예정. `scripts/build-420-private-rules-candidate.mjs`는 원본 `database.rules.json`을 절대 수정하지 않고 **임시 후보만 생성**. 기존 `userSync/$uid`의 넓은 부모 `.write`를 없앤 후 기존 6개 정상 알림 자식에 같은 인증 쓰기권한을 각각 보존하면서 오래된 `exploreLikeIntent416` 직접 쓰기만 거절하는 설계. `scripts/verify-420-private-rules-candidate.mjs`가 정적 ACL equivalence 검사. **Firebase 실제 배포 Rules는 미변경**.
+- **QA:** Fast [38023304221](https://github.com/andrawing1212/soridraw-music/actions/runs/38023304221) PASS 정책 기본; Fast [38023881344](https://github.com/andrawing1212/soridraw-music/actions/runs/38023881344) PASS 서버 모의 transaction + 권한 후보 포함. 408 [38023594858](https://github.com/andrawing1212/soridraw-music/actions/runs/38023594858) PASS 기존 보호. 새 Functions TypeScript/Build + 전체 회귀 [38024059885](https://github.com/andrawing1212/soridraw-music/actions/runs/38024059885)은 **완료 확인 전**. PASS를 가정하지 않는다.
+- **핵심 미완성 / 출시 불가:** 기존 app392 `src/services/exploreLikeIntent416.ts`는 여전히 인증 클라이언트가 구 RTDB 경로에 직접 쓸 수 있다. 위 server-only 새 callable/RTDB 루트는 아직 앱에 연결되지 않았고, 기존 userSync 부모 접근권한은 live 상태 그대로다. 따라서 이 상태에서 공격자는 우회 가능. **보안 활성화 / 2시간 계정 제한 서비스 PASS 아님.** Firebase RTDB Emulator에서 신규쓰기 직접거절/기존 6채널 정상 old-client/멀티기기, 실제 함수 지연+호출료 대 RTDB 전송비용, Worker canonical direct 경로 잠금 조회/차단, Master 운영 설정 변경 API, 경고·잠금 UX, 30/40/120min 실사용 테스트가 남아 있다.
+- **보호 및 배포:** 안전한 app392 PC↔mobile 거의 즉시 개인 하트 서비스 유지. 임의 5초→5분 저장 변경 없음. Firebase shared rules/Worker/Functions 실배포 **0**, D1/Firestore/user canonical 데이터 write/delete/migrate **0**, TEST/PRODUCTION 변화 없음. 이 미완성 보안 백엔드를 실제 공유 규칙에 적용하지 않는다.
+- **다음 실행 순서:** emulator에서 서버 전용 write deny+기존 채널 full parity → ② 실시간 하트 신규 callable latency p95/가격 시뮬레이션 → 앱 인텐트 송신/수신 전환 및 Master 운영 UI → Worker canonical 경로 봉쇄 → 전체 QA → PREVIEW 안전 배포와 사용자 정상 클릭 검증. 이 순서 전에 이전 app392 실시간 기능을 깨면 FAIL.
+
+---
+
 ## 최종 사용자 지정 정책 — 2026-10-10 13:10 KST
 
 **기존 1시간 제한을 2시간 제한으로 변경 확정.** 직전 작성된 본 문서의 `1시간` 관련 제안/설명은 역사적 초안이며 현재 사용 금지. 최신 확정 정책은 다음과 같다.

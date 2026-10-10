@@ -107,6 +107,9 @@ type ExploreLikePendingMutation = {
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
+  // 390: a newer accepted change on another device must survive a local outbox guard.
+  // Do not discard the unsubmitted local intention or confuse it with an ACK.
+  deferredSignal390?: { version: number; result: ExploreLikeAcceptedRow127 };
 };
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
@@ -620,9 +623,9 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
   return { version, previousVersion, results };
 };
 
-const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => {
+const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, deferredReplay390 = false) => {
   const lastSeen = readSeenLikeSignal127(uid);
-  if (signal.version <= lastSeen) return;
+  if (!deferredReplay390 && signal.version <= lastSeen) return;
   // If an initial retained signal arrives after the R2 baseline, its rows
   // could predate that snapshot. Reconcile once rather than accepting it as
   // a newer personal state solely because no local signal version was stored.
@@ -630,8 +633,8 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   // accepted after this device's R2 baseline. Do not discard those exact track
   // transitions merely because this device has no prior signal watermark.
   // An actual missing interval (a previously seen version) still requires repair.
-  const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
-  const needsRepair = gap || readRepairTarget127(uid) > 0;
+  const gap = !deferredReplay390 && lastSeen > 0 && signal.previousVersion !== lastSeen;
+  const needsRepair = !deferredReplay390 && (gap || readRepairTarget127(uid) > 0);
   if (needsRepair) {
     // The retained signal rows are exact changed-track final states. Apply them
     // immediately even when an older notification interval was missed; then use
@@ -647,11 +650,23 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   let changed = false;
   let unresolvedChanged = false;
   let locksChanged = false;
+  let deferredPendingChanged390 = false;
   const acceptedForUi141: ExploreLikeSyncEventDetail[] = [];
   for (const item of signal.results) {
-    // A newer unsent local click must win. An older accepted-but-unsettled
-    // intention must NOT permanently block a newer server-accepted device state.
-    if (pending[item.trackId]) continue;
+    // Preserve an unsubmitted local click, but do not silently lose a newer
+    // server-accepted remote event when its RTDB watermark is advanced.
+    const localPending390 = pending[item.trackId];
+    if (localPending390) {
+      if (!deferredReplay390 && (!localPending390.deferredSignal390 ||
+          signal.version > localPending390.deferredSignal390.version)) {
+        pending[item.trackId] = {
+          ...localPending390,
+          deferredSignal390: { version: signal.version, result: item },
+        };
+        deferredPendingChanged390 = true;
+      }
+      continue;
+    }
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
       changed = true;
@@ -689,11 +704,12 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     // exact remote change until the next page/tab visit.
     acceptedForUi141.push({ ...item, uid, source: 'remote' });
   }
+  if (deferredPendingChanged390) persistLikeOutbox(uid, pending);
   if (changed) persistLikedStateCache(uid, cache);
   if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
   markLocalLikeCatalogReady135(uid);
-  markSeenLikeSignal127(uid, signal.version);
+  if (!deferredReplay390) markSeenLikeSignal127(uid, signal.version);
   // App141: publish to the mounted/replayable UI only AFTER its authoritative
   // local membership read can observe this entire accepted changed-track batch.
   // No new server request, extra listener, retry, or layout change is involved.
@@ -1295,6 +1311,21 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? row.operationId : undefined,
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
+    ...(row.deferredSignal390 && typeof row.deferredSignal390 === 'object' &&
+        Number.isSafeInteger(Number(row.deferredSignal390.version)) && Number(row.deferredSignal390.version) > 0 &&
+        row.deferredSignal390.result && typeof row.deferredSignal390.result.trackId === 'string' &&
+        row.deferredSignal390.result.trackId === trackId && typeof row.deferredSignal390.result.liked === 'boolean'
+      ? { deferredSignal390: {
+        version: Number(row.deferredSignal390.version),
+        result: {
+          uid: '',
+          trackId,
+          ownerUid: String(row.deferredSignal390.result.ownerUid || ''),
+          liked: row.deferredSignal390.result.liked,
+          likeCount: clampLikeCount(row.deferredSignal390.result.likeCount),
+          ...(row.deferredSignal390.result.canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
+        },
+      } } : {}),
   };
 };
 
@@ -1610,11 +1641,23 @@ flushPendingLikes = async (user: User): Promise<void> => {
   const noOps = ordered.filter((pending) => pending.desiredLiked === pending.baseLiked);
   if (noOps.length) {
     const latest = readLikeOutbox(uid);
+    const releasedRemote390: Array<{ version: number; result: ExploreLikeAcceptedRow127 }> = [];
     for (const pending of noOps) {
       const current = latest[pending.trackId];
-      if (current?.updatedAt === pending.updatedAt) delete latest[pending.trackId];
+      if (current?.updatedAt === pending.updatedAt) {
+        delete latest[pending.trackId];
+        if (current.deferredSignal390) releasedRemote390.push(current.deferredSignal390);
+      }
     }
     persistLikeOutbox(uid, latest);
+    // A net-zero local click never reached the server. Once its outbox guard
+    // disappears, replay only the actually received changed-track signal.
+    // The original signal was already marked seen, so this is local-only.
+    for (const deferred of releasedRemote390) {
+      applyRemoteLikeSignal127(uid, {
+        version: deferred.version, previousVersion: 0, results: [deferred.result],
+      }, true);
+    }
   }
 
   const batchEntries = ordered.filter((pending) => pending.desiredLiked !== pending.baseLiked);

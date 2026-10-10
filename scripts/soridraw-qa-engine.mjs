@@ -81,6 +81,7 @@ const groups = [
   ] },
   { name: 'perf-entry', commands: [
     ['node', 'scripts/verify-gemini-lazy-entry.mjs'],
+    ['node', 'scripts/verify-studio-generation-modal-lazy.mjs'],
   ] },
   { name: 'typecheck', commands: [['npm', 'run', 'lint']] },
   { name: 'build', commands: [['npm', 'run', 'build']] },

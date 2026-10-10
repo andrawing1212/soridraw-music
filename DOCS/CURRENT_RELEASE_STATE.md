@@ -1,3 +1,13 @@
+## 0S66. app391 1단계 실사용 FAIL 추가 확인 — 원본 모바일 하트 소실 + 다른 기기 신호 부재 / PREVIEW 069 실측 정상이지만 UID 상태 미확인 (2026-10-10 KST)
+
+- **사용자 확인(최우선):** 빈 하트가 나온 곳은 PC가 아니라 **좋아요를 직접 누른 모바일 자체**. 최근 업데이트에서는 **한 기기에서 좋아요 클릭해도 같은 계정의 다른 기기에 반응이 없음**. 따라서 app391의 두 증상 모두 실사용 **FAIL**. PC 알림만의 문제라고 가정하거나 숫자 1만 보고 개인 canonical 좋아요가 확정됐다고 주장 금지.
+- **읽기 전용 실제 Cloudflare PREVIEW 상태:** 원래 `.github/workflows/diagnose-069-live-like.yml`는 변경 push에 자동 실패·job 0인 오래된 진단 워크플로였음. 불필요하고 현재 버전과 맞지 않는 queue replay/cron 토글·DOCS 자동 push 경로를 제거하고 **SELECT 전용 최소 진단**으로 교체함. [Run 38013782144](https://github.com/andrawing1212/soridraw-music/actions/runs/38013782144) SUCCESS: 2026-10-10 01:35:58Z `Q069_BATCHES=1`, `Q069_MUTATIONS=1`, oldest 1초, q035/q066=0, processor lease 잔여 0. [Run 38013865064](https://github.com/andrawing1212/soridraw-music/actions/runs/38013865064) SUCCESS: 01:37:17Z q069/q035/q066 0, lease 잔여 0. 01:38~01:40 Run 38013960769 / 38014016271 / 38014084831도 SELECT-only SUCCESS, q069=0. **대기열이 단순히 영구적으로 막혔다**는 주장은 이 실측에서 지원되지 않으나, **사용자 특정 트랙의 canonical 개인 membership 확정은 이 숫자로 증명 불가**.
+- **대상곡 식별 미완료:** 이미지 제목은 `성적표 대소동` (이전 문서의 `내소동`은 오독). D1 `tracks.title` 완전 일치 SELECT 조회 0건, 공개 `/v1/search?q=성적표 대소동`에서 exact row 검색 0건. 이 결과는 공개곡/캐시 데이터에서 제목이 다르게 저장된 경우 등과 구분 불가. **곡이 DB에 없다, 데이터가 지워졌다, 좋아요가 0이라는 결론을 내리면 안 됨.** canonical 관계를 정확히 확인하려면 실제 공개 카드의 불변 `trackId`와 로그인 UID가 필요한데 현재 읽기 전용 진단으로는 확보하지 못했음. raw UID/track ID 로그 출력 금지, 공유 데이터 수정 금지.
+- **실행 결과 / 범위:** diagnostic tool `.github/workflows/diagnose-069-live-like.yml`, trigger `.deploy/diagnose-069-live-like.trigger`만 preview 수정·push. 앱 코드 / 버전 / Hosting / Worker / Functions / Rules / 공유 D1 원본 / TEST / PRODUCTION **모두 그대로**. 현재 Firebase PREVIEW app391 (locked `877c50a1666eb6e090f4578a523eac2a85a873ce`), **좋아요 실제 FAIL**. 실제 원인 특정 없이 앱392를 재차 추정 배포하지 않음.
+- **다음 작업:** 사용자가 다시 테스트하게 만들기 전에, 기존 앱 자체의 동일 UID/trackId에 대해 **로컬 outbox/accepted-pending/캐시, 실제 변경 응답 status, RTDB 신호 송수신, indexed canonical 개인 좋아요**를 좁게 대조하는 검증을 구성. 신규 검사/수정은 사용자 원본 변경 없이, 정상 Local-First/W1(비용 가이드)/30초 저장 보호, 공개 숫자와 개인 membership 분리. 검증 가능해진 *구체 결함*에 한해서 코드 수정→TypeScript/Build/회귀→PREVIEW Firebase 배포까지 같은 작업으로 완료할 것. `app391` 기능 PASS나 다음 환경 승격 금지.
+
+---
+
 ## 0S65. 사용자 app391 실제 빈 하트 지속 — 실사용 FAIL 확정, 원인 분기 추가 확인 필요 (2026-10-10 KST)
 
 - **사용자 최신 피드백:** app391 Firebase PREVIEW 반영 뒤에도 같은 곡 하트가 여전히 비어 있음. 이전 앱390과 동일하게 실사용 좋아요 상태 FAIL. app391의 QA 실행형 ACK fixture PASS는 이 결과를 뒤집지 못함. 좋아요 1단계 합격·TEST/PRODUCTION 승격 금지.

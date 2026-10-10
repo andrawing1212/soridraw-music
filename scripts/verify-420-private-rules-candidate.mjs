@@ -24,11 +24,14 @@ assert.deepEqual(uid['$other'], oldUid['$other'],
   'account-private unknown child rejection unchanged');
 assert.deepEqual(next.rules.privateLikeSync420, {
   '$uid': {
-    '.read': userPolicy,
     '.write': false,
+    'display': { '.read': userPolicy },
+    'adminUnlockAudit': { '.read': false },
     '$other': { '.validate': false },
   },
 });
+assert.equal(next.rules.privateLikeSync420.$uid['.read'], undefined,
+  'parent read grant would leak Master actor ID and audit reason');
 for (const name of Object.keys(source.rules)) {
   if (name === 'userSync') continue;
   assert.deepEqual(next.rules[name], source.rules[name], 'protected tree changed: ' + name);

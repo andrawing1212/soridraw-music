@@ -656,17 +656,18 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
     // Preserve an unsubmitted local click, but do not silently lose a newer
     // server-accepted remote event when its RTDB watermark is advanced.
     const localPending390 = pending[item.trackId];
-    if (localPending390) {
-      if (!deferredReplay390 && (!localPending390.deferredSignal390 ||
+    if (localPending390 && !deferredReplay390 &&
+        (!localPending390.deferredSignal390 ||
           signal.version > localPending390.deferredSignal390.version)) {
-        pending[item.trackId] = {
-          ...localPending390,
-          deferredSignal390: { version: signal.version, result: item },
-        };
-        deferredPendingChanged390 = true;
-      }
-      continue;
+      pending[item.trackId] = {
+        ...localPending390,
+        deferredSignal390: { version: signal.version, result: item },
+      };
+      deferredPendingChanged390 = true;
     }
+    // Never overwrite an actual pending local click. Only a net-zero local
+    // outbox release may replay the deferred server-accepted changed-track row.
+    if (pending[item.trackId]) continue;
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
       changed = true;

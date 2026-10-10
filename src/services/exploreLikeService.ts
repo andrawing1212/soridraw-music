@@ -2084,7 +2084,6 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   }
 
   const outbox = readLikeOutbox(user.uid);
-  const unresolved = readSnapshotPending127(user.uid);
   if (Object.values(outbox).some((pending) => (pending.retryCount || 0) === 0)) {
     installExitFlush413();
     schedulePendingFlush(user);

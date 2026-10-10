@@ -2292,7 +2292,12 @@ export default function ExplorePage() {
 
       // 416 provisional updates repaint only MY heart and My Likes membership.
       // Their likeCount is not a published public count, even when filled.
-      if (isTentative416) return;
+      if (isTentative416) {
+        // Keep My Likes membership in sync without touching public counts.
+        // Existing local-first collection hydration remains the sole card source.
+        setLikeAccountSyncSignal((value) => value + 1);
+        return;
+      }
 
       // Heart + count are one accepted like atom. When a canonical remote count
       // accompanies the account state, patch every loaded surface together.

@@ -1,3 +1,16 @@
+## 0S74. Stage416 ② 직접 수정 후 Firebase PREVIEW 앱392 + 공유 RTDB 선택 노드 배포 완료 / 실기기 합격 대기 (2026-10-10 KST)
+
+- **릴리스 실제 성공:** GitHub [PREVIEW Release Run 38021358243](https://github.com/andrawing1212/soridraw-music/actions/runs/38021358243) SUCCESS. Locked release commit `dc1b96d05e4abb9a673f0b5ac508237afd0573d1`, 앱 버전 **392** / `PREVIEW_APP_VERSION=392` / `PREVIEW_EXACT_BUILD=PASS`. Firebase Hosting `https://preview.soridraw.com/` 실제 파일 대조 PASS, TEST/PRODUCTION Hosting 비변경 PASS. 제품 직전 408 [Run 38021216836](https://github.com/andrawing1212/soridraw-music/actions/runs/38021216836) SUCCESS(app392 소스 commit `fd74739064ede1dfae9d77ab8b77b2ad084026ff`). Fast QA [38021097439](https://github.com/andrawing1212/soridraw-music/actions/runs/38021097439) SUCCESS.
+- **배포 자체 검사:** TypeScript PASS, Build PASS, 기존 377/378/379 팔로우 회귀 PASS, 공유 RTDB `418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS additive-private-intent-only`, `416_PRIVATE_RTDB_ADDITIVE_PREFLIGHT=PASS`, `SHARED_RTDB_RULES_EXACT_MATCH=PASS`, `SHARED_RTDB_RULES_DEPLOY=PASS`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- **정확한 기능:** 새로운 UID-private `userSync/$uid/exploreLikeIntent416`는 **서버 확정 전** 바뀐 곡의 개인 하트 의도만 RTDB로 전달. 기존 좋아요 `userSync/$uid/exploreLike`/확정 receipt, canonical 5초 묶음 전송, 전체 공개 숫자 파생/Cloudflare Worker/D1/Functions, Music Note/Library/팔로우 기능은 기존 그대로. 신규 전용 노드만 RTDB rules에 additive 허용하였으며 이 shared rules는 세 앱의 공용 설정이므로 모든 환경 코드가 읽을 수 있는 하위호환 추가. 사용자 원본 데이터 복제/삭제/대량변환/마이그레이션 **없음**.
+- **안전 처리:** 각 실제 클릭에만 private RTDB transaction signal 발행, 계정별 정렬된 버전과 operationId, 기존 ACK 수신보다 최신 클릭 우선, 오래된 accepted ACK의 same-value 오인 제거 보호, re-entry에서 기존 canonical/outbox 우선, 페이지 재진입으로 전체 서버 다시 읽지 않음. Pending RTDB 전송 기록은 변경곡 최대 50개, 정착된 기록은 다음 클릭 시 반복 전송하지 않음. 자기/타계정 public likeCount broadcast는 이 새 신호에서 하지 않음. 실제 5~10초 네트워크 전달은 **아직 사용자가 실측하지 않음**.
+- **현재 단계 판정:** ② 코드 구현·PREVIEW 배포 성공, **PC↔모바일 실제 기능 합격은 미검증이므로 단계 완료 처리하지 않는다**. ① 사용자 보고 반복 읽기는 추후 검사 보류/미해결, ③ 개인 기본 5분 및 Master 1/3/5/10/20분 설정 미구현, ④ 공개 공동집계 기본 5분 및 독립 Master 설정 미구현, ⑤ 독립/비용 최종검증 대기. **전체 완료 0/5**.
+- **사용자에게 요청한 테스트:** PC·모바일 양쪽 `https://preview.soridraw.com/` 앱392 같은 계정, 같은 Explore 곡을 켜놓고 PC like→모바일 하트 10초 이내 자동, 모바일 unlike→PC 10초 이내 자동, 반대 방향 재검. 새로고침/탭 이동 불필요 기준. 공개 숫자 5분 정책은 아직 미구현이므로 테스트 범위에서 제외. 테스트 FAIL이면 원인별 최소수정/앱393 등 별도 검증 후 재릴리스.
+- **남은 위험/미검증:** 앱392 실사용 정확한 타기기 지연, 모바일 오프라인·절전·장기 실행·강제종료/여러 탭, Master 설정 두 항목 미구현, RTDB 전체 실제 대역폭/요금, 10만 사용자 전체 백엔드 비용, Work 독립감사 미실행. 별도의 Follow-only Candidate Check 자동 Job은 구형 Worker 함수 source frozen assertion과 충돌하여 실패 중(이번 stage에서 Cloudflare Worker 미변경); 이번 **실제 Release의 기존 377/378/379 팔로우 회귀는 모두 PASS**. 본 실사용 확인 전 TEST 승격 금지.
+- **배포 후 환경 고정:** `preview`만 Hosting 앱392; `main`/TEST·`production`/정식 Hosting/Worker는 변경하지 않았고 source data shared remains. Cloudflare Worker/Functions/Firestore Rules/D1/R2 원본 스키마 및 사용자 데이터 **실제 변경 0**. 다만 shared Firebase RTDB rules에 새 optional child 한 개는 모든 앱에 동일하게 적용됨.
+
+---
+
 ## 0S73. Stage416 ② ChatGPT 직접 구현 · 추가 안전보강 · app392 릴리스 전 검사 (2026-10-10 KST)
 
 - **사용자 지시:** Codex에 다시 맡기지 말고 ChatGPT 직접 개발. 진행 중 ①~⑤ 고정 진척도와 성공/실패·다음 작업 계속 보고, 사용자 PC↔모바일 테스트가 실제 필요할 때만 별도 요청.

@@ -46,6 +46,7 @@ on:
       - 'scripts/verify-217-cache-live-update-reset.mjs'
       - 'src/components/CacheDiagnosticsOverlay.tsx'
       - 'src/components/CacheDiagnosticsOverlayImpl.tsx'
+      - 'scripts/verify-393-preview-browser-smoke.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
@@ -114,6 +115,13 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+      - name: Verify app393 PREVIEW guest browser smoke (on-demand only)
+        if: contains(github.event.head_commit.message, '[browser-smoke]')
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright-core@1.56.1
+          node scripts/verify-393-preview-browser-smoke.mjs
       - name: Strict existing personal-like and catalog contracts
         shell: bash
         run: |

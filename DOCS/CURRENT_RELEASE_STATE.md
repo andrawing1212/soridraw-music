@@ -1,3 +1,10 @@
+## 0S96. app393 실사이트 Guest 브라우저 계측 작업 추가 (2026-10-10 KST)
+
+- 앱393 실제 사용자 기능/성능 결과가 아직 미검증이므로, PREVIEW live 주소를 Google Chrome에서 읽기 전용으로 열어보는 **일회 실행형 게이트** 추가. 기존 408 품질검사 Workflow에 `[browser-smoke]` commit에서만 실행되는 단계로 연결, 별도 workflow 누적 없음. Chrome desktop 1440x900 / 모바일 emulation 390x844, app-version 393, 첫 렌더 유무, JS/CSS HTTP 실패, 첫 실행에서 미사용 Gemini/생성모달 chunk download 여부, long task p95 측정. Guest no-login, 클릭/생성/좋아요/원본 write 없음. Runner network/browser 문제로 실패하면 결과는 FAIL/미검증으로 그대로 기록할 것.
+- 유의: Github runner의 모바일 emulation과 실제 Samsung/모바일 실기기 검증은 **별개**. 인증된 main/musicApi 모달, 최초 AI 생성·번역·back 및 Studio splitter 드래그 실기기는 여전히 미검증. 이 검사가 성공해도 전체 Stage416 1/5=20%, 속도 3/5=60%, 현 실제 검증 3/4=75%를 성급히 올리지 않음.
+- 신규 테스트는 기존 UI/React App/like/캐시/서버/Rules/Worker 및 Firebase Hosting 배포를 전혀 변경하지 않음. 배포 app393 유지, TEST/PRODUCTION 비변경.
+
+---
 ## 0S95. PREVIEW app393 초기 실행 경량화 실제 Hosting 배포 PASS, 실사용 성능 검증 대기 (2026-10-10 KST)
 
 - **배포 완료:** GitHub `preview` 배포 대상 exact SHA `0ed690d392440e3024815209e7bc4035786e6600`, [Firebase PREVIEW Release 38036146314](https://github.com/andrawing1212/soridraw-music/actions/runs/38036146314) **SUCCESS**. `https://preview.soridraw.com/` 원격 `app-version.json=393`, 실제 `index.html` 빌드 SHA 일치 **PREVIEW_EXACT_BUILD=PASS**. `TEST_PRODUCTION_UNCHANGED=PASS`, shared RTDB 배포 **SKIPPED**, Worker/Functions/D1/R2 및 사용자 원본 변경 없음.

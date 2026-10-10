@@ -9,6 +9,13 @@ import {
   seedExploreLikedTrackCandidates129,
 } from './exploreLikedTracksService';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import {
+  readExploreLikeIntent416,
+  clearExploreLikeIntent416,
+  subscribeExploreLikeIntent416,
+  publishExploreLikeIntent416,
+  settleExploreLikeIntent416,
+} from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
   canAdvancePersonalLikeOriginCertificate357,
@@ -146,7 +153,7 @@ type ExploreLikeSyncEventDetail = {
   ownerUid: string;
   liked: boolean;
   likeCount: number;
-  source?: 'local' | 'confirmed' | 'remote';
+  source?: 'local' | 'confirmed' | 'remote' | 'remote-intent';
 };
 
 type ExploreLikeUiSyncListener139 = (detail: ExploreLikeSyncEventDetail) => void;
@@ -184,7 +191,7 @@ export const subscribeExploreLikeUiSync139 = (
 };
 
 const notifyExploreLikeUiSync139 = (detail: ExploreLikeSyncEventDetail) => {
-  if (detail.source !== 'remote') return;
+  if (detail.source !== 'remote' && detail.source !== 'remote-intent') return;
   const normalizedUid = String(detail.uid || '').trim();
   const trackId = String(detail.trackId || '').trim();
   if (!normalizedUid || !trackId) return;
@@ -390,6 +397,10 @@ export const readExploreTrackLikeMembership127 = (uid: string, trackId: string):
   if (!uid || !id) return undefined;
   const pending = readLikeOutbox(uid)[id];
   if (pending) return pending.desiredLiked;
+  // 416: accepted server state remains untouched. An active, same-UID private
+  // hint can repaint another device before the original 5s/5min server batch.
+  const tentative416 = readExploreLikeIntent416(uid, id);
+  if (typeof tentative416 === 'boolean') return tentative416;
   const acceptedButNotMaterialized = readSnapshotPending127(uid);
   if (Object.prototype.hasOwnProperty.call(acceptedButNotMaterialized, id)) return acceptedButNotMaterialized[id];
   // A complete account snapshot is globally authoritative. If the legacy R2
@@ -668,6 +679,9 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
     // Never overwrite an actual pending local click. Only a net-zero local
     // outbox release may replay the deferred server-accepted changed-track row.
     if (pending[item.trackId]) continue;
+    // An older accepted event cannot retire a newer opposite private intent.
+    // Identical personal membership becomes durable through the 127 path.
+    clearExploreLikeIntent416(uid, item.trackId, item.liked);
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
       changed = true;
@@ -764,9 +778,32 @@ const startLikeSignal127 = (uid: string) => {
     (error) => console.warn('[127] Personal like signal unavailable; local cache preserved:', error),
   );
 };
+// 416 uses a distinct UID-private channel, never the accepted 127 schema. It
+// paints only a tentative PERSONAL heart; no canonical/public count change.
+let activeLikeIntentUid416 = '';
+let unsubscribeLikeIntent416: Unsubscribe | null = null;
+const startLikeIntent416 = (uid: string) => {
+  if (uid === activeLikeIntentUid416) return;
+  unsubscribeLikeIntent416?.();
+  unsubscribeLikeIntent416 = null;
+  activeLikeIntentUid416 = uid;
+  if (!uid) return;
+  unsubscribeLikeIntent416 = subscribeExploreLikeIntent416(uid, (trackId) => {
+    if (auth.currentUser?.uid !== uid || activeLikeIntentUid416 !== uid ||
+        readLikeOutbox(uid)[trackId]) return;
+    const liked = readExploreTrackLikeMembership127(uid, trackId);
+    if (typeof liked !== 'boolean') return;
+    patchExploreLikedTrackMembership(uid, trackId, liked);
+    dispatchLikeSync({ uid, trackId, ownerUid: '', liked, likeCount: 0, source: 'remote-intent' });
+  });
+};
 // This listener does not read Firestore/D1 and subscribes once for the signed-in
 // account, not once per song/card/tab. No continuous timer or global Feed reload.
-onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
+onAuthStateChanged(auth, (user) => {
+  const uid = user?.uid || '';
+  startLikeSignal127(uid);
+  startLikeIntent416(uid);
+});
 
 const requestPersonalLikeBaseline127 = async (
   user: User,
@@ -1652,6 +1689,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
       }
     }
     persistLikeOutbox(uid, latest);
+    // Cancelling a batch must also retire the same exact tentative operation.
+    // This is RTDB-only, asynchronous, and cannot create a D1 mutation.
+    void settleExploreLikeIntent416(uid, noOps.map((pending) => ({
+      trackId: pending.trackId,
+      operationId: pending.operationId || '',
+      status: 'rejected' as const,
+    }))).catch(() => { /* 127 accepted path remains the fallback. */ });
     // A net-zero local click never reached the server. Once its outbox guard
     // disappears, replay only the actually received changed-track signal.
     // The original signal was already marked seen, so this is local-only.
@@ -1774,6 +1818,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
           continue;
         }
         if (!hasNewerPending) {
+          clearExploreLikeIntent416(uid, pending.trackId, pending.desiredLiked, pending.operationId);
           // A stale PC/mobile request is not automatically replayed over a
           // newer canonical state. The returned server state becomes local
           // truth; the next explicit click creates a fresh operation.
@@ -1840,6 +1885,16 @@ flushPendingLikes = async (user: User): Promise<void> => {
       canonicalConflictUiAfterPersist127.forEach(dispatchLikeSync);
       canonicalAcceptedUiAfterPersist127.forEach(dispatchLikeSync);
       succeeded = true;
+      // An accepted hint is NOT canonical authority; the existing 127
+      // accepted event still carries the authoritative personal membership.
+      // Failure to retire this tiny hint cannot retry or delay the D1 batch.
+      void settleExploreLikeIntent416(uid, batchEntries.map((pending) => ({
+        trackId: pending.trackId,
+        operationId: pending.operationId || '',
+        status: resultByTrack.get(pending.trackId)?.status === 'revision-conflict' ||
+          resultByTrack.get(pending.trackId)?.status === 'ineligible'
+          ? 'rejected' as const : 'accepted' as const,
+      }))).catch((error) => console.warn('[416] Tentative personal hint cleanup deferred:', error));
       // Cross-device notification is now tied to the accepted account state.
       // Notification failure must NEVER replay a successful D1 queue intake.
       try {
@@ -2031,7 +2086,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     schedulePendingFlush(user);
   }
 
-  return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? unresolved[trackId] ?? cache.get(trackId) === true);
+  return normalized.filter((trackId) => readExploreTrackLikeMembership127(user.uid, trackId) === true);
 };
 
 // App129 single-authority rule:
@@ -2123,6 +2178,18 @@ export const setExploreTrackLike = async (
   };
   persistLikeOutbox(uid, outbox);
   installExitFlush413();
+
+  // Private, provisional hint only. A denied/missing new RTDB rule is harmless:
+  // the original durable outbox + accepted 127 signal continue to work.
+  const operationId416 = outbox[normalizedTrackId].operationId;
+  if (operationId416) {
+    void publishExploreLikeIntent416(uid, {
+      trackId: normalizedTrackId,
+      ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
+      liked,
+      operationId: operationId416,
+    }).catch((error) => console.warn('[416] Private intent hint unavailable; accepted path retained:', error));
+  }
 
   // Sliding idle window: every click restarts the same 5-second timer. One song
   // or many songs therefore leave as one final-state batch after the last click.

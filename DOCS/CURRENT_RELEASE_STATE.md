@@ -1,3 +1,15 @@
+## 0S63. PREVIEW app390 배포 완료 — 서버 충돌 좋아요 결과가 모바일 하트에 반영되지 않던 수신 순서 오류 수정 / 사용자 검증 일괄 보류 (2026-10-10 KST)
+
+- **사용자 지시:** app389 기능의 매 단계 사용자 실기기 테스트를 반복하지 않고 다른 좁은 수정·검증을 이어가며 여러 항목을 모아 최종 PC/모바일 실사용 테스트 1회로 취합. **사용자 실기기 기능 결과를 자동 검사 성공으로 미리 PASS 판정하지 않는다.** 신규 기능 범위·TEST/PRODUCTION 승격은 자의 결정하지 않는다.
+- **독립 코드상 재현된 결함:** `src/services/exploreLikeService.ts`의 `flushPendingLikes`는 server가 `revision-conflict` 또는 `ineligible` 상태로 기존 하트와 다른 정답을 돌려줬을 때, **이전 outbox/accepted-pending 캐시가 저장된 채 `source:remote` 화면 알림을 먼저 발생**시켰음. `ExplorePage.tsx` 수신자는 새 event의 boolean을 현재 outbox/pending membership과 대조하므로 해당 event를 거절하며, 이후 outbox가 삭제돼도 자동 화면 알림이 다시 오지 않는 경로. 타 화면 이동/새로고침 후에야 하트가 맞춰질 수 있음. 이 경로는 실제 UI 코드 판독 + 격리 실행으로 확인; 모든 실사용 오류의 유일 원인이라는 증거는 아님.
+- **실제 수정:** affected changed-track에만 서버가 회신한 하트를 캐시와 `My Likes` membership에 맞추고, `snapshotPending`·outbox 최종 저장 이후 `remote` 화면 알림을 전달. 새로운 서버 요청·DB 조회/쓰기/폴링/RTDB 변경 없음. 현재 미전송 새 로컬 클릭이 존재하면 기존 재기준화하여 보호하며, 서버 확정 전 막대한 전역 동기화는 실행하지 않음. UI/CSS/Worker/Rules/Functions 및 기존 정상 Studio 저장하트 변경 없음.
+- **변경 파일:** `src/services/exploreLikeService.ts`, 기존 재사용 테스트 `scripts/verify-180-like-live-signal-and-cached-paint.mjs`, `public/app-version.json` 및 릴리스 트리거. Work 별도 독립 실기기 검증은 미실시. 코드 최종 QA SHA `cd09ac55077e56c966d47f4aaccdcf61a9a75d60`. 배포 locked SHA `73815684acdfc10f28c1cef52f6c16ff70c159fe`.
+- **QA [408 Run 38011415722](https://github.com/andrawing1212/soridraw-music/actions/runs/38011415722) SUCCESS:** TypeScript/Build/기존 127/175/180/178/191/192/197/390 및 shared RTDB Rules 읽기전용 검사 PASS. 추가 **실제 `flushPendingLikes` 함수 추출실행** `APP390_CONFLICT_ACK_DURABLE_BEFORE_REPAINT=PASS`, `APP390_CONFLICT_MY_LIKES_MEMBERSHIP_AND_W0_RETRY=PASS`. 가상 UI는 화면 측의 실제 우선순위 판독과 동일하게 옛 outbox/snapshot이 남으면 remote 이벤트를 거부하도록 구성. 실제 PC/mobile UI E2E가 아님.
+- **실제 PREVIEW Firebase [App Release Run 38011570464](https://github.com/andrawing1212/soridraw-music/actions/runs/38011570464) SUCCESS:** `LOCKED_PREVIEW_SHA=73815684acdfc10f28c1cef52f6c16ff70c159fe`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=390`, `PREVIEW_EXACT_BUILD=PASS` (실제 `https://preview.soridraw.com/` index SHA 확인), `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 앱 Hosting만 변경. Worker `03af0cc6-1336-4ed2-98ff-4983e1b21a44` 유지, Cloudflare/D1/R2/Firestore/RTDB Rules/Functions/shared data/main/TEST/PRODUCTION 미변경.
+- **검증 취합 항목(실사용 미진행):** app389 기존 RTDB outbox deferred net-zero, app390 server revision-conflict/ineligible 하트·내 좋아요·공개 likeCount, 첫 로그인·기존 캐시, PC→모바일 및 모바일→PC 좋아요/해제 페이지 이동 없이 일치. 앱389/390 코드·배포 QA는 PASS이나 사용자 실기기 불일치 기존 **FAIL 판정 유지**. 배포 성공과 출시 가능 판정 분리. 위험: 장기 `retryCount>0` ambiguous outbox와 복합 최신상태 충돌은 일부 여전히 미해결 가능. 069 자동진단, 오래된 follow-only 후보 오류는 릴리스와 별도 추적.
+
+---
+
 ## 0S62. app389 Firebase PREVIEW 배포 완료 — 수정 요청 시 검증 후 PREVIEW 배포까지 한 작업 (2026-10-10 KST)
 
 - **최신 사용자 운영 지시(상시 적용):** 사용자가 앞으로 SORIDRAW 수정 지시를 하면 안전 검증을 통과한 완성 수정본을 별도 '배포' 재요청 없이 **같은 작업에서 Firebase PREVIEW 배포·실제 주소 확인까지 진행한 뒤 최종 결과를 보고**할 것. 검사만 또는 커밋만 완료한 것을 끝이라고 보고하지 않는다. TEST 승격/PRODUCTION은 각각 기존 명시 승인 필요. 위험/검증 실패 시 배포·승격 중단하고 실패 이유와 현재 상태만 보고. `AGENTS.md`에도 동일 방침 이미 명시돼 있으므로 정합 유지.

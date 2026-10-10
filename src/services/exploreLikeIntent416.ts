@@ -5,7 +5,6 @@ import { realtimeDb } from '../firebase';
 // canonical membership, public counts, the accepted 127 signal or a Worker queue.
 const INTENT_MAX_416 = 50;
 const INTENT_TTL_MS_416 = 60 * 60_000;
-const INTENT_CACHE_416 = 'soridraw:explore-like-intent:416';
 const INTENT_SEEN_416 = 'soridraw:explore-like-intent-seen:416';
 
 type IntentStatus416 = 'pending' | 'accepted' | 'rejected';
@@ -48,34 +47,24 @@ const validRow416 = (value: unknown): value is IntentRow416 => {
     Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0 &&
     (row.status === 'pending' || row.status === 'accepted' || row.status === 'rejected');
 };
+// Tentative remote hints have NO cross-launch authority. Never revive a stale
+// provisional heart from localStorage after an app restart: the original
+// canonical cache plus durable OWN outbox already own recovery. In-memory
+// overlays exist only while this signed-in device is actively listening.
 const readLocal416 = (uid: string): Record<string, LocalIntent416> => {
-  const inMemory = localIntentByUid416.get(uid);
-  if (inMemory) return inMemory;
-  let result: Record<string, LocalIntent416> = {};
-  try {
-    const raw = JSON.parse(readText416(storeKey416(INTENT_CACHE_416, uid)));
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      result = Object.fromEntries(Object.entries(raw).filter(([id, value]) => {
-        const v = value as Partial<LocalIntent416> | null;
-        return id.length > 0 && id.length <= 512 && !!v &&
-          typeof v.liked === 'boolean' && validOperation416(v.operationId) &&
-          Number.isSafeInteger(Number(v.version)) && Number(v.version) > 0 &&
-          Number.isSafeInteger(Number(v.at)) && Number(v.at) > 0 &&
-          Date.now() - Number(v.at) <= INTENT_TTL_MS_416;
-      })) as Record<string, LocalIntent416>;
-    }
-  } catch { /* Malformed optional hints must not touch canonical state. */ }
-  localIntentByUid416.set(uid, result);
-  return result;
+  let entries = localIntentByUid416.get(uid);
+  if (!entries) {
+    entries = {};
+    localIntentByUid416.set(uid, entries);
+  }
+  return entries;
 };
 const saveLocal416 = (uid: string, entries: Record<string, LocalIntent416>): void => {
   const fresh = Object.entries(entries)
     .filter(([, value]) => Date.now() - value.at <= INTENT_TTL_MS_416)
     .sort((a, b) => a[1].version - b[1].version)
     .slice(-INTENT_MAX_416);
-  const bounded = Object.fromEntries(fresh) as Record<string, LocalIntent416>;
-  localIntentByUid416.set(uid, bounded);
-  writeText416(storeKey416(INTENT_CACHE_416, uid), JSON.stringify(bounded));
+  localIntentByUid416.set(uid, Object.fromEntries(fresh) as Record<string, LocalIntent416>);
 };
 const seenVersion416 = (uid: string) => {
   const memory = seenByUid416.get(uid);

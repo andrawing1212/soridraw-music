@@ -1,3 +1,15 @@
+## 0S69. Stage416 ① 개인 좋아요 반복 읽기 소스/CI 감사 — 추가 코드 수정 HOLD (2026-10-10 KST)
+
+- **작업 방향 고정:** Stage416 ①서버 불필요 읽기→②개인 동일계정 5~10초→③개인 마지막 클릭 후 5분 저장→④공개 변경곡 공동 집계 1/3/5/10/20분(Master 변경·다음 집계부터)→⑤독립검증. app391 좋아요 버튼 **사용자 정상 확인**을 개인 즉시 동기화 ② PASS로 해석하지 않는다. 사용자 실측 타기기 10~15초, 목표 5~10초, 기존 app391은 좋아요 클릭 후 **5초** idle batch + ACK 후 UID RTDB 신호. 앱 종료 시 조기 전송 시도 있으나 강제종료 ACK/알림 전달 보장 아님. `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md` 최신 확정 기준.
+- **① 현재 확정한 실제 소스:** `src/services/exploreSocialSnapshotService.ts`의 `getExplorePersonalSocialSnapshot`: 유효 영속캐시가 있으면 로컬에서 바로 응답, 원본 GET 없음; 최초 캐시 미스 시 한 번 GET, 동시 GET 합침. `src/services/exploreSocialService.ts` follow bundle도 유효 complete cache 우선, fallback snapshot. `src/pages/ExplorePage.tsx` My Likes 진입만 `ensureExplorePersonalLikeCrossOriginParity357` 검사. `src/services/exploreLikeService.ts`는 정상/이미 인증된 신호에서는 즉시 return; **416 수정으로 settlement-only 경로가 오래된 FULL repair를 재가동하지 않도록 차단**. 누락 신호·partial·아직 정착하지 않은 좋아요 guard에는 정확성 보호를 위한 제한적 조회 가능.
+- **기존 CI 실제 로그 재검사:** [408 QA Run 38012744090](https://github.com/andrawing1212/soridraw-music/actions/runs/38012744090) `416_HEALTHY_REENTRY_ZERO_REQUESTS=PASS`, `416_SETTLEMENT_ONLY_NO_EXTRA_FULL_REPAIR=PASS`, `416_FAILED_GAP_REPEAT_READ_COOLDOWN=PASS`, `APP135_VERIFIED_COMPLETE_CATALOG_D1_R0_AND_PARTIAL_TARGETED=PASS`, `APP197_WARM_REVISIT_R0_W0=PASS`, TS/Build 성공. 이 검증은 **격리/소스 경로** PASS이며 app391 실제 사용자 세션 실시간 비용 계측과 동등하지 않음.
+- **비용 관찰:** 2026-10-09 read-only 실제 Cloudflare D1 7일량 공유 Explore R372,699/W2,059, 계정 전체 D1 R400,396/W8,203 (0S57). 이 값만으로 R4/5가 정상 앱 페이지 이동마다 반복 중이라고 확정할 수 없고, Workers/R2/DO/Firebase 총청구도 검증되지 않았음. 과거 동영상의 개인 R4~R5는 D1 SQL query 수, HTTP 요청 수 아님.
+- **① 판정:** 코드/기존 CI **PASS**, 실제 warm-cache 동일 계정에서 잔여 endpoint 재호출 및 D1/R2/Worker 회수 **미검증 → 최종 비용 합격 HOLD**. 근거 없는 제거·타이머 수정·복구 경로 차단은 정상 기능 위험. **추가 제품 코드 수정/배포 없음, 공유 사용자 데이터 변경 0.**
+- **다음 좁은 검증:** 배포된 app391의 정상 캐시 상태에서 내 좋아요 재진입·좋아요 1회/해제 1회 시 `/v1/me/social-snapshot`과 `PERSONAL SETTLEMENT 189`이 반복 호출되는지 분리해 물리 R/W 증가를 확인. 반복이 확인되면 정확한 호출 원인만 국소 수정; 아니라면 ① 소스 경로 보호하고 ②단계 5~10초 목표로 진행. CI PASS만으로 실사용 PASS 단정 금지.
+- **감사 commit 범위:** preview `550c137e54de27a68910626f79d7f3e92b8f4a4c` 제품 코드 기준과 관련 QA 로그 감사. 설계 문서 업데이트 `2554db80d69079b7bf5f1b8b4dc9ab6cf0b2a997`; 현재 상태 문서 기록 외 제품/Worker/Functions/Rules/Hosting/main/TEST/PRODUCTION 변경·배포 없음.
+
+---
+
 ## 0S68. app391 + 공유 RTDB 선택 필드 추가 뒤 사용자 실사용 정상 확인 — 현재 정상 기준 보호 (2026-10-10 KST)
 
 - **사용자 실사용 결과:** 공유 Firebase RTDB 규칙의 `canonicalSettled417` 선택 boolean 허용 추가 후, 사용자가 "이번엔 제대로 작동돼"라고 명시적으로 보고. 직전 테스트에서 같은 계정 모바일 자기 하트 빈 상태 + 다른 기기 반응 없음 + "다른 기기 알림은 재시도 중" 경고였으며, 사용자가 수정 뒤 정상 동작을 확인. 해당 보고를 **이번 실사용 재현 시나리오 PASS**로 기록. 양방향 모든 조합, 새 기기, 여러 계정, 앱 재설치, 장시간 지속성까지 포괄적으로 검사했다는 의미는 아님.

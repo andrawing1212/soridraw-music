@@ -123,3 +123,50 @@ jobs:
           }
           console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE
+
+      - name: Authenticate shared Firebase for read-only live App Check and rules status
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Verify actual RTDB App Check enforcement and live rules (GET only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path: raise SystemExit('No read-only credential')
+          creds=service_account.Credentials.from_service_account_file(
+            path,scopes=['https://www.googleapis.com/auth/cloud-platform',
+                         'https://www.googleapis.com/auth/firebase.database',
+                         'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          headers={'Authorization':'Bearer '+creds.token}
+          url='https://firebaseappcheck.googleapis.com/v1/projects/91309780603/services/firebasedatabase.googleapis.com'
+          r=requests.get(url,headers=headers,timeout=25)
+          print('RTDB_APP_CHECK_CONFIG_HTTP='+str(r.status_code))
+          if r.status_code==200:
+            j=r.json()
+            mode=str(j.get('enforcementMode','UNKNOWN'))
+            print('RTDB_APP_CHECK_ENFORCEMENT='+mode)
+          else:
+            # Never log response bodies or private credential metadata.
+            print('RTDB_APP_CHECK_ENFORCEMENT=UNVERIFIED')
+          rules_url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          rr=requests.get(rules_url,params={'access_token':creds.token},timeout=25)
+          print('RTDB_LIVE_RULES_HTTP='+str(rr.status_code))
+          if rr.status_code==200:
+            live=rr.json()
+            local=json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+            node=live.get('rules',{}).get('userSync',{}).get('$uid',{}).get('exploreLike',{})
+            print('RTDB_LIVE_EXPLORE_LIKE_RULES_MATCH='+str(node==local.get('rules',{}).get('userSync',{}).get('$uid',{}).get('exploreLike',{})).upper())
+            print('RTDB_LIVE_UID_RW_RULES_MATCH='+str(
+              live.get('rules',{}).get('userSync',{}).get('$uid',{}).get('.write')==
+              local.get('rules',{}).get('userSync',{}).get('$uid',{}).get('.write')
+            ).upper())
+          else: print('RTDB_LIVE_RULES=UNVERIFIED')
+          PY

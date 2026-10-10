@@ -48,12 +48,13 @@ export const resolveGuardedOutbox420 = (
       latest.updatedAt !== sent.updatedAt) {
     return { action: 'superseded', canFlush: false };
   }
-  if (!reply) return { action: 'await-reply', canFlush: false };
+  if (!reply || reply.ok !== true) return { action: 'await-reply', canFlush: false };
   if (reply.allowed) return { action: 'approved', canFlush: true };
   if (!evidence || evidence.uid !== sent.uid ||
       evidence.trackId !== sent.trackId ||
       !Number.isSafeInteger(evidence.version) || evidence.version < 0 ||
-      typeof evidence.liked !== 'boolean') {
+      typeof evidence.liked !== 'boolean' ||
+      !['accepted-127', 'verified-personal-snapshot', 'verified-local-baseline'].includes(evidence.source)) {
     // A denied provisional signal does not prove a canonical liked/unliked
     // value. Retain the durable row until bounded authoritative reconciliation.
     return { action: 'await-proof', canFlush: false };

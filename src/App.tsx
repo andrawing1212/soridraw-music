@@ -1103,7 +1103,7 @@ const formatStoredCustomStructureText = (structure: any): string => {
   }).join(' → ');
 };
 
-import { generateSong, translateTitleAndLyrics, translateLyrics, generateCustomSectionMetadata, regenerateLyricsOnly } from './services/geminiService';
+import { generateSong, translateTitleAndLyrics, translateLyrics, generateCustomSectionMetadata, regenerateLyricsOnly } from './services/geminiServiceLazy';
 import { 
   collection, 
   query, 

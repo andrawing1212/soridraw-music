@@ -1,3 +1,11 @@
+## CURRENT — Stage420 브라우저 탭 최초 중복 전송 방어 작은 작업 완료, 다음 exact ACK-loss 복구 (2026-10-10)
+
+- preview 후보 소스 `9342ae028fa2a2eec27b23de2a30a5cd28ff5812`. [408 Run 38051975847](https://github.com/andrawing1212/soridraw-music/actions/runs/38051975847) SUCCESS: 브라우저 exclusive Web Lock+durable first-send marker 조합, 두 탭 동시 요청 1회, 미지원 Web Locks/저장실패 시 송신 0, stale newer click 무변경, 기존 좋아요 회귀/Functions TS/앱 TS/Build PASS. **이 후보 세부 작업 4/4 완료**. Stage416 1/5=20%, 앱 속도 개선 3/5=60%, 실기기 3/4=75% 그대로.
+- 다음 한 작업은 단순 outbox 보존을 넘어 **서버 승인 응답과 증표 모두 분실한 정확한 UID+trackId+liked+operationId의 O(1) 검증 가능한 증거 확인/안전한 재정착**. 전송 기록이 표시 50건 밖으로 밀려난 경우도 신규 클릭 승인·쿼터 소모·복제 쓰기 없이 인증 가능한 서버/171 canonical 상태가 있어야 복구 가능. 증명할 수 없으면 outbox fail-closed 보존, 전체 계정/곡 스캔 금지. 여러 탭 Web Locks는 같은 브라우저 출처의 동시성 보호이지 여러 기기/서버 승인증거의 대체가 아님.
+- Stage420/426 cutover OFF 유지; PREVIEW Firebase Hosting app395 그대로. shared RTDB Rules/Functions/Worker/D1/R2/사용자 원본 변경·배포 금지, app395/TEST/PROD old-client parity, 120분 잠금 원본 enforcement, 실제 171 receipt W0, 월 비용·실사용 지연 증명 전 릴리스 HOLD. Legacy Follow-only Worker freeze FAIL 별도 유지.
+
+---
+
 ## CURRENT — Stage420 최초 ACK 소실: durable first-send marker PASS, 서버 증거 복구 및 동시성 HOLD (2026-10-10)
 
 - 현재 GitHub `preview` 소스 commit `5c83abff9d15ae6a656cb59e31ca9ddbf39926e9`. [408 Run 38043767723](https://github.com/andrawing1212/soridraw-music/actions/runs/38043767723) PASS: Functions/React TypeScript, Build, 기존 좋아요 회귀, `STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD`. 420 최초 전송 marker를 outbox에 저장/재확인 후 첫 callable을 보내는 후보 구현 완료. 정상 PREVIEW 서비스 app395 변화 0, Stage420/426 hard OFF.

@@ -1,3 +1,14 @@
+## 0S113. Stage420 같은 브라우저 여러 탭 최초 승인 중복 전송 방어 — 소스 후보/전체 408 PASS (2026-10-10)
+
+- **완료된 독립 작은 작업:** 동일 UID+trackId에서 여러 브라우저 탭이 최초 Stage420 승인 호출을 동시에 시작할 때, Web Locks API의 브라우저 exclusive lock 안에서 최신 durable outbox를 다시 확인→최초 시도 기록 저장→한 건만 Firebase Callable 실행하게 최소 수정. Web Locks가 없거나 거절되고 저장증명이 없으면 **첫 송신을 생략하고 outbox 보존**(fail-closed). 기존 ACK 분실로 기록된 opId, 나중에 밀려난 51건, 새로운 최신 클릭은 새로운 승인 호출로 변환하지 않음. 잠금은 기기 내 탭 조정만 하며 새 서버 읽기/쓰기 없음.
+- **수정 코드 commit:** `9342ae028fa2a2eec27b23de2a30a5cd28ff5812` (부모 `ce81b83b57b0ba9e2718f5382111641b7cc4380f`). 파일 2개: `src/services/exploreLikeGuardedTransport420.ts`, `scripts/verify-420-guarded-transport.mjs`. `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false` 유지; 배포된 app395 좋아요 및 외관 변경 없음.
+- **검증 근거:** [408 Run 38051975847](https://github.com/andrawing1212/soridraw-music/actions/runs/38051975847) SUCCESS. `STAGE420_CROSSTAB_FIRST_SEND_EXCLUSIVE_LEASE=PASS`, `STAGE420_MISSING_LOCK_OR_STORAGE_FAIL_CLOSED=PASS`, `STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD=PASS`, renewal/127/390/417·Functions TS/앱 TS/Build·shared RTDB Rules read-only PASS. **격리 VM 모형 검증이지 실제 탭/실기기 서버 비용·서비스 보안 PASS가 아님.**
+- **이번 작은 작업 진척도:** 소스 범위 확인→국소 수정→408 자동검사→상태 문서 기록 **4/4=100%**(후보 코드/자동검사 완료). 전체 Stage416 **1/5=20%**, 전체 앱 속도 개선 **3/5=60%**, 현재 실기기 **3/4=75%** **불변**.
+- **미완료 차단:** 최초 Firebase 승인 ACK와 서명증표 모두 소실된 요청은 브라우저 중복 전송 차단만으로 canonical 자동 확정/복구할 수 없음. O(1) 신뢰 가능 exact server/canonical operationId 증빙, Firefox/Safari/실제 스마트폰 Web Locks 지원·다중기기 충돌, 24h+·키회전, Master 120분 잠금 Worker 원본 우회, 구형 app395/TEST/PROD+shared Rules 호환, 171 물리 W0, 10만 DAU 월 총 비용·p95 미증명. **Stage420/426 활성화 HOLD 및 TEST/PROD 승격 금지.**
+- **서비스 상태:** Firebase PREVIEW Hosting app395 기존 그대로; Functions/RTDB Rules/Worker/D1/R2/공유 사용자 데이터·main/production 모두 미변경, GitHub preview 소스·테스트·문서만 수정. Follow-only legacy Worker freeze CI 과거 FAIL은 별도 미해결. 다음에는 최초 ACK 완전 소실의 exact approved/canonical 복구 하나만 분리하여 설계/검증.
+
+---
+
 ## 0S112. Stage420 최초 ACK 소실 재전송 보호: 기기 우선 durable marker 후보 PASS, 실제 복구는 HOLD (2026-10-10 KST)
 
 - **새 소스 commit:** `5c83abff9d15ae6a656cb59e31ca9ddbf39926e9` (부모 `d10e2b5ab567e2e14157676c382f4af373f58d99`). 수정한 파일은 `src/services/exploreLikeGuardedOutbox420.ts`, `src/services/exploreLikeGuardedTransport420.ts`, `src/services/exploreLikeService.ts`, `scripts/verify-420-guarded-transport.mjs` 4개. 신규 계정/기능/데이터 쓰기 없음.

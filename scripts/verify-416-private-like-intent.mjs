@@ -44,8 +44,7 @@ const sdk = {
   },
 };
 const clients = [];
-function makeClient() {
-  const storage = new Map();
+function makeClient(storage = new Map()) {
   const notices = [];
   const module = { exports: {} };
   const context = {
@@ -84,6 +83,13 @@ assert.equal(cold.api.readExploreLikeIntent416(uid, track), undefined,
   'new browser must not promote a retained tentative hint to canonical state');
 assert.equal(cold.notices.length, 0);
 stopCold();
+const restartedB = makeClient(B.storage);
+const stopRestart = restartedB.api.subscribeExploreLikeIntent416(uid,
+  (id, liked) => restartedB.notices.push({ id, liked }));
+assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), undefined,
+  'restarting same browser must not resurrect stale unconfirmed private hints');
+assert.equal(restartedB.notices.length, 0);
+stopRestart();
 assert.equal(B.api.listExploreLikeIntents416(uid)[track], true, 'My Likes local candidate must see same provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
 assert.equal(database.get(`userSync/${uid}/exploreLike`), undefined, 'accepted 127 signal unchanged');

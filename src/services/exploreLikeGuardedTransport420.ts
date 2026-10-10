@@ -20,6 +20,7 @@ export type GuardedLikeDecision420 = {
   remainingInWindow: number;
   version: number;
   duplicate: boolean;
+  guardPermit420?: string;
 };
 export type GuardedLikeEvent420 = GuardedLikeMutation420 & {
   version: number;
@@ -65,7 +66,9 @@ export const publishGuardedLikeIntent420 = async (
   const decision = result.data;
   if (!decision || decision.ok !== true ||
       typeof decision.allowed !== 'boolean' ||
-      !Number.isFinite(decision.lockedUntilMs)) {
+      !Number.isFinite(decision.lockedUntilMs) ||
+      (decision.allowed && (typeof decision.guardPermit420 !== 'string' ||
+        !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(decision.guardPermit420)))) {
     throw new Error('INVALID_GUARDED_LIKE_RESPONSE');
   }
   return decision;
@@ -127,7 +130,8 @@ export const submitGuardedOutboxCandidate420 = async (
       operationId: sent.operationId,
     });
     reply = { ok: true, allowed: response.allowed,
-      lockedUntilMs: response.lockedUntilMs };
+      lockedUntilMs: response.lockedUntilMs,
+      ...(response.guardPermit420 ? {guardPermit420: response.guardPermit420} : {}) };
   } catch {
     // No direct RTDB fallback. Canonical outbox remains durable, unapproved,
     // and unavailable to the Worker intake until an exact verified response.

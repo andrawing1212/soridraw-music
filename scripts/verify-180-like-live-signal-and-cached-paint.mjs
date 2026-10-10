@@ -247,6 +247,6 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     'old optimistic outbox must be cleared before listener reads it');
   assert.equal(calls.filter((event) => event === 'POST').length, 1,
     'canonical ACK conflict must not trigger another server write');
-  console.log('APP389_CONFLICT_ACK_DURABLE_BEFORE_REPAINT=PASS');
-  console.log('APP389_CONFLICT_MY_LIKES_MEMBERSHIP_AND_W0_RETRY=PASS');
+  console.log('APP390_CONFLICT_ACK_DURABLE_BEFORE_REPAINT=PASS');
+  console.log('APP390_CONFLICT_MY_LIKES_MEMBERSHIP_AND_W0_RETRY=PASS');
 }

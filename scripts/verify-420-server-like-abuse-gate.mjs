@@ -114,6 +114,18 @@ assert.match(callable, /publishGuardedLikeSignal420\(admin\.database\(\), uid/,
   'server only uses Admin SDK to publish into the new private root');
 assert.doesNotMatch(callable.slice(callable.indexOf('// Stage420 secured candidate')), /raw\.uid/,
   'untrusted UID must never select another account');
+const masterUnlock = callable.slice(callable.indexOf('export const masterUnlockExploreLike420 = onCall('),
+  callable.indexOf('export const masterGetExploreLikeLimit420 = onCall('));
+const masterGet = callable.slice(callable.indexOf('export const masterGetExploreLikeLimit420 = onCall('));
+assert.match(masterUnlock, /await requireMasterCaller\(request\)/,
+  'manual two-hour unlock must be Master authorized on the backend');
+assert.match(masterUnlock, /adminUnlockAudit: \[/,
+  'manual unlock must record an atomic audit receipt');
+assert.match(masterUnlock, /lockedUntilMs: 0/,
+  'Master unlock must clear the durable server lock');
+assert.match(masterGet, /await requireMasterCaller\(request\)/,
+  'private rate status must be restricted to Master');
+
 
 console.log('STAGE420_SERVER_30_WARN_40_DENY=PASS');
 console.log('STAGE420_SERVER_CONSECUTIVE_120_MIN_AND_RECOVERY=PASS');

@@ -1,3 +1,10 @@
+## 0S97. app393 생성 설정창 실 Chrome 격리 테스트 (2026-10-10 KST)
+
+- app393 실제 PREVIEW Guest [408 Run 38037254837](https://github.com/andrawing1212/soridraw-music/actions/runs/38037254837) SUCCESS. Chrome desktop/mobile emulation 양쪽 첫 화면 렌더, app-version393, JS/CSS 0실패, 앱 시작 불필요 Gemini/Modal chunk 0 확인. Runner 실측 desktop DOM content loaded 1617ms/longtask 2/p95 95ms, mobile emulated 643ms/2/p95 65ms. 로그인 계정/손 드래그 실기기와 동일하지 않음.
+- 다음으로 **제품 코드 수정 없이**, 같은 `MusicApiGenerateModalLazy`와 실제 내부 `MusicApiGenerateModal`을 테스트 전용 esbuild+Chrome에서 띄워 `main` 생성창 첫 열기(첫 chunk 1초 가상 지연)/단계 전진/브라우저 Back/닫기/재열기/musicApi 모드 확인하는 격리 검사 추가. 임시 서버는 GitHub runner의 localhost만 사용하며 Firebase/Auth/Worker/API 요청 0. 408 `[browser-smoke]`에서만 실행, 별도 workflow 신설 없음.
+- 검사 PASS 전 완료로 취급하지 않음. 속도 개선 3/5=60%, Stage416 1/5=20%, 현재 검증 3/4=75%; 로그인 후 실사용 첫 AI 생성/번역/태블릿 분할바 검증 별개 대기.
+
+---
 ## 0S96. app393 실사이트 Guest 브라우저 계측 작업 추가 (2026-10-10 KST)
 
 - 앱393 실제 사용자 기능/성능 결과가 아직 미검증이므로, PREVIEW live 주소를 Google Chrome에서 읽기 전용으로 열어보는 **일회 실행형 게이트** 추가. 기존 408 품질검사 Workflow에 `[browser-smoke]` commit에서만 실행되는 단계로 연결, 별도 workflow 누적 없음. Chrome desktop 1440x900 / 모바일 emulation 390x844, app-version 393, 첫 렌더 유무, JS/CSS HTTP 실패, 첫 실행에서 미사용 Gemini/생성모달 chunk download 여부, long task p95 측정. Guest no-login, 클릭/생성/좋아요/원본 write 없음. Runner network/browser 문제로 실패하면 결과는 FAIL/미검증으로 그대로 기록할 것.

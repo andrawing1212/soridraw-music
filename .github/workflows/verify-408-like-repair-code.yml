@@ -47,6 +47,8 @@ on:
       - 'src/components/CacheDiagnosticsOverlay.tsx'
       - 'src/components/CacheDiagnosticsOverlayImpl.tsx'
       - 'scripts/verify-393-preview-browser-smoke.mjs'
+      - 'scripts/verify-393-modal-component-browser.mjs'
+      - 'scripts/fixtures/393-modal-entry.tsx'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
@@ -122,6 +124,7 @@ jobs:
           set -euo pipefail
           npm install --no-save --no-package-lock --no-audit --no-fund playwright-core@1.56.1
           node scripts/verify-393-preview-browser-smoke.mjs
+          node scripts/verify-393-modal-component-browser.mjs
       - name: Strict existing personal-like and catalog contracts
         shell: bash
         run: |

@@ -13,6 +13,8 @@ on:
       - 'src/services/exploreLikeAbusePolicy420.ts'
       - 'scripts/verify-420-like-abuse-policy.mjs'
       - 'functions/src/exploreLikeAbuseGate420.ts'
+      - 'functions/src/exploreLikeAtomicLedgerCandidate420.ts'
+      - 'scripts/verify-420-atomic-ledger-candidate.mjs'
       - 'functions/src/exploreLikeApprovalRecovery420.ts'
       - 'scripts/verify-420-permit-expiry-replay.mjs'
       - 'src/services/exploreLikeGuardedTransport420.ts'
@@ -118,6 +120,7 @@ jobs:
           node scripts/verify-420-permit-renewal.mjs
           node scripts/verify-420-approval-recovery.mjs
           node scripts/verify-420-journal-cost-envelope.mjs
+          node scripts/verify-420-atomic-ledger-candidate.mjs
           node scripts/verify-420-permit-expiry-replay.mjs
           node scripts/verify-420-private-rules-candidate.mjs
           node scripts/verify-420-guarded-transport.mjs

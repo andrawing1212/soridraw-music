@@ -101,8 +101,24 @@ const cross = makeClient();
 const unsubOther = cross.api.subscribeExploreLikeIntent416('other-uid', () => {
   throw new Error('must never receive another UID');
 });
-await A.api.publishExploreLikeIntent416(uid, like(true, '33333333-3333-4333-a333-333333333333'));
+const op3 = '33333333-3333-4333-a333-333333333333';
+await A.api.publishExploreLikeIntent416(uid, like(true, op3));
 assert.equal(cross.api.readExploreLikeIntent416('other-uid', track), undefined);
+// An older accepted LIKE may have the same boolean as this new pending LIKE.
+// Without the exact pending->accepted operation status, the old 127 signal
+// must NOT clear this newest private intent.
+B.api.clearExploreLikeIntent416(uid, track, true);
+assert.equal(B.api.readExploreLikeIntent416(uid, track), true,
+  'older same-value 127 ACK must not retire an unaccepted newer operation');
+await A.api.settleExploreLikeIntent416(uid, [
+  { trackId: track, operationId: op3, status: 'accepted' },
+]);
+assert.equal(B.api.readExploreLikeIntent416(uid, track), true,
+  'accepted status alone does not replace the authoritative 127 personal signal');
+B.api.clearExploreLikeIntent416(uid, track, true);
+assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined,
+  'newer exact ACK permits later 127 signal to retire the matched hint');
+
 const beforeDenied = writes;
 rejectWrites = true;
 await assert.rejects(

@@ -16,7 +16,7 @@ const environment = await initializeTestEnvironment({
   database: {
     host: '127.0.0.1',
     port: 9000,
-    rules: JSON.stringify(source.rules),
+    rules: JSON.stringify(source),
   },
 });
 const owner = environment.authenticatedContext('uid-A').database();
@@ -42,7 +42,7 @@ try {
   await expectOldGood();
   console.log('STAGE420_EMULATOR_CURRENT_416_DIRECT_WRITE_BYPASS=REPRODUCED');
 
-  await environment.loadDatabaseRules({ rules: JSON.stringify(candidate.rules) });
+  await environment.loadDatabaseRules({ rules: JSON.stringify(candidate) });
   await expectOldGood();
   await assertFails(path('exploreLikeIntent416').remove());
   await assertFails(path('exploreLikeIntent416').set({

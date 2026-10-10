@@ -176,9 +176,13 @@ export const publishExploreLikeIntent416 = async (uid: string, mutation: IntentM
     databaseRef(realtimeDb, `userSync/${uid}/exploreLikeIntent416`),
     (raw) => {
       const current = raw as Partial<IntentEnvelope416> | null;
+      // Do not resurrect a stale offline click as a new 'live' intent on
+      // reconnect. The durable canonical outbox already owns its retry.
+      if (Date.now() - at > 10_000) return;
       const previous = Number(current?.version || 0);
-      const version = Number.isSafeInteger(previous) && previous >= 0 && previous < Number.MAX_SAFE_INTEGER
-        ? previous + 1 : 1;
+      if (!Number.isSafeInteger(previous) || previous < 0 ||
+          previous >= Number.MAX_SAFE_INTEGER) return;
+      const version = previous + 1;
       const oldRows = Array.isArray(current?.results)
         ? current.results.filter(validRow416) : [];
       const row: IntentRow416 = {

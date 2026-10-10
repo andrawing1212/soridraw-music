@@ -1,3 +1,11 @@
+## CURRENT — PC1800 로딩 단발 이상치 비재현. 속도 4단계는 로그인 실제 사용자 동작 확인 (2026-10-10)
+
+- 직전 PC1800 초기 Chrome DCL 2292ms를 검증하려고 기존 live PREVIEW smoke에 interleaved cold Chrome 3회/width를 보강한 소스 commit `6d1a47162bb9c8fe0cf2d185c5a8a08ce54c21ff`. [408 Run 38053181779](https://github.com/andrawing1212/soridraw-music/actions/runs/38053181779) SUCCESS. 반복 중간값 DCL PC1800 **889ms** / PC1440 **981ms**, 화면 표시 PC1800 **1007ms** / PC1440 **1084ms**. 화면 폭 전용 지속 지연 재현 0. cold 첫 기동 이상치의 정확한 원인은 미확정, 앱 코드는 보호.
+- 다음 한 작업은 **실제 로그인 Music Note·Library/Studio 대량 목록, 빠른 분할 드래그/재방문, PC↔모바일에서 캐시와 화면의 실동작을 가능한 범위 내에서 직접 측정**하는 속도 4단계. 사용자가 보고한 정상 기능/UI 변경 금지; 브라우저 에뮬레이션을 실제 Galaxy Tab/휴대전화 PASS로 과장하지 않음. 실제 인증 계정과 물리 디바이스에 접근할 방법이 현재 없으면 그 부분은 정확히 미검증 기록.
+- **상시 진행률 명칭:** Stage416 전체(좋아요 보안 전환) 1/5·20%, 앱 속도 개선 전체(로딩/분할/기기 체감) 3/5·60%, 현 실기기 검증(로그인 PC/모바일/태블릿) 3/4·75%. **이번 세부 작업(PC1800 첫 로딩 이상치 재현 여부 판별) 4/4·100% QA 완료**, **이전 세부 작업(PC·태블릿·모바일 Chrome 5화면/터치 검사) 4/4·100% 자동검사 완료**. PREVIEW Hosting app395 불변·Stage420/426 OFF·공유 원본/TEST/PROD 불변.
+
+---
+
 ## CURRENT — 속도 개선 우선: PREVIEW Chrome 5화면 cold/warm·태블릿 touch 자동검사 PASS, 실제 물리기기/인증 구간 미완 (2026-10-10)
 
 - 소스/QA `8ce47c0b2aa6d7284d3741d21c9750139dbd57a0`, [408 Run 38052529238](https://github.com/andrawing1212/soridraw-music/actions/runs/38052529238) SUCCESS. 실제 preview guest cold/warm PC1800/1440, tablet1280/1100, mobile390 전부 화면 표시/JS·CSS 자산 정상, 첫 화면 불필요 lazy chunk 0. 격리 split PC1800/1600·tablet1280/1100 드래그/scroll no-snap, 1280 Chrome synthetic touch PASS. 실제 물리 Galaxy Tab/스마트폰 및 로그인 Music Note/Library/Explore 캐시·실제 AI 생성·번역은 검증되지 않음.

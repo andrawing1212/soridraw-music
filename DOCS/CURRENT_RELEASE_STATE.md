@@ -1,3 +1,15 @@
+## 0S115. PC 1800px 첫 로딩 2.29초 단발 지연: 3회 교차 반복 재현되지 않음 / 실제 앱 변경 불필요 (2026-10-10)
+
+- **세부 작업명:** `PC 1800px 첫 로딩 단발 지연 반복 재현 및 화면 폭 병목 판별`. 사용자 지시대로 추측/코드 임의 수정보다 실제 PREVIEW 브라우저 측정으로 완료 판정.
+- **검증 소스:** preview `6d1a47162bb9c8fe0cf2d185c5a8a08ce54c21ff` (부모 `9743274cfd91a4ffafd9d14e4892a1f70b2f3f18`), `scripts/verify-393-preview-browser-smoke.mjs` 한 파일만 수정. 고정 408 워크플로 [Run 38053181779](https://github.com/andrawing1212/soridraw-music/actions/runs/38053181779) **SUCCESS**, Functions TS/앱 TS/Build/기존 Like 회귀/Chrome real preview guest 모두 PASS.
+- **수치:** 헤드리스 Chrome 새 브라우저 context, 이미 origin 연결 후 PC1800/PC1440 각 3회 교차 실행. PC1800 DCL **804,889,1184ms**, root-visible **929,1007,1310ms**, 최장 longtask max **104ms**. PC1440 DCL **775,1158,981ms**, root-visible **880,1263,1084ms**, 최장 longtask max **100ms**. 세 번 중간값 DCL **1800=889ms, 1440=981ms**(차이 -92ms), root-visible **1800=1007ms, 1440=1084ms**(차이 -77ms), 각 평균이 아니라 **3샘플 중간값**. 문서 HTTP responseEnd 중간값 63/68ms, 응답 이후 DCL 중간값 811/844ms. 화면 폭별 지속 750ms 지연 조건 **false**.
+- **판단:** 직전 PC1800 첫 시도 DCL 2292ms/longtask235ms는 **이번 샘플에서 재현되지 않음**. 단발 지연 원인이 DNS/TLS인지 runner warmup인지 확정 근거 없음; PC폭 전용 병목으로 단정하여 기존 앱/분할엔진/이미지/캐시를 수정하지 않는다. 실서비스 로딩 이상이 영구적으로 없다는 증명은 아니며 10만 사용자/로그인 실제 Device p95 대표치도 아니다.
+- **진행률 구분:** Stage416 전체 1/5·20%, 앱 속도 개선 전체 3/5·60%, 실제 물리 기기/계정 검증 3/4·75% 불변. **이번 세부 작업(PC1800 첫 로딩 단발 지연 재현 여부 판별) 4/4·100%** — 작업한 것은 검증과 오진 방지, 앱 성능 코드 변경 0. **이전 세부 작업(PC·태블릿·모바일 Chrome 5화면 cold/warm·split touch 검증) 4/4·100% 자동검사**, 실제 기기 결과로 주장 금지.
+- **보호/배포:** PREVIEW Firebase Hosting 앱395 기존 버전 그대로. 사용자 계정, Firestore/D1/RTDB/Functions/Worker/R2/UI/Styles/test/prod 0 변경. Stage420 실서비스 활성화 계속 HOLD.
+- **다음 한 작업:** 실제 로그인 환경 Music Note/Library/Studio 대량 목록 스크롤·Split pointer-release / 브라우저·PC/모바일 재진입 측정으로 속도 개선 4단계를 검증한다. 자동 Chrome과 안전한 격리 경로부터 수행하고, 계정 로그인·물리 Galaxy Tab/휴대전화 체감은 현재 연결된 앱 세션 없이 측정 불가능한 구간으로 구분. 불필요한 코드 수정으로 속도 5단계를 억지 달성하지 않는다.
+
+---
+
 ## 0S114. PC·태블릿·모바일 PREVIEW 실제 Chrome 첫/재방문·분할 터치 QA 완료 — 실물 로그인 검증 별개 (2026-10-10)
 
 - **사용자 우선 지시 반영:** Stage420 좋아요 후보만 반복하지 않고 앱 속도 및 기기 검증을 독립적으로 계속 진행. 보고 진행률에는 반드시 이전/현재 세부 작업의 **구체 명칭**을 포함하며, 100%는 해당 검사 묶음에 한정. 자동 Chrome/모바일 에뮬레이션 결과를 물리 Galaxy Tab·스마트폰 PASS로 표현하지 않음.

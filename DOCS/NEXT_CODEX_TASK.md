@@ -1,3 +1,14 @@
+## CURRENT — Stage416 ② ChatGPT 직접 코드 후보 완성 / 검증 전 HOLD (2026-10-10 KST)
+
+- **사용자 최신 지시:** 이번 구현은 Codex가 아니라 **ChatGPT 직접 수정**. 더 이상 Codex에 재위임하지 않는다. 이 파일명은 역사적 작업 접수 위치이며 실제 실행자는 사용자 최신 지시에 따른다.
+- **구현 후보:** `preview`에서 `src/services/exploreLikeIntent416.ts`, `src/services/exploreLikeService.ts`, `src/pages/ExplorePage.tsx`, `database.rules.json`, `scripts/verify-416-private-like-intent.mjs`, `scripts/soridraw-qa-engine.mjs` 변경. source diff 기준 기존 127 서버확정 RTDB/5초 batch/공개 숫자/권한은 보존, 새 UID-private tentative changed-track 알림과 My Likes 로컬 overlay만 추가. 기존 RTDB 규칙의 모든 이전 subtree 동일 확인.
+- **검증 게이트가 다음 우선순위:** GitHub 자동 Fast QA `like` 그룹의 실제 성공 로그 확인; 신규 `node scripts/verify-416-private-like-intent.mjs`, 127/175/180/191/192/197/390, TypeScript, Build. 실제 검증 로그를 못 얻으면 명확히 `미검증` 상태. RTDB rules 실제 source/live additive diff, 권한 거절 회복, 100k명 규모 RTDB 전송비용, 장치별 지연·역순 동시성 위험을 반드시 평가. 서버 공유 rules 실제 반영 전 배포 금지.
+- **배포:** ② QA 및 별도 읽기전용 독립감사 합격 전 **NO PREVIEW DEPLOY**, TEST/PRODUCTION 영구 별도 승인. 실제 서비스 Firebase PREVIEW app391 유지. 사용자 데이터/공유 D1/Cloudflare/Functions 변경 없음.
+- **Stage 상태:** ① 사용자 보고 반복 읽기 보류(미해결); ② 소스 작성 완료·검증 전; ③ 개인 기본5분 + Master 1/3/5/10/20 설계만; ④ 공개 기본5분 + Master 독립 설정 설계만; ⑤ 독립 검증·실기기 대기. **전체 0/5 완료**.
+- **참고:** `DOCS/CURRENT_RELEASE_STATE.md` 최신 0S72와 `DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md` 구현 안전계약. 기존 문서의 'Codex 구현 대기'는 과거 상태다.
+
+---
+
 ## CURRENT — Stage416 ② Codex High 실행 대기 (2026-10-10 KST)
 
 - **실제 작업 명령서:** [`DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`](STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md). 모든 구현 조건·기존 source 지연 원인·구형 앱/Firebase RTDB 안전·실행형 회귀 합격선은 해당 문서를 우선한다.

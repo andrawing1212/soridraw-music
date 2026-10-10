@@ -48,6 +48,8 @@ on:
       - 'src/components/CacheDiagnosticsOverlayImpl.tsx'
       - 'scripts/verify-393-preview-browser-smoke.mjs'
       - 'scripts/verify-393-modal-component-browser.mjs'
+      - 'src/components/MusicApiGenerateModalLazy.tsx'
+      - 'scripts/verify-studio-generation-modal-lazy.mjs'
       - 'scripts/fixtures/393-modal-entry.tsx'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
@@ -111,6 +113,8 @@ jobs:
         run: |
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
+      - name: Verify lazy generation settings loading behavior
+        run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior
         run: node scripts/verify-217-cache-live-update-reset.mjs
       - name: TypeScript

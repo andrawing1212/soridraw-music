@@ -16,7 +16,10 @@ assert.match(app,/import \{ readStoredV1LyricWritingStyle, writeStoredV1LyricWri
 assert.match(lazy,/lazy\(\(\) => import\(['"]\.\/MusicApiGenerateModal['"]\)\)/);
 assert.match(lazy,/<MusicApiGenerateModalImpl \{\.\.\.props\} \/>/,
   'the lazy wrapper must forward every prop without remount transforms');
-assert.match(lazy,/<Suspense fallback=\{null\}>/);
+assert.match(lazy,/<Suspense fallback=\{\(/, 'lazy modal must show a loading state');
+assert.match(lazy,/role="status"/, 'first modal download must report loading accessibly');
+assert.match(lazy,/aria-live="polite"/);
+assert.match(lazy,/생성 설정 불러오는 중/, 'avoid an apparently unresponsive first click');
 assert.match(modal,/export default function MusicApiGenerateModal\(/);
 assert.match(modal,/export \{ readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle \} from/);
 assert.match(modal,/import \{ readStoredV1LyricWritingStyle \} from/);
@@ -30,4 +33,5 @@ assert.equal((app.match(/<MusicApiGenerateModal\b/g)||[]).length,2,
 console.log('STUDIO_MODAL_EAGER_IMPORT_REMOVED=PASS');
 console.log('STUDIO_MODAL_MAIN_AND_SUNO_VARIANTS_PRESERVED=PASS');
 console.log('STUDIO_MODAL_LYRIC_WRITING_PREFERENCE_PRESERVED=PASS');
+console.log('STUDIO_MODAL_SUSPENSE_LOADING_FALLBACK=PASS');
 console.log('STUDIO_MODAL_REAL_FIRST_OPEN_BROWSER_LATENCY=NOT_TESTED');

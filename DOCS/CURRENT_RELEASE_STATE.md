@@ -1,3 +1,10 @@
+## 0S99. app393 생성 설정 첫 다운로드 ‘무반응’ 체감 위험 최소 수정 (2026-10-10 KST)
+
+- [실 Chrome 격리 Run 38037706763](https://github.com/andrawing1212/soridraw-music/actions/runs/38037706763) **SUCCESS**, desktop+mobile emulation 두 경우 main 첫 열기/다음 단계/브라우저 Back/닫기/재열기/musicApi 설정 모두 PASS, 브라우저 JS 예외 0. 최초 chunk에 **가상 네트워크 지연 1000ms** 추가 시 실제 표시까지 desktop **1349ms**, mobile emulation **1330ms**. 제품의 `React.lazy` wrapper가 `Suspense fallback=null`이어서 그 시간 동안 눈에 보이는 안내가 전혀 없음. 기능 오류가 아니라 **느린 연결에서 클릭 무반응으로 보이는 UX 위험**으로 원인 확정.
+- 제품 모달 원본 UI/props/history/생성 로직은 전혀 수정하지 않고 **`MusicApiGenerateModalLazy.tsx`의 fallback에만 기존 색상 변수와 같은 레이어의 작은 스피너/`생성 설정 불러오는 중…` status** 추가. 로딩 완료 후 fallback 자동 사라짐, PC·모바일/다크·라이트 기존 모달 디자인·위치·클릭 결과 그대로. 스피너 표시는 서버 읽기/쓰기 0. `verify-studio-generation-modal-lazy.mjs`와 격리 Chrome 테스트에 1초 지연 중 표시·실제 모달 오픈 후 제거를 검증하도록 추가. 408 QA는 수정된 fallback 정적 테스트와 기존 TypeScript·Build/Like 보호 유지.
+- **소스 수정 후보 단계**: 수정된 HEAD의 CI/게스트·모달 브라우저 검사와 실제 PREVIEW 배포/성능·PC모바일 실사용을 확인하기 전까지 PASS/릴리스 완료라고 말하지 않음. Stage416 1/5=20%, 속도 개선 3/5=60%, 현 실사용 검증 3/4=75%. Stage420/RTDB/Worker/Functions/D1 및 shared 데이터 미변경; main/TEST/PROD 비변경.
+
+---
 ## 0S98. app393 모달 격리 브라우저 검사 첫 실패 원인=테스트 선택자 중복, 제품 오류 아님 (2026-10-10 KST)
 
 - [408 Run 38037513582](https://github.com/andrawing1212/soridraw-music/actions/runs/38037513582) TypeScript/Build 및 live PREVIEW Guest Chrome desktop/mobile first load PASS, **격리 modal test 도중 FAIL**. 로그: `locator('button[title="닫기"]') resolved to 2 elements`. 모달 1단계 왼쪽 뒤로/닫기와 오른쪽 X 닫기가 같은 title을 사용하기 때문. 최초 chunk 다운로드/첫 렌더/다음 2단계/브라우저 Back 1단계 복귀는 모두 실패 없이 실행됐고, 닫기 클릭 직전 검사기 선택자가 중복이라 정지함. 제품 소스 버그 아님.

@@ -70,7 +70,9 @@ try {
     assert.equal(chunks.length, 0, profile.device + ' eagerly loaded modal chunk');
     const begin = Date.now();
     await page.locator('#open-main').click();
+    await page.getByRole('status', { name: '생성 설정 불러오는 중…' }).waitFor({ timeout: 5000 });
     await page.getByText('생성 옵션 선택', { exact: true }).waitFor({ timeout: 15000 });
+    await page.getByRole('status', { name: '생성 설정 불러오는 중…' }).waitFor({ state: 'detached' });
     const openMs = Date.now() - begin;
     await page.getByRole('button', { name: '다음' }).click();
     await page.getByText('생성 준비 완료', { exact: true }).waitFor({ timeout: 5000 });
@@ -90,7 +92,7 @@ try {
     const row = { device: profile.device, firstOpenMs: openMs,
       firstOpenArtificialNetworkDelayMs: 1000,
       modalChunksRequested: chunks.length,
-      mainStepForwardBack: 'PASS', reopen: 'PASS', musicApiVariant: 'PASS',
+      loadingFallback: 'PASS', mainStepForwardBack: 'PASS', reopen: 'PASS', musicApiVariant: 'PASS',
       jsRuntimeErrors: errors.length };
     console.log('APP393_MODAL_CHROME=' + JSON.stringify(row));
     await context.close();

@@ -1,3 +1,11 @@
+## CURRENT — 속도 개선 우선: PREVIEW Chrome 5화면 cold/warm·태블릿 touch 자동검사 PASS, 실제 물리기기/인증 구간 미완 (2026-10-10)
+
+- 소스/QA `8ce47c0b2aa6d7284d3741d21c9750139dbd57a0`, [408 Run 38052529238](https://github.com/andrawing1212/soridraw-music/actions/runs/38052529238) SUCCESS. 실제 preview guest cold/warm PC1800/1440, tablet1280/1100, mobile390 전부 화면 표시/JS·CSS 자산 정상, 첫 화면 불필요 lazy chunk 0. 격리 split PC1800/1600·tablet1280/1100 드래그/scroll no-snap, 1280 Chrome synthetic touch PASS. 실제 물리 Galaxy Tab/스마트폰 및 로그인 Music Note/Library/Explore 캐시·실제 AI 생성·번역은 검증되지 않음.
+- **한 작업을 끝내기:** 속도 4단계 실제 기기와 인증 상태의 사용성/첫 로딩·재방문을 먼저 확인. 현재 CI에서 PC1800 최초 DCL 2292ms/longtask p95 235ms는 단 1개 runner 샘플이므로 재현 가능성부터 검증, 표본 소음이면 정상 코드 재작성 금지. 사용자에게 전부 테스트를 떠넘기지 말고 자동 Chrome/격리 검사 및 로그 수집부터 하고, 기기 화면·계정 상태를 원격으로 접근할 수 없는 검사는 별도로 구분. 필요한 경우 실제 사용자에게 간결한 최종 1회 실물기기 확인만 요청.
+- **상시 3중 + 이름:** Stage416 전체 1/5·20%; 앱 속도 개선 3/5·60%; 현재 세부 작업(PREVIEW PC·태블릿·모바일 Chrome cold/warm·touch QA) 4/4·100% 자동검사 완료. 이전 세부 작업(Stage420 다중 탭 최초 좋아요 승인 중복 전송 방지) 4/4·100% 소스/QA 후보. 실기기 검증 3/4·75%(사용자 로그인/물리 모바일·태블릿 최종 확인 미완). 활성 PREVIEW app395 변동 없음, TEST/PROD 및 공유 원본 미변경. Stage420 보안 cutover HOLD.
+
+---
+
 ## CURRENT — Stage420 브라우저 탭 최초 중복 전송 방어 작은 작업 완료, 다음 exact ACK-loss 복구 (2026-10-10)
 
 - preview 후보 소스 `9342ae028fa2a2eec27b23de2a30a5cd28ff5812`. [408 Run 38051975847](https://github.com/andrawing1212/soridraw-music/actions/runs/38051975847) SUCCESS: 브라우저 exclusive Web Lock+durable first-send marker 조합, 두 탭 동시 요청 1회, 미지원 Web Locks/저장실패 시 송신 0, stale newer click 무변경, 기존 좋아요 회귀/Functions TS/앱 TS/Build PASS. **이 후보 세부 작업 4/4 완료**. Stage416 1/5=20%, 앱 속도 개선 3/5=60%, 실기기 3/4=75% 그대로.

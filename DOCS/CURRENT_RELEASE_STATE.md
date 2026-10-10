@@ -1,3 +1,15 @@
+## 0S114. PC·태블릿·모바일 PREVIEW 실제 Chrome 첫/재방문·분할 터치 QA 완료 — 실물 로그인 검증 별개 (2026-10-10)
+
+- **사용자 우선 지시 반영:** Stage420 좋아요 후보만 반복하지 않고 앱 속도 및 기기 검증을 독립적으로 계속 진행. 보고 진행률에는 반드시 이전/현재 세부 작업의 **구체 명칭**을 포함하며, 100%는 해당 검사 묶음에 한정. 자동 Chrome/모바일 에뮬레이션 결과를 물리 Galaxy Tab·스마트폰 PASS로 표현하지 않음.
+- **검증 소스 commit:** `8ce47c0b2aa6d7284d3741d21c9750139dbd57a0` (부모 `f93e2af9c5a2621bf4e4be1e00cf789fda9141a4`), 수정 2개 `scripts/verify-393-preview-browser-smoke.mjs`, `scripts/verify-394-split-chrome.mjs`. 제품 코드·CSS·Firebase·Cloudflare·공유 DB/사용자 데이터/배포를 수정하지 않음. 기존 408 QA의 명시적 `[browser-smoke]` 경로를 재사용, 새 Workflow 추가하지 않음.
+- **실제 검사:** [408 Run 38052529238](https://github.com/andrawing1212/soridraw-music/actions/runs/38052529238) **SUCCESS**. 실제 `https://preview.soridraw.com/` 앱395 guest Chrome 첫 방문·재방문 5프로필 모두 root/JS/CSS 오류0·불필요 Gemini/생성 모달 chunk 0. 초기 DOMContentLoaded / 재방문 DOMContentLoaded: PC1800 2292/533ms, PC1440 864/289ms, 태블릿 모의1280 1075/396ms, 태블릿경계1100 904/216ms, 모바일모의390 1084/218ms. GitHub runner 표본 1회씩이므로 실제 사용자 p95 또는 성능 향상/퇴보 증명 아님. PC1800 longtask 4개·p95 235ms, PC1440 3·113ms, 태블릿1280 3·87ms, 태블릿1100 3·88ms, 모바일390 3·90ms: PC1800 수치 재현 검사 전 최적화 대상 확정 금지.
+- **분할 실 Chrome 검사:** 동일 Run Chrome 격리 React 실제 Split Engine + 양쪽 140행. PC1800, PC1600, tablet1280, tablet1100 모두 처음 50:50, 마우스 드래그/놓을 때 snap없음, 양쪽 scrollTop 260/330 유지·JS 에러0 PASS. tablet1280 **CDP synthetic touch**도 width 728→628px 이동, release 628px 유지, scrollTop 유지 PASS. 실제 Galaxy Tab touch, 다양한 660/820/1080 content handoff, 복잡한 실제 로그인 목록/생성바는 **미검증**.
+- **생성 모달 별도 격리 Chrome:** PC/mobile-emulated 각 최초 다운로드 1000ms 인위 지연 후 fallback/다음·뒤로가기/재열기/musicApi 변형 PASS, 실제 Gemini/Suno 생성·번역 호출하지 않음. TypeScript/Build/기존 좋아요·팔로우 대상 408 PASS.
+- **진척도(명칭 필수):** Stage416 전체 1/5(20%) 불변. 앱 속도 개선 전체 **3/5(60%)** 불변 — 4단계 실제 인증·실기기 성능 검증과 5단계 hotspot 결정 미완. 물리기기 포함 현 실사용 검증 **3/4(75%)** 기존 기준 유지; GitHub 모의 Chrome가 실물 폰 사용 증명은 아님. **현재 세부 작업(PREVIEW PC·태블릿·모바일 실사이트 Chrome cold/warm + split touch 검사) 4/4=100% 자동검사 완료.** **이전 세부 작업(Stage420 다중 탭 최초 좋아요 재전송 중복 차단) 4/4=100% 후보 소스검사 완료**, Stage420 실사용 활성화는 HOLD.
+- **다음 단계:** 속도 4단계의 실제 사용자 계정/기기 UI와 p95 검증을 자동으로 할 수 있는 범위부터 확장. 로그인·생성/번역·PC↔모바일 캐시·Galaxy Tab 물리 터치는 미검증을 유지하고 최종 소수 사용자 실기기 확인과 혼동 금지. PC1800 cold 2292ms 1회 이상치를 반복 측정한 뒤 실제 재현되는 경우에만 좁은 hotspot을 찾아 수정. PREVIEW 실서비스 app395 기존 그대로, TEST/PRODUCTION 승격·Stage420 보안 활성화 금지.
+
+---
+
 ## 0S113. Stage420 같은 브라우저 여러 탭 최초 승인 중복 전송 방어 — 소스 후보/전체 408 PASS (2026-10-10)
 
 - **완료된 독립 작은 작업:** 동일 UID+trackId에서 여러 브라우저 탭이 최초 Stage420 승인 호출을 동시에 시작할 때, Web Locks API의 브라우저 exclusive lock 안에서 최신 durable outbox를 다시 확인→최초 시도 기록 저장→한 건만 Firebase Callable 실행하게 최소 수정. Web Locks가 없거나 거절되고 저장증명이 없으면 **첫 송신을 생략하고 outbox 보존**(fail-closed). 기존 ACK 분실로 기록된 opId, 나중에 밀려난 51건, 새로운 최신 클릭은 새로운 승인 호출로 변환하지 않음. 잠금은 기기 내 탭 조정만 하며 새 서버 읽기/쓰기 없음.

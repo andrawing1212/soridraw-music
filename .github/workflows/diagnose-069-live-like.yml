@@ -56,7 +56,7 @@ jobs:
               ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks
             FROM tracks t
             LEFT JOIN track_stats s ON s.track_id=t.id
-            WHERE t.title = '성적표 내소동';
+            WHERE t.title = '성적표 대소동';
           " --json > "$RUNNER_TEMP/specified-track-readonly.json"
           node - <<'NODE'
           const fs = require('fs');

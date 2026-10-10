@@ -3980,3 +3980,68 @@ export const publishExploreLikeIntent420 = onCall(
     }
   },
 );
+
+// Stage420 Master-only administrative recovery. This is server-owned
+// administration, never a client-side localStorage unlock. The *same* RTDB
+// transaction clears the lock and stores its bounded audit receipt.
+export const masterUnlockExploreLike420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { requesterUid } = await requireMasterCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const reason = String(request.data?.reason || "Master 관리자 수동 해제").trim().slice(0, 120);
+    if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid)) {
+      throw new HttpsError("invalid-argument", "해제할 계정이 올바르지 않습니다.");
+    }
+    const now = Date.now();
+    const targetRef = admin.database().ref(`privateLikeSync420/${targetUid}`);
+    const outcome = await targetRef.transaction((raw) => {
+      const previous = raw && typeof raw === "object" ? raw as Record<string, any> : {};
+      const rate = previous.rate && typeof previous.rate === "object" ? previous.rate : {};
+      if (Number(rate.lockedUntilMs || 0) <= now) return;
+      const history = Array.isArray(previous.adminUnlockAudit) ? previous.adminUnlockAudit : [];
+      return {
+        ...previous,
+        rate: {
+          windowStartMs: 0,
+          acceptedInWindow: 0,
+          previousWindowStartMs: 0,
+          previousWindowReachedLimit: false,
+          lockedUntilMs: 0,
+        },
+        adminUnlockAudit: [...history.slice(-9), {
+          actorUid: requesterUid,
+          at: now,
+          reason,
+          previousLockedUntilMs: Number(rate.lockedUntilMs || 0),
+        }],
+      };
+    }, undefined, false);
+    return {
+      ok: true,
+      unlocked: outcome.committed,
+      targetUid,
+      at: now,
+    };
+  },
+);
+
+export const masterGetExploreLikeLimit420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireMasterCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid)) {
+      throw new HttpsError("invalid-argument", "조회할 계정이 올바르지 않습니다.");
+    }
+    const snapshot = await admin.database().ref(`privateLikeSync420/${targetUid}/rate`).get();
+    const raw = snapshot.val() as Record<string, unknown> | null;
+    const lockedUntilMs = Number(raw?.lockedUntilMs || 0);
+    return {
+      ok: true,
+      targetUid,
+      acceptedInWindow: Math.max(0, Math.floor(Number(raw?.acceptedInWindow || 0))),
+      lockedUntilMs: lockedUntilMs > Date.now() ? lockedUntilMs : 0,
+    };
+  },
+);

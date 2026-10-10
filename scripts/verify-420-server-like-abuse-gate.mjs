@@ -115,6 +115,24 @@ const secondAccount = await server.publishGuardedLikeSignal420(
 );
 assert.equal(secondAccount.allowed, true, 'one account must never lock another');
 assert(store.get('privateLikeSync420/account-b').display);
+// Two opposite clicks on ONE track must not delete the first operationId.
+// A delayed retry of the earlier click is a true duplicate, not a new action.
+const secondSameTrack = await server.publishGuardedLikeSignal420(
+  database, 'account-b', { ...mk(91), trackId: mk(90).trackId }, base + 2_000,
+);
+assert.equal(secondSameTrack.allowed, true);
+const beforeOldReplay = writes.length;
+const delayedFirstClick = await server.publishGuardedLikeSignal420(
+  database, 'account-b', mk(90), base + 2_500,
+);
+assert.equal(delayedFirstClick.allowed, true);
+assert.equal(delayedFirstClick.duplicate, true);
+assert.equal(writes.length, beforeOldReplay, 'old same-track replay must write zero rows');
+const tamperedOldReplay = await server.publishGuardedLikeSignal420(
+  database, 'account-b', { ...mk(90), liked: !mk(90).liked }, base + 2_600,
+);
+assert.equal(tamperedOldReplay.allowed, false);
+assert.equal(writes.length, beforeOldReplay, 'same-track operation collision must write zero rows');
 for (const [invalidUid, bad] of [['', mk(91)], ['account-a', {
   ...mk(92), trackId: '',
 }]]) {
@@ -157,5 +175,6 @@ console.log('STAGE420_SERVER_30_WARN_40_DENY=PASS');
 console.log('STAGE420_SERVER_CONSECUTIVE_120_MIN_AND_RECOVERY=PASS');
 console.log('STAGE420_SERVER_DUPLICATE_IDEMPOTENT_AND_UID_ISOLATED=PASS');
 console.log('STAGE420_OPERATION_ID_PAYLOAD_MISMATCH_DENIED_W0=PASS');
+console.log('STAGE420_SAME_TRACK_DELAYED_REPLAY_IDEMPOTENT_W0=PASS');
 console.log('STAGE420_SERVER_ATOMIC_MOCK_POLICY_PARITY=PASS');
 console.log('STAGE420_DIRECT_LEGACY_RTDB_REVOKE_REQUIRED=HOLD');

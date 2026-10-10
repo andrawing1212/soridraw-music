@@ -16,13 +16,20 @@ const sent = { uid:'account-a',trackId:'track-a',ownerUid:'artist-a',
   baseLiked:false,updatedAt:1234,guardStatus:'awaiting' };
 const proof = {uid:sent.uid,trackId:sent.trackId,liked:false,
   source:'verified-personal-snapshot',version:10 };
-const permit = {ok:true,allowed:true,lockedUntilMs:0};
+const permit = {ok:true,allowed:true,lockedUntilMs:0,
+  guardPermit420:'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw' };
 const deny = {...permit,allowed:false};
 assert.equal(flush(sent),false,'pending authorization cannot create canonical batch');
-assert.equal(flush({...sent,guardStatus:'approved'}),true);
+assert.equal(flush({...sent,guardStatus:'approved'}),false,
+  'the server approval flag alone cannot grant a canonical write');
+assert.equal(flush({...sent,guardStatus:'approved',
+  guardPermit420:permit.guardPermit420}),true);
 const result = (latest,reply,evidence) => resolve(sent,latest,reply,evidence);
 assert.equal(result(sent,null,proof).action,'await-reply','unknown response preserves outbox');
 assert.equal(result(sent,permit,proof).action,'approved');
+assert.equal(result(sent,permit,proof).guardPermit420,permit.guardPermit420);
+assert.equal(result(sent,{...permit,guardPermit420:undefined},proof).action,'await-reply',
+  'a missing signed Worker permit must not approve canonical intake');
 assert.equal(result(sent,deny,null).action,'await-proof','never infer truth from public likes');
 assert.equal(result(sent,deny,{...proof,uid:'another'}).action,'await-proof');
 assert.equal(result(sent,deny,{...proof,trackId:'other'}).action,'await-proof');
@@ -66,6 +73,7 @@ current = {latest:sent,evidence:proof};
 assert.equal(invoke(permit).action,'approved');
 assert.deepEqual(order,['read','persist','notify']);
 console.log('STAGE420_GUARDED_OUTBOX_APPROVAL_ONLY_FLUSH=PASS');
+console.log('STAGE420_SIGNED_PERMIT_REQUIRED_BEFORE_CANONICAL=PASS');
 console.log('STAGE420_UNKNOWN_OR_NO_PROOF_RETAINS_OUTBOX=PASS');
 console.log('STAGE420_LATE_DENIAL_NEVER_REMOVES_NEWER_INTENT=PASS');
 console.log('STAGE420_SAME_UID_EXACT_CANONICAL_ROLLBACK=PASS');

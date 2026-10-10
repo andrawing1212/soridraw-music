@@ -13,6 +13,8 @@ on:
       - 'scripts/verify-420-like-abuse-policy.mjs'
       - 'functions/src/exploreLikeAbuseGate420.ts'
       - 'scripts/verify-420-server-like-abuse-gate.mjs'
+      - 'scripts/build-420-private-rules-candidate.mjs'
+      - 'scripts/verify-420-private-rules-candidate.mjs'
       - 'src/App.tsx'
       - 'src/pages/FavoritesPage.tsx'
       - 'src/pages/SunoLibraryPage.tsx'

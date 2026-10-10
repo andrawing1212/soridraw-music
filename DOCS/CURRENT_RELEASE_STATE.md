@@ -1,3 +1,15 @@
+## 0S82. Stage420 계속 작업: 구형 앱 보호 Cutover 조건·상시 진척도 보고 GitHub 고정 (2026-10-10)
+
+- 작업 기준: `preview` source 4188e7ea953aa8aff44912a15e8a943bc80efa34 검토 후 문서 commit `98300891cf010ae69e45366b09f43fd2988eadeb` → `7b6d6a98d7b11c9351dc311543da5f31489dc444`. 이번 작업은 **안전한 출시 조건 재확인 및 문서·보고 기준 고정**, 제품 코드 변경/배포가 아니다.
+- `AGENTS.md`: 사용자 명시 지시에 따라 새 채팅 포함 **시작/중간/종료 진척도 항상 표기**(완료/전체 단계, 완료·진행·다음·막힘·미검증 분리). `DOCS/STAGE420_LIKE_ABUSE_COST_LATENCY_GATE.md`: 실제 앱392의 416 직접 쓰기·정산 호출, 420 client 미연결, 공유 부모 RTDB Rules 허용, Cloudflare canonical 잠금 미연결, 실제 p95/월 원가 미측정에 근거한 **5단 안전 전환 게이트** 작성.
+- 구형 앱이 Firebase `userSync/$uid/exploreLikeIntent416`에 직접 쓰는 동안, 그 요청을 계속 허용하면서 악성 동등 SDK/REST 쓰기만 서버에서 완전 차단한다는 근거가 없다. **기존 app392 열린 탭 및 TEST/PRODUCTION 하위호환을 보증할 때까지 shared RTDB 권한 폐쇄/실제 Worker·Functions 보안 전환을 강행하지 않는다.** 단순 보안 후보 코드 PASS를 운영 방어 PASS로 보고하지 않는다.
+- 실제 서비스 상태 변동 없음: PREVIEW Hosting **app392** 사용자 실기기 개인 하트 양방향 거의 즉시 PASS 보호. 공유 RTDB live Rules, Firebase Functions, Cloudflare Worker/D1/R2, Firestore, 사용자 원본, main/TEST/PRODUCTION 모두 변경하지 않았다. app393 / Stage420 서버 방어 **미배포**.
+- **Stage416 공식 진척도 1/5 완료 (20%) 유지**: ① 반복 읽기 사용자 요청 보류, ② app392 빠른 동기화 PASS, ③ 개인 5분 저장/④ 공개 공동집계/⑤ 최종 검증 미완료. Stage420 보안은 **정책+QA 후보 PASS / 운영 cutover HOLD**; 임의로 전체 PASS 퍼센트를 올리지 않는다.
+- 다음 단일 작업: 정상 앱392·열린 탭/TEST/PRODUCTION 구형 코드와 새 420 클라이언트의 권한·재전송·정산·latency 호환을 증명할 **안전한 dual-read/서버 강제 cutover 구현 검토**, Cloudflare 원본 batch의 2시간 잠금 강제 및 10만명 총원가 계산. 안전을 증명하지 못하면 릴리스 HOLD. 관련 자세한 체크는 `DOCS/STAGE420_LIKE_ABUSE_COST_LATENCY_GATE.md`.
+- 기존 QA 38025863205/38026736068/38026745607 PASS는 **이전 후보 코드 검사 이력**이며 이번 문서 갱신 후 앱/Functions 전체 테스트나 실제 제품 보안 동작을 새로 PASS로 판정한 것이 아니다. 배포·실기기·Cloudflare 실측 모두 이번 작업에서는 미검증.
+
+---
+
 ## 0S81. Stage420 이번 직접 작업 QA 최종 확정 / 안전한 운영 Cutover 아직 보류 (2026-10-10)
 
 - Firebase RTDB **로컬 Emulator PASS** [Run 38025863205](https://github.com/andrawing1212/soridraw-music/actions/runs/38025863205): 구 `exploreLikeIntent416` 직접 SDK 쓰기 현재 우회 재현, 후보 Rules에서 차단, 기존 6개 userSync 채널 권한 유지(삭제 허가 + validation subtree 정적 exact-unchanged 검사), 다른 UID 교차 접근 차단, 개인 `display` 읽기와 Master `adminUnlockAudit` 읽기 금지. 실제 운영 Rules 변경 없음.

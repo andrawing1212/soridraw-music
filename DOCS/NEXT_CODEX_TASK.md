@@ -1,3 +1,13 @@
+## CURRENT — Stage420 Firebase 서버 남용 방어 구현 후보 PASS / 실제 활성화 전 (2026-10-10)
+
+- **Codex 사용 금지, ChatGPT 직접 진행**(사용자 지시). 사용자 최종 `30회/60초 경고 → 40회/60초 추가 차단 → 2개 연속 60초 제한 도달 시 120분 잠금 → 자동 해제`. Master 상태 조회·조기해제·기준조정 목표. 기존 1시간 문구는 옛 기록.
+- `functions/src/exploreLikeAbuseGate420.ts` 신규 server-owned per-UID atomic transaction + idempotency; `functions/src/index.ts` `publishExploreLikeIntent420` verified auth UID, `masterGetExploreLikeLimit420`/`masterUnlockExploreLike420` requireMasterCaller + bounded audit; RTDB rules preview 후보만 `scripts/build-420-private-rules-candidate.mjs`가 생성, 절대 shared live rules 미변경; 테스트 `verify-420-{like-abuse-policy,server-like-abuse-gate,private-rules-candidate}.mjs`.
+- **Fast QA 38023881344 PASS, full 408 QA 38024059885 PASS**(Functions TypeScript build, 앱 TS/Build, 기존 좋아요 회귀, live shared RTDB read-only). 그러나 **app392 direct Firebase RTDB 쓰기 경로는 서버 제한 밖**. 공식 Firebase 규칙상 `userSync/$uid` 부모 `.write`를 지우고 old 6채널 하위 쓰기를 정확히 재부여하는 변경이 필요; child deny 단독 불가. 신규 privateLikeSync420은 아직 앱과 연결되지 않음. 배포/보안 PASS 선언 금지.
+- **다음 직접 작업:** Rules Emulator에서 기존 RTDB 6채널·old TEST/PROD 클라이언트·직접 REST deny 증명 → 계정 인증 callable/p95 전송지연/Functions 호출비용 실측→신규 앱/RTDB 신호 cutover + old bypass revocation → canonical Worker 직접 intake도 120min lock 검사→Master 기준조정 운영/UI 경고→QA exact SHA→안전한 PREVIEW만 배포→사용자 정상 빠른 하트 실사용 확인.
+- **상태:** PREVIEW 앱392 그대로(② 사용자 양방향 거의 즉시 PASS), ③ 개인 서버 +5min / ④ 공개 +5min 아직 미착수, Stage416 전체 1/5 완료. Firebase Functions/RTDB Rules/Cloudflare/D1/TEST/PROD live 변경 및 사용자 데이터 변환 없음.
+
+---
+
 ## CURRENT — Stage416 남용 방어 최우선 / **잠금 120분 확정** / 서버 강제 검증 전 배포 HOLD (2026-10-10 KST)
 
 - **최신 사용자 정책**: 좋아요/해제 합산 동일 UID **60초 30회 경고, 40회부터 추가 입력 금지, 2개 연속 60초 제한 도달 시 120분(2시간) 잠금, 만료 자동 해제**. 기존 모든 1시간 기재는 이전 제안이며 사용 금지. Master가 잠금 상태/조기해제/기준을 운영. PC/모바일 정상 빠른 하트 실시간성 유지.

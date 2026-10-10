@@ -11,6 +11,7 @@ import {
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readExploreLikeIntent416,
+  listExploreLikeIntents416,
   clearExploreLikeIntent416,
   subscribeExploreLikeIntent416,
   publishExploreLikeIntent416,
@@ -2104,6 +2105,12 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   const candidates = new Set<string>();
   for (const [trackId, liked] of cache.entries()) if (liked) candidates.add(trackId);
   for (const [trackId, liked] of Object.entries(unresolved)) if (liked) candidates.add(trackId);
+  // Temporary same-account 416 changes belong above older accepted/cache rows,
+  // but below this device's own still-unsubmitted click.
+  for (const [trackId, liked] of Object.entries(listExploreLikeIntents416(normalizedUid))) {
+    if (liked) candidates.add(trackId);
+    else candidates.delete(trackId);
+  }
   for (const [trackId, pending] of Object.entries(outbox)) {
     if (pending.desiredLiked) candidates.add(trackId);
     else candidates.delete(trackId);

@@ -1,3 +1,14 @@
+## 0S81. Stage420 이번 직접 작업 QA 최종 확정 / 안전한 운영 Cutover 아직 보류 (2026-10-10)
+
+- Firebase RTDB **로컬 Emulator PASS** [Run 38025863205](https://github.com/andrawing1212/soridraw-music/actions/runs/38025863205): 구 `exploreLikeIntent416` 직접 SDK 쓰기 현재 우회 재현, 후보 Rules에서 차단, 기존 6개 userSync 채널 권한 유지(삭제 허가 + validation subtree 정적 exact-unchanged 검사), 다른 UID 교차 접근 차단, 개인 `display` 읽기와 Master `adminUnlockAudit` 읽기 금지. 실제 운영 Rules 변경 없음.
+- **최신 Master UI/Functions/앱 회귀 408 Quality** [Run 38026745607](https://github.com/andrawing1212/soridraw-music/actions/runs/38026745607) **SUCCESS**: Functions strict TS Build, React TS/Build, Stage420 authenticated server policy/Master 권한·UI/guarded transport 모의검사, 127/175/180/191/192/197/390/417 frozen tests + shared live RTDB read-only 검사. Fast QA [Run 38026736068](https://github.com/andrawing1212/soridraw-music/actions/runs/38026736068) **SUCCESS**.
+- Master 서버 정책 30/40/120 기본값, 조정 범위 검증, 서버 인스턴스별 60초 작은 설정 캐시, 현재 UID 1분 창 정책 고정·새 창 적용, Master-only 정책 GET/SET 및 UID 잠금조회/조기해제 감사; Master-only `ExploreLikeAbuseMasterPanel420` 화면 파일/기존 앱설정 삽입. **소스/검사 PASS이지 아직 제품 활성화/사용자 실사용 PASS가 아니다.**
+- **실서비스 그대로:** Firebase PREVIEW 앱392 양방향 거의 즉시 하트 정상; 신규 Stage420 함수/설정/화면은 **배포·연결되지 않았음**. 공유 Firebase RTDB Rules/Cloudflare Worker/Firestore/D1/R2 원본 사용자 데이터/main/TEST/PRODUCTION 변경 없음.
+- **릴리스 금지 사유:** 최신 Functions callable은 기존 direct RTDB 대신 쓰도록 420 transport 후보만 제작했고 기존 416 실행 경로는 보호 때문에 전환하지 않음. 구형 app392 tab·TEST/PROD는 아직 직접 기존 416 노드에 쓰므로 후보 shared Rules 즉시 적용 시 해당 기기 즉시 하트가 실패할 수 있음. 원본 Cloudflare Worker 직접 batch와 2시간 잠금 연동·클라이언트 서버 거절 rollback 및 정확한 좋아요 outbox 정착·사용자 장치별 callable 지연/10만명 전체 CPU+RTDB 비용 검증 필요. 사용자가 확인한 정상 app392 기능을 깨는 미검증 룰·Worker/Hosting 동시 배포 금지.
+- Stage416 전체 **1/5 완료**(① 사용자 요청으로 반복 읽기 보류, ② app392 동기화 사용자 실사용 PASS, ③/④/⑤ 대기). 좋아요 악성 클릭 방어 Stage420: **정책/구현 후보 자동검사 PASS, 실서비스 적용 전/보안 완료 아님**. 다음 작업은 직접 SDK 우회/구형 클라이언트 양립 가능한 cutover + Cloudflare canonical 잠금 검사·비용 검증. Codex로 재위임하지 않음.
+
+---
+
 ## 0S80. Stage420 보안 2시간 차단 — RTDB Emulator 우회 재현/차단 PASS + Master 서버·화면 후보, 실제 Cutover HOLD (2026-10-10 KST)
 
 - **최종 사용자 명령:** Codex 금지, ChatGPT 직접, 사용자 승인 정책 '1분 30회 경고 / 40회 제한 / 2분 연속 과도 클릭 시 120분(2시간) 잠금 / 자동해제 / Master 상태확인·조기해제·기준조정'. 기존 앱392 PC↔모바일 거의 즉시 하트 정상 속도와 기존 Music Note·Library·팔로우 보호. 남용 방어가 ③ 개인5분 저장보다 선행.

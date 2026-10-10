@@ -1,3 +1,12 @@
+## CURRENT — 로딩 3차: 생성 설정창 지연 분리 PASS, 브라우저 속도 검증/배포 전 (2026-10-10)
+
+- `DOCS/CURRENT_RELEASE_STATE.md 0S92`가 현재 기준. 작업 커밋 `preview` `1e55957492077235f5d70ee6f917bfc996c395d2`; [408 CI 38034254164](https://github.com/andrawing1212/soridraw-music/actions/runs/38034254164) TypeScript/Build/Like PASS, [Fast QA 38034310097](https://github.com/andrawing1212/soridraw-music/actions/runs/38034310097) PASS.
+- `MusicApiGenerateModal.tsx`의 63KB raw UI 본체를 `React.lazy` 래퍼로 분리, 가사 스타일 저장은 동일 key/함수만 최소 별도 모듈로 이동. 기존 modal API·UI·모드/프롬프트 미변경. 앱 메인 gzip **435.33→428.97KB(−6.36KB/1.46%)**, 새 모달 chunk gzip **7.67KB** 최초 열기에만 로드. `App.tsx` type-only import는 runtime 코드 다운로드 없음. `vite.config.ts`, Studio splitter/CSS/서버/좋아요·공유 데이터 불변. 배포 전이므로 `preview.soridraw.com` app392 유지.
+- 다음 성능 묶음 작업은 **실제 화면·네트워크 기반**으로 선택: 1) 생성창 메인/musicApi 최초 오픈/재진입/Chrome Back 및 느린 네트워크 chunk 다운로드 실사용 검증, 2) 스튜디오/뮤직노트/라이브러리 분할 드래그 성능/long-task hotspot 실측, 3) 실제 hotspot 확인 후 `src/App.tsx` 29k줄과 `studioLayout.css` 665KB에서 시각/반응형 100% 보존하며 큰 개선 하나를 선별·검사. 무작정 CSS 제거/초기 앱 재읽기/서버 비용 증가 금지.
+- Stage416 1/5(20%) 및 Stage420 HMAC 보안 cutover OFF 상태 별도. `main`/TEST/PRODUCTION, RTDB/Worker/Functions/D1/원본·실배포 미변경. 사용자가 배포를 지시하지 않으면 Hosting도 배포하지 않는다.
+
+---
+
 ## CURRENT — 실제 첫 화면 메인 JS gzip 47.6% 절감 완료, PC/모바일 성능 실사용 검증 전 (2026-10-10)
 
 - GitHub 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S91`. 소스 안정 검증 대상 `preview` `353ddabbe41ddb459a7a3a82131ff9e7a6af4c82`; 개발자 아닌 디렉터에게 실측 수치·결과 1~2줄로 요약. 사용자 요청 없으면 배포하지 않는다.

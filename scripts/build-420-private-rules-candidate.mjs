@@ -32,8 +32,11 @@ export const buildStage420PrivateRulesCandidate = (source) => {
     'guarded root already present; refuse double application');
   next.rules.privateLikeSync420 = {
     '$uid': {
-      '.read': 'auth != null && auth.uid === $uid',
+      // A parent .read would also expose adminUnlockAudit actorUid/reasons.
+      // Only the personal display subtree is readable by its owner.
       '.write': false,
+      'display': { '.read': 'auth != null && auth.uid === $uid' },
+      'adminUnlockAudit': { '.read': false },
       '$other': { '.validate': false },
     },
   };

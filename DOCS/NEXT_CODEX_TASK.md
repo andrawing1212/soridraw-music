@@ -1,3 +1,10 @@
+## CURRENT — Stage420 source-only 만료 증표·51회 오프라인 재전송 동작 감사 (2026-10-10)
+
+- app395 PREVIEW 실사용 PC 사용자 확인 정상. 추가 splitter/CSS 변경 금지. 속도 개선의 모바일/태블릿 검증은 미완.
+- 운영 Stage420 OFF 유지. 다음 검사는 15분 permit 만료→Worker D1 이전 차단, 기존 50개 기록 내 동일 operationId 서버 재발급 W0, 51개 이상 기록 후 밀려난 ID를 다시 보낼 때 quota/write 증가 여부. 정확한 Functions 후보 원본과 Worker HMAC verifier + in-memory Admin DB 사용, 기존 빠른 QA like 그룹. 테스트 결과가 위험이면 사용자 데이터가 살아있는 동안 공유 RTDB Rules/Worker cutover 진행 금지, 복구·중복 승인 장부/비용 설계 우선.
+- Stage416 1/5=20%, 속도 3/5=60%, 현재 실사용 검증 3/4=75%, TEST/PRODUCTION 승격 별도 승인.
+
+---
 ## CURRENT — PREVIEW app395 50:50 첫 분할 버그 수정·Chrome 검증·Hosting 배포 PASS; 실제 장치 검증 대기 (2026-10-10)
 
 - 배포된 최신 앱은 **app395**, exact 릴리스 `2fb614b9a82d5eceda93a1ccbdca7d4d36244819` / [Run 38040824155](https://github.com/andrawing1212/soridraw-music/actions/runs/38040824155) SUCCESS. 395 원격 버전 및 index exact checksum PASS, TEST/PROD unchanged PASS, Cloudflare/Functions/RTDB Rules/shared user source unchanged.

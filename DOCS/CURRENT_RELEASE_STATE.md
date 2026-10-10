@@ -1,3 +1,10 @@
+## 0S106. PC 실사용 이상 없음 보고 반영 + Stage420 만료된 승인 증표와 50건 버퍼의 오프라인 재전송 위험 검증 (2026-10-10)
+
+- 사용자 app395 PC 검사 피드백: "이상없어보여". PC 사용 범위에서 재현된 속도 오류는 없으며 모바일·태블릿 실제 기기/계측 p95·AI 실제 실행은 미검증. 분할 엔진·정상 CSS 추가 변경 없음.
+- Stage420 경계: 신규 Functions 승인증표 유효시간 15분, privateLikeSync420 display 최근 50개의 요청 ID만 유지. 같은 ID 증표 갱신이 원본 50건 안에 있으면 RTDB 추가 쓰기 0 가능. 51개 이상 기록 뒤 오래된 증표가 만료되면 원래 ID 기록이 밀려난 상태라 다시 요청한 이전 행동이 새 클릭으로 계산되어 quota/RTDB 쓰기 증가할 위험. 기존 Functions·Cloudflare 검증기 원본을 실제로 불러 메모리 RTDB로 재현하는 scripts/verify-420-permit-expiry-replay.mjs를 추가하고 기존 Fast QA like 그룹에 통합. 신규 기능을 운영 전환하지 않으며 이번 결과 전까지 문제 확정 또는 해결 주장 금지.
+- Stage420 하드 OFF 및 기존 app395 좋아요/팔로우/사용자 데이터·Firebase/Worker/Rules 모두 변경 없음. Stage416 1/5·20%, 속도 3/5·60%, 현 실사용 검증 3/4·75% 유지.
+
+---
 ## 0S105. PC·태블릿 Lite Split 새 기기 기본 50:50 오류 수정 / PREVIEW app395 배포 완료 (2026-10-10 KST)
 
 - **최종 PREVIEW 앱395 배포 SUCCESS:** source `493180a3dcbf8e9ab35673d1ac75f6c2d26aede2` → release trigger commit `2fb614b9a82d5eceda93a1ccbdca7d4d36244819`, [Firebase PREVIEW Run 38040824155](https://github.com/andrawing1212/soridraw-music/actions/runs/38040824155) SUCCESS. `preview.soridraw.com` remote `app-version.json=395`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, Worker/Functions/Cloudflare/D1/R2/공유 사용자 데이터 수정·배포 없음. Preview Hosting만 변경.

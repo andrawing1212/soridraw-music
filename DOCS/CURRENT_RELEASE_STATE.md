@@ -1,3 +1,13 @@
+## 0S83. Stage420 서버 중복요청 payload 정확성 보강 — source only / 배포 HOLD (2026-10-10 KST)
+
+- 직전 `preview` commit `cd40dacd49cd3761f1bc5b717318746536308fe8` 기준 ChatGPT 직접 소규모 수정: `functions/src/exploreLikeAbuseGate420.ts`에서 기존과 같은 `operationId`를 재전송했을 때 **trackId / ownerUid / liked 세 값까지 일치할 경우에만** 중복 성공 ACK를 허용. 같은 번호에 다른 곡·소유자·반대 하트를 넣은 요청은 이전 성공을 재사용하지 못하며 DB 새 write를 발생시키지 않도록 구현.
+- 코드 commit `e4c8c24ed8805758a15b97c72acfcfa947b63661`, 보강 검사 commit `4812d2de567360091c20d6f6e5d2010a3371b29c`. `scripts/verify-420-server-like-abuse-gate.mjs`에 세 가지 payload 바꿔치기/중복 ACK 거절/W0 단언 추가. compare 결과 변경 파일 정확히 2개(Functions 후보 및 검증 스크립트), 기존 416/127 정상 앱 경로 코드 변경 없음.
+- **검증 상태:** GitHub compare/변경 범위 정적 확인 완료. 신규 verifier 실제 Node 실행, Functions TypeScript, 앱 TypeScript/Build, GitHub QA run은 **이번 commit에 대해 아직 미검증**. 이전 38026745607 QA PASS를 신규 commit PASS로 간주하지 않음. 검사 전 보안 릴리스 불가.
+- **운영 상태 그대로:** PREVIEW Hosting `app392` 빠른 PC↔모바일 좋아요 사용자 검증 보호, 신규 Stage420 서버 후보 미배포. 공유 live RTDB Rules, Firebase Functions, Worker/D1/R2/Firestore, main/TEST/PRODUCTION, 사용자 원본 변경 없음. Stage416 **1/5(20%)** 유지; Stage420 실제 운영 차단 **미완성/HOLD**.
+- **다음 단일 작업:** 이번 verifier + 기존 회귀/Functions TS 자동검사 결과 확보 → 새 420 receiver의 거절·정산·구형 app392 tab 공존 요구를 입증하는 비파괴적 후보 개발 → Cloudflare canonical 120분 잠금 우회 차단·실제 latency/100k 총비용 검증. **기존 구형 클라이언트와 shared Rules cutover 호환 증명 전 배포 금지**. 사용자 지시: 시작/중간 진척도 고정 + 작업별 완료 후 변화 1~2줄 요약.
+
+---
+
 ## 0S82. Stage420 계속 작업: 구형 앱 보호 Cutover 조건·상시 진척도 보고 GitHub 고정 (2026-10-10)
 
 - 작업 기준: `preview` source 4188e7ea953aa8aff44912a15e8a943bc80efa34 검토 후 문서 commit `98300891cf010ae69e45366b09f43fd2988eadeb` → `7b6d6a98d7b11c9351dc311543da5f31489dc444`. 이번 작업은 **안전한 출시 조건 재확인 및 문서·보고 기준 고정**, 제품 코드 변경/배포가 아니다.

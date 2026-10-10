@@ -33,11 +33,13 @@ let journal={ at, digest:digestApprovedLikeCommand420(operation) };
 let reads=0;
 let writes=0;
 const db={ref:path=>{
- const journalPath='privateLikeSync420/uid-a/approvalJournal420/'+operation.operationId;
+ const journalPrefix='privateLikeSync420/uid-a/approvalJournal420/';
+ const journalPath=journalPrefix+operation.operationId;
  const fallbackPath='privateLikeSync420/uid-a/display/results';
- assert.ok(path===journalPath || path===fallbackPath,
-   'only the exact operation or bounded legacy 50-row display may be read');
- return {get:async()=>{reads++;return{val:()=>path===journalPath?journal:rows}} ,
+ assert.ok(path.startsWith(journalPrefix) || path===fallbackPath,
+   'only per-operation receipt or bounded legacy 50-row display may be read');
+ return {get:async()=>{reads++;return{val:()=>path.startsWith(journalPrefix)
+   ? (path===journalPath?journal:null) : rows}} ,
    transaction:async()=>{writes++;throw Error('NO_WRITES')},
    set:async()=>{writes++;throw Error('NO_WRITES')}};
 }};

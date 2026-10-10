@@ -13,6 +13,7 @@ assert(!/^import\s/m.test(code));
 code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420};';
 const calls = [];
 const listeners = [];
+const permit420 = 'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw';
 let nextReply = null;
 let rejectNetwork = false;
 const mock = {
@@ -20,11 +21,12 @@ const mock = {
     const state = read();
     if (!state.latest || state.latest.operationId !== sent.operationId)
       return { action: 'superseded', canFlush: false };
-    if (!reply) return { action: 'await-reply', canFlush: false };
+    if (!reply || (reply.allowed && !reply.guardPermit420))
+      return { action: 'await-reply', canFlush: false };
     if (!reply.allowed && !state.evidence)
       return { action: 'await-proof', canFlush: false };
     const decision = reply.allowed
-      ? { action: 'approved', canFlush: true }
+      ? { action: 'approved', canFlush: true, guardPermit420: reply.guardPermit420 }
       : { action: 'rollback', canFlush: false, liked: state.evidence.liked, evidenceVersion: state.evidence.version };
     commit(decision);
     notify(decision);
@@ -42,7 +44,8 @@ const mock = {
     calls.push({ name, args });
     if (rejectNetwork) throw new Error('NETWORK_ERROR');
     return { data: nextReply || { ok: true, allowed: true, warning: false,
-      lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false } };
+      lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false,
+      guardPermit420: permit420 } };
   },
 };
 const module = { exports: {} };
@@ -64,7 +67,8 @@ await assert.rejects(publish({ ...mutation, operationId: 'bad' }), /INVALID_GUAR
 // Network result may arrive after one or many subsequent clicks.
 const latest = { ...mutation, desiredLiked: mutation.liked };
 const accepted = { ok: true, allowed: true, warning: false,
-  lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false };
+  lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false,
+  guardPermit420: permit420 };
 const denied = { ...accepted, allowed: false, remainingInWindow: 0 };
 assert.equal(plan(mutation, latest, accepted), 'retain-canonical-pending',
   'private delivery acceptance is not canonical settlement');
@@ -107,6 +111,15 @@ currentPending = pending;
 nextReply = accepted;
 actual = await submit(pending,reader,save,repaint);
 assert.equal(actual.action,'approved');
+assert.equal(actual.guardPermit420,permit420);
+nextReply = {...accepted, guardPermit420:undefined};
+commits.length=0;
+await assert.rejects(publish(mutation),/INVALID_GUARDED_LIKE_RESPONSE/);
+actual = await submit(pending,reader,save,repaint);
+assert.equal(actual.action,'await-reply',
+  'a callable allowed response without a certificate must not write canonical');
+assert.equal(commits.length,0);
+nextReply = accepted;
 rejectNetwork = true;
 commits.length = 0;
 actual = await submit(pending,reader,save,repaint);
@@ -141,4 +154,5 @@ console.log('STAGE420_SERVER_ONLY_DISPLAY_AND_ADMIN_AUDIT_ISOLATION=PASS');
 console.log('STAGE420_PROVISIONAL_PRIVATE_HEART_REPLAY_GUARD=PASS');
 console.log('STAGE420_STALE_REJECTION_AND_NETWORK_UNKNOWN_OUTBOX_GUARD=PASS');
 console.log('STAGE420_GUARDED_SEND_SETTLE_CANDIDATE_NO_DIRECT_FALLBACK=PASS');
+console.log('STAGE420_MISSING_SIGNED_PERMIT_STAYS_UNAPPROVED=PASS');
 console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');

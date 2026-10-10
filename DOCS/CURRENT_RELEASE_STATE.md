@@ -1,3 +1,12 @@
+## 0S85. Stage420 서버 거절/느린 응답에서 최신 좋아요 보호: 후보 판단 로직 + 회귀검사 / 실제 연결 미완료 (2026-10-10 KST)
+
+- 기준 `preview` `b5219f188cbbd2e214b25de2c5b565f4618fce38`. 미연결 `src/services/exploreLikeGuardedTransport420.ts`에 `planGuardedLikeDecision420` 순수 후보 추가: 요청 발송 뒤 원본 outbox의 곡ID/소유UID/원하는 like/operationId 중 하나라도 달라지면 이전 Firebase callable 거절로 최신 클릭을 지우지 않음(`ignore-superseded`); 네트워크 실패·응답불명은 outbox 유지(`retain-unconfirmed`); 허용은 canonical 반영 전까지 유지(`retain-canonical-pending`); 정확히 일치하는 요청의 명시 거절만 `reject-matching-only`.
+- `scripts/verify-420-guarded-transport.mjs`에 거절, 최신 클릭, 타곡/타소유주, timeout, 허용 ACK 구분 단언 추가. 코드 commit `a5ed09665be43873847162ad058a0aeaee04f4b8`, 검사 commit `f7b9f1bbadbf5709fa95be653f601e4fde7030c8`. GitHub compare 결과 변경 파일 2개. 실제 GitHub source의 planner를 V8에서 분리 실행한 7개 사례 PASS. **전체 Node verifier, TypeScript, Build, 공식 GitHub QA, Firebase/PC모바일 실기기 미검증**.
+- **중요:** planner는 아직 기존 `exploreLikeService.ts` outbox 저장/rollback에 연결되지 않았으므로 이 단계가 '실제 서버 거절 시 하트 복구 완료'라는 의미는 아님. 기존 정상 416/127 RTDB/Explore app392, 기존 like/follow/UI, Firebase live Rules/Functions, Worker/D1/R2, 원본 사용자 데이터, main/TEST/PRODUCTION 모두 그대로. PREVIEW app392 배포 상태 유지, 신규 Stage420 기능 미배포, 공유 RTDB old direct SDK/REST bypass 및 canonical Worker 120분 잠금 미연결로 release HOLD.
+- 다음 단일 단계: 이전 127/390 outbox·accepted deferred signal과 420 private pending/denied 응답을 하나의 저장 순서로 잇는 정확한 원자적 rollback 구현 + 스키마 구버전 열린 app392 탭 호환 + canonical Worker lock/RTDB Rules cutover + 실제 장치 p95/100k 비용 검증. 신기능 전체 검증 전 PREVIEW 안전 배포 금지. Stage416 사용자 실사용 PASS **1/5(20%) 유지**, ③/④/⑤ 여전히 대기. 완료 후 1~2줄 변경 요약 + 계속 진척도 표시.
+
+---
+
 ## 0S84. Stage420 재전송 동일 곡 중복 오류 수정 + 서버 실제 소스 V8 mock 실행 검사 PASS / 배포 HOLD (2026-10-10 KST)
 
 - 기준 source `preview` `48446feb0c4139616e27b29f405a684c554e3a30`. 이번 Stage420 **미배포 후보**의 `functions/src/exploreLikeAbuseGate420.ts` 에서 같은 trackId로 신규 opposite click이 발생해도 앞선 operationId 기록을 50개 bounded results에서 바로 제거하지 않도록 변경. 지연된 앞선 operationId 재전송은 이전 이벤트와 일치하면 duplicate=true/W0, 같은 번호+다른 payload는 allowed=false/W0. 마지막 version 순서대로 receiver가 처리하는 계약 유지.

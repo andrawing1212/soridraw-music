@@ -1,3 +1,13 @@
+## 0S84. Stage420 재전송 동일 곡 중복 오류 수정 + 서버 실제 소스 V8 mock 실행 검사 PASS / 배포 HOLD (2026-10-10 KST)
+
+- 기준 source `preview` `48446feb0c4139616e27b29f405a684c554e3a30`. 이번 Stage420 **미배포 후보**의 `functions/src/exploreLikeAbuseGate420.ts` 에서 같은 trackId로 신규 opposite click이 발생해도 앞선 operationId 기록을 50개 bounded results에서 바로 제거하지 않도록 변경. 지연된 앞선 operationId 재전송은 이전 이벤트와 일치하면 duplicate=true/W0, 같은 번호+다른 payload는 allowed=false/W0. 마지막 version 순서대로 receiver가 처리하는 계약 유지.
+- 변경 commit `84b0eee06e380e2f6216fbfe145ec3b1a797744e` (Functions 미배포 후보), `61c6aa9bb2bde0d3e3a529af520879a74fce0217` (test fixture). 변경 파일 2개만 비교 확인, 기존 app392 416/127 런타임 코드 그대로.
+- **이번 턴 실행한 독립 소스 mock 검사:** GitHub HEAD에서 정확한 Functions TS 모듈을 읽어 런타임 TS annotation만 제거한 동일 로직을 V8에서 실행. 개인 UID RTDB transaction memory mock으로 `SAME_TRACK_DELAYED_REPLAY_W0`, `OPERATION_ID_MISMATCH_DENY_W0`, `30/40_PER_MINUTE`, `2_CONSECUTIVE_MINUTES_LOCK_120MIN`, `AUTO_UNLOCK`, `MAX_50_EVENT_BOUND` 모두 PASS. 검사는 제품 Firebase Emulator/실제 앱·원격 CI가 **아니며**, 리모트 Node verifier 및 Functions/React TS/Build 검사는 **아직 미실행/미검증**이다.
+- Stage420 운영방어는 공유 RTDB 구형 direct 416 권한과 canonical Worker 120분 lock 우회 때문에 **미완료/HOLD**. 기존 정상 PREVIEW Hosting app392 유지. LIVE Firebase Functions/Rules/Worker/Firestore/D1/R2, 공유 사용자 원본, main/TEST/PRODUCTION 변경 없음. Stage416 전체 진행 **1/5(20%) 동일**.
+- 다음: 고정 SHA 전체 Fast/408 QA + Node verifier/Functions TS Build 확인, 420 receive/settlement/denied rollback, 구형 392 열린 탭 양립, Cloudflare canonical 잠금 우회 차단·실측 p95/100k 월 총비용 완료 후에만 PREVIEW release 판단. 사용자에게 각 작업 완료 시 변경점 한두 줄 보고와 진척도 유지.
+
+---
+
 ## 0S83. Stage420 서버 중복요청 payload 정확성 보강 — source only / 배포 HOLD (2026-10-10 KST)
 
 - 직전 `preview` commit `cd40dacd49cd3761f1bc5b717318746536308fe8` 기준 ChatGPT 직접 소규모 수정: `functions/src/exploreLikeAbuseGate420.ts`에서 기존과 같은 `operationId`를 재전송했을 때 **trackId / ownerUid / liked 세 값까지 일치할 경우에만** 중복 성공 ACK를 허용. 같은 번호에 다른 곡·소유자·반대 하트를 넣은 요청은 이전 성공을 재사용하지 못하며 DB 새 write를 발생시키지 않도록 구현.

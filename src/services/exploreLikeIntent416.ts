@@ -123,9 +123,18 @@ export const clearExploreLikeIntent416 = (
 export const subscribeExploreLikeIntent416 = (
   uid: string,
   onChanged: (trackId: string, liked: boolean) => void,
-): Unsubscribe => onValue(
+): Unsubscribe => {
+  // A retained tentative signal is not canonical truth. Skip the initial
+  // replay on cold browser start; the existing 127 accepted/R2 cache provides
+  // initial membership. Active devices still receive every subsequent click.
+  let initialSnapshot416 = true;
+  return onValue(
   databaseRef(realtimeDb, `userSync/${uid}/exploreLikeIntent416`),
   (snapshot) => {
+    if (initialSnapshot416) {
+      initialSnapshot416 = false;
+      return;
+    }
     const raw = snapshot.val() as Partial<IntentEnvelope416> | null;
     const version = Number(raw?.version || 0);
     if (!Number.isSafeInteger(version) || version <= seenVersion416(uid) ||
@@ -167,7 +176,8 @@ export const subscribeExploreLikeIntent416 = (
     changed.forEach(({ trackId, liked }) => onChanged(trackId, liked));
   },
   (error) => console.warn('[416] Private intent signal unavailable; accepted like path retained:', error),
-);
+  );
+};
 
 export const publishExploreLikeIntent416 = async (uid: string, mutation: IntentMutation416): Promise<void> => {
   if (!uid || !mutation.trackId || !validOperation416(mutation.operationId)) return;

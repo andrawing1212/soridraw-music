@@ -122,6 +122,7 @@ type ExploreLikePendingMutation = {
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
   guardStatus420?: 'awaiting' | 'approved'; // old clients remain legacy when absent
+  guardCanonicalLiked420?: boolean; // trusted PRE-click membership, not optimistic cache
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
   // 390: a newer accepted change on another device must survive a local outbox guard.
   // Do not discard the unsubmitted local intention or confuse it with an ACK.
@@ -1364,6 +1365,8 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? row.operationId : undefined,
     ...(row.guardStatus420 === 'awaiting' || row.guardStatus420 === 'approved'
       ? { guardStatus420: row.guardStatus420 } : {}),
+    ...(typeof row.guardCanonicalLiked420 === 'boolean'
+      ? { guardCanonicalLiked420: row.guardCanonicalLiked420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
     ...(row.deferredSignal390 && typeof row.deferredSignal390 === 'object' &&
@@ -2186,6 +2189,15 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = existing?.desiredLiked ??
     readExploreTrackLikeMembership127(uid, normalizedTrackId) ?? !liked;
   const baseLiked = existing?.baseLiked ?? previousVisibleLiked;
+  // Capture verified pre-click truth BEFORE local optimism changes the cache.
+  // A post-click cache value is never safe evidence for server-denied rollback.
+  const authoritativeBeforeClick420 = existing?.guardCanonicalLiked420 ??
+    (!existing && typeof readExploreLikeIntent416(uid, normalizedTrackId) !== 'boolean' &&
+     (readTargetedVerifiedLikeTracks127(uid).has(normalizedTrackId) ||
+       baselineCompleted127.has(uid) ||
+       (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' &&
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '')) &&
+     cache.has(normalizedTrackId) ? cache.get(normalizedTrackId) : undefined);
   const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
   const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);
   const optimisticLikeCount = optimisticAction127.likeCount;
@@ -2209,7 +2221,11 @@ export const setExploreTrackLike = async (
     updatedAt: now,
     retryCount: 0,
     operationId: createExploreLikeOperationId144(),
-    ...(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ? { guardStatus420: 'awaiting' as const } : {}),
+    ...(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ? {
+      guardStatus420: 'awaiting' as const,
+      ...(typeof authoritativeBeforeClick420 === 'boolean'
+        ? { guardCanonicalLiked420: authoritativeBeforeClick420 } : {}),
+    } : {}),
     expectedRevision: existing?.expectedRevision ??
       readLikeCanonicalRevisions172(uid)[normalizedTrackId] ?? 0,
   };
@@ -2238,17 +2254,16 @@ export const setExploreTrackLike = async (
     void submitGuardedOutboxCandidate420(sent, () => {
       const latest = readLikeOutbox(uid)[sent.trackId];
       const unresolved = readSnapshotPending127(uid);
-      const membership = getLikedStateCache(uid);
-      const verified = readTargetedVerifiedLikeTracks127(uid).has(sent.trackId) ||
-        baselineCompleted127.has(uid) ||
-        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
       const revision = readLikeCanonicalRevisions172(uid)[sent.trackId] ?? 0;
       let evidence: GuardedCanonicalEvidence420 | null = null;
-      if (Object.prototype.hasOwnProperty.call(unresolved, sent.trackId)) {
+      if (latest?.deferredSignal390?.result?.trackId === sent.trackId) {
+        evidence = { uid, trackId: sent.trackId, liked: latest.deferredSignal390.result.liked,
+          source: 'accepted-127', version: latest.deferredSignal390.version };
+      } else if (Object.prototype.hasOwnProperty.call(unresolved, sent.trackId)) {
         evidence = { uid, trackId: sent.trackId, liked: unresolved[sent.trackId],
           source: 'accepted-127', version: revision };
-      } else if (verified && membership.has(sent.trackId)) {
-        evidence = { uid, trackId: sent.trackId, liked: membership.get(sent.trackId)!,
+      } else if (typeof latest?.guardCanonicalLiked420 === 'boolean') {
+        evidence = { uid, trackId: sent.trackId, liked: latest.guardCanonicalLiked420,
           source: 'verified-local-baseline', version: revision };
       }
       return {

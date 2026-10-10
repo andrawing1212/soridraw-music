@@ -7,6 +7,8 @@ const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const guarded = readFileSync('src/services/exploreLikeGuardedTransport420.ts', 'utf8');
 const reducer = readFileSync('src/services/exploreLikeGuardedOutbox420.ts', 'utf8');
 const rules = JSON.parse(readFileSync('database.rules.json', 'utf8')).rules;
+const worker = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
+const fn = readFileSync('functions/src/index.ts', 'utf8');
 assert.match(service, /export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;/,
   'shared old-client cutover must be hard disabled until coordinated proof');
 assert.match(service, /guardStatus420\?: 'awaiting' \| 'approved'/,
@@ -43,6 +45,25 @@ assert.match(guarded, /return settleGuardedOutbox420\(/);
 assert.match(reducer, /const decision = resolveGuardedOutbox420\(/);
 assert.match(reducer, /commit\(decision\);\s*notifyAfterCommit\(decision\);/,
   'durable update must precede remote/UI repaint');
+assert.match(service, /guardPermit420\?: string/, 'the client outbox must persist signed permit');
+assert.match(service, /guardPermit420: resolution\.guardPermit420/,
+  'only server-approved signed permit is stored with current exact op');
+assert.match(service, /guardPermit420: pending\.guardPermit420/,
+  'approved signed permit is included on guarded canonical mutation');
+assert.match(service, /entry\.guardStatus420 === 'approved' && !!entry\.operationId && !!entry\.guardPermit420/,
+  'no worker mutation can flush with a local approval flag alone');
+assert.match(guarded, /response\.guardPermit420/,
+  'the Function-signed certificate must reach the durable outbox reducer');
+assert.match(fn, /stage420PermitSigningSecret = defineSecret\(/);
+assert.match(fn, /outcome\.allowed\s*\? issueLikePermit420/,
+  'only an accepted authenticated like can receive a certificate');
+assert.match(worker, /const STAGE426_COMPILED_OPEN = false/,
+  'do not turn on all-environment canonical cutover');
+assert.match(worker, /await verifyGuardedLikeBatch420\(/);
+const gate=worker.slice(worker.indexOf('async function handleVerifiedLikeBatch426'),worker.indexOf('\nexport default {'));
+assert.ok(gate.indexOf('await verifyGuardedLikeBatch420(') <
+  gate.indexOf('const router=createCandidateLikeBatch422'),
+  'server signature must be checked before canonical D1 handler construction');
 assert.equal(rules.userSync.$uid['.write'], 'auth != null && auth.uid === $uid',
   'live old-client rules must NOT change in this source candidate');
 assert.equal(rules.privateLikeSync420, undefined,

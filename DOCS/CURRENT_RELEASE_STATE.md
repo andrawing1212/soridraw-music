@@ -1,3 +1,10 @@
+## 0S103. 장시간 정체된 split 실제 엔진 Chrome 드래그 검사 시행 (2026-10-10 KST)
+
+- 현재 app394 PREVIEW 성능 잔여 이슈 확인 목적. 코드 변경 없이 원본 `StudioSplitEngineWorkspace` Pure Pane Hybrid를 Chrome PC 1800px/태블릿 모의 1280px에서 140행 Builder/Result 목록으로 렌더 후 실제 pointer drag/release/scrollTop/no-snap/JS errors/long-task 측정하는 테스트를 기존 408 `[browser-smoke]`에 추가.
+- `src/components/studio/LiteStudioSplitWorkspace.tsx`/CSS/App/Backend/데이터는 불변. 독립 Chrome PASS는 물리 Galaxy Tab/실제 유저 Studio/660·820·1080 경계 검증을 대체하지 않음. 실패 시 로그로 CSS/fixture vs product defect 구분한 뒤 최소 수정.
+- 시작 진척도 Stage416 1/5=20%, 속도 개선 3/5=60%, 현재 실사용 검증 3/4=75%, app394 운영 유지.
+
+---
 ## 0S102. PREVIEW app394 실제 브라우저 검증 최종 PASS / 실기기 인증 검증은 별개 (2026-10-10 KST)
 
 - **현재 PREVIEW 운영 app394:** exact Firebase Hosting release commit `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5`, [Release Run 38038414857](https://github.com/andrawing1212/soridraw-music/actions/runs/38038414857) SUCCESS, 원격 버전 394/exact index checksum PASS, `TEST_PRODUCTION_UNCHANGED=PASS`; RTDB Rules 배포 SKIPPED, Worker/Functions/Cloudflare/D1/R2/공유 사용자 원본 변경 없음. 추가 README/테스트/문서 push는 배포가 아님.

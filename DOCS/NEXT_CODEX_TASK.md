@@ -1,3 +1,13 @@
+## CURRENT — Stage420 실제 Explore 서비스 코드 outbox 연결 후보 완료 / 임시 OFF, Worker·구형 앱 전환 검증 필요 (2026-10-10)
+
+- 사용자 지시 ChatGPT 직접(코덱스 재위임 금지), 한 묶음 개발 + 작업별 변경 요약 1~2줄/상시 진척도. 이번 작업은 `DOCS/CURRENT_RELEASE_STATE.md 0S87` 기준. Stage416 1/5(20%) 유지.
+- `src/services/exploreLikeService.ts`에 **기존 영구 127/390 outbox**와 신규 420 callable 제출 및 서버 ACK exact-op 승인·거절/캐시복구 연결, 개인 private 420 UID listener 및 MyLikes 변경분 처리, outbox cache optional `guardStatus420`/`guardCanonicalLiked420` 보존. 5초 idle/page-exit canonical Worker 전송을 guarded approved에서만 허용. old 416 송신/수신은 **cutover false**일 때 보존.
+- **코드 출시 스위치 명시적 OFF**: `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`; 이 값을 변경하지 말 것. app392 사용자 검증된 정상 기능 보호. 추가 기존 경로 백엔드 읽기 0. 리포지터리 source 23 정적 검사 PASS, 자동 QA 그룹 verifier 추가. 이번 latest source React/Functions TS/Build/408·Fast run 미검증.
+- **남은 실제 차단 조건(연속 하나의 안전 작업으로 묶기):** ① 기존 구형 app392/TEST/PRODUCTION 탭 direct RTDB write 허용과 새 private rules 보안의 불양립 해소 ② old outbox→guarded awaiting/approved 실제 재시작·오프라인 복구 ③ Cloudflare canonical 120분 UID lock 저비용 서버 신뢰 강제 및 직접 호출 우회 차단 ④ Firebase Emulator/pc/mobile 양방향 즉시성 p95·10만 DAU CPU/RTDB/Worker 총비용 ⑤ 고정 SHA QA/TypeScript/Build + 실기기. 모든 안전 조건 PASS 전 Firebase Rules/Functions/Worker/Hosting PREVIEW 및 TEST/PRODUCTION 배포 금지. 공유 원본 데이터 수정/변환 없음.
+- 예상된 설계 충돌: **공유 Firebase 규칙에서는 사용자와 같은 자격의 옛 app392 직접 쓰기만 따로 구별해 악성 SDK 요청을 막을 증거가 없음**. 이를 무시하고 하드 OFF를 켜면 안 됨. server 보안과 old-client 호환이 동시에 불가능하면 사용자에게 명확한 대안과 비용·지연을 보고할 것.
+
+---
+
 ## CURRENT — Stage420 guarded outbox + callable 후보 한 묶음 완료, 실제 앱 연결/보안 전환 HOLD (2026-10-10)
 
 - ChatGPT 직접 작업, Codex 재위임 금지. 이번 기준은 `DOCS/CURRENT_RELEASE_STATE.md` **0S86** 및 정확한 `preview` HEAD. 기존 app392 즉시 하트 사용자 실사용 PASS를 절대 훼손하지 않는다.

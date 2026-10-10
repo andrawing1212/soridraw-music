@@ -1,9 +1,9 @@
 app393-preview-first-load-lazy-modal-and-ai-engine-browser-verification
-target_source=061692e7d57f2483f9f37f174fbc13f45f157a9d
+target_source=da9686c744b9eb8fcfde9a3b51ce2d82f7989cd9
 app_version=393
 scope=preview-hosting-only
 approval=user_2026-10-10_discretionary_preview_deployment_to_enable_testing
-evidence_exact_sha_408_run=38035745690
+evidence_exact_sha_408_run=38036041146
 evidence_420_master_ui_inactive=true
 stage420_like_cutover_active=false
 deploy_shared_rtdb_rules=false
@@ -17,3 +17,5 @@ production_change=false
 must_confirm_preview_exact_build=true
 must_confirm_test_production_hosting_unchanged=true
 must_confirm_pc_mobile_first_open_and_slow_network_after_deploy=true
+previous_release_run_38035850653=FAILED_BEFORE_DEPLOY_DUE_TO_STALE_DIAGNOSTIC_VERIFIER
+retry_gate=Stage217_lazy_impl_verifier_FIXED_AND_408_PASS

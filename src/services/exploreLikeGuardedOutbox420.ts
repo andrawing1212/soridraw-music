@@ -55,7 +55,7 @@ export const resolveGuardedOutbox420 = (
     // No signed permit => no canonical flush; wait for safe retry. Actual
     // signature/UID/track/action verification happens in the Worker.
     if (typeof reply.guardPermit420 !== 'string' ||
-        !/^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
+        !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
         reply.guardPermit420.length > 2400) {
       return { action: 'await-reply', canFlush: false };
     }
@@ -80,7 +80,7 @@ export const canFlushGuardedOutbox420 = (
   entry: GuardedOutboxEntry420 & { guardPermit420?: string },
 ): boolean => entry.guardStatus === 'approved' &&
   typeof entry.guardPermit420 === 'string' &&
-  /^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(entry.guardPermit420) &&
+  /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(entry.guardPermit420) &&
   entry.guardPermit420.length <= 2400;
 
 // The outer caller supplies read/apply to guarantee a fresh synchronous

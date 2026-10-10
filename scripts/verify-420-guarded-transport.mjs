@@ -10,7 +10,7 @@ let code = stripTypeScriptTypes(
 code = code.replace(/^import\s+.*?from\s+'[^']+';\s*$/gm, '')
   .replaceAll('export const ', 'const ');
 assert(!/^import\s/m.test(code));
-code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420};';
+code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420, renewGuardedLikePermitCandidate420};';
 const calls = [];
 const listeners = [];
 const permit420 = 'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw';
@@ -119,7 +119,29 @@ actual = await submit(pending,reader,save,repaint);
 assert.equal(actual.action,'await-reply',
   'a callable allowed response without a certificate must not write canonical');
 assert.equal(commits.length,0);
+// Renewal of exact approved outbox MUST call the proof-only endpoint, never
+// the initial-rate endpoint. A stale/newer click is not overwritten.
+nextReply = {ok:true,renewed:true,guardPermit420:permit420};
+const approved = {...pending,guardStatus:'approved',guardPermit420:permit420};
+const callCount = calls.length;
+const freshToken = await module.exports.renewGuardedLikePermitCandidate420({
+  trackId:mutation.trackId,liked:true,operationId:mutation.operationId,
+},permit420);
+assert.equal(freshToken,permit420);
+assert.equal(calls[callCount].name,'renewExploreLikePermit420');
+assert.equal('uid' in calls[callCount].args,false);
+currentPending=approved;
+actual=await submit(approved,reader,save,repaint);
+assert.equal(actual.action,'approved');
+assert.equal(calls.at(-1).name,'renewExploreLikePermit420');
+assert.equal(calls.at(-1).args.operationId,mutation.operationId);
+assert.equal(calls.at(-1).args.previousGuardPermit420,permit420);
+const beforeMissing=calls.length;
+actual=await submit({...approved,guardPermit420:undefined},reader,save,repaint);
+assert.equal(actual.action,'await-reply');
+assert.equal(calls.length,beforeMissing,'missing proof must not fall back to new-click endpoint');
 nextReply = accepted;
+currentPending=pending;
 rejectNetwork = true;
 commits.length = 0;
 actual = await submit(pending,reader,save,repaint);
@@ -156,3 +178,6 @@ console.log('STAGE420_STALE_REJECTION_AND_NETWORK_UNKNOWN_OUTBOX_GUARD=PASS');
 console.log('STAGE420_GUARDED_SEND_SETTLE_CANDIDATE_NO_DIRECT_FALLBACK=PASS');
 console.log('STAGE420_MISSING_SIGNED_PERMIT_STAYS_UNAPPROVED=PASS');
 console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');
+
+console.log('STAGE420_DORMANT_APPROVED_RENEWAL_NO_RATE_REPLAY=PASS');
+console.log('STAGE420_MISSING_PROOF_RENEWAL_FAIL_CLOSED=PASS');

@@ -74,6 +74,35 @@ export const publishGuardedLikeIntent420 = async (
   return decision;
 };
 
+// Dormant renewal adapter: refresh only an earlier signed exact operation.
+// No RTDB fallback or rate-call fallback if this endpoint rejects/has no proof.
+export const renewGuardedLikePermitCandidate420 = async (
+  mutation: Pick<GuardedLikeMutation420, 'trackId' | 'liked' | 'operationId'>,
+  previousGuardPermit420: string,
+): Promise<string> => {
+  if (!mutation.trackId || mutation.trackId.length > 512 ||
+      typeof mutation.liked !== 'boolean' ||
+      !operationIdValid(mutation.operationId) ||
+      typeof previousGuardPermit420 !== 'string' ||
+      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(previousGuardPermit420) ||
+      previousGuardPermit420.length > 2400) {
+    throw new Error('INVALID_GUARDED_LIKE_RENEW_REQUEST');
+  }
+  const call = httpsCallable<
+    { trackId: string; liked: boolean; operationId: string; previousGuardPermit420: string },
+    { ok: boolean; renewed: boolean; guardPermit420?: string }
+  >(functions, 'renewExploreLikePermit420');
+  const result = await call({ ...mutation, previousGuardPermit420 });
+  const reply = result.data;
+  if (!reply || reply.ok !== true || reply.renewed !== true ||
+      typeof reply.guardPermit420 !== 'string' ||
+      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
+      reply.guardPermit420.length > 2400) {
+    throw new Error('INVALID_GUARDED_LIKE_RENEW_RESPONSE');
+  }
+  return reply.guardPermit420;
+};
+
 // Candidate-only settlement planner. A denied Function ACK must never
 // delete a newer local click that was made while the network was in flight.
 // The caller must re-check this plan at the moment of its synchronous
@@ -123,15 +152,31 @@ export const submitGuardedOutboxCandidate420 = async (
 ): Promise<GuardedResolution420> => {
   let reply: GuardedOutboxReply420 | null = null;
   try {
-    const response = await publishGuardedLikeIntent420({
-      trackId: sent.trackId,
-      ownerUid: sent.ownerUid,
-      liked: sent.desiredLiked,
-      operationId: sent.operationId,
-    });
-    reply = { ok: true, allowed: response.allowed,
-      lockedUntilMs: response.lockedUntilMs,
-      ...(response.guardPermit420 ? {guardPermit420: response.guardPermit420} : {}) };
+    if (sent.guardStatus === 'approved' || sent.guardPermit420 !== undefined) {
+      // A retry of an already-approved intent MUST NOT count as a new click,
+      // even if its operationId fell out of the latest 50 display events.
+      // Missing/invalid original proof fails closed; never call publish().
+      if (!sent.guardPermit420) throw new Error('MISSING_ORIGINAL_GUARD_PROOF');
+      const freshPermit420 = await renewGuardedLikePermitCandidate420({
+        trackId: sent.trackId,
+        liked: sent.desiredLiked,
+        operationId: sent.operationId,
+      }, sent.guardPermit420);
+      reply = { ok: true, allowed: true, lockedUntilMs: 0,
+        guardPermit420: freshPermit420 };
+    } else {
+      // First authorization only. A lost server ACK with no durable permit
+      // cannot safely be reissued after 50 events; see cutover HOLD gate.
+      const response = await publishGuardedLikeIntent420({
+        trackId: sent.trackId,
+        ownerUid: sent.ownerUid,
+        liked: sent.desiredLiked,
+        operationId: sent.operationId,
+      });
+      reply = { ok: true, allowed: response.allowed,
+        lockedUntilMs: response.lockedUntilMs,
+        ...(response.guardPermit420 ? {guardPermit420: response.guardPermit420} : {}) };
+    }
   } catch {
     // No direct RTDB fallback. Canonical outbox remains durable, unapproved,
     // and unavailable to the Worker intake until an exact verified response.

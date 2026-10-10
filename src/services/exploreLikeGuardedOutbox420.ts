@@ -10,6 +10,9 @@ export type GuardedOutboxEntry420 = {
   baseLiked: boolean;
   updatedAt: number;
   guardStatus: 'awaiting' | 'approved';
+  // Persist the exact Function-issued proof; only this can renew without
+  // calling the fresh-click rate transaction after the 15-minute expiry.
+  guardPermit420?: string;
 };
 export type GuardedOutboxReply420 = {
   allowed: boolean;

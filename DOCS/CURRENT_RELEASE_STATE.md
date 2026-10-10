@@ -1,3 +1,10 @@
+## 0S110. 재전송 클라이언트 후보 연결 — 기존 서명 증표가 있을 때 새 클릭 경로 차단 (2026-10-10)
+
+- 미배포 Stage420 transport에서 기존 GuardedOutboxEntry420.guardPermit420을 선택적으로 보존. 승인된 오래된 outbox 요청은 최초 publishExploreLikeIntent420 rate-transaction callable을 다시 호출하지 않고 새 renewExploreLikePermit420 Callable에 이전 서명증표를 전송. 새로 발급한 증표만 durable reducer가 exact op에 적용.
+- 서명증표가 사라진 approved outbox는 새 클릭으로 fall back 하지 않고 await-reply 보존. 최신 outbox opId가 바뀌면 기존 stale ACK commit 금지. source test verify-420-guarded-transport에 갱신 endpoint 호출·UID 미전송·missing proof 추가 rate/W0 무동작 보호.
+- 단 기존 awaiting outbox 최초 ACK 분실은 아직 다시 publish를 호출할 수 있으므로 첫 요청의 durable SENT marker/verified canonical reconciliation 없이는 cutover HOLD. UI/기존 Explore like 및 RTDB/D1/Worker/Rules/Functions 운영 배포 없음. Stage416 1/5·20%; 속도 3/5·60%; 실기기 3/4·75%.
+
+---
 ## 0S109. Stage420 재전송 재인증 코드/테스트 CI 증거 (2026-10-10)
 
 - 추가 시험: [Fast QA 38042365466](https://github.com/andrawing1212/soridraw-music/actions/runs/38042365466) SUCCESS. 실제 Firebase Functions 발급기와 새 갱신기, 실제 Cloudflare Worker WebCrypto 인증기를 연결한 소스 실행 테스트 PASS: 만료된 15분 승인 서명 재발급 성공, UID/곡/좋아요 상태/작업 ID 불일치·서명 위조·잘못된 키·24h 초과 요청 모두 거절, 서명된 새 exact-op은 canonical 진입 인증 PASS. 실제 영수증171 W0/과금 및 최초 승인 ACK 분실은 미검증/보류.

@@ -132,6 +132,95 @@ try {
     rows.push(row);
     await context.close();
   }
+  // Repeat both desktop widths in interleaved order after the browser
+  // has already reached the origin. Every sample uses an empty browser
+  // context (fresh HTTP/cache state). A single early 1800px sample can be
+  // affected by DNS/TLS / cold runner startup rather than viewport layout.
+  // Measure root-ready as well as DOMContentLoaded, not only network timing.
+  const repeated = [];
+  const permutations = [
+    [{name:'pc1800',width:1800,height:940},{name:'pc1440',width:1440,height:900}],
+    [{name:'pc1440',width:1440,height:900},{name:'pc1800',width:1800,height:940}],
+    [{name:'pc1800',width:1800,height:940},{name:'pc1440',width:1440,height:900}],
+  ];
+  for (const [round, pair] of permutations.entries()) {
+    for (const config of pair) {
+      const context = await browser.newContext({
+        viewport:{width:config.width,height:config.height},
+        serviceWorkers:'block',locale:'ko-KR',
+      });
+      try {
+        const page = await context.newPage();
+        const errors = [];
+        page.on('pageerror', error => errors.push(String(error.message || error)));
+        await page.addInitScript(() => {
+          window.__soridrawRepeatLongTasks = [];
+          try {
+            new PerformanceObserver(list => {
+              for(const entry of list.getEntries()) {
+                window.__soridrawRepeatLongTasks.push(Math.round(entry.duration));
+              }
+            }).observe({type:'longtask',buffered:true});
+          } catch { /* unsupported observer, recorded as an empty sample */ }
+        });
+        const start = Date.now();
+        const navigation = await page.goto(base+'/',{
+          waitUntil:'domcontentloaded',timeout:45000,
+        });
+        assert.equal(navigation?.status(),200,config.name+' repeated HTTP failure');
+        await page.waitForFunction(() => {
+          const root = document.querySelector('#root');
+          return root && (root.innerText || root.textContent || '').trim().length > 15;
+        },{timeout:22000});
+        const rootReadyMs = Date.now()-start;
+        await page.waitForTimeout(900);
+        const metrics = await page.evaluate(() => {
+          const nav = performance.getEntriesByType('navigation')[0];
+          const resources = performance.getEntriesByType('resource');
+          const tasks = window.__soridrawRepeatLongTasks || [];
+          const sorted = [...tasks].sort((a,b)=>a-b);
+          return {
+            domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
+            documentResponseMs:Math.round(nav?.responseEnd||0),
+            domAfterResponseMs:Math.round((nav?.domContentLoadedEventEnd||0)-
+              (nav?.responseEnd||0)),
+            assetCount:resources.filter(x=>x.name.startsWith(
+              location.origin+'/assets/')).length,
+            longTaskCount:tasks.length,
+            longestTaskMs:sorted.length?sorted.at(-1):0,
+            rootChars:document.querySelector('#root')?.innerText?.trim().length||0,
+          };
+        });
+        assert.ok(metrics.rootChars>15,config.name+' repeated root blank');
+        assert.deepEqual(errors,[],config.name+' repeated JS errors');
+        const row={round:round+1,device:config.name,rootReadyMs,...metrics};
+        repeated.push(row);
+        console.log('PREVIEW_APP_DESKTOP_REPEATED_COLD='+JSON.stringify(row));
+      } finally {
+        await context.close();
+      }
+    }
+  }
+  const median = numbers => [...numbers].sort((a,b)=>a-b)[Math.floor(numbers.length/2)];
+  const desktopSummary = Object.fromEntries(['pc1800','pc1440'].map(name => {
+    const selected=repeated.filter(r=>r.device===name);
+    assert.equal(selected.length,3,name+' missing repeated samples');
+    return [name,{
+      samples: selected.length,
+      medianDclMs:median(selected.map(x=>x.domContentLoadedMs)),
+      medianRootReadyMs:median(selected.map(x=>x.rootReadyMs)),
+      medianDocumentResponseMs:median(selected.map(x=>x.documentResponseMs)),
+      medianDomAfterResponseMs:median(selected.map(x=>x.domAfterResponseMs)),
+      maxLongTaskMs:Math.max(...selected.map(x=>x.longestTaskMs)),
+    }];
+  }));
+  const dclDeltaMs=desktopSummary.pc1800.medianDclMs-desktopSummary.pc1440.medianDclMs;
+  const rootDeltaMs=desktopSummary.pc1800.medianRootReadyMs-
+    desktopSummary.pc1440.medianRootReadyMs;
+  const desktopRepeatReport={...desktopSummary,dclDeltaMs,rootDeltaMs,
+    sustainedWideSlowdown:dclDeltaMs>750&&rootDeltaMs>750};
+  console.log('PREVIEW_APP_DESKTOP_REPEATED_SUMMARY='+JSON.stringify(desktopRepeatReport));
+  console.log('PREVIEW_APP_DESKTOP_COLD_REPEATED_3X_PER_WIDTH=PASS');
 } finally {
   await browser.close();
 }

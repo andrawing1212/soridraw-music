@@ -1734,6 +1734,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
           ? Math.floor(serverAcceptedAt192)
           : acknowledgedAt;
       const acceptedForSignal127: ExploreLikeAcceptedRow127[] = [];
+      // A revision-conflict/ineligible reply is server truth, not a local click.
+      // Explore rereads persistent membership when notified: hold these
+      // notifications until the old outbox and snapshot guard are committed.
+      const canonicalConflictUiAfterPersist127: ExploreLikeSyncEventDetail[] = [];
 
       for (const pending of batchEntries) {
         const result = resultByTrack.get(pending.trackId);
@@ -1779,7 +1783,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {
             delete snapshotPending127[pending.trackId];
-            dispatchLikeSync({
+            patchExploreLikedTrackMembership(uid, pending.trackId, result.liked);
+            canonicalConflictUiAfterPersist127.push({
               uid,
               trackId: pending.trackId,
               ownerUid: pending.ownerUid,
@@ -1817,6 +1822,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
       persistLikeDisplayLocks(uid, displayLocks);
       writeSnapshotPending127(uid, snapshotPending127);
       persistLikeOutbox(uid, latest);
+      // A conflict response may differ from the old optimistic heart. UI must
+      // observe the removed outbox and the canonical membership before paint.
+      canonicalConflictUiAfterPersist127.forEach(dispatchLikeSync);
       succeeded = true;
       // Cross-device notification is now tied to the accepted account state.
       // Notification failure must NEVER replay a successful D1 queue intake.

@@ -20,6 +20,7 @@ assert.equal(cap,256);assert.equal(ttl,24*60*60_000);
 const store=new Map();
 const bytes=obj=>Buffer.byteLength(JSON.stringify(obj??null),'utf8');
 let billedReadEnvelope=0,writeEnvelope=0,commits=0,attempts=0;
+const serializedWrites=[];
 const db={ref:path=>({transaction:async updater=>{
   assert.equal(path,'privateLikeSync420/cost-user');
   const original=store.get(path)??null;
@@ -29,6 +30,7 @@ const db={ref:path=>({transaction:async updater=>{
   if(proposed===undefined)return{committed:false,snapshot:{val:()=>original}};
   store.set(path,structuredClone(proposed));commits++;
   writeEnvelope+=bytes(proposed);
+  serializedWrites.push(bytes(proposed));
   return{committed:true,snapshot:{val:()=>proposed}};
 }})};
 const uid='cost-user',base=1_000_000_000;
@@ -42,7 +44,7 @@ for(let i=1;i<=260;i++){
   const root=store.get('privateLikeSync420/'+uid);
   assert(root.display.results.length<=50,'UI event buffer cannot grow');
   assert(Object.keys(root.approvalJournal420||{}).length<=cap,'journal cannot grow');
-  if([1,50,100,256,260].includes(i))sizes.set(i,bytes(root));
+  if([1,5,20,50,100,256,260].includes(i))sizes.set(i,bytes(root));
 }
 const root=store.get('privateLikeSync420/'+uid);
 assert.equal(Object.keys(root.approvalJournal420).length,256);
@@ -63,9 +65,15 @@ assert.equal(evicted.allowed,true);assert.equal(evicted.duplicate,false,
 assert.equal(commits,beforeDuplicate+1);
 const s=Object.fromEntries(sizes);
 const kB=n=>(n/1024).toFixed(1);
-const average=writeEnvelope/commits;
+// Distinct workload envelopes: new/low activity is not the same as a
+// saturated 256-receipt account. Never advertise this as observed billing.
 const monthlyGiB=(dailyUsers,actionsPerUser)=>(
-  average*dailyUsers*actionsPerUser*30/(1024**3)
+  serializedWrites.slice(0,actionsPerUser).reduce((a,b)=>a+b,0) *
+  dailyUsers * 30/(1024**3)
+).toFixed(2);
+const saturatedGiB=(dailyUsers,actionsPerDay)=>(
+  (serializedWrites.slice(200,260).reduce((a,b)=>a+b,0)/60) *
+  dailyUsers * actionsPerDay * 30/(1024**3)
 ).toFixed(2);
 console.log('STAGE420_JOURNAL_SERIALIZED_BYTES_BY_COUNT='+JSON.stringify(s));
 console.log('STAGE420_JOURNAL_AT_256_KIB='+kB(s[256]));
@@ -74,8 +82,12 @@ console.log('STAGE420_ROOT_TRANSACTION_WRITE_ENVELOPE_BYTES='+writeEnvelope);
 console.log('STAGE420_APPROVAL_JOURNAL_MAX_256=PASS');
 console.log('STAGE420_JOURNAL_RETAINED_REPLAY_W0_AND_MISMATCH_DENIED=PASS');
 console.log('STAGE420_257TH_OLD_REPLAY_AFTER_EVICTION=RISK_CONFIRMED');
-console.log('STAGE420_100K_DAU_5_MUTATIONS_PER_DAY_WRITE_GIB_MONTH_ESTIMATE='+
+console.log('STAGE420_100K_DAU_5_DAILY_NEW_ACCOUNT_ACTIONS_GIB_MONTH_MODEL='+
   monthlyGiB(100000,5));
+console.log('STAGE420_100K_DAU_20_DAILY_NEW_ACCOUNT_ACTIONS_GIB_MONTH_MODEL='+
+  monthlyGiB(100000,20));
+console.log('STAGE420_100K_DAU_5_DAILY_SATURATED_ACCOUNT_ACTIONS_GIB_MONTH_MODEL='+
+  saturatedGiB(100000,5));
 console.log('STAGE420_ESTIMATE_IS_NOT_LIVE_FIREBASE_BILLING=true');
 console.log('STAGE420_CUTOVER_RELEASE_GATE=HOLD');
 assert.match(readFileSync('src/services/exploreLikeService.ts','utf8'),

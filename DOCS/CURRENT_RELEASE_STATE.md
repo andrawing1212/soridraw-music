@@ -1,3 +1,14 @@
+## 0S71. Stage416 ② 개인 좋아요 5~10초 — 실제 코드 경로 확인 및 Codex 구현 계약 기록 (2026-10-10 KST)
+
+- **현재 결과:** 코드·RTDB 규칙 **읽기 전용** 확인 완료, Codex 구현 명령을 `DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`에 신규 기록. preview 문서 commit `7df37c49c46177cbf0dcf21a868727419a3b8a57`. **② 실제 제품 구현 전**이며 전체 진행 **0/5 완료**.
+- **확인된 지연 경로:** `src/services/exploreLikeService.ts` 현재 5초 idle batch → 서버 ACK/캐시 정착 → `publishConfirmedLikeSignal127`가 기존 `userSync/$uid/exploreLike` 알림. 같은 계정 개인 신호 5~10초 목표는 서버 저장과 알림의 분리가 필요. 신규 개인 preview를 기존 accepted RTDB 노드에 섞으면 app391/구버전에서 원본 확정으로 오해할 위험.
+- **Codex 범위 고정:** 기존 확정 신호/앱391 정상화/신규곡 최초 좋아요/개인 local-first/내 좋아요/팔로우/공개숫자 보호. 별도 UID-private tentative changed-track 신호+검증된 순서/수신 보존/RTDB additive rules 가능성 검토; 클릭 외 서버 작업 0, 수신 추가 D1/Firestore R/W0. 이미 확정된 ③ 5분 저장과 ④ 5분 공개 공동집계/Master 각각 1·3·5·10·20분은 이번 구현에 섞지 않는다.
+- **확인해야 할 충돌:** `ExplorePage`의 원격 UI 수신은 effective membership 확인 후 화면 반영하며, `normalizeExploreLikeDisplayPair129`는 하트가 차면 표시 likeCount 최소 1을 강제. Stage② 개인 잠정 하트를 서버 공개 숫자로 조기 발표하는 회귀가 없는지 반드시 테스트한다.
+- **보호/배포:** 사용자 app391 실사용 좋아요 버튼 정상, shared RTDB optional `canonicalSettled417` 규칙 보호. ① 개인 소셜 스냅샷 반복 읽기 사용자 보고는 추후 재검사 **보류**, PASS 아님. Stage② 구현/TS/Build/회귀/Work 독립 감사·실기기 5~10초 검증 **아직 미실행**. Firebase PREVIEW app391 / Worker / Functions / Rules / D1/R2 원본 / main/TEST/PRODUCTION **비변경**, 코드 수정·릴리스 없음.
+- **다음 작업:** Codex High가 위 전용 명령서만 범위로 source 구현 → QA 고정 SHA → Work read-only 독립 감사 → 필요 환경 additive 규칙의 3환경 호환/실제 배포 사전검증 → ChatGPT PREVIEW 배포 판단 → 사용자 PC↔모바일 실측 PASS 후에만 ③ 진행.
+
+---
+
 ## 0S70. 사용자 확정 최종 좋아요 구조 — Master 두 타이머 독립 관리 (2026-10-10 KST)
 
 - **사용자가 최종 목표 재확인:** 개인 좋아요 클릭 → 자기 기기 하트 즉시 / 같은 계정 PC↔모바일 **5~10초 이내** 개인 신호 → **마지막 클릭 후 기본 5분** 개인 최종상태만 원본 서버 접수 → 이 접수에서 서버 최초 공동 창 개시 시 **추가 기본 5분 뒤** 곡별 공개 숫자 발표. 10:00 클릭→10:05 개인 접수→10:10 공개 발표 예시는 다른 사용자가 먼저 시작한 공동 창이 없고 조기 전송도 없는 조건. 이전 공동 창이 존재하면 더 빨리 발표할 수 있음. 타인에게 내 private 하트는 보이지 않음.

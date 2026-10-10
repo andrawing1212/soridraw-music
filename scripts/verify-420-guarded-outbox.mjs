@@ -27,6 +27,10 @@ assert.equal(result(sent,deny,null).action,'await-proof','never infer truth from
 assert.equal(result(sent,deny,{...proof,uid:'another'}).action,'await-proof');
 assert.equal(result(sent,deny,{...proof,trackId:'other'}).action,'await-proof');
 assert.equal(result(sent,deny,{...proof,version:-1}).action,'await-proof');
+assert.equal(result(sent,deny,{...proof,source:'untrusted-public-count'}).action,'await-proof',
+  'public counters are not personal proof');
+assert.equal(result(sent,{...permit,ok:false},proof).action,'await-reply',
+  'invalid callable replies cannot approve canonical batches');
 assert.equal(result(sent,deny,proof).action,'rollback');
 assert.equal(result(sent,deny,proof).liked,false);
 for (const mutation of [

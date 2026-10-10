@@ -6567,10 +6567,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     return songMatchesMusicNoteSearch(song) && songMatchesMusicNoteFilters(song);
   });
 
+  // One pass: preserve the first song with each canonical duplicate key.
+  // Avoid a nested list.findIndex for every shared-note card as the catalog
+  // grows. This is local-only; it does not read/write Firebase or change sort.
+  const seenSharedNoteDuplicateKeys = new Set<string>();
   const dedupedFilteredFavorites = musicNoteViewMode === 'sharedNote' && !isMusicNoteSharedView
-    ? filteredFavoriteBase.filter((song, index, list) => {
+    ? filteredFavoriteBase.filter((song) => {
         const key = getMusicNoteDuplicateKey(song);
-        return list.findIndex(item => getMusicNoteDuplicateKey(item) === key) === index;
+        if (seenSharedNoteDuplicateKeys.has(key)) return false;
+        seenSharedNoteDuplicateKeys.add(key);
+        return true;
       })
     : filteredFavoriteBase;
 

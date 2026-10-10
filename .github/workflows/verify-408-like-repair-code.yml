@@ -28,6 +28,7 @@ on:
       - 'scripts/verify-420-private-rules-candidate.mjs'
       - 'src/App.tsx'
       - 'src/pages/FavoritesPage.tsx'
+      - 'scripts/verify-music-note-shared-dedup-linear.mjs'
       - 'src/pages/SunoLibraryPage.tsx'
       - 'scripts/verify-414-pending-only-lifecycle.mjs'
       - 'scripts/verify-413-like-exit-flush.mjs'
@@ -118,6 +119,8 @@ jobs:
         run: |
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
+      - name: Verify large Music Note shared-folder first-match semantics and cost
+        run: node scripts/verify-music-note-shared-dedup-linear.mjs
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior

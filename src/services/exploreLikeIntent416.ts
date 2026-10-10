@@ -5,6 +5,7 @@ import { realtimeDb } from '../firebase';
 // canonical membership, public counts, the accepted 127 signal or a Worker queue.
 const INTENT_MAX_416 = 50;
 const INTENT_TTL_MS_416 = 60 * 60_000;
+const INTENT_LIVE_DELIVERY_MAX_MS_416 = 30_000;
 const INTENT_SEEN_416 = 'soridraw:explore-like-intent-seen:416';
 
 type IntentStatus416 = 'pending' | 'accepted' | 'rejected';
@@ -166,7 +167,8 @@ export const subscribeExploreLikeIntent416 = (
       // Retained events from an old session are not canonical evidence.
       // Device clocks are NOT used to order concurrent clicks; only the
       // RTDB transaction version orders the active online private channel.
-      if (Date.now() - row.at > INTENT_TTL_MS_416 || row.at > Date.now() + INTENT_TTL_MS_416) continue;
+      if (Date.now() - row.at > INTENT_LIVE_DELIVERY_MAX_MS_416 ||
+          row.at > Date.now() + INTENT_LIVE_DELIVERY_MAX_MS_416) continue;
       if (existing?.operationId === row.operationId && existing.version === row.version) continue;
       entries[row.trackId] = {
         liked: row.liked,

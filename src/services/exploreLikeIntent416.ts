@@ -88,6 +88,15 @@ const setSeenVersion416 = (uid: string, version: number) => {
   writeText416(storeKey416(INTENT_SEEN_416, uid), String(next));
 };
 
+// My Likes derives candidates from the same tentative per-track truth. This
+// is a bounded local map: never a server lookup or a whole-liked-list scan.
+export const listExploreLikeIntents416 = (uid: string): Record<string, boolean> =>
+  Object.fromEntries(
+    Object.entries(readLocal416(uid))
+      .filter(([, row]) => Date.now() - row.at <= INTENT_TTL_MS_416)
+      .map(([trackId, row]) => [trackId, row.liked]),
+  );
+
 export const readExploreLikeIntent416 = (uid: string, trackId: string): boolean | undefined => {
   const intent = readLocal416(uid)[trackId];
   if (!intent || Date.now() - intent.at > INTENT_TTL_MS_416) return undefined;

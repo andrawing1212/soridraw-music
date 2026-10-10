@@ -1,3 +1,13 @@
+## CURRENT — Stage416 ② PREVIEW app392 배포 성공, 사용자 실기기 확인 전 HOLD (2026-10-10 KST)
+
+- **실행 주체:** 사용자 최신 지시로 Codex 금지, ChatGPT 직접 수정·QA·PREVIEW 배포. 본 파일명 `NEXT_CODEX_TASK`는 역사적 유지 경로이며 실제 코드 작업을 Codex에게 다시 위임하지 말 것.
+- **배포 확정:** Preview Hosting `https://preview.soridraw.com/` **app392**. Exact release SHA `dc1b96d05e4abb9a673f0b5ac508237afd0573d1`, [Run 38021358243](https://github.com/andrawing1212/soridraw-music/actions/runs/38021358243) SUCCESS. app392 QA [Run 38021216836](https://github.com/andrawing1212/soridraw-music/actions/runs/38021216836) PASS, Fast QA [38021097439](https://github.com/andrawing1212/soridraw-music/actions/runs/38021097439) PASS. TypeScript/Build/follow regression PASS, RTDB rules additive-private-only PRE/POST exact-match PASS, target address exact build PASS, TEST/PRODUCTION Hosting unchanged.
+- **사용자 실기기 ② 확인 대기:** 같은 계정 PC/모바일 앱392에서 같은 Explore 곡을 동시에 보며 PC like→모바일 5~10초 내 자동, 모바일 unlike→PC 5~10초 자동, 반대 방향도 검증. 10초 목표 미달, 하트 빈 상태 전환 실패/재진입 필요, 다른 계정 공개 숫자 오염, 원본 캐시 덮어쓰기라면 **② FAIL**로 기록하고 원인 특정한 범위만 고친다. 테스트 전 ② PASS 표시 금지.
+- **별도 남은 단계:** ① 반복 개인 소셜 스냅샷 읽기 사용자 요청으로 추후 재검사 보류; ③ 개인 마지막 클릭 기본5분 canonical 서버 저장+Master 선택 1/3/5/10/20분; ④ 서버 접수 후 공개 공동집계 기본5분+Master 선택 1/3/5/10/20분 (각 다음 새 대기/공동창부터); ⑤ 독립/전체 비용/실기기 최종검증. 전체 완료 0/5, ③·④ 실제 코드 미구현.
+- **중요 운영 고정:** Cloudflare Worker/D1/R2/Functions/Firestore/user source 변경 0, TEST/PRODUCTION Hosting·Worker 미배포. 공유 Firebase RTDB 규칙에 기존 권한과 동일한 별도 UID-private optional node 1개 추가는 이미 배포 완료. 같은 규칙을 중복 배포하거나 앱391로 원인 없이 되돌리지 않는다. 별도 Follow-only Candidate Check 자동 Workflow 실패는 이번 릴리스의 377/378/379 팔로우 회귀 PASS와 구분해 추후 독립 정리. 테스트 앱/정식 앱 승격 금지.
+
+---
+
 ## CURRENT — Stage416 ② ChatGPT 직접 구현: app392 배포 전 최종 QA/실사용 검증 (2026-10-10 KST)
 
 - **Codex 실행 금지 / ChatGPT 직접 작업**(사용자 최신 지시). 제품 소스 후보와 검증 진척도는 `DOCS/CURRENT_RELEASE_STATE.md 0S73`을 따른다.

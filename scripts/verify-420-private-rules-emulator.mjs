@@ -11,17 +11,18 @@ import { buildStage420PrivateRulesCandidate } from './build-420-private-rules-ca
 // account, credentials, shared user data, or deployment are ever touched.
 const source = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const candidate = buildStage420PrivateRulesCandidate(source);
-const environment = await initializeTestEnvironment({
+const opts = (rules) => ({
   projectId: 'demo-soridraw-stage420-rules',
   database: {
     host: '127.0.0.1',
     port: 9000,
-    rules: JSON.stringify(source),
+    rules: JSON.stringify(rules),
   },
 });
-const owner = environment.authenticatedContext('uid-A').database();
-const other = environment.authenticatedContext('uid-B').database();
-const noUser = environment.unauthenticatedContext().database();
+let environment = await initializeTestEnvironment(opts(source));
+let owner = environment.authenticatedContext('uid-A').database();
+let other = environment.authenticatedContext('uid-B').database();
+let noUser = environment.unauthenticatedContext().database();
 const path = name => owner.ref('userSync/uid-A/' + name);
 const expectOldGood = async () => {
   // Existing userSync write grant must support all current six channels,
@@ -42,7 +43,14 @@ try {
   await expectOldGood();
   console.log('STAGE420_EMULATOR_CURRENT_416_DIRECT_WRITE_BYPASS=REPRODUCED');
 
-  await environment.loadDatabaseRules({ rules: JSON.stringify(candidate) });
+  // The official test SDK does not expose loadDatabaseRules on TestEnvironment.
+  // Close the old SDK and initialize a fresh isolated context with candidate
+  // rules against the SAME local emulator. Neither uses live Firebase.
+  await environment.cleanup();
+  environment = await initializeTestEnvironment(opts(candidate));
+  owner = environment.authenticatedContext('uid-A').database();
+  other = environment.authenticatedContext('uid-B').database();
+  noUser = environment.unauthenticatedContext().database();
   await expectOldGood();
   await assertFails(path('exploreLikeIntent416').remove());
   await assertFails(path('exploreLikeIntent416').set({

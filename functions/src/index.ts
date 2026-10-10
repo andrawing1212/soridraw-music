@@ -3997,17 +3997,21 @@ export const masterUnlockExploreLike420 = onCall(
     const targetRef = admin.database().ref(`privateLikeSync420/${targetUid}`);
     const outcome = await targetRef.transaction((raw) => {
       const previous = raw && typeof raw === "object" ? raw as Record<string, any> : {};
-      const rate = previous.rate && typeof previous.rate === "object" ? previous.rate : {};
+      const display = previous.display && typeof previous.display === "object" ? previous.display : {};
+      const rate = display.rate && typeof display.rate === "object" ? display.rate : {};
       if (Number(rate.lockedUntilMs || 0) <= now) return;
       const history = Array.isArray(previous.adminUnlockAudit) ? previous.adminUnlockAudit : [];
       return {
         ...previous,
-        rate: {
-          windowStartMs: 0,
-          acceptedInWindow: 0,
-          previousWindowStartMs: 0,
-          previousWindowReachedLimit: false,
-          lockedUntilMs: 0,
+        display: {
+          ...display,
+          rate: {
+            windowStartMs: 0,
+            acceptedInWindow: 0,
+            previousWindowStartMs: 0,
+            previousWindowReachedLimit: false,
+            lockedUntilMs: 0,
+          },
         },
         adminUnlockAudit: [...history.slice(-9), {
           actorUid: requesterUid,
@@ -4034,7 +4038,7 @@ export const masterGetExploreLikeLimit420 = onCall(
     if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid)) {
       throw new HttpsError("invalid-argument", "조회할 계정이 올바르지 않습니다.");
     }
-    const snapshot = await admin.database().ref(`privateLikeSync420/${targetUid}/rate`).get();
+    const snapshot = await admin.database().ref(`privateLikeSync420/${targetUid}/display/rate`).get();
     const raw = snapshot.val() as Record<string, unknown> | null;
     const lockedUntilMs = Number(raw?.lockedUntilMs || 0);
     return {

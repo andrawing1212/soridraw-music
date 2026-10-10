@@ -14,6 +14,8 @@ on:
       - 'functions/src/exploreLikeAbuseGate420.ts'
       - 'src/services/exploreLikeGuardedTransport420.ts'
       - 'scripts/verify-420-guarded-transport.mjs'
+      - 'functions/src/exploreLikeAbuseSettings420.ts'
+      - 'scripts/verify-420-master-policy.mjs'
       - 'functions/src/index.ts'
       - 'scripts/verify-420-server-like-abuse-gate.mjs'
       - 'scripts/build-420-private-rules-candidate.mjs'

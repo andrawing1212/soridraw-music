@@ -1,3 +1,12 @@
+## CURRENT — Stage420 guarded outbox + callable 후보 한 묶음 완료, 실제 앱 연결/보안 전환 HOLD (2026-10-10)
+
+- ChatGPT 직접 작업, Codex 재위임 금지. 이번 기준은 `DOCS/CURRENT_RELEASE_STATE.md` **0S86** 및 정확한 `preview` HEAD. 기존 app392 즉시 하트 사용자 실사용 PASS를 절대 훼손하지 않는다.
+- **이번 묶음 완료:** `src/services/exploreLikeGuardedOutbox420.ts`에 승인 전 원본 저장 금지·최신 클릭/로그아웃/오래된 응답 보호·신뢰할 수 있는 개인 원본 확인 전 롤백 보류·저장 후 UI 통지 모델 추가. `src/services/exploreLikeGuardedTransport420.ts`의 신규 submit candidate가 서버 callable → outbox 판정 연결, network unknown 시 직접 RTDB fallback 없음. 신규 outbox verifier, 기존 transport verifier 확장, QA like 그룹에 추가. 5개 파일. exact GitHub-source 독립 V8 16 시나리오 PASS, 전체 GitHub QA/TS/Build 미실행.
+- **중요 미완료:** 기존 `src/services/exploreLikeService.ts` 영구 outbox 및 실제 앱392 사용자 실행 흐름에 *아직 연결하지 않음*. shared RTDB `userSync/$uid/exploreLikeIntent416` 직접 접근, 구형 열린 탭, Cloudflare canonical batch 2시간 잠금 미강제, 서버/개인 확정 신호 정합화, 실제 지역별 p95·10만 DAU 비용 미검증. **PREVIEW/TEST/PRODUCTION 배포 금지**. Master UI와 기존 정상 기능 무변경.
+- **다음 과제는 여러 조각으로 나누지 말고 안전한 하나의 통합 구현+검증:** stage420 candidate를 127/390 persist-outbox/변경분 private receiver/accepted canonical settlement에 연결하고, 승인 전 Worker batch flush 불가·거절 시 최신 개인 상태 복구·구형 app392/TEST/PRODUCTION 접근 보장·RTDB Rules 전환·canonical Worker 120min lock을 함께 독립 검사. 실패 시 old-client 호환/비용/지연 blocker를 구체적으로 보고하고 릴리스 HOLD. `DOCS/STAGE420_LIKE_ABUSE_COST_LATENCY_GATE.md` 필독. 사용자는 중간 진척도 및 완료 후 1~2줄 변경 요약을 원함.
+
+---
+
 ## CURRENT — Stage420 2시간 좋아요 방어: 서버+Master 소스 준비, 실사용 cutover/비용 검증 먼저 (2026-10-10)
 
 - **최신 사용자 지시:** Codex 금지, ChatGPT 직접 계속 진행. 사용자 확정 값 `30회/분 경고, 40회/분 차단, 2분 연속 한도 도달 → 2시간 정지, 자동해제, Master 조회·조기해제·횟수 기준조정`.

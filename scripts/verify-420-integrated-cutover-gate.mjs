@@ -15,8 +15,8 @@ assert.match(service, /row\.guardStatus420 === 'awaiting' \|\| row\.guardStatus4
   'reload must preserve exact private authorization state');
 assert.match(service, /guardCanonicalLiked420\?: boolean/,
   'rollback proof must be captured before optimistic click');
-assert.match(service, /const authoritativeBeforeClick420 = existing\?\.guardCanonicalLiked420/,
-  'do not infer denied rollback from post-click cache');
+assert.match(service, /const authoritativeBeforeClick420 = !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE[\s\S]*?existing\?\.guardCanonicalLiked420/,
+  'normal mode avoids extra cache reads; guarded proof comes from persisted pre-click membership');
 assert.match(service, /const existing = outbox\[normalizedTrackId\]/);
 assert.match(service, /const authoritativeBeforeClick420 =[\s\S]*?cache\.has\(normalizedTrackId\)/,
   'canonical evidence only if cached membership verified before clicking');

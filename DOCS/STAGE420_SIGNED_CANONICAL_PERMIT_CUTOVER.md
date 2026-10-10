@@ -35,3 +35,10 @@
 1. 신규 420 cutover 상태에서 15분 만료 증표 재발급·오프라인 재실행·다중기기 승인/거절 회복과 Worker 171 idempotent W0 실제 고정 테스트. 기존 app392 동작을 변경하지 않는 별도 테스트 계정으로 검증.
 2. 공유 RTDB Rules 구형 416 폐쇄 전후의 PC·모바일·TEST/PROD 호환 검증과 사용자 리프레시/승격 동의 구간을 결정한다. 풀 릴리스 전 구형 앱 자동 강제 차단/원본 데이터 덮어쓰기 금지.
 3. Master 잠금·조기해제와 canonical 직접 REST 우회검사, Firebase Emulator + Worker dry-run, 10만 DAU 월 총 비용·한국 p95 통과 후에만 exact Preview cutover 제안. 사용자의 프리뷰 배포 승인 없이 배포하지 않는다.
+
+## 추가 독립 증거 — 2026-10-10 51개 기록 뒤 증표 재발급 충돌
+
+- 검증기: scripts/verify-420-permit-expiry-replay.mjs, [Fast QA 38041454502](https://github.com/andrawing1212/soridraw-music/actions/runs/38041454502) PASS. 실제 Functions Admin rate 게이트/issuer TS와 Worker 426 verifier를 메모리 DB에 연결한 검증.
+- Worker는 만료된 15분 인증서로 canonical DB 쓰기 전에 정확히 거절. 재발급된 원래 opId의 원래 승인 신호가 최근 50건 안에 있으면 재승인 중복 처리 RTDB write 0.
+- 다만 51개의 개별 명령 이후 최초 ID가 최근 50건에서 빠지면 duplicate 식별에 실패하여 다음 재전송이 새 click·새 RTDB write로 확정됨. 따라서 **서버측 동일 OperationId 재시도는 항상 W0라는 보장은 아직 FAIL**, 앱의 오프라인 durable outbox와 충돌 가능.
+- 안전 조건: 최신 50건 UI signal buffer와 장기 승인·canonical 중복 방지의 책임을 분리하고, 15분 만료/권한 잠금/단말 오프라인 상태를 명시 처리. 171 canonical receipt의 재전송 중복 처리까지 독립 감사. 이 문제를 근거 없이 50→무제한 확장하여 매 클릭마다 전체 RTDB 트랜잭션 payload가 커지게 하거나, 원본 D1을 전체 재조회하는 해결 금지. **고비용/구형 호환성 검증 전 운영 Cutover HOLD 계속.**

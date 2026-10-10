@@ -1,3 +1,11 @@
+## CURRENT — Stage420 오프라인 재전송 중복승인 방지 설계/구현 전 안전 게이트 (2026-10-10)
+
+- 출발 preview 6b2eacc5d8fb1c9b25c80c811bba022beb1967e6, [Fast QA Run 38041454502](https://github.com/andrawing1212/soridraw-music/actions/runs/38041454502) SUCCESS, 그러나 51개 기록 뒤 같은 opId 오래된 retry가 duplicate=false, RTDB W+1 되는 문제를 독립 증명. 기존 좋아요 라이브 앱395 정상 동작, Stage420 후보와 426 route는 컴파일 OFF, Functions Secret 없음.
+- **다음 Codex 구현 범위(High, 신규 후보/격리 테스트만):** 기존 DISPLAY 최근 50개 이벤트 버퍼를 인증·중복승인 장부로 오용하지 않는 설계를 선택. 15분 permit 만료 뒤 동일 요청은 기존 승인 증거가 확인되는 경우에만 서명된 permit 갱신, **신규 클릭 quota/RTDB 이벤트/사용자 캐시 write 0**. 만료 증명/UID+track+state+opId mismatch, 사용자가 2시간 LOCK 상태, 51개 이력 밀림, 오프라인 24h·키 교체, PC↔모바일 중복, 171 canonical ACK 선행/지연 모든 경우 안전 처리. 원본 기존 app395 경로·프로덕션 Rules/Worker/Functions·DB 절대 수정/배포하지 않고 source-only isolated 모듈·regression 먼저. 모든 재전송은 원본 D1 이미 수락한 ID면 W0, 실패면 outbox 안전 보존. 설계가 10만 사용자 비용/기존 구형 앱 호환성을 충족하지 못하면 컷오버 HOLD 보고.
+- **금지:** 느린 네트워크 재전송을 새 operationId로 재발급, 무조건 중복 요청 허용, 계정별 50건 전체 스캔을 D1/Firestore로 옮기는 임시 방편, 기존 416 신호/좋아요/팔로우 기능 축소, 공유 Rules 즉시 변경, TEST/PROD 배포, 원본 데이터 대량작업.
+- Stage416 1/5=20% (운영 2시간 잠금 미완), 속도 3/5=60%, 현재 PC만 실사용 체감 정상 의견/실기기 검증 3/4=75%, 앱395 배포 unchanged. 명시 TEST/PROD 승인 전 승격 금지.
+
+---
 ## CURRENT — Stage420 source-only 만료 증표·51회 오프라인 재전송 동작 감사 (2026-10-10)
 
 - app395 PREVIEW 실사용 PC 사용자 확인 정상. 추가 splitter/CSS 변경 금지. 속도 개선의 모바일/태블릿 검증은 미완.

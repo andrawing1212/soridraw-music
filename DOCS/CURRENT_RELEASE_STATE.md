@@ -1,3 +1,12 @@
+## 0S107. Stage420 15분 승인만료/50건 기록 밀림 위험 독립 확정 — CUTOVER HOLD (2026-10-10)
+
+- [GitHub Fast QA 38041454502](https://github.com/andrawing1212/soridraw-music/actions/runs/38041454502) SUCCESS. 기존 Functions 발급기 TS + Admin 게이트 TS + Worker WebCrypto 426 검증기 원본을 in-memory RTDB로 직접 실행하는 신규 scripts/verify-420-permit-expiry-replay.mjs를 QA like 그룹에 추가. 클라이언트/서버 실제 사용자 데이터 접속 0.
+- **확인된 PASS:** 15분 만료된 이전 permit은 Worker canonical callback 호출 0으로 거절됨. 최근 50건 안의 같은 opId에 대해 15분 후 재승인 요청은 duplicate=true이고 Admin RTDB 추가 write 0, 새 증표 재발급 가능.
+- **확인된 FAIL/BLOCKER:** 같은 UID의 서로 다른 51개 허용 요청을 두 분 단위 quota 안에 나누면 결과 버퍼에서 첫 opId가 밀려나며, 15분 뒤 해당 opId 재시도는 duplicate=false, Admin RTDB write +1 및 quota 신규 소모. 최초 성공한 실제 좋아요가 여러 번 서버에서 재처리될 수 있는 운용 위험. Fast QA의 SUCCESS는 위험 감지 테스트 자체가 성공한 것일 뿐 Stage420 배포 합격이 아니다.
+- **수정 기준:** 로컬 승인 outbox와 구형 app395 정상 좋아요 보존. 승인 뒤 재전송에는 표시용 최근 50건과 **별개로 정확히 같은 UID+trackId+liked+operationId의 원본 승인 증거**를 확인하는 복구가 필요. 이미 승인된 동일 명령을 새 클릭으로 세어 quota/버전/RTDB 신호를 추가 작성하면 안 됨. 만료/오프라인/키 회전/잠금 중에는 서버가 재승인 근거를 확인할 수 없으면 영구 outbox 보존+안전한 reconciliation, 신규 조작으로 자동 전환 금지. 최종 원격 D1 receipt W0와 Functions/RTDB 비용까지 검증.
+- 구형 416 direct RTDB와 무서명 Worker 경로를 즉시 폐쇄하는 것은 TEST/PROD와 공유 원본 호환성상 금지. Stage420 client/server/canonical/RULES 실제 cutover OFF, 보안 LIVE FAIL, TEST/PRODUCTION 승격 불가. Stage416 1/5=20%, 속도개선 3/5=60%, 현재 검증 3/4=75%; app395 PREVIEW 그대로.
+
+---
 ## 0S106. PC 실사용 이상 없음 보고 반영 + Stage420 만료된 승인 증표와 50건 버퍼의 오프라인 재전송 위험 검증 (2026-10-10)
 
 - 사용자 app395 PC 검사 피드백: "이상없어보여". PC 사용 범위에서 재현된 속도 오류는 없으며 모바일·태블릿 실제 기기/계측 p95·AI 실제 실행은 미검증. 분할 엔진·정상 CSS 추가 변경 없음.

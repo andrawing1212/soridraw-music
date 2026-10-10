@@ -1,3 +1,16 @@
+## 0S73. Stage416 ② ChatGPT 직접 구현 · 추가 안전보강 · app392 릴리스 전 검사 (2026-10-10 KST)
+
+- **사용자 지시:** Codex에 다시 맡기지 말고 ChatGPT 직접 개발. 진행 중 ①~⑤ 고정 진척도와 성공/실패·다음 작업 계속 보고, 사용자 PC↔모바일 테스트가 실제 필요할 때만 별도 요청.
+- **고정 최종 목표:** ① 반복 '개인 소셜 스냅샷' 조회 사용자 요청 보류(FAIL 관찰/미해결); ② 로컬 즉시+동일 계정 PC↔모바일 하트 5~10초; ③ 개인 최종 클릭 후 기본 5분 canonical 서버 접수+Master 1/3/5/10/20분 독립 관리; ④ 서버 접수 후 변경곡 공개 공동집계 기본 5분+Master 1/3/5/10/20분 독립 관리(새 창부터 적용); ⑤ 최종 Work/실기기/전체비용 검증. **전체 완료 0/5**. app391 사용자 확인 정상 좋아요 기능 보호, Stage③/④ 제품 미구현.
+- **preview 제품 소스 후보:** `src/services/exploreLikeIntent416.ts` 신규, `src/services/exploreLikeService.ts`, `src/pages/ExplorePage.tsx`, `database.rules.json`, `scripts/verify-416-private-like-intent.mjs`, QA engine·기존 127/180/197 fixtures, `scripts/verify-418-rtdb-rules-delta.mjs`. ②는 별도 UID-private `userSync/$uid/exploreLikeIntent416` 잠정 신호로 구현. 기존 127 확정 신호 `exploreLike`, 5초 canonical 저장, Worker/D1·공개 숫자/팔로우/Music Note/UI 변경 없음. 공유 RTDB source Rules는 기존 노드/ACL exact 동일, 새로운 private schema 한 노드만 추가.
+- **핵심 개선:** RTDB transaction version으로 같은 계정 연속 클릭 순서, operationId 기반 정착/거절 관리. 신규 tentative intent가 기존 서버 확정 신호를 오인하지 않음. 같은 boolean의 오래된 ACK도 새 operation hint를 제거하지 못함. 승인된 기록은 다음 클릭 신호에서 재전송하지 않아 RTDB payload 증가 완화. 앱 재실행·계정 전환 시 미확정 원격 하트를 영속 캐시로 복원하지 않음. 30초 초과 늦은 알림은 새 실시간 클릭으로 처리하지 않음. 내 좋아요 목록은 하트와 단일 effective membership을 사용. 수신은 DB 원본 전체조회 없는 로컬 changed-ID 경로.
+- **실제 검사:** GitHub Fast QA [38021097439](https://github.com/andrawing1212/soridraw-music/actions/runs/38021097439) SUCCESS, 408 정밀 [38021100838](https://github.com/andrawing1212/soridraw-music/actions/runs/38021100838) SUCCESS (TypeScript/Build/127/175/180/178/191/192/197/390/417, shared RTDB Rules read-only preflight). 현재 앱 버전 `public/app-version.json=392`로 준비한 **app392 exact SHA `fd74739064ede1dfae9d77ab8b77b2ad084026ff`의 408 [38021216836](https://github.com/andrawing1212/soridraw-music/actions/runs/38021216836)은 진행 중이며 완료 PASS 확인 전 배포 금지**.
+- **현재 실제 서비스:** Firebase PREVIEW Hosting **app391**(Run 38014558975) 유지. app392 Hosting **아직 미배포**. 새 RTDB source 규칙도 아직 미배포; shared RTDB 실제 Rules는 app391 정상 상태 보호. Firestore/D1/R2/Functions/Worker, 사용자 원본 데이터·main/TEST/PRODUCTION Hosting/Worker 비변경.
+- **남은 위험/게이트:** RTDB 신규 private 경로의 실제 Firebase rules runtime validation, 최초 Preview PC↔mobile 5~10초/양방향 like-unlike/순서경쟁/오프라인 복구, Cloudflare+RTDB 총실청구 비용, 10만 명 규모 장기비용 **미측정**, 독립 Work 검증 **미실행**. 기존 `Follow-only Candidate Check` 자동 검사 실패 기록은 이번 단계 Worker/Firebase/backend 코드 실제 변경과 구분; 릴리스 전 기존 팔로우 사용자 기능 필수 PASS.
+- **다음 작업:** app392 최종 408 PASS 확인 → 코드/규칙 최소 변경 감사 → 릴리스 trigger 정확 고정 및 shared RTDB additive-only preflight → Firebase PREVIEW Hosting app392 실제 주소 빌드 확인(안전할 때만) → 사용자에게 정확한 PC/모바일 테스트 요청 → 실사용 5~10초 PASS 전에는 ② 또는 전체 완료 1/5 선언 금지. TEST/PRODUCTION 승격 별도 명시 승인.
+
+---
+
 ## 0S72. Stage416 ② ChatGPT 직접 구현 소스 후보 — PREVIEW 배포/검증 HOLD (2026-10-10 KST)
 
 - **사용자 지시 변경:** Codex에 맡기지 말고 ChatGPT가 직접 구현. 사용자 명령을 우선해 `preview`에서만 직접 작업했고, 별도 Codex 작업 없음. 원래 GitHub 기록 `DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`는 구현 조건 참조용이며 실행 주체는 변경.

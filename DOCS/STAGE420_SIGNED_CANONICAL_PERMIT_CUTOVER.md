@@ -42,3 +42,8 @@
 - Worker는 만료된 15분 인증서로 canonical DB 쓰기 전에 정확히 거절. 재발급된 원래 opId의 원래 승인 신호가 최근 50건 안에 있으면 재승인 중복 처리 RTDB write 0.
 - 다만 51개의 개별 명령 이후 최초 ID가 최근 50건에서 빠지면 duplicate 식별에 실패하여 다음 재전송이 새 click·새 RTDB write로 확정됨. 따라서 **서버측 동일 OperationId 재시도는 항상 W0라는 보장은 아직 FAIL**, 앱의 오프라인 durable outbox와 충돌 가능.
 - 안전 조건: 최신 50건 UI signal buffer와 장기 승인·canonical 중복 방지의 책임을 분리하고, 15분 만료/권한 잠금/단말 오프라인 상태를 명시 처리. 171 canonical receipt의 재전송 중복 처리까지 독립 감사. 이 문제를 근거 없이 50→무제한 확장하여 매 클릭마다 전체 RTDB 트랜잭션 payload가 커지게 하거나, 원본 D1을 전체 재조회하는 해결 금지. **고비용/구형 호환성 검증 전 운영 Cutover HOLD 계속.**
+
+## 후보 보완: 이전 서명 승인 증표 재발급 (소스 전용)
+
+- 기존 서버 HMAC 승인증표가 단말에 남아있으면 15분 만료 후에도 원래 인증된 UID·trackId·liked·operationId와 발급시간 24시간 이내인지 확인한 뒤 새로운 15분 인증서를 갱신 가능. 기록 최근 50건을 늘리거나 중복 클릭으로 집계하지 않음. RTDB/D1 read/write 0 목표, Functions 호출·서명 CPU 비용만 발생.
+- 인증증표가 없거나 키가 바뀌었거나 24시간을 초과하면 항상 거절하고 기존 미처리 outbox를 지킨다. 이전 승인 ACK 손실·오프라인 장기복구는 이번 방식만으로 완결되지 않는다. app395 client 및 Stage420/426 ON 변경 없음.

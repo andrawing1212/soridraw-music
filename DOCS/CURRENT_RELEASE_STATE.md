@@ -1,3 +1,11 @@
+## 0S108. Stage420 승인 증표 재발급 Source-only 후보 구현 (2026-10-10)
+
+- 판단: 최근 50건 신호 기록을 24시간 무한 확장하지 않는다. 기존 UID·곡·상태·operationId에 대한 서버 서명된 옛 15분 승인증표를 확인한 경우에만 새 15분 증표를 발행. 같은 요청을 새 클릭으로 세지 않고 함수 내부 Firebase/RTDB/D1/Worker 쓰기 및 읽기 없음. Functions 호출 1회와 서명 검증 CPU는 발생.
+- 후보 구현: functions/src/exploreLikePermitRenew420.ts의 24시간 범위 이전 승인 HMAC 검증 및 exact op 재발급, Functions index.ts의 인증된 신규 renewExploreLikePermit420 Callable(운영 미배포). 신규 verify-420-permit-renewal.mjs를 Fast QA like 그룹에 등록. 실제 Worker HMAC 검증기로 갱신 인증서가 승인되는지, 타 UID·곡·상태·operationId/만료/위조/키 오류를 거절하는지 검사.
+- 이전 51건 초과 재전송 새 RTDB W1 위험은 기존 승인 증표를 보존한 사용자에게만 회피 가능. 서버 첫 승인 ACK가 분실되어 증표를 단말이 받지 못한 경우, 24시간 이상 완전 오프라인, 키 회전, canonical receipt171 재시도/비용 및 실제 다기기 복구는 아직 미해결. 시험 PASS를 운영 보안 PASS로 부르지 않는다.
+- app395 기존 Explore 좋아요·팔로우·UI·분할바·Firestore/D1/RTDB Rules·Cloudflare 미수정. Stage420/426 활성화 금지, Firebase Functions 미배포, TEST/PRODUCTION 미변경. 진척도 Stage416 1/5(20%), 속도개선 3/5(60%), 현재 실기기 검증 3/4(75%).
+
+---
 ## 0S107. Stage420 15분 승인만료/50건 기록 밀림 위험 독립 확정 — CUTOVER HOLD (2026-10-10)
 
 - [GitHub Fast QA 38041454502](https://github.com/andrawing1212/soridraw-music/actions/runs/38041454502) SUCCESS. 기존 Functions 발급기 TS + Admin 게이트 TS + Worker WebCrypto 426 검증기 원본을 in-memory RTDB로 직접 실행하는 신규 scripts/verify-420-permit-expiry-replay.mjs를 QA like 그룹에 추가. 클라이언트/서버 실제 사용자 데이터 접속 0.

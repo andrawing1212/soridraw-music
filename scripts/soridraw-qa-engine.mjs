@@ -29,6 +29,7 @@ const groups = [
     ['node', 'scripts/verify-420-integrated-cutover-gate.mjs'],
     ['node', 'scripts/verify-420-signed-like-permit.mjs'],
     ['node', 'scripts/verify-420-permit-expiry-replay.mjs'],
+    ['node', 'scripts/verify-420-permit-renewal.mjs'],
     ['node', 'scripts/verify-420-master-policy.mjs'],
     ['node', 'scripts/verify-420-master-ui.mjs'],
   ] },

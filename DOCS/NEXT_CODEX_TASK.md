@@ -1,3 +1,11 @@
+## CURRENT — Stage420 HMAC 승인 증표 무DB 재발급 후보 실테스트 / 소실 ACK 복구 설계 (2026-10-10)
+
+- 정확한 정상 코드 영역은 보존하고 dormant Functions 후보 2파일만 수정. 새 함수 renewExploreLikePermit420은 이전 서명증표가 본인 exact operationId와 24시간 범위까지 맞을 때만 새 15분 증표 발급. Firebase/RTDB/D1 조회/쓰기 0 설계, 사용량 측정은 필요.
+- 신규 소스 검증 verify-420-permit-renewal.mjs → GitHub QA log로 PASS/FAIL 판정. 모든 실패 시 서버 코드만 최소 수정하고 기존 app395 좋아요 동작은 절대 변경하지 않는다.
+- 다음 우선순위: 첫 승인 ACK 분실 시 서명증표도 없는 outbox의 안전한 reconciliation(새 클릭 quota/W1로 변환 금지), 24h+ 오프라인, 서명키 교체, receipt171 idempotency 및 10만 명 비용 검증. 공유 RTDB Rules/Cloudflare Worker/Functions 배포와 Stage420/426 활성화는 전체 사용자 및 구버전 호환성 검증 전 HOLD.
+- Stage416 1/5 20%, 속도 3/5 60%, 현 실기기 3/4 75%, PREVIEW 운영 app395 유지.
+
+---
 ## CURRENT — Stage420 오프라인 재전송 중복승인 방지 설계/구현 전 안전 게이트 (2026-10-10)
 
 - 출발 preview 6b2eacc5d8fb1c9b25c80c811bba022beb1967e6, [Fast QA Run 38041454502](https://github.com/andrawing1212/soridraw-music/actions/runs/38041454502) SUCCESS, 그러나 51개 기록 뒤 같은 opId 오래된 retry가 duplicate=false, RTDB W+1 되는 문제를 독립 증명. 기존 좋아요 라이브 앱395 정상 동작, Stage420 후보와 426 route는 컴파일 OFF, Functions Secret 없음.

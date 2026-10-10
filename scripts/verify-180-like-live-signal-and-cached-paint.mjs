@@ -188,6 +188,10 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
       calls.push('persistOutbox');
     },
     getPendingExploreLikeMutationCount: () => Object.keys(storedOutbox).length,
+    // Stage416's optional RTDB hint is intentionally inert in this frozen
+    // app390 canonical-ACK test; it cannot affect server retry/account truth.
+    clearExploreLikeIntent416: () => {},
+    settleExploreLikeIntent416: async () => {},
     readLikeCanonicalRevisions172: () => ({}),
     persistLikeCanonicalRevisions172: () => {},
     createExploreLikeOperationId144: () => pending.operationId,

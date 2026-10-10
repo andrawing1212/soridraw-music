@@ -228,10 +228,18 @@ const notifyExploreLikeUiSync139 = (detail: ExploreLikeSyncEventDetail) => {
 
 // 420 candidates are live, tentative per-UID hints only. No account-wide
 // scan or persistent replay. Canonical 127 personal state always wins on ACK.
-type GuardedLikeHint420 = { liked: boolean; operationId: string; version: number };
+type GuardedLikeHint420 = { liked: boolean; operationId: string; version: number; receivedAt: number };
+const GUARDED_HINT_MAX_AGE_420 = 30_000;
 const guardedLikeHintsByUid420 = new Map<string, Map<string, GuardedLikeHint420>>();
-const readGuardedLikeHint420 = (uid: string, trackId: string): boolean | undefined =>
-  guardedLikeHintsByUid420.get(uid)?.get(trackId)?.liked;
+const readGuardedLikeHint420 = (uid: string, trackId: string): boolean | undefined => {
+  const hint = guardedLikeHintsByUid420.get(uid)?.get(trackId);
+  if (!hint) return undefined;
+  if (Date.now() - hint.receivedAt > GUARDED_HINT_MAX_AGE_420) {
+    guardedLikeHintsByUid420.get(uid)?.delete(trackId);
+    return undefined;
+  }
+  return hint.liked;
+};
 
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const flushTimerByUid = new Map<string, number>();
@@ -849,7 +857,7 @@ const startGuardedLike420 = (uid: string) => {
     if (current && current.version >= event.version) return;
     if (event.status === 'pending') {
       hints.set(event.trackId, { liked: event.liked,
-        operationId: event.operationId, version: event.version });
+        operationId: event.operationId, version: event.version, receivedAt: Date.now() });
       if (hints.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
         const oldest = hints.keys().next().value;
         if (oldest) hints.delete(oldest);
@@ -2201,6 +2209,10 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   // but below this device's own still-unsubmitted click.
   if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
     for (const [trackId, hint] of guardedLikeHintsByUid420.get(normalizedUid) || []) {
+      if (Date.now() - hint.receivedAt > GUARDED_HINT_MAX_AGE_420) {
+        guardedLikeHintsByUid420.get(normalizedUid)?.delete(trackId);
+        continue;
+      }
       if (hint.liked) candidates.add(trackId);
       else candidates.delete(trackId);
     }

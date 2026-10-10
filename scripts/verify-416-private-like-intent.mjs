@@ -122,7 +122,7 @@ const page = fs.readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 assert(service.includes('EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000'), 'stage3 5m canonical delay must not start here');
 assert(service.includes('publishConfirmedLikeSignal127(uid, acceptedForSignal127)'), 'existing accepted notifier is protected');
 assert(service.includes("source: 'remote-intent'"), 'provisional signal is separate from accepted');
-assert(page.includes('if (isTentative416) return;'), 'provisional signal must not publish public count in Explore');
+assert.match(page, /if \(isTentative416\) \{[\s\S]*?setLikeAccountSyncSignal\([\s\S]*?return;[\s\S]*?\}/, 'tentative personal heart must return before any public count patch');
 console.log('STAGE416_PRIVATE_INTENT_TWO_CLIENTS=PASS');
 console.log('STAGE416_STALE_REPLAY_AND_REJECTION=PASS');
 console.log('STAGE416_UID_ISOLATION_AND_BOUNDED_50=PASS');

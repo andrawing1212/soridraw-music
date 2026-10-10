@@ -1134,7 +1134,9 @@ import { sanitizeForFirestore } from './lib/utils';
 import { isMusicNoteItemRemoved } from './lib/musicNoteSavedState';
 import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal from './components/MusicApiGenerateModalLazy';
+import type { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle } from './components/MusicApiGenerateModal';
+import { readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/musicApiLyricWritingPreference';
 
 const RAP_MODE_STORAGE_KEY = 'soridraw_rap_mode';
 const readStoredRapMode = (): RapMode => {

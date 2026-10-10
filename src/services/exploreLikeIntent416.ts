@@ -88,6 +88,12 @@ export const listExploreLikeIntents416 = (uid: string): Record<string, boolean> 
       .map(([trackId, row]) => [trackId, row.liked]),
   );
 
+// An auth switch must not carry another session's unconfirmed private heart.
+// The authoritative canonical cache/outbox continue to be UID-scoped.
+export const discardExploreLikeIntentSession416 = (uid: string): void => {
+  if (uid) localIntentByUid416.delete(uid);
+};
+
 export const readExploreLikeIntent416 = (uid: string, trackId: string): boolean | undefined => {
   const intent = readLocal416(uid)[trackId];
   if (!intent || Date.now() - intent.at > INTENT_TTL_MS_416) return undefined;

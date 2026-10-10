@@ -3,6 +3,7 @@
 // userSync/$uid/exploreLikeIntent416 path until the shared ancestor .write
 // permission is migrated safely; do not claim this closes abuse by itself.
 import type { Database } from 'firebase-admin/database';
+import { DEFAULT_LIKE_ABUSE_SETTINGS_420, type LikeAbuseSettings420 } from './exploreLikeAbuseSettings420';
 
 export const LIKE_420_WARNING = 30;
 export const LIKE_420_MINUTE_LIMIT = 40;
@@ -22,6 +23,7 @@ export type LikeGuardState420 = {
   previousWindowStartMs: number;
   previousWindowReachedLimit: boolean;
   lockedUntilMs: number;
+  windowPolicy?: LikeAbuseSettings420;
 };
 type PrivateRow420 = LikePrivateCommand420 & {
   version: number;
@@ -58,7 +60,9 @@ const normalizeState = (value: unknown): LikeGuardState420 => {
   const n = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0 ? Number(v) : 0;
   return {
     windowStartMs: n(x.windowStartMs),
-    acceptedInWindow: Math.min(LIKE_420_MINUTE_LIMIT, n(x.acceptedInWindow)),
+    acceptedInWindow: Math.min(200, n(x.acceptedInWindow)),
+    windowPolicy: x.windowPolicy && Number.isInteger(x.windowPolicy.limitPerMinute)
+      ? x.windowPolicy : DEFAULT_LIKE_ABUSE_SETTINGS_420,
     previousWindowStartMs: n(x.previousWindowStartMs),
     previousWindowReachedLimit: x.previousWindowReachedLimit === true,
     lockedUntilMs: n(x.lockedUntilMs),
@@ -70,7 +74,7 @@ const validOp = (x: LikePrivateCommand420): boolean =>
   x.ownerUid.length <= 128 && typeof x.liked === 'boolean' &&
   typeof x.operationId === 'string' && /^[0-9a-f-]{36}$/i.test(x.operationId);
 
-const decide = (state: LikeGuardState420, now: number):
+const decide = (state: LikeGuardState420, now: number, configured: LikeAbuseSettings420):
   { allowed: boolean; warning: boolean; lockedUntilMs: number; remaining: number; rate: LikeGuardState420 } => {
   if (state.lockedUntilMs > now) {
     return { allowed: false, warning: true, lockedUntilMs: state.lockedUntilMs,
@@ -84,20 +88,22 @@ const decide = (state: LikeGuardState420, now: number):
       windowStartMs: minute, acceptedInWindow: 0,
       previousWindowStartMs: consecutive ? state.windowStartMs : 0,
       previousWindowReachedLimit: consecutive &&
-        state.acceptedInWindow >= LIKE_420_MINUTE_LIMIT,
+        state.acceptedInWindow >= (state.windowPolicy?.limitPerMinute || LIKE_420_MINUTE_LIMIT),
       lockedUntilMs: 0,
+      windowPolicy: configured,
     };
   }
-  if (next.acceptedInWindow >= LIKE_420_MINUTE_LIMIT) {
+  const policy = next.windowPolicy || DEFAULT_LIKE_ABUSE_SETTINGS_420;
+  if (next.acceptedInWindow >= policy.limitPerMinute) {
     return { allowed: false, warning: true, lockedUntilMs: 0, remaining: 0, rate: next };
   }
   const count = next.acceptedInWindow + 1;
-  const secondFullMinute = count === LIKE_420_MINUTE_LIMIT &&
+  const secondFullMinute = count === policy.limitPerMinute &&
     next.previousWindowReachedLimit && next.previousWindowStartMs === minute - MINUTE_MS;
-  const lockedUntilMs = secondFullMinute ? now + LIKE_420_TWO_HOURS_MS : 0;
+  const lockedUntilMs = secondFullMinute ? now + policy.suspensionMinutes * MINUTE_MS : 0;
   return {
-    allowed: true, warning: count >= LIKE_420_WARNING,
-    lockedUntilMs, remaining: LIKE_420_MINUTE_LIMIT - count,
+    allowed: true, warning: count >= policy.warningPerMinute,
+    lockedUntilMs, remaining: policy.limitPerMinute - count,
     rate: { ...next, acceptedInWindow: count, lockedUntilMs },
   };
 };
@@ -111,6 +117,7 @@ export const publishGuardedLikeSignal420 = async (
   authUid: string,
   input: LikePrivateCommand420,
   serverNowMs = Date.now(),
+  configuredPolicy: LikeAbuseSettings420 = DEFAULT_LIKE_ABUSE_SETTINGS_420,
 ): Promise<GuardedLikeResult420> => {
   if (!authUid || authUid.length > 128 || !validOp(input) ||
       !Number.isSafeInteger(serverNowMs) || serverNowMs < 0) {
@@ -125,7 +132,7 @@ export const publishGuardedLikeSignal420 = async (
     if (!Number.isSafeInteger(previousVersion) || previousVersion >= Number.MAX_SAFE_INTEGER) return;
     const prior = Array.isArray(visible.results) ? visible.results : [];
     if (prior.some((row) => row?.operationId === input.operationId)) return;
-    const decision = decide(normalizeState(visible.rate), serverNowMs);
+    const decision = decide(normalizeState(visible.rate), serverNowMs, configuredPolicy);
     if (!decision.allowed) return;
     const row: PrivateRow420 = { ...input, version: previousVersion + 1,
       at: serverNowMs, status: 'pending' };
@@ -149,9 +156,9 @@ export const publishGuardedLikeSignal420 = async (
   const allowed = transaction.committed || duplicate;
   return {
     allowed,
-    warning: rate.acceptedInWindow >= LIKE_420_WARNING || !allowed,
+    warning: rate.acceptedInWindow >= (rate.windowPolicy?.warningPerMinute || LIKE_420_WARNING) || !allowed,
     lockedUntilMs: rate.lockedUntilMs > serverNowMs ? rate.lockedUntilMs : 0,
-    remainingInWindow: Math.max(0, LIKE_420_MINUTE_LIMIT - rate.acceptedInWindow),
+    remainingInWindow: Math.max(0, (rate.windowPolicy?.limitPerMinute || LIKE_420_MINUTE_LIMIT) - rate.acceptedInWindow),
     version,
     duplicate: !transaction.committed && duplicate,
   };

@@ -9,10 +9,16 @@ import vm from 'node:vm';
 
 function loadModule(file, exportedNames) {
   let source = stripTypeScriptTypes(readFileSync(file, 'utf8'), { mode: 'strip' });
-  source = source.replaceAll('export const ', 'const ');
+  source = source.replace(/^import\\s+.*?from\\s+'[^']+';\\s*$/gm, '')
+    .replaceAll('export const ', 'const ');
   source += '\nmodule.exports = {' + exportedNames.join(',') + '};';
   const module = { exports: {} };
-  vm.runInNewContext(source, { module, console, Number, Math, Date, Error }, { timeout: 1000 });
+  vm.runInNewContext(source, {
+    module, console, Number, Math, Date, Error,
+    DEFAULT_LIKE_ABUSE_SETTINGS_420: {
+      warningPerMinute: 30, limitPerMinute: 40, suspensionMinutes: 120,
+    },
+  }, { timeout: 1000 });
   return module.exports;
 }
 const client = loadModule('src/services/exploreLikeAbusePolicy420.ts', [

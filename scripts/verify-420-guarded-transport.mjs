@@ -16,6 +16,25 @@ const listeners = [];
 const permit420 = 'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw';
 let nextReply = null;
 let rejectNetwork = false;
+const lockQueues = new Map();
+const browserNavigator = {
+  locks: {
+    request: async (name, opts, callback) => {
+      assert.equal(opts.mode, 'exclusive');
+      const previous = lockQueues.get(name) || Promise.resolve();
+      let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      const current = previous.then(() => gate);
+      lockQueues.set(name, current);
+      await previous;
+      try { return await callback(); }
+      finally {
+        release();
+        if (lockQueues.get(name) === current) lockQueues.delete(name);
+      }
+    },
+  },
+};
 const mock = {
   settleGuardedOutbox420: (sent, reply, read, commit, notify) => {
     const state = read();
@@ -49,7 +68,7 @@ const mock = {
   },
 };
 const module = { exports: {} };
-vm.runInNewContext(code, { module, ...mock, console, Date, Number, Error }, { timeout: 1000 });
+vm.runInNewContext(code, { module, ...mock, navigator:browserNavigator, console, Date, Number, Error }, { timeout: 1000 });
 const { publishGuardedLikeIntent420: publish, subscribeGuardedLikeIntent420: subscribe, planGuardedLikeDecision420: plan, submitGuardedOutboxCandidate420: submit } = module.exports;
 const mutation = {
   trackId: 'track-1',
@@ -125,6 +144,43 @@ const callsBeforeLostAckReplay = calls.length;
 actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'await-reply','original ACK loss must never republish same operation');
 assert.equal(calls.length,callsBeforeLostAckReplay,'51-event eviction must not convert a sent click into a fresh rate write');
+// Two concurrent tabs share the same browser lock and outbox storage.
+// Only the first should reach the rate-controlled Firebase Callable.
+currentPending=pending;
+nextReply=accepted;
+const beforeConcurrent=calls.filter(c => c.name === 'publishExploreLikeIntent420').length;
+const concurrent=await Promise.all([
+  submit(pending,reader,save,repaint,markFirstAttempt),
+  submit(pending,reader,save,repaint,markFirstAttempt),
+]);
+assert.deepEqual(concurrent.map(v => v.action).sort(),['approved','await-reply']);
+assert.equal(
+  calls.filter(c => c.name === 'publishExploreLikeIntent420').length - beforeConcurrent,
+  1, 'two simultaneous tabs must not double-publish a first click',
+);
+assert.equal(lockQueues.size,0,'browser lock must be released even on second-tab refusal');
+// If safe inter-tab coordination is unsupported, fail closed: do not send.
+currentPending=pending;
+const savedLocks=browserNavigator.locks;
+browserNavigator.locks=undefined;
+const beforeUnsupported=calls.length;
+const unsupported=await submit(pending,reader,save,repaint,markFirstAttempt);
+assert.equal(unsupported.action,'await-reply');
+assert.equal(calls.length,beforeUnsupported);
+assert.equal(currentPending.guardAttempt420,undefined,'no marker when no network send');
+browserNavigator.locks=savedLocks;
+// Failed durable storage cannot authorize a network send either.
+const beforeFailedStorage=calls.length;
+const failedStorage=await submit(pending,reader,save,repaint,()=>false);
+assert.equal(failedStorage.action,'await-reply');
+assert.equal(calls.length,beforeFailedStorage);
+// A newer local operationId supersedes a stale first attempt in another tab.
+currentPending={...pending,operationId:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'};
+const beforeNewer=calls.length;
+const staleAttempt=await submit(pending,reader,save,repaint,markFirstAttempt);
+assert.equal(staleAttempt.action,'superseded');
+assert.equal(calls.length,beforeNewer);
+currentPending=pending;
 nextReply = {...accepted, guardPermit420:undefined};
 commits.length=0;
 await assert.rejects(publish(mutation),/INVALID_GUARDED_LIKE_RESPONSE/);
@@ -195,3 +251,5 @@ console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');
 console.log('STAGE420_DORMANT_APPROVED_RENEWAL_NO_RATE_REPLAY=PASS');
 console.log('STAGE420_MISSING_PROOF_RENEWAL_FAIL_CLOSED=PASS');
 console.log('STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD=PASS');
+console.log('STAGE420_CROSSTAB_FIRST_SEND_EXCLUSIVE_LEASE=PASS');
+console.log('STAGE420_MISSING_LOCK_OR_STORAGE_FAIL_CLOSED=PASS');

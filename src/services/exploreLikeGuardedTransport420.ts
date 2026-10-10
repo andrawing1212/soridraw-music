@@ -170,27 +170,39 @@ export const submitGuardedOutboxCandidate420 = async (
       // A missing first ACK has no signed proof to renew. After the first
       // durable send marker, hold for exact canonical/approval reconciliation.
       // Do NOT re-count the original opId as a new click after 50 events.
-      if (!persistFirstAttempt420(sent)) {
+      // The durable marker alone is not atomic across browser tabs. The
+      // browser-owned exclusive lock serializes the read/write/send boundary
+      // for the same UID+track. Unavailable/denied lock => retain outbox,
+      // never attempt an unguarded rate transaction. No server I/O for locks.
+      const lockManager420 = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+      if (!lockManager420?.request) {
         return settleGuardedOutbox420(sent, null, readCurrent, commit, notifyAfterCommit);
       }
-      const marked = readCurrent().latest;
-      if (!marked || marked.guardAttempt420 !== 'sent-unconfirmed' ||
-          marked.uid !== sent.uid || marked.trackId !== sent.trackId ||
-          marked.ownerUid !== sent.ownerUid ||
-          marked.operationId !== sent.operationId ||
-          marked.desiredLiked !== sent.desiredLiked ||
-          marked.updatedAt !== sent.updatedAt) {
-        return settleGuardedOutbox420(sent, null, readCurrent, commit, notifyAfterCommit);
-      }
-      const response = await publishGuardedLikeIntent420({
-        trackId: sent.trackId,
-        ownerUid: sent.ownerUid,
-        liked: sent.desiredLiked,
-        operationId: sent.operationId,
-      });
-      reply = { ok: true, allowed: response.allowed,
-        lockedUntilMs: response.lockedUntilMs,
-        ...(response.guardPermit420 ? {guardPermit420: response.guardPermit420} : {}) };
+      reply = await lockManager420.request(
+        `soridraw-first-like-420:${sent.uid}:${sent.trackId}`,
+        { mode: 'exclusive' },
+        async (): Promise<GuardedOutboxReply420 | null> => {
+          // Read/claim again INSIDE the lock: another tab may already have
+          // sent this exact operation while this tab waited.
+          if (!persistFirstAttempt420(sent)) return null;
+          const marked = readCurrent().latest;
+          if (!marked || marked.guardAttempt420 !== 'sent-unconfirmed' ||
+              marked.uid !== sent.uid || marked.trackId !== sent.trackId ||
+              marked.ownerUid !== sent.ownerUid ||
+              marked.operationId !== sent.operationId ||
+              marked.desiredLiked !== sent.desiredLiked ||
+              marked.updatedAt !== sent.updatedAt) return null;
+          const response = await publishGuardedLikeIntent420({
+            trackId: sent.trackId,
+            ownerUid: sent.ownerUid,
+            liked: sent.desiredLiked,
+            operationId: sent.operationId,
+          });
+          return { ok: true, allowed: response.allowed,
+            lockedUntilMs: response.lockedUntilMs,
+            ...(response.guardPermit420 ? { guardPermit420: response.guardPermit420 } : {}) };
+        },
+      );
     }
   } catch {
     // No direct RTDB fallback. Canonical outbox remains durable, unapproved,

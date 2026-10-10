@@ -79,12 +79,15 @@ const groups = [
   { name: 'lifecycle-deep', commands: [
     ['node', 'scripts/verify-413-like-exit-flush.mjs'],
   ] },
+  { name: 'perf-entry', commands: [
+    ['node', 'scripts/verify-gemini-lazy-entry.mjs'],
+  ] },
   { name: 'typecheck', commands: [['npm', 'run', 'lint']] },
   { name: 'build', commands: [['npm', 'run', 'build']] },
 ];
 
 const byName = new Map(groups.map(group => [group.name, group]));
-const offlineNames = ['syntax','like','catalog','recent-edit-cost','public','receipt','projection','lifecycle'];
+const offlineNames = ['syntax','like','catalog','recent-edit-cost','public','receipt','projection','lifecycle','perf-entry'];
 const mode = process.argv[2] || 'fast';
 let names = [];
 if (mode === 'fast') names = offlineNames;

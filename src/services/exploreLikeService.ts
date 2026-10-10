@@ -122,6 +122,7 @@ type ExploreLikePendingMutation = {
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
   guardStatus420?: 'awaiting' | 'approved'; // old clients remain legacy when absent
+  guardPermit420?: string; // signed server claim; Worker verifies cryptographically
   guardCanonicalLiked420?: boolean; // trusted PRE-click membership, not optimistic cache
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
   // 390: a newer accepted change on another device must survive a local outbox guard.
@@ -1433,6 +1434,10 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? row.operationId : undefined,
     ...(row.guardStatus420 === 'awaiting' || row.guardStatus420 === 'approved'
       ? { guardStatus420: row.guardStatus420 } : {}),
+    ...(typeof row.guardPermit420 === 'string' &&
+        /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(row.guardPermit420) &&
+        row.guardPermit420.length <= 2400
+      ? { guardPermit420: row.guardPermit420 } : {}),
     ...(typeof row.guardCanonicalLiked420 === 'boolean'
       ? { guardCanonicalLiked420: row.guardCanonicalLiked420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
@@ -1687,12 +1692,12 @@ const clearFlushTimer = (uid: string) => {
 // before it can reach the canonical Worker or page-exit flush.
 const eligibleGuardedMutation420 = (entry: ExploreLikePendingMutation): boolean =>
   !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ||
-    (entry.guardStatus420 === 'approved' && !!entry.operationId &&
+    (entry.guardStatus420 === 'approved' && !!entry.operationId && !!entry.guardPermit420 &&
       canFlushGuardedOutbox420({
         uid: '', trackId: entry.trackId, ownerUid: entry.ownerUid,
         desiredLiked: entry.desiredLiked, operationId: entry.operationId,
         baseLiked: entry.baseLiked, updatedAt: entry.updatedAt,
-        guardStatus: entry.guardStatus420,
+        guardStatus: entry.guardStatus420, guardPermit420: entry.guardPermit420,
       }));
 
 const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbox)
@@ -1826,6 +1831,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
             mutationAt: pending.updatedAt,
             operationId: pending.operationId,
             expectedRevision: pending.expectedRevision ?? 0,
+            ...(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE && pending.guardPermit420
+              ? { guardPermit420: pending.guardPermit420 } : {}),
           })),
         }),
       });
@@ -2366,7 +2373,8 @@ export const setExploreTrackLike = async (
           row.updatedAt !== sent.updatedAt || row.desiredLiked !== sent.desiredLiked ||
           row.ownerUid !== sent.ownerUid) return;
       if (resolution.action === 'approved') {
-        latest[sent.trackId] = { ...row, guardStatus420: 'approved' };
+        latest[sent.trackId] = { ...row, guardStatus420: 'approved',
+          guardPermit420: resolution.guardPermit420 };
         persistLikeOutbox(uid, latest);
       } else if (resolution.action === 'rollback') {
         // No guessed public likeCount or global/whole-user refresh.

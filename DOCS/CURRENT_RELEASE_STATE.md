@@ -1,3 +1,11 @@
+## 0S101. PREVIEW app394 로딩 상태 수정 실제 배포 완료 및 브라우저 재검증 진행 (2026-10-10 KST)
+
+- **공식 배포 성공:** GitHub exact release commit `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5`, [Firebase PREVIEW Run 38038414857](https://github.com/andrawing1212/soridraw-music/actions/runs/38038414857) SUCCESS. `https://preview.soridraw.com/` 원격 app-version **394**, 로컬/원격 index HTML exact SHA 일치, `TEST_PRODUCTION_UNCHANGED=PASS`, shared RTDB Rules `SKIPPED`, Firebase Hosting 외 Worker/Functions/D1/R2 원본/캐시 전환 없음. 이전 app393 정상 기능 보호.
+- **코드/자동시험:** app394 버전 후보 [408 Run 38038297237](https://github.com/andrawing1212/soridraw-music/actions/runs/38038297237) PASS. 이전 [408 Run 38038109231](https://github.com/andrawing1212/soridraw-music/actions/runs/38038109231)에서는 실제 생성 설정 모달을 Chrome에서 PC/mobile emulation으로 최초 열기(1초 인위 지연)/상태로딩/해제/Back/닫기·재열기/musicApi 포함 모두 PASS, JS 실행 오류 0. 7.67KB 신규 생성 모달 chunk 첫 오픈에만 요청, 로딩 fallback 문구 `생성 설정 불러오는 중…`와 명시적 accessible status 도입. 완성된 모달 UI/CSS/동작/Studio split 원본 불변.
+- **라이브 394 재검증:** 별도 계정 없이 Chrome에서 실제 app394를 읽기 전용 검사할 수 있도록 393 전용 버전 비교값을 `public/app-version.json` 실제 소스로 바꾸고 출력명을 환경 공통으로 정리. 이전 라이브 첫 화면 결과는 app393의 것으로, **app394 라이브 Chrome 새 검사 결과 확인 전 PASS 주장 금지**. 격리 모달은 소스인증 시험이고 실제 authenticated PC·실모바일/태블릿 핸드테스트·Gemini 생성/번역·split p95는 계속 미검증.
+- **진척도:** Stage416 1/5 (20%), 속도 개선 3/5 (60%), 현 실사용 검증 3/4 (75%) 유지. `app380 Follow-only Candidate Check` 구 동결 비교 FAILURE는 현재 377~379 출고 회귀검사 성공과 별개. TEST/PRODUCTION 승격 보류.
+
+---
 ## 0S100. 생성 설정 로딩 상태 접근성 보완 (2026-10-10 KST)
 
 - [408 Run 38037940234](https://github.com/andrawing1212/soridraw-music/actions/runs/38037940234) 앱 TS/Build, live app393 Guest Chrome PASS. 신규 격리 Chrome `getByRole('status', {name:'생성 설정 불러오는 중…'})`가 타임아웃. 원인: loading fallback에 `role=status`, `aria-live=polite`, 화면 문구는 존재하지만 역할 이름을 만들어줄 `aria-label`이 없음. 시각 UI와 로딩 자체 실패라고 단정할 수 없는 **검사+접근성 표시 문제**.

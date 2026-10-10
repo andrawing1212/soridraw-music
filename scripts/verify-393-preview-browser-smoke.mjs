@@ -1,18 +1,19 @@
 // App393 remote browser probe: guest only, no sign-in, clicks, writes, or account data.
 // Designed for existing targeted PREVIEW QA, not a release or device-equivalence claim.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const base = 'https://preview.soridraw.com';
-const expectedVersion = 393;
+const expectedVersion = Number(JSON.parse(readFileSync('public/app-version.json', 'utf8')).version);
 const response = await fetch(base + '/app-version.json', {
   headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(20000),
 });
 assert.equal(response.status, 200, 'PREVIEW app-version endpoint must be reachable');
 const release = await response.json();
 assert.equal(Number(release.version), expectedVersion, 'PREVIEW version differs from pinned app393');
-console.log('APP393_PREVIEW_HTTP_VERSION=PASS version=' + expectedVersion);
+console.log('PREVIEW_APP_PREVIEW_HTTP_VERSION=PASS version=' + expectedVersion);
 
 const chromePaths = [
   process.env.CHROME_BIN,
@@ -93,7 +94,7 @@ try {
     });
     const row = { device: config.name, elapsedMs: Date.now() - started, ...measurements,
       assetFailures, runtimeErrors };
-    console.log('APP393_GUEST_BROWSER_METRICS=' + JSON.stringify(row));
+    console.log('PREVIEW_APP_GUEST_BROWSER_METRICS=' + JSON.stringify(row));
     assert.ok(measurements.rootChars > 15, config.name + ' blank React root');
     assert.equal(assetFailures.length, 0, config.name + ' first-load JS/CSS asset failure');
     assert.equal(measurements.lazyChunksFetchedBeforeAction.length, 0,
@@ -105,6 +106,6 @@ try {
 } finally {
   await browser.close();
 }
-console.log('APP393_GUEST_BROWSER=PASS deviceProfiles=' + rows.length);
-console.log('APP393_ACCOUNT_GENERATION_BACK_FORWARD_SPLITTER_AND_REAL_MOBILE=NOT_TESTED');
-console.log('APP393_BROWSER_PROBE_NO_AUTH_NO_MUTATION=true');
+console.log('PREVIEW_APP_GUEST_BROWSER=PASS deviceProfiles=' + rows.length);
+console.log('PREVIEW_APP_ACCOUNT_GENERATION_BACK_FORWARD_SPLITTER_AND_REAL_MOBILE=NOT_TESTED');
+console.log('PREVIEW_APP_BROWSER_PROBE_NO_AUTH_NO_MUTATION=true');

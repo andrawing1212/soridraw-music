@@ -1,3 +1,10 @@
+## CURRENT — PREVIEW app394 신규 첫 로딩안내 배포 PASS, 라이브 browser smoke 및 실기기 검증 대기 (2026-10-10)
+
+- 앱394 정확한 Hosting 배포 SHA `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5`, Run `38038414857` SUCCESS. 원격 `app-version.json=394`, exact build+TEST/PROD 비변경 PASS. 서버·사용자 데이터·Cloudflare·Functions/RTDB Rules 변경 없음.
+- app393 실 격리 Chrome PC/mobile 모달 1초 지연/로딩안내/다음/Back/닫기·재열기/musicApi Run `38038109231` PASS. 배포 이후 공용 Live 브라우저 검사로 `app394` 첫 화면/JS 누락/미사용 chunk 재검증, 로그인 후 실제 메인/musicApi/Gemini 결과/태블릿 split/p95는 아직 미검증. 사용자에게 실기기 확인 결과가 없으면 PASS로 바꾸지 말 것.
+- Stage416 1/5 20%, 속도개선 3/5 60%, 현 검증 3/4 75%. Stage420 방어 OFF, Master 운영 UI OFF 유지. 다음 성능 최적화는 실제 hotspot 계측 후 선별, UI·기존 기능 임의 변경 금지.
+
+---
 ## CURRENT — PREVIEW app393 배포 PASS, PC·모바일 첫 실행과 분할바 실측 단계 (2026-10-10)
 
 - 정확한 PREVIEW 릴리스 `0ed690d392440e3024815209e7bc4035786e6600`, [GitHub Firebase Run 38036146314](https://github.com/andrawing1212/soridraw-music/actions/runs/38036146314) SUCCESS. `preview.soridraw.com` 버전393/원격 exact build PASS, TypeScript·Build·좋아요·팔로우 377~379 PASS, TEST/PRODUCTION 변경 없음, RTDB shared Rules SKIPPED; Worker/Functions/D1/R2/사용자 원본 미변경. 잠금 420 및 Master 미배포 설정 메뉴 hard OFF.

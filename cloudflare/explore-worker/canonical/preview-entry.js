@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
+import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -2118,6 +2119,20 @@ async function handleVerifiedLikeBatch426(request,env,ctx) {
     // Authorize FIRST: an unauthenticated POST must never touch D1 or R2.
     const actor=await validateExploreAuth307(request,env,ctx);
     if(!actor.ok)return actor.response;
+    // Stage420: this entire 171 writer remains HARD-DORMANT at compile time.
+    // When a separately audited 3-environment cutover eventually enables it,
+    // every mutation MUST carry a short-lived permit from the authenticated
+    // Firebase server. Invalid/missing/other-UID permits are rejected before
+    // any Worker R2 proof, D1 read/write or queue enqueue.
+    // No Firebase read is added to a successfully authorized Worker batch.
+    const body=await request.json().catch(()=>null);
+    if (!env?.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET)
+      throw new Error('420_GUARD_SIGNING_KEY_MISSING');
+    await verifyGuardedLikeBatch420({
+      authenticatedUid:actor.uid,body,
+      secretBase64Url:env.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET,
+      nowMs:Date.now(),
+    });
     // The existing legacy Worker limits accepted like batches. The new
     // branch must preserve a bounded per-UID cost, not bypass abuse limits.
     if(!env?.LIKE_RATE_LIMITER?.limit)
@@ -2126,7 +2141,6 @@ async function handleVerifiedLikeBatch426(request,env,ctx) {
     if(quota?.success!==true)
       throw new Error('426_AUTHENTICATED_LIKE_RATE_LIMIT_REACHED');
     await proveLikeBatchCutover426(env);
-    const body=await request.json().catch(()=>null);
     const router=createCandidateLikeBatch422({
       db:env.DB,sharedR2:env.PROFILE_MEDIA,allEnvironmentCutoverVerified:true,
       authenticatedUid:actor.uid,firebaseIdToken:actor.idToken,
@@ -2144,7 +2158,8 @@ async function handleVerifiedLikeBatch426(request,env,ctx) {
     }),{status:200,headers});
   } catch(error) {
     const code=String(error?.code||error?.message||'426_SETTLEMENT_UNAVAILABLE');
-    const status=code.includes('INVALID')||code.includes('NEEDS_COMPATIBILITY')||
+    const status=code==='420_GUARD_PERMIT_DENIED'?403:
+      code.includes('INVALID')||code.includes('NEEDS_COMPATIBILITY')||
       code.includes('AUTH_UID_MISMATCH')?409:503;
     return new Response(JSON.stringify({
       ok:false,error:{code:'LIKE_426_SAFE_RETRY',message:

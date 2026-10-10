@@ -9,7 +9,7 @@ let gateSource = stripTypeScriptTypes(
   readFileSync('functions/src/exploreLikeAbuseGate420.ts','utf8'),{mode:'strip'})
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
-gateSource += '\\nmodule.exports={digestApprovedLikeCommand420,matchesApprovedLikeReceipt420};';
+gateSource += '\nmodule.exports={digestApprovedLikeCommand420,matchesApprovedLikeReceipt420};';
 const gateModule={exports:{}};
 vm.runInNewContext(gateSource,{module:gateModule,Number,Date,Error,Math,createHash},
   {timeout:1000});

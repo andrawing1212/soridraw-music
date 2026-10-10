@@ -1,3 +1,12 @@
+## CURRENT — 앱 속도/다운로드 경량화 우선, Stage420 보안 전환은 OFF로 일시 대기 (2026-10-10)
+
+- 현 작업 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S90`. 사용자는 앱이 무겁다고 보고했고 느린 검토/보고를 줄이고 실질적 개선을 빨리 원함. ChatGPT 직접 처리, 기능·UI·반응형·캐시·PC모바일·정상 좋아요 무변경.
+- **실제 1차 개선:** Master 전용 `CacheDiagnosticsOverlay`와 `SplitPerformanceDiagnostics`는 일반 사용자 미로드; 기존 UI 코드를 Impl 동적 import로 격리. 실측 [408 Run 38032821201](https://github.com/andrawing1212/soridraw-music/actions/runs/38032821201) PASS, 메인 JS gzip 848.42 → 830.22KB(−18.20KB/−2.1%), CSS·vendor 거의 동일. 프로덕션/프리뷰 Hosting 미배포. `vite.config.ts` catch-all 변경 실험은 실측 효과 미약으로 byte-exact 원복함.
+- **다음 목표는 눈에 띄는 개선:** 1) 초기 실행과 PC·태블릿·모바일 앱 Studio 전환/분할 드래그 사용성의 실제 long-task/CPU/JS waterfall 2) 메인 `src/App.tsx` 약 29,577줄/1.386MB와 `studioLayout.css` 원본 665KB 중 진입 전 실행이 불필요한 부분을 후보 1개로 정하고 lazy-load 분리 3) same exact 408 TS/Build/Like QA와 UI regression + compressed initial-size 비교, 개선 안 되면 원복 4) 사용자 PREVIEW 실제 테스트/배포 승인 별도. 더 이상 작은 로그/마커 변경만 반복하지 않는다.
+- Stage420 30/40/120 새 보안 기능과 Cloudflare 426 cutover 모두 하드 OFF 그대로, 구형 app392/TEST/PRODUCTION 같은 계정 데이터 보호, 공유 RTDB Rules / Worker 변경·실사용 데이터 덮어쓰기 금지. Stage416 공식 1/5(20%) 유지. `follow-only` 이전 동결 기준 실패도 별개로 열려 있음.
+
+---
+
 ## CURRENT — Stage420 signed Worker permit source PASS, 기존 app392 보호를 위한 cutover HOLD (2026-10-10)
 
 - 먼저 `DOCS/CURRENT_RELEASE_STATE.md 0S89` 및 `DOCS/STAGE420_SIGNED_CANONICAL_PERMIT_CUTOVER.md`를 읽고 정확한 `preview` HEAD를 확인한다. 사용자는 ChatGPT 직접 작업, 하나로 묶어 완료, 작업마다 1~2줄 변화 요약·진척도 표시를 원한다. Stage416 1/5 20% 불변.

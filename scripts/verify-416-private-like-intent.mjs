@@ -118,6 +118,12 @@ assert.equal(B.api.readExploreLikeIntent416(uid, track), true,
 B.api.clearExploreLikeIntent416(uid, track, true);
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined,
   'newer exact ACK permits later 127 signal to retire the matched hint');
+await A.api.publishExploreLikeIntent416(uid, like(
+  true, '66666666-6666-4666-a666-666666666666', 'new-track-after-ack',
+));
+assert.equal(database.get(`userSync/${uid}/exploreLikeIntent416`).results.some(
+  (row) => row.trackId === track,
+), false, 'settled old hint must not be retransmitted with unrelated future likes');
 
 const beforeDenied = writes;
 rejectWrites = true;

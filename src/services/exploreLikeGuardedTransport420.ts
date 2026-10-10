@@ -1,6 +1,7 @@
 import { onValue, ref as databaseRef, type Unsubscribe } from 'firebase/database';
 import { httpsCallable } from 'firebase/functions';
 import { functions, realtimeDb } from '../firebase';
+import { settleGuardedOutbox420, type GuardedOutboxEntry420, type GuardedCanonicalEvidence420, type GuardedOutboxReply420, type GuardedResolution420 } from './exploreLikeGuardedOutbox420';
 
 // Stage420 candidate-only adapter: intentionally NOT wired into app392.
 // The parent privateLikeSync420/$uid is unreadable to every client. Only its
@@ -101,6 +102,39 @@ export const planGuardedLikeDecision420 = (
   // accepted canonical signal or a different device's confirmed state must
   // still win after the exact outbox intent is removed by the future caller.
   return 'reject-matching-only';
+};
+
+// Entire candidate preflight: the originating device is already painted from
+// its durable outbox. A server denial is applied only to the EXACT current
+// operation, with known canonical evidence; a newer click is never overwritten.
+// Errors and unknown replies remain pending and MUST NOT be sent to /likes/batch.
+// Called only by a future coordinated cutover after shared Rules + Worker gates.
+export const submitGuardedOutboxCandidate420 = async (
+  sent: GuardedOutboxEntry420,
+  readCurrent: () => {
+    latest: GuardedOutboxEntry420 | null;
+    evidence: GuardedCanonicalEvidence420 | null;
+  },
+  commit: (decision: GuardedResolution420) => void,
+  notifyAfterCommit: (decision: GuardedResolution420) => void,
+): Promise<GuardedResolution420> => {
+  let reply: GuardedOutboxReply420 | null = null;
+  try {
+    const response = await publishGuardedLikeIntent420({
+      trackId: sent.trackId,
+      ownerUid: sent.ownerUid,
+      liked: sent.desiredLiked,
+      operationId: sent.operationId,
+    });
+    reply = { ok: true, allowed: response.allowed,
+      lockedUntilMs: response.lockedUntilMs };
+  } catch {
+    // No direct RTDB fallback. Canonical outbox remains durable, unapproved,
+    // and unavailable to the Worker intake until an exact verified response.
+  }
+  return settleGuardedOutbox420(
+    sent, reply, readCurrent, commit, notifyAfterCommit,
+  );
 };
 
 // One listener per signed-in UID, not per card. No D1/Firestore whole-read.

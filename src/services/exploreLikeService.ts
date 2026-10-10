@@ -634,8 +634,8 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   // transitions merely because this device has no prior signal watermark.
   // An actual missing interval (a previously seen version) still requires repair.
   const gap = !deferredReplay390 && lastSeen > 0 && signal.previousVersion !== lastSeen;
-  const needsRepair = !deferredReplay390 && (gap || readRepairTarget127(uid) > 0);
-  if (needsRepair) {
+  const needsRepair = gap || readRepairTarget127(uid) > 0;
+  if (needsRepair && !deferredReplay390) {
     // The retained signal rows are exact changed-track final states. Apply them
     // immediately even when an older notification interval was missed; then use
     // the personal R2 catalog only to repair any unknown gap. App134 returned here
@@ -715,7 +715,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   // local membership read can observe this entire accepted changed-track batch.
   // No new server request, extra listener, retry, or layout change is involved.
   acceptedForUi141.forEach(dispatchLikeSync);
-  if (needsRepair) {
+  if (needsRepair && !deferredReplay390) {
     const current = auth.currentUser;
     if (current?.uid === uid) {
       void ensurePersonalLikeBaseline127(current)

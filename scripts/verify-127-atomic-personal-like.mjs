@@ -104,7 +104,7 @@ assert.ok(getter.indexOf('const currentOutbox127 =') > getter.indexOf('await req
 assert.match(getter, /cache\.set\(trackId, likedIds\.has\(trackId\)\)/);
 assert.match(getter, /verified127\.add\(trackId\)/);
 assert.match(getter, /persistTargetedVerifiedLikeTracks127\(user\.uid, verified127\)/);
-assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? unresolved\[trackId\] \?\? cache\.get\(trackId\) === true/);
+assert.match(getter, /return normalized\.filter\(\(trackId\) => readExploreTrackLikeMembership127\(user\.uid, trackId\) === true\)/, 'My Likes uses the same effective personal membership as each heart');
 
 const membershipStart127 = service.indexOf('export const readExploreTrackLikeMembership127 =');
 const membershipEnd127 = service.indexOf('\n};', membershipStart127) + 3;

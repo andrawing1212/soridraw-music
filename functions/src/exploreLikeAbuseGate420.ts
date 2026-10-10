@@ -33,6 +33,10 @@ type ServerOwnedSignal420 = {
   rate: LikeGuardState420;
   results: PrivateRow420[];
 };
+type ServerOwnedRoot420 = {
+  display?: ServerOwnedSignal420;
+  adminUnlockAudit?: Array<Record<string, unknown>>;
+};
 export type GuardedLikeResult420 = {
   allowed: boolean;
   warning: boolean;
@@ -115,12 +119,13 @@ export const publishGuardedLikeSignal420 = async (
   const ref = database.ref(`privateLikeSync420/${authUid}`);
   const transaction = await ref.transaction((value: unknown) => {
     const current = value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Partial<ServerOwnedSignal420> : {};
-    const previousVersion = Number(current.version || 0);
+      ? value as Partial<ServerOwnedRoot420> : {};
+    const visible = current.display || {} as Partial<ServerOwnedSignal420>;
+    const previousVersion = Number(visible.version || 0);
     if (!Number.isSafeInteger(previousVersion) || previousVersion >= Number.MAX_SAFE_INTEGER) return;
-    const prior = Array.isArray(current.results) ? current.results : [];
+    const prior = Array.isArray(visible.results) ? visible.results : [];
     if (prior.some((row) => row?.operationId === input.operationId)) return;
-    const decision = decide(normalizeState(current.rate), serverNowMs);
+    const decision = decide(normalizeState(visible.rate), serverNowMs);
     if (!decision.allowed) return;
     const row: PrivateRow420 = { ...input, version: previousVersion + 1,
       at: serverNowMs, status: 'pending' };
@@ -128,10 +133,15 @@ export const publishGuardedLikeSignal420 = async (
       !!item && item.status === 'pending' && item.trackId !== input.trackId &&
       typeof item.at === 'number' && serverNowMs - item.at <= 60 * 60_000
     ).slice(-(MAX_RESULTS - 1));
-    return { version: previousVersion + 1, rate: decision.rate,
-      results: [...bounded, row] } as ServerOwnedSignal420;
+    // Keep the Master-only audit beside, but never inside the user-readable
+    // display subtree. One atomic root transaction preserves either side.
+    return { ...current, display: {
+      version: previousVersion + 1, rate: decision.rate,
+      results: [...bounded, row],
+    } } as ServerOwnedRoot420;
   }, undefined, false);
-  const snapshot = transaction.snapshot.val() as ServerOwnedSignal420 | null;
+  const root = transaction.snapshot.val() as ServerOwnedRoot420 | null;
+  const snapshot = root?.display;
   const version = Number(snapshot?.version || 0);
   const rate = normalizeState(snapshot?.rate);
   const duplicate = Array.isArray(snapshot?.results) &&

@@ -13,7 +13,7 @@ compiled = compiled
 assert(!/^import\s/m.test(compiled), 'Only the two mocked imports may be used');
 compiled += `
 module.exports = {
-  readExploreLikeIntent416, clearExploreLikeIntent416,
+  readExploreLikeIntent416, listExploreLikeIntents416, clearExploreLikeIntent416,
   subscribeExploreLikeIntent416, publishExploreLikeIntent416,
   settleExploreLikeIntent416,
 };`;
@@ -77,6 +77,7 @@ const like = (liked, operationId, trackId = track) => ({
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined, 'cold subscriber must not invent a heart');
 await A.api.publishExploreLikeIntent416(uid, like(true, op1));
 assert.equal(B.api.readExploreLikeIntent416(uid, track), true, 'remote preview must repaint before server ACK');
+assert.equal(B.api.listExploreLikeIntents416(uid)[track], true, 'My Likes local candidate must see same provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
 assert.equal(database.get(`userSync/${uid}/exploreLike`), undefined, 'accepted 127 signal unchanged');
 assert.equal(database.get('publicSync/exploreLike'), undefined, 'public signal unchanged');

@@ -1,3 +1,14 @@
+## 0S75. Stage416 ② app392 PC↔모바일 실사용 합격 — ③ 직접 개발 착수 기준 (2026-10-10 KST)
+
+- **사용자 실사용 확인 (2026-10-10 12:47 KST):** "거의 즉시 변경돼. pc에서든 모바일에서든 a에서 누르면 바로 b에도 좋아요가 바뀜." PREVIEW **app392**, 동일 계정 PC↔모바일 양 방향 개인 하트 동기화가 사용자의 목표 5~10초보다 체감상 빠르게 작동함을 사용자 확인. 테스트 화면 전환/새로고침 없이 양방향 반영을 목표로 한 Stage② **실사용 PASS**로 승격. 정확한 ms, 장기 오프라인/복구/과금량은 별도 Stage⑤ 검증으로 유지; 미측정 항목까지 PASS 주장하지 않는다.
+- **진척도:** ① 개인 소셜 스냅샷 반복 읽기 = 사용자 요청으로 보류/미해결 (완료에 미포함); ② 개인 좋아요 로컬 즉시 + 양방향 PC↔모바일 빠른 개인 하트 = **실사용 PASS**; ③ 개인 마지막 클릭 + 기본 5분 서버 접수 및 Master 독립 주기 설정 = 다음 직접 구현; ④ 공개 좋아요 서버 접수 후 기본 5분 공동집계 및 별도 Master 주기 = 대기; ⑤ 종합/독립/비용 최종검증 = 대기. **전체 1/5 단계 완료** (① 보류 포함 고정 5단계 중 ② 하나 합격).
+- **app392 보호 고정:** Firebase PREVIEW 앱392, 릴리스 `dc1b96d05e4abb9a673f0b5ac508237afd0573d1`, Run `38021358243` SUCCESS; UID-private provisional RTDB 알림, 개인 하트 0/1·내 좋아요·기존 127 확정 수신/정렬/구형 호환, 공개숫자 보존. 동기화 체감 속도·기존 UI/마스터 이외 메뉴/좋아요·팔로우·Music Note/Library 경로 절대 퇴행 금지. TEST/PRODUCTION Hosting/Worker 비변경 및 shared RTDB rules additive node 유지.
+- **③ 구현 안전 선행조건:** 현행 `src/services/exploreLikeService.ts` 5초 idle queue를 **300초 단순 상수 치환만 하지 말 것**. 사용자별 마지막 클릭 trailing 창과 Master 선택값 1·3·5·10·20분, 다음 새 창부터 적용, durable outbox·inflight/retry·session restart/앱 종료 조기전송 안전, 비활성 재방문 서버 write0/실제 데이터 변경분만, 같은 계정 두 기기 순서 보존, ② private cross-device 알림 독립 유지. 관리자 설정은 실제 서버 Master 권한/감사로그/작은 캐시/구형 앱 하위호환을 입증. 기능이 정확히 작동하기 전에는 app393 배포 금지.
+- **③와 ④ 시간 계약 분리:** ③ 개인 서버 접수 기본 마지막 클릭 +5분, ④ 별도 '서버 확정 변화 첫 이벤트'부터 공개 공동창 기본 5분. 공개 숫자는 ③ 단독 릴리스에서 기존 빠른 공개/서버 경로의 구형 호환이 가능해야 하며, ④ 공동집계에 대한 잘못된 PASS 선언 금지. 두 Master 설정 각각 `1/3/5/10/20`분, 기존 진행 중 창 고정, 새 창부터 변경 반영.
+- **다음:** GitHub preview 최신 HEAD에서 ③ 전체 타이머/종료 처리/기존 관리자 설정 위치 및 권한, legacy TEST/PRODUCTION·Worker 호환 확인 → 최소 단계 구현·회귀시험 → 독립 감사 → 안전하면 PREVIEW만 배포 → 사용자 추가 테스트 별도 안내. Codex 사용하지 않음. 공유 사용자 원본 대량변경/백필/삭제·TEST/PRODUCTION 승격 금지.
+
+---
+
 ## 0S74. Stage416 ② 직접 수정 후 Firebase PREVIEW 앱392 + 공유 RTDB 선택 노드 배포 완료 / 실기기 합격 대기 (2026-10-10 KST)
 
 - **릴리스 실제 성공:** GitHub [PREVIEW Release Run 38021358243](https://github.com/andrawing1212/soridraw-music/actions/runs/38021358243) SUCCESS. Locked release commit `dc1b96d05e4abb9a673f0b5ac508237afd0573d1`, 앱 버전 **392** / `PREVIEW_APP_VERSION=392` / `PREVIEW_EXACT_BUILD=PASS`. Firebase Hosting `https://preview.soridraw.com/` 실제 파일 대조 PASS, TEST/PRODUCTION Hosting 비변경 PASS. 제품 직전 408 [Run 38021216836](https://github.com/andrawing1212/soridraw-music/actions/runs/38021216836) SUCCESS(app392 소스 commit `fd74739064ede1dfae9d77ab8b77b2ad084026ff`). Fast QA [38021097439](https://github.com/andrawing1212/soridraw-music/actions/runs/38021097439) SUCCESS.

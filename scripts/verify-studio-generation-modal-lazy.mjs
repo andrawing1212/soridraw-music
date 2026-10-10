@@ -19,6 +19,7 @@ assert.match(lazy,/<MusicApiGenerateModalImpl \{\.\.\.props\} \/>/,
 assert.match(lazy,/<Suspense fallback=\{\(/, 'lazy modal must show a loading state');
 assert.match(lazy,/role="status"/, 'first modal download must report loading accessibly');
 assert.match(lazy,/aria-live="polite"/);
+assert.match(lazy,/aria-label="생성 설정 불러오는 중…"/, 'status needs an accessible name');
 assert.match(lazy,/생성 설정 불러오는 중/, 'avoid an apparently unresponsive first click');
 assert.match(modal,/export default function MusicApiGenerateModal\(/);
 assert.match(modal,/export \{ readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle \} from/);

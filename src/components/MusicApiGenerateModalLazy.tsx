@@ -12,6 +12,7 @@ export default function MusicApiGenerateModalLazy(props: Props) {
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/25 backdrop-blur-sm px-3"
         role="status"
+        aria-label="생성 설정 불러오는 중…"
         aria-live="polite"
       >
         <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] px-5 py-4 shadow-2xl text-[var(--text-primary)]">

@@ -1,3 +1,9 @@
+## 0S100. 생성 설정 로딩 상태 접근성 보완 (2026-10-10 KST)
+
+- [408 Run 38037940234](https://github.com/andrawing1212/soridraw-music/actions/runs/38037940234) 앱 TS/Build, live app393 Guest Chrome PASS. 신규 격리 Chrome `getByRole('status', {name:'생성 설정 불러오는 중…'})`가 타임아웃. 원인: loading fallback에 `role=status`, `aria-live=polite`, 화면 문구는 존재하지만 역할 이름을 만들어줄 `aria-label`이 없음. 시각 UI와 로딩 자체 실패라고 단정할 수 없는 **검사+접근성 표시 문제**.
+- `MusicApiGenerateModalLazy.tsx` status에 **`aria-label="생성 설정 불러오는 중…"` 한 줄 추가**. 원본 UI/모달/서버/데이터/기존 기능 보호. 자동 소스 검사에도 명시 이름 확인 추가. 같은 격리 Chrome 가상 1초 네트워크 지연+첫 오픈/닫기/뒤로/재오픈/musciApi까지 final PASS 전 완료 선언 금지. Stage416 1/5, 속도 3/5, 실사용 3/4 유지.
+
+---
 ## 0S99. app393 생성 설정 첫 다운로드 ‘무반응’ 체감 위험 최소 수정 (2026-10-10 KST)
 
 - [실 Chrome 격리 Run 38037706763](https://github.com/andrawing1212/soridraw-music/actions/runs/38037706763) **SUCCESS**, desktop+mobile emulation 두 경우 main 첫 열기/다음 단계/브라우저 Back/닫기/재열기/musicApi 설정 모두 PASS, 브라우저 JS 예외 0. 최초 chunk에 **가상 네트워크 지연 1000ms** 추가 시 실제 표시까지 desktop **1349ms**, mobile emulation **1330ms**. 제품의 `React.lazy` wrapper가 `Suspense fallback=null`이어서 그 시간 동안 눈에 보이는 안내가 전혀 없음. 기능 오류가 아니라 **느린 연결에서 클릭 무반응으로 보이는 UX 위험**으로 원인 확정.

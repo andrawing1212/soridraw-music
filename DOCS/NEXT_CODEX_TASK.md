@@ -1,3 +1,12 @@
+## CURRENT — Stage416 2/5: Atomic 256 approval journal source QA PASS, 100k 비용/호환성 검증 후 단계 종료 판단 (2026-10-10)
+
+- 기준 branch `preview`, 소스 commit `f24295b30f3b1cf69f3a31ca20cd733dfb040c6f`, [408 Run 38080477525](https://github.com/andrawing1212/soridraw-music/actions/runs/38080477525) SUCCESS; Firebase Functions/app TS, Build, 기존 좋아요·팔로우, 51번째 이벤트 뒤 exact replay W0, journal ACK 복구 PASS.
+- **이번 해결:** server-only `privateLikeSync420/$uid/approvalJournal420` 최대256건·24h compact SHA256 receipt를 server RTDB quota+signal root transaction에서 원자적으로 같이 기록. display 50개에서 원래 승인 opId가 사라져도 점 조회로 복구(W0); 거짓/만료/evicted/키 상이 시 fail-closed. 외부 서비스/트랙 전체 스캔/추가 canonical D1 read 없음. 256+와 24h 이후 모두 복구된다고 주장 금지.
+- **다음 실행:** 장기 보관 최악 256개 payload/RTDB 비용·10만 사용자 월 비용, 257+ fail-closed, old app 416 direct/write 여부 및 단계적 Rules/Worker Cutover 실제 호환성 평가를 묶어 완료. 위협/비용 평가 결과에 따라 2단계 통과 또는 최소 수정. TEST/PROD·shared Rules·실서비스 Stage420/426 활성화는 사용자 명시 승인과 안전 게이트 전 절대 금지. 불필요한 새 QA/범위 확대 금지.
+- 진행률 ① Stage416 좋아요 보안 전환 **총5단계 중 2단계 진행(1/5·20%)**; ② 앱 속도 **5/5·100% 완료**; ③ 실기기 검증 **4/4·100% 완료**. PREVIEW 앱396 기존 배포 유지; 후보 Functions 미배포.
+
+---
+
 ## CURRENT — Stage416 총5단계 중 2단계: 최초 ACK 소실 복구 50건 PASS, 51건 이후 서버 증거 설계 미완 (2026-10-10)
 
 - `preview` candidate `ecf3941e17857ab1a932f49f104d111699daeebe` (구현 `d72f90bd77084e4d264cf87e4e0ee2e6e7dd4d1d`), [408 Run 38061501678](https://github.com/andrawing1212/soridraw-music/actions/runs/38061501678) SUCCESS. ACK 유실 첫 좋아요는 재클릭·쿼터 중복쓰기 대신 Functions 읽기 전용 최대50개 exact 서버 승인 기록 확인, 맞을 때만 기존 operationId 서명 증표 복구. mismatch/51+ eviction/expired는 fail closed. 기존 app396 좋아요/팔로우·UI 동작 변경 없음. RTDB/Worker/Functions/Hosting 배포·사용자 원본 변경 없음.

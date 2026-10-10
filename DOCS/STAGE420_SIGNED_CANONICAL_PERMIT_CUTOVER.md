@@ -59,3 +59,9 @@
 - 소스 `d72f90bd77084e4d264cf87e4e0ee2e6e7dd4d1d`, 테스트 범위 보정 `ecf3941e17857ab1a932f49f104d111699daeebe`, [408 38061501678](https://github.com/andrawing1212/soridraw-music/actions/runs/38061501678) SUCCESS.
 - 새 후보 `functions/src/exploreLikeApprovalRecovery420.ts` / `functions/src/index.ts` `recoverExploreLikePermit420`: 인증 UID 아래 최근 50개 server-own 결과에서 동일 operationId+track+owner+liked+60분 승인 기록이 존재할 때만 새 15분 HMAC 발급. 기존 RTDB Admin rate 함수 재호출 없음, 트랜잭션 없음, D1 0, RTDB 승인 기록 조회 최대 1번(기록 크기 상한 50). 클라이언트 첫 publish ACK 실패 때만 후보 recover 실행, 기존 outbox 유지·신규 허위 승인 금지. 리더의 50건 초과/만료/누락·응답 실패는 fail-closed.
 - **이 작업은 최초 ACK 손실 후 이미 최근 기록이 사라진 51개 이상 경과 상황의 복구를 해결하지 않는다.** 별도 원자적·장기 서버 승인 증명 없이는 `Stage416 2/5` 완료 금지. 현재 PREVIEW app396, 구형 앱·RTDB Rules·Functions·Worker·공유 사용자 데이터 변경 없음. 키 미배포, Stage420/426 cutover OFF. 실환경 월비용/물리 p95/171 W0 미측정.
+
+## 2026-10-10 단계2 원자적 승인 저널 후보 — 51건 초과 W0 자동 QA PASS / 운영 HOLD
+
+- Candidate SHA `f24295b30f3b1cf69f3a31ca20cd733dfb040c6f`. 408 품질 [Run 38080477525](https://github.com/andrawing1212/soridraw-music/actions/runs/38080477525) SUCCESS.
+- Source-only Firebase Admin 루트 트랜잭션 한 번에 기존 rate counter + 최근50 UI events + UID별 최대256 compact digest receipt를 원자 저장. 승인 ACK/HMAC 완전 소실 후 화면 이벤트 51+가 지나도 24h 이내 정확한 기록이 journal에 있으면 서버 point GET으로 복구하고 최초 승인 재전송과 RTDB 쓰기 증가 0. 원본 opId·trackId·ownerUid·liked SHA256 fingerprint를 비교하므로 맞지 않으면 서명 발급 금지.
+- Receipt TTL 24h/UID 최대256, 256보다 오래된 승인·만료는 safe pending (영구 복구 보장 아님). 새 승인 transaction에 최대256 receipt가 포함되어 RTDB 전송량이 커질 수 있으므로 10만 사용 비용과 p95 실측 전 운영/커트오버 보류. 426/420 비활성, existing direct416/구형 앱 호환성 미해결, shared Rules·배포·실제 데이터 변경 없음.

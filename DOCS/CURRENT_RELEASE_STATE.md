@@ -1,3 +1,15 @@
+## CURRENT — Stage416 2/5: ACK 유실 이후 51건 초과 승인 기록 복구 원자적 256건·24h 후보 PASS, 비용 실측·실환경 Cutover HOLD (2026-10-10)
+
+- **사용자 요청:** 중간 승인을 반복하지 않고 안전한 후보 작업을 한 흐름으로 완성하고, 공유 Rules/TEST/PRODUCTION 등 위험 승격 시에만 승인 필요. 앱396 속도/물리기기 확인 범위 ② 5/5·100%, ③ 4/4·100% 종료 유지; 임의 추가 작업 금지.
+- **① Stage416 총 5단계 중 2단계 진행(완료 1/5·20%):** preview code SHA `f24295b30f3b1cf69f3a31ca20cd733dfb040c6f`; 소스 후보(기준 `decf581b9d551d9a5fc1e5bd02e925b897bad888`). 이전 막힘은 최초 서버 승인 ACK/HMAC이 유실되고 51개의 다른 승인 이벤트로 display 50개에서 원래 opId가 지워지면 같은 요청을 중복 계상할 수 있던 것.
+- **구현:** `functions/src/exploreLikeAbuseGate420.ts` 서버 승인에 **단일 UID root RTDB transaction 안에서** 원래 50개 UI hint와 별도의 `approvalJournal420` receipt(정확한 opId-key+SHA256 트랙/owner/action/opId fingerprint+server time)를 같이 저장. 저널은 최대 **256개/UID, 24h**이며 유효하지 않거나 오래된 항목은 수락된 새 클릭에서만 정리; 50개 이벤트 이후 재전송도 승인 exact digest가 남아 있으면 duplicate=true, Admin rate 트랜잭션 새 commit 0. `functions/src/exploreLikeApprovalRecovery420.ts`의 서버 read-only 복구는 정확한 `privateLikeSync420/$uid/approvalJournal420/$operationId` 1회 point read를 우선, 과거 source-only 기록 호환 시 최대 50건 display fallback. 클라이언트 ACK 재전송 방지·durable pending 유지·Worker signed permit 조건은 종전 동일.
+- **자동 검증:** [408 Run 38080477525](https://github.com/andrawing1212/soridraw-music/actions/runs/38080477525) **SUCCESS**. `STAGE420_ATOMIC_JOURNAL_EXACT_51PLUS_RECOVERY=PASS`, `STAGE420_OFFLINE_51_EVENT_EVICTED_REPLAY_RTDB_W0=PASS`, `STAGE420_EXACT_FIRST_ACK_LOSS_BOUNDED_RECOVERY_NO_REPUBLISH=PASS`; Functions TypeScript, 앱 TypeScript, Build, 기존 like/follow 회귀 및 RTDB Rules read-only PASS. 앞선 시행착오: 38080313358/38080394669 = 새 테스트 VM fixture 구문 오류, 38080477525에서 정정·재검증; Rules emulator Run 38080313311은 보호 스코프 이외 source 변경을 막는 job에서 FAIL한 것으로, 실제 shared Rules 변동은 없음.
+- **남은 실제 위험(단계2 닫기 전):** 256보다 더 많이 승인된 뒤 예전 receipt가 밀려나거나 24h 이후 증표와 기록이 모두 없으면 중복 요청 재승인 대신 **fail-closed**로 미확정 outbox가 남는다. 영원한 W0 보장은 아니며, 구형 앱 direct416 인증 우회 차단·shared RTDB Rules/Worker cutover/서버 HMAC secret 설정은 여전히 미완·공통 앱 호환 승인 필수. **최악 256 proof를 함께 실어 나르는 UID root 트랜잭션 payload 증가와 Functions 호출/RTDB transfer 10만 사용자 월 총비용, 모바일 왕복 p95는 미계측**. 무리한 unbounded receipts/개별 원본 DB read 금지. 실서비스 보안활성화 전 비용·구형동작·시스템 E2E 게이트 필수.
+- **배포:** 미배포(소스/테스트 commit만), 앱396 Firebase PREVIEW Hosting 계속 유지; Functions/Worker/RTDB Rules/D1/R2/Firestore/TEST/PRODUCTION 변경 0, `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`, `STAGE426_COMPILED_OPEN=false`. 공유 데이터 원본 읽기/쓰기 테스트 없음.
+- **다음 한 일:** 256건 상한의 실제 비용 및 257+·24h fail-close/older client 호환성을 독립 검토한 뒤, Stage416 2단계의 완료 판정. 사용자 승인 없이 shared Rules를 폐쇄하거나 cutover를 강제하지 않는다.
+
+---
+
 ## CURRENT — Stage416 2/5: 좋아요 첫 승인 ACK 유실 최근 50건 정확 복구 코드·408 PASS (2026-10-10)
 
 - **진행표:** ① Stage416 좋아요 보안 전환 **총 5단계 중 2단계 진행, 1/5 완료·20%**; ② 앱396 속도 개선 **5/5·100% 종료**; ③ PC·휴대폰·태블릿 실사용 확인 **4/4·100% 종료**(사용자 2026-10-10 PASS). 새로운 속도/실기기 개선 작업을 부수적으로 시작하지 않는다.

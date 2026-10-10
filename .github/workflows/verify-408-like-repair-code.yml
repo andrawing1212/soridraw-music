@@ -89,6 +89,10 @@ jobs:
           node scripts/verify-420-like-abuse-policy.mjs
           node scripts/verify-420-server-like-abuse-gate.mjs
           node scripts/verify-420-private-rules-candidate.mjs
+      - name: Firebase Functions TypeScript build for isolated Stage420 server source
+        run: |
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
       - name: TypeScript
         run: npm run lint
       - name: Build

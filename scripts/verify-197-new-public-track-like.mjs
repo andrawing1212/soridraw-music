@@ -33,6 +33,9 @@ const createHarness = ({ complete, existing = {}, pending = {}, unresolved = {},
     readLikeLocal127: () => '',
     hasLocalLikeCatalog135: () => true, // Existing device, even if R2 is partial.
     readLikeOutbox: () => pending,
+    // Existing app164 first-like regression must remain valid without a
+    // Phase416 optional private-intent signal or new RTDB subscription.
+    readExploreLikeIntent416: () => undefined,
     readSnapshotPending127: () => unresolved,
     getLikedStateCache: () => cache,
     readTargetedVerifiedLikeTracks127: () => verified,

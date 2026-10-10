@@ -19,7 +19,9 @@ type IntentRow416 = {
   status: IntentStatus416;
 };
 type IntentEnvelope416 = { version: number; results: IntentRow416[] };
-type LocalIntent416 = Pick<IntentRow416, 'liked' | 'operationId' | 'version' | 'at'>;
+type LocalIntent416 = Pick<IntentRow416, 'liked' | 'operationId' | 'version' | 'at'> & {
+  status?: 'pending' | 'accepted'; // optional for previous persisted hints
+};
 type IntentMutation416 = Pick<IntentRow416, 'trackId' | 'ownerUid' | 'liked' | 'operationId'>;
 type IntentSettlement416 = Pick<IntentRow416, 'trackId' | 'operationId'> & { status: 'accepted' | 'rejected' };
 
@@ -116,6 +118,10 @@ export const clearExploreLikeIntent416 = (
   const current = entries[trackId];
   if (!current || current.liked !== liked ||
       (operationId && current.operationId !== operationId)) return;
+  // Old confirmed RTDB signals do not carry an operationId. They may clear
+  // only a hint whose EXACT operation was already ACKed, never a newer click
+  // that happens to have the same boolean (like -> unlike -> like).
+  if (!operationId && current.status !== 'accepted') return;
   delete entries[trackId];
   saveLocal416(uid, entries);
 };
@@ -142,6 +148,7 @@ export const subscribeExploreLikeIntent416 = (
     const previouslySeen = seenVersion416(uid);
     const entries = { ...readLocal416(uid) };
     const changed: Array<{ trackId: string; liked: boolean }> = [];
+    let entriesChanged = false;
     for (const row of raw.results.slice(-INTENT_MAX_416)) {
       if (!validRow416(row) || row.version <= previouslySeen || row.version > version) continue;
       const existing = entries[row.trackId];
@@ -152,7 +159,11 @@ export const subscribeExploreLikeIntent416 = (
           // remain until the existing authenticated 127 signal confirms them.
           if (row.status === 'rejected') {
             delete entries[row.trackId];
+            entriesChanged = true;
             changed.push({ trackId: row.trackId, liked: row.liked });
+          } else if (existing && existing.status !== 'accepted') {
+            entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
+            entriesChanged = true;
           }
         }
         continue;
@@ -167,10 +178,12 @@ export const subscribeExploreLikeIntent416 = (
         operationId: row.operationId,
         version: row.version,
         at: row.at,
+        status: 'pending',
       };
+      entriesChanged = true;
       changed.push({ trackId: row.trackId, liked: row.liked });
     }
-    if (changed.length) saveLocal416(uid, entries);
+    if (entriesChanged) saveLocal416(uid, entries);
     // Durable overlay FIRST, watermark SECOND, UI notification LAST.
     setSeenVersion416(uid, version);
     changed.forEach(({ trackId, liked }) => onChanged(trackId, liked));
@@ -193,8 +206,12 @@ export const publishExploreLikeIntent416 = async (uid: string, mutation: IntentM
       if (!Number.isSafeInteger(previous) || previous < 0 ||
           previous >= Number.MAX_SAFE_INTEGER) return;
       const version = previous + 1;
+      // Do not repeatedly download and resend already settled history on
+      // every new click. Carry only still-pending changed-track hints.
       const oldRows = Array.isArray(current?.results)
-        ? current.results.filter(validRow416) : [];
+        ? current.results.filter((row) => validRow416(row) &&
+          row.status === 'pending' && Date.now() - row.at <= INTENT_TTL_MS_416)
+        : [];
       const row: IntentRow416 = {
         trackId: mutation.trackId,
         ownerUid: mutation.ownerUid,

@@ -1738,6 +1738,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // Explore rereads persistent membership when notified: hold these
       // notifications until the old outbox and snapshot guard are committed.
       const canonicalConflictUiAfterPersist127: ExploreLikeSyncEventDetail[] = [];
+      // A confirmed non-conflict ACK also needs a repaint after the durable
+      // personal state is saved; the Explore UI intentionally ignores earlier
+      // 'local'/'confirmed' events and may have been hydrated from older R2.
+      const canonicalAcceptedUiAfterPersist127: ExploreLikeSyncEventDetail[] = [];
 
       for (const pending of batchEntries) {
         const result = resultByTrack.get(pending.trackId);
@@ -1808,12 +1812,21 @@ flushPendingLikes = async (user: User): Promise<void> => {
           // until canonical settlement, but still publish this accepted 0/1 heart
           // to the same account's other devices immediately after the 30s batch.
           acceptedForSignal127.push(accepted);
+          // D1 settlement does NOT prove that this account's derived private
+          // R2 membership snapshot has been materialized. Keep the exact
+          // accepted changed-ID guard while R2 lags, preventing a stale R2
+          // hydration from turning this user's freshly filled heart empty.
+          // Only the explicit personal snapshot settlement proof may drop it.
           if (canonicalLikeSettled127) {
-            delete snapshotPending127[pending.trackId];
+            if (canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot)) {
+              delete snapshotPending127[pending.trackId];
+            } else {
+              snapshotPending127[pending.trackId] = result.liked;
+            }
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
-          dispatchLikeSync({ ...accepted, source: canonicalLikeSettled127 ? 'confirmed' : 'local' });
+          canonicalAcceptedUiAfterPersist127.push({ ...accepted, source: 'remote' });
         }
       }
 
@@ -1825,6 +1838,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // A conflict response may differ from the old optimistic heart. UI must
       // observe the removed outbox and the canonical membership before paint.
       canonicalConflictUiAfterPersist127.forEach(dispatchLikeSync);
+      canonicalAcceptedUiAfterPersist127.forEach(dispatchLikeSync);
       succeeded = true;
       // Cross-device notification is now tied to the accepted account state.
       // Notification failure must NEVER replay a successful D1 queue intake.

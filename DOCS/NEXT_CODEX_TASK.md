@@ -1,3 +1,13 @@
+## CURRENT — Stage420 signed Worker permit source PASS, 기존 app392 보호를 위한 cutover HOLD (2026-10-10)
+
+- 먼저 `DOCS/CURRENT_RELEASE_STATE.md 0S89` 및 `DOCS/STAGE420_SIGNED_CANONICAL_PERMIT_CUTOVER.md`를 읽고 정확한 `preview` HEAD를 확인한다. 사용자는 ChatGPT 직접 작업, 하나로 묶어 완료, 작업마다 1~2줄 변화 요약·진척도 표시를 원한다. Stage416 1/5 20% 불변.
+- 이번 완료: Functions `publishExploreLikeIntent420`는 UID 인증/Admin RTDB rate 허용된 operationId에만 15분 HMAC permit 발급(`functions/src/exploreLikePermit420.ts`); client 영구 outbox는 permit 없이는 Worker 전송 불가; dormant Cloudflare 426 route는 Firebase UID+전곡 HMAC를 D1 전 검사(`like-guard-permit-420.mjs`), 서명키 미배치면 fail-closed. `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`, `STAGE426_COMPILED_OPEN=false` 불변. [Fast QA 38031924162](https://github.com/andrawing1212/soridraw-music/actions/runs/38031924162), [408 38031808545](https://github.com/andrawing1212/soridraw-music/actions/runs/38031808545), [426 38031655900](https://github.com/andrawing1212/soridraw-music/actions/runs/38031655900) 각 HEAD SUCCESS. 소스 QA만 통과, 실서비스 변경 0.
+- **다음 한 묶음 개발+검증**: ① 15분 proof 만료·오프라인 재개 및 idempotent 재발급/중복 W0 ② same-account PC↔mobile + Master 2시간 잠금/해제/직접 Worker REST 위조 E2E ③ 구형 열린 app392 및 TEST·PRODUCTION `userSync/$uid/exploreLikeIntent416` 직접쓰기와 canonical 무서명 경로의 단계적 종료 계획(세 환경 정책 공유; 동등 자격 legacy와 공격 SDK 구분 불가) ④ 10만 DAU Functions/RTDB/Cloudflare 총비용과 모바일 p95 실측 ⑤ 검증된 전체 릴리스. 구형 앱 새로고침이 불가피한 지점은 사용자에게 사전 안내/명시적 승인. 비용/지연/원본 보호 불합격이면 활성화·배포 금지.
+- 이미 다른 도메인 정상인 UI/팔로우/Music Note/Library, app392, main/PRODUCTION, 공유 사용자 원본 데이터 건드리지 않는다. `defineSecret("SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET")`만 소스 후보이고 **실제 Key Secret 발급/배포 전**; 값은 채팅/GitHub에 입력하지 않는다.
+- 릴리스 상태 **HOLD**: Firebase Rules direct 416 구경로 여전히 허용, 실제 baseWorker의 old intake에 permit이 요구되지 않음. 이 둘을 그대로 둔 채 2시간 잠금 '운영 완료'로 보고 금지. Work 독립 검증/시스템 QA 후 PREVIEW 테스트, 사용자 확인 이후 TEST/PRODUCTION 승격 승인 별도.
+
+---
+
 ## CURRENT — Stage420 최신 408 QA PASS, 공유 RTDB 구형 경로/Worker 원본 잠금 안전 전환 HOLD (2026-10-10)
 
 - 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S88`. `preview` code commit `d09535b000e3588b48d0093c9b7edc78434a62cd`은 [408 Run 38030406790](https://github.com/andrawing1212/soridraw-music/actions/runs/38030406790) 실제 전체 **SUCCESS**. app413 종료·5초 idle, app141/390 확정 수신, app164 신규곡 최초 좋아요 fixture가 Stage420 false 후보 플래그를 mock에 제공하도록 수정하여 정상 좋아요 검증 계속 유지. TS/Build/Functions TS 및 live RTDB Rules read-only PASS. Stage420 switch는 여전히 OFF, PREVIEW app392 유지.

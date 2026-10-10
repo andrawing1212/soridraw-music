@@ -1,15 +1,16 @@
-name: Diagnose 069 Live Like
+name: Diagnose 069 Live Like (READ ONLY)
 
 on:
   push:
-    branches: [preview]
+    branches:
+      - preview
     paths:
       - '.github/workflows/diagnose-069-live-like.yml'
       - '.deploy/diagnose-069-live-like.trigger'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: diagnose-069-live-like
@@ -21,315 +22,45 @@ jobs:
     timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-      PREVIEW_WORKER: soridraw-explore-preview
-      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
-      PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
-        with:
-          ref: preview
-          fetch-depth: 1
-
-      - name: Set up Node.js 22
+      - name: Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-
-      - name: Install pinned Worker tooling
+          node-version: '22'
+      - name: Install existing pinned Worker CLI
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-
-      - name: Read-only live D1 like state
+      - name: Live queues, lease and counts (SELECT only, no user identifiers)
+        working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
-          cd cloudflare/explore-worker
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT 'processor' AS kind, id, lease_until, owner FROM explore_like_processor_035 WHERE id=1;
-            SELECT 'q035' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_035;
-            SELECT 'q066' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_066;
-            SELECT 'q069' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_069;
-          " --json > "$RUNNER_TEMP/queue-state.json"
-
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            WITH expanded AS (
-              SELECT b.batch_id,b.user_uid,b.created_at,b.mutation_count,
-                     TRIM(CAST(json_extract(j.value,'$.trackId') AS TEXT)) AS track_id,
-                     CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
-              FROM explore_like_batches_069 b, json_each(b.mutations_json) j
-              WHERE json_type(j.value,'$.trackId')='text'
-                AND json_type(j.value,'$.liked') IN ('true','false')
-            )
-            SELECT e.batch_id,e.created_at,e.mutation_count,e.track_id,e.desired_liked,
-                   COALESCE(s.like_count,0) AS canonical_like_count,
-                   CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END AS canonical_liked
-            FROM expanded e
-            LEFT JOIN track_stats s ON s.track_id=e.track_id
-            LEFT JOIN likes l ON l.track_id=e.track_id AND l.user_uid=e.user_uid
-            ORDER BY e.created_at DESC,e.batch_id DESC
-            LIMIT 20;
-          " --json > "$RUNNER_TEMP/pending-detail.json"
-
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT l.track_id,l.created_at,
-                   COALESCE(s.like_count,0) AS canonical_like_count,
-                   COALESCE(d.likes,-1) AS derived_like_count
-            FROM likes l
-            LEFT JOIN track_stats s ON s.track_id=l.track_id
-            LEFT JOIN explore_derived_tracks d ON d.id=l.track_id
-            WHERE l.created_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
-            ORDER BY l.created_at DESC
-            LIMIT 20;
-
-            SELECT s.track_id,s.like_count AS canonical_like_count,s.updated_at,
-                   COALESCE(d.likes,-1) AS derived_like_count
-            FROM track_stats s
-            LEFT JOIN explore_derived_tracks d ON d.id=s.track_id
-            WHERE s.updated_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
-            ORDER BY s.updated_at DESC
-            LIMIT 20;
-          " --json > "$RUNNER_TEMP/recent-counts.json"
-
-          node <<'NODE'
+            SELECT 'processor' AS kind, COALESCE(lease_until,0) AS lease_until FROM explore_like_processor_035 WHERE id=1;
+            SELECT 'q035' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_035;
+            SELECT 'q066' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_066;
+            SELECT 'q069' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_069;
+          " --json > "$RUNNER_TEMP/like-queues-readonly.json"
+          node - <<'NODE'
           const fs = require('fs');
-          const flatten = (path) => JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x => x?.results || []);
-          const q = flatten(process.env.RUNNER_TEMP + '/queue-state.json');
-          const d = flatten(process.env.RUNNER_TEMP + '/pending-detail.json');
-          const r = flatten(process.env.RUNNER_TEMP + '/recent-counts.json');
-          const now = Date.now();
-          console.log('=== 069 LIVE READ-ONLY DIAG ===');
-          for (const row of q) {
-            if (row.kind === 'processor') {
-              console.log(`PROCESSOR lease_until=${Number(row.lease_until||0)} owner=${String(row.owner||'') ? 'SET' : 'EMPTY'} lease_remaining_ms=${Math.max(0, Number(row.lease_until||0)-now)}`);
+          const a = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-queues-readonly.json','utf8'));
+          const rows = a.flatMap(part => Array.isArray(part.results) ? part.results : []);
+          for (const row of rows) {
+            const kind = String(row.kind || '');
+            if (kind === 'processor') {
+              const lease = Number(row.lease_until || 0);
+              console.log('PROCESSOR_LEASE_REMAINING_S=' + Math.max(0, Math.floor((lease - Date.now()) / 1000)));
             } else {
-              const oldest = Number(row.oldest_at||0);
-              const newest = Number(row.newest_at||0);
-              console.log(`${row.kind.toUpperCase()} batches=${Number(row.pending_batches||0)} mutations=${Number(row.pending_mutations||0)} oldest_age_s=${oldest ? Math.max(0,Math.floor((now-oldest)/1000)) : 0} newest_age_s=${newest ? Math.max(0,Math.floor((now-newest)/1000)) : 0}`);
+              const at = Number(row.oldest_at || 0);
+              console.log(kind.toUpperCase() + '_BATCHES=' + Number(row.batches || 0));
+              console.log(kind.toUpperCase() + '_MUTATIONS=' + Number(row.mutations || 0));
+              console.log(kind.toUpperCase() + '_OLDEST_AGE_S=' + (at ? Math.max(0,Math.floor((Date.now()-at)/1000)) : 0));
             }
           }
-          if (!d.length) console.log('Q069_DETAIL none');
-          for (const row of d) {
-            console.log(`Q069_DETAIL batch=${String(row.batch_id||'')} age_s=${Math.max(0,Math.floor((now-Number(row.created_at||0))/1000))} track=${String(row.track_id||'')} desired=${Number(row.desired_liked||0)} canonical_liked=${Number(row.canonical_liked||0)} canonical_count=${Number(row.canonical_like_count||0)}`);
-          }
-          if (!r.length) console.log('RECENT_COUNTS none');
-          for (const row of r) {
-            const at = Number(row.created_at || row.updated_at || 0);
-            console.log(`RECENT_COUNT track=${String(row.track_id||'')} age_s=${at ? Math.max(0,Math.floor((now-at)/1000)) : 0} canonical_count=${Number(row.canonical_like_count||0)} derived_count=${Number(row.derived_like_count??-1)}`);
-          }
-          console.log('READ_ONLY_DIAG=PASS');
+          if (!rows.some(x=>x.kind==='q069')) throw Error('q069 report unavailable');
+          console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE
-
-      - name: Persist privacy-safe same-track canonical proof and read plan
-        if: ${{ github.event_name != 'push' || (!startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') && !startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT COUNT(*) AS matched_tracks,
-              COALESCE(SUM(COALESCE(s.like_count,0)),0) AS public_like_count,
-              COALESCE(SUM(CASE WHEN EXISTS (
-                SELECT 1 FROM likes l
-                WHERE l.track_id=t.id AND l.user_uid=t.owner_uid
-              ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks,
-              COALESCE(SUM((SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id)),0) AS canonical_like_rows
-            FROM tracks t
-            LEFT JOIN track_stats s ON s.track_id=t.id
-            WHERE t.title LIKE '%끝내 돌아온 계절처럼%';
-          " --json > "$RUNNER_TEMP/affected-track.json"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            EXPLAIN QUERY PLAN SELECT l.track_id FROM likes l
-            JOIN tracks t ON t.id=l.track_id
-            WHERE l.user_uid='__diag__' AND l.track_id IN ('__diag_a__','__diag_b__')
-              AND t.is_public=1 AND t.status='published';
-            EXPLAIN QUERY PLAN WITH requested(track_id) AS (VALUES ('__diag_a__'),('__diag_b__'))
-            SELECT r.track_id FROM requested r
-            CROSS JOIN likes l INDEXED BY sqlite_autoindex_likes_1
-            JOIN tracks t ON t.id=r.track_id
-            WHERE l.track_id=r.track_id AND l.user_uid='__diag__'
-              AND t.is_public=1 AND t.status='published';
-          " --json > "$RUNNER_TEMP/like-read-plan.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const read=(name)=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name,'utf8'));
-          const a=read('affected-track.json').flatMap(x=>x.results||[])[0]||{};
-          const q=read('queue-state.json').flatMap(x=>x.results||[]);
-          const now=Date.now();
-          const plans=read('like-read-plan.json').map((x,i)=>({name:i===0?'current':'indexed_candidate',rows:x.results||[]}));
-          const lines=['# PREVIEW LIKE REAL-STATE READ-ONLY DIAGNOSTIC','',
-            'No user identifiers or raw track IDs are included. This is a one-time read-only D1 inspection.',
-            '', 'Affected public title match count: '+Number(a.matched_tracks||0),
-            'Canonical public count sum: '+Number(a.public_like_count||0),
-            'Canonical likes relation rows: '+Number(a.canonical_like_rows||0),
-            'Track owner has liked (sum): '+Number(a.owner_liked_tracks||0),
-            'Note: the logged-in viewer may not be the track owner; owner membership is not viewer membership.',''];
-          for(const row of q) if(row.kind==='processor') lines.push('Processor lease remaining seconds: '+Math.max(0,Math.floor((Number(row.lease_until||0)-now)/1000)));
-          for(const row of q) if(row.kind && row.kind!=='processor')
-            lines.push('Queue '+row.kind+': '+Number(row.pending_batches||0)+' batches, '+Number(row.pending_mutations||0)+' pending mutations; oldest age seconds '+(Number(row.oldest_at||0)>0?Math.max(0,Math.floor((now-Number(row.oldest_at))/1000)):0)+'; newest age seconds '+(Number(row.newest_at||0)>0?Math.max(0,Math.floor((now-Number(row.newest_at))/1000)):0));
-          for(const plan of plans) for(const row of plan.rows)
-            lines.push('Query plan '+plan.name+': '+String(row.detail||'').replaceAll('\`',''));
-          lines.push('', 'Diagnosis only; no data was altered.', '');
-          fs.writeFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\n'));
-          NODE
-          git config user.name "soridraw-readonly-diagnostic"
-          git config user.email "actions@users.noreply.github.com"
-          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
-          if ! git diff --cached --quiet; then
-            git commit -m "diag(preview): record anonymized canonical like and query-plan evidence"
-            git push origin HEAD:preview
-          fi
-          echo 'SANITIZED_READONLY_PROOF_COMMITTED=PASS'
-
-      - name: One-time bounded replay of already-accepted 069 batches
-        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') }}"
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
-          deployment_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/deployments"
-          schedule_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules"
-          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
-          active="$(curl -fsS -H "$auth" "$deployment_api" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id')"
-          test "$active" = '733c3981-4095-4c69-bf33-9abb5de7a450'
-          grep -Fq 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916' cloudflare/explore-worker/canonical/preview-entry.js
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS changes
-            FROM explore_like_batches_069;
-            SELECT lease_until FROM explore_like_processor_035 WHERE id=1;
-          " --json > "$RUNNER_TEMP/pre-replay.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const results=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/pre-replay.json','utf8')).flatMap(x=>x.results||[]);
-          const q=results.find(x=>'pending' in x)||{};
-          const lease=results.find(x=>'lease_until' in x)||{};
-          const n=Number(q.pending||0),m=Number(q.changes||0);
-          console.log('REPLAY_PREFLIGHT pending_batches='+n+' pending_mutations='+m);
-          if(n<1||n>20||m<1||m>100)throw Error('Unsafe pending batch count for bounded replay');
-          if(Number(lease.lease_until||0)>Date.now())throw Error('Existing aggregate processor lease still active');
-          NODE
-          pending_before="$(node -e "const x=require(process.env.RUNNER_TEMP+'/pre-replay.json').flatMap(y=>y.results||[]).find(y=>'pending' in y); process.stdout.write(String(Number(x?.pending||0)))")"
-          if [ "$pending_before" = 0 ]; then
-            echo 'CANONICAL_QUEUE_ALREADY_DRAINED=PASS'
-            exit 0
-          fi
-          old_schedules="$(curl -fsS -H "$auth" "$schedule_api" | jq -c '.result.schedules // [] | map({cron})')"
-          test "$old_schedules" = '[]'
-          printf '%s' "$old_schedules" > "$RUNNER_TEMP/preview-schedule-before.json"
-          restore=0
-          restore_original() {
-            status=$?
-            trap - EXIT
-            if [ "$restore" = 1 ]; then
-              if ! curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/preview-schedule-before.json" "$schedule_api" > "$RUNNER_TEMP/schedule-restore.json"; then
-                echo 'PREVIEW_CRON_RESTORE=FAIL' >&2
-                exit 1
-              fi
-              if ! jq -e '.success == true' "$RUNNER_TEMP/schedule-restore.json" >/dev/null; then
-                echo 'PREVIEW_CRON_RESTORE_RESPONSE=FAIL' >&2
-                exit 1
-              fi
-              echo 'PREVIEW_CRON_RESTORED=PASS'
-            fi
-            exit "$status"
-          }
-          trap restore_original EXIT
-          restore=1
-          printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/preview-queue-rescue-cron.json"
-          curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/preview-queue-rescue-cron.json" "$schedule_api" > "$RUNNER_TEMP/rescue-cron-result.json"
-          jq -e '.success == true' "$RUNNER_TEMP/rescue-cron-result.json" >/dev/null
-          echo 'PREVIEW_CRON_TEMPORARY_ONE_MINUTE=PASS'
-          remaining=999
-          for attempt in 1 2 3; do
-            sleep 75
-            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS remaining FROM explore_like_batches_069" --json > "$RUNNER_TEMP/replay-count.json"
-            remaining="$(node -e "let x=require(process.env.RUNNER_TEMP+'/replay-count.json');process.stdout.write(String(Number(x.flatMap(y=>y.results||[])[0]?.remaining??999)))")"
-            echo "CANONICAL_QUEUE_REPLAY_ATTEMPT=$attempt REMAINING=$remaining"
-            if [ "$remaining" = 0 ]; then break; fi
-          done
-          test "$remaining" = 0
-          echo 'CANONICAL_QUEUE_069_DRAINED=PASS'
-          echo 'Note: processing used existing Worker scheduled handler, not a direct data migration or custom data rewrite.'
-          printf '\\n## Existing Worker one-time queue recovery\\n- Earlier queued 069 mutations drained to zero by existing canonical scheduled handler.\\n- Temporary PREVIEW cron will be restored to its previous setting by EXIT trap.\\n- This is not proof of PC/mobile heart agreement or R0 on app re-entry.\\n' >> DOCS/LIKE_READONLY_DIAG_LATEST.md
-          git config user.name "soridraw-readonly-diagnostic"
-          git config user.email "actions@users.noreply.github.com"
-          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
-          git commit -m "diag(preview): record bounded canonical queue recovery result"
-          git push origin HEAD:preview
-
-      - name: Publish sanitized post-recovery queue and schedule status
-        if: "${{ always() && github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') || startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}"
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS changes FROM explore_like_batches_069" --json > "$RUNNER_TEMP/post-recovery.json"
-          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" > "$RUNNER_TEMP/post-schedules.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const a=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/post-recovery.json','utf8')).flatMap(x=>x.results||[])[0]||{};
-          const sched=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/post-schedules.json','utf8'));
-          const cron=Array.isArray(sched?.result?.schedules)?sched.result.schedules.length:-1;
-          const lines=['','## One-time recovery postflight',
-            'Pending 069 batches: '+Number(a.pending||0),
-            'Pending 069 user mutations: '+Number(a.changes||0),
-            'PREVIEW cron schedule count: '+cron,
-            'Cron restored to original zero schedules: '+(cron===0?'YES':'NO'),
-            'This does not independently prove PC/mobile user membership convergence.',''];
-          fs.appendFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\n'));
-          NODE
-          git config user.name "soridraw-readonly-diagnostic"
-          git config user.email "actions@users.noreply.github.com"
-          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
-          if ! git diff --cached --quiet; then
-            git commit -m "diag(preview): record queue recovery postflight and cron safety"
-            git push origin HEAD:preview
-          fi
-
-      - name: Probe current PREVIEW feed payload for recent like
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd cloudflare/explore-worker
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT track_id FROM likes
-            WHERE created_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
-            ORDER BY created_at DESC LIMIT 1;
-          " --json > "$RUNNER_TEMP/recent-like-track.json"
-          track="$(node -e "const r=require(process.env.RUNNER_TEMP+'/recent-like-track.json');process.stdout.write(String(r.flatMap(x=>x.results||[])[0]?.track_id||''))")"
-          test -n "$track"
-          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__diag=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/feed.json"
-          TRACK_ID="$track" node <<'NODE'
-          const fs=require('fs');
-          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/feed.json','utf8'));
-          const items=payload?.data?.items||[];
-          const row=items.find(x=>String(x?.id||'')===process.env.TRACK_ID);
-          if (!row) {
-            console.log(`FEED_TRACK_NOT_IN_TOP40 track=${process.env.TRACK_ID}`);
-            process.exit(0);
-          }
-          const count=Number(row.likeCount ?? row.like_count ?? row?.stats?.likeCount ?? row?.stats?.like_count ?? 0);
-          console.log(`FEED_PAYLOAD_TRACK track=${process.env.TRACK_ID} like_count=${count}`);
-          NODE
-
-      - name: Verify PREVIEW Worker schedule and active version
-        shell: bash
-        run: |
-          set -euo pipefail
-          deployments="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/deployments")"
-          schedules="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules")"
-          version="$(printf '%s' "$deployments" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id')"
-          cron="$(printf '%s' "$schedules" | jq -r '.result.schedules[0].cron // ""')"
-          echo "PREVIEW_ACTIVE_VERSION=$version"
-          echo "PREVIEW_CRON=$cron"
-          test "$cron" = '*/10 * * * *'
-          echo 'PREVIEW_SCHEDULE=PASS'

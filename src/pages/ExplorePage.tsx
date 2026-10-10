@@ -2275,19 +2275,24 @@ export default function ExplorePage() {
     const onRemote = (detail: {
       uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number; source?: string;
     }) => {
-      if (detail?.source !== 'remote' || detail.uid !== user.uid ||
-          !detail.trackId || typeof detail.liked !== 'boolean') return;
+      if ((detail?.source !== 'remote' && detail?.source !== 'remote-intent') ||
+          detail.uid !== user.uid || !detail.trackId || typeof detail.liked !== 'boolean') return;
       // React may commit this event after a newer local click. Read the
       // service's effective membership again instead of trusting the event
       // payload as the latest state.
       const effectiveLiked127 = readExploreTrackLikeMembership127(user.uid, detail.trackId);
       if (effectiveLiked127 !== detail.liked) return;
+      const isTentative416 = detail.source === 'remote-intent';
       const pair129 = normalizeExploreLikeDisplayPair129(
         effectiveLiked127,
         Number.isSafeInteger(detail.likeCount) ? Number(detail.likeCount) : 0,
       );
       likeInteractionVersionRef090.current += 1;
-      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: pair129.liked }));
+      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: effectiveLiked127 }));
+
+      // 416 provisional updates repaint only MY heart and My Likes membership.
+      // Their likeCount is not a published public count, even when filled.
+      if (isTentative416) return;
 
       // Heart + count are one accepted like atom. When a canonical remote count
       // accompanies the account state, patch every loaded surface together.

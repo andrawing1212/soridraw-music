@@ -1,3 +1,11 @@
+## CURRENT — Stage416 총5단계 중 2단계: 최초 ACK 소실 복구 50건 PASS, 51건 이후 서버 증거 설계 미완 (2026-10-10)
+
+- `preview` candidate `ecf3941e17857ab1a932f49f104d111699daeebe` (구현 `d72f90bd77084e4d264cf87e4e0ee2e6e7dd4d1d`), [408 Run 38061501678](https://github.com/andrawing1212/soridraw-music/actions/runs/38061501678) SUCCESS. ACK 유실 첫 좋아요는 재클릭·쿼터 중복쓰기 대신 Functions 읽기 전용 최대50개 exact 서버 승인 기록 확인, 맞을 때만 기존 operationId 서명 증표 복구. mismatch/51+ eviction/expired는 fail closed. 기존 app396 좋아요/팔로우·UI 동작 변경 없음. RTDB/Worker/Functions/Hosting 배포·사용자 원본 변경 없음.
+- **2단계 다음 목표 단 하나:** 최초 server approved→ACK/HMAC 증표 유실→다른 51+ 클릭으로 history eviction→재실행 시에도 **원자적으로 입증되는 exact op 승인**을 저장/확인하는 비용 상수시간 경로를 정밀 설계. 트랜잭션 원자성·동시 다중기기·장기 보존 크기·TTL·RTDB/Functions 읽기/쓰기·100k명 월비용·구형 앱 영향까지 한 번에 검토하여 안전하지 않으면 억지 구현 금지. 171 canonical 기록만으로 최초 Worker 접수 전 승인 증명 불가능. Stage420/426 OFF 유지, shared Rules/Worker/Functions/PROD 배포 금지.
+- **진행률:** ① Stage416 좋아요 보안 전환 **2/5 단계 진행 중, 완료 1/5·20%**; ② 앱 속도 개선 **5/5·100% 종료**; ③ 실기기 검증 **4/4·100% 종료**. 새 단계 추가 금지. 사용자 보고에는 상위 작업 아래 세부 목표 1개만 표시.
+
+---
+
 ## CURRENT — 앱396 속도·실기기 검증 사용자 PASS로 종료, Stage416 독립 미완료 (2026-10-10)
 
 - **② 앱 속도 개선:** 총5단계 **5/5·100% 완료** (앱396 대상). PREVIEW 배포·TypeScript·Build·회귀검사 PASS, 사용자 “모두 다 괜찮아. 통과”로 로그인 PC/모바일/갤럭시탭 체감·전환·분할바 최종 검증 PASS. 남은 재현 오류 없음 → 5단계에서는 추가 성능 패치를 만들지 않고 종료. 정량 FPS/p95와 비용 read 0의 전체 기기 계측은 수행하지 않음.

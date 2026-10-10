@@ -53,3 +53,9 @@
 - Commit 83977aa740ff8c754c5c8d9a9304e4bff1c4c7f6까지 신규 서명증표 재발급 Callable + 후보 outbox 응답 경로를 source-only로 연결. [408 Run 38042699563](https://github.com/andrawing1212/soridraw-music/actions/runs/38042699563) Functions TS/app TS/Build/기존 좋아요·팔로우+재전송 거부 테스트 SUCCESS.
 - 승인 증표가 존재하면 최초 서명된 exact opId만 재발급, 50건 이벤트 슬라이딩/쿼터 재소모를 우회. 증표 미존재 approved outbox는 fail closed. 하지만 원래 ACK 손실로 아직 awaiting 상태인 것은 재시도 시 최초 허용 경로를 다시 탈 수 있어 51개 뒤 문제가 여전히 남는다. Cutover를 활성화하지 않는 구체적인 이유다.
 - 공유 사용자 데이터, D1/RTDB Rules, Firebase Functions, Cloudflare Worker, main/TEST/PRODUCTION 전부 미변경. PREVIEW 앱395 그대로.
+
+## 2026-10-10 ACK 유실 최근 50건 서버 증거 복구 후보 — 자동검사 PASS / 운영 HOLD
+
+- 소스 `d72f90bd77084e4d264cf87e4e0ee2e6e7dd4d1d`, 테스트 범위 보정 `ecf3941e17857ab1a932f49f104d111699daeebe`, [408 38061501678](https://github.com/andrawing1212/soridraw-music/actions/runs/38061501678) SUCCESS.
+- 새 후보 `functions/src/exploreLikeApprovalRecovery420.ts` / `functions/src/index.ts` `recoverExploreLikePermit420`: 인증 UID 아래 최근 50개 server-own 결과에서 동일 operationId+track+owner+liked+60분 승인 기록이 존재할 때만 새 15분 HMAC 발급. 기존 RTDB Admin rate 함수 재호출 없음, 트랜잭션 없음, D1 0, RTDB 승인 기록 조회 최대 1번(기록 크기 상한 50). 클라이언트 첫 publish ACK 실패 때만 후보 recover 실행, 기존 outbox 유지·신규 허위 승인 금지. 리더의 50건 초과/만료/누락·응답 실패는 fail-closed.
+- **이 작업은 최초 ACK 손실 후 이미 최근 기록이 사라진 51개 이상 경과 상황의 복구를 해결하지 않는다.** 별도 원자적·장기 서버 승인 증명 없이는 `Stage416 2/5` 완료 금지. 현재 PREVIEW app396, 구형 앱·RTDB Rules·Functions·Worker·공유 사용자 데이터 변경 없음. 키 미배포, Stage420/426 cutover OFF. 실환경 월비용/물리 p95/171 W0 미측정.

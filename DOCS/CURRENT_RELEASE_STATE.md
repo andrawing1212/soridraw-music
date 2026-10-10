@@ -1,3 +1,13 @@
+## CURRENT — Stage416 2/5: 좋아요 첫 승인 ACK 유실 최근 50건 정확 복구 코드·408 PASS (2026-10-10)
+
+- **진행표:** ① Stage416 좋아요 보안 전환 **총 5단계 중 2단계 진행, 1/5 완료·20%**; ② 앱396 속도 개선 **5/5·100% 종료**; ③ PC·휴대폰·태블릿 실사용 확인 **4/4·100% 종료**(사용자 2026-10-10 PASS). 새로운 속도/실기기 개선 작업을 부수적으로 시작하지 않는다.
+- **이번 2단계 구현:** `preview` 후보 commit `d72f90bd77084e4d264cf87e4e0ee2e6e7dd4d1d`, 최종 수정 commit `ecf3941e17857ab1a932f49f104d111699daeebe`. Firebase Functions 후보 `recoverExploreLikePermit420`은 인증 UID의 `privateLikeSync420/$uid/display/results` 최대 50개 기존 기록을 딱 1번 read하여 trackId/ownerUid/liked/operationId/time/status를 정확히 비교. 맞으면 이미 승인된 **원본 operationId에만** 서명 증표를 다시 발급. 최초 ACK 실패 시 클라이언트 guarded 후보가 새 승인 트랜잭션 재전송 **대신** 이 검증을 한 번 실행하고, 불일치/기록 소멸/응답 실패면 durable outbox 유지·canonical 전송 금지. 기존 서명증표 갱신은 기존 read/write 0 경로 보호.
+- **검증 결과:** [408 Run 38061501678](https://github.com/andrawing1212/soridraw-music/actions/runs/38061501678) **SUCCESS**. 신규 server helper 실제 실행 가상 RTDB: exact recent match PASS, 51개 밖 eviction·wrong UID/곡/행동·60분 초과 fail-closed PASS, 최초 실패 시 새 publish 0 PASS, quota/admin RTDB write 0. Firebase Functions TypeScript/앱 TypeScript/Build/기존 좋아요·팔로우/공유 Rules read-only PASS. 1차 Run 38061412370은 갱신 검사의 함수 범위가 신규 복구 함수까지 걸린 **검사 자체 오류**로 FAIL, `scripts/verify-420-permit-renewal.mjs`의 범위만 보정하여 현재 PASS (보안 제약 유지).
+- **남은 2단계 필수 BLOCK:** 최초 승인과 ACK/증표 모두 소실된 뒤 51개 이상 클릭으로 해당 승인 기록이 최근 50건에서 사라지면, 기존 승인 여부를 인증 가능한 장기 서버 기록에서 확인할 수 없음. 지금 설계는 결코 재클릭/중복 RTDB write로 재전송하지 않지만, 해당 outbox가 확인 전 대기될 수 있음. 171 canonical receipt는 승인 후 canonical Worker 접수 전인 이 상황에서 존재하지 않을 수 있으므로 완전한 증명 아님. 무제한 저장·전체 계정 조회는 금지. **여기 해결과 기존 구형 앱 전환/RULES/Worker 잠금/비용 실측 전 Stage416 2단계 완료 및 활성화 불가.**
+- **배포/보호:** 소스 후보만 commit/push, Firebase Hosting 앱396 실제 운영본 그대로, 신규 Functions 미배포, Cloudflare Worker 426 OFF, `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`. RTDB Rules/D1/R2/Firestore 공유 사용자 원본·main/TEST/PRODUCTION 변경 0. 다음 하나는 최초 ACK와 증표가 모두 없는 51+ eviction을 원자적·O(1) 서버 승인 증거로 복구할 수 있는 최소 비용·호환 설계 및 실제 구현 판단, 불가능하면 사용자에게 명시적 안전성·비용 선택 보고.
+
+---
+
 ## CURRENT — 앱396 PREVIEW 실사용 PASS · 속도 개선 및 기기 검증 단계 종료 (2026-10-10)
 
 - **사용자 최종 실사용 판정:** 사용자 2026-10-10 직접 보고 “모두 다 괜찮아. 통과”. 직전 요청한 앱396 로그인 PC·모바일·갤럭시탭의 Music Note/Library 재진입·스크롤, Studio 분할바 빠른 드래그/해제, 모바일 화면 전환 점검에 대한 종합 **PASS**로 수락. 실측 FPS/p95·모든 기기의 서버비용 0 계측은 하지 않았으며 사용자 체감 확인과 구분한다.

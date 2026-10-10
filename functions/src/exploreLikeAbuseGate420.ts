@@ -151,8 +151,16 @@ export const publishGuardedLikeSignal420 = async (
   const snapshot = root?.display;
   const version = Number(snapshot?.version || 0);
   const rate = normalizeState(snapshot?.rate);
-  const duplicate = Array.isArray(snapshot?.results) &&
-    snapshot.results.some((row) => row?.operationId === input.operationId);
+  // A retry is idempotent only when the entire original command matches.
+  // Reusing a previous operationId with a different track/owner/state must
+  // never receive a successful ACK or consume another quota/write.
+  const duplicateRow = Array.isArray(snapshot?.results)
+    ? snapshot.results.find((row) => row?.operationId === input.operationId)
+    : undefined;
+  const duplicate = !!duplicateRow &&
+    duplicateRow.trackId === input.trackId &&
+    duplicateRow.ownerUid === input.ownerUid &&
+    duplicateRow.liked === input.liked;
   const allowed = transaction.committed || duplicate;
   return {
     allowed,

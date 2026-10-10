@@ -1,13 +1,14 @@
-app388-explore-liked-cross-device-RTDB-alert-failure-retry-preview
-target_source=d075357805b218d7b1da1c2d592204d5f31f5bfe
-app_version=388
-scope=uid-private-like-alert-only-bounded-2s-10s-30s-retry,canonical-unchanged,preview-hosting-only
-qa_408_run=37976643238
+app389-explore-heart-sync-local-outbox-remote-deferred-preview
+target_source=418ba5ca7d681718560db620336d61a8afa2281c
+app_version=389
+scope=preview-hosting-only,same-uid-explore-like-receiver-defer-until-local-outbox-net-zero
+qa_408_run=38010633782
 qa_408=SUCCESS
 typecheck=PASS
 build=PASS
-like_follow_regression=PASS
-live_shared_rtdb_rules_readonly_check=PASS
+personal_like_regression=PASS
+public_like_and_follow_regression=PASS
+shared_rtdb_rules_readonly_check=PASS
 deploy_shared_rtdb_rules=false
 no_user_data_migration=true
 worker_change=false
@@ -15,4 +16,4 @@ functions_change=false
 shared_d1_change=false
 test_change=false
 production_change=false
-approval=user_2026-10-09_explicit_preview_deploy
+approval=user_2026-10-10_modify-includes-preview-deploy

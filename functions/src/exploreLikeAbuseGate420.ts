@@ -136,7 +136,6 @@ export const publishGuardedLikeSignal420 = async (
   const rate = normalizeState(snapshot?.rate);
   const duplicate = Array.isArray(snapshot?.results) &&
     snapshot.results.some((row) => row?.operationId === input.operationId);
-  const decision = decide(rate, serverNowMs);
   const allowed = transaction.committed || duplicate;
   return {
     allowed,

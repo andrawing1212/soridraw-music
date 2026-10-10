@@ -22,6 +22,7 @@ import {
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 import { issueLikePermit420 } from "./exploreLikePermit420";
+import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
   DEFAULT_LIKE_ABUSE_SETTINGS_420,
   LIKE_ABUSE_SETTINGS_PATH_420,
@@ -4006,6 +4007,35 @@ export const publishExploreLikeIntent420 = onCall(
         error instanceof Error ? error.message : "unknown");
       throw new HttpsError("unavailable",
         "일시적으로 좋아요를 안전하게 처리하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+  },
+);
+
+// Candidate-only. Exact previously signed approval may be refreshed after
+// 15 minutes without re-counting the click; missing/wrong proof FAILS CLOSED.
+export const renewExploreLikePermit420 = onCall(
+  { region: "us-central1", secrets: [stage420PermitSigningSecret] },
+  async (request) => {
+    const uid = String(request.auth?.uid || "").trim();
+    if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    const raw = request.data && typeof request.data === "object" &&
+      !Array.isArray(request.data) ? request.data as Record<string, unknown> : {};
+    if (typeof raw.trackId !== "string" ||
+        typeof raw.liked !== "boolean" ||
+        typeof raw.operationId !== "string" ||
+        typeof raw.previousGuardPermit420 !== "string") {
+      throw new HttpsError("permission-denied", "기존 승인 확인이 필요합니다.");
+    }
+    try {
+      const guardPermit420 = renewPreviouslyApprovedLikePermit420({
+        uid, trackId: raw.trackId, liked: raw.liked,
+        operationId: raw.operationId,
+      }, raw.previousGuardPermit420, Date.now(), stage420PermitSigningSecret.value());
+      return { ok: true, renewed: true, guardPermit420 };
+    } catch {
+      // Preserve durable outbox for authoritative reconciliation; do not call
+      // the original rate transaction and never grant an unsigned retry.
+      throw new HttpsError("permission-denied", "기존 승인 확인이 필요합니다.");
     }
   },
 );

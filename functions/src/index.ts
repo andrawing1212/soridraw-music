@@ -1,4 +1,5 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { consumeGeminiInteractionSse } from "./geminiInteractionSse";
@@ -20,6 +21,7 @@ import {
 } from "./libraryBundleFreshness";
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
+import { issueLikePermit420 } from "./exploreLikePermit420";
 import {
   DEFAULT_LIKE_ABUSE_SETTINGS_420,
   LIKE_ABUSE_SETTINGS_PATH_420,
@@ -3945,13 +3947,18 @@ export const processMusicNoteBulkPage = onCall(
   },
 );
 
+// Shared Firebase/Cloudflare 32-byte base64url secret is PROVISIONING-ONLY:
+// never commit or display its value. Missing secret MUST fail closed. This
+// candidate must not be deployed before all-environment cutover verification.
+const stage420PermitSigningSecret = defineSecret("SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET");
+
 // Stage420 secured candidate, not deployed: same-account private provisional
 // like signal from verified Firebase Auth through a server-owned RTDB root.
 // The app392 direct channel remains live until the complete RTDB ancestor
 // permission cutover is independently validated; DO NOT enable a new client
 // while the legacy route can still be directly written by authenticated bots.
 export const publishExploreLikeIntent420 = onCall(
-  { region: "us-central1" },
+  { region: "us-central1", secrets: [stage420PermitSigningSecret] },
   async (request) => {
     const uid = String(request.auth?.uid || "").trim();
     if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -3980,7 +3987,20 @@ export const publishExploreLikeIntent420 = onCall(
         liked: input.liked,
         operationId: input.operationId,
       }, Date.now(), masterSettings);
-      return { ok: true, ...outcome };
+      // Only an authenticated, server-approved operation may receive a
+      // canonical intake proof; denied/locked actions never receive one.
+      // Exactly the matching Worker mutation must carry this short-lived
+      // certificate. Replayed operationIds remain canonical W0 by receipt171.
+      const guardPermit420 = outcome.allowed
+        ? issueLikePermit420({
+            uid,
+            trackId: input.trackId.trim(),
+            liked: input.liked,
+            operationId: input.operationId,
+          }, Date.now(), stage420PermitSigningSecret.value())
+        : undefined;
+      return { ok: true, ...outcome,
+        ...(guardPermit420 ? { guardPermit420 } : {}) };
     } catch (error) {
       console.error("[420] Authenticated private-like guard failed:",
         error instanceof Error ? error.message : "unknown");

@@ -25,8 +25,16 @@ try {
  const bin=[process.env.CHROME_BIN,'/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium'].filter(Boolean).find(existsSync);
  assert.ok(bin,'Chrome unavailable');
  browser=await chromium.launch({headless:true,executablePath:bin,args:['--no-sandbox','--disable-dev-shm-usage']});
- for(const profile of [{name:'pc',width:1800,height:940},{name:'tablet-emulated',width:1280,height:900}]) {
-  const context=await browser.newContext({viewport:{width:profile.width,height:profile.height}});
+ for(const profile of [
+  {name:'pc',width:1800,height:940},
+  {name:'pc-wide-boundary',width:1600,height:900},
+  {name:'tablet-emulated',width:1280,height:900},
+  {name:'tablet-min-edge',width:1100,height:840},
+]) {
+  const context=await browser.newContext({
+   viewport:{width:profile.width,height:profile.height},
+   hasTouch:profile.name==='tablet-emulated',
+  });
   const page=await context.newPage(),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(()=>{
@@ -76,9 +84,42 @@ try {
   assert.ok(Math.abs(after.scrollBuilder-scroll.builder)<6 && Math.abs(after.scrollResult-scroll.result)<6,
    profile.name+' scroll drift');
   assert.deepEqual(errors,[],profile.name+' browser JS error');
+  if(profile.name==='tablet-emulated'){
+   // Chrome delivers genuine browser touch/pointer events to the unchanged
+   // split engine. This is NOT a physical Galaxy Tab result.
+   const rect=await divider.boundingBox();
+   assert.ok(rect,'tablet simulated touch divider not visible');
+   const tx=Math.round(rect.x+rect.width/2);
+   const ty=Math.round(rect.y+Math.min(200,rect.height/2));
+   const touchBefore=await sample();
+   const client=await context.newCDPSession(page);
+   await client.send('Input.dispatchTouchEvent',{type:'touchStart',
+    touchPoints:[{x:tx,y:ty}]});
+   for(let n=1;n<=8;n++){
+    await client.send('Input.dispatchTouchEvent',{type:'touchMove',
+     touchPoints:[{x:tx-100*n/8,y:ty}]});
+    await page.waitForTimeout(14);
+   }
+   const touchDuring=await sample();
+   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+   await page.waitForTimeout(310);
+   const touchAfter=await sample();
+   console.log('APP394_SPLIT_TABLET_CHROME_TOUCH='+JSON.stringify({
+    device:profile.name,touchBefore,touchDuring,touchAfter,errors,
+   }));
+   assert.ok(Math.abs(touchAfter.builderWidth-touchBefore.builderWidth)>8,
+    'tablet touch event did not resize both panes');
+   assert.ok(Math.abs(touchAfter.builderWidth-touchDuring.builderWidth)<35,
+    'tablet touch pointerup snapped split boundary');
+   assert.ok(Math.abs(touchAfter.scrollBuilder-touchBefore.scrollBuilder)<6 &&
+     Math.abs(touchAfter.scrollResult-touchBefore.scrollResult)<6,
+    'tablet touch caused vertical scroll drift');
+   assert.deepEqual(errors,[],'tablet simulated touch browser JS error');
+  }
   await context.close();
  }
- console.log('APP394_SPLIT_ISOLATED=PASS profiles=2');
+ console.log('APP394_SPLIT_ISOLATED=PASS profiles=4');
+ console.log('APP394_CHROME_TABLET_TOUCH_DRAG_NO_SNAP=PASS');
  console.log('APP394_REAL_TOUCH_AND_AUTH_STUDIO=NOT_TESTED');
 } finally {
  if(browser) await browser.close();

@@ -30,7 +30,10 @@ const browser = await chromium.launch({
 const rows = [];
 try {
   for (const config of [
+    { name: 'desktop-wide', viewport: { width: 1800, height: 940 }, isMobile: false, hasTouch: false },
     { name: 'desktop', viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false },
+    { name: 'tablet-emulated', viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: true },
+    { name: 'tablet-split-edge', viewport: { width: 1100, height: 840 }, isMobile: false, hasTouch: true },
     { name: 'mobile-emulated', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
   ]) {
     const context = await browser.newContext({
@@ -99,6 +102,32 @@ try {
     assert.equal(assetFailures.length, 0, config.name + ' first-load JS/CSS asset failure');
     assert.equal(measurements.lazyChunksFetchedBeforeAction.length, 0,
       config.name + ' loaded Gemini/modal chunk without an explicit action');
+    // Same guest device, same site; second visit checks for accidental blank
+    // roots, repeat lazy downloads and crashed JS. No account or DB access.
+    const warmNavigation = await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+    assert.equal(warmNavigation?.status(), 200, config.name + ' warm revisit HTTP failure');
+    await page.waitForFunction(() => {
+      const root = document.querySelector('#root');
+      return root && (root.innerText || root.textContent || '').trim().length > 15;
+    }, { timeout: 22000 });
+    await page.waitForTimeout(1100);
+    const warm = await page.evaluate(() => ({
+      rootChars: document.querySelector('#root')?.innerText?.trim().length || 0,
+      domContentLoadedMs: Math.round(
+        performance.getEntriesByType('navigation')[0]?.domContentLoadedEventEnd || 0,
+      ),
+      lazyChunksFetchedWithoutAction: performance.getEntriesByType('resource')
+        .map(entry => entry.name.split('/').pop())
+        .filter(name => /^geminiService-|^MusicApiGenerateModal-/.test(name || '')),
+    }));
+    assert.ok(warm.rootChars > 15, config.name + ' guest warm revisit blank');
+    assert.deepEqual(warm.lazyChunksFetchedWithoutAction, [],
+      config.name + ' warm visit downloaded generation chunk with no action');
+    assert.equal(assetFailures.length, 0, config.name + ' guest cold/warm asset failures');
+    row.warmRevisit = warm;
+    console.log('PREVIEW_APP_GUEST_BROWSER_WARM_METRICS=' + JSON.stringify({
+      device: config.name, ...warm,
+    }));
     // Non-fatal errors from external Auth/AppCheck endpoints are reported for review.
     rows.push(row);
     await context.close();
@@ -107,5 +136,6 @@ try {
   await browser.close();
 }
 console.log('PREVIEW_APP_GUEST_BROWSER=PASS deviceProfiles=' + rows.length);
+console.log('PREVIEW_APP_PC_TABLET_MOBILE_COLD_WARM_NO_MUTATION=PASS');
 console.log('PREVIEW_APP_ACCOUNT_GENERATION_BACK_FORWARD_SPLITTER_AND_REAL_MOBILE=NOT_TESTED');
 console.log('PREVIEW_APP_BROWSER_PROBE_NO_AUTH_NO_MUTATION=true');

@@ -1,6 +1,6 @@
 // SORIDRAW PREVIEW QA engine v1.
 // Fast: focused checks requiring only Node 22 (no npm install).
-// Stage416: private-intent two-browser regression remains in the existing like group; verified against final source candidate (no deployment).
+// Stage416: private-intent two-browser regression remains in the existing like group; final guarded intent and restart tests, no deployment.
 // Full: the same frozen regressions + TypeScript and Vite build (npm ci needed).
 // Focus: rerun only named check groups after a small correction.
 // This is NOT a deployment or a substitute for live RTDB/D1/PC/mobile release gates.

@@ -19,6 +19,8 @@ import {
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
+import { submitGuardedOutboxCandidate420, subscribeGuardedLikeIntent420 } from './exploreLikeGuardedTransport420';
+import { canFlushGuardedOutbox420, type GuardedOutboxEntry420, type GuardedCanonicalEvidence420, type GuardedResolution420 } from './exploreLikeGuardedOutbox420';
 import {
   canAdvancePersonalLikeOriginCertificate357,
   shouldAttemptPersonalLikeOriginRepair358,
@@ -49,6 +51,10 @@ const EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE = 'explore_like_display_lock_120';
 const EXPLORE_LIKE_CANONICAL_REVISION_SCHEMA_VERSION_172 = 1;
 const EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172 = 'explore-like-canonical-revision-172';
 const EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172 = 'explore_like_canonical_revision_172';
+// OFF until old app392/TEST/PRODUCTION direct RTDB writes, canonical Worker
+// lock enforcement, latency/cost and rollback have all passed cutover tests.
+// A regular PREVIEW push MUST NOT enable Stage420 by accident.
+export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // Stage413: shorten only Explore public-like batching.
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
@@ -115,6 +121,7 @@ type ExploreLikePendingMutation = {
   updatedAt: number;
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
+  guardStatus420?: 'awaiting' | 'approved'; // old clients remain legacy when absent
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
   // 390: a newer accepted change on another device must survive a local outbox guard.
   // Do not discard the unsubmitted local intention or confuse it with an ACK.
@@ -1355,6 +1362,8 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     retryCount: Math.max(0, Math.floor(Number(row.retryCount || 0))),
     operationId: typeof row.operationId === 'string' && /^[0-9a-f-]{36}$/i.test(row.operationId)
       ? row.operationId : undefined,
+    ...(row.guardStatus420 === 'awaiting' || row.guardStatus420 === 'approved'
+      ? { guardStatus420: row.guardStatus420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
     ...(row.deferredSignal390 && typeof row.deferredSignal390 === 'object' &&
@@ -1602,6 +1611,19 @@ const clearFlushTimer = (uid: string) => {
   flushTimerByUid.delete(uid);
 };
 
+// Legacy mode retains all verified app392 semantics. In future guarded mode,
+// even an upgraded old outbox row must be explicitly accepted by the server
+// before it can reach the canonical Worker or page-exit flush.
+const eligibleGuardedMutation420 = (entry: ExploreLikePendingMutation): boolean =>
+  !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ||
+    (entry.guardStatus420 === 'approved' && !!entry.operationId &&
+      canFlushGuardedOutbox420({
+        uid: '', trackId: entry.trackId, ownerUid: entry.ownerUid,
+        desiredLiked: entry.desiredLiked, operationId: entry.operationId,
+        baseLiked: entry.baseLiked, updatedAt: entry.updatedAt,
+        guardStatus: entry.guardStatus420,
+      }));
+
 const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbox)
   .reduce((latest, pending) => Math.max(latest, pending.updatedAt || 0), 0);
 
@@ -1614,7 +1636,8 @@ const schedulePendingFlush = (user: User) => {
   const uid = String(user?.uid || '').trim();
   if (!uid || typeof window === 'undefined') return;
   const outbox = readLikeOutbox(uid);
-  const eligible = Object.values(outbox).filter((pending) => (pending.retryCount || 0) === 0);
+  const eligible = Object.values(outbox).filter((pending) =>
+    (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
   if (!eligible.length) {
     // A failed/ambiguous write must never become an idle or navigation retry
     // loop. Keep the durable intent locally, but wait for an explicit new click
@@ -1678,7 +1701,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
   const ordered = Object.values(outbox)
     // retryCount>0 means the previous response was ambiguous/failed. Do not
     // replay writes automatically from idle timers, rerenders, or navigation.
-    .filter((pending) => (pending.retryCount || 0) === 0)
+    .filter((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending))
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
 
@@ -1987,7 +2010,7 @@ const installExitFlush413 = () => {
     const current = auth.currentUser;
     if (!current?.uid) return;
     const eligible = Object.values(readLikeOutbox(current.uid))
-      .some((pending) => (pending.retryCount || 0) === 0);
+      .some((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
     if (!eligible) return;
     exitFlushArmed413.add(current.uid);
     clearFlushTimer(current.uid);
@@ -2186,22 +2209,97 @@ export const setExploreTrackLike = async (
     updatedAt: now,
     retryCount: 0,
     operationId: createExploreLikeOperationId144(),
+    ...(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ? { guardStatus420: 'awaiting' as const } : {}),
     expectedRevision: existing?.expectedRevision ??
       readLikeCanonicalRevisions172(uid)[normalizedTrackId] ?? 0,
   };
   persistLikeOutbox(uid, outbox);
   installExitFlush413();
 
-  // Private, provisional hint only. A denied/missing new RTDB rule is harmless:
-  // the original durable outbox + accepted 127 signal continue to work.
+  // Keep all current app392 behavior unchanged until explicit coordinated
+  // cutover. Guarded candidate never falls back to the direct 416 RTDB path.
   const operationId416 = outbox[normalizedTrackId].operationId;
-  if (operationId416) {
+  if (operationId416 && !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
     void publishExploreLikeIntent416(uid, {
       trackId: normalizedTrackId,
       ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
       liked,
       operationId: operationId416,
     }).catch((error) => console.warn('[416] Private intent hint unavailable; accepted path retained:', error));
+  } else if (operationId416 && EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+    // Bound the decision to this persisted operation, not the mutable row.
+    // An older approval/denial must not release or erase a newer local click.
+    const sent: GuardedOutboxEntry420 = {
+      uid, trackId: normalizedTrackId,
+      ownerUid: outbox[normalizedTrackId].ownerUid,
+      desiredLiked: liked, operationId: operationId416,
+      baseLiked, updatedAt: now, guardStatus: 'awaiting',
+    };
+    void submitGuardedOutboxCandidate420(sent, () => {
+      const latest = readLikeOutbox(uid)[sent.trackId];
+      const unresolved = readSnapshotPending127(uid);
+      const membership = getLikedStateCache(uid);
+      const verified = readTargetedVerifiedLikeTracks127(uid).has(sent.trackId) ||
+        baselineCompleted127.has(uid) ||
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+      const revision = readLikeCanonicalRevisions172(uid)[sent.trackId] ?? 0;
+      let evidence: GuardedCanonicalEvidence420 | null = null;
+      if (Object.prototype.hasOwnProperty.call(unresolved, sent.trackId)) {
+        evidence = { uid, trackId: sent.trackId, liked: unresolved[sent.trackId],
+          source: 'accepted-127', version: revision };
+      } else if (verified && membership.has(sent.trackId)) {
+        evidence = { uid, trackId: sent.trackId, liked: membership.get(sent.trackId)!,
+          source: 'verified-local-baseline', version: revision };
+      }
+      return {
+        latest: latest && latest.operationId && latest.guardStatus420
+          ? { uid, trackId: latest.trackId, ownerUid: latest.ownerUid,
+              desiredLiked: latest.desiredLiked, operationId: latest.operationId,
+              baseLiked: latest.baseLiked, updatedAt: latest.updatedAt,
+              guardStatus: latest.guardStatus420 }
+          : null,
+        evidence,
+      };
+    }, (resolution: GuardedResolution420) => {
+      // Synchronous storage update: no await between latest operation check
+      // and write. The initiating UI has already painted the local outbox.
+      if (auth.currentUser?.uid !== uid) return;
+      const latest = readLikeOutbox(uid);
+      const row = latest[sent.trackId];
+      if (!row || row.operationId !== sent.operationId ||
+          row.updatedAt !== sent.updatedAt || row.desiredLiked !== sent.desiredLiked ||
+          row.ownerUid !== sent.ownerUid) return;
+      if (resolution.action === 'approved') {
+        latest[sent.trackId] = { ...row, guardStatus420: 'approved' };
+        persistLikeOutbox(uid, latest);
+      } else if (resolution.action === 'rollback') {
+        // No guessed public likeCount or global/whole-user refresh.
+        delete latest[sent.trackId];
+        persistLikeOutbox(uid, latest);
+        const currentCache = getLikedStateCache(uid);
+        currentCache.set(sent.trackId, resolution.liked);
+        persistLikedStateCache(uid, currentCache);
+        const locks = readLikeDisplayLocks(uid);
+        delete locks[sent.trackId];
+        persistLikeDisplayLocks(uid, locks);
+      }
+    }, (resolution: GuardedResolution420) => {
+      if (auth.currentUser?.uid !== uid) return;
+      if (resolution.action === 'approved') {
+        schedulePendingFlush(user);
+      } else if (resolution.action === 'rollback') {
+        const current = readLikeOutbox(uid)[sent.trackId];
+        if (current && current.operationId !== sent.operationId) return;
+        patchExploreLikedTrackMembership(uid, sent.trackId, resolution.liked);
+        dispatchLikeSync({
+          uid, trackId: sent.trackId, ownerUid: sent.ownerUid,
+          liked: resolution.liked,
+          likeCount: resolution.liked ? Math.max(1, baseLikeCount) : baseLikeCount,
+          source: 'remote',
+        });
+      }
+    }).catch((error) =>
+      console.warn('[420] Guarded private intent retained pending authority:', error));
   }
 
   // Sliding idle window: every click restarts the same 5-second timer. One song

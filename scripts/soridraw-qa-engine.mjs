@@ -14,6 +14,7 @@ const groups = [
     ['node', '--check', 'cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs'],
+    ['node', '--check', 'cloudflare/explore-worker/runtime/like-guard-permit-420.mjs'],
     ['node', '--check', 'cloudflare/explore-worker/runtime/like-batch-composition-422.mjs'],
     ['node', '--check', 'scripts/verify-419-like-w2-cutover.mjs'],
   ] },

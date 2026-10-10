@@ -12,6 +12,15 @@
 5. **정확한 시간 예:** A 개인이 10:00 좋아요 → 10:05까지 의도 유지하고 서버 accepted → 공개 공동 window 10:05–10:10 → 10:10 public likeCount 반영. A가 10:00:10에 실제 종료하고 조기 전송이 성공하면 공동 window 10:00:10–10:05:10 시작. 10:04에 A가 원상복구한 경우 A의 접수 W0, 새로운 공개 창 없음.
 6. 비활성/미접수 최초 좋아요로 DO alarm 시작 금지. 다른 사람의 공개 수치가 5분 동안 그대로인 것은 정책상 정상. 실제 공개 숫자가 틀리거나 누락·중복되는 것은 FAIL.
 
+## 2026-10-10 현재 합격선/실사용 정정 — 원래 5단계 설계 유지
+
+- **좋아요 버튼 정상화는 2단계 전체 PASS가 아니다.** 사용자는 app391 + 공유 RTDB 규칙 배포 후 **좋아요 버튼이 제대로 작동**한다고 확인했으며, 개인 PC↔모바일 5~10초 시간 합격은 확인하지 않았다.
+- **개인 동기화 확정 시간 목표:** 같은 계정 다른 기기에서 새로고침/페이지 전환 없이 **5~10초 이내** 하트 갱신. 사용자가 관찰한 현행 10~15초는 '작동은 하나 목표시간 미달'로 분류. 개인 로컬 하트는 클릭 즉시. 서버 비용과 불필요한 저장/읽기 증가 금지.
+- **현행 app391 실제 소스:** Explore 개인 좋아요 묶음 전송 idle은 `EXPLORE_LIKE_IDLE_FLUSH_MS_120=5_000`(5초), 서버 접수 ACK 후 UID 전용 RTDB 변경 신호 발송. 종료 시 조기 서버 전송 시도 유지하지만 모바일 강제종료·조기 종료 시 타기기 알림 완료 보장 아님. 과거 문서 일부의 '현행 30초' 설명은 현재 소스와 일치하지 않음.
+- **1단계 소스 감사:** `getExplorePersonalSocialSnapshot`은 유효 persistent cache 시 LOCAL HIT, cold/missing만 single-flight GET. `ensureExplorePersonalLikeCrossOriginParity357`은 건강한 동일 신호에서 return하고 416 수정으로 settlement-only 재방문에 FULL repair 재가동을 차단. GitHub [QA 38012744090](https://github.com/andrawing1212/soridraw-music/actions/runs/38012744090) `416_HEALTHY_REENTRY_ZERO_REQUESTS=PASS`, `416_SETTLEMENT_ONLY_NO_EXTRA_FULL_REPAIR=PASS`, `APP197_WARM_REVISIT_R0_W0=PASS`. **정적/격리 PASS이며 실제 로그인 브라우저 0 read 실측 PASS는 아님.** 2026-10-09 실제 D1 Analytics 최근 7일 SQL Rows Read/Written은 CURRENT_RELEASE_STATE 0S57 참조, 전체 백엔드 청구 비용은 여전히 미측정.
+- **1단계 다음 증빙:** 동일 사용자 정상 warm cache 재진입, My Likes 이동, 좋아요/해제 각각에서 개인 social snapshot `FULL 200·SOCIAL CACHE MISS`와 `PERSONAL SETTLEMENT 189` 실제 endpoint 호출 여부를 분리하고 D1 SQL queries/rows_read 및 R2/Workers 요청 증가를 식별. 과거 R4~R5는 SQL 횟수이지 HTTP 요청 횟수 아님. 반복 원인 미증명 시 코드를 고치지 않는다.
+- **4단계 주기:** Master 관리자 메뉴 1/3/5/10/20분, 기본 5분, **다음 신규 집계 창부터 적용**, 진행 중 창 고정. 아직 구현 전.
+
 ## 1단계 — 영상 '개인 소셜 스냅샷' 원인 확인 [착수, 1차 결과]
 
 - 사용자 제공 실제 PREVIEW 영상 `20261009-0008-08.2339219.mp4` (약 60.7초) 확인. **영상의 48초 부근 '내 좋아요 곡' 이동 후 53초 화면에서** `개인 소셜 스냅샷` 줄이 `LOCAL 0 · Worker 2, D1 쿼리 R5/W0, rows read 11/W0`로 보임. 영상 초반/좋아요 버튼 조작 구간에서는 동일 엔드포인트 증가가 명확히 나타나지 않고, 58초에도 대체로 같은 계측값. **R5는 HTTP 요청 5개라는 뜻이 아니라 서버가 기록한 D1 조회 SQL 5회**. 이 영상만으로 좋아요 1회당 snapshot 1회라고 결론 금지. 페이지 전환·최초 캐시 미스·이전까지 누적 계측일 수 있음. R2/Worker 사용도 별도 집계.

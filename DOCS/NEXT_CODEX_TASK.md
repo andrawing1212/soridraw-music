@@ -1,3 +1,12 @@
+## CURRENT — Stage420 최신 408 QA PASS, 공유 RTDB 구형 경로/Worker 원본 잠금 안전 전환 HOLD (2026-10-10)
+
+- 기준 `DOCS/CURRENT_RELEASE_STATE.md 0S88`. `preview` code commit `d09535b000e3588b48d0093c9b7edc78434a62cd`은 [408 Run 38030406790](https://github.com/andrawing1212/soridraw-music/actions/runs/38030406790) 실제 전체 **SUCCESS**. app413 종료·5초 idle, app141/390 확정 수신, app164 신규곡 최초 좋아요 fixture가 Stage420 false 후보 플래그를 mock에 제공하도록 수정하여 정상 좋아요 검증 계속 유지. TS/Build/Functions TS 및 live RTDB Rules read-only PASS. Stage420 switch는 여전히 OFF, PREVIEW app392 유지.
+- **독립 감사 미해결:** Follow-only [38029954729](https://github.com/andrawing1212/soridraw-music/actions/runs/38029954729) FAIL은 옛 app379 Worker 소스 동결 검사와 이후 Stage418 canonical 결과 `settledBatchIds418`의 차이에서 발생. 현재 코드를 통과시키기 위해 기존 418 Worker나 정상 팔로우 소스를 무단 롤백·느슨하게 변경하지 않는다. 관련 명시적 새로운 baseline 동등성 검증 필요.
+- **다음 한 묶음 작업:** ① 공유 RTDB Rules에서 기존 app392 열린 탭/TEST·PROD 416 write와 인증한 공격자 SDK/REST 직접 쓰기가 구별되지 않는 문제의 안전 전환 시나리오 확정(하위호환 불가면 사전 보고/승인), ② Cloudflare canonical Worker 직접 요청에서도 Firebase 120분 서버 잠금을 저비용으로 우회 없이 강제할 공통 authority 설계, ③ 420 outbox 오프라인/재실행/PC↔모바일 실기기 및 Master 조기해제, ④ 10만 DAU 함수 CPU·RTDB outbound·Worker 실제 월비용과 한국 p95, ⑤ 모든 환경 호환 검사 후 PREVIEW 전용 승인된 한 번의 안전 릴리스. 그전에는 **코드 스위치 켜기·shared Rules·Worker/Functions 배포 금지**.
+- Stage416 전체 **1/5(20%)** 그대로, Stage420 후보 CI PASS ≠ 서버 보안 운영 PASS. ChatGPT 직접 수행; 사용자 요구 상시 진척도 및 완료 후 1~2줄 변화 요약 준수.
+
+---
+
 ## CURRENT — Stage420 실제 Explore 서비스 코드 outbox 연결 후보 완료 / 임시 OFF, Worker·구형 앱 전환 검증 필요 (2026-10-10)
 
 - 사용자 지시 ChatGPT 직접(코덱스 재위임 금지), 한 묶음 개발 + 작업별 변경 요약 1~2줄/상시 진척도. 이번 작업은 `DOCS/CURRENT_RELEASE_STATE.md 0S87` 기준. Stage416 1/5(20%) 유지.

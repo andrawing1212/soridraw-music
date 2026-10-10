@@ -60,7 +60,7 @@ for(const pattern of [/\.transaction\s*\(/,/admin\.database\s*\(/,/\.prepare\s*\
 }
 const functions=readFileSync('functions/src/index.ts','utf8');
 const start=functions.indexOf('export const renewExploreLikePermit420 = onCall(');
-const end=functions.indexOf('// Stage420 Master-only administrative recovery.',start);
+const end=functions.indexOf('// Candidate-only, exact server approval recovery after the first ACK was',start);
 assert.ok(start>=0 && end>start,'source-only callable declared');
 const callable=functions.slice(start,end);
 assert.match(callable,/request\.auth\?\.uid/);

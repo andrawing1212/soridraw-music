@@ -7,3 +7,4 @@ no_user_data_change=true
 no_worker_change=true
 no_hosting_change=true
 diagnostic_require_sanitized_reporting=true
+checkpoint=second_read_only_queue_age_no_storage_or_worker_change

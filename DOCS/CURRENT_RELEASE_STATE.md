@@ -1,3 +1,14 @@
+## 0S79. Stage420 보안 선행 작업 — 정책·Firebase Function·후보 Rules 전체 CI PASS / 배포 HOLD (2026-10-10)
+
+- **최종 사용자 정책:** 30회/60초 경고, 40회/60초 제한, 2개 연속 60초 한도 도달 시 **120분(2시간) 계정 잠금**; 자동해제, Master 상태 조회·조기해제·기준조정(기준조정 UI/API는 아직 미구현).
+- **직접 구현 코드:** `src/services/exploreLikeAbusePolicy420.ts`, `functions/src/exploreLikeAbuseGate420.ts`, 인증 UID 기반 Functions callable `publishExploreLikeIntent420`, Master-only callable `masterGetExploreLikeLimit420`/`masterUnlockExploreLike420`(원자적 감사 이력), 안전한 RTDB shared Rules **비배포 후보 생성기**, 실행형 정책/서버 트랜잭션/Rules candidate 검증 3개, 기존 Fast/408 QA 그룹 연결.
+- **테스트 성공:** [Fast QA 38023881344](https://github.com/andrawing1212/soridraw-music/actions/runs/38023881344) SUCCESS, [408 QA 38024059885](https://github.com/andrawing1212/soridraw-music/actions/runs/38024059885) SUCCESS: Stage420 결정·서버 모의 transaction·규칙 후보 정적 검증, Firebase Functions 실제 TypeScript Build, 앱 TypeScript/Build, 기존 127/175/180/191/192/197/390/417 좋아요 및 shared RTDB live read-only audit 모두 PASS.
+- **중요:** 함수는 아직 배포·호출되지 않고, 앱393 코드/호출·보안전용 신호 구독자/경고 UI·Master 기준 조정 UI가 없다. 운영 `userSync/$uid` broad client `.write`가 남아 **SDK/REST 직접 RTDB 쓰기 우회 여전**, secure candidate Rules는 에뮬레이터 합격도 실적용도 아님. canonical Worker가 2시간 계정 잠금을 같이 검사하지 않으므로 **실제 악성 공격 방어 기능이 활성화됐다고 선언 금지**. 보안 레드팀/Firebase Emulators/Functions 호출 지연·실비용 및 old-client parity 확인 전 배포 금지.
+- **운영:** 최신 Firebase PREVIEW **app392 unchanged**, TEST/PRODUCTION Hosting unchanged, Functions/Cloudflare Worker/shared RTDB Rules/Firestore Rules/D1/R2 원본 데이터 live 변경 0, data migration/삭제 0. GitHub `preview` 코드/문서 commit만 추가. Stage416 전체 완료 **1/5** 유지 (① 보류, ② app392 실사용 PASS, ③/④/⑤ 대기). 사용자 추가 테스트는 아직 불필요.
+- **다음 우선 개발:** Firebase Rules Emulator에서 부모 permission revoke/기존 6개 userSync 신호/구형앱 호환 → 신규 callable 응답시간/Functions 과금 대 RTDB 비용 비교(100k 사용자) → 읽기 전용 privateLikeSync420 receiver / 예전 direct RTDB 쓰기 우회 차단 → Canonical Worker 잠금 보호 → Master 기준 조정·경고 UI → 전체 감사 → PREVIEW만 단계적 릴리스. 기존 app392 즉시 하트 지연·버그 발생 시 진행 중단.
+
+---
+
 ## 0S78. Stage420 2시간 RTDB 클릭 공격 방어: 서버 단독 후보·Master 해제 작성, 실제 차단 배포 전 HOLD (2026-10-10)
 
 - **사용자 고정 정책**: 60초 30회 경고 / 60초 40회 제한 / 2개 연속 60초 한도 도달하면 같은 UID 좋아요·해제 **120분 잠금** / 자동해제 / Master 상태 조회·조기해제·기준 조정. 1시간은 기존 초안으로 무효. ② app392 실사용 PC↔모바일 거의 즉시 좋아요는 절대 보호.

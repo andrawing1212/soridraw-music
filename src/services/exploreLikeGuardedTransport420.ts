@@ -70,6 +70,39 @@ export const publishGuardedLikeIntent420 = async (
   return decision;
 };
 
+// Candidate-only settlement planner. A denied Function ACK must never
+// delete a newer local click that was made while the network was in flight.
+// The caller must re-check this plan at the moment of its synchronous
+// durable-outbox update; it is NOT permission to change canonical membership.
+// Unknown/network failures keep the outbox for a bounded authoritative retry.
+export type GuardedLikePending420 = {
+  trackId: string;
+  ownerUid: string;
+  desiredLiked: boolean;
+  operationId: string;
+};
+export type GuardedLikeDisposition420 =
+  | 'ignore-superseded'
+  | 'retain-unconfirmed'
+  | 'retain-canonical-pending'
+  | 'reject-matching-only';
+export const planGuardedLikeDecision420 = (
+  sent: GuardedLikeMutation420,
+  latest: GuardedLikePending420 | null | undefined,
+  decision: GuardedLikeDecision420 | null,
+): GuardedLikeDisposition420 => {
+  if (!latest || latest.trackId !== sent.trackId ||
+      latest.ownerUid !== sent.ownerUid ||
+      latest.desiredLiked !== sent.liked ||
+      latest.operationId !== sent.operationId) return 'ignore-superseded';
+  if (!decision) return 'retain-unconfirmed';
+  if (decision.allowed) return 'retain-canonical-pending';
+  // This is only a rejection of the private provisional SEND. An older
+  // accepted canonical signal or a different device's confirmed state must
+  // still win after the exact outbox intent is removed by the future caller.
+  return 'reject-matching-only';
+};
+
 // One listener per signed-in UID, not per card. No D1/Firestore whole-read.
 // Cold replay is intentionally ignored: settled 127/canonical outbox owns
 // old membership and same-account live updates are only provisional.

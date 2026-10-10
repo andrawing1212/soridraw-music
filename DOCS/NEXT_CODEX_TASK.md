@@ -1,3 +1,11 @@
+## CURRENT — app394 PREVIEW 출시 및 공개 첫 화면/모달 격리 Chrome 검사 PASS; 인증 실기기/태블릿 분할바 검증 진행 (2026-10-10)
+
+- 최종 PREVIEW Hosting app394 `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5` / [Release 38038414857](https://github.com/andrawing1212/soridraw-music/actions/runs/38038414857) PASS. 이후 [Chrome Run 38038600721](https://github.com/andrawing1212/soridraw-music/actions/runs/38038600721) PASS: 실제 preview 버전394, guest PC/mobile emulation 첫 화면·JS/CSS 0에러, 초기 무단 AI/modal 청크 0, 모달 별도 1000ms chunk 지연 로딩 상태 + main/musicApi/Back/재오픈 모두 PASS. 앱 본체 UI 스타일·좋아요/팔로우·Studio 분할 엔진 불변. TEST/PRODUCTION/Worker/Functions/RTDB/D1 원본 미변경.
+- 이번 체감 개선: `MusicApiGenerateModalLazy` 최초 다운로드 중 `role=status`, `aria-live`, `aria-label`을 가진 작은 로딩 안내. 기존 fallback=null로 느린 연결에서 클릭이 먹히지 않은 것처럼 보일 수 있던 위험을 제거함. 테스트 통과는 실제 로그인 후 PC↔모바일 AI 생성·번역 결과 보장과는 다름.
+- 다음 한 묶음은 로그인된 PREVIEW PC/실제 모바일 main/musicApi 첫/두번째 오픈+뒤로가기/실제 생성·번역, Expo/Library/Music Note 앱 재진입 R0/W0 측정, Galaxy Tab 및 PC split drag p95/FPS 근거 수집. UI와 캐시 동작에 구체 오류 발견 시만 최소 수정, 꼭 필요한 경우에만 PREVIEW app395 후보; TEST/PRODUCTION 승격 별도 승인.
+- 매 보고: Stage416 1/5=20%, 전체 속도 개선 3/5=60%, 현 검증 3/4=75%. 검증 미완료를 PASS/100%라고 하지 않는다.
+
+---
 ## CURRENT — PREVIEW app394 신규 첫 로딩안내 배포 PASS, 라이브 browser smoke 및 실기기 검증 대기 (2026-10-10)
 
 - 앱394 정확한 Hosting 배포 SHA `f6886caa44de8fe3d2e50ef3f8511785c12ba5c5`, Run `38038414857` SUCCESS. 원격 `app-version.json=394`, exact build+TEST/PROD 비변경 PASS. 서버·사용자 데이터·Cloudflare·Functions/RTDB Rules 변경 없음.

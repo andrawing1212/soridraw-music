@@ -1,4 +1,9 @@
-requested_at=2026-09-22T13:01:00Z
-purpose=read_only_trace_app136_idle_like_retry_cost
+requested_at=2026-10-10T01:31:00Z
+purpose=check_existing_preview_like_069_queue_backlog_after_mobile_self_heart_and_cross_device_fail
 mode=diagnostic_read_only
 preview_only=true
+no_queue_replay=true
+no_user_data_change=true
+no_worker_change=true
+no_hosting_change=true
+diagnostic_require_sanitized_reporting=true

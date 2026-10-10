@@ -1,3 +1,13 @@
+## CURRENT — Stage416 ② Codex High 실행 대기 (2026-10-10 KST)
+
+- **실제 작업 명령서:** [`DOCS/STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md`](STAGE416_PHASE2_PRIVATE_LIKE_SYNC_CODEX_ORDER.md). 모든 구현 조건·기존 source 지연 원인·구형 앱/Firebase RTDB 안전·실행형 회귀 합격선은 해당 문서를 우선한다.
+- 현재 app391 + shared RTDB optional `canonicalSettled417` 사용자 실사용 정상 보호. ① 반복 개인 소셜 스냅샷은 사용자 요청으로 추후 검사 보류/미해결. ② 실제 구현 및 E2E 전, ③/④ Master 독립 5분 정책 설계 확정 미구현, ⑤ 검증 대기. **전체 0/5 단계 완료**.
+- 딱 한 과제: 서버 ACK를 기다리지 않는 UID-private **잠정 개인 intent** 신호를 5~10초 내 다른 계정 기기에 전달하되, 기존 확정 `userSync/$uid/exploreLike` 노드는 혼합/의미 변경하지 않는다. old-client, sequence/race, outbox·R2 정확성, 공개숫자 불변, additive RTDB rules 동시 호환을 증명. 초기 코드 5초 idle batch는 이 단계에서 5분으로 바꾸지 않는다.
+- `preview`의 기준 SHA를 착수 직전 확인. Codex는 소스·실행형 Test → TS/Build → commit/push 및 위험 보고까지만, **배포·shared RTDB Rules 실적용·D1 mutation·main/TEST/PRODUCTION 변경 금지**. 이후 Work 읽기 전용 독립 감사 후 ChatGPT 릴리스 결정.
+- 이번 표준 문서 갱신은 **상태/작업 지시 전용**, 제품 코드는 아직 수정하지 않았다.
+
+---
+
 ## CURRENT — Stage416 최종 승인 계약: 개인/공개 두 주기 Master 설정, ②→③→④ 순차 구현 (2026-10-10 KST)
 
 **최종 합격 기준:** `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`의 '2026-10-10 사용자 최종 확정' 절. 사용자 확인 정상 **PREVIEW app391 + 공유 Firebase RTDB rules**을 보호한다. 사용자 말의 '좋아요 버튼이 제대로 작동'은 개인 즉시 ② PASS를 뜻하지 않는다.

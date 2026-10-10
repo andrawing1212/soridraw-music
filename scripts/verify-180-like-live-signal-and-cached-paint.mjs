@@ -116,6 +116,25 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(rendered.length, 1, 'an unresolved local click must retain precedence');
   assert.equal(persistentPending['track-a'], true, 'remote change must not erase unresolved local click');
   assert.equal(outbox['track-a'].deferredSignal390.version, 12, 'defer the received row without painting over the local click');
+  const deferred390 = outbox['track-a'].deferredSignal390;
+  assert.equal(deferred390.result.liked, false, 'stored accepted unlike must keep its exact value');
+  assert.match(service, /row\.deferredSignal390\.result/, 'deferred row must survive durable outbox reload');
+  assert.match(service, /releasedRemote390\.push\(current\.deferredSignal390\)/,
+    'net-zero local outbox release must retain the skipped remote event');
+  assert.match(service, /applyRemoteLikeSignal127\(uid, \{[\s\S]*?results: \[deferred\.result\],[\s\S]*?\}, true\)/,
+    'after removing a net-zero local intent, replay the exact remote state without requesting data');
+  // This local replay is safe despite the RTDB version watermark already
+  // being 12: only the release of a now-absent outbox may enable it.
+  outbox = {};
+  env.__apply('same-account', {
+    version: deferred390.version, previousVersion: 0,
+    results: [deferred390.result],
+  }, true);
+  assert.equal(rendered.length, 2, 'stored remote event should reach the UI after local outbox release');
+  assert.equal(rendered[1].liked, false, 'deferred unlike must clear the filled heart');
+  assert.equal(persistentPending['track-a'], false, 'replayed remote unlike must persist before painting');
+  assert.equal(seen, 12, 'local replay must never artificially advance the network watermark');
+  console.log('APP390_DEFERRED_REMOTE_UNLIKE_REPLAY_NO_SERVER_IO=PASS');
   console.log('APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS');
   console.log('APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS');
   console.log('APP141_RECEIVER_ADDITIONAL_SERVER_IO=0');

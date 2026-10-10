@@ -12,6 +12,7 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readExploreLikeIntent416,
   listExploreLikeIntents416,
+  discardExploreLikeIntentSession416,
   clearExploreLikeIntent416,
   subscribeExploreLikeIntent416,
   publishExploreLikeIntent416,
@@ -785,6 +786,8 @@ let activeLikeIntentUid416 = '';
 let unsubscribeLikeIntent416: Unsubscribe | null = null;
 const startLikeIntent416 = (uid: string) => {
   if (uid === activeLikeIntentUid416) return;
+  // Stop exposing an old UID's unconfirmed hints after logout/account change.
+  discardExploreLikeIntentSession416(activeLikeIntentUid416);
   unsubscribeLikeIntent416?.();
   unsubscribeLikeIntent416 = null;
   activeLikeIntentUid416 = uid;

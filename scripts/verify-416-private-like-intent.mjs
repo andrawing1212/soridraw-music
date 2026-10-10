@@ -114,7 +114,6 @@ unsubOther();
 // A checked-in source/Rule contract is also part of this release gate.
 const rules = JSON.parse(fs.readFileSync('database.rules.json', 'utf8'));
 assert(rules.rules.userSync.$uid.exploreLikeIntent416, 'private node requires explicitly installed additive rules');
-assert(rules.rules.userSync.$uid.exploreLike.canonicalSettled417 === undefined || true);
 // The settled 127 node must still retain the previously allowed receipt field.
 assert(rules.rules.userSync.$uid.exploreLike.results.$index.canonicalSettled417);
 const service = fs.readFileSync('src/services/exploreLikeService.ts', 'utf8');

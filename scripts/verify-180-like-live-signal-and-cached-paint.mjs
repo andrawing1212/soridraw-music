@@ -167,6 +167,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   };
   let storedOutbox = { [trackId]: pending };
   let storedSnapshot = { [trackId]: true };
+  let serverRow = { trackId, liked: false, likeCount: 0, revision: 1, status: 'revision-conflict' };
+  let snapshotProvenSettled = false;
   const cache = new Map([[trackId, true]]);
   const remoteRepaints = [];
   const patchedMembership = [];
@@ -191,13 +193,10 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     requestExploreLike: async (_user, route) => {
       assert.equal(route, '/v1/me/likes/batch');
       calls.push('POST');
-      return { data: { canonicalD1: 'settled' } };
+      return { data: { canonicalD1: 'settled', personalLikeSnapshot: snapshotProvenSettled ? 'settled' : 'updated' } };
     },
-    normalizeBatchResults: () => [{
-      trackId, liked: false, likeCount: 0,
-      revision: 1, status: 'revision-conflict',
-    }],
-    canBroadcastExploreLikeSnapshot127: () => false,
+    normalizeBatchResults: () => [serverRow],
+    canBroadcastExploreLikeSnapshot127: (value) => value === 'settled',
     computeExploreLikeAction127: () => { throw new Error('unexpected rebase'); },
     rebaseExploreLikeAfterInFlight127: () => { throw new Error('unexpected rebase'); },
     readSnapshotPending127: () => ({ ...storedSnapshot }),
@@ -222,10 +221,13 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
       if (effective === detail.liked) remoteRepaints.push(detail);
     },
     publishConfirmedLikeSignal127: async (_uid, rows) => {
-      assert.equal(rows.length, 0, 'conflict must not publish an accepted new mutation');
+      assert.equal(rows.length, serverRow.status === 'revision-conflict' ? 0 : 1,
+        'only a successful changed-track ACK may publish a personal notification');
     },
     publishExplorePublicLikeInvalidation192: async () => {
-      throw new Error('conflict must not rebroadcast shared public invalidation');
+      if (serverRow.status === 'revision-conflict') {
+        throw new Error('conflict must not rebroadcast shared public invalidation');
+      }
     },
     dispatchLikeSyncError: () => { throw new Error('unexpected error'); },
   };
@@ -249,4 +251,37 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     'canonical ACK conflict must not trigger another server write');
   console.log('APP390_CONFLICT_ACK_DURABLE_BEFORE_REPAINT=PASS');
   console.log('APP390_CONFLICT_MY_LIKES_MEMBERSHIP_AND_W0_RETRY=PASS');
+
+  // Regression from the user's app390 mobile screenshot: a public count of 1
+  // with an empty personal heart after 60s is never acceptable for a user's
+  // just-accepted own like. Legacy D1 'settled' is NOT the private R2 snapshot.
+  // This executes the real ACK function with a successful server-applied LIKE.
+  storedOutbox = { [trackId]: {
+    ...pending, updatedAt: 201, desiredLiked: true, baseLiked: false,
+    operationId: '00000000-0000-4000-8000-000000000002',
+  } };
+  storedSnapshot = { [trackId]: false }; // old delayed R2 hint
+  cache.set(trackId, true); // optimistic clicked heart
+  serverRow = { trackId, liked: true, likeCount: 1, revision: 2, status: 'applied' };
+  await env.__flush({ uid: 'same-account' });
+  assert.equal(Object.keys(storedOutbox).length, 0, 'applied click clears outbox');
+  assert.equal(storedSnapshot[trackId], true,
+    'D1 settled cannot delete accepted personal heart while private R2 still lags');
+  assert.equal(cache.get(trackId), true);
+  assert.equal(remoteRepaints.length, 2, 'accepted click must repaint a stale mounted heart');
+  assert.equal(remoteRepaints[1].liked, true);
+  assert.equal(remoteRepaints[1].likeCount, 1);
+  assert.ok(calls.lastIndexOf('persistSnapshot') < calls.lastIndexOf('notifyRemote'),
+    'accepted heart must be persisted before UI notification');
+  assert.ok(calls.lastIndexOf('persistOutbox') < calls.lastIndexOf('notifyRemote'),
+    'accepted outbox must clear before UI notification');
+  // A legitimate older private R2 hydrate cannot override the accepted guard.
+  cache.set(trackId, false);
+  assert.equal(storedOutbox[trackId]?.desiredLiked ?? storedSnapshot[trackId] ?? cache.get(trackId),
+    true, 'older private catalog may not hollow an accepted filled heart');
+  assert.equal(calls.filter((event) => event === 'POST').length, 2,
+    'exactly one server batch per explicit click, no extra poll or retry');
+  console.log('APP391_ACCEPTED_LIKE_STAYS_FILLED_DURING_R2_LAG=PASS');
+  console.log('APP391_DURABLE_ACK_REPAINT_AFTER_OUTBOX_ZERO=PASS');
 }
+

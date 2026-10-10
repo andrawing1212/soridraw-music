@@ -103,6 +103,34 @@ export const renewGuardedLikePermitCandidate420 = async (
   return reply.guardPermit420;
 };
 
+// A first callable ACK may disappear AFTER server-side approval. Look up
+// only that exact prior operation in the bounded server-owned display.
+// This is one recovery read on first-response failure, never another click.
+export const recoverGuardedLikePermitCandidate420 = async (
+  mutation: GuardedLikeMutation420,
+): Promise<string> => {
+  if (typeof mutation.trackId !== 'string' || !mutation.trackId ||
+      mutation.trackId.length > 512 ||
+      typeof mutation.ownerUid !== 'string' || mutation.ownerUid.length > 128 ||
+      typeof mutation.liked !== 'boolean' ||
+      !operationIdValid(mutation.operationId)) {
+    throw new Error('INVALID_GUARDED_LIKE_RECOVERY_REQUEST');
+  }
+  const call = httpsCallable<GuardedLikeMutation420,
+    { ok: boolean; recovered: boolean; guardPermit420?: string }>(
+    functions, 'recoverExploreLikePermit420',
+  );
+  const result = await call(mutation);
+  const response = result.data;
+  if (!response || response.ok !== true || response.recovered !== true ||
+      typeof response.guardPermit420 !== 'string' ||
+      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(response.guardPermit420) ||
+      response.guardPermit420.length > 2400) {
+    throw new Error('GUARDED_LIKE_APPROVAL_PROOF_MISSING');
+  }
+  return response.guardPermit420;
+};
+
 // Candidate-only settlement planner. A denied Function ACK must never
 // delete a newer local click that was made while the network was in flight.
 // The caller must re-check this plan at the moment of its synchronous
@@ -192,15 +220,24 @@ export const submitGuardedOutboxCandidate420 = async (
               marked.operationId !== sent.operationId ||
               marked.desiredLiked !== sent.desiredLiked ||
               marked.updatedAt !== sent.updatedAt) return null;
-          const response = await publishGuardedLikeIntent420({
-            trackId: sent.trackId,
-            ownerUid: sent.ownerUid,
-            liked: sent.desiredLiked,
-            operationId: sent.operationId,
-          });
-          return { ok: true, allowed: response.allowed,
-            lockedUntilMs: response.lockedUntilMs,
-            ...(response.guardPermit420 ? { guardPermit420: response.guardPermit420 } : {}) };
+          const exactMutation = {
+            trackId: sent.trackId, ownerUid: sent.ownerUid,
+            liked: sent.desiredLiked, operationId: sent.operationId,
+          };
+          try {
+            const response = await publishGuardedLikeIntent420(exactMutation);
+            return { ok: true, allowed: response.allowed,
+              lockedUntilMs: response.lockedUntilMs,
+              ...(response.guardPermit420 ? { guardPermit420: response.guardPermit420 } : {}) };
+          } catch {
+            // The initial request may have committed, but its ACK was lost.
+            // The only fallback is ONE exact read-only approval lookup, NEVER
+            // publish a second time. Missing proof keeps the durable outbox.
+            try {
+              const guardPermit420 = await recoverGuardedLikePermitCandidate420(exactMutation);
+              return { ok: true, allowed: true, lockedUntilMs: 0, guardPermit420 };
+            } catch { return null; }
+          }
         },
       );
     }

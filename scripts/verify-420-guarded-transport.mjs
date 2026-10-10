@@ -10,12 +10,14 @@ let code = stripTypeScriptTypes(
 code = code.replace(/^import\s+.*?from\s+'[^']+';\s*$/gm, '')
   .replaceAll('export const ', 'const ');
 assert(!/^import\s/m.test(code));
-code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420, renewGuardedLikePermitCandidate420};';
+code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420, renewGuardedLikePermitCandidate420, recoverGuardedLikePermitCandidate420};';
 const calls = [];
 const listeners = [];
 const permit420 = 'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw';
 let nextReply = null;
 let rejectNetwork = false;
+let rejectPublishOnly = false;
+let recoveryResponse = {ok:true,recovered:false};
 const lockQueues = new Map();
 const browserNavigator = {
   locks: {
@@ -61,7 +63,10 @@ const mock = {
   },
   httpsCallable: (_fn, name) => async (args) => {
     calls.push({ name, args });
-    if (rejectNetwork) throw new Error('NETWORK_ERROR');
+    if (rejectNetwork || (rejectPublishOnly && name === 'publishExploreLikeIntent420')) {
+      throw new Error('NETWORK_ERROR');
+    }
+    if (name === 'recoverExploreLikePermit420') return {data:recoveryResponse};
     return { data: nextReply || { ok: true, allowed: true, warning: false,
       lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false,
       guardPermit420: permit420 } };
@@ -217,6 +222,33 @@ actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'await-reply','network error must keep unapproved outbox');
 assert.equal(commits.length,0);
 rejectNetwork = false; nextReply = null;
+// Genuine first ACK loss: server already has an exact approved row.
+// Recovery must not call publish a second time or mutate canonical storage.
+currentPending=pending;
+nextReply=accepted;
+rejectPublishOnly=true;
+recoveryResponse={ok:true,recovered:true,guardPermit420:permit420};
+const beforeExactRecovery=calls.length;
+actual=await submit(pending,reader,save,repaint,markFirstAttempt);
+assert.equal(actual.action,'approved');
+assert.deepEqual(calls.slice(beforeExactRecovery).map(c=>c.name),[
+  'publishExploreLikeIntent420','recoverExploreLikePermit420',
+]);
+assert.equal('uid' in calls.at(-1).args,false,'server UID comes from Firebase auth');
+assert.equal(calls.at(-1).args.operationId,pending.operationId);
+assert.equal(currentPending.guardAttempt420,'sent-unconfirmed');
+// Approval record missing/51st eviction: client MUST retain the durable row,
+// and MUST NOT silently turn the old click into a new rate transaction.
+currentPending=pending;
+recoveryResponse={ok:true,recovered:false};
+const beforeEvicted=calls.length;
+actual=await submit(pending,reader,save,repaint,markFirstAttempt);
+assert.equal(actual.action,'await-reply');
+assert.deepEqual(calls.slice(beforeEvicted).map(c=>c.name),[
+  'publishExploreLikeIntent420','recoverExploreLikePermit420',
+]);
+assert.equal(currentPending.guardAttempt420,'sent-unconfirmed');
+rejectPublishOnly=false;
 const incoming = [];
 const off = subscribe('uid-a', (row) => incoming.push(row));
 assert.equal(listeners.length, 1);
@@ -250,6 +282,8 @@ console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');
 
 console.log('STAGE420_DORMANT_APPROVED_RENEWAL_NO_RATE_REPLAY=PASS');
 console.log('STAGE420_MISSING_PROOF_RENEWAL_FAIL_CLOSED=PASS');
+console.log('STAGE420_EXACT_FIRST_ACK_LOSS_BOUNDED_RECOVERY_NO_REPUBLISH=PASS');
+console.log('STAGE420_EVICTED_PROOF_FAIL_CLOSED=PASS');
 console.log('STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD=PASS');
 console.log('STAGE420_CROSSTAB_FIRST_SEND_EXCLUSIVE_LEASE=PASS');
 console.log('STAGE420_MISSING_LOCK_OR_STORAGE_FAIL_CLOSED=PASS');

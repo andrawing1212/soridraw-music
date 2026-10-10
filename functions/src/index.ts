@@ -21,6 +21,7 @@ import {
 } from "./libraryBundleFreshness";
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
+import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420";
 import { issueLikePermit420 } from "./exploreLikePermit420";
 import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
@@ -4036,6 +4037,58 @@ export const renewExploreLikePermit420 = onCall(
       // Preserve durable outbox for authoritative reconciliation; do not call
       // the original rate transaction and never grant an unsigned retry.
       throw new HttpsError("permission-denied", "기존 승인 확인이 필요합니다.");
+    }
+  },
+);
+
+// Candidate-only, exact server approval recovery after the first ACK was
+// lost. Read the existing bounded display once; never re-run the rate gate.
+// Evicted/expired/mismatched records cannot mint an approval certificate.
+export const recoverExploreLikePermit420 = onCall(
+  { region: "us-central1", secrets: [stage420PermitSigningSecret] },
+  async (request) => {
+    const uid = String(request.auth?.uid || "").trim();
+    if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    const raw = request.data && typeof request.data === "object" &&
+      !Array.isArray(request.data) ? request.data as Record<string, unknown> : {};
+    const input = {
+      trackId: raw.trackId,
+      ownerUid: raw.ownerUid,
+      liked: raw.liked,
+      operationId: raw.operationId,
+    };
+    if (typeof input.trackId !== "string" || !input.trackId.trim() ||
+        input.trackId.length > 512 ||
+        typeof input.ownerUid !== "string" || input.ownerUid.length > 128 ||
+        typeof input.liked !== "boolean" ||
+        typeof input.operationId !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(input.operationId)) {
+      throw new HttpsError("invalid-argument", "기존 좋아요 요청 형식이 올바르지 않습니다.");
+    }
+    const exactAction = {
+      trackId: input.trackId.trim(), ownerUid: input.ownerUid.trim(),
+      liked: input.liked, operationId: input.operationId,
+    };
+    let approved = false;
+    try {
+      approved = await hasExactRecentApprovedLike420(
+        admin.database(), uid, exactAction,
+      );
+    } catch {
+      throw new HttpsError("unavailable", "서버 승인 기록 확인에 실패했습니다.");
+    }
+    if (!approved) {
+      // Not found does not mean rejected or authorize another first send.
+      throw new HttpsError("permission-denied", "해당 요청의 승인 기록이 확인되지 않습니다.");
+    }
+    try {
+      const guardPermit420 = issueLikePermit420({
+        uid, trackId: exactAction.trackId, liked: exactAction.liked,
+        operationId: exactAction.operationId,
+      }, Date.now(), stage420PermitSigningSecret.value());
+      return { ok: true, recovered: true, guardPermit420 };
+    } catch {
+      throw new HttpsError("unavailable", "승인 증표를 발급하지 못했습니다.");
     }
   },
 );

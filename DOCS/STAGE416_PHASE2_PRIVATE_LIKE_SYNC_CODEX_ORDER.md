@@ -1,3 +1,5 @@
+> **2026-10-10 실행 주체 변경:** 사용자가 Codex 대신 ChatGPT의 직접 구현을 지시했다. 이 문서의 'Codex High' 표현은 작성 당시의 역사적 작업 계약이며, 실제 제품 소스 후보는 ChatGPT가 `preview`에 구현·push했다. 최신 `DOCS/CURRENT_RELEASE_STATE.md 0S72`와 `DOCS/NEXT_CODEX_TASK.md`가 실제 상태다. **소스 작성은 끝났지만 TypeScript/Build/실제 RTDB rules/PC·모바일 동기화 검증은 미완료**, ②/5 PASS 아님, PREVIEW 배포 없음. 기존 app391 실서비스 유지.
+
 # Stage416 ② — 개인 좋아요 5~10초 동기화 구현 명령 (2026-10-10 KST)
 
 ## 지위 / 고정 기준

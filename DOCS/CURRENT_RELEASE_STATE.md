@@ -1,3 +1,14 @@
+## 0S64. 사용자 app390 모바일 직접 좋아요 후 빈 하트 실사용 FAIL → app391 PREVIEW 릴리스 (2026-10-10 KST)
+
+- **사용자가 올린 실사용 증거:** 같은 로그인 계정의 모바일 Explore에서 [Jazz Hip-hop] `성적표 내소동`에 좋아요를 누른 뒤 약 1분 후 곡 카드 **공개 좋아요 숫자 1, 개인 하트 빈 외곽선**. 앱390은 **실사용 FAIL**, 이전 자동검사 PASS나 배포 성공으로 성공 처리 금지. 숫자 1은 다른 계정의 참여도 가능하므로 canonical 해당 UID의 좋아요 여부는 이 사진만으로 확정 불가. 실제 원인 경로는 서버 ACK 이후 오래된 개인 R2 응답에 캐시가 덮이거나 UI ACK 통지가 누락될 수 있다는 소스 증거; 해당 사용자 데이터가 정확히 그 경로였는지는 원격 로그/실기기 재현 전에는 미확정.
+- **실제 좁은 수정:** `src/services/exploreLikeService.ts`의 `flushPendingLikes`에서 서버 개인 좋아요 접수(예: `canonicalD1=settled`)만을 가지고 개인 **derived R2 snapshot도 반영됐다고 잘못 가정**해 해당 changed-track의 수신 대기 가드를 즉시 제거하는 동작을 고침. 정확한 `personalLikeSnapshot=settled` 증거가 없으면 해당 곡의 수락된 0/1 개인 membership 로컬 가드 유지, 이전 private R2 snapshot이 도착해도 새 클릭이 사라지지 않게 보호. 성공 ACK 이벤트는 이전의 `source=local/confirmed` 선발신(화면 수신자가 무시) 대신 outbox + snapshot + cache가 영속 저장된 후 `source=remote`로 로컬 UI에 전달. `revision-conflict`/ineligible 서버 거절은 app390의 확정 서버 상태 우선 구조 유지. 사용자 개인 데이터 구조/DB/Worker/RTDB Rules/Functions/UI/CSS 변경 없음.
+- **파일/commit:** `src/services/exploreLikeService.ts` 수정 `993e6d80e1af8a348a81d6902b7bee8adb324e5d`; `scripts/verify-180-like-live-signal-and-cached-paint.mjs` 실행형 accepted-ACK/R2 lag fixture 및 `scripts/verify-127-atomic-personal-like.mjs` 필수 회귀 기대를 실제 안정화 경로로 조정, version `public/app-version.json=391`; 최종 QA source/version `1cff14712003cc2cbf24a5d3bca53d114e8248a7`. 릴리스 trigger locked SHA `877c50a1666eb6e090f4578a523eac2a85a873ce`.
+- **QA [Run 38012744090](https://github.com/andrawing1212/soridraw-music/actions/runs/38012744090) SUCCESS:** TypeScript, Build, 기존 127/175/180/178/191/192/197/390, RTDB Rules 읽기전용 합격. 원본 `flushPendingLikes` 함수 대상 `APP391_ACCEPTED_LIKE_STAYS_FILLED_DURING_R2_LAG=PASS`, `APP391_DURABLE_ACK_REPAINT_AFTER_OUTBOX_ZERO=PASS`, app390 충돌 ACK, 기존 outbox 최신 클릭 우선 회귀 성공. 실사용 PC↔모바일 E2E 및 청구 실측은 **미검증**.
+- **배포 [Run 38012860289](https://github.com/andrawing1212/soridraw-music/actions/runs/38012860289) SUCCESS:** Firebase PREVIEW app391 `https://preview.soridraw.com/`, `LOCKED_PREVIEW_SHA=877c50a1666eb6e090f4578a523eac2a85a873ce`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=391`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Worker/Functions/Cloudflare/공유 D1/R2/Firestore·원본 사용자 데이터/main/TEST/PRODUCTION **변경 0**.
+- **사용자 실기기 검증은 여전히 FAIL 해제 보류:** app391은 문제 경로의 합리적인 부분 수정이지만, 다른 기기의 캐시/장기 `retryCount>0`/서버 실제 status 원인은 확인되지 않음. 앱389~391 변경분을 다음 일괄 실사용 검증에 포함. 같은 곡에서 하트·공개 숫자·내 좋아요·PC/모바일 양방향 초기/수락 후 parity를 반드시 확인, 결과 없이 다음 TEST/PRODUCTION 승격 금지.
+
+---
+
 ## 0S63. PREVIEW app390 배포 완료 — 서버 충돌 좋아요 결과가 모바일 하트에 반영되지 않던 수신 순서 오류 수정 / 사용자 검증 일괄 보류 (2026-10-10 KST)
 
 - **사용자 지시:** app389 기능의 매 단계 사용자 실기기 테스트를 반복하지 않고 다른 좁은 수정·검증을 이어가며 여러 항목을 모아 최종 PC/모바일 실사용 테스트 1회로 취합. **사용자 실기기 기능 결과를 자동 검사 성공으로 미리 PASS 판정하지 않는다.** 신규 기능 범위·TEST/PRODUCTION 승격은 자의 결정하지 않는다.

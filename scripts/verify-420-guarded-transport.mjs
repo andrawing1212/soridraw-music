@@ -96,26 +96,39 @@ let currentPending = pending;
 const reader = () => ({ latest:currentPending,
   evidence:{ uid:'uid-a',trackId:mutation.trackId,liked:false,
     source:'verified-local-baseline',version:7 } });
+const markFirstAttempt = sent => {
+  if (!currentPending || currentPending.operationId !== sent.operationId ||
+      currentPending.updatedAt !== sent.updatedAt ||
+      currentPending.guardAttempt420 === 'sent-unconfirmed' ||
+      currentPending.guardStatus !== 'awaiting') return false;
+  currentPending = { ...currentPending, guardAttempt420: 'sent-unconfirmed' };
+  return true;
+};
 const save = decision => { persisted.push(decision.action); commits.push('persist'); };
 const repaint = () => { assert.equal(commits[commits.length - 1],'persist'); commits.push('paint'); };
 nextReply = denied;
-let actual = await submit(pending,reader,save,repaint);
+let actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'rollback');
 assert.deepEqual(commits,['persist','paint']);
 currentPending = {...pending,operationId:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'};
 commits.length = 0; persisted = [];
-actual = await submit(pending,reader,save,repaint);
+actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'superseded','late rejected response must not roll back new click');
 assert.equal(commits.length,0);
 currentPending = pending;
 nextReply = accepted;
-actual = await submit(pending,reader,save,repaint);
+actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'approved');
 assert.equal(actual.guardPermit420,permit420);
+assert.equal(currentPending.guardAttempt420,'sent-unconfirmed');
+const callsBeforeLostAckReplay = calls.length;
+actual = await submit(pending,reader,save,repaint,markFirstAttempt);
+assert.equal(actual.action,'await-reply','original ACK loss must never republish same operation');
+assert.equal(calls.length,callsBeforeLostAckReplay,'51-event eviction must not convert a sent click into a fresh rate write');
 nextReply = {...accepted, guardPermit420:undefined};
 commits.length=0;
 await assert.rejects(publish(mutation),/INVALID_GUARDED_LIKE_RESPONSE/);
-actual = await submit(pending,reader,save,repaint);
+actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'await-reply',
   'a callable allowed response without a certificate must not write canonical');
 assert.equal(commits.length,0);
@@ -131,20 +144,20 @@ assert.equal(freshToken,permit420);
 assert.equal(calls[callCount].name,'renewExploreLikePermit420');
 assert.equal('uid' in calls[callCount].args,false);
 currentPending=approved;
-actual=await submit(approved,reader,save,repaint);
+actual=await submit(approved,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'approved');
 assert.equal(calls.at(-1).name,'renewExploreLikePermit420');
 assert.equal(calls.at(-1).args.operationId,mutation.operationId);
 assert.equal(calls.at(-1).args.previousGuardPermit420,permit420);
 const beforeMissing=calls.length;
-actual=await submit({...approved,guardPermit420:undefined},reader,save,repaint);
+actual=await submit({...approved,guardPermit420:undefined},reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'await-reply');
 assert.equal(calls.length,beforeMissing,'missing proof must not fall back to new-click endpoint');
 nextReply = accepted;
 currentPending=pending;
 rejectNetwork = true;
 commits.length = 0;
-actual = await submit(pending,reader,save,repaint);
+actual = await submit(pending,reader,save,repaint,markFirstAttempt);
 assert.equal(actual.action,'await-reply','network error must keep unapproved outbox');
 assert.equal(commits.length,0);
 rejectNetwork = false; nextReply = null;
@@ -181,3 +194,4 @@ console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');
 
 console.log('STAGE420_DORMANT_APPROVED_RENEWAL_NO_RATE_REPLAY=PASS');
 console.log('STAGE420_MISSING_PROOF_RENEWAL_FAIL_CLOSED=PASS');
+console.log('STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD=PASS');

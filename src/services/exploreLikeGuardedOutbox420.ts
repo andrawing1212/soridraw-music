@@ -13,6 +13,9 @@ export type GuardedOutboxEntry420 = {
   // Persist the exact Function-issued proof; only this can renew without
   // calling the fresh-click rate transaction after the 15-minute expiry.
   guardPermit420?: string;
+  // Durable before a first network publish; do not replay an uncertain ACK
+  // as a new rate transaction when the server's bounded history expires.
+  guardAttempt420?: 'sent-unconfirmed';
 };
 export type GuardedOutboxReply420 = {
   allowed: boolean;

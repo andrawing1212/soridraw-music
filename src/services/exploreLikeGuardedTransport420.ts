@@ -149,6 +149,8 @@ export const submitGuardedOutboxCandidate420 = async (
   },
   commit: (decision: GuardedResolution420) => void,
   notifyAfterCommit: (decision: GuardedResolution420) => void,
+  // Synchronously persist the exact first attempt BEFORE any network call.
+  persistFirstAttempt420: (sent: GuardedOutboxEntry420) => boolean,
 ): Promise<GuardedResolution420> => {
   let reply: GuardedOutboxReply420 | null = null;
   try {
@@ -165,8 +167,21 @@ export const submitGuardedOutboxCandidate420 = async (
       reply = { ok: true, allowed: true, lockedUntilMs: 0,
         guardPermit420: freshPermit420 };
     } else {
-      // First authorization only. A lost server ACK with no durable permit
-      // cannot safely be reissued after 50 events; see cutover HOLD gate.
+      // A missing first ACK has no signed proof to renew. After the first
+      // durable send marker, hold for exact canonical/approval reconciliation.
+      // Do NOT re-count the original opId as a new click after 50 events.
+      if (!persistFirstAttempt420(sent)) {
+        return settleGuardedOutbox420(sent, null, readCurrent, commit, notifyAfterCommit);
+      }
+      const marked = readCurrent().latest;
+      if (!marked || marked.guardAttempt420 !== 'sent-unconfirmed' ||
+          marked.uid !== sent.uid || marked.trackId !== sent.trackId ||
+          marked.ownerUid !== sent.ownerUid ||
+          marked.operationId !== sent.operationId ||
+          marked.desiredLiked !== sent.desiredLiked ||
+          marked.updatedAt !== sent.updatedAt) {
+        return settleGuardedOutbox420(sent, null, readCurrent, commit, notifyAfterCommit);
+      }
       const response = await publishGuardedLikeIntent420({
         trackId: sent.trackId,
         ownerUid: sent.ownerUid,

@@ -123,6 +123,7 @@ type ExploreLikePendingMutation = {
   operationId?: string; // stable across a retry, replaced on every new click
   guardStatus420?: 'awaiting' | 'approved'; // old clients remain legacy when absent
   guardPermit420?: string; // signed server claim; Worker verifies cryptographically
+  guardAttempt420?: 'sent-unconfirmed'; // persisted before first 420 network send
   guardCanonicalLiked420?: boolean; // trusted PRE-click membership, not optimistic cache
   expectedRevision?: number; // 172: canonical per-user/track mutation revision
   // 390: a newer accepted change on another device must survive a local outbox guard.
@@ -1438,6 +1439,8 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
         /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(row.guardPermit420) &&
         row.guardPermit420.length <= 2400
       ? { guardPermit420: row.guardPermit420 } : {}),
+    ...(row.guardAttempt420 === 'sent-unconfirmed'
+      ? { guardAttempt420: 'sent-unconfirmed' as const } : {}),
     ...(typeof row.guardCanonicalLiked420 === 'boolean'
       ? { guardCanonicalLiked420: row.guardCanonicalLiked420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
@@ -2359,7 +2362,9 @@ export const setExploreTrackLike = async (
           ? { uid, trackId: latest.trackId, ownerUid: latest.ownerUid,
               desiredLiked: latest.desiredLiked, operationId: latest.operationId,
               baseLiked: latest.baseLiked, updatedAt: latest.updatedAt,
-              guardStatus: latest.guardStatus420 }
+              guardStatus: latest.guardStatus420,
+              ...(latest.guardAttempt420 === 'sent-unconfirmed'
+                ? { guardAttempt420: 'sent-unconfirmed' as const } : {}) }
           : null,
         evidence,
       };
@@ -2402,6 +2407,25 @@ export const setExploreTrackLike = async (
           source: 'remote',
         });
       }
+    }, (attempt: GuardedOutboxEntry420): boolean => {
+      // Same-UID, same exact click only. Persist synchronously before publish;
+      // re-read to avoid sending when browser storage failed.
+      if (auth.currentUser?.uid !== uid) return false;
+      const current = readLikeOutbox(uid);
+      const row = current[attempt.trackId];
+      if (!row || row.operationId !== attempt.operationId ||
+          row.ownerUid !== attempt.ownerUid ||
+          row.updatedAt !== attempt.updatedAt ||
+          row.desiredLiked !== attempt.desiredLiked ||
+          row.guardStatus420 !== 'awaiting' ||
+          row.guardAttempt420 === 'sent-unconfirmed' ||
+          !!row.guardPermit420) return false;
+      current[attempt.trackId] = { ...row, guardAttempt420: 'sent-unconfirmed' };
+      persistLikeOutbox(uid, current);
+      const confirmed = readLikeOutbox(uid)[attempt.trackId];
+      return confirmed?.operationId === attempt.operationId &&
+        confirmed?.updatedAt === attempt.updatedAt &&
+        confirmed?.guardAttempt420 === 'sent-unconfirmed';
     }).catch((error) =>
       console.warn('[420] Guarded private intent retained pending authority:', error));
   }

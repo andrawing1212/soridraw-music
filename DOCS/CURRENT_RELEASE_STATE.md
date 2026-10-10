@@ -1,3 +1,16 @@
+## 0S90. 최초 로딩 경량화 1차: Master 전용 진단 모듈 지연 로딩, 실측 소폭 개선 / 실제 배포 전 (2026-10-10 KST)
+
+- 사용자가 앱의 무거움과 지나치게 느린 작업 속도를 지적. 직전 `preview` 기준 `5d74643e7a475be48ad9c5746a974a61090df204`. Stage420 보안 후보는 **일시 중단**, 앱 성능을 우선하고 작은 실험을 정확히 비교함.
+- 원인 기초 실측: GitHub [408 Run 38031808545](https://github.com/andrawing1212/soridraw-music/actions/runs/38031808545)의 Build에서 `src/App.tsx` 원본 약 **1,386,739 chars/29,577줄**, Studio `studioLayout.css` 약 **665,668 chars**, 메인 JS **2,864.19KB/gzip 848.42KB**, 공통 vendor JS **1,149.87KB/gzip 283.37KB**, 메인 CSS **910.90KB/gzip 97.53KB**. 앱 처음 로드 부담/구조적 유지보수 리스크는 확인됐으나 실제 브라우저 p95 렌더 측정은 아님.
+- 첫 시도 `vite.config.ts`의 catch-all vendor grouping 제거는 실제 GitHub [408 Run 38032564124](https://github.com/andrawing1212/soridraw-music/actions/runs/38032564124) TS/Build PASS였으나 메인 JS gzip **919.69KB**로 증가하고 초기 공통 의존성 합계도 약 **0.4% 차이**에 그침 → **시도를 완전히 되돌림**. `vite.config.ts`는 시작 commit 대비 byte-identical.
+- 기능 무변경 성능 패치: `src/components/CacheDiagnosticsOverlay.tsx`, `src/components/studio/SplitPerformanceDiagnostics.tsx`를 마스터 권한 있을 때만 `React.lazy/Suspense`를 통해 로드되는 작은 wrapper로 바꾸고, 원본 내용은 동일 폴더의 신규 `CacheDiagnosticsOverlayImpl.tsx`, `SplitPerformanceDiagnosticsImpl.tsx`에 그대로 보관. 일반 사용자에게 필요 없는 2개 진단 UI/후크의 즉시 실행·초기 다운로드 제거. 마스터는 권한 확인 후 비동기 최초 1회 렌더; 마스터 진단 화면 열림/위치/토글 실제 사용 테스트는 아직 미검증.
+- 실제 [408 Run 38032821201](https://github.com/andrawing1212/soridraw-music/actions/runs/38032821201) `aa1a1392f0e6000a7bf41bbad4b44f134b974a22` 기준 **SUCCESS**: TS/Build/Stage420 Functions/127·390 Like 회귀/Rules read-only. 메인 JS **2,800.46KB/gzip 830.22KB**, 시작 기준 대비 원본 **−63.73KB(−2.2%)**, gzip **−18.20KB(−2.1%)**. 진단 chunk는 캐시 21.18KB/gzip 6.81KB, 분할 진단 42.75KB/gzip 13.11KB로 별도 지연 로딩. vendor/CSS 양은 이전과 동일. **화면 버벅임의 해결이나 모바일 실측 PASS로 해석 금지**.
+- 미래 Vite 설정 변경에도 고정 408 QA가 실제 빌드를 확인하도록 `.github/workflows/verify-408-like-repair-code.yml`의 push paths에 `vite.config.ts`만 추가. 기존 고정 Firebase/Cloudflare 배포 workflow 변경 없음. 이번 diff 최종 파일은 위 5개 React 진단 모듈 + 408 QA paths 1줄만 변경. React App, Music Note, Library, Explore Likes, 기존 Studio splitter CSS, theme, user data, RTDB/Functions/Worker/D1/R2, 배포 트리거, main/TEST/PRODUCTION 일절 변경 없음.
+- **배포 안 함**, preview.soridraw.com에는 전 버전 app392 유지. QA source commit `aa1a1392f0e6000a7bf41bbad4b44f134b974a22`. Stage416 **1/5(20%) 유지**; Stage420 보안 신규 cutover 여전히 OFF, 구형 앱 완전 보안 전환 및 follow-only 옛 동결 검사 FAIL은 미해결.
+- 다음 성능 작업: 실제 초기 다운로드/waterfall과 Studio·Music Note·Library에 대한 PC/태블릿/모바일 렌더/long-task 실측을 한 번 진행하고, `App.tsx` 29k줄의 스튜디오 화면 소유 코드 및 665KB studio CSS를 UI 바꿈 없이 기능 단위로 지연 분리하는 **검증 가능한 하나의 큰 대상** 선정. 단순 파일 이동·무검증 CSS 삭제를 성능 개선으로 보고 금지.
+
+---
+
 ## 0S89. Stage420 서버 서명 증표와 Cloudflare 원본 저장 입구 차단 후보 통합 — QA PASS, 실제 강제 미활성 (2026-10-10 KST)
 
 - 기준 source `preview` `0808268670f60b0ddc83e2e70129838e6ba89f2c`; 이번 후보 **코드 고정 SHA `94aec113cea38c5bb4309c14c31d4397fc75a527`**. 새 문서 `DOCS/STAGE420_SIGNED_CANONICAL_PERMIT_CUTOVER.md` 참조. `preview-entry.js`는 아직 `STAGE426_COMPILED_OPEN = false`, 실제 app392 `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false`. 서버 연결 도면이 아니라 **실제 소스 후보 경로의 permit issue/store/verify를 구현**했지만 LIVE Worker/Functions/Rules를 바꾼 것은 아니다.

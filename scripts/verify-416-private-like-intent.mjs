@@ -77,6 +77,13 @@ const like = (liked, operationId, trackId = track) => ({
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined, 'cold subscriber must not invent a heart');
 await A.api.publishExploreLikeIntent416(uid, like(true, op1));
 assert.equal(B.api.readExploreLikeIntent416(uid, track), true, 'remote preview must repaint before server ACK');
+const cold = makeClient();
+const stopCold = cold.api.subscribeExploreLikeIntent416(uid, (id, liked) =>
+  cold.notices.push({ id, liked }));
+assert.equal(cold.api.readExploreLikeIntent416(uid, track), undefined,
+  'new browser must not promote a retained tentative hint to canonical state');
+assert.equal(cold.notices.length, 0);
+stopCold();
 assert.equal(B.api.listExploreLikeIntents416(uid)[track], true, 'My Likes local candidate must see same provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
 assert.equal(database.get(`userSync/${uid}/exploreLike`), undefined, 'accepted 127 signal unchanged');

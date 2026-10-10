@@ -75,8 +75,10 @@ for (let n = 42; n <= 81; n++) {
   assert.equal(actual.lockedUntilMs, prediction.lockedUntilMs);
   expected = prediction.nextState;
 }
-const locked = store.get('privateLikeSync420/' + uid);
+const locked = store.get('privateLikeSync420/' + uid).display;
 assert.equal(locked.rate.lockedUntilMs, base + 64_000 + 120 * 60_000);
+assert.equal(store.get('privateLikeSync420/' + uid).adminUnlockAudit, undefined,
+  'server personal publisher must not manufacture Master audit records');
 const beforeLocked = writes.length;
 const lockedTry = await server.publishGuardedLikeSignal420(
   database, uid, mk(82), locked.rate.lockedUntilMs - 1,
@@ -92,7 +94,7 @@ const secondAccount = await server.publishGuardedLikeSignal420(
   database, 'account-b', mk(90), base + 1_000,
 );
 assert.equal(secondAccount.allowed, true, 'one account must never lock another');
-assert(store.get('privateLikeSync420/account-b'));
+assert(store.get('privateLikeSync420/account-b').display);
 for (const [invalidUid, bad] of [['', mk(91)], ['account-a', {
   ...mk(92), trackId: '',
 }]]) {
@@ -100,7 +102,7 @@ for (const [invalidUid, bad] of [['', mk(91)], ['account-a', {
     database, invalidUid, bad, base + 2_000,
   ), /INVALID_PRIVATE_LIKE_REQUEST/);
 }
-assert(store.get('privateLikeSync420/account-a').results.length <= 50);
+assert(store.get('privateLikeSync420/account-a').display.results.length <= 50);
 const rules = JSON.parse(readFileSync('database.rules.json', 'utf8')).rules;
 assert.equal(rules.userSync.$uid['.write'], 'auth != null && auth.uid === $uid');
 assert.equal(rules.privateLikeSync420, undefined,

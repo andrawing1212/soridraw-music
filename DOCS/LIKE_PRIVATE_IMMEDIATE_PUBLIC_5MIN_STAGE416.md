@@ -40,6 +40,13 @@
 - **중요 비용 판단:** canonical `track_stats`를 5초마다 변경하는 기존 코드가 남으면 공용 UI 갱신만 5분 늦춰도 physical D1 W는 그대로일 수 있음. 물리적 행 W 절감 검증 없으면 비용 개선이라고 표시 금지.
 - exact per-5m public update/zero idle + first80 outside/last-second/double-actor/unlike/backfill no migration/cold reader & old clients tested before real activation.
 
+### 4단계 추가 확정 — Master 관리자 공개 공동집계 주기 설정 (2026-10-10)
+
+- 4단계 구현에 **Master 관리자 메뉴**의 '공개 좋아요 공동집계 주기' 설정을 함께 포함한다. 선택값 **1분 / 3분 / 5분 / 10분 / 20분**, 기본값 **5분**.
+- 변경한 주기는 **이미 시작된 집계 창에는 적용하지 않고 다음에 새로 시작하는 공동집계 창부터 적용**한다. 진행 중 이벤트의 마감 시간은 고정하고 누락·중복 정착이 없어야 한다.
+- 공개 숫자 공동집계 주기만 변경하며 **개인 하트·같은 계정 동기화·개인 저장 주기와 완전히 분리**한다.
+- 관리자 설정은 권한 확인·입력값 검증·변경 이력·비용 영향 확인 후 구현. 현재 app391 동작 및 Firebase/Cloudflare 배포는 바꾸지 않는다. 사용자 승인 전 Stage4 선행 배포 금지.
+
 ## 5단계 — 독립 감사/비용 실측 → PREVIEW 검증 → 팔로우
 
 - Codex High 구현, Work read-only 독립 감사, ChatGPT release gate → 사용자 PC↔mobile QA → TEST는 별도 승격, PROD 명시 승인만.

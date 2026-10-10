@@ -2054,7 +2054,8 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   // even when this device already has a partial local catalog.
   const missing = baselineReady127 ? [] : normalized.filter((trackId) => {
     if (beforeOutbox127[trackId] ||
-        Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) return false;
+        Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId) ||
+        typeof readExploreLikeIntent416(user.uid, trackId) === 'boolean') return false;
     return !cache.has(trackId);
   });
   if (missing.length) {

@@ -1,3 +1,14 @@
+## CURRENT — 앱396 PREVIEW 실사용 PASS · 속도 개선 및 기기 검증 단계 종료 (2026-10-10)
+
+- **사용자 최종 실사용 판정:** 사용자 2026-10-10 직접 보고 “모두 다 괜찮아. 통과”. 직전 요청한 앱396 로그인 PC·모바일·갤럭시탭의 Music Note/Library 재진입·스크롤, Studio 분할바 빠른 드래그/해제, 모바일 화면 전환 점검에 대한 종합 **PASS**로 수락. 실측 FPS/p95·모든 기기의 서버비용 0 계측은 하지 않았으며 사용자 체감 확인과 구분한다.
+- **② 앱 속도 개선 — 총 5단계 완료 5/5·100% (이번 앱396 범위 종료):** 4단계 ‘실사용 속도 확인’은 사용자 PASS. 5단계 ‘남은 병목 수정 필요 여부 최종 판단’은 확인된 재현 오류가 없어서 **추가 소스 변경 불필요**로 종료. 공유 Music Note 중복 목록 O(N²)→O(N) 개선 유지. 신규 성능 작업을 추측으로 늘리지 않고 이 릴리스의 성능 개선 작업을 마감한다.
+- **③ 실기기 검증 — 총 4단계 완료 4/4·100%:** 로그인 PC·모바일·태블릿의 기존 요청 범위 사용자 PASS. 자동 Chrome 에뮬레이션 PASS와 실제 사용자 실기기 판정은 서로 다른 증거임을 유지한다. 지속적 장기 관측·정량 p95/비용 감사까지 무제한 완료했다는 뜻은 아니다.
+- **① Stage416 좋아요 보안 전환 — 총 5단계 중 2단계 진행(1/5 완료·20%) 유지:** 보안 cutover Stage420/426 OFF, 실제 활성화·TEST/PRODUCTION 승격 승인으로 해석 금지.
+- **릴리스 기준 고정:** `preview` Hosting app396, 배포 source `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, [Firebase PREVIEW Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) SUCCESS, exact 빌드·TEST/PRODUCTION 비변경 PASS. Worker·Functions·Rules·D1·공유 사용자 데이터 비변경. Follow-only legacy CI Worker snapshot assertion FAIL은 별도 알려진 위험으로 유지.
+- **다음:** 속도/실기기 작업은 신규 실제 오류가 발생하지 않는 한 재개하지 않는다. 이어지는 개발 우선 항목은 별도 Stage416이지만 현재 사용자 메시지는 그 작업을 시작하거나 TEST·PRODUCTION 승격하라는 승인 아님. 기존 정상 UI/동기화 보호.
+
+---
+
 ## CURRENT — PREVIEW 앱396 Music Note 대량 목록 속도 개선 실제 배포 PASS (2026-10-10)
 
 - **실제 결과:** `preview` 배포 commit `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, 앱버전 **396**, Firebase Hosting [Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) **SUCCESS**. 실제 `preview.soridraw.com` 버전396·정확한 index 빌드 일치·TEST/PRODUCTION 비변경 확인. Hosting ONLY; Worker/Functions/공유 Rules/DB/사용자 원본 변화 없음.

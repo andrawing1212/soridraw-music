@@ -1,3 +1,12 @@
+## CURRENT — 앱396 속도·실기기 검증 사용자 PASS로 종료, Stage416 독립 미완료 (2026-10-10)
+
+- **② 앱 속도 개선:** 총5단계 **5/5·100% 완료** (앱396 대상). PREVIEW 배포·TypeScript·Build·회귀검사 PASS, 사용자 “모두 다 괜찮아. 통과”로 로그인 PC/모바일/갤럭시탭 체감·전환·분할바 최종 검증 PASS. 남은 재현 오류 없음 → 5단계에서는 추가 성능 패치를 만들지 않고 종료. 정량 FPS/p95와 비용 read 0의 전체 기기 계측은 수행하지 않음.
+- **③ 실기기 검증:** 총4단계 **4/4·100% 완료** (이번 사용자 확인 범위). 물리 기기 검사 결과는 사용자의 확인이며 CI 가상기기 결과로 바꿔 쓰지 말 것.
+- **① Stage416 좋아요 보안 전환:** 총5단계 중 **2단계 진행 중, 1/5·20% 완료**. Stage420/426 cutover OFF; 장기 동기화/ACK-loss 증빙/월비용 보안 검증 HOLD. 속도 마감을 이 보안 기능 활성화 또는 TEST/PROD 승인으로 해석하지 말 것.
+- **운영 기준:** `preview` 앱396 Hosting 배포 commit `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, [Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) SUCCESS. 공유 사용자 데이터/Worker/Functions/TEST/PROD 불변. 확인된 새로운 속도 버그가 없다면 PC1800 guest 단발 계측·분할 진단·대량 목록 검사 재반복 금지. 다음 개발은 사용자 명령에 따라 Stage416을 명명된 단계로 진행.
+
+---
+
 ## CURRENT — 앱396 PREVIEW 배포 검증 완료, 속도·실기기 최종 실사용 확인 우선 (2026-10-10)
 
 - GitHub `preview` 앱396 Hosting commit `3ecea0bcbf0c3ae2bbf4140de8cb20afd712474a`, 배포 [Run 38057570855](https://github.com/andrawing1212/soridraw-music/actions/runs/38057570855) SUCCESS. 실제 PREVIEW index exact·version396·TEST/PRODUCTION unchanged. Music Note 공유 노트 O(N²) 중복 검사→O(N), 2,400곡 원래 결과 보존, 408 검증 SUCCESS. Worker/Functions/RTDB Rules/공유 사용자 DB 미변경. Stage420/426 후보 OFF.

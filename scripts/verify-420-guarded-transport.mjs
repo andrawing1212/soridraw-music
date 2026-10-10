@@ -10,7 +10,7 @@ let code = stripTypeScriptTypes(
 code = code.replace(/^import\s+.*?from\s+'[^']+';\s*$/gm, '')
   .replaceAll('export const ', 'const ');
 assert(!/^import\s/m.test(code));
-code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420};';
+code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420};';
 const calls = [];
 const listeners = [];
 const mock = {
@@ -30,7 +30,7 @@ const mock = {
 };
 const module = { exports: {} };
 vm.runInNewContext(code, { module, ...mock, console, Date, Number, Error }, { timeout: 1000 });
-const { publishGuardedLikeIntent420: publish, subscribeGuardedLikeIntent420: subscribe } = module.exports;
+const { publishGuardedLikeIntent420: publish, subscribeGuardedLikeIntent420: subscribe, planGuardedLikeDecision420: plan } = module.exports;
 const mutation = {
   trackId: 'track-1',
   ownerUid: 'artist-1',
@@ -44,6 +44,26 @@ assert.equal(calls[0].name, 'publishExploreLikeIntent420');
 assert.equal('uid' in calls[0].args, false, 'caller never supplies a privileged UID');
 assert.equal(listeners.length, 0, 'publisher must not spawn a subscriber or a direct RTDB transaction');
 await assert.rejects(publish({ ...mutation, operationId: 'bad' }), /INVALID_GUARDED_LIKE_REQUEST/);
+// Network result may arrive after one or many subsequent clicks.
+const latest = { ...mutation, desiredLiked: mutation.liked };
+const accepted = { ok: true, allowed: true, warning: false,
+  lockedUntilMs: 0, remainingInWindow: 39, version: 1, duplicate: false };
+const denied = { ...accepted, allowed: false, remainingInWindow: 0 };
+assert.equal(plan(mutation, latest, accepted), 'retain-canonical-pending',
+  'private delivery acceptance is not canonical settlement');
+assert.equal(plan(mutation, latest, denied), 'reject-matching-only');
+assert.equal(plan(mutation, latest, null), 'retain-unconfirmed',
+  'a network error is not proof of denial');
+assert.equal(plan(mutation, null, denied), 'ignore-superseded');
+for (const newer of [
+  { ...latest, operationId: 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb' },
+  { ...latest, desiredLiked: !latest.desiredLiked },
+  { ...latest, trackId: 'other-track' },
+  { ...latest, ownerUid: 'different-owner' },
+]) {
+  assert.equal(plan(mutation, newer, denied), 'ignore-superseded',
+    'stale Function denial must not erase newer click');
+}
 const incoming = [];
 const off = subscribe('uid-a', (row) => incoming.push(row));
 assert.equal(listeners.length, 1);
@@ -70,4 +90,5 @@ assert.doesNotMatch(code, /runTransaction|set\(|update\(/,
 console.log('STAGE420_GUARDED_CALLABLE_NO_DIRECT_RTDATABASE_WRITE=PASS');
 console.log('STAGE420_SERVER_ONLY_DISPLAY_AND_ADMIN_AUDIT_ISOLATION=PASS');
 console.log('STAGE420_PROVISIONAL_PRIVATE_HEART_REPLAY_GUARD=PASS');
+console.log('STAGE420_STALE_REJECTION_AND_NETWORK_UNKNOWN_OUTBOX_GUARD=PASS');
 console.log('STAGE420_APP392_CUTOVER_AND_LATENCY=NOT_TESTED');

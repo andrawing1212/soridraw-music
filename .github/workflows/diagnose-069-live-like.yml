@@ -58,6 +58,37 @@ jobs:
             LEFT JOIN track_stats s ON s.track_id=t.id
             WHERE t.title = '성적표 대소동';
           " --json > "$RUNNER_TEMP/specified-track-readonly.json"
+          # Exact D1 title may lag behind the public Explore card. Resolve
+          # one visible public search result first; then use the canonical ID
+          # with an indexed read. No user identities or raw IDs are logged.
+          curl -fsS -G --max-time 20 -H 'Origin: https://preview.soridraw.com' \
+            --data-urlencode 'q=성적표 대소동' \
+            'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/search' \
+            > "$RUNNER_TEMP/target-public-search.json"
+          node - <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-public-search.json','utf8'));
+          const items=payload?.data?.items || [];
+          const chosen=items.find(row=>String(row?.title||'').trim()==='성적표 대소동');
+          const id=String(chosen?.id||'').trim();
+          if(id && !/^[a-zA-Z0-9_-]{1,120}$/.test(id))throw Error('Unsafe ID from public search');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/target-track-id.txt',id);
+          console.log('TARGET_PUBLIC_SEARCH_FOUND='+Number(Boolean(id)));
+          NODE
+          track_id="$(cat "$RUNNER_TEMP/target-track-id.txt")"
+          if [ -n "$track_id" ]; then
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+              SELECT COUNT(*) AS matched_tracks,
+                COALESCE(SUM(COALESCE(s.like_count,0)),0) AS public_count,
+                COALESCE(SUM((SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id)),0) AS canonical_like_rows,
+                COALESCE(SUM(CASE WHEN EXISTS (
+                  SELECT 1 FROM likes l WHERE l.track_id=t.id AND l.user_uid=t.owner_uid
+                ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks
+              FROM tracks t
+              LEFT JOIN track_stats s ON s.track_id=t.id
+              WHERE t.id='$track_id';
+            " --json > "$RUNNER_TEMP/public-id-canonical-readonly.json"
+          fi
           node - <<'NODE'
           const fs = require('fs');
           const a = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-queues-readonly.json','utf8'));
@@ -82,5 +113,13 @@ jobs:
           console.log('TARGET_CANONICAL_LIKE_RELATIONS=' + Number(one.canonical_like_rows||0));
           console.log('TARGET_OWNER_HAS_LIKED=' + Number(one.owner_liked_tracks||0));
           console.log('NOTE_VIEWER_MAY_NOT_BE_OWNER=TRUE');
+          if (fs.existsSync(process.env.RUNNER_TEMP + '/public-id-canonical-readonly.json')) {
+            const byId=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/public-id-canonical-readonly.json','utf8'));
+            const found=byId.flatMap(part=>part.results||[])[0]||{};
+            console.log('PUBLIC_ID_CANONICAL_TRACK_EXISTS='+Number(found.matched_tracks||0));
+            console.log('PUBLIC_ID_CANONICAL_LIKE_RELATIONS='+Number(found.canonical_like_rows||0));
+            console.log('PUBLIC_ID_CANONICAL_LIKE_COUNT='+Number(found.public_count||0));
+            console.log('PUBLIC_ID_OWNER_LIKED='+Number(found.owner_liked_tracks||0));
+          }
           console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE

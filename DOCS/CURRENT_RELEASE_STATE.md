@@ -1,3 +1,16 @@
+## 0S86. Stage420 한 묶음 개발: 후보 guarded outbox + callable 결합 + 회귀검사 / 실제 app392 무변경 (2026-10-10 KST)
+
+- 사용자 명령: 작업을 소규모 중단·보고 반복하지 말고 **한 번에 묶어서 진행**, 작업 끝마다 변경 1~2줄 요약 및 진행률 지속 표시. 시작 기준 `preview` `3e42563516b72c4718a350182e4f0609b1335759`.
+- **소스 후보 5개 파일:** 신규 `src/services/exploreLikeGuardedOutbox420.ts`는 개인 좋아요 서버 승인 전 canonical flush 차단, 승인 응답·명시 거절·네트워크 모호함·이전 응답 뒤 새 클릭·확정개인증거 부재를 결정론적으로 분리. 늦은 응답이 최신 outbox를 삭제하지 않도록 UID+곡+owner+operationId+desiredLiked+updatedAt exact match; 거절 때 신뢰할 수 있는 accepted127/개인카탈로그/확인된 로컬 baseline 근거 없으면 하트 원상복귀를 임의 추정하지 않음. 저장 callback 이후에만 UI 통지 callback 실행.
+- `src/services/exploreLikeGuardedTransport420.ts`에 `submitGuardedOutboxCandidate420` 추가: Firebase 인증 callable 송신 후 위 outbox 결정 함수를 한 흐름으로 연결, 통신 오류는 unknown으로 보존. 직접 416 RTDB 쓰기 fallback 절대 추가하지 않음.
+- `scripts/verify-420-guarded-outbox.mjs` 신규, `scripts/verify-420-guarded-transport.mjs` 보강, `scripts/soridraw-qa-engine.mjs` like QA 그룹에 자동검사 편입. GitHub compare에서 실제 변경 총 5개 파일(제품 정상 경로 `exploreLikeService.ts`, `exploreLikeIntent416.ts`, `database.rules.json`, Worker 및 Functions callable 불변).
+- **실제 검증 결과:** exact GitHub source에서 TypeScript annotation만 제거하여 V8 독립 실행한 guarded outbox/transport 16개 시나리오 **PASS**, 별도 이전 후보 감사/모의검사 이력은 그대로. 새 GitHub Node 전체 verifier, React TS/Build, Functions strict TS, 408/Fast QA Actions, Firebase Emulator, PC·모바일 실기기 왕복 지연은 **이번 source에 대해 미검증**. V8 검사 결과를 전체 QA PASS로 표시하지 않는다.
+- **실제 통합 현황: 미연결 / 제품 배포 HOLD.** 새 모듈은 기존 app392 `exploreLikeService`의 실제 persisted outbox read/write/flush에 아직 연결하지 않았음. canonical Worker가 120분 account lock 확인하지 않으며 구형 앱392/TEST/PRODUCTION 사용자 탭의 `userSync/$uid/exploreLikeIntent416` 직접 쓰기 권한도 유지. 서버 보안 우회 없이 즉시 전체 Rules cutover를 하면 구형 앱 정상 하트가 깨질 수 있으므로 shared Rules/Worker/Functions/Hosting 배포 금지.
+- **운영 불변:** 실제 PREVIEW Hosting app392 사용자가 확인한 양방향 즉시 하트 그대로, main/TEST/PRODUCTION와 공유 Firebase RTDB Rules/Functions, Cloudflare Worker/D1/R2, Firestore, 사용자 원본 데이터에 실제 변경·배포·migration 없음. Stage416 **1/5(20%) 유지**, Stage420 실제 운영 방어 **미완료**. 기존 UI/팔로우/Music Note/Library 변경 없음.
+- **다음 단일 작업:** 후보 reducer를 실제 영구 outbox 127/390 서비스에 안전 연결하면서 `guardStatus` persisted/reload·flush approval gate·private receiver accepted/rejected/canonical settlement·다른 기기 최신 클릭 보존·이전 app392 열린 탭 호환·Worker 120분 강제 검사를 함께 구현/Emulator·full 408 QA 검증. 100k 월 총비용과 한국 지연 실측 전 활성화 금지. 구형 직접 쓰기 차단과 하위호환이 동시에 불가능한 시점이면 사전 보고/릴리스 HOLD, 기능 고장 감수한 무단 cutover 금지.
+
+---
+
 ## 0S85. Stage420 서버 거절/느린 응답에서 최신 좋아요 보호: 후보 판단 로직 + 회귀검사 / 실제 연결 미완료 (2026-10-10 KST)
 
 - 기준 `preview` `b5219f188cbbd2e214b25de2c5b565f4618fce38`. 미연결 `src/services/exploreLikeGuardedTransport420.ts`에 `planGuardedLikeDecision420` 순수 후보 추가: 요청 발송 뒤 원본 outbox의 곡ID/소유UID/원하는 like/operationId 중 하나라도 달라지면 이전 Firebase callable 거절로 최신 클릭을 지우지 않음(`ignore-superseded`); 네트워크 실패·응답불명은 outbox 유지(`retain-unconfirmed`); 허용은 canonical 반영 전까지 유지(`retain-canonical-pending`); 정확히 일치하는 요청의 명시 거절만 `reject-matching-only`.

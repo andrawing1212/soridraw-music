@@ -1,3 +1,11 @@
+## CURRENT — 실제 Music Note 공유 폴더 중복 계산 성능 수정 검증 완료, 로그인/기기 테스트가 속도 4단계 차단 (2026-10-10)
+
+- 제품 소스 `35c51ca6744ba615947ba810bfb7cb02b96f5dc4`, [408 Run 38056610071](https://github.com/andrawing1212/soridraw-music/actions/runs/38056610071) SUCCESS. `FavoritesPage.tsx` sharedNote local dedup: 매 곡마다 `findIndex` 전체 재검색(O(N²))을 같은 첫 곡 우선 결과 유지 Set(O(N))으로 교체. 소스 구간 실행 테스트에서 2,400곡 duplicate key 계산 정확히 2,400회, 첫 곡/비공유 기존 결과 PASS. 앱/Functions TS, Build, existing like regression PASS. 사용자 데이터/디자인/서버 비용 변경 없음; PREVIEW app395 운영본 그대로.
+- **다음 한 작업 우선순위:** 로그인 실제 계정 Music Note/Library/Studio 대량 목록과 PC·물리 Galaxy Tab·휴대전화 실측(빠른 drag/release, 1100~1599, 현 캐시 보존/재진입 R0)을 최대한 완료. 실제 계정 세션/물리 기기 접근이 제공되지 않는 경우 불가능 부분은 별도 진척/위험으로 보고하며, 더 쉬운 guest 홈페이지 테스트만 반복하지 말 것. 정상 기능을 근거 없이 추가 최적화하지 않는다. 030/116 회귀 및 실컴포넌트 성능 CI 필요 범위만 확장.
+- **진척도 + 필수 이름:** Stage416 전체(좋아요 보안) 1/5·20%; 앱 속도 개선 전체(로딩/분할/실사용) 3/5·60%; 실기기 검증(로그인 PC/모바일/태블릿) 3/4·75%; 이번 세부 작업(Music Note sharedNote 실제 O(N²) 제거/2400곡 결과 보존) 4/4·100% 소스/자동 QA. 이전 세부 작업(PC1800 첫 로딩 이상치 반복분석) 4/4·100% QA. 실제 앱395 및 Stage420/426 보호, TEST/PRODUCTION 비변경.
+
+---
+
 ## CURRENT — PC1800 로딩 단발 이상치 비재현. 속도 4단계는 로그인 실제 사용자 동작 확인 (2026-10-10)
 
 - 직전 PC1800 초기 Chrome DCL 2292ms를 검증하려고 기존 live PREVIEW smoke에 interleaved cold Chrome 3회/width를 보강한 소스 commit `6d1a47162bb9c8fe0cf2d185c5a8a08ce54c21ff`. [408 Run 38053181779](https://github.com/andrawing1212/soridraw-music/actions/runs/38053181779) SUCCESS. 반복 중간값 DCL PC1800 **889ms** / PC1440 **981ms**, 화면 표시 PC1800 **1007ms** / PC1440 **1084ms**. 화면 폭 전용 지속 지연 재현 0. cold 첫 기동 이상치의 정확한 원인은 미확정, 앱 코드는 보호.

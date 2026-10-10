@@ -1,3 +1,15 @@
+## 0S116. Music Note 실코드 대량 공유노트 중복 처리 O(N²)→O(N) 최소 수정 및 2400곡 검증 PASS (2026-10-10)
+
+- **우선순위 교정:** 사용자가 반복 지적한 앱 속도 3/5(60%) 및 물리기기 검증 3/4(75%)를 단지 표에 남겨둔 채 guest Chrome/보안 후보 검사만 반복했던 우선순위 오류를 인정. **이번에는 실제 Music Note 렌더 경로 소스를 직접 수정**하고 품질검사·원래 결과 비교를 완료.
+- **실제 수정 SHA:** `35c51ca6744ba615947ba810bfb7cb02b96f5dc4` (부모 `1251e5e2331ba6eb9ea0e01836a41f539df7b611`). `src/pages/FavoritesPage.tsx`의 본인 공유 노트 목록 중복 제거: 모든 곡마다 전체 `list.findIndex(...)`를 반복하는 O(N²) 경로를 `Set<string>` 이용 단일 목록 순회 O(N)으로 교체. 기존과 동일하게 같은 중복키의 **첫 번째 곡을 유지**, 원래 정렬·필터·공개 읽기·하트·폴더/UI 스타일/간격·데이터 의미는 변경하지 않음. 다른 일반 Music Note 목록에 이 이점이 자동 확대되는 것은 아님.
+- **테스트/Workflow:** 신규 `scripts/verify-music-note-shared-dedup-linear.mjs`는 바로 `FavoritesPage.tsx`의 실제 중복 처리 구간을 추출·실행하며 다양한 중복/빈키/2,400곡/비공유 화면 원래 동작과 대조. 기존 재사용 `.github/workflows/verify-408-like-repair-code.yml`에 추가(새 Workflow 없음). [408 Run 38056610071](https://github.com/andrawing1212/soridraw-music/actions/runs/38056610071) **SUCCESS**: `MUSIC_NOTE_SHARED_DEDUP_FIRST_OCCURRENCE_IDENTICAL=PASS`, `MUSIC_NOTE_SHARED_DEDUP_2400_ROWS_KEY_CALLS=2400`, `MUSIC_NOTE_SHARED_DEDUP_NO_DB_READ_WRITE=PASS`. 앱/Functions TS, Build, 기존 좋아요/127/390/417 등 회귀 PASS. 정확한 사용자 세션의 브라우저 실측 FPS/p95는 아님.
+- **범위/정량:** 기존 구현은 곡 N개당 전체 findIndex 탐색으로 최악 N², 새 구현은 각 후보의 키를 한 번 계산하므로 N번. 2,400곡 테스트에서 2,400회 계산 확인. 실제 모든 곡을 렌더링하는 시간·실기기 RAM·PC↔모바일 캐시 지연의 실측 개선률은 미검증이므로 과장 금지.
+- **진행률:** Stage416 전체(좋아요 보안 전환) **1/5=20%**, 앱 속도 개선 전체(로딩·분할·실사용) **3/5=60%**, 실기기 검증(로그인 PC·모바일·태블릿) **3/4=75%** 유지. **이번 세부 작업(Music Note 본인 공유노트 2400곡 중복 처리 최적화) 4/4=100% 소스+통합 CI**; 실제 배포/실기기 확인까지 완료라는 뜻은 아님. **이전 세부 작업(PC1800 첫 로딩 이상치 교차 반복검사) 4/4=100% 자동 QA**.
+- **운영/안전:** PREVIEW Hosting app395 기존 그대로 **미배포**, Worker/Functions/shared RTDB Rules/D1/R2/Firestore/공유 원본 변경 없음; main, TEST, PRODUCTION 비변경. Stage420/426 활성화 OFF. 배포 요청 없이 Hosting 배포/버전 변경은 진행하지 않음.
+- **다음 한 작업:** 로그인 계정의 실제 Music Note/Library 리스트에서 이 병목이 체감·longtask에 영향을 주는지 검증. 이 채팅에는 앱 브라우저의 사용자 로그인 세션·물리 Galaxy Tab/휴대전화 원격 제어권이 없어 실제 기기 항목을 임의 PASS로 바꾸지 않는다. 우선 인증 없이 가능한 실제 컴포넌트 대량 목록 성능 분리 테스트/기존 030·116 캐시 R0 회귀 후 안전한 PREVIEW 배포 판단. 사용자에게는 남은 물리기기 최종 체감검증만 간결하게 안내.
+
+---
+
 ## 0S115. PC 1800px 첫 로딩 2.29초 단발 지연: 3회 교차 반복 재현되지 않음 / 실제 앱 변경 불필요 (2026-10-10)
 
 - **세부 작업명:** `PC 1800px 첫 로딩 단발 지연 반복 재현 및 화면 폭 병목 판별`. 사용자 지시대로 추측/코드 임의 수정보다 실제 PREVIEW 브라우저 측정으로 완료 판정.

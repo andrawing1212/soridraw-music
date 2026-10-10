@@ -1,0 +1,63 @@
+name: SORIDRAW Stage420 RTDB Emulator Security Gate
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-420-private-rules-emulator.mjs'
+      - 'scripts/verify-420-private-rules-candidate.mjs'
+      - 'scripts/build-420-private-rules-candidate.mjs'
+      - 'scripts/verify-420-server-like-abuse-gate.mjs'
+      - 'functions/src/exploreLikeAbuseGate420.ts'
+      - 'database.rules.json'
+      - '.github/workflows/verify-420-rtdb-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emulator-no-live-data:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact preview SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Java 21 (RTDB emulator requirement)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install local test SDK only
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund @firebase/rules-unit-testing@5 firebase-tools@14
+      - name: Verify isolated rules candidate source unchanged
+        run: |
+          node scripts/verify-420-private-rules-candidate.mjs
+          git diff --exit-code -- database.rules.json
+      - name: Create ephemeral emulator configuration
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const config = {
+            database: { rules: path.join(process.env.GITHUB_WORKSPACE, 'database.rules.json') },
+            emulators: { database: { host: '127.0.0.1', port: 9000 }, ui: { enabled: false } },
+          };
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'stage420-emulator.json'), JSON.stringify(config));
+          JS
+      - name: Exercise malicious old-path SDK writes and six healthy legacy channels
+        run: |
+          ./node_modules/.bin/firebase emulators:exec --only database \
+            --project demo-soridraw-stage420-rules \
+            --config "$RUNNER_TEMP/stage420-emulator.json" \
+            "node scripts/verify-420-private-rules-emulator.mjs"
+      - name: Assert no product/shared rules files were modified
+        run: |
+          git diff --exit-code -- database.rules.json firestore.rules
+          test "$(node -p "require('./public/app-version.json').version")" = "392"

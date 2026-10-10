@@ -85,6 +85,7 @@ jobs:
       - name: Stage420 two-hour like abuse policy (pure source; not server enforcement)
         run: |
           node scripts/verify-420-like-abuse-policy.mjs
+          node scripts/verify-420-server-like-abuse-gate.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

@@ -83,6 +83,9 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     getLikedStateCache: () => cache,
     readLikeDisplayLocks: () => ({}),
     patchExploreLikedTrackMembership: () => {},
+    // Phase416's separate tentative overlay is optional in this historical
+    // accepted-signal fixture; keep the app141 durable order assertions intact.
+    clearExploreLikeIntent416: () => {},
     persistLikedStateCache: () => {},
     writeSnapshotPending127: (_uid, next) => { persistentPending = { ...next }; },
     persistLikeDisplayLocks: () => {},

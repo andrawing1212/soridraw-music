@@ -105,6 +105,16 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8')).rules;
 assert.equal(rules.userSync.$uid['.write'], 'auth != null && auth.uid === $uid');
 assert.equal(rules.privateLikeSync420, undefined,
   'new server-only private root intentionally not installed in live rules yet');
+const callable = readFileSync('functions/src/index.ts', 'utf8');
+assert.match(callable, /export const publishExploreLikeIntent420 = onCall\(/,
+  'server-only endpoint must be authenticated Firebase Callable');
+assert.match(callable, /request\.auth\?\.uid/,
+  'UID must come from verified caller auth, never from untrusted input');
+assert.match(callable, /publishGuardedLikeSignal420\(admin\.database\(\), uid/,
+  'server only uses Admin SDK to publish into the new private root');
+assert.doesNotMatch(callable.slice(callable.indexOf('// Stage420 secured candidate')), /raw\.uid/,
+  'untrusted UID must never select another account');
+
 console.log('STAGE420_SERVER_30_WARN_40_DENY=PASS');
 console.log('STAGE420_SERVER_CONSECUTIVE_120_MIN_AND_RECOVERY=PASS');
 console.log('STAGE420_SERVER_DUPLICATE_IDEMPOTENT_AND_UID_ISOLATED=PASS');

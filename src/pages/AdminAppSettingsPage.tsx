@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
+import ExploreLikeAbuseMasterPanel420 from '../components/ExploreLikeAbuseMasterPanel420';
 import { auth, db, functions, httpsCallable } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';
@@ -388,6 +389,8 @@ export default function AdminAppSettingsPage() {
             </div>
           </div>
         </div>
+
+        <ExploreLikeAbuseMasterPanel420 />
 
         <div className="flex items-center justify-between gap-4 rounded-3xl bg-[var(--bg-secondary)] px-5 py-4 shadow-sm md:px-6">
           <div className="min-w-0">

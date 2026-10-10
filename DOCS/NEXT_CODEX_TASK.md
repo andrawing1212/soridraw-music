@@ -1,3 +1,12 @@
+## CURRENT — Stage420 최초 ACK 소실: durable first-send marker PASS, 서버 증거 복구 및 동시성 HOLD (2026-10-10)
+
+- 현재 GitHub `preview` 소스 commit `5c83abff9d15ae6a656cb59e31ca9ddbf39926e9`. [408 Run 38043767723](https://github.com/andrawing1212/soridraw-music/actions/runs/38043767723) PASS: Functions/React TypeScript, Build, 기존 좋아요 회귀, `STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD`. 420 최초 전송 marker를 outbox에 저장/재확인 후 첫 callable을 보내는 후보 구현 완료. 정상 PREVIEW 서비스 app395 변화 0, Stage420/426 hard OFF.
+- **다음 한 작업:** 최초 ACK+서명증표 완전 소실 후 outbox의 UID+trackId+liked+operationId를 인식하는 서버 측 **O(1) 검증된 기존 승인 또는 canonical 171 receipt 증거**를 소스 후보/격리 테스트로 설계하여 복구가 없는 경우 절대 신규 클릭 transaction을 내지 않도록 한다. Durable marker의 원자적 보존, 같은 브라우저 여러 탭 경쟁, 50개 표시 기록 밀림, 24h+/키 회전/2시간 잠금, 최신 사용자 클릭 및 이전 127/390 수신의 우선순위를 모두 확인. 증명 불가 시 outbox 보존+fail-closed, 임의 계정 전체 조회/대량 키 장부/반복 비용 증가 금지.
+- **차단:** 원격 Worker171 physical D1 W0, Functions+RTDB+Cloudflare 월 비용, PC↔모바일 거의 즉시 UX, 구버전 app395/TEST/PRODUCTION 호환 및 기존 직접 RTDB 경로 폐쇄·Worker 120분 잠금 검증 전 Stage420 활성화/배포하지 않는다. app395 좋아요·팔로우·분할바·UI·Music Note/Library 정상 경로 보존. Follow-only 38043767750은 별도 기존 worker-freeze FAIL이며 릴리스 408 PASS에 묻지 않는다.
+- 사용자 기존 ChatGPT 직접·작업별 진척도 유지. Stage416 1/5 20%, 앱 속도 3/5 60%, 실기기 3/4 75%, 첫 전송 보호 후보 2/3 67%. 공유 사용자 데이터·RTDB Rules·Worker/Functions/Hosting·TEST·PRODUCTION 변경 0.
+
+---
+
 ## CURRENT — Stage420 승인증표 없는 최초 ACK 소실/51건 기록 소멸 복구, 신뢰성·비용 독립검증 (2026-10-10)
 
 - 기준 preview commit 83977aa740ff8c754c5c8d9a9304e4bff1c4c7f6, 최종 408 CI Run 38042699563 SUCCESS. 원래 증표가 존재하는 승인 opId 재발급 서버+클라이언트 후보 구현/테스트 PASS. Stage420, 426 OFF / 기존 app395 좋아요·팔로우 정상 동결 유지.

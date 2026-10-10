@@ -1,3 +1,15 @@
+## 0S112. Stage420 최초 ACK 소실 재전송 보호: 기기 우선 durable marker 후보 PASS, 실제 복구는 HOLD (2026-10-10 KST)
+
+- **새 소스 commit:** `5c83abff9d15ae6a656cb59e31ca9ddbf39926e9` (부모 `d10e2b5ab567e2e14157676c382f4af373f58d99`). 수정한 파일은 `src/services/exploreLikeGuardedOutbox420.ts`, `src/services/exploreLikeGuardedTransport420.ts`, `src/services/exploreLikeService.ts`, `scripts/verify-420-guarded-transport.mjs` 4개. 신규 계정/기능/데이터 쓰기 없음.
+- **구체 변경:** Stage420 컷오버 OFF인 guarded-only 경로에서 최초 요청의 `guardAttempt420=sent-unconfirmed`을 개인 outbox에 먼저 동기 저장하고 재읽기 확인 후에만 처음 `publishExploreLikeIntent420`을 보낼 수 있도록 함. 이미 시도한 같은 operationId 또는 저장확인 실패/신규 클릭에 밀린 응답은 **새 클릭/새 quota/RTDB transaction으로 자동 재전송 금지**, 영구 outbox를 보존. 기존 approved+HMAC 증표의 재발급 경로는 유지. 구형 app395 이용자 경로는 `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false` 유지.
+- **자동검사 근거:** [408 Run 38043767723](https://github.com/andrawing1212/soridraw-music/actions/runs/38043767723) **SUCCESS**, `STAGE420_DURABLE_FIRST_SEND_MARKER_REPLAY_W0_GUARD=PASS`·기존 signed permit renewal·missing proof fail-closed·React TypeScript/Build·Functions TypeScript·127/141/390/417 및 좋아요 회귀·공유 RTDB Rules read-only PASS. 이 W0는 **격리 재송신 호출 0 모형 검증**이지 실제 D1/Functions 영수증 비용 측정이 아님.
+- **남은 본질적 위험:** 최초 함수 승인은 되었지만 응답/증표가 소실되었다면 이 마커만으로 승인을 증명하거나 누락된 요청을 안전 자동완료하지 못함; outbox가 보류될 수 있음. 정확한 UID+곡+state+operationId의 서버/171 canonical 증거를 O(1)으로 확인하는 안전한 reconciliation, 다중 탭 동시 초기 송신 경합, 오프라인/24h+·HMAC 키 교체·잠금·기기 전환·실제 171 D1 W0·100k 월 비용/지연 검증은 **미완료**. 마커 PASS를 보안 전환/제품 실사용 PASS라고 선언 금지.
+- **기존 별도 CI 문제:** [Follow-only Run 38043767750](https://github.com/andrawing1212/soridraw-music/actions/runs/38043767750) **FAIL** (과거 app379 Worker statement `processExploreLikeAggregateWave035` frozen assertion과 현 Worker 소스 차이). 이번 후보와 다른 기존 미해결 레거시 비교 게이트이므로 거짓 PASS로 취급하거나 Worker를 되돌리지 않음.
+- **운영 상태:** PREVIEW Firebase Hosting **app395 기존 그대로**; 소스/테스트만 `preview`에 commit/push. Stage420/426 cutover OFF, Functions·RTDB Rules·Worker·D1·R2·공유 사용자 원본/TEST/PRODUCTION **변경·배포 0**. Stage416 **1/5=20%**, 앱 속도 개선 **3/5=60%**, 실기기 검증 **3/4=75%** 유지. 이번 *최초 전송 방어 코드/검사* 2/3 (67%) — 코드 및 자동검사 완료, 서버 승인소실 안전 복구/실전증명 미완료.
+- **다음 단일 작업:** source-only O(1) exact canonical/server approval reconciliation 설계·반례 테스트. 50건 이력 스캔/재시도 새 승인·전체 read를 추가하지 말 것. old-app+TEST/PROD+공유 RTDB Rules/Cloudflare 120분 lock 합격 전 **Stage420 실제 활성화/배포 HOLD**. 실사용 PC/모바일 app395 확인 결과는 별도 유지.
+
+---
+
 ## 0S111. Stage420 서명 승인 재발급 / 구 클라이언트 무변경 보호 — 통합 소스 검증 PASS (2026-10-10)
 
 - **완료된 후보 구현:** 신규 Functions src/exploreLikePermitRenew420.ts 및 Functions index.ts의 서버 인증 Callable renewExploreLikePermit420: 같은 UID/곡/상태/opId, 기존 HMAC, 24시간 이내 발급을 확인하면 새 15분 증표만 발급. 서버 반복 좋아요 카운트 또는 RTDB transaction/Worker/D1 조회·쓰기 없음(소스 구조). 갱신 경로는 Firebase Functions 호출·서명연산 비용 발생하며 물리 요금 검증은 별도.

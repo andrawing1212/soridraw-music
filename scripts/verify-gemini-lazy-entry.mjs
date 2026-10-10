@@ -28,7 +28,7 @@ for(const name of [
   'generateCustomSectionMetadata',
   'regenerateLyricsOnly',
 ]){
-  assert.match(loader,new RegExp('export const '+name+': GeminiEngine\\[\\\''+name+'\\\'\\]'),
+  assert.ok(loader.includes("export const " + name + ": GeminiEngine['" + name + "']"),
     name+' must preserve the original TypeScript contract');
   assert.match(engine,new RegExp('export async function '+name+'\\('),
     name+' must still be implemented in original engine');

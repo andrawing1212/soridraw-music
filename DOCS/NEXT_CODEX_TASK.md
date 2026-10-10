@@ -1,3 +1,13 @@
+## CURRENT — Stage416 ② 사용자 실사용 PASS / ③ 직접 개발 시작 (2026-10-10 KST)
+
+- **사용자 확인:** 2026-10-10 12:47 KST PREVIEW app392에서 동일계정 PC→모바일 / 모바일→PC 개인 좋아요 하트가 거의 즉시 자동 반영됨. 사용자 목표 5~10초 **Stage② 실사용 PASS**, 전체 고정 **1/5 완료**. 엄밀한 ms·오프라인 복구·과금량은 ⑤ 별도 미검증.
+- **다음 직접 개발 단계 ③:** 개인 마지막 클릭 trailing 기본 5분 서버 접수 + Master 관리자 설정 1/3/5/10/20분. 두 설정 중 이것은 오직 **개인 서버 접수**; 별도 ④ 공개 공동집계 5분/Master 설정과 섞지 않음. 기존 5초 timer 단순 치환 금지. click→동일계정 private RTDB ② 경로 독립 고정. durable outbox, 127 ACK, 신규곡 첫 좋아요, 모바일 조기 종료, 한 UID 여러 곡 최종 상태, 동시 클릭, local-first 회복 및 R/W 비용 보호.
+- **즉시 읽어야 할 파일:** `src/services/exploreLikeService.ts` 5초 스케줄/리트라이/종료 처리, `src/services/exploreLikeIntent416.ts` private 알림, Master 관리자 설정/보안·감사로그 소유 코드, `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md`, `DOCS/CURRENT_RELEASE_STATE.md` 0S75. 현행 shared RTDB rules additive 호환 보호. 기존 실제 `app392` PREVIEW 고정.
+- **진척도:** ① 반복 개인 소셜 스냅샷 보류·미해결; ② 개인 빠른 동기화 PASS; ③ 구현 착수; ④ 공개 공동집계/Master 독립 설정 대기; ⑤ 전체 비용·독립감사 대기. 사용자 테스트는 실제 PREVIEW 다음 릴리스 배포 후에 별도 안내.
+- **운영:** 이번 작업자는 ChatGPT 직접(사용자가 Codex 재위임 금지). `preview`만 수정 가능. 코드 검증 전 앱393 배포/공유 원본 스키마 변경 금지, TEST/PRODUCTION 승격 별도 사용자 승인. 상세 증거 `DOCS/CURRENT_RELEASE_STATE.md` 최신 0S75.
+
+---
+
 ## CURRENT — Stage416 ② PREVIEW app392 배포 성공, 사용자 실기기 확인 전 HOLD (2026-10-10 KST)
 
 - **실행 주체:** 사용자 최신 지시로 Codex 금지, ChatGPT 직접 수정·QA·PREVIEW 배포. 본 파일명 `NEXT_CODEX_TASK`는 역사적 유지 경로이며 실제 코드 작업을 Codex에게 다시 위임하지 말 것.

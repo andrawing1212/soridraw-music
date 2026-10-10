@@ -20,6 +20,13 @@ import {
 } from "./libraryBundleFreshness";
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
+import {
+  DEFAULT_LIKE_ABUSE_SETTINGS_420,
+  LIKE_ABUSE_SETTINGS_PATH_420,
+  readLikeAbuseSettings420,
+  overrideCachedLikeAbuseSettings420,
+  validateLikeAbuseSettings420,
+} from "./exploreLikeAbuseSettings420";
 
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
@@ -3965,12 +3972,14 @@ export const publishExploreLikeIntent420 = onCall(
       throw new HttpsError("invalid-argument", "좋아요 요청 형식이 올바르지 않습니다.");
     }
     try {
-      const outcome = await publishGuardedLikeSignal420(admin.database(), uid, {
+      const database = admin.database();
+      const masterSettings = await readLikeAbuseSettings420(database);
+      const outcome = await publishGuardedLikeSignal420(database, uid, {
         trackId: input.trackId.trim(),
         ownerUid: input.ownerUid.trim(),
         liked: input.liked,
         operationId: input.operationId,
-      });
+      }, Date.now(), masterSettings);
       return { ok: true, ...outcome };
     } catch (error) {
       console.error("[420] Authenticated private-like guard failed:",
@@ -4047,5 +4056,57 @@ export const masterGetExploreLikeLimit420 = onCall(
       acceptedInWindow: Math.max(0, Math.floor(Number(raw?.acceptedInWindow || 0))),
       lockedUntilMs: lockedUntilMs > Date.now() ? lockedUntilMs : 0,
     };
+  },
+);
+
+export const masterGetExploreLikePolicy420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireMasterCaller(request);
+    const settings = await readLikeAbuseSettings420(admin.database());
+    return { ok: true, ...settings };
+  },
+);
+
+export const masterSetExploreLikePolicy420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { requesterUid } = await requireMasterCaller(request);
+    let settings;
+    try {
+      settings = validateLikeAbuseSettings420(request.data);
+    } catch {
+      throw new HttpsError("invalid-argument", "좋아요 제한 설정값이 올바르지 않습니다.");
+    }
+    const now = Date.now();
+    const settingsRef = admin.database().ref(LIKE_ABUSE_SETTINGS_PATH_420);
+    const result = await settingsRef.transaction((raw) => {
+      const prior = raw && typeof raw === "object" ? raw as Record<string, any> : {};
+      const version = Number(prior.version || 0);
+      if (!Number.isSafeInteger(version) || version >= Number.MAX_SAFE_INTEGER) return;
+      const history = Array.isArray(prior.adminAudit) ? prior.adminAudit : [];
+      return {
+        ...settings,
+        version: version + 1,
+        updatedAt: now,
+        updatedBy: requesterUid,
+        adminAudit: [...history.slice(-9), {
+          actorUid: requesterUid,
+          at: now,
+          previous: {
+            warningPerMinute: Number(prior.warningPerMinute ||
+              DEFAULT_LIKE_ABUSE_SETTINGS_420.warningPerMinute),
+            limitPerMinute: Number(prior.limitPerMinute ||
+              DEFAULT_LIKE_ABUSE_SETTINGS_420.limitPerMinute),
+            suspensionMinutes: Number(prior.suspensionMinutes ||
+              DEFAULT_LIKE_ABUSE_SETTINGS_420.suspensionMinutes),
+          },
+          next: settings,
+        }],
+      };
+    }, undefined, false);
+    if (!result.committed) throw new HttpsError("aborted", "설정 변경이 반영되지 않았습니다.");
+    overrideCachedLikeAbuseSettings420(settings);
+    return { ok: true, ...settings, effectiveForNewWindows: true };
   },
 );

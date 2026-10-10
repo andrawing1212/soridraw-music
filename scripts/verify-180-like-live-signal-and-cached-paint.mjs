@@ -73,6 +73,9 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     Set,
     clampLikeCount: (value) => Math.max(0, Math.floor(Number(value) || 0)),
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
+    // fixture runs the exact legacy app392 path, not the candidate cutover.
+    EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,
     auth: { currentUser: { uid: 'same-account' } },
     readSeenLikeSignal127: () => seen,
     readRepairTarget127: () => 0,
@@ -179,7 +182,11 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   const env = {
     console, Date, Map, Set,
     EXPLORE_LIKE_BATCH_MAX: 50,
+    eligibleGuardedMutation420: () => true, // inactive old-app outbox may flush as before
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
+    // fixture runs the exact legacy app392 path, not the candidate cutover.
+    EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,
     inflightByUid: new Map(),
     exitFlushArmed413: new Set(),
     readLikeOutbox: () => structuredClone(storedOutbox),

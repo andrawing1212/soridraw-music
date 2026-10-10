@@ -27,6 +27,7 @@ const createHarness = ({ complete, existing = {}, pending = {}, unresolved = {},
   let writes = 0;
   const context = {
     EXPLORE_LIKE_BATCH_MAX: 50,
+    EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false, // frozen app164/392 membership path
     EXPLORE_LIKE_BASELINE_127: 'complete-baseline',
     baselineCompleted127: complete ? new Set([uid]) : new Set(),
     scopedLikeKey127: (prefix, id) => prefix + ':' + id,

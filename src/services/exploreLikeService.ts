@@ -226,6 +226,13 @@ const notifyExploreLikeUiSync139 = (detail: ExploreLikeSyncEventDetail) => {
   });
 };
 
+// 420 candidates are live, tentative per-UID hints only. No account-wide
+// scan or persistent replay. Canonical 127 personal state always wins on ACK.
+type GuardedLikeHint420 = { liked: boolean; operationId: string; version: number };
+const guardedLikeHintsByUid420 = new Map<string, Map<string, GuardedLikeHint420>>();
+const readGuardedLikeHint420 = (uid: string, trackId: string): boolean | undefined =>
+  guardedLikeHintsByUid420.get(uid)?.get(trackId)?.liked;
+
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const flushTimerByUid = new Map<string, number>();
 const inflightByUid = new Map<string, Promise<void>>();
@@ -409,8 +416,13 @@ export const readExploreTrackLikeMembership127 = (uid: string, trackId: string):
   if (pending) return pending.desiredLiked;
   // 416: accepted server state remains untouched. An active, same-UID private
   // hint can repaint another device before the original 5s/5min server batch.
-  const tentative416 = readExploreLikeIntent416(uid, id);
-  if (typeof tentative416 === 'boolean') return tentative416;
+  if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+    const tentative420 = readGuardedLikeHint420(uid, id);
+    if (typeof tentative420 === 'boolean') return tentative420;
+  } else {
+    const tentative416 = readExploreLikeIntent416(uid, id);
+    if (typeof tentative416 === 'boolean') return tentative416;
+  }
   const acceptedButNotMaterialized = readSnapshotPending127(uid);
   if (Object.prototype.hasOwnProperty.call(acceptedButNotMaterialized, id)) return acceptedButNotMaterialized[id];
   // A complete account snapshot is globally authoritative. If the legacy R2
@@ -692,6 +704,12 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
     // An older accepted event cannot retire a newer opposite private intent.
     // Identical personal membership becomes durable through the 127 path.
     clearExploreLikeIntent416(uid, item.trackId, item.liked);
+    if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+      const tentative = guardedLikeHintsByUid420.get(uid);
+      // A canonical accepted same-state ACK supersedes this old hint.
+      // An opposite newer hint must not be deleted by a stale ACK.
+      if (tentative?.get(item.trackId)?.liked === item.liked) tentative.delete(item.trackId);
+    }
     if (cache.get(item.trackId) !== item.liked) {
       cache.set(item.trackId, item.liked);
       changed = true;
@@ -812,12 +830,54 @@ const startLikeIntent416 = (uid: string) => {
     notifyExploreLikeUiSync139({ uid, trackId, ownerUid: '', liked, likeCount: 0, source: 'remote-intent' });
   });
 };
+// 420 private changed-item stream: only active after an approved coordinated
+// cutover. Never subscribe to both 416 direct and 420 server-owned signals
+// during the same client session.
+let activeGuardedLikeUid420 = '';
+let unsubscribeGuardedLike420: Unsubscribe | null = null;
+const startGuardedLike420 = (uid: string) => {
+  if (uid === activeGuardedLikeUid420) return;
+  guardedLikeHintsByUid420.delete(activeGuardedLikeUid420);
+  unsubscribeGuardedLike420?.();
+  unsubscribeGuardedLike420 = null;
+  activeGuardedLikeUid420 = uid;
+  if (!uid) return;
+  unsubscribeGuardedLike420 = subscribeGuardedLikeIntent420(uid, (event) => {
+    if (activeGuardedLikeUid420 !== uid || auth.currentUser?.uid !== uid) return;
+    const hints = guardedLikeHintsByUid420.get(uid) || new Map<string, GuardedLikeHint420>();
+    const current = hints.get(event.trackId);
+    if (current && current.version >= event.version) return;
+    if (event.status === 'pending') {
+      hints.set(event.trackId, { liked: event.liked,
+        operationId: event.operationId, version: event.version });
+      if (hints.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
+        const oldest = hints.keys().next().value;
+        if (oldest) hints.delete(oldest);
+      }
+    } else if (current?.operationId === event.operationId) {
+      hints.delete(event.trackId);
+    }
+    guardedLikeHintsByUid420.set(uid, hints);
+    if (readLikeOutbox(uid)[event.trackId]) return;
+    const liked = readExploreTrackLikeMembership127(uid, event.trackId);
+    if (typeof liked !== 'boolean') return;
+    patchExploreLikedTrackMembership(uid, event.trackId, liked);
+    notifyExploreLikeUiSync139({ uid, trackId: event.trackId,
+      ownerUid: event.ownerUid, liked, likeCount: 0, source: 'remote-intent' });
+  }, (error) => console.warn('[420] Private server hint retained only on active device:', error));
+};
 // This listener does not read Firestore/D1 and subscribes once for the signed-in
 // account, not once per song/card/tab. No continuous timer or global Feed reload.
 onAuthStateChanged(auth, (user) => {
   const uid = user?.uid || '';
   startLikeSignal127(uid);
-  startLikeIntent416(uid);
+  if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+    startLikeIntent416('');
+    startGuardedLike420(uid);
+  } else {
+    startGuardedLike420('');
+    startLikeIntent416(uid);
+  }
 });
 
 const requestPersonalLikeBaseline127 = async (
@@ -2139,9 +2199,16 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   for (const [trackId, liked] of Object.entries(unresolved)) if (liked) candidates.add(trackId);
   // Temporary same-account 416 changes belong above older accepted/cache rows,
   // but below this device's own still-unsubmitted click.
-  for (const [trackId, liked] of Object.entries(listExploreLikeIntents416(normalizedUid))) {
-    if (liked) candidates.add(trackId);
-    else candidates.delete(trackId);
+  if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+    for (const [trackId, hint] of guardedLikeHintsByUid420.get(normalizedUid) || []) {
+      if (hint.liked) candidates.add(trackId);
+      else candidates.delete(trackId);
+    }
+  } else {
+    for (const [trackId, liked] of Object.entries(listExploreLikeIntents416(normalizedUid))) {
+      if (liked) candidates.add(trackId);
+      else candidates.delete(trackId);
+    }
   }
   for (const [trackId, pending] of Object.entries(outbox)) {
     if (pending.desiredLiked) candidates.add(trackId);

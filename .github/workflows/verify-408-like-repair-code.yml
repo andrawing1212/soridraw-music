@@ -32,6 +32,7 @@ on:
       - 'scripts/verify-407-exact-191-replay-recovery.mjs'
       - 'scripts/verify-127-atomic-personal-like.mjs'
       - 'scripts/verify-175-explore-like-catalog-reentry.mjs'
+      - 'scripts/verify-180-like-live-signal-and-cached-paint.mjs'
       - '.github/workflows/verify-408-like-repair-code.yml'
   workflow_dispatch:
 permissions:
@@ -87,6 +88,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-127-atomic-personal-like.mjs
           node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-180-like-live-signal-and-cached-paint.mjs
       - name: 191 and remaining frozen like contracts
         shell: bash
         run: |

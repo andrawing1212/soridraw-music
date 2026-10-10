@@ -353,7 +353,7 @@ assert.match(page, /likedTrackIds\[track\.id\] === undefined/);
 assert.match(page, /detail\?\.source !== 'remote'/);
 assert.match(page, /const effectiveLiked127 = readExploreTrackLikeMembership127\(user\.uid, detail\.trackId\)/);
 assert.match(page, /if \(effectiveLiked127 !== detail\.liked\) return/);
-assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[detail\.trackId!\]: pair129\.liked \}\)\)/);
+assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[detail\.trackId!\]: effectiveLiked127 \}\)\)/, 'tentative and accepted heart rendering must come from the single effective membership');
 assert.match(page, /const liked = readExploreTrackLikeMembership127\(user\.uid, id\) \?\? likedSet\.has\(id\)/);
 assert.match(page, /verifiedMembership\.forEach\(\(liked, id\) => \{ next\[id\] = liked; \}\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);

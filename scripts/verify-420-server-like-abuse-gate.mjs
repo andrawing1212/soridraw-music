@@ -73,6 +73,20 @@ const duplicate = await server.publishGuardedLikeSignal420(database, uid, mk(40)
 assert.equal(duplicate.allowed, true);
 assert.equal(duplicate.duplicate, true);
 assert.equal(writes.length, beforeDenied);
+// Reusing one operationId with a different command must never be confirmed
+// as a successful like/unlike. It also must not cost another RTDB write.
+for (const replayMismatch of [
+  { ...mk(40), trackId: 'tampered-track' },
+  { ...mk(40), ownerUid: 'tampered-owner' },
+  { ...mk(40), liked: !mk(40).liked },
+]) {
+  const deniedReplay = await server.publishGuardedLikeSignal420(
+    database, uid, replayMismatch, rejectAt,
+  );
+  assert.equal(deniedReplay.allowed, false, 'mismatched replay must not ACK');
+  assert.equal(deniedReplay.duplicate, false, 'payload mismatch is not idempotent');
+  assert.equal(writes.length, beforeDenied, 'mismatch must not write RTDB');
+}
 for (let n = 42; n <= 81; n++) {
   const at = base + 60_000 + (n - 41) * 100;
   const actual = await server.publishGuardedLikeSignal420(database, uid, mk(n), at);
@@ -142,5 +156,6 @@ assert.match(masterGet, /await requireMasterCaller\(request\)/,
 console.log('STAGE420_SERVER_30_WARN_40_DENY=PASS');
 console.log('STAGE420_SERVER_CONSECUTIVE_120_MIN_AND_RECOVERY=PASS');
 console.log('STAGE420_SERVER_DUPLICATE_IDEMPOTENT_AND_UID_ISOLATED=PASS');
+console.log('STAGE420_OPERATION_ID_PAYLOAD_MISMATCH_DENIED_W0=PASS');
 console.log('STAGE420_SERVER_ATOMIC_MOCK_POLICY_PARITY=PASS');
 console.log('STAGE420_DIRECT_LEGACY_RTDB_REVOKE_REQUIRED=HOLD');

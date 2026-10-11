@@ -1,3 +1,12 @@
+## NEXT (2026-10-11) — 실제 통합 Firebase Emulator PASS 이후, Stage420 운영 릴리스 안전 게이트
+
+- **소스/코드 완료한 부분 다시 미세 변경하지 말 것:** `preview` code+test `da30e98d87120ef157a32ba5087cf437ac6b692c`; [408 TS/Build/like+follow Run 38121069451](https://github.com/andrawing1212/soridraw-music/actions/runs/38121069451) SUCCESS, [Exact Firestore+RTDB Emulator Run 38121190515](https://github.com/andrawing1212/soridraw-music/actions/runs/38121190515) SUCCESS. 24h 최초 승인 HMAC orig 고정, v7/v4 분리, Firestore exact ACK recovery R1/W0, 실 onCreate handler/23h HOLD/실 RTDB outage/Master 복구, Master unlock, 실제 Firestore client forgery Rules 검사 PASS. **Stage420/426/공유 Rules 여전히 전부 OFF**.
+- **다음 한 묶음으로 남은 내용:** ① Work **독립 read-only 감사** (같은 SHA의 기존 app396·app164/141·Worker171, app396→TEST/PROD 열린 탭, Firestore 원자 승인·트랜잭션 경계와 50 last projection, Cloudflare 서명증명·receipt TTL, cost fanout 및 교차 기기 정합성). ② 실제 Cloud Monitoring terminal HOLD 알람·Master UI의 Firestore lock/hold 운영 연결, Firebase Eventarc trigger export·retry/TTL 배포 전 preflight, FAIL/HOLD를 성공 완료로 오인하지 않기. ③ **사용자 명확한 승인이 있어야 하는 하나의 안전정책:** 기존 구형 앱의 `userSync/$uid/exploreLikeIntent416` 직접쓰기 허용을 유지하면 새 120분 보호 우회 가능, 즉시 중단하면 열린 구형 탭/미해결 v4 outbox 송신 실패. 강제 앱업데이트 / 승인된 유예기간 / 사용자 재확인 중 어떤 전환을 할지 결정하고 공유 Rules·Firebase Functions·Cloudflare Worker·새 클라이언트의 원자 릴리스 및 복구/롤백 조건 실증. **별도 동의 전에는 실 배포 금지**.
+- **작업의 실제 불합격선:** 전체 서비스 10만 DAU 5/20회 월 비용 실측 및 대안 없음; Eventarc/Cloud Monitoring 경보·오프라인 23h 자동/수동 복구 설계 불명; 구형 PWA 파괴/승인 증거 없는 v4 마이그레이션; 보안 우회 우려; PC↔모바일 미수렴/실기기 p95 지연; 데이터 전체 스캔/페이지 진입 read/write. W1~W2는 최적화 목표이나 D1 W3+만으로 정상 기능 폐기 금지.
+- **금지/진척 고정:** 사용자 데이터·공유 Firestore/D1/Rules 변경, main/TEST/PRODUCTION 변경·배포, Stage420/426 부분 ON 금지. ① Stage416 28% ② 앱396 속도5/5 100% ③ Stage420 gate4/10 40% 유지. 다음 보고는 작은 mock 100%가 아니라 전체 진행률 3개 막대와 실제 검증·배포/위험을 간결히 묶기.
+
+---
+
 ## NEXT (2026-10-11) — 실 DB Emulator 성공 후 Stage420 실제 운영 통합·Work 독립 감사만 남은 핵심 작업
 
 - **고정 기준:** `preview` source `5500116da4180dcf32f02a48d7a2e4420f2235c7`; [408 TypeScript/Build/like+follow Run 38118903224](https://github.com/andrawing1212/soridraw-music/actions/runs/38118903224) SUCCESS, [exact final Firestore+RTDB Emulator Run 38118917160](https://github.com/andrawing1212/soridraw-music/actions/runs/38118917160) SUCCESS. 이미 해결한 v2 permit 영속성, 미래 신규 UUIDv7과 기존 v4 분리, 실제 Admin RTDB null cache/순서 역전 복구, 정상 이벤트 Firestore indexed R0는 **다시 source-only mock으로 되돌리지 말 것**.

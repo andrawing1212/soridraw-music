@@ -1,3 +1,15 @@
+## CURRENT — Stage416 2/5 원자 승인 Firestore 후보의 기존 요청 호환·잠금·비용 통합 사전점검: HOLD (2026-10-11)
+
+- **검토 기준:** `preview` HEAD `a7494b83d93f0323343532ae4c09c753462678ab`의 source-only `functions/src/exploreLikeAtomicLedgerCandidate420.ts` 및 `scripts/verify-420-atomic-ledger-candidate.mjs`. 이전 256개 RTDB root journal의 257+ 동일 op 재승인과 최대 37,128B 루트 직렬화 문제를 해결하기 위해, Firestore `privateLikeGuardV2_420/{uid}` 작은 rate 문서 + `approvals/{operationId}` 개별 receipt를 한 Firestore transaction으로 함께 생성하는 후보. **아직 Callable 연결 없음·앱/Worker cutover OFF.**
+- **확정된 통합 차단 요인 1 — 요청 ID 불호환:** 실제 `src/services/exploreLikeService.ts` `createExploreLikeOperationId144`는 `crypto.randomUUID()`로 UUID v4 생성. 새 후보는 `readLikeOperationTime420`에서 UUID v7만 허용. 기존 오래된 outbox/현재 클라이언트의 v4를 연결하면 `420_ATOMIC_LEDGER_REQUEST_INVALID`로 거절. 임의 v4→v7 교체로 원래 operationId/171 idempotency를 파괴해서는 안 됨.
+- **차단 요인 2 — 기존 기능과 원자적 연결 미완료:** 새 후보는 Firestore 내부 rate+receipt만 저장. 기존 `publishExploreLikeIntent420` Callable·RTDB `privateLikeSync420/$uid/display` 실시간 변경 신호·`masterUnlockExploreLike420` RTDB 잠금 해제·구형 direct416/Worker171 receipt 경로와 미연결. Firestore와 RTDB 간 무조건 원자적 쓰기라고 주장 금지. 기존 좋아요/해제·다기기 상태/관리자 잠금 재검증 전 통합 FAIL.
+- **차단 요인 3 — QA 범위:** 새 verifier는 65초 간격으로 1,000개 가상 승인 + 과거 첫 opId 재생을 시험하므로 30회 경고, 40회/분 제한, 연속 2분 40회, 120분 잠금, 관리자 조기해제, 동시 탭/기기, ACK 유실·51+ 기록 밀림, Firestore transaction 충돌, TTL 실제 작동, Worker171 실제 W0를 검증하지 않음. 이번 점검은 소스 정적 비교이며 **새 commit 대상 GitHub CI/실기기/실청구 PASS 판정 아님**.
+- **비용 산술 — 실청구가 아님:** 성공한 신규 승인 1건당 Firestore 읽기 2문서·쓰기 2문서(후보 테스트 표기), 동일 op 재생 1읽기·0쓰기 이론치. 10만 DAU × 5회/일 × 30일 = **1,500만 승인/월 → 3,000만 읽기 + 3,000만 쓰기/월**, 만료 steady state에는 최대 약 1,500만 receipt 삭제/월이 별도로 생길 수 있음. 20회/일이면 **6,000만 승인/월 → 1억2,000만 읽기 + 1억2,000만 쓰기**, TTL 삭제 추가. 트랜잭션 재시도, Functions/RTDB/Worker/DO/R2, 저장공간·인덱스·네트워크·실제 region 청구는 미계측. `expiresAt` 필드만으로 Firestore TTL 정책 활성화가 보장되지 않으며 TTL 삭제는 유료.
+- **판정/범위:** **Stage416 2단계 HOLD, 1/5·20% 유지**. ② 앱396 속도 개선 5/5·100%, ③ PC/휴대폰/갤럭시탭 실사용 4/4·100% 기존 완료를 재개하거나 무효화하지 않음. 실서비스 app396/PREVIEW의 정상 좋아요·팔로우는 보호. 이번 검토에서는 제품 코드·Firebase Functions/Hosting/Worker/Rules/D1/Firestore 사용자 데이터·TEST/PRODUCTION 배포/변경 없음.
+- **다음 한 작업:** `DOCS/NEXT_CODEX_TASK.md` 최상단의 Stage416 2단계 Codex High 단일 후보 통합/보안·실비용 검증. 안전하게 통합할 수 없다면 구형 outbox의 원본 ID 보존·fail-closed UX와 비용 선택만 보고하고 운영 전환하지 말 것.
+
+---
+
 ## CURRENT — Stage416 2/5 보안 전환 후보의 257+ 중복 승인·서버 전송량 실제 코드 재현: 운영 Cutover FAIL/HOLD (2026-10-10)
 
 - **완료한 작업:** `scripts/verify-420-journal-cost-envelope.mjs` 신설, 기존 408 QA workflow 한 단계로 연결. `preview` source `5e43ba11ad2ef213a75a319744d498842ebde5c8`, 비용 사례 보정 `7180ea3ca7a4b2349f285681a48e8a240e8a31d4`. [CI Run 38082111398](https://github.com/andrawing1212/soridraw-music/actions/runs/38082111398) **SUCCESS**: 실제 `functions/src/exploreLikeAbuseGate420.ts`를 Node 실행, 메모리 Firebase mock에서 260개 연속 승인·같은 opId 재생·변조·256 eviction 검사. 모든 기존 like/follow/TS/Build PASS, 실제 운영 사용자 데이터 사용 0.

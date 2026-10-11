@@ -153,7 +153,9 @@ export const planAtomicLikeDisplayDeliveryCandidate420 = (
       version: Number(receiptVersion),
       results: [...prior.slice(-49), {
         ...op, version: Number(receiptVersion),
-        at: Number(approvedAtMs), status: 'pending',
+        // Listener freshness tracks server DELIVERY time, not old approval
+        // time; a delayed retry must not look expired upon its first emit.
+        at: nowMs, status: 'pending',
       }],
     },
   };

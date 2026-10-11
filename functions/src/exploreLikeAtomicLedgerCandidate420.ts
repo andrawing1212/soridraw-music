@@ -149,7 +149,7 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
     }
     const rateRef = await tx.get(account);
     const state = normalize(rateRef.data());
-    if (nowMs - timestamp > LIKE_LEDGER420_MAX_FIRST_SEND_AGE_MS ||
+    if (timestamp === null || nowMs - timestamp > LIKE_LEDGER420_MAX_FIRST_SEND_AGE_MS ||
         state.lockedUntilMs > nowMs) return denied(state, settings.limitPerMinute);
     const minute = Math.floor(nowMs / MINUTE) * MINUTE;
     const current = state.windowStartMs === minute ? state : {

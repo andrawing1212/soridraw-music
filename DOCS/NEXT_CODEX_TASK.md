@@ -1,3 +1,15 @@
+## NEXT (2026-10-11) — Stage420 분리된 후보 추가 금지, 실제 연결 3축 통합 구현
+
+**직전 source audit:** `DOCS/STAGE420_CUTOVER_SAFETY_AUDIT_2026-10-11.md`. `preview` app396 기존 정상 기능/Stage420 OFF 보호. 현재 Stage416 28%, 속도 5/5 100%. 별도 Work 감사·실서비스 검증은 아직 미완료.
+
+**Codex High 다음 한 작업(구현→테스트→commit, 미배포):** 구형 운영 앱을 깨지 않는 **비활성 Stage420 통합 경로**에서만 (1) `src/services/exploreLikeGuardedTransport420.ts`의 `/display`와 신규 `/displayV2` 수신·event id/버전/첫 snapshot/역순 처리와 필요한 shared Rules 추가 조건을 구형 앱 비용 포함 검증; (2) `functions/src/index.ts`의 실제 `requireMasterCaller`가 보호하는 신규 Firestore lock 조회/해제/감사/기존 RTDB Master 정책 parity 설계 및 race test; (3) `createLikeReceiptDeliveryTriggerCandidate420`을 운영 연결 가능한 형태로 준비하면서 실패 ACK 방지, 23h HOLD 경보/인증 후 단건 재전달, 장기오프라인, Eventarc Emulator 회귀를 **한 묶음**으로 검증한다. 단순 mock 추가가 아니라 실제 호출선/구형 권한/수신 병목을 해결할 것. Worker171 기존 first-like/receipt, 앱197/141, like/follow, Music Note/Library, UI/30초 저장 보호.
+
+**불합격/중단 조건:** 10만 DAU Firestore 2R/2W+TTL+Eventarc+RTDB fanout+Cloudflare/D1/DO/R2 전비용 근거 불충분, old v4 pending 승인증거 없음, 구형 direct416 우회 차단과 구형 열린 탭 기능 보존의 양립 불가, shared Rules `displayV2` 권한 없음, 앱이 닫힌 후 HOLD 경보/복구 불명, 동일 클릭 중복 좋아요 허용. 충돌이면 코드를 켜지 않고 실제로 필요한 **강제 앱 업데이트/유예기간 정책 승인**을 요청한다. 절대로 old v4 승인을 새 receipt로 위조·백필하지 않는다.
+
+**CI/후속:** 좁은 검증 후 exact commit으로 앱 TS/Functions TS/Build/기존 like/follow/새 이벤트·Master 장애 테스트를 고정하고 Work **별도 read-only 독립 감사**. 실사용 보안 전환, Firebase Hosting/Functions/RTDB Rules·Cloudflare Worker 배포, 사용자 데이터 변경/TEST/PRODUCTION 승격은 이번 작업에 포함하지 않음. 운영 게이트 ⑤~⑩ 실증 전 28%를 올리지 않는다.
+
+---
+
 ## CURRENT NEXT — Stage420 mock 반복 중단: 실제 수신·Master·구형 호환 독립 감사 게이트 (2026-10-11)
 
 - **최종 QA 기준:** `preview` code `9efc4d0a98154866aae0b9ca6d1bf23a55e8bfc8`, [408 Run 38116576707](https://github.com/andrawing1212/soridraw-music/actions/runs/38116576707) SUCCESS. source-only Firestore 원자 rate+receipt/UUID v4 안전 미입증 차단, Eventarc retry factory, RTDB strict version delivery, 23h terminal HOLD, Master 인증 **후** exact held receipt 재전송(승인 다시 쓰기 0), 최초 24h HMAC v2, 관련 TS/Build/like/follow 자동검사 PASS. 구형 앱·실서버 연결은 OFF.

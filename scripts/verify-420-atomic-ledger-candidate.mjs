@@ -10,13 +10,14 @@ let code=stripTypeScriptTypes(readFileSync(
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
 assert.doesNotMatch(code,/^import\s/m);
-code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420};';
+code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420};';
 const module={exports:{}};
 vm.runInNewContext(code,{module,createHash,Number,Math,Date,Error},
   {timeout:1500});
 const {approveLikeWithAtomicLedgerCandidate420:approve,
   readLikeOperationTime420:readTime,
-  planAtomicLikeDisplayDeliveryCandidate420:project}=module.exports;
+  planAtomicLikeDisplayDeliveryCandidate420:project,
+  recoverAtomicLikeDisplayGapCandidate420:reconcile}=module.exports;
 const day=24*60*60_000;
 const base=1_800_000_000_000;
 const v7=(id,t=base)=>{
@@ -28,12 +29,35 @@ assert.equal(readTime('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),null);
 const docs=new Map();let writes=0,reads=0,created=0;
 let maxRateBytes=0,maxReceiptBytes=0;
 const clone=x=>x==null?x:structuredClone(x);
+// The mock scans its Map to emulate a Firestore indexed equality query;
+// real code uses a single-UID query with where(version)==next and limit(1).
 const ref=(path)=>({
   path,
-  collection:name=>({doc:id=>ref(path+'/'+name+'/'+id)}),
+  collection:name=>collection(path+'/'+name),
+});
+const collection=(path)=>({
+  doc:id=>ref(path+'/'+id),
+  where:(field,op,version)=>{
+    assert.equal(field,'version');
+    assert.equal(op,'==');
+    return {limit:n=>({
+      get:async()=>{
+        assert.equal(n,1);
+        const matches=[...docs.entries()].filter(([p,v])=>
+          p.startsWith(path+'/') &&
+          p.slice(path.length+1).indexOf('/')===-1 &&
+          v.version===version).slice(0,n);
+        reads+=matches.length || 1; // model one query read minimum
+        return {empty:matches.length===0,
+          docs:matches.map(([p,v])=>({
+            id:p.slice(path.length+1),data:()=>clone(v),
+          }))};
+      },
+    })};
+  },
 });
 const store={
-  collection:name=>({doc:id=>ref(name+'/'+id)}),
+  collection:name=>collection(name),
   runTransaction:async callback=>{
     const staged=[];
     const tx={
@@ -260,6 +284,67 @@ assert.equal(writes,beforeDeliveryReplayWrites,
   'projecting a signal never adds Firestore approval writes');
 console.log('STAGE420_DISPLAY_V2_MAX_50_FIXTURE_BYTES='+displayBytes);
 console.log('STAGE420_DISPLAY_V2_LATE_DELIVERY_FRESHNESS=PASS');
+// Full source recovery: Firestore approval commits exist independently of
+// RTDB delivery. Simulate Function crash before any RTDB notification and
+// restore only the exact missing receipt version; no account/full-track scan.
+let rtdbState=null;let rtdbWrites=0;
+const rtdbRef={
+  get:async()=>({val:()=>clone(rtdbState)}),
+  transaction:async callback=>{
+    const next=callback(clone(rtdbState));
+    if(next!==undefined){rtdbState=clone(next);rtdbWrites++;}
+    return {committed:next!==undefined,
+      snapshot:{val:()=>clone(rtdbState)}};
+  },
+};
+const rtdb={ref:path=>{
+  assert.equal(path,'privateLikeSync420/uid-1/displayV2');
+  return rtdbRef;
+}};
+const recoveryNow=base+1001*65_000;
+const thirdPath='privateLikeGuardV2_420/uid-1/approvals/'+mk(3).operationId;
+const thirdProof=clone(docs.get(thirdPath));
+docs.delete(thirdPath); // indexed proof lookup fails closed; no skipped track 3
+const gap=await reconcile(store,rtdb,'uid-1',5,recoveryNow,8);
+assert.equal(gap.reason,'missing-proof');
+assert.equal(gap.lastVersion,2);
+assert.equal(gap.delivered,2);
+assert.equal(rtdbWrites,2);
+docs.set(thirdPath,thirdProof);
+const healed=await reconcile(store,rtdb,'uid-1',5,recoveryNow,8);
+assert.equal(healed.complete,true);
+assert.equal(healed.lastVersion,5);
+assert.equal(healed.delivered,3);
+assert.equal(rtdbWrites,5);
+// Out-of-order trigger for version 260 catches up 6..260 in bounded groups,
+// and can resume after each explicit incomplete result.
+let loops=0;let completed=false;
+while(!completed && loops++<40){
+  const result=await reconcile(store,rtdb,'uid-1',260,recoveryNow,8);
+  assert.equal(result.reason,result.complete?'delivered':'needs-retry');
+  completed=result.complete;
+}
+assert.equal(completed,true,'bounded sequential recovery makes progress');
+assert.equal(rtdbState.version,260);
+assert.equal(rtdbState.results.length,50);
+assert.equal(rtdbWrites,260,'at most one RTDB publish per exact approval');
+const rtdbBeforeReplay=rtdbWrites;
+const replay=await reconcile(store,rtdb,'uid-1',260,recoveryNow,8);
+assert.equal(replay.delivered,0);
+assert.equal(replay.complete,true);
+assert.equal(rtdbWrites,rtdbBeforeReplay,
+  'old trigger delivered again must not create a write');
+// Missing/mismatched proof never turns into a new rate approval or broadcast.
+const nextPath='privateLikeGuardV2_420/uid-1/approvals/'+mk(261).operationId;
+const afterMissing=await reconcile(store,rtdb,'uid-1',261,recoveryNow,8);
+assert.equal(afterMissing.reason,'missing-proof');
+assert.equal(rtdbWrites,rtdbBeforeReplay);
+assert.equal(docs.has(nextPath),false);
+console.log('STAGE420_RECOVERY_MISSING_PROOF_FAIL_CLOSED=PASS');
+console.log('STAGE420_RECOVERY_GAP_THEN_RETRY_TO_260=PASS');
+console.log('STAGE420_RECOVERY_260_REPLAY_RTDB_W0=PASS');
+console.log('STAGE420_RECOVERY_BACKEND_ONCREATE_TRIGGER=NOT_WIRED');
+console.log('STAGE420_RECOVERY_UNATTENDED_RETRY=NOT_VERIFIED');
 console.log('STAGE420_DISPLAY_V2_ORDERED_1000_EMIT_50_BOUND=PASS');
 console.log('STAGE420_DISPLAY_V2_RETRY_257PLUS_NO_REEMIT=PASS');
 console.log('STAGE420_DISPLAY_V2_FAILCLOSED_ON_GAP_AND_PROOF_MISMATCH=PASS');

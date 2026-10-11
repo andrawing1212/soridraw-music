@@ -4694,7 +4694,10 @@ const fetchGoogleGeminiApiKeyFromServer = async (user: User | null | undefined):
 
 const resolveGoogleGeminiApiKey = async (user: User | null | undefined): Promise<string> => {
   if (!user?.uid) return '';
-  return fetchGoogleGeminiApiKeyFromServer(user);
+  // Real Gemini requests already validate the server-managed key. Do not make a
+  // separate status request: transient status failures must not redirect a valid
+  // user to API registration or clear the registered-key cache.
+  return 'server-managed';
 };
 
 const hasStoredGoogleGeminiApiKey = (uid?: string | null): boolean => {
@@ -14503,6 +14506,8 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         console.error(error);
         if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(rawErrorMessage)) {
           errorMessage = '마이페이지에서 개인 Gemini API 키를 등록해주세요.';
+          // Redirect only after an authoritative error from the real generation endpoint.
+          navigate('/my-page');
         } else if (/quota|rate.?limit|resource_exhausted|429/i.test(rawErrorMessage)) {
           errorMessage = 'Gemini 사용 한도 또는 요청 제한에 도달했습니다. 잠시 후 다시 시도해주세요.';
         } else if (/network|fetch|unavailable|overloaded|503|504/i.test(rawErrorMessage)) {

@@ -3,6 +3,8 @@
 // actual canonical likes, shared D1/R2, or a deployed Cloud Function.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { randomBytes, webcrypto } from 'node:crypto';
+import { verifyLikeGuardPermit420 } from '../cloudflare/explore-worker/runtime/like-guard-permit-420.mjs';
 
 const projectId = 'demo-soridraw-stage420-rules';
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080',
@@ -23,6 +25,7 @@ admin.initializeApp({
   projectId,
   databaseURL: 'https://' + projectId + '-default-rtdb.firebaseio.com',
 });
+const { issueRenewedLikePermitV2420 } = requireFunctions('./lib/exploreLikePermit420.js');
 const firestore = admin.firestore();
 const realtime = admin.database();
 const uid = 'uid-atomic-emulator';
@@ -75,6 +78,34 @@ try {
   assert.equal((await account.get()).data().version,1,
     'read-only recovery cannot approve, unlock or spend quota');
   console.log('STAGE420_REAL_EMULATOR_FIRST_ACK_LOSS_EXACT_RECOVERY_R1_W0=PASS');
+  // Real Firestore receipt -> signed permit -> actual Worker WebCrypto
+  // verification. The recovered approval's ORIGINAL timestamp must survive
+  // every retry; accepting one old exact receipt must not give it new 24h
+  // of canonical mutation authority.
+  const secret=randomBytes(32).toString('base64url');
+  const exactAction={uid,trackId:one.trackId,liked:one.liked,operationId:one.operationId};
+  const priorAt=await recoverExact(firestore,uid,one,now+23*60*60_000);
+  assert.equal(priorAt,now);
+  const signed=issueRenewedLikePermitV2420(
+    exactAction,now+23*60*60_000,priorAt,secret);
+  assert.match(signed,/^v2\./);
+  const acceptedProof=await verifyLikeGuardPermit420({
+    permit:signed,authenticatedUid:uid,mutation:one,
+    secretBase64Url:secret,nowMs:now+23*60*60_000+1,
+    subtle:webcrypto.subtle,
+  });
+  assert.equal(acceptedProof.originalIssuedAt,now);
+  await assert.rejects(verifyLikeGuardPermit420({
+    permit:signed,authenticatedUid:uid,mutation:one,
+    secretBase64Url:secret,nowMs:now+24*60*60_000,
+    subtle:webcrypto.subtle,
+  }),/420_GUARD_PERMIT_DENIED/);
+  assert.throws(()=>issueRenewedLikePermitV2420(
+    exactAction,now+24*60*60_000,priorAt,secret),
+    /420_GUARD_PERMIT_RENEW_DENIED/);
+  assert.equal((await account.get()).data().version,1,
+    'recovering and signing never spends another Firestore like approval');
+  console.log('STAGE420_REAL_EMULATOR_RECEIPT_WORKER_HMAC_ORIGIN_24H=PASS');
   console.log('STAGE420_REAL_EMULATOR_ATOMIC_FIRST_APPROVAL_EXACT_REPLAY_W0=PASS');
 
   const two=make(2,now+1), three=make(3,now+2);

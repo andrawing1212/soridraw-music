@@ -5,6 +5,9 @@ on:
     paths:
       - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/runtime/private-window-gate-416.mjs'
+      - 'scripts/verify-416-private-window-gate.mjs'
+      - 'scripts/verify-416-private-5min-batch.mjs'
       - 'cloudflare/explore-worker/canonical/preview-worker.js'
       - 'cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs'
       - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
@@ -133,6 +136,11 @@ jobs:
           node scripts/verify-420-master-policy.mjs
           node scripts/verify-420-master-ui.mjs
           node scripts/prepare-420-held-alert-policy.mjs --self-test
+      - name: Stage416 five-minute private candidate and server clock (source only)
+        run: |
+          node --check cloudflare/explore-worker/runtime/private-window-gate-416.mjs
+          node scripts/verify-416-private-5min-batch.mjs
+          node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source
         run: |
           npm --prefix functions ci --no-audit --no-fund

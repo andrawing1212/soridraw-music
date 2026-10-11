@@ -1,3 +1,11 @@
+## NEXT — 구형 앱 강제업데이트 UX 준비 source QA 완료, Stage420 실제 보안 게이트 확인 (2026-10-11)
+
+- **완료/재작업 금지:** 앱398 PREVIEW source `313af1b6...` 배포 PASS. signed legacy 409+app mandatory upgrade source, old like durable v4 pending 유지, 15분 expired permit 갱신 처리 PASS. 신규 `bcf5498e8cca569237dac3e0f9e2a3fd43136969` forced 409/version-equality reload loop 방지, `951259794aa1a781b64615bcc244904e687bb0c4` old unsigned pending user native single-track confirmation after cutover flag (HARD OFF). 408 [38142275493](https://github.com/andrawing1212/soridraw-music/actions/runs/38142275493) SUCCESS + Follow [38142275485](https://github.com/andrawing1212/soridraw-music/actions/runs/38142275485) SUCCESS. 이번 변경들은 **아직 PREVIEW 미배포**, 앱398 live 유지.
+- **다음 기능 우선:** Work read-only independent exact SHA `9512597...` audit: **고객이 확인한 old pending의 실제 서명 발급/승인/거절 후 기존 canonical 충돌 유무** 및 PC↔mobile, old PWA forced update, shared 416 Rule direct write, unsigned Worker old path bypass, Master 120m lock/override/hold operations, app version+schema 3환경 호환, monthly cost projection/physical data measurement. Cloudflare Worker JS 표면, Functions, Rules, host/worker release path를 하나로 판단. 실패하면 수정 후 재감사; PASS할 때만 `STAGE420_SIGNED_LEGACY_INTAKE_OPEN` activation/config/Shared Rules/Functions/3환경과 강제 업데이트 릴리스 계획 수립. 임의 preflight bypass/실사용 데이터 변형 금지.
+- **배포 기본:** 사용자 PREVIEW 재배포 명시 요청 없으면 이번 소스만 push, TEST/PROD 승격은 별도 승인, PRODUCTION은 명확한 정식배포 지시 전 금지. 각 환경의 Shared 데이터 원본 변경/삭제/복제 금지.
+- **진척:** Stage416 28%, 속도 100%(기존), Stage420 운영 40%(4/10), 실운영 E2E는 HOLD.
+
+---
 ## NEXT — Stage420 강제업데이트 반복 새로고침 결함 해결 후 실제 운영 전환 전 E2E (2026-10-11)
 
 - **완료:** app398 실제 PREVIEW Hosting 배포 `313af1b6...`, 구형 Worker like HTTP409 UI 업데이트 사전안내 source, signed like 신규 420 OFF 보호. 새 code `bcf5498e8cca569237dac3e0f9e2a3fd43136969`는 앱 버전 아직 398인 상태에서 409가 도착해도 **반복 새로고침/가짜 강제업데이트 불가**로 보정, 새 버전 manifest 후만 적용. [408 38141939228](https://github.com/andrawing1212/soridraw-music/actions/runs/38141939228) TS/Build/기능 회귀/실행형 업데이트 모형 SUCCESS. source-only, 아직 PREVIEW 재배포 안함.

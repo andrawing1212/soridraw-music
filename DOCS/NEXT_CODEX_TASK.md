@@ -1,3 +1,11 @@
+## NEXT — Stage416③ 소스 자동마감 PASS 이후 실서비스 전 남은 최종 안전 연결 (2026-10-12)
+
+- 기준 preview source f92e1f8e30adea02453abe2fc6877f08737c0eac, exact QA GitHub Actions 38161877181 SUCCESS. 앱399 정상 경로 및 Stage416 모든 flags OFF 유지. Cloud Tasks one-task-per-new-UID-window 후보 소스가 존재하지만 아직 Functions index export 없음, 실제 배포/권한설정 없음.
+- Codex High 다음 단계: Firebase v2 RTDB window onCreate→Cloud Tasks 최초 enqueue→+5분 후 서버 task→서버 Admin RTDB 원자 seal→Firebase HMAC→Worker D1 queue→개인 R2 및 RTDB 127 최종 ACK→PC/모바일 outbox 정리까지 emulator/E2E 검증. TASK 실패/지연/중복/25회 retry 소진 및 브라우저 종료 뒤 자동실행을 실제 재현할 것. 만료 바로 뒤 PRIOR_WINDOW_NEEDS_SEAL 실패 클릭을 이전 operationId로 반드시 재시도하도록 복구, 최종 하트/숫자 불일치 금지.
+- 운영/비용: shared Firebase RTDB를 읽는 preview/test/prod Functions task가 각각 중복 예약하지 않도록 global UID 단일 authority 선택. 앱399/구형 TEST/PRODUCTION legacy Worker가 같은 D1를 쓸 때 우회 없이 코드 승격 가능한지 안전판 마련. Master 1/3/5/10/20 새 window만 적용. 10만 DAU 기준 per-click Functions+RTDB 전체 record transaction 및 기존 hint, onCreate/task queue/worker/D1/R2 비용 계측. PC/모바일 실사용+Work 독립 PASS 전 ON/배포/공유 스키마 적용 금지.
+- 이번 사용자 지시 '배포시 보고해'는 즉시 배포 요청 아님. 배포가 승인되어 실제 실행될 때 대상 버전, URL, Firebase/Cloudflare/데이터 변경 및 비용 검증 결과 별도 보고.
+---
+
 ## NEXT — Stage416③ 실제 PREVIEW 릴리스 전 마지막 안전 연결: 서버 자동봉인·조기 종료·정확 ACK/공개 데이터 동시성 (2026-10-12)
 
 - **고정 기준:** `preview` `5cebb4c71987ef110ffcafe229f4d73cd9e5d259`. [408 CI 38160306909](https://github.com/andrawing1212/soridraw-music/actions/runs/38160306909) PASS, [RTDB server-only emulator 38159599583](https://github.com/andrawing1212/soridraw-music/actions/runs/38159599583) PASS. 앱399 Hosting 불변, 모든 Stage416 신규 플래그 OFF. `privateLikeBatch416/{uid}` server-only Root/Auth/AppCheck/Master and exact D1 receipt candidate code 존재. 실제 공유 Rules/database 변경 금지.

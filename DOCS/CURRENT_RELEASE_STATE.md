@@ -1,3 +1,12 @@
+## CURRENT — Stage416③ 서버 자동 5분 마감 후보 PASS, 배포 전 HOLD (2026-10-12)
+
+- 기준: preview source f92e1f8e30adea02453abe2fc6877f08737c0eac; 앱399 Hosting source e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a 유지.
+- 구현: functions/src/exploreLikePrivateDeadline416.ts — UID+windowId로 이전/다음 창 교차 저장 차단, 최신 클릭시 마감 연장, 이전 seal ACK 대기 시 다음 작업 60초 뒤 재시도. functions/src/exploreLikePrivateTask416.ts — 새로운 RTDB privateLikeBatch416/{uid}/window 생성마다 Firebase Cloud Tasks 1건 최초 예약, 기존 window 클릭 반복시 신규 Task 없음, 실제 Task 실행시만 재확인/필요한 후속 예약. 해시 Task ID로 onCreate 중복 이벤트 재전송 멱등화. 두 핸들러 모두 Functions index.ts에 export되지 않아 배포되지 않음.
+- 검사: GitHub Actions Run 38161877181 pinned exact source SHA SUCCESS — TypeScript, Build, Functions Build, 기존 좋아요/팔로우, 80연속클릭 매 클릭 Task 추가0, 초기 작업+연장 작업, 구형 이벤트 stale fencing, 이전 seal ACK 대기, 동일 예약 ID 중복처리, 공유 RTDB rules read-only. 부모 Run 38161770136 PASS. 실제 v2 Cloud Tasks 및 RTDB 이벤트 emulator/실서비스 실행은 미검증.
+- 비용/위험: Firebase Cloud Tasks 1회/UID 새 window, 최종 Task 호출 및 Functions 예약 onCreate invocations 추가. RTDB Admin per-click transaction이 최대256곡 UID pending 전체 맵을 처리하므로 곡수 증가시 읽기/전송비 증가 위험. 기존 RTDB 실시간 hint 유지시 중복 대역폭. Worker signed queue의 최종 R2 개인 snapshot, 구형 TEST/PRODUCTION writer 우회, Master/오프라인/강제종료, 서버에 늦게 도달하는 클릭 재시도 및 Task retry 25회 소진 복구, 10만 DAU 월 총비용, Work 독립 감사, PC↔모바일 실사용 미검증. Firebase/Cloudflare 실 배포 금지.
+- 진행률: Stage416 원 사용자 4과제 완료 1/4=25%, 기존 앱 속도 5/5=100%, Stage416③ 개인 5분 저장 source+test 후보 2/4=50%, 실제 배포된 5분 저장 기능은 0%. 클라이언트 및 Worker flags OFF. Firebase Hosting/Functions/RTDB Rules, Cloudflare Worker/D1/R2, 공유 데이터, main/TEST/PRODUCTION 변경0. preview commit/push만 완료.
+---
+
 ## CURRENT — Stage416③ 서버 전용 RTDB 격리·Master 인증·중복 재접수 차단 검증 완료, 소스 OFF (2026-10-12 KST)
 
 - **기준 branch/source:** `preview` `5cebb4c71987ef110ffcafe229f4d73cd9e5d259` (선행 기준 `76f4dfe1aac09bb4de96e5831cbbfc469ad9bc8b`, 9 commits, 17 changed files). 기존 앱399 보호, preview 브랜치 보호 유지. **현재 실제 Hosting 기준:** 기존 app399 source `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` (이번 변경은 배포/실접속 확인 아님). main/TEST/PRODUCTION과 공유 실제 사용자 원본 변경 없음.

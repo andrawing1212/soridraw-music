@@ -7,6 +7,9 @@ on:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/runtime/private-window-gate-416.mjs'
       - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
+      - 'cloudflare/explore-worker/runtime/like-private-batch-handoff-416.mjs'
+      - 'cloudflare/explore-worker/candidates/private-like-handoff-416.sql'
+      - 'scripts/verify-416-private-handoff-atomic.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
       - 'scripts/verify-416-shared-writer-d1.mjs'
       - 'src/services/exploreLikePrivateRtdbWindow416.mjs'
@@ -155,6 +158,7 @@ jobs:
           node scripts/verify-416-private-rtdb-batch.mjs
           node scripts/verify-416-client-rtdb-binding.mjs
           node scripts/verify-416-server-rtdb-seal.mjs
+          node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-worker-route-runtime.mjs
           node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source

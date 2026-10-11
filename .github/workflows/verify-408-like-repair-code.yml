@@ -6,6 +6,9 @@ on:
       - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/runtime/private-window-gate-416.mjs'
+      - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
+      - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
+      - 'scripts/verify-416-shared-writer-d1.mjs'
       - 'scripts/verify-416-private-window-gate.mjs'
       - 'scripts/verify-416-private-5min-batch.mjs'
       - 'cloudflare/explore-worker/canonical/preview-worker.js'
@@ -140,6 +143,7 @@ jobs:
         run: |
           node --check cloudflare/explore-worker/runtime/private-window-gate-416.mjs
           node scripts/verify-416-private-5min-batch.mjs
+          node scripts/verify-416-shared-writer-d1.mjs
           node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source
         run: |

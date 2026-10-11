@@ -33,5 +33,9 @@ assert.match(service,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/,'released 399
 assert.match(service,/advancePrivateBatchWindow416\(/);
 assert.match(service,/privateBatchDeadline416\(/);
 assert.match(service,/const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
+assert.match(service,/subscribeExploreLikeIntent416\(uid, \(trackId\) => \{[\s\S]*?if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE\)/);
+assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE\) \{[\s\S]*?schedulePendingFlush\(current416\)/,
+  'same-account private signal extends an active user-wide pending window');
+console.log('STAGE416_FUTURE_TWO_DEVICE_WINDOW_EXTENSION_SOURCE=PASS');
 console.log('STAGE416_PRIVATE_BATCH_MASTER_OPTIONS_AND_FROZEN_WINDOW=PASS');
 console.log('STAGE416_CURRENT_APP399_BEHAVIOR_OFF=PASS');

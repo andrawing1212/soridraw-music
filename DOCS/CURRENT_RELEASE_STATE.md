@@ -1,3 +1,13 @@
+## CURRENT — Stage420 연결 경로 실코드 대조 및 전환 차단 확정 (2026-10-11)
+
+- **이번 실제 작업:** `preview` 80bb23c9ea61d0437359d89ee797b3dce11658c7 기준 직접 소스 대조 후 `DOCS/STAGE420_CUTOVER_SAFETY_AUDIT_2026-10-11.md` 생성(commit dc6bd455ab84bc015d46bdc890aa4d6c30b01714). 별도 기존 `DOCS/WORK_AUDIT_CHECKLIST.md`의 옛 `W3+ 무조건 FAIL` 규칙을 2026-10-09 사용자 승인 최신 비용 원칙으로 교정(commit 5cf89846eea1d43891f6677d0abc182011e88e5b). **제품 코드 수정/운영 연결/새 자동검사 수행은 없음.**
+- **확정된 실제 연결 차단:** 클라이언트 구독 `.../display` 대 후보 발신 `.../displayV2` 불일치 + 공유 RTDB Rules 미반영; 기존 Master RTDB 잠금 해제/설정 대 새 Firestore 원자 권한 분리; Eventarc factory/23h HOLD는 운영 export/Monitoring 없음; app396 UUID v4 승인증거를 신규 Firestore receipt로 소급 생성할 수 없음; 기존 열린 탭의 direct416을 허용하면 보안 우회이고 즉시 닫으면 구형 앱 전송 차단. 위 5개는 **CI/mock PASS만으로 해결되지 않음**.
+- **정확한 판정:** Stage420 실제 2단계 **FAIL/HOLD**; Stage416 전체 **28%**(1/5 완료 + 4/10 게이트), 앱396 속도 **5/5·100%**(기존 자동검사 근거), 이번 세부 `운영 수신/Master/재전달 연결 코드 대조 + 실행 게이트 문서` **2/2·100% 문서·소스검토**. 운영 게이트 ⑤~⑩ 새로 통과한 항목 **0**. 이번 검토는 ChatGPT 직접 소스 대조이지 Work 별도 독립 감사·실서버/실기기 측정이 아님.
+- **배포/원본:** `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`, Stage426 OFF. 현재 배포된 PREVIEW app396 보호(이번에 실주소 재검증 없음); Hosting/Functions/Rules/Worker/D1/R2/Firestore/RTDB/shared 사용자 원본, main/TEST/PRODUCTION 변경 없음.
+- **다음 단일 구현 묶음:** Codex High가 기존 정상 likes/follows는 건드리지 않고, 비활성 후보 경로의 `displayV2` 실제 앱 수신 호환, `requireMasterCaller` 보호된 Firestore 권한 전환, Eventarc 장기 HOLD 운영 경보/단건 복구를 한 묶음으로 코딩·QA → Work 별도 read-only 감사. 구형 앱 direct416 차단/공유 Rules 및 Functions·Worker 실배포는 PROD 영향 때문에 **디렉터 명확한 사전 승인 이전 금지**. 작은 source-only mock 추가 반복 금지.
+
+---
+
 ## CURRENT — Stage420 Master 인증 후 HOLD 알림 복구 후보 PASS, 실제 2단계 전환은 여전히 28%/HOLD (2026-10-11)
 
 - **정확한 기준:** `preview` code `9efc4d0a98154866aae0b9ca6d1bf23a55e8bfc8`, [408 quality 38116576707](https://github.com/andrawing1212/soridraw-music/actions/runs/38116576707) **SUCCESS**. 이전 code `23e6b31af0687f1608e4ffc13f7627f13dc33923` 위 `functions/src/exploreLikeAtomicLedgerCandidate420.ts`와 `scripts/verify-420-atomic-ledger-candidate.mjs`만 갱신; Firebase/Cloudflare 실제 배포/사용자 데이터 변경 없음. 중간 source candidate `3df3653f`의 테스트 mock get 누락, `f193e38c`의 TS possibly undefined에 의한 CI FAIL을 수정하여 **최종 exact SHA 전체 PASS**.

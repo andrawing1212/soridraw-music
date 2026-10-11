@@ -10,14 +10,16 @@ let code=stripTypeScriptTypes(readFileSync(
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
 assert.doesNotMatch(code,/^import\s/m);
-code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420};';
+code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420,handleApprovedLikeReceiptWakeupCandidate420,masterUnlockAtomicLikeAfterAuthCandidate420};';
 const module={exports:{}};
 vm.runInNewContext(code,{module,createHash,Number,Math,Date,Error},
   {timeout:1500});
 const {approveLikeWithAtomicLedgerCandidate420:approve,
   readLikeOperationTime420:readTime,
   planAtomicLikeDisplayDeliveryCandidate420:project,
-  recoverAtomicLikeDisplayGapCandidate420:reconcile}=module.exports;
+  recoverAtomicLikeDisplayGapCandidate420:reconcile,
+  handleApprovedLikeReceiptWakeupCandidate420:wakeup,
+  masterUnlockAtomicLikeAfterAuthCandidate420:masterUnlock}=module.exports;
 const day=24*60*60_000;
 const base=1_800_000_000_000;
 const v7=(id,t=base)=>{
@@ -344,6 +346,104 @@ assert.equal(afterMissing.reason,'missing-proof');
 assert.equal(rtdbWrites,rtdbBeforeReplay);
 assert.equal(docs.has(nextPath),false);
 docs.set(nextPath,saved261);
+// Authenticated Firestore onCreate SNAPSHOT candidate. It is NOT connected
+// to live Eventarc; these fixtures must not be called live trigger coverage.
+const wakeUid='uid-1';
+const receiptFor=i=>clone(docs.get(
+  'privateLikeGuardV2_420/'+wakeUid+'/approvals/'+mk(i).operationId));
+const wakeR0=reads, wakeW0=writes, priorSignalWrites=rtdbWrites;
+const r261=await wakeup(store,rtdb,wakeUid,mk(261).operationId,
+  receiptFor(261),recoveryNow);
+assert.equal(r261.status,'delivered');
+assert.equal(rtdbState.version,261);
+assert.equal(reads,wakeR0,'happy onCreate payload means no Firestore point read');
+assert.equal(writes,wakeW0,'event delivery must not repeat approval');
+const wakeRepeat=await wakeup(store,rtdb,wakeUid,mk(261).operationId,
+  receiptFor(261),recoveryNow);
+assert.equal(wakeRepeat.status,'already-delivered');
+assert.equal(rtdbWrites,priorSignalWrites+1,'duplicate event W0');
+const late264=await wakeup(store,rtdb,wakeUid,mk(264).operationId,
+  receiptFor(264),recoveryNow);
+assert.equal(late264.status,'delivered');
+assert.equal(rtdbState.version,264);
+assert.equal(rtdbWrites,priorSignalWrites+4);
+const preFailure=rtdbWrites, originalTx=rtdbRef.transaction;
+rtdbRef.transaction=async()=>{
+  rtdbRef.transaction=originalTx;
+  throw Error('TEMPORARY_RTDB_FAILURE');
+};
+await assert.rejects(wakeup(store,rtdb,wakeUid,mk(265).operationId,
+  receiptFor(265),recoveryNow),/TEMPORARY_RTDB_FAILURE/);
+assert.equal(rtdbWrites,preFailure,'outage must not lose/duplicate signals');
+const recovered265=await wakeup(store,rtdb,wakeUid,mk(265).operationId,
+  receiptFor(265),recoveryNow);
+assert.equal(recovered265.status,'delivered');
+assert.equal(rtdbState.version,265);
+const lost266='privateLikeGuardV2_420/'+wakeUid+
+  '/approvals/'+mk(266).operationId;
+const saved266=clone(docs.get(lost266));
+docs.delete(lost266);
+const gap267=await wakeup(store,rtdb,wakeUid,mk(267).operationId,
+  receiptFor(267),recoveryNow);
+assert.equal(gap267.status,'retry-required');
+assert.equal(gap267.reason,'missing-proof');
+assert.equal(rtdbState.version,265,'must not skip missing proof');
+docs.set(lost266,saved266);
+const healed267=await wakeup(store,rtdb,wakeUid,mk(267).operationId,
+  receiptFor(267),recoveryNow);
+assert.equal(healed267.status,'delivered');
+assert.equal(rtdbState.version,267);
+assert.equal(writes,wakeW0,'all retries must be approval W0');
+await assert.rejects(wakeup(store,rtdb,'other-uid',mk(267).operationId,
+  receiptFor(267),recoveryNow),/420_RECEIPT_WAKEUP_PROOF_INVALID/);
+console.log('STAGE420_WAKEUP_SOURCE_EVENT_FAST_FS_R0=PASS');
+console.log('STAGE420_WAKEUP_RTDB_OUTAGE_GAP_RETRY=PASS');
+console.log('STAGE420_WAKEUP_ONCREATE_RETRY_PROVISIONING=NOT_WIRED');
+
+// Master helper runs only after a future authenticated Master role check.
+// It must unblock the *Firestore* authoritative counter, without inserting
+// a ghost approved version or growing the rate doc with audit history.
+const masterTarget='uid-master-candidate',masterTime=recoveryNow;
+const masterPath='privateLikeGuardV2_420/'+masterTarget;
+docs.set(masterPath,{
+  windowStartMs:masterTime-1000,acceptedInWindow:40,
+  previousWindowStartMs:masterTime-61000,
+  previousWindowReachedLimit:true,lockedUntilMs:masterTime+120*60_000,
+  limitPerMinute:40,version:88,
+});
+const beforeUnlock=await approve(store,masterTarget,{
+  trackId:'locked-track',ownerUid:'owner',liked:true,
+  operationId:v7(99001,masterTime),
+},masterTime,policy);
+assert.equal(beforeUnlock.allowed,false);
+const unlockRequestId='unlock-request-420001';
+const beforeAdminWrites=writes;
+const unlocked=await masterUnlock(store,'verified-master',masterTarget,
+  unlockRequestId,'수동 승인 복구',masterTime);
+assert.equal(unlocked.unlocked,true);
+assert.equal(unlocked.version,88);
+assert.equal(docs.get(masterPath).lockedUntilMs,0);
+assert.equal(docs.get(masterPath).version,88);
+assert.equal(writes,beforeAdminWrites+2,
+  'one canonical account update plus one audit doc');
+const repeatedUnlock=await masterUnlock(store,'verified-master',masterTarget,
+  unlockRequestId,'수동 승인 복구',masterTime+1);
+assert.equal(repeatedUnlock.duplicate,true);
+assert.equal(writes,beforeAdminWrites+2,'repeated admin request W0');
+await assert.rejects(masterUnlock(store,'wrong-master',masterTarget,
+  unlockRequestId,'수동 승인 복구',masterTime+2),
+  /420_MASTER_UNLOCK_REPLAY_MISMATCH/);
+const afterUnlock=await approve(store,masterTarget,{
+  trackId:'allowed-track',ownerUid:'owner',liked:true,
+  operationId:v7(99002,masterTime+2),
+},masterTime+2,policy);
+assert.equal(afterUnlock.allowed,true);
+assert.equal(afterUnlock.version,89);
+assert.equal(docs.has(masterPath+'/adminUnlockAudit/'+unlockRequestId),true);
+console.log('STAGE420_MASTER_FIRESTORE_ATOMIC_UNLOCK_AUDIT=PASS');
+console.log('STAGE420_MASTER_REPEAT_UNLOCK_W0=PASS');
+console.log('STAGE420_MASTER_LIVE_ROLE_GUARD=NOT_WIRED');
+
 console.log('STAGE420_RECOVERY_MISSING_PROOF_FAIL_CLOSED=PASS');
 console.log('STAGE420_RECOVERY_GAP_THEN_RETRY_TO_260=PASS');
 console.log('STAGE420_RECOVERY_260_REPLAY_RTDB_W0=PASS');

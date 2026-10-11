@@ -1,3 +1,16 @@
+## CURRENT — Stage416 2/5: Firestore 원자 승인 후보 호환·잠금·동기화·비용 통합 단일 작업 (2026-10-11)
+
+**Codex High / source-only / `preview` 기준 `a7494b83d93f0323343532ae4c09c753462678ab`.** 다른 앱 속도/UI 작업은 종료된 것으로 보호. 이번 작업은 **257+ 재승인 방지와 기존 RTDB 256개 root transfer 증가 방지**를 동시에 만족하는 비용 상수형 보안 승인 모델 **1개만** 통합 검증하는 것. 정상 app396 좋아요·팔로우·PC↔모바일·Studio 하트·공개/비공개 및 30초 outbox 유지, 추가 보안 Cutover/Functions/Worker/shared Rules 배포 금지.
+
+1. **먼저 현 후보의 ID 불호환 제거 설계.** `src/services/exploreLikeService.ts`는 `crypto.randomUUID()` v4지만 `exploreLikeAtomicLedgerCandidate420.ts`는 v7만 수락한다. 기존 durable v4 opId와 Worker171 receipt를 임의 교체·신규 클릭 변환하지 말 것. v4에 대해서도 과거 receipt 소멸 시 재승인을 확실하게 차단할 수 있는 기존 원본 그대로의 서버 증거/폐기 정책과 안전한 재확인 UX가 없으면 **fail-closed와 위험 보고**, 영구 W0 보장 주장 금지.
+2. **원자성 + 기존 동작을 한 흐름으로 검증.** Firestore rate+receipt transaction이 257+ 동일 opId 및 상이 action 재사용을 W0로 막는지 검사. 별도 RTDB `privateLikeSync420/$uid/display` 사용자 기기별 실시간 변경 신호와 `masterUnlockExploreLike420`의 120분 잠금/조기해제, `publishExploreLikeIntent420`의 HMAC issuance, 15분 renewal/recovery, Cloudflare 171 canonical receipt가 어떻게 연동되는지 구체적으로 정할 것. **Firestore+RTDB 두 DB의 원자적 commit을 근거 없이 주장 금지**: partial failure / ordered write / retry / ACK loss / latest click priority를 명확히 검증. 구형 app396/TEST/PRODUCTION의 direct416 우회 문제 및 공유 Rules 전환은 사전 승인 없이는 절대 적용하지 말 것.
+3. **검사를 실제 경계로 보강.** 현 `verify-420-atomic-ledger-candidate.mjs`의 1,000회 테스트는 65초 간격이라 rate/lock 시험이 아니다. 30회 경고, 40회/분, 연속 2분 40회, 120분 잠금, Master unlock, 같은 UID 동시탭/동시기기, 동일 opId mismatch, UUID v4 기존 outbox, 51+/257+/1,001회, 첫 ACK/HMAC 유실, 8일 최초 전송, 30일 만료, TTL 삭제 후 재생, Firestore transaction 경합/실패, 구형 Worker171 receipt W0, PC↔모바일 즉시 UI 수렴을 개별 PASS/FAIL로 만들 것. Firestore mock 검증은 실제 Firebase/Cloudflare 청구 및 물리기기 증거와 구분한다.
+4. **10만 사용자 월 전체 비용표와 병목 판정.** 5/일과 20/일 사용 시 후보의 기본 문서 R/W, TTL 삭제(별도 비용), 스토리지·인덱스·네트워크, Functions 호출·CPU, RTDB 동기화, Cloudflare Worker/DO/D1/R2를 포함. 초기/steady-state, duplicate/no-action/재진입 0, 한국 모바일 p95를 구분. 계산상 5/일 × 10만 DAU × 30일 = 1,500만 신규 승인 → 3,000만 Firestore reads + 3,000만 writes + steady-state TTL deletes 최대 약 1,500만(가정). 이 비용을 기존 RTDB 256 root 구조와 비교하고 **실제 결제액처럼 보고하지 말 것**. TTL 필드만 존재한다고 자동 삭제되는 것이 아니므로 정책 설정/인덱스/청구 영향도 문서화(운영 설정 변경 금지).
+5. **범위와 중단:** 새 Firestore 원본 authority 마이그레이션, RTDB Rules 변경, 공유 DB/대량 backfill, Functions/Worker/Hosting 배포, stage420/426 ON, main/TEST/PROD 변경 절대 금지. 작동 중인 app396/old client 기능을 희생하거나 구형 요청이 무단 재승인될 가능성이 있으면 **FAIL/HOLD**. 안전한 격리 후보와 집중 QA만 수정할 수 있으며, 예상 비용이 높거나 cross-DB 보장 불가능하면 억지 구현 대신 정확한 선택지 1개를 보고.
+6. **완료 보고:** 기준 SHA/최종 SHA, 변경 파일, TypeScript/Build/관련 기존 like/follow/신규 QA, 비용 시나리오, 미확인 physical 비용·PC/mobile 범위, 배포·공유 데이터 변경 0, 남은 blocker를 문서에 기록. Codex commit 후 Work는 read-only 독립 검증. 기존 preview app396 운영/속도 5/5·100%·실기기 4/4·100% 유지; Stage416 1/5·20%는 모든 안전 게이트 통과 전 변경 금지.
+
+---
+
 ## CURRENT — Stage416 2/5: 256 receipt 서버 루트 재검증 결과 비용·257회 재승인 위험 확정, 운영 ON 금지 (2026-10-10)
 
 - **검증 소스:** `preview` code `7180ea3ca7a4b2349f285681a48e8a240e8a31d4`, [408 Run 38082111398](https://github.com/andrawing1212/soridraw-music/actions/runs/38082111398) SUCCESS. 서버 함수 260개 승인 실제 실행/RTDB mock: 256 포화 root 37,128 bytes, root read/write는 변경 단위마다 사용자저널 전체 동반. 첫 승인 opId가 257+로 빠져 재전송되면 **새 승인 commit** 발생해 W0 불합격. 서버 전송량 100k DAU write-only 시나리오 15.36~478.63 GiB/월(모형이며 실제 DB billing 아님).

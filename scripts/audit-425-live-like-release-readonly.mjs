@@ -38,6 +38,16 @@ for(const [mode,name] of Object.entries(scripts)) {
   const missing=needed.filter(x=>!source.includes(x));
   const targetMarker=source.includes(repoMarker);
   const ready=missing.length===0&&targetMarker;
+  // Explicitly inspect ACTIVE Worker source: protected cutover cannot be
+  // described as live simply because the preview GitHub bundle contains a
+  // dormant 426 implementation. This is GET-only, with no D1 read added.
+  const compiled426=/const\s+STAGE426_COMPILED_OPEN\s*=\s*true\b/.test(source);
+  const guardedImport=/verifyGuardedLikeBatch420|acceptGuardedLikeBatch420/.test(source);
+  console.log('425_'+mode.toUpperCase()+'_ACTIVE_426_OPEN='+(
+    compiled426?'YES':'NO_OR_NOT_PROVEN'));
+  console.log('425_'+mode.toUpperCase()+'_ACTIVE_SIGNED_GATE='+(
+    guardedImport?'PRESENT_NOT_PROOF':'NOT_FOUND'));
+  if(compiled426&&!guardedImport)throw Error('425_'+mode+'_UNGUARDED_ATOMIC_CUTOVER');
   allReady&&=ready;
   console.log('425_'+mode.toUpperCase()+'_ACTIVE_VERSION='+String(active.version_id||'unknown'));
   console.log('425_'+mode.toUpperCase()+'_171_ROUTE='+(!missing.includes(needed[1])?'PRESENT':'MISSING'));

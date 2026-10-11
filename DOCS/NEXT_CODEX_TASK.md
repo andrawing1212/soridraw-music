@@ -1,3 +1,11 @@
+## NEXT — app398 PREVIEW 호환 준비 완료: 구형 차단 실제 보안 전환 게이트 (2026-10-11)
+
+- **재작업 금지:** app398 PREVIEW Hosting source `313af1b6d874768d8693d5eebbdd5220d5bb1b94` / [Release 38141075089](https://github.com/andrawing1212/soridraw-music/actions/runs/38141075089) SUCCESS. 구형 미서명 like 409/위조 403/키 누락 503 Worker candidate와 업데이트 버튼 + durable local outbox 보호 완성, 408/Follow full automated PASS. Stage420 guard OFF이며 Firebase/Cloudflare server cutover, shared Rules, Functions, D1 changes 없음. 테스트·정식 앱 현재 구버전 유지. 디렉터는 구형 앱 강제 업데이트/미갱신 좋아요 차단 정책 **승인**, PROD 배포까지 승인한 것은 아님.
+- **다음 단일 작업:** Work 독립 read-only 최종 감사 exact app398 SHA: 실제 Worker signed legacy vs 426, UUIDv4 legacy outbox 재확인/사용자 재클릭 UX, HTTP409 이후 로컬 보존, staged version upgrade된 PREVIEW와 old TEST/PROD 동시 사용, 인증 중복 /auth-test, signed token HMAC 24h retry, 50/256 eviction, Master authority + HOLD alarm, 한국 p95, 100k DAU 합산 Firebase/Cloudflare 청구, direct416/unsigned canonical 우회. 사전 감사 FAIL이면 cutover 중단하고 Codex High에 최소 수정만 지시. 실제 기능코드/보안 배포는 commit 고정 후 원자적 세환경 plan으로 준비.
+- **릴리스 안전 조건:** 공유 데이터에 접근하는 TEST/PROD 구형 앱까지 버전 업데이트 가능한 상태 확인 → Firebase Rules direct416 접근 폐쇄와 signing-enabled Worker/Functions/HMAC bindings를 3환경 호환된 하나의 릴리스로 처리 → PREVIEW 실기기 좋아요/해제/잠금/로컬 old pending/PC↔mobile 양방향/비용 테스트 → 사용자 TEST 승인 → 별도 명확한 PRODUCTION 승인. 중간 shared Rules 선폐쇄, 미서명 Worker 단독 차단, User data migration/삭제/강제 원본 재생성 및 함부로 main/production 승격 금지.
+- **3개 진행률 고정:** Stage416 **28%**, 속도 기존 **100%**, Stage420 운영 **40%**. 실 PRD 미검증은 PASS 주장 금지.
+
+---
 ## NEXT — Stage420 만료증 전송 결함 제거 후 실제 cutover 감사·승인 게이트 (2026-10-11)
 
 - **완료 반복 금지:** `preview` code `47defc8eafbc240b7c94e2fca92b03f33dc28939` signed canonical 15분 HMAC 만료 후 승인만 갱신하는 batch 경로 source-only 완성. [408 QA 38139847086](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847086) SUCCESS + [현대 Follow QA 38139847083](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847083) SUCCESS. app397 actual PREVIEW는 별도 격리 source `132ed10...` 그대로 정상 사용 중.

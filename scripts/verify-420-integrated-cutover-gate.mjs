@@ -55,8 +55,10 @@ assert.match(service, /entry\.guardStatus420 === 'approved' && !!entry\.operatio
 assert.match(guarded, /response\.guardPermit420/,
   'the Function-signed certificate must reach the durable outbox reducer');
 assert.match(fn, /stage420PermitSigningSecret = defineSecret\(/);
-assert.match(fn, /outcome\.allowed\s*\? issueLikePermit420/,
-  'only an accepted authenticated like can receive a certificate');
+assert.match(fn, /const guardPermit420 = !outcome\.allowed \? undefined/,
+  'rejected approval must never receive a signing certificate');
+assert.match(fn, /issueLikePermit420\(exactPermitAction/,
+  'accepted legacy approval retains a signed exact-operation certificate');
 assert.match(worker, /const STAGE426_COMPILED_OPEN = false/,
   'do not turn on all-environment canonical cutover');
 assert.match(worker, /await verifyGuardedLikeBatch420\(/);

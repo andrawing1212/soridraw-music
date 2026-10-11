@@ -43,9 +43,9 @@ const end=source.indexOf('// An earlier batch may be in flight',start);
 assert.ok(start>0&&end>start);
 const compiled=(await transform(source.slice(start,end),{loader:'ts',target:'es2022',format:'cjs'})).code;
 const delays=[];const fakeWindow={setTimeout:(fn,delay)=>{delays.push(delay);return 1;},clearTimeout:()=>{}};
-const schedule=new Function('readLikeOutbox','clearFlushTimer','flushTimerByUid','window','Date','EXPLORE_LIKE_IDLE_FLUSH_MS_120','flushPendingLikes','eligibleGuardedMutation420',
+const schedule=new Function('readLikeOutbox','clearFlushTimer','flushTimerByUid','window','Date','EXPLORE_LIKE_IDLE_FLUSH_MS_120','flushPendingLikes','eligibleGuardedMutation420','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE','privateBatchDeadline416','readPrivateBatchWindow416',
  compiled+'\nreturn schedulePendingFlush;')(
- ()=>({song:{retryCount:0,updatedAt:1000}}),()=>{},new Map(),fakeWindow,{now:()=>3000},5000,()=>Promise.resolve(),()=>guardedEligible
+ ()=>({song:{retryCount:0,updatedAt:1000}}),()=>{},new Map(),fakeWindow,{now:()=>3000},5000,()=>Promise.resolve(),()=>guardedEligible,false,()=>0,()=>null
 );
 schedule(user);
 assert.deepEqual(delays,[3000],'5-second trailing window from last click');

@@ -1,3 +1,11 @@
+## CURRENT — app399 디렉터 실사용 검증 정상 확정 (2026-10-11)
+
+- **사용자 실사용 피드백:** "테스트 정상" (2026-10-11). 직전에 안내한 app399 PREVIEW 3개 점검 범위(① 업데이트 후 기존 꽉 찬 좋아요 하트/숫자 유지, ② PC↔모바일 좋아요/해제 자동 동기화, ③ Explore 팔로우와 Music Note 저장하트 정상)에 대해 사용자가 일괄 정상 보고. 이는 user-validated release regression sign-off이며 **Stage420의 2시간 남용 잠금/서명 Worker/구형 미전송 Like 409 강제업데이트 활성화 검증이 아니다.**
+- **보호 기준:** 앱399 exact Hosting source `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a`, [Release Run 38143229471](https://github.com/andrawing1212/soridraw-music/actions/runs/38143229471) SUCCESS. 정상 하트/PC↔mobile/팔로우/뮤직노트 저장 로직 임의 수정 금지. 420 cutover OFF, 기존 정상 app399 유지. TEST/PRODUCTION 배포 승인 없음.
+- **다음 우선 작업:** 공유 RTDB Rules의 direct416 차단 후보 RTDB emulator PASS [Run 38142993689](https://github.com/andrawing1212/soridraw-music/actions/runs/38142993689) 이후, Firebase Functions HMAC Secret + Cloudflare Worker signed legacy gate의 **정확한 기존 canonical writer 연결과 배포 안전성**을 독립 검증; 기존 app399 UI 추가 수정이나 docs/CI 반복 대신 실제 서버 활성화 장애 해소에 집중. 별도 서버 2시간 잠금/실시간 PC/mobile/10만 DAU 물리 비용/Work 미검증은 HOLD.
+- **운영 진행률:** Stage416 28%, 앱 속도 100%(기존), Stage420 운영 40%. 앱399 사용자 QA 통과는 정상 기능 보호 기준 확정이며 Stage420 서버 보안 활성화의 대체 증거가 아님.
+
+---
 ## CURRENT — app399 PREVIEW 배포 + 구형 직접416 우회차단 RTDB 에뮬레이터 PASS (2026-10-11)
 
 - **현재 실제 PREVIEW:** Firebase Hosting `app399` exact source `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a`, [Release Run 38143229471](https://github.com/andrawing1212/soridraw-music/actions/runs/38143229471) **SUCCESS**: TS·Build·My Likes/Follow/Music Note 회귀, `preview.soridraw.com` exact build/app-version 399, TEST+PRODUCTION 웹+branch 비변경 PASS. [408 Run 38143229467](https://github.com/andrawing1212/soridraw-music/actions/runs/38143229467) SUCCESS, [Follow-only Run 38143229439](https://github.com/andrawing1212/soridraw-music/actions/runs/38143229439) SUCCESS. 배포 범위 **Firebase PREVIEW Hosting만**, 공유 RTDB Rules 배포 SKIPPED, Worker·Functions·공유 user data 변경 0.

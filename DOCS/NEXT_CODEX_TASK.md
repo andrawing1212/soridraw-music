@@ -1,3 +1,11 @@
+## NEXT — Stage416③ RTDB 공유 권한·Master 주기·Functions Callable/Worker 릴리스 안전성 검증 (2026-10-11)
+
+- **고정 기준:** preview source `36fd139a76680d32156e07ddb126e036d26de2ef`, pinned [CI 38155438436 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38155438436). 기존 후보 RTDB→Admin seal→HMAC Worker→D1 versioned atomic queue→guarded ACK 재작성 금지. **하드 OFF 유지**, 실제 앱399 source e97edb9a7... 정상 개인 하트·팔로우·Studio/Music Note 보호.
+- **Codex High 남은 단일 완성 작업:** 신규 `userSync/{uid}/exploreLikeBatch416`는 현행 Rules `$other.validate=false`로 blocked. 기존 사용자 데이터/구형 client의 `exploreLikeIntent416`와 완전 독립된 additive validation Rules를 **에뮬레이터에서** old-client parity/forged timestamp·Master period·sealed rows 위변조·UID 접근/버전 보존 확인 후 source 준비. Auth/AppCheck 검사된 Firebase UID 전용 Callable + provisioned secret→Worker 내장 `STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE` 최종 공동 릴리스 경로를 Work 독립 감사. Master 1/3/5/10/20 source을 새 사용자 창에만, page-entry read0 유지하면서 적용; 앱 pending/exact ACK/R2 개인 마음표시/PC↔mobile/50+·256+·offline·force-close 및 계정 순서증명. 우회 old TEST/PROD writer 차단·공유 데이터 하위호환 선결. RTDB 매 클릭 subtree의 다운로드/원본 Firebase bandwidth 및 10만명 총 요금이 D1 W2/click 후보보다 실제로 낮은지 물리/계산 검증; 불합격이면 STOP 및 더 단순한 비용 대안.
+- **합격 게이트:** prod-like Rules emulator+Functions + Worker signed HMAC full integration with 100k cost envelope; Work read-only FAIL/PASS; PREVIEW 실제 PC/mobile and physical metrics. 코드만 PASS인 상태로 `...ACTIVE=true` 변경·Hosting/Worker/Functions/Rules/shared D1 배포, main/TEST/PROD 승격 금지. User shared data destructive changes/Stage420 추가 남용보안 금지.
+
+---
+
 ## NEXT — Stage416③ 저비용 서버 순서 보장 통합 우선 / 2 writes-per-click 후보 OFF (2026-10-11)
 
 - **고정 baseline:** `preview` source `3df60dcc4e6d1898bbcd449716df00e616bb09b1`, [408 workflow 38152881180](https://github.com/andrawing1212/soridraw-music/actions/runs/38152881180) PASS. 실제 PREVIEW 앱399 좋아요 즉시 PC↔mobile 정상, canonical 5초 유지. `runtime/private-like-d1-writer-416.mjs` + candidate SQL의 uid+operation receipt는 SQLite 실거래 검증 통과지만 **하드 OFF/배포 금지**.

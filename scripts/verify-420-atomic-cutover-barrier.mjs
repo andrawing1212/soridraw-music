@@ -40,6 +40,11 @@ assert.match(server,/recoverExactAtomicLikeApprovalCandidate420/,
   'future ACK recovery needs the Firestore authority proof, never fresh approval');
 assert.match(server,/issueRenewedLikePermitV2420/,
   'future signed replay cannot extend the original permit lifetime');
+assert.match(client,/if \(!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\) \{[\s\S]*?settleExploreLikeIntent416\(uid, noOps\.map/,
+  'atomic cancellation must not write revoked direct416 signal');
+assert.match(client,/if \(!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\) \{[\s\S]*?settleExploreLikeIntent416\(uid, batchEntries\.map/,
+  'atomic canonical ACK must not write revoked direct416 signal');
+
 console.log('STAGE420_ATOMIC_CUTOVER_GUARD_ALL_FIVE_SURFACES_HARD_OFF=PASS');
 console.log('STAGE420_SHARED_RULES_AND_LEGACY_416_CLIENT_INTACT=PASS');
 console.log('STAGE420_ATOMIC_RECEIPT_EVENTARC_UNDEPLOYED_BY_DESIGN=PASS');

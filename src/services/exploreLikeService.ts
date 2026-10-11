@@ -1815,13 +1815,17 @@ flushPendingLikes = async (user: User): Promise<void> => {
       }
     }
     persistLikeOutbox(uid, latest);
-    // Cancelling a batch must also retire the same exact tentative operation.
-    // This is RTDB-only, asynchronous, and cannot create a D1 mutation.
-    void settleExploreLikeIntent416(uid, noOps.map((pending) => ({
-      trackId: pending.trackId,
-      operationId: pending.operationId || '',
-      status: 'rejected' as const,
-    }))).catch(() => { /* 127 accepted path remains the fallback. */ });
+    // Only the frozen app396 client owns the direct 416 tentative channel.
+    // A future approved atomic click has a Firestore receipt even if the
+    // final 30s canonical batch becomes net-zero. Never write old direct416
+    // again after shared Rules have revoked that legacy SDK permission.
+    if (!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+      void settleExploreLikeIntent416(uid, noOps.map((pending) => ({
+        trackId: pending.trackId,
+        operationId: pending.operationId || '',
+        status: 'rejected' as const,
+      }))).catch(() => { /* 127 accepted path remains the fallback. */ });
+    }
     // A net-zero local click never reached the server. Once its outbox guard
     // disappears, replay only the actually received changed-track signal.
     // The original signal was already marked seen, so this is local-only.
@@ -2013,16 +2017,18 @@ flushPendingLikes = async (user: User): Promise<void> => {
       canonicalConflictUiAfterPersist127.forEach(dispatchLikeSync);
       canonicalAcceptedUiAfterPersist127.forEach(dispatchLikeSync);
       succeeded = true;
-      // An accepted hint is NOT canonical authority; the existing 127
-      // accepted event still carries the authoritative personal membership.
-      // Failure to retire this tiny hint cannot retry or delay the D1 batch.
-      void settleExploreLikeIntent416(uid, batchEntries.map((pending) => ({
-        trackId: pending.trackId,
-        operationId: pending.operationId || '',
-        status: resultByTrack.get(pending.trackId)?.status === 'revision-conflict' ||
-          resultByTrack.get(pending.trackId)?.status === 'ineligible'
-          ? 'rejected' as const : 'accepted' as const,
-      }))).catch((error) => console.warn('[416] Tentative personal hint cleanup deferred:', error));
+      // Legacy 416 cleanup is legal only while direct416 is the current
+      // user channel. In atomic Stage420, new Firestore receipts and displayV2
+      // supersede it and old SDK writes will be denied by shared Rules.
+      if (!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+        void settleExploreLikeIntent416(uid, batchEntries.map((pending) => ({
+          trackId: pending.trackId,
+          operationId: pending.operationId || '',
+          status: resultByTrack.get(pending.trackId)?.status === 'revision-conflict' ||
+            resultByTrack.get(pending.trackId)?.status === 'ineligible'
+            ? 'rejected' as const : 'accepted' as const,
+        }))).catch((error) => console.warn('[416] Tentative personal hint cleanup deferred:', error));
+      }
       // Cross-device notification is now tied to the accepted account state.
       // Notification failure must NEVER replay a successful D1 queue intake.
       try {

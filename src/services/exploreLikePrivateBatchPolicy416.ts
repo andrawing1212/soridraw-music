@@ -37,6 +37,32 @@ export const advancePrivateBatchWindow416 = (
     deadlineAt: clickAt + minutes * 60_000,
   };
 };
+// Stage416 (OFF) remote hints may only EXTEND the pending clock. A client
+// clock is not a server authority; complete offline/cross-device coordination
+// still requires an authenticated server-side settlement gate.
+export type PrivateBatchRemoteClick416 = {
+  version: number;
+  at: number;
+  status: 'pending' | 'accepted' | 'rejected';
+};
+export const advancePrivateBatchWindowForRemoteClick416 = (
+  prior: PrivateBatchWindow416 | null,
+  remote: PrivateBatchRemoteClick416,
+  receivedAt: number,
+  configuredMinutes: PrivateBatchMinutes416 = DEFAULT_PRIVATE_BATCH_MINUTES_416,
+): PrivateBatchWindow416 | null => {
+  if (remote?.status !== 'pending' ||
+      !Number.isSafeInteger(remote.version) || remote.version <= 0 ||
+      !Number.isSafeInteger(remote.at) || remote.at <= 0 ||
+      !Number.isSafeInteger(receivedAt) || receivedAt <= 0 ||
+      !validPrivateBatchMinutes416(configuredMinutes) ||
+      Math.abs(remote.at - receivedAt) > 30_000) return null;
+  const safeAt = Math.max(receivedAt, remote.at);
+  const current = parsePrivateBatchWindow416(prior);
+  if (current && safeAt <= current.lastClickAt) return current;
+  return advancePrivateBatchWindow416(current, safeAt, configuredMinutes);
+};
+
 // Rebuild a lost local clock from the durable outbox without clearing intents.
 export const privateBatchDeadline416 = (
   prior: PrivateBatchWindow416 | null, latestOutboxClickAt: number,

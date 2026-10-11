@@ -7,7 +7,7 @@ let source = stripTypeScriptTypes(
   readFileSync('src/services/exploreLikePrivateBatchPolicy416.ts', 'utf8'),
   {mode: 'strip'},
 ).replaceAll('export const ', 'const ');
-source += '\nmodule.exports={PRIVATE_BATCH_MINUTES_416,DEFAULT_PRIVATE_BATCH_MINUTES_416,validPrivateBatchMinutes416,parsePrivateBatchWindow416,advancePrivateBatchWindow416,privateBatchDeadline416};';
+source += '\nmodule.exports={PRIVATE_BATCH_MINUTES_416,DEFAULT_PRIVATE_BATCH_MINUTES_416,validPrivateBatchMinutes416,parsePrivateBatchWindow416,advancePrivateBatchWindow416,advancePrivateBatchWindowForRemoteClick416,privateBatchDeadline416};';
 const module={exports:{}};
 vm.runInNewContext(source,{module,Number,Array,Error},{timeout:1000});
 const p=module.exports;
@@ -28,13 +28,24 @@ for(const m of [1,3,5,10,20]){
 for(const x of [0,2,6,21,'5'])assert.equal(p.validPrivateBatchMinutes416(x),false);
 assert.equal(p.parsePrivateBatchWindow416({openedAt:1_000_000,lastClickAt:1_000_000,minutes:5,deadlineAt:2}),null);
 assert.throws(()=>p.advancePrivateBatchWindow416(null,0,5));
+const r=p.advancePrivateBatchWindow416(null,1_000_000,5);
+const pending={version:7,at:1_020_000,status:'pending'};
+const extended=p.advancePrivateBatchWindowForRemoteClick416(r,pending,1_021_000,1);
+assert.equal(extended.minutes,5,'keep original duration');
+assert.equal(extended.deadlineAt,1_321_000,'use conservative receive time');
+const ahead=p.advancePrivateBatchWindowForRemoteClick416(r,{version:8,at:1_034_000,status:'pending'},1_030_000,5);
+assert.equal(ahead.lastClickAt,1_034_000,'clock skew must not allow earlier flush');
+assert.equal(p.advancePrivateBatchWindowForRemoteClick416(r,{version:9,at:1_090_000,status:'pending'},1_030_000,5),null);
+assert.equal(p.advancePrivateBatchWindowForRemoteClick416(r,{version:10,at:1_020_000,status:'rejected'},1_020_000,5),null);
+console.log('STAGE416_REMOTE_PENDING_CLOCK_AND_SETTLEMENT_GUARD=PASS');
 const service=readFileSync('src/services/exploreLikeService.ts','utf8');
 assert.match(service,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/,'released 399 must not change');
 assert.match(service,/advancePrivateBatchWindow416\(/);
+assert.match(service,/advancePrivateBatchWindowForRemoteClick416\(/);
 assert.match(service,/privateBatchDeadline416\(/);
 assert.match(service,/const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
-assert.match(service,/subscribeExploreLikeIntent416\(uid, \(trackId\) => \{[\s\S]*?if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE\)/);
-assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE\) \{[\s\S]*?schedulePendingFlush\(current416\)/,
+assert.match(service,/subscribeExploreLikeIntent416\(uid, \(trackId, _liked, observed416\) => \{[\s\S]*?if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending'\)/);
+assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending'\) \{[\s\S]*?schedulePendingFlush\(current416\)/,
   'same-account private signal extends an active user-wide pending window');
 console.log('STAGE416_FUTURE_TWO_DEVICE_WINDOW_EXTENSION_SOURCE=PASS');
 console.log('STAGE416_PRIVATE_BATCH_MASTER_OPTIONS_AND_FROZEN_WINDOW=PASS');

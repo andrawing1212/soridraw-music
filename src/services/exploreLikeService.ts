@@ -20,7 +20,8 @@ import {
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import {
-  advancePrivateBatchWindow416, parsePrivateBatchWindow416, privateBatchDeadline416,
+  advancePrivateBatchWindow416, advancePrivateBatchWindowForRemoteClick416,
+  parsePrivateBatchWindow416, privateBatchDeadline416,
   DEFAULT_PRIVATE_BATCH_MINUTES_416,
 } from './exploreLikePrivateBatchPolicy416';
 import { submitGuardedOutboxCandidate420, subscribeGuardedLikeIntent420, prepareGuardedLikeBatch420 } from './exploreLikeGuardedTransport420';
@@ -855,21 +856,24 @@ const startLikeIntent416 = (uid: string) => {
   unsubscribeLikeIntent416 = null;
   activeLikeIntentUid416 = uid;
   if (!uid) return;
-  unsubscribeLikeIntent416 = subscribeExploreLikeIntent416(uid, (trackId) => {
+  unsubscribeLikeIntent416 = subscribeExploreLikeIntent416(uid, (trackId, _liked, observed416) => {
     if (auth.currentUser?.uid !== uid || activeLikeIntentUid416 !== uid) return;
     // Future Stage416: a verified same-account private intent from another
     // online device extends the USER's pending canonical clock. It must never
     // create a public write, clear outbox, or requeue a failed mutation.
-    if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE) {
+    if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending') {
       const localPending416 = readLikeOutbox(uid);
       if (Object.values(localPending416).some((row) => (row.retryCount || 0) === 0)) {
         const key416 = scopedLikeKey127(STAGE416_PRIVATE_BATCH_WINDOW_KEY, uid);
-        const next416 = advancePrivateBatchWindow416(
-          readPrivateBatchWindow416(uid), Date.now(), DEFAULT_PRIVATE_BATCH_MINUTES_416,
+        const next416 = advancePrivateBatchWindowForRemoteClick416(
+          readPrivateBatchWindow416(uid), observed416,
+          Date.now(), DEFAULT_PRIVATE_BATCH_MINUTES_416,
         );
-        writeLikeLocal127(key416, JSON.stringify(next416));
-        const current416 = auth.currentUser;
-        if (current416?.uid === uid) schedulePendingFlush(current416);
+        if (next416) {
+          writeLikeLocal127(key416, JSON.stringify(next416));
+          const current416 = auth.currentUser;
+          if (current416?.uid === uid) schedulePendingFlush(current416);
+        }
       }
     }
     if (readLikeOutbox(uid)[trackId]) return;

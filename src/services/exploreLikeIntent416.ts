@@ -19,6 +19,7 @@ type IntentRow416 = {
   status: IntentStatus416;
 };
 type IntentEnvelope416 = { version: number; results: IntentRow416[] };
+type IntentObservation416 = Pick<IntentRow416, 'version' | 'at' | 'status'>;
 type LocalIntent416 = Pick<IntentRow416, 'liked' | 'operationId' | 'version' | 'at'> & {
   status?: 'pending' | 'accepted'; // optional for previous persisted hints
 };
@@ -124,7 +125,7 @@ export const clearExploreLikeIntent416 = (
 
 export const subscribeExploreLikeIntent416 = (
   uid: string,
-  onChanged: (trackId: string, liked: boolean) => void,
+  onChanged: (trackId: string, liked: boolean, observed: IntentObservation416) => void,
 ): Unsubscribe => {
   // A retained tentative signal is not canonical truth. Skip the initial
   // replay on cold browser start; the existing 127 accepted/R2 cache provides
@@ -143,7 +144,7 @@ export const subscribeExploreLikeIntent416 = (
         !Array.isArray(raw?.results)) return;
     const previouslySeen = seenVersion416(uid);
     const entries = { ...readLocal416(uid) };
-    const changed: Array<{ trackId: string; liked: boolean }> = [];
+    const changed: Array<{ trackId: string; liked: boolean } & IntentObservation416> = [];
     let entriesChanged = false;
     for (const row of raw.results.slice(-INTENT_MAX_416)) {
       if (!validRow416(row) || row.version <= previouslySeen || row.version > version) continue;
@@ -156,7 +157,7 @@ export const subscribeExploreLikeIntent416 = (
           if (row.status === 'rejected') {
             delete entries[row.trackId];
             entriesChanged = true;
-            changed.push({ trackId: row.trackId, liked: row.liked });
+            changed.push({ trackId: row.trackId, liked: row.liked, version: row.version, at: row.at, status: row.status });
           } else if (existing && existing.status !== 'accepted') {
             entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
             entriesChanged = true;
@@ -178,12 +179,13 @@ export const subscribeExploreLikeIntent416 = (
         status: 'pending',
       };
       entriesChanged = true;
-      changed.push({ trackId: row.trackId, liked: row.liked });
+      changed.push({ trackId: row.trackId, liked: row.liked, version: row.version, at: row.at, status: row.status });
     }
     if (entriesChanged) saveLocal416(uid, entries);
     // Durable overlay FIRST, watermark SECOND, UI notification LAST.
     setSeenVersion416(uid, version);
-    changed.forEach(({ trackId, liked }) => onChanged(trackId, liked));
+    changed.forEach(({ trackId, liked, version, at, status }) =>
+      onChanged(trackId, liked, { version, at, status }));
   },
   (error) => console.warn('[416] Private intent signal unavailable; accepted like path retained:', error),
   );

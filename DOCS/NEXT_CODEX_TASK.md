@@ -1,3 +1,12 @@
+## CURRENT NEXT — Stage420 mock 반복 중단: 실제 수신·Master·구형 호환 독립 감사 게이트 (2026-10-11)
+
+- **최종 QA 기준:** `preview` code `9efc4d0a98154866aae0b9ca6d1bf23a55e8bfc8`, [408 Run 38116576707](https://github.com/andrawing1212/soridraw-music/actions/runs/38116576707) SUCCESS. source-only Firestore 원자 rate+receipt/UUID v4 안전 미입증 차단, Eventarc retry factory, RTDB strict version delivery, 23h terminal HOLD, Master 인증 **후** exact held receipt 재전송(승인 다시 쓰기 0), 최초 24h HMAC v2, 관련 TS/Build/like/follow 자동검사 PASS. 구형 앱·실서버 연결은 OFF.
+- **다음에는 작은 후보를 하나씩 더 붙이지 말고 Work를 별도 read-only 감사자로 활용:** 운영 API 우회/direct416 보안과 구버전 outbox 유지, Master role guard 및 현재 RTDB 잠금과 신규 Firestore 잠금의 전환, shared `database.rules.json`/클라이언트 `display` 대 신규 `displayV2`의 PC/모바일 호환, Eventarc onCreate/Cloud Monitoring/long offline 복구, Worker171 W0/expiry, 승인당 Firestore 2R2W/RTDB last50 egress/fanout/Functions 비용의 **10만 DAU ×5/20회** 시나리오, 캐시 업데이트 Read0, emulator+실기기 p95, rollback/TEST→PROD 구버전 PWA upgrade를 하나의 게이트로 판단. source-only memory PASS를 실제 데이터·물리요금 PASS로 혼동 금지.
+- **승인 경계:** 사용자 명시 승인 없이 shared RTDB Rules 폐쇄·Firestore 데이터 이관·실제 Firebase Functions/Worker/Hosting 배포·Stage420/426 ON·main/PRODUCTION 변경 금지. 구형 열린 탭과 악성 동일 인증 SDK를 현재 Rules만으로 신뢰성 있게 구별할 수 없으므로 완전한 구형 무중단과 즉시 120분 보안강제는 양립 불가할 수 있음. 이 경우 임의 승격 대신 그 영향과 안전한 강제 업데이트/유예기간을 결정해야 함.
+- **보고 관례:** 전체 Stage416 28% (현재 대단계 4/10 게이트); 앱396 속도5/5 100%; source-only HOLD 복구 세부 3/3 100%. 실제 2단계가 10/10 통과하기 전까지 40%라 하지 않음. 사용자는 중간 작업 보고로 대화를 계속 이어야 하는 방식을 원하지 않으므로 **완성/명확한 안전 차단 시에만 묶어 보고**.
+
+---
+
 ## CURRENT NEXT — Stage420 Eventarc source-only retry PASS, 실제 동기화·Master·비용 게이트 HOLD (2026-10-11)
 
 - **완료한 것 반복 금지:** source-only `preview` candidate `8bba31cc3b9661bfe5254d9e179929513f63230c`, [408 Run 38115862721](https://github.com/andrawing1212/soridraw-music/actions/runs/38115862721) PASS. onCreate `retry:true` factory, `retry-required` 예외 전파, 오류 시 23h 범위 재시도·그 후 operationId별 Firestore HOLD 1회/재반복 W0 memory QA, 정상 이벤트 추가 Firestore R0. **실 Functions onCreate export/Cloud Monitoring/실 Firebase/RTDB 미배포·미연결**, 진척 전체 28%(4/10) 유지.

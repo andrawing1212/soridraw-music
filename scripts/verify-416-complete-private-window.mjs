@@ -48,7 +48,7 @@ const http=async(_url,init)=>{
 };
 await assert.rejects(complete(database,'uid',worker,secret,now,http),/NOT_CONFIRMED/);
 assert(state.sealed,'ambiguous Worker rejection must retain frozen RTDB payload');
-assert.equal(state.pending && Object.keys(state.pending).length,0);
+assert.equal(state.pending ? Object.keys(state.pending).length : 0,0);
 const originalId=state.sealed.id;
 await click(3,'song-a',false,now+1);
 assert.equal(state.sealed.id,originalId);

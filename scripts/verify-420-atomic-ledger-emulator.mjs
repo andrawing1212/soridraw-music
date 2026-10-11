@@ -21,6 +21,7 @@ const {
   handleApprovedLikeReceiptWakeupCandidate420: deliver,
   recoverHeldLikeDeliveryAfterMasterAuthCandidate420: recoverHeld,
   masterUnlockAtomicLikeAfterAuthCandidate420: unlock,
+  createLikeReceiptDeliveryTriggerCandidate420: makeOnCreate,
 } = requireFunctions('./lib/exploreLikeAtomicLedgerCandidate420.js');
 admin.initializeApp({
   projectId,
@@ -263,6 +264,72 @@ try {
   assert.equal((await account.get()).data().version,7,
     'tampered server proof must not increase account quota/version');
   console.log('STAGE420_REAL_EMULATOR_CORRUPT_RECEIPT_DUPLICATE_DENIED=PASS');
+
+  // Use the ACTUAL Firebase onDocumentCreated v2 handler factory against
+  // the real local Firestore/RTDB emulator. This does not register/deploy an
+  // Eventarc trigger: the CloudFunction.run test surface executes locally.
+  const eventFor=(accountId,op,data)=>({
+    params:{uid:accountId,operationId:op.operationId},
+    data:{data:()=>data},
+  });
+  const realOnCreate=makeOnCreate(firestore,realtime);
+  assert.equal(typeof realOnCreate.run,'function',
+    '2nd gen Firestore onCreate must expose an executable handler');
+  const handlerUid='uid-eventarc-sim';
+  const handlerOp=make(81,now+150);
+  assert.equal((await approve(firestore,handlerUid,handlerOp,now+150)).allowed,true);
+  const handlerProof=(await firestore.collection('privateLikeGuardV2_420').doc(handlerUid)
+    .collection('approvals').doc(handlerOp.operationId).get()).data();
+  await realOnCreate.run(eventFor(handlerUid,handlerOp,handlerProof));
+  const handlerDisplay=realtime.ref('privateLikeSync420/'+handlerUid+'/displayV2');
+  assert.equal((await handlerDisplay.get()).val().version,1);
+  await realOnCreate.run(eventFor(handlerUid,handlerOp,handlerProof));
+  assert.equal((await handlerDisplay.get()).val().version,1,
+    'duplicate Firestore event must not deliver a second RTDB change');
+  console.log('STAGE420_REAL_EMULATOR_ONCREATE_HANDLER_DUPLICATE_DELIVERY_W0=PASS');
+
+  const outageRealtime={
+    ref:()=>{throw new Error('SIMULATED_RTDB_OUTAGE');},
+  };
+  const failOnCreate=makeOnCreate(firestore,outageRealtime);
+  const retryUid='uid-eventarc-retry-sim';
+  const retryOp=make(82,now+151);
+  assert.equal((await approve(firestore,retryUid,retryOp,now+151)).allowed,true);
+  const retryAccount=firestore.collection('privateLikeGuardV2_420').doc(retryUid);
+  const retryProof=(await retryAccount.collection('approvals')
+    .doc(retryOp.operationId).get()).data();
+  await assert.rejects(failOnCreate.run(eventFor(retryUid,retryOp,retryProof)),
+    /SIMULATED_RTDB_OUTAGE/,'fresh event MUST throw to request Eventarc retry');
+  assert.equal((await retryAccount.collection('deliveryFailures')
+    .doc(retryOp.operationId).get()).exists,false,
+    'temporary outage cannot be silently acknowledged as terminal HOLD');
+  await realOnCreate.run(eventFor(retryUid,retryOp,retryProof));
+  assert.equal((await realtime.ref('privateLikeSync420/'+retryUid+'/displayV2')
+    .get()).val().version,1);
+  console.log('STAGE420_REAL_EMULATOR_EVENTARC_TEMP_FAILURE_RETHROW_THEN_RECOVER=PASS');
+
+  // Once event age passes the bounded retry horizon, preserve ONE exact HOLD
+  // in real Firestore for an authorized Master to repair later. This log alone
+  // is not a deployed Cloud Monitoring alert; monitoring remains a HOLD gate.
+  const oldAt=now-24*60*60_000;
+  const holdUid='uid-eventarc-terminal-sim';
+  const holdOp=make(83,oldAt);
+  assert.equal((await approve(firestore,holdUid,holdOp,oldAt)).allowed,true);
+  const holdAccount=firestore.collection('privateLikeGuardV2_420').doc(holdUid);
+  const holdProof=(await holdAccount.collection('approvals')
+    .doc(holdOp.operationId).get()).data();
+  const terminalHold=holdAccount.collection('deliveryFailures').doc(holdOp.operationId);
+  await failOnCreate.run(eventFor(holdUid,holdOp,holdProof));
+  assert.equal((await terminalHold.get()).data().state,'needs-manual-reconciliation');
+  await failOnCreate.run(eventFor(holdUid,holdOp,holdProof));
+  assert.equal((await terminalHold.get()).data().state,'needs-manual-reconciliation');
+  const repaired=await recoverHeld(firestore,realtime,'master-sandbox',holdUid,
+    holdOp.operationId,'review after outage',now+500);
+  assert.equal(repaired.recovered,true);
+  assert.equal((await terminalHold.get()).data().state,'recovered');
+  assert.equal((await realtime.ref('privateLikeSync420/'+holdUid+'/displayV2')
+    .get()).val().version,1);
+  console.log('STAGE420_REAL_EMULATOR_TERMINAL_HOLD_THEN_MASTER_EXACT_RECOVERY=PASS');
 
   console.log('STAGE420_EMULATOR_REAL_DB_OPERATIONS_NOT_LIVE_BILLING=PASS');
 } finally {

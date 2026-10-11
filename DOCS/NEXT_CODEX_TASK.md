@@ -1,3 +1,18 @@
+## CURRENT NEXT — Stage416 28% / Stage420 3종 실제 연결 차단 해소 (2026-10-11)
+
+**감사 기준:** source code `2e4346239e5d857cec6b86651901505466322270`, 408 quality [38114014953](https://github.com/andrawing1212/soridraw-music/actions/runs/38114014953) PASS. 후속 GitHub 정적 소스 감사 결과 **실서비스 cutover FAIL/HOLD**, 앱396 보호. 현재 전체 진척 공식 계산 `1개 대단계 완료(20%) + 두 번째 대단계 10개 게이트 중 source QA 4개(8%) = 28%`. 다음 각 게이트가 PASS될 때마다 정확히 **2%p**씩만 증가시킬 것(모형 PASS/운영 PASS 구별).
+
+**Codex High 다음 한 작업 — 3종 차단 우선 해결.** 다른 좋아요/UI 성능 수정과 병행하지 말고 다음 순서로 단일 최소 후보 설계→구현→QA→commit. 아무리 안전해도 **Functions/Worker/Hosting/Rules/shared DB 실제 배포 금지**(사용자·상태문서의 Stage420 전환 HOLD 유지).
+
+1. **무기한 서명증표 갱신 체인 차단:** `functions/src/exploreLikePermitRenew420.ts`의 `nowMs - claims.iat <= 24h` 검사는 직전 갱신만 검증하며 `issueLikePermit420(...nowMs)`가 최초 approval timestamp를 잃어버림. HMAC v1/old pending과 Worker426 승인시그니처를 깨지 않는 방법으로 **최초 승인에 바인딩된 절대 replay/renewal 한계**를 증명. 최소 31일 동안 매23시간 연속 갱신→구 증표 171 canonical 재전송·TTL 삭제 후 재승인 없음/서명위조 거절을 테스트. 구버전 미확정 proof는 승인으로 승격하지 말 것.
+2. **서버 자동 재전달 / 재시도 만료:** `handleApprovedLikeReceiptWakeupCandidate420`은 `retry-required` 반환만으로 Eventarc 재실행이 되지 않음. 실연동에 적합한 `onDocumentCreated` v2 trigger `retry:true` 예외 전파, 24h retry 만료, 영구 missing-proof, out-of-order, user가 앱을 닫았을 때에도 유실되지 않는 bounded 재조정·실패 알림/운영 복구 경로를 명시하고 source-only/Emulator 테스트. **성공 응답으로 실패 이벤트를 ACK하면 자동 재시도 PASS 금지**. 잦은 per-user polling/UID 전체 scan/거대 queue 금지. 트리거가 필요 없다면 비용·안전 증거와 더 단순한 경로를 제시.
+3. **실사용 수신/관리자 연결·구형 호환:** 현재 `src/services/exploreLikeGuardedTransport420.ts`는 `.../display` 수신, 신규 출력은 `displayV2`. 저장소 `database.rules.json`에 privateLikeSync420이 아직 없고 Candidate Rules Builder는 배포되지 않음. Master 현재 onCall은 RTDB rate만 잠금 해제, 새 후보는 Firestore. `requireMasterCaller`/감사·PC↔모바일 listener/RTDB 데이터 권한과 기존 UUID v4 outbox/Worker171/무서명 구형 탭을 모두 포함해 무손실 승격 계획 검증. shared Rules 폐쇄/실운영 불가피한 재인증·업그레이드 구간은 사용자 승인/고지 전 적용 불가.
+4. **한 번에 비용·완료 판정:** 10만 DAU 하루5/20회×30일(1,500만/6,000만 승인가정)의 Firestore 2R/2W+TTL/Functions event/RTDB 50-item bytes fanout/Worker171·D1·DO·R2·retry + 한국 모바일 p95 한 묶음으로 판단. 이전 '$37.5/month'는 미국 Firestore doc operation 일부만이며 전체비용으로 표시 금지. 256+ replay W0, 동시탭/기기, 앱 업데이트 후 캐시, 120m Master lock/unlock, 페이지 재진입 D1/Firestore read0, rollback, production-origin old cache를 문서/테스트에서 검증.
+
+**완료 조건:** exact branch/commit·변경 파일·TS/Build/기존 like/follow 회귀/새 보안 경계 테스트 PASS, 10만 사용 비용(실측 vs 가정 분리), shared user data 0변경, 앱396 실기기 미변경, Stage420+426 OFF. Codex 뒤 별도 Work read-only 독립 감사. 세 가지 근본 문제 중 하나가 해결 불가능하면 무작정 source-only helper를 더 쌓지 말고 FAIL/HOLD 근거와 더 작은 대안 하나를 보고. 앱 성능 5/5 100%, 원래 stage1 캐시 read 예외는 최종 비용 감사까지 사용자 지시대로 보류.
+
+---
+
 ## CURRENT NEXT — Stage420 운영 전환 적합성 Work 독립 감사 / 자동 wakeup + 비용·구형 호환 HOLD (2026-10-11)
 
 - **고정 소스:** `preview` `2e4346239e5d857cec6b86651901505466322270` 및 [408 Run 38114014953](https://github.com/andrawing1212/soridraw-music/actions/runs/38114014953) SUCCESS. `functions/src/exploreLikeAtomicLedgerCandidate420.ts`에 신규 source-only `handleApprovedLikeReceiptWakeupCandidate420` 및 `masterUnlockAtomicLikeAfterAuthCandidate420` 추가. 기존 verifier만 확장. Functions/app TS·Build·like/follow·260/1,001회 W0·Master audit W0·mock RTDB 장애 복구 PASS. **코드 후보를 실제 사용자 앱 연결 완료/서비스 자동 복구 완료로 오인 금지.**

@@ -96,7 +96,7 @@ export async function commitPrivateWindow416(db, uid, serverNowMs) {
   const statements = [];
   const batchIds = [];
   for (let i = 0; i < chunks.length; i += 1) {
-    const batchAt = baseAt + i;
+    const batchAt = baseAt; // Distinct hashed IDs; no future-dated chunk is stranded.
     const digest = await id416(uid, snapshot.window_id, snapshot.version, i, chunks[i]);
     const batchId = 'l069_' + String(batchAt).padStart(13, '0') + '_' + digest;
     batchIds.push(batchId);

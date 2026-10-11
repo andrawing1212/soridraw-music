@@ -1,3 +1,13 @@
+## CURRENT NEXT — Stage420 자동 복구 트리거 / Master 단일 잠금 / 건당 비용 최종 통합 (2026-10-11)
+
+- **완료된 증거는 재수행/재작성 금지:** `preview` candidate `3708b7d1481a50ce3c4bc90ec0ea3e72f1eb1f88`, [408 Run 38113517437](https://github.com/andrawing1212/soridraw-music/actions/runs/38113517437) PASS. 한 UID의 빠진 승인 버전만 Firestore indexed `where(version == next).limit(1)` 조회해 RTDB displayV2를 순서대로 복구; 3번 record 미존재시 stop, 증거 복구 이후 260번까지 순서대로, exact retry W0. 서버/실데이터/PROD 변경은 없음.
+- **Codex High 실제 다음 한 과제:** **승인 Firestore transaction 커밋 직후 Functions crash와 RTDB 장애가 발생해도 서버가 스스로 delivery 작업을 재실행**하도록 onCreate durable wakeup(또는 비용·운영성이 더 나은 기존 인프라) + bounded retry/실패 격리/알림 연결 설계·실행형 격리 검증. 최초 앱 좋아요/해제 즉시 표시를 늦추거나 네트워크 분리 시 새 승인 재전송하지 말 것. 영구 cursor gap을 방치하는 순서만 있는 mock은 불합격. **정상 성공 경로마다 Firestore 추가 indexed read+RTDB root 약8KB 쓰기가 생기는 구조의 10만 DAU 전체 월비용을 먼저 비교하고, trigger의 안전한 서버-owned 증거를 이용해 중복 읽기 감소 가능성 검증**. UID/곡 전체 스캔·page entry/idle polling·거대 queue/migration 금지.
+- **동일 게이트에서 Master 잠금 일치:** 기존 `masterUnlockExploreLike420`은 RTDB rate를 변경하지만 새 후보의 canonical lock은 Firestore rate이므로 동일 source authority와 거래 감사가 필요. 원본 RTDB old client 차단/Worker 서명 전환은 shared Rules/PROD 호환과 명시 승인 전 실시 금지. Firestore receipt TTL 삭제 후 구형 UUID v4 신규 승인 재생은 금지; 실제 구형 outbox 승인 증거 없으면 사용자 재확인 대안 제시.
+- **합격/중단:** Eventarc/Functions 실제 재시도와 부분실패·동시성·Master 조기해제·클라이언트 즉시 하트·171 receipt·구형 앱 호환, 10만DAU 기준 모든 Firebase/Cloudflare read/write/transaction/egress/TTL/CPU 비용, 한국 모바일 왕복 p95를 독립 검증. 어느 하나 미증명이면 **HOLD**; 모형 PASS ≠ 운영 PASS. 검증 전 Stage420/426 활성화, Functions/Worker/Hosting/Rules 배포, shared 데이터 변환/삭제, main/TEST/PROD 승격 금지. 기존 PREVIEW 앱396 기능과 속도 5/5·100% 보호.
+- **3중 보고:** Stage416 원래5단계 **1/5·20%**, 앱396 속도 **5/5·100%**, 이번 indexed 누락알림 복구 후보 **3/3·100%**(격리 QA 한정). 다음 세부 작업은 자동 서버 wakeup·Master 통합·10만DAU 비용으로 새로 시작하며 실서비스 적용률 0.
+
+---
+
 ## CURRENT NEXT — Stage420 마지막 안전 게이트: durable 전송 복구 + Master 잠금 일치 + 10만 DAU 전체 비용 (2026-10-11)
 
 **기준:** `preview` candidate code `6a915700483ca907a61f5db56e67f5a868f228f6`; [408 Run 38113008823](https://github.com/andrawing1212/soridraw-music/actions/runs/38113008823) PASS. 기존 비활성 `approveLikeWithAtomicLedgerCandidate420`의 Firestore 원자 승인·개별 영수증, `planAtomicLikeDisplayDeliveryCandidate420`의 **순서 있는 RTDB 50건 알림**은 source-only mock 통과. **이후 같은 모형의 작은 검사 추가 반복 금지.**

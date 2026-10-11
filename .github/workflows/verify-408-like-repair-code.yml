@@ -20,6 +20,8 @@ on:
       - 'scripts/verify-416-private-rtdb-batch.mjs'
       - 'functions/src/exploreLikePrivateSeal416.ts'
       - 'functions/src/exploreLikePrivateServerClick416.ts'
+      - 'functions/src/exploreLikePrivateCallable416.ts'
+      - 'scripts/verify-416-private-callable-master.mjs'
       - 'scripts/verify-416-server-only-click.mjs'
       - 'functions/src/exploreLikePrivateHandoff416.ts'
       - 'functions/src/exploreLikePrivateCommit416.ts'
@@ -167,6 +169,7 @@ jobs:
           node scripts/verify-416-canonical-no-early-flush.mjs
           node scripts/verify-416-server-rtdb-seal.mjs
           node scripts/verify-416-server-only-click.mjs
+          node scripts/verify-416-private-callable-master.mjs
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-signed-worker-issuer.mjs
           node scripts/verify-416-complete-private-window.mjs

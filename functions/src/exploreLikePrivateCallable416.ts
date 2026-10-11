@@ -1,0 +1,35 @@
+import type {Database} from 'firebase-admin/database';
+import {HttpsError} from 'firebase-functions/v2/https';
+import {readLikeBatchTiming416} from './exploreLikeBatchSettings416';
+import {recordUserPrivateClick416,type ServerPrivateLikeClick416}
+ from './exploreLikePrivateServerClick416';
+
+// SOURCE ONLY. This handler is NOT exported by index.ts and no callable
+// exists until the 3-environment joint-release / App Check audit. A future
+// callable export MUST set { enforceAppCheck:true } and preserve these checks.
+type Request416={auth?:{uid?:string}|null;app?:unknown;data?:unknown};
+export async function handleAuthenticatedPrivateClick416(
+ database:Database,request:Request416,
+):Promise<{ok:true;accepted:boolean;reason:string;version?:number;
+ count?:number;deadlineAtMs?:number}>{
+ const uid=request?.auth?.uid;
+ if(!uid||typeof uid!=='string'||uid.length>128)
+  throw new HttpsError('unauthenticated','416_LOGIN_REQUIRED');
+ if(!request.app)
+  throw new HttpsError('failed-precondition','416_APPCHECK_REQUIRED');
+ const data=request.data;
+ if(!data||typeof data!=='object'||Array.isArray(data))
+  throw new HttpsError('invalid-argument','416_INVALID_MUTATION');
+ const fields=Object.keys(data);
+ const allowed=['trackId','liked','operationId','deviceId','deviceSequence'];
+ if(fields.length!==allowed.length||fields.some(field=>!allowed.includes(field)))
+  throw new HttpsError('invalid-argument','416_MUTATION_FIELDS_ONLY');
+ // A browser-supplied UID, timestamp, deadline, device key hash or Master
+ // minutes is never accepted. Only the signed-in UID and Admin RTDB policy.
+ const click=data as ServerPrivateLikeClick416;
+ const policy=await readLikeBatchTiming416(database);
+ const result=await recordUserPrivateClick416(
+   database,uid,click,policy.privateMinutes,
+ );
+ return {ok:true,...result};
+}

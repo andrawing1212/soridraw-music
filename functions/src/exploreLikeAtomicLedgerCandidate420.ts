@@ -80,6 +80,85 @@ const denied = (rate: RateState, limit: number): AtomicLikeDecision420 => ({
   version: rate.version,
 });
 
+// Candidate-only delivery projection, NOT attached to RTDB or any Callable.
+// Firestore is the approval authority; the RTDB display is only a bounded
+// ordered signal. A missing predecessor MUST NOT be silently skipped.
+// A server-owned RTDB transaction must run this planner inside its callback.
+// The future integration needs durable retries for missing predecessors and
+// separate Master unlock parity; this pure planner alone is not a cutover.
+export type AtomicLikeDisplayEvent420 = AtomicLikeCommand420 & {
+  version: number;
+  at: number;
+  status: 'pending';
+};
+export type AtomicLikeDisplayState420 = {
+  version: number;
+  results: AtomicLikeDisplayEvent420[];
+};
+export type AtomicLikeDisplayOutcome420 =
+  | { status: 'emit'; next: AtomicLikeDisplayState420 }
+  | { status: 'already-delivered' | 'waiting-prior' | 'invalid'; next?: never };
+
+export const planAtomicLikeDisplayDeliveryCandidate420 = (
+  uid: string,
+  op: AtomicLikeCommand420,
+  rawApproval: unknown,
+  rawDisplay: unknown,
+  nowMs = Date.now(),
+): AtomicLikeDisplayOutcome420 => {
+  if (!validAccount(uid) || !op || typeof op.trackId !== 'string' ||
+      !op.trackId || op.trackId.length > 512 ||
+      typeof op.ownerUid !== 'string' || op.ownerUid.length > 128 ||
+      typeof op.liked !== 'boolean' || typeof op.operationId !== 'string' ||
+      !Number.isSafeInteger(nowMs) || nowMs <= 0) return { status: 'invalid' };
+  const proof = rawApproval && typeof rawApproval === 'object' &&
+    !Array.isArray(rawApproval)
+    ? rawApproval as Record<string, unknown> : {};
+  const receiptVersion = proof.version;
+  const approvedAtMs = proof.approvedAtMs;
+  // The caller must obtain proof directly from the authenticated UID's
+  // Firestore receipt document, never from an untrusted client payload.
+  if (proof.status !== 'approved' || proof.digest !== fingerprint(uid, op) ||
+      !Number.isSafeInteger(receiptVersion) || Number(receiptVersion) < 1 ||
+      !Number.isSafeInteger(approvedAtMs) || Number(approvedAtMs) <= 0 ||
+      Number(approvedAtMs) > nowMs + CLOCK_SKEW_MS ||
+      nowMs - Number(approvedAtMs) >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS) {
+    return { status: 'invalid' };
+  }
+  // This state must live at a NEW displayV2 subtree. It MUST start at 0
+  // before the first Firestore receipt version=1; don't reuse legacy display.
+  const existing = rawDisplay === null || rawDisplay === undefined
+    ? { version: 0, results: [] as AtomicLikeDisplayEvent420[] }
+    : rawDisplay && typeof rawDisplay === 'object' && !Array.isArray(rawDisplay)
+      ? rawDisplay as Partial<AtomicLikeDisplayState420>
+      : null;
+  if (!existing || !Number.isSafeInteger(existing.version) ||
+      Number(existing.version) < 0 || !Array.isArray(existing.results) ||
+      existing.results.length > 50) return { status: 'invalid' };
+  const previousVersion = Number(existing.version);
+  if (Number(receiptVersion) <= previousVersion) {
+    // Correct ONLY if all previous versions were applied sequentially under
+    // this RTDB transaction. No manual seed, jump, or foreign writers allowed.
+    return { status: 'already-delivered' };
+  }
+  if (Number(receiptVersion) !== previousVersion + 1) {
+    // Different tracks can be in-flight concurrently. Skipping a version
+    // could lose a valid earlier track's like signal forever.
+    return { status: 'waiting-prior' };
+  }
+  const prior = existing.results as AtomicLikeDisplayEvent420[];
+  return {
+    status: 'emit',
+    next: {
+      version: Number(receiptVersion),
+      results: [...prior.slice(-49), {
+        ...op, version: Number(receiptVersion),
+        at: Number(approvedAtMs), status: 'pending',
+      }],
+    },
+  };
+};
+
 // Firestore guarantees atomic create(receipt)+update(rate) in one transaction.
 // NO RTDB tree read/rewrite; bounded 1 exact receipt + 1 small rate document.
 // A permanent/old v4 op is never silently granted after receipt TTL deletion.

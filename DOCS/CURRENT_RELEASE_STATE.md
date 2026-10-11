@@ -1,3 +1,14 @@
+## CURRENT — Stage420 최단 경로 재검토 / 실제 Cloudflare 3환경·D1 감사 (2026-10-11)
+
+- preview 기준 SOURCE: 008c2db15b3cc9710c4e6b3bfe73e02b64d4a8da. [408 전체 TS/Build/like/follow Run 38125272745](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272745) SUCCESS; [426 Worker bundle dry-run 38125272759](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272759) SUCCESS.
+- [425 LIVE Cloudflare read-only Run 38125099710](https://github.com/andrawing1212/soridraw-music/actions/runs/38125099710): 감사 SUCCESS, 실제 CUTOVER=HOLD. PREVIEW/TEST/PRODUCTION deployed Worker 내용에서 새 420 signed/171/174 게이트 마커 모두 미검출; 버전 IDs 각각 03af0cc6-1336-4ed2-98ff-4983e1b21a44 / bc01f091-b9e6-43b7-ac82-73385ea24e52 / 4d82f107-ae7e-4985-b955-8c889807c888. Shared D1에서 explore_like_cutover_control_174 및 explore_like_writer_phase_419 테이블 MISSING, 171 파생 2테이블 PRESENT but EMPTY, 035/066/069/075 queue 전부 EMPTY, likes 사용자 선행 index PRESENT. Shared D1 SELECT read-only만 실행, writes 0.
+- 비용·안전 정책(2026-10-09 정상 기능 보호, W3+ 무조건 금지 아님)에 따라 D1-only 426 전체 대체는 보류하고, 기존 건강한 baseWorker·069/075 canonical 흐름·R2 결과를 유지한 채 Firebase UID 확인+50개 전체 HMAC 검사만 기존 Worker intake 앞에 두는 STAGE420_SIGNED_LEGACY_INTAKE_OPEN=false 대안을 source-only 구현. 174/419 새 공유 D1 테이블 불필요; 426과 동시 ON 시 fail-closed. 실Worker 인증 조회·한국 p95·월간 비용은 미검증이므로 RELEASE/HOLD 그대로.
+- 구형 416 RTDB 직접 정리 호출 2곳은 Stage420 ON에서만 생략하도록 수정: old app396 OFF 경로 100% 유지, 향후 Rules 금지 시 permission-denied 반복 전송 예방. 408·426 번들 검사 PASS.
+- PROD/TEST/MAIN 비변경, 공유 RTDB/Firestore/D1/R2 user data/Cloudflare/Firebase Functions/Hosting/Rules/Workers 실변경·배포 0. 기존 PREVIEW app396 유지. Work 독립 감사·PC/mobile 실기기·100k DAU 총비용·Cloud Monitoring 실통지 미검증.
+- **진척도:** Stage416 28%, app396 속도 5/5·100%(기존 QA), Stage420 운영 gate 4/10·40%. 소스 버그 수정/운영 대안만으로 운영 합격선을 올리지 않음.
+- **다음 핵심:** Work 독립 read-only 검증으로 기존 Writer+HMAC vs 426 전환의 우회·구형 PWA·100k 비용·pc/mobile 손실·롤백을 비교. 416 direct-write 폐쇄/3환경 signed enforcement는 구형 앱 거부 위험 때문에 디렉터의 refresh/유예 정책 승인 전 금지.
+
+---
 ## CURRENT — Stage420 Master 단건 복구·Cloud Monitoring 경보 준비, 전체 CI/실 DB Emulator PASS (2026-10-11)
 
 - **기준:** `preview` **e8d45d70503408490891a3a0ea565ae1e65d45de** (부모 기준 c478e8d8a949c357086e6c22c968d3cc28882261). 이번 작업은 제품의 정상 좋아요·팔로우·Studio 하트 수정 0, **비활성 Master 관리 UI 1개 + Stage420 서버 후보 logger 1개 + 운영 manifest/runbook+집중 QA**. [GitHub 408 Run 38123272267](https://github.com/andrawing1212/soridraw-music/actions/runs/38123272267) **SUCCESS**: Functions TS, 앱 TS, Build, Master UI/서버 role 검사, 기존 Like/Follow 회귀, 숨김 Master 게이트·경보 manifest 로컬 검사. [GitHub Stage420 Emulator Run 38123272177](https://github.com/andrawing1212/soridraw-music/actions/runs/38123272177) **SUCCESS**: Firestore/RTDB Rules, 순서 역전·동시 승인·본인 receipt 위조차단, 실제 onCreate handler/HOLD/Master 복구; 로그 SDK 변경 회귀 PASS. 이번 GitHub 자동검사는 **Work 별도 독립 감사가 아님**.

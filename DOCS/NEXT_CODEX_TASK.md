@@ -1,3 +1,11 @@
+## NEXT — Stage420 빠른 합격 경로의 독립 보안·비용 감사 (2026-10-11)
+
+- 고정 source 008c2db15b3cc9710c4e6b3bfe73e02b64d4a8da; 408 Run 38125272745 SUCCESS, Worker dry-run 38125272759 SUCCESS, LIVE 425 read-only 38125099710 SUCCESS=감사 실행 완료 / RELEASE HOLD. D1 174·419 schema MISSING; 171 파생 공백, 기존 queue empty.
+- 반복 미세수정 대신 ① Work 독립 read-only 감사: 기존 정상 069/075 Worker 앞 signed HMAC guard(기본 OFF) vs D1-only 426(기본 OFF), 인증 중복 조회와 10만 DAU 전체 비용, RTDB 폐쇄와 열려 있는 app396·TEST·PROD 탭, old UUIDv4 pending, PC/mobile p95, Cloud Monitoring/백업. ② 이 비교 결과로 구형 PWA 자동 reload / 유예 중 하나를 디렉터에게 명확히 승인받기. ③ 승인된 Rules+Functions+Worker 3환경+client 단일 릴리스, 라이브 기능/캐시 parity 검증.
+- 배포 전: Stage420/426/alternative signed Worker 전부 OFF, 공유 사용자 데이터 변경 0. D1 schema 추가·data backfill/삭제, Firebase Rules·Cloudflare Worker·Functions/Hosting 배포는 명시 승인이 없으면 금지. TEST/PRODUCTION/MAIN 승격 금지.
+- 3중 진행률 Stage416 28%, app396 속도 100%, Stage420 운영 4/10·40%. 실제 운영/Work 독립 QA 전에는 상승 금지.
+
+---
 ## NEXT (2026-10-11) — MASTER/Cloud Logging 코드 준비 완료, 운영 활성화·독립 감사 보류
 
 - **고정 코드:** `preview` **e8d45d70503408490891a3a0ea565ae1e65d45de**. [408 Run 38123272267](https://github.com/andrawing1212/soridraw-music/actions/runs/38123272267) **PASS**, [Firebase Emulator Run 38123272177](https://github.com/andrawing1212/soridraw-music/actions/runs/38123272177) **PASS**. 기존 버튼/UI/like/follow, 새 receipt 서명 origin/ACK 복구, 120분 잠금/단건 HOLD의 자동·서버 검사 포함. `ExploreLikeAbuseMasterPanel420` Firestore Authority/해제 요청ID/실패알림 단건복구는 숨김+하드 OFF. `prepare-420-held-alert-policy.mjs`는 실제 알림정책 **로컬 JSON 출력**만 하며 운영 구독 채널 미설정. 같은 후보 코드에 micro mock 추가 반복 금지.

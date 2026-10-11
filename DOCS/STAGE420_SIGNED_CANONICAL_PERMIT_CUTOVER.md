@@ -1,3 +1,10 @@
+## 2026-10-11 감사로 확인된 D1-only 426 차단과 기존 Writer 유지 대안
+
+[LIVE Cloudflare read-only 425 Run 38125099710](https://github.com/andrawing1212/soridraw-music/actions/runs/38125099710): 공유 D1에 174/419 필수 전환 테이블이 없고 171 파생 테이블은 비어 있다. 따라서 전체 426/D1-only writer를 현재 그대로 ON할 수 없다. Queue 035/066/069/075는 감사 시점 EMPTY.
+2026-10-09 기능 보호·W3+ 허용 최신 결정에 따라 불필요한 공유 D1 migration을 피할 수 있는 STAGE420_SIGNED_LEGACY_INTAKE_OPEN=false 후보를 추가: 인증 Firebase UID와 서버 HMAC v1/v2를 기존 건강한 Worker batch intake 이전에 검증하고, 원래 baseWorker/069/075·DO·R2·receipt를 보존한다. STAGE426_COMPILED_OPEN=false는 별도로 유지; 실수로 양쪽 ON이면 503으로 중단. [408 Run 38125272745](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272745) 및 [Worker dry-run 38125272759](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272759) PASS, **운영 배포/한국 p95/전체 비용/Work 감사는 미완료**.
+가장 큰 기술적·정책적 문제는 shared userSync/$uid/exploreLikeIntent416 쓰기와 기존 무서명 canonical 요청이다. 구형 앱과 같은 UID를 쓰는 공격자의 직접 SDK 요청을 Rules로 구분할 수 없다. 이를 폐쇄하면 열린 구형 앱에 영향이 발생할 수 있으므로 구형 업데이트/유예 사용자 승인 없이 Stage420 실제 ON/Rules 변경 금지. 지연·추가 Firebase 인증/Function/Worker 비용을 10만 DAU ×5/20회에서 독립 비교할 것.
+
+---
 # Stage420 — 좋아요 서버 승인 증표 / 구형 앱 안전 전환 기준 (2026-10-10)
 
 ## 판정

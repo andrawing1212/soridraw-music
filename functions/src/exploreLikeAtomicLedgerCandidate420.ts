@@ -186,7 +186,12 @@ export const recoverAtomicLikeDisplayGapCandidate420 = async (
       !Number.isSafeInteger(maxPerAttempt) || maxPerAttempt < 1 ||
       maxPerAttempt > 32) throw new Error('420_DISPLAY_RECOVERY_INVALID');
   const displayRef = realtime.ref(`privateLikeSync420/${uid}/displayV2`);
-  const initial = await displayRef.get();
+  // CRITICAL: Admin RTDB transactions may invoke the updater with local
+  // null BEFORE fetching the remote tree. If the known prior version is
+  // nonzero, returning undefined aborts the transaction without fetching it.
+  // Prime the local transaction cache via the value listener (not get()).
+  // This one bounded account-scoped read is only for an actual delivery gap.
+  const initial = await displayRef.once('value');
   const currentVersion = Number(initial.val()?.version || 0);
   if (!Number.isSafeInteger(currentVersion) || currentVersion < 0) {
     throw new Error('420_DISPLAY_RECOVERY_CORRUPT_VERSION');

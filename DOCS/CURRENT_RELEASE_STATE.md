@@ -1,3 +1,15 @@
+## CURRENT — app397 PREVIEW 보호 / Stage420 동기 수신 일치 + 구형 Follow CI 오류 해결 (2026-10-11)
+
+- **최종 소스 커밋:** `preview` `16d9d5bfe016a46cf3f8a2b9797271d1acb1deca`; Stage420 신호 생산자 `display`와 신앱 단일 수신자 `legacy` 일치 수정은 코드 commit `8fa70dfbe15c0729bcae3e85befece0aac7b76b7` (정확 2파일). Source-only이며 Stage420 고객 경로는 모두 HARD OFF.
+- **GitHub 408 본 기능 품질검사:** [Run 38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) SUCCESS — Functions TypeScript, 앱 TypeScript/Build, like/follow 회귀, shared Rules read-only PASS.
+- **이전 Follow-only CI 위양성 원인/해결:** `app380-follow-only-check.yml`은 app382에서만 유효한 `verify-394/395` app379 전체 Worker byte freeze를 app397 preview 변경마다 강제하고 있었음. `verify-354/355`도 app379 전체 Worker 코드에 하드바인딩, `verify-387`은 app382의 좋아요 30s timer를 강제했지만, 현재 안전한 app413는 좋아요 5s idle flush. 오랫동안 Worker 035 불일치로 Fail한 검사여서 신기능 오류와 구분.
+- **수정 커밋:** `65dc68ec411ceffaa723a54b64cea2fb3f66a32a` → `5cc92299d94635a3907a4d2be4321bbc2ec9abe0` → `16d9d5bfe016a46cf3f8a2b9797271d1acb1deca`. 고전 app382 Worker 전체 freeze + 30s 기준은 historical로 그대로 유지; 현재 app397에서는 Worker sha256 무결성 독립 확인, 실제 Follow354/355 runtime + 356/377/386/387/389/303 전부 실행. `verify-387` 현대 소스의 이미 검증된 app413 5s를 검사하고 30s 팔로우 window는 보호. 같은 시점에 신규 앱 기능/UI/Worker 본문/Rules/DB 변경 0.
+- **최종 자동 검사:** [Follow-only Run 38139163112](https://github.com/andrawing1212/soridraw-music/actions/runs/38139163112) **SUCCESS**: TypeScript PASS, Build PASS, Worker sha256 PASS, 354/355/356/377/386/387/389/303 **8/8 PASS**. 구형 app382 전체 freeze는 현대 커밋에서 의도적 NOT APPLICABLE (삭제 아님). 408 exact 본기능 소스 `8fa70df` PASS는 유지. 전체 자동검사 이제 이전 위양성으로 차단되지 않음.
+- **실제 PREVIEW 배포:** 기존 **app397** Hosting exact `132ed10e58351b227f616d60786a5eaacc62a451` + [Run 38137424564](https://github.com/andrawing1212/soridraw-music/actions/runs/38137424564) 유지. 현재 Stage420 코드/Follow CI 작업은 **미배포**, 단일 420 클라이언트 OFF이므로 지금 Hosting만 올려도 사용자가 실제로 시험할 420 개선 없음. RTDB parent direct416/구형 PWA 호환과 Firebase Functions+Cloudflare Worker 전환경로가 아직 미승인/미배포라 부분 활성화 금지. 사용자 데이터 복사/변경/삭제 0, main/TEST/PRODUCTION 불변.
+- **아직 미완료:** Work 별도 독립 감사; 구형 열린 앱 refresh/유예 정책 승인; 120분 전체 경로 우회 차단; 10만DAU Firebase/Cloudflare 합산 비용과 한국 PC/mobile 실제 p95; Cloud Monitoring 알림·Master 단건복구 실수신. Stage416 **28%** / 앱 속도 **5/5 100%** (기존 기준) / Stage420 **4/10 40%**. CI 고친 것으로 운영 게이트를 올리지 않는다.
+- **다음 가장 빠른 실제 진행:** `16d9d5b...` SHA 고정 Work read-only 최종 감사, 특히 416 구형 직접 RTDB 쓰기 권한+unsigned Worker guard 병렬 검사, source/UI parity 및 비용 실측 계획; 이후 디렉터의 구형 새로고침/유예 정책 결정 → 한 번의 승인된 PREVIEW 작동 검증/안전 릴리스만. app397 현재 정상 사용자용 Hosting 중간 재배포는 하지 않음.
+
+---
 ## CURRENT — Stage420 기존 signed Writer RTDB 수신 경로 맞춤 source-only PASS / Follow-only 별도 FAIL (2026-10-11)
 
 - **기능 commit:** `preview` `8fa70dfbe15c0729bcae3e85befece0aac7b76b7` (기준 `28a60c1b818e3921a0f7d3e20a88cde9ab7b96bc`), **변경 정확히 2파일**: `src/services/exploreLikeService.ts`, `scripts/verify-420-atomic-cutover-barrier.mjs`. 기존 signed baseWorker+RTDB legacy `display` 생산 경로에 맞춰 비활성 Stage420 client의 단일 `STAGE420_PRIVATE_SIGNAL_SOURCE='legacy'` 수신 선택; Firestore Eventarc atomic `displayV2`는 별도 완성 cutover 승인 전 미선택. 동시 이중 구독·기존 정상 기능 변경 없음. 검사에서 이 결합을 고정해 server atomic OFF인데 client만 V2에 귀속되는 회귀를 차단.

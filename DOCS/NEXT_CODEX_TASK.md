@@ -1,3 +1,11 @@
+## NEXT — Stage420 실제 PREVIEW 가동 검증으로 직접 이동 (2026-10-11)
+
+- **반복 금지:** `preview` `16d9d5bfe016a46cf3f8a2b9797271d1acb1deca`에서 동기 수신 정합화와 구형 Follow CI false-fail 수정 끝. 408 [38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) PASS, modern follow [38139163112](https://github.com/andrawing1212/soridraw-music/actions/runs/38139163112) TypeScript/Build + 실제 runtime 8/8 PASS. app397 PREVIEW exact 배포 `132ed10e58351b227f616d60786a5eaacc62a451` 완료되어 유지. 이전 app379/382 전체 Worker freeze, 과거 좋아요 30s timing, 354/355 import 위양성은 현재 버전과 분리됨. 역사적 app382 검사 자체는 보존되어 있음.
+- **다음 작업 묶음:** ① Work 독립 read-only 감사 **정확 SHA `16d9d5b...`**로 416 old RTDB ancestor 권한/서명 없는 canonical 우회, old PWA v4/열린 탭, 420 signed legacy Worker+Functions+UID HMAC 인증/duplicate /auth-test, master HOLD, signal display vs displayV2, D1 W0 replay, 100k DAU × 5/20/day 월 합산비용/PC mobile p95/실환경 parity를 검증하고 FAIL이면 운영 전환 중단. ② 디렉터에게 기존 구형 PWA 강제 reload 대 승인된 유예 정책 중 승인받아 shared Rules/Functions/Worker와 3환경 버전 정합을 설계. ③ 안전한 전체 릴리스 exact artifact PREVIEW 실기기 양방향 검증 뒤 TEST/PRODUCTION 사용자 승인 대기.
+- **건드리지 말 것:** app397 current deployed Gemini 수정/UI, app164 frozen like/follow, Studio save heart, Music Note/Library, 데이터 전체 조회/쓰기 방지. Stage420/426/source alternative Worker 전부 HARD OFF; 사용자 승인 전 RTDB Rules 폐쇄, Worker/Functions, 새 D1 174/419 migration/backfill/삭제, main TEST PROD 승격/실배포 금지. 새 테스트만 보고 제품 사용자 실검증 PASS 주장 금지.
+- **세 진척률:** Stage416 28%; 앱 속도 5/5 100% (기존); Stage420 운영4/10·40%. QA 정상화는 source-only 완료, Work·실기기·과금 미검증.
+
+---
 ## NEXT — Stage420 signed 기존 Writer 수신 정합화 PASS 후 남은 실제 운영 게이트 (2026-10-11)
 
 - **다시 하지 말 것:** `preview` code `8fa70dfbe15c0729bcae3e85befece0aac7b76b7`에서 기존 signed Writer `/display`와 Stage420 단일 수신자를 일치시켰고 408 전체 [38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) PASS. app397 PREVIEW Hosting 이미 배포 완료, 이번 Stage420 source-only 커밋은 미배포. 이전 실 Cloudflare 425 read-only 및 174/419 D1 결손도 재진단 반복 금지.

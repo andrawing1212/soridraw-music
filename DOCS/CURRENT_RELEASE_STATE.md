@@ -1,3 +1,13 @@
+## CURRENT — app397 Gemini 곡 생성 false-negative API 키 확인 수정 PREVIEW 배포 완료 (2026-10-11)
+
+- **PREVIEW 실제 Firebase Hosting app397 배포 완료:** 공식 `.github/workflows/firebase-hosting-custom-preview.yml` workflow_dispatch **Run 38137424564 SUCCESS**. 고정 배포 target_sha `132ed10e58351b227f616d60786a5eaacc62a451` 로그 `LOCKED_PREVIEW_SHA` exact-match; 소스 app396 `e7923394ad970fb71ad55c03de580fa0e77e5a2a` 대비 변경 `src/App.tsx`+`public/app-version.json` **2파일**. 최신 preview의 아직 미배포 Stage420 후보는 이번 Hosting 빌드에서 제외.
+- **검증 PASS:** `npm ci`, TypeScript, Build, 기존 프로필/좋아요/팔로우/뮤직노트 관련 workflow regression steps 모두 PASS; Firebase Hosting Deploy PASS; `preview.soridraw.com` remote/local `index.html` sha exact-match, `PREVIEW_APP_VERSION=397`, `PREVIEW_EXACT_BUILD=PASS`; `TEST_PRODUCTION_UNCHANGED=PASS`.
+- **불변:** `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, Worker/Functions/Rules/D1/사용자 데이터 migration/write/삭제 0(배포 절차 자체); main, TEST, PRODUCTION 변경 0. 실제 Gemini 계정 생성 성공 및 PC/모바일 실기기 테스트 **아직 미검증**.
+- **현재 GitHub 소스 기준:** `preview`에 stage420 후보와 app397 fix 모두 병합 이력 연결됨(`79e0676af64e8d2a94f7b6ed0ffa9b39af79e355`, 그 후 이 문서 변경 포함). 실제 배포 Hosting은 **반드시 고정 target_sha**의 app397 소스이지 최신 preview HEAD 전체가 아님. Stage420 활성화·배포는 계속 HOLD.
+- **원인/수정:** 생성 직전 `getGoogleGeminiApiKeyStatus` 추가 확인이 일시 실패하면 등록된 개인 키도 미등록 취급하고 마이페이지로 보내던 프런트 문제 해결. 이제 로그인된 계정은 서버 관리용 opaque marker로 실제 Gemini 생성 Functions에 진행; 서버의 개인 키 검사·진짜 미등록 오류 안내 유지. 이용자에게 API 키 재등록 요구 금지.
+- **다음 작업:** 사용자 PREVIEW에서 실제 1곡 생성과 반복 생성, PC/모바일 접속, 저장 키 재등록 화면 비의도 이동 여부 확인. 결과 정상일 때 향후 Stage420 전체 릴리스에도 변경 유지. 작업 실패 시 Stage420이 아닌 app396 release 고정 소스 기준으로 PREVIEW Hosting만 별도 롤백 판단.
+
+---
 ## CURRENT — app397 Gemini 생성 미등록 오판 hotfix / PREVIEW 공식배포 대기 (2026-10-11)
 
 - **실제 배포:** PREVIEW Hosting은 계속 **app396**. app397은 아직 **미배포**이며 TypeScript·Build·PC/mobile 실제 생성 결과 미검증. TEST/PRODUCTION/MAIN/공유 사용자 데이터/Firebase Functions/Worker/D1/Rules 변경·배포 0.

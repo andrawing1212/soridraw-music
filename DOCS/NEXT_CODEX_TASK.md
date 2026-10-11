@@ -1,3 +1,12 @@
+## NEXT — Stage416③ 실제 PREVIEW 릴리스 전 마지막 안전 연결: 서버 자동봉인·조기 종료·정확 ACK/공개 데이터 동시성 (2026-10-12)
+
+- **고정 기준:** `preview` `5cebb4c71987ef110ffcafe229f4d73cd9e5d259`. [408 CI 38160306909](https://github.com/andrawing1212/soridraw-music/actions/runs/38160306909) PASS, [RTDB server-only emulator 38159599583](https://github.com/andrawing1212/soridraw-music/actions/runs/38159599583) PASS. 앱399 Hosting 불변, 모든 Stage416 신규 플래그 OFF. `privateLikeBatch416/{uid}` server-only Root/Auth/AppCheck/Master and exact D1 receipt candidate code 존재. 실제 공유 Rules/database 변경 금지.
+- **Codex High 다음 완성 작업:** ① 앱 직접 like click → Firebase Callable `recordPrivateLike416`의 보안 onCall {enforceAppCheck:true}/uid/rate-limit/source 등록·특정 UID last click +1/3/5/10/20 Master policy을 PREVIEW/TEST/PROD 동시 원본 호환 방식으로 완성. ② 진입/페이지 이동/업데이트 비용0, 종료시 후보 새 서버 조기 저장 시도 및 실패시 durable outbox 보존(현재 source candidate가 기존 5초 종료 처리를 차단하므로 새 조기 경로 없이는 ON 금지); 5분 끝났을 때 앱이 꺼져도 batch seal + retry+Worker 처리 일정·시점 확정, 새 기기 동일 계정/기기 순서 역전 방지. ③ canonical 069 scheduler가 개인 final R2+RTDB accepted 127 및 PC↔모바일 각각의 정확 operationId 아웃박스·하트/좋아요 숫자를 이중쓰기 없이 완전 수렴시키는지 실 SQLite/emulator/browser E2E. ④ 구형 TEST/PROD 현재 Worker /batch 우회를 무리한 전체 앱 업데이트/원본 데이터 이동 없이 막을 전체 릴리스 contract, rollback/비용/Work 독립 감사. 정상 앱399 기능을 먼저 보호.
+- **비용 합격:** 100k 사용자에서 Functions+RTDB per-click settings read + account transaction + existing hint RTDB + Worker/D1/R2/DO 총비용 검증. 직접 D1 per-click W2 후보보다 전체 비용 비싸면 설계 중단/간소화. W1~W2를 기능 손실보다 우선하지 말 것; no data change, no full scans, warm page data read0.
+- **STOP/승격:** Functions index export, shared D1 SQL 적용/Rules 배포, 기존 signed Worker flag 및 client flag ON은 안전 통합·구형 호환·Work/실기기 검증 때까지 보류. PREVIEW Hosting 배포 자체도 새 기능 source 전체가 완성/검증 가능 전 금지. main/TEST/PRODUCTION 승격은 사용자 명시 승인. 새 테스트/문서만 반복해 완료라고 주장하지 말 것.
+
+---
+
 ## NEXT — Stage416③ RTDB 공유 권한·Master 주기·Functions Callable/Worker 릴리스 안전성 검증 (2026-10-11)
 
 - **고정 기준:** preview source `36fd139a76680d32156e07ddb126e036d26de2ef`, pinned [CI 38155438436 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38155438436). 기존 후보 RTDB→Admin seal→HMAC Worker→D1 versioned atomic queue→guarded ACK 재작성 금지. **하드 OFF 유지**, 실제 앱399 source e97edb9a7... 정상 개인 하트·팔로우·Studio/Music Note 보호.

@@ -1,3 +1,12 @@
+## NEXT (2026-10-11) — 실 DB Emulator 성공 후 Stage420 실제 운영 통합·Work 독립 감사만 남은 핵심 작업
+
+- **고정 기준:** `preview` source `5500116da4180dcf32f02a48d7a2e4420f2235c7`; [408 TypeScript/Build/like+follow Run 38118903224](https://github.com/andrawing1212/soridraw-music/actions/runs/38118903224) SUCCESS, [exact final Firestore+RTDB Emulator Run 38118917160](https://github.com/andrawing1212/soridraw-music/actions/runs/38118917160) SUCCESS. 이미 해결한 v2 permit 영속성, 미래 신규 UUIDv7과 기존 v4 분리, 실제 Admin RTDB null cache/순서 역전 복구, 정상 이벤트 Firestore indexed R0는 **다시 source-only mock으로 되돌리지 말 것**.
+- **실제 다음 묶음:** ① Work **별도 read-only 독립 감사**(서로 다른 Firebase/Cloudflare 환경과 구형 app396/TEST/PROD, Work 체크리스트의 like/follow 보호, 실제 Firestore transaction + Eventarc off/on + RTDB listener/last50 비용 fanout, Worker171/426 HMAC/receipt/TTL, 월 10만DAU × 5/20회 전체 Cloudflare/Firebase 가격 및 p95/구형 PWA 상태, 롤백). ② 승인 전 안전한 구현 준비: onCreate 실제 등록·재시도 에러 전파, 23h terminal HOLD Cloud Monitoring 알람/인증된 Master 단건 재전송/관리 UI 동작, lock 읽기/조기해제와 실제 Firestore rate 단일 authority. ③ 구형 사용자 RTDB `userSync/$uid/exploreLikeIntent416`의 ancestor write 우회 닫기에는 **기존 열린 탭/구형 클라이언트 단절 가능성**이 있으므로 디렉터 승인받은 강제 업데이트/유예기간 설계 후에만 shared Rules·Functions·Worker **동시 검증 릴리스**로 적용. 불가하면 실제 운영 전환 HOLD, 부분 기능 활성화 금지.
+- **유지할 중단선:** Stage416 **28%**(현재 gate 4/10), 앱396 속도 5/5 100%; `Stage420/426 OFF`, 임의 PRODUCTION/TEST/main 전환, 공유 사용자 데이터 변경/대량스캔/삭제, Hosting/Functions/Worker/RTDB Rules 배포 금지. 앱 업데이트·페이지 진입 읽기/쓰기 0 목표, 기존 좋아요/팔로우/Studio 저장 하트·Music Note/Library/UI 보호. 새로운 emulator PASS를 운영·실청구 PASS로 기록하지 말 것.
+- **사용자 보고 방식:** 전체 Stage416 % / 앱 속도 % / 현재 Stage420 게이트 % 3개 진행바로 한눈에, 매 작업마다 100% 소규모 성과 보고 금지. 핵심 단계를 실제로 끝내거나 보안상 승인 없이는 못 넘어갈 때만 묶어서 보고.
+
+---
+
 ## NEXT (2026-10-11) — 수신·Master 코드 및 격리 Emulator PASS 후 남은 운영 3중 게이트
 
 **완료되어 반복할 필요 없음:** `preview` 1110ae7 코드, f9312db8 Emulator 테스트. `displayV2` 구독 소유권 분리, 기존 `requireMasterCaller` 서버 검증으로 감싼 Firestore Master 단건 조회/잠금 해제/HOLD 복구 Callable(하드 OFF), 후보 shared Rules V2 본인 읽기/타인 거부/쓰기 거부 Firebase Emulator PASS. 408 Run 38117685491, RTDB Emulator Run 38117761415 SUCCESS. 이것은 실제 기능 ON/실기기 전달/실청구 QA가 아님.

@@ -20,6 +20,7 @@ const {
   recoverExactAtomicLikeApprovalCandidate420: recoverExact,
   handleApprovedLikeReceiptWakeupCandidate420: deliver,
   recoverHeldLikeDeliveryAfterMasterAuthCandidate420: recoverHeld,
+  masterUnlockAtomicLikeAfterAuthCandidate420: unlock,
 } = requireFunctions('./lib/exploreLikeAtomicLedgerCandidate420.js');
 admin.initializeApp({
   projectId,
@@ -174,6 +175,75 @@ try {
   },now+90),/420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
   assert.equal((await account.get()).data().version,4);
   console.log('STAGE420_REAL_EMULATOR_LEGACY_UNPROVEN_V4_FAIL_CLOSED=PASS');
+
+  // Competing same-account approvals must serialize through the ONE small
+  // rate document and allocate distinct, consecutive receipt versions.
+  // This is a real Firestore emulator transaction test (not the Map mock).
+  const races=[make(5,now+100),make(6,now+100),make(7,now+100)];
+  const decisions=await Promise.all(races.map(op=>approve(firestore,uid,op,now+100)));
+  assert.deepEqual(decisions.map(x=>x.version).sort((a,b)=>a-b),[5,6,7]);
+  assert(decisions.every(x=>x.allowed && !x.duplicate));
+  assert.equal((await account.get()).data().version,7);
+  const concurrentReplay=await Promise.all(
+    Array.from({length:3},()=>approve(firestore,uid,races[0],now+110)));
+  assert(concurrentReplay.every(x=>x.allowed && x.duplicate && x.version===5));
+  assert.equal((await account.get()).data().version,7,
+    'concurrent exact replay must not change the rate version');
+  // Firestore receipt Eventarc can arrive last-first. The RTDB snapshot is
+  // repaired from only missing UID/version receipts, with no reapproval.
+  const lastProof=await receipt(races[2]);
+  const lastDelivery=await deliver(firestore,realtime,uid,
+    races[2].operationId,lastProof,now+120);
+  assert.equal(lastDelivery.status,'delivered');
+  const lastDisplay=(await display.get()).val();
+  assert.equal(lastDisplay.version,7);
+  assert.deepEqual(lastDisplay.results.map(row=>row.version),[1,2,3,4,5,6,7]);
+  for(const op of races) {
+    const outcome=await deliver(firestore,realtime,uid,op.operationId,
+      await receipt(op),now+130);
+    assert.equal(outcome.status,'already-delivered');
+    assert.equal(outcome.delivered,0);
+  }
+  assert.equal((await display.get()).val().version,7);
+  console.log('STAGE420_REAL_EMULATOR_CONCURRENT_RACE_REPLAY_AND_REORDER=PASS');
+
+  // Exercise actual Firestore two-consecutive-minute lock, exact Master
+  // unlock audit, replay idempotence and account-version preservation.
+  // Master ROLE verification is separately enforced by requireMasterCaller;
+  // this emulator directly checks the *backend state transition* only.
+  const lockUid='uid-locked-emulator';
+  const policy={warningPerMinute:1,limitPerMinute:2,suspensionMinutes:120};
+  const minute=Math.ceil((now+120000)/60000)*60000;
+  const twoMinutes=[
+    make(101,minute+1),make(102,minute+2),
+    make(103,minute+60001),make(104,minute+60002),
+  ];
+  const times=[minute+1,minute+2,minute+60001,minute+60002];
+  let locked;
+  for(let i=0;i<4;i++){
+    locked=await approve(firestore,lockUid,twoMinutes[i],times[i],policy);
+    assert.equal(locked.allowed,true);
+  }
+  assert(locked.lockedUntilMs>times[3]);
+  const lockDoc=firestore.collection('privateLikeGuardV2_420').doc(lockUid);
+  const unlockId='MasterUnlockOne_420';
+  const opened=await unlock(firestore,'master-sandbox',lockUid,unlockId,
+    'security review',times[3]+100);
+  assert.equal(opened.unlocked,true);
+  assert.equal(opened.duplicate,false);
+  const replayUnlock=await unlock(firestore,'master-sandbox',lockUid,unlockId,
+    'security review',times[3]+101);
+  assert.equal(replayUnlock.unlocked,false);
+  assert.equal(replayUnlock.duplicate,true);
+  const unlockedRate=(await lockDoc.get()).data();
+  assert.equal(unlockedRate.lockedUntilMs,0);
+  assert.equal(unlockedRate.version,4);
+  const audit=(await lockDoc.collection('adminUnlockAudit').doc(unlockId).get()).data();
+  assert.equal(audit.masterUid,'master-sandbox');
+  await assert.rejects(unlock(firestore,'different-master',lockUid,unlockId,
+    'security review',times[3]+102),/420_MASTER_UNLOCK_REPLAY_MISMATCH/);
+  assert.equal((await lockDoc.get()).data().version,4);
+  console.log('STAGE420_REAL_EMULATOR_MASTER_120MIN_UNLOCK_AUDIT_REPLAY_W0=PASS');
 
   console.log('STAGE420_EMULATOR_REAL_DB_OPERATIONS_NOT_LIVE_BILLING=PASS');
 } finally {

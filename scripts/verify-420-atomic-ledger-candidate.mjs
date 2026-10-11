@@ -228,6 +228,12 @@ for(let i=5;i<=1000;i++){
 }
 assert.equal(display.version,1000);
 assert.equal(display.results.length,50,'bounded RTDB display even after 1000');
+assert.equal(display.results[49].at,base+1001*65_000,
+  'delayed server signal uses delivery timestamp, not stale approval timestamp');
+const displayBytes=Buffer.byteLength(JSON.stringify(display));
+assert(displayBytes<12000,
+  'server-owned last-50 display should be bounded under 12KB in fixture');
+
 const after1000=emitted;
 assert.equal(await attempt(1),'already-delivered',
   '257+ original RTDB delivery retry must not re-emit');
@@ -249,6 +255,8 @@ assert.equal(futureGap.status,'waiting-prior',
 const beforeDeliveryReplayWrites=writes;
 assert.equal(writes,beforeDeliveryReplayWrites,
   'projecting a signal never adds Firestore approval writes');
+console.log('STAGE420_DISPLAY_V2_MAX_50_FIXTURE_BYTES='+displayBytes);
+console.log('STAGE420_DISPLAY_V2_LATE_DELIVERY_FRESHNESS=PASS');
 console.log('STAGE420_DISPLAY_V2_ORDERED_1000_EMIT_50_BOUND=PASS');
 console.log('STAGE420_DISPLAY_V2_RETRY_257PLUS_NO_REEMIT=PASS');
 console.log('STAGE420_DISPLAY_V2_FAILCLOSED_ON_GAP_AND_PROOF_MISMATCH=PASS');

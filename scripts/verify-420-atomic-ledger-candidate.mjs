@@ -10,7 +10,7 @@ let code=stripTypeScriptTypes(readFileSync(
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
 assert.doesNotMatch(code,/^import\s/m);
-code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420,handleApprovedLikeReceiptWakeupCandidate420,masterUnlockAtomicLikeAfterAuthCandidate420,createLikeReceiptDeliveryTriggerCandidate420};';
+code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420,handleApprovedLikeReceiptWakeupCandidate420,masterUnlockAtomicLikeAfterAuthCandidate420,createLikeReceiptDeliveryTriggerCandidate420,recoverHeldLikeDeliveryAfterMasterAuthCandidate420};';
 const module={exports:{}};
 const baseForEventTests=1_800_000_000_000+1001*65_000;
 const eventWarnings=[];
@@ -29,7 +29,8 @@ const {approveLikeWithAtomicLedgerCandidate420:approve,
   recoverAtomicLikeDisplayGapCandidate420:reconcile,
   handleApprovedLikeReceiptWakeupCandidate420:wakeup,
   masterUnlockAtomicLikeAfterAuthCandidate420:masterUnlock,
-  createLikeReceiptDeliveryTriggerCandidate420:makeTrigger}=module.exports;
+  createLikeReceiptDeliveryTriggerCandidate420:makeTrigger,
+  recoverHeldLikeDeliveryAfterMasterAuthCandidate420:repairHeld}=module.exports;
 const day=24*60*60_000;
 const base=1_800_000_000_000;
 const v7=(id,t=base)=>{
@@ -465,6 +466,29 @@ assert.equal(writes,writesBeforeTerminal+1,
 assert.equal(eventWarnings.length,2);
 docs.set(removed270,proof270);
 nowClock=recoveryNow;
+// A held approval must be recoverable by a future VERIFIED Master without
+// creating another approval/like; the exact server proof is mandatory.
+const holdReadBefore=reads,holdWriteBefore=writes;
+const repair=await repairHeld(store,rtdb,'verified-master',wakeUid,
+  mk(271).operationId,'알림 누락 수동 복구',recoveryNow);
+assert.equal(repair.recovered,true);
+assert.equal(repair.delivered,2,'recover missed 270 then 271 in order');
+assert.equal(rtdbState.version,271);
+assert.equal(docs.get(failureDoc).state,'recovered');
+assert.equal(writes,holdWriteBefore+1,'repair writes only the hold settlement');
+const repairAgain=await repairHeld(store,rtdb,'verified-master',wakeUid,
+  mk(271).operationId,'알림 누락 수동 복구',recoveryNow+1);
+assert.equal(repairAgain.duplicate,true);
+assert.equal(writes,holdWriteBefore+1,'duplicate manual repair W0');
+assert.equal(reads>holdReadBefore,true,'only exact receipt and hold point reads');
+await assert.rejects(repairHeld(store,rtdb,'verified-master',wakeUid,
+  mk(272).operationId,'증거 없음',recoveryNow),
+  /420_HELD_RECOVERY_NOT_FOUND/);
+assert.equal(writes,holdWriteBefore+1,'unheld requests do not get approved');
+console.log('STAGE420_HELD_APPROVAL_MASTER_EXACT_REPAIR_NO_REAPPROVAL=PASS');
+console.log('STAGE420_HELD_APPROVAL_REPAIR_REPLAY_W0=PASS');
+console.log('STAGE420_HELD_APPROVAL_REAL_ROLE_CHECK=NOT_WIRED');
+
 console.log('STAGE420_EVENTARC_RETRY_REQUIRED_REJECTS=PASS');
 console.log('STAGE420_EVENTARC_CRASH_REPLAY_AND_IDEMPOTENT_HOLD=PASS');
 console.log('STAGE420_EVENTARC_OPERATOR_ALARM_PROVISIONING=NOT_WIRED');

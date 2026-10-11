@@ -373,6 +373,80 @@ export const createLikeReceiptDeliveryTriggerCandidate420 = (
 
 // Triggers not linked in index.ts. No new service may be deployed on push.
 
+// Master-only MANUAL recovery candidate for a held, previously approved
+// like delivery. The future callable MUST invoke requireMasterCaller first.
+// Exact per-operation Firestore reads only; this NEVER repeats an approval.
+export type AtomicLikeHeldRecoveryResult420 = {
+  recovered: boolean;
+  duplicate: boolean;
+  delivered: number;
+};
+export const recoverHeldLikeDeliveryAfterMasterAuthCandidate420 = async (
+  firestore: Firestore,
+  realtime: Database,
+  masterUid: string,
+  targetUid: string,
+  operationId: string,
+  reason: string,
+  nowMs = Date.now(),
+): Promise<AtomicLikeHeldRecoveryResult420> => {
+  if (!validAccount(masterUid) || !validAccount(targetUid) ||
+      typeof operationId !== 'string' ||
+      !/^[0-9a-f-]{36}$/i.test(operationId) ||
+      typeof reason !== 'string' || !reason.trim() ||
+      reason.length > 120 || !Number.isSafeInteger(nowMs) || nowMs <= 0) {
+    throw new Error('420_HELD_RECOVERY_REQUEST_INVALID');
+  }
+  const account = firestore.collection('privateLikeGuardV2_420').doc(targetUid);
+  const heldRef = account.collection('deliveryFailures').doc(operationId);
+  const proofRef = account.collection('approvals').doc(operationId);
+  const [heldSnap, proofSnap] = await Promise.all([
+    heldRef.get(), proofRef.get(),
+  ]);
+  if (!heldSnap.exists) throw new Error('420_HELD_RECOVERY_NOT_FOUND');
+  const held = heldSnap.data();
+  if (held?.state === 'recovered') {
+    return { recovered: false, duplicate: true, delivered: 0 };
+  }
+  if (!proofSnap.exists || held?.state !== 'needs-manual-reconciliation') {
+    throw new Error('420_HELD_RECOVERY_PROOF_MISSING');
+  }
+  const proof = proofSnap.data();
+  if (held?.uid !== targetUid || held?.operationId !== operationId ||
+      held?.approvalVersion !== proof?.version ||
+      held?.approvedAtMs !== proof?.approvedAtMs) {
+    throw new Error('420_HELD_RECOVERY_PROOF_MISMATCH');
+  }
+  const wake = await handleApprovedLikeReceiptWakeupCandidate420(
+    firestore, realtime, targetUid, operationId, proof, nowMs,
+  );
+  if (wake.status === 'retry-required') {
+    throw new Error('420_HELD_RECOVERY_STILL_WAITING_' + wake.reason);
+  }
+  // Two Masters could race on the same held event. The delivery transaction
+  // already prevents duplicate notifications; the receipt update stays W1.
+  return firestore.runTransaction(async tx => {
+    const current = await tx.get(heldRef);
+    const value = current.data();
+    if (value?.state === 'recovered') {
+      return { recovered: false, duplicate: true, delivered: 0 };
+    }
+    if (!current.exists || value?.state !== 'needs-manual-reconciliation' ||
+        value?.approvedAtMs !== proof.approvedAtMs ||
+        value?.approvalVersion !== proof.version) {
+      throw new Error('420_HELD_RECOVERY_CHANGED');
+    }
+    tx.set(heldRef, {
+      ...value,
+      state: 'recovered',
+      recoveredAtMs: nowMs,
+      recoveredByMasterUid: masterUid,
+      recoveryReason: reason.trim(),
+    });
+    return { recovered: true, duplicate: false, delivered: wake.delivered };
+  });
+};
+
 // Only callable by a future server wrapper AFTER requireMasterCaller has
 // authenticated the Master. DO NOT directly expose this as a Function.
 // The unlock and immutable audit are one atomic Firestore transaction.

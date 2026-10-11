@@ -48,7 +48,16 @@ try {
       version: 1, at: Date.now(), status: 'pending' }],
   };
   await assertSucceeds(path('exploreLikeIntent416').set(forgedOldSignal420));
-  await assertSucceeds(path('exploreLikeIntent416/results/0/liked').set(false));
+  // The pre-cutover RTDB schema REQUIRES version increments on each nested
+  // change. Prove the true old-client bypass with a valid entire parent
+  // payload (not an invalid leaf-only update denied by old validation).
+  await assertFails(path('exploreLikeIntent416/results/0/liked').set(false));
+  await assertSucceeds(path('exploreLikeIntent416').set({
+    version: 2, results: [{
+      ...forgedOldSignal420.results[0],
+      version: 2, liked: false,
+    }],
+  }));
   await assertSucceeds(path('exploreLikeIntent416').remove());
   await expectOldGood();
   console.log('STAGE420_EMULATOR_OLD_CLIENT_DIRECT_416_SET_AND_NESTED_WRITE_BYPASS=REPRODUCED');

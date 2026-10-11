@@ -1,3 +1,14 @@
+## CURRENT — Explore 체감 성능 저하 신고, 소스 반복 렌더 계산 최소화 QA PASS / 실사용 미검증 (2026-10-12)
+
+- **실사용 사용자 신고:** "경량화까지 해놓고 더 느려졌어." 기존 속도 5/5=100%는 과거 코드/정해진 테스트 범위 합격이지 현재 PC/모바일 체감 PASS 아님. **현재 속도 체감 = FAIL 신고·실사용 재검증 전**, 100%를 실제 속도 완료 표시로 쓰지 않는다.
+- **작업 기준:** preview source commit `4f00b185cfcb80531f7bf8ecb7fa8bd2795bfd97`, 대상 `src/pages/ExplorePage.tsx`. 마지막 확인된 PREVIEW Hosting app399 `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a`. app399 후 Stage416 후보는 전부 소스 OFF/미배포라 **그 미배포 코드로 현재 실사용 앱의 체감 성능 저하를 설명할 수 없음**; 서버/브라우저 실제 병목 원인은 미확정. 라이브 URL 실접속/실사용 성능측정은 미검증.
+- **최소 수정 3종:** Explore loaded six lists의 publicLikeVisibleTracksRef192 index가 각 React render에서 매번 배열 합치기+filter+map+Map을 했던 경로를 `useMemo`와 직접 순회로 고쳐 **6개 list 참조가 변경될 때만 다시 생성**. Public changed-track R2 likeCount와 same-account RTDB heart+count 동기화 patch는 ID가 없거나 숫자가 같으면 기존 배열을 그대로 반환하여 불필요 React state rerender 제거. My Likes unlike 상태 제거·public count0·PC/mobile membership·RTDB/Worker/데이터 캐시 경로 불변. 외관/CSS/위치/간격/모바일 반응형 비변경.
+- **자동검증:** pinned exact source GitHub [Run 38184259697](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259697) **SUCCESS** Node runtime actual extract: unchanged lists 200 rerender index build 1, changed list index refresh, absent/unchanged likes no-op array reuse, changed count including 0 patch; TypeScript, Build, Functions build, like/canonical contract, live shared Rules read-only, no deploy PASS. [Follow-only 38184259712](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259712) SUCCESS. QA는 컴포넌트/브라우저 성능 실측이 아님.
+- **상태·배포:** preview commit/push only. Firebase Hosting/Functions/Rules, Cloudflare Worker/D1/R2, 공유 사용자 데이터, main/TEST/PRODUCTION **변경 없음**. Stage416 5min 활성화 금지 지속. 실제 PREVIEW app399 속도·서버 읽기 원인을 확인하지 않은 채 새 candidate 앱을 배포하지 않는다. 안전한 standalone 성능 수정의 PREVIEW 릴리스는 Stage416 미완료 source 포함 여부, 릴리스 소스 완전성 및 실 브라우저 PC/mobile 확인 선결.
+- **진행률 구분:** Stage416 4대 목표 1/4 25%, Stage416③ source 후보 준비 2/4 50%, 앱 속도 과거 자동검증 범위 5/5이지만 **현재 사용자 체감 FAIL 신고·미재검증**. 이번 소스 Explore no-op render optimization PASS, actual UX improvement 未검증.
+
+---
+
 ## CURRENT — Stage416③ 서버 자동 5분 마감 후보 PASS, 배포 전 HOLD (2026-10-12)
 
 - 기준: preview source f92e1f8e30adea02453abe2fc6877f08737c0eac; 앱399 Hosting source e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a 유지.

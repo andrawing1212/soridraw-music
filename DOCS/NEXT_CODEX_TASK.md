@@ -1,3 +1,12 @@
+## NEXT — 실제 배포 앱399 PC/모바일 체감 속도 회귀 원인 확정, 검증된 Explore 최소 수정만 릴리스 검토 (2026-10-12)
+
+- **현재 source:** preview `4f00b185cfcb80531f7bf8ecb7fa8bd2795bfd97`; [CI like/build 38184259697 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259697), [follow 38184259712 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259712). 최신 Hosting 기록 app399, 미배포 Stage416 5min candidate OFF. 사용자 실제 체감 느림: 현재 **미해결**, 과거 속도 100% 표현 금지.
+- **Codex High 또는 Work 독립 READ-ONLY 실제 측정 우선:** Chrome Performance trace/React Profiler로 app399의 Explore 첫 진입/재방문, 하트 수신, 스크롤·PC/태블릿/모바일 paint/render count; Music Note/Library/Studio 진입/분할바가 신고 대상인지 확인. 앱399 소스와 미배포 최신 소스를 혼동하지 말고 실제 Hosting/Worker version·RTDB/Firestore/D1 캐시 수치를 확인. user가 특정 화면을 지정하지 않았으니 감으로 전체 UI/백엔드를 재작성하지 않는다. 브라우저 측정이 불가능하면 원인 확정이라고 보고하지 않는다.
+- **검증된 최소 개선:** source ExplorePage six-list Map useMemo, no-op count state reuse만 변경. 변경 전후 200 unchanged renders index build 200→1 source harness PASS이지만 PC/mobile fps/interaction median/p95 수치 없음. 설계 위치/CSS/정상 앱399 좋아요 5초 flush/내 하트/공개 숫자·팔로우·Music Note 보호. Stage416 inactive 후보가 들어 있는 preview 전체를 앱400으로 무턱대고 배포 금지; 배포할 경우 exact intended client build, staged feature OFF, TEST/PROD shared user compatibility/work audit PASS 후 PREVIEW Hosting만 고정 workflow로, 목표 URL 및 app version 실제 확인, 사용자 보고.
+- **별도 Stage416 진행:** 실제 5분 저장은 source-only. Functions Tasks/Auth master/server-only RTDB 후보의 end-to-end 및 10만 DAU 비용, 구형 앱 우회, exact R2 state 및 PC-mobile E2E FAIL-HOLD 유지. 속도 이슈 안정화보다 우선해 배포/공유 DB schema 변경 금지.
+
+---
+
 ## NEXT — Stage416③ 소스 자동마감 PASS 이후 실서비스 전 남은 최종 안전 연결 (2026-10-12)
 
 - 기준 preview source f92e1f8e30adea02453abe2fc6877f08737c0eac, exact QA GitHub Actions 38161877181 SUCCESS. 앱399 정상 경로 및 Stage416 모든 flags OFF 유지. Cloud Tasks one-task-per-new-UID-window 후보 소스가 존재하지만 아직 Functions index export 없음, 실제 배포/권한설정 없음.

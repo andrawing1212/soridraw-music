@@ -46,6 +46,11 @@ const clone=x=>x==null?x:structuredClone(x);
 // real code uses a single-UID query with where(version)==next and limit(1).
 const ref=(path)=>({
   path,
+  get:async()=>{
+    reads++;
+    const value=docs.get(path);
+    return {exists:value!==undefined,data:()=>clone(value)};
+  },
   collection:name=>collection(path+'/'+name),
   create:async value=>{
     if(docs.has(path)){const error=new Error('already-exists');error.code=6;throw error;}

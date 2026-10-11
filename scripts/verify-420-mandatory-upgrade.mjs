@@ -16,7 +16,7 @@ const auth = preflight.indexOf('await validateExploreAuth307(');
 const unsigned = preflight.indexOf("code:'420_APP_UPGRADE_REQUIRED'");
 const signature = preflight.indexOf('await verifyGuardedLikeBatch420(');
 const delegate = worker.indexOf('const rejected = await verifySignedLegacyLikeIntake420(');
-const base = worker.indexOf('return baseWorker.fetch(request,env,ctx)');
+const base = worker.indexOf('await baseWorker.fetch(request, env, ctx)', delegate);
 assert.ok(auth >= 0 && unsigned > auth && signature > unsigned,
   'unauthenticated users cannot bypass UID verification; unsigned intake fails before HMAC/canonical');
 assert.ok(delegate >= 0 && base > delegate,

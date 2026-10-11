@@ -25,6 +25,10 @@ import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420"
 import { issueLikePermit420, issueRenewedLikePermitV2420 } from "./exploreLikePermit420";
 import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
+  readLikeBatchTiming416, changeLikeBatchTiming416,
+  parseLikeBatchTiming416,
+} from "./exploreLikeBatchSettings416";
+import {
   approveLikeWithAtomicLedgerCandidate420,
   recoverExactAtomicLikeApprovalCandidate420,
   masterUnlockAtomicLikeAfterAuthCandidate420,
@@ -4336,3 +4340,39 @@ export const masterRecoverHeldAtomicLike420 = onCall(
 // Receipt onCreate remains deliberately UNEXPORTED until its real Eventarc
 // retry policy, shared Rules/old client compatibility and operator alert are
 // approved together. A trigger deployed alone would create delivery gaps.
+
+
+// Stage416 Master-only timing configuration. These source-only Callables are
+// NOT DEPLOYED until the staged 5m private and shared public aggregation paths
+// pass existing-app/Worker parity. No ordinary-user background config reads.
+export const masterGetLikeBatchTiming416 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireMasterCaller(request);
+    const current = await readLikeBatchTiming416(admin.database());
+    return { ok: true, ...current };
+  },
+);
+export const masterSetLikeBatchTiming416 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { requesterUid } = await requireMasterCaller(request);
+    try {
+      const input = parseLikeBatchTiming416(request.data);
+      const expectedVersion = Number(request.data?.expectedVersion);
+      const updated = await changeLikeBatchTiming416(
+        admin.database(), requesterUid, input, expectedVersion,
+      );
+      return { ok: true, ...updated, effectiveForNewWindows: true };
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "unknown";
+      if (code === '416_INVALID_MASTER_TIMING' || code === '416_INVALID_MASTER_WRITE') {
+        throw new HttpsError("invalid-argument", "저장 주기는 1·3·5·10·20분 중 선택해주세요.");
+      }
+      if (code === '416_MASTER_VERSION_CONFLICT_OR_UNCHANGED') {
+        throw new HttpsError("aborted", "다른 관리자가 변경했습니다. 최신 설정을 다시 확인해주세요.");
+      }
+      throw new HttpsError("unavailable", "좋아요 저장 주기를 저장하지 못했습니다.");
+    }
+  },
+);

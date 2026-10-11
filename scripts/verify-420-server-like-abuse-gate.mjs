@@ -155,8 +155,20 @@ assert.match(callable, /const database = admin\.database\(\)/,
   'only Admin SDK may access server-owned rate and signal state');
 assert.match(callable, /readLikeAbuseSettings420\(database\)/,
   'Master settings must be cached from server-owned configuration');
-assert.match(callable, /publishGuardedLikeSignal420\(database, uid/,
-  'verified UID and cached settings feed the atomic server rate guard');
+assert.match(callable, /const STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE = false;/,
+  'new Firestore authority must remain hard OFF while live app396 uses RTDB');
+assert.match(callable,
+  /STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE[\s\S]*?approveLikeWithAtomicLedgerCandidate420\([\s\S]*?admin\.firestore\(\), uid, exactAction, Date\.now\(\), masterSettings/,
+  'atomic receipt authority must be tied to authenticated UID and cached Master policy');
+assert.match(callable,
+  /: await publishGuardedLikeSignal420\([\s\S]*?database, uid, exactAction, Date\.now\(\), masterSettings/,
+  'frozen operating RTDB rate/journal path must remain the exact OFF fallback');
+assert.match(callable,
+  /: await hasExactRecentApprovedLike420\([\s\S]*?admin\.database\(\), uid, exactAction/,
+  'legacy first ACK recovery must remain on frozen RTDB authority');
+assert.match(callable,
+  /\? await recoverExactAtomicLikeApprovalCandidate420\([\s\S]*?admin\.firestore\(\), uid, exactAction/,
+  'future atomic lost-ACK recovery must read exact prior receipt, not approve a fresh click');
 assert.doesNotMatch(callable.slice(callable.indexOf('// Stage420 secured candidate')), /raw\.uid/,
   'untrusted UID must never select another account');
 const masterUnlock = callable.slice(callable.indexOf('export const masterUnlockExploreLike420 = onCall('),

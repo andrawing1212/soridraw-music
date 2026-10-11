@@ -9,6 +9,9 @@ on:
       - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
       - 'scripts/verify-416-shared-writer-d1.mjs'
+      - 'src/services/exploreLikePrivateRtdbWindow416.mjs'
+      - 'src/services/exploreLikePrivateRtdbTransport416.ts'
+      - 'scripts/verify-416-private-rtdb-batch.mjs'
       - 'scripts/verify-416-worker-route-runtime.mjs'
       - 'scripts/verify-416-private-window-gate.mjs'
       - 'scripts/verify-416-private-5min-batch.mjs'
@@ -145,6 +148,7 @@ jobs:
           node --check cloudflare/explore-worker/runtime/private-window-gate-416.mjs
           node scripts/verify-416-private-5min-batch.mjs
           node scripts/verify-416-shared-writer-d1.mjs
+          node scripts/verify-416-private-rtdb-batch.mjs
           node scripts/verify-416-worker-route-runtime.mjs
           node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source

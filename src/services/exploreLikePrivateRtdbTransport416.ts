@@ -16,7 +16,7 @@ export const publishPrivateRtdbBatchClick416=async(
   if(!uid||uid.length>128)throw Error('416_BAD_RTDB_UID');
   const trackKey=await hashTrackIdForRtdb416(click.trackId);
   const result=await runTransaction(
-    dbRef(realtimeDb,\`userSync/\${uid}/exploreLikeBatch416\`),
+    dbRef(realtimeDb,`userSync/${uid}/exploreLikeBatch416`),
     old=>applyPrivateRtdbClick416(old,{...click,trackKey},serverTimestamp(),minutes),
     {applyLocally:false},
   );

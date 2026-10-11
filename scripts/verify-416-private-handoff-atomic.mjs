@@ -50,11 +50,20 @@ assert.deepEqual(sorted.map(x=>x.mutation_count).sort((a,b)=>a-b),[30,50]);
 const replay=await acceptPrivateHandoff416(db,claim);
 assert.equal(replay.accepted,true);assert.equal(replay.duplicate,true);
 assert.equal(rowsWritten,3,'exact resend must write 0');
+// Real background worker consumes the 069 queue. A late identical Function
+// retry MUST NOT recreate the consumed batch even though receipt survives.
+sqlite.prepare('DELETE FROM explore_like_batches_069').run();
+const wroteBeforeConsumedReplay=rowsWritten;
+const replayAfterConsume=await acceptPrivateHandoff416(db,claim);
+assert.equal(replayAfterConsume.accepted,true);
+assert.equal(replayAfterConsume.duplicate,true);
+assert.equal(rowsWritten,wroteBeforeConsumedReplay,'already consumed queue must never be reinserted');
+assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM explore_like_batches_069').get().n,0);
 const old={...raw,version:79,windowId:'00000000-0000-4000-8000-000000000078'};
 const stale=await acceptPrivateHandoff416(db,validatePrivateHandoff416(old,now));
 assert.equal(stale.accepted,false);
 assert.equal(rowsWritten,3,'older seal must not reopen canonical queue');
-assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM explore_like_batches_069').get().n,2);
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM explore_like_batches_069').get().n,0);
 const next={...raw,version:82,windowId:'00000000-0000-4000-8000-000000000079',
  rows:[{trackId:'song-1',liked:false,operationId:'00000000-0000-4000-8000-000000000081'}]};
 const later=await acceptPrivateHandoff416(db,validatePrivateHandoff416(next,now));
@@ -66,4 +75,5 @@ assert.throws(()=>validatePrivateHandoff416({...raw,signedAtMs:now-1_000_000},no
 assert.throws(()=>validatePrivateHandoff416({...raw,rows:[raw.rows[0],raw.rows[0]]},now),/INVALID/);
 console.log('STAGE416_HMAC_WORKER_80_TRACKS_SHARED_D1_ATOMIC_W3=PASS');
 console.log('STAGE416_HMAC_DUPLICATE_W0_STALE_VERSION_W0=PASS');
+console.log('STAGE416_CONSUMED_BATCH_LATE_REPLAY_NO_REQUEUE_W0=PASS');
 console.log('STAGE416_HMAC_SERVER_HANDOFF_SOURCE_ONLY=PASS');

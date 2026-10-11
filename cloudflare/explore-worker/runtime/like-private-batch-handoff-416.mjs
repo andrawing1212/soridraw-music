@@ -47,12 +47,16 @@ export async function acceptPrivateHandoff416(db,claim){
  const digest=await sha416(JSON.stringify({uid,windowId,version,sealedAtMs,rows}));
  const chunks=[];for(let i=0;i<rows.length;i+=BATCH_SIZE_416)
    chunks.push(rows.slice(i,i+BATCH_SIZE_416));
+ // This fresh invocation nonce is stored ONLY if the monotonically newer
+ // seal claims the UID. An identical accepted retry uses a different nonce
+ // and therefore cannot recreate queue rows after background consumption.
+ const claimToken=crypto.randomUUID();
  const cursor=db.prepare(
-   'INSERT INTO '+RECEIPTS_416+'(user_uid,version,digest,accepted_at) VALUES(?,?,?,?) '+
+   'INSERT INTO '+RECEIPTS_416+'(user_uid,version,digest,accepted_at,claim_token) VALUES(?,?,?,?,?) '+
    'ON CONFLICT(user_uid) DO UPDATE SET '+
-   'version=excluded.version,digest=excluded.digest,accepted_at=excluded.accepted_at '+
+   'version=excluded.version,digest=excluded.digest,accepted_at=excluded.accepted_at,claim_token=excluded.claim_token '+
    'WHERE excluded.version>'+RECEIPTS_416+'.version RETURNING version'
- ).bind(uid,version,digest,sealedAtMs);
+ ).bind(uid,version,digest,sealedAtMs,claimToken);
  const statements=[cursor],batchIds=[];
  for(let i=0;i<chunks.length;i++){
    const chunk=chunks[i];
@@ -63,8 +67,8 @@ export async function acceptPrivateHandoff416(db,claim){
      'INSERT OR IGNORE INTO '+QUEUE_416+
      '(batch_id,user_uid,created_at,mutation_count,mutations_json) '+
      'SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM '+RECEIPTS_416+
-     ' WHERE user_uid=? AND version=? AND digest=?)'
-   ).bind(batchId,uid,sealedAtMs,chunk.length,JSON.stringify(chunk),uid,version,digest));
+     ' WHERE user_uid=? AND version=? AND digest=? AND claim_token=?)'
+   ).bind(batchId,uid,sealedAtMs,chunk.length,JSON.stringify(chunk),uid,version,digest,claimToken));
  }
  const results=await db.batch(statements);
  if(!Array.isArray(results)||results.length!==statements.length||

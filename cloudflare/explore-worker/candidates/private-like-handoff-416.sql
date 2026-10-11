@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS explore_like_private_acceptance_416(
  user_uid TEXT PRIMARY KEY,
  version INTEGER NOT NULL CHECK(version>0),
  digest TEXT NOT NULL,
- accepted_at INTEGER NOT NULL
+ accepted_at INTEGER NOT NULL,
+ claim_token TEXT NOT NULL
 );

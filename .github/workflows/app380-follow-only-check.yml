@@ -84,17 +84,31 @@ jobs:
           node scripts/verify-394-follow-only-worker-freeze.mjs
           node scripts/verify-395-follow-only-release-scope.mjs
           node scripts/verify-396-public-like-reload-and-diagnostics.mjs
-      - name: Existing follow regressions
+      - name: Current follow regressions (each check reports independently)
+        shell: bash
         run: |
-          set -euo pipefail
-          node scripts/verify-354-follow-orchestration.mjs
-          node scripts/verify-355-follow-audit-repairs.mjs
-          node scripts/verify-356-follow-worker341-legacy-parity.mjs
-          node scripts/verify-377-follow-count-list-sync.mjs
-          node scripts/verify-386-follow-overlay-count-display.mjs
-          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
-          node scripts/verify-389-social-client-batching.mjs --follow-only
-          node scripts/verify-303-studio-split-browser-history.mjs
-          # The current 127 verifier targets excluded receipt390 logic.
-          # The exact original app379 like client + all non-follow Worker code
-          # are instead enforced byte-for-byte by verify-394 above.
+          set -uo pipefail
+          failed=0
+          run_check() {
+            name="$1"
+            shift
+            if "$@"; then
+              echo "FOLLOW_CHECK_${name}=PASS"
+            else
+              echo "::error title=Follow regression failed::${name}"
+              failed=1
+            fi
+          }
+          # 354 is a strict app379 whole-Worker byte freeze. Run it only
+          # inside the historical app382 release gate, never on modern code.
+          if [ "${{ steps.contract.outputs.app_version }}" = "382" ]; then
+            run_check 354 node scripts/verify-354-follow-orchestration.mjs
+          fi
+          run_check 355 node scripts/verify-355-follow-audit-repairs.mjs
+          run_check 356 node scripts/verify-356-follow-worker341-legacy-parity.mjs
+          run_check 377 node scripts/verify-377-follow-count-list-sync.mjs
+          run_check 386 node scripts/verify-386-follow-overlay-count-display.mjs
+          run_check 387 env SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
+          run_check 389 node scripts/verify-389-social-client-batching.mjs --follow-only
+          run_check 303 node scripts/verify-303-studio-split-browser-history.mjs
+          exit "$failed"

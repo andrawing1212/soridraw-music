@@ -117,8 +117,8 @@ try {
     three.operationId,'integration-test',now+70);
   assert.equal(secondRepair.recovered,false);
   assert.equal(secondRepair.duplicate,true);
-  assert.equal((await account.get()).data().version,3);
-  assert.equal((await display.get()).val().version,3);
+  assert.equal((await account.get()).data().version,4);
+  assert.equal((await display.get()).val().version,4);
   assert.equal((await hold.get()).data().state,'recovered');
   console.log('STAGE420_REAL_EMULATOR_MASTER_HOLD_EXACT_REPAIR_IDEMPOTENT=PASS');
 
@@ -127,7 +127,7 @@ try {
   await assert.rejects(approve(firestore,uid,{
     ...make(4),operationId:'2e2db23f-56aa-4f91-82b2-13e3d2c62c00',
   },now+90),/420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
-  assert.equal((await account.get()).data().version,3);
+  assert.equal((await account.get()).data().version,4);
   console.log('STAGE420_REAL_EMULATOR_LEGACY_UNPROVEN_V4_FAIL_CLOSED=PASS');
 
   console.log('STAGE420_EMULATOR_REAL_DB_OPERATIONS_NOT_LIVE_BILLING=PASS');

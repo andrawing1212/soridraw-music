@@ -242,6 +242,123 @@ export const recoverAtomicLikeDisplayGapCandidate420 = async (
     reason: lastVersion >= throughVersion ? 'delivered' : 'needs-retry' };
 };
 
+
+// Candidate only: Eventarc Firestore onCreate can call this with a trusted
+// receipt snapshot AFTER Firestore has committed. It is intentionally not
+// wired to functions/src/index.ts or deployed.
+export type AtomicLikeWakeupResult420 =
+  | { status: 'delivered' | 'already-delivered'; delivered: number }
+  | { status: 'retry-required'; reason: string; delivered: number };
+export const handleApprovedLikeReceiptWakeupCandidate420 = async (
+  firestore: Firestore,
+  realtime: Database,
+  uid: string,
+  receiptId: string,
+  rawReceipt: unknown,
+  nowMs = Date.now(),
+): Promise<AtomicLikeWakeupResult420> => {
+  if (!validAccount(uid) || typeof receiptId !== 'string' ||
+      receiptId.length > 128) throw new Error('420_RECEIPT_WAKEUP_INVALID');
+  const proof = rawReceipt && typeof rawReceipt === 'object' &&
+    !Array.isArray(rawReceipt) ? rawReceipt as Record<string, unknown> : {};
+  const op: AtomicLikeCommand420 = {
+    trackId: proof.trackId as string,
+    ownerUid: proof.ownerUid as string,
+    liked: proof.liked as boolean,
+    operationId: proof.operationId as string,
+  };
+  if (op.operationId !== receiptId ||
+      planAtomicLikeDisplayDeliveryCandidate420(
+        uid, op, proof, { version: Number(proof.version) - 1, results: [] },
+        nowMs,
+      ).status !== 'emit') {
+    throw new Error('420_RECEIPT_WAKEUP_PROOF_INVALID');
+  }
+  // Fast path: the event already contains the original server-owned proof,
+  // so there is no additional Firestore query per normal delivery.
+  const display = realtime.ref('privateLikeSync420/' + uid + '/displayV2');
+  const outcome = await display.transaction((raw: unknown) => {
+    const planned = planAtomicLikeDisplayDeliveryCandidate420(
+      uid, op, proof, raw, nowMs,
+    );
+    return planned.status === 'emit' ? planned.next : undefined;
+  }, undefined, false);
+  const currentVersion = Number(outcome.snapshot.val()?.version || 0);
+  if (outcome.committed) return { status: 'delivered', delivered: 1 };
+  if (Number.isSafeInteger(currentVersion) &&
+      currentVersion >= Number(proof.version)) {
+    return { status: 'already-delivered', delivered: 0 };
+  }
+  // Out-of-order onCreate event: use only the exact missing versions under
+  // this UID, and never repeat the approval transaction.
+  const gap = await recoverAtomicLikeDisplayGapCandidate420(
+    firestore, realtime, uid, Number(proof.version), nowMs, 16,
+  );
+  return gap.complete
+    ? { status: 'delivered', delivered: gap.delivered }
+    : { status: 'retry-required', reason: gap.reason, delivered: gap.delivered };
+};
+
+// Only callable by a future server wrapper AFTER requireMasterCaller has
+// authenticated the Master. DO NOT directly expose this as a Function.
+// The unlock and immutable audit are one atomic Firestore transaction.
+export type AtomicLikeMasterUnlockResult420 = {
+  unlocked: boolean;
+  duplicate: boolean;
+  previousLockedUntilMs: number;
+  version: number;
+};
+export const masterUnlockAtomicLikeAfterAuthCandidate420 = async (
+  firestore: Firestore,
+  masterUid: string,
+  targetUid: string,
+  requestId: string,
+  reason: string,
+  nowMs = Date.now(),
+): Promise<AtomicLikeMasterUnlockResult420> => {
+  if (!validAccount(masterUid) || !validAccount(targetUid) ||
+      typeof requestId !== 'string' ||
+      !/^[a-zA-Z0-9_-]{12,96}$/.test(requestId) ||
+      typeof reason !== 'string' || !reason.trim() ||
+      reason.length > 120 || !Number.isSafeInteger(nowMs) || nowMs <= 0) {
+    throw new Error('420_MASTER_UNLOCK_INVALID');
+  }
+  const rateRef = firestore.collection('privateLikeGuardV2_420').doc(targetUid);
+  const auditRef = rateRef.collection('adminUnlockAudit').doc(requestId);
+  return firestore.runTransaction(async tx => {
+    const previousAudit = await tx.get(auditRef);
+    if (previousAudit.exists) {
+      const record = previousAudit.data();
+      if (record?.masterUid !== masterUid ||
+          record?.reason !== reason.trim()) {
+        throw new Error('420_MASTER_UNLOCK_REPLAY_MISMATCH');
+      }
+      return { unlocked: false, duplicate: true,
+        previousLockedUntilMs: Number(record?.previousLockedUntilMs || 0),
+        version: Number(record?.version || 0) };
+    }
+    const snapshot = await tx.get(rateRef);
+    const state = normalize(snapshot.data());
+    if (state.lockedUntilMs <= nowMs) {
+      return { unlocked: false, duplicate: false,
+        previousLockedUntilMs: state.lockedUntilMs, version: state.version };
+    }
+    const next: RateState = { ...state, windowStartMs: 0,
+      acceptedInWindow: 0, previousWindowStartMs: 0,
+      previousWindowReachedLimit: false, lockedUntilMs: 0 };
+    // Keep last approved version intact: the next genuine click must be
+    // contiguous. Audit is a separate immutable exact-ID document, rather
+    // than growing the every-click rate document.
+    tx.set(rateRef, next);
+    tx.create(auditRef, {
+      masterUid, targetUid, requestId, reason: reason.trim(), at: nowMs,
+      previousLockedUntilMs: state.lockedUntilMs, version: state.version,
+    });
+    return { unlocked: true, duplicate: false,
+      previousLockedUntilMs: state.lockedUntilMs, version: state.version };
+  });
+};
+
 // Firestore guarantees atomic create(receipt)+update(rate) in one transaction.
 // NO RTDB tree read/rewrite; bounded 1 exact receipt + 1 small rate document.
 // A permanent/old v4 op is never silently granted after receipt TTL deletion.

@@ -46,8 +46,10 @@ const src=readFileSync('functions/src/exploreLikeAtomicLedgerCandidate420.ts','u
 assert(src.includes(marker),'terminal hold must use the exact searchable log marker');
 assert(src.includes("state: 'needs-manual-reconciliation'"),
   'a terminal alert must have a corresponding durable Firestore HOLD');
-assert(src.includes("console.error('420_DELIVERY_HELD_FOR_OPERATOR'"),
-  'Cloud Logging ERROR severity is required for the policy filter');
+assert(src.includes("logError('420_DELIVERY_HELD_FOR_OPERATOR'"),
+  'Firebase structured logger ERROR severity is required for the policy filter');
+assert(src.includes("import { error as logError } from 'firebase-functions/logger'"),
+  'Cloud Monitoring requires explicit firebase-functions structured logger');
 const run=process.argv.slice(2);
 if(run.length===1 && run[0]==='--self-test') {
   const project='demo-soridraw-stage420';

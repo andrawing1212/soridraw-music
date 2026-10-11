@@ -5,6 +5,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Database, DataSnapshot } from 'firebase-admin/database';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { error as logError } from 'firebase-functions/logger';
 import { createHash } from 'node:crypto';
 import { DEFAULT_LIKE_ABUSE_SETTINGS_420, type LikeAbuseSettings420 } from './exploreLikeAbuseSettings420';
 
@@ -445,7 +446,10 @@ export const createLikeReceiptDeliveryTriggerCandidate420 = (
     }
     // Terminal HOLD is deliberately not success. An operator needs an
     // out-of-band alert and authenticated, exact-ID recovery before cutover.
-    console.error('420_DELIVERY_HELD_FOR_OPERATOR', { uid, operationId });
+    // Firebase Functions logger emits structured ERROR severity so Cloud
+    // Logging's LogMatch policy can notify the operator. This event does not
+    // mean the delivery succeeded, even though HOLD is durably stored.
+    logError('420_DELIVERY_HELD_FOR_OPERATOR', { uid, operationId });
   }
 });
 

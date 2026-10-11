@@ -21,7 +21,7 @@ const onDocumentCreated=(settings,handler)=>{
   eventConfig=settings;eventHandler=handler;return handler;
 };
 vm.runInNewContext(code,{module,createHash,Number,Math,Date:CandidateDate,Error,
-  onDocumentCreated,console:{error:(...args)=>eventWarnings.push(args)}},
+  onDocumentCreated,logError:(...args)=>eventWarnings.push(args)},
   {timeout:1500});
 const {approveLikeWithAtomicLedgerCandidate420:approve,
   readLikeOperationTime420:readTime,

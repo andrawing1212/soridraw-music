@@ -1,3 +1,12 @@
+## 2026-10-11 검증 완료 — 재반복 금지 / 다음은 실제 호환 원자 설계 한 건
+
+- QA-only `preview` code `5763eba8bcdbefaebaf29892ef7c96e5fa928ff2`, [408 Run 38112104128](https://github.com/andrawing1212/soridraw-music/actions/runs/38112104128) SUCCESS. 기존 `scripts/verify-420-atomic-ledger-candidate.mjs` 실제 source 함수를 실행하여 1분 30 경고·40 제한·2분 연속 40→120분 잠금·자동해제·잠금 중 신규 승인 W0·8일 첫 요청 deny·1,001번째 정확한 재전송 W0을 확인. Functions/app TS, Build, 보호 좋아요/팔로우 PASS. **같은 검사를 다시 작성하거나 패치 누적 금지.**
+- `STAGE420_ATOMIC_LEDGER_V4_LEGACY_COMPATIBILITY=FAIL_CUTOVER_HOLD`는 의도된 안전 판정: 현재 기존 outbox는 UUID v4, 후보는 v7-only. 이 문제를 억지 v4→v7 변환이나 TTL 삭제 뒤 재승인 허용으로 해결하지 말 것. **source-only 통합 후보는 현재 미연결·미배포**, CI Success를 cutover PASS로 말하지 말 것.
+- **Codex/Work 다음 실제 한 작업:** 원본 UUID v4 재전송의 O(1) 영속 승인 증명/안전한 실패 UX와 Firestore receipt+RTDB display·Master unlock 원자성/후속 재조정(부분 실패), 10만 DAU 전체 청구 비용 중 동시에 성립 가능한 **한 가지 최소 구조를 증명**. 안전/경제성 증거 없으면 코드 연결/운영 전환 중단. 앱396 정상 좋아요·팔로우·UI·속도 5/5·실기기 4/4 보호. 사용자가 지정한 ① 개인 스냅샷 반복 읽기 예외 최종 검증은 단계5 비용 감사까지 보류.
+- Stage416 전체 공식 완료 **1/5·20%** 유지, 실서비스 Stage420/426 cutover OFF. 배포·Rules·shared DB·TEST/PROD 변경 승인 없음.
+
+---
+
 ## CURRENT — Stage416 2/5: Firestore 원자 승인 후보 호환·잠금·동기화·비용 통합 단일 작업 (2026-10-11)
 
 **Codex High / source-only / `preview` 기준 `a7494b83d93f0323343532ae4c09c753462678ab`.** 다른 앱 속도/UI 작업은 종료된 것으로 보호. 이번 작업은 **257+ 재승인 방지와 기존 RTDB 256개 root transfer 증가 방지**를 동시에 만족하는 비용 상수형 보안 승인 모델 **1개만** 통합 검증하는 것. 정상 app396 좋아요·팔로우·PC↔모바일·Studio 하트·공개/비공개 및 30초 outbox 유지, 추가 보안 Cutover/Functions/Worker/shared Rules 배포 금지.

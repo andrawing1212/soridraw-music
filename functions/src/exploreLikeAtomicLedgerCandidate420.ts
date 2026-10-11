@@ -296,12 +296,28 @@ export const handleApprovedLikeReceiptWakeupCandidate420 = async (
   // Fast path: the event already contains the original server-owned proof,
   // so there is no additional Firestore query per normal delivery.
   const display = realtime.ref('privateLikeSync420/' + uid + '/displayV2');
-  const outcome = await display.transaction((raw: unknown) => {
-    const planned = planAtomicLikeDisplayDeliveryCandidate420(
-      uid, op, proof, raw, nowMs,
-    );
-    return planned.status === 'emit' ? planned.next : undefined;
-  }, undefined, false);
+  // Real Admin RTDB may call a cold transaction updater with local null,
+  // causing a false waiting-prior and an unnecessary indexed Firestore read
+  // on EVERY normal approval after version 1. A short live listener primes
+  // the exact UID display cache; it is always detached after the transaction.
+  let onSnapshot: (snapshot: DataSnapshot) => void = () => {};
+  const ready = new Promise<DataSnapshot>((resolve, reject) => {
+    onSnapshot = resolve;
+    display.on('value', onSnapshot, reject);
+  });
+  const outcome = await (async () => {
+    try {
+      await ready;
+      return await display.transaction((raw: unknown) => {
+        const planned = planAtomicLikeDisplayDeliveryCandidate420(
+          uid, op, proof, raw, nowMs,
+        );
+        return planned.status === 'emit' ? planned.next : undefined;
+      }, undefined, false);
+    } finally {
+      display.off('value', onSnapshot);
+    }
+  })();
   const currentVersion = Number(outcome.snapshot.val()?.version || 0);
   if (outcome.committed) return { status: 'delivered', delivered: 1 };
   if (Number.isSafeInteger(currentVersion) &&

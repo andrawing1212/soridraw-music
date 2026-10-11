@@ -83,6 +83,23 @@ try {
   assert.equal((await display.get()).val().version,3);
   console.log('STAGE420_REAL_EMULATOR_OUT_OF_ORDER_VERSION_GAP_REPAIRED=PASS');
 
+  // Normal version 4 is NOT an out-of-order gap: its Eventarc source snapshot
+  // must reach RTDB without performing an extra indexed Firestore approval
+  // query. Throw if the normal-path handler touches Firestore at all.
+  const four=make(4,now+3);
+  const fourthApproval=await approve(firestore,uid,four,now+3);
+  assert.equal(fourthApproval.version,4);
+  const savedFour=await receipt(four);
+  const noExtraFirestoreRead={collection:()=>{
+    throw new Error('NORMAL_EVENT_MUST_NOT_READ_FIRESTORE_AGAIN');
+  }};
+  const fourthDelivery=await deliver(noExtraFirestoreRead,realtime,uid,
+    four.operationId,savedFour,now+45);
+  assert.equal(fourthDelivery.status,'delivered');
+  assert.equal(fourthDelivery.delivered,1);
+  assert.equal((await display.get()).val().version,4);
+  console.log('STAGE420_REAL_EMULATOR_NORMAL_SOURCE_EVENT_FS_R0=PASS');
+
   // The REAL Firestore transaction and REAL RTDB delivery are also reused
   // for exact Master HOLD repair; no new like receipt is granted.
   const hold=account.collection('deliveryFailures').doc(three.operationId);

@@ -19,6 +19,8 @@ import {
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
+import { reserveExploreLikeDeviceSequence416 } from './exploreLikeDeviceSequence416.mjs';
+import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
 import {
   advancePrivateBatchWindow416, advancePrivateBatchWindowForRemoteClick416,
   parsePrivateBatchWindow416, privateBatchDeadline416,
@@ -125,6 +127,8 @@ const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922
 
 type ExploreLikePendingMutation = {
+  privateDeviceId416?: string;
+  privateDeviceSequence416?: number;
   trackId: string;
   ownerUid: string;
   baseLiked: boolean;
@@ -1492,6 +1496,12 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? { guardCanonicalLiked420: row.guardCanonicalLiked420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
+    ...(typeof row.privateDeviceId416 === 'string' &&
+      /^[0-9a-f-]{36}$/i.test(row.privateDeviceId416) &&
+      Number.isSafeInteger(row.privateDeviceSequence416) &&
+      Number(row.privateDeviceSequence416) > 0
+      ? { privateDeviceId416: row.privateDeviceId416,
+          privateDeviceSequence416: Number(row.privateDeviceSequence416) } : {}),
     ...(row.deferredSignal390 && typeof row.deferredSignal390 === 'object' &&
         Number.isSafeInteger(Number(row.deferredSignal390.version)) && Number(row.deferredSignal390.version) > 0 &&
         row.deferredSignal390.result && typeof row.deferredSignal390.result.trackId === 'string' &&
@@ -2533,6 +2543,42 @@ export const setExploreTrackLike = async (
         confirmed?.guardAttempt420 === 'sent-unconfirmed';
     }).catch((error) =>
       console.warn('[420] Guarded private intent retained pending authority:', error));
+  }
+
+  // Stage416 RTDB-only transport candidate remains explicitly OFF.
+  // Existing 399 private hint, canonical 5s batch and displayed hearts are
+  // untouched. A device sequence is persisted BEFORE the tentative RTDB write.
+  if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
+      operationId416 && !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+    void (async () => {
+      if (typeof window === 'undefined' || typeof navigator === 'undefined' ||
+          !navigator.locks?.request || !window.crypto?.randomUUID) {
+        throw new Error('416_DEVICE_SEQUENCE_UNAVAILABLE');
+      }
+      const token = await reserveExploreLikeDeviceSequence416(
+        uid, window.localStorage, navigator.locks, () => window.crypto.randomUUID(),
+      );
+      const latest416 = readLikeOutbox(uid);
+      const entry416 = latest416[normalizedTrackId];
+      if (!entry416 || entry416.operationId !== operationId416 ||
+          entry416.updatedAt !== now || entry416.desiredLiked !== liked) return;
+      latest416[normalizedTrackId] = {
+        ...entry416, privateDeviceId416: token.deviceId,
+        privateDeviceSequence416: token.deviceSequence,
+      };
+      persistLikeOutbox(uid, latest416);
+      const persisted416 = readLikeOutbox(uid)[normalizedTrackId];
+      if (persisted416?.operationId !== operationId416 ||
+          persisted416.privateDeviceId416 !== token.deviceId ||
+          persisted416.privateDeviceSequence416 !== token.deviceSequence) {
+        throw new Error('416_DEVICE_SEQUENCE_NOT_DURABLE');
+      }
+      await publishPrivateRtdbBatchClick416(uid, {
+        trackId: normalizedTrackId, liked, operationId: operationId416,
+        deviceId: token.deviceId, deviceSequence: token.deviceSequence,
+      }, DEFAULT_PRIVATE_BATCH_MINUTES_416);
+    })().catch((error) =>
+      console.warn('[416] RTDB private candidate deferred; durable outbox retained:', error));
   }
 
   // Future Stage416: preserve the 5-minute user-wide trailing clock locally.

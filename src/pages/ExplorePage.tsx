@@ -2156,11 +2156,20 @@ export default function ExplorePage() {
 
   // Keep a render-current index without resubscribing the RTDB listener whenever
   // React replaces a Feed/Profile array.
-  publicLikeVisibleTracksRef192.current = new Map(
-    [...tracks, ...popularTracks, ...curatedTracks307, ...managedCuratedTracks307, ...profileTracks, ...profileLikedTracks]
-      .filter((track) => Boolean(track?.id))
-      .map((track) => [track.id, track.ownerUid || '']),
-  );
+  const publicLikeVisibleTracksMap192 = useMemo(() => {
+    // Updating a heart/notice must not rebuild a six-list track index.
+    // Rebuild only when the underlying loaded rows actually change.
+    const index = new Map<string, string>();
+    for (const list of [tracks, popularTracks, curatedTracks307,
+      managedCuratedTracks307, profileTracks, profileLikedTracks]) {
+      for (const track of list) {
+        if (track?.id) index.set(track.id, track.ownerUid || '');
+      }
+    }
+    return index;
+  }, [tracks, popularTracks, curatedTracks307, managedCuratedTracks307,
+    profileTracks, profileLikedTracks]);
+  publicLikeVisibleTracksRef192.current = publicLikeVisibleTracksMap192;
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -2200,9 +2209,16 @@ export default function ExplorePage() {
           }
 
           if (settled.size) {
-            const patchPublicCounts192 = (previous: ExploreTrack[]) => previous.map((track) => (
-              settled.has(track.id) ? { ...track, likeCount: settled.get(track.id)! } : track
-            ));
+            const patchPublicCounts192 = (previous: ExploreTrack[]) => {
+              let changed = false;
+              const patched = previous.map((track) => {
+                const nextCount = settled.get(track.id);
+                if (nextCount === undefined || nextCount === track.likeCount) return track;
+                changed = true;
+                return { ...track, likeCount: nextCount };
+              });
+              return changed ? patched : previous;
+            };
             setTracks(patchPublicCounts192);
             setPopularTracks(patchPublicCounts192);
             setCuratedTracks307(patchPublicCounts192);
@@ -2303,9 +2319,15 @@ export default function ExplorePage() {
       // Heart + count are one accepted like atom. When a canonical remote count
       // accompanies the account state, patch every loaded surface together.
       if (Number.isSafeInteger(detail.likeCount)) {
-        const patchRemotePair129 = (previous: ExploreTrack[]) => previous.map((track) => (
-          track.id === detail.trackId ? { ...track, likeCount: pair129.likeCount } : track
-        ));
+        const patchRemotePair129 = (previous: ExploreTrack[]) => {
+          let changed = false;
+          const patched = previous.map((track) => {
+            if (track.id !== detail.trackId || track.likeCount === pair129.likeCount) return track;
+            changed = true;
+            return { ...track, likeCount: pair129.likeCount };
+          });
+          return changed ? patched : previous;
+        };
         setTracks(patchRemotePair129);
         setPopularTracks(patchRemotePair129);
         setCuratedTracks307(patchRemotePair129);
@@ -2313,7 +2335,8 @@ export default function ExplorePage() {
         setProfileTracks(patchRemotePair129);
         setProfileLikedTracks((previous) => {
           const patched = patchRemotePair129(previous);
-          return pair129.liked ? patched : patched.filter((track) => track.id !== detail.trackId);
+          if (pair129.liked || !patched.some((track) => track.id === detail.trackId)) return patched;
+          return patched.filter((track) => track.id !== detail.trackId);
         });
         // A same-account RTDB acknowledgement is NOT a shared public publication.
         // Keep its count on the active UI and this account's liked-card cache only.

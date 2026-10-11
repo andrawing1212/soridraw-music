@@ -4,6 +4,8 @@ on:
     branches: [preview]
     paths:
       - 'scripts/verify-420-private-rules-emulator.mjs'
+      - 'scripts/verify-420-atomic-ledger-emulator.mjs'
+      - 'functions/src/exploreLikeAtomicLedgerCandidate420.ts'
       - 'scripts/verify-420-private-rules-candidate.mjs'
       - 'scripts/build-420-private-rules-candidate.mjs'
       - 'scripts/verify-420-server-like-abuse-gate.mjs'
@@ -36,6 +38,8 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund @firebase/rules-unit-testing@5 firebase-tools@14
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
       - name: Verify isolated rules candidate source unchanged
         run: |
           node scripts/verify-420-private-rules-candidate.mjs
@@ -47,16 +51,18 @@ jobs:
           import path from 'node:path';
           const config = {
             database: { rules: path.join(process.env.GITHUB_WORKSPACE, 'database.rules.json') },
-            emulators: { database: { host: '127.0.0.1', port: 9000 }, ui: { enabled: false } },
+            firestore: { rules: path.join(process.env.GITHUB_WORKSPACE, 'firestore.rules') },
+            emulators: { database: { host: '127.0.0.1', port: 9000 },
+              firestore: { host: '127.0.0.1', port: 8080 }, ui: { enabled: false } },
           };
           fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'stage420-emulator.json'), JSON.stringify(config));
           JS
       - name: Exercise malicious old-path SDK writes and six healthy legacy channels
         run: |
-          ./node_modules/.bin/firebase emulators:exec --only database \
+          ./node_modules/.bin/firebase emulators:exec --only database,firestore \
             --project demo-soridraw-stage420-rules \
             --config "$RUNNER_TEMP/stage420-emulator.json" \
-            "node scripts/verify-420-private-rules-emulator.mjs"
+            "node scripts/verify-420-private-rules-emulator.mjs && node scripts/verify-420-atomic-ledger-emulator.mjs"
       - name: Assert no product/shared rules files were modified
         run: |
           git diff --exit-code -- database.rules.json firestore.rules

@@ -148,13 +148,53 @@ assert.equal(afterExpiry.allowed,true,'lock expires automatically');
 assert.equal(afterExpiry.duplicate,false);
 assert.equal(afterExpiry.lockedUntilMs,0);
 
-// UUID v4 remains the existing app/outbox format; the dormant v7-only
-// candidate must be reported as INCOMPATIBLE, never wired in silently.
+// Existing app396 pending operation IDs are UUID v4. They cannot be
+// treated as new approvals (no timestamp). Only an exact pre-existing
+// SERVER proof can be used for read-only replay; none is created here.
 const oldV4={...mk(9001),operationId:'2e2db23f-56aa-4f91-82b2-13e3d2c62c00'};
 const beforeV4Writes=writes;
+const beforeV4Reads=reads;
 await assert.rejects(approve(store,rateUid,oldV4,minute0,policy),
-  /420_ATOMIC_LEDGER_REQUEST_INVALID/);
-assert.equal(writes,beforeV4Writes,'legacy v4 must never be re-keyed/written');
+  /420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
+assert.equal(writes,beforeV4Writes,'unproven old v4 is never charged or re-keyed');
+assert.equal(reads,beforeV4Reads+1,'unproven v4 needs only one receipt lookup');
+
+// Synthetic server-owned approval fixture, NOT a migration of live v4 data.
+// New v4 operations are always blocked; proof must already exist.
+const legacyUid='uid-legacy-approved';
+const legacyPath='privateLikeGuardV2_420/'+legacyUid+
+  '/approvals/'+oldV4.operationId;
+const approvedAtMs=minute0-600;
+docs.set(legacyPath,{
+  digest:createHash('sha256').update(JSON.stringify([
+    legacyUid,oldV4.trackId,oldV4.ownerUid,oldV4.liked,oldV4.operationId,
+  ])).digest('base64url'),
+  status:'approved', approvedAtMs, version:17,
+  warning:false,
+  rateAtApproval:{acceptedInWindow:9,lockedUntilMs:0},
+});
+const readOnlyBefore=reads;
+const replayBefore=writes;
+const acceptedOld=await approve(store,legacyUid,oldV4,minute0,policy);
+assert.equal(acceptedOld.allowed,true);
+assert.equal(acceptedOld.duplicate,true);
+assert.equal(acceptedOld.version,17);
+assert.equal(reads,readOnlyBefore+1,'old approval is a single exact-point read');
+assert.equal(writes,replayBefore,'old receipt replay W0');
+const forgedOld=await approve(store,legacyUid,
+  {...oldV4,liked:!oldV4.liked},minute0,policy);
+assert.equal(forgedOld.allowed,false,'same v4 with altered action rejected');
+assert.equal(writes,replayBefore,'tampered v4 costs W0');
+await assert.rejects(approve(store,'different-uid',oldV4,minute0,policy),
+  /420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
+assert.equal(writes,replayBefore,'wrong UID cannot replay approval');
+await assert.rejects(approve(store,legacyUid,oldV4,
+  approvedAtMs+31*day,policy),/420_LEGACY_PROOF_EXPIRED_FAIL_CLOSED/);
+assert.equal(writes,replayBefore,'old v4 beyond safe proof age remains W0');
+docs.delete(legacyPath); // simulate TTL deleting the proof
+await assert.rejects(approve(store,legacyUid,oldV4,
+  approvedAtMs+31*day,policy),/420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
+assert.equal(writes,replayBefore,'missing post-TTL proof never becomes a new click');
 
 console.log('STAGE420_ATOMIC_LEDGER_1000_UNIQUE_APPROVALS=PASS');
 console.log('STAGE420_ATOMIC_LEDGER_1001ST_EXACT_REPLAY_W0=PASS');
@@ -164,7 +204,9 @@ console.log('STAGE420_ATOMIC_LEDGER_MAX_RECEIPT_DOC_BYTES='+maxReceiptBytes);
 console.log('STAGE420_FIRESTORE_FIRST_ACCEPT=2_READ_2_WRITE_THEORETICAL');
 console.log('STAGE420_FIRESTORE_DUPLICATE=1_READ_0_WRITE_THEORETICAL');
 console.log('STAGE420_ATOMIC_LEDGER_30_WARNING_40_LIMIT_120M_LOCK=PASS');
-console.log('STAGE420_ATOMIC_LEDGER_V4_LEGACY_COMPATIBILITY=FAIL_CUTOVER_HOLD');
+console.log('STAGE420_ATOMIC_LEDGER_V4_EXACT_SERVER_PROOF_READ_ONLY_W0=PASS');
+console.log('STAGE420_ATOMIC_LEDGER_UNPROVEN_OR_EXPIRED_V4_FAIL_CLOSED=PASS');
+console.log('STAGE420_ATOMIC_LEDGER_V4_LIVE_OUTBOX_CUTOVER=HOLD_UNPROVEN_PROOF');
 console.log('STAGE420_ATOMIC_LEDGER_8DAY_FIRST_SEND_SAFE_DENIAL=PASS');
 console.log('STAGE420_LIVE_BILLING_AND_RTDB_DELIVERY=NOT_VERIFIED');
 console.log('STAGE420_ATOMIC_LEDGER_CUTOVER=OFF');

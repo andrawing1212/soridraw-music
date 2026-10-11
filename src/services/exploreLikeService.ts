@@ -2576,7 +2576,7 @@ export const setExploreTrackLike = async (
       await publishPrivateRtdbBatchClick416(uid, {
         trackId: normalizedTrackId, liked, operationId: operationId416,
         deviceId: token.deviceId, deviceSequence: token.deviceSequence,
-      }, DEFAULT_PRIVATE_BATCH_MINUTES_416);
+      });
     })().catch((error) =>
       console.warn('[416] RTDB private candidate deferred; durable outbox retained:', error));
   }

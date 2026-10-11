@@ -30,7 +30,7 @@ export async function sealUserPrivateLikes416(
   if(!uid||uid.length>128||!Number.isSafeInteger(nowMs)||nowMs<=0)
     throw Error('416_BAD_SERVER_SEAL');
   let disposition:Stage416SealResult={sealed:false,reason:'UNDETERMINED'};
-  const result=await database.ref('userSync/'+uid+'/exploreLikeBatch416').transaction(
+  const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
       const value=raw as Pending|null;
       if(value?.sealed){
@@ -75,7 +75,7 @@ export async function acknowledgeUserPrivateSeal416(
   if(!uid||uid.length>128||!validUuid(receipt?.id)||
      !Number.isSafeInteger(receipt?.version)||receipt.version<=0)
     throw Error('416_BAD_SERVER_ACK');
-  const result=await database.ref('userSync/'+uid+'/exploreLikeBatch416').transaction(
+  const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
       const value=raw as Pending|null;
       if(!value?.sealed||value.sealed.id!==receipt.id||

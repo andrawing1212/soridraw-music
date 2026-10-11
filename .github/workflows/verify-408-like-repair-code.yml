@@ -18,6 +18,8 @@ on:
       - 'src/services/exploreLikePrivateRtdbTransport416.ts'
       - 'scripts/verify-416-private-rtdb-batch.mjs'
       - 'functions/src/exploreLikePrivateSeal416.ts'
+      - 'functions/src/exploreLikePrivateServerClick416.ts'
+      - 'scripts/verify-416-server-only-click.mjs'
       - 'functions/src/exploreLikePrivateHandoff416.ts'
       - 'functions/src/exploreLikePrivateCommit416.ts'
       - 'scripts/verify-416-complete-private-window.mjs'
@@ -162,6 +164,7 @@ jobs:
           node scripts/verify-416-private-rtdb-batch.mjs
           node scripts/verify-416-client-rtdb-binding.mjs
           node scripts/verify-416-server-rtdb-seal.mjs
+          node scripts/verify-416-server-only-click.mjs
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-signed-worker-issuer.mjs
           node scripts/verify-416-complete-private-window.mjs

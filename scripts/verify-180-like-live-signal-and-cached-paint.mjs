@@ -182,6 +182,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   const env = {
     console, Date, Map, Set,
     EXPLORE_LIKE_BATCH_MAX: 50,
+    STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE: false,
+    STAGE416_SHARED_RTDB_BATCH_ACTIVE: false,
     eligibleGuardedMutation420: () => true, // inactive old-app outbox may flush as before
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver

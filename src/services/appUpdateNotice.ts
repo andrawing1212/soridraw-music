@@ -12,6 +12,9 @@ const COMPLETED_NOTICE_DURATION_MS = 8_000;
 // Do not clear outbox, login, local caches, drafts, or user data on update.
 const LIKE_UPGRADE_REQUIRED_EVENT_420 = 'soridraw:like-upgrade-required-420';
 let likeUpgradeRequired420 = false;
+// A server 409 can arrive BEFORE the newer Hosting version is published.
+// Never offer a reload of the same old build as an alleged security update.
+let likeUpgradeReady420 = false;
 // SORIDRAW_CACHE_LIVE_UPDATE_RESET_217_20260928
 // Diagnostic counters are observation-only. A real app version upgrade starts a
 // fresh diagnostic window without touching user caches, auth, drafts, or product data.
@@ -186,16 +189,29 @@ const showUpdateNotice = () => {
     button = document.createElement('button');
     button.id = NOTICE_ID;
     button.type = 'button';
-    button.textContent = likeUpgradeRequired420 ? '좋아요 업데이트 필수 · 적용' : '새 업데이트 · 적용';
-    button.setAttribute('aria-label', likeUpgradeRequired420 ? '좋아요 업데이트 필수 적용' : '새 업데이트 적용');
     applyNoticeStyle(button);
-    button.addEventListener('click', () => window.location.reload());
+    button.addEventListener('click', () => {
+      // Never loop an old PWA onto itself when a signed Worker has already
+      // rejected its last like. Recheck ONLY the public, cheap version file.
+      if (likeUpgradeRequired420 && !likeUpgradeReady420) {
+        void checkForUpdate(true);
+        return;
+      }
+      window.location.reload();
+    });
     document.body.appendChild(button);
   }
 
   if (likeUpgradeRequired420) {
-    button.textContent = '좋아요 업데이트 필수 · 적용';
-    button.setAttribute('aria-label', '좋아요 업데이트 필수 적용');
+    button.textContent = likeUpgradeReady420
+      ? '좋아요 업데이트 필수 · 적용'
+      : '좋아요 업데이트 준비 중 · 다시 확인';
+    button.setAttribute('aria-label', likeUpgradeReady420
+      ? '좋아요 업데이트 필수 적용'
+      : '좋아요 새 버전 다시 확인');
+  } else {
+    button.textContent = '새 업데이트 · 적용';
+    button.setAttribute('aria-label', '새 업데이트 적용');
   }
   showFallbackPosition(button);
   scheduleStatusRowPosition(button, NOTICE_ID);
@@ -280,11 +296,16 @@ const checkForUpdate = async (force = false) => {
   try {
     const response = await fetch(`${VERSION_URL}?t=${now}`, { cache: 'no-store' });
     if (!response.ok) {
-      removeUpdateNotice();
+      if (likeUpgradeRequired420) showUpdateNotice();
+      else removeUpdateNotice();
       return;
     }
     const payload = await response.json() as { version?: string | number };
     const remoteVersion = String(payload?.version || '').trim();
+    // Only a strictly newer published build may be offered as the mandatory
+    // signed-like upgrade; equality/rollback is NOT a real update.
+    likeUpgradeReady420 = !!remoteVersion &&
+      isVersionUpgrade(CURRENT_APP_VERSION, remoteVersion);
     if (!remoteVersion || remoteVersion === CURRENT_APP_VERSION) {
       // After a verified server-side 409, do not hide the forced-update
       // notice merely because the edge version manifest has not caught up.
@@ -294,8 +315,11 @@ const checkForUpdate = async (force = false) => {
     }
     showUpdateNotice();
   } catch {
-    // 업데이트 확인에 실패하면 현재 앱을 방해하지 않고 다음 주기/복귀 때 다시 확인한다.
-    removeUpdateNotice();
+    // A failed public manifest lookup must not erase an already-received 409.
+    // No user data read and no repeating network request on the click path
+    // beyond the existing version-file check.
+    if (likeUpgradeRequired420) showUpdateNotice();
+    else removeUpdateNotice();
   }
 };
 
@@ -320,6 +344,8 @@ export const startAppUpdateNotice = () => {
   rememberLaunchVersionAndMaybeShowCompletedNotice();
   window.addEventListener(LIKE_UPGRADE_REQUIRED_EVENT_420, () => {
     likeUpgradeRequired420 = true;
+    // The last successful manifest fetch decides if reload is actionable.
+    // Otherwise show a safe "check again" notice with no user data mutation.
     showUpdateNotice();
     // Reuses existing lightweight app-version.json check, no user DB read.
     void checkForUpdate(true);

@@ -94,6 +94,96 @@ assert.equal(canonicalEntrances,1);
 console.log('STAGE420_EXECUTABLE_OLD_CLIENT_409_BEFORE_CANONICAL=PASS');
 console.log('STAGE420_EXECUTABLE_MIXED_UNSIGNED_BATCH_NO_PARTIAL_D1=PASS');
 console.log('STAGE420_EXECUTABLE_HMAC_TAMPER_AUTH_KEY_FAIL_CLOSED=PASS');
+
+// Run the real app-update controller in a minimal browser sandbox. A 409
+// before hosting publishes the NEXT version must not trigger an infinite
+// same-version reload; a published newer version must allow exactly one.
+{
+  const vm = await import('node:vm');
+  const ts = await import('typescript');
+  const updateSource = read('src/services/appUpdateNotice.ts');
+  const events = new Map();
+  const nodes = new Map();
+  const storage = new Map();
+  let remoteVersion420 = 398;
+  let failManifest420 = false;
+  let reloads420 = 0;
+  const requested420 = [];
+  const window420 = {
+    location:{hostname:'preview.soridraw.com',reload:()=>{reloads420++;}},
+    localStorage:{
+      getItem:k=>storage.get(k)??null,
+      setItem:(k,v)=>storage.set(k,String(v)),
+      get length(){return storage.size;},
+      key:i=>Array.from(storage.keys())[i]??null,
+    },
+    sessionStorage:{length:0,key:()=>null,removeItem:()=>{}},
+    addEventListener:(event,cb)=>events.set(event,cb),
+    setInterval:()=>1, clearInterval:()=>{},
+    setTimeout:()=>1,clearTimeout:()=>{},
+    requestAnimationFrame:()=>1,innerWidth:1200,
+  };
+  const doc420 = {
+    body:{appendChild:element=>{nodes.set(element.id,element);}},
+    createElement:()=>({
+      id:'',style:{},listeners:{},
+      setAttribute(key,value){this[key]=value;},
+      addEventListener(event,handler){this.listeners[event]=handler;},
+      remove(){nodes.delete(this.id);},
+    }),
+    getElementById:id=>nodes.get(id)||null,
+    querySelector:()=>null,
+    querySelectorAll:()=>[],
+    addEventListener:(event,cb)=>events.set('document:'+event,cb),
+    visibilityState:'visible',
+  };
+  const exports420={};
+  const code420=ts.transpileModule(updateSource,{
+    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+  }).outputText+
+    '\nexports.__check420=checkForUpdate;';
+  vm.runInNewContext(code420,{
+    exports:exports420,document:doc420,window:window420,
+    __SORIDRAW_APP_VERSION__:'398',
+    fetch:async (url,opts)=>{
+      requested420.push({url,opts});
+      if(failManifest420) throw Error('manifest offline');
+      return {ok:true,json:async()=>({version:remoteVersion420})};
+    },
+    Date,Number,Math,Set,Map,Object,Array,String,console,
+  },{timeout:2000});
+  exports420.startAppUpdateNotice();
+  await exports420.__check420(true);
+  assert.equal(nodes.has('soridraw-app-update-notice'),false,
+    'healthy app398 cannot show a forced update without server 409');
+  events.get('soridraw:like-upgrade-required-420')();
+  await exports420.__check420(true);
+  const notice420=nodes.get('soridraw-app-update-notice');
+  assert.ok(notice420,'409 must preserve a useful upgrade notice');
+  assert.match(notice420.textContent,/준비 중/);
+  notice420.listeners.click();
+  await exports420.__check420(true);
+  assert.equal(reloads420,0,
+    'newer Hosting manifest missing: never reload the same old bundle');
+  failManifest420=true;
+  await exports420.__check420(true);
+  assert.ok(nodes.has('soridraw-app-update-notice'),
+    'network outage cannot hide a verified Worker rejection');
+  notice420.listeners.click();
+  assert.equal(reloads420,0,'manifest outage cannot cause reload loops');
+  failManifest420=false;
+  remoteVersion420=399;
+  await exports420.__check420(true);
+  assert.match(notice420.textContent,/필수 · 적용/);
+  notice420.listeners.click();
+  assert.equal(reloads420,1,'published newer build allows one real reload');
+  assert.ok(requested420.every(r=>r.url.startsWith('/app-version.json?t=')),
+    'mandatory upgrade may fetch only the public version manifest');
+  assert.ok(requested420.every(r=>r.opts?.cache==='no-store'));
+  console.log('STAGE420_MANDATORY_UPGRADE_VERSION_READY_NO_RELOAD_LOOP=PASS');
+  console.log('STAGE420_SERVER_409_MANIFEST_OFFLINE_RETAINS_NOTICE=PASS');
+  console.log('STAGE420_UPGRADE_VERSION_CHECK_ONLY_USER_DB_R0=PASS');
+}
 console.log('STAGE420_MANDATORY_UPGRADE_AUTH_FIRST_409_BEFORE_CANONICAL=PASS');
 console.log('STAGE420_USER_OUTBOX_AND_CACHE_PRESERVED_ON_409=PASS');
 console.log('STAGE420_OLD_APP_UPDATE_NOTICE_NO_USER_DB_READ=PASS');

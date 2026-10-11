@@ -1,3 +1,11 @@
+## NEXT — app399 PREVIEW 정상 배포 및 416 direct bypass emulator PASS, actual cutover HOLD (2026-10-11)
+
+- **완료:** [PREVIEW App399 Release 38143229471](https://github.com/andrawing1212/soridraw-music/actions/runs/38143229471) SUCCESS SHA `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a`, 408 QA/Follow QA SUCCESS, 원본 DB 비변경. [Emulator 38142993689](https://github.com/andrawing1212/soridraw-music/actions/runs/38142993689) SUCCESS: 구형 유효한 버전 1→2 직접416 쓰기 기존 허용 재현 + 새 ACL 차단, 6개 정상 채널 유지, RTDB/Firestore emulator only.
+- **다음 실질 작업 (중복 UX/문서 패치 금지):** Cloudflare Workers Build PREVIEW candidate failure 원인 독립 확인·고정 exact bundle; Stage420 old Worker unsigned 409 + JWT HMAC 서명 검증 → 기존 069/075 writer까지 한 번에 정확하게 연결하는 source/backend dry run, Firebase Secret+Functions 검증/RTDB rules direct416 차단 3환경 호환, Master 잠금/조기해제/알람 운영절차. 100k DAU 5/20/day 월 비용·한국 실제 PC+mobile p95 계측/Work independent read-only audit 없이는 실제 Stage420 ON 금지. TEST/PRODUCTION 분리된 코드에 맞춰 사용자 데이터 공유 권한 전환을 중간만 활성화하지 말 것.
+- **권한:** 구형 앱 업데이트 정책은 사용자 승인받았으나 TEST 승격은 별도 승인, PRODUCTION 명확한 정식 배포 지시 전 금지. 앱399 정상 UI 유지. 캐시 전체 조회/재생성, 사용자 원본 삭제/대량 변환·migration 금지.
+- **고정 진척:** Stage416 28%, 앱 속도 100%, Stage420 실운영 40%(4/10). Emulator pre-release QA를 운영 PASS로 과장 금지.
+
+---
 ## NEXT — 구형 앱 강제업데이트 UX 준비 source QA 완료, Stage420 실제 보안 게이트 확인 (2026-10-11)
 
 - **완료/재작업 금지:** 앱398 PREVIEW source `313af1b6...` 배포 PASS. signed legacy 409+app mandatory upgrade source, old like durable v4 pending 유지, 15분 expired permit 갱신 처리 PASS. 신규 `bcf5498e8cca569237dac3e0f9e2a3fd43136969` forced 409/version-equality reload loop 방지, `951259794aa1a781b64615bcc244904e687bb0c4` old unsigned pending user native single-track confirmation after cutover flag (HARD OFF). 408 [38142275493](https://github.com/andrawing1212/soridraw-music/actions/runs/38142275493) SUCCESS + Follow [38142275485](https://github.com/andrawing1212/soridraw-music/actions/runs/38142275485) SUCCESS. 이번 변경들은 **아직 PREVIEW 미배포**, 앱398 live 유지.

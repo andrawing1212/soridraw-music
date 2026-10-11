@@ -20,6 +20,8 @@ on:
       - 'scripts/verify-420-permit-expiry-replay.mjs'
       - 'src/services/exploreLikeGuardedTransport420.ts'
       - 'scripts/verify-420-guarded-transport.mjs'
+      - 'scripts/verify-420-mandatory-upgrade.mjs'
+      - 'src/services/appUpdateNotice.ts'
       - 'functions/src/exploreLikeAbuseSettings420.ts'
       - 'scripts/verify-420-master-policy.mjs'
       - 'src/components/ExploreLikeAbuseMasterPanel420.tsx'
@@ -127,6 +129,7 @@ jobs:
           node scripts/verify-420-permit-expiry-replay.mjs
           node scripts/verify-420-private-rules-candidate.mjs
           node scripts/verify-420-guarded-transport.mjs
+          node scripts/verify-420-mandatory-upgrade.mjs
           node scripts/verify-420-master-policy.mjs
           node scripts/verify-420-master-ui.mjs
           node scripts/prepare-420-held-alert-policy.mjs --self-test

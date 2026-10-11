@@ -2030,6 +2030,19 @@ async function verifySignedLegacyLikeIntake420(request, env, ctx) {
       return failure(503,'420_SIGNED_LEGACY_KEY_UNAVAILABLE');
     }
     const body=await request.clone().json().catch(()=>null);
+    // An authenticated old app has no server-issued HMAC certificate.
+    // During the coordinated cutover it must update before another like is
+    // accepted. No canonical/queue D1 or R2 work happens on this 409 path.
+    // Its old durable local outbox is not mutated by this Worker response.
+    if (body && Array.isArray(body.mutations) &&
+        body.mutations.length > 0 && body.mutations.length <= 50 &&
+        body.mutations.some(row => !row || typeof row.guardPermit420 !== 'string' ||
+          row.guardPermit420.length === 0)) {
+      return new Response(JSON.stringify({
+        ok:false,error:{code:'420_APP_UPGRADE_REQUIRED',
+          message:'좋아요 저장을 계속하려면 최신 앱 업데이트를 적용해 주세요. 미전송 변경은 기기에 보관됩니다.'},
+      }),{status:409,headers});
+    }
     await verifyGuardedLikeBatch420({
       authenticatedUid:identity.uid,
       body,secretBase64Url:env.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET,

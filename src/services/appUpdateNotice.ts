@@ -7,6 +7,11 @@ const COMPLETED_NOTICE_VERSION_KEY = 'soridraw.app-update.completed-notice-versi
 const MIN_CHECK_INTERVAL_MS = 30_000;
 const ACTIVE_CHECK_INTERVAL_MS = 60_000;
 const COMPLETED_NOTICE_DURATION_MS = 8_000;
+// This signal is emitted only after the canonical Worker denies an old,
+// unsigned like batch during the approved coordinated security transition.
+// Do not clear outbox, login, local caches, drafts, or user data on update.
+const LIKE_UPGRADE_REQUIRED_EVENT_420 = 'soridraw:like-upgrade-required-420';
+let likeUpgradeRequired420 = false;
 // SORIDRAW_CACHE_LIVE_UPDATE_RESET_217_20260928
 // Diagnostic counters are observation-only. A real app version upgrade starts a
 // fresh diagnostic window without touching user caches, auth, drafts, or product data.
@@ -181,13 +186,17 @@ const showUpdateNotice = () => {
     button = document.createElement('button');
     button.id = NOTICE_ID;
     button.type = 'button';
-    button.textContent = '새 업데이트 · 적용';
-    button.setAttribute('aria-label', '새 업데이트 적용');
+    button.textContent = likeUpgradeRequired420 ? '좋아요 업데이트 필수 · 적용' : '새 업데이트 · 적용';
+    button.setAttribute('aria-label', likeUpgradeRequired420 ? '좋아요 업데이트 필수 적용' : '새 업데이트 적용');
     applyNoticeStyle(button);
     button.addEventListener('click', () => window.location.reload());
     document.body.appendChild(button);
   }
 
+  if (likeUpgradeRequired420) {
+    button.textContent = '좋아요 업데이트 필수 · 적용';
+    button.setAttribute('aria-label', '좋아요 업데이트 필수 적용');
+  }
   showFallbackPosition(button);
   scheduleStatusRowPosition(button, NOTICE_ID);
 };
@@ -277,7 +286,10 @@ const checkForUpdate = async (force = false) => {
     const payload = await response.json() as { version?: string | number };
     const remoteVersion = String(payload?.version || '').trim();
     if (!remoteVersion || remoteVersion === CURRENT_APP_VERSION) {
-      removeUpdateNotice();
+      // After a verified server-side 409, do not hide the forced-update
+      // notice merely because the edge version manifest has not caught up.
+      if (!likeUpgradeRequired420) removeUpdateNotice();
+      else showUpdateNotice();
       return;
     }
     showUpdateNotice();
@@ -306,6 +318,12 @@ export const startAppUpdateNotice = () => {
   }
 
   rememberLaunchVersionAndMaybeShowCompletedNotice();
+  window.addEventListener(LIKE_UPGRADE_REQUIRED_EVENT_420, () => {
+    likeUpgradeRequired420 = true;
+    showUpdateNotice();
+    // Reuses existing lightweight app-version.json check, no user DB read.
+    void checkForUpdate(true);
+  });
   void checkForUpdate(true);
   startActiveUpdateChecks();
   document.addEventListener('visibilitychange', () => {

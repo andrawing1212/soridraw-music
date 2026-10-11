@@ -1666,6 +1666,14 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
   let payload: any = null;
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) {
+    // The 420 coordinated security cutover rejects unsigned old clients
+    // before any canonical write. Keep the existing durable outbox and ask
+    // for an app update without clearing Music Note/Library/liked caches.
+    if (path === '/v1/me/likes/batch' && response.status === 409 &&
+        payload?.error?.code === '420_APP_UPGRADE_REQUIRED' &&
+        typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('soridraw:like-upgrade-required-420'));
+    }
     const message = String(payload?.message || payload?.error?.message || payload?.error || '좋아요 요청을 처리하지 못했습니다.').trim();
     throw new Error(message || '좋아요 요청을 처리하지 못했습니다.');
   }

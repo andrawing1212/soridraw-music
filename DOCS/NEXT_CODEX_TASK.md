@@ -1,3 +1,10 @@
+## NEXT — Stage420 만료증 전송 결함 제거 후 실제 cutover 감사·승인 게이트 (2026-10-11)
+
+- **완료 반복 금지:** `preview` code `47defc8eafbc240b7c94e2fca92b03f33dc28939` signed canonical 15분 HMAC 만료 후 승인만 갱신하는 batch 경로 source-only 완성. [408 QA 38139847086](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847086) SUCCESS + [현대 Follow QA 38139847083](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847083) SUCCESS. app397 actual PREVIEW는 별도 격리 source `132ed10...` 그대로 정상 사용 중.
+- **남은 결정적 문제:** 본 Stage420 신규 approval + HMAC Worker는 전부 OFF이고, 실 공유 RTDB `userSync/$uid/.write`가 여전히 구형 416 직접 쓰기를 허용한다. signed guard만 켜도 구형 미서명 Worker/구형 PWA 호환 불가. Work read-only 독립 E2E/비용 감사 후 **디렉터 승인 구형 탭 강제 갱신 또는 유예 방침** 없이는 실제 120분 보안 전환을 합격시킬 수 없다. Firebase Functions onCall, shared Rules, 3환경 Worker, 신규 클라이언트, HMAC secret, Master HOLD/Cloud Monitoring 운영은 원자적 릴리스 계획으로만 다룬다. 100k DAU × 5/20회 서버 전체 비용/한국 p95/PC-mobile 실제 결과 미검증. 임의 schema migration/backfill, TEST/PROD/main 변경 및 사용자 데이터 변경 금지.
+- **현재 운영 진행률:** Stage416 28%, 앱 속도 100%(기존), Stage420 40%(4/10), 기능 준비 중. 다음 QA는 구형 클라이언트/Rules/worker 보안 및 실제 비용에 집중하고 동일 CI 반복 금지.
+
+---
 ## NEXT — Stage420 실제 PREVIEW 가동 검증으로 직접 이동 (2026-10-11)
 
 - **반복 금지:** `preview` `16d9d5bfe016a46cf3f8a2b9797271d1acb1deca`에서 동기 수신 정합화와 구형 Follow CI false-fail 수정 끝. 408 [38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) PASS, modern follow [38139163112](https://github.com/andrawing1212/soridraw-music/actions/runs/38139163112) TypeScript/Build + 실제 runtime 8/8 PASS. app397 PREVIEW exact 배포 `132ed10e58351b227f616d60786a5eaacc62a451` 완료되어 유지. 이전 app379/382 전체 Worker freeze, 과거 좋아요 30s timing, 354/355 import 위양성은 현재 버전과 분리됨. 역사적 app382 검사 자체는 보존되어 있음.

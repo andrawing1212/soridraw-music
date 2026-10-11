@@ -1,3 +1,11 @@
+## CURRENT — Stage420 오프라인 좋아요 승인증 만료 복구 source-only 구현/검사 PASS (2026-10-11)
+
+- **기능 기준 `preview` code `47defc8eafbc240b7c94e2fca92b03f33dc28939` (이전 `ebef588f07613db12d3b4f8357dd66cb1aa604c8`), 변경 3파일:** `src/services/exploreLikeGuardedTransport420.ts`, `src/services/exploreLikeService.ts`, `scripts/verify-420-guarded-transport.mjs`. 새 승인증은 발급 15분 후 만료되는데 이전 Stage420 guarded flush는 오프라인 승인 완료 outbox에서 만료증을 그대로 Worker로 전달할 수 있었음. 이제 **Stage420 ON에서만** 실제 대기 중인 canonical batch 송신 전 동일 track/liked/operationId의 기존 HMAC을 필요시에만 `renewExploreLikePermit420` Callable로 갱신하고, 최신 operation과 일치하는 새 증표를 durable outbox에 먼저 저장한 뒤 전송. 갱신 실패/24h 초과 시 재승인·새 operationId 발급·직접 RTDB fallback 없이 기존 사용자 의도 보존. 다른 탭의 새 클릭이 앞서면 구 승인 결과는 폐기. 기존 app397 OFF 구간 및 변경 없는 page-entry 추가 읽기/쓰기 0.
+- **실제 GitHub 자동검사:** [408 Run 38139847086](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847086) **SUCCESS** (Functions TS, 앱 TS, Build, 새 오프라인 15min 갱신·중복/오염 차단, 기존 like/follow, shared RTDB Rules read-only). [Follow Run 38139847083](https://github.com/andrawing1212/soridraw-music/actions/runs/38139847083) **SUCCESS** (TS, Build, 8개 현재 팔로우 회귀 + Worker 파일 무결성).
+- **배포:** PREVIEW 실제 Hosting은 앱397 exact `132ed10e58351b227f616d60786a5eaacc62a451` 그대로. Stage420 / signed Worker alternative / 426 / Functions atomic HARD OFF; 이번 source-only 수정 미배포. 공유 RTDB Rules·D1/R2/Firestore 원본/TEST/PRODUCTION/main 변경 0. 새 기능을 실기기/Worker Cloudflare에서 테스트했다고 주장 금지.
+- **다음 실질 게이트:** Work 독립 read-only 감사 + 구형 열린 PWA/RTDB direct416 + unsigned Worker 우회 차단/구형 업데이트 정책 확정 + PC/mobile 실사용+100k DAU 비용과 p95 + HOLD/Monitoring 실제 운영 검증. 사용자 승인 전 보안 전환 일부 ON·shared Rules 폐쇄/Functions/Worker 릴리스 금지. 전체 **Stage416 28%, 앱 속도 5/5·100%(기존 QA), Stage420 운영4/10·40%**. 소스 결함 1건 수정으로 운영 PASS 상승 없음.
+
+---
 ## CURRENT — app397 PREVIEW 보호 / Stage420 동기 수신 일치 + 구형 Follow CI 오류 해결 (2026-10-11)
 
 - **최종 소스 커밋:** `preview` `16d9d5bfe016a46cf3f8a2b9797271d1acb1deca`; Stage420 신호 생산자 `display`와 신앱 단일 수신자 `legacy` 일치 수정은 코드 commit `8fa70dfbe15c0729bcae3e85befece0aac7b76b7` (정확 2파일). Source-only이며 Stage420 고객 경로는 모두 HARD OFF.

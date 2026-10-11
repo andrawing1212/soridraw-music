@@ -1,3 +1,12 @@
+## CURRENT NEXT — Stage420 Eventarc source-only retry PASS, 실제 동기화·Master·비용 게이트 HOLD (2026-10-11)
+
+- **완료한 것 반복 금지:** source-only `preview` candidate `8bba31cc3b9661bfe5254d9e179929513f63230c`, [408 Run 38115862721](https://github.com/andrawing1212/soridraw-music/actions/runs/38115862721) PASS. onCreate `retry:true` factory, `retry-required` 예외 전파, 오류 시 23h 범위 재시도·그 후 operationId별 Firestore HOLD 1회/재반복 W0 memory QA, 정상 이벤트 추가 Firestore R0. **실 Functions onCreate export/Cloud Monitoring/실 Firebase/RTDB 미배포·미연결**, 진척 전체 28%(4/10) 유지.
+- **다음 하나는 Work 독립 read-only 감사 + Codex High 운영 연결 설계 확정:** (1) Firebase v2 onCreate 실제 Eventarc 재시도·운영 경보/장기 HOLD 해소와 사후 재전달을 운영자 인증/원본 opId 보존으로 보장할지, (2) 실제 RTDB Rules `displayV2`와 app396 `display` listener·old v4 outbox/Worker171 canonical/TTL + TEST/PROD 공유 사용자와의 호환성, (3) Master 기존 RTDB lock과 Firestore atomic lock 단일 authority·role proof·rollback, (4) 10만 DAU 하루5/20회 기준 Firestore R/W + TTL + Functions/Eventarc retry + RTDB last50 broadcast fanout + Worker/D1/DO/R2 + 한국 모바일 p95/업데이트 read0를 실제와 비용계산 분리해 검증. UI/좋아요/팔로우/Studio 하트·Local First 건드리지 말 것.
+- **중단:** Work가 구형 앱 호환/중복 승인/10만 DAU 비용을 PASS하지 못하면 source-only를 더 늘려서 cutover를 밀어붙이지 말 것. `Stage420/426 OFF`, Functions/Worker/Rules/Hosting 실제 배포·공유데이터 backfill·대량 쓰기/삭제·main/TEST/PROD 변경 금지. Work 미실행임을 명시하고, QA 모형은 실사용 증거가 아님.
+- **보고 형식:** Stage416 전체 **28%** (1 큰 단계 + 현재 4/10 합격) / 앱 속도 5/5 100% / 이번 retry 후보 세부작업 3/3 100%. 새로운 운영 게이트 실제 통과 때만 전체 +2%p.
+
+---
+
 ## CURRENT NEXT — Stage420 origin-bound permit 완료; 이벤트 장기 복구/실사용 MASTER/구버전 호환 게이트 (2026-10-11)
 
 - **준비된 소스:** `preview` `edf0fa500c36fc906a5edc5f150128c92c078f60`, [408 Run 38115370628](https://github.com/andrawing1212/soridraw-music/actions/runs/38115370628) PASS. `issueLikePermit420` v1 그대로 + renewal v2 원본 HMAC `orig` 고정, Worker v1/v2 strict 검증, 24h 최초 승인 절대 시간 제한. v1→v2→23시간 후 v2→24시간/31일 거절·기존 like/follow/TS/Build PASS. **이 보안 문제를 매번 재탐색·재패치하지 말고 다음 통합으로 이동.**

@@ -412,6 +412,7 @@ export const recoverHeldLikeDeliveryAfterMasterAuthCandidate420 = async (
     throw new Error('420_HELD_RECOVERY_PROOF_MISSING');
   }
   const proof = proofSnap.data();
+  if (!proof) throw new Error('420_HELD_RECOVERY_PROOF_MISSING');
   if (held?.uid !== targetUid || held?.operationId !== operationId ||
       held?.approvalVersion !== proof?.version ||
       held?.approvedAtMs !== proof?.approvedAtMs) {

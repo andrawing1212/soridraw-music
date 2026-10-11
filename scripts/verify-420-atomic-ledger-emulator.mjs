@@ -50,6 +50,7 @@ try {
   assert.equal(first.allowed,true);
   assert.equal(first.duplicate,false);
   assert.equal(first.version,1);
+  assert.equal(first.approvedAtMs,now,'initial receipt origin comes from server clock');
   const savedOne = await receipt(one);
   const firstDelivery = await deliver(firestore,realtime,uid,one.operationId,savedOne,now+5);
   assert.equal(firstDelivery.status,'delivered');
@@ -58,17 +59,19 @@ try {
   assert.equal(repeated.allowed,true);
   assert.equal(repeated.duplicate,true);
   assert.equal(repeated.version,1);
+  assert.equal(repeated.approvedAtMs,now,
+    'replayed approval NEVER resets original certificate origin time');
   const repeatedDelivery = await deliver(firestore,realtime,uid,one.operationId,savedOne,now+20);
   assert.equal(repeatedDelivery.status,'already-delivered');
   assert.equal((await display.get()).val().version,1);
   assert.equal((await account.get()).data().version,1);
   // Server lost its initial callable response after Firestore transaction:
   // recover exactly one existing receipt without any second quota charge.
-  assert.equal(await recoverExact(firestore,uid,one,now+30),true);
-  assert.equal(await recoverExact(firestore,uid,{...one,liked:!one.liked},now+30),false);
-  assert.equal(await recoverExact(firestore,'other-uid',one,now+30),false);
+  assert.equal(await recoverExact(firestore,uid,one,now+30),now);
+  assert.equal(await recoverExact(firestore,uid,{...one,liked:!one.liked},now+30),null);
+  assert.equal(await recoverExact(firestore,'other-uid',one,now+30),null);
   const missing=make(99,now+31);
-  assert.equal(await recoverExact(firestore,uid,missing,now+31),false);
+  assert.equal(await recoverExact(firestore,uid,missing,now+31),null);
   assert.equal((await account.get()).data().version,1,
     'read-only recovery cannot approve, unlock or spend quota');
   console.log('STAGE420_REAL_EMULATOR_FIRST_ACK_LOSS_EXACT_RECOVERY_R1_W0=PASS');

@@ -40,6 +40,9 @@ export type AtomicLikeCommand420 = {
   operationId: string;
 };
 export type AtomicLikeDecision420 = {
+  // Original Firestore approval clock, NOT a new clock for a replayed op.
+  // Signing must preserve this origin across lost ACK and repeated requests.
+  approvedAtMs?: number;
   allowed: boolean;
   duplicate: boolean;
   warning: boolean;
@@ -91,7 +94,7 @@ export const recoverExactAtomicLikeApprovalCandidate420 = async (
   uid: string,
   op: AtomicLikeCommand420,
   nowMs = Date.now(),
-): Promise<boolean> => {
+): Promise<number | null> => {
   if (!validAccount(uid) || !op || typeof op.trackId !== 'string' ||
       !op.trackId || op.trackId.length > 512 ||
       typeof op.ownerUid !== 'string' || op.ownerUid.length > 128 ||
@@ -103,11 +106,11 @@ export const recoverExactAtomicLikeApprovalCandidate420 = async (
   }
   const record = await db.collection('privateLikeGuardV2_420').doc(uid)
     .collection('approvals').doc(op.operationId).get();
-  if (!record.exists) return false;
+  if (!record.exists) return null;
   const proof = record.data();
   const issuedAt = Number(proof?.approvedAtMs || 0);
   const originMs = readLikeOperationTime420(op.operationId);
-  return proof?.status === 'approved' &&
+  const trusted = proof?.status === 'approved' &&
     proof?.operationId === op.operationId &&
     proof?.trackId === op.trackId &&
     proof?.ownerUid === op.ownerUid &&
@@ -119,6 +122,7 @@ export const recoverExactAtomicLikeApprovalCandidate420 = async (
     nowMs - issuedAt < LIKE_LEDGER420_MAX_REPLAY_AGE_MS &&
     (originMs === null || (originMs <= issuedAt + CLOCK_SKEW_MS &&
       issuedAt - originMs <= LIKE_LEDGER420_MAX_FIRST_SEND_AGE_MS));
+  return trusted ? issuedAt : null;
 };
 
 // Candidate-only delivery projection, NOT attached to RTDB or any Callable.
@@ -638,10 +642,15 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
         }
       }
       const rateFromReceipt = normalize(raw?.rateAtApproval);
-      if (raw?.digest !== digest || raw?.status !== 'approved') {
+      const approvedAtMs = Number(raw?.approvedAtMs || 0);
+      if (raw?.digest !== digest || raw?.status !== 'approved' ||
+          !Number.isSafeInteger(approvedAtMs) || approvedAtMs <= 0 ||
+          approvedAtMs > nowMs + CLOCK_SKEW_MS ||
+          nowMs - approvedAtMs >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS) {
         return denied(rateFromReceipt, settings.limitPerMinute);
       }
       return {
+        approvedAtMs,
         allowed: true, duplicate: true,
         warning: raw?.warning === true, lockedUntilMs: rateFromReceipt.lockedUntilMs,
         remainingInWindow: Math.max(0,
@@ -688,6 +697,7 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
       expiresAt: new Date(timestamp + LIKE_LEDGER420_TTL_DELETE_AFTER_MS),
     });
     return {
+      approvedAtMs: nowMs,
       allowed: true, duplicate: false, warning,
       lockedUntilMs: next.lockedUntilMs,
       remainingInWindow: Math.max(0, limit - count), version: next.version,

@@ -22,7 +22,7 @@ import {
 import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420";
-import { issueLikePermit420 } from "./exploreLikePermit420";
+import { issueLikePermit420, issueRenewedLikePermitV2420 } from "./exploreLikePermit420";
 import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
   approveLikeWithAtomicLedgerCandidate420,
@@ -4014,14 +4014,20 @@ export const publishExploreLikeIntent420 = onCall(
       // canonical intake proof; denied/locked actions never receive one.
       // Exactly the matching Worker mutation must carry this short-lived
       // certificate. Replayed operationIds remain canonical W0 by receipt171.
-      const guardPermit420 = outcome.allowed
-        ? issueLikePermit420({
-            uid,
-            trackId: input.trackId.trim(),
-            liked: input.liked,
-            operationId: input.operationId,
-          }, Date.now(), stage420PermitSigningSecret.value())
-        : undefined;
+      const exactPermitAction = {
+        uid, trackId: exactAction.trackId, liked: exactAction.liked,
+        operationId: exactAction.operationId,
+      };
+      // v2 ties every Firestore receipt replay to FIRST approval time.
+      // Minting new v1 on each replay would silently reset the 24h proof
+      // horizon, permitting indefinitely fresh Worker intake certificates.
+      // Legacy RTDB path intentionally keeps its existing v1 behavior.
+      const guardPermit420 = !outcome.allowed ? undefined
+        : STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
+          ? issueRenewedLikePermitV2420(exactPermitAction, Date.now(),
+              Number(outcome.approvedAtMs), stage420PermitSigningSecret.value())
+          : issueLikePermit420(exactPermitAction, Date.now(),
+              stage420PermitSigningSecret.value());
       return { ok: true, ...outcome,
         ...(guardPermit420 ? { guardPermit420 } : {}) };
     } catch (error) {
@@ -4091,17 +4097,21 @@ export const recoverExploreLikePermit420 = onCall(
       liked: input.liked, operationId: input.operationId,
     };
     let approved = false;
+    let originalApprovedAtMs: number | null = null;
     try {
       // This read-only recovery NEVER reapproves a lost-ACK operation.
       // The future atomic receipt is a different authority from the frozen
       // RTDB bounded display/journal. No automatic cross-authority fallback.
-      approved = STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
-        ? await recoverExactAtomicLikeApprovalCandidate420(
-            admin.firestore(), uid, exactAction,
-          )
-        : await hasExactRecentApprovedLike420(
-            admin.database(), uid, exactAction,
-          );
+      if (STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE) {
+        originalApprovedAtMs = await recoverExactAtomicLikeApprovalCandidate420(
+          admin.firestore(), uid, exactAction,
+        );
+        approved = originalApprovedAtMs !== null;
+      } else {
+        approved = await hasExactRecentApprovedLike420(
+          admin.database(), uid, exactAction,
+        );
+      }
     } catch {
       throw new HttpsError("unavailable", "서버 승인 기록 확인에 실패했습니다.");
     }
@@ -4110,10 +4120,15 @@ export const recoverExploreLikePermit420 = onCall(
       throw new HttpsError("permission-denied", "해당 요청의 승인 기록이 확인되지 않습니다.");
     }
     try {
-      const guardPermit420 = issueLikePermit420({
+      const permitAction = {
         uid, trackId: exactAction.trackId, liked: exactAction.liked,
         operationId: exactAction.operationId,
-      }, Date.now(), stage420PermitSigningSecret.value());
+      };
+      const guardPermit420 = STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
+        ? issueRenewedLikePermitV2420(permitAction, Date.now(),
+            Number(originalApprovedAtMs), stage420PermitSigningSecret.value())
+        : issueLikePermit420(permitAction, Date.now(),
+            stage420PermitSigningSecret.value());
       return { ok: true, recovered: true, guardPermit420 };
     } catch {
       throw new HttpsError("unavailable", "승인 증표를 발급하지 못했습니다.");

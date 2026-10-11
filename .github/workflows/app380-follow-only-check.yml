@@ -47,7 +47,24 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
-      - name: Follow-only release boundary
+      # App382-specific byte freeze is a HISTORICAL release test. Running it
+      # against modern app397 source gives a false failure before the actual
+      # follow regressions. Keep the frozen gate for the exact old release,
+      # while testing current follow behavior on every matching preview push.
+      - name: Classify historical follow-only release
+        id: contract
+        run: |
+          node -e 'const v=require("./public/app-version.json").version;require("fs").appendFileSync(process.env.GITHUB_OUTPUT,`app_version=${v}\n`);'
+      - name: Current Worker source integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+      - name: Follow-only release boundary (historical app382 only)
+        if: steps.contract.outputs.app_version == '382'
         shell: bash
         run: |
           set -euo pipefail

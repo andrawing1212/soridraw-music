@@ -45,7 +45,7 @@ export async function recordUserPrivateClick416(
    if(click.deviceSequence<=previousDeviceSeq){
      reason='STALE_OR_DUPLICATE';return;
    }
-   if(Object.keys(devices).length>=32&&!Object.hasOwn(devices,click.deviceId)){
+   if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
      reason='DEVICE_LIMIT';return;
    }
    if(Object.keys(pending).length>=256&&!Object.hasOwn(pending,trackKey)){

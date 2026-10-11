@@ -161,13 +161,14 @@ const flush = service.slice(service.indexOf('flushPendingLikes = async'), servic
 assert.match(flush, /acceptedForSignal127/);
 
 assert.match(flush, /operationId: pending\.operationId/, 'stable ID must accompany the batch request');
-assert.match(flush, /if \(!mutation\.operationId\)/, 'legacy outbox ID must be backfilled once');
+assert.match(flush, /if \(!mutation\.operationId && !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\)/,
+  'legacy outbox ID must be backfilled only on frozen app396, never upgraded as a new atomic click');
 assert.match(flush, /if \(upgradedLegacyOutbox144\) persistLikeOutbox\(uid, outbox\)/,
   'backfilled operation ID must be saved before the HTTP request');
 assert.ok(flush.indexOf('persistLikeOutbox(uid, outbox)') < flush.indexOf("requestExploreLike(user, '/v1/me/likes/batch'"),
   'persist before transport');
-assert.match(service, /operationId: createExploreLikeOperationId144\(\)/,
-  'every new click must receive a new stable operation ID');
+assert.match(service, /operationId: EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\s*\? createExploreLikeOperationId420\(\)\s*: createExploreLikeOperationId144\(\)/,
+  'every new click gets one durable ID: frozen app396 stays v4, dormant atomic flow uses timestamp-bound v7');
 assert.match(service, /operationId: typeof row\.operationId === 'string'/,
   'persisted ID must survive local cache normalization');
 const operationStart144 = service.indexOf('export const createExploreLikeOperationId144 =');

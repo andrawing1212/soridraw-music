@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/verify-420-private-rules-emulator.mjs'
       - 'scripts/verify-420-atomic-ledger-emulator.mjs'
+      - 'scripts/verify-420-firestore-ledger-rules-emulator.mjs'
+      - 'firestore.rules'
       - 'functions/src/exploreLikeAtomicLedgerCandidate420.ts'
       - 'scripts/verify-420-private-rules-candidate.mjs'
       - 'scripts/build-420-private-rules-candidate.mjs'
@@ -62,7 +64,7 @@ jobs:
           ./node_modules/.bin/firebase emulators:exec --only database,firestore \
             --project demo-soridraw-stage420-rules \
             --config "$RUNNER_TEMP/stage420-emulator.json" \
-            "node scripts/verify-420-private-rules-emulator.mjs && node scripts/verify-420-atomic-ledger-emulator.mjs"
+            "node scripts/verify-420-private-rules-emulator.mjs && node scripts/verify-420-firestore-ledger-rules-emulator.mjs && node scripts/verify-420-atomic-ledger-emulator.mjs"
       - name: Assert no product/shared rules files were modified
         run: |
           git diff --exit-code -- database.rules.json firestore.rules

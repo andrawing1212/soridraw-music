@@ -61,7 +61,7 @@ assert.equal(state.sealed,null);
 assert.equal(state.pending[await hash('song-a')].liked,false);
 assert.equal((await complete(database,'uid',worker,secret,now+200,http)).reason,'NOT_DUE');
 assert.equal(sends,2,'one failed attempt and one verified idempotent retry');
-assert(writes>=5);
+assert.equal(writes,2,'only initial seal and exact ACK may write RTDB in server coordinator');
 assert(reads>=4);
 console.log('STAGE416_RTDB_SEALED_FUNCTION_WORKER_RETRY_AND_ACK=PASS');
 console.log('STAGE416_RTDB_NEW_CLICK_SURVIVES_OLD_SEAL_ACK=PASS');

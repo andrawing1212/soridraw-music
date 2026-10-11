@@ -21,6 +21,7 @@ const groups = [
   { name: 'like', commands: [
     ['node', 'scripts/verify-419-like-w2-cutover.mjs'],
     ['node', 'scripts/verify-416-private-like-intent.mjs'],
+    ['node', 'scripts/verify-416-private-5min-batch.mjs'],
     ['node', 'scripts/verify-420-like-abuse-policy.mjs'],
     ['node', 'scripts/verify-420-server-like-abuse-gate.mjs'],
     ['node', 'scripts/verify-420-private-rules-candidate.mjs'],

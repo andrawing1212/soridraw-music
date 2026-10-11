@@ -19,6 +19,10 @@ import {
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
+import {
+  advancePrivateBatchWindow416, parsePrivateBatchWindow416, privateBatchDeadline416,
+  DEFAULT_PRIVATE_BATCH_MINUTES_416,
+} from './exploreLikePrivateBatchPolicy416';
 import { submitGuardedOutboxCandidate420, subscribeGuardedLikeIntent420, prepareGuardedLikeBatch420 } from './exploreLikeGuardedTransport420';
 import { canFlushGuardedOutbox420, type GuardedOutboxEntry420, type GuardedCanonicalEvidence420, type GuardedResolution420 } from './exploreLikeGuardedOutbox420';
 import {
@@ -61,7 +65,11 @@ export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;
 // Exactly one private account listener remains active, never both.
 const STAGE420_PRIVATE_SIGNAL_SOURCE: 'legacy' | 'atomic-v2' = 'legacy';
 const EXPLORE_LIKE_BATCH_MAX = 50;
-const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // Stage413: shorten only Explore public-like batching.
+const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // app399 verified behavior.
+ // Stage416 canonical 5m integration stays OFF until user-private live replay,
+ // Master settings and all environments' old-client compatibility are proven.
+const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;
+const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
@@ -1753,6 +1761,14 @@ let flushPendingLikes: (user: User) => Promise<void>;
 // Preserve a retry-eligible durable outbox for the next app launch.
 const exitFlushArmed413 = new Set<string>();
 
+const readPrivateBatchWindow416 = (uid: string) => {
+  try {
+    return parsePrivateBatchWindow416(JSON.parse(
+      readLikeLocal127(scopedLikeKey127(STAGE416_PRIVATE_BATCH_WINDOW_KEY, uid)) || 'null',
+    ));
+  } catch { return null; }
+};
+
 const schedulePendingFlush = (user: User) => {
   const uid = String(user?.uid || '').trim();
   if (!uid || typeof window === 'undefined') return;
@@ -1770,7 +1786,9 @@ const schedulePendingFlush = (user: User) => {
   const latestEligibleUpdatedAt = eligible.reduce(
     (latest, pending) => Math.max(latest, pending.updatedAt || 0), 0,
   );
-  const deadline = latestEligibleUpdatedAt + EXPLORE_LIKE_IDLE_FLUSH_MS_120;
+  const deadline = STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE
+    ? privateBatchDeadline416(readPrivateBatchWindow416(uid), latestEligibleUpdatedAt)
+    : latestEligibleUpdatedAt + EXPLORE_LIKE_IDLE_FLUSH_MS_120;
   const delay = Math.max(0, deadline - Date.now());
   const timer = window.setTimeout(() => {
     flushTimerByUid.delete(uid);
@@ -2498,8 +2516,16 @@ export const setExploreTrackLike = async (
       console.warn('[420] Guarded private intent retained pending authority:', error));
   }
 
-  // Sliding idle window: every click restarts the same 5-second timer. One song
-  // or many songs therefore leave as one final-state batch after the last click.
+  // Future Stage416: preserve the 5-minute user-wide trailing clock locally.
+  // The 416 cross-device private hint above remains immediate and independent.
+  if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE) {
+    const key416 = scopedLikeKey127(STAGE416_PRIVATE_BATCH_WINDOW_KEY, uid);
+    const next416 = advancePrivateBatchWindow416(
+      readPrivateBatchWindow416(uid), now, DEFAULT_PRIVATE_BATCH_MINUTES_416,
+    );
+    writeLikeLocal127(key416, JSON.stringify(next416));
+  }
+  // Current app399 retains its previously tested 5-second intake.
   schedulePendingFlush(user);
 
   dispatchLikeSync({

@@ -2006,6 +2006,44 @@ async function handleCrossOriginPersonalLikeRepair358(request, env, ctx) {
   });
 }
 
+// STAGE420_ALTERNATIVE_GUARD_EXISTING_075_069_CANONICAL_BATCH
+// Security-first, cost-focused alternative to the 426/D1-only migration.
+// This path preserves the existing healthy baseWorker like write/scheduler/
+// R2 publication and does NOT require the absent 174 or 419 D1 tables.
+// It is hard OFF until a coordinated old-client force-refresh/Rules/Functions
+// release has been independently audited and explicitly approved.
+// It must never be enabled alongside the 426 replacement writer.
+const STAGE420_SIGNED_LEGACY_INTAKE_OPEN = false;
+async function verifySignedLegacyLikeIntake420(request, env, ctx) {
+  const headers = like426Headers(request);
+  const failure = (status, code) => new Response(JSON.stringify({
+    ok:false, error:{code, message:
+      '좋아요 승인 상태를 확인하지 못했습니다. 기기에 보관한 변경을 유지해 주세요.'},
+  }), {status, headers});
+  try {
+    // Reject unverified account claims BEFORE consulting the existing Worker
+    // queue. A valid HMAC alone is not proof of the calling Firebase user.
+    const identity = await validateExploreAuth307(request,env,ctx);
+    if (!identity.ok) return identity.response;
+    if (typeof env?.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET !== 'string' ||
+        !env.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET) {
+      return failure(503,'420_SIGNED_LEGACY_KEY_UNAVAILABLE');
+    }
+    const body=await request.clone().json().catch(()=>null);
+    await verifyGuardedLikeBatch420({
+      authenticatedUid:identity.uid,
+      body,secretBase64Url:env.SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET,
+      nowMs:Date.now(),
+    });
+    // The caller continues through the SAME existing legacy baseWorker
+    // canonical path, 069 queue scheduler, 127 personal state and R2
+    // projections; no new 171 relation schema is introduced by this guard.
+    return null;
+  } catch {
+    return failure(403,'420_SIGNED_LEGACY_PROOF_DENIED');
+  }
+}
+
 // SORIDRAW_426_DORMANT_LIKE_BATCH_V171_ROUTE_20261009
 // Fail-closed only. Wrangler does NOT define SORIDRAW_LIKE_171_READY.
 // Legacy /v1/me/likes/batch remains the EXACT previous Worker path.
@@ -2200,6 +2238,16 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Both experimental writers cannot own one canonical endpoint. If a
+    // later release accidentally enables both, fail BEFORE any D1 work.
+    if (request.method==='POST' && url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103 &&
+        STAGE420_SIGNED_LEGACY_INTAKE_OPEN) {
+      if (STAGE426_COMPILED_OPEN)
+        return new Response(JSON.stringify({ok:false,
+          error:{code:'420_MULTIPLE_WRITERS_REFUSED'}}),{status:503});
+      const rejected = await verifySignedLegacyLikeIntake420(request, env, ctx);
+      if (rejected) return rejected;
+    }
     // Stage426: only an explicitly armed all-environment DB cutover takes
     // this path. Ordinary PREVIEW and ALL existing TEST/PRODUCTION requests
     // retain the previous Worker implementation byte-for-byte.

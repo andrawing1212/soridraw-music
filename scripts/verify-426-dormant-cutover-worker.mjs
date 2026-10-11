@@ -3,6 +3,24 @@ import {readFileSync} from 'node:fs';
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const config=JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc','utf8'));
 const stage=entry.slice(entry.indexOf('// SORIDRAW_426_DORMANT_LIKE_BATCH_V171_ROUTE_20261009'));
+const minimal=entry.slice(entry.indexOf('// STAGE420_ALTERNATIVE_GUARD_EXISTING_075_069_CANONICAL_BATCH'),
+  entry.indexOf('// SORIDRAW_426_DORMANT_LIKE_BATCH_V171_ROUTE_20261009'));
+assert.match(minimal,/const STAGE420_SIGNED_LEGACY_INTAKE_OPEN = false;/,
+  'signed existing Worker intake is not live until the coordinated cutover');
+assert.match(minimal,/await validateExploreAuth307\(request,env,ctx\);/);
+assert.match(minimal,/await verifyGuardedLikeBatch420\(\{/);
+assert.match(minimal,/request\.clone\(\)\.json\(\)/,
+  'guard cannot consume the body needed by the old canonical Writer');
+assert.doesNotMatch(minimal,/proveLikeBatchCutover426\(env\)/,
+  'existing Writer HMAC guard must never require absent 174/419 tables');
+const newFetch=entry.slice(entry.indexOf('  async fetch(request, env, ctx) {'));
+const guardPos=newFetch.indexOf('await verifySignedLegacyLikeIntake420(request, env, ctx)');
+const canonicalPos=newFetch.indexOf('await baseWorker.fetch(request, env, ctx)');
+assert(guardPos>=0&&canonicalPos>guardPos,
+  'when guard is enabled, all 50 signed approvals must precede old canonical DB work');
+assert.match(newFetch,/if \(STAGE426_COMPILED_OPEN\)\s*return new Response/,
+  'if both 420 and 426 flags turn on, fail closed');
+console.log('420_MINIMAL_SIGNED_EXISTING_WRITER_DORMANT_NO_NEW_D1_SCHEMA=PASS');
 assert.match(entry,/import \{ createCandidateLikeBatch422 \} from '\.\.\/runtime\/like-batch-composition-422\.mjs';/);
 assert.match(stage,/const STAGE426_COMPILED_OPEN = false;/);
 assert.equal(Object.prototype.hasOwnProperty.call(config.vars||{},'SORIDRAW_LIKE_171_READY'),false,

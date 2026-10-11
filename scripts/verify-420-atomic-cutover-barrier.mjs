@@ -27,6 +27,8 @@ assert.match(ui,/const STAGE420_MASTER_PANEL_ACTIVE = false;/,
   'unreleased Master panel must not replace the existing role UI');
 assert.match(worker,/const STAGE426_COMPILED_OPEN = false;/,
   'unsigned old Worker path must not be bypassed through a partial release');
+assert.match(worker,/const STAGE420_SIGNED_LEGACY_INTAKE_OPEN = false;/,
+  'alternate signed guard needs the SAME old-client/Rules release approval');
 assert.equal(shared.rules.privateLikeSync420,undefined,
   'shared RTDB Rules cannot be silently flipped on a preview-only code push');
 assert.match(shared.rules.userSync.$uid['.write'],

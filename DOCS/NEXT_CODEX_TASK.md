@@ -1,3 +1,12 @@
+## CURRENT NEXT — Stage420 origin-bound permit 완료; 이벤트 장기 복구/실사용 MASTER/구버전 호환 게이트 (2026-10-11)
+
+- **준비된 소스:** `preview` `edf0fa500c36fc906a5edc5f150128c92c078f60`, [408 Run 38115370628](https://github.com/andrawing1212/soridraw-music/actions/runs/38115370628) PASS. `issueLikePermit420` v1 그대로 + renewal v2 원본 HMAC `orig` 고정, Worker v1/v2 strict 검증, 24h 최초 승인 절대 시간 제한. v1→v2→23시간 후 v2→24시간/31일 거절·기존 like/follow/TS/Build PASS. **이 보안 문제를 매번 재탐색·재패치하지 말고 다음 통합으로 이동.**
+- **다음 단일 보안 구현+독립 감사 범위:** ① `handleApprovedLikeReceiptWakeupCandidate420`의 `retry-required`가 성공 ACK돼 누락되지 않도록 실제 onCreate `retry:true` 예외/최대 24시간/영구 proof gap 경보와 장기 복구를 설계하되 UID/곡 전체 scan·무한 retry 비용 금지. ② 기존 `masterUnlockExploreLike420` 실제 역할검증 및 RTDB 상태와 `masterUnlockAtomicLikeAfterAuthCandidate420` Firestore 단일 승인 authority의 운영 UI·rollback·구형 탭 일치 설계. ③ 기존 `src/services/exploreLikeGuardedTransport420.ts`가 `/display`만 구독하지만 source-only 후보는 `/displayV2`, shared Rules 실운영에는 새 subtree 미적용, 기존 app396 UUIDv4 pending Firestore 승인 receipt 없음. HMAC v1 기존 대기/outbox과 Worker171 canonical replay, 30일 TTL 이후 안전을 사용자 데이터 변경 없이 입증할 것.
+- **검증·비용:** 10만 DAU 하루5/20회 기준 Firebase Firestore/RTDB 진짜 누적 read-write-egress/Functions CPU/Eventarc/TTL/Cloudflare D1/DO/R2 및 실기기 p95 등 **전체 비용**(이전 $37.5는 FS 행비용 일부만); 51+/257+/1001 동일 op W0, 120m Master, 구형 사용자 업데이트·오프라인·양방향 하트/팔로우 정확성. 기존 앱396 정상 동작·Studio saving 30초·UI·캐시 보호. 공유 사용자 원본, Rules, main/TEST/PROD, Functions/Worker/Hosting 배포와 Stage420/426 활성화 금지.
+- **보고:** Stage416 **28% (1/5 완료 + 현재 4/10 게이트)** / 앱 속도 **100%** / 이번 source-only permit 수리 **3/3·100%**. 다음 실사용 게이트 통과 시에만 2%p 증가. Codex 완료 후 Work 별도 read-only 독립 감사; 현재는 별도 Work 미완료, 실서비스 미검증. 무리하게 구현하면 기존 like가 깨질 경우 FAIL/HOLD와 최소 대안 1개만 보고.
+
+---
+
 ## CURRENT NEXT — Stage416 28% / Stage420 3종 실제 연결 차단 해소 (2026-10-11)
 
 **감사 기준:** source code `2e4346239e5d857cec6b86651901505466322270`, 408 quality [38114014953](https://github.com/andrawing1212/soridraw-music/actions/runs/38114014953) PASS. 후속 GitHub 정적 소스 감사 결과 **실서비스 cutover FAIL/HOLD**, 앱396 보호. 현재 전체 진척 공식 계산 `1개 대단계 완료(20%) + 두 번째 대단계 10개 게이트 중 source QA 4개(8%) = 28%`. 다음 각 게이트가 PASS될 때마다 정확히 **2%p**씩만 증가시킬 것(모형 PASS/운영 PASS 구별).

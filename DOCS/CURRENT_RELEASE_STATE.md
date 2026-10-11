@@ -1,3 +1,15 @@
+## CURRENT — Stage420 서명증표 최초 승인시각 고정(v1→v2), 24시간 무기한 갱신 차단 PASS (2026-10-11)
+
+- **코드 기준:** preview `edf0fa500c36fc906a5edc5f150128c92c078f60`; [408 통합 품질 Run 38115370628](https://github.com/andrawing1212/soridraw-music/actions/runs/38115370628) **SUCCESS**. 기존 `functions/src/exploreLikePermit420.ts` v1 최초 승인 형식 유지, `exploreLikePermitRenew420.ts` v1/v2 HMAC 원본 증거 확인, **갱신 결과만 v2+서명된 `orig` 최초 발급시각을 유지**. Worker `like-guard-permit-420.mjs`는 구형 v1 15분 증표와 신규 v2 모두 지원하되 v2의 최초 승인 후 **24시간 경과 시 미만료 증표도 거부**, 클라이언트의 휴면 Stage420 outbox 검증도 v1/v2를 허용. 모두 OFF 상태의 후보 경로, 운영처럼 전환하지 않음.
+- **보강한 실행형 QA:** `scripts/verify-420-permit-renewal.mjs`에 v1→v2 원본시각 보존, 23시간 후 재갱신, 최초 승인 24시간 시점 서버 거절 + Worker 거절, 31일 사슬 재전송 거절, 계정/곡/행동/opId 변조·다른 서명키 거절 확인. `STAGE420_V1_TO_V2_ORIGIN_BOUND_24H_CHAIN_DENIED=PASS`, `STAGE420_EXPIRED_APPROVED_EXACT_OP_RENEWAL=PASS`, `STAGE420_WORKER_ACCEPTS_RENEWED_EXACT_OP=PASS`, `STAGE420_OLD_LIKE_AND_426_ACTIVATION_STILL_OFF=PASS`. GitHub Functions TS, 앱 TS, Build, 기존 좋아요·팔로우 및 신규 공개곡 첫 좋아요 APP197/수신 순서 APP141 자동회귀 PASS. 이는 **합성 검증이지 실제 Cloudflare/Firebase secret/prod 고정 계약 검증이 아님**.
+- **검사 전/후 기능 안전:** 원본 `issueLikePermit420` v1는 그대로여서 기존 pending HMAC v1 서명 인정, 갱신 시 v2로 승격, 장기 경과 시 기존 승인 원본 증거 확인 UI/안전 재동기화 필요; 24시간 이상 원본 증표를 계속 연장하는 UX는 의도적으로 차단. 새로운 canonical 승인/likeCount 덮어쓰기, 공유 사용자 데이터 migration, RTDB Rules 변경 없음. Stage420/426 모두 OFF.
+- **진행률 — 사용자 요청 5단계 내 세분화:** Stage416 전체 **28% = 완료 큰 단계 1/5 20% + 현재 큰 단계 4/10 게이트 × 2%p**. 새 서명증표 수리는 안전한 구형 앱·Worker171·RTDB Rules 호환 **7번 게이트의 일부**이므로 전체 30%로 올리지 않음. 앱396 속도 **5/5·100%**. 이번 세부작업 `원본 경계 검사→source-only 수리→408 TypeScript/Build/회귀` **3/3·100%**. 기존 Stage416 1번 반복 읽기 최종 감사 보류 지시 유지.
+- **남은 상위 차단:** 이벤트 `retry-required`의 실제 onCreate+bounded retry/장기누락 경보 미연결, Master 실제 Callable RTDB authority와 새 Firestore authority 불일치, 신규 `displayV2`를 기존 앱이 구독하지 않음/실제 shared RTDB Rules 후보 미승격, UUIDv4 구버전 outbox 승인증거 부재, Worker171 원본 canonical 기록 30일 replay 이후 실제 중복안전, 10만 DAU 전체 RTDB/Functions/Cloudflare+실기기 PC/모바일 p95 및 Work 독립감사. 이들을 해결하지 않고 cutover·Functions/Rules 배포/TEST·PROD 승격 금지.
+- **환경:** 이번 변경은 preview 코드 및 문서만. Hosting `preview.soridraw.com`은 이전 기록의 정상 앱396 **유지(새 URL 배포 검증 아님)**. Functions/Cloudflare/Firestore/D1/R2/Rules 실제 배포·사용자 원본 read/write/migration 없음; main/TEST/PRODUCTION 미변경.
+- **다음 하나:** Codex High가 실제 onCreate 실패 재시도(24시간 제한·장기복구·비용상한)와 Master 실권한, old display/Worker171/Rules 단계별 호환을 **한 번에** 검증 가능한 최소한의 source-only 연결 계약으로 확정. 먼저 Work read-only 독립 감사. 모형 통과를 운영 PASS로 바꾸지 말 것.
+
+---
+
 ## CURRENT — Stage416 진행률 세분화 28% 및 Stage420 독립 소스 보안·비용 감사 FAIL/HOLD (2026-10-11)
 
 - **코드/감사 기준:** `preview` 코드 최종 `2e4346239e5d857cec6b86651901505466322270`, [408 Run 38114014953](https://github.com/andrawing1212/soridraw-music/actions/runs/38114014953) 자동 TS/Build/관련 회귀 **SUCCESS**. 문서 HEAD `da6cdb95a5a8dfbce205357f831dde23577ba8e4`에서 독립적으로 관련 서버·앱·Rules·서명 갱신 코드를 다시 읽어 정적 감사. **이번 것은 ChatGPT read-only source audit이지, Work의 별도 독립 실행 감사나 실제 Firebase/Cloudflare 실측은 아니다.** 제품 코드·Rules·사용자 DB·배포 변경 0.

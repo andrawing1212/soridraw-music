@@ -1,3 +1,17 @@
+## CURRENT NEXT — Stage420 마지막 안전 게이트: durable 전송 복구 + Master 잠금 일치 + 10만 DAU 전체 비용 (2026-10-11)
+
+**기준:** `preview` candidate code `6a915700483ca907a61f5db56e67f5a868f228f6`; [408 Run 38113008823](https://github.com/andrawing1212/soridraw-music/actions/runs/38113008823) PASS. 기존 비활성 `approveLikeWithAtomicLedgerCandidate420`의 Firestore 원자 승인·개별 영수증, `planAtomicLikeDisplayDeliveryCandidate420`의 **순서 있는 RTDB 50건 알림**은 source-only mock 통과. **이후 같은 모형의 작은 검사 추가 반복 금지.**
+
+**Codex High 단일 목표:** Firestore에 원본 승인은 성공했지만 (a) Functions가 곧바로 크래시, (b) RTDB 전송 실패, (c) 서로 다른 트랙 이벤트 version2가 version1보다 먼저 도착, (d) 첫 ACK 분실·장기 오프라인·서명증표 만료인 경우에도 **실서비스 클라이언트가 페이지 이동/새로고침 없이 정상 동기화되는 자동 서버측 재전달**을 한 가지 최소 구조로 완성·격리 QA. `displayV2`의 초기 version 0/연속 버전 불변/동일 서버 receipt W0, last50 8105B 모형을 기준으로, **자동 재전달을 책임지는 durable wakeup·bounded retry·운영 실패 알림/복구 경로를 설계하지 못하면 기능 PASS 불가**. 잦은 polling, uid 전체 scan, 별도 거대 queue, 실제 데이터 backfill 금지. 정상 캐시 재진입/업데이트 read0 우선.
+
+**반드시 같이 풀어야 할 것:** 현재 기존 `masterUnlockExploreLike420`은 RTDB를 잠금 authority로 사용하므로 Firestore rate lock과 분리돼 조기해제 불일치. Master 정책/잠금 확인/조기해제와 감사 기록이 신규 승인 authority의 동일 상태를 기준으로 하는 최소 설계 후 경합/감사/기존 관리자 사용성 검증; 구형 v4 outbox의 실존 승인 증거가 없으면 승인 기록 임의 생성·변환 금지, 승인 미확정은 fail-closed + 사용자 상태 확인 경로. Worker171 canonical exact receipt/HMAC 15m renew, 구형 direct416 shared Rules는 별도 사용자 승인 전 OFF.
+
+**비용 및 중단:** 가정 100,000 DAU ×5/일/30일 = 1,500만 신규 승인, ×20/일=6,000만. Firestore first approval 2R/2W 이론/receipt TTL 별도 삭제, RTDB last50 payload 8105B fixture(가정상 포화 사용자 월 1,500만회 ×8105B ≈ 121.6GB serialized, 6,000만회 ≈ 486.3GB; 이 수치를 실제 egress/billing으로 바꾸지 말 것), trigger/Task/Functions 호출/CPU, Master DB writes, Worker/D1/DO/R2, 실제 RTDB 다운로드 및 한국 모바일 p95까지 비교. 트래픽 따라 서버 비용이 급증하거나 old client·현재 UI가 깨지면 **HOLD/FAIL + 최소 대안 보고**, 성능/요금 증거 없이 강제 Cutover 금지.
+
+**작업 방식:** 기존 app396 좋아요/팔로우/Studio 하트/개인-공개 동기화/캐시 보호; `preview`의 단일 격리 구현→TS/Build/회귀/고장 주입→Codex commit→Work read-only 독립 감사→ChatGPT 확인. 신규 Functions/Worker/Hosting, shared Rules/Firestore/RTDB, TEST/PRODUCTION 배포와 공유 데이터 write/migration 금지. 사용자 승인 없이 `Stage420/426` ON 금지. Stage416 공식 1/5·20%, 속도 5/5·100%, 종료 실기기 4/4·100%; Stage416 ① 개인 카탈로그 예외 반복 읽기 최종 비용감사로 보류.
+
+---
+
 ## 2026-10-11 다음 구현 기준 — UUID v4 exact proof 후보 PASS, 원본 승인증거·이중 DB 전달 미완 (단일 목표)
 
 - Source candidate `2016e2de548975d58557c06df8ecc25a08d4e165`, [408 38112462716](https://github.com/andrawing1212/soridraw-music/actions/runs/38112462716) PASS. 원래 앱396의 UUID v4는 이제 **미리 존재하는 서버 소유 Firestore receipt가 정확히 일치할 때만** 1 read/0 write로 중복 승인 처리한다. 미확정/만료/위조 v4는 신규 승인 없이 fail closed. v7 1,001회 W0/30·40·120분 QA도 PASS. **운영 구형 사용자 receipt는 현재 Firestore에 자동 존재하지 않는다.** 이 소스 후보를 '구형 좋아요 실사용 호환 PASS'로 바꿔 말하지 말 것.

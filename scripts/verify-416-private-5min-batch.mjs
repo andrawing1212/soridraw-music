@@ -50,3 +50,9 @@ assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.st
 console.log('STAGE416_FUTURE_TWO_DEVICE_WINDOW_EXTENSION_SOURCE=PASS');
 console.log('STAGE416_PRIVATE_BATCH_MASTER_OPTIONS_AND_FROZEN_WINDOW=PASS');
 console.log('STAGE416_CURRENT_APP399_BEHAVIOR_OFF=PASS');
+// Server-only deterministic contract is a separate module, exercised by this CI entrypoint.
+const { spawnSync } = await import('node:child_process');
+const server416 = spawnSync(process.execPath, ['scripts/verify-416-private-window-gate.mjs'], { encoding: 'utf8' });
+if (server416.status !== 0) throw new Error(server416.stderr || server416.stdout || '416 server clock test failed');
+process.stdout.write(server416.stdout);
+

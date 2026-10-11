@@ -114,3 +114,65 @@ assert.equal(canonicalCalls,1);
 console.log('STAGE420_WORKER_ACCEPTS_RENEWED_EXACT_OP=PASS');
 console.log('STAGE420_REAL_171_IDEMPOTENT_D1_BILLING=NOT_TESTED');
 console.log('STAGE420_MISSING_ORIGINAL_ACK_AUTO_RECOVERY=HOLD');
+
+
+// Cross-component contract: the renewed v2 HMAC permit must survive
+// persistent outbox normalization and authorize ONLY the exact pending
+// operation's Worker submission. The Worker still verifies its signature.
+const guardedOutbox = load('src/services/exploreLikeGuardedOutbox420.ts', [
+  'resolveGuardedOutbox420','canFlushGuardedOutbox420',
+]);
+const pending = { uid:op.uid, trackId:op.trackId, ownerUid:'artist-a',
+  desiredLiked:true, operationId:op.operationId, baseLiked:false,
+  updatedAt:at, guardStatus:'awaiting' };
+const resultV2 = guardedOutbox.resolveGuardedOutbox420(pending,pending,{
+  ok:true,allowed:true,lockedUntilMs:0,guardPermit420:restored,
+},null);
+assert.equal(resultV2.action,'approved','renewer v2 must not freeze personal heart');
+assert.equal(resultV2.canFlush,true);
+assert.equal(guardedOutbox.canFlushGuardedOutbox420({
+  ...pending,guardStatus:'approved',guardPermit420:restored,
+}),true,'signed v2 must reach canonical intake after expiry renewal');
+assert.equal(guardedOutbox.canFlushGuardedOutbox420({
+  ...pending,guardStatus:'approved',guardPermit420:original,
+}),true,'previously approved v1 remains supported');
+for(const rejectedPermit of ['v3.abc.def','v2.nope','v2.xxx.yyy.extra']) {
+  assert.equal(guardedOutbox.canFlushGuardedOutbox420({
+    ...pending,guardStatus:'approved',guardPermit420:rejectedPermit,
+  }),false,'unknown/malformed permit cannot pass local format check');
+}
+const appService = readFileSync('src/services/exploreLikeService.ts','utf8');
+assert.match(appService,/\^v\(\?:1\|2\).*?test\(row\.guardPermit420\)/,
+  'v2 permit must survive a browser restart and persisted outbox parser');
+assert.match(appService,/EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false/,
+  'current app396 must remain on existing v4 flow');
+console.log('STAGE420_V2_RENEWAL_SURVIVES_OUTBOX_RESTART_AND_FLUSH=PASS');
+
+// Cross-component contract: atomic Firestore ledger accepts only newly
+// generated v7 clicks; app396 stays UUIDv4. Nothing rewrites old v4 IDs.
+const generator = appService.match(
+  /export const createExploreLikeOperationId420 = \(\): string => \{[\s\S]*?\n\};/,
+)?.[0];
+assert.ok(generator,'atomic-only UUIDv7 generator not found');
+const code=stripTypeScriptTypes(generator,{mode:'strip'})
+  .replace('export const ','const ')+
+  '\nmodule.exports={createExploreLikeOperationId420};';
+const generatorModule={exports:{}};
+vm.runInNewContext(code,{module:generatorModule,crypto:webcrypto,Number,Date,Error},
+  {timeout:1000});
+const ids=new Set();
+for(let i=0;i<64;i++){
+  const before=Date.now();
+  const id=generatorModule.exports.createExploreLikeOperationId420();
+  const after=Date.now();
+  assert.match(id,/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const decoded=Number.parseInt(id.slice(0,8)+id.slice(9,13),16);
+  assert.ok(decoded>=before&&decoded<=after,'new atomic ID binds actual creation time');
+  assert.ok(!ids.has(id),'concurrent clicks must have distinct UUIDv7');
+  ids.add(id);
+}
+assert.match(appService,/operationId: EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\s*\? createExploreLikeOperationId420\(\)\s*: createExploreLikeOperationId144\(\)/,
+  'v7 is allowed only behind the disabled atomic cutover gate');
+assert.match(appService,/if \(!mutation\.operationId && !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\)/,
+  'legacy outbox without a server-proven operation must not be re-keyed');
+console.log('STAGE420_ATOMIC_UUIDV7_TIMESTAMP_WITH_LEGACY_V4_FROZEN=PASS');

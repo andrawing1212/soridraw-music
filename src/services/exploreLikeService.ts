@@ -301,6 +301,20 @@ export const createExploreLikeOperationId144 = (): string => {
   return crypto.randomUUID();
 };
 
+// ONLY future Stage420 atomic approvals need a UUIDv7 with a verifiable
+// creation timestamp. The existing app396/legacy like path MUST keep v4.
+// 74 random bits originate from crypto.randomUUID; retries keep the same ID.
+export const createExploreLikeOperationId420 = (): string => {
+  const random = createExploreLikeOperationId144().replace(/-/g, '');
+  const now = Date.now();
+  if (!Number.isSafeInteger(now) || now <= 0 || now >= 0x1_0000_0000_0000) {
+    throw new Error('안전한 좋아요 요청 시각을 확인할 수 없습니다.');
+  }
+  const ms = now.toString(16).padStart(12, '0');
+  const variant = (8 | (Number.parseInt(random[3], 16) & 3)).toString(16);
+  return `${ms.slice(0, 8)}-${ms.slice(8)}-7${random.slice(0, 3)}-${variant}${random.slice(4, 7)}-${random.slice(7, 19)}`;
+};
+
 // App129 single-like atom:
 // one (uid, trackId) relation contributes either 0 or exactly 1 to the public
 // total. Heart + this user's one-count contribution are therefore one state
@@ -1437,7 +1451,7 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     ...(row.guardStatus420 === 'awaiting' || row.guardStatus420 === 'approved'
       ? { guardStatus420: row.guardStatus420 } : {}),
     ...(typeof row.guardPermit420 === 'string' &&
-        /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(row.guardPermit420) &&
+        /^v(?:1|2)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(row.guardPermit420) &&
         row.guardPermit420.length <= 2400
       ? { guardPermit420: row.guardPermit420 } : {}),
     ...(row.guardAttempt420 === 'sent-unconfirmed'
@@ -1768,7 +1782,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
   let upgradedLegacyOutbox144 = false;
   const revisions172 = readLikeCanonicalRevisions172(uid);
   for (const mutation of Object.values(outbox)) {
-    if (!mutation.operationId) {
+    if (!mutation.operationId && !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+      // Under atomic Stage420, an old unknown pending operation is NOT a
+      // new authenticated click: never invent a v7 ID for a legacy outbox.
       mutation.operationId = createExploreLikeOperationId144();
       upgradedLegacyOutbox144 = true;
     }
@@ -2312,7 +2328,9 @@ export const setExploreTrackLike = async (
     queuedAt: existing?.queuedAt || now,
     updatedAt: now,
     retryCount: 0,
-    operationId: createExploreLikeOperationId144(),
+    operationId: EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE
+      ? createExploreLikeOperationId420()
+      : createExploreLikeOperationId144(),
     ...(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE ? {
       guardStatus420: 'awaiting' as const,
       ...(typeof authoritativeBeforeClick420 === 'boolean'

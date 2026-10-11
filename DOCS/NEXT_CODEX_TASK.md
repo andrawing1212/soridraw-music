@@ -1,3 +1,13 @@
+## CURRENT NEXT — Stage420 운영 전환 적합성 Work 독립 감사 / 자동 wakeup + 비용·구형 호환 HOLD (2026-10-11)
+
+- **고정 소스:** `preview` `2e4346239e5d857cec6b86651901505466322270` 및 [408 Run 38114014953](https://github.com/andrawing1212/soridraw-music/actions/runs/38114014953) SUCCESS. `functions/src/exploreLikeAtomicLedgerCandidate420.ts`에 신규 source-only `handleApprovedLikeReceiptWakeupCandidate420` 및 `masterUnlockAtomicLikeAfterAuthCandidate420` 추가. 기존 verifier만 확장. Functions/app TS·Build·like/follow·260/1,001회 W0·Master audit W0·mock RTDB 장애 복구 PASS. **코드 후보를 실제 사용자 앱 연결 완료/서비스 자동 복구 완료로 오인 금지.**
+- **다음 하나 = Work read-only 독립 감사 + Codex High 최종 통합 전 설계 안전 게이트.** 수정자와 별개로 동일 SHA 고정 후 1) Eventarc onCreate `retry:true` 실제 binding/장기 백오프·최대 시도·경보가 없을 때 `retry-required`가 누락되는지, 영구 proof gap 시 과금 폭증 없이 fail-closed 되는지, 2) Master 실제 Callable `requireMasterCaller` 검증·서버 권한·Firestore 잠금 authority·RTDB 기존 운영 UI·업데이트 전 앱 정책/로그 일치, 3) 구형 app396/TEST/PRODUCTION UUID v4 원본 재전송·구형 direct416/Worker171 무서명 접근 차단의 단계적 방법, 4) Firestore per-approval 2R/2W+TTL+onCreate×1+RTDB 실다운로드 fanout/Cloudflare Worker/DO/D1/R2 포함 100k DAU 실제 월비용과 한국 p95, 5) 앱 업데이트·페이지 진입·기존 하트와 좋아요/팔로우 정상 보호를 감사. source-only mock PASS만으로 cutover ON/Functions 배포 승인하지 말 것.
+- **비용 조기 판단:** 10만 DAU × 하루 5/20회면 월 1,500만/6,000만 이벤트. Firestore R/W 기본 월 3천만/3천만 또는 1억2천만/1억2천만, TTL steady-state 삭제 월 최대 1,500만/6,000만, onCreate invocation 같은 수. 최근50 RTDB serialized 8,105B × 이벤트 수는 약121.6GB/486.3GB **가상 반복 payload**(실제 다운로드 요금 아님). us-central1 Standard Firestore R/W/D 단독 이론 약 USD 37.5/150, 함수 invocation 단독 초과분 약 USD 5.2/23.2; **전체 결제액 아님**. 가장 큰 숨은 위험은 listener fanout/RTDB transfer·재시도 증폭·Master 권한·shared Rules. 운영 배포 전 실제 청구·성능 측정이 가능한 안전한 격리 계획부터 확정.
+- **금지:** 정상 app396 UI/30초 outbox/팔로우 수정, 구형 좋아요 데이터 원본 재작성·복제·백필·삭제, shared Rules 폐쇄·Firebase/Worker/Hosting 배포, Stage420/426 ON, TEST/PRODUCTION/main 승격. 현 단계가 FAIL/HOLD이면 억지 구현 대신 **정확한 사유와 사용자 영향·최소 대안 하나**를 보고.
+- **상태:** Stage416 **1/5·20%**, 앱 속도 **5/5·100%**, 이번 후보 검증 **3/3·100% 코드/자동 QA**. 운영 신규 적용/실기기 독립 검증 미완료. Stage416 원래① 새 기기/캐시복구 반복 read 감시는 최종 단계의 전체 비용 감사까지 사용자 지정 보류.
+
+---
+
 ## CURRENT NEXT — Stage420 자동 복구 트리거 / Master 단일 잠금 / 건당 비용 최종 통합 (2026-10-11)
 
 - **완료된 증거는 재수행/재작성 금지:** `preview` candidate `3708b7d1481a50ce3c4bc90ec0ea3e72f1eb1f88`, [408 Run 38113517437](https://github.com/andrawing1212/soridraw-music/actions/runs/38113517437) PASS. 한 UID의 빠진 승인 버전만 Firestore indexed `where(version == next).limit(1)` 조회해 RTDB displayV2를 순서대로 복구; 3번 record 미존재시 stop, 증거 복구 이후 260번까지 순서대로, exact retry W0. 서버/실데이터/PROD 변경은 없음.

@@ -158,7 +158,8 @@ const code=stripTypeScriptTypes(generator,{mode:'strip'})
   .replace('export const ','const ')+
   '\nmodule.exports={createExploreLikeOperationId420};';
 const generatorModule={exports:{}};
-vm.runInNewContext(code,{module:generatorModule,crypto:webcrypto,Number,Date,Error},
+vm.runInNewContext(code,{module:generatorModule,crypto:webcrypto,Number,Date,Error,
+  createExploreLikeOperationId144:()=>webcrypto.randomUUID()},
   {timeout:1000});
 const ids=new Set();
 for(let i=0;i<64;i++){

@@ -1,3 +1,11 @@
+## CURRENT — Stage420 기존 Writer 서명 대안 연결 불일치 소스 감사 (2026-10-11)
+
+- **감사 기록:** `DOCS/STAGE420_SIGNED_EXISTING_WRITER_PARITY_REVIEW_2026-10-11.md` (GitHub doc commit `bd05e263950eb1b8df153b3593efe45f73cb94cb`). ChatGPT source read-only 대조이며 Codex 구현·Work 별도 독립 감사가 아님.
+- **확인된 차단:** legacy 서버 `publishGuardedLikeSignal420`은 private RTDB `display`에 보내지만 새 Stage420 앱 `startGuardedLike420`은 `atomic-v2`(`displayV2`)만 구독. 기존 069/075 Worker+HMAC 대안에서는 이 조합을 그대로 켜면 PC↔모바일 잠정 좋아요 신호가 누락될 수 있음. direct416 shared RTDB 부모 쓰기 권한과 무서명 구형 요청 경로도 아직 활성화 차단 요건.
+- **다음 코드 작업(미실행):** Codex High source-only 단일 연결 정합화 + 이전 app397/like/follow 회귀 및 비용 집중검증 → Work 독립 감사. Stage420/426/서명대안 전부 OFF, shared Rules/Function/Worker/DB/Hosting 배포·사용자 원본 변경 금지. 완료라 주장하지 않는다.
+- **배포 및 진척 불변:** app397 exact PREVIEW Hosting 배포 `132ed10e58351b227f616d60786a5eaacc62a451` 유지, TEST/PRODUCTION 그대로. Stage416 **28%**, app397 속도 관련 기존 기준 **5/5·100%**, Stage420 운영 게이트 **4/10·40%**. 현재 작업은 문서 기록만, TypeScript·Build 신규 실행 없음.
+
+---
 ## CURRENT — app397 Gemini 곡 생성 false-negative API 키 확인 수정 PREVIEW 배포 완료 (2026-10-11)
 
 - **PREVIEW 실제 Firebase Hosting app397 배포 완료:** 공식 `.github/workflows/firebase-hosting-custom-preview.yml` workflow_dispatch **Run 38137424564 SUCCESS**. 고정 배포 target_sha `132ed10e58351b227f616d60786a5eaacc62a451` 로그 `LOCKED_PREVIEW_SHA` exact-match; 소스 app396 `e7923394ad970fb71ad55c03de580fa0e77e5a2a` 대비 변경 `src/App.tsx`+`public/app-version.json` **2파일**. 최신 preview의 아직 미배포 Stage420 후보는 이번 Hosting 빌드에서 제외.

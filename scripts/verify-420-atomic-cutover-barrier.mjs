@@ -21,6 +21,12 @@ assert.match(client,/export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;/
   'old mobile/PC accounts must not be routed to inactive Stage420');
 assert.match(server,/const STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE = false;/,
   'Firestore approved receipts need all other release components before activation');
+// The chosen signed-existing-Writer route uses the RTDB /display producer.
+// /displayV2 is owned solely by the different, still-dormant atomic onCreate.
+assert.match(client,/const STAGE420_PRIVATE_SIGNAL_SOURCE: 'legacy' \| 'atomic-v2' = 'legacy';/,
+  'signed-existing-Writer client must listen to the producer at /display');
+assert.match(client,/unsubscribeGuardedLike420 = subscribeGuardedLikeIntent420\(uid,[\s\S]*?STAGE420_PRIVATE_SIGNAL_SOURCE\);/,
+  'single UID receiver must use the guarded server signal source selector');
 assert.match(server,/const STAGE420_ATOMIC_MASTER_CUTOVER_ENABLED = false;/,
   'Master must not clear a different rate authority');
 assert.match(ui,/const STAGE420_MASTER_PANEL_ACTIVE = false;/,

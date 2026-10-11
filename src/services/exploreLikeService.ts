@@ -55,6 +55,11 @@ const EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172 = 'explore_like_canonical_
 // lock enforcement, latency/cost and rollback have all passed cutover tests.
 // A regular PREVIEW push MUST NOT enable Stage420 by accident.
 export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;
+// Match the dormant signed-existing-Worker path's RTDB producer: the legacy
+// approval Callable writes /display, not /displayV2. Change this to atomic-v2
+// ONLY with the independently approved Firestore onCreate/Rules/Worker release.
+// Exactly one private account listener remains active, never both.
+const STAGE420_PRIVATE_SIGNAL_SOURCE: 'legacy' | 'atomic-v2' = 'legacy';
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // Stage413: shorten only Explore public-like batching.
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
@@ -889,7 +894,7 @@ const startGuardedLike420 = (uid: string) => {
     notifyExploreLikeUiSync139({ uid, trackId: event.trackId,
       ownerUid: event.ownerUid, liked, likeCount: 0, source: 'remote-intent' });
   }, (error) => console.warn('[420] Private server hint retained only on active device:', error),
-  'atomic-v2');
+  STAGE420_PRIVATE_SIGNAL_SOURCE);
 };
 // This listener does not read Firestore/D1 and subscribes once for the signed-in
 // account, not once per song/card/tab. No continuous timer or global Feed reload.

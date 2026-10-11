@@ -1,3 +1,11 @@
+## NEXT — Stage416③ 서버 재전송·계정 영구 순서 문제부터 해결, source 후보 활성화 금지 (2026-10-11)
+
+- **현재 exact baseline:** `preview` `7b2a12f88509aa4778b9e259ba2cba0c104ad545`; Worker source-off route + real SQLite tests PASS [38152016362](https://github.com/andrawing1212/soridraw-music/actions/runs/38152016362). D1 후보 스키마는 `cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql`에만 있고 실제 DB **미적용**. 정상 app399 canonical 5초/PC-mobile 좋아요 유지.
+- **Codex High 다음 핵심 작업 한 묶음:** (1) **과거 operationId가 원래 5분 창 정착 후 뒤늦게 재전송돼도 새 좋아요로 수락되지 않는 영구 UID/곡별 순서·승인기록**을 저비용으로 설계해 `registerPrivateClick416`에 실제 연결. 가짜 서버 version·시간을 클라이언트가 만들지 못하도록 검증하고 오프라인/동시 기기·네트워크 응답손실 후 재전송을 실행형 DB 테스트로 재현. (2) `src/services/exploreLikeService.ts` 출발 클릭↔Worker 접수의 실패/복구/재접수/50+ outbox 및 타기기 표시를 정상 앱399와 완전 분기하여, 5분 이후 서버 응답이 실제 개인 변경 의도/operationId와 일치할 때만 local outbox 제거; 개인 R2 changed-only/RTDB 수신 parity 증명. (3) Master RTDB Callable 1/3/5/10/20 설정을 공유 서버 policy로 안전하게 공급(보통 사용자 변경 없는 재방문 read0), 기존 진행 창 불변. (4) 다른 TEST/PROD 구형 Worker의 canonical 직접쓰기/구형 유저 upgrade·퇴장시 조기 flush와 공유 069 scheduler, 데이터 구조를 독립 Work 감사/3환경 release manifest로 검증. 비용 10만명 실측 전 D1 per-click W1이 경제적이지 않으면 **더 저렴한 기존 RTDB/worker 경로**로 설계를 재평가한다.
+- **STOP:** 반복 같은 mock/문서 추가, 실제 shared D1 SQL 실행, source flag ON, Worker·Functions·Rules·Hosting 배포, main TEST PROD 승격, 기존 정상 좋아요/팔로우/Studio/Music Note/UI 구조 변경 금지. 보안/호환·월 총비용/타임 경합이 증명되지 않으면 OFF/앱399 유지. Stage420 보안 추가 개발은 user priority 아님.
+
+---
+
 ## NEXT — Stage416③ 순수 서버시계 PASS → 실제 단일 canonical writer 직렬화 연결 (2026-10-11)
 
 - **최신 exact code:** preview `0c8b87d2afa84d1595e076e9c396bc92f5ef05c1`, GitHub [408 38150514656](https://github.com/andrawing1212/soridraw-music/actions/runs/38150514656) SUCCESS. `runtime/private-window-gate-416.mjs`의 register/evaluate 알고리즘과 verifier를 다시 만들지 말 것. 앱399 UI/좋아요/팔로우·Studio·Music Note 정상 보호, Stage416/420 flags OFF.

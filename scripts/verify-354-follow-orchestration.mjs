@@ -105,6 +105,10 @@ const normalizePublication365ForFollowAudit = (text, name) => {
 }`;
 };
 
+// Historical app382 freezes ALL unrelated app379 Worker statements byte-for-byte.
+// Current app397 runs the same actual follow fixtures, but app413+ deliberately
+// changed unrelated like aggregation; its own 408 tests guard that domain.
+if (process.env.SORIDRAW_CURRENT_FOLLOW_RUNTIME !== '1') {
 for (const node of baselineAst.statements.filter(ts.isFunctionDeclaration)) {
   const wrappedCore = publication358Wrapped.get(node.name?.text || '');
   if (wrappedCore) {
@@ -169,6 +173,7 @@ for (const name of ['handleFollowR2Core','handleFollow','handleFollowState']) {
     return true;
   }).map(text);
   assert.deepEqual(legacy(a),legacy(b),'legacy path changed: ' + name);
+}
 }
 for (const name of names) assert.ok(functions.has(name), 'missing ' + name);
 const code = names.map(n => functions.get(n)).join('\n');
@@ -405,7 +410,11 @@ await assert.rejects(client.client354('overlay-viewer','target',false,conflict),
 console.log('FOLLOW354_ACTUAL_FUNCTION_CRASH_REPLAY_AND_EXACT_RECOVERY=PASS');
 console.log('FOLLOW354_SUSPENDED_WRITER_DUPLICATE_REVERSE_AND_SHARED_TARGET=PASS');
 console.log('FOLLOW354_ACTUAL_HTTP_FLOW_LEGACY_SYNC_BYPASS=PASS');
-console.log('FOLLOW354_UNRELATED_FUNCTIONS_AND_LEGACY_PATH_UNCHANGED=PASS');
+if (process.env.SORIDRAW_CURRENT_FOLLOW_RUNTIME === '1') {
+  console.log('FOLLOW354_CURRENT_RUNTIME_WITHOUT_OLD_APP379_WHOLE_WORKER_FREEZE=PASS');
+} else {
+  console.log('FOLLOW354_UNRELATED_FUNCTIONS_AND_LEGACY_PATH_UNCHANGED=PASS');
+}
 console.log('FOLLOW354_CLIENT_LEGACY_ONE_REQUEST_ORDERED_QUEUE_STABLE_RETRY=PASS');
 console.log('FOLLOW354_SHARED_DB_DEPLOYMENT_USER_DATA_CHANGES=0');
 

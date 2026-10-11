@@ -99,9 +99,12 @@ jobs:
               failed=1
             fi
           }
-          # 354 is a strict app379 whole-Worker byte freeze. Run it only
-          # inside the historical app382 release gate, never on modern code.
+          # Only the app382 release gate asserts the app379 whole-Worker
+          # freeze. The modern 354/355 runtime fixtures still run in full.
           if [ "${{ steps.contract.outputs.app_version }}" = "382" ]; then
+            run_check 354 node scripts/verify-354-follow-orchestration.mjs
+          else
+            export SORIDRAW_CURRENT_FOLLOW_RUNTIME=1
             run_check 354 node scripts/verify-354-follow-orchestration.mjs
           fi
           run_check 355 node scripts/verify-355-follow-audit-repairs.mjs

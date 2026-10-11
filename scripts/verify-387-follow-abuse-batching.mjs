@@ -55,11 +55,13 @@ assert.doesNotMatch(guard, /env\.DB|RATE_DB/);
 assert.match(guard, /etagMatches/);
 assert.match(followPatch, /payload\?\.followOperationId/);
 
-// Likes already have their own cost defenses: 30s local final-state batching,
-// stable outbox/operation ordering, same-state no-op elimination, and an edge
-// rate limiter that avoids D1/RATE_DB writes. Do not silently claim a progressive
-// same-track cooldown in the old limiter: the additive candidate is verified separately.
-assert.match(like, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
+// The app382 historical fixture freezes the former 30-second public-like
+// idle timer. Active app397 uses Stage413 5-second idle flush; it is covered
+// independently by 408. Do NOT rewrite the application to satisfy an old test.
+const currentFollowRuntime = process.env.SORIDRAW_CURRENT_FOLLOW_RUNTIME === '1';
+assert.match(like, currentFollowRuntime
+  ? /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/
+  : /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(like, /desiredLiked === pending\.baseLiked/);
 assert.match(like, /operationId/);
 assert.match(likePatch, /enforceExploreLikeBatchEdgeRateLimit054/);
@@ -108,6 +110,8 @@ console.log('APP380_PUBLIC_TARGET_FINAL_STATE_ONLY=PASS');
 console.log('APP380_FOLLOW_SERVER_PROGRESSIVE_PAIR_COOLDOWN=PASS');
 console.log('APP380_FOLLOW_ACCOUNT_WINDOW_DAY_CAP=PASS');
 console.log('APP380_FOLLOW_ABUSE_GUARD_D1_RATE_DB_ZERO=PASS');
-console.log('LIKE_EXISTING_30S_FINAL_STATE_BATCH=PASS');
+console.log(currentFollowRuntime
+  ? 'LIKE_STAGE413_CURRENT_5S_IDLE_FLUSH_SEPARATE_FROM_FOLLOW=PASS'
+  : 'LIKE_HISTORICAL_30S_IDLE_FLUSH=PASS');
 console.log('LIKE_EXISTING_EDGE_RATE_LIMIT_D1_RATE_DB_ZERO=PASS');
 console.log('LIKE_PROGRESSIVE_SAME_TRACK_COOLDOWN=CANDIDATE_098_RUNTIME_388');

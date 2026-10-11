@@ -1,3 +1,11 @@
+## CURRENT — Stage420 기존 signed Writer RTDB 수신 경로 맞춤 source-only PASS / Follow-only 별도 FAIL (2026-10-11)
+
+- **기능 commit:** `preview` `8fa70dfbe15c0729bcae3e85befece0aac7b76b7` (기준 `28a60c1b818e3921a0f7d3e20a88cde9ab7b96bc`), **변경 정확히 2파일**: `src/services/exploreLikeService.ts`, `scripts/verify-420-atomic-cutover-barrier.mjs`. 기존 signed baseWorker+RTDB legacy `display` 생산 경로에 맞춰 비활성 Stage420 client의 단일 `STAGE420_PRIVATE_SIGNAL_SOURCE='legacy'` 수신 선택; Firestore Eventarc atomic `displayV2`는 별도 완성 cutover 승인 전 미선택. 동시 이중 구독·기존 정상 기능 변경 없음. 검사에서 이 결합을 고정해 server atomic OFF인데 client만 V2에 귀속되는 회귀를 차단.
+- **자동 QA:** [408 38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) **SUCCESS** — Functions TypeScript, 앱 TypeScript, Build, Stage420 signer/RTDB server·receiver/barrier, 기존 Like/Follow, Music Note, 실 shared RTDB Rules read-only 등 검사 PASS. **별도 Follow-only [38138398757](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398757)는 FAIL**: `verify-394-follow-only-worker-freeze.mjs:35`의 `processExploreLikeAggregateWave035` frozen assertion 불일치. 해당 `preview-worker.js`는 이번 2파일 diff에 포함되지 않았고, 이전 문서에도 같은 실패가 기록돼 있음. 전체 GitHub 체크가 전부 PASS는 아니므로 무조건 승격/배포 합격으로 처리하지 않는다. 별도 진단/이전 정상 기준 비교 후 필요하면 별도 작업에서 해결.
+- **보호:** app397 PREVIEW actual release `132ed10e58351b227f616d60786a5eaacc62a451` 변경 없음. Stage420 app/Functions atomic/Worker signed legacy/426 전부 HARD OFF; shared Rules, Firestore/RTDB/D1/R2 사용자 원본·Hosting·Functions·Worker **배포/데이터 변경 없음**, main/TEST/PRODUCTION 미승격. 새 코드가 실제 PC↔모바일에 적용됐다는 주장은 금지.
+- **다음:** Work 독립 read-only 감사로 signed existing Writer 전경로·구형 열린 PWA/UUIDv4 미전송 outbox·120분 우회/Rules·중복 Firebase 인증 비용·10만DAU 전체 청구·한국 p95와 app397 기능 parity 점검. 구형 refresh/유예 정책 사용자 승인 전 shared Rules 폐쇄나 Stage420 ON 금지. **진척 고정**: Stage416 **28%** (큰 단계 1/5 + 현재 gate 4/10), 앱 속도 **5/5·100%** (기존), Stage420 운영 **4/10·40%**. 세부 source-only 수신 정합화 **2/2 PASS**, 독립 Work/실기기/실비용 **미검증**.
+
+---
 ## CURRENT — Stage420 기존 Writer 서명 대안 연결 불일치 소스 감사 (2026-10-11)
 
 - **감사 기록:** `DOCS/STAGE420_SIGNED_EXISTING_WRITER_PARITY_REVIEW_2026-10-11.md` (GitHub doc commit `bd05e263950eb1b8df153b3593efe45f73cb94cb`). ChatGPT source read-only 대조이며 Codex 구현·Work 별도 독립 감사가 아님.

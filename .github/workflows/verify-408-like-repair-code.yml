@@ -15,6 +15,7 @@ on:
       - 'src/services/exploreLikePrivateRtdbWindow416.mjs'
       - 'src/services/exploreLikeDeviceSequence416.mjs'
       - 'scripts/verify-416-client-rtdb-binding.mjs'
+      - 'scripts/verify-416-canonical-no-early-flush.mjs'
       - 'src/services/exploreLikePrivateRtdbTransport416.ts'
       - 'scripts/verify-416-private-rtdb-batch.mjs'
       - 'functions/src/exploreLikePrivateSeal416.ts'
@@ -163,6 +164,7 @@ jobs:
           node scripts/verify-416-shared-writer-d1.mjs
           node scripts/verify-416-private-rtdb-batch.mjs
           node scripts/verify-416-client-rtdb-binding.mjs
+          node scripts/verify-416-canonical-no-early-flush.mjs
           node scripts/verify-416-server-rtdb-seal.mjs
           node scripts/verify-416-server-only-click.mjs
           node scripts/verify-416-private-handoff-atomic.mjs

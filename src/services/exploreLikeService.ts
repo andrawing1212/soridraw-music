@@ -1800,6 +1800,12 @@ const readPrivateBatchWindow416 = (uid: string) => {
 
 const schedulePendingFlush = (user: User) => {
   const uid = String(user?.uid || '').trim();
+  // Future 416 server-owned window: never let the app399 5s scheduler
+  // submit a second unguarded batch while the signed UID seal owns intake.
+  if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
+    clearFlushTimer(uid);
+    return;
+  }
   if (!uid || typeof window === 'undefined') return;
   const outbox = readLikeOutbox(uid);
   const eligible = Object.values(outbox).filter((pending) =>
@@ -1847,6 +1853,8 @@ const rebaseExploreLikeAfterInFlight127 = (
 
 flushPendingLikes = async (user: User): Promise<void> => {
   const uid = String(user?.uid || '').trim();
+  // No legacy canonical writes are allowed after staged RTDB handoff cutover.
+  if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) return;
   if (!uid || inflightByUid.has(uid)) return;
 
   const outbox = readLikeOutbox(uid);
@@ -2202,6 +2210,8 @@ const installExitFlush413 = () => {
   exitFlushInstalled413 = true;
   const flushOnExit413 = () => {
     const current = auth.currentUser;
+    // Exit must not race signed server-only 416 sealing with an old /batch.
+    if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) return;
     if (!current?.uid) return;
     const eligible = Object.values(readLikeOutbox(current.uid))
       .some((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
@@ -2591,7 +2601,10 @@ export const setExploreTrackLike = async (
     writeLikeLocal127(key416, JSON.stringify(next416));
   }
   // Current app399 retains its previously tested 5-second intake.
-  schedulePendingFlush(user);
+  // Candidate 416 controls its own server-owned deadline when both flags turn ON.
+  if (!(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE)) {
+    schedulePendingFlush(user);
+  }
 
   dispatchLikeSync({
     uid,

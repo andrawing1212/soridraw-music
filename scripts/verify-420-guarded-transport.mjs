@@ -10,7 +10,7 @@ let code = stripTypeScriptTypes(
 code = code.replace(/^import\s+.*?from\s+'[^']+';\s*$/gm, '')
   .replaceAll('export const ', 'const ');
 assert(!/^import\s/m.test(code));
-code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420, renewGuardedLikePermitCandidate420, recoverGuardedLikePermitCandidate420};';
+code += '\nmodule.exports = {publishGuardedLikeIntent420, subscribeGuardedLikeIntent420, planGuardedLikeDecision420, submitGuardedOutboxCandidate420, renewGuardedLikePermitCandidate420, recoverGuardedLikePermitCandidate420, guardedLikePermitNeedsRenewal420, prepareGuardedLikeBatch420};';
 const calls = [];
 const listeners = [];
 const permit420 = 'v1.dGVzdC1wZXJtaXQ.aGVhZGVyLXNpZw';
@@ -73,7 +73,7 @@ const mock = {
   },
 };
 const module = { exports: {} };
-vm.runInNewContext(code, { module, ...mock, navigator:browserNavigator, console, Date, Number, Error }, { timeout: 1000 });
+vm.runInNewContext(code, { module, ...mock, navigator:browserNavigator, console, Date, Number, Error, atob }, { timeout: 1000 });
 const { publishGuardedLikeIntent420: publish, subscribeGuardedLikeIntent420: subscribe, planGuardedLikeDecision420: plan, submitGuardedOutboxCandidate420: submit } = module.exports;
 const mutation = {
   trackId: 'track-1',
@@ -278,6 +278,74 @@ listeners[0].handler({val:()=>({version:1,results:[event]})});
 assert.equal(atomicIncoming.length,1,'duplicate V2 notifications do not repaint');
 stopAtomic();
 assert.equal(listeners.length,0);
+// Offline approved-outbox survival: after the original signed v1 certificate
+// expires, renew only the exact original proof; persist BEFORE canonical batch.
+// No new click/RTDB write/rate-gate call is legal on this path.
+const offlineUid='user-a', offlineTrack='offline-track';
+const nowForOffline=Date.now();
+const encodeClaims=claims=>'v1.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.validsig';
+const freshOfflinePermit=encodeClaims({exp:nowForOffline+10*60_000});
+const expiredOfflinePermit=encodeClaims({exp:nowForOffline-60_000});
+const {guardedLikePermitNeedsRenewal420: needsRenew,
+  prepareGuardedLikeBatch420: prepareBatch} = module.exports;
+assert.equal(needsRenew(freshOfflinePermit,nowForOffline),false);
+assert.equal(needsRenew(expiredOfflinePermit,nowForOffline),true);
+assert.equal(needsRenew('bogus',nowForOffline),true);
+let approvedOutbox={
+  [offlineTrack]:{trackId:offlineTrack,desiredLiked:true,
+    operationId:mutation.operationId,updatedAt:37,
+    guardStatus420:'approved',guardPermit420:freshOfflinePermit},
+};
+let renewCount=0, saveCount=0, callsCanonical=0, renewalRequest;
+const readApproved=()=>approvedOutbox;
+const persistApproved=rows=>{saveCount++;approvedOutbox=rows;};
+const fakeRenew=async (request,oldPermit)=>{
+  renewCount++;renewalRequest={request,oldPermit};
+  return freshOfflinePermit;
+};
+const freshBatch=await prepareBatch([approvedOutbox[offlineTrack]],
+  readApproved,persistApproved,fakeRenew);
+assert.equal(freshBatch.length,1);
+assert.equal(renewCount,0,'fresh certificate must not call Firebase');
+assert.equal(saveCount,0,'fresh certificate must not rewrite local outbox');
+approvedOutbox[offlineTrack]={...approvedOutbox[offlineTrack],guardPermit420:expiredOfflinePermit};
+const expiredCopy={...approvedOutbox[offlineTrack]};
+const restoredBatch=await prepareBatch([expiredCopy],readApproved,persistApproved,fakeRenew);
+assert.equal(restoredBatch.length,1);
+assert.equal(renewCount,1,'exact expired click must renew once');
+assert.equal(saveCount,1,'persist renewed proof once');
+assert.equal(renewalRequest.request.operationId,mutation.operationId);
+assert.equal(renewalRequest.request.trackId,offlineTrack);
+assert.equal(renewalRequest.request.liked,true);
+assert.equal(renewalRequest.oldPermit,expiredOfflinePermit);
+assert.equal(approvedOutbox[offlineTrack].guardPermit420,freshOfflinePermit,
+  'canonical sender observes durable renewed proof');
+callsCanonical+=restoredBatch.length;
+assert.equal(callsCanonical,1);
+approvedOutbox[offlineTrack]={...expiredCopy};
+const beforeLate=saveCount;
+const replaced=await prepareBatch([expiredCopy],readApproved,persistApproved,
+  async ()=>{
+    approvedOutbox[offlineTrack]={...expiredCopy,
+      operationId:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'};
+    return freshOfflinePermit;
+  });
+assert.equal(replaced.length,0,'newer click must not inherit old signed approval');
+assert.equal(saveCount,beforeLate,'stale response must not overwrite outbox');
+approvedOutbox[offlineTrack]={...expiredCopy};
+await assert.rejects(prepareBatch([expiredCopy],readApproved,persistApproved,
+  async ()=>{throw Error('DENIED_OR_TOO_OLD');}),/DENIED_OR_TOO_OLD/);
+assert.equal(approvedOutbox[offlineTrack].operationId,expiredCopy.operationId,
+  'rejected/24h-expired renewal must retain original user intention');
+const serviceSource=readFileSync('src/services/exploreLikeService.ts','utf8');
+assert.match(serviceSource,/if \(EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\) \{[\s\S]*?batchEntries = await prepareGuardedLikeBatch420/);
+assert.match(serviceSource,/if \(!batchEntries.length\) \{[\s\S]*?succeeded = true;/);
+console.log('STAGE420_OFFLINE_15M_APPROVED_PROOF_RENEWAL=PASS');
+console.log('STAGE420_FRESH_APPROVAL_FUNCTION_R0_W0=PASS');
+console.log('STAGE420_APPROVAL_EXACT_OP_DURABLE_BEFORE_CANONICAL=PASS');
+console.log('STAGE420_NEW_CLICK_OUTRANKS_STALE_RENEWAL=PASS');
+console.log('STAGE420_24H_EXPIRED_PROOF_RETAINS_OUTBOX=PASS');
+
 const functionCode = readFileSync('functions/src/index.ts', 'utf8');
 assert.match(functionCode, /export const publishExploreLikeIntent420 = onCall\(/);
 const rulesBuilder = readFileSync('scripts/build-420-private-rules-candidate.mjs', 'utf8');

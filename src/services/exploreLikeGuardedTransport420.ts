@@ -250,6 +250,77 @@ export const submitGuardedOutboxCandidate420 = async (
   );
 };
 
+// A previously approved click can outlive its 15-minute HMAC certificate
+// while the device is offline. Renew ONLY that exact stored certificate on
+// the next actual pending-batch send; never rerun the first-click rate gate.
+export const guardedLikePermitNeedsRenewal420 = (
+  permit: string,
+  nowMs = Date.now(),
+): boolean => {
+  try {
+    const parts = permit.split('.');
+    if (parts.length !== 3 || !/^v[12]$/.test(parts[0]) ||
+        !/^[A-Za-z0-9_-]+$/.test(parts[1]) || parts[1].length > 2200) return true;
+    const encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(encoded + '='.repeat((4 - encoded.length % 4) % 4))) as {
+      exp?: unknown;
+    };
+    return !Number.isSafeInteger(claims?.exp) ||
+      Number(claims.exp) - nowMs <= 30_000;
+  } catch { return true; }
+};
+
+type ApprovedLikeBatchRow420 = {
+  trackId: string;
+  desiredLiked: boolean;
+  operationId?: string;
+  updatedAt: number;
+  guardStatus420?: 'awaiting' | 'approved';
+  guardPermit420?: string;
+};
+
+// Return only the exact still-pending rows; never send a superseded click.
+// A successful renewal is persisted before canonical Worker transmission.
+// The caller supplies its own existing outbox storage, no new cache/DB reads.
+export const prepareGuardedLikeBatch420 = async <T extends ApprovedLikeBatchRow420>(
+  batch: T[],
+  loadOutbox: () => Record<string, T>,
+  persistOutbox: (outbox: Record<string, T>) => void,
+  renew: (mutation: {trackId: string; liked: boolean; operationId: string},
+    oldPermit: string) => Promise<string> = renewGuardedLikePermitCandidate420,
+): Promise<T[]> => {
+  const ready: T[] = [];
+  const same = (row: T | undefined, original: T): boolean =>
+    !!row && row.operationId === original.operationId &&
+    row.updatedAt === original.updatedAt &&
+    row.desiredLiked === original.desiredLiked &&
+    row.guardStatus420 === 'approved' &&
+    typeof row.guardPermit420 === 'string';
+  for (const original of batch) {
+    const before = loadOutbox()[original.trackId];
+    if (!same(before, original) || !before.operationId || !before.guardPermit420) continue;
+    let permit = before.guardPermit420;
+    if (guardedLikePermitNeedsRenewal420(permit)) {
+      const newPermit = await renew({
+        trackId: before.trackId, liked: before.desiredLiked,
+        operationId: before.operationId,
+      }, permit);
+      // Renewal is credential-only (no Firebase/D1 data read/write).
+      // An unrelated newer click must not inherit an older approval.
+      const latest = loadOutbox();
+      const pending = latest[original.trackId];
+      if (!same(pending, original) || pending.guardPermit420 !== permit) continue;
+      const updated = { ...pending, guardPermit420: newPermit } as T;
+      persistOutbox({ ...latest, [original.trackId]: updated });
+      const saved = loadOutbox()[original.trackId];
+      if (!same(saved, original) || saved.guardPermit420 !== newPermit) continue;
+      permit = newPermit;
+    }
+    ready.push({ ...original, guardPermit420: permit });
+  }
+  return ready;
+};
+
 // One listener per signed-in UID, not per card. No D1/Firestore whole-read.
 // Cold replay is intentionally ignored: settled 127/canonical outbox owns
 // old membership and same-account live updates are only provisional.

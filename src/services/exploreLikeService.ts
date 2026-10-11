@@ -19,7 +19,7 @@ import {
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
-import { submitGuardedOutboxCandidate420, subscribeGuardedLikeIntent420 } from './exploreLikeGuardedTransport420';
+import { submitGuardedOutboxCandidate420, subscribeGuardedLikeIntent420, prepareGuardedLikeBatch420 } from './exploreLikeGuardedTransport420';
 import { canFlushGuardedOutbox420, type GuardedOutboxEntry420, type GuardedCanonicalEvidence420, type GuardedResolution420 } from './exploreLikeGuardedOutbox420';
 import {
   canAdvancePersonalLikeOriginCertificate357,
@@ -1841,7 +1841,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
     }
   }
 
-  const batchEntries = ordered.filter((pending) => pending.desiredLiked !== pending.baseLiked);
+  let batchEntries = ordered.filter((pending) => pending.desiredLiked !== pending.baseLiked);
   if (!batchEntries.length) {
     if (getPendingExploreLikeMutationCount(uid) > 0) schedulePendingFlush(user);
     return;
@@ -1850,6 +1850,22 @@ flushPendingLikes = async (user: User): Promise<void> => {
   let succeeded = false;
   const task = (async () => {
     try {
+      if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
+        // The existing Worker validates a 15m HMAC at the moment of intake.
+        // After offline sleep, renew the signed proof for the SAME operationId
+        // before sending. A renewal NEVER creates another private like click.
+        // Unchanged healthy app397 legacy requests perform none of this.
+        batchEntries = await prepareGuardedLikeBatch420(batchEntries,
+          () => readLikeOutbox(uid),
+          (next) => persistLikeOutbox(uid, next));
+        if (!batchEntries.length) {
+          // A newer click replaced these rows while renewal was in flight.
+          // Its own pending timer may already have fired while this task held
+          // inflightByUid; arrange a bounded normal flush after completion.
+          succeeded = true;
+          return;
+        }
+      }
       const payload = await requestExploreLike(user, '/v1/me/likes/batch', {
         method: 'POST',
         body: JSON.stringify({

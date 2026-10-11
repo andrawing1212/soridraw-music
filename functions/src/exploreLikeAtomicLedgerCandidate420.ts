@@ -314,7 +314,8 @@ export const handleApprovedLikeReceiptWakeupCandidate420 = async (
     firestore, realtime, uid, Number(proof.version), nowMs, 16,
   );
   return gap.complete
-    ? { status: 'delivered', delivered: gap.delivered }
+    ? { status: gap.delivered > 0 ? 'delivered' : 'already-delivered',
+        delivered: gap.delivered }
     : { status: 'retry-required', reason: gap.reason, delivered: gap.delivered };
 };
 

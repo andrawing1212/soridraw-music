@@ -15,6 +15,10 @@ const validAccount = (uid: string): boolean =>
   typeof uid === 'string' && uid.length > 0 && uid.length <= 128 &&
   !/[/.#$\\[\\]]/.test(uid);
 const UUID_V7 = /^([0-9a-f]{8})-([0-9a-f]{4})-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Existing app396 pending operations use crypto.randomUUID() (UUID v4).
+// v4 has no immutable creation timestamp. A NEW v4 approval cannot be proven
+// safe after receipt expiry; only exact, server-existing approval may replay.
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Unlike a v4 operationId, the original click time is immutable in this ID.
 // It lets the server fail closed after TTL has safely removed a receipt.
@@ -87,6 +91,8 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
   settings: LikeAbuseSettings420 = DEFAULT_LIKE_ABUSE_SETTINGS_420,
 ): Promise<AtomicLikeDecision420> => {
   const timestamp = readLikeOperationTime420(op?.operationId);
+  const isLegacyV4 = typeof op?.operationId === 'string' &&
+    UUID_V4.test(op.operationId);
   if (!validAccount(uid) || !op || typeof op.trackId !== 'string' ||
       !op.trackId || op.trackId.length > 512 ||
       typeof op.ownerUid !== 'string' || op.ownerUid.length > 128 ||
@@ -97,13 +103,15 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
       !Number.isInteger(settings.warningPerMinute) ||
       settings.warningPerMinute < 1 ||
       !Number.isInteger(settings.suspensionMinutes) ||
-      settings.suspensionMinutes < 1 || timestamp === null) {
+      settings.suspensionMinutes < 1 ||
+      (timestamp === null && !isLegacyV4)) {
     throw new Error('420_ATOMIC_LEDGER_REQUEST_INVALID');
   }
-  // Critical ordering: reject old operation IDs BEFORE checking receipts.
-  // Once Firestore TTL removes a receipt, the old ID must never be new again.
-  if (timestamp > nowMs + CLOCK_SKEW_MS ||
-      nowMs - timestamp >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS) {
+  // Critical ordering: v7 IDs older than the replay window can NEVER become
+  // new once Firestore TTL removes the receipt. A v4 has no embedded timestamp,
+  // so it is allowed ONLY as exact replay of an existing trusted receipt.
+  if (timestamp !== null && (timestamp > nowMs + CLOCK_SKEW_MS ||
+      nowMs - timestamp >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS)) {
     throw new Error('420_ATOMIC_LEDGER_EXPIRED_FAIL_CLOSED');
   }
   const digest = fingerprint(uid, op);
@@ -111,8 +119,22 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
   const receipt = account.collection('approvals').doc(op.operationId);
   return db.runTransaction(async (tx) => {
     const existing = await tx.get(receipt);
+    if (isLegacyV4 && !existing.exists) {
+      // No proof exists in the new ledger for a pre-cutover v4 request.
+      // Never manufacture an approval, rewrite opId, or spend click quota.
+      // Caller must keep its original durable pending state for reconciliation.
+      throw new Error('420_LEGACY_PROOF_MISSING_FAIL_CLOSED');
+    }
     if (existing.exists) {
       const raw = existing.data();
+      if (isLegacyV4) {
+        const approvedAtMs = raw?.approvedAtMs;
+        if (!Number.isSafeInteger(approvedAtMs) || approvedAtMs <= 0 ||
+            approvedAtMs > nowMs + CLOCK_SKEW_MS ||
+            nowMs - approvedAtMs >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS) {
+          throw new Error('420_LEGACY_PROOF_EXPIRED_FAIL_CLOSED');
+        }
+      }
       const rateFromReceipt = normalize(raw?.rateAtApproval);
       if (raw?.digest !== digest || raw?.status !== 'approved') {
         return denied(rateFromReceipt, settings.limitPerMinute);

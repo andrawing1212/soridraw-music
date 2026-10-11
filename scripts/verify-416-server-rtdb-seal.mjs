@@ -48,7 +48,7 @@ assert.equal(claimed.sealed,true);
 assert.equal(claimed.value.rows.find(row=>row.trackId==='song-a').liked,false);
 assert.equal(state.window,null);
 assert.equal(state.sealed.version,3);
-assert.equal((await seal(db,'user',initial+301_201)).reason,'EMPTY');
+assert.equal((await seal(db,'user',initial+301_201)).reason,'PRIOR_SEAL_UNACKNOWLEDGED');
 await event(B,2,'song-c',initial+301_300,3);
 assert.equal(state.window.minutes,3);
 assert.equal(state.sealed.version,3);

@@ -1,3 +1,11 @@
+## NEXT — Stage420 signed 기존 Writer 수신 정합화 PASS 후 남은 실제 운영 게이트 (2026-10-11)
+
+- **다시 하지 말 것:** `preview` code `8fa70dfbe15c0729bcae3e85befece0aac7b76b7`에서 기존 signed Writer `/display`와 Stage420 단일 수신자를 일치시켰고 408 전체 [38138398782](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398782) PASS. app397 PREVIEW Hosting 이미 배포 완료, 이번 Stage420 source-only 커밋은 미배포. 이전 실 Cloudflare 425 read-only 및 174/419 D1 결손도 재진단 반복 금지.
+- **남은 다음 한 작업:** Work read-only 독립 감사에서 기존 `baseWorker`+Firebase UID/HMAC vs D1-only 426, `display`·기존 416 신호·구형 앱 장기 오프라인/v4 pending, 120분 rate 우회와 shared Rules, exact W0 retry, 10만 DAU × 5/20회 전체 Firebase/Cloudflare 비용/중복 `/auth-test`/한국 모바일 p95, Master HOLD/경보 및 TEST/PROD PWA 캐시 계약을 비교해 PASS/FAIL 근거 확정. **Follow-only 별도 [38138398757](https://github.com/andrawing1212/soridraw-music/actions/runs/38138398757) FAIL**은 기존 `processExploreLikeAggregateWave035` frozen assertion 불일치이며 이번 2파일 수정과 구별해서 별도 감사; 전체 GitHub 체크를 all green으로 주장 금지.
+- **금지:** Stage420/426/signing 실제 ON, 구형 416 shared Rules 폐쇄, Firebase Functions/Worker/Hosting 배포, user data backfill/delete/migration, main/TEST/PRODUCTION 변경은 구형 refresh/유예 정책 명확한 승인 및 실기기 검증 전 금지. 정상 좋아요·팔로우·Studio 하트·Music Note/Library 및 app397 Gemini 배포 보호.
+- **3중 진척 고정:** Stage416 **28%**, 속도 **5/5·100%**, Stage420 운영 **4/10·40%**. 이번 연결 코드 정합화 소스/자동QA 2/2 PASS, Work/실기기/실비용 미검증.
+
+---
 ## NEXT — Stage420 빠른 합격 경로의 독립 보안·비용 감사 (2026-10-11)
 
 - 고정 source 008c2db15b3cc9710c4e6b3bfe73e02b64d4a8da; 408 Run 38125272745 SUCCESS, Worker dry-run 38125272759 SUCCESS, LIVE 425 read-only 38125099710 SUCCESS=감사 실행 완료 / RELEASE HOLD. D1 174·419 schema MISSING; 171 파생 공백, 기존 queue empty.

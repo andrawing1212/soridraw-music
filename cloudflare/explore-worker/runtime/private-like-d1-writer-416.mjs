@@ -5,6 +5,7 @@ const CLOCK_PERIODS_416 = new Set([1, 3, 5, 10, 20]);
 const MAX_PENDING_TRACKS_416 = 256;
 const MAX_BATCH_416 = 50;
 const TABLE_416 = 'explore_like_private_pending_416';
+const OP_TABLE_416 = 'explore_like_private_operations_416';
 const ms416 = (minutes) => minutes * 60_000;
 
 const finiteTime416 = (value) => Number.isSafeInteger(value) && value > 0;
@@ -45,10 +46,16 @@ export async function registerPrivateClick416(db, uid, input, serverNowMs, confi
   const payload = JSON.stringify({ [trackId]: {
     liked: input.liked, operationId: input.operationId,
   } });
+  // The receipt record must outlive the 5-minute pending window. Without it,
+  // a response-lost old operation can be reintroduced after the queue handoff.
+  // D1.batch commits both changes or neither. An already-recorded operation
+  // is rejected BEFORE even a new UID pending row can be created.
   const sql = [
     'INSERT INTO ' + TABLE_416 +
       '(user_uid,window_id,version,opened_at,last_click_at,deadline_at,minutes,pending_count,mutations_json)',
-    'VALUES (?, ?, 1, ?, ?, ?, ?, 1, ?)',
+    'SELECT ?, ?, 1, ?, ?, ?, ?, 1, ?',
+    'WHERE NOT EXISTS (SELECT 1 FROM ' + OP_TABLE_416 +
+      ' WHERE user_uid=? AND operation_id=?)',
     'ON CONFLICT(user_uid) DO UPDATE SET',
     'version=' + TABLE_416 + '.version+1,',
     'last_click_at=MAX(' + TABLE_416 + '.last_click_at+1,excluded.last_click_at),',
@@ -62,16 +69,38 @@ export async function registerPrivateClick416(db, uid, input, serverNowMs, confi
     'AND json_extract(' + TABLE_416 + '.mutations_json,?) IS NOT ?',
     'RETURNING window_id,version,last_click_at,deadline_at,minutes,pending_count',
   ].join(' ');
-  const row = await db.prepare(sql).bind(
+  const writePending = db.prepare(sql).bind(
     uid, windowId, serverNowMs, serverNowMs,
     serverNowMs + ms416(configuredMinutes), configuredMinutes, payload,
+    uid, input.operationId,
     path, MAX_PENDING_TRACKS_416, path, opPath, input.operationId,
-  ).first();
-  // Duplicate operation (or full bounded map) performs NO write.
-  if (!row) return { accepted: false, reason: 'DUPLICATE_OR_LIMIT' };
-  return { accepted: true, windowId: row.window_id, version: Number(row.version),
-    deadlineAt: Number(row.deadline_at), minutes: Number(row.minutes),
-    pendingCount: Number(row.pending_count) };
+  );
+  const retainReceipt = db.prepare(
+    'INSERT OR IGNORE INTO ' + OP_TABLE_416 +
+    '(user_uid,operation_id,track_id,recorded_at) ' +
+    'SELECT ?,?,?,? FROM ' + TABLE_416 +
+    ' WHERE user_uid=? AND json_extract(mutations_json,?)=?'
+  ).bind(uid, input.operationId, trackId, serverNowMs,
+    uid, opPath, input.operationId);
+  const transaction = await db.batch([writePending, retainReceipt]);
+  if (!Array.isArray(transaction) || transaction.length !== 2 ||
+      transaction.some((step) => step?.success === false)) {
+    throw Error('416_PRIVATE_OPERATION_ATOMICITY_FAILED');
+  }
+  const pending = transaction[0]?.results?.[0];
+  const written = Number(transaction[0]?.meta?.changes || 0);
+  const recorded = Number(transaction[1]?.meta?.changes || 0);
+  if (!pending && written === 0 && recorded === 0) {
+    // Duplicate replay and bounded overflow write neither table.
+    return { accepted: false, reason: 'DUPLICATE_OR_LIMIT' };
+  }
+  if (!pending || written !== 1 || recorded !== 1) {
+    // Never tell a client the click was durably registered without BOTH rows.
+    throw Error('416_PRIVATE_OPERATION_RECEIPT_INVALID');
+  }
+  return { accepted: true, windowId: pending.window_id, version: Number(pending.version),
+    deadlineAt: Number(pending.deadline_at), minutes: Number(pending.minutes),
+    pendingCount: Number(pending.pending_count) };
 }
 // This is the ACTUAL atomic D1 queue handoff candidate. A read-only snapshot
 // is used to construct <=50-track batches; every INSERT and the conditional

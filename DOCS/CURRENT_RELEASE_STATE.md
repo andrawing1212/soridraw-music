@@ -1,3 +1,12 @@
+## CURRENT — Stage416③ 타기기 클릭 시간·settlement 오인 방지 후보 / 미활성 (2026-10-11)
+
+- **기능 소스 commit:** preview 0c2d6bc1626ecd0da35eda5985d22945d7c9a17a; 4파일: exploreLikePrivateBatchPolicy416.ts, exploreLikeIntent416.ts, exploreLikeService.ts, verify-416-private-5min-batch.mjs. RTDB intent callback에 version/at/status를 전달; OFF인 5분 원격 타이머가 accepted/rejected를 새 클릭으로 오인하지 않도록 하며, pending은 수신 시각과 sender 시각 중 늦은 보수적 시각으로만 연장. 유효 시각 차가 30초를 넘으면 임의 적용 금지. app399 5초 저장과 기존 실사용 좋아요/팔로우는 불변.
+- **GitHub 자동검증:** exact source 0c2d6bc... [408 TypeScript/Build/기존 좋아요 회귀 + Stage416 timing 38149667270](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667270) SUCCESS, [Follow-only 38149667287](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667287) SUCCESS. **Work 독립감사·실기기 5분 저장·실 청구 비용 검증은 미실시.**
+- **명확한 미해결:** Local-only 5분 타이머는 두 기기 오프라인/지연 event·최초 onValue snapshot skip·RTDB 최근50개 이탈 상태에서 계정 전역 마지막 클릭을 증명할 수 없다. Cloudflare Worker canonical batch 수락 시 서버측 최신 UID별 deadline/순서 fence 없이 사용자별 +5분 저장을 보장하지 못한다. Master 설정의 일반 사용자 전달·다음 창 적용 및 50+ 대기곡 분할/ACK, 앱 종료/구형 TEST·PROD 동시 원본 호환, 실제 10만 DAU 전체 비용도 미완료. **이 상태로 STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=true 변경/배포 금지.**
+- **환경/진척:** PREVIEW 실제 Hosting 앱399 e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a 그대로. Worker/Functions/Rules/D1/공유 사용자 원본, main/TEST/PRODUCTION 변경 0. Stage416 전체 28%, 앱 속도 5/5 100%, 개인 5분 저장은 후보 준비 단계(사용자 실사용 미완료). 다음은 서버 권한으로 검증되는 cross-device 통합 +5분 deadline/late ACK/race 안전 설계 및 단일 통합 구현. Stage420 기능 확대 중지 유지.
+
+---
+
 ## CURRENT — 디렉터 지시대로 Stage416 본래 4작업만 최우선; 개인 5분 설정 소스 통합 (2026-10-11)
 
 - **우선순위 변경 사용자 명령:** 반복 개인 데이터 읽기, 개인 PC↔모바일 즉시동기, 개인 마지막 클릭 후 기본 5분 묶음저장, 전 계정 공개 좋아요 공동 기본 5분 집계가 본래 네 과제. Stage420 30/40회·2시간 잠금/구형 강제업데이트 추가 기능 확대 작업은 **중지**. 기존 정책 후보 유지하되 현 과제의 선행 게이트라고 주장하거나 추가 구현에 시간 사용 금지. 속도 우선+정상 기능 보호.

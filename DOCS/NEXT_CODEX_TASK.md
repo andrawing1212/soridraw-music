@@ -1,3 +1,12 @@
+## NEXT — Stage416③ PC↔모바일 공통 마지막 클릭의 서버 확정 게이트 (2026-10-11)
+
+- **코드 기준:** preview 0c2d6bc1626ecd0da35eda5985d22945d7c9a17a. 408 [38149667270](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667270) PASS, Follow [38149667287](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667287) PASS. 5분 관련 flag·Master 패널 OFF, live PREVIEW 앱399/5초 canonical 보호.
+- **Codex High 집중 범위 (한 번에):** RTDB 416 private changed-track pending 신호는 즉시 UI 힌트일 뿐 계정 전역 마지막 클릭 서버 증명이 아님. Worker /v1/me/likes/batch 또는 동일 인증 보장 계층에서 UID별 마지막 클릭 / 유효 1·3·5·10·20분 deadline과 operation order를 **원자적으로 확인하고 아직 창이 열려 있으면 canonical 조기 수락을 거부**한다. 서로 다른 기기에서 동시에 마감과 새 클릭이 경합해도 이전 batch가 최신 의도를 덮지 않도록 설계. 클라이언트 first onValue replay skip·bounded last50·클럭차·다중 탭·오프라인·50+ songs·net-zero W0·다음 Master 창 적용을 같은 통합 QA로 검증. 사용자별 보관·읽기/쓰기 증가가 10만명 기준 비용 폭주하는 방식이면 대안 제시 후 HOLD. 기존 Worker 069/075와 416 direct hint 및 구형 TEST/PROD 공유 원본과 호환 필수.
+- **합격 문턱:** 해당 gate의 실제 신뢰 가능한 서버 권한/토큰 증명, RTDB emulator/Worker runtime 연동, 앱·Functions·Worker TypeScript/Build, Like/Follow/Studio save heart/Music Note 보호, 실제 1/3/5/10/20·양기기 5~10초·원상복구·종료/restart·Master 변경 및 캐시 재진입 D1 read0, 10만 DAU Cloudflare/Firebase 합산요금, Work read-only 독립감사. **단순 5초 상수 치환, 과거 신호 소급 수락, Source-only test PASS로 STAGE③ 완성 주장 금지.**
+- **중단:** 서버 원자 보장을 공유데이터 파괴나 구형 앱의 무조건 중단 없이 충족할 수 없으면 Flag OFF·앱399 유지하고 위험/대안을 보고. 공유 데이터·Rules/Worker/Functions/Hosting 배포, main/TEST/PROD 승격은 자동 수행 금지. Stage420 보안 확대는 본 작업 범위 아님.
+
+---
+
 ## NEXT — Stage416③ 개인 5분 저장 완료에만 집중 (디렉터 원래 네 작업 복귀, 2026-10-11)
 
 - **작업 우선순위:** ① 반복개인읽기(마지막 계측), ② 개인하트 즉시 PC↔모바일(앱399 사용자 PASS·보호), **③ 개인 마지막 클릭 후 기본5분 묶음 저장 + Master 1/3/5/10/20 독립 주기 [현재 1순위]**, ④ 전사용자 공동 공개숫자 기본5분 집계 + 별도 Master 주기 [③ PASS 후]. Stage420 abuse/강제업데이트 범위 추가 작업 **일단 중지**. 원래 Stage416 설계 문서 `DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md` 따름.

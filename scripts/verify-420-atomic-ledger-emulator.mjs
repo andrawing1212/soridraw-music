@@ -186,7 +186,10 @@ try {
   assert.equal((await account.get()).data().version,7);
   const concurrentReplay=await Promise.all(
     Array.from({length:3},()=>approve(firestore,uid,races[0],now+110)));
-  assert(concurrentReplay.every(x=>x.allowed && x.duplicate && x.version===5));
+  assert(concurrentReplay.every(x=>x.allowed && x.duplicate &&
+    x.version===decisions[0].version &&
+    x.approvedAtMs===decisions[0].approvedAtMs),
+    'receipt version depends on transaction commit order, not request array order');
   assert.equal((await account.get()).data().version,7,
     'concurrent exact replay must not change the rate version');
   // Firestore receipt Eventarc can arrive last-first. The RTDB snapshot is

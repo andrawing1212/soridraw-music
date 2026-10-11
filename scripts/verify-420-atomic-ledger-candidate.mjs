@@ -80,7 +80,7 @@ assert.equal(writes,beforeReplayWrite);
 await assert.rejects(approve(store,'uid-1',first,base+31*day,policy),
   /420_ATOMIC_LEDGER_EXPIRED_FAIL_CLOSED/);
 await assert.rejects(approve(store,'uid-1',{
-  ...mk(1002),operationId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+  ...mk(1002),operationId:'aaaaaaaa-aaaa-5aaa-aaaa-aaaaaaaaaaaa',
 },base+1002*65_000,policy),/420_ATOMIC_LEDGER_REQUEST_INVALID/);
 const stampOld=v7(7001,base);
 // A newly received 8-day-old command must be safely DENIED (not thrown).

@@ -10,12 +10,13 @@ let code=stripTypeScriptTypes(readFileSync(
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
 assert.doesNotMatch(code,/^import\s/m);
-code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420};';
+code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420};';
 const module={exports:{}};
 vm.runInNewContext(code,{module,createHash,Number,Math,Date,Error},
   {timeout:1500});
 const {approveLikeWithAtomicLedgerCandidate420:approve,
-  readLikeOperationTime420:readTime}=module.exports;
+  readLikeOperationTime420:readTime,
+  planAtomicLikeDisplayDeliveryCandidate420:project}=module.exports;
 const day=24*60*60_000;
 const base=1_800_000_000_000;
 const v7=(id,t=base)=>{
@@ -195,6 +196,65 @@ docs.delete(legacyPath); // simulate TTL deleting the proof
 await assert.rejects(approve(store,legacyUid,oldV4,
   approvedAtMs+31*day,policy),/420_LEGACY_PROOF_MISSING_FAIL_CLOSED/);
 assert.equal(writes,replayBefore,'missing post-TTL proof never becomes a new click');
+
+// Cross-database partial failure fixture: ONLY source-only planning.
+// Firestore already approved 1000 distinct operations, but RTDB may fail
+// before emitting. Never re-run approve() merely to send the notification.
+let display=null;let emitted=0;
+const readProof=(id)=>clone(docs.get(
+  'privateLikeGuardV2_420/uid-1/approvals/'+mk(id).operationId));
+const displayFrom=(id,state=display,uid='uid-1',operation=mk(id))=>
+  project(uid,operation,readProof(id),state,base+1001*65_000);
+const attempt=async id=>{
+  const plan=displayFrom(id);
+  if(plan.status==='emit'){display=clone(plan.next);emitted++;}
+  return plan.status;
+};
+// Approvals 1 and 2 exist, but event 2 arrives before event 1.
+assert.equal(await attempt(2),'waiting-prior');
+assert.equal(display,null,'must not skip missing unrelated track event');
+assert.equal(emitted,0,'RTDB writes zero until predecessor succeeds');
+assert.equal(await attempt(1),'emit');
+assert.equal(await attempt(1),'already-delivered','retry never broadcasts again');
+assert.equal(emitted,1,'one event per exact approval');
+// Simulate approval of event 3 committed in Firestore but RTDB service fails.
+// Event 4 may not leap past it. A later exact server-proof retry heals it.
+assert.equal(await attempt(4),'waiting-prior');
+assert.equal(await attempt(3),'emit');
+assert.equal(await attempt(4),'emit');
+assert.equal(emitted,4,'recovered 1 through 4 in sequence');
+for(let i=5;i<=1000;i++){
+  assert.equal(await attempt(i),'emit','all versions delivered consecutively');
+}
+assert.equal(display.version,1000);
+assert.equal(display.results.length,50,'bounded RTDB display even after 1000');
+const after1000=emitted;
+assert.equal(await attempt(1),'already-delivered',
+  '257+ original RTDB delivery retry must not re-emit');
+assert.equal(emitted,after1000,'RTDB duplicate W0 with oldest row evicted');
+assert.equal(displayFrom(1000,display,'wrong-uid').status,'invalid',
+  'other UID cannot use source receipt');
+assert.equal(displayFrom(1000,display,'uid-1',
+  {...mk(1000),liked:!mk(1000).liked}).status,'invalid',
+  'tampered action cannot use source receipt');
+assert.equal(project('uid-1',mk(1),null,display,
+  base+1001*65_000).status,'invalid',
+  'receipt unavailable cannot be treated as delivered');
+assert.equal(displayFrom(1,{version:900,results:[]}).status,
+  'already-delivered',
+  'planner assumes trusted contiguous RTDB version (not verified externally)');
+const futureGap=displayFrom(1000,{version:998,results:[]});
+assert.equal(futureGap.status,'waiting-prior',
+  'out of order cannot skip a missing previous event');
+const beforeDeliveryReplayWrites=writes;
+assert.equal(writes,beforeDeliveryReplayWrites,
+  'projecting a signal never adds Firestore approval writes');
+console.log('STAGE420_DISPLAY_V2_ORDERED_1000_EMIT_50_BOUND=PASS');
+console.log('STAGE420_DISPLAY_V2_RETRY_257PLUS_NO_REEMIT=PASS');
+console.log('STAGE420_DISPLAY_V2_FAILCLOSED_ON_GAP_AND_PROOF_MISMATCH=PASS');
+console.log('STAGE420_DISPLAY_V2_DURABLE_RECOVERY_TRIGGER=NOT_IMPLEMENTED');
+console.log('STAGE420_DISPLAY_V2_MASTER_UNLOCK_PARITY=NOT_IMPLEMENTED');
+console.log('STAGE420_DISPLAY_V2_REAL_RTDB_TRANSACTION=NOT_VERIFIED');
 
 console.log('STAGE420_ATOMIC_LEDGER_1000_UNIQUE_APPROVALS=PASS');
 console.log('STAGE420_ATOMIC_LEDGER_1001ST_EXACT_REPLAY_W0=PASS');

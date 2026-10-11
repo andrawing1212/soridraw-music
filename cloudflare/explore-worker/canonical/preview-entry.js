@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
+import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
@@ -2276,6 +2277,48 @@ async function handlePrivateLikeRoute416(request,env,ctx,url) {
   }
 }
 
+
+// Stage416 signed RTDB-sealed Function handoff: deliberately HARD OFF.
+// A signed claim is the only authorized new writer. Direct legacy /batch
+// remains unchanged until all shared-data environments move together.
+const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false;
+const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-416';
+async function handleSignedPrivateHandoff416(request,env){
+ const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
+   'Cache-Control':'no-store'});
+ const fail=(code,status=503)=>new Response(JSON.stringify({ok:false,
+   error:{code}}),{status,headers});
+ if(STAGE420_SIGNED_LEGACY_INTAKE_OPEN||STAGE426_COMPILED_OPEN||
+    STAGE416_SHARED_D1_INTAKE_ACTIVE)return fail('416_MULTIPLE_CANONICAL_WRITERS');
+ const secret=env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET;
+ if(typeof secret!=='string'||secret.length<32||!env?.DB?.batch)
+   return fail('416_PRIVATE_HANDOFF_BINDING_UNAVAILABLE');
+ const raw=await request.text();
+ if(!await verifyPrivateHmac416(raw,request.headers.get('X-Soridraw-416-Signature'),secret))
+   return fail('416_PRIVATE_HANDOFF_SIGNATURE_DENIED',403);
+ let claim;
+ try{claim=validatePrivateHandoff416(JSON.parse(raw),Date.now());}
+ catch{return fail('416_PRIVATE_HANDOFF_INVALID',400);}
+ try{
+   const result=await acceptPrivateHandoff416(env.DB,claim);
+   if(!result.accepted)return fail('416_STALE_OR_DIFFERENT_BATCH',409);
+   try{await scheduleExploreLikeAggregate103(env);}
+   catch(error){
+     console.error('[416] saved handoff awaiting scheduler',String(error?.message||error));
+     return new Response(JSON.stringify({ok:false,
+       error:{code:'416_DURABLE_QUEUE_SCHEDULER_PENDING'},
+       data:{queued:true,version:result.version,batchIds:result.batchIds}}),
+       {status:503,headers});
+   }
+   return new Response(JSON.stringify({ok:true,data:{...result,
+     queued:true,canonicalD1:'queued',personalLikeSnapshot:'repair-needed'}}),
+     {status:200,headers});
+ }catch(error){
+   console.error('[416] private signed handoff failed',String(error?.message||error));
+   return fail('416_PRIVATE_HANDOFF_UNAVAILABLE');
+ }
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -2308,6 +2351,10 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if(STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE&&
+       request.method==='POST'&&url.pathname===STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE){
+      return handleSignedPrivateHandoff416(request,env);
+    }
     if(STAGE416_SHARED_D1_INTAKE_ACTIVE&&
       (url.pathname===STAGE416_CLICK_ROUTE||url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103)&&
       (request.method==='POST'||request.method==='OPTIONS')){

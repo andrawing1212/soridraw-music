@@ -1,3 +1,12 @@
+## 2026-10-11 다음 구현 기준 — UUID v4 exact proof 후보 PASS, 원본 승인증거·이중 DB 전달 미완 (단일 목표)
+
+- Source candidate `2016e2de548975d58557c06df8ecc25a08d4e165`, [408 38112462716](https://github.com/andrawing1212/soridraw-music/actions/runs/38112462716) PASS. 원래 앱396의 UUID v4는 이제 **미리 존재하는 서버 소유 Firestore receipt가 정확히 일치할 때만** 1 read/0 write로 중복 승인 처리한다. 미확정/만료/위조 v4는 신규 승인 없이 fail closed. v7 1,001회 W0/30·40·120분 QA도 PASS. **운영 구형 사용자 receipt는 현재 Firestore에 자동 존재하지 않는다.** 이 소스 후보를 '구형 좋아요 실사용 호환 PASS'로 바꿔 말하지 말 것.
+- **다음 Codex High 한 작업:** 기존 앱396/TEST/PRODUCTION UUID v4 outbox에 대해 *실제로 어느 저장소의 어떤 이미 존재하는 원본 증거만으로 승인 사실을 검증할 수 있는지*와, **Firestore 한 DB 안의 rate+receipt 원자성은 보존하되 RTDB 실시간 동기화/Worker171/마스터 조기해제와의 사이가 분리됐을 때 ACK 유실·연속 클릭·부분 실패가 어떻게 회복되는지**를 한 모델로 소스/검사 및 비용 비교. 계정별 전체 읽기/백필/기존 데이터 복사 금지. 인증 증거가 없거나 양쪽 저장소 commit 동시 원자성을 보장할 수 없으면 **구형 pending 보존 + 명확한 사용자 재확인 UX / 단계적 구버전 refresh 필요**를 제안하고 cutover는 HOLD. Firestore+RTDB를 원자적이라고 주장하지 말 것.
+- **합격선:** 기존 개인 좋아요/해제/PC↔모바일 하트·공개 숫자·팔로우 및 30초 outbox 기능 불변, 새 미승인 v4 재승인/구형 direct416 우회 0, 51+/257+/1,001회 replay W0, Master 120m lock/early unlock 반영, Worker171 canonical receipt, 10만 DAU × 5회/일·20회/일 전체 Firebase/Cloudflare 월 청구·실기기 지연, 24h+/TTL/키교체, 파생 Feed 재생성/전체 scan 0. **기존 운영 환경 데이터를 건드리지 않는 격리 구현·독립감사만 허용.** 위험 승격/공유 Rules/데이터 변환은 사용자 승인 없이는 금지. 과도한 실험이나 QA 스크립트 누적 없이 한 후보를 끝낼 것.
+- **현재 상태:** 전체 Stage416 1/5·20%, 앱 속도 5/5·100%, 실기기 이전 사용자 PASS 4/4·100%. 앱396 PREVIEW 배포 그대로, 새 Functions/Worker/Rules/Firestore 데이터·main/TEST/PROD 불변, Stage420/426 OFF. 1단계 재진입 반복 읽기 예외는 최종 전체 비용검증에서 확인.
+
+---
+
 ## 2026-10-11 검증 완료 — 재반복 금지 / 다음은 실제 호환 원자 설계 한 건
 
 - QA-only `preview` code `5763eba8bcdbefaebaf29892ef7c96e5fa928ff2`, [408 Run 38112104128](https://github.com/andrawing1212/soridraw-music/actions/runs/38112104128) SUCCESS. 기존 `scripts/verify-420-atomic-ledger-candidate.mjs` 실제 source 함수를 실행하여 1분 30 경고·40 제한·2분 연속 40→120분 잠금·자동해제·잠금 중 신규 승인 W0·8일 첫 요청 deny·1,001번째 정확한 재전송 W0을 확인. Functions/app TS, Build, 보호 좋아요/팔로우 PASS. **같은 검사를 다시 작성하거나 패치 누적 금지.**

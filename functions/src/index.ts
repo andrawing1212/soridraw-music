@@ -4025,7 +4025,8 @@ export const publishExploreLikeIntent420 = onCall(
       const guardPermit420 = !outcome.allowed ? undefined
         : STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
           ? issueRenewedLikePermitV2420(exactPermitAction, Date.now(),
-              Number(outcome.approvedAtMs), stage420PermitSigningSecret.value())
+              Number('approvedAtMs' in outcome ? outcome.approvedAtMs : 0),
+              stage420PermitSigningSecret.value())
           : issueLikePermit420(exactPermitAction, Date.now(),
               stage420PermitSigningSecret.value());
       return { ok: true, ...outcome,

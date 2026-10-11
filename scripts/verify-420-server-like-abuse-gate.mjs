@@ -164,10 +164,10 @@ assert.match(callable,
   /: await publishGuardedLikeSignal420\([\s\S]*?database, uid, exactAction, Date\.now\(\), masterSettings/,
   'frozen operating RTDB rate/journal path must remain the exact OFF fallback');
 assert.match(callable,
-  /: await hasExactRecentApprovedLike420\([\s\S]*?admin\.database\(\), uid, exactAction/,
+  /approved = await hasExactRecentApprovedLike420\([\s\S]*?admin\.database\(\), uid, exactAction/,
   'legacy first ACK recovery must remain on frozen RTDB authority');
 assert.match(callable,
-  /\? await recoverExactAtomicLikeApprovalCandidate420\([\s\S]*?admin\.firestore\(\), uid, exactAction/,
+  /originalApprovedAtMs = await recoverExactAtomicLikeApprovalCandidate420\([\s\S]*?admin\.firestore\(\), uid, exactAction/,
   'future atomic lost-ACK recovery must read exact prior receipt, not approve a fresh click');
 assert.doesNotMatch(callable.slice(callable.indexOf('// Stage420 secured candidate')), /raw\.uid/,
   'untrusted UID must never select another account');

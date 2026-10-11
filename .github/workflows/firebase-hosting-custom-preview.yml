@@ -92,6 +92,11 @@ jobs:
       - name: Verify app379 overlay-safe profile follow counters
         run: node scripts/verify-386-follow-overlay-count-display.mjs
 
+      - name: Protect dormant Stage420 during app398 compatibility-first rollout
+        run: |
+          node scripts/verify-420-atomic-cutover-barrier.mjs
+          node scripts/verify-420-mandatory-upgrade.mjs
+
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:

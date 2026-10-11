@@ -1,3 +1,12 @@
+## CURRENT — app398 구형 강제업데이트 동일버전 반복 새로고침 방지 완료 / source-only (2026-10-11)
+
+- **정상 PREVIEW 제품:** app398 Firebase Hosting source `313af1b6d874768d8693d5eebbdd5220d5bb1b94` / [Release 38141075089](https://github.com/andrawing1212/soridraw-music/actions/runs/38141075089) **SUCCESS** (actual version/index hash, TEST/PROD unchanged). 이번 코드 수정 **미배포**, 현재 app398 live 영향 없음.
+- **기능 코드 commit:** `preview` `bcf5498e8cca569237dac3e0f9e2a3fd43136969`, 정확 2파일 `src/services/appUpdateNotice.ts`, `scripts/verify-420-mandatory-upgrade.mjs`. 새 signed Worker가 구형 Like HTTP409를 반환했지만 업데이트 파일에 아직 새 앱 버전이 배포되지 않았다면 기존 app398 UI가 동일 버전 반복 새로고침을 요청할 위험을 제거: 원격 `app-version.json`이 실제로 새 버전임이 확인되기 전에는 **‘좋아요 업데이트 준비 중 · 다시 확인’** 동작으로 제한. 원격 버전 증가 확정 후에만 실제 reload 허용. 앱 버전 파일 일시 네트워크 오류 때도 기존 409 안내는 보존. 단순 공개 version JSON GET 외 서버 user DB 추가 호출 0, 사용자 로컬 outbox/캐시 삭제/변경 0. 일반 (non-409) 업데이트 경로 보호.
+- **QA:** [408 Run 38141939228](https://github.com/andrawing1212/soridraw-music/actions/runs/38141939228) **SUCCESS** (실제 앱 Update Controller VM 브라우저 모형: 409 동버전 재시작 0, 새 버전 공개시 reload 1, manifest OFF 안내 보존, 앱 TS/Build, Functions TS, private like/canonical regression 및 shared Rules read-only). Work 별도 독립검증·실기기 p95·Cloudflare live 실운영 동작 **미검증**.
+- **Stage420 전환 계획:** 디렉터는 구형 PWA 업데이트 강제·미서명 Like 거절·미전송 outbox 보호 정책 승인. signed 420 canonical Worker/Roles/Functions/RTDB Rules를 **아직 켜면 안 됨**: 모든 클라이언트(TEST/PRODUCTION 구형 포함) 공유 사용자 원본, 416 직접 RTDB 통로, 동일 Worker 인증/서명/마스터 recovery/10만 DAU 비용 검증되지 않음. `EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE=false`, `STAGE420_SIGNED_LEGACY_INTAKE_OPEN=false`, `STAGE426_COMPILED_OPEN=false`. Firebase Functions/Worker/Rules/D1/user data/main 변경 0, prod 미승격. 다음: 구형 pending 명시 재확인 UX/실제 3환경 cutover 계약 및 Work 독립감사, approved exact coherent deployment only after pass.
+- **진척 표준:** Stage416 전체 **28%**; 앱 속도 기존 **100%**; Stage420 운영 **4/10=40%**. 소스 수정/CI만으로 운영 게이트 상향 금지.
+
+---
 ## CURRENT — 사용자 승인 구형 앱 필수업데이트 전환 1단계 app398 PREVIEW 배포 완료 (2026-10-11)
 
 - **디렉터 승인(2026-10-11):** 구형 앱은 업데이트 후 좋아요를 사용하도록 전환한다. 구형 미서명 Worker 좋아요 접수를 거절하며, 로컬 미전송(outbox) 원본은 삭제/재발급하지 않고 보존한다. 구형 앱의 즉시 무중단 사용을 보장할 수 없다는 정책 차이를 승인받음. 이 승인은 **TEST 또는 PRODUCTION 배포 승인으로 간주하지 않는다.**

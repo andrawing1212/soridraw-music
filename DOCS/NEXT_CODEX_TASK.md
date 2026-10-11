@@ -1,3 +1,11 @@
+## NEXT — Stage420 강제업데이트 반복 새로고침 결함 해결 후 실제 운영 전환 전 E2E (2026-10-11)
+
+- **완료:** app398 실제 PREVIEW Hosting 배포 `313af1b6...`, 구형 Worker like HTTP409 UI 업데이트 사전안내 source, signed like 신규 420 OFF 보호. 새 code `bcf5498e8cca569237dac3e0f9e2a3fd43136969`는 앱 버전 아직 398인 상태에서 409가 도착해도 **반복 새로고침/가짜 강제업데이트 불가**로 보정, 새 버전 manifest 후만 적용. [408 38141939228](https://github.com/andrawing1212/soridraw-music/actions/runs/38141939228) TS/Build/기능 회귀/실행형 업데이트 모형 SUCCESS. source-only, 아직 PREVIEW 재배포 안함.
+- **다음 실질 게이트:** old 416 outbox v4의 확인·복구 UX를 사용자 명시 클릭에만 연결(구형 미전송 클릭 자동 재승인·삭제 금지), 전환경로 signed backend/RTDB ancestor/direct writes/Cloudflare 옛 unsigned like route 우회 검증, Master 120분 잠금 권한/운영 복구 통합, Firebase Emulator + PC↔mobile 실기기/p95 및 10만DAU 합산 월 비용. Work 읽기 전용 독립감사 exact SHA; 실패 시 3환경 및 shared data 승격 중단.
+- **금지:** 현재 배포 app398 UI, Music Note/Library/Studio 저장하트/좋아요 동기화 임의 변경 금지. stage420/426 ON, Worker/Functions/RTDB Rules/생성 D1 174/419 migration/backend 실제 배포, TEST(main)/PRODUCTION 승격은 검증 및 별도 단계 승인 이전 금지. 과거 반복 CI/doc 보고를 실제 기능 완료로 포장 금지.
+- **고정 진행률:** Stage416 28%, 속도 100%, Stage420 운영 40%.
+
+---
 ## NEXT — app398 PREVIEW 호환 준비 완료: 구형 차단 실제 보안 전환 게이트 (2026-10-11)
 
 - **재작업 금지:** app398 PREVIEW Hosting source `313af1b6d874768d8693d5eebbdd5220d5bb1b94` / [Release 38141075089](https://github.com/andrawing1212/soridraw-music/actions/runs/38141075089) SUCCESS. 구형 미서명 like 409/위조 403/키 누락 503 Worker candidate와 업데이트 버튼 + durable local outbox 보호 완성, 408/Follow full automated PASS. Stage420 guard OFF이며 Firebase/Cloudflare server cutover, shared Rules, Functions, D1 changes 없음. 테스트·정식 앱 현재 구버전 유지. 디렉터는 구형 앱 강제 업데이트/미갱신 좋아요 차단 정책 **승인**, PROD 배포까지 승인한 것은 아님.

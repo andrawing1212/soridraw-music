@@ -36,6 +36,9 @@ export const buildStage420PrivateRulesCandidate = (source) => {
       // Only the personal display subtree is readable by its owner.
       '.write': false,
       'display': { '.read': 'auth != null && auth.uid === $uid' },
+      // One authenticated UID can read the changed-event projection only;
+      // no parent .read grant, Admin audit/lock are never exposed.
+      'displayV2': { '.read': 'auth != null && auth.uid === $uid' },
       'adminUnlockAudit': { '.read': false },
       '$other': { '.validate': false },
     },

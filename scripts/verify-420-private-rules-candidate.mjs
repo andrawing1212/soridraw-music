@@ -26,6 +26,7 @@ assert.deepEqual(next.rules.privateLikeSync420, {
   '$uid': {
     '.write': false,
     'display': { '.read': userPolicy },
+    'displayV2': { '.read': userPolicy },
     'adminUnlockAudit': { '.read': false },
     '$other': { '.validate': false },
   },

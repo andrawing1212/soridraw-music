@@ -257,12 +257,16 @@ export const subscribeGuardedLikeIntent420 = (
   uid: string,
   onChanged: (event: GuardedLikeEvent420) => void,
   onError?: (error: Error) => void,
+  // Rollback-safe switch: exactly ONE signal tree per device (not dual
+  // listeners with unrelated version counters). Never mirror a legacy
+  // /display version onto the atomic /displayV2 cursor.
+  source: 'legacy' | 'atomic-v2' = 'legacy',
 ): Unsubscribe => {
   if (!uid || uid.length > 128) return () => {};
   let initialized = false;
   let seenVersion = 0;
   return onValue(
-    databaseRef(realtimeDb, `privateLikeSync420/${uid}/display`),
+    databaseRef(realtimeDb, `privateLikeSync420/${uid}/${source === 'atomic-v2' ? 'displayV2' : 'display'}`),
     (snapshot) => {
       const raw = snapshot.val() as Partial<GuardedLikeDisplay420> | null;
       const version = Number(raw?.version || 0);

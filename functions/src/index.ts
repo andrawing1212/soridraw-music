@@ -25,6 +25,10 @@ import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420"
 import { issueLikePermit420 } from "./exploreLikePermit420";
 import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
+  masterUnlockAtomicLikeAfterAuthCandidate420,
+  recoverHeldLikeDeliveryAfterMasterAuthCandidate420,
+} from "./exploreLikeAtomicLedgerCandidate420";
+import {
   DEFAULT_LIKE_ABUSE_SETTINGS_420,
   LIKE_ABUSE_SETTINGS_PATH_420,
   readLikeAbuseSettings420,
@@ -4213,3 +4217,82 @@ export const masterSetExploreLikePolicy420 = onCall(
     return { ok: true, ...settings, effectiveForNewWindows: true };
   },
 );
+
+// Stage420 atomic Master adapter is wired to real existing server-role checking,
+// but is HARD DISABLED until the shared RTDB Rules, old-client cutover,
+// receipt onCreate delivery, alerting and rollback have passed live gates.
+// The old RTDB-backed Master callables above remain the sole current UI route.
+// Do not turn this on as part of a Hosting-only version bump.
+const STAGE420_ATOMIC_MASTER_CUTOVER_ENABLED = false;
+const requireStage420AtomicMaster = async (request: CallableRequestLike) => {
+  if (!STAGE420_ATOMIC_MASTER_CUTOVER_ENABLED) {
+    throw new HttpsError("failed-precondition",
+      "Stage420 원자 승인 전환은 아직 활성화되지 않았습니다.");
+  }
+  return requireMasterCaller(request);
+};
+
+// Candidate new authority read: Master identity from canonical user document,
+// exactly one per-account Firestore rate document; no personal like catalog.
+export const masterGetAtomicLikeLimit420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db } = await requireStage420AtomicMaster(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid)) {
+      throw new HttpsError("invalid-argument", "대상 회원 UID가 올바르지 않습니다.");
+    }
+    const rateSnap = await db.collection("privateLikeGuardV2_420").doc(targetUid).get();
+    const rate = rateSnap.data() || {};
+    const lockedUntilMs = Number(rate.lockedUntilMs || 0);
+    return {
+      ok: true, targetUid, version: Number(rate.version || 0),
+      acceptedInWindow: Math.max(0, Number(rate.acceptedInWindow || 0)),
+      lockedUntilMs: lockedUntilMs > Date.now() ? lockedUntilMs : 0,
+    };
+  },
+);
+
+// Separate name deliberately prevents old Master UI from accidentally
+// clearing the wrong authority. Immutable requestId audit and rate update
+// happen in a single Firestore transaction in the candidate helper.
+export const masterUnlockAtomicLike420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireStage420AtomicMaster(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const requestId = String(request.data?.requestId || "").trim();
+    const reason = String(request.data?.reason || "").trim();
+    if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid) ||
+        !/^[a-zA-Z0-9_-]{12,96}$/.test(requestId) || !reason || reason.length > 120) {
+      throw new HttpsError("invalid-argument", "잠금 해제 요청을 확인해주세요.");
+    }
+    const result = await masterUnlockAtomicLikeAfterAuthCandidate420(
+      db, requesterUid, targetUid, requestId, reason,
+    );
+    return { ok: true, targetUid, ...result };
+  },
+);
+
+// Master-authorized repair of ONE held receipt. No rate reapproval, no
+// whole-account scan, no rewrite of original signed approval.
+export const masterRecoverHeldAtomicLike420 = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireStage420AtomicMaster(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const operationId = String(request.data?.operationId || "").trim();
+    const reason = String(request.data?.reason || "").trim();
+    if (!targetUid || targetUid.length > 128 || /[.#$\[\]\/]/.test(targetUid) ||
+        !/^[0-9a-f-]{36}$/i.test(operationId) || !reason || reason.length > 120) {
+      throw new HttpsError("invalid-argument", "복구할 승인 내역을 확인해주세요.");
+    }
+    const result = await recoverHeldLikeDeliveryAfterMasterAuthCandidate420(
+      db, admin.database(), requesterUid, targetUid, operationId, reason,
+    );
+    return { ok: true, targetUid, operationId, ...result };
+  },
+);
+// Receipt onCreate remains deliberately UNEXPORTED until its real Eventarc
+// retry policy, shared Rules/old client compatibility and operator alert are
+// approved together. A trigger deployed alone would create delivery gaps.

@@ -108,6 +108,22 @@ for (const name of [
 }
 assert.match(functions, /readLikeAbuseSettings420\(database\)/,
   'likes must use the single cached Master policy, not per-click Firestore reads');
+// New Firestore authority is a different Master surface: role check is
+// mandatory even though the cutover flag remains OFF.
+for (const name of [
+  'masterGetAtomicLikeLimit420', 'masterUnlockAtomicLike420',
+  'masterRecoverHeldAtomicLike420',
+]) assert.match(functions, new RegExp('export const ' + name + ' = onCall\\('));
+assert.match(functions,
+  /const requireStage420AtomicMaster = async [\s\S]*?return requireMasterCaller\(request\);/,
+  'atomic Master endpoints must use real server-role verification');
+assert.match(functions, /const STAGE420_ATOMIC_MASTER_CUTOVER_ENABLED = false;/,
+  'new Master surface must be disabled until old-app/shared Rules cutover');
+assert.match(functions, /masterUnlockAtomicLikeAfterAuthCandidate420\(/,
+  'atomic Master unlock must use Firestore authoritative rate and audit');
+assert.match(functions, /recoverHeldLikeDeliveryAfterMasterAuthCandidate420\(/,
+  'held receipt must only recover through the authenticated Master wrapper');
+console.log('STAGE420_ATOMIC_MASTER_ROLE_BOUND_AND_CUTOVER_OFF=PASS');
 console.log('STAGE420_MASTER_SETTINGS_DEFAULT_30_40_120=PASS');
 console.log('STAGE420_MASTER_VALIDATION_AND_CACHED_READ=PASS');
 console.log('STAGE420_MASTER_POLICY_NEXT_WINDOW_ONLY=PASS');

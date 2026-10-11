@@ -265,6 +265,19 @@ listeners[0].handler({ val: () => ({ version: 2, results: [stale] }) });
 assert.equal(incoming.length, 1, 'stale replay cannot repaint a private heart');
 off();
 assert.equal(listeners.length, 0);
+// Staged atomic cutover uses a separate version history. A new V2 subscriber
+// must not keep /display's old high watermark or create a second listener.
+const atomicIncoming = [];
+const stopAtomic = subscribe('uid-a', row => atomicIncoming.push(row), undefined, 'atomic-v2');
+assert.equal(listeners.length, 1, 'atomic listener must replace old one');
+assert.equal(listeners[0].path,'privateLikeSync420/uid-a/displayV2');
+assert.equal(atomicIncoming.length,0,'V2 cold history is not a fresh canonical click');
+listeners[0].handler({val:()=>({version:1,results:[event]})});
+assert.equal(atomicIncoming.length,1,'V2 starts from its own cursor zero');
+listeners[0].handler({val:()=>({version:1,results:[event]})});
+assert.equal(atomicIncoming.length,1,'duplicate V2 notifications do not repaint');
+stopAtomic();
+assert.equal(listeners.length,0);
 const functionCode = readFileSync('functions/src/index.ts', 'utf8');
 assert.match(functionCode, /export const publishExploreLikeIntent420 = onCall\(/);
 const rulesBuilder = readFileSync('scripts/build-420-private-rules-candidate.mjs', 'utf8');
@@ -275,6 +288,7 @@ assert.doesNotMatch(code, /runTransaction|set\(|update\(/,
 console.log('STAGE420_GUARDED_CALLABLE_NO_DIRECT_RTDATABASE_WRITE=PASS');
 console.log('STAGE420_SERVER_ONLY_DISPLAY_AND_ADMIN_AUDIT_ISOLATION=PASS');
 console.log('STAGE420_PROVISIONAL_PRIVATE_HEART_REPLAY_GUARD=PASS');
+console.log('STAGE420_ATOMIC_DISPLAY_V2_SINGLE_LISTENER_VERSION_ISOLATION=PASS');
 console.log('STAGE420_STALE_REJECTION_AND_NETWORK_UNKNOWN_OUTBOX_GUARD=PASS');
 console.log('STAGE420_GUARDED_SEND_SETTLE_CANDIDATE_NO_DIRECT_FALLBACK=PASS');
 console.log('STAGE420_MISSING_SIGNED_PERMIT_STAYS_UNAPPROVED=PASS');

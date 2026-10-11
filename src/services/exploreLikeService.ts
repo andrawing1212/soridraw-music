@@ -874,7 +874,8 @@ const startGuardedLike420 = (uid: string) => {
     patchExploreLikedTrackMembership(uid, event.trackId, liked);
     notifyExploreLikeUiSync139({ uid, trackId: event.trackId,
       ownerUid: event.ownerUid, liked, likeCount: 0, source: 'remote-intent' });
-  }, (error) => console.warn('[420] Private server hint retained only on active device:', error));
+  }, (error) => console.warn('[420] Private server hint retained only on active device:', error),
+  'atomic-v2');
 };
 // This listener does not read Firestore/D1 and subscribes once for the signed-in
 // account, not once per song/card/tab. No continuous timer or global Feed reload.

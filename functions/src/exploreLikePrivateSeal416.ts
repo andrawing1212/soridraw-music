@@ -33,8 +33,11 @@ export async function sealUserPrivateLikes416(
   const result=await database.ref('userSync/'+uid+'/exploreLikeBatch416').transaction(
     (raw:unknown)=>{
       const value=raw as Pending|null;
+      if(value?.sealed){
+        disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED',value:value.sealed};
+        return;
+      }
       if(!value?.window){disposition={sealed:false,reason:'EMPTY'};return;}
-      if(value.sealed){disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED'};return;}
       const {window,pending}=value;
       if(!Number.isSafeInteger(window.lastClickAtMs)||window.lastClickAtMs<=0||
          !MINUTES.includes(window.minutes)||!validUuid(window.id)||
@@ -56,6 +59,7 @@ export async function sealUserPrivateLikes416(
     undefined,false,
   );
   if(!result.committed)return {sealed:false,reason:disposition.reason,
+    ...(disposition.value?{value:disposition.value}:{}),
     ...(disposition.retryAfterMs!==undefined?{retryAfterMs:disposition.retryAfterMs}:{})};
   const committed=result.snapshot.val() as Pending;
   if(!committed?.sealed||committed.sealed.id!==disposition.value?.id||

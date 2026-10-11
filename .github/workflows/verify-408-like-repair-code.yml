@@ -19,6 +19,8 @@ on:
       - 'scripts/verify-416-private-rtdb-batch.mjs'
       - 'functions/src/exploreLikePrivateSeal416.ts'
       - 'functions/src/exploreLikePrivateHandoff416.ts'
+      - 'functions/src/exploreLikePrivateCommit416.ts'
+      - 'scripts/verify-416-complete-private-window.mjs'
       - 'scripts/verify-416-signed-worker-issuer.mjs'
       - 'scripts/verify-416-server-rtdb-seal.mjs'
       - 'scripts/verify-416-worker-route-runtime.mjs'
@@ -162,6 +164,7 @@ jobs:
           node scripts/verify-416-server-rtdb-seal.mjs
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-signed-worker-issuer.mjs
+          node scripts/verify-416-complete-private-window.mjs
           node scripts/verify-416-worker-route-runtime.mjs
           node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source

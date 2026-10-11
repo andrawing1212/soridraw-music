@@ -68,7 +68,7 @@ export const publishGuardedLikeIntent420 = async (
       typeof decision.allowed !== 'boolean' ||
       !Number.isFinite(decision.lockedUntilMs) ||
       (decision.allowed && (typeof decision.guardPermit420 !== 'string' ||
-        !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(decision.guardPermit420)))) {
+        !/^v(?:1|2)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(decision.guardPermit420)))) {
     throw new Error('INVALID_GUARDED_LIKE_RESPONSE');
   }
   return decision;
@@ -84,7 +84,7 @@ export const renewGuardedLikePermitCandidate420 = async (
       typeof mutation.liked !== 'boolean' ||
       !operationIdValid(mutation.operationId) ||
       typeof previousGuardPermit420 !== 'string' ||
-      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(previousGuardPermit420) ||
+      !/^v(?:1|2)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(previousGuardPermit420) ||
       previousGuardPermit420.length > 2400) {
     throw new Error('INVALID_GUARDED_LIKE_RENEW_REQUEST');
   }
@@ -96,7 +96,7 @@ export const renewGuardedLikePermitCandidate420 = async (
   const reply = result.data;
   if (!reply || reply.ok !== true || reply.renewed !== true ||
       typeof reply.guardPermit420 !== 'string' ||
-      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
+      !/^v(?:1|2)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(reply.guardPermit420) ||
       reply.guardPermit420.length > 2400) {
     throw new Error('INVALID_GUARDED_LIKE_RENEW_RESPONSE');
   }
@@ -124,7 +124,7 @@ export const recoverGuardedLikePermitCandidate420 = async (
   const response = result.data;
   if (!response || response.ok !== true || response.recovered !== true ||
       typeof response.guardPermit420 !== 'string' ||
-      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(response.guardPermit420) ||
+      !/^v(?:1|2)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(response.guardPermit420) ||
       response.guardPermit420.length > 2400) {
     throw new Error('GUARDED_LIKE_APPROVAL_PROOF_MISSING');
   }

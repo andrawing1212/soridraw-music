@@ -4,7 +4,9 @@
 // the need for per-batch Firebase reads (not a claim about Function click cost).
 const AUDIENCE = 'soridraw:explore-like-canonical:420';
 const TTL_MS = 15 * 60_000;
-const EXPECTED_KEYS = 'aud,exp,iat,liked,operationId,trackId,uid,v';
+const EXPECTED_KEYS_V1 = 'aud,exp,iat,liked,operationId,trackId,uid,v';
+const EXPECTED_KEYS_V2 = 'aud,exp,iat,liked,operationId,orig,trackId,uid,v';
+const MAX_ORIGINAL_AGE_MS = 24 * 60 * 60_000;
 
 const denied = () => Object.assign(new Error('420_GUARD_PERMIT_DENIED'), {
   code: '420_GUARD_PERMIT_DENIED', status: 403,
@@ -42,7 +44,7 @@ export const verifyLikeGuardPermit420 = async ({
       !Number.isSafeInteger(nowMs) || nowMs <= 0) throw denied();
 
   const parts = permit.split('.');
-  if (parts.length !== 3 || parts[0] !== 'v1') throw denied();
+  if (parts.length !== 3 || (parts[0] !== 'v1' && parts[0] !== 'v2')) throw denied();
   const key = decodeB64(secretBase64Url, 300);
   const payloadBytes = decodeB64(parts[1], 2200);
   const mac = decodeB64(parts[2], 80);
@@ -53,16 +55,23 @@ export const verifyLikeGuardPermit420 = async ({
     const text = new TextDecoder('utf-8', {fatal:true}).decode(payloadBytes);
     claims = JSON.parse(text);
   } catch { throw denied(); }
+  const legacy = parts[0] === 'v1';
+  const originalIssuedAt = legacy ? claims?.iat : claims?.orig;
   if (!claims || Array.isArray(claims) || typeof claims !== 'object' ||
-      Object.keys(claims).sort().join(',') !== EXPECTED_KEYS ||
-      claims.v !== 1 || claims.aud !== AUDIENCE ||
+      Object.keys(claims).sort().join(',') !==
+        (legacy ? EXPECTED_KEYS_V1 : EXPECTED_KEYS_V2) ||
+      claims.v !== (legacy ? 1 : 2) || claims.aud !== AUDIENCE ||
       claims.uid !== authenticatedUid ||
       claims.trackId !== mutation.trackId ||
       claims.liked !== mutation.liked ||
       claims.operationId !== mutation.operationId ||
       !Number.isSafeInteger(claims.iat) || !Number.isSafeInteger(claims.exp) ||
-      claims.iat <= 0 || claims.exp - claims.iat !== TTL_MS ||
+      !Number.isSafeInteger(originalIssuedAt) ||
+      claims.iat <= 0 || originalIssuedAt <= 0 ||
+      originalIssuedAt > claims.iat ||
+      claims.exp - claims.iat !== TTL_MS ||
       claims.iat > nowMs + 5_000 || claims.exp <= nowMs ||
+      (!legacy && nowMs - originalIssuedAt >= MAX_ORIGINAL_AGE_MS) ||
       !/^[0-9a-f-]{36}$/i.test(claims.operationId)) throw denied();
 
   const hmacKey = await subtle.importKey(
@@ -72,7 +81,8 @@ export const verifyLikeGuardPermit420 = async ({
   const valid = await subtle.verify('HMAC', hmacKey, mac, signedBytes);
   if (valid !== true) throw denied();
   return {uid: claims.uid, trackId: claims.trackId, liked: claims.liked,
-    operationId: claims.operationId, issuedAt: claims.iat, expiresAt: claims.exp};
+    operationId: claims.operationId, issuedAt: claims.iat, expiresAt: claims.exp,
+    originalIssuedAt};
 };
 
 export const verifyGuardedLikeBatch420 = async ({

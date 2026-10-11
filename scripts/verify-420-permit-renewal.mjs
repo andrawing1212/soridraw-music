@@ -16,7 +16,9 @@ const load=(path,names,extra={})=>{
   return module.exports;
 };
 const signer=load('functions/src/exploreLikePermit420.ts',[
-  'issueLikePermit420','LIKE_PERMIT_AUDIENCE_420','LIKE_PERMIT_TTL_MS_420']);
+  'issueLikePermit420','issueRenewedLikePermitV2420',
+  'LIKE_PERMIT_AUDIENCE_420','LIKE_PERMIT_TTL_MS_420',
+  'LIKE_PERMIT_MAX_RENEWAL_AGE_MS_420']);
 const {renewPreviouslyApprovedLikePermit420:renew,
   MAX_PERMIT_RENEWAL_AGE_MS_420:maxAge}=load('functions/src/exploreLikePermitRenew420.ts',
     ['renewPreviouslyApprovedLikePermit420','MAX_PERMIT_RENEWAL_AGE_MS_420'],signer);
@@ -29,11 +31,37 @@ const original=signer.issueLikePermit420(op,at,secret);
 const now=at+15*60_000+10_000;
 const restored=renew(op,original,now,secret);
 assert.notEqual(restored,original,'new expiration required');
+assert.match(restored,/^v2\./,'first v1 renewal must lock original iat in v2');
 const verified=await verifyLikeGuardPermit420({permit:restored,
   authenticatedUid:op.uid,mutation:op,secretBase64Url:secret,
   nowMs:now+1,subtle:webcrypto.subtle});
 assert.equal(verified.operationId,op.operationId);
 assert.equal(verified.issuedAt,now);
+assert.equal(verified.originalIssuedAt,at);
+const legacyAccepted=await verifyLikeGuardPermit420({
+  permit:original,authenticatedUid:op.uid,mutation:op,
+  secretBase64Url:secret,nowMs:at+1,subtle:webcrypto.subtle,
+});
+assert.equal(legacyAccepted.originalIssuedAt,at,'legacy v1 remains accepted');
+// Attack: repeatedly renew v2 certificates while the current certificate
+// remains less than 24 hours old. The v2 signature must preserve the first iat.
+const almost24=at+23*60*60_000;
+const penultimate=renew(op,restored,almost24,secret);
+const lastVerified=await verifyLikeGuardPermit420({
+  permit:penultimate,authenticatedUid:op.uid,mutation:op,
+  secretBase64Url:secret,nowMs:almost24+1,subtle:webcrypto.subtle,
+});
+assert.equal(lastVerified.originalIssuedAt,at);
+const endOfOriginal=at+maxAge;
+assert.throws(()=>renew(op,penultimate,endOfOriginal,secret),
+  /420_GUARD_PERMIT_RENEW_DENIED/,'cannot extend v2 beyond original 24 hours');
+await assert.rejects(verifyLikeGuardPermit420({
+  permit:penultimate,authenticatedUid:op.uid,mutation:op,
+  secretBase64Url:secret,nowMs:endOfOriginal,subtle:webcrypto.subtle,
+}),/420_GUARD_PERMIT_DENIED/,'Worker also refuses still-fresh v2 past origin');
+assert.throws(()=>renew(op,penultimate,at+31*24*60*60_000,secret),
+  /420_GUARD_PERMIT_RENEW_DENIED/,'31-day replay via chained renewals denied');
+console.log('STAGE420_V1_TO_V2_ORIGIN_BOUND_24H_CHAIN_DENIED=PASS');
 await assert.rejects(verifyLikeGuardPermit420({permit:original,
   authenticatedUid:op.uid,mutation:op,secretBase64Url:secret,
   nowMs:now,subtle:webcrypto.subtle}),/420_GUARD_PERMIT_DENIED/);

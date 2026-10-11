@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
+import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
 import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs';
@@ -2219,6 +2220,62 @@ async function handleVerifiedLikeBatch426(request,env,ctx) {
   }
 }
 
+
+// Stage416: AUTHENTICATED real shared-D1 route candidate; HARD OFF until
+// 3-environment writer migration, Master policy, R2/RTDB and costs are proven.
+const STAGE416_SHARED_D1_INTAKE_ACTIVE = false;
+const STAGE416_CLICK_ROUTE = '/v1/me/likes/private-click-416';
+async function handlePrivateLikeRoute416(request,env,ctx,url) {
+  const headers=like426Headers(request);
+  headers.set('Access-Control-Allow-Methods','POST, OPTIONS');
+  headers.set('Access-Control-Allow-Headers','Authorization, X-Firebase-AppCheck, Content-Type, X-Soridraw-Private-Clock');
+  const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers});
+  if(STAGE420_SIGNED_LEGACY_INTAKE_OPEN||STAGE426_COMPILED_OPEN)
+    return reply(503,{ok:false,error:{code:'416_MULTIPLE_WRITERS_BLOCKED'}});
+  if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
+  if(request.headers.get('X-Soridraw-Private-Clock')!=='416')
+    return reply(409,{ok:false,error:{code:'416_CLIENT_UPGRADE_REQUIRED'}});
+  if(!env?.DB?.prepare||!env?.DB?.batch)
+    return reply(503,{ok:false,error:{code:'416_SHARED_D1_UNAVAILABLE'}});
+  const minutes=Number(env?.STAGE416_PRIVATE_CANONICAL_MINUTES);
+  if(![1,3,5,10,20].includes(minutes))
+    return reply(503,{ok:false,error:{code:'416_MASTER_TIMING_UNAVAILABLE'}});
+  const actor=await validateExploreAuth307(request,env,ctx);
+  if(!actor.ok)return actor.response;
+  if(url.pathname===STAGE416_CLICK_ROUTE){
+    if(!env?.LIKE_RATE_LIMITER?.limit)
+      return reply(503,{ok:false,error:{code:'416_RATE_GUARD_UNAVAILABLE'}});
+    const limited=await env.LIKE_RATE_LIMITER.limit({key:actor.uid});
+    if(!limited?.success)return reply(429,{ok:false,error:{code:'416_TOO_MANY_CLICKS'}});
+    const body=await request.json().catch(()=>null);
+    try{
+      const result=await registerPrivateClick416(env.DB,actor.uid,body,Date.now(),minutes);
+      return reply(200,{ok:true,data:{...result,canonicalD1:'private-pending-416'}});
+    }catch(error){
+      if(String(error?.message||'').startsWith('416_BAD_'))
+        return reply(400,{ok:false,error:{code:'416_INVALID_CLICK'}});
+      console.error('[416] private click failed',String(error?.message||error));
+      return reply(503,{ok:false,error:{code:'416_PRIVATE_CLICK_UNAVAILABLE'}});
+    }
+  }
+  try{
+    const result=await commitPrivateWindow416(env.DB,actor.uid,Date.now());
+    if(!result.committed)return reply(200,{ok:true,data:{...result,queued:false}});
+    // Queue rows and versioned deletion committed atomically in SAME D1.batch.
+    // Scheduling failure cannot reinsert an already-claimed window.
+    try{await scheduleExploreLikeAggregate103(env);}
+    catch(error){
+      console.error('[416] durable queued batch not scheduled',String(error?.message||error));
+      return reply(503,{ok:false,error:{code:'416_SCHEDULER_RETRY_NEEDED'},
+        data:{queued:true,batchIds:result.batchIds}});
+    }
+    return reply(200,{ok:true,data:{...result,queued:true,canonicalD1:'queued'}});
+  }catch(error){
+    console.error('[416] shared-D1 handoff failed',String(error?.message||error));
+    return reply(503,{ok:false,error:{code:'416_PRIVATE_COMMIT_UNAVAILABLE'}});
+  }
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -2251,6 +2308,11 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if(STAGE416_SHARED_D1_INTAKE_ACTIVE&&
+      (url.pathname===STAGE416_CLICK_ROUTE||url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103)&&
+      (request.method==='POST'||request.method==='OPTIONS')){
+      return handlePrivateLikeRoute416(request,env,ctx,url);
+    }
     // Both experimental writers cannot own one canonical endpoint. If a
     // later release accidentally enables both, fail BEFORE any D1 work.
     if (request.method==='POST' && url.pathname===EXPLORE_LIKE_BATCH_ROUTE_103 &&

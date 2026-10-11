@@ -20,7 +20,7 @@ const rows416 = (record) => {
   const rows = Object.entries(object).map(([trackId, value]) => {
     if (!validTrack416(trackId) || typeof value?.liked !== 'boolean' ||
         !validOp416(value?.operationId)) throw Error('416_BAD_PENDING');
-    return { trackId, liked: value.liked };
+    return { trackId, liked: value.liked, operationId: value.operationId };
   }).sort((a, b) => a.trackId.localeCompare(b.trackId));
   if (!rows.length || rows.length > MAX_PENDING_TRACKS_416 ||
       rows.length !== Number(record.pending_count)) throw Error('416_BAD_COUNT');
@@ -97,7 +97,8 @@ export async function commitPrivateWindow416(db, uid, serverNowMs) {
   const batchIds = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const batchAt = baseAt; // Distinct hashed IDs; no future-dated chunk is stranded.
-    const digest = await id416(uid, snapshot.window_id, snapshot.version, i, chunks[i]);
+    const canonicalPayload=chunks[i].map(({trackId,liked})=>({trackId,liked}));
+    const digest = await id416(uid, snapshot.window_id, snapshot.version, i, canonicalPayload);
     const batchId = 'l069_' + String(batchAt).padStart(13, '0') + '_' + digest;
     batchIds.push(batchId);
     statements.push(db.prepare(
@@ -106,7 +107,7 @@ export async function commitPrivateWindow416(db, uid, serverNowMs) {
       ' SELECT ?,user_uid,?,?,? FROM ' + TABLE_416 +
       ' WHERE user_uid=? AND window_id=? AND version=? AND deadline_at<=?'
     ).bind(batchId, batchAt, chunks[i].length,
-      JSON.stringify(chunks[i]), uid, snapshot.window_id, snapshot.version, serverNowMs));
+      JSON.stringify(canonicalPayload), uid, snapshot.window_id, snapshot.version, serverNowMs));
   }
   statements.push(db.prepare('DELETE FROM ' + TABLE_416 +
     ' WHERE user_uid=? AND window_id=? AND version=? AND deadline_at<=?' +
@@ -124,5 +125,6 @@ export async function commitPrivateWindow416(db, uid, serverNowMs) {
     throw Error('416_ATOMIC_QUEUE_PROOF_MISSING');
   }
   return { committed: true, batchIds, batchCount: chunks.length,
-    trackCount: mutations.length, version: Number(snapshot.version) };
+    trackCount: mutations.length, version: Number(snapshot.version),
+    results: mutations.map((row)=>({...row,status:'legacy-queued'})) };
 }

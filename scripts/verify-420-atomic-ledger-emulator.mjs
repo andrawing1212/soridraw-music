@@ -245,6 +245,19 @@ try {
   assert.equal((await lockDoc.get()).data().version,4);
   console.log('STAGE420_REAL_EMULATOR_MASTER_120MIN_UNLOCK_AUDIT_REPLAY_W0=PASS');
 
+  // Corrupted server receipt fields cannot mint another valid certificate.
+  // The exact hash alone is insufficient if the ordered version was lost.
+  // This is a deliberately corrupted TEST-ONLY Firestore emulator fixture.
+  const firstRef=account.collection('approvals').doc(one.operationId);
+  await firstRef.update({version:0});
+  const corrupted=await approve(firestore,uid,one,now+140);
+  assert.equal(corrupted.allowed,false,'corrupt version must never grant replay');
+  assert.equal(await recoverExact(firestore,uid,one,now+140),null,
+    'lost-ACK proof must fail closed if ordered version is invalid');
+  assert.equal((await account.get()).data().version,7,
+    'tampered server proof must not increase account quota/version');
+  console.log('STAGE420_REAL_EMULATOR_CORRUPT_RECEIPT_DUPLICATE_DENIED=PASS');
+
   console.log('STAGE420_EMULATOR_REAL_DB_OPERATIONS_NOT_LIVE_BILLING=PASS');
 } finally {
   await Promise.allSettled([

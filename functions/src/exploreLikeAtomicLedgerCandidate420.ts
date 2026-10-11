@@ -644,6 +644,11 @@ export const approveLikeWithAtomicLedgerCandidate420 = async (
       const rateFromReceipt = normalize(raw?.rateAtApproval);
       const approvedAtMs = Number(raw?.approvedAtMs || 0);
       if (raw?.digest !== digest || raw?.status !== 'approved' ||
+          raw?.trackId !== op.trackId ||
+          raw?.ownerUid !== op.ownerUid ||
+          raw?.liked !== op.liked ||
+          raw?.operationId !== op.operationId ||
+          !Number.isSafeInteger(raw?.version) || raw.version < 1 ||
           !Number.isSafeInteger(approvedAtMs) || approvedAtMs <= 0 ||
           approvedAtMs > nowMs + CLOCK_SKEW_MS ||
           nowMs - approvedAtMs >= LIKE_LEDGER420_MAX_REPLAY_AGE_MS) {

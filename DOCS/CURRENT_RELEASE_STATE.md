@@ -1,3 +1,13 @@
+## CURRENT — Stage416 보안 승인 후보 실제 30/40/120분 검증 PASS, 구형 UUID v4 호환 FAIL/HOLD (2026-10-11)
+
+- **이번 완료:** `preview` QA-only commit `5763eba8bcdbefaebaf29892ef7c96e5fa928ff2`, `scripts/verify-420-atomic-ledger-candidate.mjs`만 수정. 이전 8일 첫 전송 검사에서 `assert.rejects(...).catch(...)`로 기대와 다른 예외를 삼키던 흐름을 명시적 `allowed=false` 검증으로 교정. 기존 1,000회·1,001번째 재전송 테스트에 더해 같은 분의 30회 경고, 40회 허용·41번째 거절, 다음 1분 40회에 120분 잠금, 잠금 중 신규 쓰기 0, 이전 정확한 opId 재전송 W0, 120분 자동해제, 현재 앱 UUID v4의 후보 거절을 실제 **후보 함수 실행/in-memory Firestore mock**으로 확인.
+- **실행 결과:** [408 QA Run 38112104128](https://github.com/andrawing1212/soridraw-music/actions/runs/38112104128) **SUCCESS**; Node22, Functions TypeScript, 앱 TypeScript, Build, 관련 기존 좋아요/팔로우 회귀 PASS. 로그 `STAGE420_ATOMIC_LEDGER_30_WARNING_40_LIMIT_120M_LOCK=PASS`, `STAGE420_ATOMIC_LEDGER_8DAY_FIRST_SEND_SAFE_DENIAL=PASS`, `STAGE420_ATOMIC_LEDGER_V4_LEGACY_COMPATIBILITY=FAIL_CUTOVER_HOLD`, `STAGE420_LIVE_BILLING_AND_RTDB_DELIVERY=NOT_VERIFIED`, `STAGE420_ATOMIC_LEDGER_CUTOVER=OFF`. 전체 Workflow SUCCESS는 운영 cutover PASS가 아님.
+- **변하지 않은 중요 차단:** 기존 앱의 `crypto.randomUUID()` UUID v4와 후보의 v7-only 조건 미호환, Firestore receipt/rate와 RTDB 실시간 표시·Master 120분 조기해제의 분리, Worker171 canonical receipt / 구형 direct416/ACK 유실/TTL 실운영과 실계측 미검증. 고정 `app396`와 기존 좋아요·팔로우는 무수정. 2단계/Stage420·426 운영 cutover **HOLD**.
+- **배포 및 공유 데이터:** 새 앱/Worker/Functions/Rules 배포 없음. 공유 Firestore/RTDB/D1/R2/user 원본 변경/삭제/백필 없음. `main`/TEST/PRODUCTION 미승격. Stage416 전체 **1/5·20%**, 앱 속도 **5/5·100%**, 기기 검증 **4/4·100%** 유지. 세부 작업(후보 승인 제한·잠금·기존 v4 호환 검증) **3/3·100% 소스/자동검사+보고**, 실제 서비스 도입률 0.
+- **다음 한 작업:** `DOCS/NEXT_CODEX_TASK.md`의 유일한 Stage416 2단계 통합 설계/격리 구현. v4 durable pending/구형 탭을 원본 opId 그대로 복구하는 서버 증거 + Firestore↔RTDB 간 부분 실패·중복 송신 수렴 + Master 잠금 연결 + 10만 DAU 월 총비용을 동시에 증명. 불가능하면 정상 기능 강제 차단 대신 fail-closed 복구 UX와 비용·전환 선택을 먼저 보고한다. 1단계 반복 읽기 예외/새 기기 검증은 최종 비용 감사까지 사용자 지시대로 보류.
+
+---
+
 ## CURRENT — Stage416 2/5 원자 승인 Firestore 후보의 기존 요청 호환·잠금·비용 통합 사전점검: HOLD (2026-10-11)
 
 - **검토 기준:** `preview` HEAD `a7494b83d93f0323343532ae4c09c753462678ab`의 source-only `functions/src/exploreLikeAtomicLedgerCandidate420.ts` 및 `scripts/verify-420-atomic-ledger-candidate.mjs`. 이전 256개 RTDB root journal의 257+ 동일 op 재승인과 최대 37,128B 루트 직렬화 문제를 해결하기 위해, Firestore `privateLikeGuardV2_420/{uid}` 작은 rate 문서 + `approvals/{operationId}` 개별 receipt를 한 Firestore transaction으로 함께 생성하는 후보. **아직 Callable 연결 없음·앱/Worker cutover OFF.**

@@ -217,6 +217,7 @@ docs.set(legacyPath,{
     legacyUid,oldV4.trackId,oldV4.ownerUid,oldV4.liked,oldV4.operationId,
   ])).digest('base64url'),
   status:'approved', approvedAtMs, version:17,
+  ...oldV4,
   warning:false,
   rateAtApproval:{acceptedInWindow:9,lockedUntilMs:0},
 });

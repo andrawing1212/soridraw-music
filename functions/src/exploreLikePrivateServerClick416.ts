@@ -48,7 +48,7 @@ export async function recordUserPrivateClick416(
    if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
      reason='DEVICE_LIMIT';return;
    }
-   if(Object.keys(pending).length>=256&&!Object.hasOwn(pending,trackKey)){
+   if(Object.keys(pending).length>=256&&!Object.prototype.hasOwnProperty.call(pending,trackKey)){
      reason='TRACK_LIMIT';return;
    }
    const previous=state.window;

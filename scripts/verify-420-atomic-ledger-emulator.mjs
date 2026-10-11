@@ -15,6 +15,7 @@ const requireFunctions = createRequire(new URL('../functions/package.json',impor
 const admin = requireFunctions('firebase-admin');
 const {
   approveLikeWithAtomicLedgerCandidate420: approve,
+  recoverExactAtomicLikeApprovalCandidate420: recoverExact,
   handleApprovedLikeReceiptWakeupCandidate420: deliver,
   recoverHeldLikeDeliveryAfterMasterAuthCandidate420: recoverHeld,
 } = requireFunctions('./lib/exploreLikeAtomicLedgerCandidate420.js');
@@ -61,6 +62,16 @@ try {
   assert.equal(repeatedDelivery.status,'already-delivered');
   assert.equal((await display.get()).val().version,1);
   assert.equal((await account.get()).data().version,1);
+  // Server lost its initial callable response after Firestore transaction:
+  // recover exactly one existing receipt without any second quota charge.
+  assert.equal(await recoverExact(firestore,uid,one,now+30),true);
+  assert.equal(await recoverExact(firestore,uid,{...one,liked:!one.liked},now+30),false);
+  assert.equal(await recoverExact(firestore,'other-uid',one,now+30),false);
+  const missing=make(99,now+31);
+  assert.equal(await recoverExact(firestore,uid,missing,now+31),false);
+  assert.equal((await account.get()).data().version,1,
+    'read-only recovery cannot approve, unlock or spend quota');
+  console.log('STAGE420_REAL_EMULATOR_FIRST_ACK_LOSS_EXACT_RECOVERY_R1_W0=PASS');
   console.log('STAGE420_REAL_EMULATOR_ATOMIC_FIRST_APPROVAL_EXACT_REPLAY_W0=PASS');
 
   const two=make(2,now+1), three=make(3,now+2);

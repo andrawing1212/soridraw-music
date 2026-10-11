@@ -82,6 +82,45 @@ const denied = (rate: RateState, limit: number): AtomicLikeDecision420 => ({
   version: rate.version,
 });
 
+// Read-only recovery of EXACT prior Firestore approval when the first
+// callable ACK was lost. Never rerun approveLikeWithAtomicLedger here:
+// missing receipts must not become a NEW charge or signed click. A different
+// action reusing an operationId must never mint a permit either.
+export const recoverExactAtomicLikeApprovalCandidate420 = async (
+  db: Firestore,
+  uid: string,
+  op: AtomicLikeCommand420,
+  nowMs = Date.now(),
+): Promise<boolean> => {
+  if (!validAccount(uid) || !op || typeof op.trackId !== 'string' ||
+      !op.trackId || op.trackId.length > 512 ||
+      typeof op.ownerUid !== 'string' || op.ownerUid.length > 128 ||
+      typeof op.liked !== 'boolean' ||
+      typeof op.operationId !== 'string' ||
+      (!UUID_V7.test(op.operationId) && !UUID_V4.test(op.operationId)) ||
+      !Number.isSafeInteger(nowMs) || nowMs <= 0) {
+    throw new Error('420_ATOMIC_EXACT_RECOVERY_INVALID');
+  }
+  const record = await db.collection('privateLikeGuardV2_420').doc(uid)
+    .collection('approvals').doc(op.operationId).get();
+  if (!record.exists) return false;
+  const proof = record.data();
+  const issuedAt = Number(proof?.approvedAtMs || 0);
+  const originMs = readLikeOperationTime420(op.operationId);
+  return proof?.status === 'approved' &&
+    proof?.operationId === op.operationId &&
+    proof?.trackId === op.trackId &&
+    proof?.ownerUid === op.ownerUid &&
+    proof?.liked === op.liked &&
+    proof?.digest === fingerprint(uid, op) &&
+    Number.isSafeInteger(proof?.version) && proof.version >= 1 &&
+    Number.isSafeInteger(issuedAt) && issuedAt > 0 &&
+    issuedAt <= nowMs + CLOCK_SKEW_MS &&
+    nowMs - issuedAt < LIKE_LEDGER420_MAX_REPLAY_AGE_MS &&
+    (originMs === null || (originMs <= issuedAt + CLOCK_SKEW_MS &&
+      issuedAt - originMs <= LIKE_LEDGER420_MAX_FIRST_SEND_AGE_MS));
+};
+
 // Candidate-only delivery projection, NOT attached to RTDB or any Callable.
 // Firestore is the approval authority; the RTDB display is only a bounded
 // ordered signal. A missing predecessor MUST NOT be silently skipped.

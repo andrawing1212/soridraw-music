@@ -25,6 +25,8 @@ import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420"
 import { issueLikePermit420 } from "./exploreLikePermit420";
 import { renewPreviouslyApprovedLikePermit420 } from "./exploreLikePermitRenew420";
 import {
+  approveLikeWithAtomicLedgerCandidate420,
+  recoverExactAtomicLikeApprovalCandidate420,
   masterUnlockAtomicLikeAfterAuthCandidate420,
   recoverHeldLikeDeliveryAfterMasterAuthCandidate420,
 } from "./exploreLikeAtomicLedgerCandidate420";
@@ -3957,6 +3959,11 @@ export const processMusicNoteBulkPage = onCall(
 // never commit or display its value. Missing secret MUST fail closed. This
 // candidate must not be deployed before all-environment cutover verification.
 const stage420PermitSigningSecret = defineSecret("SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET");
+// This is NOT a live config toggle. The atomic Firestore approval route,
+// authenticated Master APIs, client V2 listener, Eventarc onCreate, Worker
+// signed-permit enforcement and shared RTDB Rules must pass as ONE release.
+// Keep hard OFF until that exact coordinated cutover is approved.
+const STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE = false;
 
 // Stage420 secured candidate, not deployed: same-account private provisional
 // like signal from verified Firebase Auth through a server-owned RTDB root.
@@ -3987,12 +3994,22 @@ export const publishExploreLikeIntent420 = onCall(
     try {
       const database = admin.database();
       const masterSettings = await readLikeAbuseSettings420(database);
-      const outcome = await publishGuardedLikeSignal420(database, uid, {
+      const exactAction = {
         trackId: input.trackId.trim(),
         ownerUid: input.ownerUid.trim(),
         liked: input.liked,
         operationId: input.operationId,
-      }, Date.now(), masterSettings);
+      };
+      // Existing operating RTDB rate/journal stays completely unchanged.
+      // Atomic branch is dormant: only it writes per-click Firestore approval
+      // receipts that can later emit ordered /displayV2 onCreate events.
+      const outcome = STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
+        ? await approveLikeWithAtomicLedgerCandidate420(
+            admin.firestore(), uid, exactAction, Date.now(), masterSettings,
+          )
+        : await publishGuardedLikeSignal420(
+            database, uid, exactAction, Date.now(), masterSettings,
+          );
       // Only an authenticated, server-approved operation may receive a
       // canonical intake proof; denied/locked actions never receive one.
       // Exactly the matching Worker mutation must carry this short-lived
@@ -4075,9 +4092,16 @@ export const recoverExploreLikePermit420 = onCall(
     };
     let approved = false;
     try {
-      approved = await hasExactRecentApprovedLike420(
-        admin.database(), uid, exactAction,
-      );
+      // This read-only recovery NEVER reapproves a lost-ACK operation.
+      // The future atomic receipt is a different authority from the frozen
+      // RTDB bounded display/journal. No automatic cross-authority fallback.
+      approved = STAGE420_ATOMIC_APPROVAL_CUTOVER_ACTIVE
+        ? await recoverExactAtomicLikeApprovalCandidate420(
+            admin.firestore(), uid, exactAction,
+          )
+        : await hasExactRecentApprovedLike420(
+            admin.database(), uid, exactAction,
+          );
     } catch {
       throw new HttpsError("unavailable", "서버 승인 기록 확인에 실패했습니다.");
     }

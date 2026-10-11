@@ -15,7 +15,7 @@ const a=source.indexOf('let exitFlushInstalled413 = false;');
 const b=source.indexOf('// App 120 deliberately ignores',a);
 assert.ok(a>=0&&b>a,'exact runtime exit handler not found');
 const snippet=source.slice(a,b);
-const callbackFactory=new Function('auth','readLikeOutbox','clearFlushTimer','flushPendingLikes','window','document','console','exitFlushArmed413','eligibleGuardedMutation420',snippet+'\nreturn installExitFlush413;');
+const callbackFactory=new Function('auth','readLikeOutbox','clearFlushTimer','flushPendingLikes','window','document','console','exitFlushArmed413','eligibleGuardedMutation420','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE','STAGE416_SHARED_RTDB_BATCH_ACTIVE',snippet+'\nreturn installExitFlush413;');
 const handlers={};const calls=[];let pending=false;
 const user={uid:'tester'};
 const auth={currentUser:user};
@@ -23,7 +23,7 @@ const w={addEventListener:(name,fn)=>{handlers[name]=fn;}};
 const d={visibilityState:'visible',addEventListener:(name,fn)=>{handlers[name]=fn;}};
 const armed=new Set();
 let guardedEligible=true;
-const install=callbackFactory(auth,()=>pending?{song:{retryCount:0}}:{},uid=>calls.push('timer:'+uid),u=>{calls.push('send:'+u.uid);return Promise.resolve()},w,d,{warn:()=>{}},armed,()=>guardedEligible);
+const install=callbackFactory(auth,()=>pending?{song:{retryCount:0}}:{},uid=>calls.push('timer:'+uid),u=>{calls.push('send:'+u.uid);return Promise.resolve()},w,d,{warn:()=>{}},armed,()=>guardedEligible,false,false);
 install();install();
 assert.equal(Object.keys(handlers).length,2,'only one pair of listeners');
 d.visibilityState='hidden';handlers.visibilitychange();
@@ -43,9 +43,9 @@ const end=source.indexOf('// An earlier batch may be in flight',start);
 assert.ok(start>0&&end>start);
 const compiled=(await transform(source.slice(start,end),{loader:'ts',target:'es2022',format:'cjs'})).code;
 const delays=[];const fakeWindow={setTimeout:(fn,delay)=>{delays.push(delay);return 1;},clearTimeout:()=>{}};
-const schedule=new Function('readLikeOutbox','clearFlushTimer','flushTimerByUid','window','Date','EXPLORE_LIKE_IDLE_FLUSH_MS_120','flushPendingLikes','eligibleGuardedMutation420','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE','privateBatchDeadline416','readPrivateBatchWindow416',
+const schedule=new Function('readLikeOutbox','clearFlushTimer','flushTimerByUid','window','Date','EXPLORE_LIKE_IDLE_FLUSH_MS_120','flushPendingLikes','eligibleGuardedMutation420','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE','STAGE416_SHARED_RTDB_BATCH_ACTIVE','privateBatchDeadline416','readPrivateBatchWindow416',
  compiled+'\nreturn schedulePendingFlush;')(
- ()=>({song:{retryCount:0,updatedAt:1000}}),()=>{},new Map(),fakeWindow,{now:()=>3000},5000,()=>Promise.resolve(),()=>guardedEligible,false,()=>0,()=>null
+ ()=>({song:{retryCount:0,updatedAt:1000}}),()=>{},new Map(),fakeWindow,{now:()=>3000},5000,()=>Promise.resolve(),()=>guardedEligible,false,false,()=>0,()=>null
 );
 schedule(user);
 assert.deepEqual(delays,[3000],'5-second trailing window from last click');

@@ -1,3 +1,13 @@
+## CURRENT — app397 Gemini 생성 미등록 오판 hotfix / PREVIEW 공식배포 대기 (2026-10-11)
+
+- **실제 배포:** PREVIEW Hosting은 계속 **app396**. app397은 아직 **미배포**이며 TypeScript·Build·PC/mobile 실제 생성 결과 미검증. TEST/PRODUCTION/MAIN/공유 사용자 데이터/Firebase Functions/Worker/D1/Rules 변경·배포 0.
+- **재현 증상:** 정상 저장된 사용자 Gemini API 키가 있는데 생성 직전 `getGoogleGeminiApiKeyStatus` 추가 호출의 비정상/일시 실패를 미등록으로 오판하고 API 등록 화면(`/my-page`)으로 이동. 앱은 조회 응답 실패 시 등록 플래그도 제거. 실제 Gemini 생성 자체를 시도하지 못할 수 있음.
+- **분리된 PREVIEW 릴리스:** 기존 실배포 app396 소스 `e7923394ad970fb71ad55c03de580fa0e77e5a2a` 기준 **app397 ONLY 2 files** `src/App.tsx`, `public/app-version.json`. 격리 배포 SHA **`132ed10e58351b227f616d60786a5eaacc62a451`**, 브랜치 `release/gemini-app396-isolated-20261011`. 생성 직전 중복 status preflight 제거, 실제 생성 Firebase 함수에서 uid별 서버 API 키 존재/유효성 검증 유지. 실제 Gemini 키 미등록 오류의 기존 재등록 안내 보호. 앱/UI/Worker/Functions/공유 D1 변경 없음.
+- **다른 채팅 Stage420 보호:** 당시 `preview` HEAD `9b8ce2dbfe797018d058eae0a37bdeed4f0fdb19`의 전체 Stage420 파일을 그대로 둔 채 merge commit `79e0676af64e8d2a94f7b6ed0ffa9b39af79e355`으로 app397 소스 수정 2파일만 반영. 둘째 부모를 격리 app397 SHA로 연결했으므로 공식 PREVIEW workflow의 `target_sha` ancestor 안전검사 통과가 가능한 이력 구조. Stage420 후보 코드 / OFF 플래그 및 기타 파일 내용은 변경하지 않음. 정상 `preview` HEAD 전체를 배포하면 Stage420 미완료 변경이 포함되므로 **금지**.
+- **실제 다음 단계:** 고정 `.github/workflows/firebase-hosting-custom-preview.yml`을 `workflow_dispatch`로 호출할 때 브랜치 `preview`, **`target_sha=132ed10e58351b227f616d60786a5eaacc62a451`** 지정. 빈 SHA/latest 선택 절대 금지. 기존 고정 CI TypeScript, Build, 좋아요/팔로우 회귀검증 PASS 후 Firebase PREVIEW Hosting only; `preview.soridraw.com` exact build/app397 및 TEST/PROD 비변경 확인. 현재 연결된 GitHub 도구에는 workflow_dispatch 실행 권한이 없어 자동 배포는 못 했으며 공식 실행 시작 전. 사용자가 GitHub UI에서 기존 workflow의 Run workflow를 눌러야 함.
+- **롤백:** app397 배포가 실패하거나 사용자 생성 회귀 시 공식 workflow에 `target_sha=e7923394ad970fb71ad55c03de580fa0e77e5a2a` 고정하여 PREVIEW Hosting만 이전 정상 app396으로 배포(별도 사용자 확인·승인 필요). TEST/PROD 및 Stage420 릴리스 진행은 분리.
+
+---
 ## CURRENT — Stage420 최단 경로 재검토 / 실제 Cloudflare 3환경·D1 감사 (2026-10-11)
 
 - preview 기준 SOURCE: 008c2db15b3cc9710c4e6b3bfe73e02b64d4a8da. [408 전체 TS/Build/like/follow Run 38125272745](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272745) SUCCESS; [426 Worker bundle dry-run 38125272759](https://github.com/andrawing1212/soridraw-music/actions/runs/38125272759) SUCCESS.

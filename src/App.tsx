@@ -4694,7 +4694,12 @@ const fetchGoogleGeminiApiKeyFromServer = async (user: User | null | undefined):
 
 const resolveGoogleGeminiApiKey = async (user: User | null | undefined): Promise<string> => {
   if (!user?.uid) return '';
-  return fetchGoogleGeminiApiKeyFromServer(user);
+  // The personal Gemini key is stored server-side and validated on every actual
+  // generateGeminiContent/Preview request. An extra status request here can fail
+  // transiently, incorrectly clear the registration cache, and send a registered
+  // user to My Page without even attempting generation.
+  // Return only an opaque availability marker; never fetch or expose the key.
+  return 'server-managed';
 };
 
 const hasStoredGoogleGeminiApiKey = (uid?: string | null): boolean => {

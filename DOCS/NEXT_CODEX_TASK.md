@@ -1,3 +1,13 @@
+## NEXT (2026-10-11) — 수신·Master 코드 및 격리 Emulator PASS 후 남은 운영 3중 게이트
+
+**완료되어 반복할 필요 없음:** `preview` 1110ae7 코드, f9312db8 Emulator 테스트. `displayV2` 구독 소유권 분리, 기존 `requireMasterCaller` 서버 검증으로 감싼 Firestore Master 단건 조회/잠금 해제/HOLD 복구 Callable(하드 OFF), 후보 shared Rules V2 본인 읽기/타인 거부/쓰기 거부 Firebase Emulator PASS. 408 Run 38117685491, RTDB Emulator Run 38117761415 SUCCESS. 이것은 실제 기능 ON/실기기 전달/실청구 QA가 아님.
+
+**다음 실제 완료해야 할 통합 게이트:** (1) **Work 별도 read-only 독립 감사**에서 같은 SHA로 기존 app396/구형 탭·UUIDv4 outbox/Worker171/RTDB direct416, 신규 V2 ordering/version/last50, 2R2W+TTL+RTDB 전송/fanout·100k DAU 전서비스 월요금·rollback 확인; (2) Firebase Eventarc `onDocumentCreated` export + Cloud Logging alert + 23h HOLD Master 단건 운영 복구를 서비스에서 실제 관리 가능한 구조로 연결하고 emulator/통합 QA. UI·실기기 수신과 Master 정책/lock parity 확인; (3) 공유 RTDB Rules `exploreLikeIntent416` 직접 쓰기를 닫아야 하는 보안선 때문에 **구형 설치 앱/열린 탭의 강제 업데이트 또는 유예**를 검증하고 디렉터 승인받은 후에만 Functions/Rules/Worker 같은 릴리스에서 배포. 하나라도 미충족이면 Stage420/426 OFF/FAIL-HOLD. 부분 배포 금지.
+
+**보호/금지:** 현재 좋아요·팔로우/Studio 저장 하트·Music Note/Library/UI 변경하지 말 것. 사용자 원본 복제/대량 변경/백필/삭제 및 main/TEST/PROD 변경, 공유 Rules/Functions/Worker/Hosting 배포는 승인 없이 금지. Source QA를 라이브 PASS로 승격하지 말 것. Stage416 28%, 앱 속도 5/5 100% 유지. Follow-only 오래된 Worker frozen assertion FAIL은 관련성·현재 제품 영향 독립 감사 전까지 가리지 말 것. 다음 응답은 소규모 검사마다 멈추지 말고 실제로 끝난 묶음 또는 불가피한 안전 차단일 때만.
+
+---
+
 ## NEXT (2026-10-11) — Stage420 분리된 후보 추가 금지, 실제 연결 3축 통합 구현
 
 **직전 source audit:** `DOCS/STAGE420_CUTOVER_SAFETY_AUDIT_2026-10-11.md`. `preview` app396 기존 정상 기능/Stage420 OFF 보호. 현재 Stage416 28%, 속도 5/5 100%. 별도 Work 감사·실서비스 검증은 아직 미완료.

@@ -217,8 +217,11 @@ assert.equal(emitted,0,'RTDB writes zero until predecessor succeeds');
 assert.equal(await attempt(1),'emit');
 assert.equal(await attempt(1),'already-delivered','retry never broadcasts again');
 assert.equal(emitted,1,'one event per exact approval');
-// Simulate approval of event 3 committed in Firestore but RTDB service fails.
-// Event 4 may not leap past it. A later exact server-proof retry heals it.
+// A late event 2 must be recovered before a later version 3 or 4.
+// Even valid events for unrelated tracks are NOT allowed to skip a gap.
+assert.equal(await attempt(4),'waiting-prior');
+assert.equal(await attempt(3),'waiting-prior');
+assert.equal(await attempt(2),'emit');
 assert.equal(await attempt(4),'waiting-prior');
 assert.equal(await attempt(3),'emit');
 assert.equal(await attempt(4),'emit');

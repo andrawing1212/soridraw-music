@@ -10,16 +10,26 @@ let code=stripTypeScriptTypes(readFileSync(
   .replace(/^import\s+.*?from\s+'[^']+';\s*$/gm,'')
   .replaceAll('export const ','const ');
 assert.doesNotMatch(code,/^import\s/m);
-code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420,handleApprovedLikeReceiptWakeupCandidate420,masterUnlockAtomicLikeAfterAuthCandidate420};';
+code+='\nmodule.exports={approveLikeWithAtomicLedgerCandidate420,readLikeOperationTime420,planAtomicLikeDisplayDeliveryCandidate420,recoverAtomicLikeDisplayGapCandidate420,handleApprovedLikeReceiptWakeupCandidate420,masterUnlockAtomicLikeAfterAuthCandidate420,createLikeReceiptDeliveryTriggerCandidate420};';
 const module={exports:{}};
-vm.runInNewContext(code,{module,createHash,Number,Math,Date,Error},
+const baseForEventTests=1_800_000_000_000+1001*65_000;
+const eventWarnings=[];
+let eventConfig, eventHandler;
+let nowClock=baseForEventTests;
+const CandidateDate=class extends Date { static now(){return nowClock;} };
+const onDocumentCreated=(settings,handler)=>{
+  eventConfig=settings;eventHandler=handler;return handler;
+};
+vm.runInNewContext(code,{module,createHash,Number,Math,Date:CandidateDate,Error,
+  onDocumentCreated,console:{error:(...args)=>eventWarnings.push(args)}},
   {timeout:1500});
 const {approveLikeWithAtomicLedgerCandidate420:approve,
   readLikeOperationTime420:readTime,
   planAtomicLikeDisplayDeliveryCandidate420:project,
   recoverAtomicLikeDisplayGapCandidate420:reconcile,
   handleApprovedLikeReceiptWakeupCandidate420:wakeup,
-  masterUnlockAtomicLikeAfterAuthCandidate420:masterUnlock}=module.exports;
+  masterUnlockAtomicLikeAfterAuthCandidate420:masterUnlock,
+  createLikeReceiptDeliveryTriggerCandidate420:makeTrigger}=module.exports;
 const day=24*60*60_000;
 const base=1_800_000_000_000;
 const v7=(id,t=base)=>{
@@ -36,6 +46,10 @@ const clone=x=>x==null?x:structuredClone(x);
 const ref=(path)=>({
   path,
   collection:name=>collection(path+'/'+name),
+  create:async value=>{
+    if(docs.has(path)){const error=new Error('already-exists');error.code=6;throw error;}
+    docs.set(path,clone(value));writes++;
+  },
 });
 const collection=(path)=>({
   doc:id=>ref(path+'/'+id),
@@ -396,6 +410,65 @@ assert.equal(rtdbState.version,267);
 assert.equal(writes,wakeW0,'all retries must be approval W0');
 await assert.rejects(wakeup(store,rtdb,'other-uid',mk(267).operationId,
   receiptFor(267),recoveryNow),/420_RECEIPT_WAKEUP_PROOF_INVALID/);
+// Dormant Eventarc trigger factory, never exported in functions/src/index.ts.
+// Test actual server callback semantics: retry-required MUST reject, not ACK.
+const eventTrigger=makeTrigger(store,rtdb);
+assert.equal(eventConfig.retry,true,'future onCreate must retry transient failures');
+assert.equal(eventConfig.document,
+  'privateLikeGuardV2_420/{uid}/approvals/{operationId}');
+assert.equal(typeof eventHandler,'function');
+const asEvent=i=>({params:{uid:wakeUid,operationId:mk(i).operationId},
+  data:{data:()=>receiptFor(i)}});
+nowClock=recoveryNow;
+const triggerInitialWrites=writes,triggerInitialReads=reads;
+await eventTrigger(asEvent(268));
+assert.equal(rtdbState.version,268);
+assert.equal(reads,triggerInitialReads,
+  'onCreate trusted payload must avoid normal Firestore extra read');
+assert.equal(writes,triggerInitialWrites);
+const beforeRetryWrites=rtdbWrites;
+const originalTriggerTx=rtdbRef.transaction;
+rtdbRef.transaction=async()=>{rtdbRef.transaction=originalTriggerTx;
+  throw new Error('TEMPORARY_RTDB_OUTAGE_TRIGGER');};
+await assert.rejects(eventTrigger(asEvent(269)),/TEMPORARY_RTDB_OUTAGE_TRIGGER/,
+  'transient failure must propagate to Eventarc');
+assert.equal(rtdbWrites,beforeRetryWrites);
+await eventTrigger(asEvent(269));
+assert.equal(rtdbState.version,269);
+assert.equal(writes,triggerInitialWrites,'retry never repeats canonical approval');
+await eventTrigger(asEvent(269));
+assert.equal(rtdbWrites,beforeRetryWrites+1,'redelivery is RTDB W0');
+// Remove the 270 proof to force an unresolved dependency for event 271.
+// Under the event retry window, the trigger MUST throw retry-required.
+const removed270='privateLikeGuardV2_420/'+wakeUid+
+  '/approvals/'+mk(270).operationId;
+const proof270=clone(docs.get(removed270));
+docs.delete(removed270);
+await assert.rejects(eventTrigger(asEvent(271)),
+  /420_DELIVERY_RETRY_REQUIRED_missing-proof/);
+assert.equal(rtdbState.version,269);
+const failureDoc='privateLikeGuardV2_420/'+wakeUid+
+  '/deliveryFailures/'+mk(271).operationId;
+assert.equal(docs.has(failureDoc),false);
+// Outside bounded Eventarc retry horizon, create one durable operator HOLD.
+// Operator recovery wiring / alarm must still be independently approved.
+nowClock=receiptFor(271).approvedAtMs+23*60*60_000+1000;
+const writesBeforeTerminal=writes;
+await eventTrigger(asEvent(271));
+assert.equal(docs.get(failureDoc).state,'needs-manual-reconciliation');
+assert.equal(writes,writesBeforeTerminal+1,
+  'one terminal hold write for the exact failed operation');
+assert.equal(rtdbState.version,269,'holding is not delivering');
+await eventTrigger(asEvent(271));
+assert.equal(writes,writesBeforeTerminal+1,
+  'repeated terminal failure is a write-zero idempotent hold');
+assert.equal(eventWarnings.length,2);
+docs.set(removed270,proof270);
+nowClock=recoveryNow;
+console.log('STAGE420_EVENTARC_RETRY_REQUIRED_REJECTS=PASS');
+console.log('STAGE420_EVENTARC_CRASH_REPLAY_AND_IDEMPOTENT_HOLD=PASS');
+console.log('STAGE420_EVENTARC_OPERATOR_ALARM_PROVISIONING=NOT_WIRED');
+console.log('STAGE420_EVENTARC_LIVE_FUNCTION_DEPLOYMENT=OFF');
 console.log('STAGE420_WAKEUP_SOURCE_EVENT_FAST_FS_R0=PASS');
 console.log('STAGE420_WAKEUP_RTDB_OUTAGE_GAP_RETRY=PASS');
 console.log('STAGE420_WAKEUP_ONCREATE_RETRY_PROVISIONING=NOT_WIRED');

@@ -194,9 +194,12 @@ try {
     'concurrent exact replay must not change the rate version');
   // Firestore receipt Eventarc can arrive last-first. The RTDB snapshot is
   // repaired from only missing UID/version receipts, with no reapproval.
-  const lastProof=await receipt(races[2]);
+  const lastIndex=decisions.findIndex(x=>x.version===7);
+  assert(lastIndex>=0,'exact highest committed receipt must be present');
+  const lastOp=races[lastIndex];
+  const lastProof=await receipt(lastOp);
   const lastDelivery=await deliver(firestore,realtime,uid,
-    races[2].operationId,lastProof,now+120);
+    lastOp.operationId,lastProof,now+120);
   assert.equal(lastDelivery.status,'delivered');
   const lastDisplay=(await display.get()).val();
   assert.equal(lastDisplay.version,7);

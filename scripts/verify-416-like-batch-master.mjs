@@ -53,4 +53,13 @@ assert.match(fn,/effectiveForNewWindows: true/);
 console.log('STAGE416_MASTER_TWO_INDEPENDENT_MINUTE_SETTINGS=PASS');
 console.log('STAGE416_MASTER_VERSION_CONFLICT_AND_NOOP_W0=PASS');
 console.log('STAGE416_SERVER_AUTH_GUARD_AND_BOUND_AUDIT_SOURCE=PASS');
+const page=readFileSync('src/pages/AdminAppSettingsPage.tsx','utf8');
+const panel=readFileSync('src/components/Stage416LikeBatchMasterPanel.tsx','utf8');
+assert.match(page,/STAGE416_LIKE_BATCH_MASTER_PANEL_ACTIVE = false/,
+  'user-confirmed app399 UI must remain unchanged before completed cutover');
+assert.match(panel,/privateMinutes/);
+assert.match(panel,/publicMinutes/);
+assert.match(panel,/expectedVersion: loaded.version/);
+assert.match(panel,/normalizeStaffRole\(readUserProfileCache\(uid\)\) === 'master'/);
+console.log('STAGE416_MASTER_TWO_INDEPENDENT_CONTROLS_OFF_UNTIL_RELEASE=PASS');
 console.log('STAGE416_BACKEND_CONFIG_DEPLOY=NOT_RUN');

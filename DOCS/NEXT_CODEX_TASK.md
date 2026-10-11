@@ -1,3 +1,12 @@
+## NEXT — Stage416③ 저비용 서버 순서 보장 통합 우선 / 2 writes-per-click 후보 OFF (2026-10-11)
+
+- **고정 baseline:** `preview` source `3df60dcc4e6d1898bbcd449716df00e616bb09b1`, [408 workflow 38152881180](https://github.com/andrawing1212/soridraw-music/actions/runs/38152881180) PASS. 실제 PREVIEW 앱399 좋아요 즉시 PC↔mobile 정상, canonical 5초 유지. `runtime/private-like-d1-writer-416.mjs` + candidate SQL의 uid+operation receipt는 SQLite 실거래 검증 통과지만 **하드 OFF/배포 금지**.
+- **Codex High 단일 집중작업:** 변경하지 않아도 되는 기존 앱399 클라이언트/Worker 069/075 원본 경로와 RTDB `exploreLikeIntent416.ts`의 실제 사용자별 변경 버전/신호를 기준으로, 계정 전역 마지막 클릭(+5분)을 3환경에서 일관되게 확인하고 원본 `/v1/me/likes/batch`에 **단 한 번만** 최종 상태를 접수시키는 더 저렴한 구조를 구현한다. 신규 D1 per-click W2와 기존 RTDB per-click signal을 이중으로 계속 유지하는 것이 경제적으로 합격인지 먼저 판단. 안전하게 기존 RTDB 변경 분만 재활용할 수 있다면 우선한다. 단 오프라인/RTDB 초기 snapshot skip·50개 범위·기기 간 다른 곡/같은 곡 순서/재시도 op receipt/TOCTOU를 단순 timestamp 추측이나 유한 TTL만으로 해결했다고 주장하지 말 것. 필요한 경우 서버 한곳에서 인증·버전·배치 등록을 원자화하고 D1 원본과 R2/RTDB를 명확히 구분한다.
+- **연동 범위:** Master RTDB Callable 1/3/5/10/20 정책은 공유 사용자 캐시 리비전 전달→새 창에만 적용; 앱 종료 조기전송 1회 attempt & 재기동 outbox 복구, 좋아요→해제 순변화0 원본 W0, 50곡 초과 분할, 반대기기 하트 5~10초, shared PRODUCTION 원본/구형 TEST와 호환, D1·Workers·DO·R2·Firebase 합계 10만 DAU 월비용. Stage④ 공개 5분 집계는 Stage③ 실사용 검증 후 별도.
+- **합격/중단:** TypeScript/Build/Functions/Worker/실 SQLite runtime, client cross-device scenario, PC/mobile 실서비스 검증, Work read-only independent audit 필요. 비용이 더 높은 W2/click 후보를 정상 앱399에 덮어씌워 5분 기능을 켜지 말 것. Shared D1 migration, Worker/Rules/Functions/Hosting deploy, main TEST PROD 승격은 사용자 승인과 릴리스 게이트 전 금지. 문서 수정·mock만 반복하지 말고 실제 서버-클라이언트 안전 연결 검증에 집중.
+
+---
+
 ## NEXT — Stage416③ 서버 재전송·계정 영구 순서 문제부터 해결, source 후보 활성화 금지 (2026-10-11)
 
 - **현재 exact baseline:** `preview` `7b2a12f88509aa4778b9e259ba2cba0c104ad545`; Worker source-off route + real SQLite tests PASS [38152016362](https://github.com/andrawing1212/soridraw-music/actions/runs/38152016362). D1 후보 스키마는 `cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql`에만 있고 실제 DB **미적용**. 정상 app399 canonical 5초/PC-mobile 좋아요 유지.

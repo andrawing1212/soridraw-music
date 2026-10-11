@@ -10,12 +10,12 @@ import {deliverPrivateSealToWorker416,type PrivateSeal416}
 // Worker queue handoff per completed UID-wide window.
 export async function completeUserPrivateWindow416(
  db:Database,uid:string,workerEndpoint:string,secret:string,
- nowMs=Date.now(),http:typeof fetch=fetch,
+ nowMs=Date.now(),http:typeof fetch=fetch,expectedWindowId?:string,
 ):Promise<{
  queued:boolean;acknowledged?:boolean;reason?:string;retryAfterMs?:number;
  version?:number;batchIds?:string[];
 }>{
- const current=await sealUserPrivateLikes416(db,uid,nowMs);
+ const current=await sealUserPrivateLikes416(db,uid,nowMs,expectedWindowId);
  const seal=current.value as PrivateSeal416|undefined;
  if(!seal||(!current.sealed&&current.reason!=='PRIOR_SEAL_UNACKNOWLEDGED'))
    return {queued:false,reason:current.reason,

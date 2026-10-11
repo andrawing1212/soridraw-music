@@ -25,20 +25,28 @@ export type Stage416SealResult={sealed:boolean;reason:string;value?:Seal;retryAf
 // payload in the SAME account record, serialized against every new device
 // transaction. An account clock is ONLY trusted after RTDB resolves .sv timestamp.
 export async function sealUserPrivateLikes416(
-  database:Database,uid:string,nowMs=Date.now(),
+  database:Database,uid:string,nowMs=Date.now(),expectedWindowId?:string,
 ):Promise<Stage416SealResult>{
   if(!uid||uid.length>128||!Number.isSafeInteger(nowMs)||nowMs<=0)
     throw Error('416_BAD_SERVER_SEAL');
+  if(expectedWindowId && !validUuid(expectedWindowId))
+    throw Error('416_BAD_SERVER_WINDOW_ID');
   let disposition:Stage416SealResult={sealed:false,reason:'UNDETERMINED'};
   const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
       const value=raw as Pending|null;
       if(value?.sealed){
+        if(expectedWindowId && value.sealed.id!==expectedWindowId){
+          disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
+        }
         disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED',value:value.sealed};
         return;
       }
       if(!value?.window){disposition={sealed:false,reason:'EMPTY'};return;}
       const {window,pending}=value;
+      if(expectedWindowId && window.id!==expectedWindowId){
+        disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
+      }
       if(!Number.isSafeInteger(window.lastClickAtMs)||window.lastClickAtMs<=0||
          !MINUTES.includes(window.minutes)||!validUuid(window.id)||
          !Number.isSafeInteger(window.revision)||window.revision<=0)

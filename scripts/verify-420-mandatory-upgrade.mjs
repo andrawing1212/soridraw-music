@@ -180,7 +180,31 @@ console.log('STAGE420_EXECUTABLE_HMAC_TAMPER_AUTH_KEY_FAIL_CLOSED=PASS');
   assert.ok(requested420.every(r=>r.url.startsWith('/app-version.json?t=')),
     'mandatory upgrade may fetch only the public version manifest');
   assert.ok(requested420.every(r=>r.opts?.cache==='no-store'));
-  console.log('STAGE420_MANDATORY_UPGRADE_VERSION_READY_NO_RELOAD_LOOP=PASS');
+  
+// Old v4 outbox entries are opaque: a new signed click may replace ONE row
+// only when the user confirms in the existing like action. On cancel, no
+// mutation or new operation ID is created. app398 OFF stays exactly unchanged.
+assert.match(like,/export const readLegacyPendingLikeForUpgrade420/);
+assert.match(like,/if \(!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE \|\| !uid \|\| !trackId\) return null;/);
+const pageLike = read('src/pages/ExplorePage.tsx');
+const toggleStart420 = pageLike.indexOf('  const toggleLike = async (track: ExploreTrack) => {');
+const toggleEnd420 = pageLike.indexOf('  const selectLatestPublicScope312',toggleStart420);
+assert.ok(toggleStart420>=0 && toggleEnd420>toggleStart420);
+const toggle420=pageLike.slice(toggleStart420,toggleEnd420);
+assert.match(toggle420,/const legacyPending420 = readLegacyPendingLikeForUpgrade420\(user\.uid, track\.id\);/);
+assert.match(toggle420,/if \(!window\.confirm\(confirmMessage420\)\) \{/);
+assert.match(toggle420,/setSocialNotice\('이전 미전송 좋아요는 기기에 그대로 보관됩니다\.'\);\s*return;/);
+assert.ok(toggle420.indexOf('window.confirm(') < toggle420.indexOf('setExploreTrackLike('),
+  'no new signed click before consent');
+assert.match(toggle420,/legacyPending420\?\.desiredLiked \?\? !currentLiked/,
+  'old intent confirmation must keep the original desired state');
+assert.match(like,/operationId: EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE\s*\? createExploreLikeOperationId420\(\)\s*: createExploreLikeOperationId144\(\)/,
+  'new explicit confirmation alone creates a v7 operation');
+assert.match(like,/const eligibleGuardedMutation420 =[\s\S]*?entry\.guardStatus420 === 'approved'/,
+  'unapproved old outbox cannot drain in the background');
+console.log('STAGE420_OLD_OUTBOX_REQUIRES_USER_CONFIRMATION_NO_AUTOREKEY=PASS');
+console.log('STAGE420_CONFIRM_SAME_DESIRED_STATE_AND_NO_CANCEL_LOSS=PASS');
+console.log('STAGE420_MANDATORY_UPGRADE_VERSION_READY_NO_RELOAD_LOOP=PASS');
   console.log('STAGE420_SERVER_409_MANIFEST_OFFLINE_RETAINS_NOTICE=PASS');
   console.log('STAGE420_UPGRADE_VERSION_CHECK_ONLY_USER_DB_R0=PASS');
 }

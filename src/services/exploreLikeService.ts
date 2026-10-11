@@ -1521,6 +1521,20 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
 
 export const getPendingExploreLikeMutationCount = (uid: string): number => Object.keys(readLikeOutbox(uid)).length;
 
+// During the approved mandatory-upgrade transition, an old app's durable
+// unsigned outbox is not a new user click and must not be silently rewritten,
+// re-keyed, or drained. Return one local changed-track item ONLY when the user
+// explicitly selects that heart again. No user DB read/whole-catalog scan.
+export const readLegacyPendingLikeForUpgrade420 = (
+  uid: string, trackId: string,
+): { desiredLiked: boolean } | null => {
+  if (!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE || !uid || !trackId) return null;
+  const pending = readLikeOutbox(uid)[trackId];
+  if (!pending || pending.guardStatus420 === 'approved' ||
+      pending.guardStatus420 === 'awaiting') return null;
+  return { desiredLiked: pending.desiredLiked };
+};
+
 const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const row = value as Partial<ExploreLikeDisplayLock>;

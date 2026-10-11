@@ -39,6 +39,7 @@ import {
   ensureExplorePersonalLikeBaseline127,
   ensureExplorePersonalLikeCrossOriginParity357,
   readExploreTrackLikeMembership127,
+  readLegacyPendingLikeForUpgrade420,
   normalizeExploreLikeDisplayPair129,
   overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
@@ -3701,10 +3702,27 @@ export default function ExplorePage() {
       setSocialNotice('좋아요 상태를 확인하고 있어요. 잠시 후 다시 시도해주세요.');
       return;
     }
+    // An unsigned pending click retained from an old app is NEVER silently
+    // promoted into a signed 420 operation. Only an explicit confirmation
+    // replaces that one local intent. Cancel leaves its original ID intact.
+    // Under the current app398 (cutover OFF), this branch is never entered.
+    const legacyPending420 = readLegacyPendingLikeForUpgrade420(user.uid, track.id);
+    if (legacyPending420) {
+      const confirmMessage420 = legacyPending420.desiredLiked
+        ? '이전 앱에서 누른 좋아요가 아직 저장되지 않았습니다. 기존 기록을 새 보안 방식으로 다시 저장할까요?'
+        : '이전 앱에서 해제한 좋아요가 아직 저장되지 않았습니다. 기존 기록을 새 보안 방식으로 다시 저장할까요?';
+      if (!window.confirm(confirmMessage420)) {
+        setSocialNotice('이전 미전송 좋아요는 기기에 그대로 보관됩니다.');
+        return;
+      }
+    }
     likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
-      const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
+      // Confirm the OLD user's intended final state, not its inverse.
+      // A normal fresh click retains the original toggle behavior.
+      const desiredLiked420 = legacyPending420?.desiredLiked ?? !currentLiked;
+      const result = await setExploreTrackLike(user, track.id, desiredLiked420, track.likeCount, track.ownerUid);
       const optimisticTrack = { ...track, likeCount: result.likeCount };
       const patchOptimisticCount120 = (previous: ExploreTrack[]) => previous.map((item) => (
         item.id === track.id ? { ...item, likeCount: result.likeCount } : item

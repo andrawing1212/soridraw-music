@@ -4,6 +4,7 @@
 // Master unlock parity must be solved before a coordinated cutover.
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Database } from 'firebase-admin/database';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { createHash } from 'node:crypto';
 import { DEFAULT_LIKE_ABUSE_SETTINGS_420, type LikeAbuseSettings420 } from './exploreLikeAbuseSettings420';
 
@@ -298,6 +299,79 @@ export const handleApprovedLikeReceiptWakeupCandidate420 = async (
     ? { status: 'delivered', delivered: gap.delivered }
     : { status: 'retry-required', reason: gap.reason, delivered: gap.delivered };
 };
+
+// FACTORY ONLY: do NOT register/export an active Cloud Function from index.ts.
+// This can be activated only after legacy app, shared RTDB Rules and Master
+// cutover gates pass. An onCreate event arrives AFTER an atomic approval.
+export const createLikeReceiptDeliveryTriggerCandidate420 = (
+  firestore: Firestore,
+  realtime: Database,
+) => onDocumentCreated({
+  document: 'privateLikeGuardV2_420/{uid}/approvals/{operationId}',
+  region: 'us-central1',
+  retry: true,
+  // Keep per-attempt resource use bounded; Eventarc delivers at least once
+  // and may deliver out of order. This is not a 30-day retry guarantee.
+  timeoutSeconds: 60,
+  memory: '256MiB',
+}, async event => {
+  const uid = event.params.uid;
+  const operationId = event.params.operationId;
+  const receipt = event.data?.data();
+  if (!receipt || typeof receipt !== 'object') {
+    // A malformed event must never authorize a like or acknowledge delivery.
+    throw new Error('420_DELIVERY_EVENT_PROOF_MISSING');
+  }
+  const approvedAtMs = receipt.approvedAtMs;
+  if (!Number.isSafeInteger(approvedAtMs) || approvedAtMs <= 0) {
+    throw new Error('420_DELIVERY_EVENT_TIMESTAMP_INVALID');
+  }
+  const ageMs = Date.now() - approvedAtMs;
+  if (ageMs < 0) {
+    throw new Error('420_DELIVERY_EVENT_CLOCK_SKEW');
+  }
+  try {
+    const result = await handleApprovedLikeReceiptWakeupCandidate420(
+      firestore, realtime, uid, operationId, receipt,
+    );
+    // CRITICAL: returning retry-required is an Eventarc ACK unless thrown.
+    if (result.status === 'retry-required') {
+      throw new Error('420_DELIVERY_RETRY_REQUIRED_' + result.reason);
+    }
+  } catch (error) {
+    if (ageMs < 23 * 60 * 60_000) {
+      // Must throw, not return. The deployed Eventarc retry policy still has
+      // to be verified independently before any Stage420 activation.
+      throw error;
+    }
+    // Past the bounded retry horizon, preserve a server-owned, exact-operation
+    // failure record for explicit repair. This is NOT successful delivery.
+    // Unique operation ID avoids ever rewriting an existing failure record.
+    const hold = firestore.collection('privateLikeGuardV2_420').doc(uid)
+      .collection('deliveryFailures').doc(operationId);
+    try {
+      await hold.create({
+        uid, operationId, approvalVersion: receipt.version,
+        approvedAtMs, heldAtMs: Date.now(),
+        state: 'needs-manual-reconciliation',
+        // TTL policy is NOT yet provisioned; do not claim auto deletion.
+        expiresAt: new Date(Date.now() + 31 * 24 * 60 * 60_000),
+      });
+    } catch (writeError: unknown) {
+      // The only tolerable conflict is that the exact hold already exists.
+      if ((writeError as { code?: string | number })?.code !== 6 &&
+          (writeError as { code?: string | number })?.code !== 'already-exists') {
+        // Do not falsely acknowledge a retry if the alert write failed.
+        throw writeError;
+      }
+    }
+    // Terminal HOLD is deliberately not success. An operator needs an
+    // out-of-band alert and authenticated, exact-ID recovery before cutover.
+    console.error('420_DELIVERY_HELD_FOR_OPERATOR', { uid, operationId });
+  }
+});
+
+// Triggers not linked in index.ts. No new service may be deployed on push.
 
 // Only callable by a future server wrapper AFTER requireMasterCaller has
 // authenticated the Master. DO NOT directly expose this as a Function.

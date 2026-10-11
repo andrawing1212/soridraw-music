@@ -3,7 +3,7 @@
 // a Callable or used by any deployed app; RTDB provisional delivery and
 // Master unlock parity must be solved before a coordinated cutover.
 import type { Firestore } from 'firebase-admin/firestore';
-import type { Database } from 'firebase-admin/database';
+import type { Database, DataSnapshot } from 'firebase-admin/database';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { createHash } from 'node:crypto';
 import { DEFAULT_LIKE_ABUSE_SETTINGS_420, type LikeAbuseSettings420 } from './exploreLikeAbuseSettings420';
@@ -191,61 +191,74 @@ export const recoverAtomicLikeDisplayGapCandidate420 = async (
   // nonzero, returning undefined aborts the transaction without fetching it.
   // Prime the local transaction cache via the value listener (not get()).
   // This one bounded account-scoped read is only for an actual delivery gap.
-  const initial = await displayRef.once('value');
-  const currentVersion = Number(initial.val()?.version || 0);
-  if (!Number.isSafeInteger(currentVersion) || currentVersion < 0) {
-    throw new Error('420_DISPLAY_RECOVERY_CORRUPT_VERSION');
+  // Keep the small UID-scoped listener LIVE for the gap transaction.
+  // Firebase Admin's RTDB SDK can otherwise call a transaction updater
+  // with uncached null and silently abort when receipt.version > 1.
+  // Detach in every exit path; this listener is never used on page entry.
+  let onSnapshot: (snapshot: DataSnapshot) => void = () => {};
+  const firstSnapshot = new Promise<DataSnapshot>((resolve, reject) => {
+    onSnapshot = resolve;
+    displayRef.on('value', onSnapshot, reject);
+  });
+  try {
+    const initial = await firstSnapshot;
+    const currentVersion = Number(initial.val()?.version || 0);
+    if (!Number.isSafeInteger(currentVersion) || currentVersion < 0) {
+      throw new Error('420_DISPLAY_RECOVERY_CORRUPT_VERSION');
+    }
+    if (currentVersion >= throughVersion) {
+      return { complete: true, delivered: 0, lastVersion: currentVersion,
+        reason: 'delivered' };
+    }
+    let delivered = 0;
+    let lastVersion = currentVersion;
+    for (let attempt = 0; attempt < maxPerAttempt && lastVersion < throughVersion; attempt++) {
+      const missingVersion = lastVersion + 1;
+      // Indexed equality query within ONE UID's receipt subcollection. One
+      // missing version at a time; no scans of users, tracks, or full catalogs.
+      const query = await firestore.collection('privateLikeGuardV2_420')
+        .doc(uid).collection('approvals')
+        .where('version', '==', missingVersion).limit(1).get();
+      if (query.empty || query.docs.length !== 1) {
+        return { complete: false, delivered, lastVersion, reason: 'missing-proof' };
+      }
+      const proofDoc = query.docs[0];
+      const proof = proofDoc.data();
+      const command: AtomicLikeCommand420 = {
+        trackId: proof.trackId, ownerUid: proof.ownerUid, liked: proof.liked,
+        operationId: proof.operationId,
+      };
+      if (proofDoc.id !== command.operationId ||
+          planAtomicLikeDisplayDeliveryCandidate420(
+            uid, command, proof, { version: missingVersion - 1, results: [] },
+            nowMs,
+          ).status !== 'emit') {
+        return { complete: false, delivered, lastVersion, reason: 'invalid-proof' };
+      }
+      // A separate RTDB transaction serializes racing triggers. A competing
+      // event may already have delivered this version by the time we write.
+      let transactionPlan: AtomicLikeDisplayOutcome420 = { status: 'invalid' };
+      const transaction = await displayRef.transaction((previous: unknown) => {
+        transactionPlan = planAtomicLikeDisplayDeliveryCandidate420(
+          uid, command, proof, previous, nowMs,
+        );
+        return transactionPlan.status === 'emit' ? transactionPlan.next : undefined;
+      }, undefined, false);
+      const actualVersion = Number(transaction.snapshot.val()?.version || 0);
+      if (!Number.isSafeInteger(actualVersion) || actualVersion < lastVersion) {
+        throw new Error('420_DISPLAY_RECOVERY_TRANSACTION_INVALID');
+      }
+      lastVersion = actualVersion;
+      if (transaction.committed) delivered++;
+      if (!transaction.committed && actualVersion < missingVersion) {
+        return { complete: false, delivered, lastVersion, reason: 'needs-retry' };
+      }
+    }
+    return { complete: lastVersion >= throughVersion, delivered, lastVersion,
+      reason: lastVersion >= throughVersion ? 'delivered' : 'needs-retry' };
+  } finally {
+    displayRef.off('value', onSnapshot);
   }
-  if (currentVersion >= throughVersion) {
-    return { complete: true, delivered: 0, lastVersion: currentVersion,
-      reason: 'delivered' };
-  }
-  let delivered = 0;
-  let lastVersion = currentVersion;
-  for (let attempt = 0; attempt < maxPerAttempt && lastVersion < throughVersion; attempt++) {
-    const missingVersion = lastVersion + 1;
-    // Indexed equality query within ONE UID's receipt subcollection. One
-    // missing version at a time; no scans of users, tracks, or full catalogs.
-    const query = await firestore.collection('privateLikeGuardV2_420')
-      .doc(uid).collection('approvals')
-      .where('version', '==', missingVersion).limit(1).get();
-    if (query.empty || query.docs.length !== 1) {
-      return { complete: false, delivered, lastVersion, reason: 'missing-proof' };
-    }
-    const proofDoc = query.docs[0];
-    const proof = proofDoc.data();
-    const command: AtomicLikeCommand420 = {
-      trackId: proof.trackId, ownerUid: proof.ownerUid, liked: proof.liked,
-      operationId: proof.operationId,
-    };
-    if (proofDoc.id !== command.operationId ||
-        planAtomicLikeDisplayDeliveryCandidate420(
-          uid, command, proof, { version: missingVersion - 1, results: [] },
-          nowMs,
-        ).status !== 'emit') {
-      return { complete: false, delivered, lastVersion, reason: 'invalid-proof' };
-    }
-    // A separate RTDB transaction serializes racing triggers. A competing
-    // event may already have delivered this version by the time we write.
-    let transactionPlan: AtomicLikeDisplayOutcome420 = { status: 'invalid' };
-    const transaction = await displayRef.transaction((previous: unknown) => {
-      transactionPlan = planAtomicLikeDisplayDeliveryCandidate420(
-        uid, command, proof, previous, nowMs,
-      );
-      return transactionPlan.status === 'emit' ? transactionPlan.next : undefined;
-    }, undefined, false);
-    const actualVersion = Number(transaction.snapshot.val()?.version || 0);
-    if (!Number.isSafeInteger(actualVersion) || actualVersion < lastVersion) {
-      throw new Error('420_DISPLAY_RECOVERY_TRANSACTION_INVALID');
-    }
-    lastVersion = actualVersion;
-    if (transaction.committed) delivered++;
-    if (!transaction.committed && actualVersion < missingVersion) {
-      return { complete: false, delivered, lastVersion, reason: 'needs-retry' };
-    }
-  }
-  return { complete: lastVersion >= throughVersion, delivered, lastVersion,
-    reason: lastVersion >= throughVersion ? 'delivered' : 'needs-retry' };
 };
 
 

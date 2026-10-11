@@ -312,10 +312,11 @@ console.log('STAGE420_DISPLAY_V2_LATE_DELIVERY_FRESHNESS=PASS');
 let rtdbState=null;let rtdbWrites=0;
 const rtdbRef={
   get:async()=>({val:()=>clone(rtdbState)}),
-  once:async event=>{
+  on:(event,callback)=>{
     assert.equal(event,'value');
-    return {val:()=>clone(rtdbState)};
+    callback({val:()=>clone(rtdbState)});
   },
+  off:event=>assert.equal(event,'value'),
   transaction:async callback=>{
     const next=callback(clone(rtdbState));
     if(next!==undefined){rtdbState=clone(next);rtdbWrites++;}

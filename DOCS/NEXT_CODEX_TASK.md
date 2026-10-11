@@ -1,3 +1,11 @@
+## NEXT — Stage416③ 순수 서버시계 PASS → 실제 단일 canonical writer 직렬화 연결 (2026-10-11)
+
+- **최신 exact code:** preview `0c8b87d2afa84d1595e076e9c396bc92f5ef05c1`, GitHub [408 38150514656](https://github.com/andrawing1212/soridraw-music/actions/runs/38150514656) SUCCESS. `runtime/private-window-gate-416.mjs`의 register/evaluate 알고리즘과 verifier를 다시 만들지 말 것. 앱399 UI/좋아요/팔로우·Studio·Music Note 정상 보호, Stage416/420 flags OFF.
+- **Codex High 다음 구현을 하나로 끝낼 것:** Cloudflare `canonical/preview-entry.js` + `preview-worker.js` 원본 승인·등록/집계 경로와 기존 Firebase `exploreLikeIntent416.ts`/Master 설정의 현재 데이터 호환성 확인 후, 공유 UID 단일 저장 시계의 **인증된 서버 등록·직렬화된 원본 Writer**를 실제 연결. **서버에서 버전 비교만 하고 다른 독립 Writer에 정착시키지 말 것**(TOCTOU). per-environment DO 별도 clock을 같은 공유 유저 진실로 주장하지 말 것; cross PREVIEW/TEST/PROD 동작과 비용 같이 증명. 개인정보 전체 스캔 또는 페이지 진입/업데이트 write·반복 read 금지. 상대기기 최신 클릭, 뒤늦은 ACK, 50+ pending, 오프라인, 새 탭·종료/재시작, 좋아요→해제 net-zero W0, 시간 1/3/5/10/20, Master 다음 새 창, 하트 5~10초 즉시표시, 비용을 runtime/emulator/E2E로 검증. 기존 user original 데이터 destructive migration 금지.
+- **합격:** Worker/Functions/앱 TS·Build·실행 테스트 PASS, Work 별도 read-only 독립 감사, physical D1/RTDB/Firebase/DO/R2/Worker 비용과 한국 PC+mobile 실제 시나리오, 구형 TEST/PROD 공유데이터 호환. 안전 통합 불가면 OFF 유지하고 최소 경제적 대안/위험을 보고. 배포 없이도 코드 완성 후에만 PREVIEW 배포 여부 판단; main/TEST/PROD 승격은 사용자의 별도 명시 승인.
+
+---
+
 ## NEXT — Stage416③ PC↔모바일 공통 마지막 클릭의 서버 확정 게이트 (2026-10-11)
 
 - **코드 기준:** preview 0c2d6bc1626ecd0da35eda5985d22945d7c9a17a. 408 [38149667270](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667270) PASS, Follow [38149667287](https://github.com/andrawing1212/soridraw-music/actions/runs/38149667287) PASS. 5분 관련 flag·Master 패널 OFF, live PREVIEW 앱399/5초 canonical 보호.

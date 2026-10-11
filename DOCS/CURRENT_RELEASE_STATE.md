@@ -1,3 +1,12 @@
+## CURRENT — Stage416③ 서버 소유 UID 단일 시계 알고리즘 + 실제 QA PASS, 연결 전 HOLD (2026-10-11)
+
+- **현재 기준:** preview source `0c8b87d2afa84d1595e076e9c396bc92f5ef05c1` (원격 시계 원본 `0c2d6bc...`; dormant 서버 알고리즘 `057c44f...`, 검증기 `abb297d...`, CI 연동 `0c8b87d...`). `cloudflare/explore-worker/runtime/private-window-gate-416.mjs` 신규 함수: 인증된 단일 UID 서버 순번/서버 시간으로 후행 창 계산, 구형/역순 요청 W0 무시, 진행중 Master 기간 고정, 만료 전/구형 기기 버전 canonical intake 거절하는 결정 함수. **실제 Worker/RTDB/Functions의 canonical writer에는 아직 연결되지 않음**. 현재 5분 클라이언트 플래그 OFF, 앱399 기존 +5초 유지.
+- **검증:** pinned exact SHA [408 Run 38150514656](https://github.com/andrawing1212/soridraw-music/actions/runs/38150514656) SUCCESS: Stage416 private 1/3/5/10/20분/80연속클릭/버전역순/중복수신/설정 변경 가짜서버시계 runtime, TS, Build, Functions Build, 기존 Like/Follow/Catalog, RTDB Rules read-only. 소스/모형 PASS를 실서비스 5분/청구 PASS로 표현 금지.
+- **남은 핵심 구현 한 가지:** 현재 알고리즘은 일체 IO가 없는 순수 검증기. 실제 공유 UID 전역 마지막클릭을 Firebase/Cloudflare cross-environment에서 같은 서버가 원자적으로 기록하고, **그 same coordinator가 canonical D1 writer까지 직렬화해** 조기접수·뒤늦은 클릭 경합을 막아야 함. 사전 조회만 하고 다른 Worker가 쓰게 두면 검사-쓰기 사이 경합(TOCTOU)으로 불합격. 실제 browser 신호/오프라인 재전송/50+ batch/취소 W0/앱 종료/새 기기/관리자 설정 가동 및 Cloudflare/Firebase 10만DAU 월 물리비용 미검증. 현재 3환경 코드는 공유 원본을 사용하므로 섣부른 per-env clock은 불일치 위험.
+- **환경/진척:** PREVIEW Hosting 앱399 e97edb9... 그대로, TEST/PROD/main 불변, Firebase Functions/Rules·Cloudflare Worker/D1/공유 원본 데이터 및 배포 **변경 0**. Stage416 28%, 앱 속도 기존 5/5 100%, Stage③ 후보 1/4 완료(서버 연결 및 실환경 검증 전), Stage420 추가 보안 개발 중지 유지. 다음 실질 작업은 기존 authenticated writer에 낮은 비용의 shared per-UID 직렬화 경로를 정확히 구현하는 것.
+
+---
+
 ## CURRENT — Stage416③ 타기기 클릭 시간·settlement 오인 방지 후보 / 미활성 (2026-10-11)
 
 - **기능 소스 commit:** preview 0c2d6bc1626ecd0da35eda5985d22945d7c9a17a; 4파일: exploreLikePrivateBatchPolicy416.ts, exploreLikeIntent416.ts, exploreLikeService.ts, verify-416-private-5min-batch.mjs. RTDB intent callback에 version/at/status를 전달; OFF인 5분 원격 타이머가 accepted/rejected를 새 클릭으로 오인하지 않도록 하며, pending은 수신 시각과 sender 시각 중 늦은 보수적 시각으로만 연장. 유효 시각 차가 30초를 넘으면 임의 적용 금지. app399 5초 저장과 기존 실사용 좋아요/팔로우는 불변.

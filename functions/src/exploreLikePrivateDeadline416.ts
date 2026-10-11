@@ -38,11 +38,12 @@ export async function dispatchPrivateWindowTask416(
    // Worker 069 receipt is durable, ACK only clears the matching frozen seal.
    return {status:'DELIVERED'};
  }
- if(result.reason==='NOT_DUE'){
+ if(result.reason==='NOT_DUE'||result.reason==='WAITING_FOR_PRIOR_SEAL'){
    const next=nowMs+Number(result.retryAfterMs||0);
    if(!validTime(next)||next<=nowMs)throw Error('416_INVALID_RETRY_DEADLINE');
-   // Exactly one reschedule when the prior task fires before the new
-   // last-click deadline. A large burst does not create one task per click.
+   // Reschedule only on an actual task execution. A late prior ACK may also
+   // block a newer window until the original durable seal is acknowledged.
+   // No page visit or like click creates another periodic task.
    await queue.enqueue(task,{scheduleTime:new Date(next)});
    return {status:'RESCHEDULED',atMs:next};
  }

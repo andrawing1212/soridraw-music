@@ -37,6 +37,12 @@ export async function sealUserPrivateLikes416(
       const value=raw as Pending|null;
       if(value?.sealed){
         if(expectedWindowId && value.sealed.id!==expectedWindowId){
+          if(value.window?.id===expectedWindowId){
+            // A new window may have begun while the older frozen seal awaits
+            // a remote queue ACK. Do not discard the new task; retry later.
+            disposition={sealed:false,reason:'WAITING_FOR_PRIOR_SEAL',retryAfterMs:60_000};
+            return;
+          }
           disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
         }
         disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED',value:value.sealed};

@@ -60,6 +60,21 @@ const http=async(_url,req)=>{
  return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'queued',
   version:seal.version,batchIds:['l069_'+String(seal.sealedAtMs).padStart(13,'0')+'_'+'a'.repeat(64)]}})};
 };
+// A new UID window cannot be dropped merely because an older frozen seal
+// has not yet received its exact Worker acknowledgement.
+const blockedLater={uid:task.uid,windowId:'00000000-0000-4000-8000-000000000099'};
+const earlierSealed={id:task.windowId,version:1,closedAtMs:now,
+ rows:[{trackId:'song-a',liked:true,operationId:task.windowId}]};
+const previousState=state;
+state={...state,sealed:earlierSealed,window:{
+ id:blockedLater.windowId,minutes:5,openedAtMs:now,lastClickAtMs:now,revision:3,
+},pending:{songc:{trackId:'song-c',liked:true,operationId:blockedLater.windowId,
+ deviceId:'00000000-0000-4000-8000-000000000009',deviceSequence:3,version:3}}};
+const blocked=await dispatch(db,queue,blockedLater,endpoint,secret,now+300_000,http);
+assert.equal(blocked.status,'RESCHEDULED','newer task stays alive while older ACK is unconfirmed');
+assert.equal(blocked.atMs,now+360_000);
+assert.equal(state.sealed.id,task.windowId);
+state=previousState;
 const done=await dispatch(db,queue,task,endpoint,secret,now+360_000,http);
 assert.equal(done.status,'DELIVERED');
 assert.equal(sends,1);

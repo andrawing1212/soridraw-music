@@ -38,9 +38,20 @@ const expectOldGood = async () => {
   await assertFails(noUser.ref('userSync/uid-A/musicNote').remove());
 };
 try {
-  // Source currently allows old client private-like writes; prove the bypass.
+  // Source currently allows old client private-like writes; prove that a
+  // valid signed-in OLD APP can still bypass rate/lock on the shared ancestor.
+  // These exact same authenticated SDK writes MUST all fail after cutover.
+  const forgedOldSignal420 = {
+    version: 1,
+    results: [{ trackId: 'one', ownerUid: 'artist', liked: true,
+      operationId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+      version: 1, at: Date.now(), status: 'pending' }],
+  };
+  await assertSucceeds(path('exploreLikeIntent416').set(forgedOldSignal420));
+  await assertSucceeds(path('exploreLikeIntent416/results/0/liked').set(false));
   await assertSucceeds(path('exploreLikeIntent416').remove());
   await expectOldGood();
+  console.log('STAGE420_EMULATOR_OLD_CLIENT_DIRECT_416_SET_AND_NESTED_WRITE_BYPASS=REPRODUCED');
   console.log('STAGE420_EMULATOR_CURRENT_416_DIRECT_WRITE_BYPASS=REPRODUCED');
 
   // The official test SDK does not expose loadDatabaseRules on TestEnvironment.
@@ -53,13 +64,18 @@ try {
   noUser = environment.unauthenticatedContext().database();
   await expectOldGood();
   await assertFails(path('exploreLikeIntent416').remove());
-  await assertFails(path('exploreLikeIntent416').set({
-    version: 1, results: [{
-      trackId: 'one', ownerUid: 'artist', liked: true,
-      operationId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
-      version: 1, at: Date.now(), status: 'pending',
-    }],
+  await assertFails(path('exploreLikeIntent416').set(forgedOldSignal420));
+  await assertFails(path('exploreLikeIntent416/results/0/liked').set(false));
+  await assertFails(path('exploreLikeIntent416/version').set(2));
+  // Parent .write has to be revoked. Otherwise a malicious authenticated
+  // client could bypass any child-only .write:false via the parent path.
+  await assertFails(owner.ref('userSync/uid-A').set({
+    exploreLikeIntent416: forgedOldSignal420,
+    musicNote: { version: 2 },
   }));
+  await assertSucceeds(owner.ref('userSync/uid-A/musicNote').remove());
+  await assertSucceeds(owner.ref('userSync/uid-A/exploreFollow').remove());
+  console.log('STAGE420_EMULATOR_OLD_CLIENT_NESTED_DIRECT_AND_PARENT_BYPASS_DENIED=PASS');
   await assertFails(owner.ref('userSync/uid-A').remove());
   await assertFails(owner.ref('userSync/uid-A/unauthorizedOther').set('bad'));
   await assertFails(owner.ref('privateLikeSync420/uid-A').set({ version: 1 }));

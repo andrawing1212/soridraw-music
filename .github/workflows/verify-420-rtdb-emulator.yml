@@ -60,4 +60,5 @@ jobs:
       - name: Assert no product/shared rules files were modified
         run: |
           git diff --exit-code -- database.rules.json firestore.rules
-          test "$(node -p "require('./public/app-version.json').version")" = "392"
+          git diff --exit-code -- public/app-version.json
+          node --input-type=module -e "import fs from 'node:fs'; const x=JSON.parse(fs.readFileSync('public/app-version.json','utf8')); if (!Number.isInteger(x.version) || x.version <= 0) process.exit(1)"

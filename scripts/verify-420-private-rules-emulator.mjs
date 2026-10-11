@@ -69,6 +69,7 @@ try {
   await environment.withSecurityRulesDisabled(async (adminContext) => {
     await adminContext.database().ref('privateLikeSync420/uid-A').set({
       display: { version: 1, rate: { lockedUntilMs: 0 }, results: [] },
+      displayV2: { version: 1, results: [] },
       adminUnlockAudit: [{ actorUid: 'master-secret-uid', reason: 'private reason', at: 12 }],
     });
   });
@@ -77,10 +78,18 @@ try {
   await assertFails(other.ref('privateLikeSync420/uid-A/display').get());
   await assertFails(noUser.ref('privateLikeSync420/uid-A/display').get());
   await assertSucceeds(owner.ref('privateLikeSync420/uid-A/display').get());
+  await assertFails(other.ref('privateLikeSync420/uid-A/displayV2').get());
+  await assertFails(noUser.ref('privateLikeSync420/uid-A/displayV2').get());
+  await assertSucceeds(owner.ref('privateLikeSync420/uid-A/displayV2').get());
+  await assertFails(owner.ref('privateLikeSync420/uid-A/displayV2').set({
+    version: 2, results: [],
+  }), 'Client must not forge server-owned V2 notifications');
+  await assertFails(owner.ref('privateLikeSync420/uid-A/adminUnlockAudit').set([]));
   // Legacy confirmed signal 127 and five other channels remain authorized.
   console.log('STAGE420_EMULATOR_DIRECT_LIKE_WRITE_AND_ROOT_DELETE_DENIED=PASS');
   console.log('STAGE420_EMULATOR_SIX_LEGACY_SIGNAL_CHANNELS_AND_UID_ISOLATION=PASS');
   console.log('STAGE420_EMULATOR_SERVER_ONLY_ROOT_READ_PRIVACY=PASS');
+  console.log('STAGE420_EMULATOR_DISPLAY_V2_OWNER_READ_OTHER_DENY_CLIENT_WRITE_DENY=PASS');
   console.log('STAGE420_REAL_SHARED_RULES_DEPLOY=NOT_RUN');
 } finally {
   await environment.cleanup();

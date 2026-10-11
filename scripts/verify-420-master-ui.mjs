@@ -23,6 +23,25 @@ for(const endpoint of [
     'backend Master auth missing: '+endpoint);
 }
 assert.match(ui, /window\.confirm\(/,'early unlock must require explicit confirmation');
+assert.match(ui, /const STAGE420_ATOMIC_MASTER_UI_CUTOVER = false;/,
+  'Master must not switch from RTDB authority to Firestore before cutover');
+for (const name of ['masterGetAtomicLikeLimit420','masterUnlockAtomicLike420',
+  'masterRecoverHeldAtomicLike420']) {
+  assert(ui.includes(name),'new Master UI must use authenticated server callable: '+name);
+  const match=functions.indexOf('export const '+name+' = onCall(');
+  assert(match>=0,'new Master backend missing: '+name);
+}
+assert.match(ui, /unlockRequestRef = useRef/,
+  'atomic Master unlock must retain requestId across lost callable response retries');
+assert.match(ui, /requestId: crypto\.randomUUID\(\)/,
+  'new unlock must have a server-verifiable single-use idempotency key');
+assert.match(ui, /functions, 'masterRecoverHeldAtomicLike420'/,
+  'a held Eventarc receipt must have an exact-ID Master-only UI action');
+assert.match(ui, /window\.confirm\('정확히 이 계정의 이 좋아요 알림 1건만 복구할까요\?'/,
+  'operator must confirm exact account and held operation');
+assert.doesNotMatch(ui, /query\(|getDocs\(|onSnapshot\(/,
+  'Master repair panel must never scan user collections or watch them in background');
+
 assert.match(ui, /loadedPolicy/,'admin setting must indicate dirty state');
 assert.doesNotMatch(ui, /setDoc\(|updateDoc\(|\.ref\(/,
   'Master policy client must never bypass server');

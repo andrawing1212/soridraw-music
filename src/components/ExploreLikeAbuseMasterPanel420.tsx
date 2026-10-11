@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { auth, functions, httpsCallable } from '../firebase';
 import { normalizeStaffRole } from '../constants/adminPermissions';
@@ -7,6 +7,11 @@ import {
   isUserProfileCacheStorageKey,
   readUserProfileCache,
 } from '../lib/userProfileCache';
+
+// Atomic Master UI is dormant until BOTH the client AND shared Rules,
+// signed Worker intake, server Firestore authority and Eventarc have passed
+// the same coordinated release. Never enable this flag independently.
+const STAGE420_ATOMIC_MASTER_UI_CUTOVER = false;
 
 // Stage420: isolated Master-only section. The backend repeats Master auth on
 // every operation. Client role and buttons are presentation, NOT enforcement.
@@ -45,6 +50,12 @@ export default function ExploreLikeAbuseMasterPanel420() {
   const [targetUid, setTargetUid] = useState('');
   const [status, setStatus] = useState<LikeGuardStatus420 | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
+  // A lost Callable response must retry EXACTLY the original audit request.
+  // Keep the requestId in memory until a confirmed server answer or the
+  // operator changes target. The backend checks Master role on every call.
+  const unlockRequestRef = useRef<{ targetUid: string; requestId: string } | null>(null);
+  const [heldOperationId, setHeldOperationId] = useState('');
+  const [heldRecoveryBusy, setHeldRecoveryBusy] = useState(false);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -125,12 +136,16 @@ export default function ExploreLikeAbuseMasterPanel420() {
 
   const findLock = async () => {
     if (!targetUid.trim() || statusBusy) return;
+    if (unlockRequestRef.current?.targetUid !== targetUid.trim()) {
+      unlockRequestRef.current = null;
+    }
     setStatusBusy(true);
     setStatus(null);
     setNotice('');
     try {
       const call = httpsCallable<{ targetUid: string }, LikeGuardStatus420>(
-        functions, 'masterGetExploreLikeLimit420',
+        functions, STAGE420_ATOMIC_MASTER_UI_CUTOVER
+          ? 'masterGetAtomicLikeLimit420' : 'masterGetExploreLikeLimit420',
       );
       const found = (await call({ targetUid: targetUid.trim() })).data;
       if (!found.ok) throw new Error('MASTER_LOCK_UNAVAILABLE');
@@ -146,17 +161,71 @@ export default function ExploreLikeAbuseMasterPanel420() {
     if (!window.confirm('이 계정의 좋아요·해제 2시간 제한을 지금 해제할까요?')) return;
     setStatusBusy(true);
     try {
-      const call = httpsCallable<{ targetUid: string; reason: string }, { ok: boolean; unlocked: boolean }>(
-        functions, 'masterUnlockExploreLike420',
+      // The new Firestore API requires a unique idempotency key so two
+      // Masters / double-clicks / lost ACK retries cannot double-unlock.
+      if (STAGE420_ATOMIC_MASTER_UI_CUTOVER && !unlockRequestRef.current) {
+        if (typeof crypto?.randomUUID !== 'function') {
+          throw new Error('MASTER_IDEMPOTENCY_ID_UNAVAILABLE');
+        }
+        unlockRequestRef.current = {
+          targetUid: status.targetUid, requestId: crypto.randomUUID(),
+        };
+      }
+      const call = httpsCallable<
+        { targetUid: string; reason: string; requestId?: string },
+        { ok: boolean; unlocked: boolean; duplicate?: boolean }
+      >(
+        functions, STAGE420_ATOMIC_MASTER_UI_CUTOVER
+          ? 'masterUnlockAtomicLike420' : 'masterUnlockExploreLike420',
       );
-      const result = (await call({ targetUid: status.targetUid, reason: 'Master 관리자 직접 해제' })).data;
+      const request = {
+        targetUid: status.targetUid, reason: 'Master 관리자 직접 해제',
+        ...(STAGE420_ATOMIC_MASTER_UI_CUTOVER
+          ? { requestId: unlockRequestRef.current?.requestId }
+          : {}),
+      };
+      const result = (await call(request)).data;
       if (!result.ok) throw new Error('MASTER_UNLOCK_FAILED');
+      unlockRequestRef.current = null;
       setStatus({ ...status, lockedUntilMs: 0, acceptedInWindow: 0 });
       setNotice(result.unlocked ? '좋아요 제한을 해제하고 감사 기록을 남겼습니다.' : '이미 제한이 해제된 계정입니다.');
     } catch {
       setNotice('제한을 해제하지 못했습니다.');
     } finally {
       setStatusBusy(false);
+    }
+  };
+
+  // This recovery is intentionally a manual, exact-ID operation. Never
+  // scan all users or receipts to populate the panel. No auto polling.
+  const recoverHeld = async () => {
+    const uid = targetUid.trim();
+    const operationId = heldOperationId.trim();
+    if (!STAGE420_ATOMIC_MASTER_UI_CUTOVER || heldRecoveryBusy ||
+        !uid || uid.length > 128 ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationId)) {
+      return;
+    }
+    if (!window.confirm('정확히 이 계정의 이 좋아요 알림 1건만 복구할까요?')) return;
+    setHeldRecoveryBusy(true);
+    setNotice('');
+    try {
+      const call = httpsCallable<
+        { targetUid: string; operationId: string; reason: string },
+        { ok: boolean; recovered: boolean; duplicate: boolean; delivered: number }
+      >(functions, 'masterRecoverHeldAtomicLike420');
+      const response = (await call({
+        targetUid: uid, operationId, reason: 'Master 관리자 승인 알림 단건 복구',
+      })).data;
+      if (!response.ok) throw new Error('MASTER_HOLD_RECOVERY_FAILED');
+      setNotice(response.duplicate
+        ? '이미 처리된 알림입니다. 좋아요는 다시 승인하지 않았습니다.'
+        : '기존 승인 알림 1건을 복구했습니다. 좋아요 승인·횟수는 변경하지 않았습니다.');
+      if (response.recovered || response.duplicate) setHeldOperationId('');
+    } catch {
+      setNotice('복구에 실패했습니다. 승인 기록은 변경하지 않았습니다. 관리자 로그를 확인하세요.');
+    } finally {
+      setHeldRecoveryBusy(false);
     }
   };
 
@@ -206,7 +275,11 @@ export default function ExploreLikeAbuseMasterPanel420() {
         <p className="mb-3 text-xs font-black text-[var(--text-primary)]">계정 잠금 조회 및 조기 해제</p>
         <div className="flex flex-wrap gap-2">
           <input aria-label="잠금 계정 UID" className={cssInput + ' min-w-0 flex-1'} placeholder="계정 UID"
-            value={targetUid} onChange={e => setTargetUid(e.target.value)} disabled={statusBusy}/>
+            value={targetUid} onChange={e => {
+              setTargetUid(e.target.value);
+              setStatus(null);
+              unlockRequestRef.current = null;
+            }} disabled={statusBusy || heldRecoveryBusy}/>
           <button type="button" className={cssButton} disabled={statusBusy || !targetUid.trim()}
             onClick={findLock}>
             {statusBusy && <Loader2 className="h-4 w-4 animate-spin"/>}
@@ -226,6 +299,30 @@ export default function ExploreLikeAbuseMasterPanel420() {
           </div>
         )}
       </div>
+      {STAGE420_ATOMIC_MASTER_UI_CUTOVER && (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <p className="mb-2 text-xs font-black text-[var(--text-primary)]">
+            승인 알림 전달 실패 · 단건 복구
+          </p>
+          <p className="mb-3 text-xs text-[var(--text-secondary)]">
+            위 계정 UID와 보류된 승인 ID가 일치할 때만 기존 알림을 다시 전달합니다.
+            새로운 좋아요 승인은 만들지 않습니다.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <input aria-label="보류된 승인 ID" className={cssInput + ' min-w-0 flex-1'}
+              placeholder="보류된 승인 operationId"
+              value={heldOperationId} onChange={e => setHeldOperationId(e.target.value)}
+              disabled={heldRecoveryBusy || statusBusy}/>
+            <button type="button" className={cssButton}
+              disabled={heldRecoveryBusy || statusBusy || !targetUid.trim() ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(heldOperationId.trim())}
+              onClick={recoverHeld}>
+              {heldRecoveryBusy && <Loader2 className="h-4 w-4 animate-spin"/>}
+              알림 1건 복구
+            </button>
+          </div>
+        </div>
+      )}
       {notice && <p role="status" className="mt-3 text-xs font-bold text-[#BBA8CA]">{notice}</p>}
     </section>
   );

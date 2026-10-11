@@ -336,10 +336,14 @@ assert.equal(rtdbWrites,rtdbBeforeReplay,
   'old trigger delivered again must not create a write');
 // Missing/mismatched proof never turns into a new rate approval or broadcast.
 const nextPath='privateLikeGuardV2_420/uid-1/approvals/'+mk(261).operationId;
+const saved261=clone(docs.get(nextPath));
+assert(saved261,'the test must remove a real receipt, not invent a gap');
+docs.delete(nextPath);
 const afterMissing=await reconcile(store,rtdb,'uid-1',261,recoveryNow,8);
 assert.equal(afterMissing.reason,'missing-proof');
 assert.equal(rtdbWrites,rtdbBeforeReplay);
 assert.equal(docs.has(nextPath),false);
+docs.set(nextPath,saved261);
 console.log('STAGE420_RECOVERY_MISSING_PROOF_FAIL_CLOSED=PASS');
 console.log('STAGE420_RECOVERY_GAP_THEN_RETRY_TO_260=PASS');
 console.log('STAGE420_RECOVERY_260_REPLAY_RTDB_W0=PASS');

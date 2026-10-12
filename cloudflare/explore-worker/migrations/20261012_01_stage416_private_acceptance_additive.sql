@@ -1,5 +1,5 @@
 -- Stage416 additive server-only acceptance fence.
--- EMPTY operational table only: no backfill, no existing-row rewrite/delete.
+-- EMPTY operational table only: no backfill and no mutation of existing rows.
 CREATE TABLE IF NOT EXISTS explore_like_private_acceptance_416(
  user_uid TEXT PRIMARY KEY,
  version INTEGER NOT NULL CHECK(version>0),

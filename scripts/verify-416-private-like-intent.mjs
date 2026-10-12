@@ -86,9 +86,10 @@ stopCold();
 const restartedB = makeClient(B.storage);
 const stopRestart = restartedB.api.subscribeExploreLikeIntent416(uid,
   (id, liked) => restartedB.notices.push({ id, liked }));
-assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), undefined,
-  'restarting same browser must not resurrect stale unconfirmed private hints');
-assert.equal(restartedB.notices.length, 0);
+assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), true,
+  'same browser reload must keep its already received and bounded private hint');
+assert.equal(restartedB.notices.length, 0,
+  'reload restores only local viewer state without publishing another RTDB event');
 stopRestart();
 assert.equal(B.api.listExploreLikeIntents416(uid)[track], true, 'My Likes local candidate must see same provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
@@ -102,6 +103,11 @@ assert.equal(B.api.readExploreLikeIntent416(uid, track), false, 'stale operation
 assert.equal(B.notices.length, afterFalse);
 await A.api.settleExploreLikeIntent416(uid, [{ trackId: track, operationId: op2, status: 'rejected' }]);
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined, 'rejected hint clears; canonical fallback remains independent');
+const rejectedReload = makeClient(B.storage);
+const stopRejectedReload = rejectedReload.api.subscribeExploreLikeIntent416(uid, () => {});
+assert.equal(rejectedReload.api.readExploreLikeIntent416(uid, track), undefined,
+  'rejected remote hint must not survive reload');
+stopRejectedReload();
 assert.equal(B.notices.at(-1).id, track);
 const cross = makeClient();
 const unsubOther = cross.api.subscribeExploreLikeIntent416('other-uid', () => {
@@ -124,6 +130,11 @@ assert.equal(B.api.readExploreLikeIntent416(uid, track), true,
 B.api.clearExploreLikeIntent416(uid, track, true);
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined,
   'newer exact ACK permits later 127 signal to retire the matched hint');
+const settledReload = makeClient(B.storage);
+const stopSettledReload = settledReload.api.subscribeExploreLikeIntent416(uid, () => {});
+assert.equal(settledReload.api.readExploreLikeIntent416(uid, track), undefined,
+  'canonical acknowledgement removes local optimistic hints across reload');
+stopSettledReload();
 await A.api.publishExploreLikeIntent416(uid, like(
   true, '66666666-6666-4666-a666-666666666666', 'new-track-after-ack',
 ));
@@ -160,6 +171,26 @@ for (let i = 0; i < 65; i++) {
 }
 assert(database.get(`userSync/${uid}/exploreLikeIntent416`).results.length <= 50);
 assert.equal(database.get('publicSync/exploreLike'), undefined);
+const expiryStorage = new Map([[
+  'soridraw:explore-like-intent-reload:416:' + uid,
+  JSON.stringify({ stale: {
+    liked: true, operationId: op1, version: 1,
+    at: Date.now() - 21 * 60_000, status: 'pending', optimisticLikeCount: 1,
+  }, corrupt: { liked: true, operationId: 'invalid', version: 3,
+    at: Date.now(), status: 'pending' } }),
+]]);
+const expired = makeClient(expiryStorage);
+assert.equal(expired.api.readExploreLikeIntent416(uid, 'stale'), undefined,
+  'remote hints older than longest Master window never survive reload');
+assert.equal(expired.api.readExploreLikeIntent416(uid, 'corrupt'), undefined,
+  'invalid local storage is not accepted');
+const noNetworkWrites = writes;
+const retained = makeClient(B.storage);
+retained.api.listExploreLikeIntents416(uid);
+assert.equal(writes, noNetworkWrites, 'page reload reads only local cache, adds no RTDB/D1 write');
+const anotherUser = makeClient(B.storage);
+assert.equal(anotherUser.api.readExploreLikeIntent416('different-uid', track), undefined,
+  'even shared browser storage must never leak private hint across UID');
 unsubscribe();
 unsubOther();
 // A checked-in source/Rule contract is also part of this release gate.
@@ -179,4 +210,6 @@ console.log('STAGE416_UID_ISOLATION_AND_BOUNDED_50=PASS');
 console.log('STAGE416_PERMISSION_DENIED_SAFE_FALLBACK=PASS');
 console.log('STAGE416_CANONICAL_AND_PUBLIC_MUTATION_ZERO=PASS');
 console.log('STAGE416_EXISTING_ACCEPTED_PATH_AND_RULES_PRESERVED=PASS');
+console.log('STAGE416_RELOAD_SAME_DEVICE_RECENT_HINT_AND_REJECTION=PASS');
+console.log('STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS');
 console.log('STAGE416_LIVE_DEVICE_LATENCY=NOT_TESTED');

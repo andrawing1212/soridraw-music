@@ -1701,6 +1701,18 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
     }
 
     const effectiveLiked = readExploreTrackLikeMembership127(normalizedUid, trackId);
+    // Refresh-safe account-private optimistic pair: an already RECEIVED
+    // same-UID 416 hint may be restored locally before the 5-minute canonical
+    // final receipt. Do not mutate the shared Feed/R2 cache.
+    const privateHint416 = !EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE
+      ? readExploreLikeIntentDetail416(normalizedUid, trackId) : null;
+    if (privateHint416 && typeof privateHint416.optimisticLikeCount === 'number' &&
+        !Object.prototype.hasOwnProperty.call(outbox, trackId) &&
+        effectiveLiked === privateHint416.liked) {
+      const pair = normalizeExploreLikeDisplayPair129(
+        privateHint416.liked, privateHint416.optimisticLikeCount);
+      return pair.likeCount === track.likeCount ? track : { ...track, likeCount: pair.likeCount };
+    }
     const lock = locks[trackId];
     if (lock) {
       const sharedCount = clampLikeCount(track.likeCount);

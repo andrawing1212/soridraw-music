@@ -6,7 +6,13 @@ import { realtimeDb } from '../firebase';
 const INTENT_MAX_416 = 50;
 const INTENT_TTL_MS_416 = 60 * 60_000;
 const INTENT_LIVE_DELIVERY_MAX_MS_416 = 30_000;
+// Restore ONLY a previously received private hint on the SAME device.
+// The longest Master window is 20m; after that provisional hints expire.
+// This is NOT canonical membership and never causes a server mutation on load.
+const INTENT_RELOAD_GRACE_MS_416 = 30_000;
+const INTENT_RELOAD_MAX_MS_416 = 20 * 60_000 + INTENT_RELOAD_GRACE_MS_416;
 const INTENT_SEEN_416 = 'soridraw:explore-like-intent-seen:416';
+const INTENT_RELOAD_416 = 'soridraw:explore-like-intent-reload:416';
 
 type IntentStatus416 = 'pending' | 'accepted' | 'rejected';
 type IntentRow416 = {
@@ -55,24 +61,52 @@ const validRow416 = (value: unknown): value is IntentRow416 => {
     Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0 &&
     (row.status === 'pending' || row.status === 'accepted' || row.status === 'rejected');
 };
-// Tentative remote hints have NO cross-launch authority. Never revive a stale
-// provisional heart from localStorage after an app restart: the original
-// canonical cache plus durable OWN outbox already own recovery. In-memory
-// overlays exist only while this signed-in device is actively listening.
+// The previously received SAME-DEVICE provisional hint may survive a reload,
+// but MUST expire by the longest allowed server batch window and MUST NOT be
+// promoted into canonical/R2/public truth. Unseen retained RTDB rows are never
+// replayed on first subscription. The signed server-only final receipt still
+// supersedes and clears matching operations.
+const validReloadHint416 = (value: unknown, now: number): value is LocalIntent416 => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Partial<LocalIntent416>;
+  return typeof row.liked === 'boolean' && validOperation416(row.operationId) &&
+    Number.isSafeInteger(row.version) && Number(row.version) > 0 &&
+    Number.isSafeInteger(row.at) && Number(row.at) > 0 &&
+    now >= Number(row.at) - INTENT_LIVE_DELIVERY_MAX_MS_416 &&
+    now - Number(row.at) <= INTENT_RELOAD_MAX_MS_416 &&
+    (row.status === 'pending' || row.status === 'accepted') &&
+    (row.optimisticLikeCount === undefined ||
+      (Number.isSafeInteger(row.optimisticLikeCount) && row.optimisticLikeCount >= 0 &&
+       row.optimisticLikeCount <= 1_000_000_000));
+};
 const readLocal416 = (uid: string): Record<string, LocalIntent416> => {
   let entries = localIntentByUid416.get(uid);
   if (!entries) {
-    entries = {};
+    let stored: unknown = null;
+    try { stored = JSON.parse(readText416(storeKey416(INTENT_RELOAD_416, uid)) || 'null'); }
+    catch { /* Corrupted private cache is never authoritative. */ }
+    const now = Date.now();
+    const valid = stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? Object.entries(stored).filter(([id, row]) =>
+          id.length > 0 && id.length <= 512 && validReloadHint416(row, now))
+          .sort((a, b) => (a[1] as LocalIntent416).version - (b[1] as LocalIntent416).version)
+          .slice(-INTENT_MAX_416) : [];
+    entries = Object.fromEntries(valid) as Record<string, LocalIntent416>;
     localIntentByUid416.set(uid, entries);
   }
   return entries;
 };
 const saveLocal416 = (uid: string, entries: Record<string, LocalIntent416>): void => {
+  const now = Date.now();
   const fresh = Object.entries(entries)
-    .filter(([, value]) => Date.now() - value.at <= INTENT_TTL_MS_416)
+    .filter(([id, value]) => id.length > 0 && id.length <= 512 &&
+      validReloadHint416(value, now))
     .sort((a, b) => a[1].version - b[1].version)
     .slice(-INTENT_MAX_416);
-  localIntentByUid416.set(uid, Object.fromEntries(fresh) as Record<string, LocalIntent416>);
+  const bounded = Object.fromEntries(fresh) as Record<string, LocalIntent416>;
+  localIntentByUid416.set(uid, bounded);
+  // The receiver writes only its own small LOCAL overlay, never shared RTDB.
+  writeText416(storeKey416(INTENT_RELOAD_416, uid), JSON.stringify(bounded));
 };
 const seenVersion416 = (uid: string) => {
   const memory = seenByUid416.get(uid);
@@ -99,7 +133,12 @@ export const listExploreLikeIntents416 = (uid: string): Record<string, boolean> 
 // An auth switch must not carry another session's unconfirmed private heart.
 // The authoritative canonical cache/outbox continue to be UID-scoped.
 export const discardExploreLikeIntentSession416 = (uid: string): void => {
-  if (uid) localIntentByUid416.delete(uid);
+  if (uid) {
+    localIntentByUid416.delete(uid);
+    // A real logout/account switch is not a page reload; discard tentative
+    // authority rather than carrying it into a future sign-in session.
+    writeText416(storeKey416(INTENT_RELOAD_416, uid), '{}');
+  }
 };
 
 export const readExploreLikeIntent416 = (uid: string, trackId: string): boolean | undefined => {
@@ -143,8 +182,9 @@ export const subscribeExploreLikeIntent416 = (
   onChanged: (trackId: string, liked: boolean, observed: IntentObservation416) => void,
 ): Unsubscribe => {
   // A retained tentative signal is not canonical truth. Skip the initial
-  // replay on cold browser start; the existing 127 accepted/R2 cache provides
-  // initial membership. Active devices still receive every subsequent click.
+  // replay on cold browser start; only small, previously received and
+  // time-bounded SAME-DEVICE hints are eligible for reload restoration.
+  // The existing 127 accepted/R2 cache remains the canonical baseline.
   let initialSnapshot416 = true;
   return onValue(
   databaseRef(realtimeDb, `userSync/${uid}/exploreLikeIntent416`),

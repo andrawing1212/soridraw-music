@@ -63,6 +63,32 @@ assert.equal((await complete(database,'uid',worker,secret,now+200,http)).reason,
 assert.equal(sends,2,'one failed attempt and one verified idempotent retry');
 assert.equal(writes,2,'only initial seal and exact ACK may write RTDB in server coordinator');
 assert(reads>=4);
+// A durable Worker queue receipt with an RTDB ACK conflict must not let the
+// Cloud Task finish while the exact frozen seal remains in RTDB.
+state=null;
+await click(10,'song-ack-retry',true);
+let loseFirstAck=true;
+const ambiguousAckDatabase={ref:(_name)=>({
+ transaction:async(fn)=>{
+   if(loseFirstAck && state?.sealed){
+     loseFirstAck=false;
+     reads++;
+     return {committed:false,snapshot:{val:()=>state}};
+   }
+   return database.ref('privateLikeBatch416/uid').transaction(fn);
+ },
+ child:()=>({get:async()=>{reads++;return {val:()=>state?.sealed||null};}}),
+})};
+await assert.rejects(
+ complete(ambiguousAckDatabase,'uid',worker,secret,now,http),
+ /416_SEAL_ACK_STILL_PENDING/,
+ 'an unacknowledged frozen seal must request Cloud Tasks retry',
+);
+assert(state.sealed,'failed ACK must preserve the exact signed seal');
+const acknowledgedAfterRetry=await complete(database,'uid',worker,secret,now+1,http);
+assert.equal(acknowledgedAfterRetry.acknowledged,true);
+assert.equal(state.sealed,null,'bounded retry must clear only the exact seal');
+console.log('STAGE416_AMBIGUOUS_ACK_STILL_FROZEN_RETRY=PASS');
 console.log('STAGE416_RTDB_SEALED_FUNCTION_WORKER_RETRY_AND_ACK=PASS');
 console.log('STAGE416_RTDB_NEW_CLICK_SURVIVES_OLD_SEAL_ACK=PASS');
 console.log('STAGE416_COMMIT_COORDINATOR_NOT_CALLABLE_OR_DEPLOYED=PASS');

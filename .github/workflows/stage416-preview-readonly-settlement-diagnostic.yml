@@ -358,6 +358,37 @@ jobs:
           console.log('STAGE416_PUBLIC_TRACK_R2_EQUALS_CANONICAL='+(r2Count===null?'CARD_MISSING':String(r2Count===canonicalCount).toUpperCase()));
           console.log('STAGE416_PUBLIC_TRACK_D1_ROWS_READ='+rowsRead);
           console.log('STAGE416_PUBLIC_TRACK_D1_ROWS_WRITTEN='+rowsWritten);
+          // Compare materialized track_stats with the exact changed-track
+          // like records, but ONLY when a track_id lookup uses an index.
+          const query=async(statement)=>{
+            const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${db}/query`,
+              {method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+               body:JSON.stringify({sql:statement,params:[trackId]})});
+            const doc=await response.json();
+            const value=doc?.result?.[0];
+            if(!response.ok||doc?.success!==true||value?.success!==true)
+              throw Error('STAGE416_TRACK_LIKE_READONLY_QUERY_FAILED');
+            if(Number(value?.meta?.rows_written||0)!==0)
+              throw Error('STAGE416_TRACK_LIKE_READONLY_WRITE_DETECTED');
+            return value;
+          };
+          const plan=await query('EXPLAIN QUERY PLAN SELECT user_uid FROM likes WHERE track_id=? LIMIT 1');
+          const indexed=(plan.results||[]).some(row=>
+            /SEARCH.+USING.+INDEX/i.test(String(row?.detail||'')));
+          console.log('STAGE416_SINGLE_TRACK_LIKES_INDEXED='+String(indexed).toUpperCase());
+          if(indexed){
+            const countRow=await query('SELECT COUNT(*) AS like_rows FROM likes WHERE track_id=?');
+            const likeRows=Number(countRow.results?.[0]?.like_rows);
+            const readCost=Number(countRow.meta?.rows_read||0);
+            if(!Number.isSafeInteger(likeRows)||likeRows<0||readCost>50)
+              throw Error('STAGE416_EXACT_TRACK_LIKE_COUNT_COST_OR_VALUE_INVALID');
+            console.log('STAGE416_SINGLE_TRACK_LIKES_ROW_COUNT='+likeRows);
+            console.log('STAGE416_SINGLE_TRACK_LIKES_ROWS_READ='+readCost);
+            console.log('STAGE416_SINGLE_TRACK_LIKE_ROWS_EQUAL_STATS='+
+              String(likeRows===canonicalCount).toUpperCase());
+          }else{
+            console.log('STAGE416_SINGLE_TRACK_LIKES_ROW_COUNT=NOT_CHECKED_UNINDEXED');
+          }
           console.log('STAGE416_SINGLE_TRACK_PUBLIC_AUDIT_READONLY=PASS');
           NODE
 

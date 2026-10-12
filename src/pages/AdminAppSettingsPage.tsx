@@ -13,7 +13,7 @@ const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_ADMIN_SCOPE = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 const STAGE420_MASTER_PANEL_ACTIVE = false; // Keep dormant until callable/Rules/Worker release is approved and deployed.
-const STAGE416_LIKE_BATCH_MASTER_PANEL_ACTIVE = false; // Keep OFF until server + private/public window cutover is verified.
+const STAGE416_LIKE_BATCH_MASTER_PANEL_ACTIVE = true; // app400 PREVIEW: backend is live; TEST/PRODUCTION feature remains OFF.
 import {
   getNavigationFirestorePayload,
   getNavigationMenuAccessMode,

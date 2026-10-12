@@ -1,3 +1,13 @@
+## NEXT — PREVIEW app406 모바일 해제 후 새로고침 QA + Stage416 서버 확정 실패 원인 (2026-10-12 KST)
+
+- **현재 고정:** app406 Hosting only [38259848293](https://github.com/andrawing1212/soridraw-music/actions/runs/38259848293) SUCCESS, QA [38259528489](https://github.com/andrawing1212/soridraw-music/actions/runs/38259528489) SUCCESS, source `82be614a2ee8bfbae0a1b8a77f900f2a1bf0ff9d`. `preview.soridraw.com` 정확한 406/Build PASS, TEST/PRODUCTION unchanged. UI/login/auth restoration-local recompute only; Worker/Functions/D1/R2/Rules/user original 변경 없음.
+- **핵심 모바일 테스트:** `골목길 탐험대` 같은 A계정에서 PC like→모바일 빈/채움+count 실시간 맞춤→양쪽 refresh, PC unlike→모바일 즉시 빈 하트+0 → **모바일만 refresh**해 0 유지 확인. 화면 hidden→visible 재확인과 단순 refresh 구분. app406은 auth가 늦게 돌아온 뒤 `curatedTracks307`에 already-received private hint를 계정중립 캐시 기준으로 다시 입히는 수정. 임시 pending hint가 해당 모바일에 없거나 20m 만료됐으면 이 수정으로 0을 보증하지 못함.
+- **Stage416 실질 최종 FAIL 별도:** D1 단일 곡 좋아요 원본 1건/집계 1/R2 1 정확 일치 ([38256077221](https://github.com/andrawing1212/soridraw-music/actions/runs/38256077221)); 최근 Settle `EMPTY=19`, acceptance none ([38256513112](https://github.com/andrawing1212/soridraw-music/actions/runs/38256513112)). 416 RTDB private click accepted:true→server `window` persisted→due Task→signed Worker handoff→shared D1 exact acceptance→R2/public RTDB signal을 **하나의 동일 operation/window**에 대해 개인정보 공개 없이 입증, 원인 단일 단계 최소 수정. HTTP204/화면 0/좋아요 표시만으로 canonical success 판정 금지.
+- **보호:** 기존 다른 곡 정상 like/unlike/follows/app160+164 및 app402/404/405, My Likes/Studio Save-heart, 디자인/UI 보호. 앱 첫 진입/업데이트/새로고침으로 D1/Firestore read/write 증가 금지. 대량삭제·전체 backfill·공유원본 강제 reset·TEST/PRODUCTION 승격 절대 금지. PREVIEW는 검증 PASS 시 사용자 선승인에 따라 자동 배포 가능.
+- **진행률:** Stage416 전체 1/4·25%, 성능 5/5·100%, 5분 정산 3/4·75%(제품 실사용 FAIL), app406 모바일 초기 캐시 복원 source/QA/deploy PASS, 실사용 QA 전.
+
+---
+
 ## NEXT — Stage416 app405 골목길 탐험대 서버 접수·최종 저장 누락 원인 단일 경로 확인 (2026-10-12 KST)
 
 - **절대 우선 사실:** 실사용 PC/mobile 새로고침 후 빈 하트 0↔1 불일치. 「골목길 탐험대」 서버 D1 indexed like row=1, track_stats=1, 공유 R2 changed-card=1, curated shared=1 ([38256077221](https://github.com/andrawing1212/soridraw-music/actions/runs/38256077221)). 이 값은 실제 서버 원본이므로 클라이언트 캐시 전체 삭제/원본 좋아요 삭제/무조건 0 강제 반영 **금지**. 현재 테스트 계정 본인의 row인지 다른 계정의 합법적 1인지 증거 없음.

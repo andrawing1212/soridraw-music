@@ -67,6 +67,13 @@ await assert.rejects(retry416(async()=>{
 },()=>true,async()=>{}),/STALE_OR_DUPLICATE/);
 assert.equal(attempts,1,'ambiguous stale receipt never treated as accepted');
 assert.match(source,/current\.privateDeviceSequence416 === token\.deviceSequence/);
+assert(source.includes('privateServerRegistered416:true'));
+assert(source.includes('inFlightRecovery416.has(uid)'));
+assert(source.includes('budget.count>=3'));
+assert(source.includes("window.addEventListener('online'"));
+assert(source.includes('onAuthStateChanged(auth,user=>'));
+assert(source.includes('row.privateDeviceSequence416===saved.privateDeviceSequence416'));
+console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
 console.log('STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');

@@ -30,6 +30,7 @@ export async function recordUserPrivateClick416(
   throw Error('416_BAD_SERVER_PRIVATE_CLICK');
  const trackKey=createHash('sha256').update(click.trackId,'utf8').digest('hex');
  let reason='UNDETERMINED';
+ let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
  const outcome=await database.ref('privateLikeBatch416/'+uid).transaction((raw:unknown)=>{
    const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)
      ?raw:{} ) as Pending416;
@@ -43,7 +44,26 @@ export async function recordUserPrivateClick416(
       !pending||typeof pending!=='object'||Array.isArray(pending))
      throw Error('416_SERVER_PRIVATE_STATE_CORRUPT');
    if(click.deviceSequence<=previousDeviceSeq){
-     reason='STALE_OR_DUPLICATE';return;
+     // Confirm only the exact previously registered operation inside the
+     // SAME UID RTDB transaction. A guessed duplicate is never accepted.
+     const frozen=state.sealed as {rows?:Array<{
+       trackId:string;liked:boolean;operationId:string;deviceId?:string;
+       deviceSequence?:number;version?:number}>}|null|undefined;
+     const registered=[pending[trackKey],
+       ...(Array.isArray(frozen?.rows)?frozen.rows:[])]
+       .find(row=>row?.trackId===click.trackId&&row.liked===click.liked&&
+         row.operationId===click.operationId&&row.deviceId===click.deviceId&&
+         row.deviceSequence===click.deviceSequence);
+     if(click.deviceSequence===previousDeviceSeq && registered &&
+        Number.isSafeInteger(registered.version)&&Number(registered.version)>0){
+       reason='DUPLICATE_CONFIRMED';
+       replay={version:Number(registered.version),
+         count:Object.keys(pending).length||
+           (Array.isArray(frozen?.rows)?frozen.rows.length:0),
+         ...(state.window?{deadlineAtMs:
+           state.window.lastClickAtMs+state.window.minutes*60_000}:{})};
+     }else reason='STALE_OR_DUPLICATE';
+     return;
    }
    if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
      reason='DEVICE_LIMIT';return;
@@ -77,7 +97,10 @@ export async function recordUserPrivateClick416(
        lastClickAtMs:serverClickAt,revision:versionNext},
    };
  },undefined,false);
- if(!outcome.committed)return {accepted:false,reason};
+ if(!outcome.committed){
+   if(replay)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...replay};
+   return {accepted:false,reason};
+ }
  const state=outcome.snapshot.val() as Pending416;
  if(!state?.window||state.version!==state.window.revision)
    throw Error('416_SERVER_PRIVATE_CLICK_PROOF_MISSING');

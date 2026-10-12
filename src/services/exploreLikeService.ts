@@ -129,6 +129,7 @@ const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 type ExploreLikePendingMutation = {
   privateDeviceId416?: string;
   privateDeviceSequence416?: number;
+  privateServerRegistered416?: boolean;
   trackId: string;
   ownerUid: string;
   baseLiked: boolean;
@@ -1496,6 +1497,7 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
       ? { guardCanonicalLiked420: row.guardCanonicalLiked420 } : {}),
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
+    ...(row.privateServerRegistered416 === true ? {privateServerRegistered416:true} : {}),
     ...(typeof row.privateDeviceId416 === 'string' &&
       /^[0-9a-f-]{36}$/i.test(row.privateDeviceId416) &&
       Number.isSafeInteger(row.privateDeviceSequence416) &&
@@ -2583,7 +2585,7 @@ export const setExploreTrackLike = async (
           persisted416.privateDeviceSequence416 !== token.deviceSequence) {
         throw new Error('416_DEVICE_SEQUENCE_NOT_DURABLE');
       }
-      await publishPrivateRtdbBatchClick416(uid, {
+      const registered416 = await publishPrivateRtdbBatchClick416(uid, {
         trackId: normalizedTrackId, liked, operationId: operationId416,
         deviceId: token.deviceId, deviceSequence: token.deviceSequence,
       }, () => {
@@ -2596,6 +2598,18 @@ export const setExploreTrackLike = async (
           current.privateDeviceId416 === token.deviceId &&
           current.privateDeviceSequence416 === token.deviceSequence;
       });
+      if (registered416 && auth.currentUser?.uid===uid) {
+        const rows416=readLikeOutbox(uid);
+        const exact416=rows416[normalizedTrackId];
+        if(exact416?.operationId===operationId416 &&
+           exact416.updatedAt===now && exact416.desiredLiked===liked &&
+           exact416.privateDeviceId416===token.deviceId &&
+           exact416.privateDeviceSequence416===token.deviceSequence &&
+           !exact416.privateServerRegistered416){
+          rows416[normalizedTrackId]={...exact416,privateServerRegistered416:true};
+          persistLikeOutbox(uid,rows416);
+        }
+      }
     })().catch((error) =>
       console.warn('[416] RTDB private candidate deferred; durable outbox retained:', error));
   }
@@ -2626,3 +2640,60 @@ export const setExploreTrackLike = async (
 
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };
+
+// Disabled Stage416-only recovery. No periodic reads and no mutation on
+// ordinary page entry. Only user-generated unresolved durable operations.
+if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
+    typeof window !== 'undefined') {
+  const inFlightRecovery416=new Set<string>();
+  const retryBudget416=new Map<string,{count:number;lastAt:number}>();
+  const recover416=async(uid:string)=>{
+    if(!uid||auth.currentUser?.uid!==uid||inFlightRecovery416.has(uid))return;
+    const budget=retryBudget416.get(uid)||{count:0,lastAt:0};
+    if(budget.count>=3||Date.now()-budget.lastAt<60_000)return;
+    const outstanding=Object.values(readLikeOutbox(uid))
+      .filter(row=>!row.privateServerRegistered416&&row.operationId&&
+        row.privateDeviceId416&&row.privateDeviceSequence416)
+      .sort((a,b)=>Number(a.privateDeviceSequence416)-Number(b.privateDeviceSequence416));
+    if(!outstanding.length)return;
+    retryBudget416.set(uid,{count:budget.count+1,lastAt:Date.now()});
+    inFlightRecovery416.add(uid);
+    try{
+      for(const saved of outstanding){
+        const stillCurrent=()=>{
+          const row=readLikeOutbox(uid)[saved.trackId];
+          return auth.currentUser?.uid===uid&&
+            row?.operationId===saved.operationId&&
+            row.updatedAt===saved.updatedAt&&
+            row.desiredLiked===saved.desiredLiked&&
+            row.privateDeviceId416===saved.privateDeviceId416&&
+            row.privateDeviceSequence416===saved.privateDeviceSequence416;
+        };
+        if(!stillCurrent())continue;
+        try{
+          const receipt=await publishPrivateRtdbBatchClick416(uid,{
+            trackId:saved.trackId,liked:saved.desiredLiked,
+            operationId:saved.operationId!,deviceId:saved.privateDeviceId416!,
+            deviceSequence:saved.privateDeviceSequence416!,
+          },stillCurrent);
+          if(!receipt||!stillCurrent())continue;
+          const rows=readLikeOutbox(uid),row=rows[saved.trackId];
+          if(row&&!row.privateServerRegistered416){
+            rows[saved.trackId]={...row,privateServerRegistered416:true};
+            persistLikeOutbox(uid,rows);
+          }
+        }catch(error){
+          // Preserve ambiguous outbox until exact server receipt; never
+          // claim canonical settlement from a mere registration response.
+          console.warn('[416] Exact restart registration retained:',error);
+        }
+      }
+    }finally{inFlightRecovery416.delete(uid);}
+  };
+  onAuthStateChanged(auth,user=>{
+    if(user?.uid)void recover416(user.uid);
+  });
+  window.addEventListener('online',()=>{
+    if(auth.currentUser?.uid)void recover416(auth.currentUser.uid);
+  });
+}

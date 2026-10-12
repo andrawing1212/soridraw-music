@@ -223,3 +223,16 @@ if(appVersion>=408){
     'old Stage416 outbox metadata must not block legacy canonical settlement');
   console.log('APP408_EXISTING_STAGE416_OUTBOX_LEGACY_SETTLEMENT_ELIGIBLE=PASS');
 }
+
+if(appVersion>=409){
+  assert.match(source,/hasRecoverablePending409 = Object\.values\(readLikeOutbox\(user\.uid\)\)/,
+    'startup recovery must inspect only the durable local outbox');
+  assert.match(source,/hasRecoverablePending409\) schedulePendingFlush\(user\)/,
+    'existing pending click settles without waiting for Explore card hydration');
+  const startup409=source.slice(source.indexOf('// app409:'),source.indexOf('// app409:')+1100);
+  assert.doesNotMatch(startup409,/requestExploreLike|fetch\(|httpsCallable|setRealtimeValue/,
+    'empty startup recovery must add no server request');
+  assert.match(startup409,/\(pending\.retryCount \|\| 0\) === 0/,
+    'ambiguous failed writes must not be replayed automatically');
+  console.log('APP409_STARTUP_EXISTING_PENDING_ONLY_NO_IDLE_IO=PASS');
+}

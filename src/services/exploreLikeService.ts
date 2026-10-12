@@ -1898,6 +1898,19 @@ const schedulePendingFlush = (user: User) => {
   flushTimerByUid.set(uid, timer);
 };
 
+// app409: app400-407 may have left real user clicks in the durable outbox while
+// the unproven Stage416 server-owned path suppressed the verified canonical batch.
+// Recover ONLY those existing user mutations as soon as Auth is ready, without
+// waiting for Explore card hydration. Empty/settled accounts do no network work.
+if (!STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && typeof window !== 'undefined') {
+  onAuthStateChanged(auth, (user) => {
+    if (!user?.uid || EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) return;
+    const hasRecoverablePending409 = Object.values(readLikeOutbox(user.uid))
+      .some((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
+    if (hasRecoverablePending409) schedulePendingFlush(user);
+  });
+}
+
 // An earlier batch may be in flight while the same song is toggled again.
 // Never discard a later unlike just because its ORIGINAL baseline was unliked:
 // the earlier like may still commit. Rebase the later intent to the earlier

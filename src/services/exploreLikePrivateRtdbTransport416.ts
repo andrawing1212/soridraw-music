@@ -1,10 +1,9 @@
 import { functions, httpsCallable } from '../firebase';
 
-// Stage416 server-only authority. Candidate is HARD OFF, no app399 call.
-// The user browser NEVER directly writes the canonical pending/sealed tree.
-// Firebase Callable must verify Auth+AppCheck, use server time and Master
-// policy; its future export remains disabled until the shared-data rollout.
-export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=false;
+// Stage416 app400 PREVIEW activation. The browser still NEVER writes the
+// canonical pending/sealed tree directly; it calls the Auth+AppCheck Function,
+// which owns server time and the shared RTDB transaction.
+export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=true;
 export type PrivateRtdbClick416={
   trackId:string; liked:boolean; operationId:string; deviceId:string; deviceSequence:number;
 };

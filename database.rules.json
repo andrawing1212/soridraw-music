@@ -162,6 +162,9 @@
               "liked": {
                 ".validate": "newData.isBoolean()"
               },
+              "optimisticLikeCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+              },
               "operationId": {
                 ".validate": "newData.isString() && newData.val().matches(/^[0-9a-fA-F-]{36}$/)"
               },

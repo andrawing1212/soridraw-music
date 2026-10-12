@@ -31,7 +31,7 @@ assert.equal(usedPath,'privateLikeBatch416/test-uid','Admin-only sibling, no use
 assert.equal(a.deadlineAtMs,now+300_000);
 assert.equal((await take(deviceB,1,'track-b',true,now+1000,1)).accepted,true);
 assert.equal(state.window.minutes,5,'active Master period immutable');
-assert.equal((await take(deviceA,1,'track-a',true,now+2000)).reason,'STALE_OR_DUPLICATE');
+assert.equal((await take(deviceA,1,'track-a',true,now+2000)).reason,'DUPLICATE_CONFIRMED');
 assert.equal(writes,2,'duplicate must write zero');
 const exactReplay=await take(deviceA,1,'track-a',true,now+2000);
 assert.equal(exactReplay.accepted,true);

@@ -117,6 +117,7 @@ import {
   getExploreCurationAccess307,
   getManagedSoridrawCuratedTracks307,
   getSoridrawCuratedTracks307,
+  readCachedSoridrawCuratedTracks307,
   revalidateSoridrawCuratedTracks335,
   setSoridrawCuratedTrack307,
   type ExploreCurationAccess307,
@@ -2436,9 +2437,22 @@ export default function ExplorePage() {
   // existing visible cards when auth becomes ready: zero Worker/D1 reads/writes.
   useEffect(() => {
     if (!user?.uid) return;
-    setCuratedTracks307((previous) => previous.length
-      ? overlayExploreLikeDisplayCounts(user.uid, previous)
-      : previous);
+    // Start from the account-neutral source, not another account's
+    // provisional display count. This also handles direct account switches.
+    const cachedRaw406 = readCachedSoridrawCuratedTracks307();
+    if (!cachedRaw406.length) return; // network fetch still pending: loader owns it
+    const canonical406 = new Map(
+      cachedRaw406.map(normalizeTrack).filter((track) => Boolean(track.id))
+        .map((track) => [track.id, track.likeCount] as const));
+    setCuratedTracks307((previous) => {
+      if (!previous.length) return previous;
+      const neutral406 = previous.map((track) => {
+        const count = canonical406.get(track.id);
+        return count === undefined || count === track.likeCount
+          ? track : { ...track, likeCount: count };
+      });
+      return overlayExploreLikeDisplayCounts(user.uid, neutral406);
+    });
   }, [user?.uid]);
 
   useEffect(() => {

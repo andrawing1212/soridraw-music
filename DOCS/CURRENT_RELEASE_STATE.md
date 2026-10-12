@@ -1,3 +1,13 @@
+## CURRENT — 사용자 정정 및 Stage416③ ACK 안전 보완 (2026-10-12 KST)
+
+- **사용자 정정:** "경량화 후 느려졌다"는 SORIDRAW 앱의 렌더링/로딩이 아니라 **ChatGPT의 작업 처리 속도가 느려졌다는 지적**이다. 아래 과거 "앱 속도 FAIL 신고" 기록은 이 정정으로 대체한다. 실제 앱 성능 장애가 보고됐다는 뜻으로 해석하거나 속도 최적화 개발을 최우선으로 돌리지 않는다. 기존 작업 분담·안전 검증 절차를 유지하면서 작업 확인/구현/보고를 빠르게 진행한다.
+- **현재 1순위:** Stage416③ 개인 좋아요 마지막 클릭 +5분 서버 묶음 확정. Stage416 원 4개 과제 완료 1/4·25%, Stage416③ source 후보 2/4·50%, 실서비스 활성화 0%. 현재 PREVIEW Hosting app399 source `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` 계속 보호.
+- **이번 preview 변경 (미배포):** `d192ecde8d724ce0576979880289061b3d423dce` (선행 `a0a2e3a46e9f3a2d0fa79caea645503e41408237`). `functions/src/exploreLikePrivateCommit416.ts` — Worker durable receipt 후 RTDB exact seal ACK transaction이 실패하면 드문 그 경우에만 현재 seal을 1회 읽어, 동일 UID/window/version이 남았을 때 명시 오류로 Cloud Task 재시도. 다른 작업이 이미 ACK했다면 안전 종료. `scripts/verify-416-complete-private-window.mjs` — ACK 거절→sealed 유지→동일 sealed signed receipt 재전송→정확 ACK 처리 회귀검사 추가.
+- **검증 상태:** GitHub exact commit [408 Run 38189979956](https://github.com/andrawing1212/soridraw-music/actions/runs/38189979956) **진행 대기/결과 미확인**. CI 완료 전 TypeScript/Build/Test 통과로 보고하지 않는다. 실제 Cloud Tasks/Functions/Worker/RTDB 공유 데이터/PC·모바일 종단 검증도 미완료.
+- **차단 유지:** Stage416 Functions Callable/Task handler index export 금지, RTDB Rules·D1 SQL 미적용, Worker/클라이언트 flag OFF, Firebase/Cloudflare/Hosting/main/TEST/PRODUCTION 배포 및 사용자 데이터 변경 없음. 기존 정상 app399의 개인 하트·팔로우·저장하트·Music Note 보호. 다음은 exact QA 결과 확인 후 서버 단계 자동마감→Worker ACK→개인 R2/127→PC·모바일 durable outbox 완료까지 종단 검증.
+
+---
+
 ## CURRENT — Explore 체감 성능 저하 신고, 소스 반복 렌더 계산 최소화 QA PASS / 실사용 미검증 (2026-10-12)
 
 - **실사용 사용자 신고:** "경량화까지 해놓고 더 느려졌어." 기존 속도 5/5=100%는 과거 코드/정해진 테스트 범위 합격이지 현재 PC/모바일 체감 PASS 아님. **현재 속도 체감 = FAIL 신고·실사용 재검증 전**, 100%를 실제 속도 완료 표시로 쓰지 않는다.

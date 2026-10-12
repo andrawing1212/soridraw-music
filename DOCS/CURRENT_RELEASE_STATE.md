@@ -1,3 +1,15 @@
+## CURRENT — 「골목길 탐험대」 D1 실값 1 확인, app405 새로고침 0/1 분기 및 Stage416 Task EMPTY 다수 (2026-10-12 KST)
+
+- **사용자 추가 재현(사진/실사용):** 모바일 화면 껐다 켜면 빈 하트+0, 다시 새로고침 시 빈 하트+1 복귀; PC에서도 때로 0/1로 불일치. 같은 계정 PC·모바일 첫 좋아요/해제 실시간 일치는 PASS였으나 재진입·새로고침 이후 같은 곡만 수치 불일치 → **app405 제품 실사용 FAIL**. 이미 정상인 다른 곡과 임시 UI는 추가 수정 금지.
+- **단일 곡 READ-ONLY 원본 증거:** [Run 38255681232](https://github.com/andrawing1212/soridraw-music/actions/runs/38255681232) SUCCESS: 공개 추천곡 「골목길 탐험대」 1곡 식별, curated R2 count=**1**, 공유 R2 changed-card count=**1**, 공유 D1 `track_stats.like_count`=**1**. [Run 38256077221](https://github.com/andrawing1212/soridraw-music/actions/runs/38256077221) SUCCESS: `likes WHERE track_id=?` indexed 확인, 실재 canonical like row **1건**과 track_stats **1** 일치, 해당 조회 D1 rows_read=2, rows_written=0. 아이디/좋아요 사용자/비공개 내역 출력 없음. **따라서 reload 시 1은 임의 숫자 생성이 아니라 서버에 영속된 1.** 현재 기기의 0은 개인 미정산 optimistic overlay일 수 있으며, 그 서버 row가 현재 테스트 계정인지 다른 계정인지 **미확인**. 빈 하트+1도 다른 계정이 좋아요했다면 정상 가능, 절대 0 강제 수정 또는 data reset 금지.
+- **Stage416 정산 진단의 숨겨진 결함:** 이전 진단 Workflow `SETTLEMENT_TASK_NOT_DELIVERED\\s+`는 이중 이스케이프로 미전달 분류를 영원히 0으로 만드는 결함; 정규식 수정 commit `8218ad4b627d7efea9730b7e3c11a4d136333e7e`. [Run 38256513112](https://github.com/andrawing1212/soridraw-music/actions/runs/38256513112) SUCCESS: 최근 90분 익명 Task 미전달 로그 `EMPTY=19`, `RESCHEDULED=0`, `STALE=0`. Settle HTTP204는 19건이며 **19건 모두 처리할 Window 없음**. 해당 19건이 테스트 곡의 UID/window에서 왔다고 단정하면 안 됨. Callable HTTP200/204 다수이나 개별 클릭 `accepted:true` 증거는 없음. 416 D1 private acceptance=NO, 069 pending=NO, 공개 RTDB 좋아요 신호 마지막 갱신 10/10 UTC. Stage416 최종 정산 여전히 **FAIL/미확정**, 특히 클라이언트 즉시 개인 optimistic RTDB intent ≠ 서버 window accepted ≠ D1 canonical final.
+- **진단 도구 신뢰성 수정:** 처음 원격 Worker 대용량 버전 소스/배포 API 응답이 4KB에서 잘못된 JSON을 반환하며 Run 38254588916/38255263970 실패. 이전 [Run 38243351165](https://github.com/andrawing1212/soridraw-music/actions/runs/38243351165)의 소스 활성화 PASS에 근거하고, 새 한 곡 검사는 Cloudflare **현재 DB binding만** 재확인하도록 대용량 API 조회 생략. 초기 제목 정확일치 0건은 제목 중 문자/공백 표시 차이였음; NFKC/공백정규화/부분 두 토큰 매칭으로 하나 정확 식별. 환경/사용자 데이터 변경 없음.
+- **금번 변경:** PREVIEW GitHub 진단 Workflow 및 트리거만 수정·push (최신 product source app405 유지). Firebase Hosting/Functions/Worker/D1/R2/Rules/main/production 코드 및 원본 데이터 수정·배포·마이그레이션·삭제 **0**.
+- **다음 작업 고정:** 더 이상의 숫자 UI 땜질/좋아요 강제 초기화 중단. 개인정보 비노출의 **같은 클릭 operationId 단위** PREVIEW 서버 접수 proof→UID/window pending seal→Cloud Task 결과→signed handoff D1→public bus를 좁혀 실제 빠진 구간을 확정한 뒤 한곳만 최소 수정. 공개 집계 숫자 1의 소유 회원 여부는 증명되지 않았으므로 개인 데이터를 스캔하거나 타인 계정 데이터를 추정하지 않음. 이후 TypeScript/Build/좋아요·팔로우 회귀, Worker/D1 비용, Work 독립 감사, PREVIEW 실기기; TEST/PRODUCTION 금지.
+- **진행률:** 근본 원인 조사 3/4·75%(server count + queue-class 분류 완료 / 개인 operation 증거 미확보); Stage416 전체 1/4·25%, 앱 속도 5/5·100%, 5분 최종 정산 3/4·75%(제품 FAIL). 새 배포 없음.
+
+---
+
 ## CURRENT — PREVIEW app405 추천곡 reload 숫자 복원 보정 배포 PASS / Stage416 서버 최종 정산 여전히 FAIL (2026-10-12 KST)
 
 - **실사용 신고:** app404에서 같은 계정 PC↔모바일 하트 즉시 동기화/새로고침은 사용자 일부 곡 PASS 확인. 하지만 추천곡 `골목길 탐험대`에서 PC 해제 직후 0 → 모바일 새로고침 후 빈 하트+1 → 모바일 재좋아요 +2 → PC 새로고침 +2. 사진 3장 확보. 주의: 빈 하트+1은 **다른 계정의 1좋아요가 있을 때도 합법적인 표시**여서 사진만으로 canonical 원본이 부정확하다고 단정하거나 사용자 레코드 삭제 금지.

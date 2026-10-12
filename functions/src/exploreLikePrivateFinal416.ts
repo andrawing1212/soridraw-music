@@ -1,0 +1,79 @@
+import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
+import type {Database} from 'firebase-admin/database';
+
+// Stage416 OFF: internal ONLY, NOT exported from Functions index.ts.
+// A future Worker callback must independently PROVE exact 069 D1 drain AND
+// successful personal-R2 publication BEFORE signing this payload.
+// Never turn a queued/repair-needed acknowledgement into canonical truth.
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const batch=/^l069_[0-9]{13}_[0-9a-f]{64}$/;
+const safeUid=(s:unknown)=>typeof s==='string'&&
+ /^[A-Za-z0-9_-]{1,128}$/.test(s);
+type FinalRow={trackId:string;operationId:string;liked:boolean;likeCount:number};
+type SignedFinal={uid:string;windowId:string;version:number;
+ signedAtMs:number;canonicalD1:string;canonicalProof:string;
+ personalLikeSnapshot:string;batchIds:string[];settledBatchIds:string[];
+ rows:FinalRow[]};
+export async function publishAuthenticatedPrivateFinal416(
+ db:Database, raw:string, signature:string, secret:string,
+ nowMs=Date.now(),
+):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';version:number;count:number}>{
+ if(!raw||raw.length>160_000||typeof secret!=='string'||secret.length<32||
+    !/^[0-9a-f]{64}$/i.test(signature||'')||!Number.isSafeInteger(nowMs)||
+    nowMs<=0)throw Error('416_FINAL_INVALID_AUTH');
+ const actual=createHmac('sha256',secret).update(raw,'utf8').digest();
+ const claimed=Buffer.from(signature,'hex');
+ if(claimed.length!==actual.length||!timingSafeEqual(claimed,actual))
+   throw Error('416_FINAL_BAD_SIGNATURE');
+ let data:SignedFinal;
+ try{data=JSON.parse(raw) as SignedFinal;}
+ catch{throw Error('416_FINAL_BAD_JSON');}
+ if(!safeUid(data?.uid)||!uuid.test(data.windowId)||
+    !Number.isSafeInteger(data.version)||data.version<=0||
+    !Number.isSafeInteger(data.signedAtMs)||
+    data.signedAtMs<nowMs-15*60_000||data.signedAtMs>nowMs+30_000||
+    data.canonicalD1!=='settled'||data.canonicalProof!=='atomic-drain-batch-418'||
+    data.personalLikeSnapshot!=='changed-track-r2'||
+    !Array.isArray(data.rows)||data.rows.length<1||data.rows.length>256||
+    !Array.isArray(data.batchIds)||data.batchIds.length<1||
+    data.batchIds.length>6||!Array.isArray(data.settledBatchIds)||
+    data.settledBatchIds.length!==data.batchIds.length||
+    data.batchIds.some(id=>typeof id!=='string'||!batch.test(id))||
+    new Set(data.batchIds).size!==data.batchIds.length||
+    data.batchIds.some(id=>!data.settledBatchIds.includes(id))||
+    new Set(data.settledBatchIds).size!==data.settledBatchIds.length)
+    throw Error('416_FINAL_CANONICAL_PROOF_REQUIRED');
+ const seen=new Set<string>();
+ for(const row of data.rows){
+   if(!row||typeof row.trackId!=='string'||!row.trackId||
+      row.trackId.length>512||!uuid.test(row.operationId)||
+      typeof row.liked!=='boolean'||!Number.isSafeInteger(row.likeCount)||
+      row.likeCount<0||row.likeCount>1_000_000_000||seen.has(row.trackId))
+     throw Error('416_FINAL_BAD_ROW');
+   seen.add(row.trackId);
+ }
+ const stable={uid:data.uid,windowId:data.windowId,version:data.version,
+   batchIds:data.batchIds,rows:data.rows};
+ const digest=createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+ let reason:'DUPLICATE'|'STALE'|'CONFLICT'='STALE';
+ const result=await db.ref('privateLikeFinal416/'+data.uid).transaction(
+   (rawState:unknown)=>{
+     const current=rawState as {version?:number;digest?:string}|null;
+     const prev=Number(current?.version||0);
+     if(!Number.isSafeInteger(prev)||prev<0)throw Error('416_FINAL_STATE_CORRUPT');
+     if(prev>=data.version){
+       reason=prev===data.version?
+         (current?.digest===digest?'DUPLICATE':'CONFLICT'):'STALE';
+       return;
+     }
+     return {version:data.version,canonicalD1:'settled',
+       personalLikeSnapshot:'changed-track-r2',windowId:data.windowId,
+       digest,rows:data.rows,issuedAtMs:nowMs};
+   },undefined,false,
+ );
+ if(!result.committed){
+   if(reason==='CONFLICT')throw Error('416_FINAL_SAME_VERSION_CONFLICT');
+   return {status:reason,version:data.version,count:data.rows.length};
+ }
+ return {status:'PUBLISHED',version:data.version,count:data.rows.length};
+}

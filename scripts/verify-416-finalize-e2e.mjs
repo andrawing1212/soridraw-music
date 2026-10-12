@@ -83,13 +83,15 @@ vm.runInNewContext(compile(readFileSync('src/services/explorePublicLikeSyncServi
    PROFILE_MEDIA:{get:async key=>{
     publicR2Reads++;
     const id=decodeURIComponent(key.split('/').pop().replace(/\.json$/,''));
-    assert(['song-0','song-1'].includes(id),'only visible changed cards are read');
+    assert(publicCards.has(id),'only changed-track R2 cards are read');
     return {text:async()=>JSON.stringify(publicCards.get(id))};
    }},
   });
  },
 });
-let screen=[{id:'song-0',likeCount:0,liked:false},{id:'song-1',likeCount:0,liked:false},
+// Delayed B observer has 80 visible tracks, so the changed-card receiver
+// must request 50+30 from R2, not silently truncate at the endpoint's cap.
+let screen=[...rows.map(row=>({id:row.trackId,likeCount:0,liked:false})),
  {id:'unrelated',likeCount:9,liked:true}];
 const timers=[],cachePatches=[];
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
@@ -131,9 +133,12 @@ await drainScreen();
 assert.equal(screen[0].likeCount,1,'A settled like updates B without navigation');
 assert.equal(screen[1].likeCount,2);
 assert.equal(screen[0].liked,false,'B personal heart stays untouched');
-assert.equal(screen[2].likeCount,9);
-assert.equal(publicRequests,1);assert.equal(publicR2Reads,2);
-assert.equal(cachePatches.length,2);
+assert.equal(screen[80].likeCount,9);
+assert(screen.slice(0,80).every((row,i)=>row.likeCount===i+1),
+ 'all 80 visible tracks must repaint after a coalesced RTDB signal');
+assert.equal(publicRequests,2,'80 changed cards fetched in 50+30 requests');
+assert.equal(publicR2Reads,80);
+assert.equal(cachePatches.length,80);
 assert.equal(lastClaim.rows.length,80);
 for(let i=0;i<80;i++){
  const row=lastClaim.rows.find(x=>x.trackId==='song-'+i);
@@ -147,7 +152,7 @@ assert.equal(retry.receiptStatus,'DUPLICATE');
 assert.equal(r2puts,1,'exact retry R2 W0');
 assert.equal(callbacks,2);
 await drainScreen();
-assert.equal(publicRequests,1,'exact replay does not fetch cards again');
+assert.equal(publicRequests,2,'exact replay does not fetch cards again');
 sqlite.prepare('INSERT INTO explore_like_batches_069 VALUES(?)').run(batchIds[0]);
 await assert.rejects(finalizePrivateHandoff416({...args,version:81}),/416_FINAL_069_STILL_PENDING/);
 assert.equal(r2puts,1);assert.equal(callbacks,2);
@@ -162,8 +167,8 @@ await finalizePrivateHandoff416({...args,version:81,nowMs:clock,
  rows:[{trackId:'song-0',liked:false,operationId:op(1000)}]});
 await drainScreen();
 assert.equal(screen[0].likeCount,0,'settled unlike delivers zero to B');
-assert.equal(screen[0].liked,false);assert.equal(screen[2].liked,true);
-assert.equal(publicRequests,2);assert.equal(publicR2Reads,3);
+assert.equal(screen[0].liked,false);assert.equal(screen[80].liked,true);
+assert.equal(publicRequests,3);assert.equal(publicR2Reads,81);
 assert.equal(timers.length,0,'no idle polling remains');
 console.log('STAGE416_SIGNED_FINAL_PUBLIC_BUS_R2_ENDPOINT_B_SCREEN_LIKE_UNLIKE=PASS');
 console.log('STAGE416_B_PERSONAL_HEART_UNCHANGED_NO_FEED_NO_D1_NO_IDLE_POLL=PASS');

@@ -1,3 +1,17 @@
+## CURRENT — app401 PREVIEW 교차 반대 좋아요 deadlock 수정 배포 / 실기기 재검증 대기 (2026-10-12 KST)
+
+- **사용자 실기기 app400 FAIL:** 같은 계정에서 PC 단독 좋아요↔해제는 모바일에 정상 반영됐지만, **PC 좋아요 → 모바일 해제** 또는 반대 순서가 한 번 발생하면 해당 곡이 양쪽 기기에서 더 이상 정상 수렴하지 않음. 이후 5분 이상 지나도 다른 기기에 최종 상태가 적용되지 않는 실제 결함 확인.
+- **원인:** Stage416은 각 기기의 미정산 outbox를 무조건 최신으로 보호했고, 다른 기기에서 더 늦게 발생한 반대 클릭의 private intent/final receipt가 와도 **operationId가 다르다는 이유만으로 이전 기기의 오래된 outbox가 계속 우선**했다. 그 결과 양쪽 기기가 서로의 최신 클릭을 막는 deadlock이 발생.
+- **app401 수정:** UID private intent의 RTDB transaction version을 로컬 outbox에 `privateIntentVersion416`으로 보존하고, Callable 등록 결과의 server global version을 `privateServerVersion416`으로 보존. 다른 기기의 더 높은 intent version이 증명되면 오래된 local outbox만 retire하고, 5분 final receipt도 더 높은 server version이 증명될 때만 이전 registered outbox를 정리. 현재 세션의 미등록/더 최신 클릭은 계속 보호.
+- **app400 잔여 stale row 복구:** app401 새 세션에서 fresh remote click을 받으면, app400에서 version 필드가 없던 **이전 세션 stale outbox**만 안전하게 retire 가능. 현재 세션에서 막 생성된 unversioned click은 삭제하지 않음. app400 stuck 곡은 app401로 양쪽 새로고침 후 한 번의 새 교차 클릭부터 복구 검증 필요.
+- **자동검증:** 408 Run **38207825043 SUCCESS**. 신규 `verify-401-cross-device-opposite-like.mjs`에서 PC like→mobile unlike, mobile like→PC unlike, 오래된 final receipt 차단, app400 prior-session stale recovery를 실행형 검사. 기존 Stage416/Functions Build/TypeScript/Build/personal-like/catalog/191/390/417/live RTDB additive-only audit 모두 PASS. Follow-only Run **38207581150 SUCCESS**.
+- **PREVIEW 배포:** Run **38208007174 SUCCESS**, source trigger `99a4d5763e030a66f3119616b1020cd625a9ad0e`. `preview.soridraw.com` remote **app401**, exact build PASS. shared RTDB Rules deploy SKIPPED, Worker/Functions/D1 변경 0, TEST/PRODUCTION unchanged PASS.
+- **보호:** PREVIEW Worker `c6486c81-e05d-4014-ac41-ca24e9b6efb7` 및 Stage416 Functions 6개 그대로. 사용자 원본 migration/backfill/delete/overwrite 0. main/production branch 변경 0.
+- **진행률:** ① Stage416 전체 사용자 목표 **1/4·25% 유지**, ② 앱 속도 기존 자동검증 **5/5·100%**, ③ 개인 좋아요 5분 저장 **3/4·75% 유지**. app401 자동/배포 PASS지만 **PC↔mobile 교차 반대 클릭 + app400 stuck 곡 복구 + 마지막 클릭 5분 수렴 + 실비용** 실기기 PASS 전 4/4 금지.
+- **다음:** PC/모바일 모두 app401로 새로고침 후 기존 stuck 곡과 새 곡 각각에서 양방향 반대 클릭을 반복하고, 마지막 클릭 후 5분 이상 상태 수렴 확인. 실패 시 TEST 승격 금지.
+
+---
+
 ## CURRENT — app400 PREVIEW Stage416③ 실제 활성 배포 PASS / 실사용 검증만 남음 (2026-10-12 KST)
 
 - **배포 소스:** `d84526c4c2cef96e79fed011645aa96b68f1137f` (app400 activation candidate `746bfe936cc1e54bb819618e92d924ccdabc119b` + PREVIEW release trigger).

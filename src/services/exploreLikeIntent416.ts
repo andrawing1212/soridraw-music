@@ -13,17 +13,19 @@ type IntentRow416 = {
   trackId: string;
   ownerUid: string;
   liked: boolean;
+  optimisticLikeCount?: number;
   operationId: string;
   version: number;
   at: number;
   status: IntentStatus416;
 };
 type IntentEnvelope416 = { version: number; results: IntentRow416[] };
-type IntentObservation416 = Pick<IntentRow416, 'operationId' | 'version' | 'at' | 'status'>;
-type LocalIntent416 = Pick<IntentRow416, 'liked' | 'operationId' | 'version' | 'at'> & {
+type IntentObservation416 = Pick<IntentRow416, 'operationId' | 'optimisticLikeCount' | 'version' | 'at' | 'status'>;
+type LocalIntent416 = Pick<IntentRow416, 'liked' | 'optimisticLikeCount' | 'operationId' | 'version' | 'at'> & {
   status?: 'pending' | 'accepted'; // optional for previous persisted hints
 };
-type IntentMutation416 = Pick<IntentRow416, 'trackId' | 'ownerUid' | 'liked' | 'operationId'>;
+type IntentMutation416 = Pick<IntentRow416, 'trackId' | 'ownerUid' | 'liked' | 'operationId'> &
+  { optimisticLikeCount: number };
 type IntentSettlement416 = Pick<IntentRow416, 'trackId' | 'operationId'> & { status: 'accepted' | 'rejected' };
 
 const localIntentByUid416 = new Map<string, Record<string, LocalIntent416>>();
@@ -44,7 +46,11 @@ const validRow416 = (value: unknown): value is IntentRow416 => {
   const row = value as Partial<IntentRow416>;
   return typeof row.trackId === 'string' && row.trackId.length > 0 && row.trackId.length <= 512 &&
     typeof row.ownerUid === 'string' && row.ownerUid.length <= 128 &&
-    typeof row.liked === 'boolean' && validOperation416(row.operationId) &&
+    typeof row.liked === 'boolean' &&
+    (row.optimisticLikeCount === undefined ||
+      (Number.isSafeInteger(Number(row.optimisticLikeCount)) &&
+       Number(row.optimisticLikeCount) >= 0 && Number(row.optimisticLikeCount) <= 1000000000)) &&
+    validOperation416(row.operationId) &&
     Number.isSafeInteger(Number(row.version)) && Number(row.version) > 0 &&
     Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0 &&
     (row.status === 'pending' || row.status === 'accepted' || row.status === 'rejected');
@@ -166,7 +172,9 @@ export const subscribeExploreLikeIntent416 = (
           if (row.status === 'rejected') {
             delete entries[row.trackId];
             entriesChanged = true;
-            changed.push({ trackId: row.trackId, liked: row.liked, operationId: row.operationId, version: row.version, at: row.at, status: row.status });
+            changed.push({ trackId: row.trackId, liked: row.liked,
+              optimisticLikeCount: row.optimisticLikeCount,
+              operationId: row.operationId, version: row.version, at: row.at, status: row.status });
           } else if (existing && existing.status !== 'accepted') {
             entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
             entriesChanged = true;
@@ -182,6 +190,8 @@ export const subscribeExploreLikeIntent416 = (
       if (existing?.operationId === row.operationId && existing.version === row.version) continue;
       entries[row.trackId] = {
         liked: row.liked,
+        ...(Number.isSafeInteger(Number(row.optimisticLikeCount))
+          ? { optimisticLikeCount: Number(row.optimisticLikeCount) } : {}),
         operationId: row.operationId,
         version: row.version,
         at: row.at,
@@ -193,8 +203,10 @@ export const subscribeExploreLikeIntent416 = (
     if (entriesChanged) saveLocal416(uid, entries);
     // Durable overlay FIRST, watermark SECOND, UI notification LAST.
     setSeenVersion416(uid, version);
-    changed.forEach(({ trackId, liked, operationId, version, at, status }) =>
-      onChanged(trackId, liked, { operationId, version, at, status }));
+    changed.forEach(({ trackId, liked, optimisticLikeCount, operationId, version, at, status }) =>
+      onChanged(trackId, liked, {
+        operationId, optimisticLikeCount, version, at, status,
+      }));
   },
   (error) => console.warn('[416] Private intent signal unavailable; accepted like path retained:', error),
   );
@@ -227,6 +239,7 @@ export const publishExploreLikeIntent416 = async (
         trackId: mutation.trackId,
         ownerUid: mutation.ownerUid,
         liked: mutation.liked,
+        optimisticLikeCount: Math.max(0, Math.floor(Number(mutation.optimisticLikeCount || 0))),
         operationId: mutation.operationId,
         version,
         at,

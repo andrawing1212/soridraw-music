@@ -57,8 +57,10 @@ const http=async(_url,req)=>{
  sends++;const seal=JSON.parse(req.body);
  assert.equal(seal.version,2);
  assert.equal(seal.rows.length,2);
- return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'queued',
-  version:seal.version,batchIds:['l069_'+String(seal.sealedAtMs).padStart(13,'0')+'_'+'a'.repeat(64)]}})};
+ return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',
+  canonicalProof:'atomic-drain-batch-418',personalLikeSnapshot:'changed-track-r2',
+  finalReceipt:'PUBLISHED',version:seal.version,
+  batchIds:['l069_'+String(seal.sealedAtMs).padStart(13,'0')+'_'+'a'.repeat(64)]}})};
 };
 // A new UID window cannot be dropped merely because an older frozen seal
 // has not yet received its exact Worker acknowledgement.

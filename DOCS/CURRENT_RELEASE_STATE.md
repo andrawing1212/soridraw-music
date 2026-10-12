@@ -1,3 +1,15 @@
+## CURRENT — app403 5분 공개 좋아요 FAIL 후 Stage416 조기 Task 재예약 손실 방지 PREVIEW 서버 1개 배포 PASS / 실기기 재검증 전 (2026-10-12 KST)
+
+- **신고/실제 진단:** PREVIEW app403에서도 A 마지막 좋아요+5분 이후 B 공개 숫자 미반영. RTDB `publicSync/exploreLike` 최근 시각 2026-10-10 03:46:49 UTC (10/12 갱신 0). 공유 D1 `explore_like_private_acceptance_416`/pending `explore_like_batches_069` 각각 `SELECT 1 LIMIT 1`(rows_read 1, rows_written 0)로 기록 없음. Callable 다수 HTTP200, Schedule HTTP200 08:34:12 UTC, Settle HTTP204 08:39:11 UTC. 기존 task 응답 204에 세부 `DELIVERED|RESCHEDULED|STALE|EMPTY` 증거가 없어 실건 원인을 확정하지 못함.
+- **재현 가능한 소스 위험:** Task가 RTDB 마감 시각보다 미세하게 일찍 실행되면 `NOT_DUE` 재예약 시 **원래 일정과 동일한 task ID**가 생성될 수 있고, 기존 `functions/task-already-exists`를 정상 처리하면서 예약이 남지 않을 수 있음. 재현 검사 추가 및 `NOT_DUE` 재예약을 마감+1초로 옮겨 서로 다른 ID로 보존. Task 미전달 결과의 상태 이름만 익명화 로그에 남겨 원인 재발시 식별(UID/track/window/task ID 출력 금지). 이 경합이 사용자 A의 실제 유일한 원인이라는 증거는 아직 없음.
+- **코드:** `functions/src/exploreLikePrivateDeadline416.ts`, `functions/src/exploreLikePrivateTask416.ts`, `scripts/verify-416-private-deadline.mjs` 최소 수정. app403 client, private click/same-account instant sync, Worker/D1/R2/Rules/public-sync UI 변경 0. 408 QA [38226817256](https://github.com/andrawing1212/soridraw-music/actions/runs/38226817256) **SUCCESS**, Stage416 backend readonly preflight [38226817252](https://github.com/andrawing1212/soridraw-music/actions/runs/38226817252) **SUCCESS**.
+- **서버 배포:** 기존 `stage416SettlePrivateWindowCandidate` 단일 Function만 isolated source로 PREVIEW 배포. [Run 38227381079](https://github.com/andrawing1212/soridraw-music/actions/runs/38227381079) **SUCCESS**, Task queue pre/post RUNNING, HMAC secret 유지, main/production refs unchanged 확인. 고정 소스 target `f3a8d5206904f75c3963509a33da62263df5fcf5`, trigger commit `0683b556e04e9e124461ca0ade8225ed58f80d5c`. 중복 후속 실행 `38227594413`은 target/parent 불일치 **배포 전 FAIL**, `38227470400`은 CANCELLED로 실제 추가 배포 0.
+- **환경/데이터/비용:** Firebase Hosting app403 그대로; PREVIEW Settle Task Function 1개만 교체. Cloudflare Worker/D1 schema, R2, RTDB Rules, TEST/PRODUCTION, 공유 사용자 원본 데이터 변경 없음. 1초 연장 재예약은 `NOT_DUE` 예외에만 적용하며 정상 5분 정책 불변. 추가 D1/Firestore read/write/전체 Feed 조회 없음(소스 기준), 실비용 미측정.
+- **남은 게이트:** 새로운 추가 클릭이 아닌 **마지막 클릭 이후 5분+여유**에서 B 숫자 자동 반영 실기기 확인. 같은 계정 즉시동기화/좋아요·해제/팔로우 정상 보호. 재차 FAIL이면 새 익명 `SETTLEMENT_TASK_NOT_DELIVERED` 로그와 RTDB 공개 버스 시각/서명 D1 접수 exact 근거로 분기 확인 후에만 추가 코드 수정. 사용자 원본 데이터 강제 재처리/대량 읽기 금지.
+- **진행률:** Stage416 전체 1/4·25%, 앱 속도 5/5·100%, 개인 좋아요 5분 3/4·75% (실사용 재검증 전, 이전 FAIL).
+
+---
+
 ## CURRENT — app403 실사용 5분 공개 좋아요 FAIL / 실제 정산 대기열 원인 미확정 (2026-10-12 KST)
 
 - **사용자 검증:** PREVIEW app403에서도 A계정 마지막 좋아요 5분 후 B계정 공개 숫자가 자동으로 갱신되지 않는다고 재신고. **Stage416 canonical/public 실사용 FAIL**, TEST 승격 금지. 이전 app403 Firebase Function/Hosting 배포 SUCCESS만으로 기능 PASS 아님.

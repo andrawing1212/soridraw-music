@@ -96,6 +96,32 @@ jobs:
           print('LOGS_READONLY_NO_UID_NO_PAYLOAD=PASS')
           PY
 
+      - name: Verify callable-to-queue runtime identity without IAM changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          project='soridraw-app-866a5'
+          names=['recordPrivateLike416','stage416SchedulePrivateWindowCandidate',
+                 'stage416SettlePrivateWindowCandidate']
+          identities={}
+          for name in names:
+            p=subprocess.run(['gcloud','functions','describe',name,'--gen2',
+              '--region=us-central1','--project',project,'--format=json'],
+              capture_output=True,text=True)
+            if p.returncode:raise SystemExit('STAGE416_FUNCTION_IDENTITY_READ_DENIED_'+name)
+            d=json.loads(p.stdout)
+            if d.get('state')!='ACTIVE':raise SystemExit('STAGE416_FUNCTION_NOT_ACTIVE_'+name)
+            account=d.get('serviceConfig',{}).get('serviceAccountEmail') or 'UNKNOWN'
+            identities[name]=account
+            print('STAGE416_FUNCTION_RUNTIME_IDENTITY',name,account)
+          same=identities[names[0]]==identities[names[1]]!='UNKNOWN'
+          print('STAGE416_CALLABLE_AND_SCHEDULER_SAME_SERVICE_ACCOUNT='+('YES' if same else 'NO'))
+          print('STAGE416_TASK_CREATION_PERMISSION_INFERRED_ONLY_FROM_SCHEDULER_SUCCESS_NOT_TESTED')
+          print('STAGE416_NO_IAM_MUTATION=PASS')
+          PY
+
       - name: Confirm no mutation commands
         run: echo 'READONLY_DIAGNOSTIC=true;DEPLOY=0;DATABASE_WRITE=0'
 

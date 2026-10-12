@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-// A live read-only gate for the ONE previously approved receipt bool and
-// Stage416's ONE additional private-only child. This preserves exact-match
-// validation of every other shared RTDB permission, including old clients.
+// Read-only shared RTDB gate. The local release candidate may add:
+// 1) the previously approved canonicalSettled417 bool,
+// 2) the UID-private exploreLikeIntent416 child,
+// 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt.
+// Every other permission/schema byte must remain equivalent to the live rules.
 const local = JSON.parse(readFileSync('database.rules.json','utf8'));
 const user = local?.rules?.userSync?.$uid;
 const accepted = user?.exploreLike?.results?.$index?.canonicalSettled417;
 const intent = user?.exploreLikeIntent416;
+const batch416 = local?.rules?.privateLikeBatch416;
+const final416 = local?.rules?.privateLikeFinal416;
+
 assert.equal(accepted?.['.validate'], 'newData.isBoolean()');
 assert.equal(user['.read'], 'auth != null && auth.uid === $uid');
 assert.equal(user['.write'], 'auth != null && auth.uid === $uid');
@@ -19,6 +24,20 @@ assert.equal(intent.results?.$index?.status?.['.validate'],
 assert.equal(intent['$other']?.['.validate'], false);
 assert.equal(intent.results?.$index?.['$other']?.['.validate'], false);
 
+// New Stage416 pending/sealed server state is never client-readable/writable.
+// Only the compact final receipt is owner-readable; clients can never write it.
+assert.deepEqual(batch416, {
+  '.read': false, '.write': false,
+  '$uid': { '.read': false, '.write': false },
+});
+assert.deepEqual(final416, {
+  '.read': false, '.write': false,
+  '$uid': {
+    '.read': 'auth != null && auth.uid === $uid',
+    '.write': false,
+  },
+});
+
 const stable = x => JSON.stringify(sortObject(x));
 function sortObject(value) {
   if (Array.isArray(value)) return value.map(sortObject);
@@ -27,44 +46,69 @@ function sortObject(value) {
   );
   return value;
 }
-const before416 = structuredClone(local);
-delete before416.rules.userSync.$uid.exploreLikeIntent416;
-const before418 = structuredClone(before416);
-delete before418.rules.userSync.$uid.exploreLike.results.$index.canonicalSettled417;
-const beforeBoolOnly = structuredClone(local);
-delete beforeBoolOnly.rules.userSync.$uid.exploreLike.results.$index.canonicalSettled417;
-const compare = remote =>
-  stable(remote) === stable(local) ? 'already-live'
-    : stable(remote) === stable(before416) ? 'additive-private-intent-only'
-    : stable(remote) === stable(before418) ? 'additive-private-intent-and-bool'
-    : stable(remote) === stable(beforeBoolOnly) ? 'additive-bool-only' : null;
+const withoutIntent = source => {
+  const out = structuredClone(source);
+  delete out.rules.userSync.$uid.exploreLikeIntent416;
+  return out;
+};
+const withoutBool = source => {
+  const out = structuredClone(source);
+  delete out.rules.userSync.$uid.exploreLike.results.$index.canonicalSettled417;
+  return out;
+};
+const withoutServer416 = source => {
+  const out = structuredClone(source);
+  delete out.rules.privateLikeBatch416;
+  delete out.rules.privateLikeFinal416;
+  return out;
+};
+
+const variants = [
+  ['already-live', local],
+  ['additive-private-intent-only', withoutIntent(local)],
+  ['additive-bool-only', withoutBool(local)],
+  ['additive-private-intent-and-bool', withoutBool(withoutIntent(local))],
+  ['additive-server-only-416', withoutServer416(local)],
+  ['additive-server-only-416-and-private-intent',
+    withoutIntent(withoutServer416(local))],
+  ['additive-server-only-416-and-bool',
+    withoutBool(withoutServer416(local))],
+  ['additive-server-only-416-private-intent-and-bool',
+    withoutBool(withoutIntent(withoutServer416(local)))],
+];
+const compare = remote => {
+  const key = stable(remote);
+  return variants.find(([,candidate]) => stable(candidate) === key)?.[0] || null;
+};
 
 if (process.argv.includes('--self-test')) {
-  assert.equal(compare(before418), 'additive-private-intent-and-bool');
-  assert.equal(compare(before416), 'additive-private-intent-only');
-  assert.equal(compare(beforeBoolOnly), 'additive-bool-only');
-  assert.equal(compare(local), 'already-live');
-  for (const baseline of [before418, before416, beforeBoolOnly]) {
-    const malicious = structuredClone(baseline);
+  for (const [status,candidate] of variants) {
+    assert.equal(compare(candidate), status);
+    const malicious = structuredClone(candidate);
     malicious.rules.userSync.$uid['.read'] = 'auth != null';
     assert.equal(compare(malicious), null, 'weakened private permissions must fail');
-    const altered = structuredClone(baseline);
-    altered.rules.userSync.$uid.exploreLike['.validate'] = 'newData.exists()';
-    assert.equal(compare(altered), null, 'legacy accepted schema change must fail');
   }
   const mutated = structuredClone(local);
   mutated.rules.userSync.$uid.exploreLikeIntent416.results.$index.liked['.validate'] = 'newData.isString()';
   assert.equal(compare(mutated), null, 'private intent validation change must fail');
+  const exposedBatch = structuredClone(local);
+  exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
+  assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');
+  const writableFinal = structuredClone(local);
+  writableFinal.rules.privateLikeFinal416.$uid['.write'] = 'auth != null && auth.uid === $uid';
+  assert.equal(compare(writableFinal), null, 'client-writable final receipt must fail');
   console.log('418_SHARED_RTDB_ADDITIVE_BOOL_ONLY_SELF_TEST=PASS');
-  console.log('416_PRIVATE_RTDB_ONE_NODE_ADDITIVE_ONLY_SELF_TEST=PASS');
+  console.log('416_PRIVATE_RTDB_INTENT_ADDITIVE_ONLY_SELF_TEST=PASS');
+  console.log('416_SERVER_ONLY_RTDB_TWO_NODE_ADDITIVE_SELF_TEST=PASS');
 } else {
   const path = process.argv[2];
   if (!path) throw new Error('Live read-only RTDB rules JSON path required');
   const remote = JSON.parse(readFileSync(path,'utf8'));
   const status = compare(remote);
   if (!status) throw new Error(
-    'Shared RTDB live/source divergence outside allowed 417 boolean and 416 private-only node: STOP before any PUT or PREVIEW Hosting deploy'
+    'Shared RTDB live/source divergence outside allowed 417/416 additive nodes: STOP before any PUT or PREVIEW Hosting deploy'
   );
   console.log('418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS '+status);
   console.log('416_PRIVATE_RTDB_ADDITIVE_PREFLIGHT=PASS');
+  console.log('416_SERVER_ONLY_RTDB_ADDITIVE_PREFLIGHT=PASS');
 }

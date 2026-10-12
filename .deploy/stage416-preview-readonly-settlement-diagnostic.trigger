@@ -4,3 +4,4 @@ gcp_logging_read_only=true
 shared_data_write=false
 deployment=false
 read_timing_and_cloud_tasks_queue=true
+retry_after_diagnostic_dependency_install=true

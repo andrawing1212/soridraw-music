@@ -1,10 +1,10 @@
-app405-stage416-curated-private-count-reload
-app_version=405
+app406-stage416-mobile-auth-curated-unlike-reload-parity
+app_version=406
 scope=preview-hosting-only
-source_code_commit=9537665929f2c1d6de0ea981966ea308c7a4cca0
-approval=user_auto_preview_deploy_on_safe_fix_2026-10-12
-evidence_408_qa=38244194395_SUCCESS
-evidence_live_readonly=38243351165_SUCCESS
+source_code_commit=82be614a2ee8bfbae0a1b8a77f900f2a1bf0ff9d
+approval=user_auto_preview_deploy_on_verified_fix_2026-10-12
+evidence_408_qa=38259528489_SUCCESS
+evidence_single_track_D1_readonly=38256077221_SUCCESS
 deploy_shared_rtdb_rules=false
 worker_change=false
 functions_change=false

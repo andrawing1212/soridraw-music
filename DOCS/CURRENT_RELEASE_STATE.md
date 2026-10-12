@@ -1,3 +1,16 @@
+## CURRENT — app403 실사용 5분 공개 좋아요 FAIL / 실제 정산 대기열 원인 미확정 (2026-10-12 KST)
+
+- **사용자 검증:** PREVIEW app403에서도 A계정 마지막 좋아요 5분 후 B계정 공개 숫자가 자동으로 갱신되지 않는다고 재신고. **Stage416 canonical/public 실사용 FAIL**, TEST 승격 금지. 이전 app403 Firebase Function/Hosting 배포 SUCCESS만으로 기능 PASS 아님.
+- **서버 읽기 전용 진단:** GitHub Runs [38224738129](https://github.com/andrawing1212/soridraw-music/actions/runs/38224738129), [38225061128](https://github.com/andrawing1212/soridraw-music/actions/runs/38225061128), [38225299155](https://github.com/andrawing1212/soridraw-music/actions/runs/38225299155), [38225766150](https://github.com/andrawing1212/soridraw-music/actions/runs/38225766150). GCP Functions 4개 ACTIVE, Master 설정 노드 null로 실제 기본 private=5m/public=5m, Cloud Tasks `stage416SettlePrivateWindowCandidate` queue RUNNING.
+- **시간 근거:** 2026-10-12 **08:34:12 UTC** Schedule Function HTTP200, **08:39:11 UTC** Settle Function HTTP204 기록. 단 Cloud Tasks 내부 Task ID/해당 UID를 로그상 연결하지 못했으므로 사용자 A의 정확한 클릭에 대응한 성공 여부까지 증명하지 못함. HTTP204는 DELIVERED/RESCHEDULED/STALE/EMPTY 등의 세부 결과를 알려주지 않음. CloudTasks `tasks.list`가 배포 service account IAM 권한 부족으로 거절됨; 읽기 전용 권한도 무단 확대하지 않음.
+- **실제 데이터 경계:** RTDB 파생 버스 `publicSync/exploreLike`의 최근 발행 시각은 2026-10-10 03:46:49 UTC, **10/12 정산 관련 새 발행 0**. 공유 D1에서 `SELECT 1 FROM explore_like_private_acceptance_416 LIMIT 1`, `SELECT 1 FROM explore_like_batches_069 LIMIT 1` 각각 bounded rows_read=1, rows_written=0. `private_acceptance_416` 존재 row 없음, `explore_like_batches_069` pending row 없음. 즉 Stage416 새 Worker 서명 접수가 D1까지 완료된 증거가 없고, app403 공개 버스 수정은 현재 테스트에서 실행될 기회가 없었음. 사용자 원본/개인 RTDB 미열람, 개별 UID/곡 ID 미출력.
+- **원인 범위:** ① 개인 서버 등록 (HTTP 응답 존재, 본 테스트의 `accepted=true` exact proof 미확인) → ② onCreate 예약 (1회 기록) → ③ Cloud Task dispatcher 결과 상태/재예약 여부 (HTTP204지만 세부 불명) → ④ 서명 Worker→D1 접수 **사이**가 우선 조사 대상. 이후 ⑤ 개인 R2/최종 callback/공개 버스/관찰자 R2는 아직 실건 검증 불가. R2/card/UI만 또 수정하거나 전체 Feed 새로고침/polling 추가 금지.
+- **다음 안전 작업:** 이미 처리된 공유 사용자 데이터 강제 재생성이나 D1/backfill 금지. 익명화된 `DELIVERED|RESCHEDULED|STALE|EMPTY` Task 결과 로그 또는 단일 UID/Window exact read-only 증거 확보 후 그 분기만 최소 수정. Task Function 재배포는 Cloud Tasks queue/기존 예약 보존 preflight 전까지 금지. 사용자에게 반복 A/B 클릭 테스트 요구 금지.
+- **환경:** preview GitHub에 읽기전용 workflow/trigger와 이 상태문서만 추가. 신규 app/Function/Worker/Rules 배포 0; app403 PREVIEW 그대로. main/production, 공유 원본 사용자 데이터 비변경. 비용 추적 소규모 SELECT only. 기존 같은 계정 PC↔mobile 즉시동기화 보호.
+- **진행률 유지:** Stage416 1/4·25%, 앱 속도 5/5·100%, 개인 좋아요 5분 3/4·75%(실사용 FAIL).
+
+---
+
 ## CURRENT — PREVIEW app403 Stage416 공개 좋아요 + 50곡 초과 알림 수정 실제 배포 SUCCESS (2026-10-12 KST)
 
 - **사용자 요청:** PREVIEW 배포 승인. **배포 대상 코드 commit:** `b0a2473f6f67b23f43daceb83e100b952c42c0bc`, app403. 사용자 원본 데이터 전환·backfill·delete 없음.

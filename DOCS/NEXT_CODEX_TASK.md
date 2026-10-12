@@ -1,3 +1,15 @@
+## NEXT — app406 PASS 고정, Stage416 Callable accepted ↔ Scheduler onCreate 최초 단절점 확정 (2026-10-12 UTC)
+
+- **현재 상태:** 모바일 PC↔mobile 좋아요/해제+새로고침 app406 사용자 실사용 PASS. `preview.soridraw.com` app406 유지; UI/저장 카탈로그/캐시 복원 추가 수정 금지. TEST/PRODUCTION 금지.
+- **서버 진단:** [38261359548](https://github.com/andrawing1212/soridraw-music/actions/runs/38261359548), [38262662237](https://github.com/andrawing1212/soridraw-music/actions/runs/38262662237), [38263043769](https://github.com/andrawing1212/soridraw-music/actions/runs/38263043769) 모두 readonly SUCCESS. Scheduler `stage416SchedulePrivateWindowCandidate` Cloud Run request 100m **0건**, 독립 settle task는 33회 HTTP204(최근 Task EMPTY 다수), Callable HTTP200 다수. `explore_like_private_acceptance_416` D1 row 존재 NO / 공개 RTDB like signal 10/10. Schedule은 ACTIVE + ref-created `privateLikeBatch416/{uid}/window`, Eventarc us-central1/instance=* binding 정상 등록. Function이 0회 기록됐다는 사실은 server-click accepted 또는 window creation 실패와 Eventarc 전달 실패 어느 쪽도 확정하지 않는다.
+- **Codex High 조사 목표:** A) app406 `setExploreTrackLike`의 immediate `publishExploreLikeIntent416` (화면만)과 실제 `publishPrivateRtdbBatchClick416` Callable 응답(`accepted:boolean,reason,version`)을 동일 operation 기준 구별. B) Auth/AppCheck/lock/deviceSeq / retry `PRIOR_WINDOW_NEEDS_SEAL` / `STALE_OR_DUPLICATE` 조건별 durable outbox 보장. C) `recordUserPrivateClick416` 반환 `accepted:true`가 실제 `privateLikeBatch416/{uid}/window` create와 일치하는지 테스트 계정 하나에 한정해 증명. D) Eventarc `onValueCreated` trigger가 그 DB instance/ref에 event를 받는지/Cloud Tasks enqueue 성공 여부 확인. E) 같은 window의 due seal→Worker→D1 acceptance→R2 public bus. 추측 수정 중단. 왜 Task는 EMPTY인지 정확한 직전 window 상태를 입증.
+- **안전한 구현 방향:** 필요하면 기존 Admin/Master 기본 OFF 진단 기능에 **현재 로그인한 본인 계정, 현재 한 곡·한 operation**만: 브라우저가 이미 받은 Callable 응답의 승인/거절 reason, 로컬 outbox의 `privateServerRegistered416` 상태를 일회성으로 노출. 일반 사용자 이벤트 반복 로깅/페이지 진입 시 서버 read/write/전체 UID scan/Task 강제 실행 금지. Raw UID/trackId/operationId/Task ID/secret/log data를 CI 등에 출력하지 않는다. 라이브 DB/RTDB 진단이 승인되지 않는다면 source-only 에뮬레이터 회귀 + 독립 감사로 우선 정리. Functions/Worker 실제 디버깅용 배포는 IAM/보안/공유 데이터 영향 독립 검증 후만.
+- **완료 합격선:** 서버 응답 accepted:true → 실제 하나의 new window 생성 → Eventarc/Task → 정확히 5분+합리적 지연 뒤 D1 canonical count, R2/public B 화면 일치. TypeScript/Build/좋아요·팔로우/비용/로컬 캐시 회귀 PASS; 대상 commit 고정 후 Work 독립 감사, PREVIEW 단독 배포, 실사용 PASS. 그런 증거가 없으면 75% 고정.
+- **비변경:** 공유 사용자 원본 수정/삭제/변환/재집계/백필, main/production, 기존 UI/디자인·정상 app406 복원 모두 금지. 정상 페이지 Firestore/D1 R0/W0 보호.
+- **진행률:** Stage416 1/4·25%, 앱 성능 100%, 최종 정산 3/4·75%. 예약 경로 감사 진행 중, 서버 E2E 미달.
+
+---
+
 ## NEXT — Stage416 서버 최종 정산 원인 확정 / app406 모바일 PASS 동결 (2026-10-12 14:15 UTC)
 
 - **사용자 실사용:** PREVIEW app406 모바일 좋아요/해제 후 새로고침 PASS를 2026-10-12 14:09 UTC 확인. `ExplorePage.tsx`의 app406 복원 및 기존 PC↔모바일 UI 변경 **금지**. 제품 Hosting app406 유지.

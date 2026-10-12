@@ -103,7 +103,9 @@ jobs:
             if isinstance(payload,dict):payload=str(payload.get('message',''))
             match=status_pattern.search(str(payload))
             if match:status_counts[match.group(1).upper()]+=1
-          print('STAGE416_SETTLEMENT_TASK_NONDELIVERY_COUNTS',json.dumps(status_counts,sort_keys=True))
+          for kind in ('RESCHEDULED','STALE','EMPTY'):
+            print('STAGE416_NONDELIVERY_'+kind+'='+str(status_counts[kind]))
+          print('STAGE416_SETTLEMENT_NONDELIVERY_TOTAL='+str(sum(status_counts.values())))
           print('LOGS_READONLY_NO_UID_NO_PAYLOAD=PASS')
           PY
 

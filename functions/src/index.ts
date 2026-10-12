@@ -28,6 +28,7 @@ import {
   readLikeBatchTiming416, changeLikeBatchTiming416,
   parseLikeBatchTiming416,
 } from "./exploreLikeBatchSettings416";
+import { handleAuthenticatedPrivateClick416 } from "./exploreLikePrivateCallable416";
 import {
   approveLikeWithAtomicLedgerCandidate420,
   recoverExactAtomicLikeApprovalCandidate420,
@@ -4341,6 +4342,19 @@ export const masterRecoverHeldAtomicLike420 = onCall(
 // retry policy, shared Rules/old client compatibility and operator alert are
 // approved together. A trigger deployed alone would create delivery gaps.
 
+
+// Stage416 PREVIEW backend release: endpoint exports are server-only/inert until
+// the PREVIEW client + Worker hard flags are enabled. TEST/PRODUCTION clients
+// cannot call this path because their deployed app code keeps the candidate OFF.
+export const recordPrivateLike416 = onCall(
+  { region: "us-central1", enforceAppCheck: true },
+  async (request) => handleAuthenticatedPrivateClick416(admin.database(), request),
+);
+export {
+  stage416SchedulePrivateWindowCandidate,
+  stage416SettlePrivateWindowCandidate,
+} from "./exploreLikePrivateTask416";
+export { privateLikeFinalReceipt416Candidate } from "./exploreLikePrivateFinalEndpoint416";
 
 // Stage416 Master-only timing configuration. These source-only Callables are
 // NOT DEPLOYED until the staged 5m private and shared public aggregation paths

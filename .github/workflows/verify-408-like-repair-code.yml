@@ -13,6 +13,9 @@ on:
       - 'cloudflare/explore-worker/canonical/source-sha256.txt'
       - 'scripts/verify-416-cross-env-ordering.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-handoff-416.sql'
+      - 'cloudflare/explore-worker/migrations/20261012_01_stage416_private_acceptance_additive.sql'
+      - 'database.rules.json'
+      - 'scripts/verify-416-preview-backend-release.mjs'
       - 'scripts/verify-416-private-handoff-atomic.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
       - 'scripts/verify-416-shared-writer-d1.mjs'
@@ -193,6 +196,7 @@ jobs:
           node scripts/verify-416-private-deadline.mjs
           node scripts/verify-explore-like-noop-render.mjs
           node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-416-preview-backend-release.mjs
           node scripts/verify-416-worker-route-runtime.mjs
           node scripts/verify-416-like-batch-master.mjs
       - name: Firebase Functions TypeScript build for isolated Stage420 server source

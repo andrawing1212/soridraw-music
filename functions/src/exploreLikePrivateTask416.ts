@@ -61,7 +61,8 @@ export const stage416SettlePrivateWindowCandidate=onTaskDispatched(
    rateLimits:{maxConcurrentDispatches:50}},
  async request=>{
    const task=request.data as PrivateWindowTask416;
-   const endpoint=String(process.env.SORIDRAW_PRIVATE_BATCH416_WORKER_URL||'');
+   const endpoint=String(process.env.SORIDRAW_PRIVATE_BATCH416_WORKER_URL||
+     'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/internal/private-like-handoff-416');
    const secret=SECRET_416.value();
    if(!endpoint||!secret)throw Error('416_TASK_DEPLOYMENT_BINDING_MISSING');
    await dispatchPrivateWindowTask416(

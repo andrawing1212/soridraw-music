@@ -48,8 +48,13 @@ assert.equal(queueCalls[0].opt.id,queueCalls[1].opt.id,
  'same window creation retry must use identical Cloud Tasks ID');
 assert.match(queueCalls[0].opt.id,/^s416-[a-f0-9]{64}$/);
 await assert.rejects(settle({data:{uid:'uid-A',windowId:uuid}}),/BINDING_MISSING/);
-assert.doesNotMatch(readFileSync('functions/src/index.ts','utf8'),
- /stage416SchedulePrivateWindowCandidate|stage416SettlePrivateWindowCandidate/);
+const indexSource=readFileSync('functions/src/index.ts','utf8');
+assert.match(indexSource,/stage416SchedulePrivateWindowCandidate/);
+assert.match(indexSource,/stage416SettlePrivateWindowCandidate/);
+assert.match(indexSource,/recordPrivateLike416 = onCall/);
+assert.match(indexSource,/enforceAppCheck: true/);
+assert.match(readFileSync('functions/src/exploreLikePrivateTask416.ts','utf8'),
+ /soridraw-explore-preview\.andrawing1212\.workers\.dev\/v1\/internal\/private-like-handoff-416/);
 console.log('STAGE416_RTD_B_NEW_WINDOW_ONLY_CLOUD_TASK_ENQUEUE=PASS');
 console.log('STAGE416_TASK_IDEMPOTENCE_AND_FAIL_CLOSED_BINDINGS=PASS');
-console.log('STAGE416_TASK_TRIGGERS_NOT_DEPLOYED=PASS');
+console.log('STAGE416_PREVIEW_SERVER_EXPORTS_AND_APPCHECK=PASS');

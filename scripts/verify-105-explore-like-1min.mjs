@@ -46,7 +46,11 @@ assert.doesNotMatch(worker, /event-like-batch-5m-103/);
 if (appVersion >= 120) {
   assert.match(like, /SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918/);
   assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000;/);
-  assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) => \(pending\.retryCount \|\| 0\) === 0\)/);
+  if (appVersion >= 399) {
+    assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) =>[\s\S]{0,120}\(pending\.retryCount \|\| 0\) === 0 && eligibleGuardedMutation420\(pending\)\)/);
+  } else {
+    assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) => \(pending\.retryCount \|\| 0\) === 0\)/);
+  }
   assert.match(like, /latestEligibleUpdatedAt \+ EXPLORE_LIKE_IDLE_FLUSH_MS_120/);
   assert.match(like, /schedulePendingFlush\(user\)/);
   assert.doesNotMatch(like, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 20_000/);

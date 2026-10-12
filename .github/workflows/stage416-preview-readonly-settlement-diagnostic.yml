@@ -93,6 +93,17 @@ jobs:
           print('SEVERITY_COUNTS',json.dumps({f'{a}/{b}':n for (a,b),n in severities.items()},sort_keys=True))
           print('ERROR_CODE_COUNTS',json.dumps({f'{a}/{b}':n for (a,b),n in errors.items()},sort_keys=True))
           print('REDACTED_ERROR_TIMELINE',json.dumps(samples))
+          # Extract ONLY the public non-delivery class, never its arguments,
+          # UID, payload, route, sealed rows or task identifiers.
+          status_counts=collections.Counter()
+          status_pattern=re.compile(r'SETTLEMENT_TASK_NOT_DELIVERED\\s+(RESCHEDULED|STALE|EMPTY)',re.I)
+          for row in logs:
+            if row.get('resource',{}).get('labels',{}).get('service_name')!='stage416settleprivatewindowcandidate':continue
+            payload=row.get('textPayload') or row.get('jsonPayload',{}).get('message') or ''
+            if isinstance(payload,dict):payload=str(payload.get('message',''))
+            match=status_pattern.search(str(payload))
+            if match:status_counts[match.group(1).upper()]+=1
+          print('STAGE416_SETTLEMENT_TASK_NONDELIVERY_COUNTS',json.dumps(status_counts,sort_keys=True))
           print('LOGS_READONLY_NO_UID_NO_PAYLOAD=PASS')
           PY
 

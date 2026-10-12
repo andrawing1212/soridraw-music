@@ -312,8 +312,25 @@ jobs:
             return body.data;
           };
           const data=await safeGet(base+'/v1/curated?collection=soridraw&limit=20');
-          const matches=(data?.items||[]).map(row=>row?.track||row)
-            .filter(row=>typeof row?.title==='string'&&row.title.trim()==='골목길 탐험대');
+          const entries=Array.isArray(data?.items)?data.items:[];
+          console.log('STAGE416_PUBLIC_CURATED_ITEM_COUNT='+entries.length);
+          console.log('STAGE416_PUBLIC_CURATED_FIRST_ROW_KEYS='+
+            JSON.stringify(Object.keys(entries[0]||{}).filter(x=>/track|id|title|name/i.test(x)).slice(0,8)));
+          console.log('STAGE416_PUBLIC_CURATED_FIRST_TRACK_KEYS='+
+            JSON.stringify(Object.keys(entries[0]?.track||{}).filter(x=>/id|title|name|like|count/i.test(x)).slice(0,10)));
+          // Titles may be stored in other public display fields or contain
+          // invisible separators. Do not reveal account identifiers or IDs.
+          const rows=entries.map(row=>row?.track||row);
+          const candidates=rows.map(row=>({
+            row,
+            title:String(row?.title||row?.name||row?.trackTitle||row?.displayTitle||'')
+              .normalize('NFKC').replace(/\\s+/g,'').trim(),
+          }));
+          const matches=candidates.filter(x=>x.title.includes('골목길')&&
+            x.title.includes('탐험대')).map(x=>x.row);
+          console.log('STAGE416_PUBLIC_CURATED_MATCH_COUNT='+matches.length);
+          console.log('STAGE416_PUBLIC_CURATED_TITLE_FIELD_COUNT='+
+            candidates.filter(x=>x.title.length>0).length);
           if(matches.length!==1)throw Error('CURATED_TRACK_TITLE_NOT_UNIQUE_OR_ABSENT_'+matches.length);
           const publicTrack=matches[0];
           const trackId=String(publicTrack?.id||publicTrack?.trackId||'').trim();

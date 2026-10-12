@@ -1,3 +1,13 @@
+## NEXT — PREVIEW app403 Stage416 만료 창 복구 배포 이후 실서비스 최종 저장 추적 (2026-10-12 KST)
+
+- **고정 PREVIEW:** 앱 Hosting app403, Cloudflare signed Worker 기존, Firebase `recordPrivateLike416` 단일 Function 수정 배포 [38237388824](https://github.com/andrawing1212/soridraw-music/actions/runs/38237388824) PASS, source `b2b1126d149db95030895a8aa57782a5e47f17f0`; 나머지 Function/Worker/D1/Rules/공유 데이터/TEST/PRODUCTION 변경 없음.
+- **가장 먼저 확인할 단일 실사용 증거:** 사용자가 재테스트할 때 기존 공개곡 「성적표 대소동」을 A 계정에서 새 인증 클릭(이전 5분 이상 지난 경우)을 하면 만료된 정확한 서버 UID/window 복구 Task가 생성되는지, 새 클릭 original operationId가 bounded 재전송으로 정확히 받아들여지는지, 마지막 클릭+5분(새 창일 경우) 후 Worker 서명→D1 접수/069 drain→개인 R2·signed final callback→RTDB `publicSync/exploreLike`→B 화면 숫자가 1:1 일치하는지 순서대로 검증. 화면 숫자만으로 canonical PASS 주장 금지.
+- **읽기 전용 진단:** 기존 `.github/workflows/stage416-preview-readonly-settlement-diagnostic.yml` + trigger를 재사용하여 새 클릭 전후의 Function 익명 결과, Task 실행/NOT_DELIVERED, 공개 버스 마지막 시각, D1 acceptance/069 pending O(1) SELECT를 비교. CloudTasks `tasks.list` 권한 없음: 읽기 권한 확대하지 말고 결과 미확인으로 보고. 개인정보/UID/곡 ID/Task ID 로그 출력 및 전체 스캔 금지.
+- **재실패 시:** 실패 시점 이후 Task 로그의 `SETTLEMENT_TASK_NOT_DELIVERED` 분기·Cloud Task 예약/응답·signed handoff 도달 여부를 먼저 확정하고 그 **단일 단계만** 최소 수정. 이전 HTTP200/204는 accepted/canonical 확정 증거 아님. 새로 클릭이 발생하지 않으면 old orphan 자동 수거 없음; 전체 privateLikeBatch416 열람/강제 backfill 금지.
+- **릴리스 게이트:** 기능 정상/실비용/PC↔모바일/기존 like-follows 보호 실사용 확인 전 Stage416③ 3/4·75% 및 TEST/PRODUCTION 중단 유지. 기존 app403 UI와 좋아요 즉시동기화/공개 상태/Studio 하트/Music Note 보호.
+
+---
+
 ## NEXT — app403 서버 고립 만료 창 PREVIEW 단일 Callable 복구 릴리스 검증 (2026-10-12 KST)
 
 - **기준 코드:** preview `b1e2462215328b925e651781ef57186f39141a55`; 408 run 38234160600 PASS. PREVIEW Hosting app403 그대로, Functions 수정본 **미배포**. live RTDB/D1 진단 38232992419 성공이지만 사용자 클릭별 accepted/finalized 정확한 증거 없음.

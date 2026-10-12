@@ -70,9 +70,10 @@ export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;
 const STAGE420_PRIVATE_SIGNAL_SOURCE: 'legacy' | 'atomic-v2' = 'legacy';
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // app399 verified behavior.
- // Stage416 canonical 5m integration stays OFF until user-private live replay,
- // Master settings and all environments' old-client compatibility are proven.
-const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;
+ // Stage416 app400 PREVIEW activation: backend/Worker prerequisites are live and
+ // TEST/PRODUCTION compatibility is already deployed. Final completion still requires
+ // same-account PC/mobile and cost verification before TEST feature activation.
+const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true;
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 

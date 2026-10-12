@@ -1,6 +1,6 @@
-requested_at=2026-10-12T13:25:00+09:00
+requested_at=2026-10-12T13:27:00+09:00
 requested_by=user_approved_continue_stage416_preview_activation
-product_code_target=b9caf4983b22798909f58be5595eeebcae738ed3
+product_code_target=0c9c00eb49a5469407802c4fb071f533fa862ba4
 release_source_target=canonical_preview_worker_stage416_signed_handoff
 release_purpose=preview_only_stage416_signed_internal_handoff_backend_activation
 app_version=399
@@ -21,5 +21,5 @@ repair_shared_like_snapshot_191=false
 preview_only=true
 test_production_unchanged_required=true
 approval=user_continue_after_stage416_backend_prerequisite_success
-retry=1
-retry_reason=verify105_updated_for_current_app399_guarded_idle_flush
+retry=2
+retry_reason=install_root_typescript_for_stage416_release_verifiers

@@ -32,11 +32,11 @@ const compiled=ts.transpileModule(transport,{compilerOptions:{
 }}).outputText;
 const module416={exports:{}};let callableCalls416=0;
 vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
-  require:id=>id==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
+  require:moduleId=>moduleId==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
     callableCalls416++;
     assert.equal(click.operationId,id);
     return {data:{ok:true,accepted:true,version:12,count:3}};
-  }}:(()=>{throw Error('unexpected import '+id)})(),
+  }}:(()=>{throw Error('unexpected import '+moduleId)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;

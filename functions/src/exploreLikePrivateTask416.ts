@@ -65,7 +65,11 @@ export const stage416SettlePrivateWindowCandidate=onTaskDispatched(
      'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/internal/private-like-handoff-416');
    const secret=SECRET_416.value();
    if(!endpoint||!secret)throw Error('416_TASK_DEPLOYMENT_BINDING_MISSING');
-   await dispatchPrivateWindowTask416(
+   const result=await dispatchPrivateWindowTask416(
      getDatabase(),queue416(),task,endpoint,secret);
+   // One privacy-safe result per non-delivery while investigating app403.
+   // Never log UID, track IDs, private payloads, or task identifiers.
+   if(result.status!=='DELIVERED')
+     console.warn('[416] SETTLEMENT_TASK_NOT_DELIVERED',result.status);
  },
 );

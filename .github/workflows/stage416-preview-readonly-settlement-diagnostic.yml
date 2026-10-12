@@ -299,6 +299,62 @@ jobs:
             throw Error('STAGE416_PREVIEW_WORKER_SIGNED_DELIVERY_BINDING_OR_ROUTE_MISMATCH');
           NODE
 
+      - name: Compare one public curated card with shared R2 card and canonical D1
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+          SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          const base='https://soridraw-explore-preview.andrawing1212.workers.dev';
+          const safeGet=async(url)=>{
+            const resp=await fetch(url,{headers:{Accept:'application/json',Origin:'https://preview.soridraw.com','Cache-Control':'no-cache'}});
+            if(!resp.ok)throw Error('CURATED_PUBLIC_READ_HTTP_'+resp.status);
+            const body=await resp.json();
+            if(body?.ok!==true)throw Error('CURATED_PUBLIC_BAD_RESPONSE');
+            return body.data;
+          };
+          const data=await safeGet(base+'/v1/curated?collection=soridraw&limit=20');
+          const matches=(data?.items||[]).map(row=>row?.track||row)
+            .filter(row=>typeof row?.title==='string'&&row.title.trim()==='골목길 탐험대');
+          if(matches.length!==1)throw Error('CURATED_TRACK_TITLE_NOT_UNIQUE_OR_ABSENT_'+matches.length);
+          const publicTrack=matches[0];
+          const trackId=String(publicTrack?.id||publicTrack?.trackId||'').trim();
+          if(!trackId||trackId.length>512)throw Error('CURATED_TRACK_ID_INVALID');
+          console.log('STAGE416_SINGLE_PUBLIC_TRACK_HASH12='+createHash('sha256').update(trackId).digest('hex').slice(0,12));
+          const curatedCount=Number(publicTrack.likeCount??publicTrack?.stats?.likeCount);
+          if(!Number.isSafeInteger(curatedCount)||curatedCount<0)
+            throw Error('CURATED_LIKE_COUNT_INVALID');
+          const changed=await safeGet(base+'/v1/public-like-cards?trackIds='+encodeURIComponent(trackId));
+          const card=(changed.items||[]).find(row=>row.trackId===trackId);
+          const r2Count=card?Number(card.likeCount):null;
+          const token=process.env.CLOUDFLARE_API_TOKEN,account=process.env.CLOUDFLARE_ACCOUNT_ID,db=process.env.SHARED_D1_ID;
+          const sql='SELECT COALESCE(s.like_count,0) AS like_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id=? AND t.is_public=1 AND t.status=\'published\' LIMIT 1';
+          const resp=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${db}/query`,
+            {method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+             body:JSON.stringify({sql,params:[trackId]})});
+          const payload=await resp.json();
+          const result=payload?.result?.[0];
+          if(!resp.ok||payload?.success!==true||result?.success!==true||
+             !Array.isArray(result.results)||result.results.length!==1)
+            throw Error('CURATED_CANONICAL_D1_EXACT_READ_FAILED');
+          const rowsRead=Number(result.meta?.rows_read??0),rowsWritten=Number(result.meta?.rows_written??0);
+          if(rowsWritten!==0||rowsRead>10)
+            throw Error('CURATED_EXACT_D1_COST_EXCEEDED');
+          const canonicalCount=Number(result.results[0].like_count);
+          console.log('STAGE416_PUBLIC_TRACK_CURATED_COUNT='+curatedCount);
+          console.log('STAGE416_PUBLIC_TRACK_R2_CARD_COUNT='+(r2Count===null?'ABSENT':r2Count));
+          console.log('STAGE416_PUBLIC_TRACK_CANONICAL_D1_COUNT='+canonicalCount);
+          console.log('STAGE416_PUBLIC_TRACK_CURATED_EQUALS_CANONICAL='+String(curatedCount===canonicalCount).toUpperCase());
+          console.log('STAGE416_PUBLIC_TRACK_R2_EQUALS_CANONICAL='+(r2Count===null?'CARD_MISSING':String(r2Count===canonicalCount).toUpperCase()));
+          console.log('STAGE416_PUBLIC_TRACK_D1_ROWS_READ='+rowsRead);
+          console.log('STAGE416_PUBLIC_TRACK_D1_ROWS_WRITTEN='+rowsWritten);
+          console.log('STAGE416_SINGLE_TRACK_PUBLIC_AUDIT_READONLY=PASS');
+          NODE
+
       - name: Check existence of pending canonical queue with two O1 SELECTs
         shell: bash
         env:

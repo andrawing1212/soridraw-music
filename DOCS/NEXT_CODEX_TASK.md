@@ -1,3 +1,13 @@
+## NEXT — PREVIEW app404 새로고침 복원 + Stage416 5분 최종 확정 실기기 증거 (2026-10-12 KST)
+
+- **제품 기준:** app404 Firebase Hosting only [Run 38241014684](https://github.com/andrawing1212/soridraw-music/actions/runs/38241014684) SUCCESS, exact build/version/TEST·PRODUCTION unchanged. 408 QA [38240795296](https://github.com/andrawing1212/soridraw-music/actions/runs/38240795296) SUCCESS, RTDB Rules/Functions/Worker/D1/R2 비변경. 이전 Stage416 one-function repair [38237388824](https://github.com/andrawing1212/soridraw-music/actions/runs/38237388824) ACTIVE.
+- **즉시 진행:** 사용자가 확인한 동일 계정 PC↔모바일 좋아요/해제 실시간 동기화 → 양쪽 새로고침 뒤 하트·viewer 임시 숫자 일치 → 반대 클릭 → 새로고침 재일치. 이미 받은 그 기기의 bounded 잠정 hint 복원만 기대할 수 있으며 멀티 디바이스 완전 cold 신규 기기 캐시 초기화 없음.
+- **다음 핵심 실패 확인:** 마지막 클릭 +5분 30초에도 A/B 공개 likeCount가 자동 반영되지 않으면 Stage416 private Task→Worker→D1 acceptance→final receipt→publicSync bus 재진단. HTTP200/204만으로 canonical PASS 주장 금지. scoped O(1) read-only 진단, 공유 RTDB/D1 무단 수정/backfill 금지. 임시 hint TTL 이후 서버 실패 시 이전 값 복귀 위험은 여전함.
+- **필수 보호:** RTDB private hint는 canonical 증명이 아니며 정확한 operationId final/accepted/rejected 우선, 이전 반대 클릭 보호. app404 로컬 복원으로 D1/Firestore 추가 read/write 0, 페이지 진입 mutation 0, 기존 app160/app164/401/402/416 개인/공개/팔로우 기능 유지. PC/모바일 실사용 성공과 5분 최종 정산 실사용 성공을 따로 보고.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, 5분 정산 3/4·75% (제품 실사용 미검증/이전 FAIL). 배포 완료는 실사용 PASS가 아님.
+
+---
+
 ## NEXT — app403 PC↔모바일 실시간 하트가 새로고침 후 이전 상태로 복귀하는 결함 (2026-10-12 KST)
 
 - **실사용 증거:** 사용자 제공 PC·모바일 동시 화면에서 "창문을 조금 열고", "조금 달라진 기분", "성적표 대소동"의 개인 채운 하트/계정 내 임시 숫자가 서로 다름. 같은 계정 PC↔모바일 실시간 클릭 수신은 동작하나, 새로고침 후 각각 과거 개인/캐시 상태로 복귀. 정상 아님, 실사용 FAIL.

@@ -1,3 +1,14 @@
+## CURRENT — Stage416③ 앱 재시작 미접수 좋아요 복구 및 서버 정확 재접수 검증 PASS (2026-10-12 KST)
+
+- **코드 기준:** preview `3b68f646fcceb698c445271a29f1582d76296229`; GitHub exact [408 Run 38191517790](https://github.com/andrawing1212/soridraw-music/actions/runs/38191517790) **SUCCESS** (Stage416 source/runtime test, 앱 TypeScript/Build, Firebase Functions Build, 기존 like/follow 회귀, live shared RTDB Rules read-only). 관련 Follow-only [38191293870](https://github.com/andrawing1212/soridraw-music/actions/runs/38191293870) SUCCESS (선행 동일 클라이언트 코드).
+- **실제 코드 작업:** `functions/src/exploreLikePrivateServerClick416.ts`는 RTDB UID 직렬 transaction 안에서 현재 pending/sealed의 동일 trackId+liked+operationId+deviceId+deviceSequence를 정확히 재확인한 경우에만 `DUPLICATE_CONFIRMED` 접수증을 **쓰기 0**으로 반환하고 불명확한 오래된 클릭은 계속 거절. `src/services/exploreLikeService.ts`는 후보 앱에서 원래 outbox의 서버 접수 상태를 별도 필드로 영속 기록하고, 앱 재실행·온라인 복귀에 미접수된 동일 operationId+deviceSequence만 최대 3회/기기 세션·60초 최소간격으로 순차 재접수 시도; 사용자 계정 전환·신규 같은 곡 클릭 후 오래된 응답은 무시. 등록 성공은 **canonical 최종 완료가 아님**, 원본 outbox는 보존. 기존 Stage416 플래그 OFF라 app399 live 경로 변화 없음. 동작 코드/회귀검사 5개 파일 수정, Commit `e29ce9e4...` ~ `3b68f646...`.
+- **추가 발견된 승격 차단:** Stage416 signed Worker `cloudflare/explore-worker/runtime/like-private-batch-handoff-416.mjs`의 signed rows 정규화가 `operationId`를 D1 큐로 전달하기 전에 제거함. 따라서 현재 069→개인 R2/RTDB 127 신호에는 정확 operationId 기반 **PC/모바일 최종 ACK 및 outbox 자동 해제 증명 불가**. 본 작업에서는 공유 D1/Worker를 임의로 수정하지 않았으며, 최종 ACK 계약과 구형 TEST/PROD 데이터 동시 호환 및 10만 DAU 전체비용 증명 이후만 기능 활성화 검토.
+- **검증 수준:** 재기동 복구 경로는 source assertion / 서버 transaction 실행형 단위검증 / 앱·Functions 빌드 PASS. 브라우저 재기동·실 Firebase Cloud Tasks/R2/RTDB Worker 종단 E2E, PC↔모바일 실제 검사, 소진 재시도 복구, 물리 비용, 독립 Work audit **미검증**. 따라서 Stage416 전체 실사용 완료 1/4·25%, 앱 속도 과거 자동검증 5/5·100%(현재 앱 지연 신고 아님), Stage416③ 전체 source 후보 2/4·50%, 실서비스 5분 활성 0%. 작은 수정 완료률로 전체 진행률 상승시키지 말 것.
+- **배포/데이터:** PREVIEW Hosting app399 `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` (기존 기록), 기능 OFF, Firebase Hosting/Functions/Rules 및 Cloudflare Worker/D1/R2, shared 사용자 데이터 변경하지 않음. main/TEST 및 production/PRODUCTION 승격 없음.
+- **바로 다음 작업:** `operationId` 전달이 끊기는 지점부터 069→R2→RTDB 127 **최종 ACK-대기 해제**를 하위호환/저비용 방식으로 코드·실행형 E2E 완성하고, Work 독립 감사·3환경 코드 동작·실기기·청구비용을 확인. 그 전 Functions index export/Stage416 flag ON/공유 DB migration/배포 불가.
+
+---
+
 ## CURRENT — Stage416③ 이전 5분 창 만료 경합: 동일 클릭 한정 재시도 PASS (2026-10-12 KST)
 
 - **기준:** preview 코드 `ff3b1b590f71096e09751e8331acd6811e2bb8e4`, 자동검사 [408 Run 38190670770](https://github.com/andrawing1212/soridraw-music/actions/runs/38190670770) SUCCESS, follow-only [38190613340](https://github.com/andrawing1212/soridraw-music/actions/runs/38190613340) SUCCESS. 마지막 확인된 실제 PREVIEW Hosting app399 `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` 유지.

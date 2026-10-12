@@ -26,6 +26,26 @@ assert.match(branch,/patchExploreLikedTrackCachedCount091\(user\.uid, detail\.tr
 assert.doesNotMatch(branch,/publishExplorePublicLikeInvalidation192|patchExplorePublic|fetch\(/,
   'same-account provisional count must remain account-private UI/cache only');
 
+// app405: the exact curated sections were loading shared public R2 counts
+// directly after refresh, overwriting the already received private 416 pair.
+// Require local overlay on each curated data entrance; no shared R2 mutation.
+const curated405 = page.slice(page.indexOf('void getSoridrawCuratedTracks307(false)'),page.indexOf('}, [profileUid, submittedQuery]'));
+assert.match(curated405,/overlayExploreLikeDisplayCounts\(uid405, cards405\)/,
+  'curated cold/reload must reapply same-account provisional count');
+const managed405 = page.slice(page.indexOf('void getManagedSoridrawCuratedTracks307(user)'),page.indexOf('}, [user?.uid, curationManageRequested307'));
+assert.match(managed405,/overlayExploreLikeDisplayCounts\(user\.uid, normalized\)/,
+  'managed curated list must retain viewer-private count parity');
+assert.match(managed405,/setCuratedTracks307\(viewerCards405\.slice/,
+  'manager parity path must not reintroduce raw old count');
+const revised405=page.slice(page.indexOf('void revalidateSoridrawCuratedTracks335()'));
+assert.match(revised405,/overlayExploreLikeDisplayCounts\(uid405, cards405\)/,
+  'activity-only curated revision must preserve pending last click');
+assert.doesNotMatch(curated405+/''+managed405.slice(0,1200)+revised405.slice(0,600),
+  /persistExploreFeed|writeSoridrawPersistentCache|publishExplorePublicLikeInvalidation192/,
+  'viewer overlay is only UI and cannot mutate shared public caches');
+console.log('APP405_CURATED_REFRESH_PRIVATE_COUNT_OVERLAY=PASS');
+console.log('APP405_NO_SHARED_PUBLIC_COUNT_WRITE=PASS');
+
 console.log('APP402_SAME_ACCOUNT_HEART_AND_COUNT_ATOMIC_UI=PASS');
 console.log('APP402_UNLIKE_EMPTY_HEART_ZERO_COUNT_PRIVATE_SYNC=PASS');
 console.log('APP402_NO_PUBLIC_COUNT_EARLY_PUBLISH=PASS');

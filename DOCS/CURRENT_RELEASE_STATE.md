@@ -1,3 +1,15 @@
+## CURRENT — app406 실사용 PASS 보호, Stage416 예약 생성 이벤트 불명확 / 기능 배포 보류 (2026-10-12 UTC)
+
+- **사용자 정상확정:** 2026-10-12 14:09 UTC 모바일 좋아요 해제 후 새로고침 0 유지 PASS. app406 이 기능은 유지·수정 금지.
+- **서버 재검사 38261359548:** 호출 Callable 수백 건 HTTP200/204, Task 최근 90~100분 EMPTY=21, signed shared D1 `explore_like_private_acceptance_416` existence NO, 069 pending NO, RTDB 공개 숫자 bus 마지막 2026-10-10. 단일 「골목길 탐험대」 shared D1 canonical like row=1, 집계=1.
+- **로그 조회 누락 제거 38262662237:** 종전 서비스 통합 조회는 1200건 cap에 막혀 예약 생성 함수 로그를 단정할 수 없었음. 서비스별 독립 100분 조회: `stage416SchedulePrivateWindowCandidate` **로그 0건**, `stage416SettlePrivateWindowCandidate` 총 72 entries/HTTP204 33, `recordPrivateLike416` 600 entries(잘린 표본, HTTP200 247/204 101). 독립 예약 생성 0건은 중요한 단서지만 정확한 server accepted:true 부재로 원인 확정 불가.
+- **Eventarc 설정 읽기 전용 38263043769:** schedule Function ACTIVE, 이벤트 `google.firebase.database.ref.v1.created`, 필터 `privateLikeBatch416/{uid}/window`, instance wildcard, triggerRegion us-central1, Eventarc trigger resource 존재. 해당 100분 scheduler request log 0건; Settle EMPTY=23, 416 D1 acceptance 여전히 NO. 설정이 등록돼 있다는 뜻이지 RTDB window 생성 이벤트의 실제 수신 PASS는 아님.
+- **코드 구조 확인:** `src/services/exploreLikeService.ts`가 사용자 즉시 하트용 `publishExploreLikeIntent416`을 서버 `publishPrivateRtdbBatchClick416`과 독립 비동기로 실행하고 return. server-only Callable이 `accepted:true`를 증명해야 outbox의 `privateServerRegistered416` 설정. 거절/예외도 화면은 긍정적 상태를 유지할 수 있으며 해당 작업이 정상 canonical로 끝났다는 보장은 없음.
+- **다음 단계:** 진단/테스트 계정 1건에 한해 기존 Callable 반환 `accepted,reason,version`을 개인정보 비노출·로컬 기본 OFF로 확인하도록 좁힌 뒤, (A) 클릭의 RTDB server window create 실패 / (B) Eventarc onCreate 수신 실패 / (C) due Task 실패 중 한 갈래를 증명. 원인 확인 전 좋아요 UI 재수정·공유 D1 like 원본 삭제·전체 스캔·Task 강제 재실행·Worker migration 금지. 배포 승인은 PREVIEW 검증 완료 코드에만; 이 진단은 제품 재배포 안 함.
+- **검사/수정:** GitHub PREVIEW 읽기 전용 기존 Workflow/trigger 및 이 문서만 변경; 앱 Hosting app406, Functions, Worker, D1/R2/RTDB Rules, TEST/PRODUCTION 변경 없음. 416 서버 최종 정산 실사용 PASS 아님. 3중 진행률 Stage416 25%, 앱 속도 100%, 최종 5분 정산 75%(제품 미검증).
+
+---
+
 ## Stage416 후속 점검 — app406 실사용 PASS 이후 최종 정산 증거 불합격 (2026-10-12 14:15 UTC)
 
 - 사용자 app406 모바일 좋아요 해제+refresh PASS 확인 및 보호(직전 CURRENT). 같은 제품 release 406 유지.

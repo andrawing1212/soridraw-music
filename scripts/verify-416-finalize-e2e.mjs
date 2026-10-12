@@ -64,7 +64,9 @@ await assert.rejects(finalizePrivateHandoff416({...args,version:81}),/416_FINAL_
 assert.equal(r2puts,1);assert.equal(callbacks,2);
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const index=readFileSync('functions/src/index.ts','utf8');
-if (process.env.STAGE416_EXPECT_SIGNED_ROUTE === '1') {
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
+const expectSigned416=process.env.STAGE416_EXPECT_SIGNED_ROUTE === '1' || appVersion>=400;
+if (expectSigned416) {
   assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true/);
 } else {
   assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);

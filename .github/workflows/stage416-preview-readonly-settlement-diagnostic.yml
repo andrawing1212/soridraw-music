@@ -161,3 +161,55 @@ jobs:
                 'STATUS_CODE',t.get('lastAttempt',{}).get('responseStatus',{}).get('code','NONE'))
           print('STAGE416_QUEUE_READONLY=PASS')
           PY
+
+      - name: Read public derived signal timestamp only and task/final HTTP timeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,requests,datetime,json,subprocess,re
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          creds=service_account.Credentials.from_service_account_file(
+            os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ['GOOGLE_APPLICATION_CREDENTIALS'],
+            scopes=['https://www.googleapis.com/auth/firebase.database',
+                    'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          endpoint='https://soridraw-app-866a5-default-rtdb.firebaseio.com/publicSync/exploreLike.json'
+          response=requests.get(endpoint,params={'access_token':creds.token},timeout=20)
+          if response.status_code!=200:
+            raise SystemExit('PUBLIC_SIGNAL_READ_DENIED_HTTP_'+str(response.status_code))
+          doc=response.json()
+          if not isinstance(doc,dict):
+            print('PUBLIC_SYNC_ROOT_ABSENT')
+          else:
+            rows=doc.get('rows') or []
+            overflow=doc.get('overflow416') or []
+            r=lambda x:list(x.values()) if isinstance(x,dict) else x if isinstance(x,list) else []
+            at=doc.get('at')
+            accepted=[x.get('at',0) for x in r(rows)+r(overflow) if isinstance(x,dict)]
+            def stamp(t):
+              return datetime.datetime.fromtimestamp(t/1000,datetime.timezone.utc).isoformat() if isinstance(t,(int,float)) and t>0 else 'NONE'
+            print('PUBLIC_SIGNAL_LAST_PUBLISHED_UTC',stamp(at))
+            print('PUBLIC_SIGNAL_VISIBLE_ROWS',len(r(rows)))
+            print('PUBLIC_SIGNAL_OVERFLOW_ROWS',len(r(overflow)))
+            print('PUBLIC_SIGNAL_MAX_ACCEPTED_UTC',stamp(max(accepted,default=0)))
+            print('PUBLIC_SIGNAL_AGE_SECONDS',round((datetime.datetime.now(datetime.timezone.utc).timestamp()*1000-at)/1000) if isinstance(at,(int,float)) and at>0 else 'NONE')
+          svcs=['stage416settleprivatewindowcandidate',
+            'privatelikefinalreceipt416candidate','stage416scheduleprivatewindowcandidate']
+          expr='resource.type="cloud_run_revision" AND ('+' OR '.join('resource.labels.service_name="'+s+'"' for s in svcs)+')'
+          p=subprocess.run(['gcloud','logging','read',expr,'--project','soridraw-app-866a5',
+            '--freshness=90m','--limit=120','--format=json'],capture_output=True,text=True)
+          if p.returncode:raise SystemExit('CLOUD_FUNCTION_TIMELINE_READ_FAILED')
+          entries=json.loads(p.stdout or '[]')
+          errorpat=re.compile('416_[A-Z0-9_]{4,80}')
+          for x in sorted(entries,key=lambda x:x.get('timestamp',''))[-30:]:
+            name=x.get('resource',{}).get('labels',{}).get('service_name','?')
+            status=x.get('httpRequest',{}).get('status','NO_HTTP')
+            severity=x.get('severity','DEFAULT')
+            payload=x.get('textPayload') or str(x.get('jsonPayload',{}).get('message',''))
+            errors=list(dict.fromkeys(errorpat.findall(str(payload))))[:3]
+            print('STAGE416_EVENT',x.get('timestamp','')[:19],name,'HTTP',status,
+              'SEVERITY',severity,'ERROR_CODES',','.join(errors) or 'NONE')
+          print('PUBLIC_BUS_AND_TASK_TIMELINE_READONLY=PASS')
+          PY

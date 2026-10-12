@@ -124,7 +124,13 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
       : [];
   if (!Number.isSafeInteger(version) || version <= 0 ||
       !Number.isSafeInteger(at) || at <= 0 || !actorUid) return null;
-  const rows = rawRows
+  // 50+ Stage416 items arrive in one atomic snapshot rather than two
+  // overwritten notifications. Legacy writers send rows only.
+  const extra = value.overflow416;
+  const overflowRows = Array.isArray(extra) ? extra
+    : extra && typeof extra === 'object'
+      ? Object.values(extra as Record<string, unknown>) : [];
+  const rows = [...rawRows, ...overflowRows]
     .map((row): ExplorePublicLikeSignalRow192 | null => {
       if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
       const item = row as Record<string, unknown>;
@@ -135,7 +141,7 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
       return { trackId, ownerUid, at: rowAt };
     })
     .filter((row): row is ExplorePublicLikeSignalRow192 => Boolean(row))
-    .slice(0, PUBLIC_LIKE_SIGNAL_MAX_192);
+    .slice(0, 256);
   if (!rows.length) return null;
   return { version, at, actorUid, rows };
 };
@@ -223,7 +229,7 @@ export const subscribeExplorePublicLikeInvalidation192 = (
         const previousAt = seenTrackAt.get(row.trackId) || 0;
         if (row.at <= previousAt) return false;
         seenTrackAt.set(row.trackId, row.at);
-        while (seenTrackAt.size > PUBLIC_LIKE_SIGNAL_MAX_192 * 2) {
+        while (seenTrackAt.size > 512) {
           const oldest = seenTrackAt.keys().next().value as string | undefined;
           if (!oldest) break;
           seenTrackAt.delete(oldest);

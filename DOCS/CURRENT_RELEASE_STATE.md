@@ -1,3 +1,14 @@
+## CURRENT — Stage416 50+ 공개 알림 1회 원자 전송 소스 수정 후보 (2026-10-12 KST)
+
+- **기준:** preview `1184ea9de8adb76eb6e885ce41e71fbedbcf6ec5`, app402, 기존 ac04a72 공개 알림 누락 수정 미배포.
+- **문제:** 80곡을 50+30 연속 root 덮어쓰기로 보내면 slow onValue 수신자는 30곡을 놓칠 수 있음. ExplorePage 또한 R2 changed-card 최대 50개 제한.
+- **변경:** Function이 최대 256 변경 ID를 1회 RTDB transaction에 담고 legacy rows <=50 유지, 신규 optional overflow416은 server-only 전송. PREVIEW 수신자는 50 초과도 읽고 보이는 곡만 R2 changed-card 요청을 50개씩 처리. 기존 Rules, Worker, D1, 개인 하트/즉시동기화, UI 미변경. 80/256 delayed-observer, exact retry W0, 다른 actor 최신 watermark, A/B 실코드 fixture 검사 추가.
+- **비용:** root 공개 알림 최대 6 tx → 1 tx / 5분 완료 window. 새 D1/Firestore/R2 write 없음, 전체 Feed read 0. 50곡 초과 window에서 RTDB payload 최대 256 ID로 커지므로 100k active cost는 실측 미완료. 오프라인 장기간 또는 다른 UID window 간 root coalescing까지 완전 보장하는 영속 журнал은 아님. 실제 TEST/PRODUCTION 구형 클라이언트는 overflow416을 무시하며 legacy rows는 정상.
+- **게이트:** GitHub 408 TypeScript/Build/Function Build/Stage416/likes/follows 테스트, 독립 감사, 실제 A/B 5분 정산/Cloud Tasks/D1/R2/RTDB 비용 검사 전 PASS/TEST 승격 금지. 새 클라이언트와 Function 같이 PREVIEW 배포 시에만 50+ 수신 가능.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, 5분 개인 좋아요 3/4·75%(실사용 FAIL 이력).
+
+---
+
 ## CURRENT — app402 Stage416 서버 정산 후 공개 좋아요 알림 누락 수정 / preview 소스만, 미배포 (2026-10-12 KST)
 
 - **작업 기준:** GitHub preview `721202e8383cf3c36b6c638ef45d462c8d115d15`에서 시작. 사용자 신고: A 15:30 공개곡 좋아요, 마지막 클릭 +5분이 지난 15:43에도 B 공개 숫자 0. 같은 계정 PC↔mobile 즉시동기화는 사용자 PASS로 보호.

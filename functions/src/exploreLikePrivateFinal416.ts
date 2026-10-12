@@ -14,37 +14,39 @@ type SignedFinal={uid:string;windowId:string;version:number;
  personalLikeSnapshot:string;batchIds:string[];settledBatchIds:string[];
  rows:FinalRow[]};
 type PublicRow416={trackId:string;ownerUid:string;at:number};
+// Publish ONE atomic public signal per settled window. Older clients still
+// see <=50 rows; extra rows are optional server-owned data read by app403+.
+// RTDB Admin SDK writes do not require a shared Rules/schema change.
 async function notifySettledPublicLikes416(db:Database,data:SignedFinal,nowMs:number){
- // Match the existing 192 bus: identifiers only, at most 50 per event. The
- // card freshness boundary is queue acceptance (seal time), NOT callback time:
- // a correctly settled R2 card normally predates this signed callback.
  const acceptedAt=Math.max(...data.batchIds.map(id=>Number(id.split('_')[1])));
  if(!Number.isSafeInteger(acceptedAt)||acceptedAt<=0||acceptedAt>data.signedAtMs)
    throw Error('416_FINAL_BAD_PUBLIC_BOUNDARY');
- for(let start=0;start<data.rows.length;start+=50){
-   const incoming=data.rows.slice(start,start+50).map(row=>({
-     trackId:row.trackId,ownerUid:row.ownerUid,at:acceptedAt,
-   }));
-   await db.ref('publicSync/exploreLike').transaction((raw:unknown)=>{
-     const current=raw as {version?:number;rows?:PublicRow416[]}|null;
-     const retained=new Map<string,PublicRow416>();
-     for(const row of Object.values(current?.rows||{})){
-       if(row&&typeof row.trackId==='string'&&typeof row.ownerUid==='string'&&
-          Number.isSafeInteger(row.at)&&row.at>=nowMs-3*60_000)
-         retained.set(row.trackId,row);
-     }
-     const changed=incoming.filter(row=>(retained.get(row.trackId)?.at||0)<row.at);
-     if(!changed.length)return;
-     // Prioritize this chunk so equal timestamps cannot discard tracks 51+.
-     // Preserve other actors' retained rows when there is room; never lower a
-     // newer per-track watermark on a delayed retry.
-     const ids=new Set(changed.map(row=>row.trackId));
-     const rows=[...changed,...[...retained.values()]
-       .filter(row=>!ids.has(row.trackId)).sort((a,b)=>b.at-a.at)].slice(0,50);
-     return {version:Math.max(nowMs,Number(current?.version||0)+1),
-       at:nowMs,actorUid:data.uid,rows};
-   },undefined,false);
- }
+ const incoming=data.rows.map(row=>({
+   trackId:row.trackId,ownerUid:row.ownerUid,at:acceptedAt,
+ }));
+ await db.ref('publicSync/exploreLike').transaction((raw:unknown)=>{
+   const current=raw as {version?:number;rows?:PublicRow416[]|Record<string,PublicRow416>;
+     overflow416?:PublicRow416[]|Record<string,PublicRow416>}|null;
+   const retained=new Map<string,PublicRow416>();
+   for(const row of [...Object.values(current?.rows||{}),
+     ...Object.values(current?.overflow416||{})]){
+     if(row&&typeof row.trackId==='string'&&typeof row.ownerUid==='string'&&
+       Number.isSafeInteger(row.at)&&row.at>=nowMs-3*60_000)
+       retained.set(row.trackId,row);
+   }
+   let changed=false;
+   for(const row of incoming){
+     const prior=retained.get(row.trackId);
+     if(!prior||prior.at<row.at){retained.set(row.trackId,row);changed=true;}
+   }
+   if(!changed)return; // an exact retry never re-broadcasts
+   const ordered=[...retained.values()].sort((a,b)=>b.at-a.at||
+     a.trackId.localeCompare(b.trackId)).slice(0,256);
+   const rows=ordered.slice(0,50),overflow=ordered.slice(50);
+   return {version:Math.max(nowMs,Number(current?.version||0)+1),
+     at:nowMs,actorUid:data.uid,rows,
+     ...(overflow.length?{overflow416:overflow}:{})};
+ },undefined,false);
 }
 export async function publishAuthenticatedPrivateFinal416(
  db:Database, raw:string, signature:string, secret:string,

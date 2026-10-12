@@ -2180,7 +2180,8 @@ export default function ExplorePage() {
       publicLikeRefreshTimerRef192.current = window.setTimeout(async () => {
         publicLikeRefreshTimerRef192.current = null;
         if (cancelled) return;
-        const pending = [...publicLikePendingRowsRef192.current.values()];
+        // The changed-card R2 endpoint accepts at most 50 visible IDs.
+        const pending = [...publicLikePendingRowsRef192.current.values()].slice(0, 50);
         if (!pending.length) return;
 
         const ids = pending.map((row) => row.trackId);
@@ -2232,7 +2233,8 @@ export default function ExplorePage() {
 
         // Bounded retry only while an actual changed-track signal is unresolved.
         // No idle timer and no D1 read are introduced.
-        for (const [trackId] of publicLikePendingRowsRef192.current) {
+        for (const {trackId} of pending) {
+          if (!publicLikePendingRowsRef192.current.has(trackId)) continue;
           const attempts = (publicLikeRefreshAttemptsRef192.current.get(trackId) || 0) + 1;
           if (attempts >= 4) {
             publicLikePendingRowsRef192.current.delete(trackId);
@@ -2242,7 +2244,7 @@ export default function ExplorePage() {
           }
         }
         if (!cancelled && publicLikePendingRowsRef192.current.size) {
-          scheduleRefresh192(5_000);
+          scheduleRefresh192(publicLikePendingRowsRef192.current.size > pending.length ? 0 : 5_000);
         }
       }, Math.max(0, delayMs));
     };

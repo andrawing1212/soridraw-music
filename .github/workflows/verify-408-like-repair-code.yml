@@ -43,6 +43,8 @@ on:
       - 'functions/src/exploreLikePrivateFinalEndpoint416.ts'
       - 'scripts/verify-416-finalize-e2e.mjs'
       - 'scripts/verify-416-private-final-publisher.mjs'
+      - 'scripts/verify-416-public-coalescing-gap.mjs'
+      - 'src/services/explorePublicLikeSyncService.ts'
       - 'scripts/verify-416-private-task-routing.mjs'
       - 'scripts/verify-416-private-deadline.mjs'
       - 'src/pages/ExplorePage.tsx'
@@ -197,6 +199,7 @@ jobs:
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-cross-env-ordering.mjs
           node scripts/verify-416-private-final-publisher.mjs
+          node scripts/verify-416-public-coalescing-gap.mjs
           node scripts/verify-416-finalize-e2e.mjs
           node scripts/verify-416-signed-worker-issuer.mjs
           node scripts/verify-416-complete-private-window.mjs

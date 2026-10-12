@@ -125,6 +125,8 @@ const out=await finalizePrivateHandoff416(args);
 assert.equal(out.settled,true);assert.equal(out.rows.length,80);
 assert.equal(r2puts,1,'whole account changed-window membership is one R2 CAS');
 assert.equal(callbacks,1);
+const atomic=realtime.get('publicSync/exploreLike');
+assert.equal(atomic.rows.length,50);assert.equal(atomic.overflow416.length,30);
 await drainScreen();
 assert.equal(screen[0].likeCount,1,'A settled like updates B without navigation');
 assert.equal(screen[1].likeCount,2);

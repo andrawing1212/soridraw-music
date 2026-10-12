@@ -51,11 +51,12 @@ const first=await call(original);
 assert.equal(first.status,'PUBLISHED');
 assert.equal(writes,2);assert.equal(path,'privateLikeFinal416/same-account');
 assert.equal(state.rows.length,80,'50+30 grouped final receipt');
-assert.equal(publicWrites,2,'80 settled tracks notify the existing public bus in bounded chunks');
-assert.equal(new Set(publicEvents.flatMap(x=>x.rows.map(r=>r.trackId))).size,80);
+assert.equal(publicWrites,1,'80 settled tracks notify atomically');
+assert.equal(publicState.rows.length,50);assert.equal(publicState.overflow416.length,30);
+assert.equal(new Set([...publicState.rows,...publicState.overflow416].map(r=>r.trackId)).size,80);
 assert.equal((await call({...original,signedAtMs:now+1})).status,'DUPLICATE');
 assert.equal(writes,2,'exact replay W0');
-assert.equal(publicWrites,2,'completed replay does not re-publish evicted chunks');
+assert.equal(publicWrites,1,'completed replay does not re-publish evicted chunks');
 await assert.rejects(call({...original,rows:[...original.rows.slice(0,79),
  {...original.rows[79],liked:!original.rows[79].liked}]}),
  /416_FINAL_SAME_VERSION_CONFLICT/);
@@ -95,7 +96,7 @@ await call(next);
 assert.deepEqual([writes,publicWrites],completedWrites,'completed retry is RTDB W0');
 for(const event of publicEvents){
  assert(event.rows.length<=50);
- for(const row of event.rows){
+ for(const row of [...event.rows,...(event.overflow416||[])]){
    assert.deepEqual(Object.keys(row).sort(),['at','ownerUid','trackId']);
    assert.equal(row.at,now-500,'R2 freshness uses seal time, never callback time');
  }
@@ -115,8 +116,8 @@ const before256=publicEvents.length;
 await call({...original,version:256,rows:Array.from({length:256},(_,i)=>({
  trackId:'large-'+i,operationId:op(i),ownerUid:'owner',liked:true,likeCount:1,
 }))});
-assert.equal(publicEvents.length-before256,6);
-assert.equal(new Set(publicEvents.slice(before256).flatMap(e=>e.rows)
+assert.equal(publicEvents.length-before256,1,'256 changed rows one event');
+assert.equal(new Set([...publicState.rows,...(publicState.overflow416||[])]
  .filter(r=>r.trackId.startsWith('large-')).map(r=>r.trackId)).size,256);
 const checkpointClaim={...next,version:257};
 failCheckpoint=true;

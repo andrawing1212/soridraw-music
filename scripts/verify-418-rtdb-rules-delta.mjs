@@ -68,7 +68,8 @@ const withoutServer416 = source => {
 };
 const withoutIntentOptimisticCount = source => {
   const out = structuredClone(source);
-  delete out.rules.userSync.$uid.exploreLikeIntent416.results.$index.optimisticLikeCount;
+  const row = out?.rules?.userSync?.$uid?.exploreLikeIntent416?.results?.$index;
+  if (row) delete row.optimisticLikeCount;
   return out;
 };
 

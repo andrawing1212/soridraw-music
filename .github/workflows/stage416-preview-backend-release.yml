@@ -1,0 +1,319 @@
+name: SORIDRAW Stage416 PREVIEW Backend Prerequisite Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/stage416-preview-backend-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-stage416-preview-backend-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+      RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_WORKER: soridraw-explore-preview
+      HMAC_SECRET_NAME: SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET
+
+    steps:
+      - name: Resolve exact approved PREVIEW source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/stage416-preview-backend-release.trigger"
+          target="$(curl -fsSL "$trigger_url" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "LOCKED_STAGE416_SOURCE=$target"
+
+      - name: Checkout exact PREVIEW source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Lock protected refs and Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor "${{ steps.source.outputs.sha }}" origin/preview
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json'               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          active_version soridraw-explore-preview > "$RUNNER_TEMP/preview-worker-before.txt"
+          active_version soridraw-explore-test > "$RUNNER_TEMP/test-worker-before.txt"
+          active_version soridraw-explore-api > "$RUNNER_TEMP/production-worker-before.txt"
+          echo "PREVIEW_WORKER_BEFORE=$(cat "$RUNNER_TEMP/preview-worker-before.txt")"
+          echo "TEST_WORKER_BEFORE=$(cat "$RUNNER_TEMP/test-worker-before.txt")"
+          echo "PRODUCTION_WORKER_BEFORE=$(cat "$RUNNER_TEMP/production-worker-before.txt")"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Source and regression preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node scripts/verify-416-preview-backend-release.mjs
+          node scripts/verify-418-rtdb-rules-delta.mjs --self-test
+          node scripts/verify-416-private-handoff-atomic.mjs
+          node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-180-like-live-signal-and-cached-paint.mjs
+          npm run lint
+          npm run build
+          echo 'STAGE416_BACKEND_RELEASE_SOURCE_PREFLIGHT=PASS'
+
+      - name: Build Firebase Functions exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          for fn in             recordPrivateLike416             stage416SchedulePrivateWindowCandidate             stage416SettlePrivateWindowCandidate             privateLikeFinalReceipt416Candidate             masterGetLikeBatchTiming416             masterSetLikeBatchTiming416; do
+            grep -Fq "$fn" functions/lib/securedIndex.js
+          done
+          echo 'STAGE416_FUNCTIONS_BUILD_EXPORTS=PASS'
+
+      - name: Authenticate Firebase / Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Read live shared RTDB Rules and derive exact additive candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('Stage416 Firebase credential path missing')
+          creds=service_account.Credentials.from_service_account_file(
+              path,
+              scopes=['https://www.googleapis.com/auth/firebase.database',
+                      'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('Stage416 RTDB OAuth token unavailable')
+          root=Path(os.environ['RUNNER_TEMP'])
+          (root/'stage416-rtdb-token').write_text(creds.token,encoding='utf-8')
+          url=os.environ['RTDB_RULES_URL']
+          r=requests.get(url,params={'access_token':creds.token},timeout=30)
+          if r.status_code != 200:
+              raise SystemExit('Stage416 RTDB rules GET failed '+str(r.status_code))
+          (root/'stage416-rtdb-before.json').write_text(r.text,encoding='utf-8')
+          print('STAGE416_RTD_RULES_READONLY_GET=PASS')
+          PY
+          node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/stage416-rtdb-before.json"
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {buildStage416ServerRulesCandidate} from './scripts/build-416-private-server-rules.mjs';
+          const source=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/stage416-rtdb-before.json','utf8'));
+          const candidate=buildStage416ServerRulesCandidate(source);
+          writeFileSync(process.env.RUNNER_TEMP+'/stage416-rtdb-candidate.json',JSON.stringify(candidate));
+          console.log('STAGE416_RTD_RULES_DERIVED_FROM_LIVE=PASS');
+          NODE
+
+      - name: Deploy only two additive server-owned RTDB roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(cat "$RUNNER_TEMP/stage416-rtdb-token")"
+          auth_url="${RTDB_RULES_URL}?access_token=${token}"
+          code="$(curl -sS --max-time 30 -X PUT             -H 'Content-Type: application/json'             --data-binary @"$RUNNER_TEMP/stage416-rtdb-candidate.json"             -o "$RUNNER_TEMP/stage416-rtdb-put.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/stage416-rtdb-after.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          expected=json.loads((root/'stage416-rtdb-candidate.json').read_text())
+          actual=json.loads((root/'stage416-rtdb-after.json').read_text())
+          if actual != expected:
+              raise SystemExit('Stage416 RTDB post-deploy exact candidate mismatch')
+          before=json.loads((root/'stage416-rtdb-before.json').read_text())
+          for key in ['privateLikeBatch416','privateLikeFinal416']:
+              if key in before.get('rules',{}):
+                  raise SystemExit('Stage416 server root unexpectedly existed before release: '+key)
+          stripped=json.loads((root/'stage416-rtdb-after.json').read_text())
+          for key in ['privateLikeBatch416','privateLikeFinal416']:
+              stripped['rules'].pop(key,None)
+          if stripped != before:
+              raise SystemExit('Stage416 RTDB release changed unrelated live rules')
+          print('STAGE416_SHARED_RTDB_TWO_ADDITIVE_ROOTS_DEPLOY=PASS')
+          print('STAGE416_SHARED_RTDB_UNRELATED_RULES_UNCHANGED=PASS')
+          PY
+          rm -f "$RUNNER_TEMP/stage416-rtdb-token"
+
+      - name: Apply one empty additive shared D1 acceptance table
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,DB=process.env.SHARED_D1_ID;
+          if(!A||!T||!DB)throw Error('416_D1_RELEASE_BINDING_MISSING');
+          const H={Authorization:'Bearer '+T,'Content-Type':'application/json'};
+          const url=`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`;
+          async function q(sql){
+            const r=await fetch(url,{method:'POST',headers:H,body:JSON.stringify({sql,params:[]})});
+            const x=await r.json();
+            if(!r.ok||x?.success!==true||!Array.isArray(x.result)||x.result.length!==1||x.result[0]?.success!==true)
+              throw Error('416_D1_QUERY_FAILED_'+r.status);
+            return x.result[0];
+          }
+          const before=await q("SELECT sql FROM sqlite_schema WHERE type='table' AND name='explore_like_private_acceptance_416'");
+          const rows=before.results||[];
+          const migration=readFileSync('cloudflare/explore-worker/migrations/20261012_01_stage416_private_acceptance_additive.sql','utf8');
+          const sql=migration.replace(/--.*$/gm,'').trim();
+          if(!/^CREATE TABLE IF NOT EXISTS explore_like_private_acceptance_416\s*\(/i.test(sql)||
+             /\b(DROP|ALTER|INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql))
+            throw Error('416_D1_MIGRATION_NOT_ADDITIVE_ONLY');
+          if(rows.length===0){
+            await q(sql);
+            console.log('416_SHARED_D1_ACCEPTANCE_TABLE_CREATED=YES');
+          }else{
+            console.log('416_SHARED_D1_ACCEPTANCE_TABLE_CREATED=NO_ALREADY_PRESENT');
+          }
+          const after=await q("SELECT sql FROM sqlite_schema WHERE type='table' AND name='explore_like_private_acceptance_416'");
+          if((after.results||[]).length!==1)throw Error('416_D1_ACCEPTANCE_TABLE_MISSING_AFTER');
+          const normalized=String(after.results[0].sql||'').replace(/\s+/g,' ').toLowerCase();
+          for(const part of ['user_uid text primary key','version integer not null','digest text not null','accepted_at integer not null','claim_token text not null'])
+            if(!normalized.includes(part))throw Error('416_D1_ACCEPTANCE_SCHEMA_DRIFT');
+          const empty=await q('SELECT 1 AS row FROM explore_like_private_acceptance_416 LIMIT 1');
+          if((empty.results||[]).length!==0)throw Error('416_D1_ACCEPTANCE_TABLE_NOT_EMPTY');
+          console.log('416_SHARED_D1_ACCEPTANCE_SCHEMA_EXACT_EMPTY=PASS');
+          console.log('416_SHARED_D1_USER_ROW_MIGRATION=0');
+          NODE
+
+      - name: Provision one shared HMAC secret without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret_file="$RUNNER_TEMP/stage416-hmac"
+          if gcloud secrets describe "$HMAC_SECRET_NAME" --project "$FIREBASE_PROJECT" >/dev/null 2>&1; then
+            gcloud secrets versions access latest               --secret "$HMAC_SECRET_NAME"               --project "$FIREBASE_PROJECT" > "$secret_file"
+            echo 'STAGE416_GCP_HMAC_SECRET=REUSED'
+          else
+            openssl rand -hex 32 > "$secret_file"
+            gcloud secrets create "$HMAC_SECRET_NAME"               --project "$FIREBASE_PROJECT"               --replication-policy=automatic               --data-file="$secret_file" >/dev/null
+            echo 'STAGE416_GCP_HMAC_SECRET=CREATED'
+          fi
+          test "$(wc -c < "$secret_file" | tr -d ' ')" -ge 32
+          echo "::add-mask::$(cat "$secret_file")"
+          echo 'STAGE416_GCP_HMAC_SECRET_READY=PASS'
+
+      - name: Deploy only Stage416 Firebase Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config firebase.json             --only "functions:recordPrivateLike416,functions:stage416SchedulePrivateWindowCandidate,functions:stage416SettlePrivateWindowCandidate,functions:privateLikeFinalReceipt416Candidate,functions:masterGetLikeBatchTiming416,functions:masterSetLikeBatchTiming416"             --non-interactive
+          echo 'STAGE416_FIREBASE_FUNCTIONS_DEPLOY=PASS'
+
+      - name: Verify Stage416 Functions live configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          describe() {
+            local fn="$1" region="$2"
+            gcloud functions describe "$fn" --gen2 --region "$region"               --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/fn-$fn.json"
+            node - "$RUNNER_TEMP/fn-$fn.json" "$fn" <<'NODE'
+          const fs=require('fs');
+          const d=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(String(d.state||'')!=='ACTIVE')throw Error(process.argv[3]+' not ACTIVE');
+          console.log('416_FUNCTION_ACTIVE='+process.argv[3]);
+          NODE
+          }
+          describe recordPrivateLike416 us-central1
+          describe stage416SchedulePrivateWindowCandidate us-central1
+          describe stage416SettlePrivateWindowCandidate us-central1
+          describe privateLikeFinalReceipt416Candidate asia-northeast3
+          describe masterGetLikeBatchTiming416 us-central1
+          describe masterSetLikeBatchTiming416 us-central1
+          node - "$RUNNER_TEMP/fn-stage416SettlePrivateWindowCandidate.json" <<'NODE'
+          const fs=require('fs');
+          const d=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const secrets=d?.serviceConfig?.secretEnvironmentVariables||[];
+          if(!secrets.some(x=>String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416 task function secret binding missing');
+          console.log('416_TASK_SECRET_BINDING=PASS');
+          NODE
+          echo 'STAGE416_FUNCTIONS_LIVE_METADATA=PASS'
+
+      - name: Bind same HMAC secret to PREVIEW Worker while route remains OFF
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          secret_file="$RUNNER_TEMP/stage416-hmac"
+          test -s "$secret_file"
+          cat "$secret_file" | node node_modules/wrangler/bin/wrangler.js secret put             SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET             --config canonical/wrangler.preview.jsonc >/dev/null
+          rm -f "$secret_file"
+          echo 'STAGE416_PREVIEW_WORKER_HMAC_SECRET_BINDING=PASS'
+
+      - name: Verify client and signed Worker route are still OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false' src/services/exploreLikeService.ts
+          grep -Fq 'export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=false' src/services/exploreLikePrivateRtdbTransport416.ts
+          grep -Fq 'const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false' cloudflare/explore-worker/canonical/preview-entry.js
+          code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/route-off.json" -w '%{http_code}'             -X POST -H 'Content-Type: application/json'             "https://soridraw-explore-preview.andrawing1212.workers.dev/v1/internal/private-like-handoff-416" || true)"
+          test "$code" = '404'
+          echo 'STAGE416_PREVIEW_FEATURE_STILL_OFF=PASS'
+
+      - name: Verify protected refs and TEST/PRODUCTION Workers unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json'               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          test "$(active_version soridraw-explore-test)" = "$(cat "$RUNNER_TEMP/test-worker-before.txt")"
+          test "$(active_version soridraw-explore-api)" = "$(cat "$RUNNER_TEMP/production-worker-before.txt")"
+          echo "PREVIEW_WORKER_AFTER_SECRET=$(active_version soridraw-explore-preview)"
+          echo 'STAGE416_TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'
+          echo 'STAGE416_MAIN_PRODUCTION_BRANCHES_UNCHANGED=PASS'
+
+      - name: Release summary
+        run: |
+          echo 'STAGE416_PREVIEW_BACKEND_PREREQUISITES=PASS'
+          echo 'STAGE416_CLIENT_ACTIVE=false'
+          echo 'STAGE416_SIGNED_WORKER_ROUTE_ACTIVE=false'
+          echo 'USER_DATA_MIGRATION=0'
+          echo 'D1_ADDITIVE_EMPTY_TABLE_ONLY=true'
+          echo 'RTDB_ADDITIVE_SERVER_ROOTS_ONLY=true'
+          echo 'FIREBASE_HOSTING_DEPLOY=0'

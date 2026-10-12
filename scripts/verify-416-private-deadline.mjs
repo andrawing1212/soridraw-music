@@ -45,9 +45,27 @@ await push(2,'song-b',now+60_000);
 const later=await dispatch(db,queue,task,'https://preview.soridraw.com/v1/internal/private-like-handoff-416',
  'strict-secret-over-thirty-two-characters',now+300_000);
 assert.equal(later.status,'RESCHEDULED');
-assert.equal(later.atMs,now+360_000);
+assert.equal(later.atMs,now+361_000,
+ 'NOT_DUE reschedule must use a fresh task ID after deadline');
 assert.equal(planned.length,2,'two clicks still just 1 initial task and 1 deferred task');
 assert.equal(writes,0,'early task must not seal RTDB');
+// One millisecond early delivery previously attempted to enqueue the original
+// scheduleTime, colliding with the still-running Cloud Task ID. The existing
+// taskQueue adapter treats ALREADY_EXISTS as success, so the window is lost.
+state=null;planned.length=0;
+await push(1,'song-one-ms-early',now);
+await initial(queue,task,{lastClickAtMs:now,minutes:5});
+const early=await dispatch(db,queue,task,
+ 'https://preview.soridraw.com/v1/internal/private-like-handoff-416',
+ 'strict-secret-over-thirty-two-characters',now+300_000-1);
+assert.equal(early.status,'RESCHEDULED');
+assert.equal(early.atMs,now+301_000);
+assert.notEqual(planned[0].at,planned[1].at,
+ 'new retry ID must not equal currently executing initial task ID');
+// Restore the original window for remaining unchanged regression scenarios.
+state=null;
+await push(1,'song-a',now);
+await push(2,'song-b',now+60_000);
 const newerTask={uid:task.uid,windowId:'00000000-0000-4000-8000-000000000099'};
 assert.equal((await dispatch(db,queue,newerTask,'url','secret',now+360_000)).status,'STALE');
 assert.equal(planned.length,2,'stale task must not reschedule');

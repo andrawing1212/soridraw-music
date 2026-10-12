@@ -39,7 +39,13 @@ export async function dispatchPrivateWindowTask416(
    return {status:'DELIVERED'};
  }
  if(result.reason==='NOT_DUE'||result.reason==='WAITING_FOR_PRIOR_SEAL'){
-   const next=nowMs+Number(result.retryAfterMs||0);
+   // Cloud Tasks may dispatch slightly before the stored RTDB deadline.
+   // Re-enqueueing the exact original deadline can reuse the still-running
+   // task ID. Its ALREADY_EXISTS reply is swallowed as idempotent, leaving
+   // NO future task after the current invocation returns 204.
+   // Add a bounded 1s cushion only to NOT_DUE retries to guarantee a new ID.
+   const cushion=result.reason==='NOT_DUE'?1_000:0;
+   const next=nowMs+Number(result.retryAfterMs||0)+cushion;
    if(!validTime(next)||next<=nowMs)throw Error('416_INVALID_RETRY_DEADLINE');
    // Reschedule only on an actual task execution. A late prior ACK may also
    // block a newer window until the original durable seal is acknowledged.

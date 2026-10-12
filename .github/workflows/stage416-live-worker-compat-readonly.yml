@@ -1,0 +1,66 @@
+name: SORIDRAW Stage416 Live Worker Compatibility Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/stage416-live-worker-compat-readonly.yml'
+      - 'scripts/verify-416-live-worker-compatibility.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch active TEST and PRODUCTION Worker source read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const {mkdirSync,writeFileSync}=require('node:fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN;
+          const targets={TEST:'soridraw-explore-test',PRODUCTION:'soridraw-explore-api'};
+          async function g(url){
+            const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});
+            const x=await r.json();
+            if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,700));
+            return x.result||x;
+          }
+          (async()=>{
+            mkdirSync('.stage416-live',{recursive:true});
+            for(const [stage,name] of Object.entries(targets)){
+              const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${name}`;
+              const ds=await g(base+'/deployments');
+              const d=(ds.deployments||ds||[])[0];
+              const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+              if(!active?.version_id||Number(active.percentage||0)<99.99)throw Error(stage+' single active version missing');
+              const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+              const mods=v.modules||[];
+              const main=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+              if(!main?.content_base64)throw Error(stage+' main module unavailable');
+              const source=Buffer.from(main.content_base64,'base64').toString('utf8');
+              writeFileSync('.stage416-live/'+stage.toLowerCase()+'.js',source);
+              console.log(stage+'_ACTIVE_VERSION='+active.version_id);
+              console.log(stage+'_SOURCE_BYTES='+Buffer.byteLength(source));
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Verify Stage416 optional-field compatibility target
+        run: |
+          node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/test.js TEST
+          node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/production.js PRODUCTION
+          echo 'REMOTE_WRITES=0'
+          echo 'WORKER_DEPLOY=0'

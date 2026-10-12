@@ -30,8 +30,16 @@ export async function completeUserPrivateWindow416(
    id:seal.id,version:receipt.version,
  });
  if(!acked){
-   // Another approved server delivery may already have acknowledged it.
-   // Never report a fresh ACK when our transaction did not commit.
+   // An ambiguous ACK must never silently strand the frozen UID seal.
+   // Pay for one extra RTDB read ONLY on this rare mismatch, not per click.
+   // If our exact seal is still present, fail the Cloud Task so its bounded
+   // retry can re-deliver the durable Worker receipt and clear that seal.
+   const stored=await db.ref('privateLikeBatch416/'+uid).child('sealed').get();
+   const stillPending=stored.val() as {id?:string;version?:number}|null;
+   if(stillPending?.id===seal.id && stillPending.version===seal.version)
+     throw Error('416_SEAL_ACK_STILL_PENDING');
+   // Another approved delivery already ACKed this version, or the exact seal
+   // was superseded. Never clear or ACK a different/newer user window.
    return {queued:true,acknowledged:false,version:receipt.version,
      batchIds:receipt.batchIds};
  }

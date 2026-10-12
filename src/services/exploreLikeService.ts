@@ -22,6 +22,10 @@ import {
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import { reserveExploreLikeDeviceSequence416 } from './exploreLikeDeviceSequence416.mjs';
 import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
+import {
+  shouldFinalReceiptSupersedeLocal401,
+  shouldRemoteIntentSupersedeLocal401,
+} from './exploreLikePrivateOrdering401.mjs';
 import {parsePrivateFinalReceipt416,selectExactFinalizedPrivateLikes416} from './exploreLikePrivateFinalReceipt416.mjs';
 import {
   advancePrivateBatchWindow416, advancePrivateBatchWindowForRemoteClick416,
@@ -904,14 +908,9 @@ const startLikeIntent416 = (uid: string) => {
           persistLikeOutbox(uid, rows416);
         }
       } else {
-        const localIntentVersion416 = Number(local416.privateIntentVersion416 || 0);
-        const staleFromPriorSession416 = localIntentVersion416 <= 0 &&
-          local416.updatedAt > 0 &&
-          local416.updatedAt < STAGE416_CLIENT_SESSION_STARTED_AT;
-        const remoteIsNewer416 =
-          (localIntentVersion416 > 0 && observed416.version > localIntentVersion416) ||
-          staleFromPriorSession416;
-        if (remoteIsNewer416) {
+        if (shouldRemoteIntentSupersedeLocal401(
+          local416, observed416, STAGE416_CLIENT_SESSION_STARTED_AT,
+        )) {
           delete rows416[trackId];
           persistLikeOutbox(uid, rows416);
         }
@@ -2819,11 +2818,8 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
          // local operation was server-registered at an older global version,
          // the final receipt proves another device superseded it for this track.
          const exactCurrent416=exactIds.has(row.trackId);
-         const currentServerVersion416=Number(current?.privateServerVersion416||0);
          const supersededCurrent416=!!current&&!exactCurrent416&&
-           current.privateServerRegistered416===true&&
-           Number.isSafeInteger(currentServerVersion416)&&currentServerVersion416>0&&
-           currentServerVersion416<receipt.version;
+           shouldFinalReceiptSupersedeLocal401(current,receipt.version,row);
          if(current&&!exactCurrent416&&!supersededCurrent416)continue;
          if(current)delete outbox[row.trackId];
          delete pending[row.trackId];

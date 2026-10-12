@@ -1,3 +1,17 @@
+## CURRENT — app400 PREVIEW Stage416③ 실제 활성 배포 PASS / 실사용 검증만 남음 (2026-10-12 KST)
+
+- **배포 소스:** `d84526c4c2cef96e79fed011645aa96b68f1137f` (app400 activation candidate `746bfe936cc1e54bb819618e92d924ccdabc119b` + PREVIEW release trigger).
+- **PREVIEW 앱:** `preview.soridraw.com` **app400**. App release Run **38204922375 SUCCESS**: TypeScript PASS, Build PASS, 기존 My Likes/Follow/Music Note 회귀 PASS, Firebase PREVIEW Hosting PASS, 실제 remote app-version=400 + exact build PASS, TEST/PRODUCTION unchanged PASS. 이번 Hosting release의 shared RTDB Rules deploy는 SKIPPED.
+- **PREVIEW Worker:** active version `c6486c81-e05d-4014-ac41-ca24e9b6efb7`. Worker Run **38204032483 SUCCESS**: signed Stage416 internal handoff ON, unsigned request 403 fail-closed PASS, existing feed/profile/like regressions PASS, TEST/PRODUCTION Workers unchanged PASS. Legacy direct Stage416 D1 intake remains OFF.
+- **Stage416 backend:** prerequisite Run **38203161041 SUCCESS**. `recordPrivateLike416`, schedule/settle task, final receipt endpoint, Master get/set timing Functions 6개 live. Cloud Tasks/Secret 연결 PASS. Shared RTDB는 server-only `privateLikeBatch416` + owner-readable final `privateLikeFinal416` additive roots만 추가. Shared D1은 `explore_like_private_acceptance_416` additive table만 생성, 최초/검증 당시 row 0. 사용자 원본 migration/backfill/delete/overwrite 0.
+- **app400 활성:** `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=true`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE=true`, Master timing panel ON. 기존 app399 5초 legacy flush는 Stage416 active 경로에서 조기 전송하지 않도록 차단되고 server-owned trailing window가 canonical intake를 소유.
+- **최종 코드 QA:** 408 Run **38204742660 SUCCESS** on `746bfe936cc1e54bb819618e92d924ccdabc119b`: Stage416 전체 실행형 검사, Functions Build, 앱 TypeScript/Build, 기존 personal-like/catalog/191/390/417, live shared RTDB additive-only read audit 모두 PASS. Follow-only Run **38204541225 SUCCESS**.
+- **TEST/PRODUCTION:** Stage416 feature activation **0**. TEST compatibility Worker `ddd2255a-75cc-4db9-8905-b47338558cb0`, PRODUCTION compatibility Worker `af81502a-298d-4ec6-bc2a-0c529d6dc29e` 유지. main/production branch 승격 없음.
+- **진행률:** ① Stage416 전체 사용자 목표 **1/4·25% 유지**, ② 앱 속도 기존 자동검증 **5/5·100%**, ③ 개인 좋아요 5분 저장 **3/4·75% 유지**. 코드/백엔드/Worker/Hosting은 실제 PREVIEW까지 활성됐지만 **같은 계정 PC↔mobile 실사용 + 마지막 클릭 기준 시간 + 재시작/반대클릭 + 실제 비용 계측 전에는 4/4 처리 금지**.
+- **현재 남은 일:** PREVIEW app400에서 사용자 실사용 검증. 실패 시 TEST로 승격하지 않고 app400/Stage416 해당 레이어만 원인 고정. 성공 후 실제 D1/RTDB/Functions/Task/Worker 비용을 확인한 뒤 Stage416③ 완료 여부 결정. Work 독립감사는 아직 별도 미실행.
+
+---
+
 ## CURRENT — Stage416③ isolated Functions package PASS / 단일 Secret metadata 권한에서 안전 중단 (2026-10-12 KST)
 
 - **현재 preview 기준:** `83a655869888fd85a9bdd767a3e68fb1abce70ab` 이후 release tooling fix 포함.

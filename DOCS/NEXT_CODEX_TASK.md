@@ -1,3 +1,12 @@
+## NEXT — Stage416③ 5분 서버 저장 종단 정합성 완성 (2026-10-12, 우선순위 정정)
+
+- **사용자 정정:** '경량화 이후 느림'은 앱 성능 문제가 아닌 **ChatGPT의 작업 처리 속도**에 대한 지적이다. 이전 첫 항목의 앱 성능 FAIL 신고를 현재 사용자 요구로 다시 해석하지 말 것. 작업 방식과 3중 진행률은 유지하되 빠르게 단일 기능 중심으로 처리한다.
+- **현재 exact candidate:** `preview` `d192ecde8d724ce0576979880289061b3d423dce`의 Stage416 ACK 안정화 코드+테스트, GitHub 408 [38189979956](https://github.com/andrawing1212/soridraw-music/actions/runs/38189979956) 결과 확인 전. PREVIEW live app399 unchanged, Stage416 5m Flag OFF. QA 실패면 수정·재검증, 성공이어도 실서비스 완료 아님.
+- **다음 구현 1순위, Codex High:** 이미 있는 Firebase Callable → server-only UID/window transaction → Cloud Tasks onCreate/deadline → HMAC Worker D1 069 큐 → 최종 개인 R2 + accepted 127 → 양기기 outbox의 exact operationId 확인 및 정리까지 **하나의 끝단 흐름**으로 묶어 실행형 emulator/Worker integration 검증. `PRIOR_WINDOW_NEEDS_SEAL`가 반환된 클릭은 동일 operationId/deviceSequence로 bounded 재전송하고 앱 종료/restart/앰비규어스 ACK·Task retries 25회 소진 후에도 누락 없이 복구; 다른 기기 새 클릭과 오래된 ACK의 역전 방지. 50+ / 256+ 노래, net-zero W0, 기존 구형 TEST/PROD direct Worker 우회, 원본 사용자 DB 호환·10만 DAU D1/RTDB/Functions/Cloud Tasks/Worker/R2 월 총비용을 계측한다. 기존 통과 테스트는 재작성하지 않는다.
+- **게이트:** full TypeScript/Build/target Test + independent Work read-only audit + PC/mobile physical proof와 정확한 costs 후에만 coordinated PREVIEW activation 판단. Functions index export, shared Rules/D1 schema, Worker/Hosting 배포, flag ON, main/TEST/PRODUCTION 변경은 안전 증명 전 금지. 코드/가드/문서만 반복하면서 Stage416③ 완료라고 주장하지 않는다. app399 기존 하트/좋아요·팔로우·저장하트·Music Note 및 CSS 보호.
+
+---
+
 ## NEXT — 실제 배포 앱399 PC/모바일 체감 속도 회귀 원인 확정, 검증된 Explore 최소 수정만 릴리스 검토 (2026-10-12)
 
 - **현재 source:** preview `4f00b185cfcb80531f7bf8ecb7fa8bd2795bfd97`; [CI like/build 38184259697 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259697), [follow 38184259712 PASS](https://github.com/andrawing1212/soridraw-music/actions/runs/38184259712). 최신 Hosting 기록 app399, 미배포 Stage416 5min candidate OFF. 사용자 실제 체감 느림: 현재 **미해결**, 과거 속도 100% 표현 금지.

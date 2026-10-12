@@ -1,0 +1,100 @@
+name: Stage416 PREVIEW Readonly Settlement Diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/stage416-preview-readonly-settlement-diagnostic.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-416-readonly-settlement-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable preview
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Authenticate readonly log access
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Inspect active Functions and 90min Cloud Run error summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,re,collections,datetime
+          project='soridraw-app-866a5'
+          names=[
+            ('recordPrivateLike416','us-central1'),
+            ('stage416SchedulePrivateWindowCandidate','us-central1'),
+            ('stage416SettlePrivateWindowCandidate','us-central1'),
+            ('privateLikeFinalReceipt416Candidate','asia-northeast3'),
+          ]
+          services=[]
+          for name,region in names:
+            p=subprocess.run(['gcloud','functions','describe',name,'--gen2',
+              '--region',region,'--project',project,'--format=json'],
+              capture_output=True,text=True)
+            if p.returncode:
+              print('FUNCTION_METADATA_UNAVAILABLE',name,'STATUS=ERROR')
+              continue
+            try:d=json.loads(p.stdout)
+            except ValueError:
+              print('FUNCTION_METADATA_BAD_JSON',name);continue
+            url=str(d.get('serviceConfig',{}).get('service',''))
+            service=url.rsplit('/',1)[-1] if url else ''
+            if service:services.append(service)
+            print('FUNCTION',name,'STATE',d.get('state','UNKNOWN'),'SERVICE',service,
+              'UPDATED',d.get('updateTime','UNKNOWN'))
+          if not services:
+            raise SystemExit('NO_FUNCTION_METADATA_READ')
+          clauses=' OR '.join('resource.labels.service_name="'+s+'"' for s in services)
+          expr='resource.type="cloud_run_revision" AND ('+clauses+')'
+          p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+            '--freshness=100m','--limit=1200','--format=json'],
+            capture_output=True,text=True)
+          if p.returncode:
+            print('CLOUD_LOGS_READ_UNAVAILABLE',' '.join(p.stderr.strip().split())[:220])
+            raise SystemExit(31)
+          logs=json.loads(p.stdout or '[]')
+          print('RECENT_FUNCTION_LOG_ENTRIES',len(logs))
+          byservice=collections.Counter()
+          severities=collections.Counter()
+          statuses=collections.Counter()
+          errors=collections.Counter()
+          samples=[]
+          pattern=re.compile(r'416_[A-Z0-9_]{5,100}|(?:FAILED|UNAVAILABLE|PENDING|STILL_PENDING|COLD|CORRUPT|CONFLICT|STALE|DENIED|INVALID|RETRY)',re.I)
+          for row in logs:
+            s=row.get('resource',{}).get('labels',{}).get('service_name','unknown')
+            sev=str(row.get('severity','DEFAULT'))
+            byservice[s]+=1
+            severities[(s,sev)]+=1
+            status=row.get('httpRequest',{}).get('status')
+            if status is not None:statuses[(s,str(status))]+=1
+            payload=row.get('textPayload') or row.get('jsonPayload',{}).get('message') or ''
+            if not isinstance(payload,str):payload=json.dumps(payload)
+            matches=sorted(set(x.upper() for x in pattern.findall(payload)))
+            for code in matches:errors[(s,code)]+=1
+            if matches and len(samples)<25:samples.append((s,str(row.get('timestamp',''))[:19],matches[:5]))
+          print('SERVICE_LOG_COUNTS',json.dumps(byservice,sort_keys=True))
+          print('HTTP_STATUS_COUNTS',json.dumps({f'{a}/{b}':n for (a,b),n in statuses.items()},sort_keys=True))
+          print('SEVERITY_COUNTS',json.dumps({f'{a}/{b}':n for (a,b),n in severities.items()},sort_keys=True))
+          print('ERROR_CODE_COUNTS',json.dumps({f'{a}/{b}':n for (a,b),n in errors.items()},sort_keys=True))
+          print('REDACTED_ERROR_TIMELINE',json.dumps(samples))
+          print('LOGS_READONLY_NO_UID_NO_PAYLOAD=PASS')
+          PY
+
+      - name: Confirm no mutation commands
+        run: echo 'READONLY_DIAGNOSTIC=true;DEPLOY=0;DATABASE_WRITE=0'

@@ -4,10 +4,10 @@ import {
   recordStage416PrivateAcceptanceReply416,
 } from './exploreLikePrivateDiagnostic416';
 
-// Stage416 app400 PREVIEW activation. The browser still NEVER writes the
-// canonical pending/sealed tree directly; it calls the Auth+AppCheck Function,
-// which owns server time and the shared RTDB transaction.
-export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=true;
+// app408 rollback: keep the server-only Stage416 implementation available in source,
+// but stop PREVIEW clients from registering new 5-minute private windows until the
+// end-to-end settlement path is proven. app399's canonical batch remains authoritative.
+export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=false;
 export type PrivateRtdbClick416={
   trackId:string; liked:boolean; operationId:string; deviceId:string; deviceSequence:number;
 };

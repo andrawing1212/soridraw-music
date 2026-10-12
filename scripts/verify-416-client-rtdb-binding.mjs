@@ -15,8 +15,9 @@ assert.deepEqual(values.map(x=>x.deviceSequence).sort((a,b)=>a-b),Array.from({le
 assert.equal((await allocate(uid,storage,locks,()=>id)).deviceSequence,81);
 await assert.rejects(allocate(uid,storage,null,()=>id),/416_DEVICE_SEQUENCE_UNAVAILABLE/);
 const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
+const stage416ClientActive=appVersion>=400&&appVersion<408;
 const source=readFileSync('src/services/exploreLikeService.ts','utf8');
-if(appVersion>=400) assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
+if(stage416ClientActive) assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
 else assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/STAGE416_SHARED_RTDB_BATCH_ACTIVE &&/);
 assert.match(source,/persistLikeOutbox\(uid, latest416\);[\s\S]*?publishPrivateRtdbBatchClick416\(/);
@@ -45,17 +46,18 @@ const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;
 const releaseProbe=await publish416('account',{trackId:'song',liked:true,
   operationId:id,deviceId:id,deviceSequence:1});
-if(appVersion>=400){
-  assert.equal(releaseProbe?.version,12,'app400 uses exact server receipt version');
-  assert.equal(releaseProbe?.count,3,'app400 uses exact server receipt count');
-  assert.equal(callableCalls416,1,'app400 performs one Callable registration');
+if(stage416ClientActive){
+  assert.equal(releaseProbe?.version,12,'active Stage416 uses exact server receipt version');
+  assert.equal(releaseProbe?.count,3,'active Stage416 uses exact server receipt count');
+  assert.equal(callableCalls416,1,'active Stage416 performs one Callable registration');
   assert.equal(transportDiagnostics416.length,1,'diagnostic observes existing Callable reply only');
   assert.equal(transportDiagnostics416[0][0],'reply');
   assert.equal(transportDiagnostics416[0][1],'account');
   assert.equal(transportDiagnostics416[0][2],id);
 }else{
-  assert.equal(releaseProbe,null,'app399 OFF never calls Firebase Callable');
+  assert.equal(releaseProbe,null,'inactive Stage416 never calls Firebase Callable');
   assert.equal(callableCalls416,0);
+  assert.equal(transportDiagnostics416.length,0,'rollback adds no Stage416 server diagnostic traffic');
 }
 let attempts=0,waits=[],sameOp=id;
 const accepted=await retry416(async()=>{
@@ -143,9 +145,11 @@ console.log('STAGE416_PENDING_NEWER_CLICK_NOT_CLEARED=PASS');
 console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
-console.log(appVersion>=400
-  ? 'STAGE416_APP400_PLUS_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
-  : 'STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');
+console.log(stage416ClientActive
+  ? 'STAGE416_APP400_TO_407_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
+  : appVersion>=408
+    ? 'APP408_STAGE416_CLIENT_OFF_LEGACY_CANONICAL_SYNC_RESTORED=PASS'
+    : 'STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');
 
 const diagnosticSource=readFileSync('src/services/exploreLikePrivateDiagnostic416.ts','utf8');
 assert.doesNotMatch(diagnosticSource,/httpsCallable|databaseRef|runTransaction|\bfetch\s*\(/,
@@ -208,3 +212,14 @@ assert.match(source,/stillCurrent,'recovery'/);
 assert.match(source,/markStage416PrivateAcceptanceRegistered416[\s\S]*?'recovery'/);
 console.log('STAGE416_PRIVATE_ACCEPTANCE_LOCAL_DIAGNOSTIC_NO_SERVER_IO=PASS');
 console.log('STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_NO_RAW_IDS=PASS');
+
+if(appVersion>=408){
+  assert.match(source,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
+  assert.match(source,/publishExploreLikeIntent416\(uid,/,
+    'same-account immediate hint remains available while canonical path rolls back');
+  assert.match(source,/if \(!\(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE\)\) \{[\s\S]*?schedulePendingFlush\(user\)/,
+    'legacy canonical scheduler must resume when Stage416 is off');
+  assert.match(source,/const eligibleGuardedMutation420 = \(entry: ExploreLikePendingMutation\): boolean =>[\s\S]*?!EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE/,
+    'old Stage416 outbox metadata must not block legacy canonical settlement');
+  console.log('APP408_EXISTING_STAGE416_OUTBOX_LEGACY_SETTLEMENT_ELIGIBLE=PASS');
+}

@@ -76,10 +76,11 @@ export const EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false;
 const STAGE420_PRIVATE_SIGNAL_SOURCE: 'legacy' | 'atomic-v2' = 'legacy';
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // app399 verified behavior.
- // Stage416 app400 PREVIEW activation: backend/Worker prerequisites are live and
- // TEST/PRODUCTION compatibility is already deployed. Final completion still requires
- // same-account PC/mobile and cost verification before TEST feature activation.
-const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true;
+ // app408 rollback: user-observed PC/mobile hearts diverged immediately after update
+ // while Stage416 final settlement was still unproven. Keep the additive backend ready,
+ // but restore the last verified app399 5-second canonical intake on PREVIEW.
+ // Existing durable outbox rows are preserved and settle through the legacy batch path.
+const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;
 const STAGE416_CLIENT_SESSION_STARTED_AT = Date.now();
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;

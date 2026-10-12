@@ -39,8 +39,8 @@ pending=false;handlers.pagehide();
 assert.equal(calls.length,2,'no pending => close does not write');
 
 const start=source.indexOf('const schedulePendingFlush = (user: User) => {');
-const end=source.indexOf('// An earlier batch may be in flight',start);
-assert.ok(start>0&&end>start);
+const end=source.indexOf('// app409:',start);
+assert.ok(start>0&&end>start,'exact schedulePendingFlush block not found');
 const compiled=(await transform(source.slice(start,end),{loader:'ts',target:'es2022',format:'cjs'})).code;
 const delays=[];const fakeWindow={setTimeout:(fn,delay)=>{delays.push(delay);return 1;},clearTimeout:()=>{}};
 const schedule=new Function('readLikeOutbox','clearFlushTimer','flushTimerByUid','window','Date','EXPLORE_LIKE_IDLE_FLUSH_MS_120','flushPendingLikes','eligibleGuardedMutation420','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE','STAGE416_SHARED_RTDB_BATCH_ACTIVE','privateBatchDeadline416','readPrivateBatchWindow416',
@@ -52,8 +52,41 @@ assert.deepEqual(delays,[3000],'5-second trailing window from last click');
 guardedEligible=false;
 schedule(user);
 assert.deepEqual(delays,[3000],'unapproved Stage420 outbox must not schedule a canonical flush');
+
+// app409 recovery is a separate Auth-ready bridge. Test it independently so
+// the schedulePendingFlush harness never accidentally swallows later module code.
+const recoveryStart=source.indexOf('// app409:',end);
+const recoveryEnd=source.indexOf('// An earlier batch may be in flight',recoveryStart);
+assert.ok(recoveryStart>0&&recoveryEnd>recoveryStart,'app409 startup recovery block not found');
+const recoveryCompiled=(await transform(source.slice(recoveryStart,recoveryEnd),{
+  loader:'ts',target:'es2022',format:'cjs'
+})).code;
+let authReadyHandler=null;let startupSchedules=0;let startupPending=false;
+new Function('onAuthStateChanged','auth','readLikeOutbox','eligibleGuardedMutation420',
+  'schedulePendingFlush','window','STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE',
+  'EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE',
+  recoveryCompiled)(
+    (_auth,handler)=>{authReadyHandler=handler;},
+    auth,
+    ()=>startupPending?{song:{retryCount:0}}:{},
+    ()=>true,
+    ()=>{startupSchedules++;},
+    {},
+    false,
+    false,
+  );
+assert.equal(typeof authReadyHandler,'function','app409 must subscribe to Auth readiness');
+authReadyHandler(user);
+assert.equal(startupSchedules,0,'empty startup outbox must do zero canonical work');
+startupPending=true;
+authReadyHandler(user);
+assert.equal(startupSchedules,1,'existing user mutation schedules canonical recovery once Auth is ready');
+startupPending=false;
+authReadyHandler(null);
+assert.equal(startupSchedules,1,'signed-out state cannot schedule a mutation');
 console.log('413_STAGE420_UNAPPROVED_EXIT_AND_IDLE_FLUSH_DENIED=PASS');
 console.log('413_REAL_CLIENT_BACKGROUND_SEND=PASS');
 console.log('413_FIVE_SECOND_TRAILING_TIMER=PASS');
+console.log('APP409_AUTH_READY_EXISTING_PENDING_ONLY=PASS');
 console.log('413_KEEPALIVE_PENDING_ONLY_NO_NAVIGATION_WRITE=PASS');
 console.log('413_FORCE_KILL_RELIABILITY=UNVERIFIED (must test mobile)');

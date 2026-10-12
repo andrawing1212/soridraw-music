@@ -48,6 +48,9 @@ jobs:
             *) echo 'UNAPPROVED_FUNCTION_TARGET'; exit 21 ;;
           esac
           echo "PATCH_FUNCTION=$function_name" >> "$GITHUB_ENV"
+          preflight_only="$(sed -n 's/^preflight_only=//p' "$trigger")"
+          case "$preflight_only" in true|false) ;; *) echo 'INVALID_PREFLIGHT_FLAG'; exit 21;; esac
+          echo "PREFLIGHT_ONLY=$preflight_only" >> "$GITHUB_ENV"
           grep -Fxq 'shared_d1_change=false' "$trigger"
           grep -Fxq 'shared_rtdb_rules_change=false' "$trigger"
           grep -Fxq 'worker_change=false' "$trigger"
@@ -185,6 +188,7 @@ jobs:
           NODE
 
       - name: Deploy only the approved existing PREVIEW Function
+        if: env.PREFLIGHT_ONLY == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -196,6 +200,7 @@ jobs:
           echo 'PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS'
 
       - name: Verify patched Function and protected environments
+        if: env.PREFLIGHT_ONLY == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -230,3 +235,7 @@ jobs:
           test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
           echo 'MAIN_PRODUCTION_UNCHANGED=PASS'
           echo 'NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS'
+
+      - name: Confirm preflight-only mode performs no deployment
+        if: env.PREFLIGHT_ONLY == 'true'
+        run: echo 'STAGE416_SINGLE_FUNCTION_PREFLIGHT_ONLY=PASS;FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0'

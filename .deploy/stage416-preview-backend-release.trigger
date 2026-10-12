@@ -3,4 +3,4 @@ release_scope=stage416_preview_backend_prerequisites_only
 client_activation=false
 worker_route_activation=false
 user_data_migration=false
-retry_after_secret_manager_api_enabled=1
+retry_after_single_secret_created_and_accessor_granted=1

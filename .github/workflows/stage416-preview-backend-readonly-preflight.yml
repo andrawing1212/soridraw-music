@@ -101,6 +101,14 @@ jobs:
           if(/STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE\s*=\s*true\b/.test(source)||
              /STAGE416_SHARED_D1_INTAKE_ACTIVE\s*=\s*true\b/.test(source))
             throw Error('416_PREVIEW_WORKER_FEATURE_PREMATURELY_ACTIVE');
+          const signedRoutePresent=source.includes('/v1/internal/private-like-handoff-416') &&
+            source.includes('416_PRIVATE_HANDOFF_SIGNATURE_DENIED');
+          const names=new Set(bindings.map(b=>String(b.name||'')));
+          console.log('416_PREVIEW_DORMANT_SIGNED_ROUTE='+(signedRoutePresent?'PRESENT':'ABSENT'));
+          console.log('416_PREVIEW_HMAC_BINDING='+
+            (names.has('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')?'PRESENT':'MISSING'));
+          console.log('416_PREVIEW_FINAL_ENDPOINT_BINDING='+
+            (names.has('SORIDRAW_PRIVATE_FINAL416_ENDPOINT')?'PRESENT':'MISSING'));
           const schema=await select("SELECT sql FROM sqlite_schema WHERE type='table' AND name='explore_like_private_acceptance_416'");
           if(schema.length===0){
             console.log('416_SHARED_D1_ACCEPTANCE_TABLE=MISSING_EXPECTED_BEFORE_RELEASE');
@@ -177,6 +185,8 @@ jobs:
           check_absent stage416SchedulePrivateWindowCandidate us-central1
           check_absent stage416SettlePrivateWindowCandidate us-central1
           check_absent privateLikeFinalReceipt416Candidate asia-northeast3
+          check_absent masterGetLikeBatchTiming416 us-central1
+          check_absent masterSetLikeBatchTiming416 us-central1
           echo '416_PREVIEW_FUNCTIONS_PRE_RELEASE_ABSENT=PASS'
           echo 'FUNCTIONS_DEPLOY=0'
 

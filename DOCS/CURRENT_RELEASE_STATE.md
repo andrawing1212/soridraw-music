@@ -1,3 +1,15 @@
+## CURRENT — app402 PREVIEW same-account 하트+숫자 원자 동기화 수정 배포 / 5분 canonical 실사용 검증 대기 (2026-10-12 KST)
+
+- **사용자 app401 실기기 결과:** 같은 계정 PC↔mobile 하트 상태 양방향 실시간 동기화는 PASS. 다만 PC에서 unlike 후 모바일은 **빈 하트 + 숫자 1**로 남아 개인 하트와 숫자가 불일치.
+- **원인:** Stage416 `remote-intent`는 같은 계정의 개인 하트만 즉시 전달하고 optimistic likeCount는 고의로 전달/반영하지 않던 이전 보호 로직이 남아 있었음. 따라서 initiator PC는 0으로 보이지만 receiver mobile은 기존 공개 count 1을 유지.
+- **app402 수정:** 동일 UID private RTDB hint에 그 클릭의 account-private `optimisticLikeCount`를 같은 transaction row로 포함. receiver는 `privateCountExact416=true`인 경우에만 **하트+숫자를 함께** 현재 계정 UI와 user-scoped liked-card cache에 반영. shared Feed/R2/D1/public cache에는 조기 publish하지 않음. app401 구형 hint에 count가 없으면 0으로 추측하지 않고 기존 숫자 유지.
+- **자동검증:** 408 Run **38208941291 SUCCESS**, Follow Run **38208941297 SUCCESS**. 신규 `verify-402-private-heart-count-pair.mjs`에서 same-account unlike 빈하트+0, private-only count, public early publish 0을 보호. TypeScript/Build/기존 좋아요·팔로우 회귀 PASS.
+- **PREVIEW 배포:** Run **38209107993 SUCCESS**, remote `preview.soridraw.com` **app402**, exact build PASS. shared RTDB Rules deploy SKIPPED, Worker/Functions/D1 변경 0, TEST/PRODUCTION unchanged PASS.
+- **5분 검증 의미:** same-account 즉시 표시와 별개로 **canonical/public settlement**을 확인해야 하므로 다른 계정(또는 로그아웃/시크릿 세션)이 가장 명확한 관찰자. 마지막 클릭 시각 +5분 이후 canonical/public count가 최종 상태로 수렴해야 함.
+- **진행률:** ① Stage416 전체 **1/4·25%**, ② 앱 속도 **5/5·100%**, ③ 개인 좋아요 5분 저장 **3/4·75% 유지**. app402 mobile count 실기기 + 다른 계정 5분 canonical + 비용 확인 전 4/4 금지.
+
+---
+
 ## CURRENT — app401 PREVIEW 교차 반대 좋아요 deadlock 수정 배포 / 실기기 재검증 대기 (2026-10-12 KST)
 
 - **사용자 실기기 app400 FAIL:** 같은 계정에서 PC 단독 좋아요↔해제는 모바일에 정상 반영됐지만, **PC 좋아요 → 모바일 해제** 또는 반대 순서가 한 번 발생하면 해당 곡이 양쪽 기기에서 더 이상 정상 수렴하지 않음. 이후 5분 이상 지나도 다른 기기에 최종 상태가 적용되지 않는 실제 결함 확인.

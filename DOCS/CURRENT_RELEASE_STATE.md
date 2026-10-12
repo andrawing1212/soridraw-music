@@ -1,3 +1,17 @@
+## CURRENT — PREVIEW app406 모바일 좋아요 해제 뒤 새로고침 숫자 1 복귀 경로 보정 배포 PASS / 실기기 QA 전 (2026-10-12 KST)
+
+- **신규 사용자 재현:** 「골목길 탐험대」에서 좋아요 클릭은 PC+모바일 하트/수치 모두 1, 새로고침에도 정상; 좋아요 **해제 직후 둘 다 빈 하트+0**이나 **모바일 새로고침만 1**로 복귀. 사용자 새 재현 조건으로 app405 실사용 FAIL 지속. PC에서는 정상인 경우가 있음.
+- **정확히 발견한 프론트 race:** `ExplorePage.tsx`의 `getSoridrawCuratedTracks307(false)` 효과는 `[profileUid,submittedQuery]`만 의존. 모바일에선 빠른 로컬 curated R2 캐시가 표시될 때 `auth.currentUser`/`user`가 아직 null이라 사용자 416 pending/outbox 카운트 overlay 없이 공유 canonical 1로 렌더됨. 이후 `onAuthStateChanged`가 user를 복원해도 curated 로더 효과가 재실행되지 않는 코드 경로. 모바일 화면 hidden→visible 재검증은 새 overlay 적용해 0으로 바뀔 수 있음. 이것은 재현과 일치하는 **검증 가능한 race 경로**이지 개별 모바일 런타임 trace까지 확인한 결과는 아님.
+- **수정 app406:** `src/pages/ExplorePage.tsx`의 UID 변경 전용 효과가 `readCachedSoridrawCuratedTracks307()`로 **계정 중립 원본을 추가 서버 읽기 0으로 재사용**하고 `overlayExploreLikeDisplayCounts(user.uid, neutral406)`를 이미 표시된 curated 카드에 재적용. `src/services/exploreCurationService.ts`에 로컬 캐시 읽기 전용 동기 접근자 추가. 계정 전환 시 이전 계정 임시 숫자를 다음 계정에 전파하지 않도록 중립 원본에서 계산. 기존 React 카드 구조, UI, 사용자 데이터/실시간 클릭, Worker D1 정산 무변경.
+- **변경 파일:** `src/pages/ExplorePage.tsx`, `src/services/exploreCurationService.ts`, `scripts/verify-402-private-heart-count-pair.mjs`, `public/app-version.json`(405→406). 기준 구현/테스트 `f2a5a72f62532250479ebf4a5479683dbfa35476`, exact 앱 source `82be614a2ee8bfbae0a1b8a77f900f2a1bf0ff9d`, Release trigger commit `1d47d6de2f2874f71e20a6d56c439fd736884c83`.
+- **검사:** 408 [38259528489](https://github.com/andrawing1212/soridraw-music/actions/runs/38259528489) SUCCESS: TypeScript·Build, app406 늦은 UID restore source regression, 기존 app402/405 및 likes/follow 회귀, RTDB Rules read-only PASS. 신규 검사에서 UID-only 효과와 R2/D1 추가 fetch 0을 소스 단위로 확인. **PC·모바일 실제 체험 PASS 아님.**
+- **PREVIEW 배포:** [Release Run 38259848293](https://github.com/andrawing1212/soridraw-music/actions/runs/38259848293) SUCCESS, `preview.soridraw.com` PREVIEW_APP_VERSION=406 / PREVIEW_EXACT_BUILD=PASS, Hosting only, SHARED_RTDB_RULES_DEPLOY=SKIPPED, TEST_PRODUCTION_UNCHANGED=PASS. Functions/Cloudflare Worker/D1/R2/사용자 원본/마이그레이션/백필/삭제 0.
+- **남은 근본 문제:** 단일 곡 「골목길 탐험대」는 shared D1 indexed likes row 1건, stats=1, R2 card=1, curated=1 ([38256077221](https://github.com/andrawing1212/soridraw-music/actions/runs/38256077221)); 서버 원본과 shared count는 일치. 모바일의 임시 0이 실제 승인된 해제인지 미확인. Stage416 최근 90분 Task `EMPTY=19`, D1 acceptance 없음 ([38256513112](https://github.com/andrawing1212/soridraw-music/actions/runs/38256513112)). **최종 5분 저장 FAIL/미확정**, app406은 늦은 Auth 클라이언트 복원만 보완하므로 20분 넘은 provisional hint 만료나 canonical D1 미정산은 해결하지 않음. 절대 UI 임시 숫자를 D1 진실로 착각하거나 원본 like row 삭제/리셋 금지.
+- **다음:** 사용자의 같은 계정 PC 좋아요→모바일 동기화→양쪽 새로고침, PC 해제→모바일 동기화→**모바일만 바로 새로고침** 실기기 확인. 이후 실제 단일 operationId(개인정보 마스킹) server accepted/window/Task→D1 final 진단 필수. TEST/PRODUCTION 변경 금지.
+- **진행률:** Stage416 전체 1/4·25%, 앱 속도 5/5·100%, 5분 최종 정산 3/4·75%(사용자 실사용 FAIL). app406 클라이언트 보정의 구현+QA+PREVIEW 릴리스 PASS, 실기기 FAIL 여부 보류.
+
+---
+
 ## CURRENT — 「골목길 탐험대」 D1 실값 1 확인, app405 새로고침 0/1 분기 및 Stage416 Task EMPTY 다수 (2026-10-12 KST)
 
 - **사용자 추가 재현(사진/실사용):** 모바일 화면 껐다 켜면 빈 하트+0, 다시 새로고침 시 빈 하트+1 복귀; PC에서도 때로 0/1로 불일치. 같은 계정 PC·모바일 첫 좋아요/해제 실시간 일치는 PASS였으나 재진입·새로고침 이후 같은 곡만 수치 불일치 → **app405 제품 실사용 FAIL**. 이미 정상인 다른 곡과 임시 UI는 추가 수정 금지.

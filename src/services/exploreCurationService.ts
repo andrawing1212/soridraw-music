@@ -153,6 +153,11 @@ const readCuratedCache307 = (): CuratedCache307 | null => {
   }
 };
 
+// app406: synchronous, account-neutral curated snapshot for auth restoration.
+ // No HTTP and no cache mutation. Never return a viewer-optimistic count here.
+export const readCachedSoridrawCuratedTracks307 = (): Array<Record<string, unknown>> =>
+  readCuratedCache307()?.items || [];
+
 const writeCuratedCache307 = (
   items: Array<Record<string, unknown>>,
   revision: string,

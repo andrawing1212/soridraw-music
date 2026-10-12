@@ -25,3 +25,4 @@ const compat=[
 if(!oldAnchor&&!compat)throw Error(stage+' aggregate shape is neither known legacy nor Stage416-compatible');
 console.log(stage+'_416_AGGREGATE_SHAPE='+(compat?'COMPAT':'LEGACY_PATCHABLE'));
 console.log(stage+'_416_COMPATIBILITY_READONLY=PASS');
+// stage416-live-rerun: 2026-10-12T02:51Z

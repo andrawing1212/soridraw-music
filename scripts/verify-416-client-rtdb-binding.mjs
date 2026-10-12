@@ -82,6 +82,16 @@ const acceptedFinal=parseFinal({version:9,canonicalD1:'settled',
     trackId:'song-a',operationId:opFinal,liked:true,likeCount:2,
   }]});
 assert(acceptedFinal);
+const final80=parseFinal({version:10,canonicalD1:'settled',
+  personalLikeSnapshot:'changed-track-r2',rows:Array.from({length:80},(_,i)=>({
+    trackId:'split-'+i,operationId:'00000000-0000-4000-8000-'+
+      String(i+1).padStart(12,'0'),liked:i%2===0,likeCount:i,
+  }))});
+assert.equal(final80?.rows.length,80,'50+30 canonical receipt must remain exact');
+assert.equal(parseFinal({...final80,version:11,
+  canonicalD1:'settled',personalLikeSnapshot:'changed-track-r2',
+  rows:[...final80.rows,...final80.rows,...final80.rows,...final80.rows]}),null,
+  'unbounded server receipt is never trusted');
 assert.equal(exactFinal({'song-a':{operationId:opFinal,desiredLiked:true}},
   acceptedFinal).length,1);
 assert.equal(exactFinal({'song-a':{operationId:opFinal,desiredLiked:false}},

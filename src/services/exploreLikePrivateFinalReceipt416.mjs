@@ -8,7 +8,7 @@ export function parsePrivateFinalReceipt416(raw){
     !Number.isSafeInteger(raw.version)||raw.version<=0||
     raw.canonicalD1!=='settled'||
     raw.personalLikeSnapshot!=='changed-track-r2'||
-    !Array.isArray(raw.rows)||raw.rows.length<1||raw.rows.length>50)
+    !Array.isArray(raw.rows)||raw.rows.length<1||raw.rows.length>256)
    return null;
  const seen=new Set(),rows=[];
  for(const v of raw.rows){

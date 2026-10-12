@@ -81,9 +81,13 @@ jobs:
           for stage in ('test','production'):
               before=Path(f'.stage416-live/{stage}.js').read_text()
               after=Path(f'.stage416-live/{stage}-patched.js').read_text()
-              assert before != after
               marker="json_type(j.value, '$.mutationAt') = 'integer'"
-              assert marker not in before
+              if marker in before:
+                  assert after == before
+                  assert before.count(marker) == 1
+                  print(stage.upper()+'_416_ALREADY_COMPAT_NO_DIFF=PASS')
+                  continue
+              assert before != after
               assert after.count(marker) == 1
               # Only the aggregate CTE optional-time projection may change.
               b0=before.index('function exploreLikeAggregateSnapshotCte039')
@@ -97,4 +101,37 @@ jobs:
           echo 'REMOTE_WRITES=0'
           echo 'WORKER_DEPLOY=0'
 
-# stage416-readonly-rerun: 2026-10-12T02:37Z
+      - name: Verify live TEST compatibility smoke and bindings read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-test';
+          const EXPECTED='ddd2255a-75cc-4db9-8905-b47338558cb0';
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,500));return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments');const d=(ds.deployments||ds||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(active?.version_id!==EXPECTED||Number(active?.percentage||0)<99.99)throw Error('TEST active version mismatch '+active?.version_id);
+            const settings=await g(base+'/settings');const b=Array.isArray(settings.bindings)?settings.bindings:[];
+            const byName=new Map(b.map(x=>[String(x.name),x]));
+            const db=byName.get('DB'),rate=byName.get('RATE_DB'),media=byName.get('PROFILE_MEDIA'),cache=byName.get('EXPLORE_CACHE');
+            if(String(db?.id||db?.database_id||db?.uuid||'')!=='217ef5b1-5d80-4f7c-afc7-9e07eb05c06b')throw Error('TEST shared DB binding drift');
+            if(String(rate?.id||rate?.database_id||rate?.uuid||'')!=='31817dbd-d06e-415e-9bc0-5553b0f5dc43')throw Error('TEST RATE_DB binding drift');
+            if(String(media?.bucket_name||media?.bucket||'')!=='soridraw-profile-media')throw Error('TEST shared PROFILE_MEDIA drift');
+            if(String(cache?.bucket_name||cache?.bucket||'')!=='soridraw-profile-media-test')throw Error('TEST EXPLORE_CACHE drift');
+            if(!byName.has('LIKE_RATE_LIMITER'))throw Error('TEST rate limiter missing');
+            if(!byName.has('EXPLORE_LIKE_BATCH_SCHEDULER'))throw Error('TEST scheduler binding missing');
+            const feed=await fetch('https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1',{headers:{Origin:'https://test.soridraw.com','Cache-Control':'no-cache'}});
+            if(feed.status!==200)throw Error('TEST feed HTTP '+feed.status);
+            if(String(feed.headers.get('access-control-allow-origin')||'')!=='https://test.soridraw.com')throw Error('TEST feed CORS');
+            const w=feed.headers.get('x-soridraw-d1-write');if(w!==null&&String(w).trim()!=='0')throw Error('TEST feed D1 write '+w);
+            console.log('TEST_STAGE416_COMPAT_ACTIVE='+EXPECTED);
+            console.log('TEST_STAGE416_BINDINGS_UNCHANGED=PASS');
+            console.log('TEST_STAGE416_FEED_SMOKE=PASS');
+            console.log('REMOTE_WRITES=0');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+# stage416-readonly-rerun: 2026-10-12T02:38Z

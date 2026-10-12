@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      STAGE416_EXPECTED_PRODUCTION_VERSION: 4d82f107-ae7e-4985-b955-8c889807c888
     steps:
       - name: Checkout preview tooling
         uses: actions/checkout@v4
@@ -32,25 +34,36 @@ jobs:
         with:
           node-version: 22
 
-      - name: Prepare exact live Worker plus cache patch
+      - name: Prepare exact live PRODUCTION Worker plus Stage416 compatibility patch
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
-          npm install --no-audit --no-fund
-          npm run cf:prepare
+          npm install --no-audit --no-fund --package-lock=false
+          node scripts/prepare-stage416-production-compat.mjs
+          cp .remote-worker/worker.js "$RUNNER_TEMP/stage416-prod-before.js"
+          node scripts/stage416-ordering-compat-patch.mjs .remote-worker/worker.js
           node --check .remote-worker/worker.js
-
-          # Cloudflare returns the deployed Worker in compiled form. Source comments,
-          # whitespace and `return await` may be removed, so verify behavior markers
-          # instead of requiring the pre-compile source spelling.
-          grep -Fq 'handleFeedWithEdgeCache' .remote-worker/worker.js
-          grep -Fq 'caches.default' .remote-worker/worker.js
-          grep -Fq 'X-SORIDRAW-Edge-Cache' .remote-worker/worker.js
-          grep -Fq 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js
-          echo "MUTATION_INVALIDATION_REFERENCES=$(grep -Fc 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js || true)"
-          echo 'EDGE_CACHE_SOURCE_VALIDATION=PASS'
+          cd ../..
+          node scripts/verify-416-live-worker-compatibility.mjs cloudflare/explore-worker/.remote-worker/worker.js PRODUCTION_DEPLOY_PACKAGE
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          b=(Path(os.environ['RUNNER_TEMP'])/'stage416-prod-before.js').read_text()
+          a=Path('cloudflare/explore-worker/.remote-worker/worker.js').read_text()
+          fn='function exploreLikeAggregateSnapshotCte039'
+          b0=b.index(fn); a0=a.index(fn)
+          b1=b.index('\n}\n',b0)+3; a1=a.index('\n}\n',a0)+3
+          assert b[:b0]==a[:a0]
+          assert b[b1:]==a[a1:]
+          assert "json_type(j.value, '$.mutationAt') = 'integer'" not in b
+          assert a.count("json_type(j.value, '$.mutationAt') = 'integer'")==1
+          print('PRODUCTION_STAGE416_EXACT_CTE_ONLY_DIFF=PASS')
+          PY
+          cd cloudflare/explore-worker
+          npx wrangler deploy --config .remote-worker/wrangler.jsonc --dry-run --outdir .remote-worker/dryrun
+          echo 'PRODUCTION_STAGE416_DEPLOY_DRYRUN=PASS'
 
       - name: Deploy only prepared Explore Worker
         working-directory: cloudflare/explore-worker
@@ -58,21 +71,19 @@ jobs:
         run: |
           set -euo pipefail
           npm run cf:deploy
-          echo 'EXPLORE_WORKER_EDGE_CACHE_DEPLOY=PASS'
+          echo 'PRODUCTION_STAGE416_COMPAT_DEPLOY=PASS'
 
-      - name: Re-read deployed Worker and verify persisted behavior
+      - name: Re-read deployed Worker and verify Stage416 compatibility persisted
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           rm -rf .remote-worker
-          npm run cf:prepare
+          SORIDRAW_SKIP_PATCH_REPLAY=1 npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -Fq 'handleFeedWithEdgeCache' .remote-worker/worker.js
-          grep -Fq 'caches.default' .remote-worker/worker.js
-          grep -Fq 'X-SORIDRAW-Edge-Cache' .remote-worker/worker.js
-          grep -Fq 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js
-          echo 'LIVE_EDGE_CACHE_BEHAVIOR_SOURCE=PASS'
+          cd ../..
+          node scripts/verify-416-live-worker-compatibility.mjs cloudflare/explore-worker/.remote-worker/worker.js PRODUCTION_LIVE
+          echo 'PRODUCTION_STAGE416_COMPAT_LIVE_SOURCE=PASS'
 
       - name: Verify second public-feed request is D1-free edge HIT
         shell: bash
@@ -81,7 +92,7 @@ jobs:
           url='https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40'
           for n in 1 2; do
             curl -fsS --max-time 30 -D "$RUNNER_TEMP/feed-$n.headers" -o "$RUNNER_TEMP/feed-$n.json" \
-              -H 'Origin: https://preview.soridraw.com' \
+              -H 'Origin: https://soridraw.com' \
               -H 'Accept: application/json' \
               "$url"
             grep -q '"ok":true' "$RUNNER_TEMP/feed-$n.json"
@@ -99,3 +110,5 @@ jobs:
           echo 'NO_FIREBASE_RULES_CHANGE=true'
           echo 'NO_FIREBASE_FUNCTIONS_DEPLOY=true'
           echo 'NO_FIREBASE_PRODUCTION_HOSTING_DEPLOY=true'
+          echo 'STAGE416_FEATURE_ACTIVATION=false'
+          echo 'USER_DATA_MIGRATION=0'

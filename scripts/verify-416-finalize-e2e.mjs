@@ -64,7 +64,11 @@ await assert.rejects(finalizePrivateHandoff416({...args,version:81}),/416_FINAL_
 assert.equal(r2puts,1);assert.equal(callbacks,2);
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const index=readFileSync('functions/src/index.ts','utf8');
-assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
+if (process.env.STAGE416_EXPECT_SIGNED_ROUTE === '1') {
+  assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true/);
+} else {
+  assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
+}
 assert.match(entry,/finalizePrivateHandoff416\(\{/);
 assert.match(index,/privateLikeFinalReceipt416Candidate/);
 console.log('STAGE416_069_DRAIN_TO_ONE_R2_CAS_TO_SIGNED_FINAL80=PASS');

@@ -1,3 +1,14 @@
+## CURRENT — Stage416 50+ 공개 알림 수정 소스/408 CI PASS, 배포 전 (2026-10-12 KST)
+
+- **검증한 실제 소스 commit:** `fb4a38b5b8fff5c4f8909d0f0a74b1990b250ba7`. 해당 commit의 GitHub 408 Run [38221242172](https://github.com/andrawing1212/soridraw-music/actions/runs/38221242172) **SUCCESS**.
+- **수정 내용:** Stage416 한 사용자 5분 완료 윈도우의 변경곡 80/256을 하나의 RTDB 알림 transaction으로 전송. 구형 수신기용 `rows` 최대50 유지, 신규 `overflow416` 최대206 사용. 새로운 변경곡을 legacy 첫50에 우선 포함. PREVIEW 수신기는 화면에 보이는 변경곡만 R2 changed-card API 50곡씩 순차 갱신하고 미확정 카드만 5초 간격으로 제한 재시도. 추가 D1 read/write 또는 전체 Feed 재조회 없음.
+- **검사:** Node 실행형 delayed-observer 80/256, exact replay W0, 타 actor 최신 상태 보호, signed final→RTDB→R2 card→80 visible B 화면 50+30, like/unlike·팔로우, Stage416, TypeScript, Functions Build, 앱 Build, shared RTDB Rules read-only PASS. 기존 개인 동기화 코드 불변.
+- **비용·범위:** 공유 Rules/Worker/D1/user 원본 무변경; server 알림 최대 6W→1W/윈도우(논리적). 50곡 초과 윈도우의 RTDB fan-out 대역폭 증가와 실제 10만 사용자 비용 **미측정**. 여러 UID가 짧게 연속 기록한 경우의 전역 이벤트 전달·장시간 오프라인 복구는 여전히 **미보장**. 이를 완전 보장하려면 별도 변경 저널+비용 설계 필요.
+- **배포 상태:** Github preview 코드만, PREVIEW Firebase Hosting/Functions **미배포**, app402 실서비스 종전 상태. 배포하려면 Functions + 새 수신 클라이언트를 동일 목표 버전으로 묶어 배포 및 목표 도메인 실제 확인 필요. TEST/PRODUCTION/공유 사용자 데이터 비변경.
+- **진행률:** Stage416 전체 1/4·25%, 앱 속도 5/5·100%, 개인 좋아요 5분 저장 3/4·75% 유지. A/B 실사용 및 실제 비용 미검증이라 실서비스 기능 PASS 아님.
+
+---
+
 ## CURRENT — Stage416 50+ 공개 알림 1회 원자 전송 소스 수정 후보 (2026-10-12 KST)
 
 - **기준:** preview `1184ea9de8adb76eb6e885ce41e71fbedbcf6ec5`, app402, 기존 ac04a72 공개 알림 누락 수정 미배포.

@@ -136,17 +136,21 @@ jobs:
           const sourceResponse=await fetch(base+'/content/v2',{headers});
           if(!sourceResponse.ok) throw Error('416_PREVIEW_WORKER_SOURCE_GET_'+sourceResponse.status);
           const source=await sourceResponse.text();
-          if(/STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE\s*=\s*true\b/.test(source)||
-             /STAGE416_SHARED_D1_INTAKE_ACTIVE\s*=\s*true\b/.test(source))
-            throw Error('416_PREVIEW_WORKER_FEATURE_PREMATURELY_ACTIVE');
+          if(!/STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE\s*=\s*true\b/.test(source))
+            throw Error('416_PREVIEW_SIGNED_HANDOFF_NOT_ACTIVE');
+          if(/STAGE416_SHARED_D1_INTAKE_ACTIVE\s*=\s*true\b/.test(source))
+            throw Error('416_PREVIEW_LEGACY_D1_INTAKE_MUST_STAY_OFF');
           const signedRoutePresent=source.includes('/v1/internal/private-like-handoff-416') &&
             source.includes('416_PRIVATE_HANDOFF_SIGNATURE_DENIED');
+          if(!signedRoutePresent) throw Error('416_PREVIEW_SIGNED_ROUTE_MISSING');
           const names=new Set(bindings.map(b=>String(b.name||'')));
-          console.log('416_PREVIEW_DORMANT_SIGNED_ROUTE='+(signedRoutePresent?'PRESENT':'ABSENT'));
-          console.log('416_PREVIEW_HMAC_BINDING='+
-            (names.has('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')?'PRESENT':'MISSING'));
-          console.log('416_PREVIEW_FINAL_ENDPOINT_BINDING='+
-            (names.has('SORIDRAW_PRIVATE_FINAL416_ENDPOINT')?'PRESENT':'MISSING'));
+          if(!names.has('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET'))
+            throw Error('416_PREVIEW_HMAC_BINDING_MISSING');
+          if(!names.has('SORIDRAW_PRIVATE_FINAL416_ENDPOINT'))
+            throw Error('416_PREVIEW_FINAL_ENDPOINT_BINDING_MISSING');
+          console.log('416_PREVIEW_SIGNED_ROUTE_ACTIVE=PASS');
+          console.log('416_PREVIEW_HMAC_BINDING=PRESENT');
+          console.log('416_PREVIEW_FINAL_ENDPOINT_BINDING=PRESENT');
           const schema=await select("SELECT sql FROM sqlite_schema WHERE type='table' AND name='explore_like_private_acceptance_416'");
           if(schema.length===0){
             console.log('416_SHARED_D1_ACCEPTANCE_TABLE=MISSING_EXPECTED_BEFORE_RELEASE');
@@ -160,7 +164,7 @@ jobs:
             console.log('416_SHARED_D1_ACCEPTANCE_TABLE=EXACT_COMPATIBLE');
           }
           console.log('416_PREVIEW_ACTIVE_WORKER_VERSION='+active.version_id);
-          console.log('416_PREVIEW_WORKER_FLAGS_NOT_ACTIVE=PASS');
+          console.log('416_PREVIEW_WORKER_STAGE416_ACTIVE=PASS');
           console.log('416_PREVIEW_SHARED_D1_BINDING=PASS');
           console.log('416_SHARED_D1_SCHEMA_METADATA_READONLY=PASS');
           console.log('REMOTE_D1_WRITES=0');
@@ -201,37 +205,30 @@ jobs:
           PY
           node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/stage416-live-rules.json"
 
-      - name: Confirm Stage416 PREVIEW Functions are not deployed yet
+      - name: Confirm Stage416 PREVIEW Functions are deployed and ACTIVE
         shell: bash
         run: |
           set -euo pipefail
           project='soridraw-app-866a5'
-          check_absent() {
+          check_active() {
             local fn="$1" region="$2"
-            if gcloud functions describe "$fn" --gen2 --region "$region" --project "$project"               --format='value(name)' >"$RUNNER_TEMP/fn.out" 2>"$RUNNER_TEMP/fn.err"; then
-              echo "416_PREMATURE_FUNCTION_DEPLOY=$fn"
-              exit 1
-            fi
-            if grep -qiE 'NOT_FOUND|not found|does not exist|could not be found' "$RUNNER_TEMP/fn.err"; then
-              echo "416_FUNCTION_NOT_DEPLOYED_YET=$fn"
-            else
-              cat "$RUNNER_TEMP/fn.err"
-              exit 1
-            fi
+            state="$(gcloud functions describe "$fn" --gen2 --region "$region" --project "$project" --format='value(state)')"
+            test "$state" = 'ACTIVE'
+            echo "416_FUNCTION_ACTIVE=$fn"
           }
-          check_absent recordPrivateLike416 us-central1
-          check_absent stage416SchedulePrivateWindowCandidate us-central1
-          check_absent stage416SettlePrivateWindowCandidate us-central1
-          check_absent privateLikeFinalReceipt416Candidate asia-northeast3
-          check_absent masterGetLikeBatchTiming416 us-central1
-          check_absent masterSetLikeBatchTiming416 us-central1
-          echo '416_PREVIEW_FUNCTIONS_PRE_RELEASE_ABSENT=PASS'
+          check_active recordPrivateLike416 us-central1
+          check_active stage416SchedulePrivateWindowCandidate us-central1
+          check_active stage416SettlePrivateWindowCandidate us-central1
+          check_active privateLikeFinalReceipt416Candidate asia-northeast3
+          check_active masterGetLikeBatchTiming416 us-central1
+          check_active masterSetLikeBatchTiming416 us-central1
+          echo '416_PREVIEW_FUNCTIONS_LIVE=PASS'
           echo 'FUNCTIONS_DEPLOY=0'
 
       - name: Safety result
         run: |
           echo 'STAGE416_PREVIEW_BACKEND_READONLY_PREFLIGHT=PASS'
-          echo 'STAGE416_FEATURE_ACTIVATION=false'
+          echo 'STAGE416_FEATURE_ACTIVATION=true'
           echo 'NO_D1_MIGRATION=true'
           echo 'NO_RTDB_RULES_DEPLOY=true'
           echo 'NO_FUNCTIONS_DEPLOY=true'

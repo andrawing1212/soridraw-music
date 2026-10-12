@@ -86,10 +86,13 @@ const baseVariants = [
   ['additive-server-only-416-private-intent-and-bool',
     withoutBool(withoutIntent(withoutServer416(local)))],
 ];
-const variants = baseVariants.flatMap(([status,candidate]) => [
+const expandedVariants = baseVariants.flatMap(([status,candidate]) => [
   [status, candidate],
   [status+'-without-private-optimistic-count', withoutIntentOptimisticCount(candidate)],
 ]);
+const variants = [...new Map(
+  expandedVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+).values()];
 const compare = remote => {
   const key = stable(remote);
   return variants.find(([,candidate]) => stable(candidate) === key)?.[0] || null;

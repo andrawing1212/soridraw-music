@@ -1,0 +1,9 @@
+product_code_target=47fa39c24cee2cdbc11c68d636b2c8ce789dfb4d
+scope=preview_single_existing_final_function_only
+shared_rules_change=false
+shared_d1_change=false
+worker_change=false
+firebase_functions_scope=privateLikeFinalReceipt416Candidate
+hosting_change=false
+main_production_change=false
+user_data_migration=false

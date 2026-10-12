@@ -712,6 +712,52 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
   return { version, previousVersion, results };
 };
 
+// app410: the retained same-account RTDB row is already delivered by the
+// existing listener on every subscription. If this device recorded that exact
+// version before but one local membership cache row drifted, replay ONLY the
+// matching retained membership locally. This adds no server request, never
+// changes public likeCount, and never outranks a newer local/private intention.
+const replaySameVersionRetainedMembership410 = (
+  uid: string,
+  signal: ExploreLikeSignal127,
+): number => {
+  if (!uid || signal.version !== readSeenLikeSignal127(uid)) return 0;
+  const pending = readLikeOutbox(uid);
+  const unresolved = readSnapshotPending127(uid);
+  const retryTracks = new Set(readSignalRetry127(uid).map((row) => row.trackId));
+  const cache = getLikedStateCache(uid);
+  const repaired: ExploreLikeAcceptedRow127[] = [];
+
+  for (const item of signal.results) {
+    if (pending[item.trackId] || retryTracks.has(item.trackId)) continue;
+    if (typeof readExploreLikeIntent416(uid, item.trackId) === 'boolean') continue;
+    if (EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE &&
+        guardedLikeHintsByUid420.get(uid)?.has(item.trackId)) continue;
+    if (Object.prototype.hasOwnProperty.call(unresolved, item.trackId) &&
+        unresolved[item.trackId] !== item.liked) continue;
+    if (cache.get(item.trackId) === item.liked) continue;
+    cache.set(item.trackId, item.liked);
+    patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
+    repaired.push(item);
+  }
+
+  if (!repaired.length) return 0;
+  persistLikedStateCache(uid, cache);
+  markLocalLikeCatalogReady135(uid);
+  // Reuse the personal-only repaint channel so React changes the heart without
+  // replacing the current shared/public count with an old retained count.
+  repaired.forEach((item) => notifyExploreLikeUiSync139({
+    uid,
+    trackId: item.trackId,
+    ownerUid: item.ownerUid,
+    liked: item.liked,
+    likeCount: 0,
+    privateCountExact416: false,
+    source: 'remote-intent',
+  }));
+  return repaired.length;
+};
+
 const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, deferredReplay390 = false) => {
   const lastSeen = readSeenLikeSignal127(uid);
   if (!deferredReplay390 && signal.version <= lastSeen) return;
@@ -848,6 +894,10 @@ const startLikeSignal127 = (uid: string) => {
         rememberLastRetainedLikeSignal357(uid, signal.version);
         const seenBefore357 = readSeenLikeSignal127(uid);
         const certifiedBefore357 = readCrossOriginLikeCertified357(uid);
+        // If this exact retained version was already marked seen, the normal
+        // monotonic handler intentionally returns early. app410 first repairs
+        // only a drifted local heart from that exact already-received row.
+        if (signal.version === seenBefore357) replaySameVersionRetainedMembership410(uid, signal);
         applyRemoteLikeSignal127(uid, signal);
         if (canAdvancePersonalLikeOriginCertificate357({
           seenBefore: seenBefore357,

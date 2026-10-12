@@ -731,3 +731,83 @@ retryHarness127.schedule('same-account');
 assert.equal(retryJobs127.size, 1, 'new accepted event must have a fresh retry budget');
 retryHarness127.clear('same-account');
 assert.equal(retryJobs127.size, 0, 'successful publication must cancel its pending timer');
+
+
+// app410: an already-seen retained RTDB row may repair one stale local heart
+// without any new server request and without touching the shared public count.
+const repairStart410 = service.indexOf('const replaySameVersionRetainedMembership410 =');
+const repairEnd410 = service.indexOf('const applyRemoteLikeSignal127 =', repairStart410);
+assert.ok(repairStart410 > 0 && repairEnd410 > repairStart410, 'app410 retained replay helper missing');
+const repairSource410 = service.slice(repairStart410, repairEnd410);
+assert.doesNotMatch(repairSource410, /requestExploreLike\(|fetch\(|httpsCallable|setRealtimeValue|databaseRef\(/,
+  'app410 retained replay must add zero server IO');
+assert.match(repairSource410, /signal\.version !== readSeenLikeSignal127\(uid\)/,
+  'app410 may replay only the exact already-seen retained version');
+assert.match(repairSource410, /pending\[item\.trackId\] \|\| retryTracks\.has\(item\.trackId\)/,
+  'app410 must preserve newer/unpublished local operations');
+assert.match(repairSource410, /readExploreLikeIntent416\(uid, item\.trackId\)/,
+  'app410 must not outrank an active private intent');
+assert.match(repairSource410, /privateCountExact416: false/,
+  'app410 heart repair must not overwrite the shared public count');
+
+const repairJS410 = ts.transpileModule(repairSource410, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+}).outputText;
+const cache410 = new Map([['song-a', false], ['song-b', true]]);
+const persisted410 = [];
+const patched410 = [];
+const notified410 = [];
+let seen410 = 77;
+let outbox410 = {};
+let unresolved410 = {};
+let intents410 = {};
+let retry410 = [];
+const repairFn410 = new Function(
+  'readSeenLikeSignal127','readLikeOutbox','readSnapshotPending127','readSignalRetry127',
+  'getLikedStateCache','readExploreLikeIntent416','EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE',
+  'guardedLikeHintsByUid420','patchExploreLikedTrackMembership','persistLikedStateCache',
+  'markLocalLikeCatalogReady135','notifyExploreLikeUiSync139',
+  repairJS410 + '\nreturn replaySameVersionRetainedMembership410;',
+)(
+  () => seen410,
+  () => outbox410,
+  () => unresolved410,
+  () => retry410,
+  () => cache410,
+  (_uid,id) => intents410[id],
+  false,
+  new Map(),
+  (_uid,id,liked) => patched410.push([id,liked]),
+  () => persisted410.push('persist'),
+  () => persisted410.push('ready'),
+  detail => notified410.push(detail),
+);
+const signal410 = {
+  version: 77, previousVersion: 70,
+  results: [
+    { uid:'', trackId:'song-a', ownerUid:'owner', liked:true, likeCount:1, source:'remote' },
+    { uid:'', trackId:'song-b', ownerUid:'owner', liked:true, likeCount:9, source:'remote' },
+  ],
+};
+assert.equal(repairFn410('user', signal410), 1, 'only the stale exact row should replay');
+assert.equal(cache410.get('song-a'), true);
+assert.deepEqual(patched410, [['song-a', true]]);
+assert.equal(notified410.length, 1);
+assert.equal(notified410[0].source, 'remote-intent');
+assert.equal(notified410[0].privateCountExact416, false);
+assert.equal(notified410[0].likeCount, 0, 'public count must stay untouched');
+assert.equal(repairFn410('user', signal410), 0, 'second replay must be idempotent');
+seen410 = 78;
+cache410.set('song-a', false);
+assert.equal(repairFn410('user', signal410), 0, 'older retained signal must never roll back newer state');
+seen410 = 77;
+outbox410 = {'song-a': {desiredLiked:false}};
+assert.equal(repairFn410('user', signal410), 0, 'local pending click must outrank retained repair');
+outbox410 = {};
+intents410 = {'song-a': false};
+assert.equal(repairFn410('user', signal410), 0, 'newer private intent must outrank retained repair');
+intents410 = {};
+retry410 = [{trackId:'song-a', liked:false}];
+assert.equal(repairFn410('user', signal410), 0, 'unpublished accepted retry must outrank retained repair');
+console.log('410_SAME_VERSION_RETAINED_HEART_REPAIR_LOCAL_ONLY=PASS');
+console.log('410_RETAINED_REPAIR_ZERO_SERVER_IO_AND_PUBLIC_COUNT_UNCHANGED=PASS');

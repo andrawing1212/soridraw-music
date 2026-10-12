@@ -1,3 +1,14 @@
+## CURRENT — Stage416 서버 접수 재시도 공백 코드 확인 / 제품 수정 보류 (2026-10-12 14:48 UTC 이후)
+
+- **읽기 전용 소스 감사 기준:** preview `817264e9da0963bffb0580c95d8784aef77547a9`; app406 사용자 실기기 모바일 해제/새로고침 PASS 동결. 추가 앱/Functions/Worker/Rules/D1/R2/사용자 데이터 변경 없음.
+- **새 확인 사항(코드상 위험):** `src/services/exploreLikeService.ts`는 화면 즉시 동기화용 `publishExploreLikeIntent416`과 별도로 server-only `publishPrivateRtdbBatchClick416`을 클릭 시 비동기 호출한다. 단말의 `deviceId/deviceSequence`와 outbox는 호출 전에 로컬 보존하지만, 호출이 거절/예외로 종료되면 `console.warn`만 하고 해당 operation의 `privateServerRegistered416`은 false/미설정으로 남는다. 활성 416 플래그에서 `schedulePendingFlush`는 조기 종료한다. 현재 확인한 클릭 경로에는 이 실패한 private Callable을 로그인/새로고침만으로 다시 등록하는 확정 복구가 없다. **이는 위험 경로 확인이지 현재 실기기 누락의 원인 확정이 아니다.**
+- **기존 서버 증거 재확인:** read-only run `38262662237` / `38263043769`에서 Scheduler onCreate request 0, Callable HTTP200/204 다수(accepted:true 불명), Settle HTTP204/EMPTY 다수, Eventarc trigger ACTIVE 등록, D1 416 acceptance NO. 한 operation별 window 생성/예약/최종 저장의 증거가 여전히 필요하다. HTTP 성공은 논리 승인 증거가 아니다.
+- **Codex 다음 좁은 작업:** (1) 한 Admin/Master 진단 계정의 사용자가 실제 클릭한 **한 operation**만, 브라우저가 이미 받은 Callable 반환 `accepted,reason,version`과 동일 outbox의 `privateServerRegistered416`을 로컬 기본 OFF로 구분하는 개인정보 비노출 진단(서버 추가 read/write 금지), (2) 소스/에뮬레이터 테스트로 accepted:true ⇔ 해당 UID 새 window create, Eventarc schedule, Task due/EMPTY 분기를 독립 검증, (3) 최초 단절 단계가 증명된 뒤에만 단일 지점 최소 수정. 성공 여부가 모호한 요청은 기존 operationId/deviceSequence의 중복/최종 receipt 없이 새 ID로 재시도하지 않는다. 로그인/페이지 진입 무조건 재전송·poll 금지.
+- **보호/게이트:** app406 UI/캐시 복원, app160/164/402/404 및 팔로우·Studio 하트, 정상 방문 R0/W0, shared canonical 원본, Stage420 OFF, TEST/PRODUCTION 비변경 유지. 진단 결과 전 제품 배포 보류. Work 독립 감사 및 단일 클릭+5분 서버 D1/타계정 공개 숫자 실증 없이는 Stage416 최종 정산 PASS 불가.
+- **진행률(검증기준 불변):** Stage416 전체 1/4·25%; 앱 속도 개선 5/5·100%; 최종 5분 서버 정산 3/4·75%(제품 E2E 미검증). 금번은 소스 및 기존 Actions 로그 재검토, TypeScript/Build/새 실기기 검증·배포 없음.
+
+---
+
 ## CURRENT — app406 실사용 PASS 보호, Stage416 예약 생성 이벤트 불명확 / 기능 배포 보류 (2026-10-12 UTC)
 
 - **사용자 정상확정:** 2026-10-12 14:09 UTC 모바일 좋아요 해제 후 새로고침 0 유지 PASS. app406 이 기능은 유지·수정 금지.

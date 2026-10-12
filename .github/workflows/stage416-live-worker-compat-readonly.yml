@@ -175,14 +175,19 @@ jobs:
           before=Path(os.environ['RUNNER_TEMP'])/'prod-before.js'
           after=Path('cloudflare/explore-worker/.remote-worker/worker.js')
           b=before.read_text(); a=after.read_text()
-          fn='function exploreLikeAggregateSnapshotCte039'
-          b0=b.index(fn); a0=a.index(fn)
-          b1=b.index('\n}\n',b0)+3; a1=a.index('\n}\n',a0)+3
-          assert b[:b0]==a[:a0]
-          assert b[b1:]==a[a1:]
-          assert "json_type(j.value, '$.mutationAt') = 'integer'" not in b
-          assert a.count("json_type(j.value, '$.mutationAt') = 'integer'")==1
-          print('PRODUCTION_PACKAGE_EXACT_CTE_ONLY_DIFF=PASS')
+          marker="json_type(j.value, '$.mutationAt') = 'integer'"
+          if marker in b:
+              assert a == b
+              assert b.count(marker) == 1
+              print('PRODUCTION_PACKAGE_ALREADY_COMPAT_NO_DIFF=PASS')
+          else:
+              fn='function exploreLikeAggregateSnapshotCte039'
+              b0=b.index(fn); a0=a.index(fn)
+              b1=b.index('\n}\n',b0)+3; a1=a.index('\n}\n',a0)+3
+              assert b[:b0]==a[:a0]
+              assert b[b1:]==a[a1:]
+              assert a.count(marker)==1
+              print('PRODUCTION_PACKAGE_EXACT_CTE_ONLY_DIFF=PASS')
           PY
           cd cloudflare/explore-worker
           npx wrangler deploy --config .remote-worker/wrangler.jsonc --dry-run --outdir .remote-worker/dryrun

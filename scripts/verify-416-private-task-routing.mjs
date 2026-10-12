@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 const src=readFileSync('functions/src/exploreLikePrivateTask416.ts','utf8');
@@ -15,8 +16,7 @@ const fakeTaskQueue={enqueue:async(task,opt)=>{
 const context={
  module:{exports},exports,process:{env:{}},String,Number,Date,Error,
  require:id=>{
- if(id==='node:crypto')return {createHash:()=>( {update:function(x){this.x=x;return this},
- digest:function(){return 'a'.repeat(64)}})};
+ if(id==='node:crypto')return {createHash};
  if(id==='firebase-admin/functions')return {getFunctions:()=>({taskQueue:()=>fakeTaskQueue})};
  if(id==='firebase-admin/database')return {getDatabase:()=>({})};
  if(id==='firebase-functions/v2/database')return {onValueCreated:(_o,fn)=>{

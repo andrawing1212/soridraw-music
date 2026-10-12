@@ -7,3 +7,4 @@ hosting_change=false
 user_data_migration=false
 target_function=stage416SettlePrivateWindowCandidate
 test_evidence_408_run=38226817256_SUCCESS
+retry_workflow_registration_after_first_push=true

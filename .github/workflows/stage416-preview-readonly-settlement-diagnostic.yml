@@ -213,3 +213,36 @@ jobs:
               'SEVERITY',severity,'ERROR_CODES',','.join(errors) or 'NONE')
           print('PUBLIC_BUS_AND_TASK_TIMELINE_READONLY=PASS')
           PY
+
+      - name: Check existence of pending canonical queue with two O1 SELECTs
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+          SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const T=process.env.CLOUDFLARE_API_TOKEN;
+          const D=process.env.SHARED_D1_ID;
+          if(!A||!T||!D)throw Error('READ_ONLY_D1_ENV_MISSING');
+          const url=`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${D}/query`;
+          for(const [label,sql] of [
+             ['PRIVATE_ACCEPTANCE_ANY','SELECT 1 AS present FROM explore_like_private_acceptance_416 LIMIT 1'],
+             ['PENDING_069_ANY','SELECT 1 AS present FROM explore_like_batches_069 LIMIT 1'],
+          ]){
+            const res=await fetch(url,{method:'POST',headers:{
+              Authorization:'Bearer '+T,'Content-Type':'application/json'},
+              body:JSON.stringify({sql,params:[]})});
+            const out=await res.json();
+            const x=out?.result?.[0];
+            if(!res.ok||out?.success!==true||!x||x.success!==true)
+              throw Error('READ_ONLY_D1_QUERY_FAILED_'+label);
+            if(Number(x.meta?.rows_written||0)!==0||Number(x.meta?.rows_read||0)>5)
+              throw Error('READ_ONLY_D1_UNEXPECTED_COST_'+label);
+            console.log('STAGE416_'+label+'='+((x.results||[]).length?'YES':'NO'));
+            console.log('STAGE416_'+label+'_ROWS_READ='+Number(x.meta?.rows_read||0));
+          }
+          console.log('STAGE416_NO_D1_MUTATIONS=PASS');
+          NODE

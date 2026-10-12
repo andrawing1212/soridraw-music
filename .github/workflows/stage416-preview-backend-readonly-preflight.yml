@@ -1,0 +1,192 @@
+name: SORIDRAW Stage416 PREVIEW Backend Readonly Preflight
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/stage416-preview-backend-readonly-preflight.yml'
+      - 'scripts/verify-416-preview-backend-release.mjs'
+      - 'scripts/verify-418-rtdb-rules-delta.mjs'
+      - 'scripts/build-416-private-server-rules.mjs'
+      - 'cloudflare/explore-worker/migrations/20261012_01_stage416_private_acceptance_additive.sql'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'database.rules.json'
+      - 'functions/src/index.ts'
+      - 'functions/src/exploreLikePrivateCallable416.ts'
+      - 'functions/src/exploreLikePrivateTask416.ts'
+      - 'functions/src/exploreLikePrivateFinalEndpoint416.ts'
+      - 'src/services/exploreLikeService.ts'
+      - 'src/services/exploreLikePrivateRtdbTransport416.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-stage416-preview-backend-readonly-preflight
+  cancel-in-progress: true
+
+jobs:
+  readonly-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - name: Checkout exact preview SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify source release candidate remains hard OFF
+        run: |
+          set -euo pipefail
+          node scripts/verify-416-preview-backend-release.mjs
+          node scripts/verify-418-rtdb-rules-delta.mjs --self-test
+
+      - name: Read active PREVIEW Worker and shared D1 schema only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const T=process.env.CLOUDFLARE_API_TOKEN;
+          const DB=process.env.SHARED_D1_ID;
+          const N='soridraw-explore-preview';
+          if(!A||!T||!DB) throw Error('416_READONLY_CLOUDFLARE_BINDING_MISSING');
+          const headers={Authorization:`Bearer ${T}`,Accept:'application/json'};
+          async function get(url){
+            const r=await fetch(url,{headers}); const x=await r.json();
+            if(!r.ok||x.success===false) throw Error('CF_GET_'+r.status);
+            return x.result||x;
+          }
+          async function select(sql){
+            if(!/^SELECT\s/i.test(sql)||/[;]/.test(sql)||
+              /\b(INSERT|DELETE|UPDATE|DROP|ALTER|REPLACE|CREATE|PRAGMA|ATTACH|DETACH)\b/i.test(sql))
+              throw Error('416_REFUSE_NON_SELECT');
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{
+              method:'POST',
+              headers:{...headers,'Content-Type':'application/json'},
+              body:JSON.stringify({sql,params:[]}),
+            });
+            const x=await r.json();
+            if(!r.ok||x.success!==true||!Array.isArray(x.result)||x.result.length!==1)
+              throw Error('416_D1_READONLY_QUERY_FAILED_'+r.status);
+            const result=x.result[0];
+            if(result.success!==true||Number(result.meta?.rows_written||0)!==0)
+              throw Error('416_UNEXPECTED_D1_WRITE');
+            return result.results||[];
+          }
+          const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+          const deployments=await get(base+'/deployments');
+          const d=(deployments.deployments||deployments||[])[0];
+          const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+          if(!active?.version_id||Number(active.percentage||0)<99.99)
+            throw Error('416_PREVIEW_WORKER_NOT_EXCLUSIVE');
+          const settings=await get(base+'/settings');
+          const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+          const dbBinding=bindings.find(b=>String(b.name)==='DB');
+          const boundId=String(dbBinding?.id||dbBinding?.database_id||dbBinding?.uuid||'');
+          if(boundId!==DB) throw Error('416_PREVIEW_SHARED_D1_BINDING_DRIFT');
+          const sourceResponse=await fetch(base+'/content/v2',{headers});
+          if(!sourceResponse.ok) throw Error('416_PREVIEW_WORKER_SOURCE_GET_'+sourceResponse.status);
+          const source=await sourceResponse.text();
+          if(/STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE\s*=\s*true\b/.test(source)||
+             /STAGE416_SHARED_D1_INTAKE_ACTIVE\s*=\s*true\b/.test(source))
+            throw Error('416_PREVIEW_WORKER_FEATURE_PREMATURELY_ACTIVE');
+          const schema=await select("SELECT sql FROM sqlite_schema WHERE type='table' AND name='explore_like_private_acceptance_416'");
+          if(schema.length===0){
+            console.log('416_SHARED_D1_ACCEPTANCE_TABLE=MISSING_EXPECTED_BEFORE_RELEASE');
+          }else{
+            if(schema.length!==1) throw Error('416_SHARED_D1_ACCEPTANCE_TABLE_DUPLICATE');
+            const sql=String(schema[0].sql||'').replace(/\s+/g,' ').toLowerCase();
+            for(const part of ['user_uid text primary key','version integer not null','digest text not null',
+              'accepted_at integer not null','claim_token text not null']){
+              if(!sql.includes(part)) throw Error('416_SHARED_D1_ACCEPTANCE_SCHEMA_DRIFT');
+            }
+            console.log('416_SHARED_D1_ACCEPTANCE_TABLE=EXACT_COMPATIBLE');
+          }
+          console.log('416_PREVIEW_ACTIVE_WORKER_VERSION='+active.version_id);
+          console.log('416_PREVIEW_WORKER_FLAGS_NOT_ACTIVE=PASS');
+          console.log('416_PREVIEW_SHARED_D1_BINDING=PASS');
+          console.log('416_SHARED_D1_SCHEMA_METADATA_READONLY=PASS');
+          console.log('REMOTE_D1_WRITES=0');
+          console.log('WORKER_DEPLOY=0');
+          NODE
+
+      - name: Authenticate Firebase for read-only live audit
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Verify live shared RTDB rules are exact additive predecessor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          creds_path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not creds_path:
+              raise SystemExit('416_FIREBASE_READONLY_CREDENTIAL_MISSING')
+          creds=service_account.Credentials.from_service_account_file(
+              creds_path,
+              scopes=['https://www.googleapis.com/auth/firebase.database',
+                      'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          response=requests.get(url,params={'access_token':creds.token},timeout=30)
+          if response.status_code != 200:
+              raise SystemExit('416_RTD_RULES_GET_HTTP_'+str(response.status_code))
+          Path(os.environ['RUNNER_TEMP'],'stage416-live-rules.json').write_text(
+              response.text,encoding='utf-8')
+          print('416_SHARED_RTDB_RULES_READ_ONLY=PASS')
+          PY
+          node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/stage416-live-rules.json"
+
+      - name: Confirm Stage416 PREVIEW Functions are not deployed yet
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='soridraw-app-866a5'
+          check_absent() {
+            local fn="$1" region="$2"
+            if gcloud functions describe "$fn" --gen2 --region "$region" --project "$project"               --format='value(name)' >"$RUNNER_TEMP/fn.out" 2>"$RUNNER_TEMP/fn.err"; then
+              echo "416_PREMATURE_FUNCTION_DEPLOY=$fn"
+              exit 1
+            fi
+            if grep -qiE 'NOT_FOUND|not found|does not exist|could not be found' "$RUNNER_TEMP/fn.err"; then
+              echo "416_FUNCTION_NOT_DEPLOYED_YET=$fn"
+            else
+              cat "$RUNNER_TEMP/fn.err"
+              exit 1
+            fi
+          }
+          check_absent recordPrivateLike416 us-central1
+          check_absent stage416SchedulePrivateWindowCandidate us-central1
+          check_absent stage416SettlePrivateWindowCandidate us-central1
+          check_absent privateLikeFinalReceipt416Candidate asia-northeast3
+          echo '416_PREVIEW_FUNCTIONS_PRE_RELEASE_ABSENT=PASS'
+          echo 'FUNCTIONS_DEPLOY=0'
+
+      - name: Safety result
+        run: |
+          echo 'STAGE416_PREVIEW_BACKEND_READONLY_PREFLIGHT=PASS'
+          echo 'STAGE416_FEATURE_ACTIVATION=false'
+          echo 'NO_D1_MIGRATION=true'
+          echo 'NO_RTDB_RULES_DEPLOY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_WORKER_DEPLOY=true'
+          echo 'NO_HOSTING_DEPLOY=true'
+          echo 'USER_DATA_MIGRATION=0'

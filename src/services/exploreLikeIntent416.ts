@@ -19,7 +19,7 @@ type IntentRow416 = {
   status: IntentStatus416;
 };
 type IntentEnvelope416 = { version: number; results: IntentRow416[] };
-type IntentObservation416 = Pick<IntentRow416, 'version' | 'at' | 'status'>;
+type IntentObservation416 = Pick<IntentRow416, 'operationId' | 'version' | 'at' | 'status'>;
 type LocalIntent416 = Pick<IntentRow416, 'liked' | 'operationId' | 'version' | 'at'> & {
   status?: 'pending' | 'accepted'; // optional for previous persisted hints
 };
@@ -102,6 +102,15 @@ export const readExploreLikeIntent416 = (uid: string, trackId: string): boolean 
   return intent.liked;
 };
 
+export const readExploreLikeIntentDetail416 = (
+  uid: string,
+  trackId: string,
+): (LocalIntent416 & { trackId: string }) | null => {
+  const intent = readLocal416(uid)[trackId];
+  if (!intent || Date.now() - intent.at > INTENT_TTL_MS_416) return null;
+  return { trackId, ...intent };
+};
+
 // Only an existing accepted personal signal (or the exact owner's ACK) can
 // retire an identical pending hint. A newer opposite intent must survive an
 // older accepted signal. Clearing hints never changes the confirmed cache.
@@ -157,7 +166,7 @@ export const subscribeExploreLikeIntent416 = (
           if (row.status === 'rejected') {
             delete entries[row.trackId];
             entriesChanged = true;
-            changed.push({ trackId: row.trackId, liked: row.liked, version: row.version, at: row.at, status: row.status });
+            changed.push({ trackId: row.trackId, liked: row.liked, operationId: row.operationId, version: row.version, at: row.at, status: row.status });
           } else if (existing && existing.status !== 'accepted') {
             entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
             entriesChanged = true;
@@ -184,17 +193,20 @@ export const subscribeExploreLikeIntent416 = (
     if (entriesChanged) saveLocal416(uid, entries);
     // Durable overlay FIRST, watermark SECOND, UI notification LAST.
     setSeenVersion416(uid, version);
-    changed.forEach(({ trackId, liked, version, at, status }) =>
-      onChanged(trackId, liked, { version, at, status }));
+    changed.forEach(({ trackId, liked, operationId, version, at, status }) =>
+      onChanged(trackId, liked, { operationId, version, at, status }));
   },
   (error) => console.warn('[416] Private intent signal unavailable; accepted like path retained:', error),
   );
 };
 
-export const publishExploreLikeIntent416 = async (uid: string, mutation: IntentMutation416): Promise<void> => {
-  if (!uid || !mutation.trackId || !validOperation416(mutation.operationId)) return;
+export const publishExploreLikeIntent416 = async (
+  uid: string,
+  mutation: IntentMutation416,
+): Promise<IntentRow416 | null> => {
+  if (!uid || !mutation.trackId || !validOperation416(mutation.operationId)) return null;
   const at = Date.now();
-  await runTransaction(
+  const result = await runTransaction(
     databaseRef(realtimeDb, `userSync/${uid}/exploreLikeIntent416`),
     (raw) => {
       const current = raw as Partial<IntentEnvelope416> | null;
@@ -227,6 +239,15 @@ export const publishExploreLikeIntent416 = async (uid: string, mutation: IntentM
     },
     { applyLocally: false },
   );
+  if (!result.committed) return null;
+  const value = result.snapshot.val() as Partial<IntentEnvelope416> | null;
+  const exact = Array.isArray(value?.results)
+    ? value.results.find((row) => validRow416(row) &&
+      row.trackId === mutation.trackId &&
+      row.operationId === mutation.operationId &&
+      row.status === 'pending')
+    : null;
+  return exact && validRow416(exact) ? exact : null;
 };
 
 // Best-effort local hint cleanup is *not* canonical settlement. The original

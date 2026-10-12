@@ -198,6 +198,52 @@ jobs:
           print('STAGE416_EVENTARC_BINDING_READONLY=PASS')
           PY
 
+      - name: Inspect Eventarc trigger delivery conditions read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          project='soridraw-app-866a5'
+          p=subprocess.run(['gcloud','functions','describe','stage416SchedulePrivateWindowCandidate',
+            '--gen2','--region=us-central1','--project',project,'--format=json'],
+            capture_output=True,text=True)
+          if p.returncode:raise SystemExit('STAGE416_EVENTARC_SOURCE_METADATA_UNAVAILABLE')
+          src=json.loads(p.stdout or '{}')
+          resource=str((src.get('eventTrigger') or {}).get('trigger') or '')
+          if not resource.startswith('projects/'+project+'/locations/') or '/triggers/' not in resource:
+            raise SystemExit('STAGE416_EVENTARC_TRIGGER_RESOURCE_INVALID')
+          parts=resource.split('/')
+          location=parts[3]
+          name=parts[-1]
+          # No trigger identifiers, private paths, UID or event payloads in CI logs.
+          p=subprocess.run(['gcloud','eventarc','triggers','describe',name,
+            '--location='+location,'--project',project,'--format=json'],
+            capture_output=True,text=True)
+          if p.returncode:
+            print('STAGE416_EVENTARC_DELIVERY_CONDITIONS=UNVERIFIED_ACCESS')
+            raise SystemExit('STAGE416_EVENTARC_CONDITION_READ_FAILED')
+          info=json.loads(p.stdout or '{}')
+          conditions=info.get('conditions') or {}
+          if not isinstance(conditions,dict):
+            raise SystemExit('STAGE416_EVENTARC_CONDITION_FORMAT_UNEXPECTED')
+          # Deliberately expose only known-safe enum and boolean condition states.
+          codes={}
+          for key,value in conditions.items():
+            if not isinstance(value,dict):continue
+            code=str(value.get('code') or 'UNKNOWN')
+            codes[str(key)]=code if code in ('OK','UNKNOWN','FAILED_PRECONDITION',
+              'PERMISSION_DENIED','UNAVAILABLE','NOT_FOUND','INTERNAL') else 'OTHER'
+          print('STAGE416_EVENTARC_CONDITION_COUNT='+str(len(codes)))
+          print('STAGE416_EVENTARC_CONDITION_CODES='+json.dumps(codes,sort_keys=True))
+          print('STAGE416_EVENTARC_TRANSPORT_TYPE='+str(
+            ((info.get('transport') or {}).get('pubsub') or {}).get('topic') is not None).upper())
+          if any(code not in ('OK','UNKNOWN') for code in codes.values()):
+            raise SystemExit('STAGE416_EVENTARC_CONDITION_UNHEALTHY')
+          print('STAGE416_EVENTARC_CONDITIONS_READONLY=PASS')
+          print('STAGE416_EVENTARC_EVENT_DELIVERY_PROVEN=NO')
+          PY
+
       - name: Confirm no mutation commands
         run: echo 'READONLY_DIAGNOSTIC=true;DEPLOY=0;DATABASE_WRITE=0'
 

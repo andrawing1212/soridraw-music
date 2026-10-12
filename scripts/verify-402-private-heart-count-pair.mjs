@@ -46,6 +46,32 @@ assert.doesNotMatch(curated405+'\n'+managed405.slice(0,1200)+revised405.slice(0,
 console.log('APP405_CURATED_REFRESH_PRIVATE_COUNT_OVERLAY=PASS');
 console.log('APP405_NO_SHARED_PUBLIC_COUNT_WRITE=PASS');
 
+// app406: a mobile cold reload can hydrate curated R2 cards BEFORE Firebase
+// restores the UID. The first card pass has no private count authority, so
+// an auth-only local replay MUST repair the unlike count without a refetch.
+const curation406 = readFileSync('src/services/exploreCurationService.ts', 'utf8');
+assert.match(curation406,/export const readCachedSoridrawCuratedTracks307/);
+const cache406 = curation406.slice(
+  curation406.indexOf('export const readCachedSoridrawCuratedTracks307'),
+  curation406.indexOf('const writeCuratedCache307 ='));
+assert.match(cache406,/readCuratedCache307\(\)\?\.items/);
+assert.doesNotMatch(cache406,/fetch\(|requestAuthed307|writeCuratedCache307/,
+  'auth hydration must use only existing neutral curated cache');
+const raceStart406 = page.indexOf('// app406: curated data may resolve');
+const raceEnd406 = page.indexOf('if (!user || !curationManageRequested307', raceStart406);
+assert(raceStart406>=0 && raceEnd406>raceStart406,
+  'late mobile auth curated fix must exist before manager path');
+const race406 = page.slice(raceStart406,raceEnd406);
+assert.match(race406,/readCachedSoridrawCuratedTracks307\(\)/);
+assert.match(race406,/const canonical406 = new Map/);
+assert.match(race406,/setCuratedTracks307\(\(previous\) =>/);
+assert.match(race406,/overlayExploreLikeDisplayCounts\(user\.uid, neutral406\)/);
+assert.match(race406,/\}, \[user\?\.uid\]\);/);
+assert.doesNotMatch(race406,/fetch\(|getSoridrawCuratedTracks307\(|revalidateSoridrawCuratedTracks335\(/,
+  'UID restoration cannot create an extra R2/D1 read');
+console.log('APP406_MOBILE_AUTH_HYDRATION_UNLIKE_RESTORE=PASS');
+console.log('APP406_ACCOUNT_SWITCH_NEUTRAL_COUNT_NO_EXTRA_SERVER_READ=PASS');
+
 console.log('APP402_SAME_ACCOUNT_HEART_AND_COUNT_ATOMIC_UI=PASS');
 console.log('APP402_UNLIKE_EMPTY_HEART_ZERO_COUNT_PRIVATE_SYNC=PASS');
 console.log('APP402_NO_PUBLIC_COUNT_EARLY_PUBLISH=PASS');

@@ -1,3 +1,16 @@
+## CURRENT — app403 5분 좋아요 미반영 재확인, 고립된 만료 창 제한 재예약 소스 PASS / PREVIEW 서버 미배포 (2026-10-12 KST)
+
+- **사용자 재검증:** 2026-10-12 09:52 UTC 전후 A→B 공개 숫자가 마지막 클릭+5분 뒤에도 자동 반영되지 않음. 앱403 실사용 FAIL, Stage416③ 3/4·75%, TEST/PRODUCTION 승격 금지.
+- **독립 서버 읽기 전용 기록:** [Run 38232992419](https://github.com/andrawing1212/soridraw-music/actions/runs/38232992419) SUCCESS. Callable에는 HTTP 200/204가 다수 관측됐지만 `accepted:true` 단일 실제 클릭 증거는 없음. Schedule은 08:34:12 UTC 1회, Settle HTTP204 08:39:11 UTC 1회, 이후 09:55까지 새 예약/정산 실행 기록 없음. RTDB `publicSync/exploreLike` 마지막 발행 10/10 03:46:49 UTC, D1 `explore_like_private_acceptance_416` 및 pending `explore_like_batches_069`는 각각 O(1) SELECT 존재 결과 NO. Task queue RUNNING, tasks.list IAM 권한 부족. 특정 UID/클릭의 정확한 분기 확정은 여전히 미확인.
+- **재현 가능한 소스 결함:** 조기 Task 재예약이 과거에 소실돼 만료된 `privateLikeBatch416/{uid}/window`가 남으면 이후 새 클릭은 `PRIOR_WINDOW_NEEDS_SEAL`로 거부됨. 기존 Callable은 고립된 정확한 window 복구 예약을 만들지 않아 오래된 창이 무기한 새 접수를 막을 수 있음.
+- **PREVIEW source-only 최소 보정:** `functions/src/exploreLikePrivateServerClick416.ts`는 그 RTDB 거래에서 확인한 expired windowId를 내부 반환, `exploreLikePrivateCallable416.ts`는 오직 Auth/AppCheck 검증 클릭의 해당 거부 분기에만 task 복구 enqueue, `exploreLikePrivateTask416.ts`는 UID/window/분 단위 결정적 task ID로 여러 거부 재시도를 묶음. 내부 windowId는 클라이언트 응답에 노출하지 않음. 관련 실행형 검사 3개 갱신. 초기 오류가 실제 이 단일 원인이라는 실건 증거는 없으므로 코드 가설과 실증을 구별.
+- **검증:** 최종 소스 commit [b1e2462215328b925e651781ef57186f39141a55](https://github.com/andrawing1212/soridraw-music/commit/b1e2462215328b925e651781ef57186f39141a55), 408 QA [38234160600](https://github.com/andrawing1212/soridraw-music/actions/runs/38234160600) SUCCESS (TypeScript/Build/Functions/좋아요·팔로우 회귀/기능 검사), 416 Backend readonly [38234040551](https://github.com/andrawing1212/soridraw-music/actions/runs/38234040551) SUCCESS (이전 소스 commit f2a6; 변경된 최종 검사는 테스트 코드만). 진단 Run은 읽기 전용.
+- **배포/원본 데이터:** 이번 대화에서 GitHub preview 코드/진단 trigger/상태문서만 갱신. PREVIEW Firebase Hosting app403/Functions 기존 실행본 그대로, Cloudflare Worker/D1/R2/RTDB Rules 변경 없음. main/production, 공유 사용자 데이터 변경 없음. 새 source Callable은 **아직 배포되지 않아 실제 문제는 미해결**.
+- **다음 게이트:** Codex/Work 독립 감사, Firebase Callable 기존 서비스계정의 Task enqueue 권한 및 정확한 단일 Function 배포 경로 검증, 그 뒤 필요시 PREVIEW recordPrivateLike416 단독 배포. 익명 `PRIOR_WINDOW_NEEDS_SEAL`/재예약/DELIVERED 상태·D1 접수·공개 신호 실제 확인. 전체 데이터 스캔, 강제 backfill, 반복 페이지 읽기 금지.
+- **진행률:** ① Stage416 1/4·25% ② 앱 속도 개선 5/5·100% (기존 단계) ③ 개인 좋아요 5분 정산 3/4·75% (실사용 FAIL).
+
+---
+
 ## CURRENT — app403 5분 공개 좋아요 FAIL 후 Stage416 조기 Task 재예약 손실 방지 PREVIEW 서버 1개 배포 PASS / 실기기 재검증 전 (2026-10-12 KST)
 
 - **신고/실제 진단:** PREVIEW app403에서도 A 마지막 좋아요+5분 이후 B 공개 숫자 미반영. RTDB `publicSync/exploreLike` 최근 시각 2026-10-10 03:46:49 UTC (10/12 갱신 0). 공유 D1 `explore_like_private_acceptance_416`/pending `explore_like_batches_069` 각각 `SELECT 1 LIMIT 1`(rows_read 1, rows_written 0)로 기록 없음. Callable 다수 HTTP200, Schedule HTTP200 08:34:12 UTC, Settle HTTP204 08:39:11 UTC. 기존 task 응답 204에 세부 `DELIVERED|RESCHEDULED|STALE|EMPTY` 증거가 없어 실건 원인을 확정하지 못함.

@@ -1,4 +1,4 @@
-name: Stage416 PREVIEW Settle Task Collision Hotfix
+name: Stage416 PREVIEW Existing Single Function Patch
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  settle-only:
+  single-function:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -38,7 +38,16 @@ jobs:
           target="$(sed -n 's/^product_code_target=//p' "$trigger")"
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
           test "$(grep -c '^product_code_target=' "$trigger")" -eq 1
-          grep -Fxq 'scope=preview_existing_settle_task_only' "$trigger"
+          function_name="$(sed -n 's/^target_function=//p' "$trigger")"
+          test "$(grep -c '^target_function=' "$trigger")" -eq 1
+          case "$function_name" in
+            stage416SettlePrivateWindowCandidate)
+              grep -Fxq 'scope=preview_existing_settle_task_only' "$trigger" ;;
+            recordPrivateLike416)
+              grep -Fxq 'scope=preview_existing_private_click_only' "$trigger" ;;
+            *) echo 'UNAPPROVED_FUNCTION_TARGET'; exit 21 ;;
+          esac
+          echo "PATCH_FUNCTION=$function_name" >> "$GITHUB_ENV"
           grep -Fxq 'shared_d1_change=false' "$trigger"
           grep -Fxq 'shared_rtdb_rules_change=false' "$trigger"
           grep -Fxq 'worker_change=false' "$trigger"
@@ -51,7 +60,12 @@ jobs:
           git checkout --detach "$target"
           grep -Fq "result.reason==='NOT_DUE'?1_000:0" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
-          echo "LOCKED_SETTLE_TASK_SOURCE=$target"
+          if [ "$function_name" = recordPrivateLike416 ]; then
+            grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId)" functions/src/exploreLikePrivateCallable416.ts
+            grep -Fq "const stableBucket=Math.floor(nowMs/60_000)*60_000+1_000" functions/src/exploreLikePrivateTask416.ts
+            grep -Fq "expiredWindowId=previous.id" functions/src/exploreLikePrivateServerClick416.ts
+          fi
+          echo "LOCKED_ONE_FUNCTION_SOURCE=$target"
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
@@ -64,6 +78,8 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
+          node scripts/verify-416-server-only-click.mjs
+          node scripts/verify-416-private-callable-master.mjs
           node scripts/verify-416-private-deadline.mjs
           node scripts/verify-416-private-task-routing.mjs
           node scripts/verify-416-private-final-publisher.mjs
@@ -74,22 +90,28 @@ jobs:
           npm run build
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
-          echo 'STAGE416_SINGLE_TASK_PREFLIGHT=PASS'
+          echo 'STAGE416_SINGLE_FUNCTION_PREFLIGHT=PASS'
 
-      - name: Prepare only the pre-existing settle Function
+      - name: Prepare only the approved pre-existing Function
         shell: bash
         run: |
           set -euo pipefail
-          d=.stage416-settle-patch
+          d=.stage416-single-patch
           mkdir -p "$d/lib"
           for file in exploreLikePrivateTask416 exploreLikePrivateDeadline416 \
              exploreLikePrivateCommit416 exploreLikePrivateSeal416 \
              exploreLikePrivateHandoff416; do
             cp "functions/lib/$file.js" "$d/lib/$file.js"
           done
+          if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then
+            for file in exploreLikeBatchSettings416 exploreLikePrivateCallable416 \
+               exploreLikePrivateServerClick416; do
+              cp "functions/lib/$file.js" "$d/lib/$file.js"
+            done
+          fi
           cat > "$d/package.json" <<'JSON'
           {
-            "name": "soridraw-stage416-settle-patch",
+            "name": "soridraw-stage416-single-patch",
             "private": true,
             "main": "lib/index.js",
             "engines": {"node":"22"},
@@ -105,18 +127,27 @@ jobs:
           admin.initializeApp({
             databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
           });
-          exports.stage416SettlePrivateWindowCandidate =
-            require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
+          if(process.env.PATCH_FUNCTION==='recordPrivateLike416'){
+            const {onCall}=require("firebase-functions/v2/https");
+            const {handleAuthenticatedPrivateClick416}=
+              require("./exploreLikePrivateCallable416");
+            exports.recordPrivateLike416=onCall(
+              {region:"us-central1",enforceAppCheck:true},
+              async(request)=>handleAuthenticatedPrivateClick416(admin.database(),request));
+          } else if(process.env.PATCH_FUNCTION==='stage416SettlePrivateWindowCandidate'){
+            exports.stage416SettlePrivateWindowCandidate =
+              require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
+          } else throw Error('STAGE416_FUNCTION_SCOPE_INVALID');
           NODE
-          cat > stage416.settle-patch.firebase.json <<'JSON'
-          {"functions":{"source":".stage416-settle-patch"}}
+          cat > stage416.single-patch.firebase.json <<'JSON'
+          {"functions":{"source":".stage416-single-patch"}}
           JSON
           npm install --prefix "$d" --omit=dev --no-audit --no-fund
           node - <<'NODE'
-          const mod=require('./.stage416-settle-patch/lib/index.js');
-          if(Object.keys(mod).join(',')!=='stage416SettlePrivateWindowCandidate')
-            throw Error('SETTLE_FUNCTION_EXPORT_SCOPE_DRIFT');
-          console.log('EXACTLY_ONE_EXISTING_TASK_FUNCTION=PASS');
+          const mod=require('./.stage416-single-patch/lib/index.js');
+          if(Object.keys(mod).join(',')!==process.env.PATCH_FUNCTION)
+            throw Error('STAGE416_SINGLE_FUNCTION_EXPORT_SCOPE_DRIFT');
+          console.log('STAGE416_EXACTLY_ONE_EXISTING_FUNCTION=PASS');
           NODE
 
       - name: Authenticate Firebase deploy principal
@@ -125,57 +156,74 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
-      - name: Verify existing Function HMAC and Cloud Task queue before deploy
+      - name: Verify function identity and queue without mutations
         shell: bash
         run: |
           set -euo pipefail
+          gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json"
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
-            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/settle-before.json"
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-before.json"
           gcloud tasks queues list --location "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-before.json"
-          node - "$RUNNER_TEMP/settle-before.json" "$RUNNER_TEMP/queue-before.json" <<'NODE'
+          node - "$RUNNER_TEMP/function-before.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/queue-before.json" <<'NODE'
           const fs=require('fs');
           const fn=JSON.parse(fs.readFileSync(process.argv[2]));
-          const q=JSON.parse(fs.readFileSync(process.argv[3])).find(x=>
+          const task=JSON.parse(fs.readFileSync(process.argv[3]));
+          const q=JSON.parse(fs.readFileSync(process.argv[4])).find(x=>
             String(x.name||'').endsWith('/'+process.env.TASK_NAME));
-          if(fn.state!=='ACTIVE'||q?.state!=='RUNNING')
-            throw Error('SETTLE_FUNCTION_OR_QUEUE_NOT_READY');
-          if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
+          if(fn.state!=='ACTIVE'||task.state!=='ACTIVE'||q?.state!=='RUNNING')
+            throw Error('STAGE416_FUNCTION_OR_QUEUE_NOT_READY');
+          if(process.env.PATCH_FUNCTION==='recordPrivateLike416' &&
+             (!fn.serviceConfig?.serviceAccountEmail||
+              fn.serviceConfig.serviceAccountEmail!==task.serviceConfig?.serviceAccountEmail))
+            throw Error('STAGE416_CALLABLE_SCHEDULER_ACCOUNT_MISMATCH');
+          if(!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
-            throw Error('SETTLE_HMAC_SECRET_NOT_BOUND');
-          console.log('EXISTING_TASK_QUEUE_AND_SECRET_PRECHECK=PASS');
+            throw Error('STAGE416_SETTLE_HMAC_SECRET_NOT_BOUND');
+          console.log('STAGE416_SINGLE_FUNCTION_QUEUE_AND_IDENTITY_PREFLIGHT=PASS');
           NODE
 
-      - name: Deploy only PREVIEW Stage416 settle Task Function
+      - name: Deploy only the approved existing PREVIEW Function
         shell: bash
         run: |
           set -euo pipefail
           npx --yes firebase-tools@latest deploy \
             --project "$FIREBASE_PROJECT" \
-            --config stage416.settle-patch.firebase.json \
-            --only functions:stage416SettlePrivateWindowCandidate \
+            --config stage416.single-patch.firebase.json \
+            --only "functions:$PATCH_FUNCTION" \
             --non-interactive --force
-          echo 'PREVIEW_ONE_SETTLE_TASK_FUNCTION_DEPLOY=PASS'
+          echo 'PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS'
 
-      - name: Verify Task queue still RUNNING and protected branches unchanged
+      - name: Verify patched Function and protected environments
         shell: bash
         run: |
           set -euo pipefail
+          gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
-            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/settle-after.json"
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-after.json"
           gcloud tasks queues list --location "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-after.json"
-          node - "$RUNNER_TEMP/settle-after.json" "$RUNNER_TEMP/queue-after.json" <<'NODE'
+          node - "$RUNNER_TEMP/function-before.json" "$RUNNER_TEMP/function-after.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/task-after.json" "$RUNNER_TEMP/queue-after.json" <<'NODE'
           const fs=require('fs');
-          const fn=JSON.parse(fs.readFileSync(process.argv[2]));
-          const q=JSON.parse(fs.readFileSync(process.argv[3])).find(x=>
+          const before=JSON.parse(fs.readFileSync(process.argv[2]));
+          const fn=JSON.parse(fs.readFileSync(process.argv[3]));
+          const oldTask=JSON.parse(fs.readFileSync(process.argv[4]));
+          const task=JSON.parse(fs.readFileSync(process.argv[5]));
+          const queue=JSON.parse(fs.readFileSync(process.argv[6])).find(x=>
             String(x.name||'').endsWith('/'+process.env.TASK_NAME));
-          if(fn.state!=='ACTIVE'||q?.state!=='RUNNING')
-            throw Error('SETTLE_FUNCTION_OR_QUEUE_CHANGED_UNEXPECTEDLY');
-          if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
+          if(fn.state!=='ACTIVE'||task.state!=='ACTIVE'||queue?.state!=='RUNNING')
+            throw Error('STAGE416_FUNCTION_OR_QUEUE_BROKEN');
+          if(before.name!==fn.name || before.serviceConfig?.serviceAccountEmail!==fn.serviceConfig?.serviceAccountEmail)
+            throw Error('STAGE416_DEPLOYED_FUNCTION_IDENTITY_CHANGED');
+          if(process.env.PATCH_FUNCTION==='recordPrivateLike416' &&
+            oldTask.updateTime!==task.updateTime)
+            throw Error('STAGE416_UNRELATED_TASK_FUNCTION_CHANGED');
+          if(!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
-            throw Error('SETTLE_HMAC_SECRET_LOST');
-          console.log('SETTLE_FUNCTION_AND_QUEUE_LIVE=PASS');
+            throw Error('STAGE416_SETTLE_HMAC_SECRET_LOST');
+          console.log('STAGE416_SINGLE_FUNCTION_POSTFLIGHT=PASS');
           NODE
           git fetch origin main production --no-tags
           test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"

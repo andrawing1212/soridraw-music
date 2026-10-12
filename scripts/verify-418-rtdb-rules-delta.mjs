@@ -21,6 +21,8 @@ assert.equal(user['.write'], 'auth != null && auth.uid === $uid');
 assert.ok(intent, 'Stage416 private-only node missing');
 assert.match(String(intent['.validate'] || ''), /newData\.hasChildren\(\['version','results'\]\)/);
 assert.equal(intent.results?.$index?.liked?.['.validate'], 'newData.isBoolean()');
+assert.equal(intent.results?.$index?.optimisticLikeCount?.['.validate'],
+  'newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000');
 assert.equal(intent.results?.$index?.status?.['.validate'],
   "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'rejected')");
 assert.equal(intent['$other']?.['.validate'], false);
@@ -64,8 +66,13 @@ const withoutServer416 = source => {
   delete out.rules.privateLikeFinal416;
   return out;
 };
+const withoutIntentOptimisticCount = source => {
+  const out = structuredClone(source);
+  delete out.rules.userSync.$uid.exploreLikeIntent416.results.$index.optimisticLikeCount;
+  return out;
+};
 
-const variants = [
+const baseVariants = [
   ['already-live', local],
   ['additive-private-intent-only', withoutIntent(local)],
   ['additive-bool-only', withoutBool(local)],
@@ -78,6 +85,10 @@ const variants = [
   ['additive-server-only-416-private-intent-and-bool',
     withoutBool(withoutIntent(withoutServer416(local)))],
 ];
+const variants = baseVariants.flatMap(([status,candidate]) => [
+  [status, candidate],
+  [status+'-without-private-optimistic-count', withoutIntentOptimisticCount(candidate)],
+]);
 const compare = remote => {
   const key = stable(remote);
   return variants.find(([,candidate]) => stable(candidate) === key)?.[0] || null;
@@ -93,6 +104,10 @@ if (process.argv.includes('--self-test')) {
   const mutated = structuredClone(local);
   mutated.rules.userSync.$uid.exploreLikeIntent416.results.$index.liked['.validate'] = 'newData.isString()';
   assert.equal(compare(mutated), null, 'private intent validation change must fail');
+  const widenedCount = structuredClone(local);
+  widenedCount.rules.userSync.$uid.exploreLikeIntent416.results.$index.optimisticLikeCount['.validate'] =
+    'newData.isNumber()';
+  assert.equal(compare(widenedCount), null, 'private optimistic count bounds must stay exact');
   const exposedBatch = structuredClone(local);
   exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');
@@ -101,6 +116,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(compare(writableFinal), null, 'client-writable final receipt must fail');
   console.log('418_SHARED_RTDB_ADDITIVE_BOOL_ONLY_SELF_TEST=PASS');
   console.log('416_PRIVATE_RTDB_INTENT_ADDITIVE_ONLY_SELF_TEST=PASS');
+  console.log('402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_SELF_TEST=PASS');
   console.log('416_SERVER_ONLY_RTDB_TWO_NODE_ADDITIVE_SELF_TEST=PASS');
 } else {
   const path = process.argv[2];
@@ -112,5 +128,6 @@ if (process.argv.includes('--self-test')) {
   );
   console.log('418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS '+status);
   console.log('416_PRIVATE_RTDB_ADDITIVE_PREFLIGHT=PASS');
+  console.log('402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_PREFLIGHT=PASS');
   console.log('416_SERVER_ONLY_RTDB_ADDITIVE_PREFLIGHT=PASS');
 }

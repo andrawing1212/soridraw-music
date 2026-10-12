@@ -1,3 +1,15 @@
+## CURRENT — PREVIEW app405 추천곡 reload 숫자 복원 보정 배포 PASS / Stage416 서버 최종 정산 여전히 FAIL (2026-10-12 KST)
+
+- **실사용 신고:** app404에서 같은 계정 PC↔모바일 하트 즉시 동기화/새로고침은 사용자 일부 곡 PASS 확인. 하지만 추천곡 `골목길 탐험대`에서 PC 해제 직후 0 → 모바일 새로고침 후 빈 하트+1 → 모바일 재좋아요 +2 → PC 새로고침 +2. 사진 3장 확보. 주의: 빈 하트+1은 **다른 계정의 1좋아요가 있을 때도 합법적인 표시**여서 사진만으로 canonical 원본이 부정확하다고 단정하거나 사용자 레코드 삭제 금지.
+- **코드 원인 중 하나:** `src/pages/ExplorePage.tsx` curated 최초 로딩(`getSoridrawCuratedTracks307`), 관리자 curated 로딩, 앱 활동 재검증 경로에서 `setCuratedTracks307`에 공유 R2의 오래된 public likeCount를 그대로 저장하여 이미 수신·persist된 viewer-only 416 pending `optimisticLikeCount` overlay를 거치지 않음. 이후 재좋아요 시 이 숫자를 클릭의 기존 count로 사용해 UI +2가 나타날 수 있는 경로. 기존 `overlayExploreLikeDisplayCounts`를 세 curated 입구에만 적용(UID 범위, 본인 로컬 데이터 우선, shared R2/D1 write 0), 집계/캐시/서버 본문 변경 없음.
+- **코드 및 검증:** `src/pages/ExplorePage.tsx`, `scripts/verify-402-private-heart-count-pair.mjs`, `public/app-version.json`(404→405). 코드+검사 최종 소스 commit `9537665929f2c1d6de0ea981966ea308c7a4cca0`. [408 Run 38244194395](https://github.com/andrawing1212/soridraw-music/actions/runs/38244194395) SUCCESS: app405 curated entry assertions, 기존 416 서버/클라이언트 좋아요, 팔로우 보호, TypeScript, Build, live Rules read-only PASS. 실기기 UX 및 Work 독립 감사 미검증.
+- **배포:** app405 [PREVIEW Firebase Hosting Run 38244405202](https://github.com/andrawing1212/soridraw-music/actions/runs/38244405202) SUCCESS, `preview.soridraw.com` `PREVIEW_APP_VERSION=405`, exact index build PASS, TEST/PRODUCTION unchanged PASS, RTDB Rules skipped. Functions/Cloudflare Worker/D1/R2/사용자 원본/DB migration/backfill/delete 변경 0. 릴리스 트리거 `867cb22f7cf06bc18b79087aeb76c25e7215436d`.
+- **서버 읽기 전용 진단:** [38242496215](https://github.com/andrawing1212/soridraw-music/actions/runs/38242496215), [38242959363](https://github.com/andrawing1212/soridraw-music/actions/runs/38242959363), [38243351165](https://github.com/andrawing1212/soridraw-music/actions/runs/38243351165) PASS. 11:25 UTC까지 Settle Function HTTP204 24건 관측, **Cloudflare D1 `explore_like_private_acceptance_416` 존재 NO**, pending 069 NO, RTDB `publicSync/exploreLike` 마지막 갱신 10/10 03:46 UTC. Non-delivery (RESCHEDULED/STALE/EMPTY) 안전 로그 패턴 0건이며 **HTTP204는 416 canonical 성공의 증거가 아님**. 실제 PREVIEW Worker 활성 트래픽 100%, 서명 route/handler on, Worker DB binding은 공유 D1 정확 일치 확인. 정확한 사용자의 등록 accepted/Cloud Task final 결과는 사용자 정보 없이 읽는 로그로 미확정. Function/Worker/D1 reset 및 전체 재처리 금지.
+- **남은 리스크와 다음 한 작업:** app405 추천곡 reload 모바일↔PC 실사용 다시 검증. 5분 뒤 최종 Worker/D1 receipt와 다른 계정 공개 count 반영은 별도 근본 FAIL이며 앱 UI 보정으로 성공이라 판단하지 않음. 실패 시 정확한 단일 UID/window에서 서버 accepted→Task → canonical handoff 상태의 프라이버시 안전 증거를 확보한 뒤 수정. shared user data 강제 삭제·리셋 금지, TEST/PRODUCTION 승격 금지.
+- **3중 진행률 유지:** Stage416 전체 1/4·25%; 앱 속도 5/5·100%; 좋아요 5분 정산 3/4·75%(실사용 FAIL). app405 표시 경로 소스/QA/배포 PASS, 실사용 검증 전.
+
+---
+
 ## CURRENT — PREVIEW app404 새로고침 후 개인 좋아요 이전값 복귀 수정 배포 SUCCESS / 실제 PC·모바일 검증 전 (2026-10-12 KST)
 
 - **사용자 재현:** 같은 UID PC·모바일 간 실시간 좋아요·해제는 바르게 수신되지만 새로고침 시 이전 하트/숫자로 되돌아가는 app403 결함. 「성적표 대소동」, 「창문을 조금 열고」, 「조금 달라진 기분」 사진 비교. 이 결함은 server 5분 정산 실사용 실패와 **별도**로 관리.

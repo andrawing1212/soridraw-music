@@ -34,14 +34,22 @@ async function notifySettledPublicLikes416(db:Database,data:SignedFinal,nowMs:nu
        Number.isSafeInteger(row.at)&&row.at>=nowMs-3*60_000)
        retained.set(row.trackId,row);
    }
-   let changed=false;
+   const changedIds:string[]=[];
    for(const row of incoming){
      const prior=retained.get(row.trackId);
-     if(!prior||prior.at<row.at){retained.set(row.trackId,row);changed=true;}
+     if(!prior||prior.at<row.at){
+       retained.set(row.trackId,row);
+       changedIds.push(row.trackId);
+     }
    }
-   if(!changed)return; // an exact retry never re-broadcasts
-   const ordered=[...retained.values()].sort((a,b)=>b.at-a.at||
-     a.trackId.localeCompare(b.trackId)).slice(0,256);
+   if(!changedIds.length)return; // an exact retry never re-broadcasts
+   // Prioritize the newest window's changed rows in legacy <=50:
+   // a single new like must never be buried behind 80 retained equal-time IDs.
+   const changedSet=new Set(changedIds);
+   const ordered=[...changedIds.map(id=>retained.get(id)!),
+     ...[...retained.values()].filter(row=>!changedSet.has(row.trackId))
+       .sort((a,b)=>b.at-a.at||a.trackId.localeCompare(b.trackId))
+   ].slice(0,256);
    const rows=ordered.slice(0,50),overflow=ordered.slice(50);
    return {version:Math.max(nowMs,Number(current?.version||0)+1),
      at:nowMs,actorUid:data.uid,rows,

@@ -1,0 +1,165 @@
+name: SORIDRAW Stage416 PREVIEW Public Final Patch
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/stage416-preview-public-final-patch.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-stage416-preview-backend-release
+  cancel-in-progress: false
+
+jobs:
+  patch-final-callback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+      SHARED_RTDB: https://soridraw-app-866a5-default-rtdb.firebaseio.com
+    steps:
+      - name: Checkout immutable trigger
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Lock exact code and protect TEST PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = preview
+          target="$(sed -n 's/^product_code_target=//p' .deploy/stage416-preview-public-final-patch.trigger)"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(grep -c '^product_code_target=' .deploy/stage416-preview-public-final-patch.trigger)" -eq 1
+          grep -Fxq 'scope=preview_single_existing_final_function_only' .deploy/stage416-preview-public-final-patch.trigger
+          grep -Fxq 'shared_rules_change=false' .deploy/stage416-preview-public-final-patch.trigger
+          grep -Fxq 'shared_d1_change=false' .deploy/stage416-preview-public-final-patch.trigger
+          grep -Fxq 'worker_change=false' .deploy/stage416-preview-public-final-patch.trigger
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor "$target" origin/preview
+          test "$target" = "$(git rev-parse HEAD^)" || { echo 'Target must be direct trigger parent'; exit 3; }
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before"
+          git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
+          git checkout --detach "$target"
+          grep -Fq "overflow416" functions/src/exploreLikePrivateFinal416.ts
+          grep -Fq "publicNotified416" functions/src/exploreLikePrivateFinal416.ts
+          test "$(node -p "require('./public/app-version.json').version")" -eq 402
+          echo "LOCKED_FINAL_PATCH_SHA=$target" >> "$GITHUB_ENV"
+          echo "STAGE416_FINAL_PATCH_SOURCE=$target"
+
+      - name: Install Node 22 and regression test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify exact code without user-data writes
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node scripts/verify-416-public-coalescing-gap.mjs
+          node scripts/verify-416-private-final-publisher.mjs
+          node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-402-private-heart-count-pair.mjs
+          node scripts/verify-401-cross-device-opposite-like.mjs
+          npm run lint
+          npm run build
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          echo '416_EXACT_FINAL_PATCH_QA=PASS'
+
+      - name: Stage ONE existing Function and no other exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          d=.stage416-final-patch
+          mkdir -p "$d/lib"
+          cp functions/lib/exploreLikePrivateFinal416.js "$d/lib/"
+          cp functions/lib/exploreLikePrivateFinalEndpoint416.js "$d/lib/"
+          cat > "$d/package.json" <<'JSON'
+          {
+            "name": "soridraw-stage416-final-patch",
+            "private": true,
+            "main": "lib/index.js",
+            "engines": {"node":"22"},
+            "dependencies": {
+              "firebase-admin": "^12.0.0",
+              "firebase-functions": "^4.5.0"
+            }
+          }
+          JSON
+          cat > "$d/lib/index.js" <<'NODE'
+          "use strict";
+          const admin = require("firebase-admin");
+          admin.initializeApp({databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"});
+          exports.privateLikeFinalReceipt416Candidate =
+            require("./exploreLikePrivateFinalEndpoint416").privateLikeFinalReceipt416Candidate;
+          NODE
+          cat > stage416.final-patch.firebase.json <<'JSON'
+          {"functions":{"source":".stage416-final-patch"}}
+          JSON
+          npm install --prefix "$d" --omit=dev --no-audit --no-fund
+          node - <<'NODE'
+          const fn=require('./.stage416-final-patch/lib/index.js');
+          if(Object.keys(fn).join(',')!=='privateLikeFinalReceipt416Candidate')
+            throw Error('416_PATCH_EXPORT_SCOPE_DRIFT');
+          console.log('416_SINGLE_FUNCTION_EXPORT_ONLY=PASS');
+          NODE
+
+      - name: Authenticate existing Firebase deploy service account
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Verify existing PREVIEW callback and secret binding (readonly)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe privateLikeFinalReceipt416Candidate \
+            --gen2 --region=asia-northeast3 --project="$FIREBASE_PROJECT" \
+            --format=json > "$RUNNER_TEMP/final-before.json"
+          node - "$RUNNER_TEMP/final-before.json" <<'NODE'
+          const d=require(process.argv[2]);
+          if(d.state!=='ACTIVE')throw Error('416_CALLBACK_NOT_ACTIVE');
+          if(!d.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_CALLBACK_EXISTING_HMAC_BINDING_MISSING');
+          console.log('416_EXISTING_CALLBACK_SECRET_READONLY=PASS');
+          NODE
+
+      - name: Deploy EXACTLY one Stage416 PREVIEW callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --project "$FIREBASE_PROJECT" \
+            --config stage416.final-patch.firebase.json \
+            --only functions:privateLikeFinalReceipt416Candidate \
+            --non-interactive --force
+          echo '416_PREVIEW_FINAL_CALLBACK_DEPLOY=PASS'
+
+      - name: Verify deployed Function and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe privateLikeFinalReceipt416Candidate \
+            --gen2 --region=asia-northeast3 --project="$FIREBASE_PROJECT" \
+            --format=json > "$RUNNER_TEMP/final-after.json"
+          node - "$RUNNER_TEMP/final-after.json" <<'NODE'
+          const d=require(process.argv[2]);
+          if(d.state!=='ACTIVE')throw Error('416_DEPLOYED_CALLBACK_NOT_ACTIVE');
+          if(!d.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_DEPLOYED_CALLBACK_SECRET_MISSING');
+          console.log('416_FINAL_CALLBACK_LIVE=PASS');
+          NODE
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+          echo '416_PROTECTED_BRANCHES_UNCHANGED=PASS'
+          echo '416_NO_SHARED_RULES_D1_R2_OR_WORKER_MUTATION=PASS'

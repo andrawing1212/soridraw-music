@@ -155,6 +155,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
           grep -Fq 'const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;' cloudflare/explore-worker/canonical/preview-entry.js
           grep -Fq 'const STAGE416_SHARED_D1_INTAKE_ACTIVE = false;' cloudflare/explore-worker/canonical/preview-entry.js
           grep -Fq '"SORIDRAW_PRIVATE_FINAL416_ENDPOINT": "https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/privateLikeFinalReceipt416Candidate"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc

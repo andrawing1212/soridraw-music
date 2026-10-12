@@ -1,3 +1,13 @@
+## NEXT — app403 서버 고립 만료 창 PREVIEW 단일 Callable 복구 릴리스 검증 (2026-10-12 KST)
+
+- **기준 코드:** preview `b1e2462215328b925e651781ef57186f39141a55`; 408 run 38234160600 PASS. PREVIEW Hosting app403 그대로, Functions 수정본 **미배포**. live RTDB/D1 진단 38232992419 성공이지만 사용자 클릭별 accepted/finalized 정확한 증거 없음.
+- **최우선 Codex High / Work 독립 감사:** 세 소스 파일 `exploreLikePrivateServerClick416.ts`, `exploreLikePrivateCallable416.ts`, `exploreLikePrivateTask416.ts`의 **오래된 window 만료→PRIOR_WINDOW_NEEDS_SEAL→정확히 그 window의 결정적 복구 Task 1회/분** 보정 독립 감사. 유효 Auth/AppCheck, 이전 window GUID 무노출, 무한 재예약/보안우회 없음, 마지막 operationId/deviceSeq 유지, 정상 신규 클릭 추가 Task 0, 클릭 실패 시 허위 ACK 0, 서버 만료 seal→signed Worker→D1→R2→공개 버스 E2E 테스트. 원본 데이터/전체 계정 스캔 금지.
+- **릴리스 선행 조건:** 실제 recordPrivateLike416 서비스계정이 `stage416SettlePrivateWindowCandidate` queue에 enqueue 가능한지 IAM read-only 확인. 새 워크플로 누적보다 검증된 단일 Function isolated deploy 경로 재사용/정리; Task/Worker/Rules/D1/Hosting 불필요 배포 금지. 현재 408 PASS는 실제 live IAM/Task/정산 PASS 아님. 위험이 확인되면 배포 전 중단.
+- **배포 후 증거:** PREVIEW 대상 Function ACTIVE/queue RUNNING, 신규 익명 복구 상태와 5분 정확 마감, private acceptance/069 D1 scoped O(1) 증거, RTDB `publicSync/exploreLike` 새 발행, B 공개 숫자 자동 반영, 같은 계정 PC↔mobile 즉시동기화/팔로우 회귀, 실제 비용. TEST/PRODUCTION 승격 금지. 동일 UID 원본 전체 읽기 및 데이터 backfill 금지.
+- **진행률:** Stage416 1/4·25% / 앱 속도 5/5·100% / 5분 정산 3/4·75%; 실사용 FAIL 보류.
+
+---
+
 ## NEXT — app403 Stage416 정산 실사용 재검증 / 손실 예약 정확 진단 (2026-10-12 KST)
 
 - **현재 PREVIEW:** app403 Hosting 배포 성공, signed Worker 유지. public final Function hotfix 성공, Settle Task NOT_DUE 예약 ID 충돌 방지 단일 Function Run 38227381079 SUCCESS. 기존 개인/공개 데이터 구조 동일. 마지막 제품 실기기는 A 좋아요+5분 후 B 공개 숫자 미변경으로 **FAIL**. TEST/PRODUCTION 승격 금지.

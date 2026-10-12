@@ -162,7 +162,7 @@ jobs:
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-signed-worker-issuer.mjs
           node scripts/verify-416-complete-private-window.mjs
-          node scripts/verify-416-finalize-e2e.mjs
+          STAGE416_EXPECT_SIGNED_ROUTE=1 node scripts/verify-416-finalize-e2e.mjs
           node scripts/verify-416-private-task-routing.mjs
           node scripts/verify-416-cross-env-ordering.mjs
           echo 'STAGE416_PREVIEW_SIGNED_HANDOFF_RELEASE_GATE=PASS'

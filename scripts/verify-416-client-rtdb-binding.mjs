@@ -73,6 +73,37 @@ assert(source.includes('budget.count>=3'));
 assert(source.includes("window.addEventListener('online'"));
 assert(source.includes('onAuthStateChanged(auth,user=>'));
 assert(source.includes('row.privateDeviceSequence416===saved.privateDeviceSequence416'));
+const {parsePrivateFinalReceipt416:parseFinal,
+  selectExactFinalizedPrivateLikes416:exactFinal}=await import(
+  '../src/services/exploreLikePrivateFinalReceipt416.mjs');
+const opFinal='00000000-0000-4000-8000-000000000014';
+const acceptedFinal=parseFinal({version:9,canonicalD1:'settled',
+  personalLikeSnapshot:'changed-track-r2',rows:[{
+    trackId:'song-a',operationId:opFinal,liked:true,likeCount:2,
+  }]});
+assert(acceptedFinal);
+assert.equal(exactFinal({'song-a':{operationId:opFinal,desiredLiked:true}},
+  acceptedFinal).length,1);
+assert.equal(exactFinal({'song-a':{operationId:opFinal,desiredLiked:false}},
+  acceptedFinal).length,0,'newer unlike remains pending');
+assert.equal(exactFinal({'song-a':{operationId:id,desiredLiked:true}},
+  acceptedFinal).length,1);
+assert.equal(exactFinal({'song-a':{operationId:
+  '00000000-0000-4000-8000-000000000099',desiredLiked:true}},
+  acceptedFinal).length,0,'different operation cannot clear');
+for(const invalid of [
+ {version:9,canonicalD1:'queued',personalLikeSnapshot:'changed-track-r2',
+   rows:acceptedFinal.rows},
+ {version:9,canonicalD1:'settled',personalLikeSnapshot:'repair-needed',
+   rows:acceptedFinal.rows},
+ {version:9,canonicalD1:'settled',personalLikeSnapshot:'changed-track-r2',
+   rows:[...acceptedFinal.rows,...acceptedFinal.rows]},
+])assert.equal(parseFinal(invalid),null,'unsafe final receipt rejected');
+assert(source.includes('privateLikeFinal416/'));
+assert(source.includes('persistLikeOutbox(uid,outbox);'));
+assert(source.includes('repaint.forEach(dispatchLikeSync)'));
+console.log('STAGE416_EXACT_D1_AND_R2_PROVEN_FINAL_RECEIPT_ONLY=PASS');
+console.log('STAGE416_PENDING_NEWER_CLICK_NOT_CLEARED=PASS');
 console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');

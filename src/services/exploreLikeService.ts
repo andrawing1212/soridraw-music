@@ -21,6 +21,7 @@ import {
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import { reserveExploreLikeDeviceSequence416 } from './exploreLikeDeviceSequence416.mjs';
 import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
+import {parsePrivateFinalReceipt416,selectExactFinalizedPrivateLikes416} from './exploreLikePrivateFinalReceipt416.mjs';
 import {
   advancePrivateBatchWindow416, advancePrivateBatchWindowForRemoteClick416,
   parsePrivateBatchWindow416, privateBatchDeadline416,
@@ -2608,6 +2609,8 @@ export const setExploreTrackLike = async (
            !exact416.privateServerRegistered416){
           rows416[normalizedTrackId]={...exact416,privateServerRegistered416:true};
           persistLikeOutbox(uid,rows416);
+          window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
+            {detail:{uid}}));
         }
       }
     })().catch((error) =>
@@ -2681,6 +2684,8 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
           if(row&&!row.privateServerRegistered416){
             rows[saved.trackId]={...row,privateServerRegistered416:true};
             persistLikeOutbox(uid,rows);
+            window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
+              {detail:{uid}}));
           }
         }catch(error){
           // Preserve ambiguous outbox until exact server receipt; never
@@ -2696,4 +2701,74 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
   window.addEventListener('online',()=>{
     if(auth.currentUser?.uid)void recover416(auth.currentUser.uid);
   });
+}
+
+// Source-only Stage416 trusted final receipt receiver. The sibling receipt
+// path is server-writable ONLY; existing client-writable 127 intent/hint has
+// no authority to release a canonical pending click.
+// A listener exists ONLY when this UID has server-registered unsettled work.
+if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
+ let receiverUid416='';
+ let unsubscribeFinal416:Unsubscribe|null=null;
+ const installFinal416=(uid:string)=>{
+   if(!uid||auth.currentUser?.uid!==uid||unsubscribeFinal416||
+      !Object.values(readLikeOutbox(uid)).some(x=>x.privateServerRegistered416))
+     return;
+   receiverUid416=uid;
+   unsubscribeFinal416=onValue(
+     databaseRef(realtimeDb,'privateLikeFinal416/'+uid),
+     snapshot=>{
+       if(auth.currentUser?.uid!==uid||receiverUid416!==uid)return;
+       const receipt=parsePrivateFinalReceipt416(snapshot.val());
+       if(!receipt)return;
+       const outbox=readLikeOutbox(uid);
+       const exact=selectExactFinalizedPrivateLikes416(outbox,receipt);
+       if(!exact.length)return;
+       const cache=getLikedStateCache(uid);
+       const pending=readSnapshotPending127(uid);
+       const locks=readLikeDisplayLocks(uid);
+       const now=Date.now();
+       const repaint:ExploreLikeSyncEventDetail[]=[];
+       for(const row of exact){
+         const current=outbox[row.trackId];
+         if(!current||current.operationId!==row.operationId||
+            current.desiredLiked!==row.liked)continue;
+         delete outbox[row.trackId];
+         delete pending[row.trackId];
+         cache.set(row.trackId,row.liked);
+         locks[row.trackId]={liked:row.liked,likeCount:row.likeCount,
+           updatedAt:now,protectUntil:now+EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120};
+         patchExploreLikedTrackMembership(uid,row.trackId,row.liked);
+         clearExploreLikeIntent416(uid,row.trackId,row.liked,row.operationId);
+         repaint.push({uid,trackId:row.trackId,ownerUid:current.ownerUid,
+           liked:row.liked,likeCount:row.likeCount,source:'remote'});
+       }
+       if(!repaint.length)return;
+       // Persist FIRST, notify mounted/mobile UIs only after exact durable truth.
+       persistLikedStateCache(uid,cache);
+       writeSnapshotPending127(uid,pending);
+       persistLikeDisplayLocks(uid,locks);
+       persistLikeOutbox(uid,outbox);
+       markLocalLikeCatalogReady135(uid);
+       repaint.forEach(dispatchLikeSync);
+       if(!Object.values(outbox).some(x=>x.privateServerRegistered416)){
+         unsubscribeFinal416?.();unsubscribeFinal416=null;receiverUid416='';
+       }
+     },
+     error=>console.warn('[416] Exact final receipt deferred:',error),
+   );
+ };
+ onAuthStateChanged(auth,user=>{
+   if(receiverUid416!==user?.uid){
+     unsubscribeFinal416?.();unsubscribeFinal416=null;receiverUid416='';
+   }
+   if(user?.uid)installFinal416(user.uid);
+ });
+ // One subscription for outstanding data, never one listener per track.
+ // This event fires after the exact registration ACK has been persisted.
+ window.addEventListener('soridraw:private-like-registered-416',
+   (event:Event)=>{
+     const uid=(event as CustomEvent<{uid?:string}>).detail?.uid||'';
+     installFinal416(uid);
+   });
 }

@@ -36,6 +36,22 @@ try{
  await assertFails(anon.ref(protectedRoot).get());
  await assertFails(owner.ref(protectedRoot+'/sealed').remove());
  await assertFails(owner.ref(protectedRoot+'/sealed/rows/0/liked').set(false));
+ // Final receipt is readable only by owner, never client-writable.
+ const finalPath='privateLikeFinal416/uid-A';
+ await env.withSecurityRulesDisabled(async admin=>{
+   await admin.database().ref(finalPath).set({
+     version:1,canonicalD1:'settled',personalLikeSnapshot:'changed-track-r2',
+     rows:[{trackId:'song-a',operationId:'00000000-0000-4000-8000-000000000001',
+       liked:true,likeCount:1}],
+   });
+ });
+ await assertSucceeds(owner.ref(finalPath).get());
+ await assertFails(other.ref(finalPath).get());
+ await assertFails(anon.ref(finalPath).get());
+ await assertFails(owner.ref(finalPath).remove());
+ await assertFails(owner.ref(finalPath+'/rows/0/liked').set(false));
+ await assertFails(other.ref(finalPath).set({version:99}));
+ await assertFails(owner.ref('privateLikeFinal416').get());
  // Sibling structure preserves full old-client semantics.
  const oldSignal={version:1,results:[{trackId:'song',ownerUid:'uid-A',
    liked:true,operationId:'00000000-0000-4000-8000-000000000001',

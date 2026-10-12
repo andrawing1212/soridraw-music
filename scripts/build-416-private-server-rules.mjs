@@ -11,5 +11,16 @@ export const buildStage416ServerRulesCandidate=(source)=>{
   '.read':false,'.write':false,
   '$uid':{'.read':false,'.write':false},
  };
+ // A separate very small canonical receipt; never expose pending, seal,
+ // device counter or server batch contents. Admin writes; own UID reads only.
+ if(Object.hasOwn(source.rules,'privateLikeFinal416'))
+  throw Error('416_FINAL_RECEIPT_NODE_REVIEW_REQUIRED');
+ out.rules.privateLikeFinal416={
+  '.read':false,'.write':false,
+  '$uid':{
+   '.read':'auth != null && auth.uid === $uid',
+   '.write':false,
+  },
+ };
  return out;
 };

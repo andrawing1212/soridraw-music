@@ -7,3 +7,4 @@ read_timing_and_cloud_tasks_queue=true
 retry_after_diagnostic_dependency_install=true
 read_public_derived_bus_timestamp_only=true
 check_bounded_d1_069_queue_metadata=true
+recheck_after_app403_real_user_fail_utc=2026-10-12T09:52:33Z

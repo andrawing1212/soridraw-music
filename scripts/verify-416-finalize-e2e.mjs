@@ -66,8 +66,8 @@ const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js',
 const index=readFileSync('functions/src/index.ts','utf8');
 assert.match(entry,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
 assert.match(entry,/finalizePrivateHandoff416\(\{/);
-assert.doesNotMatch(index,/privateLikeFinalReceipt416Candidate/);
+assert.match(index,/privateLikeFinalReceipt416Candidate/);
 console.log('STAGE416_069_DRAIN_TO_ONE_R2_CAS_TO_SIGNED_FINAL80=PASS');
 console.log('STAGE416_FINAL_RETRY_R2_W0_CALLBACK_IDEMPOTENT=PASS');
 console.log('STAGE416_PENDING_069_BLOCKS_FALSE_FINAL_ACK=PASS');
-console.log('STAGE416_FINAL_HTTP_SOURCE_NOT_EXPORTED_OR_DEPLOYED=PASS');
+console.log('STAGE416_FINAL_HTTP_PREVIEW_EXPORT_READY=PASS');

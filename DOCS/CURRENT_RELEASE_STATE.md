@@ -1,3 +1,12 @@
+## CURRENT — app406 모바일 새로고침 좋아요 해제 사용자 실사용 PASS, Stage416 5분 서버 정산 별도 진행 (2026-10-12 KST)
+
+- **사용자 2026-10-12 14:09 UTC 확인:** 「골목길 탐험대」의 PC 좋아요/해제→모바일 반영→**모바일 새로고침 시 빈 하트+0 유지**를 app406에서 정상 작동으로 확인. 이전 app405 모바일 reload 1 복귀 오류는 사용자 실기기 기준 PASS로 종료·보호한다. 더 이상 같은 UI/복원 경로 임의 수정 금지.
+- **배포 고정:** PREVIEW app406 Hosting [Run 38259848293](https://github.com/andrawing1212/soridraw-music/actions/runs/38259848293) SUCCESS, source `82be614a2ee8bfbae0a1b8a77f900f2a1bf0ff9d`, QA [38259528489](https://github.com/andrawing1212/soridraw-music/actions/runs/38259528489) PASS, TEST/PRODUCTION unchanged. 사용자 확인은 모바일 reload 화면 회귀에 한정하며 5분 서버 최종 D1 정산 PASS를 의미하지 않는다.
+- **다음 작업 승인/범위:** 사용자 요청에 따라 Stage416 최종 정산 조사로 전환. 동일 `operationId`의 Auth/AppCheck server `accepted` → private RTDB window → Cloud Task due → Worker 서명 전달 → 공유 D1 `explore_like_private_acceptance_416` 및 canonical like count → R2/pub bus를 작은 읽기 전용 증거로 확인. 기존 19 EMPTY는 전체 익명 Task 집계라 원인 추정 금지. 정확한 결함 확인 전 원본 데이터 수정/삭제/전체 백필/강제 재접수 금지. app406의 이미 정상인 모바일 복원 코드 보호.
+- **진행률:** app406 모바일 reload PASS 100%. Stage416 전체 1/4·25%, 앱 속도 5/5·100%, 5분 서버 최종 정산 3/4·75%(실사용 미입증). 새 서버 코드/배포 없음.
+
+---
+
 ## CURRENT — PREVIEW app406 모바일 좋아요 해제 뒤 새로고침 숫자 1 복귀 경로 보정 배포 PASS / 실기기 QA 전 (2026-10-12 KST)
 
 - **신규 사용자 재현:** 「골목길 탐험대」에서 좋아요 클릭은 PC+모바일 하트/수치 모두 1, 새로고침에도 정상; 좋아요 **해제 직후 둘 다 빈 하트+0**이나 **모바일 새로고침만 1**로 복귀. 사용자 새 재현 조건으로 app405 실사용 FAIL 지속. PC에서는 정상인 경우가 있음.

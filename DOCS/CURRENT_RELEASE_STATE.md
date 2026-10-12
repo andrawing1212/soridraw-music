@@ -1,3 +1,16 @@
+## CURRENT — app410 단일 retained 하트 drift 복구 PREVIEW 배포 / 실기기 확인 대기 (2026-10-12 16:12 UTC)
+
+- **사용자 실기기 결과:** app409에서 대부분 정상화됐고, 정확히 `골목길 탐험대` 한 곡만 모바일은 filled heart + 1, PC는 empty heart + 1. 다른 곡은 정상. 공개 숫자 1은 양쪽 동일하므로 shared/public count 문제는 아니고 **PC의 개인 membership 한 row만 stale false**로 남은 문제로 확정.
+- **원인:** `applyRemoteLikeSignal127`가 retained same-account RTDB signal에 대해 `signal.version <= lastSeen`이면 즉시 return. 기기가 이미 그 version watermark를 기록한 뒤 로컬 membership 한 row만 어긋난 경우, 서버 추가 조회 없이도 exact retained row가 다시 배달되지만 이를 재적용하지 않아 heart drift가 영구 잔류할 수 있었음.
+- **app410 수정:** product commit `ffd49ca4a87344ac4aac9f2827198440d168cafd`. **오직 `signal.version === lastSeen`인 exact retained row**를 로컬 membership과 대조. outbox pending, unpublished signal retry, active 416 private intent, future 420 hint, opposite unresolved guard가 있으면 절대 덮지 않음. stale local membership만 수정하고 liked-card local index를 맞춤. 기존 personal-only repaint channel을 사용해 **heart만 다시 그림**.
+- **비용/공개 숫자 보호:** app410 retained repair에는 `fetch`, Worker request, Callable, RTDB 추가 listener/write, D1/Firestore/R2 read/write가 없음. 기존 RTDB listener가 원래 받는 retained payload만 재사용. `privateCountExact416:false`로 shared/public likeCount를 덮지 않음. 전체 liked catalog/feed scan 없음.
+- **검증:** Quality [38275331236](https://github.com/andrawing1212/soridraw-music/actions/runs/38275331236) SUCCESS. `410_SAME_VERSION_RETAINED_HEART_REPAIR_LOCAL_ONLY=PASS`, `410_RETAINED_REPAIR_ZERO_SERVER_IO_AND_PUBLIC_COUNT_UNCHANGED=PASS`; TypeScript/Build/frozen likes PASS. Follow [38275331107](https://github.com/andrawing1212/soridraw-music/actions/runs/38275331107) SUCCESS. Stage416 readonly preflight [38275331141](https://github.com/andrawing1212/soridraw-music/actions/runs/38275331141) SUCCESS.
+- **PREVIEW 배포:** trigger `eb533c91c5577a0215cf0242358da8bf91debad8`; Hosting Run [38275509549](https://github.com/andrawing1212/soridraw-music/actions/runs/38275509549) SUCCESS. `preview.soridraw.com` **app410 / exact build PASS**. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`; Functions/Worker/D1/R2/shared user data 변경 0; TEST/PRODUCTION unchanged PASS.
+- **다음 실기기 확인:** PC app410 업데이트 후 같은 `골목길 탐험대`를 **클릭하지 말고** 확인. retained exact row가 현재 signal에 남아 있으면 empty→filled로 자동 복구되어야 하며 숫자 1은 그대로 유지되어야 함. 다른 곡의 현재 정상 heart/count는 변하면 안 됨. 만약 여전히 empty라면 그 track은 현재 retained signal에 더 이상 포함되지 않은 것이므로 다음 수정은 전체 scan이 아니라 exact visible track의 기존 account-private revision/targeted canonical path만 사용.
+- **진행률:** Stage416 1/4·25%(제품 client OFF); 앱 속도 5/5·100%; 이번 단일 하트 복구 3/4·75%(코드/QA/PREVIEW 배포 완료, 사용자 실기기 확인만 남음). TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — app409 PC↔모바일 좋아요 초기 불일치 복구 PREVIEW 배포 / 실기기 확인 대기 (2026-10-12 15:58 UTC)
 
 - **사용자 재현 결함:** app407 업데이트 직후 아무 클릭 전 같은 계정 PC/모바일 Explore 카드의 하트·숫자가 서로 달랐음. 예: 한 기기 1/filled, 다른 기기 0/empty. 이는 카드 숫자만의 문제가 아니라 개인 like membership/local catalog가 기기별로 갈린 상태.

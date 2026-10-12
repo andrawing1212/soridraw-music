@@ -1,3 +1,13 @@
+## NEXT — app410 골목길 탐험대 PC 하트 exact retained 복구 실기기 확인 (2026-10-12 16:12 UTC)
+
+- **현재 PREVIEW:** app410 Run [38275509549](https://github.com/andrawing1212/soridraw-music/actions/runs/38275509549) SUCCESS / exact build PASS. product `ffd49ca4...`; Stage416 client 5분 path OFF 유지.
+- **확인:** PC를 app410으로 업데이트한 뒤 `골목길 탐험대`를 클릭하지 않고 하트만 확인. 모바일 filled+1 / PC filled+1로 일치해야 하며 공개 숫자는 1 그대로여야 함. 다른 정상 곡은 그대로 유지.
+- **PASS:** app410을 현재 좋아요 보호 기준으로 고정하고 PC↔모바일 양방향 새 클릭/해제와 새로고침 유지까지 마지막 확인.
+- **FAIL:** 현재 retained signal에 해당 track row가 없는 것으로 보고, 전체 catalog/Feed/D1 scan 금지. exact visible track 하나만 account-private revision/targeted canonical membership으로 검증하는 bounded repair 설계. 비용 없는 retained replay를 먼저 사용한 현재 구조는 유지.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, 이번 단일 하트 복구 3/4·75%.
+
+---
+
 ## NEXT — app409 실기기 PC↔모바일 초기/양방향 좋아요 일치 확인 (2026-10-12 15:58 UTC)
 
 - **현재 PREVIEW:** app409 [38273830554](https://github.com/andrawing1212/soridraw-music/actions/runs/38273830554) SUCCESS / exact build PASS. Stage416 5분 client path OFF, app399 canonical batch 복구 + 기존 pending Auth-ready recovery 추가.

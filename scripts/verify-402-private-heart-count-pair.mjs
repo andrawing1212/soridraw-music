@@ -40,7 +40,7 @@ assert.match(managed405,/setCuratedTracks307\(viewerCards405\.slice/,
 const revised405=page.slice(page.indexOf('void revalidateSoridrawCuratedTracks335()'));
 assert.match(revised405,/overlayExploreLikeDisplayCounts\(uid405, cards405\)/,
   'activity-only curated revision must preserve pending last click');
-assert.doesNotMatch(curated405+/''+managed405.slice(0,1200)+revised405.slice(0,600),
+assert.doesNotMatch(curated405+'\n'+managed405.slice(0,1200)+revised405.slice(0,600),
   /persistExploreFeed|writeSoridrawPersistentCache|publishExplorePublicLikeInvalidation192/,
   'viewer overlay is only UI and cannot mutate shared public caches');
 console.log('APP405_CURATED_REFRESH_PRIVATE_COUNT_OVERLAY=PASS');

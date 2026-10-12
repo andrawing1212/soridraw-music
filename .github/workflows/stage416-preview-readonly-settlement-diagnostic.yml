@@ -169,6 +169,35 @@ jobs:
           print('STAGE416_NO_IAM_MUTATION=PASS')
           PY
 
+      - name: Check PREVIEW window onCreate Eventarc binding without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          name='stage416SchedulePrivateWindowCandidate'
+          project='soridraw-app-866a5'
+          p=subprocess.run(['gcloud','functions','describe',name,'--gen2',
+            '--region=us-central1','--project',project,'--format=json'],
+            text=True,capture_output=True)
+          if p.returncode:raise SystemExit('STAGE416_SCHEDULE_EVENTARC_DESCRIPTION_DENIED')
+          d=json.loads(p.stdout)
+          trigger=d.get('eventTrigger') or {}
+          eventType=str(trigger.get('eventType') or '')
+          filters=[{'attribute':str(x.get('attribute') or ''),
+                   'value':str(x.get('value') or '')}
+                   for x in (trigger.get('eventFilters') or [])]
+          print('STAGE416_ONCREATE_FUNCTION_STATE='+str(d.get('state') or 'UNKNOWN'))
+          print('STAGE416_ONCREATE_EVENT_TYPE='+eventType)
+          print('STAGE416_ONCREATE_EVENT_FILTERS='+json.dumps(filters,sort_keys=True))
+          print('STAGE416_ONCREATE_TRIGGER_REGION='+str(trigger.get('triggerRegion') or 'UNSET'))
+          print('STAGE416_ONCREATE_TRIGGER_RESOURCE_PRESENT='+str(bool(trigger.get('trigger'))).upper())
+          print('STAGE416_ONCREATE_SERVICE='+str(d.get('serviceConfig',{}).get('service','')).rsplit('/',1)[-1])
+          if d.get('state')!='ACTIVE' or not trigger.get('trigger'):
+            raise SystemExit('STAGE416_SCHEDULE_EVENTARC_NOT_ACTIVE')
+          print('STAGE416_EVENTARC_BINDING_READONLY=PASS')
+          PY
+
       - name: Confirm no mutation commands
         run: echo 'READONLY_DIAGNOSTIC=true;DEPLOY=0;DATABASE_WRITE=0'
 

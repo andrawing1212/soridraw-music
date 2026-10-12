@@ -1,3 +1,13 @@
+## NEXT — Stage416③ PREVIEW coordinated activation 전 read-only 릴리스 프리플라이트 (2026-10-12)
+
+- **현재 고정 기준:** `preview` `5afac9fa2ba40ed746f429b8d006b0a27e6d2b26`. TEST Worker `ddd2255a-75cc-4db9-8905-b47338558cb0`, PRODUCTION Worker `af81502a-298d-4ec6-bc2a-0c529d6dc29e` 모두 Stage416 optional `mutationAt` ordering 호환 상태이며 read-only Run [38198040888](https://github.com/andrawing1212/soridraw-music/actions/runs/38198040888) PASS. Stage416 기능 활성은 아직 0.
+- **다음 단일 작업:** PREVIEW backend/app activation 전에 실제 배포 패키지를 **쓰기 없이** 고정 검증한다. 확인 범위는 (1) shared D1 `explore_like_private_acceptance_416` additive schema의 현재 존재/정확 shape와 파괴적 변경 0, (2) `privateLikeBatch416` / `privateLikeFinal416` RTDB Rules가 기존 root를 덮지 않는 additive server-only diff인지, (3) Firebase Functions private click/deadline/task/final endpoint export와 HMAC secret/Cloud Tasks 연결이 PREVIEW에서만 안전하게 준비되는지, (4) PREVIEW Worker의 signed handoff route/final endpoint binding 및 기존 canonical 069/075 경로 보호, (5) client 두 Stage416 flag를 **마지막 단계 전까지 OFF**로 유지하는지, (6) old app399/TEST/PRODUCTION이 shared user data를 계속 읽고 쓸 수 있는지 확인한다.
+- **합격 후 순서:** additive D1/Rules → PREVIEW Functions/Task/secret → PREVIEW Worker signed handoff ON → backend smoke/rollback proof → 마지막으로 app400 PREVIEW client flag ON + Hosting 배포. 어느 단계든 실패하면 즉시 중단하고 app399 경로를 유지한다. TEST/PRODUCTION Stage416 기능 활성은 이번 범위 아님.
+- **검증:** 기존 408 TypeScript/Build/like/follow 회귀, Stage416 80곡/50+30, exact retry W0, restart/outbox, cross-env ordering, no early flush, final receipt 검증을 exact release candidate에서 다시 실행. 페이지 진입/재방문 write 0, 전체 feed/profile scan 0, shared user data migration/backfill/delete 0 필수.
+- **완료 기준:** PREVIEW 실제 PC↔mobile 양방향, 마지막 클릭 +5분, 앱 종료/재실행, 같은 곡 반대클릭, 80곡, stale ACK, D1/RTDB/Functions/Task/Worker/R2 실제 비용 계측 PASS 후 Stage416③ 4/4로 올린다. 자동검사만으로 4/4 처리 금지.
+
+---
+
 ## NEXT — Stage416③ 5분 서버 저장 종단 정합성 완성 (2026-10-12, 우선순위 정정)
 
 - **사용자 정정:** '경량화 이후 느림'은 앱 성능 문제가 아닌 **ChatGPT의 작업 처리 속도**에 대한 지적이다. 이전 첫 항목의 앱 성능 FAIL 신고를 현재 사용자 요구로 다시 해석하지 말 것. 작업 방식과 3중 진행률은 유지하되 빠르게 단일 기능 중심으로 처리한다.

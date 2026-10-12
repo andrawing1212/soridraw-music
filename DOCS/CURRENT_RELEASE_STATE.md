@@ -1,3 +1,16 @@
+## CURRENT — app402 즉시동기화 회귀 원인 확정 / 공유 RTDB 규칙 hotfix 배포 PASS (2026-10-12 KST)
+
+- **사용자 실기기 app402 FAIL:** app401에서 되던 같은 계정 PC↔mobile 즉시 하트 동기화가 app402에서는 양쪽 모두 끊김.
+- **원인 확정:** app402가 UID-private `exploreLikeIntent416.results.$index`에 새 `optimisticLikeCount`를 쓰도록 변경했지만, live shared RTDB Rules의 해당 row는 `$other:false`이고 이 필드가 허용되지 않아 **private intent transaction 자체가 Rules에서 거부**됨. 그래서 숫자뿐 아니라 하트 실시간 동기화도 함께 끊김.
+- **수정:** `optimisticLikeCount`를 **선택 필드**로만 허용하는 exact validation(`number, 0..1,000,000,000`)을 shared RTDB Rules에 additive 추가. 기존 required children 목록은 그대로라 app401/TEST/PRODUCTION 구형 클라이언트가 이 필드를 보내지 않아도 정상. 기존 권한/다른 node/schema 의미 변경 없음.
+- **검증:** 408 Run **38210508948 SUCCESS**. shared rule delta self-test는 기존 live rules(새 필드 없음)와 새 exact rules의 차이가 이 optional field 하나뿐임을 검증. active-backend read-only Preflight Run **38210981253 SUCCESS**로 PREVIEW signed Worker/Functions 6개/D1 schema/live RTDB rules 상태 재확인.
+- **실제 배포:** PREVIEW App Release Run **38210748547 SUCCESS**. `402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_PREFLIGHT=PASS`, `SHARED_RTDB_RULES_EXACT_MATCH=PASS`, `SHARED_RTDB_RULES_DEPLOY=PASS`, remote app version **402**, exact build PASS, TEST/PRODUCTION Hosting/branches unchanged PASS.
+- **데이터 영향:** 사용자 row migration/backfill/delete/overwrite 0. Rules만 additive 1필드 허용. Worker/Functions/D1 재배포 0.
+- **진행률:** ① Stage416 전체 **1/4·25%**, ② 앱 속도 **5/5·100%**, ③ 개인 좋아요 5분 저장 **3/4·75% 유지**. 즉시동기화 실기기 재검증 + 5분 canonical/public + 비용 확인 전 4/4 금지.
+- **다음:** PC/모바일 둘 다 app402 새로고침 후 같은 계정에서 PC like→mobile 확인 / PC unlike→mobile `빈하트+0` / 반대 방향까지 재검증. 이게 PASS하면 다른 계정으로 마지막 클릭+5분 canonical 수렴을 검증.
+
+---
+
 ## CURRENT — app402 PREVIEW same-account 하트+숫자 원자 동기화 수정 배포 / 5분 canonical 실사용 검증 대기 (2026-10-12 KST)
 
 - **사용자 app401 실기기 결과:** 같은 계정 PC↔mobile 하트 상태 양방향 실시간 동기화는 PASS. 다만 PC에서 unlike 후 모바일은 **빈 하트 + 숫자 1**로 남아 개인 하트와 숫자가 불일치.

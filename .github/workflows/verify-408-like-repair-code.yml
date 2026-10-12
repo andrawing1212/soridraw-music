@@ -16,6 +16,8 @@ on:
       - 'cloudflare/explore-worker/migrations/20261012_01_stage416_private_acceptance_additive.sql'
       - 'database.rules.json'
       - 'scripts/verify-416-preview-backend-release.mjs'
+      - 'scripts/build-416-private-server-rules.mjs'
+      - 'scripts/verify-418-rtdb-rules-delta.mjs'
       - 'scripts/verify-416-private-handoff-atomic.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
       - 'scripts/verify-416-shared-writer-d1.mjs'

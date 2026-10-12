@@ -22,6 +22,7 @@ import {
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
 import { reserveExploreLikeDeviceSequence416 } from './exploreLikeDeviceSequence416.mjs';
 import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
+import { markStage416PrivateAcceptanceRegistered416 } from './exploreLikePrivateDiagnostic416';
 import {
   shouldFinalReceiptSupersedeLocal401,
   shouldRemoteIntentSupersedeLocal401,
@@ -2710,6 +2711,8 @@ export const setExploreTrackLike = async (
             privateServerVersion416:registered416.version,
           };
           persistLikeOutbox(uid,rows416);
+          markStage416PrivateAcceptanceRegistered416(
+            uid,operationId416,'initial',registered416.version);
           window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
             {detail:{uid}}));
         }
@@ -2779,7 +2782,7 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
             trackId:saved.trackId,liked:saved.desiredLiked,
             operationId:saved.operationId!,deviceId:saved.privateDeviceId416!,
             deviceSequence:saved.privateDeviceSequence416!,
-          },stillCurrent);
+          },stillCurrent,'recovery');
           if(!receipt||!stillCurrent())continue;
           const rows=readLikeOutbox(uid),row=rows[saved.trackId];
           if(row&&(!row.privateServerRegistered416||
@@ -2790,6 +2793,8 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
               privateServerVersion416:receipt.version,
             };
             persistLikeOutbox(uid,rows);
+            markStage416PrivateAcceptanceRegistered416(
+              uid,saved.operationId!,'recovery',receipt.version);
             window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
               {detail:{uid}}));
           }

@@ -1,4 +1,8 @@
 import { functions, httpsCallable } from '../firebase';
+import {
+  recordStage416PrivateAcceptanceError416,
+  recordStage416PrivateAcceptanceReply416,
+} from './exploreLikePrivateDiagnostic416';
 
 // Stage416 app400 PREVIEW activation. The browser still NEVER writes the
 // canonical pending/sealed tree directly; it calls the Auth+AppCheck Function,
@@ -38,14 +42,25 @@ export async function retryPrivateClickAfterPriorSeal416(
   }
   throw Error('416_PRIVATE_SERVER_RETRY_EXHAUSTED');
 }
+export type PrivateRegistrationDiagnosticSource416='initial'|'recovery';
+
 export const publishPrivateRtdbBatchClick416=async(
   _uid:string,click:PrivateRtdbClick416,isStillCurrent:()=>boolean=()=>true,
+  diagnosticSource:PrivateRegistrationDiagnosticSource416='initial',
 ):Promise<{version:number;count:number}|null>=>{
  if(!STAGE416_SHARED_RTDB_BATCH_ACTIVE)return null;
  const call=httpsCallable<PrivateRtdbClick416,PrivateClickReply416>(
    functions,'recordPrivateLike416');
  return retryPrivateClickAfterPriorSeal416(async()=>{
-   const result=await call(click);
-   return result.data;
+   try{
+     const result=await call(click);
+     recordStage416PrivateAcceptanceReply416(
+       _uid,click.operationId,diagnosticSource,result.data);
+     return result.data;
+   }catch(error){
+     recordStage416PrivateAcceptanceError416(
+       _uid,click.operationId,diagnosticSource,error);
+     throw error;
+   }
  },isStillCurrent);
 };

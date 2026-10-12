@@ -30,13 +30,16 @@ const transport=readFileSync('src/services/exploreLikePrivateRtdbTransport416.ts
 const compiled=ts.transpileModule(transport,{compilerOptions:{
   module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
 }}).outputText;
-const module416={exports:{}};let callableCalls416=0;
+const module416={exports:{}};let callableCalls416=0,transportDiagnostics416=[];
 vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   require:moduleId=>moduleId==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
     callableCalls416++;
     assert.equal(click.operationId,id);
     return {data:{ok:true,accepted:true,version:12,count:3}};
-  }}:(()=>{throw Error('unexpected import '+moduleId)})(),
+  }}:moduleId==='./exploreLikePrivateDiagnostic416'?{
+    recordStage416PrivateAcceptanceReply416:(...args)=>transportDiagnostics416.push(['reply',...args]),
+    recordStage416PrivateAcceptanceError416:(...args)=>transportDiagnostics416.push(['error',...args]),
+  }:(()=>{throw Error('unexpected import '+moduleId)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;
@@ -46,6 +49,10 @@ if(appVersion>=400){
   assert.equal(releaseProbe?.version,12,'app400 uses exact server receipt version');
   assert.equal(releaseProbe?.count,3,'app400 uses exact server receipt count');
   assert.equal(callableCalls416,1,'app400 performs one Callable registration');
+  assert.equal(transportDiagnostics416.length,1,'diagnostic observes existing Callable reply only');
+  assert.equal(transportDiagnostics416[0][0],'reply');
+  assert.equal(transportDiagnostics416[0][1],'account');
+  assert.equal(transportDiagnostics416[0][2],id);
 }else{
   assert.equal(releaseProbe,null,'app399 OFF never calls Firebase Callable');
   assert.equal(callableCalls416,0);
@@ -139,3 +146,65 @@ console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
 console.log(appVersion>=400
   ? 'STAGE416_APP400_PLUS_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
   : 'STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');
+
+const diagnosticSource=readFileSync('src/services/exploreLikePrivateDiagnostic416.ts','utf8');
+assert.doesNotMatch(diagnosticSource,/httpsCallable|databaseRef|runTransaction|\bfetch\s*\(/,
+  'local acceptance diagnostic must add no server IO');
+assert.match(diagnosticSource,/readCacheDiagnosticsEnabled\(uid\)/);
+assert.match(diagnosticSource,/operationToken/);
+assert.doesNotMatch(diagnosticSource,/trackId\s*:/,
+  'diagnostic state must not persist raw track identifiers');
+const diagnosticCompiled=ts.transpileModule(diagnosticSource,{compilerOptions:{
+  module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+}}).outputText;
+const diagnosticModule={exports:{}};
+const diagnosticStore=new Map();
+let diagnosticEnabled=true,diagnosticEvents=0;
+class DiagnosticEvent416{constructor(type,init){this.type=type;this.detail=init?.detail;}}
+vm.runInNewContext(diagnosticCompiled,{
+  module:diagnosticModule,exports:diagnosticModule.exports,
+  require:moduleId=>moduleId==='../lib/cacheDiagnostics'?{
+    readCacheDiagnosticsEnabled:()=>diagnosticEnabled,
+  }:(()=>{throw Error('unexpected diagnostic import '+moduleId)})(),
+  sessionStorage:{
+    getItem:key=>diagnosticStore.has(key)?diagnosticStore.get(key):null,
+    setItem:(key,value)=>diagnosticStore.set(key,value),
+  },
+  window:{dispatchEvent:()=>{diagnosticEvents++;}},
+  CustomEvent:DiagnosticEvent416,JSON,String,Number,Date,Set,Math,Error,Object,Array,
+},{timeout:1500});
+const diag=diagnosticModule.exports;
+diag.recordStage416PrivateAcceptanceReply416('private-uid',opFinal,'initial',{
+  ok:true,accepted:false,reason:'PRIOR_WINDOW_NEEDS_SEAL',
+});
+let diagState=diag.readStage416PrivateAcceptanceDiagnostic416('private-uid');
+assert.equal(diagState.serverAccepted,false);
+assert.equal(diagState.reason,'PRIOR_WINDOW_NEEDS_SEAL');
+assert.equal(diagState.attempt,1);
+assert.equal(diagState.outboxRegistered,false);
+diag.recordStage416PrivateAcceptanceReply416('private-uid',opFinal,'recovery',{
+  ok:true,accepted:true,reason:'ACCEPTED',version:12,count:1,
+});
+diag.markStage416PrivateAcceptanceRegistered416('private-uid',opFinal,'recovery',12);
+diagState=diag.readStage416PrivateAcceptanceDiagnostic416('private-uid');
+assert.equal(diagState.phase,'registered');
+assert.equal(diagState.serverAccepted,true);
+assert.equal(diagState.receiptValid,true);
+assert.equal(diagState.version,12);
+assert.equal(diagState.outboxRegistered,true);
+assert.equal(diagState.attempt,2);
+const serializedDiagnostic=[...diagnosticStore.values()].join('');
+assert(!serializedDiagnostic.includes('private-uid'),'raw UID must not persist in diagnostic');
+assert(!serializedDiagnostic.includes(opFinal),'raw operationId must not persist in diagnostic');
+diagnosticEnabled=false;
+assert.equal(diag.readStage416PrivateAcceptanceDiagnostic416('private-uid'),null,
+  'diagnostic is default-off/gated by existing cache diagnostic toggle');
+assert(diagnosticEvents>=3);
+const panel416=readFileSync('src/components/Stage416LikeBatchMasterPanel.tsx','utf8');
+assert.match(panel416,/Stage416 서버 접수 진단/);
+assert.match(panel416,/readStage416PrivateAcceptanceDiagnostic416/);
+assert.match(source,/markStage416PrivateAcceptanceRegistered416[\s\S]*?'initial'/);
+assert.match(source,/stillCurrent,'recovery'/);
+assert.match(source,/markStage416PrivateAcceptanceRegistered416[\s\S]*?'recovery'/);
+console.log('STAGE416_PRIVATE_ACCEPTANCE_LOCAL_DIAGNOSTIC_NO_SERVER_IO=PASS');
+console.log('STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_NO_RAW_IDS=PASS');

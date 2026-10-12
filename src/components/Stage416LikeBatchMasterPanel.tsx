@@ -5,6 +5,14 @@ import { normalizeStaffRole } from '../constants/adminPermissions';
 import {
   USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache,
 } from '../lib/userProfileCache';
+import {
+  CACHE_DIAGNOSTICS_TOGGLE_EVENT, readCacheDiagnosticsEnabled,
+} from '../lib/cacheDiagnostics';
+import {
+  readStage416PrivateAcceptanceDiagnostic416,
+  STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_EVENT,
+  type Stage416PrivateAcceptanceDiagnostic416,
+} from '../services/exploreLikePrivateDiagnostic416';
 
 // Stage416 Master-only section: both settings are independent, not the
 // Stage420 abuse/lock panel. Server checks Master on each get/set.
@@ -20,6 +28,11 @@ const isMaster = () => {
   const uid = auth.currentUser?.uid || '';
   return !!uid && normalizeStaffRole(readUserProfileCache(uid)) === 'master';
 };
+const formatDiagnosticTime416 = (updatedAt: number) => {
+  if (!updatedAt) return '-';
+  try { return new Date(updatedAt).toLocaleTimeString('ko-KR', { hour12: false }); }
+  catch { return '-'; }
+};
 
 export default function Stage416LikeBatchMasterPanel() {
   const [allowed, setAllowed] = useState(isMaster);
@@ -27,6 +40,9 @@ export default function Stage416LikeBatchMasterPanel() {
   const [draft, setDraft] = useState<Timing416>(DEFAULT);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [acceptanceDiagnostic, setAcceptanceDiagnostic] =
+    useState<Stage416PrivateAcceptanceDiagnostic416 | null>(() =>
+      readStage416PrivateAcceptanceDiagnostic416(auth.currentUser?.uid || ''));
 
   useEffect(() => {
     const uid = auth.currentUser?.uid || '';
@@ -42,6 +58,23 @@ export default function Stage416LikeBatchMasterPanel() {
     return () => {
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, onCache as EventListener);
       window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncDiagnostic = () => setAcceptanceDiagnostic(
+      readStage416PrivateAcceptanceDiagnostic416(auth.currentUser?.uid || ''),
+    );
+    window.addEventListener(
+      STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_EVENT, syncDiagnostic as EventListener);
+    window.addEventListener(
+      CACHE_DIAGNOSTICS_TOGGLE_EVENT, syncDiagnostic as EventListener);
+    syncDiagnostic();
+    return () => {
+      window.removeEventListener(
+        STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_EVENT, syncDiagnostic as EventListener);
+      window.removeEventListener(
+        CACHE_DIAGNOSTICS_TOGGLE_EVENT, syncDiagnostic as EventListener);
     };
   }, []);
 
@@ -139,6 +172,36 @@ export default function Stage416LikeBatchMasterPanel() {
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} 주기 저장
       </button>
       {notice && <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">{notice}</p>}
+      <div className="mt-5 rounded-2xl border border-white/10 bg-black/15 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-black text-[var(--text-primary)]">Stage416 서버 접수 진단</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-[var(--text-secondary)]">
+              캐시 진단 ON일 때 이 기기에서 받은 Callable 응답만 기록합니다.
+              UID·곡 ID·요청 ID 원문과 서버 추가 조회는 사용하지 않습니다.
+            </p>
+          </div>
+          <span className="rounded-lg bg-white/[0.055] px-2 py-1 text-[10px] font-black text-[var(--text-secondary)]">
+            {readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ? '진단 ON' : '진단 OFF'}
+          </span>
+        </div>
+        {!readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ? (
+          <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">
+            아래 ‘캐시 진단 표시’를 ON으로 켠 뒤 익스플로어에서 좋아요를 1회 테스트하세요.
+          </p>
+        ) : !acceptanceDiagnostic ? (
+          <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">
+            아직 이 세션에서 Stage416 서버 접수 응답을 받지 않았습니다.
+          </p>
+        ) : (
+          <div className="mt-3 grid gap-2 text-[11px] font-bold text-[var(--text-secondary)] sm:grid-cols-2">
+            <p>요청: {acceptanceDiagnostic.operationToken} · {acceptanceDiagnostic.source === 'recovery' ? '복구 재접수' : '최초 접수'} · {acceptanceDiagnostic.attempt}회</p>
+            <p>응답: {acceptanceDiagnostic.phase === 'error' ? '호출 오류' : acceptanceDiagnostic.serverAccepted ? '서버 승인' : '서버 거절'} · {acceptanceDiagnostic.reason}</p>
+            <p>증명: receipt {acceptanceDiagnostic.receiptValid ? '유효' : '미확정'} · version {acceptanceDiagnostic.version ?? '-'}</p>
+            <p>로컬 outbox: {acceptanceDiagnostic.outboxRegistered ? '서버 등록 완료' : '등록 대기'} · {formatDiagnosticTime416(acceptanceDiagnostic.updatedAt)}</p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

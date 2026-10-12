@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
 const s=readFileSync('src/services/exploreLikeService.ts','utf8');
 const on='STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE';
-assert.match(s,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
+if(appVersion>=400) assert.match(s,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
+else assert.match(s,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.equal((s.match(/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE/g)||[]).length,7,
  'guard scheduler, canonical sender, on-exit, set-like scheduler, publisher, startup recovery and final receipt');
 const scheduler=s.slice(s.indexOf('const schedulePendingFlush ='),s.indexOf('const schedulePendingFlush =')+800);
@@ -15,4 +17,6 @@ assert(s.includes('if (!('+on+')) {\n    schedulePendingFlush(user);'));
 assert(s.includes('if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&\n    typeof window !== \'undefined\')'), 'startup recovery is also behind both hard-OFF flags');
 assert(s.includes('if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {\n let receiverUid416'), 'final receipt receiver also behind both hard-OFF flags');
 console.log('STAGE416_CANDIDATE_NO_APP399_TIMER_FLUSH_OR_PAGE_EXIT_WRITE=PASS');
-console.log('STAGE416_CURRENT_APP399_5SEC_FLUSH_PRESERVED_OFF=PASS');
+console.log(appVersion>=400
+  ? 'STAGE416_APP400_NO_EARLY_LEGACY_FLUSH_WHILE_ACTIVE=PASS'
+  : 'STAGE416_CURRENT_APP399_5SEC_FLUSH_PRESERVED_OFF=PASS');

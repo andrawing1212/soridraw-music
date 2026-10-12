@@ -1,3 +1,13 @@
+## CURRENT — Stage416③ TEST/PRODUCTION Worker 호환 패치 실소스 dry-run PASS / 실제 배포 승인 대기 (2026-10-12 KST)
+
+- **기준:** preview `3ee4253155c738651c3db515e57d35893d2b8c57`. Read-only live audit [Run 38195602471](https://github.com/andrawing1212/soridraw-music/actions/runs/38195602471) SUCCESS, exact patch dry-run [Run 38195678776](https://github.com/andrawing1212/soridraw-music/actions/runs/38195678776) SUCCESS.
+- **실제 활성 Worker 확인:** TEST active `bc01f091-b9e6-43b7-ac82-73385ea24e52`, PRODUCTION active `4d82f107-ae7e-4985-b955-8c889807c888`; 두 환경 main source SHA256가 동일했고 둘 다 `LEGACY_PATCHABLE`.
+- **호환 패치 준비 완료:** `cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs`는 기존 `exploreLikeAggregateSnapshotCte039`의 069 JSON 확장 한 구간만 바꾸며, Stage416 행에 `operationId+mutationAt`이 있을 때만 서버 클릭시각을 정렬에 사용. 기존 069 행은 기존 `created_at` 그대로. 실제 TEST/PRODUCTION 소스를 임시 복사해 패치한 결과 둘 다 `COMPAT`, Node syntax PASS, 함수 바깥 byte-for-byte 동일 검증 PASS. 원격 쓰기/Worker deploy 0.
+- **진행률 유지:** Stage416③ 개인 좋아요 5분 저장 **3/4·75%**. 남은 1/4은 실제 호환 Worker 승격 → PREVIEW backend/Rules/D1 additive 준비 → 앱을 마지막에 ON → PC/mobile/비용 실사용 검증. 소스 구현은 완료됐지만 서비스 활성은 아직 0%.
+- **승인 경계:** 다음 단계는 TEST/PRODUCTION Worker의 compatibility-only 코드 배포를 포함한다. PRODUCTION 변경이므로 `계속 진행` 같은 일반 지시는 정식 PRODUCTION 승인으로 해석하지 않으며, 명확한 호환 패치 배포 승인 전에는 실행하지 않는다. main/production branch, Firebase, Cloudflare live code/data 모두 이번 dry-run으로 변경 없음.
+
+---
+
 ## CURRENT — Stage416③ 개인 5분 저장 소스 종단 구현 3/4·75% PASS / 실제 활성 전 공유 Worker 호환 승격 승인 필요 (2026-10-12 KST)
 
 - **현재 기준:** preview `163a5dc0c97da352e5616929c62a65c2e63ec1da`. Exact GitHub 408 [Run 38194515333](https://github.com/andrawing1212/soridraw-music/actions/runs/38194515333) SUCCESS, Follow-only [38194515366](https://github.com/andrawing1212/soridraw-music/actions/runs/38194515366) SUCCESS. PREVIEW live app399 source `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` 유지, Stage416 미배포/비활성.

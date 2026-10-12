@@ -66,7 +66,7 @@ await assert.rejects(retry416(async()=>{
   attempts++;return {ok:true,accepted:false,reason:'STALE_OR_DUPLICATE'};
 },()=>true,async()=>{}),/STALE_OR_DUPLICATE/);
 assert.equal(attempts,1,'ambiguous stale receipt never treated as accepted');
-assert.match(source,/current\\.privateDeviceSequence416 === token\\.deviceSequence/);
+assert.match(source,/current\.privateDeviceSequence416 === token\.deviceSequence/);
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
 console.log('STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');

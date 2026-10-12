@@ -17,3 +17,4 @@ app404_worker_remote_binding_audit_2026-10-12T11:35Z
 app405_public_track_curated_r2_d1_exact_2026-10-12T13-13Z
 app405_public_track_d1_r2_compare_retry_no_large_source_2026-10-12T13-18Z
 app405_single_public_curated_shape_check_2026-10-12T13-24Z
+app405_exact_curated_shape_no_workers_deployments_2026-10-12T13-26Z

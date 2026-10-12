@@ -151,6 +151,21 @@ jobs:
           npx tsx scripts/verify-368-live-profile-like-convergence.ts
           node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
 
+      - name: Verify Stage416 signed PREVIEW handoff release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;' cloudflare/explore-worker/canonical/preview-entry.js
+          grep -Fq 'const STAGE416_SHARED_D1_INTAKE_ACTIVE = false;' cloudflare/explore-worker/canonical/preview-entry.js
+          grep -Fq '"SORIDRAW_PRIVATE_FINAL416_ENDPOINT": "https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/privateLikeFinalReceipt416Candidate"' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+          node scripts/verify-416-private-handoff-atomic.mjs
+          node scripts/verify-416-signed-worker-issuer.mjs
+          node scripts/verify-416-complete-private-window.mjs
+          node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-416-cross-env-ordering.mjs
+          echo 'STAGE416_PREVIEW_SIGNED_HANDOFF_RELEASE_GATE=PASS'
+
       - name: One-shot preflight
         working-directory: cloudflare/explore-worker
         shell: bash
@@ -506,6 +521,19 @@ jobs:
           echo 'WARM_REVISION_R0_W0=PASS'
           echo 'LIKE_AGGREGATE_FIXED_CRON_DISABLED=PASS'
           echo 'DURABLE_OBJECT_EVENT_SCHEDULER_DEPLOY=PASS'
+          unsigned416_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/stage416-unsigned.json" -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"uid":"forbidden"}' \
+            "${PREVIEW_BASE}/v1/internal/private-like-handoff-416")"
+          test "$unsigned416_code" = 403
+          node - "$RUNNER_TEMP/stage416-unsigned.json" <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(p?.error?.code!=='416_PRIVATE_HANDOFF_SIGNATURE_DENIED')
+            throw Error('Stage416 signed route did not fail closed on unsigned request');
+          console.log('STAGE416_PREVIEW_SIGNED_ROUTE_UNSIGNED_403=PASS');
+          NODE
+
           echo 'TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'
 
           # 156 is an explicitly approved, one-time, four-track derived R2 repair.

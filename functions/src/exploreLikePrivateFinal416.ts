@@ -1,8 +1,7 @@
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 import type {Database} from 'firebase-admin/database';
 
-// Stage416 OFF: internal ONLY, NOT exported from Functions index.ts.
-// A future Worker callback must independently PROVE exact 069 D1 drain AND
+// Internal signed Worker callback: independently PROVE exact 069 D1 drain AND
 // successful personal-R2 publication BEFORE signing this payload.
 // Never turn a queued/repair-needed acknowledgement into canonical truth.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,6 +13,39 @@ type SignedFinal={uid:string;windowId:string;version:number;
  signedAtMs:number;canonicalD1:string;canonicalProof:string;
  personalLikeSnapshot:string;batchIds:string[];settledBatchIds:string[];
  rows:FinalRow[]};
+type PublicRow416={trackId:string;ownerUid:string;at:number};
+async function notifySettledPublicLikes416(db:Database,data:SignedFinal,nowMs:number){
+ // Match the existing 192 bus: identifiers only, at most 50 per event. The
+ // card freshness boundary is queue acceptance (seal time), NOT callback time:
+ // a correctly settled R2 card normally predates this signed callback.
+ const acceptedAt=Math.max(...data.batchIds.map(id=>Number(id.split('_')[1])));
+ if(!Number.isSafeInteger(acceptedAt)||acceptedAt<=0||acceptedAt>data.signedAtMs)
+   throw Error('416_FINAL_BAD_PUBLIC_BOUNDARY');
+ for(let start=0;start<data.rows.length;start+=50){
+   const incoming=data.rows.slice(start,start+50).map(row=>({
+     trackId:row.trackId,ownerUid:row.ownerUid,at:acceptedAt,
+   }));
+   await db.ref('publicSync/exploreLike').transaction((raw:unknown)=>{
+     const current=raw as {version?:number;rows?:PublicRow416[]}|null;
+     const retained=new Map<string,PublicRow416>();
+     for(const row of Object.values(current?.rows||{})){
+       if(row&&typeof row.trackId==='string'&&typeof row.ownerUid==='string'&&
+          Number.isSafeInteger(row.at)&&row.at>=nowMs-3*60_000)
+         retained.set(row.trackId,row);
+     }
+     const changed=incoming.filter(row=>(retained.get(row.trackId)?.at||0)<row.at);
+     if(!changed.length)return;
+     // Prioritize this chunk so equal timestamps cannot discard tracks 51+.
+     // Preserve other actors' retained rows when there is room; never lower a
+     // newer per-track watermark on a delayed retry.
+     const ids=new Set(changed.map(row=>row.trackId));
+     const rows=[...changed,...[...retained.values()]
+       .filter(row=>!ids.has(row.trackId)).sort((a,b)=>b.at-a.at)].slice(0,50);
+     return {version:Math.max(nowMs,Number(current?.version||0)+1),
+       at:nowMs,actorUid:data.uid,rows};
+   },undefined,false);
+ }
+}
 export async function publishAuthenticatedPrivateFinal416(
  db:Database, raw:string, signature:string, secret:string,
  nowMs=Date.now(),
@@ -39,6 +71,8 @@ export async function publishAuthenticatedPrivateFinal416(
     data.batchIds.length>6||!Array.isArray(data.settledBatchIds)||
     data.settledBatchIds.length!==data.batchIds.length||
     data.batchIds.some(id=>typeof id!=='string'||!batch.test(id))||
+    data.batchIds.some(id=>Number(id.split('_')[1])<=0||
+      Number(id.split('_')[1])>data.signedAtMs)||
     new Set(data.batchIds).size!==data.batchIds.length||
     data.batchIds.some(id=>!data.settledBatchIds.includes(id))||
     new Set(data.settledBatchIds).size!==data.settledBatchIds.length)
@@ -76,7 +110,18 @@ export async function publishAuthenticatedPrivateFinal416(
    // The RTDB transaction callback supplies this value after the await.
    const outcome=reason as 'DUPLICATE'|'STALE'|'CONFLICT';
    if(outcome==='CONFLICT')throw Error('416_FINAL_SAME_VERSION_CONFLICT');
-   return {status:outcome,version:data.version,count:data.rows.length};
+   if(outcome==='STALE')return {status:outcome,version:data.version,count:data.rows.length};
  }
- return {status:'PUBLISHED',version:data.version,count:data.rows.length};
+ // A failed public transaction must fail the signed callback, keeping the
+ // existing Cloud Task/seal retry alive. The private receipt alone is not a
+ // delivery checkpoint. Do not touch private intent/instant-sync transport.
+ if(result.snapshot.val()?.publicNotified416!==true){
+   await notifySettledPublicLikes416(db,data,nowMs);
+   await db.ref('privateLikeFinal416/'+data.uid).transaction((rawState:unknown)=>{
+     const current=rawState as {version?:number;digest?:string;publicNotified416?:boolean}|null;
+     if(current?.version!==data.version||current.digest!==digest||current.publicNotified416)return;
+     return {...current,publicNotified416:true};
+   },undefined,false);
+ }
+ return {status:result.committed?'PUBLISHED':'DUPLICATE',version:data.version,count:data.rows.length};
 }

@@ -72,8 +72,10 @@ export async function publishAuthenticatedPrivateFinal416(
    },undefined,false,
  );
  if(!result.committed){
-   if(reason==='CONFLICT')throw Error('416_FINAL_SAME_VERSION_CONFLICT');
-   return {status:reason,version:data.version,count:data.rows.length};
+   // The RTDB transaction callback supplies this value after the await.
+   const outcome=reason as 'DUPLICATE'|'STALE'|'CONFLICT';
+   if(outcome==='CONFLICT')throw Error('416_FINAL_SAME_VERSION_CONFLICT');
+   return {status:outcome,version:data.version,count:data.rows.length};
  }
  return {status:'PUBLISHED',version:data.version,count:data.rows.length};
 }

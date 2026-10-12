@@ -1,10 +1,10 @@
-app404-stage416-remote-heart-reload-safe
-app_version=404
+app405-stage416-curated-private-count-reload
+app_version=405
 scope=preview-hosting-only
-source_code_commit=d4a083b5155e396beb99f36d1752741ffee155ac
-approval=user_explicit_auto_preview_deploy_after_verified_fix_2026-10-12
-evidence_408_qa=38240795296_SUCCESS
-evidence_416_server_recovery=38237388824_SUCCESS
+source_code_commit=9537665929f2c1d6de0ea981966ea308c7a4cca0
+approval=user_auto_preview_deploy_on_safe_fix_2026-10-12
+evidence_408_qa=38244194395_SUCCESS
+evidence_live_readonly=38243351165_SUCCESS
 deploy_shared_rtdb_rules=false
 worker_change=false
 functions_change=false

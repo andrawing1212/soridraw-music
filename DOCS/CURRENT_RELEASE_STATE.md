@@ -1,3 +1,16 @@
+## CURRENT — Stage416③ Secret Manager API 활성 확인 / 단일 Secret 생성 권한에서 안전 중단 (2026-10-12 KST)
+
+- **현재 preview 기준:** `1afa57f6620fdbe976dba7be265a7ccafe174ee7`.
+- **사용자 조치 확인:** `soridraw-app-866a5` Secret Manager API 활성화 완료. 재개 Run [38200620880](https://github.com/andrawing1212/soridraw-music/actions/runs/38200620880)에서 API gate **PASS**.
+- **현재 외부 blocker:** GitHub deploy service account `github-action-1188157610@soridraw.iam.gserviceaccount.com`에 `secretmanager.secrets.create` 권한이 없어 `SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET` 신규 생성이 거부됨. Functions/Worker 활성화 전에 중단.
+- **이미 완료된 live prerequisite:** shared RTDB Stage416 server-only roots 2개 exact additive 상태, shared D1 `explore_like_private_acceptance_416` exact empty table 상태. 재개 Run에서도 RTDB unrelated rules unchanged + D1 empty exact schema 재확인 PASS. 사용자 데이터 row migration/backfill/delete 0.
+- **미배포/미활성:** Stage416 Functions 6개, Cloud Task runtime, Cloudflare PREVIEW HMAC secret, signed Worker route, app400 client flags, Master panel, PREVIEW Hosting 모두 아직 미활성.
+- **안전 보정:** release workflow는 이제 **Secret Manager API + 기존 HMAC secret value 접근을 live mutation보다 먼저 검사**한다. 자동 secret 생성/광범위 IAM 확대를 하지 않는다. Secret이 없거나 해당 단일 secret 접근권한이 없으면 즉시 fail-closed.
+- **진행률:** ① Stage416 전체 사용자 목표 **1/4·25%**, ② 앱 속도 기존 자동검증 **5/5·100%**, ③ Stage416③ 개인 좋아요 5분 저장 **3/4·75% 유지**. backend/app 실연결 + PC↔mobile 실사용/비용 검증 전 4/4 금지.
+- **바로 다음 작업:** Cloud Console/Cloud Shell에서 `SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET`을 32-byte 이상 랜덤 값으로 **한 번 생성**하고, 위 GitHub deploy service account에 **그 단일 secret에만** 필요한 접근권한을 부여한다. 완료 후 guarded PREVIEW backend release 재실행.
+
+---
+
 ## CURRENT — Stage416③ PREVIEW backend prerequisite 일부 실제 적용 / Secret Manager API 권한에서 안전 중단 (2026-10-12 KST)
 
 - **현재 preview 코드 기준:** `f61e2e7fa489c108db760d2f9224c719dd457da4`. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` 유지.

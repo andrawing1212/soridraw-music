@@ -188,7 +188,7 @@ export const subscribeExploreLikeIntent416 = (
         status: 'pending',
       };
       entriesChanged = true;
-      changed.push({ trackId: row.trackId, liked: row.liked, version: row.version, at: row.at, status: row.status });
+      changed.push({ trackId: row.trackId, liked: row.liked, operationId: row.operationId, version: row.version, at: row.at, status: row.status });
     }
     if (entriesChanged) saveLocal416(uid, entries);
     // Durable overlay FIRST, watermark SECOND, UI notification LAST.

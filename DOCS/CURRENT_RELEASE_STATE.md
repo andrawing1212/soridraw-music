@@ -1,3 +1,16 @@
+## CURRENT — Stage416③ TEST/PRODUCTION Worker 호환 패치 실제 활성 확인 PASS / PREVIEW 기능은 아직 OFF (2026-10-12 KST)
+
+- **현재 preview 기준:** `fcc45a807c353e75fcfa7e7d2769fca3d5ca7f67`.
+- **TEST 호환 Worker 실제 활성:** `ddd2255a-75cc-4db9-8905-b47338558cb0`.
+- **PRODUCTION 호환 Worker 실제 활성:** `af81502a-298d-4ec6-bc2a-0c529d6dc29e`. 승인된 compatibility-only ordering patch만 적용되었고, Stage416 기능 자체는 아직 OFF.
+- **독립 재확인:** read-only GitHub Actions Run [38198040888](https://github.com/andrawing1212/soridraw-music/actions/runs/38198040888) **SUCCESS**. TEST/PRODUCTION 모두 `COMPAT`, 이미 적용된 패치를 다시 적용해도 source diff 0, TEST feed smoke/bindings PASS, 원격 write/deploy 0.
+- **PRODUCTION 배포 Run 해석:** Run [38197244939](https://github.com/andrawing1212/soridraw-music/actions/runs/38197244939)는 전체 결론이 FAILURE였지만, 실제 Worker upload/deploy와 재조회 검증은 먼저 성공해 위 PRODUCTION version이 100% 활성됨. 실패 원인은 뒤의 기존 edge-cache HIT assertion이었고 당시 두 feed 요청 모두 `x-soridraw-d1-read: 0`; 호환 source 자체는 live 재조회 PASS. 이 false-negative를 read-only audit에서 수정·재검증함.
+- **안전 상태:** Stage416 client/Functions/private Worker route flag ON 0, additive D1 schema 적용 0, RTDB Rules 배포 0, Firebase Hosting/Functions 배포 0, 사용자 원본 migration/backfill/delete 0. main/production branch도 이 호환 rollout 때문에 변경하지 않음.
+- **진행률:** ① Stage416 원 4개 사용자 목표 실사용 완료 **1/4·25%**. ② 앱 속도 기존 자동검증 범위 **5/5·100%**. ③ Stage416③ 개인 좋아요 5분 저장 **3/4·75%**. 남은 1/4은 **PREVIEW backend/app coordinated activation → PC↔mobile/재시작/반대클릭/실비용 검증**.
+- **바로 다음 작업:** PREVIEW 전용 read-only release preflight로 shared D1 additive schema, server-only RTDB Rules diff, Firebase Functions export/secret/task 연결, Worker signed handoff/final endpoint binding과 모든 feature flag를 한 번에 고정 검증한다. PASS 후에만 backend를 additive 방식으로 먼저 배포하고 app400 PREVIEW를 마지막에 ON한다. TEST/PRODUCTION의 Stage416 기능 활성은 별도 승격 단계이며 현재 하지 않는다.
+
+---
+
 ## CURRENT — Stage416③ 호환 패치 배포 승인 후 TEST 릴리스 시도 중단 / live 변경 0 (2026-10-12 KST)
 
 - **사용자 승인:** TEST/PRODUCTION Worker compatibility-only ordering patch 배포 명시 승인 완료.

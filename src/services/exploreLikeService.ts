@@ -11,6 +11,7 @@ import {
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readExploreLikeIntent416,
+  readExploreLikeIntentDetail416,
   listExploreLikeIntents416,
   discardExploreLikeIntentSession416,
   clearExploreLikeIntent416,
@@ -74,6 +75,7 @@ const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // app399 verified behavior.
  // TEST/PRODUCTION compatibility is already deployed. Final completion still requires
  // same-account PC/mobile and cost verification before TEST feature activation.
 const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true;
+const STAGE416_CLIENT_SESSION_STARTED_AT = Date.now();
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
@@ -131,6 +133,8 @@ const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 type ExploreLikePendingMutation = {
   privateDeviceId416?: string;
   privateDeviceSequence416?: number;
+  privateIntentVersion416?: number;
+  privateServerVersion416?: number;
   privateServerRegistered416?: boolean;
   trackId: string;
   ownerUid: string;
@@ -1503,6 +1507,10 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
       ? Number(row.expectedRevision) : undefined,
     ...(row.privateServerRegistered416 === true ? {privateServerRegistered416:true} : {}),
+    ...(Number.isSafeInteger(Number(row.privateIntentVersion416)) && Number(row.privateIntentVersion416) > 0
+      ? { privateIntentVersion416: Number(row.privateIntentVersion416) } : {}),
+    ...(Number.isSafeInteger(Number(row.privateServerVersion416)) && Number(row.privateServerVersion416) > 0
+      ? { privateServerVersion416: Number(row.privateServerVersion416) } : {}),
     ...(typeof row.privateDeviceId416 === 'string' &&
       /^[0-9a-f-]{36}$/i.test(row.privateDeviceId416) &&
       Number.isSafeInteger(row.privateDeviceSequence416) &&

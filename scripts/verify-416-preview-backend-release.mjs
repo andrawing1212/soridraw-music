@@ -7,6 +7,7 @@ const {buildStage416ServerRulesCandidate}=await import('./build-416-private-serv
 const rules=buildStage416ServerRulesCandidate(baseRules).rules;
 const migration=readFileSync('cloudflare/explore-worker/migrations/20261012_01_stage416_private_acceptance_additive.sql','utf8');
 const migrationSql=migration.replace(/--.*$/gm,'');
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const app=readFileSync('src/services/exploreLikeService.ts','utf8');
 const transport=readFileSync('src/services/exploreLikePrivateRtdbTransport416.ts','utf8');
@@ -21,10 +22,18 @@ assert.equal(rules.privateLikeFinal416['$uid']['.write'],false);
 assert.equal(rules.privateLikeFinal416['$uid']['.read'],'auth != null && auth.uid === $uid');
 assert.match(migration,/CREATE TABLE IF NOT EXISTS explore_like_private_acceptance_416/);
 assert.doesNotMatch(migrationSql,/\b(?:DROP|ALTER|INSERT|UPDATE|DELETE|REPLACE)\b/i);
-assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
-assert.match(app,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
-assert.match(transport,/STAGE416_SHARED_RTDB_BATCH_ACTIVE=false/);
+if(appVersion>=400){
+  assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true/);
+  assert.match(app,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
+  assert.match(transport,/STAGE416_SHARED_RTDB_BATCH_ACTIVE=true/);
+}else{
+  assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
+  assert.match(app,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
+  assert.match(transport,/STAGE416_SHARED_RTDB_BATCH_ACTIVE=false/);
+}
 console.log('STAGE416_PREVIEW_BACKEND_EXPORTS_READY=PASS');
 console.log('STAGE416_SERVER_ONLY_RTDB_RULES=PASS');
 console.log('STAGE416_ADDITIVE_EMPTY_D1_MIGRATION=PASS');
-console.log('STAGE416_CLIENT_AND_WORKER_STILL_HARD_OFF=PASS');
+console.log(appVersion>=400
+  ? 'STAGE416_APP400_CLIENT_AND_WORKER_ACTIVE=PASS'
+  : 'STAGE416_CLIENT_AND_WORKER_STILL_HARD_OFF=PASS');

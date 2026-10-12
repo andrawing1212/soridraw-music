@@ -1,3 +1,12 @@
+## NEXT — app403 Stage416 정산 실사용 재검증 / 손실 예약 정확 진단 (2026-10-12 KST)
+
+- **현재 PREVIEW:** app403 Hosting 배포 성공, signed Worker 유지. public final Function hotfix 성공, Settle Task NOT_DUE 예약 ID 충돌 방지 단일 Function Run 38227381079 SUCCESS. 기존 개인/공개 데이터 구조 동일. 마지막 제품 실기기는 A 좋아요+5분 후 B 공개 숫자 미변경으로 **FAIL**. TEST/PRODUCTION 승격 금지.
+- **증거:** Cloud Tasks queue RUNNING, 실제 private=5/public=5. 08:34 UTC Schedule HTTP200, 08:39 UTC Settle HTTP204. 공유 RTDB public 버스는 10/10 이후 업데이트 없음. D1 private acceptance와 069 pending 없음(각 SELECT 1 LIMIT 1). 전 사용자/전곡 스캔과 사용자 데이터 backfill 금지. 기존 테스트 윈도우가 회복되는지는 미확인.
+- **최우선:** 다음 실사용 오류 발생 시 Task의 익명 로그 SETTLEMENT_TASK_NOT_DELIVERED 상태(RESCHEDULED/STALE/EMPTY) 및 호출 시각, 069 queue/공개 버스 갱신 여부를 대조. 결과 없이 public bus/UI를 추가 수정하거나 반복 조회 도입 금지.
+- **원인 후보:** 원래 태스크와 동일 scheduleTime 재예약 시 idempotent ID 중복이 되어 다음 Task가 사라질 수 있는 경합. 예방코드는 NOT_DUE 재예약에만 1초 여유, 로컬 테스트 PASS. 실기기 실패의 확정 원인은 아직 미확인. 이미 유실된 과거 Task를 자동 재발행하지 않음.
+- **검증/승격:** A/B 공개 숫자, 같은 계정 PC↔mobile 즉시 하트, 마지막 클릭+5m, 기존 팔로우, Cloud Tasks/D1/R2/RTDB 비용 확인 전 Stage416 3/4·75% 유지. 실사용 PASS 전 TEST/PRODUCTION 금지.
+
+---
 ## NEXT — app401 PREVIEW 기존 stuck 곡 + 교차 반대 클릭 실기기 재검증 (2026-10-12)
 
 - **live 기준:** PREVIEW app401 / release Run 38208007174 SUCCESS. Worker/Functions/D1/Rules 추가 변경 0, TEST/PRODUCTION unchanged.

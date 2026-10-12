@@ -96,7 +96,7 @@ jobs:
           # Extract ONLY the public non-delivery class, never its arguments,
           # UID, payload, route, sealed rows or task identifiers.
           status_counts=collections.Counter()
-          status_pattern=re.compile(r'SETTLEMENT_TASK_NOT_DELIVERED\\s+(RESCHEDULED|STALE|EMPTY)',re.I)
+          status_pattern=re.compile(r'SETTLEMENT_TASK_NOT_DELIVERED\s+(RESCHEDULED|STALE|EMPTY)',re.I)
           for row in logs:
             if row.get('resource',{}).get('labels',{}).get('service_name')!='stage416settleprivatewindowcandidate':continue
             payload=row.get('textPayload') or row.get('jsonPayload',{}).get('message') or ''

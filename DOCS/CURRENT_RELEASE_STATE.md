@@ -1,3 +1,12 @@
+## CURRENT — Stage416③ 이전 5분 창 만료 경합: 동일 클릭 한정 재시도 PASS (2026-10-12 KST)
+
+- **기준:** preview 코드 `ff3b1b590f71096e09751e8331acd6811e2bb8e4`, 자동검사 [408 Run 38190670770](https://github.com/andrawing1212/soridraw-music/actions/runs/38190670770) SUCCESS, follow-only [38190613340](https://github.com/andrawing1212/soridraw-music/actions/runs/38190613340) SUCCESS. 마지막 확인된 실제 PREVIEW Hosting app399 `e97edb9a7105b6082ab74c3b7e4e3e98f38ed25a` 유지.
+- **이번 완료:** `src/services/exploreLikePrivateRtdbTransport416.ts`의 미활성 Callable 후보가 `PRIOR_WINDOW_NEEDS_SEAL`을 반환할 때 동일 operationId/deviceSequence로만 최대 3회 지연 재시도(2/5/10초). 서버 승인과 정확 version/count일 때만 성공. `src/services/exploreLikeService.ts`는 계정 전환 또는 동일 곡 최신 로컬 클릭에 밀린 오래된 작업을 재전송하지 않도록 검사. `scripts/verify-416-client-rtdb-binding.mjs`에서 실제 후보 함수를 실행해 만료 경합→승인, 최신 클릭 우선, 제한 횟수 초과/불명확한 중복응답 보류, 플래그 OFF를 검증. TypeScript, 앱 Build, Functions Build, 기존 좋아요/팔로우 회귀 전부 PASS.
+- **미완료/위험:** 제한 횟수 이후에도 서버 봉인이 끝나지 않으면 durable outbox에 남고 **재기동/온라인 복구 재전송은 아직 연결되지 않음**. 최종 Worker R2/RTDB 127 ACK→동일 UID PC·모바일 outbox 정확 해제, 구형 환경 writer 우회 방지, Cloud Tasks retry 소진, 10만 DAU 전체비용, 독립 Work/실기기 검증 미완료. Stage416 ③ 소스 준비 2/4·50%, 실제 배포 활성 0%; Stage416 전체 실사용 완료 1/4·25%. 원래 '앱 속도 저하'는 사용자가 AI 작업 속도에 관한 지적임을 정정함.
+- **배포/데이터:** 두 클라이언트 Stage416 플래그 OFF, Functions export 없음, app399 실제 정상 경로 미변경. Firebase Hosting/Functions/Rules, Cloudflare Worker/D1/R2, 공유 원본, main/TEST/PRODUCTION 미변경. 다음 구현은 **durable outbox 재기동 복구+정확 최종 ACK** 한 번에 연결하되 개인 기록 삭제·전체조회·반복비용 금지.
+
+---
+
 ## CURRENT — 사용자 정정 및 Stage416③ ACK 안전 보완 (2026-10-12 KST)
 
 - **사용자 정정:** "경량화 후 느려졌다"는 SORIDRAW 앱의 렌더링/로딩이 아니라 **ChatGPT의 작업 처리 속도가 느려졌다는 지적**이다. 아래 과거 "앱 속도 FAIL 신고" 기록은 이 정정으로 대체한다. 실제 앱 성능 장애가 보고됐다는 뜻으로 해석하거나 속도 최적화 개발을 최우선으로 돌리지 않는다. 기존 작업 분담·안전 검증 절차를 유지하면서 작업 확인/구현/보고를 빠르게 진행한다.

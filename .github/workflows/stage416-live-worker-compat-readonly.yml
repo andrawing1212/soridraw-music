@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/stage416-live-worker-compat-readonly.yml'
       - 'scripts/verify-416-live-worker-compatibility.mjs'
+      - 'cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs'
   workflow_dispatch:
 
 permissions:
@@ -62,5 +63,36 @@ jobs:
         run: |
           node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/test.js TEST
           node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/production.js PRODUCTION
+
+      - name: Dry-run exact compatibility patch against both live Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .stage416-live/test.js .stage416-live/test-patched.js
+          cp .stage416-live/production.js .stage416-live/production-patched.js
+          node cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs .stage416-live/test-patched.js
+          node cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs .stage416-live/production-patched.js
+          node --check .stage416-live/test-patched.js
+          node --check .stage416-live/production-patched.js
+          node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/test-patched.js TEST_PATCHED
+          node scripts/verify-416-live-worker-compatibility.mjs .stage416-live/production-patched.js PRODUCTION_PATCHED
+          python3 - <<'PY'
+          from pathlib import Path
+          for stage in ('test','production'):
+              before=Path(f'.stage416-live/{stage}.js').read_text()
+              after=Path(f'.stage416-live/{stage}-patched.js').read_text()
+              assert before != after
+              marker="json_type(j.value, '$.mutationAt') = 'integer'"
+              assert marker not in before
+              assert after.count(marker) == 1
+              # Only the aggregate CTE optional-time projection may change.
+              b0=before.index('function exploreLikeAggregateSnapshotCte039')
+              a0=after.index('function exploreLikeAggregateSnapshotCte039')
+              b1=before.index('\n}\n',b0)+3
+              a1=after.index('\n}\n',a0)+3
+              assert before[:b0] == after[:a0]
+              assert before[b1:] == after[a1:]
+              print(stage.upper()+'_416_EXACT_CTE_ONLY_DIFF=PASS')
+          PY
           echo 'REMOTE_WRITES=0'
           echo 'WORKER_DEPLOY=0'

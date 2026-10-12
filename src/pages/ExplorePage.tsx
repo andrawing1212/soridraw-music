@@ -2244,7 +2244,11 @@ export default function ExplorePage() {
           }
         }
         if (!cancelled && publicLikePendingRowsRef192.current.size) {
-          scheduleRefresh192(publicLikePendingRowsRef192.current.size > pending.length ? 0 : 5_000);
+          // Continue immediately only when this batch settled; otherwise
+          // retain the existing 5s changed-item retry (no busy polling).
+          const unresolvedThisBatch = pending.some(row =>
+            publicLikePendingRowsRef192.current.has(row.trackId));
+          scheduleRefresh192(unresolvedThisBatch ? 5_000 : 0);
         }
       }, Math.max(0, delayMs));
     };

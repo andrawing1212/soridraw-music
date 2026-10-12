@@ -1,10 +1,11 @@
-product_code_target=cb799655f6327daeccb3221be6dcd959606bb7ff
+product_code_target=cc78e73970f798e2445efd9f4e28b2d2e3b7acb8
 scope=preview_existing_private_click_only
 target_function=recordPrivateLike416
-preflight_only=true
+preflight_only=false
 shared_d1_change=false
 shared_rtdb_rules_change=false
 worker_change=false
 hosting_change=false
 user_data_migration=false
 test_evidence_408_run=38234160600_SUCCESS
+preflight_evidence_run=38236540604_SUCCESS

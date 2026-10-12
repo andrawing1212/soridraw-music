@@ -103,6 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
           python3 - <<'PY'
           import os,json,requests
           from google.oauth2 import service_account

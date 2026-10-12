@@ -130,27 +130,37 @@ jobs:
           admin.initializeApp({
             databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
           });
-          if(process.env.PATCH_FUNCTION==='recordPrivateLike416'){
-            const {onCall}=require("firebase-functions/v2/https");
-            const {handleAuthenticatedPrivateClick416}=
-              require("./exploreLikePrivateCallable416");
-            exports.recordPrivateLike416=onCall(
-              {region:"us-central1",enforceAppCheck:true},
-              async(request)=>handleAuthenticatedPrivateClick416(admin.database(),request));
-          } else if(process.env.PATCH_FUNCTION==='stage416SettlePrivateWindowCandidate'){
-            exports.stage416SettlePrivateWindowCandidate =
-              require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
-          } else throw Error('STAGE416_FUNCTION_SCOPE_INVALID');
           NODE
+          if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          const {onCall}=require("firebase-functions/v2/https");
+          const {handleAuthenticatedPrivateClick416}=
+            require("./exploreLikePrivateCallable416");
+          exports.recordPrivateLike416=onCall(
+            {region:"us-central1",enforceAppCheck:true},
+            async(request)=>handleAuthenticatedPrivateClick416(admin.database(),request));
+          NODE
+          elif [ "$PATCH_FUNCTION" = stage416SettlePrivateWindowCandidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.stage416SettlePrivateWindowCandidate =
+            require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
+          NODE
+          else
+            echo 'STAGE416_SINGLE_SCOPE_DENIED'
+            exit 42
+          fi
           cat > stage416.single-patch.firebase.json <<'JSON'
           {"functions":{"source":".stage416-single-patch"}}
           JSON
           npm install --prefix "$d" --omit=dev --no-audit --no-fund
-          node - <<'NODE'
+          env -u PATCH_FUNCTION node - "$PATCH_FUNCTION" <<'NODE'
+          // Firebase's source analyzer may clear workflow-only environment vars.
+          // Package discovery must still export exactly the pinned function.
+          const expected=process.argv[2];
           const mod=require('./.stage416-single-patch/lib/index.js');
-          if(Object.keys(mod).join(',')!==process.env.PATCH_FUNCTION)
+          if(Object.keys(mod).join(',')!==expected)
             throw Error('STAGE416_SINGLE_FUNCTION_EXPORT_SCOPE_DRIFT');
-          console.log('STAGE416_EXACTLY_ONE_EXISTING_FUNCTION=PASS');
+          console.log('STAGE416_ENV_INDEPENDENT_SINGLE_FUNCTION_EXPORT=PASS');
           NODE
 
       - name: Authenticate Firebase deploy principal

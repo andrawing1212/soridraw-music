@@ -131,13 +131,14 @@ jobs:
           set -euo pipefail
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/settle-before.json"
-          gcloud tasks queues describe "$TASK_NAME" --location "$TASK_REGION" \
+          gcloud tasks queues list --location "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-before.json"
           node - "$RUNNER_TEMP/settle-before.json" "$RUNNER_TEMP/queue-before.json" <<'NODE'
           const fs=require('fs');
           const fn=JSON.parse(fs.readFileSync(process.argv[2]));
-          const q=JSON.parse(fs.readFileSync(process.argv[3]));
-          if(fn.state!=='ACTIVE'||q.state!=='RUNNING')
+          const q=JSON.parse(fs.readFileSync(process.argv[3])).find(x=>
+            String(x.name||'').endsWith('/'+process.env.TASK_NAME));
+          if(fn.state!=='ACTIVE'||q?.state!=='RUNNING')
             throw Error('SETTLE_FUNCTION_OR_QUEUE_NOT_READY');
           if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
@@ -162,13 +163,14 @@ jobs:
           set -euo pipefail
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/settle-after.json"
-          gcloud tasks queues describe "$TASK_NAME" --location "$TASK_REGION" \
+          gcloud tasks queues list --location "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-after.json"
           node - "$RUNNER_TEMP/settle-after.json" "$RUNNER_TEMP/queue-after.json" <<'NODE'
           const fs=require('fs');
           const fn=JSON.parse(fs.readFileSync(process.argv[2]));
-          const q=JSON.parse(fs.readFileSync(process.argv[3]));
-          if(fn.state!=='ACTIVE'||q.state!=='RUNNING')
+          const q=JSON.parse(fs.readFileSync(process.argv[3])).find(x=>
+            String(x.name||'').endsWith('/'+process.env.TASK_NAME));
+          if(fn.state!=='ACTIVE'||q?.state!=='RUNNING')
             throw Error('SETTLE_FUNCTION_OR_QUEUE_CHANGED_UNEXPECTEDLY');
           if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))

@@ -1,3 +1,15 @@
+## NEXT — app400 PREVIEW Stage416③ 실사용/실비용 최종 검증 (2026-10-12)
+
+- **현재 live 기준:** PREVIEW app400, Worker `c6486c81-e05d-4014-ac41-ca24e9b6efb7`, Stage416 Functions 6개/Cloud Tasks/RTDB server-only roots/D1 additive acceptance schema active. TEST/PRODUCTION Stage416 feature는 OFF.
+- **사용자 실사용 1차:** 같은 계정 PC와 모바일을 모두 `preview.soridraw.com` app400으로 새로고침. 현재 빈 하트 1곡을 PC에서 좋아요 → 모바일에서 별도 페이지 이동/새로고침 없이 개인 하트가 수초 내 일치하는지 확인. 반대로 모바일→PC도 동일 확인.
+- **마감 검증:** 마지막 클릭 시각을 기준으로 기본 5분 동안 다른 클릭이 없을 때만 server-owned window가 봉인·정산되는지 확인. 5분 안에 새 곡 클릭 또는 같은 곡 반대 클릭을 하면 그 **마지막 클릭부터 다시** 시간을 세며, 오래된 ACK가 최신 하트를 되돌리지 않아야 함. 앱/브라우저를 닫았다 다시 열어도 등록된 operation은 보존·최종 receipt로 정확히 정리되어야 함.
+- **추가 검증:** 50+ 곡은 자동검사에서 80곡 50+30 split PASS했지만 실사용은 소수곡으로 먼저 검증. 문제가 없으면 필요 시 Master panel에서 private timing을 1분으로 임시 설정해 반복 시나리오를 빠르게 확인한 뒤 기본 5분으로 복원. 설정 변경은 새 window에만 적용되어야 함.
+- **비용 합격:** 사용자 테스트 직전/직후 Cloudflare D1, Firebase RTDB/Functions/Cloud Tasks 계측을 비교. 페이지 진입/재진입/업데이트만으로 Stage416 write가 생기면 FAIL. 실제 클릭만 RTDB/Function을 사용하고, window 마감 때만 Worker/D1/R2가 움직여야 함. exact retry는 D1 추가 write 0 목표, 전체 feed/profile scan 0 필수.
+- **완료 조건:** PC→mobile, mobile→PC, 마지막클릭+5분, 재시작, 같은 곡 반대 클릭, 기존 좋아요/팔로우 회귀, 비용이 모두 PASS해야 Stage416③을 4/4로 변경. 실패 시 TEST 승격 금지.
+- **이후:** Stage416③ PASS 후에만 Stage416④ 전사용자 공동 공개숫자/공개집계 주기 작업으로 넘어간다. TEST 승격은 PREVIEW 실사용 완료 후 사용자 요청/승인 시에만 진행하며, 사용자 데이터 복제는 하지 않는다.
+
+---
+
 ## NEXT — Stage416③ 단일 HMAC Secret 수동 생성/단일 리소스 권한 후 PREVIEW backend 재개 (2026-10-12)
 
 - **현재 상태:** Secret Manager API는 활성화 확인 PASS. shared RTDB/D1 prerequisite는 live exact/additive 상태. Stage416 Functions/Worker/client는 아직 OFF.

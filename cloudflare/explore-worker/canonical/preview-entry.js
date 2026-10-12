@@ -2282,7 +2282,7 @@ async function handlePrivateLikeRoute416(request,env,ctx,url) {
 // Stage416 signed RTDB-sealed Function handoff: deliberately HARD OFF.
 // A signed claim is the only authorized new writer. Direct legacy /batch
 // remains unchanged until all shared-data environments move together.
-const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false;
+const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-416';
 async function handleSignedPrivateHandoff416(request,env){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8',

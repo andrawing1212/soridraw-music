@@ -20,4 +20,53 @@ assert.match(source,/STAGE416_SHARED_RTDB_BATCH_ACTIVE &&/);
 assert.match(source,/persistLikeOutbox\(uid, latest416\);[\s\S]*?publishPrivateRtdbBatchClick416\(/);
 assert.match(source,/privateDeviceSequence416: token.deviceSequence/);
 console.log('STAGE416_MULTI_TAB_UID_DEVICE_SEQUENCE_80=PASS');
+// Execute the real (dormant) Callable retry function in isolation. An
+// expired server window must not lose a click or issue a NEW operation ID.
+const ts=(await import('typescript')).default;
+const vm=(await import('node:vm')).default;
+const transport=readFileSync('src/services/exploreLikePrivateRtdbTransport416.ts','utf8');
+const compiled=ts.transpileModule(transport,{compilerOptions:{
+  module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+}}).outputText;
+const module416={exports:{}};
+vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
+  require:id=>id==='../firebase'?{functions:{},httpsCallable:()=>{throw Error('disabled')}}
+    :(()=>{throw Error('unexpected import '+id)})(),
+  Number,Date,Error,Promise,setTimeout}, {timeout:2500});
+const {retryPrivateClickAfterPriorSeal416:retry416,
+  publishPrivateRtdbBatchClick416:publish416}=module416.exports;
+const disabled=await publish416('account',{trackId:'song',liked:true,
+  operationId:id,deviceId:id,deviceSequence:1});
+assert.equal(disabled,null,'app399 OFF never calls Firebase Callable');
+let attempts=0,waits=[],sameOp=id;
+const accepted=await retry416(async()=>{
+  attempts++;
+  assert.equal(sameOp,id,'same operationId after prior window rejection');
+  return attempts<3?{ok:true,accepted:false,reason:'PRIOR_WINDOW_NEEDS_SEAL'}
+    :{ok:true,accepted:true,version:12,count:3};
+},()=>true,async ms=>{waits.push(ms)});
+assert.equal(accepted.version,12);
+assert.equal(accepted.count,3);
+assert.equal(attempts,3);
+assert.deepEqual(waits,[2_000,5_000]);
+let current=true;attempts=0;
+const superseded=await retry416(async()=>{
+  attempts++;return {ok:true,accepted:false,reason:'PRIOR_WINDOW_NEEDS_SEAL'};
+},()=>current,async()=>{current=false});
+assert.equal(superseded,null);
+assert.equal(attempts,1,'new local click stops old HTTP retry');
+attempts=0;waits=[];
+await assert.rejects(retry416(async()=>{
+  attempts++;return {ok:true,accepted:false,reason:'PRIOR_WINDOW_NEEDS_SEAL'};
+},()=>true,async ms=>{waits.push(ms)}),/PRIOR_WINDOW_NEEDS_SEAL/);
+assert.equal(attempts,4,'bounded 4 calls including first click');
+assert.deepEqual(waits,[2_000,5_000,10_000]);
+attempts=0;
+await assert.rejects(retry416(async()=>{
+  attempts++;return {ok:true,accepted:false,reason:'STALE_OR_DUPLICATE'};
+},()=>true,async()=>{}),/STALE_OR_DUPLICATE/);
+assert.equal(attempts,1,'ambiguous stale receipt never treated as accepted');
+assert.match(source,/current\\.privateDeviceSequence416 === token\\.deviceSequence/);
+console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
+console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
 console.log('STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');

@@ -7,7 +7,7 @@ const OUT=join(ROOT,'.remote-worker');
 const NAME='soridraw-explore-api';
 const ACCOUNT=String(process.env.CLOUDFLARE_ACCOUNT_ID||'').trim();
 const TOKEN=String(process.env.CLOUDFLARE_API_TOKEN||'').trim();
-const EXPECTED=String(process.env.STAGE416_EXPECTED_PRODUCTION_VERSION||'4d82f107-ae7e-4985-b955-8c889807c888').trim();
+const EXPECTED=String(process.env.STAGE416_EXPECTED_PRODUCTION_VERSION||'').trim();
 if(!ACCOUNT||!TOKEN) throw new Error('Cloudflare auth missing');
 const H={Authorization:'Bearer '+TOKEN,Accept:'application/json'};
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;

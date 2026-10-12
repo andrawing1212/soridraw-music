@@ -1,3 +1,14 @@
+## CURRENT — Stage416③ isolated Functions package PASS / 단일 Secret metadata 권한에서 안전 중단 (2026-10-12 KST)
+
+- **현재 preview 기준:** `83a655869888fd85a9bdd767a3e68fb1abce70ab` 이후 release tooling fix 포함.
+- **신규 확인:** 전체 `functions/src/index.ts`를 Firebase CLI가 분석하면 기존 다른 기능용 `SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET` 권한까지 요구해 Stage416 배포가 불필요하게 막힘. 이를 피하기 위해 Stage416 관련 모듈만 담은 **ephemeral isolated Functions package**를 release workflow에서 생성하도록 수정했고 export set 6개 exact-check **PASS**.
+- **현재 blocker:** GitHub deploy principal은 Stage416 HMAC **value access는 PASS**지만 `secretmanager.secrets.get`이 없어 metadata describe가 거부됨. Run [38201631728](https://github.com/andrawing1212/soridraw-music/actions/runs/38201631728)은 이 gate에서 **추가 live mutation 전에 fail-closed**. Functions/Worker/app activation 0.
+- **필요 최소 권한:** Stage416 secret 하나에 GitHub deploy principal `roles/secretmanager.viewer`, runtime compute service account에 `roles/secretmanager.secretAccessor`. Cloud Tasks API도 enabled 상태가 필요하며 workflow가 다음 gate에서 확인.
+- **이미 완료된 live prerequisite:** shared RTDB server-only roots 2개 exact additive, shared D1 `explore_like_private_acceptance_416` exact empty table. user data row migration/backfill/delete 0.
+- **진행률:** ① Stage416 전체 **1/4·25%**, ② 앱 속도 기존 자동검증 **5/5·100%**, ③ Stage416③ 개인 좋아요 5분 저장 **3/4·75% 유지**. Functions/Worker/client/PC↔mobile 실검증 전 4/4 금지.
+
+---
+
 ## CURRENT — Stage416③ Secret Manager API 활성 확인 / 단일 Secret 생성 권한에서 안전 중단 (2026-10-12 KST)
 
 - **현재 preview 기준:** `1afa57f6620fdbe976dba7be265a7ccafe174ee7`.

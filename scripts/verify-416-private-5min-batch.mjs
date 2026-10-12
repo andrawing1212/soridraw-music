@@ -38,8 +38,10 @@ assert.equal(ahead.lastClickAt,1_034_000,'clock skew must not allow earlier flus
 assert.equal(p.advancePrivateBatchWindowForRemoteClick416(r,{version:9,at:1_090_000,status:'pending'},1_030_000,5),null);
 assert.equal(p.advancePrivateBatchWindowForRemoteClick416(r,{version:10,at:1_020_000,status:'rejected'},1_020_000,5),null);
 console.log('STAGE416_REMOTE_PENDING_CLOCK_AND_SETTLEMENT_GUARD=PASS');
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
 const service=readFileSync('src/services/exploreLikeService.ts','utf8');
-assert.match(service,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/,'released 399 must not change');
+if(appVersion>=400) assert.match(service,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/,'app400 must activate Stage416');
+else assert.match(service,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/,'released 399 must not change');
 assert.match(service,/advancePrivateBatchWindow416\(/);
 assert.match(service,/advancePrivateBatchWindowForRemoteClick416\(/);
 assert.match(service,/privateBatchDeadline416\(/);
@@ -49,7 +51,9 @@ assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.st
   'same-account private signal extends an active user-wide pending window');
 console.log('STAGE416_FUTURE_TWO_DEVICE_WINDOW_EXTENSION_SOURCE=PASS');
 console.log('STAGE416_PRIVATE_BATCH_MASTER_OPTIONS_AND_FROZEN_WINDOW=PASS');
-console.log('STAGE416_CURRENT_APP399_BEHAVIOR_OFF=PASS');
+console.log(appVersion>=400
+  ? 'STAGE416_APP400_PRIVATE_FIVE_MINUTE_ACTIVE=PASS'
+  : 'STAGE416_CURRENT_APP399_BEHAVIOR_OFF=PASS');
 // Server-only deterministic contract is a separate module, exercised by this CI entrypoint.
 const { spawnSync } = await import('node:child_process');
 const server416 = spawnSync(process.execPath, ['scripts/verify-416-private-window-gate.mjs'], { encoding: 'utf8' });

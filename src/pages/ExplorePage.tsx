@@ -2290,7 +2290,8 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!user?.uid) return;
     const onRemote = (detail: {
-      uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number; source?: string;
+      uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number;
+      privateCountExact416?: boolean; source?: string;
     }) => {
       if ((detail?.source !== 'remote' && detail?.source !== 'remote-intent') ||
           detail.uid !== user.uid || !detail.trackId || typeof detail.liked !== 'boolean') return;
@@ -2307,11 +2308,33 @@ export default function ExplorePage() {
       likeInteractionVersionRef090.current += 1;
       setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: effectiveLiked127 }));
 
-      // 416 provisional updates repaint only MY heart and My Likes membership.
-      // Their likeCount is not a published public count, even when filled.
+      // app402: a same-account provisional click repaints MY heart and MY
+      // account-private optimistic number together. This is not a public
+      // publication: do not touch shared Feed/R2/D1 caches. Old app401 hints
+      // without an exact count keep their current number instead of guessing 0.
       if (isTentative416) {
-        // Keep My Likes membership in sync without touching public counts.
-        // Existing local-first collection hydration remains the sole card source.
+        if (detail.privateCountExact416 === true && Number.isSafeInteger(detail.likeCount)) {
+          const patchPrivatePair402 = (previous: ExploreTrack[]) => {
+            let changed = false;
+            const patched = previous.map((track) => {
+              if (track.id !== detail.trackId || track.likeCount === pair129.likeCount) return track;
+              changed = true;
+              return { ...track, likeCount: pair129.likeCount };
+            });
+            return changed ? patched : previous;
+          };
+          setTracks(patchPrivatePair402);
+          setPopularTracks(patchPrivatePair402);
+          setCuratedTracks307(patchPrivatePair402);
+          setManagedCuratedTracks307(patchPrivatePair402);
+          setProfileTracks(patchPrivatePair402);
+          setProfileLikedTracks((previous) => {
+            const patched = patchPrivatePair402(previous);
+            if (pair129.liked || !patched.some((track) => track.id === detail.trackId)) return patched;
+            return patched.filter((track) => track.id !== detail.trackId);
+          });
+          patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
+        }
         setLikeAccountSyncSignal((value) => value + 1);
         return;
       }

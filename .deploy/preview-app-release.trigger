@@ -1,10 +1,10 @@
-app403-stage416-public-final-and-50plus-overflow
-app_version=403
+app404-stage416-remote-heart-reload-safe
+app_version=404
 scope=preview-hosting-only
-source_code_commit=4fd9b29289931fc1d9a9976939426f492e66da29
-approval=user_explicit_preview_deploy_2026-10-12
-evidence_stage416_408=38221242172_SUCCESS
-evidence_stage416_final_function=38222374468_SUCCESS
+source_code_commit=d4a083b5155e396beb99f36d1752741ffee155ac
+approval=user_explicit_auto_preview_deploy_after_verified_fix_2026-10-12
+evidence_408_qa=38240795296_SUCCESS
+evidence_416_server_recovery=38237388824_SUCCESS
 deploy_shared_rtdb_rules=false
 worker_change=false
 functions_change=false

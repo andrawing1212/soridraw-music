@@ -1,3 +1,13 @@
+## CURRENT — app402 RTDB hotfix 후 같은 계정 즉시동기화 실기기 PASS / 5분 canonical만 미검증 (2026-10-12 KST)
+
+- **사용자 실기기 재검증 PASS:** app402 hotfix 후 같은 계정 PC↔mobile에서 좋아요/해제 하트 즉시 동기화가 다시 정상 작동한다고 사용자 확인. app401에서 보였던 교차 반대클릭 deadlock도 현재 재현되지 않음.
+- **자동/배포 근거:** 408 Run **38210508948 SUCCESS**, PREVIEW App Release **38210748547 SUCCESS**, active-backend read-only Preflight **38210981253 SUCCESS**. remote app402 exact build 및 shared RTDB optional `optimisticLikeCount` additive rule 확인.
+- **현재 보호 판단:** 즉시 private sync 경로는 실기기 PASS 상태이므로 추가 수정 금지. Worker/Functions/D1/RTDB schema를 더 건드리지 않고 5분 canonical/public settlement와 실제 비용만 검증한다.
+- **남은 실사용 1개:** 다른 계정 관찰자로 **마지막 클릭 +5분** 이후 공개 숫자/상태가 최종 canonical 값으로 수렴하는지 확인. 같은 계정은 즉시 private overlay가 보여서 5분 정산 여부 확인 용도로는 부적합.
+- **진행률:** ① Stage416 전체 **1/4·25%**, ② 앱 속도 **5/5·100%**, ③ 개인 좋아요 5분 저장 **3/4·75% 유지**. 즉시동기화는 실기기 PASS, 5분 canonical/public + 비용 확인 전 4/4 금지.
+
+---
+
 ## CURRENT — app402 즉시동기화 회귀 원인 확정 / 공유 RTDB 규칙 hotfix 배포 PASS (2026-10-12 KST)
 
 - **사용자 실기기 app402 FAIL:** app401에서 되던 같은 계정 PC↔mobile 즉시 하트 동기화가 app402에서는 양쪽 모두 끊김.

@@ -51,6 +51,28 @@ jobs:
           node scripts/verify-416-preview-backend-release.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
 
+      - name: Dry-run exact repository PREVIEW Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          out="$RUNNER_TEMP/stage416-worker-dryrun"
+          rm -rf "$out"
+          mkdir -p "$out"
+          node node_modules/wrangler/bin/wrangler.js deploy             --config canonical/wrangler.preview.jsonc             --dry-run             --outdir "$out"
+          bundle="$(find "$out" -maxdepth 1 -type f -name '*.js' | head -1)"
+          test -n "$bundle"
+          node --check "$bundle"
+          grep -Fq '/v1/internal/private-like-handoff-416' "$bundle"
+          grep -Fq '416_PRIVATE_HANDOFF_SIGNATURE_DENIED' "$bundle"
+          bytes="$(wc -c < "$bundle" | tr -d ' ')"
+          sha="$(sha256sum "$bundle" | awk '{print $1}')"
+          echo "416_PREVIEW_DRYRUN_BUNDLE_BYTES=$bytes"
+          echo "416_PREVIEW_DRYRUN_BUNDLE_SHA256=$sha"
+          echo '416_PREVIEW_WORKER_DRYRUN=PASS'
+          echo 'WORKER_DEPLOY=0'
+
       - name: Read active PREVIEW Worker and shared D1 schema only
         shell: bash
         run: |

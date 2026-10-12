@@ -65,11 +65,15 @@ assert.equal((await call({...original,version:81,rows:[{
 }]})).status,'PUBLISHED');
 assert.equal(writes,2,'new canonical window one RTDB write');
 assert(reads>=4);
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const fns=readFileSync('functions/src/index.ts','utf8');
-assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
+if(appVersion>=400) assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true/);
+else assert.match(worker,/const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=false/);
 assert.doesNotMatch(fns,/publishAuthenticatedPrivateFinal416/);
 console.log('STAGE416_SIGNED_CANONICAL_AND_R2_PROOF_FINAL80=PASS');
 console.log('STAGE416_FINAL_SAME_VERSION_REPLAY_W0_STALE_W0=PASS');
 console.log('STAGE416_FINAL_UNPROVEN_FORGERY_REJECTED_W0=PASS');
-console.log('STAGE416_FINAL_SERVER_WRITER_DORMANT=PASS');
+console.log(appVersion>=400
+  ? 'STAGE416_FINAL_SERVER_WRITER_APP400_BACKEND_ACTIVE=PASS'
+  : 'STAGE416_FINAL_SERVER_WRITER_DORMANT=PASS');

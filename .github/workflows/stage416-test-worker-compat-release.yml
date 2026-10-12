@@ -64,20 +64,105 @@ jobs:
           node cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node scripts/verify-416-live-worker-compatibility.mjs cloudflare/explore-worker/canonical/preview-entry.js TEST_PATCHED
+      - name: Build exact live-binding TEST config
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cloudflare/explore-worker/.stage416-test
+          cp cloudflare/explore-worker/canonical/preview-entry.js cloudflare/explore-worker/.stage416-test/worker.js
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-test';
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,500));return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const settings=await g(base+'/settings');
+            const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+            const allowed=new Set(['plain_text','secret_text','d1','r2_bucket','service','ratelimit','durable_object_namespace']);
+            const bad=bindings.filter(b=>!allowed.has(String(b.type||'')));if(bad.length)throw Error('unsupported bindings '+JSON.stringify(bad.map(b=>[b.name,b.type])));
+            const dbs=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database?per_page=100`);
+            const rows=Array.isArray(dbs)?dbs:(Array.isArray(dbs?.result)?dbs.result:[]);
+            const names=new Map(rows.map(d=>[String(d.uuid||d.id||''),String(d.name||'')]));
+            const d1=bindings.filter(b=>b.type==='d1').map(b=>{const id=String(b.id||b.database_id||b.uuid||'');const name=names.get(id)||'';if(!id||!name)throw Error('D1 unresolved '+b.name);return {binding:String(b.name),database_name:name,database_id:id}});
+            const r2=bindings.filter(b=>b.type==='r2_bucket').map(b=>{const bucket=String(b.bucket_name||b.bucket||'');if(!bucket)throw Error('R2 unresolved '+b.name);return {binding:String(b.name),bucket_name:bucket}});
+            const vars=Object.fromEntries(bindings.filter(b=>b.type==='plain_text'&&b.name).map(b=>[String(b.name),String(b.text??b.value??'')]));
+            if(vars.SORIDRAW_ENVIRONMENT!=='test')throw Error('environment var drift');
+            const services=bindings.filter(b=>b.type==='service').map(b=>({binding:String(b.name),service:String(b.service||b.service_name||''),...(b.environment?{environment:String(b.environment)}:{})}));
+            const canonical=JSON.parse(fs.readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc','utf8'));
+            const rateNames=new Set(bindings.filter(b=>b.type==='ratelimit').map(b=>String(b.name)));
+            const rates=(canonical.ratelimits||[]).filter(x=>rateNames.has(String(x.name)));
+            if(rates.length!==rateNames.size)throw Error('ratelimit drift');
+            const durableNames=new Set(bindings.filter(b=>b.type==='durable_object_namespace').map(b=>String(b.name)));
+            const durable=(canonical.durable_objects?.bindings||[]).filter(x=>durableNames.has(String(x.name)));
+            if(durable.length!==durableNames.size)throw Error('durable binding drift');
+            const cfg={name:N,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-09-11').slice(0,10),workers_dev:true,keep_vars:true,vars,d1_databases:d1,r2_buckets:r2,observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
+            if(services.length)cfg.services=services;if(rates.length)cfg.ratelimits=rates;if(durable.length){cfg.durable_objects={bindings:durable};cfg.migrations=canonical.migrations||[]}
+            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
+            fs.writeFileSync('cloudflare/explore-worker/.stage416-test/wrangler.jsonc',JSON.stringify(cfg,null,2)+'\n');
+            const normalized=bindings.map(b=>({type:b.type,name:b.name,id:b.id||b.database_id||b.uuid||'',bucket:b.bucket_name||b.bucket||'',service:b.service||b.service_name||'',environment:b.environment||'',namespace_id:b.namespace_id||'',text:b.type==='plain_text'?(b.text??b.value??''):undefined})).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/test-bindings-before.json',JSON.stringify(normalized));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          cd cloudflare/explore-worker
+          npx wrangler deploy --config .stage416-test/wrangler.jsonc --dry-run --outdir .stage416-test/bundle
+          echo 'TEST_COMPAT_DRY_RUN=PASS'
+
       - name: Upload patched TEST version without traffic
+        working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
-          node .deploy/release-worker-runtime.mjs test upload | tee "$RUNNER_TEMP/upload.log"
-          version="$(sed -n 's/^TEST_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/upload.log" | tail -1)"
+          npx wrangler versions upload --config .stage416-test/wrangler.jsonc | tee "$RUNNER_TEMP/upload.log"
+          version="$(grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}' "$RUNNER_TEMP/upload.log" | tail -1)"
           test -n "$version"
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-test';
+          (async()=>{const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}/deployments`,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();const d=(x.result?.deployments||x.result||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(v?.version_id!==process.env.EXPECTED_ACTIVE)throw Error('upload changed live traffic')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
           echo "NEW_VERSION=$version" >> "$GITHUB_ENV"
-      - name: Activate TEST and verify
+          echo 'TEST_COMPAT_UPLOAD_NO_TRAFFIC_CHANGE=PASS'
+
+      - name: Activate TEST compatibility version with rollback
+        working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_WORKER_VERSION="$NEW_VERSION" node .deploy/release-worker-runtime.mjs test activate
-          node .deploy/release-worker-runtime.mjs test verify
+          rollback() {
+            echo 'TEST compatibility verification failed; restoring previous Worker'
+            npx wrangler versions deploy "$EXPECTED_ACTIVE@100%" --config .stage416-test/wrangler.jsonc --yes || true
+          }
+          trap rollback ERR
+          npx wrangler versions deploy "$NEW_VERSION@100%" --config .stage416-test/wrangler.jsonc --yes
+          sleep 3
+          cd ../..
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-test',V=process.env.NEW_VERSION;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments');const d=(ds.deployments||ds||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(active?.version_id!==V||Number(active?.percentage||0)<99.99)throw Error('TEST active version mismatch');
+            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${V}?include=modules`);
+            const mods=v.modules||[];if(mods.length!==1)throw Error('TEST deployed module count');
+            const deployed=Buffer.from(mods[0].content_base64,'base64').toString('utf8');
+            const expected=fs.readFileSync('cloudflare/explore-worker/.stage416-test/worker.js','utf8');
+            if(deployed!==expected)throw Error('TEST deployed source mismatch');
+            const settings=await g(base+'/settings');const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+            const normalized=bindings.map(b=>({type:b.type,name:b.name,id:b.id||b.database_id||b.uuid||'',bucket:b.bucket_name||b.bucket||'',service:b.service||b.service_name||'',environment:b.environment||'',namespace_id:b.namespace_id||'',text:b.type==='plain_text'?(b.text??b.value??''):undefined})).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+            const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/test-bindings-before.json','utf8'));
+            if(JSON.stringify(normalized)!==JSON.stringify(before))throw Error('TEST bindings changed');
+            const feed=await fetch('https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1',{headers:{Origin:'https://test.soridraw.com','Cache-Control':'no-cache'}});
+            if(feed.status!==200)throw Error('TEST feed HTTP '+feed.status);
+            if(String(feed.headers.get('access-control-allow-origin')||'')!=='https://test.soridraw.com')throw Error('TEST CORS');
+            const w=feed.headers.get('x-soridraw-d1-write');if(w!==null&&String(w).trim()!=='0')throw Error('TEST feed D1 write '+w);
+            console.log('TEST_STAGE416_COMPAT_ACTIVE_VERSION='+V);
+            console.log('TEST_STAGE416_COMPAT_SOURCE_EXACT=PASS');
+            console.log('TEST_STAGE416_COMPAT_BINDINGS_UNCHANGED=PASS');
+            console.log('TEST_STAGE416_COMPAT_SMOKE=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          trap - ERR
       - name: Verify protected refs unchanged
         shell: bash
         run: |

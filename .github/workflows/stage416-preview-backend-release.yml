@@ -102,6 +102,19 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
+      - name: Gate required Secret Manager API before any further live mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gcloud services list --enabled --project "$FIREBASE_PROJECT" \
+            --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
+            | grep -Fxq 'secretmanager.googleapis.com'; then
+            echo 'STAGE416_EXTERNAL_BLOCKER=SECRET_MANAGER_API_DISABLED'
+            echo 'STAGE416_NO_FUNCTION_OR_WORKER_ACTIVATION=true'
+            exit 32
+          fi
+          echo 'STAGE416_SECRET_MANAGER_API_ENABLED=PASS'
+
       - name: Read live shared RTDB Rules and derive exact additive candidate
         shell: bash
         run: |
@@ -220,22 +233,6 @@ jobs:
         run: |
           set -euo pipefail
           secret_file="$RUNNER_TEMP/stage416-hmac"
-          if ! gcloud services list --enabled --project "$FIREBASE_PROJECT" \
-            --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
-            | grep -Fxq 'secretmanager.googleapis.com'; then
-            gcloud services enable secretmanager.googleapis.com --project "$FIREBASE_PROJECT" --quiet
-            echo 'STAGE416_SECRET_MANAGER_API=ENABLED'
-            for attempt in $(seq 1 18); do
-              if gcloud services list --enabled --project "$FIREBASE_PROJECT" \
-                --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
-                | grep -Fxq 'secretmanager.googleapis.com'; then
-                break
-              fi
-              sleep 10
-            done
-          else
-            echo 'STAGE416_SECRET_MANAGER_API=ALREADY_ENABLED'
-          fi
           gcloud services list --enabled --project "$FIREBASE_PROJECT" \
             --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
             | grep -Fxq 'secretmanager.googleapis.com'

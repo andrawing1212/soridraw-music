@@ -14,8 +14,10 @@ assert.equal(new Set(values.map(v=>v.deviceSequence)).size,80);
 assert.deepEqual(values.map(x=>x.deviceSequence).sort((a,b)=>a-b),Array.from({length:80},(_,i)=>i+1));
 assert.equal((await allocate(uid,storage,locks,()=>id)).deviceSequence,81);
 await assert.rejects(allocate(uid,storage,null,()=>id),/416_DEVICE_SEQUENCE_UNAVAILABLE/);
+const appVersion=Number(JSON.parse(readFileSync('public/app-version.json','utf8')).version);
 const source=readFileSync('src/services/exploreLikeService.ts','utf8');
-assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
+if(appVersion>=400) assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
+else assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/STAGE416_SHARED_RTDB_BATCH_ACTIVE &&/);
 assert.match(source,/persistLikeOutbox\(uid, latest416\);[\s\S]*?publishPrivateRtdbBatchClick416\(/);
 assert.match(source,/privateDeviceSequence416: token.deviceSequence/);
@@ -28,16 +30,25 @@ const transport=readFileSync('src/services/exploreLikePrivateRtdbTransport416.ts
 const compiled=ts.transpileModule(transport,{compilerOptions:{
   module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
 }}).outputText;
-const module416={exports:{}};
+const module416={exports:{}};let callableCalls416=0;
 vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
-  require:id=>id==='../firebase'?{functions:{},httpsCallable:()=>{throw Error('disabled')}}
-    :(()=>{throw Error('unexpected import '+id)})(),
+  require:id=>id==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
+    callableCalls416++;
+    assert.equal(click.operationId,id);
+    return {data:{ok:true,accepted:true,version:12,count:3}};
+  }}:(()=>{throw Error('unexpected import '+id)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;
-const disabled=await publish416('account',{trackId:'song',liked:true,
+const releaseProbe=await publish416('account',{trackId:'song',liked:true,
   operationId:id,deviceId:id,deviceSequence:1});
-assert.equal(disabled,null,'app399 OFF never calls Firebase Callable');
+if(appVersion>=400){
+  assert.deepEqual(releaseProbe,{version:12,count:3},'app400 uses exact server receipt');
+  assert.equal(callableCalls416,1,'app400 performs one Callable registration');
+}else{
+  assert.equal(releaseProbe,null,'app399 OFF never calls Firebase Callable');
+  assert.equal(callableCalls416,0);
+}
 let attempts=0,waits=[],sameOp=id;
 const accepted=await retry416(async()=>{
   attempts++;
@@ -119,4 +130,6 @@ console.log('STAGE416_PENDING_NEWER_CLICK_NOT_CLEARED=PASS');
 console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
-console.log('STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');
+console.log(appVersion>=400
+  ? 'STAGE416_APP400_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
+  : 'STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');

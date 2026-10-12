@@ -5,7 +5,7 @@ import type {Database} from 'firebase-admin/database';
 // A future Worker callback must independently PROVE exact 069 D1 drain AND
 // successful personal-R2 publication BEFORE signing this payload.
 // Never turn a queued/repair-needed acknowledgement into canonical truth.
-const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const batch=/^l069_[0-9]{13}_[0-9a-f]{64}$/;
 const safeUid=(s:unknown)=>typeof s==='string'&&
  /^[A-Za-z0-9_-]{1,128}$/.test(s);

@@ -60,6 +60,8 @@ on:
       - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
       - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'src/services/exploreLikeService.ts'
+      - 'src/services/exploreLikeIntent416.ts'
+      - 'scripts/verify-416-private-like-intent.mjs'
       - 'src/services/exploreLikeAbusePolicy420.ts'
       - 'scripts/verify-420-like-abuse-policy.mjs'
       - 'functions/src/exploreLikeAbuseGate420.ts'
@@ -190,6 +192,7 @@ jobs:
           node scripts/verify-416-shared-writer-d1.mjs
           node scripts/verify-416-private-rtdb-batch.mjs
           node scripts/verify-416-client-rtdb-binding.mjs
+          node scripts/verify-416-private-like-intent.mjs
           node scripts/verify-401-cross-device-opposite-like.mjs
           node scripts/verify-402-private-heart-count-pair.mjs
           node scripts/verify-416-canonical-no-early-flush.mjs

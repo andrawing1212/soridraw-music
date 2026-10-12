@@ -867,7 +867,7 @@ const startLikeIntent416 = (uid: string) => {
   unsubscribeLikeIntent416 = null;
   activeLikeIntentUid416 = uid;
   if (!uid) return;
-  unsubscribeLikeIntent416 = subscribeExploreLikeIntent416(uid, (trackId, _liked, observed416) => {
+  unsubscribeLikeIntent416 = subscribeExploreLikeIntent416(uid, (trackId, liked416, observed416) => {
     if (auth.currentUser?.uid !== uid || activeLikeIntentUid416 !== uid) return;
     // Future Stage416: a verified same-account private intent from another
     // online device extends the USER's pending canonical clock. It must never
@@ -890,9 +890,39 @@ const startLikeIntent416 = (uid: string) => {
         }
       }
     }
+    // app401: same-account device B may issue a newer opposite click while
+    // device A still owns an unresolved local outbox row. The RTDB intent
+    // transaction version orders those live private clicks. Retire only a
+    // provably older local operation; never discard an in-flight current
+    // session click that has not received its own intent version yet.
+    const rows416 = readLikeOutbox(uid);
+    const local416 = rows416[trackId];
+    if (observed416.status === 'pending' && local416?.operationId) {
+      if (local416.operationId === observed416.operationId) {
+        if (local416.privateIntentVersion416 !== observed416.version) {
+          rows416[trackId] = { ...local416, privateIntentVersion416: observed416.version };
+          persistLikeOutbox(uid, rows416);
+        }
+      } else {
+        const localIntentVersion416 = Number(local416.privateIntentVersion416 || 0);
+        const staleFromPriorSession416 = localIntentVersion416 <= 0 &&
+          local416.updatedAt > 0 &&
+          local416.updatedAt < STAGE416_CLIENT_SESSION_STARTED_AT;
+        const remoteIsNewer416 =
+          (localIntentVersion416 > 0 && observed416.version > localIntentVersion416) ||
+          staleFromPriorSession416;
+        if (remoteIsNewer416) {
+          delete rows416[trackId];
+          persistLikeOutbox(uid, rows416);
+        }
+      }
+    }
     if (readLikeOutbox(uid)[trackId]) return;
     const liked = readExploreTrackLikeMembership127(uid, trackId);
     if (typeof liked !== 'boolean') return;
+    // The callback's liked value and the effective overlay must agree before
+    // repainting. This prevents a coalesced older event from reviving stale UI.
+    if (observed416.status === 'pending' && liked !== liked416) return;
     patchExploreLikedTrackMembership(uid, trackId, liked);
     // Do not fire the historical window event: unrelated consumers may treat
     // it as an accepted/public count update. Explore's replayable subscriber
@@ -2472,6 +2502,36 @@ export const setExploreTrackLike = async (
       ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
       liked,
       operationId: operationId416,
+    }).then((published416) => {
+      if (!published416 || auth.currentUser?.uid !== uid) return;
+      const rows416 = readLikeOutbox(uid);
+      const exact416 = rows416[normalizedTrackId];
+      if (!exact416 || exact416.operationId !== operationId416 ||
+          exact416.updatedAt !== now || exact416.desiredLiked !== liked) return;
+      rows416[normalizedTrackId] = {
+        ...exact416,
+        privateIntentVersion416: published416.version,
+      };
+      persistLikeOutbox(uid, rows416);
+
+      // The listener can coalesce device A's own vN and device B's newer vN+1
+      // into one callback. Reconcile once after our transaction receipt so a
+      // newer remote opposite click cannot stay hidden behind this local row.
+      const latestIntent416 = readExploreLikeIntentDetail416(uid, normalizedTrackId);
+      if (!latestIntent416 ||
+          latestIntent416.operationId === operationId416 ||
+          latestIntent416.version <= published416.version) return;
+      const latestRows416 = readLikeOutbox(uid);
+      const current416 = latestRows416[normalizedTrackId];
+      if (!current416 || current416.operationId !== operationId416 ||
+          current416.updatedAt !== now) return;
+      delete latestRows416[normalizedTrackId];
+      persistLikeOutbox(uid, latestRows416);
+      patchExploreLikedTrackMembership(uid, normalizedTrackId, latestIntent416.liked);
+      notifyExploreLikeUiSync139({
+        uid, trackId: normalizedTrackId, ownerUid: '',
+        liked: latestIntent416.liked, likeCount: 0, source: 'remote-intent',
+      });
     }).catch((error) => console.warn('[416] Private intent hint unavailable; accepted path retained:', error));
   } else if (operationId416 && EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {
     // Bound the decision to this persisted operation, not the mutable row.
@@ -2619,7 +2679,11 @@ export const setExploreTrackLike = async (
            exact416.privateDeviceId416===token.deviceId &&
            exact416.privateDeviceSequence416===token.deviceSequence &&
            !exact416.privateServerRegistered416){
-          rows416[normalizedTrackId]={...exact416,privateServerRegistered416:true};
+          rows416[normalizedTrackId]={
+            ...exact416,
+            privateServerRegistered416:true,
+            privateServerVersion416:registered416.version,
+          };
           persistLikeOutbox(uid,rows416);
           window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
             {detail:{uid}}));
@@ -2667,8 +2731,8 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
     const budget=retryBudget416.get(uid)||{count:0,lastAt:0};
     if(budget.count>=3||Date.now()-budget.lastAt<60_000)return;
     const outstanding=Object.values(readLikeOutbox(uid))
-      .filter(row=>!row.privateServerRegistered416&&row.operationId&&
-        row.privateDeviceId416&&row.privateDeviceSequence416)
+      .filter(row=>(!row.privateServerRegistered416||!row.privateServerVersion416)&&
+        row.operationId&&row.privateDeviceId416&&row.privateDeviceSequence416)
       .sort((a,b)=>Number(a.privateDeviceSequence416)-Number(b.privateDeviceSequence416));
     if(!outstanding.length)return;
     retryBudget416.set(uid,{count:budget.count+1,lastAt:Date.now()});
@@ -2693,8 +2757,13 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
           },stillCurrent);
           if(!receipt||!stillCurrent())continue;
           const rows=readLikeOutbox(uid),row=rows[saved.trackId];
-          if(row&&!row.privateServerRegistered416){
-            rows[saved.trackId]={...row,privateServerRegistered416:true};
+          if(row&&(!row.privateServerRegistered416||
+             row.privateServerVersion416!==receipt.version)){
+            rows[saved.trackId]={
+              ...row,
+              privateServerRegistered416:true,
+              privateServerVersion416:receipt.version,
+            };
             persistLikeOutbox(uid,rows);
             window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
               {detail:{uid}}));
@@ -2745,8 +2814,17 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
        const repaint:ExploreLikeSyncEventDetail[]=[];
        for(const row of receipt.rows){
          const current=outbox[row.trackId];
-         // A different/newer local operation always wins over an older final receipt.
-         if(current&&!exactIds.has(row.trackId))continue;
+         // app401: exact operation clears normally. A different local operation
+         // is preserved only when it can still be newer/unregistered. If that
+         // local operation was server-registered at an older global version,
+         // the final receipt proves another device superseded it for this track.
+         const exactCurrent416=exactIds.has(row.trackId);
+         const currentServerVersion416=Number(current?.privateServerVersion416||0);
+         const supersededCurrent416=!!current&&!exactCurrent416&&
+           current.privateServerRegistered416===true&&
+           Number.isSafeInteger(currentServerVersion416)&&currentServerVersion416>0&&
+           currentServerVersion416<receipt.version;
+         if(current&&!exactCurrent416&&!supersededCurrent416)continue;
          if(current)delete outbox[row.trackId];
          delete pending[row.trackId];
          cache.set(row.trackId,row.liked);

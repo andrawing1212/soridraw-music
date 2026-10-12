@@ -1,3 +1,14 @@
+## NEXT — Stage416③ Secret Manager API 활성화 후 PREVIEW backend prerequisite 재개 (2026-10-12)
+
+- **현재 상태:** shared RTDB server-only roots 2개와 shared D1 `explore_like_private_acceptance_416` empty table은 실제 적용 완료/정확 재확인. Stage416 Functions, HMAC secret, PREVIEW Worker signed route, app400 client는 아직 OFF/미배포.
+- **외부 1회 선행조건:** Google Cloud project `soridraw-app-866a5`에서 **Secret Manager API(`secretmanager.googleapis.com`)만 Enable**. 현재 GitHub service account는 `serviceusage.services.enable` 권한이 없어 이 한 단계만 자동 수행 불가. IAM 역할 확대는 필요 없음/권장하지 않음.
+- **활성화 직후 재개:** `.deploy/stage416-preview-backend-release.trigger`를 갱신해 guarded workflow 재실행. workflow는 API가 OFF면 live mutation 전에 fail-closed. ON이면 기존 RTDB/D1 exact 상태를 idempotent 재확인하고, 256-bit HMAC secret 생성/재사용 → `recordPrivateLike416`, `stage416SchedulePrivateWindowCandidate`, `stage416SettlePrivateWindowCandidate`, `privateLikeFinalReceipt416Candidate`, `masterGetLikeBatchTiming416`, `masterSetLikeBatchTiming416`만 deploy → Cloudflare PREVIEW secret binding. 이 단계에서도 client/Worker route는 OFF.
+- **그 다음:** Functions/Cloud Task/secret metadata PASS 후 canonical PREVIEW Worker의 `STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE`만 ON하고 final endpoint binding 추가 → Worker release/smoke/rollback proof. 성공 후 마지막 별도 commit에서 app400의 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE`, Master panel을 ON하고 PREVIEW Hosting 배포.
+- **실사용 합격:** same UID PC→mobile / mobile→PC, last-click+5m, restart/offline recovery, same-song opposite click, 80 tracks(50+30), exact retry W0, stale final ACK, page re-entry write0/read0 target, D1/RTDB/Functions/Task/Worker/R2 실제 비용. 자동검증만으로 4/4 금지.
+- **금지:** TEST/PRODUCTION Stage416 feature activation, main/production branch 승격, 사용자 원본 backfill/delete/overwrite, 전체 feed/profile scan, API 권한을 넓히기 위한 broad IAM role 부여.
+
+---
+
 ## NEXT — Stage416③ PREVIEW coordinated activation 전 read-only 릴리스 프리플라이트 (2026-10-12)
 
 - **현재 고정 기준:** `preview` `5afac9fa2ba40ed746f429b8d006b0a27e6d2b26`. TEST Worker `ddd2255a-75cc-4db9-8905-b47338558cb0`, PRODUCTION Worker `af81502a-298d-4ec6-bc2a-0c529d6dc29e` 모두 Stage416 optional `mutationAt` ordering 호환 상태이며 read-only Run [38198040888](https://github.com/andrawing1212/soridraw-music/actions/runs/38198040888) PASS. Stage416 기능 활성은 아직 0.

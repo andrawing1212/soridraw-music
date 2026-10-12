@@ -194,6 +194,7 @@ type ExploreLikeSyncEventDetail = {
   ownerUid: string;
   liked: boolean;
   likeCount: number;
+  privateCountExact416?: boolean;
   source?: 'local' | 'confirmed' | 'remote' | 'remote-intent';
 };
 
@@ -926,10 +927,12 @@ const startLikeIntent416 = (uid: string) => {
     // Do not fire the historical window event: unrelated consumers may treat
     // it as an accepted/public count update. Explore's replayable subscriber
     // alone receives this personal, provisional repaint.
+    const privateCountExact416 =
+      Number.isSafeInteger(Number(observed416.optimisticLikeCount));
     notifyExploreLikeUiSync139({
       uid, trackId, ownerUid: '', liked,
-      likeCount: Number.isSafeInteger(Number(observed416.optimisticLikeCount))
-        ? Number(observed416.optimisticLikeCount) : 0,
+      likeCount: privateCountExact416 ? Number(observed416.optimisticLikeCount) : 0,
+      privateCountExact416,
       source: 'remote-intent',
     });
   });
@@ -2533,11 +2536,13 @@ export const setExploreTrackLike = async (
       delete latestRows416[normalizedTrackId];
       persistLikeOutbox(uid, latestRows416);
       patchExploreLikedTrackMembership(uid, normalizedTrackId, latestIntent416.liked);
+      const privateCountExact416 =
+        Number.isSafeInteger(Number(latestIntent416.optimisticLikeCount));
       notifyExploreLikeUiSync139({
         uid, trackId: normalizedTrackId, ownerUid: '',
         liked: latestIntent416.liked,
-        likeCount: Number.isSafeInteger(Number(latestIntent416.optimisticLikeCount))
-          ? Number(latestIntent416.optimisticLikeCount) : 0,
+        likeCount: privateCountExact416 ? Number(latestIntent416.optimisticLikeCount) : 0,
+        privateCountExact416,
         source: 'remote-intent',
       });
     }).catch((error) => console.warn('[416] Private intent hint unavailable; accepted path retained:', error));

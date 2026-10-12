@@ -1,3 +1,17 @@
+## CURRENT — PREVIEW app403 Stage416 공개 좋아요 + 50곡 초과 알림 수정 실제 배포 SUCCESS (2026-10-12 KST)
+
+- **사용자 요청:** PREVIEW 배포 승인. **배포 대상 코드 commit:** `b0a2473f6f67b23f43daceb83e100b952c42c0bc`, app403. 사용자 원본 데이터 전환·backfill·delete 없음.
+- **PREVIEW 서버:** 새 단일-function 안전 workflow `.github/workflows/stage416-preview-public-final-patch.yml`를 통해 기존 `privateLikeFinalReceipt416Candidate` (asia-northeast3)만 exact source 배포. Run [38222374468](https://github.com/andrawing1212/soridraw-music/actions/runs/38222374468) **SUCCESS**, 운영 Function ACTIVE + HMAC secret binding 읽기 확인 PASS. 서버 패치 트리거 commit `7f5e2396c4b933aa7ab45cc79acdaf5ed78ba858`, 소스 target `47fa39c24cee2cdbc11c68d636b2c8ce789dfb4d`.
+- **PREVIEW 앱:** `public/app-version.json` 402→403, `.deploy/preview-app-release.trigger`에서 `deploy_shared_rtdb_rules=false`로 고정하여 **Hosting only** 배포. Run [38222817908](https://github.com/andrawing1212/soridraw-music/actions/runs/38222817908) **SUCCESS**, TypeScript/Build·follow regression·`preview.soridraw.com` exact deployed HTML build hash·TEST/PRODUCTION unchanged PASS. PREVIEW Worker 추가 배포 0.
+- **추가 제품 QA:** [408 Run 38222774560](https://github.com/andrawing1212/soridraw-music/actions/runs/38222774560) **SUCCESS**, [Follow Run 38222774564](https://github.com/andrawing1212/soridraw-music/actions/runs/38222774564) **SUCCESS**; Stage416 변경된 한 윈도우 80/256 원자 알림, B 표시 80곡 50+30 R2 변경곡 단독 읽기, 기존 개인 하트 및 좋아요·팔로우 테스트 PASS.
+- **데이터/비용:** 실제 사용자 D1/R2/Firestore 자료 변경이나 backfill 0, RTDB Rules/Worker/D1 schema 비변경. 정산 후 **공개 알림**을 보내는 Function은 공유 RTDB 파생 캐시 root `publicSync/exploreLike`에 향후 정상 완료 건마다 bounded write를 추가하는 동작 변경이므로 운영 데이터 변경이 영원히 0이라는 뜻이 아님. 새 D1 읽기·전체 Feed 조회 추가 0은 source test 기준. 실비용과 10만 사용자 동시 fan-out **미검증**.
+- **환경 보호:** main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` 비변경 확인. 사용자가 별도로 지정하지 않은 TEST/PRODUCTION 승격 금지.
+- **남은 실사용 게이트:** A계정 app403에서 좋아요 마지막 클릭 시각 기록 → B계정 같은 공개곡에서 **마지막 클릭+5분 후 공개 좋아요 숫자** 자동 반영 확인(개인 하트는 B계정이 좋아요하지 않았다면 비어 있어야 함). 같은 계정 PC↔mobile 즉시동기화 유지, 실제 Cloud Tasks/Functions/R2/D1/RTDB 비용·작동 확인, 50곡 초과/여러 UID 동시 fan-in·장시간 오프라인 복구는 별도 검증. 앱403 배포 성공은 제품 실사용 5분 정산 PASS를 의미하지 않음.
+- **진행률 유지:** ① Stage416 전체 1/4·25%, ② 앱 속도 5/5·100%, ③ 개인 좋아요 5분 정산 3/4·75%(실기기 재검증 전).
+- **직접 외부 조회 한계:** GitHub Hosting workflow가 실제 URL HTML exact build를 검증해 PASS 기록함. 이번 ChatGPT 환경의 일반 외부 직접 GET는 DNS/웹 접근 불가로 별도 독립 조회를 완료하지 못함.
+
+---
+
 ## CURRENT — Stage416 50+ 공개 알림 수정 소스/408 CI PASS, 배포 전 (2026-10-12 KST)
 
 - **검증한 실제 소스 commit:** `fb4a38b5b8fff5c4f8909d0f0a74b1990b250ba7`. 해당 commit의 GitHub 408 Run [38221242172](https://github.com/andrawing1212/soridraw-music/actions/runs/38221242172) **SUCCESS**.

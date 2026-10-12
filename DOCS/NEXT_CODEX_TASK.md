@@ -1,3 +1,13 @@
+## NEXT — app407 단일 클릭 서버 접수 증거 확인 → 최초 단절점만 직접 수정 (2026-10-12 15:28 UTC)
+
+- **현재 PREVIEW:** app407 Hosting [38270217668](https://github.com/andrawing1212/soridraw-music/actions/runs/38270217668) SUCCESS, exact build PASS. source `c4fce678df9f5cbea6850d5a91dfcccd1b43b1fa`; QA 38269975727 / readonly preflight 38269975617 PASS. Functions/Worker/RTDB Rules/D1/R2/TEST/PRODUCTION 비변경.
+- **사용자 테스트 한 번만:** Master → 관리자 앱 설정 → `캐시 진단 표시` ON → Explore에서 곡 하나 좋아요/해제 1회 → 관리자 앱 설정의 `Stage416 서버 접수 진단` 결과 확인. 표시값은 raw UID/trackId/operationId가 아닌 opaque operation token + 최초/복구 + 시도수 + 승인/거절 reason + receipt/version + outbox 등록 여부.
+- **판단 분기:** (A) 서버 승인+receipt 유효+등록 완료 → 브라우저/Callable은 정상. 해당 클릭 시각 뒤 privacy-safe scheduler/window/Eventarc/Task 로그를 read-only 대조. (B) Callable 오류/거절 → 표시된 안전 reason의 단일 경로만 수정. (C) 승인인데 outbox 등록 대기 → 클라이언트 exact-operation persistence race만 좁혀 수정. 어떠한 경우도 전체 UID/좋아요 scan, 원본 데이터 리셋, 새 polling, 무조건 재전송 금지.
+- **완료 게이트:** 동일 operation의 accepted:true → new window → Eventarc/Task → 5분 뒤 Worker/D1 acceptance → R2/public 타계정 숫자까지 증명. 정상 app406/407 하트·팔로우·My Likes·Studio heart 보호, 정상 방문 R0/W0, TypeScript/Build/관련 회귀 PASS 후 PREVIEW만 갱신. TEST/PRODUCTION은 별도 승인 전 금지.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, 최종 서버 정산 3/4·75%. 현재 막힌 유일한 실증은 **실제 한 클릭의 app407 로컬 서버접수 결과**.
+
+---
+
 ## NEXT — app406 PASS 고정, Stage416 Callable accepted ↔ Scheduler onCreate 최초 단절점 확정 (2026-10-12 UTC)
 
 - **현재 상태:** 모바일 PC↔mobile 좋아요/해제+새로고침 app406 사용자 실사용 PASS. `preview.soridraw.com` app406 유지; UI/저장 카탈로그/캐시 복원 추가 수정 금지. TEST/PRODUCTION 금지.

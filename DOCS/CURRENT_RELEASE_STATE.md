@@ -1,3 +1,16 @@
+## CURRENT — PREVIEW app407 로컬 서버접수 진단 직접 수정·배포 PASS / 단일 실사용 응답 대기 (2026-10-12 15:28 UTC)
+
+- **사용자 지시 반영:** Codex로 넘기지 않고 ChatGPT가 직접 수정. 정상 app406 좋아요/해제·PC↔모바일·새로고침 동작은 변경하지 않고 Stage416의 기존 Callable 응답을 **기기 로컬에서만** 확인하는 기본 OFF 진단을 추가.
+- **제품 source:** `c4fce678df9f5cbea6850d5a91dfcccd1b43b1fa` (`public/app-version.json` 406→407). 변경: `src/services/exploreLikePrivateDiagnostic416.ts` 신규, `exploreLikePrivateRtdbTransport416.ts`, `exploreLikeService.ts`, `Stage416LikeBatchMasterPanel.tsx`, `verify-416-client-rtdb-binding.mjs`, app version. 신규 진단은 기존 캐시 진단 ON + 해당 UID일 때만 sessionStorage에 동작하며 원본 UID/trackId/operationId는 저장하지 않고 operation은 8자리 opaque token만 표시. 새 fetch/Callable/RTDB/D1/Firestore IO 없음.
+- **진단 의미:** 기존 `recordPrivateLike416`의 실제 브라우저 응답을 최초/복구 재접수별로 `서버 승인/거절·reason·receipt 유효성·version·로컬 outbox 서버등록 완료`로 표시한다. transport가 원래 보내던 Callable을 관찰만 하며, 추가 요청/폴링/자동 재시도는 만들지 않음. 기존 `recover416`과 operationId/deviceSequence 순서도 변경 없음.
+- **자동검증:** 408 Quality [38269975727](https://github.com/andrawing1212/soridraw-music/actions/runs/38269975727) SUCCESS — 신규 `STAGE416_PRIVATE_ACCEPTANCE_LOCAL_DIAGNOSTIC_NO_SERVER_IO=PASS`, `NO_RAW_IDS=PASS`, Stage416 전체 source 회귀, Functions build, TypeScript, Build, 기존 127/175/180/178/191/192/197/390/417 좋아요 회귀 모두 PASS. Stage416 backend readonly preflight [38269975617](https://github.com/andrawing1212/soridraw-music/actions/runs/38269975617) SUCCESS.
+- **PREVIEW 배포:** release trigger `c0e1366ea0067c42a15497e167d25d35f664088c`; Firebase PREVIEW Run [38270217668](https://github.com/andrawing1212/soridraw-music/actions/runs/38270217668) SUCCESS. `preview.soridraw.com` app407 / exact build PASS. TypeScript·Build 및 기존 profile/My Likes/follow 회귀 PASS. **SHARED_RTDB_RULES_DEPLOY=SKIPPED**, Hosting only. TEST/PRODUCTION unchanged PASS.
+- **백엔드/데이터 비변경:** Functions 재배포 0, Cloudflare Worker 0, D1/R2 mutation 0, RTDB Rules 0, 공유 사용자 데이터/마이그레이션/백필/삭제 0. 이번 앱 업데이트 자체가 서버 데이터 read/write를 추가하지 않음.
+- **다음 실사용 1건:** Master 계정에서 관리자 앱 설정의 **캐시 진단 표시 ON** → Explore에서 기존 공개곡 좋아요 또는 해제 1회 → 앱 설정의 “Stage416 서버 접수 진단” 확인. `서버 승인 + receipt 유효 + 서버 등록 완료`면 Callable→RTDB transaction 접수까지 증명되어 다음은 같은 시각의 server window/Eventarc만 read-only 확인. `CALLABLE_* / PRIOR_WINDOW_NEEDS_SEAL / STALE_OR_DUPLICATE` 등이면 그 최초 단절 단계만 수정. 원인 전 추가 재시도 엔진·UI 좋아요 수정 금지.
+- **진행률:** Stage416 전체 1/4·25%; 앱 속도 5/5·100%; 5분 서버 최종 정산 3/4·75%. app407 진단 구현/자동검증/PREVIEW 배포는 100%, **실제 한 클릭 서버 응답 및 5분 canonical E2E는 아직 미검증**. TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — Stage416 Eventarc 전달 조건 추가 검사 PASS / 단절 구간 미확정 (2026-10-12 15:06 UTC)
 
 - **기준:** PREVIEW app406 Hosting 사용자 정상확정 유지. 이번 readonly 진단 후 preview `e877e07ba166befd4ea0dad02d03cb4eb57aa443`을 기준으로 검사; 새 제품/Functions/Worker/Rules/공유 사용자 데이터 변경·배포 없음.

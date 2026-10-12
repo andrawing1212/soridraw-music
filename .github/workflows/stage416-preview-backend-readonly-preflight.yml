@@ -95,6 +95,22 @@ jobs:
           const dbBinding=bindings.find(b=>String(b.name)==='DB');
           const boundId=String(dbBinding?.id||dbBinding?.database_id||dbBinding?.uuid||'');
           if(boundId!==DB) throw Error('416_PREVIEW_SHARED_D1_BINDING_DRIFT');
+          const version=await get(
+            `https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`
+          );
+          const modules=Array.isArray(version.modules)?version.modules:[];
+          const {createHash}=await import('node:crypto');
+          const {readFileSync}=await import('node:fs');
+          const lock=readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
+          const moduleRows=modules.map(m=>{
+            const bytes=Buffer.from(String(m.content_base64||''),'base64');
+            return {name:String(m.name||''),bytes:bytes.length,
+              sha256:createHash('sha256').update(bytes).digest('hex')};
+          });
+          console.log('416_PREVIEW_ACTIVE_MODULES='+moduleRows.map(x=>x.name+':'+x.bytes).join(','));
+          const baseModule=moduleRows.find(x=>x.name.endsWith('preview-worker.js'));
+          console.log('416_PREVIEW_BASE_LOCK_MATCH='+
+            (baseModule?(baseModule.sha256===lock?'PASS':'DRIFT'):'UNAVAILABLE'));
           const sourceResponse=await fetch(base+'/content/v2',{headers});
           if(!sourceResponse.ok) throw Error('416_PREVIEW_WORKER_SOURCE_GET_'+sourceResponse.status);
           const source=await sourceResponse.text();

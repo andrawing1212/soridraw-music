@@ -1,3 +1,16 @@
+## CURRENT — app408 Stage416 클라이언트 롤백 / 검증된 좋아요 canonical 동기화 복구 PREVIEW 배포 (2026-10-12 15:49 UTC)
+
+- **사용자 실사용 결함:** app407 업데이트 직후 아무 조작 전부터 같은 계정 PC/모바일의 Explore 하트·숫자가 서로 다르게 표시됨. 예: 같은 카드가 한 기기에서는 하트/1, 다른 기기에서는 빈하트/0. 카드 렌더는 개인 membership이 true면 공개 숫자를 최소 1로 맞추므로 단순 숫자 캐시가 아니라 **기기별 개인 좋아요 카탈로그/미정산 의도 불일치**가 핵심.
+- **원인 확정 범위:** app400부터 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=true` + `STAGE416_SHARED_RTDB_BATCH_ACTIVE=true`가 기존 app399의 검증된 5초 `/v1/me/likes/batch` canonical 저장을 차단했다. 반면 Stage416 server final settlement는 Scheduler 0 / D1 acceptance NO 등으로 아직 E2E 미입증 상태였다. 즉 tentative same-account hint는 보일 수 있지만 canonical final이 막혀 업데이트/재접속한 기기가 각자 로컬 상태로 시작할 수 있는 위험이 실제 사용자 화면에서 재현됨.
+- **app408 직접 수정:** 제품 commit `ba86d7ed90957c6edee935ec909f99370cdb57a6`. `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false`. app401~407의 하트 보호·op ordering·진단 코드는 유지. 기존 durable outbox를 삭제/변환하지 않고 Stage420 OFF의 기존 eligibility 규칙으로 app399 canonical batch가 그대로 이어받게 함. 즉 기존 Stage416 미정산 rows도 새 ID 생성 없이 기존 operationId로 정상 정산 후보가 됨.
+- **기존 즉시 동기화 보호:** `publishExploreLikeIntent416` same-account 즉시 hint는 유지. 차이는 **미완성 5분 서버 소유 final path만 OFF**, 검증된 canonical batch와 accepted 127 RTDB 신호를 다시 살린 것. 일반 페이지 진입 전체 scan/rebuild 추가 없음.
+- **회귀검증:** 408 Quality [38272489224](https://github.com/andrawing1212/soridraw-music/actions/runs/38272489224) SUCCESS. `APP408_PRIVATE_FIVE_MINUTE_ROLLBACK_OFF`, `STAGE416_CLIENT_OFF_LEGACY_CANONICAL_SYNC_RESTORED`, `EXISTING_STAGE416_OUTBOX_LEGACY_SETTLEMENT_ELIGIBLE`, `LEGACY_5SEC_CANONICAL_FLUSH_RESTORED` PASS. TypeScript, Build, Functions build, 127/175/180/178/191/192/197/390/417 등 frozen like 회귀 PASS. Follow-only check [38272489289](https://github.com/andrawing1212/soridraw-music/actions/runs/38272489289) SUCCESS. Backend readonly preflight [38272489273](https://github.com/andrawing1212/soridraw-music/actions/runs/38272489273) SUCCESS.
+- **PREVIEW 배포:** release trigger `5186770e5528d9039431e54d2eb50ae0d4e16f85`; Hosting Run [38272717811](https://github.com/andrawing1212/soridraw-music/actions/runs/38272717811) SUCCESS. `preview.soridraw.com` **app408 / exact build PASS**. TypeScript/Build 및 profile/My Likes/follow 회귀 PASS. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`; Functions/Worker/D1/R2/user data 변경 없음. TEST/PRODUCTION unchanged PASS.
+- **다음 실기기 확인:** PC와 모바일 모두 app408로 갱신 후 **좋아요를 누르지 않은 상태로 Explore 첫 화면**의 동일 카드 하트/숫자가 수렴하는지 확인. 기존 Stage416 outbox가 있으면 app408의 복구된 canonical path가 그대로 정산한다. 그 다음 한 곡을 PC→모바일, 모바일→PC 각각 좋아요/해제하여 페이지 이동/새로고침 없이 수렴 확인. 불일치가 남으면 Stage416을 다시 켜지 말고 해당 기기의 outbox↔accepted127↔local catalog 단절만 좁혀 수정.
+- **진행률:** Stage416 전체 1/4·25%(클라이언트 기능 일시 OFF, backend additive ready); 앱 속도 5/5·100%; 이번 PC↔모바일 좋아요 복구 3/4·75%(코드/QA/PREVIEW 배포 완료, 사용자 실기기 확인 대기). TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — PREVIEW app407 로컬 서버접수 진단 직접 수정·배포 PASS / 단일 실사용 응답 대기 (2026-10-12 15:28 UTC)
 
 - **사용자 지시 반영:** Codex로 넘기지 않고 ChatGPT가 직접 수정. 정상 app406 좋아요/해제·PC↔모바일·새로고침 동작은 변경하지 않고 Stage416의 기존 Callable 응답을 **기기 로컬에서만** 확인하는 기본 OFF 진단을 추가.

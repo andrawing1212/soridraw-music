@@ -1,3 +1,13 @@
+## NEXT — app408 PC↔모바일 초기 하트/숫자 + 양방향 클릭 실사용 검증 (2026-10-12 15:49 UTC)
+
+- **현재 PREVIEW:** app408 Hosting [38272717811](https://github.com/andrawing1212/soridraw-music/actions/runs/38272717811) SUCCESS / exact build PASS. 제품 source `ba86d7ed90957c6edee935ec909f99370cdb57a6`; release trigger `5186770e...`. Stage416 5분 client path OFF, app399 검증 canonical batch 복구. Backend Stage416 리소스는 그대로 있으나 새 client 등록은 없음.
+- **사용자 확인 순서:** (1) PC/모바일 모두 app408 업데이트, (2) 아무 좋아요 클릭 없이 Explore 동일 카드들의 하트/숫자 비교, (3) PC에서 한 곡 like/unlike → 모바일 자동 반영, (4) 모바일에서 반대 변경 → PC 자동 반영, (5) 각 기기 새로고침 후 동일 상태 유지. 페이지/탭 이동을 동기화 조건으로 인정하지 않음.
+- **PASS면:** 현재 좋아요 기능 app408을 새 보호 기준으로 고정하고 Stage416 5분 비용 실험은 제품 경로에서 분리해 다시 설계/감사. 사용자 기능을 깨뜨린 상태로 비용 최적화를 재개하지 않음.
+- **FAIL이면:** 화면 전체/캐시 전체를 리셋하지 않는다. 불일치한 정확한 track 기준으로 local outbox → accepted 127 signal → liked-state catalog → public count overlay 중 첫 단절만 확인. 전체 좋아요 목록/Feed/D1 scan, user data 재생성, Stage416 재활성화 금지.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, app408 PC↔모바일 복구 3/4·75%. 마지막 1단계는 실기기 결과.
+
+---
+
 ## NEXT — app407 단일 클릭 서버 접수 증거 확인 → 최초 단절점만 직접 수정 (2026-10-12 15:28 UTC)
 
 - **현재 PREVIEW:** app407 Hosting [38270217668](https://github.com/andrawing1212/soridraw-music/actions/runs/38270217668) SUCCESS, exact build PASS. source `c4fce678df9f5cbea6850d5a91dfcccd1b43b1fa`; QA 38269975727 / readonly preflight 38269975617 PASS. Functions/Worker/RTDB Rules/D1/R2/TEST/PRODUCTION 비변경.

@@ -98,3 +98,65 @@ jobs:
 
       - name: Confirm no mutation commands
         run: echo 'READONLY_DIAGNOSTIC=true;DEPLOY=0;DATABASE_WRITE=0'
+
+      - name: Read 416 Master interval only (no account identifiers)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          creds_path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          creds=service_account.Credentials.from_service_account_file(
+            creds_path,scopes=['https://www.googleapis.com/auth/firebase.database',
+                               'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/likeBatchTiming416/current.json'
+          r=requests.get(url,params={'access_token':creds.token},timeout=20)
+          if r.status_code!=200:raise SystemExit('TIMING_READ_FAILED_HTTP_'+str(r.status_code))
+          d=r.json()
+          if d is None:
+            print('STAGE416_LIVE_TIMING=DEFAULT_PRIVATE5_PUBLIC5')
+          else:
+            print('STAGE416_LIVE_PRIVATE_MINUTES',d.get('privateMinutes','INVALID'))
+            print('STAGE416_LIVE_PUBLIC_MINUTES',d.get('publicMinutes','INVALID'))
+            print('STAGE416_LIVE_TIMING_VERSION',d.get('version','INVALID'))
+          print('STAGE416_TIMING_READONLY=PASS')
+          PY
+
+      - name: Read Cloud Tasks queue status without task payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,datetime
+          project='soridraw-app-866a5'
+          p=subprocess.run(['gcloud','tasks','queues','list','--location=us-central1',
+            '--project',project,'--format=json'],capture_output=True,text=True)
+          if p.returncode:
+            print('TASK_QUEUES_LIST_UNAVAILABLE',' '.join(p.stderr.split())[:180])
+            raise SystemExit(32)
+          qs=json.loads(p.stdout or '[]')
+          wanted=[q for q in qs if 'stage416' in str(q.get('name','')).lower()]
+          print('STAGE416_TASK_QUEUE_MATCHES',len(wanted))
+          for queue in wanted:
+            name=queue['name'].split('/')[-1]
+            print('STAGE416_QUEUE_NAME',name,'STATE',queue.get('state','UNKNOWN'),
+              'RATE',queue.get('rateLimits',{}).get('maxDispatchesPerSecond','UNKNOWN'))
+            p=subprocess.run(['gcloud','tasks','list','--queue',name,
+              '--location=us-central1','--project',project,'--format=json',
+              '--limit=30'],capture_output=True,text=True)
+            if p.returncode:
+              print('STAGE416_TASK_LIST_UNAVAILABLE',name,' '.join(p.stderr.split())[:180])
+              continue
+            ts=json.loads(p.stdout or '[]')
+            print('STAGE416_QUEUED_TASKS_SAMPLED',name,len(ts))
+            for t in ts[:10]:
+              # Task identifiers and any request payload are deliberately excluded.
+              print('STAGE416_TASK_SCHEDULE',str(t.get('scheduleTime',''))[:19],
+                'DISPATCHES',t.get('dispatchCount',0),
+                'RESPONSES',t.get('responseCount',0),
+                'STATUS_CODE',t.get('lastAttempt',{}).get('responseStatus',{}).get('code','NONE'))
+          print('STAGE416_QUEUE_READONLY=PASS')
+          PY

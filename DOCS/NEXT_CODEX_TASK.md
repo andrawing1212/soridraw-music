@@ -1,3 +1,13 @@
+## NEXT — Stage416③ 단일 HMAC Secret 수동 생성/단일 리소스 권한 후 PREVIEW backend 재개 (2026-10-12)
+
+- **현재 상태:** Secret Manager API는 활성화 확인 PASS. shared RTDB/D1 prerequisite는 live exact/additive 상태. Stage416 Functions/Worker/client는 아직 OFF.
+- **외부 1회 선행조건:** Secret Manager에 `SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET`을 32-byte 이상 랜덤 값으로 생성하고, GitHub deploy principal `github-action-1188157610@soridraw.iam.gserviceaccount.com`에 **이 secret 하나에 한해서** 배포/읽기에 필요한 권한을 부여한다. 프로젝트 전체 Secret Manager 권한 확대 금지.
+- **재개 방식:** release workflow가 API + existing secret access를 모든 추가 live mutation 전에 먼저 확인한다. PASS하면 RTDB/D1 idempotent exact-check → Stage416 Functions 6개 deploy → task secret binding/live metadata → same value를 Cloudflare PREVIEW secret으로 bind → client/Worker route OFF 재확인.
+- **그 다음 단계:** PREVIEW Worker signed route만 ON + final endpoint binding → backend smoke/rollback proof → app400 client two flags + Master panel ON/Hosting → PC↔mobile/last-click+5m/restart/opposite-click/80곡/cost 실사용 검증.
+- **금지:** secret 값을 chat/GitHub log에 출력, project-wide broad IAM, TEST/PRODUCTION Stage416 feature activation, 사용자 데이터 backfill/delete/overwrite.
+
+---
+
 ## NEXT — Stage416③ Secret Manager API 활성화 후 PREVIEW backend prerequisite 재개 (2026-10-12)
 
 - **현재 상태:** shared RTDB server-only roots 2개와 shared D1 `explore_like_private_acceptance_416` empty table은 실제 적용 완료/정확 재확인. Stage416 Functions, HMAC secret, PREVIEW Worker signed route, app400 client는 아직 OFF/미배포.

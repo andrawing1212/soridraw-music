@@ -1,0 +1,90 @@
+name: SORIDRAW Stage416 TEST Worker Compatibility Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/stage416-test-worker-compat-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-stage416-test-worker-compat
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      EXPECTED_ACTIVE: bc01f091-b9e6-43b7-ac82-73385ea24e52
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify approved TEST-only trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'approval=TEST_STAGE416_COMPAT_2026-10-12' .deploy/stage416-test-worker-compat-release.trigger
+          grep -Fxq 'stage416_feature_activation=false' .deploy/stage416-test-worker-compat-release.trigger
+          git fetch origin main production --no-tags
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before"
+          git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Fetch exact active TEST Worker and patch only aggregate CTE
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const {writeFileSync}=require('fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-test';
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments');const d=(ds.deployments||ds||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(active?.version_id!==process.env.EXPECTED_ACTIVE||Number(active?.percentage||0)<99.99)throw Error('TEST active drift '+active?.version_id);
+            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`);
+            const mods=v.modules||[];if(mods.length!==1)throw Error('expected one module');
+            const src=Buffer.from(mods[0].content_base64,'base64').toString('utf8');
+            writeFileSync('cloudflare/explore-worker/canonical/preview-entry.js',src);
+            console.log('TEST_ACTIVE_VERSION='+active.version_id);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node cloudflare/explore-worker/scripts/stage416-ordering-compat-patch.mjs cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node scripts/verify-416-live-worker-compatibility.mjs cloudflare/explore-worker/canonical/preview-entry.js TEST_PATCHED
+      - name: Upload patched TEST version without traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-worker-runtime.mjs test upload | tee "$RUNNER_TEMP/upload.log"
+          version="$(sed -n 's/^TEST_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/upload.log" | tail -1)"
+          test -n "$version"
+          echo "NEW_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Activate TEST and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_WORKER_VERSION="$NEW_VERSION" node .deploy/release-worker-runtime.mjs test activate
+          node .deploy/release-worker-runtime.mjs test verify
+      - name: Verify protected refs unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+          echo 'TEST_STAGE416_COMPAT_RELEASE=PASS'
+          echo 'STAGE416_FEATURE_ACTIVATION=false'
+          echo 'USER_DATA_MIGRATION=0'

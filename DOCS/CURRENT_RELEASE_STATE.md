@@ -1,3 +1,13 @@
+## Stage416 후속 점검 — app406 실사용 PASS 이후 최종 정산 증거 불합격 (2026-10-12 14:15 UTC)
+
+- 사용자 app406 모바일 좋아요 해제+refresh PASS 확인 및 보호(직전 CURRENT). 같은 제품 release 406 유지.
+- **신규 read-only 38261359548 SUCCESS:** Firebase Callable HTTP200/204 존재하지만 요청별 `accepted:true` 부재; 최근 90분 Task 결과 `EMPTY=21` / `RESCHEDULED=0` / `STALE=0`. canonical D1 416 acceptance ANY=NO, 069 pending=NO, 공개 버스 마지막 10/10. 「골목길 탐험대」 실제 likes=1, stats=1, shared R2=1 그대로. 새 서버 변경/배포 없음.
+- **범위 확정:** 416 잠정 화면 신호와 서버 Callable 접수는 별도 비동기 동작이며, 클릭 화면이 정상이라는 사실만으로 서버 저장 성공을 뜻하지 않음. 단일 operation의 실제 가입/거절 이유를 추적하기 전에는 원인 미확정. 작업 지시는 `DOCS/NEXT_CODEX_TASK.md` 최신 섹션. 사용자에게 반복 좋아요 테스트 요청 전 privacy-safe proof를 먼저 확보해야 함.
+- **비용/안전:** 이번 점검 read-only, indexed single-song 조회 및 기존 간단한 queue 존재 확인만 사용. Firebase Hosting/Functions, Worker, 공유 데이터/Rules, TEST/PRODUCTION 미변경. app406 정상 복원 기능 건드리지 않음.
+- **현재 진행률:** app406 모바일 PASS 100%; Stage416 전체 25%, 앱 속도 100%, 5분 서버 최종 정산 75%(E2E 미확정). 원인 추적은 계속, 제품 배포 전.
+
+---
+
 ## CURRENT — app406 모바일 새로고침 좋아요 해제 사용자 실사용 PASS, Stage416 5분 서버 정산 별도 진행 (2026-10-12 KST)
 
 - **사용자 2026-10-12 14:09 UTC 확인:** 「골목길 탐험대」의 PC 좋아요/해제→모바일 반영→**모바일 새로고침 시 빈 하트+0 유지**를 app406에서 정상 작동으로 확인. 이전 app405 모바일 reload 1 복귀 오류는 사용자 실기기 기준 PASS로 종료·보호한다. 더 이상 같은 UI/복원 경로 임의 수정 금지.

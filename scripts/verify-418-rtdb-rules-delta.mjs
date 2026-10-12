@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { buildStage416ServerRulesCandidate } from './build-416-private-server-rules.mjs';
 
 // Read-only shared RTDB gate. The local release candidate may add:
 // 1) the previously approved canonicalSettled417 bool,
 // 2) the UID-private exploreLikeIntent416 child,
 // 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt.
 // Every other permission/schema byte must remain equivalent to the live rules.
-const local = JSON.parse(readFileSync('database.rules.json','utf8'));
+const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
+const local = buildStage416ServerRulesCandidate(canonicalBase);
 const user = local?.rules?.userSync?.$uid;
 const accepted = user?.exploreLike?.results?.$index?.canonicalSettled417;
 const intent = user?.exploreLikeIntent416;

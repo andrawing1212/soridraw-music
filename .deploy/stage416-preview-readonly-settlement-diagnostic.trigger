@@ -1,0 +1,5 @@
+stage416_app403_readonly_settlement_diagnostic
+lookback=100minutes
+gcp_logging_read_only=true
+shared_data_write=false
+deployment=false

@@ -1,3 +1,17 @@
+## CURRENT — Stage416③ PREVIEW backend prerequisite 일부 실제 적용 / Secret Manager API 권한에서 안전 중단 (2026-10-12 KST)
+
+- **현재 preview 코드 기준:** `f61e2e7fa489c108db760d2f9224c719dd457da4`. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` 유지.
+- **실제 PREVIEW backend prerequisite Run:** [38199681581](https://github.com/andrawing1212/soridraw-music/actions/runs/38199681581). 소스/좋아요 회귀/Build/Functions build PASS 후, 공유 RTDB에 **server-only `privateLikeBatch416` + owner-readable-final `privateLikeFinal416` 두 루트만 additive 배포 PASS**, 기존 Rules byte-equivalent 보호 PASS.
+- **공유 D1 실제 상태:** `explore_like_private_acceptance_416` 빈 additive table 1개 생성 완료. exact schema 재확인 PASS, row 0, backfill/update/delete 0. 재시도 Run [38199833260](https://github.com/andrawing1212/soridraw-music/actions/runs/38199833260)에서 이미 존재/정확/빈 상태 재확인 PASS.
+- **현재 중단점:** `soridraw-app-866a5`의 **Secret Manager API가 비활성**이고 연결된 GitHub service account에는 `serviceusage.services.enable` 권한이 없어 API 활성화 자체가 거부됨. Secret 생성 전에 중단되어 Stage416 Functions deploy, Cloudflare HMAC secret binding, signed Worker route activation, client flag ON, Hosting 배포는 모두 0.
+- **안전 보정:** 이후 workflow는 Secret Manager API가 켜져 있지 않으면 **추가 live mutation 전에 fail-closed**하도록 `stage416-preview-backend-release.yml`을 수정. 이미 들어간 RTDB/D1 변경은 둘 다 하위호환 additive/inert이며 app399는 Stage416 flags OFF라 사용하지 않음.
+- **실서비스 상태:** 기존 PREVIEW app399 및 기존 Explore 좋아요 5초 canonical 경로 유지. Stage416 signed Worker route OFF, Stage416 client OFF. TEST/PRODUCTION Worker의 compatibility-only patch 상태는 기존 완료본 유지, 이번 prerequisite 작업으로 재배포 없음.
+- **사용자 원본 데이터:** migration/backfill/delete/overwrite **0**. 이번 실제 변경은 빈 D1 schema 1개 + server-only RTDB permission roots 2개뿐.
+- **진행률:** ① Stage416 전체 사용자 목표 **1/4·25%**. ② 현재 앱 속도 기존 자동검증 범위 **5/5·100%**. ③ Stage416③ 개인 좋아요 5분 저장 **3/4·75% 유지**. backend prerequisite가 일부 live였지만 Functions/Worker/client 실연결과 PC↔mobile 비용 검증 전이므로 4/4로 올리지 않음.
+- **바로 다음 작업:** Google Cloud project `soridraw-app-866a5`에서 **Secret Manager API만 활성화** → 같은 guarded PREVIEW backend release 재실행 → HMAC secret 생성/Stage416 Functions 6개/Cloud Task metadata/Worker secret binding 검증 → signed Worker route PREVIEW만 ON → backend smoke → 마지막에 app400 client+Master panel ON/Hosting → PC↔mobile/재시작/반대클릭/80곡/실비용 검증. TEST/PRODUCTION Stage416 기능 활성은 이번 범위 아님.
+
+---
+
 ## CURRENT — Stage416③ TEST/PRODUCTION Worker 호환 패치 실제 활성 확인 PASS / PREVIEW 기능은 아직 OFF (2026-10-12 KST)
 
 - **현재 preview 기준:** `fcc45a807c353e75fcfa7e7d2769fca3d5ca7f67`.

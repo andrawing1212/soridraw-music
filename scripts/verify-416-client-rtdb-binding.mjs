@@ -79,13 +79,13 @@ const {parsePrivateFinalReceipt416:parseFinal,
 const opFinal='00000000-0000-4000-8000-000000000014';
 const acceptedFinal=parseFinal({version:9,canonicalD1:'settled',
   personalLikeSnapshot:'changed-track-r2',rows:[{
-    trackId:'song-a',operationId:opFinal,liked:true,likeCount:2,
+    trackId:'song-a',operationId:opFinal,ownerUid:'owner-a',liked:true,likeCount:2,
   }]});
 assert(acceptedFinal);
 const final80=parseFinal({version:10,canonicalD1:'settled',
   personalLikeSnapshot:'changed-track-r2',rows:Array.from({length:80},(_,i)=>({
     trackId:'split-'+i,operationId:'00000000-0000-4000-8000-'+
-      String(i+1).padStart(12,'0'),liked:i%2===0,likeCount:i,
+      String(i+1).padStart(12,'0'),ownerUid:'owner',liked:i%2===0,likeCount:i,
   }))});
 assert.equal(final80?.rows.length,80,'50+30 canonical receipt must remain exact');
 assert.equal(parseFinal({...final80,version:11,
@@ -112,6 +112,8 @@ for(const invalid of [
 assert(source.includes('privateLikeFinal416/'));
 assert(source.includes('persistLikeOutbox(uid,outbox);'));
 assert(source.includes('repaint.forEach(dispatchLikeSync)'));
+assert(source.includes("soridraw:private-like-await-final-416"));
+assert(source.includes('if(current&&!exactIds.has(row.trackId))continue;'));
 console.log('STAGE416_EXACT_D1_AND_R2_PROVEN_FINAL_RECEIPT_ONLY=PASS');
 console.log('STAGE416_PENDING_NEWER_CLICK_NOT_CLEARED=PASS');
 console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');

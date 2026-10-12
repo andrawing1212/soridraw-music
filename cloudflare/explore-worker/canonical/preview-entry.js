@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
+import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
 import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
@@ -2310,8 +2311,14 @@ async function handleSignedPrivateHandoff416(request,env){
        data:{queued:true,version:result.version,batchIds:result.batchIds}}),
        {status:503,headers});
    }
+   const final=await finalizePrivateHandoff416({
+     db:env.DB,r2:env.PROFILE_MEDIA,uid:claim.uid,windowId:claim.windowId,
+     version:claim.version,batchIds:result.batchIds,rows:claim.rows,
+     finalEndpoint:env.SORIDRAW_PRIVATE_FINAL416_ENDPOINT,secret,
+   });
    return new Response(JSON.stringify({ok:true,data:{...result,
-     queued:true,canonicalD1:'queued',personalLikeSnapshot:'repair-needed'}}),
+     queued:true,canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
+     personalLikeSnapshot:'changed-track-r2',finalReceipt:final.receiptStatus}}),
      {status:200,headers});
  }catch(error){
    console.error('[416] private signed handoff failed',String(error?.message||error));

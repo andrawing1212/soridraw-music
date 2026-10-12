@@ -868,6 +868,9 @@ const startLikeIntent416 = (uid: string) => {
     // online device extends the USER's pending canonical clock. It must never
     // create a public write, clear outbox, or requeue a failed mutation.
     if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending') {
+      if (STAGE416_SHARED_RTDB_BATCH_ACTIVE && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('soridraw:private-like-await-final-416', {detail:{uid}}));
+      }
       const localPending416 = readLikeOutbox(uid);
       if (Object.values(localPending416).some((row) => (row.retryCount || 0) === 0)) {
         const key416 = scopedLikeKey127(STAGE416_PRIVATE_BATCH_WINDOW_KEY, uid);
@@ -2711,9 +2714,11 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
  let receiverUid416='';
  let unsubscribeFinal416:Unsubscribe|null=null;
  const installFinal416=(uid:string)=>{
-   if(!uid||auth.currentUser?.uid!==uid||unsubscribeFinal416||
-      !Object.values(readLikeOutbox(uid)).some(x=>x.privateServerRegistered416))
-     return;
+   if(!uid||auth.currentUser?.uid!==uid||unsubscribeFinal416)return;
+   const localRows416=readLikeOutbox(uid);
+   const waitingLocal416=Object.values(localRows416).some(x=>x.privateServerRegistered416);
+   const waitingRemote416=Object.keys(listExploreLikeIntents416(uid)).length>0;
+   if(!waitingLocal416&&!waitingRemote416)return;
    receiverUid416=uid;
    unsubscribeFinal416=onValue(
      databaseRef(realtimeDb,'privateLikeFinal416/'+uid),
@@ -2723,24 +2728,24 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
        if(!receipt)return;
        const outbox=readLikeOutbox(uid);
        const exact=selectExactFinalizedPrivateLikes416(outbox,receipt);
-       if(!exact.length)return;
+       const exactIds=new Set(exact.map(row=>row.trackId));
        const cache=getLikedStateCache(uid);
        const pending=readSnapshotPending127(uid);
        const locks=readLikeDisplayLocks(uid);
        const now=Date.now();
        const repaint:ExploreLikeSyncEventDetail[]=[];
-       for(const row of exact){
+       for(const row of receipt.rows){
          const current=outbox[row.trackId];
-         if(!current||current.operationId!==row.operationId||
-            current.desiredLiked!==row.liked)continue;
-         delete outbox[row.trackId];
+         // A different/newer local operation always wins over an older final receipt.
+         if(current&&!exactIds.has(row.trackId))continue;
+         if(current)delete outbox[row.trackId];
          delete pending[row.trackId];
          cache.set(row.trackId,row.liked);
          locks[row.trackId]={liked:row.liked,likeCount:row.likeCount,
            updatedAt:now,protectUntil:now+EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120};
          patchExploreLikedTrackMembership(uid,row.trackId,row.liked);
          clearExploreLikeIntent416(uid,row.trackId,row.liked,row.operationId);
-         repaint.push({uid,trackId:row.trackId,ownerUid:current.ownerUid,
+         repaint.push({uid,trackId:row.trackId,ownerUid:row.ownerUid||current?.ownerUid||'',
            liked:row.liked,likeCount:row.likeCount,source:'remote'});
        }
        if(!repaint.length)return;
@@ -2766,9 +2771,10 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) {
  });
  // One subscription for outstanding data, never one listener per track.
  // This event fires after the exact registration ACK has been persisted.
- window.addEventListener('soridraw:private-like-registered-416',
-   (event:Event)=>{
+ for(const eventName of ['soridraw:private-like-registered-416','soridraw:private-like-await-final-416']){
+   window.addEventListener(eventName,(event:Event)=>{
      const uid=(event as CustomEvent<{uid?:string}>).detail?.uid||'';
      installFinal416(uid);
    });
+ }
 }

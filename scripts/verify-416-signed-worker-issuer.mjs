@@ -25,7 +25,8 @@ const accepted=async(url,init)=>{
   assert.equal(await verifyPrivateHmac416(init.body,init.headers['X-Soridraw-416-Signature'],secret),true);
   const claim=validatePrivateHandoff416(JSON.parse(init.body),now);
   assert.equal(claim.version,89);assert.equal(claim.rows[0].liked,true);
-  return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'queued',
+  return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
+    personalLikeSnapshot:'changed-track-r2',finalReceipt:'PUBLISHED',
     version:89,duplicate:false,batchIds:['l069_1699999998000_'+'a'.repeat(64)]}})};
 };
 const r=await deliver('uid1',seal,worker,secret,now,accepted);
@@ -38,7 +39,8 @@ await assert.rejects(deliver('uid1',seal,'https://evil.example/v1/internal/priva
 await assert.rejects(deliver('uid1',seal,worker,secret,now,
   async()=>({ok:false,json:async()=>({ok:false})})),/NOT_CONFIRMED/);
 await assert.rejects(deliver('uid1',seal,worker,secret,now,
-  async()=>({ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'queued',
+  async()=>({ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
+    personalLikeSnapshot:'changed-track-r2',finalReceipt:'PUBLISHED',
     version:88,batchIds:['l069_1699999998000_'+'a'.repeat(64)]}})})),/NOT_CONFIRMED/);
 console.log('STAGE416_FIREBASE_SIGNED_TO_CLOUDFLARE_WORKER_EXACT_RECEIPT=PASS');
 console.log('STAGE416_FIREBASE_HANDOFF_TARGET_RESTRICTION_AND_FAIL_CLOSED=PASS');

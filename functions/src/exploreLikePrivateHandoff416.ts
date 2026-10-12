@@ -42,7 +42,10 @@ export async function deliverPrivateSealToWorker416(
    ok?:boolean;data?:Record<string,unknown>;error?:{code?:string}
  }|null;
  if(!response.ok||payload?.ok!==true||payload?.data?.queued!==true||
-    payload?.data?.canonicalD1!=='queued'||
+    payload?.data?.canonicalD1!=='settled'||
+    payload?.data?.canonicalProof!=='atomic-drain-batch-418'||
+    payload?.data?.personalLikeSnapshot!=='changed-track-r2'||
+    (payload?.data?.finalReceipt!=='PUBLISHED'&&payload?.data?.finalReceipt!=='DUPLICATE')||
     payload?.data?.version!==seal.version||
     !Array.isArray(payload?.data?.batchIds)||
     payload.data.batchIds.length<1||payload.data.batchIds.length>6||

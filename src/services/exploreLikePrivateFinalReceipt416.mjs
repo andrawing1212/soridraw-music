@@ -13,11 +13,12 @@ export function parsePrivateFinalReceipt416(raw){
  const seen=new Set(),rows=[];
  for(const v of raw.rows){
    if(!v||!cleanId(v.trackId,512)||!UUID416.test(v.operationId)||
+      !cleanId(v.ownerUid,128)&&v.ownerUid!==''||
       typeof v.liked!=='boolean'||!Number.isSafeInteger(v.likeCount)||
       v.likeCount<0||v.likeCount>1000000000||
       seen.has(v.trackId))return null;
    seen.add(v.trackId);
-   rows.push({trackId:v.trackId,operationId:v.operationId,
+   rows.push({trackId:v.trackId,operationId:v.operationId,ownerUid:v.ownerUid,
      liked:v.liked,likeCount:v.likeCount});
  }
  return {version:raw.version,rows};

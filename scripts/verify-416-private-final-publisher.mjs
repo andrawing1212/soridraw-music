@@ -29,7 +29,7 @@ const original={uid:'same-account',windowId:op(500),version:80,
  personalLikeSnapshot:'changed-track-r2',batchIds:[batchId],
  settledBatchIds:[batchId],
  rows:Array.from({length:80},(_,i)=>({
-   trackId:'song-'+i,operationId:op(i),liked:i%2===0,likeCount:2,
+   trackId:'song-'+i,operationId:op(i),ownerUid:'owner',liked:i%2===0,likeCount:2,
  }))};
 const call=async data=>{
  const raw=JSON.stringify(data);
@@ -61,7 +61,7 @@ await assert.rejects(publish(db,altered,
  '0'.repeat(64),secret,now),/416_FINAL_BAD_SIGNATURE/);
 assert.equal(writes,1);
 assert.equal((await call({...original,version:81,rows:[{
- trackId:'song-x',operationId:op(200),liked:true,likeCount:1,
+ trackId:'song-x',operationId:op(200),ownerUid:'owner',liked:true,likeCount:1,
 }]})).status,'PUBLISHED');
 assert.equal(writes,2,'new canonical window one RTDB write');
 assert(reads>=4);

@@ -42,7 +42,8 @@ const http=async(_url,init)=>{
    init.headers['X-Soridraw-416-Signature'],secret),true);
  const payload=JSON.parse(init.body);
  if(fail) return {ok:false,json:async()=>({ok:false})};
- return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'queued',
+ return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
+   personalLikeSnapshot:'changed-track-r2',finalReceipt:sends>1?'DUPLICATE':'PUBLISHED',
    version:payload.version,duplicate:sends>1,
    batchIds:['l069_'+String(payload.sealedAtMs).padStart(13,'0')+'_'+'a'.repeat(64)]}})};
 };

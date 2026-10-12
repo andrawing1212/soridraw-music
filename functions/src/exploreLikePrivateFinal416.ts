@@ -9,7 +9,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const batch=/^l069_[0-9]{13}_[0-9a-f]{64}$/;
 const safeUid=(s:unknown)=>typeof s==='string'&&
  /^[A-Za-z0-9_-]{1,128}$/.test(s);
-type FinalRow={trackId:string;operationId:string;liked:boolean;likeCount:number};
+type FinalRow={trackId:string;operationId:string;ownerUid:string;liked:boolean;likeCount:number};
 type SignedFinal={uid:string;windowId:string;version:number;
  signedAtMs:number;canonicalD1:string;canonicalProof:string;
  personalLikeSnapshot:string;batchIds:string[];settledBatchIds:string[];
@@ -47,6 +47,7 @@ export async function publishAuthenticatedPrivateFinal416(
  for(const row of data.rows){
    if(!row||typeof row.trackId!=='string'||!row.trackId||
       row.trackId.length>512||!uuid.test(row.operationId)||
+      typeof row.ownerUid!=='string'||row.ownerUid.length>128||
       typeof row.liked!=='boolean'||!Number.isSafeInteger(row.likeCount)||
       row.likeCount<0||row.likeCount>1_000_000_000||seen.has(row.trackId))
      throw Error('416_FINAL_BAD_ROW');

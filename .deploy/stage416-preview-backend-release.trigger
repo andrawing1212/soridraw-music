@@ -3,4 +3,4 @@ release_scope=stage416_preview_backend_prerequisites_only
 client_activation=false
 worker_route_activation=false
 user_data_migration=false
-retry_with_isolated_stage416_functions_package=1
+retry_after_secret_viewer_runtime_accessor_cloudtasks_enabled=1

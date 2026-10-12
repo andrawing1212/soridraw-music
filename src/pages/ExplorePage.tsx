@@ -2429,6 +2429,18 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [profileUid, submittedQuery]);
 
+  // app406: curated data may resolve from the shared on-device cache BEFORE
+  // Firebase finishes restoring the signed-in user on a mobile page reload.
+  // The source list effect above deliberately doesn't refetch on auth changes.
+  // Reapply ONLY the already-received UID-private pending/count hint to the
+  // existing visible cards when auth becomes ready: zero Worker/D1 reads/writes.
+  useEffect(() => {
+    if (!user?.uid) return;
+    setCuratedTracks307((previous) => previous.length
+      ? overlayExploreLikeDisplayCounts(user.uid, previous)
+      : previous);
+  }, [user?.uid]);
+
   useEffect(() => {
     if (!user || !curationManageRequested307 || !curationAccess307.canCurate) return undefined;
     let cancelled = false;

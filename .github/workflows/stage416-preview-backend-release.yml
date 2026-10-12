@@ -102,7 +102,7 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
-      - name: Gate required Secret Manager API before any further live mutation
+      - name: Gate required Secret Manager secret before any further live mutation
         shell: bash
         run: |
           set -euo pipefail
@@ -113,7 +113,21 @@ jobs:
             echo 'STAGE416_NO_FUNCTION_OR_WORKER_ACTIVATION=true'
             exit 32
           fi
+          secret_file="$RUNNER_TEMP/stage416-hmac"
+          if ! gcloud secrets versions access latest \
+            --secret "$HMAC_SECRET_NAME" \
+            --project "$FIREBASE_PROJECT" > "$secret_file" 2>"$RUNNER_TEMP/stage416-secret-access.err"; then
+            cat "$RUNNER_TEMP/stage416-secret-access.err" >&2
+            echo 'STAGE416_EXTERNAL_BLOCKER=CREATE_SECRET_AND_GRANT_SINGLE_SECRET_ACCESS'
+            echo 'STAGE416_REQUIRED_SECRET=SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET'
+            echo 'STAGE416_REQUIRED_PRINCIPAL=github-action-1188157610@soridraw.iam.gserviceaccount.com'
+            echo 'STAGE416_NO_FUNCTION_OR_WORKER_ACTIVATION=true'
+            exit 33
+          fi
+          test "$(wc -c < "$secret_file" | tr -d ' ')" -ge 32
+          echo "::add-mask::$(cat "$secret_file")"
           echo 'STAGE416_SECRET_MANAGER_API_ENABLED=PASS'
+          echo 'STAGE416_EXISTING_HMAC_SECRET_ACCESS=PASS'
 
       - name: Read live shared RTDB Rules and derive exact additive candidate
         shell: bash
@@ -228,24 +242,15 @@ jobs:
           console.log('416_SHARED_D1_USER_ROW_MIGRATION=0');
           NODE
 
-      - name: Provision one shared HMAC secret without printing it
+      - name: Reuse preflighted HMAC secret without printing it
         shell: bash
         run: |
           set -euo pipefail
           secret_file="$RUNNER_TEMP/stage416-hmac"
-          gcloud services list --enabled --project "$FIREBASE_PROJECT" \
-            --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
-            | grep -Fxq 'secretmanager.googleapis.com'
-          if gcloud secrets describe "$HMAC_SECRET_NAME" --project "$FIREBASE_PROJECT" >/dev/null 2>&1; then
-            gcloud secrets versions access latest               --secret "$HMAC_SECRET_NAME"               --project "$FIREBASE_PROJECT" > "$secret_file"
-            echo 'STAGE416_GCP_HMAC_SECRET=REUSED'
-          else
-            openssl rand -hex 32 > "$secret_file"
-            gcloud secrets create "$HMAC_SECRET_NAME"               --project "$FIREBASE_PROJECT"               --replication-policy=automatic               --data-file="$secret_file" >/dev/null
-            echo 'STAGE416_GCP_HMAC_SECRET=CREATED'
-          fi
+          test -s "$secret_file"
           test "$(wc -c < "$secret_file" | tr -d ' ')" -ge 32
           echo "::add-mask::$(cat "$secret_file")"
+          echo 'STAGE416_GCP_HMAC_SECRET=REUSED_EXISTING'
           echo 'STAGE416_GCP_HMAC_SECRET_READY=PASS'
 
       - name: Deploy only Stage416 Firebase Functions

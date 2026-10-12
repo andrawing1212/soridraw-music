@@ -161,15 +161,15 @@ jobs:
           if actual != expected:
               raise SystemExit('Stage416 RTDB post-deploy exact candidate mismatch')
           before=json.loads((root/'stage416-rtdb-before.json').read_text())
+          before_base=json.loads((root/'stage416-rtdb-before.json').read_text())
+          after_base=json.loads((root/'stage416-rtdb-after.json').read_text())
           for key in ['privateLikeBatch416','privateLikeFinal416']:
-              if key in before.get('rules',{}):
-                  raise SystemExit('Stage416 server root unexpectedly existed before release: '+key)
-          stripped=json.loads((root/'stage416-rtdb-after.json').read_text())
-          for key in ['privateLikeBatch416','privateLikeFinal416']:
-              stripped['rules'].pop(key,None)
-          if stripped != before:
+              before_base['rules'].pop(key,None)
+              after_base['rules'].pop(key,None)
+          if after_base != before_base:
               raise SystemExit('Stage416 RTDB release changed unrelated live rules')
-          print('STAGE416_SHARED_RTDB_TWO_ADDITIVE_ROOTS_DEPLOY=PASS')
+          existed=all(key in before.get('rules',{}) for key in ['privateLikeBatch416','privateLikeFinal416'])
+          print('STAGE416_SHARED_RTDB_TWO_ADDITIVE_ROOTS_DEPLOY='+('ALREADY_EXACT' if existed else 'PASS'))
           print('STAGE416_SHARED_RTDB_UNRELATED_RULES_UNCHANGED=PASS')
           PY
           rm -f "$RUNNER_TEMP/stage416-rtdb-token"
@@ -220,6 +220,25 @@ jobs:
         run: |
           set -euo pipefail
           secret_file="$RUNNER_TEMP/stage416-hmac"
+          if ! gcloud services list --enabled --project "$FIREBASE_PROJECT" \
+            --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
+            | grep -Fxq 'secretmanager.googleapis.com'; then
+            gcloud services enable secretmanager.googleapis.com --project "$FIREBASE_PROJECT" --quiet
+            echo 'STAGE416_SECRET_MANAGER_API=ENABLED'
+            for attempt in $(seq 1 18); do
+              if gcloud services list --enabled --project "$FIREBASE_PROJECT" \
+                --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
+                | grep -Fxq 'secretmanager.googleapis.com'; then
+                break
+              fi
+              sleep 10
+            done
+          else
+            echo 'STAGE416_SECRET_MANAGER_API=ALREADY_ENABLED'
+          fi
+          gcloud services list --enabled --project "$FIREBASE_PROJECT" \
+            --filter='config.name:secretmanager.googleapis.com' --format='value(config.name)' \
+            | grep -Fxq 'secretmanager.googleapis.com'
           if gcloud secrets describe "$HMAC_SECRET_NAME" --project "$FIREBASE_PROJECT" >/dev/null 2>&1; then
             gcloud secrets versions access latest               --secret "$HMAC_SECRET_NAME"               --project "$FIREBASE_PROJECT" > "$secret_file"
             echo 'STAGE416_GCP_HMAC_SECRET=REUSED'

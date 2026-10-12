@@ -6,7 +6,7 @@ import {createHmac} from 'node:crypto';
 // No endpoint or secret is stored in app bundles.
 export type PrivateSeal416={
  id:string;version:number;closedAtMs:number;
- rows:Array<{trackId:string;liked:boolean;operationId:string}>;
+ rows:Array<{trackId:string;liked:boolean;operationId:string;mutationAt:number}>;
 };
 export type PrivateHandoffReceipt416={
  accepted:boolean;duplicate:boolean;queued:boolean;version:number;batchIds:string[];
@@ -30,6 +30,7 @@ export async function deliverPrivateSealToWorker416(
    uid,windowId:seal.id,version:seal.version,sealedAtMs:seal.closedAtMs,
    signedAtMs:nowMs,rows:seal.rows.map(row=>({
      trackId:row.trackId,liked:row.liked,operationId:row.operationId,
+     mutationAt:row.mutationAt,
    })),
  };
  const raw=JSON.stringify(claim);

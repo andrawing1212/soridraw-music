@@ -9,6 +9,9 @@ on:
       - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
       - 'cloudflare/explore-worker/runtime/like-private-batch-handoff-416.mjs'
       - 'cloudflare/explore-worker/runtime/like-private-finalize-416.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-worker.js'
+      - 'cloudflare/explore-worker/canonical/source-sha256.txt'
+      - 'scripts/verify-416-cross-env-ordering.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-handoff-416.sql'
       - 'scripts/verify-416-private-handoff-atomic.mjs'
       - 'cloudflare/explore-worker/candidates/private-like-d1-writer-416.sql'
@@ -182,6 +185,7 @@ jobs:
           node scripts/verify-416-server-only-click.mjs
           node scripts/verify-416-private-callable-master.mjs
           node scripts/verify-416-private-handoff-atomic.mjs
+          node scripts/verify-416-cross-env-ordering.mjs
           node scripts/verify-416-private-final-publisher.mjs
           node scripts/verify-416-finalize-e2e.mjs
           node scripts/verify-416-signed-worker-issuer.mjs

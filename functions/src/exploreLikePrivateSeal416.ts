@@ -5,7 +5,7 @@ import type {Database} from 'firebase-admin/database';
 // a separate mandatory release gate. Pending envelope is UID-scoped RTDB.
 const MAX_TRACKS=256;
 const MINUTES=[1,3,5,10,20];
-type Row={trackId:string;liked:boolean;operationId:string;deviceId:string;deviceSequence:number;version:number};
+type Row={trackId:string;liked:boolean;operationId:string;deviceId:string;deviceSequence:number;version:number;mutationAt:number};
 type Seal={id:string;version:number;closedAtMs:number;rows:Row[]};
 type Pending={
   version:number;deviceSeq:Record<string,number>;
@@ -18,7 +18,8 @@ const validUuid=(value:unknown)=>typeof value==='string'&&
 const validRow=(row:Row)=>!!row&&typeof row.trackId==='string'&&row.trackId.length>0&&
  row.trackId.length<=512&&typeof row.liked==='boolean'&&validUuid(row.operationId)&&
  validUuid(row.deviceId)&&Number.isSafeInteger(row.deviceSequence)&&row.deviceSequence>0&&
- Number.isSafeInteger(row.version)&&row.version>0;
+ Number.isSafeInteger(row.version)&&row.version>0&&
+ Number.isSafeInteger(row.mutationAt)&&row.mutationAt>0;
 export type Stage416SealResult={sealed:boolean;reason:string;value?:Seal;retryAfterMs?:number};
 
 // RTDB transaction commits the deadline decision and frozen final per-track

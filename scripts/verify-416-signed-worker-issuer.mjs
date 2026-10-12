@@ -17,7 +17,7 @@ const secret='aStage416SharedSecretLongerThan32Characters';
 const worker='https://preview.soridraw.com/v1/internal/private-like-handoff-416';
 const seal={id:'00000000-0000-4000-8000-000000000077',version:89,
   closedAtMs:now-2_000,
-  rows:[{trackId:'song-a',liked:true,operationId:'00000000-0000-4000-8000-000000000009'}]};
+  rows:[{trackId:'song-a',liked:true,operationId:'00000000-0000-4000-8000-000000000009',mutationAt:now-5_000}]};
 let observed=0;
 const accepted=async(url,init)=>{
   observed++;assert.equal(url,worker);
@@ -25,6 +25,7 @@ const accepted=async(url,init)=>{
   assert.equal(await verifyPrivateHmac416(init.body,init.headers['X-Soridraw-416-Signature'],secret),true);
   const claim=validatePrivateHandoff416(JSON.parse(init.body),now);
   assert.equal(claim.version,89);assert.equal(claim.rows[0].liked,true);
+  assert.equal(claim.rows[0].mutationAt,now-5_000);
   return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
     personalLikeSnapshot:'changed-track-r2',finalReceipt:'PUBLISHED',
     version:89,duplicate:false,batchIds:['l069_1699999998000_'+'a'.repeat(64)]}})};

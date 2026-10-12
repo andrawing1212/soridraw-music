@@ -24980,7 +24980,17 @@ function exploreLikeAggregateSnapshotCte039(includeQueue066 = false, includeQueu
         )
     ),
     expanded AS (
-      SELECT e.batch_id, e.user_uid, e.created_at, e.queue_kind,
+      SELECT e.batch_id, e.user_uid,
+        CASE
+          WHEN e.queue_kind = '069'
+           AND json_type(j.value, '$.operationId') = 'text'
+           AND json_type(j.value, '$.mutationAt') = 'integer'
+           AND CAST(json_extract(j.value, '$.mutationAt') AS INTEGER) > 0
+           AND CAST(json_extract(j.value, '$.mutationAt') AS INTEGER) <= e.created_at
+          THEN CAST(json_extract(j.value, '$.mutationAt') AS INTEGER)
+          ELSE e.created_at
+        END AS created_at,
+        e.queue_kind,
         TRIM(CAST(json_extract(j.value, '$.trackId') AS TEXT)) AS track_id,
         CASE WHEN json_extract(j.value, '$.liked') THEN 1 ELSE 0 END AS desired_liked
       FROM eligible e, json_each(e.mutations_json) AS j

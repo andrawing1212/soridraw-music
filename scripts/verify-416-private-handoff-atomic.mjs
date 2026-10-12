@@ -32,7 +32,8 @@ const now=1_700_000_000_000;
 const raw={uid,windowId:'00000000-0000-4000-8000-000000000077',
  version:80,sealedAtMs:now-3000,signedAtMs:now,
  rows:Array.from({length:80},(_,i)=>({trackId:'song-'+i,liked:i%2===0,
- operationId:'00000000-0000-4000-8000-'+String(i+1).padStart(12,'0')}))};
+ operationId:'00000000-0000-4000-8000-'+String(i+1).padStart(12,'0'),
+ mutationAt:now-10_000+i}))};
 const body=JSON.stringify(raw);
 const sig=createHmac('sha256',secret).update(body).digest('hex');
 assert.equal(await verifyPrivateHmac416(body,sig,secret),true);
@@ -58,7 +59,8 @@ for (const row of queued) {
  assert.equal(row.operationId,exact.operationId,
   'one 069 chunk lost a signed per-click operation identity');
  assert.equal(row.liked,exact.liked);
- assert.deepEqual(Object.keys(row).sort(),['liked','operationId','trackId']);
+ assert.equal(row.mutationAt,exact.mutationAt);
+ assert.deepEqual(Object.keys(row).sort(),['liked','mutationAt','operationId','trackId']);
 }
 const legacyShapeCompatible=queued.every(x=>
   typeof x.trackId==='string'&&typeof x.liked==='boolean');
@@ -89,7 +91,7 @@ assert.equal(stale.accepted,false);
 assert.equal(rowsWritten,3,'older seal must not reopen canonical queue');
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM explore_like_batches_069').get().n,0);
 const next={...raw,version:82,windowId:'00000000-0000-4000-8000-000000000079',
- rows:[{trackId:'song-1',liked:false,operationId:'00000000-0000-4000-8000-000000000081'}]};
+ rows:[{trackId:'song-1',liked:false,operationId:'00000000-0000-4000-8000-000000000081',mutationAt:now-100}]};
 const later=await acceptPrivateHandoff416(db,validatePrivateHandoff416(next,now));
 assert.equal(later.accepted,true);
 assert.equal(rowsWritten,5);

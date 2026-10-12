@@ -14,7 +14,7 @@ const validMinute416=(n:number)=>[1,3,5,10,20].includes(n);
 type Window416={id:string;minutes:number;openedAtMs:number;lastClickAtMs:number;revision:number};
 type Pending416={version?:number;deviceSeq?:Record<string,number>;
   window?:Window416|null;pending?:Record<string,{trackId:string;liked:boolean;
-  operationId:string;deviceId:string;deviceSequence:number;version:number}>|null;
+  operationId:string;deviceId:string;deviceSequence:number;version:number;mutationAt:number}>|null;
   sealed?:unknown};
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
@@ -87,6 +87,7 @@ export async function recordUserPrivateClick416(
    const nextPending={...pending,[trackKey]:{
      trackId:click.trackId,liked:click.liked,operationId:click.operationId,
      deviceId:click.deviceId,deviceSequence:click.deviceSequence,version:versionNext,
+     mutationAt:serverClickAt,
    }};
    reason='ACCEPTED';
    return {...state,version:versionNext,

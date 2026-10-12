@@ -35,11 +35,13 @@ export function validatePrivateHandoff416(body,nowMs){
  const rows=body.rows.map(x=>{
    const id=String(x?.trackId||'');
    if(!id||id.length>512||typeof x?.liked!=='boolean'||
-      !UUID_416.test(x?.operationId)||seen.has(id))
+      !UUID_416.test(x?.operationId)||!Number.isSafeInteger(x?.mutationAt)||
+      x.mutationAt<=0||x.mutationAt>body.sealedAtMs||seen.has(id))
      throw Error('416_INVALID_SIGNED_TRACK');
    // Keep the already HMAC-verified operation identity in each durable 069
    // queue row. The existing trackId/liked keys retain their old meaning.
-   seen.add(id);return {trackId:id,liked:x.liked,operationId:x.operationId};
+   seen.add(id);return {trackId:id,liked:x.liked,operationId:x.operationId,
+     mutationAt:x.mutationAt};
  });
  return {uid:body.uid,windowId:body.windowId,version:body.version,
    sealedAtMs:body.sealedAtMs,rows:rows.sort((a,b)=>a.trackId.localeCompare(b.trackId))};

@@ -12,7 +12,8 @@ const validSeq = n => Number.isSafeInteger(n) && n>0;
 const validTrack = trackId => typeof trackId==='string' && trackId.length>0 && trackId.length<=512;
 const validPending = row => !!row && validTrack(row.trackId) &&
   typeof row.liked==='boolean' && validUuid(row.operationId) &&
-  validUuid(row.deviceId) && validSeq(row.deviceSequence) && validSeq(row.version);
+  validUuid(row.deviceId) && validSeq(row.deviceSequence) && validSeq(row.version) &&
+  Number.isSafeInteger(row.mutationAt) && row.mutationAt>0;
 const safeMap = x => x && typeof x==='object' && !Array.isArray(x)?x:{};
 // Account seq is RTDB-transaction serialized. Device sequence ensures a replay
 // after full settlement cannot mint a fresh account version with the same
@@ -44,6 +45,7 @@ export function applyPrivateRtdbClick416(prior, input, serverTimestamp, configur
   const nextPending={...pending,[input.trackKey]:{
     trackId:input.trackId,liked:input.liked,operationId:input.operationId,
     deviceId:input.deviceId,deviceSequence:input.deviceSequence,version:nextVersion,
+    mutationAt:serverTimestamp,
   }};
   return {
     ...state,

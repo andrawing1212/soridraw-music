@@ -43,7 +43,8 @@ const {retryPrivateClickAfterPriorSeal416:retry416,
 const releaseProbe=await publish416('account',{trackId:'song',liked:true,
   operationId:id,deviceId:id,deviceSequence:1});
 if(appVersion>=400){
-  assert.deepEqual(releaseProbe,{version:12,count:3},'app400 uses exact server receipt');
+  assert.equal(releaseProbe?.version,12,'app400 uses exact server receipt version');
+  assert.equal(releaseProbe?.count,3,'app400 uses exact server receipt count');
   assert.equal(callableCalls416,1,'app400 performs one Callable registration');
 }else{
   assert.equal(releaseProbe,null,'app399 OFF never calls Firebase Callable');

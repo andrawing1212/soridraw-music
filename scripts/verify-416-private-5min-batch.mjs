@@ -46,13 +46,13 @@ assert.match(service,/advancePrivateBatchWindow416\(/);
 assert.match(service,/advancePrivateBatchWindowForRemoteClick416\(/);
 assert.match(service,/privateBatchDeadline416\(/);
 assert.match(service,/const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
-assert.match(service,/subscribeExploreLikeIntent416\(uid, \(trackId, _liked, observed416\) => \{[\s\S]*?if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending'\)/);
+assert.match(service,/subscribeExploreLikeIntent416\(uid, \(trackId, liked416, observed416\) => \{[\s\S]*?if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending'\)/);
 assert.match(service,/if \(STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && observed416.status === 'pending'\) \{[\s\S]*?schedulePendingFlush\(current416\)/,
   'same-account private signal extends an active user-wide pending window');
 console.log('STAGE416_FUTURE_TWO_DEVICE_WINDOW_EXTENSION_SOURCE=PASS');
 console.log('STAGE416_PRIVATE_BATCH_MASTER_OPTIONS_AND_FROZEN_WINDOW=PASS');
 console.log(appVersion>=400
-  ? 'STAGE416_APP400_PRIVATE_FIVE_MINUTE_ACTIVE=PASS'
+  ? 'STAGE416_APP400_PLUS_PRIVATE_FIVE_MINUTE_ACTIVE=PASS'
   : 'STAGE416_CURRENT_APP399_BEHAVIOR_OFF=PASS');
 // Server-only deterministic contract is a separate module, exercised by this CI entrypoint.
 const { spawnSync } = await import('node:child_process');

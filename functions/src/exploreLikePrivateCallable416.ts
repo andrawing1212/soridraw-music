@@ -3,6 +3,7 @@ import {HttpsError} from 'firebase-functions/v2/https';
 import {readLikeBatchTiming416} from './exploreLikeBatchSettings416';
 import {recordUserPrivateClick416,type ServerPrivateLikeClick416}
  from './exploreLikePrivateServerClick416';
+import {requeueExpiredPrivateWindow416} from './exploreLikePrivateTask416';
 
 // Server-owned Stage416 handler. PREVIEW release exports it only through an
 // App Check-enforced onCall wrapper in index.ts. Preserve these checks even
@@ -31,5 +32,13 @@ export async function handleAuthenticatedPrivateClick416(
  const result=await recordUserPrivateClick416(
    database,uid,click,policy.privateMinutes,
  );
- return {ok:true,...result};
+ // A previously LOST/early-dispatched task can strand a server window.
+ // Its replacement must be scheduled by trusted Firebase, not by the client.
+ // Never acknowledge this new click until the old exact window is sealed.
+ const {expiredWindowId,...publicResult}=result;
+ if(!result.accepted && result.reason==='PRIOR_WINDOW_NEEDS_SEAL'){
+   if(!expiredWindowId)throw Error('416_EXPIRED_WINDOW_RECOVERY_PROOF_MISSING');
+   await requeueExpiredPrivateWindow416(uid,expiredWindowId);
+ }
+ return {ok:true,...publicResult};
 }

@@ -44,6 +44,8 @@ assert.equal(wrongReplay.reason,'STALE_OR_DUPLICATE');
 assert.equal(writes,2);
 const expire=await take(deviceA,2,'track-a',false,now+301_000,3);
 assert.equal(expire.reason,'PRIOR_WINDOW_NEEDS_SEAL');
+assert.equal(expire.expiredWindowId,state.window.id,
+ 'recovery must use the already expired exact UID/window, not a guessed ID');
 assert.equal(writes,2,'expired window must not absorb a new click');
 assert.equal(state.version,2);
 assert.equal(state.deviceSeq[deviceA],1);

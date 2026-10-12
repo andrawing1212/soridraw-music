@@ -19,7 +19,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
-):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number}>{
+):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
     typeof click.liked!=='boolean'||!UUID_416.test(click.operationId)||
@@ -30,6 +30,7 @@ export async function recordUserPrivateClick416(
   throw Error('416_BAD_SERVER_PRIVATE_CLICK');
  const trackKey=createHash('sha256').update(click.trackId,'utf8').digest('hex');
  let reason='UNDETERMINED';
+ let expiredWindowId:string|undefined;
  let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
  const outcome=await database.ref('privateLikeBatch416/'+uid).transaction((raw:unknown)=>{
    const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)
@@ -79,7 +80,7 @@ export async function recordUserPrivateClick416(
    if(previous && receivedAtMs>=previous.lastClickAtMs+previous.minutes*60_000){
      // The expired preceding window must be sealed first, never mixed with a
      // later new window. Original browser outbox must retry this same click.
-     reason='PRIOR_WINDOW_NEEDS_SEAL';return;
+     reason='PRIOR_WINDOW_NEEDS_SEAL';expiredWindowId=previous.id;return;
    }
    const serverClickAt=Math.max(receivedAtMs,(previous?.lastClickAtMs||0)+1);
    const minutes=previous?previous.minutes:trustedMinutes;
@@ -103,7 +104,8 @@ export async function recordUserPrivateClick416(
    // proof type at the post-transaction boundary for strict TypeScript.
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
-   return {accepted:false,reason};
+   return {accepted:false,reason,
+     ...(reason==='PRIOR_WINDOW_NEEDS_SEAL'&&expiredWindowId?{expiredWindowId}:{})};
  }
  const state=outcome.snapshot.val() as Pending416;
  if(!state?.window||state.version!==state.window.revision)

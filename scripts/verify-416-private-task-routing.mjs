@@ -34,7 +34,8 @@ const context={
  }};
 vm.runInNewContext(output,context,{timeout:1500});
 const {stage416SchedulePrivateWindowCandidate:schedule,
- stage416SettlePrivateWindowCandidate:settle}=exports;
+ stage416SettlePrivateWindowCandidate:settle,
+ requeueExpiredPrivateWindow416:repair}=exports;
 assert.equal(triggered,1);assert.equal(dispatched,1);
 const event={params:{uid:'uid-A'},data:{val:()=>({
  id:uuid,lastClickAtMs:1_700_000_000_000,minutes:5})}};
@@ -46,6 +47,15 @@ await schedule(event);
 assert.equal(queueCalls.length,2);
 assert.equal(queueCalls[0].opt.id,queueCalls[1].opt.id,
  'same window creation retry must use identical Cloud Tasks ID');
+await repair('uid-A',uuid,1_700_000_374_000);
+await repair('uid-A',uuid,1_700_000_375_000);
+assert.equal(queueCalls.length,4);
+assert.equal(queueCalls[2].opt.id,queueCalls[3].opt.id,
+ 'same minute repair retries must share a deterministic task id');
+assert.notEqual(queueCalls[0].opt.id,queueCalls[2].opt.id,
+ 'repair must not collide with original expired task');
+assert.equal(queueCalls[2].task.windowId,uuid);
+assert.equal(queueCalls[2].opt.scheduleTime.getTime(),1_700_000_341_000);
 assert.match(queueCalls[0].opt.id,/^s416-[a-f0-9]{64}$/);
 await assert.rejects(settle({data:{uid:'uid-A',windowId:uuid}}),/BINDING_MISSING/);
 const indexSource=readFileSync('functions/src/index.ts','utf8');
@@ -58,3 +68,4 @@ assert.match(readFileSync('functions/src/exploreLikePrivateTask416.ts','utf8'),
 console.log('STAGE416_RTD_B_NEW_WINDOW_ONLY_CLOUD_TASK_ENQUEUE=PASS');
 console.log('STAGE416_TASK_IDEMPOTENCE_AND_FAIL_CLOSED_BINDINGS=PASS');
 console.log('STAGE416_PREVIEW_SERVER_EXPORTS_AND_APPCHECK=PASS');
+console.log('STAGE416_EXPIRED_WINDOW_REPAIR_TASK_IDEMPOTENT=PASS');

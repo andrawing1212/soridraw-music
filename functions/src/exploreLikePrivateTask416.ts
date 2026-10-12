@@ -37,6 +37,19 @@ const queue416=():PrivateQueue416=>{
  const queue=getFunctions().taskQueue<PrivateWindowTask416>(TASK_TARGET_416);
  return makeIdempotentPrivateQueue416(queue);
 };
+// Only an authenticated click blocked by an already EXPIRED window may repair
+// a missing Cloud Task. One deterministic id per UID/window/minute keeps
+// repeated retries bounded. No page-entry scans, user-data rewrites or polling.
+export async function requeueExpiredPrivateWindow416(
+ uid:string,windowId:string,nowMs=Date.now(),
+):Promise<void>{
+ if(typeof uid!=='string'||!uid||uid.length>128||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(windowId)||
+    !Number.isSafeInteger(nowMs)||nowMs<=0)
+   throw Error('416_BAD_EXPIRED_WINDOW_REPAIR');
+ const stableBucket=Math.floor(nowMs/60_000)*60_000+1_000;
+ await queue416().enqueue({uid,windowId},{scheduleTime:new Date(stableBucket)});
+}
 // One database event for a NEW window, not per like click. Updates to
 // lastClickAtMs do not re-enqueue tasks. Retries are idempotent by task ID.
 export const stage416SchedulePrivateWindowCandidate=onValueCreated(

@@ -1,3 +1,17 @@
+## CURRENT — app409 PC↔모바일 좋아요 초기 불일치 복구 PREVIEW 배포 / 실기기 확인 대기 (2026-10-12 15:58 UTC)
+
+- **사용자 재현 결함:** app407 업데이트 직후 아무 클릭 전 같은 계정 PC/모바일 Explore 카드의 하트·숫자가 서로 달랐음. 예: 한 기기 1/filled, 다른 기기 0/empty. 이는 카드 숫자만의 문제가 아니라 개인 like membership/local catalog가 기기별로 갈린 상태.
+- **원인:** app400~407에서 Stage416 5분 client path가 활성화되어 마지막으로 검증된 app399 `/v1/me/likes/batch` canonical 정산을 차단했으나, Stage416 final settlement는 Scheduler 0 / D1 acceptance NO 등으로 E2E 미입증. local outbox/즉시 hint만 남고 canonical accepted127 신호가 만들어지지 않는 경우 기기별 상태가 장기 잔류할 수 있었음.
+- **app408 롤백:** product `ba86d7ed90957c6edee935ec909f99370cdb57a6`에서 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false`; app399 canonical 5초 정산 복구. app401~407 안전장치/ordering/diagnostic은 유지. 기존 outbox 삭제·ID 재생성 없음.
+- **app409 보강:** product `79113aa21ec0d6f9ff4ab083e9450bd6a32f9849`. Stage416 OFF 상태에서 Auth가 준비되면 **기존 durable outbox에 실제 pending user mutation(retryCount=0)이 있을 때만** 기존 `schedulePendingFlush`를 호출. Explore 카드 hydration을 기다리지 않고 오래된 app400~407 pending을 정산. empty outbox는 네트워크/서버 IO 0, ambiguous retryCount>0 자동 재전송 금지, Stage420 OFF 보호.
+- **테스트 보강:** 기존 413 harness가 schedule 함수 아래 app409 Auth 블록까지 잘못 eval해 `onAuthStateChanged is not defined`로 첫 QA 실패(38273264491). 제품 import 문제 아님. verifier를 정확히 분리한 `14d8f0c9f98a8551cdfc6b8c30f07a3c7d9bd606`에서 별도 Auth mock으로 empty=0회 / pending=1회 검증.
+- **자동검증:** Quality [38273565621](https://github.com/andrawing1212/soridraw-music/actions/runs/38273565621) SUCCESS. `APP409_AUTH_READY_EXISTING_PENDING_ONLY=PASS`, `APP409_STARTUP_EXISTING_PENDING_ONLY_NO_IDLE_IO=PASS`, app408 Stage416 OFF/legacy canonical 복구, TypeScript, Build, frozen like regressions PASS. Stage416 readonly preflight [38273264637](https://github.com/andrawing1212/soridraw-music/actions/runs/38273264637) SUCCESS. Follow check [38273264588](https://github.com/andrawing1212/soridraw-music/actions/runs/38273264588) SUCCESS.
+- **PREVIEW:** release trigger `3193ea758088ada1e7033c6bd9d97aefb1e1bafd`; Hosting Run [38273830554](https://github.com/andrawing1212/soridraw-music/actions/runs/38273830554) SUCCESS. `preview.soridraw.com` **app409 / exact build PASS**. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`; Functions/Worker/D1/R2/shared user data 변경 0; TEST/PRODUCTION unchanged PASS.
+- **실기기 합격 조건:** PC/모바일 모두 app409 업데이트 후 아무 클릭 없이 동일 카드 하트/숫자가 자동 수렴하고, 이후 PC→모바일 / 모바일→PC like/unlike가 페이지 이동 없이 맞으며 새로고침 후 유지. 첫 정산 네트워크 왕복은 발생할 수 있으므로 app400~407의 오래된 pending이 있는 기기는 최초 몇 초 내 자동 수렴 여부까지 본다. 클릭/탭 이동을 수렴 트리거로 인정하지 않음.
+- **진행률:** Stage416 전체 1/4·25%(제품 client OFF, backend additive ready); 앱 속도 5/5·100%; PC↔모바일 좋아요 복구 3/4·75%(코드/QA/PREVIEW 배포 완료, 실기기 PASS만 남음). TEST/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — app408 Stage416 클라이언트 롤백 / 검증된 좋아요 canonical 동기화 복구 PREVIEW 배포 (2026-10-12 15:49 UTC)
 
 - **사용자 실사용 결함:** app407 업데이트 직후 아무 조작 전부터 같은 계정 PC/모바일의 Explore 하트·숫자가 서로 다르게 표시됨. 예: 같은 카드가 한 기기에서는 하트/1, 다른 기기에서는 빈하트/0. 카드 렌더는 개인 membership이 true면 공개 숫자를 최소 1로 맞추므로 단순 숫자 캐시가 아니라 **기기별 개인 좋아요 카탈로그/미정산 의도 불일치**가 핵심.

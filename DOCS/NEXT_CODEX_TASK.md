@@ -1,3 +1,14 @@
+## NEXT — app409 실기기 PC↔모바일 초기/양방향 좋아요 일치 확인 (2026-10-12 15:58 UTC)
+
+- **현재 PREVIEW:** app409 [38273830554](https://github.com/andrawing1212/soridraw-music/actions/runs/38273830554) SUCCESS / exact build PASS. Stage416 5분 client path OFF, app399 canonical batch 복구 + 기존 pending Auth-ready recovery 추가.
+- **실기기 1차:** PC와 모바일 모두 app409로 업데이트한 뒤 좋아요를 누르지 않고 Explore 동일 카드의 하트/숫자 비교. app400~407에서 남은 실제 pending이 있으면 로그인 직후 자동 정산되므로 몇 초 안에 수렴해야 하며 페이지/탭 이동은 필요 없어야 함.
+- **실기기 2차:** PC에서 한 곡 like/unlike → 모바일 자동 수렴, 모바일에서 다른 곡/반대 변경 → PC 자동 수렴. 각 기기 새로고침 후 상태 유지.
+- **FAIL 분기:** Stage416 재활성화 금지. 불일치한 exact track 하나를 기준으로 durable outbox → canonical batch result → accepted127 retained signal → liked-state cache 순서의 첫 단절만 확인. 전체 liked list/feed scan, 캐시 전체 삭제, user data 재생성 금지.
+- **PASS 후:** app409을 새 좋아요 보호 기준으로 고정. Stage416 5분 비용 실험은 사용자 기능과 분리된 별도 후보로 다시 검증하기 전 제품 client에 켜지 않음.
+- **진행률:** Stage416 1/4·25%, 앱 속도 5/5·100%, 이번 PC↔모바일 복구 3/4·75%. 실기기 확인만 남음.
+
+---
+
 ## NEXT — app408 PC↔모바일 초기 하트/숫자 + 양방향 클릭 실사용 검증 (2026-10-12 15:49 UTC)
 
 - **현재 PREVIEW:** app408 Hosting [38272717811](https://github.com/andrawing1212/soridraw-music/actions/runs/38272717811) SUCCESS / exact build PASS. 제품 source `ba86d7ed90957c6edee935ec909f99370cdb57a6`; release trigger `5186770e...`. Stage416 5분 client path OFF, app399 검증 canonical batch 복구. Backend Stage416 리소스는 그대로 있으나 새 client 등록은 없음.

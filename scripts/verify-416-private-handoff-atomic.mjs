@@ -91,6 +91,7 @@ assert.equal(stale.accepted,false);
 assert.equal(rowsWritten,3,'older seal must not reopen canonical queue');
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM explore_like_batches_069').get().n,0);
 const next={...raw,version:82,windowId:'00000000-0000-4000-8000-000000000079',
+ sealedAtMs:now-50,
  rows:[{trackId:'song-1',liked:false,operationId:'00000000-0000-4000-8000-000000000081',mutationAt:now-100}]};
 const later=await acceptPrivateHandoff416(db,validatePrivateHandoff416(next,now));
 assert.equal(later.accepted,true);

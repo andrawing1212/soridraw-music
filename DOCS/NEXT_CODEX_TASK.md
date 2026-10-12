@@ -1,3 +1,15 @@
+## NEXT — app401 PREVIEW 기존 stuck 곡 + 교차 반대 클릭 실기기 재검증 (2026-10-12)
+
+- **live 기준:** PREVIEW app401 / release Run 38208007174 SUCCESS. Worker/Functions/D1/Rules 추가 변경 0, TEST/PRODUCTION unchanged.
+- **중요:** 브라우저 저장소를 지우지 말 것. app400에서 실제로 생긴 stale outbox를 app401이 fresh remote click으로 복구하는지 검증해야 한다. PC/모바일 둘 다 app401로만 새로고침/재실행.
+- **1순위 기존 stuck 곡 A:** PC에서 현재 반대 상태로 1회 클릭 → 모바일이 페이지 이동/새로고침 없이 즉시 따라오는지 확인 → 모바일에서 즉시 반대 클릭 → PC가 즉시 따라오는지 확인 → 다시 PC/모바일 번갈아 1회씩 반대 클릭하여 deadlock 재발 여부 확인.
+- **2순위 새 곡 B:** 모바일에서 시작하여 같은 양방향 교차 반대 클릭을 반복해 순서 방향이 바뀌어도 동일한지 확인.
+- **5분 최종:** 마지막 클릭 뒤 추가 클릭 없이 5분+ 대기. 두 기기 모두 마지막 개인 하트와 동일해야 하고 이전 상태로 되돌아가면 FAIL.
+- **비용:** 실기기 기능 PASS 후 D1/RTDB/Functions/Tasks 실제 사용량 비교. 페이지 진입/재진입만으로 mutation write가 생기면 FAIL. 전체 Feed/Profile scan 금지.
+- **승격:** 위 실기기 + 비용 PASS 전 Stage416③ 3/4·75% 유지, TEST 승격 금지.
+
+---
+
 ## NEXT — app400 PREVIEW Stage416③ 실사용/실비용 최종 검증 (2026-10-12)
 
 - **현재 live 기준:** PREVIEW app400, Worker `c6486c81-e05d-4014-ac41-ca24e9b6efb7`, Stage416 Functions 6개/Cloud Tasks/RTDB server-only roots/D1 additive acceptance schema active. TEST/PRODUCTION Stage416 feature는 OFF.

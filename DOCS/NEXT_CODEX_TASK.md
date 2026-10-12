@@ -1,3 +1,14 @@
+## NEXT — Stage416 app405 골목길 탐험대 서버 접수·최종 저장 누락 원인 단일 경로 확인 (2026-10-12 KST)
+
+- **절대 우선 사실:** 실사용 PC/mobile 새로고침 후 빈 하트 0↔1 불일치. 「골목길 탐험대」 서버 D1 indexed like row=1, track_stats=1, 공유 R2 changed-card=1, curated shared=1 ([38256077221](https://github.com/andrawing1212/soridraw-music/actions/runs/38256077221)). 이 값은 실제 서버 원본이므로 클라이언트 캐시 전체 삭제/원본 좋아요 삭제/무조건 0 강제 반영 **금지**. 현재 테스트 계정 본인의 row인지 다른 계정의 합법적 1인지 증거 없음.
+- **정산 위험 핵심:** 진단 regex 수정 후 [38256513112](https://github.com/andrawing1212/soridraw-music/actions/runs/38256513112)에서 최근 90분 Settle task `EMPTY=19` / RESCHEDULED=0 / STALE=0, D1 416 acceptance=NO, publicSync 마지막 10/10. EMPTY는 익명 전체 Task 집계이지 대상 곡과 단독 연결되지 않음. Callable HTTP 200은 실제 `accepted:true` 입증이 아님.
+- **먼저 Codex High 분석:** `src/services/exploreLikeService.ts`의 immediate `publishExploreLikeIntent416`와 실제 `publishPrivateRtdbBatchClick416`의 성공·실패 분리, outbox durability 및 `navigator.locks` guard, auth/AppCheck 오류/PRIOR_WINDOW_NEEDS_SEAL/STALE_OR_DUPLICATE, 등록되지 않은 outbox의 retry (지금은 로그인/online 이벤트에만 한정) 간 연결 확인. `functions/src/exploreLikePrivateServerClick416.ts` transaction commit proof 및 `stage416SchedulePrivateWindowCandidate` window onCreate, `stage416SettlePrivateWindowCandidate` 19 EMPTY 원인 분석. 현재 동일 operation의 사용자 미노출 비밀 상세 로그가 없으므로 원인 근거 없이 수정/배포 금지.
+- **허용되는 진단:** 개인정보 출력 없이, 기능 플래그/한시적 진단 계정·단일 operation 범위에서 `server accepted` vs `private window created` vs `Task result` vs `D1 signed final` 최소 증거. 기존 익명 readonly Workflow 재사용, 새 독립 Workflow/무한 polling 금지. 원본 전체 UID/전체 좋아요 scan 금지. 단일 곡 실제 likes row 확인은 이미 마침.
+- **검증 후 수정:** 바로 문제 단계만 복구, UI·반응형·다른 곡 변경 금지, App164/160/401/402/404/405 하트·공개카운트·팔로우 보호, 정상 방문 Firestore/D1 R0/W0, 서버 쓰기는 5분 실제 변경분 한 번, PC/모바일 양방향/새로고침/5분 뒤 타계정 카운트 실제 검증. Work 독립 감사 후 안전하면 PREVIEW 배포 승인됨, TEST/PRODUCTION 명시 승인 전 변경 금지.
+- **현재 상태:** PREVIEW Hosting app405 유지, 신규 제품 수정·배포 없음. 진단 Workflow/trigger 및 CURRENT 상태문서만 갱신. 근본 원인 조사 3/4·75%, Stage416 1/4·25%, 속도 5/5·100%, 최종 5분 정산 3/4·75%(FAIL).
+
+---
+
 ## NEXT — app405 추천곡 숫자 복원 확인 + 416 실제 정산 차단 단계 확정 (2026-10-12 KST)
 
 - **상태:** PREVIEW Hosting app405 [38244405202](https://github.com/andrawing1212/soridraw-music/actions/runs/38244405202) PASS, source `9537665929f2c1d6de0ea981966ea308c7a4cca0`, 408 QA [38244194395](https://github.com/andrawing1212/soridraw-music/actions/runs/38244194395) PASS. 사용자 데이터 원본/Cloudflare Worker/Functions/Rules/D1/R2 변화 없음, TEST/PRODUCTION 보호 PASS. Work 독립 감사 및 실제 모바일·PC 검증 미실시.

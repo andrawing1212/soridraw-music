@@ -125,12 +125,17 @@ assert(source.includes('privateLikeFinal416/'));
 assert(source.includes('persistLikeOutbox(uid,outbox);'));
 assert(source.includes('repaint.forEach(dispatchLikeSync)'));
 assert(source.includes("soridraw:private-like-await-final-416"));
-assert(source.includes('if(current&&!exactIds.has(row.trackId))continue;'));
+if(appVersion>=401){
+  assert(source.includes('shouldFinalReceiptSupersedeLocal401(current,receipt.version,row)'));
+  assert(source.includes('if(current&&!exactCurrent416&&!supersededCurrent416)continue;'));
+}else{
+  assert(source.includes('if(current&&!exactIds.has(row.trackId))continue;'));
+}
 console.log('STAGE416_EXACT_D1_AND_R2_PROVEN_FINAL_RECEIPT_ONLY=PASS');
 console.log('STAGE416_PENDING_NEWER_CLICK_NOT_CLEARED=PASS');
 console.log('STAGE416_RESTART_EXACT_OPERATION_PENDING_ONLY=PASS');
 console.log('STAGE416_PRIOR_WINDOW_EXACT_CLICK_BOUNDED_RETRY=PASS');
 console.log('STAGE416_SUPERSEDED_AND_AMBIGUOUS_CLICK_FAIL_CLOSED=PASS');
 console.log(appVersion>=400
-  ? 'STAGE416_APP400_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
+  ? 'STAGE416_APP400_PLUS_CLIENT_SERVER_REGISTRATION_ACTIVE=PASS'
   : 'STAGE416_CLIENT_INTEGRATION_OFF_NO_APP399_CHANGE=PASS');

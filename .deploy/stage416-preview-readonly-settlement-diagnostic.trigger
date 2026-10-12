@@ -3,3 +3,4 @@ lookback=100minutes
 gcp_logging_read_only=true
 shared_data_write=false
 deployment=false
+read_timing_and_cloud_tasks_queue=true

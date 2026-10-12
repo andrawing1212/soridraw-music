@@ -4,9 +4,9 @@ import {readLikeBatchTiming416} from './exploreLikeBatchSettings416';
 import {recordUserPrivateClick416,type ServerPrivateLikeClick416}
  from './exploreLikePrivateServerClick416';
 
-// SOURCE ONLY. This handler is NOT exported by index.ts and no callable
-// exists until the 3-environment joint-release / App Check audit. A future
-// callable export MUST set { enforceAppCheck:true } and preserve these checks.
+// Server-owned Stage416 handler. PREVIEW release exports it only through an
+// App Check-enforced onCall wrapper in index.ts. Preserve these checks even
+// when later environments enable their client-side Stage416 feature flag.
 type Request416={auth?:{uid?:string}|null;app?:unknown;data?:unknown};
 export async function handleAuthenticatedPrivateClick416(
  database:Database,request:Request416,

@@ -47,9 +47,33 @@ assert.equal(first.trackCount,80);
 assert.equal(rowsWritten,3,'one version receipt + two 069 queue rows, no per-click D1');
 const sorted=sqlite.prepare('SELECT * FROM explore_like_batches_069 ORDER BY batch_id').all();
 assert.deepEqual(sorted.map(x=>x.mutation_count).sort((a,b)=>a-b),[30,50]);
+// The final personal settlement cannot match PC/mobile outbox by track ID
+// alone. Preserve the EXACT signed operation identity after the 50-row split.
+const queued=sorted.flatMap(x=>JSON.parse(x.mutations_json));
+assert.equal(queued.length,80);
+assert.deepEqual(queued.map(x=>x.trackId).sort(),
+  raw.rows.map(x=>x.trackId).sort());
+for (const row of queued) {
+ const exact=raw.rows.find(x=>x.trackId===row.trackId);
+ assert.equal(row.operationId,exact.operationId,
+  'one 069 chunk lost a signed per-click operation identity');
+ assert.equal(row.liked,exact.liked);
+ assert.deepEqual(Object.keys(row).sort(),['liked','operationId','trackId']);
+}
+const legacyShapeCompatible=queued.every(x=>
+  typeof x.trackId==='string'&&typeof x.liked==='boolean');
+assert.equal(legacyShapeCompatible,true,'069 trackId/liked consumer shape preserved');
+
 const replay=await acceptPrivateHandoff416(db,claim);
 assert.equal(replay.accepted,true);assert.equal(replay.duplicate,true);
 assert.equal(rowsWritten,3,'exact resend must write 0');
+assert.deepEqual(
+ sqlite.prepare('SELECT mutations_json FROM explore_like_batches_069 ORDER BY batch_id').all()
+   .map(x=>x.mutations_json),
+ sorted.map(x=>x.mutations_json),
+ 'an idempotent HMAC replay cannot change the queued operation IDs'
+);
+
 // Real background worker consumes the 069 queue. A late identical Function
 // retry MUST NOT recreate the consumed batch even though receipt survives.
 sqlite.prepare('DELETE FROM explore_like_batches_069').run();
@@ -73,6 +97,13 @@ assert.equal((await acceptPrivateHandoff416(db,claim)).accepted,false);
 assert.equal(rowsWritten,5);
 assert.throws(()=>validatePrivateHandoff416({...raw,signedAtMs:now-1_000_000},now),/INVALID/);
 assert.throws(()=>validatePrivateHandoff416({...raw,rows:[raw.rows[0],raw.rows[0]]},now),/INVALID/);
+const alteredOperation={...raw,rows:raw.rows.map((item,i)=>i===0
+  ? {...item,operationId:'00000000-0000-4000-8000-000000000099'} : item)};
+assert.equal(await acceptPrivateHandoff416(db,
+  validatePrivateHandoff416(alteredOperation,now)).then(x=>x.accepted),false,
+  'same account version with altered operation must not replace canonical proof');
+assert.equal(rowsWritten,5);
+console.log('STAGE416_HMAC_SIGNED_OPERATION_ID_PRESERVED_TO_069_QUEUE=PASS');
 console.log('STAGE416_HMAC_WORKER_80_TRACKS_SHARED_D1_ATOMIC_W3=PASS');
 console.log('STAGE416_HMAC_DUPLICATE_W0_STALE_VERSION_W0=PASS');
 console.log('STAGE416_CONSUMED_BATCH_LATE_REPLAY_NO_REQUEUE_W0=PASS');

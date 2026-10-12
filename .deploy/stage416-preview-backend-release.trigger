@@ -1,0 +1,5 @@
+product_code_target=64c28fa945023399a02fdf496600dcedbdc07dd2
+release_scope=stage416_preview_backend_prerequisites_only
+client_activation=false
+worker_route_activation=false
+user_data_migration=false

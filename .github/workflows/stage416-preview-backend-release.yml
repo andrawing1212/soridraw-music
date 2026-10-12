@@ -414,7 +414,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config stage416.functions.firebase.json             --only "functions:recordPrivateLike416,functions:stage416SchedulePrivateWindowCandidate,functions:stage416SettlePrivateWindowCandidate,functions:privateLikeFinalReceipt416Candidate,functions:masterGetLikeBatchTiming416,functions:masterSetLikeBatchTiming416"             --non-interactive
+          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config stage416.functions.firebase.json             --only "functions:recordPrivateLike416,functions:stage416SchedulePrivateWindowCandidate,functions:stage416SettlePrivateWindowCandidate,functions:privateLikeFinalReceipt416Candidate,functions:masterGetLikeBatchTiming416,functions:masterSetLikeBatchTiming416"             --non-interactive             --force
           echo 'STAGE416_FIREBASE_FUNCTIONS_DEPLOY=PASS'
 
       - name: Verify Stage416 Functions live configuration

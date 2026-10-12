@@ -2413,7 +2413,12 @@ export default function ExplorePage() {
     void getSoridrawCuratedTracks307(false)
       .then((rows) => {
         if (cancelled) return;
-        setCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+        // app405: a curated R2 card carries the last PUBLIC count. Reapply only
+        // this viewer's existing local/outbox/416 count overlay on refresh;
+        // never publish the provisional value into the shared curated cache.
+        const cards405 = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
+        const uid405 = auth.currentUser?.uid || user?.uid || '';
+        setCuratedTracks307(uid405 ? overlayExploreLikeDisplayCounts(uid405, cards405) : cards405);
       })
       .catch((reason) => {
         if (!cancelled) console.warn('[app307] SORIDRAW curated load failed:', reason);
@@ -2432,13 +2437,14 @@ export default function ExplorePage() {
       .then((rows) => {
         if (cancelled) return;
         const normalized = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
-        setManagedCuratedTracks307(normalized);
+        const viewerCards405 = overlayExploreLikeDisplayCounts(user.uid, normalized);
+        setManagedCuratedTracks307(viewerCards405);
         // SORIDRAW_CURATED_MANAGER_PUBLIC_STATE_PARITY_311_20261003
         // Manager and public feed share the same curated R2 snapshot. When a
         // cross-device change is observed in the manager view, patch the public
         // feed state immediately too instead of showing the older local list
         // when the manager closes.
-        setCuratedTracks307(normalized.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));
+        setCuratedTracks307(viewerCards405.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));
       })
       .catch((reason) => {
         if (!cancelled) setSocialNotice(reason instanceof Error ? reason.message : '승격 곡 목록을 불러오지 못했어요.');
@@ -2915,7 +2921,9 @@ export default function ExplorePage() {
       // post-entry activity/resume, never merely because the page was opened/reloaded.
       void revalidateSoridrawCuratedTracks335()
         .then((rows) => {
-          setCuratedTracks307(rows.map(normalizeTrack).filter((track) => Boolean(track.id)));
+          const cards405 = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
+          const uid405 = auth.currentUser?.uid || user?.uid || '';
+          setCuratedTracks307(uid405 ? overlayExploreLikeDisplayCounts(uid405, cards405) : cards405);
         })
         .catch((reason) => {
           console.warn('[app335] SORIDRAW curated activity revalidation failed:', reason);

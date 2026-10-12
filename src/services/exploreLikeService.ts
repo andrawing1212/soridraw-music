@@ -926,7 +926,12 @@ const startLikeIntent416 = (uid: string) => {
     // Do not fire the historical window event: unrelated consumers may treat
     // it as an accepted/public count update. Explore's replayable subscriber
     // alone receives this personal, provisional repaint.
-    notifyExploreLikeUiSync139({ uid, trackId, ownerUid: '', liked, likeCount: 0, source: 'remote-intent' });
+    notifyExploreLikeUiSync139({
+      uid, trackId, ownerUid: '', liked,
+      likeCount: Number.isSafeInteger(Number(observed416.optimisticLikeCount))
+        ? Number(observed416.optimisticLikeCount) : 0,
+      source: 'remote-intent',
+    });
   });
 };
 // 420 private changed-item stream: only active after an approved coordinated
@@ -2500,6 +2505,7 @@ export const setExploreTrackLike = async (
       trackId: normalizedTrackId,
       ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
       liked,
+      optimisticLikeCount,
       operationId: operationId416,
     }).then((published416) => {
       if (!published416 || auth.currentUser?.uid !== uid) return;
@@ -2529,7 +2535,10 @@ export const setExploreTrackLike = async (
       patchExploreLikedTrackMembership(uid, normalizedTrackId, latestIntent416.liked);
       notifyExploreLikeUiSync139({
         uid, trackId: normalizedTrackId, ownerUid: '',
-        liked: latestIntent416.liked, likeCount: 0, source: 'remote-intent',
+        liked: latestIntent416.liked,
+        likeCount: Number.isSafeInteger(Number(latestIntent416.optimisticLikeCount))
+          ? Number(latestIntent416.optimisticLikeCount) : 0,
+        source: 'remote-intent',
       });
     }).catch((error) => console.warn('[416] Private intent hint unavailable; accepted path retained:', error));
   } else if (operationId416 && EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) {

@@ -2586,6 +2586,15 @@ export const setExploreTrackLike = async (
       await publishPrivateRtdbBatchClick416(uid, {
         trackId: normalizedTrackId, liked, operationId: operationId416,
         deviceId: token.deviceId, deviceSequence: token.deviceSequence,
+      }, () => {
+        // A newer same-song click or an account switch cancels an old retry.
+        // Never allocate a second device sequence for an ambiguous response.
+        if (auth.currentUser?.uid !== uid) return false;
+        const current = readLikeOutbox(uid)[normalizedTrackId];
+        return current?.operationId === operationId416 &&
+          current.updatedAt === now && current.desiredLiked === liked &&
+          current.privateDeviceId416 === token.deviceId &&
+          current.privateDeviceSequence416 === token.deviceSequence;
       });
     })().catch((error) =>
       console.warn('[416] RTDB private candidate deferred; durable outbox retained:', error));

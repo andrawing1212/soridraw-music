@@ -134,4 +134,24 @@ jobs:
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
-# stage416-readonly-rerun: 2026-10-12T02:38Z
+      - name: Inspect live PRODUCTION binding shape read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-api';
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,500));return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const settings=await g(base+'/settings');
+            const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+            const summary=bindings.map(b=>({type:String(b.type||''),name:String(b.name||''),
+              id:String(b.id||b.database_id||b.uuid||''),bucket:String(b.bucket_name||b.bucket||''),
+              service:String(b.service||b.service_name||''),namespace_id:String(b.namespace_id||'')}))
+              .sort((a,b)=>a.name.localeCompare(b.name));
+            console.log('PRODUCTION_BINDING_SHAPE='+JSON.stringify(summary));
+            console.log('PRODUCTION_COMPATIBILITY_BINDING_READONLY=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+# stage416-readonly-rerun: 2026-10-12T02:42Z

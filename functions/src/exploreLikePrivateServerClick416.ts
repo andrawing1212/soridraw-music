@@ -98,7 +98,10 @@ export async function recordUserPrivateClick416(
    };
  },undefined,false);
  if(!outcome.committed){
-   if(replay)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...replay};
+   // Transaction callbacks set this value asynchronously; keep the explicit
+   // proof type at the post-transaction boundary for strict TypeScript.
+   const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
+   if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
    return {accepted:false,reason};
  }
  const state=outcome.snapshot.val() as Pending416;

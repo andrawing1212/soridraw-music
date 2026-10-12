@@ -1,3 +1,15 @@
+## NEXT — app403 PC↔모바일 실시간 하트가 새로고침 후 이전 상태로 복귀하는 결함 (2026-10-12 KST)
+
+- **실사용 증거:** 사용자 제공 PC·모바일 동시 화면에서 "창문을 조금 열고", "조금 달라진 기분", "성적표 대소동"의 개인 채운 하트/계정 내 임시 숫자가 서로 다름. 같은 계정 PC↔모바일 실시간 클릭 수신은 동작하나, 새로고침 후 각각 과거 개인/캐시 상태로 복귀. 정상 아님, 실사용 FAIL.
+- **소스에서 확인한 원인 경로:** `src/services/exploreLikeIntent416.ts`의 `localIntentByUid416`는 모듈 메모리(Map) 전용, `readLocal416`은 새 탭/새로고침에서 빈 객체로 시작. `subscribeExploreLikeIntent416`은 cold initial `onValue` snapshot을 무조건 skip하며 `seenVersion416`은 localStorage에 영구 보존되어 이전 실시간 변경을 재적용할 기회가 사라짐. `src/services/exploreLikeService.ts` `readExploreTrackLikeMembership127`은 수신한 임시 hint가 없으면 오래된 pending/canonical/cache로 fallback. `src/pages/ExplorePage.tsx` remote-intent는 실시간 시 개인 잠정 하트·숫자만 repaint, 공유 R2/D1 canonical 갱신은 아님.
+- **중요한 구별:** 이 코드 경로는 **새로고침 직후 회귀 현상을 충분히 설명**하지만, 사용자 실건의 서버 416 accepted/5분 D1 final 누락 자체의 단독 원인을 증명하지 않음. 과거 5분 Task 실사용 실패는 별도로 계속 조사.
+- **다음 Codex High 설계/구현:** 같은 UID의 최신 pending 하트/해제를 **새로고침 뒤에도 보존**하되 이전 창의 stale intent를 canonical 확정처럼 영구 저장하거나 초기 RTDB pending snapshot을 무검증 리플레이하는 방법 금지. bounded UID/변경곡 단위로 (a) 현재 정확한 pending intent version/operationId, (b) 로컬 own outbox/최신 반대 클릭, (c) server-only `privateLikeFinal416/{uid}` 최신 canonical receipt 우선순위를 맞출 것. 사용자가 이미 가진 같은 UID 이벤트 스트림의 초기값을 활용하며 page refresh로 D1/Firestore read/write, 전체 UID/Feed scan, 새로운 주기 poll 추가하지 말 것. 구버전 app403도 서버와 동일한 데이터 읽기 호환성을 유지.
+- **필수 회귀:** PC→mobile 및 mobile→PC like/unlike 직후 reload, +30초/+5분 경계, 같은 곡 양방향 빠른 반대 클릭, 새 브라우저/기기와 기존 캐시, stale/rejected/accepted pending, 다른 계정 private 하트 침범 금지, public count는 canonical final 이전 임시 계정 숫자와 구분, 새로고침 중 서버 mutation write 0. 기존 app401/402/416, app164/160, follow, cache R0 보호. TypeScript/Build/QA PASS 후 Work 독립 검증과 PREVIEW 실사용 게이트; TEST/PRODUCTION 변경 금지.
+- **배포:** 이번 진단은 코드 변경/제품 배포 없음. PREVIEW Firebase `recordPrivateLike416` 이전 수정 배포 Run 38237388824 유지, Hosting app403 그대로.
+- **진행률:** Stage416 1/4·25%; 앱 속도 5/5·100%; 개인 좋아요 5분 정산 3/4·75%(실사용 FAIL). 새로고침 복원 문제 해결은 별도 미완료 게이트.
+
+---
+
 ## NEXT — PREVIEW app403 Stage416 만료 창 복구 배포 이후 실서비스 최종 저장 추적 (2026-10-12 KST)
 
 - **고정 PREVIEW:** 앱 Hosting app403, Cloudflare signed Worker 기존, Firebase `recordPrivateLike416` 단일 Function 수정 배포 [38237388824](https://github.com/andrawing1212/soridraw-music/actions/runs/38237388824) PASS, source `b2b1126d149db95030895a8aa57782a5e47f17f0`; 나머지 Function/Worker/D1/Rules/공유 데이터/TEST/PRODUCTION 변경 없음.

@@ -1,3 +1,12 @@
+## NEXT — app405 추천곡 숫자 복원 확인 + 416 실제 정산 차단 단계 확정 (2026-10-12 KST)
+
+- **상태:** PREVIEW Hosting app405 [38244405202](https://github.com/andrawing1212/soridraw-music/actions/runs/38244405202) PASS, source `9537665929f2c1d6de0ea981966ea308c7a4cca0`, 408 QA [38244194395](https://github.com/andrawing1212/soridraw-music/actions/runs/38244194395) PASS. 사용자 데이터 원본/Cloudflare Worker/Functions/Rules/D1/R2 변화 없음, TEST/PRODUCTION 보호 PASS. Work 독립 감사 및 실제 모바일·PC 검증 미실시.
+- **한 곡 실기기 확인:** `골목길 탐험대` 같은 UID에서 PC like/unlike → 모바일 즉시 수신 → 양쪽 새로고침 → 클릭 직전 실시간 viewer 하트·임시 숫자 쌍이 유지되는지. 다른 계정 좋아요가 실제 존재하면 빈 하트 +1도 정상일 수 있으므로 무조건 0이라고 간주하지 않기. 이번 app405은 `getSoridrawCuratedTracks307` initial/revalidation/manager의 오래된 shared R2 숫자 복원 누락만 수정.
+- **서버 원인 이어받기:** 11:25 UTC 현재 Cloud Tasks Settle 실행 HTTP204 관측에도 D1 416 acceptance ANY=NO, pending 069 ANY=NO, publicSync 마지막 10/10. Cloudflare Worker PREVIEW 서명 route 활성·DB shared binding 일치 확인. 아직 해당 UID의 실제 `accepted:true` 입증/개별 window→Task→Worker receipt 연결이 안 됨. 개인정보·토큰 로그 없이 bounded event 상태만 수집해 정확한 장애 단계를 증명해야 함. 이전 `SETTLEMENT_TASK_NOT_DELIVERED` 공개 등급 메시지 0은 `DELIVERED` 자체의 증거 아님. **서버 좋아요 기록 삭제/전체 백필/강제 D1 재집계 금지.**
+- **비용/릴리스:** 변경 없는 앱 업데이트·페이지 이동·새로고침에 D1/Firestore read/write 0 목표, 공유 R2 cache 손대지 않기, 기존 좋아요·팔로우/모바일 하트 즉시 동기화 보호. 실제 서버 final+공개 다른 계정 수렴과 청구 비용 확인 전 Stage416③=3/4·75% 및 TEST/PRODUCTION 중단 유지.
+
+---
+
 ## NEXT — PREVIEW app404 새로고침 복원 + Stage416 5분 최종 확정 실기기 증거 (2026-10-12 KST)
 
 - **제품 기준:** app404 Firebase Hosting only [Run 38241014684](https://github.com/andrawing1212/soridraw-music/actions/runs/38241014684) SUCCESS, exact build/version/TEST·PRODUCTION unchanged. 408 QA [38240795296](https://github.com/andrawing1212/soridraw-music/actions/runs/38240795296) SUCCESS, RTDB Rules/Functions/Worker/D1/R2 비변경. 이전 Stage416 one-function repair [38237388824](https://github.com/andrawing1212/soridraw-music/actions/runs/38237388824) ACTIVE.

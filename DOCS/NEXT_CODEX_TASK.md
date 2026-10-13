@@ -1,3 +1,13 @@
+## NEXT — app412 실기기 phantom-like 재발 확인 / Stage416 보류 (2026-10-13 KST)
+
+- **현재 PREVIEW:** app412 Hosting Run `38360420805` SUCCESS / exact build PASS. TEST/PRODUCTION unchanged. Stage416 일반 client OFF.
+- **사용자 최소 확인:** PC와 모바일 모두 app412 업데이트 → 좋아요 버튼을 누르지 않은 채 Explore 사용/재접속/새로고침. 기존에 서버에 이미 들어간 `창문을 조금 열고(테스트)` count=1은 유지될 수 있음. 핵심은 다른 old pending 곡이 새 canonical like로 자동 증가하지 않는지 확인.
+- **새 클릭 회귀:** 임의의 정상 곡 1개를 실제로 like→5초 정산→반대 기기 자동 수렴, unlike→수렴까지 확인하면 app410 정상 기능도 보호됨을 실기기 확정.
+- **기존 사고 relation:** SORiDRAW owner relation 1건은 shared user data라 자동 삭제 금지. 사용자가 해당 잘못된 좋아요 1건 삭제를 명확히 승인할 때만 exact one-row repair를 별도 수행하고, 전체 likes scan/backfill/reset 금지.
+- **Codex:** 사용량 부족 사용자 지시에 따라 추가 Codex 호출 중단. Issue #118 Stage416 lost-click/env-isolation 작업은 HOLD. app412 사고 대응과 섞지 않는다.
+- **진행률:** Stage416 전체 **1/4·25% HOLD**, 앱 속도 개선 **5/5·100%**, app412 phantom-like 자동재전송 차단 **3/4·75%** (source/QA/PREVIEW deploy PASS, 실기기 재발 확인만 남음).
+
+---
 ## NEXT — Issue #118 correction: crash-safe global version + env acceptance atomicity (2026-10-13 KST)
 
 - global version monotonic 요구와 environment-isolated transient runtime 방향은 유지.

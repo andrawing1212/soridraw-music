@@ -1,3 +1,19 @@
+## CURRENT — app412 PREVIEW: 과거 Explore 좋아요 outbox 자동 부활 차단 배포 PASS / 기존 잘못 저장된 1건은 보존 (2026-10-13 KST)
+
+- **사용자 신고:** `창문을 조금 열고(테스트)` 카드가 사용자가 누른 적 없는데 공개 likeCount=1, 현재 기기 하트는 empty로 관측.
+- **live read-only 사실 확인:** Run `38357167441` / 추가 trace `38357446485` SUCCESS. 정확한 public track 존재=1, canonical `likes` relation=1, `track_stats.like_count=1`. 관계 1건은 곡 owner `SORiDRAW(@soridraw)` 본인 계정. 해당 relation created_at `1791868582575` (2026-10-13 14:16:22 KST). q035/q066/q069 pending=0.
+- **Stage416 배제 근거:** owner의 Stage416 persistent acceptance receipt는 version39 / accepted_at `1791864896089` (13:14:56 KST)로 사고 like relation보다 약 61분 앞서며, current legacy queues도 0. 이번 relation 생성 시각과 controlled v39 receipt는 동일 사건으로 보지 않는다.
+- **원인:** app409 Auth-ready recovery와 hydration/pagehide/legacy canonical flush가 `retryCount=0` durable outbox를 과거 실험 row와 현재 명시적 클릭으로 구분하지 못했다. 오래된 pending row가 로그인/업데이트/재진입 뒤 자동 canonical batch에 포함될 수 있었음.
+- **app412 최소 수정:** `ExploreLikePendingMutation.explicitReplayEligible412` local-only marker 추가. 이 marker는 `setExploreTrackLike`의 **새 명시적 사용자 클릭**에서만 `true`로 저장. Auth-ready recovery, 5초 scheduler, canonical batch selection, visible hydration scheduler, visibility/pagehide exit flush는 marker가 없는 historical app400~411 row를 canonical 서버로 보내지 않음.
+- **데이터 보호:** historical unmarked outbox는 삭제/변환하지 않고 local-only quarantine. 사용자가 같은 곡을 다시 명시 클릭하면 새 operation row로 교체되면서 marker가 붙고 기존 정상 5초 canonical 정산/재시작 복구를 사용.
+- **정상 기능 보호:** app410 same-version retained local repair, app399 canonical batch, like/unlike, PC↔mobile changed-track signal, app390 conflict/ACK ordering, Stage416 client OFF 모두 회귀 PASS.
+- **검증:** Quality Run `38360197897` SUCCESS. `APP412_STALE_OUTBOX_AUTH_RECOVERY_WRITE0=PASS`, `APP412_STALE_OUTBOX_HYDRATION_EXIT_WRITE0=PASS`, `APP412_NEW_EXPLICIT_CLICK_REPLAY_ELIGIBLE=PASS`, `APP412_NO_LOCAL_OUTBOX_DELETION=PASS`, TypeScript/Build/Functions TS/live RTDB Rules read-only audit PASS. Follow Run `38359444129` SUCCESS, Stage416 readonly preflight `38359444123` SUCCESS.
+- **PREVIEW 배포:** source/test candidate `5372170e1bef3ed3dc36a0afb8c2952cb8977a9e`; release trigger `8f947cc51d349cb35deac43e2c2bf16ca64534f2`; Firebase PREVIEW Run `38360420805` SUCCESS. `PREVIEW_APP_VERSION=412`, `PREVIEW_EXACT_BUILD=PASS`, Hosting only.
+- **비변경:** Worker/Functions/D1/R2/shared RTDB Rules/shared user data/main/TEST/PRODUCTION 변경 0. release에서 shared RTDB Rules SKIPPED, TEST_PRODUCTION_UNCHANGED=PASS.
+- **중요:** 이미 잘못 생성된 `창문을 조금 열고(테스트)`의 SORiDRAW canonical like relation 1건은 사용자 원본 데이터이므로 **자동 삭제하지 않았다**. app412 수정은 추가 phantom auto-replay 차단이며 기존 1건 삭제는 별도 명시 승인 필요.
+- **실사용 상태:** app412 PC/모바일 업데이트 후 '아무 클릭 없이 새 phantom canonical like가 더 생기지 않음'은 사용자 실기기 검증 전. 기존 사고 곡 count=1은 의도적으로 그대로 남아 있으므로 이 숫자 자체를 app412 실패로 해석하지 않는다.
+
+---
 ## CURRENT — Issue #118 global-version correction audit FAIL / lost-click blocker (2026-10-13 KST)
 
 - Codex corrected branch `codex/stage416-global-version`, commit `1424204006072b0ffff78b34bb0fe4df96218688` 생성. 공식 Codex session은 `couldn't complete`로 종료했고 PR/CI 없음.

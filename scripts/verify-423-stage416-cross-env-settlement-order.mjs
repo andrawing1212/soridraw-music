@@ -80,6 +80,7 @@ const http=async()=>null;
 const lower=await findLowerOutstandingPrivateVersion416(
  db,uid,101,allRoots,'privateLikeBatch416');
 assert.equal(lower,100);
+reads=0;
 
 // Attempt the higher PREVIEW settlement first. It must freeze in RTDB but MUST
 // NOT reach Worker/D1 while TEST v100 remains outstanding.

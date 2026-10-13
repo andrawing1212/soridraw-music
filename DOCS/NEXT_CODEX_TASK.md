@@ -1,3 +1,15 @@
+## NEXT — app416 PREVIEW 실기기 수렴 검증 (2026-10-13 KST)
+
+- **현재 PREVIEW:** app416 Hosting Run `38389032059` SUCCESS / `PREVIEW_EXACT_BUILD=PASS` / `preview.soridraw.com`.
+- **확인 1 — 업데이트 직후:** PC와 모바일 모두 app416 적용 직후 여러 기존 곡의 filled/empty 하트가 이전 실제 상태와 맞는지 확인. 앱 업데이트 자체 때문에 과거 최근 임시 상태가 하트를 뒤집으면 FAIL.
+- **확인 2 — 양방향:** PC에서 like/unlike → 모바일 자동 수렴, 모바일에서 like/unlike → PC 자동 수렴. 페이지 이동/새로고침을 동기화 조건으로 인정하지 않음.
+- **확인 3 — refresh/time:** 한쪽 새로고침 후에도 동일 상태 유지, 최소 5분 이상 지나도 하트가 스스로 되돌아가지 않아야 함.
+- **확인 4 — 재진입:** Explore를 나갔다 다시 들어와도 같은 상태 유지. warm revisit는 추가 서버 read/write 0 목표.
+- **보호 확인:** 다른 사용자 공개 좋아요 숫자 자동 반영은 이미 사용자 실테스트 PASS이므로 app416에서도 회귀가 없어야 함.
+- **PASS 후:** TEST 승격은 사용자의 별도 테스트배포 승인 후 진행. PRODUCTION은 명확한 정식배포 승인 전 절대 변경하지 않음.
+- **Stage416:** 내부 Stage416 batch/cutover는 계속 OFF/HOLD. 앱 버전 app416과 별개.
+
+---
 ## NEXT — app416 GPT-6 독립 재감사 → PASS 시 Firebase PREVIEW Hosting만 배포 (2026-10-13 KST)
 
 - **감사 제품 기준 commit:** `5b4d50b58fc3072f5fd970a53367746d9cd68222`; Quality Run `38388071448` SUCCESS.

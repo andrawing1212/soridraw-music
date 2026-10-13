@@ -46,6 +46,7 @@ on:
       - 'scripts/verify-416-public-coalescing-gap.mjs'
       - 'src/services/explorePublicLikeSyncService.ts'
       - 'scripts/verify-416-private-task-routing.mjs'
+      - 'scripts/verify-416-expired-window-requeue-e2e.mjs'
       - 'scripts/verify-416-private-deadline.mjs'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-explore-like-noop-render.mjs'
@@ -209,6 +210,7 @@ jobs:
           node scripts/verify-416-private-deadline.mjs
           node scripts/verify-explore-like-noop-render.mjs
           node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-416-expired-window-requeue-e2e.mjs
           node scripts/verify-416-preview-backend-release.mjs
           node scripts/verify-416-worker-route-runtime.mjs
           node scripts/verify-416-like-batch-master.mjs

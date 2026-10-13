@@ -52,10 +52,17 @@ if (appVersion >= 120) {
       likes.includes('publicCount + Number(desiredLiked) - Number(baseLiked)') ||
       likes.includes('base.likeCount + Number(desiredLiked) - Number(baseLiked)')
     ) &&
-    likes.includes('const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);') &&
-    likes.includes('const optimisticLikeCount = optimisticAction127.likeCount;');
-  if (!directOptimistic120 && !helperOptimistic127) {
-    fail('actor optimistic count must remain one-step baseline/final delta');
+    likes.includes('const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);');
+  const safeOptimistic413 =
+    appVersion >= 413 &&
+    likes.includes('export const stabilizeExploreLikeOptimisticCount413 = (') &&
+    likes.includes('!hasExistingPending && !baseLiked && desiredLiked && publicCount > 0') &&
+    likes.includes('const optimisticLikeCount = stabilizeExploreLikeOptimisticCount413(') &&
+    likes.includes('Boolean(existing), baseLiked, liked, baseLikeCount, optimisticAction127.likeCount');
+  const legacyHelperOptimistic127 =
+    helperOptimistic127 && likes.includes('const optimisticLikeCount = optimisticAction127.likeCount;');
+  if (!directOptimistic120 && !(appVersion >= 413 ? safeOptimistic413 : legacyHelperOptimistic127)) {
+    fail('actor optimistic count must keep one-step delta except app413 stale-membership overcount guard');
   }
   if (!likes.includes('overlayExploreLikeDisplayCounts')) fail('actor stale-shared overwrite protection missing');
   if (!likes.includes('explore-like-display-lock-120')) fail('current display lock cache missing');
@@ -100,7 +107,9 @@ if (shared113) {
 
 console.log('107_EXPLORE_DIRECT_COUNT_ZERO_READ=PASS');
 console.log('PUBLIC_COUNT_SOURCE=SHARED_FEED_PROFILE_WITH_ACTOR_LOCAL_PENDING_OVERLAY');
-console.log(appVersion >= 120 ? 'ACTOR_PENDING_COUNT=LOCAL_ONLY_BASELINE_FINAL_DELTA' : 'ACCOUNT_SIGNAL=MEMBERSHIP_ONLY');
+console.log(appVersion >= 413
+  ? 'ACTOR_PENDING_COUNT=LOCAL_ONLY_SAFE_UNTIL_EXACT_CHANGED_TRACK_ACK'
+  : (appVersion >= 120 ? 'ACTOR_PENDING_COUNT=LOCAL_ONLY_BASELINE_FINAL_DELTA' : 'ACCOUNT_SIGNAL=MEMBERSHIP_ONLY'));
 console.log(shared113 ? (appVersion >= 335 ? 'PROFILE_WARM_ENTRY=LOCAL_WORKER_ZERO_ACTIVITY_REVALIDATION' : 'PROFILE_WARM_REVISIT=LOCAL_IMMEDIATE_PLUS_BOUNDED_SHARED_R2_CHECK') : 'PROFILE_WARM_REVISIT_D1_READ=0_BY_CLIENT_CONTRACT');
 console.log('PROFILE_WARM_D1_READ=0_BY_CONTRACT');
 console.log('OBSOLETE_DISPLAY_OVERLAY=REMOVED');

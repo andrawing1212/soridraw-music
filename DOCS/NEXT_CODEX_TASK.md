@@ -1,3 +1,14 @@
+## NEXT — app410 동결 유지 / Stage416 controlled E2E proof gate 설계 (2026-10-13 KST)
+
+- **현재 기준:** PREVIEW app410 사용자 PASS. `recordPrivateLike416` authoritative-abort refresh fix는 Run `38335089397`로 PREVIEW 배포 PASS. Stage416 client flags OFF, Worker/settle/Eventarc additive backend는 유지.
+- **목표:** 일반 사용자 경로를 다시 켜지 않고 **한 Admin/Master 테스트 operation만** Stage416 server path에 넣어, 동일 operation의 `accepted:true → RTDB new window → Eventarc Scheduler → due Task → signed Worker handoff → shared D1 persistent acceptance receipt → private final callback/ACK`을 증명하는 controlled gate를 만든다.
+- **안전조건:** 기본 OFF, 명시적 Master 진단에서만 1 operation, current signed-in self only. UID/trackId/opId raw 로그 금지. whole private root/Feed/D1 scan 금지. 데이터 reset/backfill/delete 금지. 기존 app410 canonical 좋아요 표시·저장은 테스트 대상 외 일반 사용자에게 그대로 유지.
+- **비용조건:** 정상 방문/업데이트 R0/W0 유지. 진단 1 operation에 필요한 bounded server work만 허용. 반복 polling/주기적 Task/전체 catalog read 금지.
+- **PASS 게이트:** 새 PREVIEW Callable fix 이후 D1 `explore_like_private_acceptance_416` persistent receipt가 실제 생기고 final callback까지 확인돼야 Stage416 전체를 다음 단계로 올림. CI/source proof만으로 전체 PASS 금지.
+- **진행률:** Stage416 **1/4·25%**, 앱 속도 **5/5·100%**, 다음 세부 작업 `Stage416 controlled E2E proof gate` **0/4·0%**.
+
+---
+
 ## NEXT — app410 보호 고정, Stage416 historical Eventarc/Task read-only 24h 감사 (2026-10-13 KST)
 
 - **제품 기준:** app410 사용자 실기기 PASS. 좋아요 제품 코드와 UI는 동결. Stage416 client flags OFF 유지.

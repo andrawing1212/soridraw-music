@@ -1,3 +1,15 @@
+## Stage416 PREVIEW recordPrivateLike416 authoritative-abort refresh 단일 함수 배포 (2026-10-13 KST)
+
+- **배포 Run:** [38335089397](https://github.com/andrawing1212/soridraw-music/actions/runs/38335089397) SUCCESS.
+- **고정 source:** `ddaa32e25146ba9a6867b8c1afd752f76c02747f`; release trigger `e4cf84b918519db255e5a5ccb037cdd680d4aeb3`.
+- **변경 Function:** PREVIEW `recordPrivateLike416` 단 하나. aborted RTDB transaction no-write 판단에서만 server snapshot 1회 refresh 후 동일 click timestamp로 bounded 1회 재판정. 정상 accepted click extra authoritative read 0.
+- **검증:** Quality `38334898118` SUCCESS; stale-cache false expired-window 재현/복구 PASS, exact expired-window→Task→Worker mock→ACK→blocked click retry PASS, Functions TypeScript, app TypeScript/Build, frozen like regressions PASS.
+- **역사 진단:** Readonly `38333348534` / `38333463196` / `38334163928` SUCCESS. Scheduler 2, Settle 67, logging 도입 후 EMPTY 65; Eventarc transport error 0; shared D1 416 acceptance receipt 0. EMPTY 65는 10:47~15:39 UTC이며 10:36 expired-window requeue Callable 배포 이후 집중.
+- **비변경:** PREVIEW Hosting app410 유지, Cloudflare Worker/D1/R2/RTDB Rules/shared user data 변경 0. TEST/PRODUCTION unchanged PASS. migration/backfill/delete 0.
+- **아직 미완료:** 새 fix 이후 실제 한 operation의 Worker/D1 receipt live E2E는 미검증. Stage416 client는 계속 OFF이며 TEST/PRODUCTION 승격 금지.
+
+---
+
 ## 0S22. Stage413 PREVIEW app383 공식 Firebase Hosting 배포 성공 — 사용자 즉시 종료 실사용 검증 대기 (2026-10-09 KST)
 
 - **유저 최우선 핵심 오류:** 모바일에서 Explore 좋아요 후 앱/창을 바로 닫으면 다른 디바이스가 반영되지 않음. 모바일 재실행 후 대기해야 반영됨. Stage412 좋아요 3/3 기능 PASS는 해당 단기종료 오류의 PASS가 아니며, 개인 스냅샷 반복 D1 읽기 문제도 별도로 남음.

@@ -1,3 +1,18 @@
+## CURRENT — app410 보호 유지 / Stage416 aborted RTDB stale-cache fix PREVIEW Callable 배포 완료 (2026-10-13 KST)
+
+- **app410 보호:** 사용자 실기기 PASS 동결 유지. Hosting은 app410 / Run `38275509549` 그대로이며 좋아요 UI·canonical app399 batch·app409 startup recovery·app410 retained repair를 변경하지 않음. Stage416 client flags 계속 OFF.
+- **24h 독립 감사:** Readonly Runs `38333348534`, `38333463196`, `38334163928` SUCCESS. 24h Cloud Run 기준 `recordPrivateLike416` 2122 requests, Scheduler 2 HTTP200, Settle 67 HTTP204. Eventarc transport topic/subscription 존재, subscription ERROR 0. Scheduler 안전 시각은 05:01:01 / 08:34:12 UTC. 현재 로깅 도입 뒤 Settle `EMPTY=65`, RESCHEDULED=0, STALE=0; EMPTY는 10:47:22~15:39:03 UTC에 집중. Shared D1 `explore_like_private_acceptance_416` receipt는 0, pending069도 0.
+- **역사 해석 정정:** 67−65의 2건을 DELIVERED로 보지 않음. non-delivery 로그는 08:57 UTC 이후 추가됐고 두 초기 Task는 그 이전. 08:34 Scheduler→08:39 Settle 뒤에도 D1 receipt/final callback이 없었으므로 canonical 성공 증거가 아님. 08:55의 early deadline task-ID collision fix 이전 이력과 부합.
+- **실제 단절 원인 판정:** `recordUserPrivateClick416`는 transaction callback에서 expired/duplicate 등 no-write 판단 시 `undefined`를 반환해 transaction을 즉시 abort. RTDB transaction callback은 SDK local cache에서 시작할 수 있으므로, 장기 Callable 인스턴스의 stale expired window를 서버 확정 상태로 오인해 `PRIOR_WINDOW_NEEDS_SEAL`→repair Task를 만들 수 있었고, Task의 실제 서버 state는 이미 window 없음→`EMPTY`가 될 수 있음. 과거 인스턴스의 local cache 자체는 소급 관찰 불가하지만, live 시간대/무삭제·동일 D1·동일 settle source 증거와 exact stale-cache 재현이 모두 이 메커니즘과 일치.
+- **source fix:** `ddaa32e25146ba9a6867b8c1afd752f76c02747f`. 정상 committed click은 추가 read 0. **transaction이 abort된 예외 분기에서만** 같은 RTDB ref `.get()`으로 서버 snapshot을 1회 갱신하고 동일 `receivedAtMs`로 transaction을 한 번 재실행. 실제 expired server window면 기존 exact repair Task, stale local window면 false repair 없이 정상 click 수락. 무한 retry/poll 없음.
+- **통합 검증:** source-only shared-state e2e `6bda4722...` 및 수정 QA Run `38334898118` SUCCESS. `STAGE416_EXPIRED_WINDOW_SHARED_STATE_REQUEUE_TO_DELIVERED=PASS`, `STAGE416_BLOCKED_CLICK_RETRY_AFTER_EXACT_ACK=PASS`, `STAGE416_STALE_ABORT_CACHE_REFRESH_PREVENTS_FALSE_EMPTY_REQUEUE=PASS`, `STAGE416_NORMAL_ACCEPTED_CLICK_EXTRA_AUTHORITATIVE_READ=0`; Functions TypeScript, app TypeScript/Build, frozen likes 모두 PASS. 공유 데이터/네트워크를 쓰는 테스트 아님.
+- **PREVIEW backend 배포:** trigger `e4cf84b918519db255e5a5ccb037cdd680d4aeb3`; single Function Run `38335089397` SUCCESS. `recordPrivateLike416`만 source `ddaa32e2...`로 교체, postflight PASS. Worker/D1/R2/RTDB Rules/Hosting/shared user data 변경 0, TEST/PRODUCTION unchanged PASS.
+- **비용:** 정상 accepted click 추가 authoritative read 0. aborted retry/expired/duplicate 같은 예외 판단에서만 RTDB server snapshot 1회. page entry/update/revisit로 발생하는 read/write 추가 없음.
+- **진행률:** Stage416 전체 **1/4·25%**(새 코드의 실제 accepted→window→Task→Worker/D1 live E2E 아직 미증명); 앱 속도 **5/5·100%**; 세부 작업 `Stage416 서버 예약 경로 독립 검증` **4/4·100%**.
+- **다음:** app410 user path를 켜지 않고 controlled E2E 증거를 만들 수 있는 최소 진단 게이트를 설계/검증. 실서버 accepted→window create→Eventarc/Task→Worker D1 persistent receipt→final callback을 한 operation 기준으로 증명하기 전 Stage416 client activation 금지.
+
+---
+
 ## CURRENT — app410 사용자 실기기 PASS 동결 / Stage416 backend 독립검증 재개 (2026-10-13 KST)
 
 - **사용자 확인:** app410의 마지막 단일 하트 drift 수정 실기기 **PASS**. PC/모바일 `골목길 탐험대` 상태 일치 확인. 이번 좋아요 복구 세부 작업 **4/4·100% 완료**.

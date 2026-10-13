@@ -1,3 +1,18 @@
+## CURRENT — app416 후보: reload-restored 416 late-accepted 권한 부활 차단 / 자동검증 PASS / 미배포 (2026-10-13 KST)
+
+- **직전 독립 감사:** app415 `5c4d894856acbeea762af24d41db428afdb8c02c` FAIL. reload-restored historical 416 row는 기본 UI/My Likes 권한이 0이었지만, 동일 operationId의 뒤늦은 `accepted` transition이 오면 `markLiveIntent416`으로 격리가 해제되어 stale heart/count/My Likes가 다시 권한을 얻을 수 있는 예외 확인.
+- **app416 최소 수정:** `src/services/exploreLikeIntent416.ts`의 late `accepted` branch에서 reload quarantine을 해제하지 않는다. accepted는 exact cleanup/settlement metadata로만 보존. `rejected`는 기존처럼 정리하며, **새로 도착한 실제 live `pending`**만 quarantine을 해제하고 provisional UI 권한을 다시 얻는다.
+- **신규 실행형 회귀검사:** reload-restored old pending → same operation late accepted → heart authority 없음 / count detail 없음 / My Likes candidate 없음 / repaint 없음. 이후 newer live pending은 즉시 authority 회복.
+- **소스 commit:** `5e5afdc707b1090dd93eb0a60f05dd7391275a70`.
+- **감사 누락 케이스 test commit:** `d283549ff9402bca6d5b2181bcadb03862674f81`.
+- **앱 버전:** app416 bump `5b4d50b58fc3072f5fd970a53367746d9cd68222`. 이 앱 버전 416은 내부 기능명 Stage416과 별개.
+- **최종 Quality Run:** `38388071448` SUCCESS on `5b4d50b58fc3072f5fd970a53367746d9cd68222`. TypeScript PASS, app Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox quarantine PASS, app414 old-outbox UI quarantine PASS, app390/app141 ordering PASS, app197 warm revisit R0/W0 PASS, live shared RTDB Rules read-only/additive PASS.
+- **app416 핵심 PASS:** `APP416_LATE_ACCEPTED_RELOAD_HINT_STAYS_QUARANTINED=PASS`; `APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS`; `APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS`; `STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS`.
+- **데이터/비용:** 새 D1/Firestore/Worker data read/write 0. cache reset 0, migration/backfill/delete 0, shared user data 변경 0. 기존 5초 canonical batch와 다른 사용자 공개 좋아요 자동 반영 경로 비변경.
+- **사용자 실사용 사실:** 다른 사용자 공개 좋아요 like/unlike 자동 반영은 페이지 이동·새로고침 없이 사용자 실테스트 PASS.
+- **현재 상태:** **GPT-6 독립 재감사 전 / PREVIEW app416 미배포**. Worker/Functions/Rules/D1/R2/shared user data/main/TEST/PRODUCTION 변경 0. `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
+
+---
 ## CURRENT — app415 후보: 업데이트/새로고침 복원 416 임시 하트의 권한 제거 / 자동검증 PASS / 미배포 (2026-10-13 KST)
 
 - **직전 감사:** app414 `preview` HEAD `bc406a37490f7b0f7167dca244be5e4e58c8164d` 독립 감사 FAIL. app412 old-outbox UI quarantine은 유효하지만, 새로고침 후 localStorage에서 복원된 Stage416 임시 하트가 canonical 개인 좋아요보다 우선하거나 app410 retained repair를 막을 가능성이 남아 PREVIEW 배포 보류.

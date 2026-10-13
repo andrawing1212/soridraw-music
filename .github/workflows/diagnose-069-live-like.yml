@@ -45,31 +45,24 @@ jobs:
             SELECT 'q066' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_066;
             SELECT 'q069' AS kind, COUNT(*) AS batches, COALESCE(SUM(mutation_count),0) AS mutations, COALESCE(MIN(created_at),0) AS oldest_at FROM explore_like_batches_069;
           " --json > "$RUNNER_TEMP/like-queues-readonly.json"
-          # The report contains aggregate counts only; track/owner IDs stay inside
-          # this ephemeral query and are never emitted to Actions logs.
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-            SELECT COUNT(*) AS matched_tracks,
-              COALESCE(SUM(COALESCE(s.like_count,0)),0) AS public_count,
-              COALESCE(SUM((SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id)),0) AS canonical_like_rows,
-              COALESCE(SUM(CASE WHEN EXISTS (
-                SELECT 1 FROM likes l WHERE l.track_id=t.id AND l.user_uid=t.owner_uid
-              ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks
-            FROM tracks t
-            LEFT JOIN track_stats s ON s.track_id=t.id
-            WHERE t.title = '성적표 대소동';
-          " --json > "$RUNNER_TEMP/specified-track-readonly.json"
-          # Exact D1 title may lag behind the public Explore card. Resolve
-          # one visible public search result first; then use the canonical ID
-          # with an indexed read. No user identities or raw IDs are logged.
+          # Target title is supplied as base64 in the diagnostic trigger so the
+          # reusable workflow never interpolates an arbitrary title into SQL.
+          trigger='.deploy/diagnose-069-live-like.trigger'
+          target_b64="$(sed -n 's/^target_title_b64=//p' "$trigger" | tail -n1)"
+          test -n "$target_b64"
+          printf '%s' "$target_b64" | base64 --decode > "$RUNNER_TEMP/target-title.txt"
+          target_title="$(cat "$RUNNER_TEMP/target-title.txt")"
+          test -n "$target_title"
           curl -fsS -G --max-time 20 -H 'Origin: https://preview.soridraw.com' \
-            --data-urlencode 'q=성적표 대소동' \
+            --data-urlencode "q=$target_title" \
             'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/search' \
             > "$RUNNER_TEMP/target-public-search.json"
           node - <<'NODE'
           const fs=require('fs');
           const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-public-search.json','utf8'));
+          const wanted=fs.readFileSync(process.env.RUNNER_TEMP+'/target-title.txt','utf8').trim();
           const items=payload?.data?.items || [];
-          const chosen=items.find(row=>String(row?.title||'').trim()==='성적표 대소동');
+          const chosen=items.find(row=>String(row?.title||'').trim()===wanted);
           const id=String(chosen?.id||'').trim();
           if(id && !/^[a-zA-Z0-9_-]{1,120}$/.test(id))throw Error('Unsafe ID from public search');
           fs.writeFileSync(process.env.RUNNER_TEMP+'/target-track-id.txt',id);
@@ -88,6 +81,18 @@ jobs:
               LEFT JOIN track_stats s ON s.track_id=t.id
               WHERE t.id='$track_id';
             " --json > "$RUNNER_TEMP/public-id-canonical-readonly.json"
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+              SELECT l.user_uid,l.created_at,
+                CASE WHEN l.user_uid=t.owner_uid THEN 1 ELSE 0 END AS is_owner,
+                COALESCE(p.handle,'') AS public_handle,
+                COALESCE(p.nickname,'') AS public_nickname
+              FROM likes l
+              JOIN tracks t ON t.id=l.track_id
+              LEFT JOIN public_profiles p ON p.uid=l.user_uid AND p.is_public=1
+              WHERE l.track_id='$track_id'
+              ORDER BY l.created_at ASC
+              LIMIT 20;
+            " --json > "$RUNNER_TEMP/target-likers-private.json"
           fi
           node - <<'NODE'
           const fs = require('fs');
@@ -106,13 +111,7 @@ jobs:
             }
           }
           if (!rows.some(x=>x.kind==='q069')) throw Error('q069 report unavailable');
-          const trackReports=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/specified-track-readonly.json','utf8'));
-          const one=trackReports.flatMap(part=>part.results||[])[0]||{};
-          console.log('TARGET_TITLE_MATCHES=' + Number(one.matched_tracks||0));
-          console.log('TARGET_CANONICAL_PUBLIC_COUNT=' + Number(one.public_count||0));
-          console.log('TARGET_CANONICAL_LIKE_RELATIONS=' + Number(one.canonical_like_rows||0));
-          console.log('TARGET_OWNER_HAS_LIKED=' + Number(one.owner_liked_tracks||0));
-          console.log('NOTE_VIEWER_MAY_NOT_BE_OWNER=TRUE');
+          const crypto=require('crypto');
           if (fs.existsSync(process.env.RUNNER_TEMP + '/public-id-canonical-readonly.json')) {
             const byId=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/public-id-canonical-readonly.json','utf8'));
             const found=byId.flatMap(part=>part.results||[])[0]||{};
@@ -120,6 +119,19 @@ jobs:
             console.log('PUBLIC_ID_CANONICAL_LIKE_RELATIONS='+Number(found.canonical_like_rows||0));
             console.log('PUBLIC_ID_CANONICAL_LIKE_COUNT='+Number(found.public_count||0));
             console.log('PUBLIC_ID_OWNER_LIKED='+Number(found.owner_liked_tracks||0));
+          }
+          if (fs.existsSync(process.env.RUNNER_TEMP + '/target-likers-private.json')) {
+            const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-likers-private.json','utf8'));
+            const likerRows=payload.flatMap(part=>part.results||[]);
+            console.log('TARGET_LIKER_ROWS='+likerRows.length);
+            likerRows.forEach((row,index)=>{
+              const token=crypto.createHash('sha256').update(String(row.user_uid||'')).digest('hex').slice(0,12);
+              console.log('LIKER_'+(index+1)+'_ROLE='+(Number(row.is_owner||0)===1?'OWNER':'OTHER'));
+              console.log('LIKER_'+(index+1)+'_PUBLIC_HANDLE='+String(row.public_handle||''));
+              console.log('LIKER_'+(index+1)+'_PUBLIC_NICKNAME='+String(row.public_nickname||''));
+              console.log('LIKER_'+(index+1)+'_TOKEN='+token);
+              console.log('LIKER_'+(index+1)+'_CREATED_AT='+Number(row.created_at||0));
+            });
           }
           console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE

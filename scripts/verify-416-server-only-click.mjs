@@ -14,13 +14,16 @@ const deviceA='00000000-0000-4000-8000-000000000001';
 const deviceB='00000000-0000-4000-8000-000000000002';
 const op=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 let writes=0,reads=0,state=null,usedPath='';
-const db={ref:path=>({transaction:async fn=>{
+const db={ref:path=>({
+ transaction:async fn=>{
   usedPath=path;reads++;
   const updated=fn(state);
   if(updated===undefined)return {committed:false,snapshot:{val:()=>state}};
   state=updated;writes++;
   return {committed:true,snapshot:{val:()=>state}};
-}})};
+ },
+ get:async()=>{reads++;return {val:()=>state};},
+})};
 const now=1_000_000;
 const take=async(dev,seq,track,liked,at,master=5)=>record(db,'test-uid',{
  trackId:track,liked,operationId:op(dev===deviceB?seq+300:seq),
@@ -83,3 +86,6 @@ assert.match(seal,/database.ref\('privateLikeBatch416\/'\+uid\)/);
 console.log('STAGE416_SERVER_ONLY_UID_CLICK_80_TRACKS_NO_D1_AND_OLD_SIGNAL_OFF=PASS');
 console.log('STAGE416_SERVER_AUTH_CLOCK_DEVICE_DEDUP_AND_MASTER_WINDOW=PASS');
 console.log('STAGE416_EXPIRED_WINDOW_FAILS_CLOSED_UNTIL_SEAL=PASS');
+assert.match(source,/if\(!authoritativeRetry\)[\s\S]*?await privateRef\.get\(\)[\s\S]*?recordUserPrivateClick416\([\s\S]*?true\)/,
+ 'aborted local-cache decisions must refresh from server exactly once');
+console.log('STAGE416_ABORTED_TRANSACTION_AUTHORITATIVE_REFRESH_SOURCE=PASS');

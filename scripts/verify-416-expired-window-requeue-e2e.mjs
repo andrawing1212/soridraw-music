@@ -46,6 +46,7 @@ const database={
         state=next;
         return {committed:true,snapshot:{val:()=>state}};
       },
+      get:async()=>({val:()=>state}),
       child:name=>({
         get:async()=>{
           assert.equal(name,'sealed');
@@ -116,8 +117,48 @@ assert.equal(acceptedRetry.version,2);
 assert.equal(state.window.id,op2);
 assert.equal(Object.values(state.pending).length,1);
 assert.equal(Object.values(state.pending)[0].trackId,'song-b');
-assert(transactions>=5);
+assert(transactions>=6);
+
+// Reproduce the live failure shape: the Callable's local RTDB cache can still
+// contain an expired window after another service has already cleared it on
+// the server. A local abort must refresh before it schedules a false repair.
+let localState={
+  version:1,
+  deviceSeq:{[device]:1},
+  pending:{stale:{trackId:'old-song',liked:true,operationId:op1,
+    deviceId:device,deviceSequence:1,version:1,mutationAt:t0}},
+  window:{id:op1,minutes:5,openedAtMs:t0,lastClickAtMs:t0,revision:1},
+};
+let serverState={version:1,deviceSeq:{[device]:1},pending:null,window:null,sealed:null};
+let refreshReads=0;
+const staleCacheDb={ref:path=>{
+  assert.equal(path,'privateLikeBatch416/'+uid);
+  return {
+    transaction:async update=>{
+      const next=update(localState);
+      if(next===undefined)return {committed:false,snapshot:{val:()=>localState}};
+      localState=next;serverState=next;
+      return {committed:true,snapshot:{val:()=>localState}};
+    },
+    get:async()=>{
+      refreshReads++;
+      localState=structuredClone(serverState);
+      return {val:()=>localState};
+    },
+  };
+}};
+const staleRecovered=await recordUserPrivateClick416(staleCacheDb,uid,{
+  trackId:'new-song',liked:true,operationId:op2,deviceId:device,deviceSequence:2,
+},5,t0+300_010);
+assert.equal(refreshReads,1,'only an aborted decision gets one authoritative refresh');
+assert.equal(staleRecovered.accepted,true,
+ 'stale local expired window must not create a false repair task');
+assert.equal(staleRecovered.reason,'ACCEPTED');
+assert.equal(serverState.window.id,op2);
+assert.equal(serverState.version,2);
 
 console.log('STAGE416_EXPIRED_WINDOW_SHARED_STATE_REQUEUE_TO_DELIVERED=PASS');
 console.log('STAGE416_BLOCKED_CLICK_RETRY_AFTER_EXACT_ACK=PASS');
+console.log('STAGE416_STALE_ABORT_CACHE_REFRESH_PREVENTS_FALSE_EMPTY_REQUEUE=PASS');
+console.log('STAGE416_NORMAL_ACCEPTED_CLICK_EXTRA_AUTHORITATIVE_READ=0');
 console.log('STAGE416_INTEGRATION_LIVE_NETWORK_AND_SHARED_DATA_IO=0');

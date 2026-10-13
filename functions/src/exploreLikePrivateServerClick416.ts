@@ -19,6 +19,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
+  authoritativeRetry=false,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -32,7 +33,8 @@ export async function recordUserPrivateClick416(
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
  let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
- const outcome=await database.ref('privateLikeBatch416/'+uid).transaction((raw:unknown)=>{
+ const privateRef=database.ref('privateLikeBatch416/'+uid);
+ const outcome=await privateRef.transaction((raw:unknown)=>{
    const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)
      ?raw:{} ) as Pending416;
    const version=Number(state.version||0);
@@ -100,6 +102,15 @@ export async function recordUserPrivateClick416(
    };
  },undefined,false);
  if(!outcome.committed){
+   // RTDB transaction callbacks can start from this Admin SDK instance's local
+   // cache. Returning undefined aborts before a server conflict can refresh it.
+   // Refresh only an aborted decision, then replay exactly once with the same
+   // server-owned click timestamp. Normal accepted clicks keep zero extra reads.
+   if(!authoritativeRetry){
+     await privateRef.get();
+     return recordUserPrivateClick416(
+       database,uid,click,trustedMinutes,receivedAtMs,true);
+   }
    // Transaction callbacks set this value asynchronously; keep the explicit
    // proof type at the post-transaction boundary for strict TypeScript.
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;

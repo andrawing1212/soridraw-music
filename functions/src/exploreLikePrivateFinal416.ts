@@ -58,7 +58,7 @@ async function notifySettledPublicLikes416(db:Database,data:SignedFinal,nowMs:nu
 }
 export async function publishAuthenticatedPrivateFinal416(
  db:Database, raw:string, signature:string, secret:string,
- nowMs=Date.now(),
+ nowMs=Date.now(),finalRoot='privateLikeFinal416',
 ):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';version:number;count:number}>{
  if(!raw||raw.length>160_000||typeof secret!=='string'||secret.length<32||
     !/^[0-9a-f]{64}$/i.test(signature||'')||!Number.isSafeInteger(nowMs)||
@@ -101,7 +101,7 @@ export async function publishAuthenticatedPrivateFinal416(
    batchIds:data.batchIds,rows:data.rows};
  const digest=createHash('sha256').update(JSON.stringify(stable)).digest('hex');
  let reason:'DUPLICATE'|'STALE'|'CONFLICT'='STALE';
- const result=await db.ref('privateLikeFinal416/'+data.uid).transaction(
+ const result=await db.ref(finalRoot+'/'+data.uid).transaction(
    (rawState:unknown)=>{
      const current=rawState as {version?:number;digest?:string}|null;
      const prev=Number(current?.version||0);
@@ -127,7 +127,7 @@ export async function publishAuthenticatedPrivateFinal416(
  // delivery checkpoint. Do not touch private intent/instant-sync transport.
  if(result.snapshot.val()?.publicNotified416!==true){
    await notifySettledPublicLikes416(db,data,nowMs);
-   await db.ref('privateLikeFinal416/'+data.uid).transaction((rawState:unknown)=>{
+   await db.ref(finalRoot+'/'+data.uid).transaction((rawState:unknown)=>{
      const current=rawState as {version?:number;digest?:string;publicNotified416?:boolean}|null;
      if(current?.version!==data.version||current.digest!==digest||current.publicNotified416)return;
      return {...current,publicNotified416:true};

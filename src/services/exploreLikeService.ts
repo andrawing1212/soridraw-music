@@ -394,6 +394,14 @@ export const stabilizeExploreLikeOptimisticCount413 = (
     : optimisticCount
 );
 
+// app414: app412 quarantined historical unmarked outbox rows from server replay,
+// but they were still allowed to override the heart/count and to block newer
+// accepted same-account state. Quarantine must be symmetric: preserved in
+// storage for safety, but never treated as a current user intention.
+export const isExploreLikeActivePending414 = (
+  pending: { explicitReplayEligible412?: true } | null | undefined,
+): boolean => pending?.explicitReplayEligible412 === true;
+
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   const values = new Map<string, boolean>();
   const envelope = readSoridrawPersistentCache<Record<string, boolean>>({
@@ -488,7 +496,7 @@ const getLikedStateCache = (uid: string) => {
 export const readExploreTrackLikeMembership127 = (uid: string, trackId: string): boolean | undefined => {
   const id = String(trackId || '').trim();
   if (!uid || !id) return undefined;
-  const pending = readLikeOutbox(uid)[id];
+  const pending = readActiveLikeOutbox414(uid)[id];
   if (pending) return pending.desiredLiked;
   // 416: accepted server state remains untouched. An active, same-UID private
   // hint can repaint another device before the original 5s/5min server batch.
@@ -742,7 +750,7 @@ const replaySameVersionRetainedMembership410 = (
   signal: ExploreLikeSignal127,
 ): number => {
   if (!uid || signal.version !== readSeenLikeSignal127(uid)) return 0;
-  const pending = readLikeOutbox(uid);
+  const pending = readActiveLikeOutbox414(uid);
   const unresolved = readSnapshotPending127(uid);
   const retryTracks = new Set(readSignalRetry127(uid).map((row) => row.trackId));
   const cache = getLikedStateCache(uid);
@@ -810,7 +818,9 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
   for (const item of signal.results) {
     // Preserve an unsubmitted local click, but do not silently lose a newer
     // server-accepted remote event when its RTDB watermark is advanced.
-    const localPending390 = pending[item.trackId];
+    const storedPending390 = pending[item.trackId];
+    const localPending390 = isExploreLikeActivePending414(storedPending390)
+      ? storedPending390 : undefined;
     if (localPending390 && !deferredReplay390 &&
         (!localPending390.deferredSignal390 ||
           signal.version > localPending390.deferredSignal390.version)) {
@@ -822,7 +832,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
     }
     // Never overwrite an actual pending local click. Only a net-zero local
     // outbox release may replay the deferred server-accepted changed-track row.
-    if (pending[item.trackId]) continue;
+    if (isExploreLikeActivePending414(pending[item.trackId])) continue;
     // An older accepted event cannot retire a newer opposite private intent.
     // Identical personal membership becomes durable through the 127 path.
     clearExploreLikeIntent416(uid, item.trackId, item.liked);
@@ -954,7 +964,8 @@ const startLikeIntent416 = (uid: string) => {
         window.dispatchEvent(new CustomEvent('soridraw:private-like-await-final-416', {detail:{uid}}));
       }
       const localPending416 = readLikeOutbox(uid);
-      if (Object.values(localPending416).some((row) => (row.retryCount || 0) === 0)) {
+      if (Object.values(localPending416).some((row) =>
+        isExploreLikeActivePending414(row) && (row.retryCount || 0) === 0)) {
         const key416 = scopedLikeKey127(STAGE416_PRIVATE_BATCH_WINDOW_KEY, uid);
         const next416 = advancePrivateBatchWindowForRemoteClick416(
           readPrivateBatchWindow416(uid), observed416,
@@ -973,7 +984,8 @@ const startLikeIntent416 = (uid: string) => {
     // provably older local operation; never discard an in-flight current
     // session click that has not received its own intent version yet.
     const rows416 = readLikeOutbox(uid);
-    const local416 = rows416[trackId];
+    const storedLocal416 = rows416[trackId];
+    const local416 = isExploreLikeActivePending414(storedLocal416) ? storedLocal416 : undefined;
     if (observed416.status === 'pending' && local416?.operationId) {
       if (local416.operationId === observed416.operationId) {
         if (local416.privateIntentVersion416 !== observed416.version) {
@@ -989,7 +1001,7 @@ const startLikeIntent416 = (uid: string) => {
         }
       }
     }
-    if (readLikeOutbox(uid)[trackId]) return;
+    if (isExploreLikeActivePending414(readLikeOutbox(uid)[trackId])) return;
     const liked = readExploreTrackLikeMembership127(uid, trackId);
     if (typeof liked !== 'boolean') return;
     // The callback's liked value and the effective overlay must agree before
@@ -1037,7 +1049,7 @@ const startGuardedLike420 = (uid: string) => {
       hints.delete(event.trackId);
     }
     guardedLikeHintsByUid420.set(uid, hints);
-    if (readLikeOutbox(uid)[event.trackId]) return;
+    if (isExploreLikeActivePending414(readLikeOutbox(uid)[event.trackId])) return;
     const liked = readExploreTrackLikeMembership127(uid, event.trackId);
     if (typeof liked !== 'boolean') return;
     patchExploreLikedTrackMembership(uid, event.trackId, liked);
@@ -1233,7 +1245,7 @@ const ensurePersonalLikeBaseline127 = async (user: User, observedR2Revision189 =
       }
 
       const confirmed = new Set(likedIds);
-      const outbox = readLikeOutbox(uid);
+      const outbox = readActiveLikeOutbox414(uid);
       const unresolved = readSnapshotPending127(uid);
       // SORIDRAW_PERSONAL_LIKE_SETTLED_GUARD_RELEASE_189_20260924
       // A fresh app189 response is emitted only after queue-empty canonical D1
@@ -1660,6 +1672,12 @@ const readLikeOutbox = (uid: string): ExploreLikeOutbox => {
   }, {});
 };
 
+const readActiveLikeOutbox414 = (uid: string): ExploreLikeOutbox =>
+  Object.fromEntries(
+    Object.entries(readLikeOutbox(uid)).filter(([, pending]) =>
+      isExploreLikeActivePending414(pending)),
+  );
+
 const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
   if (!Object.keys(outbox).length) {
     removeSoridrawPersistentCache(EXPLORE_LIKE_OUTBOX_CACHE_KEY, uid);
@@ -1681,7 +1699,8 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
   });
 };
 
-export const getPendingExploreLikeMutationCount = (uid: string): number => Object.keys(readLikeOutbox(uid)).length;
+export const getPendingExploreLikeMutationCount = (uid: string): number =>
+  Object.keys(readActiveLikeOutbox414(uid)).length;
 
 // During the approved mandatory-upgrade transition, an old app's durable
 // unsigned outbox is not a new user click and must not be silently rewritten,
@@ -1755,7 +1774,7 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid || !tracks.length) return tracks;
 
-  const outbox = readLikeOutbox(normalizedUid);
+  const outbox = readActiveLikeOutbox414(normalizedUid);
   const locks = readLikeDisplayLocks(normalizedUid);
   const now = Date.now();
   let locksChanged = false;
@@ -2424,7 +2443,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const verified127 = readTargetedVerifiedLikeTracks127(user.uid);
   const baselineReady127 = baselineCompleted127.has(user.uid) ||
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, user.uid)) === '1';
-  const beforeOutbox127 = readLikeOutbox(user.uid);
+  const beforeOutbox127 = readActiveLikeOutbox414(user.uid);
   const beforeUnresolved127 = readSnapshotPending127(user.uid);
   // A verified complete personal snapshot proves that an unseen, unguarded
   // track is not liked. Record ONLY that new ID as false so the first click
@@ -2460,7 +2479,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     // A bounded /v1/me/likes result is exact for every requested ID even when
     // the account-wide legacy R2 snapshot is partial. Re-read local mutation
     // guards after the request; only untouched IDs become click-authoritative.
-    const currentOutbox127 = readLikeOutbox(user.uid);
+    const currentOutbox127 = readActiveLikeOutbox414(user.uid);
     const currentUnresolved127 = readSnapshotPending127(user.uid);
     for (const trackId of missing) {
       if (currentOutbox127[trackId] ||
@@ -2495,7 +2514,7 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return [];
   const cache = getLikedStateCache(normalizedUid);
-  const outbox = readLikeOutbox(normalizedUid);
+  const outbox = readActiveLikeOutbox414(normalizedUid);
   const unresolved = readSnapshotPending127(normalizedUid);
   const candidates = new Set<string>();
   for (const [trackId, liked] of cache.entries()) if (liked) candidates.add(trackId);
@@ -2557,7 +2576,8 @@ export const setExploreTrackLike = async (
   const uid = user.uid;
   installLikeSignalRetry127();
   const outbox = readLikeOutbox(uid);
-  const existing = outbox[normalizedTrackId];
+  const storedExisting = outbox[normalizedTrackId];
+  const existing = isExploreLikeActivePending414(storedExisting) ? storedExisting : undefined;
   const cache = getLikedStateCache(uid);
   // Pending accepted-but-unsettled intent outranks a legacy cached heart.
   const previousVisibleLiked = existing?.desiredLiked ??

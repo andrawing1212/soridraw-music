@@ -1,4 +1,4 @@
-## CURRENT — Stage416 cross-environment global settlement version 수정 / 배포 없음 (2026-10-13 KST)
+## CURRENT — Stage416 global version 2-phase lost-click 수정 / 배포 없음 (2026-10-13 KST)
 
 - 기준: 현재 `preview` HEAD `fbf084597af4e2252a23fc07e4c7c6349efccb7d` (제품 기준
   `2ea0e6f1d29d0316b7571473a4584d013305da9a` + blocker 감사 기록) 위에 environment-isolation
@@ -8,12 +8,18 @@
 - sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를
   migration/backfill/read bootstrap 없이 넘어가며, PREVIEW → TEST → PRODUCTION → PREVIEW 실행형
   interleaving에서 shared D1/R2 acceptance version이 strictly increasing이다.
-- exact same-operation duplicate는 bounded device receipt로 기존 version을 재사용하고 logical RTDB W0,
-  stale/different operation도 W0이다. 새 accepted click은 기존 environment-root W1에 sequencer W1이
-  추가되어 RTDB changed writes 총 W2다. page/update/re-entry IO는 계속 0이다.
-- global version 예약 뒤 environment root가 prior-window 대기로 거부된 경우에도 예약 receipt 자체를
-  성공으로 오인하지 않는다. exact retry는 같은 global version을 재사용해 environment transaction을
-  다시 통과하며, 새 version을 추가 소비하지 않는다.
+- global sequencer는 per-UID 단일 bounded reservation → environment transaction → committed receipt의
+  2-phase protocol을 사용한다. 예약 단계에서는 committed version/device receipt를 올리지 않으며 다른
+  operation은 `GLOBAL_RESERVATION_BUSY`로 fail-closed하여 settlement 순서 역전을 막는다.
+- global version 예약 뒤 environment root가 prior-window 대기로 거부된 경우 예약을 유지하되 accepted로
+  응답하지 않는다. exact same-operation retry만 같은 version으로 environment transaction을 다시 통과하고,
+  실제 pending/sealed 등록 증명 뒤에만 globally committed receipt로 확정한다.
+- DEVICE_LIMIT/TRACK_LIMIT/STALE rejection은 reservation을 제거하고 committed version/device receipt를
+  남기지 않는다. environment root identity도 receipt에 포함하여 다른 environment에서 같은 operation을
+  duplicate-confirm하거나 이중 등록하지 못한다.
+- exact committed duplicate는 기존 version을 재사용하고 logical RTDB W0이다. 새 accepted click은
+  reservation W1 + environment-root W1 + commit W1로 RTDB changed writes 총 W3이며 모두 bounded O(1)이다.
+  canonical D1 rows_written 계약은 변경 없이 W1~W2이고 page/update/re-entry IO는 계속 0이다.
 - D1 schema/table/key, shared canonical user data, Worker/release workflow는 변경하지 않았다.
 - TEST/PRODUCTION의 distinct final receipt Function/final root 및 environment-specific Worker endpoint
   identity는 유지되어 후속 #117 binding에서 명시적으로 사용할 수 있다.

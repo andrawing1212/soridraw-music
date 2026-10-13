@@ -16,9 +16,17 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
   window?:Window416|null;pending?:Record<string,{trackId:string;liked:boolean;
   operationId:string;deviceId:string;deviceSequence:number;version:number;mutationAt:number}>|null;
   sealed?:unknown};
-type GlobalVersion416={version?:number;settledVersion?:number;devices?:Record<string,{
+type GlobalDeviceSnapshot416={
   deviceSequence:number;operationId:string;trackId:string;liked:boolean;version:number;
-}>};
+};
+type GlobalDeviceReservation416=GlobalDeviceSnapshot416&{
+  // One-level predecessor lets an exact rejected reservation roll back without
+  // deleting an existing device's monotonic sequence history. null means this
+  // reservation created the device slot; undefined is legacy/ambiguous state.
+  previous?:GlobalDeviceSnapshot416|null;
+};
+type GlobalVersion416={version?:number;settledVersion?:number;
+  devices?:Record<string,GlobalDeviceReservation416>};
 
 // Cross-environment state allocates only a globally monotonic version. It is
 // NOT acceptance authority. An exact retry may reuse its reservation, but the
@@ -62,6 +70,8 @@ async function reserveGlobalVersion416(database:Database,uid:string,
     return {...state,version:rebased,devices:{...devices,[click.deviceId]:{
      deviceSequence:click.deviceSequence,operationId:click.operationId,
      trackId:click.trackId,liked:click.liked,version:rebased,
+     ...(Object.prototype.hasOwnProperty.call(prior,'previous')
+       ?{previous:prior.previous??null}:{}),
     }}};
    }
    decision={reserved:false,reason:'STALE_OR_DUPLICATE'};
@@ -75,18 +85,22 @@ async function reserveGlobalVersion416(database:Database,uid:string,
    throw Error('416_GLOBAL_VERSION_EXHAUSTED');
   decision={reserved:true,reason:'GLOBAL_VERSION_RESERVED',version:next,
     highWater:next,createdDevice:!prior};
+  const previous:GlobalDeviceSnapshot416|null=prior?{
+   deviceSequence:prior.deviceSequence,operationId:prior.operationId,
+   trackId:prior.trackId,liked:prior.liked,version:prior.version,
+  }:null;
   return {...state,version:next,devices:{...devices,[click.deviceId]:{
    deviceSequence:click.deviceSequence,operationId:click.operationId,
-   trackId:click.trackId,liked:click.liked,version:next,
+   trackId:click.trackId,liked:click.liked,version:next,previous,
   }}};
  },undefined,false);
  if(!result.committed&&decision.reason==='UNDETERMINED')
   throw Error('416_GLOBAL_VERSION_DECISION_MISSING');
  return decision;
 }
-async function releaseRejectedNewDeviceReservation416(
+async function releaseRejectedReservation416(
  database:Database,uid:string,click:ServerPrivateLikeClick416,
- globalVersionRoot:string,allocatedVersion:number,
+ globalVersionRoot:string,allocatedVersion:number,reservationCreatedDevice:boolean,
 ):Promise<boolean>{
  let released=false;
  const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
@@ -99,8 +113,25 @@ async function releaseRejectedNewDeviceReservation416(
      prior.operationId!==click.operationId||prior.trackId!==click.trackId||
      prior.liked!==click.liked||prior.version!==allocatedVersion)
     return unchanged;
+  // Never guess how to roll back a legacy reservation that lacks predecessor
+  // metadata. New reservations always carry previous:null (new device) or the
+  // exact previous device snapshot (existing device).
+  if(!Object.prototype.hasOwnProperty.call(prior,'previous'))return unchanged;
   const nextDevices={...devices};
-  delete nextDevices[click.deviceId];
+  const previous=prior.previous;
+  if(previous===null){
+   if(!reservationCreatedDevice)return unchanged;
+   delete nextDevices[click.deviceId];
+  }else{
+   if(!previous||!Number.isSafeInteger(previous.deviceSequence)||previous.deviceSequence<=0||
+      previous.deviceSequence>=click.deviceSequence||
+      typeof previous.operationId!=='string'||!UUID_416.test(previous.operationId)||
+      typeof previous.trackId!=='string'||!previous.trackId||previous.trackId.length>512||
+      typeof previous.liked!=='boolean'||!Number.isSafeInteger(previous.version)||
+      previous.version<=0||previous.version>=allocatedVersion)
+    throw Error('416_GLOBAL_PREVIOUS_RESERVATION_CORRUPT');
+   nextDevices[click.deviceId]={...previous};
+  }
   released=true;
   return {...state,devices:nextDevices};
  },undefined,false);
@@ -246,10 +277,10 @@ export async function recordUserPrivateClick416(
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
-   if(reservationCreatedDevice&&globalVersionRoot&&allocatedVersion!==undefined&&
+   if(globalVersionRoot&&allocatedVersion!==undefined&&
       (reason==='DEVICE_LIMIT'||reason==='TRACK_LIMIT'||reason==='STALE_OR_DUPLICATE'))
-     await releaseRejectedNewDeviceReservation416(
-       database,uid,click,globalVersionRoot,allocatedVersion);
+     await releaseRejectedReservation416(
+       database,uid,click,globalVersionRoot,allocatedVersion,reservationCreatedDevice);
    return {accepted:false,reason,
      ...(reason==='PRIOR_WINDOW_NEEDS_SEAL'&&expiredWindowId?{expiredWindowId}:{})};
  }

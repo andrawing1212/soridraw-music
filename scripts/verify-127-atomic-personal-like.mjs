@@ -309,12 +309,13 @@ const transitionSource = service.slice(transitionStart, transitionEnd)
   // exported clock/UUID helpers, and new Function has no CommonJS exports.
   .replaceAll('export const ', 'const ');
 const js = ts.transpileModule(
-  transitionSource + '; return { computeExploreLikeAction127, stabilizeExploreLikeOptimisticCount413 };',
+  transitionSource + '; return { computeExploreLikeAction127, stabilizeExploreLikeOptimisticCount413, isExploreLikeActivePending414 };',
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
 const transitions127 = new Function(js)();
 const compute = transitions127.computeExploreLikeAction127;
 const stabilize413 = transitions127.stabilizeExploreLikeOptimisticCount413;
+const activePending414 = transitions127.isExploreLikeActivePending414;
 assert.deepEqual(compute(false, true, 0), { liked: true, likeCount: 1 });
 assert.deepEqual(compute(false, true, 1), { liked: true, likeCount: 2 }, 'retain another user\'s like');
 assert.deepEqual(compute(true, false, 2), { liked: false, likeCount: 1 }, 'unlike only the current user');
@@ -337,6 +338,30 @@ assert.equal(stabilize413(false, true, false, 2, 1), 1,
   'normal unlike math remains unchanged');
 assert.match(service, /stabilizeExploreLikeOptimisticCount413\(\s*Boolean\(existing\), baseLiked, liked, baseLikeCount, optimisticAction127\.likeCount/);
 console.log('413_STALE_EMPTY_HEART_NO_DOUBLE_PUBLIC_COUNT=PASS');
+
+assert.equal(activePending414({}), false,
+  'app414 historical unmarked outbox must not remain heart/count authority');
+assert.equal(activePending414({ explicitReplayEligible412: true }), true,
+  'app414 fresh explicit click must remain pending authority');
+assert.equal(activePending414(null), false);
+assert.match(service, /const readActiveLikeOutbox414 = \(uid: string\): ExploreLikeOutbox =>/);
+assert.match(service, /const pending = readActiveLikeOutbox414\(uid\)\[id\]/,
+  'membership must ignore quarantined app400-411 rows');
+assert.match(service, /const pending = readActiveLikeOutbox414\(uid\);[\s\S]{0,220}retryTracks/,
+  'app410 retained repair must not be blocked by quarantined rows');
+assert.match(service, /const localPending390 = isExploreLikeActivePending414\(storedPending390\)/,
+  'new accepted 127 state must not be deferred behind a quarantined row');
+assert.match(service, /if \(isExploreLikeActivePending414\(pending\[item\.trackId\]\)\) continue;/,
+  'canonical changed-track state must pass historical quarantine');
+assert.match(service, /const outbox = readActiveLikeOutbox414\(uid\);[\s\S]{0,900}const nextLiked = outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/,
+  'fresh exact baseline must ignore quarantined old outbox authority');
+assert.match(service, /const beforeOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
+assert.match(service, /const currentOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
+assert.match(service, /const storedExisting = outbox\[normalizedTrackId\];[\s\S]{0,180}isExploreLikeActivePending414\(storedExisting\)/,
+  'a fresh explicit click must replace, not coalesce with, a quarantined historical row');
+console.log('414_STALE_OUTBOX_UI_AUTHORITY_QUARANTINED=PASS');
+console.log('414_RETAINED_CANONICAL_REPAIR_NOT_BLOCKED=PASS');
+console.log('414_FRESH_EXPLICIT_CLICK_AUTHORITY_PRESERVED=PASS');
 
 // An in-flight true can reach canonical D1 after the same user's later false.
 // Compare the later intent against the earlier accepted desired state rather

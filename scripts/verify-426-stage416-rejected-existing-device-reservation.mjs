@@ -37,7 +37,7 @@ for(let i=0;i<256;i++){
   fullPending[key]={
     trackId,liked:true,
     operationId:`00000000-0000-4000-8000-${String(300000000000+i).padStart(12,'0')}`,
-    deviceId=`00000000-0000-4000-8000-${String(400000000000+i).padStart(12,'0')}`,
+    deviceId:`00000000-0000-4000-8000-${String(400000000000+i).padStart(12,'0')}`,
     deviceSequence:1,version:100,mutationAt:50,
   };
 }

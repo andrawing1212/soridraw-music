@@ -1,8 +1,7 @@
 ## CURRENT — Stage416 global version 2-phase lost-click 수정 / 배포 없음 (2026-10-13 KST)
 
-- 기준: 현재 `preview` HEAD `6d01a675f9f76e2f5b54d8ec271c7cbb2292d96d` (제품 기준
-  `2ea0e6f1d29d0316b7571473a4584d013305da9a` + 두 blocker 감사 기록) 위에 environment-isolation
-  B안 `47c639f8982a2c4d3f77738c45496db1e3d084c5`을 force-push 없이 재기반한 corrected branch.
+- 기준: 작업 시작 시 최신 `preview` HEAD `8b0e48a3fdb5cc36369914fba0e96ebf30248384`
+  위에 environment-isolation B안과 global-version 수정 방향을 force-push 없이 재기반한 corrected branch.
 - environment별 pending/task/final receipt root와 Function identity는 유지하면서, 세 환경이 동일한
   `privateLikeGlobalVersion416/{uid}` bounded sequencer를 사용하도록 수정했다.
 - sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를

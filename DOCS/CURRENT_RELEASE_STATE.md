@@ -1,29 +1,24 @@
-## CURRENT — Issue #118 Codex 산출물 2개 감사 / cross-env version collision로 merge BLOCKED (2026-10-13 KST)
+## CURRENT — Stage416 cross-environment global settlement version 수정 / 배포 없음 (2026-10-13 KST)
 
-- **Codex 공식 상태:** Issue #118 bot session은 `Codex couldn't complete this request`로 종료. Draft PR 없음.
-- **남은 산출물:** A `codex/issue-118-stage416-env-isolation` / `e4d36ba87aee475889f7f0ebe67c73ded33ca20d` (current preview `2ea0e6f...` 기반), B `codex/stage416-env-isolation` / `47c639f8982a2c4d3f77738c45496db1e3d084c5` (이전 `a80b0e5...` 기반).
-- **A 감사:** callable/task/root/timing/Worker endpoint는 환경 분리했지만 final receipt Function/final RTDB root가 PREVIEW 단일 identity로 남아 end-to-end isolation 불완전.
-- **B 감사:** A보다 나아 final receipt Function + final RTDB root까지 PREVIEW/TEST/PRODUCTION별로 분리. 그러나 **critical version collision** 존재.
-- **critical blocker:** 각 env private root가 독립 `version=1,2,...`를 생성하지만 shared D1 `explore_like_private_acceptance_416`는 `user_uid`별로 `excluded.version > current.version`만 허용하고 shared personal R2도 `privateLikeVersion416` monotonic version을 사용. 따라서 PREVIEW에서 이미 v39인 사용자의 TEST v1/PROD v1 settlement는 stale로 거부될 수 있음.
-- **판정:** A/B 모두 merge/deploy 금지. Issue #118에 환경별 transient isolation은 유지하되 uid별 canonical settlement version은 세 환경 전체에서 strictly increasing이 되도록 교정 지시 완료. D1 schema/user data migration 없이 해결해야 함.
-- **비변경:** preview product code/functions/worker/D1/R2/Rules/Hosting, TEST, PRODUCTION, shared user data 변경 0. 일반 Stage416 client flags OFF 유지.
+- 기준: `preview` HEAD `2ea0e6f1d29d0316b7571473a4584d013305da9a` + environment-isolation B안
+  `47c639f8982a2c4d3f77738c45496db1e3d084c5` 위 corrected branch.
+- environment별 pending/task/final receipt root와 Function identity는 유지하면서, 세 환경이 동일한
+  `privateLikeGlobalVersion416/{uid}` bounded sequencer를 사용하도록 수정했다.
+- sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를
+  migration/backfill/read bootstrap 없이 넘어가며, PREVIEW → TEST → PRODUCTION → PREVIEW 실행형
+  interleaving에서 shared D1/R2 acceptance version이 strictly increasing이다.
+- exact same-operation duplicate는 bounded device receipt로 기존 version을 재사용하고 logical RTDB W0,
+  stale/different operation도 W0이다. 새 accepted click은 기존 environment-root W1에 sequencer W1이
+  추가되어 RTDB changed writes 총 W2다. page/update/re-entry IO는 계속 0이다.
+- D1 schema/table/key, shared canonical user data, Worker/release workflow는 변경하지 않았다.
+- TEST/PRODUCTION의 distinct final receipt Function/final root 및 environment-specific Worker endpoint
+  identity는 유지되어 후속 #117 binding에서 명시적으로 사용할 수 있다.
+- Functions TypeScript와 Stage416 global interleaving/isolation/callable/server-click/expired-window verifier
+  PASS. 배포, main/production 변경, 사용자 데이터 migration/backfill은 0이다.
 
----
-## CURRENT — Stage416 release contract 감사 FAIL / environment-isolated transient backend 선행 필요 (2026-10-13 KST)
+## PREVIOUS — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
 
-- **Issue #117 Codex 결과:** 공식 세션은 실패했지만 두 source branch가 남음: A `codex/issue-117-functions-promotion` / `9b1abe00c12a8412fa65a5b0960764dd51c78b8b`, B `codex/stage416-functions-promotion-contract` / `97859b162ac5a48fd3ff306991df39cad61fcbb4`.
-- **독립 감사 판정:** 두 안 모두 merge 금지. A는 TEST/PRODUCTION 실제 Functions 승격 단계가 없고, B는 TEST deploy만 있으며 PRODUCTION deploy가 없음.
-- **구조적 차단점:** 현재 `src/firebase.js`는 PREVIEW/TEST/PRODUCTION host 모두 Firebase project `soridraw-app-866a5`와 같은 `getFunctions(app,'us-central1')`를 사용하며 Stage416 client transport는 callable name `recordPrivateLike416` 고정. settle source도 single task target `stage416SettlePrivateWindowCandidate`이고 TEST/PRODUCTION용 별도 runtime identity가 없음. 같은 이름을 같은 Firebase project에 재배포하면 환경별 승격이 아니라 기존 shared Function 덮어쓰기.
-- **Worker routing 위험:** settle runtime은 `SORIDRAW_PRIVATE_BATCH416_WORKER_URL` 미설정 시 PREVIEW Worker endpoint로 fallback. TEST/PRODUCTION 독립 Function identity 없이 release workflow만 추가하면 wrong-environment Worker routing 가능.
-- **결론:** user canonical likes/D1는 계속 공유하되 Stage416 transient RTDB window/pending/sealed, timing config, callable/task runtime identity는 환경별로 additive 분리해야 함. 기존 PREVIEW controlled path는 호환 유지.
-- **새 선행 작업:** Issue #118 `Stage416 environment-isolated transient backend prerequisite` 생성 및 Codex 요청. Release Controller #117 수정은 #118 완료/독립 감사 전 보류.
-- **비변경:** 두 Codex branch 모두 preview에 merge 안 됨. 실제 Functions/Worker/D1/R2/Rules/Hosting/user data/TEST/PRODUCTION 변경 0. 일반 Stage416 client OFF 유지.
-
----
-## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
-## CURRENT — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
-
-- 기준: 최신 PREVIEW `a80b0e5fb3af6019023aa7be9ca040b6d09650a7`.
+- 기준: 최신 PREVIEW `2ea0e6f1d29d0316b7571473a4584d013305da9a`.
 - 기존 controlled PREVIEW callable/task/RTDB root/timing path identity는 그대로 보존했다.
 - TEST/PRODUCTION에 서로 다른 callable, scheduler, Cloud Task target, settle/final Function,
   transient pending/final root, timing path를 additive source로 추가했다.

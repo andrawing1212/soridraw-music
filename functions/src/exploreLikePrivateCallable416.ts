@@ -32,6 +32,7 @@ export async function handleAuthenticatedPrivateClick416(
  const policy=await readLikeBatchTimingAt416(database,config.timingPath);
  const result=await recordUserPrivateClick416(
    database,uid,click,policy.privateMinutes,Date.now(),false,config.privateRoot,
+   config.globalVersionRoot,
  );
  // A previously LOST/early-dispatched task can strand a server window.
  // Its replacement must be scheduled by trusted Firebase, not by the client.

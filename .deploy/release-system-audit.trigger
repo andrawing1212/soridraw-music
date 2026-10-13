@@ -1,6 +1,7 @@
-# app380 collect all isolated like regression failures once
-prior_run=37711245036
-source=b4d7e3188e8f04dc4004f55719380efcf3f6c8c8
+# app414 stale-outbox UI authority quarantine audit
+requested_at=2026-10-13T10:00:00Z
+source=preview
+purpose=verify_app414_like_convergence_candidate
 audit_only=true
 shared_d1_apply=false
 worker_deploy=false

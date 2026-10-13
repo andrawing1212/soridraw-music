@@ -1,3 +1,14 @@
+## PREVIEW app411 — Master-only Stage416 controlled E2E proof gate (2026-10-13 KST)
+
+- **제품 source:** `69416c86c209ce05b8e80de320b3cb788e9f1542` (controlled proof product `b6bec317...`, one-track read `4707a0ab...`, verifier-only final).
+- **Quality:** Run `38336802234` SUCCESS. Stage416 one-operation Master gate/exact one-track canonical check/general Explore unchanged/no new schema or polling PASS; TypeScript/Build/frozen likes/Rules audit PASS. Follow-only `38336581227` SUCCESS.
+- **Hosting release:** trigger `f557c163ad1bae14c879fe69556674b0645377b1`; Run `38336992721` SUCCESS. `preview.soridraw.com` app411 / exact build PASS. TEST/PRODUCTION unchanged PASS; RTDB Rules SKIPPED.
+- **배포 변경 범위:** Master 앱 설정의 Stage416 패널 + diagnostic service + app version. app410 일반 사용자 like UI/transport/caches unchanged. Functions/Cloudflare Worker/D1/R2/shared data/migration/backfill/delete 변경 0.
+- **pre-click baseline:** readonly `38337210526` SUCCESS, Stage416 persistent D1 acceptance receipt NO / pending069 NO.
+- **남은 실제 검증:** Master 버튼 1회 실행 후 server accepted 표시 및 설정된 private window due 이후 Worker/D1 receipt/final ACK read-only 증명. 그 전에는 Stage416 client activation/TEST 승격 금지.
+
+---
+
 ## Stage416 PREVIEW recordPrivateLike416 authoritative-abort refresh 단일 함수 배포 (2026-10-13 KST)
 
 - **배포 Run:** [38335089397](https://github.com/andrawing1212/soridraw-music/actions/runs/38335089397) SUCCESS.

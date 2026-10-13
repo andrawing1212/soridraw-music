@@ -1,3 +1,17 @@
+## CURRENT — app411 Master controlled Stage416 E2E gate PREVIEW 배포 / 실실행 1회 대기 (2026-10-13 KST)
+
+- **일반 사용자 보호:** app410에서 사용자 실기기 PASS한 Explore 좋아요 동작은 그대로 유지. app411은 **Master 앱 설정 진단 UI/전용 service만 추가**했고 일반 Explore click/outbox/canonical app399 batch/app409 recovery/app410 retained repair 코드는 변경하지 않음. Stage416 일반 client flags 계속 OFF.
+- **구현:** product `b6bec3174dd29d8ca4fd0d83977055f2f4d72b91` + one-track read 최적화 `4707a0ab32717eead72be43b0782c19309306e9c` + verifier 정정 `69416c86c209ce05b8e80de320b3cb788e9f1542`. 새 `src/services/stage416ControlledProof416.ts`와 기존 Master `Stage416LikeBatchMasterPanel`만 연결.
+- **controlled gate 안전조건:** server-side `masterGetLikeBatchTiming416` 성공이 먼저 필요. 이 기기의 기존 canonical-liked 후보 1곡만 사용하고 `/v1/me/likes?trackIds=<exact one>`로 실제 `liked=true`를 **최대 1회 확인**. 같은 `liked=true`만 Stage416에 전송하므로 사용자 최종 선택/공개 count를 의도적으로 바꾸지 않는 no-op 목표. operation/device sequence를 localStorage에 먼저 고정하고 재시도도 같은 operation만 사용. prior expired window는 기존 2s/5s/10s bounded retry helper 재사용. polling/whole scan/새 schema 없음.
+- **QA:** 최초 `4707a0a...` Run `38336678399` FAIL은 verifier가 비용 최적화 전 destructuring 문자열을 찾던 검사 오류. 제품 순서는 실제로 Master→prepare→private callable이었음. verifier만 정정 후 Quality Run `38336802234` **SUCCESS**. `STAGE416_MASTER_CONTROLLED_E2E_ONE_OPERATION_GATE=PASS`, exact one-track canonical check PASS, general Explore path unchanged PASS, no new schema/polling PASS, Functions TypeScript/app TypeScript/Build/frozen like regressions/RTDB Rules audit PASS. Follow-only Run `38336581227` SUCCESS.
+- **PREVIEW app411:** release trigger `f557c163ad1bae14c879fe69556674b0645377b1`; Hosting Run `38336992721` **SUCCESS**. `preview.soridraw.com` remote `app-version=411`, exact build PASS. shared RTDB Rules SKIPPED. Functions/Worker/D1/R2/shared data는 app411 Hosting 배포에서 변경 0. TEST/PRODUCTION unchanged PASS.
+- **pre-click live baseline:** Readonly Run `38337210526` SUCCESS. `STAGE416_PRIVATE_ACCEPTANCE_ANY=NO`, `PENDING_069_ANY=NO`. 과거 24h Scheduler 2 / Settle 67 / logging-era EMPTY 65 상태 유지. 따라서 다음 persistent acceptance receipt가 생기면 app411 controlled operation과 시간상 분리 확인 가능.
+- **비용:** 일반 업데이트/방문/페이지 이동 추가 server read/write 0. Master proof 실행 1회에만 Master 권한 확인 + exact membership 1곡 bounded read + 기존 Stage416 O(1) server path. 전체 liked list/feed/catalog scan 없음.
+- **진행률:** Stage416 전체 **1/4·25%**; 앱 속도 **5/5·100%**; 세부 작업 `Stage416 controlled E2E proof gate` **3/4·75%**. 남은 1단계는 로그인된 Master가 app411 앱 설정에서 controlled proof를 1회 실행하고, due 이후 D1 receipt/final callback을 read-only로 확인하는 것.
+- **사용자 실행 위치:** PREVIEW → 관리자 `앱 설정` → `좋아요 저장·공개 집계 주기` → 아래 `캐시 진단 표시` ON → `Stage416 서버 1회 검증`. raw UID/trackId/opId는 UI/로그에 표시하지 않음.
+
+---
+
 ## CURRENT — app410 보호 유지 / Stage416 aborted RTDB stale-cache fix PREVIEW Callable 배포 완료 (2026-10-13 KST)
 
 - **app410 보호:** 사용자 실기기 PASS 동결 유지. Hosting은 app410 / Run `38275509549` 그대로이며 좋아요 UI·canonical app399 batch·app409 startup recovery·app410 retained repair를 변경하지 않음. Stage416 client flags 계속 OFF.

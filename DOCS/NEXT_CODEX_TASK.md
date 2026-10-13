@@ -1,3 +1,15 @@
+## NEXT — app411 Master controlled proof 1회 실행 → due 후 persistent receipt 확인 (2026-10-13 KST)
+
+- **현재 PREVIEW:** app411 Hosting Run `38336992721` SUCCESS / exact build PASS. controlled proof source `4707a0ab...`, QA `38336802234` SUCCESS. general Stage416 client OFF.
+- **현재 기준선:** pre-click readonly Run `38337210526`에서 shared D1 `explore_like_private_acceptance_416` row existence **NO**, pending069 **NO**.
+- **사용자 1회 실행:** Master 로그인 → `/admin/app-settings`(앱 설정) → 캐시 진단 표시 ON → `Stage416 서버 1회 검증`. 버튼은 local cached canonical-liked 후보 1곡을 exact membership 1회 확인한 뒤 same-state `liked=true`만 전송. 기존 intent가 있으면 동일 operation으로만 재시도.
+- **즉시 PASS 1:** 패널에 `서버 접수 승인 · version N`이 표시되고 `서버 접수 진단`이 receipt 유효 / 서버 등록 완료로 바뀌어야 함. 거절/오류면 raw ID 없이 reason만 기록하고 Stage416 전체 진행률은 올리지 않음.
+- **due 후 PASS 2:** Master privateMinutes(현재 live 설정) 경과 후 read-only diagnostic에서 Scheduler/Settle 새 activity와 shared D1 persistent acceptance receipt YES, pending069 정상 소진, final callback/ACK 증거를 한 시간창으로 묶어 확인. persistent receipt 없으면 client activation 금지.
+- **금지:** 일반 Explore Stage416 flag ON, whole private root read, D1 delete/reset, Task 강제실행, shared user backfill/migration, TEST/PRODUCTION 승격.
+- **진행률:** Stage416 **1/4·25%**, 앱 속도 **5/5·100%**, `Stage416 controlled E2E proof gate` **3/4·75%**.
+
+---
+
 ## NEXT — app410 동결 유지 / Stage416 controlled E2E proof gate 설계 (2026-10-13 KST)
 
 - **현재 기준:** PREVIEW app410 사용자 PASS. `recordPrivateLike416` authoritative-abort refresh fix는 Run `38335089397`로 PREVIEW 배포 PASS. Stage416 client flags OFF, Worker/settle/Eventarc additive backend는 유지.

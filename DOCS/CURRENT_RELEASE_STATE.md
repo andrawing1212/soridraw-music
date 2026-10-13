@@ -1,3 +1,21 @@
+## CURRENT — Issue #118 감사 FAIL 3건 교정 완료 / 최종 회귀 PASS / 재감사 대기 (2026-10-14 KST)
+
+- **작업 branch:** `gpt56/stage416-lost-click-fix`
+- **기준 preview:** `2d282ffb6fb4d9c95f654c782c20a1e2cf2ae922`
+- **직전 감사 대상:** `beb6f445ce354b5561519e76239c3d9b3e3a4d97` → GPT-6 독립 감사 **FAIL**.
+- **FAIL 1 — 동시 예약 역순 저장:** A가 v100 예약 후 지연되고 B가 v101 예약·저장한 뒤 A가 저장될 때 click 유실 가능. 교정 후 같은 operationId를 유지하면서 관측된 env/global high-water보다 최신 버전으로만 안전 rebase한다.
+- **FAIL 1 실행형 재현:** A 예약 → B 예약 → B 저장 → A 저장 순서를 직접 재현. `STAGE416_CONCURRENT_RESERVATION_REBASE_NO_LOST_CLICK=PASS`.
+- **FAIL 2 — 환경 간 최종 확정 역전:** 높은 버전 환경이 낮은 버전보다 먼저 Worker/D1/R2로 확정되는 경로를 차단했다. 실제 due settlement에서 현재 환경을 제외한 **다른 두 transient private root만 bounded read**하고, 더 낮은 active window/seal이 있으면 higher seal을 RTDB에 그대로 보존한 채 Cloud Task retry로 대기한다.
+- **FAIL 2 실행형 재현:** PREVIEW v101 확정 시도 → TEST v100 존재 → v101 Worker/D1 호출 0 → TEST v100 전달/ACK → PREVIEW v101 전달/ACK. `STAGE416_CROSS_ENV_FINAL_DELIVERY_STRICT_100_101=PASS`, `STAGE416_BLOCKED_HIGHER_WORKER_D1_CALLS=0`.
+- **FAIL 3 — 거절된 신규기기 예약 슬롯 잔존:** 새 global device slot을 만든 요청이 최종적으로 DEVICE_LIMIT / TRACK_LIMIT / STALE로 거절된 경우 exact reservation만 조건부 회수한다. accepted/duplicate/PRIOR_WINDOW_NEEDS_SEAL reservation은 삭제하지 않는다. `STAGE416_REJECTED_NEW_DEVICE_RESERVATION_SLOT_RELEASED=PASS`.
+- **최종 개발 QA:** Run `38424104197` SUCCESS. Stage416 421/422/423 + callable/server/expired-window + app416 intent + 127/175/178/191/192/197/390/412/413/414 회귀 + app TypeScript + app Build + Functions TypeScript PASS.
+- **비용:** 정상 accepted click RTDB changed writes 모델 W2 유지, exact proven duplicate W0 유지. cross-env settlement gate는 **실제 due window 시도당 peer RTDB read 2**만 추가하며 page/update/re-entry IO는 0. rejected 신규기기 cleanup은 거절 상황에서만 exact global reservation RTDB write 최대 1회 추가.
+- **관리자 운영값:** live 확인 기준 private=1분 / public=5분 그대로. 이번 후보는 값을 읽거나 활성화하지 않으며 일반 Stage416 client flag는 계속 OFF.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0.
+- **배포:** Firebase/Functions/Worker/Rules/Hosting 배포 0. TEST/PRODUCTION 변경 0.
+- **현재 gate:** 새 독립 감사 PASS 전 PR #120 merge, preview client activation, 개인 1분 실사용 활성화 금지.
+
+---
 ## CURRENT — Stage416 lost-click blocker 직접 수정 완료 / QA PASS / 독립 감사 대기 (2026-10-14 KST)
 
 - **작업 branch:** `gpt56/stage416-lost-click-fix`

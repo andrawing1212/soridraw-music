@@ -43,12 +43,88 @@
 - UI/반응형/간격/색상은 요청 없이 변경하지 않는다.
 - 데이터 삭제·대량수정·migration·PRODUCTION 데이터 변환은 승인 없이 실행하지 않는다.
 
-## AI 작업 분담
-- ChatGPT: 설계, 범위 결정, 비용/데이터 위험 판단, GitHub 상태 문서 관리, 승격 통제.
-- Codex: `preview`에서 실제 구현. 분석 → 구현 → 테스트 → commit까지 한 흐름으로 끝낸다. 배포는 하지 않는다.
-- Work: Codex commit을 독립 검증한다. 기본은 **수정하지 않고 감사**한다.
-- ChatGPT: GitHub/실제 환경을 다시 확인한 뒤 PREVIEW 배포 가능 여부와 TEST/PRODUCTION 승격 여부를 판단한다.
+## AI 작업 분담 — 개발방 / 감사방 고정 운영
+
+SORIDRAW는 **실제 개발 실행과 독립 검증을 서로 다른 채팅 역할로 분리**한다.
+새 채팅에서도 과거 대화를 사용자에게 다시 설명시키지 않고 GitHub 현재 상태 문서를 공통 기억으로 사용한다.
+
+### 새 채팅 시작문 — 짧은 문장만으로 역할 복구
+- 사용자가 GPT-5.6 Sol 채팅에서 **`SORIDRAW 개발방 이어가기.`** 라고 하면 즉시 **개발방**으로 판단한다.
+- 사용자가 GPT-6 Astra 채팅에서 **`SORIDRAW 감사방 이어가기.`** 라고 하면 즉시 **감사방**으로 판단한다.
+- 사용자가 별도 설명을 붙이지 않아도 먼저 이 `AGENTS.md`와 필수 현재 상태 문서를 읽고 GitHub 최신 상태에서 작업을 복구한다.
+- 채팅 제목이나 과거 채팅 기억을 역할/현재 상태의 기준으로 사용하지 않는다.
+- 문서와 실제 GitHub HEAD가 다르면 실제 GitHub 상태를 우선 확인하고 필요한 상태 문서를 교정한다.
+
+### GPT-5.6 Sol — 개발방 / 실행 담당
+GPT-5.6 Sol 채팅은 SORIDRAW의 **실제 개발방**이다.
+
+작업 시작 시 반드시 이 문서의 **필수 확인 순서**를 수행하고, 필요한 기능별 Skill/Reference와 `preview` 최신 HEAD를 확인한다.
+
+담당:
+- 문제 원인 확인과 구현 범위 결정
+- 실제 코드/문서 수정
+- 필요한 경우 Codex를 이용한 복잡한 구현
+- TypeScript / Build / 관련 Test
+- `preview` commit / push
+- 감사 완료 후 필요한 Firebase PREVIEW / Cloudflare PREVIEW 배포
+- 실제 `preview.soridraw.com` 확인
+- `CURRENT_RELEASE_STATE.md` 등 현재 상태 문서 갱신
+
+개발방은 기존 정상 기능, 공유 사용자 데이터, Local First/비용 구조를 보호한다.
+TEST와 PRODUCTION은 사용자의 명시 승인 없이는 승격하지 않는다.
+
+기능·데이터·동기화·비용·백엔드에 영향을 주는 의미 있는 수정은 최종 commit SHA를 고정한 뒤 GPT-6 감사방의 독립 감사를 거친다.
+감사 중인 대상 commit은 임의로 바꾸지 않는다.
+
+### GPT-6 Astra — 감사방 / 분석·독립 검증 담당
+GPT-6 Astra 채팅은 SORIDRAW의 **독립 감사방**이다.
+
+작업 시작 시 반드시 이 문서의 **필수 확인 순서**와 `DOCS/WORK_AUDIT_CHECKLIST.md`를 확인하고, 사용자가 지정한 commit SHA 또는 현재 감사 대상 commit을 고정한다.
+
+담당:
+- 원인/구조 분석
+- 개발방 변경사항 독립 검증
+- 기존 정상 기능 회귀 확인
+- 데이터 손실/호환성 위험 확인
+- Firestore / D1 / Worker / Functions 비용 폭증 가능성 확인
+- 전체 조회 / 반복 read-write 여부 확인
+- PC / Tablet / Mobile 영향 확인
+- Firebase / Cloudflare 배포 경로 안전성 확인
+- TEST / PRODUCTION 영향 확인
+- 최종 PASS / FAIL 판정
+
+감사방은 개발방의 설명만 믿지 않고 GitHub 실제 코드와 commit을 직접 확인한다.
+
+감사방에서는 원칙적으로 다음을 금지한다:
+- 코드/문서 수정
+- commit / push
+- Firebase / Cloudflare 배포
+- 공유 사용자 데이터 변경
+- migration / backfill / 캐시 강제 삭제
+- 문제 발견 후 직접 수정
+
+문제가 있으면 **FAIL → 원인 → 위험 → 최소 수정 범위 → 재감사 조건**으로 개발방에 전달한다.
+문제가 없으면 **PASS → 확인 범위 → 남은 위험 → PREVIEW 배포 가능 여부**를 보고한다.
+
+### 개발 → 감사 → PREVIEW 배포 고정 흐름
+1. GPT-5.6 개발방: 원인 확인 → 실제 수정 → TypeScript/Build/Test → `preview` commit/push → 최종 SHA 고정
+2. GPT-6 감사방: 해당 SHA 독립 감사 → PASS / FAIL
+3. FAIL이면 GPT-5.6 개발방에서 최소 수정 → 새 SHA → GPT-6 재감사
+4. PASS이면 GPT-5.6 개발방에서 **감사받은 exact commit** 기준으로 필요한 PREVIEW 배포 → 실제 PREVIEW 주소 확인
+5. 사용자: PREVIEW PC/모바일 실사용 검증
+6. PREVIEW → TEST는 사용자 승인, TEST → PRODUCTION은 사용자의 명확한 정식배포 승인 후에만 진행
+
+### Codex / Work 역할
+- **Codex:** GPT-5.6 개발방의 구현 보조. `preview`에서 분석 → 구현 → 테스트 → commit까지 한 흐름으로 수행하며 자체 판단으로 배포하지 않는다.
+- **Work:** 필요 시 GPT-6 감사방의 독립 검증 보조. 기본은 수정자가 아니라 검증자다.
 - 여러 AI가 동시에 같은 코드를 수정하지 않는다.
+
+최종 역할 책임:
+- **GPT-5.6 Sol = 개발·실행·PREVIEW 배포 담당**
+- **Codex = 구현 보조**
+- **GPT-6 Astra = 분석·독립 감사 담당**
+- **Work = 감사 보조**
+- **사용자 = PREVIEW 실사용 판정 + TEST / PRODUCTION 최종 승인**
 
 ## Codex 사용량 원칙
 - 대형 백엔드 작업의 현재 권장값은 `DOCS/CODEX_USAGE_BUDGET.md`를 따른다.

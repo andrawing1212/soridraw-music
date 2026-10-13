@@ -38,7 +38,7 @@ assert.doesNotMatch(panel,/ExplorePage|toggleLike|flushPendingLikes/,
  'Master panel must not alter ordinary Explore click flow');
 
 const masterAt=service.indexOf('const privateMinutes = await requireMaster416()');
-const prepareAt=service.indexOf('const { proof, reused } = await prepareProof416(uid)');
+const prepareAt=service.indexOf('const { proof, reused, canonicalConfirmed } = await prepareProof416(uid)');
 const privateAt=service.indexOf("functions, 'recordPrivateLike416'");
 assert(masterAt>=0&&prepareAt>masterAt&&privateAt>=0,
  'Master authorization must precede controlled operation preparation');

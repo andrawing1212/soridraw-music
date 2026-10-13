@@ -6,7 +6,7 @@ const panel=readFileSync('src/components/Stage416LikeBatchMasterPanel.tsx','utf8
 const appSettings=readFileSync('src/pages/AdminAppSettingsPage.tsx','utf8');
 const version=JSON.parse(readFileSync('public/app-version.json','utf8')).version;
 
-assert.equal(version,411,'controlled proof is PREVIEW app411');
+assert.ok(version>=411,'controlled proof baseline must remain available from PREVIEW app411 onward');
 assert.match(appSettings,/STAGE416_LIKE_BATCH_MASTER_PANEL_ACTIVE = true/);
 assert.match(panel,/runStage416ControlledProof416/);
 assert.match(panel,/Stage416 서버 1회 검증/);

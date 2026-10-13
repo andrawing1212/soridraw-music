@@ -168,6 +168,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     trackId, ownerUid, baseLiked: false, desiredLiked: true,
     baseLikeCount: 0, optimisticLikeCount: 1,
     queuedAt: 100, updatedAt: 200, retryCount: 0,
+    explicitReplayEligible412: true,
     operationId: '00000000-0000-4000-8000-000000000001',
     expectedRevision: 0,
   };

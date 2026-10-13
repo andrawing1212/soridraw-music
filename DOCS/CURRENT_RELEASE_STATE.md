@@ -1,3 +1,14 @@
+## CURRENT — Stage416 release contract 감사 FAIL / environment-isolated transient backend 선행 필요 (2026-10-13 KST)
+
+- **Issue #117 Codex 결과:** 공식 세션은 실패했지만 두 source branch가 남음: A `codex/issue-117-functions-promotion` / `9b1abe00c12a8412fa65a5b0960764dd51c78b8b`, B `codex/stage416-functions-promotion-contract` / `97859b162ac5a48fd3ff306991df39cad61fcbb4`.
+- **독립 감사 판정:** 두 안 모두 merge 금지. A는 TEST/PRODUCTION 실제 Functions 승격 단계가 없고, B는 TEST deploy만 있으며 PRODUCTION deploy가 없음.
+- **구조적 차단점:** 현재 `src/firebase.js`는 PREVIEW/TEST/PRODUCTION host 모두 Firebase project `soridraw-app-866a5`와 같은 `getFunctions(app,'us-central1')`를 사용하며 Stage416 client transport는 callable name `recordPrivateLike416` 고정. settle source도 single task target `stage416SettlePrivateWindowCandidate`이고 TEST/PRODUCTION용 별도 runtime identity가 없음. 같은 이름을 같은 Firebase project에 재배포하면 환경별 승격이 아니라 기존 shared Function 덮어쓰기.
+- **Worker routing 위험:** settle runtime은 `SORIDRAW_PRIVATE_BATCH416_WORKER_URL` 미설정 시 PREVIEW Worker endpoint로 fallback. TEST/PRODUCTION 독립 Function identity 없이 release workflow만 추가하면 wrong-environment Worker routing 가능.
+- **결론:** user canonical likes/D1는 계속 공유하되 Stage416 transient RTDB window/pending/sealed, timing config, callable/task runtime identity는 환경별로 additive 분리해야 함. 기존 PREVIEW controlled path는 호환 유지.
+- **새 선행 작업:** Issue #118 `Stage416 environment-isolated transient backend prerequisite` 생성 및 Codex 요청. Release Controller #117 수정은 #118 완료/독립 감사 전 보류.
+- **비변경:** 두 Codex branch 모두 preview에 merge 안 됨. 실제 Functions/Worker/D1/R2/Rules/Hosting/user data/TEST/PRODUCTION 변경 0. 일반 Stage416 client OFF 유지.
+
+---
 ## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
 
 - **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.

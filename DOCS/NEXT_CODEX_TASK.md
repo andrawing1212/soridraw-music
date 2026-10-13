@@ -1,3 +1,15 @@
+## NEXT — Codex High: Issue #118 Stage416 transient backend environment isolation (2026-10-13 KST)
+
+- **목표:** canonical 사용자 좋아요/D1는 공유 유지하면서 Stage416의 operational batching runtime만 PREVIEW/TEST/PRODUCTION별로 분리한다.
+- **호환:** 기존 PREVIEW controlled gate/function/path는 깨지지 않도록 legacy preview alias/path 유지. destructive move/delete/migration 금지.
+- **분리 대상:** TEST/PRODUCTION callable identity, scheduler/settle Function identity, Cloud Tasks target/queue identity, transient RTDB window/pending/sealed namespace, Master timing config namespace, Worker endpoint binding.
+- **client:** host/environment별 올바른 callable name 선택 구조를 준비하되 일반 `STAGE416_*_ACTIVE` flags는 OFF 유지.
+- **서버:** 공통 handler에 environment config를 주입해 로직 복붙 금지. TEST/PRODUCTION에서 PREVIEW Worker fallback 금지.
+- **검증:** preview legacy regression, cross-env task/root isolation, timing isolation, callable host routing, ACK/EMPTY/NOT_DUE/WAITING bounded retry, Functions/app TypeScript, Build, app410 frozen likes, RTDB Rules audit.
+- **금지:** 실제 deploy, Worker/D1/R2/Rules/shared user data 변경, main/production 변경, Issue #117 release workflow 수정.
+- **Issue:** #118. Draft PR + commit/push + 테스트까지 Codex, 이후 Work/ChatGPT 독립 감사.
+
+---
 ## NEXT — Codex High: Stage416 Functions exact TEST/PRODUCTION promotion contract 설계·구현 (2026-10-13 KST)
 
 - **전제:** controlled E2E live 4/4 PASS, bounded WAITING retry PREVIEW deploy/postflight PASS. 일반 client flags OFF 유지.

@@ -13,6 +13,7 @@ import {
   retryPrivateClickAfterPriorSeal416,
   type PrivateRtdbClick416,
 } from './exploreLikePrivateRtdbTransport416';
+import {currentStage416CallableName416} from './stage416Environment416';
 
 type StoredProof416 = {
   schemaVersion: 1;
@@ -187,7 +188,7 @@ export const runStage416ControlledProof416 = async (): Promise<Stage416Controlle
     deviceSequence: proof.deviceSequence,
   };
   const callable = httpsCallable<PrivateRtdbClick416, PrivateClickReply416>(
-    functions, 'recordPrivateLike416',
+    functions, currentStage416CallableName416(),
   );
   let lastReason = 'OTHER';
   const result = await retryPrivateClickAfterPriorSeal416(async () => {

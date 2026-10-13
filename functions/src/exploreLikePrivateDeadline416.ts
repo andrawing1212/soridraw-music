@@ -29,10 +29,11 @@ export async function dispatchPrivateWindowTask416(
  db:Database, queue:PrivateQueue416, task:PrivateWindowTask416,
  workerEndpoint:string,secret:string,
  nowMs=Date.now(),http:typeof fetch=fetch,
+ batchRoot='privateLikeBatch416',
 ):Promise<{status:'DELIVERED'|'RESCHEDULED'|'STALE'|'EMPTY';atMs?:number}>{
  if(!isValid(task)||!validTime(nowMs))throw Error('416_INVALID_DISPATCH_TASK');
  const result=await completeUserPrivateWindow416(
-  db,task.uid,workerEndpoint,secret,nowMs,http,task.windowId,
+  db,task.uid,workerEndpoint,secret,nowMs,http,task.windowId,batchRoot,
  );
  if(result.queued){
    // Worker 069 receipt is durable, ACK only clears the matching frozen seal.

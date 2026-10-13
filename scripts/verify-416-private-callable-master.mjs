@@ -11,6 +11,8 @@ const calls={config:0,submit:0,uid:'',repairs:[]};
 class HttpErr extends Error{constructor(code,message){super(message);this.code=code;}}
 const requireMock=id=>{
  if(id==='firebase-functions/v2/https')return {HttpsError:HttpErr};
+ if(id==='./exploreLikeEnvironment416')return {STAGE416_ENVIRONMENTS:{preview:{
+  batchRoot:'privateLikeBatch416',timingPath:'likeBatchTiming416/current',taskTarget:'preview',workerEndpoint:'https://preview.invalid'}}};
  if(id==='./exploreLikeBatchSettings416')return {
   readLikeBatchTiming416:async()=>{
     calls.config++;return {privateMinutes:calls.config===1?5:3,publicMinutes:5};
@@ -60,8 +62,8 @@ assert.equal(calls.repairs.length,1,'exactly one bounded requeue on blocked expi
 assert.equal(calls.repairs[0].uid,'account');
 assert.equal(calls.repairs[0].windowId,'00000000-0000-4000-8000-000000000099');
 const index=readFileSync('functions/src/index.ts','utf8');
-assert.match(index,/export const recordPrivateLike416\s*=\s*onCall/);
-assert.match(index,/recordPrivateLike416[\s\S]{0,180}enforceAppCheck:\s*true/);
+assert.match(index,/makeRecordPrivateLike416[\s\S]{0,180}enforceAppCheck:\s*true/);
+assert.match(index,/export const recordPrivateLike416\s*=\s*makeRecordPrivateLike416/);
 console.log('STAGE416_CALLABLE_UID_APPCHECK_SERVER_MASTER_1_3_5_10_20=PASS');
 console.log('STAGE416_CALLABLE_CLIENT_TIMING_AND_UID_FORGERY_DENIED=PASS');
 console.log('STAGE416_MASTER_READ_ONLY_PER_CLICK_NO_PAGE_ENTRY_READ=PASS');

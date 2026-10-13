@@ -40,6 +40,8 @@ vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   }}:moduleId==='./exploreLikePrivateDiagnostic416'?{
     recordStage416PrivateAcceptanceReply416:(...args)=>transportDiagnostics416.push(['reply',...args]),
     recordStage416PrivateAcceptanceError416:(...args)=>transportDiagnostics416.push(['error',...args]),
+  }:moduleId==='./stage416Environment416'?{
+    currentStage416CallableName416:()=> 'recordPrivateLike416',
   }:(()=>{throw Error('unexpected import '+moduleId)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,

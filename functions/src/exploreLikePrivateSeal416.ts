@@ -27,13 +27,14 @@ export type Stage416SealResult={sealed:boolean;reason:string;value?:Seal;retryAf
 // transaction. An account clock is ONLY trusted after RTDB resolves .sv timestamp.
 export async function sealUserPrivateLikes416(
   database:Database,uid:string,nowMs=Date.now(),expectedWindowId?:string,
+  batchRoot='privateLikeBatch416',
 ):Promise<Stage416SealResult>{
   if(!uid||uid.length>128||!Number.isSafeInteger(nowMs)||nowMs<=0)
     throw Error('416_BAD_SERVER_SEAL');
   if(expectedWindowId && !validUuid(expectedWindowId))
     throw Error('416_BAD_SERVER_WINDOW_ID');
   let disposition:Stage416SealResult={sealed:false,reason:'UNDETERMINED'};
-  const privateRef=database.ref('privateLikeBatch416/'+uid);
+  const privateRef=database.ref(batchRoot+'/'+uid);
   const result=await privateRef.transaction(
     (raw:unknown)=>{
       const unchanged=raw===undefined?null:raw;
@@ -96,12 +97,13 @@ export async function sealUserPrivateLikes416(
 // ACK retries/mismatches are no-op; they never mutate newer pending clicks.
 export async function acknowledgeUserPrivateSeal416(
   database:Database,uid:string,receipt:{id:string;version:number},
+  batchRoot='privateLikeBatch416',
 ):Promise<boolean>{
   if(!uid||uid.length>128||!validUuid(receipt?.id)||
      !Number.isSafeInteger(receipt?.version)||receipt.version<=0)
     throw Error('416_BAD_SERVER_ACK');
   let acknowledged=false;
-  const result=await database.ref('privateLikeBatch416/'+uid).transaction(
+  const result=await database.ref(batchRoot+'/'+uid).transaction(
     (raw:unknown)=>{
       // A Task instance can begin this ACK from a stale local RTDB cache. A
       // mismatch must not abort before the transaction protocol compares with

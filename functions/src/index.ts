@@ -29,6 +29,7 @@ import {
   parseLikeBatchTiming416,
 } from "./exploreLikeBatchSettings416";
 import { handleAuthenticatedPrivateClick416 } from "./exploreLikePrivateCallable416";
+import { STAGE416_ENVIRONMENTS, type Stage416EnvironmentConfig } from "./exploreLikeEnvironment416";
 import {
   approveLikeWithAtomicLedgerCandidate420,
   recoverExactAtomicLikeApprovalCandidate420,
@@ -4346,28 +4347,35 @@ export const masterRecoverHeldAtomicLike420 = onCall(
 // Stage416 PREVIEW backend release: endpoint exports are server-only/inert until
 // the PREVIEW client + Worker hard flags are enabled. TEST/PRODUCTION clients
 // cannot call this path because their deployed app code keeps the candidate OFF.
-export const recordPrivateLike416 = onCall(
+const makeRecordPrivateLike416 = (config: Stage416EnvironmentConfig) => onCall(
   { region: "us-central1", enforceAppCheck: true },
-  async (request) => handleAuthenticatedPrivateClick416(admin.database(), request),
+  async (request) => handleAuthenticatedPrivateClick416(admin.database(), request, config),
 );
+export const recordPrivateLike416 = makeRecordPrivateLike416(STAGE416_ENVIRONMENTS.preview);
+export const recordPrivateLikeTest416 = makeRecordPrivateLike416(STAGE416_ENVIRONMENTS.test);
+export const recordPrivateLikeProduction416 = makeRecordPrivateLike416(STAGE416_ENVIRONMENTS.production);
 export {
   stage416SchedulePrivateWindowCandidate,
   stage416SettlePrivateWindowCandidate,
+  stage416SchedulePrivateWindowTest416,
+  stage416SettlePrivateWindowTest416,
+  stage416SchedulePrivateWindowProduction416,
+  stage416SettlePrivateWindowProduction416,
 } from "./exploreLikePrivateTask416";
 export { privateLikeFinalReceipt416Candidate } from "./exploreLikePrivateFinalEndpoint416";
 
 // Stage416 Master-only timing configuration. These source-only Callables are
 // NOT DEPLOYED until the staged 5m private and shared public aggregation paths
 // pass existing-app/Worker parity. No ordinary-user background config reads.
-export const masterGetLikeBatchTiming416 = onCall(
+const makeMasterGetLikeBatchTiming416 = (config: Stage416EnvironmentConfig) => onCall(
   { region: "us-central1" },
   async (request) => {
     await requireMasterCaller(request);
-    const current = await readLikeBatchTiming416(admin.database());
+    const current = await readLikeBatchTiming416(admin.database(), config.timingPath);
     return { ok: true, ...current };
   },
 );
-export const masterSetLikeBatchTiming416 = onCall(
+const makeMasterSetLikeBatchTiming416 = (config: Stage416EnvironmentConfig) => onCall(
   { region: "us-central1" },
   async (request) => {
     const { requesterUid } = await requireMasterCaller(request);
@@ -4376,6 +4384,7 @@ export const masterSetLikeBatchTiming416 = onCall(
       const expectedVersion = Number(request.data?.expectedVersion);
       const updated = await changeLikeBatchTiming416(
         admin.database(), requesterUid, input, expectedVersion,
+        Date.now(), config.timingPath,
       );
       return { ok: true, ...updated, effectiveForNewWindows: true };
     } catch (error) {
@@ -4390,3 +4399,9 @@ export const masterSetLikeBatchTiming416 = onCall(
     }
   },
 );
+export const masterGetLikeBatchTiming416 = makeMasterGetLikeBatchTiming416(STAGE416_ENVIRONMENTS.preview);
+export const masterSetLikeBatchTiming416 = makeMasterSetLikeBatchTiming416(STAGE416_ENVIRONMENTS.preview);
+export const masterGetLikeBatchTimingTest416 = makeMasterGetLikeBatchTiming416(STAGE416_ENVIRONMENTS.test);
+export const masterSetLikeBatchTimingTest416 = makeMasterSetLikeBatchTiming416(STAGE416_ENVIRONMENTS.test);
+export const masterGetLikeBatchTimingProduction416 = makeMasterGetLikeBatchTiming416(STAGE416_ENVIRONMENTS.production);
+export const masterSetLikeBatchTimingProduction416 = makeMasterSetLikeBatchTiming416(STAGE416_ENVIRONMENTS.production);

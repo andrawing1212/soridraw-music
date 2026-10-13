@@ -24,6 +24,11 @@ const context={
  if(id==='firebase-functions/v2/tasks')return {onTaskDispatched:(_o,fn)=>{
    dispatched++;return fn;}};
  if(id==='firebase-functions/params')return {defineSecret:()=>({value:()=>''})};
+ if(id==='./exploreLikeEnvironment416')return {STAGE416_ENVIRONMENTS:{
+  preview:{batchRoot:'privateLikeBatch416',taskTarget:'stage416SettlePrivateWindowCandidate',workerEndpoint:'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/internal/private-like-handoff-416'},
+  test:{batchRoot:'privateLikeBatch416Test',taskTarget:'stage416SettlePrivateWindowTest416',workerEndpoint:'https://test.invalid/v1/internal/private-like-handoff-416'},
+  production:{batchRoot:'privateLikeBatch416Production',taskTarget:'stage416SettlePrivateWindowProduction416',workerEndpoint:'https://prod.invalid/v1/internal/private-like-handoff-416'},
+ }};
  if(id==='./exploreLikePrivateDeadline416')return {
    scheduleInitialPrivateWindow416:async(q,t,w)=>{
      await q.enqueue(t,{scheduleTime:new Date(w.lastClickAtMs+w.minutes*60000)});
@@ -36,7 +41,7 @@ vm.runInNewContext(output,context,{timeout:1500});
 const {stage416SchedulePrivateWindowCandidate:schedule,
  stage416SettlePrivateWindowCandidate:settle,
  requeueExpiredPrivateWindow416:repair}=exports;
-assert.equal(triggered,1);assert.equal(dispatched,1);
+assert.equal(triggered,3);assert.equal(dispatched,3);
 const event={params:{uid:'uid-A'},data:{val:()=>({
  id:uuid,lastClickAtMs:1_700_000_000_000,minutes:5})}};
 await schedule(event);
@@ -61,9 +66,9 @@ await assert.rejects(settle({data:{uid:'uid-A',windowId:uuid}}),/BINDING_MISSING
 const indexSource=readFileSync('functions/src/index.ts','utf8');
 assert.match(indexSource,/stage416SchedulePrivateWindowCandidate/);
 assert.match(indexSource,/stage416SettlePrivateWindowCandidate/);
-assert.match(indexSource,/recordPrivateLike416 = onCall/);
+assert.match(indexSource,/recordPrivateLike416 = makeRecordPrivateLike416/);
 assert.match(indexSource,/enforceAppCheck: true/);
-assert.match(readFileSync('functions/src/exploreLikePrivateTask416.ts','utf8'),
+assert.match(readFileSync('functions/src/exploreLikeEnvironment416.ts','utf8'),
  /soridraw-explore-preview\.andrawing1212\.workers\.dev\/v1\/internal\/private-like-handoff-416/);
 console.log('STAGE416_RTD_B_NEW_WINDOW_ONLY_CLOUD_TASK_ENQUEUE=PASS');
 console.log('STAGE416_TASK_IDEMPOTENCE_AND_FAIL_CLOSED_BINDINGS=PASS');

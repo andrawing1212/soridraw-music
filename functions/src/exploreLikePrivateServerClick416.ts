@@ -19,7 +19,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
-  authoritativeRetry=false,
+  authoritativeRetry=false,batchRoot='privateLikeBatch416',
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -33,7 +33,7 @@ export async function recordUserPrivateClick416(
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
  let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
- const privateRef=database.ref('privateLikeBatch416/'+uid);
+ const privateRef=database.ref(batchRoot+'/'+uid);
  const outcome=await privateRef.transaction((raw:unknown)=>{
    // Never abort a decision that depends on current server state. Returning the
    // exact local value forces RTDB to compare its hash with the server; on a
@@ -113,7 +113,7 @@ export async function recordUserPrivateClick416(
    if(!authoritativeRetry){
      await privateRef.get();
      return recordUserPrivateClick416(
-       database,uid,click,trustedMinutes,receivedAtMs,true);
+       database,uid,click,trustedMinutes,receivedAtMs,true,batchRoot);
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};

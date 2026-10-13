@@ -1,3 +1,17 @@
+## CURRENT — Issue #118 Stage416 transient backend environment isolation source 완료 / 미배포 (2026-10-13 KST)
+
+- 기존 PREVIEW `recordPrivateLike416`, scheduler/settle Function 이름, `privateLikeBatch416` RTDB root, `likeBatchTiming416/current` timing path를 legacy 호환으로 유지.
+- TEST/PRODUCTION에 각각 별도 callable, scheduler, settle Function/Cloud Tasks target identity와 `privateLikeBatch416Test` / `privateLikeBatch416Production` transient root를 additive하게 준비.
+- TEST/PRODUCTION timing config를 별도 namespace로 분리하고 공통 handler에 environment config를 주입하여 서버 로직 복붙 없이 재사용.
+- 각 환경 Worker endpoint를 config에 명시적으로 고정. TEST/PRODUCTION에는 PREVIEW endpoint fallback이 없음.
+- client host가 환경별 callable identity를 선택할 수 있도록 준비했지만 일반 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE` / `STAGE416_SHARED_RTDB_BATCH_ACTIVE`는 계속 OFF.
+- 신규 실행형 verifier에서 legacy PREVIEW identity, TEST/PRODUCTION root/task/endpoint 분리, cross-environment task leakage 0, callable host selection, timing isolation, client flags OFF PASS.
+- 기존 deadline / expired-window repair / complete-window / callable / task routing 회귀, Functions TypeScript, app TypeScript, Build, app410 retained-heart 포함 frozen-like 회귀 PASS.
+- RTDB Rules 파일 변경 없음. 로컬 Rules emulator는 root devDependency에 `@firebase/rules-unit-testing`이 없어 미실행이며 독립 verifier 환경에서 재확인 필요.
+- Firebase/Functions/Hosting/Worker/Rules 배포 0. D1/R2/RTDB/shared user data write·migration 0. Issue #117 Release Controller와 main/production branch 변경 0.
+- 이 단계는 source prerequisite이며 TEST/PRODUCTION 배포 또는 TEST_VERIFIED가 아님.
+
+---
 ## CURRENT — Stage416 release contract 감사 FAIL / environment-isolated transient backend 선행 필요 (2026-10-13 KST)
 
 - **Issue #117 Codex 결과:** 공식 세션은 실패했지만 두 source branch가 남음: A `codex/issue-117-functions-promotion` / `9b1abe00c12a8412fa65a5b0960764dd51c78b8b`, B `codex/stage416-functions-promotion-contract` / `97859b162ac5a48fd3ff306991df39cad61fcbb4`.

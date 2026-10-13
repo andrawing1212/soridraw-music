@@ -3,6 +3,7 @@ import {
   recordStage416PrivateAcceptanceError416,
   recordStage416PrivateAcceptanceReply416,
 } from './exploreLikePrivateDiagnostic416';
+import {currentStage416CallableName416} from './stage416Environment416';
 
 // app408 rollback: keep the server-only Stage416 implementation available in source,
 // but stop PREVIEW clients from registering new 5-minute private windows until the
@@ -50,7 +51,7 @@ export const publishPrivateRtdbBatchClick416=async(
 ):Promise<{version:number;count:number}|null>=>{
  if(!STAGE416_SHARED_RTDB_BATCH_ACTIVE)return null;
  const call=httpsCallable<PrivateRtdbClick416,PrivateClickReply416>(
-   functions,'recordPrivateLike416');
+   functions,currentStage416CallableName416());
  return retryPrivateClickAfterPriorSeal416(async()=>{
    try{
      const result=await call(click);

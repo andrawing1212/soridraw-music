@@ -240,8 +240,12 @@ export const subscribeExploreLikeIntent416 = (
               optimisticLikeCount: row.optimisticLikeCount,
               operationId: row.operationId, version: row.version, at: row.at, status: row.status });
           } else if (existing && existing.status !== 'accepted') {
+            // app416: a late ACCEPTED transition for a row restored from a
+            // previous page lifetime is settlement metadata only. It must not
+            // regain UI/My-Likes authority merely because the operationId
+            // matches. A genuinely new live PENDING row below is the only
+            // signal that can clear reload quarantine before canonical 127.
             entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
-            markLiveIntent416(uid, row.trackId);
             entriesChanged = true;
           }
         }

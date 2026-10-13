@@ -1,3 +1,19 @@
+## CURRENT — app414 후보: 여러 곡 하트가 시간/새로고침 뒤 되돌아가는 공통 로컬 권한 오류 수정 / 미배포 (2026-10-13 KST)
+
+- **사용자 실기기 범위 확대:** app413에서 특정 1곡만의 문제가 아니라 여러 Explore 곡의 개인 하트가 첫 PC↔모바일 동기화 직후에는 맞지만, 일정 시간이 지나거나 한쪽 새로고침 뒤 다시 빈 하트로 바뀌는 현상 확인.
+- **app410 대비 코드 대조:** app410 사용자 실기기 PASS 이후 `exploreLikeIntent416.ts`는 변경 0. 현재 `exploreLikeService.ts`의 의미 있는 좋아요 변경은 app412 stale-outbox gate와 app413 count guard 중심.
+- **확인된 공통 결함:** app412는 과거 app400~411의 `explicitReplayEligible412` 없는 outbox를 **서버 재전송에서는 격리**했지만, 개인 하트 membership, public count overlay, app410 retained repair blocker, accepted 127 signal blocker, exact personal baseline merge, visible hydration, My Likes candidate, 새 explicit click의 기존 pending 판단에서는 여전히 현재 pending처럼 사용했다.
+- **영향:** 공유 D1 canonical relation/공개 count가 정상이어도 기기별 오래된 unmarked outbox가 서버 확정값보다 우선하여 빈/찬 하트를 다시 칠하거나, newer accepted same-account state가 로컬 캐시에 영구 반영되는 것을 막을 수 있다. 이 결함은 특정 곡 1개가 아니라 **과거 격리 row가 남은 곡들에 공통으로 발생 가능**하다.
+- **app414 최소 수정:** historical unmarked outbox는 저장소에서 삭제/변환하지 않고 그대로 보존하되 `isExploreLikeActivePending414` / `readActiveLikeOutbox414`를 통해 **현재 명시 클릭(`explicitReplayEligible412=true`)만 UI/동기화 권한**으로 인정한다.
+- **보호 범위:** fresh explicit click의 local-first 즉시 하트, 5초 canonical batch, app410 same-version retained repair, 416 same-account 빠른 힌트, My Likes, app413 exact count ACK는 유지. Stage416 client flags는 OFF 유지.
+- **데이터/비용:** shared user data 삭제·변환·backfill 0. historical outbox local 삭제 0. 페이지 진입/재진입 추가 Worker/D1/Firestore read/write 0. partial/new-device에서 격리 row가 더 이상 missing-ID 검증을 막지 않으므로 필요한 기존 bounded `/v1/me/likes?trackIds=...` 복구만 허용.
+- **소스 commit:** `eb45091bed36960ae6ba4d5e06a5be4b88f70f2f`.
+- **회귀검사 보호 commit:** `0f316384683add18d8b800072797640c56b5e8b4`; `verify-127-atomic-personal-like.mjs`에 unmarked row UI authority 0, retained canonical repair 비차단, fresh explicit pending 권한 보존 검사를 추가.
+- **버전:** app414 bump commit `3fcff8f4762aae28bcb79357e893e7fd87452793`.
+- **현재 상태:** 소스 수정/검사 코드 작성 완료. TypeScript/Build/전체 관련 자동검증 및 GPT-6 독립 감사 전. **PREVIEW 미배포**, TEST/PRODUCTION 변경 없음.
+- **중요:** 이번 수정은 코드상 확인된 공통 결함을 제거한다. 사용자의 시간경과/새로고침 증상을 이것 하나가 100% 전부 설명한다고 실기기 검증 전 확정하지 않는다. app414 배포 후에도 동일 증상이 남으면 다음 후보는 416 reload-restored provisional hint / snapshotPending guard 순서로 좁혀 검사한다.
+
+---
 ## CURRENT — app413 PREVIEW: 같은 계정 공개 좋아요 1→2 유령 표시 수정 / Worker+Hosting 배포 PASS (2026-10-13 KST)
 
 - **사용자 실기기 신고:** app412에서 `창문을 조금 열고(테스트)`가 empty heart + public count 1인 상태에서 같은 SORiDRAW 계정으로 heart를 1회 클릭하자 filled heart + count 2로 즉시 표시.

@@ -93,7 +93,8 @@ await assert.rejects(retry416(async()=>{
   attempts++;return {ok:true,accepted:false,reason:'STALE_OR_DUPLICATE'};
 },()=>true,async()=>{}),/STALE_OR_DUPLICATE/);
 assert.equal(attempts,1,'ambiguous stale receipt never treated as accepted');
-assert.match(source,/current\.privateDeviceSequence416 === token\.deviceSequence/);
+assert.match(source,/row\.privateDeviceSequence416 === saved\.privateDeviceSequence416/,
+  'ordered drain must keep exact durable device sequence authority');
 assert(source.includes('privateServerRegistered416:true'));
 assert(source.includes('inFlightRecovery416.has(uid)'));
 assert(source.includes('budget.count>=3'));

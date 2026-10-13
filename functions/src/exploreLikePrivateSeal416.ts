@@ -27,13 +27,15 @@ export type Stage416SealResult={sealed:boolean;reason:string;value?:Seal;retryAf
 // transaction. An account clock is ONLY trusted after RTDB resolves .sv timestamp.
 export async function sealUserPrivateLikes416(
   database:Database,uid:string,nowMs=Date.now(),expectedWindowId?:string,
+  authoritativeEmptyRetry=false,
 ):Promise<Stage416SealResult>{
   if(!uid||uid.length>128||!Number.isSafeInteger(nowMs)||nowMs<=0)
     throw Error('416_BAD_SERVER_SEAL');
   if(expectedWindowId && !validUuid(expectedWindowId))
     throw Error('416_BAD_SERVER_WINDOW_ID');
   let disposition:Stage416SealResult={sealed:false,reason:'UNDETERMINED'};
-  const result=await database.ref('privateLikeBatch416/'+uid).transaction(
+  const privateRef=database.ref('privateLikeBatch416/'+uid);
+  const result=await privateRef.transaction(
     (raw:unknown)=>{
       const value=raw as Pending|null;
       if(value?.sealed){
@@ -73,9 +75,20 @@ export async function sealUserPrivateLikes416(
     },
     undefined,false,
   );
-  if(!result.committed)return {sealed:false,reason:disposition.reason,
-    ...(disposition.value?{value:disposition.value}:{}),
-    ...(disposition.retryAfterMs!==undefined?{retryAfterMs:disposition.retryAfterMs}:{})};
+  if(!result.committed){
+    // A Cloud Tasks Function can start with an empty local RTDB cache. Returning
+    // undefined on EMPTY aborts before the SDK can compare with the server, so a
+    // real due window can be misclassified as EMPTY forever. Refresh ONLY this
+    // observed no-window branch once; normal due seals still add zero reads.
+    if(disposition.reason==='EMPTY'&&!authoritativeEmptyRetry){
+      await privateRef.get();
+      return sealUserPrivateLikes416(
+        database,uid,nowMs,expectedWindowId,true);
+    }
+    return {sealed:false,reason:disposition.reason,
+      ...(disposition.value?{value:disposition.value}:{}),
+      ...(disposition.retryAfterMs!==undefined?{retryAfterMs:disposition.retryAfterMs}:{})};
+  }
   const committed=result.snapshot.val() as Pending;
   if(!committed?.sealed||committed.sealed.id!==disposition.value?.id||
      committed.sealed.version!==disposition.value?.version)

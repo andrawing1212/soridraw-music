@@ -28,11 +28,14 @@ const scheduled=await initial(queue,task,{lastClickAtMs:now,minutes:5});
 assert.equal(scheduled,now+300_000);
 assert.deepEqual(planned.map(x=>x.at),[now+300_000]);
 let state=null,reads=0,writes=0,sends=0;
-const db={ref:()=>({transaction:async fn=>{
- reads++;const n=fn(state);
- if(n===undefined)return {committed:false,snapshot:{val:()=>state}};
- state=n;writes++;return {committed:true,snapshot:{val:()=>state}};
-}})};
+const db={ref:()=>({
+ transaction:async fn=>{
+  reads++;const n=fn(state);
+  if(n===undefined)return {committed:false,snapshot:{val:()=>state}};
+  state=n;writes++;return {committed:true,snapshot:{val:()=>state}};
+ },
+ get:async()=>{reads++;return {val:()=>state};},
+})};
 async function push(seq,track,at){
  const row={trackId:track,trackKey:await hash(track),
  liked:true,deviceId:'00000000-0000-4000-8000-000000000009',

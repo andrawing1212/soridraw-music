@@ -108,6 +108,55 @@ assert.equal(state.window,null);
 assert.equal(state.sealed,null);
 assert.equal(state.pending,null);
 
+// Restore one real expired window so the separate stale-empty Task-cache
+// regression below proves the Task itself, not the earlier happy-path dispatch.
+const replayWindow=await recordUserPrivateClick416(database,uid,{
+  trackId:'song-a',liked:true,operationId:op1,deviceId:device,deviceSequence:1,
+},5,t0);
+assert.equal(replayWindow.accepted,true);
+assert.equal(state.window.id,op1);
+
+// Reproduce the live Task failure shape: the settle service can start with an
+// empty local cache even though the shared RTDB server still owns the due window.
+let settleLocalState=null;
+let settleServerState=state;
+let settleRefreshReads=0;
+const staleEmptySettleDb={ref:path=>{
+  assert.equal(path,'privateLikeBatch416/'+uid);
+  return {
+    transaction:async update=>{
+      transactions++;
+      const next=update(settleLocalState);
+      if(next===undefined)return {committed:false,snapshot:{val:()=>settleLocalState}};
+      settleLocalState=next;settleServerState=next;
+      return {committed:true,snapshot:{val:()=>settleLocalState}};
+    },
+    get:async()=>{
+      settleRefreshReads++;
+      settleLocalState=structuredClone(settleServerState);
+      return {val:()=>settleLocalState};
+    },
+    child:name=>({
+      get:async()=>{
+        assert.equal(name,'sealed');
+        return {val:()=>settleLocalState?.sealed||null};
+      },
+    }),
+  };
+}};
+const recoveredDelivered=await dispatchPrivateWindowTask416(
+  staleEmptySettleDb,queue,{uid,windowId:op1},
+  workerEndpoint,secret,t0+300_002,http,
+);
+assert.equal(settleRefreshReads,1,
+  'only a false local EMPTY gets one authoritative RTDB refresh');
+assert.equal(recoveredDelivered.status,'DELIVERED',
+  'stale empty Task cache must not hide a real due server window');
+assert.equal(settleServerState.window,null);
+assert.equal(settleServerState.sealed,null);
+
+// Continue the original shared-state scenario after the recovered Task settled.
+state=settleServerState;
 const acceptedRetry=await recordUserPrivateClick416(database,uid,{
   trackId:'song-b',liked:true,operationId:op2,deviceId:device,deviceSequence:2,
 },5,t0+300_003);
@@ -160,5 +209,7 @@ assert.equal(serverState.version,2);
 console.log('STAGE416_EXPIRED_WINDOW_SHARED_STATE_REQUEUE_TO_DELIVERED=PASS');
 console.log('STAGE416_BLOCKED_CLICK_RETRY_AFTER_EXACT_ACK=PASS');
 console.log('STAGE416_STALE_ABORT_CACHE_REFRESH_PREVENTS_FALSE_EMPTY_REQUEUE=PASS');
+console.log('STAGE416_SETTLE_STALE_EMPTY_CACHE_REFRESH_DELIVERS_REAL_WINDOW=PASS');
+console.log('STAGE416_NORMAL_DUE_SETTLE_EXTRA_AUTHORITATIVE_READ=0');
 console.log('STAGE416_NORMAL_ACCEPTED_CLICK_EXTRA_AUTHORITATIVE_READ=0');
 console.log('STAGE416_INTEGRATION_LIVE_NETWORK_AND_SHARED_DATA_IO=0');

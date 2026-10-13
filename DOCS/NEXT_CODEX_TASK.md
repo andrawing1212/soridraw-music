@@ -1,3 +1,15 @@
+## NEXT — app413 실기기 one-account-one-like 확인 / Stage416 HOLD (2026-10-13 KST)
+
+- **현재 PREVIEW:** app413 Hosting Run `38365644196` SUCCESS, Worker Run `38365460909` SUCCESS. TEST/PRODUCTION unchanged.
+- **확인 1:** PC/모바일을 app413으로 업데이트. `창문을 조금 열고(테스트)`의 현재 canonical state는 relation 1이므로 filled heart + count 1이 기대값. 2가 보이면 즉시 FAIL.
+- **확인 2:** 해당 filled heart를 1회 unlike → 즉시 empty 방향, 약 5초 canonical settle 후 count 0. 재클릭 like → 즉시 filled; count는 stale/ambiguous 상태에서 임의 +1하지 않고 exact settled changed-track count로 최종 1. 한 계정에서 2 금지.
+- **확인 3:** 반대 기기에서 자동 수렴하고 새로고침/재진입 후에도 동일해야 함. 페이지 이동을 동기화 조건으로 인정하지 않음.
+- **비용 확인:** 실사용 click에서만 changed-track exact count read(max50 IDs/batch). 업데이트/페이지 진입/재진입 추가 read/write 0.
+- **기존 ghost relation:** 앱이 자동 삭제하지 않음. 사용자의 정상 unlike 클릭으로 제거 가능. 서버 직접 exact-row repair는 사용자가 별도로 명시 승인할 때만 수행.
+- **Codex/Stage416:** Codex 사용량 부족에 따라 추가 호출 없음. Stage416 #118 HOLD 유지.
+- **진행률:** Stage416 **1/4·25% HOLD**, 앱 속도 **5/5·100%**, app413 same-account phantom count fix **3/4·75%** (source/QA/Worker/Hosting PASS, 사용자 PC/모바일 실기기 확인만 남음).
+
+---
 ## NEXT — app412 실기기 phantom-like 재발 확인 / Stage416 보류 (2026-10-13 KST)
 
 - **현재 PREVIEW:** app412 Hosting Run `38360420805` SUCCESS / exact build PASS. TEST/PRODUCTION unchanged. Stage416 일반 client OFF.

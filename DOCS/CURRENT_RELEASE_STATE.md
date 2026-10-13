@@ -1,3 +1,19 @@
+## CURRENT — app413 PREVIEW: 같은 계정 공개 좋아요 1→2 유령 표시 수정 / Worker+Hosting 배포 PASS (2026-10-13 KST)
+
+- **사용자 실기기 신고:** app412에서 `창문을 조금 열고(테스트)`가 empty heart + public count 1인 상태에서 같은 SORiDRAW 계정으로 heart를 1회 클릭하자 filled heart + count 2로 즉시 표시.
+- **즉시 live read-only 판정:** Run `38363943947` SUCCESS. 클릭 후에도 canonical D1 `likes` relation=1, `track_stats.like_count=1`, owner-liked=1, q035/q066/q069=0. 즉 같은 계정 relation이 2개 생긴 것이 아니라 **클라이언트 표시만 2로 과대계산**.
+- **정확 원인:** stale local membership이 `false`인데 public card count가 이미 1이면 `computeExploreLikeAction127(false,true,1)`이 optimistic count 2를 만든다. 현 legacy W1 `/v1/me/likes/batch` 응답의 `results`는 `legacy-queued` liked 상태만 갖고 exact `likeCount`가 없었고, exact 418 settlement ACK도 그 results를 그대로 반환. 클라이언트는 count 부재 시 `pending.optimisticLikeCount`(2)를 canonical-like display lock/changed-track signal에 재사용할 수 있었음.
+- **app413 client 최소 수정:** 새 pure guard `stabilizeExploreLikeOptimisticCount413`. 기존 pending이 없는 첫 explicit click에서 local heart=false + desired=true + current public count>0이면 heart는 즉시 filled로 바꾸되 public count는 현재값을 유지. count=0 첫 like는 기존처럼 즉시 1. 정상 unlike/active pending coalescing은 기존 계산 유지.
+- **app413 Worker 최소 수정:** exact 069 batch가 `atomic-drain-batch-418`로 실제 settle된 경우에만 `readExactSettledLikeCounts413`가 그 batch의 changed track IDs(max50)만 PK-bounded D1 SELECT하여 `track_stats.like_count`를 response result에 넣음. page/update/re-entry read 0, whole Feed/profile/account scan 0. count read 실패는 이미 settled된 mutation을 5xx/replay하지 않고 기존 successful ACK를 유지.
+- **회귀/비용:** actual changed batch당 count 확인은 max50 changed IDs only. 일반 앱 업데이트/Explore 진입/재진입 추가 D1 read/write 0. D1 schema/migration/backfill/delete 없음. one-account-one-track canonical relation invariant 유지.
+- **QA:** source commit `1fd2d6bcef74b78c1700f05e034e1c04f673f406`; verifier alignment `97755c27b8c301598d5b19b2f49d42ff30b4580a`. Quality Run `38364999508` SUCCESS: `413_STALE_EMPTY_HEART_NO_DOUBLE_PUBLIC_COUNT=PASS`, app410 retained repair, app412 stale-outbox quarantine, app390/app141, TypeScript/Build/Functions/Rules regressions PASS. Follow `38364999640` SUCCESS, Stage416 readonly `38364999626` SUCCESS, dormant Worker check `38364999516` SUCCESS.
+- **Worker 배포:** 첫 Run `38365285519`은 실제 deploy 전 old verifier107에서 중단(서버 변경 0). verifier contract만 app413 의미로 교정 후 Run `38365460909` SUCCESS. PREVIEW Worker active version `a3635a75-7f94-4c68-add2-46e9abaa644d`; `413_EXACT_CHANGED_TRACK_COUNT_AFTER_SETTLEMENT=PASS`, Feed/Profile/Search smoke PASS, pending035=0/pending069=0, fixed cron clear PASS, TEST/PRODUCTION Workers unchanged PASS.
+- **Hosting 배포:** trigger `471b9a5814a977375edcd444bd1ddaac8fcb7ee9`, Run `38365644196` SUCCESS. `PREVIEW_APP_VERSION=413`, `PREVIEW_EXACT_BUILD=PASS`, Firebase PREVIEW Hosting only. shared RTDB Rules SKIPPED, TEST/PRODUCTION unchanged PASS.
+- **공유 사용자 데이터:** 변경/삭제/복구 작업 0. 기존 `창문을 조금 열고(테스트)` canonical SORiDRAW like relation 1건은 그대로 유지. app413은 double-display 방지이며 이 existing relation을 임의 삭제하지 않음.
+- **사용자 기대값:** app413 업데이트 후 해당 곡은 canonical relation이 이미 1이므로 **filled heart + count 1**이 정상. 사용자가 현재 relation을 해제하려면 filled heart를 1회 unlike하여 empty + 0으로 수렴하는지 확인. 같은 계정에서 다시 2가 보이면 FAIL.
+- **Stage416:** 일반 client OFF / Issue #118 HOLD. 이번 app413 incident fix와 분리.
+
+---
 ## CURRENT — app412 PREVIEW: 과거 Explore 좋아요 outbox 자동 부활 차단 배포 PASS / 기존 잘못 저장된 1건은 보존 (2026-10-13 KST)
 
 - **사용자 신고:** `창문을 조금 열고(테스트)` 카드가 사용자가 누른 적 없는데 공개 likeCount=1, 현재 기기 하트는 empty로 관측.

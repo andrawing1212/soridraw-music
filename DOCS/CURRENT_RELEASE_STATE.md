@@ -1,3 +1,15 @@
+## CURRENT — Stage416 controlled E2E live PASS / exact ACK 자연 재시도 성공 (2026-10-13 KST)
+
+- **최종 read-only Run:** `38346090880` SUCCESS. ACK patch 배포 `38344369373` 이후 old Task의 자연 backoff 재시도가 실제 발생했고, 새 `416_SEAL_ACK_STILL_PENDING` 오류는 0. 마지막 ACK error는 배포 전 `03:58:21 UTC`.
+- **old frozen seal 정리 증거:** `04:14:21` Settle HTTP204 직후 `04:14:28` final receipt Function HTTP200. 이전 500/error 재발 없이 exact frozen seal ACK가 새 코드에서 정리된 시간 흐름과 일치.
+- **version39 final 정산 증거:** prior ACK 해소 뒤 `04:14:56` Settle HTTP204, `04:15:04` final receipt Function HTTP200. 그 이후 같은 window의 매분 reschedule가 더 이상 관측되지 않음.
+- **stale EMPTY 회귀 없음:** EMPTY 마지막 시각은 계속 `03:11:40 UTC`; ACK patch 이후 신규 EMPTY 0.
+- **canonical 상태:** `STAGE416_PRIVATE_ACCEPTANCE_ANY=YES`, `STAGE416_PENDING_069_ANY=NO`, PREVIEW Worker↔shared D1 binding 정상. read-only audit D1 write 0.
+- **controlled E2E 판정:** `accepted → RTDB window → Scheduler/Eventarc → due Task → Worker/D1 persistent acceptance → final receipt → exact RTDB seal ACK`를 한 controlled flow에서 실서버로 증명. **controlled E2E 4/4 PASS**.
+- **보호 상태:** app410 frozen likes, app411 일반 사용자 Stage416 client OFF, Worker/D1/R2/Rules/Hosting/main/production 비변경. 공유 사용자 원본 변경/삭제/백필 없음.
+- **릴리스 의미:** 이 PASS는 backend controlled gate의 성공이며 일반 사용자 5분 client path를 즉시 ON한다는 뜻은 아님. 다음 단계는 independent audit + 비용/회귀 기준 확인 후 activation 후보를 별도 설계.
+
+---
 ## CURRENT — Stage416 exact frozen-seal ACK patch PREVIEW 배포 완료 / old Task backoff 재시도 대기 (2026-10-13 KST)
 
 - **확정 live blocker:** version39 due 이후 stale EMPTY는 재발 0이었으나, old frozen seal ACK가 `416_SEAL_ACK_STILL_PENDING`으로 반복되어 version39 window가 WAITING_FOR_PRIOR_SEAL 계열 reschedule에 고착.

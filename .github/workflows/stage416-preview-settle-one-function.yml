@@ -61,7 +61,10 @@ jobs:
           git rev-parse origin/main > "$RUNNER_TEMP/main-before"
           git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
           git checkout --detach "$target"
-          grep -Fq "result.reason==='NOT_DUE'?1_000:0" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "if(result.reason==='WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "throw Error('416_WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "if(result.reason==='NOT_DUE')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
           if [ "$function_name" = recordPrivateLike416 ]; then
             grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId)" functions/src/exploreLikePrivateCallable416.ts

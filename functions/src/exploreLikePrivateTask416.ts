@@ -83,7 +83,7 @@ const makeSettle416=(config:Stage416EnvironmentConfig)=>onTaskDispatched(
    const privateRoots=Object.values(STAGE416_ENVIRONMENTS).map(row=>row.privateRoot);
    const result=await dispatchPrivateWindowTask416(
      getDatabase(),queue416(config),task,endpoint,secret,Date.now(),fetch,
-     config.privateRoot,privateRoots);
+     config.privateRoot,privateRoots,config.globalVersionRoot);
    // One privacy-safe result per non-delivery while investigating app403.
    // Never log UID, track IDs, private payloads, or task identifiers.
    if(result.status!=='DELIVERED')

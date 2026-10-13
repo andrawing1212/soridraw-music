@@ -1,3 +1,16 @@
+## CURRENT — app415 후보: 업데이트/새로고침 복원 416 임시 하트의 권한 제거 / 자동검증 PASS / 미배포 (2026-10-13 KST)
+
+- **직전 감사:** app414 `preview` HEAD `bc406a37490f7b0f7167dca244be5e4e58c8164d` 독립 감사 FAIL. app412 old-outbox UI quarantine은 유효하지만, 새로고침 후 localStorage에서 복원된 Stage416 임시 하트가 canonical 개인 좋아요보다 우선하거나 app410 retained repair를 막을 가능성이 남아 PREVIEW 배포 보류.
+- **사용자 실기기 관찰:** 배포/업데이트 직후 하트가 불안정한 경우가 있으나 일정 시간 뒤 정상 수렴하는 패턴 확인. 반면 **다른 사용자 공개 좋아요 숫자 자동 반영은 실제 like/unlike 모두 페이지 이동·새로고침 없이 정상 PASS**.
+- **app415 최소 수정:** `exploreLikeIntent416.ts`에서 reload 전용 localStorage 복원 row를 별도 추적. 복원 row는 삭제하지 않고 exact cleanup/reconciliation을 위해 보존하지만, `readExploreLikeIntent416`, detail/count overlay, My Likes candidate에서 권한 0. app410 same-version retained canonical repair도 더 이상 복원 hint 때문에 막히지 않음.
+- **현재 세션 정상 기능 보호:** 새로고침 이후 **새로 들어온 실제 live 416 event**는 restored 표식을 해제하고 즉시 provisional authority를 다시 얻음. 이 기기의 fresh explicit click은 app412 marker가 있는 outbox가 최우선이라 기존 local-first 즉시 하트와 5초 canonical batch를 그대로 유지.
+- **데이터/비용:** 캐시 전체 삭제 0, 사용자 데이터 삭제/변환/backfill 0, 새 D1/Firestore/Worker read/write 0. 업데이트 자체가 데이터 서버 읽기를 강제하지 않음. warm revisit R0/W0 유지.
+- **app415 source:** `9b9c91c787f2ce9eb3c356f23e99e467e8ff805e`; browser-reload executable test fix `f5fc1e615ebdead04b9a503d9f19b0671507d981`; version 415 commit `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`.
+- **최종 Quality Run:** `38386251533` SUCCESS on `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`. TypeScript PASS, Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox quarantine PASS, app414 old-outbox UI quarantine PASS, app390/app141 ordering PASS, app197 warm revisit R0/W0 PASS, live shared RTDB Rules read-only/additive PASS.
+- **app415 신규 검증:** `APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS`, `APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS`, `STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS`.
+- **현재 상태:** **GPT-6 재감사 전 / PREVIEW 미배포**. Worker/Functions/Rules/D1/R2/shared user data/main/TEST/PRODUCTION 변경 0. 최종 자동검사 `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
+
+---
 ## CURRENT — app414 후보: 여러 곡 하트가 시간/새로고침 뒤 되돌아가는 공통 로컬 권한 오류 수정 / 미배포 (2026-10-13 KST)
 
 - **사용자 실기기 범위 확대:** app413에서 특정 1곡만의 문제가 아니라 여러 Explore 곡의 개인 하트가 첫 PC↔모바일 동기화 직후에는 맞지만, 일정 시간이 지나거나 한쪽 새로고침 뒤 다시 빈 하트로 바뀌는 현상 확인.

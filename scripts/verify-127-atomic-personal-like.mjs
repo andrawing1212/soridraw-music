@@ -806,14 +806,16 @@ let unresolved410 = {};
 let intents410 = {};
 let retry410 = [];
 const repairFn410 = new Function(
-  'readSeenLikeSignal127','readLikeOutbox','readSnapshotPending127','readSignalRetry127',
+  'readSeenLikeSignal127','readActiveLikeOutbox414','readSnapshotPending127','readSignalRetry127',
   'getLikedStateCache','readExploreLikeIntent416','EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE',
   'guardedLikeHintsByUid420','patchExploreLikedTrackMembership','persistLikedStateCache',
   'markLocalLikeCatalogReady135','notifyExploreLikeUiSync139',
   repairJS410 + '\nreturn replaySameVersionRetainedMembership410;',
 )(
   () => seen410,
-  () => outbox410,
+  () => Object.fromEntries(
+    Object.entries(outbox410).filter(([, row]) => row?.explicitReplayEligible412 === true),
+  ),
   () => unresolved410,
   () => retry410,
   () => cache410,
@@ -844,8 +846,13 @@ seen410 = 78;
 cache410.set('song-a', false);
 assert.equal(repairFn410('user', signal410), 0, 'older retained signal must never roll back newer state');
 seen410 = 77;
+outbox410 = {'song-a': {desiredLiked:false, explicitReplayEligible412:true}};
+assert.equal(repairFn410('user', signal410), 0, 'fresh explicit local pending click must outrank retained repair');
 outbox410 = {'song-a': {desiredLiked:false}};
-assert.equal(repairFn410('user', signal410), 0, 'local pending click must outrank retained repair');
+cache410.set('song-a', false);
+assert.equal(repairFn410('user', signal410), 1,
+  'app414 historical quarantined row must not block same-version retained canonical repair');
+assert.equal(cache410.get('song-a'), true);
 outbox410 = {};
 intents410 = {'song-a': false};
 assert.equal(repairFn410('user', signal410), 0, 'newer private intent must outrank retained repair');
@@ -854,3 +861,4 @@ retry410 = [{trackId:'song-a', liked:false}];
 assert.equal(repairFn410('user', signal410), 0, 'unpublished accepted retry must outrank retained repair');
 console.log('410_SAME_VERSION_RETAINED_HEART_REPAIR_LOCAL_ONLY=PASS');
 console.log('410_RETAINED_REPAIR_ZERO_SERVER_IO_AND_PUBLIC_COUNT_UNCHANGED=PASS');
+console.log('414_QUARANTINED_OUTBOX_CANNOT_BLOCK_APP410_RETAINED_REPAIR=PASS');

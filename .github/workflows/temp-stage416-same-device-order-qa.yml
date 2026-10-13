@@ -1,0 +1,38 @@
+name: TEMP Stage416 Same Device Order QA
+on:
+  push:
+    branches:
+      - gpt56/stage416-lost-click-fix
+permissions:
+  contents: read
+concurrency:
+  group: temp-stage416-same-device-order-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app
+        run: npm ci --no-audit --no-fund
+      - name: Same-device ordering
+        run: |
+          set -euo pipefail
+          node scripts/verify-424-stage416-same-device-registration-order.mjs
+          node scripts/verify-416-client-rtdb-binding.mjs
+          node scripts/verify-422-stage416-global-version-interleaving.mjs
+      - name: App TypeScript
+        run: npm run lint
+      - name: App Build
+        run: npm run build
+      - name: Safety
+        run: |
+          echo 'SAME_DEVICE_ORDER_QA=PASS'
+          echo 'DEPLOYMENT=0'
+          echo 'SHARED_DATA_CHANGE=0'

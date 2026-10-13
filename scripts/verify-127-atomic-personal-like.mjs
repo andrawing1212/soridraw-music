@@ -353,8 +353,10 @@ assert.match(service, /const localPending390 = isExploreLikeActivePending414\(st
   'new accepted 127 state must not be deferred behind a quarantined row');
 assert.match(service, /if \(isExploreLikeActivePending414\(pending\[item\.trackId\]\)\) continue;/,
   'canonical changed-track state must pass historical quarantine');
-assert.match(service, /const outbox = readActiveLikeOutbox414\(uid\);[\s\S]{0,900}const nextLiked = outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/,
-  'fresh exact baseline must ignore quarantined old outbox authority');
+assert.match(service, /const outbox = readActiveLikeOutbox414\(uid\);/,
+  'fresh exact baseline must select only active explicit pending rows');
+assert.match(service, /const nextLiked = outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/,
+  'fresh exact baseline must merge active pending over unresolved/canonical state');
 assert.match(service, /const beforeOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
 assert.match(service, /const currentOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
 assert.match(service, /const storedExisting = outbox\[normalizedTrackId\];[\s\S]{0,180}isExploreLikeActivePending414\(storedExisting\)/,

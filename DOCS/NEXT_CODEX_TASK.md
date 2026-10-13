@@ -1,3 +1,14 @@
+## NEXT — version 39 due window 자동 정산 + exact seal ACK 완료 확인 (2026-10-13 KST)
+
+- **현재 기준:** immediate accepted proof Run `38342979008` SUCCESS. prior expired window persistent acceptance YES, pending069 NO, final receipt callback observed, new Scheduler 03:41:55 UTC HTTP200.
+- **대기 항목:** version 39 accepted 시각 기준 private 5분 due 이후 settle Task가 실행되어야 함.
+- **PASS:** 새 EMPTY 0, `416_SEAL_ACK_STILL_PENDING`이 bounded retry 후 소진, new window Worker/D1 persistent receipt 확인, final callback/ACK 성공, pending069 NO 유지.
+- **FAIL:** ACK pending이 계속 반복되거나 new window가 WAITING_FOR_PRIOR_SEAL/500에서 고착, 또는 D1 receipt가 새 window까지 이어지지 않으면 추가 사용자 클릭 없이 exact ACK 경로만 분석.
+- **금지:** whole private root read/delete/reset, Task force-run, D1/RTDB 원본 수정, client Stage416 ON, TEST/PRODUCTION 승격.
+- **사용자 조작:** 없음. 추가 버튼 클릭/새 좋아요/새로고침 금지.
+
+---
+
 ## NEXT — dual-function reconciliation 이후 same-operation controlled retry 1회 → persistent receipt 증명 (2026-10-13 KST)
 
 - **현재 PREVIEW:** code/test 기준 `59917f17072fd0ef970b836203aa2e8a882bbf17`; settle Run `38341722912` SUCCESS, recordPrivateLike416 Run `38342074694` SUCCESS. app411 Hosting/일반 Stage416 client OFF 유지.

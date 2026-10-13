@@ -1,3 +1,15 @@
+## CURRENT — app411 controlled retry ACCEPTED / prior expired window D1 receipt 생성 / final ACK pending (2026-10-13 KST)
+
+- **사용자 화면 실증:** same-operation controlled retry가 `ACCEPTED`, receipt valid, version 39, local outbox server registered complete로 전환. 이전 `PRIOR_WINDOW_NEEDS_SEAL` 반복에서 탈출.
+- **즉시 read-only Run:** `38342979008` SUCCESS. recordPrivateLike416 03:41:51~54 UTC 요청, 새 Scheduler onCreate `03:41:55 HTTP200` 확인. `STAGE416_PRIVATE_ACCEPTANCE_ANY=YES`, `PENDING_069_ANY=NO`, D1 mutation audit write 0.
+- **prior expired window canonical 전달:** public accepted signal max `03:41:52.165 UTC`; final receipt Function 03:42:09 / 03:42:50 HTTP200. 즉 Worker/D1 persistent acceptance + final callback 경로가 실제 실서버에서 처음 확인됨.
+- **남은 차단점:** Settle Task에서 `416_SEAL_ACK_STILL_PENDING` 발생, 03:41:52 / 03:42:42 HTTP500 bounded retry. 이는 exact durable receipt 이후 RTDB frozen seal ACK가 아직 정리되지 않았다는 의미. 데이터 삭제/강제 ACK/Task force-run 금지.
+- **새 version 39 window:** Scheduler 생성 확인. privateMinutes 기본 5분 due 이후 new window Settle이 prior ACK 대기에서 벗어나 정상 DELIVERED되는지 확인 필요.
+- **판정:** controlled E2E 즉시 접수/이전 창 canonical delivery는 PASS, 전체 final ACK는 아직 미완료. Stage416 전체 진행률은 1/4·25% 유지, controlled E2E 3/4·75% 유지.
+- **보호:** app410 frozen likes / app399 canonical batch / app409 recovery / app410 retained repair / follow / My Likes / Studio heart / UI 변경 없음. Worker/D1/R2/Rules/Hosting/main/production 비변경.
+
+---
+
 ## CURRENT — Stage416 RTDB transaction reconciliation PREVIEW dual-function 배포 완료 / same-operation 재실행 대기 (2026-10-13 KST)
 
 - **사용자 실증 실패 기준:** app411 Master controlled proof의 same-operation 재시도는 최종 8회까지 `PRIOR_WINDOW_NEEDS_SEAL`, receipt 미확정, outbox 등록 대기. 재시도 직후 read-only Run `38340849113`에서 03:11:38 UTC Settle HTTP204 뒤 03:11:40 UTC `EMPTY`가 새로 확인됐고 shared D1 `explore_like_private_acceptance_416`=NO, pending069=NO.

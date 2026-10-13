@@ -86,7 +86,8 @@ assert.match(seal,/database.ref\('privateLikeBatch416\/'\+uid\)/);
 console.log('STAGE416_SERVER_ONLY_UID_CLICK_80_TRACKS_NO_D1_AND_OLD_SIGNAL_OFF=PASS');
 console.log('STAGE416_SERVER_AUTH_CLOCK_DEVICE_DEDUP_AND_MASTER_WINDOW=PASS');
 console.log('STAGE416_EXPIRED_WINDOW_FAILS_CLOSED_UNTIL_SEAL=PASS');
-assert.match(source,/const unchanged=raw===undefined\?null:raw/);
-assert.doesNotMatch(source,/await privateRef\.get\(\)/,
- 'server authority must come from RTDB transaction reconciliation, not cache warming');
-console.log('STAGE416_TRANSACTION_SERVER_RECONCILIATION_SOURCE=PASS');
+assert.match(source,/reason='PRIOR_WINDOW_NEEDS_SEAL';expiredWindowId=previous\.id;return unchanged;/,
+ 'expired prior window must force RTDB server conflict reconciliation');
+assert.match(source,/if\(!authoritativeRetry\)[\s\S]*?await privateRef\.get\(\)/,
+ 'existing duplicate and limit W0 abort path stays unchanged');
+console.log('STAGE416_PRIOR_WINDOW_TRANSACTION_RECONCILIATION_SOURCE=PASS');

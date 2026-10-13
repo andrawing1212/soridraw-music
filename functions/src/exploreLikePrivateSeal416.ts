@@ -45,17 +45,17 @@ export async function sealUserPrivateLikes416(
             // A new window may have begun while the older frozen seal awaits
             // a remote queue ACK. Do not discard the new task; retry later.
             disposition={sealed:false,reason:'WAITING_FOR_PRIOR_SEAL',retryAfterMs:60_000};
-            return unchanged;
+            return;
           }
-          disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return unchanged;
+          disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
         }
         disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED',value:value.sealed};
-        return unchanged;
+        return;
       }
       if(!value?.window){disposition={sealed:false,reason:'EMPTY'};return unchanged;}
       const {window,pending}=value;
       if(expectedWindowId && window.id!==expectedWindowId){
-        disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return unchanged;
+        disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
       }
       if(!Number.isSafeInteger(window.lastClickAtMs)||window.lastClickAtMs<=0||
          !MINUTES.includes(window.minutes)||!validUuid(window.id)||
@@ -64,7 +64,7 @@ export async function sealUserPrivateLikes416(
       const deadline=window.lastClickAtMs+window.minutes*60000;
       if(nowMs<deadline){
         disposition={sealed:false,reason:'NOT_DUE',retryAfterMs:deadline-nowMs};
-        return unchanged;
+        return;
       }
       const rows=Object.values(pending||{});
       if(!rows.length||rows.length>MAX_TRACKS||rows.some(row=>!validRow(row)))
@@ -76,7 +76,12 @@ export async function sealUserPrivateLikes416(
     },
     undefined,false,
   );
-  if(!result.committed)throw Error('416_SERVER_SEAL_TRANSACTION_ABORTED');
+  if(!result.committed)
+    return {sealed:false,reason:disposition.reason,
+      ...(disposition.value?{value:disposition.value}:{}),
+      ...(disposition.retryAfterMs!==undefined?{retryAfterMs:disposition.retryAfterMs}:{})};
+  // A committed non-seal is only the EMPTY no-op probe. If the server held a
+  // real window RTDB would have conflicted and re-run this callback with it.
   if(!disposition.sealed)
     return {sealed:false,reason:disposition.reason,
       ...(disposition.value?{value:disposition.value}:{}),
@@ -95,18 +100,13 @@ export async function acknowledgeUserPrivateSeal416(
   if(!uid||uid.length>128||!validUuid(receipt?.id)||
      !Number.isSafeInteger(receipt?.version)||receipt.version<=0)
     throw Error('416_BAD_SERVER_ACK');
-  let acknowledged=false;
   const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
-      const unchanged=raw===undefined?null:raw;
-      acknowledged=false;
       const value=raw as Pending|null;
       if(!value?.sealed||value.sealed.id!==receipt.id||
-         value.sealed.version!==receipt.version)return unchanged;
-      acknowledged=true;
+         value.sealed.version!==receipt.version)return;
       return {...value,sealed:null};
     },undefined,false,
   );
-  if(!result.committed)throw Error('416_SERVER_ACK_TRANSACTION_ABORTED');
-  return acknowledged;
+  return result.committed;
 }

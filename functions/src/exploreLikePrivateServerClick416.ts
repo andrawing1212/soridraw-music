@@ -19,6 +19,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
+  authoritativeRetry=false,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -70,13 +71,13 @@ export async function recordUserPrivateClick416(
          ...(state.window?{deadlineAtMs:
            state.window.lastClickAtMs+state.window.minutes*60_000}:{})};
      }else reason='STALE_OR_DUPLICATE';
-     return unchanged;
+     return;
    }
    if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
-     reason='DEVICE_LIMIT';return unchanged;
+     reason='DEVICE_LIMIT';return;
    }
    if(Object.keys(pending).length>=256&&!Object.prototype.hasOwnProperty.call(pending,trackKey)){
-     reason='TRACK_LIMIT';return unchanged;
+     reason='TRACK_LIMIT';return;
    }
    const previous=state.window;
    if(previous&&(!Number.isSafeInteger(previous.lastClickAtMs)||
@@ -105,16 +106,26 @@ export async function recordUserPrivateClick416(
        lastClickAtMs:serverClickAt,revision:versionNext},
    };
  },undefined,false);
- if(!outcome.committed)throw Error('416_SERVER_PRIVATE_TRANSACTION_ABORTED');
- const state=outcome.snapshot.val() as Pending416;
- // Transaction callbacks may run more than once; reason/replay above always
- // describe the final server-authoritative invocation.
- const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
- if(reason==='DUPLICATE_CONFIRMED'&&exactProof)
-   return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
- if(reason!=='ACCEPTED')
+ if(!outcome.committed){
+   // Keep the existing W0 behavior for duplicate/limit aborts. The expired
+   // prior-window branch above no longer aborts, so it reaches RTDB's own
+   // server conflict reconciliation instead of relying on get() to warm cache.
+   if(!authoritativeRetry){
+     await privateRef.get();
+     return recordUserPrivateClick416(
+       database,uid,click,trustedMinutes,receivedAtMs,true);
+   }
+   const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
+   if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
    return {accepted:false,reason,
      ...(reason==='PRIOR_WINDOW_NEEDS_SEAL'&&expiredWindowId?{expiredWindowId}:{})};
+ }
+ const state=outcome.snapshot.val() as Pending416;
+ if(reason==='PRIOR_WINDOW_NEEDS_SEAL')
+   return {accepted:false,reason,
+     ...(expiredWindowId?{expiredWindowId}:{})};
+ if(reason!=='ACCEPTED')
+   throw Error('416_SERVER_PRIVATE_NOOP_REASON_MISMATCH:'+reason);
  if(!state?.window||state.version!==state.window.revision)
    throw Error('416_SERVER_PRIVATE_CLICK_PROOF_MISSING');
  return {accepted:true,reason:'ACCEPTED',

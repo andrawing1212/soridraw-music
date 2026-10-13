@@ -1,3 +1,14 @@
+## PREVIEW Stage416 settle stale-empty authoritative refresh single Function patch (2026-10-13 KST)
+
+- **source:** `545853592460d9c7c1b5c90047aa3adcdc12315f` (product fix `a8465eff...` + test-only correction).
+- **QA:** Run `38338706914` SUCCESS. stale-empty Task cache → one authoritative refresh → real due window DELIVERED PASS; normal due settle extra authoritative read 0; Functions TypeScript/app TypeScript/Build/frozen likes/RTDB Rules PASS.
+- **deploy:** trigger `7cad1f74027512db0eb93cbd78dda777c5e38892`; Run `38338926688` SUCCESS. `stage416SettlePrivateWindowCandidate`만 교체. queue/identity/secret postflight PASS.
+- **비변경:** app411 Hosting, `recordPrivateLike416`, Worker, D1/R2, RTDB Rules, shared user data, TEST/PRODUCTION unchanged.
+- **live trigger evidence before fix:** controlled operation sent 4 Callable attempts on bounded 2/5/10s schedule; no new Scheduler; repair Tasks returned EMPTY. persistent D1 receipt NO.
+- **next:** same browser/local operation의 Master retry 1회 후 live end-to-end receipt 검증.
+
+---
+
 ## PREVIEW app411 — Master-only Stage416 controlled E2E proof gate (2026-10-13 KST)
 
 - **제품 source:** `69416c86c209ce05b8e80de320b3cb788e9f1542` (controlled proof product `b6bec317...`, one-track read `4707a0ab...`, verifier-only final).

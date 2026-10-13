@@ -1,3 +1,16 @@
+## CURRENT — app411 controlled click exposed Task stale-empty bug / settle fix PREVIEW deployed / same operation retry pending (2026-10-13 KST)
+
+- **사용자 controlled click 실증:** 사용자 Master가 app411 `Stage416 서버 1회 검증` 실행. privacy-safe request timeline Run `38338306114`에서 `recordPrivateLike416` POST가 `02:39:58 → 02:40:00 → 02:40:06 → 02:40:16 UTC`에 4회 발생. 기존 bounded retry 2s/5s/10s 간격과 정확히 일치하여 같은 operation이 `PRIOR_WINDOW_NEEDS_SEAL` 분기를 반복한 것으로 해석 가능. 같은 구간 새 Scheduler onCreate는 0.
+- **Task 실패 실증:** 같은 구간 settle Task HTTP204는 02:39:58 / 02:40:01, 결과는 EMPTY. 이 두 Task는 Callable repair가 만든 exact expired-window recovery와 시간상 일치. shared D1 Stage416 persistent acceptance receipt는 계속 NO, pending069 NO.
+- **확정 원인:** `sealUserPrivateLikes416`도 RTDB transaction callback이 local cache에서 시작하는데, Task service local cache가 empty일 경우 `!value?.window → return undefined`로 transaction을 즉시 abort하고 서버 상태 비교 없이 `EMPTY`를 반환할 수 있었음. 따라서 Callable은 실제 expired window를 보고 repair Task를 만들지만 Task는 local empty cache만 보고 종료하는 반복이 가능.
+- **source fix:** `a8465eff8d43dc0876ae933ceeb6e1e05c45f5f7` + test correction `545853592460d9c7c1b5c90047aa3adcdc12315f`. 오직 `disposition.reason==='EMPTY'`인 aborted seal에서만 `privateRef.get()`으로 authoritative RTDB state를 1회 refresh하고 동일 expectedWindowId/nowMs로 한 번 재판정. 정상 due seal은 extra authoritative read 0.
+- **재현 테스트:** 첫 QA `38338587746` FAIL은 테스트가 이미 소비된 deviceSequence 1을 새 click처럼 재사용한 verifier 오류. 제품 fix는 유지. 캡처된 due server state를 그대로 써 Task stale-empty만 재현하도록 정정 후 Quality Run `38338706914` **SUCCESS**. `STAGE416_SETTLE_STALE_EMPTY_CACHE_REFRESH_DELIVERS_REAL_WINDOW=PASS`, `STAGE416_NORMAL_DUE_SETTLE_EXTRA_AUTHORITATIVE_READ=0`, Functions TypeScript/app TypeScript/Build/frozen like regressions/Rules audit PASS.
+- **PREVIEW backend 배포:** single Function trigger `7cad1f74027512db0eb93cbd78dda777c5e38892`; Run `38338926688` **SUCCESS**. `stage416SettlePrivateWindowCandidate`만 source `54585359...`로 교체. `recordPrivateLike416`, app411 Hosting, Worker, D1/R2, RTDB Rules, shared user data 변경 0. main/production unchanged PASS.
+- **현재 행동:** 사용자는 페이지/좋아요를 건드리지 말고 app411 Master 패널의 `같은 1회 검증 재시도`를 **1회만** 눌러 기존 operation/deviceSequence를 재사용. retry 성공 시 expired old window가 새 settle fix로 Worker/D1까지 전달된 뒤 동일 operation이 새 window로 ACCEPTED되어야 함.
+- **진행률:** Stage416 전체 **1/4·25%**; 앱 속도 **5/5·100%**; 세부 작업 `Stage416 controlled E2E proof gate` **3/4·75%**. same-operation retry 이후 Scheduler→due Task→D1 persistent receipt→final ACK를 확인하기 전 4/4로 올리지 않음.
+
+---
+
 ## CURRENT — app411 Master controlled Stage416 E2E gate PREVIEW 배포 / 실실행 1회 대기 (2026-10-13 KST)
 
 - **일반 사용자 보호:** app410에서 사용자 실기기 PASS한 Explore 좋아요 동작은 그대로 유지. app411은 **Master 앱 설정 진단 UI/전용 service만 추가**했고 일반 Explore click/outbox/canonical app399 batch/app409 recovery/app410 retained repair 코드는 변경하지 않음. Stage416 일반 client flags 계속 OFF.

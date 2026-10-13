@@ -1,3 +1,14 @@
+## NEXT — app411 same-operation controlled retry → live Scheduler/D1 receipt proof (2026-10-13 KST)
+
+- **현재 기준:** settle stale-empty authoritative refresh fix Run `38338926688` PREVIEW 단일 Function 배포 SUCCESS. app411 Hosting 그대로, 일반 Stage416 client OFF.
+- **사용자 액션 1회:** 현재 열린 Master 앱 설정에서 `같은 1회 검증 재시도`만 1회 클릭. 새 좋아요 클릭/새로고침/새 operation 생성 금지.
+- **즉시 기대:** old expired window repair Task가 더 이상 EMPTY가 아니라 DELIVERED 또는 필요한 bounded reschedule로 진행하고, 같은 controlled operation이 이후 ACCEPTED되어 새 window onCreate Scheduler가 1회 나타나야 함.
+- **due 후 기대:** configured privateMinutes 경과 후 settle → signed Worker handoff → shared D1 `explore_like_private_acceptance_416` persistent receipt YES → final callback/ACK. pending069은 정상 소진. 이 전체가 한 operation 시간창에서 증명돼야 PASS.
+- **실패 처리:** 새 retry도 PRIOR_WINDOW_NEEDS_SEAL 4회 + no Scheduler라면 추가 서버 수정 전 stop. whole private root scan/delete/reset/Task force run 금지.
+- **진행률:** Stage416 **1/4·25%**, 앱 속도 **5/5·100%**, controlled E2E **3/4·75%**.
+
+---
+
 ## NEXT — app411 Master controlled proof 1회 실행 → due 후 persistent receipt 확인 (2026-10-13 KST)
 
 - **현재 PREVIEW:** app411 Hosting Run `38336992721` SUCCESS / exact build PASS. controlled proof source `4707a0ab...`, QA `38336802234` SUCCESS. general Stage416 client OFF.

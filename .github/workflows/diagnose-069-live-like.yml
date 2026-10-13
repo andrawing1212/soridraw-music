@@ -47,7 +47,7 @@ jobs:
           " --json > "$RUNNER_TEMP/like-queues-readonly.json"
           # Target title is supplied as base64 in the diagnostic trigger so the
           # reusable workflow never interpolates an arbitrary title into SQL.
-          trigger='.deploy/diagnose-069-live-like.trigger'
+          trigger='../../.deploy/diagnose-069-live-like.trigger'
           target_b64="$(sed -n 's/^target_title_b64=//p' "$trigger" | tail -n1)"
           test -n "$target_b64"
           printf '%s' "$target_b64" | base64 --decode > "$RUNNER_TEMP/target-title.txt"

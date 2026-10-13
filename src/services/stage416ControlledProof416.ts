@@ -133,9 +133,11 @@ const selectLocalLikedCandidate416 = (uid: string): string => {
   return candidate;
 };
 
-const prepareProof416 = async (uid: string): Promise<{ proof: StoredProof416; reused: boolean }> => {
+const prepareProof416 = async (
+  uid: string,
+): Promise<{ proof: StoredProof416; reused: boolean; canonicalConfirmed: boolean }> => {
   const existing = readStoredProof416(uid);
-  if (existing) return { proof: existing, reused: true };
+  if (existing) return { proof: existing, reused: true, canonicalConfirmed: false };
   const trackId = selectLocalLikedCandidate416(uid);
   if (!await confirmCanonicalLiked416(trackId)) {
     throw new Error('STAGE416_PROOF_CANDIDATE_NOT_CANONICALLY_LIKED');
@@ -158,7 +160,7 @@ const prepareProof416 = async (uid: string): Promise<{ proof: StoredProof416; re
   };
   // Persist BEFORE any Stage416 mutation call so retries reuse exactly one op.
   persistStoredProof416(uid, proof);
-  return { proof, reused: false };
+  return { proof, reused: false, canonicalConfirmed: true };
 };
 
 export const runStage416ControlledProof416 = async (): Promise<Stage416ControlledProofResult416> => {
@@ -169,11 +171,11 @@ export const runStage416ControlledProof416 = async (): Promise<Stage416Controlle
 
   // Server-side Master authorization happens before any diagnostic mutation.
   const privateMinutes = await requireMaster416();
-  const { proof, reused } = await prepareProof416(uid);
+  const { proof, reused, canonicalConfirmed } = await prepareProof416(uid);
 
-  // Reconfirm the same-state no-op target on every retry. If the user changed
-  // that heart elsewhere, do not send an old diagnostic intent.
-  if (!await confirmCanonicalLiked416(proof.trackId)) {
+  // A fresh proof was already checked once before it was persisted. Reused
+  // ambiguous operations are checked once again before any retry.
+  if (!canonicalConfirmed && !await confirmCanonicalLiked416(proof.trackId)) {
     throw new Error('STAGE416_PROOF_CANDIDATE_CHANGED');
   }
 

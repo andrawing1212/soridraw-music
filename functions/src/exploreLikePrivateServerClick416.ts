@@ -16,10 +16,58 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
   window?:Window416|null;pending?:Record<string,{trackId:string;liked:boolean;
   operationId:string;deviceId:string;deviceSequence:number;version:number;mutationAt:number}>|null;
   sealed?:unknown};
+type GlobalVersion416={version?:number;devices?:Record<string,{
+  deviceSequence:number;operationId:string;trackId:string;liked:boolean;version:number;
+}>};
+
+// This is the only cross-environment Stage416 state. It is a bounded per-UID
+// sequencer, not canonical like membership: PREVIEW/TEST/PRODUCTION still keep
+// their windows, tasks and receipts isolated. Using server receive time as the
+// floor makes the first allocation compatible with legacy PREVIEW users whose
+// private root may already be at v39+ without a migration or bootstrap read.
+async function allocateGlobalVersion416(database:Database,uid:string,
+ click:ServerPrivateLikeClick416,receivedAtMs:number,globalVersionRoot:string,
+):Promise<{accepted:boolean;reason:string;version?:number}> {
+ let decision:{accepted:boolean;reason:string;version?:number}={accepted:false,reason:'UNDETERMINED'};
+ const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
+  const unchanged=raw===undefined?null:raw;
+  decision={accepted:false,reason:'UNDETERMINED'};
+  const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{}) as GlobalVersion416;
+  const version=Number(state.version||0);
+  const devices=state.devices||{};
+  const prior=devices[click.deviceId];
+  if(!Number.isSafeInteger(version)||version<0||version>=Number.MAX_SAFE_INTEGER||
+     !devices||typeof devices!=='object'||Array.isArray(devices))
+   throw Error('416_GLOBAL_VERSION_STATE_CORRUPT');
+  if(prior&&click.deviceSequence<=prior.deviceSequence){
+   if(click.deviceSequence===prior.deviceSequence&&prior.operationId===click.operationId&&
+      prior.trackId===click.trackId&&prior.liked===click.liked&&
+      Number.isSafeInteger(prior.version)&&prior.version>0){
+    decision={accepted:true,reason:'GLOBAL_DUPLICATE_CONFIRMED',version:prior.version};
+   }else decision={accepted:false,reason:'STALE_OR_DUPLICATE'};
+   return unchanged;
+  }
+  if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
+   decision={accepted:false,reason:'DEVICE_LIMIT'};return unchanged;
+  }
+  const next=Math.max(version+1,receivedAtMs);
+  if(!Number.isSafeInteger(next)||next<=version)
+   throw Error('416_GLOBAL_VERSION_EXHAUSTED');
+  decision={accepted:true,reason:'ALLOCATED',version:next};
+  return {version:next,devices:{...devices,[click.deviceId]:{
+   deviceSequence:click.deviceSequence,operationId:click.operationId,
+   trackId:click.trackId,liked:click.liked,version:next,
+  }}};
+ },undefined,false);
+ if(!result.committed&&decision.reason==='UNDETERMINED')
+  throw Error('416_GLOBAL_VERSION_DECISION_MISSING');
+ return decision;
+}
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
   authoritativeRetry=false,privateRoot='privateLikeBatch416',
+  globalVersionRoot?:string,allocatedVersion?:number,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -30,6 +78,14 @@ export async function recordUserPrivateClick416(
     !validMinute416(trustedMinutes))
   throw Error('416_BAD_SERVER_PRIVATE_CLICK');
  const trackKey=createHash('sha256').update(click.trackId,'utf8').digest('hex');
+ if(allocatedVersion===undefined&&globalVersionRoot){
+  const allocation=await allocateGlobalVersion416(
+   database,uid,click,receivedAtMs,globalVersionRoot);
+  if(!allocation.accepted||allocation.version===undefined)return allocation;
+  if(allocation.reason==='GLOBAL_DUPLICATE_CONFIRMED')
+   return {accepted:true,reason:'DUPLICATE_CONFIRMED',version:allocation.version};
+  allocatedVersion=allocation.version;
+ }
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
  let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
@@ -91,7 +147,9 @@ export async function recordUserPrivateClick416(
    }
    const serverClickAt=Math.max(receivedAtMs,(previous?.lastClickAtMs||0)+1);
    const minutes=previous?previous.minutes:trustedMinutes;
-   const versionNext=version+1;
+   const versionNext=allocatedVersion===undefined?version+1:allocatedVersion;
+   if(!Number.isSafeInteger(versionNext)||versionNext<=version)
+    throw Error('416_GLOBAL_VERSION_NOT_NEWER_THAN_ENVIRONMENT');
    const nextPending={...pending,[trackKey]:{
      trackId:click.trackId,liked:click.liked,operationId:click.operationId,
      deviceId:click.deviceId,deviceSequence:click.deviceSequence,version:versionNext,
@@ -113,7 +171,8 @@ export async function recordUserPrivateClick416(
    if(!authoritativeRetry){
      await privateRef.get();
      return recordUserPrivateClick416(
-       database,uid,click,trustedMinutes,receivedAtMs,true,privateRoot);
+       database,uid,click,trustedMinutes,receivedAtMs,true,privateRoot,
+       globalVersionRoot,allocatedVersion);
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};

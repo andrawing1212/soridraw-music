@@ -10,6 +10,10 @@ const expected={
  test:['recordPrivateLike416Test','stage416SettlePrivateWindowTest','stage416Transient/test/privateLikeBatch','stage416Transient/test/likeBatchTiming/current','soridraw-explore-test'],
  production:['recordPrivateLike416Production','stage416SettlePrivateWindowProduction','stage416Transient/production/privateLikeBatch','stage416Transient/production/likeBatchTiming/current','soridraw-explore-api'],
 };
+assert.equal((env.match(/globalVersionRoot:'privateLikeGlobalVersion416'/g)||[]).length,3,
+ 'all environments must share exactly one bounded UID version sequencer');
+assert.match(env,/finalReceiptName:'privateLikeFinalReceipt416Test'/);
+assert.match(env,/finalReceiptName:'privateLikeFinalReceipt416Production'/);
 for(const [name,values] of Object.entries(expected))
  for(const value of values)assert.ok(env.includes(value),`${name} missing ${value}`);
 for(let column=0;column<expected.preview.length;column++)
@@ -35,3 +39,4 @@ console.log('STAGE416_TEST_PRODUCTION_TRANSIENT_ISOLATION=PASS');
 console.log('STAGE416_CALLABLE_HOST_SELECTION=PASS');
 console.log('STAGE416_TIMING_CONFIG_ISOLATION=PASS');
 console.log('STAGE416_GENERAL_CLIENT_FLAG_OFF=PASS');
+console.log('STAGE416_SHARED_GLOBAL_VERSION_IDENTITY=PASS');

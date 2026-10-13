@@ -1,6 +1,24 @@
-## CURRENT — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
+## CURRENT — Stage416 cross-environment global settlement version 수정 / 배포 없음 (2026-10-13 KST)
 
-- 기준: 최신 PREVIEW `a80b0e5fb3af6019023aa7be9ca040b6d09650a7`.
+- 기준: `preview` HEAD `2ea0e6f1d29d0316b7571473a4584d013305da9a` + environment-isolation B안
+  `47c639f8982a2c4d3f77738c45496db1e3d084c5` 위 corrected branch.
+- environment별 pending/task/final receipt root와 Function identity는 유지하면서, 세 환경이 동일한
+  `privateLikeGlobalVersion416/{uid}` bounded sequencer를 사용하도록 수정했다.
+- sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를
+  migration/backfill/read bootstrap 없이 넘어가며, PREVIEW → TEST → PRODUCTION → PREVIEW 실행형
+  interleaving에서 shared D1/R2 acceptance version이 strictly increasing이다.
+- exact same-operation duplicate는 bounded device receipt로 기존 version을 재사용하고 logical RTDB W0,
+  stale/different operation도 W0이다. 새 accepted click은 기존 environment-root W1에 sequencer W1이
+  추가되어 RTDB changed writes 총 W2다. page/update/re-entry IO는 계속 0이다.
+- D1 schema/table/key, shared canonical user data, Worker/release workflow는 변경하지 않았다.
+- TEST/PRODUCTION의 distinct final receipt Function/final root 및 environment-specific Worker endpoint
+  identity는 유지되어 후속 #117 binding에서 명시적으로 사용할 수 있다.
+- Functions TypeScript와 Stage416 global interleaving/isolation/callable/server-click/expired-window verifier
+  PASS. 배포, main/production 변경, 사용자 데이터 migration/backfill은 0이다.
+
+## PREVIOUS — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
+
+- 기준: 최신 PREVIEW `2ea0e6f1d29d0316b7571473a4584d013305da9a`.
 - 기존 controlled PREVIEW callable/task/RTDB root/timing path identity는 그대로 보존했다.
 - TEST/PRODUCTION에 서로 다른 callable, scheduler, Cloud Task target, settle/final Function,
   transient pending/final root, timing path를 additive source로 추가했다.

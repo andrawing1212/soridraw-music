@@ -1,3 +1,16 @@
+## CURRENT — PR #120 감사 FAIL 보완: 거절된 기존 기기 예약 deadlock 제거 / QA PASS / 재감사 대기 (2026-10-14 KST)
+
+- **독립 감사 FAIL 대상:** `38783d2e5a0813bdd00165215418d411635c4b06`. 기존 기기 A가 v101을 예약한 뒤 `TRACK_LIMIT` 등으로 실제 env 접수되지 않으면 global device reservation v101이 남아, 정상 기기 B의 v102 정산을 계속 막을 수 있는 논리 경로가 확인됨.
+- **최소 수정:** global device reservation에 직전 device snapshot을 1단계만 보존. authoritative env 확인 뒤 exact 요청이 `DEVICE_LIMIT / TRACK_LIMIT / STALE_OR_DUPLICATE`로 거절되면, 신규 기기는 기존처럼 exact slot만 제거하고 **기존 기기는 직전 accepted/reserved device 상태로 exact rollback**한다. global high-water 숫자는 되돌리지 않아 동시성 monotonicity를 유지한다.
+- **안전 가드:** `PRIOR_WINDOW_NEEDS_SEAL`은 rollback 대상이 아니며 같은 operation retry reservation을 그대로 보존. predecessor 정보가 없는 legacy/ambiguous reservation은 추측 삭제하지 않고 fail-closed로 보존.
+- **신규 실행형 검증:** `scripts/verify-426-stage416-rejected-existing-device-reservation.mjs`. 기존 기기 A v100 → A v101 `TRACK_LIMIT` 거절 → A global state v100 복원 → 다른 기기 B v102 정상 접수 → Worker/D1 최종 정산 성공을 한 흐름으로 재현.
+- **개발 QA:** candidate `cad5e54728018f75e3c505fe8468b5a0cd9b2fd5`, Run `38433380984` **SUCCESS**. `STAGE416_REJECTED_EXISTING_DEVICE_RESERVATION_ROLLBACK=PASS`, `STAGE416_REJECTED_V101_DOES_NOT_BLOCK_VALID_V102_SETTLEMENT=PASS`, 기존 Issue118 ordering/settlement, protected likes 회귀, app TypeScript, app Build, Functions TypeScript 모두 PASS.
+- **비용:** 정상 accepted click RTDB W2 모델 비변경. 거절된 기존기기 reservation cleanup에서만 RTDB changed write 최대 1회 추가. 정산 peer+global bounded read 3/attempt 유지. page/update/re-entry IO 0.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0. Firebase/Functions/Worker/Rules/Hosting 배포 0. 일반 Stage416 client OFF 유지.
+- **현재 gate:** 새 exact HEAD 독립 재감사 PASS 전 PR #120 merge, Stage416 개인 1분 활성화, PREVIEW 배포 금지.
+
+---
+
 ## CURRENT — Issue #118 감사 FAIL 3건 교정 완료 / 최종 회귀 PASS / 재감사 대기 (2026-10-14 KST)
 
 - **작업 branch:** `gpt56/stage416-lost-click-fix`

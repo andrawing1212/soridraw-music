@@ -16,20 +16,20 @@ assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false/);
 
 const scheduler=between('const schedulePendingFlush =','// app412: Auth-ready recovery');
-assert.match(scheduler,/isExplicitReplayEligible412\(pending\)/);
+assert.match(scheduler,/pending\.explicitReplayEligible412 === true/);
 
 const authRecovery=between('// app412: Auth-ready recovery','// An earlier batch may be in flight');
-assert.match(authRecovery,/isExplicitReplayEligible412\(pending\)/);
+assert.match(authRecovery,/pending\.explicitReplayEligible412 === true/);
 assert.doesNotMatch(authRecovery,/removeSoridrawPersistentCache|delete\s+/);
 
 const flush=between('flushPendingLikes = async','// Stage413: a 5-second timer');
-assert.match(flush,/isExplicitReplayEligible412\(pending\)/);
+assert.match(flush,/pending\.explicitReplayEligible412 === true/);
 
 const exit=between('const installExitFlush413 =','// App 120 deliberately ignores');
-assert.match(exit,/isExplicitReplayEligible412\(pending\)/);
+assert.match(exit,/pending\.explicitReplayEligible412 === true/);
 
 const hydrate=between('export const getExploreLikedTrackIds = async','// App129 single-authority rule');
-assert.match(hydrate,/isExplicitReplayEligible412\(pending\)/);
+assert.match(hydrate,/pending\.explicitReplayEligible412 === true/);
 
 const setter=between('export const setExploreTrackLike = async','// Disabled Stage416-only recovery');
 assert.match(setter,/explicitReplayEligible412: true/);

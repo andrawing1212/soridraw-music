@@ -143,6 +143,37 @@ jobs:
           print('STAGE416_ISOLATED_LOG_READONLY_NO_PAYLOAD=PASS')
           PY
 
+      - name: Inspect recent Stage416 request timestamps only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          project='soridraw-app-866a5'
+          services=[
+            'recordprivatelike416',
+            'stage416scheduleprivatewindowcandidate',
+            'stage416settleprivatewindowcandidate',
+          ]
+          for service in services:
+            expr=('resource.type="cloud_run_revision" AND '
+                  'resource.labels.service_name="'+service+'" AND httpRequest.status:*')
+            p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+              '--freshness=20m','--limit=80',
+              '--format=json(timestamp,httpRequest.status,severity)'],
+              capture_output=True,text=True)
+            if p.returncode:
+              raise SystemExit('STAGE416_RECENT_TIMELINE_READ_DENIED_'+service)
+            rows=sorted(json.loads(p.stdout or '[]'),key=lambda x:x.get('timestamp',''))
+            safe=[{
+              'at':str(row.get('timestamp') or '')[:23],
+              'http':str((row.get('httpRequest') or {}).get('status') or 'NONE'),
+              'severity':str(row.get('severity') or 'DEFAULT'),
+            } for row in rows]
+            print('STAGE416_RECENT_REQUEST_TIMELINE_'+service.upper()+'='+json.dumps(safe))
+          print('STAGE416_RECENT_TIMELINE_NO_UID_NO_PAYLOAD=PASS')
+          PY
+
       - name: Audit 24h Callable Scheduler and Task request counts read only
         shell: bash
         run: |

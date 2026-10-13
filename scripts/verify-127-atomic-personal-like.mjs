@@ -94,8 +94,8 @@ assert.match(getter, /const baselineReady127 = baselineCompleted127\.has\(user\.
 assert.match(getter, /if \(baselineReady127\) \{[\s\S]*?cache\.set\(trackId, false\);[\s\S]*?persistLikedStateCache\(user\.uid, cache\);/);
 assert.match(getter, /const missing = baselineReady127 \? \[\] : normalized\.filter/);
 assert.match(getter, /return !cache\.has\(trackId\);/);
-assert.match(getter, /readLikeOutbox\(user\.uid\)/);
-assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);
+assert.match(getter, /const beforeOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
+assert.match(getter, /const currentOutbox127 = readActiveLikeOutbox414\(user\.uid\)/);
 assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\(user\.uid\)/);
 assert.match(getter, /if \(currentOutbox127\[trackId\] \|\|/);
 assert.match(getter, /Object\.prototype\.hasOwnProperty\.call\(currentUnresolved127, trackId\)/);
@@ -117,7 +117,7 @@ assert.match(membership127, /return getLikedStateCache\(uid\)\.get\(id\)/);
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
 // The frozen app382 listener skips an unsent LOCAL intention; a historical
 // deferredSignal390 branch was removed before Stage408 and is not an authority.
-assert.match(listener, /if \(pending\[item\.trackId\]\) continue;/);
+assert.match(listener, /if \(isExploreLikeActivePending414\(pending\[item\.trackId\]\)\) continue;/);
 assert.match(listener, /const pending = readLikeOutbox\(uid\)/);
 assert.doesNotMatch(listener, /pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)/,
   'a previous accepted-but-unsettled value must not suppress a newer cross-device ACK');

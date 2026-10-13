@@ -141,6 +141,9 @@ const deviceLimit=await recordUserPrivateClick416(database,uid,{trackId:'device-
  operationId:'00000000-0000-4000-8000-000000000016',deviceId:rejectedDevice,deviceSequence:1,
 },5,1_700_000_100_002,false,'stage416Transient/test/privateLikeBatch','privateLikeGlobalVersion416');
 assert.equal(deviceLimit.reason,'DEVICE_LIMIT');
+assert.equal(deviceLimit.accepted,false);
+assert.equal(roots.privateLikeGlobalVersion416.reservation,undefined,
+ 'DEVICE_LIMIT must release its uncommitted global reservation');
 assert.deepEqual(roots.privateLikeGlobalVersion416,committedBeforeRejections);
 
 roots['stage416Transient/test/privateLikeBatch']={version:reservedVersion,deviceSeq:{},
@@ -152,6 +155,9 @@ const trackLimit=await recordUserPrivateClick416(database,uid,{trackId:'track-li
  operationId:'00000000-0000-4000-8000-000000000017',deviceId:rejectedDevice,deviceSequence:1,
 },5,1_700_000_100_003,false,'stage416Transient/test/privateLikeBatch','privateLikeGlobalVersion416');
 assert.equal(trackLimit.reason,'TRACK_LIMIT');
+assert.equal(trackLimit.accepted,false);
+assert.equal(roots.privateLikeGlobalVersion416.reservation,undefined,
+ 'TRACK_LIMIT must release its uncommitted global reservation');
 assert.deepEqual(roots.privateLikeGlobalVersion416,committedBeforeRejections);
 
 roots['stage416Transient/test/privateLikeBatch']={version:reservedVersion,
@@ -160,6 +166,9 @@ const stale=await recordUserPrivateClick416(database,uid,{trackId:'stale',liked:
  operationId:'00000000-0000-4000-8000-000000000018',deviceId:rejectedDevice,deviceSequence:1,
 },5,1_700_000_100_004,false,'stage416Transient/test/privateLikeBatch','privateLikeGlobalVersion416');
 assert.equal(stale.reason,'STALE_OR_DUPLICATE');
+assert.equal(stale.accepted,false);
+assert.equal(roots.privateLikeGlobalVersion416.reservation,undefined,
+ 'STALE_OR_DUPLICATE must release its uncommitted global reservation');
 assert.deepEqual(roots.privateLikeGlobalVersion416,committedBeforeRejections);
 
 console.log('STAGE416_PREVIEW_V39_GLOBAL_BOOTSTRAP_NO_MIGRATION=PASS');

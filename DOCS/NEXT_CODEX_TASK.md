@@ -1,3 +1,16 @@
+## NEXT — dual-function reconciliation 이후 same-operation controlled retry 1회 → persistent receipt 증명 (2026-10-13 KST)
+
+- **현재 PREVIEW:** code/test 기준 `59917f17072fd0ef970b836203aa2e8a882bbf17`; settle Run `38341722912` SUCCESS, recordPrivateLike416 Run `38342074694` SUCCESS. app411 Hosting/일반 Stage416 client OFF 유지.
+- **사전 기준선:** Run `38342504423` SUCCESS. Function ACTIVE / Queue RUNNING / Eventarc condition 0 / Worker shared D1 match / acceptance NO / pending069 NO / D1 mutation 0.
+- **사용자 액션 1회:** Master 앱 설정의 `같은 1회 검증 재시도`만 1회 클릭. 새 좋아요, 새로고침, 새 operation 생성 금지.
+- **즉시 기대:** expired prior window recovery Task가 더 이상 `EMPTY`로 끝나지 않아야 함. 같은 operation의 bounded retry가 최종 `ACCEPTED` 또는 exact duplicate proof로 수렴하고 receipt/version이 확정되어야 함.
+- **due 후 기대:** 새 window가 만들어졌다면 privateMinutes(기본 5분) 뒤 Settle → signed Worker → shared D1 `explore_like_private_acceptance_416` persistent receipt YES → final callback/ACK → pending069 소진.
+- **실패 처리:** 다시 `PRIOR_WINDOW_NEEDS_SEAL` 반복, 새 `EMPTY`, no Scheduler, no D1 receipt 중 하나라도 나오면 버튼 추가 반복 금지. whole private root scan/delete/reset, Task force-run, 공유 데이터 수정 없이 해당 시각 read-only 로그로 최초 단절점만 확인.
+- **보호:** app410 frozen likes, app399 canonical batch, app409 Auth-ready recovery, app410 retained repair, 기존 follow/My Likes/Studio heart, UI/반응형 변경 금지. TEST/PRODUCTION 승격 금지.
+- **진행률:** Stage416 **1/4·25%**, controlled E2E **3/4·75%**.
+
+---
+
 ## NEXT — app411 same-operation controlled retry → live Scheduler/D1 receipt proof (2026-10-13 KST)
 
 - **현재 기준:** settle stale-empty authoritative refresh fix Run `38338926688` PREVIEW 단일 Function 배포 SUCCESS. app411 Hosting 그대로, 일반 Stage416 client OFF.

@@ -1,3 +1,17 @@
+## CURRENT — Stage416 RTDB transaction reconciliation PREVIEW dual-function 배포 완료 / same-operation 재실행 대기 (2026-10-13 KST)
+
+- **사용자 실증 실패 기준:** app411 Master controlled proof의 same-operation 재시도는 최종 8회까지 `PRIOR_WINDOW_NEEDS_SEAL`, receipt 미확정, outbox 등록 대기. 재시도 직후 read-only Run `38340849113`에서 03:11:38 UTC Settle HTTP204 뒤 03:11:40 UTC `EMPTY`가 새로 확인됐고 shared D1 `explore_like_private_acceptance_416`=NO, pending069=NO.
+- **원인 수정 방향:** Admin RTDB transaction callback이 local cache에서 시작한 뒤 `undefined`로 abort하면 서버 conflict compare 전에 판정이 끝날 수 있으며, `.get()`으로 cache를 데운 뒤 같은 transaction을 재호출하는 방식은 실서버에서 충분하지 않았음. 서버 상태를 바꾸지 않는 exact same-value transaction probe로 RTDB 자체 conflict reconciliation을 강제하되, **실제 stale gate 두 군데만** 적용: private click의 `PRIOR_WINDOW_NEEDS_SEAL`, settle의 `EMPTY`.
+- **비용/기능 보호:** 정상 accepted click, duplicate/stale/limit abort, NOT_DUE, ACK 경로는 기존 의미와 상태변경 write 계약 유지. 일반 app410 좋아요 동결 경로 및 app411 Hosting/UI 변경 0. Worker/D1/R2/RTDB Rules/shared user data 변경 0.
+- **구현/검증:** 초기 broad 후보 `547ff376...`과 축소 후보 `ea585cf...`는 각각 기존 W0 테스트가 범위를 과하게 잡았음을 발견하여 FAIL로 중단. 최종 코드/검사 기준 `59917f17072fd0ef970b836203aa2e8a882bbf17`. Quality Run `38341523036` **SUCCESS**: Stage416 stale reconciliation, Functions TypeScript, 앱 TypeScript, Build, app410 frozen likes, RTDB Rules audit PASS.
+- **PREVIEW Function 배포:** settle 전용 trigger `b67ac85a02aae7fc6d340e09b32164dc28620299` / Run `38341722912` **SUCCESS**. private click 전용 trigger `9f0067e4c8c220a198f86cc2bf5a039f0c09a20d` / Run `38342074694` **SUCCESS**. 기존 Function 두 개만 교체, Hosting/Worker/D1/R2/Rules/main/production 변경 없음.
+- **배포 후 read-only 기준선:** diagnostic trigger `019cd99c112dc8c2462e9285c76532cb4cbaf07b` / Run `38342504423` **SUCCESS**. Scheduler ACTIVE, Eventarc condition 0, Task Queue RUNNING, PREVIEW Worker shared-D1 binding match, 최근 새 Callable/Settle 요청 0, private acceptance NO, pending069 NO, D1 mutation 0.
+- **다음 사용자 액션:** 현재 app411 Master 패널의 **같은 1회 검증 재시도**를 딱 1회 실행. 새 좋아요 클릭/새로고침/새 operation 생성 금지. 이번에는 기존 expired window가 Task에서 `EMPTY`로 빠지지 않고 seal→Worker/D1 receipt까지 진행한 뒤 같은 operation이 ACCEPTED되어 새 window를 생성해야 함.
+- **PASS 게이트:** 동일 operation 시간창에서 PRIOR recovery → Settle DELIVERED → shared D1 persistent acceptance receipt YES → final callback/ACK → pending069 소진을 read-only로 확인해야 함. 실패 시 추가 반복 클릭 없이 즉시 중단하고 새 최초 단절점만 분석.
+- **진행률:** Stage416 전체 **1/4·25%**, 앱 속도 **5/5·100%**, controlled E2E **3/4·75%**. 실서버 persistent receipt/final ACK 전 4/4 금지.
+
+---
+
 ## CURRENT — app411 controlled click exposed Task stale-empty bug / settle fix PREVIEW deployed / same operation retry pending (2026-10-13 KST)
 
 - **사용자 controlled click 실증:** 사용자 Master가 app411 `Stage416 서버 1회 검증` 실행. privacy-safe request timeline Run `38338306114`에서 `recordPrivateLike416` POST가 `02:39:58 → 02:40:00 → 02:40:06 → 02:40:16 UTC`에 4회 발생. 기존 bounded retry 2s/5s/10s 간격과 정확히 일치하여 같은 operation이 `PRIOR_WINDOW_NEEDS_SEAL` 분기를 반복한 것으로 해석 가능. 같은 구간 새 Scheduler onCreate는 0.

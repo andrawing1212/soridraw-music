@@ -27,7 +27,6 @@ export type Stage416SealResult={sealed:boolean;reason:string;value?:Seal;retryAf
 // transaction. An account clock is ONLY trusted after RTDB resolves .sv timestamp.
 export async function sealUserPrivateLikes416(
   database:Database,uid:string,nowMs=Date.now(),expectedWindowId?:string,
-  authoritativeEmptyRetry=false,
 ):Promise<Stage416SealResult>{
   if(!uid||uid.length>128||!Number.isSafeInteger(nowMs)||nowMs<=0)
     throw Error('416_BAD_SERVER_SEAL');
@@ -37,6 +36,8 @@ export async function sealUserPrivateLikes416(
   const privateRef=database.ref('privateLikeBatch416/'+uid);
   const result=await privateRef.transaction(
     (raw:unknown)=>{
+      const unchanged=raw===undefined?null:raw;
+      disposition={sealed:false,reason:'UNDETERMINED'};
       const value=raw as Pending|null;
       if(value?.sealed){
         if(expectedWindowId && value.sealed.id!==expectedWindowId){
@@ -44,17 +45,17 @@ export async function sealUserPrivateLikes416(
             // A new window may have begun while the older frozen seal awaits
             // a remote queue ACK. Do not discard the new task; retry later.
             disposition={sealed:false,reason:'WAITING_FOR_PRIOR_SEAL',retryAfterMs:60_000};
-            return;
+            return unchanged;
           }
-          disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
+          disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return unchanged;
         }
         disposition={sealed:false,reason:'PRIOR_SEAL_UNACKNOWLEDGED',value:value.sealed};
-        return;
+        return unchanged;
       }
-      if(!value?.window){disposition={sealed:false,reason:'EMPTY'};return;}
+      if(!value?.window){disposition={sealed:false,reason:'EMPTY'};return unchanged;}
       const {window,pending}=value;
       if(expectedWindowId && window.id!==expectedWindowId){
-        disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return;
+        disposition={sealed:false,reason:'STALE_WINDOW_TASK'};return unchanged;
       }
       if(!Number.isSafeInteger(window.lastClickAtMs)||window.lastClickAtMs<=0||
          !MINUTES.includes(window.minutes)||!validUuid(window.id)||
@@ -63,7 +64,7 @@ export async function sealUserPrivateLikes416(
       const deadline=window.lastClickAtMs+window.minutes*60000;
       if(nowMs<deadline){
         disposition={sealed:false,reason:'NOT_DUE',retryAfterMs:deadline-nowMs};
-        return;
+        return unchanged;
       }
       const rows=Object.values(pending||{});
       if(!rows.length||rows.length>MAX_TRACKS||rows.some(row=>!validRow(row)))
@@ -75,20 +76,11 @@ export async function sealUserPrivateLikes416(
     },
     undefined,false,
   );
-  if(!result.committed){
-    // A Cloud Tasks Function can start with an empty local RTDB cache. Returning
-    // undefined on EMPTY aborts before the SDK can compare with the server, so a
-    // real due window can be misclassified as EMPTY forever. Refresh ONLY this
-    // observed no-window branch once; normal due seals still add zero reads.
-    if(disposition.reason==='EMPTY'&&!authoritativeEmptyRetry){
-      await privateRef.get();
-      return sealUserPrivateLikes416(
-        database,uid,nowMs,expectedWindowId,true);
-    }
+  if(!result.committed)throw Error('416_SERVER_SEAL_TRANSACTION_ABORTED');
+  if(!disposition.sealed)
     return {sealed:false,reason:disposition.reason,
       ...(disposition.value?{value:disposition.value}:{}),
       ...(disposition.retryAfterMs!==undefined?{retryAfterMs:disposition.retryAfterMs}:{})};
-  }
   const committed=result.snapshot.val() as Pending;
   if(!committed?.sealed||committed.sealed.id!==disposition.value?.id||
      committed.sealed.version!==disposition.value?.version)
@@ -103,13 +95,18 @@ export async function acknowledgeUserPrivateSeal416(
   if(!uid||uid.length>128||!validUuid(receipt?.id)||
      !Number.isSafeInteger(receipt?.version)||receipt.version<=0)
     throw Error('416_BAD_SERVER_ACK');
+  let acknowledged=false;
   const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
+      const unchanged=raw===undefined?null:raw;
+      acknowledged=false;
       const value=raw as Pending|null;
       if(!value?.sealed||value.sealed.id!==receipt.id||
-         value.sealed.version!==receipt.version)return;
+         value.sealed.version!==receipt.version)return unchanged;
+      acknowledged=true;
       return {...value,sealed:null};
     },undefined,false,
   );
-  return result.committed;
+  if(!result.committed)throw Error('416_SERVER_ACK_TRANSACTION_ABORTED');
+  return acknowledged;
 }

@@ -19,7 +19,6 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
-  authoritativeRetry=false,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -35,6 +34,11 @@ export async function recordUserPrivateClick416(
  let replay:{version:number;count:number;deadlineAtMs?:number}|null=null;
  const privateRef=database.ref('privateLikeBatch416/'+uid);
  const outcome=await privateRef.transaction((raw:unknown)=>{
+   // Never abort a decision that depends on current server state. Returning the
+   // exact local value forces RTDB to compare its hash with the server; on a
+   // stale cache the transaction callback is re-run with authoritative data.
+   const unchanged=raw===undefined?null:raw;
+   reason='UNDETERMINED';expiredWindowId=undefined;replay=null;
    const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)
      ?raw:{} ) as Pending416;
    const version=Number(state.version||0);
@@ -66,13 +70,13 @@ export async function recordUserPrivateClick416(
          ...(state.window?{deadlineAtMs:
            state.window.lastClickAtMs+state.window.minutes*60_000}:{})};
      }else reason='STALE_OR_DUPLICATE';
-     return;
+     return unchanged;
    }
    if(Object.keys(devices).length>=32&&!Object.prototype.hasOwnProperty.call(devices,click.deviceId)){
-     reason='DEVICE_LIMIT';return;
+     reason='DEVICE_LIMIT';return unchanged;
    }
    if(Object.keys(pending).length>=256&&!Object.prototype.hasOwnProperty.call(pending,trackKey)){
-     reason='TRACK_LIMIT';return;
+     reason='TRACK_LIMIT';return unchanged;
    }
    const previous=state.window;
    if(previous&&(!Number.isSafeInteger(previous.lastClickAtMs)||
@@ -82,7 +86,7 @@ export async function recordUserPrivateClick416(
    if(previous && receivedAtMs>=previous.lastClickAtMs+previous.minutes*60_000){
      // The expired preceding window must be sealed first, never mixed with a
      // later new window. Original browser outbox must retry this same click.
-     reason='PRIOR_WINDOW_NEEDS_SEAL';expiredWindowId=previous.id;return;
+     reason='PRIOR_WINDOW_NEEDS_SEAL';expiredWindowId=previous.id;return unchanged;
    }
    const serverClickAt=Math.max(receivedAtMs,(previous?.lastClickAtMs||0)+1);
    const minutes=previous?previous.minutes:trustedMinutes;
@@ -101,24 +105,16 @@ export async function recordUserPrivateClick416(
        lastClickAtMs:serverClickAt,revision:versionNext},
    };
  },undefined,false);
- if(!outcome.committed){
-   // RTDB transaction callbacks can start from this Admin SDK instance's local
-   // cache. Returning undefined aborts before a server conflict can refresh it.
-   // Refresh only an aborted decision, then replay exactly once with the same
-   // server-owned click timestamp. Normal accepted clicks keep zero extra reads.
-   if(!authoritativeRetry){
-     await privateRef.get();
-     return recordUserPrivateClick416(
-       database,uid,click,trustedMinutes,receivedAtMs,true);
-   }
-   // Transaction callbacks set this value asynchronously; keep the explicit
-   // proof type at the post-transaction boundary for strict TypeScript.
-   const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
-   if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
+ if(!outcome.committed)throw Error('416_SERVER_PRIVATE_TRANSACTION_ABORTED');
+ const state=outcome.snapshot.val() as Pending416;
+ // Transaction callbacks may run more than once; reason/replay above always
+ // describe the final server-authoritative invocation.
+ const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
+ if(reason==='DUPLICATE_CONFIRMED'&&exactProof)
+   return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
+ if(reason!=='ACCEPTED')
    return {accepted:false,reason,
      ...(reason==='PRIOR_WINDOW_NEEDS_SEAL'&&expiredWindowId?{expiredWindowId}:{})};
- }
- const state=outcome.snapshot.val() as Pending416;
  if(!state?.window||state.version!==state.window.revision)
    throw Error('416_SERVER_PRIVATE_CLICK_PROOF_MISSING');
  return {accepted:true,reason:'ACCEPTED',

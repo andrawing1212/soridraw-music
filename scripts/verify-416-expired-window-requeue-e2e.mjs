@@ -119,15 +119,22 @@ const staleEmptySettleDb={ref:path=>{
   return {
     transaction:async update=>{
       transactions++;
-      const next=update(settleLocalState);
+      const localBefore=structuredClone(settleLocalState);
+      let next=update(settleLocalState);
       if(next===undefined)return {committed:false,snapshot:{val:()=>settleLocalState}};
-      settleLocalState=next;settleServerState=next;
+      // Model RTDB transaction hash reconciliation: an unchanged stale local
+      // value conflicts with the real server value and re-runs authoritatively.
+      if(JSON.stringify(localBefore)!==JSON.stringify(settleServerState)&&
+         JSON.stringify(next)===JSON.stringify(localBefore)){
+        settleLocalState=structuredClone(settleServerState);
+        next=update(settleLocalState);
+      }
+      settleLocalState=structuredClone(next);settleServerState=structuredClone(next);
       return {committed:true,snapshot:{val:()=>settleLocalState}};
     },
     get:async()=>{
       settleRefreshReads++;
-      settleLocalState=structuredClone(settleServerState);
-      return {val:()=>settleLocalState};
+      throw Error('authoritative get warming must not be required');
     },
     child:name=>({
       get:async()=>{
@@ -141,8 +148,8 @@ const recoveredDelivered=await dispatchPrivateWindowTask416(
   staleEmptySettleDb,queue,{uid,windowId:op1},
   workerEndpoint,secret,t0+300_002,http,
 );
-assert.equal(settleRefreshReads,1,
-  'only a false local EMPTY gets one authoritative RTDB refresh');
+assert.equal(settleRefreshReads,0,
+  'server reconciliation must come from the transaction protocol, not get warming');
 assert.equal(recoveredDelivered.status,'DELIVERED',
   'stale empty Task cache must not hide a real due server window');
 assert.equal(settleServerState.window,null);
@@ -177,22 +184,27 @@ const staleCacheDb={ref:path=>{
   assert.equal(path,'privateLikeBatch416/'+uid);
   return {
     transaction:async update=>{
-      const next=update(localState);
+      const localBefore=structuredClone(localState);
+      let next=update(localState);
       if(next===undefined)return {committed:false,snapshot:{val:()=>localState}};
-      localState=next;serverState=next;
+      if(JSON.stringify(localBefore)!==JSON.stringify(serverState)&&
+         JSON.stringify(next)===JSON.stringify(localBefore)){
+        localState=structuredClone(serverState);
+        next=update(localState);
+      }
+      localState=structuredClone(next);serverState=structuredClone(next);
       return {committed:true,snapshot:{val:()=>localState}};
     },
     get:async()=>{
       refreshReads++;
-      localState=structuredClone(serverState);
-      return {val:()=>localState};
+      throw Error('authoritative get warming must not be required');
     },
   };
 }};
 const staleRecovered=await recordUserPrivateClick416(staleCacheDb,uid,{
   trackId:'new-song',liked:true,operationId:op2,deviceId:device,deviceSequence:2,
 },5,t0+300_010);
-assert.equal(refreshReads,1,'only an aborted decision gets one authoritative refresh');
+assert.equal(refreshReads,0,'transaction conflict must resolve stale local state without get warming');
 assert.equal(staleRecovered.accepted,true,
  'stale local expired window must not create a false repair task');
 assert.equal(staleRecovered.reason,'ACCEPTED');
@@ -201,8 +213,8 @@ assert.equal(serverState.version,2);
 
 console.log('STAGE416_EXPIRED_WINDOW_SHARED_STATE_REQUEUE_TO_DELIVERED=PASS');
 console.log('STAGE416_BLOCKED_CLICK_RETRY_AFTER_EXACT_ACK=PASS');
-console.log('STAGE416_STALE_ABORT_CACHE_REFRESH_PREVENTS_FALSE_EMPTY_REQUEUE=PASS');
-console.log('STAGE416_SETTLE_STALE_EMPTY_CACHE_REFRESH_DELIVERS_REAL_WINDOW=PASS');
+console.log('STAGE416_TRANSACTION_SERVER_RECONCILIATION_PREVENTS_FALSE_REQUEUE=PASS');
+console.log('STAGE416_SETTLE_TRANSACTION_RECONCILIATION_DELIVERS_REAL_WINDOW=PASS');
 console.log('STAGE416_NORMAL_DUE_SETTLE_EXTRA_AUTHORITATIVE_READ=0');
 console.log('STAGE416_NORMAL_ACCEPTED_CLICK_EXTRA_AUTHORITATIVE_READ=0');
 console.log('STAGE416_INTEGRATION_LIVE_NETWORK_AND_SHARED_DATA_IO=0');

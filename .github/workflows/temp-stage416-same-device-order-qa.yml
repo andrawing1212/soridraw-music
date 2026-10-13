@@ -29,6 +29,22 @@ jobs:
           node scripts/verify-422-stage416-global-version-interleaving.mjs
           node scripts/verify-423-stage416-cross-env-settlement-order.mjs
           node scripts/verify-425-stage416-global-reservation-settlement-gap.mjs
+          node scripts/verify-421-stage416-environment-isolation.mjs
+          node scripts/verify-416-private-like-intent.mjs
+          node scripts/verify-416-expired-window-requeue-e2e.mjs
+      - name: Protected like regressions
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-178-final-like-architecture.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-390-like-acceptance-receipt.mjs
+          node scripts/verify-412-stale-like-outbox-gate.mjs
+          node scripts/verify-413-like-exit-flush.mjs
+          node scripts/verify-414-pending-only-lifecycle.mjs
       - name: App TypeScript
         run: npm run lint
       - name: App Build

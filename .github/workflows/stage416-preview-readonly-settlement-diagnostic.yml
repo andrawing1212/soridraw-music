@@ -243,6 +243,51 @@ jobs:
           print('STAGE416_EVENTARC_TRANSPORT_READONLY=PASS')
           PY
 
+      - name: Classify 24h Scheduler timestamps and Settle outcomes read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,re,collections
+          project='soridraw-app-866a5'
+          def read(expr,limit=5000):
+            p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+              '--freshness=24h','--limit='+str(limit),'--format=json'],
+              capture_output=True,text=True)
+            if p.returncode:
+              raise SystemExit('STAGE416_24H_TRACE_READ_DENIED')
+            return json.loads(p.stdout or '[]')
+          scheduler=read(
+            'resource.type="cloud_run_revision" AND '
+            'resource.labels.service_name="stage416scheduleprivatewindowcandidate" '
+            'AND httpRequest.status:*',200)
+          safe_sched=[{
+            'at':str(row.get('timestamp',''))[:19],
+            'http':str((row.get('httpRequest') or {}).get('status') or 'NONE'),
+            'severity':str(row.get('severity') or 'DEFAULT'),
+          } for row in sorted(scheduler,key=lambda x:x.get('timestamp',''))]
+          print('STAGE416_24H_SCHEDULER_SAFE_TIMELINE='+json.dumps(safe_sched))
+          settle=read(
+            'resource.type="cloud_run_revision" AND '
+            'resource.labels.service_name="stage416settleprivatewindowcandidate"',5000)
+          classes=collections.Counter()
+          pattern=re.compile(r'SETTLEMENT_TASK_NOT_DELIVERED\s+(RESCHEDULED|STALE|EMPTY)',re.I)
+          error_codes=collections.Counter()
+          errpat=re.compile(r'416_[A-Z0-9_]{4,80}')
+          for row in settle:
+            payload=row.get('textPayload') or (row.get('jsonPayload') or {}).get('message') or ''
+            match=pattern.search(str(payload))
+            if match:classes[match.group(1).upper()]+=1
+            for code in set(errpat.findall(str(payload))):error_codes[code]+=1
+          for kind in ('RESCHEDULED','STALE','EMPTY'):
+            print('STAGE416_24H_SETTLE_'+kind+'='+str(classes[kind]))
+          print('STAGE416_24H_SETTLE_NONDELIVERY_TOTAL='+str(sum(classes.values())))
+          print('STAGE416_24H_SETTLE_SAFE_ERROR_CODES='+json.dumps(error_codes,sort_keys=True))
+          print('STAGE416_24H_SETTLE_LOG_ENTRIES='+str(len(settle)))
+          print('STAGE416_24H_SETTLE_MAY_BE_TRUNCATED='+str(len(settle)>=5000).upper())
+          print('STAGE416_24H_TRACE_NO_UID_NO_TASK_ID_NO_PAYLOAD=PASS')
+          PY
+
       - name: Verify callable-to-queue runtime identity without IAM changes
         shell: bash
         run: |

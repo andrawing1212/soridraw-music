@@ -10,7 +10,10 @@
 - **소스 commit:** `eb45091bed36960ae6ba4d5e06a5be4b88f70f2f`.
 - **회귀검사 보호 commit:** `0f316384683add18d8b800072797640c56b5e8b4`; `verify-127-atomic-personal-like.mjs`에 unmarked row UI authority 0, retained canonical repair 비차단, fresh explicit pending 권한 보존 검사를 추가.
 - **버전:** app414 bump commit `3fcff8f4762aae28bcb79357e893e7fd87452793`.
-- **현재 상태:** 소스 수정/검사 코드 작성 완료. TypeScript/Build/전체 관련 자동검증 및 GPT-6 독립 감사 전. **PREVIEW 미배포**, TEST/PRODUCTION 변경 없음.
+- **공식 좋아요 품질검증:** final candidate `73d70b916b9c5aa5b303b753f0c195f2fc059b2c`, Quality Run `38382577342` SUCCESS. TypeScript PASS, app Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox write quarantine PASS, app390/app141 ordering PASS, app197 warm re-entry R0/W0 PASS, live shared RTDB Rules read-only/additive preflight PASS.
+- **app414 신규 검증:** `414_STALE_OUTBOX_UI_AUTHORITY_QUARANTINED=PASS`, `414_RETAINED_CANONICAL_REPAIR_NOT_BLOCKED=PASS`, `414_FRESH_EXPLICIT_CLICK_AUTHORITY_PRESERVED=PASS`, `414_QUARANTINED_OUTBOX_CANNOT_BLOCK_APP410_RETAINED_REPAIR=PASS`, `APP414_NEW_PUBLIC_TRACK_QUARANTINED_OUTBOX_NO_UI_AUTHORITY=PASS`.
+- **검증 중 발견/정리:** app414 의미 변경으로 production helper 일부를 직접 실행하던 기존 verifier fixture가 old outbox를 전부 active pending으로 가정해 순차 실패했으며, 제품 코드 확대 없이 verifier만 새 explicit marker 의미에 맞춰 교정했다. 최종 Quality Run에서 전체 관련 회귀 PASS.
+- **현재 상태:** 소스 수정 + 공식 자동검증 완료. **GPT-6 독립 감사 전 / PREVIEW 미배포**. TEST/PRODUCTION 변경 없음. `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
 - **중요:** 이번 수정은 코드상 확인된 공통 결함을 제거한다. 사용자의 시간경과/새로고침 증상을 이것 하나가 100% 전부 설명한다고 실기기 검증 전 확정하지 않는다. app414 배포 후에도 동일 증상이 남으면 다음 후보는 416 reload-restored provisional hint / snapshotPending guard 순서로 좁혀 검사한다.
 
 ---

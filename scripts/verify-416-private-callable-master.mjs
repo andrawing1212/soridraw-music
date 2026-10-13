@@ -12,7 +12,7 @@ class HttpErr extends Error{constructor(code,message){super(message);this.code=c
 const requireMock=id=>{
  if(id==='firebase-functions/v2/https')return {HttpsError:HttpErr};
  if(id==='./exploreLikeBatchSettings416')return {
-  readLikeBatchTiming416:async()=>{
+  readLikeBatchTimingAt416:async()=>{
     calls.config++;return {privateMinutes:calls.config===1?5:3,publicMinutes:5};
   }};
  if(id==='./exploreLikePrivateServerClick416')return {
@@ -33,26 +33,28 @@ const requireMock=id=>{
 vm.runInNewContext(output,{module:{exports},exports,require:requireMock,
   Error,Object,Array,Number,Date},{timeout:2000});
 const run=exports.handleAuthenticatedPrivateClick416;
+const previewConfig={timingPath:'likeBatchTiming416/current',privateRoot:'privateLikeBatch416',
+ taskTarget:'stage416SettlePrivateWindowCandidate'};
 const mutation={trackId:'test-song',liked:true,
  operationId:'00000000-0000-4000-8000-000000000001',
  deviceId:'00000000-0000-4000-8000-000000000002',deviceSequence:1};
-await assert.rejects(run({}, {auth:null,app:{},data:mutation}),e=>e.code==='unauthenticated');
-await assert.rejects(run({}, {auth:{uid:'account'},data:mutation}),
+await assert.rejects(run({}, {auth:null,app:{},data:mutation},previewConfig),e=>e.code==='unauthenticated');
+await assert.rejects(run({}, {auth:{uid:'account'},data:mutation},previewConfig),
   e=>e.code==='failed-precondition');
-await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,uid:'victim'}}),
+await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,uid:'victim'}},previewConfig),
   e=>e.code==='invalid-argument');
-await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,minutes:1}}),
+await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,minutes:1}},previewConfig),
   e=>e.code==='invalid-argument');
-await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,at:123}}),
+await assert.rejects(run({}, {auth:{uid:'account'},app:{},data:{...mutation,at:123}},previewConfig),
   e=>e.code==='invalid-argument');
 assert.equal(calls.config,0,'rejected requests must not read Master config');
-const a=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation});
+const a=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation},previewConfig);
 assert.equal(a.version,1);assert.equal(calls.uid,'account');
-const b=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation});
+const b=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation},previewConfig);
 assert.equal(b.version,2);
 assert.equal(calls.config,2,'Master settings read only on real click, not page entry');
 assert.equal(calls.submit,2);
-const blocked=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation});
+const blocked=await run({}, {auth:{uid:'account'},app:{token:'valid'},data:mutation},previewConfig);
 assert.equal(blocked.accepted,false,'never report canonical acceptance for blocked click');
 assert.equal(blocked.reason,'PRIOR_WINDOW_NEEDS_SEAL');
 assert.equal(Object.hasOwn(blocked,'expiredWindowId'),false,'do not expose internal window id');

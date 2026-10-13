@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const index=readFileSync('functions/src/index.ts','utf8');
 const task=readFileSync('functions/src/exploreLikePrivateTask416.ts','utf8');
+const environment=readFileSync('functions/src/exploreLikeEnvironment416.ts','utf8');
 const baseRules=JSON.parse(readFileSync('database.rules.json','utf8'));
 const {buildStage416ServerRulesCandidate}=await import('./build-416-private-server-rules.mjs');
 const rules=buildStage416ServerRulesCandidate(baseRules).rules;
@@ -15,7 +16,8 @@ assert.match(index,/recordPrivateLike416 = onCall\([\s\S]{0,180}enforceAppCheck:
 assert.match(index,/stage416SchedulePrivateWindowCandidate/);
 assert.match(index,/stage416SettlePrivateWindowCandidate/);
 assert.match(index,/privateLikeFinalReceipt416Candidate/);
-assert.match(task,/https:\/\/soridraw-explore-preview\.andrawing1212\.workers\.dev\/v1\/internal\/private-like-handoff-416/);
+assert.match(environment,/https:\/\/soridraw-explore-preview\.andrawing1212\.workers\.dev\/v1\/internal\/private-like-handoff-416/);
+assert.match(task,/const endpoint=config\.workerEndpoint/);
 assert.deepEqual(rules.privateLikeBatch416,{'.read':false,'.write':false,'$uid':{'.read':false,'.write':false}});
 assert.equal(rules.privateLikeFinal416['.write'],false);
 assert.equal(rules.privateLikeFinal416['$uid']['.write'],false);

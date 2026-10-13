@@ -11,11 +11,12 @@ import {deliverPrivateSealToWorker416,type PrivateSeal416}
 export async function completeUserPrivateWindow416(
  db:Database,uid:string,workerEndpoint:string,secret:string,
  nowMs=Date.now(),http:typeof fetch=fetch,expectedWindowId?:string,
+ privateRoot='privateLikeBatch416',
 ):Promise<{
  queued:boolean;acknowledged?:boolean;reason?:string;retryAfterMs?:number;
  version?:number;batchIds?:string[];
 }>{
- const current=await sealUserPrivateLikes416(db,uid,nowMs,expectedWindowId);
+ const current=await sealUserPrivateLikes416(db,uid,nowMs,expectedWindowId,privateRoot);
  const seal=current.value as PrivateSeal416|undefined;
  if(!seal||(!current.sealed&&current.reason!=='PRIOR_SEAL_UNACKNOWLEDGED'))
    return {queued:false,reason:current.reason,
@@ -28,13 +29,13 @@ export async function completeUserPrivateWindow416(
  );
  const acked=await acknowledgeUserPrivateSeal416(db,uid,{
    id:seal.id,version:receipt.version,
- });
+ },privateRoot);
  if(!acked){
    // An ambiguous ACK must never silently strand the frozen UID seal.
    // Pay for one extra RTDB read ONLY on this rare mismatch, not per click.
    // If our exact seal is still present, fail the Cloud Task so its bounded
    // retry can re-deliver the durable Worker receipt and clear that seal.
-   const stored=await db.ref('privateLikeBatch416/'+uid).child('sealed').get();
+   const stored=await db.ref(privateRoot+'/'+uid).child('sealed').get();
    const stillPending=stored.val() as {id?:string;version?:number}|null;
    if(stillPending?.id===seal.id && stillPending.version===seal.version)
      throw Error('416_SEAL_ACK_STILL_PENDING');

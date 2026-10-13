@@ -20,7 +20,13 @@ const source=readFileSync('src/services/exploreLikeService.ts','utf8');
 if(stage416ClientActive) assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
 else assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/STAGE416_SHARED_RTDB_BATCH_ACTIVE &&/);
-assert.match(source,/persistLikeOutbox\(uid, latest416\);[\s\S]*?publishPrivateRtdbBatchClick416\(/);
+assert.match(source,/reserveAndPersistExploreLikeDeviceSequence416\(/,
+  'device sequence and outbox persistence must stay inside one origin-wide lock');
+assert.match(source,/persistLikeOutbox\(uid, latest416\);/);
+assert.match(source,/await drainStage416PrivateRegistrations416\(uid, operationId416\)/,
+  'initial registration must use the ordered durable drain');
+assert.match(source,/await drainStage416PrivateRegistrations416\(uid\)/,
+  'restart recovery must reuse the same ordered drain');
 assert.match(source,/privateDeviceSequence416: token.deviceSequence/);
 console.log('STAGE416_MULTI_TAB_UID_DEVICE_SEQUENCE_80=PASS');
 // Execute the real (dormant) Callable retry function in isolation. An

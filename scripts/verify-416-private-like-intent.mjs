@@ -84,7 +84,8 @@ assert.equal(cold.api.readExploreLikeIntent416(uid, track), undefined,
   'new browser must not promote a retained tentative hint to canonical state');
 assert.equal(cold.notices.length, 0);
 stopCold();
-const restartedB = makeClient(B.storage);
+// A browser reload keeps the persisted bytes but the old JS instance is gone.
+const restartedB = makeClient(new Map(B.storage));
 const stopRestart = restartedB.api.subscribeExploreLikeIntent416(uid,
   (id, liked) => restartedB.notices.push({ id, liked }));
 assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), undefined,
@@ -112,7 +113,7 @@ assert.equal(B.api.readExploreLikeIntent416(uid, track), false, 'stale operation
 assert.equal(B.notices.length, afterFalse);
 await A.api.settleExploreLikeIntent416(uid, [{ trackId: track, operationId: op2, status: 'rejected' }]);
 assert.equal(B.api.readExploreLikeIntent416(uid, track), undefined, 'rejected hint clears; canonical fallback remains independent');
-const rejectedReload = makeClient(B.storage);
+const rejectedReload = makeClient(new Map(restartedB.storage));
 const stopRejectedReload = rejectedReload.api.subscribeExploreLikeIntent416(uid, () => {});
 assert.equal(rejectedReload.api.readExploreLikeIntent416(uid, track), undefined,
   'rejected remote hint must not survive reload');

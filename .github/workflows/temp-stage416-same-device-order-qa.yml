@@ -21,18 +21,26 @@ jobs:
           node-version: '22'
       - name: Install app
         run: npm ci --no-audit --no-fund
-      - name: Same-device ordering
+      - name: Issue118 ordering and settlement
         run: |
           set -euo pipefail
           node scripts/verify-424-stage416-same-device-registration-order.mjs
           node scripts/verify-416-client-rtdb-binding.mjs
           node scripts/verify-422-stage416-global-version-interleaving.mjs
+          node scripts/verify-423-stage416-cross-env-settlement-order.mjs
+          node scripts/verify-425-stage416-global-reservation-settlement-gap.mjs
       - name: App TypeScript
         run: npm run lint
       - name: App Build
         run: npm run build
+      - name: Install Functions
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Functions TypeScript
+        working-directory: functions
+        run: npm run build
       - name: Safety
         run: |
-          echo 'SAME_DEVICE_ORDER_QA=PASS'
+          echo 'ISSUE118_ORDERING_SETTLEMENT_QA=PASS'
           echo 'DEPLOYMENT=0'
           echo 'SHARED_DATA_CHANGE=0'

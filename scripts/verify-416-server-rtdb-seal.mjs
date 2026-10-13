@@ -58,6 +58,41 @@ assert.equal(state.sealed.version,3);
 assert.equal(await ack(db,'user',{id:claimed.value.id,version:3}),true);
 assert.equal(state.sealed,null);
 assert.equal(state.pending[await hash('song-c')].liked,true);
+
+// Reproduce the live ACK failure: the Task's local transaction view can be
+// empty while the authoritative server still holds the exact frozen seal.
+// The ACK must reconcile through RTDB transaction conflict handling, then
+// clear only the exact id+version. A wrong receipt must remain a no-op.
+const ackExactSeal=structuredClone(claimed.value);
+let ackLocalState=null;
+let ackServerState={version:3,deviceSeq:{},window:null,pending:null,sealed:ackExactSeal};
+let ackNoopProbes=0;
+const staleAckDb={ref:()=>({
+  transaction:async(fn)=>{
+    const localBefore=structuredClone(ackLocalState);
+    let updated=fn(ackLocalState);
+    if(updated===undefined)return {committed:false,snapshot:{val:()=>ackLocalState}};
+    if(JSON.stringify(updated)===JSON.stringify(localBefore))ackNoopProbes++;
+    if(JSON.stringify(localBefore)!==JSON.stringify(ackServerState)&&
+       JSON.stringify(updated)===JSON.stringify(localBefore)){
+      ackLocalState=structuredClone(ackServerState);
+      updated=fn(ackLocalState);
+    }
+    ackLocalState=structuredClone(updated);
+    ackServerState=structuredClone(updated);
+    return {committed:true,snapshot:{val:()=>ackLocalState}};
+  },
+})};
+assert.equal(await ack(staleAckDb,'user',{id:ackExactSeal.id,version:ackExactSeal.version}),true,
+  'stale local ACK cache must reconcile and clear the exact server seal');
+assert.equal(ackServerState.sealed,null);
+assert.equal(ackNoopProbes>=1,true);
+
+ackLocalState=null;
+ackServerState={version:3,deviceSeq:{},window:null,pending:null,sealed:ackExactSeal};
+assert.equal(await ack(staleAckDb,'user',{id:op(999),version:ackExactSeal.version}),false,
+  'mismatched receipt must never clear a different server seal');
+assert.equal(ackServerState.sealed.id,ackExactSeal.id);
 assert.equal((await seal(db,'user',initial+500_000)).sealed,true);
 assert.equal(await ack(db,'user',{id:claimed.value.id,version:3}),false);
 state=null;
@@ -70,4 +105,5 @@ assert.equal(writes>80,true);
 assert.equal(reads,transactions,'only explicit seal/ack requests may read RTDB state');
 console.log('STAGE416_SERVER_SEAL_DEADLINE_AND_FROZEN_80_TRACKS=PASS');
 console.log('STAGE416_SERVER_SEAL_ACK_RETRY_CANNOT_DROP_NEW_CLICK=PASS');
+console.log('STAGE416_STALE_ACK_TRANSACTION_RECONCILES_EXACT_SEAL_ONLY=PASS');
 console.log('STAGE416_SERVER_SEAL_NOT_EXPORTED_NOT_DEPLOYED=PASS');

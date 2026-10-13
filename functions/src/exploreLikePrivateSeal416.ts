@@ -100,13 +100,22 @@ export async function acknowledgeUserPrivateSeal416(
   if(!uid||uid.length>128||!validUuid(receipt?.id)||
      !Number.isSafeInteger(receipt?.version)||receipt.version<=0)
     throw Error('416_BAD_SERVER_ACK');
+  let acknowledged=false;
   const result=await database.ref('privateLikeBatch416/'+uid).transaction(
     (raw:unknown)=>{
+      // A Task instance can begin this ACK from a stale local RTDB cache. A
+      // mismatch must not abort before the transaction protocol compares with
+      // the server. Returning the exact local value is a no-op probe; if the
+      // server still owns this exact seal the callback is re-run with it.
+      const unchanged=raw===undefined?null:raw;
+      acknowledged=false;
       const value=raw as Pending|null;
       if(!value?.sealed||value.sealed.id!==receipt.id||
-         value.sealed.version!==receipt.version)return;
+         value.sealed.version!==receipt.version)return unchanged;
+      acknowledged=true;
       return {...value,sealed:null};
     },undefined,false,
   );
-  return result.committed;
+  if(!result.committed)throw Error('416_SERVER_ACK_TRANSACTION_ABORTED');
+  return acknowledged;
 }

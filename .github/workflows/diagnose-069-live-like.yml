@@ -93,6 +93,28 @@ jobs:
               ORDER BY l.created_at ASC
               LIMIT 20;
             " --json > "$RUNNER_TEMP/target-likers-private.json"
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+              SELECT q.updated_at,q.pending_count,
+                CAST(json_extract(j.value,'$.liked') AS INTEGER) AS desired_liked,
+                CAST(json_extract(j.value,'$.mutationAt') AS INTEGER) AS mutation_at,
+                CASE WHEN (
+                  q.updated_at > s.processed_at OR
+                  (q.updated_at = s.processed_at AND q.user_uid > s.processed_uid)
+                ) THEN 1 ELSE 0 END AS queue_pending
+              FROM tracks t
+              JOIN explore_like_user_queue_075 q ON q.user_uid=t.owner_uid
+              JOIN explore_like_user_queue_state_075 s ON s.id=1
+              JOIN json_each(q.mutations_json) j ON TRIM(CAST(j.key AS TEXT))=t.id
+              WHERE t.id='$track_id'
+              LIMIT 5;
+            " --json > "$RUNNER_TEMP/target-owner-queue.json"
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+              SELECT r.version,r.accepted_at
+              FROM explore_like_private_acceptance_416 r
+              JOIN tracks t ON t.owner_uid=r.user_uid
+              WHERE t.id='$track_id'
+              LIMIT 1;
+            " --json > "$RUNNER_TEMP/target-owner-stage416.json"
           fi
           node - <<'NODE'
           const fs = require('fs');
@@ -132,6 +154,24 @@ jobs:
               console.log('LIKER_'+(index+1)+'_TOKEN='+token);
               console.log('LIKER_'+(index+1)+'_CREATED_AT='+Number(row.created_at||0));
             });
+          }
+          if (fs.existsSync(process.env.RUNNER_TEMP + '/target-owner-queue.json')) {
+            const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-owner-queue.json','utf8'));
+            const rows=payload.flatMap(part=>part.results||[]);
+            console.log('TARGET_OWNER_QUEUE_MATCHES='+rows.length);
+            rows.forEach((row,index)=>{
+              console.log('OWNER_QUEUE_'+(index+1)+'_UPDATED_AT='+Number(row.updated_at||0));
+              console.log('OWNER_QUEUE_'+(index+1)+'_MUTATION_AT='+Number(row.mutation_at||0));
+              console.log('OWNER_QUEUE_'+(index+1)+'_DESIRED_LIKED='+Number(row.desired_liked||0));
+              console.log('OWNER_QUEUE_'+(index+1)+'_PENDING='+Number(row.queue_pending||0));
+            });
+          }
+          if (fs.existsSync(process.env.RUNNER_TEMP + '/target-owner-stage416.json')) {
+            const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-owner-stage416.json','utf8'));
+            const row=payload.flatMap(part=>part.results||[])[0]||{};
+            console.log('TARGET_OWNER_STAGE416_RECEIPT='+Number(Boolean(row.version)));
+            console.log('TARGET_OWNER_STAGE416_VERSION='+Number(row.version||0));
+            console.log('TARGET_OWNER_STAGE416_ACCEPTED_AT='+Number(row.accepted_at||0));
           }
           console.log('LIVE_069_SELECT_ONLY=PASS');
           NODE

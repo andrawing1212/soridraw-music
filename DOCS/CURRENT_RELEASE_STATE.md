@@ -1,3 +1,14 @@
+## CURRENT — Issue #118 Codex 산출물 2개 감사 / cross-env version collision로 merge BLOCKED (2026-10-13 KST)
+
+- **Codex 공식 상태:** Issue #118 bot session은 `Codex couldn't complete this request`로 종료. Draft PR 없음.
+- **남은 산출물:** A `codex/issue-118-stage416-env-isolation` / `e4d36ba87aee475889f7f0ebe67c73ded33ca20d` (current preview `2ea0e6f...` 기반), B `codex/stage416-env-isolation` / `47c639f8982a2c4d3f77738c45496db1e3d084c5` (이전 `a80b0e5...` 기반).
+- **A 감사:** callable/task/root/timing/Worker endpoint는 환경 분리했지만 final receipt Function/final RTDB root가 PREVIEW 단일 identity로 남아 end-to-end isolation 불완전.
+- **B 감사:** A보다 나아 final receipt Function + final RTDB root까지 PREVIEW/TEST/PRODUCTION별로 분리. 그러나 **critical version collision** 존재.
+- **critical blocker:** 각 env private root가 독립 `version=1,2,...`를 생성하지만 shared D1 `explore_like_private_acceptance_416`는 `user_uid`별로 `excluded.version > current.version`만 허용하고 shared personal R2도 `privateLikeVersion416` monotonic version을 사용. 따라서 PREVIEW에서 이미 v39인 사용자의 TEST v1/PROD v1 settlement는 stale로 거부될 수 있음.
+- **판정:** A/B 모두 merge/deploy 금지. Issue #118에 환경별 transient isolation은 유지하되 uid별 canonical settlement version은 세 환경 전체에서 strictly increasing이 되도록 교정 지시 완료. D1 schema/user data migration 없이 해결해야 함.
+- **비변경:** preview product code/functions/worker/D1/R2/Rules/Hosting, TEST, PRODUCTION, shared user data 변경 0. 일반 Stage416 client flags OFF 유지.
+
+---
 ## CURRENT — Stage416 release contract 감사 FAIL / environment-isolated transient backend 선행 필요 (2026-10-13 KST)
 
 - **Issue #117 Codex 결과:** 공식 세션은 실패했지만 두 source branch가 남음: A `codex/issue-117-functions-promotion` / `9b1abe00c12a8412fa65a5b0960764dd51c78b8b`, B `codex/stage416-functions-promotion-contract` / `97859b162ac5a48fd3ff306991df39cad61fcbb4`.

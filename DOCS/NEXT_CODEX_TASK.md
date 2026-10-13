@@ -1,3 +1,14 @@
+## NEXT — Issue #118 correction: environment isolation + shared monotonic settlement version (2026-10-13 KST)
+
+- **기준:** 현재 preview HEAD에서 시작. A/B 기존 branch 그대로 merge 금지.
+- **보존:** B안의 environment-specific callable/scheduler/settle/final receipt identities, transient RTDB roots, timing paths, Worker endpoints 방향은 유지 가능.
+- **필수 수정:** 같은 uid의 PREVIEW/TEST/PRODUCTION settled version이 shared D1/R2 기준으로 전역 단조 증가해야 함. independent root local counter 충돌 금지.
+- **실행형 증명:** PREVIEW vN → TEST → PRODUCTION → PREVIEW interleaving에서 각 settled version strictly increasing, D1 stale rejection 없음, final personal R2 version 역행 없음.
+- **비용:** page/update/re-entry 추가 IO 0. 실제 click bounded O(1). duplicate/no-op 비용 증가 여부 수치화.
+- **금지:** D1 schema/key 변경, migration/backfill/reset, Worker/release workflow 변경, deploy, client flag ON, main/production 변경.
+- **Issue:** #118 correction comment posted. corrected Draft PR + commit/test 결과 대기.
+
+---
 ## NEXT — Codex High: Issue #118 Stage416 transient backend environment isolation (2026-10-13 KST)
 
 - **목표:** canonical 사용자 좋아요/D1는 공유 유지하면서 Stage416의 operational batching runtime만 PREVIEW/TEST/PRODUCTION별로 분리한다.

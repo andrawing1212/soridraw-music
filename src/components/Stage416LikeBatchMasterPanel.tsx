@@ -13,6 +13,10 @@ import {
   STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_EVENT,
   type Stage416PrivateAcceptanceDiagnostic416,
 } from '../services/exploreLikePrivateDiagnostic416';
+import {
+  hasStage416ControlledProofIntent416,
+  runStage416ControlledProof416,
+} from '../services/stage416ControlledProof416';
 
 // Stage416 Master-only section: both settings are independent, not the
 // Stage420 abuse/lock panel. Server checks Master on each get/set.
@@ -40,6 +44,10 @@ export default function Stage416LikeBatchMasterPanel() {
   const [draft, setDraft] = useState<Timing416>(DEFAULT);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [proofBusy, setProofBusy] = useState(false);
+  const [proofNotice, setProofNotice] = useState('');
+  const [proofHasIntent, setProofHasIntent] = useState(() =>
+    hasStage416ControlledProofIntent416(auth.currentUser?.uid || ''));
   const [acceptanceDiagnostic, setAcceptanceDiagnostic] =
     useState<Stage416PrivateAcceptanceDiagnostic416 | null>(() =>
       readStage416PrivateAcceptanceDiagnostic416(auth.currentUser?.uid || ''));
@@ -141,6 +149,31 @@ export default function Stage416LikeBatchMasterPanel() {
       setNotice('저장하지 못했습니다. 다른 관리자의 변경 여부를 확인하려면 화면을 다시 열어주세요.');
     } finally { setBusy(false); }
   };
+  const runControlledProof = async () => {
+    if (proofBusy) return;
+    setProofBusy(true);
+    setProofNotice('');
+    try {
+      const result = await runStage416ControlledProof416();
+      setProofHasIntent(true);
+      setProofNotice(
+        `서버 접수 승인 · version ${result.version}. 약 ${result.privateMinutes}분 뒤 자동 정산 증거를 확인합니다.`,
+      );
+    } catch (error) {
+      setProofHasIntent(hasStage416ControlledProofIntent416(auth.currentUser?.uid || ''));
+      const code = String((error as Error)?.message || '');
+      const message = code.includes('NO_LOCAL_LIKED_TRACK')
+        ? '이 기기에 확인 가능한 좋아요 곡이 없습니다. 내 좋아요를 한 번 연 뒤 다시 실행해주세요.'
+        : code.includes('DIAGNOSTICS_OFF')
+          ? '아래 캐시 진단 표시를 ON으로 켠 뒤 실행해주세요.'
+          : code.includes('CANDIDATE_CHANGED') || code.includes('CANDIDATE_NOT_CANONICALLY_LIKED')
+            ? '선택된 진단 곡의 실제 좋아요 상태가 바뀌어 전송하지 않았습니다.'
+            : 'Stage416 1회 검증 접수를 완료하지 못했습니다. 같은 operation으로만 재시도할 수 있습니다.';
+      setProofNotice(message);
+    } finally {
+      setProofBusy(false);
+    }
+  };
   const css = 'rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-bold text-[var(--text-primary)] disabled:opacity-50';
   return (
     <section className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6">
@@ -185,9 +218,26 @@ export default function Stage416LikeBatchMasterPanel() {
             {readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ? '진단 ON' : '진단 OFF'}
           </span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runControlledProof()}
+            disabled={proofBusy || !readCacheDiagnosticsEnabled(auth.currentUser?.uid || '')}
+            className="inline-flex items-center gap-2 rounded-xl bg-white/[0.08] px-3 py-2 text-[11px] font-black text-[var(--text-primary)] transition-all hover:bg-white/[0.12] disabled:opacity-50"
+          >
+            {proofBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {proofHasIntent ? '같은 1회 검증 재시도' : 'Stage416 서버 1회 검증'}
+          </button>
+          <span className="text-[10px] font-bold text-[var(--text-secondary)]">
+            이미 좋아요된 로컬 1곡만 canonical 확인 후 같은 상태로 전송 · 일반 사용자 경로 영향 없음
+          </span>
+        </div>
+        {proofNotice && (
+          <p className="mt-2 text-xs font-bold text-[var(--text-secondary)]">{proofNotice}</p>
+        )}
         {!readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ? (
           <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">
-            아래 ‘캐시 진단 표시’를 ON으로 켠 뒤 익스플로어에서 좋아요를 1회 테스트하세요.
+            아래 ‘캐시 진단 표시’를 ON으로 켠 뒤 위 1회 검증을 실행하세요.
           </p>
         ) : !acceptanceDiagnostic ? (
           <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">

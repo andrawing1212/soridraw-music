@@ -1,3 +1,17 @@
+## CURRENT — app416 PREVIEW 배포 완료 / 독립 감사 PASS / 실기기 검증 대기 (2026-10-13 KST)
+
+- **독립 감사:** HEAD `d6bfdb02abeb2668cd3fb4f370f9321573f551d3`, 제품 코드 `5b4d50b58fc3072f5fd970a53367746d9cd68222` 기준 GPT-6 독립 재감사 **PASS**. 직전 app415 FAIL 원인인 reload-restored historical Stage416 row의 late `accepted` 권한 부활 경로 제거 확인.
+- **배포 trigger commit:** `0c9a0c103769add0cf15567c91d8d2bce9f827c8`.
+- **Firebase PREVIEW Hosting Run:** `38389032059` SUCCESS.
+- **배포 검증:** TypeScript PASS, Build PASS, 기존 profile/My Likes/follow 회귀 PASS, dormant Stage420 보호 PASS, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=416`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- **변경 없는 백엔드:** `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Worker/Functions/Rules/D1/R2/shared user data 변경 0. migration/backfill/delete 0.
+- **배포 주소:** `https://preview.soridraw.com/`.
+- **비용 구조:** app416 제품 수정은 로컬 상태 권한 판단만 변경. 업데이트/새로고침/재진입 신규 D1/Firestore/Worker data read/write 경로 0. warm revisit R0/W0 회귀검사 유지.
+- **사용자 실사용 기확인:** 다른 사용자 공개 좋아요 숫자의 like/unlike 자동 반영은 페이지 이동·새로고침 없이 사용자 실테스트 PASS.
+- **현재 남은 합격선:** app416 업데이트 직후 여러 곡 개인 하트 정확성, PC↔mobile 양방향 like/unlike 자동 수렴, 한쪽 refresh 후 유지, 5분 이상 시간경과 후 유지, Explore 재진입 후 유지.
+- **TEST / PRODUCTION:** 변경 없음. 사용자 PREVIEW 실기기 PASS 전 TEST 승격 금지. PRODUCTION은 명확한 별도 승인 전 금지.
+
+---
 ## CURRENT — app416 후보: reload-restored 416 late-accepted 권한 부활 차단 / 자동검증 PASS / 미배포 (2026-10-13 KST)
 
 - **직전 독립 감사:** app415 `5c4d894856acbeea762af24d41db428afdb8c02c` FAIL. reload-restored historical 416 row는 기본 UI/My Likes 권한이 0이었지만, 동일 operationId의 뒤늦은 `accepted` transition이 오면 `markLiveIntent416`으로 격리가 해제되어 stale heart/count/My Likes가 다시 권한을 얻을 수 있는 예외 확인.

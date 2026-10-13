@@ -228,11 +228,22 @@ if(appVersion>=409){
   assert.match(source,/hasRecoverablePending409 = Object\.values\(readLikeOutbox\(user\.uid\)\)/,
     'startup recovery must inspect only the durable local outbox');
   assert.match(source,/hasRecoverablePending409\) schedulePendingFlush\(user\)/,
-    'existing pending click settles without waiting for Explore card hydration');
-  const startup409=source.slice(source.indexOf('// app409:'),source.indexOf('// app409:')+1100);
-  assert.doesNotMatch(startup409,/requestExploreLike|fetch\(|httpsCallable|setRealtimeValue/,
-    'empty startup recovery must add no server request');
-  assert.match(startup409,/\(pending\.retryCount \|\| 0\) === 0/,
+    'eligible pending click settles without waiting for Explore card hydration');
+  const recoveryMarker=appVersion>=412?'// app412:':'// app409:';
+  const recoveryStart=source.indexOf(recoveryMarker);
+  assert.ok(recoveryStart>=0,'startup recovery marker missing');
+  const startupRecovery=source.slice(recoveryStart,recoveryStart+1400);
+  assert.doesNotMatch(startupRecovery,/requestExploreLike|fetch\(|httpsCallable|setRealtimeValue/,
+    'empty startup recovery must add no direct server request');
+  assert.match(startupRecovery,/\(pending\.retryCount \|\| 0\) === 0/,
     'ambiguous failed writes must not be replayed automatically');
-  console.log('APP409_STARTUP_EXISTING_PENDING_ONLY_NO_IDLE_IO=PASS');
+  if(appVersion>=412){
+    assert.match(startupRecovery,/pending\.explicitReplayEligible412 === true/,
+      'historical unmarked outbox must not auto-replay after Auth readiness');
+    assert.match(source,/explicitReplayEligible412: true/,
+      'a new explicit click must mark its durable outbox row replay-eligible');
+    console.log('APP412_STALE_OUTBOX_STARTUP_QUARANTINE=PASS');
+  }else{
+    console.log('APP409_STARTUP_EXISTING_PENDING_ONLY_NO_IDLE_IO=PASS');
+  }
 }

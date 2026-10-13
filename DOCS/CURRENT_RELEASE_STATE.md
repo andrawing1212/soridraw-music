@@ -1,3 +1,15 @@
+## CURRENT — Stage416 controlled E2E PASS / activation 독립 감사 FAIL (비용·승격 안전성) (2026-10-13 KST)
+
+- **감사 대상:** `preview` HEAD 기준 controlled E2E PASS 뒤 제품 source `f2aa1dd88cd8cafe48be290423d2481fa50f4869` + 배포/진단 증거 `38344204076`, `38344369373`, `38346090880`. `WORK_AUDIT_CHECKLIST.md` 기준 코드 수정 없이 독립 검토.
+- **기능 회귀:** Stage416 변경 diff는 `functions/src/exploreLikePrivateServerClick416.ts`, `functions/src/exploreLikePrivateSeal416.ts`와 관련 verifier에 한정. UI/Music Note/Library/Feed/profile 코드 변경 0. app411 일반 client는 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false` 유지.
+- **controlled E2E:** live `accepted → window → Scheduler/Eventarc → due Task → Worker/D1 acceptance → final receipt → exact ACK` 4/4 PASS. stale EMPTY 및 ACK_STILL_PENDING 수정은 실제 서버에서 재발 0 확인.
+- **AUDIT FAIL 1 — unbounded WAITING chain:** `dispatchPrivateWindowTask416`의 `WAITING_FOR_PRIOR_SEAL`은 60초 뒤 새 Cloud Task를 enqueue하고 현재 Task는 성공 종료. `PrivateWindowTask416`에는 attempt/age cap이 없고 새 scheduleTime마다 새 task id가 생성되므로 `retryConfig.maxAttempts=25`가 이 수동 chain 전체를 제한하지 못함. live 증거로 prior ACK 고착 중 version39 task가 03:46:54~04:14:56 매분 `RESCHEDULED`되어 28회 누적. 장기 장애 시 사용자 변경 없이 UID당 최대 1,440 Task/day 수준으로 계속 증가 가능하여 10만 사용자 비용 철학 위반.
+- **AUDIT FAIL 2 — TEST/PRODUCTION Functions promotion gap:** 고정 `.github/workflows/soridraw-release-promotion.yml`은 주석/구성상 Firebase Functions/Rules를 release component로 배포하지 않음. Stage416 Function 패치는 PREVIEW 전용 `.github/workflows/stage416-preview-settle-one-function.yml`로만 배포됨. 따라서 일반 client activation을 TEST/PRODUCTION으로 승격할 exact Function artifact/env contract가 현재 고정 승격 경로에 없음. `stage416SettlePrivateWindowCandidate` source fallback endpoint도 PREVIEW Worker URL이므로 환경별 binding 검증 전 승격 불가.
+- **비용 구조 중 PASS:** normal page/update/re-entry에는 Stage416 client OFF라 추가 IO 0. 실제 handoff는 changed tracks only; D1 acceptance는 one receipt + `ceil(changed/50)` queue rows(1 track=W2, 최대 256 tracks=7 intake rows)로 전체 Feed/전체 사용자 수와 무관한 bounded changed-item 구조. final canonical read도 exact changed IDs `WHERE id IN (...)`; whole Feed/profile scan 없음.
+- **데이터 안전:** migration/backfill/delete/reset 없음. shared D1/R2/Rules/Hosting/main/production 비변경. final diagnostic read-only D1 write 0.
+- **판정:** controlled backend proof는 PASS지만 **일반 Stage416 activation / TEST 승격은 FAIL**. 현재 app410/app411 사용자 경로는 OFF 유지하므로 현 사용자 기능에 신규 영향 없음.
+
+---
 ## CURRENT — Stage416 controlled E2E live PASS / exact ACK 자연 재시도 성공 (2026-10-13 KST)
 
 - **최종 read-only Run:** `38346090880` SUCCESS. ACK patch 배포 `38344369373` 이후 old Task의 자연 backoff 재시도가 실제 발생했고, 새 `416_SEAL_ACK_STILL_PENDING` 오류는 0. 마지막 ACK error는 배포 전 `03:58:21 UTC`.

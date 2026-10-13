@@ -1,3 +1,17 @@
+## NEXT — Codex High: Stage416 WAITING_FOR_PRIOR_SEAL 수동 무한 reschedule 제거 (2026-10-13 KST)
+
+- **작업 기준 branch:** `preview`; 시작 기준은 작업 시작 시 최신 HEAD 재확인. 일반 Stage416 client flags OFF 유지.
+- **목표 1개:** `WAITING_FOR_PRIOR_SEAL` 때문에 60초마다 새 Task를 만드는 chain을 제거하고, 기존 Cloud Tasks 동일 task의 bounded retry(`retryConfig.maxAttempts=25`, min/max backoff)를 사용하도록 최소 수정한다.
+- **권장 최소 설계:** `NOT_DUE`는 현재처럼 exact later deadline + 1s 새 task reschedule 유지. `WAITING_FOR_PRIOR_SEAL`은 새 task enqueue 금지; fail-closed 오류로 현재 task를 실패시켜 동일 Cloud Task가 플랫폼 bounded retry를 사용하게 한다. exact frozen seal/pending user data는 절대 삭제/강제 ACK하지 않는다.
+- **필수 회귀:** prior seal ACK가 늦어도 newer window rows/window 보존; ACK가 풀리면 same task retry가 정상 DELIVERED; max retry 실패 후에도 RTDB pending은 보존되어 다음 authenticated click repair가 가능; duplicate/stale/EMPTY/NOT_DUE 기존 의미 보호.
+- **비용 합격선:** WAITING idle 장애에서 새 task 생성 0. 동일 task bounded retry만 존재. 페이지/업데이트/re-entry 추가 IO 0. 정상 click extra full read/Feed scan 0. D1 경로 변경 0.
+- **필수 verifier:** 기존 `verify-416-private-deadline.mjs`, `verify-416-private-task-routing.mjs`, `verify-416-expired-window-requeue-e2e.mjs`, `verify-416-complete-private-window.mjs` 보강. 'WAITING creates no new queue task'와 'handler throws/retries same Cloud Task'를 실행형으로 증명.
+- **최종 검증:** Functions TypeScript, 앱 TypeScript, Build, app410 frozen like regression, RTDB Rules audit. 코드 수정/테스트/commit/push까지만. 배포 금지.
+- **절대 금지:** client flag ON, Worker/D1/R2/Rules/Hosting 변경, data reset/backfill/migration, TEST/PRODUCTION 변경, 새 주기 polling, 새 Workflow 생성.
+- **Codex 완료 보고:** 기준 commit, 최종 SHA, 변경 파일, TypeScript/Build/Test, 비용 의미, 남은 위험.
+- **후속 별도 작업:** bounded retry 수정 독립 감사 PASS 후에만 Stage416 Functions의 TEST/PRODUCTION exact artifact/binding 승격 경로를 Release System 작업으로 별도 설계한다. 제품 retry fix와 release-system 변경을 한 commit에 섞지 않는다.
+
+---
 ## NEXT — Stage416 controlled E2E PASS 고정 → client activation 전 독립 감사/비용 게이트 (2026-10-13 KST)
 
 - **고정 증거:** Quality `38344204076` SUCCESS, ACK settle deploy `38344369373` SUCCESS, final readonly `38346090880` SUCCESS. controlled E2E **4/4 PASS**.

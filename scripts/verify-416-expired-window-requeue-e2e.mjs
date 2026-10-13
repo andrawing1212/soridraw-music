@@ -95,6 +95,7 @@ assert.equal(blocked.expiredWindowId,op1);
 assert.equal(state.window.id,op1,
   'blocked newer click must preserve exact expired window for repair');
 assert.equal(state.sealed,undefined);
+const dueServerState=structuredClone(state);
 
 const delivered=await dispatchPrivateWindowTask416(
   database,queue,{uid,windowId:blocked.expiredWindowId},
@@ -108,18 +109,10 @@ assert.equal(state.window,null);
 assert.equal(state.sealed,null);
 assert.equal(state.pending,null);
 
-// Restore one real expired window so the separate stale-empty Task-cache
-// regression below proves the Task itself, not the earlier happy-path dispatch.
-const replayWindow=await recordUserPrivateClick416(database,uid,{
-  trackId:'song-a',liked:true,operationId:op1,deviceId:device,deviceSequence:1,
-},5,t0);
-assert.equal(replayWindow.accepted,true);
-assert.equal(state.window.id,op1);
-
-// Reproduce the live Task failure shape: the settle service can start with an
-// empty local cache even though the shared RTDB server still owns the due window.
+// Reproduce the live Task failure shape with the exact already-captured due
+// server state. Do not mint or replay another click/device sequence here.
 let settleLocalState=null;
-let settleServerState=state;
+let settleServerState=structuredClone(dueServerState);
 let settleRefreshReads=0;
 const staleEmptySettleDb={ref:path=>{
   assert.equal(path,'privateLikeBatch416/'+uid);

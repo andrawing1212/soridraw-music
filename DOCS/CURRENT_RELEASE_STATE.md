@@ -1,3 +1,16 @@
+## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
+
+- **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.
+- **독립 QA:** Run `38348077284` SUCCESS. `STAGE416_WAITING_PRIOR_SEAL_SAME_TASK_BOUNDED_RETRY=PASS`, `STAGE416_WAITING_PRIOR_SEAL_PRESERVES_NEWER_WINDOW=PASS`, 기존 ACK/EMPTY/NOT_DUE/app410/frozen like, Functions TypeScript, app TypeScript, Build, RTDB Rules audit PASS.
+- **동작 변경:** `WAITING_FOR_PRIOR_SEAL`은 더 이상 60초마다 새 Cloud Task를 만들지 않고 fail-closed하여 동일 Cloud Task의 기존 `maxAttempts=25`, `30~3600s` backoff를 사용. `NOT_DUE`의 exact later deadline +1s reschedule은 유지. newer window/pending은 실패 동안 변경하지 않음.
+- **배포 Workflow 첫 시도:** Run `38348257733` FAIL, 실제 Function 배포 전 preflight에서 중단. 원인은 제품 오류가 아니라 workflow가 이전 source literal `result.reason==='NOT_DUE'?1_000:0`을 고정 검사하던 release guard drift. 서버 변경 0.
+- **배포 guard 별도 수정:** commit `66362eac78e082135764af7219b414acd8a29604`에서 기존 workflow의 preflight를 새 의미에 맞게 강화: WAITING 분기+throw, NOT_DUE 분기+1s deadline을 각각 명시 확인. 제품 코드와 분리.
+- **PREVIEW 단일 Function 배포:** trigger `60ba858ffbe1fcc69631ebc46d955d7685f638b9`, Run `38348348201` SUCCESS. `stage416SettlePrivateWindowCandidate` 한 Function만 교체. Hosting/Worker/D1/R2/RTDB Rules/recordPrivateLike416/shared user data/main/production 변경 없음.
+- **사후 read-only:** trigger `ad1dcc342cb42e2dbea489369159bf780d2da28d`, Run `38348670497` SUCCESS. Function ACTIVE, Eventarc condition 0, Queue RUNNING, PREVIEW Worker↔shared D1 match, private acceptance YES, pending069 NO, D1 mutation 0, EMPTY last remains 03:11:40 UTC.
+- **판정:** controlled E2E backend 4/4 PASS + WAITING 비용 안전성 PASS. 일반 Stage416 client는 여전히 OFF.
+- **남은 activation 차단점:** 고정 TEST→PRODUCTION promotion workflow가 Firebase Functions를 release component로 포함하지 않아 PREVIEW에서 검증된 `recordPrivateLike416`/`stage416SettlePrivateWindowCandidate` exact artifact와 환경별 Worker endpoint/secret contract를 TEST/PRODUCTION으로 동일 승격할 수 없음. 이 release-system gap 해결 전 일반 activation/TEST 승격 금지.
+
+---
 ## CURRENT — Stage416 WAITING_FOR_PRIOR_SEAL bounded retry source 완료 / 배포 없음 (2026-10-13 KST)
 
 - **기준:** 최신 `preview` HEAD `26b7a63f98bdef691bae63e9bf8909d1f2d79ad7`의 Issue #115 한정 수정.

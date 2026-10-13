@@ -1,3 +1,16 @@
+## NEXT — Codex High: Stage416 Functions exact TEST/PRODUCTION promotion contract 설계·구현 (2026-10-13 KST)
+
+- **전제:** controlled E2E live 4/4 PASS, bounded WAITING retry PREVIEW deploy/postflight PASS. 일반 client flags OFF 유지.
+- **문제:** `.github/workflows/soridraw-release-promotion.yml`은 현재 Firebase Functions/Rules를 release component로 배포하지 않음. Stage416 Function은 PREVIEW 전용 single-function workflow로만 패치되어 TEST/PRODUCTION exact artifact identity와 환경별 endpoint/secret 계약이 승격 체인에 없음.
+- **목표:** TEST/PRODUCTION 승격 시 `recordPrivateLike416`와 `stage416SettlePrivateWindowCandidate`를 **TEST에서 검증한 exact source/artifact identity**로 승격하고, 각 환경 Worker endpoint/secret/RTDB project binding을 사전 read-only 검증하는 release-system contract를 만든다. TEST→PRODUCTION 재빌드/재해석 금지.
+- **분리 원칙:** 제품 Stage416 source/클라이언트 flag/Worker/D1/R2/Rules/schema 변경 금지. Release System 파일과 검증 스크립트만 수정. 실제 TEST/PRODUCTION 배포는 금지.
+- **필수 안전:** production approval gate 유지; `preflight_only`는 mutation 0; TEST mode도 사용자 데이터 migration/backfill/seed 0; Functions 배포 실패 시 다음 승격 중단; 기존 unrelated Functions를 전체 배포하지 말고 승인된 두 Function만 exact scope.
+- **환경 계약:** PREVIEW/TEST/PRODUCTION 각각 Firebase project/database URL, Worker `/v1/internal/private-like-handoff-416` endpoint, Secret Manager binding, service account/Cloud Tasks queue identity를 명시적으로 검사. PREVIEW workers.dev fallback을 TEST/PRODUCTION에서 암묵 사용 금지.
+- **artifact identity:** TEST에 배포한 Function build/source digest를 TEST_VERIFIED manifest에 고정하고 PRODUCTION은 동일 digest만 소비. PRODUCTION에서 source 재빌드하여 다른 artifact 생성 금지.
+- **회귀:** 기존 Hosting/Explore Worker/Media Worker exact promotion, browser-upgrade contract, main/production protection, rollback/forward-commit 방식 훼손 금지.
+- **완료:** release-system audit/preflight 실행형 테스트 + TypeScript/Build 관련 기존 release verifiers PASS, Draft PR + commit/push. 배포 금지.
+
+---
 ## NEXT — Codex High: Stage416 WAITING_FOR_PRIOR_SEAL 수동 무한 reschedule 제거 (2026-10-13 KST)
 
 - **작업 기준 branch:** `preview`; 시작 기준은 작업 시작 시 최신 HEAD 재확인. 일반 Stage416 client flags OFF 유지.

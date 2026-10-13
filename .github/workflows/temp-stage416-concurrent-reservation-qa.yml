@@ -25,6 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-422-stage416-global-version-interleaving.mjs
+          node scripts/verify-423-stage416-cross-env-settlement-order.mjs
           node scripts/verify-421-stage416-environment-isolation.mjs
           node scripts/verify-416-private-callable-master.mjs
           node scripts/verify-416-server-only-click.mjs

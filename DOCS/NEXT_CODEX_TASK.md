@@ -1,3 +1,13 @@
+## NEXT — app410 보호 고정, Stage416 historical Eventarc/Task read-only 24h 감사 (2026-10-13 KST)
+
+- **제품 기준:** app410 사용자 실기기 PASS. 좋아요 제품 코드와 UI는 동결. Stage416 client flags OFF 유지.
+- **목표:** app400~407이 활성화됐던 최근 24시간에서 `recordPrivateLike416` Callable 요청, `stage416SchedulePrivateWindowCandidate` Scheduler 요청, `stage416SettlePrivateWindowCandidate` Task 요청을 서비스별로 독립 집계한다. Scheduler가 0인지, HTTP/오류 분포가 있는지, Eventarc trigger transport metadata에 이상이 있는지 read-only로 확인.
+- **금지:** RTDB private user root 전체 읽기, 사용자 UID/trackId/opId 로그 출력, Task 강제 실행, live write, Functions/Worker/Rules 배포, client flag ON.
+- **다음 분기:** Callable 활동>0 + Scheduler=0가 24h에서도 유지되면 accepted/window-create 증거가 없는 상태와 Eventarc 미전달을 분리하기 위해 source/emulator exact-window test를 강화한다. Scheduler>0면 해당 시각의 task enqueue/settle class만 좁혀 확인한다.
+- **진행률:** Stage416 1/4·25%; 앱 속도 5/5·100%; 현재 세부 작업 1/4·25%.
+
+---
+
 ## NEXT — app410 골목길 탐험대 PC 하트 exact retained 복구 실기기 확인 (2026-10-12 16:12 UTC)
 
 - **현재 PREVIEW:** app410 Run [38275509549](https://github.com/andrawing1212/soridraw-music/actions/runs/38275509549) SUCCESS / exact build PASS. product `ffd49ca4...`; Stage416 client 5분 path OFF 유지.

@@ -1,3 +1,13 @@
+## CURRENT — app410 사용자 실기기 PASS 동결 / Stage416 backend 독립검증 재개 (2026-10-13 KST)
+
+- **사용자 확인:** app410의 마지막 단일 하트 drift 수정 실기기 **PASS**. PC/모바일 `골목길 탐험대` 상태 일치 확인. 이번 좋아요 복구 세부 작업 **4/4·100% 완료**.
+- **새 좋아요 보호 기준:** `.agents/skills/local-first-like-sync/references/soridraw-app410-like-convergence-frozen.md`. Stage416 client 5분 path OFF, app399 canonical batch 복구, app409 pending Auth-ready recovery, app410 same-version retained local-only repair를 보호.
+- **다음 작업:** 사용자 기능과 분리해 Stage416 backend만 독립 검증. client 재활성화/제품 좋아요 코드 수정 금지. 우선 과거 app400~407 활성 시간대의 Callable vs Scheduler/Eventarc/Task 기록을 **read-only 24h 범위**로 다시 대조하여 서버 단절 위치를 좁힌다.
+- **현재 진행률:** Stage416 전체 1/4·25%; 앱 속도 5/5·100%; 새 세부 작업 `Stage416 서버 예약 경로 독립 검증` 1/4·25%.
+- **환경:** PREVIEW app410 유지. TEST/PRODUCTION 비변경. shared user data / Functions / Worker / D1 / RTDB Rules 변경 없음.
+
+---
+
 ## CURRENT — app410 단일 retained 하트 drift 복구 PREVIEW 배포 / 실기기 확인 대기 (2026-10-12 16:12 UTC)
 
 - **사용자 실기기 결과:** app409에서 대부분 정상화됐고, 정확히 `골목길 탐험대` 한 곡만 모바일은 filled heart + 1, PC는 empty heart + 1. 다른 곡은 정상. 공개 숫자 1은 양쪽 동일하므로 shared/public count 문제는 아니고 **PC의 개인 membership 한 row만 stale false**로 남은 문제로 확정.

@@ -100,7 +100,7 @@ assert(source.includes('inFlightRecovery416.has(uid)'));
 assert(source.includes('budget.count>=3'));
 assert(source.includes("window.addEventListener('online'"));
 assert(source.includes('onAuthStateChanged(auth,user=>'));
-assert(source.includes('row.privateDeviceSequence416===saved.privateDeviceSequence416'));
+assert.match(source,/row\.privateDeviceSequence416\s*===\s*saved\.privateDeviceSequence416/);
 const {parsePrivateFinalReceipt416:parseFinal,
   selectExactFinalizedPrivateLikes416:exactFinal}=await import(
   '../src/services/exploreLikePrivateFinalReceipt416.mjs');

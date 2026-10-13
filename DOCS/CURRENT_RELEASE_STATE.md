@@ -1,3 +1,14 @@
+## CURRENT — Issue #118 global-version correction audit FAIL / lost-click blocker (2026-10-13 KST)
+
+- Codex corrected branch `codex/stage416-global-version`, commit `1424204006072b0ffff78b34bb0fe4df96218688` 생성. 공식 Codex session은 `couldn't complete`로 종료했고 PR/CI 없음.
+- correction은 shared `privateLikeGlobalVersion416/{uid}` sequencer를 추가해 cross-env monotonic version 충돌을 피하려 했고, synthetic interleaving verifier도 추가함.
+- **독립 감사 FAIL:** global version allocation이 environment private-root acceptance보다 먼저 commit됨. env transaction이 `PRIOR_WINDOW_NEEDS_SEAL`/DEVICE_LIMIT/TRACK_LIMIT 등으로 pending 저장을 거절해도 global sequencer는 operation을 accepted처럼 기억할 수 있음.
+- 같은 operation 재시도 시 `GLOBAL_DUPLICATE_CONFIRMED`가 먼저 반환되어 env pending write를 건너뛸 수 있어 실제 좋아요 intent 유실 위험.
+- Issue #118에 lost-click blocker 교정 지시 완료. env acceptance가 실제 성립하기 전에는 global duplicate-confirmed/accepted receipt로 승격되지 않도록 bounded crash-safe protocol 필요.
+- 기존 `142420...` 및 이전 A/B branch 모두 merge/deploy 금지.
+- preview product code/functions/worker/D1/R2/Rules/Hosting, TEST, PRODUCTION, shared user data 변경 0. 일반 Stage416 client OFF 유지.
+
+---
 ## CURRENT — Issue #118 Codex 산출물 2개 감사 / cross-env version collision로 merge BLOCKED (2026-10-13 KST)
 
 - **Codex 공식 상태:** Issue #118 bot session은 `Codex couldn't complete this request`로 종료. Draft PR 없음.

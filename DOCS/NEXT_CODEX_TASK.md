@@ -1,3 +1,14 @@
+## NEXT — Issue #118 correction: crash-safe global version + env acceptance atomicity (2026-10-13 KST)
+
+- global version monotonic 요구와 environment-isolated transient runtime 방향은 유지.
+- 필수: `PRIOR_WINDOW_NEEDS_SEAL` 후 same operation retry가 실제 env pending에 저장된 뒤에만 accepted duplicate가 가능해야 함.
+- DEVICE_LIMIT/TRACK_LIMIT/STALE rejection은 global accepted state를 남기면 안 됨.
+- crash/retry에서 double-accept, lost-click, version rollback 모두 0.
+- 실행형 verifier: reserve-before-env failure → retry → env accepted; rejection leaves no accepted global receipt; PREVIEW→TEST→PROD→PREVIEW versions strictly increasing; D1/R2 monotonic.
+- 비용: page/update/re-entry IO 0, actual click O(1), duplicate/no-op bounded. D1 schema/migration/backfill/Worker/release workflow 변경 금지.
+- 기존 `142420...` merge 금지. corrected branch/PR/test 결과 대기.
+
+---
 ## NEXT — Issue #118 correction: environment isolation + shared monotonic settlement version (2026-10-13 KST)
 
 - **기준:** 현재 preview HEAD에서 시작. A/B 기존 branch 그대로 merge 금지.

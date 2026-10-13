@@ -35,6 +35,10 @@ type IntentMutation416 = Pick<IntentRow416, 'trackId' | 'ownerUid' | 'liked' | '
 type IntentSettlement416 = Pick<IntentRow416, 'trackId' | 'operationId'> & { status: 'accepted' | 'rejected' };
 
 const localIntentByUid416 = new Map<string, Record<string, LocalIntent416>>();
+// app415: rows restored only from pre-reload localStorage are deliberately
+// provisional. Keep them for exact cleanup/reconciliation, but they must not
+// outrank canonical personal membership or block app410 retained repair.
+const reloadRestoredTrackIdsByUid416 = new Map<string, Set<string>>();
 const seenByUid416 = new Map<string, number>();
 const storeKey416 = (prefix: string, uid: string) => `${prefix}:${uid}`;
 const readText416 = (key: string): string => {
@@ -93,9 +97,20 @@ const readLocal416 = (uid: string): Record<string, LocalIntent416> => {
           .slice(-INTENT_MAX_416) : [];
     entries = Object.fromEntries(valid) as Record<string, LocalIntent416>;
     localIntentByUid416.set(uid, entries);
+    reloadRestoredTrackIdsByUid416.set(uid, new Set(valid.map(([trackId]) => trackId)));
   }
   return entries;
 };
+const isReloadRestoredIntent416 = (uid: string, trackId: string): boolean =>
+  reloadRestoredTrackIdsByUid416.get(uid)?.has(trackId) === true;
+
+const markLiveIntent416 = (uid: string, trackId: string): void => {
+  const restored = reloadRestoredTrackIdsByUid416.get(uid);
+  if (!restored) return;
+  restored.delete(trackId);
+  if (!restored.size) reloadRestoredTrackIdsByUid416.delete(uid);
+};
+
 const saveLocal416 = (uid: string, entries: Record<string, LocalIntent416>): void => {
   const now = Date.now();
   const fresh = Object.entries(entries)
@@ -126,7 +141,9 @@ const setSeenVersion416 = (uid: string, version: number) => {
 export const listExploreLikeIntents416 = (uid: string): Record<string, boolean> =>
   Object.fromEntries(
     Object.entries(readLocal416(uid))
-      .filter(([, row]) => Date.now() - row.at <= INTENT_TTL_MS_416)
+      .filter(([trackId, row]) =>
+        !isReloadRestoredIntent416(uid, trackId) &&
+        Date.now() - row.at <= INTENT_TTL_MS_416)
       .map(([trackId, row]) => [trackId, row.liked]),
   );
 
@@ -135,6 +152,7 @@ export const listExploreLikeIntents416 = (uid: string): Record<string, boolean> 
 export const discardExploreLikeIntentSession416 = (uid: string): void => {
   if (uid) {
     localIntentByUid416.delete(uid);
+    reloadRestoredTrackIdsByUid416.delete(uid);
     // A real logout/account switch is not a page reload; discard tentative
     // authority rather than carrying it into a future sign-in session.
     writeText416(storeKey416(INTENT_RELOAD_416, uid), '{}');
@@ -143,7 +161,8 @@ export const discardExploreLikeIntentSession416 = (uid: string): void => {
 
 export const readExploreLikeIntent416 = (uid: string, trackId: string): boolean | undefined => {
   const intent = readLocal416(uid)[trackId];
-  if (!intent || Date.now() - intent.at > INTENT_TTL_MS_416) return undefined;
+  if (!intent || isReloadRestoredIntent416(uid, trackId) ||
+      Date.now() - intent.at > INTENT_TTL_MS_416) return undefined;
   return intent.liked;
 };
 
@@ -152,7 +171,8 @@ export const readExploreLikeIntentDetail416 = (
   trackId: string,
 ): (LocalIntent416 & { trackId: string }) | null => {
   const intent = readLocal416(uid)[trackId];
-  if (!intent || Date.now() - intent.at > INTENT_TTL_MS_416) return null;
+  if (!intent || isReloadRestoredIntent416(uid, trackId) ||
+      Date.now() - intent.at > INTENT_TTL_MS_416) return null;
   return { trackId, ...intent };
 };
 
@@ -174,6 +194,7 @@ export const clearExploreLikeIntent416 = (
   // that happens to have the same boolean (like -> unlike -> like).
   if (!operationId && current.status !== 'accepted') return;
   delete entries[trackId];
+  markLiveIntent416(uid, trackId);
   saveLocal416(uid, entries);
 };
 
@@ -211,12 +232,14 @@ export const subscribeExploreLikeIntent416 = (
           // remain until the existing authenticated 127 signal confirms them.
           if (row.status === 'rejected') {
             delete entries[row.trackId];
+            markLiveIntent416(uid, row.trackId);
             entriesChanged = true;
             changed.push({ trackId: row.trackId, liked: row.liked,
               optimisticLikeCount: row.optimisticLikeCount,
               operationId: row.operationId, version: row.version, at: row.at, status: row.status });
           } else if (existing && existing.status !== 'accepted') {
             entries[row.trackId] = { ...existing, status: 'accepted', version: row.version };
+            markLiveIntent416(uid, row.trackId);
             entriesChanged = true;
           }
         }
@@ -237,6 +260,7 @@ export const subscribeExploreLikeIntent416 = (
         at: row.at,
         status: 'pending',
       };
+      markLiveIntent416(uid, row.trackId);
       entriesChanged = true;
       changed.push({ trackId: row.trackId, liked: row.liked,
         optimisticLikeCount: row.optimisticLikeCount,

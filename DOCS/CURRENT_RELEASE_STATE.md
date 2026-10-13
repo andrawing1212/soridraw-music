@@ -1,3 +1,13 @@
+## CURRENT — Stage416 Functions exact promotion release contract 구현 / synthetic PASS / 배포 없음 (2026-10-13 KST)
+
+- **기준:** `preview` `a80b0e5fb3af6019023aa7be9ca040b6d09650a7`에서 Release System 범위만 수정. Stage416 제품 source/client flag/Worker/D1/R2/Rules/schema/UI 변경 0.
+- **환경 계약:** PREVIEW/TEST/PRODUCTION별 Firebase project·RTDB URL repository variable과 exact Worker `/v1/internal/private-like-handoff-416` endpoint를 선언. TEST/PRODUCTION endpoint의 PREVIEW fallback은 verifier가 fail-closed한다. HMAC Secret, runtime service account, RUNNING Cloud Tasks queue, 두 Function ACTIVE/source identity는 live read-only preflight에서 검사한다.
+- **identity:** Functions TypeScript build 뒤 source digest와 compiled `functions/lib/*.js` artifact digest를 생성하고 schema 5 `TEST_VERIFIED.stage416Functions`에 고정한다. PRODUCTION은 release asset의 같은 source/artifact identity와 manifest가 일치하지 않으면 시작 전 실패한다.
+- **scope:** 승인 목록은 `recordPrivateLike416`, `stage416SettlePrivateWindowCandidate` 두 개뿐이다. unscoped Functions deploy, Rules, migration/seed/backfill/delete/user-data copy는 verifier가 금지한다.
+- **검증:** `verify-416-functions-promotion.mjs`, 기존 release promotion verifier, Functions TypeScript, 앱 TypeScript, Build PASS. synthetic artifact mismatch / binding mismatch / PREVIEW endpoint leakage fail-closed PASS. preflight 명령은 describe/list/source identity read-only이며 mutation command 0.
+- **배포:** 이번 작업에서 PREVIEW/TEST/PRODUCTION Functions·Hosting·Worker·Rules·D1·R2 배포 0. 실제 환경 repository variables를 등록하고 live `preflight_only`가 3환경에서 PASS하기 전 TEST 승격 금지. 실제 Function mutation/rollback orchestration은 별도 승인 없이 실행하지 않는다.
+
+---
 ## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
 
 - **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.

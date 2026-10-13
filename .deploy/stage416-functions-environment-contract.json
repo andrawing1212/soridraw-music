@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "policy": "stage416-functions-exact-promotion-2026-10-13",
+  "region": "us-central1",
+  "functions": [
+    "recordPrivateLike416",
+    "stage416SettlePrivateWindowCandidate"
+  ],
+  "secret": "SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET",
+  "queue": "stage416SettlePrivateWindowCandidate",
+  "environments": {
+    "preview": {
+      "projectEnv": "STAGE416_PREVIEW_FIREBASE_PROJECT",
+      "databaseUrlEnv": "STAGE416_PREVIEW_DATABASE_URL",
+      "workerEndpoint": "https://soridraw-explore-preview.andrawing1212.workers.dev/v1/internal/private-like-handoff-416"
+    },
+    "test": {
+      "projectEnv": "STAGE416_TEST_FIREBASE_PROJECT",
+      "databaseUrlEnv": "STAGE416_TEST_DATABASE_URL",
+      "workerEndpoint": "https://soridraw-explore-test.andrawing1212.workers.dev/v1/internal/private-like-handoff-416"
+    },
+    "production": {
+      "projectEnv": "STAGE416_PRODUCTION_FIREBASE_PROJECT",
+      "databaseUrlEnv": "STAGE416_PRODUCTION_DATABASE_URL",
+      "workerEndpoint": "https://soridraw-explore-api.andrawing1212.workers.dev/v1/internal/private-like-handoff-416"
+    }
+  }
+}

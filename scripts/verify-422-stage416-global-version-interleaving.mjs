@@ -142,7 +142,8 @@ const deviceLimit=await recordUserPrivateClick416(database,uid,{
  'privateLikeGlobalVersion416');
 assert.equal(deviceLimit.accepted,false);
 assert.equal(deviceLimit.reason,'DEVICE_LIMIT');
-assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices[limitDevice],'accepted'),false);
+assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices,limitDevice),false,
+ 'DEVICE_LIMIT must release a newly-created global device reservation slot');
 
 // TRACK_LIMIT rejection likewise cannot become accepted from the sequencer.
 const trackDevice='00000000-0000-4000-8000-000000000031';
@@ -165,7 +166,8 @@ const trackLimit=await recordUserPrivateClick416(database,uid,{
  'privateLikeGlobalVersion416');
 assert.equal(trackLimit.accepted,false);
 assert.equal(trackLimit.reason,'TRACK_LIMIT');
-assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices[trackDevice],'accepted'),false);
+assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices,trackDevice),false,
+ 'TRACK_LIMIT must release a newly-created global device reservation slot');
 
 // A legacy env stale sequence can consume a reservation high-water mark, but
 // it still cannot become accepted or duplicate-confirmed without env proof.
@@ -179,7 +181,8 @@ const stale=await recordUserPrivateClick416(database,uid,{
 },5,1_700_000_400_000,false,'privateLikeBatch416','privateLikeGlobalVersion416');
 assert.equal(stale.accepted,false);
 assert.equal(stale.reason,'STALE_OR_DUPLICATE');
-assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices[staleDevice],'accepted'),false);
+assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices,staleDevice),false,
+ 'STALE rejection must release a newly-created global device reservation slot');
 
 // Real concurrency regression: reservation A -> reservation B -> env B -> env A.
 // A must keep its exact operationId and rebase above B instead of being lost.
@@ -255,6 +258,7 @@ console.log('STAGE416_PREVIEW_TEST_PRODUCTION_PREVIEW_STRICT_INTERLEAVING=PASS')
 console.log('STAGE416_GLOBAL_RESERVATION_IS_NOT_ACCEPTANCE=PASS');
 console.log('STAGE416_PRIOR_SEAL_RETRY_REUSES_VERSION_AND_PERSISTS=PASS');
 console.log('STAGE416_LIMIT_AND_STALE_REJECTIONS_NEVER_GLOBAL_ACCEPT=PASS');
+console.log('STAGE416_REJECTED_NEW_DEVICE_RESERVATION_SLOT_RELEASED=PASS');
 console.log('STAGE416_GLOBAL_ONLY_DUPLICATE_AUTHORITY=0');
 console.log('STAGE416_ACCEPTED_CLICK_RTDB_CHANGED_WRITES=2');
 console.log('STAGE416_EXACT_PROVEN_DUPLICATE_RTDB_CHANGED_WRITES=0');

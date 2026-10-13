@@ -1,7 +1,8 @@
 ## CURRENT — Stage416 cross-environment global settlement version 수정 / 배포 없음 (2026-10-13 KST)
 
-- 기준: `preview` HEAD `2ea0e6f1d29d0316b7571473a4584d013305da9a` + environment-isolation B안
-  `47c639f8982a2c4d3f77738c45496db1e3d084c5` 위 corrected branch.
+- 기준: 현재 `preview` HEAD `fbf084597af4e2252a23fc07e4c7c6349efccb7d` (제품 기준
+  `2ea0e6f1d29d0316b7571473a4584d013305da9a` + blocker 감사 기록) 위에 environment-isolation
+  B안 `47c639f8982a2c4d3f77738c45496db1e3d084c5`을 force-push 없이 재기반한 corrected branch.
 - environment별 pending/task/final receipt root와 Function identity는 유지하면서, 세 환경이 동일한
   `privateLikeGlobalVersion416/{uid}` bounded sequencer를 사용하도록 수정했다.
 - sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를
@@ -10,6 +11,9 @@
 - exact same-operation duplicate는 bounded device receipt로 기존 version을 재사용하고 logical RTDB W0,
   stale/different operation도 W0이다. 새 accepted click은 기존 environment-root W1에 sequencer W1이
   추가되어 RTDB changed writes 총 W2다. page/update/re-entry IO는 계속 0이다.
+- global version 예약 뒤 environment root가 prior-window 대기로 거부된 경우에도 예약 receipt 자체를
+  성공으로 오인하지 않는다. exact retry는 같은 global version을 재사용해 environment transaction을
+  다시 통과하며, 새 version을 추가 소비하지 않는다.
 - D1 schema/table/key, shared canonical user data, Worker/release workflow는 변경하지 않았다.
 - TEST/PRODUCTION의 distinct final receipt Function/final root 및 environment-specific Worker endpoint
   identity는 유지되어 후속 #117 binding에서 명시적으로 사용할 수 있다.

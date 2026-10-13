@@ -67,7 +67,7 @@ export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
   authoritativeRetry=false,privateRoot='privateLikeBatch416',
-  globalVersionRoot?:string,allocatedVersion?:number,
+  globalVersionRoot?:string,allocatedVersion?:number,globalDuplicateConfirmed=false,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -82,9 +82,13 @@ export async function recordUserPrivateClick416(
   const allocation=await allocateGlobalVersion416(
    database,uid,click,receivedAtMs,globalVersionRoot);
   if(!allocation.accepted||allocation.version===undefined)return allocation;
-  if(allocation.reason==='GLOBAL_DUPLICATE_CONFIRMED')
-   return {accepted:true,reason:'DUPLICATE_CONFIRMED',version:allocation.version};
+  // A global receipt proves only that a version was reserved. The first
+  // environment-root attempt can still have returned PRIOR_WINDOW_NEEDS_SEAL
+  // (or crashed) before registering the click. Always replay the reserved
+  // version through the environment transaction; only that transaction may
+  // report DUPLICATE_CONFIRMED.
   allocatedVersion=allocation.version;
+  globalDuplicateConfirmed=allocation.reason==='GLOBAL_DUPLICATE_CONFIRMED';
  }
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
@@ -124,6 +128,15 @@ export async function recordUserPrivateClick416(
        replay={version:Number(registered.version),
          count:Object.keys(pending).length||
            (Array.isArray(frozen?.rows)?frozen.rows.length:0),
+         ...(state.window?{deadlineAtMs:
+           state.window.lastClickAtMs+state.window.minutes*60_000}:{})};
+     }else if(globalDuplicateConfirmed&&click.deviceSequence===previousDeviceSeq&&
+        allocatedVersion!==undefined&&version>=allocatedVersion){
+       // Settling may already have removed pending/sealed operation details.
+       // The bounded global receipt supplies exact operation identity, while
+       // this environment high-water mark proves that its registration ran.
+       reason='DUPLICATE_CONFIRMED';
+       replay={version:allocatedVersion,count:Object.keys(pending).length,
          ...(state.window?{deadlineAtMs:
            state.window.lastClickAtMs+state.window.minutes*60_000}:{})};
      }else reason='STALE_OR_DUPLICATE';
@@ -172,7 +185,7 @@ export async function recordUserPrivateClick416(
      await privateRef.get();
      return recordUserPrivateClick416(
        database,uid,click,trustedMinutes,receivedAtMs,true,privateRoot,
-       globalVersionRoot,allocatedVersion);
+       globalVersionRoot,allocatedVersion,globalDuplicateConfirmed);
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};

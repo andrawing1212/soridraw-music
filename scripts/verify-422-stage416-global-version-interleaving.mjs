@@ -75,9 +75,32 @@ assert.equal(duplicate.version,settled[3]);
 assert.deepEqual(roots.privateLikeGlobalVersion416,beforeDuplicate);
 assert.equal(changedWrites,writesBeforeDuplicate,'exact duplicate must be logical RTDB W0');
 
+// Reserving a global version is not proof that the environment-local click was
+// registered. Model an expired PREVIEW window: the first attempt reserves a
+// version but must remain rejected, then the exact retry may use that reserved
+// version only after the prior window has been cleared.
+roots.privateLikeBatch416={version:settled[3],deviceSeq:{},pending:null,
+ window:{id:'expired',minutes:1,openedAtMs:1,lastClickAtMs:1,revision:settled[3]},sealed:null};
+const delayedClick={trackId:'delayed-song',liked:true,
+ operationId:'00000000-0000-4000-8000-000000000015',deviceId:device,deviceSequence:5};
+const delayedFirst=await recordUserPrivateClick416(database,uid,delayedClick,5,
+ 1_700_000_100_000,false,'privateLikeBatch416','privateLikeGlobalVersion416');
+assert.equal(delayedFirst.accepted,false);
+assert.equal(delayedFirst.reason,'PRIOR_WINDOW_NEEDS_SEAL');
+const reservedVersion=roots.privateLikeGlobalVersion416.version;
+roots.privateLikeBatch416={...roots.privateLikeBatch416,window:null};
+const delayedRetry=await recordUserPrivateClick416(database,uid,delayedClick,5,
+ 1_700_000_100_001,false,'privateLikeBatch416','privateLikeGlobalVersion416');
+assert.equal(delayedRetry.accepted,true);
+assert.equal(delayedRetry.reason,'ACCEPTED');
+assert.equal(delayedRetry.version,reservedVersion);
+assert.equal(roots.privateLikeGlobalVersion416.version,reservedVersion,
+ 'retry must reuse rather than consume another global version');
+
 console.log('STAGE416_PREVIEW_V39_GLOBAL_BOOTSTRAP_NO_MIGRATION=PASS');
 console.log('STAGE416_PREVIEW_TEST_PRODUCTION_PREVIEW_STRICT_INTERLEAVING=PASS');
 console.log('STAGE416_SHARED_D1_STALE_REJECTION=0');
 console.log('STAGE416_ACCEPTED_CLICK_RTDB_CHANGED_WRITES=2');
 console.log('STAGE416_EXACT_DUPLICATE_RTDB_CHANGED_WRITES=0');
+console.log('STAGE416_RESERVED_VERSION_RETRY_REACHES_ENVIRONMENT_ROOT=PASS');
 console.log('STAGE416_PAGE_UPDATE_REENTRY_IO=0');

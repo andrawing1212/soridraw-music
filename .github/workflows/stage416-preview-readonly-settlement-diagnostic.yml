@@ -143,6 +143,106 @@ jobs:
           print('STAGE416_ISOLATED_LOG_READONLY_NO_PAYLOAD=PASS')
           PY
 
+      - name: Audit 24h Callable Scheduler and Task request counts read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,collections
+          project='soridraw-app-866a5'
+          services=[
+            'recordprivatelike416',
+            'stage416scheduleprivatewindowcandidate',
+            'stage416settleprivatewindowcandidate',
+          ]
+          summary={}
+          for service in services:
+            expr=('resource.type="cloud_run_revision" AND '
+                  'resource.labels.service_name="'+service+'" AND httpRequest.status:*')
+            p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+              '--freshness=24h','--limit=5000',
+              '--format=json(timestamp,httpRequest.status,severity)'],
+              capture_output=True,text=True)
+            if p.returncode:
+              raise SystemExit('STAGE416_24H_SERVICE_LOG_READ_DENIED_'+service)
+            rows=json.loads(p.stdout or '[]')
+            status=collections.Counter(
+              str((row.get('httpRequest') or {}).get('status') or 'NONE') for row in rows)
+            summary[service]={
+              'requests':len(rows),
+              'http':dict(sorted(status.items())),
+              'mayBeTruncated':len(rows)>=5000,
+            }
+          print('STAGE416_24H_REQUEST_COUNTS='+json.dumps(summary,sort_keys=True))
+          callable_count=summary['recordprivatelike416']['requests']
+          scheduler_count=summary['stage416scheduleprivatewindowcandidate']['requests']
+          settle_count=summary['stage416settleprivatewindowcandidate']['requests']
+          print('STAGE416_24H_CALLABLE_ACTIVITY='+('YES' if callable_count>0 else 'NO'))
+          print('STAGE416_24H_SCHEDULER_ACTIVITY='+('YES' if scheduler_count>0 else 'NO'))
+          print('STAGE416_24H_SETTLE_ACTIVITY='+('YES' if settle_count>0 else 'NO'))
+          print('STAGE416_24H_CALLABLE_WITH_ZERO_SCHEDULER='+
+            ('YES' if callable_count>0 and scheduler_count==0 else 'NO'))
+          print('STAGE416_24H_LOG_AUDIT_NO_UID_NO_PAYLOAD=PASS')
+          PY
+
+      - name: Inspect Eventarc transport subscription errors over 24h read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          project='soridraw-app-866a5'
+          p=subprocess.run(['gcloud','functions','describe',
+            'stage416SchedulePrivateWindowCandidate','--gen2','--region=us-central1',
+            '--project',project,'--format=json'],capture_output=True,text=True)
+          if p.returncode:
+            raise SystemExit('STAGE416_EVENTARC_TRANSPORT_SOURCE_UNAVAILABLE')
+          fn=json.loads(p.stdout or '{}')
+          resource=str((fn.get('eventTrigger') or {}).get('trigger') or '')
+          if '/triggers/' not in resource:
+            raise SystemExit('STAGE416_EVENTARC_TRIGGER_RESOURCE_MISSING')
+          parts=resource.split('/')
+          location=parts[3]
+          trigger_name=parts[-1]
+          p=subprocess.run(['gcloud','eventarc','triggers','describe',trigger_name,
+            '--location='+location,'--project',project,'--format=json'],
+            capture_output=True,text=True)
+          if p.returncode:
+            raise SystemExit('STAGE416_EVENTARC_TRIGGER_READ_DENIED')
+          trigger=json.loads(p.stdout or '{}')
+          pubsub=(trigger.get('transport') or {}).get('pubsub') or {}
+          subscription=str(pubsub.get('subscription') or '')
+          topic=str(pubsub.get('topic') or '')
+          print('STAGE416_EVENTARC_TRANSPORT_TOPIC_PRESENT='+str(bool(topic)).upper())
+          print('STAGE416_EVENTARC_TRANSPORT_SUBSCRIPTION_PRESENT='+str(bool(subscription)).upper())
+          if not subscription:
+            print('STAGE416_EVENTARC_SUBSCRIPTION_ERROR_LOGS=UNAVAILABLE_NO_SUBSCRIPTION_FIELD')
+            print('STAGE416_EVENTARC_TRANSPORT_READONLY=PASS')
+            raise SystemExit(0)
+          sub_id=subscription.rsplit('/',1)[-1]
+          p=subprocess.run(['gcloud','pubsub','subscriptions','describe',sub_id,
+            '--project',project,'--format=json'],capture_output=True,text=True)
+          if p.returncode:
+            print('STAGE416_EVENTARC_SUBSCRIPTION_DESCRIBE=UNAVAILABLE')
+          else:
+            info=json.loads(p.stdout or '{}')
+            print('STAGE416_EVENTARC_SUBSCRIPTION_STATE='+
+              str(info.get('state') or 'UNKNOWN'))
+          expr=('resource.type="pubsub_subscription" AND '
+                'resource.labels.subscription_id="'+sub_id+'" AND severity>=ERROR')
+          p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+            '--freshness=24h','--limit=200','--format=json(timestamp,severity)'],
+            capture_output=True,text=True)
+          if p.returncode:
+            print('STAGE416_EVENTARC_SUBSCRIPTION_ERROR_LOGS=UNAVAILABLE')
+          else:
+            rows=json.loads(p.stdout or '[]')
+            print('STAGE416_EVENTARC_SUBSCRIPTION_ERROR_COUNT_24H='+str(len(rows)))
+            print('STAGE416_EVENTARC_SUBSCRIPTION_ERROR_MAY_BE_TRUNCATED='+
+              str(len(rows)>=200).upper())
+          print('STAGE416_EVENTARC_TRANSPORT_READONLY=PASS')
+          PY
+
       - name: Verify callable-to-queue runtime identity without IAM changes
         shell: bash
         run: |

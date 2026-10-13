@@ -1,3 +1,21 @@
+## CURRENT — Stage416 lost-click blocker 직접 수정 완료 / QA PASS / 독립 감사 대기 (2026-10-14 KST)
+
+- **작업 branch:** `gpt56/stage416-lost-click-fix`
+- **기준 preview:** `2d282ffb6fb4d9c95f654c782c20a1e2cf2ae922`
+- **제품/Functions 코드 commit:** `8c61b49234f7d335af1993575bbf7b95ad518b82`
+- **목표 한 건:** Issue #118 환경분리 후보의 global version 선할당이 env pending 실제 저장보다 먼저 accepted처럼 재사용되어 same-operation retry에서 click을 잃을 수 있던 blocker 제거.
+- **교정 구조:** cross-environment global state는 canonical acceptance가 아니라 **version reservation only**. 같은 operation 재시도는 reservation version을 재사용하지만, 해당 환경 private root의 exact pending/sealed operation 증거가 있어야만 `DUPLICATE_CONFIRMED`를 반환한다.
+- **환경분리:** PREVIEW legacy identity 유지, TEST/PRODUCTION callable/task/privateRoot/finalRoot/timing/Worker endpoint는 additive source로 분리. 일반 Stage416 client flag는 계속 OFF.
+- **관리자 운영값:** live read-only 확인 기준 private=1분 / public=5분 그대로. 이번 수정은 이 값을 활성화하지 않음.
+- **QA:** 임시 검사 commit `d1c5ceda6bdb2397138397f07cc17312cf2459a4`, Run `38419094013` SUCCESS.
+- **핵심 PASS:** `STAGE416_GLOBAL_RESERVATION_IS_NOT_ACCEPTANCE`, `STAGE416_PRIOR_SEAL_RETRY_REUSES_VERSION_AND_PERSISTS`, `STAGE416_LIMIT_AND_STALE_REJECTIONS_NEVER_GLOBAL_ACCEPT`, `STAGE416_GLOBAL_ONLY_DUPLICATE_AUTHORITY=0`, PREVIEW→TEST→PRODUCTION→PREVIEW strict version interleaving PASS.
+- **비용 보호:** accepted click의 RTDB changed writes 모델 W2, exact proven duplicate changed writes W0, page/update/re-entry IO 0. D1 schema/table/key 변경 0.
+- **기존 기능 회귀:** app416 late-accepted quarantine, app415 reload quarantine, app414 stale outbox authority, app410 retained repair, app413 count, app412 stale outbox, 127/175/178/191/192/197/390 회귀 PASS.
+- **빌드:** app TypeScript PASS, app Build PASS, Functions TypeScript PASS.
+- **배포/데이터:** Firebase/Worker/Rules/D1/R2/Hosting 배포 0. shared user data migration/backfill/delete/overwrite 0. TEST/PRODUCTION 변경 0.
+- **현재 gate:** GPT-6 독립 감사 전 merge/activation/deploy 금지.
+
+---
 ## CURRENT — Stage416 개인 1분 / 공개 5분 서버 설정 확인, lost-click 차단점 단일 작업 진행 중 (2026-10-13 KST)
 
 - 사용자 Master가 관리자 `좋아요 저장·공개 집계 주기`에서 **개인 최종상태 1분 / 공개 공동집계 5분**으로 저장.

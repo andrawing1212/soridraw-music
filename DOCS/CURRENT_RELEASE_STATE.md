@@ -1,3 +1,16 @@
+## CURRENT — Stage416 exact frozen-seal ACK patch PREVIEW 배포 완료 / old Task backoff 재시도 대기 (2026-10-13 KST)
+
+- **확정 live blocker:** version39 due 이후 stale EMPTY는 재발 0이었으나, old frozen seal ACK가 `416_SEAL_ACK_STILL_PENDING`으로 반복되어 version39 window가 WAITING_FOR_PRIOR_SEAL 계열 reschedule에 고착.
+- **원인:** `acknowledgeUserPrivateSeal416`도 local RTDB transaction view에 exact seal이 없을 때 `undefined`로 abort하여 서버 conflict compare 전에 false가 될 수 있었음. 직후 exact `sealed` read에서는 동일 seal이 살아 있어 coordinator가 `416_SEAL_ACK_STILL_PENDING`을 던지는 live 증거와 일치.
+- **최소 수정:** source `a3079e84...`에서 ACK mismatch를 same-value no-op transaction probe로 바꿔 server reconciliation 후 **동일 id+version일 때만** `sealed:null`. 첫 QA `38343993434` FAIL은 genuinely-aborted transaction의 기존 fallback을 예외로 바꾼 회귀. 최종 `f2aa1dd88cd8cafe48be290423d2481fa50f4869`에서 aborted transaction은 다시 `false`를 반환해 기존 exact read + bounded Task retry 안전장치 유지.
+- **검증:** Quality Run `38344204076` SUCCESS. `STAGE416_STALE_ACK_TRANSACTION_RECONCILES_EXACT_SEAL_ONLY=PASS`, `STAGE416_SERVER_SEAL_ACK_RETRY_CANNOT_DROP_NEW_CLICK=PASS`, Functions/app TypeScript, Build, app410 frozen likes, RTDB live Rules audit PASS. 배포/공유데이터 변경 0.
+- **PREVIEW 단일 Function 배포:** trigger `46e942247d1aee4d1395882b745199c162f4c1eb`, Run `38344369373` SUCCESS. `stage416SettlePrivateWindowCandidate`만 교체. `PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS`, postflight PASS, main/production unchanged, Worker/D1/R2/Rules/Hosting/shared data 변경 0.
+- **배포 후 read-only Run:** `38344713907` SUCCESS. 배포 완료 04:03:13 UTC 이후 04:03:55 / 04:04:55 Settle HTTP204가 있으나 새 `416_SEAL_ACK_STILL_PENDING` error는 아직 0. 기존 old Task의 마지막 500은 03:58:13 / safe error 03:58:21로 **배포 전**. 새 EMPTY도 03:11:40 이후 0. D1 private acceptance YES, pending069 NO.
+- **현재 대기 이유:** old failed Task는 Cloud Tasks exponential backoff 중. 과거 간격 50s→68s→128s→247s→488s로 늘어 다음 old-task retry는 대략 04:14 UTC 전후 추정. 강제 Task 실행 금지; 자연 재시도에서 새 ACK 코드가 exact seal을 지우는지 확인.
+- **사용자 조작:** 없음. 버튼/좋아요/새로고침 불필요.
+- **판정:** ACK source/test/deploy는 PASS, live old-task retry proof는 **대기**. Stage416 전체 완료 선언 금지.
+
+---
 ## CURRENT — version39 due 정산: EMPTY 재발 0 / D1 receipt 유지 / frozen seal ACK 고착으로 final FAIL (2026-10-13 KST)
 
 - **due 후 read-only Run:** `38343738803` SUCCESS. version39 accepted 시각 03:41:54 UTC, Scheduler 03:41:55 HTTP200, 5분 due 이후 Settle 03:46:54부터 매분 HTTP204 reschedule 관측.

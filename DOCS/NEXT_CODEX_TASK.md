@@ -1,3 +1,12 @@
+## NEXT — old frozen-seal Task 자연 재시도 후 version39 final delivery 확인 (2026-10-13 KST)
+
+- **현재 기준:** ACK code `f2aa1dd88cd8cafe48be290423d2481fa50f4869`, Quality `38344204076` SUCCESS, PREVIEW settle deploy `38344369373` SUCCESS, postdeploy readonly `38344713907` SUCCESS.
+- **기다릴 것:** 03:58:13 UTC에 마지막 500이 난 old Task의 bounded exponential retry. force-run 금지.
+- **PASS:** 새 `416_SEAL_ACK_STILL_PENDING` 없이 old exact seal ACK 성공 → version39 task가 WAITING_FOR_PRIOR_SEAL reschedule에서 벗어나 Worker/D1 handoff → final receipt callback → pending069 NO 유지. 새 EMPTY 0.
+- **FAIL:** 새 코드 배포 이후 old Task retry에서 동일 ACK_STILL_PENDING 재발. 그 경우 사용자 클릭 없이 ACK transaction live semantics만 다시 분석; data reset/delete/force-ACK 금지.
+- **보호:** app410 likes/follow/My Likes/Studio heart/UI 동결, general Stage416 client OFF, Worker/D1/R2/Rules/Hosting/main/production 변경 금지.
+
+---
 ## NEXT — version 39 due window 자동 정산 + exact seal ACK 완료 확인 (2026-10-13 KST)
 
 - **현재 기준:** immediate accepted proof Run `38342979008` SUCCESS. prior expired window persistent acceptance YES, pending069 NO, final receipt callback observed, new Scheduler 03:41:55 UTC HTTP200.

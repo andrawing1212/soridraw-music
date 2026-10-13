@@ -21,6 +21,19 @@
 
 ---
 ## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
+## CURRENT — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
+
+- 기준: 최신 PREVIEW `a80b0e5fb3af6019023aa7be9ca040b6d09650a7`.
+- 기존 controlled PREVIEW callable/task/RTDB root/timing path identity는 그대로 보존했다.
+- TEST/PRODUCTION에 서로 다른 callable, scheduler, Cloud Task target, settle/final Function,
+  transient pending/final root, timing path를 additive source로 추가했다.
+- 공통 handler에 immutable environment config를 주입하며 환경별 로직 복사는 없다.
+- TEST/PRODUCTION Worker endpoint는 각각 test/api Worker로 고정되어 PREVIEW fallback이 없다.
+- client는 host별 callable identity를 선택할 준비만 추가했고 일반 Stage416 flag는 계속 OFF다.
+- shared canonical likes/D1/R2/Rules와 Release Controller(#117)는 변경하지 않았다.
+- Firebase/Functions/Hosting/Worker 배포, main/production 변경, 사용자 데이터 변경은 0이다.
+
+## PREVIOUS — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
 
 - **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.
 - **독립 QA:** Run `38348077284` SUCCESS. `STAGE416_WAITING_PRIOR_SEAL_SAME_TASK_BOUNDED_RETRY=PASS`, `STAGE416_WAITING_PRIOR_SEAL_PRESERVES_NEWER_WINDOW=PASS`, 기존 ACK/EMPTY/NOT_DUE/app410/frozen like, Functions TypeScript, app TypeScript, Build, RTDB Rules audit PASS.

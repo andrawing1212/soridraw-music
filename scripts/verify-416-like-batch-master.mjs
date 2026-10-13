@@ -47,7 +47,10 @@ for(let n=3;n<=14;n++){
 assert.equal(store.audit.length,10,'server Master audit remains bounded');
 const fn=readFileSync('functions/src/index.ts','utf8');
 for(const name of ['masterGetLikeBatchTiming416','masterSetLikeBatchTiming416'])
-  assert.match(fn,new RegExp('export const '+name+' = onCall'));
+  assert.match(fn,new RegExp('export const '+name+' = makeMaster'));
+for(const suffix of ['Test','Production'])
+  for(const name of ['masterGetLikeBatchTiming416','masterSetLikeBatchTiming416'])
+    assert.match(fn,new RegExp('export const '+name+suffix+' = makeMaster'));
 assert.match(fn,/const \{ requesterUid \} = await requireMasterCaller\(request\)/);
 assert.match(fn,/effectiveForNewWindows: true/);
 console.log('STAGE416_MASTER_TWO_INDEPENDENT_MINUTE_SETTINGS=PASS');

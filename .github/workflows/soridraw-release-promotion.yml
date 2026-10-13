@@ -29,7 +29,7 @@ permissions:
   issues: write
 
 # The controller only mutates the component whose flag has been armed after all prechecks.
-# Firebase Functions/Rules and user data are never deployment components here.
+# Stage416 promotion is exactly scoped to two Functions; Rules and user data are never deployment components here.
 
 concurrency:
   group: soridraw-release-controller
@@ -132,7 +132,7 @@ jobs:
             node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$MANIFEST_TAG" <<'NODE'
           const fs=require('fs'); const [path,tag]=process.argv.slice(2); const m=JSON.parse(fs.readFileSync(path));
           if(m.schema<4||m.state!=='TEST_VERIFIED'||m.tag!==tag) throw Error('manifest is not TEST_VERIFIED');
-          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','testMediaWorkerVersionId','browserUpgradeContractSha256','productionEnvironmentContract','controllerIdentity','verifiedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
+          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','testMediaWorkerVersionId','browserUpgradeContractSha256','productionEnvironmentContract','controllerIdentity','verifiedAt','workflowRunId','stage416Functions']) if(!m[k]) throw Error(`manifest missing ${k}`);
           for(const k of ['sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','browserUpgradeContractSha256']) if(!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(String(m[k]))) throw Error(`manifest invalid identity ${k}`);
           if(!m.controllerIdentity||typeof m.controllerIdentity!=='object') throw Error('manifest invalid controller identity');
           for(const k of ['workflowSha256','workerRuntimeSha256','mediaWorkerRuntimeSha256','controllerVerifierSha256']) if(!/^[0-9a-f]{64}$/.test(String(m.controllerIdentity[k]))) throw Error(`manifest invalid controller identity ${k}`);
@@ -141,7 +141,7 @@ jobs:
           if(m.canonical?.d1!=='soridraw-explore-db'||m.canonical?.profileMedia!=='soridraw-profile-media'||m.canonical?.userCatalog!=='soridraw-user-catalog'||m.parity?.status!=='PASS') throw Error('manifest canonical/parity invariant failed');
           if(!m.productionEnvironmentContract||m.productionEnvironmentContract.policy!=='soridraw-production-first-2026-10-06'||!/^[0-9a-f]{64}$/.test(String(m.productionEnvironmentContract.sha256||''))) throw Error('manifest missing production environment contract');
           const contractPath=process.env.RUNNER_TEMP+'/manifest/production-environment-contract.json'; const contractRaw=fs.readFileSync(contractPath); const contractSha=require('crypto').createHash('sha256').update(contractRaw).digest('hex'); if(contractSha!==m.productionEnvironmentContract.sha256) throw Error('production environment contract asset hash mismatch');
-          if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nEXPECTED_WORKER_CODE_SHA256=${m.testWorkerCodeSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nEXPECTED_MEDIA_WORKER_BUNDLE_SHA256=${m.testMediaWorkerBundleSha256}\nEXPECTED_MEDIA_WORKER_CODE_SHA256=${m.testMediaWorkerCodeSha256}\nTEST_MEDIA_WORKER_VERSION_ID=${m.testMediaWorkerVersionId}\nEXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256=${m.browserUpgradeContractSha256}\nEXPECTED_PRODUCTION_ENVIRONMENT_CONTRACT_SHA256=${m.productionEnvironmentContract.sha256}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
+          if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nEXPECTED_WORKER_CODE_SHA256=${m.testWorkerCodeSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nEXPECTED_MEDIA_WORKER_BUNDLE_SHA256=${m.testMediaWorkerBundleSha256}\nEXPECTED_MEDIA_WORKER_CODE_SHA256=${m.testMediaWorkerCodeSha256}\nTEST_MEDIA_WORKER_VERSION_ID=${m.testMediaWorkerVersionId}\nEXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256=${m.browserUpgradeContractSha256}\nEXPECTED_STAGE416_FUNCTIONS_SOURCE_SHA256=${m.stage416Functions.sourceSha256}\nEXPECTED_PRODUCTION_ENVIRONMENT_CONTRACT_SHA256=${m.productionEnvironmentContract.sha256}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
           NODE
             git fetch origin "$(node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').promotedMainSha")" --no-tags
           else
@@ -150,6 +150,8 @@ jobs:
           rm -rf "$RUNNER_TEMP/release-source"
           git worktree add --detach "$RUNNER_TEMP/release-source" "$(test "$MODE" = production && node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').sourcePreviewSha" || printf '%s' "$TARGET")"
           echo "RELEASE_ROOT=$RUNNER_TEMP/release-source" >> "$GITHUB_ENV"
+          stage416_source_sha="$(cd "$RUNNER_TEMP/release-source" && git ls-files -z functions/src functions/package.json functions/package-lock.json functions/tsconfig.json | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          echo "STAGE416_FUNCTIONS_SOURCE_SHA256=$stage416_source_sha" >> "$GITHUB_ENV"
 
       - name: PREFLIGHT build and static verification
         if: steps.request.outputs.mode != 'production'
@@ -162,7 +164,10 @@ jobs:
           npx tsc --noEmit
           npm run build
           node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-416-functions-promotion-contract.mjs
           node scripts/verify-release-controller.mjs
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           npx tsx scripts/verify-368-live-profile-like-convergence.ts
@@ -180,6 +185,15 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           token_format: access_token
+
+      - name: Stage416 Functions read-only environment preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          for stage in preview test production; do node scripts/stage416-functions-live-contract.mjs "$stage"; done
+          echo STAGE416_FUNCTIONS_PREFLIGHT_ONLY=PASS
+          echo STAGE416_FUNCTIONS_LIVE_PREFLIGHT_MUTATIONS=0
 
       - name: Safe Firebase write-permission and GitHub capability preflight
         shell: bash
@@ -305,6 +319,17 @@ jobs:
           RELEASE_MEDIA_WORKER_VERSION="$media_version" node .deploy/release-media-worker-runtime.mjs test activate; printf true > "$RUNNER_TEMP/test-media-worker-mutated"
           npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive; printf true > "$RUNNER_TEMP/test-hosting-mutated"
 
+      - name: TEST deploy exact Stage416 Functions scope
+        if: steps.request.outputs.mode == 'test'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          test "$(git ls-files -z functions/src functions/package.json functions/package-lock.json functions/tsconfig.json | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)" = "$STAGE416_FUNCTIONS_SOURCE_SHA256"
+          npx --yes firebase-tools@latest deploy --project soridraw-app-866a5 --config firebase.json --only "functions:recordPrivateLike416,functions:stage416SettlePrivateWindowCandidate" --non-interactive --force
+          node scripts/stage416-functions-live-contract.mjs test
+          echo STAGE416_TEST_EXACT_TWO_FUNCTIONS_DEPLOY=PASS
+
       - name: TEST_VERIFY and freeze durable manifest
         if: steps.request.outputs.mode == 'test'
         shell: bash
@@ -342,7 +367,7 @@ jobs:
           export CONTROLLER_VERIFIER_SHA="$(jq -r .controllerVerifierSha256 <<<"$controller_identity")"
           tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"
           SOURCE_TREE="$(git rev-parse "$RELEASE_TARGET^{tree}")" MAIN_SHA="$(cat "$RUNNER_TEMP/main-promoted")" MAIN_TREE="$(git rev-parse "$(cat "$RUNNER_TEMP/main-promoted")^{tree}")" TAG="$tag" node - <<'NODE'
-          const fs=require('fs'); const m={schema:4,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-code','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-code','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),browserUpgradeContractSha256:process.env.BROWSER_UPGRADE_CONTRACT_SHA256,productionEnvironmentContract:{policy:'soridraw-production-first-2026-10-06',sha256:process.env.PRODUCTION_ENVIRONMENT_CONTRACT_SHA256},controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
+          const fs=require('fs'); const m={schema:4,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-code','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-code','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),browserUpgradeContractSha256:process.env.BROWSER_UPGRADE_CONTRACT_SHA256,stage416Functions:{approvedFunctions:['recordPrivateLike416','stage416SettlePrivateWindowCandidate'],sourceSha256:process.env.STAGE416_FUNCTIONS_SOURCE_SHA256,contractSha256:require('crypto').createHash('sha256').update(fs.readFileSync('.deploy/stage416-functions-environment-contract.json')).digest('hex'),testVerified:true},productionEnvironmentContract:{policy:'soridraw-production-first-2026-10-06',sha256:process.env.PRODUCTION_ENVIRONMENT_CONTRACT_SHA256},controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
           NODE
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "TEST_RELEASE_TAG_ALREADY_EXISTS=$tag"
@@ -394,6 +419,9 @@ jobs:
           set -euo pipefail
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_DEPLOY
           cd "$RELEASE_ROOT"
+          test "$EXPECTED_STAGE416_FUNCTIONS_SOURCE_SHA256" = "$STAGE416_FUNCTIONS_SOURCE_SHA256"
+          EXPECTED_STAGE416_FUNCTIONS_SOURCE_SHA256="$EXPECTED_STAGE416_FUNCTIONS_SOURCE_SHA256" node scripts/stage416-functions-live-contract.mjs production
+          echo STAGE416_PRODUCTION_CONSUMED_TEST_VERIFIED_FUNCTIONS_IDENTITY=PASS
           EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
           EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-media-upload"
           before="$(cat "$RUNNER_TEMP/production-before")"; tree="$(git rev-parse "$MANIFEST_MAIN^{tree}")"

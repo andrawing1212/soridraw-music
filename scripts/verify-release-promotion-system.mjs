@@ -47,6 +47,10 @@ for (const token of [
   'production-environment-contract.json',
   'EXPECTED_WORKER_CODE_SHA256',
   'EXPECTED_MEDIA_WORKER_CODE_SHA256',
+  'Stage416 Functions read-only environment preflight',
+  'STAGE416_FUNCTIONS_PREFLIGHT_ONLY=PASS',
+  'EXPECTED_STAGE416_FUNCTIONS_SOURCE_SHA256',
+  'functions:recordPrivateLike416,functions:stage416SettlePrivateWindowCandidate',
 ]) required(workflow, token, 'promotion workflow');
 
 forbidden(workflow, /git\s+push[^\n]*(?:--force|-f\b)/i, 'force push');

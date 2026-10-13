@@ -1,3 +1,14 @@
+## CURRENT — Stage416 Functions exact promotion release contract 구현 / 배포 0 (2026-10-13 KST)
+
+- **기준 SHA:** `a80b0e5fb3af6019023aa7be9ca040b6d09650a7` 최신 PREVIEW에서 Release System 범위만 수정.
+- **환경 계약:** PREVIEW/TEST/PRODUCTION의 Firebase project·RTDB URL·Stage416 Worker handoff URL을 명시하고, 승인 Function 2개, HMAC secret, runtime service account 일치, Cloud Tasks queue identity/state를 read-only preflight에서 검사하도록 고정.
+- **fail-closed:** TEST/PRODUCTION Worker URL이 PREVIEW를 가리키거나 Function/secret/service account/queue/RTDB binding이 다르면 mutation 전 실패. `preflight_only`는 live describe/list만 실행하며 mutation 0.
+- **artifact 계약:** Functions compiled-source SHA256과 환경계약 SHA256을 TEST_VERIFIED manifest에 저장하고 PRODUCTION은 동일 source identity가 아니면 중단. 배포 scope는 `recordPrivateLike416`, `stage416SettlePrivateWindowCandidate` 두 개로만 고정하고 unscoped Functions deploy를 verifier가 거부.
+- **비변경:** Stage416 제품 source/client flag/Worker/D1/R2/Rules/schema/UI 및 사용자 데이터 변경 0. 실제 PREVIEW/TEST/PRODUCTION 배포 0.
+- **주의:** 이 commit은 release-system 구현/정적·synthetic 검증 결과이며 실제 live TEST/PRODUCTION preflight와 승격 승인은 별도다. 일반 Stage416 client flag는 계속 OFF.
+
+---
+
 ## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
 
 - **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.

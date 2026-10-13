@@ -1,0 +1,27 @@
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+
+const stage=process.argv[2];
+const contract=JSON.parse(readFileSync('.deploy/stage416-functions-environment-contract.json','utf8'));
+const expected=contract.environments[stage];
+if(!expected)throw Error('usage: stage416-functions-live-contract.mjs <preview|test|production>');
+const run=(args)=>{const r=spawnSync('gcloud',args,{encoding:'utf8'});if(r.status!==0)throw Error(r.stderr||args.join(' '));return JSON.parse(r.stdout)};
+const describe=(name)=>run(['functions','describe',name,'--gen2','--region',contract.region,'--project',expected.firebaseProject,'--format=json']);
+const callable=describe('recordPrivateLike416');
+const settle=describe('stage416SettlePrivateWindowCandidate');
+const queues=run(['tasks','queues','list','--location',contract.region,'--project',expected.firebaseProject,'--format=json']);
+const queue=queues.find(x=>String(x.name||'').endsWith('/'+contract.queue));
+if(callable.state!=='ACTIVE'||settle.state!=='ACTIVE'||queue?.state!=='RUNNING')throw Error(`${stage} Function/queue is not ready`);
+const sourceIds=[callable,settle].map(x=>String(x.buildConfig?.source?.storageSource?.object||x.buildConfig?.source?.repoSource?.commitSha||''));
+if(sourceIds.some(x=>!x))throw Error(`${stage} build source identity missing`);
+const serviceAccount=settle.serviceConfig?.serviceAccountEmail;
+if(!serviceAccount||callable.serviceConfig?.serviceAccountEmail!==serviceAccount)throw Error(`${stage} runtime service account mismatch`);
+const secrets=settle.serviceConfig?.secretEnvironmentVariables||[];
+if(!secrets.some(x=>String(x.secret||x.secretName||'').split('/').pop()===contract.secret))throw Error(`${stage} secret binding mismatch`);
+const env=settle.serviceConfig?.environmentVariables||{};
+if(env.FIREBASE_DATABASE_URL!==expected.databaseUrl)throw Error(`${stage} RTDB URL mismatch`);
+if(env.SORIDRAW_PRIVATE_BATCH416_WORKER_URL!==expected.workerEndpoint)throw Error(`${stage} Worker endpoint mismatch`);
+if(stage!=='preview'&&/preview/i.test(env.SORIDRAW_PRIVATE_BATCH416_WORKER_URL))throw Error(`${stage} resolved to PREVIEW Worker`);
+console.log(`STAGE416_${stage.toUpperCase()}_FUNCTION_BUILD_SOURCES=${sourceIds.join(',')}`);
+console.log(`STAGE416_${stage.toUpperCase()}_LIVE_READ_ONLY_CONTRACT=PASS`);
+console.log(`STAGE416_${stage.toUpperCase()}_RUNTIME_SERVICE_ACCOUNT=${serviceAccount}`);

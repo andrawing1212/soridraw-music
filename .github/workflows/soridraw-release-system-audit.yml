@@ -70,6 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-416-functions-promotion-contract.mjs
           node scripts/verify-release-controller.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
           npx tsx scripts/verify-368-live-profile-like-convergence.ts

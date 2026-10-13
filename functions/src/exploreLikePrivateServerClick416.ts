@@ -27,8 +27,8 @@ type GlobalVersion416={version?:number;devices?:Record<string,{
 async function reserveGlobalVersion416(database:Database,uid:string,
  click:ServerPrivateLikeClick416,receivedAtMs:number,globalVersionRoot:string,
  minimumExclusiveVersion=0,
-):Promise<{reserved:boolean;reason:string;version?:number}> {
- let decision:{reserved:boolean;reason:string;version?:number}={
+):Promise<{reserved:boolean;reason:string;version?:number;highWater?:number}> {
+ let decision:{reserved:boolean;reason:string;version?:number;highWater?:number}={
   reserved:false,reason:'UNDETERMINED'};
  const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
   const unchanged=raw===undefined?null:raw;
@@ -45,7 +45,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
       prior.trackId===click.trackId&&prior.liked===click.liked&&
       Number.isSafeInteger(prior.version)&&prior.version>0){
     if(prior.version>minimumExclusiveVersion){
-     decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version};
+     decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version,highWater:version};
      return unchanged;
     }
     // Another request may have committed a newer environment version after
@@ -54,7 +54,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
     const rebased=Math.max(version+1,minimumExclusiveVersion+1,receivedAtMs);
     if(!Number.isSafeInteger(rebased)||rebased<=version)
      throw Error('416_GLOBAL_VERSION_EXHAUSTED');
-    decision={reserved:true,reason:'GLOBAL_RESERVATION_REBASED',version:rebased};
+    decision={reserved:true,reason:'GLOBAL_RESERVATION_REBASED',version:rebased,highWater:rebased};
     return {version:rebased,devices:{...devices,[click.deviceId]:{
      deviceSequence:click.deviceSequence,operationId:click.operationId,
      trackId:click.trackId,liked:click.liked,version:rebased,
@@ -69,7 +69,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   const next=Math.max(version+1,minimumExclusiveVersion+1,receivedAtMs);
   if(!Number.isSafeInteger(next)||next<=version)
    throw Error('416_GLOBAL_VERSION_EXHAUSTED');
-  decision={reserved:true,reason:'GLOBAL_VERSION_RESERVED',version:next};
+  decision={reserved:true,reason:'GLOBAL_VERSION_RESERVED',version:next,highWater:next};
   return {version:next,devices:{...devices,[click.deviceId]:{
    deviceSequence:click.deviceSequence,operationId:click.operationId,
    trackId:click.trackId,liked:click.liked,version:next,
@@ -83,7 +83,7 @@ export async function recordUserPrivateClick416(
   database:Database,uid:string,click:ServerPrivateLikeClick416,
   trustedMinutes:number,receivedAtMs=Date.now(),
   authoritativeRetry=false,privateRoot='privateLikeBatch416',
-  globalVersionRoot?:string,allocatedVersion?:number,
+  globalVersionRoot?:string,allocatedVersion?:number,allocatedHighWater?:number,
   minimumExclusiveVersion=0,versionRebaseAttempts=0,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
@@ -95,12 +95,15 @@ export async function recordUserPrivateClick416(
     !validMinute416(trustedMinutes))
   throw Error('416_BAD_SERVER_PRIVATE_CLICK');
  const trackKey=createHash('sha256').update(click.trackId,'utf8').digest('hex');
+ if(allocatedVersion!==undefined&&allocatedHighWater===undefined)
+  allocatedHighWater=allocatedVersion;
  if(allocatedVersion===undefined&&globalVersionRoot){
   const reservation=await reserveGlobalVersion416(
    database,uid,click,receivedAtMs,globalVersionRoot,minimumExclusiveVersion);
   if(!reservation.reserved||reservation.version===undefined)
    return {accepted:false,reason:reservation.reason};
   allocatedVersion=reservation.version;
+  allocatedHighWater=Number(reservation.highWater||reservation.version);
  }
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
@@ -170,13 +173,17 @@ export async function recordUserPrivateClick416(
    const versionNext=allocatedVersion===undefined?version+1:allocatedVersion;
    if(!Number.isSafeInteger(versionNext))
     throw Error('416_GLOBAL_VERSION_INVALID');
-   if(versionNext<=version){
+   const globalFloor=Number(allocatedHighWater||0);
+   if(!Number.isSafeInteger(globalFloor)||globalFloor<0)
+    throw Error('416_GLOBAL_VERSION_HIGH_WATER_INVALID');
+   if(versionNext<=version||versionNext<globalFloor){
     if(globalVersionRoot&&allocatedVersion!==undefined&&versionRebaseAttempts<8){
-     // Reservation order and environment commit order can differ under real
-     // concurrent devices. Do not lose the older operation: ask the shared
-     // sequencer to rebase this SAME operation above the observed env version.
+     // A reservation can become old either because this environment committed
+     // a newer request first OR because another environment advanced the shared
+     // high-water before this operation reached its private root. Rebase the
+     // SAME operation above both observed floors; never fabricate acceptance.
      reason='GLOBAL_VERSION_REBASE_REQUIRED';
-     rebaseFloor=version;
+     rebaseFloor=Math.max(version,globalFloor);
      return unchanged;
     }
     throw Error('416_GLOBAL_VERSION_NOT_NEWER_THAN_ENVIRONMENT');
@@ -203,7 +210,8 @@ export async function recordUserPrivateClick416(
      await privateRef.get();
      return recordUserPrivateClick416(
        database,uid,click,trustedMinutes,receivedAtMs,true,privateRoot,
-       globalVersionRoot,allocatedVersion,minimumExclusiveVersion,versionRebaseAttempts);
+       globalVersionRoot,allocatedVersion,allocatedHighWater,
+       minimumExclusiveVersion,versionRebaseAttempts);
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
@@ -216,7 +224,7 @@ export async function recordUserPrivateClick416(
      return {accepted:false,reason:'GLOBAL_VERSION_REBASE_RETRY_EXHAUSTED'};
    return recordUserPrivateClick416(
      database,uid,click,trustedMinutes,receivedAtMs,false,privateRoot,
-     globalVersionRoot,undefined,rebaseFloor,versionRebaseAttempts+1);
+     globalVersionRoot,undefined,undefined,rebaseFloor,versionRebaseAttempts+1);
  }
  if(reason==='PRIOR_WINDOW_NEEDS_SEAL')
    return {accepted:false,reason,

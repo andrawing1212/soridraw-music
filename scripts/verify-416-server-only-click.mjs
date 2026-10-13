@@ -13,13 +13,15 @@ const record=exported.recordUserPrivateClick416;
 const deviceA='00000000-0000-4000-8000-000000000001';
 const deviceB='00000000-0000-4000-8000-000000000002';
 const op=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
-let writes=0,reads=0,state=null,usedPath='';
+let writes=0,reads=0,transactionCommits=0,state=null,usedPath='';
 const db={ref:path=>({
  transaction:async fn=>{
   usedPath=path;reads++;
+  const before=structuredClone(state);
   const updated=fn(state);
   if(updated===undefined)return {committed:false,snapshot:{val:()=>state}};
-  state=updated;writes++;
+  state=updated;transactionCommits++;
+  if(JSON.stringify(updated)!==JSON.stringify(before))writes++;
   return {committed:true,snapshot:{val:()=>state}};
  },
  get:async()=>{reads++;return {val:()=>state};},
@@ -49,7 +51,8 @@ const expire=await take(deviceA,2,'track-a',false,now+301_000,3);
 assert.equal(expire.reason,'PRIOR_WINDOW_NEEDS_SEAL');
 assert.equal(expire.expiredWindowId,state.window.id,
  'recovery must use the already expired exact UID/window, not a guessed ID');
-assert.equal(writes,2,'expired window must not absorb a new click');
+assert.equal(writes,2,'expired window compare must not mutate user state');
+assert.equal(transactionCommits>=3,true,'expired window must reach RTDB server reconciliation');
 assert.equal(state.version,2);
 assert.equal(state.deviceSeq[deviceA],1);
 state={...state,window:null,pending:null,

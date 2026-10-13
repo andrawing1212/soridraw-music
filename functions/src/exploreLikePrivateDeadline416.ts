@@ -38,14 +38,21 @@ export async function dispatchPrivateWindowTask416(
    // Worker 069 receipt is durable, ACK only clears the matching frozen seal.
    return {status:'DELIVERED'};
  }
- if(result.reason==='NOT_DUE'||result.reason==='WAITING_FOR_PRIOR_SEAL'){
+ if(result.reason==='WAITING_FOR_PRIOR_SEAL'){
+   // Do not create a fresh task every minute while an older frozen seal is
+   // awaiting its exact ACK. Failing this delivery keeps the same Cloud Task
+   // under the queue's bounded retryConfig/backoff. The RTDB window/pending
+   // rows remain intact, so a later retry (or an authenticated-click repair
+   // after retries are exhausted) can resume without dropping user intent.
+   throw Error('416_WAITING_FOR_PRIOR_SEAL');
+ }
+ if(result.reason==='NOT_DUE'){
    // Cloud Tasks may dispatch slightly before the stored RTDB deadline.
    // Re-enqueueing the exact original deadline can reuse the still-running
    // task ID. Its ALREADY_EXISTS reply is swallowed as idempotent, leaving
    // NO future task after the current invocation returns 204.
    // Add a bounded 1s cushion only to NOT_DUE retries to guarantee a new ID.
-   const cushion=result.reason==='NOT_DUE'?1_000:0;
-   const next=nowMs+Number(result.retryAfterMs||0)+cushion;
+   const next=nowMs+Number(result.retryAfterMs||0)+1_000;
    if(!validTime(next)||next<=nowMs)throw Error('416_INVALID_RETRY_DEADLINE');
    // Reschedule only on an actual task execution. A late prior ACK may also
    // block a newer window until the original durable seal is acknowledged.

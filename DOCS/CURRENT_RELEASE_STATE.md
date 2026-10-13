@@ -1,3 +1,12 @@
+## CURRENT — Stage416 WAITING_FOR_PRIOR_SEAL bounded same-task retry source 완료 / 배포 0 (2026-10-13 KST)
+
+- **기준:** 최신 `preview` `26b7a63f98bdef691bae63e9bf8909d1f2d79ad7`에서 Issue #115 단일 범위만 수정. 일반 Stage416 client flags는 OFF 유지.
+- **수정:** `dispatchPrivateWindowTask416`에서 `WAITING_FOR_PRIOR_SEAL`일 때 60초 뒤 새 Cloud Task를 enqueue하던 수동 chain을 제거. 현재 handler를 `416_WAITING_FOR_PRIOR_SEAL`로 fail-closed하여 동일 Cloud Task가 기존 `retryConfig.maxAttempts=25`와 30~3600초 backoff를 사용한다. `NOT_DUE`의 exact later deadline +1초 재예약은 그대로 유지.
+- **보존:** WAITING 동안 older frozen seal, newer window/pending을 수정·삭제·강제 ACK하지 않는다. prior exact ACK 해소 후 동일 task 재시도는 newer changed rows만 DELIVERED 가능하며, retry 소진 뒤에도 RTDB 상태는 다음 authenticated click의 기존 repair 경로를 위해 남는다.
+- **검증:** deadline/task-routing/expired-window/complete-window 실행형 verifier, Functions TypeScript, 앱 TypeScript, Build, app410 frozen-like 회귀, RTDB Rules audit을 로컬에서 PASS. WAITING enqueue 0, handler failure 전파, same-task 후속 DELIVERED, stale/EMPTY/NOT_DUE 보호를 확인.
+- **비변경:** Worker/D1/R2/Rules/Hosting, UI, 일반 좋아요 경로, 공유 사용자 데이터, TEST/PRODUCTION 변경 0. migration/backfill/reset/delete 0. 배포 0.
+- **남은 gate:** source/자동검증 완료일 뿐 PREVIEW live Cloud Tasks 동작 및 독립 감사는 아직 미검증. 독립 감사 전 client activation 및 TEST/PRODUCTION 승격 금지.
+
 ## CURRENT — Stage416 controlled E2E PASS / activation 독립 감사 FAIL (비용·승격 안전성) (2026-10-13 KST)
 
 - **감사 대상:** `preview` HEAD 기준 controlled E2E PASS 뒤 제품 source `f2aa1dd88cd8cafe48be290423d2481fa50f4869` + 배포/진단 증거 `38344204076`, `38344369373`, `38346090880`. `WORK_AUDIT_CHECKLIST.md` 기준 코드 수정 없이 독립 검토.
@@ -296,4 +305,3 @@
 - 세 진행률 변경 없음: Stage416 1/4·25%, 앱 속도 5/5·100%, 개인 5분 정산 3/4·75%. Preview app403, TEST/PRODUCTION 비변경.
 
 ---
-

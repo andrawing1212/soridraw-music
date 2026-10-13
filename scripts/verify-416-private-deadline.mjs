@@ -89,23 +89,51 @@ const blockedLater={uid:task.uid,windowId:'00000000-0000-4000-8000-000000000099'
 const earlierSealed={id:task.windowId,version:1,closedAtMs:now,
  rows:[{trackId:'song-a',liked:true,operationId:task.windowId}]};
 const previousState=state;
+const songCKey=await hash('song-c');
 state={...state,sealed:earlierSealed,window:{
  id:blockedLater.windowId,minutes:5,openedAtMs:now,lastClickAtMs:now,revision:3,
-},pending:{songc:{trackId:'song-c',liked:true,operationId:blockedLater.windowId,
- deviceId:'00000000-0000-4000-8000-000000000009',deviceSequence:3,version:3}}};
-const blocked=await dispatch(db,queue,blockedLater,endpoint,secret,now+300_000,http);
-assert.equal(blocked.status,'RESCHEDULED','newer task stays alive while older ACK is unconfirmed');
-assert.equal(blocked.atMs,now+360_000);
+},pending:{[songCKey]:{trackId:'song-c',trackKey:songCKey,liked:true,
+ operationId:blockedLater.windowId,
+ deviceId:'00000000-0000-4000-8000-000000000009',deviceSequence:3,version:3,
+ mutationAt:now}}};
+const queueCountBeforeWaiting=planned.length;
+await assert.rejects(
+ dispatch(db,queue,blockedLater,endpoint,secret,now+300_000,http),
+ /416_WAITING_FOR_PRIOR_SEAL/,
+ 'newer task must fail so Cloud Tasks retries the same bounded task',
+);
+assert.equal(planned.length,queueCountBeforeWaiting,
+ 'WAITING must not enqueue a fresh task chain');
 assert.equal(state.sealed.id,task.windowId);
+assert.equal(state.window.id,blockedLater.windowId);
+assert.equal(state.pending[songCKey].trackId,'song-c');
+// Model the older task's exact ACK, then retry the identical newer task.
+state={...state,sealed:null};
+const retryHttp=async(_url,req)=>{
+ sends++;const seal=JSON.parse(req.body);
+ assert.equal(seal.rows.length,1);
+ assert.equal(seal.rows[0].trackId,'song-c');
+ return {ok:true,json:async()=>({ok:true,data:{queued:true,canonicalD1:'settled',
+  canonicalProof:'atomic-drain-batch-418',personalLikeSnapshot:'changed-track-r2',
+  finalReceipt:'PUBLISHED',version:seal.version,
+  batchIds:['l069_'+String(seal.sealedAtMs).padStart(13,'0')+'_'+'b'.repeat(64)]}})};
+};
+const unblocked=await dispatch(db,queue,blockedLater,endpoint,secret,
+ now+300_001,retryHttp);
+assert.equal(unblocked.status,'DELIVERED',
+ 'same task retry must deliver after prior exact ACK resolves');
+assert.equal(state.sealed,null);
+assert.equal(state.window,null);
+assert.equal(state.pending,null);
 state=previousState;
 const done=await dispatch(db,queue,task,endpoint,secret,now+360_000,http);
 assert.equal(done.status,'DELIVERED');
-assert.equal(sends,1);
+assert.equal(sends,2);
 assert.equal(state.sealed,null);
 assert.equal(state.window,null);
 const replay=await dispatch(db,queue,task,endpoint,secret,now+360_100,http);
 assert.equal(replay.status,'EMPTY','finished old task must not produce another request');
-assert.equal(sends,1);
+assert.equal(sends,2);
 state=null;reads=0;writes=0;planned.length=0;
 const beforeReads=reads;
 for(let n=1;n<=80;n++)await push(n,'song-'+n,now+n);
@@ -115,3 +143,5 @@ console.log('STAGE416_DEADLINE_INITIAL_ONE_TASK_LATEST_CLICK_RESCHEDULE=PASS');
 console.log('STAGE416_DEADLINE_STALE_TASK_NO_WRITE_POST_SETTLE_EMPTY=PASS');
 console.log('STAGE416_DEADLINE_80_CLICK_NO_PER_CLICK_TASK_OR_READ=PASS');
 console.log('STAGE416_EARLY_DEADLINE_RETRY_UNIQUE_TASK_ID=PASS');
+console.log('STAGE416_WAITING_SAME_TASK_BOUNDED_RETRY_NO_ENQUEUE=PASS');
+console.log('STAGE416_WAITING_PRESERVES_NEWER_STATE_THEN_DELIVERS=PASS');

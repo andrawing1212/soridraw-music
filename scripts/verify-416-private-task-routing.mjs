@@ -8,13 +8,14 @@ const output=ts.transpileModule(src,{compilerOptions:{
   module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017,
 }}).outputText;
 const exports={};let triggered=0,dispatched=0,queueCalls=[];
+let dispatchCalls=0;
 const uuid='00000000-0000-4000-8000-000000000001';
 const fakeTaskQueue={enqueue:async(task,opt)=>{
  queueCalls.push({task,opt});if(queueCalls.length===2){
    const err=new Error('duplicate');err.code='functions/task-already-exists';throw err;
  }}};
 const context={
- module:{exports},exports,process:{env:{}},String,Number,Date,Error,
+ module:{exports},exports,process:{env:{SORIDRAW_PRIVATE_BATCH416_WORKER_URL:'https://worker.example'}},String,Number,Date,Error,
  require:id=>{
  if(id==='node:crypto')return {createHash};
  if(id==='firebase-admin/functions')return {getFunctions:()=>({taskQueue:()=>fakeTaskQueue})};
@@ -23,12 +24,14 @@ const context={
    triggered++;return fn;}};
  if(id==='firebase-functions/v2/tasks')return {onTaskDispatched:(_o,fn)=>{
    dispatched++;return fn;}};
- if(id==='firebase-functions/params')return {defineSecret:()=>({value:()=>''})};
+ if(id==='firebase-functions/params')return {defineSecret:()=>({value:()=> 'bounded-retry-secret'})};
  if(id==='./exploreLikePrivateDeadline416')return {
    scheduleInitialPrivateWindow416:async(q,t,w)=>{
      await q.enqueue(t,{scheduleTime:new Date(w.lastClickAtMs+w.minutes*60000)});
    },
-   dispatchPrivateWindowTask416:async()=>{throw Error('task must be inactive');},
+   dispatchPrivateWindowTask416:async()=>{
+     dispatchCalls++;throw Error('416_WAITING_FOR_PRIOR_SEAL');
+   },
  };
  throw Error('unknown import '+id);
  }};
@@ -57,7 +60,14 @@ assert.notEqual(queueCalls[0].opt.id,queueCalls[2].opt.id,
 assert.equal(queueCalls[2].task.windowId,uuid);
 assert.equal(queueCalls[2].opt.scheduleTime.getTime(),1_700_000_341_000);
 assert.match(queueCalls[0].opt.id,/^s416-[a-f0-9]{64}$/);
-await assert.rejects(settle({data:{uid:'uid-A',windowId:uuid}}),/BINDING_MISSING/);
+await assert.rejects(settle({data:{uid:'uid-A',windowId:uuid}}),
+ /416_WAITING_FOR_PRIOR_SEAL/,
+ 'task handler must propagate WAITING so the platform retries this task');
+assert.equal(dispatchCalls,1);
+assert.equal(queueCalls.length,4,
+ 'settle WAITING failure must not enqueue a replacement task');
+assert.match(src,/retryConfig:\{maxAttempts:25,minBackoffSeconds:30,maxBackoffSeconds:3600\}/,
+ 'same-task retry must remain bounded by the platform policy');
 const indexSource=readFileSync('functions/src/index.ts','utf8');
 assert.match(indexSource,/stage416SchedulePrivateWindowCandidate/);
 assert.match(indexSource,/stage416SettlePrivateWindowCandidate/);
@@ -69,3 +79,4 @@ console.log('STAGE416_RTD_B_NEW_WINDOW_ONLY_CLOUD_TASK_ENQUEUE=PASS');
 console.log('STAGE416_TASK_IDEMPOTENCE_AND_FAIL_CLOSED_BINDINGS=PASS');
 console.log('STAGE416_PREVIEW_SERVER_EXPORTS_AND_APPCHECK=PASS');
 console.log('STAGE416_EXPIRED_WINDOW_REPAIR_TASK_IDEMPOTENT=PASS');
+console.log('STAGE416_WAITING_HANDLER_PROPAGATES_BOUNDED_PLATFORM_RETRY=PASS');

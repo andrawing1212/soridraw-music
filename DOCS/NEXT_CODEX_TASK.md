@@ -1,5 +1,6 @@
 ## NEXT — Codex High: Stage416 WAITING_FOR_PRIOR_SEAL 수동 무한 reschedule 제거 (2026-10-13 KST)
 
+- **Codex source 상태:** 최신 `preview` 기준 최소 수정과 로컬 필수 검증 완료. WAITING 새 enqueue 0 + handler failure 전파 + prior ACK 후 동일 task DELIVERED를 실행형으로 고정했으며 배포/공유 데이터 변경 0. 다음 단계는 이 commit의 독립 감사이며 제품 client activation이나 release-system 작업을 섞지 않는다.
 - **작업 기준 branch:** `preview`; 시작 기준은 작업 시작 시 최신 HEAD 재확인. 일반 Stage416 client flags OFF 유지.
 - **목표 1개:** `WAITING_FOR_PRIOR_SEAL` 때문에 60초마다 새 Task를 만드는 chain을 제거하고, 기존 Cloud Tasks 동일 task의 bounded retry(`retryConfig.maxAttempts=25`, min/max backoff)를 사용하도록 최소 수정한다.
 - **권장 최소 설계:** `NOT_DUE`는 현재처럼 exact later deadline + 1s 새 task reschedule 유지. `WAITING_FOR_PRIOR_SEAL`은 새 task enqueue 금지; fail-closed 오류로 현재 task를 실패시켜 동일 Cloud Task가 플랫폼 bounded retry를 사용하게 한다. exact frozen seal/pending user data는 절대 삭제/강제 ACK하지 않는다.

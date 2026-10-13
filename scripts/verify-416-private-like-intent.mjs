@@ -96,6 +96,22 @@ assert.equal(restartedB.api.listExploreLikeIntents416(uid)[track], undefined,
   'app415 reload-restored provisional hint must not change My Likes membership');
 assert.equal(restartedB.notices.length, 0,
   'reload-restored state stays silent until a genuinely new live event arrives');
+
+// app416: the exact audit gap. A previous-lifetime pending row can receive a
+// late ACCEPTED transition after reload. That metadata must remain quarantined
+// and cannot repaint the heart/count/My Likes before canonical 127 cleanup.
+await A.api.settleExploreLikeIntent416(uid, [
+  { trackId: track, operationId: op1, status: 'accepted' },
+]);
+assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), undefined,
+  'late accepted for reload-restored row must not regain heart authority');
+assert.equal(restartedB.api.readExploreLikeIntentDetail416(uid, track), null,
+  'late accepted for reload-restored row must not regain count authority');
+assert.equal(restartedB.api.listExploreLikeIntents416(uid)[track], undefined,
+  'late accepted for reload-restored row must not regain My Likes authority');
+assert.equal(restartedB.notices.length, 0,
+  'late accepted settlement metadata must not repaint a reloaded screen');
+
 assert.equal(B.api.listExploreLikeIntents416(uid)[track], true,
   'the still-live receiving session keeps its current-session provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
@@ -223,5 +239,6 @@ console.log('STAGE416_EXISTING_ACCEPTED_PATH_AND_RULES_PRESERVED=PASS');
 console.log('STAGE416_RELOAD_SAME_DEVICE_RECENT_HINT_AND_REJECTION=PASS');
 console.log('APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS');
 console.log('APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS');
+console.log('APP416_LATE_ACCEPTED_RELOAD_HINT_STAYS_QUARANTINED=PASS');
 console.log('STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS');
 console.log('STAGE416_LIVE_DEVICE_LATENCY=NOT_TESTED');

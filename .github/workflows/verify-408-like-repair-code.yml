@@ -64,6 +64,7 @@ on:
       - 'cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs'
       - 'scripts/verify-412-shared-projection-cas.mjs'
       - 'src/services/exploreLikeService.ts'
+      - 'scripts/verify-412-stale-like-outbox-gate.mjs'
       - 'src/services/exploreLikeIntent416.ts'
       - 'scripts/verify-416-private-like-intent.mjs'
       - 'src/services/exploreLikeAbusePolicy420.ts'
@@ -248,6 +249,7 @@ jobs:
           node scripts/verify-127-atomic-personal-like.mjs
           node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-180-like-live-signal-and-cached-paint.mjs
+          node scripts/verify-412-stale-like-outbox-gate.mjs
       - name: 191 and remaining frozen like contracts
         shell: bash
         run: |

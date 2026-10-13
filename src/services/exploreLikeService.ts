@@ -151,6 +151,10 @@ type ExploreLikePendingMutation = {
   queuedAt: number;
   updatedAt: number;
   retryCount: number;
+  // app412: only clicks created by this fixed client may resume/flush after
+  // auth, reload, visibility exit or another page hydration. Historical
+  // unmarked outbox rows remain local-only until the user explicitly clicks.
+  explicitReplayEligible412?: true;
   operationId?: string; // stable across a retry, replaced on every new click
   guardStatus420?: 'awaiting' | 'approved'; // old clients remain legacy when absent
   guardPermit420?: string; // signed server claim; Worker verifies cryptographically
@@ -1581,6 +1585,7 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     queuedAt: Math.max(0, Number(row.queuedAt || updatedAt)),
     updatedAt,
     retryCount: Math.max(0, Math.floor(Number(row.retryCount || 0))),
+    ...(row.explicitReplayEligible412 === true ? { explicitReplayEligible412: true as const } : {}),
     operationId: typeof row.operationId === 'string' && /^[0-9a-f-]{36}$/i.test(row.operationId)
       ? row.operationId : undefined,
     ...(row.guardStatus420 === 'awaiting' || row.guardStatus420 === 'approved'
@@ -1898,6 +1903,13 @@ const eligibleGuardedMutation420 = (entry: ExploreLikePendingMutation): boolean 
         guardStatus: entry.guardStatus420, guardPermit420: entry.guardPermit420,
       }));
 
+// app412 incident guard: app409 could not distinguish an old experimental
+// pending row from a new explicit click. An unmarked historical row must never
+// create a canonical write merely because Auth became ready, a page hydrated,
+// or the tab exited. A new explicit click replaces it and sets this marker.
+const isExplicitReplayEligible412 = (entry: ExploreLikePendingMutation): boolean =>
+  entry.explicitReplayEligible412 === true;
+
 const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbox)
   .reduce((latest, pending) => Math.max(latest, pending.updatedAt || 0), 0);
 
@@ -1925,7 +1937,9 @@ const schedulePendingFlush = (user: User) => {
   if (!uid || typeof window === 'undefined') return;
   const outbox = readLikeOutbox(uid);
   const eligible = Object.values(outbox).filter((pending) =>
-    (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
+    (pending.retryCount || 0) === 0 &&
+    isExplicitReplayEligible412(pending) &&
+    eligibleGuardedMutation420(pending));
   if (!eligible.length) {
     // A failed/ambiguous write must never become an idle or navigation retry
     // loop. Keep the durable intent locally, but wait for an explicit new click
@@ -1948,15 +1962,18 @@ const schedulePendingFlush = (user: User) => {
   flushTimerByUid.set(uid, timer);
 };
 
-// app409: app400-407 may have left real user clicks in the durable outbox while
-// the unproven Stage416 server-owned path suppressed the verified canonical batch.
-// Recover ONLY those existing user mutations as soon as Auth is ready, without
-// waiting for Explore card hydration. Empty/settled accounts do no network work.
+// app412: Auth-ready recovery is allowed only for rows created by an explicit
+// click on this fixed client. Historical app400-411 rows stay durable but inert;
+// they cannot become a canonical like merely because the user logged in/updated.
+// Empty/quarantined accounts do no network work.
 if (!STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && typeof window !== 'undefined') {
   onAuthStateChanged(auth, (user) => {
     if (!user?.uid || EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE) return;
     const hasRecoverablePending409 = Object.values(readLikeOutbox(user.uid))
-      .some((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
+      .some((pending) =>
+        (pending.retryCount || 0) === 0 &&
+        isExplicitReplayEligible412(pending) &&
+        eligibleGuardedMutation420(pending));
     if (hasRecoverablePending409) schedulePendingFlush(user);
   });
 }
@@ -2008,7 +2025,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
   const ordered = Object.values(outbox)
     // retryCount>0 means the previous response was ambiguous/failed. Do not
     // replay writes automatically from idle timers, rerenders, or navigation.
-    .filter((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending))
+    .filter((pending) =>
+      (pending.retryCount || 0) === 0 &&
+      isExplicitReplayEligible412(pending) &&
+      eligibleGuardedMutation420(pending))
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
 
@@ -2343,7 +2363,10 @@ const installExitFlush413 = () => {
     if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE) return;
     if (!current?.uid) return;
     const eligible = Object.values(readLikeOutbox(current.uid))
-      .some((pending) => (pending.retryCount || 0) === 0 && eligibleGuardedMutation420(pending));
+      .some((pending) =>
+        (pending.retryCount || 0) === 0 &&
+        isExplicitReplayEligible412(pending) &&
+        eligibleGuardedMutation420(pending));
     if (!eligible) return;
     exitFlushArmed413.add(current.uid);
     clearFlushTimer(current.uid);
@@ -2444,7 +2467,8 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   }
 
   const outbox = readLikeOutbox(user.uid);
-  if (Object.values(outbox).some((pending) => (pending.retryCount || 0) === 0)) {
+  if (Object.values(outbox).some((pending) =>
+    (pending.retryCount || 0) === 0 && isExplicitReplayEligible412(pending))) {
     installExitFlush413();
     schedulePendingFlush(user);
   }
@@ -2563,6 +2587,9 @@ export const setExploreTrackLike = async (
     queuedAt: existing?.queuedAt || now,
     updatedAt: now,
     retryCount: 0,
+    // Set only inside the explicit user-click setter. Existing persisted rows
+    // from older apps intentionally remain unmarked and cannot auto-resurrect.
+    explicitReplayEligible412: true,
     operationId: EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE
       ? createExploreLikeOperationId420()
       : createExploreLikeOperationId144(),

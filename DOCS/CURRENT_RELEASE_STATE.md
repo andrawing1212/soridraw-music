@@ -1,3 +1,13 @@
+## CURRENT — version39 due 정산: EMPTY 재발 0 / D1 receipt 유지 / frozen seal ACK 고착으로 final FAIL (2026-10-13 KST)
+
+- **due 후 read-only Run:** `38343738803` SUCCESS. version39 accepted 시각 03:41:54 UTC, Scheduler 03:41:55 HTTP200, 5분 due 이후 Settle 03:46:54부터 매분 HTTP204 reschedule 관측.
+- **개선 확인:** 새 `EMPTY`는 03:11:40 이후 추가 0. 이전 stale EMPTY 문제는 이번 실증에서는 재발하지 않음.
+- **canonical 전달:** shared D1 `STAGE416_PRIVATE_ACCEPTANCE_ANY=YES`, pending069=NO 유지. final receipt Function HTTP200이 03:42:09, 03:42:50, 03:43:57, 03:46:05, 03:50:12에 관측됨.
+- **현재 최초 차단점:** `stage416SettlePrivateWindowCandidate`가 `416_SEAL_ACK_STILL_PENDING`으로 03:42:12, 03:42:50, 03:43:58, 03:46:05, 03:50:13 총 5회 오류. version39 due Task는 prior frozen seal ACK 대기 때문에 03:46:54 이후 매분 reschedule되어 final settle 완료 못함.
+- **판정:** RTDB stale EMPTY 수정은 실서버 PASS. Stage416 controlled E2E 전체는 **FAIL / ACK 단계 미완료**. 다음 수정 범위는 exact frozen seal ACK transaction 한 곳뿐이며, 사용자 추가 클릭/Task force-run/data reset 금지.
+- **보호:** app410 frozen likes, app411 Hosting, Worker/D1/R2/Rules/shared user data/main/production 비변경. 진단 자체 D1 write 0.
+
+---
 ## CURRENT — app411 controlled retry ACCEPTED / prior expired window D1 receipt 생성 / final ACK pending (2026-10-13 KST)
 
 - **사용자 화면 실증:** same-operation controlled retry가 `ACCEPTED`, receipt valid, version 39, local outbox server registered complete로 전환. 이전 `PRIOR_WINDOW_NEEDS_SEAL` 반복에서 탈출.

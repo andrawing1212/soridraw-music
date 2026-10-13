@@ -10,7 +10,7 @@ need("EXPLORE_LIKE_LOCAL_CATALOG_READY_135", '135 local catalog marker');
 need("const hasLocalLikeCatalog135 =", '135 local catalog readiness helper');
 need("const needsRepair = gap || readRepairTarget127(uid) > 0;", 'gap repair flag');
 need("requestRepair127(uid, signal.version);", 'gap repair request');
-need("if (pending[item.trackId]) continue;", 'local unsent like must win');
+need("if (isExploreLikeActivePending414(pending[item.trackId])) continue;", 'fresh explicit local unsent like must win');
 need("markLocalLikeCatalogReady135(uid);\n  markSeenLikeSignal127(uid, signal.version);", 'remote delta catalog persist');
 need("const missing = baselineReady127 ? [] : normalized.filter", 'verified complete catalog must remain local-first');
 need("return !cache.has(trackId);", 'partial catalog may verify only an unknown visible ID');

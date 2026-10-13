@@ -13,7 +13,8 @@ compiled = compiled
 assert(!/^import\s/m.test(compiled), 'Only the two mocked imports may be used');
 compiled += `
 module.exports = {
-  readExploreLikeIntent416, listExploreLikeIntents416, clearExploreLikeIntent416,
+  readExploreLikeIntent416, readExploreLikeIntentDetail416,
+  listExploreLikeIntents416, clearExploreLikeIntent416,
   subscribeExploreLikeIntent416, publishExploreLikeIntent416,
   settleExploreLikeIntent416,
 };`;
@@ -86,17 +87,25 @@ stopCold();
 const restartedB = makeClient(B.storage);
 const stopRestart = restartedB.api.subscribeExploreLikeIntent416(uid,
   (id, liked) => restartedB.notices.push({ id, liked }));
-assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), true,
-  'same browser reload must keep its already received and bounded private hint');
+assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), undefined,
+  'app415 reload-restored provisional hint must not outrank canonical personal membership');
+assert.equal(restartedB.api.readExploreLikeIntentDetail416(uid, track), null,
+  'app415 reload-restored provisional count must not repaint a canonical card');
+assert.equal(restartedB.api.listExploreLikeIntents416(uid)[track], undefined,
+  'app415 reload-restored provisional hint must not change My Likes membership');
 assert.equal(restartedB.notices.length, 0,
-  'reload restores only local viewer state without publishing another RTDB event');
-stopRestart();
-assert.equal(B.api.listExploreLikeIntents416(uid)[track], true, 'My Likes local candidate must see same provisional membership');
+  'reload-restored state stays silent until a genuinely new live event arrives');
+assert.equal(B.api.listExploreLikeIntents416(uid)[track], true,
+  'the still-live receiving session keeps its current-session provisional membership');
 assert.deepEqual(B.notices.at(-1), { id: track, liked: true });
 assert.equal(database.get(`userSync/${uid}/exploreLike`), undefined, 'accepted 127 signal unchanged');
 assert.equal(database.get('publicSync/exploreLike'), undefined, 'public signal unchanged');
 await A.api.publishExploreLikeIntent416(uid, like(false, op2));
 assert.equal(B.api.readExploreLikeIntent416(uid, track), false, 'latest same-track click wins');
+assert.equal(restartedB.api.readExploreLikeIntent416(uid, track), false,
+  'a genuinely newer live event after reload regains provisional authority');
+assert.deepEqual(restartedB.notices.at(-1), { id: track, liked: false });
+stopRestart();
 const afterFalse = B.notices.length;
 await A.api.settleExploreLikeIntent416(uid, [{ trackId: track, operationId: op1, status: 'accepted' }]);
 assert.equal(B.api.readExploreLikeIntent416(uid, track), false, 'stale operation settlement cannot remove newer intent');
@@ -211,5 +220,7 @@ console.log('STAGE416_PERMISSION_DENIED_SAFE_FALLBACK=PASS');
 console.log('STAGE416_CANONICAL_AND_PUBLIC_MUTATION_ZERO=PASS');
 console.log('STAGE416_EXISTING_ACCEPTED_PATH_AND_RULES_PRESERVED=PASS');
 console.log('STAGE416_RELOAD_SAME_DEVICE_RECENT_HINT_AND_REJECTION=PASS');
+console.log('APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS');
+console.log('APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS');
 console.log('STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS');
 console.log('STAGE416_LIVE_DEVICE_LATENCY=NOT_TESTED');

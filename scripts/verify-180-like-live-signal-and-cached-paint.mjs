@@ -81,6 +81,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     readRepairTarget127: () => 0,
     requestRepair127: () => { throw new Error('unexpected gap repair'); },
     readLikeOutbox: () => outbox,
+    isExploreLikeActivePending414: row => row?.explicitReplayEligible412 === true,
     persistLikeOutbox: (_uid, value) => { outbox = value; },
     readSnapshotPending127: () => ({ ...persistentPending }),
     getLikedStateCache: () => cache,
@@ -114,7 +115,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     results: [{ trackId: 'track-a', ownerUid: '', liked: false, likeCount: 0 }],
   });
   assert.equal(rendered.length, 1, 'stale signal must not repaint');
-  outbox = { 'track-a': { desiredLiked: false } };
+  outbox = { 'track-a': { desiredLiked: false, explicitReplayEligible412: true } };
   env.__apply('same-account', {
     version: 12, previousVersion: 11,
     results: [{ trackId: 'track-a', ownerUid: '', liked: false, likeCount: 0 }],

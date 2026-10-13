@@ -181,7 +181,76 @@ assert.equal(stale.accepted,false);
 assert.equal(stale.reason,'STALE_OR_DUPLICATE');
 assert.equal(Object.hasOwn(roots.privateLikeGlobalVersion416.devices[staleDevice],'accepted'),false);
 
+// Real concurrency regression: reservation A -> reservation B -> env B -> env A.
+// A must keep its exact operationId and rebase above B instead of being lost.
+const concurrentUid='concurrent-same-environment-user';
+const concurrentRoots={
+ privateLikeBatch416:null,
+ privateLikeGlobalVersion416:null,
+};
+let firstGlobalPaused=false;
+let releaseFirstGlobal;
+let firstGlobalCommitted;
+const firstGlobalCommittedPromise=new Promise(resolve=>{firstGlobalCommitted=resolve;});
+const releaseFirstGlobalPromise=new Promise(resolve=>{releaseFirstGlobal=resolve;});
+const concurrentClone=value=>value==null?value:structuredClone(value);
+const concurrentDatabase={ref:path=>{
+ const suffix='/'+concurrentUid;
+ assert.ok(path.endsWith(suffix));
+ const root=path.slice(0,-suffix.length);
+ assert.ok(Object.hasOwn(concurrentRoots,root),`unexpected concurrent root ${root}`);
+ return {
+  transaction:async update=>{
+   const before=concurrentClone(concurrentRoots[root]);
+   const next=update(concurrentClone(before));
+   if(next===undefined)return {committed:false,snapshot:{val:()=>concurrentClone(concurrentRoots[root])}};
+   concurrentRoots[root]=concurrentClone(next);
+   if(root==='privateLikeGlobalVersion416'&&!firstGlobalPaused){
+    firstGlobalPaused=true;
+    firstGlobalCommitted();
+    await releaseFirstGlobalPromise;
+   }
+   return {committed:true,snapshot:{val:()=>concurrentClone(concurrentRoots[root])}};
+  },
+  get:async()=>({val:()=>concurrentClone(concurrentRoots[root])}),
+ };
+}};
+const concurrentA={
+ trackId:'concurrent-A',liked:true,
+ operationId:'00000000-0000-4000-8000-000000000051',
+ deviceId:'00000000-0000-4000-8000-000000000052',deviceSequence:1,
+};
+const concurrentB={
+ trackId:'concurrent-B',liked:true,
+ operationId:'00000000-0000-4000-8000-000000000053',
+ deviceId:'00000000-0000-4000-8000-000000000054',deviceSequence:1,
+};
+const aPromise=recordUserPrivateClick416(
+ concurrentDatabase,concurrentUid,concurrentA,5,1_700_001_000_000,false,
+ 'privateLikeBatch416','privateLikeGlobalVersion416');
+await firstGlobalCommittedPromise;
+const bPromise=recordUserPrivateClick416(
+ concurrentDatabase,concurrentUid,concurrentB,5,1_700_001_000_001,false,
+ 'privateLikeBatch416','privateLikeGlobalVersion416');
+const bResult=await bPromise;
+assert.equal(bResult.accepted,true);
+const bVersion=bResult.version;
+releaseFirstGlobal();
+const aResult=await aPromise;
+assert.equal(aResult.accepted,true);
+assert.ok(aResult.version>bVersion,
+ 'late A must rebase above already-committed B instead of throwing/loss');
+const aKey=createHash('sha256').update(concurrentA.trackId).digest('hex');
+const bKey=createHash('sha256').update(concurrentB.trackId).digest('hex');
+assert.equal(concurrentRoots.privateLikeBatch416.pending[aKey].operationId,concurrentA.operationId);
+assert.equal(concurrentRoots.privateLikeBatch416.pending[bKey].operationId,concurrentB.operationId);
+assert.equal(concurrentRoots.privateLikeBatch416.pending[aKey].version,aResult.version);
+assert.equal(concurrentRoots.privateLikeBatch416.pending[bKey].version,bVersion);
+assert.equal(concurrentRoots.privateLikeBatch416.version,aResult.version);
+assert.equal(concurrentRoots.privateLikeBatch416.window.revision,aResult.version);
+
 console.log('STAGE416_PREVIEW_V39_GLOBAL_BOOTSTRAP_NO_MIGRATION=PASS');
+console.log('STAGE416_CONCURRENT_RESERVATION_REBASE_NO_LOST_CLICK=PASS');
 console.log('STAGE416_PREVIEW_TEST_PRODUCTION_PREVIEW_STRICT_INTERLEAVING=PASS');
 console.log('STAGE416_GLOBAL_RESERVATION_IS_NOT_ACCEPTANCE=PASS');
 console.log('STAGE416_PRIOR_SEAL_RETRY_REUSES_VERSION_AND_PERSISTS=PASS');

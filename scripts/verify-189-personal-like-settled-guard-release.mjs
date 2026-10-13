@@ -56,6 +56,12 @@ const createHarness = ({ markers = {}, unresolved = {}, outbox = {}, responses =
       Object.assign(unresolved, value);
     },
     readLikeOutbox: () => outbox,
+    // app414 production baseline now consumes only fresh explicit-click rows.
+    // Historical unmarked app400-411 rows remain preserved but have no UI/
+    // reconciliation authority.
+    readActiveLikeOutbox414: () => Object.fromEntries(
+      Object.entries(outbox).filter(([, row]) => row?.explicitReplayEligible412 === true),
+    ),
     readCurrentPersonalLikeRevision130: uid => storage.get('revision:' + uid) || '',
     readSeenLikeSignal127: () => signal,
     readRepairTarget127: () => 0,
@@ -147,7 +153,7 @@ await provenanceOnly.ensure({ uid });
 assert.equal(Object.keys(provenanceOnly.unresolved).length, 5,
   'persistent provenance and accepted pre-aggregate response cannot release guards');
 
-const liveOutbox = { 'track-10': { desiredLiked: false } };
+const liveOutbox = { 'track-10': { desiredLiked: false, explicitReplayEligible412: true } };
 const protectedClick = createHarness({
   markers: { [key('baseline127')]: '1' }, unresolved: stale(), outbox: liveOutbox,
   responses: [snapshot(true)],
@@ -155,6 +161,17 @@ const protectedClick = createHarness({
 await protectedClick.ensure({ uid });
 assert.equal(protectedClick.unresolved['track-10'], false, 'live outbox guard remains protected');
 assert.equal(protectedClick.cache.get('track-10'), false, 'unsent local intention wins over settlement');
+
+const quarantinedHistoricalOutbox = { 'track-10': { desiredLiked: false } };
+const quarantinedOldRow = createHarness({
+  markers: { [key('baseline127')]: '1' }, unresolved: stale(), outbox: quarantinedHistoricalOutbox,
+  responses: [snapshot(true)],
+});
+await quarantinedOldRow.ensure({ uid });
+assert.equal(quarantinedOldRow.unresolved['track-10'], undefined,
+  'app414 historical unmarked outbox cannot block fresh settled guard release');
+assert.equal(quarantinedOldRow.cache.get('track-10'), true,
+  'app414 canonical settled membership outranks historical quarantined row');
 
 const raced = createHarness({
   markers: { [key('baseline127')]: '1' }, unresolved: stale(),
@@ -247,6 +264,7 @@ assert.equal(await workerContext.verify189(workerScenario({ finalEtag: 'changed'
 console.log('APP189_PRODUCTION_BASELINE_PATH_5_TO_10=PASS');
 console.log('APP189_APP156_MARKERS_ONE_TIME_ENTRY=PASS');
 console.log('APP189_FRESH_PROOF_AND_LIVE_OUTBOX=PASS');
+console.log('APP414_HISTORICAL_OUTBOX_NO_BASELINE_AUTHORITY=PASS');
 console.log('APP189_ACCEPTED_PREAGGREGATE_AND_RACE_FAIL_CLOSED=PASS');
 console.log('APP189_HEALTHY_CACHE_D1_R0=PASS');
 console.log('APP164_ONE_TIME_PARTIAL_REPAIR_THEN_APP_UPDATE_D1_R0=PASS');

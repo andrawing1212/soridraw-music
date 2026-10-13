@@ -1,0 +1,67 @@
+name: TEMP Stage416 Lost Click QA
+on:
+  push:
+    branches:
+      - gpt56/stage416-lost-click-fix
+permissions:
+  contents: read
+concurrency:
+  group: temp-stage416-lost-click-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Stage416 lost-click and environment isolation
+        run: |
+          set -euo pipefail
+          node scripts/verify-422-stage416-global-version-interleaving.mjs
+          node scripts/verify-421-stage416-environment-isolation.mjs
+          node scripts/verify-416-like-batch-master.mjs
+          node scripts/verify-416-private-callable-master.mjs
+          node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-416-server-only-click.mjs
+          node scripts/verify-416-private-deadline.mjs
+          node scripts/verify-416-server-rtdb-seal.mjs
+          node scripts/verify-416-complete-private-window.mjs
+          node scripts/verify-416-expired-window-requeue-e2e.mjs
+          node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-416-preview-backend-release.mjs
+      - name: Protected like regressions
+        run: |
+          set -euo pipefail
+          node scripts/verify-416-private-like-intent.mjs
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
+          node scripts/verify-178-final-like-architecture.mjs
+          node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-192-cross-account-public-like-live.mjs
+          node scripts/verify-197-new-public-track-like.mjs
+          node scripts/verify-390-like-acceptance-receipt.mjs
+          node scripts/verify-412-stale-like-outbox-gate.mjs
+      - name: App TypeScript
+        run: npm run lint
+      - name: App Build
+        run: npm run build
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Functions TypeScript
+        working-directory: functions
+        run: npm run build
+      - name: Safety
+        run: |
+          echo 'TEMP_QA_ONLY=PASS'
+          echo 'DEPLOYMENT=0'
+          echo 'SHARED_DATA_CHANGE=0'

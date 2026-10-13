@@ -1,3 +1,15 @@
+## NEXT — app416 GPT-6 독립 재감사 → PASS 시 Firebase PREVIEW Hosting만 배포 (2026-10-13 KST)
+
+- **감사 제품 기준 commit:** `5b4d50b58fc3072f5fd970a53367746d9cd68222`; Quality Run `38388071448` SUCCESS.
+- **직전 app415 FAIL 포인트 재검증 필수:** reload-restored old pending이 동일 operationId의 late `accepted`를 받아도 heart/count/My Likes/app410 repair blocker 권한을 다시 얻지 못해야 한다.
+- **반대 보호:** reload 후 genuinely newer live `pending`은 기존처럼 즉시 provisional heart를 반영해야 하며 fresh explicit click/local-first/5초 canonical batch를 깨면 안 된다.
+- **보호 범위:** app410 PC↔mobile convergence, app412 historical outbox server/UI quarantine, app413 public count, app414 old-outbox UI quarantine, app390/app141 ordering, 다른 사용자 공개 좋아요 자동 반영, warm revisit R0/W0.
+- **비용 합격선:** update/page entry/re-entry 추가 D1/Firestore/Worker data read/write 0. cache reset/migration/backfill/delete 금지.
+- **PASS 후:** GPT-5.6 개발방에서 감사받은 exact app416 product commit을 Firebase PREVIEW Hosting에만 배포. app416은 client-only이므로 Worker/Functions/Rules는 재배포하지 않는다.
+- **실기기 합격선:** 업데이트 직후 여러 곡 heart 정확, PC↔mobile 양방향 like/unlike 자동 수렴, refresh 후 유지, 5분 이상 시간경과 후 유지, Explore 재진입 후 유지. 다른 사용자 public count 경로는 현재 사용자 실사용 PASS를 보호.
+- **Stage416:** 내부 Stage416 batch/cutover는 계속 OFF/HOLD. 앱 버전 app416과 혼동하지 않는다.
+
+---
 ## NEXT — app415 GPT-6 독립 재감사 → PASS 시 Firebase PREVIEW Hosting만 배포 (2026-10-13 KST)
 
 - **감사 제품 기준 commit:** `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`; Quality Run `38386251533` SUCCESS.

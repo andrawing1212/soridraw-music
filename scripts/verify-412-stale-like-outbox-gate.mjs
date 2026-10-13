@@ -12,7 +12,6 @@ const between=(startMarker,endMarker)=>{
 
 assert.match(source,/explicitReplayEligible412\?: true/);
 assert.match(source,/row\.explicitReplayEligible412 === true/);
-assert.match(source,/const isExplicitReplayEligible412[\s\S]*?entry\.explicitReplayEligible412 === true/);
 assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE = false/);
 

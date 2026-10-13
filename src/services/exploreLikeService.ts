@@ -1903,13 +1903,6 @@ const eligibleGuardedMutation420 = (entry: ExploreLikePendingMutation): boolean 
         guardStatus: entry.guardStatus420, guardPermit420: entry.guardPermit420,
       }));
 
-// app412 incident guard: app409 could not distinguish an old experimental
-// pending row from a new explicit click. An unmarked historical row must never
-// create a canonical write merely because Auth became ready, a page hydrated,
-// or the tab exited. A new explicit click replaces it and sets this marker.
-const isExplicitReplayEligible412 = (entry: ExploreLikePendingMutation): boolean =>
-  entry.explicitReplayEligible412 === true;
-
 const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbox)
   .reduce((latest, pending) => Math.max(latest, pending.updatedAt || 0), 0);
 
@@ -1938,7 +1931,7 @@ const schedulePendingFlush = (user: User) => {
   const outbox = readLikeOutbox(uid);
   const eligible = Object.values(outbox).filter((pending) =>
     (pending.retryCount || 0) === 0 &&
-    isExplicitReplayEligible412(pending) &&
+    pending.explicitReplayEligible412 === true &&
     eligibleGuardedMutation420(pending));
   if (!eligible.length) {
     // A failed/ambiguous write must never become an idle or navigation retry
@@ -1972,7 +1965,7 @@ if (!STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && typeof window !== 'undefined') {
     const hasRecoverablePending409 = Object.values(readLikeOutbox(user.uid))
       .some((pending) =>
         (pending.retryCount || 0) === 0 &&
-        isExplicitReplayEligible412(pending) &&
+        pending.explicitReplayEligible412 === true &&
         eligibleGuardedMutation420(pending));
     if (hasRecoverablePending409) schedulePendingFlush(user);
   });
@@ -2027,7 +2020,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
     // replay writes automatically from idle timers, rerenders, or navigation.
     .filter((pending) =>
       (pending.retryCount || 0) === 0 &&
-      isExplicitReplayEligible412(pending) &&
+      pending.explicitReplayEligible412 === true &&
       eligibleGuardedMutation420(pending))
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
@@ -2365,7 +2358,7 @@ const installExitFlush413 = () => {
     const eligible = Object.values(readLikeOutbox(current.uid))
       .some((pending) =>
         (pending.retryCount || 0) === 0 &&
-        isExplicitReplayEligible412(pending) &&
+        pending.explicitReplayEligible412 === true &&
         eligibleGuardedMutation420(pending));
     if (!eligible) return;
     exitFlushArmed413.add(current.uid);
@@ -2468,7 +2461,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
 
   const outbox = readLikeOutbox(user.uid);
   if (Object.values(outbox).some((pending) =>
-    (pending.retryCount || 0) === 0 && isExplicitReplayEligible412(pending))) {
+    (pending.retryCount || 0) === 0 && pending.explicitReplayEligible412 === true)) {
     installExitFlush413();
     schedulePendingFlush(user);
   }

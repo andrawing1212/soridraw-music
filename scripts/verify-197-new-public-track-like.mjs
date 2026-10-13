@@ -34,6 +34,9 @@ const createHarness = ({ complete, existing = {}, pending = {}, unresolved = {},
     readLikeLocal127: () => '',
     hasLocalLikeCatalog135: () => true, // Existing device, even if R2 is partial.
     readLikeOutbox: () => pending,
+    readActiveLikeOutbox414: () => Object.fromEntries(
+      Object.entries(pending).filter(([, row]) => row?.explicitReplayEligible412 === true),
+    ),
     // Existing app164 first-like regression must remain valid without a
     // Phase416 optional private-intent signal or new RTDB subscription.
     readExploreLikeIntent416: () => undefined,
@@ -88,13 +91,24 @@ assert.deepEqual(complete.calls, [], 'warm revisit must not read server');
 
 const pending = createHarness({
   complete: true, existing: { 'existing-liked': true },
-  pending: { 'newly-published': { desiredLiked: true, retryCount: 0 } },
+  pending: { 'newly-published': { desiredLiked: true, retryCount: 0, explicitReplayEligible412: true } },
 });
 assert.deepEqual(await pending.service.getExploreLikedTrackIds(pending.user, ['newly-published']), ['newly-published']);
 assert.equal(pending.service.readExploreTrackLikeMembership127(pending.user.uid, 'newly-published'), true,
   'unsubmitted local click wins');
 assert.equal(pending.cache.has('newly-published'), false, 'new negative seed must not overwrite pending click');
 assert.equal(pending.writes, 0);
+
+const quarantined = createHarness({
+  complete: true,
+  pending: { 'newly-published': { desiredLiked: true, retryCount: 0 } },
+});
+assert.deepEqual(await quarantined.service.getExploreLikedTrackIds(
+  quarantined.user, ['newly-published']), [],
+  'app414 historical unmarked row is preserved but cannot paint a filled heart');
+assert.equal(quarantined.service.readExploreTrackLikeMembership127(
+  quarantined.user.uid, 'newly-published'), false,
+  'app414 complete canonical baseline outranks historical quarantine');
 
 const accepted = createHarness({ complete: true, unresolved: { 'newly-published': true } });
 assert.deepEqual(await accepted.service.getExploreLikedTrackIds(accepted.user, ['newly-published']), ['newly-published']);
@@ -121,3 +135,4 @@ console.log('APP197_NEW_PUBLISHED_FIRST_LIKE_READY=PASS');
 console.log('APP197_EXISTING_HEART_AND_UNSENT_INTENT_PROTECTED=PASS');
 console.log('APP197_PARTIAL_CATALOG_TARGETED_ONLY=PASS');
 console.log('APP197_WARM_REVISIT_R0_W0=PASS');
+console.log('APP414_NEW_PUBLIC_TRACK_QUARANTINED_OUTBOX_NO_UI_AUTHORITY=PASS');

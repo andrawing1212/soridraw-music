@@ -1,3 +1,15 @@
+## CURRENT — Stage416 개인 1분 / 공개 5분 서버 설정 확인, lost-click 차단점 단일 작업 진행 중 (2026-10-13 KST)
+
+- 사용자 Master가 관리자 `좋아요 저장·공개 집계 주기`에서 **개인 최종상태 1분 / 공개 공동집계 5분**으로 저장.
+- read-only diagnostic trigger `8b0e48a3fdb5cc36369914fba0e96ebf30248384`, Run `38414453319` SUCCESS.
+- 실제 shared RTDB 설정 확인: `STAGE416_LIVE_PRIVATE_MINUTES 1`, `STAGE416_LIVE_PUBLIC_MINUTES 5`, `STAGE416_TIMING_READONLY=PASS`.
+- 진단 중 D1 write 0, 배포 0. `STAGE416_PRIVATE_ACCEPTANCE_ANY=YES`, `STAGE416_PENDING_069_ANY=NO` 확인.
+- 일반 Stage416 client는 여전히 OFF. 현재 app416 좋아요 실사용 경로는 변경/배포하지 않음.
+- 현재 단일 차단점: Issue #118 corrected commit `142420...`의 global version 선할당이 env pending 실제 저장보다 먼저 확정되어 same-operation retry에서 click 유실 가능.
+- Issue #118에 최신 preview 기준 lost-click 한 건만 Codex 재요청(comment `6148102510`). D1 schema/Worker/release workflow/client activation/deploy 금지.
+- 다음: corrected branch/final SHA가 나오면 독립 코드·실행형 verifier 확인. 이 blocker PASS 전 개인 1분 일반 사용자 ON 금지.
+
+---
 ## CURRENT — app416 사용자 실사용 PASS 처리 / 다음 작업은 5분 공동집계만 진행 (2026-10-13 KST)
 
 - **사용자 판단:** app416 좋아요 실사용감은 현재 수준에서 PASS. 서버 확정 전 짧은 새로고침 과도구간은 원인 파악 완료 상태로 유지하고 추가 수정하지 않음.

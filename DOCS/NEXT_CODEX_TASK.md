@@ -1,3 +1,14 @@
+## NEXT — app415 GPT-6 독립 재감사 → PASS 시 Firebase PREVIEW Hosting만 배포 (2026-10-13 KST)
+
+- **감사 제품 기준 commit:** `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`; Quality Run `38386251533` SUCCESS.
+- **감사 핵심:** reload-restored 416 row가 heart/count/My Likes/app410 repair를 다시 덮거나 막을 경로가 없는지, fresh current-session live 416과 explicit local click은 그대로 빠르게 작동하는지 독립 확인.
+- **보호 범위:** app410 PC↔mobile convergence, app412 historical outbox server/UI quarantine, app413 public count, app399 5-second canonical batch, app390/app141 ACK ordering, 다른 사용자 공개 좋아요 자동 반영, Local First / warm revisit R0/W0.
+- **비용:** update/page entry/re-entry 때문에 새 D1/Firestore/Worker read/write가 생기면 FAIL. 캐시 전체 reset/migration/backfill 금지.
+- **PASS 후 배포:** GPT-5.6 개발방에서 감사받은 exact app415 code만 Firebase PREVIEW Hosting에 배포. app415은 client-only이므로 Worker/Functions/Rules는 재배포하지 않는다.
+- **실기기 합격선:** 업데이트 직후 여러 곡 하트 정확, PC↔mobile like/unlike 자동 수렴, 한쪽 refresh 후 유지, 5분 이상 시간경과 후 유지, 페이지 재진입 후 유지. 다른 사용자 공개 count 경로는 사용자 실사용 PASS 상태를 보호.
+- **Stage416:** 일반 Stage416 batch/cutover는 계속 OFF/HOLD이며 이번 app415 보완과 혼합하지 않는다.
+
+---
 ## NEXT — app414 GPT-6 독립 감사 → PASS 시 PREVIEW 배포 (2026-10-13 KST)
 
 - **공식 자동검증 완료:** candidate `73d70b916b9c5aa5b303b753f0c195f2fc059b2c`, Quality Run `38382577342` SUCCESS. TypeScript / Build / app410 / app412 / app390 / app141 / app197 / live RTDB Rules read-only 검증 PASS.

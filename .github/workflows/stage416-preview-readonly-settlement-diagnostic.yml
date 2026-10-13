@@ -288,6 +288,39 @@ jobs:
           print('STAGE416_24H_TRACE_NO_UID_NO_TASK_ID_NO_PAYLOAD=PASS')
           PY
 
+      - name: Audit 24h EMPTY timing distribution read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,re,collections
+          project='soridraw-app-866a5'
+          expr=('resource.type="cloud_run_revision" AND '
+                'resource.labels.service_name="stage416settleprivatewindowcandidate"')
+          p=subprocess.run(['gcloud','logging','read',expr,'--project',project,
+            '--freshness=24h','--limit=5000','--format=json'],
+            capture_output=True,text=True)
+          if p.returncode: raise SystemExit('STAGE416_EMPTY_TIMELINE_READ_DENIED')
+          rows=json.loads(p.stdout or '[]')
+          pat=re.compile(r'SETTLEMENT_TASK_NOT_DELIVERED\s+EMPTY',re.I)
+          times=[]
+          per_hour=collections.Counter()
+          for row in rows:
+            payload=row.get('textPayload') or (row.get('jsonPayload') or {}).get('message') or ''
+            if not pat.search(str(payload)): continue
+            stamp=str(row.get('timestamp') or '')[:19]
+            if stamp:
+              times.append(stamp)
+              per_hour[stamp[:13]]+=1
+          times.sort()
+          print('STAGE416_24H_EMPTY_COUNT='+str(len(times)))
+          print('STAGE416_24H_EMPTY_FIRST='+str(times[0] if times else 'NONE'))
+          print('STAGE416_24H_EMPTY_LAST='+str(times[-1] if times else 'NONE'))
+          print('STAGE416_24H_EMPTY_PER_HOUR='+json.dumps(dict(sorted(per_hour.items()))))
+          print('STAGE416_24H_EMPTY_SAFE_TIMES='+json.dumps(times))
+          print('STAGE416_24H_EMPTY_TIMELINE_NO_UID_NO_TASK_ID_NO_PAYLOAD=PASS')
+          PY
+
       - name: Verify callable-to-queue runtime identity without IAM changes
         shell: bash
         run: |

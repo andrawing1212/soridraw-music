@@ -6,8 +6,10 @@ import { realtimeDb } from '../firebase';
 const INTENT_MAX_416 = 50;
 const INTENT_TTL_MS_416 = 60 * 60_000;
 const INTENT_LIVE_DELIVERY_MAX_MS_416 = 30_000;
-// Restore ONLY a previously received private hint on the SAME device.
-// The longest Master window is 20m; after that provisional hints expire.
+// Persist a previously received private hint on the SAME device only for
+// exact cleanup/reconciliation across reload. app415 deliberately gives a
+// reload-restored row NO UI/My-Likes authority until a genuinely new live
+// event arrives. The longest Master window still bounds storage retention.
 // This is NOT canonical membership and never causes a server mutation on load.
 const INTENT_RELOAD_GRACE_MS_416 = 30_000;
 const INTENT_RELOAD_MAX_MS_416 = 20 * 60_000 + INTENT_RELOAD_GRACE_MS_416;

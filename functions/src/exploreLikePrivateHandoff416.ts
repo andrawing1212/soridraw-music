@@ -6,7 +6,8 @@ import {createHmac} from 'node:crypto';
 // No endpoint or secret is stored in app bundles.
 export type PrivateSeal416={
  id:string;version:number;closedAtMs:number;
- rows:Array<{trackId:string;liked:boolean;operationId:string;mutationAt:number}>;
+ rows:Array<{trackId:string;liked:boolean;operationId:string;mutationAt:number;
+   deviceId?:string;deviceSequence?:number;version?:number}>;
 };
 export type PrivateHandoffReceipt416={
  accepted:boolean;duplicate:boolean;queued:boolean;version:number;batchIds:string[];

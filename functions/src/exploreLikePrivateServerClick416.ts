@@ -16,7 +16,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
   window?:Window416|null;pending?:Record<string,{trackId:string;liked:boolean;
   operationId:string;deviceId:string;deviceSequence:number;version:number;mutationAt:number}>|null;
   sealed?:unknown};
-type GlobalVersion416={version?:number;devices?:Record<string,{
+type GlobalVersion416={version?:number;settledVersion?:number;devices?:Record<string,{
   deviceSequence:number;operationId:string;trackId:string;liked:boolean;version:number;
 }>};
 
@@ -35,9 +35,11 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   decision={reserved:false,reason:'UNDETERMINED'};
   const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{}) as GlobalVersion416;
   const version=Number(state.version||0);
+  const settledVersion=Number(state.settledVersion||0);
   const devices=state.devices||{};
   const prior=devices[click.deviceId];
   if(!Number.isSafeInteger(version)||version<0||version>=Number.MAX_SAFE_INTEGER||
+     !Number.isSafeInteger(settledVersion)||settledVersion<0||settledVersion>version||
      !devices||typeof devices!=='object'||Array.isArray(devices))
    throw Error('416_GLOBAL_VERSION_STATE_CORRUPT');
   if(prior&&click.deviceSequence<=prior.deviceSequence){
@@ -57,7 +59,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
      throw Error('416_GLOBAL_VERSION_EXHAUSTED');
     decision={reserved:true,reason:'GLOBAL_RESERVATION_REBASED',version:rebased,
       highWater:rebased,createdDevice:false};
-    return {version:rebased,devices:{...devices,[click.deviceId]:{
+    return {...state,version:rebased,devices:{...devices,[click.deviceId]:{
      deviceSequence:click.deviceSequence,operationId:click.operationId,
      trackId:click.trackId,liked:click.liked,version:rebased,
     }}};
@@ -73,7 +75,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
    throw Error('416_GLOBAL_VERSION_EXHAUSTED');
   decision={reserved:true,reason:'GLOBAL_VERSION_RESERVED',version:next,
     highWater:next,createdDevice:!prior};
-  return {version:next,devices:{...devices,[click.deviceId]:{
+  return {...state,version:next,devices:{...devices,[click.deviceId]:{
    deviceSequence:click.deviceSequence,operationId:click.operationId,
    trackId:click.trackId,liked:click.liked,version:next,
   }}};

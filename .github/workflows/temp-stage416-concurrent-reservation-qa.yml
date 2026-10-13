@@ -1,0 +1,47 @@
+name: TEMP Stage416 Concurrent Reservation QA
+on:
+  push:
+    branches:
+      - gpt56/stage416-lost-click-fix
+permissions:
+  contents: read
+concurrency:
+  group: temp-stage416-concurrent-reservation-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app
+        run: npm ci --no-audit --no-fund
+      - name: Concurrent reservation inversion
+        run: |
+          set -euo pipefail
+          node scripts/verify-422-stage416-global-version-interleaving.mjs
+          node scripts/verify-421-stage416-environment-isolation.mjs
+          node scripts/verify-416-private-callable-master.mjs
+          node scripts/verify-416-server-only-click.mjs
+          node scripts/verify-416-expired-window-requeue-e2e.mjs
+          node scripts/verify-416-private-like-intent.mjs
+      - name: App TypeScript
+        run: npm run lint
+      - name: App Build
+        run: npm run build
+      - name: Install Functions
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Functions TypeScript
+        working-directory: functions
+        run: npm run build
+      - name: Safety
+        run: |
+          echo 'CONCURRENT_RESERVATION_QA=PASS'
+          echo 'DEPLOYMENT=0'
+          echo 'SHARED_DATA_CHANGE=0'

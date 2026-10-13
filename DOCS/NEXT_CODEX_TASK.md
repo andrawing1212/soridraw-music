@@ -1,3 +1,14 @@
+## NEXT — app414 자동검증 → GPT-6 독립 감사 → PASS 시 PREVIEW 배포 (2026-10-13 KST)
+
+- **고정 후보:** 현재 app414 preview HEAD를 자동 TypeScript/Build/좋아요 회귀검사까지 완료한 뒤 final SHA를 고정한다.
+- **필수 자동검증:** `verify-127-atomic-personal-like.mjs`, app410 retained repair, app412 stale-outbox write quarantine, app413 same-account count, TypeScript, Build. historical unmarked outbox를 삭제하지 않는 것도 확인.
+- **감사:** 자동검증 PASS 후 GPT-6 감사방에서 final SHA를 독립 감사. 코드 수정/commit/push/deploy/user-data 변경 금지.
+- **PASS 후:** GPT-5.6 개발방에서 감사받은 exact commit만 Firebase PREVIEW Hosting에 배포하고 `preview.soridraw.com` exact build 확인. Worker/Functions/Rules 변경이 필요 없는 client-only 수정이면 재배포하지 않는다.
+- **실기기 합격선:** 여러 곡에서 like/unlike 첫 동기화뿐 아니라 5분 이상 유지, 한쪽 새로고침, 페이지 재진입, PC↔모바일 반대 방향에서도 filled/empty membership이 스스로 되돌아가지 않아야 한다. 페이지 이동을 동기화 조건으로 인정하지 않는다.
+- **비용 합격선:** 변경 없는 업데이트/진입/재진입 추가 D1/Firestore data read/write 0 목표. 이번 app414 자체는 새 서버 IO를 추가하지 않는다.
+- **Stage416:** 일반 client OFF / HOLD 유지. app414 검증과 섞지 않는다.
+
+---
 ## NEXT — app413 실기기 one-account-one-like 확인 / Stage416 HOLD (2026-10-13 KST)
 
 - **현재 PREVIEW:** app413 Hosting Run `38365644196` SUCCESS, Worker Run `38365460909` SUCCESS. TEST/PRODUCTION unchanged.

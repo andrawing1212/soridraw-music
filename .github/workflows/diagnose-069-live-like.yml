@@ -56,20 +56,20 @@ jobs:
               ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks
             FROM tracks t
             LEFT JOIN track_stats s ON s.track_id=t.id
-            WHERE t.title = '성적표 대소동';
+            WHERE t.title = '창문을 조금 열고(테스트)';
           " --json > "$RUNNER_TEMP/specified-track-readonly.json"
           # Exact D1 title may lag behind the public Explore card. Resolve
           # one visible public search result first; then use the canonical ID
           # with an indexed read. No user identities or raw IDs are logged.
           curl -fsS -G --max-time 20 -H 'Origin: https://preview.soridraw.com' \
-            --data-urlencode 'q=성적표 대소동' \
+            --data-urlencode 'q=창문을 조금 열고(테스트)' \
             'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/search' \
             > "$RUNNER_TEMP/target-public-search.json"
           node - <<'NODE'
           const fs=require('fs');
           const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target-public-search.json','utf8'));
           const items=payload?.data?.items || [];
-          const chosen=items.find(row=>String(row?.title||'').trim()==='성적표 대소동');
+          const chosen=items.find(row=>String(row?.title||'').trim()==='창문을 조금 열고(테스트)');
           const id=String(chosen?.id||'').trim();
           if(id && !/^[a-zA-Z0-9_-]{1,120}$/.test(id))throw Error('Unsafe ID from public search');
           fs.writeFileSync(process.env.RUNNER_TEMP+'/target-track-id.txt',id);

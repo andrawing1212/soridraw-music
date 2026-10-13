@@ -229,7 +229,7 @@ if(appVersion>=409){
     'startup recovery must inspect only the durable local outbox');
   assert.match(source,/hasRecoverablePending409\) schedulePendingFlush\(user\)/,
     'eligible pending click settles without waiting for Explore card hydration');
-  const recoveryMarker=appVersion>=412?'// app412:':'// app409:';
+  const recoveryMarker=appVersion>=412?'// app412: Auth-ready recovery':'// app409:';
   const recoveryStart=source.indexOf(recoveryMarker);
   assert.ok(recoveryStart>=0,'startup recovery marker missing');
   const startupRecovery=source.slice(recoveryStart,recoveryStart+1400);

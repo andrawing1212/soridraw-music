@@ -308,10 +308,13 @@ const transitionSource = service.slice(transitionStart, transitionEnd)
   // Strip *all* exports in this extracted helper block: it also contains
   // exported clock/UUID helpers, and new Function has no CommonJS exports.
   .replaceAll('export const ', 'const ');
-const js = ts.transpileModule(transitionSource + '; return computeExploreLikeAction127;', {
-  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
-}).outputText;
-const compute = new Function(js)();
+const js = ts.transpileModule(
+  transitionSource + '; return { computeExploreLikeAction127, stabilizeExploreLikeOptimisticCount413 };',
+  { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
+).outputText;
+const transitions127 = new Function(js)();
+const compute = transitions127.computeExploreLikeAction127;
+const stabilize413 = transitions127.stabilizeExploreLikeOptimisticCount413;
 assert.deepEqual(compute(false, true, 0), { liked: true, likeCount: 1 });
 assert.deepEqual(compute(false, true, 1), { liked: true, likeCount: 2 }, 'retain another user\'s like');
 assert.deepEqual(compute(true, false, 2), { liked: false, likeCount: 1 }, 'unlike only the current user');
@@ -321,6 +324,19 @@ assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeati
 assert.deepEqual(compute(true, true, 0), { liked: true, likeCount: 1 }, 'filled heart can never render with zero total');
 assert.deepEqual(compute(true, false, 0), { liked: false, likeCount: 0 }, 'stale impossible zero is repaired before unlike delta');
 assert.deepEqual(compute(false, false, 0), { liked: false, likeCount: 0 }, 'unliked zero remains zero');
+
+assert.equal(stabilize413(false, false, true, 1, 2), 1,
+  'app413 stale empty heart + existing public one must not display a fake second like');
+assert.equal(stabilize413(false, false, true, 0, 1), 1,
+  'app413 genuine first like may still paint one immediately');
+assert.equal(stabilize413(false, false, true, 3, 4), 3,
+  'app413 ambiguous positive public count stays unchanged until canonical ACK');
+assert.equal(stabilize413(true, false, true, 1, 2), 2,
+  'an active explicit pending row keeps its normal coalesced optimistic math');
+assert.equal(stabilize413(false, true, false, 2, 1), 1,
+  'normal unlike math remains unchanged');
+assert.match(service, /stabilizeExploreLikeOptimisticCount413\(\s*Boolean\(existing\), baseLiked, liked, baseLikeCount, optimisticAction127\.likeCount/);
+console.log('413_STALE_EMPTY_HEART_NO_DOUBLE_PUBLIC_COUNT=PASS');
 
 // An in-flight true can reach canonical D1 after the same user's later false.
 // Compare the later intent against the earlier accepted desired state rather

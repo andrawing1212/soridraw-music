@@ -1097,6 +1097,31 @@ async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
   return response.json().catch(() => ({}));
 }
 
+// SORIDRAW_APP413_EXACT_SETTLED_LIKE_COUNT_20261013
+// Only after the exact 069 batch is proven settled, read the canonical public
+// count for those changed track IDs. This is one bounded changed-data SELECT
+// (max 50 IDs), never a Feed/profile/account scan and never a page-entry read.
+async function readExactSettledLikeCounts413(env, rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  if (!sourceRows.length || sourceRows.length > 50 || !env?.DB?.prepare) return null;
+  const ids = [...new Set(sourceRows.map((row) => String(row?.trackId || '').trim()))];
+  if (ids.length !== sourceRows.length || ids.some((id) => !id || id.length > 512)) return null;
+  const placeholders = ids.map(() => '?').join(',');
+  const result = await env.DB.prepare(
+    'SELECT t.id,COALESCE(s.like_count,0) AS like_count FROM tracks t ' +
+    'LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id IN (' + placeholders + ')'
+  ).bind(...ids).all();
+  const countById = new Map();
+  for (const row of result?.results || []) {
+    const id = String(row?.id || '').trim();
+    const count = Number(row?.like_count);
+    if (!ids.includes(id) || !Number.isSafeInteger(count) || count < 0 || countById.has(id)) return null;
+    countById.set(id, count);
+  }
+  if (countById.size !== ids.length) return null;
+  return sourceRows.map((row) => ({ ...row, likeCount: countById.get(String(row.trackId)) }));
+}
+
 async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
   const url = new URL(request.url);
   if (request.method !== 'POST' || url.pathname !== EXPLORE_LIKE_BATCH_ROUTE_103 || !response.ok) return response;
@@ -1130,14 +1155,25 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
       const headers = new Headers(response.headers);
       headers.set('Content-Type', 'application/json; charset=utf-8');
       headers.set('Cache-Control', 'no-store');
-      // No secondary D1 SELECT or snapshot R4; the canonical relation writes
-      // and 069 DELETE RETURNING shared one committed D1.batch transaction.
+      // app413: relation/count settlement is already final. Read only these
+      // changed IDs so the client never treats a stale local empty heart as an
+      // extra public +1. If this bounded read fails, keep the successful ACK
+      // (never 5xx/replay an already-settled mutation); the client holds the
+      // pre-click public count until normal changed-card convergence.
+      let exactRows413 = null;
+      try {
+        exactRows413 = await readExactSettledLikeCounts413(env, rows418);
+      } catch (error) {
+        console.warn('[413] exact settled like-count read deferred:', String(error?.message || error || 'unknown'));
+      }
       return new Response(JSON.stringify({
         ...payload,
         data: {
           ...payload.data,
+          results: exactRows413 || rows418,
           canonicalD1: 'settled',
           canonicalProof: 'atomic-drain-batch-418',
+          ...(exactRows413 ? { canonicalLikeCountProof: 'track-stats-exact-413' } : {}),
         },
       }), { status: response.status, statusText: response.statusText, headers });
     }

@@ -41,12 +41,35 @@ assert.match(worker, /ExploreLikeBatchScheduler103 extends DurableObject/);
 assert.doesNotMatch(worker, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 \* 60 \* 1000/);
 assert.doesNotMatch(worker, /event-like-batch-5m-103/);
 
+if (appVersion >= 413) {
+  assert.match(like, /export const stabilizeExploreLikeOptimisticCount413 =/);
+  assert.match(like, /!hasExistingPending && !baseLiked && desiredLiked && publicCount > 0/);
+  assert.match(worker, /SORIDRAW_APP413_EXACT_SETTLED_LIKE_COUNT_20261013/);
+  assert.match(worker, /async function readExactSettledLikeCounts413\(env, rows\)/);
+  assert.match(worker, /sourceRows\.length > 50/);
+  assert.match(worker, /WHERE t\.id IN \(' \+ placeholders \+ '\)'/);
+  assert.match(worker, /exactRows413 = await readExactSettledLikeCounts413\(env, rows418\)/);
+  assert.match(worker, /results: exactRows413 \|\| rows418/);
+  assert.match(worker, /canonicalLikeCountProof: 'track-stats-exact-413'/);
+  const settled413 = worker.slice(
+    worker.indexOf("if (expectedBatchId418 &&"),
+    worker.indexOf("    return response;", worker.indexOf("if (expectedBatchId418 &&")),
+  );
+  assert.match(settled413, /try \{[\s\S]*readExactSettledLikeCounts413/);
+  assert.match(settled413, /catch \(error\)[\s\S]*console\.warn/);
+  assert.doesNotMatch(settled413, /throw error/,
+    'post-settlement count read failure must never replay an already-settled like');
+  console.log('413_EXACT_CHANGED_TRACK_COUNT_AFTER_SETTLEMENT=PASS');
+}
+
 // Current actor path is app413+: one trailing 5-second local batch, not the obsolete
 // app105 client one-minute window. This changes only intake timing; shared aggregate stays 1m.
 if (appVersion >= 120) {
   assert.match(like, /SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918/);
   assert.match(like, /const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000;/);
-  if (appVersion >= 399) {
+  if (appVersion >= 412) {
+    assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) =>[\s\S]{0,220}\(pending\.retryCount \|\| 0\) === 0[\s\S]{0,120}pending\.explicitReplayEligible412 === true[\s\S]{0,120}eligibleGuardedMutation420\(pending\)/);
+  } else if (appVersion >= 399) {
     assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) =>[\s\S]{0,120}\(pending\.retryCount \|\| 0\) === 0 && eligibleGuardedMutation420\(pending\)\)/);
   } else {
     assert.match(like, /const eligible = Object\.values\(outbox\)\.filter\(\(pending\) => \(pending\.retryCount \|\| 0\) === 0\)/);

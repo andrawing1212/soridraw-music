@@ -378,6 +378,22 @@ export const computeExploreLikeAction127 = (
   );
 };
 
+// app413: a stale empty personal heart cannot prove that this account is absent
+// from an already-positive public count. Fill the heart immediately, but never
+// invent a second public like from that ambiguous local state. The exact count
+// arrives from the settled changed-track Worker response.
+export const stabilizeExploreLikeOptimisticCount413 = (
+  hasExistingPending: boolean,
+  baseLiked: boolean,
+  desiredLiked: boolean,
+  publicCount: number,
+  optimisticCount: number,
+): number => (
+  !hasExistingPending && !baseLiked && desiredLiked && publicCount > 0
+    ? publicCount
+    : optimisticCount
+);
+
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   const values = new Map<string, boolean>();
   const envelope = readSoridrawPersistentCache<Record<string, boolean>>({
@@ -2560,7 +2576,13 @@ export const setExploreTrackLike = async (
        cache.has(normalizedTrackId) ? cache.get(normalizedTrackId) : undefined));
   const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
   const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);
-  const optimisticLikeCount = optimisticAction127.likeCount;
+  // app413: if this device says "empty" while the public card is already >0,
+  // membership may simply be stale (the reported owner-like incident). Keep
+  // the current public number until the changed-track canonical ACK returns
+  // an exact count; do not optimistically manufacture +1.
+  const optimisticLikeCount = stabilizeExploreLikeOptimisticCount413(
+    Boolean(existing), baseLiked, liked, baseLikeCount, optimisticAction127.likeCount,
+  );
   // A millisecond timestamp is not a unique mutation version: two clicks in
   // the same millisecond could make an old ACK look like the newest action.
   // Keep updatedAt strictly monotonic for THIS track while preserving the

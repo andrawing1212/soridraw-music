@@ -1,5 +1,5 @@
-requested_at=2026-10-13T07:37:00Z
-purpose=verify_same_account_like_count_after_app412_user_click
+requested_at=2026-10-10T01:31:00Z
+purpose=check_existing_preview_like_069_queue_backlog_after_mobile_self_heart_and_cross_device_fail
 mode=diagnostic_read_only
 preview_only=true
 no_queue_replay=true
@@ -7,4 +7,4 @@ no_user_data_change=true
 no_worker_change=true
 no_hosting_change=true
 diagnostic_require_sanitized_reporting=true
-checkpoint=single_track_relation_vs_public_count_after_second_visible_like
+checkpoint=second_read_only_queue_age_no_storage_or_worker_change

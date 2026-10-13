@@ -1,139 +1,44 @@
-## CURRENT — app416 사용자 실사용 PASS 처리 / 다음 작업은 5분 공동집계만 진행 (2026-10-13 KST)
+## CURRENT — Stage416 global version 2-phase lost-click 수정 / 배포 없음 (2026-10-13 KST)
 
-- **사용자 판단:** app416 좋아요 실사용감은 현재 수준에서 PASS. 서버 확정 전 짧은 새로고침 과도구간은 원인 파악 완료 상태로 유지하고 추가 수정하지 않음.
-- **다음 우선순위:** 기존에 진행하던 **좋아요 5분 공동집계(Stage416 5-minute server aggregation)**를 다시 최우선으로 복귀.
-- **운영 UI:** 관리자/Master 앱 설정의 `좋아요 저장·공개 집계 주기` 및 Stage416 검증 패널을 그대로 기준으로 사용.
-- **작업 방식:** 한 번에 여러 작업 병행 금지. 5분 공동집계 완료/검증 전 Worker 사용량 감사, 팔로우 비용 최적화, TEST 승격 등 후속 작업 시작 금지.
-- **보호:** 현재 app416 실사용 좋아요 즉시 반영/PC↔모바일 동기화/5초 canonical fallback 경로는 정상 기준으로 동결. 정상 기능을 깨면서 5분 집계를 맞추지 않음.
+- 기준: 현재 `preview` HEAD `6d01a675f9f76e2f5b54d8ec271c7cbb2292d96d` (제품 기준
+  `2ea0e6f1d29d0316b7571473a4584d013305da9a` + 두 blocker 감사 기록) 위에 environment-isolation
+  B안 `47c639f8982a2c4d3f77738c45496db1e3d084c5`을 force-push 없이 재기반한 corrected branch.
+- environment별 pending/task/final receipt root와 Function identity는 유지하면서, 세 환경이 동일한
+  `privateLikeGlobalVersion416/{uid}` bounded sequencer를 사용하도록 수정했다.
+- sequencer version은 `max(previous + 1, trusted server receivedAtMs)`이므로 기존 PREVIEW v39+를
+  migration/backfill/read bootstrap 없이 넘어가며, PREVIEW → TEST → PRODUCTION → PREVIEW 실행형
+  interleaving에서 shared D1/R2 acceptance version이 strictly increasing이다.
+- global sequencer는 per-UID 단일 bounded reservation → environment transaction → committed receipt의
+  2-phase protocol을 사용한다. 예약 단계에서는 committed version/device receipt를 올리지 않으며 다른
+  operation은 `GLOBAL_RESERVATION_BUSY`로 fail-closed하여 settlement 순서 역전을 막는다.
+- global version 예약 뒤 environment root가 prior-window 대기로 거부된 경우 예약을 유지하되 accepted로
+  응답하지 않는다. exact same-operation retry만 같은 version으로 environment transaction을 다시 통과하고,
+  실제 pending/sealed 등록 증명 뒤에만 globally committed receipt로 확정한다.
+- DEVICE_LIMIT/TRACK_LIMIT/STALE rejection은 reservation을 제거하고 committed version/device receipt를
+  남기지 않는다. environment root identity도 receipt에 포함하여 다른 environment에서 같은 operation을
+  duplicate-confirm하거나 이중 등록하지 못한다.
+- exact committed duplicate는 기존 version을 재사용하고 logical RTDB W0이다. 새 accepted click은
+  reservation W1 + environment-root W1 + commit W1로 RTDB changed writes 총 W3이며 모두 bounded O(1)이다.
+  canonical D1 rows_written 계약은 변경 없이 W1~W2이고 page/update/re-entry IO는 계속 0이다.
+- D1 schema/table/key, shared canonical user data, Worker/release workflow는 변경하지 않았다.
+- TEST/PRODUCTION의 distinct final receipt Function/final root 및 environment-specific Worker endpoint
+  identity는 유지되어 후속 #117 binding에서 명시적으로 사용할 수 있다.
+- Functions TypeScript와 Stage416 global interleaving/isolation/callable/server-click/expired-window verifier
+  PASS. 배포, main/production 변경, 사용자 데이터 migration/backfill은 0이다.
 
----
-## CURRENT — app416 PREVIEW 배포 완료 / 독립 감사 PASS / 실기기 검증 대기 (2026-10-13 KST)
+## PREVIOUS — Stage416 transient backend environment isolation 구현 / 배포 없음 (2026-10-13 KST)
 
-- **독립 감사:** HEAD `d6bfdb02abeb2668cd3fb4f370f9321573f551d3`, 제품 코드 `5b4d50b58fc3072f5fd970a53367746d9cd68222` 기준 GPT-6 독립 재감사 **PASS**. 직전 app415 FAIL 원인인 reload-restored historical Stage416 row의 late `accepted` 권한 부활 경로 제거 확인.
-- **배포 trigger commit:** `0c9a0c103769add0cf15567c91d8d2bce9f827c8`.
-- **Firebase PREVIEW Hosting Run:** `38389032059` SUCCESS.
-- **배포 검증:** TypeScript PASS, Build PASS, 기존 profile/My Likes/follow 회귀 PASS, dormant Stage420 보호 PASS, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=416`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
-- **변경 없는 백엔드:** `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Worker/Functions/Rules/D1/R2/shared user data 변경 0. migration/backfill/delete 0.
-- **배포 주소:** `https://preview.soridraw.com/`.
-- **비용 구조:** app416 제품 수정은 로컬 상태 권한 판단만 변경. 업데이트/새로고침/재진입 신규 D1/Firestore/Worker data read/write 경로 0. warm revisit R0/W0 회귀검사 유지.
-- **사용자 실사용 기확인:** 다른 사용자 공개 좋아요 숫자의 like/unlike 자동 반영은 페이지 이동·새로고침 없이 사용자 실테스트 PASS.
-- **현재 남은 합격선:** app416 업데이트 직후 여러 곡 개인 하트 정확성, PC↔mobile 양방향 like/unlike 자동 수렴, 한쪽 refresh 후 유지, 5분 이상 시간경과 후 유지, Explore 재진입 후 유지.
-- **TEST / PRODUCTION:** 변경 없음. 사용자 PREVIEW 실기기 PASS 전 TEST 승격 금지. PRODUCTION은 명확한 별도 승인 전 금지.
+- 기준: 최신 PREVIEW `2ea0e6f1d29d0316b7571473a4584d013305da9a`.
+- 기존 controlled PREVIEW callable/task/RTDB root/timing path identity는 그대로 보존했다.
+- TEST/PRODUCTION에 서로 다른 callable, scheduler, Cloud Task target, settle/final Function,
+  transient pending/final root, timing path를 additive source로 추가했다.
+- 공통 handler에 immutable environment config를 주입하며 환경별 로직 복사는 없다.
+- TEST/PRODUCTION Worker endpoint는 각각 test/api Worker로 고정되어 PREVIEW fallback이 없다.
+- client는 host별 callable identity를 선택할 준비만 추가했고 일반 Stage416 flag는 계속 OFF다.
+- shared canonical likes/D1/R2/Rules와 Release Controller(#117)는 변경하지 않았다.
+- Firebase/Functions/Hosting/Worker 배포, main/production 변경, 사용자 데이터 변경은 0이다.
 
----
-## CURRENT — app416 후보: reload-restored 416 late-accepted 권한 부활 차단 / 자동검증 PASS / 미배포 (2026-10-13 KST)
-
-- **직전 독립 감사:** app415 `5c4d894856acbeea762af24d41db428afdb8c02c` FAIL. reload-restored historical 416 row는 기본 UI/My Likes 권한이 0이었지만, 동일 operationId의 뒤늦은 `accepted` transition이 오면 `markLiveIntent416`으로 격리가 해제되어 stale heart/count/My Likes가 다시 권한을 얻을 수 있는 예외 확인.
-- **app416 최소 수정:** `src/services/exploreLikeIntent416.ts`의 late `accepted` branch에서 reload quarantine을 해제하지 않는다. accepted는 exact cleanup/settlement metadata로만 보존. `rejected`는 기존처럼 정리하며, **새로 도착한 실제 live `pending`**만 quarantine을 해제하고 provisional UI 권한을 다시 얻는다.
-- **신규 실행형 회귀검사:** reload-restored old pending → same operation late accepted → heart authority 없음 / count detail 없음 / My Likes candidate 없음 / repaint 없음. 이후 newer live pending은 즉시 authority 회복.
-- **소스 commit:** `5e5afdc707b1090dd93eb0a60f05dd7391275a70`.
-- **감사 누락 케이스 test commit:** `d283549ff9402bca6d5b2181bcadb03862674f81`.
-- **앱 버전:** app416 bump `5b4d50b58fc3072f5fd970a53367746d9cd68222`. 이 앱 버전 416은 내부 기능명 Stage416과 별개.
-- **최종 Quality Run:** `38388071448` SUCCESS on `5b4d50b58fc3072f5fd970a53367746d9cd68222`. TypeScript PASS, app Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox quarantine PASS, app414 old-outbox UI quarantine PASS, app390/app141 ordering PASS, app197 warm revisit R0/W0 PASS, live shared RTDB Rules read-only/additive PASS.
-- **app416 핵심 PASS:** `APP416_LATE_ACCEPTED_RELOAD_HINT_STAYS_QUARANTINED=PASS`; `APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS`; `APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS`; `STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS`.
-- **데이터/비용:** 새 D1/Firestore/Worker data read/write 0. cache reset 0, migration/backfill/delete 0, shared user data 변경 0. 기존 5초 canonical batch와 다른 사용자 공개 좋아요 자동 반영 경로 비변경.
-- **사용자 실사용 사실:** 다른 사용자 공개 좋아요 like/unlike 자동 반영은 페이지 이동·새로고침 없이 사용자 실테스트 PASS.
-- **현재 상태:** **GPT-6 독립 재감사 전 / PREVIEW app416 미배포**. Worker/Functions/Rules/D1/R2/shared user data/main/TEST/PRODUCTION 변경 0. `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
-
----
-## CURRENT — app415 후보: 업데이트/새로고침 복원 416 임시 하트의 권한 제거 / 자동검증 PASS / 미배포 (2026-10-13 KST)
-
-- **직전 감사:** app414 `preview` HEAD `bc406a37490f7b0f7167dca244be5e4e58c8164d` 독립 감사 FAIL. app412 old-outbox UI quarantine은 유효하지만, 새로고침 후 localStorage에서 복원된 Stage416 임시 하트가 canonical 개인 좋아요보다 우선하거나 app410 retained repair를 막을 가능성이 남아 PREVIEW 배포 보류.
-- **사용자 실기기 관찰:** 배포/업데이트 직후 하트가 불안정한 경우가 있으나 일정 시간 뒤 정상 수렴하는 패턴 확인. 반면 **다른 사용자 공개 좋아요 숫자 자동 반영은 실제 like/unlike 모두 페이지 이동·새로고침 없이 정상 PASS**.
-- **app415 최소 수정:** `exploreLikeIntent416.ts`에서 reload 전용 localStorage 복원 row를 별도 추적. 복원 row는 삭제하지 않고 exact cleanup/reconciliation을 위해 보존하지만, `readExploreLikeIntent416`, detail/count overlay, My Likes candidate에서 권한 0. app410 same-version retained canonical repair도 더 이상 복원 hint 때문에 막히지 않음.
-- **현재 세션 정상 기능 보호:** 새로고침 이후 **새로 들어온 실제 live 416 event**는 restored 표식을 해제하고 즉시 provisional authority를 다시 얻음. 이 기기의 fresh explicit click은 app412 marker가 있는 outbox가 최우선이라 기존 local-first 즉시 하트와 5초 canonical batch를 그대로 유지.
-- **데이터/비용:** 캐시 전체 삭제 0, 사용자 데이터 삭제/변환/backfill 0, 새 D1/Firestore/Worker read/write 0. 업데이트 자체가 데이터 서버 읽기를 강제하지 않음. warm revisit R0/W0 유지.
-- **app415 source:** `9b9c91c787f2ce9eb3c356f23e99e467e8ff805e`; browser-reload executable test fix `f5fc1e615ebdead04b9a503d9f19b0671507d981`; version 415 commit `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`.
-- **최종 Quality Run:** `38386251533` SUCCESS on `0419139b0851e773d0b5ba4dd7f56e4e0f894ad8`. TypeScript PASS, Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox quarantine PASS, app414 old-outbox UI quarantine PASS, app390/app141 ordering PASS, app197 warm revisit R0/W0 PASS, live shared RTDB Rules read-only/additive PASS.
-- **app415 신규 검증:** `APP415_RELOAD_RESTORED_HINT_HAS_NO_UI_OR_MYLIKES_AUTHORITY=PASS`, `APP415_POST_RELOAD_NEW_LIVE_HINT_STILL_FAST=PASS`, `STAGE416_RELOAD_NO_SERVER_WRITE_AND_EXPIRED_UID_SAFE=PASS`.
-- **현재 상태:** **GPT-6 재감사 전 / PREVIEW 미배포**. Worker/Functions/Rules/D1/R2/shared user data/main/TEST/PRODUCTION 변경 0. 최종 자동검사 `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
-
----
-## CURRENT — app414 후보: 여러 곡 하트가 시간/새로고침 뒤 되돌아가는 공통 로컬 권한 오류 수정 / 미배포 (2026-10-13 KST)
-
-- **사용자 실기기 범위 확대:** app413에서 특정 1곡만의 문제가 아니라 여러 Explore 곡의 개인 하트가 첫 PC↔모바일 동기화 직후에는 맞지만, 일정 시간이 지나거나 한쪽 새로고침 뒤 다시 빈 하트로 바뀌는 현상 확인.
-- **app410 대비 코드 대조:** app410 사용자 실기기 PASS 이후 `exploreLikeIntent416.ts`는 변경 0. 현재 `exploreLikeService.ts`의 의미 있는 좋아요 변경은 app412 stale-outbox gate와 app413 count guard 중심.
-- **확인된 공통 결함:** app412는 과거 app400~411의 `explicitReplayEligible412` 없는 outbox를 **서버 재전송에서는 격리**했지만, 개인 하트 membership, public count overlay, app410 retained repair blocker, accepted 127 signal blocker, exact personal baseline merge, visible hydration, My Likes candidate, 새 explicit click의 기존 pending 판단에서는 여전히 현재 pending처럼 사용했다.
-- **영향:** 공유 D1 canonical relation/공개 count가 정상이어도 기기별 오래된 unmarked outbox가 서버 확정값보다 우선하여 빈/찬 하트를 다시 칠하거나, newer accepted same-account state가 로컬 캐시에 영구 반영되는 것을 막을 수 있다. 이 결함은 특정 곡 1개가 아니라 **과거 격리 row가 남은 곡들에 공통으로 발생 가능**하다.
-- **app414 최소 수정:** historical unmarked outbox는 저장소에서 삭제/변환하지 않고 그대로 보존하되 `isExploreLikeActivePending414` / `readActiveLikeOutbox414`를 통해 **현재 명시 클릭(`explicitReplayEligible412=true`)만 UI/동기화 권한**으로 인정한다.
-- **보호 범위:** fresh explicit click의 local-first 즉시 하트, 5초 canonical batch, app410 same-version retained repair, 416 same-account 빠른 힌트, My Likes, app413 exact count ACK는 유지. Stage416 client flags는 OFF 유지.
-- **데이터/비용:** shared user data 삭제·변환·backfill 0. historical outbox local 삭제 0. 페이지 진입/재진입 추가 Worker/D1/Firestore read/write 0. partial/new-device에서 격리 row가 더 이상 missing-ID 검증을 막지 않으므로 필요한 기존 bounded `/v1/me/likes?trackIds=...` 복구만 허용.
-- **소스 commit:** `eb45091bed36960ae6ba4d5e06a5be4b88f70f2f`.
-- **회귀검사 보호 commit:** `0f316384683add18d8b800072797640c56b5e8b4`; `verify-127-atomic-personal-like.mjs`에 unmarked row UI authority 0, retained canonical repair 비차단, fresh explicit pending 권한 보존 검사를 추가.
-- **버전:** app414 bump commit `3fcff8f4762aae28bcb79357e893e7fd87452793`.
-- **공식 좋아요 품질검증:** final candidate `73d70b916b9c5aa5b303b753f0c195f2fc059b2c`, Quality Run `38382577342` SUCCESS. TypeScript PASS, app Build PASS, Functions build PASS, app410 retained repair PASS, app412 stale-outbox write quarantine PASS, app390/app141 ordering PASS, app197 warm re-entry R0/W0 PASS, live shared RTDB Rules read-only/additive preflight PASS.
-- **app414 신규 검증:** `414_STALE_OUTBOX_UI_AUTHORITY_QUARANTINED=PASS`, `414_RETAINED_CANONICAL_REPAIR_NOT_BLOCKED=PASS`, `414_FRESH_EXPLICIT_CLICK_AUTHORITY_PRESERVED=PASS`, `414_QUARANTINED_OUTBOX_CANNOT_BLOCK_APP410_RETAINED_REPAIR=PASS`, `APP414_NEW_PUBLIC_TRACK_QUARANTINED_OUTBOX_NO_UI_AUTHORITY=PASS`.
-- **검증 중 발견/정리:** app414 의미 변경으로 production helper 일부를 직접 실행하던 기존 verifier fixture가 old outbox를 전부 active pending으로 가정해 순차 실패했으며, 제품 코드 확대 없이 verifier만 새 explicit marker 의미에 맞춰 교정했다. 최종 Quality Run에서 전체 관련 회귀 PASS.
-- **현재 상태:** 소스 수정 + 공식 자동검증 완료. **GPT-6 독립 감사 전 / PREVIEW 미배포**. TEST/PRODUCTION 변경 없음. `408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE`.
-- **중요:** 이번 수정은 코드상 확인된 공통 결함을 제거한다. 사용자의 시간경과/새로고침 증상을 이것 하나가 100% 전부 설명한다고 실기기 검증 전 확정하지 않는다. app414 배포 후에도 동일 증상이 남으면 다음 후보는 416 reload-restored provisional hint / snapshotPending guard 순서로 좁혀 검사한다.
-
----
-## CURRENT — app413 PREVIEW: 같은 계정 공개 좋아요 1→2 유령 표시 수정 / Worker+Hosting 배포 PASS (2026-10-13 KST)
-
-- **사용자 실기기 신고:** app412에서 `창문을 조금 열고(테스트)`가 empty heart + public count 1인 상태에서 같은 SORiDRAW 계정으로 heart를 1회 클릭하자 filled heart + count 2로 즉시 표시.
-- **즉시 live read-only 판정:** Run `38363943947` SUCCESS. 클릭 후에도 canonical D1 `likes` relation=1, `track_stats.like_count=1`, owner-liked=1, q035/q066/q069=0. 즉 같은 계정 relation이 2개 생긴 것이 아니라 **클라이언트 표시만 2로 과대계산**.
-- **정확 원인:** stale local membership이 `false`인데 public card count가 이미 1이면 `computeExploreLikeAction127(false,true,1)`이 optimistic count 2를 만든다. 현 legacy W1 `/v1/me/likes/batch` 응답의 `results`는 `legacy-queued` liked 상태만 갖고 exact `likeCount`가 없었고, exact 418 settlement ACK도 그 results를 그대로 반환. 클라이언트는 count 부재 시 `pending.optimisticLikeCount`(2)를 canonical-like display lock/changed-track signal에 재사용할 수 있었음.
-- **app413 client 최소 수정:** 새 pure guard `stabilizeExploreLikeOptimisticCount413`. 기존 pending이 없는 첫 explicit click에서 local heart=false + desired=true + current public count>0이면 heart는 즉시 filled로 바꾸되 public count는 현재값을 유지. count=0 첫 like는 기존처럼 즉시 1. 정상 unlike/active pending coalescing은 기존 계산 유지.
-- **app413 Worker 최소 수정:** exact 069 batch가 `atomic-drain-batch-418`로 실제 settle된 경우에만 `readExactSettledLikeCounts413`가 그 batch의 changed track IDs(max50)만 PK-bounded D1 SELECT하여 `track_stats.like_count`를 response result에 넣음. page/update/re-entry read 0, whole Feed/profile/account scan 0. count read 실패는 이미 settled된 mutation을 5xx/replay하지 않고 기존 successful ACK를 유지.
-- **회귀/비용:** actual changed batch당 count 확인은 max50 changed IDs only. 일반 앱 업데이트/Explore 진입/재진입 추가 D1 read/write 0. D1 schema/migration/backfill/delete 없음. one-account-one-track canonical relation invariant 유지.
-- **QA:** source commit `1fd2d6bcef74b78c1700f05e034e1c04f673f406`; verifier alignment `97755c27b8c301598d5b19b2f49d42ff30b4580a`. Quality Run `38364999508` SUCCESS: `413_STALE_EMPTY_HEART_NO_DOUBLE_PUBLIC_COUNT=PASS`, app410 retained repair, app412 stale-outbox quarantine, app390/app141, TypeScript/Build/Functions/Rules regressions PASS. Follow `38364999640` SUCCESS, Stage416 readonly `38364999626` SUCCESS, dormant Worker check `38364999516` SUCCESS.
-- **Worker 배포:** 첫 Run `38365285519`은 실제 deploy 전 old verifier107에서 중단(서버 변경 0). verifier contract만 app413 의미로 교정 후 Run `38365460909` SUCCESS. PREVIEW Worker active version `a3635a75-7f94-4c68-add2-46e9abaa644d`; `413_EXACT_CHANGED_TRACK_COUNT_AFTER_SETTLEMENT=PASS`, Feed/Profile/Search smoke PASS, pending035=0/pending069=0, fixed cron clear PASS, TEST/PRODUCTION Workers unchanged PASS.
-- **Hosting 배포:** trigger `471b9a5814a977375edcd444bd1ddaac8fcb7ee9`, Run `38365644196` SUCCESS. `PREVIEW_APP_VERSION=413`, `PREVIEW_EXACT_BUILD=PASS`, Firebase PREVIEW Hosting only. shared RTDB Rules SKIPPED, TEST/PRODUCTION unchanged PASS.
-- **공유 사용자 데이터:** 변경/삭제/복구 작업 0. 기존 `창문을 조금 열고(테스트)` canonical SORiDRAW like relation 1건은 그대로 유지. app413은 double-display 방지이며 이 existing relation을 임의 삭제하지 않음.
-- **사용자 기대값:** app413 업데이트 후 해당 곡은 canonical relation이 이미 1이므로 **filled heart + count 1**이 정상. 사용자가 현재 relation을 해제하려면 filled heart를 1회 unlike하여 empty + 0으로 수렴하는지 확인. 같은 계정에서 다시 2가 보이면 FAIL.
-- **Stage416:** 일반 client OFF / Issue #118 HOLD. 이번 app413 incident fix와 분리.
-
----
-## CURRENT — app412 PREVIEW: 과거 Explore 좋아요 outbox 자동 부활 차단 배포 PASS / 기존 잘못 저장된 1건은 보존 (2026-10-13 KST)
-
-- **사용자 신고:** `창문을 조금 열고(테스트)` 카드가 사용자가 누른 적 없는데 공개 likeCount=1, 현재 기기 하트는 empty로 관측.
-- **live read-only 사실 확인:** Run `38357167441` / 추가 trace `38357446485` SUCCESS. 정확한 public track 존재=1, canonical `likes` relation=1, `track_stats.like_count=1`. 관계 1건은 곡 owner `SORiDRAW(@soridraw)` 본인 계정. 해당 relation created_at `1791868582575` (2026-10-13 14:16:22 KST). q035/q066/q069 pending=0.
-- **Stage416 배제 근거:** owner의 Stage416 persistent acceptance receipt는 version39 / accepted_at `1791864896089` (13:14:56 KST)로 사고 like relation보다 약 61분 앞서며, current legacy queues도 0. 이번 relation 생성 시각과 controlled v39 receipt는 동일 사건으로 보지 않는다.
-- **원인:** app409 Auth-ready recovery와 hydration/pagehide/legacy canonical flush가 `retryCount=0` durable outbox를 과거 실험 row와 현재 명시적 클릭으로 구분하지 못했다. 오래된 pending row가 로그인/업데이트/재진입 뒤 자동 canonical batch에 포함될 수 있었음.
-- **app412 최소 수정:** `ExploreLikePendingMutation.explicitReplayEligible412` local-only marker 추가. 이 marker는 `setExploreTrackLike`의 **새 명시적 사용자 클릭**에서만 `true`로 저장. Auth-ready recovery, 5초 scheduler, canonical batch selection, visible hydration scheduler, visibility/pagehide exit flush는 marker가 없는 historical app400~411 row를 canonical 서버로 보내지 않음.
-- **데이터 보호:** historical unmarked outbox는 삭제/변환하지 않고 local-only quarantine. 사용자가 같은 곡을 다시 명시 클릭하면 새 operation row로 교체되면서 marker가 붙고 기존 정상 5초 canonical 정산/재시작 복구를 사용.
-- **정상 기능 보호:** app410 same-version retained local repair, app399 canonical batch, like/unlike, PC↔mobile changed-track signal, app390 conflict/ACK ordering, Stage416 client OFF 모두 회귀 PASS.
-- **검증:** Quality Run `38360197897` SUCCESS. `APP412_STALE_OUTBOX_AUTH_RECOVERY_WRITE0=PASS`, `APP412_STALE_OUTBOX_HYDRATION_EXIT_WRITE0=PASS`, `APP412_NEW_EXPLICIT_CLICK_REPLAY_ELIGIBLE=PASS`, `APP412_NO_LOCAL_OUTBOX_DELETION=PASS`, TypeScript/Build/Functions TS/live RTDB Rules read-only audit PASS. Follow Run `38359444129` SUCCESS, Stage416 readonly preflight `38359444123` SUCCESS.
-- **PREVIEW 배포:** source/test candidate `5372170e1bef3ed3dc36a0afb8c2952cb8977a9e`; release trigger `8f947cc51d349cb35deac43e2c2bf16ca64534f2`; Firebase PREVIEW Run `38360420805` SUCCESS. `PREVIEW_APP_VERSION=412`, `PREVIEW_EXACT_BUILD=PASS`, Hosting only.
-- **비변경:** Worker/Functions/D1/R2/shared RTDB Rules/shared user data/main/TEST/PRODUCTION 변경 0. release에서 shared RTDB Rules SKIPPED, TEST_PRODUCTION_UNCHANGED=PASS.
-- **중요:** 이미 잘못 생성된 `창문을 조금 열고(테스트)`의 SORiDRAW canonical like relation 1건은 사용자 원본 데이터이므로 **자동 삭제하지 않았다**. app412 수정은 추가 phantom auto-replay 차단이며 기존 1건 삭제는 별도 명시 승인 필요.
-- **실사용 상태:** app412 PC/모바일 업데이트 후 '아무 클릭 없이 새 phantom canonical like가 더 생기지 않음'은 사용자 실기기 검증 전. 기존 사고 곡 count=1은 의도적으로 그대로 남아 있으므로 이 숫자 자체를 app412 실패로 해석하지 않는다.
-
----
-## CURRENT — Issue #118 global-version correction audit FAIL / lost-click blocker (2026-10-13 KST)
-
-- Codex corrected branch `codex/stage416-global-version`, commit `1424204006072b0ffff78b34bb0fe4df96218688` 생성. 공식 Codex session은 `couldn't complete`로 종료했고 PR/CI 없음.
-- correction은 shared `privateLikeGlobalVersion416/{uid}` sequencer를 추가해 cross-env monotonic version 충돌을 피하려 했고, synthetic interleaving verifier도 추가함.
-- **독립 감사 FAIL:** global version allocation이 environment private-root acceptance보다 먼저 commit됨. env transaction이 `PRIOR_WINDOW_NEEDS_SEAL`/DEVICE_LIMIT/TRACK_LIMIT 등으로 pending 저장을 거절해도 global sequencer는 operation을 accepted처럼 기억할 수 있음.
-- 같은 operation 재시도 시 `GLOBAL_DUPLICATE_CONFIRMED`가 먼저 반환되어 env pending write를 건너뛸 수 있어 실제 좋아요 intent 유실 위험.
-- Issue #118에 lost-click blocker 교정 지시 완료. env acceptance가 실제 성립하기 전에는 global duplicate-confirmed/accepted receipt로 승격되지 않도록 bounded crash-safe protocol 필요.
-- 기존 `142420...` 및 이전 A/B branch 모두 merge/deploy 금지.
-- preview product code/functions/worker/D1/R2/Rules/Hosting, TEST, PRODUCTION, shared user data 변경 0. 일반 Stage416 client OFF 유지.
-
----
-## CURRENT — Issue #118 Codex 산출물 2개 감사 / cross-env version collision로 merge BLOCKED (2026-10-13 KST)
-
-- **Codex 공식 상태:** Issue #118 bot session은 `Codex couldn't complete this request`로 종료. Draft PR 없음.
-- **남은 산출물:** A `codex/issue-118-stage416-env-isolation` / `e4d36ba87aee475889f7f0ebe67c73ded33ca20d` (current preview `2ea0e6f...` 기반), B `codex/stage416-env-isolation` / `47c639f8982a2c4d3f77738c45496db1e3d084c5` (이전 `a80b0e5...` 기반).
-- **A 감사:** callable/task/root/timing/Worker endpoint는 환경 분리했지만 final receipt Function/final RTDB root가 PREVIEW 단일 identity로 남아 end-to-end isolation 불완전.
-- **B 감사:** A보다 나아 final receipt Function + final RTDB root까지 PREVIEW/TEST/PRODUCTION별로 분리. 그러나 **critical version collision** 존재.
-- **critical blocker:** 각 env private root가 독립 `version=1,2,...`를 생성하지만 shared D1 `explore_like_private_acceptance_416`는 `user_uid`별로 `excluded.version > current.version`만 허용하고 shared personal R2도 `privateLikeVersion416` monotonic version을 사용. 따라서 PREVIEW에서 이미 v39인 사용자의 TEST v1/PROD v1 settlement는 stale로 거부될 수 있음.
-- **판정:** A/B 모두 merge/deploy 금지. Issue #118에 환경별 transient isolation은 유지하되 uid별 canonical settlement version은 세 환경 전체에서 strictly increasing이 되도록 교정 지시 완료. D1 schema/user data migration 없이 해결해야 함.
-- **비변경:** preview product code/functions/worker/D1/R2/Rules/Hosting, TEST, PRODUCTION, shared user data 변경 0. 일반 Stage416 client flags OFF 유지.
-
----
-## CURRENT — Stage416 release contract 감사 FAIL / environment-isolated transient backend 선행 필요 (2026-10-13 KST)
-
-- **Issue #117 Codex 결과:** 공식 세션은 실패했지만 두 source branch가 남음: A `codex/issue-117-functions-promotion` / `9b1abe00c12a8412fa65a5b0960764dd51c78b8b`, B `codex/stage416-functions-promotion-contract` / `97859b162ac5a48fd3ff306991df39cad61fcbb4`.
-- **독립 감사 판정:** 두 안 모두 merge 금지. A는 TEST/PRODUCTION 실제 Functions 승격 단계가 없고, B는 TEST deploy만 있으며 PRODUCTION deploy가 없음.
-- **구조적 차단점:** 현재 `src/firebase.js`는 PREVIEW/TEST/PRODUCTION host 모두 Firebase project `soridraw-app-866a5`와 같은 `getFunctions(app,'us-central1')`를 사용하며 Stage416 client transport는 callable name `recordPrivateLike416` 고정. settle source도 single task target `stage416SettlePrivateWindowCandidate`이고 TEST/PRODUCTION용 별도 runtime identity가 없음. 같은 이름을 같은 Firebase project에 재배포하면 환경별 승격이 아니라 기존 shared Function 덮어쓰기.
-- **Worker routing 위험:** settle runtime은 `SORIDRAW_PRIVATE_BATCH416_WORKER_URL` 미설정 시 PREVIEW Worker endpoint로 fallback. TEST/PRODUCTION 독립 Function identity 없이 release workflow만 추가하면 wrong-environment Worker routing 가능.
-- **결론:** user canonical likes/D1는 계속 공유하되 Stage416 transient RTDB window/pending/sealed, timing config, callable/task runtime identity는 환경별로 additive 분리해야 함. 기존 PREVIEW controlled path는 호환 유지.
-- **새 선행 작업:** Issue #118 `Stage416 environment-isolated transient backend prerequisite` 생성 및 Codex 요청. Release Controller #117 수정은 #118 완료/독립 감사 전 보류.
-- **비변경:** 두 Codex branch 모두 preview에 merge 안 됨. 실제 Functions/Worker/D1/R2/Rules/Hosting/user data/TEST/PRODUCTION 변경 0. 일반 Stage416 client OFF 유지.
-
----
-## CURRENT — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
+## PREVIOUS — Stage416 bounded WAITING retry PREVIEW 배포 PASS / activation 차단점 1개 남음 (2026-10-13 KST)
 
 - **Codex source:** Issue #115 branch `codex/issue-115-bounded-prior-seal-retry`, commit `e0ec9c86e0634e588b74d8f265a088ec240bdc10`; PR #116로 `preview` merge commit `73e1ac8dbdb3c77794a60adc4fd2db99cc2cf46f`.
 - **독립 QA:** Run `38348077284` SUCCESS. `STAGE416_WAITING_PRIOR_SEAL_SAME_TASK_BOUNDED_RETRY=PASS`, `STAGE416_WAITING_PRIOR_SEAL_PRESERVES_NEWER_WINDOW=PASS`, 기존 ACK/EMPTY/NOT_DUE/app410/frozen like, Functions TypeScript, app TypeScript, Build, RTDB Rules audit PASS.

@@ -116,6 +116,9 @@ export async function acknowledgeUserPrivateSeal416(
       return {...value,sealed:null};
     },undefined,false,
   );
-  if(!result.committed)throw Error('416_SERVER_ACK_TRANSACTION_ABORTED');
+  // Preserve the existing ambiguous-ACK fallback in the coordinator:
+  // a genuinely aborted transaction returns false so the exact server seal is
+  // read once and Cloud Tasks retries only if that same seal is still pending.
+  if(!result.committed)return false;
   return acknowledged;
 }

@@ -106,7 +106,7 @@ jobs:
           mkdir -p "$d/lib"
           for file in exploreLikePrivateTask416 exploreLikePrivateDeadline416 \
              exploreLikePrivateCommit416 exploreLikePrivateSeal416 \
-             exploreLikePrivateHandoff416; do
+             exploreLikePrivateHandoff416 exploreLikeEnvironment416; do
             cp "functions/lib/$file.js" "$d/lib/$file.js"
           done
           if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then

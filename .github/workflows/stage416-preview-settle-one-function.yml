@@ -67,7 +67,7 @@ jobs:
           grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
           if [ "$function_name" = recordPrivateLike416 ]; then
-            grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId)" functions/src/exploreLikePrivateCallable416.ts
+            grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId,Date.now(),config)" functions/src/exploreLikePrivateCallable416.ts
             grep -Fq "const stableBucket=Math.floor(nowMs/60_000)*60_000+1_000" functions/src/exploreLikePrivateTask416.ts
             grep -Fq "expiredWindowId=previous.id" functions/src/exploreLikePrivateServerClick416.ts
           fi

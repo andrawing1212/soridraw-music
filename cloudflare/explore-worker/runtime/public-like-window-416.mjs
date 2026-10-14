@@ -103,10 +103,15 @@ const eventFingerprint416=(event)=>JSON.stringify({
  eventAtMs:event.eventAtMs,windowCandidateId:event.windowCandidateId,
  trackIds:event.trackIds,
 });
+const publicEventAliasKey416=(eventId)=>'stage416/public/event/'+eventId;
+const publicWindowPrefix416=(windowId)=>'stage416/public/window/'+windowId+'/';
+const publicWindowEventKey416=(windowId,eventId)=>
+ publicWindowPrefix416(windowId)+'event/'+eventId;
+
 export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
  if(!storage?.get||!storage?.put)throw Error('416_PUBLIC_STORAGE_UNAVAILABLE');
  const event=validatePublicLikeEvent416(raw,nowMs);
- const markerKey='stage416/public/event/'+event.eventId;
+ const markerKey=publicEventAliasKey416(event.eventId);
  const fingerprint=eventFingerprint416(event);
  const prior=await storage.get(markerKey);
  if(prior){
@@ -128,6 +133,9 @@ export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
      schemaVersion:1,fingerprint,windowId:plan.window.windowId,
      deadlineAtMs:plan.window.deadlineAtMs,publicMinutes:plan.window.publicMinutes,
    },
+   [publicWindowEventKey416(plan.window.windowId,event.eventId)]:{
+     schemaVersion:1,eventId:event.eventId,acked:false,eventAtMs:event.eventAtMs,
+   },
  };
  if(plan.opened)entries[PUBLIC_LIKE_WINDOW_KEY_416]=plan.window;
  for(const row of plan.trackEntries)entries[row.key]={
@@ -138,4 +146,61 @@ export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
    windowId:plan.window.windowId,deadlineAtMs:plan.window.deadlineAtMs,
    publicMinutes:plan.window.publicMinutes,trackCount:plan.trackEntries.length,
    scheduleAtMs:plan.scheduleAtMs};
+}
+
+export async function ackPublicLikeEventStorage416(storage,eventId,ackedAtMs=Date.now()){
+ if(!storage?.get||!storage?.put||!UUID416.test(String(eventId||''))||
+    !Number.isSafeInteger(ackedAtMs)||ackedAtMs<=0)
+   throw Error('416_PUBLIC_BAD_ACK');
+ const alias=await storage.get(publicEventAliasKey416(eventId));
+ if(!alias?.windowId)throw Error('416_PUBLIC_ACK_EVENT_MISSING');
+ const key=publicWindowEventKey416(String(alias.windowId),String(eventId));
+ const marker=await storage.get(key);
+ if(!marker||marker.eventId!==eventId)throw Error('416_PUBLIC_ACK_MARKER_MISSING');
+ if(marker.acked===true)return {acked:true,duplicate:true,windowId:String(alias.windowId)};
+ await storage.put(key,{...marker,acked:true,ackedAtMs});
+ return {acked:true,duplicate:false,windowId:String(alias.windowId)};
+}
+
+export async function readPublicLikeReleaseState416(storage,nowMs){
+ if(!storage?.get||!storage?.list||!Number.isSafeInteger(nowMs)||nowMs<=0)
+   throw Error('416_PUBLIC_RELEASE_STORAGE_UNAVAILABLE');
+ const window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+ if(!window)return {exists:false,due:false,blockedUnacked:false,trackIds:[],eventIds:[]};
+ const plan=publicLikeReleasePlan416(window,nowMs);
+ if(!plan.due)return {exists:true,due:false,blockedUnacked:false,
+   window,trackIds:[],eventIds:[]};
+ const prefix=publicWindowPrefix416(String(window.windowId));
+ const rows=await storage.list({prefix});
+ const trackIds=[],eventIds=[];let blockedUnacked=false;
+ for(const [key,value] of rows){
+   if(key.startsWith(prefix+'track/')){
+     const trackId=String(value?.trackId||'');
+     if(!trackId||trackId.length>512)throw Error('416_PUBLIC_RELEASE_TRACK_CORRUPT');
+     trackIds.push(trackId);
+   }else if(key.startsWith(prefix+'event/')){
+     const eventId=String(value?.eventId||'');
+     if(!UUID416.test(eventId))throw Error('416_PUBLIC_RELEASE_EVENT_CORRUPT');
+     eventIds.push(eventId);
+     if(value?.acked!==true)blockedUnacked=true;
+   }
+ }
+ return {exists:true,due:true,blockedUnacked,window,
+   trackIds:[...new Set(trackIds)].sort((a,b)=>a.localeCompare(b)),
+   eventIds:[...new Set(eventIds)].sort((a,b)=>a.localeCompare(b)),
+   releaseToken:plan.releaseToken};
+}
+
+export async function clearPublicLikeReleaseStorage416(storage,state){
+ if(!state?.due||state.blockedUnacked||!state?.window?.windowId||
+    !storage?.list||!storage?.delete)
+   throw Error('416_PUBLIC_CLEAR_REFUSED');
+ const windowId=String(state.window.windowId);
+ const prefix=publicWindowPrefix416(windowId);
+ const rows=await storage.list({prefix});
+ const keys=[...rows.keys(),PUBLIC_LIKE_WINDOW_KEY_416,
+   ...(state.eventIds||[]).map(publicEventAliasKey416)];
+ const unique=[...new Set(keys)];
+ if(unique.length)await storage.delete(unique);
+ return {cleared:true,windowId,deleted:unique.length};
 }

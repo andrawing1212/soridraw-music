@@ -9,6 +9,8 @@ const base=1_700_070_000_000;
 const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const map=new Map(),writes=[],deletes=[];
 const storage={
+ async transaction(fn){return fn(this);},
+ async getAlarm(){return null;},async setAlarm() {},
  async get(key){return map.get(key);},
  async put(entries,value){
    if(typeof entries==='string'){
@@ -27,12 +29,6 @@ const e1={eventId:id(1),windowCandidateId:id(101),eventAtMs:base,
  publicMinutes:5,trackIds:['song-a','song-b']};
 const a=await registerPublicLikeEventStorage416(storage,e1,base);
 assert.equal(a.registered,true);assert.equal(a.opened,true);
-let state=await readPublicLikeReleaseState416(storage,base+300_000);
-assert.equal(state.due,true);assert.equal(state.blockedUnacked,true,
- 'release must not outrun Firebase registration checkpoint');
-assert.deepEqual(state.trackIds,['song-a','song-b']);
-await assert.rejects(clearPublicLikeReleaseStorage416(storage,state),/416_PUBLIC_CLEAR_REFUSED/);
-
 const ack1=await ackPublicLikeEventStorage416(storage,e1.eventId,base+1);
 assert.equal(ack1.acked,true);assert.equal(ack1.duplicate,false);
 const ackRetry=await ackPublicLikeEventStorage416(storage,e1.eventId,base+2);
@@ -41,6 +37,12 @@ assert.equal(ackRetry.duplicate,true,'ack retry W0');
 const e2={eventId:id(2),windowCandidateId:id(102),eventAtMs:base+120_000,
  publicMinutes:1,trackIds:['song-b','song-c']};
 await registerPublicLikeEventStorage416(storage,e2,base+120_000);
+let state=await readPublicLikeReleaseState416(storage,base+300_000);
+assert.equal(state.due,true);assert.equal(state.blockedUnacked,true,
+ 'release must not outrun Firebase registration checkpoint');
+assert.deepEqual(state.trackIds,['song-a','song-b','song-c']);
+await assert.rejects(clearPublicLikeReleaseStorage416(storage,state),/416_PUBLIC_CLEAR_REFUSED/);
+
 state=await readPublicLikeReleaseState416(storage,base+300_000);
 assert.equal(state.blockedUnacked,true);
 await ackPublicLikeEventStorage416(storage,e2.eventId,base+120_001);

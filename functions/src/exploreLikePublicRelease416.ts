@@ -103,6 +103,9 @@ export async function publishPublicLikeRelease416(
         (current.status!=='PENDING'&&current.status!=='PUBLISHED'))
        throw Error('416_PUBLIC_RELEASE_MARKER_CORRUPT');
      if(sameMarker416(current,data,digest))return;
+     // Never reinterpret a shrunken/changed claim as a new release identity.
+     if(current.releaseToken===data.releaseToken||current.windowId===data.windowId)
+       throw Error('416_PUBLIC_RELEASE_IDENTITY_CONFLICT');
      if(current.status==='PENDING'&&currentDeadline<data.deadlineAtMs)
        throw Error('416_PUBLIC_PRIOR_RELEASE_PENDING');
      if(currentDeadline>=data.deadlineAtMs)return;

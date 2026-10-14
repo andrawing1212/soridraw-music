@@ -16,6 +16,8 @@ const base=1_700_110_000_000;
 const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const map=new Map(),writes=[],deletes=[];
 const storage={
+ async transaction(fn){return fn(this);},
+ async getAlarm(){return null;},async setAlarm() {},
   async get(key){return map.get(key);},
   async put(entries,value){
     if(typeof entries==='string'){

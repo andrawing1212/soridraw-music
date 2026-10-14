@@ -98,6 +98,14 @@ export function publicLikeReleasePlan416(window,nowMs){
 }
 
 
+// Storage transactions serialize registration/join/seal and survive DO restarts.
+const atomic416=(storage,fn)=>{
+ if(typeof storage?.transaction!=='function')throw Error('416_PUBLIC_TRANSACTION_REQUIRED');
+ return storage.transaction(fn);
+};
+export const PUBLIC_LIKE_RELEASE_KEY_416='stage416/public/release';
+const PUBLIC_LIKE_NEXT_KEY_416='stage416/public/next';
+const PUBLIC_LIKE_NEXT_TRACK_PREFIX_416=PUBLIC_LIKE_NEXT_KEY_416+'/track/';
 export const PUBLIC_LIKE_WINDOW_KEY_416='stage416/public/current';
 export const PUBLIC_LIKE_PENDING_OPEN_KEY_416='stage416/public/pending-open';
 const PUBLIC_LIKE_PENDING_OPEN_MAX_TRACKS_416=50000;
@@ -120,6 +128,9 @@ const normalizePendingIds416=(ids)=>{
 };
 const pendingDigest416=async(ids)=>hexPending416(await crypto.subtle.digest(
  'SHA-256',encoderPending416.encode(JSON.stringify(ids))));
+const deleteChunked416=async(storage,keys)=>{
+ for(let offset=0;offset<keys.length;offset+=128)await storage.delete(keys.slice(offset,offset+128));
+};
 const putChunked416=async(storage,entries)=>{
  const rows=Object.entries(entries);
  for(let offset=0;offset<rows.length;offset+=PUBLIC_LIKE_STORAGE_PUT_CHUNK_416){
@@ -128,7 +139,7 @@ const putChunked416=async(storage,entries)=>{
  }
 };
 
-export async function stagePublicLikeOpenPayload416(storage,trackIds,eventAtMs=Date.now()){
+async function stagePublicLikeOpenPayload416Inner(storage,trackIds,eventAtMs=Date.now()){
  if(!storage?.get||!storage?.put||!Number.isSafeInteger(eventAtMs)||eventAtMs<=0)
    throw Error('416_PUBLIC_PENDING_STORAGE_UNAVAILABLE');
  const incoming=normalizePendingIds416(trackIds);
@@ -152,13 +163,31 @@ export async function stagePublicLikeOpenPayload416(storage,trackIds,eventAtMs=D
  return {staged:true,unchanged:false,trackCount:incoming.length};
 }
 
-export async function joinPublicLikeChangedTracks416(storage,trackIds,eventAtMs=Date.now()){
+async function joinPublicLikeChangedTracks416Inner(storage,trackIds,eventAtMs=Date.now(),fallbackMinutes=0){
  if(!storage?.get||!storage?.put||!Number.isSafeInteger(eventAtMs)||eventAtMs<=0)
    throw Error('416_PUBLIC_JOIN_STORAGE_UNAVAILABLE');
  const ids=normalizePendingIds416(trackIds);
- const window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
- if(!window?.windowId||!UUID416.test(String(window.windowId||'')))
-   return {joined:false,reason:'NO_WINDOW',trackCount:0};
+ let window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+ if(!window?.windowId){
+   // A canonical drain may have observed the old window before its release
+   // completed. Its captured timing allows a fresh, durably scheduled window.
+   if(!PUBLIC_LIKE_MINUTES_416.has(Number(fallbackMinutes)))
+     return {joined:false,reason:'NO_WINDOW',trackCount:0};
+   window={schemaVersion:1,windowId:crypto.randomUUID(),openedAtMs:eventAtMs,
+     deadlineAtMs:eventAtMs+Number(fallbackMinutes)*60_000,publicMinutes:Number(fallbackMinutes)};
+   await storage.put(PUBLIC_LIKE_WINDOW_KEY_416,window);
+   await schedulePublicLikeAlarm416(storage,window.deadlineAtMs);
+ }
+ if(!UUID416.test(String(window.windowId||'')))throw Error('416_PUBLIC_WINDOW_CORRUPT');
+ if(window.sealed===true||eventAtMs>=window.deadlineAtMs){
+   // One row per changed track, not one record per event/retry.
+   await putChunked416(storage,Object.fromEntries(ids.map(trackId=>[
+     PUBLIC_LIKE_NEXT_TRACK_PREFIX_416+encodeURIComponent(trackId),{trackId}])));
+   if(!await storage.get(PUBLIC_LIKE_NEXT_KEY_416))
+     await storage.put(PUBLIC_LIKE_NEXT_KEY_416,{publicMinutes:window.publicMinutes});
+   await schedulePublicLikeAlarm416(storage,eventAtMs+1000);
+   return {joined:false,staged:true,reason:'WINDOW_CLOSED',trackCount:ids.length};
+ }
  const entries={};
  for(const trackId of ids)entries[
    'stage416/public/window/'+window.windowId+'/track/'+encodeURIComponent(trackId)
@@ -167,12 +196,13 @@ export async function joinPublicLikeChangedTracks416(storage,trackIds,eventAtMs=
  return {joined:true,windowId:String(window.windowId),trackCount:ids.length};
 }
 
-export async function mergePendingPublicLikeOpen416(storage,eventAtMs=Date.now()){
+async function mergePendingPublicLikeOpen416Inner(storage,eventAtMs=Date.now()){
  if(!storage?.get||!storage?.list||!storage?.delete||
     !Number.isSafeInteger(eventAtMs)||eventAtMs<=0)
    throw Error('416_PUBLIC_PENDING_STORAGE_UNAVAILABLE');
  const window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
- if(!window?.windowId||!UUID416.test(String(window.windowId||'')))
+ if(!window?.windowId||!UUID416.test(String(window.windowId||''))||
+    window.sealed===true||eventAtMs>=window.deadlineAtMs)
    return {merged:false,trackCount:0};
  let mergedCount=0;
  // Pending chunks are immutable and digest-keyed. Drain bounded first pages
@@ -185,14 +215,12 @@ export async function mergePendingPublicLikeOpen416(storage,eventAtMs=Date.now()
    for(const value of page.values()){
      const ids=Array.isArray(value?.trackIds)?value.trackIds:null;
      if(!ids?.length)continue;
-     const at=Number.isSafeInteger(value?.eventAtMs)&&value.eventAtMs>0
-       ?value.eventAtMs:eventAtMs;
-     const joined=await joinPublicLikeChangedTracks416(storage,ids,at);
+     const joined=await joinPublicLikeChangedTracks416Inner(storage,ids,eventAtMs);
      if(!joined.joined)throw Error('416_PUBLIC_PENDING_WINDOW_LOST');
      mergedCount+=joined.trackCount;
    }
    const keys=[...page.keys()];
-   await storage.delete(keys);
+   await deleteChunked416(storage,keys);
    if(keys.length<PUBLIC_LIKE_LIST_PAGE_416)break;
    if(pageIndex===99999)throw Error('416_PUBLIC_PENDING_TOO_LARGE');
  }
@@ -227,7 +255,7 @@ const listPublicWindowPages416=async(storage,prefix,onPage)=>{
  throw Error('416_PUBLIC_RELEASE_LIST_TOO_LARGE');
 };
 
-export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
+async function registerPublicLikeEventStorage416Inner(storage,raw,nowMs){
  if(!storage?.get||!storage?.put)throw Error('416_PUBLIC_STORAGE_UNAVAILABLE');
  const event=validatePublicLikeEvent416(raw,nowMs);
  const markerKey=publicEventAliasKey416(event.eventId);
@@ -242,6 +270,7 @@ export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
  }
  const current=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
  const plan=planPublicLikeWindow416(current,event);
+ if(current&&(current.sealed===true||nowMs>=current.deadlineAtMs))plan.needsRelease=true;
  if(plan.needsRelease){
    return {registered:false,duplicate:false,opened:false,needsRelease:true,
      windowId:String(plan.window?.windowId||''),
@@ -261,14 +290,14 @@ export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
  for(const row of plan.trackEntries)entries[row.key]={
    schemaVersion:1,trackId:row.trackId,eventAtMs:row.eventAtMs,
  };
- await storage.put(entries);
+ await putChunked416(storage,entries);
  return {registered:true,duplicate:false,opened:plan.opened,needsRelease:false,
    windowId:plan.window.windowId,deadlineAtMs:plan.window.deadlineAtMs,
    publicMinutes:plan.window.publicMinutes,trackCount:plan.trackEntries.length,
    scheduleAtMs:plan.scheduleAtMs};
 }
 
-export async function ackPublicLikeEventStorage416(storage,eventId,ackedAtMs=Date.now()){
+async function ackPublicLikeEventStorage416Inner(storage,eventId,ackedAtMs=Date.now()){
  if(!storage?.get||!storage?.put||!UUID416.test(String(eventId||''))||
     !Number.isSafeInteger(ackedAtMs)||ackedAtMs<=0)
    throw Error('416_PUBLIC_BAD_ACK');
@@ -282,7 +311,7 @@ export async function ackPublicLikeEventStorage416(storage,eventId,ackedAtMs=Dat
  return {acked:true,duplicate:false,windowId:String(alias.windowId)};
 }
 
-export async function readPublicLikeReleaseState416(storage,nowMs){
+async function readPublicLikeReleaseState416Inner(storage,nowMs){
  if(!storage?.get||!storage?.list||!Number.isSafeInteger(nowMs)||nowMs<=0)
    throw Error('416_PUBLIC_RELEASE_STORAGE_UNAVAILABLE');
  const window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
@@ -290,6 +319,16 @@ export async function readPublicLikeReleaseState416(storage,nowMs){
  const plan=publicLikeReleasePlan416(window,nowMs);
  if(!plan.due)return {exists:true,due:false,blockedUnacked:false,
    window,trackIds:[],eventIds:[]};
+ const checkpoint=await readPublicLikeCheckpoint416(storage);
+ if(checkpoint){
+   if(checkpoint.windowId!==window.windowId)throw Error('416_PUBLIC_CHECKPOINT_CONFLICT');
+   return {exists:true,due:true,blockedUnacked:false,window,trackIds:[],eventIds:[],
+     releaseToken:plan.releaseToken,checkpoint};
+ }
+ if(window.sealed!==true){
+   window.sealed=true;
+   await storage.put(PUBLIC_LIKE_WINDOW_KEY_416,window);
+ }
  const prefix=publicWindowPrefix416(String(window.windowId));
  const trackIds=[],eventIds=[];let blockedUnacked=false;
  await listPublicWindowPages416(storage,prefix,async rows=>{
@@ -312,29 +351,111 @@ export async function readPublicLikeReleaseState416(storage,nowMs){
    releaseToken:plan.releaseToken};
 }
 
-export async function clearPublicLikeReleaseStorage416(storage,state){
- if(!state?.due||state.blockedUnacked||!state?.window?.windowId||
-    !storage?.list||!storage?.delete)
+// One compact claim, split below the DO per-value limit. The exact changed-ID
+// list remains in immutable window rows / the existing bounded R2 manifest.
+export async function readPublicLikeCheckpoint416(storage){
+ const meta=await storage.get(PUBLIC_LIKE_RELEASE_KEY_416);
+ if(!meta)return null;
+ const rows=[];
+ for(let i=0;i<Number(meta.rowChunks||0);i++){
+   const part=await storage.get(PUBLIC_LIKE_RELEASE_KEY_416+'/'+i);
+   if(!Array.isArray(part))throw Error('416_PUBLIC_CHECKPOINT_INCOMPLETE');
+   rows.push(...part);
+ }
+ return {...meta,claim:meta.claim?{...meta.claim,rows}:null};
+}
+export const savePublicLikeCheckpoint416=(storage,checkpoint)=>atomic416(storage,async tx=>{
+ const current=await tx.get(PUBLIC_LIKE_WINDOW_KEY_416);
+ if(current?.windowId!==checkpoint.windowId||current.sealed!==true)
+   throw Error('416_PUBLIC_CHECKPOINT_WINDOW_LOST');
+ const rows=checkpoint.claim?.rows||[],rowChunks=Math.ceil(rows.length/100);
+ const entries={[PUBLIC_LIKE_RELEASE_KEY_416]:{...checkpoint,rowChunks,
+   claim:checkpoint.claim?{...checkpoint.claim,rows:undefined}:null}};
+ // Omit undefined for durable JSON-style mocks as well as DO storage.
+ if(entries[PUBLIC_LIKE_RELEASE_KEY_416].claim)delete entries[PUBLIC_LIKE_RELEASE_KEY_416].claim.rows;
+ for(let i=0;i<rowChunks;i++)entries[PUBLIC_LIKE_RELEASE_KEY_416+'/'+i]=rows.slice(i*100,(i+1)*100);
+ await tx.put(entries);
+});
+export const markPublicLikePublished416=(storage,windowId)=>atomic416(storage,async tx=>{
+ const checkpoint=await tx.get(PUBLIC_LIKE_RELEASE_KEY_416);
+ if(checkpoint?.windowId!==windowId)throw Error('416_PUBLIC_CHECKPOINT_WINDOW_LOST');
+ if(checkpoint.published!==true)await tx.put(PUBLIC_LIKE_RELEASE_KEY_416,{...checkpoint,published:true});
+});
+const schedulePublicLikeAlarm416=async(storage,at)=>{
+ const alarm=await storage.getAlarm();
+ if(!alarm||alarm>at)await storage.setAlarm(at);
+};
+
+export async function clearPublicLikeReleaseStorage416(storage,state,nowMs=Date.now()){
+ if(!state?.due||state.blockedUnacked||!state?.window?.windowId)
    throw Error('416_PUBLIC_CLEAR_REFUSED');
- const windowId=String(state.window.windowId);
- const prefix=publicWindowPrefix416(windowId);
+ const windowId=String(state.window.windowId),prefix=publicWindowPrefix416(windowId);
  let deleted=0;
- // Delete a bounded first page repeatedly. This avoids relying on a cursor
- // after deleting the rows that established that cursor, and it cannot leave
- // >1000-track windows partially retained.
+ // Each page and its event aliases commit together. A crash never loses the
+ // information needed to collect aliases; the release checkpoint is outside
+ // this prefix and is removed only with the final current-window transition.
  for(let pageIndex=0;pageIndex<100000;pageIndex++){
-   const rows=await storage.list({prefix,limit:PUBLIC_LIKE_LIST_PAGE_416});
-   if(!(rows instanceof Map))throw Error('416_PUBLIC_CLEAR_LIST_INVALID');
-   if(!rows.size)break;
-   const keys=[...rows.keys()];
-   await storage.delete(keys);
-   deleted+=keys.length;
-   if(keys.length<PUBLIC_LIKE_LIST_PAGE_416)break;
+   const count=await atomic416(storage,async tx=>{
+     const current=await tx.get(PUBLIC_LIKE_WINDOW_KEY_416);
+     if(current?.windowId!==windowId)return 0;
+     const rows=await tx.list({prefix,limit:PUBLIC_LIKE_LIST_PAGE_416});
+     if(!(rows instanceof Map))throw Error('416_PUBLIC_CLEAR_LIST_INVALID');
+     const keys=[...rows.keys()];
+     const aliases=[...rows].filter(([key])=>key.startsWith(prefix+'event/'))
+       .map(([,value])=>publicEventAliasKey416(value.eventId));
+     if(keys.length)await deleteChunked416(tx,[...keys,...aliases]);
+     return keys.length;
+   });
+   deleted+=count;
+   if(count<PUBLIC_LIKE_LIST_PAGE_416)break;
    if(pageIndex===99999)throw Error('416_PUBLIC_CLEAR_TOO_LARGE');
  }
- const tail=[PUBLIC_LIKE_WINDOW_KEY_416,
-   ...(state.eventIds||[]).map(publicEventAliasKey416)];
- const unique=[...new Set(tail)];
- if(unique.length){await storage.delete(unique);deleted+=unique.length;}
+ await atomic416(storage,async tx=>{
+   const current=await tx.get(PUBLIC_LIKE_WINDOW_KEY_416);
+   if(current?.windowId!==windowId)return;
+   const checkpoint=await tx.get(PUBLIC_LIKE_RELEASE_KEY_416);
+   const next=await tx.get(PUBLIC_LIKE_NEXT_KEY_416);
+   await tx.delete([PUBLIC_LIKE_WINDOW_KEY_416,PUBLIC_LIKE_RELEASE_KEY_416,
+     PUBLIC_LIKE_NEXT_KEY_416,...Array.from({length:Number(checkpoint?.rowChunks||0)},
+       (_,i)=>PUBLIC_LIKE_RELEASE_KEY_416+'/'+i)]);
+   if(next){
+     const window={schemaVersion:1,windowId:crypto.randomUUID(),openedAtMs:nowMs,
+       deadlineAtMs:nowMs+Number(next.publicMinutes)*60_000,publicMinutes:Number(next.publicMinutes)};
+     await tx.put(PUBLIC_LIKE_WINDOW_KEY_416,window);
+     await listPublicWindowPages416(tx,PUBLIC_LIKE_NEXT_TRACK_PREFIX_416,async rows=>{
+       const ids=[...rows.values()].map(row=>row.trackId);
+       await joinPublicLikeChangedTracks416Inner(tx,ids,nowMs);
+       await deleteChunked416(tx,[...rows.keys()]);
+     });
+     await mergePendingPublicLikeOpen416Inner(tx,nowMs);
+     // The next deadline is fixed at opening; arrivals cannot extend it.
+     const alarm=await tx.getAlarm();
+     await tx.setAlarm(alarm&&alarm>nowMs?Math.min(alarm,window.deadlineAtMs):window.deadlineAtMs);
+   }
+ });
  return {cleared:true,windowId,deleted};
 }
+
+export const stagePublicLikeOpenPayload416=(storage,trackIds,eventAtMs=Date.now())=>
+ atomic416(storage,async tx=>{
+   // The drain may have started before registration opened a window. Recheck
+   // inside the same transaction so a just-merged pending queue cannot strand it.
+   if(await tx.get(PUBLIC_LIKE_WINDOW_KEY_416))
+     return joinPublicLikeChangedTracks416Inner(tx,trackIds,eventAtMs);
+   return stagePublicLikeOpenPayload416Inner(tx,trackIds,eventAtMs);
+ });
+
+export const joinPublicLikeChangedTracks416=(storage,trackIds,eventAtMs=Date.now(),fallbackMinutes=0)=>
+ atomic416(storage,tx=>joinPublicLikeChangedTracks416Inner(tx,trackIds,eventAtMs,fallbackMinutes));
+
+export const mergePendingPublicLikeOpen416=(storage,eventAtMs=Date.now())=>
+ atomic416(storage,tx=>mergePendingPublicLikeOpen416Inner(tx,eventAtMs));
+
+export const registerPublicLikeEventStorage416=(storage,raw,nowMs)=>
+ atomic416(storage,tx=>registerPublicLikeEventStorage416Inner(tx,raw,nowMs));
+
+export const ackPublicLikeEventStorage416=(storage,eventId,ackedAtMs=Date.now())=>
+ atomic416(storage,tx=>ackPublicLikeEventStorage416Inner(tx,eventId,ackedAtMs));
+
+export const readPublicLikeReleaseState416=(storage,nowMs)=>
+ atomic416(storage,tx=>readPublicLikeReleaseState416Inner(tx,nowMs));

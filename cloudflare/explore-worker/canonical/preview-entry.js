@@ -1245,7 +1245,8 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       if(changedTrackIds416.length){
         if(deferExistingPublic416){
           await joinPublicLikeChangedTracks416(
-            this.ctx.storage,changedTrackIds416,Date.now());
+            this.ctx.storage,changedTrackIds416,Date.now(),
+            Number(currentPublicWindow416.publicMinutes));
         }else if(settledAggregate418?.stage416Changed416===true){
           // The first signed Stage416 net change may be drained by a request
           // whose HTTP waiter is not the eventual final-receipt retry. Persist
@@ -1281,6 +1282,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     ).first();
     if (!pending) {
       await this.ctx.storage.deleteAlarm().catch(() => {});
+      await this.ensurePublicAlarm416();
       return null;
     }
 
@@ -1290,12 +1292,14 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     const claimedAt = Number(await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194) || 0);
     if (Number.isFinite(claimedAt) && claimedAt > 0 &&
         claimedAt >= now - EXPLORE_LIKE_ACTIVE_GRACE_MS_194) {
+      await this.ensurePublicAlarm416();
       return pending;
     }
 
     const nextAt = now + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
     await this.ctx.storage.put(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194, nextAt);
     await this.ctx.storage.setAlarm(nextAt);
+    await this.ensurePublicAlarm416();
     return pending;
   }
 
@@ -1411,10 +1415,35 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     }
   }
 
+  async ensurePublicAlarm416() {
+    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE!==true)return;
+    await this.ctx.storage.transaction(async tx=>{
+      const current=await tx.get(PUBLIC_LIKE_WINDOW_KEY_416);
+      if(!current)return;
+      const at=Math.max(Date.now()+1000,Number(current.deadlineAtMs));
+      const alarm=await tx.getAlarm();
+      if(!alarm||alarm<=Date.now()||alarm>at)await tx.setAlarm(at);
+    });
+  }
+
   async alarm() {
     try {
-      await this.runAggregate194();
-      await this.finalizeAggregate195();
+      // A successor public window owns a durable alarm even when no new
+      // private mutation or final-receipt HTTP request follows the old release.
+      const publicOnly416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true&&
+        !await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
+      if(!publicOnly416){
+        await this.runAggregate194();
+        await this.finalizeAggregate195();
+      }
+      if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true){
+        await releaseDuePublicLikeWindow416({
+          db:this.env.DB,r2:this.env.PROFILE_MEDIA,storage:this.ctx.storage,
+          releaseEndpoint:this.env.SORIDRAW_PUBLIC_RELEASE416_ENDPOINT,
+          secret:this.env.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET,nowMs:Date.now(),
+        });
+        await this.ensurePublicAlarm416();
+      }
     } catch (error) {
       // Durable Object alarms are at-least-once. Preserve the active marker for
       // the short grace window; the next real batch can recover afterwards.

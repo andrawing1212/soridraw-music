@@ -29,7 +29,11 @@ console.log('412_SHARED_CARD_WRITER_ETAG_CAS=CONFIRMED');
 const start=entry.indexOf('const PUBLIC_LIKE_REPAIR_MARKER_191');
 const end=entry.indexOf('// SORIDRAW_VERIFIED_SHARED_LIKE_SNAPSHOT_REPAIR_156_',start);
 assert.ok(start>0&&end>start);
+// Evaluate the extracted function with its actual surrounding compile gate.
+const stage426Gate=entry.match(/const STAGE426_COMPILED_OPEN\s*=\s*(true|false)/);
+assert(stage426Gate,'Stage426 compile gate missing');
 const repair=runInNewContext(entry.slice(start,end)+'\nrepairSharedPublicLikeCounts191',{
+ STAGE426_COMPILED_OPEN:stage426Gate[1]==='true',
   sharedFeedR2Key112:sort=>'feed:'+sort,
   Map,Set,Number,String,Math,Date,JSON,Error,encodeURIComponent
 },{timeout:2000});

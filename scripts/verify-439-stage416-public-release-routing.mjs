@@ -65,8 +65,9 @@ assert.match(entry,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
 
 const releaseCore=readFileSync('cloudflare/explore-worker/runtime/public-like-release-416.mjs','utf8');
 assert.match(releaseCore,/status:'STALE_TASK'/);
-assert.ok(releaseCore.indexOf("status:'STALE_TASK'")<
- releaseCore.indexOf('const projection=await materialize'),
+const staleAt=releaseCore.indexOf("status:'STALE_TASK'");
+const projectionAt=releaseCore.indexOf('const projectionResult=await materialize');
+assert.ok(staleAt>=0&&projectionAt>staleAt,
  'stale task must stop before D1/R2 projection');
 
 const endpoint=readFileSync('functions/src/exploreLikePublicReleaseEndpoint416.ts','utf8');

@@ -26,7 +26,11 @@ for(const guard of [
  'for (const [id, state] of changed)',
  'const saved = await shared.put(snapshot.key, JSON.stringify({',
 ]) assert.ok(body.includes(guard),'191 code changed: '+guard);
+// Evaluate the extracted function with its actual surrounding compile gate.
+const stage426Gate=source.match(/const STAGE426_COMPILED_OPEN\s*=\s*(true|false)/);
+assert(stage426Gate,'Stage426 compile gate missing');
 const repair=runInNewContext(body+'\nrepairSharedPublicLikeCounts191',{
+ STAGE426_COMPILED_OPEN:stage426Gate[1]==='true',
  sharedFeedR2Key112:(sort)=>'feed:'+sort,
  Map,Set,Number,String,Math,Date,JSON,Error,encodeURIComponent,
 },{timeout:2000});

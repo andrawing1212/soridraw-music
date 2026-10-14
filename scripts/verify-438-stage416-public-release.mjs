@@ -51,6 +51,8 @@ const before=[markerWrites,signalWrites];
 const duplicate=await call({...claim,signedAtMs:now+1});
 assert.equal(duplicate.status,'DUPLICATE');
 assert.deepEqual([markerWrites,signalWrites],before,'completed release retry W0');
+await assert.rejects(call({...claim,rows:rows.slice(1)}),/416_PUBLIC_RELEASE_IDENTITY_CONFLICT/);
+assert.deepEqual([markerWrites,signalWrites],before,'same token with a shrunken claim must fail W0');
 
 const claim2={windowId:id(2),releaseToken:'stage416-public-'+id(2),
  deadlineAtMs:deadline+1000,signedAtMs:now,rows:[{trackId:'song-x',ownerUid:'owner-x'}]};
@@ -71,6 +73,8 @@ assert.deepEqual([markerWrites,signalWrites],afterResume,'older release cannot r
 const base=1_700_090_000_000;
 const map=new Map();
 const storage={
+ async transaction(fn){return fn(this);},
+ async getAlarm(){return null;},async setAlarm() {},
  async get(key){return map.get(key);},
  async put(entries,value){
    if(typeof entries==='string'){map.set(entries,structuredClone(value));return;}
@@ -120,8 +124,8 @@ const released=await releaseDuePublicLikeWindow416({
 assert.equal(released.status,'RELEASED');assert.equal(released.cleared,true);
 assert.equal(released.d1Writes,0);
 assert.equal((await readPublicLikeReleaseState416(storage,base+300_001)).exists,false);
-assert.equal(callbackAttempts,2);assert.equal(materializeCalls,2,
- 'projection replay is allowed but window clear waits for RTDB receipt');
+assert.equal(callbackAttempts,2);assert.equal(materializeCalls,1,
+ 'durable claim retry skips projection and window clear waits for RTDB receipt');
 
 const projectionSource=readFileSync(
  'cloudflare/explore-worker/runtime/public-like-projection-416.mjs','utf8');
@@ -130,7 +134,7 @@ const releaseSource=readFileSync(
  'cloudflare/explore-worker/runtime/public-like-release-416.mjs','utf8');
 assert.match(releaseSource,/materializePublicLikeProjection416/);
 assert.match(releaseSource,/clearPublicLikeReleaseStorage416/);
-assert.ok(releaseSource.indexOf('const projection=await materialize')<
+assert.ok(releaseSource.indexOf('const projectionResult=await materialize')<
  releaseSource.indexOf('const delivered=await sendPublicLikeRelease416'),
  'R2 projection must finish before public RTDB callback');
 assert.ok(releaseSource.indexOf('const delivered=await sendPublicLikeRelease416')<

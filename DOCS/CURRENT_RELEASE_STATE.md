@@ -1,3 +1,16 @@
+## CURRENT — Stage416 2/4 공개 창 조회 오류 fail-closed 최소 수정 / CI PASS / 독립 exact-SHA 감사 대기 (2026-10-15 KST)
+
+- **브랜치 및 제품 commit:** `preview` / `3b5c4426c1e27df725a43d04df6ec591227161d3` (부모 `1ada5daba729a9adbd7ea06cd9d974c23f5b3a62`). 이번 신규 독립 감사 대상은 반드시 이 제품 SHA로 고정한다. 과거 `f580c36a670e56559590ad36efe115cd5dc4bf41`은 이번 오류가 남은 이전 감사 FAIL 후보이다.
+- **독립 감사 신규 FAIL 1건 수정:** `ExploreLikeBatchScheduler103.runAggregate194()`의 Stage416 공개 창 DO storage.get 오류를 `.catch(()=>null)`로 숨기던 경로를 제거. 공개 5분 기능이 ON이면 저장소 조회 실패가 즉시 상위 실행으로 전파되어, canonical D1 집계·공개 R2 반영·191 복구가 조회 상태 불명확인 채 진행되지 않는다. 기존 `/schedule` 오류 전파 및 DO alarm 재시도 경로를 그대로 사용한다. 실제 빈 창 `null`과 기능 OFF 경로는 종전처럼 처리한다.
+- **변경 파일 2개만:** `cloudflare/explore-worker/canonical/preview-entry.js` (+4/-1), `scripts/verify-440-stage416-public-window-coalescing.mjs` (+69/-0). Worker 실제 `runAggregate194` 메서드를 그대로 추출하여 DO get 실패 주입→canonical/191 호출 0, 저장소 복구 후 기존 창 합류·보류, 정상 빈 창 Stage416 pending / legacy 191, 공개 기능 OFF 시 storage get 0 및 기존 경로 유지까지 실행 확인한다. 새 별도 진단 도구/Workflow/인프라 없음.
+- **GitHub CI 검증 (동일 제품 SHA):** 408 좋아요 품질 Run `38594672253` **SUCCESS** (Stage416 verify-440 포함, TypeScript, App Build, Functions TypeScript, frozen 좋아요·팔로우 회귀 및 shared Rules read-only), 426 Dormant Worker Bundle Run `38594672463` **SUCCESS**, Stage416 PREVIEW Backend Readonly Preflight Run `38594673140` **SUCCESS**. 코드 메서드 대상 오류 주입·복구 사전 테스트도 PASS. 이전 5,000곡·5,500곡, 실제 workerd verify-442/443은 `f580c36a` 개발방 검증 기록이 있으나 이번 CI에서 신규 재실행한 것으로 주장하지 않는다. 독립 감사·실서비스 테스트는 아직 미실시.
+- **비용·안전:** 이번 변경으로 신규 D1/RTDB/R2 IO 경로 없음. Storage 실패 시 fail-closed로 조기 공개를 차단. 기존 private/개인 하트·캐시·UI·데이터 구조 변경 없음. PUBLIC 5분 Stage416 gate **HARD OFF** 유지.
+- **배포/데이터:** 이번 수정은 GitHub `preview` source commit에만 존재. Firebase Hosting/Functions, Cloudflare Worker, Rules **배포 0**. 공유 D1/RTDB/R2 사용자 데이터 수정 0. `main`/TEST/PRODUCTION 변경 0.
+- **다음 단계:** `3b5c4426c1e27df725a43d04df6ec591227161d3` exact-SHA 독립 재감사. 실제 `/schedule` 예외 이후 durable alarm/기존 대기 작업 보존과 자동 복구, 개인 settlement 비회귀, legacy 191 조기 공개 차단, 기능 OFF 보호, 비용/데이터 무변경을 확인한다. 감사 PASS 전 Worker/Functions 배포·Stage416 ON·TEST 승격 금지.
+- **진행률:** Stage416 전체 1/4·25%, 앱 속도 개선 5/5·100%, 이번 신규 FAIL 1건 코드 수정·검증·commit 4/4·100%. **독립 감사 PASS 또는 배포 완료로 해석하지 않는다.**
+
+---
+
 ## CURRENT — Stage416 2/4 감사 FAIL 2건 복구 후보 / 자동검증 PASS / exact-SHA 독립 재감사 대기 (2026-10-15 KST)
 
 - **작업 branch / 시작 HEAD:** `preview` / `12460ac140f3c28bad07899ea80acba8b01a8479`. 작업 전·커밋 전 GitHub 최신 HEAD 재확인, 다른 신규 commit 없음. 기존 로컬 제품 4개·테스트 5개 수정안을 보존하고 이어서 완성했다.

@@ -139,9 +139,11 @@ jobs:
           const {onCall}=require("firebase-functions/v2/https");
           const {handleAuthenticatedPrivateClick416}=
             require("./exploreLikePrivateCallable416");
+          const {STAGE416_ENVIRONMENTS}=require("./exploreLikeEnvironment416");
           exports.recordPrivateLike416=onCall(
-            {region:"us-central1",enforceAppCheck:true},
-            async(request)=>handleAuthenticatedPrivateClick416(admin.database(),request));
+            {region:"us-central1",enforceAppCheck:true,timeoutSeconds:60},
+            async(request)=>handleAuthenticatedPrivateClick416(
+              admin.database(),request,STAGE416_ENVIRONMENTS.preview));
           NODE
           elif [ "$PATCH_FUNCTION" = stage416SettlePrivateWindowCandidate ]; then
             cat >> "$d/lib/index.js" <<'NODE'

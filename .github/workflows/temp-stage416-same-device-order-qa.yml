@@ -30,6 +30,7 @@ jobs:
           node scripts/verify-423-stage416-cross-env-settlement-order.mjs
           node scripts/verify-425-stage416-global-reservation-settlement-gap.mjs
           node scripts/verify-426-stage416-rejected-existing-device-reservation.mjs
+          node scripts/verify-427-stage416-interrupted-new-device-retry-cleanup.mjs
           node scripts/verify-421-stage416-environment-isolation.mjs
           node scripts/verify-416-private-like-intent.mjs
           node scripts/verify-416-expired-window-requeue-e2e.mjs

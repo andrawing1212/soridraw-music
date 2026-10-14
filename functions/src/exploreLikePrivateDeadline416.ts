@@ -28,15 +28,23 @@ export async function scheduleInitialPrivateWindow416(
 export async function dispatchPrivateWindowTask416(
  db:Database, queue:PrivateQueue416, task:PrivateWindowTask416,
  workerEndpoint:string,secret:string,
- nowMs=Date.now(),http:typeof fetch=fetch,
+ nowMs=Date.now(),http:typeof fetch=fetch,privateRoot='privateLikeBatch416',
+ privateRoots:string[]=[privateRoot],globalVersionRoot='',
 ):Promise<{status:'DELIVERED'|'RESCHEDULED'|'STALE'|'EMPTY';atMs?:number}>{
  if(!isValid(task)||!validTime(nowMs))throw Error('416_INVALID_DISPATCH_TASK');
  const result=await completeUserPrivateWindow416(
-  db,task.uid,workerEndpoint,secret,nowMs,http,task.windowId,
+  db,task.uid,workerEndpoint,secret,nowMs,http,task.windowId,privateRoot,privateRoots,
+  globalVersionRoot,
  );
  if(result.queued){
    // Worker 069 receipt is durable, ACK only clears the matching frozen seal.
    return {status:'DELIVERED'};
+ }
+ if(result.reason==='WAITING_FOR_LOWER_ENVIRONMENT_VERSION'){
+   // Preserve the exact sealed higher-version window and let the same Cloud
+   // Task retry after the lower environment has delivered+ACKed. This is
+   // changed-data-only coordination; no page or background polling is added.
+   throw Error('416_WAITING_FOR_LOWER_ENVIRONMENT_VERSION');
  }
  if(result.reason==='WAITING_FOR_PRIOR_SEAL'){
    // Do not create a fresh task every minute while an older frozen seal is

@@ -1,3 +1,133 @@
+## CURRENT — PR #120 감사 FAIL 보완: 이미 정산된 seq1 응답 유실 시 exact operation settlement proof / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
+
+- **직전 GPT-6 독립 감사 FAIL 대상:** `2ad92fd69f2859abe672235a2ed038982124c5f6`.
+- **감사에서 확인된 남은 blocker:** same-device seq1(A곡)이 서버에서 이미 Worker/D1/R2 최종 정산되고 env pending/sealed도 ACK 후 정리됐는데, 클라이언트가 최초 Callable 응답만 잃은 경우. 기존 재시도는 exact env proof가 사라졌으므로 `STALE_OR_DUPLICATE`가 될 수 있고, 이를 fail-closed로 유지하면 seq2가 영구 대기할 수 있음.
+- **핵심 수정:** shared global Stage416 UID state에 **최신 canonical settled operation proof를 device별 최대 1개** additive하게 기록. proof는 `deviceSequence + operationId + trackId + liked + rowVersion + settled-window count`로 구성하며, Worker/D1/R2 canonical receipt가 성공한 뒤 기존 `settledVersion`을 올리는 **같은 RTDB transaction** 안에서만 기록한다.
+- **재시도 판정:** global reservation 단계에서 요청이 해당 device의 exact settled proof와 완전히 일치할 때만 `SETTLED_DUPLICATE_CONFIRMED`으로 accepted 반환. 일반 `STALE_OR_DUPLICATE`는 성공으로 승격하지 않는다.
+- **비용 보호:** settled proof 저장은 기존 completed-window global fence W1에 함께 저장되므로 추가 changed write 0. exact settled duplicate retry는 global transaction logical W0, env pending 재생성/changed write 0. page/update/re-entry 신규 IO 0.
+- **bounded 구조:** global `devices`가 기존 최대 32 device이므로 `settledDevices`도 device별 latest proof 1개만 유지하며 전체 사용자/곡/좋아요 수에 비례한 history를 만들지 않는다. migration/backfill 없음.
+- **기존 same-device ordering 유지:** seq N ambiguous일 때 seq N+1 전송 금지, same operation retry 우선, terminal rejection durable 기록 후에만 다음 seq 진행.
+- **신규 실행형 검증:** `scripts/verify-431-stage416-settled-lost-response-proof.mjs`.
+  - seq1 accepted 서버 상태 생성
+  - client response lost 상황으로 로컬 ACK 미확정 가정
+  - canonical settled fence + exact settled operation proof 기록
+  - env pending/sealed 제거 후 same seq1/op retry
+  - exact settled proof로 accepted W0
+  - 그 뒤 seq2 다른 track 정상 accepted
+  - 다른 operation의 generic stale은 여전히 reject
+- **개발 QA Run:** `38525747336` **SUCCESS**.
+- **핵심 PASS:** `STAGE416_SETTLED_SEQ1_OPERATION_PROOF_RECORDED`, `STAGE416_LOST_RESPONSE_SEQ1_RETRY_PROVEN_ACCEPTED`, `STAGE416_SETTLED_DUPLICATE_RETRY_CHANGED_WRITES=0`, `STAGE416_SEQ2_AFTER_PROVEN_SEQ1_ACCEPTED`, `STAGE416_GENERIC_STALE_NOT_PROMOTED_TO_SUCCESS`, `STAGE416_SETTLED_PROOF_PAGE_UPDATE_REENTRY_IO=0`.
+- **전체 회귀:** Issue118 ordering/settlement, protected likes, App TypeScript, App Build, Functions TypeScript, Safety 모두 PASS.
+- **변경 없음:** Firebase/Functions/Cloudflare/Hosting 배포 0, shared user data 변경 0, D1/R2 schema/table/key 변경 0, migration/backfill/delete 0, TEST/PRODUCTION 변경 0, Stage416 general client OFF.
+- **현재 gate:** 새 exact HEAD GPT-6 독립 감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
+## CURRENT — PR #120 감사 FAIL 보완: same-device seq1 미확정 시 seq2 전송 차단 / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
+
+- **직전 독립 감사 FAIL 대상:** `4140f8ff2123fd6f9870db2c00ea3b3c9a2c13af`. global orphan lease 보완은 PASS했지만, 같은 browser device에서 seq1(A곡) Callable 응답이 ambiguous한 동안 drain이 catch 후 seq2(B곡)를 계속 전송할 수 있어, seq2가 먼저 env device sequence를 올린 뒤 seq1 retry가 `STALE_OR_DUPLICATE`로 거절되어 서로 다른 곡 A가 유실될 수 있는 경로가 확인됨.
+- **핵심 수정:** Stage416 private registration drain을 **terminal-result 직렬화**로 변경. 같은 durable ordered drain에서 seq N은 `ACCEPTED / DUPLICATE_CONFIRMED / 명시적 terminal rejection` 중 하나가 확정되기 전 seq N+1을 네트워크로 보내지 않는다.
+- **ambiguous 처리:** 네트워크 오류, `PRIOR_WINDOW_NEEDS_SEAL` retry exhaustion, `STALE_OR_DUPLICATE`, unknown 오류는 fail-closed로 drain 즉시 중단. durable outbox와 같은 operationId/deviceSequence를 그대로 보존해 다음 recovery가 seq1부터 재시도한다.
+- **명시적 terminal rejection:** 현재 서버가 exact rejection으로 확정할 수 있는 `DEVICE_LIMIT / TRACK_LIMIT`만 terminal로 분류. 이 경우 exact local outbox operation을 먼저 제거·재검증하고 pre-click local membership/count로 rollback한 뒤에만 다음 sequence 진행. rejection persistence 실패 시 다음 sequence 전송 금지.
+- **정상 기능 보호:** same-track supersession, app410 frozen canonical path, app412/413/414, app416 intent/quarantine, 127/175/178/191/192/197/390 회귀 모두 보호. Stage416 general client flag는 계속 OFF.
+- **신규 코드:** `src/services/exploreLikePrivateRegistrationOrder416.mjs`의 순수 ordered drain helper를 실제 `drainStage416PrivateRegistrations416()`에 연결. transport는 terminal/recoverable failure를 구조화하되 `STALE_OR_DUPLICATE`는 accepted/rejected 어느 쪽으로도 추측하지 않음.
+- **신규 실행형 검증:** `scripts/verify-430-stage416-same-device-ambiguous-sequence.mjs`.
+  - seq1 A ambiguous failure → seq2 network call 0
+  - 동일 operationId seq1 retry → exact receipt 후 seq2 전송
+  - 서로 다른 A/B track 모두 생존
+  - STALE_OR_DUPLICATE fail-closed
+  - TRACK_LIMIT terminal rejection durable record 후에만 seq2 진행
+  - rejection persistence 실패 시 seq2 차단
+- **개발 QA candidate:** `e33715d7fba6bc847e76596266b2822eb0854eb3`.
+- **개발 QA Run:** `38519953280` **SUCCESS**.
+- **핵심 PASS:** `STAGE416_AMBIGUOUS_SEQ1_BLOCKS_SEQ2_NETWORK_SEND`, `STAGE416_SEQ1_RETRY_REUSES_OPERATION_THEN_SEQ2_SENDS`, `STAGE416_DIFFERENT_TRACK_SEQ1_SEQ2_BOTH_SURVIVE`, `STAGE416_STALE_OR_DUPLICATE_REMAINS_FAIL_CLOSED`, `STAGE416_FINAL_REJECTION_RECORDED_BEFORE_SEQ2`, `STAGE416_FAILED_REJECTION_PERSISTENCE_BLOCKS_SEQ2`.
+- **비용:** 정상 accepted W2 비변경, exact proven duplicate W0 유지. ordering fix 자체 page/update/re-entry IO 0. explicit terminal rejection에서만 기존 tentative intent cleanup + local rollback 수행; full scan/rebuild 없음.
+- **변경 없음:** Firebase/Functions/Cloudflare/Hosting 배포 0, shared user data 변경 0, D1/R2 schema/migration/backfill/delete 0, TEST/PRODUCTION 변경 0.
+- **현재 gate:** 새 exact HEAD 독립 GPT-6 재감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
+## CURRENT — PR #120 핵심원인 보완: global-only orphan reservation lease / no-retry 회복 QA PASS / 독립 감사 대기 (2026-10-14 KST)
+
+- **직전 독립 감사 FAIL:** `33bf13666e27894d16cd1ef23d39077de75b52ae`. global version reservation 직후 Functions가 중단되고 같은 operation retry가 아예 오지 않으면, lower global-only reservation이 영구적으로 higher settlement를 막을 수 있는 구조적 차단점이 확인됨.
+- **핵심원인 교정:** global reservation을 영구 acceptance/fence가 아니라 **짧은 in-flight lease**로 한정. Stage416 authenticated Callable은 `timeoutSeconds: 60`, global reservation lease는 `120s`로 고정해 살아 있는 호출보다 lease가 항상 길게 유지되도록 함.
+- **정산 판단:** exact click이 어느 환경 pending/sealed에 실제 materialize되면 global row version은 별도 영구 barrier가 아니며 해당 **environment batch revision**이 canonical ordering fence가 됨. 반대로 어떤 환경에도 materialize되지 않은 global-only reservation만 lease 동안 higher settlement를 차단.
+- **no-retry orphan 회복:** lease 만료 + 3개 환경 bounded UID snapshot에 exact/same-track materialization 증거 없음이 확인된 reservation은 due-settlement 시 UID당 **단일 global transaction W1 최대 1회**로 exact cleanup. 신규 device orphan은 exact slot 제거, 기존 device orphan은 predecessor snapshot 복원.
+- **race 보호:** settlement가 expired orphan을 관측한 뒤 same-operation retry가 lease를 refresh하면 cleanup transaction이 최신 lease를 재검증해 삭제하지 않고 fail-closed. genuine retry는 환경 materialization이 아직 필요할 때만 lease refresh; environment-proven exact duplicate는 logical W0 유지.
+- **rolling compatibility:** 이전 candidate의 `leaseUntilMs` 없는 epoch-ms reservation에는 15분 bounded legacy grace 적용. predecessor metadata 없는 ambiguous legacy row는 destructive cleanup하지 않음.
+- **신규 실행형 검증:** `verify-428-stage416-no-retry-orphan-lease.mjs`, `verify-429-stage416-reservation-lifecycle-edges.mjs`.
+- **최종 코드/test HEAD:** `cd7660fd73d11ff645c14c73859b6843f111959b`.
+- **최종 QA:** Run `38513702935` **SUCCESS**. no-retry orphan expiry→higher settlement, live reservation block, environment-proven duplicate W0, retry-vs-cleanup race, existing-device predecessor restore, legacy grace/ambiguous non-destructive handling, protected likes, App TypeScript, App Build, Functions TypeScript 모두 PASS.
+- **핵심 PASS:** `STAGE416_GLOBAL_ONLY_RESERVATION_HAS_BOUNDED_LEASE`, `STAGE416_NO_RETRY_ORPHAN_EXPIRES_AND_V102_SETTLES`, `STAGE416_EXPIRED_LEASE_ENV_PROVEN_DUPLICATE_W0`, `STAGE416_SETTLED_BATCH_FENCE_DOES_NOT_REBASE_MATERIALIZED_ROW`, `STAGE416_GENUINE_EXPIRED_RETRY_RENEWS_THEN_MATERIALIZES`, `STAGE416_CLEANUP_RACE_WITH_RETRY_REFRESH_FAILS_CLOSED`, `STAGE416_EXISTING_DEVICE_NO_RETRY_ORPHAN_RESTORES_PREDECESSOR`, `STAGE416_PREVIOUS_CANDIDATE_NO_LEASE_HAS_BOUNDED_LEGACY_GRACE`, `STAGE416_AMBIGUOUS_LEGACY_CLEANUP_IS_NONDESTRUCTIVE`.
+- **비용:** accepted click 기존 RTDB W2 모델 유지. exact environment-proven duplicate W0 유지. no-retry orphan cleanup은 실제 장애 회복 시 UID당 changed write 최대 W1. settlement bounded read는 기존 3/attempt(현재 env 제외 peer roots 2 + global 1) 유지. page/update/re-entry 신규 IO 0.
+- **변경 없음:** shared user data, D1 schema/table/key, Worker runtime deploy, Rules, R2 schema, migration/backfill/delete 변경 0. Firebase/Functions/Cloudflare/Hosting 배포 0. 일반 Stage416 client OFF.
+- **현재 gate:** exact 새 HEAD 독립 감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
+## CURRENT — PR #120 재감사 FAIL 보완: 중단 후 신규기기 retry orphan 예약 정리 / QA PASS / 재감사 대기 (2026-10-14 KST)
+
+- **독립 감사 FAIL 대상:** `be96753594d0b4326dad05ce28982d6f6d446749`. 신규 기기 A가 global v101 예약 직후 Functions가 중단되고, 같은 operation 재시도에서 env `TRACK_LIMIT`으로 거절되면 재시도 호출의 `reservationCreatedDevice=false` 때문에 exact v101 예약이 남아 정상 v102 정산을 막을 수 있는 경로가 확인됨.
+- **최소 수정:** rejection cleanup 권한을 "이번 호출이 device slot을 만들었는가"가 아니라 **global exact reservation 자체의 predecessor metadata + canonical settled fence**로 판단. `previous:null`은 해당 exact unsettled reservation이 신규 device slot을 만든 증거이므로 재시도 호출에서도 제거 가능. 기존 기기는 exact predecessor snapshot으로 rollback.
+- **정상 요청 보호:** `allocatedVersion <= settledVersion`인 이미 canonical 정산 완료 예약은 cleanup하지 않는다. predecessor metadata가 없는 legacy/ambiguous 예약도 추측 삭제하지 않고 fail-closed. `PRIOR_WINDOW_NEEDS_SEAL`은 기존대로 cleanup 대상이 아니며 same-operation retry reservation을 유지.
+- **신규 실행형 검증:** `scripts/verify-427-stage416-interrupted-new-device-retry-cleanup.mjs`. 신규 A v101 예약 → env 저장 전 Functions 중단 → 동일 operation retry → `TRACK_LIMIT` 거절 → exact orphan v101 제거 → B v102 정상 접수 → Worker/D1/R2 정산 성공을 실제 함수 흐름으로 재현.
+- **개발 QA:** 코드/test candidate `f2b25868ae2e7faa9027dd16954a8629c840c42f`, Run `38495796906` **SUCCESS**. 신규 interrupted-retry 검증, 기존 426 existing-device rollback, Issue118 ordering/settlement, protected like regressions, App TypeScript, App Build, Functions TypeScript 모두 PASS.
+- **핵심 PASS:** `STAGE416_INTERRUPTED_NEW_DEVICE_V101_RESERVATION_PERSISTS_FOR_RETRY`, `STAGE416_RETRY_TRACK_LIMIT_CLEANS_EXACT_ORPHAN_V101`, `STAGE416_RETRY_CLEANUP_USES_RESERVATION_METADATA_NOT_CALL_FLAG`, `STAGE416_REJECTED_ORPHAN_V101_DOES_NOT_BLOCK_VALID_V102`, `STAGE416_VALID_V102_AFTER_INTERRUPTED_RETRY_WORKER_D1_DELIVERY`.
+- **비용:** 정상 accepted click RTDB W2 모델 비변경, exact proven duplicate W0 유지. 거절된 exact unsettled reservation cleanup에서만 RTDB changed write 최대 1회. settlement bounded read 3/attempt 유지. page/update/re-entry IO 0.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0. Firebase/Functions/Worker/Rules/Hosting 배포 0. 일반 Stage416 client OFF 유지.
+- **현재 gate:** 새 exact HEAD 독립 재감사 PASS 전 PR #120 merge, Stage416 개인 1분 활성화, PREVIEW 배포 금지.
+
+---
+
+## CURRENT — PR #120 감사 FAIL 보완: 거절된 기존 기기 예약 deadlock 제거 / QA PASS / 재감사 대기 (2026-10-14 KST)
+
+- **독립 감사 FAIL 대상:** `38783d2e5a0813bdd00165215418d411635c4b06`. 기존 기기 A가 v101을 예약한 뒤 `TRACK_LIMIT` 등으로 실제 env 접수되지 않으면 global device reservation v101이 남아, 정상 기기 B의 v102 정산을 계속 막을 수 있는 논리 경로가 확인됨.
+- **최소 수정:** global device reservation에 직전 device snapshot을 1단계만 보존. authoritative env 확인 뒤 exact 요청이 `DEVICE_LIMIT / TRACK_LIMIT / STALE_OR_DUPLICATE`로 거절되면, 신규 기기는 기존처럼 exact slot만 제거하고 **기존 기기는 직전 accepted/reserved device 상태로 exact rollback**한다. global high-water 숫자는 되돌리지 않아 동시성 monotonicity를 유지한다.
+- **안전 가드:** `PRIOR_WINDOW_NEEDS_SEAL`은 rollback 대상이 아니며 같은 operation retry reservation을 그대로 보존. predecessor 정보가 없는 legacy/ambiguous reservation은 추측 삭제하지 않고 fail-closed로 보존.
+- **신규 실행형 검증:** `scripts/verify-426-stage416-rejected-existing-device-reservation.mjs`. 기존 기기 A v100 → A v101 `TRACK_LIMIT` 거절 → A global state v100 복원 → 다른 기기 B v102 정상 접수 → Worker/D1 최종 정산 성공을 한 흐름으로 재현.
+- **개발 QA:** candidate `cad5e54728018f75e3c505fe8468b5a0cd9b2fd5`, Run `38433380984` **SUCCESS**. `STAGE416_REJECTED_EXISTING_DEVICE_RESERVATION_ROLLBACK=PASS`, `STAGE416_REJECTED_V101_DOES_NOT_BLOCK_VALID_V102_SETTLEMENT=PASS`, 기존 Issue118 ordering/settlement, protected likes 회귀, app TypeScript, app Build, Functions TypeScript 모두 PASS.
+- **비용:** 정상 accepted click RTDB W2 모델 비변경. 거절된 기존기기 reservation cleanup에서만 RTDB changed write 최대 1회 추가. 정산 peer+global bounded read 3/attempt 유지. page/update/re-entry IO 0.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0. Firebase/Functions/Worker/Rules/Hosting 배포 0. 일반 Stage416 client OFF 유지.
+- **현재 gate:** 새 exact HEAD 독립 재감사 PASS 전 PR #120 merge, Stage416 개인 1분 활성화, PREVIEW 배포 금지.
+
+---
+
+## CURRENT — Issue #118 감사 FAIL 3건 교정 완료 / 최종 회귀 PASS / 재감사 대기 (2026-10-14 KST)
+
+- **작업 branch:** `gpt56/stage416-lost-click-fix`
+- **기준 preview:** `2d282ffb6fb4d9c95f654c782c20a1e2cf2ae922`
+- **직전 감사 대상:** `beb6f445ce354b5561519e76239c3d9b3e3a4d97` → GPT-6 독립 감사 **FAIL**.
+- **FAIL 1 — 동시 예약 역순 저장:** A가 v100 예약 후 지연되고 B가 v101 예약·저장한 뒤 A가 저장될 때 click 유실 가능. 교정 후 같은 operationId를 유지하면서 관측된 env/global high-water보다 최신 버전으로만 안전 rebase한다.
+- **FAIL 1 실행형 재현:** A 예약 → B 예약 → B 저장 → A 저장 순서를 직접 재현. `STAGE416_CONCURRENT_RESERVATION_REBASE_NO_LOST_CLICK=PASS`.
+- **FAIL 2 — 환경 간 최종 확정 역전:** 높은 버전 환경이 낮은 버전보다 먼저 Worker/D1/R2로 확정되는 경로를 차단했다. 실제 due settlement에서 현재 환경을 제외한 **다른 두 transient private root만 bounded read**하고, 더 낮은 active window/seal이 있으면 higher seal을 RTDB에 그대로 보존한 채 Cloud Task retry로 대기한다.
+- **FAIL 2 실행형 재현:** PREVIEW v101 확정 시도 → TEST v100 존재 → v101 Worker/D1 호출 0 → TEST v100 전달/ACK → PREVIEW v101 전달/ACK. `STAGE416_CROSS_ENV_FINAL_DELIVERY_STRICT_100_101=PASS`, `STAGE416_BLOCKED_HIGHER_WORKER_D1_CALLS=0`.
+- **FAIL 3 — 거절된 신규기기 예약 슬롯 잔존:** 새 global device slot을 만든 요청이 최종적으로 DEVICE_LIMIT / TRACK_LIMIT / STALE로 거절된 경우 exact reservation만 조건부 회수한다. accepted/duplicate/PRIOR_WINDOW_NEEDS_SEAL reservation은 삭제하지 않는다. `STAGE416_REJECTED_NEW_DEVICE_RESERVATION_SLOT_RELEASED=PASS`.
+- **최종 개발 QA:** Run `38424104197` SUCCESS. Stage416 421/422/423 + callable/server/expired-window + app416 intent + 127/175/178/191/192/197/390/412/413/414 회귀 + app TypeScript + app Build + Functions TypeScript PASS.
+- **비용:** 정상 accepted click RTDB changed writes 모델 W2 유지, exact proven duplicate W0 유지. cross-env settlement gate는 **실제 due window 시도당 peer RTDB read 2**만 추가하며 page/update/re-entry IO는 0. rejected 신규기기 cleanup은 거절 상황에서만 exact global reservation RTDB write 최대 1회 추가.
+- **관리자 운영값:** live 확인 기준 private=1분 / public=5분 그대로. 이번 후보는 값을 읽거나 활성화하지 않으며 일반 Stage416 client flag는 계속 OFF.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0.
+- **배포:** Firebase/Functions/Worker/Rules/Hosting 배포 0. TEST/PRODUCTION 변경 0.
+- **현재 gate:** 새 독립 감사 PASS 전 PR #120 merge, preview client activation, 개인 1분 실사용 활성화 금지.
+
+---
+## CURRENT — Stage416 lost-click blocker 직접 수정 완료 / QA PASS / 독립 감사 대기 (2026-10-14 KST)
+
+- **작업 branch:** `gpt56/stage416-lost-click-fix`
+- **기준 preview:** `2d282ffb6fb4d9c95f654c782c20a1e2cf2ae922`
+- **제품/Functions 코드 commit:** `8c61b49234f7d335af1993575bbf7b95ad518b82`
+- **목표 한 건:** Issue #118 환경분리 후보의 global version 선할당이 env pending 실제 저장보다 먼저 accepted처럼 재사용되어 same-operation retry에서 click을 잃을 수 있던 blocker 제거.
+- **교정 구조:** cross-environment global state는 canonical acceptance가 아니라 **version reservation only**. 같은 operation 재시도는 reservation version을 재사용하지만, 해당 환경 private root의 exact pending/sealed operation 증거가 있어야만 `DUPLICATE_CONFIRMED`를 반환한다.
+- **환경분리:** PREVIEW legacy identity 유지, TEST/PRODUCTION callable/task/privateRoot/finalRoot/timing/Worker endpoint는 additive source로 분리. 일반 Stage416 client flag는 계속 OFF.
+- **관리자 운영값:** live read-only 확인 기준 private=1분 / public=5분 그대로. 이번 수정은 이 값을 활성화하지 않음.
+- **QA:** 임시 검사 commit `d1c5ceda6bdb2397138397f07cc17312cf2459a4`, Run `38419094013` SUCCESS.
+- **핵심 PASS:** `STAGE416_GLOBAL_RESERVATION_IS_NOT_ACCEPTANCE`, `STAGE416_PRIOR_SEAL_RETRY_REUSES_VERSION_AND_PERSISTS`, `STAGE416_LIMIT_AND_STALE_REJECTIONS_NEVER_GLOBAL_ACCEPT`, `STAGE416_GLOBAL_ONLY_DUPLICATE_AUTHORITY=0`, PREVIEW→TEST→PRODUCTION→PREVIEW strict version interleaving PASS.
+- **비용 보호:** accepted click의 RTDB changed writes 모델 W2, exact proven duplicate changed writes W0, page/update/re-entry IO 0. D1 schema/table/key 변경 0.
+- **기존 기능 회귀:** app416 late-accepted quarantine, app415 reload quarantine, app414 stale outbox authority, app410 retained repair, app413 count, app412 stale outbox, 127/175/178/191/192/197/390 회귀 PASS.
+- **빌드:** app TypeScript PASS, app Build PASS, Functions TypeScript PASS.
+- **배포/데이터:** Firebase/Worker/Rules/D1/R2/Hosting 배포 0. shared user data migration/backfill/delete/overwrite 0. TEST/PRODUCTION 변경 0.
+- **현재 gate:** GPT-6 독립 감사 전 merge/activation/deploy 금지.
+
+---
 ## CURRENT — Stage416 개인 1분 / 공개 5분 서버 설정 확인, lost-click 차단점 단일 작업 진행 중 (2026-10-13 KST)
 
 - 사용자 Master가 관리자 `좋아요 저장·공개 집계 주기`에서 **개인 최종상태 1분 / 공개 공동집계 5분**으로 저장.

@@ -3,11 +3,26 @@ import {
   recordStage416PrivateAcceptanceError416,
   recordStage416PrivateAcceptanceReply416,
 } from './exploreLikePrivateDiagnostic416';
+import {
+  createStage416PrivateRegistrationError416,
+  isFinalStage416PrivateRegistrationReason416,
+} from './exploreLikePrivateRegistrationOrder416.mjs';
 
 // app408 rollback: keep the server-only Stage416 implementation available in source,
 // but stop PREVIEW clients from registering new 5-minute private windows until the
 // end-to-end settlement path is proven. app399's canonical batch remains authoritative.
 export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=false;
+export const selectStage416Callable416=(hostname:string):string=>{
+ const host=String(hostname||'').toLowerCase();
+ if(host==='test.soridraw.com'||host==='soridraw-test.web.app'||
+    host==='soridraw-test.firebaseapp.com')return 'recordPrivateLike416Test';
+ if(host==='soridraw.com'||host==='www.soridraw.com'||
+    host==='soridraw.web.app'||host==='soridraw.firebaseapp.com'||
+    host==='soridraw-app-866a5.web.app'||host==='soridraw-app-866a5.firebaseapp.com')
+   return 'recordPrivateLike416Production';
+ // Preserve the controlled PREVIEW and local/emulator path exactly.
+ return 'recordPrivateLike416';
+};
 export type PrivateRtdbClick416={
   trackId:string; liked:boolean; operationId:string; deviceId:string; deviceSequence:number;
 };
@@ -36,11 +51,16 @@ export async function retryPrivateClickAfterPriorSeal416(
       await sleep(PRIOR_WINDOW_RETRY_DELAYS_416[attempt]);
       continue;
     }
-    // A STALE_OR_DUPLICATE answer might also be a lost prior ACK; never
-    // pretend canonical acceptance without the exact server receipt.
-    throw Error('416_PRIVATE_SERVER_CLICK_NOT_ACCEPTED:'+String(reply?.reason||'UNKNOWN'));
+    // STALE_OR_DUPLICATE may still represent an accepted operation whose
+    // exact env proof already moved on, so it remains unresolved/fail-closed.
+    // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server rejections and may
+    // release the next deviceSequence only after the caller durably records
+    // that rejection.
+    const reason=String(reply?.reason||'UNKNOWN');
+    throw createStage416PrivateRegistrationError416(
+      reason,isFinalStage416PrivateRegistrationReason416(reason));
   }
-  throw Error('416_PRIVATE_SERVER_RETRY_EXHAUSTED');
+  throw createStage416PrivateRegistrationError416('PRIVATE_SERVER_RETRY_EXHAUSTED',false);
 }
 export type PrivateRegistrationDiagnosticSource416='initial'|'recovery';
 
@@ -50,7 +70,8 @@ export const publishPrivateRtdbBatchClick416=async(
 ):Promise<{version:number;count:number}|null>=>{
  if(!STAGE416_SHARED_RTDB_BATCH_ACTIVE)return null;
  const call=httpsCallable<PrivateRtdbClick416,PrivateClickReply416>(
-   functions,'recordPrivateLike416');
+   functions,selectStage416Callable416(
+     typeof window==='undefined'?'':window.location.hostname));
  return retryPrivateClickAfterPriorSeal416(async()=>{
    try{
      const result=await call(click);

@@ -28,8 +28,8 @@ export type LikeBatchSettingsSnapshot416 = LikeBatchTiming416 & {
   version: number;
   updatedAtMs: number;
 };
-export const readLikeBatchTiming416 = async (database: Database): Promise<LikeBatchSettingsSnapshot416> => {
-  const snapshot = await database.ref(LIKE_BATCH_TIMING_PATH_416).get();
+export const readLikeBatchTimingAt416 = async (database: Database, path: string): Promise<LikeBatchSettingsSnapshot416> => {
+  const snapshot = await database.ref(path).get();
   const raw = snapshot.val();
   if (raw == null) return { ...DEFAULT_LIKE_BATCH_TIMING_416, version: 0, updatedAtMs: 0 };
   const timing = parseLikeBatchTiming416(raw);
@@ -39,15 +39,17 @@ export const readLikeBatchTiming416 = async (database: Database): Promise<LikeBa
       !Number.isSafeInteger(updated) || updated < 0) throw new Error('416_CORRUPT_MASTER_REVISION');
   return { ...timing, version: revision, updatedAtMs: updated };
 };
+export const readLikeBatchTiming416 = async (database: Database): Promise<LikeBatchSettingsSnapshot416> =>
+  readLikeBatchTimingAt416(database, LIKE_BATCH_TIMING_PATH_416);
 export const changeLikeBatchTiming416 = async (
   database: Database, masterUid: string, timing: LikeBatchTiming416,
-  expectedVersion: number, nowMs = Date.now(),
+  expectedVersion: number, nowMs = Date.now(), path = LIKE_BATCH_TIMING_PATH_416,
 ): Promise<LikeBatchSettingsSnapshot416> => {
   const validated = parseLikeBatchTiming416(timing);
   if (!masterUid || masterUid.length > 128 ||
       !Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
       !Number.isSafeInteger(nowMs) || nowMs <= 0) throw new Error('416_INVALID_MASTER_WRITE');
-  const outcome = await database.ref(LIKE_BATCH_TIMING_PATH_416).transaction((raw: unknown) => {
+  const outcome = await database.ref(path).transaction((raw: unknown) => {
     const current = raw && typeof raw === 'object' && !Array.isArray(raw)
       ? raw as Record<string, unknown> : {};
     const version = Number(current.version || 0);

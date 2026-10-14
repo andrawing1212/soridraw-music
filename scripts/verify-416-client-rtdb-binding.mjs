@@ -20,7 +20,13 @@ const source=readFileSync('src/services/exploreLikeService.ts','utf8');
 if(stage416ClientActive) assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = true/);
 else assert.match(source,/STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);
 assert.match(source,/STAGE416_SHARED_RTDB_BATCH_ACTIVE &&/);
-assert.match(source,/persistLikeOutbox\(uid, latest416\);[\s\S]*?publishPrivateRtdbBatchClick416\(/);
+assert.match(source,/reserveAndPersistExploreLikeDeviceSequence416\(/,
+  'device sequence and outbox persistence must stay inside one origin-wide lock');
+assert.match(source,/persistLikeOutbox\(uid, latest416\);/);
+assert.match(source,/await drainStage416PrivateRegistrations416\(uid, operationId416\)/,
+  'initial registration must use the ordered durable drain');
+assert.match(source,/await drainStage416PrivateRegistrations416\(uid\)/,
+  'restart recovery must reuse the same ordered drain');
 assert.match(source,/privateDeviceSequence416: token.deviceSequence/);
 console.log('STAGE416_MULTI_TAB_UID_DEVICE_SEQUENCE_80=PASS');
 // Execute the real (dormant) Callable retry function in isolation. An
@@ -32,6 +38,7 @@ const compiled=ts.transpileModule(transport,{compilerOptions:{
   module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
 }}).outputText;
 const module416={exports:{}};let callableCalls416=0,transportDiagnostics416=[];
+const registrationOrder416=await import('../src/services/exploreLikePrivateRegistrationOrder416.mjs');
 vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   require:moduleId=>moduleId==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
     callableCalls416++;
@@ -40,7 +47,8 @@ vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   }}:moduleId==='./exploreLikePrivateDiagnostic416'?{
     recordStage416PrivateAcceptanceReply416:(...args)=>transportDiagnostics416.push(['reply',...args]),
     recordStage416PrivateAcceptanceError416:(...args)=>transportDiagnostics416.push(['error',...args]),
-  }:(()=>{throw Error('unexpected import '+moduleId)})(),
+  }:moduleId==='./exploreLikePrivateRegistrationOrder416.mjs'?registrationOrder416
+   :(()=>{throw Error('unexpected import '+moduleId)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;
@@ -87,13 +95,14 @@ await assert.rejects(retry416(async()=>{
   attempts++;return {ok:true,accepted:false,reason:'STALE_OR_DUPLICATE'};
 },()=>true,async()=>{}),/STALE_OR_DUPLICATE/);
 assert.equal(attempts,1,'ambiguous stale receipt never treated as accepted');
-assert.match(source,/current\.privateDeviceSequence416 === token\.deviceSequence/);
+assert.match(source,/row\.privateDeviceSequence416 === saved\.privateDeviceSequence416/,
+  'ordered drain must keep exact durable device sequence authority');
 assert(source.includes('privateServerRegistered416:true'));
 assert(source.includes('inFlightRecovery416.has(uid)'));
 assert(source.includes('budget.count>=3'));
 assert(source.includes("window.addEventListener('online'"));
 assert(source.includes('onAuthStateChanged(auth,user=>'));
-assert(source.includes('row.privateDeviceSequence416===saved.privateDeviceSequence416'));
+assert.match(source,/row\.privateDeviceSequence416\s*===\s*saved\.privateDeviceSequence416/);
 const {parsePrivateFinalReceipt416:parseFinal,
   selectExactFinalizedPrivateLikes416:exactFinal}=await import(
   '../src/services/exploreLikePrivateFinalReceipt416.mjs');
@@ -207,9 +216,12 @@ assert(diagnosticEvents>=3);
 const panel416=readFileSync('src/components/Stage416LikeBatchMasterPanel.tsx','utf8');
 assert.match(panel416,/Stage416 서버 접수 진단/);
 assert.match(panel416,/readStage416PrivateAcceptanceDiagnostic416/);
-assert.match(source,/markStage416PrivateAcceptanceRegistered416[\s\S]*?'initial'/);
-assert.match(source,/stillCurrent,'recovery'/);
-assert.match(source,/markStage416PrivateAcceptanceRegistered416[\s\S]*?'recovery'/);
+assert.match(source,/const diagnosticSource = saved\.operationId === initialOperationId[\s\S]*?'initial' as const : 'recovery' as const/,
+  'ordered drain must preserve initial vs recovery diagnostics');
+assert.match(source,/\(\) => stillCurrent416\(saved\), diagnosticSource/,
+  'Callable registration must use the ordered drain diagnostic source');
+assert.match(source,/markStage416PrivateAcceptanceRegistered416\([\s\S]*?receipt\.diagnosticSource, receipt\.version\)/,
+  'registered diagnostic must preserve the same ordered source');
 console.log('STAGE416_PRIVATE_ACCEPTANCE_LOCAL_DIAGNOSTIC_NO_SERVER_IO=PASS');
 console.log('STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_NO_RAW_IDS=PASS');
 

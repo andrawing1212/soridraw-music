@@ -20,8 +20,12 @@ import {
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
 import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
-import { reserveExploreLikeDeviceSequence416 } from './exploreLikeDeviceSequence416.mjs';
+import {
+  reserveAndPersistExploreLikeDeviceSequence416,
+  withExploreLikeRegistrationLock416,
+} from './exploreLikeDeviceSequence416.mjs';
 import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
+import { drainStage416PrivateRegistrationsInOrder416 } from './exploreLikePrivateRegistrationOrder416.mjs';
 import { markStage416PrivateAcceptanceRegistered416 } from './exploreLikePrivateDiagnostic416';
 import {
   shouldFinalReceiptSupersedeLocal401,
@@ -2544,6 +2548,53 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   return [...candidates];
 };
 
+const retireStage416PermanentRejection416 = async (
+  uid: string,
+  saved: ExploreLikePendingMutation,
+  reason: string,
+): Promise<boolean> => {
+  // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server replies. Retire
+  // only this exact durable operation, restore its pre-click local state,
+  // and verify the row is gone BEFORE any higher deviceSequence is sent.
+  const rows = readLikeOutbox(uid);
+  const row = rows[saved.trackId];
+  if (auth.currentUser?.uid !== uid || !row ||
+      row.operationId !== saved.operationId ||
+      row.updatedAt !== saved.updatedAt ||
+      row.desiredLiked !== saved.desiredLiked ||
+      row.privateDeviceId416 !== saved.privateDeviceId416 ||
+      row.privateDeviceSequence416 !== saved.privateDeviceSequence416) return false;
+  delete rows[saved.trackId];
+  persistLikeOutbox(uid, rows);
+  const reread = readLikeOutbox(uid)[saved.trackId];
+  if (reread?.operationId === saved.operationId) return false;
+
+  const cache = getLikedStateCache(uid);
+  cache.set(saved.trackId, saved.baseLiked);
+  persistLikedStateCache(uid, cache);
+  const locks = readLikeDisplayLocks(uid);
+  delete locks[saved.trackId];
+  persistLikeDisplayLocks(uid, locks);
+  patchExploreLikedTrackMembership(uid, saved.trackId, saved.baseLiked);
+  // Best-effort tentative-channel cleanup. This is not canonical settlement
+  // and never justifies sending a later sequence by itself.
+  void settleExploreLikeIntent416(uid, [{
+    trackId: saved.trackId,
+    operationId: saved.operationId || '',
+    status: 'rejected' as const,
+  }]).catch(() => {});
+  dispatchLikeSync({
+    uid,
+    trackId: saved.trackId,
+    ownerUid: saved.ownerUid,
+    liked: saved.baseLiked,
+    likeCount: saved.baseLikeCount,
+    source: 'local',
+  });
+  console.warn('[416] Private registration permanently rejected:', reason);
+  return true;
+};
+
 export const reconcileExploreLikedTrackCollectionState = (
   uid: string,
   candidateLikedTrackIds: string[],
@@ -2562,6 +2613,85 @@ export const reconcileExploreLikedTrackCollectionState = (
     }
   }
   return effectiveLikedTrackIds;
+};
+
+const drainStage416PrivateRegistrations416 = async (
+  uid: string,
+  initialOperationId = '',
+): Promise<void> => {
+  if (!STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE || !STAGE416_SHARED_RTDB_BATCH_ACTIVE) return;
+  if (!uid || typeof window === 'undefined' || typeof navigator === 'undefined' ||
+      !navigator.locks?.request) {
+    throw new Error('416_DEVICE_REGISTRATION_LOCK_UNAVAILABLE');
+  }
+  await withExploreLikeRegistrationLock416(uid, navigator.locks, async () => {
+    const outstanding = Object.values(readLikeOutbox(uid))
+      .filter((row) =>
+        (!row.privateServerRegistered416 || !row.privateServerVersion416) &&
+        !!row.operationId && !!row.privateDeviceId416 && !!row.privateDeviceSequence416)
+      .sort((a, b) => {
+        const deviceA = String(a.privateDeviceId416 || '');
+        const deviceB = String(b.privateDeviceId416 || '');
+        if (deviceA === deviceB) {
+          const sequenceDelta = Number(a.privateDeviceSequence416 || 0) -
+            Number(b.privateDeviceSequence416 || 0);
+          if (sequenceDelta !== 0) return sequenceDelta;
+        }
+        return Number(a.queuedAt || a.updatedAt || 0) -
+          Number(b.queuedAt || b.updatedAt || 0);
+      });
+
+    const stillCurrent416 = (saved: ExploreLikePendingMutation) => {
+      const row = readLikeOutbox(uid)[saved.trackId];
+      return auth.currentUser?.uid === uid &&
+        row?.operationId === saved.operationId &&
+        row.updatedAt === saved.updatedAt &&
+        row.desiredLiked === saved.desiredLiked &&
+        row.privateDeviceId416 === saved.privateDeviceId416 &&
+        row.privateDeviceSequence416 === saved.privateDeviceSequence416;
+    };
+
+    await drainStage416PrivateRegistrationsInOrder416(outstanding, {
+      isCurrent: stillCurrent416,
+      send: async (saved: ExploreLikePendingMutation) => {
+        const diagnosticSource = saved.operationId === initialOperationId
+          ? 'initial' as const : 'recovery' as const;
+        const receipt = await publishPrivateRtdbBatchClick416(uid, {
+          trackId: saved.trackId,
+          liked: saved.desiredLiked,
+          operationId: saved.operationId!,
+          deviceId: saved.privateDeviceId416!,
+          deviceSequence: saved.privateDeviceSequence416!,
+        }, () => stillCurrent416(saved), diagnosticSource);
+        return receipt ? { ...receipt, diagnosticSource } : null;
+      },
+      persistAccepted: async (
+        saved: ExploreLikePendingMutation,
+        receipt: { version: number; count: number; diagnosticSource: 'initial' | 'recovery' },
+      ) => {
+        if (!stillCurrent416(saved)) return;
+        const rows = readLikeOutbox(uid);
+        const row = rows[saved.trackId];
+        if (row && (!row.privateServerRegistered416 ||
+            row.privateServerVersion416 !== receipt.version)) {
+          rows[saved.trackId] = {
+            ...row,
+            privateServerRegistered416: true,
+            privateServerVersion416: receipt.version,
+          };
+          persistLikeOutbox(uid, rows);
+          markStage416PrivateAcceptanceRegistered416(
+            uid, saved.operationId!, receipt.diagnosticSource, receipt.version);
+          window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
+            { detail: { uid } }));
+        }
+      },
+      persistRejected: async (saved: ExploreLikePendingMutation, reason: string) => {
+        if (!stillCurrent416(saved)) return false;
+        return retireStage416PermanentRejection416(uid, saved, reason);
+      },
+    });
+  });
 };
 
 export const setExploreTrackLike = async (
@@ -2793,57 +2923,33 @@ export const setExploreTrackLike = async (
           !navigator.locks?.request || !window.crypto?.randomUUID) {
         throw new Error('416_DEVICE_SEQUENCE_UNAVAILABLE');
       }
-      const token = await reserveExploreLikeDeviceSequence416(
+      await reserveAndPersistExploreLikeDeviceSequence416(
         uid, window.localStorage, navigator.locks, () => window.crypto.randomUUID(),
-      );
-      const latest416 = readLikeOutbox(uid);
-      const entry416 = latest416[normalizedTrackId];
-      if (!entry416 || entry416.operationId !== operationId416 ||
-          entry416.updatedAt !== now || entry416.desiredLiked !== liked) return;
-      latest416[normalizedTrackId] = {
-        ...entry416, privateDeviceId416: token.deviceId,
-        privateDeviceSequence416: token.deviceSequence,
-      };
-      persistLikeOutbox(uid, latest416);
-      const persisted416 = readLikeOutbox(uid)[normalizedTrackId];
-      if (persisted416?.operationId !== operationId416 ||
-          persisted416.privateDeviceId416 !== token.deviceId ||
-          persisted416.privateDeviceSequence416 !== token.deviceSequence) {
-        throw new Error('416_DEVICE_SEQUENCE_NOT_DURABLE');
-      }
-      const registered416 = await publishPrivateRtdbBatchClick416(uid, {
-        trackId: normalizedTrackId, liked, operationId: operationId416,
-        deviceId: token.deviceId, deviceSequence: token.deviceSequence,
-      }, () => {
-        // A newer same-song click or an account switch cancels an old retry.
-        // Never allocate a second device sequence for an ambiguous response.
-        if (auth.currentUser?.uid !== uid) return false;
-        const current = readLikeOutbox(uid)[normalizedTrackId];
-        return current?.operationId === operationId416 &&
-          current.updatedAt === now && current.desiredLiked === liked &&
-          current.privateDeviceId416 === token.deviceId &&
-          current.privateDeviceSequence416 === token.deviceSequence;
-      });
-      if (registered416 && auth.currentUser?.uid===uid) {
-        const rows416=readLikeOutbox(uid);
-        const exact416=rows416[normalizedTrackId];
-        if(exact416?.operationId===operationId416 &&
-           exact416.updatedAt===now && exact416.desiredLiked===liked &&
-           exact416.privateDeviceId416===token.deviceId &&
-           exact416.privateDeviceSequence416===token.deviceSequence &&
-           !exact416.privateServerRegistered416){
-          rows416[normalizedTrackId]={
-            ...exact416,
-            privateServerRegistered416:true,
-            privateServerVersion416:registered416.version,
+        async (token: { deviceId: string; deviceSequence: number }) => {
+          const latest416 = readLikeOutbox(uid);
+          const entry416 = latest416[normalizedTrackId];
+          if (!entry416 || entry416.operationId !== operationId416 ||
+              entry416.updatedAt !== now || entry416.desiredLiked !== liked) {
+            throw new Error('416_CLICK_SUPERSEDED_BEFORE_SEQUENCE_PERSIST');
+          }
+          latest416[normalizedTrackId] = {
+            ...entry416,
+            privateDeviceId416: token.deviceId,
+            privateDeviceSequence416: token.deviceSequence,
           };
-          persistLikeOutbox(uid,rows416);
-          markStage416PrivateAcceptanceRegistered416(
-            uid,operationId416,'initial',registered416.version);
-          window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
-            {detail:{uid}}));
-        }
-      }
+          persistLikeOutbox(uid, latest416);
+          const persisted416 = readLikeOutbox(uid)[normalizedTrackId];
+          if (persisted416?.operationId !== operationId416 ||
+              persisted416.privateDeviceId416 !== token.deviceId ||
+              persisted416.privateDeviceSequence416 !== token.deviceSequence) {
+            throw new Error('416_DEVICE_SEQUENCE_NOT_DURABLE');
+          }
+        },
+      );
+      // The registration lock drains every durable row in ascending device
+      // sequence. Multi-tab/network timing therefore cannot send seq N+1 ahead
+      // of an already-persisted seq N from this browser origin.
+      await drainStage416PrivateRegistrations416(uid, operationId416);
     })().catch((error) =>
       console.warn('[416] RTDB private candidate deferred; durable outbox retained:', error));
   }
@@ -2893,44 +2999,7 @@ if (STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE && STAGE416_SHARED_RTDB_BATCH_ACTIVE &&
     retryBudget416.set(uid,{count:budget.count+1,lastAt:Date.now()});
     inFlightRecovery416.add(uid);
     try{
-      for(const saved of outstanding){
-        const stillCurrent=()=>{
-          const row=readLikeOutbox(uid)[saved.trackId];
-          return auth.currentUser?.uid===uid&&
-            row?.operationId===saved.operationId&&
-            row.updatedAt===saved.updatedAt&&
-            row.desiredLiked===saved.desiredLiked&&
-            row.privateDeviceId416===saved.privateDeviceId416&&
-            row.privateDeviceSequence416===saved.privateDeviceSequence416;
-        };
-        if(!stillCurrent())continue;
-        try{
-          const receipt=await publishPrivateRtdbBatchClick416(uid,{
-            trackId:saved.trackId,liked:saved.desiredLiked,
-            operationId:saved.operationId!,deviceId:saved.privateDeviceId416!,
-            deviceSequence:saved.privateDeviceSequence416!,
-          },stillCurrent,'recovery');
-          if(!receipt||!stillCurrent())continue;
-          const rows=readLikeOutbox(uid),row=rows[saved.trackId];
-          if(row&&(!row.privateServerRegistered416||
-             row.privateServerVersion416!==receipt.version)){
-            rows[saved.trackId]={
-              ...row,
-              privateServerRegistered416:true,
-              privateServerVersion416:receipt.version,
-            };
-            persistLikeOutbox(uid,rows);
-            markStage416PrivateAcceptanceRegistered416(
-              uid,saved.operationId!,'recovery',receipt.version);
-            window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
-              {detail:{uid}}));
-          }
-        }catch(error){
-          // Preserve ambiguous outbox until exact server receipt; never
-          // claim canonical settlement from a mere registration response.
-          console.warn('[416] Exact restart registration retained:',error);
-        }
-      }
+      await drainStage416PrivateRegistrations416(uid);
     }finally{inFlightRecovery416.delete(uid);}
   };
   onAuthStateChanged(auth,user=>{

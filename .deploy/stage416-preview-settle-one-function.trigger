@@ -13,3 +13,4 @@ public_gate_activation=false
 release_reason=readonly_public_receipt_pipeline_preflight_after_product_independent_audit
 test_evidence_408_run=38602592906_SUCCESS
 test_production_unchanged_required=true
+public_recovery_mode=initial_only

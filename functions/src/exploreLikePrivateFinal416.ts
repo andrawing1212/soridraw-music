@@ -12,7 +12,7 @@ type FinalRow={trackId:string;operationId:string;ownerUid:string;liked:boolean;l
 type SignedFinal={uid:string;windowId:string;version:number;
  signedAtMs:number;canonicalD1:string;canonicalProof:string;
  personalLikeSnapshot:string;batchIds:string[];settledBatchIds:string[];
- rows:FinalRow[]};
+ rows:FinalRow[];changedTrackIds?:string[]};
 type PublicRow416={trackId:string;ownerUid:string;at:number};
 // Publish ONE atomic public signal per settled window. Older clients still
 // see <=50 rows; extra rows are optional server-owned data read by app403+.
@@ -58,8 +58,9 @@ async function notifySettledPublicLikes416(db:Database,data:SignedFinal,nowMs:nu
 }
 export async function publishAuthenticatedPrivateFinal416(
  db:Database, raw:string, signature:string, secret:string,
- nowMs=Date.now(),finalRoot='privateLikeFinal416',
-):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';version:number;count:number}>{
+ nowMs=Date.now(),finalRoot='privateLikeFinal416',deferPublic416=false,
+):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';version:number;count:number;
+ changedTrackIds:string[]}>{
  if(!raw||raw.length>160_000||typeof secret!=='string'||secret.length<32||
     !/^[0-9a-f]{64}$/i.test(signature||'')||!Number.isSafeInteger(nowMs)||
     nowMs<=0)throw Error('416_FINAL_INVALID_AUTH');
@@ -87,6 +88,12 @@ export async function publishAuthenticatedPrivateFinal416(
     data.batchIds.some(id=>!data.settledBatchIds.includes(id))||
     new Set(data.settledBatchIds).size!==data.settledBatchIds.length)
     throw Error('416_FINAL_CANONICAL_PROOF_REQUIRED');
+ const changedTrackIds=Array.isArray(data.changedTrackIds)?data.changedTrackIds:[];
+ if((deferPublic416&&!Array.isArray(data.changedTrackIds))||
+    changedTrackIds.length>data.rows.length||
+    new Set(changedTrackIds).size!==changedTrackIds.length||
+    changedTrackIds.some(id=>typeof id!=='string'||!id||id.length>512))
+   throw Error('416_FINAL_BAD_CHANGED_TRACK_IDS');
  const seen=new Set<string>();
  for(const row of data.rows){
    if(!row||typeof row.trackId!=='string'||!row.trackId||
@@ -97,6 +104,8 @@ export async function publishAuthenticatedPrivateFinal416(
      throw Error('416_FINAL_BAD_ROW');
    seen.add(row.trackId);
  }
+ if(changedTrackIds.some(id=>!seen.has(id)))
+   throw Error('416_FINAL_BAD_CHANGED_TRACK_IDS');
  const stable={uid:data.uid,windowId:data.windowId,version:data.version,
    batchIds:data.batchIds,rows:data.rows};
  const digest=createHash('sha256').update(JSON.stringify(stable)).digest('hex');
@@ -120,12 +129,13 @@ export async function publishAuthenticatedPrivateFinal416(
    // The RTDB transaction callback supplies this value after the await.
    const outcome=reason as 'DUPLICATE'|'STALE'|'CONFLICT';
    if(outcome==='CONFLICT')throw Error('416_FINAL_SAME_VERSION_CONFLICT');
-   if(outcome==='STALE')return {status:outcome,version:data.version,count:data.rows.length};
+   if(outcome==='STALE')return {status:outcome,version:data.version,count:data.rows.length,
+     changedTrackIds};
  }
  // A failed public transaction must fail the signed callback, keeping the
  // existing Cloud Task/seal retry alive. The private receipt alone is not a
  // delivery checkpoint. Do not touch private intent/instant-sync transport.
- if(result.snapshot.val()?.publicNotified416!==true){
+ if(!deferPublic416&&result.snapshot.val()?.publicNotified416!==true){
    await notifySettledPublicLikes416(db,data,nowMs);
    await db.ref(finalRoot+'/'+data.uid).transaction((rawState:unknown)=>{
      const current=rawState as {version?:number;digest?:string;publicNotified416?:boolean}|null;
@@ -133,5 +143,6 @@ export async function publishAuthenticatedPrivateFinal416(
      return {...current,publicNotified416:true};
    },undefined,false);
  }
- return {status:result.committed?'PUBLISHED':'DUPLICATE',version:data.version,count:data.rows.length};
+ return {status:result.committed?'PUBLISHED':'DUPLICATE',version:data.version,
+   count:data.rows.length,changedTrackIds};
 }

@@ -55,7 +55,11 @@ export function planPublicLikeWindow416(current,event){
       !PUBLIC_LIKE_MINUTES_416.has(Number(window.publicMinutes)))
      throw Error('416_PUBLIC_WINDOW_CORRUPT');
  }
- if(!window||e.eventAtMs>=window.deadlineAtMs){
+ if(window&&e.eventAtMs>=window.deadlineAtMs){
+   return {opened:false,needsRelease:true,window,scheduleAtMs:null,
+     eventMarkerKey:'stage416/public/event/'+e.eventId,trackEntries:[]};
+ }
+ if(!window){
    opened=true;
    window={
      schemaVersion:1,
@@ -67,6 +71,7 @@ export function planPublicLikeWindow416(current,event){
  }
  return {
    opened,
+   needsRelease:false,
    window,
    scheduleAtMs:opened?window.deadlineAtMs:null,
    eventMarkerKey:'stage416/public/event/'+e.eventId,
@@ -90,4 +95,47 @@ export function publicLikeReleasePlan416(window,nowMs){
    releaseToken:'stage416-public-'+String(window.windowId),
    deadlineAtMs:Number(window.deadlineAtMs),
  };
+}
+
+
+export const PUBLIC_LIKE_WINDOW_KEY_416='stage416/public/current';
+const eventFingerprint416=(event)=>JSON.stringify({
+ eventAtMs:event.eventAtMs,windowCandidateId:event.windowCandidateId,
+ trackIds:event.trackIds,
+});
+export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
+ if(!storage?.get||!storage?.put)throw Error('416_PUBLIC_STORAGE_UNAVAILABLE');
+ const event=validatePublicLikeEvent416(raw,nowMs);
+ const markerKey='stage416/public/event/'+event.eventId;
+ const fingerprint=eventFingerprint416(event);
+ const prior=await storage.get(markerKey);
+ if(prior){
+   if(prior?.fingerprint!==fingerprint)throw Error('416_PUBLIC_EVENT_CONFLICT');
+   return {registered:true,duplicate:true,opened:false,needsRelease:false,
+     windowId:String(prior.windowId||''),deadlineAtMs:Number(prior.deadlineAtMs||0),
+     publicMinutes:Number(prior.publicMinutes||0),trackCount:event.trackIds.length};
+ }
+ const current=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+ const plan=planPublicLikeWindow416(current,event);
+ if(plan.needsRelease){
+   return {registered:false,duplicate:false,opened:false,needsRelease:true,
+     windowId:String(plan.window?.windowId||''),
+     deadlineAtMs:Number(plan.window?.deadlineAtMs||0),
+     publicMinutes:Number(plan.window?.publicMinutes||0),trackCount:0};
+ }
+ const entries={
+   [markerKey]:{
+     schemaVersion:1,fingerprint,windowId:plan.window.windowId,
+     deadlineAtMs:plan.window.deadlineAtMs,publicMinutes:plan.window.publicMinutes,
+   },
+ };
+ if(plan.opened)entries[PUBLIC_LIKE_WINDOW_KEY_416]=plan.window;
+ for(const row of plan.trackEntries)entries[row.key]={
+   schemaVersion:1,trackId:row.trackId,eventAtMs:row.eventAtMs,
+ };
+ await storage.put(entries);
+ return {registered:true,duplicate:false,opened:plan.opened,needsRelease:false,
+   windowId:plan.window.windowId,deadlineAtMs:plan.window.deadlineAtMs,
+   publicMinutes:plan.window.publicMinutes,trackCount:plan.trackEntries.length,
+   scheduleAtMs:plan.scheduleAtMs};
 }

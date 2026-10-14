@@ -77,8 +77,8 @@ for(const trackId of waveIds)assert(state.trackIds.includes(trackId));
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 assert.match(worker,/SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014/);
-assert.match(worker,/MAX\(CASE WHEN d\.stage416_signed=1 THEN 1 ELSE 0 END\) AS stage416_signed/);
-assert.match(worker,/HAVING SUM\(d\.delta\) <> 0/);
+assert.match(worker,/RETURNING track_id,\s*\(SELECT MAX\(CASE WHEN d\.stage416_signed=1 AND d\.delta<>0 THEN 1 ELSE 0 END\)/);
+assert.match(worker,/Reuse the two canonical track_stats mutations' RETURNING rows: zero extra/);
 assert.match(worker,/changedTrackIds416/);
 assert.match(worker,/stage416Changed416/);
 assert.match(worker,/publicDeferred416:true/);

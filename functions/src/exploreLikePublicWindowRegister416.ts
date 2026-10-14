@@ -2,6 +2,7 @@ import {createHmac} from 'node:crypto';
 
 const UUID416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PUBLIC_ROUTE_416='/v1/internal/public-like-window-416';
+const PUBLIC_ACK_ROUTE_416='/v1/internal/public-like-window-416/ack';
 
 const publicWorkerTarget416=(privateWorkerEndpoint:string)=>{
  const url=new URL(privateWorkerEndpoint);
@@ -46,4 +47,32 @@ export async function deliverPublicLikeWindow416({
    needsRelease:false,windowId:String(data.windowId||''),
    deadlineAtMs:Number(data.deadlineAtMs||0),publicMinutes:Number(data.publicMinutes||0),
    trackCount:Number(data.trackCount||0)};
+}
+
+
+const publicAckTarget416=(privateWorkerEndpoint:string)=>{
+ const url=new URL(publicWorkerTarget416(privateWorkerEndpoint));
+ url.pathname=PUBLIC_ACK_ROUTE_416;
+ return url.toString();
+};
+
+export async function ackPublicLikeWindow416({
+ workerEndpoint,secret,eventId,signedAtMs=Date.now(),http=fetch,
+}:{
+ workerEndpoint:string;secret:string;eventId:string;signedAtMs?:number;http?:typeof fetch;
+}):Promise<{acked:boolean;duplicate:boolean;windowId:string}>{
+ if(typeof secret!=='string'||secret.length<32||!UUID416.test(eventId)||
+    !Number.isSafeInteger(signedAtMs)||signedAtMs<=0)
+  throw Error('416_PUBLIC_ACK_INPUT_INVALID');
+ const raw=JSON.stringify({eventId,signedAtMs});
+ const signature=createHmac('sha256',secret).update(raw,'utf8').digest('hex');
+ const response=await http(publicAckTarget416(workerEndpoint),{
+   method:'POST',headers:{'Content-Type':'application/json',
+     'X-Soridraw-416-Public-Signature':signature},body:raw,
+ });
+ const payload=await response.json().catch(()=>null);
+ if(!response.ok||payload?.ok!==true||payload?.data?.acked!==true)
+   throw Error('416_PUBLIC_ACK_NOT_CONFIRMED');
+ return {acked:true,duplicate:payload.data.duplicate===true,
+   windowId:String(payload.data.windowId||'')};
 }

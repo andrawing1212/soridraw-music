@@ -11,6 +11,7 @@ const PUBLIC_LIKE_SIGNAL_PATH_192 = 'publicSync/exploreLike';
 const PUBLIC_LIKE_SIGNAL_MAX_192 = 50;
 const PUBLIC_LIKE_SIGNAL_RETENTION_MS_192 = 3 * 60_000;
 const PUBLIC_LIKE_CARD_ROUTE_192 = '/v1/public-like-cards';
+const PUBLIC_LIKE_MANIFEST_ROUTE_416 = '/v1/public-like-release-manifest-416';
 
  
 // A received RTDB value remains visible for three minutes. Re-subscribing
@@ -88,6 +89,16 @@ export type ExplorePublicLikeSignalRow192 = {
   trackId: string;
   ownerUid: string;
   at: number;
+  settledAfterProjection416?: boolean;
+};
+
+export type ExplorePublicLikeManifest416 = {
+  schemaVersion: 1;
+  windowId: string;
+  deadlineAtMs: number;
+  digest: string;
+  count: number;
+  slot: number;
 };
 
 export type ExplorePublicLikeSignal192 = {
@@ -95,6 +106,8 @@ export type ExplorePublicLikeSignal192 = {
   at: number;
   actorUid: string;
   rows: ExplorePublicLikeSignalRow192[];
+  settledAfterProjection416?: boolean;
+  manifest416?: ExplorePublicLikeManifest416;
 };
 
 export type ExplorePublicLikeCard192 = {
@@ -124,6 +137,25 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
       : [];
   if (!Number.isSafeInteger(version) || version <= 0 ||
       !Number.isSafeInteger(at) || at <= 0 || !actorUid) return null;
+  const settledAfterProjection416 = value.settledAfterProjection416 === true;
+  let manifest416: ExplorePublicLikeManifest416 | undefined;
+  const rawManifest = value.manifest416;
+  if (rawManifest && typeof rawManifest === 'object' && !Array.isArray(rawManifest)) {
+    const item = rawManifest as Record<string, unknown>;
+    const windowId = normalizeId192(item.windowId, 64);
+    const deadlineAtMs = Math.floor(Number(item.deadlineAtMs || 0));
+    const digest = String(item.digest || '').trim().toLowerCase();
+    const count = Math.floor(Number(item.count || 0));
+    const slot = Math.floor(Number(item.slot ?? -1));
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(windowId) &&
+        Number.isSafeInteger(deadlineAtMs) && deadlineAtMs > 0 &&
+        /^[0-9a-f]{64}$/.test(digest) &&
+        Number.isSafeInteger(count) && count > 256 &&
+        Number.isSafeInteger(slot) && slot >= 0 && slot < 8 &&
+        Math.floor(deadlineAtMs / 60_000) % 8 === slot) {
+      manifest416 = { schemaVersion: 1, windowId, deadlineAtMs, digest, count, slot };
+    }
+  }
   // 50+ Stage416 items arrive in one atomic snapshot rather than two
   // overwritten notifications. Legacy writers send rows only.
   const extra = value.overflow416;
@@ -138,12 +170,15 @@ const normalizeSignal192 = (raw: unknown): ExplorePublicLikeSignal192 | null => 
       const ownerUid = normalizeId192(item.ownerUid, 128);
       const rowAt = Math.floor(Number(item.at || 0));
       if (!trackId || !Number.isSafeInteger(rowAt) || rowAt <= 0) return null;
-      return { trackId, ownerUid, at: rowAt };
+      return { trackId, ownerUid, at: rowAt,
+        ...(settledAfterProjection416 ? { settledAfterProjection416: true } : {}) };
     })
     .filter((row): row is ExplorePublicLikeSignalRow192 => Boolean(row))
     .slice(0, 256);
-  if (!rows.length) return null;
-  return { version, at, actorUid, rows };
+  if (!rows.length && !manifest416) return null;
+  return { version, at, actorUid, rows,
+    ...(settledAfterProjection416 ? { settledAfterProjection416: true } : {}),
+    ...(manifest416 ? { manifest416 } : {}) };
 };
 
 export const mergeExplorePublicLikeSignal192 = (
@@ -210,6 +245,7 @@ export const subscribeExplorePublicLikeInvalidation192 = (
   listener: (signal: ExplorePublicLikeSignal192) => void,
 ): Unsubscribe => {
   let lastVersion = 0;
+  let lastManifestDigest416 = '';
   const seenTrackAt = new Map<string, number>();
   return onValue(
     databaseRef(realtimeDb, PUBLIC_LIKE_SIGNAL_PATH_192),
@@ -236,11 +272,57 @@ export const subscribeExplorePublicLikeInvalidation192 = (
         }
         return true;
       });
-      if (!freshRows.length) return;
+      const manifestFresh416 = Boolean(signal.manifest416?.digest) &&
+        signal.manifest416?.digest !== lastManifestDigest416;
+      if (manifestFresh416) lastManifestDigest416 = signal.manifest416?.digest || '';
+      if (!freshRows.length && !manifestFresh416) return;
       listener({ ...signal, rows: freshRows });
     },
     (error) => console.warn('[192] Public like invalidation unavailable; normal revision path remains active:', error),
   );
+};
+
+export const fetchExplorePublicLikeManifestMatches416 = async (
+  manifest: ExplorePublicLikeManifest416,
+  trackIds: string[],
+): Promise<ExplorePublicLikeSignalRow192[]> => {
+  const ids = [...new Set(trackIds.map((id) => normalizeId192(id)).filter(Boolean))]
+    .slice(0, 200);
+  if (!ids.length) return [];
+  const query = new URLSearchParams({
+    windowId: manifest.windowId,
+    deadlineAtMs: String(manifest.deadlineAtMs),
+    digest: manifest.digest,
+    count: String(manifest.count),
+    slot: String(manifest.slot),
+    trackIds: ids.join(','),
+  });
+  const response = await fetch(
+    `${EXPLORE_API_BASE}${PUBLIC_LIKE_MANIFEST_ROUTE_416}?${query.toString()}`,
+    { method: 'GET', headers: { Accept: 'application/json' } },
+  );
+  recordCloudflareResponse(response, PUBLIC_LIKE_MANIFEST_ROUTE_416);
+  if (!response.ok) throw new Error('Public like manifest unavailable: HTTP ' + response.status);
+  const payload = await response.json() as {
+    ok?: boolean;
+    data?: { rows?: Array<Record<string, unknown>>; windowId?: string;
+      deadlineAtMs?: number; digest?: string };
+  };
+  if (payload?.ok !== true || !Array.isArray(payload?.data?.rows) ||
+      payload.data.windowId !== manifest.windowId ||
+      Number(payload.data.deadlineAtMs) !== manifest.deadlineAtMs ||
+      String(payload.data.digest || '').toLowerCase() !== manifest.digest) {
+    throw new Error('Public like manifest response is invalid');
+  }
+  return payload.data.rows
+    .map((item): ExplorePublicLikeSignalRow192 | null => {
+      const trackId = normalizeId192(item.trackId);
+      const ownerUid = normalizeId192(item.ownerUid, 128);
+      if (!trackId) return null;
+      return { trackId, ownerUid, at: manifest.deadlineAtMs,
+        settledAfterProjection416: true };
+    })
+    .filter((item): item is ExplorePublicLikeSignalRow192 => Boolean(item));
 };
 
 export const fetchExplorePublicLikeCards192 = async (

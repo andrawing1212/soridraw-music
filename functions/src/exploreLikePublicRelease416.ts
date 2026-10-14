@@ -11,9 +11,11 @@ const SIGNAL_LEGACY_ROWS_416=50;
 const SERVER_ACTOR_416='stage416-public';
 
 type PublicReleaseRow416={trackId:string;ownerUid:string};
+type PublicManifest416={schemaVersion:number;windowId:string;deadlineAtMs:number;
+ digest:string;count:number;slot:number};
 type PublicReleaseClaim416={
  windowId:string;releaseToken:string;deadlineAtMs:number;signedAtMs:number;
- rows:PublicReleaseRow416[];
+ rows:PublicReleaseRow416[];manifest416?:PublicManifest416;
 };
 type ReleaseMarker416={
  schemaVersion:number;windowId:string;releaseToken:string;deadlineAtMs:number;
@@ -22,7 +24,8 @@ type ReleaseMarker416={
 type SignalRow416={trackId:string;ownerUid:string;at:number};
 type Signal416={version?:number;at?:number;actorUid?:string;
  rows?:SignalRow416[]|Record<string,SignalRow416>;
- overflow416?:SignalRow416[]|Record<string,SignalRow416>};
+ overflow416?:SignalRow416[]|Record<string,SignalRow416>;
+ settledAfterProjection416?:boolean;manifest416?:PublicManifest416};
 
 const validText=(value:unknown,max:number)=>typeof value==='string'&&
  value.length>0&&value.length<=max;
@@ -33,13 +36,22 @@ const parseClaim416=(raw:string,nowMs:number):PublicReleaseClaim416=>{
  let data:PublicReleaseClaim416;
  try{data=JSON.parse(raw) as PublicReleaseClaim416;}
  catch{throw Error('416_PUBLIC_RELEASE_BAD_JSON');}
+ const manifest=data?.manifest416;
+ const manifestValid=!manifest||(
+    manifest.schemaVersion===1&&manifest.windowId===data.windowId&&
+    manifest.deadlineAtMs===data.deadlineAtMs&&
+    /^[0-9a-f]{64}$/i.test(String(manifest.digest||''))&&
+    Number.isSafeInteger(manifest.count)&&manifest.count>SIGNAL_MAX_416&&
+    Number.isSafeInteger(manifest.slot)&&manifest.slot>=0&&manifest.slot<8&&
+    Math.floor(data.deadlineAtMs/60_000)%8===manifest.slot);
  if(!UUID416.test(String(data?.windowId||''))||
     data?.releaseToken!=='stage416-public-'+data.windowId||
     !Number.isSafeInteger(data?.deadlineAtMs)||data.deadlineAtMs<=0||
     !Number.isSafeInteger(data?.signedAtMs)||
     data.signedAtMs<nowMs-15*60_000||data.signedAtMs>nowMs+30_000||
     data.deadlineAtMs>data.signedAtMs+30_000||
-    !Array.isArray(data?.rows)||data.rows.length<1||data.rows.length>SIGNAL_MAX_416)
+    !Array.isArray(data?.rows)||data.rows.length<1||data.rows.length>SIGNAL_MAX_416||
+    !manifestValid||(manifest&&data.rows.length!==SIGNAL_MAX_416))
    throw Error('416_PUBLIC_RELEASE_BAD_CLAIM');
  const seen=new Set<string>();
  const rows=data.rows.map(row=>{
@@ -49,12 +61,16 @@ const parseClaim416=(raw:string,nowMs:number):PublicReleaseClaim416=>{
      throw Error('416_PUBLIC_RELEASE_BAD_ROW');
    seen.add(trackId);return {trackId,ownerUid};
  }).sort((a,b)=>a.trackId.localeCompare(b.trackId));
- return {...data,rows};
+ return {...data,rows,
+   ...(manifest?{manifest416:{...manifest,digest:String(manifest.digest).toLowerCase()}}:{})};
 };
+const totalCount416=(data:PublicReleaseClaim416)=>
+ data.manifest416?.count||data.rows.length;
 
 const markerDigest416=(data:PublicReleaseClaim416)=>createHash('sha256')
  .update(JSON.stringify({windowId:data.windowId,releaseToken:data.releaseToken,
-   deadlineAtMs:data.deadlineAtMs,rows:data.rows}),'utf8').digest('hex');
+   deadlineAtMs:data.deadlineAtMs,rows:data.rows,
+   manifest416:data.manifest416||null}),'utf8').digest('hex');
 
 const sameMarker416=(value:unknown,data:PublicReleaseClaim416,digest:string,status?:string)=>{
  const row=value as Partial<ReleaseMarker416>|null;
@@ -99,14 +115,14 @@ export async function publishPublicLikeRelease416(
  if(!reserved.committed){
    const current=reserved.snapshot.val();
    if(sameMarker416(current,data,digest,'PUBLISHED'))
-     return {status:'DUPLICATE',windowId:data.windowId,count:data.rows.length,
+     return {status:'DUPLICATE',windowId:data.windowId,count:totalCount416(data),
        signalChanged:false};
    if(sameMarker416(current,data,digest,'PENDING')){
      // Resume an exact release whose RTDB signal or final checkpoint failed.
    }else{
      const currentDeadline=Number(current?.deadlineAtMs||0);
      if(Number.isSafeInteger(currentDeadline)&&currentDeadline>=data.deadlineAtMs)
-       return {status:'STALE',windowId:data.windowId,count:data.rows.length,
+       return {status:'STALE',windowId:data.windowId,count:totalCount416(data),
          signalChanged:false};
      throw Error('416_PUBLIC_RELEASE_RESERVATION_CONFLICT');
    }
@@ -136,7 +152,12 @@ export async function publishPublicLikeRelease416(
        at:data.deadlineAtMs});
      changedIds.push(row.trackId);
    }
-   if(!changedIds.length)return;
+   const currentManifest=current?.manifest416;
+   const manifestChanged=Boolean(data.manifest416)&&(
+     currentManifest?.windowId!==data.manifest416?.windowId||
+     currentManifest?.digest!==data.manifest416?.digest||
+     currentManifest?.count!==data.manifest416?.count);
+   if(!changedIds.length&&!manifestChanged)return;
    signalChanged=true;
    const changed=new Set(changedIds);
    const ordered=[
@@ -147,8 +168,9 @@ export async function publishPublicLikeRelease416(
    const rows=ordered.slice(0,SIGNAL_LEGACY_ROWS_416);
    const overflow=ordered.slice(SIGNAL_LEGACY_ROWS_416);
    return {version:Math.max(nowMs,currentVersion+1),at:nowMs,
-     actorUid:SERVER_ACTOR_416,rows,
-     ...(overflow.length?{overflow416:overflow}:{})};
+     actorUid:SERVER_ACTOR_416,rows,settledAfterProjection416:true,
+     ...(overflow.length?{overflow416:overflow}:{}),
+     ...(data.manifest416?{manifest416:data.manifest416}:{})};
  },undefined,false);
  if(!signalResult.committed)signalChanged=false;
 
@@ -161,5 +183,5 @@ export async function publishPublicLikeRelease416(
  },undefined,false);
  if(!completed.committed&&!sameMarker416(completed.snapshot.val(),data,digest,'PUBLISHED'))
    throw Error('416_PUBLIC_RELEASE_CHECKPOINT_FAILED');
- return {status:'PUBLISHED',windowId:data.windowId,count:data.rows.length,signalChanged};
+ return {status:'PUBLISHED',windowId:data.windowId,count:totalCount416(data),signalChanged};
 }

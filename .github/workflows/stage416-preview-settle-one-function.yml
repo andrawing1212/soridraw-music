@@ -45,6 +45,10 @@ jobs:
               grep -Fxq 'scope=preview_existing_settle_task_only' "$trigger" ;;
             recordPrivateLike416)
               grep -Fxq 'scope=preview_existing_private_click_only' "$trigger" ;;
+            stage416ReleasePublicWindowCandidate)
+              grep -Fxq 'scope=preview_new_public_task_hard_off_only' "$trigger" ;;
+            publicLikeRelease416Candidate)
+              grep -Fxq 'scope=preview_new_public_receipt_hard_off_only' "$trigger" ;;
             *) echo 'UNAPPROVED_FUNCTION_TARGET'; exit 21 ;;
           esac
           echo "PATCH_FUNCTION=$function_name" >> "$GITHUB_ENV"
@@ -57,7 +61,16 @@ jobs:
           grep -Fxq 'hosting_change=false' "$trigger"
           git fetch origin preview main production --no-tags
           git merge-base --is-ancestor "$target" origin/preview
-          test "$target" = "$(git rev-parse HEAD^)"
+          case "$function_name" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              grep -Fxq "audit_head=$target" "$trigger"
+              grep -Fxq 'audit_result=PASS' "$trigger"
+              grep -Fxq 'public_gate_activation=false' "$trigger"
+              grep -Fxq 'user_data_migration=false' "$trigger"
+              grep -Fxq 'test_production_unchanged_required=true' "$trigger"
+              ;;
+            *) test "$target" = "$(git rev-parse HEAD^)" ;;
+          esac
           git rev-parse origin/main > "$RUNNER_TEMP/main-before"
           git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
           git checkout --detach "$target"
@@ -66,6 +79,16 @@ jobs:
           grep -Fq "if(result.reason==='NOT_DUE')" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
+          if [ "$function_name" = stage416ReleasePublicWindowCandidate ] ||
+             [ "$function_name" = publicLikeRelease416Candidate ]; then
+            grep -Fxq "export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false;" functions/src/exploreLikePublicTask416.ts
+            grep -Fxq "export const STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false;" functions/src/exploreLikePublicReleaseEndpoint416.ts
+            grep -Fxq "export const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" functions/src/exploreLikePrivateFinalEndpoint416.ts
+            grep -Fxq " const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" cloudflare/explore-worker/canonical/preview-entry.js ||
+              grep -Fxq "const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" cloudflare/explore-worker/canonical/preview-entry.js
+            grep -Fq 'export { stage416ReleasePublicWindowCandidate }' functions/src/index.ts
+            grep -Fq 'export { publicLikeRelease416Candidate }' functions/src/index.ts
+          fi
           if [ "$function_name" = recordPrivateLike416 ]; then
             grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId,Date.now(),config)" functions/src/exploreLikePrivateCallable416.ts
             grep -Fq "const stableBucket=Math.floor(nowMs/60_000)*60_000+1_000" functions/src/exploreLikePrivateTask416.ts
@@ -90,6 +113,8 @@ jobs:
           node scripts/verify-416-private-task-routing.mjs
           node scripts/verify-416-private-final-publisher.mjs
           node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-439-stage416-public-release-routing.mjs
+          node scripts/verify-440-stage416-public-window-coalescing.mjs
           node scripts/verify-401-cross-device-opposite-like.mjs
           node scripts/verify-402-private-heart-count-pair.mjs
           npm run lint
@@ -110,6 +135,13 @@ jobs:
              exploreLikePrivateServerClick416; do
             cp "functions/lib/$file.js" "$d/lib/$file.js"
           done
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate)
+              cp functions/lib/exploreLikePublicTask416.js "$d/lib/" ;;
+            publicLikeRelease416Candidate)
+              cp functions/lib/exploreLikePublicRelease416.js "$d/lib/"
+              cp functions/lib/exploreLikePublicReleaseEndpoint416.js "$d/lib/" ;;
+          esac
           if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then
             for file in exploreLikeBatchSettings416 exploreLikePrivateCallable416; do
               cp "functions/lib/$file.js" "$d/lib/$file.js"
@@ -150,6 +182,16 @@ jobs:
           exports.stage416SettlePrivateWindowCandidate =
             require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
           NODE
+          elif [ "$PATCH_FUNCTION" = stage416ReleasePublicWindowCandidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.stage416ReleasePublicWindowCandidate =
+            require("./exploreLikePublicTask416").stage416ReleasePublicWindowCandidate;
+          NODE
+          elif [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.publicLikeRelease416Candidate =
+            require("./exploreLikePublicReleaseEndpoint416").publicLikeRelease416Candidate;
+          NODE
           else
             echo 'STAGE416_SINGLE_SCOPE_DENIED'
             exit 42
@@ -178,6 +220,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              if [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
+                echo 'PUBLIC_FUNCTION_REGION=asia-northeast3' >> "$GITHUB_ENV"
+                expected_region=asia-northeast3
+              else
+                echo 'PUBLIC_FUNCTION_REGION=us-central1' >> "$GITHUB_ENV"
+                expected_region=us-central1
+              fi
+              if gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$expected_region" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json" 2>"$RUNNER_TEMP/function-not-found.err"; then
+                echo '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY'
+                exit 41
+              fi
+              # Confirm the missing resource is specifically a fresh candidate;
+              # do not suppress an IAM/API failure and accidentally redeploy.
+              if ! grep -Eiq 'NOT_FOUND|not found|does not exist' "$RUNNER_TEMP/function-not-found.err"; then
+                cat "$RUNNER_TEMP/function-not-found.err" >&2
+                echo '416_PUBLIC_FUNCTION_PREFLIGHT_UNKNOWN_ERROR'
+                exit 42
+              fi
+              gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-before.json"
+              node - "$RUNNER_TEMP/task-before.json" <<'NODE'
+          const fs=require('fs');
+          const task=JSON.parse(fs.readFileSync(process.argv[2]));
+          if(task.state!=='ACTIVE'||!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_PUBLIC_DEPLOY_HMAC_PRECONDITION_FAILED');
+          console.log('416_PUBLIC_NEW_FUNCTION_AND_HMAC_PREFLIGHT=PASS');
+          NODE
+              exit 0
+              ;;
+          esac
           gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json"
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
@@ -219,6 +295,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$PUBLIC_FUNCTION_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
+              gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-after.json"
+              node - "$RUNNER_TEMP/function-after.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/task-after.json" <<'NODE'
+          const fs=require('fs');
+          const fn=JSON.parse(fs.readFileSync(process.argv[2]));
+          const prior=JSON.parse(fs.readFileSync(process.argv[3]));
+          const current=JSON.parse(fs.readFileSync(process.argv[4]));
+          const expected=process.env.PATCH_FUNCTION;
+          if(fn.state!=='ACTIVE'||!fn.name?.endsWith('/'+expected)||
+             fn.buildConfig?.runtime!=='nodejs22')throw Error('416_PUBLIC_DEPLOYED_FUNCTION_INVALID');
+          if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
+             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_PUBLIC_DEPLOYED_SECRET_MISSING');
+          if(prior.updateTime!==current.updateTime||
+             prior.serviceConfig?.serviceAccountEmail!==current.serviceConfig?.serviceAccountEmail)
+            throw Error('416_EXISTING_SETTLE_CHANGED');
+          console.log('416_PUBLIC_ONLY_FUNCTION_POSTFLIGHT=PASS name='+expected);
+          NODE
+              git fetch origin main production --no-tags
+              test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+              test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+              echo 'MAIN_PRODUCTION_UNCHANGED=PASS'
+              echo 'NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS'
+              exit 0
+              ;;
+          esac
           gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
           gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \

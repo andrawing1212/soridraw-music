@@ -3,37 +3,61 @@ import {sealUserPrivateLikes416,acknowledgeUserPrivateSeal416}
   from './exploreLikePrivateSeal416';
 import {deliverPrivateSealToWorker416,type PrivateSeal416}
   from './exploreLikePrivateHandoff416';
+import {
+  cleanupExpiredGlobalReservations416,getGlobalReservationLeaseUntil416,
+  type ExpiredGlobalReservation416,
+} from './exploreLikePrivateServerClick416';
 
+type GateRow416={
+ trackId:string;operationId:string;version?:number;
+};
 type PeerPrivateState416={
  window?:{revision?:number}|null;
- sealed?:{version?:number}|null;
- pending?:Record<string,unknown>|null;
+ sealed?:{version?:number;rows?:GateRow416[]}|null;
+ pending?:Record<string,GateRow416>|null;
 };
 type GlobalSettlementState416={
  version?:number;
  settledVersion?:number;
  devices?:Record<string,{
-  deviceSequence?:number;operationId?:string;trackId?:string;liked?:boolean;version?:number;
+  deviceSequence?:number;operationId?:string;trackId?:string;liked?:boolean;
+  version?:number;leaseUntilMs?:number;
  }>;
 };
-type GateRow416={
- trackId:string;operationId:string;version?:number;
+type SettlementInspection416={
+ lower:number|null;
+ expiredOrphans:ExpiredGlobalReservation416[];
 };
 
-// Final canonical handoffs share one D1/R2 user authority across environments.
-// A higher version must wait for BOTH:
-// 1) lower active peer environment windows/seals, and
-// 2) lower global reservations that have not reached any environment yet.
-// Rows already coalesced into THIS seal (or superseded on the same track by a
-// newer row in this seal) are not outstanding blockers.
-export async function findLowerOutstandingPrivateVersion416(
+const exactKey416=(operationId:string,version:number)=>operationId+'\n'+version;
+const addMaterializedRow416=(
+ row:GateRow416,ceiling:number,exact:Set<string>,trackMax:Map<string,number>,
+ errorCode:string,
+)=>{
+ const trackId=String(row?.trackId||'');
+ const operationId=String(row?.operationId||'');
+ const version=Number(row?.version||0);
+ if(!trackId||trackId.length>512||!operationId||
+    !Number.isSafeInteger(version)||version<=0||version>ceiling)
+  throw Error(errorCode);
+ exact.add(exactKey416(operationId,version));
+ trackMax.set(trackId,Math.max(trackMax.get(trackId)||0,version));
+};
+
+// Global reservations solve only the tiny race between version allocation and
+// environment materialization. Once an exact click (or a newer same-track
+// final state) is visible in an environment window/seal, that environment's
+// BATCH revision becomes the canonical ordering fence. An unmaterialized
+// reservation may block only while its trusted short Callable lease is live.
+async function inspectLowerOutstandingPrivateVersion416(
  db:Database,uid:string,currentVersion:number,privateRoots:string[],
  currentPrivateRoot:string,currentRows:GateRow416[]=[],globalVersionRoot='',
-):Promise<number|null>{
+ nowMs=Date.now(),
+):Promise<SettlementInspection416>{
  if(!uid||uid.length>128||!Number.isSafeInteger(currentVersion)||currentVersion<=0||
     !Array.isArray(privateRoots)||privateRoots.length<1||privateRoots.length>3||
     typeof currentPrivateRoot!=='string'||!currentPrivateRoot||
-    !Array.isArray(currentRows))
+    !Array.isArray(currentRows)||!Number.isSafeInteger(nowMs)||nowMs<=0)
   throw Error('416_BAD_CROSS_ENV_SETTLEMENT_GATE');
  const roots=[...new Set(privateRoots)];
  if(roots.length!==privateRoots.length||!roots.includes(currentPrivateRoot)||
@@ -42,25 +66,56 @@ export async function findLowerOutstandingPrivateVersion416(
   throw Error('416_BAD_CROSS_ENV_SETTLEMENT_ROOTS');
 
  const peers=roots.filter(root=>root!==currentPrivateRoot);
- const peerSnapshots=await Promise.all(peers.map(root=>db.ref(root+'/'+uid).get()));
- const globalSnapshot=globalVersionRoot
-   ?await db.ref(globalVersionRoot+'/'+uid).get():null;
+ const [peerSnapshots,globalSnapshot]=await Promise.all([
+  Promise.all(peers.map(root=>db.ref(root+'/'+uid).get())),
+  globalVersionRoot?db.ref(globalVersionRoot+'/'+uid).get():Promise.resolve(null),
+ ]);
 
  let settledVersion=0;
  let lower:number|null=null;
- const currentExact=new Set<string>();
- const currentTrackMax=new Map<string,number>();
- for(const row of currentRows){
-  const trackId=String(row?.trackId||'');
-  const operationId=String(row?.operationId||'');
-  const version=Number(row?.version||0);
-  if(!trackId||trackId.length>512||!operationId||
-     !Number.isSafeInteger(version)||version<=0||version>currentVersion)
-   throw Error('416_CROSS_ENV_CURRENT_SEAL_ROW_CORRUPT');
-  currentExact.add(operationId+'\n'+version);
-  currentTrackMax.set(trackId,Math.max(currentTrackMax.get(trackId)||0,version));
+ const materializedExact=new Set<string>();
+ const materializedTrackMax=new Map<string,number>();
+ const peerBatchVersions:number[]=[];
+
+ for(const row of currentRows)
+  addMaterializedRow416(row,currentVersion,materializedExact,materializedTrackMax,
+    '416_CROSS_ENV_CURRENT_SEAL_ROW_CORRUPT');
+
+ // Read peer rows only from the same two bounded UID roots already paid for by
+ // settlement. This distinguishes an accepted/coalesced row from a reservation
+ // that never reached any environment, without adding per-track/server reads.
+ for(const snapshot of peerSnapshots){
+  const raw=snapshot.val() as PeerPrivateState416|null;
+  if(raw==null)continue;
+  if(typeof raw!=='object'||Array.isArray(raw))
+   throw Error('416_CROSS_ENV_PRIVATE_STATE_CORRUPT');
+
+  if(raw.sealed!=null){
+   const version=Number(raw.sealed.version);
+   if(!Number.isSafeInteger(version)||version<=0||
+      !Array.isArray(raw.sealed.rows)||raw.sealed.rows.length<1||raw.sealed.rows.length>256)
+    throw Error('416_CROSS_ENV_SEAL_VERSION_CORRUPT');
+   peerBatchVersions.push(version);
+   for(const row of raw.sealed.rows)
+    addMaterializedRow416(row,version,materializedExact,materializedTrackMax,
+      '416_CROSS_ENV_SEALED_ROW_CORRUPT');
+  }
+  if(raw.window!=null){
+   const version=Number(raw.window.revision);
+   if(!Number.isSafeInteger(version)||version<=0)
+    throw Error('416_CROSS_ENV_WINDOW_VERSION_CORRUPT');
+   peerBatchVersions.push(version);
+   const rows=Object.values(raw.pending||{});
+   if(rows.length>256)throw Error('416_CROSS_ENV_PENDING_ROW_LIMIT');
+   for(const row of rows)
+    addMaterializedRow416(row,version,materializedExact,materializedTrackMax,
+      '416_CROSS_ENV_PENDING_ROW_CORRUPT');
+  }else if(raw.pending&&Object.keys(raw.pending).length>0&&!raw.sealed){
+   throw Error('416_CROSS_ENV_PENDING_WITHOUT_WINDOW');
+  }
  }
 
+ const expiredOrphans:ExpiredGlobalReservation416[]=[];
  if(globalSnapshot){
   const raw=globalSnapshot.val() as GlobalSettlementState416|null;
   if(raw!=null){
@@ -75,46 +130,56 @@ export async function findLowerOutstandingPrivateVersion416(
       !devices||typeof devices!=='object'||Array.isArray(devices))
     throw Error('416_GLOBAL_SETTLEMENT_STATE_CORRUPT');
 
-   for(const reservation of Object.values(devices)){
+   for(const [deviceId,reservation] of Object.entries(devices)){
     const version=Number(reservation?.version||0);
     const operationId=String(reservation?.operationId||'');
     const trackId=String(reservation?.trackId||'');
+    const liked=reservation?.liked;
+    const deviceSequence=Number(reservation?.deviceSequence||0);
     if(!Number.isSafeInteger(version)||version<=0||version>globalVersion||
-       !operationId||!trackId||trackId.length>512)
+       !operationId||!trackId||trackId.length>512||typeof liked!=='boolean'||
+       !Number.isSafeInteger(deviceSequence)||deviceSequence<=0)
       throw Error('416_GLOBAL_RESERVATION_CORRUPT');
     if(version<=settledVersion||version>=currentVersion)continue;
-    if(currentExact.has(operationId+'\n'+version))continue;
-    if((currentTrackMax.get(trackId)||0)>=version)continue;
-    if(lower===null||version<lower)lower=version;
+
+    // Exact environment proof means this click is no longer "global-only".
+    // Same-track newer materialization means the old click was coalesced away;
+    // in both cases the environment batch revision below governs final order.
+    if(materializedExact.has(exactKey416(operationId,version)))continue;
+    if((materializedTrackMax.get(trackId)||0)>=version)continue;
+
+    const leaseUntilMs=getGlobalReservationLeaseUntil416(reservation,nowMs);
+    if(leaseUntilMs>nowMs){
+     if(lower===null||version<lower)lower=version;
+     continue;
+    }
+    expiredOrphans.push({
+     deviceId,deviceSequence,operationId,trackId,liked,version,leaseUntilMs,
+    });
    }
   }
  }
 
- for(const snapshot of peerSnapshots){
-  const raw=snapshot.val() as PeerPrivateState416|null;
-  if(raw==null)continue;
-  if(typeof raw!=='object'||Array.isArray(raw))
-   throw Error('416_CROSS_ENV_PRIVATE_STATE_CORRUPT');
-  const versions:number[]=[];
-  if(raw.sealed!=null){
-   const version=Number(raw.sealed.version);
-   if(!Number.isSafeInteger(version)||version<=0)
-    throw Error('416_CROSS_ENV_SEAL_VERSION_CORRUPT');
-   versions.push(version);
-  }
-  if(raw.window!=null){
-   const version=Number(raw.window.revision);
-   if(!Number.isSafeInteger(version)||version<=0)
-    throw Error('416_CROSS_ENV_WINDOW_VERSION_CORRUPT');
-   versions.push(version);
-  }
-  if(raw.pending&&Object.keys(raw.pending).length>0&&!raw.window&&!raw.sealed)
-   throw Error('416_CROSS_ENV_PENDING_WITHOUT_WINDOW');
-  for(const version of versions)
-   if(version>settledVersion&&version<currentVersion&&
-      (lower===null||version<lower))lower=version;
- }
- return lower;
+ // Only peer BATCH revisions are canonical ordering barriers. Individual rows
+ // inside a newer batch may carry older reservation versions, but Worker/D1
+ // accepts the whole coalesced batch under its single seal.version.
+ for(const version of peerBatchVersions)
+  if(version>settledVersion&&version<currentVersion&&
+     (lower===null||version<lower))lower=version;
+
+ return {lower,expiredOrphans};
+}
+
+// Public verifier helper: no writes. Production settlement uses the same
+// inspection and only then performs a bounded W1 orphan repair when necessary.
+export async function findLowerOutstandingPrivateVersion416(
+ db:Database,uid:string,currentVersion:number,privateRoots:string[],
+ currentPrivateRoot:string,currentRows:GateRow416[]=[],globalVersionRoot='',
+ nowMs=Date.now(),
+):Promise<number|null>{
+ return (await inspectLowerOutstandingPrivateVersion416(
+  db,uid,currentVersion,privateRoots,currentPrivateRoot,currentRows,
+  globalVersionRoot,nowMs)).lower;
 }
 
 // The shared global root remembers only the highest version that has actually
@@ -168,11 +233,21 @@ export async function completeUserPrivateWindow416(
      ...(current.retryAfterMs?{retryAfterMs:current.retryAfterMs}:{})};
  if(privateRoots.length>1&&!globalVersionRoot)
    throw Error('416_GLOBAL_SETTLEMENT_ROOT_REQUIRED');
- const lowerOutstanding=await findLowerOutstandingPrivateVersion416(
-   db,uid,seal.version,privateRoots,privateRoot,seal.rows,globalVersionRoot);
- if(lowerOutstanding!==null)
+ const inspection=await inspectLowerOutstandingPrivateVersion416(
+   db,uid,seal.version,privateRoots,privateRoot,seal.rows,globalVersionRoot,nowMs);
+ if(inspection.lower!==null)
    return {queued:false,reason:'WAITING_FOR_LOWER_ENVIRONMENT_VERSION',
      retryAfterMs:30_000,version:seal.version};
+ if(globalVersionRoot&&inspection.expiredOrphans.length){
+   const cleanup=await cleanupExpiredGlobalReservations416(
+     db,uid,globalVersionRoot,nowMs,inspection.expiredOrphans);
+   // A concurrent same-operation retry may have refreshed the lease after the
+   // inspection snapshot. Never race that live request; keep the frozen seal
+   // and let the existing bounded Cloud Task retry.
+   if(!cleanup.resolved)
+     return {queued:false,reason:'WAITING_FOR_LOWER_ENVIRONMENT_VERSION',
+       retryAfterMs:30_000,version:seal.version};
+ }
  // Frozen server-trusted seal remains in RTDB until exact durable queue
  // receipt. A Worker timeout is ambiguous: DO NOT clear the seal or reissue a
  // new UID version; the same sealed version/digest retries idempotently.

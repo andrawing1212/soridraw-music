@@ -286,46 +286,48 @@ export const fetchExplorePublicLikeManifestMatches416 = async (
   manifest: ExplorePublicLikeManifest416,
   trackIds: string[],
 ): Promise<ExplorePublicLikeSignalRow192[]> => {
-  const ids = [...new Set(trackIds.map((id) => normalizeId192(id)).filter(Boolean))]
-    .slice(0, 200);
+  const ids = [...new Set(trackIds.map((id) => normalizeId192(id)).filter(Boolean))];
   if (!ids.length) return [];
-  const response = await fetch(
-    `${EXPLORE_API_BASE}${PUBLIC_LIKE_MANIFEST_ROUTE_416}`,
-    {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        windowId: manifest.windowId,
-        deadlineAtMs: manifest.deadlineAtMs,
-        digest: manifest.digest,
-        count: manifest.count,
-        slot: manifest.slot,
-        trackIds: ids,
-      }),
-    },
-  );
-  recordCloudflareResponse(response, PUBLIC_LIKE_MANIFEST_ROUTE_416);
-  if (!response.ok) throw new Error('Public like manifest unavailable: HTTP ' + response.status);
-  const payload = await response.json() as {
-    ok?: boolean;
-    data?: { rows?: Array<Record<string, unknown>>; windowId?: string;
-      deadlineAtMs?: number; digest?: string };
-  };
-  if (payload?.ok !== true || !Array.isArray(payload?.data?.rows) ||
-      payload.data.windowId !== manifest.windowId ||
-      Number(payload.data.deadlineAtMs) !== manifest.deadlineAtMs ||
-      String(payload.data.digest || '').toLowerCase() !== manifest.digest) {
-    throw new Error('Public like manifest response is invalid');
-  }
-  return payload.data.rows
-    .map((item): ExplorePublicLikeSignalRow192 | null => {
+  const byTrack = new Map<string, ExplorePublicLikeSignalRow192>();
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const chunk = ids.slice(offset, offset + 200);
+    const response = await fetch(
+      `${EXPLORE_API_BASE}${PUBLIC_LIKE_MANIFEST_ROUTE_416}`,
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          windowId: manifest.windowId,
+          deadlineAtMs: manifest.deadlineAtMs,
+          digest: manifest.digest,
+          count: manifest.count,
+          slot: manifest.slot,
+          trackIds: chunk,
+        }),
+      },
+    );
+    recordCloudflareResponse(response, PUBLIC_LIKE_MANIFEST_ROUTE_416);
+    if (!response.ok) throw new Error('Public like manifest unavailable: HTTP ' + response.status);
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: { rows?: Array<Record<string, unknown>>; windowId?: string;
+        deadlineAtMs?: number; digest?: string };
+    };
+    if (payload?.ok !== true || !Array.isArray(payload?.data?.rows) ||
+        payload.data.windowId !== manifest.windowId ||
+        Number(payload.data.deadlineAtMs) !== manifest.deadlineAtMs ||
+        String(payload.data.digest || '').toLowerCase() !== manifest.digest) {
+      throw new Error('Public like manifest response is invalid');
+    }
+    for (const item of payload.data.rows) {
       const trackId = normalizeId192(item.trackId);
       const ownerUid = normalizeId192(item.ownerUid, 128);
-      if (!trackId) return null;
-      return { trackId, ownerUid, at: manifest.deadlineAtMs,
-        settledAfterProjection416: true };
-    })
-    .filter((item): item is ExplorePublicLikeSignalRow192 => Boolean(item));
+      if (!trackId) continue;
+      byTrack.set(trackId, { trackId, ownerUid, at: manifest.deadlineAtMs,
+        settledAfterProjection416: true });
+    }
+  }
+  return [...byTrack.values()];
 };
 
 export const fetchExplorePublicLikeCards192 = async (

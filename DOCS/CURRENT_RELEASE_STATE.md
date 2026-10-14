@@ -1,3 +1,33 @@
+## CURRENT — Stage416 settlement stale-cache 수정 독립 감사 PASS / PREVIEW Settle Function 배포·사후 read-only PASS / fresh 실사용 1회 대기 (2026-10-14 KST)
+
+- **독립 감사 exact SHA:** `1cd605fef46c672506be287fbc3d0c7d60f5f7b1` — PASS.
+- **수정 요지:** RTDB transaction callback이 process-local stale global high-water를 먼저 볼 때 즉시 `416_GLOBAL_SETTLEMENT_STATE_CORRUPT`로 끝내지 않고 unchanged no-op probe로 authoritative server state와 재조정. 최종 snapshot에서 target global version/settledVersion을 증명하지 못하면 `416_GLOBAL_SETTLEMENT_TARGET_UNAVAILABLE`로 fail-closed.
+- **자동검증:** Run `38538985008` SUCCESS.
+  - stale cache → authoritative reconcile PASS
+  - settlement changed-write W1 유지
+  - 추가 explicit read 0
+  - authoritative fence 부재 false success 차단 PASS
+  - app410~416 / cross-env / orphan / settled duplicate / TypeScript / Build / Functions / live Rules read-only PASS
+- **PREVIEW 배포:** `stage416SettlePrivateWindowCandidate` 단일 Function만 배포. Release commit `c75be88ea67eca436dab3e27f0418eb9c959d065`, Run `38540479746` SUCCESS, exact source `1cd605fef46c672506be287fbc3d0c7d60f5f7b1`.
+  - PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS
+  - STAGE416_SINGLE_FUNCTION_POSTFLIGHT=PASS
+  - MAIN_PRODUCTION_UNCHANGED=PASS
+  - NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS
+- **배포 후 read-only:** commit `748abdc313d6fac57218abfd5b2a9ac49456ca62`, Run `38541001126` SUCCESS.
+  - settle Function ACTIVE, updated `2026-10-14T09:14:15Z`
+  - Eventarc error 24h = 0, binding PASS
+  - live private=1분/public=5분
+  - PREVIEW Worker ↔ shared D1 binding TRUE
+  - pending069=NO
+  - diagnostic D1 mutation 0
+  - 24h error summary의 `416_GLOBAL_SETTLEMENT_STATE_CORRUPT:1`은 **배포 전 08:48 KST 실사용 실패 기록**이며, 배포 후 fresh settlement가 아직 없으므로 수정 실서비스 재현 PASS 근거로 사용하지 않는다.
+- **변경 없음:** Worker/Hosting/RTDB Rules/D1/R2/shared user data migration/backfill/delete 0. 일반 Stage416 client OFF.
+- **TEST/PRODUCTION:** unchanged. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`.
+- **현재 gate:** 수정본 배포 자체와 정적/자동/read-only 검증은 PASS. **배포 후 fresh controlled operation의 첫 settle이 500 없이 한 번에 끝나는 실서비스 검증 1회가 남음.**
+- **진행률:** ① Stage416 전체 1/4·25% ② 앱 속도 개선 5/5·100% ③ 현재 세부 작업(정산 stale-cache 실제 PREVIEW 수정) 4/5·80%.
+
+---
+
 ## CURRENT — controlled PREVIEW 재시도 STALE_OR_DUPLICATE 확인 / stale 진단 operation 로컬 retire 보완·Hosting 배포 PASS (2026-10-14 KST)
 
 - 사용자 두 번째 controlled retry는 UI `서버 거절 · STALE_OR_DUPLICATE`, receipt/version 미확정으로 종료.

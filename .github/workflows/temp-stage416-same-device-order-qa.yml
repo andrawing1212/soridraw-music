@@ -34,6 +34,7 @@ jobs:
           node scripts/verify-428-stage416-no-retry-orphan-lease.mjs
           node scripts/verify-429-stage416-reservation-lifecycle-edges.mjs
           node scripts/verify-430-stage416-same-device-ambiguous-sequence.mjs
+          node scripts/verify-431-stage416-settled-lost-response-proof.mjs
           node scripts/verify-421-stage416-environment-isolation.mjs
           node scripts/verify-416-private-like-intent.mjs
           node scripts/verify-416-expired-window-requeue-e2e.mjs

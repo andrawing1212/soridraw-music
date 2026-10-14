@@ -1,4 +1,4 @@
-requested_at=2026-10-15T01:44:00+09:00
+requested_at=2026-10-15T01:48:00+09:00
 requested_by=user_continue_stage416_independent_audit_pass
 product_code_target=3b5c4426c1e27df725a43d04df6ec591227161d3
 release_source_target=stage416_2of4_audited_public_source_hard_off
@@ -22,3 +22,4 @@ repair_shared_like_snapshot_191=false
 preview_only=true
 test_production_unchanged_required=true
 approval=user_continue_controlled_preview_release_after_independent_pass_20261015
+retry_policy=exact_source_once_after_single_profile_tracks_curl56_reset_no_changes

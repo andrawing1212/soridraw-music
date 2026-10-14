@@ -118,7 +118,8 @@ export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
    if(prior?.fingerprint!==fingerprint)throw Error('416_PUBLIC_EVENT_CONFLICT');
    return {registered:true,duplicate:true,opened:false,needsRelease:false,
      windowId:String(prior.windowId||''),deadlineAtMs:Number(prior.deadlineAtMs||0),
-     publicMinutes:Number(prior.publicMinutes||0),trackCount:event.trackIds.length};
+     publicMinutes:Number(prior.publicMinutes||0),trackCount:event.trackIds.length,
+     scheduleAtMs:Number(prior.deadlineAtMs||0)};
  }
  const current=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
  const plan=planPublicLikeWindow416(current,event);

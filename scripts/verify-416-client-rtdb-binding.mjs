@@ -38,6 +38,7 @@ const compiled=ts.transpileModule(transport,{compilerOptions:{
   module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
 }}).outputText;
 const module416={exports:{}};let callableCalls416=0,transportDiagnostics416=[];
+const registrationOrder416=await import('../src/services/exploreLikePrivateRegistrationOrder416.mjs');
 vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   require:moduleId=>moduleId==='../firebase'?{functions:{},httpsCallable:()=>async click=>{
     callableCalls416++;
@@ -46,7 +47,8 @@ vm.runInNewContext(compiled,{module:module416,exports:module416.exports,
   }}:moduleId==='./exploreLikePrivateDiagnostic416'?{
     recordStage416PrivateAcceptanceReply416:(...args)=>transportDiagnostics416.push(['reply',...args]),
     recordStage416PrivateAcceptanceError416:(...args)=>transportDiagnostics416.push(['error',...args]),
-  }:(()=>{throw Error('unexpected import '+moduleId)})(),
+  }:moduleId==='./exploreLikePrivateRegistrationOrder416.mjs'?registrationOrder416
+   :(()=>{throw Error('unexpected import '+moduleId)})(),
   Number,Date,Error,Promise,setTimeout}, {timeout:2500});
 const {retryPrivateClickAfterPriorSeal416:retry416,
   publishPrivateRtdbBatchClick416:publish416}=module416.exports;

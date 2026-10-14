@@ -1,3 +1,17 @@
+## CURRENT — PR #120 재감사 FAIL 보완: 중단 후 신규기기 retry orphan 예약 정리 / QA PASS / 재감사 대기 (2026-10-14 KST)
+
+- **독립 감사 FAIL 대상:** `be96753594d0b4326dad05ce28982d6f6d446749`. 신규 기기 A가 global v101 예약 직후 Functions가 중단되고, 같은 operation 재시도에서 env `TRACK_LIMIT`으로 거절되면 재시도 호출의 `reservationCreatedDevice=false` 때문에 exact v101 예약이 남아 정상 v102 정산을 막을 수 있는 경로가 확인됨.
+- **최소 수정:** rejection cleanup 권한을 "이번 호출이 device slot을 만들었는가"가 아니라 **global exact reservation 자체의 predecessor metadata + canonical settled fence**로 판단. `previous:null`은 해당 exact unsettled reservation이 신규 device slot을 만든 증거이므로 재시도 호출에서도 제거 가능. 기존 기기는 exact predecessor snapshot으로 rollback.
+- **정상 요청 보호:** `allocatedVersion <= settledVersion`인 이미 canonical 정산 완료 예약은 cleanup하지 않는다. predecessor metadata가 없는 legacy/ambiguous 예약도 추측 삭제하지 않고 fail-closed. `PRIOR_WINDOW_NEEDS_SEAL`은 기존대로 cleanup 대상이 아니며 same-operation retry reservation을 유지.
+- **신규 실행형 검증:** `scripts/verify-427-stage416-interrupted-new-device-retry-cleanup.mjs`. 신규 A v101 예약 → env 저장 전 Functions 중단 → 동일 operation retry → `TRACK_LIMIT` 거절 → exact orphan v101 제거 → B v102 정상 접수 → Worker/D1/R2 정산 성공을 실제 함수 흐름으로 재현.
+- **개발 QA:** 코드/test candidate `f2b25868ae2e7faa9027dd16954a8629c840c42f`, Run `38495796906` **SUCCESS**. 신규 interrupted-retry 검증, 기존 426 existing-device rollback, Issue118 ordering/settlement, protected like regressions, App TypeScript, App Build, Functions TypeScript 모두 PASS.
+- **핵심 PASS:** `STAGE416_INTERRUPTED_NEW_DEVICE_V101_RESERVATION_PERSISTS_FOR_RETRY`, `STAGE416_RETRY_TRACK_LIMIT_CLEANS_EXACT_ORPHAN_V101`, `STAGE416_RETRY_CLEANUP_USES_RESERVATION_METADATA_NOT_CALL_FLAG`, `STAGE416_REJECTED_ORPHAN_V101_DOES_NOT_BLOCK_VALID_V102`, `STAGE416_VALID_V102_AFTER_INTERRUPTED_RETRY_WORKER_D1_DELIVERY`.
+- **비용:** 정상 accepted click RTDB W2 모델 비변경, exact proven duplicate W0 유지. 거절된 exact unsettled reservation cleanup에서만 RTDB changed write 최대 1회. settlement bounded read 3/attempt 유지. page/update/re-entry IO 0.
+- **변경 없음:** D1 schema/table/key, Worker runtime, Rules, R2 schema, shared user data, migration/backfill/delete 변경 0. Firebase/Functions/Worker/Rules/Hosting 배포 0. 일반 Stage416 client OFF 유지.
+- **현재 gate:** 새 exact HEAD 독립 재감사 PASS 전 PR #120 merge, Stage416 개인 1분 활성화, PREVIEW 배포 금지.
+
+---
+
 ## CURRENT — PR #120 감사 FAIL 보완: 거절된 기존 기기 예약 deadlock 제거 / QA PASS / 재감사 대기 (2026-10-14 KST)
 
 - **독립 감사 FAIL 대상:** `38783d2e5a0813bdd00165215418d411635c4b06`. 기존 기기 A가 v101을 예약한 뒤 `TRACK_LIMIT` 등으로 실제 env 접수되지 않으면 global device reservation v101이 남아, 정상 기기 B의 v102 정산을 계속 막을 수 있는 논리 경로가 확인됨.

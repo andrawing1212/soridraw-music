@@ -1,9 +1,11 @@
 import {onRequest} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getDatabase} from 'firebase-admin/database';
-import {publishAuthenticatedPrivateFinal416} from './exploreLikePrivateFinal416';
+import {markPublicWindowRegistered416,publishAuthenticatedPrivateFinal416}
+ from './exploreLikePrivateFinal416';
 import {readLikeBatchTimingAt416} from './exploreLikeBatchSettings416';
-import {deliverPublicLikeWindow416} from './exploreLikePublicWindowRegister416';
+import {ackPublicLikeWindow416,deliverPublicLikeWindow416}
+ from './exploreLikePublicWindowRegister416';
 import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
  from './exploreLikeEnvironment416';
 
@@ -28,7 +30,8 @@ const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({
      STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE);
    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&data.status!=='STALE'&&
       data.changedTrackIds.length){
-     const claim=JSON.parse(raw) as {windowId:string;batchIds:string[]};
+     const claim=JSON.parse(raw) as {uid:string;windowId:string;version:number;
+       batchIds:string[]};
      const acceptedAt=Math.max(...claim.batchIds.map(id=>Number(id.split('_')[1])));
      const timing=await readLikeBatchTimingAt416(database,config.timingPath);
      await deliverPublicLikeWindow416({
@@ -36,6 +39,12 @@ const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({
        eventId:claim.windowId,windowCandidateId:claim.windowId,
        eventAtMs:acceptedAt,publicMinutes:timing.publicMinutes,
        trackIds:data.changedTrackIds,signedAtMs:nowMs,
+     });
+     await markPublicWindowRegistered416(database,claim.uid,claim.version,
+       claim.windowId,config.finalRoot);
+     await ackPublicLikeWindow416({
+       workerEndpoint:config.workerEndpoint,secret:secret416.value(),
+       eventId:claim.windowId,signedAtMs:Date.now(),
      });
    }
    res.status(200).json({ok:true,data});

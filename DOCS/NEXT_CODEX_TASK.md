@@ -4,7 +4,7 @@
 - 지난 독립 감사 `b0107938` FAIL: 전체 Functions 비변경 스냅샷이 없고 `--force`가 있었으며, 신규 Function 부분 생성 후 안전한 재확인 방식이 없었음. 신 SHA에서 신규 공개 Task/receipt 배포는 pinned firebase-tools@15.30.1, --force 없음, gen1+gen2 Firebase Functions 전체 목록 before/after read-only 비교 및 타 함수 updateTime/buildConfig/serviceConfig 불변 검증. 기존 개인 deploy modes 변화 없는지 확인.
 - 최초 후보 미존재 + `initial_only`만 신규 생성 허용. 이미 있는 후보는 `verify_existing` 명시 + ACTIVE/Node22/HMAC/region/정확한 이름이면 **읽기전용 확인만**, 미검증/불완전 후보는 별도 운영자 승인 없이 자동 delete/overwrite 금지. 첫 생성 후 실패 상황 및 Task 성공·receipt 실패 상황에서 부분 배포를 SUCCESS로 오판하지 않고 다음 생성 중단하는지 확인.
 - 제품 SHA의 `preflight_only=false` trigger에서 exact infra guard SHA 및 `release_guard_audit=PASS`가 승인된 workflow+helper blob과 동일하지 않으면 배포 전에 차단되는지 검사. 인프라/제품 SHA 구분 유지, 기존 shared RTDB/D1/Rules/Hosting/Worker main/PROD 변경 금지.
-- 개발 preflight: `38609229247` SUCCESS, read-only real Firebase function count 37; 이후 YAML 중복 삽입 오류 `38609677383`, `38609921779` FAIL(jobs 0, 실제 배포 0) 수정 완료. 최종 preflight Run `38610213825`은 2026-10-15 KST 기준 **queued**, 미완료. CI 결과 재확인 후 감사 PASS/FAIL.
+- 개발 preflight: `38609229247` SUCCESS, read-only real Firebase function count 37; 이후 YAML 중복 삽입 오류 `38609677383`, `38609921779` FAIL(jobs 0, 실제 배포 0) 수정 완료. 최종 preflight Run `38610213825`은 job **SUCCESS**, 최상위 Run은 마지막 조회 기준 **in_progress**(완료 conclusion 별도 확인 필요). CI 결과 재확인 후 감사 PASS/FAIL.
 - 독립 감사 중 코드 수정/commit/push/배포/공유데이터 변경 금지. 실제 공개 함수 2개 배포나 Stage416 PUBLIC ON 승인으로 해석하지 말 것.
 
 ---

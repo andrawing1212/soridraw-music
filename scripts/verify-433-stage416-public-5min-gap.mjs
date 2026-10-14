@@ -27,7 +27,7 @@ assert.match(patch065,/patchSharedFeedLikeCounts065\(env, changedItems\)/);
 assert.match(contract,/300초로만 바꾸면 개인 원본 정착까지 미룸/);
 assert.match(contract,/canonical .*likes.* 및 .*track_stats.*와 .*repairSharedPublicLikeCounts191.*를/);
 assert.match(contract,/canonical\/private ack와 public projection materialization 분리/);
-assert.match(contract,/first80 밖의 곡 누락 금지/);
+assert.match(contract,/first80만 읽어 .*전 곡 변경 source 아님/);
 
 console.log('STAGE416_PUBLIC_SETTING_EXISTS_BUT_RUNTIME_UNUSED=PASS');
 console.log('STAGE416_PUBLIC_SIGNAL_IS_CURRENTLY_IMMEDIATE_AFTER_PRIVATE_FINAL=PASS');

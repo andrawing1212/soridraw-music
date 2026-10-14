@@ -79,6 +79,11 @@ jobs:
           esac
           git rev-parse origin/main > "$RUNNER_TEMP/main-before"
           git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
+          # The release guard is infrastructure from the trigger commit; the
+          # immutable product SHA deliberately precedes this inventory helper.
+          cp scripts/verify-416-public-function-inventory.mjs \
+            "$RUNNER_TEMP/stage416-public-function-inventory.mjs"
+          echo "INVENTORY_416_SCRIPT=$RUNNER_TEMP/stage416-public-function-inventory.mjs" >> "$GITHUB_ENV"
           git checkout --detach "$target"
           grep -Fq "if(result.reason==='WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "throw Error('416_WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
@@ -121,6 +126,7 @@ jobs:
           node scripts/verify-416-finalize-e2e.mjs
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
+          node "$INVENTORY_416_SCRIPT" selftest
           node scripts/verify-401-cross-device-opposite-like.mjs
           node scripts/verify-402-private-heart-count-pair.mjs
           npm run lint
@@ -232,7 +238,7 @@ jobs:
               # This source-only PREVIEW release must never touch an unrelated
               # Function, even if Firebase CLI reports target deploy success.
               gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-before.json"
-              node scripts/verify-416-public-function-inventory.mjs baseline "$RUNNER_TEMP/functions-before.json"
+              node "$INVENTORY_416_SCRIPT" baseline "$RUNNER_TEMP/functions-before.json"
               if [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
                 echo 'PUBLIC_FUNCTION_REGION=asia-northeast3' >> "$GITHUB_ENV"
                 expected_region=asia-northeast3
@@ -246,7 +252,7 @@ jobs:
                   echo '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY'
                   exit 41
                 fi
-                node scripts/verify-416-public-function-inventory.mjs adopt \
+                node "$INVENTORY_416_SCRIPT" adopt \
                   "$RUNNER_TEMP/function-before.json" "$PATCH_FUNCTION" "$expected_region"
                 echo '416_PUBLIC_EXISTING_CANDIDATE_VERIFIED_NO_REDEPLOY=PASS'
               else
@@ -336,7 +342,7 @@ jobs:
           case "$PATCH_FUNCTION" in
             stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
               gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-after.json"
-              node scripts/verify-416-public-function-inventory.mjs compare \
+              node "$INVENTORY_416_SCRIPT" compare \
                 "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-after.json" \
                 "$PATCH_FUNCTION" "$PUBLIC_RECOVERY_MODE"
               gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$PUBLIC_FUNCTION_REGION" \
@@ -410,7 +416,7 @@ jobs:
                 gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-failure.json" || {
                   echo '416_PUBLIC_FAILURE_INVENTORY_UNAVAILABLE_STOP'; exit 0;
                 }
-                node scripts/verify-416-public-function-inventory.mjs diagnose \
+                node "$INVENTORY_416_SCRIPT" diagnose \
                   "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-failure.json" \
                   "$PATCH_FUNCTION" || true
                 echo '416_PUBLIC_RELEASE=BLOCKED_AFTER_FAILURE'

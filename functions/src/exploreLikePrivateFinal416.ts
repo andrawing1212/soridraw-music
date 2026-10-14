@@ -146,3 +146,22 @@ export async function publishAuthenticatedPrivateFinal416(
  return {status:result.committed?'PUBLISHED':'DUPLICATE',version:data.version,
    count:data.rows.length,changedTrackIds};
 }
+
+
+export async function markPublicWindowRegistered416(
+ db:Database,uid:string,version:number,windowId:string,
+ finalRoot='privateLikeFinal416',
+):Promise<{registered:boolean;unchanged:boolean}>{
+ if(!safeUid(uid)||!Number.isSafeInteger(version)||version<=0||!uuid.test(windowId))
+   throw Error('416_PUBLIC_CHECKPOINT_INPUT_INVALID');
+ let unchanged=false;
+ const result=await db.ref(finalRoot+'/'+uid).transaction((rawState:unknown)=>{
+   const current=rawState as {version?:number;windowId?:string;
+     publicWindowRegistered416?:boolean}|null;
+   if(current?.version!==version||current?.windowId!==windowId)
+     throw Error('416_PUBLIC_CHECKPOINT_FINAL_MISMATCH');
+   if(current.publicWindowRegistered416===true){unchanged=true;return;}
+   return {...current,publicWindowRegistered416:true};
+ },undefined,false);
+ return {registered:true,unchanged:!result.committed||unchanged};
+}

@@ -55,6 +55,7 @@ import {
 import { getExplorePublicProfileFirstView, revalidateExplorePublicProfileFirstView335, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, upsertExplorePublicProfileFirstViewTrack, removeExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   fetchExplorePublicLikeCards192,
+  fetchExplorePublicLikeManifestMatches416,
   hasSettledExplorePublicLikeSignal396,
   rememberSettledExplorePublicLikeSignal396,
   subscribeExplorePublicLikeInvalidation192,
@@ -2196,7 +2197,8 @@ export default function ExplorePage() {
             const card = cardById.get(row.trackId);
             // The invalidation is sent when W1 is accepted. Only an R2 card
             // written at/after that signal can be trusted as the new public count.
-            if (!card || card.updatedAt < row.at) continue;
+            if (!card ||
+                (row.settledAfterProjection416 !== true && card.updatedAt < row.at)) continue;
             settled.set(row.trackId, card.likeCount);
             publicLikePendingRowsRef192.current.delete(row.trackId);
             publicLikeRefreshAttemptsRef192.current.delete(row.trackId);
@@ -2254,11 +2256,12 @@ export default function ExplorePage() {
       }, Math.max(0, delayMs));
     };
 
-    const unsubscribe = subscribeExplorePublicLikeInvalidation192((signal) => {
-      if (cancelled) return;
+    const queueRelevantRows192 = (
+      rows: ExplorePublicLikeSignalRow192[],
+    ): boolean => {
       const visible = publicLikeVisibleTracksRef192.current;
       let relevant = false;
-      for (const row of signal.rows) {
+      for (const row of rows) {
         if (!visible.has(row.trackId)) continue;
         // The RTDB node retains old events for 3 minutes. A normal reload
         // must not repeatedly read an R2 card already applied on this device.
@@ -2270,11 +2273,40 @@ export default function ExplorePage() {
           publicLikeRefreshAttemptsRef192.current.set(row.trackId, 0);
         }
       }
-      if (!relevant) return;
+      return relevant;
+    };
 
-      // Worker192 settles the already 30-second-batched W1 queue five seconds
-      // after acceptance. Wait slightly longer, then read only the changed R2 cards.
-      const firstDelay = Math.max(0, signal.at + 7_000 - Date.now());
+    const unsubscribe = subscribeExplorePublicLikeInvalidation192((signal) => {
+      if (cancelled) return;
+
+      // Stage416 large windows keep only 256 compatibility rows in RTDB.
+      // Resolve the exact overflow against this screen's already-visible IDs
+      // through one edge-cached manifest intersection. No Feed/D1/account scan.
+      if (signal.manifest416) {
+        const visibleIds = [...publicLikeVisibleTracksRef192.current.keys()];
+        void fetchExplorePublicLikeManifestMatches416(signal.manifest416, visibleIds)
+          .then((manifestRows) => {
+            if (cancelled) return;
+            const merged = new Map<string, ExplorePublicLikeSignalRow192>();
+            for (const row of [...signal.rows, ...manifestRows]) {
+              const prior = merged.get(row.trackId);
+              if (!prior || row.at >= prior.at) merged.set(row.trackId, row);
+            }
+            if (queueRelevantRows192([...merged.values()])) scheduleRefresh192(0);
+          })
+          .catch((reason) => {
+            console.warn('[416] Public like overflow manifest deferred:', reason);
+            if (!cancelled && queueRelevantRows192(signal.rows)) scheduleRefresh192(0);
+          });
+        return;
+      }
+
+      if (!queueRelevantRows192(signal.rows)) return;
+      // Legacy 192 invalidation is emitted before the changed R2 card settles,
+      // so retain its existing small delay. Stage416 server release is emitted
+      // only AFTER R2 projection, therefore it can read the changed card now.
+      const firstDelay = signal.settledAfterProjection416 === true
+        ? 0 : Math.max(0, signal.at + 7_000 - Date.now());
       scheduleRefresh192(firstDelay);
     });
 

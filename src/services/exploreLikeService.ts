@@ -2548,6 +2548,53 @@ export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
   return [...candidates];
 };
 
+const retireStage416PermanentRejection416 = async (
+  uid: string,
+  saved: ExploreLikePendingMutation,
+  reason: string,
+): Promise<boolean> => {
+  // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server replies. Retire
+  // only this exact durable operation, restore its pre-click local state,
+  // and verify the row is gone BEFORE any higher deviceSequence is sent.
+  const rows = readLikeOutbox(uid);
+  const row = rows[saved.trackId];
+  if (auth.currentUser?.uid !== uid || !row ||
+      row.operationId !== saved.operationId ||
+      row.updatedAt !== saved.updatedAt ||
+      row.desiredLiked !== saved.desiredLiked ||
+      row.privateDeviceId416 !== saved.privateDeviceId416 ||
+      row.privateDeviceSequence416 !== saved.privateDeviceSequence416) return false;
+  delete rows[saved.trackId];
+  persistLikeOutbox(uid, rows);
+  const reread = readLikeOutbox(uid)[saved.trackId];
+  if (reread?.operationId === saved.operationId) return false;
+
+  const cache = getLikedStateCache(uid);
+  cache.set(saved.trackId, saved.baseLiked);
+  persistLikedStateCache(uid, cache);
+  const locks = readLikeDisplayLocks(uid);
+  delete locks[saved.trackId];
+  persistLikeDisplayLocks(uid, locks);
+  patchExploreLikedTrackMembership(uid, saved.trackId, saved.baseLiked);
+  // Best-effort tentative-channel cleanup. This is not canonical settlement
+  // and never justifies sending a later sequence by itself.
+  void settleExploreLikeIntent416(uid, [{
+    trackId: saved.trackId,
+    operationId: saved.operationId || '',
+    status: 'rejected' as const,
+  }]).catch(() => {});
+  dispatchLikeSync({
+    uid,
+    trackId: saved.trackId,
+    ownerUid: saved.ownerUid,
+    liked: saved.baseLiked,
+    likeCount: saved.baseLikeCount,
+    source: 'local',
+  });
+  console.warn('[416] Private registration permanently rejected:', reason);
+  return true;
+};
+
 export const reconcileExploreLikedTrackCollectionState = (
   uid: string,
   candidateLikedTrackIds: string[],
@@ -2640,43 +2687,8 @@ const drainStage416PrivateRegistrations416 = async (
         }
       },
       persistRejected: async (saved: ExploreLikePendingMutation, reason: string) => {
-        // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server replies. Retire
-        // only this exact durable operation, restore its pre-click local state,
-        // and verify the row is gone BEFORE any higher deviceSequence is sent.
         if (!stillCurrent416(saved)) return false;
-        const rows = readLikeOutbox(uid);
-        const row = rows[saved.trackId];
-        if (!row || row.operationId !== saved.operationId ||
-            row.privateDeviceSequence416 !== saved.privateDeviceSequence416) return false;
-        delete rows[saved.trackId];
-        persistLikeOutbox(uid, rows);
-        const reread = readLikeOutbox(uid)[saved.trackId];
-        if (reread?.operationId === saved.operationId) return false;
-
-        const cache = getLikedStateCache(uid);
-        cache.set(saved.trackId, saved.baseLiked);
-        persistLikedStateCache(uid, cache);
-        const locks = readLikeDisplayLocks(uid);
-        delete locks[saved.trackId];
-        persistLikeDisplayLocks(uid, locks);
-        patchExploreLikedTrackMembership(uid, saved.trackId, saved.baseLiked);
-        // Best-effort tentative-channel cleanup. This is not canonical
-        // settlement and never justifies sending a later sequence by itself.
-        void settleExploreLikeIntent416(uid, [{
-          trackId: saved.trackId,
-          operationId: saved.operationId || '',
-          status: 'rejected' as const,
-        }]).catch(() => {});
-        dispatchLikeSync({
-          uid,
-          trackId: saved.trackId,
-          ownerUid: saved.ownerUid,
-          liked: saved.baseLiked,
-          likeCount: saved.baseLikeCount,
-          source: 'local',
-        });
-        console.warn('[416] Private registration permanently rejected:', reason);
-        return true;
+        return retireStage416PermanentRejection416(uid, saved, reason);
       },
     });
   });

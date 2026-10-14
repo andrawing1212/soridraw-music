@@ -50,6 +50,7 @@
     "094-publication-d1-read-compaction.mjs",
     "095-publication-canonical-like-request-cache.mjs",
     "096-follow-actor-count-response.mjs",
-    "097-follow-abuse-guard.mjs"
+    "097-follow-abuse-guard.mjs",
+    "099-stage416-public-window-defer.mjs"
   ]
 }

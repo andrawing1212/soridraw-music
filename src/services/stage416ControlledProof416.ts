@@ -85,6 +85,14 @@ const persistStoredProof416 = (uid: string, proof: StoredProof416) => {
   }
 };
 
+const retireStoredProof416 = (uid: string, operationId: string): boolean => {
+  if (!uid || typeof window === 'undefined' || !operationId) return false;
+  const current = readStoredProof416(uid);
+  if (!current || current.operationId !== operationId) return false;
+  window.localStorage.removeItem(proofKey416(uid));
+  return readStoredProof416(uid) === null;
+};
+
 export const hasStage416ControlledProofIntent416 = (uid: string): boolean =>
   !!readStoredProof416(uid);
 
@@ -190,23 +198,42 @@ export const runStage416ControlledProof416 = async (): Promise<Stage416Controlle
     functions, 'recordPrivateLike416',
   );
   let lastReason = 'OTHER';
-  const result = await retryPrivateClickAfterPriorSeal416(async () => {
-    try {
-      const reply = (await callable(click)).data;
-      lastReason = String(reply?.reason || (reply?.accepted ? 'ACCEPTED' : 'OTHER'));
-      recordStage416PrivateAcceptanceReply416(uid, proof.operationId, 'initial', reply);
-      return {
-        ok: reply?.ok === true,
-        accepted: reply?.accepted === true,
-        version: Number(reply?.version),
-        count: Number(reply?.count),
-        reason: String(reply?.reason || ''),
-      };
-    } catch (error) {
-      recordStage416PrivateAcceptanceError416(uid, proof.operationId, 'initial', error);
-      throw error;
+  let result: { version: number; count: number } | null = null;
+  try {
+    result = await retryPrivateClickAfterPriorSeal416(async () => {
+      try {
+        const reply = (await callable(click)).data;
+        lastReason = String(reply?.reason || (reply?.accepted ? 'ACCEPTED' : 'OTHER'));
+        recordStage416PrivateAcceptanceReply416(uid, proof.operationId, 'initial', reply);
+        return {
+          ok: reply?.ok === true,
+          accepted: reply?.accepted === true,
+          version: Number(reply?.version),
+          count: Number(reply?.count),
+          reason: String(reply?.reason || ''),
+        };
+      } catch (error) {
+        recordStage416PrivateAcceptanceError416(uid, proof.operationId, 'initial', error);
+        throw error;
+      }
+    }, () => readStoredProof416(uid)?.operationId === proof.operationId);
+  } catch (error) {
+    const reason = String(
+      (error as { stage416Reason?: unknown } | null)?.stage416Reason || '',
+    );
+    // Controlled proof only: STALE_OR_DUPLICATE means the server has already
+    // advanced this device beyond this exact diagnostic operation. Retire only
+    // this Master-only local proof so the next button press allocates a fresh,
+    // strictly higher deviceSequence. Ambiguous transport/internal failures
+    // keep the same proof and therefore still retry the same operation.
+    if (reason === 'STALE_OR_DUPLICATE') {
+      if (!retireStoredProof416(uid, proof.operationId)) {
+        throw new Error('STAGE416_PROOF_STALE_RETIRE_FAILED');
+      }
+      throw new Error('STAGE416_PROOF_STALE_RETIRED');
     }
-  }, () => readStoredProof416(uid)?.operationId === proof.operationId);
+    throw error;
+  }
 
   if (!result) throw new Error('STAGE416_PROOF_OPERATION_SUPERSEDED');
   markStage416PrivateAcceptanceRegistered416(

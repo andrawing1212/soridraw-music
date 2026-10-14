@@ -1,3 +1,21 @@
+## CURRENT — PR #120 핵심원인 보완: global-only orphan reservation lease / no-retry 회복 QA PASS / 독립 감사 대기 (2026-10-14 KST)
+
+- **직전 독립 감사 FAIL:** `33bf13666e27894d16cd1ef23d39077de75b52ae`. global version reservation 직후 Functions가 중단되고 같은 operation retry가 아예 오지 않으면, lower global-only reservation이 영구적으로 higher settlement를 막을 수 있는 구조적 차단점이 확인됨.
+- **핵심원인 교정:** global reservation을 영구 acceptance/fence가 아니라 **짧은 in-flight lease**로 한정. Stage416 authenticated Callable은 `timeoutSeconds: 60`, global reservation lease는 `120s`로 고정해 살아 있는 호출보다 lease가 항상 길게 유지되도록 함.
+- **정산 판단:** exact click이 어느 환경 pending/sealed에 실제 materialize되면 global row version은 별도 영구 barrier가 아니며 해당 **environment batch revision**이 canonical ordering fence가 됨. 반대로 어떤 환경에도 materialize되지 않은 global-only reservation만 lease 동안 higher settlement를 차단.
+- **no-retry orphan 회복:** lease 만료 + 3개 환경 bounded UID snapshot에 exact/same-track materialization 증거 없음이 확인된 reservation은 due-settlement 시 UID당 **단일 global transaction W1 최대 1회**로 exact cleanup. 신규 device orphan은 exact slot 제거, 기존 device orphan은 predecessor snapshot 복원.
+- **race 보호:** settlement가 expired orphan을 관측한 뒤 same-operation retry가 lease를 refresh하면 cleanup transaction이 최신 lease를 재검증해 삭제하지 않고 fail-closed. genuine retry는 환경 materialization이 아직 필요할 때만 lease refresh; environment-proven exact duplicate는 logical W0 유지.
+- **rolling compatibility:** 이전 candidate의 `leaseUntilMs` 없는 epoch-ms reservation에는 15분 bounded legacy grace 적용. predecessor metadata 없는 ambiguous legacy row는 destructive cleanup하지 않음.
+- **신규 실행형 검증:** `verify-428-stage416-no-retry-orphan-lease.mjs`, `verify-429-stage416-reservation-lifecycle-edges.mjs`.
+- **최종 코드/test HEAD:** `cd7660fd73d11ff645c14c73859b6843f111959b`.
+- **최종 QA:** Run `38513702935` **SUCCESS**. no-retry orphan expiry→higher settlement, live reservation block, environment-proven duplicate W0, retry-vs-cleanup race, existing-device predecessor restore, legacy grace/ambiguous non-destructive handling, protected likes, App TypeScript, App Build, Functions TypeScript 모두 PASS.
+- **핵심 PASS:** `STAGE416_GLOBAL_ONLY_RESERVATION_HAS_BOUNDED_LEASE`, `STAGE416_NO_RETRY_ORPHAN_EXPIRES_AND_V102_SETTLES`, `STAGE416_EXPIRED_LEASE_ENV_PROVEN_DUPLICATE_W0`, `STAGE416_SETTLED_BATCH_FENCE_DOES_NOT_REBASE_MATERIALIZED_ROW`, `STAGE416_GENUINE_EXPIRED_RETRY_RENEWS_THEN_MATERIALIZES`, `STAGE416_CLEANUP_RACE_WITH_RETRY_REFRESH_FAILS_CLOSED`, `STAGE416_EXISTING_DEVICE_NO_RETRY_ORPHAN_RESTORES_PREDECESSOR`, `STAGE416_PREVIOUS_CANDIDATE_NO_LEASE_HAS_BOUNDED_LEGACY_GRACE`, `STAGE416_AMBIGUOUS_LEGACY_CLEANUP_IS_NONDESTRUCTIVE`.
+- **비용:** accepted click 기존 RTDB W2 모델 유지. exact environment-proven duplicate W0 유지. no-retry orphan cleanup은 실제 장애 회복 시 UID당 changed write 최대 W1. settlement bounded read는 기존 3/attempt(현재 env 제외 peer roots 2 + global 1) 유지. page/update/re-entry 신규 IO 0.
+- **변경 없음:** shared user data, D1 schema/table/key, Worker runtime deploy, Rules, R2 schema, migration/backfill/delete 변경 0. Firebase/Functions/Cloudflare/Hosting 배포 0. 일반 Stage416 client OFF.
+- **현재 gate:** exact 새 HEAD 독립 감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
 ## CURRENT — PR #120 재감사 FAIL 보완: 중단 후 신규기기 retry orphan 예약 정리 / QA PASS / 재감사 대기 (2026-10-14 KST)
 
 - **독립 감사 FAIL 대상:** `be96753594d0b4326dad05ce28982d6f6d446749`. 신규 기기 A가 global v101 예약 직후 Functions가 중단되고, 같은 operation 재시도에서 env `TRACK_LIMIT`으로 거절되면 재시도 호출의 `reservationCreatedDevice=false` 때문에 exact v101 예약이 남아 정상 v102 정산을 막을 수 있는 경로가 확인됨.

@@ -1,8 +1,10 @@
-verify-after-master-retry-stale-duplicate
-reason=diagnose_same_operation_retry_stale_or_duplicate
+verify-after-master-fresh-accepted
+reason=verify_fresh_controlled_operation_full_settlement
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
-observed_ui=STALE_OR_DUPLICATE
-observed_receipt_missing=true
+observed_ui=ACCEPTED
+observed_version=1791967620569
+observed_receipt_valid=true
+observed_outbox_registered=true
 test_production_unchanged_required=true

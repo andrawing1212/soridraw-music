@@ -4348,17 +4348,17 @@ export const masterRecoverHeldAtomicLike420 = onCall(
 // the PREVIEW client + Worker hard flags are enabled. TEST/PRODUCTION clients
 // cannot call this path because their deployed app code keeps the candidate OFF.
 export const recordPrivateLike416 = onCall(
-  { region: "us-central1", enforceAppCheck: true },
+  { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60 },
   async (request) => handleAuthenticatedPrivateClick416(
     admin.database(), request, STAGE416_ENVIRONMENTS.preview),
 );
 export const recordPrivateLike416Test = onCall(
-  { region: "us-central1", enforceAppCheck: true },
+  { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60 },
   async (request) => handleAuthenticatedPrivateClick416(
     admin.database(), request, STAGE416_ENVIRONMENTS.test),
 );
 export const recordPrivateLike416Production = onCall(
-  { region: "us-central1", enforceAppCheck: true },
+  { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60 },
   async (request) => handleAuthenticatedPrivateClick416(
     admin.database(), request, STAGE416_ENVIRONMENTS.production),
 );

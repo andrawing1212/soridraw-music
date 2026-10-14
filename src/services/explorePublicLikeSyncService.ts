@@ -289,17 +289,20 @@ export const fetchExplorePublicLikeManifestMatches416 = async (
   const ids = [...new Set(trackIds.map((id) => normalizeId192(id)).filter(Boolean))]
     .slice(0, 200);
   if (!ids.length) return [];
-  const query = new URLSearchParams({
-    windowId: manifest.windowId,
-    deadlineAtMs: String(manifest.deadlineAtMs),
-    digest: manifest.digest,
-    count: String(manifest.count),
-    slot: String(manifest.slot),
-    trackIds: ids.join(','),
-  });
   const response = await fetch(
-    `${EXPLORE_API_BASE}${PUBLIC_LIKE_MANIFEST_ROUTE_416}?${query.toString()}`,
-    { method: 'GET', headers: { Accept: 'application/json' } },
+    `${EXPLORE_API_BASE}${PUBLIC_LIKE_MANIFEST_ROUTE_416}`,
+    {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        windowId: manifest.windowId,
+        deadlineAtMs: manifest.deadlineAtMs,
+        digest: manifest.digest,
+        count: manifest.count,
+        slot: manifest.slot,
+        trackIds: ids,
+      }),
+    },
   );
   recordCloudflareResponse(response, PUBLIC_LIKE_MANIFEST_ROUTE_416);
   if (!response.ok) throw new Error('Public like manifest unavailable: HTTP ' + response.status);

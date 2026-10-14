@@ -4,6 +4,7 @@ import {
   PUBLIC_LIKE_PENDING_OPEN_KEY_416,
   PUBLIC_LIKE_WINDOW_KEY_416,
   ackPublicLikeEventStorage416,
+  clearPublicLikeReleaseStorage416,
   joinPublicLikeChangedTracks416,
   mergePendingPublicLikeOpen416,
   readPublicLikeReleaseState416,
@@ -23,8 +24,12 @@ const storage={
     for(const [key,row] of Object.entries(entries))map.set(key,structuredClone(row));
     writes.push(Object.keys(entries).sort());
   },
-  async list({prefix}={}){
-    return new Map([...map].filter(([key])=>!prefix||key.startsWith(prefix)));
+  async list({prefix,startAfter,limit}={}){
+    let rows=[...map].filter(([key])=>!prefix||key.startsWith(prefix))
+      .sort((a,b)=>a[0].localeCompare(b[0]));
+    if(startAfter)rows=rows.filter(([key])=>key>startAfter);
+    if(Number.isSafeInteger(limit)&&limit>0)rows=rows.slice(0,limit);
+    return new Map(rows);
   },
   async delete(keys){
     const list=Array.isArray(keys)?keys:[keys];
@@ -33,16 +38,18 @@ const storage={
   },
 };
 
-const waveIds=Array.from({length:80},(_,i)=>'wave-'+String(i).padStart(3,'0'));
+const waveIds=Array.from({length:5000},(_,i)=>'wave-'+String(i).padStart(5,'0'));
 const staged=await stagePublicLikeOpenPayload416(storage,waveIds,base+5_000);
 assert.equal(staged.staged,true);
 assert.equal(staged.unchanged,false);
-assert.equal(staged.trackCount,80);
+assert.equal(staged.trackCount,5000);
 const writeCount=writes.length;
 const retryStage=await stagePublicLikeOpenPayload416(storage,[...waveIds].reverse(),base+6_000);
 assert.equal(retryStage.unchanged,true,'exact pending wave retry must be DO W0');
 assert.equal(writes.length,writeCount);
-assert.equal(map.get(PUBLIC_LIKE_PENDING_OPEN_KEY_416).eventAtMs,base+5_000);
+const pendingEvent=[...map.entries()].find(([key])=>
+  key.startsWith(PUBLIC_LIKE_PENDING_OPEN_KEY_416+'/event/'))?.[1];
+assert.equal(pendingEvent?.eventAtMs,base+5_000);
 
 const firstEvent={eventId:id(1),windowCandidateId:id(101),eventAtMs:base+10_000,
   publicMinutes:5,trackIds:['stage-own-track']};
@@ -51,8 +58,9 @@ assert.equal(opened.opened,true);
 assert.equal(opened.deadlineAtMs,base+310_000);
 const merged=await mergePendingPublicLikeOpen416(storage,base+10_001);
 assert.equal(merged.merged,true);
-assert.equal(merged.trackCount,80);
-assert.equal(map.has(PUBLIC_LIKE_PENDING_OPEN_KEY_416),false);
+assert.equal(merged.trackCount,5000);
+assert.equal([...map.keys()].some(key=>
+  key.startsWith(PUBLIC_LIKE_PENDING_OPEN_KEY_416+'/')),false);
 
 const duplicate=await registerPublicLikeEventStorage416(storage,firstEvent,base+11_000);
 assert.equal(duplicate.duplicate,true,
@@ -60,7 +68,7 @@ assert.equal(duplicate.duplicate,true,
 assert.equal(duplicate.scheduleAtMs,base+310_000);
 
 const legacyJoin=await joinPublicLikeChangedTracks416(
-  storage,['legacy-a','wave-000'],base+309_000);
+  storage,['legacy-a','wave-00000'],base+309_000);
 assert.equal(legacyJoin.joined,true);
 assert.equal(legacyJoin.trackCount,2);
 assert.equal(map.get(PUBLIC_LIKE_WINDOW_KEY_416).deadlineAtMs,base+310_000,
@@ -70,10 +78,15 @@ await ackPublicLikeEventStorage416(storage,firstEvent.eventId,base+12_000);
 const state=await readPublicLikeReleaseState416(storage,base+310_000);
 assert.equal(state.due,true);
 assert.equal(state.blockedUnacked,false);
-assert.equal(state.trackIds.length,82);
+assert.equal(state.trackIds.length,5002);
 assert(state.trackIds.includes('legacy-a'));
 assert(state.trackIds.includes('stage-own-track'));
 for(const trackId of waveIds)assert(state.trackIds.includes(trackId));
+const cleared=await clearPublicLikeReleaseStorage416(storage,state);
+assert.equal(cleared.cleared,true);
+assert.equal([...map.keys()].some(key=>key.includes('/window/'+id(101)+'/')),false,
+  'paged clear must remove every >1000 changed-track row');
+assert.equal(map.has(PUBLIC_LIKE_WINDOW_KEY_416),false);
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 assert.match(worker,/SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014/);
@@ -108,6 +121,7 @@ console.log('STAGE416_FIRST_CANONICAL_WAVE_PENDING_IDS_MERGE=PASS');
 console.log('STAGE416_OPEN_WINDOW_LEGACY_CHANGED_IDS_JOIN=PASS');
 console.log('STAGE416_FIXED_DEADLINE_NO_EXTENSION=PASS');
 console.log('STAGE416_PENDING_RETRY_W0=PASS');
+console.log('STAGE416_PUBLIC_WINDOW_5000_IDS_PAGED_READ_CLEAR=PASS');
 console.log('STAGE416_NET_CHANGED_IDS_SAME_D1_BATCH_SOURCE=PASS');
 console.log('STAGE416_DEFERRED_WAVE_SKIPS_191_PUBLIC_LEAK=PASS');
 console.log('DEPLOYMENT=0');

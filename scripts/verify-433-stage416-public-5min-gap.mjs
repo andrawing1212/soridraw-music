@@ -24,7 +24,7 @@ assert.match(entry,/await repairSharedPublicLikeCounts191\(this\.env\)/);
 assert.match(patch056,/reconcileExplorePublicLikes056\(env\)/);
 assert.match(patch065,/patchSharedFeedLikeCounts065\(env, changedItems\)/);
 
-assert.match(contract,/canonical queue drain을 300s 늦추지 않는다/);
+assert.match(contract,/300초로만 바꾸면 개인 원본 정착까지 미룸/);
 assert.match(contract,/canonical .*likes.* 및 .*track_stats.*와 .*repairSharedPublicLikeCounts191.*를/);
 assert.match(contract,/canonical\/private ack와 public projection materialization 분리/);
 assert.match(contract,/first80 밖의 곡 누락 금지/);

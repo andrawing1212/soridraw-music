@@ -1,8 +1,8 @@
-verify-after-callable-wrapper-config-fix
-reason=postdeploy_readonly_after_callable_internal_fix
+verify-after-master-retry-stale-duplicate
+reason=diagnose_same_operation_retry_stale_or_duplicate
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
-callable_deploy_run=38532474337
-observed_prior_failure=CALLABLE_INTERNAL
+observed_ui=STALE_OR_DUPLICATE
+observed_receipt_missing=true
 test_production_unchanged_required=true

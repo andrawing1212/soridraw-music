@@ -1,4 +1,4 @@
-product_code_target=3ec14a9756ea24072e21daa622a25fecadd762e6
+product_code_target=ba56237ea7f8385ec88456c60222e90a9cb170f1
 scope=preview_existing_private_click_only
 target_function=recordPrivateLike416
 preflight_only=false
@@ -13,4 +13,5 @@ release_reason=issue118_settled_duplicate_and_same_device_lost_click_fix
 test_evidence_408_run=38527817569_SUCCESS
 readonly_preflight_run=38527605746_SUCCESS
 prior_release_guard_failure=38528249277_NO_DEPLOY
+prior_package_failure=38528380601_NO_DEPLOY
 test_production_unchanged_required=true

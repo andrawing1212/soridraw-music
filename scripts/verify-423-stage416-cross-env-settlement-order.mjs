@@ -5,6 +5,13 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 const nativeRequire=createRequire(import.meta.url);
+const serverSource=readFileSync('functions/src/exploreLikePrivateServerClick416.ts','utf8');
+const serverOutput=ts.transpileModule(serverSource,{compilerOptions:{
+ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+}}).outputText;
+const serverModule={exports:{}};
+vm.runInNewContext(serverOutput,{module:serverModule,exports:serverModule.exports,
+ require:nativeRequire,Date,Object,Number,Error,Array,Promise,console},{timeout:2500});
 const source=readFileSync('functions/src/exploreLikePrivateCommit416.ts','utf8');
 const output=ts.transpileModule(source,{compilerOptions:{
  module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
@@ -45,6 +52,7 @@ const roots={
 
 const deliveries=[];
 const requireMock=id=>{
+  if(id==='./exploreLikePrivateServerClick416')return serverModule.exports;
  if(id==='./exploreLikePrivateSeal416')return {
   sealUserPrivateLikes416:async(_db,_uid,_now,_expected,privateRoot)=>{
    const seal=seals[privateRoot];

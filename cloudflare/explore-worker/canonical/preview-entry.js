@@ -2501,7 +2501,14 @@ async function handleSignedPublicLikeWindow416(request,env){
 }
 
 async function handlePublicLikeManifestIntersect416(request,env){
- const headers=new Headers(revisionCors036(request));
+ const origin=String(request.headers.get('Origin')||'');
+ const headers=new Headers();
+ if(RELEASE_ALLOWED_ORIGINS_036.has(origin)){
+   headers.set('Access-Control-Allow-Origin',origin);
+   headers.set('Access-Control-Allow-Methods','POST, OPTIONS');
+   headers.set('Access-Control-Allow-Headers','Content-Type');
+   headers.set('Vary','Origin');
+ }
  headers.set('Content-Type','application/json; charset=utf-8');
  headers.set('Cache-Control','no-store');
  headers.set('X-SORIDRAW-CF-Diagnostics','416-MANIFEST');
@@ -2514,18 +2521,20 @@ async function handlePublicLikeManifestIntersect416(request,env){
    'X-SORIDRAW-CF-Diagnostics, X-SORIDRAW-D1-Read, X-SORIDRAW-D1-Write, X-SORIDRAW-D1-Read-Queries, X-SORIDRAW-D1-Write-Queries, X-SORIDRAW-R2-B');
  const fail=(status,code)=>new Response(JSON.stringify({ok:false,error:{code}}),
    {status,headers});
- if(request.method!=='GET')return fail(405,'416_PUBLIC_MANIFEST_METHOD');
+ if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
+ if(request.method!=='POST')return fail(405,'416_PUBLIC_MANIFEST_METHOD');
  const url=new URL(request.url);
- const requested=[...new Set(String(url.searchParams.get('trackIds')||'')
-   .split(',').map(x=>x.trim()).filter(Boolean))];
+ const body=await request.json().catch(()=>null);
+ const requested=[...new Set(Array.isArray(body?.trackIds)
+   ?body.trackIds.map(x=>String(x||'').trim()).filter(Boolean):[])];
  let meta;
  try{
    meta=validatePublicLikeManifestMetadata416({
-     schemaVersion:1,windowId:String(url.searchParams.get('windowId')||''),
-     deadlineAtMs:Number(url.searchParams.get('deadlineAtMs')),
-     digest:String(url.searchParams.get('digest')||''),
-     count:Number(url.searchParams.get('count')),
-     slot:Number(url.searchParams.get('slot')),
+     schemaVersion:1,windowId:String(body?.windowId||''),
+     deadlineAtMs:Number(body?.deadlineAtMs),
+     digest:String(body?.digest||''),
+     count:Number(body?.count),
+     slot:Number(body?.slot),
    });
    if(!requested.length||requested.length>200||
       requested.some(id=>!id||id.length>512))

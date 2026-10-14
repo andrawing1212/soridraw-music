@@ -1,10 +1,9 @@
-verify-after-master-fresh-accepted
-reason=verify_fresh_controlled_operation_full_settlement
+verify-after-settlement-stale-cache-fix-deploy
+reason=postdeploy_readonly_after_rtdb_settlement_cache_reconciliation
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
-observed_ui=ACCEPTED
-observed_version=1791967620569
-observed_receipt_valid=true
-observed_outbox_registered=true
+settle_deploy_run=38540479746
+audit_head=1cd605fef46c672506be287fbc3d0c7d60f5f7b1
+audit_result=PASS
 test_production_unchanged_required=true

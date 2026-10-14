@@ -2284,20 +2284,31 @@ export default function ExplorePage() {
       // through one edge-cached manifest intersection. No Feed/D1/account scan.
       if (signal.manifest416) {
         const visibleIds = [...publicLikeVisibleTracksRef192.current.keys()];
-        void fetchExplorePublicLikeManifestMatches416(signal.manifest416, visibleIds)
-          .then((manifestRows) => {
-            if (cancelled) return;
-            const merged = new Map<string, ExplorePublicLikeSignalRow192>();
-            for (const row of [...signal.rows, ...manifestRows]) {
-              const prior = merged.get(row.trackId);
-              if (!prior || row.at >= prior.at) merged.set(row.trackId, row);
-            }
-            if (queueRelevantRows192([...merged.values()])) scheduleRefresh192(0);
-          })
-          .catch((reason) => {
-            console.warn('[416] Public like overflow manifest deferred:', reason);
-            if (!cancelled && queueRelevantRows192(signal.rows)) scheduleRefresh192(0);
-          });
+        const resolveManifest416 = (attempt: number) => {
+          void fetchExplorePublicLikeManifestMatches416(signal.manifest416!, visibleIds)
+            .then((manifestRows) => {
+              if (cancelled) return;
+              const merged = new Map<string, ExplorePublicLikeSignalRow192>();
+              for (const row of [...signal.rows, ...manifestRows]) {
+                const prior = merged.get(row.trackId);
+                if (!prior || row.at >= prior.at) merged.set(row.trackId, row);
+              }
+              if (queueRelevantRows192([...merged.values()])) scheduleRefresh192(0);
+            })
+            .catch((reason) => {
+              console.warn('[416] Public like overflow manifest deferred:', reason);
+              if (cancelled) return;
+              if (queueRelevantRows192(signal.rows)) scheduleRefresh192(0);
+              // Signal-driven only: no idle polling. A transient edge/R2 miss
+              // gets the same bounded four-attempt recovery as changed cards.
+              if (attempt < 3) {
+                window.setTimeout(() => {
+                  if (!cancelled) resolveManifest416(attempt + 1);
+                }, 5_000);
+              }
+            });
+        };
+        resolveManifest416(0);
         return;
       }
 

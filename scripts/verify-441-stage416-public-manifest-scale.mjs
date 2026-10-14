@@ -129,7 +129,7 @@ assert.match(service,/fetchExplorePublicLikeManifestMatches416/);
 assert.match(service,/settledAfterProjection416/);
 assert.match(service,/manifest416/);
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
-assert.match(page,/fetchExplorePublicLikeManifestMatches416\(signal\.manifest416, visibleIds\)/);
+assert.match(page,/fetchExplorePublicLikeManifestMatches416\(signal\.manifest416!?, visibleIds\)/);
 assert.match(page,/row\.settledAfterProjection416 !== true && card\.updatedAt < row\.at/);
 const like=readFileSync('src/services/exploreLikeService.ts','utf8');
 assert.match(like,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false/);

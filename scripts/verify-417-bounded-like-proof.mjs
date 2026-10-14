@@ -140,9 +140,12 @@ const runDO = async ({ aggregate: result, requestId = batchId, pending = false, 
     'EXPLORE_LIKE_ALARM_FALLBACK_MS_194',
     'EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105',
     'waitExploreLikeDelay194',
+    'STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE',
+    'PUBLIC_LIKE_WINDOW_KEY_416',
     doSource.replace(/^export class /, 'class ') + '\nreturn ExploreLikeBatchScheduler103;',
   )(BaseDO, fakeBaseWorker, async () => ({}),
-    'active-scheduled-at-194', 20_000, 15_000, 5_000, async () => {});
+    'active-scheduled-at-194', 20_000, 15_000, 5_000, async () => {},
+    false, 'stage416/public/current');
   const storage = {
     async get() { return active; },
     async put() {},

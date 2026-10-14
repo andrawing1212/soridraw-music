@@ -99,7 +99,7 @@ assert.equal(roots[globalRoot].version,101);
 assert.equal(roots[globalRoot].settledVersion,100);
 assert.deepEqual(roots[globalRoot].devices[deviceA],{
   deviceSequence:1,operationId:opA,trackId:'interrupted-a',
-  liked:true,version:101,previous:null,
+  liked:true,version:101,previous:null,leaseUntilMs:120101,
 });
 assert.equal(roots[testRoot].deviceSeq[deviceA],undefined,
   'interrupted first call must leave no environment acceptance proof');

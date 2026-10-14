@@ -1,3 +1,15 @@
+## CURRENT — Stage416 2/4 exact-SHA 독립 코드 감사 PASS / PREVIEW 통제 배포 준비 단계 (2026-10-15 KST)
+
+- **감사 기준:** `preview` 제품 commit `3b5c4426c1e27df725a43d04df6ec591227161d3`; 이전 doc-only HEAD `b461b9c16a85e69dc19470bc7c3529668e0dc335`. 사용자가 전달한 **별도 GPT-6 독립 재감사 최종 판정 PASS**. 이 PASS는 **코드 감사**이며 실 Cloudflare 알람 전송, 5분 실제 집계/과금, Master 통제 E2E 또는 PC↔모바일 실화면 PASS가 아니다.
+- **독립 감사 확인:** DO 공개 창 조회 실패 시 fail-closed로 canonical/191 호출 0; `/schedule` 오류 뒤 대기 marker 및 alarm 유지 → 저장소 복구 뒤 alarm 메서드 재실행 PASS(독립 모의 저장소). 이전 PUBLISHED 후 partial-delete 복구와 만료 후 next-window dedup 유지 코드 PASS; 5,000/5,500곡 대규모 로컬 개발 검사 기록 PASS, 이번 독립 감사에서 workerd 실엔진 자체 재실행은 하지 않음. 새 차단 오류 미발견.
+- **제품 품질 근거:** exact SHA 408 GitHub Run `38594672253` SUCCESS (TypeScript/Build/Functions/like regressions), 426 Worker Run `38594672463` SUCCESS, Stage416 PREVIEW read-only preflight `38594673140` SUCCESS. 실제 청구비·실서비스 공개 5분 검증은 아직 미측정/미실시.
+- **배포 전 확인한 구조:** `cloudflare/explore-worker/canonical/preview-entry.js` 의 `STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false` 고정; `functions/src/exploreLikePublicTask416.ts` / `exploreLikePublicReleaseEndpoint416.ts` 는 source-only이며 `functions/src/index.ts` 에 해당 **공개** Task/Release export 미연결. 기존 `stage416-preview-backend-release.yml`은 오래된 private prerequisites 배포이며 RTDB Rules / additive D1 table / 여러 Functions / secret까지 다루므로 **이번 public 5분 단독 배포 경로로 재사용 금지**.
+- **현재 실제 브랜치:** main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`. 이번 감사 인계와 문서 정리에서는 코드·공유 데이터·배포 변경 0.
+- **다음 작업:** PREVIEW에 한정된 exact-product-SHA 배포 범위/Functions export/Worker binding·secret/롤백 계획을 먼저 읽기 전용으로 확정. 공개 5분 기능은 별도 Master 통제 실검증 단계 전까지 OFF; 기존 5초 개인 settlement/app410 좋아요/팔로우/UI 보호. 허용되지 않은 Rules/D1 migration/Hosting/TEST/PRODUCTION 배포 금지. 배포 여부와 실제 live binding은 실행 후에만 PASS.
+- **진행:** Stage416 전체 1/4·25%, 앱 속도 개선 5/5·100%, 이번 신규 FAIL 수정 4/4·100%, 독립 코드 감사 PASS. Stage416 2/4 배포/실환경 검증은 **미완료**.
+
+---
+
 ## CURRENT — Stage416 2/4 공개 창 조회 오류 fail-closed 최소 수정 / CI PASS / 독립 exact-SHA 감사 대기 (2026-10-15 KST)
 
 - **브랜치 및 제품 commit:** `preview` / `3b5c4426c1e27df725a43d04df6ec591227161d3` (부모 `1ada5daba729a9adbd7ea06cd9d974c23f5b3a62`). 이번 신규 독립 감사 대상은 반드시 이 제품 SHA로 고정한다. 과거 `f580c36a670e56559590ad36efe115cd5dc4bf41`은 이번 오류가 남은 이전 감사 FAIL 후보이다.

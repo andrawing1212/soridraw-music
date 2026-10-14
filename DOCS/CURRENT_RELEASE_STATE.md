@@ -1,3 +1,57 @@
+## CURRENT — Stage416 2/4 감사 FAIL 2건 복구 후보 / 자동검증 PASS / exact-SHA 독립 재감사 대기 (2026-10-15 KST)
+
+- **작업 branch / 시작 HEAD:** `preview` / `12460ac140f3c28bad07899ea80acba8b01a8479`. 작업 전·커밋 전 GitHub 최신 HEAD 재확인, 다른 신규 commit 없음. 기존 로컬 제품 4개·테스트 5개 수정안을 보존하고 이어서 완성했다.
+- **새 감사 대상 제품 SHA:** `dc002309852d652e39c2f8fa46968f48e4cbbd73` (제품 코드 4개 + 테스트 9개). 이 항목 아래의 과거 `61a33fdf76257de6fd0339cdabf7c09c75cc184c` 후보는 FAIL 이력이 있는 이전 기준이며 현재 감사 대상이 아니다.
+- **상태:** 개발방 자동검증 PASS이며 독립 감사 PASS/배포 PASS/실기기 PASS가 아니다. Stage416 전체 **1/4 · 25%**, 앱 속도 개선 **5/5 · 100%** 유지. 이번 FAIL 복구의 구현·검증을 완료했고, GitHub 제품/문서 commit 전달 후 복구 작업 **4/4 · 100%**로 종료한다. Stage416 2/4 자체는 재감사 전 완료 판정하지 않는다.
+
+### 수정 내용과 보호 범위
+
+1. **FAIL 1 — PUBLISHED 후 부분 삭제 복구:** due 창을 transaction으로 seal하고, 최초 materialization의 정확한 release claim(동일 windowId/releaseToken, inline rows 및 기존 manifest identity)을 삭제 prefix 밖에 durable checkpoint로 확정한 뒤 RTDB에 보낸다. PUBLISHED 응답 유실이면 동일 claim에 서명 시각만 갱신해 재시도한다. 로컬 published checkpoint가 있으면 HTTP 재발표 없이 정리만 계속한다. 1,000행 단위 창 삭제와 event alias 삭제는 같은 transaction이며 마지막 current/checkpoint 제거와 다음 창 승격도 atomic하다. 축소된 잔여 목록으로 재발표하지 않는다. Functions는 같은 windowId/releaseToken의 변경된 claim을 conflict로 거부한다.
+2. **FAIL 2 — 마감 동시 변경 유실:** 만료·sealed 창에 신규 canonical changed ID를 합류시키지 않는다. 곡별 dedup된 next 저장소에 보존하고 현재 창 정리 시 새 fixed 5분 창으로 승격한다. next는 현재 창 종료까지의 대기 버퍼이며 다음 deadline은 새 창을 여는 시점에 고정한다. 기존 deadline은 연장하지 않는다. canonical drain이 await 중 이전 창이 종료되어도 captured timing으로 새 창을 만들고 알람을 보존한다. 실제 scheduler의 public-only alarm은 private canonical drain 없이 다음 창을 발표한다.
+3. **verify-439:** 68행의 이전 `const projection=await materialize` 문자열이 `projectionResult` 구조와 달라 실패했다. 두 위치가 실제 존재하고 STALE_TASK가 projection보다 앞선다는 검사를 유지·강화했다. verify-442는 wrong windowId와 wrong deadline 각각에서 D1/R2/HTTP 접근 시 throw하는 adapter로 IO 0을 실행 검증한다.
+4. **mock / 보호검사:** DurableObjectTransaction의 getAlarm/setAlarm/deleteAlarm 및 transaction rollback을 구현했다. verify-407/411의 추출 함수 fixture는 누락됐던 외부 `STAGE426_COMPILED_OPEN`을 실제 소스에서 읽어 주입한다. 제품 191 함수나 gate를 변경하지 않았다. 기존 검사 삭제·무조건 PASS 처리 없음.
+5. 개인 app410 하트·PC↔모바일, app416 개인 settlement/receipt, 5초 canonical 경로, follow/publication, Music Note/Library/Studio 저장하트, UI 및 정상 캐시는 보호 범위다. `src/`, Rules, canonical base Worker, manifest/lockfile, workflow, `.deploy/`, 배포용 dist의 최종 diff는 0. 모든 Stage416 공개 활성화 gate는 OFF 유지.
+
+### 실행 검증 결과 (Node 22, 로컬 데이터만)
+
+| 검증 | 결과 / 범위 |
+| --- | --- |
+| verify-442 신규 장애·동시성 검사 | PASS. 5,000곡 공개 후 1,000행 단위 **6개 삭제 중단점**(곡 5,000 + event 1행), 저장소 상태를 유지한 재실행, RTDB 추가 변경 0, D1/R2 재projection 0, alias/checkpoint 최종 정리 |
+| PUBLISHED 응답 유실 | PASS. PUBLISHED 직후 실행 중단 후 20분 늦은 재시도에도 동일 release identity, RTDB 추가 변경 0 |
+| 5분 경계·동시 변경 | PASS. 마감 -1ms / 정확한 마감 / 마감 이후, 목록 확보 후 B곡 변경, 발표와 join 동시 실행, 같은 release 중복 호출, A곡 상쇄 최종 0 및 B곡 최종 숫자 정확성 |
+| 다음 창 및 rollback | PASS. 늦은 변경 유실 0, 5,500곡 next dedup, 마지막 승격 transaction 오류/rollback 후 복구, 정상 종료 후 임시 상태 정리 |
+| verify-443 실제 workerd | PASS. SQLite DO에서 5,000곡 공개 후 세 번째 삭제 page commit 직후 중단 → Miniflare dispose → 같은 SQLite/R2 경로로 새 isolate 시작 → 복구 RTDB W0. 실제 engine alarm으로 다음 창 B 발표, 중복 0, 남은 storage/alarm 0 |
+| Stage416 회귀 | PASS. verify-416 소스/실행 검사 23개 + verify-421~442 Stage416 22개 = 45개. 별도 live-worker-compatibility는 로컬 canonical source 입력으로 PASS. verify-438 변경 claim conflict/W0 추가 검사도 PASS |
+| 기존 보호 경로 | PASS. 127/175/178/180/191/192/197, 211/212/303/334/365 공개·비공개/기기 간 보호, 354/355/356/377/385/386/387 팔로우, 390 receipt, 401 cross-device, 402 private-heart-count, 407/411/412/413/414/417, Music Note shared-dedup 및 389 follow-only |
+| 추가 기존 진단 | 401 existing-derived-journal / 402 like-notification-trust-recovery / 411 existing-r2-writers 진단 실행 완료. 해당 스크립트의 역사적 BLOCKED/구형 unguarded-writer 진단은 현재 신규 기능 배포 PASS 근거로 사용하지 않는다 |
+| App TypeScript / Build | `npm run lint` PASS / `npm run build` PASS. 기존 1,500kB chunk 크기 warning만 있음 |
+| Functions TypeScript | `./functions/node_modules/.bin/tsc -p functions/tsconfig.json --noEmit` PASS |
+| 기타 | Worker entry syntax, `git diff --check` PASS. 실제 191 제품 함수 변경 0 |
+
+재현 명령 (저장소 루트, npm 의존성 설치 후):
+
+```sh
+node scripts/verify-439-stage416-public-release-routing.mjs
+node scripts/verify-442-stage416-public-crash-race.mjs
+npm install --prefix /tmp/stage416-runtime-check miniflare@4.20260730.0
+MINIFLARE_MODULE=/tmp/stage416-runtime-check/node_modules/miniflare/dist/src/index.js node scripts/verify-443-stage416-public-workerd.mjs
+npm run lint
+npm run build
+./functions/node_modules/.bin/tsc -p functions/tsconfig.json --noEmit
+```
+
+### 비용·데이터·남은 검증
+
+- 공개 release **D1 write 0** 유지. 새 전체 Feed/profile/track scan 없음. 고정된 변경 ID만 기존 projection에 전달한다. 체크포인트 이후 재시도는 D1/R2 materialization·manifest 재생성 0, PUBLISHED duplicate는 RTDB **추가 변경 0**(응답 유실 재시도에서 identity 확인 transaction/read는 있을 수 있음).
+- DO 비용은 seal/checkpoint/published 상태와 다음 창의 unique changed-track 저장·전환에 추가된다. checkpoint는 1개와 최대 3개 inline-row chunk, next는 곡별 dedup이고 정상 종료 후 수거한다. 무제한 완료 이력 보관 없음. 진행 중 changed-track 집합 크기에 비례하는 저장소/transaction 작업은 존재하며 live 과금 수치는 미측정이다.
+- 페이지 진입·재진입·앱 업데이트 신규 IO를 추가한 client 변경 0. R2는 기존 bounded 8-slot manifest 사용. 공유 사용자 원본/파생 D1·RTDB·R2 실제 변경 **0**. migration/backfill/강제 캐시 초기화 없음.
+- **미검증:** 독립 exact-SHA 재감사, 배포 환경 실검증 및 PC↔모바일 실기기 재검증은 남아 있다. 추가 RTDB Rules emulator 실행은 JAR 다운로드 도메인 `storage.googleapis.com`의 환경 정책 403 차단으로 미실행; PASS로 계산하지 않았다. Rules 변경 없음이며 관련 소스 보호검사는 PASS다.
+- **배포 상태:** 이번 작업 Firebase Hosting/Functions/Rules, Cloudflare Worker 배포 없음. `preview.soridraw.com` 서비스는 기존 배포 유지. Stage416 일반 사용자 ON 금지. `main`·TEST·PRODUCTION 변경 없음.
+- **브랜치/Workflow:** 신규 원격 브랜치 및 Workflow 생성·삭제 없음. 기존 임시·미병합 브랜치는 이 작업에서 변경하지 않았다. preview/main/production의 force-push·삭제 방지 ruleset `22889511` active 확인.
+- **다음 한 작업:** 아래 새 제품 exact SHA를 GPT-6 감사방에서 독립 재감사. PASS 전 신규 공개 집계 활성화·배포 금지.
+
+---
+
 ## CURRENT — Stage416 2/4 공개 5분 공동집계 source candidate 구현·대규모 회귀 PASS / 독립 감사 전 (2026-10-14 KST)
 
 - **기준 branch / product commit:** `preview` / `61a33fdf76257de6fd0339cdabf7c09c75cc184c`.

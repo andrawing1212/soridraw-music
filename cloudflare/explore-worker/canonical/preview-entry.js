@@ -8,6 +8,9 @@ import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
  from '../runtime/public-like-window-416.mjs';
 import {releaseDuePublicLikeWindow416}
  from '../runtime/public-like-release-416.mjs';
+import {PUBLIC_LIKE_MANIFEST_ROUTE_416,validatePublicLikeManifestMetadata416,
+ readPublicLikeManifest416,intersectPublicLikeManifest416}
+ from '../runtime/public-like-manifest-416.mjs';
 import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
@@ -2497,6 +2500,69 @@ async function handleSignedPublicLikeWindow416(request,env){
  }
 }
 
+async function handlePublicLikeManifestIntersect416(request,env){
+ const headers=new Headers(revisionCors036(request));
+ headers.set('Content-Type','application/json; charset=utf-8');
+ headers.set('Cache-Control','no-store');
+ headers.set('X-SORIDRAW-CF-Diagnostics','416-MANIFEST');
+ headers.set('X-SORIDRAW-D1-Read','0');
+ headers.set('X-SORIDRAW-D1-Write','0');
+ headers.set('X-SORIDRAW-D1-Read-Queries','0');
+ headers.set('X-SORIDRAW-D1-Write-Queries','0');
+ headers.set('X-SORIDRAW-R2-B','0');
+ headers.set('Access-Control-Expose-Headers',
+   'X-SORIDRAW-CF-Diagnostics, X-SORIDRAW-D1-Read, X-SORIDRAW-D1-Write, X-SORIDRAW-D1-Read-Queries, X-SORIDRAW-D1-Write-Queries, X-SORIDRAW-R2-B');
+ const fail=(status,code)=>new Response(JSON.stringify({ok:false,error:{code}}),
+   {status,headers});
+ if(request.method!=='GET')return fail(405,'416_PUBLIC_MANIFEST_METHOD');
+ const url=new URL(request.url);
+ const requested=[...new Set(String(url.searchParams.get('trackIds')||'')
+   .split(',').map(x=>x.trim()).filter(Boolean))];
+ let meta;
+ try{
+   meta=validatePublicLikeManifestMetadata416({
+     schemaVersion:1,windowId:String(url.searchParams.get('windowId')||''),
+     deadlineAtMs:Number(url.searchParams.get('deadlineAtMs')),
+     digest:String(url.searchParams.get('digest')||''),
+     count:Number(url.searchParams.get('count')),
+     slot:Number(url.searchParams.get('slot')),
+   });
+   if(!requested.length||requested.length>200||
+      requested.some(id=>!id||id.length>512))
+     throw Error('416_PUBLIC_MANIFEST_INTERSECT_BAD_TRACK');
+ }catch{return fail(400,'416_PUBLIC_MANIFEST_REQUEST_INVALID');}
+ if(!env?.PROFILE_MEDIA)return fail(503,'416_PUBLIC_MANIFEST_R2_UNAVAILABLE');
+
+ const cacheUrl=new URL('/__soridraw/public-like-manifest-v416/'+
+   meta.slot+'/'+meta.digest,url.origin);
+ const cacheKey=new Request(cacheUrl.toString(),{method:'GET'});
+ let manifest=null,r2Reads=0;
+ try{
+   const cached=await caches.default.match(cacheKey);
+   if(cached){
+     manifest=await cached.json();
+   }else{
+     const loaded=await readPublicLikeManifest416(env.PROFILE_MEDIA,meta);
+     r2Reads=Number(loaded?.r2Reads||0);
+     if(!loaded?.rows)return fail(409,'416_PUBLIC_MANIFEST_SUPERSEDED');
+     manifest={meta:loaded.meta,rows:loaded.rows};
+     await caches.default.put(cacheKey,new Response(JSON.stringify(manifest),{
+       headers:{'Content-Type':'application/json; charset=utf-8',
+         'Cache-Control':'public, max-age=240'},
+     }));
+   }
+   const rows=intersectPublicLikeManifest416(manifest?.rows,requested);
+   headers.set('X-SORIDRAW-R2-B',String(r2Reads));
+   return new Response(JSON.stringify({ok:true,data:{rows,
+     windowId:meta.windowId,deadlineAtMs:meta.deadlineAtMs,digest:meta.digest}}),
+     {status:200,headers});
+ }catch(error){
+   console.warn('[416] public manifest intersect failed',
+     String(error?.message||error||'unknown'));
+   return fail(503,'416_PUBLIC_MANIFEST_UNAVAILABLE');
+ }
+}
+
 async function handleSignedPublicLikeRelease416(request,env){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
    'Cache-Control':'no-store'});
@@ -2601,6 +2667,10 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&
+       url.pathname===PUBLIC_LIKE_MANIFEST_ROUTE_416){
+      return handlePublicLikeManifestIntersect416(request,env);
+    }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&request.method==='POST'&&
        url.pathname===STAGE416_PUBLIC_RELEASE_ROUTE){
       return handleSignedPublicLikeRelease416(request,env);

@@ -1,8 +1,8 @@
-verify-after-issue118-preview-backend-38529684657
-reason=postdeploy_readonly_after_record_and_settle_issue118_fix
+verify-after-master-controlled-callable-internal
+reason=diagnose_master_controlled_stage416_callable_internal
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
-record_private_run=38528686713
-settle_run=38529684657
+observed_ui=CALLABLE_INTERNAL
+observed_local_outbox_waiting=true
 test_production_unchanged_required=true

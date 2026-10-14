@@ -25,8 +25,12 @@ assert.match(repair,/candidateIds\.size > 80/);
 assert.match(repair,/SELECT t\.id,t\.owner_uid,COALESCE\(s\.like_count,0\) AS like_count/);
 assert.match(repair,/await env\.DB\.prepare\(sql\)\.bind\(\.\.\.ids\)\.all\(\)/);
 assert.match(workerScheduled,/await processExploreLikeBatches035\(env/);
-assert.doesNotMatch(workerScheduled,/return (?:await )?processExploreLikeBatches035\(env/);
-console.log('406_PROTECTED_SOURCE_PATH=PASS (scheduled aggregate response discarded; existing first-page repair runs after it)');
+// Stage416 consumes the existing aggregate receipt/changed IDs; preserve its
+// return as well as the gated legacy repair this cost experiment measures.
+assert.match(workerScheduled,/return await processExploreLikeBatches035\(env/);
+assert.match(schedule,/settledAggregate418\s*=\s*await baseWorker\.scheduled\(/);
+assert.match(schedule,/settledAggregate418\?\.changedTrackIds416/);
+console.log('406_PROTECTED_SOURCE_PATH=PASS (scheduled aggregate receipt returned; existing gated first-page repair retained)');
 
 const mf=new Miniflare({
   modules:true,compatibilityDate:'2026-08-01',

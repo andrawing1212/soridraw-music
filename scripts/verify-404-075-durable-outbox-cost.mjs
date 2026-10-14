@@ -22,7 +22,15 @@ assert.match(intake, /canonicalD1:\s*'queued'/);
 assert.match(legacy, /includeQueue069/);
 assert.match(legacy, /INSERT OR IGNORE INTO likes/);
 assert.match(legacy, /DELETE FROM likes/);
-assert.doesNotMatch(legacy, /RETURNING\s+track_id/i);
+// Stage416 now returns exact net-changed track_stats IDs. This historical
+// feasibility experiment concerns per-membership RETURNING, still absent.
+const legacyMembership = legacy.slice(legacy.indexOf('INSERT OR IGNORE INTO likes'),
+  legacy.indexOf('DELETE FROM explore_like_batches_035'));
+assert.match(legacyMembership, /DELETE FROM likes/);
+assert.doesNotMatch(legacyMembership, /RETURNING\s+track_id/i);
+assert.equal([...legacy.matchAll(/RETURNING\s+track_id/gi)].length, 2,
+  'only the two existing track_stats mutations return changed track IDs');
+assert.match(legacy, /changedTrackIds416/);
 assert.match(queue075, /const projection = await env\.DB\.prepare/);
 assert.match(queue075, /const changedRows = /);
 assert.match(queue075, /const result = await env\.DB\.batch/);

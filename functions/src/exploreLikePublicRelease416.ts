@@ -84,7 +84,7 @@ export async function publishPublicLikeRelease416(
  markerRoot='publicLikeRelease416',signalPath='publicSync/exploreLike',
 ):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';windowId:string;count:number;
  signalChanged:boolean}>{
- if(!raw||raw.length>160_000||typeof secret!=='string'||secret.length<32||
+ if(!raw||raw.length>512_000||typeof secret!=='string'||secret.length<32||
     !/^[0-9a-f]{64}$/i.test(signature||'')||!Number.isSafeInteger(nowMs)||nowMs<=0||
     !markerRoot||!signalPath)
    throw Error('416_PUBLIC_RELEASE_INVALID_AUTH');

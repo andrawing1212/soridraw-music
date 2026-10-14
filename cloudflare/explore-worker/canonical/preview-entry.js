@@ -4,6 +4,8 @@ import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} 
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
 import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416}
  from '../runtime/public-like-window-416.mjs';
+import {releaseDuePublicLikeWindow416}
+ from '../runtime/public-like-release-416.mjs';
 import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
@@ -1254,6 +1256,25 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if(request.method==='POST'&&url.pathname==='/public-release'){
+      const body=await request.json().catch(()=>null);
+      try{
+        const data=await releaseDuePublicLikeWindow416({
+          db:this.env.DB,r2:this.env.PROFILE_MEDIA,storage:this.ctx.storage,
+          releaseEndpoint:this.env.SORIDRAW_PUBLIC_RELEASE416_ENDPOINT,
+          secret:this.env.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET,nowMs:Date.now(),
+          expectedWindowId:String(body?.windowId||''),
+          expectedDeadlineAtMs:Number(body?.deadlineAtMs||0),
+        });
+        if(data.status==='NOT_DUE')return Response.json({ok:false,
+          error:{code:'416_PUBLIC_RELEASE_NOT_DUE'},data},{status:425});
+        return Response.json({ok:true,data});
+      }catch(error){
+        const code=String(error?.message||'416_PUBLIC_RELEASE_FAILED');
+        return Response.json({ok:false,error:{code}},
+          {status:code==='416_PUBLIC_RELEASE_REGISTRATION_PENDING'?409:503});
+      }
+    }
     if(request.method==='POST'&&url.pathname==='/public-register'){
       const body=await request.json().catch(()=>null);
       try{
@@ -2349,6 +2370,7 @@ const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-4
 const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
 const STAGE416_PUBLIC_WINDOW_ROUTE='/v1/internal/public-like-window-416';
 const STAGE416_PUBLIC_WINDOW_ACK_ROUTE='/v1/internal/public-like-window-416/ack';
+const STAGE416_PUBLIC_RELEASE_ROUTE='/v1/internal/public-like-release-416';
 async function handleSignedPrivateHandoff416(request,env){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
    'Cache-Control':'no-store'});
@@ -2430,6 +2452,45 @@ async function handleSignedPublicLikeWindow416(request,env){
  }
 }
 
+async function handleSignedPublicLikeRelease416(request,env){
+ const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
+   'Cache-Control':'no-store'});
+ const fail=(code,status=503)=>new Response(JSON.stringify({ok:false,error:{code}}),
+   {status,headers});
+ const secret=env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET;
+ if(typeof secret!=='string'||secret.length<32)return fail('416_PUBLIC_BINDING_UNAVAILABLE');
+ const raw=await request.text();
+ if(!await verifyPrivateHmac416(raw,
+    request.headers.get('X-Soridraw-416-Public-Task-Signature'),secret))
+   return fail('416_PUBLIC_TASK_SIGNATURE_DENIED',403);
+ let body;
+ try{body=JSON.parse(raw);}catch{return fail('416_PUBLIC_BAD_JSON',400);}
+ const signedAtMs=Number(body?.signedAtMs||0),deadlineAtMs=Number(body?.deadlineAtMs||0);
+ const windowId=String(body?.windowId||''),now=Date.now();
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(windowId)||
+    !Number.isSafeInteger(deadlineAtMs)||deadlineAtMs<=0||
+    !Number.isSafeInteger(signedAtMs)||signedAtMs<now-15*60_000||signedAtMs>now+30_000)
+   return fail('416_PUBLIC_TASK_INVALID',400);
+ try{
+   const namespace=env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+   if(!namespace)throw Error('416_PUBLIC_DO_BINDING_UNAVAILABLE');
+   const id=namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
+   const response=await namespace.get(id).fetch('https://soridraw.internal/public-release',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({windowId,deadlineAtMs}),
+   });
+   const payload=await response.json().catch(()=>null);
+   if(response.status===425||response.status===409)
+     return fail(payload?.error?.code||'416_PUBLIC_RELEASE_RETRY',503);
+   if(!response.ok||payload?.ok!==true)
+     throw Error(payload?.error?.code||'416_PUBLIC_RELEASE_FAILED');
+   return new Response(JSON.stringify({ok:true,data:payload.data}),{status:200,headers});
+ }catch(error){
+   console.error('[416] public release task failed',String(error?.message||error));
+   return fail('416_PUBLIC_RELEASE_UNAVAILABLE');
+ }
+}
+
 async function handleSignedPublicLikeWindowAck416(request,env){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
    'Cache-Control':'no-store'});
@@ -2495,6 +2556,10 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&request.method==='POST'&&
+       url.pathname===STAGE416_PUBLIC_RELEASE_ROUTE){
+      return handleSignedPublicLikeRelease416(request,env);
+    }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&request.method==='POST'&&
        url.pathname===STAGE416_PUBLIC_WINDOW_ACK_ROUTE){
       return handleSignedPublicLikeWindowAck416(request,env);

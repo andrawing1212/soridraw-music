@@ -100,27 +100,34 @@ async function reserveGlobalVersion416(database:Database,uid:string,
 }
 async function releaseRejectedReservation416(
  database:Database,uid:string,click:ServerPrivateLikeClick416,
- globalVersionRoot:string,allocatedVersion:number,reservationCreatedDevice:boolean,
+ globalVersionRoot:string,allocatedVersion:number,
 ):Promise<boolean>{
  let released=false;
  const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
   const unchanged=raw===undefined?null:raw;
   released=false;
   const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{}) as GlobalVersion416;
+  const version=Number(state.version||0);
+  const settledVersion=Number(state.settledVersion||0);
   const devices=state.devices||{};
   const prior=devices[click.deviceId];
+  if(!Number.isSafeInteger(version)||version<0||
+     !Number.isSafeInteger(settledVersion)||settledVersion<0||settledVersion>version)
+    throw Error('416_GLOBAL_REJECTED_RESERVATION_STATE_CORRUPT');
   if(!prior||prior.deviceSequence!==click.deviceSequence||
      prior.operationId!==click.operationId||prior.trackId!==click.trackId||
      prior.liked!==click.liked||prior.version!==allocatedVersion)
     return unchanged;
-  // Never guess how to roll back a legacy reservation that lacks predecessor
-  // metadata. New reservations always carry previous:null (new device) or the
-  // exact previous device snapshot (existing device).
-  if(!Object.prototype.hasOwnProperty.call(prior,'previous'))return unchanged;
+  // Never roll back a reservation that already reached canonical settlement.
+  // For an unsettled exact reservation, predecessor metadata is the authority:
+  // previous:null means the reservation itself created the device slot even
+  // when this request is a later same-operation retry after a Functions abort.
+  // Missing predecessor metadata is legacy/ambiguous, so fail closed.
+  if(allocatedVersion<=settledVersion||
+     !Object.prototype.hasOwnProperty.call(prior,'previous'))return unchanged;
   const nextDevices={...devices};
   const previous=prior.previous;
   if(previous===null){
-   if(!reservationCreatedDevice)return unchanged;
    delete nextDevices[click.deviceId];
   }else{
    if(!previous||!Number.isSafeInteger(previous.deviceSequence)||previous.deviceSequence<=0||
@@ -280,7 +287,7 @@ export async function recordUserPrivateClick416(
    if(globalVersionRoot&&allocatedVersion!==undefined&&
       (reason==='DEVICE_LIMIT'||reason==='TRACK_LIMIT'||reason==='STALE_OR_DUPLICATE'))
      await releaseRejectedReservation416(
-       database,uid,click,globalVersionRoot,allocatedVersion,reservationCreatedDevice);
+       database,uid,click,globalVersionRoot,allocatedVersion);
    return {accepted:false,reason,
      ...(reason==='PRIOR_WINDOW_NEEDS_SEAL'&&expiredWindowId?{expiredWindowId}:{})};
  }

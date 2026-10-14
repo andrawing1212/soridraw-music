@@ -1218,7 +1218,10 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // only shared R2/public invalidation waits for the fixed public deadline.
     const publicWindowActive416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true;
     const currentPublicWindow416=publicWindowActive416
-      ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416).catch(()=>null)
+      // Fail closed: a failed DO read is not proof that no public window exists.
+      // Throw before canonical aggregation or legacy public R2/191 repair;
+      // the existing schedule/alarm retry will resume once storage recovers.
+      ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416)
       :null;
     const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
     const aggregateEnv416=publicWindowActive416

@@ -112,6 +112,74 @@ assert.match(run,/joinPublicLikeChangedTracks416/);
 assert.ok(run.indexOf('return {...settledAggregate418,publicWindowDeferred416:true')<
   run.indexOf('await repairSharedPublicLikeCounts191(this.env)'),
   'deferred wave must exit before legacy 191 public repair can leak counts');
+// Exercise the actual Worker method, not a surrogate: a failed DO read must
+// reject BEFORE canonical D1 aggregate and public R2/191 reconciliation.
+const aggregateMethod416=run.match(/async runAggregate194\(\) \{[\s\S]*?\n  \}/)?.[0];
+assert.ok(aggregateMethod416,'Worker runAggregate194 source extraction failed');
+let publicReadFails416=true,publicWindow416={windowId:id(101),publicMinutes:5};
+let aggregateCalls416=0,repairCalls416=0,joinCalls416=0,pendingCalls416=0,readCalls416=0;
+let signedWave416=false;
+const workerAggregate416={scheduled:async(_ev,env)=>{
+  aggregateCalls416++;
+  assert.equal(env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE,true);
+  return {changedTrackIds416:['canonical-changed-id'],
+    stage416Changed416:signedWave416};
+}};
+const workerRepair416=async()=>{repairCalls416++;};
+const workerJoin416=async(_storage,ids,_at,minutes)=>{
+  assert.deepEqual(ids,['canonical-changed-id']);
+  assert.equal(minutes,5);joinCalls416++;return {joined:true};
+};
+const workerPending416=async()=>{pendingCalls416++;return {staged:true};};
+const makeWorkerRun416=(enabled,worker=workerAggregate416)=>new Function(
+  'baseWorker','STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE','PUBLIC_LIKE_WINDOW_KEY_416',
+  'joinPublicLikeChangedTracks416','stagePublicLikeOpenPayload416',
+  'repairSharedPublicLikeCounts191',
+  'return ({'+aggregateMethod416+'}).runAggregate194;',
+)(worker,enabled,PUBLIC_LIKE_WINDOW_KEY_416,workerJoin416,
+  workerPending416,workerRepair416);
+const workerContext416={env:{},ctx:{storage:{get:async key=>{
+  assert.equal(key,PUBLIC_LIKE_WINDOW_KEY_416);readCalls416++;
+  if(publicReadFails416)throw Error('INJECTED_PUBLIC_WINDOW_STORAGE_READ_FAILURE');
+  return publicWindow416;
+}}}};
+const activeAggregate416=makeWorkerRun416(true);
+await assert.rejects(activeAggregate416.call(workerContext416),
+  /INJECTED_PUBLIC_WINDOW_STORAGE_READ_FAILURE/);
+assert.equal(aggregateCalls416,0,'unknown public window must prevent canonical D1 mutation');
+assert.equal(repairCalls416,0,'unknown public window must prevent premature R2/191 repair');
+assert.equal(joinCalls416,0,'failed read must not fabricate an empty window');
+publicReadFails416=false;
+const recovered416=await activeAggregate416.call(workerContext416);
+assert.equal(recovered416.publicWindowDeferred416,true,
+  'retry after storage recovery must preserve existing public window');
+assert.equal(aggregateCalls416,1);
+assert.equal(joinCalls416,1);
+assert.equal(repairCalls416,0);
+publicWindow416=null;signedWave416=true;
+const staged416=await activeAggregate416.call(workerContext416);
+assert.equal(staged416.publicWindowDeferred416,true);
+assert.equal(pendingCalls416,1,'new signed wave stages without an existing public window');
+assert.equal(repairCalls416,0);
+signedWave416=false;
+const empty416=await activeAggregate416.call(workerContext416);
+assert.equal(empty416.publicWindowDeferred416,undefined,
+  'a genuine empty window may use the existing legacy path');
+assert.equal(repairCalls416,1);
+const getCountBeforeOff416=readCalls416;
+publicReadFails416=true;
+const offAggregate416=makeWorkerRun416(false,{
+  scheduled:async(_ev,env)=>{
+    aggregateCalls416++;
+    assert.equal(env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE,undefined);
+    return {changedTrackIds416:[]};
+  },
+});
+await offAggregate416.call(workerContext416);
+assert.equal(readCalls416,getCountBeforeOff416,
+  'Stage416 HARD OFF must never read public window storage');
+assert.equal(repairCalls416,2,'Stage416 HARD OFF preserves legacy repair path');
+
 const registerAt=entry.indexOf("url.pathname==='/public-register'");
 const registerBlock=entry.slice(registerAt,registerAt+1800);
 assert.match(registerBlock,/mergePendingPublicLikeOpen416/);
@@ -126,5 +194,6 @@ console.log('STAGE416_PENDING_RETRY_W0=PASS');
 console.log('STAGE416_PUBLIC_WINDOW_5000_IDS_PAGED_READ_CLEAR=PASS');
 console.log('STAGE416_NET_CHANGED_IDS_SAME_D1_BATCH_SOURCE=PASS');
 console.log('STAGE416_DEFERRED_WAVE_SKIPS_191_PUBLIC_LEAK=PASS');
+console.log('STAGE416_PUBLIC_WINDOW_READ_FAILURE_FAIL_CLOSED_RETRY=PASS');
 console.log('DEPLOYMENT=0');
 console.log('SHARED_DATA_CHANGE=0');

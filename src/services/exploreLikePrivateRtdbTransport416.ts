@@ -3,6 +3,10 @@ import {
   recordStage416PrivateAcceptanceError416,
   recordStage416PrivateAcceptanceReply416,
 } from './exploreLikePrivateDiagnostic416';
+import {
+  createStage416PrivateRegistrationError416,
+  isFinalStage416PrivateRegistrationReason416,
+} from './exploreLikePrivateRegistrationOrder416.mjs';
 
 // app408 rollback: keep the server-only Stage416 implementation available in source,
 // but stop PREVIEW clients from registering new 5-minute private windows until the
@@ -47,11 +51,16 @@ export async function retryPrivateClickAfterPriorSeal416(
       await sleep(PRIOR_WINDOW_RETRY_DELAYS_416[attempt]);
       continue;
     }
-    // A STALE_OR_DUPLICATE answer might also be a lost prior ACK; never
-    // pretend canonical acceptance without the exact server receipt.
-    throw Error('416_PRIVATE_SERVER_CLICK_NOT_ACCEPTED:'+String(reply?.reason||'UNKNOWN'));
+    // STALE_OR_DUPLICATE may still represent an accepted operation whose
+    // exact env proof already moved on, so it remains unresolved/fail-closed.
+    // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server rejections and may
+    // release the next deviceSequence only after the caller durably records
+    // that rejection.
+    const reason=String(reply?.reason||'UNKNOWN');
+    throw createStage416PrivateRegistrationError416(
+      reason,isFinalStage416PrivateRegistrationReason416(reason));
   }
-  throw Error('416_PRIVATE_SERVER_RETRY_EXHAUSTED');
+  throw createStage416PrivateRegistrationError416('PRIVATE_SERVER_RETRY_EXHAUSTED',false);
 }
 export type PrivateRegistrationDiagnosticSource416='initial'|'recovery';
 

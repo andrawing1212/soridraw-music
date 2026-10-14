@@ -25,6 +25,7 @@ import {
   withExploreLikeRegistrationLock416,
 } from './exploreLikeDeviceSequence416.mjs';
 import { publishPrivateRtdbBatchClick416, STAGE416_SHARED_RTDB_BATCH_ACTIVE } from './exploreLikePrivateRtdbTransport416';
+import { drainStage416PrivateRegistrationsInOrder416 } from './exploreLikePrivateRegistrationOrder416.mjs';
 import { markStage416PrivateAcceptanceRegistered416 } from './exploreLikePrivateDiagnostic416';
 import {
   shouldFinalReceiptSupersedeLocal401,
@@ -2593,28 +2594,35 @@ const drainStage416PrivateRegistrations416 = async (
           Number(b.queuedAt || b.updatedAt || 0);
       });
 
-    for (const saved of outstanding) {
-      const stillCurrent = () => {
-        const row = readLikeOutbox(uid)[saved.trackId];
-        return auth.currentUser?.uid === uid &&
-          row?.operationId === saved.operationId &&
-          row.updatedAt === saved.updatedAt &&
-          row.desiredLiked === saved.desiredLiked &&
-          row.privateDeviceId416 === saved.privateDeviceId416 &&
-          row.privateDeviceSequence416 === saved.privateDeviceSequence416;
-      };
-      if (!stillCurrent()) continue;
-      const diagnosticSource = saved.operationId === initialOperationId
-        ? 'initial' as const : 'recovery' as const;
-      try {
+    const stillCurrent416 = (saved: ExploreLikePendingMutation) => {
+      const row = readLikeOutbox(uid)[saved.trackId];
+      return auth.currentUser?.uid === uid &&
+        row?.operationId === saved.operationId &&
+        row.updatedAt === saved.updatedAt &&
+        row.desiredLiked === saved.desiredLiked &&
+        row.privateDeviceId416 === saved.privateDeviceId416 &&
+        row.privateDeviceSequence416 === saved.privateDeviceSequence416;
+    };
+
+    await drainStage416PrivateRegistrationsInOrder416(outstanding, {
+      isCurrent: stillCurrent416,
+      send: async (saved: ExploreLikePendingMutation) => {
+        const diagnosticSource = saved.operationId === initialOperationId
+          ? 'initial' as const : 'recovery' as const;
         const receipt = await publishPrivateRtdbBatchClick416(uid, {
           trackId: saved.trackId,
           liked: saved.desiredLiked,
           operationId: saved.operationId!,
           deviceId: saved.privateDeviceId416!,
           deviceSequence: saved.privateDeviceSequence416!,
-        }, stillCurrent, diagnosticSource);
-        if (!receipt || !stillCurrent()) continue;
+        }, () => stillCurrent416(saved), diagnosticSource);
+        return receipt ? { ...receipt, diagnosticSource } : null;
+      },
+      persistAccepted: async (
+        saved: ExploreLikePendingMutation,
+        receipt: { version: number; count: number; diagnosticSource: 'initial' | 'recovery' },
+      ) => {
+        if (!stillCurrent416(saved)) return;
         const rows = readLikeOutbox(uid);
         const row = rows[saved.trackId];
         if (row && (!row.privateServerRegistered416 ||
@@ -2626,16 +2634,51 @@ const drainStage416PrivateRegistrations416 = async (
           };
           persistLikeOutbox(uid, rows);
           markStage416PrivateAcceptanceRegistered416(
-            uid, saved.operationId!, diagnosticSource, receipt.version);
+            uid, saved.operationId!, receipt.diagnosticSource, receipt.version);
           window.dispatchEvent(new CustomEvent('soridraw:private-like-registered-416',
             { detail: { uid } }));
         }
-      } catch (error) {
-        // Keep the exact durable row. A later user action/auth/online recovery
-        // retries it under the SAME account-wide registration lock.
-        console.warn('[416] Ordered private registration retained:', error);
-      }
-    }
+      },
+      persistRejected: async (saved: ExploreLikePendingMutation, reason: string) => {
+        // DEVICE_LIMIT/TRACK_LIMIT are explicit terminal server replies. Retire
+        // only this exact durable operation, restore its pre-click local state,
+        // and verify the row is gone BEFORE any higher deviceSequence is sent.
+        if (!stillCurrent416(saved)) return false;
+        const rows = readLikeOutbox(uid);
+        const row = rows[saved.trackId];
+        if (!row || row.operationId !== saved.operationId ||
+            row.privateDeviceSequence416 !== saved.privateDeviceSequence416) return false;
+        delete rows[saved.trackId];
+        persistLikeOutbox(uid, rows);
+        const reread = readLikeOutbox(uid)[saved.trackId];
+        if (reread?.operationId === saved.operationId) return false;
+
+        const cache = getLikedStateCache(uid);
+        cache.set(saved.trackId, saved.baseLiked);
+        persistLikedStateCache(uid, cache);
+        const locks = readLikeDisplayLocks(uid);
+        delete locks[saved.trackId];
+        persistLikeDisplayLocks(uid, locks);
+        patchExploreLikedTrackMembership(uid, saved.trackId, saved.baseLiked);
+        // Best-effort tentative-channel cleanup. This is not canonical
+        // settlement and never justifies sending a later sequence by itself.
+        void settleExploreLikeIntent416(uid, [{
+          trackId: saved.trackId,
+          operationId: saved.operationId || '',
+          status: 'rejected' as const,
+        }]).catch(() => {});
+        dispatchLikeSync({
+          uid,
+          trackId: saved.trackId,
+          ownerUid: saved.ownerUid,
+          liked: saved.baseLiked,
+          likeCount: saved.baseLikeCount,
+          source: 'local',
+        });
+        console.warn('[416] Private registration permanently rejected:', reason);
+        return true;
+      },
+    });
   });
 };
 

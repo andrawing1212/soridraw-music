@@ -1,8 +1,8 @@
-verify-after-master-controlled-callable-internal
-reason=diagnose_master_controlled_stage416_callable_internal
+verify-after-callable-wrapper-config-fix
+reason=postdeploy_readonly_after_callable_internal_fix
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
-observed_ui=CALLABLE_INTERNAL
-observed_local_outbox_waiting=true
+callable_deploy_run=38532474337
+observed_prior_failure=CALLABLE_INTERNAL
 test_production_unchanged_required=true

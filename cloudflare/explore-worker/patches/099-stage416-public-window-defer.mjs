@@ -64,34 +64,25 @@ replaceFn('processExploreLikeAggregateWave035',t=>{
   "if (!boundary) return { positiveTracks: 0, negativeTracks: 0, insertedLikes: 0, deletedLikes: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0, settledBatchIds418: [], changedTrackIds416: [], stage416Changed416: false };",
   'wave empty');
  t=once(t,
-`  const statements = [
-    env.DB.prepare(cte + \`
-      INSERT INTO track_stats`,
-`  const statements = [
-    // ${marker}
-    // Exact net public-count IDs are read inside the same D1 transaction.
-    env.DB.prepare(cte + \`
-      SELECT d.track_id,
-        MAX(CASE WHEN d.stage416_signed=1 THEN 1 ELSE 0 END) AS stage416_signed
-      FROM deltas d
-      GROUP BY d.track_id
-      HAVING SUM(d.delta) <> 0
-    \`).bind(...prefix),
-    env.DB.prepare(cte + \`
-      INSERT INTO track_stats`,'wave projection');
+`      ON CONFLICT(track_id) DO UPDATE SET like_count = track_stats.like_count + excluded.like_count, updated_at = excluded.updated_at
+    \`).bind(...prefix, now),`,
+`      ON CONFLICT(track_id) DO UPDATE SET like_count = track_stats.like_count + excluded.like_count, updated_at = excluded.updated_at
+      RETURNING track_id,
+        (SELECT MAX(CASE WHEN d.stage416_signed=1 AND d.delta<>0 THEN 1 ELSE 0 END)
+         FROM deltas d WHERE d.track_id=track_stats.track_id) AS stage416_signed
+    \`).bind(...prefix, now),`,'positive returning');
+ t=once(t,
+`      WHERE track_id IN (SELECT track_id FROM deltas GROUP BY track_id HAVING SUM(delta) < 0)
+    \`).bind(...prefix, now),`,
+`      WHERE track_id IN (SELECT track_id FROM deltas GROUP BY track_id HAVING SUM(delta) < 0)
+      RETURNING track_id,
+        (SELECT MAX(CASE WHEN d.stage416_signed=1 AND d.delta<>0 THEN 1 ELSE 0 END)
+         FROM deltas d WHERE d.track_id=track_stats.track_id) AS stage416_signed
+    \`).bind(...prefix, now),`,'negative returning');
  t=once(t,
   '  const oldProcessed = Number(result?.[4]?.meta?.changes || 0);',
-  "  const changedRows416=Array.isArray(result?.[0]?.results)?result[0].results:[];\n  const changedTrackIds416=[...new Set(changedRows416.map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];\n  const stage416Changed416=changedRows416.some((row)=>Number(row?.stage416_signed||0)===1);\n  const oldProcessed = Number(result?.[5]?.meta?.changes || 0);",
-  'wave indexes');
- t=once(t,
-`    positiveTracks: Number(result?.[0]?.meta?.changes || 0),
-    negativeTracks: Number(result?.[1]?.meta?.changes || 0),
-    insertedLikes: Number(result?.[2]?.meta?.changes || 0),
-    deletedLikes: Number(result?.[3]?.meta?.changes || 0),`,
-`    positiveTracks: Number(result?.[1]?.meta?.changes || 0),
-    negativeTracks: Number(result?.[2]?.meta?.changes || 0),
-    insertedLikes: Number(result?.[3]?.meta?.changes || 0),
-    deletedLikes: Number(result?.[4]?.meta?.changes || 0),`,'wave metrics');
+  "  // ${marker}\n  // Reuse canonical track_stats RETURNING rows: zero extra D1 SELECT/query.\n  const changedRows416=[...(Array.isArray(result?.[0]?.results)?result[0].results:[]),...(Array.isArray(result?.[1]?.results)?result[1].results:[])];\n  const changedTrackIds416=[...new Set(changedRows416.map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];\n  const stage416Changed416=changedRows416.some((row)=>Number(row?.stage416_signed||0)===1);\n  const oldProcessed = Number(result?.[4]?.meta?.changes || 0);",
+  'wave returning ids');
  return once(t,
 `    settledBatchIds418: w1Index >= 0 && Array.isArray(result?.[w1Index]?.results)
       ? result[w1Index].results.map((row) => String(row?.batch_id || '').trim()).filter(Boolean).slice(0, 2)

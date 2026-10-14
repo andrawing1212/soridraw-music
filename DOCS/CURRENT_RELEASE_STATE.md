@@ -1,3 +1,33 @@
+## CURRENT — Stage416 2/4 공개 5분 공동집계 source candidate 구현·대규모 회귀 PASS / 독립 감사 전 (2026-10-14 KST)
+
+- **기준 branch / product commit:** `preview` / `61a33fdf76257de6fd0339cdabf7c09c75cc184c`.
+- **이번 작업 목표:** 검증된 개인 canonical settlement(기존 5초 경로)은 그대로 두고, 공개 좋아요 숫자만 첫 실제 canonical 변화 기준 고정 5분 window로 합쳐서 변경된 곡만 한 번에 공개 반영하는 Stage416 2/4 source candidate 구현.
+- **핵심 구현:**
+  - Stage416 signed 069 canonical wave의 실제 `delta != 0` changed track ID를 **기존 track_stats mutation의 RETURNING 결과**에서 회수. 추가 D1 SELECT/query 0.
+  - 첫 Stage416 changed wave는 공개 projection을 보류하고 exact changed IDs를 Durable Object pending-open에 안전하게 보존. final receipt가 public window를 연 뒤 pending IDs를 합침.
+  - 이미 public window가 열려 있으면 그 사이 legacy/Stage416 canonical changed IDs를 같은 fixed deadline window에 합침. 뒤늦은 이벤트가 deadline을 연장하지 않음.
+  - 공개 due 시 exact changed IDs만 canonical D1 bounded read → shared track-card / profile / latest / popular R2 반영 → 그 뒤에만 Firebase RTDB `publicSync/exploreLike` 공개 신호 → ACK 후 window 정리.
+  - 공개 release는 D1 write 0. retry/duplicate는 동일 release token/marker 기준 no-op 보호.
+  - 256개 초과 changed IDs는 RTDB에 전부 밀어 넣지 않고, bounded R2 rolling manifest(8 slots)에 exact IDs를 보존하고 RTDB에는 legacy-compatible inline 256 + manifest metadata만 게시. 클라이언트는 현재 화면에 보이는 ID만 edge-cached manifest와 교집합 조회하며 D1 R0/W0.
+  - 검색/장르 R2 경로는 catalog ID를 **shared track-card**로 hydrate하므로 release 시 track-card likeCount 갱신이 그대로 검색/장르 결과에도 반영되는 기존 구조를 재사용.
+- **대규모 안전성:** pending-open을 단일 4096-ID 값으로 제한하지 않고 digest-keyed chunk storage로 변경. 5,000 changed-ID 실행형 검증에서 pending 저장 → window merge → paged release read → 전체 paged clear 누락 0.
+- **일반 사용자 보호:** `STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false` 유지. Worker public coalescing gate, client early-public-signal gate, Functions final/public endpoint 모두 source-only HARD OFF. 현재 app410~416 일반 좋아요/하트/숫자 동작은 기존 즉시 192 경로 유지.
+- **자동검증:** Quality Run `38568344287` **SUCCESS** on exact product commit `61a33fdf76257de6fd0339cdabf7c09c75cc184c`.
+  - TypeScript PASS
+  - App Build PASS
+  - Functions TypeScript PASS
+  - Stage416 private/canonical existing contracts PASS
+  - app410~416 / 127/175/178/191/192/197/390 보호 PASS
+  - live shared RTDB Rules read-only audit PASS
+  - `STAGE416_PUBLIC_WINDOW_5000_IDS_PAGED_READ_CLEAR=PASS`
+  - high-volume 600-ID exact manifest / duplicate RTDB W0 / manifest intersection D1 R0W0 PASS
+- **비용 판정:** page/update/re-entry 신규 server IO 0. canonical private settlement 기존 비용 계약 유지. public release D1 changed-data bounded read + 필요한 popular rank bounded read만 허용, D1 write 0. exact changed-ID 추출에 추가 D1 query 0.
+- **배포/데이터:** 이번 작업에서 Firebase Hosting/Functions, Cloudflare Worker, Rules 배포 **0**. shared D1/RTDB/R2 user-data migration/backfill/delete **0**. TEST/PRODUCTION 비변경.
+- **현재 gate:** 코드 구현/자동회귀는 PASS지만 **독립 감사 전**. exact SHA 독립 감사 PASS 전 PREVIEW public 5-minute gate ON, public Functions/Worker coordinated deploy, 일반 client ON, TEST 승격 금지.
+- **다음 작업:** `61a33fdf76257de6fd0339cdabf7c09c75cc184c` exact SHA를 WORK_AUDIT_CHECKLIST 기준으로 독립 감사. 특히 early-public leak, legacy join, >256 manifest, >1000 paging, retry/duplicate, 191/192/search/genre, app410~416 회귀와 비용을 별도 검증.
+
+---
+
 ## CURRENT — Stage416 fresh 모바일 실사용 E2E PASS / private settlement blocker 종료 (2026-10-14 KST)
 
 - **사용자 fresh mobile controlled proof:** PREVIEW 새 기기 컨텍스트에서 1회 클릭 즉시 `ACCEPTED`, receipt 유효, version `1791971188927`, local outbox 서버 등록 완료.

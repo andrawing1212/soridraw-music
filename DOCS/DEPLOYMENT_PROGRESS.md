@@ -1,3 +1,12 @@
+## Stage416 public Function workflow two-audit-FAIL safety correction (2026-10-15 KST)
+
+- Previous `b01079382d56724d5c2cf6f5561bb0e8718b6254` infra independent audit FAIL: missing global Functions inventory parity, force flag, partial creation recovery path.
+- Corrected final Workflow SHA `7142a0b8c846c59a6caa8fce779e31158a564091`, inventory helper `scripts/verify-416-public-function-inventory.mjs`. New public functions only: pinned `firebase-tools@15.30.1`, no --force, exact target one-at-time, entire existing Functions list+revision before/after, failure diagnostics and read-only verified adoption; operator stops for incomplete resources. Independently audited release guard SHA required before live deploy.
+- Pre-guard repair dry run `38609229247` SUCCESS (existing 37 Functions read-only, isolated new Function packaging/HMAC/TypeScript/Build/like tests PASS). Intermediate malformed-YAML runs `38609677383`, `38609921779` FAIL with jobs=0; no deployments. File duplicate corrected in `7142a0b8`. New dry preflight `38610213825` queued at last inspection, result not yet confirmed.
+- Firebase new Functions created 0; no Cloudflare/hosting/rules/schema/data/backend user-mutation; PUBLIC five-minute still HARD OFF, TEST/PRODUCTION unchanged. Re-audit infrastructure before deploy.
+
+---
+
 ## Stage416 PREVIEW public Functions single-scope deployment dry preflight — no live deployment (2026-10-15 KST)
 
 - Product code independent PASS `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`, source public endpoints HARD OFF.

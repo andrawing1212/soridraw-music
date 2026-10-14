@@ -1,8 +1,13 @@
-verify-after-settlement-stale-cache-fix-deploy
-reason=postdeploy_readonly_after_rtdb_settlement_cache_reconciliation
+verify-after-fresh-mobile-controlled-accepted
+reason=verify_postdeploy_fresh_controlled_operation_full_settlement
 readonly=true
 expected_private_minutes=1
 expected_public_minutes=5
+observed_ui=ACCEPTED
+observed_version=1791971188927
+observed_receipt_valid=true
+observed_outbox_registered=true
+observed_local_time=18:46:29_KST
 settle_deploy_run=38540479746
 audit_head=1cd605fef46c672506be287fbc3d0c7d60f5f7b1
 audit_result=PASS

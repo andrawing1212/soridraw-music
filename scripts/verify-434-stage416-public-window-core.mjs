@@ -41,8 +41,15 @@ const next=validatePublicLikeEvent416({
   eventId:id(3),windowCandidateId:id(103),eventAtMs:base+300_001,
   publicMinutes:1,trackIds:['song-a','song-d'],
 },base+300_001);
-const p3=planPublicLikeWindow416(p2.window,next);
+const dueBlocked=planPublicLikeWindow416(p2.window,next);
+assert.equal(dueBlocked.opened,false);
+assert.equal(dueBlocked.needsRelease,true,
+  'expired current window must release before a new window can replace it');
+assert.equal(dueBlocked.window.windowId,id(101));
+
+const p3=planPublicLikeWindow416(null,next);
 assert.equal(p3.opened,true);
+assert.equal(p3.needsRelease,false);
 assert.equal(p3.window.windowId,id(103));
 assert.equal(p3.window.publicMinutes,1);
 assert.equal(p3.window.deadlineAtMs,base+360_001);
@@ -65,6 +72,7 @@ assert.doesNotMatch(finalizer,/privateLikeChangedTrackIds416[\s\S]*db\.prepare/)
 console.log('STAGE416_PUBLIC_WINDOW_FIRST_EVENT_FIXED_DEADLINE=PASS');
 console.log('STAGE416_PUBLIC_WINDOW_LATE_JOIN_NO_EXTENSION=PASS');
 console.log('STAGE416_PUBLIC_WINDOW_SETTING_NEXT_WINDOW_ONLY=PASS');
+console.log('STAGE416_PUBLIC_WINDOW_DUE_REQUIRES_RELEASE_BEFORE_REPLACEMENT=PASS');
 console.log('STAGE416_PUBLIC_WINDOW_TRACK_KEY_DEDUP=PASS');
 console.log('STAGE416_FINAL_CHANGED_IDS_PERSISTED_IN_EXISTING_R2_CAS=PASS');
 console.log('STAGE416_FINAL_CHANGED_IDS_EXACT_RETRY_RECOVERY=PASS');

@@ -6,6 +6,7 @@ import {markPublicWindowRegistered416,publishAuthenticatedPrivateFinal416}
 import {readLikeBatchTimingAt416} from './exploreLikeBatchSettings416';
 import {ackPublicLikeWindow416,deliverPublicLikeWindow416}
  from './exploreLikePublicWindowRegister416';
+import {schedulePublicLikeRelease416} from './exploreLikePublicTask416';
 import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
  from './exploreLikeEnvironment416';
 
@@ -34,12 +35,19 @@ const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({
        batchIds:string[]};
      const acceptedAt=Math.max(...claim.batchIds.map(id=>Number(id.split('_')[1])));
      const timing=await readLikeBatchTimingAt416(database,config.timingPath);
-     await deliverPublicLikeWindow416({
+     const registration=await deliverPublicLikeWindow416({
        workerEndpoint:config.workerEndpoint,secret:secret416.value(),
        eventId:claim.windowId,windowCandidateId:claim.windowId,
        eventAtMs:acceptedAt,publicMinutes:timing.publicMinutes,
        trackIds:data.changedTrackIds,signedAtMs:nowMs,
      });
+     // The opener owns one deterministic release task. An exact duplicate may
+     // recover a failed first enqueue without extending the shared deadline.
+     if(registration.opened||registration.duplicate){
+       if(!registration.scheduleAtMs)throw Error('416_PUBLIC_TASK_DEADLINE_MISSING');
+       await schedulePublicLikeRelease416(
+         config,registration.windowId,registration.scheduleAtMs,nowMs);
+     }
      await markPublicWindowRegistered416(database,claim.uid,claim.version,
        claim.windowId,config.finalRoot);
      await ackPublicLikeWindow416({

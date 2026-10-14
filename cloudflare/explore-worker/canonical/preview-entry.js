@@ -2,7 +2,9 @@ import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
-import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416}
+import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
+ PUBLIC_LIKE_WINDOW_KEY_416,stagePublicLikeOpenPayload416,
+ joinPublicLikeChangedTracks416,mergePendingPublicLikeOpen416}
  from '../runtime/public-like-window-416.mjs';
 import {releaseDuePublicLikeWindow416}
  from '../runtime/public-like-release-416.mjs';
@@ -1208,16 +1210,51 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       throw new Error('Canonical Explore like aggregate handler unavailable');
     }
 
+    // Stage416 440: an already-open public window makes every canonical like
+    // wave public-deferred. The canonical D1 mutation still settles at 5s;
+    // only shared R2/public invalidation waits for the fixed public deadline.
+    const currentPublicWindow416=await this.ctx.storage
+      .get(PUBLIC_LIKE_WINDOW_KEY_416).catch(()=>null);
+    const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
+    const aggregateEnv416=deferExistingPublic416
+      ?new Proxy(this.env,{get:(target,prop)=>
+        prop==='__SORIDRAW_DEFER_PUBLIC_416'?true:Reflect.get(target,prop)})
+      :this.env;
+
     const settledAggregate418 = await baseWorker.scheduled({
       scheduledTime: Date.now(),
       cron: 'event-like-batch-1m-105',
       type: 'scheduled',
-    }, this.env, this.ctx);
+    }, aggregateEnv416, this.ctx);
+
+    const changedTrackIds416=[...new Set(
+      (Array.isArray(settledAggregate418?.changedTrackIds416)
+        ?settledAggregate418.changedTrackIds416:[])
+      .map((id)=>String(id||'').trim()).filter(Boolean))];
+
+    if(deferExistingPublic416||settledAggregate418?.stage416Changed416===true||
+       settledAggregate418?.publicDeferred416===true){
+      if(changedTrackIds416.length){
+        if(deferExistingPublic416){
+          await joinPublicLikeChangedTracks416(
+            this.ctx.storage,changedTrackIds416,Date.now());
+        }else if(settledAggregate418?.stage416Changed416===true){
+          // The first signed Stage416 net change may be drained by a request
+          // whose HTTP waiter is not the eventual final-receipt retry. Persist
+          // the exact wave IDs until /public-register opens the shared window.
+          await stagePublicLikeOpenPayload416(
+            this.ctx.storage,changedTrackIds416,Date.now());
+        }
+      }
+      return {...settledAggregate418,publicWindowDeferred416:true,
+        changedTrackIds416};
+    }
+
     // One bounded recovery check per actual changed-data window, never per user
-    // or page view. Canonical mutation stays authoritative; this only repairs
-    // the bounded public R2 projections for the changed window.
+    // or page view. Do not run it while Stage416 intentionally holds public
+    // projection, or it would leak the new count before the public deadline.
     await repairSharedPublicLikeCounts191(this.env);
-    return settledAggregate418;
+    return {...settledAggregate418,changedTrackIds416};
   }
 
   // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924
@@ -1281,7 +1318,10 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         const data=await registerPublicLikeEventStorage416(this.ctx.storage,body,Date.now());
         if(data.needsRelease)return Response.json({ok:false,
           error:{code:'416_PUBLIC_WINDOW_DUE'},data},{status:409});
-        return Response.json({ok:true,data});
+        const pending416=await mergePendingPublicLikeOpen416(
+          this.ctx.storage,Date.now());
+        return Response.json({ok:true,data:{...data,
+          pendingMergedTrackCount416:Number(pending416?.trackCount||0)}});
       }catch(error){
         return Response.json({ok:false,error:{code:String(error?.message||'416_PUBLIC_BAD_EVENT')}},
           {status:400});

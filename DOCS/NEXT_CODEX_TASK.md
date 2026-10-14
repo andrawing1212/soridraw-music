@@ -1,3 +1,14 @@
+## NEXT — Stage416 PREVIEW 공개 Functions 2개만 배포할 고정 workflow 독립 감사 (2026-10-15 KST)
+
+- **제품 exact SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` — 사용자 전달 별도 GPT-6 감사 PASS. 제품 코드 다시 수정하거나 공통 public gate ON 금지.
+- **신규 감사 대상 배포 인프라 SHA:** `b01079382d56724d5c2cf6f5561bb0e8718b6254`. `preview` HEAD는 dry preflight trigger/후속 문서 commit을 포함하므로 제품과 인프라를 **각각 SHA로 고정**. 변경 파일 `.github/workflows/stage416-preview-settle-one-function.yml` 단 하나.
+- **실행 증거:** PREVIEW Task dry preflight Run `38605790524` SUCCESS, PREVIEW receipt dry preflight Run `38606075258` SUCCESS. 두 로그에 `STAGE416_ENV_INDEPENDENT_SINGLE_FUNCTION_EXPORT=PASS`, `416_PUBLIC_NEW_FUNCTION_AND_HMAC_PREFLIGHT=PASS`, `STAGE416_SINGLE_FUNCTION_PREFLIGHT_ONLY=PASS;FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0` 증명.
+- **필수 독립 검사:** (1) 기존 private 2개 single function 배포 workflow 회귀·allowlist 유지 (2) public Task/receipt 각 deploy isolated Firebase source module/단일 export만 있고 추가 함수 삭제/변경 없음 (3) `audit_head`/PASS/false gates/pinned product checkout/preview-only trigger 검증 (4) 사전 gcloud 404가 실제 missing 후보임을 확인; 기존 함수를 덮어쓰지 않는지 (5) `preflight_only` 실제 deploy 차단과 TEST/PROD, shared DB/Rules/Worker/Hosting 비변경 보호 (6) region Task us-central1/receipt asia-northeast3, secret binding, Cloud Tasks 비용/25회 retry 위험 (7) 최초 함수 생성 중 실패 시 partial release 취급하고 추가 승격 중단, postflight 실제 `503` 또는 미호출을 확인할 경로/rollback 계획 (8) CI PASS와 live 배포를 혼동하지 않음.
+- **감사방에서는 코드 수정, commit/push, 배포, 공유 데이터 변경 금지.** PASS 전 실제 Firebase Function 생성 금지. PASS면 개발방에서 기존 trigger `preflight_only=false`로 각각 한 번씩 실행, 2개만 정확히 생성/활성 확인하고 실제 public mode는 HARD OFF 유지. TASK/receipt 중 하나라도 실패하면 다음 트리거를 중단, 비용/상태 검증과 rollback 먼저.
+- **비용·안전:** 앱 좋아요·팔로우/UI/캐시/개인 5초 집계 비변경, 공유 D1/RTDB/R2 migration/backfill/delete 금지, 사용자 테스트는 이후 Master 단일 계정 통제 활성화 검증 단계에서 진행.
+
+---
+
 ## NEXT — Stage416 2/4 PREVIEW 공개 Functions export 후보 exact-SHA 독립 감사 (2026-10-15 KST)
 
 - **새 감사 제품 SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` (`preview`의 doc-only 후속 commit은 제외). 이전 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3` 위에 공개 서버 wiring 4개 소스만 변경.

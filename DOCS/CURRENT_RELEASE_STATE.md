@@ -1,3 +1,15 @@
+## CURRENT — Stage416 공개 PREVIEW Function 단독 배포 경로 사전검사 2/2 PASS / 신규 release guard 독립 감사 대기 (2026-10-15 KST)
+
+- **제품 코드(이미 독립 감사 PASS):** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 Task `stage416ReleasePublicWindowCandidate` 및 공개 신호 `publicLikeRelease416Candidate`는 source exported지만 런타임 각각 `false` HARD OFF. 기존 private final/Worker/client 공개 5분도 OFF. 공유 사용자 데이터/R2/RTDB/D1 영향 없음.
+- **별도 배포 인프라 수정:** `preview` infra commit `b01079382d56724d5c2cf6f5561bb0e8718b6254` 에서 **기존** `.github/workflows/stage416-preview-settle-one-function.yml`만 수정. 기존 `recordPrivateLike416` 및 `stage416SettlePrivateWindowCandidate` case/단일 Function deploy 유지하고 새로운 승인 함수 이름 2개 추가. 신규 함수 배포는 각 trigger에서 정확히 하나만 허용, old function identity 및 shared schema/Rules/Hosting/Worker 불변 체크. 새 Workflow를 추가하지 않음. 신규 모드에서 제품 SHA/독립 감사/false gates 일치해야 계속, source는 exact 제품 SHA detached checkout, 독립 isolated package export 1개만.
+- **첫 번째 PREVIEW Task dry preflight:** trigger `c61be4ec239f1d22b64c2b99ce7d73030217092e`, Run [38605790524](https://github.com/andrawing1212/soridraw-music/actions/runs/38605790524) **SUCCESS**; `stage416ReleasePublicWindowCandidate`, `preflight_only=true`. 기존 좋아요·Stage416 regressions, app TS/Build, Functions TS, isolated one-export exact package, PREVIEW HMAC/기존 Task identity LIVE readonly PASS, 실배포 0.
+- **두 번째 PREVIEW receipt dry preflight:** trigger `61bb2c5ad6d9f77ff5df960503434a781c56bac4`, Run [38606075258](https://github.com/andrawing1212/soridraw-music/actions/runs/38606075258) **SUCCESS**; `publicLikeRelease416Candidate`, `preflight_only=true`. 동일한 품질·HMAC/isolated export 및 no-deploy 검증 PASS.
+- **실제 배포 상태:** 이번 작업은 Firebase Functions **배포 0**, `FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0` 로그 확인. `preview` Cloudflare Worker는 앞서 완료한 version `2e5afeee-c0f6-456e-875e-095d29a6a43c` 그대로이며 public five-minute OFF. TEST/PRODUCTION/공유 사용자 원본 데이터/캐시 변경 없음. 최신 trigger는 receipt `preflight_only=true`로 안전한 상태.
+- **배포 위험/다음 단계:** 배포 Workflow 변경 자체는 source 제품 감사 `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`와 구별하여 **별도 독립 감사 필요**. 아직 LIVE function 2개 없음. 독립 감사에서 신규 모드 최초 생성 PREVIEW 한정·단일 isolated export·secret binding·기존 private mode 비회귀·(TASK 25회 disabled 재시도 방지: enqueue OFF)·다른 Functions/TEST/PROD 비변경·부분 실패 처리·배포 후 실제 endpoint 503/queue inert 여부를 검증한다. 감사 PASS 후 dry-run true를 false로 전환하는 **정확한 2회** trigger에만 배포 승인 적용; 실패 시 추가 함수/환경으로 확대하지 않는다. 실제 공개 공동 5분 집계는 LIVE activation 별도 감사/승인 전까지 OFF.
+- **진척도:** Stage416 전체 1/4·25%, 앱 속도 개선 5/5·100%, 이번 세부작업(두 공개 Functions 배포경로 준비) 3/4·75% = 코드 연결·배포경로 구현·각각 preflight PASS, 인프라 독립 감사/실제 배포 미완료.
+
+---
+
 ## CURRENT — Stage416 2/4 공개 Functions PREVIEW export 연결 후보 / HARD OFF QA PASS / exact SHA 감사 대기 (2026-10-15 KST)
 
 - **제품/브랜치:** `preview` 신제품 후보 `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` (부모 `b13f435ae7f6021f66436520fae333ebfc222457`). 앱 버전/Hosting/UI/Worker runtime 코드/기존 공유 데이터 구조 변경 없음. 직전 독립 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3`와 별개 신규 감사 대상이다.

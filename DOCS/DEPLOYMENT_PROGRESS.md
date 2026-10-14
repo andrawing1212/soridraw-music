@@ -1,3 +1,14 @@
+## Stage416 PREVIEW public Functions single-scope deployment dry preflight — no live deployment (2026-10-15 KST)
+
+- Product code independent PASS `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`, source public endpoints HARD OFF.
+- Extended existing one-function workflow in isolated infra commit `b01079382d56724d5c2cf6f5561bb0e8718b6254`, no new workflow, two public function allowlist options only.
+- `stage416ReleasePublicWindowCandidate`: trigger `c61be4ec239f1d22b64c2b99ce7d73030217092e`, Run `38605790524` SUCCESS, preflight-only, one function export, HMAC and live existing Task read-only PASS.
+- `publicLikeRelease416Candidate`: trigger `61bb2c5ad6d9f77ff5df960503434a781c56bac4`, Run `38606075258` SUCCESS, preflight-only, one function export, HMAC and existing Task read-only PASS.
+- Firebase Functions deployment 0, no new queue/task event, no shared data, hosting, Worker or branch environment changes. New workflow modifications must be independently audited before `preflight_only=false` deployment triggers.
+- On audit PASS, deploy exactly one function per run, LIVE OFF; verify no unrelated function change, shared data 0, and TEST/PRODUCTION unchanged.
+
+---
+
 ## Stage416 2/4 audited Worker PREVIEW source-only release (2026-10-15 KST)
 
 - product exact `3b5c4426c1e27df725a43d04df6ec591227161d3`, separate GPT-6 code audit PASS.

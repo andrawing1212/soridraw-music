@@ -51,6 +51,10 @@ on:
       - 'cloudflare/explore-worker/runtime/public-like-release-416.mjs'
       - 'functions/src/exploreLikePublicRelease416.ts'
       - 'scripts/verify-438-stage416-public-release.mjs'
+      - 'functions/src/exploreLikePublicTask416.ts'
+      - 'functions/src/exploreLikePublicReleaseEndpoint416.ts'
+      - 'scripts/verify-439-stage416-public-release-routing.mjs'
+      - 'functions/src/exploreLikeEnvironment416.ts'
       - 'DOCS/STAGE416_PUBLIC_5MIN_IMPLEMENTATION_PLAN.md'
       - 'scripts/verify-432-stage416-settlement-stale-cache.mjs'
       - 'functions/src/exploreLikePrivateDeadline416.ts'
@@ -226,6 +230,7 @@ jobs:
           node scripts/verify-436-stage416-public-register-checkpoint.mjs
           node scripts/verify-437-stage416-public-projection.mjs
           node scripts/verify-438-stage416-public-release.mjs
+          node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-416-private-final-publisher.mjs
           node scripts/verify-416-public-coalescing-gap.mjs
           node scripts/verify-416-finalize-e2e.mjs

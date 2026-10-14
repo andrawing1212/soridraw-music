@@ -218,9 +218,9 @@ assert.match(panel416,/Stage416 서버 접수 진단/);
 assert.match(panel416,/readStage416PrivateAcceptanceDiagnostic416/);
 assert.match(source,/const diagnosticSource = saved\.operationId === initialOperationId[\s\S]*?'initial' as const : 'recovery' as const/,
   'ordered drain must preserve initial vs recovery diagnostics');
-assert.match(source,/stillCurrent, diagnosticSource/,
+assert.match(source,/\(\) => stillCurrent416\(saved\), diagnosticSource/,
   'Callable registration must use the ordered drain diagnostic source');
-assert.match(source,/markStage416PrivateAcceptanceRegistered416\([\s\S]*?diagnosticSource, receipt\.version\)/,
+assert.match(source,/markStage416PrivateAcceptanceRegistered416\([\s\S]*?receipt\.diagnosticSource, receipt\.version\)/,
   'registered diagnostic must preserve the same ordered source');
 console.log('STAGE416_PRIVATE_ACCEPTANCE_LOCAL_DIAGNOSTIC_NO_SERVER_IO=PASS');
 console.log('STAGE416_PRIVATE_ACCEPTANCE_DIAGNOSTIC_NO_RAW_IDS=PASS');

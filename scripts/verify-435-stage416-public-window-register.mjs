@@ -21,11 +21,13 @@ const first={eventId:id(1),windowCandidateId:id(101),eventAtMs:base,
  publicMinutes:5,trackIds:['song-a','song-b']};
 const a=await registerPublicLikeEventStorage416(storage,first,base);
 assert.equal(a.registered,true);assert.equal(a.opened,true);assert.equal(a.duplicate,false);
-assert.equal(a.deadlineAtMs,base+300_000);assert.equal(writes.length,1);
+assert.equal(a.deadlineAtMs,base+300_000);assert.equal(a.scheduleAtMs,base+300_000);
+assert.equal(writes.length,1);
 assert.equal(map.get(PUBLIC_LIKE_WINDOW_KEY_416).publicMinutes,5);
 
 const retry=await registerPublicLikeEventStorage416(storage,{...first,publicMinutes:1},base+1000);
 assert.equal(retry.duplicate,true,'same event retry ignores later setting drift');
+assert.equal(retry.scheduleAtMs,base+300_000,'duplicate can recover missed first task enqueue');
 assert.equal(writes.length,1,'duplicate registration W0');
 
 const late={eventId:id(2),windowCandidateId:id(102),eventAtMs:base+299_000,

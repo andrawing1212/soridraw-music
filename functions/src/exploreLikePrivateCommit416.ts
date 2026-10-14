@@ -199,7 +199,7 @@ export async function advanceGlobalSettledVersion416(
     !Array.isArray(settledRows)||settledRows.length<1||settledRows.length>256)
   throw Error('416_BAD_GLOBAL_SETTLEMENT_ADVANCE');
  let advanced=false;
- await db.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
+ const result=await db.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
   const unchanged=raw===undefined?null:raw;
   advanced=false;
   const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)

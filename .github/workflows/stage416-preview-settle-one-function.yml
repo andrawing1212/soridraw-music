@@ -68,6 +68,12 @@ jobs:
               grep -Fxq 'public_gate_activation=false' "$trigger"
               grep -Fxq 'user_data_migration=false' "$trigger"
               grep -Fxq 'test_production_unchanged_required=true' "$trigger"
+              mode="$(sed -n 's/^public_recovery_mode=//p' "$trigger")"
+              test "$(grep -c '^public_recovery_mode=' "$trigger")" -eq 1
+              case "$mode" in initial_only|verify_existing) ;; *)
+                echo '416_PUBLIC_RECOVERY_MODE_NOT_APPROVED'; exit 21 ;;
+              esac
+              echo "PUBLIC_RECOVERY_MODE=$mode" >> "$GITHUB_ENV"
               ;;
             *) test "$target" = "$(git rev-parse HEAD^)" ;;
           esac
@@ -222,6 +228,11 @@ jobs:
           set -euo pipefail
           case "$PATCH_FUNCTION" in
             stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              # Snapshot the whole shared Firebase project (gen1 + gen2).
+              # This source-only PREVIEW release must never touch an unrelated
+              # Function, even if Firebase CLI reports target deploy success.
+              gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-before.json"
+              node scripts/verify-416-public-function-inventory.mjs baseline "$RUNNER_TEMP/functions-before.json"
               if [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
                 echo 'PUBLIC_FUNCTION_REGION=asia-northeast3' >> "$GITHUB_ENV"
                 expected_region=asia-northeast3
@@ -231,15 +242,24 @@ jobs:
               fi
               if gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$expected_region" \
                 --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json" 2>"$RUNNER_TEMP/function-not-found.err"; then
-                echo '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY'
-                exit 41
-              fi
-              # Confirm the missing resource is specifically a fresh candidate;
-              # do not suppress an IAM/API failure and accidentally redeploy.
-              if ! grep -Eiq 'NOT_FOUND|not found|does not exist' "$RUNNER_TEMP/function-not-found.err"; then
-                cat "$RUNNER_TEMP/function-not-found.err" >&2
-                echo '416_PUBLIC_FUNCTION_PREFLIGHT_UNKNOWN_ERROR'
-                exit 42
+                if [ "$PUBLIC_RECOVERY_MODE" != verify_existing ]; then
+                  echo '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY'
+                  exit 41
+                fi
+                node scripts/verify-416-public-function-inventory.mjs adopt \
+                  "$RUNNER_TEMP/function-before.json" "$PATCH_FUNCTION" "$expected_region"
+                echo '416_PUBLIC_EXISTING_CANDIDATE_VERIFIED_NO_REDEPLOY=PASS'
+              else
+                if [ "$PUBLIC_RECOVERY_MODE" = verify_existing ]; then
+                  echo '416_PUBLIC_RECOVERY_TARGET_MISSING_REFUSE'
+                  exit 41
+                fi
+                # Only a genuine NOT_FOUND can authorize first creation.
+                if ! grep -Eiq 'NOT_FOUND|not found|does not exist' "$RUNNER_TEMP/function-not-found.err"; then
+                  cat "$RUNNER_TEMP/function-not-found.err" >&2
+                  echo '416_PUBLIC_FUNCTION_PREFLIGHT_UNKNOWN_ERROR'
+                  exit 42
+                fi
               fi
               gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
                 --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-before.json"
@@ -283,12 +303,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --project "$FIREBASE_PROJECT" \
-            --config stage416.single-patch.firebase.json \
-            --only "functions:$PATCH_FUNCTION" \
-            --non-interactive --force
-          echo 'PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS'
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              if [ "$PUBLIC_RECOVERY_MODE" = verify_existing ]; then
+                echo '416_PUBLIC_EXISTING_FUNCTION_ADOPT_VERIFICATION_ONLY=PASS'
+              else
+                # Pinned CLI; no --force or implicit deletion consent.
+                npx --yes firebase-tools@15.30.1 deploy \
+                  --project "$FIREBASE_PROJECT" \
+                  --config stage416.single-patch.firebase.json \
+                  --only "functions:$PATCH_FUNCTION" \
+                  --non-interactive
+                echo '416_PUBLIC_EXACT_ONE_FUNCTION_CREATE=PASS'
+              fi
+              ;;
+            *)
+              # Preserve audited existing private Function patch semantics.
+              npx --yes firebase-tools@latest deploy \
+                --project "$FIREBASE_PROJECT" \
+                --config stage416.single-patch.firebase.json \
+                --only "functions:$PATCH_FUNCTION" \
+                --non-interactive --force
+              echo 'PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS'
+              ;;
+          esac
 
       - name: Verify patched Function and protected environments
         if: env.PREFLIGHT_ONLY == 'false'
@@ -297,6 +335,10 @@ jobs:
           set -euo pipefail
           case "$PATCH_FUNCTION" in
             stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-after.json"
+              node scripts/verify-416-public-function-inventory.mjs compare \
+                "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-after.json" \
+                "$PATCH_FUNCTION" "$PUBLIC_RECOVERY_MODE"
               gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$PUBLIC_FUNCTION_REGION" \
                 --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
               gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
@@ -356,6 +398,27 @@ jobs:
           test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
           echo 'MAIN_PRODUCTION_UNCHANGED=PASS'
           echo 'NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS'
+
+      - name: Diagnose incomplete PREVIEW public Function creation without mutations
+        if: failure() && env.PREFLIGHT_ONLY == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${PATCH_FUNCTION:-}" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              if [ -f "$RUNNER_TEMP/functions-before.json" ]; then
+                gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-failure.json" || {
+                  echo '416_PUBLIC_FAILURE_INVENTORY_UNAVAILABLE_STOP'; exit 0;
+                }
+                node scripts/verify-416-public-function-inventory.mjs diagnose \
+                  "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-failure.json" \
+                  "$PATCH_FUNCTION" || true
+                echo '416_PUBLIC_RELEASE=BLOCKED_AFTER_FAILURE'
+                echo '416_PUBLIC_RELEASE_NEXT=verify_existing_only_if_TARGET_ACTIVE_AND_HMAC_BOUND'
+                echo '416_PUBLIC_RELEASE_UNHEALTHY=STOP_AND_OPERATOR_REVIEW_NO_AUTOMATIC_DELETE'
+              fi
+              ;;
+          esac
 
       - name: Confirm preflight-only mode performs no deployment
         if: env.PREFLIGHT_ONLY == 'true'

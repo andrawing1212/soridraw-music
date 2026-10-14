@@ -1,3 +1,16 @@
+## CURRENT — controlled PREVIEW 1회 검증 첫 호출 CALLABLE_INTERNAL 원인 교정 / 재검증 대기 (2026-10-14 KST)
+
+- 사용자 Master controlled proof 첫 시도(약 16:59 KST)는 UI `CALLABLE_INTERNAL`, receipt/version 미확정, local outbox 동일 operation 대기 상태로 종료. 90초 후에도 화면이 같았던 것은 1분 정산 단계에 들어가기 전에 Callable 자체가 실패했기 때문.
+- read-only 진단 Run `38532295535`: `recordPrivateLike416`에 같은 시각 HTTP 204 1회 뒤 HTTP 500 1회, Scheduler/Settle 신규 실행 0. 즉 server acceptance/window 생성 전 내부 오류로 판정.
+- **정확한 원인:** PREVIEW 단일 Function 배포 workflow의 임시 wrapper가 새 `handleAuthenticatedPrivateClick416(database, request, config)` 시그니처에 `config`를 넘기지 않고 2개 인자만 전달. 제품 코드 PR #120 로직 문제가 아니라 release wrapper drift.
+- **수정:** single-function wrapper가 `STAGE416_ENVIRONMENTS.preview`를 명시 전달하고 원본과 동일하게 `timeoutSeconds:60` 적용. commit `a92e3ea4aa031299a64ce7f45eddb83cbc8937c8`.
+- **PREVIEW 재배포:** `recordPrivateLike416` only, Run `38532474337` **SUCCESS**. postflight, main/production unchanged, no shared D1/R2/Rules/Worker/Hosting/data mutation 모두 PASS.
+- **사후 read-only:** Run `38532896847` **SUCCESS**. Function/queue/Eventarc/Worker-D1 연결 상태 정상. diagnostic write 0.
+- **안전:** TEST/PRODUCTION 변경 없음, shared data migration/backfill/delete 0, 일반 Stage416 client OFF 유지. 기존 failed local operation은 삭제하지 않고 same operation 재시도를 기다리므로 lost-click 보호와 일치.
+- **다음 gate:** 사용자 화면의 `같은 1회 검증 재시도` 버튼으로 **같은 operation을 1회 재시도**. 성공 응답 후 약 90초 뒤 서버 read-only로 accepted→scheduler→settle→Worker/D1/R2→final ACK를 확인.
+
+---
+
 ## CURRENT — PR #120 독립 감사 PASS → preview 병합 / Issue118 PREVIEW backend 배포·사후감사 PASS / controlled 실사용 1회 대기 (2026-10-14 KST)
 
 - **독립 감사 PASS exact product HEAD:** `9c4c22c31f29a4a7d8b98064a5a47be8de1dcffc`.

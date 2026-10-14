@@ -79,7 +79,7 @@ assert.match(service,/privateIntentVersion416\?: number/);
 assert.match(service,/privateServerVersion416\?: number/);
 assert.match(service,/shouldRemoteIntentSupersedeLocal401/);
 assert.match(service,/shouldFinalReceiptSupersedeLocal401/);
-assert.match(service,/privateServerVersion416:registered416\.version/);
+assert.match(service,/privateServerVersion416:\s*receipt\.version/);
 assert.match(service,/readExploreLikeIntentDetail416/);
 assert.match(intent,/operationId.*version.*at.*status/);
 assert.match(intent,/Promise<IntentRow416 \| null>/);

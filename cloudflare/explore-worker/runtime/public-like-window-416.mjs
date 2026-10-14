@@ -170,6 +170,24 @@ const publicEventAliasKey416=(eventId)=>'stage416/public/event/'+eventId;
 const publicWindowPrefix416=(windowId)=>'stage416/public/window/'+windowId+'/';
 const publicWindowEventKey416=(windowId,eventId)=>
  publicWindowPrefix416(windowId)+'event/'+eventId;
+const PUBLIC_LIKE_LIST_PAGE_416=1000;
+const listPublicWindowPages416=async(storage,prefix,onPage)=>{
+ let startAfter;
+ for(let pageIndex=0;pageIndex<100000;pageIndex++){
+   const options={prefix,limit:PUBLIC_LIKE_LIST_PAGE_416,
+     ...(startAfter?{startAfter}:{})};
+   const page=await storage.list(options);
+   if(!(page instanceof Map))throw Error('416_PUBLIC_RELEASE_LIST_INVALID');
+   if(!page.size)return;
+   await onPage(page);
+   if(page.size<PUBLIC_LIKE_LIST_PAGE_416)return;
+   const keys=[...page.keys()];
+   const last=keys[keys.length-1];
+   if(!last||last===startAfter)throw Error('416_PUBLIC_RELEASE_LIST_STALLED');
+   startAfter=last;
+ }
+ throw Error('416_PUBLIC_RELEASE_LIST_TOO_LARGE');
+};
 
 export async function registerPublicLikeEventStorage416(storage,raw,nowMs){
  if(!storage?.get||!storage?.put)throw Error('416_PUBLIC_STORAGE_UNAVAILABLE');
@@ -235,20 +253,21 @@ export async function readPublicLikeReleaseState416(storage,nowMs){
  if(!plan.due)return {exists:true,due:false,blockedUnacked:false,
    window,trackIds:[],eventIds:[]};
  const prefix=publicWindowPrefix416(String(window.windowId));
- const rows=await storage.list({prefix});
  const trackIds=[],eventIds=[];let blockedUnacked=false;
- for(const [key,value] of rows){
-   if(key.startsWith(prefix+'track/')){
-     const trackId=String(value?.trackId||'');
-     if(!trackId||trackId.length>512)throw Error('416_PUBLIC_RELEASE_TRACK_CORRUPT');
-     trackIds.push(trackId);
-   }else if(key.startsWith(prefix+'event/')){
-     const eventId=String(value?.eventId||'');
-     if(!UUID416.test(eventId))throw Error('416_PUBLIC_RELEASE_EVENT_CORRUPT');
-     eventIds.push(eventId);
-     if(value?.acked!==true)blockedUnacked=true;
+ await listPublicWindowPages416(storage,prefix,async rows=>{
+   for(const [key,value] of rows){
+     if(key.startsWith(prefix+'track/')){
+       const trackId=String(value?.trackId||'');
+       if(!trackId||trackId.length>512)throw Error('416_PUBLIC_RELEASE_TRACK_CORRUPT');
+       trackIds.push(trackId);
+     }else if(key.startsWith(prefix+'event/')){
+       const eventId=String(value?.eventId||'');
+       if(!UUID416.test(eventId))throw Error('416_PUBLIC_RELEASE_EVENT_CORRUPT');
+       eventIds.push(eventId);
+       if(value?.acked!==true)blockedUnacked=true;
+     }
    }
- }
+ });
  return {exists:true,due:true,blockedUnacked,window,
    trackIds:[...new Set(trackIds)].sort((a,b)=>a.localeCompare(b)),
    eventIds:[...new Set(eventIds)].sort((a,b)=>a.localeCompare(b)),

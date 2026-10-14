@@ -1,3 +1,18 @@
+## CURRENT — controlled PREVIEW 재시도 STALE_OR_DUPLICATE 확인 / stale 진단 operation 로컬 retire 보완·Hosting 배포 PASS (2026-10-14 KST)
+
+- 사용자 두 번째 controlled retry는 UI `서버 거절 · STALE_OR_DUPLICATE`, receipt/version 미확정으로 종료.
+- read-only Run `38533459799`: 실제 Callable은 `08:10:56Z` HTTP 200으로 정상 도달했으나 Scheduler/Settle 신규 실행 0. 즉 wrapper 500 문제는 해결됐고, 이번 요청은 서버가 논리적으로 stale로 거절한 상태.
+- **데이터 안전:** 해당 retry는 canonical settlement를 시작하지 않았고 D1 mutation 0, pending069 없음. 일반 사용자 Stage416 client OFF 유지.
+- **진단 도구 원인:** Master controlled proof는 ambiguous/internal failure에는 같은 operation을 재시도해야 하지만, authoritative `STALE_OR_DUPLICATE`까지 localStorage에 계속 보존해 같은 stale diagnostic operation을 반복하는 구조였음.
+- **최소 수정:** controlled proof 전용으로만 `STALE_OR_DUPLICATE` 수신 시 exact local proof key를 삭제. CALLABLE_INTERNAL/network ambiguity는 기존처럼 same operation 보존. 일반 Explore 좋아요/outbox/server path는 변경 없음.
+- **수정 commit:** `8c611bcf3a485e251ef294f70e97fa34bb6051b0`.
+- **QA:** 408 Run `38533913465` SUCCESS — TypeScript, Build, Stage416 source checks, 개인 좋아요/카탈로그 회귀, live Rules read-only PASS.
+- **PREVIEW Hosting:** release commit `13844ef25ca8d716fec710643476891934b110cf`, Run `38534219323` SUCCESS. `PREVIEW_APP_VERSION=416`, exact build PASS, shared RTDB Rules deploy SKIPPED, TEST/PRODUCTION unchanged PASS.
+- **다음 사용자 동작:** PREVIEW hard refresh 후 기존 `같은 1회 검증 재시도`를 1회 눌러 stale proof를 로컬에서 retire → 버튼이 `Stage416 서버 1회 검증`으로 바뀌면 새 검증을 1회 시작. fresh accepted/version 이후 90초 settlement 확인.
+- **진행률:** Stage416 전체 1/4·25% 유지, 앱 속도 5/5·100%, Issue118 backend/audit/deploy PASS, controlled real-use final gate 미완료.
+
+---
+
 ## CURRENT — controlled PREVIEW 1회 검증 첫 호출 CALLABLE_INTERNAL 원인 교정 / 재검증 대기 (2026-10-14 KST)
 
 - 사용자 Master controlled proof 첫 시도(약 16:59 KST)는 UI `CALLABLE_INTERNAL`, receipt/version 미확정, local outbox 동일 operation 대기 상태로 종료. 90초 후에도 화면이 같았던 것은 1분 정산 단계에 들어가기 전에 Callable 자체가 실패했기 때문.

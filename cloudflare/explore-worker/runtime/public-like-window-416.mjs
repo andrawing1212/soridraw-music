@@ -4,7 +4,7 @@
 // publicMinutes and returns deterministic, idempotent storage intents.
 export const PUBLIC_LIKE_MINUTES_416=new Set([1,3,5,10,20]);
 export const PUBLIC_LIKE_MAX_EVENT_TRACKS_416=256;
-const UUID416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const cleanIds416=(ids)=>{
  if(!Array.isArray(ids)||ids.length<1||ids.length>PUBLIC_LIKE_MAX_EVENT_TRACKS_416)

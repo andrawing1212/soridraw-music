@@ -67,8 +67,10 @@ export function getGlobalReservationLeaseUntil416(
 async function reserveGlobalVersion416(database:Database,uid:string,
  click:ServerPrivateLikeClick416,receivedAtMs:number,globalVersionRoot:string,
  minimumExclusiveVersion=0,
-):Promise<{reserved:boolean;reason:string;version?:number;highWater?:number;createdDevice?:boolean}> {
- let decision:{reserved:boolean;reason:string;version?:number;highWater?:number;createdDevice?:boolean}={
+):Promise<{reserved:boolean;reason:string;version?:number;highWater?:number;
+  createdDevice?:boolean;leaseRefreshRequired?:boolean}> {
+ let decision:{reserved:boolean;reason:string;version?:number;highWater?:number;
+  createdDevice?:boolean;leaseRefreshRequired?:boolean}={
   reserved:false,reason:'UNDETERMINED'};
  const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
   const unchanged=raw===undefined?null:raw;
@@ -92,17 +94,16 @@ async function reserveGlobalVersion416(database:Database,uid:string,
     // environment pending/sealed proof remains the only duplicate authority.
     const reuseFloor=minimumExclusiveVersion;
     if(prior.version>reuseFloor){
-     decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version,
-       highWater:version,createdDevice:false};
      const leaseUntil=getGlobalReservationLeaseUntil416(prior,receivedAtMs);
-     if(leaseUntil-receivedAtMs>=GLOBAL_RESERVATION_LEASE_REFRESH_FLOOR_MS_416)
-      return unchanged;
-     // A genuine later retry refreshes only the short in-flight fence. Normal
-     // same-call authoritative retries never re-enter this allocator, so the
-     // common exact-duplicate path remains logical W0.
-     return {...state,devices:{...devices,[click.deviceId]:{
-      ...prior,leaseUntilMs:receivedAtMs+GLOBAL_RESERVATION_LEASE_MS_416,
-     }}};
+     decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version,
+       highWater:version,createdDevice:false,
+       leaseRefreshRequired:
+         leaseUntil-receivedAtMs<GLOBAL_RESERVATION_LEASE_REFRESH_FLOOR_MS_416};
+     // Do NOT refresh here. The environment root may already prove this exact
+     // operation is pending/sealed, in which case an exact duplicate must stay
+     // logical W0. Only a retry that still needs to materialize the click
+     // refreshes the short global fence after that proof check.
+     return unchanged;
     }
     // Another request may have committed a newer environment version after
     // this exact operation reserved its first global version. Refresh only the
@@ -147,6 +148,38 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   throw Error('416_GLOBAL_VERSION_DECISION_MISSING');
  return decision;
 }
+async function refreshExactGlobalReservationLease416(
+ database:Database,uid:string,click:ServerPrivateLikeClick416,
+ globalVersionRoot:string,allocatedVersion:number,receivedAtMs:number,
+):Promise<boolean>{
+ let exactLive=false;
+ await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
+  const unchanged=raw===undefined?null:raw;
+  exactLive=false;
+  const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{}) as GlobalVersion416;
+  const version=Number(state.version||0);
+  const settledVersion=Number(state.settledVersion||0);
+  const devices=state.devices||{};
+  if(!Number.isSafeInteger(version)||version<0||
+     !Number.isSafeInteger(settledVersion)||settledVersion<0||settledVersion>version||
+     !devices||typeof devices!=='object'||Array.isArray(devices))
+   throw Error('416_GLOBAL_RESERVATION_REFRESH_STATE_CORRUPT');
+  const prior=devices[click.deviceId];
+  if(!prior||prior.deviceSequence!==click.deviceSequence||
+     prior.operationId!==click.operationId||prior.trackId!==click.trackId||
+     prior.liked!==click.liked||prior.version!==allocatedVersion||
+     prior.version<=settledVersion)return unchanged;
+  exactLive=true;
+  const leaseUntil=getGlobalReservationLeaseUntil416(prior,receivedAtMs);
+  if(leaseUntil-receivedAtMs>=GLOBAL_RESERVATION_LEASE_REFRESH_FLOOR_MS_416)
+   return unchanged;
+  return {...state,devices:{...devices,[click.deviceId]:{
+   ...prior,leaseUntilMs:receivedAtMs+GLOBAL_RESERVATION_LEASE_MS_416,
+  }}};
+ },undefined,false);
+ return exactLive;
+}
+
 async function releaseRejectedReservation416(
  database:Database,uid:string,click:ServerPrivateLikeClick416,
  globalVersionRoot:string,allocatedVersion:number,
@@ -265,6 +298,7 @@ export async function recordUserPrivateClick416(
   authoritativeRetry=false,privateRoot='privateLikeBatch416',
   globalVersionRoot?:string,allocatedVersion?:number,allocatedHighWater?:number,
   reservationCreatedDevice=false,minimumExclusiveVersion=0,versionRebaseAttempts=0,
+  reservationLeaseRefreshRequired=false,
 ):Promise<{accepted:boolean;reason:string;version?:number;count?:number;deadlineAtMs?:number;expiredWindowId?:string}>{
  if(!uid||uid.length>128||!click||typeof click.trackId!=='string'||
     !click.trackId||click.trackId.length>512||
@@ -285,6 +319,8 @@ export async function recordUserPrivateClick416(
   allocatedVersion=reservation.version;
   allocatedHighWater=Number(reservation.highWater||reservation.version);
   reservationCreatedDevice=reservationCreatedDevice||reservation.createdDevice===true;
+  reservationLeaseRefreshRequired=
+    reservationLeaseRefreshRequired||reservation.leaseRefreshRequired===true;
  }
  let reason='UNDETERMINED';
  let expiredWindowId:string|undefined;
@@ -345,8 +381,12 @@ export async function recordUserPrivateClick416(
    }
    if(previous && receivedAtMs>=previous.lastClickAtMs+previous.minutes*60_000){
      // The expired preceding window must be sealed first, never mixed with a
-     // later new window. The global reservation is intentionally reusable by
-     // this exact operation after the prior seal clears.
+     // later new window. If this is a later retry whose short reservation
+     // lease is nearly/fully expired, renew that exact in-flight fence before
+     // handing control to the prior-window recovery path.
+     if(reservationLeaseRefreshRequired&&globalVersionRoot&&allocatedVersion!==undefined){
+       reason='GLOBAL_RESERVATION_LEASE_RENEW_REQUIRED';return unchanged;
+     }
      reason='PRIOR_WINDOW_NEEDS_SEAL';expiredWindowId=previous.id;return unchanged;
    }
    const serverClickAt=Math.max(receivedAtMs,(previous?.lastClickAtMs||0)+1);
@@ -368,6 +408,9 @@ export async function recordUserPrivateClick416(
      return unchanged;
     }
     throw Error('416_GLOBAL_VERSION_NOT_NEWER_THAN_ENVIRONMENT');
+   }
+   if(reservationLeaseRefreshRequired&&globalVersionRoot&&allocatedVersion!==undefined){
+     reason='GLOBAL_RESERVATION_LEASE_RENEW_REQUIRED';return unchanged;
    }
    const nextPending={...pending,[trackKey]:{
      trackId:click.trackId,liked:click.liked,operationId:click.operationId,
@@ -392,7 +435,8 @@ export async function recordUserPrivateClick416(
      return recordUserPrivateClick416(
        database,uid,click,trustedMinutes,receivedAtMs,true,privateRoot,
        globalVersionRoot,allocatedVersion,allocatedHighWater,
-       reservationCreatedDevice,minimumExclusiveVersion,versionRebaseAttempts);
+       reservationCreatedDevice,minimumExclusiveVersion,versionRebaseAttempts,
+       reservationLeaseRefreshRequired);
    }
    const exactProof=replay as {version:number;count:number;deadlineAtMs?:number}|null;
    if(exactProof)return {accepted:true,reason:'DUPLICATE_CONFIRMED',...exactProof};
@@ -410,7 +454,26 @@ export async function recordUserPrivateClick416(
    return recordUserPrivateClick416(
      database,uid,click,trustedMinutes,receivedAtMs,false,privateRoot,
      globalVersionRoot,undefined,undefined,reservationCreatedDevice,
-     rebaseFloor,versionRebaseAttempts+1);
+     rebaseFloor,versionRebaseAttempts+1,false);
+ }
+ if(reason==='GLOBAL_RESERVATION_LEASE_RENEW_REQUIRED'){
+   if(!globalVersionRoot||allocatedVersion===undefined||versionRebaseAttempts>=8)
+     return {accepted:false,reason:'GLOBAL_RESERVATION_LEASE_RENEW_RETRY_EXHAUSTED'};
+   const refreshed=await refreshExactGlobalReservationLease416(
+     database,uid,click,globalVersionRoot,allocatedVersion,receivedAtMs);
+   if(refreshed){
+     return recordUserPrivateClick416(
+       database,uid,click,trustedMinutes,receivedAtMs,false,privateRoot,
+       globalVersionRoot,allocatedVersion,allocatedHighWater,
+       reservationCreatedDevice,minimumExclusiveVersion,versionRebaseAttempts+1,false);
+   }
+   // The exact reservation was either already settled or concurrently cleaned
+   // as an expired orphan. Reacquire from current global state rather than
+   // materializing a stale version.
+   return recordUserPrivateClick416(
+     database,uid,click,trustedMinutes,receivedAtMs,false,privateRoot,
+     globalVersionRoot,undefined,undefined,false,
+     minimumExclusiveVersion,versionRebaseAttempts+1,false);
  }
  if(reason==='PRIOR_WINDOW_NEEDS_SEAL')
    return {accepted:false,reason,

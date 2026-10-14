@@ -1,3 +1,25 @@
+## CURRENT — Stage416 fresh 모바일 실사용 E2E PASS / private settlement blocker 종료 (2026-10-14 KST)
+
+- **사용자 fresh mobile controlled proof:** PREVIEW 새 기기 컨텍스트에서 1회 클릭 즉시 `ACCEPTED`, receipt 유효, version `1791971188927`, local outbox 서버 등록 완료.
+- **배포 후 실제 서버 타임라인 read-only Run `38545499107` SUCCESS:**
+  - Callable: `2026-10-14T09:46:28Z` HTTP 200
+  - Scheduler: `09:46:29Z` HTTP 200
+  - **첫 Settle:** `09:47:28Z` HTTP 204 — 배포 전과 달리 500 없음
+  - Final receipt endpoint: `09:47:38Z` HTTP 200
+  - fresh operation 구간에 `416_GLOBAL_SETTLEMENT_STATE_CORRUPT` / `416_GLOBAL_SETTLEMENT_TARGET_UNAVAILABLE` 없음
+  - PREVIEW Worker↔shared D1 binding TRUE
+  - private acceptance row 존재
+  - pending069=NO
+  - diagnostic D1 mutation=0
+- **24h error summary의 CORRUPT 1건:** `08:48 KST` 배포 전 실패 이력으로만 남아 있으며 fresh postdeploy operation에는 재발하지 않음.
+- **결론:** `accepted → scheduler → 첫 settle 2xx → Worker/D1 canonical drain → final receipt 200` 실제 PREVIEW E2E PASS. 이번 stale-cache settlement blocker 종료.
+- **감사/배포 증거:** audit SHA `1cd605fef46c672506be287fbc3d0c7d60f5f7b1` PASS, QA Run `38538985008` SUCCESS, Settle Function deploy Run `38540479746` SUCCESS.
+- **보호:** 일반 Stage416 client는 여전히 OFF. app410 baseline, TEST/PRODUCTION, shared user data, Worker/Rules/Hosting 비의도 변경 없음. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`.
+- **다음 큰 단계:** private final settlement 실서비스 증명이 끝났으므로 **공개 5분 공동 집계(public aggregation/coalescing)** 구조를 독립 단계로 진행. 한 클릭 때문에 전체 Feed/전체 인기곡 재계산 금지, changed-track only, D1 W1~W2 및 unchanged page/re-entry R0 목표 유지.
+- **진행률:** ① Stage416 전체 1/4 완료 및 다음 2/4 진입 준비 ② 앱 속도 개선 5/5·100% ③ settlement stale-cache 세부 작업 5/5·100%.
+
+---
+
 ## CURRENT — Stage416 settlement stale-cache 수정 독립 감사 PASS / PREVIEW Settle Function 배포·사후 read-only PASS / fresh 실사용 1회 대기 (2026-10-14 KST)
 
 - **독립 감사 exact SHA:** `1cd605fef46c672506be287fbc3d0c7d60f5f7b1` — PASS.

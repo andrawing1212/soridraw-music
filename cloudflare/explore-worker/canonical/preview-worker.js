@@ -25042,25 +25042,21 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
   const cte = exploreLikeAggregateSnapshotCte039(includeQueue066, includeQueue069, cutoff);
   const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
   const statements = [
-    // SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014
-    // Snapshot actual net public-count changes inside the same D1 transaction.
-    // This is bounded by the existing aggregate boundary and adds no D1 write.
-    env.DB.prepare(cte + `
-      SELECT d.track_id,
-        MAX(CASE WHEN d.stage416_signed=1 THEN 1 ELSE 0 END) AS stage416_signed
-      FROM deltas d
-      GROUP BY d.track_id
-      HAVING SUM(d.delta) <> 0
-    `).bind(...prefix),
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
       SELECT track_id, SUM(delta), 0, 0, ? FROM deltas GROUP BY track_id HAVING SUM(delta) > 0
       ON CONFLICT(track_id) DO UPDATE SET like_count = track_stats.like_count + excluded.like_count, updated_at = excluded.updated_at
+      RETURNING track_id,
+        (SELECT MAX(CASE WHEN d.stage416_signed=1 AND d.delta<>0 THEN 1 ELSE 0 END)
+         FROM deltas d WHERE d.track_id=track_stats.track_id) AS stage416_signed
     `).bind(...prefix, now),
     env.DB.prepare(cte + `
       UPDATE track_stats
       SET like_count = MAX(0, like_count + COALESCE((SELECT SUM(d.delta) FROM deltas d WHERE d.track_id = track_stats.track_id), 0)), updated_at = ?
       WHERE track_id IN (SELECT track_id FROM deltas GROUP BY track_id HAVING SUM(delta) < 0)
+      RETURNING track_id,
+        (SELECT MAX(CASE WHEN d.stage416_signed=1 AND d.delta<>0 THEN 1 ELSE 0 END)
+         FROM deltas d WHERE d.track_id=track_stats.track_id) AS stage416_signed
     `).bind(...prefix, now),
     env.DB.prepare(cte + `
       INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
@@ -25089,18 +25085,24 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     `).bind(...prefix));
   }
   const result = await env.DB.batch(statements);
-  const changedRows416=Array.isArray(result?.[0]?.results)?result[0].results:[];
+  // SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014
+  // Reuse the two canonical track_stats mutations' RETURNING rows: zero extra
+  // D1 SELECT/query while preserving exact net-changed track identity.
+  const changedRows416=[
+    ...(Array.isArray(result?.[0]?.results)?result[0].results:[]),
+    ...(Array.isArray(result?.[1]?.results)?result[1].results:[]),
+  ];
   const changedTrackIds416=[...new Set(changedRows416
     .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];
   const stage416Changed416=changedRows416.some((row)=>Number(row?.stage416_signed||0)===1);
-  const oldProcessed = Number(result?.[5]?.meta?.changes || 0);
+  const oldProcessed = Number(result?.[4]?.meta?.changes || 0);
   const compactProcessed = compactIndex >= 0 ? Number(result?.[compactIndex]?.meta?.changes || 0) : 0;
   const w1Processed = w1Index >= 0 ? Number(result?.[w1Index]?.meta?.changes || 0) : 0;
   return {
-    positiveTracks: Number(result?.[1]?.meta?.changes || 0),
-    negativeTracks: Number(result?.[2]?.meta?.changes || 0),
-    insertedLikes: Number(result?.[3]?.meta?.changes || 0),
-    deletedLikes: Number(result?.[4]?.meta?.changes || 0),
+    positiveTracks: Number(result?.[0]?.meta?.changes || 0),
+    negativeTracks: Number(result?.[1]?.meta?.changes || 0),
+    insertedLikes: Number(result?.[2]?.meta?.changes || 0),
+    deletedLikes: Number(result?.[3]?.meta?.changes || 0),
     processedBatches: oldProcessed + compactProcessed + w1Processed,
     oldProcessed, compactProcessed, w1Processed,
     // SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009

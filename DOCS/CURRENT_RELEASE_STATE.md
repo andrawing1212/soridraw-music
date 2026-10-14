@@ -1,3 +1,30 @@
+## CURRENT — PR #120 독립 감사 PASS → preview 병합 / Issue118 PREVIEW backend 배포·사후감사 PASS / controlled 실사용 1회 대기 (2026-10-14 KST)
+
+- **독립 감사 PASS exact product HEAD:** `9c4c22c31f29a4a7d8b98064a5a47be8de1dcffc`.
+- **감사 결론:** 직전 blocker였던 `seq1 canonical settlement 완료 + 최초 Callable 응답 유실 + env proof 정리 후 same-op retry`는 exact settled-operation proof로 해결. generic `STALE_OR_DUPLICATE` 성공 오인 없음, same-device seq2 진행 회복, 회귀/TypeScript/Build/Functions PASS.
+- **PR #120:** 임시 QA workflow만 제거한 뒤 `preview` merge 완료. merge commit `f57bea5237d54a7ea2e87ad404dba9c8f1357c56`.
+- **merge 직후 QA:** 기존 app401 verifier가 ordered Stage416 receipt 새 변수명을 고정 문자열로 검사해 Run `38527605739`만 FAIL. 제품 실패 아님. assertion만 새 실제 경로로 정렬한 commit `9abb88e51641db4c0c05da5deb5d5a367043d7b4`, 재검증 Run `38527817569` **SUCCESS**. App TypeScript/Build/Functions/보호 좋아요 회귀 PASS.
+- **PREVIEW 배포 1 — Callable:** `recordPrivateLike416` 단일 Function, Run `38528686713` **SUCCESS**. exact release source는 제품 코드 포함 `ba56237ea7f8385ec88456c60222e90a9cb170f1`; Function ACTIVE update `2026-10-14T07:32:53Z`.
+- **PREVIEW 배포 2 — Settle Task:** `stage416SettlePrivateWindowCandidate` 단일 Function, Run `38529684657` **SUCCESS**. Function ACTIVE update `2026-10-14T07:41:18Z`.
+- **배포 workflow 보정:** 환경분리 후 single-function package가 새 의존 모듈을 누락해 predeploy 단계에서 3회 차단됨: Run `38528249277`(stale guard literal), `38528380601`(environment module 누락), `38529432830`(serverClick module 누락). 셋 모두 Firebase deploy 단계 이전 실패라 live 서비스 변경 0. 이후 workflow guard/package dependency만 최소 수정.
+- **사후 read-only:** Run `38530026542` **SUCCESS**.
+  - `recordPrivateLike416` ACTIVE
+  - `stage416SettlePrivateWindowCandidate` ACTIVE
+  - Scheduler/Callable/Settle runtime service account 동일
+  - Eventarc binding PASS, 24h transport subscription ERROR 0
+  - Cloud Tasks queue `stage416SettlePrivateWindowCandidate` RUNNING
+  - live Master timing private=1분 / public=5분
+  - PREVIEW Worker ↔ shared D1 binding match TRUE
+  - existing private acceptance row 존재, pending069 없음
+  - diagnostic D1 mutation 0
+- **비용/데이터:** 이번 배포 자체 D1/R2/RTDB Rules/Hosting/Worker 변경 0. user-data migration/backfill/delete 0. postdeploy diagnostic DB write 0. page/update/re-entry 신규 IO 없음.
+- **보호 상태:** `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false`, `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false`. 일반 사용자 Stage416 client는 아직 OFF이며 app410/app416 canonical 좋아요가 계속 기준.
+- **TEST/PRODUCTION:** branch 및 환경 변경 없음. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`.
+- **현재 gate:** 서버 코드/배포/readonly 검증은 PASS. 다음은 **PREVIEW Master controlled 1회 검증**으로 실제 `accepted → 1분 due → Worker/D1/R2 canonical settlement → settled-operation proof → final ACK`를 확인한다. 이 실사용 PASS 전 일반 client ON / TEST 승격 / 공개 5분 공동집계 후속 활성화 금지.
+- **진행률:** Stage416 전체 1/4·25% 유지, 앱 속도 5/5·100%, Issue118 개발/감사/PREVIEW backend 적용 100%, 실사용 controlled gate 전.
+
+---
+
 ## CURRENT — PR #120 감사 FAIL 보완: 이미 정산된 seq1 응답 유실 시 exact operation settlement proof / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
 
 - **직전 GPT-6 독립 감사 FAIL 대상:** `2ad92fd69f2859abe672235a2ed038982124c5f6`.

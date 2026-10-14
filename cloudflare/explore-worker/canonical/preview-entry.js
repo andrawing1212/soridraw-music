@@ -2,7 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
-import {registerPublicLikeEventStorage416} from '../runtime/public-like-window-416.mjs';
+import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416}
+ from '../runtime/public-like-window-416.mjs';
 import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private-like-d1-writer-416.mjs';
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
@@ -1265,6 +1266,17 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
           {status:400});
       }
     }
+    if(request.method==='POST'&&url.pathname==='/public-ack'){
+      const body=await request.json().catch(()=>null);
+      try{
+        const data=await ackPublicLikeEventStorage416(
+          this.ctx.storage,String(body?.eventId||''),Date.now());
+        return Response.json({ok:true,data});
+      }catch(error){
+        return Response.json({ok:false,error:{code:String(error?.message||'416_PUBLIC_BAD_ACK')}},
+          {status:409});
+      }
+    }
     if (request.method !== 'POST' || url.pathname !== '/schedule') {
       return new Response('Not found', { status: 404 });
     }
@@ -2336,6 +2348,7 @@ const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-4
 // Stage416 public release stays source-only until exact SHA independent audit.
 const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
 const STAGE416_PUBLIC_WINDOW_ROUTE='/v1/internal/public-like-window-416';
+const STAGE416_PUBLIC_WINDOW_ACK_ROUTE='/v1/internal/public-like-window-416/ack';
 async function handleSignedPrivateHandoff416(request,env){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
    'Cache-Control':'no-store'});
@@ -2417,6 +2430,39 @@ async function handleSignedPublicLikeWindow416(request,env){
  }
 }
 
+async function handleSignedPublicLikeWindowAck416(request,env){
+ const headers=new Headers({'Content-Type':'application/json; charset=utf-8',
+   'Cache-Control':'no-store'});
+ const fail=(code,status=503)=>new Response(JSON.stringify({ok:false,error:{code}}),
+   {status,headers});
+ const secret=env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET;
+ if(typeof secret!=='string'||secret.length<32)return fail('416_PUBLIC_BINDING_UNAVAILABLE');
+ const raw=await request.text();
+ if(!await verifyPrivateHmac416(raw,request.headers.get('X-Soridraw-416-Public-Signature'),secret))
+   return fail('416_PUBLIC_SIGNATURE_DENIED',403);
+ let body;
+ try{body=JSON.parse(raw);}catch{return fail('416_PUBLIC_BAD_JSON',400);}
+ const signedAtMs=Number(body?.signedAtMs||0),now=Date.now();
+ if(!Number.isSafeInteger(signedAtMs)||signedAtMs<now-15*60_000||signedAtMs>now+30_000)
+   return fail('416_PUBLIC_STALE_SIGNATURE',409);
+ try{
+   const namespace=env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+   if(!namespace)throw Error('416_PUBLIC_DO_BINDING_UNAVAILABLE');
+   const id=namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
+   const response=await namespace.get(id).fetch('https://soridraw.internal/public-ack',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({eventId:String(body?.eventId||'')}),
+   });
+   const payload=await response.json().catch(()=>null);
+   if(!response.ok||payload?.ok!==true||payload?.data?.acked!==true)
+     throw Error('416_PUBLIC_ACK_FAILED');
+   return new Response(JSON.stringify({ok:true,data:payload.data}),{status:200,headers});
+ }catch(error){
+   console.error('[416] public window ack failed',String(error?.message||error));
+   return fail('416_PUBLIC_ACK_UNAVAILABLE');
+ }
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
@@ -2449,6 +2495,10 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&request.method==='POST'&&
+       url.pathname===STAGE416_PUBLIC_WINDOW_ACK_ROUTE){
+      return handleSignedPublicLikeWindowAck416(request,env);
+    }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&request.method==='POST'&&
        url.pathname===STAGE416_PUBLIC_WINDOW_ROUTE){
       return handleSignedPublicLikeWindow416(request,env);

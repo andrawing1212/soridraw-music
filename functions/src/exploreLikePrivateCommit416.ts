@@ -23,6 +23,10 @@ type GlobalSettlementState416={
   deviceSequence?:number;operationId?:string;trackId?:string;liked?:boolean;
   version?:number;leaseUntilMs?:number;
  }>;
+ settledDevices?:Record<string,{
+  deviceSequence?:number;operationId?:string;trackId?:string;liked?:boolean;
+  version?:number;count?:number;
+ }>;
 };
 type SettlementInspection416={
  lower:number|null;
@@ -187,9 +191,12 @@ export async function findLowerOutstandingPrivateVersion416(
 // completed UID window, never per page visit or per click.
 export async function advanceGlobalSettledVersion416(
  db:Database,uid:string,settledVersion:number,globalVersionRoot:string,
+ settledRows:Array<{trackId:string;liked:boolean;operationId:string;
+   deviceId?:string;deviceSequence?:number;version?:number}>=[],
 ):Promise<boolean>{
  if(!uid||uid.length>128||!Number.isSafeInteger(settledVersion)||
-    settledVersion<=0||!globalVersionRoot||globalVersionRoot.length>160)
+    settledVersion<=0||!globalVersionRoot||globalVersionRoot.length>160||
+    !Array.isArray(settledRows)||settledRows.length<1||settledRows.length>256)
   throw Error('416_BAD_GLOBAL_SETTLEMENT_ADVANCE');
  let advanced=false;
  await db.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
@@ -200,15 +207,52 @@ export async function advanceGlobalSettledVersion416(
   const version=Number(state.version||0);
   const prior=Number(state.settledVersion||0);
   const devices=state.devices||{};
+  const settledDevices=state.settledDevices||{};
   if(!Number.isSafeInteger(version)||version<settledVersion||
      !Number.isSafeInteger(prior)||prior<0||prior>version||
-     !devices||typeof devices!=='object'||Array.isArray(devices))
+     !devices||typeof devices!=='object'||Array.isArray(devices)||
+     !settledDevices||typeof settledDevices!=='object'||Array.isArray(settledDevices))
     throw Error('416_GLOBAL_SETTLEMENT_STATE_CORRUPT');
   if(prior>settledVersion)
     throw Error('416_GLOBAL_SETTLEMENT_VERSION_REGRESSION');
-  if(prior===settledVersion)return unchanged;
-  advanced=true;
-  return {...state,settledVersion};
+
+  const nextSettledDevices={...settledDevices};
+  for(const row of settledRows){
+   const deviceId=String(row?.deviceId||'');
+   const deviceSequence=Number(row?.deviceSequence||0);
+   const operationId=String(row?.operationId||'');
+   const trackId=String(row?.trackId||'');
+   const rowVersion=Number(row?.version||0);
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deviceId)||
+      !Number.isSafeInteger(deviceSequence)||deviceSequence<=0||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)||
+      !trackId||trackId.length>512||typeof row?.liked!=='boolean'||
+      !Number.isSafeInteger(rowVersion)||rowVersion<=0||rowVersion>settledVersion)
+    throw Error('416_GLOBAL_SETTLED_ROW_PROOF_INVALID');
+   const existing=nextSettledDevices[deviceId];
+   const existingSequence=Number(existing?.deviceSequence||0);
+   if(existing){
+    if(!Number.isSafeInteger(existingSequence)||existingSequence<=0)
+      throw Error('416_GLOBAL_SETTLED_DEVICE_PROOF_CORRUPT');
+    if(deviceSequence<existingSequence)continue;
+    if(deviceSequence===existingSequence){
+     if(existing.operationId!==operationId||existing.trackId!==trackId||
+        existing.liked!==row.liked||Number(existing.version)!==rowVersion)
+      throw Error('416_GLOBAL_SETTLED_DEVICE_PROOF_CONFLICT');
+     continue;
+    }
+   }
+   nextSettledDevices[deviceId]={
+    deviceSequence,operationId,trackId,liked:row.liked,version:rowVersion,
+    count:settledRows.length,
+   };
+  }
+
+  const proofChanged=JSON.stringify(nextSettledDevices)!==JSON.stringify(settledDevices);
+  if(prior===settledVersion&&!proofChanged)return unchanged;
+  advanced=prior<settledVersion;
+  return {...state,settledVersion:Math.max(prior,settledVersion),
+    settledDevices:nextSettledDevices};
  },undefined,false);
  return advanced;
 }
@@ -259,7 +303,7 @@ export async function completeUserPrivateWindow416(
  // environment can never pass while this canonical version is still unknown.
  if(globalVersionRoot)
    await advanceGlobalSettledVersion416(
-     db,uid,receipt.version,globalVersionRoot);
+     db,uid,receipt.version,globalVersionRoot,seal.rows);
  const acked=await acknowledgeUserPrivateSeal416(db,uid,{
    id:seal.id,version:receipt.version,
  },privateRoot);

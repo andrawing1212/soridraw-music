@@ -41,8 +41,13 @@ export type GlobalDeviceReservation416=GlobalDeviceSnapshot416&{
 export type ExpiredGlobalReservation416=GlobalDeviceSnapshot416&{
   deviceId:string;leaseUntilMs:number;
 };
+export type SettledDeviceProof416={
+  deviceSequence:number;operationId:string;trackId:string;liked:boolean;
+  version:number;count:number;
+};
 type GlobalVersion416={version?:number;settledVersion?:number;
-  devices?:Record<string,GlobalDeviceReservation416>};
+  devices?:Record<string,GlobalDeviceReservation416>;
+  settledDevices?:Record<string,SettledDeviceProof416>};
 
 export function getGlobalReservationLeaseUntil416(
  reservation:{version?:number;leaseUntilMs?:number},nowMs:number,
@@ -68,9 +73,11 @@ async function reserveGlobalVersion416(database:Database,uid:string,
  click:ServerPrivateLikeClick416,receivedAtMs:number,globalVersionRoot:string,
  minimumExclusiveVersion=0,
 ):Promise<{reserved:boolean;reason:string;version?:number;highWater?:number;
-  createdDevice?:boolean;leaseRefreshRequired?:boolean}> {
+  createdDevice?:boolean;leaseRefreshRequired?:boolean;
+  settledDuplicate?:boolean;count?:number}> {
  let decision:{reserved:boolean;reason:string;version?:number;highWater?:number;
-  createdDevice?:boolean;leaseRefreshRequired?:boolean}={
+  createdDevice?:boolean;leaseRefreshRequired?:boolean;
+  settledDuplicate?:boolean;count?:number}={
   reserved:false,reason:'UNDETERMINED'};
  const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
   const unchanged=raw===undefined?null:raw;
@@ -79,11 +86,29 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   const version=Number(state.version||0);
   const settledVersion=Number(state.settledVersion||0);
   const devices=state.devices||{};
+  const settledDevices=state.settledDevices||{};
   const prior=devices[click.deviceId];
+  const settled=settledDevices[click.deviceId];
   if(!Number.isSafeInteger(version)||version<0||version>=Number.MAX_SAFE_INTEGER||
      !Number.isSafeInteger(settledVersion)||settledVersion<0||settledVersion>version||
-     !devices||typeof devices!=='object'||Array.isArray(devices))
+     !devices||typeof devices!=='object'||Array.isArray(devices)||
+     !settledDevices||typeof settledDevices!=='object'||Array.isArray(settledDevices))
    throw Error('416_GLOBAL_VERSION_STATE_CORRUPT');
+  if(settled){
+   if(!Number.isSafeInteger(settled.deviceSequence)||settled.deviceSequence<=0||
+      !UUID_416.test(settled.operationId)||!settled.trackId||settled.trackId.length>512||
+      typeof settled.liked!=='boolean'||!Number.isSafeInteger(settled.version)||
+      settled.version<=0||settled.version>settledVersion||
+      !Number.isSafeInteger(settled.count)||settled.count<1||settled.count>256)
+    throw Error('416_GLOBAL_SETTLED_DEVICE_PROOF_CORRUPT');
+   if(click.deviceSequence===settled.deviceSequence&&
+      click.operationId===settled.operationId&&click.trackId===settled.trackId&&
+      click.liked===settled.liked){
+     decision={reserved:false,reason:'GLOBAL_SETTLED_DUPLICATE_CONFIRMED',
+       version:settled.version,highWater:version,settledDuplicate:true,count:settled.count};
+     return unchanged;
+   }
+  }
   if(prior&&click.deviceSequence<=prior.deviceSequence){
    if(click.deviceSequence===prior.deviceSequence&&prior.operationId===click.operationId&&
       prior.trackId===click.trackId&&prior.liked===click.liked&&
@@ -314,6 +339,10 @@ export async function recordUserPrivateClick416(
  if(allocatedVersion===undefined&&globalVersionRoot){
   const reservation=await reserveGlobalVersion416(
    database,uid,click,receivedAtMs,globalVersionRoot,minimumExclusiveVersion);
+  if(reservation.settledDuplicate&&reservation.version!==undefined&&
+     Number.isSafeInteger(reservation.count)&&Number(reservation.count)>0)
+   return {accepted:true,reason:'SETTLED_DUPLICATE_CONFIRMED',
+     version:reservation.version,count:Number(reservation.count)};
   if(!reservation.reserved||reservation.version===undefined)
    return {accepted:false,reason:reservation.reason};
   allocatedVersion=reservation.version;

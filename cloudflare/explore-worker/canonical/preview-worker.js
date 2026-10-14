@@ -25373,7 +25373,8 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
       for (let wave = 0; wave < EXPLORE_LIKE_USER_QUEUE_MAX_WAVES_075; wave += 1) {
         const current = await processExploreLikeUserQueueWave075(
           env, now, Date.now(),
-          env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);
+          env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&
+          (env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true));
         totals.waves += 1;
         if (!current.advanced) break;
         totals.processedUserWaves += 1;
@@ -25404,8 +25405,8 @@ async function mirrorExploreSharedFeeds059(env) {
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
-  const deferPublic416=env?.__SORIDRAW_DEFER_PUBLIC_416===true||
-    totals.stage416Changed416===true;
+  const deferPublic416=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&(
+    env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);
   if(deferPublic416)return {...totals,publicProjection:'deferred-416',
     publicDeferred416:true};
   try {

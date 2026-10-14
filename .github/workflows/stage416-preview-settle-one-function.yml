@@ -80,7 +80,20 @@ jobs:
                 # infrastructure commit; a trigger-only change is then safe.
                 guard_sha="$(sed -n 's/^release_guard_sha=//p' "$trigger")"
                 test "$(grep -c '^release_guard_sha=' "$trigger")" -eq 1
-                printf '%s' "$guard_sha" | grep -Eq '^[0-9a-f]{40}
+                printf '%s' "$guard_sha" | grep -Eq '^[0-9a-f]{40}$'
+                grep -Fxq 'release_guard_audit=PASS' "$trigger"
+                git merge-base --is-ancestor "$guard_sha" origin/preview
+                for file in \
+                  .github/workflows/stage416-preview-settle-one-function.yml \
+                  scripts/verify-416-public-function-inventory.mjs; do
+                  test "$(git rev-parse "$guard_sha:$file")" = "$(git rev-parse "HEAD:$file")" || {
+                    echo '416_PUBLIC_UNAUDITED_DEPLOY_GUARD_REFUSED'; exit 21;
+                  }
+                done
+                echo '416_PUBLIC_EXACT_AUDITED_DEPLOY_GUARD=PASS'
+              fi
+              ;;
+            *) test "$target" = "$(git rev-parse HEAD^)" ;;
           esac
           git rev-parse origin/main > "$RUNNER_TEMP/main-before"
           git rev-parse origin/production > "$RUNNER_TEMP/prod-before"

@@ -1,3 +1,28 @@
+## CURRENT — PR #120 감사 FAIL 보완: 이미 정산된 seq1 응답 유실 시 exact operation settlement proof / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
+
+- **직전 GPT-6 독립 감사 FAIL 대상:** `2ad92fd69f2859abe672235a2ed038982124c5f6`.
+- **감사에서 확인된 남은 blocker:** same-device seq1(A곡)이 서버에서 이미 Worker/D1/R2 최종 정산되고 env pending/sealed도 ACK 후 정리됐는데, 클라이언트가 최초 Callable 응답만 잃은 경우. 기존 재시도는 exact env proof가 사라졌으므로 `STALE_OR_DUPLICATE`가 될 수 있고, 이를 fail-closed로 유지하면 seq2가 영구 대기할 수 있음.
+- **핵심 수정:** shared global Stage416 UID state에 **최신 canonical settled operation proof를 device별 최대 1개** additive하게 기록. proof는 `deviceSequence + operationId + trackId + liked + rowVersion + settled-window count`로 구성하며, Worker/D1/R2 canonical receipt가 성공한 뒤 기존 `settledVersion`을 올리는 **같은 RTDB transaction** 안에서만 기록한다.
+- **재시도 판정:** global reservation 단계에서 요청이 해당 device의 exact settled proof와 완전히 일치할 때만 `SETTLED_DUPLICATE_CONFIRMED`으로 accepted 반환. 일반 `STALE_OR_DUPLICATE`는 성공으로 승격하지 않는다.
+- **비용 보호:** settled proof 저장은 기존 completed-window global fence W1에 함께 저장되므로 추가 changed write 0. exact settled duplicate retry는 global transaction logical W0, env pending 재생성/changed write 0. page/update/re-entry 신규 IO 0.
+- **bounded 구조:** global `devices`가 기존 최대 32 device이므로 `settledDevices`도 device별 latest proof 1개만 유지하며 전체 사용자/곡/좋아요 수에 비례한 history를 만들지 않는다. migration/backfill 없음.
+- **기존 same-device ordering 유지:** seq N ambiguous일 때 seq N+1 전송 금지, same operation retry 우선, terminal rejection durable 기록 후에만 다음 seq 진행.
+- **신규 실행형 검증:** `scripts/verify-431-stage416-settled-lost-response-proof.mjs`.
+  - seq1 accepted 서버 상태 생성
+  - client response lost 상황으로 로컬 ACK 미확정 가정
+  - canonical settled fence + exact settled operation proof 기록
+  - env pending/sealed 제거 후 same seq1/op retry
+  - exact settled proof로 accepted W0
+  - 그 뒤 seq2 다른 track 정상 accepted
+  - 다른 operation의 generic stale은 여전히 reject
+- **개발 QA Run:** `38525747336` **SUCCESS**.
+- **핵심 PASS:** `STAGE416_SETTLED_SEQ1_OPERATION_PROOF_RECORDED`, `STAGE416_LOST_RESPONSE_SEQ1_RETRY_PROVEN_ACCEPTED`, `STAGE416_SETTLED_DUPLICATE_RETRY_CHANGED_WRITES=0`, `STAGE416_SEQ2_AFTER_PROVEN_SEQ1_ACCEPTED`, `STAGE416_GENERIC_STALE_NOT_PROMOTED_TO_SUCCESS`, `STAGE416_SETTLED_PROOF_PAGE_UPDATE_REENTRY_IO=0`.
+- **전체 회귀:** Issue118 ordering/settlement, protected likes, App TypeScript, App Build, Functions TypeScript, Safety 모두 PASS.
+- **변경 없음:** Firebase/Functions/Cloudflare/Hosting 배포 0, shared user data 변경 0, D1/R2 schema/table/key 변경 0, migration/backfill/delete 0, TEST/PRODUCTION 변경 0, Stage416 general client OFF.
+- **현재 gate:** 새 exact HEAD GPT-6 독립 감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
 ## CURRENT — PR #120 감사 FAIL 보완: same-device seq1 미확정 시 seq2 전송 차단 / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
 
 - **직전 독립 감사 FAIL 대상:** `4140f8ff2123fd6f9870db2c00ea3b3c9a2c13af`. global orphan lease 보완은 PASS했지만, 같은 browser device에서 seq1(A곡) Callable 응답이 ambiguous한 동안 drain이 catch 후 seq2(B곡)를 계속 전송할 수 있어, seq2가 먼저 env device sequence를 올린 뒤 seq1 retry가 `STALE_OR_DUPLICATE`로 거절되어 서로 다른 곡 A가 유실될 수 있는 경로가 확인됨.

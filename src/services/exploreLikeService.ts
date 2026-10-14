@@ -85,6 +85,11 @@ const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000; // app399 verified behavior.
  // but restore the last verified app399 5-second canonical intake on PREVIEW.
  // Existing durable outbox rows are preserved and settle through the legacy batch path.
 const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;
+// Public 5-minute coalescing is a separate coordinated release gate. While
+// false, app410/app416 keeps the proven immediate 192 invalidation unchanged.
+// When enabled with the server release, clients stop writing the public bus;
+// only the post-R2 server release publishes public invalidation.
+const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false;
 const STAGE416_CLIENT_SESSION_STARTED_AT = Date.now();
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
@@ -2328,7 +2333,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // screens through one bounded global invalidation signal. It carries no
       // personal heart and no trusted count. Other accounts wait for the
       // changed-track shared R2 card and then paint its settled public count.
-      if (acceptedForSignal127.length) {
+      if (acceptedForSignal127.length && !STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE) {
         try {
           await publishExplorePublicLikeInvalidation192(
             uid,

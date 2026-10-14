@@ -1,3 +1,12 @@
+## Stage416 2/4 audited Worker PREVIEW source-only release (2026-10-15 KST)
+
+- product exact `3b5c4426c1e27df725a43d04df6ec591227161d3`, separate GPT-6 code audit PASS.
+- First trigger `4caf6fb243a3c41e47f24a31becce25a31da5ac8`, Run `38600852443` FAIL after deployed version `0b036ec5-a118-4639-8c84-18369371570c`: profile tracks curl reset by peer, exit 56. Automatic rollback SUCCESS to `a3635a75-7f94-4c68-add2-46e9abaa644d` (100%).
+- One bounded same-SHA retry trigger `bd1c6a169d4aed96c77e93bf80f19338ae51f132`; Run `38601331638` SUCCESS. New PREVIEW Worker version `2e5afeee-c0f6-456e-875e-095d29a6a43c` active. Profile tracks, genre/search, latest/popular, profile signal, public like cards, cached revision D1 R0/W0 smoke PASS. Signed private route anonymous 403 PASS. Fixed cron none. TEST `ddd2255a-75cc-4db9-8905-b47338558cb0`, PROD `af81502a-298d-4ec6-bc2a-0c529d6dc29e` unchanged.
+- No Firebase Hosting/Functions/Rules or D1 schema, shared user data migration/backfill, general client activation. Public five-minute gate remains HARD OFF. Real 5-minute E2E not tested and no live cost measurement.
+
+---
+
 ## PREVIEW Stage416 settle stale-empty authoritative refresh single Function patch (2026-10-13 KST)
 
 - **source:** `545853592460d9c7c1b5c90047aa3adcdc12315f` (product fix `a8465eff...` + test-only correction).

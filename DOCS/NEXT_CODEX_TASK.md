@@ -1,3 +1,13 @@
+## NEXT — Stage416 2/4 Worker PREVIEW 배포 PASS 이후 공개 5분 통제 실환경 연결 (2026-10-15 KST)
+
+- **직전 완료:** 독립 코드 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3`; PREVIEW Worker release Run `38601331638` SUCCESS, version `2e5afeee-c0f6-456e-875e-095d29a6a43c`. 첫 Run `38600852443`은 profile-tracks curl56으로 FAIL 후 자동 rollback, 동일 source 단 한 번 재시도에서 full smoke PASS.
+- **남은 blocker:** public 5-minute Worker gate는 source hard OFF, 공개 Functions `stage416ReleasePublicWindowCandidate` / `publicLikeRelease416Candidate`는 `functions/src/index.ts` export 및 runtime 배포 연결 전. 신규 공개 5분 Master 통제 E2E는 **불가능/미검증**. 일반 사용자 gate ON 금지.
+- **다음 작업 범위:** 공개 이벤트/5분 발표 기능을 Master 통제 검증할 최소 서버 release plan 및 호환성 설계: 안전한 Master 한정 실험 계정/feature flag, 본래 shared user-data 및 앱 하트 보호, Functions Task/receipt HMAC/Cloud Tasks binding preflight, Worker route flag/rollback, R2 manifest/RTDB Rules 호환. 반드시 감사된 기존 private canonical 경로 보호.
+- **순서:** PREVIEW source 후보 최소 변경→실제/모의 테스트·TypeScript/Build·비용 회귀→신규 exact SHA 독립 감사→통제 PREVIEW Function/Worker 배포→Master controlled 공개 5분 E2E·Cloudflare 알람·PC↔모바일 결과·비용 측정. 변경 없는 Hosting/Rules/D1 schema 재배포 금지.
+- **주의:** 이번 Worker 배포는 OFF source-only 검증, 기능 활성화 승인 아님. 10만 사용자 전체 읽기/쓰기, data migration, backfill/delete, TEST/PRODUCTION 변경 금지. 다른 실패 시 반복 재배포하지 말고 별도 원인 분석.
+
+---
+
 ## NEXT — Stage416 2/4 독립 감사 PASS 후 PREVIEW 통제 배포 범위 확정 (2026-10-15 KST)
 
 - **코드 감사 PASS 고정 SHA:** `3b5c4426c1e27df725a43d04df6ec591227161d3`. 별도 문서 commit은 제품 감사 코드를 변경하지 않는다. 이전 FAIL 후보인 `f580c36a...`, `61a33fdf...` 재사용 금지.

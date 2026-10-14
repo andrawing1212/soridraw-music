@@ -1,3 +1,16 @@
+## CURRENT — Stage416 2/4 독립 감사 PASS Worker PREVIEW source-only 배포 성공 / 공개 5분 HARD OFF (2026-10-15 KST)
+
+- **브랜치/감사 제품 SHA:** `preview`, 제품 exact `3b5c4426c1e27df725a43d04df6ec591227161d3`. Worker의 public 5-minute gate는 `STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false`; 공개 5분 공동집계 실서비스 활성화·E2E PASS가 아니다.
+- **통제 PREVIEW Worker 배포:** 기존 고정 `cloudflare-explore-preview-release.yml` 사용, `.deploy/preview-worker-release.trigger`를 2회 갱신. 첫 시도 commit `4caf6fb243a3c41e47f24a31becce25a31da5ac8`, Run `38600852443` **FAIL**. 신규 Worker `0b036ec5-a118-4639-8c84-18369371570c` 업로드 후 Feed/latest/popular/profile signal 등 PASS, `/v1/profiles/{owner}/tracks` curl의 일회성 connection reset (exit 56)으로 실패. 기존 PREVIEW Worker `a3635a75-7f94-4c68-add2-46e9abaa644d` **rollback SUCCESS 100%** 로그 확인.
+- **동일 exact SHA 재시도 1회:** trigger `bd1c6a169d4aed96c77e93bf80f19338ae51f132`, Run `38601331638` **SUCCESS**. PREVIEW Worker active version `2e5afeee-c0f6-456e-875e-095d29a6a43c` (100% 배포 검증). 이전 실패한 profile tracks R0/W0, 최신/인기 Feed R0/W0, genre/search R0/W0, profile signal, 변경곡 카드 D1 R0/W0, warmed feed revision R0/W0, signed private route unsigned=403, DO event scheduler, PREVIEW fixed cron none, authenticated like endpoints 401 smoke 모두 PASS.
+- **기존 Worker 보호:** PREVIEW 이전 `a3635a75-7f94-4c68-add2-46e9abaa644d`; TEST Worker `ddd2255a-75cc-4db9-8905-b47338558cb0`, PRODUCTION Worker `af81502a-298d-4ec6-bc2a-0c529d6dc29e` **비변경 PASS** (같은 workflow pre/post exact version). GitHub main/production 변경 금지 유지.
+- **배포 범위:** Cloudflare PREVIEW Explore Worker **1개만**. Firebase Hosting/Functions/Rules, Cloudflare TEST/PRODUCTION Worker 및 사용자 원본 D1/RTDB/R2 schema/backfill/delete **변경 없음**. Trigger `repair_shared_like_snapshot_156=false`, `repair_shared_like_snapshot_191=false`; 배포 전 pending069=0. 공개 Functions/Task는 여전히 source-only 미배포, 전체 공개 5분 사용자 기능 OFF. 기존 개인 settlement/app410 좋아요 기능 유지.
+- **앱 실제 주소:** Worker API base `https://soridraw-explore-preview.andrawing1212.workers.dev` workflow live smoke PASS. `preview.soridraw.com` Hosting 자체는 이번에 배포하지 않았고 PC/모바일 실제 브라우저 수동 검증은 미실시.
+- **다음 단계:** 별도 공개 5분 Master-only 통제 E2E를 위한 최소 Functions export/Task binding 및 Worker 활성화 방식 정의 → 제품 source 후보 → TypeScript/Build/실행형 테스트 → exact SHA 독립 감사 → PREVIEW 필요한 backend만 안전 배포. 일반 사용자 ON/TEST/PRODUCTION 승격/공유 데이터 migration 금지. 기존 배포 PASS를 공개 5분 live PASS로 오인하지 않는다.
+- **진행률:** Stage416 전체 1/4·25%(2/4 공개 기능 live 미검증), 앱 속도 개선 5/5·100%, 이번 Worker source-only PREVIEW 배포 1/1·100%.
+
+---
+
 ## CURRENT — Stage416 2/4 exact-SHA 독립 코드 감사 PASS / PREVIEW 통제 배포 준비 단계 (2026-10-15 KST)
 
 - **감사 기준:** `preview` 제품 commit `3b5c4426c1e27df725a43d04df6ec591227161d3`; 이전 doc-only HEAD `b461b9c16a85e69dc19470bc7c3529668e0dc335`. 사용자가 전달한 **별도 GPT-6 독립 재감사 최종 판정 PASS**. 이 PASS는 **코드 감사**이며 실 Cloudflare 알람 전송, 5분 실제 집계/과금, Master 통제 E2E 또는 PC↔모바일 실화면 PASS가 아니다.

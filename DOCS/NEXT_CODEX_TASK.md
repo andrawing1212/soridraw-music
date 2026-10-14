@@ -1,3 +1,14 @@
+## NEXT — Stage416 2/4 PREVIEW 공개 Functions export 후보 exact-SHA 독립 감사 (2026-10-15 KST)
+
+- **새 감사 제품 SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` (`preview`의 doc-only 후속 commit은 제외). 이전 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3` 위에 공개 서버 wiring 4개 소스만 변경.
+- `AGENTS.md`, `CURRENT_RELEASE_STATE.md`, `NEXT_CODEX_TASK.md`, `WORK_AUDIT_CHECKLIST.md`, `WORKFLOW_GUARDRAILS.md`, `local-first-like-sync` 동결 기준 확인 후 실제 제품 SHA 고정. **감사방은 코드/commit/push/배포/공유 데이터 변경 금지.**
+- 검증: (1) `functions/src/index.ts` public preview export 2개만 추가되고 TEST/PROD 공개 export 없음. (2) 공개 Task의 OFF guard는 유효 Task 처리/Worker HTTP 이전, 공개 receipt의 OFF guard는 shared DB 참조/RTDB publish 이전에 적용. (3) private final과 Worker 공개 gate 및 client Stage416 OFF 유지. (4) verify-439의 실제 export된 Handler 오류주입 검사가 우회 불가이며 503/no IO; 정상 공개 인증/HMAC/마감 재시도 계약 기존 보존. (5) 기존 Stage416 5,000곡 crash rollback/next window, 개인 canonical, PC/모바일 like, follow/publication, cost regression 및 한 번의 변경으로 전체 feed scan 없는지 확인.
+- **CI:** exact SHA `38602592906` SUCCESS, PREVIEW backend read-only `38602592934` SUCCESS, Gemini audit `38602592785` SUCCESS. CI가 live E2E를 대신하지 않는다.
+- **배포 gate:** 독립 감사 PASS 전 배포 금지; PASS 후에도 Functions Task+receipt export만으로 공개 5분 실사용이 켜지는 것이 아님. 기존 `stage416-preview-backend-release.yml` private prerequisites 재실행 및 임의 Workflow 수정/신설 금지. 최소 범위 PREVIEW candidate deploy와 Master 제한 데이터 안전·rollbacks 검증을 거친 후 controlled 5분 live E2E 진행. 어떤 환경에서도 전역 Stage416 ON으로 일반 사용자 하트/공개 숫자를 시험하지 않는다.
+- Main/TEST/PRODUCTION, shared D1/RTDB/R2/schema, Hosting/UI, Rules, backfill/delete unchanged.
+
+---
+
 ## NEXT — Stage416 2/4 Worker PREVIEW 배포 PASS 이후 공개 5분 통제 실환경 연결 (2026-10-15 KST)
 
 - **직전 완료:** 독립 코드 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3`; PREVIEW Worker release Run `38601331638` SUCCESS, version `2e5afeee-c0f6-456e-875e-095d29a6a43c`. 첫 Run `38600852443`은 profile-tracks curl56으로 FAIL 후 자동 rollback, 동일 source 단 한 번 재시도에서 full smoke PASS.

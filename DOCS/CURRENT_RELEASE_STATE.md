@@ -1,3 +1,16 @@
+## CURRENT — Stage416 2/4 공개 Functions PREVIEW export 연결 후보 / HARD OFF QA PASS / exact SHA 감사 대기 (2026-10-15 KST)
+
+- **제품/브랜치:** `preview` 신제품 후보 `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` (부모 `b13f435ae7f6021f66436520fae333ebfc222457`). 앱 버전/Hosting/UI/Worker runtime 코드/기존 공유 데이터 구조 변경 없음. 직전 독립 감사 PASS `3b5c4426c1e27df725a43d04df6ec591227161d3`와 별개 신규 감사 대상이다.
+- **변경 소스 4개:** `functions/src/index.ts`에 PREVIEW 공개 Task `stage416ReleasePublicWindowCandidate`와 공개 RTDB receipt `publicLikeRelease416Candidate`만 export 연결. TEST/PRODUCTION 공개 export 없음. `exploreLikePublicTask416.ts`, `exploreLikePublicReleaseEndpoint416.ts`에 서로 독립된 literal `false` HARD OFF 추가: Task는 Worker 호출 전에 `416_PUBLIC_RELEASE_TASK_DISABLED` 오류; HTTP endpoint는 shared RTDB/DB 접근 전에 HTTP 503 `416_PUBLIC_RELEASE_DISABLED`. `scripts/verify-439-stage416-public-release-routing.mjs`에는 직접 transpile된 실제 Task/HTTP handler를 실행해 disabled 상태에서 DB 호출 0·RTDB publish 0 및 early refuse를 확인하는 테스트 추가.
+- **원래 보호 게이트 유지:** `functions/src/exploreLikePrivateFinalEndpoint416.ts`의 `STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false`, Worker `preview-entry.js`의 같은 false, 일반 client Stage416 false 유지. 기존 app410 좋아요·개인 5초 canonical/1분 settlement·팔로우·공개/비공개 및 cache 경로 비변경. 공개 5분 기능 **여전히 미활성화**.
+- **동일 SHA 자동검증:** GitHub 408 Run `38602592906` **SUCCESS** (verify-439 신규 HARD OFF, Stage416 regression, Functions TS, App TypeScript, Build, 좋아요/팔로우 보호, shared Rules read-only); Stage416 PREVIEW Backend Readonly Preflight Run `38602592934` **SUCCESS**; PREVIEW Gemini Function Source Audit Run `38602592785` **SUCCESS**. 이는 code/CI PASS이지 live public 5분 E2E PASS가 아니다.
+- **배포:** 이번 신규 후보는 GitHub 소스 commit만, Functions/Hosting/Worker/Rules **배포 0**, 공유 D1/RTDB/R2 원본 및 파생 데이터 조작 0. 직전 감사된 PREVIEW Worker `2e5afeee-c0f6-456e-875e-095d29a6a43c` 유지; `main`·TEST·PRODUCTION 변경 없음.
+- **중요한 activation 제한:** 공개 기능은 같은 shared DO·canonical D1·R2를 사용한다. 단순 전역 Worker gate ON만으로 Master 전용 안전성이 성립하지 않는다. 일반 사용자 legacy 좋아요의 조기 공개/집계 지연·정확성이 동일하게 보호되는 통제 범위, Cloud Task/Function HMAC·실제 shared RTDB marker write 영향, rollback 계획을 별도 확정하기 전에는 live activation 금지.
+- **다음 작업:** 제품 `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` exact-SHA 독립 감사(공개 Function export 범위, OFF 일관성, HTTP 503 no IO/Task fail-closed, 기존 private/Worker/off regressions). PASS면 PREVIEW 한정 공개 서버 배포·Master 통제 검증 운영안을 기존 고정 배포 정책에 맞춰 설계·검증한다. 감사·실서비스 5분 검사 전 정상 사용자 기능 변화 금지.
+- **진척도:** Stage416 전체 1/4·25%(2/4 공개 live 미완료), 앱 속도 개선 5/5·100%, 현재 세부 작업(공개 Function export 연결+HARD OFF QA+GitHub commit) 3/4·75% (독립 감사 미완료).
+
+---
+
 ## CURRENT — Stage416 2/4 독립 감사 PASS Worker PREVIEW source-only 배포 성공 / 공개 5분 HARD OFF (2026-10-15 KST)
 
 - **브랜치/감사 제품 SHA:** `preview`, 제품 exact `3b5c4426c1e27df725a43d04df6ec591227161d3`. Worker의 public 5-minute gate는 `STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false`; 공개 5분 공동집계 실서비스 활성화·E2E PASS가 아니다.

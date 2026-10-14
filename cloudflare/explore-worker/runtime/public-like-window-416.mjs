@@ -280,10 +280,23 @@ export async function clearPublicLikeReleaseStorage416(storage,state){
    throw Error('416_PUBLIC_CLEAR_REFUSED');
  const windowId=String(state.window.windowId);
  const prefix=publicWindowPrefix416(windowId);
- const rows=await storage.list({prefix});
- const keys=[...rows.keys(),PUBLIC_LIKE_WINDOW_KEY_416,
+ let deleted=0;
+ // Delete a bounded first page repeatedly. This avoids relying on a cursor
+ // after deleting the rows that established that cursor, and it cannot leave
+ // >1000-track windows partially retained.
+ for(let pageIndex=0;pageIndex<100000;pageIndex++){
+   const rows=await storage.list({prefix,limit:PUBLIC_LIKE_LIST_PAGE_416});
+   if(!(rows instanceof Map))throw Error('416_PUBLIC_CLEAR_LIST_INVALID');
+   if(!rows.size)break;
+   const keys=[...rows.keys()];
+   await storage.delete(keys);
+   deleted+=keys.length;
+   if(keys.length<PUBLIC_LIKE_LIST_PAGE_416)break;
+   if(pageIndex===99999)throw Error('416_PUBLIC_CLEAR_TOO_LARGE');
+ }
+ const tail=[PUBLIC_LIKE_WINDOW_KEY_416,
    ...(state.eventIds||[]).map(publicEventAliasKey416)];
- const unique=[...new Set(keys)];
- if(unique.length)await storage.delete(unique);
- return {cleared:true,windowId,deleted:unique.length};
+ const unique=[...new Set(tail)];
+ if(unique.length){await storage.delete(unique);deleted+=unique.length;}
+ return {cleared:true,windowId,deleted};
 }

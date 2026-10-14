@@ -1,7 +1,7 @@
 ## CURRENT — Stage416 2/4 감사 FAIL 2건 복구 후보 / 자동검증 PASS / exact-SHA 독립 재감사 대기 (2026-10-15 KST)
 
 - **작업 branch / 시작 HEAD:** `preview` / `12460ac140f3c28bad07899ea80acba8b01a8479`. 작업 전·커밋 전 GitHub 최신 HEAD 재확인, 다른 신규 commit 없음. 기존 로컬 제품 4개·테스트 5개 수정안을 보존하고 이어서 완성했다.
-- **새 감사 대상 제품 SHA:** `dc002309852d652e39c2f8fa46968f48e4cbbd73` (제품 코드 4개 + 테스트 9개). 이 항목 아래의 과거 `61a33fdf76257de6fd0339cdabf7c09c75cc184c` 후보는 FAIL 이력이 있는 이전 기준이며 현재 감사 대상이 아니다.
+- **새 감사 대상 제품 SHA:** `f580c36a670e56559590ad36efe115cd5dc4bf41` (제품 코드 4개 + 테스트 12개). 이 항목 아래의 과거 `61a33fdf76257de6fd0339cdabf7c09c75cc184c` 후보는 FAIL 이력이 있는 이전 기준이며 현재 감사 대상이 아니다.
 - **상태:** 개발방 자동검증 PASS이며 독립 감사 PASS/배포 PASS/실기기 PASS가 아니다. Stage416 전체 **1/4 · 25%**, 앱 속도 개선 **5/5 · 100%** 유지. 이번 FAIL 복구의 구현·검증을 완료했고, GitHub 제품/문서 commit 전달 후 복구 작업 **4/4 · 100%**로 종료한다. Stage416 2/4 자체는 재감사 전 완료 판정하지 않는다.
 
 ### 수정 내용과 보호 범위
@@ -39,6 +39,12 @@ npm run lint
 npm run build
 ./functions/node_modules/.bin/tsc -p functions/tsconfig.json --noEmit
 ```
+
+### push 후 자동 CI 추가 확인 및 검사 보정
+
+- 최초 push HEAD `347875a2a91513ba8b3dc2080cdf176cf0f5ee6d`에서 Quality `38586562240`, Worker bundle dry-run `38586562200`, PREVIEW readonly preflight `38586562241`은 SUCCESS. Isolated D1 `38586562153`은 기존 verify-400의 오래된 source guard 때문에 FAIL이었다. 이 실패를 PASS로 숨기거나 무시하지 않았다.
+- verify-400/404-075는 이제 기존 두 track_stats mutation의 RETURNING만 정확히 허용하고 개별 likes membership의 RETURNING 부재를 별도로 검사한다. verify-406은 기존 scheduler의 반환된 receipt/changed IDs를 실제 호출부가 받는다는 현재 계약을 검사한다. 기존 canonical parity, D1 비용, preselect race 검사는 유지했다. **이 후속 수정은 테스트 3개만이며 제품 코드 4개는 `dc002309852d652e39c2f8fa46968f48e4cbbd73`와 동일하다.**
+- Isolated D1 workflow의 12개 스크립트(398/399/400/401/402/403/404-069/404-075/406/407/411/412)는 모든 항목을 로컬 Miniflare로 실행했고, 실패한 source guard를 보정한 뒤 관련 항목까지 모두 PASS했다. 최종 GitHub CI 결과는 최종 전달 보고에서 별도로 확인한다. 제품을 바꾸지 않았으므로 이미 PASS한 TypeScript/Build 결과는 그대로 적용된다.
 
 ### 비용·데이터·남은 검증
 

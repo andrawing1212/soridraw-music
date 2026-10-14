@@ -21,7 +21,8 @@ export async function deliverPublicLikeWindow416({
  eventAtMs:number;publicMinutes:number;trackIds:string[];signedAtMs?:number;
  http?:typeof fetch;
 }):Promise<{registered:boolean;duplicate:boolean;opened:boolean;needsRelease:boolean;
- windowId:string;deadlineAtMs:number;publicMinutes:number;trackCount:number}>{
+ windowId:string;deadlineAtMs:number;publicMinutes:number;trackCount:number;
+ scheduleAtMs:number|null}>{
  if(typeof secret!=='string'||secret.length<32||
     !UUID416.test(eventId)||!UUID416.test(windowCandidateId)||
     !Number.isSafeInteger(eventAtMs)||eventAtMs<=0||
@@ -46,7 +47,9 @@ export async function deliverPublicLikeWindow416({
  return {registered:true,duplicate:data.duplicate===true,opened:data.opened===true,
    needsRelease:false,windowId:String(data.windowId||''),
    deadlineAtMs:Number(data.deadlineAtMs||0),publicMinutes:Number(data.publicMinutes||0),
-   trackCount:Number(data.trackCount||0)};
+   trackCount:Number(data.trackCount||0),
+   scheduleAtMs:Number.isSafeInteger(Number(data.scheduleAtMs))&&Number(data.scheduleAtMs)>0
+     ?Number(data.scheduleAtMs):null};
 }
 
 

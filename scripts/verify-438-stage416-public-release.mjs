@@ -130,11 +130,11 @@ const releaseSource=readFileSync(
  'cloudflare/explore-worker/runtime/public-like-release-416.mjs','utf8');
 assert.match(releaseSource,/materializePublicLikeProjection416/);
 assert.match(releaseSource,/clearPublicLikeReleaseStorage416/);
-assert.ok(releaseSource.indexOf('materialize({db,r2,trackIds:state.trackIds})')<
- releaseSource.indexOf('sendPublicLikeRelease416({'),
+assert.ok(releaseSource.indexOf('const projection=await materialize')<
+ releaseSource.indexOf('const delivered=await sendPublicLikeRelease416'),
  'R2 projection must finish before public RTDB callback');
-assert.ok(releaseSource.indexOf('sendPublicLikeRelease416({')<
- releaseSource.indexOf('clearPublicLikeReleaseStorage416(storage,state)'),
+assert.ok(releaseSource.indexOf('const delivered=await sendPublicLikeRelease416')<
+ releaseSource.indexOf('const cleared=await clearPublicLikeReleaseStorage416'),
  'window clear must follow confirmed RTDB callback');
 console.log('STAGE416_PUBLIC_RELEASE_R2_BEFORE_RTDB_BEFORE_CLEAR=PASS');
 console.log('STAGE416_PUBLIC_RELEASE_CALLBACK_FAILURE_RETRY_SAFE=PASS');

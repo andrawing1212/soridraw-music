@@ -4373,6 +4373,13 @@ export {
 export { privateLikeFinalReceipt416Candidate, privateLikeFinalReceipt416Test,
   privateLikeFinalReceipt416Production } from "./exploreLikePrivateFinalEndpoint416";
 
+// Stage416 public 5-minute PREVIEW server endpoints: exported for exact-identity
+// deploy preparation, but BOTH handlers reject all requests while HARD OFF.
+// Private final receipt and Worker public gates independently remain OFF.
+// TEST/PRODUCTION public endpoints remain unexported.
+export { stage416ReleasePublicWindowCandidate } from "./exploreLikePublicTask416";
+export { publicLikeRelease416Candidate } from "./exploreLikePublicReleaseEndpoint416";
+
 // Stage416 Master-only timing configuration. These source-only Callables are
 // NOT DEPLOYED until the staged 5m private and shared public aggregation paths
 // pass existing-app/Worker parity. No ordinary-user background config reads.

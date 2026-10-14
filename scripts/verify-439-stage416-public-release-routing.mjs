@@ -74,11 +74,59 @@ const endpoint=readFileSync('functions/src/exploreLikePublicReleaseEndpoint416.t
 assert.match(endpoint,/X-Soridraw-416-Public-Release-Signature/);
 assert.match(endpoint,/config\.publicReleaseMarkerRoot/);
 const index=readFileSync('functions/src/index.ts','utf8');
-assert.doesNotMatch(index,/stage416ReleasePublicWindowCandidate/);
-assert.doesNotMatch(index,/publicLikeRelease416Candidate/);
+assert.match(index,/export \{ stage416ReleasePublicWindowCandidate \} from "\.\/exploreLikePublicTask416"/);
+assert.match(index,/export \{ publicLikeRelease416Candidate \} from "\.\/exploreLikePublicReleaseEndpoint416"/);
+assert.doesNotMatch(index,/export \{ stage416ReleasePublicWindowTest/);
+assert.doesNotMatch(index,/export \{ publicLikeRelease416Test/);
+assert.match(source,/export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false/);
+const taskDisabledAt=source.indexOf('if(!STAGE416_PUBLIC_RELEASE_TASK_ACTIVE)');
+const taskRequestAt=source.indexOf('const task=validTask416(request.data');
+assert.ok(taskDisabledAt>=0&&taskRequestAt>taskDisabledAt,
+ 'exported public task must be HARD OFF before claim/network handling');
+await assert.rejects(mod.exports.stage416ReleasePublicWindowCandidate({data:{
+ windowId,deadlineAtMs:base+300_000,
+}}),/416_PUBLIC_RELEASE_TASK_DISABLED/);
+assert.match(endpoint,/export const STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false/);
+const publicEndpointDisabledAt=endpoint.indexOf('if(!STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE)');
+const publishAt=endpoint.indexOf('const data=await publishPublicLikeRelease416(');
+assert.ok(publicEndpointDisabledAt>=0&&publishAt>publicEndpointDisabledAt,
+ 'exported public receipt must reject before shared RTDB publication');
+// Independently execute the real transpiled HTTP handler with network/data
+// adapters that throw if reached. An inactive endpoint must return 503 only.
+const receiptOutput=ts.transpileModule(endpoint,{compilerOptions:{
+ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const receiptModule={exports:{}};
+let receiptDbCalls=0,receiptPublishCalls=0;
+vm.runInNewContext(receiptOutput,{module:receiptModule,exports:receiptModule.exports,
+ Buffer,JSON,Object,String,Date,Error,
+ require:ref=>{
+   if(ref==='firebase-functions/v2/https')return {
+     onRequest:(_options,handler)=>handler};
+   if(ref==='firebase-functions/params')return {
+     defineSecret:()=>({value:()=>'x'.repeat(40)})};
+   if(ref==='firebase-admin/database')return {
+     getDatabase:()=>{receiptDbCalls++;throw Error('UNEXPECTED_SHARED_RTDB_IO')}};
+   if(ref==='./exploreLikePublicRelease416')return {
+     publishPublicLikeRelease416:()=>{receiptPublishCalls++;throw Error('UNEXPECTED_PUBLISH_IO')}};
+   if(ref==='./exploreLikeEnvironment416')return {
+     STAGE416_ENVIRONMENTS:{preview:config,test:config,production:config}};
+   throw Error('unexpected public endpoint dependency '+ref);
+ }
+},{timeout:2500});
+let receiptStatus=0,receiptPayload=null;
+const receiptRes={
+ status(code){receiptStatus=code;return this;},
+ json(body){receiptPayload=body;return this;},
+};
+await receiptModule.exports.publicLikeRelease416Candidate({
+ method:'POST',rawBody:Buffer.from('{}'),header:()=>''},receiptRes);
+assert.equal(receiptStatus,503);
+assert.equal(receiptPayload?.error?.code,'416_PUBLIC_RELEASE_DISABLED');
+assert.equal(receiptDbCalls,0);
+assert.equal(receiptPublishCalls,0);
 console.log('STAGE416_PUBLIC_TASK_DETERMINISTIC_RETRY_W0=PASS');
 console.log('STAGE416_PUBLIC_REGISTER_TASK_CHECKPOINT_ACK_ORDER=PASS');
 console.log('STAGE416_PUBLIC_STALE_TASK_BEFORE_D1_R2=PASS');
-console.log('STAGE416_PUBLIC_RELEASE_ENDPOINT_SOURCE_ONLY_HARD_OFF=PASS');
+console.log('STAGE416_PUBLIC_EXPORTED_ENDPOINTS_HARD_OFF_NO_SHARED_IO=PASS');
 console.log('DEPLOYMENT=0');
 console.log('SHARED_DATA_CHANGE=0');

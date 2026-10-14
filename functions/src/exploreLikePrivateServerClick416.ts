@@ -27,6 +27,7 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
   sealed?:unknown};
 type GlobalDeviceSnapshot416={
   deviceSequence:number;operationId:string;trackId:string;liked:boolean;version:number;
+  leaseUntilMs?:number;
 };
 export type GlobalDeviceReservation416=GlobalDeviceSnapshot416&{
   // One-level predecessor lets an exact rejected/orphan reservation roll back
@@ -129,6 +130,8 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   const previous:GlobalDeviceSnapshot416|null=prior?{
    deviceSequence:prior.deviceSequence,operationId:prior.operationId,
    trackId:prior.trackId,liked:prior.liked,version:prior.version,
+   ...(Number.isSafeInteger(Number(prior.leaseUntilMs||0))&&Number(prior.leaseUntilMs||0)>0
+     ?{leaseUntilMs:Number(prior.leaseUntilMs)}:{}),
   }:null;
   return {...state,version:next,devices:{...devices,[click.deviceId]:{
    deviceSequence:click.deviceSequence,operationId:click.operationId,

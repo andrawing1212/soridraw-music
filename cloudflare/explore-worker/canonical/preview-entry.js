@@ -1213,13 +1213,17 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // Stage416 440: an already-open public window makes every canonical like
     // wave public-deferred. The canonical D1 mutation still settles at 5s;
     // only shared R2/public invalidation waits for the fixed public deadline.
-    const currentPublicWindow416=await this.ctx.storage
-      .get(PUBLIC_LIKE_WINDOW_KEY_416).catch(()=>null);
+    const publicWindowActive416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true;
+    const currentPublicWindow416=publicWindowActive416
+      ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416).catch(()=>null)
+      :null;
     const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
-    const aggregateEnv416=deferExistingPublic416
-      ?new Proxy(this.env,{get:(target,prop)=>
-        prop==='__SORIDRAW_DEFER_PUBLIC_416'?true:Reflect.get(target,prop)})
-      :this.env;
+    const aggregateEnv416=publicWindowActive416
+      ?new Proxy(this.env,{get:(target,prop)=>{
+        if(prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
+        if(prop==='__SORIDRAW_DEFER_PUBLIC_416')return deferExistingPublic416;
+        return Reflect.get(target,prop);
+      }}):this.env;
 
     const settledAggregate418 = await baseWorker.scheduled({
       scheduledTime: Date.now(),
@@ -1232,8 +1236,9 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         ?settledAggregate418.changedTrackIds416:[])
       .map((id)=>String(id||'').trim()).filter(Boolean))];
 
-    if(deferExistingPublic416||settledAggregate418?.stage416Changed416===true||
-       settledAggregate418?.publicDeferred416===true){
+    if(publicWindowActive416&&(
+       deferExistingPublic416||settledAggregate418?.stage416Changed416===true||
+       settledAggregate418?.publicDeferred416===true)){
       if(changedTrackIds416.length){
         if(deferExistingPublic416){
           await joinPublicLikeChangedTracks416(

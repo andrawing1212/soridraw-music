@@ -82,14 +82,16 @@ assert.match(worker,/HAVING SUM\(d\.delta\) <> 0/);
 assert.match(worker,/changedTrackIds416/);
 assert.match(worker,/stage416Changed416/);
 assert.match(worker,/publicDeferred416:true/);
-assert.match(worker,/env\?\.__SORIDRAW_DEFER_PUBLIC_416===true\|\|\s*totals\.stage416Changed416===true/);
+assert.match(worker,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&\(\s*env\?\.__SORIDRAW_DEFER_PUBLIC_416===true\|\|totals\.stage416Changed416===true\)/);
 
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const runStart=entry.indexOf('async runAggregate194()');
 const runEnd=entry.indexOf('async finalizeAggregate195()',runStart);
 const run=entry.slice(runStart,runEnd);
 assert.match(run,/PUBLIC_LIKE_WINDOW_KEY_416/);
+assert.match(run,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE/);
 assert.match(run,/__SORIDRAW_DEFER_PUBLIC_416/);
+assert.match(run,/STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true/);
 assert.match(run,/stagePublicLikeOpenPayload416/);
 assert.match(run,/joinPublicLikeChangedTracks416/);
 assert.ok(run.indexOf('return {...settledAggregate418,publicWindowDeferred416:true')<

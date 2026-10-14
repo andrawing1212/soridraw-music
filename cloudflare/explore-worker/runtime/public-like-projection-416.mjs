@@ -212,7 +212,10 @@ export async function materializePublicLikeProjection416({db,r2,trackIds}){
  const profiles=await patchExactPublicProfiles416(r2,canonical.states);
  const latest=await patchLatestPublicFeed416(r2,canonical.states);
  const popular=await rebuildPopularPublicFeed416(db,r2,canonical.states);
- return {changedTracks:canonical.states.size,missingIds:canonical.missingIds,
+ const releaseRows=[...canonical.states.values()]
+   .map(({trackId,ownerUid})=>({trackId,ownerUid}))
+   .sort((a,b)=>a.trackId.localeCompare(b.trackId));
+ return {changedTracks:canonical.states.size,missingIds:canonical.missingIds,releaseRows,
    d1ReadQueries:canonical.readQueries+popular.rankReadQueries,d1Writes:0,
    r2Reads:cards.reads+profiles.reads+latest.reads+popular.reads,
    r2Writes:cards.writes+profiles.writes+latest.writes+popular.writes};

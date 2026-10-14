@@ -9,8 +9,8 @@ const patch056=readFileSync('cloudflare/explore-worker/patches/056-explore-publi
 const patch065=readFileSync('cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs','utf8');
 const contract=readFileSync('DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md','utf8');
 
-assert.match(settings,/publicMinutes:number/);
-assert.match(settings,/DEFAULT_POLICY:LikeBatchTiming416=\{privateMinutes:5,publicMinutes:5/);
+assert.match(settings,/publicMinutes\s*:\s*number/);
+assert.match(settings,/DEFAULT_POLICY\s*:\s*LikeBatchTiming416\s*=\s*\{\s*privateMinutes\s*:\s*5\s*,\s*publicMinutes\s*:\s*5/);
 assert.match(panel,/모든 사용자 공개숫자 공동 집계/);
 assert.match(panel,/이미 진행 중인 개인 대기·공동 집계 창은 이전 주기를 유지합니다/);
 

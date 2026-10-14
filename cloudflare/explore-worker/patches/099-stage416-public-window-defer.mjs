@@ -134,7 +134,7 @@ replaceFn('processExploreLikeBatches035Core056',t=>{
   'core aggregate merge');
  t=once(t,
   '        const current = await processExploreLikeUserQueueWave075(env, now, Date.now());',
-  '        const current = await processExploreLikeUserQueueWave075(env, now, Date.now(), env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);',
+  '        const current = await processExploreLikeUserQueueWave075(env, now, Date.now(), env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&(env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true));',
   'core 075 call');
  return once(t,
   "        totals.changedTracks += current.positiveTracks + current.negativeTracks;\n      }\n    }\n    console.log('[SORIDRAW 042] like aggregate', JSON.stringify(totals));",
@@ -144,7 +144,7 @@ replaceFn('processExploreLikeBatches035Core056',t=>{
 
 replaceFn('processExploreLikeBatches035Core059',t=>once(t,
  "  if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;\n  try {",
- "  if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;\n  const deferPublic416=env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true;\n  if(deferPublic416)return {...totals,publicProjection:'deferred-416',publicDeferred416:true};\n  try {",
+ "  if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;\n  const deferPublic416=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&(env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);\n  if(deferPublic416)return {...totals,publicProjection:'deferred-416',publicDeferred416:true};\n  try {",
  'core059 defer'));
 
 replaceFn('processExploreLikeBatches035',t=>once(t,

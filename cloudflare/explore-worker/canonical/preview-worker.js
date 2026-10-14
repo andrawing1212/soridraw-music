@@ -24991,6 +24991,14 @@ function exploreLikeAggregateSnapshotCte039(includeQueue066 = false, includeQueu
           ELSE e.created_at
         END AS created_at,
         e.queue_kind,
+        CASE
+          WHEN e.queue_kind = '069'
+           AND json_type(j.value, '$.operationId') = 'text'
+           AND json_type(j.value, '$.mutationAt') = 'integer'
+           AND CAST(json_extract(j.value, '$.mutationAt') AS INTEGER) > 0
+           AND CAST(json_extract(j.value, '$.mutationAt') AS INTEGER) <= e.created_at
+          THEN 1 ELSE 0
+        END AS stage416_signed,
         TRIM(CAST(json_extract(j.value, '$.trackId') AS TEXT)) AS track_id,
         CASE WHEN json_extract(j.value, '$.liked') THEN 1 ELSE 0 END AS desired_liked
       FROM eligible e, json_each(e.mutations_json) AS j
@@ -24998,7 +25006,8 @@ function exploreLikeAggregateSnapshotCte039(includeQueue066 = false, includeQueu
         AND json_type(j.value, '$.liked') IN ('true', 'false')
     ),
     latest AS (
-      SELECT user_uid, track_id, desired_liked, created_at, batch_id, queue_kind
+      SELECT user_uid, track_id, desired_liked, created_at, batch_id, queue_kind,
+        stage416_signed
       FROM (
         SELECT expanded.*,
           ROW_NUMBER() OVER (
@@ -25028,11 +25037,21 @@ function exploreLikeAggregateSnapshotCte039(includeQueue066 = false, includeQueu
 async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue066 = false, includeQueue069 = false) {
   const max = EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035;
   const boundary = await selectExploreLikeAggregateBoundary039(env, cutoff, max, includeQueue066, includeQueue069);
-  if (!boundary) return { positiveTracks: 0, negativeTracks: 0, insertedLikes: 0, deletedLikes: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0, settledBatchIds418: [] };
+  if (!boundary) return { positiveTracks: 0, negativeTracks: 0, insertedLikes: 0, deletedLikes: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0, settledBatchIds418: [], changedTrackIds416: [], stage416Changed416: false };
 
   const cte = exploreLikeAggregateSnapshotCte039(includeQueue066, includeQueue069, cutoff);
   const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
   const statements = [
+    // SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014
+    // Snapshot actual net public-count changes inside the same D1 transaction.
+    // This is bounded by the existing aggregate boundary and adds no D1 write.
+    env.DB.prepare(cte + `
+      SELECT d.track_id,
+        MAX(CASE WHEN d.stage416_signed=1 THEN 1 ELSE 0 END) AS stage416_signed
+      FROM deltas d
+      GROUP BY d.track_id
+      HAVING SUM(d.delta) <> 0
+    `).bind(...prefix),
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
       SELECT track_id, SUM(delta), 0, 0, ? FROM deltas GROUP BY track_id HAVING SUM(delta) > 0
@@ -25070,14 +25089,18 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     `).bind(...prefix));
   }
   const result = await env.DB.batch(statements);
-  const oldProcessed = Number(result?.[4]?.meta?.changes || 0);
+  const changedRows416=Array.isArray(result?.[0]?.results)?result[0].results:[];
+  const changedTrackIds416=[...new Set(changedRows416
+    .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];
+  const stage416Changed416=changedRows416.some((row)=>Number(row?.stage416_signed||0)===1);
+  const oldProcessed = Number(result?.[5]?.meta?.changes || 0);
   const compactProcessed = compactIndex >= 0 ? Number(result?.[compactIndex]?.meta?.changes || 0) : 0;
   const w1Processed = w1Index >= 0 ? Number(result?.[w1Index]?.meta?.changes || 0) : 0;
   return {
-    positiveTracks: Number(result?.[0]?.meta?.changes || 0),
-    negativeTracks: Number(result?.[1]?.meta?.changes || 0),
-    insertedLikes: Number(result?.[2]?.meta?.changes || 0),
-    deletedLikes: Number(result?.[3]?.meta?.changes || 0),
+    positiveTracks: Number(result?.[1]?.meta?.changes || 0),
+    negativeTracks: Number(result?.[2]?.meta?.changes || 0),
+    insertedLikes: Number(result?.[3]?.meta?.changes || 0),
+    deletedLikes: Number(result?.[4]?.meta?.changes || 0),
     processedBatches: oldProcessed + compactProcessed + w1Processed,
     oldProcessed, compactProcessed, w1Processed,
     // SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009
@@ -25085,7 +25108,9 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     // together; RETURNING costs no additional SQL SELECT.
     settledBatchIds418: w1Index >= 0 && Array.isArray(result?.[w1Index]?.results)
       ? result[w1Index].results.map((row) => String(row?.batch_id || '').trim()).filter(Boolean).slice(0, 2)
-      : []
+      : [],
+    changedTrackIds416,
+    stage416Changed416
   };
 }
 __name(processExploreLikeAggregateWave035, "processExploreLikeAggregateWave035");
@@ -25293,7 +25318,7 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
   // Important cost boundary: an empty 10-minute cron performs no D1 write.
   // The lease is acquired only after read-only preflight proves there is work.
   if (!legacyBoundary && !userQueuePending) {
-    const idle = { skipped: true, reason: 'idle', idleWriteZero: true, waves: 0, processedBatches: 0, processedUserWaves: 0, insertedLikes: 0, deletedLikes: 0, changedTracks: 0 };
+    const idle = { skipped: true, reason: 'idle', idleWriteZero: true, waves: 0, processedBatches: 0, processedUserWaves: 0, insertedLikes: 0, deletedLikes: 0, changedTracks: 0, changedTrackIds416: [], stage416Changed416: false };
     console.log('[SORIDRAW 042] like aggregate idle', JSON.stringify(idle));
     return idle;
   }
@@ -25318,7 +25343,9 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
     compactQueue: includeQueue066,
     w1Queue: includeQueue069,
     userQueue: userQueuePending,
-    settledBatchIds418: []
+    settledBatchIds418: [],
+    changedTrackIds416: [],
+    stage416Changed416: false
   };
   try {
     if (legacyBoundary) {
@@ -25334,19 +25361,28 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
         totals.insertedLikes += current.insertedLikes;
         totals.deletedLikes += current.deletedLikes;
         totals.changedTracks += current.positiveTracks + current.negativeTracks;
+        for(const id of current.changedTrackIds416||[]){
+          if(!totals.changedTrackIds416.includes(id))totals.changedTrackIds416.push(id);
+        }
+        if(current.stage416Changed416===true)totals.stage416Changed416=true;
         if (!current.processedBatches) break;
       }
     }
 
     if (userQueuePending) {
       for (let wave = 0; wave < EXPLORE_LIKE_USER_QUEUE_MAX_WAVES_075; wave += 1) {
-        const current = await processExploreLikeUserQueueWave075(env, now, Date.now());
+        const current = await processExploreLikeUserQueueWave075(
+          env, now, Date.now(),
+          env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);
         totals.waves += 1;
         if (!current.advanced) break;
         totals.processedUserWaves += 1;
         totals.insertedLikes += current.insertedLikes;
         totals.deletedLikes += current.deletedLikes;
         totals.changedTracks += current.positiveTracks + current.negativeTracks;
+        for(const id of current.changedTrackIds416||[]){
+          if(!totals.changedTrackIds416.includes(id))totals.changedTrackIds416.push(id);
+        }
       }
     }
     console.log('[SORIDRAW 042] like aggregate', JSON.stringify(totals));
@@ -25368,6 +25404,10 @@ async function mirrorExploreSharedFeeds059(env) {
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
+  const deferPublic416=env?.__SORIDRAW_DEFER_PUBLIC_416===true||
+    totals.stage416Changed416===true;
+  if(deferPublic416)return {...totals,publicProjection:'deferred-416',
+    publicDeferred416:true};
   try {
     const publicProjection = await reconcileExplorePublicLikes056(env);
     console.log('[SORIDRAW 056] public like projection reconciled', JSON.stringify(publicProjection));
@@ -25485,6 +25525,7 @@ async function processExploreLikeBatches035Core065(env, scheduledTime = Date.now
 
 async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core065(env, scheduledTime);
+  if(totals?.publicDeferred416===true)return totals;
   const changedItems = Array.isArray(totals?.publicProjectionDetail?.changedItems)
     ? totals.publicProjectionDetail.changedItems
     : [];
@@ -25700,7 +25741,7 @@ async function hasExploreLikeUserQueuePending075(env, cutoff) {
   return Number(row?.pending || 0) === 1;
 }
 
-async function processExploreLikeUserQueueWave075(env, cutoff, now) {
+async function processExploreLikeUserQueueWave075(env, cutoff, now, deferPublic416 = false) {
   const cte = exploreLikeUserAggregateCte075();
   const max = EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075;
 
@@ -25759,31 +25800,35 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
     `).bind(cutoff, max),
   ]);
 
-  await Promise.allSettled(changedRows.flatMap((row) => {
-    const trackId = String(row?.track_id || '').trim();
-    const ownerUid = String(row?.owner_uid || '').trim();
-    const likeCount = Math.max(0, Number(row?.next_like_count || 0));
-    return [
-      patchExploreFeedR2Like044(env, trackId, likeCount),
-      patchExploreProfileR2Like044(env, ownerUid, trackId, likeCount),
-    ];
-  }));
-
-  // SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919
-  // 075 is the active like path. Patch only changed tracks into shared R2.
-  if (changedRows.length) {
-    const sharedRows067 = changedRows.map((row) => ({
-      trackId: String(row?.track_id || '').trim(),
-      ownerUid: String(row?.owner_uid || '').trim(),
-      likeCount: Math.max(0, Number(row?.next_like_count || 0)),
-    })).filter((row) => row.trackId);
-    if (sharedRows067.length) {
-      try {
-        await patchSharedFeedLikeCounts065(env, sharedRows067);
-      } catch (error) {
-        console.warn('[SORIDRAW 067] 075 shared like-count patch deferred:', String(error?.message || error || 'unknown'));
+  if(!deferPublic416){
+    await Promise.allSettled(changedRows.flatMap((row) => {
+      const trackId = String(row?.track_id || '').trim();
+      const ownerUid = String(row?.owner_uid || '').trim();
+      const likeCount = Math.max(0, Number(row?.next_like_count || 0));
+      return [
+        patchExploreFeedR2Like044(env, trackId, likeCount),
+        patchExploreProfileR2Like044(env, ownerUid, trackId, likeCount),
+      ];
+    }));
+  
+    // SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919
+    // 075 is the active like path. Patch only changed tracks into shared R2.
+    if (changedRows.length) {
+      const sharedRows067 = changedRows.map((row) => ({
+        trackId: String(row?.track_id || '').trim(),
+        ownerUid: String(row?.owner_uid || '').trim(),
+        likeCount: Math.max(0, Number(row?.next_like_count || 0)),
+      })).filter((row) => row.trackId);
+      if (sharedRows067.length) {
+        try {
+          await patchSharedFeedLikeCounts065(env, sharedRows067);
+        } catch (error) {
+          console.warn('[SORIDRAW 067] 075 shared like-count patch deferred:', String(error?.message || error || 'unknown'));
+        }
       }
     }
+  
+  
   }
 
   return {
@@ -25792,6 +25837,9 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
     insertedLikes: Number(result?.[2]?.meta?.changes || 0),
     deletedLikes: Number(result?.[3]?.meta?.changes || 0),
     advanced: Number(result?.[4]?.meta?.changes || 0) > 0,
+    changedTrackIds416:[...new Set(changedRows
+      .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))],
+    stage416Changed416:false,
   };
 }
 

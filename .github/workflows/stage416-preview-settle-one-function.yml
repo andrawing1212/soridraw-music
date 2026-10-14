@@ -74,6 +74,378 @@ jobs:
                 echo '416_PUBLIC_RECOVERY_MODE_NOT_APPROVED'; exit 21 ;;
               esac
               echo "PUBLIC_RECOVERY_MODE=$mode" >> "$GITHUB_ENV"
+              if [ "$preflight_only" = false ]; then
+                # A product PASS alone cannot authorize a changed release tool.
+                # Compare BOTH guard files against their independently audited
+                # infrastructure commit; a trigger-only change is then safe.
+                guard_sha="$(sed -n 's/^release_guard_sha=//p' "$trigger")"
+                test "$(grep -c '^release_guard_sha=' "$trigger")" -eq 1
+                printf '%s' "$guard_sha" | grep -Eq '^[0-9a-f]{40}
+          esac
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before"
+          git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
+          # The release guard is infrastructure from the trigger commit; the
+          # immutable product SHA deliberately precedes this inventory helper.
+          cp scripts/verify-416-public-function-inventory.mjs \
+            "$RUNNER_TEMP/stage416-public-function-inventory.mjs"
+          echo "INVENTORY_416_SCRIPT=$RUNNER_TEMP/stage416-public-function-inventory.mjs" >> "$GITHUB_ENV"
+          git checkout --detach "$target"
+          grep -Fq "if(result.reason==='WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "throw Error('416_WAITING_FOR_PRIOR_SEAL')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "if(result.reason==='NOT_DUE')" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
+          grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
+          if [ "$function_name" = stage416ReleasePublicWindowCandidate ] ||
+             [ "$function_name" = publicLikeRelease416Candidate ]; then
+            grep -Fxq "export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false;" functions/src/exploreLikePublicTask416.ts
+            grep -Fxq "export const STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false;" functions/src/exploreLikePublicReleaseEndpoint416.ts
+            grep -Fxq "export const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" functions/src/exploreLikePrivateFinalEndpoint416.ts
+            grep -Fxq " const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" cloudflare/explore-worker/canonical/preview-entry.js ||
+              grep -Fxq "const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;" cloudflare/explore-worker/canonical/preview-entry.js
+            grep -Fq 'export { stage416ReleasePublicWindowCandidate }' functions/src/index.ts
+            grep -Fq 'export { publicLikeRelease416Candidate }' functions/src/index.ts
+          fi
+          if [ "$function_name" = recordPrivateLike416 ]; then
+            grep -Fq "requeueExpiredPrivateWindow416(uid,expiredWindowId,Date.now(),config)" functions/src/exploreLikePrivateCallable416.ts
+            grep -Fq "const stableBucket=Math.floor(nowMs/60_000)*60_000+1_000" functions/src/exploreLikePrivateTask416.ts
+            grep -Fq "expiredWindowId=previous.id" functions/src/exploreLikePrivateServerClick416.ts
+          fi
+          echo "LOCKED_ONE_FUNCTION_SOURCE=$target"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify exact like and task behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node scripts/verify-416-server-only-click.mjs
+          node scripts/verify-416-private-callable-master.mjs
+          node scripts/verify-416-private-deadline.mjs
+          node scripts/verify-416-private-task-routing.mjs
+          node scripts/verify-416-private-final-publisher.mjs
+          node scripts/verify-416-finalize-e2e.mjs
+          node scripts/verify-439-stage416-public-release-routing.mjs
+          node scripts/verify-440-stage416-public-window-coalescing.mjs
+          node "$INVENTORY_416_SCRIPT" selftest
+          node scripts/verify-401-cross-device-opposite-like.mjs
+          node scripts/verify-402-private-heart-count-pair.mjs
+          npm run lint
+          npm run build
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          echo 'STAGE416_SINGLE_FUNCTION_PREFLIGHT=PASS'
+
+      - name: Prepare only the approved pre-existing Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          d=.stage416-single-patch
+          mkdir -p "$d/lib"
+          for file in exploreLikePrivateTask416 exploreLikePrivateDeadline416 \
+             exploreLikePrivateCommit416 exploreLikePrivateSeal416 \
+             exploreLikePrivateHandoff416 exploreLikeEnvironment416 \
+             exploreLikePrivateServerClick416; do
+            cp "functions/lib/$file.js" "$d/lib/$file.js"
+          done
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate)
+              cp functions/lib/exploreLikePublicTask416.js "$d/lib/" ;;
+            publicLikeRelease416Candidate)
+              cp functions/lib/exploreLikePublicRelease416.js "$d/lib/"
+              cp functions/lib/exploreLikePublicReleaseEndpoint416.js "$d/lib/" ;;
+          esac
+          if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then
+            for file in exploreLikeBatchSettings416 exploreLikePrivateCallable416; do
+              cp "functions/lib/$file.js" "$d/lib/$file.js"
+            done
+          fi
+          cat > "$d/package.json" <<'JSON'
+          {
+            "name": "soridraw-stage416-single-patch",
+            "private": true,
+            "main": "lib/index.js",
+            "engines": {"node":"22"},
+            "dependencies": {
+              "firebase-admin": "^12.0.0",
+              "firebase-functions": "^4.5.0"
+            }
+          }
+          JSON
+          cat > "$d/lib/index.js" <<'NODE'
+          "use strict";
+          const admin=require("firebase-admin");
+          admin.initializeApp({
+            databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
+          });
+          NODE
+          if [ "$PATCH_FUNCTION" = recordPrivateLike416 ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          const {onCall}=require("firebase-functions/v2/https");
+          const {handleAuthenticatedPrivateClick416}=
+            require("./exploreLikePrivateCallable416");
+          const {STAGE416_ENVIRONMENTS}=require("./exploreLikeEnvironment416");
+          exports.recordPrivateLike416=onCall(
+            {region:"us-central1",enforceAppCheck:true,timeoutSeconds:60},
+            async(request)=>handleAuthenticatedPrivateClick416(
+              admin.database(),request,STAGE416_ENVIRONMENTS.preview));
+          NODE
+          elif [ "$PATCH_FUNCTION" = stage416SettlePrivateWindowCandidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.stage416SettlePrivateWindowCandidate =
+            require("./exploreLikePrivateTask416").stage416SettlePrivateWindowCandidate;
+          NODE
+          elif [ "$PATCH_FUNCTION" = stage416ReleasePublicWindowCandidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.stage416ReleasePublicWindowCandidate =
+            require("./exploreLikePublicTask416").stage416ReleasePublicWindowCandidate;
+          NODE
+          elif [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
+            cat >> "$d/lib/index.js" <<'NODE'
+          exports.publicLikeRelease416Candidate =
+            require("./exploreLikePublicReleaseEndpoint416").publicLikeRelease416Candidate;
+          NODE
+          else
+            echo 'STAGE416_SINGLE_SCOPE_DENIED'
+            exit 42
+          fi
+          cat > stage416.single-patch.firebase.json <<'JSON'
+          {"functions":{"source":".stage416-single-patch"}}
+          JSON
+          npm install --prefix "$d" --omit=dev --no-audit --no-fund
+          env -u PATCH_FUNCTION node - "$PATCH_FUNCTION" <<'NODE'
+          // Firebase's source analyzer may clear workflow-only environment vars.
+          // Package discovery must still export exactly the pinned function.
+          const expected=process.argv[2];
+          const mod=require('./.stage416-single-patch/lib/index.js');
+          if(Object.keys(mod).join(',')!==expected)
+            throw Error('STAGE416_SINGLE_FUNCTION_EXPORT_SCOPE_DRIFT');
+          console.log('STAGE416_ENV_INDEPENDENT_SINGLE_FUNCTION_EXPORT=PASS');
+          NODE
+
+      - name: Authenticate Firebase deploy principal
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Verify function identity and queue without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              # Snapshot the whole shared Firebase project (gen1 + gen2).
+              # This source-only PREVIEW release must never touch an unrelated
+              # Function, even if Firebase CLI reports target deploy success.
+              gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-before.json"
+              node "$INVENTORY_416_SCRIPT" baseline "$RUNNER_TEMP/functions-before.json"
+              if [ "$PATCH_FUNCTION" = publicLikeRelease416Candidate ]; then
+                echo 'PUBLIC_FUNCTION_REGION=asia-northeast3' >> "$GITHUB_ENV"
+                expected_region=asia-northeast3
+              else
+                echo 'PUBLIC_FUNCTION_REGION=us-central1' >> "$GITHUB_ENV"
+                expected_region=us-central1
+              fi
+              if gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$expected_region" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json" 2>"$RUNNER_TEMP/function-not-found.err"; then
+                if [ "$PUBLIC_RECOVERY_MODE" != verify_existing ]; then
+                  echo '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY'
+                  exit 41
+                fi
+                node "$INVENTORY_416_SCRIPT" adopt \
+                  "$RUNNER_TEMP/function-before.json" "$PATCH_FUNCTION" "$expected_region"
+                echo '416_PUBLIC_EXISTING_CANDIDATE_VERIFIED_NO_REDEPLOY=PASS'
+              else
+                if [ "$PUBLIC_RECOVERY_MODE" = verify_existing ]; then
+                  echo '416_PUBLIC_RECOVERY_TARGET_MISSING_REFUSE'
+                  exit 41
+                fi
+                # Only a genuine NOT_FOUND can authorize first creation.
+                if ! grep -Eiq 'NOT_FOUND|not found|does not exist' "$RUNNER_TEMP/function-not-found.err"; then
+                  cat "$RUNNER_TEMP/function-not-found.err" >&2
+                  echo '416_PUBLIC_FUNCTION_PREFLIGHT_UNKNOWN_ERROR'
+                  exit 42
+                fi
+              fi
+              gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-before.json"
+              node - "$RUNNER_TEMP/task-before.json" <<'NODE'
+          const fs=require('fs');
+          const task=JSON.parse(fs.readFileSync(process.argv[2]));
+          if(task.state!=='ACTIVE'||!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_PUBLIC_DEPLOY_HMAC_PRECONDITION_FAILED');
+          console.log('416_PUBLIC_NEW_FUNCTION_AND_HMAC_PREFLIGHT=PASS');
+          NODE
+              exit 0
+              ;;
+          esac
+          gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-before.json"
+          gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-before.json"
+          gcloud tasks queues list --location "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-before.json"
+          node - "$RUNNER_TEMP/function-before.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/queue-before.json" <<'NODE'
+          const fs=require('fs');
+          const fn=JSON.parse(fs.readFileSync(process.argv[2]));
+          const task=JSON.parse(fs.readFileSync(process.argv[3]));
+          const q=JSON.parse(fs.readFileSync(process.argv[4])).find(x=>
+            String(x.name||'').endsWith('/'+process.env.TASK_NAME));
+          if(fn.state!=='ACTIVE'||task.state!=='ACTIVE'||q?.state!=='RUNNING')
+            throw Error('STAGE416_FUNCTION_OR_QUEUE_NOT_READY');
+          if(process.env.PATCH_FUNCTION==='recordPrivateLike416' &&
+             (!fn.serviceConfig?.serviceAccountEmail||
+              fn.serviceConfig.serviceAccountEmail!==task.serviceConfig?.serviceAccountEmail))
+            throw Error('STAGE416_CALLABLE_SCHEDULER_ACCOUNT_MISMATCH');
+          if(!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('STAGE416_SETTLE_HMAC_SECRET_NOT_BOUND');
+          console.log('STAGE416_SINGLE_FUNCTION_QUEUE_AND_IDENTITY_PREFLIGHT=PASS');
+          NODE
+
+      - name: Deploy only the approved existing PREVIEW Function
+        if: env.PREFLIGHT_ONLY == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              if [ "$PUBLIC_RECOVERY_MODE" = verify_existing ]; then
+                echo '416_PUBLIC_EXISTING_FUNCTION_ADOPT_VERIFICATION_ONLY=PASS'
+              else
+                # Pinned CLI; no --force or implicit deletion consent.
+                npx --yes firebase-tools@15.30.1 deploy \
+                  --project "$FIREBASE_PROJECT" \
+                  --config stage416.single-patch.firebase.json \
+                  --only "functions:$PATCH_FUNCTION" \
+                  --non-interactive
+                echo '416_PUBLIC_EXACT_ONE_FUNCTION_CREATE=PASS'
+              fi
+              ;;
+            *)
+              # Preserve audited existing private Function patch semantics.
+              npx --yes firebase-tools@latest deploy \
+                --project "$FIREBASE_PROJECT" \
+                --config stage416.single-patch.firebase.json \
+                --only "functions:$PATCH_FUNCTION" \
+                --non-interactive --force
+              echo 'PREVIEW_ONE_APPROVED_FUNCTION_DEPLOY=PASS'
+              ;;
+          esac
+
+      - name: Verify patched Function and protected environments
+        if: env.PREFLIGHT_ONLY == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PATCH_FUNCTION" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-after.json"
+              node "$INVENTORY_416_SCRIPT" compare \
+                "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-after.json" \
+                "$PATCH_FUNCTION" "$PUBLIC_RECOVERY_MODE"
+              gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$PUBLIC_FUNCTION_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
+              gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+                --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-after.json"
+              node - "$RUNNER_TEMP/function-after.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/task-after.json" <<'NODE'
+          const fs=require('fs');
+          const fn=JSON.parse(fs.readFileSync(process.argv[2]));
+          const prior=JSON.parse(fs.readFileSync(process.argv[3]));
+          const current=JSON.parse(fs.readFileSync(process.argv[4]));
+          const expected=process.env.PATCH_FUNCTION;
+          if(fn.state!=='ACTIVE'||!fn.name?.endsWith('/'+expected)||
+             fn.buildConfig?.runtime!=='nodejs22')throw Error('416_PUBLIC_DEPLOYED_FUNCTION_INVALID');
+          if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
+             String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('416_PUBLIC_DEPLOYED_SECRET_MISSING');
+          if(prior.updateTime!==current.updateTime||
+             prior.serviceConfig?.serviceAccountEmail!==current.serviceConfig?.serviceAccountEmail)
+            throw Error('416_EXISTING_SETTLE_CHANGED');
+          console.log('416_PUBLIC_ONLY_FUNCTION_POSTFLIGHT=PASS name='+expected);
+          NODE
+              git fetch origin main production --no-tags
+              test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+              test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+              echo 'MAIN_PRODUCTION_UNCHANGED=PASS'
+              echo 'NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS'
+              exit 0
+              ;;
+          esac
+          gcloud functions describe "$PATCH_FUNCTION" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/function-after.json"
+          gcloud functions describe "$TASK_NAME" --gen2 --region "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/task-after.json"
+          gcloud tasks queues list --location "$TASK_REGION" \
+            --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/queue-after.json"
+          node - "$RUNNER_TEMP/function-before.json" "$RUNNER_TEMP/function-after.json" "$RUNNER_TEMP/task-before.json" "$RUNNER_TEMP/task-after.json" "$RUNNER_TEMP/queue-after.json" <<'NODE'
+          const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.argv[2]));
+          const fn=JSON.parse(fs.readFileSync(process.argv[3]));
+          const oldTask=JSON.parse(fs.readFileSync(process.argv[4]));
+          const task=JSON.parse(fs.readFileSync(process.argv[5]));
+          const queue=JSON.parse(fs.readFileSync(process.argv[6])).find(x=>
+            String(x.name||'').endsWith('/'+process.env.TASK_NAME));
+          if(fn.state!=='ACTIVE'||task.state!=='ACTIVE'||queue?.state!=='RUNNING')
+            throw Error('STAGE416_FUNCTION_OR_QUEUE_BROKEN');
+          if(before.name!==fn.name || before.serviceConfig?.serviceAccountEmail!==fn.serviceConfig?.serviceAccountEmail)
+            throw Error('STAGE416_DEPLOYED_FUNCTION_IDENTITY_CHANGED');
+          if(process.env.PATCH_FUNCTION==='recordPrivateLike416' &&
+            oldTask.updateTime!==task.updateTime)
+            throw Error('STAGE416_UNRELATED_TASK_FUNCTION_CHANGED');
+          if(!task.serviceConfig?.secretEnvironmentVariables?.some(x=>
+            String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('STAGE416_SETTLE_HMAC_SECRET_LOST');
+          console.log('STAGE416_SINGLE_FUNCTION_POSTFLIGHT=PASS');
+          NODE
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+          echo 'MAIN_PRODUCTION_UNCHANGED=PASS'
+          echo 'NO_SHARED_D1_R2_RULES_WORKER_HOSTING_DATA_MUTATION=PASS'
+
+      - name: Diagnose incomplete PREVIEW public Function creation without mutations
+        if: failure() && env.PREFLIGHT_ONLY == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${PATCH_FUNCTION:-}" in
+            stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
+              if [ -f "$RUNNER_TEMP/functions-before.json" ]; then
+                gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-failure.json" || {
+                  echo '416_PUBLIC_FAILURE_INVENTORY_UNAVAILABLE_STOP'; exit 0;
+                }
+                node "$INVENTORY_416_SCRIPT" diagnose \
+                  "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-failure.json" \
+                  "$PATCH_FUNCTION" || true
+                echo '416_PUBLIC_RELEASE=BLOCKED_AFTER_FAILURE'
+                echo '416_PUBLIC_RELEASE_NEXT=verify_existing_only_if_TARGET_ACTIVE_AND_HMAC_BOUND'
+                echo '416_PUBLIC_RELEASE_UNHEALTHY=STOP_AND_OPERATOR_REVIEW_NO_AUTOMATIC_DELETE'
+              fi
+              ;;
+          esac
+
+      - name: Confirm preflight-only mode performs no deployment
+        if: env.PREFLIGHT_ONLY == 'true'
+        run: echo 'STAGE416_SINGLE_FUNCTION_PREFLIGHT_ONLY=PASS;FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0'
+
+                grep -Fxq 'release_guard_audit=PASS' "$trigger"
+                git merge-base --is-ancestor "$guard_sha" origin/preview
+                for file in \
+                  .github/workflows/stage416-preview-settle-one-function.yml \
+                  scripts/verify-416-public-function-inventory.mjs; do
+                  test "$(git rev-parse "$guard_sha:$file")" = "$(git rev-parse "HEAD:$file")" || {
+                    echo '416_PUBLIC_UNAUDITED_DEPLOY_GUARD_REFUSED'; exit 21;
+                  }
+                done
+                echo '416_PUBLIC_EXACT_AUDITED_DEPLOY_GUARD=PASS'
+              fi
               ;;
             *) test "$target" = "$(git rev-parse HEAD^)" ;;
           esac

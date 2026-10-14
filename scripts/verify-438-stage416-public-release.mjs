@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {createHmac,webcrypto} from 'node:crypto';
+import {createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import vm from 'node:vm';
@@ -68,7 +68,6 @@ const stale=await call(claim);
 assert.equal(stale.status,'STALE');
 assert.deepEqual([markerWrites,signalWrites],afterResume,'older release cannot rebroadcast');
 
-globalThis.crypto=webcrypto;
 const base=1_700_090_000_000;
 const map=new Map();
 const storage={

@@ -1,3 +1,27 @@
+## CURRENT — PR #120 감사 FAIL 보완: same-device seq1 미확정 시 seq2 전송 차단 / QA PASS / 독립 재감사 대기 (2026-10-14 KST)
+
+- **직전 독립 감사 FAIL 대상:** `4140f8ff2123fd6f9870db2c00ea3b3c9a2c13af`. global orphan lease 보완은 PASS했지만, 같은 browser device에서 seq1(A곡) Callable 응답이 ambiguous한 동안 drain이 catch 후 seq2(B곡)를 계속 전송할 수 있어, seq2가 먼저 env device sequence를 올린 뒤 seq1 retry가 `STALE_OR_DUPLICATE`로 거절되어 서로 다른 곡 A가 유실될 수 있는 경로가 확인됨.
+- **핵심 수정:** Stage416 private registration drain을 **terminal-result 직렬화**로 변경. 같은 durable ordered drain에서 seq N은 `ACCEPTED / DUPLICATE_CONFIRMED / 명시적 terminal rejection` 중 하나가 확정되기 전 seq N+1을 네트워크로 보내지 않는다.
+- **ambiguous 처리:** 네트워크 오류, `PRIOR_WINDOW_NEEDS_SEAL` retry exhaustion, `STALE_OR_DUPLICATE`, unknown 오류는 fail-closed로 drain 즉시 중단. durable outbox와 같은 operationId/deviceSequence를 그대로 보존해 다음 recovery가 seq1부터 재시도한다.
+- **명시적 terminal rejection:** 현재 서버가 exact rejection으로 확정할 수 있는 `DEVICE_LIMIT / TRACK_LIMIT`만 terminal로 분류. 이 경우 exact local outbox operation을 먼저 제거·재검증하고 pre-click local membership/count로 rollback한 뒤에만 다음 sequence 진행. rejection persistence 실패 시 다음 sequence 전송 금지.
+- **정상 기능 보호:** same-track supersession, app410 frozen canonical path, app412/413/414, app416 intent/quarantine, 127/175/178/191/192/197/390 회귀 모두 보호. Stage416 general client flag는 계속 OFF.
+- **신규 코드:** `src/services/exploreLikePrivateRegistrationOrder416.mjs`의 순수 ordered drain helper를 실제 `drainStage416PrivateRegistrations416()`에 연결. transport는 terminal/recoverable failure를 구조화하되 `STALE_OR_DUPLICATE`는 accepted/rejected 어느 쪽으로도 추측하지 않음.
+- **신규 실행형 검증:** `scripts/verify-430-stage416-same-device-ambiguous-sequence.mjs`.
+  - seq1 A ambiguous failure → seq2 network call 0
+  - 동일 operationId seq1 retry → exact receipt 후 seq2 전송
+  - 서로 다른 A/B track 모두 생존
+  - STALE_OR_DUPLICATE fail-closed
+  - TRACK_LIMIT terminal rejection durable record 후에만 seq2 진행
+  - rejection persistence 실패 시 seq2 차단
+- **개발 QA candidate:** `e33715d7fba6bc847e76596266b2822eb0854eb3`.
+- **개발 QA Run:** `38519953280` **SUCCESS**.
+- **핵심 PASS:** `STAGE416_AMBIGUOUS_SEQ1_BLOCKS_SEQ2_NETWORK_SEND`, `STAGE416_SEQ1_RETRY_REUSES_OPERATION_THEN_SEQ2_SENDS`, `STAGE416_DIFFERENT_TRACK_SEQ1_SEQ2_BOTH_SURVIVE`, `STAGE416_STALE_OR_DUPLICATE_REMAINS_FAIL_CLOSED`, `STAGE416_FINAL_REJECTION_RECORDED_BEFORE_SEQ2`, `STAGE416_FAILED_REJECTION_PERSISTENCE_BLOCKS_SEQ2`.
+- **비용:** 정상 accepted W2 비변경, exact proven duplicate W0 유지. ordering fix 자체 page/update/re-entry IO 0. explicit terminal rejection에서만 기존 tentative intent cleanup + local rollback 수행; full scan/rebuild 없음.
+- **변경 없음:** Firebase/Functions/Cloudflare/Hosting 배포 0, shared user data 변경 0, D1/R2 schema/migration/backfill/delete 0, TEST/PRODUCTION 변경 0.
+- **현재 gate:** 새 exact HEAD 독립 GPT-6 재감사 PASS 전 PR #120 merge / PREVIEW Stage416 활성화 / Functions 배포 금지.
+
+---
+
 ## CURRENT — PR #120 핵심원인 보완: global-only orphan reservation lease / no-retry 회복 QA PASS / 독립 감사 대기 (2026-10-14 KST)
 
 - **직전 독립 감사 FAIL:** `33bf13666e27894d16cd1ef23d39077de75b52ae`. global version reservation 직후 Functions가 중단되고 같은 operation retry가 아예 오지 않으면, lower global-only reservation이 영구적으로 higher settlement를 막을 수 있는 구조적 차단점이 확인됨.

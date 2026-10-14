@@ -1,3 +1,26 @@
+## NEXT — PR #120 same-device ambiguous seq 보완본 독립 재감사만 진행 (2026-10-14 KST)
+
+- 현재 새 구현 금지. `gpt56/stage416-lost-click-fix` **latest exact HEAD만 독립 감사**한다.
+- 필수 핵심 재현:
+  1) same device seq1=A different track global reservation/network ambiguous
+  2) seq2=B already durable local outbox
+  3) 첫 drain에서 seq2 network send=0
+  4) recovery에서 same operationId seq1 재시도
+  5) seq1 ACCEPTED/DUPLICATE_CONFIRMED 뒤 seq2 전송
+  6) A/B 둘 다 최종 보존
+- 반드시 확인:
+  1) ambiguous error catch가 다음 row로 continue하지 않고 drain을 중단하는지.
+  2) Web Lock + durable sequence sort + ordered helper가 multi-tab에서도 동일하게 적용되는지.
+  3) STALE_OR_DUPLICATE를 terminal rejection으로 오인하지 않는지.
+  4) DEVICE_LIMIT/TRACK_LIMIT만 명시적 terminal rejection으로 처리하고, exact outbox rejection이 durable하게 기록/제거되기 전 seq N+1이 전송되지 않는지.
+  5) terminal rollback이 My Likes membership authority, public likeCount, app410 retained repair를 침범하지 않는지.
+  6) prior orphan lease 120s/no-retry cleanup, cross-env ordering, rejection rollback, PRIOR_WINDOW_NEEDS_SEAL 기존 PASS를 유지하는지.
+- 비용/회귀: accepted W2, exact proven duplicate W0, ordering fix page/update/re-entry IO 0, orphan cleanup W1 max, settlement bounded read 3/attempt, app410~416 및 127/175/178/191/192/197/390/412/413/414 보호.
+- PASS 전 PR merge, client Stage416 ON, PREVIEW Functions activation/deploy, 공개 5분 공동집계 후속 구현, TEST/PRODUCTION 승격 금지.
+- shared data 변경, D1/R2 schema migration/backfill/delete, destructive 작업 금지.
+
+---
+
 ## NEXT — PR #120 global-only orphan lease 보완본 독립 재감사만 진행 (2026-10-14 KST)
 
 - 현재 새 구현 금지. `gpt56/stage416-lost-click-fix`의 **latest exact HEAD만 독립 감사**한다.

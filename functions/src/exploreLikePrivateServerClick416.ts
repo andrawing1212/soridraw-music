@@ -11,6 +11,15 @@ export type ServerPrivateLikeClick416 = {
 };
 const UUID_416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validMinute416=(n:number)=>[1,3,5,10,20].includes(n);
+
+// A global reservation is only a short cross-environment ordering fence while
+// one authenticated Callable is materializing the exact click into an
+// environment RTDB window. Callables are explicitly capped at 60s; keep a
+// 120s fence so an in-flight request cannot be mistaken for an orphan.
+export const GLOBAL_RESERVATION_LEASE_MS_416=120_000;
+export const GLOBAL_RESERVATION_LEASE_REFRESH_FLOOR_MS_416=70_000;
+export const GLOBAL_RESERVATION_LEGACY_GRACE_MS_416=15*60_000;
+const GLOBAL_RESERVATION_MIN_EPOCH_MS_416=1_600_000_000_000;
 type Window416={id:string;minutes:number;openedAtMs:number;lastClickAtMs:number;revision:number};
 type Pending416={version?:number;deviceSeq?:Record<string,number>;
   window?:Window416|null;pending?:Record<string,{trackId:string;liked:boolean;
@@ -19,14 +28,36 @@ type Pending416={version?:number;deviceSeq?:Record<string,number>;
 type GlobalDeviceSnapshot416={
   deviceSequence:number;operationId:string;trackId:string;liked:boolean;version:number;
 };
-type GlobalDeviceReservation416=GlobalDeviceSnapshot416&{
-  // One-level predecessor lets an exact rejected reservation roll back without
-  // deleting an existing device's monotonic sequence history. null means this
-  // reservation created the device slot; undefined is legacy/ambiguous state.
+export type GlobalDeviceReservation416=GlobalDeviceSnapshot416&{
+  // One-level predecessor lets an exact rejected/orphan reservation roll back
+  // without deleting an existing device's monotonic sequence history. null
+  // means this reservation created the device slot; undefined is legacy state.
   previous?:GlobalDeviceSnapshot416|null;
+  // Trusted server lease. It is NOT acceptance authority; environment
+  // pending/sealed proof remains the only durable registration authority.
+  leaseUntilMs?:number;
+};
+export type ExpiredGlobalReservation416=GlobalDeviceSnapshot416&{
+  deviceId:string;leaseUntilMs:number;
 };
 type GlobalVersion416={version?:number;settledVersion?:number;
   devices?:Record<string,GlobalDeviceReservation416>};
+
+export function getGlobalReservationLeaseUntil416(
+ reservation:{version?:number;leaseUntilMs?:number},nowMs:number,
+):number{
+ if(!Number.isSafeInteger(nowMs)||nowMs<=0)throw Error('416_BAD_RESERVATION_LEASE_CLOCK');
+ const explicit=Number(reservation?.leaseUntilMs||0);
+ if(Number.isSafeInteger(explicit)&&explicit>0)return explicit;
+ const version=Number(reservation?.version||0);
+ // Backward-compatible grace for reservations created by the immediately
+ // preceding candidate, whose globally monotonic version was server epoch-ms.
+ // Synthetic/unknown legacy versions stay fail-closed forever.
+ if(Number.isSafeInteger(version)&&version>=GLOBAL_RESERVATION_MIN_EPOCH_MS_416&&
+    version<=nowMs+GLOBAL_RESERVATION_LEGACY_GRACE_MS_416)
+  return version+GLOBAL_RESERVATION_LEGACY_GRACE_MS_416;
+ return Number.MAX_SAFE_INTEGER;
+}
 
 // Cross-environment state allocates only a globally monotonic version. It is
 // NOT acceptance authority. An exact retry may reuse its reservation, but the
@@ -54,15 +85,24 @@ async function reserveGlobalVersion416(database:Database,uid:string,
    if(click.deviceSequence===prior.deviceSequence&&prior.operationId===click.operationId&&
       prior.trackId===click.trackId&&prior.liked===click.liked&&
       Number.isSafeInteger(prior.version)&&prior.version>0){
-    if(prior.version>minimumExclusiveVersion){
+    const reuseFloor=Math.max(minimumExclusiveVersion,settledVersion);
+    if(prior.version>reuseFloor){
      decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version,
        highWater:version,createdDevice:false};
-     return unchanged;
+     const leaseUntil=getGlobalReservationLeaseUntil416(prior,receivedAtMs);
+     if(leaseUntil-receivedAtMs>=GLOBAL_RESERVATION_LEASE_REFRESH_FLOOR_MS_416)
+      return unchanged;
+     // A genuine later retry refreshes only the short in-flight fence. Normal
+     // same-call authoritative retries never re-enter this allocator, so the
+     // common exact-duplicate path remains logical W0.
+     return {...state,devices:{...devices,[click.deviceId]:{
+      ...prior,leaseUntilMs:receivedAtMs+GLOBAL_RESERVATION_LEASE_MS_416,
+     }}};
     }
     // Another request may have committed a newer environment version after
     // this exact operation reserved its first global version. Refresh only the
     // same operation reservation; never mint a new logical click.
-    const rebased=Math.max(version+1,minimumExclusiveVersion+1,receivedAtMs);
+    const rebased=Math.max(version+1,reuseFloor+1,receivedAtMs);
     if(!Number.isSafeInteger(rebased)||rebased<=version)
      throw Error('416_GLOBAL_VERSION_EXHAUSTED');
     decision={reserved:true,reason:'GLOBAL_RESERVATION_REBASED',version:rebased,
@@ -70,6 +110,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
     return {...state,version:rebased,devices:{...devices,[click.deviceId]:{
      deviceSequence:click.deviceSequence,operationId:click.operationId,
      trackId:click.trackId,liked:click.liked,version:rebased,
+     leaseUntilMs:receivedAtMs+GLOBAL_RESERVATION_LEASE_MS_416,
      ...(Object.prototype.hasOwnProperty.call(prior,'previous')
        ?{previous:prior.previous??null}:{}),
     }}};
@@ -92,6 +133,7 @@ async function reserveGlobalVersion416(database:Database,uid:string,
   return {...state,version:next,devices:{...devices,[click.deviceId]:{
    deviceSequence:click.deviceSequence,operationId:click.operationId,
    trackId:click.trackId,liked:click.liked,version:next,previous,
+   leaseUntilMs:receivedAtMs+GLOBAL_RESERVATION_LEASE_MS_416,
   }}};
  },undefined,false);
  if(!result.committed&&decision.reason==='UNDETERMINED')
@@ -145,6 +187,69 @@ async function releaseRejectedReservation416(
  if(!result.committed&&released)
   throw Error('416_GLOBAL_REJECTED_RESERVATION_RELEASE_FAILED');
  return released;
+}
+
+// Due-settlement orphan repair. The coordinator has already proven these
+// exact reservations are absent from every active environment window/seal and
+// their short Callable lease has expired. One UID transaction repairs all
+// candidates (max 32 devices), so crash recovery is W1 max rather than WN.
+export async function cleanupExpiredGlobalReservations416(
+ database:Database,uid:string,globalVersionRoot:string,nowMs:number,
+ candidates:ExpiredGlobalReservation416[],
+):Promise<{resolved:boolean;changed:boolean}>{
+ if(!uid||uid.length>128||!globalVersionRoot||globalVersionRoot.length>160||
+    !Number.isSafeInteger(nowMs)||nowMs<=0||!Array.isArray(candidates)||
+    candidates.length>32)throw Error('416_BAD_EXPIRED_RESERVATION_CLEANUP');
+ if(!candidates.length)return {resolved:true,changed:false};
+ let resolved=true,changed=false;
+ const result=await database.ref(globalVersionRoot+'/'+uid).transaction((raw:unknown)=>{
+  const unchanged=raw===undefined?null:raw;
+  resolved=true;changed=false;
+  const state=(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{}) as GlobalVersion416;
+  const version=Number(state.version||0);
+  const settledVersion=Number(state.settledVersion||0);
+  const devices=state.devices||{};
+  if(!Number.isSafeInteger(version)||version<0||
+     !Number.isSafeInteger(settledVersion)||settledVersion<0||settledVersion>version||
+     !devices||typeof devices!=='object'||Array.isArray(devices))
+   throw Error('416_GLOBAL_EXPIRED_RESERVATION_STATE_CORRUPT');
+  const nextDevices={...devices};
+  for(const candidate of candidates){
+   if(!candidate||!UUID_416.test(candidate.deviceId)||!UUID_416.test(candidate.operationId)||
+      !candidate.trackId||candidate.trackId.length>512||typeof candidate.liked!=='boolean'||
+      !Number.isSafeInteger(candidate.deviceSequence)||candidate.deviceSequence<=0||
+      !Number.isSafeInteger(candidate.version)||candidate.version<=0||
+      !Number.isSafeInteger(candidate.leaseUntilMs)||candidate.leaseUntilMs<=0)
+    throw Error('416_BAD_EXPIRED_RESERVATION_CANDIDATE');
+   const prior=nextDevices[candidate.deviceId];
+   if(!prior||prior.deviceSequence!==candidate.deviceSequence||
+      prior.operationId!==candidate.operationId||prior.trackId!==candidate.trackId||
+      prior.liked!==candidate.liked||prior.version!==candidate.version)continue;
+   if(prior.version<=settledVersion)continue;
+   const liveUntil=getGlobalReservationLeaseUntil416(prior,nowMs);
+   if(liveUntil>nowMs){resolved=false;continue;}
+   // Legacy entries without predecessor metadata can be ignored as expired
+   // ordering fences, but cannot be destructively guessed/rewritten.
+   if(!Object.prototype.hasOwnProperty.call(prior,'previous'))continue;
+   const previous=prior.previous;
+   if(previous===null){
+    delete nextDevices[candidate.deviceId];
+   }else{
+    if(!previous||!Number.isSafeInteger(previous.deviceSequence)||previous.deviceSequence<=0||
+       previous.deviceSequence>=candidate.deviceSequence||
+       !UUID_416.test(previous.operationId)||!previous.trackId||previous.trackId.length>512||
+       typeof previous.liked!=='boolean'||!Number.isSafeInteger(previous.version)||
+       previous.version<=0||previous.version>=candidate.version)
+     throw Error('416_GLOBAL_PREVIOUS_RESERVATION_CORRUPT');
+    nextDevices[candidate.deviceId]={...previous};
+   }
+   changed=true;
+  }
+  return changed?{...state,devices:nextDevices}:unchanged;
+ },undefined,false);
+ if(!result.committed&&changed)
+  throw Error('416_GLOBAL_EXPIRED_RESERVATION_CLEANUP_FAILED');
+ return {resolved,changed};
 }
 
 export async function recordUserPrivateClick416(

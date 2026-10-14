@@ -86,7 +86,11 @@ async function reserveGlobalVersion416(database:Database,uid:string,
    if(click.deviceSequence===prior.deviceSequence&&prior.operationId===click.operationId&&
       prior.trackId===click.trackId&&prior.liked===click.liked&&
       Number.isSafeInteger(prior.version)&&prior.version>0){
-    const reuseFloor=Math.max(minimumExclusiveVersion,settledVersion);
+    // settledVersion is a BATCH fence, not a proof that every lower row
+    // version has disappeared. A lower exact row may still be materialized
+    // inside a newer environment batch. Reuse the original reservation here;
+    // environment pending/sealed proof remains the only duplicate authority.
+    const reuseFloor=minimumExclusiveVersion;
     if(prior.version>reuseFloor){
      decision={reserved:true,reason:'GLOBAL_RESERVATION_REUSED',version:prior.version,
        highWater:version,createdDevice:false};

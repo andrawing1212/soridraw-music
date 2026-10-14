@@ -208,11 +208,16 @@ export async function advanceGlobalSettledVersion416(
   const prior=Number(state.settledVersion||0);
   const devices=state.devices||{};
   const settledDevices=state.settledDevices||{};
-  if(!Number.isSafeInteger(version)||version<settledVersion||
+  if(!Number.isSafeInteger(version)||version<0||
      !Number.isSafeInteger(prior)||prior<0||prior>version||
      !devices||typeof devices!=='object'||Array.isArray(devices)||
      !settledDevices||typeof settledDevices!=='object'||Array.isArray(settledDevices))
     throw Error('416_GLOBAL_SETTLEMENT_STATE_CORRUPT');
+  // RTDB transactions may invoke the callback first with a process-local stale
+  // cache. A lower local high-water is not authoritative corruption. Return
+  // the exact value as a no-op probe so RTDB compares it with the server and
+  // re-runs this callback if the server owns the newer reservation.
+  if(version<settledVersion)return unchanged;
   if(prior>settledVersion)
     throw Error('416_GLOBAL_SETTLEMENT_VERSION_REGRESSION');
 
@@ -254,6 +259,16 @@ export async function advanceGlobalSettledVersion416(
   return {...state,settledVersion:Math.max(prior,settledVersion),
     settledDevices:nextSettledDevices};
  },undefined,false);
+ const finalState=(result.snapshot.val()&&typeof result.snapshot.val()==='object'&&
+   !Array.isArray(result.snapshot.val())
+   ?result.snapshot.val():{}) as GlobalSettlementState416;
+ const finalVersion=Number(finalState.version||0);
+ const finalSettled=Number(finalState.settledVersion||0);
+ // If the server truly has not reserved this seal version, never ACK/clear the
+ // private seal after a stale-cache no-op. The Cloud Task remains retryable.
+ if(!Number.isSafeInteger(finalVersion)||finalVersion<settledVersion||
+    !Number.isSafeInteger(finalSettled)||finalSettled<settledVersion)
+  throw Error('416_GLOBAL_SETTLEMENT_TARGET_UNAVAILABLE');
  return advanced;
 }
 

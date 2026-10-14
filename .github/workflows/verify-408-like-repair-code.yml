@@ -40,6 +40,7 @@ on:
       - 'scripts/verify-416-server-only-click.mjs'
       - 'functions/src/exploreLikePrivateHandoff416.ts'
       - 'functions/src/exploreLikePrivateCommit416.ts'
+      - 'scripts/verify-432-stage416-settlement-stale-cache.mjs'
       - 'functions/src/exploreLikePrivateDeadline416.ts'
       - 'functions/src/exploreLikePrivateTask416.ts'
       - 'functions/src/exploreLikePrivateFinal416.ts'
@@ -206,6 +207,7 @@ jobs:
           node scripts/verify-416-private-callable-master.mjs
           node scripts/verify-416-private-handoff-atomic.mjs
           node scripts/verify-416-cross-env-ordering.mjs
+          node scripts/verify-432-stage416-settlement-stale-cache.mjs
           node scripts/verify-416-private-final-publisher.mjs
           node scripts/verify-416-public-coalescing-gap.mjs
           node scripts/verify-416-finalize-e2e.mjs

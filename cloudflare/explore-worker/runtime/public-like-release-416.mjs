@@ -44,11 +44,18 @@ export async function sendPublicLikeRelease416({
 export async function releaseDuePublicLikeWindow416({
  db,r2,storage,releaseEndpoint,secret,nowMs=Date.now(),http=fetch,
  materialize=materializePublicLikeProjection416,
+ expectedWindowId='',expectedDeadlineAtMs=0,
 }={}){
  if(!storage||!db||!r2||!Number.isSafeInteger(nowMs)||nowMs<=0)
    throw Error('416_PUBLIC_RELEASE_INPUT_INVALID');
  const state=await readPublicLikeReleaseState416(storage,nowMs);
  if(!state.exists)return {status:'EMPTY',cleared:false};
+ if(expectedWindowId&&(
+    String(state.window?.windowId||'')!==String(expectedWindowId)||
+    Number(state.window?.deadlineAtMs||0)!==Number(expectedDeadlineAtMs||0)))
+   return {status:'STALE_TASK',cleared:false,
+     windowId:String(state.window?.windowId||''),
+     deadlineAtMs:Number(state.window?.deadlineAtMs||0)};
  if(!state.due)return {status:'NOT_DUE',cleared:false,
    deadlineAtMs:Number(state.window?.deadlineAtMs||0)};
  if(state.blockedUnacked)throw Error('416_PUBLIC_RELEASE_REGISTRATION_PENDING');

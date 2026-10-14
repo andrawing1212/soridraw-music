@@ -39,12 +39,13 @@ export const publicLikeManifestKey416=slot=>{
 export async function preparePublicLikeManifest416(
  r2,rows,windowId,deadlineAtMs,
 ){
- if(!r2?.get||!r2?.put||!UUID416.test(String(windowId||'')))
+ if(!UUID416.test(String(windowId||'')))
    throw Error('416_PUBLIC_MANIFEST_BINDING_INVALID');
  const normalized=cleanRows416(rows);
  const inlineRows=normalized.slice(0,PUBLIC_LIKE_INLINE_MAX_416);
  if(normalized.length<=PUBLIC_LIKE_INLINE_MAX_416)
    return {inlineRows,manifest416:null,r2Reads:0,r2Writes:0};
+ if(!r2?.get||!r2?.put)throw Error('416_PUBLIC_MANIFEST_R2_UNAVAILABLE');
 
  const digest=await digest416(JSON.stringify(normalized));
  const slot=publicLikeManifestSlot416(deadlineAtMs);

@@ -99,6 +99,69 @@ export function publicLikeReleasePlan416(window,nowMs){
 
 
 export const PUBLIC_LIKE_WINDOW_KEY_416='stage416/public/current';
+export const PUBLIC_LIKE_PENDING_OPEN_KEY_416='stage416/public/pending-open';
+const PUBLIC_LIKE_PENDING_OPEN_MAX_TRACKS_416=4096;
+
+const normalizePendingIds416=(ids)=>{
+ if(!Array.isArray(ids)||ids.length<1||ids.length>PUBLIC_LIKE_PENDING_OPEN_MAX_TRACKS_416)
+   throw Error('416_PUBLIC_PENDING_TRACKS_INVALID');
+ const out=[],seen=new Set();
+ for(const raw of ids){
+   const id=String(raw||'').trim();
+   if(!id||id.length>512)throw Error('416_PUBLIC_PENDING_TRACK_INVALID');
+   if(!seen.has(id)){seen.add(id);out.push(id);}
+ }
+ return out.sort((a,b)=>a.localeCompare(b));
+};
+
+export async function stagePublicLikeOpenPayload416(storage,trackIds,eventAtMs=Date.now()){
+ if(!storage?.get||!storage?.put||!Number.isSafeInteger(eventAtMs)||eventAtMs<=0)
+   throw Error('416_PUBLIC_PENDING_STORAGE_UNAVAILABLE');
+ const incoming=normalizePendingIds416(trackIds);
+ const prior=await storage.get(PUBLIC_LIKE_PENDING_OPEN_KEY_416);
+ const priorIds=Array.isArray(prior?.trackIds)?prior.trackIds:[];
+ const merged=normalizePendingIds416([...priorIds,...incoming]);
+ if(Array.isArray(prior?.trackIds)&&prior.trackIds.length===merged.length&&
+    prior.trackIds.every((id,index)=>id===merged[index]))
+   return {staged:true,unchanged:true,trackCount:merged.length};
+ await storage.put(PUBLIC_LIKE_PENDING_OPEN_KEY_416,{
+   schemaVersion:1,trackIds:merged,
+   eventAtMs:Math.min(
+     Number.isSafeInteger(prior?.eventAtMs)&&prior.eventAtMs>0?prior.eventAtMs:eventAtMs,
+     eventAtMs),
+ });
+ return {staged:true,unchanged:false,trackCount:merged.length};
+}
+
+export async function joinPublicLikeChangedTracks416(storage,trackIds,eventAtMs=Date.now()){
+ if(!storage?.get||!storage?.put||!Number.isSafeInteger(eventAtMs)||eventAtMs<=0)
+   throw Error('416_PUBLIC_JOIN_STORAGE_UNAVAILABLE');
+ const ids=normalizePendingIds416(trackIds);
+ const window=await storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+ if(!window?.windowId||!UUID416.test(String(window.windowId||'')))
+   return {joined:false,reason:'NO_WINDOW',trackCount:0};
+ const entries={};
+ for(const trackId of ids)entries[
+   'stage416/public/window/'+window.windowId+'/track/'+encodeURIComponent(trackId)
+ ]={schemaVersion:1,trackId,eventAtMs};
+ await storage.put(entries);
+ return {joined:true,windowId:String(window.windowId),trackCount:ids.length};
+}
+
+export async function mergePendingPublicLikeOpen416(storage,eventAtMs=Date.now()){
+ if(!storage?.get||!storage?.delete)
+   throw Error('416_PUBLIC_PENDING_STORAGE_UNAVAILABLE');
+ const pending=await storage.get(PUBLIC_LIKE_PENDING_OPEN_KEY_416);
+ const ids=Array.isArray(pending?.trackIds)?pending.trackIds:[];
+ if(!ids.length)return {merged:false,trackCount:0};
+ const joined=await joinPublicLikeChangedTracks416(
+   storage,ids,Number.isSafeInteger(pending?.eventAtMs)&&pending.eventAtMs>0
+     ?pending.eventAtMs:eventAtMs);
+ if(!joined.joined)return {merged:false,trackCount:ids.length};
+ await storage.delete(PUBLIC_LIKE_PENDING_OPEN_KEY_416);
+ return {merged:true,trackCount:ids.length,windowId:joined.windowId};
+}
+
 const eventFingerprint416=(event)=>JSON.stringify({
  eventAtMs:event.eventAtMs,windowCandidateId:event.windowCandidateId,
  trackIds:event.trackIds,

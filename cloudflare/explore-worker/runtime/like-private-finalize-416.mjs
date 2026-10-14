@@ -71,20 +71,33 @@ async function persistPersonal416(r2,uid,version,batchIds,rows,nowMs){
    if(prev>version)throw Error('416_FINAL_PERSONAL_R2_STALE');
    if(prev===version){
      if(prior.privateLikeDigest416!==digest)throw Error('416_FINAL_PERSONAL_R2_CONFLICT');
-     return {persisted:true,unchanged:true,digest};
+     const changed=Array.isArray(prior.privateLikeChangedTrackIds416)
+       ?prior.privateLikeChangedTrackIds416:[];
+     const allowed=new Set(rows.map(x=>x.trackId));
+     if(changed.length>rows.length||new Set(changed).size!==changed.length||
+        changed.some(id=>typeof id!=='string'||!allowed.has(id)))
+       throw Error('416_FINAL_PERSONAL_R2_CHANGED_IDS_BAD');
+     return {persisted:true,unchanged:true,digest,changedTrackIds:[...changed]};
    }
    const set=new Set(ids);
-   for(const row of rows){if(row.liked)set.add(row.trackId);else set.delete(row.trackId);}
+   const changedTrackIds=[];
+   for(const row of rows){
+     const before=set.has(row.trackId);
+     if(before!==row.liked)changedTrackIds.push(row.trackId);
+     if(row.liked)set.add(row.trackId);else set.delete(row.trackId);
+   }
    if(set.size>2000)throw Error('416_FINAL_PERSONAL_R2_CAPACITY');
    const next={...prior,likedTrackIds:[...set],exactLikeCount156:set.size,
-     privateLikeVersion416:version,privateLikeDigest416:digest,updatedAt:nowMs};
+     privateLikeVersion416:version,privateLikeDigest416:digest,
+     privateLikeChangedTrackIds416:changedTrackIds,updatedAt:nowMs};
    const stored=await r2.put(key,JSON.stringify(next),{
      onlyIf:{etagMatches:obj.etag},
      httpMetadata:{contentType:'application/json; charset=utf-8'},
      customMetadata:{...(obj.customMetadata||{}),
        soridrawSharedLikes:'416-final',privateLikeVersion416:String(version)},
    });
-   if(stored)return {persisted:true,unchanged:false,digest};
+   if(stored)return {persisted:true,unchanged:false,digest,
+     changedTrackIds:[...changedTrackIds]};
  }
  throw Error('416_FINAL_PERSONAL_R2_CAS_EXHAUSTED');
 }
@@ -117,11 +130,15 @@ export async function finalizePrivateHandoff416({
     nowMs<=0||!validRows416(rows))
    throw Error('416_FINAL_INPUT_INVALID');
  const finalRows=await canonicalRows416(db,uid,rows,batchIds);
- await persistPersonal416(r2,uid,version,batchIds,finalRows,nowMs);
+ const personal=await persistPersonal416(r2,uid,version,batchIds,finalRows,nowMs);
+ const changedTrackIds=Array.isArray(personal?.changedTrackIds)
+   ?personal.changedTrackIds:[];
  const claim={uid,windowId,version,signedAtMs:nowMs,
    canonicalD1:'settled',canonicalProof:'atomic-drain-batch-418',
    personalLikeSnapshot:'changed-track-r2',batchIds,
-   settledBatchIds:[...batchIds],rows:finalRows};
+   settledBatchIds:[...batchIds],rows:finalRows,
+   changedTrackIds};
  const delivered=await sendFinal416(finalEndpoint,secret,claim,http);
- return {settled:true,receiptStatus:delivered.status,rows:finalRows};
+ return {settled:true,receiptStatus:delivered.status,rows:finalRows,
+   changedTrackIds};
 }

@@ -1,3 +1,22 @@
+## 2026-10-15 — Stage416 PREVIEW public Functions 2/2 live / HARD OFF verified
+
+- Public Task create: `stage416ReleasePublicWindowCandidate(us-central1)`, Run `38688103686`.
+- Public receipt create: `publicLikeRelease416Candidate(asia-northeast3)`, Run `38692609397` attempt 3. Function create succeeded; Firebase CLI final exit 1 only because asia-northeast3 Artifact Registry cleanup policy was absent.
+- Inventory after receipt create: protected existing Functions changes = 0, added Function = receipt only, total expected 39.
+- Final read-only live Run `38694282662`: **SUCCESS**.
+  - `416_PUBLIC_FUNCTION_COUNT=39`
+  - `416_PUBLIC_TASK_AND_RECEIPT_ACTIVE=PASS`
+  - `416_PUBLIC_RECEIPT_HTTP_503_HARD_OFF=PASS`
+  - `416_PUBLIC_SOURCE_GATES_HARD_OFF=PASS`
+  - `416_PUBLIC_TASK_DISPATCH_REQUESTS=0`
+  - `FUNCTIONS_DEPLOY=0`
+  - `SHARED_DATA_CHANGE=0`
+- D1/RTDB/R2/Rules/Hosting/Worker/user data: unchanged.
+- TEST/PRODUCTION: unchanged.
+- Known non-blocking ops item: set a deliberate Artifact Registry cleanup/retention policy later; do not use release-time `--force` implicitly.
+
+---
+
 ## Stage416 public Task live create + eventFilters comparator correction (2026-10-15 KST)
 
 - PR #121 / merge `a6f52075...`: `stage416ReleasePublicWindowCandidate` successfully created in us-central1, Run `38688103686`. Existing baseline 37, exact product/HMAC preflight PASS.

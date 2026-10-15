@@ -1,5 +1,7 @@
 name: SORIDRAW 408 Targeted Like Repair Quality
 on:
+  pull_request:
+    branches: [preview]
   push:
     branches: [preview]
     paths:

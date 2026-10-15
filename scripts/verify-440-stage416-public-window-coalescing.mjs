@@ -135,11 +135,12 @@ const workerJoin416=async(_storage,ids,_at,minutes)=>{
 };
 const workerPending416=async()=>{pendingCalls416++;return {staged:true};};
 const makeWorkerRun416=(enabled,worker=workerAggregate416)=>new Function(
-  'baseWorker','STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE','PUBLIC_LIKE_WINDOW_KEY_416',
+  'baseWorker','STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE',
+  'COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448','PUBLIC_LIKE_WINDOW_KEY_416',
   'joinPublicLikeChangedTracks416','stagePublicLikeOpenPayload416',
   'repairSharedPublicLikeCounts191',
   'return ({'+aggregateMethod416+'}).runAggregate194;',
-)(worker,enabled,PUBLIC_LIKE_WINDOW_KEY_416,workerJoin416,
+)(worker,enabled,false,PUBLIC_LIKE_WINDOW_KEY_416,workerJoin416,
   workerPending416,workerRepair416);
 const workerContext416={env:{},ctx:{storage:{get:async key=>{
   assert.equal(key,PUBLIC_LIKE_WINDOW_KEY_416);readCalls416++;

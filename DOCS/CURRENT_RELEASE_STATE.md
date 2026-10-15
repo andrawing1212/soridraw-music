@@ -1,3 +1,15 @@
+## CURRENT — app418 PREVIEW live wiring fixed / A→B real-device retest next (2026-10-16 KST)
+
+- **preview HEAD before docs checkpoint:** `8b3bbe0e58b2ce4d558f04edb8e68e79cb3ca653`.
+- **First real-device acceptance:** FAIL — with public window set to 1 minute, Account A like did not auto-refresh Account B.
+- **Root cause:** app418 Worker release path referenced `SORIDRAW_PUBLIC_RELEASE416_ENDPOINT`, but the PREVIEW Worker had no endpoint binding and `publicLikeRelease416Candidate` had not been deployed. Public-window settlement could not complete the RTDB changed-track invalidation needed by other viewers.
+- **Fix:** PR #164 added the PREVIEW Worker endpoint binding and a single-Function PREVIEW deploy path; PR #165 fixed CI verifier dependencies. `publicLikeRelease416Candidate` Run `38790526729` SUCCESS and ACTIVE with HMAC secret binding. Worker binding release Run `38791091574` SUCCESS; live Worker version `1fde33ed-69fa-412e-876a-3c7d2c9ad330`; log confirms `SORIDRAW_PUBLIC_RELEASE416_ENDPOINT` binding present, Feed/Profile smoke PASS, TEST/PRODUCTION Workers unchanged.
+- **Important timing correction:** normal app410/app418 personal likes do **not** use the Master left-side `privateMinutes` window. `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false` and `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false`; the proven normal personal path remains the existing fast/legacy intake. The app418 shared public cadence uses the right-side `publicMinutes` setting.
+- **Data/safety:** no D1 schema change, migration/backfill/delete, shared RTDB Rules deployment, Hosting change, TEST change or PRODUCTION change in this wiring fix.
+- **Next:** user repeats the same A→B PREVIEW test with only the right-side public setting at 1 minute. B must update automatically after the common public window closes without page/tab navigation. Do not promote to TEST until this passes.
+
+---
+
 ## CURRENT — app418 PREVIEW live / user acceptance next (2026-10-16 KST)
 
 - **preview release commit before docs checkpoint:** `9a2958e929b52993e6f2c3a4338458c69a4aff26`.

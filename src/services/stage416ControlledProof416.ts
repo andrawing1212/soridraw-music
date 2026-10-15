@@ -342,9 +342,10 @@ export const runStage416ControlledPublicProof416 = async (
   }
 
   // Master authorization is confirmed by the already-deployed server callable
-  // BEFORE creating a real unlike operation. Public timing must be exactly 5m.
+  // BEFORE creating a real unlike operation. Both timing values must be 5m;
+  // the actual public hold is now the single private 5m window.
   const { privateMinutes, publicMinutes } = await requireMaster416();
-  if (publicMinutes !== 5) {
+  if (privateMinutes !== 5 || publicMinutes !== 5) {
     throw new Error('STAGE416_PUBLIC_PROOF_REQUIRES_5_MINUTES');
   }
   const { proof, reused, canonicalConfirmed } = await preparePublicProof416(uid);

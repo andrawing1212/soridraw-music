@@ -1,3 +1,12 @@
+## CURRENT — Stage416 #147 candidate CI PASS but PREVIEW release BLOCKED (2026-10-15 KST)
+
+- **Release head:** preview `307b6fab4765cf82dc6c8c027ddb2d7a9a42c1df` (unchanged while this docs-only update is merged). Implementation lives only in DRAFT PR #147, branch `fix/stage416-mixed-track-public-correctness`; quality-tested exact source commit `be4a0d2860f2ff8b405213fe3030f81a9635a144`, documented final branch HEAD `d2b850d11fd7c6493792ad37a4e8a8a8275f6008`.
+- **Quality:** [Run 38740570418](https://github.com/andrawing1212/soridraw-music/actions/runs/38740570418) SUCCESS including 446 same-song Master/ordinary public=11 and 191 recovery=1, SQLite 447 due public=10/atomic retry, legacy 156/191, TS/Build/Firebase Functions TS, app410 protection. Both private and public timing values 1/3/5/10/20min independently preserved.
+- **STOP:** Master signed net delta 446 journal is additive CANDIDATE ONLY, not migrated. Worker main/production reference source still has unmasked 191 raw canonical count (live deployed versions not yet verified); with shared canonical D1/R2, other environment may leak held Master changes early. 446 journal adds D1 write(s) and due DELETE; W2 cost NOT measured/proven. **No independent release audit PASS, no user permission for shared table migration, no PREVIEW activation.** TEST/PRODUCTION code/data unaffected.
+- **Next safe step:** independent read-only cross-env actual Worker and cost compatibility audit; verify Stage416 exact branch before considering release. Never self-approve migration or activate any Worker/Functions from green code CI alone.
+
+---
+
 ## CURRENT — Stage416 second independent audit FAIL / PREVIEW activation blocked (2026-10-15 KST)
 
 - **최종 감사 결과:** 제품 `142667f24a70f6c8597c9dfe7250a4072a0d1860`은 191 복구 직접 조기 공개 차단은 PASS, 그러나 (1) Master와 ordinary가 **같은 곡**에서 각각 -1/+1일 때 ordinary 공개 결과 **11 대신 10** (Master 변경 조기 노출), (2) Stage416 ON이면 ordinary 실패 R2의 191 복구까지 전역 차단되어 **1회 필요/0회 실행**. 독립 감사 최종 **FAIL**. 기존 CI PASS는 이 혼합 상황을 다루지 않았음.

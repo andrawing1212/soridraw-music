@@ -34,6 +34,8 @@ assert.match(wf,/privateLikeFinalReceipt416Candidate[\s\S]*?exploreLikePrivateFi
 assert.match(wf,/requirePreviewMaster416/);
 assert.match(wf,/await requirePreviewMaster416\(request\)/);
 assert.match(wf,/STAGE416_ENV_INDEPENDENT_SINGLE_FUNCTION_EXPORT=PASS/);
+assert.match(wf,/node scripts\/verify-444-stage416-master-public-e2e\.mjs/);
+assert.match(wf,/416_ACTIVATION_EXACT_PRODUCT_SOURCE=PASS/);
 
 assert.match(inv,/audited_update_only/);
 assert.match(inv,/AUDITED_UPDATE_TARGETS_416/);

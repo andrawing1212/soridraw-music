@@ -24,43 +24,26 @@ const safeFields416=fn=>JSON.stringify({
 });
 export function compareInventory416(before,after,target,mode){
   const old=parseInventory416(before),now=parseInventory416(after);
-  assert.ok(['initial_only','verify_existing'].includes(mode),'416_FUNCTION_RECOVERY_MODE_INVALID');
+  assert.equal(mode,'initial_only','416_UNVERIFIED_RECOVERY_MODE_REFUSED');
   assert.ok(['stage416ReleasePublicWindowCandidate','publicLikeRelease416Candidate'].includes(target),
     '416_UNAPPROVED_FUNCTION_TARGET');
   for(const [key,oldFn] of old){
     const current=now.get(key);
     assert.ok(current,'416_UNRELATED_FUNCTION_DELETED:'+key);
-    if(shortName416(key)===target && mode==='verify_existing')continue;
+    // Existing function identity must be rejected before new deployment.
     assert.equal(safeFields416(current),safeFields416(oldFn),
       '416_UNRELATED_FUNCTION_CHANGED:'+key);
   }
   const added=[...now.keys()].filter(key=>!old.has(key));
-  if(mode==='initial_only'){
-    assert.ok(![...old.keys()].some(key=>shortName416(key)===target),
-      '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY');
-    assert.equal(added.length,1,'416_FUNCTION_ADDED_SET_MISMATCH');
-    assert.equal(shortName416(added[0]),target,'416_UNRELATED_FUNCTION_ADDED');
-  }else{
-    assert.equal(added.length,0,'416_RECOVERY_MUTATED_FUNCTION_SET');
-    const existing=[...old.keys()].filter(key=>shortName416(key)===target);
-    assert.equal(existing.length,1,'416_RECOVERY_CANDIDATE_AMBIGUOUS');
-    assert.equal(safeFields416(now.get(existing[0])),safeFields416(old.get(existing[0])),
-      '416_RECOVERY_CANDIDATE_CHANGED');
-  }
-  return {protectedCount:old.size-(mode==='verify_existing'?1:0),target};
+  assert.ok(![...old.keys()].some(key=>shortName416(key)===target),
+    '416_PUBLIC_FUNCTION_ALREADY_PRESENT_REFUSE_INITIAL_DEPLOY');
+  assert.equal(added.length,1,'416_FUNCTION_ADDED_SET_MISMATCH');
+  assert.equal(shortName416(added[0]),target,'416_UNRELATED_FUNCTION_ADDED');
+  return {protectedCount:old.size,target};
 }
-export function validateAdopt416(fn,target,region){
-  assert.ok(fn&&typeof fn==='object'&&!Array.isArray(fn));
-  assert.ok(['stage416ReleasePublicWindowCandidate','publicLikeRelease416Candidate'].includes(target));
-  assert.equal(shortName416(fn.name),target,'416_RECOVERY_WRONG_CANDIDATE');
-  assert.ok(String(fn.name).includes('/locations/'+region+'/functions/'),
-    '416_RECOVERY_WRONG_REGION');
-  assert.equal(fn.state,'ACTIVE','416_RECOVERY_CANDIDATE_NOT_ACTIVE');
-  assert.equal(fn.buildConfig?.runtime,'nodejs22','416_RECOVERY_RUNTIME_INVALID');
-  assert.ok(fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
-    String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')),
-    '416_RECOVERY_SECRET_NOT_BOUND');
-  return true;
+export function validateAdopt416(_fn,_target,_region){
+  // Metadata cannot attest deployed HARD OFF source. Never adopt blindly.
+  throw Error('416_RECOVERY_SOURCE_NOT_ATTESTED_STOP');
 }
 export function diagnoseFailure416(before,after,target){
   const old=parseInventory416(before),now=parseInventory416(after);
@@ -83,7 +66,7 @@ if(args[0]){
     console.log('416_ALL_EXISTING_FUNCTIONS_UNCHANGED=PASS count='+ok.protectedCount);
   }else if(mode==='adopt'){
     validateAdopt416(read(first),second,third);
-    console.log('416_PUBLIC_EXISTING_FUNCTION_ADOPTION_READONLY=PASS');
+    throw Error('416_PUBLIC_UNVERIFIED_ADOPTION_DENIED');
   }else if(mode==='diagnose'){
     console.log('416_PUBLIC_PARTIAL_FAILURE_STATE='+JSON.stringify(
       diagnoseFailure416(read(first),read(second),third)));
@@ -100,11 +83,12 @@ if(args[0]){
       'stage416ReleasePublicWindowCandidate','initial_only'),/CHANGED/);
     assert.throws(()=>compareInventory416(orig,[...orig,target,mk('other')],
       'stage416ReleasePublicWindowCandidate','initial_only'),/ADDED_SET/);
-    assert.equal(compareInventory416([...orig,target],[...orig,target],
-      'stage416ReleasePublicWindowCandidate','verify_existing').protectedCount,2);
-    assert.equal(validateAdopt416(target,'stage416ReleasePublicWindowCandidate','us-central1'),true);
-    assert.throws(()=>validateAdopt416({...target,state:'FAILED'},
-      'stage416ReleasePublicWindowCandidate','us-central1'),/NOT_ACTIVE/);
+    assert.throws(()=>compareInventory416([...orig,target],[...orig,target],
+      'stage416ReleasePublicWindowCandidate','verify_existing'),/UNVERIFIED_RECOVERY_MODE_REFUSED/);
+    assert.throws(()=>validateAdopt416(target,'stage416ReleasePublicWindowCandidate','us-central1'),
+      /RECOVERY_SOURCE_NOT_ATTESTED_STOP/);
+    assert.throws(()=>validateAdopt416({...target,state:'ACTIVE',deployedSource:'DIFFERENT_CODE'},
+      'stage416ReleasePublicWindowCandidate','us-central1'),/RECOVERY_SOURCE_NOT_ATTESTED_STOP/);
     console.log('416_ALL_FUNCTIONS_INVENTORY_ADD_DELETE_DRIFT_RECOVERY=PASS');
   }else throw Error('416_UNKNOWN_FUNCTION_INVENTORY_MODE');
 }

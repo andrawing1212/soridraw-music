@@ -1,3 +1,13 @@
+## NEXT — Stage416 446 exact-SHA cross-environment safety/cost audit before preview release (2026-10-15 KST)
+
+- **Target:** DRAFT PR #147 on `fix/stage416-mixed-track-public-correctness`; tested code `be4a0d2860f2ff8b405213fe3030f81a9635a144`, CI [38740570418 SUCCESS](https://github.com/andrawing1212/soridraw-music/actions/runs/38740570418). User independent time settings preserved.
+- **Independently validate** all shared canonical `track_stats.like_count` public readers/writers (including current LIVE TEST and PRODUCTION 075/191/156/056, Explore Feed, public profile, direct API/Edge) cannot expose signed Master delta before configured public deadline, despite same D1. Direct one PREVIEW Worker code path PASS does NOT prove global secrecy.
+- **Cost gate:** compare physical changed-track write count for D1 signed 069 drain + 446 journal insert + 446 due delete; quantify each statement/meta changes, ordinary R2 recovery failure/retry, D1 W2 target. Current CI is NOT a real billable-cost proof; if W2 exceeded flag with precise alternative before any deployment.
+- **Durability:** signed + ordinary same/different track, 1/3/5/10/20 private/public independent timers, multiple consecutive windows same track and delayed callback/retry/CAS conflict, stale checkpoint, old queue drain, server restarts, backfill none, D1 schema compatibility, protected app410. Bounded replay only changed IDs, never full Feed.
+- **Release gate:** exact independent PASS and explicit approval for additive shared D1 table migration before actual PREVIEW activation. PR #147 DRAFT until green independent audit; TEST/PROD stay unchanged. Never self-approve GitHub release guard.
+
+---
+
 ## NEXT — Stage416 191 early-public leak fixed: focused independent audit then PREVIEW-only activation (2026-10-15 KST)
 
 - **범위 고정:** 기존 독립 감사 FAIL 중 `repairSharedPublicLikeCounts191`가 공개 5분 보류 중 Master 숫자를 조기 노출하는 문제만. 다른 좋아요 구조/Firestore/Cloudflare 원본/Studio/UI 리팩터링 금지.

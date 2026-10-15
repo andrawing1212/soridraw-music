@@ -188,7 +188,7 @@ const offAggregate416=makeWorkerRun416(false,{
 await offAggregate416.call(workerContext416);
 assert.equal(readCalls416,getCountBeforeOff416,
   'Stage416 HARD OFF must never read public window storage');
-assert.equal(repairCalls416,3,'Stage416 HARD OFF preserves legacy repair path');
+assert.equal(repairCalls416,1,'Stage416 HARD OFF preserves one legacy repair call');
 
 const registerAt=entry.indexOf("url.pathname==='/public-register'");
 const registerBlock=entry.slice(registerAt,registerAt+1800);

@@ -15,7 +15,9 @@ import {
 } from '../services/exploreLikePrivateDiagnostic416';
 import {
   hasStage416ControlledProofIntent416,
+  hasStage416ControlledPublicProofIntent416,
   runStage416ControlledProof416,
+  runStage416ControlledPublicProof416,
 } from '../services/stage416ControlledProof416';
 
 // Stage416 Master-only section: both settings are independent, not the
@@ -48,6 +50,10 @@ export default function Stage416LikeBatchMasterPanel() {
   const [proofNotice, setProofNotice] = useState('');
   const [proofHasIntent, setProofHasIntent] = useState(() =>
     hasStage416ControlledProofIntent416(auth.currentUser?.uid || ''));
+  const [publicProofBusy, setPublicProofBusy] = useState(false);
+  const [publicProofNotice, setPublicProofNotice] = useState('');
+  const [publicProofHasIntent, setPublicProofHasIntent] = useState(() =>
+    hasStage416ControlledPublicProofIntent416(auth.currentUser?.uid || ''));
   const [acceptanceDiagnostic, setAcceptanceDiagnostic] =
     useState<Stage416PrivateAcceptanceDiagnostic416 | null>(() =>
       readStage416PrivateAcceptanceDiagnostic416(auth.currentUser?.uid || ''));
@@ -174,6 +180,36 @@ export default function Stage416LikeBatchMasterPanel() {
       setProofBusy(false);
     }
   };
+
+  const runControlledPublicProof = async () => {
+    if (publicProofBusy) return;
+    setPublicProofBusy(true);
+    setPublicProofNotice('');
+    try {
+      const result = await runStage416ControlledPublicProof416();
+      setPublicProofHasIntent(true);
+      setPublicProofNotice(
+        `실제 좋아요 해제 1건 접수 · 개인 ${result.privateMinutes}분 / 공개 ${result.publicMinutes}분. 공개 숫자는 5분 창 검증 후 반영됩니다.`,
+      );
+    } catch (error) {
+      setPublicProofHasIntent(
+        hasStage416ControlledPublicProofIntent416(auth.currentUser?.uid || ''),
+      );
+      const code = String((error as Error)?.message || '');
+      const message = code.includes('REQUIRES_5_MINUTES')
+        ? '공개 집계 주기를 5분으로 저장한 뒤 실행해주세요.'
+        : code.includes('NO_LOCAL_LIKED_TRACK')
+          ? '실제 해제 테스트에 사용할 좋아요 곡이 없습니다. 내 좋아요를 한 번 연 뒤 다시 실행해주세요.'
+          : code.includes('DIAGNOSTICS_OFF')
+            ? '아래 캐시 진단 표시를 ON으로 켠 뒤 실행해주세요.'
+            : code.includes('CANDIDATE_CHANGED') || code.includes('CANDIDATE_NOT_CANONICALLY_LIKED')
+              ? '선택된 곡의 실제 좋아요 상태가 바뀌어 전송하지 않았습니다.'
+              : '공개 5분 실검증 접수를 완료하지 못했습니다. 같은 operation만 재시도합니다.';
+      setPublicProofNotice(message);
+    } finally {
+      setPublicProofBusy(false);
+    }
+  };
   const css = 'rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-bold text-[var(--text-primary)] disabled:opacity-50';
   return (
     <section className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6">
@@ -235,6 +271,32 @@ export default function Stage416LikeBatchMasterPanel() {
         {proofNotice && (
           <p className="mt-2 text-xs font-bold text-[var(--text-secondary)]">{proofNotice}</p>
         )}
+
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void runControlledPublicProof()}
+              disabled={
+                publicProofBusy ||
+                !readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ||
+                loaded?.publicMinutes !== 5
+              }
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-300/15 px-3 py-2 text-[11px] font-black text-amber-200 transition-all hover:bg-amber-300/20 disabled:opacity-40"
+            >
+              {publicProofBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {publicProofHasIntent ? '같은 공개 5분 검증 재시도' : '실제 좋아요 1곡 해제 · 공개 5분 검증'}
+            </button>
+            <span className="text-[10px] font-bold text-amber-200/80">
+              마스터 계정의 실제 좋아요 1곡이 해제됩니다 · 일반 사용자 클릭 경로는 그대로 유지
+            </span>
+          </div>
+          {publicProofNotice && (
+            <p className="mt-2 text-xs font-bold text-[var(--text-secondary)]">
+              {publicProofNotice}
+            </p>
+          )}
+        </div>
         {!readCacheDiagnosticsEnabled(auth.currentUser?.uid || '') ? (
           <p className="mt-3 text-xs font-bold text-[var(--text-secondary)]">
             아래 ‘캐시 진단 표시’를 ON으로 켠 뒤 위 1회 검증을 실행하세요.

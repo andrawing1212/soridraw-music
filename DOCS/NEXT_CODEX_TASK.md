@@ -1,3 +1,15 @@
+## NEXT — Stage416 inventory eventFilters ordering fix exact-SHA 독립 감사 후 receipt PREVIEW 배포 (2026-10-15 KST)
+
+- **제품 PASS SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`.
+- **새 인프라 감사 SHA:** `dc8b055a1c4a3da0bed2c80cecb3448c71f60e0e`. 실제 코드 변경은 `scripts/verify-416-public-function-inventory.mjs` 1파일; audited Workflow 자체는 `70a2a137...`과 동일.
+- **배포 사건:** Run `38688103686`에서 public Task 생성 성공 후 postflight FAIL. 독립적으로 로그를 대조해 기존 private scheduler metadata는 eventFilters 배열 순서만 달랐고 updateTime/build/revision/service account/filter 값은 동일. receipt는 미배포.
+- **수정 검증:** 새 helper는 eventTrigger.eventFilters 순서만 canonical sort. 값 변경/삭제/추가/다른 함수 변경은 기존 strict failure 유지. selftest에 순서 reversal PASS 및 value mutation FAIL 추가. Run `38688695998` SUCCESS, 현재 Functions baseline 38, HMAC/exact product/one-package PASS, deploy 0/shared data 0.
+- **감사 핵심:** (1) eventFilters 순서를 무시하는 것이 Firebase Eventarc filter 의미상 안전한지 (2) 정렬 범위가 eventFilters에만 제한되어 build/revision/updateTime/serviceConfig/labels 등 실제 변화가 가려지지 않는지 (3) value/operator/attribute 변경은 실패하는지 (4) 이미 생성된 Task가 Run 38688103686의 exact audited product source에서 생성된 것으로 신뢰 가능한지 (5) second receipt deploy baseline 38→39에서 기존 38 보호가 성립하는지.
+- **운영 보호:** preview direct push 차단 + PR 필수, approvals 0(단독 저장소), bypass 없음. Assistant connector는 Actions repository variable을 바꿀 수 없으므로 live deploy는 사용자가 별도 설정한 `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`와 trigger guard SHA가 일치해야만 진행. 이 2-party operational separation이 독립 승인으로 충분한지 감사에서 명시 판정.
+- 감사 중 코드 수정/commit/push/deploy/shared-data mutation 금지. PASS 전 receipt actual deploy 금지.
+
+---
+
 ## NEXT — Stage416 GitHub 운영 승인 설정 후 public Functions PREVIEW 2단계 배포 (2026-10-15 KST)
 
 - 제품 exact PASS `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`; infra exact PASS `70a2a137657b5239119ce4958c1d6a5b169101d3`.

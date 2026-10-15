@@ -25091,11 +25091,11 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
   if(holdActive446){
     statements.unshift(env.DB.prepare(cte+`
       INSERT INTO explore_like_public_hold_446(batch_id,track_id,created_at,delta)
-      SELECT batch_id,track_id,?,SUM(delta) FROM deltas
+      SELECT batch_id,track_id,CAST(SUBSTR(batch_id,6,13) AS INTEGER),SUM(delta) FROM deltas
       WHERE stage416_signed=1 AND delta<>0
       GROUP BY batch_id,track_id HAVING SUM(delta)<>0
       ON CONFLICT(batch_id,track_id) DO NOTHING
-    `).bind(...prefix,now));
+    `).bind(...prefix));
   }
   const result = await env.DB.batch(statements);
   if(holdActive446){

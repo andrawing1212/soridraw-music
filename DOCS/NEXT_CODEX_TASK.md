@@ -1,3 +1,12 @@
+## NEXT — app418 PR #160 exact-SHA re-audit after 075 preregistration repair
+
+- **Audit SHA:** `ccaf2279250722cf0adf12dac974836357ac2a34`.
+- **Evidence:** Quality Run `38777780859` SUCCESS; dedicated 448 markers for 075 preregister-before-D1, config fail-closed, zero-net public IO 0, and retry checkpoint all PASS.
+- **Re-audit only:** inject 075 preregistration/config/storage failure and prove likes/cursor D1 mutation does not happen first; prove retry later processes the same track; recheck 069 path, net-zero, callback retry/idempotency, app410 protection, whole-feed scan 0, 446/migration 0.
+- **PASS only:** merge PR #160 and deploy PREVIEW Worker + Hosting. TEST/PRODUCTION forbidden. No shared-data migration/backfill/delete.
+
+---
+
 ## NEXT — app418 audit-fix exact SHA 독립 재감사만
 
 - **감사 제품 SHA:** `41221206c2880472e2f39ec2f66fd49cbc9d407c`; DRAFT PR #160. Quality Run `38773426335` SUCCESS.

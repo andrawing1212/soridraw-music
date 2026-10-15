@@ -12,3 +12,4 @@ settle_deploy_run=38540479746
 audit_head=1cd605fef46c672506be287fbc3d0c7d60f5f7b1
 audit_result=PASS
 test_production_unchanged_required=true
+public_functions_live_readonly=39_hardoff_receipt_503_task_queue_zero

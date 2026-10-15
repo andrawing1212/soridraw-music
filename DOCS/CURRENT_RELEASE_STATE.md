@@ -1,3 +1,12 @@
+## CURRENT — Stage416 second independent audit FAIL / PREVIEW activation blocked (2026-10-15 KST)
+
+- **최종 감사 결과:** 제품 `142667f24a70f6c8597c9dfe7250a4072a0d1860`은 191 복구 직접 조기 공개 차단은 PASS, 그러나 (1) Master와 ordinary가 **같은 곡**에서 각각 -1/+1일 때 ordinary 공개 결과 **11 대신 10** (Master 변경 조기 노출), (2) Stage416 ON이면 ordinary 실패 R2의 191 복구까지 전역 차단되어 **1회 필요/0회 실행**. 독립 감사 최종 **FAIL**. 기존 CI PASS는 이 혼합 상황을 다루지 않았음.
+- **재현 증거:** [Run 38727425830](https://github.com/andrawing1212/soridraw-music/actions/runs/38727425830)에서 실제 Worker 함수 추출 실행: `STAGE416_SAME_TRACK_PUBLIC_EXPECTED=11 ACTUAL=10,10,10`, `STAGE416_ORDINARY_RECOVERY_EXPECTED=1 ACTUAL=0`. 재현 PR [#147](https://github.com/andrawing1212/soridraw-music/pull/147)은 **DRAFT**, **병합/배포 금지**. Scope/task [#148](https://github.com/andrawing1212/soridraw-music/issues/148).
+- **현재 안전 상태:** PREVIEW Master 공개 5분 activation **HARD OFF / 미배포**. `preview` 정상 앱/Worker/Functions 39개 유지, 공유 Canonical 데이터 미변경, TEST/PRODUCTION 미변경.
+- **즉시 후속:** Codex High로 두 경로만 원자성·재시도·차단 대상을 분리해 정확 수정. signed Master 보류 중 ordinary same-track 공개 숫자 11, ordinary 복구 1, 5분 종료 10을 필수 executable 합격선으로 유지. app410/UI/데이터 구조 전체 재설계 금지. 수정 PR #147 관련 시험 PASS 전 merge/deploy 금지. **최종 exact SHA 독립 감사 PASS 전에 Stage416 activation trigger 변경·실제 배포 금지.**
+
+---
+
 ## CURRENT — Stage416 191 early-public fix full CI PASS + PREVIEW dry preflight PASS / final narrow independent audit gate (2026-10-15 KST)
 
 - **최신 기준:** `preview` code + quality workflow exact commit `142667f24a70f6c8597c9dfe7250a4072a0d1860` (PR #140, #141, #142, #144). PREVIEW deployment **read-only trigger commit** `6a2024398b7dc9b7ef445d1f0f3ee9514c420ef1` (PR #145). `AGENTS.md` 기준으로 이 구간을 다시 설계하거나 확대하지 않음.

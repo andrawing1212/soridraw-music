@@ -1,3 +1,12 @@
+## NEXT — Stage416 FAIL two-path exact repair only (2026-10-15 KST)
+
+- **Status:** NOT DEPLOYABLE; independent auditor FAIL for `142667f24a70f6c8597c9dfe7250a4072a0d1860`. Earlier CI/preflight PASS DOES NOT authorize activation.
+- **Executable negative tests:** [Run 38727425830](https://github.com/andrawing1212/soridraw-music/actions/runs/38727425830) in DRAFT PR #147, `scripts/verify-446-stage416-mixed-master-ordinary-public.mjs`: same-track Master unlike(-1)+ordinary like(+1) public visible should stay 11 until deadline, actual 10; ordinary 191 repair expected1 actual0.
+- **Implementation task:** [Issue #148](https://github.com/andrawing1212/soridraw-music/issues/148); Codex High: exact per-track held signed delta excluded from ordinary public projection and selective ordinary 191 R2 recovery, idempotent retry/fail-closed. Only Stage416 Worker publication and tests; no app410/UI/Functions or shared original user data change.
+- **Stop condition:** both executable checks, existing 191/440/444, TS/Build and costs PASS then **independent exact-SHA audit** before any PREVIEW activation. DRAFT PR #147 never merge while failing. Current 39 Functions and public activation HARD OFF intact.
+
+---
+
 ## NEXT — Stage416 191 early-public leak fixed: focused independent audit then PREVIEW-only activation (2026-10-15 KST)
 
 - **범위 고정:** 기존 독립 감사 FAIL 중 `repairSharedPublicLikeCounts191`가 공개 5분 보류 중 Master 숫자를 조기 노출하는 문제만. 다른 좋아요 구조/Firestore/Cloudflare 원본/Studio/UI 리팩터링 금지.

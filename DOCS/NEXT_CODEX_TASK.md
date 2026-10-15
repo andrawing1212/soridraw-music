@@ -1,3 +1,14 @@
+## NEXT — Stage416 release guard 외부 승인·출처 불명 복구 거부 후보 독립 감사 (2026-10-15 KST)
+
+- **대상 인프라 SHA:** `91e6715a725051c9e3bbed10b46c36b08f7b3de9` (`preview`, 마지막 감사 FAIL `7142a0b8c846c59a6caa8fce779e31158a564091` → 새 후보). 코드 제품 SHA `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` 그대로.
+- 체크 1: `.github/workflows/stage416-preview-settle-one-function.yml` 실제 배포에서 요청서 `release_guard_sha`를 자체 인정하지 않고 외부 GitHub Actions 변수 `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`의 exact SHA와 두 guard 파일 blob 비교가 모두 일치해야 진행. 변수 미설정·거짓 SHA·다른 코드 변경은 반드시 fail-closed.
+- 체크 2: `verify_existing` 작업은 deployed source HARD OFF 출처를 증명 불가하여 **무조건 거부**. 기존 함수가 있어도 재배포/자동채택/자동삭제/성공 오판 금지. `initial_only` 신규 함수는 오직 exact one Function 및 전체 inventory 무변경 확인 후에만 PASS. 중간 실패 시 수동 판단으로 중단.
+- 기존 개인 Function 모드, Firebase CLI 버전 고정, --force 없는 신규 public, HMAC binding, TEST/PRODUCTION, 사용자 데이터 보호 동작 유지 여부.
+- 신규 SHA의 GitHub CI는 **미실행**(preflight trigger tool operation blocked). 이전 `38610213825` SUCCESS는 이번 SHA PASS를 보증하지 않음. 독립 감사 별도로 진행; 코드/commit/push/배포/공유 데이터 변경 금지.
+- 별도 독립 감사 PASS 이후에만 GitHub 관리자 관리 repository variable에 audited SHA 설정과 새로운 preflight-only 승인 절차를 마련한다. 인증되지 않은 SHA로 실배포 금지.
+
+---
+
 ## NEXT — Stage416 공개 Functions 안전 배포 인프라 FAIL 2건 재감사 (2026-10-15 KST)
 
 - 제품 코드 감사 PASS 고정 `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 신규 **배포 인프라 감사 SHA `7142a0b8c846c59a6caa8fce779e31158a564091`**; 범위 `.github/workflows/stage416-preview-settle-one-function.yml` 및 `scripts/verify-416-public-function-inventory.mjs`. 감사된 제품, 기존 좋아요, 공개 5분 HARD OFF 코드 그대로 보호.

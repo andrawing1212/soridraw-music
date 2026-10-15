@@ -1,3 +1,16 @@
+## CURRENT — Stage416 신규 인프라 감사 FAIL 2건 최소 수정 / PREVIEW 미배포 / 신규 SHA 감사 대기 (2026-10-15 KST)
+
+- **제품 독립 감사 PASS:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 원래 Worker/Task/public receipt/client HARD OFF 유지.
+- **배포 인프라 신규 감사 결과:** `7142a0b8c846c59a6caa8fce779e31158a564091` **FAIL**. (1) Trigger가 임의 release_guard_sha로 자기 자신을 승인할 수 있음 (2) verify_existing이 ACTIVE/Node22/HMAC만 비교해 실제 배포된 코드 출처 불명 후보를 PASS 처리할 수 있음.
+- **수정 후보 제품이 아닌 인프라 SHA:** `91e6715a725051c9e3bbed10b46c36b08f7b3de9`. 변경 파일 `.github/workflows/stage416-preview-settle-one-function.yml`, `scripts/verify-416-public-function-inventory.mjs` 단 2개. 이전 긴 YAML 파일 저장 과정의 잘못된 중복은 마지막 정상 7142 SHA에서 원본 파일을 다시 구성하여 제거. 현재 Workflow 448줄, 25,009자, 단계 중복 없음.
+- **수정 1:** 배포 요청 파일이 전달한 SHA뿐 아니라 별도 관리자 관리 GitHub Repository Actions Variable `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`가 정확히 같아야 배포. GitHub 설정 변수 누락/불일치/미승인일 때 `preflight_only=false` 실제 배포 자동 차단. 별도 독립 감사 PASS 후 관리자가 정확히 해당 감사 SHA를 변수에 입력해야만 실행 가능. **변수 설정은 이번에 하지 않음**.
+- **수정 2:** `verify_existing`은 기존 deployed source identity를 신뢰성 있게 증명할 수 없으므로 즉시 FAIL. 기존 후보가 존재하면 ACTIVE/secret/region에 관계없이 FAIL, 자동 채택/삭제/덮어쓰기 없음. 새 함수 미존재 시에만 `initial_only` 신규 생성 후보; 기존 Functions 전체 inventory snapshot 비교 유지. `verify-416-public-function-inventory.mjs` 기존에 서로 다른 코드인 healthy 후보를 포함한 부정 검사 추가.
+- **검증 상태:** 이전 clean 기준 `38610213825` PASS는 신규 수정 SHA의 QA를 대신하지 않음. 신규 검증용 안전 trigger 요청이 플랫폼 보안 확인에서 **차단**돼 Run 미생성, 해당 SHA 새 GitHub Actions 검사 **미실행**. 제품 코드/추가 Functions 배포 0, 공유 D1/RTDB/R2/Rules/Hosting/Worker 변경 없음. 공개 5분 HARD OFF. 새로운 인프라 독립 감사 필요.
+- **다음:** 신규 SHA의 actual diff/negative tests 별도 독립 감사 → GitHub repository variable 신뢰 주체 및 정확 SHA 설정 → PREVIEW preflight-only 재실행 → PASS 후 개별 Function 첫 생성 검토. variable 미설정/사전검사 실패 시 실배포 금지. 임의의 repo variable 셀프 승인으로 변질되지 않도록 관리자 설정 범위 확인 필요.
+- **진척:** Stage416 전체 1/4·25%, 앱 속도 개선 5/5·100%, 현 배포 안전장치 작업 구현 2/4·50% (코드 commit/정적 확인, 독립 감사·신규 CI·배포 미완료).
+
+---
+
 ## CURRENT — Stage416 공개 Functions 배포 Workflow 감사 FAIL 2건 보완 후보 / 배포 0 / 재감사 대기 (2026-10-15 KST)
 
 - **기준:** `preview`; 제품 exact `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` 독립 감사 PASS, 제품 코드 및 공개 Task/receipt HARD OFF unchanged. 이전 배포 인프라 `b01079382d56724d5c2cf6f5561bb0e8718b6254`은 사용자가 전달한 별도 독립 감사 **FAIL**: (1) 전체 Firebase Functions 비변경 증거 부족 (2) 신규 생성 중 부분 성공/오류 복구 절차 부족.

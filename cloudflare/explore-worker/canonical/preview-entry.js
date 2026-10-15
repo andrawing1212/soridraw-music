@@ -1213,21 +1213,18 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       throw new Error('Canonical Explore like aggregate handler unavailable');
     }
 
-    // Stage416 440: an already-open public window makes every canonical like
-    // wave public-deferred. The canonical D1 mutation still settles at 5s;
-    // only shared R2/public invalidation waits for the fixed public deadline.
+    // Stage416 controlled PREVIEW: opening a public window must never delay
+    // unrelated legacy/075 users. The base bundle marks only signed Stage416
+    // canonical deltas; those exact IDs alone join the fixed public window.
     const publicWindowActive416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true;
     const currentPublicWindow416=publicWindowActive416
-      // Fail closed: a failed DO read is not proof that no public window exists.
-      // Throw before canonical aggregation or legacy public R2/191 repair;
-      // the existing schedule/alarm retry will resume once storage recovers.
+      // Fail closed: an unknown window state is not permission to aggregate.
       ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416)
       :null;
     const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
     const aggregateEnv416=publicWindowActive416
       ?new Proxy(this.env,{get:(target,prop)=>{
         if(prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
-        if(prop==='__SORIDRAW_DEFER_PUBLIC_416')return deferExistingPublic416;
         return Reflect.get(target,prop);
       }}):this.env;
 
@@ -1243,7 +1240,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       .map((id)=>String(id||'').trim()).filter(Boolean))];
 
     if(publicWindowActive416&&(
-       deferExistingPublic416||settledAggregate418?.stage416Changed416===true||
+       settledAggregate418?.stage416Changed416===true||
        settledAggregate418?.publicDeferred416===true)){
       if(changedTrackIds416.length){
         if(deferExistingPublic416){
@@ -2446,8 +2443,9 @@ async function handlePrivateLikeRoute416(request,env,ctx,url) {
 // remains unchanged until all shared-data environments move together.
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-416';
-// Stage416 public release stays source-only until exact SHA independent audit.
-const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
+// PREVIEW controlled release only. TEST/PRODUCTION use separate Workers and
+// remain unchanged. The canonical bundle below defers only signed Stage416 IDs.
+const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true;
 const STAGE416_PUBLIC_WINDOW_ROUTE='/v1/internal/public-like-window-416';
 const STAGE416_PUBLIC_WINDOW_ACK_ROUTE='/v1/internal/public-like-window-416/ack';
 const STAGE416_PUBLIC_RELEASE_ROUTE='/v1/internal/public-like-release-416';

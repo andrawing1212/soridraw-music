@@ -8,10 +8,10 @@ import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
 // Worker -> Firebase delayed public invalidation receipt.
 // Source-only / HARD OFF until independent audit and coordinated PREVIEW release.
 const secret416=defineSecret('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET');
-// Global/Test/Production remain OFF. The controlled PREVIEW candidate alone
-// may publish the delayed public invalidation after Worker materialization.
+// Public invalidation occurs immediately after private canonical settlement.
+// The extra delayed receipt remains OFF in PREVIEW/TEST/PRODUCTION.
 export const STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false;
-export const STAGE416_PREVIEW_PUBLIC_RELEASE_ENDPOINT_ACTIVE=true;
+export const STAGE416_PREVIEW_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false;
 const publicReleaseEndpointActive416=(config:Stage416EnvironmentConfig)=>
  config.environment==='preview'&&STAGE416_PREVIEW_PUBLIC_RELEASE_ENDPOINT_ACTIVE;
 const makePublicRelease416=(config:Stage416EnvironmentConfig)=>onRequest({

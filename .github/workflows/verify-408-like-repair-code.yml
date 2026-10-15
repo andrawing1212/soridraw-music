@@ -55,6 +55,7 @@ on:
       - 'functions/src/exploreLikePublicReleaseEndpoint416.ts'
       - 'scripts/verify-439-stage416-public-release-routing.mjs'
       - 'scripts/verify-440-stage416-public-window-coalescing.mjs'
+      - 'scripts/verify-416-191-public-hold-guard.mjs'
       - 'scripts/verify-444-stage416-master-public-e2e.mjs'
       - '.github/workflows/stage416-preview-settle-one-function.yml'
       - 'scripts/verify-416-public-function-inventory.mjs'
@@ -240,6 +241,7 @@ jobs:
           node scripts/verify-438-stage416-public-release.mjs
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
+          node scripts/verify-416-191-public-hold-guard.mjs
           node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-445-stage416-activation-release-infra.mjs
           node scripts/verify-416-public-function-inventory.mjs selftest

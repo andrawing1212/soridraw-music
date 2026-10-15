@@ -42,3 +42,19 @@ export function makeReleaseHoldStatement446(db,trackIds,deadlineAtMs){
     WHERE created_at<=? AND track_id IN (${ids.map(()=>'?').join(',')})`;
   return db.prepare(sql).bind(deadlineAtMs,...ids);
 }
+
+// Called only AFTER fixed public deadline and all signed events are ACKed.
+// Clearing the signed hold BEFORE publishing canonical counts lets concurrent
+// ordinary 075 / 191 traffic converge to the newly visible count. A partial
+// deletion may safely retry; no held delta is removed before it is due.
+export async function clearReleasedPublicHolds446(db,trackIds,deadlineAtMs){
+  if(!Array.isArray(trackIds)||!trackIds.length)throw Error('446_EMPTY_RELEASE_IDS');
+  let deleted=0,statements=0;
+  for(let i=0;i<trackIds.length;i+=256){
+    const statement=makeReleaseHoldStatement446(db,trackIds.slice(i,i+256),deadlineAtMs);
+    const result=await statement.run();
+    deleted+=Number(result?.meta?.changes||0);
+    statements++;
+  }
+  return {deleted,statements};
+}

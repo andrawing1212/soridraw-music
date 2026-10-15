@@ -1,3 +1,15 @@
+## CURRENT — Stage416 191 premature-public-repair fix merged / CI PASS / activation 미배포 (2026-10-15 KST)
+
+- **이번 범위:** Master-only Stage416 공개 5분 지연 도중 legacy `repairSharedPublicLikeCounts191`가 R2 공개 숫자를 조기 수정하는 독립 감사 FAIL만 최소 수정. 다른 기능/환경 범위 확대 금지.
+- **최신 수정·검사 기준:** `preview` code commit `73d63ae00c50d198cf1bf9aff208c4979db61d46` (PR #140/#141/#142). Worker `cloudflare/explore-worker/canonical/preview-entry.js`의 기존 191 복구 호출 3곳에 Stage416 public ON 차단, 관련 verifier `scripts/verify-440-stage416-public-window-coalescing.mjs` 기대값 갱신, 신규 `scripts/verify-416-191-public-hold-guard.mjs` 추가.
+- **GitHub CI:** SORIDRAW 408 Targeted Like Repair Quality Run `38721061437` SUCCESS. Stage416 440 검사, Functions TypeScript, 앱 TypeScript 등 해당 workflow 전체 통과. 직전 두 FAIL은 구형 440 검사 기대값 정렬로 해결.
+- **독립 감사:** 기존 activation SHA `2d2ac479...`에 대한 독립 감사 FAIL(legacy 191 조기 공개 재현). 이 수정 `73d63ae...`에 대한 **새로운 독립 감사 PASS는 아직 없음**. CI PASS를 독립 감사나 실제 서비스 E2E PASS로 간주하지 않음.
+- **실제 상태:** 이번 조기 공개 수정에 대한 PREVIEW Worker/Functions/Hosting 배포 **0**. 기존 PREVIEW Functions 39개, Master 공개 5분 activation 미배포, 일반 app410 좋아요 보호 유지. 공유 Canonical 데이터/TEST/PRODUCTION 변경 없음.
+- **다음 한정 단계:** code SHA `73d63ae...`의 191 조기 공개 차단 및 일반 사용자 즉시 반영/혼합 wave에 대한 **표적 독립 감사** → PASS 시 preview Worker 및 기존 4 Functions 단일 함수 순차 activation workflow를 엄격히 검증 → 각 단계 실제 배포와 live Master 단일 unlike/5분 경과 + 일반 사용자 경로 검증. FAIL 시 정확한 경로만 수정, 범위 확대 금지.
+- **배포 운영 블로커:** 현재 연결된 GitHub connector에는 `workflow_dispatch` 실행 기능이 없어 실제 activation workflow를 이 채팅에서 시작할 수 없음. 승인 guard variable 및 Workflow dispatch는 별도 승인된 GitHub Actions 경로에서 실행해야 함. 배포 전 product exact source lock / external approved guard SHA 일치 여부 확인 필수.
+
+---
+
 ## CURRENT — Stage416 Master-only PREVIEW activation dry preflight PASS / 실제 배포 전 독립 감사 대기 (2026-10-15 KST)
 
 - **제품 activation 후보:** `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`. 제품 본체는 `5b047d2486a140ac8dd4b4af18d07093e73bbbc3`와 동일하고 verifier 435 정렬만 추가된 descendant.

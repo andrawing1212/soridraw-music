@@ -1279,12 +1279,17 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
           ?settledAggregate418.commonPublicChangedTrackIds448:[])
         .map((id)=>String(id||'').trim()).filter(Boolean))];
       if(ids448.length){
+        const now448=Date.now();
         const existingWindow448=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
-        const minutes448=COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existingWindow448?.publicMinutes))
+        const currentOpen448=existingWindow448?.windowId&&
+          existingWindow448?.sealed!==true&&
+          Number(existingWindow448?.deadlineAtMs)>now448;
+        const minutes448=currentOpen448&&
+          COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existingWindow448?.publicMinutes))
           ?Number(existingWindow448.publicMinutes)
           :await readCommonPublicLikeMinutes448();
         await joinPublicLikeChangedTracks416(
-          this.ctx.storage,ids448,Date.now(),minutes448);
+          this.ctx.storage,ids448,now448,minutes448);
         return {...settledAggregate418,publicWindowDeferred448:true,
           commonPublicChangedTrackIds448:ids448,publicMinutes448:minutes448};
       }

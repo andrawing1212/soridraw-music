@@ -1,3 +1,16 @@
+## CURRENT — app418 shared public-like window IMPLEMENTED / PREVIEW activation pending (2026-10-16 KST)
+
+- **preview HEAD at checkpoint:** `3e0cf445af8b1e138e32cd4c580bee5869569c32`; app418 product merge `18005cc536842de2f15eaf8b91d64969499af628` (PR #151).
+- **Goal fixed:** app410 personal heart/membership remains unchanged and immediate locally. Public Explore like counts use one common per-track changed-ID window at the Master-selected 1/3/5/10/20-minute cadence.
+- **Implemented behavior:** A/B/C likes on the same song during one open window settle personal membership independently, but public `track_stats.like_count` is recomputed from canonical membership only once when the common window closes. Later clicks do not extend the open deadline; post-deadline clicks enter the next aligned window.
+- **Cost shape:** no 446 hold table/journal, no migration/backfill, no whole Feed/profile rebuild. Public release touches only changed track IDs; duplicate same-track events collapse in the shared Durable Object set.
+- **Quality evidence:** Run `38764154717` product-quality **SUCCESS** including TypeScript, Build, Functions TypeScript, app410 personal-like protection, 127/191/Stage416 regressions, shared Rules audit and dedicated 448 common-window verifier.
+- **Release progress:** PREVIEW-only config Function release trigger merged via PR #153; trigger-source workflow fix PR #154; retry trigger PR #155 at current preview HEAD. Worker/Hosting app418 activation has **not been claimed PASS** in this checkpoint because the push-triggered release run/live endpoint is not observable through the current GitHub connector surface.
+- **Safety:** shared D1 schema/user-data mutation 0, 446 migration 0, TEST/PRODUCTION change 0. Do not deploy Worker/Hosting until config Function live PASS and independent exact-SHA backend audit PASS.
+- **Old Stage416 #147:** historical only; do not merge or migrate 446 into app418.
+
+---
+
 ## CURRENT — app418 shared public-like window candidate / PR #151 (2026-10-16 KST)
 
 - **Branch / head:** `fix/common-public-like-window-448` / `ba6d26b732111cef4c000124655b442f3f154fce`; base latest `preview` `aa00be22322aaf5d16b1cc2d2eb064d9a65c9497`. DRAFT PR #151.

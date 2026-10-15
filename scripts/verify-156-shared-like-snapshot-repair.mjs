@@ -12,14 +12,14 @@ for (const required of [
   'etagMatches: object.etag',
   'etagDoesNotMatch:',
   'VERIFIED_LIKE_REPAIR_TITLES_156',
-  'SELECT t.id, COALESCE(s.like_count,0)',
+  'const expected156=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true',
   'AND t.is_public=1 AND t.status=',
   'observed.size !== ids.length',
 ]) assert.ok(entry.includes(required), required);
 const scheduledEnd = entry.indexOf('  async fetch(request, env, ctx) {', end);
 assert.ok(scheduledEnd > end, 'scheduled wrapper missing');
 const scheduledBlock = entry.slice(end, scheduledEnd);
-assert.match(scheduledBlock, /return (?:await )?baseWorker\.scheduled\(controller, env, ctx\)/);
+assert.match(scheduledBlock, /return baseWorker\.scheduled\(controller, protectedEnv446, ctx\)/);
 assert.match(scheduledBlock, /await repairVerifiedSharedLikeSnapshots156\(env\)/);
 assert.match(scheduledBlock, /SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924/);
 assert.doesNotMatch(source, /UPDATE |DELETE |INSERT |\.run\(/);
@@ -30,6 +30,8 @@ assert.doesNotMatch(fetchBlock, /repairVerifiedSharedLikeSnapshots156/);
 // Execute the exact helper with isolated fake R2 and D1 bindings.
 const ctx = {
   sharedFeedR2Key112: sort => 'internal/explore/shared-feed-v112/' + sort + '-40.json',
+  // This frozen verifier exercises the pre-416 156 repair path.
+  STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE:false,
   Date, Map, Set, JSON, Number, String, Error, Array, console,
 };
 vm.runInNewContext(source + '\nthis.repair = repairVerifiedSharedLikeSnapshots156;', ctx);

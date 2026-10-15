@@ -13,6 +13,9 @@ const ctx = {
   // Stage426 compilation defaults OFF. The 191 legacy regression must
   // exercise its original branch, not an unbound symbol in the VM fixture.
   STAGE426_COMPILED_OPEN: false,
+  // This frozen legacy contract exercises the Stage416-OFF path. Stage416-ON
+  // signed-hold behavior is covered separately by executable 446/447 tests.
+  STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE: false,
   proveLikeBatchCutover426: async()=>{throw Error('426 unexpectedly enabled in 191 fixture');},
   Date, Map, Set, JSON, Number, String, Error, Array,
 };

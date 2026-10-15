@@ -5,6 +5,8 @@ import {clearPublicLikeReleaseStorage416,readPublicLikeReleaseState416,
  from './public-like-window-416.mjs';
 import {preparePublicLikeManifest416}
  from './public-like-manifest-416.mjs';
+import {clearReleasedPublicHolds446}
+ from './public-like-hold-446.mjs';
 
 // Stage416 delayed public release coordinator.
 // Source-only / HARD OFF until the Worker route + Firebase task are audited.
@@ -68,8 +70,17 @@ async function releaseDuePublicLikeWindowInner416({
  if(!checkpoint){
    if(!Array.isArray(state.trackIds)||!state.trackIds.length)
      throw Error('416_PUBLIC_RELEASE_NO_TRACKS');
+   // Stage446: the independently configured PUBLIC deadline is now due and
+   // every private-final registration is ACKed. Remove ONLY journal entries
+   // accepted by this deadline before any canonical public R2 projection.
+   // A transient R2 failure will retry after the deadline with ordinary
+   // 075/191 repairing the same visible canonical value; never drop future
+   // windows on the same track.
+   const journalCleanup446=await clearReleasedPublicHolds446(
+     db,state.trackIds,state.window.deadlineAtMs);
    const projectionResult=await materialize({db,r2,trackIds:state.trackIds});
-   projection=projectionResult;
+   projection={...projectionResult,d1Writes:
+     Number(projectionResult?.d1Writes||0)+journalCleanup446.statements};
    const rows=Array.isArray(projection?.releaseRows)?projection.releaseRows:[];
    let claim=null;
    if(rows.length){

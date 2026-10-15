@@ -10,12 +10,13 @@ const match=src.match(/async runAggregate194\(\) \{([\s\S]*?)\n  \}\n\n  \/\/ SO
 assert.ok(match,'runAggregate194 body present');
 const body=match[1];
 assert.match(body,/await baseWorker\.scheduled\(/,'ordinary aggregate preserved');
-assert.match(body,/if\(!publicWindowActive416\)await repairSharedPublicLikeCounts191\(this\.env\)/,
-  'Master public hold gates legacy 191 repair');
-assert.match(src,/if\(!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\)await repairSharedPublicLikeCounts191\(env\)/,
-  'temporary 192 drain cannot leak via 191');
-assert.match(src,/const repair191 = STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\s*\? \{changedTracks:0,skippedForStage416PublicWindow:true\}/,
-  'one-time repair cannot leak via 191');
+assert.match(body,/await repairSharedPublicLikeCounts191\(this\.env\)/,
+  'bounded ordinary recovery must remain active');
+assert.match(src,/await repairSharedPublicLikeCounts191\(env\)/,
+  'predeploy drain must use protected 191 recovery');
+assert.match(src,/const repair191 = await repairSharedPublicLikeCounts191\(env, \{ oneTime: true \}\)/,
+  'one-time repair must use the compensated public count');
+assert.match(src,/explore_like_public_hold_446/, 'signed Master hold masked in repair');
 
 async function simulate(publicWindowActive416, stage416Changed416) {
   const calls=[];
@@ -41,8 +42,8 @@ const held=await simulate(true,true);
 assert.deepEqual(held,['ordinary-aggregate','join-held-track'],
   'Master changed track held; ordinary aggregate still executes; 191 cannot leak');
 const ordinaryDuringHold=await simulate(true,false);
-assert.deepEqual(ordinaryDuringHold,['ordinary-aggregate'],
-  'ordinary 075 remains on original aggregate while optional legacy repair is paused');
+assert.deepEqual(ordinaryDuringHold,['ordinary-aggregate','legacy-repair'],
+  'ordinary R2 repair must continue through a Master window without leaking held delta');
 const ordinaryWithoutHold=await simulate(false,false);
 assert.deepEqual(ordinaryWithoutHold,['ordinary-aggregate','legacy-repair'],
   'disabled Stage416 retains original 191 behavior');

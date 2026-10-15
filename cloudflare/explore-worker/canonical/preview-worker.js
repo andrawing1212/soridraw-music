@@ -25084,7 +25084,24 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
       RETURNING batch_id
     `).bind(...prefix));
   }
+  // Stage446: signed-only hold is DURABLE in the same D1 transaction as
+  // canonical counts, likes and 069 queue deletion. Journal BEFORE updating
+  // 'likes', so the exact CTE net deltas are still available.
+  const holdActive446=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true;
+  if(holdActive446){
+    statements.unshift(env.DB.prepare(cte+`
+      INSERT INTO explore_like_public_hold_446(batch_id,track_id,created_at,delta)
+      SELECT batch_id,track_id,CAST(SUBSTR(batch_id,6,13) AS INTEGER),SUM(delta) FROM deltas
+      WHERE stage416_signed=1 AND delta<>0
+      GROUP BY batch_id,track_id HAVING SUM(delta)<>0
+      ON CONFLICT(batch_id,track_id) DO NOTHING
+    `).bind(...prefix));
+  }
   const result = await env.DB.batch(statements);
+  if(holdActive446){
+    if(result?.[0]?.success===false)throw Error('446_SIGNED_HOLD_ATOMIC_BATCH_FAILED');
+    result.shift(); // Preserve every legacy result index and receipt contract.
+  }
   // SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014
   // Reuse the two canonical track_stats mutations' RETURNING rows: zero extra
   // D1 SELECT/query while preserving exact net-changed track identity.
@@ -25411,9 +25428,11 @@ async function mirrorExploreSharedFeeds059(env) {
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
-  const deferPublic416=
-    env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&
-    totals.stage416Changed416===true;
+  // Stage446: derived 056 counts are unmasked canonical totals. While the
+  // Stage416 public gate runs, 075 publishes exact ordinary deltas and the
+  // bounded 191 compensation repairs first-page R2. Never rebuild public 056
+  // from an unadjusted signed Master total (including ordinary-only waves).
+  const deferPublic416=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true;
   if(deferPublic416)return {...totals,publicProjection:'deferred-416',
     publicDeferred416:true};
   try {
@@ -25753,9 +25772,12 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now, deferPublic4
   const cte = exploreLikeUserAggregateCte075();
   const max = EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075;
 
+  const pendingSigned446=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true
+    ?' - COALESCE((SELECT SUM(h.delta) FROM explore_like_public_hold_446 h WHERE h.track_id=d.track_id),0)'
+    :'';
   const projection = await env.DB.prepare(cte + `
     SELECT d.track_id, d.owner_uid,
-      MAX(0, COALESCE(s.like_count, 0) + SUM(d.delta)) AS next_like_count
+      MAX(0, COALESCE(s.like_count, 0) + SUM(d.delta)${pendingSigned446}) AS next_like_count
     FROM deltas d
     LEFT JOIN track_stats s ON s.track_id = d.track_id
     GROUP BY d.track_id, d.owner_uid, s.like_count

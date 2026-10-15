@@ -1,7 +1,7 @@
 name: SORIDRAW 408 Targeted Like Repair Quality
 on:
   push:
-    branches: [preview]
+    branches: [preview, fix/stage416-mixed-track-public-correctness]
     paths:
       - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
@@ -56,6 +56,10 @@ on:
       - 'scripts/verify-439-stage416-public-release-routing.mjs'
       - 'scripts/verify-440-stage416-public-window-coalescing.mjs'
       - 'scripts/verify-416-191-public-hold-guard.mjs'
+      - 'cloudflare/explore-worker/candidates/stage416-public-hold-446.sql'
+      - 'cloudflare/explore-worker/runtime/public-like-hold-446.mjs'
+      - 'scripts/verify-447-stage416-hold-sql-fixture.mjs'
+      - 'scripts/verify-446-stage416-mixed-master-ordinary-public.mjs'
       - 'scripts/verify-444-stage416-master-public-e2e.mjs'
       - '.github/workflows/stage416-preview-settle-one-function.yml'
       - 'scripts/verify-416-public-function-inventory.mjs'
@@ -128,6 +132,7 @@ on:
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
       - 'scripts/verify-191-bounded-public-like-convergence.mjs'
+      - 'scripts/verify-156-shared-like-snapshot-repair.mjs'
       - 'scripts/verify-417-bounded-like-proof.mjs'
       - 'scripts/verify-426-dormant-cutover-worker.mjs'
       - 'scripts/verify-419-like-w2-cutover.mjs'
@@ -242,6 +247,8 @@ jobs:
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
           node scripts/verify-416-191-public-hold-guard.mjs
+          node scripts/verify-447-stage416-hold-sql-fixture.mjs
+          node scripts/verify-446-stage416-mixed-master-ordinary-public.mjs
           node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-445-stage416-activation-release-infra.mjs
           node scripts/verify-416-public-function-inventory.mjs selftest
@@ -296,6 +303,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-178-final-like-architecture.mjs
           node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

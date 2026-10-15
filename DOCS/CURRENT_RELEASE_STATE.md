@@ -1,3 +1,29 @@
+## CURRENT — Stage416 Master-only PREVIEW activation dry preflight PASS / 실제 배포 전 독립 감사 대기 (2026-10-15 KST)
+
+- **제품 activation 후보:** `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`. 제품 본체는 `5b047d2486a140ac8dd4b4af18d07093e73bbbc3`와 동일하고 verifier 435 정렬만 추가된 descendant.
+- **일반 사용자 보호:** app417에서도 ordinary Explore/app410 client flags는 OFF 유지. 기존 일반 사용자 좋아요는 기존 즉시 경로 그대로. Master 진단 경로만 실제 unlike 1회 proof를 만들며 PREVIEW `recordPrivateLike416`은 서버에서도 `requireMasterCaller`로 재검증.
+- **공개 5분 PREVIEW source candidate:** private-final / public Task / public receipt는 global HARD OFF 상수 + PREVIEW 전용 active 상수로 환경 격리. TEST/PRODUCTION은 source-level HARD OFF.
+- **Worker 보호:** PREVIEW Worker는 `SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015` 기준으로 signed Stage416 changed IDs만 5분 지연. ordinary 075/legacy 변경은 기존 즉시 공개. `__SORIDRAW_DEFER_PUBLIC_416` 전역 지연 제거.
+- **activation release infra:** 기존 one-function Workflow를 audited-update mode로 확장. 대상은 `recordPrivateLike416`, `privateLikeFinalReceipt416Candidate`, `stage416ReleasePublicWindowCandidate`, `publicLikeRelease416Candidate` 4개 allowlist이며 실제 배포 시 한 번에 1 Function만 update, `--force` 없음, 나머지 38개 inventory/runtime policy 보호.
+- **preflight infra bug 2건 수정:** silent source grep bundle을 exact `verify-444`로 통합(PR #135 merge `10382df92e6d21b41c5ba311c0100f17ba88d656`), 같은 shell step에서 `ACTIVATION_RELEASE`가 unbound였던 문제를 local export로 수정(PR #137 merge `96eb9d86b7b0693ac1eb689ae6435ede7f7952aa`).
+- **최종 dry preflight:** PR #138 merge HEAD `a3a6912879c4ad894073a7cf546c07c823dbed9c`, Run `38714537395` **SUCCESS**.
+  - `LOCKED_ONE_FUNCTION_SOURCE=2d2ac479...`
+  - `416_ACTIVATION_EXACT_PRODUCT_SOURCE=PASS`
+  - `STAGE416_APP410_ORDINARY_EXPLORE_PATH_FROZEN=PASS`
+  - `STAGE416_MASTER_REAL_UNLIKE_EXACT_ONE_OPERATION_GATE=PASS`
+  - `STAGE416_PREVIEW_ONLY_SERVER_PUBLIC_GATES=PASS`
+  - `STAGE416_SIGNED_ONLY_PUBLIC_DELAY_ORDINARY_075_IMMEDIATE=PASS`
+  - `416_SHARED_FUNCTIONS_BASELINE=PASS count=39`
+  - `416_ACTIVATION_FUNCTION_BASELINE_39=PASS`
+  - `STAGE416_SINGLE_FUNCTION_PREFLIGHT=PASS`
+  - `STAGE416_ENV_INDEPENDENT_SINGLE_FUNCTION_EXPORT=PASS`
+  - TypeScript / Build / Functions Build / app401·402 회귀 PASS
+  - `FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0`
+- **실제 배포 상태:** 이번 activation 작업에서는 아직 Functions/Worker/Hosting 배포 0. 현재 live PREVIEW는 이전 39 Functions + public HARD OFF 상태 그대로.
+- **다음:** 제품 SHA `2d2ac...` + 최종 activation infra(`96eb9d86...`의 workflow guard files, dry-run evidence Run 38714537395) 독립 감사 1회 → PASS 시 external guard SHA 갱신 → PREVIEW existing Functions를 한 함수씩 coordinated update → PREVIEW Worker activation → Master 1곡 unlike controlled E2E → 일반 사용자 immediate path/비용 회귀 확인. TEST/PRODUCTION 금지.
+
+---
+
 ## CURRENT — Stage416 public Functions PREVIEW 2/2 실제 생성 완료 / 39 Functions / HARD OFF live PASS (2026-10-15 KST)
 
 - **제품 PASS 유지:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 5분 활성화 gate는 아직 모두 OFF.

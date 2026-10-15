@@ -1,10 +1,9 @@
-requested_at=2026-10-16T01:28:00+09:00
-product_code_target=18005cc536842de2f15eaf8b91d64969499af628
-target_function=publicLikeWindowConfig448Candidate
-scope=preview_public_like_config448_only
+requested_at=2026-10-16T03:55:00+09:00
+product_code_target=f18b12f57ecb35c4419080de3a0b0bfc8901c286
+target_function=publicLikeRelease416Candidate
+scope=preview_public_like_release416_only
 shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
-
-retry_reason=cleanup_policy_warning_handler_fix_157
+reason=app418_live_missing_public_release_callback

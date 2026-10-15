@@ -1,4 +1,4 @@
-name: SORIDRAW PREVIEW Public Like Config 448 Release
+name: SORIDRAW PREVIEW Public Like Support Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soridraw-preview-public-like-config448-release
+  group: soridraw-preview-public-like-support-release
   cancel-in-progress: false
 
 jobs:
@@ -27,9 +27,18 @@ jobs:
         run: |
           set -euo pipefail
           trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-public-like-config448.trigger"
-          target="$(curl -fsSL "$trigger_url" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
+          raw="$(curl -fsSL "$trigger_url")"
+          target="$(printf '%s\n' "$raw" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
+          fn="$(printf '%s\n' "$raw" | sed -n 's/^target_function=//p' | tail -1 | tr -d '\r')"
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          case "$fn" in
+            publicLikeWindowConfig448Candidate|publicLikeRelease416Candidate) ;;
+            *) echo "REFUSE_TARGET_FUNCTION=$fn"; exit 3 ;;
+          esac
           echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "fn=$fn" >> "$GITHUB_OUTPUT"
+          echo "LOCKED_PUBLIC_LIKE_SUPPORT_SHA=$target"
+          echo "LOCKED_PUBLIC_LIKE_SUPPORT_FUNCTION=$fn"
 
       - name: Checkout exact source
         uses: actions/checkout@v4
@@ -45,7 +54,7 @@ jobs:
           git merge-base --is-ancestor "${{ steps.source.outputs.sha }}" origin/preview
           trigger="$RUNNER_TEMP/preview-public-like-config448.trigger"
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-public-like-config448.trigger" -o "$trigger"
-          grep -Fxq 'target_function=publicLikeWindowConfig448Candidate' "$trigger"
+          grep -Fxq "target_function=${{ steps.source.outputs.fn }}" "$trigger"
           grep -Fxq 'shared_d1_change=false' "$trigger"
           grep -Fxq 'shared_rtdb_rules_change=false' "$trigger"
           grep -Fxq 'user_data_change=false' "$trigger"
@@ -63,21 +72,49 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          target_fn="${{ steps.source.outputs.fn }}"
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
-          grep -Fq 'publicLikeWindowConfig448Candidate' functions/lib/index.js
-          grep -Fq 'readLikeBatchTimingAt416' functions/lib/exploreLikePublicConfig448.js
           node scripts/verify-448-common-public-like-window.mjs
-
-          d=".preview-public-like-config448"
+          d=".preview-public-like-support"
           rm -rf "$d"
           mkdir -p "$d/lib"
-          cp functions/lib/exploreLikePublicConfig448.js "$d/lib/"
-          cp functions/lib/exploreLikeBatchSettings416.js "$d/lib/"
-          cp functions/lib/exploreLikeEnvironment416.js "$d/lib/"
+
+          if [ "$target_fn" = 'publicLikeWindowConfig448Candidate' ]; then
+            cp functions/lib/exploreLikePublicConfig448.js "$d/lib/"
+            cp functions/lib/exploreLikeBatchSettings416.js "$d/lib/"
+            cp functions/lib/exploreLikeEnvironment416.js "$d/lib/"
+            cat > "$d/lib/index.js" <<'NODE'
+          "use strict";
+          const admin=require("firebase-admin");
+          admin.initializeApp({
+            databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
+          });
+          exports.publicLikeWindowConfig448Candidate =
+            require("./exploreLikePublicConfig448").publicLikeWindowConfig448Candidate;
+          NODE
+          else
+            node scripts/verify-438-stage416-public-release.mjs
+            node scripts/verify-439-stage416-public-release-routing.mjs
+            node scripts/verify-416-public-function-inventory.mjs selftest
+            grep -Fq 'SORIDRAW_PUBLIC_RELEASE416_ENDPOINT' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+            cp functions/lib/exploreLikePublicReleaseEndpoint416.js "$d/lib/"
+            cp functions/lib/exploreLikePublicRelease416.js "$d/lib/"
+            cp functions/lib/exploreLikeEnvironment416.js "$d/lib/"
+            cat > "$d/lib/index.js" <<'NODE'
+          "use strict";
+          const admin=require("firebase-admin");
+          admin.initializeApp({
+            databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
+          });
+          exports.publicLikeRelease416Candidate =
+            require("./exploreLikePublicReleaseEndpoint416").publicLikeRelease416Candidate;
+          NODE
+          fi
+
           cat > "$d/package.json" <<'JSON'
           {
-            "name":"soridraw-preview-public-like-config448",
+            "name":"soridraw-preview-public-like-support",
             "private":true,
             "main":"lib/index.js",
             "engines":{"node":"22"},
@@ -87,24 +124,16 @@ jobs:
             }
           }
           JSON
-          cat > "$d/lib/index.js" <<'NODE'
-          "use strict";
-          const admin=require("firebase-admin");
-          admin.initializeApp({
-            databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
-          });
-          exports.publicLikeWindowConfig448Candidate =
-            require("./exploreLikePublicConfig448").publicLikeWindowConfig448Candidate;
-          NODE
-          cat > preview.public-like-config448.firebase.json <<'JSON'
-          {"functions":{"source":".preview-public-like-config448"}}
+          cat > preview.public-like-support.firebase.json <<'JSON'
+          {"functions":{"source":".preview-public-like-support"}}
           JSON
           npm install --prefix "$d" --omit=dev --no-audit --no-fund
-          node - <<'NODE'
-          const mod=require('./.preview-public-like-config448/lib/index.js');
-          if(Object.keys(mod).join(',')!=='publicLikeWindowConfig448Candidate')
-            throw Error('448_SINGLE_FUNCTION_EXPORT_DRIFT');
-          console.log('448_SINGLE_FUNCTION_EXPORT=PASS');
+          node - "$target_fn" <<'NODE'
+          const target=process.argv[2];
+          const mod=require('./.preview-public-like-support/lib/index.js');
+          if(Object.keys(mod).join(',')!==target)
+            throw Error('PUBLIC_LIKE_SUPPORT_SINGLE_EXPORT_DRIFT');
+          console.log('PUBLIC_LIKE_SUPPORT_SINGLE_EXPORT=PASS '+target);
           NODE
 
       - name: Authenticate Firebase
@@ -113,33 +142,45 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
-      - name: Deploy PREVIEW config Function only
+      - name: Deploy exact PREVIEW Function only
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/config448-deploy.log"
+          target_fn="${{ steps.source.outputs.fn }}"
+          log="$RUNNER_TEMP/public-like-support-deploy.log"
           set +e
-          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config preview.public-like-config448.firebase.json             --only functions:publicLikeWindowConfig448Candidate             --non-interactive 2>&1 | tee "$log"
+          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config preview.public-like-support.firebase.json             --only "functions:$target_fn"             --non-interactive --force 2>&1 | tee "$log"
           deploy_rc=${PIPESTATUS[0]}
           set -e
           if [ "$deploy_rc" -ne 0 ]; then
             if grep -Fq 'Functions successfully deployed but could not set up cleanup policy' "$log"; then
-              gcloud functions describe publicLikeWindowConfig448Candidate                 --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"                 --format='value(state)' | grep -Fxq ACTIVE
-              echo '448_CONFIG_FUNCTION_DEPLOY=PASS_CLEANUP_POLICY_WARNING_ONLY'
+              gcloud functions describe "$target_fn"                 --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"                 --format='value(state)' | grep -Fxq ACTIVE
+              echo 'PUBLIC_LIKE_SUPPORT_DEPLOY=PASS_CLEANUP_POLICY_WARNING_ONLY'
             else
               exit "$deploy_rc"
             fi
           else
-            echo '448_CONFIG_FUNCTION_DEPLOY=PASS'
+            echo 'PUBLIC_LIKE_SUPPORT_DEPLOY=PASS'
           fi
 
       - name: Verify Function and protected refs
         shell: bash
         run: |
           set -euo pipefail
-          gcloud functions describe publicLikeWindowConfig448Candidate             --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"             --format='value(state)' | grep -Fxq ACTIVE
+          target_fn="${{ steps.source.outputs.fn }}"
+          gcloud functions describe "$target_fn"             --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"             --format=json > "$RUNNER_TEMP/public-like-support.json"
+          node - "$RUNNER_TEMP/public-like-support.json" "$target_fn" <<'NODE'
+          const d=require(process.argv[2]);
+          const target=process.argv[3];
+          if(String(d.state||'')!=='ACTIVE')throw Error(target+'_NOT_ACTIVE');
+          if(target==='publicLikeRelease416Candidate'){
+            const secrets=d?.serviceConfig?.secretEnvironmentVariables||[];
+            if(!secrets.some(x=>String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+              throw Error('416_PUBLIC_RELEASE_SECRET_BINDING_MISSING');
+          }
+          console.log('PUBLIC_LIKE_SUPPORT_FUNCTION_ACTIVE=PASS '+target);
+          NODE
           git fetch origin main production --no-tags
           test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
           test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
-          echo '448_CONFIG_FUNCTION_ACTIVE=PASS'
           echo 'TEST_PRODUCTION_UNCHANGED=PASS'

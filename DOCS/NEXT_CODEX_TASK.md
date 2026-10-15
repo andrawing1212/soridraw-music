@@ -1,3 +1,13 @@
+## NEXT — Stage416 191 early-public leak fixed: focused independent audit then PREVIEW-only activation (2026-10-15 KST)
+
+- **범위 고정:** 기존 독립 감사 FAIL 중 `repairSharedPublicLikeCounts191`가 공개 5분 보류 중 Master 숫자를 조기 노출하는 문제만. 다른 좋아요 구조/Firestore/Cloudflare 원본/Studio/UI 리팩터링 금지.
+- **감사 code exact:** `142667f24a70f6c8597c9dfe7250a4072a0d1860`; 이전 FAIL code `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`; 변경 PR #140/#141/#142/#144. `preview`에는 이후 PR #145 preflight trigger `6a2024398b7dc9b7ef445d1f0f3ee9514c420ef1`만 더해짐.
+- **최신 근거:** full CI Run `38723601670` SUCCESS (191 mixed guard, old 440, TS/Build); PREVIEW pinned single-Function dry preflight Run `38724015843` SUCCESS. 실제 deploy `0`, shared canonical mutation `0`.
+- **독립감사 우선 검사:** (1) 실제 191 repair 3 호출 경로 모두 차단 (2) Master delayed public count 5분 조기 노출 0 (3) ordinary 075 즉시 base aggregate/공개 소실 없음 (4) Stage416 ON 전체 시간 동안 optional legacy 191 R2 repair 정지가 ordinary 데이터 정확성을 침해하는지 (5) same-track/different-track 혼합 wave + window close retry 안전 (6) page revisit D1 extra scan/write 없음 (7) Firebase 39개 보호, TEST/PROD OFF. 감사방은 코드 수정/commit/push/deploy 금지.
+- **감사 PASS 시** audit SHA를 exact lock하고 GitHub repository variable `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA` 별도 관리자 승인 확인. 기존 승인된 `.deploy/stage416-preview-settle-one-function.trigger` PR/push Workflow 경로로 `audit_result=PASS;preflight_only=false` 상태의 **4 Functions 대상 1개씩** 배포하고 각 inventory no-diff 확인; PREVIEW Worker only 배포 후 Master 한 곡 실제 unlike 1회/5분 공개와 일반 좋아요 정상 동작/비용 실측. Guard 불일치/누락 시 자동 중단; 사용자 원본 데이터 변경/TEST/PROD 배포 금지.
+
+---
+
 ## NEXT — Stage416 Master-only PREVIEW activation exact-SHA 독립 감사 후 coordinated release (2026-10-15 KST)
 
 - **제품 감사 대상:** `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`.

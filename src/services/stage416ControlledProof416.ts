@@ -47,14 +47,50 @@ export type Stage416ControlledProofResult416 = {
   reason: string;
 };
 
+export type Stage416ControlledPublicProofResult416 = {
+  accepted: true;
+  version: number;
+  count: number;
+  privateMinutes: number;
+  publicMinutes: number;
+  reusedOperation: boolean;
+  reason: string;
+};
+
 const KEY_PREFIX_416 = 'soridraw:stage416:controlled-e2e-proof:v1:';
+const PUBLIC_KEY_PREFIX_416 = 'soridraw:stage416:controlled-public-proof:v1:';
 const UUID_416 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofKey416 = (uid: string) => KEY_PREFIX_416 + encodeURIComponent(uid);
+const publicProofKey416 = (uid: string) => PUBLIC_KEY_PREFIX_416 + encodeURIComponent(uid);
 
 const readStoredProof416 = (uid: string): StoredProof416 | null => {
   if (!uid || typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(proofKey416(uid));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<StoredProof416>;
+    if (value.schemaVersion !== 1 || !UUID_416.test(String(value.operationId || '')) ||
+        !UUID_416.test(String(value.deviceId || '')) ||
+        !String(value.trackId || '').trim() || String(value.trackId).length > 512 ||
+        !Number.isSafeInteger(Number(value.deviceSequence)) || Number(value.deviceSequence) <= 0 ||
+        !Number.isSafeInteger(Number(value.createdAt)) || Number(value.createdAt) <= 0) return null;
+    return {
+      schemaVersion: 1,
+      operationId: String(value.operationId),
+      trackId: String(value.trackId),
+      deviceId: String(value.deviceId),
+      deviceSequence: Number(value.deviceSequence),
+      createdAt: Number(value.createdAt),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readStoredPublicProof416 = (uid: string): StoredProof416 | null => {
+  if (!uid || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(publicProofKey416(uid));
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<StoredProof416>;
     if (value.schemaVersion !== 1 || !UUID_416.test(String(value.operationId || '')) ||
@@ -85,6 +121,16 @@ const persistStoredProof416 = (uid: string, proof: StoredProof416) => {
   }
 };
 
+const persistStoredPublicProof416 = (uid: string, proof: StoredProof416) => {
+  if (typeof window === 'undefined') throw new Error('STAGE416_PUBLIC_PROOF_BROWSER_REQUIRED');
+  window.localStorage.setItem(publicProofKey416(uid), JSON.stringify(proof));
+  const reread = readStoredPublicProof416(uid);
+  if (!reread || reread.operationId !== proof.operationId ||
+      reread.deviceId !== proof.deviceId || reread.deviceSequence !== proof.deviceSequence) {
+    throw new Error('STAGE416_PUBLIC_PROOF_INTENT_NOT_DURABLE');
+  }
+};
+
 const retireStoredProof416 = (uid: string, operationId: string): boolean => {
   if (!uid || typeof window === 'undefined' || !operationId) return false;
   const current = readStoredProof416(uid);
@@ -95,17 +141,22 @@ const retireStoredProof416 = (uid: string, operationId: string): boolean => {
 
 export const hasStage416ControlledProofIntent416 = (uid: string): boolean =>
   !!readStoredProof416(uid);
+export const hasStage416ControlledPublicProofIntent416 = (uid: string): boolean =>
+  !!readStoredPublicProof416(uid);
 
-const requireMaster416 = async (): Promise<number> => {
+const requireMaster416 = async (): Promise<{ privateMinutes: number; publicMinutes: number }> => {
   const call = httpsCallable<Record<string, never>, MasterTimingReply416>(
     functions, 'masterGetLikeBatchTiming416',
   );
   const response = (await call({})).data;
-  const minutes = Number(response?.privateMinutes);
-  if (response?.ok !== true || ![1, 3, 5, 10, 20].includes(minutes)) {
+  const privateMinutes = Number(response?.privateMinutes);
+  const publicMinutes = Number(response?.publicMinutes);
+  if (response?.ok !== true ||
+      ![1, 3, 5, 10, 20].includes(privateMinutes) ||
+      ![1, 3, 5, 10, 20].includes(publicMinutes)) {
     throw new Error('STAGE416_MASTER_PROOF_NOT_AUTHORIZED');
   }
-  return minutes;
+  return { privateMinutes, publicMinutes };
 };
 
 const confirmCanonicalLiked416 = async (trackId: string): Promise<boolean> => {
@@ -171,6 +222,37 @@ const prepareProof416 = async (
   return { proof, reused: false, canonicalConfirmed: true };
 };
 
+const preparePublicProof416 = async (
+  uid: string,
+): Promise<{ proof: StoredProof416; reused: boolean; canonicalConfirmed: boolean }> => {
+  const existing = readStoredPublicProof416(uid);
+  if (existing) return { proof: existing, reused: true, canonicalConfirmed: false };
+  const trackId = selectLocalLikedCandidate416(uid);
+  if (!await confirmCanonicalLiked416(trackId)) {
+    throw new Error('STAGE416_PUBLIC_PROOF_CANDIDATE_NOT_CANONICALLY_LIKED');
+  }
+  if (typeof window === 'undefined' || typeof navigator === 'undefined' ||
+      !navigator.locks || typeof crypto === 'undefined' ||
+      typeof crypto.randomUUID !== 'function') {
+    throw new Error('STAGE416_PUBLIC_PROOF_DEVICE_SEQUENCE_UNAVAILABLE');
+  }
+  const sequence = await reserveExploreLikeDeviceSequence416(
+    uid, window.localStorage, navigator.locks, () => crypto.randomUUID(),
+  );
+  const proof: StoredProof416 = {
+    schemaVersion: 1,
+    operationId: crypto.randomUUID(),
+    trackId,
+    deviceId: sequence.deviceId,
+    deviceSequence: sequence.deviceSequence,
+    createdAt: Date.now(),
+  };
+  // This button performs ONE real unlike. Keep the exact operation durable so
+  // a retry can never allocate a second mutation after an ambiguous response.
+  persistStoredPublicProof416(uid, proof);
+  return { proof, reused: false, canonicalConfirmed: true };
+};
+
 export const runStage416ControlledProof416 = async (): Promise<Stage416ControlledProofResult416> => {
   const user = auth.currentUser;
   const uid = user?.uid || '';
@@ -178,7 +260,7 @@ export const runStage416ControlledProof416 = async (): Promise<Stage416Controlle
   if (!readCacheDiagnosticsEnabled(uid)) throw new Error('STAGE416_PROOF_DIAGNOSTICS_OFF');
 
   // Server-side Master authorization happens before any diagnostic mutation.
-  const privateMinutes = await requireMaster416();
+  const { privateMinutes } = await requireMaster416();
   const { proof, reused, canonicalConfirmed } = await prepareProof416(uid);
 
   // A fresh proof was already checked once before it was persisted. Reused
@@ -244,6 +326,71 @@ export const runStage416ControlledProof416 = async (): Promise<Stage416Controlle
     version: result.version,
     count: result.count,
     privateMinutes,
+    reusedOperation: reused,
+    reason: lastReason,
+  };
+};
+
+
+export const runStage416ControlledPublicProof416 = async (
+): Promise<Stage416ControlledPublicProofResult416> => {
+  const user = auth.currentUser;
+  const uid = user?.uid || '';
+  if (!uid) throw new Error('STAGE416_PUBLIC_PROOF_AUTH_REQUIRED');
+  if (!readCacheDiagnosticsEnabled(uid)) {
+    throw new Error('STAGE416_PUBLIC_PROOF_DIAGNOSTICS_OFF');
+  }
+
+  // Master authorization is confirmed by the already-deployed server callable
+  // BEFORE creating a real unlike operation. Public timing must be exactly 5m.
+  const { privateMinutes, publicMinutes } = await requireMaster416();
+  if (publicMinutes !== 5) {
+    throw new Error('STAGE416_PUBLIC_PROOF_REQUIRES_5_MINUTES');
+  }
+  const { proof, reused, canonicalConfirmed } = await preparePublicProof416(uid);
+  if (!canonicalConfirmed && !await confirmCanonicalLiked416(proof.trackId)) {
+    throw new Error('STAGE416_PUBLIC_PROOF_CANDIDATE_CHANGED');
+  }
+
+  const click: PrivateRtdbClick416 = {
+    trackId: proof.trackId,
+    liked: false,
+    operationId: proof.operationId,
+    deviceId: proof.deviceId,
+    deviceSequence: proof.deviceSequence,
+  };
+  const callable = httpsCallable<PrivateRtdbClick416, PrivateClickReply416>(
+    functions, 'recordPrivateLike416',
+  );
+  let lastReason = 'OTHER';
+  const result = await retryPrivateClickAfterPriorSeal416(async () => {
+    try {
+      const reply = (await callable(click)).data;
+      lastReason = String(reply?.reason || (reply?.accepted ? 'ACCEPTED' : 'OTHER'));
+      recordStage416PrivateAcceptanceReply416(uid, proof.operationId, 'initial', reply);
+      return {
+        ok: reply?.ok === true,
+        accepted: reply?.accepted === true,
+        version: Number(reply?.version),
+        count: Number(reply?.count),
+        reason: String(reply?.reason || ''),
+      };
+    } catch (error) {
+      recordStage416PrivateAcceptanceError416(uid, proof.operationId, 'initial', error);
+      throw error;
+    }
+  }, () => readStoredPublicProof416(uid)?.operationId === proof.operationId);
+
+  if (!result) throw new Error('STAGE416_PUBLIC_PROOF_OPERATION_SUPERSEDED');
+  markStage416PrivateAcceptanceRegistered416(
+    uid, proof.operationId, 'initial', result.version,
+  );
+  return {
+    accepted: true,
+    version: result.version,
+    count: result.count,
+    privateMinutes,
+    publicMinutes,
     reusedOperation: reused,
     reason: lastReason,
   };

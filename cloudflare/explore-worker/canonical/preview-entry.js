@@ -1492,7 +1492,6 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     }
   }
 }
-}
 
 // SORIDRAW_BOUNDED_CANONICAL_PUBLIC_LIKE_CONVERGENCE_191_20260924
 // The old 075 path can consume a D1 queue despite a failed shared R2 projection.

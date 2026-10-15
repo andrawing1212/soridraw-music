@@ -123,6 +123,10 @@ assert.ok(settleAt>=0&&materializeAt>settleAt&&callbackAt>materializeAt&&clearAt
   'public release must settle canonical count, project R2, notify, then clear');
 assert.match(release,/alignSuccessorToPriorDeadline:true/);
 
+const client=readFileSync('src/services/exploreLikeService.ts','utf8');
+assert.match(client,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
+assert.match(client,/!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE[\\s\\S]{0,120}!COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448/);
+
 const config=readFileSync('functions/src/exploreLikePublicConfig448.ts','utf8');
 assert.match(config,/readLikeBatchTimingAt416/);
 assert.match(config,/publicMinutes: timing\.publicMinutes/);
@@ -134,6 +138,7 @@ console.log('COMMON_PUBLIC_448_SUCCESSOR_ALIGNED=PASS');
 console.log('COMMON_PUBLIC_448_PERSONAL_RELATION_PUBLIC_COUNT_SEPARATED=PASS');
 console.log('COMMON_PUBLIC_448_CHANGED_TRACK_ONLY_RECOUNT=PASS');
 console.log('COMMON_PUBLIC_448_ADMIN_INTERVAL_NEW_WINDOW_ONLY=PASS');
+console.log('COMMON_PUBLIC_448_CLIENT_INVALIDATION_RELEASE_ONLY=PASS');
 console.log('COMMON_PUBLIC_448_NO_446_D1_MIGRATION=PASS');
 console.log('DEPLOYMENT=0');
 console.log('SHARED_DATA_CHANGE=0');

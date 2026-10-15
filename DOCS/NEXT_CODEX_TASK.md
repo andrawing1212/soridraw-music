@@ -1,3 +1,14 @@
+## NEXT — app418 exact release gate only: config live PASS → independent audit → PREVIEW Worker/Hosting
+
+- Product merge: `18005cc536842de2f15eaf8b91d64969499af628`; current preview release-trigger head at checkpoint: `3e0cf445af8b1e138e32cd4c580bee5869569c32`.
+- **No more redesign.** Preserve app410 personal likes and the implemented shared public window.
+- First gate: verify `publicLikeWindowConfig448Candidate` is live and returns the existing Master `publicMinutes` value.
+- Second gate: independent read-only audit of the exact app418 merged code for same-track A/B/C aggregation, fixed deadline, release retry/idempotency, changed-track-only D1/R2 work, app410 regression, no cross-environment early-public leak.
+- PASS only: deploy PREVIEW Worker exact app418 source, then PREVIEW Hosting app418, then real-device same-song multi-user check. TEST/PRODUCTION forbidden.
+- Stop on first FAIL; do not add another table, journal, timer layer or migration.
+
+---
+
 ## NEXT — app418 shared public-like window PREVIEW release and real-device verification
 
 - Exact candidate: `4ba9317e71fbdd137b84d94deb861944f7313711`, branch `fix/common-public-like-window-448`, PR #151.

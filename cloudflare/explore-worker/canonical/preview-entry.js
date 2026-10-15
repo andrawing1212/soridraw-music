@@ -2447,9 +2447,11 @@ async function handlePrivateLikeRoute416(request,env,ctx,url) {
 // remains unchanged until all shared-data environments move together.
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-416';
-// PREVIEW controlled release only. TEST/PRODUCTION use separate Workers and
-// remain unchanged. The canonical bundle below defers only signed Stage416 IDs.
-const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true;
+// Stage416 one-window plan: Master stays in RTDB private pending until the
+// configured private deadline; only then may signed handoff reach shared D1.
+// No second public hold. Restore ordinary 075 projection + 191 repair.
+// PREVIEW controlled source only. TEST/PRODUCTION Workers are unchanged.
+const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
 const STAGE416_PUBLIC_WINDOW_ROUTE='/v1/internal/public-like-window-416';
 const STAGE416_PUBLIC_WINDOW_ACK_ROUTE='/v1/internal/public-like-window-416/ack';
 const STAGE416_PUBLIC_RELEASE_ROUTE='/v1/internal/public-like-release-416';

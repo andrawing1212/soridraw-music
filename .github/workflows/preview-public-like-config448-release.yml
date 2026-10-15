@@ -73,6 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           target_fn="${{ steps.source.outputs.fn }}"
+          npm ci --ignore-scripts --no-audit --no-fund
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
           node scripts/verify-448-common-public-like-window.mjs

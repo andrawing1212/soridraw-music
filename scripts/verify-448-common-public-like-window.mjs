@@ -8,7 +8,12 @@ import {
 } from '../cloudflare/explore-worker/runtime/public-like-window-416.mjs';
 import {
   settlePublicLikeCountsFromMembership448,
+  planPublicLikeCountsFromMembership448,
+  applyPublicLikeCountPlan448,
 } from '../cloudflare/explore-worker/runtime/public-like-canonical-settle-448.mjs';
+import {
+  releaseDueCommonPublicLikeWindow448,
+} from '../cloudflare/explore-worker/runtime/common-public-like-release-448.mjs';
 
 const base=1_700_200_000_000;
 const minute=60_000;
@@ -76,21 +81,82 @@ const preparedSql=[];
 const fakeDb={
   prepare(sql){
     preparedSql.push(sql);
-    return {bind(){return {all:async()=>({
-      results:[{track_id:'song',like_count:3}],meta:{changes:1},
-    })};}};
+    return {bind(){return {all:async()=>{
+      if(/SELECT t\.id AS track_id/.test(sql))return {
+        results:[{track_id:'song',published_like_count:2,target_like_count:3}],
+        meta:{changes:0},
+      };
+      if(/INSERT INTO track_stats/.test(sql))return {
+        results:[{track_id:'song',like_count:3}],meta:{changes:1},
+      };
+      throw Error('unexpected 448 SQL');
+    }};}};
   },
 };
+const planned=await planPublicLikeCountsFromMembership448(fakeDb,['song','song']);
+assert.equal(planned.requestedTracks,1);
+assert.equal(planned.changedTracks,1);
+assert.deepEqual(planned.changedRows,[{
+  trackId:'song',targetLikeCount:3,publishedLikeCount:2,
+}]);
+const applied=await applyPublicLikeCountPlan448(
+  fakeDb,planned.changedRows,base+20*minute);
+assert.equal(applied.d1Writes,1);
 const settled=await settlePublicLikeCountsFromMembership448(
   fakeDb,['song','song'],base+20*minute);
 assert.equal(settled.requestedTracks,1);
 assert.equal(settled.changedTracks,1);
 assert.equal(settled.d1Writes,1);
-assert.equal(preparedSql.length,1);
-assert.match(preparedSql[0],/COUNT\(l\.user_uid\)/);
-assert.match(preparedSql[0],/WHERE track_stats\.like_count<>excluded\.like_count/);
-assert.match(preparedSql[0],/WHERE t\.id IN \(/);
-assert.doesNotMatch(preparedSql[0],/explore_like_public_hold_446/);
+assert.equal(preparedSql.filter(sql=>/COUNT\(l\.user_uid\)/.test(sql)).length,2);
+assert.ok(preparedSql.some(sql=>/SELECT t\.id AS track_id/.test(sql)));
+assert.ok(preparedSql.some(sql=>/INSERT INTO track_stats/.test(sql)));
+assert.ok(preparedSql.every(sql=>!/explore_like_public_hold_446/.test(sql)));
+
+const zeroMap=new Map();
+let zeroAlarm=null;
+const zeroStorage={
+  async transaction(fn){return fn(this);},
+  async get(key){return zeroMap.get(key);},
+  async put(entries,value){
+    if(typeof entries==='string'){zeroMap.set(entries,structuredClone(value));return;}
+    for(const [key,row] of Object.entries(entries))zeroMap.set(key,structuredClone(row));
+  },
+  async list({prefix,startAfter,limit}={}){
+    let rows=[...zeroMap].filter(([key])=>!prefix||key.startsWith(prefix))
+      .sort((a,b)=>a[0].localeCompare(b[0]));
+    if(startAfter)rows=rows.filter(([key])=>key>startAfter);
+    if(Number.isSafeInteger(limit)&&limit>0)rows=rows.slice(0,limit);
+    return new Map(rows);
+  },
+  async delete(keys){for(const key of (Array.isArray(keys)?keys:[keys]))zeroMap.delete(key);},
+  async getAlarm(){return zeroAlarm;},
+  async setAlarm(value){zeroAlarm=value;},
+  async deleteAlarm(){zeroAlarm=null;},
+};
+await joinPublicLikeChangedTracks416(zeroStorage,['song'],base,20);
+const zeroSql=[];
+const zeroDb={
+  prepare(sql){
+    zeroSql.push(sql);
+    return {bind(){return {all:async()=>{
+      if(!/SELECT t\.id AS track_id/.test(sql))throw Error('zero-net wrote D1');
+      return {results:[{
+        track_id:'song',published_like_count:3,target_like_count:3,
+      }],meta:{changes:0}};
+    }};}};
+  },
+};
+const zeroRelease=await releaseDueCommonPublicLikeWindow448({
+  db:zeroDb,r2:{},storage:zeroStorage,nowMs:base+20*minute,
+});
+assert.equal(zeroRelease.status,'NO_CHANGE');
+assert.equal(zeroRelease.canonicalChangedTracks448,0);
+assert.equal(zeroRelease.d1Writes,0);
+assert.equal(zeroRelease.r2Reads,0);
+assert.equal(zeroRelease.r2Writes,0);
+assert.equal(zeroRelease.receiptStatus,'NO_PUBLIC_CHANGE');
+assert.equal(zeroSql.length,1);
+assert.equal(await zeroStorage.get(PUBLIC_LIKE_WINDOW_KEY_416),undefined);
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 const commonStart=worker.indexOf('SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_448_20261015');
@@ -112,15 +178,33 @@ assert.match(entry,/__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE/);
 assert.match(entry,/readCommonPublicLikeMinutes448/);
 assert.match(entry,/joinPublicLikeChangedTracks416/);
 assert.match(entry,/releaseDueCommonPublicLikeWindow448/);
+assert.doesNotMatch(entry,/COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448/);
+assert.match(entry,/448_PUBLIC_CONFIG_UNAVAILABLE/);
+const preregisterAt=entry.indexOf('Register the candidate track set durably BEFORE any D1 queue drain');
+const activeMarkerAt=entry.indexOf('const activeAt = Number(',preregisterAt);
+assert.ok(preregisterAt>=0&&activeMarkerAt>preregisterAt,
+  'candidate track registration must happen before an active aggregate can drain D1');
+const aggregateStart=entry.indexOf('async runAggregate194()');
+const preflightAt=entry.indexOf('const preflightPublicMinutes448=',aggregateStart);
+const baseScheduledAt=entry.indexOf('await baseWorker.scheduled({',aggregateStart);
+assert.ok(preflightAt>aggregateStart&&baseScheduledAt>preflightAt,
+  'public timing config must fail closed before canonical D1 settlement');
 
 const release=readFileSync(
   'cloudflare/explore-worker/runtime/common-public-like-release-448.mjs','utf8');
-const settleAt=release.indexOf('settlePublicLikeCountsFromMembership448');
-const materializeAt=release.indexOf('materializePublicLikeProjection416({db,r2,trackIds:ids})');
-const callbackAt=release.indexOf('sendPublicLikeRelease416({');
-const clearAt=release.indexOf('clearPublicLikeReleaseStorage416(');
-assert.ok(settleAt>=0&&materializeAt>settleAt&&callbackAt>materializeAt&&clearAt>callbackAt,
-  'public release must settle canonical count, project R2, notify, then clear');
+const planAt=release.indexOf('planPublicLikeCountsFromMembership448(db,originalIds)');
+const noChangeAt=release.indexOf("status:'NO_CHANGE'",planAt);
+const checkpointAt=release.indexOf('await savePublicLikeCheckpoint416(storage,checkpoint)',planAt);
+const applyAt=release.indexOf('await applyPublicLikeCountPlan448(db,planRows,nowMs)',checkpointAt);
+const materializeAt=release.indexOf('materializePublicLikeProjection416({',applyAt);
+const callbackAt=release.indexOf('sendPublicLikeRelease416({',materializeAt);
+const publishedAt=release.indexOf('markPublicLikePublished416(storage,windowId)',callbackAt);
+const clearAt=release.lastIndexOf('clearPublicLikeReleaseStorage416(');
+assert.ok(planAt>=0&&noChangeAt>planAt&&checkpointAt>noChangeAt&&
+  applyAt>checkpointAt&&materializeAt>applyAt&&callbackAt>materializeAt&&
+  publishedAt>callbackAt&&clearAt>publishedAt,
+  'release must plan -> zero-net exit OR checkpoint -> D1 apply -> R2 -> notify -> publish mark -> clear');
+assert.match(release,/r2Reads:0,r2Writes:0/);
 assert.match(release,/alignSuccessorToPriorDeadline:true/);
 
 const client=readFileSync('src/services/exploreLikeService.ts','utf8');
@@ -137,6 +221,10 @@ console.log('COMMON_PUBLIC_448_FIXED_DEADLINE_NO_EXTENSION=PASS');
 console.log('COMMON_PUBLIC_448_SUCCESSOR_ALIGNED=PASS');
 console.log('COMMON_PUBLIC_448_PERSONAL_RELATION_PUBLIC_COUNT_SEPARATED=PASS');
 console.log('COMMON_PUBLIC_448_CHANGED_TRACK_ONLY_RECOUNT=PASS');
+console.log('COMMON_PUBLIC_448_PREREGISTER_BEFORE_D1=PASS');
+console.log('COMMON_PUBLIC_448_CONFIG_FAIL_CLOSED=PASS');
+console.log('COMMON_PUBLIC_448_ZERO_NET_PUBLIC_IO_ZERO=PASS');
+console.log('COMMON_PUBLIC_448_RELEASE_RETRY_CHECKPOINT=PASS');
 console.log('COMMON_PUBLIC_448_ADMIN_INTERVAL_NEW_WINDOW_ONLY=PASS');
 console.log('COMMON_PUBLIC_448_CLIENT_INVALIDATION_RELEASE_ONLY=PASS');
 console.log('COMMON_PUBLIC_448_NO_446_D1_MIGRATION=PASS');

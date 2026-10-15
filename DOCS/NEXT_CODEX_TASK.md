@@ -1,3 +1,15 @@
+## NEXT — Stage416 Master-only PREVIEW activation exact-SHA 독립 감사 후 coordinated release (2026-10-15 KST)
+
+- **제품 감사 대상:** `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`.
+- **activation infra 감사 기준:** merge `96eb9d86b7b0693ac1eb689ae6435ede7f7952aa`; current dry preflight trigger HEAD `a3a6912879c4ad894073a7cf546c07c823dbed9c`.
+- **증거 Run:** `38714537395` SUCCESS, baseline 39, exact product source PASS, ordinary app410 frozen, Master exact-one unlike gate PASS, PREVIEW-only public gates PASS, signed-only delayed public / ordinary immediate PASS, TS/Build/Functions Build/app401·402 PASS, deploy 0/shared data 0.
+- 감사에서 확인할 핵심: (1) ordinary client flags false 유지 (2) Master proof 외 일반 사용자 Stage416 intake 없음 (3) PREVIEW recordPrivate 서버 Master 재검증 (4) TEST/PROD public gates OFF (5) Worker signed-only changed IDs만 지연, ordinary 075/legacy 즉시 (6) one-function audited update가 target 1개만 변경하고 다른 38개 runtime policy/inventory 보호 (7) same-step env fix와 verify-444 통합이 승인 우회를 만들지 않음.
+- PASS 후 actual release는 한 번에 하나씩: recordPrivateLike416 → privateLikeFinalReceipt416Candidate → stage416ReleasePublicWindowCandidate → publicLikeRelease416Candidate → PREVIEW Worker. 매 단계 기존 39 보호/target only update 확인. 반쪽 상태 실패 시 다음 단계 중단.
+- 마지막 live E2E는 Master 실제 좋아요 1곡 해제 1회만 사용. 개인 하트/내 좋아요 즉시 유지, 공개 count는 약 5분 후 1회 반영, ordinary 사용자 즉시 경로 불변, 추가 전체 scan 없음 확인.
+- TEST/PRODUCTION 승격 금지.
+
+---
+
 ## NEXT — Stage416 PREVIEW public five-minute controlled Master E2E 활성화 (2026-10-15 KST)
 
 - **현재 live 기반:** Firebase Functions 39개. public Task + public receipt 둘 다 ACTIVE/HMAC/Node22, receipt HTTP 503 HARD OFF, Task dispatch 0건.

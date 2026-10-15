@@ -1,3 +1,13 @@
+## NEXT — app418 audit-fix exact SHA 독립 재감사만
+
+- **감사 제품 SHA:** `41221206c2880472e2f39ec2f66fd49cbc9d407c`; DRAFT PR #160. Quality Run `38773426335` SUCCESS.
+- **재감사 핵심:** ① 공동창 등록/설정 실패가 canonical D1 queue drain 전에 차단되어 공개 변경분 유실 0인지 ② Master 20분에서 config 오류 시 5분 fallback 없이 fail-closed인지 ③ like→unlike net-zero 창에서 R2 read/write·manifest·공개 알림 0인지 ④ D1 성공 후 R2/HTTP 실패 재시도가 checkpoint exact set을 재사용하고 중복 공개하지 않는지.
+- **보호:** app410 개인 하트/PC↔모바일/127·191 회귀, whole Feed/profile scan 0, 446 table/journal/migration 0, TEST/PRODUCTION/shared schema 비변경.
+- **비용 판정 요청:** changed-track `COUNT(l.user_uid)`가 좋아요 수에 비례하는 점을 실제 release blocker인지, 현행 cost 기준상 측정 필요 리스크인지 분리해서 명시 판정.
+- **PASS only:** PR #160 merge → PREVIEW Worker exact audited source → Hosting app418 → preview.soridraw.com 확인 → 사용자 1분 공동창 실기기 다계정 테스트. FAIL이면 지적된 최소 범위만 재수정. 배포/공유데이터 변경은 감사 중 금지.
+
+---
+
 ## NEXT — app418 exact-SHA independent audit before PREVIEW Worker/Hosting release
 
 - **Audit product SHA:** `18005cc536842de2f15eaf8b91d64969499af628`.

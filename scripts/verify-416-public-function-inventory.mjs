@@ -33,6 +33,25 @@ const safeFields416=fn=>JSON.stringify({
   eventTrigger:normalizeEventTrigger416(fn.eventTrigger||null),
   labels:fn.labels||null,
 });
+const stableTargetPolicy416=fn=>JSON.stringify({
+  name:fn.name||'',
+  environment:fn.environment||'',
+  runtime:fn.buildConfig?.runtime||'',
+  entryPoint:fn.buildConfig?.entryPoint||'',
+  eventTrigger:normalizeEventTrigger416(fn.eventTrigger||null),
+  serviceAccountEmail:fn.serviceConfig?.serviceAccountEmail||'',
+  timeoutSeconds:fn.serviceConfig?.timeoutSeconds??null,
+  availableMemory:fn.serviceConfig?.availableMemory||'',
+  minInstanceCount:fn.serviceConfig?.minInstanceCount??null,
+  maxInstanceCount:fn.serviceConfig?.maxInstanceCount??null,
+  maxInstanceRequestConcurrency:fn.serviceConfig?.maxInstanceRequestConcurrency??null,
+  ingressSettings:fn.serviceConfig?.ingressSettings||'',
+  vpcConnector:fn.serviceConfig?.vpcConnector||'',
+  vpcConnectorEgressSettings:fn.serviceConfig?.vpcConnectorEgressSettings||'',
+  secretEnvironmentVariables:(fn.serviceConfig?.secretEnvironmentVariables||[])
+    .map(x=>({key:x?.key||'',secret:x?.secret||x?.secretName||'',version:x?.version||''}))
+    .sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),
+});
 const INITIAL_TARGETS_416=new Set([
   'stage416ReleasePublicWindowCandidate',
   'publicLikeRelease416Candidate',
@@ -83,9 +102,8 @@ export function compareInventory416(before,after,target,mode){
       assert.equal(current.state,'ACTIVE','416_AUDITED_UPDATE_TARGET_NOT_ACTIVE');
       assert.equal(current.buildConfig?.runtime,'nodejs22',
         '416_AUDITED_UPDATE_TARGET_RUNTIME_DRIFT');
-      assert.equal(current.serviceConfig?.serviceAccountEmail,
-        oldFn.serviceConfig?.serviceAccountEmail,
-        '416_AUDITED_UPDATE_TARGET_SERVICE_ACCOUNT_DRIFT');
+      assert.equal(stableTargetPolicy416(current),stableTargetPolicy416(oldFn),
+        '416_AUDITED_UPDATE_TARGET_RUNTIME_POLICY_DRIFT');
       continue;
     }
     assert.equal(safeFields416(current),safeFields416(oldFn),

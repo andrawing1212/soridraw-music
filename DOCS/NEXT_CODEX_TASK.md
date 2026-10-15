@@ -1,3 +1,17 @@
+## NEXT — Stage416 PREVIEW public five-minute controlled Master E2E 활성화 (2026-10-15 KST)
+
+- **현재 live 기반:** Firebase Functions 39개. public Task + public receipt 둘 다 ACTIVE/HMAC/Node22, receipt HTTP 503 HARD OFF, Task dispatch 0건.
+- **고정 제품 기준:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`; 인프라 guard 기준 `dc8b055a1c4a3da0bed2c80cecb3448c71f60e0e`.
+- 다음 작업은 **PREVIEW only controlled activation**. private/canonical settlement의 현재 즉시·정확 경로, app410 좋아요 동결 기준, 기존 public immediate fallback을 보호하면서 Master 제한 실험으로 public 5분 지연을 실제 검증한다.
+- 활성화 후보에서 최소 확인: Functions public Task gate, public receipt gate, private-final public-five-minute gate, PREVIEW Worker public route gate가 같은 release identity로만 켜짐. 일부만 켜진 반쪽 상태 금지.
+- **합격선:** 개인 하트/내 좋아요는 기존처럼 즉시·PC↔모바일 수렴. 공개 likeCount/타 사용자 표시는 약 5분 window 뒤 변경분만 반영. 전체 feed/profile scan 없음. Task retry가 중복 공개를 만들지 않음. 공개 release 1회가 O(1) 변경분 처리. 좋아요 해제도 대칭.
+- **안전:** 일반 사용자 전체 활성화 전에 Master/제한 계정으로 1회 controlled E2E. 문제 시 public gates OFF로 되돌리고 private settlement는 유지. shared canonical data 삭제/백필/migration 금지.
+- 활성화 제품 diff는 exact SHA 고정 후 독립 감사 1회. 같은 내용 재감사 반복 금지. PASS 시 PREVIEW coordinated Worker/Functions만 배포하고 live E2E 검증.
+- Artifact Registry cleanup policy는 별도 운영 정리 항목. public 5분 기능 검증과 섞지 않음.
+- TEST/PRODUCTION 승격은 사용자 별도 승인 전 금지.
+
+---
+
 ## NEXT — Stage416 inventory eventFilters ordering fix exact-SHA 독립 감사 후 receipt PREVIEW 배포 (2026-10-15 KST)
 
 - **제품 PASS SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`.

@@ -1,3 +1,21 @@
+## CURRENT — Stage416 public Functions PREVIEW 2/2 실제 생성 완료 / 39 Functions / HARD OFF live PASS (2026-10-15 KST)
+
+- **제품 PASS 유지:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 5분 활성화 gate는 아직 모두 OFF.
+- **인프라 감사 PASS:** `dc8b055a1c4a3da0bed2c80cecb3448c71f60e0e`.
+- **GitHub 승인 보호:** `preview` PR 필수 / direct push 차단 / bypass 없음 / approvals 0(단독 저장소). Actions repository variable `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`는 새 감사 SHA로 갱신되었고 Run `38692609397` attempt 3에서 `416_PUBLIC_EXACT_AUDITED_DEPLOY_GUARD=PASS`로 실제 확인.
+- **공개 Task:** `stage416ReleasePublicWindowCandidate(us-central1)` 생성 완료. 최초 create Run `38688103686`.
+- **공개 receipt:** `publicLikeRelease416Candidate(asia-northeast3)` 생성 완료. Run `38692609397` attempt 3에서 Firebase 로그가 `Successful create operation`을 기록. Run 자체는 Function 실패가 아니라 **Artifact Registry cleanup policy 미설정** 때문에 Firebase CLI가 create 완료 후 exit 1.
+- **배포 직후 inventory:** failure diagnosis 기준 기존 38 Functions 변화 0, 신규 receipt 1개만 추가. 따라서 38→39.
+- **live read-only 검증:** Run `38694282662` **SUCCESS**. 실제 `416_PUBLIC_FUNCTION_COUNT=39`, Task/receipt ACTIVE + Node22 + HMAC binding PASS, receipt live GET **HTTP 503 / 416_PUBLIC_RELEASE_DISABLED**, public source gates HARD OFF PASS, public Task Cloud Run HTTP dispatch 요청 **0건(최근 2h)**, `FUNCTIONS_DEPLOY=0`, `SHARED_DATA_CHANGE=0`.
+- **공유 데이터/서비스 영향:** D1/RTDB/R2/Rules/Hosting/Worker/user canonical data 변경 0. TEST/PRODUCTION 변경 0.
+- **알려진 운영 리스크:** asia-northeast3 Functions Artifact Registry cleanup policy가 없어 Firebase CLI가 경고/exit 1. 기능 배포 자체는 완료됐지만 장기적으로 컨테이너 이미지가 누적되어 소액 저장비용이 생길 수 있음. 사용자 데이터와 무관하며 이번 기능 활성화 blocker는 아님. 자동 `--force` 적용은 하지 않음.
+- **Task queue 개별 task list:** 현재 GitHub 서비스계정은 `cloudtasks.tasks.list` 및 Monitoring timeSeries 권한이 없어 queue 내부 목록/깊이 직접 확인은 불가. 대신 live Task 서비스 HTTP dispatch 요청 0건 + source gates OFF를 확인해 현재 자동 실행 없음을 검증.
+- **현재 결론:** public Functions 서버 배치 2/2 완료. **공개 5분 사용자 기능은 아직 HARD OFF이며 활성화 전**.
+- **다음:** PREVIEW에서만 public five-minute controlled Master E2E 활성화 후보를 설계/구현 → exact SHA 독립 감사 → Worker + Functions coordinated PREVIEW activation → 실제 1회 Master 좋아요로 개인 즉시 반영 유지 / 공개 약 5분 지연 / PC↔모바일 수렴 / 비용 O(1) 검증. TEST/PRODUCTION 승격 금지.
+- **진척:** Stage416 전체 **1/4·25% 유지**(2/4 public 5분 live 동작 미활성). Public Functions 인프라 배치 **2/2·100%**.
+
+---
+
 ## CURRENT — Stage416 공개 Task PREVIEW 생성 완료 / inventory false-positive 수정 / receipt dry-run 38개 PASS / 재감사 대기 (2026-10-15 KST)
 
 - **제품 코드 PASS 유지:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 Task/receipt/Worker/client의 public five-minute 실행 gate는 HARD OFF.

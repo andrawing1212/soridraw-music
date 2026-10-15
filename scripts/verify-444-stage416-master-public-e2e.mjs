@@ -15,7 +15,7 @@ const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js',
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 const workerLock=readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
 
-assert.equal(version,417,'controlled public proof candidate must be PREVIEW app417');
+assert.equal(version,418,'shared public-window candidate must be PREVIEW app418');
 
 // Ordinary Explore/app410 path remains frozen and does not enter Stage416.
 assert.match(like,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);

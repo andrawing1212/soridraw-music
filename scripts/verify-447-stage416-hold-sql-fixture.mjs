@@ -28,7 +28,7 @@ await journal();
 const read=()=>db.prepare(`SELECT s.like_count AS canonical,
  ${PUBLIC_HELD_DELTA_SQL_446('s.track_id')} AS held
  FROM track_stats s WHERE s.track_id=?`).get('song');
-assert.deepEqual(read(),{canonical:9,held:-1});
+assert.deepEqual({...read()},{canonical:9,held:-1});
 assert.equal(projectPublicCount446(read().canonical,read().held),10);
 // Existing ordinary 075 wave remains fully canonical and immediately visible.
 db.prepare('UPDATE track_stats SET like_count=like_count+1 WHERE track_id=?').run('song');

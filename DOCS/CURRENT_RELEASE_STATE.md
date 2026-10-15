@@ -1,3 +1,17 @@
+## CURRENT — app418 PREVIEW live / user acceptance next (2026-10-16 KST)
+
+- **preview release commit before docs checkpoint:** `9a2958e929b52993e6f2c3a4338458c69a4aff26`.
+- **Audited product SHA:** `ccaf2279250722cf0adf12dac974836357ac2a34`; independent PR #160 final re-audit PASS.
+- **PREVIEW config Function:** Run `38769147047` SUCCESS; `publicLikeWindowConfig448Candidate` ACTIVE.
+- **PREVIEW Worker:** Run `38779499228` SUCCESS; live version `754c6395-c650-4187-826e-012fb74c6c25`; canonical worker SHA256 `fbc35053b49b6addb4f2571deb0a998abe988a33b2c68a7334b8fc52122adbc5`. Feed/Profile smoke PASS, public-like-card D1 R0/W0 PASS, TEST/PRODUCTION Workers unchanged.
+- **PREVIEW Hosting:** Run `38779861310` SUCCESS; `https://preview.soridraw.com/` exact build PASS; remote app version **418**; TEST/PRODUCTION unchanged.
+- **Released behavior:** app410 personal heart remains immediate/protected. Public likes use one Master-configured 1/3/5/10/20-minute common window. Same-song changes coalesce to one fixed deadline. Both 069 and legacy 075 preregister changed tracks before D1 settlement. Config failure is fail-closed. Net-zero public windows skip public R2/notification. Release retry uses checkpointed exact changed set.
+- **Shared data safety:** D1 schema change 0, migration/backfill/delete 0, shared RTDB Rules deployment 0, TEST/PRODUCTION code/data change 0.
+- **Cost evidence:** unchanged/public-card smoke D1 R0/W0 and R2-only Feed/Profile reads PASS. Changed-track membership recount cost still scales with likes on that changed track, so large-scale rows_read remains a measurement item after PREVIEW acceptance.
+- **Next:** user PREVIEW real-device acceptance at 1-minute public window. Do not promote to TEST until this passes.
+
+---
+
 ## CURRENT — app418 075 compatibility repair / CI PASS / independent re-audit next (2026-10-16 KST)
 
 - **Audit product SHA:** `ccaf2279250722cf0adf12dac974836357ac2a34`; DRAFT PR #160. Base preview `1b20d1a0b95c276ba32f45565d12f01b4e008bd4`.

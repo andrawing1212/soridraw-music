@@ -1,3 +1,15 @@
+## CURRENT — app418 075 compatibility repair / CI PASS / independent re-audit next (2026-10-16 KST)
+
+- **Audit product SHA:** `ccaf2279250722cf0adf12dac974836357ac2a34`; DRAFT PR #160. Base preview `1b20d1a0b95c276ba32f45565d12f01b4e008bd4`.
+- **Last independent FAIL fixed:** legacy `075` wave now reads that wave's exact non-zero membership-delta track IDs and calls the shared-window preregistration hook **before** its likes/cursor D1 batch. If preregistration/config/storage fails, the 075 D1 queue/cursor is not advanced, so retry can recover the same public change.
+- **Previously fixed and retained:** config failure has no 5-minute fallback (fail-closed); net-zero public windows skip R2/manifest/public notification; public release exact changed-set checkpoint preserves retry/idempotency.
+- **Quality Run:** `38777780859` **SUCCESS**. Explicit PASS markers include `COMMON_PUBLIC_448_075_PREREGISTER_BEFORE_D1`, `CONFIG_FAIL_CLOSED`, `ZERO_NET_PUBLIC_IO_ZERO`, `RELEASE_RETRY_CHECKPOINT`. TypeScript, Build, Functions TypeScript, app410 personal-like/catalog contracts, 191/frozen likes, and shared RTDB Rules read-only audit all PASS.
+- **Intermediate CI note:** commits before the canonical Worker SHA lock refresh failed only because the expected SHA still pointed to the previous Worker bytes. `source-sha256.txt` is now updated to the exact current Worker hash and the final run above passed.
+- **No deploy/data change:** PREVIEW Worker/Hosting not deployed from this candidate. Shared D1 schema/user data/migration/backfill 0; TEST/PRODUCTION unchanged.
+- **Next:** independent exact-SHA re-audit only. PASS → merge PR #160 → PREVIEW Worker → Hosting → `preview.soridraw.com` live verification → 1-minute same-song multi-account user test.
+
+---
+
 ## CURRENT — app418 independent-audit FAIL 3건 최소 수정 / CI PASS / 재감사 대기 (2026-10-16 KST)
 
 - **제품 감사 후보 SHA:** `41221206c2880472e2f39ec2f66fd49cbc9d407c`; branch `fix/app418-audit-fail-minimal-449`, DRAFT PR #160. Base preview `1b20d1a0b95c276ba32f45565d12f01b4e008bd4`.

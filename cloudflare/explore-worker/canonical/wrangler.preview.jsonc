@@ -62,6 +62,7 @@
     "SORIDRAW_PUBLICATION_R2_ONLY_READ_V1": "1",
     "SORIDRAW_FOLLOW_AUTHORITY_LIFECYCLE_378": "1",
     "SORIDRAW_PRIVATE_FINAL416_ENDPOINT": "https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/privateLikeFinalReceipt416Candidate",
+    "SORIDRAW_PUBLIC_RELEASE416_ENDPOINT": "https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicLikeRelease416Candidate",
     "SORIDRAW_ENVIRONMENT": "preview"
   }
 }

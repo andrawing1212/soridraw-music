@@ -87,13 +87,31 @@ jobs:
           process.stdout.write(String(hit.name||'').split('/').at(-1));
           NODE
           )"
-          gcloud tasks list --queue="$public_queue" --location=us-central1             --project="$project" --format=json > "$RUNNER_TEMP/stage416-public-tasks.json"
-          node - "$RUNNER_TEMP/stage416-public-tasks.json" <<'NODE'
+          token="$(gcloud auth print-access-token)"
+          start_time="$(date -u -d '15 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          filter="metric.type=\"cloudtasks.googleapis.com/queue/depth\" AND resource.type=\"cloud_tasks_queue\" AND resource.labels.queue_id=\"$public_queue\" AND resource.labels.location=\"us-central1\""
+          curl -sS --fail-with-body -G \
+            -H "Authorization: Bearer $token" \
+            --data-urlencode "filter=$filter" \
+            --data-urlencode "interval.startTime=$start_time" \
+            --data-urlencode "interval.endTime=$end_time" \
+            --data-urlencode "view=FULL" \
+            "https://monitoring.googleapis.com/v3/projects/$project/timeSeries" \
+            > "$RUNNER_TEMP/stage416-public-task-depth.json"
+          node - "$RUNNER_TEMP/stage416-public-task-depth.json" <<'NODE'
           const fs=require('fs');
-          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-          if(!Array.isArray(rows))throw Error('416_PUBLIC_TASK_LIST_INVALID');
-          if(rows.length!==0)throw Error('416_PUBLIC_TASKS_SCHEDULED_WHILE_HARD_OFF:'+rows.length);
-          console.log('416_PUBLIC_TASKS_SCHEDULED=0');
+          const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const series=Array.isArray(body.timeSeries)?body.timeSeries:[];
+          const points=series.flatMap(s=>Array.isArray(s.points)?s.points:[])
+            .filter(p=>p?.value?.int64Value!==undefined)
+            .sort((a,b)=>String(b.interval?.endTime||'').localeCompare(String(a.interval?.endTime||'')));
+          if(!points.length)throw Error('416_PUBLIC_TASK_DEPTH_METRIC_UNAVAILABLE');
+          const depth=Number(points[0].value.int64Value);
+          if(!Number.isSafeInteger(depth)||depth!==0)
+            throw Error('416_PUBLIC_TASK_QUEUE_DEPTH_NOT_ZERO:'+String(depth));
+          console.log('416_PUBLIC_TASK_QUEUE_DEPTH=0');
+          console.log('416_PUBLIC_TASKS_SCHEDULED=0_METRIC');
           console.log('416_PUBLIC_HARD_OFF_LIVE_READONLY=PASS');
           console.log('FUNCTIONS_DEPLOY=0');
           console.log('SHARED_DATA_CHANGE=0');

@@ -1,3 +1,16 @@
+## CURRENT — app418 shared public-like window candidate / PR #151 (2026-10-16 KST)
+
+- **Branch / head:** `fix/common-public-like-window-448` / `ba6d26b732111cef4c000124655b442f3f154fce`; base latest `preview` `aa00be22322aaf5d16b1cc2d2eb064d9a65c9497`. DRAFT PR #151.
+- **Goal:** app410 personal heart/membership stays local-first and protected. Public Explore like counts collect changed track IDs into one shared 1/3/5/10/20-minute window and update each changed track once at the fixed common deadline.
+- **Implemented:** personal canonical membership settles without immediate `track_stats.like_count` publication; common-window close recomputes only changed track IDs from canonical membership, updates `track_stats`, materializes exact changed-card R2, then emits one public invalidation. No full feed rebuild, no 446 hold journal/table, no shared D1 migration/backfill.
+- **Admin timing:** existing Master `publicMinutes` setting is read once per new shared window through PREVIEW-only `publicLikeWindowConfig448Candidate`; an already-open window keeps its original deadline and the new setting applies to the next window.
+- **Quality:** exact branch CI Run `38764154717` reached app410/127/191/Stage416/TypeScript/Build/Functions TypeScript and shared Rules checks; final result was being re-run after verifier-harness compatibility fixes. Dedicated 448 checks include A/B/C same-window aggregation, fixed deadline, changed-track-only recount, release-only public invalidation, and no 446 migration.
+- **Deploy status:** PREVIEW not yet activated from this candidate. New isolated release workflow deploys only `publicLikeWindowConfig448Candidate`; Worker/Hosting remain separate PREVIEW-only release steps. TEST/PRODUCTION unchanged.
+- **Old Stage416 #147:** preserved as historical candidate only; do not merge/migrate 446 for app418. app418 replaces that public-delay approach with the simpler shared-window model.
+- **Safety:** no user-data delete/overwrite/migration, no TEST/PRODUCTION code change, app410 personal-like frozen regressions remain mandatory.
+
+---
+
 ## CURRENT — Stage416 #147 candidate CI PASS but PREVIEW release BLOCKED (2026-10-15 KST)
 
 - **Release head:** preview `307b6fab4765cf82dc6c8c027ddb2d7a9a42c1df` (unchanged while this docs-only update is merged). Implementation lives only in DRAFT PR #147, branch `fix/stage416-mixed-track-public-correctness`; quality-tested exact source commit `be4a0d2860f2ff8b405213fe3030f81a9635a144`, documented final branch HEAD `d2b850d11fd7c6493792ad37a4e8a8a8275f6008`.

@@ -8,10 +8,10 @@ import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
 // Stage416 delayed public release task.
 // Source-only / HARD OFF until independent audit and coordinated PREVIEW release.
 const SECRET_416=defineSecret('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET');
-// Global/Test/Production stay OFF. Only the PREVIEW candidate may dispatch
-// after the independently audited controlled release.
+// One private hold owns the full five-minute delay. The additional public
+// release task remains OFF for every environment (including PREVIEW).
 export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false;
-export const STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE=true;
+export const STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE=false;
 const publicReleaseTaskActive416=(config:Stage416EnvironmentConfig)=>
  config.environment==='preview'&&STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE;
 const UUID416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

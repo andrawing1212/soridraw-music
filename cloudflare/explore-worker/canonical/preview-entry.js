@@ -46,7 +46,6 @@ const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 * 1000;
 const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true;
 const COMMON_PUBLIC_LIKE_CONFIG_ENDPOINT_448 =
   'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicLikeWindowConfig448Candidate';
-const COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448 = 5;
 const COMMON_PUBLIC_LIKE_MINUTES_448 = new Set([1, 3, 5, 10, 20]);
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
 const EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103 = 'shared-like-batch';
@@ -1108,10 +1107,12 @@ async function readCommonPublicLikeMinutes448(http=fetch) {
     if(response.ok&&payload?.ok===true&&COMMON_PUBLIC_LIKE_MINUTES_448.has(minutes))
       return minutes;
   } catch {}
-  return COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448;
+  throw new Error('448_PUBLIC_CONFIG_UNAVAILABLE');
 }
 
-async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
+async function scheduleExploreLikeAggregate103(
+  env, expectedBatchId418 = '', expectedTrackIds448 = [],
+) {
   const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
   if (!namespace) throw new Error('Explore like scheduler binding unavailable');
   const id = namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
@@ -1119,7 +1120,7 @@ async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
   const response = await stub.fetch('https://soridraw.internal/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ expectedBatchId418 }),
+    body: JSON.stringify({ expectedBatchId418, expectedTrackIds448 }),
   });
   if (!response.ok) throw new Error(`Explore like scheduler rejected: ${response.status}`);
   return response.json().catch(() => ({}));
@@ -1174,8 +1175,18 @@ async function ensureQueuedLikeBatchScheduled103(request, env, response, ctx) {
       row.status === 'legacy-queued')
       ? id418 : '';
 
+  const expectedTrackIds448 =
+    payload?.data?.queue === '069' &&
+    payload?.data?.canonicalD1 === 'queued' &&
+    Array.isArray(rows418) && rows418.length > 0 && rows418.length <= 50 &&
+    rows418.every((row) =>
+      row && typeof row.trackId === 'string' && row.trackId.length > 0 &&
+      row.trackId.length <= 512 && typeof row.liked === 'boolean')
+      ? [...new Set(rows418.map((row) => row.trackId.trim()))] : [];
+
   try {
-    const schedule = await scheduleExploreLikeAggregate103(env, expectedBatchId418);
+    const schedule = await scheduleExploreLikeAggregate103(
+      env, expectedBatchId418, expectedTrackIds448);
     if (expectedBatchId418 &&
         schedule?.newlyScheduled === true &&
         schedule?.settled === true &&
@@ -1234,14 +1245,47 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
     const publicWindowActive416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true;
     const commonPublicActive448=COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
-    const currentPublicWindow416=publicWindowActive416
+    const now448=Date.now();
+    const currentPublicWindow416=(publicWindowActive416||commonPublicActive448)
       ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416)
       :null;
     const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
+    const currentCommonOpen448=commonPublicActive448&&
+      currentPublicWindow416?.windowId&&currentPublicWindow416?.sealed!==true&&
+      Number(currentPublicWindow416?.deadlineAtMs)>now448&&
+      COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(currentPublicWindow416?.publicMinutes));
+    // Fail closed BEFORE canonical D1 settlement. A config outage must never
+    // silently turn a Master 20-minute window into the old 5-minute default.
+    const preflightPublicMinutes448=commonPublicActive448
+      ?(currentCommonOpen448
+        ?Number(currentPublicWindow416.publicMinutes)
+        :await readCommonPublicLikeMinutes448())
+      :0;
+    const preregisterCommonPublicLikeTracks448=async(rawIds)=>{
+      const ids=[...new Set((Array.isArray(rawIds)?rawIds:[])
+        .map((id)=>String(id||'').trim()).filter(Boolean))];
+      if(!ids.length)return {registered:false,trackCount:0};
+      if(ids.length>50000||ids.some((id)=>id.length>512))
+        throw new Error('448_PUBLIC_075_PREREGISTER_INVALID');
+      const at=Date.now();
+      const existing=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+      const open=existing?.windowId&&existing?.sealed!==true&&
+        Number(existing?.deadlineAtMs)>at&&
+        COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existing?.publicMinutes));
+      const minutes=open?Number(existing.publicMinutes):preflightPublicMinutes448;
+      const result=await joinPublicLikeChangedTracks416(
+        this.ctx.storage,ids,at,minutes);
+      if(result?.joined!==true&&result?.staged!==true)
+        throw new Error('448_PUBLIC_075_PREREGISTER_FAILED');
+      return {registered:true,trackCount:ids.length};
+    };
     const aggregateEnv448=(publicWindowActive416||commonPublicActive448)
       ?new Proxy(this.env,{get:(target,prop)=>{
         if(publicWindowActive416&&prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
         if(commonPublicActive448&&prop==='__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE')return true;
+        if(commonPublicActive448&&
+           prop==='__SORIDRAW_COMMON_PUBLIC_LIKE_PREREGISTER_448')
+          return preregisterCommonPublicLikeTracks448;
         return Reflect.get(target,prop);
       }}):this.env;
 
@@ -1287,7 +1331,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         const minutes448=currentOpen448&&
           COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existingWindow448?.publicMinutes))
           ?Number(existingWindow448.publicMinutes)
-          :await readCommonPublicLikeMinutes448();
+          :preflightPublicMinutes448;
         await joinPublicLikeChangedTracks416(
           this.ctx.storage,ids448,now448,minutes448);
         return {...settledAggregate418,publicWindowDeferred448:true,
@@ -1389,7 +1433,32 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
     const body418 = await request.json().catch(() => null);
     const expectedBatchId418 = String(body418?.expectedBatchId418 || '');
+    const expectedTrackIds448=[...new Set(
+      (Array.isArray(body418?.expectedTrackIds448)?body418.expectedTrackIds448:[])
+        .map((id)=>String(id||'').trim()).filter(Boolean))];
+    if(expectedTrackIds448.length>50||
+       expectedTrackIds448.some((id)=>id.length>512))
+      return Response.json({ok:false,error:{code:'448_PUBLIC_TRACKS_INVALID'}},
+        {status:400});
     const now = Date.now();
+
+    // Register the candidate track set durably BEFORE any D1 queue drain. If
+    // this storage/config step fails, the personal queue stays intact and the
+    // next retry can safely try again instead of losing the public change.
+    if(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true&&expectedTrackIds448.length){
+      const current448=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+      const open448=current448?.windowId&&current448?.sealed!==true&&
+        Number(current448?.deadlineAtMs)>now&&
+        COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(current448?.publicMinutes));
+      const minutes448=open448
+        ?Number(current448.publicMinutes)
+        :await readCommonPublicLikeMinutes448();
+      const registered448=await joinPublicLikeChangedTracks416(
+        this.ctx.storage,expectedTrackIds448,now,minutes448);
+      if(registered448?.joined!==true&&registered448?.staged!==true)
+        throw new Error('448_PUBLIC_PREREGISTER_FAILED');
+    }
+
     const activeAt = Number(await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194) || 0);
     if (
       Number.isFinite(activeAt)

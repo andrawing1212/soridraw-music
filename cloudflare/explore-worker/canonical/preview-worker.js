@@ -25843,6 +25843,25 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now, deferPublic4
 
   // SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_448_20261015
   if (env?.__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE === true) {
+    // 075 compatibility: discover only this wave's real membership deltas and
+    // durably preregister them in the shared public window BEFORE mutating
+    // likes or advancing the 075 cursor. If preregistration fails, the D1
+    // queue remains untouched and a later retry can safely try again.
+    const preRegister448 = await env.DB.prepare(cte + `
+      SELECT DISTINCT track_id
+      FROM deltas
+      WHERE delta <> 0
+      ORDER BY track_id ASC
+    `).bind(cutoff, max).all();
+    const preRegisterIds448=[...new Set(
+      (Array.isArray(preRegister448?.results)?preRegister448.results:[])
+        .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];
+    if(preRegisterIds448.length){
+      const preregister=env?.__SORIDRAW_COMMON_PUBLIC_LIKE_PREREGISTER_448;
+      if(typeof preregister!=='function')
+        throw new Error('448_PUBLIC_075_PREREGISTER_UNAVAILABLE');
+      await preregister(preRegisterIds448);
+    }
     const result448 = await env.DB.batch([
       env.DB.prepare(cte + `
         INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)

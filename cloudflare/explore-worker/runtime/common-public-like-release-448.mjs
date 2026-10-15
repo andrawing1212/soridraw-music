@@ -46,7 +46,8 @@ export async function releaseDueCommonPublicLikeWindow448({
      endpoint:releaseEndpoint,secret:releaseSecret,claim,http});
    receiptStatus=delivered.status;
  }
- const cleared=await clearPublicLikeReleaseStorage416(storage,state,nowMs);
+ const cleared=await clearPublicLikeReleaseStorage416(
+   storage,state,nowMs,{alignSuccessorToPriorDeadline:true});
  return {
    status:'RELEASED',cleared:cleared.cleared===true,
    windowId:String(state.window.windowId),trackCount:ids.length,

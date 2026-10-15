@@ -154,7 +154,7 @@ jobs:
           grep -Fq "if(result.reason==='NOT_DUE')" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
-          if [ "$ACTIVATION_RELEASE" = true ]; then
+          if [ "$activation_release" = true ]; then
             grep -Fq '"version": 417' public/app-version.json
             grep -Fq 'const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;' src/services/exploreLikeService.ts
             grep -Fq 'const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false;' src/services/exploreLikeService.ts

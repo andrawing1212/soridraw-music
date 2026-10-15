@@ -5,6 +5,7 @@
 // merge or deploy until its two assertions pass on an implementation branch.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
@@ -19,19 +20,53 @@ const user075=extract(worker,
   '// SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915');
 const actualPublished=[];
 const stage416ClientWindow=true;
+// Use actual SQLite SQL rather than stubbing the expected count. The signed
+// Master unlike has already settled D1 (-1) while the public projection still
+// shows 10. The ordinary 075 wave must publish canonical 10 minus held -1 = 11.
+const sqlite=new DatabaseSync(':memory:');
+sqlite.exec(readFileSync('cloudflare/explore-worker/candidates/stage416-public-hold-446.sql','utf8'));
+sqlite.exec(`
+  CREATE TABLE track_stats(track_id TEXT PRIMARY KEY,like_count INTEGER,
+    comment_count INTEGER DEFAULT 0,play_count INTEGER DEFAULT 0,updated_at INTEGER);
+  CREATE TABLE likes(track_id TEXT,user_uid TEXT,created_at INTEGER,PRIMARY KEY(track_id,user_uid));
+  CREATE TABLE explore_like_user_queue_state_075(id INTEGER PRIMARY KEY,processed_at INTEGER,processed_uid TEXT);
+  INSERT INTO track_stats VALUES('same-track',9,0,0,0);
+  INSERT INTO explore_like_user_queue_state_075 VALUES(1,0,'');
+`);
+sqlite.prepare('INSERT INTO explore_like_public_hold_446 VALUES(?,?,?,?)')
+  .run('l069_1700000000000_'+('a'.repeat(64)),'same-track',1700000000000,-1);
+const simpleCte075=`WITH args_075 AS (SELECT ? AS cutoff,? AS max),
+  eligible AS (SELECT 'ordinary-user' AS user_uid,1700000001000 AS updated_at),
+  valid AS (SELECT 'same-track' AS track_id,'ordinary-user' AS user_uid,
+    1700000001000 AS mutation_at,1 AS desired_liked),
+  deltas AS (SELECT 'same-track' AS track_id,'owner-1' AS owner_uid,
+    'ordinary-user' AS user_uid,1 AS delta)`;
 const simulatedDb={
   prepare:sql=>({
-    bind:()=>({
-      all:async()=>({results:[{track_id:'same-track',owner_uid:'owner-1',
-        // Canonical after signed Master -1 AND ordinary +1: 10
-        next_like_count:10}]}),
+    bind:(...values)=>({
+      all:async()=>({results:sqlite.prepare(sql).all(...values)}),
     }),
   }),
-  batch:async()=>[
-    {meta:{changes:1}},{meta:{changes:0}},{meta:{changes:1}},
-    {meta:{changes:0}},{meta:{changes:1}},
-  ],
+  batch:async statements=>{
+    const out=[];
+    sqlite.exec('BEGIN');
+    try{
+      for(const statement of statements){
+        const row=statement._run();
+        out.push({meta:{changes:row.changes}});
+      }
+      sqlite.exec('COMMIT');
+      return out;
+    }catch(error){sqlite.exec('ROLLBACK');throw error;}
+  },
 };
+// SQLite mock covers the actual 075 five-statement D1 transaction.
+simulatedDb.prepare=sql=>({
+ bind:(...values)=>({
+   all:async()=>({results:sqlite.prepare(sql).all(...values)}),
+   _run:()=>sqlite.prepare(sql).run(...values),
+ }),
+});
 const actual075=new Function('exploreLikeUserAggregateCte075',
   'EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075',
   'patchExploreFeedR2Like044','patchExploreProfileR2Like044',
@@ -48,6 +83,7 @@ await actual075({
   __SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE:stage416ClientWindow,
 },Date.now(),Date.now(),false);
 const counts=actualPublished.map(row=>row[2]);
+assert.equal(sqlite.prepare("SELECT like_count AS n FROM track_stats WHERE track_id='same-track'").get().n,10,'ordinary queue must commit its canonical delta');
 const failure1=counts.some(count=>count!==11);
 // Initial public count 10 + ordinary +1; Master -1 stays held until deadline.
 console.log('STAGE416_SAME_TRACK_PUBLIC_EXPECTED=11 ACTUAL='+counts.join(','));

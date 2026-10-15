@@ -55,6 +55,7 @@ on:
       - 'functions/src/exploreLikePublicReleaseEndpoint416.ts'
       - 'scripts/verify-439-stage416-public-release-routing.mjs'
       - 'scripts/verify-440-stage416-public-window-coalescing.mjs'
+      - 'scripts/verify-444-stage416-master-public-e2e.mjs'
       - 'cloudflare/explore-worker/runtime/public-like-manifest-416.mjs'
       - 'scripts/verify-441-stage416-public-manifest-scale.mjs'
       - 'cloudflare/explore-worker/canonical/preview-worker.js'
@@ -236,6 +237,7 @@ jobs:
           node scripts/verify-438-stage416-public-release.mjs
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
+          node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-441-stage416-public-manifest-scale.mjs
           node scripts/verify-416-private-final-publisher.mjs
           node scripts/verify-416-public-coalescing-gap.mjs

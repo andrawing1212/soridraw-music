@@ -94,10 +94,13 @@ const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js
 assert.match(worker,/SORIDRAW_STAGE416_EXACT_PUBLIC_CHANGED_IDS_440_20261014/);
 assert.match(worker,/RETURNING track_id,\s*\(SELECT MAX\(CASE WHEN d\.stage416_signed=1 AND d\.delta<>0 THEN 1 ELSE 0 END\)/);
 assert.match(worker,/Reuse the two canonical track_stats mutations' RETURNING rows: zero extra/);
-assert.match(worker,/changedTrackIds416/);
-assert.match(worker,/stage416Changed416/);
+assert.match(worker,/SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015/);
+assert.match(worker,/changedRows416[\s\S]*?filter\(\(row\)=>Number\(row\?\.stage416_signed\|\|0\)===1\)[\s\S]*?changedTrackIds416/);
+assert.match(worker,/stage416Changed416=changedTrackIds416\.length>0/);
 assert.match(worker,/publicDeferred416:true/);
-assert.match(worker,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&\(\s*env\?\.__SORIDRAW_DEFER_PUBLIC_416===true\|\|totals\.stage416Changed416===true\)/);
+assert.match(worker,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&[\s\S]{0,120}totals\.stage416Changed416===true/);
+assert.doesNotMatch(worker,/__SORIDRAW_DEFER_PUBLIC_416/);
+assert.match(worker,/processExploreLikeUserQueueWave075\(\s*env, now, Date\.now\(\), false\)/);
 
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const runStart=entry.indexOf('async runAggregate194()');
@@ -105,7 +108,7 @@ const runEnd=entry.indexOf('async finalizeAggregate195()',runStart);
 const run=entry.slice(runStart,runEnd);
 assert.match(run,/PUBLIC_LIKE_WINDOW_KEY_416/);
 assert.match(run,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE/);
-assert.match(run,/__SORIDRAW_DEFER_PUBLIC_416/);
+assert.doesNotMatch(run,/__SORIDRAW_DEFER_PUBLIC_416/);
 assert.match(run,/STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true/);
 assert.match(run,/stagePublicLikeOpenPayload416/);
 assert.match(run,/joinPublicLikeChangedTracks416/);
@@ -150,22 +153,29 @@ assert.equal(aggregateCalls416,0,'unknown public window must prevent canonical D
 assert.equal(repairCalls416,0,'unknown public window must prevent premature R2/191 repair');
 assert.equal(joinCalls416,0,'failed read must not fabricate an empty window');
 publicReadFails416=false;
-const recovered416=await activeAggregate416.call(workerContext416);
-assert.equal(recovered416.publicWindowDeferred416,true,
-  'retry after storage recovery must preserve existing public window');
+// Existing public window + ordinary legacy wave must remain immediate.
+const ordinaryWhileOpen416=await activeAggregate416.call(workerContext416);
+assert.equal(ordinaryWhileOpen416.publicWindowDeferred416,undefined,
+  'ordinary users must not be delayed by a Master-only public window');
 assert.equal(aggregateCalls416,1);
+assert.equal(joinCalls416,0);
+assert.equal(repairCalls416,1);
+// A signed Stage416 wave joins the already-open fixed public window.
+signedWave416=true;
+const signedWhileOpen416=await activeAggregate416.call(workerContext416);
+assert.equal(signedWhileOpen416.publicWindowDeferred416,true);
 assert.equal(joinCalls416,1);
-assert.equal(repairCalls416,0);
-publicWindow416=null;signedWave416=true;
+assert.equal(repairCalls416,1);
+publicWindow416=null;
 const staged416=await activeAggregate416.call(workerContext416);
 assert.equal(staged416.publicWindowDeferred416,true);
 assert.equal(pendingCalls416,1,'new signed wave stages without an existing public window');
-assert.equal(repairCalls416,0);
+assert.equal(repairCalls416,1);
 signedWave416=false;
 const empty416=await activeAggregate416.call(workerContext416);
 assert.equal(empty416.publicWindowDeferred416,undefined,
-  'a genuine empty window may use the existing legacy path');
-assert.equal(repairCalls416,1);
+  'a genuine ordinary/empty wave may use the existing legacy path');
+assert.equal(repairCalls416,2);
 const getCountBeforeOff416=readCalls416;
 publicReadFails416=true;
 const offAggregate416=makeWorkerRun416(false,{
@@ -178,7 +188,7 @@ const offAggregate416=makeWorkerRun416(false,{
 await offAggregate416.call(workerContext416);
 assert.equal(readCalls416,getCountBeforeOff416,
   'Stage416 HARD OFF must never read public window storage');
-assert.equal(repairCalls416,2,'Stage416 HARD OFF preserves legacy repair path');
+assert.equal(repairCalls416,3,'Stage416 HARD OFF preserves legacy repair path');
 
 const registerAt=entry.indexOf("url.pathname==='/public-register'");
 const registerBlock=entry.slice(registerAt,registerAt+1800);
@@ -186,9 +196,11 @@ assert.match(registerBlock,/mergePendingPublicLikeOpen416/);
 
 const finalEndpoint=readFileSync('functions/src/exploreLikePrivateFinalEndpoint416.ts','utf8');
 assert.match(finalEndpoint,/STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
+assert.match(finalEndpoint,/STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=true/);
 
 console.log('STAGE416_FIRST_CANONICAL_WAVE_PENDING_IDS_MERGE=PASS');
-console.log('STAGE416_OPEN_WINDOW_LEGACY_CHANGED_IDS_JOIN=PASS');
+console.log('STAGE416_OPEN_WINDOW_ORDINARY_USERS_STAY_IMMEDIATE=PASS');
+console.log('STAGE416_OPEN_WINDOW_SIGNED_IDS_ONLY_JOIN=PASS');
 console.log('STAGE416_FIXED_DEADLINE_NO_EXTENSION=PASS');
 console.log('STAGE416_PENDING_RETRY_W0=PASS');
 console.log('STAGE416_PUBLIC_WINDOW_5000_IDS_PAGED_READ_CLEAR=PASS');

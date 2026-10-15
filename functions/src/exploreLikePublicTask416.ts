@@ -8,9 +8,12 @@ import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
 // Stage416 delayed public release task.
 // Source-only / HARD OFF until independent audit and coordinated PREVIEW release.
 const SECRET_416=defineSecret('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET');
-// Even if a broad Firebase deploy exposes this PREVIEW Task, its callback
-// cannot reach the shared Worker or D1/R2/RTDB while public staging is OFF.
+// Global/Test/Production stay OFF. Only the PREVIEW candidate may dispatch
+// after the independently audited controlled release.
 export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false;
+export const STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE=true;
+const publicReleaseTaskActive416=(config:Stage416EnvironmentConfig)=>
+ config.environment==='preview'&&STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE;
 const UUID416=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PUBLIC_RELEASE_ROUTE_416='/v1/internal/public-like-release-416';
 
@@ -72,7 +75,7 @@ const makeRelease416=(config:Stage416EnvironmentConfig)=>onTaskDispatched(
   retryConfig:{maxAttempts:25,minBackoffSeconds:30,maxBackoffSeconds:3600},
   rateLimits:{maxConcurrentDispatches:20}},
  async request=>{
-   if(!STAGE416_PUBLIC_RELEASE_TASK_ACTIVE)
+   if(!publicReleaseTaskActive416(config))
      throw Error('416_PUBLIC_RELEASE_TASK_DISABLED');
    const task=validTask416(request.data as PublicReleaseTask416);
    const nowMs=Date.now();

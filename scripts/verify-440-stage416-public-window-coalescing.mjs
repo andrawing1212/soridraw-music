@@ -98,7 +98,7 @@ assert.match(worker,/SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015/);
 assert.match(worker,/changedRows416[\s\S]*?filter\(\(row\)=>Number\(row\?\.stage416_signed\|\|0\)===1\)[\s\S]*?changedTrackIds416/);
 assert.match(worker,/stage416Changed416=changedTrackIds416\.length>0/);
 assert.match(worker,/publicDeferred416:true/);
-assert.match(worker,/__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&[\s\S]{0,120}totals\.stage416Changed416===true/);
+assert.match(worker,/const deferPublic416=env\?\.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true/);
 assert.doesNotMatch(worker,/__SORIDRAW_DEFER_PUBLIC_416/);
 assert.match(worker,/processExploreLikeUserQueueWave075\(\s*env, now, Date\.now\(\), false\)/);
 
@@ -159,23 +159,23 @@ assert.equal(ordinaryWhileOpen416.publicWindowDeferred416,undefined,
   'ordinary users must not be delayed by a Master-only public window');
 assert.equal(aggregateCalls416,1);
 assert.equal(joinCalls416,0);
-assert.equal(repairCalls416,0,'legacy 191 must not leak Master counts while public gate active');
+assert.equal(repairCalls416,1,'compensated 191 must recover ordinary count while Master gate active');
 // A signed Stage416 wave joins the already-open fixed public window.
 signedWave416=true;
 const signedWhileOpen416=await activeAggregate416.call(workerContext416);
 assert.equal(signedWhileOpen416.publicWindowDeferred416,true);
 assert.equal(joinCalls416,1);
-assert.equal(repairCalls416,0);
+assert.equal(repairCalls416,1);
 publicWindow416=null;
 const staged416=await activeAggregate416.call(workerContext416);
 assert.equal(staged416.publicWindowDeferred416,true);
 assert.equal(pendingCalls416,1,'new signed wave stages without an existing public window');
-assert.equal(repairCalls416,0);
+assert.equal(repairCalls416,1);
 signedWave416=false;
 const empty416=await activeAggregate416.call(workerContext416);
 assert.equal(empty416.publicWindowDeferred416,undefined,
   'a genuine ordinary/empty wave may use the existing legacy path');
-assert.equal(repairCalls416,0,'even ordinary wave must not invoke cross-track 191 while hold active');
+assert.equal(repairCalls416,2,'ordinary wave invokes signed-hold-masked bounded 191');
 const getCountBeforeOff416=readCalls416;
 publicReadFails416=true;
 const offAggregate416=makeWorkerRun416(false,{
@@ -188,7 +188,7 @@ const offAggregate416=makeWorkerRun416(false,{
 await offAggregate416.call(workerContext416);
 assert.equal(readCalls416,getCountBeforeOff416,
   'Stage416 HARD OFF must never read public window storage');
-assert.equal(repairCalls416,1,'Stage416 HARD OFF preserves one legacy repair call');
+assert.equal(repairCalls416,3,'Stage416 HARD OFF preserves its one additional legacy repair call');
 
 const registerAt=entry.indexOf("url.pathname==='/public-register'");
 const registerBlock=entry.slice(registerAt,registerAt+1800);

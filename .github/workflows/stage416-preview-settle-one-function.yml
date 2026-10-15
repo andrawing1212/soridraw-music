@@ -23,6 +23,7 @@ jobs:
       TASK_REGION: us-central1
       # Independently approved immutable commit from GitHub repository settings.
       TRUSTED_PUBLIC_GUARD_SHA: ${{ vars.SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA }}
+      AUDITED_PUBLIC_PRODUCT_SHA: c6b29de643b1d0dd3bb9c48be437b5dfb5600387
 
     steps:
       - name: Lock exact PREVIEW code and protected branches
@@ -66,6 +67,7 @@ jobs:
           case "$function_name" in
             stage416ReleasePublicWindowCandidate|publicLikeRelease416Candidate)
               grep -Fxq "audit_head=$target" "$trigger"
+              test "$target" = "$AUDITED_PUBLIC_PRODUCT_SHA" || { echo '416_UNAUDITED_PRODUCT_SHA_REFUSED'; exit 21; }
               grep -Fxq 'audit_result=PASS' "$trigger"
               grep -Fxq 'public_gate_activation=false' "$trigger"
               grep -Fxq 'user_data_migration=false' "$trigger"

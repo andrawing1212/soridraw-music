@@ -44,9 +44,8 @@ import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs'
 const REVISION_HEAD_CACHE_SECONDS_077 = 60;
 const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 * 1000;
 const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true;
-const COMMON_PUBLIC_LIKE_CONFIG_KEY_448 = 'common-public-like/config-448';
-const COMMON_PUBLIC_LIKE_CONFIG_ROUTE_448 = '/v1/internal/common-public-like-config-448';
-const COMMON_PUBLIC_LIKE_CONFIG_DO_ROUTE_448 = '/common-public-config-448';
+const COMMON_PUBLIC_LIKE_CONFIG_ENDPOINT_448 =
+  'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicLikeWindowConfig448Candidate';
 const COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448 = 5;
 const COMMON_PUBLIC_LIKE_MINUTES_448 = new Set([1, 3, 5, 10, 20]);
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
@@ -1100,51 +1099,16 @@ async function handlePublicLikeCards192(request, env) {
 // SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009
 // Queue intake is NOT final state. Only an atomic D1.batch DELETE RETURNING
 // identifying the exact accepted batch can prove canonical completion.
-async function syncCommonPublicLikeConfig448(env, publicMinutes, version) {
-  const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
-  if (!namespace || !COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(publicMinutes)) ||
-      !Number.isSafeInteger(Number(version)) || Number(version) < 0) {
-    throw new Error('448_PUBLIC_CONFIG_INVALID');
-  }
-  const id = namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
-  const response = await namespace.get(id).fetch(
-    'https://soridraw.internal' + COMMON_PUBLIC_LIKE_CONFIG_DO_ROUTE_448, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publicMinutes: Number(publicMinutes), version: Number(version) }),
-    });
-  if (!response.ok) throw new Error('448_PUBLIC_CONFIG_DO_REJECTED');
-  return response.json().catch(() => ({}));
-}
-
-async function handleSignedCommonPublicLikeConfig448(request, env) {
-  const secret = env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET;
-  if (typeof secret !== 'string' || secret.length < 32) {
-    return Response.json({ ok: false, error: { code: '448_CONFIG_BINDING_UNAVAILABLE' } }, { status: 503 });
-  }
-  const raw = await request.text();
-  const signature = request.headers.get('X-Soridraw-448-Signature');
-  if (!await verifyPrivateHmac416(raw, signature, secret)) {
-    return Response.json({ ok: false, error: { code: '448_CONFIG_SIGNATURE_DENIED' } }, { status: 403 });
-  }
-  let body = null;
-  try { body = JSON.parse(raw); } catch {}
-  const publicMinutes = Number(body?.publicMinutes);
-  const version = Number(body?.version);
-  const signedAtMs = Number(body?.signedAtMs);
-  const now = Date.now();
-  if (!COMMON_PUBLIC_LIKE_MINUTES_448.has(publicMinutes) ||
-      !Number.isSafeInteger(version) || version < 0 ||
-      !Number.isSafeInteger(signedAtMs) || Math.abs(now - signedAtMs) > 5 * 60 * 1000) {
-    return Response.json({ ok: false, error: { code: '448_CONFIG_INVALID' } }, { status: 400 });
-  }
+async function readCommonPublicLikeMinutes448(http=fetch) {
   try {
-    const data = await syncCommonPublicLikeConfig448(env, publicMinutes, version);
-    return Response.json({ ok: true, data });
-  } catch (error) {
-    console.error('[448] common public config sync failed', String(error?.message || error));
-    return Response.json({ ok: false, error: { code: '448_CONFIG_SYNC_FAILED' } }, { status: 503 });
-  }
+    const response=await http(COMMON_PUBLIC_LIKE_CONFIG_ENDPOINT_448,{
+      method:'GET',headers:{'Accept':'application/json'}});
+    const payload=await response.json().catch(()=>null);
+    const minutes=Number(payload?.data?.publicMinutes);
+    if(response.ok&&payload?.ok===true&&COMMON_PUBLIC_LIKE_MINUTES_448.has(minutes))
+      return minutes;
+  } catch {}
+  return COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448;
 }
 
 async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
@@ -1315,9 +1279,10 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
           ?settledAggregate418.commonPublicChangedTrackIds448:[])
         .map((id)=>String(id||'').trim()).filter(Boolean))];
       if(ids448.length){
-        const config448=await this.ctx.storage.get(COMMON_PUBLIC_LIKE_CONFIG_KEY_448);
-        const minutes448=COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(config448?.publicMinutes))
-          ?Number(config448.publicMinutes):COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448;
+        const existingWindow448=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+        const minutes448=COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existingWindow448?.publicMinutes))
+          ?Number(existingWindow448.publicMinutes)
+          :await readCommonPublicLikeMinutes448();
         await joinPublicLikeChangedTracks416(
           this.ctx.storage,ids448,Date.now(),minutes448);
         return {...settledAggregate418,publicWindowDeferred448:true,
@@ -1368,21 +1333,6 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if(request.method==='POST'&&url.pathname===COMMON_PUBLIC_LIKE_CONFIG_DO_ROUTE_448){
-      const body=await request.json().catch(()=>null);
-      const publicMinutes=Number(body?.publicMinutes);
-      const version=Number(body?.version);
-      if(!COMMON_PUBLIC_LIKE_MINUTES_448.has(publicMinutes)||
-         !Number.isSafeInteger(version)||version<0)
-        return Response.json({ok:false,error:{code:'448_CONFIG_INVALID'}},{status:400});
-      const current=await this.ctx.storage.get(COMMON_PUBLIC_LIKE_CONFIG_KEY_448);
-      if(!current||version>=Number(current.version||0)){
-        await this.ctx.storage.put(COMMON_PUBLIC_LIKE_CONFIG_KEY_448,{
-          publicMinutes,version,updatedAtMs:Date.now()});
-      }
-      const saved=await this.ctx.storage.get(COMMON_PUBLIC_LIKE_CONFIG_KEY_448);
-      return Response.json({ok:true,data:saved});
-    }
     if(request.method==='POST'&&url.pathname==='/public-release'){
       const body=await request.json().catch(()=>null);
       try{
@@ -2795,10 +2745,6 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448&&request.method==='POST'&&
-       url.pathname===COMMON_PUBLIC_LIKE_CONFIG_ROUTE_448){
-      return handleSignedCommonPublicLikeConfig448(request,env);
-    }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&
        url.pathname===PUBLIC_LIKE_MANIFEST_ROUTE_416){
       return handlePublicLikeManifestIntersect416(request,env);

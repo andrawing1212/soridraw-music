@@ -125,7 +125,7 @@ assert.match(release,/alignSuccessorToPriorDeadline:true/);
 
 const client=readFileSync('src/services/exploreLikeService.ts','utf8');
 assert.match(client,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
-assert.match(client,/!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE[\\s\\S]{0,120}!COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448/);
+assert.match(client,/!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE[\s\S]{0,160}!COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448/);
 
 const config=readFileSync('functions/src/exploreLikePublicConfig448.ts','utf8');
 assert.match(config,/readLikeBatchTimingAt416/);

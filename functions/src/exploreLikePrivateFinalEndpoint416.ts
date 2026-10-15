@@ -12,10 +12,11 @@ import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
 
 // Candidate only. This module is intentionally NOT imported/exported by index.ts.
 const secret416=defineSecret('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET');
-// Historical global gate remains false so TEST/PRODUCTION cannot be opened by
-// this source. The controlled release enables only the PREVIEW candidate.
+// Single-window Stage416: private RTDB 5-minute hold precedes canonical D1;
+// once signed private seal settles, public propagation is immediate. Disable
+// the second public window in PREVIEW as well as TEST/PRODUCTION.
 export const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
-export const STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=true;
+export const STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=false;
 const publicFiveMinuteActive416=(config:Stage416EnvironmentConfig)=>
  config.environment==='preview'&&STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE;
 const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({

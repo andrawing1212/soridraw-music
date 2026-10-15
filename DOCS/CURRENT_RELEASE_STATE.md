@@ -1,3 +1,17 @@
+## CURRENT — app418 shared public-like window implemented / config Function PREVIEW PASS / independent audit next (2026-10-16 KST)
+
+- **preview HEAD:** `4a82a8f457cfe3afff8e3daf092d3606cb2c55af`.
+- **Product implementation merge:** `18005cc536842de2f15eaf8b91d64969499af628` (PR #151).
+- **Goal:** app410 personal heart/membership remains protected. Public Explore like counts collect only changed track IDs into one shared Master-configured 1/3/5/10/20-minute window and publish each changed track once at the fixed common deadline.
+- **Implemented behavior:** A/B/C likes on the same song during one open window settle personal membership independently but do not update public `track_stats.like_count` per user. Window close recomputes only changed track IDs from canonical membership, materializes only changed public R2 cards, emits one public invalidation, then advances to the next aligned window. Later clicks do not extend the current deadline.
+- **Cost/safety:** no 446 hold table/journal, no D1 migration/backfill, no whole Feed/profile rebuild. Shared D1 schema/user data unchanged. TEST/PRODUCTION unchanged.
+- **Quality:** Run `38764154717` SUCCESS — TypeScript, Build, Functions TypeScript, app410/127/191/Stage416 regressions, shared Rules audit, dedicated 448 A/B/C same-window/fixed-deadline/changed-track-only/no-446 checks.
+- **PREVIEW config Function:** `publicLikeWindowConfig448Candidate` deployment Run `38769147047` SUCCESS. Build/auth/deploy/ACTIVE verification/protected refs all PASS. First run `38765724201` had a false-red after the Function was actually created because Firebase CLI could not auto-create an Artifact Registry cleanup policy; PR #157 changed only that exact post-deploy warning handling and PR #158 retried successfully.
+- **Not yet released:** PREVIEW Worker + Hosting app418 are NOT deployed yet. Independent exact-SHA backend audit must PASS first, then deploy Worker/Hosting and perform same-song multi-user real PREVIEW verification.
+- **Old Stage416 #147:** historical only. Do not merge/migrate 446 into app418.
+
+---
+
 ## CURRENT — app418 shared public-like window candidate / PR #151 (2026-10-16 KST)
 
 - **Branch / head:** `fix/common-public-like-window-448` / `ba6d26b732111cef4c000124655b442f3f154fce`; base latest `preview` `aa00be22322aaf5d16b1cc2d2eb064d9a65c9497`. DRAFT PR #151.

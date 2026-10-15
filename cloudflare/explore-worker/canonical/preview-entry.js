@@ -1261,10 +1261,31 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         ?Number(currentPublicWindow416.publicMinutes)
         :await readCommonPublicLikeMinutes448())
       :0;
+    const preregisterCommonPublicLikeTracks448=async(rawIds)=>{
+      const ids=[...new Set((Array.isArray(rawIds)?rawIds:[])
+        .map((id)=>String(id||'').trim()).filter(Boolean))];
+      if(!ids.length)return {registered:false,trackCount:0};
+      if(ids.length>50000||ids.some((id)=>id.length>512))
+        throw new Error('448_PUBLIC_075_PREREGISTER_INVALID');
+      const at=Date.now();
+      const existing=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+      const open=existing?.windowId&&existing?.sealed!==true&&
+        Number(existing?.deadlineAtMs)>at&&
+        COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existing?.publicMinutes));
+      const minutes=open?Number(existing.publicMinutes):preflightPublicMinutes448;
+      const result=await joinPublicLikeChangedTracks416(
+        this.ctx.storage,ids,at,minutes);
+      if(result?.joined!==true&&result?.staged!==true)
+        throw new Error('448_PUBLIC_075_PREREGISTER_FAILED');
+      return {registered:true,trackCount:ids.length};
+    };
     const aggregateEnv448=(publicWindowActive416||commonPublicActive448)
       ?new Proxy(this.env,{get:(target,prop)=>{
         if(publicWindowActive416&&prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
         if(commonPublicActive448&&prop==='__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE')return true;
+        if(commonPublicActive448&&
+           prop==='__SORIDRAW_COMMON_PUBLIC_LIKE_PREREGISTER_448')
+          return preregisterCommonPublicLikeTracks448;
         return Reflect.get(target,prop);
       }}):this.env;
 

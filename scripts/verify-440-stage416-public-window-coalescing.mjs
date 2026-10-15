@@ -159,23 +159,23 @@ assert.equal(ordinaryWhileOpen416.publicWindowDeferred416,undefined,
   'ordinary users must not be delayed by a Master-only public window');
 assert.equal(aggregateCalls416,1);
 assert.equal(joinCalls416,0);
-assert.equal(repairCalls416,1);
+assert.equal(repairCalls416,0,'legacy 191 must not leak Master counts while public gate active');
 // A signed Stage416 wave joins the already-open fixed public window.
 signedWave416=true;
 const signedWhileOpen416=await activeAggregate416.call(workerContext416);
 assert.equal(signedWhileOpen416.publicWindowDeferred416,true);
 assert.equal(joinCalls416,1);
-assert.equal(repairCalls416,1);
+assert.equal(repairCalls416,0);
 publicWindow416=null;
 const staged416=await activeAggregate416.call(workerContext416);
 assert.equal(staged416.publicWindowDeferred416,true);
 assert.equal(pendingCalls416,1,'new signed wave stages without an existing public window');
-assert.equal(repairCalls416,1);
+assert.equal(repairCalls416,0);
 signedWave416=false;
 const empty416=await activeAggregate416.call(workerContext416);
 assert.equal(empty416.publicWindowDeferred416,undefined,
   'a genuine ordinary/empty wave may use the existing legacy path');
-assert.equal(repairCalls416,2);
+assert.equal(repairCalls416,0,'even ordinary wave must not invoke cross-track 191 while hold active');
 const getCountBeforeOff416=readCalls416;
 publicReadFails416=true;
 const offAggregate416=makeWorkerRun416(false,{

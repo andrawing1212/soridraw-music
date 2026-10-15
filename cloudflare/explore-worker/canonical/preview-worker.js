@@ -25041,6 +25041,77 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
 
   const cte = exploreLikeAggregateSnapshotCte039(includeQueue066, includeQueue069, cutoff);
   const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
+
+  // SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_448_20261015
+  // Personal membership settles first. Public track_stats is intentionally left
+  // unchanged until the one shared public window closes, so every environment
+  // continues to read the same old public count during the window.
+  if (env?.__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE === true) {
+    const relationStatements448 = [
+      env.DB.prepare(cte + `
+        INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
+        SELECT track_id, user_uid, created_at FROM latest WHERE desired_liked = 1
+        RETURNING track_id
+      `).bind(...prefix),
+      env.DB.prepare(cte + `
+        DELETE FROM likes
+        WHERE (track_id, user_uid) IN (
+          SELECT track_id, user_uid FROM latest WHERE desired_liked = 0
+        )
+        RETURNING track_id
+      `).bind(...prefix),
+      env.DB.prepare(cte + `
+        DELETE FROM explore_like_batches_035
+        WHERE batch_id IN (SELECT batch_id FROM eligible WHERE queue_kind = '035')
+      `).bind(...prefix),
+    ];
+    let compactIndex448 = -1;
+    let w1Index448 = -1;
+    if (includeQueue066) {
+      compactIndex448 = relationStatements448.length;
+      relationStatements448.push(env.DB.prepare(cte + `
+        DELETE FROM explore_like_batches_066
+        WHERE batch_id IN (SELECT batch_id FROM eligible WHERE queue_kind = '066')
+      `).bind(...prefix));
+    }
+    if (includeQueue069) {
+      w1Index448 = relationStatements448.length;
+      relationStatements448.push(env.DB.prepare(cte + `
+        DELETE FROM explore_like_batches_069
+        WHERE batch_id IN (SELECT batch_id FROM eligible WHERE queue_kind = '069')
+        RETURNING batch_id
+      `).bind(...prefix));
+    }
+    const relationResult448 = await env.DB.batch(relationStatements448);
+    const commonPublicChangedTrackIds448 = [...new Set([
+      ...(Array.isArray(relationResult448?.[0]?.results) ? relationResult448[0].results : []),
+      ...(Array.isArray(relationResult448?.[1]?.results) ? relationResult448[1].results : []),
+    ].map((row) => String(row?.track_id || '').trim()).filter(Boolean))];
+    const oldProcessed448 = Number(relationResult448?.[2]?.meta?.changes || 0);
+    const compactProcessed448 = compactIndex448 >= 0
+      ? Number(relationResult448?.[compactIndex448]?.meta?.changes || 0) : 0;
+    const w1Processed448 = w1Index448 >= 0
+      ? Number(relationResult448?.[w1Index448]?.meta?.changes || 0) : 0;
+    return {
+      positiveTracks: 0,
+      negativeTracks: 0,
+      insertedLikes: Number(relationResult448?.[0]?.meta?.changes || 0),
+      deletedLikes: Number(relationResult448?.[1]?.meta?.changes || 0),
+      processedBatches: oldProcessed448 + compactProcessed448 + w1Processed448,
+      oldProcessed: oldProcessed448,
+      compactProcessed: compactProcessed448,
+      w1Processed: w1Processed448,
+      settledBatchIds418: w1Index448 >= 0 && Array.isArray(relationResult448?.[w1Index448]?.results)
+        ? relationResult448[w1Index448].results
+          .map((row) => String(row?.batch_id || '').trim()).filter(Boolean).slice(0, 2)
+        : [],
+      changedTrackIds416: [],
+      stage416Changed416: false,
+      commonPublicChangedTrackIds448,
+      commonPublicDeferred448: commonPublicChangedTrackIds448.length > 0,
+    };
+  }
+
   const statements = [
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
@@ -25351,7 +25422,9 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
     userQueue: userQueuePending,
     settledBatchIds418: [],
     changedTrackIds416: [],
-    stage416Changed416: false
+    stage416Changed416: false,
+    commonPublicChangedTrackIds448: [],
+    commonPublicDeferred448: false
   };
   try {
     if (legacyBoundary) {
@@ -25370,6 +25443,11 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
         for(const id of current.changedTrackIds416||[]){
           if(!totals.changedTrackIds416.includes(id))totals.changedTrackIds416.push(id);
         }
+        for(const id of current.commonPublicChangedTrackIds448||[]){
+          if(!totals.commonPublicChangedTrackIds448.includes(id))
+            totals.commonPublicChangedTrackIds448.push(id);
+        }
+        if(current.commonPublicDeferred448===true)totals.commonPublicDeferred448=true;
         if(current.stage416Changed416===true)totals.stage416Changed416=true;
         if (!current.processedBatches) break;
       }
@@ -25390,6 +25468,11 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
         for(const id of current.changedTrackIds416||[]){
           if(!totals.changedTrackIds416.includes(id))totals.changedTrackIds416.push(id);
         }
+        for(const id of current.commonPublicChangedTrackIds448||[]){
+          if(!totals.commonPublicChangedTrackIds448.includes(id))
+            totals.commonPublicChangedTrackIds448.push(id);
+        }
+        if(current.commonPublicDeferred448===true)totals.commonPublicDeferred448=true;
       }
     }
     console.log('[SORIDRAW 042] like aggregate', JSON.stringify(totals));
@@ -25410,6 +25493,11 @@ async function mirrorExploreSharedFeeds059(env) {
 
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
+  if (env?.__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE === true &&
+      Array.isArray(totals?.commonPublicChangedTrackIds448) &&
+      totals.commonPublicChangedTrackIds448.length > 0) {
+    return {...totals, publicProjection:'deferred-448', publicDeferred448:true};
+  }
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
   const deferPublic416=
     env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&
@@ -25533,7 +25621,7 @@ async function processExploreLikeBatches035Core065(env, scheduledTime = Date.now
 
 async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core065(env, scheduledTime);
-  if(totals?.publicDeferred416===true)return totals;
+  if(totals?.publicDeferred416===true||totals?.publicDeferred448===true)return totals;
   const changedItems = Array.isArray(totals?.publicProjectionDetail?.changedItems)
     ? totals.publicProjectionDetail.changedItems
     : [];
@@ -25752,6 +25840,51 @@ async function hasExploreLikeUserQueuePending075(env, cutoff) {
 async function processExploreLikeUserQueueWave075(env, cutoff, now, deferPublic416 = false) {
   const cte = exploreLikeUserAggregateCte075();
   const max = EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075;
+
+  // SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_448_20261015
+  if (env?.__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE === true) {
+    const result448 = await env.DB.batch([
+      env.DB.prepare(cte + `
+        INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
+        SELECT track_id, user_uid, mutation_at
+        FROM valid
+        WHERE desired_liked = 1
+        RETURNING track_id
+      `).bind(cutoff, max),
+      env.DB.prepare(cte + `
+        DELETE FROM likes
+        WHERE (track_id, user_uid) IN (
+          SELECT track_id, user_uid FROM valid WHERE desired_liked = 0
+        )
+        RETURNING track_id
+      `).bind(cutoff, max),
+      env.DB.prepare(cte + `
+        UPDATE explore_like_user_queue_state_075
+        SET processed_at = COALESCE((
+              SELECT updated_at FROM eligible ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+            ), processed_at),
+            processed_uid = COALESCE((
+              SELECT user_uid FROM eligible ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+            ), processed_uid)
+        WHERE id = 1 AND EXISTS (SELECT 1 FROM eligible)
+      `).bind(cutoff, max),
+    ]);
+    const commonPublicChangedTrackIds448 = [...new Set([
+      ...(Array.isArray(result448?.[0]?.results) ? result448[0].results : []),
+      ...(Array.isArray(result448?.[1]?.results) ? result448[1].results : []),
+    ].map((row) => String(row?.track_id || '').trim()).filter(Boolean))];
+    return {
+      positiveTracks: 0,
+      negativeTracks: 0,
+      insertedLikes: Number(result448?.[0]?.meta?.changes || 0),
+      deletedLikes: Number(result448?.[1]?.meta?.changes || 0),
+      advanced: Number(result448?.[2]?.meta?.changes || 0) > 0,
+      changedTrackIds416: [],
+      stage416Changed416: false,
+      commonPublicChangedTrackIds448,
+      commonPublicDeferred448: commonPublicChangedTrackIds448.length > 0,
+    };
+  }
 
   const projection = await env.DB.prepare(cte + `
     SELECT d.track_id, d.owner_uid,

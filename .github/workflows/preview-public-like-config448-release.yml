@@ -43,7 +43,8 @@ jobs:
           set -euo pipefail
           git fetch origin preview main production --no-tags
           git merge-base --is-ancestor "${{ steps.source.outputs.sha }}" origin/preview
-          trigger=".deploy/preview-public-like-config448.trigger"
+          trigger="$RUNNER_TEMP/preview-public-like-config448.trigger"
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-public-like-config448.trigger" -o "$trigger"
           grep -Fxq 'target_function=publicLikeWindowConfig448Candidate' "$trigger"
           grep -Fxq 'shared_d1_change=false' "$trigger"
           grep -Fxq 'shared_rtdb_rules_change=false' "$trigger"

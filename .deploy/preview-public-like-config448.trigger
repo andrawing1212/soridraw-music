@@ -1,9 +1,9 @@
-requested_at=2026-10-16T03:55:00+09:00
-product_code_target=f18b12f57ecb35c4419080de3a0b0bfc8901c286
+requested_at=2026-10-16T04:02:00+09:00
+product_code_target=a9be62fa3a9ff2763d8f4d3af0a38ca7844636db
 target_function=publicLikeRelease416Candidate
 scope=preview_public_like_release416_only
 shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
-reason=app418_live_missing_public_release_callback
+reason=retry_app418_public_release_after_ci_dependency_fix

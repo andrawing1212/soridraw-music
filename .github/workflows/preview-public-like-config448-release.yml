@@ -117,8 +117,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config preview.public-like-config448.firebase.json             --only functions:publicLikeWindowConfig448Candidate             --non-interactive
-          echo '448_CONFIG_FUNCTION_DEPLOY=PASS'
+          log="$RUNNER_TEMP/config448-deploy.log"
+          set +e
+          npx --yes firebase-tools@latest deploy             --project "$FIREBASE_PROJECT"             --config preview.public-like-config448.firebase.json             --only functions:publicLikeWindowConfig448Candidate             --non-interactive 2>&1 | tee "$log"
+          deploy_rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$deploy_rc" -ne 0 ]; then
+            if grep -Fq 'Functions successfully deployed but could not set up cleanup policy' "$log"; then
+              gcloud functions describe publicLikeWindowConfig448Candidate                 --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"                 --format='value(state)' | grep -Fxq ACTIVE
+              echo '448_CONFIG_FUNCTION_DEPLOY=PASS_CLEANUP_POLICY_WARNING_ONLY'
+            else
+              exit "$deploy_rc"
+            fi
+          else
+            echo '448_CONFIG_FUNCTION_DEPLOY=PASS'
+          fi
 
       - name: Verify Function and protected refs
         shell: bash

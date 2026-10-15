@@ -20,6 +20,7 @@ assert.match(wf,/require_external_guard416/);
 assert.match(wf,/TRUSTED_PUBLIC_GUARD_SHA/);
 assert.match(wf,/416_PUBLIC_UNAUDITED_DEPLOY_GUARD_REFUSED/);
 assert.match(wf,/public_gate_activation=true/);
+assert.match(wf,/export ACTIVATION_RELEASE="\$activation_release"/);
 assert.match(wf,/test "\$mode" = audited_update_only/);
 assert.match(wf,/416_ACTIVATION_EXPECTED_39_FUNCTIONS_BEFORE/);
 assert.match(wf,/416_AUDITED_EXACT_ONE_EXISTING_FUNCTION_UPDATE=PASS/);

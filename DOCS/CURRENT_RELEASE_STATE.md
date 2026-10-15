@@ -1,3 +1,16 @@
+## CURRENT — Stage416 public Function release infra 최종 독립 감사 PASS / GitHub 운영 설정 2건 대기 (2026-10-15 KST)
+
+- **제품 PASS:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 Task/receipt/Worker/client HARD OFF 유지.
+- **인프라 PASS:** `70a2a137657b5239119ce4958c1d6a5b169101d3` 별도 GPT-6 독립 재감사 **PASS**. 제품 SHA exact pin, 외부 infra approval SHA, 미감사 Workflow 거부, verify_existing/출처 불명 Function 자동 채택·재배포·삭제 금지, one-function create, pinned Firebase CLI, public 신규 배포의 --force 제거, 기존 37 Functions inventory 보호 모두 PASS.
+- **신규 dry CI:** 공개 Task Run `38678844741` SUCCESS, public receipt Run `38679044570` SUCCESS. 두 Run 모두 `LOCKED_ONE_FUNCTION_SOURCE=c6b29de6...`, Functions baseline 37, HMAC/isolated export/inventory PASS, `FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0`.
+- **현재 실제 blocker 1 — GitHub Workflow 변경 보호:** ruleset `Protect release branches` id `22889511`은 preview/main/production에 active이나 현재 확인 가능한 rule은 deletion + non-fast-forward뿐. PREVIEW Workflow 수정에 PR + 별도 승인 1명 요구를 확인하지 못함. 권장: preview 전용 branch ruleset, Require a pull request before merging ON, approvals 1, dismiss stale approvals ON, bypass 없음.
+- **현재 실제 blocker 2 — 외부 감사 SHA variable:** GitHub Actions repository variable `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`에 exact audited infra SHA `70a2a137657b5239119ce4958c1d6a5b169101d3` 등록 필요. 현재 연결 도구에서는 설정/확인 쓰기 기능 없음.
+- **배포 상태:** public Firebase Functions 생성 0, shared D1/RTDB/R2/Rules/Hosting/Worker 변경 0, TEST/PRODUCTION 변경 0, public five-minute OFF.
+- **다음:** 위 GitHub 운영 설정 2건 완료 확인 → 공개 Task 1개 최초 생성 → 기존 37 + 신규 1개만인지 postflight → PASS시에만 public receipt 생성 → 총 39, 기존 37 불변, HMAC, receipt HTTP 503, Task 미예약/HARD OFF 확인. 어느 단계든 FAIL이면 다음 단계 중단.
+- **진척:** Stage416 전체 1/4·25%, 앱 속도 5/5·100%, public Function 배포 준비 코드/CI/독립 감사 4/4·100%; 실제 PREVIEW Functions 배포 및 public 5분 live E2E는 아직 미완료.
+
+---
+
 ## CURRENT — Stage416 제품 SHA exact pin + 신규 인프라 CI 2/2 PASS / GitHub Workflow 승인 설정만 미확정 (2026-10-15 KST)
 
 - **제품 코드:** 독립 감사 PASS exact `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`; 공개 Task/receipt/Worker/client HARD OFF 그대로. 제품 기능 코드 추가 변경 없음.

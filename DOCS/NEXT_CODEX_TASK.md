@@ -1,3 +1,15 @@
+## NEXT — Stage416 GitHub 운영 승인 설정 후 public Functions PREVIEW 2단계 배포 (2026-10-15 KST)
+
+- 제품 exact PASS `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`; infra exact PASS `70a2a137657b5239119ce4958c1d6a5b169101d3`.
+- **운영 설정 1:** GitHub Settings → Rules → Rulesets에서 preview 전용 ruleset 추가/강화. Require pull request before merging ON, Required approvals 1, Dismiss stale approvals ON, bypass 없음. 기존 release ruleset은 main/production까지 묶여 있으므로 불필요하게 수정하지 않음.
+- **운영 설정 2:** Settings → Secrets and variables → Actions → Variables → repository variable `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA` = `70a2a137657b5239119ce4958c1d6a5b169101d3`. 승인되지 않은 다른 값/미설정은 Workflow fail-closed.
+- 설정 확인 전 실제 deploy trigger `preflight_only=false` 금지.
+- 설정 완료 후 1단계: `stage416ReleasePublicWindowCandidate`만 initial_only 최초 생성. 기존 37 Functions 전체 불변 + 신규 1개만 추가, HMAC, region us-central1, HARD OFF 확인. 실패 시 중단.
+- 1단계 PASS 후 2단계: `publicLikeRelease416Candidate`만 최초 생성. 총 39 Functions, 기존 37 + Task 동일, receipt asia-northeast3, HMAC, HTTP 503/HARD OFF 확인. 실패 시 공개 5분 활성화로 넘어가지 않음.
+- 이후 별도 Stage416 public 5-minute controlled Master E2E 설계/감사/활성화. TEST/PRODUCTION 승격은 금지.
+
+---
+
 ## NEXT — Stage416 exact product-pinned public Function release infra 최종 독립 감사 (2026-10-15 KST)
 
 - **제품 PASS SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`.

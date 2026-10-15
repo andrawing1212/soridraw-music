@@ -29,6 +29,76 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
+      - name: Verify Stage416 public Functions and HARD OFF read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='soridraw-app-866a5'
+          gcloud functions list --project "$project" --format=json > "$RUNNER_TEMP/stage416-all-functions.json"
+          node - "$RUNNER_TEMP/stage416-all-functions.json" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(!Array.isArray(rows))throw Error('416_PUBLIC_INVENTORY_INVALID');
+          if(rows.length!==39)throw Error('416_PUBLIC_FUNCTION_COUNT_NOT_39:'+rows.length);
+          const byShort=new Map(rows.map(fn=>[String(fn.name||'').split('/').at(-1),fn]));
+          for(const [name,region] of [
+            ['stage416ReleasePublicWindowCandidate','us-central1'],
+            ['publicLikeRelease416Candidate','asia-northeast3'],
+          ]){
+            const fn=byShort.get(name);
+            if(!fn||fn.state!=='ACTIVE'||!String(fn.name||'').includes('/locations/'+region+'/'))
+              throw Error('416_PUBLIC_FUNCTION_NOT_ACTIVE:'+name);
+            if(fn.buildConfig?.runtime!=='nodejs22')
+              throw Error('416_PUBLIC_FUNCTION_RUNTIME_DRIFT:'+name);
+            if(!fn.serviceConfig?.secretEnvironmentVariables?.some(x=>
+              String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+              throw Error('416_PUBLIC_HMAC_BINDING_MISSING:'+name);
+          }
+          console.log('416_PUBLIC_FUNCTION_COUNT=39');
+          console.log('416_PUBLIC_TASK_AND_RECEIPT_ACTIVE=PASS');
+          NODE
+
+          receipt_uri="$(gcloud functions describe publicLikeRelease416Candidate             --gen2 --region=asia-northeast3 --project="$project"             --format='value(serviceConfig.uri)')"
+          test -n "$receipt_uri"
+          http_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/stage416-public-receipt.json"             -w '%{http_code}' "$receipt_uri")"
+          test "$http_code" = '503'
+          node - "$RUNNER_TEMP/stage416-public-receipt.json" <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(body?.ok!==false||body?.error?.code!=='416_PUBLIC_RELEASE_DISABLED')
+            throw Error('416_PUBLIC_RECEIPT_NOT_HARD_OFF');
+          console.log('416_PUBLIC_RECEIPT_HTTP_503_HARD_OFF=PASS');
+          NODE
+
+          gcloud tasks queues list --location=us-central1 --project="$project"             --format=json > "$RUNNER_TEMP/stage416-queues.json"
+          node - "$RUNNER_TEMP/stage416-queues.json" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const hits=(Array.isArray(rows)?rows:[]).filter(q=>
+            String(q.name||'').toLowerCase().includes('stage416releasepublicwindowcandidate'));
+          if(hits.length!==1)throw Error('416_PUBLIC_TASK_QUEUE_NOT_EXACTLY_ONE:'+hits.length);
+          console.log('416_PUBLIC_TASK_QUEUE='+String(hits[0].name||'').split('/').at(-1));
+          NODE
+          public_queue="$(node - "$RUNNER_TEMP/stage416-queues.json" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const hit=rows.find(q=>String(q.name||'').toLowerCase().includes('stage416releasepublicwindowcandidate'));
+          if(!hit)process.exit(2);
+          process.stdout.write(String(hit.name||'').split('/').at(-1));
+          NODE
+          )"
+          gcloud tasks list --queue="$public_queue" --location=us-central1             --project="$project" --format=json > "$RUNNER_TEMP/stage416-public-tasks.json"
+          node - "$RUNNER_TEMP/stage416-public-tasks.json" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(!Array.isArray(rows))throw Error('416_PUBLIC_TASK_LIST_INVALID');
+          if(rows.length!==0)throw Error('416_PUBLIC_TASKS_SCHEDULED_WHILE_HARD_OFF:'+rows.length);
+          console.log('416_PUBLIC_TASKS_SCHEDULED=0');
+          console.log('416_PUBLIC_HARD_OFF_LIVE_READONLY=PASS');
+          console.log('FUNCTIONS_DEPLOY=0');
+          console.log('SHARED_DATA_CHANGE=0');
+          NODE
+
       - name: Inspect active Functions and 90min Cloud Run error summaries
         shell: bash
         run: |

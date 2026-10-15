@@ -12,12 +12,12 @@ export function makePublicHoldStatement446(db,cte,prefix,now){
   // Grouping by winning batch_id avoids duplicate same-track journal keys.
   const statement=cte+`
     INSERT INTO explore_like_public_hold_446(batch_id,track_id,created_at,delta)
-    SELECT batch_id,track_id,?,SUM(delta)
+    SELECT batch_id,track_id,CAST(SUBSTR(batch_id,6,13) AS INTEGER),SUM(delta)
     FROM deltas WHERE stage416_signed=1 AND delta<>0
     GROUP BY batch_id,track_id HAVING SUM(delta)<>0
     ON CONFLICT(batch_id,track_id) DO NOTHING
   `;
-  return db.prepare(statement).bind(...prefix,now);
+  return db.prepare(statement).bind(...prefix);
 }
 
 // Embed in the EXISTING bounded SELECT. Requires an index lookup for each

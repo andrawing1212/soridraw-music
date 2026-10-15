@@ -1,3 +1,18 @@
+## 2026-10-15 — Stage416 activation recordPrivate dry preflight PASS
+
+- Product target: `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`.
+- Final activation release infra before audit: `96eb9d86b7b0693ac1eb689ae6435ede7f7952aa`.
+- Dry trigger merge: `a3a6912879c4ad894073a7cf546c07c823dbed9c`.
+- Run `38714537395`: **SUCCESS**.
+- Firebase live baseline read-only: 39 Functions.
+- Master-only / ordinary immediate / PREVIEW-only gates / exact Worker SHA lock: PASS.
+- TypeScript / app Build / Functions Build / app401·402 like convergence: PASS.
+- FUNCTIONS_DEPLOY=0; SHARED_DATA_CHANGE=0.
+- No Worker/Hosting/Rules/D1/RTDB/R2 mutation. TEST/PRODUCTION unchanged.
+- Next: one independent exact-SHA audit, then coordinated PREVIEW activation only.
+
+---
+
 ## 2026-10-15 — Stage416 PREVIEW public Functions 2/2 live / HARD OFF verified
 
 - Public Task create: `stage416ReleasePublicWindowCandidate(us-central1)`, Run `38688103686`.

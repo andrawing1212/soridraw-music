@@ -170,6 +170,15 @@ assert.doesNotMatch(commonBranch,/INSERT INTO track_stats/);
 assert.doesNotMatch(commonBranch,/UPDATE track_stats/);
 assert.match(worker,/commonPublicDeferred448/);
 assert.match(worker,/publicProjection:'deferred-448'/);
+const queue075At=worker.indexOf('async function processExploreLikeUserQueueWave075');
+const preread075At=worker.indexOf('SELECT DISTINCT track_id',queue075At);
+const callback075At=worker.indexOf('__SORIDRAW_COMMON_PUBLIC_LIKE_PREREGISTER_448',queue075At);
+const d1Batch075At=worker.indexOf('const result448 = await env.DB.batch([',queue075At);
+assert.ok(queue075At>=0&&preread075At>queue075At&&callback075At>preread075At&&
+  d1Batch075At>callback075At,
+  '075 must discover delta IDs and durably preregister before membership/cursor D1 batch');
+assert.match(worker.slice(queue075At,d1Batch075At),/WHERE delta <> 0/);
+assert.match(worker.slice(queue075At,d1Batch075At),/448_PUBLIC_075_PREREGISTER_UNAVAILABLE/);
 
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 assert.match(entry,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
@@ -180,6 +189,9 @@ assert.match(entry,/joinPublicLikeChangedTracks416/);
 assert.match(entry,/releaseDueCommonPublicLikeWindow448/);
 assert.doesNotMatch(entry,/COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448/);
 assert.match(entry,/448_PUBLIC_CONFIG_UNAVAILABLE/);
+assert.match(entry,/__SORIDRAW_COMMON_PUBLIC_LIKE_PREREGISTER_448/);
+assert.match(entry,/preregisterCommonPublicLikeTracks448/);
+assert.match(entry,/448_PUBLIC_075_PREREGISTER_FAILED/);
 const preregisterAt=entry.indexOf('Register the candidate track set durably BEFORE any D1 queue drain');
 const activeMarkerAt=entry.indexOf('const activeAt = Number(',preregisterAt);
 assert.ok(preregisterAt>=0&&activeMarkerAt>preregisterAt,
@@ -225,6 +237,7 @@ console.log('COMMON_PUBLIC_448_PREREGISTER_BEFORE_D1=PASS');
 console.log('COMMON_PUBLIC_448_CONFIG_FAIL_CLOSED=PASS');
 console.log('COMMON_PUBLIC_448_ZERO_NET_PUBLIC_IO_ZERO=PASS');
 console.log('COMMON_PUBLIC_448_RELEASE_RETRY_CHECKPOINT=PASS');
+console.log('COMMON_PUBLIC_448_075_PREREGISTER_BEFORE_D1=PASS');
 console.log('COMMON_PUBLIC_448_ADMIN_INTERVAL_NEW_WINDOW_ONLY=PASS');
 console.log('COMMON_PUBLIC_448_CLIENT_INVALIDATION_RELEASE_ONLY=PASS');
 console.log('COMMON_PUBLIC_448_NO_446_D1_MIGRATION=PASS');

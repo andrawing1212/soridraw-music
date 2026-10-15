@@ -69,7 +69,8 @@ assert.match(endpoint,/readLikeBatchTimingAt416\(database,config\.timingPath\)/)
 assert.match(endpoint,/data\.changedTrackIds\.length/);
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
-assert.match(worker,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true/);
+assert.match(worker,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
+assert.match(worker,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
 assert.match(worker,/url\.pathname===STAGE416_PUBLIC_WINDOW_ROUTE/);
 assert.match(worker,/registerPublicLikeEventStorage416\(this\.ctx\.storage/);
 
@@ -82,7 +83,7 @@ console.log('STAGE416_PUBLIC_REGISTER_DUPLICATE_W0_SETTING_DRIFT_SAFE=PASS');
 console.log('STAGE416_PUBLIC_REGISTER_LATE_JOIN_NO_DEADLINE_EXTENSION=PASS');
 console.log('STAGE416_PUBLIC_REGISTER_DUE_WINDOW_FAILS_CLOSED_W0=PASS');
 console.log('STAGE416_PUBLIC_REGISTER_SIGNED_INTERNAL_ROUTE=PASS');
-console.log('STAGE416_PUBLIC_REGISTER_PREVIEW_CONTROLLED_RUNTIME_ON=PASS');
+console.log('STAGE416_PUBLIC_REGISTER_RUNTIME_RETAINED_COMMON448_ACTIVE=PASS');
 console.log('STAGE416_TEST_PRODUCTION_GLOBAL_GATE_REMAINS_OFF=PASS');
 console.log('DEPLOYMENT=0');
 console.log('SHARED_DATA_CHANGE=0');

@@ -183,8 +183,11 @@ async function joinPublicLikeChangedTracks416Inner(storage,trackIds,eventAtMs=Da
    // One row per changed track, not one record per event/retry.
    await putChunked416(storage,Object.fromEntries(ids.map(trackId=>[
      PUBLIC_LIKE_NEXT_TRACK_PREFIX_416+encodeURIComponent(trackId),{trackId}])));
-   if(!await storage.get(PUBLIC_LIKE_NEXT_KEY_416))
-     await storage.put(PUBLIC_LIKE_NEXT_KEY_416,{publicMinutes:window.publicMinutes});
+   if(!await storage.get(PUBLIC_LIKE_NEXT_KEY_416)){
+     const nextMinutes=PUBLIC_LIKE_MINUTES_416.has(Number(fallbackMinutes))
+       ?Number(fallbackMinutes):Number(window.publicMinutes);
+     await storage.put(PUBLIC_LIKE_NEXT_KEY_416,{publicMinutes:nextMinutes});
+   }
    await schedulePublicLikeAlarm416(storage,eventAtMs+1000);
    return {joined:false,staged:true,reason:'WINDOW_CLOSED',trackCount:ids.length};
  }

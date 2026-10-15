@@ -1,3 +1,14 @@
+## CURRENT — Stage416 191 early-public fix full CI PASS + PREVIEW dry preflight PASS / final narrow independent audit gate (2026-10-15 KST)
+
+- **최신 기준:** `preview` code + quality workflow exact commit `142667f24a70f6c8597c9dfe7250a4072a0d1860` (PR #140, #141, #142, #144). PREVIEW deployment **read-only trigger commit** `6a2024398b7dc9b7ef445d1f0f3ee9514c420ef1` (PR #145). `AGENTS.md` 기준으로 이 구간을 다시 설계하거나 확대하지 않음.
+- **감사 FAIL 수정:** legacy `repairSharedPublicLikeCounts191` 3곳이 Master-only Stage416 공개 5분 보류 상태의 최신 D1 숫자를 조기 R2 공개하는 위험을 막음. 앱/UI/Functions/공유 원본 구조는 수정하지 않았으며 ordinary `baseWorker.scheduled` 즉시 집계는 그대로. Master-only activation 전체에서 선택적인 legacy 191 R2 복구를 보류하는 방식이므로 ordinary 누락 복구 지연 영향은 새 독립 감사에서 꼭 확인.
+- **실행 회귀:** Run `38723601670` **SUCCESS**. `STAGE416_191_MASTER_WINDOW_MIXED_GATE=PASS`, `STAGE416_OPEN_WINDOW_ORDINARY_USERS_STAY_IMMEDIATE=PASS`, `STAGE416_OPEN_WINDOW_SIGNED_IDS_ONLY_JOIN=PASS`, TypeScript, Build, Functions TypeScript, 기존 191/app410 검증 PASS. 신규 191 전용 verifier를 실제 CI에 등록한 PR #144 포함.
+- **PREVIEW dry preflight:** Run `38724015843` **SUCCESS**, immutable Functions product source `2d2ac47970a0f1099ff53bb7b041097b3a3fe91a`, `STAGE416_SINGLE_FUNCTION_PREFLIGHT=PASS`, `416_ACTIVATION_EXISTING_TARGET_PREFLIGHT=PASS name=recordPrivateLike416`, `FUNCTIONS_DEPLOY=0`, `SHARED_DATA_CHANGE=0`. PR #145 trigger는 `preflight_only=true; audit_result=PENDING`으로 고정. 배포되지 않음.
+- **현재 상태:** PREVIEW Worker / Functions / Hosting 실제 Stage416 activation **미배포**. 기존 39 Functions와 public 5-minute HARD OFF 유지. 일반 app410 좋아요 코드 보호, TEST/PRODUCTION 및 공유 데이터 변경 0.
+- **남은 명확한 한 단계:** 최종 exact code `142667f24a...`과 preflight `6a202439...`를 대상으로 **이전에 FAIL낸 191 early-public leak 경로만 중심으로 독립 표적 감사**. legacy 191 전체 복구를 Stage416 활성화 동안 중단하는 것의 ordinary 영향 및 Master/ordinary mixed same-track or different-track, public deadline release, no-write on reentry 검증. PASS 후에만 GitHub Actions external guard SHA exact 승인 확인 및 `.deploy/stage416-preview-settle-one-function.trigger` PR 승인된 방식으로 Functions 4개 1개씩 PREVIEW actual update → Worker PREVIEW activation → Master 단일 실제 unlike 검증. 중간 FAIL 시 다음 deploy 중단. TEST/PRODUCTION 금지.
+
+---
+
 ## CURRENT — Stage416 191 premature-public-repair fix merged / CI PASS / activation 미배포 (2026-10-15 KST)
 
 - **이번 범위:** Master-only Stage416 공개 5분 지연 도중 legacy `repairSharedPublicLikeCounts191`가 R2 공개 숫자를 조기 수정하는 독립 감사 FAIL만 최소 수정. 다른 기능/환경 범위 확대 금지.

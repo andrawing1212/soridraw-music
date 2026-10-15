@@ -1259,14 +1259,10 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         changedTrackIds416};
     }
 
-    // One bounded recovery check per actual changed-data window, never per user
-    // or page view. Do not run it while Stage416 intentionally holds public
-    // projection, or it would leak the new count before the public deadline.
-    // During Master-only Stage416 activation, the legacy 191 projection repair
-    // cannot distinguish delayed signed changes from ordinary count drift.
-    // The canonical aggregate above still publishes ordinary 075 changes at once.
-    // Suspend only this optional repair until Stage416 public release is finalized.
-    if(!publicWindowActive416)await repairSharedPublicLikeCounts191(this.env);
+    // Stage446: bounded ordinary public repair uses canonical MINUS durable
+    // signed hold. Signed waves already returned above, so no early Master
+    // publication occurs and ordinary 075 R2 failures can still recover.
+    await repairSharedPublicLikeCounts191(this.env);
     return {...settledAggregate418,changedTrackIds416};
   }
 
@@ -1503,7 +1499,10 @@ async function repairSharedPublicLikeCounts191(env, { oneTime = false } = {}) {
   const ids = [...candidateIds];
   const canonical = new Map();
   if (ids.length) {
-    const sql = 'SELECT t.id,t.owner_uid,COALESCE(s.like_count,0) AS like_count ' +
+    const expectedPublicCount446=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true
+      ?'MAX(0,COALESCE(s.like_count,0) - COALESCE((SELECT SUM(h.delta) FROM explore_like_public_hold_446 h WHERE h.track_id=t.id),0))'
+      :'COALESCE(s.like_count,0)';
+    const sql = 'SELECT t.id,t.owner_uid,'+expectedPublicCount446+' AS like_count ' +
       'FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id ' +
       `WHERE t.id IN (${ids.map(() => '?').join(',')}) ` +
       "AND t.is_public=1 AND t.status='published'";
@@ -2690,17 +2689,15 @@ export default {
         throw new Error('[192] canonical like aggregate handler unavailable');
       }
       await baseWorker.scheduled(controller, env, ctx);
-      // Do not expose private Stage416 counts via the legacy 191 R2 repair.
-      if(!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE)await repairSharedPublicLikeCounts191(env);
+      // Stage446 repair reads the public count with exact signed hold masked.
+      await repairSharedPublicLikeCounts191(env);
       return;
     }
 
     // A temporary PREVIEW cron is the sole authorized repair trigger. Never
     // put an R2 HEAD or canonical D1 read on routine like-batch alarms.
     if (controller?.cron === '* * * * *') {
-      const repair191 = STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE
-        ? {changedTracks:0,skippedForStage416PublicWindow:true}
-        : await repairSharedPublicLikeCounts191(env, { oneTime: true });
+      const repair191 = await repairSharedPublicLikeCounts191(env, { oneTime: true });
       if (repair191?.changedTracks) console.log('[SORIDRAW 191] bounded public like repair:', JSON.stringify(repair191));
       const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
       if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));

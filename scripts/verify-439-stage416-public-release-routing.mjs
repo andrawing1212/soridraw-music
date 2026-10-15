@@ -63,7 +63,8 @@ assert.match(entry,/const STAGE416_PUBLIC_RELEASE_ROUTE='\/v1\/internal\/public-
 assert.match(entry,/X-Soridraw-416-Public-Task-Signature/);
 assert.match(entry,/expectedWindowId:String\(body\?\.windowId\|\|''\)/);
 assert.match(entry,/SORIDRAW_PUBLIC_RELEASE416_ENDPOINT/);
-assert.match(entry,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true/);
+assert.match(entry,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
+assert.match(entry,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
 
 const releaseCore=readFileSync('cloudflare/explore-worker/runtime/public-like-release-416.mjs','utf8');
 assert.match(releaseCore,/status:'STALE_TASK'/);

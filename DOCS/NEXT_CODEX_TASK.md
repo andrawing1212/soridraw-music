@@ -1,3 +1,14 @@
+## NEXT — app418 exact-SHA independent audit before PREVIEW Worker/Hosting release
+
+- **Audit product SHA:** `18005cc536842de2f15eaf8b91d64969499af628`.
+- **Current preview HEAD / release infra:** `4a82a8f457cfe3afff8e3daf092d3606cb2c55af`.
+- **Already PASS:** quality Run `38764154717`; PREVIEW config Function Run `38769147047` SUCCESS and ACTIVE.
+- **Audit only, no edits/deploy/data mutation:** verify app410 personal likes unchanged; same-song A/B/C changes collapse into one common deadline; later clicks do not extend the deadline; next window aligns correctly; only changed track IDs are recounted/projected; retry/idempotency does not double-publish; no whole Feed/profile scan; no 446 table/journal/migration; shared canonical compatibility with TEST/PRODUCTION old readers/writers; public config failure fallback is safe; Worker/DO/R2/D1 cost remains bounded O(changed tracks).
+- **PASS only:** deploy PREVIEW Worker exact app418 source, then PREVIEW Hosting app418, verify `preview.soridraw.com`, then user real-device same-song multi-account test at 1-minute setting.
+- **STOP on FAIL:** return minimum fix scope only. Do not add another table, journal, timer layer, migration or unrelated optimization. TEST/PRODUCTION forbidden.
+
+---
+
 ## NEXT — app418 shared public-like window PREVIEW release and real-device verification
 
 - Exact candidate: `4ba9317e71fbdd137b84d94deb861944f7313711`, branch `fix/common-public-like-window-448`, PR #151.

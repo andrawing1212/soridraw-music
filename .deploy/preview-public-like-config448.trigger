@@ -1,4 +1,4 @@
-requested_at=2026-10-16T01:00:00+09:00
+requested_at=2026-10-16T01:05:00+09:00
 product_code_target=18005cc536842de2f15eaf8b91d64969499af628
 target_function=publicLikeWindowConfig448Candidate
 scope=preview_public_like_config448_only
@@ -6,3 +6,5 @@ shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
+
+retry_reason=release_workflow_trigger_source_fix_154

@@ -87,7 +87,17 @@ const event={eventId:id(10),windowCandidateId:id(11),eventAtMs:base,
  publicMinutes:5,trackIds:['outside-top40','song-a']};
 await registerPublicLikeEventStorage416(storage,event,base);
 await ackPublicLikeEventStorage416(storage,event.eventId,base+1);
-let callbackAttempts=0,materializeCalls=0;
+let callbackAttempts=0,materializeCalls=0,holdCleanupWrites446=0;
+// The new signed-hold cleanup is a D1 write after the PUBLIC deadline.
+// Real D1 is never used by this fixture. Retry after callback failure must W0.
+const publicHoldDb446={prepare(sql){
+ assert.match(sql,/DELETE FROM explore_like_public_hold_446/);
+ return {bind:(deadlineAtMs,...ids)=>{
+   assert.equal(deadlineAtMs,base+300_000);
+   assert.deepEqual(ids,['outside-top40','song-a']);
+   return {run:async()=>{holdCleanupWrites446++;return {meta:{changes:2}};}};
+ }};
+}};
 const materialize=async({trackIds})=>{
  materializeCalls++;assert.deepEqual(trackIds,['outside-top40','song-a']);
  return {releaseRows:[
@@ -106,7 +116,7 @@ const failingHttp=async(_url,init)=>{
  return {ok:false,json:async()=>({ok:false})};
 };
 await assert.rejects(releaseDuePublicLikeWindow416({
- db:{},r2:{},storage,releaseEndpoint,secret,nowMs:base+300_000,
+ db:publicHoldDb446,r2:{},storage,releaseEndpoint,secret,nowMs:base+300_000,
  http:failingHttp,materialize,
 }),/416_PUBLIC_RELEASE_CALLBACK_NOT_CONFIRMED/);
 assert.equal((await readPublicLikeReleaseState416(storage,base+300_000)).exists,true,
@@ -118,12 +128,13 @@ const okHttp=async(_url,init)=>{
  return {ok:true,json:async()=>({ok:true,data:{status:'PUBLISHED'}})};
 };
 const released=await releaseDuePublicLikeWindow416({
- db:{},r2:{},storage,releaseEndpoint,secret,nowMs:base+300_001,
+ db:publicHoldDb446,r2:{},storage,releaseEndpoint,secret,nowMs:base+300_001,
  http:okHttp,materialize,
 });
 assert.equal(released.status,'RELEASED');assert.equal(released.cleared,true);
 assert.equal(released.d1Writes,0);
 assert.equal((await readPublicLikeReleaseState416(storage,base+300_001)).exists,false);
+assert.equal(holdCleanupWrites446,1,'a failed receipt must retry without another D1 hold release');
 assert.equal(callbackAttempts,2);assert.equal(materializeCalls,1,
  'durable claim retry skips projection and window clear waits for RTDB receipt');
 

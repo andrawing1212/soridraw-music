@@ -25092,9 +25092,13 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     ...(Array.isArray(result?.[0]?.results)?result[0].results:[]),
     ...(Array.isArray(result?.[1]?.results)?result[1].results:[]),
   ];
+  // SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015
+  // Keep exact signed Stage416 IDs separate from legacy/075 changes sharing
+  // the same aggregate transaction. This adds no D1 query or write.
   const changedTrackIds416=[...new Set(changedRows416
+    .filter((row)=>Number(row?.stage416_signed||0)===1)
     .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))];
-  const stage416Changed416=changedRows416.some((row)=>Number(row?.stage416_signed||0)===1);
+  const stage416Changed416=changedTrackIds416.length>0;
   const oldProcessed = Number(result?.[4]?.meta?.changes || 0);
   const compactProcessed = compactIndex >= 0 ? Number(result?.[compactIndex]?.meta?.changes || 0) : 0;
   const w1Processed = w1Index >= 0 ? Number(result?.[w1Index]?.meta?.changes || 0) : 0;
@@ -25373,10 +25377,10 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
 
     if (userQueuePending) {
       for (let wave = 0; wave < EXPLORE_LIKE_USER_QUEUE_MAX_WAVES_075; wave += 1) {
+        // 075 is the ordinary-user path. A Master-only Stage416 public
+        // window must never delay its existing immediate public projection.
         const current = await processExploreLikeUserQueueWave075(
-          env, now, Date.now(),
-          env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&
-          (env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true));
+          env, now, Date.now(), false);
         totals.waves += 1;
         if (!current.advanced) break;
         totals.processedUserWaves += 1;
@@ -25407,8 +25411,9 @@ async function mirrorExploreSharedFeeds059(env) {
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
-  const deferPublic416=env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&(
-    env?.__SORIDRAW_DEFER_PUBLIC_416===true||totals.stage416Changed416===true);
+  const deferPublic416=
+    env?.__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE===true&&
+    totals.stage416Changed416===true;
   if(deferPublic416)return {...totals,publicProjection:'deferred-416',
     publicDeferred416:true};
   try {
@@ -25840,8 +25845,8 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now, deferPublic4
     insertedLikes: Number(result?.[2]?.meta?.changes || 0),
     deletedLikes: Number(result?.[3]?.meta?.changes || 0),
     advanced: Number(result?.[4]?.meta?.changes || 0) > 0,
-    changedTrackIds416:[...new Set(changedRows
-      .map((row)=>String(row?.track_id||'').trim()).filter(Boolean))],
+    // 075 is never a Stage416-signed wave in controlled PREVIEW mode.
+    changedTrackIds416:[],
     stage416Changed416:false,
   };
 }

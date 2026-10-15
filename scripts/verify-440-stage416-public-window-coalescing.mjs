@@ -196,7 +196,7 @@ assert.match(registerBlock,/mergePendingPublicLikeOpen416/);
 
 const finalEndpoint=readFileSync('functions/src/exploreLikePrivateFinalEndpoint416.ts','utf8');
 assert.match(finalEndpoint,/STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
-assert.match(finalEndpoint,/STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=true/);
+assert.match(finalEndpoint,/STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
 
 console.log('STAGE416_FIRST_CANONICAL_WAVE_PENDING_IDS_MERGE=PASS');
 console.log('STAGE416_OPEN_WINDOW_ORDINARY_USERS_STAY_IMMEDIATE=PASS');

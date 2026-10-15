@@ -4349,8 +4349,13 @@ export const masterRecoverHeldAtomicLike420 = onCall(
 // cannot call this path because their deployed app code keeps the candidate OFF.
 export const recordPrivateLike416 = onCall(
   { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60 },
-  async (request) => handleAuthenticatedPrivateClick416(
-    admin.database(), request, STAGE416_ENVIRONMENTS.preview),
+  async (request) => {
+    // Controlled PREVIEW activation: only Master may create a Stage416 window.
+    // Ordinary app410 clients never call this path, so normal users pay R0/W0.
+    await requireMasterCaller(request);
+    return handleAuthenticatedPrivateClick416(
+      admin.database(), request, STAGE416_ENVIRONMENTS.preview);
+  },
 );
 export const recordPrivateLike416Test = onCall(
   { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60 },

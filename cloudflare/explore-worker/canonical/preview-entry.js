@@ -1262,7 +1262,11 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // One bounded recovery check per actual changed-data window, never per user
     // or page view. Do not run it while Stage416 intentionally holds public
     // projection, or it would leak the new count before the public deadline.
-    await repairSharedPublicLikeCounts191(this.env);
+    // During Master-only Stage416 activation, the legacy 191 projection repair
+    // cannot distinguish delayed signed changes from ordinary count drift.
+    // The canonical aggregate above still publishes ordinary 075 changes at once.
+    // Suspend only this optional repair until Stage416 public release is finalized.
+    if(!publicWindowActive416)await repairSharedPublicLikeCounts191(this.env);
     return {...settledAggregate418,changedTrackIds416};
   }
 
@@ -2686,14 +2690,17 @@ export default {
         throw new Error('[192] canonical like aggregate handler unavailable');
       }
       await baseWorker.scheduled(controller, env, ctx);
-      await repairSharedPublicLikeCounts191(env);
+      // Do not expose private Stage416 counts via the legacy 191 R2 repair.
+      if(!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE)await repairSharedPublicLikeCounts191(env);
       return;
     }
 
     // A temporary PREVIEW cron is the sole authorized repair trigger. Never
     // put an R2 HEAD or canonical D1 read on routine like-batch alarms.
     if (controller?.cron === '* * * * *') {
-      const repair191 = await repairSharedPublicLikeCounts191(env, { oneTime: true });
+      const repair191 = STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE
+        ? {changedTracks:0,skippedForStage416PublicWindow:true}
+        : await repairSharedPublicLikeCounts191(env, { oneTime: true });
       if (repair191?.changedTracks) console.log('[SORIDRAW 191] bounded public like repair:', JSON.stringify(repair191));
       const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
       if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));

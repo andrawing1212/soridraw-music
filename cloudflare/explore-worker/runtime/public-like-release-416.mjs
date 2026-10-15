@@ -76,9 +76,11 @@ async function releaseDuePublicLikeWindowInner416({
    // A transient R2 failure will retry after the deadline with ordinary
    // 075/191 repairing the same visible canonical value; never drop future
    // windows on the same track.
-   await clearReleasedPublicHolds446(db,state.trackIds,state.window.deadlineAtMs);
+   const journalCleanup446=await clearReleasedPublicHolds446(
+     db,state.trackIds,state.window.deadlineAtMs);
    const projectionResult=await materialize({db,r2,trackIds:state.trackIds});
-   projection=projectionResult;
+   projection={...projectionResult,d1Writes:
+     Number(projectionResult?.d1Writes||0)+journalCleanup446.statements};
    const rows=Array.isArray(projection?.releaseRows)?projection.releaseRows:[];
    let claim=null;
    if(rows.length){

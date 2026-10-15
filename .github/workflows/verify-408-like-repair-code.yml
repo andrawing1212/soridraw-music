@@ -1,7 +1,7 @@
 name: SORIDRAW 408 Targeted Like Repair Quality
 on:
   push:
-    branches: [preview]
+    branches: [preview, fix/stage416-mixed-track-public-correctness]
     paths:
       - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
@@ -56,6 +56,7 @@ on:
       - 'scripts/verify-439-stage416-public-release-routing.mjs'
       - 'scripts/verify-440-stage416-public-window-coalescing.mjs'
       - 'scripts/verify-416-191-public-hold-guard.mjs'
+      - 'scripts/verify-446-stage416-mixed-master-ordinary-public.mjs'
       - 'scripts/verify-444-stage416-master-public-e2e.mjs'
       - '.github/workflows/stage416-preview-settle-one-function.yml'
       - 'scripts/verify-416-public-function-inventory.mjs'
@@ -242,6 +243,7 @@ jobs:
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
           node scripts/verify-416-191-public-hold-guard.mjs
+          node scripts/verify-446-stage416-mixed-master-ordinary-public.mjs
           node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-445-stage416-activation-release-infra.mjs
           node scripts/verify-416-public-function-inventory.mjs selftest

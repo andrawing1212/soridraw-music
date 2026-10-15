@@ -62,6 +62,7 @@ jobs:
           if [ "$scope" = preview_audited_stage416_activation_single_function ]; then
             activation_release=true
           fi
+          export ACTIVATION_RELEASE="$activation_release"
           echo "ACTIVATION_RELEASE=$activation_release" >> "$GITHUB_ENV"
 
           preflight_only="$(sed -n 's/^preflight_only=//p' "$trigger")"

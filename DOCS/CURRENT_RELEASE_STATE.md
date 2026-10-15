@@ -1,3 +1,18 @@
+## CURRENT — Stage416 공개 Task PREVIEW 생성 완료 / inventory false-positive 수정 / receipt dry-run 38개 PASS / 재감사 대기 (2026-10-15 KST)
+
+- **제품 코드 PASS 유지:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 Task/receipt/Worker/client의 public five-minute 실행 gate는 HARD OFF.
+- **GitHub PREVIEW 보호:** ruleset `SORIDRAW Preview Protection` id `25138620`, `refs/heads/preview` active, direct push 실제 차단 확인(`Changes must be made through a pull request`), stale approval dismissal ON, bypass 없음. 저장소 단독 운영 때문에 required approvals는 현재 **0**이며 PR merge 필수만 유지. 외부 audited guard SHA repository variable은 사용자가 GitHub Settings에서 관리하며 현재 Assistant GitHub connector는 해당 Actions variable 읽기/쓰기 endpoint 접근 불가.
+- **공개 Task 실제 배포:** PR #121 merge commit `a6f52075f18bbc6a3656cabc4c6aa06c7b8a3871`; Run `38688103686`. `stage416ReleasePublicWindowCandidate(us-central1)` **Successful create operation** / `416_PUBLIC_EXACT_ONE_FUNCTION_CREATE=PASS`. 제품 source `c6b29de6...` exact lock, 배포 전 Functions 37개, HMAC preflight PASS.
+- **Run 38688103686 최종 FAIL 원인:** postflight inventory에서 기존 `stage416SchedulePrivateWindowCandidate`의 `eventTrigger.eventFilters` 배열이 Firebase/gcloud 응답마다 순서만 `ref,instance` ↔ `instance,ref`로 뒤집혀 `JSON.stringify` strict comparator가 false-positive. 해당 함수의 updateTime `2026-10-12T04:19:49.133769531Z`, build, revision, service account, filter 값 및 나머지 metadata는 로그상 동일. Failure diagnosis는 protectedChanges 1개 + addedFunctions = public Task 1개만 보고. 규칙대로 receipt 배포는 중단.
+- **검사기 최소 수정:** PR #122 merge commit **`dc8b055a1c4a3da0bed2c80cecb3448c71f60e0e`**. 변경 파일 `scripts/verify-416-public-function-inventory.mjs` 1개. 오직 `eventTrigger.eventFilters`를 JSON 항목 기준 정렬하여 순서만 무시; filter value 변경은 여전히 FAIL. selftest에 reorder PASS + changed value FAIL 반례 추가. 기존 verify_existing 출처불명 후보 거부 유지.
+- **수정 후 두 번째 함수 dry-run:** PR #123 merge commit `a458310364cc796bff473927f66dacb31cc81383`; Run `38688695998` **SUCCESS**. `LOCKED_ONE_FUNCTION_SOURCE=c6b29de6...`, inventory selftest PASS, **Firebase Functions baseline 38**, HMAC preflight PASS, `publicLikeRelease416Candidate` 아직 미생성, `FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0`.
+- **현재 live state:** 기존 37 + `stage416ReleasePublicWindowCandidate` = 38 Functions. public receipt 미배포. Task는 source-level HARD OFF이므로 정상 요청은 Worker 호출 전에 차단. 공유 D1/RTDB/R2/Rules/Hosting/Worker/사용자 데이터 변경 없음. TEST/PRODUCTION 변경 없음.
+- **새 인프라 재감사 대상:** `dc8b055a1c4a3da0bed2c80cecb3448c71f60e0e`의 guard identity(기존 audited Workflow + 수정 inventory helper). 기존 repository variable이 이전 infra SHA `70a2a137...`를 가리키므로 새 helper가 독립 감사 PASS하고 사용자가 variable을 새 exact SHA로 갱신하기 전에는 다음 live public Function 배포를 진행하지 않음.
+- **다음:** GPT-6 exact-SHA 독립 감사 → PASS 시 repository variable을 `dc8b055a...`로 사용자 갱신 → receipt live trigger에 `release_guard_sha=dc8b055a...` 고정 → PREVIEW receipt 단독 생성 → baseline 38→39, 기존 38 semantic inventory 불변, HMAC, HTTP 503/HARD OFF, Task 미예약 확인. FAIL 시 중단.
+- **진척:** Stage416 전체 1/4·25% 표기는 유지(공개 5분 live 기능 미활성). Public Functions 서버 연결은 1/2 실제 배포 완료 + 2/2 dry-run 완료, receipt actual deploy/controlled E2E 미완료.
+
+---
+
 ## CURRENT — Stage416 public Function release infra 최종 독립 감사 PASS / GitHub 운영 설정 2건 대기 (2026-10-15 KST)
 
 - **제품 PASS:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 공개 Task/receipt/Worker/client HARD OFF 유지.

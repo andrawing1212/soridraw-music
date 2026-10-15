@@ -155,16 +155,8 @@ jobs:
           grep -Fq "const next=nowMs+Number(result.retryAfterMs||0)+1_000" functions/src/exploreLikePrivateDeadline416.ts
           grep -Fq "SETTLEMENT_TASK_NOT_DELIVERED" functions/src/exploreLikePrivateTask416.ts
           if [ "$ACTIVATION_RELEASE" = true ]; then
-            grep -Fq '"version": 417' public/app-version.json
-            grep -Fq 'const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;' src/services/exploreLikeService.ts
-            grep -Fq 'const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false;' src/services/exploreLikeService.ts
-            grep -Fq 'export const STAGE416_SHARED_RTDB_BATCH_ACTIVE=false;' src/services/exploreLikePrivateRtdbTransport416.ts
-            grep -Fxq 'export const STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=true;' functions/src/exploreLikePrivateFinalEndpoint416.ts
-            grep -Fxq 'export const STAGE416_PREVIEW_PUBLIC_RELEASE_TASK_ACTIVE=true;' functions/src/exploreLikePublicTask416.ts
-            grep -Fxq 'export const STAGE416_PREVIEW_PUBLIC_RELEASE_ENDPOINT_ACTIVE=true;' functions/src/exploreLikePublicReleaseEndpoint416.ts
-            grep -Fq 'await requireMasterCaller(request);' functions/src/index.ts
-            grep -Fq 'const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true;' cloudflare/explore-worker/canonical/preview-entry.js
-            grep -Fq 'SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015' cloudflare/explore-worker/canonical/preview-worker.js
+            node scripts/verify-444-stage416-master-public-e2e.mjs
+            echo '416_ACTIVATION_EXACT_PRODUCT_SOURCE=PASS'
           elif [ "$function_name" = stage416ReleasePublicWindowCandidate ] ||
                [ "$function_name" = publicLikeRelease416Candidate ]; then
             grep -Fxq 'export const STAGE416_PUBLIC_RELEASE_TASK_ACTIVE=false;' functions/src/exploreLikePublicTask416.ts

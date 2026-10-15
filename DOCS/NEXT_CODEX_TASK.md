@@ -1,3 +1,16 @@
+## NEXT — app418 PREVIEW 1-minute real-device acceptance
+
+- app418 is live on PREVIEW: Worker Run `38779499228` SUCCESS, Hosting Run `38779861310` SUCCESS, remote app version 418.
+- Set Master public-like window to **1 minute** for acceptance.
+- Same published song: Account A like, then Account B like within the same minute.
+- Each account's own heart must change immediately. Public count must not increment per click; it should update once after the shared window closes.
+- Verify PC ↔ mobile without page/tab navigation dependence.
+- Net-zero check: like then unlike within one window must finish with no public-count change after release.
+- Watch D1/Worker diagnostics for unexpected repeated reads/writes; unchanged page re-entry remains target R0/W0.
+- PASS → app418 PREVIEW accepted. TEST promotion only on explicit user request. FAIL → capture exact account/device/timestamps and fix only the failing path.
+
+---
+
 ## NEXT — app418 PR #160 exact-SHA re-audit after 075 preregistration repair
 
 - **Audit SHA:** `ccaf2279250722cf0adf12dac974836357ac2a34`.

@@ -1676,7 +1676,11 @@ async function repairVerifiedSharedLikeSnapshots156(env) {
     targetById.set(id, null);
   }
   const ids = [...targetById.keys()];
-  const sql = 'SELECT t.id, COALESCE(s.like_count,0) AS like_count FROM tracks t ' +
+  // Stage446: historic four-song snapshot repair also masks held Master delta.
+  const expected156=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true
+    ?'MAX(0,COALESCE(s.like_count,0) - COALESCE((SELECT SUM(h.delta) FROM explore_like_public_hold_446 h WHERE h.track_id=t.id),0))'
+    :'COALESCE(s.like_count,0)';
+  const sql = 'SELECT t.id, '+expected156+' AS like_count FROM tracks t ' +
     'LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id IN (?,?,?,?) ' +
     "AND t.is_public=1 AND t.status='published'";
   const result = await env.DB.prepare(sql).bind(...ids).all();
@@ -2688,7 +2692,12 @@ export default {
       if (typeof baseWorker?.scheduled !== 'function') {
         throw new Error('[192] canonical like aggregate handler unavailable');
       }
-      await baseWorker.scheduled(controller, env, ctx);
+      const protectedEnv446=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true
+        ?new Proxy(env,{get:(target,prop)=>{
+          if(prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
+          return Reflect.get(target,prop);
+        }}):env;
+      await baseWorker.scheduled(controller, protectedEnv446, ctx);
       // Stage446 repair reads the public count with exact signed hold masked.
       await repairSharedPublicLikeCounts191(env);
       return;
@@ -2704,7 +2713,12 @@ export default {
       return;
     }
     if (typeof baseWorker?.scheduled === 'function') {
-      return baseWorker.scheduled(controller, env, ctx);
+      const protectedEnv446=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true
+        ?new Proxy(env,{get:(target,prop)=>{
+          if(prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
+          return Reflect.get(target,prop);
+        }}):env;
+      return baseWorker.scheduled(controller, protectedEnv446, ctx);
     }
   },
 

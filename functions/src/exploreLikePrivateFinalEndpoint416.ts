@@ -12,9 +12,12 @@ import {STAGE416_ENVIRONMENTS,type Stage416EnvironmentConfig}
 
 // Candidate only. This module is intentionally NOT imported/exported by index.ts.
 const secret416=defineSecret('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET');
-// Source-only gate. Keep FALSE through independent audit and PREVIEW Worker/
-// Function coordinated release. False preserves the current immediate public bus.
+// Historical global gate remains false so TEST/PRODUCTION cannot be opened by
+// this source. The controlled release enables only the PREVIEW candidate.
 export const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
+export const STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE=true;
+const publicFiveMinuteActive416=(config:Stage416EnvironmentConfig)=>
+ config.environment==='preview'&&STAGE416_PREVIEW_PUBLIC_FIVE_MINUTE_ACTIVE;
 const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({
  region:'asia-northeast3',secrets:[secret416],timeoutSeconds:30,
 },async(req,res)=>{
@@ -26,10 +29,11 @@ const makeFinalReceipt416=(config:Stage416EnvironmentConfig)=>onRequest({
    const raw=rawBody.toString('utf8');
    const database=getDatabase();
    const nowMs=Date.now();
+   const deferPublic416=publicFiveMinuteActive416(config);
    const data=await publishAuthenticatedPrivateFinal416(
      database,raw,signature,secret416.value(),nowMs,config.finalRoot,
-     STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE);
-   if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&data.status!=='STALE'&&
+     deferPublic416);
+   if(deferPublic416&&data.status!=='STALE'&&
       data.changedTrackIds.length){
      const claim=JSON.parse(raw) as {uid:string;windowId:string;version:number;
        batchIds:string[]};

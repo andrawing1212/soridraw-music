@@ -55,9 +55,10 @@ assert.match(receipt,/STAGE416_PUBLIC_RELEASE_ENDPOINT_ACTIVE=false/);
 assert.match(receipt,/STAGE416_PREVIEW_PUBLIC_RELEASE_ENDPOINT_ACTIVE=true/);
 assert.match(receipt,/config\.environment==='preview'/);
 
-// PREVIEW Worker public routes are on, but only exact signed Stage416 deltas
-// are withheld. Ordinary 075/legacy changes remain on the existing immediate path.
-assert.match(entry,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true/);
+// Stage448 owns PREVIEW public timing now. The old Master-only Stage416
+// runtime gate stays off while its signed routes/source remain available.
+assert.match(entry,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);
+assert.match(entry,/COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
 assert.doesNotMatch(entry,/__SORIDRAW_DEFER_PUBLIC_416/);
 assert.match(worker,/SORIDRAW_STAGE416_MASTER_ONLY_PUBLIC_444_20261015/);
 assert.match(worker,/\.filter\(\(row\)=>Number\(row\?\.stage416_signed\|\|0\)===1\)/);

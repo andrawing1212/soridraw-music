@@ -132,6 +132,7 @@ on:
       - 'scripts/verify-413-like-exit-flush.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
       - 'scripts/verify-191-bounded-public-like-convergence.mjs'
+      - 'scripts/verify-156-shared-like-snapshot-repair.mjs'
       - 'scripts/verify-417-bounded-like-proof.mjs'
       - 'scripts/verify-426-dormant-cutover-worker.mjs'
       - 'scripts/verify-419-like-w2-cutover.mjs'
@@ -302,6 +303,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-178-final-like-architecture.mjs
           node scripts/verify-191-bounded-public-like-convergence.mjs
+          node scripts/verify-156-shared-like-snapshot-repair.mjs
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

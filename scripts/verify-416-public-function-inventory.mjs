@@ -16,10 +16,21 @@ export function parseInventory416(rows) {
   return byName;
 }
 const shortName416=name=>String(name).split('/').at(-1);
+const normalizeEventTrigger416=trigger=>{
+  if(!trigger||typeof trigger!=='object')return trigger||null;
+  const out={...trigger};
+  if(Array.isArray(out.eventFilters)){
+    out.eventFilters=[...out.eventFilters]
+      .map(item=>item&&typeof item==='object'?{...item}:item)
+      .sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  }
+  return out;
+};
 const safeFields416=fn=>JSON.stringify({
   name:fn.name,state:fn.state||'',updateTime:fn.updateTime||'',
   environment:fn.environment||'',buildConfig:fn.buildConfig||null,
-  serviceConfig:fn.serviceConfig||null,eventTrigger:fn.eventTrigger||null,
+  serviceConfig:fn.serviceConfig||null,
+  eventTrigger:normalizeEventTrigger416(fn.eventTrigger||null),
   labels:fn.labels||null,
 });
 export function compareInventory416(before,after,target,mode){
@@ -75,6 +86,24 @@ if(args[0]){
       state:'ACTIVE',updateTime:t,buildConfig:{runtime:'nodejs22'},
       serviceConfig:{secretEnvironmentVariables:[{secret:'SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET'}]}});
     const orig=[mk('likeA'),mk('likeB')], target=mk('stage416ReleasePublicWindowCandidate');
+    const refFilter={attribute:'ref',operator:'match-path-pattern',value:'privateLikeBatch416/{uid}/window'};
+    const instanceFilter={attribute:'instance',operator:'match-path-pattern',value:'*'};
+    const withFilters=(fn,filters)=>({...fn,eventTrigger:{
+      eventType:'google.firebase.database.ref.v1.created',
+      eventFilters:filters,
+      retryPolicy:'RETRY_POLICY_DO_NOT_RETRY',
+    }});
+    const ordered=withFilters(orig[0],[refFilter,instanceFilter]);
+    const reordered=withFilters(orig[0],[instanceFilter,refFilter]);
+    assert.equal(safeFields416(ordered),safeFields416(reordered),
+      '416_EVENT_FILTER_ORDER_MUST_BE_SEMANTICALLY_STABLE');
+    const changedFilter=withFilters(orig[0],[instanceFilter,{...refFilter,value:'privateLikeBatch416/CHANGED/window'}]);
+    assert.notEqual(safeFields416(ordered),safeFields416(changedFilter),
+      '416_EVENT_FILTER_VALUE_CHANGE_MUST_STILL_FAIL');
+    assert.equal(compareInventory416([ordered,orig[1]],[reordered,orig[1],target],
+      'stage416ReleasePublicWindowCandidate','initial_only').protectedCount,2);
+    assert.throws(()=>compareInventory416([ordered,orig[1]],[changedFilter,orig[1],target],
+      'stage416ReleasePublicWindowCandidate','initial_only'),/CHANGED/);
     assert.equal(compareInventory416(orig,[...orig,target],
       'stage416ReleasePublicWindowCandidate','initial_only').protectedCount,2);
     assert.throws(()=>compareInventory416(orig,[mk('likeA'),target],

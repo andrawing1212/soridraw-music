@@ -386,7 +386,9 @@ const schedulePublicLikeAlarm416=async(storage,at)=>{
  if(!alarm||alarm>at)await storage.setAlarm(at);
 };
 
-export async function clearPublicLikeReleaseStorage416(storage,state,nowMs=Date.now()){
+export async function clearPublicLikeReleaseStorage416(
+ storage,state,nowMs=Date.now(),{alignSuccessorToPriorDeadline=false}={},
+){
  if(!state?.due||state.blockedUnacked||!state?.window?.windowId)
    throw Error('416_PUBLIC_CLEAR_REFUSED');
  const windowId=String(state.window.windowId),prefix=publicWindowPrefix416(windowId);
@@ -419,8 +421,18 @@ export async function clearPublicLikeReleaseStorage416(storage,state,nowMs=Date.
      PUBLIC_LIKE_NEXT_KEY_416,...Array.from({length:Number(checkpoint?.rowChunks||0)},
        (_,i)=>PUBLIC_LIKE_RELEASE_KEY_416+'/'+i)]);
    if(next){
-     const window={schemaVersion:1,windowId:crypto.randomUUID(),openedAtMs:nowMs,
-       deadlineAtMs:nowMs+Number(next.publicMinutes)*60_000,publicMinutes:Number(next.publicMinutes)};
+     const minutes=Number(next.publicMinutes);
+     const intervalMs=minutes*60_000;
+     const priorDeadline=Number(state.window.deadlineAtMs);
+     let openedAtMs=nowMs,deadlineAtMs=nowMs+intervalMs;
+     if(alignSuccessorToPriorDeadline===true&&
+        Number.isSafeInteger(priorDeadline)&&priorDeadline>0&&intervalMs>0){
+       const steps=Math.max(1,Math.floor(Math.max(0,nowMs-priorDeadline)/intervalMs)+1);
+       deadlineAtMs=priorDeadline+steps*intervalMs;
+       openedAtMs=deadlineAtMs-intervalMs;
+     }
+     const window={schemaVersion:1,windowId:crypto.randomUUID(),openedAtMs,
+       deadlineAtMs,publicMinutes:minutes};
      await tx.put(PUBLIC_LIKE_WINDOW_KEY_416,window);
      await listPublicWindowPages416(tx,PUBLIC_LIKE_NEXT_TRACK_PREFIX_416,async rows=>{
        const ids=[...rows.values()].map(row=>row.trackId);

@@ -1,3 +1,13 @@
+## Stage416 exact product pin + two dry preflights (2026-10-15 KST)
+
+- Infra candidate `70a2a137657b5239119ce4958c1d6a5b169101d3`: hard pins audited product `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` for public Function release.
+- Public Task dry Run `38678844741`: SUCCESS, exact product source, existing Functions 37, inventory/HMAC/isolated export PASS, FUNCTIONS_DEPLOY=0.
+- Public receipt dry Run `38679044570`: SUCCESS, same protections, FUNCTIONS_DEPLOY=0.
+- Live GitHub ruleset `Protect release branches` id 22889511 currently enforces deletion + non-fast-forward for preview/main/production, but no verified PR/reviewer requirement for Workflow file modifications. Deployment stays blocked until independent infra audit and repository-level approval protection are complete.
+- No Firebase/Cloudflare/Rules/Hosting/shared user data change in this step.
+
+---
+
 ## Stage416 public Function workflow two-audit-FAIL safety correction (2026-10-15 KST)
 
 - Previous `b01079382d56724d5c2cf6f5561bb0e8718b6254` infra independent audit FAIL: missing global Functions inventory parity, force flag, partial creation recovery path.

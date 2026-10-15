@@ -1,3 +1,14 @@
+## NEXT — Stage416 exact product-pinned public Function release infra 최종 독립 감사 (2026-10-15 KST)
+
+- **제품 PASS SHA:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`.
+- **새 인프라 감사 SHA:** `70a2a137657b5239119ce4958c1d6a5b169101d3`. 범위는 Stage416 단일 Function Workflow의 product exact pin 추가. 기반 `91e6715a...`의 external infra approval 및 unverified existing Function fail-closed를 포함.
+- **실행 증거:** Task preflight Run `38678844741` SUCCESS; receipt preflight Run `38679044570` SUCCESS. 두 로그 모두 `LOCKED_ONE_FUNCTION_SOURCE=c6b29de6...`, 전체 inventory selftest PASS, live shared Firebase Functions count 37, HMAC PASS, FUNCTIONS_DEPLOY=0, SHARED_DATA_CHANGE=0.
+- 독립 검증: (1) trigger가 다른 product_code_target 또는 audit_head를 넣어도 exact audited product SHA 아니면 배포 전 FAIL (2) 외부 infra approval SHA가 미설정/다르면 actual deploy FAIL (3) verify_existing 및 코드 출처 불명 기존 후보 자동 채택/재배포/삭제 금지 (4) 초기 신규 함수만 one-at-a-time, --force 없음, Firebase tools pinned, 전체 Function 불변 검사 (5) 기존 private single-function deploy modes 비회귀.
+- **운영 blocker 별도:** GitHub ruleset id `22889511`은 active이나 deletion/non-fast-forward만 요구하며 Workflow 수정 reviewer/PR 승인 rule 확인되지 않음. branch protection detailed API는 connector 403. 따라서 인프라 코드 PASS와 별도로 실제 PREVIEW public deploy 전 repository Workflow 변경 승인 보호 또는 동등한 관리자 승인 장치를 GitHub Settings에서 설정/확인해야 함.
+- 감사 중 코드/commit/push/배포/공유 데이터 변경 금지. 이 감사 PASS만으로 Firebase public functions live deploy나 Stage416 public ON을 승인하지 않음.
+
+---
+
 ## NEXT — Stage416 release guard 외부 승인·출처 불명 복구 거부 후보 독립 감사 (2026-10-15 KST)
 
 - **대상 인프라 SHA:** `91e6715a725051c9e3bbed10b46c36b08f7b3de9` (`preview`, 마지막 감사 FAIL `7142a0b8c846c59a6caa8fce779e31158a564091` → 새 후보). 코드 제품 SHA `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` 그대로.

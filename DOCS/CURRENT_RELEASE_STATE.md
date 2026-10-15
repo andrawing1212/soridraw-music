@@ -1,3 +1,16 @@
+## CURRENT — Stage416 제품 SHA exact pin + 신규 인프라 CI 2/2 PASS / GitHub Workflow 승인 설정만 미확정 (2026-10-15 KST)
+
+- **제품 코드:** 독립 감사 PASS exact `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`; 공개 Task/receipt/Worker/client HARD OFF 그대로. 제품 기능 코드 추가 변경 없음.
+- **최신 인프라 후보:** `70a2a137657b5239119ce4958c1d6a5b169101d3`. 이전 `91e6715a...` 감사에서 추가로 발견된 "다른 product_code_target 지정 가능"을 차단: public deploy workflow env에 `AUDITED_PUBLIC_PRODUCT_SHA=c6b29de6...` exact 상수를 고정하고 trigger `product_code_target` 및 `audit_head`가 이 값과 다르면 `416_UNAUDITED_PRODUCT_SHA_REFUSED`로 배포 전 중단. 기존 외부 infra 승인 변수 `SORIDRAW_STAGE416_AUDITED_RELEASE_GUARD_SHA`, unverified `verify_existing` 거부, 전체 Functions inventory 보호는 유지.
+- **신규 SHA 실제 dry CI — 공개 Task:** trigger `c4ebb9a2ba73220c876f3a94e2380b704b2cad3b`, Run `38678844741` **SUCCESS**. 로그 exact source `c6b29de6...`, inventory selftest PASS, Firebase Functions baseline **37**, HMAC preflight PASS, `FUNCTIONS_DEPLOY=0;SHARED_DATA_CHANGE=0`.
+- **신규 SHA 실제 dry CI — public receipt:** trigger `0c31c2e03ce696070cd2bcdc74489383eee6cc2f`, Run `38679044570` **SUCCESS**. 동일 exact product / 37 Functions / HMAC / one-function packaging / 배포 0 PASS.
+- **GitHub 권한 실제 확인:** repository ruleset `Protect release branches` id `22889511`, `preview/main/production` 대상, active. 현재 rules는 **deletion 금지 + non-fast-forward 금지**뿐이고 bypass actor 0. Workflow 수정에 PR/reviewer 승인 요구는 없음. branch protection 상세 endpoint는 integration 권한 부족 403. 따라서 별도 감사 지적의 "Workflow 자체 수정 권한 보호"는 **현재 확인된 설정으로는 미충족**.
+- **실제 배포:** 신규 public Firebase Functions 생성 0, 공유 D1/RTDB/R2/Rules/Hosting/Worker 변경 0, TEST/PRODUCTION 변경 0. 외부 infra 승인 Repository Variable도 이번 작업에서 설정하지 않음. 공개 5분 기능 OFF.
+- **다음:** 인프라 SHA `70a2a137...` 독립 재감사. 코드/CI가 PASS하더라도 실제 public Functions 배포 전 GitHub 측 Workflow 승인 보호를 관리자 설정으로 보강·확인하고, external audited guard SHA도 감사된 exact SHA로 설정해야 함. 현재 연결 도구는 ruleset read는 가능하지만 ruleset/Actions variable 쓰기 기능이 없어 자동 설정하지 못함. 해당 GitHub 운영 설정 완료 전 live `preflight_only=false` 금지.
+- **진척:** Stage416 전체 1/4·25%, 앱 속도 5/5·100%, public Function 배포 준비 코드/CI 3/4·75%; 남은 1/4 = 인프라 독립 감사 + GitHub 운영 승인 보호 + 실제 PREVIEW 2함수 배포/검증.
+
+---
+
 ## CURRENT — Stage416 신규 인프라 감사 FAIL 2건 최소 수정 / PREVIEW 미배포 / 신규 SHA 감사 대기 (2026-10-15 KST)
 
 - **제품 독립 감사 PASS:** `c6b29de643b1d0dd3bb9c48be437b5dfb5600387`. 원래 Worker/Task/public receipt/client HARD OFF 유지.

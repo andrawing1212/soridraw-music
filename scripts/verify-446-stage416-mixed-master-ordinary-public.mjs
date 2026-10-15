@@ -72,7 +72,7 @@ const actual075=new Function('exploreLikeUserAggregateCte075',
   'patchExploreFeedR2Like044','patchExploreProfileR2Like044',
   'patchSharedFeedLikeCounts065','console',
   'return ('+user075.replace(/^async function /,'async function ')+');')(
-    ()=>'',50,
+    ()=>simpleCte075,50,
     async(_env,trackId,count)=>{actualPublished.push(['feed',trackId,count]);return {ok:true};},
     async(_env,_owner,trackId,count)=>{actualPublished.push(['profile',trackId,count]);return {ok:true};},
     async(_env,rows)=>{actualPublished.push(['shared',rows[0].trackId,rows[0].likeCount]);return {ok:true};},

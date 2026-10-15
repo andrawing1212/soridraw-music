@@ -56,6 +56,9 @@ on:
       - 'scripts/verify-439-stage416-public-release-routing.mjs'
       - 'scripts/verify-440-stage416-public-window-coalescing.mjs'
       - 'scripts/verify-416-191-public-hold-guard.mjs'
+      - 'cloudflare/explore-worker/candidates/stage416-public-hold-446.sql'
+      - 'cloudflare/explore-worker/runtime/public-like-hold-446.mjs'
+      - 'scripts/verify-447-stage416-hold-sql-fixture.mjs'
       - 'scripts/verify-446-stage416-mixed-master-ordinary-public.mjs'
       - 'scripts/verify-444-stage416-master-public-e2e.mjs'
       - '.github/workflows/stage416-preview-settle-one-function.yml'
@@ -243,6 +246,7 @@ jobs:
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
           node scripts/verify-416-191-public-hold-guard.mjs
+          node scripts/verify-447-stage416-hold-sql-fixture.mjs
           node scripts/verify-446-stage416-mixed-master-ordinary-public.mjs
           node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-445-stage416-activation-release-infra.mjs

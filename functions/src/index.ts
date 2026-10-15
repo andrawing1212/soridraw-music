@@ -4384,6 +4384,7 @@ export { privateLikeFinalReceipt416Candidate, privateLikeFinalReceipt416Test,
 // TEST/PRODUCTION public endpoints remain unexported.
 export { stage416ReleasePublicWindowCandidate } from "./exploreLikePublicTask416";
 export { publicLikeRelease416Candidate } from "./exploreLikePublicReleaseEndpoint416";
+export { publicLikeWindowConfig448Candidate } from "./exploreLikePublicConfig448";
 
 // Stage416 Master-only timing configuration. These source-only Callables are
 // NOT DEPLOYED until the staged 5m private and shared public aggregation paths

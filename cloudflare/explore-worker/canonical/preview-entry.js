@@ -8,6 +8,8 @@ import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
  from '../runtime/public-like-window-416.mjs';
 import {releaseDuePublicLikeWindow416}
  from '../runtime/public-like-release-416.mjs';
+import {releaseDueCommonPublicLikeWindow448}
+ from '../runtime/common-public-like-release-448.mjs';
 import {PUBLIC_LIKE_MANIFEST_ROUTE_416,validatePublicLikeManifestMetadata416,
  readPublicLikeManifest416,intersectPublicLikeManifest416}
  from '../runtime/public-like-manifest-416.mjs';
@@ -41,6 +43,11 @@ import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs'
 // many clients recovering the same snapshot share one edge body without polling.
 const REVISION_HEAD_CACHE_SECONDS_077 = 60;
 const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 5 * 1000;
+const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true;
+const COMMON_PUBLIC_LIKE_CONFIG_ENDPOINT_448 =
+  'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicLikeWindowConfig448Candidate';
+const COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448 = 5;
+const COMMON_PUBLIC_LIKE_MINUTES_448 = new Set([1, 3, 5, 10, 20]);
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
 const EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103 = 'shared-like-batch';
 const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
@@ -1092,6 +1099,18 @@ async function handlePublicLikeCards192(request, env) {
 // SORIDRAW_CANONICAL_ATOMIC_DRAIN_RECEIPT_418_20261009
 // Queue intake is NOT final state. Only an atomic D1.batch DELETE RETURNING
 // identifying the exact accepted batch can prove canonical completion.
+async function readCommonPublicLikeMinutes448(http=fetch) {
+  try {
+    const response=await http(COMMON_PUBLIC_LIKE_CONFIG_ENDPOINT_448,{
+      method:'GET',headers:{'Accept':'application/json'}});
+    const payload=await response.json().catch(()=>null);
+    const minutes=Number(payload?.data?.publicMinutes);
+    if(response.ok&&payload?.ok===true&&COMMON_PUBLIC_LIKE_MINUTES_448.has(minutes))
+      return minutes;
+  } catch {}
+  return COMMON_PUBLIC_LIKE_DEFAULT_MINUTES_448;
+}
+
 async function scheduleExploreLikeAggregate103(env, expectedBatchId418 = '') {
   const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
   if (!namespace) throw new Error('Explore like scheduler binding unavailable');
@@ -1213,18 +1232,16 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       throw new Error('Canonical Explore like aggregate handler unavailable');
     }
 
-    // Stage416 controlled PREVIEW: opening a public window must never delay
-    // unrelated legacy/075 users. The base bundle marks only signed Stage416
-    // canonical deltas; those exact IDs alone join the fixed public window.
     const publicWindowActive416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true;
+    const commonPublicActive448=COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
     const currentPublicWindow416=publicWindowActive416
-      // Fail closed: an unknown window state is not permission to aggregate.
       ?await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416)
       :null;
     const deferExistingPublic416=Boolean(currentPublicWindow416?.windowId);
-    const aggregateEnv416=publicWindowActive416
+    const aggregateEnv448=(publicWindowActive416||commonPublicActive448)
       ?new Proxy(this.env,{get:(target,prop)=>{
-        if(prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
+        if(publicWindowActive416&&prop==='__SORIDRAW_STAGE416_PUBLIC_WINDOW_ACTIVE')return true;
+        if(commonPublicActive448&&prop==='__SORIDRAW_COMMON_PUBLIC_LIKE_WINDOW_ACTIVE')return true;
         return Reflect.get(target,prop);
       }}):this.env;
 
@@ -1232,7 +1249,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       scheduledTime: Date.now(),
       cron: 'event-like-batch-1m-105',
       type: 'scheduled',
-    }, aggregateEnv416, this.ctx);
+    }, aggregateEnv448, this.ctx);
 
     const changedTrackIds416=[...new Set(
       (Array.isArray(settledAggregate418?.changedTrackIds416)
@@ -1248,9 +1265,6 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
             this.ctx.storage,changedTrackIds416,Date.now(),
             Number(currentPublicWindow416.publicMinutes));
         }else if(settledAggregate418?.stage416Changed416===true){
-          // The first signed Stage416 net change may be drained by a request
-          // whose HTTP waiter is not the eventual final-receipt retry. Persist
-          // the exact wave IDs until /public-register opens the shared window.
           await stagePublicLikeOpenPayload416(
             this.ctx.storage,changedTrackIds416,Date.now());
         }
@@ -1259,13 +1273,28 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         changedTrackIds416};
     }
 
-    // One bounded recovery check per actual changed-data window, never per user
-    // or page view. Do not run it while Stage416 intentionally holds public
-    // projection, or it would leak the new count before the public deadline.
-    // During Master-only Stage416 activation, the legacy 191 projection repair
-    // cannot distinguish delayed signed changes from ordinary count drift.
-    // The canonical aggregate above still publishes ordinary 075 changes at once.
-    // Suspend only this optional repair until Stage416 public release is finalized.
+    if(commonPublicActive448){
+      const ids448=[...new Set(
+        (Array.isArray(settledAggregate418?.commonPublicChangedTrackIds448)
+          ?settledAggregate418.commonPublicChangedTrackIds448:[])
+        .map((id)=>String(id||'').trim()).filter(Boolean))];
+      if(ids448.length){
+        const now448=Date.now();
+        const existingWindow448=await this.ctx.storage.get(PUBLIC_LIKE_WINDOW_KEY_416);
+        const currentOpen448=existingWindow448?.windowId&&
+          existingWindow448?.sealed!==true&&
+          Number(existingWindow448?.deadlineAtMs)>now448;
+        const minutes448=currentOpen448&&
+          COMMON_PUBLIC_LIKE_MINUTES_448.has(Number(existingWindow448?.publicMinutes))
+          ?Number(existingWindow448.publicMinutes)
+          :await readCommonPublicLikeMinutes448();
+        await joinPublicLikeChangedTracks416(
+          this.ctx.storage,ids448,now448,minutes448);
+        return {...settledAggregate418,publicWindowDeferred448:true,
+          commonPublicChangedTrackIds448:ids448,publicMinutes448:minutes448};
+      }
+    }
+
     if(!publicWindowActive416)await repairSharedPublicLikeCounts191(this.env);
     return {...settledAggregate418,changedTrackIds416};
   }
@@ -1420,7 +1449,8 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   }
 
   async ensurePublicAlarm416() {
-    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE!==true)return;
+    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE!==true&&
+       COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448!==true)return;
     await this.ctx.storage.transaction(async tx=>{
       const current=await tx.get(PUBLIC_LIKE_WINDOW_KEY_416);
       if(!current)return;
@@ -1432,11 +1462,12 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async alarm() {
     try {
-      // A successor public window owns a durable alarm even when no new
-      // private mutation or final-receipt HTTP request follows the old release.
-      const publicOnly416=STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true&&
+      const publicWindowEnabled448=
+        STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
+        COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
+      const publicOnly448=publicWindowEnabled448&&
         !await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
-      if(!publicOnly416){
+      if(!publicOnly448){
         await this.runAggregate194();
         await this.finalizeAggregate195();
       }
@@ -1446,12 +1477,17 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
           releaseEndpoint:this.env.SORIDRAW_PUBLIC_RELEASE416_ENDPOINT,
           secret:this.env.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET,nowMs:Date.now(),
         });
-        await this.ensurePublicAlarm416();
+      }else if(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true){
+        await releaseDueCommonPublicLikeWindow448({
+          db:this.env.DB,r2:this.env.PROFILE_MEDIA,storage:this.ctx.storage,
+          releaseEndpoint:this.env.SORIDRAW_PUBLIC_RELEASE416_ENDPOINT,
+          releaseSecret:this.env.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET,
+          nowMs:Date.now(),
+        });
       }
+      if(publicWindowEnabled448)await this.ensurePublicAlarm416();
     } catch (error) {
-      // Durable Object alarms are at-least-once. Preserve the active marker for
-      // the short grace window; the next real batch can recover afterwards.
-      console.warn('[SORIDRAW 194] alarm retry failed:', String(error?.message || error || 'unknown'));
+      console.warn('[SORIDRAW 448] alarm retry failed:', String(error?.message || error || 'unknown'));
       throw error;
     }
   }
@@ -2449,7 +2485,7 @@ const STAGE416_SIGNED_PRIVATE_HANDOFF_ACTIVE=true;
 const STAGE416_SIGNED_PRIVATE_HANDOFF_ROUTE='/v1/internal/private-like-handoff-416';
 // PREVIEW controlled release only. TEST/PRODUCTION use separate Workers and
 // remain unchanged. The canonical bundle below defers only signed Stage416 IDs.
-const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=true;
+const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false;
 const STAGE416_PUBLIC_WINDOW_ROUTE='/v1/internal/public-like-window-416';
 const STAGE416_PUBLIC_WINDOW_ACK_ROUTE='/v1/internal/public-like-window-416/ack';
 const STAGE416_PUBLIC_RELEASE_ROUTE='/v1/internal/public-like-release-416';

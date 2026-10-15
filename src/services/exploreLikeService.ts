@@ -90,6 +90,9 @@ const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false;
 // When enabled with the server release, clients stop writing the public bus;
 // only the post-R2 server release publishes public invalidation.
 const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false;
+// app448: public changed-track invalidation is emitted once by the shared
+// server window after R2 materialization. Personal app410 membership stays local-first.
+const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true;
 const STAGE416_CLIENT_SESSION_STARTED_AT = Date.now();
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
@@ -2333,7 +2336,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // screens through one bounded global invalidation signal. It carries no
       // personal heart and no trusted count. Other accounts wait for the
       // changed-track shared R2 card and then paint its settled public count.
-      if (acceptedForSignal127.length && !STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE) {
+      if (acceptedForSignal127.length &&
+          !STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE &&
+          !COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448) {
         try {
           await publishExplorePublicLikeInvalidation192(
             uid,

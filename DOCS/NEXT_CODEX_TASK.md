@@ -1,3 +1,12 @@
+## NEXT — app418 shared public-like window PREVIEW release and real-device verification
+
+- Exact candidate: `4ba9317e71fbdd137b84d94deb861944f7313711`, branch `fix/common-public-like-window-448`, PR #151.
+- Finish only this goal: common public Explore counts update once per fixed admin-configured window; app410 personal heart/membership remains unchanged.
+- Required order after final CI PASS: merge to `preview` → deploy PREVIEW config Function only → PREVIEW Worker exact commit → PREVIEW Hosting exact commit → verify preview.soridraw.com with 1/3/5/10/20-minute setting and same-track multi-user aggregation.
+- No 446 migration/table/journal. No TEST/PRODUCTION. No unrelated cost optimization.
+
+---
+
 ## NEXT — Stage416 446: DO NOT redevelop; unblock cross-env leak + D1 cost before any activation (2026-10-15 KST)
 
 - DRAFT PR #147 already implements compensating Master hold. Target QA SHA `be4a0d2860f2ff8b405213fe3030f81a9635a144`, [CI SUCCESS 38740570418](https://github.com/andrawing1212/soridraw-music/actions/runs/38740570418). Follow its subsequent docs HEAD `d2b850d11fd7c6493792ad37a4e8a8a8275f6008`. Do not rerun Codex for same implementation until specific audit FAIL.

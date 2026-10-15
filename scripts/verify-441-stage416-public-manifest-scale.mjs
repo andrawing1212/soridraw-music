@@ -133,7 +133,8 @@ assert.match(page,/fetchExplorePublicLikeManifestMatches416\(signal\.manifest416
 assert.match(page,/row\.settledAfterProjection416 !== true && card\.updatedAt < row\.at/);
 const like=readFileSync('src/services/exploreLikeService.ts','utf8');
 assert.match(like,/const STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE = false/);
-assert.match(like,/acceptedForSignal127\.length && !STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE/);
+assert.match(like,/const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true/);
+assert.match(like,/acceptedForSignal127\.length &&[\s\S]{0,160}!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE[\s\S]{0,160}!COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448/);
 
 console.log('STAGE416_PUBLIC_MANIFEST_600_EXACT_IDS=PASS');
 console.log('STAGE416_PUBLIC_MANIFEST_RING_MAX8=PASS');

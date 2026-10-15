@@ -10,6 +10,7 @@ const transport=readFileSync('src/services/exploreLikePrivateRtdbTransport416.ts
 const finalEndpoint=readFileSync('functions/src/exploreLikePrivateFinalEndpoint416.ts','utf8');
 const task=readFileSync('functions/src/exploreLikePublicTask416.ts','utf8');
 const receipt=readFileSync('functions/src/exploreLikePublicReleaseEndpoint416.ts','utf8');
+const functionsIndex=readFileSync('functions/src/index.ts','utf8');
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 const workerLock=readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
@@ -36,6 +37,12 @@ assert.doesNotMatch(publicProof,/setDoc\(|updateDoc\(|deleteDoc\(|runTransaction
 assert.match(panel,/실제 좋아요 1곡 해제 · 공개 5분 검증/);
 assert.match(panel,/마스터 계정의 실제 좋아요 1곡이 해제됩니다/);
 assert.doesNotMatch(panel,/ExplorePage|toggleLike|flushPendingLikes/);
+const previewIntakeStart=functionsIndex.indexOf('export const recordPrivateLike416 = onCall');
+const previewIntakeEnd=functionsIndex.indexOf('export const recordPrivateLike416Test',previewIntakeStart);
+const previewIntake=functionsIndex.slice(previewIntakeStart,previewIntakeEnd);
+assert.match(previewIntake,/await requireMasterCaller\(request\)/,
+ 'PREVIEW Stage416 intake must independently enforce Master server-side');
+assert.match(previewIntake,/enforceAppCheck:\s*true/);
 
 // Shared server source is active only for the PREVIEW candidate.
 assert.match(finalEndpoint,/STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE=false/);

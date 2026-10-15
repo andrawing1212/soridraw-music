@@ -23,6 +23,7 @@ async function simulate(publicWindowActive416, stage416Changed416) {
     return {stage416Changed416,changedTrackIds416:stage416Changed416?['master-track']:[]};}};
   const context={
     STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE:publicWindowActive416,
+    COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448:false,
     PUBLIC_LIKE_WINDOW_KEY_416:'public-window',
     baseWorker:fakeBase,
     repairSharedPublicLikeCounts191:async()=>{calls.push('legacy-repair');},

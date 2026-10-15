@@ -1,3 +1,13 @@
+## Stage416 public Task live create + eventFilters comparator correction (2026-10-15 KST)
+
+- PR #121 / merge `a6f52075...`: `stage416ReleasePublicWindowCandidate` successfully created in us-central1, Run `38688103686`. Existing baseline 37, exact product/HMAC preflight PASS.
+- Postflight false-positive: only `stage416SchedulePrivateWindowCandidate.eventTrigger.eventFilters` order reversed in gcloud JSON; actual metadata values/updateTime/build/revision unchanged. Run marked FAIL and receipt release correctly stopped.
+- PR #122 / merge `dc8b055a...`: read-only inventory helper canonicalizes only eventFilters ordering; changed filter values still fail; selftests added.
+- PR #123 / merge `a4583103...`: receipt dry preflight Run `38688695998` SUCCESS, baseline **38**, exact product/HMAC/selftest PASS, FUNCTIONS_DEPLOY=0, SHARED_DATA_CHANGE=0.
+- Current live Firebase Functions = 38 (37 original + public Task). Receipt not deployed; public 5-minute gates remain OFF. New helper needs independent exact-SHA audit and external guard variable update before second live deploy.
+
+---
+
 ## Stage416 final infra audit PASS — GitHub operating controls pending (2026-10-15 KST)
 
 - Product `c6b29de643b1d0dd3bb9c48be437b5dfb5600387` PASS; infra `70a2a137657b5239119ce4958c1d6a5b169101d3` independent audit PASS.

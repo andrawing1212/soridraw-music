@@ -46,7 +46,8 @@ assert.ok(
   const parser=ts.transpileModule(service.slice(from,to)+
     '\nglobalThis.decode=normalizeLikeSignal127;',
     {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
-  const context={clampLikeCount:(v)=>Math.max(0,Math.floor(Number(v)||0))};
+  const context={EXPLORE_LIKE_SIGNAL_MAX_127:50,
+    clampLikeCount:(v)=>Math.max(0,Math.floor(Number(v)||0))};
   vm.runInNewContext(parser,context);
   const row=context.decode({version:20_001,previousVersion:20_000,
     results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6,

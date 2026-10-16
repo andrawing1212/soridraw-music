@@ -1,3 +1,15 @@
+## CURRENT — app420 revised public repaint safety; external audit pending (2026-10-16)
+
+- **Latest PREVIEW code SHA:** 3460c9d346295e3086875003a437add53a5c2ffc, PR #192 merged. Actual PREVIEW Hosting remains app419; app420 has NOT been deployed.
+- **New issue found during code audit after #190:** old PUBLIC changed-card signal left newer actor count lock intact, but React list repaint and personal liked-card cache unconditionally overwrote actor count with old public count. This violated +1/-1 despite keeping the lock.
+- **#192 fix:** feed/profile/liked React changed-card paints and private liked-card display pass through existing UID-only actor overlay; R2/shared public caches remain public-only. Avoid unnecessary React redraws by comparing final visible like counts. Historical other-UID/no-op test fixtures updated.
+- **Regression quality:** GitHub Actions Run 38886509436 SUCCESS, including TypeScript/Build, baseline likes and app448. Earlier #192 CI failed due to test-fixture missing new callback dependency, fixed before latest successful run.
+- **Separate independent audit remains NOT DONE:** audit exact 3460c9d346295e3086875003a437add53a5c2ffc, including stale/duplicate public signal, private pending ACK, already-desired, concurrent multi-user same song, PC/mobile parity, missed 20-minute event and 25-minute lock expiry, mixed old app, zero idle reads. Developer self-review and CI are not separate independent PASS.
+- **Non-changes:** Firebase/Cloudflare/RTDB Rules/shared canonical D1/storage/original user data, TEST/PRODUCTION not modified. main b13360df1bab52e2d3b746ea47dc4e3718eef85c and production fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4 checked.
+- **Next:** exact SHA independent GPT-6/Work audit; if PASS only Firebase PREVIEW Hosting app420 deployment, exact URL/build verification, real PC↔mobile acceptance. Do not deploy on CI alone.
+
+---
+
 ## CURRENT — app420 audit-detected count defect fixed on preview; independent exact-SHA approval pending (2026-10-16)
 
 - **Latest product code SHA:** `463d0370e4fced1f0737ea03ecc5da01581df70f` / PR #190. Previous implementation SHA `ce8650eb12445e8f00b015260242d211f9701d6f` had **audit FAIL** despite CI PASS: an `already-desired` same-UID canonical ACK could preserve a phantom private +1 for 25min, and a stale public signal could borrow a later R2 card updatedAt to retire a newer private actor lock. **Do not deploy the old SHA.**

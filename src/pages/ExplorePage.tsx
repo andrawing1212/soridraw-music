@@ -2244,8 +2244,8 @@ export default function ExplorePage() {
               // in ALL mounted views, even if the R2 card is newer than an
               // earlier shared signal. Shared caches above remain PUBLIC.
               const actorVisible420 = overlayExploreLikeDisplayCounts(user.uid, patched);
-              if (actorVisible420 === patched) return changed ? patched : previous;
-              return actorVisible420;
+              const actorChanged420 = actorVisible420.some((track, i) => track !== patched[i]);
+              return changed || actorChanged420 ? actorVisible420 : previous;
             };
             setTracks(patchPublicCounts192);
             setPopularTracks(patchPublicCounts192);

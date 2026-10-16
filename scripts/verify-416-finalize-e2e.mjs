@@ -106,6 +106,8 @@ vm.runInNewContext(compile(page.slice(effectStart,effectEnd)),{
  publicLikeRefreshAttemptsRef192:{current:new Map()},publicLikeRefreshTimerRef192:{current:null},
  patchExploreFeedSessionCachesRow:(id,patch)=>cachePatches.push({id,...patch}),
  patchExplorePublicProfileFirstViewTrack(){},patchExploreLikedTrackCachedCount091(){},
+ // B is another UID; a public changed-card event has no private actor lock to retire.
+ retireExploreLikeDisplayLockAfterPublicCount420:()=>false,
  setTracks:update=>{screen=update(screen);},setPopularTracks(){},setCuratedTracks307(){},
  setManagedCuratedTracks307(){},setProfileTracks(){},setProfileLikedTracks(){},
 });

@@ -65,6 +65,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   let persistentPending = { 'track-a': false };
   let seen = 10;
   let outbox = {};
+  let publicSettledAt420 = 0;
+  let personalLocks420 = {};
   const rendered = [];
   const env = {
     console,
@@ -87,14 +89,16 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     persistLikeOutbox: (_uid, value) => { outbox = value; },
     readSnapshotPending127: () => ({ ...persistentPending }),
     getLikedStateCache: () => cache,
-    readLikeDisplayLocks: () => ({}),
+    readLikeDisplayLocks: () => ({ ...personalLocks420 }),
+    hasSettledExplorePublicLikeSignal396: (_uid,_track,acceptedAt) =>
+      publicSettledAt420 >= acceptedAt,
     patchExploreLikedTrackMembership: () => {},
     // Phase416's separate tentative overlay is optional in this historical
     // accepted-signal fixture; keep the app141 durable order assertions intact.
     clearExploreLikeIntent416: () => {},
     persistLikedStateCache: () => {},
     writeSnapshotPending127: (_uid, next) => { persistentPending = { ...next }; },
-    persistLikeDisplayLocks: () => {},
+    persistLikeDisplayLocks: (_uid, locks) => { personalLocks420 = { ...locks }; },
     markLocalLikeCatalogReady135: () => {},
     markSeenLikeSignal127: (_uid, version) => { seen = version; },
     dispatchLikeSync: (detail) => {
@@ -166,6 +170,39 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(rendered[3].liked, false);
   assert.equal(rendered[3].likeCount, 5,
     'reverse-device accepted OFF restores provisional 5 from 6');
+  // Independent audit reproducer: the Worker accepted the personal ON before
+  // publication, but mobile receives the UID-private RTDB row *after* the
+  // public count 7 has already been accepted locally.
+  publicSettledAt420 = 9_000;
+  env.__apply('same-account', {
+    version: 15, previousVersion: 14,
+    results: [{ trackId:'track-a',ownerUid:'',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000 }],
+  });
+  assert.equal(rendered.length,5);
+  assert.equal(rendered[4].liked,true,
+    'late private ACK still updates same-account personal heart');
+  assert.equal(rendered[4].privateCountExact416,false,
+    'late private ACK is NOT an authority to repaint settled PUBLIC 7 as 6');
+  assert.equal(personalLocks420['track-a'],undefined,
+    'late private ACK may not install a new 25-minute provisional lock');
+  // Reversed order: a genuinely newer private action after publication must
+  // remain protected, regardless of when RTDB happens to deliver it.
+  env.__apply('same-account', {
+    version: 16, previousVersion: 15,
+    results: [{trackId:'track-a',ownerUid:'',liked:false,likeCount:6,
+      acceptedAtPublicClock420:10_000}],
+  });
+  assert.equal(rendered.length,6);
+  assert.notEqual(rendered[5].privateCountExact416,false);
+  assert.equal(personalLocks420['track-a'].acceptedAtPublicClock420,10_000);
+  assert.equal(personalLocks420['track-a'].likeCount,6);
+  assert.match(service,/acceptedAtPublicClock420: serverAcceptedAt192/,
+    'origin Worker acceptance clock must travel with 127 signal, never receive Date.now');
+  assert.match(publish,/acceptedAtPublicClock420/,
+    'existing RTDB signal must preserve the Worker acceptance time');
+  console.log('APP420_AUDIT_LATE_PRIVATE_AFTER_PUBLIC_7_STAYS_7=PASS');
+  console.log('APP420_POST_PUBLIC_NEW_PRIVATE_CLICK_PROTECTED_6=PASS');
   console.log('APP420_SAME_UID_ON_6_OFF_5_REMOTE_SIGNAL=PASS');
   console.log('APP420_DUPLICATE_SIGNAL_NO_DOUBLE_PLUS_ONE=PASS');
   console.log('APP390_DEFERRED_REMOTE_UNLIKE_REPLAY_NO_SERVER_IO=PASS');

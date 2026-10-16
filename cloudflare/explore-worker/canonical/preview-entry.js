@@ -456,7 +456,11 @@ async function handleCuratedRevision307(request, env) {
 async function handleCuratedPublic307(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
-  if (limit === 20) {
+  // app421: a device which has checked the public revision must never be handed
+  // an old stable 20-card body cached by a different Cloudflare POP. The R2
+  // snapshot and existing revision-keyed Edge cache remain the shared authority.
+  const revisionChecked421 = url.searchParams.get('revisionCheck') === '1';
+  if (limit === 20 && !revisionChecked421) {
     try {
       const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
       if (cached) {

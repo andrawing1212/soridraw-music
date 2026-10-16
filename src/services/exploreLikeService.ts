@@ -19,7 +19,7 @@ import {
   publishExploreLikeIntent416,
   settleExploreLikeIntent416,
 } from './exploreLikeIntent416';
-import { publishExplorePublicLikeInvalidation192 } from './explorePublicLikeSyncService';
+import { publishExplorePublicLikeInvalidation192, hasSettledExplorePublicLikeSignal396 } from './explorePublicLikeSyncService';
 import {
   reserveAndPersistExploreLikeDeviceSequence416,
   withExploreLikeRegistrationLock416,
@@ -192,6 +192,9 @@ type ExploreLikeDisplayLock = {
   // A PRIVATE actor count matching an in-memory UI row is not proof that the
   // common PUBLIC window settled. Retire only on changed-card publication.
   deferredPublic420?: true;
+  // Worker batch ACK and public release use the same server clock. Receiving
+  // an older private RTDB event late must not make it newer than publication.
+  acceptedAtPublicClock420?: number;
 };
 
 type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
@@ -739,6 +742,7 @@ const markCrossOriginLikeSettled359 = (uid: string, version: number): void => {
 // signal. Old clients ignore it and still use their original reconciliation.
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail & {
   canonicalSettled417?: boolean;
+  acceptedAtPublicClock420?: number;
 };
 type ExploreLikeSignal127 = {
   version: number;
@@ -767,6 +771,9 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
       liked: value.liked,
       likeCount: clampLikeCount(value.likeCount),
       ...(value.canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
+      ...(Number.isSafeInteger(value.acceptedAtPublicClock420) &&
+        Number(value.acceptedAtPublicClock420) > 0
+        ? { acceptedAtPublicClock420: Number(value.acceptedAtPublicClock420) } : {}),
     });
   }
   return { version, previousVersion, results };
@@ -896,23 +903,38 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
       unresolved[item.trackId] = item.liked;
       unresolvedChanged = true;
     }
-    // Persist the accepted count as well as the heart: an RTDB event can arrive
-    // before Explore mounts, and a cached Feed may still carry an older count.
-    displayLocks[item.trackId] = {
-      liked: item.liked,
-      likeCount: clampLikeCount(item.likeCount),
-      updatedAt: acceptedAt,
-      protectUntil: acceptedAt + (COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448
-        ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
-        : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
-      ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
-    };
+    // The server stamped the original mutation before the public release.
+    // RTDB may deliver this retained UID-only notification much later. A
+    // locally known settled PUBLIC row then outranks its stale private count,
+    // while the newly accepted personal heart still applies.
+    const serverAccepted420 = Number(item.acceptedAtPublicClock420);
+    const hasServerClock420 = Number.isSafeInteger(serverAccepted420) && serverAccepted420 > 0;
+    const alreadyPublished420 = COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 &&
+      hasSettledExplorePublicLikeSignal396(
+        uid, item.trackId, hasServerClock420 ? serverAccepted420 : 1,
+      );
+    if (alreadyPublished420) {
+      delete displayLocks[item.trackId];
+    } else {
+      displayLocks[item.trackId] = {
+        liked: item.liked,
+        likeCount: clampLikeCount(item.likeCount),
+        updatedAt: acceptedAt,
+        protectUntil: acceptedAt + (COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448
+          ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+          : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+        ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
+        ...(hasServerClock420 ? { acceptedAtPublicClock420: serverAccepted420 } : {}),
+      };
+    }
     locksChanged = true;
     // Collect notifications until both the membership and pending snapshot
     // are durable. Explore rereads effective membership in its UI subscriber;
     // dispatching here would expose an OLD snapshotPending value and drop this
     // exact remote change until the next page/tab visit.
-    acceptedForUi141.push({ ...item, uid, source: 'remote' });
+    acceptedForUi141.push({ ...item, uid, source: 'remote',
+      ...(alreadyPublished420 ? { privateCountExact416: false } : {}),
+    });
   }
   if (deferredPendingChanged390) persistLikeOutbox(uid, pending);
   if (changed) persistLikedStateCache(uid, cache);
@@ -1580,12 +1602,15 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
       {
         version,
         previousVersion: forceGap ? 0 : previousVersion,
-        results: rows.map(({ trackId, ownerUid, liked, likeCount, canonicalSettled417 }) => ({
+        results: rows.map(({ trackId, ownerUid, liked, likeCount, canonicalSettled417,
+          acceptedAtPublicClock420 }) => ({
           trackId,
           ownerUid,
           liked,
           likeCount: clampLikeCount(likeCount),
           ...(canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
+          ...(Number.isSafeInteger(acceptedAtPublicClock420) && Number(acceptedAtPublicClock420) > 0
+            ? { acceptedAtPublicClock420 } : {}),
         })),
       },
     );
@@ -1761,6 +1786,9 @@ const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => 
   if (!updatedAt || !protectUntil) return null;
   return { liked: row.liked, likeCount, updatedAt, protectUntil,
     ...(row.deferredPublic420 === true ? { deferredPublic420: true as const } : {}),
+    ...(Number.isSafeInteger(row.acceptedAtPublicClock420) &&
+      Number(row.acceptedAtPublicClock420) > 0
+      ? { acceptedAtPublicClock420: Number(row.acceptedAtPublicClock420) } : {}),
   };
 };
 
@@ -1813,7 +1841,9 @@ export const retireExploreLikeDisplayLockAfterPublicCount420 = (
       readActiveLikeOutbox414(uid)[trackId]) return false;
   const locks = readLikeDisplayLocks(uid);
   const lock = locks[trackId];
-  if (!lock || lock.updatedAt > publishedAt) return false;
+  // Prefer the original Worker ACK clock to the client's receive clock.
+  // Only legacy locks without this receipt retain the historical fallback.
+  if (!lock || (lock.acceptedAtPublicClock420 ?? lock.updatedAt) > publishedAt) return false;
   delete locks[trackId];
   persistLikeDisplayLocks(uid, locks);
   return true;
@@ -1860,8 +1890,16 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
     }
     const lock = locks[trackId];
     if (lock) {
+      // A public row may already have settled while the Explore view was
+      // unmounted. Reuse the existing small per-UID release watermark cache.
+      // No network request, D1 scan or new listener is introduced.
+      const acceptedAt420 = Number(lock.acceptedAtPublicClock420);
+      const settledAfterActor420 = lock.deferredPublic420 &&
+        hasSettledExplorePublicLikeSignal396(normalizedUid, trackId,
+          Number.isSafeInteger(acceptedAt420) && acceptedAt420 > 0 ? acceptedAt420 : 1);
       const sharedCount = clampLikeCount(track.likeCount);
-      if ((!lock.deferredPublic420 && sharedCount === lock.likeCount) ||
+      if (settledAfterActor420 ||
+          (!lock.deferredPublic420 && sharedCount === lock.likeCount) ||
           lock.protectUntil <= now) {
         delete locks[trackId];
         locksChanged = true;
@@ -2265,6 +2303,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
           result.status !== 'already-desired' &&
           result.status !== 'revision-conflict' &&
           result.status !== 'ineligible';
+        const alreadyReleasedForAck420 = holdDeferredActorCount420 &&
+          Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0 &&
+          hasSettledExplorePublicLikeSignal396(uid, pending.trackId, serverAcceptedAt192);
         const canonicalLikeCount = resolveExploreLikeAckCount420(
           holdDeferredActorCount420,
           true,
@@ -2300,15 +2341,21 @@ flushPendingLikes = async (user: User): Promise<void> => {
           // newer canonical state. The returned server state becomes local
           // truth; the next explicit click creates a fresh operation.
           cache.set(pending.trackId, result.liked);
-          displayLocks[pending.trackId] = {
-            liked: result.liked,
-            likeCount: canonicalLikeCount,
-            updatedAt: acknowledgedAt,
-            protectUntil: acknowledgedAt + (holdDeferredActorCount420
-              ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
-              : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
-            ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
-          };
+          if (alreadyReleasedForAck420) {
+            delete displayLocks[pending.trackId];
+          } else {
+            displayLocks[pending.trackId] = {
+              liked: result.liked,
+              likeCount: canonicalLikeCount,
+              updatedAt: acknowledgedAt,
+              protectUntil: acknowledgedAt + (holdDeferredActorCount420
+                ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+                : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+              ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
+              ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
+                ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
+            };
+          }
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {
             delete snapshotPending127[pending.trackId];
@@ -2331,6 +2378,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
             likeCount: canonicalLikeCount,
             source: 'confirmed',
             ...(trustedCanonicalReceipt417 ? { canonicalSettled417: true } : {}),
+            ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
+              ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
           };
           // Cross-device membership follows the server-accepted account state,
           // not the later public aggregate. Keep the local snapshot-pending guard
@@ -2351,7 +2400,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
-          canonicalAcceptedUiAfterPersist127.push({ ...accepted, source: 'remote' });
+          canonicalAcceptedUiAfterPersist127.push({ ...accepted, source: 'remote',
+            ...(alreadyReleasedForAck420 ? { privateCountExact416: false } : {}),
+          });
         }
       }
 

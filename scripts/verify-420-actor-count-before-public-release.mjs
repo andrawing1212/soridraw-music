@@ -49,7 +49,7 @@ const {overlay,retire}=new Function(
   'readActiveLikeOutbox414','readLikeDisplayLocks','persistLikeDisplayLocks',
   'readExploreTrackLikeMembership127','readExploreLikeIntentDetail416',
   'EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE','normalizeExploreLikeDisplayPair129',
-  'clampLikeCount','Date',
+  'clampLikeCount','Date','hasSettledExplorePublicLikeSignal396',
   overlayJs+
   '\nreturn {overlay:overlayExploreLikeDisplayCounts,retire:retireExploreLikeDisplayLockAfterPublicCount420};',
 )(
@@ -62,6 +62,7 @@ const {overlay,retire}=new Function(
   pair,
   n=>Math.max(0,Math.floor(Number(n)||0)),
   {now:()=>now},
+  () => false,
 );
 const uid='actor',track='song';
 const published=[{id:track,likeCount:5}];
@@ -112,6 +113,11 @@ assert.match(service,/result\.status !== 'already-desired'/,
 assert.match(page,/patchExploreFeedSessionCachesRow\(row\.trackId, \{ likeCount: card\.likeCount \}\)/,
   'public cache gets only public published count');
 assert.match(service,/EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420 = 25 \* 60_000/);
+assert.equal(JSON.parse(readFileSync('public/app-version.json','utf8')).version,420,
+  'app420 must build a new app version; same-version app419 release is forbidden');
+assert.match(page,/detail\.privateCountExact416 !== false && Number\.isSafeInteger\(detail\.likeCount\)/,
+  'late personal signal must retain the heart without reverting a settled public count');
+console.log('APP420_RELEASE_VERSION_420_AND_LATE_PRIVATE_REPAINT_GUARD=PASS');
 console.log('APP420_VERIFIED_ACTOR_0_TO_1_AND_5_TO_6=PASS');
 console.log('APP420_UNKNOWN_MEMBERSHIP_APP413_GUARD=PASS');
 console.log('APP420_DEFERRED_PRIVATE_ACK_NO_OLD_PUBLIC_ROLLBACK=PASS');

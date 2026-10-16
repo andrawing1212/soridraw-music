@@ -34,6 +34,62 @@ assert.ok(
   'cached hearts must paint before async revision/baseline work',
 );
 
+// app420: execute the actual RTDB payload decoder AND the mounted Explore
+// receiver. The account's filled heart may arrive after public 7 has settled,
+// but the private provisional 6 cannot repaint the already published count.
+{
+  const {default:ts}=await import('typescript');
+  const {default:vm}=await import('node:vm');
+  const from=service.indexOf('const normalizeLikeSignal127 =');
+  const to=service.indexOf('// app410:',from);
+  assert.ok(from>0&&to>from,'exact private RTDB decoder missing');
+  const parser=ts.transpileModule(service.slice(from,to)+
+    '\nglobalThis.decode=normalizeLikeSignal127;',
+    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  const context={EXPLORE_LIKE_SIGNAL_MAX_127:50,
+    clampLikeCount:(v)=>Math.max(0,Math.floor(Number(v)||0))};
+  vm.runInNewContext(parser,context);
+  const row=context.decode({version:20_001,previousVersion:20_000,
+    results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000}]}).results[0];
+  assert.equal(row.acceptedAtPublicClock420,8_000);
+  const legacy=context.decode({version:20_002,previousVersion:20_001,
+    results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6}]}).results[0];
+  assert.equal(legacy.acceptedAtPublicClock420,undefined,
+    'older app419 signals remain readable without schema migration');
+
+  const begin=page.indexOf('const onRemote = (detail: {');
+  const end=page.indexOf('const onGap =',begin);
+  assert.ok(begin>=0&&end>begin,'real mounted React receiver missing');
+  const executable=ts.transpileModule(page.slice(begin,end)+
+    '\nglobalThis.onRemote=onRemote;',
+    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  let renderedCount=7,heart=false,likedCacheWrites=0;
+  const setTrack=(fn)=>{const a=fn([{id:'song',likeCount:renderedCount}]);
+    renderedCount=a[0].likeCount;};
+  const canvas={
+    user:{uid:'same-account'},
+    likeInteractionVersionRef090:{current:0},
+    readExploreTrackLikeMembership127:()=>true,
+    normalizeExploreLikeDisplayPair129:(liked,likeCount)=>({liked,likeCount}),
+    setLikedTrackIds:(fn)=>{heart=fn({song:heart}).song;},
+    setTracks:setTrack,setPopularTracks:()=>{},setCuratedTracks307:()=>{},
+    setManagedCuratedTracks307:()=>{},setProfileTracks:()=>{},
+    setProfileLikedTracks:()=>{},
+    patchExploreLikedTrackCachedCount091:()=>{likedCacheWrites++;},
+    setLikeAccountSyncSignal:()=>{},
+  };
+  vm.runInNewContext(executable,canvas);
+  canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:false});
+  assert.equal(heart,true,'late private ACK updates personal heart');
+  assert.equal(renderedCount,7,'late private ACK cannot repaint public 7 as 6');
+  assert.equal(likedCacheWrites,0,'late private ACK cannot overwrite liked-card settled public 7');
+  canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:undefined});
+  assert.equal(renderedCount,6,'newer private actor accepted count still repaints');
+  console.log('APP420_REAL_RTDB_DECODER_SERVER_TIME_AND_APP419_COMPAT=PASS');
+  console.log('APP420_REAL_REACT_LATE_PRIVATE_HEART_ONLY_PUBLIC_7_STAYS_7=PASS');
+}
+
 console.log('APP140_LIVE_CHANGED_TRACK_RTDB_SET=PASS');
 console.log('APP140_LIVE_SIGNAL_D1_FIRESTORE_IO=0');
 console.log('APP140_CACHED_HEART_INITIAL_SPINNER_AVOIDED=PASS');
@@ -65,6 +121,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   let persistentPending = { 'track-a': false };
   let seen = 10;
   let outbox = {};
+  let publicSettledAt420 = 0;
+  let personalLocks420 = {};
   const rendered = [];
   const env = {
     console,
@@ -87,14 +145,16 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     persistLikeOutbox: (_uid, value) => { outbox = value; },
     readSnapshotPending127: () => ({ ...persistentPending }),
     getLikedStateCache: () => cache,
-    readLikeDisplayLocks: () => ({}),
+    readLikeDisplayLocks: () => ({ ...personalLocks420 }),
+    hasSettledExplorePublicLikeSignal396: (_uid,_track,acceptedAt) =>
+      publicSettledAt420 >= acceptedAt,
     patchExploreLikedTrackMembership: () => {},
     // Phase416's separate tentative overlay is optional in this historical
     // accepted-signal fixture; keep the app141 durable order assertions intact.
     clearExploreLikeIntent416: () => {},
     persistLikedStateCache: () => {},
     writeSnapshotPending127: (_uid, next) => { persistentPending = { ...next }; },
-    persistLikeDisplayLocks: () => {},
+    persistLikeDisplayLocks: (_uid, locks) => { personalLocks420 = { ...locks }; },
     markLocalLikeCatalogReady135: () => {},
     markSeenLikeSignal127: (_uid, version) => { seen = version; },
     dispatchLikeSync: (detail) => {
@@ -166,6 +226,39 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(rendered[3].liked, false);
   assert.equal(rendered[3].likeCount, 5,
     'reverse-device accepted OFF restores provisional 5 from 6');
+  // Independent audit reproducer: the Worker accepted the personal ON before
+  // publication, but mobile receives the UID-private RTDB row *after* the
+  // public count 7 has already been accepted locally.
+  publicSettledAt420 = 9_000;
+  env.__apply('same-account', {
+    version: 15, previousVersion: 14,
+    results: [{ trackId:'track-a',ownerUid:'',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000 }],
+  });
+  assert.equal(rendered.length,5);
+  assert.equal(rendered[4].liked,true,
+    'late private ACK still updates same-account personal heart');
+  assert.equal(rendered[4].privateCountExact416,false,
+    'late private ACK is NOT an authority to repaint settled PUBLIC 7 as 6');
+  assert.equal(personalLocks420['track-a'],undefined,
+    'late private ACK may not install a new 25-minute provisional lock');
+  // Reversed order: a genuinely newer private action after publication must
+  // remain protected, regardless of when RTDB happens to deliver it.
+  env.__apply('same-account', {
+    version: 16, previousVersion: 15,
+    results: [{trackId:'track-a',ownerUid:'',liked:false,likeCount:6,
+      acceptedAtPublicClock420:10_000}],
+  });
+  assert.equal(rendered.length,6);
+  assert.notEqual(rendered[5].privateCountExact416,false);
+  assert.equal(personalLocks420['track-a'].acceptedAtPublicClock420,10_000);
+  assert.equal(personalLocks420['track-a'].likeCount,6);
+  assert.match(service,/acceptedAtPublicClock420: serverAcceptedAt192/,
+    'origin Worker acceptance clock must travel with 127 signal, never receive Date.now');
+  assert.match(publish,/acceptedAtPublicClock420/,
+    'existing RTDB signal must preserve the Worker acceptance time');
+  console.log('APP420_AUDIT_LATE_PRIVATE_AFTER_PUBLIC_7_STAYS_7=PASS');
+  console.log('APP420_POST_PUBLIC_NEW_PRIVATE_CLICK_PROTECTED_6=PASS');
   console.log('APP420_SAME_UID_ON_6_OFF_5_REMOTE_SIGNAL=PASS');
   console.log('APP420_DUPLICATE_SIGNAL_NO_DOUBLE_PLUS_ONE=PASS');
   console.log('APP390_DEFERRED_REMOTE_UNLIKE_REPLAY_NO_SERVER_IO=PASS');

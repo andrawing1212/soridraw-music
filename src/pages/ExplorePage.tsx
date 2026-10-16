@@ -2419,7 +2419,10 @@ export default function ExplorePage() {
 
       // Heart + count are one accepted like atom. When a canonical remote count
       // accompanies the account state, patch every loaded surface together.
-      if (Number.isSafeInteger(detail.likeCount)) {
+      // A delayed PRIVATE account ACK can arrive AFTER a PUBLIC release.
+      // Its heart remains valid, but its pre-release count cannot repaint an
+      // already-settled 192 public total (or the matching liked-card cache).
+      if (detail.privateCountExact416 !== false && Number.isSafeInteger(detail.likeCount)) {
         const patchRemotePair129 = (previous: ExploreTrack[]) => {
           let changed = false;
           const patched = previous.map((track) => {

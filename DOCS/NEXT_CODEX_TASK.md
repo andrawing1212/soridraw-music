@@ -1,3 +1,11 @@
+## NEXT — repeat EXTERNAL independent audit, corrected app420 exact SHA (2026-10-16)
+
+- **Audit exact product SHA:** `9f304a726280c2630840431a04b6627ba51e1407`, merged PR #194; quality Run `38897965277` SUCCESS, app-version 420. Older SHA `3460c9d346295e3086875003a437add53a5c2ffc` was externally audited **FAIL** (late private count 6 overwrote settled public 7) and is forbidden for deployment.
+- **READ-ONLY in separate audit room.** Verify the actual UID-private RTDB encoder/decoder carries *original Worker batch ACK time* `acceptedAtPublicClock420` without resetting it on delivery/retry/replay; public release uses server `row.at`. Trace service receive, actor lock, React remote paint, public repaint, and per-user already-settled ledger. Reproduce both published7→late-private6 stays7 and published7→genuinely-new-private6 stays6. Verify late same-device private ACK; concurrent two devices, rapid unlike/net-zero, old app419 signal compatibility, missing server timestamp fallback, ledger 25min bound, cached/reload/cross-account and all 1/3/5/10/20min windows, unchanged read/write costs and app410 frozen membership.
+- **Release gate:** do not deploy, change code, commit, push, Rules, D1, Worker, shared data in audit room. If PASS, development room may use existing fixed Firebase PREVIEW Hosting workflow to ship exact app420 and verify live `preview.soridraw.com` version and PC/mobile. If FAIL, new focused repair, CI, SHA and independent re-audit first. main/TEST/PRODUCTION unchanged.
+
+---
+
 ## NEXT — Independent audit app420 exact SHA, then gated PREVIEW Hosting release (2026-10-16)
 
 - **Audit candidate:** 3460c9d346295e3086875003a437add53a5c2ffc, PR #192; quality Run 38886509436 SUCCESS, live Hosting remains app419.

@@ -15,7 +15,16 @@ function functionFromSource(begin,end,object){
    {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
  // Public-count fixture has no actor-private lock; keep the genuine
  // change-only React callback but give it the existing local-only overlay.
- const ctx={user:{uid:'fixture-uid'},overlayExploreLikeDisplayCounts:(_uid,rows)=>rows,...object};
+ const ctx={
+   user:{uid:'fixture-uid'},
+   overlayExploreLikeDisplayCounts:(_uid,rows)=>rows,
+   resolveExploreLikeRemoteDisplayCount420:(current,provisional,base,exact)=>{
+     if(exact===false)return current;
+     if(Number.isSafeInteger(base)&&base>=0)return current===base?provisional:current;
+     return provisional;
+   },
+   ...object,
+ };
  vm.runInNewContext(code,ctx,{timeout:2000});
  return ctx.extracted;
 }

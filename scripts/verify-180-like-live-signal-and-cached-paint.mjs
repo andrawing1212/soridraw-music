@@ -51,8 +51,10 @@ assert.ok(
   vm.runInNewContext(parser,context);
   const row=context.decode({version:20_001,previousVersion:20_000,
     results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6,
-      acceptedAtPublicClock420:8_000}]}).results[0];
+      acceptedAtPublicClock420:8_000,basePublicLikeCount420:5}]}).results[0];
   assert.equal(row.acceptedAtPublicClock420,8_000);
+  assert.equal(row.basePublicLikeCount420,5,
+    'app420 RTDB row preserves the exact public base used for +1');
   const legacy=context.decode({version:20_002,previousVersion:20_001,
     results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6}]}).results[0];
   assert.equal(legacy.acceptedAtPublicClock420,undefined,
@@ -70,6 +72,11 @@ assert.ok(
   const canvas={
     user:{uid:'same-account'},
     likeInteractionVersionRef090:{current:0},
+    resolveExploreLikeRemoteDisplayCount420:(current,provisional,base,exact)=>{
+      if(exact===false)return current;
+      if(Number.isSafeInteger(base)&&base>=0)return current===base?provisional:current;
+      return provisional;
+    },
     readExploreTrackLikeMembership127:()=>true,
     normalizeExploreLikeDisplayPair129:(liked,likeCount)=>({liked,likeCount}),
     setLikedTrackIds:(fn)=>{heart=fn({song:heart}).song;},
@@ -82,12 +89,25 @@ assert.ok(
   vm.runInNewContext(executable,canvas);
   canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:false});
   assert.equal(heart,true,'late private ACK updates personal heart');
-  assert.equal(renderedCount,7,'late private ACK cannot repaint public 7 as 6');
-  assert.equal(likedCacheWrites,0,'late private ACK cannot overwrite liked-card settled public 7');
+  assert.equal(renderedCount,7,'explicit heart-only ACK cannot repaint public 7 as 6');
+  assert.equal(likedCacheWrites,0,'heart-only ACK cannot overwrite liked-card settled public 7');
+
+  // Re-audit A: even without this device's public-settlement ledger, public 7
+  // is already different from the sender's public base 5, so retained 6 loses.
   canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:undefined});
-  assert.equal(renderedCount,6,'newer private actor accepted count still repaints');
+  assert.equal(renderedCount,7,
+    'existing/missed-ledger device keeps advanced public 7 over stale private 6');
+
+  // Re-audit B: before shared publication, the receiver still sees exact base 5.
+  // The same account must therefore display its accepted provisional +1 as 6.
+  renderedCount=5;
+  canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:undefined});
+  assert.equal(renderedCount,6,
+    'fresh device before shared release promotes public base 5 to private 6');
   console.log('APP420_REAL_RTDB_DECODER_SERVER_TIME_AND_APP419_COMPAT=PASS');
   console.log('APP420_REAL_REACT_LATE_PRIVATE_HEART_ONLY_PUBLIC_7_STAYS_7=PASS');
+  console.log('APP420_REAL_REACT_PUBLIC7_REJECTS_BASE5_PRIVATE6=PASS');
+  console.log('APP420_REAL_REACT_PUBLIC5_ACCEPTS_BASE5_PRIVATE6=PASS');
 }
 
 console.log('APP140_LIVE_CHANGED_TRACK_RTDB_SET=PASS');
@@ -279,15 +299,45 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(rendered.at(-1).privateCountExact416,false,
     'first retained private number is not allowed to override loaded public count');
   assert.equal(personalLocks420['fresh-device-song'],undefined,
-    'fresh device cannot create a 25-minute provisional lock from unproven retained history');
+    'legacy app419 retained row without public-base proof stays heart-only');
+
+  // Current app420 retained row carries its public base. This removes the false
+  // first-snapshot dichotomy: public5 can show private6 immediately, while a
+  // receiver already on public7 will reject that stale6 in the display layer.
+  seen = 0;
+  publicSettledAt420 = 0;
+  personalLocks420 = {};
+  persistentPending = {};
+  cache.set('fresh-base-song', false);
+  const beforeBaseRows = rendered.length;
+  env.__apply('same-account', {
+    version: 31, previousVersion: 30,
+    results: [{trackId:'fresh-base-song',ownerUid:'',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000,basePublicLikeCount420:5}],
+  }, false, true);
+  assert.equal(rendered.length,beforeBaseRows+1);
+  assert.equal(rendered.at(-1).liked,true);
+  assert.notEqual(rendered.at(-1).privateCountExact416,false,
+    'base-proven initial retained row may carry same-account provisional count');
+  assert.equal(rendered.at(-1).basePublicLikeCount420,5);
+  assert.equal(personalLocks420['fresh-base-song'].likeCount,6);
+  assert.equal(personalLocks420['fresh-base-song'].basePublicLikeCount420,5);
 
   // Once the initial Firebase snapshot has been consumed, a genuinely new live
   // account change must still carry the immediate same-account provisional count.
+  assert.equal(seen,31,'fresh-base retained row must advance the network watermark');
+  assert.equal(cache.get('fresh-device-song'),true,'earlier retained heart is still durable');
+  assert.equal(outbox['fresh-device-song'],undefined,'no local outbox may block the live remote row');
+  const beforeLiveRows420=rendered.length;
   env.__apply('same-account', {
-    version: 22, previousVersion: 21,
+    version: 32, previousVersion: 31,
     results: [{trackId:'fresh-device-song',ownerUid:'',liked:false,likeCount:7,
-      acceptedAtPublicClock420:12_000}],
+      acceptedAtPublicClock420:12_000,basePublicLikeCount420:6}],
   }, false, false);
+  assert.equal(seen,32,'live same-account row must advance network watermark');
+  assert.equal(cache.get('fresh-device-song'),false,'live unlike must become durable membership');
+  assert.equal(persistentPending['fresh-device-song'],false,'live unlike pending snapshot persists before UI');
+  assert.equal(rendered.length,beforeLiveRows420+1,'live same-account row must reach the UI once');
   assert.equal(rendered.at(-1).liked,false);
   assert.notEqual(rendered.at(-1).privateCountExact416,false,
     'subsequent live same-UID change keeps provisional count authority');
@@ -296,6 +346,7 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.match(service,/let firstPrivateSnapshot420 = true/);
   assert.match(service,/applyRemoteLikeSignal127\(uid, signal, false, initialRetained420\)/);
   console.log('APP420_NEW_DEVICE_FIRST_RETAINED_HEART_ONLY_NO_STALE_COUNT=PASS');
+  console.log('APP420_NEW_DEVICE_BASE5_RETAINED_PRIVATE6_AUTHORIZED=PASS');
   console.log('APP420_NEW_DEVICE_SUBSEQUENT_LIVE_PRIVATE_COUNT_STILL_SYNCED=PASS');
   console.log('APP420_AUDIT_LATE_PRIVATE_AFTER_PUBLIC_7_STAYS_7=PASS');
   console.log('APP420_POST_PUBLIC_NEW_PRIVATE_CLICK_PROTECTED_6=PASS');

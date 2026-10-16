@@ -825,7 +825,12 @@ const replaySameVersionRetainedMembership410 = (
   return repaired.length;
 };
 
-const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, deferredReplay390 = false) => {
+const applyRemoteLikeSignal127 = (
+  uid: string,
+  signal: ExploreLikeSignal127,
+  deferredReplay390 = false,
+  initialRetained420 = false,
+) => {
   const lastSeen = readSeenLikeSignal127(uid);
   if (!deferredReplay390 && signal.version <= lastSeen) return;
   // If an initial retained signal arrives after the R2 baseline, its rows
@@ -913,9 +918,19 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
       hasSettledExplorePublicLikeSignal396(
         uid, item.trackId, hasServerClock420 ? serverAccepted420 : 1,
       );
+    // app420 new-device rule: the FIRST RTDB value is a retained account event,
+    // not proof that its private count is newer than the public Feed already
+    // loaded on this origin. If this origin has no public-settlement ledger yet,
+    // apply the personal heart/membership but keep the current public count.
+    // Subsequent live callbacks are allowed to carry the provisional +/-1.
+    const unprovenInitialRetained420 = COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 &&
+      initialRetained420 && lastSeen <= 0 && !alreadyPublished420;
     if (alreadyPublished420) {
-      delete displayLocks[item.trackId];
-    } else {
+      if (displayLocks[item.trackId]) {
+        delete displayLocks[item.trackId];
+        locksChanged = true;
+      }
+    } else if (!unprovenInitialRetained420) {
       displayLocks[item.trackId] = {
         liked: item.liked,
         likeCount: clampLikeCount(item.likeCount),
@@ -926,14 +941,15 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
         ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
         ...(hasServerClock420 ? { acceptedAtPublicClock420: serverAccepted420 } : {}),
       };
+      locksChanged = true;
     }
-    locksChanged = true;
     // Collect notifications until both the membership and pending snapshot
     // are durable. Explore rereads effective membership in its UI subscriber;
     // dispatching here would expose an OLD snapshotPending value and drop this
     // exact remote change until the next page/tab visit.
     acceptedForUi141.push({ ...item, uid, source: 'remote',
-      ...(alreadyPublished420 ? { privateCountExact416: false } : {}),
+      ...((alreadyPublished420 || unprovenInitialRetained420)
+        ? { privateCountExact416: false } : {}),
     });
   }
   if (deferredPendingChanged390) persistLikeOutbox(uid, pending);
@@ -972,10 +988,13 @@ const startLikeSignal127 = (uid: string) => {
   unsubscribeLikeSignal127 = null;
   activeLikeSignalUid127 = uid;
   if (!uid) return;
+  let firstPrivateSnapshot420 = true;
   unsubscribeLikeSignal127 = onValue(
     databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
     (snapshot) => {
       if (activeLikeSignalUid127 !== uid || auth.currentUser?.uid !== uid) return;
+      const initialRetained420 = firstPrivateSnapshot420;
+      firstPrivateSnapshot420 = false;
       const signal = normalizeLikeSignal127(snapshot.val());
       if (signal) {
         rememberLastRetainedLikeSignal357(uid, signal.version);
@@ -985,7 +1004,7 @@ const startLikeSignal127 = (uid: string) => {
         // monotonic handler intentionally returns early. app410 first repairs
         // only a drifted local heart from that exact already-received row.
         if (signal.version === seenBefore357) replaySameVersionRetainedMembership410(uid, signal);
-        applyRemoteLikeSignal127(uid, signal);
+        applyRemoteLikeSignal127(uid, signal, false, initialRetained420);
         if (canAdvancePersonalLikeOriginCertificate357({
           seenBefore: seenBefore357,
           signalPreviousVersion: signal.previousVersion,

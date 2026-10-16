@@ -2207,7 +2207,10 @@ export default function ExplorePage() {
             // provisional count; never erase an unsent or newer same-UID click.
             // All surfaces receive the exact same published count below.
             retireExploreLikeDisplayLockAfterPublicCount420(
-              user.uid, row.trackId, Math.max(row.at, card.updatedAt),
+              // Causality is the PUBLIC signal's publication timestamp.
+              // A later R2 card write must not make an OLDER signal appear
+              // newer than this device's accepted private change.
+              user.uid, row.trackId, row.at,
             );
             const ownerUid = card.ownerUid || row.ownerUid;
             patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });

@@ -431,6 +431,24 @@ export const resolveExploreLikeAckCount420 = (
   ? clampLikeCount(optimisticCount)
   : clampLikeCount(returnedPublicCount);
 
+// Cross-device provisional count is valid only while the receiver is still
+// looking at the same public count the actor used as its base.
+export const resolveExploreLikeRemoteDisplayCount420 = (
+  currentPublicCount: number,
+  provisionalCount: number,
+  basePublicLikeCount420: unknown,
+  privateCountExact416: unknown,
+): number => {
+  const current = clampLikeCount(currentPublicCount);
+  if (privateCountExact416 === false) return current;
+  if (Number.isSafeInteger(basePublicLikeCount420) &&
+      Number(basePublicLikeCount420) >= 0) {
+    const base = clampLikeCount(basePublicLikeCount420);
+    return current === base ? clampLikeCount(provisionalCount) : current;
+  }
+  return clampLikeCount(provisionalCount);
+};
+
 // app414: app412 quarantined historical unmarked outbox rows from server replay,
 // but they were still allowed to override the heart/count and to block newer
 // accepted same-account state. Quarantine must be symmetric: preserved in

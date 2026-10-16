@@ -1,3 +1,15 @@
+## CURRENT — app420 actor like/count provisional parity: spec locked, implementation pending (2026-10-16 KST)
+
+- **Base PREVIEW:** `1a3994f263bb1f8f53b83e304152fe0a55a20f38` (app419 Hosting live). User has confirmed **Master 1-minute saving succeeded and 1-minute shared PUBLIC release works**; this supersedes earlier app419 save-failure pending acceptance notices. Overall shared public-count parity with different accounts is not separately certified.
+- **New confirmed real-device defect:** own Explore heart follows ON/OFF, but during personal-server batch ACK the own displayed count can revert to the old published total before the next public-window release. Other devices signed into the **same account** must receive the latest accepted personal heart and **provisional ±1 count together**. The previous assistant's assessment located the private/public authority mix; exact end-to-end runtime cause remains to be proven by executable test.
+- **Canonical design contract:** authenticated verified false→true must show +1, true→false -1 immediately, same UID both directions without navigating. Do not treat a deferred-448 personal ACK's `track_stats.like_count` as published-new count. Cross-account public total remains last published until the fixed 1/3/5/10/20-min window ends. Then matching changed-card publication retires only the older private overlay and all accounts converge. Newer local outbox intent and app410 membership are never overwritten by an old ACK.
+- **Source risk points:** `src/services/exploreLikeService.ts` `stabilizeExploreLikeOptimisticCount413`, `flushPendingLikes` `canonicalLikeCount`, UID 127 signal and `displayLocks` 90s TTL; `src/pages/ExplorePage.tsx` remote and public-count handlers. Preemptive+1 for **unknown/ambiguous** membership breaks app413 safety and is forbidden; use verified membership authority.
+- **Implementation task:** GitHub [Issue #186](https://github.com/andrawing1212/soridraw-music/issues/186) (Codex High; protected app410/141/164/413/448 regressions, executable local ACK→same UID signal→public release tests, no extra D1/Firestore/RTDB writes, no whole reads).
+- **Status:** analysis/design 1/4·25%; implementation **not started**, tests and independent SHA audit **not run**, PREVIEW code/deploy **unchanged**, shared user data untouched, TEST/PRODUCTION untouched. Stage416 1/4·25%; app speed 5/5·100%.
+- **Next:** implement Issue #186 on preview -> TypeScript/Build/targeted tests -> exact-SHA independent audit -> only approved safe PREVIEW release -> PC↔mobile manual acceptance. Do not conflate shared public count with private provisional display.
+
+---
+
 ## CURRENT — app419 Master 1-minute save repeat FAIL: retained RTDB listener correction deployed PREVIEW; real-user confirmation pending (2026-10-16)
 
 - **User-visible repeat FAIL** at ~14:36 KST: Master selected public cadence 1 minute, saw save failure, and reentry reverted to 5 minutes. Previous one-shot `get()` fix was insufficient and must not be represented as accepted.

@@ -104,7 +104,11 @@ assert.match(service,/displayLocks\[item\.trackId\] = \{[\s\S]*?likeCount: clamp
   'same-UID receiver retains accepted pair before UI notification');
 assert.match(service,/persistLikeDisplayLocks\(uid, displayLocks\);[\s\S]*?markSeenLikeSignal127\(uid, signal\.version\);[\s\S]*?acceptedForUi141\.forEach\(dispatchLikeSync\)/,
   'app141 persist before remote UI dispatch');
-assert.match(page,/retireExploreLikeDisplayLockAfterPublicCount420\([\s\S]*?user\.uid, row\.trackId, Math\.max\(row\.at, card\.updatedAt\)/);
+assert.match(page,/retireExploreLikeDisplayLockAfterPublicCount420\([\s\S]*?user\.uid, row\.trackId, row\.at/);
+assert.doesNotMatch(page,/retireExploreLikeDisplayLockAfterPublicCount420\([\s\S]{0,250}?Math\.max\(row\.at, card\.updatedAt\)/,
+  'old published signal cannot borrow a newer card updatedAt to erase a newer actor lock');
+assert.match(service,/result\.status !== 'already-desired'/,
+  'a canonical no-change ACK cannot retain a speculative +1 for 25 minutes');
 assert.match(page,/patchExploreFeedSessionCachesRow\(row\.trackId, \{ likeCount: card\.likeCount \}\)/,
   'public cache gets only public published count');
 assert.match(service,/EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420 = 25 \* 60_000/);

@@ -15,12 +15,15 @@ for(const invalid of [{privateMinutes:0,publicMinutes:5},{privateMinutes:5,publi
  {privateMinutes:'5',publicMinutes:5},{privateMinutes:5,publicMinutes:30},{}]){
   assert.throws(()=>parse(invalid));
 }
-let store=null,readCount=0,writes=0;
+let store=null,readCount=0,writes=0,listeners=0,listenerReads=0;
 const db={ref:(path)=>{
   assert.equal(path,'likeBatchTiming416/current');
   return {
     get:async()=>{readCount++;return {val:()=>store}},
+    on:(_event,cb)=>{listeners++;listenerReads++;cb({val:()=>store});return cb;},
+    off:()=>{listeners--;},
     transaction:async(run)=>{
+      assert.equal(listeners,1,'Master policy listener stays alive during transaction');
       const result=run(store);
       if(result===undefined)return {committed:false,snapshot:{val:()=>store}};
       store=result;writes++;
@@ -45,16 +48,20 @@ for(let n=3;n<=14;n++){
   await change(db,'master-user',value,n-1,130_000+n*1000);
 }
 assert.equal(store.audit.length,10,'server Master audit remains bounded');
-// Real Admin RTDB transactions can first see uncached null even if server
-// already owns version 1. Refusing that null aborts before a server refresh.
-// Verify a warm read of just this Master node precedes each CAS transaction.
+assert.equal(listeners,0,'Master read listeners are always cleaned up');
+assert.equal(listenerReads,16,'one tiny Master policy subscription per real save attempt');
+// Firebase one-shot get() doesn't pin the synchronous transaction cache.
+// A live listener is required until the transaction completes.
 let coldRemote={privateMinutes:1,publicMinutes:5,version:1,updatedAtMs:5,audit:[]};
-let coldHydrated=false,coldReads=0,coldWrites=0;
+let coldListeners=0,coldSubscribes=0,coldWrites=0,coldGetReads=0;
 const coldDb={ref:()=>{
   return {
-    get:async()=>{coldReads++;coldHydrated=true;return {val:()=>coldRemote};},
+    get:async()=>{coldGetReads++;return {val:()=>coldRemote};},
+    on:(_event,cb)=>{coldListeners++;coldSubscribes++;cb({val:()=>coldRemote});return cb;},
+    off:()=>{coldListeners--;},
     transaction:async(run)=>{
-      const next=run(coldHydrated?coldRemote:null);
+      // The real SDK initially guesses null if no listener keeps its cache.
+      const next=run(coldListeners>0?coldRemote:null);
       if(next===undefined)return {committed:false,snapshot:{val:()=>coldRemote}};
       coldRemote=next;coldWrites++;return {committed:true,snapshot:{val:()=>coldRemote}};
     },
@@ -64,14 +71,30 @@ const coldSaved=await change(coldDb,'master-cold',{privateMinutes:1,publicMinute
 assert.equal(coldSaved.version,2);
 assert.equal(coldSaved.publicMinutes,1);
 assert.equal(coldWrites,1);
-assert.equal(coldReads,1,'only one tiny Master config read per save');
+assert.equal(coldListeners,0,'no lingering Firebase Master listener');
+assert.equal(coldSubscribes,1,'one small RTDB policy subscription per Master save');
+assert.equal(coldGetReads,0,'one-shot get() cannot pin the transaction cache');
 await assert.rejects(
   change(coldDb,'master-stale',{privateMinutes:1,publicMinutes:3},1,151_000),
   /CONFLICT/,
 );
 assert.equal(coldWrites,1,'stale config does not overwrite newer Master value');
-console.log('STAGE416_MASTER_COLD_CACHE_VERSION_1_TO_2_SAVE=PASS');
-console.log('STAGE416_MASTER_STALE_VERSION_FAIL_CLOSED=PASS');
+assert.equal(coldListeners,0,'failed save also detaches the listener');
+assert.equal(coldSubscribes,2);
+// Fail-closed under a version change between initial listener and transaction:
+const racedDb={ref:()=>({
+  on:(_event,cb)=>{cb({val:()=>coldRemote});return cb;},
+  off:()=>{},
+  transaction:async(run)=>{
+    const raced={...coldRemote,version:3,publicMinutes:10};
+    const next=run(raced);
+    assert.equal(next,undefined,'do not overwrite a newer Master configuration');
+    return {committed:false,snapshot:{val:()=>raced}};
+  },
+})};
+await assert.rejects(change(racedDb,'raced-master',{privateMinutes:1,publicMinutes:5},2,160_000),/CONFLICT/);
+console.log('STAGE416_MASTER_LIVE_LISTENER_COLD_CACHE_VERSION_1_TO_2_SAVE=PASS');
+console.log('STAGE416_MASTER_LISTENER_DETACH_AND_RACE_FAIL_CLOSED=PASS');
 const fn=readFileSync('functions/src/index.ts','utf8');
 for(const name of ['masterGetLikeBatchTiming416','masterSetLikeBatchTiming416'])
   assert.match(fn,new RegExp('export const '+name+' = makeMaster'));

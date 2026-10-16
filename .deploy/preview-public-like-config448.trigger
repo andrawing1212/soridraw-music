@@ -1,9 +1,10 @@
-requested_at=2026-10-16T13:35:00+09:00
-product_code_target=1f03c91f7d9372d131cb3517318c0284caceebfc
-target_function=publicLikeWindowConfig448Candidate
-scope=preview_public_like_config448_only
+requested_at=2026-10-16T14:02:00+09:00
+product_code_target=b6e1d91c86fb81940d88e6e878f689ebf9accae7
+target_function=masterSetLikeBatchTiming416
+scope=preview_master_timing_inspect_only
+preflight_only=true
 shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
-reason=app419_preview_public_timing_no_store
+reason=read_live_master_get_set_inventory_before_save_fix

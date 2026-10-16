@@ -1,3 +1,12 @@
+## NEXT — app419 Master public timing real-user save acceptance (2026-10-16)
+
+- Product code commit `7691cca03afc6dc9846d1864b08cf6a7fb110ce7`, release commit `8531215b5b5a0508df8cac7468897616e57221aa`, quality Run `38857004280` SUCCESS, isolated Function Run `38857264207` SUCCESS+ACTIVE.
+- Previous 1-minute Save failure and 5-minute reversion persisted even after get-only hydration. Updated writer keeps an RTDB value listener through the compare-and-set transaction and detaches on exit.
+- Next exact acceptance: signed-in Master select 1min, press save, check success, leave/reenter and confirm 1min persists. If error recurs, inspect bounded sanitized call/HTTP status and actual policy version before any other write or blind redeploy.
+- After save PASS, A→B same song personal hearts immediate and shared count updates without navigation on the 1-minute window; like→unlike net-zero; PC↔mobile and D1 cost check. Shared D1 schema/original user data, Worker, TEST/PROD remain unchanged; no TEST promotion until real-device PASS.
+
+---
+
 ## NEXT — app419 Master public cadence save: PREVIEW real-account acceptance only
 
 - **PREVIEW repair release:** product SHA `b710bd4692fbdf0b4b9444cb8988e3c20e86f7e7`; single Function release Run `38854999807` SUCCESS/ACTIVE; current pre-docs HEAD `81c56dff46b589cd6e1b12a85b5d4974f9a86c33`. Existing Hosting remains app419.

@@ -2257,9 +2257,17 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (!result) continue;
         const current = latest[pending.trackId];
         const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
+        // 'already-desired' is not a newly applied personal +1/-1. For
+        // example, another device already liked the same song while this
+        // device had a stale empty heart. Never manufacture a 25-minute
+        // actor increment when the canonical worker made no new change.
+        const holdDeferredActorCount420 = deferredPublicCount420 &&
+          result.status !== 'already-desired' &&
+          result.status !== 'revision-conflict' &&
+          result.status !== 'ineligible';
         const canonicalLikeCount = resolveExploreLikeAckCount420(
-          deferredPublicCount420,
-          result.status !== 'revision-conflict' && result.status !== 'ineligible',
+          holdDeferredActorCount420,
+          true,
           pending.optimisticLikeCount,
           Number.isSafeInteger(result.likeCount) ? Number(result.likeCount) : pending.optimisticLikeCount,
         );
@@ -2296,10 +2304,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
             liked: result.liked,
             likeCount: canonicalLikeCount,
             updatedAt: acknowledgedAt,
-            protectUntil: acknowledgedAt + (deferredPublicCount420
+            protectUntil: acknowledgedAt + (holdDeferredActorCount420
               ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
               : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
-            ...(deferredPublicCount420 ? { deferredPublic420: true as const } : {}),
+            ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
           };
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {

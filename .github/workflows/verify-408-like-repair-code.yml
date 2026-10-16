@@ -132,6 +132,7 @@ on:
       - 'src/pages/SunoLibraryPage.tsx'
       - 'scripts/verify-414-pending-only-lifecycle.mjs'
       - 'scripts/verify-413-like-exit-flush.mjs'
+      - 'scripts/verify-420-actor-count-before-public-release.mjs'
       - 'scripts/verify-197-new-public-track-like.mjs'
       - 'scripts/verify-191-bounded-public-like-convergence.mjs'
       - 'scripts/verify-417-bounded-like-proof.mjs'
@@ -248,6 +249,7 @@ jobs:
           node scripts/verify-439-stage416-public-release-routing.mjs
           node scripts/verify-440-stage416-public-window-coalescing.mjs
           node scripts/verify-448-common-public-like-window.mjs
+          node scripts/verify-420-actor-count-before-public-release.mjs
           node scripts/verify-416-191-public-hold-guard.mjs
           node scripts/verify-444-stage416-master-public-e2e.mjs
           node scripts/verify-445-stage416-activation-release-infra.mjs

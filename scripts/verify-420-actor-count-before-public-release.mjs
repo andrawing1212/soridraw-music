@@ -49,7 +49,7 @@ const {overlay,retire}=new Function(
   'readActiveLikeOutbox414','readLikeDisplayLocks','persistLikeDisplayLocks',
   'readExploreTrackLikeMembership127','readExploreLikeIntentDetail416',
   'EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE','normalizeExploreLikeDisplayPair129',
-  'clampLikeCount','Date',
+  'clampLikeCount','Date','hasSettledExplorePublicLikeSignal396',
   overlayJs+
   '\nreturn {overlay:overlayExploreLikeDisplayCounts,retire:retireExploreLikeDisplayLockAfterPublicCount420};',
 )(
@@ -62,6 +62,7 @@ const {overlay,retire}=new Function(
   pair,
   n=>Math.max(0,Math.floor(Number(n)||0)),
   {now:()=>now},
+  () => false,
 );
 const uid='actor',track='song';
 const published=[{id:track,likeCount:5}];

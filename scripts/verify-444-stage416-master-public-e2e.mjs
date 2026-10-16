@@ -15,7 +15,7 @@ const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js',
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
 const workerLock=readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
 
-assert.ok(version===418||version===419,'shared public-window candidate must be PREVIEW app418 or app419');
+assert.ok([418,419,420].includes(version),'shared public-window regression must remain valid through PREVIEW app420');
 
 // Ordinary Explore/app410 path remains frozen and does not enter Stage416.
 assert.match(like,/const STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE = false/);

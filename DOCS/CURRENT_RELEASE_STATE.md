@@ -1,3 +1,19 @@
+## CURRENT — app419 public-like timing admin fix / quality PASS / PREVIEW code merge next (2026-10-16 KST)
+
+- **base preview:** `3f39964402b15d3bb5a6ddc20218007de9a46653`.
+- **product/code SHA:** `caa27e8416c8ae25db4e1bc71ddf5f1b6cc3ef8b`; branch `fix/app419-public-like-timing-admin`; DRAFT PR #168.
+- **User-visible decision:** the left Master selector **“개인 최종상태 서버 저장”** is removed from the admin UI because normal app410/app418 personal likes do not use `privateMinutes`. The backend field is retained only for dormant Stage416 diagnostic compatibility; personal like/storage behavior is unchanged.
+- **Public cadence save fix:** the panel now treats only `publicMinutes` as editable user intent. A stale settings revision no longer forces a page reopen: it re-reads the latest timing once, preserves the latest hidden `privateMinutes`, and retries the selected public cadence once.
+- **Fresh new-window config:** `publicLikeWindowConfig448Candidate` now sends `Cache-Control: no-store`. The endpoint is read once per **new shared window**, not per user/page, so a newly opened window cannot reuse a stale cached 5-minute value after the Master changes it to 1 minute.
+- **Quality:** Run `38849637178` **SUCCESS** after aligning historical Stage416 verifier expectations to the current public-only UI. Functions TypeScript, app TypeScript, Build, app410 personal-like/catalog contracts, 191/frozen like contracts, and live shared RTDB Rules read-only audit all PASS.
+- **Files:** `src/components/Stage416LikeBatchMasterPanel.tsx`, `functions/src/exploreLikePublicConfig448.ts`, `scripts/verify-448-common-public-like-window.mjs`, `scripts/verify-433-stage416-public-5min-gap.mjs`, `scripts/verify-416-like-batch-master.mjs`.
+- **Safety/cost:** shared D1 schema/write path/migration/backfill/delete 0; personal like path change 0; Worker change 0; shared user data change 0; TEST/PRODUCTION change 0. New config read remains one tiny read per new shared public window, not per user/page.
+- **Deploy status:** **not deployed**. PREVIEW currently still shows app418 UI/config behavior until a separately approved PREVIEW release.
+- **Progress:** Stage416 overall **1/4·25%**, app speed improvement **5/5·100%**, this admin/public-cadence fix **4/4·100% code/quality, deployment pending**.
+- **Next:** merge PR #168 to `preview` without deploy. Before any PREVIEW release of this backend/UI change, perform exact-SHA independent audit; then only if PREVIEW deployment is requested, redeploy the config Function + Hosting and repeat the 1-minute A→B real-device acceptance.
+
+---
+
 ## CURRENT — app418 PREVIEW live wiring fixed / A→B real-device retest next (2026-10-16 KST)
 
 - **preview HEAD before docs checkpoint:** `8b3bbe0e58b2ce4d558f04edb8e68e79cb3ca653`.

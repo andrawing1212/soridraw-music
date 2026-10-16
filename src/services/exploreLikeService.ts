@@ -189,6 +189,9 @@ type ExploreLikeDisplayLock = {
   likeCount: number;
   updatedAt: number;
   protectUntil: number;
+  // A PRIVATE actor count matching an in-memory UI row is not proof that the
+  // common PUBLIC window settled. Retire only on changed-card publication.
+  deferredPublic420?: true;
 };
 
 type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
@@ -902,6 +905,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
       protectUntil: acceptedAt + (COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448
         ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
         : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+      ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
     };
     locksChanged = true;
     // Collect notifications until both the membership and pending snapshot
@@ -1755,7 +1759,9 @@ const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => 
   const updatedAt = Math.max(0, Number(row.updatedAt || 0));
   const protectUntil = Math.max(0, Number(row.protectUntil || 0));
   if (!updatedAt || !protectUntil) return null;
-  return { liked: row.liked, likeCount, updatedAt, protectUntil };
+  return { liked: row.liked, likeCount, updatedAt, protectUntil,
+    ...(row.deferredPublic420 === true ? { deferredPublic420: true as const } : {}),
+  };
 };
 
 const readLikeDisplayLocks = (uid: string): ExploreLikeDisplayLocks => {
@@ -1855,7 +1861,8 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
     const lock = locks[trackId];
     if (lock) {
       const sharedCount = clampLikeCount(track.likeCount);
-      if (sharedCount === lock.likeCount || lock.protectUntil <= now) {
+      if ((!lock.deferredPublic420 && sharedCount === lock.likeCount) ||
+          lock.protectUntil <= now) {
         delete locks[trackId];
         locksChanged = true;
       } else {
@@ -2292,6 +2299,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
             protectUntil: acknowledgedAt + (deferredPublicCount420
               ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
               : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+            ...(deferredPublicCount420 ? { deferredPublic420: true as const } : {}),
           };
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {

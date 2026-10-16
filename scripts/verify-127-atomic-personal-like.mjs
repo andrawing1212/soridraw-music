@@ -127,7 +127,7 @@ assert.match(listener, /unresolved\[item\.trackId\] = item\.liked/,
   'accepted device state must outrank a partial legacy R2/D1 snapshot');
 assert.match(listener, /persistLikeDisplayLocks\(uid, displayLocks\)/,
   'accepted remote count must survive an Explore remount or early RTDB event');
-assert.match(listener, /acceptedForUi141\.push\(\{ \.\.\.item, uid, source: 'remote' \}\)/);
+assert.match(listener, /acceptedForUi141\.push\(\{ \.\.\.item, uid, source: 'remote',/);
 assert.match(listener, /acceptedForUi141\.forEach\(dispatchLikeSync\)/);
 assert.ok(
   listener.indexOf('writeSnapshotPending127(uid, unresolved)') <
@@ -235,7 +235,7 @@ assert.ok(
   flush.indexOf('acceptedForSignal127.push(accepted)') < flush.indexOf('if (canonicalLikeSettled127) {'),
   'accepted account state must be queued for cross-device sync before canonical aggregate settlement gating',
 );
-assert.match(flush, /canonicalAcceptedUiAfterPersist127\.push\(\{ \.\.\.accepted, source: 'remote' \}\)/,
+assert.match(flush, /canonicalAcceptedUiAfterPersist127\.push\(\{ \.\.\.accepted, source: 'remote',/,
   'server-confirmed own heart needs a replayable UI repaint');
 assert.ok(
   flush.indexOf('persistLikeOutbox(uid, latest);', flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')) <

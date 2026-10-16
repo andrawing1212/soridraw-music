@@ -34,6 +34,61 @@ assert.ok(
   'cached hearts must paint before async revision/baseline work',
 );
 
+// app420: execute the actual RTDB payload decoder AND the mounted Explore
+// receiver. The account's filled heart may arrive after public 7 has settled,
+// but the private provisional 6 cannot repaint the already published count.
+{
+  const {default:ts}=await import('typescript');
+  const {default:vm}=await import('node:vm');
+  const from=service.indexOf('const normalizeLikeSignal127 =');
+  const to=service.indexOf('// app410:',from);
+  assert.ok(from>0&&to>from,'exact private RTDB decoder missing');
+  const parser=ts.transpileModule(service.slice(from,to)+
+    '\nglobalThis.decode=normalizeLikeSignal127;',
+    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  const context={clampLikeCount:(v)=>Math.max(0,Math.floor(Number(v)||0))};
+  vm.runInNewContext(parser,context);
+  const row=context.decode({version:20_001,previousVersion:20_000,
+    results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000}]}).results[0];
+  assert.equal(row.acceptedAtPublicClock420,8_000);
+  const legacy=context.decode({version:20_002,previousVersion:20_001,
+    results:[{trackId:'song',ownerUid:'owner',liked:true,likeCount:6}]}).results[0];
+  assert.equal(legacy.acceptedAtPublicClock420,undefined,
+    'older app419 signals remain readable without schema migration');
+
+  const begin=page.indexOf('const onRemote = (detail: {');
+  const end=page.indexOf('const onGap =',begin);
+  assert.ok(begin>=0&&end>begin,'real mounted React receiver missing');
+  const executable=ts.transpileModule(page.slice(begin,end)+
+    '\nglobalThis.onRemote=onRemote;',
+    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  let renderedCount=7,heart=false,likedCacheWrites=0;
+  const setTrack=(fn)=>{const a=fn([{id:'song',likeCount:renderedCount}]);
+    renderedCount=a[0].likeCount;};
+  const canvas={
+    user:{uid:'same-account'},
+    likeInteractionVersionRef090:{current:0},
+    readExploreTrackLikeMembership127:()=>true,
+    normalizeExploreLikeDisplayPair129:(liked,likeCount)=>({liked,likeCount}),
+    setLikedTrackIds:(fn)=>{heart=fn({song:heart}).song;},
+    setTracks:setTrack,setPopularTracks:()=>{},setCuratedTracks307:()=>{},
+    setManagedCuratedTracks307:()=>{},setProfileTracks:()=>{},
+    setProfileLikedTracks:()=>{},
+    patchExploreLikedTrackCachedCount091:()=>{likedCacheWrites++;},
+    setLikeAccountSyncSignal:()=>{},
+  };
+  vm.runInNewContext(executable,canvas);
+  canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:false});
+  assert.equal(heart,true,'late private ACK updates personal heart');
+  assert.equal(renderedCount,7,'late private ACK cannot repaint public 7 as 6');
+  assert.equal(likedCacheWrites,0,'late private ACK cannot overwrite liked-card settled public 7');
+  canvas.onRemote({...row,uid:'same-account',source:'remote',privateCountExact416:undefined});
+  assert.equal(renderedCount,6,'newer private actor accepted count still repaints');
+  console.log('APP420_REAL_RTDB_DECODER_SERVER_TIME_AND_APP419_COMPAT=PASS');
+  console.log('APP420_REAL_REACT_LATE_PRIVATE_HEART_ONLY_PUBLIC_7_STAYS_7=PASS');
+}
+
 console.log('APP140_LIVE_CHANGED_TRACK_RTDB_SET=PASS');
 console.log('APP140_LIVE_SIGNAL_D1_FIRESTORE_IO=0');
 console.log('APP140_CACHED_HEART_INITIAL_SPINNER_AVOIDED=PASS');

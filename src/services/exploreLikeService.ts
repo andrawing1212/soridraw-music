@@ -899,7 +899,9 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
       liked: item.liked,
       likeCount: clampLikeCount(item.likeCount),
       updatedAt: acceptedAt,
-      protectUntil: acceptedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
+      protectUntil: acceptedAt + (COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448
+        ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+        : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
     };
     locksChanged = true;
     // Collect notifications until both the membership and pending snapshot

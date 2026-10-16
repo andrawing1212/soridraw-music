@@ -226,7 +226,14 @@ assert.match(client,/!STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE[\s\S]{0,160}!COMMON_PUB
 const config=readFileSync('functions/src/exploreLikePublicConfig448.ts','utf8');
 assert.match(config,/readLikeBatchTimingAt416/);
 assert.match(config,/publicMinutes: timing\.publicMinutes/);
-assert.match(config,/Cache-Control", "public, max-age=30"/);
+assert.match(config,/Cache-Control", "no-store"/);
+
+const adminPanel=readFileSync('src/components/Stage416LikeBatchMasterPanel.tsx','utf8');
+assert.doesNotMatch(adminPanel,/개인 최종상태 서버 저장/);
+assert.match(adminPanel,/모든 사용자 공개숫자 공동 집계/);
+assert.match(adminPanel,/const changed = !!loaded && loaded\.publicMinutes !== draft\.publicMinutes/);
+assert.match(adminPanel,/const latest = await getLatest\(\)/);
+assert.match(adminPanel,/privateMinutes: base\.privateMinutes/);
 
 console.log('COMMON_PUBLIC_448_A_B_C_ONE_WINDOW=PASS');
 console.log('COMMON_PUBLIC_448_FIXED_DEADLINE_NO_EXTENSION=PASS');

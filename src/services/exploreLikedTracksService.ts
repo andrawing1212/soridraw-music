@@ -242,6 +242,7 @@ export const patchExploreLikedTrackCachedCount091 = (
   uid: string,
   trackId: string,
   likeCount: number,
+  expectedCurrentLikeCount?: number,
 ) => {
   const normalizedUid = normalizeId(uid);
   const normalizedTrackId = normalizeId(trackId);
@@ -249,8 +250,11 @@ export const patchExploreLikedTrackCachedCount091 = (
   const cache = readCache(normalizedUid);
   const item = cache.items[normalizedTrackId];
   if (!item) return;
+  const currentCount = Math.max(0, Math.floor(Number(item.likeCount || 0)));
+  if (Number.isSafeInteger(expectedCurrentLikeCount) &&
+      currentCount !== Math.max(0, Math.floor(Number(expectedCurrentLikeCount)))) return;
   const normalizedCount = Math.max(0, Math.floor(Number(likeCount || 0)));
-  if (Number(item.likeCount || 0) === normalizedCount) return;
+  if (currentCount === normalizedCount) return;
   cache.items[normalizedTrackId] = { ...item, likeCount: normalizedCount };
   writeCache(normalizedUid, cache);
 };

@@ -245,6 +245,43 @@ jobs:
             (Array.isArray(rows)?rows.length:0));
           NODE
           done
+          # Read only the small Master policy node. Never emit account UID,
+          # raw audit rows, tokens, or other shared user data.
+          node <<'NODE'
+          const admin=require('./.preview-public-like-support/node_modules/firebase-admin');
+          admin.initializeApp({databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"});
+          (async()=>{
+            const snap=await admin.database().ref('likeBatchTiming416/current').get();
+            const v=snap.val();
+            console.log('MASTER_TIMING_NODE_EXISTS='+Boolean(v));
+            if(v&&typeof v==='object'){
+              for(const k of ['privateMinutes','publicMinutes','version']){
+                const n=Number(v[k]);
+                console.log('MASTER_TIMING_'+k.toUpperCase()+'='+
+                  (Number.isSafeInteger(n)?n:'INVALID'));
+              }
+              console.log('MASTER_TIMING_AUDIT_LENGTH='+
+                (Array.isArray(v.audit)?v.audit.length:0));
+            }
+          })().catch(e=>{console.log('MASTER_TIMING_READONLY_STATUS=FAILED');process.exit(2)});
+          NODE
+          for service in mastersetlikebatchtiming416 mastergetlikebatchtiming416; do
+            gcloud logging read \
+              "resource.type=cloud_run_revision AND resource.labels.service_name=$service AND timestamp>=\"2026-10-16T04:30:00Z\"" \
+              --project "$FIREBASE_PROJECT" --limit=100 --format=json \
+              > "$RUNNER_TEMP/$service-events.json" 2>/dev/null || printf '[]' > "$RUNNER_TEMP/$service-events.json"
+            node - "$RUNNER_TEMP/$service-events.json" "$service" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const status={};
+          for(const r of Array.isArray(rows)?rows:[]){
+            const code=r?.httpRequest?.status;
+            if(Number.isInteger(code)&&code>=100&&code<=599)
+              status[String(code)]=(status[String(code)]||0)+1;
+          }
+          console.log('MASTER_REQUEST_HTTP_STATUS_COUNTS='+process.argv[3]+':'+JSON.stringify(status));
+          NODE
+          done
           echo 'MASTER_LIVE_READONLY_INSPECTION=PASS'
 
       - name: Deploy exact PREVIEW Function only

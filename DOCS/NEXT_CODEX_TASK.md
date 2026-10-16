@@ -1,3 +1,12 @@
+## NEXT — Final independent review and gated PREVIEW app420 Hosting release (2026-10-16)
+
+- **Fix SHA:** `463d0370e4fced1f0737ea03ecc5da01581df70f`, PR #190; original app420 PR #188 SHA `ce8650eb12445e8f00b015260242d211f9701d6f` is **superseded after audit FAIL**. Quality Run `38883990100` SUCCESS; no deploy yet.
+- **Read-only independent audit required** under WORK_AUDIT_CHECKLIST.md, NOT the same implementation agent/chat. Validate verified ON +1/OFF -1, missing/stale membership, same-UID cross-device, deferred shared 1/3/5/10/20min, no-op `already-desired` 5 (not phantom6), duplicate and rapid ON↔OFF, older PUBLIC signal with newer R2 card cannot retire later actor, stale signal replay, 25min lock and lost notification fallback, mixed app419 readers, R0/W0 idle and O(1) mutations. Audit code and tests independently, not simply reuse CI PASS.
+- **After exact SHA PASS:** PREVIEW Firebase Hosting-only trigger; target app420, ensure exact index build and `preview.soridraw.com`, TEST/PRODUCTION unchanged, RTDB Rules SKIPPED, no Worker/Functions/D1 user-data changes. Real signed-in PC and mobile same UID ON/OFF with 1min shared release required; retain status unverified until performed.
+- **If audit FAIL:** no release, return to focused Codex fix on preview, new SHA/CI and re-audit. No user data transformations.
+
+---
+
 ## NEXT — Independent exact-SHA audit ONLY: app420 actor heart±1 count before shared release (2026-10-16)
 
 - **Audit product commit:** `ce8650eb12445e8f00b015260242d211f9701d6f`, PR #188 merged. Quality Run `38862904490` SUCCESS. This is PREVIEW **code** only, still **not deployed**. Current live Hosting app419. GitHub Issue #186.

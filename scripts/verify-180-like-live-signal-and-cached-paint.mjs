@@ -349,6 +349,24 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(Object.keys(storedOutbox).length,0);
   assert.equal(calls.filter((event) => event === 'POST').length,3,
     'one canonical write per explicit batch; no new retry or polling');
+  // Independent countercase: a second device already liked this song, so
+  // a stale-empty heart's explicit ON returns 'already-desired', no canonical
+  // change and potentially NO public release signal. Do not keep a phantom +1.
+  storedOutbox = { [trackId]: {
+    ...pending, updatedAt: 203, desiredLiked: true, baseLiked: false,
+    baseLikeCount: 5, optimisticLikeCount: 6,
+    operationId: '00000000-0000-4000-8000-000000000004',
+  } };
+  storedSnapshot = { [trackId]: false };
+  cache.set(trackId,true);
+  serverRow = {trackId,liked:true,likeCount:5,revision:3,status:'already-desired'};
+  await env.__flush({uid:'same-account'});
+  assert.equal(remoteRepaints.length,4,'no-change same-UID ACK still repaints');
+  assert.equal(remoteRepaints[3].liked,true);
+  assert.equal(remoteRepaints[3].likeCount,5,
+    'already-desired must restore true canonical 5, not keep phantom actor +1');
+  assert.equal(calls.filter((event)=>event==='POST').length,4);
+  console.log('APP420_ALREADY_DESIRED_NO_PHANTOM_ACTOR_COUNT=PASS');
   console.log('APP420_REAL_PRIVATE_ACK_STALE_PUBLIC_5_ACTOR_6=PASS');
   console.log('APP391_ACCEPTED_LIKE_STAYS_FILLED_DURING_R2_LAG=PASS');
   console.log('APP391_DURABLE_ACK_REPAINT_AFTER_OUTBOX_ZERO=PASS');

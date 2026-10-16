@@ -1,3 +1,13 @@
+## NEXT — app419 Master public cadence save: PREVIEW real-account acceptance only
+
+- **PREVIEW repair release:** product SHA `b710bd4692fbdf0b4b9444cb8988e3c20e86f7e7`; single Function release Run `38854999807` SUCCESS/ACTIVE; current pre-docs HEAD `81c56dff46b589cd6e1b12a85b5d4974f9a86c33`. Existing Hosting remains app419.
+- **Why fixed:** live `masterSetLikeBatchTiming416` was already ACTIVE but returned HTTP 409 twice with shared tiny Master policy `version=1,publicMinutes=5`. Cold RTDB transaction null initially caused false optimistic revision rejection. Added one Master-only policy `get()` before the compare-and-set transaction; test proves v1→v2 save and stale reject.
+- **User next:** log in as Master to `https://preview.soridraw.com/`, select 1 minute for public likes, click save, reopen setting and confirm 1 minute persists. Existing private setting is hidden, never change it from UI.
+- **Follow-up acceptance:** PC ↔ mobile separate accounts on same public song, personal hearts immediate, shared public count updates once per fixed 1-minute window without tab navigation; like→unlike within one window does not change public count. Check D1 cost; unchanged warm revisit remains R0/W0 goal.
+- **If FAIL:** collect sanitized Callable status and bounded server logs; do not blindly redeploy or mutate shared data. No TEST/PRODUCTION promotion until accepted.
+
+---
+
 ## NEXT — app419 merged PREVIEW code: independent audit before any deploy
 
 - **PREVIEW merge checkpoint:** `59f8721cf1915fefe2ae2628987831f0f58285aa`; product implementation SHA `caa27e8416c8ae25db4e1bc71ddf5f1b6cc3ef8b`; PR #168 merged; final quality Run `38849897278` SUCCESS.

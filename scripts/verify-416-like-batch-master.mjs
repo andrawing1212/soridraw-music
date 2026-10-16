@@ -68,9 +68,13 @@ if(appVersion>=400){
 }
 assert.match(panel,/privateMinutes/);
 assert.match(panel,/publicMinutes/);
-assert.match(panel,/expectedVersion: loaded.version/);
+assert.doesNotMatch(panel,/개인 최종상태 서버 저장/);
+assert.match(panel,/모든 사용자 공개숫자 공동 집계/);
+assert.match(panel,/privateMinutes: base\.privateMinutes/);
+assert.match(panel,/expectedVersion: base\.version/);
+assert.match(panel,/const latest = await getLatest\(\)/);
 assert.match(panel,/normalizeStaffRole\(readUserProfileCache\(uid\)\) === 'master'/);
 console.log(appVersion>=400
-  ? 'STAGE416_MASTER_TWO_INDEPENDENT_CONTROLS_APP400_ACTIVE=PASS'
-  : 'STAGE416_MASTER_TWO_INDEPENDENT_CONTROLS_OFF_UNTIL_RELEASE=PASS');
+  ? 'STAGE416_MASTER_PUBLIC_CONTROL_APP400_ACTIVE_PRIVATE_BACKEND_RETAINED=PASS'
+  : 'STAGE416_MASTER_PUBLIC_CONTROL_OFF_UNTIL_RELEASE=PASS');
 console.log('STAGE416_BACKEND_CONFIG_DEPLOY=NOT_RUN');

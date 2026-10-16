@@ -96,6 +96,10 @@ const COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 = true;
 const STAGE416_CLIENT_SESSION_STARTED_AT = Date.now();
 const STAGE416_PRIVATE_BATCH_WINDOW_KEY = 'soridraw:explore:private-batch-window:416';
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
+// app420: 448 Master windows are 1/3/5/10/20 min. A private ACK is not
+// public publication. Keep only the actor's tiny changed-track overlay until
+// changed-card publication (or a bounded failure-recovery limit).
+const EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420 = 25 * 60_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
@@ -185,6 +189,9 @@ type ExploreLikeDisplayLock = {
   likeCount: number;
   updatedAt: number;
   protectUntil: number;
+  // A PRIVATE actor count matching an in-memory UI row is not proof that the
+  // common PUBLIC window settled. Retire only on changed-card publication.
+  deferredPublic420?: true;
 };
 
 type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
@@ -400,11 +407,24 @@ export const stabilizeExploreLikeOptimisticCount413 = (
   desiredLiked: boolean,
   publicCount: number,
   optimisticCount: number,
+  verifiedUnliked = false,
 ): number => (
-  !hasExistingPending && !baseLiked && desiredLiked && publicCount > 0
+  !hasExistingPending && !baseLiked && desiredLiked && publicCount > 0 && !verifiedUnliked
     ? publicCount
     : optimisticCount
 );
+
+// app420: an accepted PRIVATE mutation can precede the common PUBLIC count.
+// Never replace a verified personal +1/-1 display with the old track_stats
+// projection merely because the personal batch returned successfully.
+export const resolveExploreLikeAckCount420 = (
+  deferredPublic: boolean,
+  accepted: boolean,
+  optimisticCount: number,
+  returnedPublicCount: number,
+): number => deferredPublic && accepted
+  ? clampLikeCount(optimisticCount)
+  : clampLikeCount(returnedPublicCount);
 
 // app414: app412 quarantined historical unmarked outbox rows from server replay,
 // but they were still allowed to override the heart/count and to block newer
@@ -882,7 +902,10 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127, def
       liked: item.liked,
       likeCount: clampLikeCount(item.likeCount),
       updatedAt: acceptedAt,
-      protectUntil: acceptedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
+      protectUntil: acceptedAt + (COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448
+        ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+        : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+      ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
     };
     locksChanged = true;
     // Collect notifications until both the membership and pending snapshot
@@ -1736,7 +1759,9 @@ const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => 
   const updatedAt = Math.max(0, Number(row.updatedAt || 0));
   const protectUntil = Math.max(0, Number(row.protectUntil || 0));
   if (!updatedAt || !protectUntil) return null;
-  return { liked: row.liked, likeCount, updatedAt, protectUntil };
+  return { liked: row.liked, likeCount, updatedAt, protectUntil,
+    ...(row.deferredPublic420 === true ? { deferredPublic420: true as const } : {}),
+  };
 };
 
 const readLikeDisplayLocks = (uid: string): ExploreLikeDisplayLocks => {
@@ -1779,6 +1804,21 @@ const persistLikeDisplayLocks = (uid: string, locks: ExploreLikeDisplayLocks) =>
 // pending. After batch ACK, the same count stays protected briefly until a shared
 // Feed/Profile payload reaches that exact count. This prevents old public cache
 // responses from making the actor's number jump backward and forward.
+// Only a real changed-card publication can retire a still-live private count.
+// An older/public signal cannot erase a newer local or same-UID intent.
+export const retireExploreLikeDisplayLockAfterPublicCount420 = (
+  uid: string, trackId: string, publishedAt: number,
+): boolean => {
+  if (!uid || !trackId || !Number.isFinite(publishedAt) ||
+      readActiveLikeOutbox414(uid)[trackId]) return false;
+  const locks = readLikeDisplayLocks(uid);
+  const lock = locks[trackId];
+  if (!lock || lock.updatedAt > publishedAt) return false;
+  delete locks[trackId];
+  persistLikeDisplayLocks(uid, locks);
+  return true;
+};
+
 export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCount: number }>(
   uid: string,
   tracks: T[],
@@ -1821,7 +1861,8 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
     const lock = locks[trackId];
     if (lock) {
       const sharedCount = clampLikeCount(track.likeCount);
-      if (sharedCount === lock.likeCount || lock.protectUntil <= now) {
+      if ((!lock.deferredPublic420 && sharedCount === lock.likeCount) ||
+          lock.protectUntil <= now) {
         delete locks[trackId];
         locksChanged = true;
       } else {
@@ -2197,6 +2238,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
         Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
           ? Math.floor(serverAcceptedAt192)
           : acknowledgedAt;
+      // Canonical membership is accepted independently of the deferred shared
+      // public projection. In 448 mode, batch likeCount can still be yesterday's
+      // published track_stats number. Never classify it as the actor's new count.
+      const deferredPublicCount420 = COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448;
       const acceptedForSignal127: ExploreLikeAcceptedRow127[] = [];
       // A revision-conflict/ineligible reply is server truth, not a local click.
       // Explore rereads persistent membership when notified: hold these
@@ -2212,8 +2257,12 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (!result) continue;
         const current = latest[pending.trackId];
         const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
-        const canonicalLikeCount = Number.isSafeInteger(result.likeCount)
-          ? Number(result.likeCount) : pending.optimisticLikeCount;
+        const canonicalLikeCount = resolveExploreLikeAckCount420(
+          deferredPublicCount420,
+          result.status !== 'revision-conflict' && result.status !== 'ineligible',
+          pending.optimisticLikeCount,
+          Number.isSafeInteger(result.likeCount) ? Number(result.likeCount) : pending.optimisticLikeCount,
+        );
         if (Number.isSafeInteger(result.revision) && Number(result.revision) >= 0) {
           canonicalRevisions172[pending.trackId] = Number(result.revision);
         }
@@ -2247,7 +2296,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
             liked: result.liked,
             likeCount: canonicalLikeCount,
             updatedAt: acknowledgedAt,
-            protectUntil: acknowledgedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
+            protectUntil: acknowledgedAt + (deferredPublicCount420
+              ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+              : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+            ...(deferredPublicCount420 ? { deferredPublic420: true as const } : {}),
           };
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {
@@ -2741,8 +2793,17 @@ export const setExploreTrackLike = async (
   // membership may simply be stale (the reported owner-like incident). Keep
   // the current public number until the changed-track canonical ACK returns
   // an exact count; do not optimistically manufacture +1.
+  // app413's stale-empty-heart guard still applies to an *unknown* account
+  // membership. An explicitly verified false value must move +1, not stay flat.
+  const verifiedUnliked420 = !existing && previousVisibleLiked === false &&
+    cache.get(normalizedTrackId) === false &&
+    (readTargetedVerifiedLikeTracks127(uid).has(normalizedTrackId) ||
+      baselineCompleted127.has(uid) ||
+      (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' &&
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === ''));
   const optimisticLikeCount = stabilizeExploreLikeOptimisticCount413(
     Boolean(existing), baseLiked, liked, baseLikeCount, optimisticAction127.likeCount,
+    verifiedUnliked420,
   );
   // A millisecond timestamp is not a unique mutation version: two clicks in
   // the same millisecond could make an old ACK look like the newest action.

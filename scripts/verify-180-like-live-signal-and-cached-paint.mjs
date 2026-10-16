@@ -73,6 +73,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     Set,
     clampLikeCount: (value) => Math.max(0, Math.floor(Number(value) || 0)),
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420: 25 * 60_000,
+    COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448: true,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
     // fixture runs the exact legacy app392 path, not the candidate cutover.
     EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,
@@ -141,6 +143,31 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(rendered[1].liked, false, 'deferred unlike must clear the filled heart');
   assert.equal(persistentPending['track-a'], false, 'replayed remote unlike must persist before painting');
   assert.equal(seen, 12, 'local replay must never artificially advance the network watermark');
+  // app420 same-UID recipient: accepted private signal carries the actor's
+  // provisional ±1, not the older common-public count still awaiting release.
+  env.__apply('same-account', {
+    version: 13, previousVersion: 12,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: true, likeCount: 6 }],
+  });
+  assert.equal(rendered.length, 3);
+  assert.equal(rendered[2].liked, true);
+  assert.equal(rendered[2].likeCount, 6,
+    'remote same-UID device gets ON+6 while public is still 5');
+  env.__apply('same-account', {
+    version: 13, previousVersion: 12,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: true, likeCount: 7 }],
+  });
+  assert.equal(rendered.length, 3,'same-version duplicate cannot add another +1');
+  env.__apply('same-account', {
+    version: 14, previousVersion: 13,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: false, likeCount: 5 }],
+  });
+  assert.equal(rendered.length, 4);
+  assert.equal(rendered[3].liked, false);
+  assert.equal(rendered[3].likeCount, 5,
+    'reverse-device accepted OFF restores provisional 5 from 6');
+  console.log('APP420_SAME_UID_ON_6_OFF_5_REMOTE_SIGNAL=PASS');
+  console.log('APP420_DUPLICATE_SIGNAL_NO_DOUBLE_PLUS_ONE=PASS');
   console.log('APP390_DEFERRED_REMOTE_UNLIKE_REPLAY_NO_SERVER_IO=PASS');
   console.log('APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS');
   console.log('APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS');
@@ -190,6 +217,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     STAGE416_SHARED_RTDB_BATCH_ACTIVE: false,
     eligibleGuardedMutation420: () => true, // inactive old-app outbox may flush as before
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420: 25 * 60_000,
+    resolveExploreLikeAckCount420: (deferred,accepted,optimistic,published) => deferred && accepted ? optimistic : published,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
     // fixture runs the exact legacy app392 path, not the candidate cutover.
     EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,
@@ -301,6 +330,26 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     true, 'older private catalog may not hollow an accepted filled heart');
   assert.equal(calls.filter((event) => event === 'POST').length, 2,
     'exactly one server batch per explicit click, no extra poll or retry');
+  // app420 exact ACK regression: common 448 public track_stats is still 5,
+  // while a verified same-account false→true click has already shown 6.
+  // Exercise the ACTUAL flush function rather than a copied count algorithm.
+  storedOutbox = { [trackId]: {
+    ...pending, updatedAt: 202, desiredLiked: true, baseLiked: false,
+    baseLikeCount: 5, optimisticLikeCount: 6,
+    operationId: '00000000-0000-4000-8000-000000000003',
+  } };
+  storedSnapshot = { [trackId]: false };
+  cache.set(trackId, true);
+  serverRow = { trackId, liked: true, likeCount: 5, revision: 3, status: 'applied' };
+  await env.__flush({ uid: 'same-account' });
+  assert.equal(remoteRepaints.length, 3,'private ACK must notify mounted account UI');
+  assert.equal(remoteRepaints[2].liked, true);
+  assert.equal(remoteRepaints[2].likeCount, 6,
+    'deferred public track_stats=5 must not repaint actor 6 back to 5');
+  assert.equal(Object.keys(storedOutbox).length,0);
+  assert.equal(calls.filter((event) => event === 'POST').length,3,
+    'one canonical write per explicit batch; no new retry or polling');
+  console.log('APP420_REAL_PRIVATE_ACK_STALE_PUBLIC_5_ACTOR_6=PASS');
   console.log('APP391_ACCEPTED_LIKE_STAYS_FILLED_DURING_R2_LAG=PASS');
   console.log('APP391_DURABLE_ACK_REPAINT_AFTER_OUTBOX_ZERO=PASS');
 }

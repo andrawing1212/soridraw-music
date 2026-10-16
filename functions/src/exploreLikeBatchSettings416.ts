@@ -49,7 +49,14 @@ export const changeLikeBatchTiming416 = async (
   if (!masterUid || masterUid.length > 128 ||
       !Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
       !Number.isSafeInteger(nowMs) || nowMs <= 0) throw new Error('416_INVALID_MASTER_WRITE');
-  const outcome = await database.ref(path).transaction((raw: unknown) => {
+  // Admin RTDB transactions may invoke the updater once with an uncached null
+  // before receiving the real server value. With expectedVersion > 0, that
+  // first empty callback would abort a legitimate Master edit as a false 409.
+  // Hydrate only this tiny Master settings node once before the CAS transaction.
+  // Ordinary likes/page entry never call this Master-only write path.
+  const timingRef = database.ref(path);
+  await timingRef.get();
+  const outcome = await timingRef.transaction((raw: unknown) => {
     const current = raw && typeof raw === 'object' && !Array.isArray(raw)
       ? raw as Record<string, unknown> : {};
     const version = Number(current.version || 0);

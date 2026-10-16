@@ -45,6 +45,33 @@ for(let n=3;n<=14;n++){
   await change(db,'master-user',value,n-1,130_000+n*1000);
 }
 assert.equal(store.audit.length,10,'server Master audit remains bounded');
+// Real Admin RTDB transactions can first see uncached null even if server
+// already owns version 1. Refusing that null aborts before a server refresh.
+// Verify a warm read of just this Master node precedes each CAS transaction.
+let coldRemote={privateMinutes:1,publicMinutes:5,version:1,updatedAtMs:5,audit:[]};
+let coldHydrated=false,coldReads=0,coldWrites=0;
+const coldDb={ref:()=>{
+  return {
+    get:async()=>{coldReads++;coldHydrated=true;return {val:()=>coldRemote};},
+    transaction:async(run)=>{
+      const next=run(coldHydrated?coldRemote:null);
+      if(next===undefined)return {committed:false,snapshot:{val:()=>coldRemote}};
+      coldRemote=next;coldWrites++;return {committed:true,snapshot:{val:()=>coldRemote}};
+    },
+  };
+}};
+const coldSaved=await change(coldDb,'master-cold',{privateMinutes:1,publicMinutes:1},1,150_000);
+assert.equal(coldSaved.version,2);
+assert.equal(coldSaved.publicMinutes,1);
+assert.equal(coldWrites,1);
+assert.equal(coldReads,1,'only one tiny Master config read per save');
+await assert.rejects(
+  change(coldDb,'master-stale',{privateMinutes:1,publicMinutes:3},1,151_000),
+  /CONFLICT/,
+);
+assert.equal(coldWrites,1,'stale config does not overwrite newer Master value');
+console.log('STAGE416_MASTER_COLD_CACHE_VERSION_1_TO_2_SAVE=PASS');
+console.log('STAGE416_MASTER_STALE_VERSION_FAIL_CLOSED=PASS');
 const fn=readFileSync('functions/src/index.ts','utf8');
 for(const name of ['masterGetLikeBatchTiming416','masterSetLikeBatchTiming416'])
   assert.match(fn,new RegExp('export const '+name+' = makeMaster'));

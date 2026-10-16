@@ -1,10 +1,10 @@
-requested_at=2026-10-16T14:24:00+09:00
-product_code_target=605cb2dbace599bf1a85c6b71938909438fbe004
+requested_at=2026-10-16T14:18:00+09:00
+product_code_target=b710bd4692fbdf0b4b9444cb8988e3c20e86f7e7
 target_function=masterSetLikeBatchTiming416
-scope=preview_master_timing_inspection_only
-preflight_only=true
+scope=preview_master_timing_save_only
+preflight_only=false
 shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
-reason=retry_bounded_master_timing_live_readonly_diagnosis
+reason=repair_false_409_master_public_cadence_setting

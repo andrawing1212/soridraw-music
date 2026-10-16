@@ -195,6 +195,7 @@ type ExploreLikeDisplayLock = {
   // Worker batch ACK and public release use the same server clock. Receiving
   // an older private RTDB event late must not make it newer than publication.
   acceptedAtPublicClock420?: number;
+  basePublicLikeCount420?: number;
 };
 
 type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
@@ -223,6 +224,7 @@ type ExploreLikeSyncEventDetail = {
   liked: boolean;
   likeCount: number;
   privateCountExact416?: boolean;
+  basePublicLikeCount420?: number;
   source?: 'local' | 'confirmed' | 'remote' | 'remote-intent';
 };
 
@@ -743,6 +745,7 @@ const markCrossOriginLikeSettled359 = (uid: string, version: number): void => {
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail & {
   canonicalSettled417?: boolean;
   acceptedAtPublicClock420?: number;
+  basePublicLikeCount420?: number;
 };
 type ExploreLikeSignal127 = {
   version: number;
@@ -774,6 +777,9 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
       ...(Number.isSafeInteger(value.acceptedAtPublicClock420) &&
         Number(value.acceptedAtPublicClock420) > 0
         ? { acceptedAtPublicClock420: Number(value.acceptedAtPublicClock420) } : {}),
+      ...(Number.isSafeInteger(value.basePublicLikeCount420) &&
+        Number(value.basePublicLikeCount420) >= 0
+        ? { basePublicLikeCount420: clampLikeCount(value.basePublicLikeCount420) } : {}),
     });
   }
   return { version, previousVersion, results };
@@ -923,8 +929,10 @@ const applyRemoteLikeSignal127 = (
     // loaded on this origin. If this origin has no public-settlement ledger yet,
     // apply the personal heart/membership but keep the current public count.
     // Subsequent live callbacks are allowed to carry the provisional +/-1.
+    const hasBasePublicCount420 = Number.isSafeInteger(item.basePublicLikeCount420) &&
+      Number(item.basePublicLikeCount420) >= 0;
     const unprovenInitialRetained420 = COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 &&
-      initialRetained420 && lastSeen <= 0 && !alreadyPublished420;
+      initialRetained420 && lastSeen <= 0 && !alreadyPublished420 && !hasBasePublicCount420;
     if (alreadyPublished420) {
       if (displayLocks[item.trackId]) {
         delete displayLocks[item.trackId];
@@ -940,6 +948,8 @@ const applyRemoteLikeSignal127 = (
           : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
         ...(COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448 ? { deferredPublic420: true as const } : {}),
         ...(hasServerClock420 ? { acceptedAtPublicClock420: serverAccepted420 } : {}),
+        ...(hasBasePublicCount420
+          ? { basePublicLikeCount420: clampLikeCount(item.basePublicLikeCount420) } : {}),
       };
       locksChanged = true;
     }
@@ -1622,7 +1632,7 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
         version,
         previousVersion: forceGap ? 0 : previousVersion,
         results: rows.map(({ trackId, ownerUid, liked, likeCount, canonicalSettled417,
-          acceptedAtPublicClock420 }) => ({
+          acceptedAtPublicClock420, basePublicLikeCount420 }) => ({
           trackId,
           ownerUid,
           liked,
@@ -1630,6 +1640,8 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
           ...(canonicalSettled417 === true ? { canonicalSettled417: true } : {}),
           ...(Number.isSafeInteger(acceptedAtPublicClock420) && Number(acceptedAtPublicClock420) > 0
             ? { acceptedAtPublicClock420 } : {}),
+          ...(Number.isSafeInteger(basePublicLikeCount420) && Number(basePublicLikeCount420) >= 0
+            ? { basePublicLikeCount420: clampLikeCount(basePublicLikeCount420) } : {}),
         })),
       },
     );
@@ -1808,6 +1820,9 @@ const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => 
     ...(Number.isSafeInteger(row.acceptedAtPublicClock420) &&
       Number(row.acceptedAtPublicClock420) > 0
       ? { acceptedAtPublicClock420: Number(row.acceptedAtPublicClock420) } : {}),
+    ...(Number.isSafeInteger(row.basePublicLikeCount420) &&
+      Number(row.basePublicLikeCount420) >= 0
+      ? { basePublicLikeCount420: clampLikeCount(row.basePublicLikeCount420) } : {}),
   };
 };
 
@@ -1917,7 +1932,12 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
         hasSettledExplorePublicLikeSignal396(normalizedUid, trackId,
           Number.isSafeInteger(acceptedAt420) && acceptedAt420 > 0 ? acceptedAt420 : 1);
       const sharedCount = clampLikeCount(track.likeCount);
+      const basePublic420 = Number(lock.basePublicLikeCount420);
+      const hasBasePublic420 = Number.isSafeInteger(basePublic420) && basePublic420 >= 0;
+      const publicAdvancedPastBase420 = lock.deferredPublic420 &&
+        hasBasePublic420 && sharedCount !== basePublic420;
       if (settledAfterActor420 ||
+          publicAdvancedPastBase420 ||
           (!lock.deferredPublic420 && sharedCount === lock.likeCount) ||
           lock.protectUntil <= now) {
         delete locks[trackId];
@@ -2373,6 +2393,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
               ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
               ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
                 ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
+              ...(holdDeferredActorCount420
+                ? { basePublicLikeCount420: clampLikeCount(pending.baseLikeCount) } : {}),
             };
           }
           delete latest[pending.trackId];
@@ -2399,6 +2421,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
             ...(trustedCanonicalReceipt417 ? { canonicalSettled417: true } : {}),
             ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
               ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
+            ...(holdDeferredActorCount420
+              ? { basePublicLikeCount420: clampLikeCount(pending.baseLikeCount) } : {}),
           };
           // Cross-device membership follows the server-accepted account state,
           // not the later public aggregate. Keep the local snapshot-pending guard

@@ -73,6 +73,9 @@ assert(previewRelease.includes('/v1/curated?collection=soridraw&limit=20'), 'PRE
 assert(previewRelease.includes('CURATED_RECOMMENDATION_WARM_R0_W0=PASS'), 'PREVIEW Worker release must require warm curated D1 R0/W0.');
 assert(previewRelease.includes("x-soridraw-curated-source"), 'PREVIEW Worker release must verify curated R2/Edge authority.');
 
+// app421 regression: execute cross-browser promotion/revision behavior, not just static markers.
+await import('./verify-421-curated-cross-device.mjs');
+
 console.log('APP307_EXPLORE_CURATION_VERIFY=PASS');
 console.log('CURATED_PUBLIC_READ=LOCAL_FIRST_PLUS_EDGE_R2');
 console.log('CURATION_MUTATION=D1_TARGETED_W1');

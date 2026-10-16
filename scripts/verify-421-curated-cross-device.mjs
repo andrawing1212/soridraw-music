@@ -80,23 +80,23 @@ const admin = { uid: 'curator', getIdToken: async () => 'mock-id-token' };
 const a = makeClient();
 const b = makeClient();
 
-assert.deepEqual((await a.getSoridrawCuratedTracks307()).map((t) => t.id), ['first']);
-assert.deepEqual((await b.getSoridrawCuratedTracks307()).map((t) => t.id), ['first']);
+assert.deepEqual(Array.from(await a.getSoridrawCuratedTracks307(), (t) => t.id), ['first']);
+assert.deepEqual(Array.from(await b.getSoridrawCuratedTracks307(), (t) => t.id), ['first']);
 const bodyBefore = totals.body;
 await a.setSoridrawCuratedTrack307(admin, 'new-pick', true);
 assert.equal(totals.writes, 1, 'promotion must remain one canonical mutation');
-assert.deepEqual((await b.getSoridrawCuratedTracks307()).map((t) => t.id), ['first'],
+assert.deepEqual(Array.from(await b.getSoridrawCuratedTracks307(), (t) => t.id), ['first'],
   'device B should paint its warm local snapshot immediately');
 time += 61_000;
-assert.deepEqual((await b.revalidateSoridrawCuratedTracks335()).map((t) => t.id), ['new-pick', 'first'],
+assert.deepEqual(Array.from(await b.revalidateSoridrawCuratedTracks335(), (t) => t.id), ['new-pick', 'first'],
   'another account must receive promoted recommendation on bounded revision check');
 assert.equal(totals.body, bodyBefore + 1, 'changed revision must fetch one new public body');
 const bodyAfter = totals.body;
 time += 61_000;
-assert.deepEqual((await b.revalidateSoridrawCuratedTracks335()).map((t) => t.id), ['new-pick', 'first']);
+assert.deepEqual(Array.from(await b.revalidateSoridrawCuratedTracks335(), (t) => t.id), ['new-pick', 'first']);
 assert.equal(totals.body, bodyAfter, 'unchanged revision must not refetch the curated list');
 const c = makeClient();
-assert.deepEqual((await c.getSoridrawCuratedTracks307()).map((t) => t.id), ['new-pick', 'first'],
+assert.deepEqual(Array.from(await c.getSoridrawCuratedTracks307(), (t) => t.id), ['new-pick', 'first'],
   'a new third account must see the shared promoted list');
 console.log('APP421_CURATED_CROSS_DEVICE_REVALIDATION=PASS');
 console.log('UNCHANGED_RECOMMENDATION_BODY_READS=0');

@@ -1,3 +1,12 @@
+## NEXT — Independent audit app420 exact SHA, then gated PREVIEW Hosting release (2026-10-16)
+
+- **Audit candidate:** 3460c9d346295e3086875003a437add53a5c2ffc, PR #192; quality Run 38886509436 SUCCESS, live Hosting remains app419.
+- **Audit is READ-ONLY:** no code/commit/push/deploy. Review private ACK +1/-1, same-UID PC/mobile signal, frozen app410/413/141, stale-public signal with newer card date, actor overlay React list and private liked cache, simultaneous likes, net-zero, 1/3/5/10/20 min Master public windows, lost release vs 25min guard, mixed app419, no extra server reads/writes or shared data edits.
+- **PASS only when separately audited:** then use fixed Firebase PREVIEW Hosting-only release workflow, exact tested source SHA, real preview.soridraw.com version/index checks; do not touch Worker/Functions/Rules/D1, main/TEST or PRODUCTION. User real-device acceptance separate.
+- **FAIL:** focused code repair, new code SHA, new CI, new independent review before deployment.
+
+---
+
 ## NEXT — Final independent review and gated PREVIEW app420 Hosting release (2026-10-16)
 
 - **Fix SHA:** `463d0370e4fced1f0737ea03ecc5da01581df70f`, PR #190; original app420 PR #188 SHA `ce8650eb12445e8f00b015260242d211f9701d6f` is **superseded after audit FAIL**. Quality Run `38883990100` SUCCESS; no deploy yet.

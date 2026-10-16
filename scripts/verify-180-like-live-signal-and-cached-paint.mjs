@@ -326,9 +326,9 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   // Once the initial Firebase snapshot has been consumed, a genuinely new live
   // account change must still carry the immediate same-account provisional count.
   env.__apply('same-account', {
-    version: 22, previousVersion: 21,
+    version: 32, previousVersion: 31,
     results: [{trackId:'fresh-device-song',ownerUid:'',liked:false,likeCount:7,
-      acceptedAtPublicClock420:12_000}],
+      acceptedAtPublicClock420:12_000,basePublicLikeCount420:6}],
   }, false, false);
   assert.equal(rendered.at(-1).liked,false);
   assert.notEqual(rendered.at(-1).privateCountExact416,false,

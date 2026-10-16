@@ -325,11 +325,19 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
 
   // Once the initial Firebase snapshot has been consumed, a genuinely new live
   // account change must still carry the immediate same-account provisional count.
+  assert.equal(seen,31,'fresh-base retained row must advance the network watermark');
+  assert.equal(cache.get('fresh-device-song'),true,'earlier retained heart is still durable');
+  assert.equal(outbox['fresh-device-song'],undefined,'no local outbox may block the live remote row');
+  const beforeLiveRows420=rendered.length;
   env.__apply('same-account', {
     version: 32, previousVersion: 31,
     results: [{trackId:'fresh-device-song',ownerUid:'',liked:false,likeCount:7,
       acceptedAtPublicClock420:12_000,basePublicLikeCount420:6}],
   }, false, false);
+  assert.equal(seen,32,'live same-account row must advance network watermark');
+  assert.equal(cache.get('fresh-device-song'),false,'live unlike must become durable membership');
+  assert.equal(persistentPending['fresh-device-song'],false,'live unlike pending snapshot persists before UI');
+  assert.equal(rendered.length,beforeLiveRows420+1,'live same-account row must reach the UI once');
   assert.equal(rendered.at(-1).liked,false);
   assert.notEqual(rendered.at(-1).privateCountExact416,false,
     'subsequent live same-UID change keeps provisional count authority');

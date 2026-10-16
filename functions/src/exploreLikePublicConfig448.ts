@@ -16,7 +16,10 @@ export const publicLikeWindowConfig448Candidate = onRequest(
     try {
       const timing = await readLikeBatchTimingAt416(
         getDatabase(), STAGE416_ENVIRONMENTS.preview.timingPath);
-      res.set("Cache-Control", "public, max-age=30");
+      // A new shared window must use the latest Master-selected cadence.
+      // This endpoint is read once per new window, not per user/page, so stale
+      // edge caching saves little while it can keep an old 5-minute value alive.
+      res.set("Cache-Control", "no-store");
       res.status(200).json({
         ok: true,
         data: { publicMinutes: timing.publicMinutes, version: timing.version },

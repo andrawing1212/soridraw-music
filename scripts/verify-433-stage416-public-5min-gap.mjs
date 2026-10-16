@@ -12,7 +12,8 @@ const contract=readFileSync('DOCS/LIKE_PRIVATE_IMMEDIATE_PUBLIC_5MIN_STAGE416.md
 assert.match(settings,/publicMinutes\s*:\s*number/);
 assert.match(settings,/DEFAULT_LIKE_BATCH_TIMING_416\s*=\s*\{\s*privateMinutes\s*:\s*5\s*,\s*publicMinutes\s*:\s*5/);
 assert.match(panel,/모든 사용자 공개숫자 공동 집계/);
-assert.match(panel,/이미 진행 중인 개인 대기·공동 집계 창은 이전 주기를 유지합니다/);
+assert.match(panel,/공개 집계 주기를 저장했습니다\. 이미 열린 공동 집계 창은 기존 주기를 유지합니다/);
+assert.doesNotMatch(panel,/개인 최종상태 서버 저장/);
 
 assert.doesNotMatch(finalPublisher,/publicMinutes/);
 assert.match(finalPublisher,/await notifySettledPublicLikes416\(/);

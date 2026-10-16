@@ -42,6 +42,7 @@ import {
   readLegacyPendingLikeForUpgrade420,
   normalizeExploreLikeDisplayPair129,
   overlayExploreLikeDisplayCounts,
+  resolveExploreLikeRemoteDisplayCount420,
   retireExploreLikeDisplayLockAfterPublicCount420,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
@@ -2369,7 +2370,7 @@ export default function ExplorePage() {
     if (!user?.uid) return;
     const onRemote = (detail: {
       uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number;
-      privateCountExact416?: boolean; source?: string;
+      privateCountExact416?: boolean; basePublicLikeCount420?: number; source?: string;
     }) => {
       if ((detail?.source !== 'remote' && detail?.source !== 'remote-intent') ||
           detail.uid !== user.uid || !detail.trackId || typeof detail.liked !== 'boolean') return;
@@ -2411,7 +2412,13 @@ export default function ExplorePage() {
             if (pair129.liked || !patched.some((track) => track.id === detail.trackId)) return patched;
             return patched.filter((track) => track.id !== detail.trackId);
           });
-          patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
+          patchExploreLikedTrackCachedCount091(
+          user.uid,
+          detail.trackId,
+          pair129.likeCount,
+          Number.isSafeInteger(detail.basePublicLikeCount420)
+            ? Number(detail.basePublicLikeCount420) : undefined,
+        );
         }
         setLikeAccountSyncSignal((value) => value + 1);
         return;
@@ -2426,9 +2433,16 @@ export default function ExplorePage() {
         const patchRemotePair129 = (previous: ExploreTrack[]) => {
           let changed = false;
           const patched = previous.map((track) => {
-            if (track.id !== detail.trackId || track.likeCount === pair129.likeCount) return track;
+            if (track.id !== detail.trackId) return track;
+            const nextCount420 = resolveExploreLikeRemoteDisplayCount420(
+              track.likeCount,
+              pair129.likeCount,
+              detail.basePublicLikeCount420,
+              detail.privateCountExact416,
+            );
+            if (nextCount420 === track.likeCount) return track;
             changed = true;
-            return { ...track, likeCount: pair129.likeCount };
+            return { ...track, likeCount: nextCount420 };
           });
           return changed ? patched : previous;
         };

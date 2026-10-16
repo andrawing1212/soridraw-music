@@ -1,3 +1,13 @@
+## NEXT — fix app420 independent FAIL separately; independently audit curated PR #200 before any PREVIEW release (2026-10-17 KST)
+
+- **Priority 1 — app420 independent FAIL remains:** exact audited SHA `c0ac756c980bcea0ac2adb78841606d6f82370e1`. Public liked count may return to the same value after net-zero aggregate; delayed retained same-UID provisional count must not override settled public despite matching original base. Compare existing public settlement ordering metadata, not count equality; no D1 read/listener/write added without explicit design/cost approval. Preserve app410 existing membership. A new SHA and separate independent PASS are REQUIRED.
+- **Priority 2 — curated promotion across accounts:** review draft [PR #200](https://github.com/andrawing1212/soridraw-music/pull/200), head `9bf0c01afb8e0e4585559af979fd748c8aa9f105`, QA Run `38952075536` SUCCESS. Reproduce A curator promotion -> same-env B fresh/warm/new browser; verify shared R2 snapshot, curated revision check on entry, stale stable-body Edge bypass, list ordering/visibility, de-promotion, no added D1 item scan, no full Feed scan. Include explicit A PREVIEW vs B TEST/PRODUCTION parity investigation: PREVIEW `EXPLORE_CACHE` derived R2 is env-local while D1 and PROFILE_MEDIA are shared. A common shared canonical change must be visible from other environments after code promotion without data replication.
+- **Do not conflate:** automated simulated PR QA PASS is not a live authenticated curator / second-account browser PASS. No API live data mutation permitted for verification without controlled test-account safeguards. NO deployment of PREVIEW Hosting from preview with failed app420. No TEST/PROD promotion. No workflow modifications to bypass guards.
+- **Deploy only after BOTH gates:** independent app420 PASS, independent curated contract/cross-env PASS, then approved PREVIEW Worker/Hosting exact artifact release, Firebase/Cloudflare verify, actual A→B PC/mobile acceptance and monthly-cost assessment. Existing `preview.soridraw.com` still app419.
+- **3 progress rates:** Stage416 1/4=25%, app speed 5/5=100%, curated PR 2/4=50% (candidate implementation + automated QA only).
+
+---
+
 ## NEXT — independent re-audit ONLY: app420 exact public-base provisional count guard (2026-10-17)
 
 - **Audit exact product SHA:** `c0ac756c980bcea0ac2adb78841606d6f82370e1` / PR #198 (implementation head `4adec9c93cdef22e19bb21ec214690a22ad36cfd`). Quality Run `38944750283` SUCCESS. Live PREVIEW Hosting remains app419; do not deploy in audit room.

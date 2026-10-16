@@ -1,3 +1,17 @@
+## CURRENT — app419 Master public timing save HTTP 409 repair deployed PREVIEW / user retry pending (2026-10-16 KST)
+
+- **PREVIEW release trigger HEAD before docs checkpoint:** `81c56dff46b589cd6e1b12a85b5d4974f9a86c33`. Product fix merge `b710bd4692fbdf0b4b9444cb8988e3c20e86f7e7`, PR #180.
+- **User acceptance:** app419 Master UI 5min→1min save **FAIL** on 2026-10-16 despite app419 Hosting/Config Function deploy. This was not a missing Function. Live read-only inventory proved `masterGetLikeBatchTiming416` and `masterSetLikeBatchTiming416` **ACTIVE** since 2026-10-12; RTDB Master timing node `privateMinutes=1, publicMinutes=5, version=1, audit length=1`; two recent save HTTP statuses `409`, get `200`.
+- **Root cause and narrow correction:** a cold Firebase Admin RTDB transaction updater could initially receive uncached null, see local version 0 and prematurely abort when the server stored version 1. `changeLikeBatchTiming416` now calls `timingRef.get()` once before its optimistic versioned transaction, hydrating only the tiny Master policy node; a genuine concurrent stale expected version still fails closed. One additional RTDB read **per Master setting save**, not per ordinary user/page/like. No full reads/scans.
+- **Focused tests:** `scripts/verify-416-like-batch-master.mjs` cold-cache v1→v2 save PASS, stale-version overwrite refused PASS, no-op W0 existing guard PASS. Full quality Run `38854749384` SUCCESS including TypeScript, Build, Functions TypeScript, frozen app410/191/catalog contracts and shared Rules read-only audit.
+- **Deployment:** only `masterSetLikeBatchTiming416` on shared Firebase project `soridraw-app-866a5`, PREVIEW Master naming/path, region us-central1. GitHub Release Run `38854999807` **SUCCESS**, exact single export PASS, deployed Function ACTIVE PASS, main/production branch refs unchanged PASS. No app Hosting redeploy required; live PREVIEW app remains **419**, `https://preview.soridraw.com/`. Existing Master GET Function, Config Function, Cloudflare Worker, shared D1 and RTDB Rules unchanged.
+- **Shared-data safety:** no settings writes during diagnostic/deployment; no user canonical data mutations, no D1 migration/backfill/delete, no TEST/PRODUCTION promotion. Read-only PREVIEW small Master setting state probe only. Legacy app410 immediate personal likes protected.
+- **Status:** release pipeline PASS; **real authenticated Master 1-minute save after this deploy and subsequent A→B cross-account 1-minute public count remains unverified**. Do NOT promote to TEST on CI alone.
+- **Progress:** Stage416 overall 1/4·25%; app speed 5/5·100%; this Master save recovery 3/4·75% (cause, code/test, deployment done; real Master acceptance pending).
+- **Next:** Master reloads PREVIEW admin → change public window from 5min to 1min → save → leave/reenter admin and confirm it remains 1min. Then A→B same published song cross-account with no navigation, net-zero, no repeated D1 read. If save still fails, capture only safe error code, do not trigger another blind redeploy.
+
+---
+
 ## CURRENT — app419 PREVIEW Hosting + public config Function deployed / exact build PASS (2026-10-16 KST)
 
 - **Current release trigger HEAD:** `180aeabcc319dd257de95570016108bad62be218`; app419 source merge `1f03c91f7d9372d131cb3517318c0284caceebfc`, quality Run `38851063066` SUCCESS (Functions TS, TypeScript, Build, frozen personal likes, 191, shared RTDB rules read-only check).

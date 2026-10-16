@@ -526,10 +526,12 @@ async function handleCuratedPublic307(request, env, ctx) {
 }
 
 async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, curatorRole) {
+  // app421: canonical D1 success must never masquerade as PUBLIC curation
+  // success when the shared recommendation snapshot cannot be published.
   const bucket = curatedBucket307(env);
-  if (!bucket) return;
+  if (!bucket) throw new Error('CURATED_R2_BINDING_MISSING_421');
   const selected = await readCuratedObject307(request, env, ctx);
-  if (!selected.payload?.data?.items) return;
+  if (!selected.payload?.data?.items) throw new Error('CURATED_R2_SNAPSHOT_UNAVAILABLE_421');
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
@@ -543,18 +545,19 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     }), env, ctx);
     const detail = await detailResponse.clone().json().catch(() => null);
     const track = detail?.data?.track;
-    if (detailResponse.ok && track?.id) {
-      items.unshift({
-        track,
-        curation: {
-          curatorUid: '',
-          curatorRole,
-          sortOrder: 0,
-          startsAt: null,
-          endsAt: null,
-        },
-      });
+    if (!detailResponse.ok || String(track?.id || '').trim() !== trackId) {
+      throw new Error('CURATED_TRACK_DETAIL_UNAVAILABLE_421');
     }
+    items.unshift({
+      track,
+      curation: {
+        curatorUid: '',
+        curatorRole,
+        sortOrder: 0,
+        startsAt: null,
+        endsAt: null,
+      },
+    });
   }
   const payload = {
     ok: true,
@@ -700,9 +703,24 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   try {
     await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
   } catch (error) {
-    console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
+    console.warn('[app421] curated R2 publication not confirmed; bounded public read may recover:', String(error?.message || error || 'unknown'));
     try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
     await clearCuratedEdge307(new URL(request.url));
+    // D1 mutation was committed. A retry is idempotent; do not tell the curator
+    // the recommendation is visible until the R2 public snapshot was updated.
+    // Recovery reads at most the existing 40 explicit curated memberships.
+    return new Response(JSON.stringify({
+      ok: false,
+      error: {
+        code: 'CURATION_PUBLICATION_PENDING_421',
+        message: '추천곡 기록은 저장했지만 공개 목록 갱신이 확인되지 않았습니다. 잠시 후 다시 시도해주세요.',
+      },
+    }), {
+      status: 503,
+      headers: curationHeaders307(request, {
+        d1Read, d1Write: 1, source: 'CURATION-R2-PENDING-421',
+      }),
+    });
   }
 
   return new Response(JSON.stringify({

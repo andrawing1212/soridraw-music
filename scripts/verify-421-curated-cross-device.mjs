@@ -101,3 +101,56 @@ assert.deepEqual(Array.from(await c.getSoridrawCuratedTracks307(), (t) => t.id),
 console.log('APP421_CURATED_CROSS_DEVICE_REVALIDATION=PASS');
 console.log('UNCHANGED_RECOMMENDATION_BODY_READS=0');
 console.log('D1_SCAN_AND_POLLING_ADDED=0');
+
+
+// app421: R2 write failure is NOT a successful recommendation promotion.
+// Exercise the actual Worker snapshot writer with a missing bucket and a
+// canonical-published track whose public detail fails. Neither may publish a
+// phantom recommendation into a derived shared list.
+const writerStart421 = workerSource.indexOf('async function writeCuratedSnapshot307(');
+const writerEnd421 = workerSource.indexOf('// SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_', writerStart421);
+assert.ok(writerStart421 > 0 && writerEnd421 > writerStart421, 'Worker curation snapshot writer missing');
+assert.match(workerSource.slice(writerEnd421), /CURATION_PUBLICATION_PENDING_421/);
+assert.match(workerSource.slice(writerEnd421), /status: 503/);
+let writerResult421 = { payload: { data: { items: [] } }, memberIds: [] };
+let writerDetail421 = { ok: false, clone: () => ({ json: async () => ({}) }) };
+let writerPutCount421 = 0;
+const writer421 = vm.runInNewContext(
+  workerSource.slice(writerStart421, writerEnd421) + '\nwriteCuratedSnapshot307;',
+  {
+    curatedBucket307: (env) => env?.bucket || null,
+    readCuratedObject307: async () => writerResult421,
+    baseWorker: { fetch: async () => writerDetail421 },
+    clearCuratedEdge307: async () => {},
+    SORIDRAW_CURATED_COLLECTION_307: 'soridraw',
+    SORIDRAW_CURATED_R2_KEY_307: 'internal/explore/curated-v307/soridraw-40.json',
+    URL, Request,
+  },
+);
+const bucket421 = { put: async () => { writerPutCount421++; } };
+const request421 = {
+  url: 'https://mock.test/v1/curation/soridraw/test-song',
+  headers: new Headers({ Origin: 'https://preview.soridraw.com' }),
+};
+await assert.rejects(
+  writer421(request421, {}, {}, 'test-song', true, 'master'),
+  /CURATED_R2_BINDING_MISSING_421/,
+);
+writerResult421 = { payload: null, memberIds: [] };
+await assert.rejects(
+  writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
+  /CURATED_R2_SNAPSHOT_UNAVAILABLE_421/,
+);
+writerResult421 = { payload: { data: { items: [] } }, memberIds: [] };
+await assert.rejects(
+  writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
+  /CURATED_TRACK_DETAIL_UNAVAILABLE_421/,
+);
+assert.equal(writerPutCount421, 0, 'unresolvable track must not publish a phantom R2 snapshot');
+writerDetail421 = {
+  ok: true,
+  clone: () => ({ json: async () => ({ data: { track: { id: 'test-song', title: 'Selected' } } }) }),
+};
+await writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master');
+assert.equal(writerPutCount421, 1, 'valid targeted recommendation must update one R2 object');
+console.log('APP421_CURATED_FALSE_SUCCESS_R2_FAILURE_BLOCKED=PASS');

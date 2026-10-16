@@ -1,3 +1,15 @@
+## CURRENT — app419 Master 1-minute save repeat FAIL: retained RTDB listener correction deployed PREVIEW; real-user confirmation pending (2026-10-16)
+
+- **User-visible repeat FAIL** at ~14:36 KST: Master selected public cadence 1 minute, saw save failure, and reentry reverted to 5 minutes. Previous one-shot `get()` fix was insufficient and must not be represented as accepted.
+- **Root cause (Firebase documented):** RTDB transaction handler may initially see uncached `null`; a one-shot `get()` may release the local cache before `transaction()`, causing an immediate false version conflict for actual policy version 1. Explicit `on('value')` listener keeps **only** the Master timing node cached while version-checked transaction runs; `off('value')` in finally releases listener on success, rejection or abort. Only an actual Master setting save initiates this short-lived read. No ordinary user/page/like cost increase.
+- **Source:** `functions/src/exploreLikeBatchSettings416.ts`; test `scripts/verify-416-like-batch-master.mjs`. PR #183 merged to preview commit `7691cca03afc6dc9846d1864b08cf6a7fb110ce7`. Full quality Run `38857004280` SUCCESS: cold-cache v1→v2 save PASS, no-op W0, stale/race rejection, no leaked RTDB listeners, TypeScript, Build and frozen-like regression PASS.
+- **Actual PREVIEW Firebase deploy:** single `masterSetLikeBatchTiming416` only; release trigger merge `8531215b5b5a0508df8cac7468897616e57221aa`; Run `38857264207` **SUCCESS**, ACTIVE, target single export PASS, TEST/PRODUCTION unchanged PASS. PREVIEW Hosting still app419. No get/config Function, Worker, RTDB Rules, D1, shared original data or TEST/PRODUCTION mutation/release.
+- **Live observed policy before repair:** `publicMinutes=5, privateMinutes=1, version=1`. Diagnostic reads were read-only; deployment did not change these values or simulate an authenticated Master action.
+- **Acceptance:** after this deployment an actual authenticated Master 5→1 save plus leave/reentry check **not yet performed**; no claim of real-user PASS. Also 1-minute cross-account A→B public count, net-zero, live D1 cost and PC/mobile parity pending. TEST promotion BLOCKED.
+- **Progress:** Stage416 1/4·25%, app speed 5/5·100%, this Master save repair code+release done, real-user acceptance pending.
+
+---
+
 ## CURRENT — app419 Master public timing save HTTP 409 repair deployed PREVIEW / user retry pending (2026-10-16 KST)
 
 - **PREVIEW release trigger HEAD before docs checkpoint:** `81c56dff46b589cd6e1b12a85b5d4974f9a86c33`. Product fix merge `b710bd4692fbdf0b4b9444cb8988e3c20e86f7e7`, PR #180.

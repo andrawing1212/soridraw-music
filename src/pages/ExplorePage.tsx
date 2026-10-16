@@ -2499,26 +2499,25 @@ export default function ExplorePage() {
     if (profileUid || submittedQuery) return undefined;
     let cancelled = false;
     setCuratedLoading307(true);
-    const paintCurated421 = (rows: Array<Record<string, unknown>>) => {
-      if (cancelled) return;
-      // Public R2 remains account neutral; only the viewer's displayed counts
-      // get the existing local/outbox/416 overlay.
-      const cards405 = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
-      const uid405 = auth.currentUser?.uid || user?.uid || '';
-      setCuratedTracks307(uid405 ? overlayExploreLikeDisplayCounts(uid405, cards405) : cards405);
-    };
     void getSoridrawCuratedTracks307(false)
       .then((rows) => {
         if (cancelled) return;
-        paintCurated421(rows); // local cached paint first, without network wait
-        // app421: a second browser/account may be carrying an old recommendation
-        // list forever. Revalidate the tiny public revision on Explore entry
-        // only when its existing 60-second cache window has expired. No timer,
-        // per-card listener or D1 feed read; fetch cards only if revision changed.
+        // app405: public R2 is account neutral; preserve same-account private
+        // like overlay on both the immediate local paint and revised list.
+        const cards405 = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
+        const uid405 = auth.currentUser?.uid || user?.uid || '';
+        setCuratedTracks307(uid405 ? overlayExploreLikeDisplayCounts(uid405, cards405) : cards405);
+        // app421: an old recommendation cache must not survive every browser
+        // entry forever. Check only the existing 60s-gated shared revision;
+        // unchanged snapshot costs no list fetch or new D1 read/listener.
         void revalidateSoridrawCuratedTracks335()
           .then((freshRows) => {
             if (cancelled || freshRows === rows) return;
-            paintCurated421(freshRows);
+            const freshCards421 = freshRows.map(normalizeTrack).filter((track) => Boolean(track.id));
+            const viewerUid421 = auth.currentUser?.uid || user?.uid || '';
+            setCuratedTracks307(
+              viewerUid421 ? overlayExploreLikeDisplayCounts(viewerUid421, freshCards421) : freshCards421,
+            );
           })
           .catch((reason) => {
             if (!cancelled) console.warn('[app421] curated entry revision check deferred:', reason);

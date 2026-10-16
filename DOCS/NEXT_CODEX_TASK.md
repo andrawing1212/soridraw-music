@@ -1,3 +1,14 @@
+## NEXT — Independent exact-SHA audit ONLY: app420 actor heart±1 count before shared release (2026-10-16)
+
+- **Audit product commit:** `ce8650eb12445e8f00b015260242d211f9701d6f`, PR #188 merged. Quality Run `38862904490` SUCCESS. This is PREVIEW **code** only, still **not deployed**. Current live Hosting app419. GitHub Issue #186.
+- **Audit mode:** no code changes, commit/push, cache deletion, migration, shared D1 mutations or deployment during audit.
+- **Review:** verified false/public5→ON heart+count6, true/public5→OFF heart+count4, verified false/public0→1, app413 unknown baseline no duplicate. 5s private ACK still old published count must NOT repaint actor. A→B and B→A same-UID via accepted 127 RTDB heart/count, persist-before-notify and no newer local outbox overwrite. ON→OFF net-zero, stale/duplicate signals, 1/3/5/10/20-min 448 windows, no early 90s guard expiry, public changed-card retires older private lock only. Historical first-like/app410 receiver protected.
+- **Cost/data/environment:** client-only, no new D1/Firestore/RTDB read/write, idle/nav full refresh or per-card listener. Shared user schema and Worker/Function/Rules unchanged. Mixed app419 TEST/PRODUCTION readers remain compatible with existing personal signal shape. Long lived locked count on lost public notification: evaluate bounded 25min stale risk, R2 publication ordering and cross-account parity.
+- **Expected verdict:** PASS/FAIL + exact SHA + required focused changes + whether safe to deploy PREVIEW only. CI PASS is not independently verified real device.
+- **Only after PASS:** PREVIEW app420 Hosting exact source, check preview.soridraw.com, real PC↔mobile and same track other-account after 1min publication. TEST/PRODUCTION require distinct user approval.
+
+---
+
 ## NEXT — Issue #186 app420: own Explore heart±1 count parity and same-UID PC↔mobile (2026-10-16)
 
 - **Base:** preview `1a3994f263bb1f8f53b83e304152fe0a55a20f38`, app419 live. User-confirmed Master 1-minute save PASS and fixed public-window release PASS; **do not edit** public 448 window/Config Function/Worker/Master settings without a separate demonstrated need.

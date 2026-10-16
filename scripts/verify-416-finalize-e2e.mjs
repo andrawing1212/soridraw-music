@@ -108,6 +108,8 @@ vm.runInNewContext(compile(page.slice(effectStart,effectEnd)),{
  patchExplorePublicProfileFirstViewTrack(){},patchExploreLikedTrackCachedCount091(){},
  // B is another UID; a public changed-card event has no private actor lock to retire.
  retireExploreLikeDisplayLockAfterPublicCount420:()=>false,
+ // This fixture renders B (different UID), which has no account-private actor lock.
+ overlayExploreLikeDisplayCounts:(_uid,rows)=>rows,
  setTracks:update=>{screen=update(screen);},setPopularTracks(){},setCuratedTracks307(){},
  setManagedCuratedTracks307(){},setProfileTracks(){},setProfileLikedTracks(){},
 });

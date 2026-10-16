@@ -73,6 +73,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     Set,
     clampLikeCount: (value) => Math.max(0, Math.floor(Number(value) || 0)),
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420: 25 * 60_000,
+    COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448: true,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
     // fixture runs the exact legacy app392 path, not the candidate cutover.
     EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,
@@ -190,6 +192,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     STAGE416_SHARED_RTDB_BATCH_ACTIVE: false,
     eligibleGuardedMutation420: () => true, // inactive old-app outbox may flush as before
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
+    EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420: 25 * 60_000,
+    resolveExploreLikeAckCount420: (deferred,accepted,optimistic,published) => deferred && accepted ? optimistic : published,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
     // fixture runs the exact legacy app392 path, not the candidate cutover.
     EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,

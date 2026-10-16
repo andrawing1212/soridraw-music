@@ -2303,6 +2303,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
           result.status !== 'already-desired' &&
           result.status !== 'revision-conflict' &&
           result.status !== 'ineligible';
+        const alreadyReleasedForAck420 = holdDeferredActorCount420 &&
+          Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0 &&
+          hasSettledExplorePublicLikeSignal396(uid, pending.trackId, serverAcceptedAt192);
         const canonicalLikeCount = resolveExploreLikeAckCount420(
           holdDeferredActorCount420,
           true,
@@ -2338,17 +2341,21 @@ flushPendingLikes = async (user: User): Promise<void> => {
           // newer canonical state. The returned server state becomes local
           // truth; the next explicit click creates a fresh operation.
           cache.set(pending.trackId, result.liked);
-          displayLocks[pending.trackId] = {
-            liked: result.liked,
-            likeCount: canonicalLikeCount,
-            updatedAt: acknowledgedAt,
-            protectUntil: acknowledgedAt + (holdDeferredActorCount420
-              ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
-              : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
-            ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
-            ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
-              ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
-          };
+          if (alreadyReleasedForAck420) {
+            delete displayLocks[pending.trackId];
+          } else {
+            displayLocks[pending.trackId] = {
+              liked: result.liked,
+              likeCount: canonicalLikeCount,
+              updatedAt: acknowledgedAt,
+              protectUntil: acknowledgedAt + (holdDeferredActorCount420
+                ? EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420
+                : EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120),
+              ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
+              ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
+                ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
+            };
+          }
           delete latest[pending.trackId];
           if (result.status === 'revision-conflict' || result.status === 'ineligible') {
             delete snapshotPending127[pending.trackId];
@@ -2393,7 +2400,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
-          canonicalAcceptedUiAfterPersist127.push({ ...accepted, source: 'remote' });
+          canonicalAcceptedUiAfterPersist127.push({ ...accepted, source: 'remote',
+            ...(alreadyReleasedForAck420 ? { privateCountExact416: false } : {}),
+          });
         }
       }
 

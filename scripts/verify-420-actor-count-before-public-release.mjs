@@ -10,8 +10,8 @@ assert.ok(start>=0&&stop>start,'real optimistic policy not found');
 const compiled=(await transform(service.slice(start,stop).replaceAll('export const ','const '),{
   loader:'ts',target:'es2022',format:'cjs',
 })).code;
-const {stabilize,resolve}=new Function('clampLikeCount',compiled+
-  '\nreturn {stabilize:stabilizeExploreLikeOptimisticCount413,resolve:resolveExploreLikeAckCount420};'
+const {stabilize,resolve,remote}=new Function('clampLikeCount',compiled+
+  '\nreturn {stabilize:stabilizeExploreLikeOptimisticCount413,resolve:resolveExploreLikeAckCount420,remote:resolveExploreLikeRemoteDisplayCount420};'
 )(n=>Math.max(0,Math.floor(Number(n)||0)));
 
 const optimistic=(before,after,count,verified)=>stabilize(
@@ -29,6 +29,14 @@ assert.equal(resolve(true,true,4,5),4,
 assert.equal(resolve(false,true,6,5),5,'immediate public contract stays unchanged');
 assert.equal(resolve(true,false,6,5),5,
   'conflict/ineligible must use canonical result rather than optimistic state');
+assert.equal(remote(5,6,5,undefined),6,
+  'fresh device before public release: public base 5 authorizes private 6');
+assert.equal(remote(7,6,5,undefined),7,
+  'missed-public device: advanced public 7 rejects stale private 6');
+assert.equal(remote(5,4,5,undefined),4,
+  'same base also authorizes private unlike -1');
+assert.equal(remote(7,6,undefined,false),7,
+  'explicit heart-only retained row never changes public count');
 
 // Exercise the real actor overlay and release-retirement source with one
 // persisted account-private small changed-track row, not a fake public cache.
@@ -69,14 +77,12 @@ const published=[{id:track,likeCount:5}];
 const protectUntil=now+25*60_000;
 for(const device of ['pc','mobile']){
   currentDevice=device;
-  allDeviceLocks.set(key(uid),{[track]:{liked:true,likeCount:6,updatedAt:now,protectUntil,deferredPublic420:true}});
-  assert.equal(overlay(uid,published)[0].likeCount,6,device+' receives same account-provisional +1');
-  assert.equal(overlay(uid,[{id:track,likeCount:6}])[0].likeCount,6,
-    device+' own UI pair matches but is NOT public publication');
-  assert.ok(allDeviceLocks.get(key(uid))[track],
-    'a matching PRIVATE UI number alone must not retire unpublished lock');
+  allDeviceLocks.set(key(uid),{[track]:{liked:true,likeCount:6,updatedAt:now,protectUntil,
+    deferredPublic420:true,basePublicLikeCount420:5}});
   assert.equal(overlay(uid,published)[0].likeCount,6,
-    device+' old published count cannot return after private UI equality');
+    device+' receives same-account provisional +1 while public remains exact base 5');
+  assert.ok(allDeviceLocks.get(key(uid))[track],
+    'base-matching shared public row keeps provisional actor lock');
 }
 // A later stale Feed payload must not roll either same-UID device back before
 // the chosen 20 minute shared window has finished.
@@ -85,7 +91,15 @@ for(const device of ['pc','mobile']){
   currentDevice=device;
   assert.equal(overlay(uid,published)[0].likeCount,6,device+' survives 20 minute window');
 }
+// A different public value proves this actor's old base is no longer current,
+ // even when this device missed the public RTDB invalidation.
 currentDevice='pc';
+assert.equal(overlay(uid,[{id:track,likeCount:7}])[0].likeCount,7,
+  'advanced public 7 rejects stale private 6 without a local settlement ledger');
+assert.equal(allDeviceLocks.get(key(uid))[track],undefined,
+  'advanced public count retires stale base-5 actor lock');
+allDeviceLocks.set(key(uid),{[track]:{liked:true,likeCount:6,updatedAt:now,protectUntil,
+  deferredPublic420:true,basePublicLikeCount420:5}});
 activePendings.set(key(uid),{[track]:{desiredLiked:false,optimisticLikeCount:5}});
 assert.equal(retire(uid,track,now+500),false,'inflight newer local unlike outranks publication');
 activePendings.delete(key(uid));
@@ -100,6 +114,14 @@ const acceptedAck=service.slice(service.indexOf('flushPendingLikes = async'),ser
 assert.match(acceptedAck,/canonicalLikeCount = resolveExploreLikeAckCount420\(/);
 assert.match(acceptedAck,/likeCount: canonicalLikeCount/);
 assert.match(acceptedAck,/acceptedForSignal127\.push\(accepted\)/);
+assert.match(acceptedAck,/basePublicLikeCount420: clampLikeCount\(pending\.baseLikeCount\)/,
+  'sender must preserve the public count that the provisional +/-1 was based on');
+assert.match(service,/basePublicLikeCount420: clampLikeCount\(value\.basePublicLikeCount420\)/,
+  'RTDB decoder must preserve optional public-base count');
+assert.match(service,/sharedCount !== basePublic420/,
+  'persistent actor overlay must yield to any public count that advanced past its base');
+assert.match(page,/resolveExploreLikeRemoteDisplayCount420\(/,
+  'mounted React receiver must compare provisional count against current public base');
 assert.match(acceptedAck,/publishConfirmedLikeSignal127\(uid, acceptedForSignal127\)/);
 assert.match(service,/displayLocks\[item\.trackId\] = \{[\s\S]*?likeCount: clampLikeCount\(item\.likeCount\)/,
   'same-UID receiver retains accepted pair before UI notification');
@@ -121,6 +143,8 @@ console.log('APP420_RELEASE_VERSION_420_AND_LATE_PRIVATE_REPAINT_GUARD=PASS');
 console.log('APP420_VERIFIED_ACTOR_0_TO_1_AND_5_TO_6=PASS');
 console.log('APP420_UNKNOWN_MEMBERSHIP_APP413_GUARD=PASS');
 console.log('APP420_DEFERRED_PRIVATE_ACK_NO_OLD_PUBLIC_ROLLBACK=PASS');
+console.log('APP420_PUBLIC_BASE_5_PRIVATE_6_FRESH_DEVICE=PASS');
+console.log('APP420_ADVANCED_PUBLIC_7_REJECTS_STALE_PRIVATE_6=PASS');
 console.log('APP420_SAME_UID_PC_MOBILE_20MIN_PROVISIONAL_DISPLAY=PASS');
 console.log('APP420_NEWER_LOCAL_CLICK_AND_OLDER_PUBLIC_SIGNAL_PROTECTED=PASS');
 console.log('APP420_CHANGED_CARD_PUBLIC_RELEASE_EXACT_COUNT=PASS');

@@ -257,6 +257,46 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     'origin Worker acceptance clock must travel with 127 signal, never receive Date.now');
   assert.match(publish,/acceptedAtPublicClock420/,
     'existing RTDB signal must preserve the Worker acceptance time');
+  // Independent re-audit reproducer: a brand-new device subscribes after
+  // the public bus retention has expired. Firebase immediately replays the
+  // retained UID-private row, but this origin has no public settlement ledger.
+  // That FIRST retained row is allowed to repair the heart only; its old
+  // provisional count must not install a 25-minute display lock.
+  seen = 0;
+  publicSettledAt420 = 0;
+  personalLocks420 = {};
+  persistentPending = {};
+  cache.set('fresh-device-song', false);
+  const beforeFreshDeviceRows = rendered.length;
+  env.__apply('same-account', {
+    version: 21, previousVersion: 20,
+    results: [{trackId:'fresh-device-song',ownerUid:'',liked:true,likeCount:6,
+      acceptedAtPublicClock420:8_000}],
+  }, false, true);
+  assert.equal(rendered.length,beforeFreshDeviceRows+1);
+  assert.equal(rendered.at(-1).liked,true,
+    'new device still receives exact personal heart from retained signal');
+  assert.equal(rendered.at(-1).privateCountExact416,false,
+    'first retained private number is not allowed to override loaded public count');
+  assert.equal(personalLocks420['fresh-device-song'],undefined,
+    'fresh device cannot create a 25-minute provisional lock from unproven retained history');
+
+  // Once the initial Firebase snapshot has been consumed, a genuinely new live
+  // account change must still carry the immediate same-account provisional count.
+  env.__apply('same-account', {
+    version: 22, previousVersion: 21,
+    results: [{trackId:'fresh-device-song',ownerUid:'',liked:false,likeCount:7,
+      acceptedAtPublicClock420:12_000}],
+  }, false, false);
+  assert.equal(rendered.at(-1).liked,false);
+  assert.notEqual(rendered.at(-1).privateCountExact416,false,
+    'subsequent live same-UID change keeps provisional count authority');
+  assert.equal(personalLocks420['fresh-device-song'].likeCount,7);
+  assert.equal(personalLocks420['fresh-device-song'].acceptedAtPublicClock420,12_000);
+  assert.match(service,/let firstPrivateSnapshot420 = true/);
+  assert.match(service,/applyRemoteLikeSignal127\(uid, signal, false, initialRetained420\)/);
+  console.log('APP420_NEW_DEVICE_FIRST_RETAINED_HEART_ONLY_NO_STALE_COUNT=PASS');
+  console.log('APP420_NEW_DEVICE_SUBSEQUENT_LIVE_PRIVATE_COUNT_STILL_SYNCED=PASS');
   console.log('APP420_AUDIT_LATE_PRIVATE_AFTER_PUBLIC_7_STAYS_7=PASS');
   console.log('APP420_POST_PUBLIC_NEW_PRIVATE_CLICK_PROTECTED_6=PASS');
   console.log('APP420_SAME_UID_ON_6_OFF_5_REMOTE_SIGNAL=PASS');

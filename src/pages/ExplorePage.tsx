@@ -42,6 +42,7 @@ import {
   readLegacyPendingLikeForUpgrade420,
   normalizeExploreLikeDisplayPair129,
   overlayExploreLikeDisplayCounts,
+  retireExploreLikeDisplayLockAfterPublicCount420,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
   subscribeExploreLikeUiSync139,
@@ -2202,6 +2203,12 @@ export default function ExplorePage() {
             settled.set(row.trackId, card.likeCount);
             publicLikePendingRowsRef192.current.delete(row.trackId);
             publicLikeRefreshAttemptsRef192.current.delete(row.trackId);
+            // A settled PUBLIC changed-card row retires only an OLDER actor
+            // provisional count; never erase an unsent or newer same-UID click.
+            // All surfaces receive the exact same published count below.
+            retireExploreLikeDisplayLockAfterPublicCount420(
+              user.uid, row.trackId, Math.max(row.at, card.updatedAt),
+            );
             const ownerUid = card.ownerUid || row.ownerUid;
             patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });
             if (ownerUid) {

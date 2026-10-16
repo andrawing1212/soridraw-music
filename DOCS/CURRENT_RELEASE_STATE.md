@@ -1,3 +1,13 @@
+## CURRENT — app420 audit-detected count defect fixed on preview; independent exact-SHA approval pending (2026-10-16)
+
+- **Latest product code SHA:** `463d0370e4fced1f0737ea03ecc5da01581df70f` / PR #190. Previous implementation SHA `ce8650eb12445e8f00b015260242d211f9701d6f` had **audit FAIL** despite CI PASS: an `already-desired` same-UID canonical ACK could preserve a phantom private +1 for 25min, and a stale public signal could borrow a later R2 card updatedAt to retire a newer private actor lock. **Do not deploy the old SHA.**
+- **Narrow repairs:** `src/services/exploreLikeService.ts` treats `already-desired`/rejected status as canonical returned count, only genuinely deferred applied-intent ACK retains optimistic count. `src/pages/ExplorePage.tsx` retires actor guard using the PUBLIC signal's actual `row.at`, not `Math.max(row.at, card.updatedAt)`. Added executable no-change ACK and old-signal guards to regressions. Baseline app410 and existing shared 448 window unchanged.
+- **Verification:** final PR #190 HEAD `947db76b554e4859183e6f06ed91e5bfa8b7d68b`, quality Run `38883990100` SUCCESS incl TypeScript, Build, Functions TS, APP420_ALREADY_DESIRED_NO_PHANTOM_ACTOR_COUNT, APP420_REAL_PRIVATE_ACK_STALE_PUBLIC_5_ACTOR_6, APP420_SAME_UID_ON_6_OFF_5_REMOTE_SIGNAL, app141/app410 and Stage416. This is CI and read-only code-path verification, NOT a separate GPT-6 Astra Work independent final audit and NOT real PC/mobile acceptance.
+- **Release gate:** no PREVIEW Hosting deploy yet, live PREVIEW remains app419; no Worker/Functions/RTDB Rules/D1 schema/data or TEST/PRODUCTION changes. **Independent audit of `463d0370e4fced1f0737ea03ecc5da01581df70f` required before PREVIEW app420 release.** If PASS, only Hosting deploy, exact build and real PC↔mobile verification; if FAIL, focused repair/new exact SHA + CI. Review 25min private lock on missed public signal, mixed app419/app420 sessions and concurrent same-song likes.
+- **Progress:** Stage416 1/4·25%, app speed 5/5·100%, app420 implementation and focused repair 2/4·50% (independent audit/deploy + live acceptance pending).
+
+---
+
 ## CURRENT — app420 own-heart ±1 count / same-UID PC↔mobile candidate merged, independent audit pending (2026-10-16 KST)
 
 - **PREVIEW product code merge SHA:** `ce8650eb12445e8f00b015260242d211f9701d6f`, PR #188 merged. Base preview before implementation `30914bc01f537e434164d94d43f5cf0784cf0764`. Feature requirements: GitHub Issue #186. **Still NOT deployed**; last PREVIEW live Hosting app419.

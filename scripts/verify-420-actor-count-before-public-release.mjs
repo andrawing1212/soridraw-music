@@ -68,8 +68,14 @@ const published=[{id:track,likeCount:5}];
 const protectUntil=now+25*60_000;
 for(const device of ['pc','mobile']){
   currentDevice=device;
-  allDeviceLocks.set(key(uid),{[track]:{liked:true,likeCount:6,updatedAt:now,protectUntil}});
+  allDeviceLocks.set(key(uid),{[track]:{liked:true,likeCount:6,updatedAt:now,protectUntil,deferredPublic420:true}});
   assert.equal(overlay(uid,published)[0].likeCount,6,device+' receives same account-provisional +1');
+  assert.equal(overlay(uid,[{id:track,likeCount:6}])[0].likeCount,6,
+    device+' own UI pair matches but is NOT public publication');
+  assert.ok(allDeviceLocks.get(key(uid))[track],
+    'a matching PRIVATE UI number alone must not retire unpublished lock');
+  assert.equal(overlay(uid,published)[0].likeCount,6,
+    device+' old published count cannot return after private UI equality');
 }
 // A later stale Feed payload must not roll either same-UID device back before
 // the chosen 20 minute shared window has finished.

@@ -1,3 +1,14 @@
+## NEXT — independent re-audit ONLY: app420 exact public-base provisional count guard (2026-10-17)
+
+- **Audit exact product SHA:** `c0ac756c980bcea0ac2adb78841606d6f82370e1` / PR #198 (implementation head `4adec9c93cdef22e19bb21ec214690a22ad36cfd`). Quality Run `38944750283` SUCCESS. Live PREVIEW Hosting remains app419; do not deploy in audit room.
+- **Prior audit contradiction to reproduce:** (A) existing/missed-public device already shows public 7 but retained accepted private row says base 5 -> provisional 6: result must keep count 7 while applying heart/membership. (B) fresh device before public release still shows public 5 and receives that same base-5 -> provisional-6 row: result must show count 6 immediately.
+- **Read-only audit:** trace `basePublicLikeCount420` from local pending base -> canonical ACK row -> UID RTDB encoder/decoder -> persisted display lock -> React Feed/Profile/Liked repaint and liked-card cache. Confirm legacy app419 row without the optional field remains first-retained heart-only.
+- **Required countercases:** ON then OFF/net-zero base chaining; duplicate/same-version retained replay; initial empty snapshot then genuine live row; newer local pending outranks older remote; delayed private row after published release; another account advances public count between actor acceptance and receiver repaint; 1/3/5/10/20min windows; stale reload/missed public signal; app410 frozen membership; no extra backend read/write/listener/poll/full scan.
+- **PASS gate:** only after separate GPT-6/Work PASS may development room deploy **Firebase PREVIEW Hosting only** for app420 exact audited source and verify exact live app version/build plus real PC↔mobile same-UID acceptance. Worker/Functions/Rules/D1/R2/shared user data stay unchanged. TEST/PRODUCTION require separate user approval.
+- **FAIL:** no deployment; report exact failing scenario and minimal code scope only, then new SHA/CI and re-audit.
+
+---
+
 ## NEXT — third independent re-audit: app420 fresh-device retained signal repair (2026-10-16)
 
 - **Audit exact product SHA:** `a63eb5f32ffb85c14f89ec493ad11e3546959a49` / PR #196. Quality Run `38903284828` SUCCESS. App version 420. Live PREVIEW remains previous app419; do not deploy in audit room.

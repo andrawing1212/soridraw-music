@@ -118,4 +118,43 @@ console.log('APP420_DEFERRED_PRIVATE_ACK_NO_OLD_PUBLIC_ROLLBACK=PASS');
 console.log('APP420_SAME_UID_PC_MOBILE_20MIN_PROVISIONAL_DISPLAY=PASS');
 console.log('APP420_NEWER_LOCAL_CLICK_AND_OLDER_PUBLIC_SIGNAL_PROTECTED=PASS');
 console.log('APP420_CHANGED_CARD_PUBLIC_RELEASE_EXACT_COUNT=PASS');
+
+ // A pre-existing/public changed-card signal can repaint a newer private click.
+ // Exercise the actual React changed-card patch callback, rather than merely
+ // verifying that retireExploreLikeDisplayLockAfterPublicCount420() returned false.
+currentDevice='pc';
+now+=1_000;
+allDeviceLocks.set(key(uid),{[track]:{
+ liked:true,likeCount:6,updatedAt:now,protectUntil:now+25*60_000,deferredPublic420:true,
+}});
+const patchStart=page.indexOf('const patchPublicCounts192 = (previous: ExploreTrack[]) => {');
+const patchStop=page.indexOf('setTracks(patchPublicCounts192);',patchStart);
+assert.ok(patchStart>=0&&patchStop>patchStart,'real React public repaint callback not found');
+const patchSource=page.slice(patchStart,patchStop);
+const patchJs=(await transform(patchSource,{loader:'ts',target:'es2022',format:'cjs'})).code;
+const makePatch=new Function('settled','user','overlayExploreLikeDisplayCounts',
+  patchJs+'\nreturn patchPublicCounts192;');
+const preWindowSettle=new Map([[track,5]]);
+const patchOld=makePatch(preWindowSettle,{uid},overlay);
+const oldSignalAt=now-1;
+assert.equal(retire(uid,track,oldSignalAt),false,
+ 'older published signal does not clear newer actor guard');
+const protectedView=patchOld([{id:track,likeCount:6}]);
+assert.equal(protectedView[0].likeCount,6,
+ 'public React repaint must NOT erase a newer actor provisional +1');
+assert.equal(patchOld(protectedView),protectedView,
+ 'no extra React repaint when same actor display remains unchanged');
+assert.ok(allDeviceLocks.get(key(uid))[track],
+ 'prior PUBLIC signal must leave newer PRIVATE lock active');
+const newSignalAt=now+5_000;
+assert.equal(retire(uid,track,newSignalAt),true,
+ 'truly newer published release retires old guard');
+const patchNew=makePatch(new Map([[track,7]]),{uid},overlay);
+assert.equal(patchNew(protectedView)[0].likeCount,7,
+ 'correct settled count from other users is eventually visible');
+assert.match(page,/actorDisplay420 = overlayExploreLikeDisplayCounts\(user\.uid, \[/,
+ 'account liked-card cache must retain the same private actor overlay');
+console.log('APP420_OLD_PUBLIC_SIGNAL_DOES_NOT_REPAINT_NEW_ACTOR_COUNT=PASS');
+console.log('APP420_REAL_REACT_PUBLIC_REPAINT_RETIRE_AND_NO_REDUNDANT_RENDER=PASS');
+
 console.log('APP420_NO_PUBLIC_WORKER_OR_SHARED_DATA_MUTATION=PASS');

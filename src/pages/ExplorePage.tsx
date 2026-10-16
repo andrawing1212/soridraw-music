@@ -2217,7 +2217,15 @@ export default function ExplorePage() {
             if (ownerUid) {
               patchExplorePublicProfileFirstViewTrack(ownerUid, row.trackId, { likeCount: card.likeCount });
             }
-            patchExploreLikedTrackCachedCount091(user.uid, row.trackId, card.likeCount);
+            // The R2 card is canonical PUBLIC state only. If a newer
+            // same-account intent still owns a private provisional count,
+            // do not overwrite this account's liked-card display cache.
+            const actorDisplay420 = overlayExploreLikeDisplayCounts(user.uid, [
+              { id: row.trackId, likeCount: card.likeCount },
+            ])[0];
+            patchExploreLikedTrackCachedCount091(
+              user.uid, row.trackId, actorDisplay420.likeCount,
+            );
             // Persist only after the settled R2 card has patched device caches.
             rememberSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at);
           }
@@ -2231,7 +2239,17 @@ export default function ExplorePage() {
                 changed = true;
                 return { ...track, likeCount: nextCount };
               });
-              return changed ? patched : previous;
+              // A PUBLIC update may be unrelated to this account's newer
+              // click for the same track. Keep the effective actor overlay
+              // in ALL mounted views, even if the R2 card is newer than an
+              // earlier shared signal. Shared caches above remain PUBLIC.
+              const actorVisible420 = overlayExploreLikeDisplayCounts(user.uid, patched);
+              // The public row may differ internally while the visible
+              // provisional value stays unchanged. Avoid a needless rerender.
+              const visibleChanged420 = actorVisible420.some(
+                (track, i) => track.likeCount !== previous[i].likeCount,
+              );
+              return visibleChanged420 ? actorVisible420 : previous;
             };
             setTracks(patchPublicCounts192);
             setPopularTracks(patchPublicCounts192);

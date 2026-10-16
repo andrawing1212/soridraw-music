@@ -13,7 +13,10 @@ function functionFromSource(begin,end,object){
  const body=source.slice(start,finish);
  const code=ts.transpileModule(body+'\nglobalThis.extracted = '+begin.split(' = ')[0].replace('const ','').trim()+';',
    {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
- const ctx={...object};vm.runInNewContext(code,ctx,{timeout:2000});
+ // Public-count fixture has no actor-private lock; keep the genuine
+ // change-only React callback but give it the existing local-only overlay.
+ const ctx={user:{uid:'fixture-uid'},overlayExploreLikeDisplayCounts:(_uid,rows)=>rows,...object};
+ vm.runInNewContext(code,ctx,{timeout:2000});
  return ctx.extracted;
 }
 const unchanged=[{id:'a',ownerUid:'x',likeCount:3},{id:'b',ownerUid:'y',likeCount:0}];

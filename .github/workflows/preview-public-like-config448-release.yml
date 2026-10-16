@@ -32,9 +32,17 @@ jobs:
           fn="$(printf '%s\n' "$raw" | sed -n 's/^target_function=//p' | tail -1 | tr -d '\r')"
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
           case "$fn" in
-            publicLikeWindowConfig448Candidate|publicLikeRelease416Candidate) ;;
+            publicLikeWindowConfig448Candidate|publicLikeRelease416Candidate|masterGetLikeBatchTiming416|masterSetLikeBatchTiming416) ;;
             *) echo "REFUSE_TARGET_FUNCTION=$fn"; exit 3 ;;
           esac
+          preflight="$(printf '%s\n' "$raw" | sed -n 's/^preflight_only=//p' | tail -1 | tr -d '\r')"
+          case "$fn" in
+            masterGetLikeBatchTiming416|masterSetLikeBatchTiming416)
+              case "$preflight" in true|false) ;; *) echo "MASTER_PREFLIGHT_FLAG_REQUIRED"; exit 3 ;; esac
+              ;;
+            *) test -z "$preflight" || test "$preflight" = false ;;
+          esac
+          echo "preflight=$preflight" >> "$GITHUB_OUTPUT"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "fn=$fn" >> "$GITHUB_OUTPUT"
           echo "LOCKED_PUBLIC_LIKE_SUPPORT_SHA=$target"
@@ -94,6 +102,69 @@ jobs:
           exports.publicLikeWindowConfig448Candidate =
             require("./exploreLikePublicConfig448").publicLikeWindowConfig448Candidate;
           NODE
+          elif [ "$target_fn" = 'masterGetLikeBatchTiming416' ] ||
+               [ "$target_fn" = 'masterSetLikeBatchTiming416' ]; then
+            node scripts/verify-416-like-batch-master.mjs
+            cp functions/lib/exploreLikeBatchSettings416.js "$d/lib/"
+            cp functions/lib/exploreLikeEnvironment416.js "$d/lib/"
+            cat > "$d/lib/index.js" <<'NODE'
+          "use strict";
+          const admin=require("firebase-admin");
+          const {onCall,HttpsError}=require("firebase-functions/v2/https");
+          const {STAGE416_ENVIRONMENTS}=require("./exploreLikeEnvironment416");
+          const {readLikeBatchTimingAt416,parseLikeBatchTiming416,changeLikeBatchTiming416}=
+            require("./exploreLikeBatchSettings416");
+          admin.initializeApp({
+            databaseURL:"https://soridraw-app-866a5-default-rtdb.firebaseio.com"
+          });
+          const timingPath=STAGE416_ENVIRONMENTS.preview.timingPath;
+          async function requireMaster(request){
+            const uid=request.auth?.uid;
+            if(!uid)throw new HttpsError("unauthenticated","관리자 로그인이 필요합니다.");
+            const snap=await admin.firestore().collection("users").doc(uid).get();
+            if(snap.data()?.staffRole!=="master")
+              throw new HttpsError("permission-denied","마스터 권한이 필요합니다.");
+            return uid;
+          }
+          exports.masterGetLikeBatchTiming416=onCall(
+            {region:"us-central1"},async(request)=>{
+              await requireMaster(request);
+              return {ok:true,...await readLikeBatchTimingAt416(admin.database(),timingPath)};
+            });
+          exports.masterSetLikeBatchTiming416=onCall(
+            {region:"us-central1"},async(request)=>{
+              const uid=await requireMaster(request);
+              try {
+                const input=parseLikeBatchTiming416(request.data);
+                const version=Number(request.data?.expectedVersion);
+                const saved=await changeLikeBatchTiming416(
+                  admin.database(),uid,input,version,Date.now(),timingPath);
+                return {ok:true,...saved,effectiveForNewWindows:true};
+              } catch(error) {
+                const code=error instanceof Error?error.message:"unknown";
+                if(code==="416_INVALID_MASTER_TIMING"||code==="416_INVALID_MASTER_WRITE")
+                  throw new HttpsError("invalid-argument","저장 주기는 1·3·5·10·20분 중 선택해주세요.");
+                if(code==="416_MASTER_VERSION_CONFLICT_OR_UNCHANGED")
+                  throw new HttpsError("aborted","다른 관리자가 변경했습니다. 최신 설정을 다시 확인해주세요.");
+                throw new HttpsError("unavailable","좋아요 저장 주기를 저장하지 못했습니다.");
+              }
+            });
+          NODE
+            # Only export the single target. Never deploy the other Master
+            # Callable or the Stage416 private/public mutation handlers.
+            node - "$d/lib/index.js" "$target_fn" <<'NODE'
+          const fs=require('fs');
+          const file=process.argv[2],target=process.argv[3];
+          const code=fs.readFileSync(file,'utf8');
+          const other=target==='masterGetLikeBatchTiming416'
+            ?'masterSetLikeBatchTiming416':'masterGetLikeBatchTiming416';
+          fs.writeFileSync(file,code+[
+            '', 'delete exports.'+other+';',
+            'if(Object.keys(exports).join(",")!=="'+target+'")',
+            '  throw new Error("MASTER_EXACT_EXPORT_DRIFT");',
+            '',
+          ].join('\n'));
+          NODE
           else
             node scripts/verify-438-stage416-public-release.mjs
             node scripts/verify-439-stage416-public-release-routing.mjs
@@ -143,7 +214,41 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
 
+      - name: Inspect PREVIEW Master timing Functions read-only
+        if: contains(steps.source.outputs.fn, 'master')
+        shell: bash
+        run: |
+          set -euo pipefail
+          for fn in masterGetLikeBatchTiming416 masterSetLikeBatchTiming416; do
+            if gcloud functions describe "$fn" --gen2 --region us-central1 \
+              --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/$fn.json" 2>/dev/null; then
+              node - "$RUNNER_TEMP/$fn.json" "$fn" <<'NODE'
+          const v=require(process.argv[2]);
+          console.log("LIVE_MASTER_FUNCTION="+process.argv[3]+":"+v.state+
+            ":updated="+String(v.updateTime||"unknown"));
+          NODE
+            else
+              echo "LIVE_MASTER_FUNCTION=$fn:MISSING_OR_UNREADABLE"
+            fi
+          done
+          # Read-only recent failure categories only; never print UID, request
+          # payload, log message, stored data or authentication tokens.
+          for service in mastersetlikebatchtiming416 mastergetlikebatchtiming416; do
+            gcloud logging read \
+              "resource.type=cloud_run_revision AND resource.labels.service_name=$service AND timestamp>=\"2026-10-16T04:30:00Z\" AND severity>=ERROR" \
+              --project "$FIREBASE_PROJECT" --limit=10 --format=json \
+              > "$RUNNER_TEMP/$service-err.json" 2>/dev/null || printf '[]' > "$RUNNER_TEMP/$service-err.json"
+            node - "$RUNNER_TEMP/$service-err.json" "$service" <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          console.log("LIVE_MASTER_ERROR_EVENTS="+process.argv[3]+":"+
+            (Array.isArray(rows)?rows.length:0));
+          NODE
+          done
+          echo 'MASTER_LIVE_READONLY_INSPECTION=PASS'
+
       - name: Deploy exact PREVIEW Function only
+        if: steps.source.outputs.preflight != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -155,7 +260,7 @@ jobs:
           set -e
           if [ "$deploy_rc" -ne 0 ]; then
             if grep -Fq 'Functions successfully deployed but could not set up cleanup policy' "$log"; then
-              gcloud functions describe "$target_fn"                 --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"                 --format='value(state)' | grep -Fxq ACTIVE
+              gcloud functions describe "$target_fn"                 --gen2 --region "$(case "$target_fn" in masterGetLikeBatchTiming416|masterSetLikeBatchTiming416) echo us-central1;; *) echo asia-northeast3;; esac)" --project "$FIREBASE_PROJECT"                 --format='value(state)' | grep -Fxq ACTIVE
               echo 'PUBLIC_LIKE_SUPPORT_DEPLOY=PASS_CLEANUP_POLICY_WARNING_ONLY'
             else
               exit "$deploy_rc"
@@ -165,11 +270,12 @@ jobs:
           fi
 
       - name: Verify Function and protected refs
+        if: steps.source.outputs.preflight != 'true'
         shell: bash
         run: |
           set -euo pipefail
           target_fn="${{ steps.source.outputs.fn }}"
-          gcloud functions describe "$target_fn"             --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT"             --format=json > "$RUNNER_TEMP/public-like-support.json"
+          gcloud functions describe "$target_fn"             --gen2 --region "$(case "$target_fn" in masterGetLikeBatchTiming416|masterSetLikeBatchTiming416) echo us-central1;; *) echo asia-northeast3;; esac)" --project "$FIREBASE_PROJECT"             --format=json > "$RUNNER_TEMP/public-like-support.json"
           node - "$RUNNER_TEMP/public-like-support.json" "$target_fn" <<'NODE'
           const d=require(process.argv[2]);
           const target=process.argv[3];

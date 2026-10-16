@@ -77,4 +77,13 @@ assert.match(panel,/normalizeStaffRole\(readUserProfileCache\(uid\)\) === 'maste
 console.log(appVersion>=400
   ? 'STAGE416_MASTER_PUBLIC_CONTROL_APP400_ACTIVE_PRIVATE_BACKEND_RETAINED=PASS'
   : 'STAGE416_MASTER_PUBLIC_CONTROL_OFF_UNTIL_RELEASE=PASS');
+const wf=readFileSync('.github/workflows/preview-public-like-config448-release.yml','utf8');
+assert.match(wf,/masterGetLikeBatchTiming416\|masterSetLikeBatchTiming416/);
+assert.match(wf,/if: steps\.source\.outputs\.preflight != 'true'/);
+assert.match(wf,/LIVE_MASTER_FUNCTION=/);
+assert.match(wf,/MASTER_EXACT_EXPORT_DRIFT/);
+assert.match(wf,/if\(snap\.data\(\)\?\.staffRole!=="master"\)/);
+assert.match(wf,/admin\.database\(\),uid,input,version,Date\.now\(\),timingPath/);
+assert.match(wf,/--only "functions:\$target_fn"/);
+console.log('STAGE416_MASTER_READONLY_PREFLIGHT_AND_SINGLE_FUNCTION_RELEASE=PASS');
 console.log('STAGE416_BACKEND_CONFIG_DEPLOY=NOT_RUN');

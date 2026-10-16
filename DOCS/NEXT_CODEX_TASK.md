@@ -1,3 +1,14 @@
+## NEXT — Issue #186 app420: own Explore heart±1 count parity and same-UID PC↔mobile (2026-10-16)
+
+- **Base:** preview `1a3994f263bb1f8f53b83e304152fe0a55a20f38`, app419 live. User-confirmed Master 1-minute save PASS and fixed public-window release PASS; **do not edit** public 448 window/Config Function/Worker/Master settings without a separate demonstrated need.
+- **Task:** [Issue #186](https://github.com/andrawing1212/soridraw-music/issues/186), Codex High. Single versioned actor provisional count overlay from verified private membership to public release; 5-second canonical intake, app410 same-account signal, app413 ambiguous false membership protection, 191 changed-card public release unchanged.
+- **Must fix:** verified ON +1 / OFF -1 on own device and same UID across PC and mobile, no 5-second private ACK rollback to old shared count, rapid ON↔OFF net-zero, concurrent/stale signals, old 90-second guard premature expiry with 3/5/10/20-min window, proper clearing at exact public release. Never add another canonical write or periodic full reads.
+- **Mandatory executable E2E simulations:** 0→1, 5→6, 5→4, A→B/B→A, duplicate/older ACK, inflight opposite local click, cross-account shared count remains published until release, multiuser same-track, 1/3/5/10/20 min, stale reload/missing catalog. TypeScript/Build + protected app410/141/164/191/413/448 and cost regressions.
+- **Do not deploy until exact-SHA independent audit PASS.** No shared user data/schema/Rules migration, Worker or Functions updates unless independently proven essential. Only PREVIEW code. No TEST/PRODUCTION change.
+- **Progress:** this actor-count task **1/4·25%** (evidence+requirements; no code changes). Stage416 overall 1/4·25%; app speed 5/5·100%.
+
+---
+
 ## NEXT — app419 Master public timing real-user save acceptance (2026-10-16)
 
 - Product code commit `7691cca03afc6dc9846d1864b08cf6a7fb110ce7`, release commit `8531215b5b5a0508df8cac7468897616e57221aa`, quality Run `38857004280` SUCCESS, isolated Function Run `38857264207` SUCCESS+ACTIVE.

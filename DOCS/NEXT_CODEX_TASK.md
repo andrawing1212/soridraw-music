@@ -1,3 +1,14 @@
+## NEXT — app419 public cadence fix: exact-SHA audit before any PREVIEW deploy
+
+- **Product SHA:** `caa27e8416c8ae25db4e1bc71ddf5f1b6cc3ef8b`; DRAFT PR #168; quality Run `38849637178` SUCCESS.
+- The admin UI must expose **only** “모든 사용자 공개숫자 공동 집계”. The hidden `privateMinutes` backend value remains only for dormant Stage416 diagnostics and must not be wired into normal app410/app418 personal likes.
+- Verify stale-version recovery: public cadence save re-reads once, preserves the latest hidden private value, and retries only the intended `publicMinutes`; no page reload required.
+- Verify `publicLikeWindowConfig448Candidate` is `no-store` and remains one read per **new shared window**, never per user/page.
+- Protect app410 personal heart/membership, 191/frozen like regressions, D1 schema/canonical write path, Worker, TEST/PRODUCTION and shared user data.
+- **No deployment in this task.** If audit PASS and the user later requests PREVIEW deployment, release only the config Function + Hosting needed for this change, then test public window 1 minute with Account A → Account B automatic update without navigation.
+
+---
+
 ## NEXT — app418 PREVIEW 1-minute real-device acceptance
 
 - app418 is live on PREVIEW: Worker Run `38779499228` SUCCESS, Hosting Run `38779861310` SUCCESS, remote app version 418.

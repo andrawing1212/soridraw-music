@@ -30,6 +30,17 @@ type Timing416 = {
 };
 const OPTIONS = [1, 3, 5, 10, 20] as const;
 const DEFAULT: Timing416 = { privateMinutes: 5, publicMinutes: 5, version: 0, updatedAtMs: 0 };
+const normalizeTiming416 = (answer: ({ ok: boolean } & Timing416)): Timing416 => {
+  if (!answer.ok || !OPTIONS.includes(answer.privateMinutes as typeof OPTIONS[number]) ||
+      !OPTIONS.includes(answer.publicMinutes as typeof OPTIONS[number]) ||
+      !Number.isSafeInteger(answer.version)) throw new Error('INVALID_416_POLICY');
+  return {
+    privateMinutes: answer.privateMinutes,
+    publicMinutes: answer.publicMinutes,
+    version: answer.version,
+    updatedAtMs: answer.updatedAtMs,
+  };
+};
 const isMaster = () => {
   const uid = auth.currentUser?.uid || '';
   return !!uid && normalizeStaffRole(readUserProfileCache(uid)) === 'master';
@@ -102,15 +113,7 @@ export default function Stage416LikeBatchMasterPanel() {
         );
         const answer = (await call({})).data;
         if (!live) return;
-        if (!answer.ok || !OPTIONS.includes(answer.privateMinutes as typeof OPTIONS[number]) ||
-            !OPTIONS.includes(answer.publicMinutes as typeof OPTIONS[number]) ||
-            !Number.isSafeInteger(answer.version)) throw new Error('INVALID_416_POLICY');
-        const next = {
-          privateMinutes: answer.privateMinutes,
-          publicMinutes: answer.publicMinutes,
-          version: answer.version,
-          updatedAtMs: answer.updatedAtMs,
-        };
+        const next = normalizeTiming416(answer);
         setLoaded(next);
         setDraft(next);
       } catch {
@@ -122,37 +125,51 @@ export default function Stage416LikeBatchMasterPanel() {
   }, [allowed]);
 
   if (!allowed) return null;
-  const changed = !!loaded && (
-    loaded.privateMinutes !== draft.privateMinutes ||
-    loaded.publicMinutes !== draft.publicMinutes
-  );
+  const changed = !!loaded && loaded.publicMinutes !== draft.publicMinutes;
   const save = async () => {
     if (busy || !changed || !loaded) return;
+    const desiredPublicMinutes = draft.publicMinutes;
     setBusy(true);
     setNotice('');
     try {
-      const call = httpsCallable<
-        { privateMinutes: number; publicMinutes: number; expectedVersion: number },
-        { ok: boolean } & Timing416
-      >(functions, 'masterSetLikeBatchTiming416');
-      const response = (await call({
-        privateMinutes: draft.privateMinutes,
-        publicMinutes: draft.publicMinutes,
-        expectedVersion: loaded.version,
-      })).data;
-      if (!response.ok) throw new Error('INVALID_416_SAVED_POLICY');
-      const next = {
-        privateMinutes: response.privateMinutes,
-        publicMinutes: response.publicMinutes,
-        version: response.version,
-        updatedAtMs: response.updatedAtMs,
+      const getLatest = async () => {
+        const call = httpsCallable<{}, { ok: boolean } & Timing416>(
+          functions, 'masterGetLikeBatchTiming416',
+        );
+        return normalizeTiming416((await call({})).data);
       };
+      const setPublicMinutes = async (base: Timing416) => {
+        const call = httpsCallable<
+          { privateMinutes: number; publicMinutes: number; expectedVersion: number },
+          { ok: boolean } & Timing416
+        >(functions, 'masterSetLikeBatchTiming416');
+        return normalizeTiming416((await call({
+          // privateMinutes is retained only for the dormant Stage416 private
+          // diagnostic contract. The normal app410/app418 personal-like path
+          // does not use this Master setting.
+          privateMinutes: base.privateMinutes,
+          publicMinutes: desiredPublicMinutes,
+          expectedVersion: base.version,
+        })).data);
+      };
+
+      let next: Timing416;
+      try {
+        next = await setPublicMinutes(loaded);
+      } catch {
+        // A stale Master revision should not force a page reload. Refresh once,
+        // preserve the latest hidden private value, then retry only the public
+        // cadence the Master actually selected.
+        const latest = await getLatest();
+        next = latest.publicMinutes === desiredPublicMinutes
+          ? latest
+          : await setPublicMinutes(latest);
+      }
       setLoaded(next);
       setDraft(next);
-      setNotice('저장했습니다. 이미 진행 중인 개인 대기·공동 집계 창은 이전 주기를 유지합니다.');
+      setNotice('공개 집계 주기를 저장했습니다. 이미 열린 공동 집계 창은 기존 주기를 유지합니다.');
     } catch {
-      // Master or stale revision must never be treated as successfully saved.
-      setNotice('저장하지 못했습니다. 다른 관리자의 변경 여부를 확인하려면 화면을 다시 열어주세요.');
+      setNotice('공개 집계 주기를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally { setBusy(false); }
   };
   const runControlledProof = async () => {
@@ -215,26 +232,24 @@ export default function Stage416LikeBatchMasterPanel() {
     <section className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6">
       <h3 className="text-sm font-black text-[var(--text-primary)]">좋아요 저장·공개 집계 주기</h3>
       <p className="mt-2 text-xs text-[var(--text-secondary)]">
-        개인 좋아요는 기기 간 즉시 보이고, 원본 저장과 전체 공개 숫자는 따로 묶습니다.
-        설정 변경은 각 작업의 다음 새 대기창부터 적용됩니다.
+        개인 좋아요 저장은 현재 검증된 기존 경로를 그대로 사용합니다.
+        여기서는 모든 사용자에게 보이는 공개 좋아요 숫자의 공동 집계 주기만 설정합니다.
+        설정 변경은 다음 새 공동 집계 창부터 적용됩니다.
       </p>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {([
-          { key: 'privateMinutes' as const, label: '개인 최종상태 서버 저장' },
-          { key: 'publicMinutes' as const, label: '모든 사용자 공개숫자 공동 집계' },
-        ]).map(({ key, label }) => (
-          <label key={key} className="flex flex-col gap-2 text-xs font-black text-[var(--text-primary)]">
-            {label}
-            <select
-              className={css}
-              value={draft[key]}
-              disabled={!loaded || busy}
-              onChange={(event) => setDraft((value) => ({ ...value, [key]: Number(event.target.value) }))}
-            >
-              {OPTIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
-            </select>
-          </label>
-        ))}
+      <div className="mt-4 max-w-xl">
+        <label className="flex flex-col gap-2 text-xs font-black text-[var(--text-primary)]">
+          모든 사용자 공개숫자 공동 집계
+          <select
+            className={css}
+            value={draft.publicMinutes}
+            disabled={!loaded || busy}
+            onChange={(event) => setDraft((value) => ({
+              ...value, publicMinutes: Number(event.target.value),
+            }))}
+          >
+            {OPTIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+          </select>
+        </label>
       </div>
       <button type="button" onClick={() => void save()} disabled={!changed || busy}
         className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#BBA8CA] px-4 py-2 text-xs font-black text-[#1b161d] disabled:opacity-50">

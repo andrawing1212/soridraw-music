@@ -1,3 +1,13 @@
+## NEXT — third independent re-audit: app420 fresh-device retained signal repair (2026-10-16)
+
+- **Audit exact product SHA:** `a63eb5f32ffb85c14f89ec493ad11e3546959a49` / PR #196. Quality Run `38903284828` SUCCESS. App version 420. Live PREVIEW remains previous app419; do not deploy in audit room.
+- **Prior FAIL to reproduce:** new device has no local 396 public-settlement ledger, currently displays published count 7, public RTDB signal already expired, Firebase initial UID-private retained row says heart ON/private count 6. Required result: heart ON, count remains 7, no deferred private count lock. Then simulate a later genuinely live private callback and verify same-UID provisional +/-1 works immediately.
+- **Audit READ-ONLY:** inspect actual `startLikeSignal127` first-snapshot classification, `applyRemoteLikeSignal127(... initialRetained420)`, local pending precedence, first empty snapshot behavior, duplicate/same-version retained app410 path, React `privateCountExact416=false` paint, public changed-card convergence, no extra backend IO. Include 1/3/5/10/20min windows and app419 optional timestamp compatibility.
+- **PASS gate:** only after separate audit PASS may development room run PREVIEW Firebase Hosting-only app420 deployment and exact live version/build verification. Worker/Functions/Rules/D1/shared user data stay unchanged. TEST/PRODUCTION require separate approval.
+- **FAIL:** no deployment; focused repair → new SHA → CI → independent audit again.
+
+---
+
 ## NEXT — repeat EXTERNAL independent audit, corrected app420 exact SHA (2026-10-16)
 
 - **Audit exact product SHA:** `9f304a726280c2630840431a04b6627ba51e1407`, merged PR #194; quality Run `38897965277` SUCCESS, app-version 420. Older SHA `3460c9d346295e3086875003a437add53a5c2ffc` was externally audited **FAIL** (late private count 6 overwrote settled public 7) and is forbidden for deployment.

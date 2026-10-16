@@ -49,14 +49,34 @@ export const changeLikeBatchTiming416 = async (
   if (!masterUid || masterUid.length > 128 ||
       !Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
       !Number.isSafeInteger(nowMs) || nowMs <= 0) throw new Error('416_INVALID_MASTER_WRITE');
-  // Admin RTDB transactions may invoke the updater once with an uncached null
-  // before receiving the real server value. With expectedVersion > 0, that
-  // first empty callback would abort a legitimate Master edit as a false 409.
-  // Hydrate only this tiny Master settings node once before the CAS transaction.
-  // Ordinary likes/page entry never call this Master-only write path.
+  // RTDB transactions first invoke the updater against their local sync cache.
+  // A one-shot get() does NOT retain that cache: the updater may still see null
+  // even when the remote Master policy is at version 1 or higher. Returning
+  // undefined on that cold null aborts before the server can retry.
+  //
+  // Keep one value listener on ONLY the Master settings node while the
+  // transaction runs. The initial value event hydrates the transaction cache.
+  // A concurrent write still forces the SDK transaction to re-run the version
+  // comparison; an outdated expectedVersion must never overwrite new settings.
+  // No ordinary user's like, page visit or shared D1 path calls this code.
   const timingRef = database.ref(path);
-  await timingRef.get();
-  const outcome = await timingRef.transaction((raw: unknown) => {
+  let initialListenerSettled = false;
+  let onValue: (snapshot: { val: () => unknown }) => void = () => {};
+  let outcome: Awaited<ReturnType<typeof timingRef.transaction>>;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      onValue = () => {
+        if (initialListenerSettled) return;
+        initialListenerSettled = true;
+        resolve();
+      };
+      timingRef.on('value', onValue, (error: Error) => {
+        if (initialListenerSettled) return;
+        initialListenerSettled = true;
+        reject(error);
+      });
+    });
+    outcome = await timingRef.transaction((raw: unknown) => {
     const current = raw && typeof raw === 'object' && !Array.isArray(raw)
       ? raw as Record<string, unknown> : {};
     const version = Number(current.version || 0);
@@ -76,7 +96,11 @@ export const changeLikeBatchTiming416 = async (
         next: validated,
       }],
     };
-  }, undefined, false);
+    }, undefined, false);
+  } finally {
+    // No persistent RTDB listener and no per-user polling cost.
+    timingRef.off('value', onValue);
+  }
   if (!outcome.committed) throw new Error('416_MASTER_VERSION_CONFLICT_OR_UNCHANGED');
   const value = outcome.snapshot.val();
   const saved = parseLikeBatchTiming416(value);

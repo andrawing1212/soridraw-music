@@ -1,3 +1,16 @@
+## CURRENT — app419 PREVIEW Hosting + public config Function deployed / exact build PASS (2026-10-16 KST)
+
+- **Current release trigger HEAD:** `180aeabcc319dd257de95570016108bad62be218`; app419 source merge `1f03c91f7d9372d131cb3517318c0284caceebfc`, quality Run `38851063066` SUCCESS (Functions TS, TypeScript, Build, frozen personal likes, 191, shared RTDB rules read-only check).
+- **PREVIEW config Function deployed:** `publicLikeWindowConfig448Candidate` release Run `38851277873` SUCCESS; build, Firebase authentication, deploy, ACTIVE verification, protected main/production refs PASS. Function now emits `Cache-Control: no-store` for each new common-window configuration lookup.
+- **PREVIEW Hosting deployed:** Run `38851564475` SUCCESS; locked HEAD `180aeabcc319dd257de95570016108bad62be218`; `https://preview.soridraw.com/` remote app version **419** and exact index.html SHA match PASS. TypeScript/Build, My Likes/Follow regressions, TEST/PRODUCTION unchanged checks PASS.
+- **App UI:** hidden Master left-side `개인 최종상태 서버 저장` (dormant Stage416 diagnostic server field retained). Right-side `모든 사용자 공개숫자 공동 집계` remains; public-only save auto-refreshes one stale revision and retries. Existing app410 personal likes and app418 common public-window Worker unchanged.
+- **Strict non-changes:** shared RTDB Rules deployment SKIPPED; Cloudflare Worker unchanged; shared canonical D1 schema/migration/backfill/delete 0; original user data change 0; main/TEST and PRODUCTION unchanged. This is code and Function release, not a data migration.
+- **Acceptance still pending:** authenticated Master save 5→1 persistence and 1-minute A→B PC/mobile cross-account auto-update without page navigation, net-zero like→unlike behavior, and live D1 billed costs need manual PREVIEW real-device tests. Do not promote to TEST before acceptance PASS.
+- **Progress:** Stage416 overall 1/4·25%; app speed 5/5·100%; app419 PREVIEW deployment 4/4·100% (live user acceptance separate).
+- **Independent audit:** prior code/CI checks PASS, but separate GPT-6 Astra independent exact-SHA audit **not recorded as PASS** in this release; record as unverified rather than implying its completion.
+
+---
+
 ## CURRENT — app419 public-like timing admin fix merged to PREVIEW code / quality PASS / not deployed (2026-10-16 KST)
 
 - **PREVIEW code merge checkpoint:** `59f8721cf1915fefe2ae2628987831f0f58285aa` (PR #168 merged). Product implementation before docs-only checkpoints: `caa27e8416c8ae25db4e1bc71ddf5f1b6cc3ef8b`.

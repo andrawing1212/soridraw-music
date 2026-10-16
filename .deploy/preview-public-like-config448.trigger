@@ -1,10 +1,10 @@
-requested_at=2026-10-16T14:02:00+09:00
-product_code_target=b6e1d91c86fb81940d88e6e878f689ebf9accae7
+requested_at=2026-10-16T14:12:00+09:00
+product_code_target=528d88912bcb3189ecb871fe5a45e41e57dd43e6
 target_function=masterSetLikeBatchTiming416
-scope=preview_master_timing_inspect_only
+scope=preview_master_timing_diagnostic_only
 preflight_only=true
 shared_d1_change=false
 shared_rtdb_rules_change=false
 user_data_change=false
 test_production_change=false
-reason=read_live_master_get_set_inventory_before_save_fix
+reason=inspect_master_policy_revision_and_sanitized_http_status

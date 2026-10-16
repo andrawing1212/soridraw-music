@@ -19,7 +19,11 @@ const PUBLIC_LIKE_MANIFEST_ROUTE_416 = '/v1/public-like-release-manifest-416';
 // Keep only settled changed-track acknowledgements, scoped to the signed-in
 // viewer, so a new account/device can still reconcile its own cached feed.
 const PUBLIC_LIKE_SETTLED_ACK_KEY_396 = 'soridraw_public_like_settled_ack_396';
-const PUBLIC_LIKE_SETTLED_ACK_TTL_MS_396 = PUBLIC_LIKE_SIGNAL_RETENTION_MS_192 + 60_000;
+// app420: keep only bounded changed-track release timestamps as long as the
+// longest actor provisional guard (25 min). A retained PRIVATE UID signal can
+// arrive later than the 3-minute PUBLIC bus retention after a mobile resume.
+// This is device-local metadata, not a new R2/D1 read or a Feed cache reset.
+const PUBLIC_LIKE_SETTLED_ACK_TTL_MS_396 = 25 * 60_000;
 type SettledPublicLikeAck396 = { at: number; checkedAt: number };
 type SettledPublicLikeLedger396 = {
   viewerUid: string;

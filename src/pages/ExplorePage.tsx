@@ -2412,13 +2412,7 @@ export default function ExplorePage() {
             if (pair129.liked || !patched.some((track) => track.id === detail.trackId)) return patched;
             return patched.filter((track) => track.id !== detail.trackId);
           });
-          patchExploreLikedTrackCachedCount091(
-          user.uid,
-          detail.trackId,
-          pair129.likeCount,
-          Number.isSafeInteger(detail.basePublicLikeCount420)
-            ? Number(detail.basePublicLikeCount420) : undefined,
-        );
+          patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
         }
         setLikeAccountSyncSignal((value) => value + 1);
         return;
@@ -2458,7 +2452,13 @@ export default function ExplorePage() {
         });
         // A same-account RTDB acknowledgement is NOT a shared public publication.
         // Keep its count on the active UI and this account's liked-card cache only.
-        patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
+        patchExploreLikedTrackCachedCount091(
+          user.uid,
+          detail.trackId,
+          pair129.likeCount,
+          Number.isSafeInteger(detail.basePublicLikeCount420)
+            ? Number(detail.basePublicLikeCount420) : undefined,
+        );
       }
 
       // Own liked collection uses the same membership cache; load only a newly

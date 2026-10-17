@@ -66,7 +66,7 @@ assert(managedSlice310.includes("source: 'MANAGED-R2-310'"), 'Manager list must 
 assert(!managedSlice310.includes('baseWorker.fetch('), 'Manager list must not call the D1-backed curated list route.');
 assert(worker.includes("url.pathname === '/v1/me/music-note-publications/batch'"), 'Current Music Note publication batch path must sync curated privacy.');
 assert(worker.includes('memberIds'), 'Curated R2 must preserve promoted membership while a song is private.');
-assert(worker.includes('syncCuratedPublicationResults307(request, env, results307)'), 'Publication results must patch curated R2.');
+assert(worker.includes('syncCuratedPublicationResults307(request, env, ctx, results307)'), 'Publication results must patch curated R2.');
 assert(worker.includes('DELETE FROM curated_picks WHERE collection_key=? AND track_id=?'), 'Explicit recommendation removal must stay single-row targeted.');
 assert(worker.includes('INSERT INTO curated_picks(collection_key,track_id'), 'Explicit recommendation promotion must stay single-row targeted.');
 assert(!worker.includes("if (isTrackVisibilityMutation307 && response.ok) {\n      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307)"), 'Visibility changes must not invalidate the whole curated snapshot.');

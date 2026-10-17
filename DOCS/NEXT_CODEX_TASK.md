@@ -1,3 +1,13 @@
+## NEXT — app422 actor-private count/public shared baseline candidate QA PASS; release still gated (2026-10-17 KST)
+
+- **Current targeted branch:** draft PR #209 `fix/app422-private-public-ack-baseline`, exact SHA `07c0fcd8a9e33cb2f75695ce6ec8065538aa7195`. QA [39032323212](https://github.com/andrawing1212/soridraw-music/actions/runs/39032323212) SUCCESS: TypeScript/Build/app410 frozen and actual `flushPendingLikes` 5(public)→6(private ON)→5(private OFF), same-UID relay baseline remains public 5. No extra DB requests/writes, no server/Worker/RTDB source changes or deployment. Do not repeat full QA needlessly or reopen root-cause research.
+- **Director requirement:** keep real-time personal like heart/private display count stable on all signed-in devices through the shared public 448 window; unrelated accounts must see only shared public aggregation, not that personal provisional. Shared published count must take over when a verifiably newer changed-card release exists. Never treat numeric equality as a net-zero publication receipt.
+- **Known residual:** existing 448 net-zero emits no durable UID settlement marker; if private ACK/RTDB missed or on a new device, precise proof is unavailable without new durable UID range and operational costs (DO/Functions/RTDB). Those changes **not authorized**; PR #209 is client-only bounded repair, not total app420 independent PASS.
+- **Separate candidate:** curated PR #200 SHA `281846c2cf9f0a08fc30f8b8cfadaffe33eb8c49` QA success but staged shared-curated v421 flag OFF and actual cross-env A→B/production-first binding tests missing. Do not combine unreleased PRs without independent audit and a coherent fixed preview release commit.
+- **Next practical:** validate client-only 209 under independent exact-SHA source audit with protected app410 and partial net-zero behavior classified; if necessary reconcile the narrowed acceptance/remaining risk before a single Work integrated audit. Preserve Work 1–2 run budget. No Firebase/Worker/Functions/Rules/shared-data changes, no PR #209 or #200 merge, no deploy, TEST and PRODUCTION unchanged until release gates satisfied.
+
+---
+
 ## NEXT — audit app421 late-publication canonical fix; independent app420 release block persists (2026-10-17 KST)
 
 - **Exact draft PR #200 source:** `281846c2cf9f0a08fc30f8b8cfadaffe33eb8c49`, GitHub quality Run `39024082737` SUCCESS. Stale public/private response after a newer canonical visibility state now checks one targeted D1 `tracks` row and resolves current exact public detail if version mismatches. Regression `APP421_PUBLICATION_LATE_SIGNAL_CANONICAL=PASS` in existing `scripts/verify-421-curated-cross-device.mjs`.

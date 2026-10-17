@@ -11,6 +11,7 @@ import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstV
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { takeExploreDormantResume424 } from '../services/exploreDormantResume424';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { GENRES, GENRE_HIERARCHY } from '../constants';
@@ -2527,7 +2528,9 @@ export default function ExplorePage() {
       // revision. Do not reset hydration or re-run /v1/me/likes on every focus.
       // A real revision change dispatches the existing account invalidation
       // event, which then performs one targeted reconciliation for visible IDs.
-      void checkExplorePersonalLikeRevision127(user).catch((reason) => {
+      // Only true dormant resumes bypass the normal 5-minute metadata gate;
+      // ordinary page mount / SPA navigation still stays entirely local.
+      void checkExplorePersonalLikeRevision127(user, takeExploreDormantResume424('private')).catch((reason) => {
         console.warn('Explore like revision resume check failed:', reason);
       });
     };
@@ -3072,13 +3075,15 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!isExploreFeedRequest(requestUrl) || profileUid) return;
 
-    const requestRevisionCheck = () => {
+    const requestRevisionCheck = (actualDormantResume424 = false) => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
       const revisionKey = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
       const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionKey);
-      if (lastCheckedAt > 0 && now - lastCheckedAt < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
-      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
+      if (!actualDormantResume424 && lastCheckedAt > 0 &&
+          now - lastCheckedAt < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
+      if (!actualDormantResume424 &&
+          now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
       feedRevisionRequestedUrlRef.current = requestUrl;
       setFeedRevisionSignal((value) => value + 1);
@@ -3099,9 +3104,17 @@ export default function ExplorePage() {
     // app335: route entry, reload, focus, pageshow and ordinary pointer clicks are
     // not change signals. Revalidate only after a real hidden→visible tab resume;
     // mutation-specific like/publication signals keep their own targeted paths.
-    document.addEventListener('visibilitychange', requestRevisionCheck);
+    const onVisible424 = () => {
+      if (document.visibilityState !== 'visible') return;
+      requestRevisionCheck(takeExploreDormantResume424('public'));
+    };
+    document.addEventListener('visibilitychange', onVisible424);
+    // A reopened mobile browser may begin *already visible* and never emit
+    // visibilitychange. Recover one true dormant epoch on initial Explore mount.
+    if (document.visibilityState === 'visible' &&
+        takeExploreDormantResume424('public')) requestRevisionCheck(true);
     return () => {
-      document.removeEventListener('visibilitychange', requestRevisionCheck);
+      document.removeEventListener('visibilitychange', onVisible424);
     };
   }, [requestUrl, profileUid, user?.uid]);
 

@@ -128,6 +128,17 @@ const writer421 = vm.runInNewContext(
   },
 );
 const bucket421 = { put: async () => { writerPutCount421++; return { etag: 'rev1' }; } };
+// Targeted shared D1 membership source (only real curator actions query it).
+const canonicalMembers421 = new Set(['test-song', 'new-a', 'new-b']);
+const canonicalDB421 = {
+  prepare: (sql) => {
+    assert.match(sql, /FROM curated_picks/);
+    assert.match(sql, /track_id=\?/);
+    return { bind: (_collection, id) => ({
+      first: async () => canonicalMembers421.has(id) ? { track_id: id } : null,
+    }) };
+  },
+};
 const request421 = {
   url: 'https://mock.test/v1/curation/soridraw/test-song',
   headers: new Headers({ Origin: 'https://preview.soridraw.com' }),
@@ -138,12 +149,12 @@ await assert.rejects(
 );
 writerResult421 = { payload: null, memberIds: [] };
 await assert.rejects(
-  writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
+  writer421(request421, { bucket: bucket421, DB: canonicalDB421 }, {}, 'test-song', true, 'master'),
   /CURATED_R2_SNAPSHOT_UNAVAILABLE_421/,
 );
 writerResult421 = { object: { etag: 'rev0' }, payload: { data: { items: [] } }, memberIds: [] };
 await assert.rejects(
-  writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
+  writer421(request421, { bucket: bucket421, DB: canonicalDB421 }, {}, 'test-song', true, 'master'),
   /CURATED_TRACK_DETAIL_UNAVAILABLE_421/,
 );
 assert.equal(writerPutCount421, 0, 'unresolvable track must not publish a phantom R2 snapshot');
@@ -151,7 +162,7 @@ writerDetail421 = {
   ok: true,
   clone: () => ({ json: async () => ({ data: { track: { id: 'test-song', title: 'Selected' } } }) }),
 };
-await writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master');
+await writer421(request421, { bucket: bucket421, DB: canonicalDB421 }, {}, 'test-song', true, 'master');
 assert.equal(writerPutCount421, 1, 'valid targeted recommendation must update one R2 object');
 console.log('APP421_CURATED_FALSE_SUCCESS_R2_FAILURE_BLOCKED=PASS');
 
@@ -197,6 +208,7 @@ writerDetail421 = (req) => {
 };
 const concurrentEnv421 = {
   bucket: concurrentBucket421,
+  DB: canonicalDB421,
   readSnapshot: async () => {
     const object = await concurrentBucket421.get();
     const data = JSON.parse(await object.text());
@@ -286,3 +298,59 @@ assert.deepEqual(Array.from(coldResult421.memberIds), ['promoted-later', 'first'
 assert.deepEqual(Array.from(coldResult421.payload.data.items, (x) => x.track.id), ['promoted-later', 'first']);
 assert.equal(coldResult421.source, 'R2-CURATED-CONCURRENT-COLD-421');
 console.log('APP421_CURATED_COLD_BOOTSTRAP_CAS=PASS');
+
+
+// Same-track opposite action interleaving: canonical D1 accepted a REMOVE
+// after another curator had requested PROMOTE. A delayed promote writer
+// must reconcile canonical D1 and may not re-add the removed song to R2.
+const oppositeR2421 = {
+  etag: 'same0', memberIds: ['test-song'],
+  payload: { ok: true, data: { items: [{ track: { id: 'test-song' } }] } },
+  gets: 0, writes: 0,
+};
+const oppositeBucket421 = {
+  async get() {
+    oppositeR2421.gets++;
+    return {
+      etag: oppositeR2421.etag,
+      text: async () => JSON.stringify({
+        schemaVersion: 1,
+        memberIds: oppositeR2421.memberIds,
+        payload: oppositeR2421.payload,
+      }),
+    };
+  },
+  async put(_key, body, options) {
+    assert.equal(options.onlyIf.etagMatches, oppositeR2421.etag);
+    const next = JSON.parse(body);
+    oppositeR2421.memberIds = next.memberIds;
+    oppositeR2421.payload = next.payload;
+    oppositeR2421.etag = 'same' + (++oppositeR2421.writes);
+    return { etag: oppositeR2421.etag };
+  },
+};
+const oppositeEnv421 = {
+  bucket: oppositeBucket421,
+  DB: canonicalDB421,
+  readSnapshot: async () => {
+    const object = await oppositeBucket421.get();
+    const row = JSON.parse(await object.text());
+    return { object, payload: row.payload, memberIds: row.memberIds };
+  },
+};
+canonicalMembers421.delete('test-song'); // B's canonical D1 DELETE wins
+const delayedPromote421 = await writer421(
+  request421, oppositeEnv421, {}, 'test-song', true, 'master',
+);
+assert.equal(delayedPromote421.recommended, false, 'stale A promote must report canonical B remove');
+assert.deepEqual(Array.from(oppositeR2421.memberIds), [],
+  'later canonical remove wins even if older promote R2 writer executes last');
+assert.equal(oppositeR2421.writes, 1);
+canonicalMembers421.add('test-song'); // A's canonical D1 PROMOTE now wins
+const delayedRemove421 = await writer421(
+  request421, oppositeEnv421, {}, 'test-song', false, 'master',
+);
+assert.equal(delayedRemove421.recommended, true, 'stale B remove must report newer canonical A promote');
+assert.deepEqual(Array.from(oppositeR2421.memberIds), ['test-song']);
+assert.equal(oppositeR2421.writes, 2);
+console.log('APP421_CURATED_SAME_TRACK_OPPOSITE_CANONICAL_AUTHORITY=PASS');

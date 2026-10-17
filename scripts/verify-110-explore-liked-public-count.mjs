@@ -77,7 +77,7 @@ if (!/expiresAt:\s*null/.test(liked)) fail('liked-track long-lived cache contrac
 if (appVersion >= 335) {
   if (page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS')) fail('app335 ordinary viewer activity must not schedule Feed Worker checks');
   if (page.includes("window.addEventListener('pointerdown', requestActivityRevisionCheck")) fail('app335 pointer activity Worker trigger returned');
-  if (!page.includes("document.addEventListener('visibilitychange', requestRevisionCheck)")) fail('app335 real tab-resume revision path missing');
+  if (!page.includes("document.addEventListener('visibilitychange', onVisible424)")) fail('app335 real tab-resume revision path missing');
 } else if (appVersion >= 121) {
   if (!page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000')) fail('two-minute viewer activity gate changed');
 } else if (!page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS')) {

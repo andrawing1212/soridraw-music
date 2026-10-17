@@ -404,3 +404,40 @@ assert.equal(sharedHelpers421.curatedBucket307({ CURATED_SHARED_V421: '1' }), nu
   'shared flag must fail closed if canonical PROFILE_MEDIA binding missing');
 console.log('APP421_SHARED_CURATED_STAGED_BINDING_PARITY=PASS');
 console.log('APP421_LEGACY_PRODUCTION_R2_UNTOUCHED=PASS');
+
+
+// app421: fail closed when a shared R2 projection is damaged. A read-side
+// repair may NOT unconditionally delete a key another stage is writing.
+const readAt421 = workerSource.indexOf('async function readCuratedObject307(');
+const readEnd421 = workerSource.indexOf('async function handleCuratedRevision307(', readAt421);
+assert.ok(readAt421 > 0 && readEnd421 > readAt421);
+let sharedDeletes421 = 0;
+let sharedColdBuilds421 = 0;
+const damagedSharedBucket421 = {
+  get: async () => ({ etag: 'damaged', text: async () => '{invalid json' }),
+  delete: async () => { sharedDeletes421++; },
+};
+const reader421 = vm.runInNewContext(
+  workerSource.slice(readAt421, readEnd421) + '\nreadCuratedObject307;',
+  {
+    curatedBucket307: (env) => env.bucket,
+    curatedObjectKey307: (env) => env.CURATED_SHARED_V421 === '1'
+      ? 'internal/explore/shared-curated-v421/soridraw-40.json'
+      : 'internal/explore/curated-v307/soridraw-40.json',
+    curatedSharedEnabled421: (env) => env.CURATED_SHARED_V421 === '1',
+    materializeCuratedR2FromBase307: async () => {
+      sharedColdBuilds421++;
+      return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'unexpected' };
+    },
+    SORIDRAW_CURATED_R2_KEY_307: 'internal/explore/curated-v307/soridraw-40.json',
+  },
+);
+const damagedResult421 = await reader421(request421, {
+  CURATED_SHARED_V421: '1', bucket: damagedSharedBucket421,
+}, {});
+assert.equal(damagedResult421.source, 'SHARED-CURATED-CORRUPT-FAIL-CLOSED-421');
+assert.equal(damagedResult421.payload, null);
+assert.equal(damagedResult421.d1Read, 0);
+assert.equal(sharedDeletes421, 0, 'damaged shared reader cannot delete a concurrent writer');
+assert.equal(sharedColdBuilds421, 0, 'damaged shared reader cannot rebuild the full list');
+console.log('APP421_SHARED_CURATED_CORRUPT_NO_DELETE=PASS');

@@ -83,7 +83,7 @@ console.log('APP402_NO_PUBLIC_COUNT_EARLY_PUBLISH=PASS');
 // The server's current PUBLIC track_stats base must not be overwritten by
 // an earlier PRIVATE optimistic number when the same account clicks again.
 const ackHelpersBegin422 = service.indexOf('export const resolveExploreLikeAckCount420 =');
-const ackHelpersEnd422 = service.indexOf('// Cross-device provisional count is valid only', ackHelpersBegin422);
+const ackHelpersEnd422 = service.indexOf('// app414:', ackHelpersBegin422);
 assert(ackHelpersBegin422 > 0 && ackHelpersEnd422 > ackHelpersBegin422,
   'app422 public/private ACK count helpers missing');
 const ackHelpersJs422 = ts.transpileModule(

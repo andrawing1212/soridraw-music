@@ -108,7 +108,16 @@ function curationHeaders307(request, {
 // SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006
 // PREVIEW/TEST have an environment-local EXPLORE_CACHE binding. PRODUCTION
 // intentionally uses PROFILE_MEDIA as its derived Explore-cache fallback.
-const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;
+// app421: opt-in versioned shared curation snapshot only after all stages
+// support the key. Legacy v307 production objects remain untouched.
+const SORIDRAW_CURATED_SHARED_R2_KEY_421 = 'internal/explore/shared-curated-v421/soridraw-40.json';
+const curatedSharedEnabled421 = (env) => env?.CURATED_SHARED_V421 === '1';
+const curatedBucket307 = (env) => curatedSharedEnabled421(env)
+  ? (env?.PROFILE_MEDIA || null)
+  : (env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null);
+const curatedObjectKey307 = (env) => curatedSharedEnabled421(env)
+  ? SORIDRAW_CURATED_SHARED_R2_KEY_421
+  : SORIDRAW_CURATED_R2_KEY_307;
 const curatedRevision307 = (object) => String(
   object?.httpEtag
   || object?.etag
@@ -366,7 +375,7 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   };
   // app421: cold bootstrap must never overwrite a curator's concurrent
   // accepted R2 snapshot. Only create while the object is still absent.
-  const created421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const created421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(stored), {
     onlyIf: new Headers({ 'If-None-Match': '*' }),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
@@ -374,7 +383,7 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   if (created421) await clearCuratedEdge307(new URL(request.url));
   // Always return the *actual* authoritative object. A competing writer may
   // have created or updated it between the original cold read and this GET.
-  const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
+  const object = await bucket.get(curatedObjectKey307(env));
   let current421 = null;
   try { current421 = object ? JSON.parse(await object.text()) : null; } catch {}
   if (current421?.schemaVersion !== 1 || current421?.payload?.ok !== true ||
@@ -394,7 +403,7 @@ async function readCuratedObject307(request, env, ctx) {
   const bucket = curatedBucket307(env);
   if (!bucket) return { object: null, payload: null, memberIds: [], r2Reads: 0, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
   let object = null;
-  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { object = await bucket.get(curatedObjectKey307(env)); } catch {}
   if (!object) {
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
     return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
@@ -403,7 +412,7 @@ async function readCuratedObject307(request, env, ctx) {
   try { stored = JSON.parse(await object.text()); } catch {}
   const payload = stored?.payload;
   if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
-    try { await bucket.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    try { await bucket.delete(curatedObjectKey307(env)); } catch {}
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
     return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
   }
@@ -439,7 +448,7 @@ async function handleCuratedRevision307(request, env) {
     }
   } catch {}
   let head = null;
-  try { head = await bucket.head(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { head = await bucket.head(curatedObjectKey307(env)); } catch {}
   const revision = curatedRevision307(head);
   if (!revision) {
     return new Response(JSON.stringify({
@@ -592,7 +601,7 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     payload,
     updatedAt: Date.now(),
   };
-  const published421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const published421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(stored), {
     onlyIf: { etagMatches: selected.object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
@@ -612,7 +621,7 @@ async function syncCuratedPublicationResults307(request, env, results) {
   // A curator updating membership concurrently must never lose that update.
   for (let casAttempt421 = 0; casAttempt421 < 4; casAttempt421++) {
   let object = null;
-  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { object = await bucket.get(curatedObjectKey307(env)); } catch {}
   if (!object) return;
   if (!object.etag) throw new Error('CURATED_PUBLICATION_R2_ETAG_MISSING_421');
 
@@ -676,7 +685,7 @@ async function syncCuratedPublicationResults307(request, env, results) {
     payload: nextPayload,
     updatedAt: Date.now(),
   };
-  const published421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+  const published421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(nextStored), {
     onlyIf: { etagMatches: object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(nextStored.updatedAt) },

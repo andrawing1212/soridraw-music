@@ -42,7 +42,10 @@ assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Wo
 assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker R2 local-first marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006'), 'Cold curated cache must use bounded canonical bootstrap.');
 assert(worker.includes('SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006'), 'Curated cache must document the PRODUCTION R2 fallback.');
-assert(worker.includes('const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;'), 'Curated cache must follow the release runtime EXPLORE_CACHE -> PROFILE_MEDIA fallback contract.');
+assert(worker.includes('const curatedBucket307 = (env) => curatedSharedEnabled421(env)'), 'Curated Worker must explicitly gate the new shared authority.');
+assert(worker.includes('env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null'), 'Curated legacy runtime must keep EXPLORE_CACHE -> PROFILE_MEDIA fallback.');
+assert(worker.includes("env?.CURATED_SHARED_V421 === '1'"), 'Shared curated authority must stay disabled until explicit stage approval.');
+assert(worker.includes("internal/explore/shared-curated-v421/soridraw-40.json"), 'New shared key must never overlap legacy production R2.');
 const bootstrapAt356 = worker.indexOf('async function materializeCuratedR2FromBase307');
 const bootstrapEnd356 = worker.indexOf('async function readCuratedObject307', bootstrapAt356);
 const bootstrapSlice356 = worker.slice(bootstrapAt356, bootstrapEnd356);
@@ -63,7 +66,7 @@ assert(managedSlice310.includes("source: 'MANAGED-R2-310'"), 'Manager list must 
 assert(!managedSlice310.includes('baseWorker.fetch('), 'Manager list must not call the D1-backed curated list route.');
 assert(worker.includes("url.pathname === '/v1/me/music-note-publications/batch'"), 'Current Music Note publication batch path must sync curated privacy.');
 assert(worker.includes('memberIds'), 'Curated R2 must preserve promoted membership while a song is private.');
-assert(worker.includes('syncCuratedPublicationResults307(request, env, results307)'), 'Publication results must patch curated R2.');
+assert(worker.includes('syncCuratedPublicationResults307(request, env, ctx, results307)'), 'Publication results must patch curated R2.');
 assert(worker.includes('DELETE FROM curated_picks WHERE collection_key=? AND track_id=?'), 'Explicit recommendation removal must stay single-row targeted.');
 assert(worker.includes('INSERT INTO curated_picks(collection_key,track_id'), 'Explicit recommendation promotion must stay single-row targeted.');
 assert(!worker.includes("if (isTrackVisibilityMutation307 && response.ok) {\n      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307)"), 'Visibility changes must not invalidate the whole curated snapshot.');
@@ -72,6 +75,9 @@ assert(previewRelease.includes('SORIDRAW_PREVIEW_CURATED_RELEASE_SMOKE_356_20261
 assert(previewRelease.includes('/v1/curated?collection=soridraw&limit=20'), 'PREVIEW Worker release must probe the public curated endpoint.');
 assert(previewRelease.includes('CURATED_RECOMMENDATION_WARM_R0_W0=PASS'), 'PREVIEW Worker release must require warm curated D1 R0/W0.');
 assert(previewRelease.includes("x-soridraw-curated-source"), 'PREVIEW Worker release must verify curated R2/Edge authority.');
+
+// app421 regression: execute cross-browser promotion/revision behavior, not just static markers.
+await import('./verify-421-curated-cross-device.mjs');
 
 console.log('APP307_EXPLORE_CURATION_VERIFY=PASS');
 console.log('CURATED_PUBLIC_READ=LOCAL_FIRST_PLUS_EDGE_R2');

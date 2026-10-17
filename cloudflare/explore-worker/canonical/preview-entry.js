@@ -108,7 +108,16 @@ function curationHeaders307(request, {
 // SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006
 // PREVIEW/TEST have an environment-local EXPLORE_CACHE binding. PRODUCTION
 // intentionally uses PROFILE_MEDIA as its derived Explore-cache fallback.
-const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;
+// app421: opt-in versioned shared curation snapshot only after all stages
+// support the key. Legacy v307 production objects remain untouched.
+const SORIDRAW_CURATED_SHARED_R2_KEY_421 = 'internal/explore/shared-curated-v421/soridraw-40.json';
+const curatedSharedEnabled421 = (env) => env?.CURATED_SHARED_V421 === '1';
+const curatedBucket307 = (env) => curatedSharedEnabled421(env)
+  ? (env?.PROFILE_MEDIA || null)
+  : (env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null);
+const curatedObjectKey307 = (env) => curatedSharedEnabled421(env)
+  ? SORIDRAW_CURATED_SHARED_R2_KEY_421
+  : SORIDRAW_CURATED_R2_KEY_307;
 const curatedRevision307 = (object) => String(
   object?.httpEtag
   || object?.etag
@@ -364,18 +373,29 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  // app421: cold bootstrap must never overwrite a curator's concurrent
+  // accepted R2 snapshot. Only create while the object is still absent.
+  const created421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(stored), {
+    onlyIf: new Headers({ 'If-None-Match': '*' }),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
-  await clearCuratedEdge307(new URL(request.url));
-  const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
+  if (created421) await clearCuratedEdge307(new URL(request.url));
+  // Always return the *actual* authoritative object. A competing writer may
+  // have created or updated it between the original cold read and this GET.
+  const object = await bucket.get(curatedObjectKey307(env));
+  let current421 = null;
+  try { current421 = object ? JSON.parse(await object.text()) : null; } catch {}
+  if (current421?.schemaVersion !== 1 || current421?.payload?.ok !== true ||
+      !Array.isArray(current421?.payload?.data?.items)) {
+    return { object: null, payload: null, memberIds: [], d1Read, source: 'D1-CURATED-COLD-RECOVERY-UNCONFIRMED-421' };
+  }
   return {
     object,
-    payload,
-    memberIds,
+    payload: current421.payload,
+    memberIds: Array.isArray(current421.memberIds) ? current421.memberIds : memberIds,
     d1Read,
-    source: 'D1-BOUNDED-BOOTSTRAP-356',
+    source: created421 ? 'D1-BOUNDED-BOOTSTRAP-356' : 'R2-CURATED-CONCURRENT-COLD-421',
   };
 }
 
@@ -383,7 +403,7 @@ async function readCuratedObject307(request, env, ctx) {
   const bucket = curatedBucket307(env);
   if (!bucket) return { object: null, payload: null, memberIds: [], r2Reads: 0, d1Read: 0, source: 'R2-BINDING-MISSING-307' };
   let object = null;
-  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { object = await bucket.get(curatedObjectKey307(env)); } catch {}
   if (!object) {
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
     return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
@@ -392,7 +412,17 @@ async function readCuratedObject307(request, env, ctx) {
   try { stored = JSON.parse(await object.text()); } catch {}
   const payload = stored?.payload;
   if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
-    try { await bucket.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    // app421: a shared snapshot belongs to ALL deployed environments. Never
+    // delete it unconditionally during a reader-side repair: another curator
+    // may have published a newer version after the damaged object was read.
+    // Fail closed pending an exact-versioned, independently audited repair.
+    if (curatedSharedEnabled421(env)) {
+      return {
+        object: null, payload: null, memberIds: [], r2Reads: 1, d1Read: 0,
+        source: 'SHARED-CURATED-CORRUPT-FAIL-CLOSED-421',
+      };
+    }
+    try { await bucket.delete(curatedObjectKey307(env)); } catch {}
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
     return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };
   }
@@ -428,7 +458,7 @@ async function handleCuratedRevision307(request, env) {
     }
   } catch {}
   let head = null;
-  try { head = await bucket.head(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { head = await bucket.head(curatedObjectKey307(env)); } catch {}
   const revision = curatedRevision307(head);
   if (!revision) {
     return new Response(JSON.stringify({
@@ -456,7 +486,11 @@ async function handleCuratedRevision307(request, env) {
 async function handleCuratedPublic307(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
-  if (limit === 20) {
+  // app421: a device which has checked the public revision must never be handed
+  // an old stable 20-card body cached by a different Cloudflare POP. The R2
+  // snapshot and existing revision-keyed Edge cache remain the shared authority.
+  const revisionChecked421 = url.searchParams.get('revisionCheck') === '1';
+  if (limit === 20 && !revisionChecked421) {
     try {
       const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
       if (cached) {
@@ -522,15 +556,28 @@ async function handleCuratedPublic307(request, env, ctx) {
 }
 
 async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, curatorRole) {
+  // app421: canonical D1 success must never masquerade as PUBLIC curation
+  // success when the shared recommendation snapshot cannot be published.
   const bucket = curatedBucket307(env);
-  if (!bucket) return;
+  if (!bucket) throw new Error('CURATED_R2_BINDING_MISSING_421');
+  // app421: R2 GET + conditional PUT protects concurrent curator requests.
+  // A stale writer re-reads the latest snapshot, never overwrites unconditionally.
+  for (let casAttempt421 = 0; casAttempt421 < 4; casAttempt421++) {
   const selected = await readCuratedObject307(request, env, ctx);
-  if (!selected.payload?.data?.items) return;
+  if (!selected.payload?.data?.items) throw new Error('CURATED_R2_SNAPSHOT_UNAVAILABLE_421');
+  if (!selected.object?.etag) throw new Error('CURATED_R2_CAS_ETAG_MISSING_421');
+  // app421: curation intent is NOT the canonical result. A newer opposite
+  // operation on the same ID may have committed in shared D1 while this R2
+  // writer was waiting. Consult only this membership PK on real mutations.
+  const member421 = await env.DB.prepare(
+    'SELECT track_id FROM curated_picks WHERE collection_key=? AND track_id=? LIMIT 1',
+  ).bind(SORIDRAW_CURATED_COLLECTION_307, trackId).first();
+  const canonicalPromoted421 = Boolean(member421?.track_id);
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
   let items = selected.payload.data.items.filter((item) => String(item?.track?.id || '').trim() !== trackId);
-  if (promoted) {
+  if (canonicalPromoted421) {
     memberIds = [trackId, ...memberIds].slice(0, 40);
     const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
     const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
@@ -539,18 +586,19 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     }), env, ctx);
     const detail = await detailResponse.clone().json().catch(() => null);
     const track = detail?.data?.track;
-    if (detailResponse.ok && track?.id) {
-      items.unshift({
-        track,
-        curation: {
-          curatorUid: '',
-          curatorRole,
-          sortOrder: 0,
-          startsAt: null,
-          endsAt: null,
-        },
-      });
+    if (!detailResponse.ok || String(track?.id || '').trim() !== trackId) {
+      throw new Error('CURATED_TRACK_DETAIL_UNAVAILABLE_421');
     }
+    items.unshift({
+      track,
+      curation: {
+        curatorUid: '',
+        curatorRole,
+        sortOrder: 0,
+        startsAt: null,
+        endsAt: null,
+      },
+    });
   }
   const payload = {
     ok: true,
@@ -563,20 +611,29 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const published421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(stored), {
+    onlyIf: { etagMatches: selected.object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
+  if (!published421) continue; // R2 precondition failed; retry from latest object
   await clearCuratedEdge307(new URL(request.url));
+  return { recommended: canonicalPromoted421, d1Read: casAttempt421 + 1 };
+  }
+  throw new Error('CURATED_R2_CAS_RETRY_EXHAUSTED_421');
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
-async function syncCuratedPublicationResults307(request, env, results) {
+async function syncCuratedPublicationResults307(request, env, ctx, results) {
   const bucket = curatedBucket307(env);
   if (!bucket || !Array.isArray(results) || !results.length) return;
+  // Only mutate a snapshot if it still matches the observed revision.
+  // A curator updating membership concurrently must never lose that update.
+  for (let casAttempt421 = 0; casAttempt421 < 4; casAttempt421++) {
   let object = null;
-  try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+  try { object = await bucket.get(curatedObjectKey307(env)); } catch {}
   if (!object) return;
+  if (!object.etag) throw new Error('CURATED_PUBLICATION_R2_ETAG_MISSING_421');
 
   let stored = null;
   try { stored = JSON.parse(await object.text()); } catch {}
@@ -600,13 +657,40 @@ async function syncCuratedPublicationResults307(request, env, results) {
     if (result?.ok !== true) continue;
     const trackId = String(result?.trackId || '').trim();
     if (!trackId || !memberSet.has(trackId)) continue;
-    const status = result?.status === 'public' ? 'public' : 'private';
-    if (status === 'private') {
+    // app421: a delayed PUBLIC event must not resurrect a song which was
+    // privately hidden later. Apply the *current canonical track visibility*
+    // for this exact curated ID, never the older response's desired status.
+    // This one PK read happens only on a real publication mutation touching
+    // an explicitly curated member; no D1 read on ordinary Explore entry.
+    const current421 = await env.DB.prepare(
+      'SELECT is_public,status,updated_at FROM tracks WHERE id=? LIMIT 1',
+    ).bind(trackId).first();
+    const canonicalPublic421 = Number(current421?.is_public || 0) === 1
+      && current421?.status === 'published';
+    if (!canonicalPublic421) {
       if (itemByTrackId.delete(trackId)) changed = true;
       continue;
     }
-    const track = result?.snapshotItem;
-    if (!track?.id) continue;
+    // An older public snapshot may predate a later still-public edit.
+    // Resolve only this selected ID from the live detail route when its
+    // returned version cannot be proven equal to canonical D1.
+    let track = result?.snapshotItem;
+    const exactTimestamp421 = Number(track?.updatedAt ?? track?.updated_at);
+    if (!track?.id || String(track.id) !== trackId ||
+        !Number.isFinite(exactTimestamp421) ||
+        exactTimestamp421 !== Number(current421.updated_at)) {
+      const detailUrl421 = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
+      const detailResponse421 = await baseWorker.fetch(new Request(detailUrl421.toString(), {
+        method: 'GET',
+        headers: { Origin: request.headers.get('Origin') || '' },
+      }), env, ctx);
+      const detailPayload421 = detailResponse421.ok
+        ? await detailResponse421.clone().json().catch(() => null) : null;
+      track = detailPayload421?.data?.track;
+      if (!track?.id || String(track.id) !== trackId) {
+        throw new Error('CURATED_PUBLICATION_CURRENT_DETAIL_UNAVAILABLE_421');
+      }
+    }
     const previous = itemByTrackId.get(trackId);
     itemByTrackId.set(trackId, {
       track,
@@ -638,11 +722,16 @@ async function syncCuratedPublicationResults307(request, env, results) {
     payload: nextPayload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+  const published421 = await bucket.put(curatedObjectKey307(env), JSON.stringify(nextStored), {
+    onlyIf: { etagMatches: object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(nextStored.updatedAt) },
   });
+  if (!published421) continue; // concurrent membership or publication changed
   await clearCuratedEdge307(new URL(request.url));
+  return;
+  }
+  throw new Error('CURATED_PUBLICATION_R2_CAS_RETRY_EXHAUSTED_421');
 }
 
 async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
@@ -693,17 +782,36 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     ).bind(SORIDRAW_CURATED_COLLECTION_307, id).run();
   }
 
+  let currentRecommended421 = promoted;
   try {
-    await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
+    const published421 = await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
+    d1Read += Number(published421?.d1Read || 0);
+    currentRecommended421 = published421?.recommended === true;
   } catch (error) {
-    console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
-    try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    console.warn('[app421] curated R2 publication not confirmed; bounded public read may recover:', String(error?.message || error || 'unknown'));
+    // A failed/losing writer must not delete another writer's successful R2.
+    // Preserve the last valid snapshot; explicit retry can perform bounded repair.
     await clearCuratedEdge307(new URL(request.url));
+    // D1 mutation was committed. A retry is idempotent; do not tell the curator
+    // the recommendation is visible until the R2 public snapshot was updated.
+    // Recovery reads at most the existing 40 explicit curated memberships.
+    return new Response(JSON.stringify({
+      ok: false,
+      error: {
+        code: 'CURATION_PUBLICATION_PENDING_421',
+        message: '추천곡 기록은 저장했지만 공개 목록 갱신이 확인되지 않았습니다. 잠시 후 다시 시도해주세요.',
+      },
+    }), {
+      status: 503,
+      headers: curationHeaders307(request, {
+        d1Read, d1Write: 1, source: 'CURATION-R2-PENDING-421',
+      }),
+    });
   }
 
   return new Response(JSON.stringify({
     ok: true,
-    data: { collection: SORIDRAW_CURATED_COLLECTION_307, trackId: id, recommended: promoted },
+    data: { collection: SORIDRAW_CURATED_COLLECTION_307, trackId: id, recommended: currentRecommended421 },
   }), {
     status: 200,
     headers: curationHeaders307(request, {
@@ -2975,7 +3083,7 @@ export default {
               status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
-        await syncCuratedPublicationResults307(request, env, results307);
+        await syncCuratedPublicationResults307(request, env, ctx, results307);
       } catch (error) {
         console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
       }

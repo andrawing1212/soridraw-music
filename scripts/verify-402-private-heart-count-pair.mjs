@@ -75,3 +75,7 @@ console.log('APP406_ACCOUNT_SWITCH_NEUTRAL_COUNT_NO_EXTRA_SERVER_READ=PASS');
 console.log('APP402_SAME_ACCOUNT_HEART_AND_COUNT_ATOMIC_UI=PASS');
 console.log('APP402_UNLIKE_EMPTY_HEART_ZERO_COUNT_PRIVATE_SYNC=PASS');
 console.log('APP402_NO_PUBLIC_COUNT_EARLY_PUBLISH=PASS');
+
+// app421: this frozen like-overlay verifier runs in PR quality, so also execute
+// the isolated cross-account recommendation freshness regression.
+await import('./verify-421-curated-cross-device.mjs');

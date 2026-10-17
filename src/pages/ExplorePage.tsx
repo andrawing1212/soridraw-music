@@ -2502,12 +2502,26 @@ export default function ExplorePage() {
     void getSoridrawCuratedTracks307(false)
       .then((rows) => {
         if (cancelled) return;
-        // app405: a curated R2 card carries the last PUBLIC count. Reapply only
-        // this viewer's existing local/outbox/416 count overlay on refresh;
-        // never publish the provisional value into the shared curated cache.
+        // app405: public R2 is account neutral; preserve same-account private
+        // like overlay on both the immediate local paint and revised list.
         const cards405 = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
         const uid405 = auth.currentUser?.uid || user?.uid || '';
         setCuratedTracks307(uid405 ? overlayExploreLikeDisplayCounts(uid405, cards405) : cards405);
+        // app421: an old recommendation cache must not survive every browser
+        // entry forever. Check only the existing 60s-gated shared revision;
+        // unchanged snapshot costs no list fetch or new D1 read/listener.
+        void revalidateSoridrawCuratedTracks335()
+          .then((freshRows) => {
+            if (cancelled || freshRows === rows) return;
+            const freshCards421 = freshRows.map(normalizeTrack).filter((track) => Boolean(track.id));
+            const viewerUid421 = auth.currentUser?.uid || user?.uid || '';
+            setCuratedTracks307(
+              viewerUid421 ? overlayExploreLikeDisplayCounts(viewerUid421, freshCards421) : freshCards421,
+            );
+          })
+          .catch((reason) => {
+            if (!cancelled) console.warn('[app421] curated entry revision check deferred:', reason);
+          });
       })
       .catch((reason) => {
         if (!cancelled) console.warn('[app307] SORIDRAW curated load failed:', reason);
@@ -4640,8 +4654,14 @@ export default function ExplorePage() {
     setCurationBusyTrackId307(track.id);
     setMoreActionBusy('curation');
     try {
-      await setSoridrawCuratedTrack307(user, track.id, promoted);
-      if (promoted) {
+      const result421 = await setSoridrawCuratedTrack307(user, track.id, promoted);
+      // app421: a concurrent opposite curator action can commit after this
+      // request. Use the Worker's confirmed canonical membership, not an
+      // optimistic copy of the button's original intent.
+      const confirmedPromoted421 = typeof result421?.recommended === 'boolean'
+        ? result421.recommended
+        : promoted; // older deployed Worker compatibility
+      if (confirmedPromoted421) {
         setCuratedTracks307((previous) => previous.some((item) => item.id === track.id)
           ? previous
           : [track, ...previous].slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));

@@ -257,7 +257,9 @@ const fetchCuratedRevision309 = async () => {
 };
 
 const fetchCuratedBody307 = async () => {
-  const path = `/v1/curated?collection=${SORIDRAW_CURATED_COLLECTION_307}&limit=20`;
+  // app421: a real revision-driven request bypasses cross-colo stale stable-body Edge cache.
+  // The Worker still serves a revision-keyed shared Edge body; no D1 list scan.
+  const path = `/v1/curated?collection=${SORIDRAW_CURATED_COLLECTION_307}&limit=20&revisionCheck=1`;
   const response = await fetch(`${EXPLORE_API_BASE}${path}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },

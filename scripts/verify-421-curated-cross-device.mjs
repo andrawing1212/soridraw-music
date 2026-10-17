@@ -112,22 +112,22 @@ const writerEnd421 = workerSource.indexOf('// SORIDRAW_CURATED_PUBLICATION_TARGE
 assert.ok(writerStart421 > 0 && writerEnd421 > writerStart421, 'Worker curation snapshot writer missing');
 assert.match(workerSource.slice(writerEnd421), /CURATION_PUBLICATION_PENDING_421/);
 assert.match(workerSource.slice(writerEnd421), /status: 503/);
-let writerResult421 = { payload: { data: { items: [] } }, memberIds: [] };
+let writerResult421 = { object: { etag: 'rev0' }, payload: { data: { items: [] } }, memberIds: [] };
 let writerDetail421 = { ok: false, clone: () => ({ json: async () => ({}) }) };
 let writerPutCount421 = 0;
 const writer421 = vm.runInNewContext(
   workerSource.slice(writerStart421, writerEnd421) + '\nwriteCuratedSnapshot307;',
   {
     curatedBucket307: (env) => env?.bucket || null,
-    readCuratedObject307: async () => writerResult421,
-    baseWorker: { fetch: async () => writerDetail421 },
+    readCuratedObject307: async (_req, env) => env?.readSnapshot ? env.readSnapshot() : writerResult421,
+    baseWorker: { fetch: async (req) => typeof writerDetail421 === 'function' ? writerDetail421(req) : writerDetail421 },
     clearCuratedEdge307: async () => {},
     SORIDRAW_CURATED_COLLECTION_307: 'soridraw',
     SORIDRAW_CURATED_R2_KEY_307: 'internal/explore/curated-v307/soridraw-40.json',
     URL, Request,
   },
 );
-const bucket421 = { put: async () => { writerPutCount421++; } };
+const bucket421 = { put: async () => { writerPutCount421++; return { etag: 'rev1' }; } };
 const request421 = {
   url: 'https://mock.test/v1/curation/soridraw/test-song',
   headers: new Headers({ Origin: 'https://preview.soridraw.com' }),
@@ -141,7 +141,7 @@ await assert.rejects(
   writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
   /CURATED_R2_SNAPSHOT_UNAVAILABLE_421/,
 );
-writerResult421 = { payload: { data: { items: [] } }, memberIds: [] };
+writerResult421 = { object: { etag: 'rev0' }, payload: { data: { items: [] } }, memberIds: [] };
 await assert.rejects(
   writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master'),
   /CURATED_TRACK_DETAIL_UNAVAILABLE_421/,
@@ -154,3 +154,64 @@ writerDetail421 = {
 await writer421(request421, { bucket: bucket421 }, {}, 'test-song', true, 'master');
 assert.equal(writerPutCount421, 1, 'valid targeted recommendation must update one R2 object');
 console.log('APP421_CURATED_FALSE_SUCCESS_R2_FAILURE_BLOCKED=PASS');
+
+
+// Actual extracted R2 writer, two concurrent curator requests, forced to read
+// the same old snapshot before either conditional put resolves.
+const deferred421 = () => {
+  let resolve;
+  const promise = new Promise((yes) => { resolve = yes; });
+  return { promise, resolve };
+};
+const initial421 = {
+  schemaVersion: 1, memberIds: ['first'], payload: {
+    ok: true, data: { items: [{ track: { id: 'first' }, curation: {} }] },
+  },
+};
+const fakeR2State421 = { etag: 'e0', stored: initial421, reads: 0, writes: 0, conflicts: 0, totalPut: 0 };
+const bothAtPut421 = deferred421();
+const concurrentBucket421 = {
+  async get() {
+    const etag = fakeR2State421.etag;
+    const json = JSON.stringify(fakeR2State421.stored);
+    fakeR2State421.reads++;
+    return { etag, text: async () => json };
+  },
+  async put(_key, body, opts) {
+    const thisPut = ++fakeR2State421.totalPut;
+    if (thisPut === 1) await bothAtPut421.promise;
+    if (thisPut === 2) bothAtPut421.resolve();
+    assert.ok(opts?.onlyIf?.etagMatches, 'R2 update must be conditional on the read ETag');
+    if (opts.onlyIf.etagMatches !== fakeR2State421.etag) {
+      fakeR2State421.conflicts++;
+      return null;
+    }
+    fakeR2State421.stored = JSON.parse(body);
+    fakeR2State421.etag = 'e' + (++fakeR2State421.writes);
+    return { etag: fakeR2State421.etag };
+  },
+};
+writerDetail421 = (req) => {
+  const id = decodeURIComponent(new URL(req.url).pathname.split('/').pop());
+  return { ok: true, clone: () => ({ json: async () => ({ data: { track: { id } } }) }) };
+};
+const concurrentEnv421 = {
+  bucket: concurrentBucket421,
+  readSnapshot: async () => {
+    const object = await concurrentBucket421.get();
+    const data = JSON.parse(await object.text());
+    return { object, payload: data.payload, memberIds: data.memberIds };
+  },
+};
+await Promise.all([
+  writer421(request421, concurrentEnv421, {}, 'new-a', true, 'master'),
+  writer421(request421, concurrentEnv421, {}, 'new-b', true, 'master'),
+]);
+assert.deepEqual(
+  fakeR2State421.stored.memberIds.slice().sort(),
+  ['first', 'new-a', 'new-b'],
+  'simultaneous promotions must preserve both canonical memberships',
+);
+assert.equal(fakeR2State421.conflicts, 1, 'one conflicting old revision must be rejected');
+assert.equal(fakeR2State421.writes, 2, 'each accepted promotion updates exactly one R2 snapshot');
+console.log('APP421_CURATED_SIMULTANEOUS_PROMOTIONS_CAS=PASS');

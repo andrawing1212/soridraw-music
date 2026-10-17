@@ -1971,6 +1971,11 @@ export default function ExplorePage() {
   // another account's personal filled-heart state.
   const publicLikeVisibleTracksRef192 = useRef<Map<string, string>>(new Map());
   const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  // app423: RTDB can deliver a retained public changed-track row before the
+  // cached Feed has created its visible track index on a reopened mobile app.
+  // Retain only bounded signal metadata until its exact card becomes visible.
+  const publicLikeBeforeVisibleRowsRef423 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  const replayPublicLikeWhenVisibleRef423 = useRef<(() => void) | null>(null);
   const publicLikeRefreshAttemptsRef192 = useRef<Map<string, number>>(new Map());
   const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
   // app237 — keep the visual equalizer alive across Explore route unmounts.
@@ -2291,7 +2296,23 @@ export default function ExplorePage() {
       const visible = publicLikeVisibleTracksRef192.current;
       let relevant = false;
       for (const row of rows) {
-        if (!visible.has(row.trackId)) continue;
+        if (!visible.has(row.trackId)) {
+          // app423: do not discard a recent retained notification solely
+          // because the Feed's cached cards have not painted yet. Once cards
+          // render, fetch only matching changed-card IDs, never the entire Feed.
+          if (Date.now() - row.at <= 180_000 &&
+              !hasSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at)) {
+            const deferred423 = publicLikeBeforeVisibleRowsRef423.current;
+            const previous423 = deferred423.get(row.trackId);
+            if (!previous423 || row.at >= previous423.at) deferred423.set(row.trackId, row);
+            while (deferred423.size > 256) {
+              const oldest423 = deferred423.keys().next().value;
+              if (!oldest423) break;
+              deferred423.delete(oldest423);
+            }
+          }
+          continue;
+        }
         // The RTDB node retains old events for 3 minutes. A normal reload
         // must not repeatedly read an R2 card already applied on this device.
         if (hasSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at)) continue;
@@ -2304,6 +2325,23 @@ export default function ExplorePage() {
       }
       return relevant;
     };
+    const replayPublicLikeWhenVisible423 = () => {
+      if (cancelled) return;
+      const deferred423 = publicLikeBeforeVisibleRowsRef423.current;
+      if (!deferred423.size || !publicLikeVisibleTracksRef192.current.size) return;
+      const visible423: ExplorePublicLikeSignalRow192[] = [];
+      for (const [id, row] of deferred423) {
+        if (Date.now() - row.at > 180_000) {
+          deferred423.delete(id);
+          continue;
+        }
+        if (!publicLikeVisibleTracksRef192.current.has(id)) continue;
+        deferred423.delete(id);
+        visible423.push(row);
+      }
+      if (queueRelevantRows192(visible423)) scheduleRefresh192(0);
+    };
+    replayPublicLikeWhenVisibleRef423.current = replayPublicLikeWhenVisible423;
 
     const unsubscribe = subscribeExplorePublicLikeInvalidation192((signal) => {
       if (cancelled) return;
@@ -2353,6 +2391,10 @@ export default function ExplorePage() {
     return () => {
       cancelled = true;
       unsubscribe();
+      if (replayPublicLikeWhenVisibleRef423.current === replayPublicLikeWhenVisible423) {
+        replayPublicLikeWhenVisibleRef423.current = null;
+      }
+      publicLikeBeforeVisibleRowsRef423.current.clear();
       publicLikePendingRowsRef192.current.clear();
       publicLikeRefreshAttemptsRef192.current.clear();
       if (publicLikeRefreshTimerRef192.current != null) {
@@ -2361,6 +2403,12 @@ export default function ExplorePage() {
       }
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    // app423: cached cards can mount AFTER the retained public RTDB callback.
+    // Reuse the existing single changed-card queue; no new listener or poll.
+    replayPublicLikeWhenVisibleRef423.current?.();
+  }, [publicLikeVisibleTracksMap192]);
 
   // SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920
   // The same account-owned boolean drives every Heart in Feed/Profile/Liked.
@@ -2487,6 +2535,10 @@ export default function ExplorePage() {
     // app335: focus can be emitted by a browser reload. A real tab resume is
     // represented by visibilitychange; keep that bounded private revision path.
     document.addEventListener('visibilitychange', onResume);
+    // app423: a freshly opened tab may start visible without a
+    // visibilitychange event. Reuse the existing five-minute-gated tiny
+    // private R2 revision check once on mount, after local paint.
+    onResume();
     window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     return () => {
       unsubscribeLikeUi139();

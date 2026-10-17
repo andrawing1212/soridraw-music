@@ -42,7 +42,10 @@ assert(worker.includes('SORIDRAW_EXPLICIT_CURATED_MANAGEMENT_307_20261003'), 'Wo
 assert(worker.includes('SORIDRAW_CURATED_R2_LOCAL_FIRST_307_20261003'), 'Worker R2 local-first marker is missing.');
 assert(worker.includes('SORIDRAW_CURATED_BOUNDED_BOOTSTRAP_356_20261006'), 'Cold curated cache must use bounded canonical bootstrap.');
 assert(worker.includes('SORIDRAW_CURATED_PRODUCTION_R2_FALLBACK_356_20261006'), 'Curated cache must document the PRODUCTION R2 fallback.');
-assert(worker.includes('const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;'), 'Curated cache must follow the release runtime EXPLORE_CACHE -> PROFILE_MEDIA fallback contract.');
+assert(worker.includes('const curatedBucket307 = (env) => curatedSharedEnabled421(env)'), 'Curated Worker must explicitly gate the new shared authority.');
+assert(worker.includes('env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null'), 'Curated legacy runtime must keep EXPLORE_CACHE -> PROFILE_MEDIA fallback.');
+assert(worker.includes("env?.CURATED_SHARED_V421 === '1'"), 'Shared curated authority must stay disabled until explicit stage approval.');
+assert(worker.includes("internal/explore/shared-curated-v421/soridraw-40.json"), 'New shared key must never overlap legacy production R2.');
 const bootstrapAt356 = worker.indexOf('async function materializeCuratedR2FromBase307');
 const bootstrapEnd356 = worker.indexOf('async function readCuratedObject307', bootstrapAt356);
 const bootstrapSlice356 = worker.slice(bootstrapAt356, bootstrapEnd356);

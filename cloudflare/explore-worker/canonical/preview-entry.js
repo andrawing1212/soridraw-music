@@ -624,7 +624,7 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
-async function syncCuratedPublicationResults307(request, env, results) {
+async function syncCuratedPublicationResults307(request, env, ctx, results) {
   const bucket = curatedBucket307(env);
   if (!bucket || !Array.isArray(results) || !results.length) return;
   // Only mutate a snapshot if it still matches the observed revision.
@@ -657,13 +657,40 @@ async function syncCuratedPublicationResults307(request, env, results) {
     if (result?.ok !== true) continue;
     const trackId = String(result?.trackId || '').trim();
     if (!trackId || !memberSet.has(trackId)) continue;
-    const status = result?.status === 'public' ? 'public' : 'private';
-    if (status === 'private') {
+    // app421: a delayed PUBLIC event must not resurrect a song which was
+    // privately hidden later. Apply the *current canonical track visibility*
+    // for this exact curated ID, never the older response's desired status.
+    // This one PK read happens only on a real publication mutation touching
+    // an explicitly curated member; no D1 read on ordinary Explore entry.
+    const current421 = await env.DB.prepare(
+      'SELECT is_public,status,updated_at FROM tracks WHERE id=? LIMIT 1',
+    ).bind(trackId).first();
+    const canonicalPublic421 = Number(current421?.is_public || 0) === 1
+      && current421?.status === 'published';
+    if (!canonicalPublic421) {
       if (itemByTrackId.delete(trackId)) changed = true;
       continue;
     }
-    const track = result?.snapshotItem;
-    if (!track?.id) continue;
+    // An older public snapshot may predate a later still-public edit.
+    // Resolve only this selected ID from the live detail route when its
+    // returned version cannot be proven equal to canonical D1.
+    let track = result?.snapshotItem;
+    const exactTimestamp421 = Number(track?.updatedAt ?? track?.updated_at);
+    if (!track?.id || String(track.id) !== trackId ||
+        !Number.isFinite(exactTimestamp421) ||
+        exactTimestamp421 !== Number(current421.updated_at)) {
+      const detailUrl421 = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
+      const detailResponse421 = await baseWorker.fetch(new Request(detailUrl421.toString(), {
+        method: 'GET',
+        headers: { Origin: request.headers.get('Origin') || '' },
+      }), env, ctx);
+      const detailPayload421 = detailResponse421.ok
+        ? await detailResponse421.clone().json().catch(() => null) : null;
+      track = detailPayload421?.data?.track;
+      if (!track?.id || String(track.id) !== trackId) {
+        throw new Error('CURATED_PUBLICATION_CURRENT_DETAIL_UNAVAILABLE_421');
+      }
+    }
     const previous = itemByTrackId.get(trackId);
     itemByTrackId.set(trackId, {
       track,
@@ -3056,7 +3083,7 @@ export default {
               status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
-        await syncCuratedPublicationResults307(request, env, results307);
+        await syncCuratedPublicationResults307(request, env, ctx, results307);
       } catch (error) {
         console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
       }

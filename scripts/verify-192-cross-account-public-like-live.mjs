@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
 
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const publicSync = readFileSync('src/services/explorePublicLikeSyncService.ts', 'utf8');
@@ -164,3 +166,67 @@ console.log('193_MERGED_ACTOR_ROWS_NOT_DROPPED=PASS');
 console.log('193_RTDB_ARRAY_OBJECT_COMPAT=PASS');
 console.log('194_STALE_ALARM_CANNOT_BLOCK_FUTURE_BATCH=PASS');
 console.log('195_JOINED_BATCH_CANNOT_FALL_BETWEEN_PENDING_CHECK_AND_MARKER_DELETE=PASS');
+
+
+// app423: a closed mobile session receives its *retained* public RTDB signal
+// before the cached Feed cards are mounted. The corresponding 1-minute
+// settled public count MUST not be dropped because the visible index was
+// temporarily empty. Exercise the actual ExplorePage queue and replay code.
+const lateBegin423=page.indexOf('const queueRelevantRows192 = (');
+const lateEnd423=page.indexOf('const unsubscribe = subscribeExplorePublicLikeInvalidation192',lateBegin423);
+assert.ok(lateBegin423>0 && lateEnd423>lateBegin423);
+const lateSnippet423=ts.transpileModule(
+  page.slice(lateBegin423,lateEnd423)+
+  '\n(globalThis.__app423={queueRelevantRows192,replayPublicLikeWhenVisible423});',
+  {compilerOptions:{target:ts.ScriptTarget.ES2022}},
+).outputText;
+const deferred423=new Map();
+const pending423=new Map();
+const attempts423=new Map();
+const visible423={current:new Map()};
+let scheduled423=0;
+let acceptedAfterSettled423=false;
+const sandbox423={
+  console,Date,Map,
+  user:{uid:'same-account'},
+  cancelled:false,
+  publicLikeVisibleTracksRef192:visible423,
+  publicLikePendingRowsRef192:{current:pending423},
+  publicLikeRefreshAttemptsRef192:{current:attempts423},
+  publicLikeBeforeVisibleRowsRef423:{current:deferred423},
+  replayPublicLikeWhenVisibleRef423:{current:null},
+  hasSettledExplorePublicLikeSignal396:()=>acceptedAfterSettled423,
+  scheduleRefresh192:(delay)=>{assert.equal(delay,0);scheduled423++;},
+};
+vm.runInNewContext(lateSnippet423,sandbox423);
+const {queueRelevantRows192:queue423,replayPublicLikeWhenVisible423:replay423}=sandbox423.__app423;
+const time423=Date.now();
+const row423={trackId:'offline-song',ownerUid:'artist',at:time423,settledAfterProjection416:true};
+assert.equal(queue423([row423]),false,'RTDB arrived before cards, no immediate R2 read');
+assert.equal(deferred423.size,1,'retain just the changed-track signal');
+assert.equal(pending423.size,0);
+visible423.current.set('offline-song','artist');
+replay423();
+assert.equal(deferred423.size,0,'remove replayed deferred signal');
+assert.equal(pending423.get('offline-song').at,time423,'queue correct retained update');
+assert.equal(scheduled423,1,'replay schedules exactly one changed-card request');
+replay423();
+assert.equal(scheduled423,1,'re-render must not repeat changed-card work');
+acceptedAfterSettled423=true;
+const settled423={trackId:'settled-song',ownerUid:'artist',at:time423};
+assert.equal(queue423([settled423]),false);
+assert.equal(deferred423.size,0,'settled changed track needs no replay');
+acceptedAfterSettled423=false;
+const expired423={trackId:'stale-song',ownerUid:'artist',at:time423-180001};
+queue423([expired423]);
+assert.equal(deferred423.size,0,'old RTDB rows must not create a second R2 fetch');
+assert.equal(pending423.size,1);
+assert.match(page,/replayPublicLikeWhenVisibleRef423\.current\?\.\(\)/,
+  'visible-card render must drain deferred retained rows');
+assert.match(page,/document\.addEventListener\('visibilitychange', onResume\);[\s\S]{0,270}onResume\(\)/,
+  'cold app entry should reuse the already bounded private revision check');
+assert.doesNotMatch(page.slice(lateBegin423,lateEnd423),/requestExploreLike|query\(|\.prepare\(|setInterval\(/,
+  'deferred public replay must not fetch D1, scan, or poll');
+console.log('APP423_CLOSED_DEVICE_LATE_VISIBLE_RTDB_REPLAY=PASS');
+console.log('APP423_SHARED_COUNT_CHANGED_CARD_ONLY_D1_R0=PASS');
+console.log('APP423_RETAINED_SIGNAL_NO_DUPLICATE_OR_STALE_REPLAY=PASS');

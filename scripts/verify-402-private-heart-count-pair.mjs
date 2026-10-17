@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
 
 const intent=readFileSync('src/services/exploreLikeIntent416.ts','utf8');
 const service=readFileSync('src/services/exploreLikeService.ts','utf8');
@@ -75,3 +77,67 @@ console.log('APP406_ACCOUNT_SWITCH_NEUTRAL_COUNT_NO_EXTRA_SERVER_READ=PASS');
 console.log('APP402_SAME_ACCOUNT_HEART_AND_COUNT_ATOMIC_UI=PASS');
 console.log('APP402_UNLIKE_EMPTY_HEART_ZERO_COUNT_PRIVATE_SYNC=PASS');
 console.log('APP402_NO_PUBLIC_COUNT_EARLY_PUBLISH=PASS');
+
+
+// app422: evaluate the actual isolated app420/422 client count helpers.
+// The server's current PUBLIC track_stats base must not be overwritten by
+// an earlier PRIVATE optimistic number when the same account clicks again.
+const ackHelpersBegin422 = service.indexOf('export const resolveExploreLikeAckCount420 =');
+const ackHelpersEnd422 = service.indexOf('// app414:', ackHelpersBegin422);
+assert(ackHelpersBegin422 > 0 && ackHelpersEnd422 > ackHelpersBegin422,
+  'app422 public/private ACK count helpers missing');
+const ackHelpersJs422 = ts.transpileModule(
+  service.slice(ackHelpersBegin422, ackHelpersEnd422),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } },
+).outputText;
+const ackSandbox422 = {
+  exports: {},
+  clampLikeCount: (value) => Math.max(0, Math.floor(Number(value) || 0)),
+};
+vm.runInNewContext(ackHelpersJs422, ackSandbox422);
+const { resolveExploreLikeAckCount420: personalACK422,
+  resolveExploreLikeAckPublicBaseline422: publishedACK422 } = ackSandbox422.exports;
+assert.equal(typeof personalACK422, 'function');
+assert.equal(typeof publishedACK422, 'function');
+// Account A begins from verified unliked with public5. Own heart+count ON/6.
+// ACK confirms membership while common published count remains5.
+const firstPrivate422 = personalACK422(true, true, 6, 5);
+const firstPublishedBase422 = publishedACK422(5);
+assert.equal(firstPrivate422, 6);
+assert.equal(firstPublishedBase422, 5);
+assert.equal(firstPrivate422 - firstPublishedBase422, 1);
+// Before common publication, A unlikes; the *previous private count* was6.
+// This second ACK is 5/5, not a new public baseline 6.
+const secondPrivate422 = personalACK422(true, true, 5, 5);
+const secondPublishedBase422 = publishedACK422(5);
+assert.equal(secondPrivate422, 5);
+assert.equal(secondPublishedBase422, 5);
+assert.notEqual(secondPublishedBase422, firstPrivate422,
+  'previous private 6 cannot be treated as the next PUBLIC count');
+// Missing or invalid backend public count is UNKNOWN rather than private count.
+assert.equal(publishedACK422(undefined), undefined);
+assert.equal(publishedACK422(-1), undefined);
+assert.equal(publishedACK422(5.5), undefined);
+// Same-account device B uses personal provisional6 on top of actual public5;
+// a newer unlike accepted5 restores the account-private 5. Other accounts
+// never use these personal-only helpers or receive private ACK UI events.
+const { resolveExploreLikeRemoteDisplayCount420: remoteCount422 } = ackSandbox422.exports;
+assert.equal(remoteCount422(5, 6, firstPublishedBase422, true), 6);
+assert.equal(remoteCount422(5, 5, secondPublishedBase422, true), 5);
+assert.equal(remoteCount422(6, 5, 5, true), 6,
+  'a later published common count cannot be rewritten by old private 5');
+assert.equal(remoteCount422(5, 6, 5, false), 5,
+  'explicitly unverified private count must not override public state');
+// Both persisted ACK lock and same-account relay carry the published number;
+// they must not copy the private pending.baseLikeCount.
+const ackStart422 = service.indexOf('const publicAckBaseline422 = resolveExploreLikeAckPublicBaseline422(result.likeCount);');
+const ackEnd422 = service.indexOf('acceptedForSignal127.push(accepted);', ackStart422);
+assert(ackStart422 > 0 && ackEnd422 > ackStart422);
+const ackSource422 = service.slice(ackStart422, ackEnd422);
+assert.equal((ackSource422.match(/basePublicLikeCount420: publicAckBaseline422/g) || []).length, 2);
+assert.doesNotMatch(ackSource422,/basePublicLikeCount420:\s*clampLikeCount\(pending\.baseLikeCount\)/);
+assert.match(service,/const baseLikeCount = existing\?\.baseLikeCount \?\? clampLikeCount\(currentLikeCount\)/,
+  'outbox existing optimistic behavior remains unchanged');
+console.log('APP422_ACK_PUBLIC_PRIVATE_BASELINE=PASS');
+console.log('APP422_NET_ZERO_PRIVATE_COUNT_RESTORE_WITHOUT_SERVER_IO=PASS');
+console.log('APP422_UNKNOWN_PUBLIC_BASELINE_NOT_INVENTED=PASS');

@@ -553,6 +553,29 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
   assert.equal(remoteRepaints[3].likeCount,5,
     'already-desired must restore true canonical 5, not keep phantom actor +1');
   assert.equal(calls.filter((event)=>event==='POST').length,4);
+  // app422 actual flush (not a copied helper): an account which just saw
+  // optimistic ON/6 may press OFF before public track_stats advances from5.
+  // The private response/count must be5, and crucially the cross-device
+  // baseline remains the returned PUBLIC 5 rather than previous PRIVATE 6.
+  storedOutbox = { [trackId]: {
+    ...pending, updatedAt: 204, baseLiked: true, desiredLiked: false,
+    baseLikeCount: 6, optimisticLikeCount: 5,
+    operationId: '00000000-0000-4000-8000-000000000005',
+  } };
+  storedSnapshot = { [trackId]: true };
+  cache.set(trackId, false);
+  serverRow = { trackId, liked: false, likeCount: 5, revision: 4, status: 'applied' };
+  await env.__flush({ uid: 'same-account' });
+  assert.equal(remoteRepaints.length, 5, 'final OFF ACK must repaint account state once');
+  assert.equal(remoteRepaints[4].liked, false);
+  assert.equal(remoteRepaints[4].likeCount, 5, 'net-zero actor sees restored private count 5');
+  assert.equal(remoteRepaints[4].basePublicLikeCount420, 5,
+    'the second ACK cannot publish earlier provisional 6 as base');
+  assert.equal(storedSnapshot[trackId], false);
+  assert.equal(cache.get(trackId), false);
+  assert.equal(calls.filter((event) => event === 'POST').length, 5,
+    'real ON/OFF actions retain exactly one batch write each, no new poll');
+  console.log('APP422_REAL_FLUSH_SECOND_ACK_PUBLIC5_PRIVATE5_AFTER_ON6=PASS');
   console.log('APP420_ALREADY_DESIRED_NO_PHANTOM_ACTOR_COUNT=PASS');
   console.log('APP420_REAL_PRIVATE_ACK_STALE_PUBLIC_5_ACTOR_6=PASS');
   console.log('APP391_ACCEPTED_LIKE_STAYS_FILLED_DURING_R2_LAG=PASS');

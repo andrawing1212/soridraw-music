@@ -4654,8 +4654,14 @@ export default function ExplorePage() {
     setCurationBusyTrackId307(track.id);
     setMoreActionBusy('curation');
     try {
-      await setSoridrawCuratedTrack307(user, track.id, promoted);
-      if (promoted) {
+      const result421 = await setSoridrawCuratedTrack307(user, track.id, promoted);
+      // app421: a concurrent opposite curator action can commit after this
+      // request. Use the Worker's confirmed canonical membership, not an
+      // optimistic copy of the button's original intent.
+      const confirmedPromoted421 = typeof result421?.recommended === 'boolean'
+        ? result421.recommended
+        : promoted; // older deployed Worker compatibility
+      if (confirmedPromoted421) {
         setCuratedTracks307((previous) => previous.some((item) => item.id === track.id)
           ? previous
           : [track, ...previous].slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304));

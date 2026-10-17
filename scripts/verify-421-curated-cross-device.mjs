@@ -119,6 +119,9 @@ const writer421 = vm.runInNewContext(
   workerSource.slice(writerStart421, writerEnd421) + '\nwriteCuratedSnapshot307;',
   {
     curatedBucket307: (env) => env?.bucket || null,
+    curatedObjectKey307: (env) => env?.CURATED_SHARED_V421 === '1'
+      ? 'internal/explore/shared-curated-v421/soridraw-40.json'
+      : 'internal/explore/curated-v307/soridraw-40.json',
     readCuratedObject307: async (_req, env) => env?.readSnapshot ? env.readSnapshot() : writerResult421,
     baseWorker: { fetch: async (req) => typeof writerDetail421 === 'function' ? writerDetail421(req) : writerDetail421 },
     clearCuratedEdge307: async () => {},
@@ -281,6 +284,9 @@ const cold421 = vm.runInNewContext(
   workerSource.slice(coldAt421, coldEnd421) + '\nmaterializeCuratedR2FromBase307;',
   {
     curatedBucket307: (env) => env?.bucket || null,
+    curatedObjectKey307: (env) => env?.CURATED_SHARED_V421 === '1'
+      ? 'internal/explore/shared-curated-v421/soridraw-40.json'
+      : 'internal/explore/curated-v307/soridraw-40.json',
     baseWorker: { fetch: async () => ({
       ok: true,
       headers: { get: () => '0' },

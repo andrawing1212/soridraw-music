@@ -1539,11 +1539,17 @@ const requestPersonalLikeRevision127 = async (user: User): Promise<string> => {
   return revision;
 };
 
-export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<void> => {
+export const checkExplorePersonalLikeRevision127 = async (
+  user: User, actualDormantResume424 = false,
+): Promise<void> => {
   const uid = String(user?.uid || '').trim();
   if (!uid) return;
   const now = Date.now();
-  if (now - readExploreLikeRevisionCheckAt334(uid) < EXPLORE_LIKE_LEGACY_CHECK_MS_127) return;
+  // A device which was truly hidden while another origin changed likes must
+  // not remain stale for the rest of the normal five-minute hot-tab throttle.
+  // The caller passes this only once per real background/pagehide epoch.
+  if (!actualDormantResume424 &&
+      now - readExploreLikeRevisionCheckAt334(uid) < EXPLORE_LIKE_LEGACY_CHECK_MS_127) return;
   const existing = revisionCheckInFlight127.get(uid);
   if (existing) return existing;
   const task = (async () => {
@@ -1552,6 +1558,7 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
       if (auth.currentUser?.uid !== uid) return;
       const key = scopedLikeKey127(EXPLORE_LIKE_R2_REVISION_127, uid);
       const previous = readLikeLocal127(key);
+      const hadLocalCatalog424 = hasLocalLikeCatalog135(uid);
       if (previous !== revision) {
         invalidateExplorePersonalLikeBaseline127(uid);
         await ensurePersonalLikeBaseline127(user, revision);
@@ -1559,7 +1566,7 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
         // A failed snapshot never advances this marker. The next focus/entry
         // retries the exact same revision without hiding a stale heart.
         writeLikeLocal127(key, revision);
-        if (typeof window !== 'undefined' && previous) {
+        if (typeof window !== 'undefined' && (previous || hadLocalCatalog424)) {
           window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
             detail: { uid, reason: 'personal-r2-revision-changed' },
           }));

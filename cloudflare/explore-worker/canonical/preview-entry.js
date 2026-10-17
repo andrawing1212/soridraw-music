@@ -412,6 +412,16 @@ async function readCuratedObject307(request, env, ctx) {
   try { stored = JSON.parse(await object.text()); } catch {}
   const payload = stored?.payload;
   if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+    // app421: a shared snapshot belongs to ALL deployed environments. Never
+    // delete it unconditionally during a reader-side repair: another curator
+    // may have published a newer version after the damaged object was read.
+    // Fail closed pending an exact-versioned, independently audited repair.
+    if (curatedSharedEnabled421(env)) {
+      return {
+        object: null, payload: null, memberIds: [], r2Reads: 1, d1Read: 0,
+        source: 'SHARED-CURATED-CORRUPT-FAIL-CLOSED-421',
+      };
+    }
     try { await bucket.delete(curatedObjectKey307(env)); } catch {}
     const boot = await materializeCuratedR2FromBase307(request, env, ctx);
     return { object: boot.object, payload: boot.payload, memberIds: boot.memberIds || [], r2Reads: boot.object ? 1 : 0, d1Read: boot.d1Read, source: boot.source };

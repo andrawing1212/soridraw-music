@@ -103,6 +103,9 @@ vm.runInNewContext(compile(page.slice(effectStart,effectEnd)),{
  window:{setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){}},
  publicLikeVisibleTracksRef192:{current:new Map(screen.map(t=>[t.id,'owner']))},
  publicLikePendingRowsRef192:{current:new Map()},
+ // app423: isolated fixture mirrors the reopened Feed's early-signal queue.
+ publicLikeBeforeVisibleRowsRef423:{current:new Map()},
+ replayPublicLikeWhenVisibleRef423:{current:null},
  publicLikeRefreshAttemptsRef192:{current:new Map()},publicLikeRefreshTimerRef192:{current:null},
  patchExploreFeedSessionCachesRow:(id,patch)=>cachePatches.push({id,...patch}),
  patchExplorePublicProfileFirstViewTrack(){},patchExploreLikedTrackCachedCount091(){},

@@ -354,3 +354,47 @@ assert.equal(delayedRemove421.recommended, true, 'stale B remove must report new
 assert.deepEqual(Array.from(oppositeR2421.memberIds), ['test-song']);
 assert.equal(oppositeR2421.writes, 2);
 console.log('APP421_CURATED_SAME_TRACK_OPPOSITE_CANONICAL_AUTHORITY=PASS');
+
+
+// app421: PREVIEW, TEST, PRODUCTION all have a shared PROFILE_MEDIA binding
+// but their EXPLORE_CACHE is intentionally environment-local. The flag is
+// *disabled by default*; an explicit all-stage change selects one new R2 key
+// which cannot overlap the existing PRODUCTION v307 derived object.
+const sharedHelpersAt421 = workerSource.indexOf('// app421: opt-in versioned shared curation snapshot');
+const sharedHelpersEnd421 = workerSource.indexOf('const curatedRevision307', sharedHelpersAt421);
+assert.ok(sharedHelpersAt421 > 0 && sharedHelpersEnd421 > sharedHelpersAt421);
+const sharedHelpers421 = vm.runInNewContext(
+  "const SORIDRAW_CURATED_R2_KEY_307 = 'internal/explore/curated-v307/soridraw-40.json';\n" +
+  workerSource.slice(sharedHelpersAt421, sharedHelpersEnd421) +
+  '\n({ curatedBucket307, curatedObjectKey307, curatedSharedEnabled421 });',
+);
+const commonR2421 = { name: 'SHARED_PROFILE_MEDIA' };
+const envs421 = ['PREVIEW', 'TEST', 'PRODUCTION'].map((name) => ({
+  name, EXPLORE_CACHE: { name: name + '_DERIVED' }, PROFILE_MEDIA: commonR2421,
+}));
+assert.equal(sharedHelpers421.curatedSharedEnabled421(envs421[0]), false);
+for (const env of envs421) {
+  assert.equal(sharedHelpers421.curatedBucket307(env), env.EXPLORE_CACHE,
+    'default release must preserve all legacy environment cache bindings');
+  assert.equal(sharedHelpers421.curatedObjectKey307(env),
+    'internal/explore/curated-v307/soridraw-40.json',
+    'old active PRODUCTION key must remain unchanged');
+}
+const oldObject421 = { value: 'current production release untouched' };
+const storage421 = new Map([['internal/explore/curated-v307/soridraw-40.json', oldObject421]]);
+for (const env of envs421) {
+  env.CURATED_SHARED_V421 = '1';
+  assert.equal(sharedHelpers421.curatedBucket307(env), commonR2421,
+    'explicitly enabled releases must read identical shared PROFILE_MEDIA');
+  const key = sharedHelpers421.curatedObjectKey307(env);
+  assert.equal(key, 'internal/explore/shared-curated-v421/soridraw-40.json');
+  storage421.set(key, { revision: 421, members: ['example-song'] });
+}
+assert.equal(storage421.get('internal/explore/curated-v307/soridraw-40.json'), oldObject421,
+  'staged opt-in must not overwrite legacy production R2');
+assert.deepEqual(storage421.get(sharedHelpers421.curatedObjectKey307(envs421[2])),
+  { revision: 421, members: ['example-song'] });
+assert.equal(sharedHelpers421.curatedBucket307({ CURATED_SHARED_V421: '1' }), null,
+  'shared flag must fail closed if canonical PROFILE_MEDIA binding missing');
+console.log('APP421_SHARED_CURATED_STAGED_BINDING_PARITY=PASS');
+console.log('APP421_LEGACY_PRODUCTION_R2_UNTOUCHED=PASS');

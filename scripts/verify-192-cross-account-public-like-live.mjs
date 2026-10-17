@@ -230,3 +230,78 @@ assert.doesNotMatch(page.slice(lateBegin423,lateEnd423),/requestExploreLike|quer
 console.log('APP423_CLOSED_DEVICE_LATE_VISIBLE_RTDB_REPLAY=PASS');
 console.log('APP423_SHARED_COUNT_CHANGED_CARD_ONLY_D1_R0=PASS');
 console.log('APP423_RETAINED_SIGNAL_NO_DUPLICATE_OR_STALE_REPLAY=PASS');
+
+
+// app424 closed-origin proof. Test the extracted real global dormant lifecycle
+// helper (not a hand-copied predicate). An actual 1m/4m inactive gap forces
+// only the tiny personal/private and edge-public revision checks once each;
+// healthy SPA reentry/app version reload adds zero new original-data reads.
+const dormantSource424=readFileSync('src/services/exploreDormantResume424.ts','utf8');
+const main424=readFileSync('src/main.tsx','utf8');
+const compiledDormant424=ts.transpileModule(dormantSource424,{
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+}).outputText;
+const local424=new Map(), session424=new Map();
+const documentListeners424=new Map(),windowListeners424=new Map();
+let clock424=1_000_000;
+const storage424=(map)=>({
+  getItem:(key)=>map.has(key)?map.get(key):null,
+  setItem:(key,value)=>map.set(key,String(value)),
+});
+const document424={
+  visibilityState:'visible',
+  addEventListener:(name,fn)=>documentListeners424.set(name,fn),
+};
+const window424={
+  localStorage:storage424(local424),sessionStorage:storage424(session424),
+  addEventListener:(name,fn)=>windowListeners424.set(name,fn),
+};
+const exports424={};
+vm.runInNewContext(compiledDormant424,{
+  exports:exports424,window:window424,document:document424,
+  Date:class extends Date{static now(){return clock424;}},
+  Map,Number,
+});
+const take424=exports424.takeExploreDormantResume424;
+exports424.installExploreDormantResumeClock424();
+assert.match(main424,/installExploreDormantResumeClock424\(\)/,
+ 'the app shell must register lifecycle events even if Explore is not currently mounted');
+assert.equal(take424('private',clock424),false);
+assert.equal(take424('public',clock424),false);
+clock424+=10_000;
+document424.visibilityState='hidden';
+documentListeners424.get('visibilitychange')();
+clock424+=60_000;
+document424.visibilityState='visible';
+assert.equal(take424('private',clock424),true,'1-minute private reopen must bypass hot 5m TTL');
+assert.equal(take424('public',clock424),true,'1-minute public reopen must bypass hot 2m TTL');
+assert.equal(take424('private',clock424),false,'ordinary page reentry private 0');
+assert.equal(take424('public',clock424),false,'ordinary page reentry public 0');
+clock424+=60_000;
+assert.equal(take424('public',clock424),false,'app update alone must not create network work');
+// Closed >4m and retained RTDB 3-minute signal expired: use shared revision,
+// NOT the missing changed-track rows, to recover current public R2 snapshot.
+windowListeners424.get('pagehide')();
+clock424+=4*60_000+1000;
+assert.equal(take424('private',clock424),true,'expired personal RTDB signal needs metadata check');
+assert.equal(take424('public',clock424),true,'expired public RTDB signal needs edge revision check');
+assert.equal(take424('public',clock424),false,'no repeated reads for same close/reopen');
+windowListeners424.get('pagehide')();
+clock424+=5000;
+assert.equal(take424('private',clock424),false,'fast reload is not true background resume');
+assert.equal(take424('public',clock424),false);
+assert.match(page,/requestRevisionCheck\(takeExploreDormantResume424\('public'\)\)/,
+ 'public visibility resume must consume genuine dormant epoch');
+assert.match(page,/takeExploreDormantResume424\('public'\)\) requestRevisionCheck\(true\)/,
+ 'already-visible cold launch must check the old public Feed revision');
+assert.match(page,/checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/,
+ 'private resume must perform the corresponding old personal R2 HEAD');
+assert.match(like,/!actualDormantResume424 &&\s*now - readExploreLikeRevisionCheckAt334\(uid\)/,
+ 'only real dormancy may bypass the healthy 5-minute private gate');
+assert.match(page,/!actualDormantResume424 && lastCheckedAt > 0/,
+ 'only real dormancy may bypass the healthy 2-minute public gate');
+assert.doesNotMatch(dormantSource424,/fetch\(|requestExploreLike|\.prepare\(|setInterval\(/,
+ 'lifecycle tracking has no direct server IO, Firestore, D1, or polling');
+console.log('APP424_TRUE_DORMANT_1M_4M_REVISION_GATE=PASS');
+console.log('APP424_EXPIRED_OR_REPLACED_RTDB_USE_REVISIONS=PASS');
+console.log('APP424_APP_UPDATE_AND_PAGE_REENTRY_DATA_READS=0');

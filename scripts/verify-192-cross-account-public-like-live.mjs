@@ -300,6 +300,16 @@ assert.match(like,/!actualDormantResume424 &&\s*now - readExploreLikeRevisionChe
  'only real dormancy may bypass the healthy 5-minute private gate');
 assert.match(page,/!actualDormantResume424 && lastCheckedAt > 0/,
  'only real dormancy may bypass the healthy 2-minute public gate');
+assert.match(page,/const shouldRevalidate = dormantForcedFeed424 \|\| shouldRevalidateExploreFeedOnEntry126/,
+ 'actual reopened Feed effect must bypass 2m gate once, not merely emit a signal');
+assert.match(page,/if \(!dormantForcedPopular424 &&\s*!shouldRevalidateExploreFeedOnEntry126/,
+ 'reopened Popular must also bypass gate once to avoid a different count by tab');
+assert.match(page,/if \(actualDormantResume424\) \{\s*dormantFeedRevisionUrlRef424.current = requestUrl;\s*dormantPopularRevisionRef424.current = true/,
+ 'dormant origin should arm both current Feed and Popular revision checks together');
+assert.match(page,/if \(dormantForcedFeed424\) dormantFeedRevisionUrlRef424.current = ''/,
+ 'one-time Feed bypass must be consumed and not leak to route navigation');
+assert.match(page,/if \(dormantForcedPopular424\) dormantPopularRevisionRef424.current = false/,
+ 'one-time Popular bypass must be consumed and not leak to route navigation');
 assert.doesNotMatch(dormantSource424,/fetch\(|requestExploreLike|\.prepare\(|setInterval\(/,
  'lifecycle tracking has no direct server IO, Firestore, D1, or polling');
 console.log('APP424_TRUE_DORMANT_1M_4M_REVISION_GATE=PASS');

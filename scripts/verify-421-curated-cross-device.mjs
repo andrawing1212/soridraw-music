@@ -215,3 +215,74 @@ assert.deepEqual(
 assert.equal(fakeR2State421.conflicts, 1, 'one conflicting old revision must be rejected');
 assert.equal(fakeR2State421.writes, 2, 'each accepted promotion updates exactly one R2 snapshot');
 console.log('APP421_CURATED_SIMULTANEOUS_PROMOTIONS_CAS=PASS');
+
+
+// app421: the older bounded cold bootstrap was an unconditional PUT. An
+// arriving curator may create a newer public recommendation before the
+// bootstrap finishes its 40-member DB materialization. The cold request
+// MUST return that newer R2 object, rather than writing stale membership.
+const coldAt421 = workerSource.indexOf('async function materializeCuratedR2FromBase307(');
+const coldEnd421 = workerSource.indexOf('async function readCuratedObject307(', coldAt421);
+assert.ok(coldAt421 > 0 && coldEnd421 > coldAt421);
+const concurrentWinner421 = {
+  schemaVersion: 1,
+  memberIds: ['promoted-later', 'first'],
+  payload: { ok: true, data: { collection: 'soridraw', items: [
+    { track: { id: 'promoted-later' } }, { track: { id: 'first' } },
+  ] } },
+};
+let coldPut421 = 0;
+const coldBucket421 = {
+  async put(_key, _body, options) {
+    coldPut421++;
+    const header = options?.onlyIf?.get('If-None-Match');
+    assert.equal(header, '*', 'cold bootstrap must use If-None-Match * to prevent overwrite');
+    // A separate authenticated curation operation won before the cold write.
+    return null;
+  },
+  async get() {
+    return {
+      etag: 'winner-etag',
+      text: async () => JSON.stringify(concurrentWinner421),
+    };
+  },
+};
+const coldDB421 = {
+  prepare(sql) {
+    assert.match(sql, /FROM curated_picks/, 'cold boot can query only curated membership');
+    assert.match(sql, /LIMIT 40/, 'cold boot membership must be bounded');
+    return {
+      bind: () => ({
+        all: async () => ({ results: [{
+          track_id: 'first',
+          curator_uid: 'owner',
+          curator_role: 'master',
+          sort_order: 0,
+          starts_at: null,
+          ends_at: null,
+        }] }),
+      }),
+    };
+  },
+};
+const cold421 = vm.runInNewContext(
+  workerSource.slice(coldAt421, coldEnd421) + '\nmaterializeCuratedR2FromBase307;',
+  {
+    curatedBucket307: (env) => env?.bucket || null,
+    baseWorker: { fetch: async () => ({
+      ok: true,
+      headers: { get: () => '0' },
+      clone: () => ({ json: async () => ({ data: { track: { id: 'first' } } }) }),
+    }) },
+    clearCuratedEdge307: async () => { throw new Error('losing bootstrap must not clear winner cache'); },
+    SORIDRAW_CURATED_COLLECTION_307: 'soridraw',
+    SORIDRAW_CURATED_R2_KEY_307: 'internal/explore/curated-v307/soridraw-40.json',
+    Date, URL, Request, Headers, console,
+  },
+);
+const coldResult421 = await cold421(request421, { bucket: coldBucket421, DB: coldDB421 }, {});
+assert.equal(coldPut421, 1);
+assert.deepEqual(Array.from(coldResult421.memberIds), ['promoted-later', 'first']);
+assert.deepEqual(Array.from(coldResult421.payload.data.items, (x) => x.track.id), ['promoted-later', 'first']);
+assert.equal(coldResult421.source, 'R2-CURATED-CONCURRENT-COLD-421');
+console.log('APP421_CURATED_COLD_BOOTSTRAP_CAS=PASS');

@@ -10,8 +10,8 @@ assert.ok(start>=0&&stop>start,'real optimistic policy not found');
 const compiled=(await transform(service.slice(start,stop).replaceAll('export const ','const '),{
   loader:'ts',target:'es2022',format:'cjs',
 })).code;
-const {stabilize,resolve,remote}=new Function('clampLikeCount',compiled+
-  '\nreturn {stabilize:stabilizeExploreLikeOptimisticCount413,resolve:resolveExploreLikeAckCount420,remote:resolveExploreLikeRemoteDisplayCount420};'
+const {stabilize,resolve,remote,publicAckBase422}=new Function('clampLikeCount',compiled+
+  '\nreturn {stabilize:stabilizeExploreLikeOptimisticCount413,resolve:resolveExploreLikeAckCount420,remote:resolveExploreLikeRemoteDisplayCount420,publicAckBase422:resolveExploreLikeAckPublicBaseline422};'
 )(n=>Math.max(0,Math.floor(Number(n)||0)));
 
 const optimistic=(before,after,count,verified)=>stabilize(
@@ -114,8 +114,20 @@ const acceptedAck=service.slice(service.indexOf('flushPendingLikes = async'),ser
 assert.match(acceptedAck,/canonicalLikeCount = resolveExploreLikeAckCount420\(/);
 assert.match(acceptedAck,/likeCount: canonicalLikeCount/);
 assert.match(acceptedAck,/acceptedForSignal127\.push\(accepted\)/);
-assert.match(acceptedAck,/basePublicLikeCount420: clampLikeCount\(pending\.baseLikeCount\)/,
-  'sender must preserve the public count that the provisional +/-1 was based on');
+assert.match(acceptedAck,/publicAckBaseline422 = resolveExploreLikeAckPublicBaseline422\(result\.likeCount\)/,
+  'sender must distinguish current PUBLIC track_stats from the account PRIVATE count');
+assert.equal((acceptedAck.match(/basePublicLikeCount420: publicAckBaseline422/g) || []).length, 2,
+  'both persisted lock and same-account notification must use the same public ACK baseline');
+assert.doesNotMatch(acceptedAck,/basePublicLikeCount420: clampLikeCount\(pending\.baseLikeCount\)/,
+  'an earlier private 6 must never be replayed as shared PUBLIC base');
+assert.equal(publicAckBase422(5), 5);
+assert.equal(publicAckBase422(undefined), undefined);
+assert.equal(resolve(true,true,6,5), 6, 'private 6 remains visible after ACK');
+assert.equal(resolve(true,true,5,5), 5, 'net-zero private 5 restores shared baseline');
+assert.equal(remote(5,6,publicAckBase422(5),true), 6,
+  'same UID PC/mobile may show provisional 6 while public=5');
+assert.equal(remote(5,5,publicAckBase422(5),true), 5,
+  'new same UID unlike ACK restores 5 even though previous private was 6');
 assert.match(service,/basePublicLikeCount420: clampLikeCount\(value\.basePublicLikeCount420\)/,
   'RTDB decoder must preserve optional public-base count');
 assert.match(service,/sharedCount !== basePublic420/,

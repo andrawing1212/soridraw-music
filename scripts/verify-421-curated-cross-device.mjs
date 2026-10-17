@@ -441,3 +441,96 @@ assert.equal(damagedResult421.d1Read, 0);
 assert.equal(sharedDeletes421, 0, 'damaged shared reader cannot delete a concurrent writer');
 assert.equal(sharedColdBuilds421, 0, 'damaged shared reader cannot rebuild the full list');
 console.log('APP421_SHARED_CURATED_CORRUPT_NO_DELETE=PASS');
+
+
+// app421 late public/private publication signal must NOT overwrite newer D1
+// canonical visibility for a promoted member. Exercise real extracted Worker
+// sync, not only text regexes or a curated response mock.
+const pubStart421 = workerSource.indexOf('async function syncCuratedPublicationResults307(');
+const pubEnd421 = workerSource.indexOf('async function handleCurationMutation307(', pubStart421);
+assert.ok(pubStart421 > 0 && pubEnd421 > pubStart421);
+let canonicalVisibility421 = false;
+let pubD1Reads421 = 0;
+let pubDetailReads421 = 0;
+const pubStore421 = {
+  etag: 'visibility0',
+  stored: {
+    schemaVersion: 1, collection: 'soridraw', memberIds: ['test-song'],
+    payload: { ok: true, data: { collection: 'soridraw', items: [
+      { track: { id: 'test-song', updatedAt: 100 }, curation: {} },
+    ] } },
+  },
+  writes: 0,
+};
+const pubBucket421 = {
+  async get() {
+    const etag = pubStore421.etag;
+    const body = JSON.stringify(pubStore421.stored);
+    return { etag, text: async () => body };
+  },
+  async put(_key, body, opts) {
+    assert.equal(opts.onlyIf.etagMatches, pubStore421.etag,
+      'publication snapshot must retain conditional version check');
+    pubStore421.stored = JSON.parse(body);
+    pubStore421.etag = 'visibility' + (++pubStore421.writes);
+    return { etag: pubStore421.etag };
+  },
+};
+const syncPublication421 = vm.runInNewContext(
+  workerSource.slice(pubStart421, pubEnd421) + '\nsyncCuratedPublicationResults307;',
+  {
+    curatedBucket307: (env) => env.bucket,
+    curatedObjectKey307: () => 'internal/explore/shared-curated-v421/soridraw-40.json',
+    SORIDRAW_CURATED_COLLECTION_307: 'soridraw',
+    SORIDRAW_CURATED_R2_KEY_307: 'internal/explore/curated-v307/soridraw-40.json',
+    baseWorker: {
+      fetch: async () => {
+        pubDetailReads421++;
+        return { ok: true, clone: () => ({
+          json: async () => ({ data: { track: { id: 'test-song', updatedAt: 56789 } } }),
+        }) };
+      },
+    },
+    clearCuratedEdge307: async () => {},
+    URL, Request, Date, console,
+  },
+);
+const pubEnv421 = {
+  bucket: pubBucket421,
+  DB: { prepare(sql) {
+    assert.match(sql, /FROM tracks WHERE id=\? LIMIT 1/);
+    return { bind: (id) => ({
+      first: async () => {
+        assert.equal(id, 'test-song');
+        pubD1Reads421++;
+        return { is_public: canonicalVisibility421 ? 1 : 0,
+          status: 'published', updated_at: 56789 };
+      },
+    }) };
+  } },
+};
+const snapshotIds421 = () => pubStore421.stored.payload.data.items.map((x) => x.track.id);
+const pubRequest421 = {
+  url: 'https://mock.test/v1/me/music-note-publications/batch',
+  headers: new Headers({ Origin: 'https://preview.soridraw.com' }),
+};
+await syncPublication421(pubRequest421, pubEnv421, {}, [
+  { ok: true, trackId: 'test-song', status: 'public',
+    snapshotItem: { id: 'test-song', updatedAt: 100 } },
+]);
+assert.deepEqual(snapshotIds421(), [],
+  'late PUBLIC result must not resurrect a canonically private curated song');
+assert.equal(pubD1Reads421, 1, 'only exact curated ID is checked on real mutation');
+assert.equal(pubDetailReads421, 0, 'canonical private state needs no detail reread');
+canonicalVisibility421 = true;
+await syncPublication421(pubRequest421, pubEnv421, {}, [
+  { ok: true, trackId: 'test-song', status: 'private', snapshotItem: null },
+]);
+assert.deepEqual(snapshotIds421(), ['test-song'],
+  'late PRIVATE result must not hide a canonically republished song');
+assert.equal(pubD1Reads421, 2);
+assert.equal(pubDetailReads421, 1,
+  'canonical public song resolves only its own current detail');
+assert.equal(pubStore421.stored.payload.data.items[0].track.updatedAt, 56789);
+console.log('APP421_PUBLICATION_LATE_SIGNAL_CANONICAL=PASS');
+console.log('APP421_PUBLICATION_CANONICAL_READS_ONLY_ON_MUTATION=PASS');

@@ -138,7 +138,7 @@ assert.match(String(publicRule?.rows?.$index?.trackId?.['.validate'] || ''), /le
 if (appVersion >= 335) {
   assert.doesNotMatch(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS/);
   assert.doesNotMatch(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
-  assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+  assert.match(page, /document\.addEventListener\('visibilitychange', onVisible424\)/);
 } else {
   assert.match(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000/);
 }

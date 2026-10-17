@@ -403,6 +403,9 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
     EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420: 25 * 60_000,
     resolveExploreLikeAckCount420: (deferred,accepted,optimistic,published) => deferred && accepted ? optimistic : published,
+    // app422: flush now separates the personal ACK count from published baseline.
+    resolveExploreLikeAckPublicBaseline422: (published) =>
+      Number.isSafeInteger(published) && published >= 0 ? published : undefined,
     // Guarded Stage420 remains hard-disabled: the frozen 127/390 receiver
     // fixture runs the exact legacy app392 path, not the candidate cutover.
     EXPLORE_LIKE_STAGE420_CUTOVER_ACTIVE: false,

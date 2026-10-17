@@ -1,3 +1,13 @@
+## NEXT — app420 PREVIEW released, real two-device verification; do not redeploy without new defect (2026-10-17 KST)
+
+- **Deployment confirmed:** Firebase Hosting PREVIEW app420 at `https://preview.soridraw.com`, pinned `fbc3435e6042783505163abb5c5743f54d817522`; workflow [39036662143](https://github.com/andrawing1212/soridraw-music/actions/runs/39036662143) SUCCESS, exact build/site version420 PASS, TEST/PRODUCTION unchanged. PR #209 client ACK baseline merged; QA head [39032323212](https://github.com/andrawing1212/soridraw-music/actions/runs/39032323212) SUCCESS.
+- **Real user acceptance pending:** test PC/mobile same UID like ON6 and OFF5 while other account sees unchanged public5 until shared release; public changed count eventually converges; no stale private count after ACK/update, same-account heart and My Likes stable. Record observed timing/console counters without extra server writes. Do not claim real-device PASS before report.
+- **Known accepted limitation:** net-zero windows provide no durable UID completion receipt on missed RTDB/new device; user approved testing now and follow-up later. Do not add arbitrary DO/Functions/RTDB fan-out without bounded A-recipient cost and separate approval.
+- **Next development separate:** curate PR #200 remains draft/unmerged and is not on live PREVIEW. Independent exact-SHA audit/cross-env R2 scheme to be handled separately when product work resumes. Do not conflate with released likes or redeploy Worker/Functions.
+- **Absolute unchanged:** TEST main and PRODUCTION unchanged, shared user data unchanged; no release promotion without user authorization. Preserve app410 existing likes, UI, follow, Music Note, local-first and cost gates.
+
+---
+
 ## NEXT — app422 actor-private count/public shared baseline candidate QA PASS; release still gated (2026-10-17 KST)
 
 - **Current targeted branch:** draft PR #209 `fix/app422-private-public-ack-baseline`, exact SHA `07c0fcd8a9e33cb2f75695ce6ec8065538aa7195`. QA [39032323212](https://github.com/andrawing1212/soridraw-music/actions/runs/39032323212) SUCCESS: TypeScript/Build/app410 frozen and actual `flushPendingLikes` 5(public)→6(private ON)→5(private OFF), same-UID relay baseline remains public 5. No extra DB requests/writes, no server/Worker/RTDB source changes or deployment. Do not repeat full QA needlessly or reopen root-cause research.

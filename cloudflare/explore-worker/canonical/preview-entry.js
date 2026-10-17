@@ -530,8 +530,12 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
   // success when the shared recommendation snapshot cannot be published.
   const bucket = curatedBucket307(env);
   if (!bucket) throw new Error('CURATED_R2_BINDING_MISSING_421');
+  // app421: R2 GET + conditional PUT protects concurrent curator requests.
+  // A stale writer re-reads the latest snapshot, never overwrites unconditionally.
+  for (let casAttempt421 = 0; casAttempt421 < 4; casAttempt421++) {
   const selected = await readCuratedObject307(request, env, ctx);
   if (!selected.payload?.data?.items) throw new Error('CURATED_R2_SNAPSHOT_UNAVAILABLE_421');
+  if (!selected.object?.etag) throw new Error('CURATED_R2_CAS_ETAG_MISSING_421');
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
@@ -570,20 +574,29 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const published421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    onlyIf: { etagMatches: selected.object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
+  if (!published421) continue; // R2 precondition failed; retry from latest object
   await clearCuratedEdge307(new URL(request.url));
+  return;
+  }
+  throw new Error('CURATED_R2_CAS_RETRY_EXHAUSTED_421');
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
 async function syncCuratedPublicationResults307(request, env, results) {
   const bucket = curatedBucket307(env);
   if (!bucket || !Array.isArray(results) || !results.length) return;
+  // Only mutate a snapshot if it still matches the observed revision.
+  // A curator updating membership concurrently must never lose that update.
+  for (let casAttempt421 = 0; casAttempt421 < 4; casAttempt421++) {
   let object = null;
   try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
   if (!object) return;
+  if (!object.etag) throw new Error('CURATED_PUBLICATION_R2_ETAG_MISSING_421');
 
   let stored = null;
   try { stored = JSON.parse(await object.text()); } catch {}
@@ -645,11 +658,16 @@ async function syncCuratedPublicationResults307(request, env, results) {
     payload: nextPayload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+  const published421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+    onlyIf: { etagMatches: object.etag },
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(nextStored.updatedAt) },
   });
+  if (!published421) continue; // concurrent membership or publication changed
   await clearCuratedEdge307(new URL(request.url));
+  return;
+  }
+  throw new Error('CURATED_PUBLICATION_R2_CAS_RETRY_EXHAUSTED_421');
 }
 
 async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
@@ -704,7 +722,8 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
   } catch (error) {
     console.warn('[app421] curated R2 publication not confirmed; bounded public read may recover:', String(error?.message || error || 'unknown'));
-    try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+    // A failed/losing writer must not delete another writer's successful R2.
+    // Preserve the last valid snapshot; explicit retry can perform bounded repair.
     await clearCuratedEdge307(new URL(request.url));
     // D1 mutation was committed. A retry is idempotent; do not tell the curator
     // the recommendation is visible until the R2 public snapshot was updated.

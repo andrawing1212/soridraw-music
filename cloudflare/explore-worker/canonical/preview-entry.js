@@ -547,11 +547,18 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
   const selected = await readCuratedObject307(request, env, ctx);
   if (!selected.payload?.data?.items) throw new Error('CURATED_R2_SNAPSHOT_UNAVAILABLE_421');
   if (!selected.object?.etag) throw new Error('CURATED_R2_CAS_ETAG_MISSING_421');
+  // app421: curation intent is NOT the canonical result. A newer opposite
+  // operation on the same ID may have committed in shared D1 while this R2
+  // writer was waiting. Consult only this membership PK on real mutations.
+  const member421 = await env.DB.prepare(
+    'SELECT track_id FROM curated_picks WHERE collection_key=? AND track_id=? LIMIT 1',
+  ).bind(SORIDRAW_CURATED_COLLECTION_307, trackId).first();
+  const canonicalPromoted421 = Boolean(member421?.track_id);
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
   let items = selected.payload.data.items.filter((item) => String(item?.track?.id || '').trim() !== trackId);
-  if (promoted) {
+  if (canonicalPromoted421) {
     memberIds = [trackId, ...memberIds].slice(0, 40);
     const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
     const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
@@ -592,7 +599,7 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
   });
   if (!published421) continue; // R2 precondition failed; retry from latest object
   await clearCuratedEdge307(new URL(request.url));
-  return;
+  return { recommended: canonicalPromoted421, d1Read: casAttempt421 + 1 };
   }
   throw new Error('CURATED_R2_CAS_RETRY_EXHAUSTED_421');
 }
@@ -729,8 +736,11 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     ).bind(SORIDRAW_CURATED_COLLECTION_307, id).run();
   }
 
+  let currentRecommended421 = promoted;
   try {
-    await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
+    const published421 = await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
+    d1Read += Number(published421?.d1Read || 0);
+    currentRecommended421 = published421?.recommended === true;
   } catch (error) {
     console.warn('[app421] curated R2 publication not confirmed; bounded public read may recover:', String(error?.message || error || 'unknown'));
     // A failed/losing writer must not delete another writer's successful R2.
@@ -755,7 +765,7 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
 
   return new Response(JSON.stringify({
     ok: true,
-    data: { collection: SORIDRAW_CURATED_COLLECTION_307, trackId: id, recommended: promoted },
+    data: { collection: SORIDRAW_CURATED_COLLECTION_307, trackId: id, recommended: currentRecommended421 },
   }), {
     status: 200,
     headers: curationHeaders307(request, {

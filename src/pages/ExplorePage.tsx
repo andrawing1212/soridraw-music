@@ -1967,6 +1967,11 @@ export default function ExplorePage() {
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
   const feedRevisionRequestedUrlRef = useRef('');
+  // app424 genuine dormant resumes are consumed separately by Latest/Popular.
+  // A single intentional reopen may bypass the hot-tab 2-minute gate once;
+  // ordinary route changes never set either flag.
+  const dormantFeedRevisionUrlRef424 = useRef('');
+  const dormantPopularRevisionRef424 = useRef(false);
   const likeInteractionVersionRef090 = useRef(0);
   // 192: a single Explore-level public-count listener. It never changes
   // another account's personal filled-heart state.
@@ -2770,6 +2775,8 @@ export default function ExplorePage() {
       ? readExploreFeedSessionCache(requestUrl)
       : readExploreSearchCache340(requestUrl);
     const revisionCheckKey154 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
+    const dormantForcedFeed424 = dormantFeedRevisionUrlRef424.current === requestUrl;
+    if (dormantForcedFeed424) dormantFeedRevisionUrlRef424.current = '';
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -2872,7 +2879,7 @@ export default function ExplorePage() {
 
       const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
       const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionCheckKey154);
-      const shouldRevalidate = shouldRevalidateExploreFeedOnEntry126(
+      const shouldRevalidate = dormantForcedFeed424 || shouldRevalidateExploreFeedOnEntry126(
         feedRequest,
         revalidateRequested,
         lastCheckedAt,
@@ -2952,6 +2959,8 @@ export default function ExplorePage() {
     const requestUrl304 = EXPLORE_POPULAR_FEED_REQUEST_URL_304;
     const cachedRows304 = readExploreFeedSessionCache(requestUrl304);
     const revisionCheckKey304 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl304);
+    const dormantForcedPopular424 = dormantPopularRevisionRef424.current;
+    if (dormantForcedPopular424) dormantPopularRevisionRef424.current = false;
     const controller304 = new AbortController();
 
     const fetchPopularRevision304 = async (): Promise<string | null> => {
@@ -3022,7 +3031,8 @@ export default function ExplorePage() {
       }
 
       const lastCheckedAt304 = readExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
-      if (!shouldRevalidateExploreFeedOnEntry126(true, feedRevisionSignal > 0, lastCheckedAt304, Date.now())) {
+      if (!dormantForcedPopular424 &&
+          !shouldRevalidateExploreFeedOnEntry126(true, feedRevisionSignal > 0, lastCheckedAt304, Date.now())) {
         return () => controller304.abort();
       }
 
@@ -3086,6 +3096,10 @@ export default function ExplorePage() {
           now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
       feedRevisionRequestedUrlRef.current = requestUrl;
+      if (actualDormantResume424) {
+        dormantFeedRevisionUrlRef424.current = requestUrl;
+        dormantPopularRevisionRef424.current = true;
+      }
       setFeedRevisionSignal((value) => value + 1);
 
       // app335: SORIDRAW recommendation revision is checked only alongside a real

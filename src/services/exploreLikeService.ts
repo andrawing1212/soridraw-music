@@ -431,6 +431,16 @@ export const resolveExploreLikeAckCount420 = (
   ? clampLikeCount(optimisticCount)
   : clampLikeCount(returnedPublicCount);
 
+// app422: the Worker ACK reports the current published track_stats count,
+// which may differ from the account's still-provisional private count.
+// An earlier PRIVATE +1 must never become the next PUBLIC baseline.
+export const resolveExploreLikeAckPublicBaseline422 = (
+  publishedCount: unknown,
+): number | undefined =>
+  Number.isSafeInteger(publishedCount) && Number(publishedCount) >= 0
+    ? clampLikeCount(Number(publishedCount))
+    : undefined;
+
 // Cross-device provisional count is valid only while the receiver is still
 // looking at the same public count the actor used as its base.
 export const resolveExploreLikeRemoteDisplayCount420 = (
@@ -2369,6 +2379,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
           pending.optimisticLikeCount,
           Number.isSafeInteger(result.likeCount) ? Number(result.likeCount) : pending.optimisticLikeCount,
         );
+        // The private ACK display stays optimistic, but its reference must
+        // come from published track_stats, never pending.baseLikeCount.
+        const publicAckBaseline422 = resolveExploreLikeAckPublicBaseline422(result.likeCount);
         if (Number.isSafeInteger(result.revision) && Number(result.revision) >= 0) {
           canonicalRevisions172[pending.trackId] = Number(result.revision);
         }
@@ -2411,8 +2424,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
               ...(holdDeferredActorCount420 ? { deferredPublic420: true as const } : {}),
               ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
                 ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
-              ...(holdDeferredActorCount420
-                ? { basePublicLikeCount420: clampLikeCount(pending.baseLikeCount) } : {}),
+              ...(holdDeferredActorCount420 && publicAckBaseline422 !== undefined
+              ? { basePublicLikeCount420: publicAckBaseline422 } : {}),
             };
           }
           delete latest[pending.trackId];
@@ -2439,8 +2452,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
             ...(trustedCanonicalReceipt417 ? { canonicalSettled417: true } : {}),
             ...(Number.isSafeInteger(serverAcceptedAt192) && serverAcceptedAt192 > 0
               ? { acceptedAtPublicClock420: serverAcceptedAt192 } : {}),
-            ...(holdDeferredActorCount420
-              ? { basePublicLikeCount420: clampLikeCount(pending.baseLikeCount) } : {}),
+            ...(holdDeferredActorCount420 && publicAckBaseline422 !== undefined
+              ? { basePublicLikeCount420: publicAckBaseline422 } : {}),
           };
           // Cross-device membership follows the server-accepted account state,
           // not the later public aggregate. Keep the local snapshot-pending guard

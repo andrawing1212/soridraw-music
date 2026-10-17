@@ -364,18 +364,29 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  // app421: cold bootstrap must never overwrite a curator's concurrent
+  // accepted R2 snapshot. Only create while the object is still absent.
+  const created421 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    onlyIf: new Headers({ 'If-None-Match': '*' }),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
-  await clearCuratedEdge307(new URL(request.url));
+  if (created421) await clearCuratedEdge307(new URL(request.url));
+  // Always return the *actual* authoritative object. A competing writer may
+  // have created or updated it between the original cold read and this GET.
   const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
+  let current421 = null;
+  try { current421 = object ? JSON.parse(await object.text()) : null; } catch {}
+  if (current421?.schemaVersion !== 1 || current421?.payload?.ok !== true ||
+      !Array.isArray(current421?.payload?.data?.items)) {
+    return { object: null, payload: null, memberIds: [], d1Read, source: 'D1-CURATED-COLD-RECOVERY-UNCONFIRMED-421' };
+  }
   return {
     object,
-    payload,
-    memberIds,
+    payload: current421.payload,
+    memberIds: Array.isArray(current421.memberIds) ? current421.memberIds : memberIds,
     d1Read,
-    source: 'D1-BOUNDED-BOOTSTRAP-356',
+    source: created421 ? 'D1-BOUNDED-BOOTSTRAP-356' : 'R2-CURATED-CONCURRENT-COLD-421',
   };
 }
 

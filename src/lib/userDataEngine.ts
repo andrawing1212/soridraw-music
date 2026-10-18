@@ -658,6 +658,7 @@ const readRemoteCatalogSnapshot = async (
   uid: string,
   minimumRevision = 0,
   localSnapshot: SoridrawCatalogSnapshot | null = null,
+  allowBootstrapRepair = true,
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
@@ -701,6 +702,9 @@ const readRemoteCatalogSnapshot = async (
       // bootstrap. App-version changes and healthy warm entry never reach this path.
       if (response.status === 409 && !sharedBootstrapAttempted) {
         const repair = await response.json().catch(() => ({}));
+        if (!allowBootstrapRepair && String(repair?.code || '') === 'CATALOG_REPAIR_REQUIRED') {
+          throw new Error('CATALOG_KNOWN_MUTATION_REPAIR_REQUIRED');
+        }
         if (String(repair?.code || '') === 'CATALOG_REPAIR_REQUIRED') {
           sharedBootstrapAttempted = true;
           const bootstrapHeaders = await authenticatedHeaders(true);
@@ -769,6 +773,33 @@ const readRemoteCatalogSnapshot = async (
   }
   console.warn(`[userDataEngine] ${kind} catalog snapshot read unavailable after retry.`, lastError);
   return null;
+};
+
+const catalogKnownMutationRefreshInFlight = new Map<string, Promise<SoridrawCatalogSnapshot | null>>();
+
+export const refreshCatalogSnapshotAfterKnownMutation = async (
+  kind: SoridrawCatalogKind,
+  uid: string,
+): Promise<SoridrawCatalogSnapshot | null> => {
+  if (!uid || !isPreviewCatalogEnabled()) return null;
+  const key = catalogKey(kind, uid);
+  const existing = catalogKnownMutationRefreshInFlight.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const local = await readCatalogSnapshotFromLocalCache(kind, uid);
+    // app426: this path is reached only after a real remote canonical mutation.
+    // Bypass the warm-cache short-circuit so a device that missed several retained
+    // RTDB item signals can consume the R2 journal delta. Never bootstrap/scan
+    // Firestore from this recovery path; a missing shared Catalog is deferred.
+    const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local, false);
+    if (!remote) return null;
+    catalogLastReadSources.set(key, 'remote');
+    return remote;
+  })().finally(() => catalogKnownMutationRefreshInFlight.delete(key));
+
+  catalogKnownMutationRefreshInFlight.set(key, promise);
+  return promise;
 };
 
 export const readCatalogSnapshotCacheFirst = async (

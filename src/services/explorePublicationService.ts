@@ -25,6 +25,7 @@ import {
   readLatestExplorePublicationSyncSignal,
   type ExplorePublicationSyncSignal,
 } from './userDomainSyncService';
+import { publishExplorePublicPublicationInvalidation429 } from './explorePublicPublicationSyncService';
 import { shouldRepairMusicNotePublicationOrigin361 } from './exploreEnvironmentParityPolicy';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
@@ -413,29 +414,40 @@ const publishPublicationSyncBestEffort = async (
   state: ExploreMusicNotePublicationState,
   snapshotItem?: unknown,
 ): Promise<void> => {
+  let snapshotJson = '';
+  if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+    const encoded = JSON.stringify(snapshotItem);
+    if (encoded.length <= 24_000) snapshotJson = encoded;
+  }
+
   try {
-    let snapshotJson = '';
-    if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
-      const encoded = JSON.stringify(snapshotItem);
-      if (encoded.length <= 24_000) snapshotJson = encoded;
+    if (!(state.status === 'public' && !snapshotJson)) {
+      await publishExplorePublicationSyncSignal(uid, {
+        sourceId,
+        trackId: state.trackId,
+        status: state.status,
+        allowNextSongApply: state.allowNextSongApply,
+        allowFollowerSave: state.allowFollowerSave,
+        profilePinned: state.profilePinned,
+        ...(snapshotJson ? { snapshotJson } : {}),
+      });
     }
-    // Public signals without a compact snapshot are skipped instead of forcing the
-    // receiving device to spend a Worker request on every reload. Existing bounded
-    // R2 revision recovery remains the fallback for those rare paths.
-    if (state.status === 'public' && !snapshotJson) return;
-    await publishExplorePublicationSyncSignal(uid, {
-      sourceId,
-      trackId: state.trackId,
-      status: state.status,
-      allowNextSongApply: state.allowNextSongApply,
-      allowFollowerSave: state.allowFollowerSave,
-      profilePinned: state.profilePinned,
-      ...(snapshotJson ? { snapshotJson } : {}),
-    });
   } catch (error) {
-    // Canonical Explore mutation already succeeded. A signal outage must never turn
-    // a real public/private change into a failed user action.
-    console.warn('Explore publication cross-device signal skipped:', error);
+    console.warn('Explore publication same-account signal skipped:', error);
+  }
+
+  try {
+    // app429: other accounts receive only a changed-track invalidation. RTDB
+    // never becomes public truth; receivers verify exact state from shared R2.
+    await publishExplorePublicPublicationInvalidation429(uid, [{
+      trackId: state.trackId,
+      ownerUid: uid,
+      at: Date.now(),
+    }]);
+  } catch (error) {
+    // Canonical mutation already succeeded. Derived notification failure must
+    // never turn a real public/private mutation into a false failure.
+    console.warn('Explore publication public invalidation skipped:', error);
   }
 };
 
@@ -566,7 +578,16 @@ export const getExploreMusicNotePublicationStates = async (
   const uid = String(user.uid || '').trim();
   const cached = readPublicationStateCache(uid);
   const envelope = readPublicationStateEnvelope(uid);
-  if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;
+  if (cached && getPendingExplorePublicationMutationCount(uid) > 0) {
+    // app429: older clients may already have persisted the optimistic desired
+    // state. Repair that polluted cache from the durable outbox base before the
+    // early return. This is device-local only: Worker/D1/Firestore I/O stays 0.
+    const repaired = overlayPendingPublicationStates(uid, cached);
+    if (JSON.stringify(repaired) !== JSON.stringify(cached)) {
+      writePublicationStateCache(uid, repaired, String(envelope?.serverRevision || '').trim() || undefined);
+    }
+    return repaired;
+  }
   // app335: normal Music Note entry/reload renders the healthy persistent state
   // without turning navigation into a Worker request. Explicit post-entry activity
   // may request the bounded revision validation below.

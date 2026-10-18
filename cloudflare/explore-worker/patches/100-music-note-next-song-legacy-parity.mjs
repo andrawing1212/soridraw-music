@@ -61,7 +61,7 @@ function buildMusicNoteShareBundle100(note) {
     'vocalType','vocalTone','vocal','lyricsLength','songStructure','customStructure','sectionCueOptions',
     'kpopMode','citypopMode','isKoreanEnglishMix','englishMixRatio','languageMixRatio','languageMixTargetLanguages',
     'lyricLanguages','titleLanguages','maleCount','femaleCount','rapEnabled','rapMode',
-    'lyricWritingStyle','drumStyle','isBallad','isNoLyrics','includeLyrics','instrumentalBgmMode',
+    'lyricWritingStyle','isLyricMode','lyricMode','drumStyle','isBallad','isNoLyrics','includeLyrics','instrumentalBgmMode',
     'instrumentTags','situation','situationSummary',
     'userInput','commandInput','directInput','customPrompt',
   ];
@@ -139,7 +139,7 @@ function buildMusicNoteShareBundle100(note) {
 
   const stringFields = [
     'pointSound','customGenreInput','customMoodInput','customThemeInput','customStyleInput','customSoundInput',
-    'tempo','vocalType','vocalTone','lyricsLength','songStructure','drumStyle','rapMode','lyricWritingStyle','tempoSource',
+    'tempo','vocalType','vocalTone','lyricsLength','songStructure','drumStyle','rapMode','lyricWritingStyle','lyricMode','tempoSource',
   ];
   for (const key of stringFields) {
     const value = shareText015(applied[key], key.startsWith('custom') ? 500 : 240);
@@ -151,7 +151,7 @@ function buildMusicNoteShareBundle100(note) {
 
   const scalarFields = [
     'kpopMode','citypopMode','isKoreanEnglishMix','englishMixRatio','languageMixRatio',
-    'maleCount','femaleCount','rapEnabled','isBallad','isNoLyrics','includeLyrics',
+    'maleCount','femaleCount','rapEnabled','isLyricMode','isBallad','isNoLyrics','includeLyrics',
     'instrumentalBgmMode','isRandomTempo',
   ];
   for (const key of scalarFields) {
@@ -207,6 +207,8 @@ function buildMusicNoteShareBundle100(note) {
         rapEnabled: Boolean(nextSong.rapEnabled),
         rapMode: nextSong.rapMode || '',
         lyricWritingStyle: nextSong.lyricWritingStyle || '',
+        isLyricMode: Boolean(nextSong.isLyricMode),
+        lyricMode: nextSong.lyricMode || '',
         tempoSource: nextSong.tempoSource || '',
         isRandomTempo: Boolean(nextSong.isRandomTempo),
         isNoLyrics: Boolean(nextSong.isNoLyrics),

@@ -14,6 +14,7 @@ const accepted = user?.exploreLike?.results?.$index?.canonicalSettled417;
 const intent = user?.exploreLikeIntent416;
 const batch416 = local?.rules?.privateLikeBatch416;
 const final416 = local?.rules?.privateLikeFinal416;
+const publication429 = local?.rules?.publicSync?.explorePublication;
 
 assert.equal(accepted?.['.validate'], 'newData.isBoolean()');
 assert.equal(user['.read'], 'auth != null && auth.uid === $uid');
@@ -26,6 +27,12 @@ assert.equal(intent.results?.$index?.optimisticLikeCount?.['.validate'],
 assert.equal(intent.results?.$index?.status?.['.validate'],
   "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'rejected')");
 assert.equal(intent['$other']?.['.validate'], false);
+assert.equal(publication429?.['.read'], 'auth != null');
+assert.equal(publication429?.['.write'],
+  "auth != null && newData.child('actorUid').val() === auth.uid");
+assert.equal(publication429?.rows?.$index?.ownerUid?.['.validate'],
+  'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
+assert.equal(publication429?.rows?.$index?.['$other']?.['.validate'], false);
 assert.equal(intent.results?.$index?.['$other']?.['.validate'], false);
 
 // New Stage416 pending/sealed server state is never client-readable/writable.
@@ -72,6 +79,11 @@ const withoutIntentOptimisticCount = source => {
   if (row) delete row.optimisticLikeCount;
   return out;
 };
+const withoutPublicPublication429 = source => {
+  const out = structuredClone(source);
+  if (out?.rules?.publicSync) delete out.rules.publicSync.explorePublication;
+  return out;
+};
 
 const baseVariants = [
   ['already-live', local],
@@ -88,7 +100,10 @@ const baseVariants = [
 ];
 const expandedVariants = baseVariants.flatMap(([status,candidate]) => [
   [status, candidate],
+  [status+'-without-public-publication-429', withoutPublicPublication429(candidate)],
   [status+'-without-private-optimistic-count', withoutIntentOptimisticCount(candidate)],
+  [status+'-without-private-optimistic-count-and-public-publication-429',
+    withoutPublicPublication429(withoutIntentOptimisticCount(candidate))],
 ]);
 const variants = [...new Map(
   expandedVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
@@ -112,6 +127,10 @@ if (process.argv.includes('--self-test')) {
   widenedCount.rules.userSync.$uid.exploreLikeIntent416.results.$index.optimisticLikeCount['.validate'] =
     'newData.isNumber()';
   assert.equal(compare(widenedCount), null, 'private optimistic count bounds must stay exact');
+  const widenedPublication = structuredClone(local);
+  widenedPublication.rules.publicSync.explorePublication.rows.$index.ownerUid['.validate'] =
+    'newData.isString()';
+  assert.equal(compare(widenedPublication), null, 'public publication writer ownership must stay exact');
   const exposedBatch = structuredClone(local);
   exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');

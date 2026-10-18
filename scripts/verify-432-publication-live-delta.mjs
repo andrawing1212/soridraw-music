@@ -55,14 +55,26 @@ assert.equal(rules?.rules?.publicSync?.explorePublication?.rows?.$index?.cardJso
 assert.equal(rules?.rules?.publicSync?.explorePublicationProfiles?.$ownerKey?.['.read'],'auth != null');
 assert.equal(rules?.rules?.publicSync?.explorePublicationProfiles?.$ownerKey?.['.write'],false);
 
-const SIGNAL_TRACK_MAX=512;
-const SIGNAL_OWNER_MAX=128;
-const SIGNAL_OVERHEAD_BUDGET=512;
-const ACTIVE_100K_SIGNAL_MAX_BYTES=(SIGNAL_TRACK_MAX+SIGNAL_OWNER_MAX+SIGNAL_OVERHEAD_BUDGET)*100_000;
-assert.ok(ACTIVE_100K_SIGNAL_MAX_BYTES<=115_200_000);
+// Cost diagnostic only: measure UTF-8 bytes, never treat JS string length as
+// billed bytes and never claim a 100k absolute billing/network ceiling.
+const multibyteSignal={
+  version:Number.MAX_SAFE_INTEGER,
+  at:Number.MAX_SAFE_INTEGER,
+  actorUid:'publication-server-431',
+  rows:[{
+    trackId:'가'.repeat(512),
+    ownerUid:'나'.repeat(128),
+    at:Number.MAX_SAFE_INTEGER,
+    status:'public',
+  }],
+};
+const serialized=JSON.stringify(multibyteSignal);
+const UTF8_SAMPLE_BYTES=Buffer.byteLength(serialized,'utf8');
+assert.ok(UTF8_SAMPLE_BYTES>serialized.length);
 console.log('APP432_NEW_PUBLIC_TRACK_NO_NAVIGATION_EDGE_CARD=PASS');
 console.log('APP432_R2_READ_EDGE_SHARED_NOT_PER_VIEWER=PASS');
 console.log('APP432_PROFILE_OWNER_SCOPED_SUBSCRIPTION=PASS');
 console.log('APP432_HIDDEN_SEARCH_POPULAR_GLOBAL_LISTENER_ZERO=PASS');
 console.log('APP432_SIGNAL_ONE_ROW_NO_CARD_PAYLOAD=PASS');
-console.log('APP432_100K_ACTIVE_FEED_SIGNAL_HARD_MAX_BYTES_PER_EVENT='+ACTIVE_100K_SIGNAL_MAX_BYTES);
+console.log('APP432_UTF8_MULTIBYTE_SIGNAL_SAMPLE_BYTES='+UTF8_SAMPLE_BYTES);
+console.log('APP432_100K_RTDB_WORKER_R2_BILLED_COST=UNVERIFIED_PREVIEW_MEASUREMENT_REQUIRED');

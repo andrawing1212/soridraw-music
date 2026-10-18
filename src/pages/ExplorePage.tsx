@@ -74,6 +74,12 @@ import {
   type ExplorePublicPublicationSignalRow429,
 } from '../services/explorePublicPublicationSyncService';
 import {
+  isExplorePublicationPublicResponseCurrent433,
+  recordLatestExplorePublicationSignal433,
+  shouldInsertExplorePublicationTrack433,
+  type ExplorePublicationLiveSignalState433,
+} from '../services/explorePublicationLivePolicy433';
+import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
@@ -2793,12 +2799,15 @@ export default function ExplorePage() {
 
     let cancelled432 = false;
     let unsubscribe432: (() => void) | null = null;
+    const latestSignalByTrack433 = new Map<string, ExplorePublicationLiveSignalState433>();
 
     const applyPublicCard432 = (
       row432: ExplorePublicPublicationSignalRow429,
+      signalState433: ExplorePublicationLiveSignalState433,
       snapshot432: Record<string, unknown>,
     ) => {
-      if (cancelled432) return;
+      if (cancelled432 ||
+          !isExplorePublicationPublicResponseCurrent433(latestSignalByTrack433, signalState433)) return;
       const normalized432 = normalizeTrack(snapshot432);
       if (!normalized432.id || normalized432.id !== row432.trackId ||
           normalized432.ownerUid !== row432.ownerUid) return;
@@ -2815,13 +2824,6 @@ export default function ExplorePage() {
       setProfileLikedTracks(patchExisting432);
 
       if (homeFeed432) {
-        const isLatestFeed432 = (() => {
-          try {
-            return new URL(requestUrl).searchParams.get('sort') === 'latest';
-          } catch {
-            return requestUrl.includes('sort=latest');
-          }
-        })();
         setTracks((previous) => {
           const index = previous.findIndex((track) => track.id === normalized432.id);
           if (index >= 0) {
@@ -2829,7 +2831,7 @@ export default function ExplorePage() {
             next[index] = { ...next[index], ...normalized432 };
             return overlayActorLikeCounts120(next);
           }
-          if (!isLatestFeed432) return previous;
+          if (!shouldInsertExplorePublicationTrack433(sort)) return previous;
           return overlayActorLikeCounts120([normalized432, ...previous].slice(0, 40));
         });
       }
@@ -2848,7 +2850,17 @@ export default function ExplorePage() {
       );
     };
 
-    const applyRow432 = (row432: ExplorePublicPublicationSignalRow429) => {
+    const applyRow432 = (
+      row432: ExplorePublicPublicationSignalRow429,
+      signalVersion433: number,
+    ) => {
+      const signalState433: ExplorePublicationLiveSignalState433 = {
+        trackId: row432.trackId,
+        at: row432.at,
+        status: row432.status,
+        version: signalVersion433,
+      };
+      if (!recordLatestExplorePublicationSignal433(latestSignalByTrack433, signalState433)) return;
       if (cancelled432 || row432.ownerUid === viewerUid432 ||
           hasSettledExplorePublicPublicationSignal429(
             viewerUid432, row432.trackId, row432.at,
@@ -2874,17 +2886,21 @@ export default function ExplorePage() {
 
       void fetchExplorePublicPublicationLiveCard432(row432)
         .then((snapshot432) => {
-          if (!snapshot432) return;
-          applyPublicCard432(row432, snapshot432);
+          if (!snapshot432 ||
+              !isExplorePublicationPublicResponseCurrent433(latestSignalByTrack433, signalState433)) return;
+          applyPublicCard432(row432, signalState433, snapshot432);
         })
         .catch((error432) => {
           console.warn('[432] Edge live-card repair deferred:', error432);
         });
     };
 
-    const onSignal432 = (signal432: { rows: ExplorePublicPublicationSignalRow429[] }) => {
+    const onSignal432 = (signal432: {
+      version: number;
+      rows: ExplorePublicPublicationSignalRow429[];
+    }) => {
       if (cancelled432) return;
-      signal432.rows.forEach(applyRow432);
+      signal432.rows.forEach((row432) => applyRow432(row432, signal432.version));
     };
 
     const detach432 = () => {

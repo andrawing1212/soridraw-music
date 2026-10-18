@@ -11,10 +11,14 @@ const hashPath='cloudflare/explore-worker/canonical/source-sha256.txt';
 const patch100='cloudflare/explore-worker/patches/100-music-note-next-song-legacy-parity.mjs';
 const patch101='cloudflare/explore-worker/patches/101-publication-live-convergence.mjs';
 
-const git=(args,options={})=>{
-  const r=spawnSync('git',args,{encoding:'utf8',...options});
-  if(r.status!==0) throw new Error(r.stderr||r.stdout||('git '+args.join(' ')+' failed'));
-  return r.stdout.trim();
+const git=(args,{trim=true,...options}={})=>{
+  const r=spawnSync('git',args,{
+    encoding:'utf8',
+    maxBuffer:32*1024*1024,
+    ...options,
+  });
+  if(r.status!==0) throw new Error(r.stderr||r.error?.message||('git '+args.join(' ')+' failed'));
+  return trim?r.stdout.trim():r.stdout;
 };
 
 if(spawnSync('git',['cat-file','-e',AUDITED_SHA+'^{commit}']).status!==0){
@@ -29,7 +33,7 @@ for(const path of [patch100,patch101]){
 
 const temp=mkdtempSync(join(tmpdir(),'soridraw-app434-release-'));
 try{
-  const base=git(['show',AUDITED_SHA+':'+workerPath]);
+  const base=git(['show',AUDITED_SHA+':'+workerPath],{trim:false});
   writeFileSync(join(temp,'worker.js'),base,'utf8');
   for(const patch of [patch100,patch101]){
     const r=spawnSync(process.execPath,[resolve(patch)],{

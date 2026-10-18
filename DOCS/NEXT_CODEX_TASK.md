@@ -1,3 +1,12 @@
+## NEXT — app421 PREVIEW Hosting candidate QA PASS, await explicit approval / real-device like verification (2026-10-18 KST)
+
+- **Prepared release:** exact Draft PR #222 HEAD `e87b08bfdf5353ff33eef72e845acd8178134df5`, just app-version421 and canonical Hosting trigger, [Quality Run 39099651971](https://github.com/andrawing1212/soridraw-music/actions/runs/39099651971) SUCCESS. Baseline preview code `80bd7734ed211cb883327c1cf3ca7072ff9c77ab`; actual live PREVIEW still app420. Never call GitHub code merge a deployed app.
+- **Preflight cleared:** app423/424 dormant 1m/4m and stale browser feed-revision reply regressions PASS; 033 old static verifier corrected PR #217 Run 39098638303 SUCCESS. app420 minimum guarded version and Stage416 shared public proof tests now run for app421+ via test-only PR #220/#221. No Worker/Functions/Rules/shared data changes. PR #218 superseded and closed, not to be merged.
+- **Next operator action once user clearly authorizes `프리뷰배포`:** mark PR #222 ready, recheck exact head, merge once, observe `SORIDRAW PREVIEW App Release` existing workflow; require TypeScript/Build/like/follow verification, Firebase PREVIEW Hosting PASS, live version421 and exact build, main TEST / production commit+site unchanged; stop on any failure. Never auto-deploy without approval.
+- **User acceptance immediately afterward:** same UID PC↔mobile with one origin closed 1m, then 4m, then multiple misses/opposite toggle; on reopen hearts/numbers and other-account shared public counts agree without page navigation; check R2/Edge/D1 diagnostics and avoid per-app-update Firestore/D1 reads. If FAIL, fix only causal path; do not modify live app410/448 working sync. Net-zero durable receipt follow-up separate. Work 1–2 audits conserved. Curated PR #200 unchanged/unmerged; no TEST/PRODUCTION approval.
+
+---
+
 ## NEXT — app421 Firebase PREVIEW release ready to gate, no further generic implementation (2026-10-18 KST)
 
 - Product source `preview` baseline `86d5fd9bb0173eb955af60eb60f3c16bedfc6048`. App423/424 PR #213 merged with exact CI [39097921024](https://github.com/andrawing1212/soridraw-music/actions/runs/39097921024) PASS. Legacy 033 static-only test pre-existing mismatch corrected PR #217; legacy 033 [39098638303](https://github.com/andrawing1212/soridraw-music/actions/runs/39098638303) PASS, app410 QA [39098626587](https://github.com/andrawing1212/soridraw-music/actions/runs/39098626587) PASS, Stage416 readonly and Follow only PASS.

@@ -2846,7 +2846,7 @@ export default function ExplorePage() {
       }
 
       rememberSettledExplorePublicPublicationSignal429(
-        viewerUid432, row432.trackId, row432.at,
+        viewerUid432, row432.trackId, row432.at, signalState433.version,
       );
     };
 
@@ -2863,7 +2863,7 @@ export default function ExplorePage() {
       if (!recordLatestExplorePublicationSignal433(latestSignalByTrack433, signalState433)) return;
       if (cancelled432 || row432.ownerUid === viewerUid432 ||
           hasSettledExplorePublicPublicationSignal429(
-            viewerUid432, row432.trackId, row432.at,
+            viewerUid432, row432.trackId, row432.at, signalVersion433,
           )) return;
 
       if (row432.status === 'private') {
@@ -2879,7 +2879,7 @@ export default function ExplorePage() {
         setProfileLikedTracks(remove432);
         if (profileOwner432 === row432.ownerUid) setProfileTracks(remove432);
         rememberSettledExplorePublicPublicationSignal429(
-          viewerUid432, row432.trackId, row432.at,
+          viewerUid432, row432.trackId, row432.at, signalVersion433,
         );
         return;
       }

@@ -43,7 +43,7 @@ export type ExplorePublicPublicationState429 = {
 
 type AckLedger429 = {
   viewerUid: string;
-  rows: Record<string, { at: number; checkedAt: number }>;
+  rows: Record<string, { at: number; version: number; checkedAt: number }>;
 };
 
 const safeId429 = (value: unknown, max = 512) => String(value || '').trim().slice(0, max);
@@ -82,7 +82,7 @@ const subscribeSignalPath432 = (
   listener: (signal: ExplorePublicPublicationSignal429) => void,
 ): Unsubscribe => {
   let lastVersion = 0;
-  const seenTrackAt = new Map<string, number>();
+  const seenTrackSignal = new Map<string, { at: number; version: number }>();
   return onValue(
     databaseRef(realtimeDb, path),
     (snapshot) => {
@@ -91,9 +91,12 @@ const subscribeSignalPath432 = (
       lastVersion = signal.version;
       if (Date.now() - signal.at > PUBLIC_PUBLICATION_RETENTION_MS_429) return;
       const rows = signal.rows.filter((row) => {
-        const previous = seenTrackAt.get(row.trackId) || 0;
-        if (row.at <= previous) return false;
-        seenTrackAt.set(row.trackId, row.at);
+        const previous = seenTrackSignal.get(row.trackId);
+        if (previous && (
+          row.at < previous.at
+          || (row.at === previous.at && signal.version <= previous.version)
+        )) return false;
+        seenTrackSignal.set(row.trackId, { at: row.at, version: signal.version });
         return true;
       });
       if (rows.length) listener({ ...signal, rows });
@@ -193,11 +196,13 @@ const readAckLedger429 = (viewerUid: string, now: number): AckLedger429 => {
     if (!parsed || parsed.viewerUid !== viewerUid || !parsed.rows || typeof parsed.rows !== 'object') return empty;
     for (const [trackId, row] of Object.entries(parsed.rows)) {
       const at = Number(row?.at);
+      const version = Number((row as { version?: unknown })?.version || 0);
       const checkedAt = Number(row?.checkedAt);
       if (!Number.isSafeInteger(at) || at <= 0 ||
+          !Number.isSafeInteger(version) || version < 0 ||
           !Number.isSafeInteger(checkedAt) || checkedAt > now + 60_000 ||
           now - checkedAt > PUBLIC_PUBLICATION_ACK_TTL_MS_429) continue;
-      empty.rows[trackId] = { at, checkedAt };
+      empty.rows[trackId] = { at, version, checkedAt };
     }
   } catch {}
   return empty;
@@ -207,29 +212,39 @@ export const hasSettledExplorePublicPublicationSignal429 = (
   viewerUid: string,
   trackId: string,
   acceptedAt: number,
+  acceptedVersion = 0,
   now = Date.now(),
 ): boolean => {
   const uid = safeId429(viewerUid, 128);
   const id = safeId429(trackId);
-  if (!uid || !id || !Number.isSafeInteger(acceptedAt) || acceptedAt <= 0) return false;
-  return (readAckLedger429(uid, now).rows[id]?.at || 0) >= acceptedAt;
+  if (!uid || !id || !Number.isSafeInteger(acceptedAt) || acceptedAt <= 0 ||
+      !Number.isSafeInteger(acceptedVersion) || acceptedVersion < 0) return false;
+  const settled = readAckLedger429(uid, now).rows[id];
+  if (!settled) return false;
+  return settled.at > acceptedAt
+    || (settled.at === acceptedAt && settled.version >= acceptedVersion);
 };
 
 export const rememberSettledExplorePublicPublicationSignal429 = (
   viewerUid: string,
   trackId: string,
   acceptedAt: number,
+  acceptedVersion = 0,
   now = Date.now(),
 ): void => {
   const uid = safeId429(viewerUid, 128);
   const id = safeId429(trackId);
   if (!uid || !id || !Number.isSafeInteger(acceptedAt) || acceptedAt <= 0 ||
+      !Number.isSafeInteger(acceptedVersion) || acceptedVersion < 0 ||
       typeof window === 'undefined') return;
   const ledger = readAckLedger429(uid, now);
-  ledger.rows[id] = {
-    at: Math.max(acceptedAt, ledger.rows[id]?.at || 0),
-    checkedAt: now,
-  };
+  const previous = ledger.rows[id];
+  const isNewerOrSame = !previous
+    || acceptedAt > previous.at
+    || (acceptedAt === previous.at && acceptedVersion >= previous.version);
+  if (isNewerOrSame) {
+    ledger.rows[id] = { at: acceptedAt, version: acceptedVersion, checkedAt: now };
+  }
   const rows = Object.fromEntries(Object.entries(ledger.rows)
     .sort((a, b) => b[1].checkedAt - a[1].checkedAt)
     .slice(0, PUBLIC_PUBLICATION_MAX_429 * 2));

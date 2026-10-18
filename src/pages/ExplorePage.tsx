@@ -2792,7 +2792,9 @@ export default function ExplorePage() {
 
     const fetchRevision = async (): Promise<string | null> => {
       if (!feedRequest) return null;
-      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl), {
+      const revisionUrl424 = new URL(buildExploreFeedRevisionUrl(requestUrl));
+      if (dormantForcedFeed424) revisionUrl424.searchParams.set('__soridraw_dormant_resume', '1');
+      const response = await fetch(revisionUrl424.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -2964,7 +2966,9 @@ export default function ExplorePage() {
     const controller304 = new AbortController();
 
     const fetchPopularRevision304 = async (): Promise<string | null> => {
-      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl304), {
+      const revisionUrl424 = new URL(buildExploreFeedRevisionUrl(requestUrl304));
+      if (dormantForcedPopular424) revisionUrl424.searchParams.set('__soridraw_dormant_resume', '1');
+      const response = await fetch(revisionUrl424.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller304.signal,

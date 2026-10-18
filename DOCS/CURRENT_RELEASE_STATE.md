@@ -1,3 +1,30 @@
+## CURRENT — app431 server-issued publication invalidation; independent re-audit pending (2026-10-19 KST)
+
+- **preview product merge:** PR #244 → `27e44757a818e686f9970f198ac2ec23f8b7c4ae`, superseding app430's browser-writable shared publication signal.
+- **Why app431 exists:** GPT-6 re-audit of `c99b70f3e7bc3a3cd26217a19edc6238270002a4` found three #226 blockers: unrelated-viewer fanout, client-writable invalidation abuse, and stale R2 completion risk. app430 bounded fanout/staleness; app431 removes the remaining browser write authority entirely.
+- **Fanout/cost:** a public signal triggers the exact Worker/R2 state route only for an already-visible changed track or the currently viewed owner's public profile. An unseen/new Feed publication only marks the existing Feed revision path stale for the next normal revision/resume check. No immediate request for unrelated viewers, no new polling, no whole Feed/profile read.
+- **Authority:** browsers are READ-ONLY on `publicSync/explorePublication`; RTDB Rules use `.write=false`. After canonical publication mutation and exact R2 projection succeed, the Worker HMAC-signs the exact track/owner/status/R2 timestamp and calls the dedicated Firebase Function. The Function validates signature, track-owner binding, freshness and idempotency, then Admin-writes the compact RTDB invalidation.
+- **R2 failure safety:** Worker attempts server invalidation only after the exact R2 state/tombstone write returns its timestamp. Browser code no longer publishes proof. Receivers still fetch exact R2 only when relevant and accept/ack only when `state.updatedAt === signal.at`; missing/stale R2 remains unacked. Callback outage does not falsify user mutation; existing revision/resume recovery remains fallback.
+- **Cost boundary:** exact state route stays D1 R0/W0; no client-side public write path; unrelated viewers stay Worker/R2 R0 for the signal. Relevant requests remain bounded and coalesced.
+- **Release safety:** new Function source is not deployed. A dedicated PREVIEW workflow requires an exact audited SHA + `audit_result=PASS` and deploys only `publicationRelease431Candidate`. Worker PREVIEW var targets only the Candidate Function; TEST/PRODUCTION promotion runtime maps to separate Test/Production Function identities.
+- **Frozen:** #229 patch100 lyric-mode parity unchanged; #237 pending save-heart/Catalog overlay unchanged; app421 likes/follows and app349 +30s save-heart settlement unchanged; UI/CSS unchanged.
+- **QA:** PR #244 head `4dfeaf3ddb6ff22f0c665b9a60b2f066cbed6f12`; Run `39157177833` **SUCCESS**. Logs confirm app431 browser-write false, HMAC server issuer/owner binding, duplicate idempotency, unrelated-viewer immediate R2 zero, environment endpoint separation and one-function release guard PASS; TypeScript, Build, Functions build, frozen like/catalog regressions and live Rules read-only preflight also PASS.
+- **Deployment:** none. Firebase PREVIEW live remains app421; new Function/Worker patch101/Rules/Hosting are source-only. TEST/PRODUCTION unchanged. No shared user-data change, D1 migration/schema/backfill/delete.
+- **Next gate:** latest `preview` HEAD after this docs-only merge is the exact GPT-6 independent re-audit SHA. Do not deploy before PASS.
+
+### Progress remains frozen until independent PASS
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | re-audit FAIL blockers corrected through app431; re-audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code PASS / frozen |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app430 #226 public live-sync audit blockers corrected; re-audit pending (2026-10-19 KST)
 
 - **preview product merge:** PR #242 → `c03d32a617062e5b85e747f5a981bf2b2019245d`, correcting only the three new #226 blockers found by the GPT-6 re-audit of `c99b70f3e7bc3a3cd26217a19edc6238270002a4`.

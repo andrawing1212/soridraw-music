@@ -1,3 +1,16 @@
+## NEXT — app429 corrected integrated SHA: GPT-6 re-audit ONLY (2026-10-19 KST)
+
+- Do not add generic implementation unless re-audit finds a concrete blocker.
+- Audit latest `preview` HEAD after this docs merge; product code underneath is PR #240 merge `68e0679b82980a6eca58344bc9619da7ebc3cf8a`.
+- **#226:** prove legacy polluted cache returns confirmed base; second-account warm Feed/public profile converges from changed-ID signal + exact shared-R2 state without navigation; route is D1 R0/W0; no polling/full refresh.
+- **#229:** prove `isLyricMode`/`lyricMode` parity and continued exclusion of lyricDraft/finished lyrics; canonical-newer wins; missing historical command remains absent.
+- **#237:** prove Catalog recovery cannot hide/reverse a +30s pending save/unsave and canonical cache remains separate; bounded R2 Catalog recovery occurs only after real remote canonical mutation.
+- Protect app421 likes/follows, app349 +30s save-heart settlement, Music Note batching, UI/CSS and shared source data.
+- PASS only then coordinate PREVIEW Hosting + Worker patches 100/101 + additive shared RTDB Rules; Functions/D1 schema/shared user data stay unchanged.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%`.
+
+---
+
 ## NEXT — exact integrated audit gate after app428 (2026-10-18 KST)
 
 - **Do not add more generic implementation before audit unless a concrete blocker is found.** Current integrated code already contains title display #234, Music Note Catalog recovery #235, legacy recipe/shareBundle #236, and publication confirmed-state #238.

@@ -1,3 +1,28 @@
+## CURRENT — app429 audit FAIL corrections merged; independent re-audit pending (2026-10-19 KST)
+
+- **preview product merge:** PR #240 → `68e0679b82980a6eca58344bc9619da7ebc3cf8a`.
+- Previous integrated audit of `85f3d5e8bd67cc5e9e98731f8e5d60ace3b9fb2a` was **FAIL**. The four reported blockers were corrected minimally; progress does not advance until GPT-6 re-audit PASS.
+- **#226:** legacy polluted optimistic publication cache is repaired from pending `baseState` before warm-cache return. Cross-account warm Feed/profile now receives bounded changed-ID RTDB invalidation and verifies exact public/private/card state from shared R2; no polling/full Feed/profile read, D1 R0/W0.
+- **#229:** Worker public nextSong now preserves persisted `isLyricMode` and `lyricMode`; lyricDraft/finished lyrics remain excluded and absent historical command is not fabricated.
+- **#237:** Catalog canonical catch-up explicitly re-applies remote-preview + local +30s pending save-heart overlays before replacing visible Music Note membership; canonical cache remains pending-free.
+- New Worker patch 101 stores only per-changed-track shared R2 publication state/tombstone. Shared RTDB Rules add one bounded authenticated invalidation node. No D1 schema/migration/backfill/delete and no shared user source-data rewrite.
+- PR #240 exact head `a177be87c7fb217a252fcc7407746be6fd7ddded`; Quality Run `39152290177` **SUCCESS** including app428/app429 verifiers, TypeScript, Build, frozen like/catalog regressions, Functions build and live Rules read-only additive audit.
+- **Deployment:** none. PREVIEW live remains app421. Worker patches 100/101 and new RTDB rule are source-only. TEST/PRODUCTION unchanged.
+- **Next:** latest preview HEAD after this docs merge becomes the exact re-audit SHA. Do not deploy before independent PASS.
+
+### Progress (frozen until re-audit)
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | audit FAIL corrected; re-audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | audit FAIL corrected; re-audit pending |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | audit FAIL corrected; re-audit pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app425/426/427/428 integrated on preview; audit/deploy pending (2026-10-18 KST)
 
 - **preview HEAD:** `3cb856b8b660828aa78ec754c7e013ee1c85db95`. PREVIEW live Hosting is still app421; these fixes are code-only on GitHub and are **not deployed yet**.

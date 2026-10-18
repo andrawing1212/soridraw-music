@@ -1,3 +1,17 @@
+## NEXT — app433 #226 app432-audit corrections: GPT-6 RE-AUDIT ONLY (2026-10-19 KST)
+
+- **No more implementation before re-audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #248 merge `843c1f044012f0f2c413c92969b861f6234a9ee1`.
+- Re-test the three exact app432 FAIL findings:
+  1. **Recommended + Latest no-navigation insertion:** verify `recommended` is explicitly permitted by the app433 pure policy and that a newly published card enters the shared `tracks` pool used by Latest and recommendation-derived rails/models. Popular remains server-ranked and does not blindly prepend.
+  2. **public→private async inversion:** reproduce public Edge fetch pending → newer private signal → old public response completion. The older public response must be rejected before any cache/UI resurrection. Also verify equal R2 millisecond timestamps are ordered by newer server signal version.
+  3. **cost wording/math:** confirm the 115.2MB absolute bound is removed; UTF-8 byte diagnostics use `Buffer.byteLength`; actual 100k RTDB/Worker/R2 billed cost remains explicitly unverified.
+- Reconfirm app432 boundaries: global signal only active visible Recommended/Latest home Feed; Search/hidden/Popular no global listener; public profile owner-scoped; one retained RTDB row; browser write false; Edge HIT R2=0; live-card route D1 R0/W0; cold/concurrent Edge misses remain a stated scale risk.
+- Protect #229/#237/app421/app349/Music Note batching/UI/CSS/shared source data.
+- **PASS only then:** coordinate exact audited PREVIEW release of Hosting + Worker patch100/101 + `publicationRelease431Candidate` + read-only publication RTDB Rules. No D1 schema/shared user-data change. After deployment run PC/mobile/second-account and cost diagnostics before advancing progress.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until independent PASS.
+
+---
+
 ## NEXT — app432 new-public live delta + realtime cost: GPT-6 AUDIT ONLY (2026-10-19 KST)
 
 - **Do not implement more before audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #246 merge `49a76941cec8c9efa8c374b81672ae945b84fdf6`.

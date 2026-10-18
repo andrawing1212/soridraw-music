@@ -11,6 +11,7 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+import { hasMusicNoteNextSongRecipe425, resolveMusicNoteNextSongRecipe425 } from '../services/musicNoteNextSongRecipe';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
 
@@ -704,13 +705,14 @@ export default function GlobalPlayer() {
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
-    let appliedKeywords =
-      group.appliedKeywords ||
-      group?.requestPayload?.appliedKeywords ||
-      (currentTrack as any)?.appliedKeywords ||
-      null;
+    let appliedKeywords = resolveMusicNoteNextSongRecipe425({
+      ...(currentTrack as any),
+      ...group,
+      appliedKeywords: group.appliedKeywords ?? (currentTrack as any)?.appliedKeywords,
+      requestPayload: group.requestPayload ?? (currentTrack as any)?.requestPayload,
+    });
 
-    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
+    if (!hasMusicNoteNextSongRecipe425(appliedKeywords)) {
       const currentUser = auth.currentUser;
       const sourceTrackId = String(
         isPlaylistTrack
@@ -723,8 +725,8 @@ export default function GlobalPlayer() {
           const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));
           if (sourceSnapshot.exists()) {
             const sourceData: any = sourceSnapshot.data() || {};
-            appliedKeywords = sourceData?.appliedKeywords || sourceData?.requestPayload?.appliedKeywords || null;
-            if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
+            appliedKeywords = resolveMusicNoteNextSongRecipe425(sourceData);
+            if (hasMusicNoteNextSongRecipe425(appliedKeywords)) {
               group.appliedKeywords = appliedKeywords;
             }
           }
@@ -734,7 +736,7 @@ export default function GlobalPlayer() {
       }
     }
     
-    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
+    if (!hasMusicNoteNextSongRecipe425(appliedKeywords)) {
       alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
       return;
     }

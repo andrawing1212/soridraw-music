@@ -1,3 +1,16 @@
+## CURRENT — P0 공개곡 정합성 실사용 FAIL 접수 / 원인 3계층 확인 / 수정 전 (2026-10-18 KST)
+
+- **새 최우선 사용자 FAIL:** PREVIEW app421 Music Note 공개에서 `PUBLICATION_BATCH_PENDING` 경고 후 route 재진입 시 공개 버튼만 다시 켜지고 canonical 공개 Feed에는 없는 false-public UI가 재현됨. 기존부터 다른 기기/계정의 Feed↔공개프로필 수렴이 navigation에 의존하는 경우와, 공개 후 Music Note 제목 수정이 Explore 제목에 반영되지 않는 문제도 함께 보고됨. GitHub Issue #226으로 통합.
+- **원인 A — confirmed/pending 혼합 확정:** `queuePublicationMutation`이 pending desired state를 publication cache에 먼저 기록하고, 실패 outbox가 남으면 hydration의 `overlayPendingPublicationStates`가 서버 bundle 위에 다시 desired public을 덮는다. 따라서 서버 row 실패 뒤에도 route/reload에서 공개 버튼이 confirmed public처럼 보일 수 있다.
+- **원인 B — shared-public change signal 공백 확인:** publication RTDB는 `userSync/{ownerUid}/explorePublication` owner UID 전용이라 같은 계정 기기에는 유효하지만 다른 계정 warm Feed/public-profile cache에는 변경 신호가 없다. Feed/Profile의 bounded revision recovery는 resume/activity에 의존해 profile 방문/route 변화가 우연한 수렴 트리거가 될 수 있다.
+- **원인 C — public title update path 누락 확정:** Music Note 제목 저장은 local draft + same-account detail preview만 보내며, 이미 공개된 canonical Explore track/title을 갱신하는 publication mutation이 연결되어 있지 않다. 현재 source-refresh path도 일반 title edit과 연결되지 않는다.
+- **app421 관계:** app420 product merge `142f5b32...` → app421 source `80bd7734...` 사이에 `explorePublicationService.ts`와 `FavoritesPage.tsx`는 변경되지 않아 A/C는 app421에서 새로 추가된 mutation 로직이 아니다. 다만 app421은 Explore dormant/cache code를 바꿨으므로 B의 표시 타이밍 상호작용은 회귀검사 대상이다.
+- **안전 원칙:** canonical `tracks`를 공개 진실로 유지, pending retry와 confirmed state 분리, changed-track only 수렴, whole Feed/profile scan·polling·per-card listener 금지. Music Note local-first/batched 저장 및 app421 likes/follows/UI는 보호한다.
+- **배포 상태:** 이 진단 단계에서 코드 수정/배포/shared D1·R2·Firebase user data 변경 **0**. PREVIEW live app421 유지, TEST/PRODUCTION unchanged.
+- **Progress:** Stage416 **1/4 · 25%** 일시 대기; app speed **5/5 · 100%**; 새 세부작업 `공개곡 정합성 P0` **1/5 · 20%** = 실사용 증상 분류 + 코드 원인 3계층 확인 완료, 구현/QA/독립감사/PREVIEW 실기기 미완료.
+
+---
+
 ## CURRENT — app421 closed-device PC↔mobile like recovery USER REAL-DEVICE PASS (2026-10-18 KST)
 
 - **User acceptance:** PREVIEW app421 real-device test passed. The previously failing case where one PC/mobile origin was closed/backgrounded while the other changed likes now converges correctly on reopen without requiring page/tab navigation. Treat the app421 closed-device recovery detail task as **5/5 · 100%**.

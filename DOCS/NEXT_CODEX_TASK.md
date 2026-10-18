@@ -1,3 +1,18 @@
+## IMPLEMENTATION GATE ADDENDUM — Issue #229 old-song next-song normalization (2026-10-18 KST)
+
+Issue #226 공개곡 P0와 병행 설계하되 **별도 호환 레이어**로 구현한다.
+
+- 하나의 canonical `resolveNextSongRecipeFromMusicNote(source)` 성격의 read-time normalization contract를 우선 설계한다. 호출부마다 서로 다른 fallback을 계속 늘리지 않는다.
+- 입력 호환 순서: 최신 `appliedKeywords` → 누락 필드만 `requestPayload.appliedKeywords` → 알려진 구형 `requestPayload` direct recipe → top-level legacy aliases. 새 값과 옛 값이 충돌하면 최신 canonical이 반드시 이긴다.
+- command input은 실제 저장된 `userInput/commandInput/directInput/customPrompt` 및 확인된 requestPayload aliases만 사용. generated `prompt/style`을 원래 사용자 명령으로 대체하지 않는다.
+- Music Note 직접 apply, GlobalPlayer/Library apply, own Explore bounded recovery, publication Worker shareBundle, follower-save/shared-note copy가 같은 field contract를 사용하거나 deterministic parity test로 동등함을 증명한다.
+- 언어/제목 언어, language mix, ratio/targets, tempo/vocal/rap/structure/custom inputs, situation/summary, point sounds 등 현재 next-song field set을 legacy fixture로 검증한다.
+- 읽기 비용: Music Note 명시적 apply에서 현재 exact-doc hydration 이상 추가 read 0; public publication도 기존 mutation source object 외 추가 collection scan 0; other-account public apply는 source Firestore를 읽지 않고 shareBundle만 사용.
+- 과거 사용자 문서를 일괄 rewrite/backfill하지 않는다. 실제 값이 없는 legacy 필드는 현재 기본값으로 남기며 추정 생성 금지.
+- #229 PASS 전에는 “구형 곡 공개 시 다음곡 적용 정보 완전성”을 PASS로 선언하지 않는다.
+
+---
+
 ## IMPLEMENTATION GATE — Issue #226 연결 기능 영향지도 확정 후에만 코드 수정 (2026-10-18 KST)
 
 공개곡 P0 구현 전에 아래 흐름을 **쓰기 전 감사**한다. 각 항목은 `영향 있음/없음 + 이유 + 보호 테스트`를 남긴 뒤 실제 수정 파일을 정한다.

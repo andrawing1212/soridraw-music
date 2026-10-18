@@ -1,3 +1,105 @@
+## MASTER ROADMAP — 2026-10-18 KST / 사용자 고정 진행표
+
+### 현재 기준
+- GitHub `preview` 기준 HEAD: `a221120e9ea56e2216acebf67d823cfabb5babc8`.
+- PREVIEW 실사용 기준 앱: app421. app421 PC↔mobile closed-device like recovery는 사용자 실기기 PASS 후 동결.
+- TEST / PRODUCTION은 이번 작업에서 변경하지 않는다.
+- 진행 보고는 아래 표를 기준으로 **매 작업마다 완료/진행중/대기 + 단계수 + %**를 반드시 표시한다.
+
+### 전체 우선순위와 진척도
+
+| 우선순위 | 작업 | 현재 단계 | 진척도 | 상태 |
+|---|---|---:|---:|---|
+| P0-1 | 공개곡 정합성 #226 | 2 / 6 | 33% | 진행중 |
+| P0-2 | 구형 Music Note 다음곡 적용 + 공개 shareBundle 호환 #229 | 2 / 5 | 40% | 진행중 |
+| P1 | Stage416 공개 좋아요 5분 집계 활성화 | 1 / 4 | 25% | P0 완료까지 대기 |
+| P2 | curated recommendations PR #200 안전성 | 0 / 4 | 0% | 별도 대기 |
+| 완료 | app421 closed-device 좋아요 수렴 | 5 / 5 | 100% | USER PASS / 동결 |
+| 완료 | 앱 속도 개선 | 5 / 5 | 100% | 완료 / 보호 |
+
+### P0-1 — 공개곡 정합성 #226
+1. **증상/원인 분류 — 완료**
+   - 실패한 공개가 route 재진입 뒤 공개 버튼만 다시 켜지는 false-public.
+   - 다른 계정/기기의 warm Feed와 공개프로필이 navigation에 의존해 뒤늦게 수렴.
+   - 공개 후 Music Note 제목/장르 수정이 Explore/public profile/search projection에 반영되지 않음.
+2. **연결 기능 영향지도 — 완료**
+   - Music Note local draft/60초+page-exit canonical batch
+   - publication confirmed cache / pending outbox / retry / pageSync
+   - same-UID RTDB signal
+   - Explore Feed cache/revision
+   - Public Profile first-view cache/revision/trackCount
+   - Worker canonical tracks/stats
+   - R2 Feed/Profile/card/search
+   - shared-note/follower-save / curation / public like identity / origin별 browser+Edge cache
+3. **최소 구현 — 미완료**
+   - pending과 confirmed 공개상태 분리.
+   - 실패 row는 prior/base confirmed state 유지 + durable retry만 보존.
+   - 성공 변경은 exact changed track만 Feed/Profile/Search에 반영.
+   - 이미 공개된 Music Note title/genre 수정은 기존 Music Note canonical batch 이후 exact public metadata update.
+   - canonical 성공과 R2/derived failure를 분리해 false failure/false success 금지.
+4. **자동 회귀/비용 QA — 미완료**
+   - publish/unpublish/title edit exact-track tests.
+   - warm Feed + warm profile 다른 계정/기기 no-navigation convergence.
+   - unchanged entry/re-entry/update D1/Firestore data R0/W0 목표.
+   - full Feed/profile scan/rebuild, per-card polling/listener 없음.
+5. **GPT-6 독립 감사 — 미완료**
+   - exact commit SHA 고정 후 WORK_AUDIT_CHECKLIST 전 항목 PASS 필요.
+6. **PREVIEW 배포 + 실기기 — 미완료**
+   - 감사 PASS exact artifact만 PREVIEW 배포.
+   - PC/mobile same UID + second account + 공개/비공개/제목변경 실제 검증.
+
+### P0-2 — 구형 Music Note 다음곡 적용 / 공개 shareBundle #229
+1. **사용자 증상 + 현재 코드 gap 확인 — 완료**
+   - 최근 곡은 정상이나 약 6개월 전 일부 곡은 다음곡 적용 시 일부 설정/명령이 누락.
+   - Music Note 직접 apply가 `requestPayload` legacy shape를 충분히 읽지 않음.
+   - public shareBundle builder도 legacy source를 충분히 읽지 않아 공개 시 같은 누락이 전파될 수 있음.
+2. **역사 저장 형식 감사 — 완료**
+   - 2026-04-27 계열 코드에서 generation에는 userInput이 있었지만 일부 Music Note 저장에는 원문 command가 실제 persisted되지 않은 경로 확인.
+   - 따라서 저장돼 있으나 reader가 놓친 값과 애초에 저장되지 않은 값을 구분.
+3. **공통 legacy normalizer 구현 — 미완료**
+   - 최신 `appliedKeywords` 우선.
+   - 비어 있는 값만 `requestPayload.appliedKeywords` → known requestPayload direct recipe → top-level aliases 순으로 보완.
+   - generated prompt/style을 원래 command로 추정 금지.
+   - Music Note / GlobalPlayer / own Explore / public shareBundle / shared-note가 같은 field contract를 사용.
+4. **legacy fixture + parity QA — 미완료**
+   - recent canonical / old appliedKeywords / old requestPayload.appliedKeywords / old direct recipe / conflicting values / historically absent command를 각각 검증.
+   - 공개 전후 next-song recipe parity.
+   - migration/backfill/full collection read 없음.
+5. **독립 감사 + PREVIEW 실사용 — 미완료**
+   - #226과 통합된 exact commit으로 감사.
+   - 과거곡 1~2개 실제 적용 + 공개 shareBundle 검증.
+
+### P1 — Stage416 공개 좋아요 5분 집계
+- **현재 1/4 · 25% / 대기.**
+- Functions는 존재하나 public activation HARD OFF.
+- #226/#229를 먼저 끝내고 좋아요 frozen app421을 건드리지 않은 상태에서 재개.
+- 재개 순서: activation source/guard 재감사 → PREVIEW-only Worker+Function activation → controlled Master E2E → 독립 감사/비용 확인.
+- 개인 하트 즉시성, PC↔mobile 수렴, public count window, O(1) 변경분, unchanged R0/W0 보호.
+
+### P2 — curated recommendations PR #200
+- 현재 **0/4 · 0% / 별도 대기**.
+- 알려진 우려: concurrent R2 snapshot overwrite, cross-environment revision authority.
+- Stage416 또는 사용자가 별도 우선순위를 지정한 뒤 분리 작업.
+- 공개곡 P0나 좋아요 작업에 섞지 않는다.
+
+### 완료/동결 항목
+- app421 closed-device PC↔mobile like recovery: **5/5 · 100% USER PASS**.
+- 앱 속도 개선: **5/5 · 100% 완료**.
+- 위 정상 기능은 새 재현 오류 없이 재설계/리팩터링 금지.
+
+### 고정 실행 순서
+`P0-1/#226 + P0-2/#229 설계 통합 → 최소 구현 → TS/Build/Test → exact SHA → GPT-6 독립감사 → PASS exact PREVIEW 배포 → 사용자 실기기 → Stage416 → curated PR #200 → TEST 승인 시 승격 → PRODUCTION은 별도 명시 승인`.
+
+### 진행 보고 형식 — 매 응답/작업 후 필수
+- 전체: `P0-1 2/6 33% | P0-2 2/5 40% | Stage416 1/4 25% | Curated 0/4 0%`
+- 이번 단계: 무엇을 끝냈는지 / 무엇이 남았는지.
+- 코드/commit/push/배포 여부.
+- TypeScript/Build/Test.
+- Firebase/Cloudflare/shared data 변경 여부.
+- 비용·PC/mobile·다른 계정 검증 여부.
+- 실패가 있으면 다음 단계로 진행하지 않고 FAIL 원인과 최소 수정 범위를 먼저 고정.
+
+---
 ## CURRENT ADDENDUM — 구형 Music Note 다음곡 적용 legacy parity P0 추가 (2026-10-18 KST)
 
 - **사용자 실기기 증상:** 약 6개월 전 생성한 일부 Music Note 곡은 카드의 장르/키워드가 남아 있어도 `다음곡에 적용` 후 Studio 명령창의 과거 직접 입력 등 일부 생성 설정이 누락된다. 최근 곡은 정상. GitHub Issue #229로 별도 추적한다.

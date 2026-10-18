@@ -147,8 +147,11 @@ assert.match(service,/result\.status !== 'already-desired'/,
 assert.match(page,/patchExploreFeedSessionCachesRow\(row\.trackId, \{ likeCount: card\.likeCount \}\)/,
   'public cache gets only public published count');
 assert.match(service,/EXPLORE_LIKE_DEFERRED_PUBLIC_LOCK_MS_420 = 25 \* 60_000/);
-assert.equal(JSON.parse(readFileSync('public/app-version.json','utf8')).version,420,
-  'app420 must build a new app version; same-version app419 release is forbidden');
+// app420 remains the minimum accepted release. Follow-up app421+ Hosting
+// versions must keep its protected actor/public count contract intact.
+const appVersion420 = JSON.parse(readFileSync('public/app-version.json','utf8')).version;
+assert.ok(Number.isSafeInteger(appVersion420) && appVersion420 >= 420,
+  'the protected app420 like baseline must never regress to app419 or an invalid version');
 assert.match(page,/detail\.privateCountExact416 !== false && Number\.isSafeInteger\(detail\.likeCount\)/,
   'late personal signal must retain the heart without reverting a settled public count');
 console.log('APP420_RELEASE_VERSION_420_AND_LATE_PRIVATE_REPAINT_GUARD=PASS');

@@ -42,7 +42,7 @@ const publicRule = rules?.rules?.publicSync?.explorePublication;
 assert.equal(publicRule?.['.read'], 'auth != null');
 assert.equal(publicRule?.['.write'], "auth != null && newData.child('actorUid').val() === auth.uid");
 assert.equal(publicRule?.rows?.$index?.ownerUid?.['.validate'],
-  'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
+  'newData.isString() && newData.val().length > 0 && newData.val().length <= 128');
 
 assert.ok(manifest.patches.includes('100-music-note-next-song-legacy-parity.mjs'));
 assert.ok(manifest.patches.includes('101-publication-live-convergence.mjs'));

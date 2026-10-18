@@ -78,6 +78,7 @@ const publication = readFileSync('src/services/explorePublicationService.ts', 'u
 const favorites = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const modal = readFileSync('src/components/explore/ExplorePublicationSettingsModal.tsx', 'utf8');
 const explore = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+const profileFirstView = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
 const workerPatch = readFileSync('cloudflare/explore-worker/patches/100-publication-legacy-next-song-recipe.mjs', 'utf8');
 
 assert.match(publication, /pending\/retry intent is not confirmed publication state/);
@@ -105,6 +106,12 @@ assert.match(modal, /normalizeExplorePublicTitle425\(title/);
 assert.match(modal, /normalizeExplorePublicTitle425\(choice\.title/);
 assert.match(explore, /title: normalizeExplorePublicTitle425\(row\.title/);
 
+assert.match(profileFirstView, /forceInteractionCheck425 = false/);
+assert.match(profileFirstView, /revalidateCachedProfile113\(normalizedRef, cached, options, forceInteractionCheck425\)/);
+assert.match(explore, /profileInteractionRevalidateUidRef425\.current = String\(track\.ownerUid/);
+assert.match(explore, /requestProfileRevalidation335\(true\)/);
+assert.doesNotMatch(profileFirstView, /setInterval\(/, 'public profile interaction repair must not poll');
+
 const workerBuilderStart = workerPatch.indexOf('function buildMusicNoteShareBundle100');
 const workerBuilderEnd = workerPatch.indexOf('const range = functionRange', workerBuilderStart);
 assert.ok(workerBuilderStart >= 0 && workerBuilderEnd > workerBuilderStart, 'worker app425 builder range missing');
@@ -130,5 +137,6 @@ assert.equal(publication.includes('setInterval('), false, 'publication service m
 console.log('APP425_PUBLIC_TITLE_NORMALIZATION=PASS');
 console.log('APP425_PUBLICATION_CONFIRMED_PENDING_SEPARATION=PASS');
 console.log('APP425_PUBLIC_METADATA_AFTER_CANONICAL_SAVE=PASS');
+console.log('APP425_EXPLICIT_PROFILE_OPEN_REVISION_RECHECK=PASS');
 console.log('APP425_LEGACY_NEXT_SONG_NORMALIZER=PASS');
 console.log('APP425_NO_PROMPT_AS_HISTORICAL_COMMAND=PASS');

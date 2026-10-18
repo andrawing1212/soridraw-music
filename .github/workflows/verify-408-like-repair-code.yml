@@ -274,6 +274,17 @@ jobs:
           npm --prefix functions run build
       - name: Verify large Music Note shared-folder first-match semantics and cost
         run: node scripts/verify-music-note-shared-dedup-linear.mjs
+      - name: Verify app425 publication and legacy next-song contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/verify-425-publication-legacy.ts
+          node --check cloudflare/explore-worker/patches/100-publication-legacy-next-song-recipe.mjs
+          rm -rf .tmp-worker-425
+          mkdir -p .tmp-worker-425
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-worker-425/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker-425" node cloudflare/explore-worker/patches/100-publication-legacy-next-song-recipe.mjs
+          node --check .tmp-worker-425/worker.js
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior

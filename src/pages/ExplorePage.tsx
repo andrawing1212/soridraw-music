@@ -1966,6 +1966,7 @@ export default function ExplorePage() {
   const [profilePublicationSyncVersion357, setProfilePublicationSyncVersion357] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
+  const profileInteractionRevalidateUidRef425 = useRef('');
   const feedRevisionActivityAtRef = useRef(0);
   const feedRevisionRequestedUrlRef = useRef('');
   // app424 genuine dormant resumes are consumed separately by Latest/Popular.
@@ -3504,7 +3505,7 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!profileUid) return undefined;
     let cancelled = false;
-    const requestProfileRevalidation335 = () => {
+    const requestProfileRevalidation335 = (forceInteractionCheck425 = false) => {
       if (document.visibilityState !== 'visible') return;
       revalidateExplorePublicProfileFirstView335(profileUid, {
         onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
@@ -3537,8 +3538,15 @@ export default function ExplorePage() {
           setFollowState(null);
           setProfileError(message || '공개 프로필을 불러오지 못했어요.');
         },
-      });
+      }, forceInteractionCheck425);
     };
+
+    const interactionRequested425 = profileInteractionRevalidateUidRef425.current === profileUid;
+    if (interactionRequested425) {
+      profileInteractionRevalidateUidRef425.current = '';
+      requestProfileRevalidation335(true);
+    }
+
     document.addEventListener('visibilitychange', requestProfileRevalidation335);
     return () => {
       cancelled = true;
@@ -3804,6 +3812,7 @@ export default function ExplorePage() {
   const openProfile = async (track: ExploreTrack) => {
     if (!track.ownerUid) return;
     await flushExploreLikeBoundary094();
+    profileInteractionRevalidateUidRef425.current = String(track.ownerUid || '').trim();
     setSearchParams({ profile: track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

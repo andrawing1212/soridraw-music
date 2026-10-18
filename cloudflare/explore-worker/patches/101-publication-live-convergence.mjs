@@ -239,10 +239,9 @@ async function handlePublicationLiveCard432(request, env, cors) {
   try {
     const hit = await caches.default.match(edgeKey);
     if (hit) {
-      const headers = new Headers(hit.headers);
+      const headers = publicationStateHeaders429(cors,0);
       headers.set('X-SORIDRAW-Publication-Live-Cache','HIT');
-      headers.set('X-SORIDRAW-R2-B','0');
-      return new Response(hit.clone().body, { status:200, headers });
+      return new Response(await hit.text(), { status:200, headers });
     }
   } catch {}
 
@@ -259,9 +258,10 @@ async function handlePublicationLiveCard432(request, env, cors) {
   headers.set('X-SORIDRAW-Publication-Live-Cache','MISS');
   const response = new Response(body,{status:200,headers});
   try {
-    const storedHeaders = new Headers(headers);
-    storedHeaders.set('Cache-Control','public, max-age=300, immutable');
-    storedHeaders.set('X-SORIDRAW-Publication-Live-Cache','EDGE');
+    const storedHeaders = new Headers({
+      'Content-Type':'application/json; charset=utf-8',
+      'Cache-Control':'public, max-age=300, immutable',
+    });
     await caches.default.put(edgeKey,new Response(body,{status:200,headers:storedHeaders}));
   } catch {}
   return response;

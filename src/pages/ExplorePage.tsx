@@ -2787,6 +2787,7 @@ export default function ExplorePage() {
     const profileOwner432 = String(profileUid || '').trim();
     const homeFeed432 = !profileOwner432
       && !submittedQuery.trim()
+      && sort !== 'popular'
       && isExploreFeedRequest(requestUrl);
     if (!homeFeed432 && !profileOwner432) return undefined;
 
@@ -2910,7 +2911,7 @@ export default function ExplorePage() {
       document.removeEventListener('visibilitychange', onVisibility432);
       detach432();
     };
-  }, [user?.uid, requestUrl, profileUid, submittedQuery]);
+  }, [user?.uid, requestUrl, profileUid, submittedQuery, sort]);
 
   useEffect(() => {
     // SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004

@@ -16,6 +16,7 @@ assert.match(live,/subscribeExplorePublicProfilePublication432/);
 assert.match(live,/subscribeExplorePublicPublicationInvalidation429/);
 assert.match(live,/document\.visibilityState !== 'visible'/);
 assert.match(live,/!submittedQuery\.trim\(\)/);
+assert.match(live,/sort !== 'popular'/);
 assert.match(live,/upsertExploreFeedSessionCacheRow\(row432\.trackId, snapshot432\)/);
 assert.match(live,/\[normalized432, \.\.\.previous\]\.slice\(0, 40\)/);
 assert.doesNotMatch(live,/fetchExplorePublicPublicationStates429|setInterval\s*\(|MIN_PUBLICATION_REFRESH_MS/);
@@ -34,6 +35,7 @@ assert.match(patch,/publicationLiveCard432/);
 assert.match(patch,/handlePublicationLiveCard432/);
 assert.match(patch,/caches\.default\.match\(edgeKey\)/);
 assert.match(patch,/caches\.default\.put\(edgeKey/);
+assert.match(patch,/const headers = publicationStateHeaders429\(cors,0\)/);
 assert.match(patch,/PUBLICATION_LIVE_CARD_ROUTE_432/);
 const liveHandler=patch.slice(
   patch.indexOf('async function handlePublicationLiveCard432'),
@@ -61,6 +63,6 @@ assert.ok(ACTIVE_100K_SIGNAL_MAX_BYTES<=115_200_000);
 console.log('APP432_NEW_PUBLIC_TRACK_NO_NAVIGATION_EDGE_CARD=PASS');
 console.log('APP432_R2_READ_EDGE_SHARED_NOT_PER_VIEWER=PASS');
 console.log('APP432_PROFILE_OWNER_SCOPED_SUBSCRIPTION=PASS');
-console.log('APP432_HIDDEN_SEARCH_GLOBAL_LISTENER_ZERO=PASS');
+console.log('APP432_HIDDEN_SEARCH_POPULAR_GLOBAL_LISTENER_ZERO=PASS');
 console.log('APP432_SIGNAL_ONE_ROW_NO_CARD_PAYLOAD=PASS');
 console.log('APP432_100K_ACTIVE_FEED_SIGNAL_HARD_MAX_BYTES_PER_EVENT='+ACTIVE_100K_SIGNAL_MAX_BYTES);

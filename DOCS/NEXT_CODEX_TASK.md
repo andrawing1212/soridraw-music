@@ -1,3 +1,16 @@
+## NEXT HIGH — Issue #226 공개곡 정합성 P0를 Stage416보다 먼저 수정 (2026-10-18 KST)
+
+- **우선순위:** app421 closed-device like recovery는 사용자 PASS로 동결. Stage416 public-five-minute activation은 이 P0가 끝날 때까지 대기. 기존 정상 likes/follows/Music Note batching/UI를 건드리지 않는다.
+- **Fix A — false-public state:** failed/partially failed publication row는 durable retry outbox를 보존하더라도 confirmed publication cache/UI에는 prior/base state를 유지한다. 성공 row만 confirmed state와 compact sync signal을 publish한다. route/reload가 pending을 confirmed public로 승격하면 FAIL.
+- **Fix B — Feed/Profile cross-account convergence:** owner-private signal과 별개로, publication mutation 성공 시 exact changed track만 다른 origins/accounts가 알 수 있는 bounded shared change proof를 사용한다. 기존 shared R2/Edge revision/card route를 우선 재사용하고 polling/per-card subscription/whole Feed refresh를 만들지 않는다. Warm Feed와 warm public-profile 모두 navigation 없이 changed track만 갱신/삭제해야 한다.
+- **Fix C — public metadata edit:** already-public Music Note title/genre처럼 public card에 보이는 canonical field는 Music Note canonical detail settlement와 연결해 exact track만 publication canonical + R2 Feed/Profile/search projection에 반영한다. 매 키 입력 write 금지; 기존 local preview/batched Music Note persistence를 보호한다.
+- **Backend failure diagnosis:** 현재 `PUBLICATION_BATCH_PENDING`은 top-level 200 안의 row `ok:false`도 동일 toast로 뭉개므로, 테스트에서 실제 row failure code/단계를 노출해 canonical mutation 실패와 derived-cache failure를 분리한다. canonical 성공을 derived failure 때문에 false failure로 뒤집지 않는 계약을 검증한다.
+- **Mandatory tests:** failed publish→private UI after navigation + retry retained; first publish initiator Feed/own profile; same-UID second device no-navigation; second account warm Feed + warm public profile no-navigation; unpublish exact removal; published title edit exact update; unchanged entry/update/re-entry D1/Firestore data R0/W0; mutation O(1)/no full rebuild; app421 likes/follow regressions.
+- **Flow:** focused implementation on preview/isolate → TypeScript/Build/executable regressions → exact SHA GPT-6 independent audit → PASS only then PREVIEW deploy → user PC/mobile + second-account verification. Shared data migration/backfill/delete and TEST/PRODUCTION deploy forbidden without separate approval.
+- **Issue:** #226 `P0: Music Note 공개곡 정합성 — 실패 후 가짜 공개, Feed/Profile 수렴, 공개 제목 갱신`.
+
+---
+
 ## NEXT — app421 accepted; resume Stage416 public five-minute PREVIEW activation as the next like-system task (2026-10-18 KST)
 
 - **Completed/frozen:** PREVIEW app421 closed-device PC↔mobile like recovery passed user real-device acceptance. Do not reopen app410/app422/app423/app424 client sync without a new reproducible defect.

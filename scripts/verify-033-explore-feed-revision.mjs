@@ -20,7 +20,11 @@ for (const [needle, label] of [
   [marker, 'ExplorePage marker'],
   ['/v1/feed-revision?sort=', 'revision endpoint'],
   ["'__soridraw_revision'", 'revision-versioned feed key'],
-  ['const cachedRows = readExploreFeedSessionCache(requestUrl);', 'cache-first render'],
+  // Modern Explore has an explicit feed/search split. Preserve cache-first
+  // visibility on either path, but only feed-scoped R2 revision is checked.
+  ['const cachedRows = feedRequest', 'cache-first feed/search branch'],
+  ['? readExploreFeedSessionCache(requestUrl)', 'cache-first Feed render'],
+  [': readExploreSearchCache340(requestUrl)', 'cache-first Search render'],
   ['if (cachedRows) {', 'cached branch'],
   ['readExploreFeedSessionCacheRevision(requestUrl)', 'revision comparison'],
   ["document.addEventListener('visibilitychange', onVisible424)", 'real tab-resume revalidation'],

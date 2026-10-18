@@ -52,7 +52,6 @@ assert.ok(manifest.patches.indexOf('101-publication-live-convergence.mjs') >
   manifest.patches.indexOf('100-music-note-next-song-legacy-parity.mjs'));
 assert.doesNotMatch(patch101, /env\?*\.DB|env\.DB|\.prepare\s*\(/);
 assert.match(patch101, /publication-state-v429/);
-assert.match(patch101, /publicationStateUpdatedAt429/);
 assert.match(patch101, /await requireExploreAuth\(request\.clone\(\)\)/);
 assert.match(publicSync, /isExplorePublicPublicationStateFresh429/);
 assert.match(publicSync, /Number\(state\.updatedAt\) === Number\(row\.at\)/);

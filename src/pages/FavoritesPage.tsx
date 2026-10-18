@@ -86,6 +86,7 @@ import {
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
   refreshExploreMusicNotePublicationSource,
+  refreshExploreMusicNotePublicationContent428,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExploreMusicNotePublicationState,
@@ -1746,6 +1747,33 @@ export default function FavoritesPage({
     const task = (async () => {
       try {
         await updateFavorite(pending.songId, pending.updates);
+
+        // app428: public metadata follows the existing canonical Music Note
+        // settlement, never editor keystrokes. A derived Explore failure must not
+        // roll back/retry the successful Firestore detail save.
+        const publicProjectionKeys428 = [
+          'title', 'displayGenre', 'koreanTitle', 'englishTitle',
+          'lyrics', 'prompt', 'appliedKeywords',
+        ];
+        if (publicProjectionKeys428.some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key))) {
+          try {
+            const publicationState = await getExploreMusicNotePublicationState(user, pending.songId);
+            if (publicationState.status === 'public' && publicationState.registered) {
+              const refreshedState = await refreshExploreMusicNotePublicationContent428(
+                user,
+                pending.songId,
+                publicationState,
+              );
+              setExplorePublicationStateBySongId((prev) => ({
+                ...prev,
+                [pending.songId]: refreshedState,
+              }));
+            }
+          } catch (publicationError) {
+            console.warn('Public Music Note metadata refresh deferred:', publicationError);
+          }
+        }
+
         const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
         const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({

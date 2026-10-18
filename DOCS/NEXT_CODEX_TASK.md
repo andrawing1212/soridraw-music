@@ -1,3 +1,15 @@
+## NEXT — exact integrated audit gate after app428 (2026-10-18 KST)
+
+- **Do not add more generic implementation before audit unless a concrete blocker is found.** Current integrated code already contains title display #234, Music Note Catalog recovery #235, legacy recipe/shareBundle #236, and publication confirmed-state #238.
+- **Audit target:** latest preview HEAD after this status-doc merge. Audit #226/#229/#237 as one connected state/cache release, not isolated diffs.
+- **#226 must prove:** failed publication never paints public after route/reload; successful publish/unpublish patches only exact track; same UID PC/mobile receives snapshot signal without navigation; published title/genre update occurs after canonical Music Note save and appears in Feed/Profile/Search projection; no whole Feed/profile scan or app-version invalidation.
+- **#229 must prove:** recent canonical behavior unchanged; old persisted requestPayload fields restored; canonical wins conflicts; historically absent command stays absent; public Worker shareBundle matches client contract; no collection scan/backfill.
+- **#237 must prove:** immediate RTDB heart preview remains Firestore R0/W0; remote canonical catch-up reads bounded private R2 Catalog only after real mutation; stale Catalog cannot undo exact patch/pending intent; full membership and Recent save-heart converge after missed mutations; no Firestore scan/bootstrap.
+- **Release after PASS:** one coordinated PREVIEW release using exact audited Hosting source and, because patch 100 changes public shareBundle Worker behavior, audited PREVIEW Worker bundle. Deploy only changed services; Functions/Rules/D1 schema/shared user data remain unchanged unless audit finds a real requirement.
+- **Real-device matrix after deploy:** PC↔mobile same UID save/unsave multiple songs; one device closed then reopen; publication success/failure; Feed + own public profile without navigation; second account warm Feed/profile; published title edit; old 6-month Music Note next-song apply; public next-song apply; likes/follows regression; cost diagnostics.
+- **Progress reporting every turn:** `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until a gate actually passes.
+
+---
 ## MASTER EXECUTION ORDER — 2026-10-18 KST
 
 ### 고정 진척도

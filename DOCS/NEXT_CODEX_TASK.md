@@ -1,3 +1,17 @@
+## NEXT — app432 new-public live delta + realtime cost: GPT-6 AUDIT ONLY (2026-10-19 KST)
+
+- **Do not implement more before audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #246 merge `49a76941cec8c9efa8c374b81672ae945b84fdf6`.
+- Verify #226 remaining two criteria:
+  1. **No-navigation new publication:** a new public track appears in an already-open Recommended/Latest Feed from the server-issued tiny signal + shared Edge live card, without page/tab navigation and without a full Feed refresh.
+  2. **100k-scale fanout:** RTDB global listener exists only on active visible Recommended/Latest home Feed; Search/hidden/Popular do not subscribe globally; profile uses owner-scoped signal; one signal retains one row only. Validate the <=115.2 MB/100k-active application-payload hard envelope and clearly distinguish it from real Firebase billed bytes.
+- Verify shared Edge live-card route: Auth+AppCheck, D1 R0/W0; exact `trackId+updatedAt` cache key; Edge HIT R2 0; cold Edge may read exactly one R2 publication-state object; stale timestamp returns no card.
+- Reconfirm browser `.write=false`, Worker HMAC→Function→Admin RTDB issuer, callback failure fallback, and no stale acknowledgement.
+- Reconfirm #229 and #237 frozen corrections plus app421 likes/follows/app349 save-heart/Music Note batching/UI.
+- **PASS only then:** coordinated PREVIEW exact audited release of Hosting + Worker patch100/101 + `publicationRelease431Candidate` + read-only publication RTDB Rules. No D1 schema/shared user-data change.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until independent PASS.
+
+---
+
 ## NEXT — app431 #226 server-issued public invalidation: GPT-6 re-audit ONLY (2026-10-19 KST)
 
 - **No more implementation before audit unless a concrete blocker is found.** Re-audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #244 merge `27e44757a818e686f9970f198ac2ec23f8b7c4ae`.

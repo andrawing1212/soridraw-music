@@ -225,8 +225,14 @@ const overlayPendingPublicationStates = (
   states: Record<string, ExploreMusicNotePublicationState>,
 ) => {
   const next = clonePublicationStates(states);
+  // app425 — pending/retry intent is not confirmed publication state.
+  // Older app421 caches may already contain the optimistic desired state, so
+  // repair only that recognizable polluted shape back to the captured base.
   Object.values(readPublicationOutbox(uid)).forEach((pending) => {
-    next[pending.sourceId] = { ...pending.desiredState };
+    const cached = next[pending.sourceId];
+    if (!cached || samePublicationState(cached, pending.desiredState)) {
+      next[pending.sourceId] = { ...pending.baseState };
+    }
   });
   return next;
 };
@@ -237,7 +243,7 @@ const findPublicationSourceByTrackId = (uid: string, trackId: string) => {
   const matched = Object.entries(states).find(([, state]) => state.trackId === normalizedTrackId);
   if (matched) return { sourceId: matched[0], state: matched[1] };
   const pending = Object.values(readPublicationOutbox(uid)).find((item) => item.trackId === normalizedTrackId);
-  if (pending) return { sourceId: pending.sourceId, state: pending.desiredState };
+  if (pending) return { sourceId: pending.sourceId, state: pending.baseState };
   const prefix = `music_note_${uid}_`;
   const sourceId = normalizedTrackId.startsWith(prefix) ? normalizedTrackId.slice(prefix.length) : normalizedTrackId;
   return {
@@ -271,8 +277,9 @@ const queuePublicationMutation = (
     };
   }
   persistPublicationOutbox(uid, outbox);
-  patchPublicationStateBySourceId(uid, sourceId, desiredState);
-  return desiredState;
+  // app425 — keep confirmed state/cache untouched until the Worker confirms the
+  // mutation. The outbox alone carries retry intent.
+  return { ...baseState };
 };
 
 const clonePublicationStates = (
@@ -932,6 +939,9 @@ profilePinned: pending.desiredState.profilePinned,
     const row: any = resultBySource.get(pending.sourceId);
     if (!row?.ok) {
       failed = true;
+      // app425 compatibility: a previous client may have persisted the desired
+      // optimistic state. A failed row must visibly remain at its confirmed base.
+      states[pending.sourceId] = { ...pending.baseState };
       continue;
     }
     const confirmed: ExploreMusicNotePublicationState = {
@@ -943,20 +953,20 @@ profilePinned: pending.desiredState.profilePinned,
       profilePinned: Boolean(row.profilePinned),
     };
     const latest = latestOutbox[pending.sourceId];
-    let visibleState = confirmed;
     if (latest && latest.updatedAt !== pending.updatedAt) {
       const rebased = { ...latest, baseState: confirmed };
       if (samePublicationState(rebased.baseState, rebased.desiredState)) {
         delete latestOutbox[pending.sourceId];
-        visibleState = confirmed;
       } else {
         latestOutbox[pending.sourceId] = rebased;
-        visibleState = rebased.desiredState;
       }
     } else {
       delete latestOutbox[pending.sourceId];
     }
-    states[pending.sourceId] = { ...visibleState };
+    // app425 — even if a newer retry intent exists, the visible/cache state is
+    // always the last server-confirmed row. Never promote a pending desired state
+    // merely because an earlier mutation in the same source succeeded.
+    states[pending.sourceId] = { ...confirmed };
     invalidateMorePages213 = true;
     publicationSignals.push(publishPublicationSyncBestEffort(
       uid,
@@ -965,11 +975,11 @@ profilePinned: pending.desiredState.profilePinned,
       row.snapshotItem,
     ));
 
-    if (visibleState.status === 'private') {
-      removeExploreFeedSessionCacheRow(visibleState.trackId);
-      removeExplorePublicProfileFirstViewTrack(uid, visibleState.trackId);
+    if (confirmed.status === 'private') {
+      removeExploreFeedSessionCacheRow(confirmed.trackId);
+      removeExplorePublicProfileFirstViewTrack(uid, confirmed.trackId);
     } else if (row.snapshotItem && typeof row.snapshotItem === 'object' && !Array.isArray(row.snapshotItem)) {
-      upsertExploreFeedSessionCacheRow(visibleState.trackId, row.snapshotItem as Record<string, unknown>);
+      upsertExploreFeedSessionCacheRow(confirmed.trackId, row.snapshotItem as Record<string, unknown>);
       upsertExplorePublicProfileFirstViewTrack(uid, row.snapshotItem as Record<string, unknown>);
     }
   }

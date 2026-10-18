@@ -1,13 +1,12 @@
-import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'firebase/database';
+import { onValue, ref as databaseRef, type Unsubscribe } from 'firebase/database';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 // SORIDRAW_PUBLIC_PUBLICATION_CHANGED_TRACK_429_20261019
-// app430 hardening: RTDB remains a tiny invalidation bus, never public truth.
-// A row is publishable only with the exact R2 state timestamp returned after a
-// successful canonical mutation + publication-state projection. Receivers must
-// also prove that the row is relevant to their already-loaded owner/track.
+// app431 hardening: browsers are READ-ONLY on this invalidation bus.
+// Only the HMAC-authenticated Worker -> Firebase Function path can publish after
+// exact R2 projection succeeds. Receivers still verify exact shared R2 state.
 const PUBLIC_PUBLICATION_SIGNAL_PATH_429 = 'publicSync/explorePublication';
 const PUBLIC_PUBLICATION_ROUTE_429 = '/v1/publication-cards';
 const PUBLIC_PUBLICATION_MAX_429 = 50;
@@ -71,71 +70,6 @@ const normalizeSignal429 = (raw: unknown): ExplorePublicPublicationSignal429 | n
   return { version, at, actorUid, rows };
 };
 
-export const mergeExplorePublicPublicationSignal429 = (
-  current: unknown,
-  actorUid: string,
-  changedRows: ExplorePublicPublicationSignalRow429[],
-): ExplorePublicPublicationSignal429 | null => {
-  const uid = safeId429(actorUid, 128);
-  if (!uid) return null;
-
-  // app430: never retain another actor's rows inside the next writer's payload.
-  // This lets Firebase Rules prove every transmitted row belongs to the writer.
-  // Same-actor rows may coalesce for three minutes.
-  const previous = normalizeSignal429(current);
-  const incoming = changedRows.map((row) => ({
-    trackId: safeId429(row.trackId),
-    ownerUid: safeId429(row.ownerUid, 128),
-    at: Math.floor(Number(row.at || 0)),
-  })).filter((row) => (
-    row.trackId && row.ownerUid === uid && Number.isSafeInteger(row.at) && row.at > 0
-  ));
-  if (!incoming.length) return null;
-
-  const newestProofAt = Math.max(...incoming.map((row) => row.at));
-  const cutoff = newestProofAt - PUBLIC_PUBLICATION_RETENTION_MS_429;
-  const byTrack = new Map<string, ExplorePublicPublicationSignalRow429>();
-  if (previous?.actorUid === uid) {
-    for (const row of previous.rows) {
-      if (row.ownerUid === uid && row.at >= cutoff) byTrack.set(row.trackId, row);
-    }
-  }
-  for (const row of incoming) byTrack.set(row.trackId, row);
-
-  const rows = [...byTrack.values()]
-    .sort((a, b) => b.at - a.at || a.trackId.localeCompare(b.trackId))
-    .slice(0, PUBLIC_PUBLICATION_MAX_429);
-  if (!rows.length) return null;
-  const at = Math.max(...rows.map((row) => row.at));
-  return {
-    version: Math.max(at, (previous?.version || 0) + 1),
-    at,
-    actorUid: uid,
-    rows,
-  };
-};
-
-export const publishExplorePublicPublicationInvalidation429 = async (
-  actorUid: string,
-  rows: ExplorePublicPublicationSignalRow429[],
-): Promise<void> => {
-  const uid = safeId429(actorUid, 128);
-  const normalized = rows.map((row) => ({
-    trackId: safeId429(row.trackId),
-    ownerUid: safeId429(row.ownerUid, 128),
-    at: Math.floor(Number(row.at || 0)),
-  })).filter((row) => (
-    row.trackId && row.ownerUid === uid && Number.isSafeInteger(row.at) && row.at > 0
-  )).slice(0, PUBLIC_PUBLICATION_MAX_429);
-  if (!uid || !normalized.length) return;
-
-  await runTransaction(
-    databaseRef(realtimeDb, PUBLIC_PUBLICATION_SIGNAL_PATH_429),
-    (current) => mergeExplorePublicPublicationSignal429(current, uid, normalized),
-    { applyLocally: false },
-  );
-};
-
 export const subscribeExplorePublicPublicationInvalidation429 = (
   listener: (signal: ExplorePublicPublicationSignal429) => void,
 ): Unsubscribe => {
@@ -161,7 +95,7 @@ export const subscribeExplorePublicPublicationInvalidation429 = (
       });
       if (rows.length) listener({ ...signal, rows });
     },
-    (error) => console.warn('[430] Public publication invalidation unavailable; revision fallback remains active:', error),
+    (error) => console.warn('[431] Server publication invalidation unavailable; revision fallback remains active:', error),
   );
 };
 

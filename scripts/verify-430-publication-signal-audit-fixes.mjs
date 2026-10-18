@@ -16,15 +16,11 @@ const publishFn = publication.slice(
   publication.indexOf('const publishPublicationSyncBestEffort = async ('),
   publication.indexOf('\n\nexport const clearExplorePublicationSessionCache'),
 );
-assert.match(publishFn, /publicProofAt429/);
-assert.match(publishFn, /proofAt429 = Math\.floor\(Number\(publicProofAt429 \|\| 0\)\)/);
-assert.match(publishFn, /if \(!Number\.isSafeInteger\(proofAt429\) \|\| proofAt429 <= 0\) return/);
-assert.match(publishFn, /at: proofAt429/);
-assert.doesNotMatch(publishFn.slice(publishFn.indexOf('const proofAt429')), /at: Date\.now\(\)/);
-assert.equal((publication.match(/publicationStateUpdatedAt429/g) || []).length >= 3, true);
+assert.doesNotMatch(publishFn, /publicProofAt429|publicationStateUpdatedAt429|publishExplorePublicPublicationInvalidation429/);
+assert.match(publishFn, /publishExplorePublicationSyncSignal/);
 
-assert.match(sync, /previous\?\.actorUid === uid/);
-assert.match(sync, /row\.ownerUid === uid/);
+
+assert.doesNotMatch(sync, /runTransaction|mergeExplorePublicPublicationSignal429|publishExplorePublicPublicationInvalidation429/);
 assert.match(sync, /isExplorePublicPublicationSignalRelevant429/);
 assert.match(sync, /visibleOwnerUid === ownerUid \|\| activeProfileUid === ownerUid/);
 assert.match(sync, /isExplorePublicPublicationStateFresh429/);
@@ -37,7 +33,7 @@ const liveEnd = page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_
 assert.ok(liveStart >= 0 && liveEnd > liveStart);
 const live = page.slice(liveStart, liveEnd);
 assert.match(live, /publicLikeVisibleTracksRef192\.current/);
-assert.match(live, /visibleOwnerUids430/);
+assert.doesNotMatch(live, /visibleOwnerUids430|representedFeedOwner430/);
 assert.match(live, /MIN_PUBLICATION_REFRESH_MS_430 = 30_000/);
 assert.match(live, /visibleTrackOwner430 && visibleTrackOwner430 !== row430\.ownerUid/);
 assert.match(live, /feedRevisionRequestedUrlRef\.current = requestUrl/);
@@ -47,15 +43,17 @@ assert.doesNotMatch(live, /setFeedRevisionSignal\(/);
 assert.doesNotMatch(live, /setInterval\s*\(/);
 
 const rule = rules?.rules?.publicSync?.explorePublication;
-assert.equal(rule?.['.write'], "auth != null && newData.child('actorUid').val() === auth.uid");
+assert.equal(rule?.['.write'], false);
 assert.equal(rule?.rows?.$index?.ownerUid?.['.validate'],
   'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
 assert.match(String(rule?.rows?.$index?.at?.['.validate'] || ''), /newData\.val\(\) <= now/);
 assert.match(String(rule?.rows?.$index?.at?.['.validate'] || ''), /now - 300000/);
 
 assert.match(patch101, /return updatedAt/);
-assert.match(patch101, /publicationStateUpdatedAt429 = await writePublicationState429/);
-assert.match(patch101, /publicationStateUpdatedAt429 > 0/);
+assert.match(patch101, /writeAndPublishPublicationState431/);
+assert.match(patch101, /publishPublicationInvalidation431/);
+assert.match(patch101, /X-Soridraw-431-Publication-Signature/);
+assert.doesNotMatch(patch101, /publicationStateUpdatedAt429/);
 assert.match(patch101, /await requireExploreAuth\(request\.clone\(\)\)/);
 assert.match(patch101, /X-SORIDRAW-D1-Read', '0'/);
 assert.match(patch101, /X-SORIDRAW-D1-Write', '0'/);
@@ -77,8 +75,9 @@ try {
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }
   const worker = readFileSync(join(temp, 'worker.js'), 'utf8');
-  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_430_20261019/);
-  assert.match(worker, /publicationStateUpdatedAt429/);
+  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_431_20261019/);
+  assert.match(worker, /writeAndPublishPublicationState431/);
+  assert.match(worker, /X-Soridraw-431-Publication-Signature/);
   assert.match(worker, /await requireExploreAuth\(request\.clone\(\)\)/);
   const routeStart = worker.indexOf('async function handlePublicationStates429');
   const routeEnd = worker.indexOf('\n}', routeStart);
@@ -89,7 +88,7 @@ try {
 }
 
 console.log('APP430_UNRELATED_VIEWER_R2_FANOUT_BLOCKED=PASS');
-console.log('APP430_WRITER_OWNER_SCOPE_AND_FRESH_PROOF=PASS');
+console.log('APP431_BROWSER_PUBLIC_SIGNAL_WRITE_REMOVED=PASS');
 console.log('APP430_STALE_R2_COMPLETION_BLOCKED=PASS');
 console.log('APP430_PUBLICATION_ROUTE_AUTH_D1_R0_W0=PASS');
 console.log('APP430_229_237_FROZEN_CORRECTIONS=PASS');

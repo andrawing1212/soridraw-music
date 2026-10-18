@@ -5,7 +5,8 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // Read-only shared RTDB gate. The local release candidate may add:
 // 1) the previously approved canonicalSettled417 bool,
 // 2) the UID-private exploreLikeIntent416 child,
-// 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt.
+// 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt,
+// 4) app431 server-only public publication invalidation read node.
 // Every other permission/schema byte must remain equivalent to the live rules.
 const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
 const local = buildStage416ServerRulesCandidate(canonicalBase);
@@ -28,8 +29,7 @@ assert.equal(intent.results?.$index?.status?.['.validate'],
   "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'rejected')");
 assert.equal(intent['$other']?.['.validate'], false);
 assert.equal(publication429?.['.read'], 'auth != null');
-assert.equal(publication429?.['.write'],
-  "auth != null && newData.child('actorUid').val() === auth.uid");
+assert.equal(publication429?.['.write'], false);
 assert.equal(publication429?.rows?.$index?.ownerUid?.['.validate'],
   'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
 assert.equal(publication429?.rows?.$index?.at?.['.validate'],
@@ -132,9 +132,8 @@ if (process.argv.includes('--self-test')) {
     'newData.isNumber()';
   assert.equal(compare(widenedCount), null, 'private optimistic count bounds must stay exact');
   const widenedPublication = structuredClone(local);
-  widenedPublication.rules.publicSync.explorePublication.rows.$index.ownerUid['.validate'] =
-    'newData.isString()';
-  assert.equal(compare(widenedPublication), null, 'public publication writer ownership must stay exact');
+  widenedPublication.rules.publicSync.explorePublication['.write'] = 'auth != null';
+  assert.equal(compare(widenedPublication), null, 'public publication bus must remain client read-only');
   const stalePublicationProof = structuredClone(local);
   stalePublicationProof.rules.publicSync.explorePublication.rows.$index.at['.validate'] =
     'newData.isNumber() && newData.val() > 0';

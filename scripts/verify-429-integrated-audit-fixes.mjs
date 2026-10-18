@@ -15,7 +15,7 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 
 assert.match(publication, /const repaired = overlayPendingPublicationStates\(uid, cached\)/);
 assert.match(publication, /writePublicationStateCache\(uid, repaired,/);
-assert.match(publication, /publishExplorePublicPublicationInvalidation429/);
+assert.doesNotMatch(publication, /publishExplorePublicPublicationInvalidation429/);
 assert.match(publicSync, /publicSync\/explorePublication/);
 assert.match(publicSync, /fetchExplorePublicPublicationStates429/);
 assert.doesNotMatch(publicSync, /firestore|env\.DB|\.prepare\s*\(/i);
@@ -40,7 +40,7 @@ assert.doesNotMatch(patch100, /lyricDraft/);
 
 const publicRule = rules?.rules?.publicSync?.explorePublication;
 assert.equal(publicRule?.['.read'], 'auth != null');
-assert.equal(publicRule?.['.write'], "auth != null && newData.child('actorUid').val() === auth.uid");
+assert.equal(publicRule?.['.write'], false);
 assert.equal(publicRule?.rows?.$index?.ownerUid?.['.validate'],
   'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
 assert.match(String(publicRule?.rows?.$index?.at?.['.validate'] || ''), /newData\.val\(\) <= now/);
@@ -56,8 +56,10 @@ assert.match(patch101, /publicationStateUpdatedAt429/);
 assert.match(patch101, /await requireExploreAuth\(request\.clone\(\)\)/);
 assert.match(publicSync, /isExplorePublicPublicationStateFresh429/);
 assert.match(publicSync, /Number\(state\.updatedAt\) === Number\(row\.at\)/);
-assert.match(publication, /proofAt429/);
-assert.match(publication, /data\?\.publicationStateUpdatedAt429/);
+assert.doesNotMatch(publication, /proofAt429|publicationStateUpdatedAt429/);
+assert.doesNotMatch(publicSync, /runTransaction|publishExplorePublicPublicationInvalidation429/);
+assert.match(patch101, /writeAndPublishPublicationState431/);
+assert.match(patch101, /X-Soridraw-431-Publication-Signature/);
 
 const temp = mkdtempSync(join(tmpdir(), 'soridraw-app429-'));
 try {
@@ -69,7 +71,7 @@ try {
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }
   const worker = readFileSync(join(temp, 'worker.js'), 'utf8');
-  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_430_20261019/);
+  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_431_20261019/);
   assert.match(worker, /PUBLICATION_STATE_ROUTE_429/);
   const routeStart = worker.indexOf('async function handlePublicationStates429');
   const routeEnd = worker.indexOf('\n}', routeStart);
@@ -77,7 +79,8 @@ try {
   const generatedRoute = worker.slice(routeStart, routeEnd + 2);
   assert.doesNotMatch(generatedRoute, /env\?*\.DB|env\.DB|\.prepare\s*\(/);
   assert.match(generatedRoute, /requireExploreAuth/);
-  assert.match(worker, /publicationStateUpdatedAt429/);
+  assert.match(worker, /writeAndPublishPublicationState431/);
+  assert.match(worker, /X-Soridraw-431-Publication-Signature/);
 } finally { rmSync(temp, { recursive: true, force: true }); }
 
 console.log('APP429_POLLUTED_PUBLICATION_CACHE_REPAIR=PASS');
@@ -85,4 +88,4 @@ console.log('APP429_CROSS_ACCOUNT_PUBLICATION_CHANGED_TRACK=PASS');
 console.log('APP429_PUBLIC_NEXT_SONG_LYRIC_MODE_PARITY=PASS');
 console.log('APP429_CATALOG_PENDING_HEART_OVERLAY=PASS');
 console.log('APP429_PUBLICATION_R2_D1_R0_W0=PASS');
-console.log('APP430_PUBLICATION_PROOF_AND_AUTH_HARDENING=PASS');
+console.log('APP431_SERVER_ONLY_PUBLICATION_INVALIDATION=PASS');

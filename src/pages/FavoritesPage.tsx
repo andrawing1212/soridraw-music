@@ -97,6 +97,7 @@ import {
   type ExplorePublicationSyncSignal,
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
+import { resolveMusicNoteNextSongRecipe425 } from '../services/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
@@ -5157,28 +5158,33 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       // ignore transient UI cleanup failures
     }
 
+    const resolvedRecipe = resolveMusicNoteNextSongRecipe425(song);
+    const resolvedSong = { ...song, appliedKeywords: resolvedRecipe };
     const pendingKeywords = {
-      ...song.appliedKeywords,
-      genre: getSongGenreValues(song),
-      subGenre: getSongSubGenreValues(song),
-      mood: getSongMoodValues(song),
-      theme: getSongThemeValues(song),
-      situation: song.appliedKeywords?.situation,
-      situationSummary: getSongSituationSummary(song),
-      style: getSongStyleValues(song),
-      instrumentSound: getSongInstrumentSoundValues(song),
-      tempo: song.appliedKeywords?.tempo ?? null,
-      lyricsLength: song.appliedKeywords?.lyricsLength ?? 'normal',
-      maleCount: song.appliedKeywords?.maleCount ?? 0,
-      femaleCount: song.appliedKeywords?.femaleCount ?? 0,
-      rapEnabled: song.appliedKeywords?.rapEnabled ?? false,
-      isKoreanEnglishMix: song.appliedKeywords?.isKoreanEnglishMix ?? false,
-      vocal: song.appliedKeywords?.vocal ?? null,
-      kpopMode: song.appliedKeywords?.kpopMode ?? 0,
-      citypopMode: song.appliedKeywords?.citypopMode ?? 0,
-      songStructure: song.appliedKeywords?.songStructure ?? '2',
-      customStructure: song.appliedKeywords?.customStructure ?? [],
-      userInput: song.appliedKeywords?.userInput ?? song.userInput ?? (song as any).commandInput ?? (song as any).directInput ?? (song as any).customPrompt ?? '',
+      ...resolvedRecipe,
+      genre: getSongGenreValues(resolvedSong),
+      subGenre: getSongSubGenreValues(resolvedSong),
+      mood: getSongMoodValues(resolvedSong),
+      theme: getSongThemeValues(resolvedSong),
+      situation: (resolvedRecipe as any).situation,
+      situationSummary: getSongSituationSummary(resolvedSong),
+      style: getSongStyleValues(resolvedSong),
+      instrumentSound: getSongInstrumentSoundValues(resolvedSong),
+      tempo: (resolvedRecipe as any).tempo ?? null,
+      lyricsLength: (resolvedRecipe as any).lyricsLength ?? 'normal',
+      maleCount: (resolvedRecipe as any).maleCount ?? 0,
+      femaleCount: (resolvedRecipe as any).femaleCount ?? 0,
+      rapEnabled: (resolvedRecipe as any).rapEnabled ?? false,
+      isKoreanEnglishMix: (resolvedRecipe as any).isKoreanEnglishMix ?? false,
+      vocal: (resolvedRecipe as any).vocal ?? null,
+      kpopMode: (resolvedRecipe as any).kpopMode ?? 0,
+      citypopMode: (resolvedRecipe as any).citypopMode ?? 0,
+      songStructure: (resolvedRecipe as any).songStructure ?? '2',
+      customStructure: (resolvedRecipe as any).customStructure ?? [],
+      userInput: (resolvedRecipe as any).userInput ?? '',
+      // Preserve the existing next-song policy: finished/direct lyrics are not
+      // silently copied as a new lyric draft. #229 only restores stored recipe
+      // fields that the old reader skipped.
       lyricDraft: '',
       isLyricMode: false,
     };

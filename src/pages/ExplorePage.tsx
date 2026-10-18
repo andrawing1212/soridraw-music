@@ -72,6 +72,7 @@ import {
   isExplorePublicPublicationStateFresh429,
   rememberSettledExplorePublicPublicationSignal429,
   subscribeExplorePublicPublicationInvalidation429,
+  type ExplorePublicPublicationSignalRow429,
 } from '../services/explorePublicPublicationSyncService';
 import {
   getExploreFollowState,

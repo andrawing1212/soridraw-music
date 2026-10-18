@@ -11,6 +11,7 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+import { resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
 
@@ -704,11 +705,12 @@ export default function GlobalPlayer() {
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
-    let appliedKeywords =
-      group.appliedKeywords ||
-      group?.requestPayload?.appliedKeywords ||
-      (currentTrack as any)?.appliedKeywords ||
-      null;
+    let appliedKeywords = resolveMusicNoteNextSongRecipe({
+      ...group,
+      ...(currentTrack as any),
+      appliedKeywords: group.appliedKeywords || (currentTrack as any)?.appliedKeywords,
+      requestPayload: group.requestPayload || (currentTrack as any)?.requestPayload,
+    });
 
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       const currentUser = auth.currentUser;
@@ -723,7 +725,7 @@ export default function GlobalPlayer() {
           const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));
           if (sourceSnapshot.exists()) {
             const sourceData: any = sourceSnapshot.data() || {};
-            appliedKeywords = sourceData?.appliedKeywords || sourceData?.requestPayload?.appliedKeywords || null;
+            appliedKeywords = resolveMusicNoteNextSongRecipe(sourceData);
             if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
               group.appliedKeywords = appliedKeywords;
             }

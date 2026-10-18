@@ -6,6 +6,7 @@ const action = readFileSync('src/services/exploreTrackActionService.ts', 'utf8')
 const app = readFileSync('src/App.tsx', 'utf8');
 const worker = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
 const patch = readFileSync('cloudflare/explore-worker/patches/089-public-next-song-command-parity.mjs', 'utf8');
+const legacyPatch427 = readFileSync('cloudflare/explore-worker/patches/100-music-note-next-song-legacy-parity.mjs', 'utf8');
 
 function functionRange(source, name) {
   const needles = [`async function ${name}(`, `function ${name}(`, `const ${name} =`];
@@ -41,12 +42,15 @@ for (const field of ['rapMode', 'lyricWritingStyle', 'tempoSource', 'isRandomTem
 assert.match(bundle, /userInput: nextSong\.userInput \|\| ''/, 'compact oversized-bundle fallback must retain command input');
 assert.doesNotMatch(bundle, /note\?\.lyrics|note\?\.lyricsText/, 'next-song share must not copy finished lyrics into the next command');
 assert.match(patch, /SORIDRAW_PUBLIC_NEXT_SONG_COMMAND_PARITY_204_20260926/, 'replay patch must preserve the same Worker contract');
+assert.match(legacyPatch427, /SORIDRAW_MUSIC_NOTE_LEGACY_NEXT_SONG_PARITY_427_20261018/, 'latest replay patch must preserve requestPayload legacy parity');
+assert.match(legacyPatch427, /requestApplied/, 'latest public bundle must read requestPayload.appliedKeywords');
+assert.doesNotMatch(legacyPatch427, /note\?\.lyrics|note\?\.lyricsText/, 'latest public bundle must not copy finished lyrics');
 
 const ownSource = functionRange(action, 'getExploreOwnMusicNoteApplyKeywords');
 assert.match(ownSource, /getDoc\(doc\(db, 'favorites', normalizedSourceId\)\)/, 'own legacy recovery must read only one source Music Note document');
 assert.doesNotMatch(ownSource, /getDocs\(|collection\(|collectionGroup\(/, 'own legacy recovery must never scan a collection');
 assert.match(ownSource, /ownerUid && ownerUid !== user\.uid/, 'own source recovery must reject a mismatched owner');
-assert.match(ownSource, /data\?\.userInput/, 'own source recovery must restore top-level command input when needed');
+assert.match(ownSource, /resolveMusicNoteNextSongRecipe\(data\)/, 'own source recovery must normalize persisted legacy recipe fields');
 
 const legacy = functionRange(action, 'buildExploreLegacyApplyKeywords');
 for (const kind of ['genre', 'style', 'mood', 'theme', 'sound']) {

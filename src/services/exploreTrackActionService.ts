@@ -3,6 +3,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { db, getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { doc, getDoc } from '../lib/firestoreMeasured';
+import { resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 
 export type ExploreTrackApplySource = {
   trackId: string;
@@ -101,23 +102,7 @@ export const getExploreOwnMusicNoteApplyKeywords = async (
   const ownerUid = String(data?.uid || data?.ownerUid || '').trim();
   if (ownerUid && ownerUid !== user.uid) return null;
 
-  const rawApplied = data?.appliedKeywords && typeof data.appliedKeywords === 'object' && !Array.isArray(data.appliedKeywords)
-    ? data.appliedKeywords
-    : data?.requestPayload?.appliedKeywords && typeof data.requestPayload.appliedKeywords === 'object'
-      ? data.requestPayload.appliedKeywords
-      : null;
-  if (!rawApplied) return null;
-
-  const nextSong: Record<string, unknown> = { ...rawApplied };
-  const userInput = String(
-    (rawApplied as any).userInput
-    || data?.userInput
-    || data?.commandInput
-    || data?.directInput
-    || data?.customPrompt
-    || '',
-  ).trim();
-  if (userInput) nextSong.userInput = userInput;
+  const nextSong = resolveMusicNoteNextSongRecipe(data);
   return Object.keys(nextSong).length ? nextSong : null;
 };
 

@@ -315,3 +315,39 @@ assert.doesNotMatch(dormantSource424,/fetch\(|requestExploreLike|\.prepare\(|set
 console.log('APP424_TRUE_DORMANT_1M_4M_REVISION_GATE=PASS');
 console.log('APP424_EXPIRED_OR_REPLACED_RTDB_USE_REVISIONS=PASS');
 console.log('APP424_APP_UPDATE_AND_PAGE_REENTRY_DATA_READS=0');
+
+
+// app424: use the REAL revision fetch-interceptor cache gate, not a copied
+// implementation. A reopened browser with previous 60s response/cache and
+// private same-UID patch must reach current shared Edge/R2 metadata once.
+const revisionCache424=readFileSync('src/services/exploreRevisionRequestCache.ts','utf8');
+const cacheStart424=revisionCache424.indexOf('const revisionUrl = revisionTarget.toString();');
+const cacheEnd424=revisionCache424.indexOf('const sort = revisionTarget.searchParams.get',cacheStart424);
+assert.ok(cacheStart424>0 && cacheEnd424>cacheStart424);
+const cacheSource424=revisionCache424.slice(cacheStart424,cacheEnd424);
+const resolveCache424=new Function(
+ 'revisionTarget','readEntry','rememberDeltaFromBody','cachedResponse',
+ cacheSource424+'\nreturn { dormantReopen424,cached };',
+);
+let cacheReads424=0;
+const cachedEntry424={body:'{"ok":true,"data":{"revision":"stale"}}'};
+const readEntry424=()=>{cacheReads424++;return cachedEntry424;};
+const fresh424=new URL('https://worker.example/v1/feed-revision?sort=latest&__soridraw_dormant_resume=1');
+const ordinary424=new URL('https://worker.example/v1/feed-revision?sort=latest');
+const bypass424=resolveCache424(fresh424,readEntry424,()=>{},()=>cachedEntry424);
+assert.equal(bypass424.dormantReopen424,true);
+assert.equal(bypass424.cached,null);
+assert.equal(cacheReads424,0,'real dormant refresh cannot read stale client revision cache');
+const original424=resolveCache424(ordinary424,readEntry424,()=>{},()=>cachedEntry424);
+assert.equal(original424,cachedEntry424,'ordinary page reentry still uses cached revision');
+assert.equal(cacheReads424,1);
+assert.match(revisionCache424,
+ /!dormantReopen424 && cachedFeedRevision && hasRecentExploreAccountLikePatch/,
+ 'same-account recent private like patch cannot suppress genuine dormant public recovery');
+assert.match(page,/if \(dormantForcedFeed424\) revisionUrl424.searchParams.set\('__soridraw_dormant_resume', '1'\)/,
+ 'Latest shared revision must explicitly ask for fresh metadata after true background');
+assert.match(page,/if \(dormantForcedPopular424\) revisionUrl424.searchParams.set\('__soridraw_dormant_resume', '1'\)/,
+ 'Popular shared revision must explicitly ask for fresh metadata after true background');
+assert.match(revisionCache424,/const dormantReopen424 = revisionTarget.searchParams.get\('__soridraw_dormant_resume'\) === '1'/);
+console.log('APP424_REAL_REVISION_CLIENT_CACHE_BYPASS=PASS');
+console.log('APP424_HOT_NAVIGATION_ONE_MINUTE_CACHE_PROTECTED=PASS');

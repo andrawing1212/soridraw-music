@@ -1,3 +1,29 @@
+## CURRENT — app433 app432 audit FAIL corrections merged; independent re-audit pending (2026-10-19 KST)
+
+- **audit FAIL target:** `ddbe172fd178f6504a50cff26ed831c5a743460f`.
+- **product correction merge:** PR #248 → `843c1f044012f0f2c413c92969b861f6234a9ee1`.
+- **Recommended/Latest explicit insertion:** new-public insertion no longer depends on inferring `sort=latest` from the shared backing request URL. A pure policy explicitly allows `recommended` and `latest`, denies `popular`. The recommendation home continues to derive its rails/models from the updated `tracks` pool.
+- **public→private race guard:** each mounted live-sync path records the latest server publication signal per track using signal `version + at + status`. A delayed older public Edge-card response is rechecked immediately before cache/UI apply and is refused after a newer private signal. Executable regression also proves a newer signal version wins when R2 timestamps are equal within one millisecond.
+- **cost claim correction:** removed the invalid `115.2 MB/event absolute max` assertion. The verifier now uses `Buffer.byteLength(..., 'utf8')` only as an application-body diagnostic. Run sample for max-length multibyte test signal = **2084 bytes**. This is not a Firebase billed-byte ceiling.
+- **100k cost remains unverified:** RTDB publication fanout and live-card Worker requests are still O(active Recommended/Latest viewers) per publication signal. Cloudflare `caches.default` is Edge/PoP-local; Edge HIT gives R2=0, while cold/concurrent misses may each reach exact R2. Real 100k RTDB/Worker/R2 billing/network cost requires PREVIEW measurement and is **not claimed PASS** by source tests.
+- **frozen:** Worker patch100/101 behavior, Functions implementation, RTDB Rules, D1 schema, #229, #237, app421 likes/follows, app349 save-heart, Music Note batching and UI/CSS are unchanged by app433.
+- **QA:** PR #248 head `d48dd823f402b7db5b4115be9af6fccaa39a6153`; Run `39160917679` **SUCCESS**. app433 executable policy/race tests PASS; app428~432 regressions, Functions build, TypeScript, Build, frozen likes/catalog and live RTDB Rules read-only preflight all PASS.
+- **deployment:** none. PREVIEW live remains app421. TEST/PRODUCTION unchanged. No shared user-data mutation, D1 migration/schema/backfill/delete.
+- **next gate:** latest `preview` HEAD after the docs-only merge is the exact GPT-6 independent re-audit SHA. Do not deploy before PASS.
+
+### Progress remains frozen until independent PASS
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | app433 audit-fail correction merged; re-audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code PASS / frozen |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app432 new-public live Feed + bounded realtime fanout; independent audit pending (2026-10-19 KST)
 
 - **preview product merge:** PR #246 → `49a76941cec8c9efa8c374b81672ae945b84fdf6`, based on app431 audit target `70133154913c7a88e91e6eefed9981c2b439a51b`.

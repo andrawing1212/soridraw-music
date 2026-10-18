@@ -725,6 +725,57 @@ export const getExploreMusicNotePublicationState = async (
   };
 };
 
+export const refreshExploreMusicNotePublicationContent425 = async (
+  user: User,
+  sourceId: string,
+  currentState: ExploreMusicNotePublicationState,
+): Promise<ExploreMusicNotePublicationState> => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) {
+    throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
+  }
+  if (currentState.status !== 'public' || !currentState.registered) {
+    return { ...currentState };
+  }
+
+  // app425 — A Music Note detail edit is canonical only after the existing
+  // Firestore batch settles. Re-run the proven one-track semantic publication
+  // path only then, so title/genre/search/share metadata changes exactly once
+  // without per-keystroke writes or a Feed/profile scan.
+  const payload = await requestExplore(user, '/v1/publications', {
+    method: 'POST',
+    body: JSON.stringify({
+      sourceType: 'music_note',
+      sourceId: normalizedSourceId,
+      allowNextSongApply: currentState.allowNextSongApply,
+      allowFollowerSave: currentState.allowFollowerSave,
+      profilePinned: currentState.profilePinned,
+    }),
+  });
+  const data = payload?.data || {};
+  const nextState: ExploreMusicNotePublicationState = {
+    status: 'public',
+    trackId: String(data?.trackId || currentState.trackId || getMusicNoteTrackId(user.uid, normalizedSourceId)),
+    registered: true,
+    allowNextSongApply: Boolean(data?.allowNextSongApply ?? currentState.allowNextSongApply),
+    allowFollowerSave: Boolean(data?.allowFollowerSave ?? currentState.allowFollowerSave),
+    profilePinned: Boolean(data?.profilePinned ?? currentState.profilePinned),
+  };
+
+  patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
+  if (data?.snapshotItem && typeof data.snapshotItem === 'object' && !Array.isArray(data.snapshotItem)) {
+    upsertExploreFeedSessionCacheRow(nextState.trackId, data.snapshotItem as Record<string, unknown>);
+    upsertExplorePublicProfileFirstViewTrack(user.uid, data.snapshotItem as Record<string, unknown>);
+  }
+  await publishPublicationSyncBestEffort(
+    user.uid,
+    normalizedSourceId,
+    nextState,
+    data?.snapshotItem,
+  );
+  return { ...nextState };
+};
+
 export const refreshExploreMusicNotePublicationSource = async (
   user: User,
   sourceId: string,

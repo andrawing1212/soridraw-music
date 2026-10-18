@@ -84,6 +84,12 @@ on:
       - 'scripts/verify-416-expired-window-requeue-e2e.mjs'
       - 'scripts/verify-416-private-deadline.mjs'
       - 'src/pages/ExplorePage.tsx'
+      - 'src/services/explorePublicationService.ts'
+      - 'src/services/explorePublicPublicationSyncService.ts'
+      - 'cloudflare/explore-worker/patches/100-music-note-next-song-legacy-parity.mjs'
+      - 'cloudflare/explore-worker/patches/101-publication-live-convergence.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'scripts/verify-429-integrated-audit-fixes.mjs'
       - 'scripts/verify-explore-like-noop-render.mjs'
       - 'scripts/verify-416-complete-private-window.mjs'
       - 'scripts/verify-416-signed-worker-issuer.mjs'
@@ -276,6 +282,12 @@ jobs:
         run: node scripts/verify-music-note-shared-dedup-linear.mjs
       - name: Verify app428 publication consistency contracts
         run: node scripts/verify-428-publication-consistency.mjs
+      - name: Verify app429 independent-audit corrections
+        run: |
+          node --check cloudflare/explore-worker/patches/100-music-note-next-song-legacy-parity.mjs
+          node --check cloudflare/explore-worker/patches/101-publication-live-convergence.mjs
+          node scripts/verify-429-integrated-audit-fixes.mjs
+          node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior

@@ -66,6 +66,12 @@ import {
   type ExplorePublicLikeSignalRow192,
 } from '../services/explorePublicLikeSyncService';
 import {
+  fetchExplorePublicPublicationStates429,
+  hasSettledExplorePublicPublicationSignal429,
+  rememberSettledExplorePublicPublicationSignal429,
+  subscribeExplorePublicPublicationInvalidation429,
+} from '../services/explorePublicPublicationSyncService';
+import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
@@ -2765,6 +2771,100 @@ export default function ExplorePage() {
     window.addEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
     return () => {
       window.removeEventListener(EXPLORE_PUBLICATION_SYNC_EVENT, onPublicationSync355 as EventListener);
+    };
+  }, [user?.uid, requestUrl, profileUid]);
+
+  // app429: public/private/title mutations can affect another signed-in
+  // account that already has a warm Feed/profile open. RTDB carries changed IDs
+  // only; exact state/card truth is verified from shared R2 before patching.
+  useEffect(() => {
+    const viewerUid429 = String(user?.uid || '').trim();
+    if (!viewerUid429) return undefined;
+    let cancelled429 = false;
+
+    const unsubscribe429 = subscribeExplorePublicPublicationInvalidation429((signal429) => {
+      if (cancelled429) return;
+      const rows429 = signal429.rows.filter((row429) => (
+        row429.ownerUid !== viewerUid429
+        && !hasSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at)
+      ));
+      if (!rows429.length) return;
+
+      void fetchExplorePublicPublicationStates429(rows429.map((row429) => row429.trackId))
+        .then((states429) => {
+          if (cancelled429) return;
+          const stateByTrack429 = new Map(states429.map((state429) => [state429.trackId, state429]));
+          for (const row429 of rows429) {
+            const state429 = stateByTrack429.get(row429.trackId);
+            if (!state429) continue;
+            const ownerUid429 = String(state429.ownerUid || row429.ownerUid || '').trim();
+
+            if (state429.status === 'private') {
+              removeExploreFeedSessionCacheRow(row429.trackId);
+              if (ownerUid429) removeExplorePublicProfileFirstViewTrack(ownerUid429, row429.trackId);
+              const remove429 = (previous: ExploreTrack[]) => previous.filter((track) => track.id !== row429.trackId);
+              setTracks(remove429);
+              setPopularTracks(remove429);
+              setCuratedTracks307(remove429);
+              setManagedCuratedTracks307(remove429);
+              setProfileLikedTracks(remove429);
+              if (profileUid === ownerUid429) setProfileTracks(remove429);
+              rememberSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at);
+              continue;
+            }
+
+            const snapshot429 = state429.card;
+            if (!snapshot429) continue;
+            upsertExploreFeedSessionCacheRow(row429.trackId, snapshot429);
+            if (ownerUid429) upsertExplorePublicProfileFirstViewTrack(ownerUid429, snapshot429);
+            const normalized429 = normalizeTrack(snapshot429);
+            if (!normalized429.id) continue;
+
+            const patchExisting429 = (previous: ExploreTrack[]) => previous.map((track) => (
+              track.id === normalized429.id ? { ...track, ...normalized429 } : track
+            ));
+            setCuratedTracks307(patchExisting429);
+            setManagedCuratedTracks307(patchExisting429);
+            setProfileLikedTracks(patchExisting429);
+
+            if (!profileUid && isExploreFeedRequest(requestUrl)) {
+              setTracks((previous) => {
+                const index = previous.findIndex((track) => track.id === normalized429.id);
+                if (index >= 0) {
+                  const next = [...previous];
+                  next[index] = { ...next[index], ...normalized429 };
+                  return overlayActorLikeCounts120(next);
+                }
+                return overlayActorLikeCounts120([normalized429, ...previous].slice(0, 40));
+              });
+              // Popular order is server-ranked; update an existing row only.
+              setPopularTracks(patchExisting429);
+            } else if (!profileUid) {
+              // Search membership is query-dependent. Update a visible hit only.
+              setTracks(patchExisting429);
+            }
+
+            if (profileUid === ownerUid429) {
+              setProfileTracks((previous) => {
+                const without429 = previous.filter((track) => track.id !== normalized429.id);
+                const next429 = [normalized429, ...without429];
+                next429.sort(comparePublicProfileTracks);
+                return overlayActorLikeCounts120(next429.slice(0, 50));
+              });
+            }
+            rememberSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at);
+          }
+        })
+        .catch((error429) => {
+          // Keep warm caches on transient edge/R2 failure. Normal bounded
+          // revision recovery remains the fallback; no polling/full Feed read.
+          console.warn('[429] Public publication changed-track repair deferred:', error429);
+        });
+    });
+
+    return () => {
+      cancelled429 = true;
+      unsubscribe429();
     };
   }, [user?.uid, requestUrl, profileUid]);
 

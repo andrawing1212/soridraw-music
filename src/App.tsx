@@ -10494,7 +10494,15 @@ const toggleCycleVariantSelection = (
       );
     }
 
-    setFavorites(authoritative);
+    // app429: Catalog is canonical recovery, but a local +30s save/unsave
+    // intent still owns visible membership until settlement. Re-apply both
+    // existing overlay layers explicitly before replacing the visible store;
+    // keep the durable canonical cache clean.
+    const visibleAfterCatalog429 = overlayStudioHeartPendingIntentsOnFavorites(
+      safeUid,
+      overlayStudioHeartRemotePreviewsOnFavorites(safeUid, authoritative),
+    );
+    favoritesStore.setFavorites(visibleAfterCatalog429);
     writeFavoritesCache(safeUid, authoritative, { publishDerived: false });
     writeMusicNoteSyncVersion(
       MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,

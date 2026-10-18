@@ -28,7 +28,7 @@ assert.match(sync, /Number\(state\.updatedAt\) === Number\(row\.at\)/);
 assert.match(sync, /Authorization: `Bearer \$\{idToken\}`/);
 assert.match(sync, /'X-Firebase-AppCheck': appCheckToken/);
 
-const liveStart = page.indexOf('// app430: cross-account public changes');
+const liveStart = page.indexOf('// app431: server-issued cross-account public changes');
 const liveEnd = page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004', liveStart);
 assert.ok(liveStart >= 0 && liveEnd > liveStart);
 const live = page.slice(liveStart, liveEnd);

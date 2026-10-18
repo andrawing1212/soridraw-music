@@ -105,13 +105,17 @@ assert.match(modal, /normalizeExplorePublicTitle425\(title/);
 assert.match(modal, /normalizeExplorePublicTitle425\(choice\.title/);
 assert.match(explore, /title: normalizeExplorePublicTitle425\(row\.title/);
 
+const workerBuilderStart = workerPatch.indexOf('function buildMusicNoteShareBundle100');
+const workerBuilderEnd = workerPatch.indexOf('const range = functionRange', workerBuilderStart);
+assert.ok(workerBuilderStart >= 0 && workerBuilderEnd > workerBuilderStart, 'worker app425 builder range missing');
+const workerBuilder = workerPatch.slice(workerBuilderStart, workerBuilderEnd);
 for (const required of [
   'requestPayload?.appliedKeywords',
   "'userInput', 'commandInput', 'directInput', 'customPrompt'",
   'SORIDRAW_PUBLIC_LEGACY_NEXT_SONG_425_20261018',
-]) assert.ok(workerPatch.includes(required), 'worker legacy contract missing: ' + required);
-assert.equal(workerPatch.includes('note?.prompt'), false);
-assert.equal(workerPatch.includes('note?.style'), false);
+]) assert.ok(workerBuilder.includes(required), 'worker legacy contract missing: ' + required);
+assert.equal(workerBuilder.includes('note?.prompt'), false);
+assert.equal(workerBuilder.includes('note?.style'), false);
 
 const normalizerSource = readFileSync('src/services/musicNoteNextSongRecipe.ts', 'utf8');
 const actionSource = readFileSync('src/services/exploreTrackActionService.ts', 'utf8');

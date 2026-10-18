@@ -1,3 +1,27 @@
+## CURRENT — app425/426/427/428 integrated on preview; audit/deploy pending (2026-10-18 KST)
+
+- **preview HEAD:** `3cb856b8b660828aa78ec754c7e013ee1c85db95`. PREVIEW live Hosting is still app421; these fixes are code-only on GitHub and are **not deployed yet**.
+- **P0-1 공개곡 정합성 #226:** **4/6 · 67%**. PR #234 title display normalization merged+QA PASS. PR #238 pending-vs-confirmed separation + failed-row base restoration + exact published metadata refresh after Music Note canonical settlement merged; Run `39137484806` SUCCESS incl. app428 verifier, TypeScript, Build, frozen likes/catalog, Rules audit. Independent GPT-6 audit and PREVIEW real-device remain.
+- **P0-2 구형 다음곡 적용/shareBundle #229:** **4/5 · 80%**. PR #236 merged on preview; Run `39136124590` SUCCESS. Shared read-time legacy normalizer now covers current appliedKeywords, requestPayload.appliedKeywords, known direct requestPayload fields and stored command aliases while refusing prompt-as-command fabrication. Public Worker patch 100 added but not deployed. Independent audit + PREVIEW old-song validation remain.
+- **P0-3 Music Note membership / Recent save-heart PC↔mobile #237:** **3/5 · 60%**. PR #235 merged; Run `39135608042` SUCCESS. Remote canonical mutation now schedules bounded private R2 Catalog catch-up so a closed device that missed retained RTDB mutations can reconcile complete Music Note membership and Recent save-heart authority without Firestore scan/bootstrap. Independent audit + PREVIEW PC/mobile validation remain.
+- **Title display requested by user:** Explore 공개설정 제목/곡 선택 카드/공개곡 더보기는 display-only formatter로 `[Nu Metal] 무거운 발걸음 | Heavy Footsteps` 형태 사용. Canonical stored title is not rewritten.
+- **Superseded branch cleanup:** old draft PR #232 closed unmerged because it had stale base + TypeScript failure; its useful work is superseded by PRs #234/#235/#236/#238.
+- **Protected:** app421 closed-device Explore-like recovery USER PASS/frozen; app349 Studio save-heart immediate same-device + same-UID RTDB preview + per-song +30s canonical settlement; Music Note 60s/detail batching; follows; UI/CSS; shared canonical user data.
+- **Backend/data:** no migration/backfill/delete, no shared user-data rewrite, no TEST/PRODUCTION deployment. Worker patch 100 exists in source only and requires audited PREVIEW Worker release together with compatible Hosting artifact when approved.
+- **Next gate:** freeze exact integrated preview SHA, GPT-6 independent audit across #226/#229/#237 + title display + cost/cache compatibility. PASS only then prepare one coordinated PREVIEW release and real-device matrix.
+
+### Updated progress
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | code + QA complete, audit/deploy pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code + QA complete, audit/deploy pending |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code + QA complete, audit/deploy pending |
+| Stage416 5-minute public like | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | separate hold |
+| app421 Explore-like recovery | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
 ## MASTER ROADMAP — 2026-10-18 KST / 사용자 고정 진행표
 
 ### 현재 기준

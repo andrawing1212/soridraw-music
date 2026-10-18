@@ -64,6 +64,7 @@ jobs:
           node scripts/verify-431-server-publication-signal.mjs
           node scripts/verify-432-publication-live-delta.mjs
           node scripts/verify-433-publication-audit-fixes.mjs
+          node scripts/verify-434-publication-signal-version-order.mjs
 
       - name: Authenticate Firebase deploy principal
         uses: google-github-actions/auth@v2

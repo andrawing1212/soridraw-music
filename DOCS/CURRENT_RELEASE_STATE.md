@@ -1,3 +1,30 @@
+## CURRENT — app432 new-public live Feed + bounded realtime fanout; independent audit pending (2026-10-19 KST)
+
+- **preview product merge:** PR #246 → `49a76941cec8c9efa8c374b81672ae945b84fdf6`, based on app431 audit target `70133154913c7a88e91e6eefed9981c2b439a51b`.
+- **Remaining audit gap closed in source:** a newly published track can enter an already-open Recommended/Latest Feed without navigation. RTDB carries only one latest tiny changed-track signal; it does **not** carry the public card payload.
+- **Realtime subscription scope:** only an active visible Recommended/Latest home Feed listens to the global publication signal. Search, hidden tabs and Popular do not keep that global listener. Public-profile pages listen to an owner-scoped `publicSync/explorePublicationProfiles/{owner}` path, not the global Feed bus.
+- **Shared Edge card:** a public signal resolves `/v1/publication-live-card?trackId&updatedAt`. The route is Auth + App Check, D1 R0/W0 and uses Cloudflare `caches.default` keyed by exact track+R2 timestamp. Edge HIT performs R2 read 0; R2 is consulted only on an Edge-cache miss and exact `updatedAt` match. Private signals remove the exact local row and do not fetch a card.
+- **Fanout payload bound:** shared RTDB keeps one row only (`trackId/ownerUid/at/status`). The app432 verifier hard-bounds a 100k simultaneously active Feed event to <=115.2 MB of application-level signal payload. This is a source-level upper envelope, **not measured Firebase invoice/network overhead**; independent audit must judge acceptability.
+- **Authority/failure safety unchanged:** browser public RTDB write remains false. Worker writes exact R2 state/tombstone first, then HMAC → `publicationRelease431Candidate` Function → Admin RTDB. Callback outage falls back to existing revision/resume recovery; no stale card is acknowledged because Edge card key and R2 `updatedAt` must match the signal.
+- **Action data stays lazy:** prompt/lyrics/shareBundle are not broadcast. Existing exact action paths remain responsible when a user explicitly applies/saves a public track.
+- **Frozen:** #229 patch100 lyric-mode parity unchanged; #237 +30s pending save-heart/Catalog overlay unchanged; app421 likes/follows, app349 save-heart settlement, Music Note batching and UI/CSS unchanged.
+- **QA:** PR #246 final head `f00d5409db67e2d3280678a3812de1dd50aae75d`; Run `39159780057` **SUCCESS** after one verifier-only regex syntax correction. app428~432 verifiers, Functions build, TypeScript, Build, frozen likes/catalog and live RTDB Rules read-only additive preflight PASS.
+- **Deployment:** none. PREVIEW live remains app421. Hosting/Worker patch100+101/app431 Function/RTDB Rules are source-only. TEST/PRODUCTION and shared user source data unchanged; no D1 schema/migration/backfill/delete.
+- **Next gate:** latest `preview` HEAD after this docs-only merge is the exact GPT-6 independent audit SHA. Do not deploy before PASS.
+
+### Progress remains frozen until independent PASS
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | app432 source+QA complete; audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code PASS / frozen |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app431 server-issued publication invalidation; independent re-audit pending (2026-10-19 KST)
 
 - **preview product merge:** PR #244 → `27e44757a818e686f9970f198ac2ec23f8b7c4ae`, superseding app430's browser-writable shared publication signal.

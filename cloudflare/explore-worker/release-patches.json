@@ -51,6 +51,7 @@
     "095-publication-canonical-like-request-cache.mjs",
     "096-follow-actor-count-response.mjs",
     "097-follow-abuse-guard.mjs",
-    "099-stage416-public-window-defer.mjs"
+    "099-stage416-public-window-defer.mjs",
+    "100-publication-legacy-next-song-recipe.mjs"
   ]
 }

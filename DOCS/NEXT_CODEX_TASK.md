@@ -1,3 +1,77 @@
+## MASTER EXECUTION ORDER — 2026-10-18 KST
+
+### 고정 진척도
+- P0-1 공개곡 정합성 #226: **2/6 · 33%**
+- P0-2 구형 다음곡 적용/shareBundle #229: **2/5 · 40%**
+- Stage416 공개 좋아요 5분 집계: **1/4 · 25% / 대기**
+- curated recommendations PR #200: **0/4 · 0% / 대기**
+- app421 closed-device 좋아요: **5/5 · 100% / USER PASS 동결**
+- 앱 속도 개선: **5/5 · 100% / 완료**
+
+### 지금부터 실행할 작업 순서
+
+#### STEP 1 — #226 + #229 공통 입력/상태 계약 확정
+- publication은 `confirmed state`와 `pending/retry intent`를 분리.
+- Music Note next-song recipe는 하나의 legacy-compatible normalization contract로 통일.
+- 같은 source song에 대해 Music Note 직접 적용 / own Explore / public Explore / shared-note가 가능한 범위에서 동일한 recipe를 내야 한다.
+- 이미 저장되지 않았던 historical command는 복구하지 않으며 generated prompt로 위조하지 않는다.
+- **완료 시 진척도:** P0-1 3/6, P0-2 3/5.
+
+#### STEP 2 — 최소 코드 구현
+- false-public 제거.
+- exact changed-track Feed/Profile/Search convergence.
+- published title/genre edit exact update.
+- legacy recipe normalizer 연결.
+- recent canonical song behavior와 app421 likes/follows/UI 보호.
+- full scan, cache-all-clear, version invalidation, polling, migration/backfill 금지.
+
+#### STEP 3 — 정적/실행 회귀 테스트
+- TypeScript + Build.
+- publication failure/pending/confirmed tests.
+- publish/unpublish/title update Feed/Profile/Search exact-track tests.
+- same UID second device + second account warm cache convergence tests.
+- recent/legacy/absent-command next-song fixtures.
+- shared-note/follower-save parity.
+- unchanged page/update/re-entry R0/W0 및 mutation O(1) 확인.
+- **완료 시 진척도:** P0-1 4/6, P0-2 4/5.
+
+#### STEP 4 — preview commit/push + exact SHA 고정
+- 구현 범위 밖 파일 변경 없음 확인.
+- CURRENT_RELEASE_STATE 업데이트.
+- 감사 대상 SHA 고정 후 더 이상 임의 변경하지 않음.
+
+#### STEP 5 — GPT-6 독립 감사
+- WORK_AUDIT_CHECKLIST 1~27 전체.
+- 기능/비용/데이터/PRODUCTION-first/cache-upgrade/PC-mobile/other-account 확인.
+- FAIL이면 PREVIEW 배포 금지, 최소 수정 후 새 SHA 재감사.
+- PASS면 P0-1 5/6, P0-2 감사 단계 완료.
+
+#### STEP 6 — PREVIEW exact artifact 배포 + 실기기
+- Firebase/Worker/Functions 중 실제 변경된 서비스만 배포.
+- preview.soridraw.com exact build 확인.
+- 같은 계정 PC/mobile + 다른 계정 warm Feed/public profile 검증.
+- 구형 Music Note 실제 다음곡 적용 + 공개 후 적용 검증.
+- TEST/PRODUCTION 비변경 확인.
+- PASS 시 P0-1 **6/6 100%**, P0-2 **5/5 100%**.
+
+#### STEP 7 — Stage416 재개
+- 기존 app421 좋아요 frozen behavior 유지.
+- activation guard 재감사 → PREVIEW-only 5분 public count activation → controlled E2E → 독립 감사.
+- Stage416 4/4가 되기 전 TEST 승격 없음.
+
+#### STEP 8 — curated PR #200 별도 처리
+- concurrent R2 snapshot overwrite와 cross-env revision authority를 독립적으로 해결/감사.
+- 공개곡/좋아요 P0와 혼합 금지.
+
+### 작업 중단 조건
+- shared user data migration/backfill/delete 필요.
+- whole Feed/Profile scan 또는 app-update cache reset 필요.
+- 좋아요/팔로우 frozen path 재작성 필요.
+- 비용이 사용자/곡 수에 비례하는 반복 read/write로 변함.
+- TEST/PRODUCTION에 비호환 schema가 생김.
+- 위 조건이면 구현을 멈추고 사용자에게 이유/대안/영향을 먼저 보고한다.
+
+---
 ## IMPLEMENTATION GATE ADDENDUM — Issue #229 old-song next-song normalization (2026-10-18 KST)
 
 Issue #226 공개곡 P0와 병행 설계하되 **별도 호환 레이어**로 구현한다.

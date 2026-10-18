@@ -44,6 +44,7 @@
 23. TEST PASS 후 PRODUCTION에서 새 기능 오류가 발생했던 릴리스라면 제품 수정 완료가 아니라 Release System 회귀로 기록했는지 확인
 24. **핵심 상태형 UI parity:** 최근 생성곡 / Music Note / Library 등 동일 사용자 곡의 저장·좋아요·잠금·공개/비공개 버튼 활성 상태와 membership이 PREVIEW → TEST → PRODUCTION 및 기존 PRODUCTION 캐시 업그레이드 뒤에도 동일한지 확인
 25. 위 상태형 UI는 서버/API 데이터가 같다는 이유만으로 PASS하지 않는다. 실제 브라우저 상태에서 버튼 fill/active 여부, 목록 포함 여부, 잠금 상태, 공개 상태가 같은 곡 기준으로 일치해야 하며 하나라도 다르면 승격 FAIL
+26. **연결 기능 영향 감사:** 수정한 파일만 보지 않고 변경된 상태/캐시/revision/signal/track identity가 연결된 소비자까지 추적한다. Music Note→publication→Feed→Public Profile→Search→shared-note/curation/like-card 같은 연쇄에서 영향 있음/없음을 각각 근거로 판정하고, 직접 수정하지 않은 기능도 실제 회귀 테스트 대상에 포함한다. 특히 캐시 변경은 같은 계정 다른 기기·다른 계정 warm cache·PREVIEW/TEST/PRODUCTION 다른 origin의 기존 캐시에서 누락/지연/역전이 없는지 확인한다.
 
 ## RED TEAM 질문
 - 사용자 수가 10만 명이어도 앱 업데이트 직후 10만 번 DB 읽기가 발생하지 않는가?

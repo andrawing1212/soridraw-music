@@ -23,7 +23,7 @@ assert.match(page, /subscribeExplorePublicPublicationInvalidation429/);
 assert.match(page, /fetchExplorePublicPublicationStates429/);
 assert.match(page, /removeExploreFeedSessionCacheRow\(row429\.trackId\)/);
 assert.match(page, /upsertExplorePublicProfileFirstViewTrack\(ownerUid429, snapshot429\)/);
-const liveBlock = page.slice(page.indexOf('// app429: public/private/title mutations'),
+const liveBlock = page.slice(page.indexOf('// app430: cross-account public changes'),
   page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004'));
 assert.doesNotMatch(liveBlock, /setInterval\s*\(|getExploreFeed|revalidateExplorePublicProfileFirstView335/);
 
@@ -42,7 +42,9 @@ const publicRule = rules?.rules?.publicSync?.explorePublication;
 assert.equal(publicRule?.['.read'], 'auth != null');
 assert.equal(publicRule?.['.write'], "auth != null && newData.child('actorUid').val() === auth.uid");
 assert.equal(publicRule?.rows?.$index?.ownerUid?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 128');
+  'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
+assert.match(String(publicRule?.rows?.$index?.at?.['.validate'] || ''), /newData\.val\(\) <= now/);
+assert.match(String(publicRule?.rows?.$index?.at?.['.validate'] || ''), /now - 300000/);
 
 assert.ok(manifest.patches.includes('100-music-note-next-song-legacy-parity.mjs'));
 assert.ok(manifest.patches.includes('101-publication-live-convergence.mjs'));
@@ -50,6 +52,12 @@ assert.ok(manifest.patches.indexOf('101-publication-live-convergence.mjs') >
   manifest.patches.indexOf('100-music-note-next-song-legacy-parity.mjs'));
 assert.doesNotMatch(patch101, /env\?*\.DB|env\.DB|\.prepare\s*\(/);
 assert.match(patch101, /publication-state-v429/);
+assert.match(patch101, /publicationStateUpdatedAt429/);
+assert.match(patch101, /await requireExploreAuth\(request\.clone\(\)\)/);
+assert.match(publicSync, /isExplorePublicPublicationStateFresh429/);
+assert.match(publicSync, /Number\(state\.updatedAt\) === Number\(row\.at\)/);
+assert.match(publication, /proofAt429/);
+assert.match(publication, /data\?\.publicationStateUpdatedAt429/);
 
 const temp = mkdtempSync(join(tmpdir(), 'soridraw-app429-'));
 try {
@@ -61,12 +69,15 @@ try {
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }
   const worker = readFileSync(join(temp, 'worker.js'), 'utf8');
-  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_429_20261019/);
+  assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_430_20261019/);
   assert.match(worker, /PUBLICATION_STATE_ROUTE_429/);
   const routeStart = worker.indexOf('async function handlePublicationStates429');
   const routeEnd = worker.indexOf('\n}', routeStart);
   assert.ok(routeStart >= 0 && routeEnd > routeStart);
-  assert.doesNotMatch(worker.slice(routeStart, routeEnd + 2), /env\?*\.DB|env\.DB|\.prepare\s*\(/);
+  const generatedRoute = worker.slice(routeStart, routeEnd + 2);
+  assert.doesNotMatch(generatedRoute, /env\?*\.DB|env\.DB|\.prepare\s*\(/);
+  assert.match(generatedRoute, /requireExploreAuth/);
+  assert.match(worker, /publicationStateUpdatedAt429/);
 } finally { rmSync(temp, { recursive: true, force: true }); }
 
 console.log('APP429_POLLUTED_PUBLICATION_CACHE_REPAIR=PASS');
@@ -74,3 +85,4 @@ console.log('APP429_CROSS_ACCOUNT_PUBLICATION_CHANGED_TRACK=PASS');
 console.log('APP429_PUBLIC_NEXT_SONG_LYRIC_MODE_PARITY=PASS');
 console.log('APP429_CATALOG_PENDING_HEART_OVERLAY=PASS');
 console.log('APP429_PUBLICATION_R2_D1_R0_W0=PASS');
+console.log('APP430_PUBLICATION_PROOF_AND_AUTH_HARDENING=PASS');

@@ -31,7 +31,11 @@ assert.equal(publication429?.['.read'], 'auth != null');
 assert.equal(publication429?.['.write'],
   "auth != null && newData.child('actorUid').val() === auth.uid");
 assert.equal(publication429?.rows?.$index?.ownerUid?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 128');
+  'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
+assert.equal(publication429?.rows?.$index?.at?.['.validate'],
+  'newData.isNumber() && newData.val() > 0 && newData.val() <= now && newData.val() >= now - 300000');
+assert.equal(publication429?.at?.['.validate'],
+  'newData.isNumber() && newData.val() > 0 && newData.val() <= now && newData.val() >= now - 300000');
 assert.equal(publication429?.rows?.$index?.['$other']?.['.validate'], false);
 assert.equal(intent.results?.$index?.['$other']?.['.validate'], false);
 
@@ -130,7 +134,11 @@ if (process.argv.includes('--self-test')) {
   const widenedPublication = structuredClone(local);
   widenedPublication.rules.publicSync.explorePublication.rows.$index.ownerUid['.validate'] =
     'newData.isString()';
-  assert.equal(compare(widenedPublication), null, 'public publication invalidation bounds must stay exact');
+  assert.equal(compare(widenedPublication), null, 'public publication writer ownership must stay exact');
+  const stalePublicationProof = structuredClone(local);
+  stalePublicationProof.rules.publicSync.explorePublication.rows.$index.at['.validate'] =
+    'newData.isNumber() && newData.val() > 0';
+  assert.equal(compare(stalePublicationProof), null, 'public publication proof freshness must stay exact');
   const exposedBatch = structuredClone(local);
   exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');

@@ -1,11 +1,13 @@
 import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'firebase/database';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
-import { realtimeDb } from '../firebase';
+import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 // SORIDRAW_PUBLIC_PUBLICATION_CHANGED_TRACK_429_20261019
-// Cross-account RTDB is invalidation only. Public/private truth always comes
-// from the exact shared R2 publication-state object written by the Worker.
+// app430 hardening: RTDB remains a tiny invalidation bus, never public truth.
+// A row is publishable only with the exact R2 state timestamp returned after a
+// successful canonical mutation + publication-state projection. Receivers must
+// also prove that the row is relevant to their already-loaded owner/track.
 const PUBLIC_PUBLICATION_SIGNAL_PATH_429 = 'publicSync/explorePublication';
 const PUBLIC_PUBLICATION_ROUTE_429 = '/v1/publication-cards';
 const PUBLIC_PUBLICATION_MAX_429 = 50;
@@ -16,6 +18,7 @@ const PUBLIC_PUBLICATION_ACK_TTL_MS_429 = 10 * 60_000;
 export type ExplorePublicPublicationSignalRow429 = {
   trackId: string;
   ownerUid: string;
+  // Exact Worker/R2 publication-state updatedAt token. Never client "now".
   at: number;
 };
 
@@ -72,32 +75,41 @@ export const mergeExplorePublicPublicationSignal429 = (
   current: unknown,
   actorUid: string,
   changedRows: ExplorePublicPublicationSignalRow429[],
-  now = Date.now(),
 ): ExplorePublicPublicationSignal429 | null => {
   const uid = safeId429(actorUid, 128);
   if (!uid) return null;
-  const cutoff = now - PUBLIC_PUBLICATION_RETENTION_MS_429;
+
+  // app430: never retain another actor's rows inside the next writer's payload.
+  // This lets Firebase Rules prove every transmitted row belongs to the writer.
+  // Same-actor rows may coalesce for three minutes.
   const previous = normalizeSignal429(current);
+  const incoming = changedRows.map((row) => ({
+    trackId: safeId429(row.trackId),
+    ownerUid: safeId429(row.ownerUid, 128),
+    at: Math.floor(Number(row.at || 0)),
+  })).filter((row) => (
+    row.trackId && row.ownerUid === uid && Number.isSafeInteger(row.at) && row.at > 0
+  ));
+  if (!incoming.length) return null;
+
+  const newestProofAt = Math.max(...incoming.map((row) => row.at));
+  const cutoff = newestProofAt - PUBLIC_PUBLICATION_RETENTION_MS_429;
   const byTrack = new Map<string, ExplorePublicPublicationSignalRow429>();
-  for (const row of previous?.rows || []) {
-    if (row.at >= cutoff) byTrack.set(row.trackId, row);
+  if (previous?.actorUid === uid) {
+    for (const row of previous.rows) {
+      if (row.ownerUid === uid && row.at >= cutoff) byTrack.set(row.trackId, row);
+    }
   }
-  for (const row of changedRows) {
-    const trackId = safeId429(row.trackId);
-    const ownerUid = safeId429(row.ownerUid, 128);
-    if (!trackId || ownerUid !== uid) continue;
-    const acceptedAt = Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0
-      ? Math.min(Math.floor(now), Math.floor(Number(row.at)))
-      : Math.floor(now);
-    byTrack.set(trackId, { trackId, ownerUid, at: acceptedAt });
-  }
+  for (const row of incoming) byTrack.set(row.trackId, row);
+
   const rows = [...byTrack.values()]
     .sort((a, b) => b.at - a.at || a.trackId.localeCompare(b.trackId))
     .slice(0, PUBLIC_PUBLICATION_MAX_429);
   if (!rows.length) return null;
+  const at = Math.max(...rows.map((row) => row.at));
   return {
-    version: Math.max(Math.floor(now), (previous?.version || 0) + 1),
-    at: Math.floor(now),
+    version: Math.max(at, (previous?.version || 0) + 1),
+    at,
     actorUid: uid,
     rows,
   };
@@ -111,11 +123,12 @@ export const publishExplorePublicPublicationInvalidation429 = async (
   const normalized = rows.map((row) => ({
     trackId: safeId429(row.trackId),
     ownerUid: safeId429(row.ownerUid, 128),
-    at: Number.isSafeInteger(Number(row.at)) && Number(row.at) > 0
-      ? Math.floor(Number(row.at)) : Date.now(),
-  })).filter((row) => row.trackId && row.ownerUid === uid)
-    .slice(0, PUBLIC_PUBLICATION_MAX_429);
+    at: Math.floor(Number(row.at || 0)),
+  })).filter((row) => (
+    row.trackId && row.ownerUid === uid && Number.isSafeInteger(row.at) && row.at > 0
+  )).slice(0, PUBLIC_PUBLICATION_MAX_429);
   if (!uid || !normalized.length) return;
+
   await runTransaction(
     databaseRef(realtimeDb, PUBLIC_PUBLICATION_SIGNAL_PATH_429),
     (current) => mergeExplorePublicPublicationSignal429(current, uid, normalized),
@@ -148,9 +161,38 @@ export const subscribeExplorePublicPublicationInvalidation429 = (
       });
       if (rows.length) listener({ ...signal, rows });
     },
-    (error) => console.warn('[429] Public publication invalidation unavailable; revision fallback remains active:', error),
+    (error) => console.warn('[430] Public publication invalidation unavailable; revision fallback remains active:', error),
   );
 };
+
+// A signal may trigger an exact R2 read only if this screen already has the
+// same owner/track relationship, or the user is viewing that owner's profile.
+export const isExplorePublicPublicationSignalRelevant429 = (
+  row: ExplorePublicPublicationSignalRow429,
+  visibleTrackOwnerUid: string,
+  profileUid: string,
+  viewerUid: string,
+): boolean => {
+  const ownerUid = safeId429(row?.ownerUid, 128);
+  const visibleOwnerUid = safeId429(visibleTrackOwnerUid, 128);
+  const activeProfileUid = safeId429(profileUid, 128);
+  const activeViewerUid = safeId429(viewerUid, 128);
+  if (!ownerUid || ownerUid === activeViewerUid) return false;
+  return visibleOwnerUid === ownerUid || activeProfileUid === ownerUid;
+};
+
+// The RTDB timestamp is a proof token from the successful Worker R2 write.
+// A stale state object must never be accepted/acked for a newer signal.
+export const isExplorePublicPublicationStateFresh429 = (
+  row: ExplorePublicPublicationSignalRow429,
+  state: ExplorePublicPublicationState429 | null | undefined,
+): boolean => Boolean(
+  state
+  && safeId429(state.trackId) === safeId429(row.trackId)
+  && safeId429(state.ownerUid, 128) === safeId429(row.ownerUid, 128)
+  && Number.isSafeInteger(Number(state.updatedAt))
+  && Number(state.updatedAt) === Number(row.at)
+);
 
 const readAckLedger429 = (viewerUid: string, now: number): AckLedger429 => {
   const empty: AckLedger429 = { viewerUid, rows: {} };
@@ -213,11 +255,24 @@ export const fetchExplorePublicPublicationStates429 = async (
   const ids = [...new Set(trackIds.map((id) => safeId429(id)).filter(Boolean))]
     .slice(0, PUBLIC_PUBLICATION_MAX_429);
   if (!ids.length) return [];
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('Public publication state requires authentication');
+  const [idToken, appCheckToken] = await Promise.all([
+    currentUser.getIdToken(),
+    getFirebaseAppCheckToken(),
+  ]);
+  if (!appCheckToken) throw new Error('Public publication state App Check unavailable');
+
   const query = new URLSearchParams({ trackIds: ids.join(',') });
   const route = `${PUBLIC_PUBLICATION_ROUTE_429}?${query.toString()}`;
   const response = await fetch(`${EXPLORE_API_BASE}${route}`, {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      'X-Firebase-AppCheck': appCheckToken,
+    },
   });
   recordCloudflareResponse(response, PUBLIC_PUBLICATION_ROUTE_429);
   if (!response.ok) throw new Error('Public publication state unavailable: HTTP ' + response.status);
@@ -235,7 +290,7 @@ export const fetchExplorePublicPublicationStates429 = async (
     const updatedAt = Math.max(0, Math.floor(Number(item.updatedAt || 0)));
     const card = item.card && typeof item.card === 'object' && !Array.isArray(item.card)
       ? item.card as Record<string, unknown> : null;
-    if (!trackId || !status) return null;
+    if (!trackId || !ownerUid || !status || !updatedAt) return null;
     return { trackId, ownerUid, status, updatedAt, ...(card ? { card } : {}) };
   }).filter((item): item is ExplorePublicPublicationState429 => Boolean(item));
 };

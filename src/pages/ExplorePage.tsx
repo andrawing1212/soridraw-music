@@ -68,8 +68,11 @@ import {
 import {
   fetchExplorePublicPublicationStates429,
   hasSettledExplorePublicPublicationSignal429,
+  isExplorePublicPublicationSignalRelevant429,
+  isExplorePublicPublicationStateFresh429,
   rememberSettledExplorePublicPublicationSignal429,
   subscribeExplorePublicPublicationInvalidation429,
+  type ExplorePublicPublicationSignalRow429,
 } from '../services/explorePublicPublicationSyncService';
 import {
   getExploreFollowState,
@@ -2774,97 +2777,160 @@ export default function ExplorePage() {
     };
   }, [user?.uid, requestUrl, profileUid]);
 
-  // app429: public/private/title mutations can affect another signed-in
-  // account that already has a warm Feed/profile open. RTDB carries changed IDs
-  // only; exact state/card truth is verified from shared R2 before patching.
+  // app430: cross-account public changes are signal-driven but relevance-gated.
+  // Unrelated viewers never spend a Worker/R2 request. A not-yet-visible new
+  // publication marks the existing Feed revision path stale locally; it does
+  // not fan one exact-card request out to every connected Explore user.
   useEffect(() => {
-    const viewerUid429 = String(user?.uid || '').trim();
-    if (!viewerUid429) return undefined;
-    let cancelled429 = false;
+    const viewerUid430 = String(user?.uid || '').trim();
+    if (!viewerUid430) return undefined;
+    let cancelled430 = false;
+    let refreshTimer430: number | null = null;
+    let lastRefreshAt430 = 0;
+    const pending430 = new Map<string, ExplorePublicPublicationSignalRow429>();
+    const MIN_PUBLICATION_REFRESH_MS_430 = 30_000;
 
-    const unsubscribe429 = subscribeExplorePublicPublicationInvalidation429((signal429) => {
-      if (cancelled429) return;
-      const rows429 = signal429.rows.filter((row429) => (
-        row429.ownerUid !== viewerUid429
-        && !hasSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at)
-      ));
-      if (!rows429.length) return;
+    const runRefresh430 = async () => {
+      refreshTimer430 = null;
+      if (cancelled430) return;
+      const pendingRows430 = [...pending430.values()].slice(0, 50);
+      if (!pendingRows430.length) return;
+      for (const row430 of pendingRows430) pending430.delete(row430.trackId);
+      lastRefreshAt430 = Date.now();
 
-      void fetchExplorePublicPublicationStates429(rows429.map((row429) => row429.trackId))
-        .then((states429) => {
-          if (cancelled429) return;
-          const stateByTrack429 = new Map(states429.map((state429) => [state429.trackId, state429]));
-          for (const row429 of rows429) {
-            const state429 = stateByTrack429.get(row429.trackId);
-            if (!state429) continue;
-            const ownerUid429 = String(state429.ownerUid || row429.ownerUid || '').trim();
+      try {
+        const states430 = await fetchExplorePublicPublicationStates429(
+          pendingRows430.map((row430) => row430.trackId),
+        );
+        if (cancelled430) return;
+        const stateByTrack430 = new Map(states430.map((state430) => [state430.trackId, state430]));
 
-            if (state429.status === 'private') {
-              removeExploreFeedSessionCacheRow(row429.trackId);
-              if (ownerUid429) removeExplorePublicProfileFirstViewTrack(ownerUid429, row429.trackId);
-              const remove429 = (previous: ExploreTrack[]) => previous.filter((track) => track.id !== row429.trackId);
-              setTracks(remove429);
-              setPopularTracks(remove429);
-              setCuratedTracks307(remove429);
-              setManagedCuratedTracks307(remove429);
-              setProfileLikedTracks(remove429);
-              if (profileUid === ownerUid429) setProfileTracks(remove429);
-              rememberSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at);
-              continue;
-            }
+        for (const row430 of pendingRows430) {
+          const state430 = stateByTrack430.get(row430.trackId);
+          if (!isExplorePublicPublicationStateFresh429(row430, state430)) continue;
+          const ownerUid430 = String(state430?.ownerUid || '').trim();
 
-            const snapshot429 = state429.card;
-            if (!snapshot429) continue;
-            upsertExploreFeedSessionCacheRow(row429.trackId, snapshot429);
-            if (ownerUid429) upsertExplorePublicProfileFirstViewTrack(ownerUid429, snapshot429);
-            const normalized429 = normalizeTrack(snapshot429);
-            if (!normalized429.id) continue;
-
-            const patchExisting429 = (previous: ExploreTrack[]) => previous.map((track) => (
-              track.id === normalized429.id ? { ...track, ...normalized429 } : track
-            ));
-            setCuratedTracks307(patchExisting429);
-            setManagedCuratedTracks307(patchExisting429);
-            setProfileLikedTracks(patchExisting429);
-
-            if (!profileUid && isExploreFeedRequest(requestUrl)) {
-              setTracks((previous) => {
-                const index = previous.findIndex((track) => track.id === normalized429.id);
-                if (index >= 0) {
-                  const next = [...previous];
-                  next[index] = { ...next[index], ...normalized429 };
-                  return overlayActorLikeCounts120(next);
-                }
-                return overlayActorLikeCounts120([normalized429, ...previous].slice(0, 40));
-              });
-              // Popular order is server-ranked; update an existing row only.
-              setPopularTracks(patchExisting429);
-            } else if (!profileUid) {
-              // Search membership is query-dependent. Update a visible hit only.
-              setTracks(patchExisting429);
-            }
-
-            if (profileUid === ownerUid429) {
-              setProfileTracks((previous) => {
-                const without429 = previous.filter((track) => track.id !== normalized429.id);
-                const next429 = [normalized429, ...without429];
-                next429.sort(comparePublicProfileTracks);
-                return overlayActorLikeCounts120(next429.slice(0, 50));
-              });
-            }
-            rememberSettledExplorePublicPublicationSignal429(viewerUid429, row429.trackId, row429.at);
+          if (state430?.status === 'private') {
+            removeExploreFeedSessionCacheRow(row430.trackId);
+            if (ownerUid430) removeExplorePublicProfileFirstViewTrack(ownerUid430, row430.trackId);
+            const remove430 = (previous: ExploreTrack[]) => previous.filter((track) => track.id !== row430.trackId);
+            setTracks(remove430);
+            setPopularTracks(remove430);
+            setCuratedTracks307(remove430);
+            setManagedCuratedTracks307(remove430);
+            setProfileLikedTracks(remove430);
+            if (profileUid === ownerUid430) setProfileTracks(remove430);
+            rememberSettledExplorePublicPublicationSignal429(
+              viewerUid430, row430.trackId, row430.at,
+            );
+            continue;
           }
-        })
-        .catch((error429) => {
-          // Keep warm caches on transient edge/R2 failure. Normal bounded
-          // revision recovery remains the fallback; no polling/full Feed read.
-          console.warn('[429] Public publication changed-track repair deferred:', error429);
-        });
+
+          const snapshot430 = state430?.card;
+          if (!snapshot430) continue;
+          upsertExploreFeedSessionCacheRow(row430.trackId, snapshot430);
+          if (ownerUid430) upsertExplorePublicProfileFirstViewTrack(ownerUid430, snapshot430);
+          const normalized430 = normalizeTrack(snapshot430);
+          if (!normalized430.id) continue;
+
+          const patchExisting430 = (previous: ExploreTrack[]) => previous.map((track) => (
+            track.id === normalized430.id ? { ...track, ...normalized430 } : track
+          ));
+          setCuratedTracks307(patchExisting430);
+          setManagedCuratedTracks307(patchExisting430);
+          setProfileLikedTracks(patchExisting430);
+
+          if (!profileUid && isExploreFeedRequest(requestUrl)) {
+            setTracks((previous) => {
+              const index = previous.findIndex((track) => track.id === normalized430.id);
+              if (index >= 0) {
+                const next = [...previous];
+                next[index] = { ...next[index], ...normalized430 };
+                return overlayActorLikeCounts120(next);
+              }
+              // Only a creator already represented in this loaded Feed reaches
+              // this branch for a new track. Fully unrelated new publications
+              // use the existing revision path instead of global R2 fan-out.
+              return overlayActorLikeCounts120([normalized430, ...previous].slice(0, 40));
+            });
+            setPopularTracks(patchExisting430);
+          } else if (!profileUid) {
+            setTracks(patchExisting430);
+          }
+
+          if (profileUid === ownerUid430) {
+            setProfileTracks((previous) => {
+              const without430 = previous.filter((track) => track.id !== normalized430.id);
+              const next430 = [normalized430, ...without430];
+              next430.sort(comparePublicProfileTracks);
+              return overlayActorLikeCounts120(next430.slice(0, 50));
+            });
+          }
+          rememberSettledExplorePublicPublicationSignal429(
+            viewerUid430, row430.trackId, row430.at,
+          );
+        }
+      } catch (error430) {
+        // No request loop: a retained signal or the normal revision/resume path
+        // may recover later. Never ack a failed/missing exact-state read.
+        console.warn('[430] Relevant public publication repair deferred:', error430);
+      }
+    };
+
+    const scheduleRefresh430 = () => {
+      if (refreshTimer430 !== null || !pending430.size) return;
+      const delay430 = Math.max(0, lastRefreshAt430 + MIN_PUBLICATION_REFRESH_MS_430 - Date.now());
+      refreshTimer430 = window.setTimeout(() => {
+        void runRefresh430();
+      }, delay430);
+    };
+
+    const unsubscribe430 = subscribeExplorePublicPublicationInvalidation429((signal430) => {
+      if (cancelled430) return;
+      const visible430 = publicLikeVisibleTracksRef192.current;
+      const visibleOwnerUids430 = new Set([...visible430.values()].filter(Boolean));
+      const isFeed430 = !profileUid && isExploreFeedRequest(requestUrl);
+
+      for (const row430 of signal430.rows) {
+        if (row430.ownerUid === viewerUid430 ||
+            hasSettledExplorePublicPublicationSignal429(
+              viewerUid430, row430.trackId, row430.at,
+            )) continue;
+
+        const visibleTrackOwner430 = String(visible430.get(row430.trackId) || '').trim();
+        const exactRelevant430 = isExplorePublicPublicationSignalRelevant429(
+          row430,
+          visibleTrackOwner430,
+          profileUid || '',
+          viewerUid430,
+        );
+        const representedFeedOwner430 = isFeed430 && visibleOwnerUids430.has(row430.ownerUid);
+        if (!exactRelevant430 && !representedFeedOwner430) {
+          // Keep first-page freshness without an immediate global read: the next
+          // already-existing revision/resume check will consume this local marker.
+          if (isFeed430) feedRevisionRequestedUrlRef.current = requestUrl;
+          continue;
+        }
+
+        // A forged writer cannot target somebody else's visible track: local
+        // owner identity is checked before any Worker/R2 request.
+        if (visibleTrackOwner430 && visibleTrackOwner430 !== row430.ownerUid) continue;
+        const previous430 = pending430.get(row430.trackId);
+        if (!previous430 || row430.at >= previous430.at) {
+          pending430.set(row430.trackId, row430);
+        }
+      }
+      scheduleRefresh430();
     });
 
     return () => {
-      cancelled429 = true;
-      unsubscribe429();
+      cancelled430 = true;
+      unsubscribe430();
+      pending430.clear();
+      if (refreshTimer430 !== null) {
+        window.clearTimeout(refreshTimer430);
+        refreshTimer430 = null;
+      }
     };
   }, [user?.uid, requestUrl, profileUid]);
 

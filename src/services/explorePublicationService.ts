@@ -413,6 +413,7 @@ const publishPublicationSyncBestEffort = async (
   sourceId: string,
   state: ExploreMusicNotePublicationState,
   snapshotItem?: unknown,
+  publicProofAt429?: unknown,
 ): Promise<void> => {
   let snapshotJson = '';
   if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
@@ -436,17 +437,17 @@ const publishPublicationSyncBestEffort = async (
     console.warn('Explore publication same-account signal skipped:', error);
   }
 
+  // app430: a shared invalidation exists only when the Worker returned proof
+  // that the exact public/private R2 state was stored after canonical success.
+  const proofAt429 = Math.floor(Number(publicProofAt429 || 0));
+  if (!Number.isSafeInteger(proofAt429) || proofAt429 <= 0) return;
   try {
-    // app429: other accounts receive only a changed-track invalidation. RTDB
-    // never becomes public truth; receivers verify exact state from shared R2.
     await publishExplorePublicPublicationInvalidation429(uid, [{
       trackId: state.trackId,
       ownerUid: uid,
-      at: Date.now(),
+      at: proofAt429,
     }]);
   } catch (error) {
-    // Canonical mutation already succeeded. Derived notification failure must
-    // never turn a real public/private mutation into a false failure.
     console.warn('Explore publication public invalidation skipped:', error);
   }
 };
@@ -794,6 +795,7 @@ export const refreshExploreMusicNotePublicationContent428 = async (
     normalizedSourceId,
     nextState,
     data?.snapshotItem,
+    data?.publicationStateUpdatedAt429,
   );
   return { ...nextState };
 };
@@ -889,6 +891,7 @@ export const refreshExploreMusicNotePublicationSource = async (
     normalizedSourceId,
     nextState,
     data?.snapshotItem,
+    data?.publicationStateUpdatedAt429,
   );
   return { ...nextState };
 };
@@ -1045,6 +1048,7 @@ profilePinned: pending.desiredState.profilePinned,
       pending.sourceId,
       confirmed,
       row.snapshotItem,
+      row.publicationStateUpdatedAt429,
     ));
 
     if (confirmed.status === 'private') {

@@ -410,12 +410,17 @@ export const patchExplorePublicProfileFirstViewTrack = (
 export const revalidateExplorePublicProfileFirstView335 = (
   profileRef: string,
   options: ExploreProfileFirstViewOptions = {},
+  forceInteractionCheck425 = false,
 ) => {
   const normalizedRef = normalizeProfileRef(profileRef);
   if (!normalizedRef) return;
   const cached = readCache(normalizedRef);
   if (!cached) return;
-  revalidateCachedProfile113(normalizedRef, cached, options);
+  // app425 — an explicit user opening a cached public profile is a meaningful
+  // interaction, not an app-update/reload. Allow one conditional Edge/R2
+  // revision check for that exact profile. Ordinary warm entry/reload and
+  // background rendering keep the existing local-zero-read path.
+  revalidateCachedProfile113(normalizedRef, cached, options, forceInteractionCheck425);
 };
 
 export const getExplorePublicProfileFirstView = async (

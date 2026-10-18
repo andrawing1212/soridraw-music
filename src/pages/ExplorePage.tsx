@@ -464,6 +464,32 @@ const safeText = (value: unknown, fallback = '') => {
   return normalized || fallback;
 };
 
+const stripExploreTitleOuterQuotes425 = (value: string) => {
+  const text = String(value || '').trim();
+  if (text.length < 2) return text;
+  const pairs: Array<[string, string]> = [["'", "'"], ['"', '"'], ['‘', '’'], ['“', '”']];
+  const pair = pairs.find(([open, close]) => text.startsWith(open) && text.endsWith(close));
+  return pair ? text.slice(pair[0].length, text.length - pair[1].length).trim() : text;
+};
+
+// app425 — Explore/publication cards historically stored some bilingual titles
+// with presentation quotes around each language. Normalize only those enclosing
+// quotes at display time so existing cached/public rows recover without a data
+// migration. Apostrophes/quotes inside the actual title remain untouched.
+const normalizeExplorePublicTitle425 = (value: unknown, fallback = '제목 없는 곡') => {
+  const raw = safeText(value, fallback);
+  const genreMatch = raw.match(/^(\[[^\]]+\]\s*)/);
+  const prefix = genreMatch?.[1] || '';
+  const body = prefix ? raw.slice(prefix.length).trim() : raw;
+  if (!body) return prefix.trim() || fallback;
+  const parts = body.split(/\s*[|│]\s*/);
+  const normalizedBody = parts
+    .map((part) => stripExploreTitleOuterQuotes425(part))
+    .filter(Boolean)
+    .join(' | ');
+  return `${prefix}${normalizedBody || fallback}`.trim();
+};
+
 // SORIDRAW_EXPLORE_KOREAN_GENRE_SEARCH_337_20261004
 // The visible query stays exactly as the user typed it. Korean genre labels are
 // translated only into extra R2 genre lookup hints, so one search request can
@@ -556,7 +582,7 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   ownerUid: safeText(row.ownerUid ?? row.owner_uid),
   ownerProfileGenres: Array.isArray(row.ownerProfileGenres) ? row.ownerProfileGenres.filter((v): v is string => typeof v === 'string').slice(0, 5) : null,
   ownerHandle: safeText(row.ownerHandle ?? row.owner_handle).replace(/^@+/, ''),
-  title: safeText(row.title, '제목 없는 곡'),
+  title: normalizeExplorePublicTitle425(row.title, '제목 없는 곡'),
   displayName: safeText(row.ownerNickname ?? row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
   avatarUrl: safeText(row.ownerAvatarUrl ?? row.avatarUrl) || null,
   coverUrl: safeText(row.coverUrl) || null,

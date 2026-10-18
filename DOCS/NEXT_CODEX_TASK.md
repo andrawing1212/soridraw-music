@@ -1,3 +1,18 @@
+## NEXT — app431 #226 server-issued public invalidation: GPT-6 re-audit ONLY (2026-10-19 KST)
+
+- **No more implementation before audit unless a concrete blocker is found.** Re-audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #244 merge `27e44757a818e686f9970f198ac2ec23f8b7c4ae`.
+- Re-audit the three prior blockers against app431:
+  1. **Fanout/cost:** unrelated logged-in Explore viewers must perform immediate Worker/R2 R0 for a publication signal. Exact R2 may run only for already-visible changed track/current owner profile; unseen Feed publication uses the existing revision/resume path without new polling/full refresh.
+  2. **Authority/abuse:** browser code must have no public RTDB write path and Rules must keep `publicSync/explorePublication/.write=false`. Only Worker HMAC → dedicated Function → Admin RTDB may publish, with exact track-owner binding/freshness/idempotency.
+  3. **R2 failure:** server signal must be attempted only after exact R2 state/tombstone write succeeds. Receiver must require exact `state.updatedAt === signal.at`; stale/missing R2 must remain unacked. Callback outage falls back to existing revision/resume recovery rather than trusting stale state.
+- Verify exact publication-state route still Auth + App Check + D1 R0/W0.
+- Verify the dedicated PREVIEW Function release workflow is audit-gated and deploys only `publicationRelease431Candidate`; PREVIEW/TEST/PRODUCTION endpoint identities remain separated.
+- Protect #229 `isLyricMode/lyricMode`, #237 +30s pending save/unsave overlay, app421 likes/follows, app349 save-heart, Music Note batching, UI/CSS and shared user source data.
+- **PASS only then:** coordinate PREVIEW release of exact audited Hosting + Worker patch100/101 + app431 Candidate Function + tightened read-only shared RTDB Rules. D1 schema/shared user data remain unchanged.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until audit PASS.
+
+---
+
 ## NEXT — app430 #226 cost/permission/failure correction: GPT-6 re-audit ONLY (2026-10-19 KST)
 
 - **No generic implementation.** Re-audit latest `preview` HEAD after this docs merge; product code underneath is PR #242 merge `c03d32a617062e5b85e747f5a981bf2b2019245d`.

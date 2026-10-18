@@ -62,6 +62,7 @@ jobs:
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
           node scripts/verify-431-server-publication-signal.mjs
+          node scripts/verify-432-publication-live-delta.mjs
 
       - name: Authenticate Firebase deploy principal
         uses: google-github-actions/auth@v2

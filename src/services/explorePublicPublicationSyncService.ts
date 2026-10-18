@@ -4,12 +4,16 @@ import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 // SORIDRAW_PUBLIC_PUBLICATION_CHANGED_TRACK_429_20261019
-// app431 hardening: browsers are READ-ONLY on this invalidation bus.
-// Only the HMAC-authenticated Worker -> Firebase Function path can publish after
-// exact R2 projection succeeds. Receivers still verify exact shared R2 state.
-const PUBLIC_PUBLICATION_SIGNAL_PATH_429 = 'publicSync/explorePublication';
+// app432: browsers remain READ-ONLY. The server publishes ONE latest compact
+// delta. Home Feed listens only while it is the active visible screen; public
+// profile listens only to its owner-scoped path. The RTDB event stays tiny;
+// an active relevant screen resolves the display card through a shared Edge cache.
+const PUBLIC_PUBLICATION_FEED_SIGNAL_PATH_432 = 'publicSync/explorePublication';
+const PUBLIC_PUBLICATION_PROFILE_SIGNAL_ROOT_432 = 'publicSync/explorePublicationProfiles';
 const PUBLIC_PUBLICATION_ROUTE_429 = '/v1/publication-cards';
+const PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432 = '/v1/publication-live-card';
 const PUBLIC_PUBLICATION_MAX_429 = 50;
+const PUBLIC_PUBLICATION_SIGNAL_ROWS_432 = 1;
 const PUBLIC_PUBLICATION_RETENTION_MS_429 = 3 * 60_000;
 const PUBLIC_PUBLICATION_ACK_KEY_429 = 'soridraw_public_publication_ack_429';
 const PUBLIC_PUBLICATION_ACK_TTL_MS_429 = 10 * 60_000;
@@ -19,6 +23,7 @@ export type ExplorePublicPublicationSignalRow429 = {
   ownerUid: string;
   // Exact Worker/R2 publication-state updatedAt token. Never client "now".
   at: number;
+  status: 'public' | 'private';
 };
 
 export type ExplorePublicPublicationSignal429 = {
@@ -62,21 +67,24 @@ const normalizeSignal429 = (raw: unknown): ExplorePublicPublicationSignal429 | n
     const trackId = safeId429(item.trackId);
     const ownerUid = safeId429(item.ownerUid, 128);
     const rowAt = Math.floor(Number(item.at || 0));
-    if (!trackId || !ownerUid || !Number.isSafeInteger(rowAt) || rowAt <= 0) return null;
-    return { trackId, ownerUid, at: rowAt };
+    const status = item.status === 'public' ? 'public' : item.status === 'private' ? 'private' : '';
+    if (!trackId || !ownerUid || !status ||
+        !Number.isSafeInteger(rowAt) || rowAt <= 0) return null;
+    return { trackId, ownerUid, at: rowAt, status };
   }).filter((row): row is ExplorePublicPublicationSignalRow429 => Boolean(row))
-    .slice(0, PUBLIC_PUBLICATION_MAX_429);
+    .slice(0, PUBLIC_PUBLICATION_SIGNAL_ROWS_432);
   if (!rows.length) return null;
   return { version, at, actorUid, rows };
 };
 
-export const subscribeExplorePublicPublicationInvalidation429 = (
+const subscribeSignalPath432 = (
+  path: string,
   listener: (signal: ExplorePublicPublicationSignal429) => void,
 ): Unsubscribe => {
   let lastVersion = 0;
   const seenTrackAt = new Map<string, number>();
   return onValue(
-    databaseRef(realtimeDb, PUBLIC_PUBLICATION_SIGNAL_PATH_429),
+    databaseRef(realtimeDb, path),
     (snapshot) => {
       const signal = normalizeSignal429(snapshot.val());
       if (!signal || signal.version <= lastVersion) return;
@@ -86,21 +94,70 @@ export const subscribeExplorePublicPublicationInvalidation429 = (
         const previous = seenTrackAt.get(row.trackId) || 0;
         if (row.at <= previous) return false;
         seenTrackAt.set(row.trackId, row.at);
-        while (seenTrackAt.size > 256) {
-          const oldest = seenTrackAt.keys().next().value as string | undefined;
-          if (!oldest) break;
-          seenTrackAt.delete(oldest);
-        }
         return true;
       });
       if (rows.length) listener({ ...signal, rows });
     },
-    (error) => console.warn('[431] Server publication invalidation unavailable; revision fallback remains active:', error),
+    (error) => console.warn('[432] Server publication delta unavailable; revision fallback remains active:', error),
   );
 };
 
-// A signal may trigger an exact R2 read only if this screen already has the
-// same owner/track relationship, or the user is viewing that owner's profile.
+// Home Feed global delta. Callers must mount this only on an active visible Feed.
+export const subscribeExplorePublicPublicationInvalidation429 = (
+  listener: (signal: ExplorePublicPublicationSignal429) => void,
+): Unsubscribe => subscribeSignalPath432(PUBLIC_PUBLICATION_FEED_SIGNAL_PATH_432, listener);
+
+// Public profiles never listen to the global Feed bus. One profile page listens
+// only to the server-issued path for that owner.
+export const subscribeExplorePublicProfilePublication432 = (
+  ownerUid: string,
+  listener: (signal: ExplorePublicPublicationSignal429) => void,
+): Unsubscribe => {
+  const uid = safeId429(ownerUid, 128);
+  if (!uid) return () => undefined;
+  return subscribeSignalPath432(
+    `${PUBLIC_PUBLICATION_PROFILE_SIGNAL_ROOT_432}/${encodeURIComponent(uid)}`,
+    listener,
+  );
+};
+
+export const fetchExplorePublicPublicationLiveCard432 = async (
+  row: ExplorePublicPublicationSignalRow429,
+): Promise<Record<string, unknown> | null> => {
+  if (row.status !== 'public') return null;
+  const currentUser = auth.currentUser;
+  if (!currentUser) return null;
+  const [idToken, appCheckToken] = await Promise.all([
+    currentUser.getIdToken(),
+    getFirebaseAppCheckToken(),
+  ]);
+  if (!appCheckToken) return null;
+  const query = new URLSearchParams({
+    trackId: row.trackId,
+    updatedAt: String(row.at),
+  });
+  const route = `${PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432}?${query.toString()}`;
+  const response = await fetch(`${EXPLORE_API_BASE}${route}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      'X-Firebase-AppCheck': appCheckToken,
+    },
+  });
+  recordCloudflareResponse(response, PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432);
+  if (!response.ok) return null;
+  const payload = await response.json() as { ok?: boolean; data?: { item?: Record<string, unknown> } };
+  const item = payload?.data?.item;
+  if (payload?.ok !== true || !item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const id = safeId429(item.id ?? item.trackId);
+  const ownerUid = safeId429(item.ownerUid ?? item.owner_uid, 128);
+  const updatedAt = Math.floor(Number(item.updatedAt ?? 0));
+  if (id !== row.trackId || ownerUid !== row.ownerUid || updatedAt !== row.at) return null;
+  return item;
+};
+
+// app430 compatibility helper retained for audit/debug exact-state fallback.
 export const isExplorePublicPublicationSignalRelevant429 = (
   row: ExplorePublicPublicationSignalRow429,
   visibleTrackOwnerUid: string,
@@ -115,8 +172,6 @@ export const isExplorePublicPublicationSignalRelevant429 = (
   return visibleOwnerUid === ownerUid || activeProfileUid === ownerUid;
 };
 
-// The RTDB timestamp is a proof token from the successful Worker R2 write.
-// A stale state object must never be accepted/acked for a newer signal.
 export const isExplorePublicPublicationStateFresh429 = (
   row: ExplorePublicPublicationSignalRow429,
   state: ExplorePublicPublicationState429 | null | undefined,
@@ -183,6 +238,8 @@ export const rememberSettledExplorePublicPublicationSignal429 = (
   } catch {}
 };
 
+// Exact Auth+AppCheck R2 route retained as a bounded manual/fallback primitive.
+// app432 live Feed/profile convergence does not call it.
 export const fetchExplorePublicPublicationStates429 = async (
   trackIds: string[],
 ): Promise<ExplorePublicPublicationState429[]> => {

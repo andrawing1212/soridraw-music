@@ -1,12 +1,13 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import type {Database} from 'firebase-admin/database';
 
-// app431: Worker -> Firebase server-only publication invalidation.
-// Browsers can read the compact signal but can never write it. The claim is
-// HMAC-authenticated only after the Worker successfully stores exact R2 state.
-const SIGNAL_RETENTION_MS_431=3*60_000;
-const SIGNAL_MAX_431=50;
+// app431 server issuer + app432 one-event compact live delta.
+// Browsers are read-only. Worker signs only after exact R2 state/tombstone write.
+// The Function writes one latest tiny global Feed event plus one owner-scoped
+// profile event; public-card bytes stay in shared Cloudflare Edge cache.
 const SERVER_ACTOR_431='publication-server-431';
+const FEED_SIGNAL_PATH_432='publicSync/explorePublication';
+const PROFILE_SIGNAL_ROOT_432='publicSync/explorePublicationProfiles';
 
 export type PublicationReleaseClaim431={
   schemaVersion:1;
@@ -17,16 +18,21 @@ export type PublicationReleaseClaim431={
   signedAtMs:number;
 };
 
-type SignalRow431={trackId:string;ownerUid:string;at:number};
+type SignalRow431={
+  trackId:string;
+  ownerUid:string;
+  at:number;
+  status:'public'|'private';
+};
 type Signal431={
-  version?:number;at?:number;actorUid?:string;
+  version?:number;
+  at?:number;
+  actorUid?:string;
   rows?:SignalRow431[]|Record<string,SignalRow431>;
 };
 
 const validText431=(value:unknown,max:number)=>typeof value==='string'&&
   value.length>0&&value.length<=max;
-const rows431=(value:Signal431['rows']):SignalRow431[]=>
-  Array.isArray(value)?value:value&&typeof value==='object'?Object.values(value):[];
 
 const parseClaim431=(raw:string,nowMs:number):PublicationReleaseClaim431=>{
   let claim:PublicationReleaseClaim431;
@@ -50,23 +56,30 @@ const parseClaim431=(raw:string,nowMs:number):PublicationReleaseClaim431=>{
   return {schemaVersion:1,trackId,ownerUid,status,stateUpdatedAt,signedAtMs};
 };
 
-export async function publishPublicationRelease431(
-  db:Database,raw:string,signature:string,secret:string,nowMs=Date.now(),
-  signalPath='publicSync/explorePublication',
-):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';trackId:string;signalChanged:boolean}>{
-  if(!raw||raw.length>64_000||typeof secret!=='string'||secret.length<32||
-     !/^[0-9a-f]{64}$/i.test(signature||'')||
-     !Number.isSafeInteger(nowMs)||nowMs<=0||!signalPath)
-    throw Error('431_PUBLICATION_RELEASE_INVALID_AUTH');
-  const expected=createHmac('sha256',secret).update(raw,'utf8').digest();
-  const claimed=Buffer.from(signature,'hex');
-  if(claimed.length!==expected.length||!timingSafeEqual(claimed,expected))
-    throw Error('431_PUBLICATION_RELEASE_BAD_SIGNATURE');
+const firstRow431=(value:Signal431['rows']):SignalRow431|null=>{
+  const rows=Array.isArray(value)?value:
+    value&&typeof value==='object'?Object.values(value):[];
+  const row=rows[0];
+  if(!row||typeof row!=='object')return null;
+  const trackId=String(row.trackId||'').trim();
+  const ownerUid=String(row.ownerUid||'').trim();
+  const at=Number(row.at||0);
+  const status=row.status;
+  if(!validText431(trackId,512)||!validText431(ownerUid,128)||
+     !Number.isSafeInteger(at)||at<=0||
+     (status!=='public'&&status!=='private'))return null;
+  return {trackId,ownerUid,at,status};
+};
 
-  const claim=parseClaim431(raw,nowMs);
+const publishLatest431=async(
+  db:Database,
+  path:string,
+  claim:PublicationReleaseClaim431,
+  nowMs:number,
+):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';changed:boolean}>=>{
   let outcome:'PUBLISHED'|'DUPLICATE'|'STALE'='PUBLISHED';
   let changed=false;
-  const result=await db.ref(signalPath).transaction((rawState:unknown)=>{
+  const result=await db.ref(path).transaction((rawState:unknown)=>{
     changed=false;
     outcome='PUBLISHED';
     const current=(rawState&&typeof rawState==='object'&&!Array.isArray(rawState)
@@ -77,38 +90,58 @@ export async function publishPublicationRelease431(
        currentAt&&(!Number.isSafeInteger(currentAt)||currentAt>nowMs+60_000))
       throw Error('431_PUBLICATION_SIGNAL_CORRUPT');
 
-    const cutoff=nowMs-SIGNAL_RETENTION_MS_431;
-    const retained=new Map<string,SignalRow431>();
-    for(const row of rows431(current.rows)){
-      const trackId=String(row?.trackId||'').trim();
-      const ownerUid=String(row?.ownerUid||'').trim();
-      const at=Number(row?.at||0);
-      if(!validText431(trackId,512)||!validText431(ownerUid,128)||
-         !Number.isSafeInteger(at)||at<=0)continue;
-      if(at>=cutoff)retained.set(trackId,{trackId,ownerUid,at});
-    }
-
-    const prior=retained.get(claim.trackId);
-    if(prior&&prior.at>=claim.stateUpdatedAt){
-      outcome=prior.at===claim.stateUpdatedAt?'DUPLICATE':'STALE';
+    const prior=firstRow431(current.rows);
+    if(prior&&prior.trackId===claim.trackId&&prior.at===claim.stateUpdatedAt){
+      outcome='DUPLICATE';
       return;
     }
-    retained.set(claim.trackId,{
-      trackId:claim.trackId,ownerUid:claim.ownerUid,at:claim.stateUpdatedAt,
-    });
-    const ordered=[...retained.values()]
-      .sort((a,b)=>b.at-a.at||a.trackId.localeCompare(b.trackId))
-      .slice(0,SIGNAL_MAX_431);
+    if(prior&&prior.at>claim.stateUpdatedAt){
+      outcome='STALE';
+      return;
+    }
+
     changed=true;
+    const row:SignalRow431={
+      trackId:claim.trackId,
+      ownerUid:claim.ownerUid,
+      at:claim.stateUpdatedAt,
+      status:claim.status,
+    };
     return {
       version:Math.max(nowMs,version+1),
       at:nowMs,
       actorUid:SERVER_ACTOR_431,
-      rows:ordered,
+      rows:[row],
     };
   },undefined,false);
 
   if(!result.committed&&!changed&&outcome==='PUBLISHED')
     throw Error('431_PUBLICATION_SIGNAL_NOT_COMMITTED');
-  return {status:outcome,trackId:claim.trackId,signalChanged:changed};
+  return {status:outcome,changed};
+};
+
+export async function publishPublicationRelease431(
+  db:Database,raw:string,signature:string,secret:string,nowMs=Date.now(),
+  feedPath=FEED_SIGNAL_PATH_432,
+  profileRoot=PROFILE_SIGNAL_ROOT_432,
+):Promise<{status:'PUBLISHED'|'DUPLICATE'|'STALE';trackId:string;signalChanged:boolean}>{
+  if(!raw||raw.length>4_000||typeof secret!=='string'||secret.length<32||
+     !/^[0-9a-f]{64}$/i.test(signature||'')||
+     !Number.isSafeInteger(nowMs)||nowMs<=0||!feedPath||!profileRoot)
+    throw Error('431_PUBLICATION_RELEASE_INVALID_AUTH');
+  const expected=createHmac('sha256',secret).update(raw,'utf8').digest();
+  const claimed=Buffer.from(signature,'hex');
+  if(claimed.length!==expected.length||!timingSafeEqual(claimed,expected))
+    throw Error('431_PUBLICATION_RELEASE_BAD_SIGNATURE');
+
+  const claim=parseClaim431(raw,nowMs);
+  const profilePath=profileRoot+'/'+encodeURIComponent(claim.ownerUid);
+  const feed=await publishLatest431(db,feedPath,claim,nowMs);
+  const profile=await publishLatest431(db,profilePath,claim,nowMs);
+
+  const changed=feed.changed||profile.changed;
+  const status: 'PUBLISHED'|'DUPLICATE'|'STALE'=
+    changed?'PUBLISHED':
+    feed.status==='DUPLICATE'&&profile.status==='DUPLICATE'?'DUPLICATE':'STALE';
+  return {status,trackId:claim.trackId,signalChanged:changed};
 }

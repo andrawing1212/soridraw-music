@@ -66,11 +66,10 @@ import {
   type ExplorePublicLikeSignalRow192,
 } from '../services/explorePublicLikeSyncService';
 import {
-  fetchExplorePublicPublicationStates429,
   hasSettledExplorePublicPublicationSignal429,
-  isExplorePublicPublicationSignalRelevant429,
-  isExplorePublicPublicationStateFresh429,
+  fetchExplorePublicPublicationLiveCard432,
   rememberSettledExplorePublicPublicationSignal429,
+  subscribeExplorePublicProfilePublication432,
   subscribeExplorePublicPublicationInvalidation429,
   type ExplorePublicPublicationSignalRow429,
 } from '../services/explorePublicPublicationSyncService';
@@ -2777,160 +2776,142 @@ export default function ExplorePage() {
     };
   }, [user?.uid, requestUrl, profileUid]);
 
-  // app431: server-issued cross-account public changes are relevance-gated.
-  // Unrelated viewers never spend a Worker/R2 request. A not-yet-visible new
-  // publication marks the existing Feed revision path stale locally; it does
-  // not fan one exact-card request out to every connected Explore user.
+  // app432: server-issued one-event live delta.
+  // RTDB carries only a tiny changed-track signal. Active visible home Feed or
+  // the exact public-profile page resolves the public display card through one
+  // shared Cloudflare Edge cache; it never performs a per-viewer R2 read.
   useEffect(() => {
-    const viewerUid430 = String(user?.uid || '').trim();
-    if (!viewerUid430) return undefined;
-    let cancelled430 = false;
-    let refreshTimer430: number | null = null;
-    let lastRefreshAt430 = 0;
-    const pending430 = new Map<string, ExplorePublicPublicationSignalRow429>();
-    const MIN_PUBLICATION_REFRESH_MS_430 = 30_000;
+    const viewerUid432 = String(user?.uid || '').trim();
+    if (!viewerUid432) return undefined;
 
-    const runRefresh430 = async () => {
-      refreshTimer430 = null;
-      if (cancelled430) return;
-      const pendingRows430 = [...pending430.values()].slice(0, 50);
-      if (!pendingRows430.length) return;
-      for (const row430 of pendingRows430) pending430.delete(row430.trackId);
-      lastRefreshAt430 = Date.now();
+    const profileOwner432 = String(profileUid || '').trim();
+    const homeFeed432 = !profileOwner432
+      && !submittedQuery.trim()
+      && sort !== 'popular'
+      && isExploreFeedRequest(requestUrl);
+    if (!homeFeed432 && !profileOwner432) return undefined;
 
-      try {
-        const states430 = await fetchExplorePublicPublicationStates429(
-          pendingRows430.map((row430) => row430.trackId),
-        );
-        if (cancelled430) return;
-        const stateByTrack430 = new Map(states430.map((state430) => [state430.trackId, state430]));
+    let cancelled432 = false;
+    let unsubscribe432: (() => void) | null = null;
 
-        for (const row430 of pendingRows430) {
-          const state430 = stateByTrack430.get(row430.trackId);
-          if (!isExplorePublicPublicationStateFresh429(row430, state430)) continue;
-          const ownerUid430 = String(state430?.ownerUid || '').trim();
+    const applyPublicCard432 = (
+      row432: ExplorePublicPublicationSignalRow429,
+      snapshot432: Record<string, unknown>,
+    ) => {
+      if (cancelled432) return;
+      const normalized432 = normalizeTrack(snapshot432);
+      if (!normalized432.id || normalized432.id !== row432.trackId ||
+          normalized432.ownerUid !== row432.ownerUid) return;
 
-          if (state430?.status === 'private') {
-            removeExploreFeedSessionCacheRow(row430.trackId);
-            if (ownerUid430) removeExplorePublicProfileFirstViewTrack(ownerUid430, row430.trackId);
-            const remove430 = (previous: ExploreTrack[]) => previous.filter((track) => track.id !== row430.trackId);
-            setTracks(remove430);
-            setPopularTracks(remove430);
-            setCuratedTracks307(remove430);
-            setManagedCuratedTracks307(remove430);
-            setProfileLikedTracks(remove430);
-            if (profileUid === ownerUid430) setProfileTracks(remove430);
-            rememberSettledExplorePublicPublicationSignal429(
-              viewerUid430, row430.trackId, row430.at,
-            );
-            continue;
+      upsertExploreFeedSessionCacheRow(row432.trackId, snapshot432);
+      upsertExplorePublicProfileFirstViewTrack(row432.ownerUid, snapshot432);
+
+      const patchExisting432 = (previous: ExploreTrack[]) => previous.map((track) => (
+        track.id === normalized432.id ? { ...track, ...normalized432 } : track
+      ));
+      setPopularTracks(patchExisting432);
+      setCuratedTracks307(patchExisting432);
+      setManagedCuratedTracks307(patchExisting432);
+      setProfileLikedTracks(patchExisting432);
+
+      if (homeFeed432) {
+        const isLatestFeed432 = (() => {
+          try {
+            return new URL(requestUrl).searchParams.get('sort') === 'latest';
+          } catch {
+            return requestUrl.includes('sort=latest');
           }
-
-          const snapshot430 = state430?.card;
-          if (!snapshot430) continue;
-          upsertExploreFeedSessionCacheRow(row430.trackId, snapshot430);
-          if (ownerUid430) upsertExplorePublicProfileFirstViewTrack(ownerUid430, snapshot430);
-          const normalized430 = normalizeTrack(snapshot430);
-          if (!normalized430.id) continue;
-
-          const patchExisting430 = (previous: ExploreTrack[]) => previous.map((track) => (
-            track.id === normalized430.id ? { ...track, ...normalized430 } : track
-          ));
-          setCuratedTracks307(patchExisting430);
-          setManagedCuratedTracks307(patchExisting430);
-          setProfileLikedTracks(patchExisting430);
-
-          if (!profileUid && isExploreFeedRequest(requestUrl)) {
-            setTracks((previous) => {
-              const index = previous.findIndex((track) => track.id === normalized430.id);
-              if (index >= 0) {
-                const next = [...previous];
-                next[index] = { ...next[index], ...normalized430 };
-                return overlayActorLikeCounts120(next);
-              }
-              // Exact visible-track signals normally update in place. A current
-              // profile signal may surface a new row; unseen home-Feed rows are
-              // routed to the existing revision path before this fetch stage.
-              return overlayActorLikeCounts120([normalized430, ...previous].slice(0, 40));
-            });
-            setPopularTracks(patchExisting430);
-          } else if (!profileUid) {
-            setTracks(patchExisting430);
+        })();
+        setTracks((previous) => {
+          const index = previous.findIndex((track) => track.id === normalized432.id);
+          if (index >= 0) {
+            const next = [...previous];
+            next[index] = { ...next[index], ...normalized432 };
+            return overlayActorLikeCounts120(next);
           }
-
-          if (profileUid === ownerUid430) {
-            setProfileTracks((previous) => {
-              const without430 = previous.filter((track) => track.id !== normalized430.id);
-              const next430 = [normalized430, ...without430];
-              next430.sort(comparePublicProfileTracks);
-              return overlayActorLikeCounts120(next430.slice(0, 50));
-            });
-          }
-          rememberSettledExplorePublicPublicationSignal429(
-            viewerUid430, row430.trackId, row430.at,
-          );
-        }
-      } catch (error430) {
-        // No request loop: a retained signal or the normal revision/resume path
-        // may recover later. Never ack a failed/missing exact-state read.
-        console.warn('[430] Relevant public publication repair deferred:', error430);
+          if (!isLatestFeed432) return previous;
+          return overlayActorLikeCounts120([normalized432, ...previous].slice(0, 40));
+        });
       }
+
+      if (profileOwner432 === row432.ownerUid) {
+        setProfileTracks((previous) => {
+          const without432 = previous.filter((track) => track.id !== normalized432.id);
+          const next432 = [normalized432, ...without432];
+          next432.sort(comparePublicProfileTracks);
+          return overlayActorLikeCounts120(next432.slice(0, 50));
+        });
+      }
+
+      rememberSettledExplorePublicPublicationSignal429(
+        viewerUid432, row432.trackId, row432.at,
+      );
     };
 
-    const scheduleRefresh430 = () => {
-      if (refreshTimer430 !== null || !pending430.size) return;
-      const delay430 = Math.max(0, lastRefreshAt430 + MIN_PUBLICATION_REFRESH_MS_430 - Date.now());
-      refreshTimer430 = window.setTimeout(() => {
-        void runRefresh430();
-      }, delay430);
+    const applyRow432 = (row432: ExplorePublicPublicationSignalRow429) => {
+      if (cancelled432 || row432.ownerUid === viewerUid432 ||
+          hasSettledExplorePublicPublicationSignal429(
+            viewerUid432, row432.trackId, row432.at,
+          )) return;
+
+      if (row432.status === 'private') {
+        removeExploreFeedSessionCacheRow(row432.trackId);
+        removeExplorePublicProfileFirstViewTrack(row432.ownerUid, row432.trackId);
+        const remove432 = (previous: ExploreTrack[]) => previous.filter(
+          (track) => track.id !== row432.trackId,
+        );
+        setTracks(remove432);
+        setPopularTracks(remove432);
+        setCuratedTracks307(remove432);
+        setManagedCuratedTracks307(remove432);
+        setProfileLikedTracks(remove432);
+        if (profileOwner432 === row432.ownerUid) setProfileTracks(remove432);
+        rememberSettledExplorePublicPublicationSignal429(
+          viewerUid432, row432.trackId, row432.at,
+        );
+        return;
+      }
+
+      void fetchExplorePublicPublicationLiveCard432(row432)
+        .then((snapshot432) => {
+          if (!snapshot432) return;
+          applyPublicCard432(row432, snapshot432);
+        })
+        .catch((error432) => {
+          console.warn('[432] Edge live-card repair deferred:', error432);
+        });
     };
 
-    const unsubscribe430 = subscribeExplorePublicPublicationInvalidation429((signal430) => {
-      if (cancelled430) return;
-      const visible430 = publicLikeVisibleTracksRef192.current;
-      const isFeed430 = !profileUid && isExploreFeedRequest(requestUrl);
+    const onSignal432 = (signal432: { rows: ExplorePublicPublicationSignalRow429[] }) => {
+      if (cancelled432) return;
+      signal432.rows.forEach(applyRow432);
+    };
 
-      for (const row430 of signal430.rows) {
-        if (row430.ownerUid === viewerUid430 ||
-            hasSettledExplorePublicPublicationSignal429(
-              viewerUid430, row430.trackId, row430.at,
-            )) continue;
+    const detach432 = () => {
+      if (!unsubscribe432) return;
+      unsubscribe432();
+      unsubscribe432 = null;
+    };
+    const attach432 = () => {
+      if (cancelled432 || document.visibilityState !== 'visible' || unsubscribe432) return;
+      unsubscribe432 = profileOwner432
+        ? subscribeExplorePublicProfilePublication432(profileOwner432, onSignal432)
+        : subscribeExplorePublicPublicationInvalidation429(onSignal432);
+    };
+    const onVisibility432 = () => {
+      if (document.visibilityState === 'visible') attach432();
+      else detach432();
+    };
 
-        const visibleTrackOwner430 = String(visible430.get(row430.trackId) || '').trim();
-        const exactRelevant430 = isExplorePublicPublicationSignalRelevant429(
-          row430,
-          visibleTrackOwner430,
-          profileUid || '',
-          viewerUid430,
-        );
-        if (!exactRelevant430) {
-          // New/unseen Feed publications never fan an exact-card request out to
-          // viewers. The existing revision/resume path owns first-page refresh.
-          if (isFeed430) feedRevisionRequestedUrlRef.current = requestUrl;
-          continue;
-        }
-
-        // A forged writer cannot target somebody else's visible track: local
-        // owner identity is checked before any Worker/R2 request.
-        if (visibleTrackOwner430 && visibleTrackOwner430 !== row430.ownerUid) continue;
-        const previous430 = pending430.get(row430.trackId);
-        if (!previous430 || row430.at >= previous430.at) {
-          pending430.set(row430.trackId, row430);
-        }
-      }
-      scheduleRefresh430();
-    });
+    document.addEventListener('visibilitychange', onVisibility432);
+    attach432();
 
     return () => {
-      cancelled430 = true;
-      unsubscribe430();
-      pending430.clear();
-      if (refreshTimer430 !== null) {
-        window.clearTimeout(refreshTimer430);
-        refreshTimer430 = null;
-      }
+      cancelled432 = true;
+      document.removeEventListener('visibilitychange', onVisibility432);
+      detach432();
     };
-  }, [user?.uid, requestUrl, profileUid]);
+  }, [user?.uid, requestUrl, profileUid, submittedQuery, sort]);
 
   useEffect(() => {
     // SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004

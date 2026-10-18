@@ -10413,6 +10413,7 @@ const toggleCycleVariantSelection = (
     // RTDB node advanced. Only a real remote canonical mutation reaches here.
     const retryDelays = [1200, 1800, 3200];
     let snapshot: any = null;
+    let expectedMutationSettled = false;
     for (const delayMs of retryDelays) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
       snapshot = await refreshCatalogSnapshotAfterKnownMutation('musicNote', safeUid);
@@ -10423,12 +10424,15 @@ const toggleCycleVariantSelection = (
           .map((item: any) => String(item?.firestoreId || item?.id || '').trim())
           .filter(Boolean),
       );
-      const latestSettled = expectedSaved
+      expectedMutationSettled = expectedSaved
         ? activeIds.has(safeDocumentId)
         : !activeIds.has(safeDocumentId);
-      if (latestSettled) break;
+      if (expectedMutationSettled) break;
     }
-    if (!snapshot) return;
+    // Never let an older R2 snapshot undo the exact canonical item signal that
+    // triggered this catch-up. If the journal has not settled yet, keep the
+    // already-patched UI and wait for a later real mutation/resume opportunity.
+    if (!snapshot || !expectedMutationSettled) return;
 
     const localDeletedIds = getFavoriteDeletedTombstoneIds(safeUid);
     const catalogFavorites = (Array.isArray(snapshot.items) ? snapshot.items : [])

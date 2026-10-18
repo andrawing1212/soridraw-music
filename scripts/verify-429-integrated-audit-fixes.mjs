@@ -21,8 +21,8 @@ assert.match(publicSync, /fetchExplorePublicPublicationStates429/);
 assert.doesNotMatch(publicSync, /firestore|env\.DB|\.prepare\s*\(/i);
 assert.match(page, /subscribeExplorePublicPublicationInvalidation429/);
 assert.match(page, /fetchExplorePublicPublicationStates429/);
-assert.match(page, /removeExploreFeedSessionCacheRow\(row429\.trackId\)/);
-assert.match(page, /upsertExplorePublicProfileFirstViewTrack\(ownerUid429, snapshot429\)/);
+assert.match(page, /removeExploreFeedSessionCacheRow\(row430\.trackId\)/);
+assert.match(page, /upsertExplorePublicProfileFirstViewTrack\(ownerUid430, snapshot430\)/);
 const liveBlock = page.slice(page.indexOf('// app430: cross-account public changes'),
   page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004'));
 assert.doesNotMatch(liveBlock, /setInterval\s*\(|getExploreFeed|revalidateExplorePublicProfileFirstView335/);

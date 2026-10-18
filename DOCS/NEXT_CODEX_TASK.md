@@ -1,3 +1,14 @@
+## NEXT — app421 accepted; resume Stage416 public five-minute PREVIEW activation as the next like-system task (2026-10-18 KST)
+
+- **Completed/frozen:** PREVIEW app421 closed-device PC↔mobile like recovery passed user real-device acceptance. Do not reopen app410/app422/app423/app424 client sync without a new reproducible defect.
+- **Next Stage416 gate:** overall Stage416 remains 1/4 · 25%. The public five-minute coalescing Functions exist but remain HARD OFF. Before any activation, independently re-audit the latest 191 premature-public guard/current activation source and release guard; only then proceed with PREVIEW-only coordinated Worker + one-Function-at-a-time activation and one controlled Master E2E.
+- **Acceptance for Stage416 2/4:** ordinary users keep immediate personal heart behavior; public count changes only after the configured shared window; PC↔mobile converges; mutation stays O(1); unchanged page/update/re-entry remains no D1/Firestore data read/write; no whole Feed/profile rebuild.
+- **Deferred like follow-ups:** durable net-zero UID completion receipt for missed/new-device proof and measured R2/Edge request cost remain separate. Do not add broad fan-out/polling/full scans merely to close these items.
+- **Separate non-like blocker:** draft PR #200 (SORIDRAW curated recommendations) still has concurrent R2 snapshot overwrite and cross-environment revision-authority concerns. Handle after the like-system stage or as an explicitly separate task; never combine it into Stage416 activation.
+- **Release rule:** PREVIEW only until its independent audit and controlled live E2E pass. TEST requires user approval; PRODUCTION requires separate explicit approval. No shared-data migration/backfill/delete.
+
+---
+
 ## NEXT — app421 PREVIEW Hosting candidate QA PASS, await explicit approval / real-device like verification (2026-10-18 KST)
 
 - **Prepared release:** exact Draft PR #222 HEAD `e87b08bfdf5353ff33eef72e845acd8178134df5`, just app-version421 and canonical Hosting trigger, [Quality Run 39099651971](https://github.com/andrawing1212/soridraw-music/actions/runs/39099651971) SUCCESS. Baseline preview code `80bd7734ed211cb883327c1cf3ca7072ff9c77ab`; actual live PREVIEW still app420. Never call GitHub code merge a deployed app.

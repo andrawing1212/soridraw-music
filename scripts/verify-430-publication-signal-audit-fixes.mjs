@@ -25,7 +25,7 @@ assert.doesNotMatch(sync, /runTransaction|mergeExplorePublicPublicationSignal429
 assert.match(sync, /fetchExplorePublicPublicationLiveCard432/);
 assert.match(sync, /subscribeExplorePublicProfilePublication432/);
 assert.match(sync, /PUBLIC_PUBLICATION_SIGNAL_ROWS_432 = 1/);
-assert.match(sync, /PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432 = '\\/v1\\/publication-live-card'/);
+assert.ok(sync.includes("const PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432 = '/v1/publication-live-card';"));
 assert.match(sync, /Authorization: `Bearer \$\{idToken\}`/);
 assert.match(sync, /'X-Firebase-AppCheck': appCheckToken/);
 

@@ -226,7 +226,11 @@ const overlayPendingPublicationStates = (
 ) => {
   const next = clonePublicationStates(states);
   Object.values(readPublicationOutbox(uid)).forEach((pending) => {
-    next[pending.sourceId] = { ...pending.desiredState };
+    // app428: the outbox is durable retry intent, not confirmed publication
+    // authority. A failed publish/private mutation must never turn route hydration
+    // into a false public/private button. Keep the last confirmed/base state until
+    // the Worker accepts this exact mutation.
+    if (!next[pending.sourceId]) next[pending.sourceId] = { ...pending.baseState };
   });
   return next;
 };
@@ -271,7 +275,9 @@ const queuePublicationMutation = (
     };
   }
   persistPublicationOutbox(uid, outbox);
-  patchPublicationStateBySourceId(uid, sourceId, desiredState);
+  // app428: do not persist optimistic desired state into the confirmed cache.
+  // FavoritesPage already owns the transient in-flight UI and rolls it back on
+  // rejection; the service cache remains server-confirmed authority.
   return desiredState;
 };
 
@@ -943,20 +949,21 @@ profilePinned: pending.desiredState.profilePinned,
       profilePinned: Boolean(row.profilePinned),
     };
     const latest = latestOutbox[pending.sourceId];
-    let visibleState = confirmed;
     if (latest && latest.updatedAt !== pending.updatedAt) {
       const rebased = { ...latest, baseState: confirmed };
       if (samePublicationState(rebased.baseState, rebased.desiredState)) {
         delete latestOutbox[pending.sourceId];
-        visibleState = confirmed;
       } else {
         latestOutbox[pending.sourceId] = rebased;
-        visibleState = rebased.desiredState;
       }
     } else {
       delete latestOutbox[pending.sourceId];
     }
-    states[pending.sourceId] = { ...visibleState };
+
+    // The persistent state/cache and all derived Feed/Profile patches follow only
+    // the confirmed Worker result. A newer queued desired state stays solely in
+    // the durable outbox until that later mutation itself succeeds.
+    states[pending.sourceId] = { ...confirmed };
     invalidateMorePages213 = true;
     publicationSignals.push(publishPublicationSyncBestEffort(
       uid,
@@ -965,11 +972,11 @@ profilePinned: pending.desiredState.profilePinned,
       row.snapshotItem,
     ));
 
-    if (visibleState.status === 'private') {
-      removeExploreFeedSessionCacheRow(visibleState.trackId);
-      removeExplorePublicProfileFirstViewTrack(uid, visibleState.trackId);
+    if (confirmed.status === 'private') {
+      removeExploreFeedSessionCacheRow(confirmed.trackId);
+      removeExplorePublicProfileFirstViewTrack(uid, confirmed.trackId);
     } else if (row.snapshotItem && typeof row.snapshotItem === 'object' && !Array.isArray(row.snapshotItem)) {
-      upsertExploreFeedSessionCacheRow(visibleState.trackId, row.snapshotItem as Record<string, unknown>);
+      upsertExploreFeedSessionCacheRow(confirmed.trackId, row.snapshotItem as Record<string, unknown>);
       upsertExplorePublicProfileFirstViewTrack(uid, row.snapshotItem as Record<string, unknown>);
     }
   }

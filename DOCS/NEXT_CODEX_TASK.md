@@ -1,3 +1,17 @@
+## NEXT — app430 #226 cost/permission/failure correction: GPT-6 re-audit ONLY (2026-10-19 KST)
+
+- **No generic implementation.** Re-audit latest `preview` HEAD after this docs merge; product code underneath is PR #242 merge `c03d32a617062e5b85e747f5a981bf2b2019245d`.
+- Re-audit the three previous blockers only:
+  1. **Fanout:** unrelated logged-in Explore viewers must not issue Worker/R2 requests for a publication signal; only relevant visible owner/track/profile may use the exact R2 route. Fully unrelated new publications only mark the pre-existing Feed revision path stale, with no immediate request/poll.
+  2. **Authority/abuse:** RTDB row owner must equal authenticated writer; proof timestamp is bounded; exact route requires Auth + App Check; locally known owner mismatch blocks before fetch.
+  3. **R2 failure:** shared invalidation is emitted only with Worker-returned successful R2 proof; receiver requires exact `state.updatedAt === signal.at` before apply/ack. Missing/stale R2 must remain unacked.
+- Reconfirm route D1 R0/W0 and bounded <=50 / >=30s relevant request batching.
+- Protect #229 `isLyricMode/lyricMode`, #237 +30s pending save/unsave overlay, app421 likes/follows, app349 save-heart, Music Note batching, UI/CSS and shared user source data.
+- **PASS only then:** coordinate PREVIEW Hosting + Worker patches 100/101 + tightened additive shared RTDB Rules. Functions/D1 schema/shared user data remain unchanged.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until audit PASS.
+
+---
+
 ## NEXT — app429 corrected integrated SHA: GPT-6 re-audit ONLY (2026-10-19 KST)
 
 - Do not add generic implementation unless re-audit finds a concrete blocker.

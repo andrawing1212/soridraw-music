@@ -1,3 +1,19 @@
+## NEXT — app434 same-timestamp publication signal ordering: GPT-6 RE-AUDIT ONLY (2026-10-19 KST)
+
+- **Do not implement more before re-audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #250 merge `07810831d99fd37b366412265564085ae0a1de2a`.
+- Re-test the exact app433 FAIL finding end-to-end through the real service:
+  1. RTDB receive: public v10 and private v11 with the same row `at` must both reach the listener; lower/older timestamps must remain blocked.
+  2. settled ACK: after public v10 is settled, same-timestamp private v11 must still be unresolved and processable; after v11 settle it must be considered settled.
+  3. legacy upgrade: old localStorage ACK rows containing only `at + checkedAt` must load as version 0 and must not suppress a newer same-timestamp version.
+  4. page wiring: `ExplorePage.tsx` must pass the actual signal version to both `hasSettled...` and `rememberSettled...`.
+- Reconfirm app433 PASS items remain intact: Recommended/Latest new-public insertion, delayed older public Edge response blocked after newer private, UTF-8 diagnostic / no false 115.2MB absolute bound, 100k real billing still explicitly unverified.
+- Reconfirm app432 boundaries: one compact RTDB row, Search/hidden/Popular no global listener, owner-scoped public profile, browser write false, Edge HIT R2=0, live-card route D1 R0/W0.
+- Protect #229/#237/app421/app349/Music Note batching/UI/CSS/shared source data.
+- **PASS only then:** coordinate exact audited PREVIEW release of Hosting + Worker patch100/101 + `publicationRelease431Candidate` + read-only publication RTDB Rules. No D1 schema/shared user-data change. After deployment run PC/mobile/second-account and cost diagnostics before advancing progress.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until independent PASS.
+
+---
+
 ## NEXT — app433 #226 app432-audit corrections: GPT-6 RE-AUDIT ONLY (2026-10-19 KST)
 
 - **No more implementation before re-audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #248 merge `843c1f044012f0f2c413c92969b861f6234a9ee1`.

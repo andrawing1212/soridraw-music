@@ -221,10 +221,10 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
   }
 `;
   body = body.slice(0, finalReturn) + proof + body.slice(finalReturn);
-  const anchor='      profilePinned: next.profilePinned === 1,\n      mutation: "written"';
+  const anchor='    profilePinned: next.profilePinned === 1,\n    mutation: "written"';
   if (body.split(anchor).length !== 2) throw new Error('[101/430] option response anchor changed');
   body=body.replace(anchor,
-    '      profilePinned: next.profilePinned === 1,\n      ...(publicationStateUpdatedAt429 > 0 ? { publicationStateUpdatedAt429 } : {}),\n      mutation: "written"');
+    '    profilePinned: next.profilePinned === 1,\n    ...(publicationStateUpdatedAt429 > 0 ? { publicationStateUpdatedAt429 } : {}),\n    mutation: "written"');
   replaceFunction('handleMusicNotePublicationOptions017', body);
 }
 

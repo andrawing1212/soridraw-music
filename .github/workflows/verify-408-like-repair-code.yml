@@ -86,6 +86,7 @@ on:
       - 'src/pages/ExplorePage.tsx'
       - 'src/services/explorePublicationService.ts'
       - 'src/services/explorePublicPublicationSyncService.ts'
+      - 'src/services/explorePublicationLivePolicy433.ts'
       - 'cloudflare/explore-worker/patches/100-music-note-next-song-legacy-parity.mjs'
       - 'cloudflare/explore-worker/patches/101-publication-live-convergence.mjs'
       - 'cloudflare/explore-worker/release-patches.json'
@@ -93,6 +94,7 @@ on:
       - 'scripts/verify-430-publication-signal-audit-fixes.mjs'
       - 'scripts/verify-431-server-publication-signal.mjs'
       - 'scripts/verify-432-publication-live-delta.mjs'
+      - 'scripts/verify-433-publication-audit-fixes.mjs'
       - 'functions/src/explorePublicationRelease431.ts'
       - 'functions/src/explorePublicationReleaseEndpoint431.ts'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
@@ -298,6 +300,7 @@ jobs:
           node scripts/verify-430-publication-signal-audit-fixes.mjs
           node scripts/verify-431-server-publication-signal.mjs
           node scripts/verify-432-publication-live-delta.mjs
+          node scripts/verify-433-publication-audit-fixes.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs

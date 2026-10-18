@@ -1,3 +1,30 @@
+## CURRENT — app434 same-timestamp publication version ordering fixed; independent re-audit pending (2026-10-19 KST)
+
+- **app433 audit FAIL target:** `e89fbbad0a3e89d0e7615cb3ec263cb6fdb3382f`.
+- **product correction merge:** PR #250 → `07810831d99fd37b366412265564085ae0a1de2a`.
+- **audit finding corrected:** the RTDB receiver no longer drops a higher `signal.version` merely because the exact R2 row timestamp is equal. Per-track receive ordering is now `row.at` first and `signal.version` as the equal-timestamp tie-breaker. Older timestamps remain rejected.
+- **settled ACK corrected:** local settled records now persist `at + version + checkedAt`. A public v10 ACK cannot suppress a same-timestamp private v11 signal. Existing timestamp-only localStorage rows remain readable as `version=0`, so app upgrades do not require cache reset/migration and cannot hide a newer version.
+- **UI wiring:** Explore passes the actual server signal version into both settled-check and settled-write paths. app433's Recommended/Latest insertion policy and delayed-public-card guard remain unchanged.
+- **executable regression:** `scripts/verify-434-publication-signal-version-order.mjs` transpiles and executes the actual `explorePublicPublicationSyncService.ts` receiver with mocked RTDB/localStorage. Public v10 → same-timestamp private v11 is delivered; v10 ACK does not suppress v11; v11 settles; legacy timestamp-only ACK remains upgrade-safe.
+- **QA:** PR #250 head `9dfbe57e920b6ea2676f986d5f332045ff1bb53c`; Run `39162669251` **SUCCESS**. app434 service/ACK tests, app428~433 regressions, Functions build, TypeScript, Build, frozen likes/catalog and live RTDB Rules read-only preflight PASS. Browser smoke remained on-demand/skipped.
+- **unchanged/frozen:** Worker patch100/101 implementation, Functions implementation, RTDB Rules, D1 schema, #229, #237, app421 likes/follows, app349 save-heart, Music Note batching, UI/CSS, shared user source data.
+- **cost status unchanged:** 10만 active Recommended/Latest 규모 RTDB/Worker/R2 실제 청구비용은 PREVIEW 실측 전이며 PASS로 주장하지 않는다. app434는 신호 순서 정합성만 수정했고 추가 서버 read/write를 만들지 않는다.
+- **deployment:** none. PREVIEW live remains app421. TEST/PRODUCTION unchanged. No shared user-data mutation, D1 migration/schema/backfill/delete.
+- **next gate:** latest `preview` HEAD after the docs-only merge is the exact GPT-6 independent re-audit SHA. Do not deploy before PASS.
+
+### Progress remains frozen until independent PASS
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | app434 exact audit-fail correction merged; re-audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code PASS / frozen |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app433 app432 audit FAIL corrections merged; independent re-audit pending (2026-10-19 KST)
 
 - **audit FAIL target:** `ddbe172fd178f6504a50cff26ed831c5a743460f`.

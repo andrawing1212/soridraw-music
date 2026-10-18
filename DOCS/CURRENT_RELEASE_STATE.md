@@ -1,3 +1,14 @@
+## CURRENT — app421 closed-device PC↔mobile like recovery USER REAL-DEVICE PASS (2026-10-18 KST)
+
+- **User acceptance:** PREVIEW app421 real-device test passed. The previously failing case where one PC/mobile origin was closed/backgrounded while the other changed likes now converges correctly on reopen without requiring page/tab navigation. Treat the app421 closed-device recovery detail task as **5/5 · 100%**.
+- **Frozen live release:** Firebase PREVIEW remains app421 from release commit `53ad809c5097bb8c896683cb51e8cb49d084e910`, Run `39103253798` SUCCESS; exact build PASS and TEST/PRODUCTION unchanged. Current preview branch includes documentation merge `ee62fb859b71dd9ee5017a6a66f5e0ab68d5ca0e`.
+- **Protected behavior:** app410 existing heart/membership convergence, app422 ACK published-base protection, app423 retained changed-ID replay, app424 dormant 1m/4m revision-gated recovery and existing follow behavior must not be changed without a newly demonstrated defect.
+- **Backend/data:** no new Worker/Functions/RTDB Rules/D1/R2 schema or shared canonical user-data change is needed for this PASS. Existing net-zero durable UID completion-receipt limitation and physical R2/Edge cost measurement remain separate follow-up items, not regressions in this accepted app421 test.
+- **Progress:** Stage416 overall remains **1/4 · 25%** because its public five-minute coalescing activation is a separate unfinished backend project; app speed improvement **5/5 · 100%**; app421 closed-device recovery **5/5 · 100%**.
+- **Next product work:** resume the already queued Stage416 2/4 PREVIEW public-five-minute activation path only after its exact current source/guard is independently re-audited. Curated recommendation PR #200 remains a separate draft blocker (concurrency + cross-environment revision) and must not be mixed into the like work.
+
+---
+
 ## CURRENT — PREVIEW app421 Firebase Hosting release SUCCESS; closed-device like recovery live, real-device verification pending (2026-10-18 KST)
 
 - **PREVIEW release commit:** `53ad809c5097bb8c896683cb51e8cb49d084e910` (PR #222 merged after explicit user PREVIEW deployment approval). Candidate head `e87b08bfdf5353ff33eef72e845acd8178134df5`; release scope remained exactly `public/app-version.json` 420→421 plus `.deploy/preview-app-release.trigger`.

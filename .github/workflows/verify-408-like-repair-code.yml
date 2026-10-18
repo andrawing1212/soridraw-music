@@ -92,6 +92,7 @@ on:
       - 'scripts/verify-429-integrated-audit-fixes.mjs'
       - 'scripts/verify-430-publication-signal-audit-fixes.mjs'
       - 'scripts/verify-431-server-publication-signal.mjs'
+      - 'scripts/verify-432-publication-live-delta.mjs'
       - 'functions/src/explorePublicationRelease431.ts'
       - 'functions/src/explorePublicationReleaseEndpoint431.ts'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
@@ -296,6 +297,7 @@ jobs:
           node scripts/verify-429-integrated-audit-fixes.mjs
           node scripts/verify-430-publication-signal-audit-fixes.mjs
           node scripts/verify-431-server-publication-signal.mjs
+          node scripts/verify-432-publication-live-delta.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs

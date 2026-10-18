@@ -6,7 +6,7 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // 1) the previously approved canonicalSettled417 bool,
 // 2) the UID-private exploreLikeIntent416 child,
 // 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt,
-// 4) app431 server-only public publication invalidation read node.
+// 4) app432 server-only public Feed + owner-profile publication delta read nodes.
 // Every other permission/schema byte must remain equivalent to the live rules.
 const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
 const local = buildStage416ServerRulesCandidate(canonicalBase);
@@ -16,6 +16,7 @@ const intent = user?.exploreLikeIntent416;
 const batch416 = local?.rules?.privateLikeBatch416;
 const final416 = local?.rules?.privateLikeFinal416;
 const publication429 = local?.rules?.publicSync?.explorePublication;
+const publicationProfiles432 = local?.rules?.publicSync?.explorePublicationProfiles;
 
 assert.equal(accepted?.['.validate'], 'newData.isBoolean()');
 assert.equal(user['.read'], 'auth != null && auth.uid === $uid');
@@ -30,13 +31,17 @@ assert.equal(intent.results?.$index?.status?.['.validate'],
 assert.equal(intent['$other']?.['.validate'], false);
 assert.equal(publication429?.['.read'], 'auth != null');
 assert.equal(publication429?.['.write'], false);
-assert.equal(publication429?.rows?.$index?.ownerUid?.['.validate'],
-  'newData.isString() && newData.val() === auth.uid && newData.val().length > 0 && newData.val().length <= 128');
-assert.equal(publication429?.rows?.$index?.at?.['.validate'],
-  'newData.isNumber() && newData.val() > 0 && newData.val() <= now && newData.val() >= now - 300000');
-assert.equal(publication429?.at?.['.validate'],
-  'newData.isNumber() && newData.val() > 0 && newData.val() <= now && newData.val() >= now - 300000');
+assert.equal(publication429?.actorUid?.['.validate'],
+  "newData.isString() && newData.val() === 'publication-server-431'");
+assert.equal(publication429?.rows?.$index?.['.validate'],
+  "$index === '0' && newData.hasChildren(['trackId','ownerUid','at','status'])");
+assert.equal(publication429?.rows?.$index?.cardJson?.['.validate'],
+  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
 assert.equal(publication429?.rows?.$index?.['$other']?.['.validate'], false);
+assert.equal(publicationProfiles432?.$ownerKey?.['.read'], 'auth != null');
+assert.equal(publicationProfiles432?.$ownerKey?.['.write'], false);
+assert.equal(publicationProfiles432?.$ownerKey?.rows?.$index?.cardJson?.['.validate'],
+  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
 assert.equal(intent.results?.$index?.['$other']?.['.validate'], false);
 
 // New Stage416 pending/sealed server state is never client-readable/writable.
@@ -85,7 +90,10 @@ const withoutIntentOptimisticCount = source => {
 };
 const withoutPublicPublication429 = source => {
   const out = structuredClone(source);
-  if (out?.rules?.publicSync) delete out.rules.publicSync.explorePublication;
+  if (out?.rules?.publicSync) {
+    delete out.rules.publicSync.explorePublication;
+    delete out.rules.publicSync.explorePublicationProfiles;
+  }
   return out;
 };
 
@@ -133,11 +141,18 @@ if (process.argv.includes('--self-test')) {
   assert.equal(compare(widenedCount), null, 'private optimistic count bounds must stay exact');
   const widenedPublication = structuredClone(local);
   widenedPublication.rules.publicSync.explorePublication['.write'] = 'auth != null';
-  assert.equal(compare(widenedPublication), null, 'public publication bus must remain client read-only');
-  const stalePublicationProof = structuredClone(local);
-  stalePublicationProof.rules.publicSync.explorePublication.rows.$index.at['.validate'] =
-    'newData.isNumber() && newData.val() > 0';
-  assert.equal(compare(stalePublicationProof), null, 'public publication proof freshness must stay exact');
+  assert.equal(compare(widenedPublication), null, 'public publication Feed bus must remain client read-only');
+  const writableProfilePublication = structuredClone(local);
+  writableProfilePublication.rules.publicSync.explorePublicationProfiles.$ownerKey['.write'] = 'auth != null';
+  assert.equal(compare(writableProfilePublication), null, 'public publication profile bus must remain client read-only');
+  const widenedPublicationRows = structuredClone(local);
+  widenedPublicationRows.rules.publicSync.explorePublication.rows.$index['.validate'] =
+    "$index.matches(/^(0|1)$/)";
+  assert.equal(compare(widenedPublicationRows), null, 'public publication signal must remain one latest row');
+  const widenedPublicationCard = structuredClone(local);
+  widenedPublicationCard.rules.publicSync.explorePublication.rows.$index.cardJson['.validate'] =
+    'newData.isString()';
+  assert.equal(compare(widenedPublicationCard), null, 'public publication live-card size bound must stay exact');
   const exposedBatch = structuredClone(local);
   exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');

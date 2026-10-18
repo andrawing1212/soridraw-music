@@ -2,12 +2,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const dir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
-if (!dir) throw new Error('[101/431] Worker directory missing');
+if (!dir) throw new Error('[101/432] Worker directory missing');
 const workerPath = join(dir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
-const marker = 'SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_431_20261019';
+const marker = 'SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_432_20261019';
 if (source.includes(marker)) {
-  console.log('[101/431] already applied');
+  console.log('[101/432] already applied');
   process.exit(0);
 }
 
@@ -24,7 +24,7 @@ for (const required of [
   'handleMusicNotePublicationOptions017',
   'handleMusicNotePublicationBatch048',
 ]) {
-  if (!source.includes(required)) throw new Error('[101/431] prerequisite missing: ' + required);
+  if (!source.includes(required)) throw new Error('[101/432] prerequisite missing: ' + required);
 }
 
 function functionRange(name) {
@@ -34,7 +34,7 @@ function functionRange(name) {
     start = source.indexOf(prefix);
     if (start >= 0) break;
   }
-  if (start < 0) throw new Error('[101/431] function missing: ' + name);
+  if (start < 0) throw new Error('[101/432] function missing: ' + name);
   const brace = source.indexOf('{', start);
   let depth = 0, quote = '', escaped = false, comment = '';
   for (let i = brace; i < source.length; i += 1) {
@@ -53,7 +53,7 @@ function functionRange(name) {
     if (c === '{') depth += 1;
     if (c === '}' && --depth === 0) return { start, end: i + 1, text: source.slice(start, i + 1) };
   }
-  throw new Error('[101/431] unterminated function: ' + name);
+  throw new Error('[101/432] unterminated function: ' + name);
 }
 
 function replaceFunction(name, nextText) {
@@ -103,7 +103,7 @@ async function writePublicationState429(env, state) {
     schemaVersion: 1, trackId: id, ownerUid, status, updatedAt, ...(card ? { card } : {}),
   }), {
     httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: { soridrawPublicationState: '431', updatedAt: String(updatedAt) },
+    customMetadata: { soridrawPublicationState: '432', updatedAt: String(updatedAt) },
   });
   return updatedAt;
 }
@@ -131,6 +131,49 @@ const publicationSign431 = async (raw, secret) => {
     'HMAC', key, publicationEncoder431.encode(raw),
   ));
 };
+
+// app432: send only the display fields needed to paint a new public card.
+// Prompt, lyrics and shareBundle never enter the shared realtime signal.
+const publicationLiveText432 = (value, max) => {
+  const text = String(value ?? '').trim();
+  return text.length <= max ? text : text.slice(0, max);
+};
+const publicationLiveUrl432 = (value) => {
+  const text = String(value ?? '').trim();
+  return text.length <= 512 ? text : '';
+};
+const publicationLiveCardJson432 = (state) => {
+  if (state?.status !== 'public') return '';
+  const card = normalizeSharedTrackCard062(state?.card);
+  if (!card) throw new Error('432_PUBLICATION_LIVE_CARD_MISSING');
+  const live = {
+    id: publicationLiveText432(card.id, 512),
+    ownerUid: publicationLiveText432(card.ownerUid, 128),
+    ownerHandle: publicationLiveText432(card.ownerHandle ?? card.owner_handle, 64),
+    ownerNickname: publicationLiveText432(card.ownerNickname ?? card.owner_nickname, 80),
+    ownerAvatarUrl: publicationLiveUrl432(card.ownerAvatarUrl ?? card.owner_avatar_url),
+    title: publicationLiveText432(card.title, 512),
+    coverUrl: publicationLiveUrl432(card.coverUrl ?? card.cover_url),
+    sunoUrlPrimary: publicationLiveUrl432(card.sunoUrlPrimary ?? card.suno_url_primary),
+    durationSeconds: Number.isFinite(Number(card.durationSeconds ?? card.duration_seconds))
+      ? Math.max(0, Number(card.durationSeconds ?? card.duration_seconds)) : 0,
+    style: publicationLiveText432(card.style, 160),
+    primaryGenre: publicationLiveText432(card.primaryGenre ?? card.primary_genre, 80),
+    allowNextSongApply: Boolean(card.allowNextSongApply ?? card.allow_next_song_apply),
+    allowFollowerSave: Boolean(card.allowFollowerSave ?? card.allow_follower_save),
+    likeCount: Math.max(0, Math.floor(Number(card.likeCount ?? card.stats?.likeCount ?? 0))),
+    publishedAt: Math.max(0, Math.floor(Number(card.publishedAt ?? card.published_at ?? 0))),
+    profilePinned: Boolean(card.profilePinned ?? card.profile_pinned),
+  };
+  if (!live.id || !live.ownerUid || live.id !== String(state?.trackId || '').trim() ||
+      live.ownerUid !== String(state?.ownerUid || '').trim()) {
+    throw new Error('432_PUBLICATION_LIVE_CARD_IDENTITY_MISMATCH');
+  }
+  const json = JSON.stringify(live);
+  if (json.length > 4096) throw new Error('432_PUBLICATION_LIVE_CARD_TOO_LARGE');
+  return json;
+};
+
 async function publishPublicationInvalidation431(env, state, stateUpdatedAt) {
   const trackId = String(state?.trackId || '').trim();
   const ownerUid = String(state?.ownerUid || '').trim();
@@ -141,8 +184,10 @@ async function publishPublicationInvalidation431(env, state, stateUpdatedAt) {
   }
   const endpoint = publicationEndpoint431(env?.SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT);
   const signedAtMs = Date.now();
+  const cardJson = publicationLiveCardJson432(state);
   const raw = JSON.stringify({
     schemaVersion: 1, trackId, ownerUid, status, stateUpdatedAt, signedAtMs,
+    ...(cardJson ? { cardJson } : {}),
   });
   const signature = await publicationSign431(raw, env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET);
   const response = await fetch(endpoint, {
@@ -170,7 +215,7 @@ async function writeAndPublishPublicationState431(env, state) {
     // Canonical mutation + exact R2 projection already succeeded. Keep user
     // mutation successful; existing revision/resume recovery handles callback
     // outages without client-side public RTDB write authority.
-    console.warn('[431] publication server invalidation deferred:', String(error?.message || error || 'unknown'));
+    console.warn('[432] publication server invalidation deferred:', String(error?.message || error || 'unknown'));
   }
   return stateUpdatedAt;
 }
@@ -179,7 +224,7 @@ function publicationStateHeaders429(cors, r2Reads) {
   const headers = new Headers(cors || {});
   headers.set('Content-Type', 'application/json; charset=utf-8');
   headers.set('Cache-Control', 'no-store');
-  headers.set('X-SORIDRAW-CF-Diagnostics', '431');
+  headers.set('X-SORIDRAW-CF-Diagnostics', '432');
   headers.set('X-SORIDRAW-D1-Read', '0');
   headers.set('X-SORIDRAW-D1-Write', '0');
   headers.set('X-SORIDRAW-R2-B', String(Math.max(0, Number(r2Reads || 0))));
@@ -216,7 +261,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
   const range = functionRange('handleMusicNotePublicationSingleWrite016');
   let body = range.text;
   const lastReturn = body.lastIndexOf('  return json({');
-  if (lastReturn < 0) throw new Error('[101/431] public final response missing');
+  if (lastReturn < 0) throw new Error('[101/432] public final response missing');
   const projection = `  try {
     await writeAndPublishPublicationState431(env, {
       trackId: source.id,
@@ -225,7 +270,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
       card: feedItem,
     });
   } catch (error) {
-    console.warn('[431] publication-state public projection unavailable:', String(error?.message || error || 'unknown'));
+    console.warn('[432] publication-state public projection unavailable:', String(error?.message || error || 'unknown'));
   }
 `;
   body = body.slice(0, lastReturn) + projection + body.slice(lastReturn);
@@ -236,7 +281,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
   const range = functionRange('handleMusicNotePrivate017Core045');
   let body = range.text;
   const finalReturn = body.lastIndexOf('  return json({ ok: true, data:');
-  if (finalReturn < 0) throw new Error('[101/431] private final response missing');
+  if (finalReturn < 0) throw new Error('[101/432] private final response missing');
   const projection = `  try {
     await writeAndPublishPublicationState431(env, {
       trackId: row.id,
@@ -244,7 +289,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
       status: 'private',
     });
   } catch (error) {
-    console.warn('[431] publication-state private projection unavailable:', String(error?.message || error || 'unknown'));
+    console.warn('[432] publication-state private projection unavailable:', String(error?.message || error || 'unknown'));
   }
 `;
   body = body.slice(0, finalReturn) + projection + body.slice(finalReturn);
@@ -255,7 +300,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
   const range = functionRange('handleMusicNotePublicationOptions017');
   let body = range.text;
   const finalReturn = body.lastIndexOf('  return json({ ok: true, data: {');
-  if (finalReturn < 0) throw new Error('[101/431] option final response missing');
+  if (finalReturn < 0) throw new Error('[101/432] option final response missing');
   const projection = `  try {
     if (Number(row.is_public || 0) === 1) {
       const card429 = await readSharedTrackCard062(env, row.id);
@@ -273,7 +318,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
       });
     }
   } catch (error) {
-    console.warn('[431] publication-state option projection unavailable:', String(error?.message || error || 'unknown'));
+    console.warn('[432] publication-state option projection unavailable:', String(error?.message || error || 'unknown'));
   }
 `;
   body = body.slice(0, finalReturn) + projection + body.slice(finalReturn);
@@ -288,7 +333,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
             }
 
             publicationTransitions.push({`;
-  if (body.split(derivedAnchor).length !== 2) throw new Error('[101/431] direct batch derived anchor changed');
+  if (body.split(derivedAnchor).length !== 2) throw new Error('[101/432] direct batch derived anchor changed');
   body = body.replace(derivedAnchor, `            } catch (error) {
               console.warn('[SORIDRAW 049] derived R2 patch deferred to self-heal:', String(error?.message || error || 'unknown'));
             }
@@ -317,7 +362,7 @@ source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
 const routeAnchor = `    if (url.pathname === "/v1/me/liked-tracks" && request.method === "POST") {
       return await handleMyLikedTracks052(request, env, cors);
     }`;
-if (source.split(routeAnchor).length !== 2) throw new Error('[101/431] route anchor changed');
+if (source.split(routeAnchor).length !== 2) throw new Error('[101/432] route anchor changed');
 source = source.replace(routeAnchor, `    if (url.pathname === PUBLICATION_STATE_ROUTE_429 && request.method === "GET") {
       return await handlePublicationStates429(request, env, cors);
     }
@@ -332,12 +377,12 @@ for (const required of [
   'SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT',
   'await requireExploreAuth(request.clone())',
 ]) {
-  if (!source.includes(required)) throw new Error('[101/431] final runtime missing: ' + required);
+  if (!source.includes(required)) throw new Error('[101/432] final runtime missing: ' + required);
 }
 const handler = functionRange('handlePublicationStates429').text;
 if (/env\?*\.DB|env\.DB|\.prepare\s*\(/.test(handler)) {
-  throw new Error('[101/431] exact publication-state read must remain D1-free');
+  throw new Error('[101/432] exact publication-state read must remain D1-free');
 }
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[101/431] server-only publication invalidation follows exact R2 projection; route D1 R0/W0.');
+console.log('[101/432] server-only publication invalidation follows exact R2 projection; route D1 R0/W0.');

@@ -1,3 +1,14 @@
+## NEXT — app423/424 merged on preview and QA PASS; PREVIEW deployment request and real-device acceptance next (2026-10-18 KST)
+
+- **Product code status:** `preview` merge `6865422a39c843919e4e27e79724c0b054909cc8` includes PR #213 exact tested head `c89539566e1b00dea13e715115679ea9b294eef7`, quality Run `39097921024` SUCCESS (TypeScript/Build, frozen app410/app422, app423/424 actual source tests, likes/follow regressions). No PR #200 curated merge.
+- **User-critical acceptance:** with one origin dormant/offline for 1 min or 4+ min while other origin likes/unlikes and another account receives shared publication, reopen must converge same-UID heart and count **without visiting other tabs**; canonical public counts must not be overridden by an older private optimistic ACK. Validate three scenarios: 1-minute resumed, 4-minute expired RTDB, multiple missed windows + same-ID opposite toggles; inspect D1 R0 and bounded R2/edge metadata. Preserve fully-open app410 live behavior.
+- **Specific cache fix already done:** dormant revision URL query `__soridraw_dormant_resume=1` skips one-minute `exploreRevisionRequestCache` response cache and same-UID recent-patch shortcut on that actual resume only; hot route/app update uses cached value. Earlier partial PR #213 already addressed public RTDB-before-card and 2min/5min revision gates.
+- **Scope:** no Worker/Functions/Rules/D1/R2 user data write/migration, no new polling or overall Feed scan, user-visible CSS untouched; actual R2/Edge request bill not measured. 448 net-zero durable completion receipt remains deferred separately and should not be claimed fixed.
+- **Deployment:** GitHub commit/push is not a deployed app. PREVIEW Hosting still app420 Run 39036662143; user must explicitly request `프리뷰배포` before bumping app version and triggering existing Firebase PREVIEW release, then exact build/site and TEST/PROD no-change. No TEST/PRODUCTION promotion without explicit approvals. Work audit quota reserved for final integrated release.
+- **If PREVIEW test FAIL:** focus only on the failed path and update source + quality; do not rerun generic cause research or rearchitect live app410/448, and do not touch curated PR #200.
+
+---
+
 ## NEXT — app424 closed-device like catchup candidate QA PASS; pin & live-audit before PREVIEW deployment (2026-10-18 KST)
 
 - **Candidate:** draft PR #213 branch `fix/app423-closed-device-retained-like-replay`, exact HEAD `c6814ab32d63fad1b272e059bd78b9a3322a1f3a`. Protected GitHub quality [39081132873](https://github.com/andrawing1212/soridraw-music/actions/runs/39081132873) SUCCESS, TypeScript, Build, frozen app410/app422, existing public changed-card and new 1m/4m true dormant tests PASS. No source merge or deployment. PREVIEW live still app420.

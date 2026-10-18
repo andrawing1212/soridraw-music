@@ -1,3 +1,16 @@
+## CURRENT — PREVIEW app421 Firebase Hosting release SUCCESS; closed-device like recovery live, real-device verification pending (2026-10-18 KST)
+
+- **PREVIEW release commit:** `53ad809c5097bb8c896683cb51e8cb49d084e910` (PR #222 merged after explicit user PREVIEW deployment approval). Candidate head `e87b08bfdf5353ff33eef72e845acd8178134df5`; release scope remained exactly `public/app-version.json` 420→421 plus `.deploy/preview-app-release.trigger`.
+- **Firebase PREVIEW App Release:** Run `39103253798` **SUCCESS**. TypeScript PASS, Build PASS, My Likes/Music Note/follow regression checks PASS, Firebase Hosting deploy PASS, live `PREVIEW_APP_VERSION=421`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- **Parallel release regressions:** Follow-only Run `39103253783` SUCCESS; 408 Targeted Like Repair Quality Run `39103253787` SUCCESS.
+- **Environment changes:** Firebase PREVIEW Hosting only. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`; Cloudflare Worker, Firebase Functions, D1/R2 schema/data, shared canonical user data, TEST/main, PRODUCTION unchanged.
+- **Included product behavior:** previously merged app423/424 closed-device recovery is now live in PREVIEW app421: retained public changed-ID replay plus true dormant 1m/4m revision-gated recovery, including forced dormant revision cache bypass. Existing app410 frozen like convergence, app422 ACK published-base protection, follows and other release regressions remain protected by CI.
+- **Not yet claimed PASS:** actual signed-in PC/mobile physical close/background 1 minute and 4 minute recovery, multiple missed private/public signals, final heart/count parity without page navigation, and physical R2/Edge request-cost measurement. Existing net-zero durable UID completion receipt remains deferred separately.
+- **Next user validation:** same account PC/mobile → one side fully closed/background about 1 minute while the other likes/unlikes → reopen and compare heart + visible count without navigation; repeat about 4 minutes and with opposite direction. Second account should continue to see canonical shared public aggregate. If mismatch remains, do not promote to TEST; reopen only the exact failed recovery path.
+- **Progress:** Stage416 overall **1/4 · 25%**; app speed improvement **5/5 · 100%**; current detail task **app421 PREVIEW release 4/5 · 80%** = code/QA/release/live exact-build complete, physical PC/mobile verification pending.
+
+---
+
 ## CURRENT — app421 PREVIEW Hosting candidate PR #222 exact QA PASS, deployment NOT started (2026-10-18 KST)
 
 - **Actual preview product code:** `80bd7734ed211cb883327c1cf3ca7072ff9c77ab` = app423/424 closed-device like recovery merged (#213), legacy 033 verifier repaired (#217), forward-compatible app420 protected like version check (#220), shared Stage416 public proof version check (#221). Actual Firebase PREVIEW is still **app420** from Run [39036662143](https://github.com/andrawing1212/soridraw-music/actions/runs/39036662143). No app421 deployment in this turn.

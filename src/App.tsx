@@ -71,6 +71,7 @@ import CacheDiagnosticsOverlay from './components/CacheDiagnosticsOverlay';
 import { markCacheDiagnostic } from './lib/cacheDiagnostics';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
+import { refreshCatalogSnapshotAfterKnownMutation } from './lib/userDataEngine';
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 const SORIDRAW_COMMON_USER_DATA_ENGINE_1033 = true;
 
@@ -5808,6 +5809,13 @@ function App() {
     song: any;
     version: number;
   }>>(new Map());
+  const musicNoteCanonicalRecoveryTimerRef = useRef<number | null>(null);
+  const musicNoteCanonicalRecoveryRequestRef = useRef<{
+    uid: string;
+    remoteVersion: number;
+    documentId: string;
+    expectedSaved: boolean;
+  } | null>(null);
 
   const clearStudioHeartIntentTimer = (documentId: string) => {
     const safeDocumentId = String(documentId || '').trim();
@@ -10389,6 +10397,147 @@ const toggleCycleVariantSelection = (
     markCacheDiagnostic('musicNote', 'CACHE', 0);
   }, []);
 
+  const recoverMusicNoteCatalogAfterRemoteCanonical = async (
+    uid: string,
+    remoteVersion: number,
+    expectedDocumentId: string,
+    expectedSaved: boolean,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeDocumentId = String(expectedDocumentId || '').trim();
+    if (!safeUid || !safeDocumentId) return;
+
+    // app426: canonical RTDB item signals are immediate changed-item patches.
+    // The private R2 Catalog is the bounded catch-up authority for any older
+    // mutations that a closed device may have missed while the single retained
+    // RTDB node advanced. Only a real remote canonical mutation reaches here.
+    const retryDelays = [1200, 1800, 3200];
+    let snapshot: any = null;
+    let expectedMutationSettled = false;
+    for (const delayMs of retryDelays) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
+      snapshot = await refreshCatalogSnapshotAfterKnownMutation('musicNote', safeUid);
+      if (!snapshot) continue;
+      const activeIds = new Set(
+        (Array.isArray(snapshot.items) ? snapshot.items : [])
+          .filter((item: any) => item && !isFavoriteSoftRemoved(item))
+          .map((item: any) => String(item?.firestoreId || item?.id || '').trim())
+          .filter(Boolean),
+      );
+      expectedMutationSettled = expectedSaved
+        ? activeIds.has(safeDocumentId)
+        : !activeIds.has(safeDocumentId);
+      if (expectedMutationSettled) break;
+    }
+    // Never let an older R2 snapshot undo the exact canonical item signal that
+    // triggered this catch-up. If the journal has not settled yet, keep the
+    // already-patched UI and wait for a later real mutation/resume opportunity.
+    if (!snapshot || !expectedMutationSettled) return;
+
+    const localDeletedIds = getFavoriteDeletedTombstoneIds(safeUid);
+    const catalogFavorites = (Array.isArray(snapshot.items) ? snapshot.items : [])
+      .filter((favorite: any) => {
+        if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+        const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
+        return !favoriteId || !localDeletedIds.has(favoriteId);
+      });
+
+    const currentVisible = favoritesStore.getFavorites();
+    const currentCanonical = stripStudioHeartPendingLayerFromFavorites(
+      safeUid,
+      stripStudioHeartRemotePreviewLayerFromFavorites(safeUid, currentVisible),
+    );
+    const snapshotTime = Number(snapshot.generatedAtMs || 0);
+    const localNewer = currentCanonical.filter((favorite: any) => {
+      const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
+      if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+      const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+        || getTimestampMs(favorite?.updatedAt)
+        || getTimestampMs(favorite?.createdAt)
+        || 0;
+      return snapshotTime > 0 && favoriteVersion > snapshotTime;
+    });
+    const authoritative = mergeFavoritePages(catalogFavorites, localNewer);
+
+    // Rebuild Recent heart authority from the complete Catalog, but never override
+    // an initiating-device pending intent that has not reached its 30s canonical
+    // settlement yet.
+    const pendingIntents = listStudioHeartPendingIntents(safeUid);
+    const authorityVersion = Math.max(
+      1,
+      Number(snapshot.revision || 0),
+      Number(snapshot.generatedAtMs || 0),
+      Number(remoteVersion || 0),
+    );
+    for (const recentSong of historyRef.current || []) {
+      const recentIdentity = String(buildRecentSongSyncKey(recentSong) || getLiveSoridrawSongId(recentSong) || '').trim();
+      const linkedFavoriteId = String(
+        (recentSong as any)?.favoriteFirestoreId || (recentSong as any)?.musicNoteFavoriteId || '',
+      ).trim();
+      const hasPending = pendingIntents.some((intent) => (
+        (linkedFavoriteId && intent.documentId === linkedFavoriteId)
+        || (recentIdentity && intent.identityKey === recentIdentity)
+      ));
+      if (hasPending) continue;
+
+      const activeFavorite = authoritative.find((favorite: any) => {
+        const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
+        if (linkedFavoriteId && favoriteId === linkedFavoriteId) return true;
+        return isSameRecentSongSyncItem(recentSong, favorite);
+      }) || null;
+      rememberRecentHeartAuthority(
+        safeUid,
+        recentSong,
+        Boolean(activeFavorite),
+        String(activeFavorite?.firestoreId || activeFavorite?.id || linkedFavoriteId || '').trim(),
+        authorityVersion,
+      );
+    }
+
+    setFavorites(authoritative);
+    writeFavoritesCache(safeUid, authoritative, { publishDerived: false });
+    writeMusicNoteSyncVersion(
+      MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+      safeUid,
+      Math.max(Number(snapshot.generatedAtMs || 0), Number(remoteVersion || 0)),
+    );
+    markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
+  };
+
+  const queueMusicNoteCatalogRecoveryAfterRemoteCanonical = (
+    uid: string,
+    remoteVersion: number,
+    documentId: string,
+    expectedSaved: boolean,
+  ) => {
+    const safeUid = String(uid || '').trim();
+    const safeDocumentId = String(documentId || '').trim();
+    if (!safeUid || !safeDocumentId) return;
+    musicNoteCanonicalRecoveryRequestRef.current = {
+      uid: safeUid,
+      remoteVersion: Math.max(1, Math.floor(Number(remoteVersion || 0))),
+      documentId: safeDocumentId,
+      expectedSaved,
+    };
+    if (musicNoteCanonicalRecoveryTimerRef.current !== null) {
+      window.clearTimeout(musicNoteCanonicalRecoveryTimerRef.current);
+    }
+    musicNoteCanonicalRecoveryTimerRef.current = window.setTimeout(() => {
+      musicNoteCanonicalRecoveryTimerRef.current = null;
+      const request = musicNoteCanonicalRecoveryRequestRef.current;
+      musicNoteCanonicalRecoveryRequestRef.current = null;
+      if (!request) return;
+      void recoverMusicNoteCatalogAfterRemoteCanonical(
+        request.uid,
+        request.remoteVersion,
+        request.documentId,
+        request.expectedSaved,
+      ).catch((error) => {
+        console.warn('Music Note canonical Catalog catch-up deferred.', error);
+      });
+    }, 600);
+  };
+
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
     originDeviceId = '',
@@ -10657,6 +10806,12 @@ const toggleCycleVariantSelection = (
           writeFavoritesCache(uid, sorted, { publishDerived: false });
           return sorted;
         });
+        queueMusicNoteCatalogRecoveryAfterRemoteCanonical(
+          uid,
+          remoteVersion,
+          remoteFavoriteId || exactDocumentIds[0] || '',
+          !isRemovalOperation && !removed,
+        );
         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
         writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
         markCacheDiagnostic('musicNote', 'SYNC', 0);
@@ -11626,6 +11781,11 @@ const toggleCycleVariantSelection = (
     return () => {
       for (const timer of studioHeartIntentTimersRef.current.values()) window.clearTimeout(timer);
       studioHeartIntentTimersRef.current.clear();
+      if (musicNoteCanonicalRecoveryTimerRef.current !== null) {
+        window.clearTimeout(musicNoteCanonicalRecoveryTimerRef.current);
+        musicNoteCanonicalRecoveryTimerRef.current = null;
+      }
+      musicNoteCanonicalRecoveryRequestRef.current = null;
     };
   }, [user?.uid]);
 

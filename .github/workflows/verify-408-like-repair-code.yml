@@ -274,6 +274,8 @@ jobs:
           npm --prefix functions run build
       - name: Verify large Music Note shared-folder first-match semantics and cost
         run: node scripts/verify-music-note-shared-dedup-linear.mjs
+      - name: Verify app428 publication consistency contracts
+        run: node scripts/verify-428-publication-consistency.mjs
       - name: Verify lazy generation settings loading behavior
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior

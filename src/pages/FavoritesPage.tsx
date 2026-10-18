@@ -86,6 +86,7 @@ import {
   getExplorePublicationErrorMessage,
   publishMusicNoteToExplore,
   refreshExploreMusicNotePublicationSource,
+  refreshExploreMusicNotePublicationContent425,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExploreMusicNotePublicationState,
@@ -1746,6 +1747,35 @@ export default function FavoritesPage({
     const task = (async () => {
       try {
         await updateFavorite(pending.songId, pending.updates);
+
+        // app425 — Public metadata follows the existing canonical Music Note
+        // settlement, never editor keystrokes. A derived Explore failure must not
+        // roll back/retry the already successful Firestore detail save.
+        const publicProjectionKeys425 = [
+          'title', 'displayGenre', 'koreanTitle', 'englishTitle',
+          'lyrics', 'prompt', 'appliedKeywords',
+        ];
+        if (publicProjectionKeys425.some((key) => Object.prototype.hasOwnProperty.call(pending.updates || {}, key))) {
+          try {
+            const publicationState = await getExploreMusicNotePublicationState(user, pending.songId);
+            if (publicationState.status === 'public' && publicationState.registered) {
+              const refreshedState = await refreshExploreMusicNotePublicationContent425(
+                user,
+                pending.songId,
+                publicationState,
+              );
+              setExplorePublicationStateBySongId((prev) => ({
+                ...prev,
+                [pending.songId]: refreshedState,
+              }));
+            }
+          } catch (publicationError) {
+            // Canonical Music Note save is authoritative. Keep it saved and leave
+            // Explore's bounded revision/source path available for a later retry.
+            console.warn('Public Music Note metadata refresh deferred:', publicationError);
+          }
+        }
+
         const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
         const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({

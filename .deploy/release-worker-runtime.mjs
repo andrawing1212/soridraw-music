@@ -173,6 +173,9 @@ async function makeConfig() {
     ? { ...canonicalWrangler.vars }
     : {};
   canonicalVars.SORIDRAW_ENVIRONMENT = mode;
+  canonicalVars.SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT = mode === 'test'
+    ? 'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicationRelease431Test'
+    : 'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publicationRelease431Production';
   const canonicalVarNames = Object.keys(canonicalVars).sort();
   if (!canonicalVarNames.length) throw new Error('canonical release feature vars are missing');
   const canonicalDurableBindings = Array.isArray(canonicalWrangler?.durable_objects?.bindings)

@@ -4432,3 +4432,12 @@ export const masterGetLikeBatchTiming416Production = makeMasterGetLikeBatchTimin
   STAGE416_ENVIRONMENTS.production.timingPath);
 export const masterSetLikeBatchTiming416Production = makeMasterSetLikeBatchTiming416(
   STAGE416_ENVIRONMENTS.production.timingPath);
+
+// app431 server-only public publication invalidation endpoints.
+// PREVIEW/TEST/PRODUCTION code identities share canonical user data but deploy
+// independently with the matching Worker endpoint for each stage.
+export {
+  publicationRelease431Candidate,
+  publicationRelease431Test,
+  publicationRelease431Production,
+} from "./explorePublicationReleaseEndpoint431";

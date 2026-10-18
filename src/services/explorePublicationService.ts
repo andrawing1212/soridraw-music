@@ -25,7 +25,6 @@ import {
   readLatestExplorePublicationSyncSignal,
   type ExplorePublicationSyncSignal,
 } from './userDomainSyncService';
-import { publishExplorePublicPublicationInvalidation429 } from './explorePublicPublicationSyncService';
 import { shouldRepairMusicNotePublicationOrigin361 } from './exploreEnvironmentParityPolicy';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
@@ -413,42 +412,28 @@ const publishPublicationSyncBestEffort = async (
   sourceId: string,
   state: ExploreMusicNotePublicationState,
   snapshotItem?: unknown,
-  publicProofAt429?: unknown,
 ): Promise<void> => {
-  let snapshotJson = '';
-  if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
-    const encoded = JSON.stringify(snapshotItem);
-    if (encoded.length <= 24_000) snapshotJson = encoded;
-  }
-
   try {
-    if (!(state.status === 'public' && !snapshotJson)) {
-      await publishExplorePublicationSyncSignal(uid, {
-        sourceId,
-        trackId: state.trackId,
-        status: state.status,
-        allowNextSongApply: state.allowNextSongApply,
-        allowFollowerSave: state.allowFollowerSave,
-        profilePinned: state.profilePinned,
-        ...(snapshotJson ? { snapshotJson } : {}),
-      });
+    let snapshotJson = '';
+    if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+      const encoded = JSON.stringify(snapshotItem);
+      if (encoded.length <= 24_000) snapshotJson = encoded;
     }
+    // Same-account devices keep the established UID-private fast path.
+    // app431 cross-account publication is server-issued by Worker -> Function
+    // after exact R2 projection; browser code never writes the public bus.
+    if (state.status === 'public' && !snapshotJson) return;
+    await publishExplorePublicationSyncSignal(uid, {
+      sourceId,
+      trackId: state.trackId,
+      status: state.status,
+      allowNextSongApply: state.allowNextSongApply,
+      allowFollowerSave: state.allowFollowerSave,
+      profilePinned: state.profilePinned,
+      ...(snapshotJson ? { snapshotJson } : {}),
+    });
   } catch (error) {
     console.warn('Explore publication same-account signal skipped:', error);
-  }
-
-  // app430: a shared invalidation exists only when the Worker returned proof
-  // that the exact public/private R2 state was stored after canonical success.
-  const proofAt429 = Math.floor(Number(publicProofAt429 || 0));
-  if (!Number.isSafeInteger(proofAt429) || proofAt429 <= 0) return;
-  try {
-    await publishExplorePublicPublicationInvalidation429(uid, [{
-      trackId: state.trackId,
-      ownerUid: uid,
-      at: proofAt429,
-    }]);
-  } catch (error) {
-    console.warn('Explore publication public invalidation skipped:', error);
   }
 };
 
@@ -795,7 +780,6 @@ export const refreshExploreMusicNotePublicationContent428 = async (
     normalizedSourceId,
     nextState,
     data?.snapshotItem,
-    data?.publicationStateUpdatedAt429,
   );
   return { ...nextState };
 };
@@ -891,7 +875,6 @@ export const refreshExploreMusicNotePublicationSource = async (
     normalizedSourceId,
     nextState,
     data?.snapshotItem,
-    data?.publicationStateUpdatedAt429,
   );
   return { ...nextState };
 };
@@ -1048,7 +1031,6 @@ profilePinned: pending.desiredState.profilePinned,
       pending.sourceId,
       confirmed,
       row.snapshotItem,
-      row.publicationStateUpdatedAt429,
     ));
 
     if (confirmed.status === 'private') {

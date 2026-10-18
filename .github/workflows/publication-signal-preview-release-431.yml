@@ -1,0 +1,131 @@
+name: SORIDRAW PREVIEW Publication Signal 431 Function Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact audited preview SHA'
+        required: true
+        type: string
+      audit_result:
+        description: 'Must be PASS after independent GPT-6 audit'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-publication-signal-431
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+      FUNCTION_NAME: publicationRelease431Candidate
+      FUNCTION_REGION: asia-northeast3
+
+    steps:
+      - name: Checkout exact audited PREVIEW source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+
+      - name: Lock audit, source, and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.audit_result }}" = PASS
+          printf '%s' "${{ inputs.target_sha }}" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(git rev-parse HEAD)" = "${{ inputs.target_sha }}"
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor HEAD origin/preview
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          echo "LOCKED_431_SHA=$(git rev-parse HEAD)"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install and verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          node scripts/verify-431-server-publication-signal.mjs
+
+      - name: Authenticate Firebase deploy principal
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Preflight exact one-function initial create
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud secrets describe SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/431-secret.json"
+          gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-before.json"
+          if gcloud functions describe "$FUNCTION_NAME" --gen2 --region "$FUNCTION_REGION"             --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/431-existing.json" 2>"$RUNNER_TEMP/431-existing.err"; then
+            echo '431_FUNCTION_ALREADY_EXISTS_STOP'
+            exit 41
+          fi
+          grep -Eiq 'NOT_FOUND|not found|does not exist' "$RUNNER_TEMP/431-existing.err" || {
+            cat "$RUNNER_TEMP/431-existing.err" >&2
+            echo '431_FUNCTION_PREFLIGHT_UNKNOWN_ERROR'
+            exit 42
+          }
+          echo '431_FUNCTION_INITIAL_CREATE_PREFLIGHT=PASS'
+
+      - name: Deploy only publicationRelease431Candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@15.30.1 deploy             --project "$FIREBASE_PROJECT"             --config firebase.json             --only "functions:$FUNCTION_NAME"             --non-interactive
+          echo '431_EXACT_ONE_PREVIEW_FUNCTION_DEPLOY=PASS'
+
+      - name: Verify exact one-function delta and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions list --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/functions-after.json"
+          node - "$RUNNER_TEMP/functions-before.json" "$RUNNER_TEMP/functions-after.json" "$FUNCTION_NAME" <<'NODE'
+          const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const after=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const target=process.argv[4];
+          const key=row=>String(row?.name||'');
+          const b=new Map(before.map(row=>[key(row),row]));
+          const a=new Map(after.map(row=>[key(row),row]));
+          const targetRows=after.filter(row=>key(row).endsWith('/'+target));
+          if(targetRows.length!==1)throw Error('431_TARGET_FUNCTION_COUNT_INVALID');
+          const created=targetRows[0];
+          if(created.state!=='ACTIVE'||created.buildConfig?.runtime!=='nodejs22'||
+             !created.serviceConfig?.secretEnvironmentVariables?.some(x=>
+               String(x.secret||x.secretName||'').includes('SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET')))
+            throw Error('431_TARGET_FUNCTION_POLICY_INVALID');
+          if(before.some(row=>key(row).endsWith('/'+target)))
+            throw Error('431_TARGET_WAS_NOT_INITIAL_CREATE');
+          for(const [name,row] of b){
+            const next=a.get(name);
+            if(!next)throw Error('431_UNRELATED_FUNCTION_REMOVED '+name);
+            if(String(row.updateTime||'')!==String(next.updateTime||''))
+              throw Error('431_UNRELATED_FUNCTION_CHANGED '+name);
+          }
+          if(after.length!==before.length+1)throw Error('431_FUNCTION_INVENTORY_DELTA_INVALID');
+          console.log('431_ONLY_APPROVED_FUNCTION_CHANGED=PASS');
+          NODE
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo '431_MAIN_PRODUCTION_UNCHANGED=PASS'
+          echo '431_NO_RULES_WORKER_HOSTING_D1_USER_DATA_CHANGE=PASS'

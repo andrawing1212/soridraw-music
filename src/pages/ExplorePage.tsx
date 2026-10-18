@@ -2777,7 +2777,7 @@ export default function ExplorePage() {
     };
   }, [user?.uid, requestUrl, profileUid]);
 
-  // app430: cross-account public changes are signal-driven but relevance-gated.
+  // app431: server-issued cross-account public changes are relevance-gated.
   // Unrelated viewers never spend a Worker/R2 request. A not-yet-visible new
   // publication marks the existing Feed revision path stale locally; it does
   // not fan one exact-card request out to every connected Explore user.
@@ -2848,9 +2848,9 @@ export default function ExplorePage() {
                 next[index] = { ...next[index], ...normalized430 };
                 return overlayActorLikeCounts120(next);
               }
-              // Only a creator already represented in this loaded Feed reaches
-              // this branch for a new track. Fully unrelated new publications
-              // use the existing revision path instead of global R2 fan-out.
+              // Exact visible-track signals normally update in place. A current
+              // profile signal may surface a new row; unseen home-Feed rows are
+              // routed to the existing revision path before this fetch stage.
               return overlayActorLikeCounts120([normalized430, ...previous].slice(0, 40));
             });
             setPopularTracks(patchExisting430);
@@ -2888,7 +2888,6 @@ export default function ExplorePage() {
     const unsubscribe430 = subscribeExplorePublicPublicationInvalidation429((signal430) => {
       if (cancelled430) return;
       const visible430 = publicLikeVisibleTracksRef192.current;
-      const visibleOwnerUids430 = new Set([...visible430.values()].filter(Boolean));
       const isFeed430 = !profileUid && isExploreFeedRequest(requestUrl);
 
       for (const row430 of signal430.rows) {
@@ -2904,10 +2903,9 @@ export default function ExplorePage() {
           profileUid || '',
           viewerUid430,
         );
-        const representedFeedOwner430 = isFeed430 && visibleOwnerUids430.has(row430.ownerUid);
-        if (!exactRelevant430 && !representedFeedOwner430) {
-          // Keep first-page freshness without an immediate global read: the next
-          // already-existing revision/resume check will consume this local marker.
+        if (!exactRelevant430) {
+          // New/unseen Feed publications never fan an exact-card request out to
+          // viewers. The existing revision/resume path owns first-page refresh.
           if (isFeed430) feedRevisionRequestedUrlRef.current = requestUrl;
           continue;
         }

@@ -113,9 +113,14 @@ for (const required of [
 assert.equal(workerPatch.includes('note?.prompt'), false);
 assert.equal(workerPatch.includes('note?.style'), false);
 
-for (const source of [publication, favorites, explore]) {
-  assert.equal(/getDocs\([^)]*favorites|collection\([^)]*favorites/.test(source.slice(0, 0)), false);
-}
+const normalizerSource = readFileSync('src/services/musicNoteNextSongRecipe.ts', 'utf8');
+const actionSource = readFileSync('src/services/exploreTrackActionService.ts', 'utf8');
+assert.equal(/firebase|firestore|getDoc|getDocs|fetch\(/.test(normalizerSource), false, 'legacy normalizer must remain pure/read-time only');
+const ownRecoveryStart = actionSource.indexOf('export const getExploreOwnMusicNoteApplyKeywords');
+const ownRecoveryEnd = actionSource.indexOf('const buildAuthHeaders', ownRecoveryStart);
+const ownRecovery = actionSource.slice(ownRecoveryStart, ownRecoveryEnd);
+assert.match(ownRecovery, /getDoc\(doc\(db, 'favorites', normalizedSourceId\)\)/, 'own recovery must stay one exact Music Note read');
+assert.doesNotMatch(ownRecovery, /getDocs\(|collection\(|collectionGroup\(/, 'own recovery must never scan favorites');
 assert.equal(publication.includes('setInterval('), false, 'publication service must not add polling');
 
 console.log('APP425_PUBLIC_TITLE_NORMALIZATION=PASS');

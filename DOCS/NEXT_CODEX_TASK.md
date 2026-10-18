@@ -1,3 +1,12 @@
+## NEXT — app421 Firebase PREVIEW release ready to gate, no further generic implementation (2026-10-18 KST)
+
+- Product source `preview` baseline `86d5fd9bb0173eb955af60eb60f3c16bedfc6048`. App423/424 PR #213 merged with exact CI [39097921024](https://github.com/andrawing1212/soridraw-music/actions/runs/39097921024) PASS. Legacy 033 static-only test pre-existing mismatch corrected PR #217; legacy 033 [39098638303](https://github.com/andrawing1212/soridraw-music/actions/runs/39098638303) PASS, app410 QA [39098626587](https://github.com/andrawing1212/soridraw-music/actions/runs/39098626587) PASS, Stage416 readonly and Follow only PASS.
+- PREVIEW app421 candidate isolated in Draft PR [#218](https://github.com/andrawing1212/soridraw-music/pull/218): only version420→421 + official `.deploy/preview-app-release.trigger`, whose merge triggers Hosting deployment. **Do NOT merge without explicit user PREVIEW deployment approval**, nor adjust Worker/Functions/Rules/shared D1/R2/user account data. CI candidate Run `39098826809` should be PASS first. Do not alter working like UI/account membership/public 448 aggregation.
+- On approved release: merge exact verified PR head and wait canonical `SORIDRAW PREVIEW App Release` workflow. Require TypeScript, Build, protected Like/Follow tests, Hosting deploy, actual `preview.soridraw.com/app-version.json`=421, exact HTML hash, TEST/PRODUCTION unchanged. Any failure stops rollout.
+- After release: obtain user signed-in PC/mobile same UID closed one origin for 1m and 4m, perform opposite likes/unlikes on other origin, reopen without navigation; compare filled hearts/numbers, independent second-account shared public counts after 448 settlement, and per-event D1/R2 cost. Distinguish from deferred net-zero receipt. No TEST/PRODUCTION deployment without new user request. Work 1–2 audits still conserved.
+
+---
+
 ## NEXT — app423/424 merged on preview and QA PASS; PREVIEW deployment request and real-device acceptance next (2026-10-18 KST)
 
 - **Product code status:** `preview` merge `6865422a39c843919e4e27e79724c0b054909cc8` includes PR #213 exact tested head `c89539566e1b00dea13e715115679ea9b294eef7`, quality Run `39097921024` SUCCESS (TypeScript/Build, frozen app410/app422, app423/424 actual source tests, likes/follow regressions). No PR #200 curated merge.

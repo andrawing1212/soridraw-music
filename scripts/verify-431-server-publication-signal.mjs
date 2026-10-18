@@ -27,7 +27,9 @@ assert.doesNotMatch(publication, /publishExplorePublicPublicationInvalidation429
 
 assert.match(patch101,/SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_432_20261019/);
 assert.match(patch101,/writeAndPublishPublicationState431/);
-assert.match(patch101,/publicationLiveCardJson432/);
+assert.match(patch101,/publicationLiveCard432/);
+assert.match(patch101,/handlePublicationLiveCard432/);
+assert.match(patch101,/caches\.default\.match\(edgeKey\)/);
 assert.match(patch101,/SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT/);
 assert.match(patch101,/SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET/);
 assert.match(patch101,/X-Soridraw-431-Publication-Signature/);
@@ -71,15 +73,9 @@ const fakeDb={
 };
 const secret='431-test-secret-abcdefghijklmnopqrstuvwxyz-0123456789';
 const now=Date.now();
-const liveCard={
-  id:'music_note_ownerA_source1',ownerUid:'ownerA',ownerHandle:'ownera',
-  ownerNickname:'Owner A',title:'[Rock] Test',coverUrl:'https://cdn.example/c.jpg',
-  sunoUrlPrimary:'https://cdn.example/a.mp3',allowNextSongApply:true,
-  allowFollowerSave:true,likeCount:0,publishedAt:now-500,profilePinned:false,
-};
 const claim={schemaVersion:1,
-  trackId:liveCard.id,ownerUid:'ownerA',status:'public',
-  stateUpdatedAt:now-100,signedAtMs:now,cardJson:JSON.stringify(liveCard)};
+  trackId:'music_note_ownerA_source1',ownerUid:'ownerA',status:'public',
+  stateUpdatedAt:now-100,signedAtMs:now};
 const raw=JSON.stringify(claim);
 const sig=createHmac('sha256',secret).update(raw,'utf8').digest('hex');
 const first=await publish(fakeDb,raw,sig,secret,now);
@@ -92,7 +88,6 @@ assert.equal(feed.rows.length,1);
 assert.equal(feed.rows[0].trackId,claim.trackId);
 assert.equal(feed.rows[0].at,claim.stateUpdatedAt);
 assert.equal(feed.rows[0].status,'public');
-assert.equal(feed.rows[0].cardJson,claim.cardJson);
 assert.equal(profile.rows[0].trackId,claim.trackId);
 const duplicate=await publish(fakeDb,raw,sig,secret,now+10);
 assert.equal(duplicate.status,'DUPLICATE');
@@ -102,12 +97,6 @@ const badClaim={...claim,trackId:'music_note_somebodyElse_source1'};
 const badRaw=JSON.stringify(badClaim);
 const badSig=createHmac('sha256',secret).update(badRaw,'utf8').digest('hex');
 await assert.rejects(()=>publish(fakeDb,badRaw,badSig,secret,now),/BAD_CLAIM/);
-const leaked={...liveCard,prompt:'must-not-broadcast'};
-const leakedClaim={...claim,cardJson:JSON.stringify(leaked)};
-const leakedRaw=JSON.stringify(leakedClaim);
-const leakedSig=createHmac('sha256',secret).update(leakedRaw,'utf8').digest('hex');
-await assert.rejects(()=>publish(fakeDb,leakedRaw,leakedSig,secret,now),/BAD_CLAIM/);
-
 // Materialize patch100 + patch101 against the canonical Worker fixture.
 const temp=mkdtempSync(join(tmpdir(),'soridraw-app432-'));
 try{
@@ -121,7 +110,9 @@ try{
   const worker=readFileSync(join(temp,'worker.js'),'utf8');
   assert.match(worker,/SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_432_20261019/);
   assert.match(worker,/writeAndPublishPublicationState431/);
-  assert.match(worker,/publicationLiveCardJson432/);
+  assert.match(worker,/publicationLiveCard432/);
+  assert.match(worker,/handlePublicationLiveCard432/);
+  assert.match(worker,/caches\.default\.match\(edgeKey\)/);
   assert.match(worker,/X-Soridraw-431-Publication-Signature/);
   assert.doesNotMatch(worker,/publicationStateUpdatedAt429/);
 }finally{rmSync(temp,{recursive:true,force:true});}

@@ -67,7 +67,7 @@ import {
 } from '../services/explorePublicLikeSyncService';
 import {
   hasSettledExplorePublicPublicationSignal429,
-  readExplorePublicPublicationLiveCard432,
+  fetchExplorePublicPublicationLiveCard432,
   rememberSettledExplorePublicPublicationSignal429,
   subscribeExplorePublicProfilePublication432,
   subscribeExplorePublicPublicationInvalidation429,
@@ -2777,10 +2777,9 @@ export default function ExplorePage() {
   }, [user?.uid, requestUrl, profileUid]);
 
   // app432: server-issued one-event live delta.
-  // - Active visible home Feed receives the compact public card directly, so a
-  //   newly published song appears without navigation and without Worker/R2.
-  // - A public-profile page listens only to that owner's scoped signal.
-  // - Search/hidden Explore screens do not keep the global realtime listener.
+  // RTDB carries only a tiny changed-track signal. Active visible home Feed or
+  // the exact public-profile page resolves the public display card through one
+  // shared Cloudflare Edge cache; it never performs a per-viewer R2 read.
   useEffect(() => {
     const viewerUid432 = String(user?.uid || '').trim();
     if (!viewerUid432) return undefined;
@@ -2794,38 +2793,15 @@ export default function ExplorePage() {
     let cancelled432 = false;
     let unsubscribe432: (() => void) | null = null;
 
-    const applyRow432 = (row432: ExplorePublicPublicationSignalRow429) => {
-      if (cancelled432 || row432.ownerUid === viewerUid432 ||
-          hasSettledExplorePublicPublicationSignal429(
-            viewerUid432, row432.trackId, row432.at,
-          )) return;
-
-      if (row432.status === 'private') {
-        removeExploreFeedSessionCacheRow(row432.trackId);
-        removeExplorePublicProfileFirstViewTrack(row432.ownerUid, row432.trackId);
-        const remove432 = (previous: ExploreTrack[]) => previous.filter(
-          (track) => track.id !== row432.trackId,
-        );
-        setTracks(remove432);
-        setPopularTracks(remove432);
-        setCuratedTracks307(remove432);
-        setManagedCuratedTracks307(remove432);
-        setProfileLikedTracks(remove432);
-        if (profileOwner432 === row432.ownerUid) setProfileTracks(remove432);
-        rememberSettledExplorePublicPublicationSignal429(
-          viewerUid432, row432.trackId, row432.at,
-        );
-        return;
-      }
-
-      const snapshot432 = readExplorePublicPublicationLiveCard432(row432);
-      if (!snapshot432) return;
+    const applyPublicCard432 = (
+      row432: ExplorePublicPublicationSignalRow429,
+      snapshot432: Record<string, unknown>,
+    ) => {
+      if (cancelled432) return;
       const normalized432 = normalizeTrack(snapshot432);
       if (!normalized432.id || normalized432.id !== row432.trackId ||
           normalized432.ownerUid !== row432.ownerUid) return;
 
-      // The display-only live card is already server-issued after exact R2
-      // projection. Cache/UI patching below is local only.
       upsertExploreFeedSessionCacheRow(row432.trackId, snapshot432);
       upsertExplorePublicProfileFirstViewTrack(row432.ownerUid, snapshot432);
 
@@ -2852,8 +2828,6 @@ export default function ExplorePage() {
             next[index] = { ...next[index], ...normalized432 };
             return overlayActorLikeCounts120(next);
           }
-          // New public tracks enter only the latest/recommended source list.
-          // Popular remains server-ranked and is never blindly prepended.
           if (!isLatestFeed432) return previous;
           return overlayActorLikeCounts120([normalized432, ...previous].slice(0, 40));
         });
@@ -2871,6 +2845,40 @@ export default function ExplorePage() {
       rememberSettledExplorePublicPublicationSignal429(
         viewerUid432, row432.trackId, row432.at,
       );
+    };
+
+    const applyRow432 = (row432: ExplorePublicPublicationSignalRow429) => {
+      if (cancelled432 || row432.ownerUid === viewerUid432 ||
+          hasSettledExplorePublicPublicationSignal429(
+            viewerUid432, row432.trackId, row432.at,
+          )) return;
+
+      if (row432.status === 'private') {
+        removeExploreFeedSessionCacheRow(row432.trackId);
+        removeExplorePublicProfileFirstViewTrack(row432.ownerUid, row432.trackId);
+        const remove432 = (previous: ExploreTrack[]) => previous.filter(
+          (track) => track.id !== row432.trackId,
+        );
+        setTracks(remove432);
+        setPopularTracks(remove432);
+        setCuratedTracks307(remove432);
+        setManagedCuratedTracks307(remove432);
+        setProfileLikedTracks(remove432);
+        if (profileOwner432 === row432.ownerUid) setProfileTracks(remove432);
+        rememberSettledExplorePublicPublicationSignal429(
+          viewerUid432, row432.trackId, row432.at,
+        );
+        return;
+      }
+
+      void fetchExplorePublicPublicationLiveCard432(row432)
+        .then((snapshot432) => {
+          if (!snapshot432) return;
+          applyPublicCard432(row432, snapshot432);
+        })
+        .catch((error432) => {
+          console.warn('[432] Edge live-card repair deferred:', error432);
+        });
     };
 
     const onSignal432 = (signal432: { rows: ExplorePublicPublicationSignalRow429[] }) => {

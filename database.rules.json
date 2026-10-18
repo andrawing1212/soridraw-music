@@ -423,9 +423,6 @@
             "status": {
               ".validate": "newData.isString() && (newData.val() === 'public' || newData.val() === 'private')"
             },
-            "cardJson": {
-              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4096"
-            },
             "$other": {
               ".validate": false
             }
@@ -463,9 +460,6 @@
               },
               "status": {
                 ".validate": "newData.isString() && (newData.val() === 'public' || newData.val() === 'private')"
-              },
-              "cardJson": {
-                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4096"
               },
               "$other": {
                 ".validate": false

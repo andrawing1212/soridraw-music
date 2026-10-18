@@ -6,14 +6,14 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 // SORIDRAW_PUBLIC_PUBLICATION_CHANGED_TRACK_429_20261019
 // app432: browsers remain READ-ONLY. The server publishes ONE latest compact
 // delta. Home Feed listens only while it is the active visible screen; public
-// profile listens only to its owner-scoped path. The compact card lets a newly
-// published song appear without a per-viewer Worker/R2 read.
+// profile listens only to its owner-scoped path. The RTDB event stays tiny;
+// an active relevant screen resolves the display card through a shared Edge cache.
 const PUBLIC_PUBLICATION_FEED_SIGNAL_PATH_432 = 'publicSync/explorePublication';
 const PUBLIC_PUBLICATION_PROFILE_SIGNAL_ROOT_432 = 'publicSync/explorePublicationProfiles';
 const PUBLIC_PUBLICATION_ROUTE_429 = '/v1/publication-cards';
+const PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432 = '/v1/publication-live-card';
 const PUBLIC_PUBLICATION_MAX_429 = 50;
 const PUBLIC_PUBLICATION_SIGNAL_ROWS_432 = 1;
-const PUBLIC_PUBLICATION_LIVE_CARD_MAX_432 = 4096;
 const PUBLIC_PUBLICATION_RETENTION_MS_429 = 3 * 60_000;
 const PUBLIC_PUBLICATION_ACK_KEY_429 = 'soridraw_public_publication_ack_429';
 const PUBLIC_PUBLICATION_ACK_TTL_MS_429 = 10 * 60_000;
@@ -24,9 +24,6 @@ export type ExplorePublicPublicationSignalRow429 = {
   // Exact Worker/R2 publication-state updatedAt token. Never client "now".
   at: number;
   status: 'public' | 'private';
-  // app432 display-only public card. It deliberately excludes prompt, lyrics
-  // and shareBundle. Full action data stays lazy/exact on user interaction.
-  cardJson?: string;
 };
 
 export type ExplorePublicPublicationSignal429 = {
@@ -71,13 +68,9 @@ const normalizeSignal429 = (raw: unknown): ExplorePublicPublicationSignal429 | n
     const ownerUid = safeId429(item.ownerUid, 128);
     const rowAt = Math.floor(Number(item.at || 0));
     const status = item.status === 'public' ? 'public' : item.status === 'private' ? 'private' : '';
-    const cardJson = typeof item.cardJson === 'string' ? item.cardJson : '';
     if (!trackId || !ownerUid || !status ||
-        !Number.isSafeInteger(rowAt) || rowAt <= 0 ||
-        cardJson.length > PUBLIC_PUBLICATION_LIVE_CARD_MAX_432) return null;
-    if (status === 'public' && !cardJson) return null;
-    if (status === 'private' && cardJson) return null;
-    return { trackId, ownerUid, at: rowAt, status, ...(cardJson ? { cardJson } : {}) };
+        !Number.isSafeInteger(rowAt) || rowAt <= 0) return null;
+    return { trackId, ownerUid, at: rowAt, status };
   }).filter((row): row is ExplorePublicPublicationSignalRow429 => Boolean(row))
     .slice(0, PUBLIC_PUBLICATION_SIGNAL_ROWS_432);
   if (!rows.length) return null;
@@ -128,24 +121,40 @@ export const subscribeExplorePublicProfilePublication432 = (
   );
 };
 
-export const readExplorePublicPublicationLiveCard432 = (
+export const fetchExplorePublicPublicationLiveCard432 = async (
   row: ExplorePublicPublicationSignalRow429,
-): Record<string, unknown> | null => {
-  if (row.status !== 'public' || !row.cardJson ||
-      row.cardJson.length > PUBLIC_PUBLICATION_LIVE_CARD_MAX_432) return null;
-  try {
-    const parsed = JSON.parse(row.cardJson) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const id = safeId429(parsed.id ?? parsed.trackId);
-    const ownerUid = safeId429(parsed.ownerUid ?? parsed.owner_uid, 128);
-    if (id !== row.trackId || ownerUid !== row.ownerUid) return null;
-    for (const forbidden of ['prompt', 'lyrics', 'lyricsParts', 'shareBundle', 'nextSong', 'selectedKeywords']) {
-      if (Object.prototype.hasOwnProperty.call(parsed, forbidden)) return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
+): Promise<Record<string, unknown> | null> => {
+  if (row.status !== 'public') return null;
+  const currentUser = auth.currentUser;
+  if (!currentUser) return null;
+  const [idToken, appCheckToken] = await Promise.all([
+    currentUser.getIdToken(),
+    getFirebaseAppCheckToken(),
+  ]);
+  if (!appCheckToken) return null;
+  const query = new URLSearchParams({
+    trackId: row.trackId,
+    updatedAt: String(row.at),
+  });
+  const route = `${PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432}?${query.toString()}`;
+  const response = await fetch(`${EXPLORE_API_BASE}${route}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      'X-Firebase-AppCheck': appCheckToken,
+    },
+  });
+  recordCloudflareResponse(response, PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432);
+  if (!response.ok) return null;
+  const payload = await response.json() as { ok?: boolean; data?: { item?: Record<string, unknown> } };
+  const item = payload?.data?.item;
+  if (payload?.ok !== true || !item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const id = safeId429(item.id ?? item.trackId);
+  const ownerUid = safeId429(item.ownerUid ?? item.owner_uid, 128);
+  const updatedAt = Math.floor(Number(item.updatedAt ?? 0));
+  if (id !== row.trackId || ownerUid !== row.ownerUid || updatedAt !== row.at) return null;
+  return item;
 };
 
 // app430 compatibility helper retained for audit/debug exact-state fallback.

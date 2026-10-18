@@ -19,7 +19,7 @@ assert.doesNotMatch(publication, /publishExplorePublicPublicationInvalidation429
 
 assert.match(publicSync, /publicSync\/explorePublication/);
 assert.match(publicSync, /publicSync\/explorePublicationProfiles/);
-assert.match(publicSync, /readExplorePublicPublicationLiveCard432/);
+assert.match(publicSync, /fetchExplorePublicPublicationLiveCard432/);
 assert.match(publicSync, /fetchExplorePublicPublicationStates429/);
 assert.doesNotMatch(publicSync, /firestore|env\.DB|\.prepare\s*\(/i);
 assert.doesNotMatch(publicSync, /runTransaction|publishExplorePublicPublicationInvalidation429/);
@@ -28,7 +28,7 @@ const liveStart = page.indexOf('// app432: server-issued one-event live delta.')
 const liveEnd = page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004', liveStart);
 assert.ok(liveStart >= 0 && liveEnd > liveStart);
 const liveBlock = page.slice(liveStart, liveEnd);
-assert.match(liveBlock, /readExplorePublicPublicationLiveCard432/);
+assert.match(liveBlock, /fetchExplorePublicPublicationLiveCard432/);
 assert.match(liveBlock, /removeExploreFeedSessionCacheRow\(row432\.trackId\)/);
 assert.match(liveBlock, /upsertExplorePublicProfileFirstViewTrack\(row432\.ownerUid, snapshot432\)/);
 assert.doesNotMatch(liveBlock, /fetchExplorePublicPublicationStates429|setInterval\s*\(|getExploreFeed|revalidateExplorePublicProfileFirstView335/);
@@ -49,8 +49,7 @@ assert.equal(publicRule?.['.read'], 'auth != null');
 assert.equal(publicRule?.['.write'], false);
 assert.equal(publicRule?.rows?.$index?.['.validate'],
   "$index === '0' && newData.hasChildren(['trackId','ownerUid','at','status'])");
-assert.equal(publicRule?.rows?.$index?.cardJson?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
+assert.equal(publicRule?.rows?.$index?.cardJson, undefined);
 assert.equal(rules?.rules?.publicSync?.explorePublicationProfiles?.$ownerKey?.['.write'], false);
 
 assert.ok(manifest.patches.includes('100-music-note-next-song-legacy-parity.mjs'));
@@ -64,7 +63,8 @@ assert.match(publicSync, /isExplorePublicPublicationStateFresh429/);
 assert.match(publicSync, /Number\(state\.updatedAt\) === Number\(row\.at\)/);
 assert.doesNotMatch(publication, /proofAt429|publicationStateUpdatedAt429/);
 assert.match(patch101, /writeAndPublishPublicationState431/);
-assert.match(patch101, /publicationLiveCardJson432/);
+assert.match(patch101, /publicationLiveCard432/);
+assert.match(patch101, /handlePublicationLiveCard432/);
 assert.match(patch101, /X-Soridraw-431-Publication-Signature/);
 
 const temp = mkdtempSync(join(tmpdir(), 'soridraw-app429-'));
@@ -85,7 +85,8 @@ try {
   const generatedRoute = worker.slice(routeStart, routeEnd + 2);
   assert.doesNotMatch(generatedRoute, /env\?*\.DB|env\.DB|\.prepare\s*\(/);
   assert.match(generatedRoute, /requireExploreAuth/);
-  assert.match(worker, /publicationLiveCardJson432/);
+  assert.match(worker, /publicationLiveCard432/);
+  assert.match(worker, /handlePublicationLiveCard432/);
 } finally { rmSync(temp, { recursive: true, force: true }); }
 
 console.log('APP429_POLLUTED_PUBLICATION_CACHE_REPAIR=PASS');

@@ -142,7 +142,7 @@ const publicationLiveUrl432 = (value) => {
   const text = String(value ?? '').trim();
   return text.length <= 512 ? text : '';
 };
-const publicationLiveCardJson432 = (state) => {
+const publicationLiveCard432 = (state) => {
   if (state?.status !== 'public') return '';
   const card = normalizeSharedTrackCard062(state?.card);
   if (!card) throw new Error('432_PUBLICATION_LIVE_CARD_MISSING');
@@ -171,7 +171,7 @@ const publicationLiveCardJson432 = (state) => {
   }
   const json = JSON.stringify(live);
   if (json.length > 4096) throw new Error('432_PUBLICATION_LIVE_CARD_TOO_LARGE');
-  return json;
+  return live;
 };
 
 async function publishPublicationInvalidation431(env, state, stateUpdatedAt) {
@@ -184,10 +184,8 @@ async function publishPublicationInvalidation431(env, state, stateUpdatedAt) {
   }
   const endpoint = publicationEndpoint431(env?.SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT);
   const signedAtMs = Date.now();
-  const cardJson = publicationLiveCardJson432(state);
   const raw = JSON.stringify({
     schemaVersion: 1, trackId, ownerUid, status, stateUpdatedAt, signedAtMs,
-    ...(cardJson ? { cardJson } : {}),
   });
   const signature = await publicationSign431(raw, env?.SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET);
   const response = await fetch(endpoint, {
@@ -218,6 +216,55 @@ async function writeAndPublishPublicationState431(env, state) {
     console.warn('[432] publication server invalidation deferred:', String(error?.message || error || 'unknown'));
   }
   return stateUpdatedAt;
+}
+
+const PUBLICATION_LIVE_CARD_ROUTE_432 = '/v1/publication-live-card';
+const publicationLiveEdgeKey432 = (request, trackId, updatedAt) => {
+  const url = new URL('/__soridraw/publication-live-card-v432/' +
+    encodeURIComponent(trackId) + '/' + String(updatedAt), new URL(request.url).origin);
+  return new Request(url.toString(), { method: 'GET' });
+};
+
+async function handlePublicationLiveCard432(request, env, cors) {
+  await requireExploreAuth(request.clone());
+  const url = new URL(request.url);
+  const trackId = String(url.searchParams.get('trackId') || '').trim();
+  const updatedAt = Math.floor(Number(url.searchParams.get('updatedAt') || 0));
+  if (!trackId || trackId.length > 512 || !Number.isSafeInteger(updatedAt) || updatedAt <= 0) {
+    return new Response(JSON.stringify({ ok:false, error:'Invalid live-card request' }), {
+      status:400, headers:publicationStateHeaders429(cors,0),
+    });
+  }
+  const edgeKey = publicationLiveEdgeKey432(request, trackId, updatedAt);
+  try {
+    const hit = await caches.default.match(edgeKey);
+    if (hit) {
+      const headers = new Headers(hit.headers);
+      headers.set('X-SORIDRAW-Publication-Live-Cache','HIT');
+      headers.set('X-SORIDRAW-R2-B','0');
+      return new Response(hit.clone().body, { status:200, headers });
+    }
+  } catch {}
+
+  const state = await readPublicationState429(env, trackId);
+  if (!state || state.status !== 'public' || state.updatedAt !== updatedAt || !state.card) {
+    return new Response(JSON.stringify({ ok:false, error:'Live card is stale or unavailable' }), {
+      status:404, headers:publicationStateHeaders429(cors,1),
+    });
+  }
+  const card = publicationLiveCard432(state);
+  const body = JSON.stringify({ ok:true, data:{ item:{ ...card, updatedAt } } });
+  const headers = publicationStateHeaders429(cors,1);
+  headers.set('Cache-Control','private, no-store');
+  headers.set('X-SORIDRAW-Publication-Live-Cache','MISS');
+  const response = new Response(body,{status:200,headers});
+  try {
+    const storedHeaders = new Headers(headers);
+    storedHeaders.set('Cache-Control','public, max-age=300, immutable');
+    storedHeaders.set('X-SORIDRAW-Publication-Live-Cache','EDGE');
+    await caches.default.put(edgeKey,new Response(body,{status:200,headers:storedHeaders}));
+  } catch {}
+  return response;
 }
 
 function publicationStateHeaders429(cors, r2Reads) {
@@ -363,7 +410,10 @@ const routeAnchor = `    if (url.pathname === "/v1/me/liked-tracks" && request.m
       return await handleMyLikedTracks052(request, env, cors);
     }`;
 if (source.split(routeAnchor).length !== 2) throw new Error('[101/432] route anchor changed');
-source = source.replace(routeAnchor, `    if (url.pathname === PUBLICATION_STATE_ROUTE_429 && request.method === "GET") {
+source = source.replace(routeAnchor, `    if (url.pathname === PUBLICATION_LIVE_CARD_ROUTE_432 && request.method === "GET") {
+      return await handlePublicationLiveCard432(request, env, cors);
+    }
+    if (url.pathname === PUBLICATION_STATE_ROUTE_429 && request.method === "GET") {
       return await handlePublicationStates429(request, env, cors);
     }
 ${routeAnchor}`);
@@ -372,6 +422,7 @@ for (const required of [
   marker,
   'PUBLICATION_STATE_ROUTE_429',
   'readPublicationState429',
+  'handlePublicationLiveCard432',
   'writeAndPublishPublicationState431',
   'X-Soridraw-431-Publication-Signature',
   'SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT',
@@ -385,4 +436,4 @@ if (/env\?*\.DB|env\.DB|\.prepare\s*\(/.test(handler)) {
 }
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[101/432] server-only publication invalidation follows exact R2 projection; route D1 R0/W0.');
+console.log('[101/432] tiny RTDB invalidation + shared Edge live-card cache; exact routes D1 R0/W0.');

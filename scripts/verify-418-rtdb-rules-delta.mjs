@@ -6,7 +6,7 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // 1) the previously approved canonicalSettled417 bool,
 // 2) the UID-private exploreLikeIntent416 child,
 // 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt,
-// 4) app432 server-only public Feed + owner-profile publication delta read nodes.
+// 4) app432 server-only tiny public Feed + owner-profile publication signal nodes.
 // Every other permission/schema byte must remain equivalent to the live rules.
 const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
 const local = buildStage416ServerRulesCandidate(canonicalBase);
@@ -35,13 +35,9 @@ assert.equal(publication429?.actorUid?.['.validate'],
   "newData.isString() && newData.val() === 'publication-server-431'");
 assert.equal(publication429?.rows?.$index?.['.validate'],
   "$index === '0' && newData.hasChildren(['trackId','ownerUid','at','status'])");
-assert.equal(publication429?.rows?.$index?.cardJson?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
 assert.equal(publication429?.rows?.$index?.['$other']?.['.validate'], false);
 assert.equal(publicationProfiles432?.$ownerKey?.['.read'], 'auth != null');
 assert.equal(publicationProfiles432?.$ownerKey?.['.write'], false);
-assert.equal(publicationProfiles432?.$ownerKey?.rows?.$index?.cardJson?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
 assert.equal(intent.results?.$index?.['$other']?.['.validate'], false);
 
 // New Stage416 pending/sealed server state is never client-readable/writable.
@@ -149,10 +145,6 @@ if (process.argv.includes('--self-test')) {
   widenedPublicationRows.rules.publicSync.explorePublication.rows.$index['.validate'] =
     "$index.matches(/^(0|1)$/)";
   assert.equal(compare(widenedPublicationRows), null, 'public publication signal must remain one latest row');
-  const widenedPublicationCard = structuredClone(local);
-  widenedPublicationCard.rules.publicSync.explorePublication.rows.$index.cardJson['.validate'] =
-    'newData.isString()';
-  assert.equal(compare(widenedPublicationCard), null, 'public publication live-card size bound must stay exact');
   const exposedBatch = structuredClone(local);
   exposedBatch.rules.privateLikeBatch416.$uid['.read'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(exposedBatch), null, 'server-only batch visibility must fail');

@@ -22,10 +22,10 @@ assert.match(publishFn, /publishExplorePublicationSyncSignal/);
 // app431 authority remains server-only; app432 additionally stops the normal
 // live convergence path from re-reading exact R2 per viewer.
 assert.doesNotMatch(sync, /runTransaction|mergeExplorePublicPublicationSignal429|publishExplorePublicPublicationInvalidation429/);
-assert.match(sync, /readExplorePublicPublicationLiveCard432/);
+assert.match(sync, /fetchExplorePublicPublicationLiveCard432/);
 assert.match(sync, /subscribeExplorePublicProfilePublication432/);
 assert.match(sync, /PUBLIC_PUBLICATION_SIGNAL_ROWS_432 = 1/);
-assert.match(sync, /PUBLIC_PUBLICATION_LIVE_CARD_MAX_432 = 4096/);
+assert.match(sync, /PUBLIC_PUBLICATION_LIVE_CARD_ROUTE_432 = '\\/v1\\/publication-live-card'/);
 assert.match(sync, /Authorization: `Bearer \$\{idToken\}`/);
 assert.match(sync, /'X-Firebase-AppCheck': appCheckToken/);
 
@@ -33,7 +33,7 @@ const liveStart = page.indexOf('// app432: server-issued one-event live delta.')
 const liveEnd = page.indexOf('// SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004', liveStart);
 assert.ok(liveStart >= 0 && liveEnd > liveStart);
 const live = page.slice(liveStart, liveEnd);
-assert.match(live, /readExplorePublicPublicationLiveCard432/);
+assert.match(live, /fetchExplorePublicPublicationLiveCard432/);
 assert.match(live, /subscribeExplorePublicProfilePublication432/);
 assert.match(live, /document\.visibilityState !== 'visible'/);
 assert.match(live, /!submittedQuery\.trim\(\)/);
@@ -47,14 +47,14 @@ assert.equal(rule?.actorUid?.['.validate'],
   "newData.isString() && newData.val() === 'publication-server-431'");
 assert.equal(rule?.rows?.$index?.['.validate'],
   "$index === '0' && newData.hasChildren(['trackId','ownerUid','at','status'])");
-assert.equal(rule?.rows?.$index?.cardJson?.['.validate'],
-  'newData.isString() && newData.val().length > 0 && newData.val().length <= 4096');
+assert.equal(rule?.rows?.$index?.cardJson, undefined);
 assert.equal(rules?.rules?.publicSync?.explorePublicationProfiles?.$ownerKey?.['.write'], false);
 
 assert.match(patch101, /return updatedAt/);
 assert.match(patch101, /writeAndPublishPublicationState431/);
 assert.match(patch101, /publishPublicationInvalidation431/);
-assert.match(patch101, /publicationLiveCardJson432/);
+assert.match(patch101, /publicationLiveCard432/);
+assert.match(patch101, /handlePublicationLiveCard432/);
 assert.match(patch101, /X-Soridraw-431-Publication-Signature/);
 assert.doesNotMatch(patch101, /publicationStateUpdatedAt429/);
 assert.match(patch101, /await requireExploreAuth\(request\.clone\(\)\)/);
@@ -80,7 +80,8 @@ try {
   const worker = readFileSync(join(temp, 'worker.js'), 'utf8');
   assert.match(worker, /SORIDRAW_PUBLICATION_LIVE_CONVERGENCE_432_20261019/);
   assert.match(worker, /writeAndPublishPublicationState431/);
-  assert.match(worker, /publicationLiveCardJson432/);
+  assert.match(worker, /publicationLiveCard432/);
+  assert.match(worker, /handlePublicationLiveCard432/);
   assert.match(worker, /X-Soridraw-431-Publication-Signature/);
   assert.match(worker, /await requireExploreAuth\(request\.clone\(\)\)/);
   const routeStart = worker.indexOf('async function handlePublicationStates429');

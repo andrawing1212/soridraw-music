@@ -1,3 +1,30 @@
+## CURRENT — app434 product audit PASS; PREVIEW release artifact materialized; focused release audit pending (2026-10-19 KST)
+
+- **product audit PASS:** GPT-6 independently passed app434 source `8b793206c67277dbe78b97426a340bcb2a613cdb` for the same-timestamp publication receive/ACK ordering fix.
+- **release preflight blocker found before deploy:** the canonical PREVIEW Worker workflow deploys the repository-owned complete `canonical/preview-worker.js` and does **not** replay `release-patches.json`. At the audited source, patch100/101 existed as audited patch files but the canonical Worker itself did not contain them. Deploying that runtime would have omitted #229/app431~434 Worker behavior, so the coordinated PREVIEW release was stopped before any service changed.
+- **release artifact correction:** PR #252 → `7f1a4031974547b0884d747bbc502303d74a9555`. No new publication algorithm was authored. The exact audited base Worker was transformed by the unchanged audited patch100 then patch101, and that output became the canonical PREVIEW Worker.
+- **artifact lock:** canonical Worker SHA256 = `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`; `canonical/source-sha256.txt` matches. PREVIEW app identity is now source-only `app-version.json=434`.
+- **provenance verifier:** `scripts/verify-435-preview-worker-release-artifact.mjs` fetches the exact app434 audited base, proves current patch100/101 blobs are byte-identical to that audit SHA, re-materializes them in order, requires byte-for-byte equality with canonical Worker, verifies SHA256, Candidate Function endpoint binding and app version 434.
+- **QA:** first PR #252 Run `39167908417` failed only because the new verifier used Node's default stdout buffer for a ~2 MB `git show`; product/app428~434 checks before that point were PASS and no deployment occurred. Verifier-only buffer handling was fixed. Final Run `39168027033` **SUCCESS**: app428~434, exact patch100/101 materialization, canonical SHA256, Function endpoint binding, app version 434, Functions build, TypeScript, Build, frozen likes/catalog and live RTDB Rules read-only preflight PASS. Guest browser smoke remained on-demand/skipped.
+- **unchanged/frozen:** client app434 logic after the audited SHA is unchanged; Functions implementation, RTDB Rules, D1 schema, #229 logic, #237, app421 likes/follows, app349 save-heart, Music Note batching and UI/CSS remain protected.
+- **deployment:** **none**. Firebase Hosting/Functions/RTDB Rules and Cloudflare Worker were not deployed. PREVIEW live remains app421. TEST/PRODUCTION unchanged. Shared user data/D1 migration/backfill/delete = 0.
+- **cost:** 100k-scale RTDB/Worker/R2 real billing remains unverified until PREVIEW live measurement.
+- **next gate:** latest `preview` HEAD after the docs-only merge is the exact focused release-artifact audit SHA. Verify artifact provenance/release path only; do not re-open already-PASS app434 product logic without a concrete regression.
+- **after focused PASS:** deploy in compatibility order: `publicationRelease431Candidate` Function → exact canonical PREVIEW Worker → read-only publication RTDB Rules + Hosting app434 → actual preview URL/cost/PC-mobile-second-account verification.
+
+### Progress remains frozen until the exact release artifact passes independent audit
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | product audit PASS; exact release artifact audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | patch100 product logic audit PASS; deployment pending |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app434 same-timestamp publication version ordering fixed; independent re-audit pending (2026-10-19 KST)
 
 - **app433 audit FAIL target:** `e89fbbad0a3e89d0e7615cb3ec263cb6fdb3382f`.

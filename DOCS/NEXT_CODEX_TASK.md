@@ -1,3 +1,21 @@
+## NEXT — app434 PREVIEW release artifact: GPT-6 FOCUSED AUDIT ONLY (2026-10-19 KST)
+
+- **Audit latest `preview` HEAD after this docs-only merge.** Product behavior underneath was already independently PASS at `8b793206c67277dbe78b97426a340bcb2a613cdb`; release artifact preparation is PR #252 merge `7f1a4031974547b0884d747bbc502303d74a9555`.
+- Focus only on release identity/provenance:
+  1. Current `canonical/preview-worker.js` must equal the audited app434 base Worker plus the audited patch100 then patch101 **byte-for-byte**; no third Worker logic change.
+  2. patch100/101 in the release artifact must be byte-identical to the product-audited SHA.
+  3. `canonical/source-sha256.txt` must equal `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`.
+  4. `public/app-version.json` must be 434 and no client product logic after the audited SHA may differ except release identity/QA files.
+  5. PREVIEW Worker config must still target only `publicationRelease431Candidate`; no TEST/PRODUCTION endpoint or binding change.
+  6. Existing release workflows must not replay a different Worker artifact or include D1/user-data migration.
+- Verify Run `39168027033` SUCCESS and the four release markers: exact materialization, canonical SHA256, Candidate Function endpoint binding, app version 434.
+- Confirm deployment is still 0 and live PREVIEW remains app421.
+- Protect #229/#237/app421/app349/Music Note batching/UI/CSS/shared user data.
+- **PASS only then:** release order is Candidate Function → exact Worker → shared read-only publication Rules + Hosting app434. Then run actual PC/mobile/second-account publication matrix and cost diagnostics. No D1 schema/shared user-data change.
+- Progress stays `P0-1 4/6 67% | P0-2 4/5 80% | P0-3 3/5 60% | Stage416 1/4 25% | Curated 0/4 0%` until this exact release artifact audit passes.
+
+---
+
 ## NEXT — app434 same-timestamp publication signal ordering: GPT-6 RE-AUDIT ONLY (2026-10-19 KST)
 
 - **Do not implement more before re-audit unless a concrete blocker is found.** Audit latest `preview` HEAD after this docs-only merge; product code underneath is PR #250 merge `07810831d99fd37b366412265564085ae0a1de2a`.

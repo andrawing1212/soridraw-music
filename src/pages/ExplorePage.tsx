@@ -17,6 +17,7 @@ import { auth, db } from '../firebase';
 import { GENRES, GENRE_HIERARCHY } from '../constants';
 import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
@@ -4889,7 +4890,7 @@ export default function ExplorePage() {
                   {moreTrack.coverUrl ? <img src={moreTrack.coverUrl} alt="" referrerPolicy="no-referrer" /> : <Music2 />}
                 </div>
                 <div>
-                  <strong>{moreTrack.title}</strong>
+                  <strong>{formatExploreDisplayTitle(moreTrack.title)}</strong>
                   <span>{moreTrack.displayName}</span>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { Loader2, Music2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import StudioCenterModalPortal from '../studio/StudioCenterModalPortal';
 import type { ExplorePublicationOptions } from '../../services/explorePublicationService';
+import { formatExploreDisplayTitle } from '../../lib/exploreTitleDisplay';
 
 export type ExplorePublicationTrackChoice = {
   index: 0 | 1;
@@ -68,7 +69,7 @@ export default function ExplorePublicationSettingsModal({
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/72">Explore</p>
               <h3 className="mt-1 text-xl font-black text-white">공개 설정</h3>
-              <p className="mt-1 truncate text-xs font-semibold text-white/42">{title || '제목 없는 곡'}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-white/42">{formatExploreDisplayTitle(title) || '제목 없는 곡'}</p>
             </div>
             <button
               type="button"
@@ -103,7 +104,7 @@ export default function ExplorePublicationSettingsModal({
                         <span>{selected ? '선택' : `${choice.index + 1}번`}</span>
                       </div>
                       <div className="soridraw-explore-publication-track-meta">
-                        <strong>{choice.title || `수노 곡 ${choice.index + 1}`}</strong>
+                        <strong>{formatExploreDisplayTitle(choice.title) || `수노 곡 ${choice.index + 1}`}</strong>
                         <small>{choice.available === false ? '연결 확인 필요' : '공개 가능'}</small>
                       </div>
                     </button>

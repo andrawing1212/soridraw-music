@@ -402,7 +402,7 @@ assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[det
 assert.match(page, /const liked = readExploreTrackLikeMembership127\(user\.uid, id\) \?\? likedSet\.has\(id\)/);
 assert.match(page, /verifiedMembership\.forEach\(\(liked, id\) => \{ next\[id\] = liked; \}\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);
-assert.match(page, /checkExplorePersonalLikeRevision127\(user\)/);
+assert.match(page, /checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/);
 assert.doesNotMatch(page, /window\.addEventListener\('focus', onResume\)/, 'app335 reload/focus must not spend a private-like revision Worker request');
 assert.match(page, /document\.addEventListener\('visibilitychange', onResume\)/);
 assert.match(service, /EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 \* 60_000/);
@@ -445,7 +445,7 @@ assert.ok(resumeStart134 > 0 && resumeEnd134 > resumeStart134, 'Explore real-tab
 const resume134 = page.slice(resumeStart134, resumeEnd134);
 assert.doesNotMatch(resume134, /likeHydrationKeyRef\.current = ''/,
   'cached tab resume must not reset like hydration and trigger another D1 membership read');
-assert.match(resume134, /checkExplorePersonalLikeRevision127\(user\)/,
+assert.match(resume134, /checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/,
   'real tab resume may check only the tiny private revision');
 
 

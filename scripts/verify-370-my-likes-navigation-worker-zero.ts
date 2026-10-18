@@ -10,7 +10,7 @@ assert.ok(getterStart >= 0 && getterEnd > getterStart, 'getExploreLikedTrackIds 
 const getter = like.slice(getterStart, getterEnd);
 assert.doesNotMatch(
   getter,
-  /checkExplorePersonalLikeRevision127\(user\)/,
+  /checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/,
   'visible heart hydration must not spend timed private revision Worker reads',
 );
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
@@ -21,7 +21,7 @@ assert.ok(likedEffectStart >= 0 && likedEffectEnd > likedEffectStart, 'My Likes 
 const likedEffect = page.slice(likedEffectStart, likedEffectEnd);
 assert.doesNotMatch(
   likedEffect,
-  /checkExplorePersonalLikeRevision127\(user\)/,
+  /checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/,
   'My Likes tab navigation must not trigger the 5-minute revision fallback',
 );
 assert.match(likedEffect, /ensureExplorePersonalLikeCrossOriginParity357\(user\)/);
@@ -33,7 +33,7 @@ assert.ok(resumeStart >= 0 && resumeEnd > resumeStart, 'resume fallback range mi
 const resume = page.slice(resumeStart, resumeEnd);
 assert.match(
   resume,
-  /checkExplorePersonalLikeRevision127\(user\)/,
+  /checkExplorePersonalLikeRevision127\(user, takeExploreDormantResume424\('private'\)\)/,
   'legacy revision fallback must remain on a real hidden->visible resume',
 );
 assert.match(page, /subscribeExploreLikeUiSync139\(user\.uid, onRemote\)/);

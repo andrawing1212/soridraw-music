@@ -325,7 +325,11 @@ export const installExploreRevisionRequestCache = () => {
     if (revisionTarget) {
       abortIfNeeded(input, init);
       const revisionUrl = revisionTarget.toString();
-      const cached = readEntry(revisionUrl);
+      // app424: only a proven hidden/pagehide resume asks for one fresh Edge/R2
+      // revision; the ordinary one-minute browser response cache remains.
+      // This is not a full Feed refresh or D1 read.
+      const dormantReopen424 = revisionTarget.searchParams.get('__soridraw_dormant_resume') === '1';
+      const cached = dormantReopen424 ? null : readEntry(revisionUrl);
       if (cached) {
         rememberDeltaFromBody(revisionTarget, cached.body);
         return cachedResponse(cached);
@@ -338,7 +342,7 @@ export const installExploreRevisionRequestCache = () => {
       // A just-received same-account signal already contains the exact visible
       // heart/count. Do not wake the public Feed for the same aggregate inside the
       // one-minute PREVIEW public settling window.
-      if (cachedFeedRevision && hasRecentExploreAccountLikePatch(REVISION_CACHE_TTL_MS)) {
+      if (!dormantReopen424 && cachedFeedRevision && hasRecentExploreAccountLikePatch(REVISION_CACHE_TTL_MS)) {
         const body = JSON.stringify({ ok: true, data: { sort, revision: cachedFeedRevision } });
         return new Response(body, {
           status: 200,

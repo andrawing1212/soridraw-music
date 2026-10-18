@@ -80,6 +80,6 @@ assert.doesNotMatch(revision, /invalidateExploreFeedSessionCache\(/);
 assert.doesNotMatch(page, /window\.addEventListener\('pageshow', requestRevisionCheck\)/);
 assert.doesNotMatch(page, /window\.addEventListener\('focus', requestRevisionCheck\)/);
 assert.doesNotMatch(page, /window\.addEventListener\('pointerdown', requestActivityRevisionCheck/);
-assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+assert.match(page, /document\.addEventListener\('visibilitychange', onVisible424\)/);
 
 console.log('PASS 211/335: warm browser entry/reload and ordinary clicks are Worker-free for Feed/profile/curation/publication checks; bounded freshness moves to real tab resume or targeted mutation signals; same-source republish remains visibility-only.');

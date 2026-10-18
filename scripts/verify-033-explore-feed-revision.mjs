@@ -23,7 +23,7 @@ for (const [needle, label] of [
   ['const cachedRows = readExploreFeedSessionCache(requestUrl);', 'cache-first render'],
   ['if (cachedRows) {', 'cached branch'],
   ['readExploreFeedSessionCacheRevision(requestUrl)', 'revision comparison'],
-  ["document.addEventListener('visibilitychange', requestRevisionCheck)", 'real tab-resume revalidation'],
+  ["document.addEventListener('visibilitychange', onVisible424)", 'real tab-resume revalidation'],
   ['feedRevisionSignal', 'event-driven revision signal'],
 ]) requireText(page, needle, label);
 

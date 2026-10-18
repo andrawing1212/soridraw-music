@@ -92,7 +92,7 @@ if (appVersion >= 335) {
   assert.match(page, /SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918/);
   assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
   assert.doesNotMatch(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS/);
-  assert.match(page, /document\.addEventListener\('visibilitychange', requestRevisionCheck\)/);
+  assert.match(page, /document\.addEventListener\('visibilitychange', onVisible424\)/);
   assert.doesNotMatch(page, /window\.addEventListener\('focus', requestRevisionCheck\)/);
   assert.doesNotMatch(page, /window\.addEventListener\('pageshow', requestRevisionCheck\)/);
   assert.match(page, /route entry, reload, focus, pageshow and ordinary pointer clicks are/);

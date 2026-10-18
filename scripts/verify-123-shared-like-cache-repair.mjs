@@ -41,7 +41,7 @@ if (entry126) {
   assert.match(cachedBranch, /if \(!revalidateRequested\) \{/);
 }
 
-const requestStart = page.indexOf('const requestRevisionCheck = () => {');
+const requestStart = page.indexOf('const requestRevisionCheck = (actualDormantResume424 = false) => {');
 const requestEnd = page.indexOf('};', requestStart) + 2;
 const requestBlock = page.slice(requestStart, requestEnd);
 assert.match(requestBlock, /feedRevisionRequestedUrlRef\.current = requestUrl/);

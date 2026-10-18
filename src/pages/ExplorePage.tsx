@@ -11,6 +11,7 @@ import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstV
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Compass, Crown, Disc3, EllipsisVertical, Grid3X3, Heart, Instagram, List, Loader2, Music2, NotebookTabs, Pencil, Play, RefreshCw, Reply, Search, Settings, ThumbsDown, UserCheck, UserPlus, X, Youtube } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { takeExploreDormantResume424 } from '../services/exploreDormantResume424';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { GENRES, GENRE_HIERARCHY } from '../constants';
@@ -1966,11 +1967,21 @@ export default function ExplorePage() {
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
   const feedRevisionRequestedUrlRef = useRef('');
+  // app424 genuine dormant resumes are consumed separately by Latest/Popular.
+  // A single intentional reopen may bypass the hot-tab 2-minute gate once;
+  // ordinary route changes never set either flag.
+  const dormantFeedRevisionUrlRef424 = useRef('');
+  const dormantPopularRevisionRef424 = useRef(false);
   const likeInteractionVersionRef090 = useRef(0);
   // 192: a single Explore-level public-count listener. It never changes
   // another account's personal filled-heart state.
   const publicLikeVisibleTracksRef192 = useRef<Map<string, string>>(new Map());
   const publicLikePendingRowsRef192 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  // app423: RTDB can deliver a retained public changed-track row before the
+  // cached Feed has created its visible track index on a reopened mobile app.
+  // Retain only bounded signal metadata until its exact card becomes visible.
+  const publicLikeBeforeVisibleRowsRef423 = useRef<Map<string, ExplorePublicLikeSignalRow192>>(new Map());
+  const replayPublicLikeWhenVisibleRef423 = useRef<(() => void) | null>(null);
   const publicLikeRefreshAttemptsRef192 = useRef<Map<string, number>>(new Map());
   const publicLikeRefreshTimerRef192 = useRef<number | null>(null);
   // app237 — keep the visual equalizer alive across Explore route unmounts.
@@ -2291,7 +2302,23 @@ export default function ExplorePage() {
       const visible = publicLikeVisibleTracksRef192.current;
       let relevant = false;
       for (const row of rows) {
-        if (!visible.has(row.trackId)) continue;
+        if (!visible.has(row.trackId)) {
+          // app423: do not discard a recent retained notification solely
+          // because the Feed's cached cards have not painted yet. Once cards
+          // render, fetch only matching changed-card IDs, never the entire Feed.
+          if (Date.now() - row.at <= 180_000 &&
+              !hasSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at)) {
+            const deferred423 = publicLikeBeforeVisibleRowsRef423.current;
+            const previous423 = deferred423.get(row.trackId);
+            if (!previous423 || row.at >= previous423.at) deferred423.set(row.trackId, row);
+            while (deferred423.size > 256) {
+              const oldest423 = deferred423.keys().next().value;
+              if (!oldest423) break;
+              deferred423.delete(oldest423);
+            }
+          }
+          continue;
+        }
         // The RTDB node retains old events for 3 minutes. A normal reload
         // must not repeatedly read an R2 card already applied on this device.
         if (hasSettledExplorePublicLikeSignal396(user.uid, row.trackId, row.at)) continue;
@@ -2304,6 +2331,23 @@ export default function ExplorePage() {
       }
       return relevant;
     };
+    const replayPublicLikeWhenVisible423 = () => {
+      if (cancelled) return;
+      const deferred423 = publicLikeBeforeVisibleRowsRef423.current;
+      if (!deferred423.size || !publicLikeVisibleTracksRef192.current.size) return;
+      const visible423: ExplorePublicLikeSignalRow192[] = [];
+      for (const [id, row] of deferred423) {
+        if (Date.now() - row.at > 180_000) {
+          deferred423.delete(id);
+          continue;
+        }
+        if (!publicLikeVisibleTracksRef192.current.has(id)) continue;
+        deferred423.delete(id);
+        visible423.push(row);
+      }
+      if (queueRelevantRows192(visible423)) scheduleRefresh192(0);
+    };
+    replayPublicLikeWhenVisibleRef423.current = replayPublicLikeWhenVisible423;
 
     const unsubscribe = subscribeExplorePublicLikeInvalidation192((signal) => {
       if (cancelled) return;
@@ -2353,6 +2397,10 @@ export default function ExplorePage() {
     return () => {
       cancelled = true;
       unsubscribe();
+      if (replayPublicLikeWhenVisibleRef423.current === replayPublicLikeWhenVisible423) {
+        replayPublicLikeWhenVisibleRef423.current = null;
+      }
+      publicLikeBeforeVisibleRowsRef423.current.clear();
       publicLikePendingRowsRef192.current.clear();
       publicLikeRefreshAttemptsRef192.current.clear();
       if (publicLikeRefreshTimerRef192.current != null) {
@@ -2361,6 +2409,12 @@ export default function ExplorePage() {
       }
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    // app423: cached cards can mount AFTER the retained public RTDB callback.
+    // Reuse the existing single changed-card queue; no new listener or poll.
+    replayPublicLikeWhenVisibleRef423.current?.();
+  }, [publicLikeVisibleTracksMap192]);
 
   // SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920
   // The same account-owned boolean drives every Heart in Feed/Profile/Liked.
@@ -2479,7 +2533,9 @@ export default function ExplorePage() {
       // revision. Do not reset hydration or re-run /v1/me/likes on every focus.
       // A real revision change dispatches the existing account invalidation
       // event, which then performs one targeted reconciliation for visible IDs.
-      void checkExplorePersonalLikeRevision127(user).catch((reason) => {
+      // Only true dormant resumes bypass the normal 5-minute metadata gate;
+      // ordinary page mount / SPA navigation still stays entirely local.
+      void checkExplorePersonalLikeRevision127(user, takeExploreDormantResume424('private')).catch((reason) => {
         console.warn('Explore like revision resume check failed:', reason);
       });
     };
@@ -2487,6 +2543,10 @@ export default function ExplorePage() {
     // app335: focus can be emitted by a browser reload. A real tab resume is
     // represented by visibilitychange; keep that bounded private revision path.
     document.addEventListener('visibilitychange', onResume);
+    // app423: a freshly opened tab may start visible without a
+    // visibilitychange event. Reuse the existing five-minute-gated tiny
+    // private R2 revision check once on mount, after local paint.
+    onResume();
     window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     return () => {
       unsubscribeLikeUi139();
@@ -2715,6 +2775,8 @@ export default function ExplorePage() {
       ? readExploreFeedSessionCache(requestUrl)
       : readExploreSearchCache340(requestUrl);
     const revisionCheckKey154 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
+    const dormantForcedFeed424 = dormantFeedRevisionUrlRef424.current === requestUrl;
+    if (dormantForcedFeed424) dormantFeedRevisionUrlRef424.current = '';
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -2730,7 +2792,9 @@ export default function ExplorePage() {
 
     const fetchRevision = async (): Promise<string | null> => {
       if (!feedRequest) return null;
-      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl), {
+      const revisionUrl424 = new URL(buildExploreFeedRevisionUrl(requestUrl));
+      if (dormantForcedFeed424) revisionUrl424.searchParams.set('__soridraw_dormant_resume', '1');
+      const response = await fetch(revisionUrl424.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -2817,7 +2881,7 @@ export default function ExplorePage() {
 
       const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
       const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionCheckKey154);
-      const shouldRevalidate = shouldRevalidateExploreFeedOnEntry126(
+      const shouldRevalidate = dormantForcedFeed424 || shouldRevalidateExploreFeedOnEntry126(
         feedRequest,
         revalidateRequested,
         lastCheckedAt,
@@ -2897,10 +2961,14 @@ export default function ExplorePage() {
     const requestUrl304 = EXPLORE_POPULAR_FEED_REQUEST_URL_304;
     const cachedRows304 = readExploreFeedSessionCache(requestUrl304);
     const revisionCheckKey304 = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl304);
+    const dormantForcedPopular424 = dormantPopularRevisionRef424.current;
+    if (dormantForcedPopular424) dormantPopularRevisionRef424.current = false;
     const controller304 = new AbortController();
 
     const fetchPopularRevision304 = async (): Promise<string | null> => {
-      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl304), {
+      const revisionUrl424 = new URL(buildExploreFeedRevisionUrl(requestUrl304));
+      if (dormantForcedPopular424) revisionUrl424.searchParams.set('__soridraw_dormant_resume', '1');
+      const response = await fetch(revisionUrl424.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller304.signal,
@@ -2967,7 +3035,8 @@ export default function ExplorePage() {
       }
 
       const lastCheckedAt304 = readExploreFeedLastRevisionCheckAt334(revisionCheckKey304);
-      if (!shouldRevalidateExploreFeedOnEntry126(true, feedRevisionSignal > 0, lastCheckedAt304, Date.now())) {
+      if (!dormantForcedPopular424 &&
+          !shouldRevalidateExploreFeedOnEntry126(true, feedRevisionSignal > 0, lastCheckedAt304, Date.now())) {
         return () => controller304.abort();
       }
 
@@ -3020,15 +3089,21 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!isExploreFeedRequest(requestUrl) || profileUid) return;
 
-    const requestRevisionCheck = () => {
+    const requestRevisionCheck = (actualDormantResume424 = false) => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
       const revisionKey = exploreFeedRevisionCheckKey154(user?.uid || null, requestUrl);
       const lastCheckedAt = readExploreFeedLastRevisionCheckAt334(revisionKey);
-      if (lastCheckedAt > 0 && now - lastCheckedAt < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
-      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
+      if (!actualDormantResume424 && lastCheckedAt > 0 &&
+          now - lastCheckedAt < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
+      if (!actualDormantResume424 &&
+          now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
       feedRevisionRequestedUrlRef.current = requestUrl;
+      if (actualDormantResume424) {
+        dormantFeedRevisionUrlRef424.current = requestUrl;
+        dormantPopularRevisionRef424.current = true;
+      }
       setFeedRevisionSignal((value) => value + 1);
 
       // app335: SORIDRAW recommendation revision is checked only alongside a real
@@ -3047,9 +3122,17 @@ export default function ExplorePage() {
     // app335: route entry, reload, focus, pageshow and ordinary pointer clicks are
     // not change signals. Revalidate only after a real hidden→visible tab resume;
     // mutation-specific like/publication signals keep their own targeted paths.
-    document.addEventListener('visibilitychange', requestRevisionCheck);
+    const onVisible424 = () => {
+      if (document.visibilityState !== 'visible') return;
+      requestRevisionCheck(takeExploreDormantResume424('public'));
+    };
+    document.addEventListener('visibilitychange', onVisible424);
+    // A reopened mobile browser may begin *already visible* and never emit
+    // visibilitychange. Recover one true dormant epoch on initial Explore mount.
+    if (document.visibilityState === 'visible' &&
+        takeExploreDormantResume424('public')) requestRevisionCheck(true);
     return () => {
-      document.removeEventListener('visibilitychange', requestRevisionCheck);
+      document.removeEventListener('visibilitychange', onVisible424);
     };
   }, [requestUrl, profileUid, user?.uid]);
 

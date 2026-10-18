@@ -1,3 +1,22 @@
+## CURRENT ADDENDUM — 구형 Music Note 다음곡 적용 legacy parity P0 추가 (2026-10-18 KST)
+
+- **사용자 실기기 증상:** 약 6개월 전 생성한 일부 Music Note 곡은 카드의 장르/키워드가 남아 있어도 `다음곡에 적용` 후 Studio 명령창의 과거 직접 입력 등 일부 생성 설정이 누락된다. 최근 곡은 정상. GitHub Issue #229로 별도 추적한다.
+- **코드상 호환 공백 확인:** Music Note 직접 적용은 exact favorites 문서를 hydrate한 뒤에도 `song.appliedKeywords`와 top-level `userInput/commandInput/directInput/customPrompt`만 읽고 `requestPayload` 계열을 보지 않는다. 반면 Explore own-source recovery와 GlobalPlayer는 이미 `requestPayload.appliedKeywords` legacy 형태를 일부 인정한다.
+- **공개 영향 확인:** 현재 public shareBundle builder도 `note.appliedKeywords`만 recipe authority로 삼고 `requestPayload` legacy shape를 보지 않아, 구형 곡을 지금 공개해도 public `nextSong` payload가 불완전해질 수 있다. 따라서 Issue #226 공개곡 정합성 완료 조건에 #229 old-source publication parity를 포함한다.
+- **안전 방향:** 사용자 데이터 migration/backfill 없이 explicit apply/publication 시 이미 읽은 한 곡 객체만 read-time normalization. 최신 canonical 값 우선, legacy는 빈 필드 보완만. generated prompt를 원래 command로 추정 금지, 전체 favorites scan/앱 업데이트 read 금지.
+- **보호 대상:** 최근곡 적용 결과, app421 likes/follows, trackId/likeCount/publication identity, Music Note 60초/page-exit canonical batching, shared-note/follower-save identity, UI/CSS 모두 불변.
+
+---
+
+## CURRENT ADDENDUM — 변경 전 연결 기능 영향지도 필수 (2026-10-18 KST)
+
+- **사용자 고정 지시:** 직접 수정 대상 파일만 보고 고치지 않는다. 캐시/동기화/공개/좋아요/팔로우처럼 상태가 여러 화면과 기기에 전파되는 작업은 **코드 수정 전에 호출·저장·캐시·신호·파생화면·다른 계정/기기까지 연결 기능 영향지도(dependency impact map)를 먼저 만든다.**
+- 현재 공개곡 P0의 1차 연결 범위: Music Note 상세 local draft/Firestore batch, publication outbox+state cache, pageSyncCoordinator, owner-UID RTDB publication signal, Explore Feed session cache/revision, Public Profile first-view cache/revision+trackCount, Worker canonical `tracks`/stats, R2 Feed/Profile/card projections, Search(title/search_text/genre), follower-save/shared-note 권한 snapshot, curation 공개상태 projection, 공개곡 likeCount/card identity, PREVIEW/TEST/PRODUCTION origin별 브라우저·Edge cache.
+- **수정 규칙:** 연결된 기능을 모두 바꾸는 것이 아니라, 영향 유무를 먼저 판정하고 **필요한 최소 경로만 수정**한다. 영향 없음은 근거와 함께 보호 대상으로 고정한다. 캐시 키/schema/revision/signal payload/track identity를 바꾸면 기존 기기·다른 origin·다른 계정의 업그레이드 경로를 반드시 검사한다.
+- **금지:** 한 증상을 고치기 위해 전체 Feed/Profile refresh, 캐시 전체 삭제, 앱 버전 기반 invalidation, per-card polling/listener, 좋아요/팔로우 정상 경로 재작성으로 우회하지 않는다.
+
+---
+
 ## CURRENT — P0 공개곡 정합성 실사용 FAIL 접수 / 원인 3계층 확인 / 수정 전 (2026-10-18 KST)
 
 - **새 최우선 사용자 FAIL:** PREVIEW app421 Music Note 공개에서 `PUBLICATION_BATCH_PENDING` 경고 후 route 재진입 시 공개 버튼만 다시 켜지고 canonical 공개 Feed에는 없는 false-public UI가 재현됨. 기존부터 다른 기기/계정의 Feed↔공개프로필 수렴이 navigation에 의존하는 경우와, 공개 후 Music Note 제목 수정이 Explore 제목에 반영되지 않는 문제도 함께 보고됨. GitHub Issue #226으로 통합.

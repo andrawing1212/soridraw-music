@@ -1,3 +1,35 @@
+## IMPLEMENTATION GATE ADDENDUM — Issue #229 old-song next-song normalization (2026-10-18 KST)
+
+Issue #226 공개곡 P0와 병행 설계하되 **별도 호환 레이어**로 구현한다.
+
+- 하나의 canonical `resolveNextSongRecipeFromMusicNote(source)` 성격의 read-time normalization contract를 우선 설계한다. 호출부마다 서로 다른 fallback을 계속 늘리지 않는다.
+- 입력 호환 순서: 최신 `appliedKeywords` → 누락 필드만 `requestPayload.appliedKeywords` → 알려진 구형 `requestPayload` direct recipe → top-level legacy aliases. 새 값과 옛 값이 충돌하면 최신 canonical이 반드시 이긴다.
+- command input은 실제 저장된 `userInput/commandInput/directInput/customPrompt` 및 확인된 requestPayload aliases만 사용. generated `prompt/style`을 원래 사용자 명령으로 대체하지 않는다.
+- Music Note 직접 apply, GlobalPlayer/Library apply, own Explore bounded recovery, publication Worker shareBundle, follower-save/shared-note copy가 같은 field contract를 사용하거나 deterministic parity test로 동등함을 증명한다.
+- 언어/제목 언어, language mix, ratio/targets, tempo/vocal/rap/structure/custom inputs, situation/summary, point sounds 등 현재 next-song field set을 legacy fixture로 검증한다.
+- 읽기 비용: Music Note 명시적 apply에서 현재 exact-doc hydration 이상 추가 read 0; public publication도 기존 mutation source object 외 추가 collection scan 0; other-account public apply는 source Firestore를 읽지 않고 shareBundle만 사용.
+- 과거 사용자 문서를 일괄 rewrite/backfill하지 않는다. 실제 값이 없는 legacy 필드는 현재 기본값으로 남기며 추정 생성 금지.
+- #229 PASS 전에는 “구형 곡 공개 시 다음곡 적용 정보 완전성”을 PASS로 선언하지 않는다.
+
+---
+
+## IMPLEMENTATION GATE — Issue #226 연결 기능 영향지도 확정 후에만 코드 수정 (2026-10-18 KST)
+
+공개곡 P0 구현 전에 아래 흐름을 **쓰기 전 감사**한다. 각 항목은 `영향 있음/없음 + 이유 + 보호 테스트`를 남긴 뒤 실제 수정 파일을 정한다.
+
+- **Music Note 원본:** Detail title/genre/lyrics/Suno source local draft → IndexedDB durable draft → page-exit canonical Firestore batch → cross-device Music Note preview. 기존 묶음 저장 횟수/타이밍 유지.
+- **공개 상태 엔진:** `explorePublicationService` confirmed cache / pending outbox / retry / registered track identity / pageSyncCoordinator. Pending과 confirmed UI를 분리하되 재시도 내구성 보존.
+- **같은 계정 동기화:** `userSync/{uid}/explorePublication` compact RTDB signal, retained signal/origin certificate, PC↔mobile 및 PREVIEW↔TEST↔PRODUCTION origin cache.
+- **공용 표시:** Explore Feed local cache + revision/R2 snapshot, Public Profile first-view local cache + revision + trackCount. 공개/비공개/title 변경이 exact track 단위로 양쪽에 같은 결과를 만들어야 함.
+- **Worker/공유 canonical:** D1 `tracks`/track_stats/public profile, publication batch, R2 Feed/Profile/card projection, Edge invalidation. canonical 성공과 derived-cache 실패를 구분하고 전체 scan/rebuild 금지.
+- **검색/장르:** `tracks.title`, `search_text`, `primary_genre` 및 검색 결과의 exact-track 갱신 여부 확인. 제목 변경 후 과거 검색 projection 잔존 금지.
+- **다른 기능 보호:** follower-save/shared-note snapshot 권한, curation의 공개/비공개 반영, 공개곡 likeCount/trackId, follow/profile counters, likes Stage416/app421 frozen behavior는 연결 영향만 검사하고 이유 없이 수정하지 않음.
+- **캐시 호환:** 기존 app420/app421 브라우저 캐시, 빈 캐시, 다른 계정 warm cache, 다른 origin warm cache를 모두 포함. app update 자체가 read/write를 만들지 않음.
+
+**코드 수정 중단 조건:** 한 변경이 위 연결 범위를 넘어 구조 재설계/새 polling/전체 캐시 무효화/공유 데이터 migration을 요구하면 구현을 멈추고 비용·회귀 범위를 먼저 보고한다.
+
+---
+
 ## NEXT HIGH — Issue #226 공개곡 정합성 P0를 Stage416보다 먼저 수정 (2026-10-18 KST)
 
 - **우선순위:** app421 closed-device like recovery는 사용자 PASS로 동결. Stage416 public-five-minute activation은 이 P0가 끝날 때까지 대기. 기존 정상 likes/follows/Music Note batching/UI를 건드리지 않는다.

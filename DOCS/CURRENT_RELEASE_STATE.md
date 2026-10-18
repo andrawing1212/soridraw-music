@@ -1,3 +1,28 @@
+## CURRENT — app430 #226 public live-sync audit blockers corrected; re-audit pending (2026-10-19 KST)
+
+- **preview product merge:** PR #242 → `c03d32a617062e5b85e747f5a981bf2b2019245d`, correcting only the three new #226 blockers found by the GPT-6 re-audit of `c99b70f3e7bc3a3cd26217a19edc6238270002a4`.
+- **Fanout/cost correction:** cross-account publication signals now cause an exact Worker/R2 read only when the changed track/owner is already relevant to the loaded screen (same visible track, represented creator on loaded Feed, or currently viewed public profile). A fully unrelated new publication performs **no immediate Worker/R2 read**; it only marks the existing Feed revision path stale for the next normal revision/resume check. No new polling or whole Feed/profile read.
+- **Permission/abuse correction:** shared publication rows must belong to the authenticated writer and carry a fresh <=5-minute Worker proof timestamp. Exact publication-state reads require Firebase Auth + App Check. A locally known different owner blocks the request before Worker/R2.
+- **Failure/stale-R2 correction:** Worker returns `publicationStateUpdatedAt429` only after the exact per-track R2 state/tombstone write succeeds. Client emits no shared invalidation without that proof. Receiver applies/acks only when fetched R2 `updatedAt === signal.at`; an older public state cannot complete a newer private signal.
+- **Cost boundary:** exact state route remains D1 R0/W0; relevant publication reads are batched to <=50 IDs with a 30-second minimum per mounted Explore screen. Unrelated viewers remain Worker/R2 R0 for that signal.
+- **Frozen:** #229 patch100 lyric-mode parity unchanged; #237 app429 pending save-heart/Catalog overlay unchanged; app421 likes/follows and app349 +30s save-heart settlement unchanged; UI/CSS unchanged.
+- **QA:** PR #242 latest head `44e14789596b064083d374aeb5668b0d03b3734b`; Run `39155796269` **SUCCESS**: app428/app429/app430 verifiers, Worker patch100+101 materialization, TypeScript, Build, frozen personal-like/catalog regressions, Functions build, and live shared RTDB Rules read-only additive preflight.
+- **Deployment:** none. Firebase PREVIEW live remains app421; Worker patch100/101 and tightened RTDB Rules remain source-only. TEST/PRODUCTION unchanged. No shared user-data change, D1 migration/schema/backfill/delete, or Functions deploy.
+- **Next gate:** latest `preview` HEAD after this docs-only merge is the exact GPT-6 independent re-audit SHA. Do not deploy before PASS.
+
+### Progress remains frozen until independent PASS
+| Work | Progress | State |
+|---|---:|---|
+| P0-1 공개곡 정합성 #226 | **4/6 · 67%** | second re-audit FAIL blockers corrected; re-audit pending |
+| P0-2 legacy next-song/shareBundle #229 | **4/5 · 80%** | code PASS / frozen |
+| P0-3 Music Note membership/save-heart #237 | **3/5 · 60%** | code correction frozen; real-device pending |
+| Stage416 | **1/4 · 25%** | P0 hold |
+| Curated PR #200 | **0/4 · 0%** | hold |
+| app421 likes | **5/5 · 100%** | USER PASS / frozen |
+| app speed | **5/5 · 100%** | complete / protect |
+
+---
+
 ## CURRENT — app429 audit FAIL corrections merged; independent re-audit pending (2026-10-19 KST)
 
 - **preview product merge:** PR #240 → `68e0679b82980a6eca58344bc9619da7ebc3cf8a`.

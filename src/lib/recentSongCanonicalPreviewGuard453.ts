@@ -41,8 +41,56 @@ export const protectRecentCanonicalSnapshotFromPreview453 = <T extends Record<st
       continue;
     }
     if (!previewEqual(songs[index], cached)) {
+      const canonical = songs[index];
+      // Canonical writes accepted after this draft must win when both edit
+      // timestamps are available. Do not revive an older RTDB preview.
+      const canonicalEditAt = Math.max(
+        Number(canonical?.updatedAtMs || 0),
+        Number(canonical?.appliedKeywords?.editedInStudioAt || 0),
+      );
+      const previewEditAt = Math.max(
+        Number(cached?.updatedAtMs || 0),
+        Number(cached?.appliedKeywords?.editedInStudioAt || 0),
+      );
+      if (canonicalEditAt > 0 && previewEditAt > 0 && canonicalEditAt > previewEditAt) {
+        continue;
+      }
       hasUnsettledPreview = true;
-      songs[index] = { ...songs[index], ...cached };
+      // Keep only the text edited in Studio. Never let a pending draft
+      // overwrite accepted save-heart identities, public/private flags,
+      // locked state, owner metadata, Suno media or thumbnail revisions.
+      const merged: T = { ...canonical };
+      for (const key of ['title', 'koreanTitle', 'englishTitle', 'prompt'] as const) {
+        if (Object.prototype.hasOwnProperty.call(cached, key)) {
+          (merged as Record<string, any>)[key] = cached[key];
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(cached, 'lyrics')) {
+        if (cached.lyrics && typeof cached.lyrics === 'object'
+          && canonical.lyrics && typeof canonical.lyrics === 'object') {
+          const lyrics = { ...canonical.lyrics };
+          for (const language of ['korean', 'english', 'foreign']) {
+            if (Object.prototype.hasOwnProperty.call(cached.lyrics, language)) {
+              lyrics[language] = cached.lyrics[language];
+            }
+          }
+          (merged as Record<string, any>).lyrics = lyrics;
+        } else {
+          (merged as Record<string, any>).lyrics = cached.lyrics;
+        }
+      }
+      const cachedLanguages = cached.appliedKeywords?.lyricsByLanguage;
+      if (cachedLanguages && typeof cachedLanguages === 'object' && !Array.isArray(cachedLanguages)) {
+        (merged as Record<string, any>).appliedKeywords = {
+          ...(canonical.appliedKeywords || {}),
+          lyricsByLanguage: {
+            ...(canonical.appliedKeywords?.lyricsByLanguage || {}),
+            ...cachedLanguages,
+          },
+        };
+      }
+      (merged as Record<string, any>).__recentSongEditPreview = true;
+      songs[index] = merged;
     }
     // When the exact latest text/lyrics finally appear in canonical, leave
     // the canonical row untouched and retire the transient preview marker.

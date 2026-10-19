@@ -112,7 +112,14 @@ assert.ok(app.includes('pickRecentSongLiveAppliedKeywords457(incomingApplied)'))
 assert.match(app,/history: visibleServerHistory453/);
 assert.match(app,/applyRecentSongsState\(visibleServerHistory453/);
 assert.match(app,/!protectedRecent453\.hasUnsettledPreview\) \{\s*acknowledgeRecentGeneratedSongs/);
-assert.match(app,/cachedSuccessfully && readSignalVersion > 0 && !protectedRecent453\.hasUnsettledPreview/);
+// The Firestore snapshot verifies settled B even while A remains a draft.
+ // Its pending canonical signal can ACK after the successful cache apply;
+ // a live edit-preview is a different RTDB-only channel, never pending ACK.
+assert.match(app,/cachedSuccessfully && readSignalVersion > 0\) \{/);
+assert.match(app,/if \(isEditPreview\) \{[\s\S]{0,1200}return;/,
+ 'edit-preview handler returns without canonical signal acknowledgement');
+assert.match(app,/if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/,
+ 'only first retained draft schedules a bounded gap check');
 assert.ok(app.includes('if (isEditPreview) {'), 'live preview handler exists');
 assert.match(app,/if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/);
 assert.doesNotMatch(sync,/if \(initialRetained\) rememberRecentSongsPendingSignalVersion\(uid, signal.version\)/,

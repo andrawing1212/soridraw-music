@@ -376,5 +376,11 @@ jobs:
           print('418_SHARED_RTDB_LIVE_READ_ONLY=PASS')
           PY
           node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-live-418.json"
+          node scripts/verify-434-publication-rtdb-additive.mjs --self-test
+          node scripts/verify-434-publication-rtdb-additive.mjs \
+            "$RUNNER_TEMP/rtdb-live-418.json" \
+            "$RUNNER_TEMP/rtdb-candidate434-readonly.json" \
+            "$RUNNER_TEMP/rtdb-mode434-readonly.txt"
+          echo '434_SHARED_RTDB_PUBLICATION_ADDITIVE_READONLY_AUDIT=PASS'
       - name: Confirm no product deployment
         run: echo '408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

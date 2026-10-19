@@ -153,24 +153,48 @@ jobs:
           # even one unrelated ACL with the checked-in snapshot. This verifies
           # the ONLY permitted change is the optional canonicalSettled417 bool.
           node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-rules-before.json"
+          node scripts/verify-434-publication-rtdb-additive.mjs --self-test
+          node scripts/verify-434-publication-rtdb-additive.mjs \
+            "$RUNNER_TEMP/rtdb-rules-before.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-candidate.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-mode.txt"
 
-          code="$(curl -sS --max-time 30 -X PUT \
-            -H 'Content-Type: application/json' \
-            --data-binary @database.rules.json \
-            -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
-          if [ "$code" != '200' ]; then
-            echo "RTDB_RULES_PUT_HTTP=$code"
-            cat "$RUNNER_TEMP/rtdb-rules-put.json" || true
+          # Re-read live shared Rules immediately before any PUT; refuse even
+          # one changed unrelated permission. Never replay database.rules.json
+          # directly because Stage416 server-only roots may already be live.
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-pre-put.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          node scripts/verify-434-publication-rtdb-additive.mjs \
+            "$RUNNER_TEMP/rtdb-rules-pre-put.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-preput-candidate.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-preput-mode.txt"
+          cmp "$RUNNER_TEMP/rtdb-rules-434-mode.txt" "$RUNNER_TEMP/rtdb-rules-434-preput-mode.txt"
+          cmp "$RUNNER_TEMP/rtdb-rules-434-candidate.json" "$RUNNER_TEMP/rtdb-rules-434-preput-candidate.json"
+          mode="$(cat "$RUNNER_TEMP/rtdb-rules-434-mode.txt")"
+          if [ "$mode" = 'ADD_ONLY_TWO_PUBLICATION_NODES' ]; then
+            code="$(curl -sS --max-time 30 -X PUT \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/rtdb-rules-434-candidate.json" \
+              -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
+            if [ "$code" != '200' ]; then
+              echo "RTDB_RULES_PUT_HTTP=$code"
+              cat "$RUNNER_TEMP/rtdb-rules-put.json" || true
+              exit 1
+            fi
+            python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
+          elif [ "$mode" = 'ALREADY_EXACT' ]; then
+            echo '434_SHARED_RTDB_RULES_ALREADY_EXACT_NO_PUT=PASS'
+          else
+            echo "434_INVALID_RULES_DEPLOY_MODE=$mode"
             exit 1
           fi
-          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
 
           code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' "$auth_url")"
           test "$code" = '200'
           python3 - <<'PY'
           import json, os
           from pathlib import Path
-          local = json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+          local = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-434-candidate.json').read_text(encoding='utf-8'))
           remote = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-after.json').read_text(encoding='utf-8'))
           if remote != local:
               raise SystemExit('RTDB deployed rules do not match approved source')

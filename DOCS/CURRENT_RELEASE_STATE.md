@@ -1,3 +1,13 @@
+## CURRENT — app434 Worker Run 39290235396 additional obsolete 204 patch-text regex fixed (2026-10-19 KST)
+
+- PR #269 merge 3774b51eba542c821ca9a30e970bbe98dbe6088a triggered Run 39290235396, FAIL BEFORE WORKER DEPLOY in strict pinned-verifier precheck. Both verifier git blobs fetched correctly; app204 test failed at line 58 scanning entire legacy patch100 source for note?.lyrics string, despite that string occurring only in the source's explicit negative no-lyrics safety guard.
+- Corrected verify-204-explore-next-song-parity.mjs retains its direct no-finished-lyrics assertion on the actual canonical runtime function and requires patch100 to contain its explicit generated-lyrics rejection guard; never suppress the actual safety test.
+- Release Workflow now pins corrected strict verifier204 Git blob 4a760c8b7d007ee5d9d55ebb1c4f1869485d2e67 from commit 0e8b1ebf3b1dc940a9faf01157a073fc2859a275, plus independently checked verifier427 blob 1ef8ead0419426860e7fc13b34be688744ed992e; audited Worker source remains 8eb3264f1c7abaf36a59026248a61c6700e3b9a0 / SHA256 916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88.
+- No Worker preflight/Cloudflare deploy/Hosting/Rules/shared D1 modification ran in this failed release. PR CI PASS and a distinct trigger required before retry. Exact like/follow/cost contracts, main and production remain protected.
+- Separately verified additive public RTDB PR #265 has read-only live quality SUCCESS (Stage416 dormant, public publication roots missing), but was not merged/deployed as of this record.
+
+---
+
 ## CURRENT — app434 Worker Run 39288697951 strict 427 test false-positive (2026-10-19 KST)
 
 - PREVIEW Worker PR #267 merged at `6d746299414c5303912530e3ce836af958612486`. Run [39288697951](https://github.com/andrawing1212/soridraw-music/actions/runs/39288697951) **FAIL BEFORE PREVIEW CLOUDFLARE DEPLOY** at pinned-verifier precheck. Release SHA, Worker source SHA256, root dependencies and corrected app204 verification passed.

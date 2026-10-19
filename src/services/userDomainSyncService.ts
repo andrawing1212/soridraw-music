@@ -855,7 +855,9 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     return;
   }
 
-  if (signal.originDeviceId === getDeviceId('recentSongs')) {
+  if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
+    // A live ACK of our own confirmed write is safe. A retained old own-device
+    // signal is not proof of complete membership after offline changes.
     // Recent-song writes save the aggregate document before this mirror fires.
     // Advance the local gate so the existing event consumer does not reread that
     // same document on the device that just wrote it.

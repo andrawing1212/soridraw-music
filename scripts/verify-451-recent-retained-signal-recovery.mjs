@@ -40,6 +40,11 @@ assert.match(app, /canAcknowledgeRecentSongsInlineSignal\(\{[\s\S]{0,230}initial
 assert.match(app, /hasUnconfirmedSongMissingFromServer\(user.uid, firestoreSongs\)/);
 assert.match(app, /recentReadMutationEpoch !== readRecentSongsMutationEpoch\(user.uid\)/);
 assert.doesNotMatch(app, /localStorage.clear\(\)|indexedDB.deleteDatabase/);
+// Preview-only RTDB events cannot certify Firestore content even on their
+// originating device. First retained draft is a bounded gap-recovery signal.
+assert.match(rtdb, /if \(signal.operation === 'edit-preview'\) \{\s*if \(initialRetained\) rememberRecentSongsPendingSignalVersion\(uid, signal.version\)/);
+assert.match(app, /if \(isEditPreview\) \{[\s\S]{0,440}if \(detail.initialRetained === true\) runRecentSongsServerSyncIfNeeded\(\)/);
+console.log('APP435_RECENT_PREVIEW_NOT_CANONICAL_ACK=PASS');
 console.log('APP435_RECENT_RETAINED_SINGLE_ITEM_GAP_REQUIRES_CATCHUP=PASS');
 console.log('APP435_RECENT_HEALTHY_WARM_CACHE_ZERO_READ=PASS');
 console.log('APP435_RECENT_PENDING_DATA_PRESERVED=PASS');

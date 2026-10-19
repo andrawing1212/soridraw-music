@@ -1,3 +1,12 @@
+## CURRENT — app434 Worker Run 39291805942 predeploy VM test environment failure (2026-10-19 KST)
+
+- **Release PR #271 merge `f0e19d2df15c78e807e83fdeb753c03083dac352`** triggered [Run 39291805942](https://github.com/andrawing1212/soridraw-music/actions/runs/39291805942). **FAIL BEFORE WORKER DEPLOY** at `Pin audited app427-compatible verifier`; Worker preflight, snapshots, Cloudflare deploy, Rules, Hosting all SKIPPED.
+- **Exact log:** audited app204 verifier PASS; app427 test's TypeScript `transpileModule` emitted `Object.defineProperty(exports,...)` for module source, but node `vm.runInNewContext` received only `globalThis`, causing `ReferenceError: exports is not defined`. This is a test harness VM environment problem, not demonstrated user functionality failure.
+- **Minimal correction branch:** add `exports: {}` solely to `scripts/verify-427-legacy-next-song-parity.mjs` VM sandbox. Update Worker release workflow's immutable verifier427 commit/blob pin to exact corrected test `72d7d05fb41e3606641bdc1b281158ab9cea5e14` / `7c80e7e52d92e0ac81f102b6ceae75d42a3b2eaf`. App/Worker source and canonical SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88` unchanged. No test skipped or relaxed.
+- **BLOCK:** validate full strict verifier on exact audited source in CI, then independent merge review; only then new Worker trigger. Never rerun initial Function; no live RTDB/D1 user data or TEST/PRODUCTION changes. Shared Rules additive fix remains separate PR #265, must not deploy raw `database.rules.json`.
+
+---
+
 ## CURRENT — app434 Worker Run 39290235396 additional obsolete 204 patch-text regex fixed (2026-10-19 KST)
 
 - PR #269 merge 3774b51eba542c821ca9a30e970bbe98dbe6088a triggered Run 39290235396, FAIL BEFORE WORKER DEPLOY in strict pinned-verifier precheck. Both verifier git blobs fetched correctly; app204 test failed at line 58 scanning entire legacy patch100 source for note?.lyrics string, despite that string occurring only in the source's explicit negative no-lyrics safety guard.

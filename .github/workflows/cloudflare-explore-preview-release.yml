@@ -78,8 +78,8 @@ jobs:
           test "$(git hash-object scripts/verify-204-explore-next-song-parity.mjs)" = "$verifier_blob"
           # app427's old verifier rejected its own *negative* lyrics leakage
           # guard inside patch100. Pin the strict corrected runtime-only test.
-          verifier427_commit="88e2b43a477b4f8b4d056ea10c3a5c8cfc5447af"
-          verifier427_blob="1ef8ead0419426860e7fc13b34be688744ed992e"
+          verifier427_commit="72d7d05fb41e3606641bdc1b281158ab9cea5e14"
+          verifier427_blob="7c80e7e52d92e0ac81f102b6ceae75d42a3b2eaf"
           git fetch --no-tags --depth=1 origin "$verifier427_commit"
           test "$(git rev-parse "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs")" = "$verifier427_blob"
           git show "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs" > scripts/verify-427-legacy-next-song-parity.mjs

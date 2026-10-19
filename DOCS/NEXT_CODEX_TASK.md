@@ -1,3 +1,15 @@
+## NEXT — finalize app435 #282 corrected exact code audit, NO MERGE before PASS (2026-10-20 KST)
+
+**Source of truth:** PR #282 `fix/app435-integrated-parity` to `preview` baseline `11f46242f3c08fc9076dd10abe90be0008aac098`, current app deployed app434. Previous Work independent audit `eeda037...` FAIL, and extra read-only check `4cd053...` FAIL. Current product fix before doc commit `dfc2edb3b8a851189df20c687aa60335de56e486`. Use latest actual PR SHA after doc updates.
+
+1. Check full GitHub run on **latest SHA**: TypeScript, Build, existing 127/191/410 liked/follow/428-434 publication, 450-454 regressions and Rules. If CI fails, halt and fix exact failing assertion/code; do not merge.
+2. Independent audit **in separate Work mode** of original-song Next Song `favorites/{id}` click lookup, stale identical-version detail-cache bypass, one-doc read per song/version, owner UID check, preserve true latest explicit blank and recover persisted legacy direct command. Check both row menu and details, Studio command window `pendingAppliedKeywords`, and no fabricated prompt/lyrics. Historical note with truly missing persisted command cannot be restored by guessing.
+3. Independently execute `recentSongCanonicalPreviewGuard453` and `pickRecentSongLiveTextPreview457`: stale server A old title versus current draft A new, canonical favorite/public/lock/media fields win, canonical B still recovered, no null generation batch/index/genre changes, newer server timestamp outranks draft. Test partial/null preview, same-UID offline→reopen, no premature ACK or repeated gap reads.
+4. Preserve app434 public/private, Recommended/Latest real-time, title, old app410/421 personal like/follow, Studio 30s save heart, Music Note 60s, Recent 150s; no D1/whole Feed query, no new RTDB listener or server write/scan. Measure costs where possible; 100k remains unmeasured.
+5. PR #282 stays draft until independent exact-SHA PASS. Then decide safety of merge + guarded Firebase PREVIEW Hosting release only; no TEST/PRODUCTION, shared D1/Firestore/R2 user data mutation, migration, cache reset or mass repair. User PC/mobile physical acceptance of historic command, Recent IDs/heart/media & Explore hearts/count is still required.
+
+---
+
 ## NEXT — PR #282 corrected app435 exact-SHA independent re-audit then PREVIEW only (2026-10-20 KST)
 
 - Read latest `preview` HEAD and `fix/app435-integrated-parity` PR #282 HEAD. Baseline product `preview` app434; former audited candidate `eeda03739b1bbe4888aa517c1747a4a7a24d172c` **Work FAIL and MUST NEVER MERGE**.

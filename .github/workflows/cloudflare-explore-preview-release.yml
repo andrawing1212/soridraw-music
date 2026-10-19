@@ -70,8 +70,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          verifier_commit="19b484e45f28254710b0e47a4cfa5286afb51e91"
-          verifier_blob="f14d55b91860c69d13ebbfd1d07d611990124bf8"
+          verifier_commit="0e8b1ebf3b1dc940a9faf01157a073fc2859a275"
+          verifier_blob="4a760c8b7d007ee5d9d55ebb1c4f1869485d2e67"
           git fetch --no-tags --depth=1 origin "$verifier_commit"
           test "$(git rev-parse "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs")" = "$verifier_blob"
           git show "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs" > scripts/verify-204-explore-next-song-parity.mjs

@@ -21,11 +21,17 @@ const project = {
   mainSunoIndex: 0,
   sunoLinks: [{ url: 'https://suno.com/song/exact-url', hugeHistoricalMetadata: 'X'.repeat(30000) }],
   thumbnailUrl: 'https://cdn.suno.ai/image/thumbnail.png',
+  audioUrl: 'https://audio.example/song-original.mp3',
+  sunoAudioUrl: 'https://audio.suno.ai/source-song',
+  streamAudioUrl: 'https://audio.example/stream-original',
 };
 const result = f(base, project);
 assert.equal(result.sunoShareUrl, project.sunoShareUrl);
 assert.equal(result.sunoCoverUrl, project.sunoCoverUrl);
 assert.equal(result.thumbnailUrl, project.thumbnailUrl);
+assert.equal(result.audioUrl, project.audioUrl, 'original playback URL must survive');
+assert.equal(result.sunoAudioUrl, project.sunoAudioUrl, 'original Suno playback URL must survive');
+assert.equal(result.streamAudioUrl, project.streamAudioUrl, 'original streaming URL must survive');
 assert.equal(result.sunoShareUrlUpdatedAt, 123456);
 assert.equal(result.sunoLinks, undefined, 'never send oversized whole media object');
 assert.ok(JSON.stringify(result).length <= 24000);

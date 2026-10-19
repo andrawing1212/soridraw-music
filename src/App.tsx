@@ -15,7 +15,7 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal } from './lib/recentSongsSyncGate';
-import { protectRecentCanonicalSnapshotFromPreview453 } from './lib/recentSongCanonicalPreviewGuard453';
+import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 import {
@@ -12895,11 +12895,16 @@ const unlockAllFavorites = async () => {
         };
       }
 
+      const safeIncoming = incoming.__recentSongEditPreview === true
+        ? pickRecentSongLiveTextPreview457(incoming)
+        : incoming;
       const merged = normalizeFavoriteTitleFields({
         ...currentSong,
-        ...incoming,
-        lyrics: incoming.lyrics && typeof incoming.lyrics === 'object'
-          ? { ...(currentSong.lyrics || {}), ...(incoming.lyrics || {}) }
+        // A live text draft cannot edit saved-heart, public/lock state or
+        // media identity. Those only change through their canonical domains.
+        ...safeIncoming,
+        lyrics: safeIncoming.lyrics && typeof safeIncoming.lyrics === 'object'
+          ? { ...(currentSong.lyrics || {}), ...(safeIncoming.lyrics || {}) }
           : currentSong.lyrics,
         appliedKeywords: mergedAppliedKeywords,
       } as SongResult) as SongResult;

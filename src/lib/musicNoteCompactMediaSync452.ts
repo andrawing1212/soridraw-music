@@ -4,6 +4,10 @@
 // 24k-character RTDB itemJson budget.
 export const MUSIC_NOTE_MEDIA_SYNC_FALLBACK_KEYS_452 = [
   'sunoShareUrl', 'sunoCoverUrl', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+  // Keep actual playback URLs before optional nested Suno links; oversized
+  // arrays must never consume the 24k budget ahead of essential audio fields.
+  'audioUrl', 'audio_url', 'sunoAudioUrl', 'streamAudioUrl', 'stream_audio_url',
+  'sourceAudioUrl', 'sourceStreamAudioUrl', 'sourceStream_audio_url',
   'sunoUrl', 'sunoSongUrl', 'sunoImageUrl', 'sunoArtworkUrl',
   'mainSunoIndex', 'sunoLinkCount', 'sunoLinks', 'sunoShareLinks',
   'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText',

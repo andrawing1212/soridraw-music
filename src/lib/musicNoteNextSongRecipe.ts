@@ -73,9 +73,12 @@ const hasProvenManualCommandClear459 = (...sources: Array<PlainRecord | null>): 
   ));
 
 const firstStoredCommand = (...sources: Array<PlainRecord | null>): string | undefined => {
-  if (hasProvenManualCommandClear459(...sources)) return '';
   for (const source of sources) {
     if (!source) continue;
+    // A clear is authoritative only within its own precedence layer.
+    // A newer nonempty command in a higher layer must not be erased by an
+    // older requestPayload clear marker.
+    if (hasProvenManualCommandClear459(source)) return '';
     for (const key of COMMAND_KEYS_459) {
       if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
       const value = typeof source[key] === 'string' ? source[key].trim() : '';
@@ -148,8 +151,9 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
     parseRecord(stored.appliedKeywords), storedRequestApplied, storedRequest, stored,
   );
   const merged: PlainRecord = { ...persisted, ...local };
-  if (localCleared || persistedCleared) merged.userInput = '';
+  if (localCleared) merged.userInput = '';
   else if (localCommand) merged.userInput = localCommand;
+  else if (persistedCleared) merged.userInput = '';
   else if (persistedCommand) merged.userInput = persistedCommand;
   return merged;
 };

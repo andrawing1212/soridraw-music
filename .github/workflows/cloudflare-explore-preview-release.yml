@@ -76,6 +76,14 @@ jobs:
           test "$(git rev-parse "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs")" = "$verifier_blob"
           git show "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs" > scripts/verify-204-explore-next-song-parity.mjs
           test "$(git hash-object scripts/verify-204-explore-next-song-parity.mjs)" = "$verifier_blob"
+          # app427's old verifier rejected its own *negative* lyrics leakage
+          # guard inside patch100. Pin the strict corrected runtime-only test.
+          verifier427_commit="88e2b43a477b4f8b4d056ea10c3a5c8cfc5447af"
+          verifier427_blob="1ef8ead0419426860e7fc13b34be688744ed992e"
+          git fetch --no-tags --depth=1 origin "$verifier427_commit"
+          test "$(git rev-parse "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs")" = "$verifier427_blob"
+          git show "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs" > scripts/verify-427-legacy-next-song-parity.mjs
+          test "$(git hash-object scripts/verify-427-legacy-next-song-parity.mjs)" = "$verifier427_blob"
           expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           test "$expected" = "$actual"

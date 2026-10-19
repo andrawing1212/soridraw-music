@@ -99,6 +99,10 @@ on:
       - 'scripts/verify-435-preview-worker-release-artifact.mjs'
       - 'scripts/verify-451-recent-retained-signal-recovery.mjs'
       - 'scripts/verify-452-music-note-media-fallback.mjs'
+      - 'scripts/verify-453-recent-stale-canonical-preview-guard.mjs'
+      - 'scripts/verify-454-legacy-command-exact-hydration.mjs'
+      - 'src/lib/recentSongCanonicalPreviewGuard453.ts'
+      - 'src/pages/FavoritesPage.tsx'
       - 'scripts/verify-450-publication-like-count-isolation.mjs'
       - 'src/services/explorePublicationLivePolicy433.ts'
       - 'src/services/exploreSessionCache.ts'
@@ -317,6 +321,8 @@ jobs:
           node scripts/verify-434-publication-signal-version-order.mjs
           node scripts/verify-451-recent-retained-signal-recovery.mjs
           node scripts/verify-452-music-note-media-fallback.mjs
+          node scripts/verify-453-recent-stale-canonical-preview-guard.mjs
+          node scripts/verify-454-legacy-command-exact-hydration.mjs
           node scripts/verify-450-publication-like-count-isolation.mjs
           node scripts/verify-435-preview-worker-release-artifact.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test

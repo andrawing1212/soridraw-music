@@ -6263,7 +6263,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const hydrateCatalogFavorite = async (song: any): Promise<any> => {
+  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {
     // app267 — shared-note rows are also compact Catalog summaries. Their full
     // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
     // that one document on explicit detail open. Page entry remains Catalog-only.
@@ -6277,7 +6277,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         !String(song?.prompt || '').trim()
         || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
       );
-    if ((!song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
+    if ((!requireStoredRecipe && !song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
@@ -6292,6 +6292,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         },
       });
       if (!detail) return song;
+      if (requireStoredRecipe) {
+        // Old rows can be shown as full local cards while their persisted
+        // requestPayload command exists only in the original one-song document.
+        // Explicit Next Song is the only path that requests this exact detail.
+        // Keep newer per-device visible data and explicitly stored commands;
+        // fill missing historical recipe fields from the original, never from
+        // generated prompt/lyrics.
+        const sourceRecipe = resolveMusicNoteNextSongRecipe(detail);
+        const localRecipe = resolveMusicNoteNextSongRecipe(song);
+        return {
+          ...song,
+          appliedKeywords: { ...sourceRecipe, ...localRecipe },
+          requestPayload: song?.requestPayload ?? detail.requestPayload,
+          id: sourceId,
+          firestoreId: sourceId,
+          __catalogSummary: false,
+        };
+      }
       return {
         ...song,
         ...detail,
@@ -6463,7 +6481,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'apply') {
-      void hydrateCatalogFavorite(song).then((hydrated) => applyKeywordsToNext(hydrated));
+      void hydrateCatalogFavorite(song, true).then((hydrated) => applyKeywordsToNext(hydrated));
       return;
     }
 
@@ -9112,7 +9130,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       <div className="-mt-1 flex shrink-0 items-center gap-2">
                       {!isEditing && (
                         <button
-                          onClick={() => applyKeywordsToNext(selectedSong)}
+                          onClick={() => { void hydrateCatalogFavorite(selectedSong, true).then((hydrated) => applyKeywordsToNext(hydrated)); }}
                           onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}

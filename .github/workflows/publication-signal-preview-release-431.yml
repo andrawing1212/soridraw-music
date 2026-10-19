@@ -104,6 +104,66 @@ jobs:
           node scripts/verify-433-publication-audit-fixes.mjs
           node scripts/verify-434-publication-signal-version-order.mjs
 
+      - name: Build isolated exact Candidate Function package
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage_dir=".preview-publication431-functions"
+          rm -rf "$stage_dir"
+          mkdir -p "$stage_dir/lib"
+          # The complete default Functions bundle includes unrelated Stage420
+          # exports with a secret absent from this project. Never scan them.
+          for module in explorePublicationReleaseEndpoint431 explorePublicationRelease431; do
+            test -s "functions/lib/$module.js"
+            cp "functions/lib/$module.js" "$stage_dir/lib/$module.js"
+            cmp "functions/lib/$module.js" "$stage_dir/lib/$module.js"
+          done
+          node - "$stage_dir/package.json" <<'NODE'
+          const fs=require('node:fs');
+          const lock=JSON.parse(fs.readFileSync('functions/package-lock.json','utf8'));
+          const exact=(name)=>{
+            const v=lock.packages?.['node_modules/'+name]?.version;
+            if(!/^\d+\.\d+\.\d+$/.test(String(v||'')))
+              throw Error('431_PINNED_DEPENDENCY_MISSING '+name);
+            return v;
+          };
+          const pkg={
+            name:'soridraw-preview-publication431',private:true,
+            main:'lib/index.js',engines:{node:'22'},
+            dependencies:{
+              'firebase-admin':exact('firebase-admin'),
+              'firebase-functions':exact('firebase-functions')
+            }
+          };
+          fs.writeFileSync(process.argv[2],JSON.stringify(pkg,null,2)+'\n');
+          NODE
+          cat > "$stage_dir/lib/index.js" <<'NODE'
+          'use strict';
+          const admin=require('firebase-admin');
+          admin.initializeApp({
+            databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com'
+          });
+          const entry=require('./explorePublicationReleaseEndpoint431');
+          exports.publicationRelease431Candidate=entry.publicationRelease431Candidate;
+          if(Object.keys(exports).join(',')!=='publicationRelease431Candidate')
+            throw Error('431_EXACT_SINGLE_EXPORT_DRIFT');
+          NODE
+          cat > preview.publication431.firebase.json <<'JSON'
+          {"functions":{"source":".preview-publication431-functions"}}
+          JSON
+          if grep -Fl 'SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET' "$stage_dir"/lib/*.js; then
+            echo '431_UNRELATED_STAGE420_SECRET_DETECTED'; exit 43
+          fi
+          npm install --prefix "$stage_dir" --omit=dev --no-audit --no-fund --ignore-scripts
+          node - <<'NODE'
+          const exports431=require('./.preview-publication431-functions/lib/index.js');
+          if(Object.keys(exports431).join(',')!=='publicationRelease431Candidate'
+            ||typeof exports431.publicationRelease431Candidate!=='function')
+            throw Error('431_EXACT_SINGLE_EXPORT_INVALID');
+          console.log('431_EXACT_AUDITED_FUNCTION_ISOLATION=PASS');
+          NODE
+          echo '431_UNRELATED_STAGE420_SECRETS_EXCLUDED=PASS'
+
       - name: Authenticate Firebase deploy principal
         uses: google-github-actions/auth@v2
         with:
@@ -131,7 +191,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@15.30.1 deploy             --project "$FIREBASE_PROJECT"             --config firebase.json             --only "functions:$FUNCTION_NAME"             --non-interactive
+          npx --yes firebase-tools@15.30.1 deploy             --project "$FIREBASE_PROJECT"             --config preview.publication431.firebase.json             --only "functions:$FUNCTION_NAME"             --non-interactive
           echo '431_EXACT_ONE_PREVIEW_FUNCTION_DEPLOY=PASS'
 
       - name: Verify exact one-function delta and protected refs

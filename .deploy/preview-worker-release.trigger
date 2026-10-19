@@ -1,8 +1,6 @@
-requested_at=2026-10-19T15:16:00+09:00
 requested_by=user_explicit_preview_deploy_after_function_cloud_run_healthy
 product_code_target=8eb3264f1c7abaf36a59026248a61c6700e3b9a0
 release_source_target=app434_audited_canonical_worker_patch100_101
-release_purpose=preview_app434_worker_retry_after_root_typescript_ci_install
 app_version=434
 candidate_function_name=publicationRelease431Candidate
 candidate_function_region=asia-northeast3
@@ -30,7 +28,11 @@ test_production_unchanged_required=true
 quality_run=39168027033
 approval=user_explicit_preview_deploy_2026_10_19
 
-retry_attempt=2
-retry_from_failed_worker_run=39276384675
-retry_gate_root_typescript_present=true
-retry_install_fix_pr=261
+requested_at=2026-10-19T15:50:00+09:00
+release_purpose=preview_app434_worker_retry_after_legacy_verifier_fix
+retry_attempt=3
+retry_from_failed_worker_run=39277598795
+retry_legacy_test_fix_pr=263
+retry_assert_427_original_command_parity=true
+verify_original_app434_worker_sha=true
+worker_source_only_no_data_migration=true

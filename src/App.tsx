@@ -15,7 +15,7 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal } from './lib/recentSongsSyncGate';
-import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457 } from './lib/recentSongCanonicalPreviewGuard453';
+import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 import {
@@ -12851,8 +12851,11 @@ const unlockAllFavorites = async () => {
       const incomingApplied = incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
         ? incoming.appliedKeywords as Record<string, any>
         : null;
-      let mergedAppliedKeywords = incomingApplied
-        ? { ...(currentSong.appliedKeywords || {}), ...incomingApplied }
+      const safeIncomingApplied = incoming.__recentSongEditPreview === true
+        ? pickRecentSongLiveAppliedKeywords457(incomingApplied)
+        : incomingApplied;
+      let mergedAppliedKeywords = safeIncomingApplied
+        ? { ...(currentSong.appliedKeywords || {}), ...safeIncomingApplied }
         : currentSong.appliedKeywords;
 
       if (

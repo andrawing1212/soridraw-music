@@ -128,7 +128,8 @@ assert.ok(!resolve({prompt:'Generated prompt only'}).userInput,'no hallucinated 
 
 const favorite=fs.readFileSync('src/pages/FavoritesPage.tsx','utf8');
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
-assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,1000}mergeMusicNoteNextSongClickRecipe455\(song, detail\)/);
+assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,2300}mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/,
+ 'click-only exact original must pass a version-verified local pending draft');
 assert.ok(favorite.includes("getDocFromServer(doc(db, 'favorites', sourceId))"),
  'explicit Next Song must read its one exact original, not stale same-version cache');
 assert.ok(favorite.includes('if (ownerUid && ownerUid !== user.uid) return null'),

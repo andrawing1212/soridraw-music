@@ -112,3 +112,20 @@ export const pickRecentSongLiveTextPreview457 = (
   result.__recentSongEditPreview = true;
   return result;
 };
+
+
+// Likewise an RTDB text draft cannot replace canonical generation identities
+// or unrelated generation options with null compact-preview placeholders.
+export const pickRecentSongLiveAppliedKeywords457 = (
+  incoming: Record<string, any> | null,
+): Record<string, any> | null => {
+  if (!incoming) return null;
+  const result: Record<string, any> = {};
+  for (const key of ['secondaryLanguage','titleLanguages','titlesByLanguage','editedInStudio','editedInStudioAt']) {
+    if (Object.prototype.hasOwnProperty.call(incoming, key)
+      && incoming[key] !== null && incoming[key] !== undefined) {
+      result[key] = incoming[key];
+    }
+  }
+  return result;
+};

@@ -1,3 +1,4 @@
+import { mergeExplorePublicationCardPreservingLikeCount435 } from './explorePublicationLivePolicy433';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import {
   readSoridrawPersistentCache,
@@ -316,7 +317,7 @@ export const upsertExplorePublicProfileFirstViewTrack = (
   const existing = cached.tracks.find((track) => publicProfileTrackId075(track) === trackId);
   const tracks = sortPublicProfileTracks075([
     ...cached.tracks.filter((track) => publicProfileTrackId075(track) !== trackId),
-    { ...(existing || {}), ...row },
+    existing ? mergeExplorePublicationCardPreservingLikeCount435(existing, row) : { ...row },
   ]).slice(0, PROFILE_FIRST_VIEW_LIMIT);
   writeCache(cached.profile.uid || profileRef, {
     ...cached,

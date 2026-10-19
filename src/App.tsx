@@ -14,7 +14,7 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal } from './lib/recentSongsSyncGate';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 import {
@@ -12916,6 +12916,7 @@ const unlockAllFavorites = async () => {
         uid?: string;
         version?: number;
         resumeAfterRead?: boolean;
+        initialRetained?: boolean;
         originDeviceId?: string;
         operation?: string;
         itemJson?: string;
@@ -12936,9 +12937,17 @@ const unlockAllFavorites = async () => {
         return;
       }
 
-      if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
-        // A canonical recent-song mutation carried the changed item itself, so
-        // the receiving device can acknowledge it without rereading the aggregate
+      if (canAcknowledgeRecentSongsInlineSignal({
+        itemApplied: itemResult.applied,
+        itemPartial: itemResult.partial,
+        signalVersion: signaledVersion,
+        initialRetained: detail.initialRetained === true,
+      })) {
+        // Only a live, non-retained canonical change can be acknowledged by
+        // the exact changed-item update. The first retained change may hide
+        // older songs missed while this device was closed; in that case read the
+        // canonical aggregate once, without clearing local unconfirmed edits.
+        // The receiving device can acknowledge a live edit without rereading the aggregate
         // user_recent_songs document.
         writeRecentSongsLocalVersion(user.uid, signaledVersion);
         acknowledgeRecentSongsSignalVersion(user.uid, signaledVersion);

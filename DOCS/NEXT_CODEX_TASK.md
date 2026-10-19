@@ -1,3 +1,15 @@
+## NEXT — PR #282 corrected app435 exact-SHA independent re-audit then PREVIEW only (2026-10-20 KST)
+
+- Read latest `preview` HEAD and `fix/app435-integrated-parity` PR #282 HEAD. Baseline product `preview` app434; former audited candidate `eeda03739b1bbe4888aa517c1747a4a7a24d172c` **Work FAIL and MUST NEVER MERGE**.
+- **First do an independent read-only audit of corrected exact PR SHA:** source `src/App.tsx` + `src/lib/recentSongCanonicalPreviewGuard453.ts` and `src/services/userDomainSyncService.ts` stale canonical vs RTDB draft, lost-item recovery, no early ACK, no Firestore read on edit-preview, 150-second trailing batch and offline/same-UID cases. Pay attention to onValue/first retained signal order, pending local vs remote, and unsettled draft across route change.
+- Verify Music Note `src/lib/musicNoteCompactMediaSync452.ts` retains unchanged complete audio/media URLs within 24k budget, does not invent or truncate large arrays, does not change canonical media. Test 452.
+- Verify historical Music Note direct command: `src/pages/FavoritesPage.tsx` explicit own exact-document hydration (both list/detail), recipe precedence from `src/lib/musicNoteNextSongRecipe.ts` and `requestPayload`, no constructed prompt/lyrics, no page-entry data reads; Test 454 and frozen app427. Check older cache with `__catalogSummary=false` but omitted requestPayload. If original source lacks command, report impossibility instead of fabrication.
+- Then check changed-item Explore public metadata/count isolation 450, other PC/mobile save-heart 349/follow, title, publication, cache and responsive UI, cost no repeat scans. TypeScript/Build/QA exact SHA PASS. **If anything fails, DO NOT merge.**
+- If Work PASS, source exact SHA→preview merge and PREVIEW Hosting only through existing release trigger and exact build verification; re-evaluate before worker/functions involvement. **Actual PC/mobile user QA** must verify Recent IDs/count, own Music Note list/hearts, Suno link/cover/audio, historical direct command in Studio and Explore heart/count/like/unlike without navigation. Until real user QA, mark PENDING and TEST/PRODUCTION BLOCK.
+- Never reset/wipe user caches, use destructive migration or blindly pick one device as canonical. No data copy/overwrite and no Stage416 5-minute activation.
+
+---
+
 ## NEXT — app434 PREVIEW real-device P0 FAIL: restore parity without losing data (2026-10-20 KST)
 
 **Current user direction:** improvements in publication #226 tasks 1/2/3/4/7 seen; #8 likely better. Protect them. **#237 & #277 user acceptance FAIL** must be solved before TEST promotion or release system refactor. Release app434 exact audited product `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`, previous preview HEAD `0b22b95e8903461008538c8a2285d35385084bdb`. No arbitrary PC/mobile truth.

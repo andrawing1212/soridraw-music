@@ -290,7 +290,11 @@ export const getOrLoadMusicNoteOriginalRecipe456 = (
   const key = `${cacheKey(safeUid, safeSourceId)}:${version}:next-song-original-456`;
   const existing = originalRecipeLoads456.get(key);
   if (existing) return existing;
-  const task = Promise.resolve().then(args.loader).catch((error) => {
+  const task = Promise.resolve().then(args.loader).then((source) => {
+    // No source, offline or owner mismatch does not prove recipe absence.
+    if (!source) originalRecipeLoads456.delete(key);
+    return source;
+  }).catch((error) => {
     // Failed read is never cached as successful verification: the next
     // deliberate click may retry after network/Auth recovery.
     originalRecipeLoads456.delete(key);

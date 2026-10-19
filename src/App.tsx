@@ -12931,9 +12931,12 @@ const unlockAllFavorites = async () => {
       const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
 
       if (isEditPreview) {
-        // Preview is RTDB-only by design. Whether the item was applied, missing
-        // from this device, or fenced by a newer local draft, it must never fall
-        // through to the canonical Firestore aggregate read path.
+        // A live preview remains RTDB-only. An initial retained preview, however,
+        // may conceal older canonical changes on another device because RTDB
+        // retains only its latest row. The 451 gate reads a canonical snapshot
+        // only when that initial changed signal has not yet been ACKed. Existing
+        // local drafts/outbox still outrank older server data.
+        if (detail.initialRetained === true) runRecentSongsServerSyncIfNeeded();
         return;
       }
 

@@ -100,7 +100,7 @@ import {
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455 } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
-import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
 import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
@@ -6282,15 +6282,31 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (!sourceId) return song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
-      const detail = await getOrLoadMusicNoteDetail({
-        uid: user.uid,
-        sourceId,
-        sourceVersion,
-        loader: async () => {
-          const snapshot = await getDoc(doc(db, 'favorites', sourceId));
-          return snapshot.exists() ? (snapshot.data() || {}) : null;
-        },
-      });
+      const detail = await (requireStoredRecipe
+        ? getOrLoadMusicNoteOriginalRecipe456({
+            uid: user.uid,
+            sourceId,
+            sourceVersion,
+            // Only an explicit Next Song click verifies this exact owned
+            // original document. Old same-version detail cache is insufficient.
+            loader: async () => {
+              const snapshot = await getDocFromServer(doc(db, 'favorites', sourceId));
+              if (!snapshot.exists()) return null;
+              const original = snapshot.data() || {};
+              const ownerUid = String((original as any).uid || (original as any).ownerUid || '').trim();
+              if (ownerUid && ownerUid !== user.uid) return null;
+              return original;
+            },
+          })
+        : getOrLoadMusicNoteDetail({
+            uid: user.uid,
+            sourceId,
+            sourceVersion,
+            loader: async () => {
+              const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+              return snapshot.exists() ? (snapshot.data() || {}) : null;
+            },
+          }));
       if (!detail) return song;
       if (requireStoredRecipe) {
         // Old rows can be shown as full local cards while their persisted

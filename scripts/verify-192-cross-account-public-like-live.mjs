@@ -144,12 +144,21 @@ if (appVersion >= 335) {
 }
 assert.doesNotMatch(page192Start >= 0 ? page.slice(page192Start, page192End) : '', /setInterval\(/);
 
-// PREVIEW app release can deploy the additive shared RTDB rule and verifies the
-// exact live rule document; TEST/PRODUCTION Hosting remain protected separately.
+// PREVIEW app release must NEVER replace the live Stage416 server-only
+// Rules with the local app434 file (which intentionally lacks those roots).
+// Only an exact validated additive publication candidate may be PUT.
+// TEST/PRODUCTION Hosting stay protected separately.
 assert.match(appRelease, /deploy_shared_rtdb_rules=true/);
 assert.match(appRelease, /RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS/);
-assert.match(appRelease, /-X PUT/);
-assert.match(appRelease, /--data-binary @database\.rules\.json/);
+assert.match(appRelease, /verify-418-rtdb-rules-delta\.mjs/);
+assert.match(appRelease, /verify-434-publication-rtdb-additive\.mjs --self-test/);
+assert.match(appRelease, /rtdb-rules-pre-put\.json/);
+assert.match(appRelease, /rtdb-rules-434-preput-mode\.txt/);
+assert.match(appRelease, /cmp "\$RUNNER_TEMP\/rtdb-rules-434-mode\.txt"/);
+assert.match(appRelease, /ADD_ONLY_TWO_PUBLICATION_NODES/);
+assert.match(appRelease, /ALREADY_EXACT/);
+assert.match(appRelease, /--data-binary @"\$RUNNER_TEMP\/rtdb-rules-434-candidate\.json"/);
+assert.doesNotMatch(appRelease, /--data-binary @database\.rules\.json/);
 assert.match(appRelease, /SHARED_RTDB_RULES_EXACT_MATCH=PASS/);
 assert.doesNotMatch(appRelease, /--only database/);
 

@@ -1,3 +1,14 @@
+## CURRENT — app434 Worker Run 39285238235 FAIL: fixed verifier shadowed by audited checkout (2026-10-19 KST)
+
+- PR #264 merge `186e21ae311ca514d433240e500f0051448ed2c8` triggered PREVIEW Worker Run [39285238235](https://github.com/andrawing1212/soridraw-music/actions/runs/39285238235). All early Worker checks PASS, but `Verify existing like and action regressions` failed on old app204 regex at `scripts/verify-204-explore-next-song-parity.mjs:36`; **Worker deployment, preflight and version snapshot never ran**.
+- **Root cause:** Worker Workflow correctly checks out exact audited product `8eb3264f1c7abaf36a59026248a61c6700e3b9a0` and therefore restores the obsolete bundled app204 verifier even after PR #263 fixed the same test on `preview`. Do not change the pinned audited product code to bypass this.
+- **Isolated release fix prepared:** after exact checkout, fetch only known PR #263 merge `19b484e45f28254710b0e47a4cfa5286afb51e91` and replace only the app204 test file, guarded by immutable verifier Git blob `f14d55b91860c69d13ebbfd1d07d611990124bf8`. Run app204 and app427 strict checks and confirm immutable Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`. No Worker/client/application file altered; all original regressions preserved.
+- Independent CI PASS required before merging workflow-only fix, then separate one-time Worker trigger retry. Never use an old failed trigger to silently redeploy; Cloudflare/Hosting/Rules are still not deployed for app434.
+- **Parallel shared Rules correction PR #265**: quality Run [39285460436](https://github.com/andrawing1212/soridraw-music/actions/runs/39285460436) failed due old `verify-192-cross-account-public-like-live.mjs` demanding unsafe `--data-binary @database.rules.json`; this was updated on PR branch to require additive Stage416-safe release and must gain new CI PASS before merge. No shared Rules write occurred.
+- PREVIEW Candidate Function remains created / Cloud Run green, prior cleanup-policy exit 1; no Function recreation. TEST/PRODUCTION and shared user data unchanged.
+
+---
+
 ## CURRENT — app434 Worker release blocked by obsolete app204 next-song marker gate (2026-10-19 KST)
 
 - **Worker release attempt #2** PR #262 merge `cf4fb44649a94fa03c45fe8a85229b3df33c3069`, Run [39277598795](https://github.com/andrawing1212/soridraw-music/actions/runs/39277598795) **FAIL BEFORE DEPLOY** in `Verify existing like and action regressions`. Root TypeScript installation worked; no Worker deployment or D1 write occurred.

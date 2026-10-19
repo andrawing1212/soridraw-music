@@ -63,6 +63,27 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
+      # Product/runtime must remain the immutable audited target SHA, but the
+      # old target predates the app427 strict verifier correction (PR #263).
+      # Pin ONLY the independently checked test blob, never Worker/product code.
+      - name: Pin audited app427-compatible verifier on frozen app434 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          verifier_commit="19b484e45f28254710b0e47a4cfa5286afb51e91"
+          verifier_blob="f14d55b91860c69d13ebbfd1d07d611990124bf8"
+          git fetch --no-tags --depth=1 origin "$verifier_commit"
+          test "$(git rev-parse "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs")" = "$verifier_blob"
+          git show "$verifier_commit:scripts/verify-204-explore-next-song-parity.mjs" > scripts/verify-204-explore-next-song-parity.mjs
+          test "$(git hash-object scripts/verify-204-explore-next-song-parity.mjs)" = "$verifier_blob"
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          test "$actual" = '916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88'
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-427-legacy-next-song-parity.mjs
+          echo 'APP434_PINNED_VERIFIER_ONLY_WORKER_UNCHANGED=PASS'
+
       - name: Verify app245 canonical lock and syntax
         working-directory: cloudflare/explore-worker
         shell: bash

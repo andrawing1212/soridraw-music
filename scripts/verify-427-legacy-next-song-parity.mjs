@@ -8,7 +8,9 @@ const js = ts.transpileModule(
   helperSource + '\n(globalThis).__resolve = resolveMusicNoteNextSongRecipe;',
   { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
 ).outputText;
-const context = { globalThis: {} };
+// TypeScript emits CommonJS exports when the helper contains exported symbols.
+// Supply only the test VM's module object; this does not alter app behavior.
+const context = { globalThis: {}, exports: {} };
 vm.runInNewContext(js, context);
 const resolve = context.globalThis.__resolve;
 

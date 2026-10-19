@@ -47,6 +47,10 @@ const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 // version. Persist both signal and acknowledgement across Studio navigation.
 const RECENT_PENDING_SIGNAL_BASE = 'soridraw_recent_songs_pending_signal_v3';
 const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_signal_v3';
+// A retained live draft can mask earlier canonical row changes on a closed device.
+// This is a one-time *gap verification* token, never a Firestore document version.
+const RECENT_RETAINED_DRAFT_GAP_BASE_460 = 'soridraw_recent_retained_draft_gap_460';
+const RECENT_RETAINED_DRAFT_VERIFIED_BASE_460 = 'soridraw_recent_retained_draft_verified_460';
 export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
@@ -116,6 +120,22 @@ export const readPendingMusicNoteSyncSignal = (uid: string): UserDomainSyncSigna
   } catch {
     return null;
   }
+};
+
+export const readRecentSongsRetainedDraftGap460 = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_RETAINED_DRAFT_GAP_BASE_460, uid));
+
+export const readRecentSongsVerifiedRetainedDraftGap460 = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_RETAINED_DRAFT_VERIFIED_BASE_460, uid));
+
+export const rememberRecentSongsRetainedDraftGap460 = (uid: string, signalVersion: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_RETAINED_DRAFT_GAP_BASE_460, uid), signalVersion);
+};
+
+export const verifyRecentSongsRetainedDraftGap460 = (uid: string, verifiedVersion: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_RETAINED_DRAFT_VERIFIED_BASE_460, uid), verifiedVersion);
 };
 
 export const readRecentSongsPendingSignalVersion = (uid: string): number =>
@@ -862,9 +882,10 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   // may have overwritten older canonical RTDB notifications, so preserve an
   // unresolved catch-up fence only for that initial replay.
   if (signal.operation === 'edit-preview') {
-    // A draft cannot certify the Firestore document version or trigger an
-    // aggregate read: the canonical data can legitimately lag up to 150s.
-    // It is still delivered as an immediate exact changed-item UI preview.
+    // A live edit is always RTDB-only. Only the *first retained* preview
+    // after attaching an origin may hide older canonical changes to other songs.
+    // Save a distinct bounded gap token, not a canonical version or ACK.
+    if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);
   } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
     // A live ACK of our own confirmed write is safe. A retained old own-device
     // signal is not proof of complete membership after offline changes.

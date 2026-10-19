@@ -55,7 +55,11 @@ assert.doesNotMatch(bundle, /note\?\.lyrics|note\?\.lyricsText/, 'next-song shar
 assert.match(patch, /SORIDRAW_PUBLIC_NEXT_SONG_COMMAND_PARITY_204_20260926/, 'replay patch must preserve the same Worker contract');
 assert.match(legacyPatch427, /SORIDRAW_MUSIC_NOTE_LEGACY_NEXT_SONG_PARITY_427_20261018/, 'latest replay patch must preserve requestPayload legacy parity');
 assert.match(legacyPatch427, /requestApplied/, 'latest public bundle must read requestPayload.appliedKeywords');
-assert.doesNotMatch(legacyPatch427, /note\?\.lyrics|note\?\.lyricsText/, 'latest public bundle must not copy finished lyrics');
+// The actual canonical runtime was already checked above for finished
+// lyrics. Patch100 intentionally contains the phrase only in its NEGATIVE
+// rejection guard; require that protection instead of falsely flagging it.
+assert.ok(legacyPatch427.includes("if (updated.includes('note?.lyrics') || updated.includes('note?.lyricsText'))"),
+  'legacy patch must actively reject copying finished lyrics');
 
 const ownSource = functionRange(action, 'getExploreOwnMusicNoteApplyKeywords');
 assert.match(ownSource, /getDoc\(doc\(db, 'favorites', normalizedSourceId\)\)/, 'own legacy recovery must read only one source Music Note document');

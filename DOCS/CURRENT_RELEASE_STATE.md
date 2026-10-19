@@ -1,3 +1,11 @@
+## CURRENT — app434 Worker release blocked by obsolete app204 next-song marker gate (2026-10-19 KST)
+
+- **Worker release attempt #2** PR #262 merge `cf4fb44649a94fa03c45fe8a85229b3df33c3069`, Run [39277598795](https://github.com/andrawing1212/soridraw-music/actions/runs/39277598795) **FAIL BEFORE DEPLOY** in `Verify existing like and action regressions`. Root TypeScript installation worked; no Worker deployment or D1 write occurred.
+- **Exact cause:** `scripts/verify-204-explore-next-song-parity.mjs` asserts obsolete inline `SORIDRAW_PUBLIC_NEXT_SONG_COMMAND_PARITY_204_20260926` marker and direct `applied.userInput ?? note?.userInput` in canonical Worker. Independently audited patch100 replaced that function with stronger app427 requestPayload/canonical/legacy merge and original-command precedence, so the old marker/direct expression are absent by design. The new canonical Worker contains `SORIDRAW_MUSIC_NOTE_LEGACY_NEXT_SONG_PARITY_427_20261018` and the expected `requestApplied`, `mergeMissing`, `firstCommand`, and persisted-only `shareText015(applied.userInput,4000)` runtime guards.
+- **Release gate correction only:** retain all app204 existing field/fallback/no-finished-lyrics checks, replace only obsolete textual marker/direct fallback assertions with app427 stronger runtime checks, and add `verify-427-legacy-next-song-parity.mjs` to both Worker release regression suites. No app/Worker/Functions/RTDB Rules/D1/user data changes; no trigger touched in this PR.
+- **Gates:** CI PASS → distinct release trigger retry → Worker preflight and smoke PASS → only then RTDB Rules/Hosting. If any further regression fails, STOP; no silent test bypass.
+
+---
 ## CURRENT — app434 Worker release blocked by missing root CI TypeScript dependency (2026-10-19 KST)
 
 - **PREVIEW-only Worker request:** PR #260 merge `3f7de76c5df3a31e2eb87fbd6873a9aff239ff57` triggered Run [39276384675](https://github.com/andrawing1212/soridraw-music/actions/runs/39276384675), overall **FAIL BEFORE WORKER DEPLOY**.

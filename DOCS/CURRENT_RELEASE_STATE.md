@@ -1,3 +1,13 @@
+## CURRENT — app434 Worker Run 39288697951 strict 427 test false-positive (2026-10-19 KST)
+
+- PREVIEW Worker PR #267 merged at `6d746299414c5303912530e3ce836af958612486`. Run [39288697951](https://github.com/andrawing1212/soridraw-music/actions/runs/39288697951) **FAIL BEFORE PREVIEW CLOUDFLARE DEPLOY** at pinned-verifier precheck. Release SHA, Worker source SHA256, root dependencies and corrected app204 verification passed.
+- **Precise failure:** old `verify-427-legacy-next-song-parity.mjs` asserts no `note?.lyrics` string anywhere in patch100 source; patch100 necessarily contains that string only inside its explicit NEGATIVE runtime safety guard, so regex wrongly flags the protective check as possible generated-lyrics leakage. The actual audited canonical `buildMusicNoteShareBundle015` runtime has no such field, confirmed by source-bound function extraction.
+- **Fix:** tighten `verify-427-legacy-next-song-parity.mjs` to inspect actual canonical runtime function and assert no finished lyrics, and **also** require patch100's explicit reject-check to remain. Worker release workflow pins both verifier204 and verifier427 by immutable Git blob SHAs and executes them on exact audited product `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`, while rechecking canonical Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`. No Worker/product modifications.
+- **Release guard:** CI PASS + independent source audit required before separate Worker trigger; Worker D1 preflight, smoke, rollback, TEST/PRODUCTION snapshot cannot be bypassed. Worker/Rules/Hosting not yet deployed.
+- **Parallel Rules:** PR #265 read-only live Rules audit Run 39287822644 SUCCESS (`434_SHARED_RTDB_RULES_ONLY_TWO_ADDITIVE_NODES=ADD_ONLY_TWO_PUBLICATION_NODES`, `434_STAGE416_PRIVATE_RULES_PRESERVED_EXACT=STAGE416_DORMANT`), but PR remains unmerged and no shared RTDB writes have run.
+
+---
+
 ## CURRENT — app434 Worker Run 39285238235 FAIL: fixed verifier shadowed by audited checkout (2026-10-19 KST)
 
 - PR #264 merge `186e21ae311ca514d433240e500f0051448ed2c8` triggered PREVIEW Worker Run [39285238235](https://github.com/andrawing1212/soridraw-music/actions/runs/39285238235). All early Worker checks PASS, but `Verify existing like and action regressions` failed on old app204 regex at `scripts/verify-204-explore-next-song-parity.mjs:36`; **Worker deployment, preflight and version snapshot never ran**.

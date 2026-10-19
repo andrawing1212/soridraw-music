@@ -1,3 +1,4 @@
+import { mergeExplorePublicationCardPreservingLikeCount435 } from './explorePublicationLivePolicy433';
 import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCachesBySourceType,
@@ -391,7 +392,7 @@ export const upsertExploreFeedSessionCacheRow = (
     const index = rows.findIndex((item) => String(item.id || item.trackId || '').trim() === normalizedId);
     if (index >= 0) {
       const next = [...rows];
-      next[index] = { ...next[index], ...row };
+      next[index] = mergeExplorePublicationCardPreservingLikeCount435(next[index], row);
       return next;
     }
     try {

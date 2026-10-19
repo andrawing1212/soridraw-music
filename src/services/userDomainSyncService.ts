@@ -856,7 +856,14 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     return;
   }
 
-  if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
+  // 'edit-preview' is a live draft, not a successful Firestore aggregate
+  // mutation. Never publish its timestamp as the canonical document revision
+  // or mark it settled. The first retained draft on a newly attached device
+  // may have overwritten older canonical RTDB notifications, so preserve an
+  // unresolved catch-up fence only for that initial replay.
+  if (signal.operation === 'edit-preview') {
+    if (initialRetained) rememberRecentSongsPendingSignalVersion(uid, signal.version);
+  } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
     // A live ACK of our own confirmed write is safe. A retained old own-device
     // signal is not proof of complete membership after offline changes.
     // Recent-song writes save the aggregate document before this mirror fires.

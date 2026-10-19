@@ -105,8 +105,21 @@ assert.ok(manifest.patches.includes('100-music-note-next-song-legacy-parity.mjs'
 assert.match(workerPatch, /requestPayload/);
 assert.match(workerPatch, /requestApplied/);
 assert.match(workerPatch, /mergeMissing/);
-assert.doesNotMatch(workerPatch, /note\?\.lyrics|note\?\.lyricsText/,
-  'public next-song share must not copy finished lyrics');
+// Patch100 legitimately includes the string "note?.lyrics" inside its
+// NEGATIVE safety check. Inspect the actual canonical runtime function
+// instead of matching that protective source-code assertion.
+const workerRuntime = fs.readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+const runtimeStart = workerRuntime.indexOf('function buildMusicNoteShareBundle015(note) {');
+assert.ok(runtimeStart >= 0, 'canonical runtime share-bundle function must exist');
+const runtimeEnd = workerRuntime.indexOf('\n}', runtimeStart);
+assert.ok(runtimeEnd > runtimeStart, 'canonical runtime share-bundle function must terminate');
+const runtimeBundle = workerRuntime.slice(runtimeStart, runtimeEnd + 2);
+assert.match(runtimeBundle, /SORIDRAW_MUSIC_NOTE_LEGACY_NEXT_SONG_PARITY_427_20261018/);
+assert.match(runtimeBundle, /const userInput = shareText015\(applied\.userInput, 4000\)/);
+assert.doesNotMatch(runtimeBundle, /note\?\.lyrics|note\?\.lyricsText/,
+  'public next-song runtime must not copy finished lyrics');
+assert.ok(workerPatch.includes("if (updated.includes('note?.lyrics') || updated.includes('note?.lyricsText'))"),
+  'patch100 must retain its explicit generated-lyrics rejection guard');
 assert.match(workerPatch, /const userInput = shareText015\(applied\.userInput, 4000\)/,
   'public share bundle must use persisted command only');
 

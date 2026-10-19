@@ -6301,9 +6301,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         // generated prompt/lyrics.
         const sourceRecipe = resolveMusicNoteNextSongRecipe(detail);
         const localRecipe = resolveMusicNoteNextSongRecipe(song);
+        const localApplied = song?.appliedKeywords && typeof song.appliedKeywords === 'object'
+          ? song.appliedKeywords as Record<string, unknown> : {};
+        const commandKeys = ['userInput', 'commandInput', 'directInput', 'customPrompt'];
+        const explicitLocalCommand = commandKeys.some((key) =>
+          Object.prototype.hasOwnProperty.call(localApplied, key)
+          || (typeof song?.[key] === 'string' && song[key].trim().length > 0),
+        );
+        // Historical local cards sometimes have a synthesized top-level
+        // userInput:'' despite an older nonempty requestPayload command. Only
+        // that placeholder yields to the true persisted source; an explicit
+        // appliedKeywords.userInput:'' remains the user's newest choice.
+        const mergedRecipe = { ...sourceRecipe, ...localRecipe };
+        if (!explicitLocalCommand && !String(localRecipe.userInput || '').trim()
+          && String(sourceRecipe.userInput || '').trim()) {
+          mergedRecipe.userInput = sourceRecipe.userInput;
+        }
         return {
           ...song,
-          appliedKeywords: { ...sourceRecipe, ...localRecipe },
+          appliedKeywords: mergedRecipe,
           requestPayload: song?.requestPayload ?? detail.requestPayload,
           id: sourceId,
           firestoreId: sourceId,

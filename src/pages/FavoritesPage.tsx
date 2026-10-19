@@ -6315,7 +6315,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         // Keep newer per-device visible data and explicitly stored commands;
         // fill missing historical recipe fields from the original, never from
         // generated prompt/lyrics.
-        const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail);
+        const pendingDraft = await readMusicNoteDetailDraft(user.uid, sourceId);
+        const originalVersion = getMusicNoteDetailSourceVersion(detail);
+        const pendingBase = Number(pendingDraft?.baseVersion || 0);
+        // Only a durable pending edit known to be based on this original can
+        // override it. A stale same-device draft is not proof of newer truth.
+        const verifiedPendingUpdates = pendingDraft?.updates && (
+          (originalVersion > 0 && pendingBase > 0 && pendingBase >= originalVersion)
+          || (originalVersion <= 0 && pendingBase <= 0)
+        ) ? pendingDraft.updates : null;
+        const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail, verifiedPendingUpdates);
         return {
           ...song,
           appliedKeywords: mergedRecipe,

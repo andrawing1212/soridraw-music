@@ -50,6 +50,20 @@ const mergeMissingDeep = (target: PlainRecord, fallback: PlainRecord): PlainReco
   return next;
 };
 
+// Only supplement a confirmed original with historical fields that are absent.
+// In a clicked original, explicit null/empty/[] mean "cleared", not "missing".
+const mergeAbsentOnlyClick462 = (target: PlainRecord, fallback: PlainRecord): PlainRecord => {
+  const merged: PlainRecord = { ...target };
+  for (const [key, value] of Object.entries(fallback)) {
+    if (!Object.prototype.hasOwnProperty.call(merged, key) || merged[key] === undefined) {
+      merged[key] = value;
+    } else if (isPlainRecord(merged[key]) && isPlainRecord(value)) {
+      merged[key] = mergeAbsentOnlyClick462(merged[key], value);
+    }
+  }
+  return merged;
+};
+
 const pickKnownRecipeFields = (source: PlainRecord | null): PlainRecord => {
   if (!source) return {};
   const picked: PlainRecord = {};
@@ -133,22 +147,48 @@ export const resolveMusicNoteNextSongRecipe = (rawSource: unknown): PlainRecord 
 export const mergeMusicNoteNextSongClickRecipe455 = (
   cachedRow: unknown,
   originalDocument: unknown,
+  verifiedPendingUpdates?: unknown,
 ): PlainRecord => {
   const local = resolveMusicNoteNextSongRecipe(cachedRow);
   const persisted = resolveMusicNoteNextSongRecipe(originalDocument);
   const cached = parseRecord(cachedRow) || {};
-  const localApplied = parseRecord(cached.appliedKeywords) || {};
+  const original = parseRecord(originalDocument) || {};
+  const canonicalApplied = parseRecord(original.appliedKeywords);
+  const localApplied = parseRecord(cached.appliedKeywords);
+  const pending = parseRecord(verifiedPendingUpdates);
+  const pendingApplied = parseRecord(pending?.appliedKeywords);
+
+  // Exact owned server original wins. Only truly absent historical settings
+  // may be filled from a local card; explicit null/empty server values stay.
+  const merged: PlainRecord = mergeAbsentOnlyClick462(persisted, local);
+  if (pending) {
+    // The caller supplies only a version-verified durable unsaved edit.
+    // Never blindly spread unrelated cached favorite/public/media fields.
+    const changed = {
+      ...pickKnownRecipeFields(pending),
+      ...pickKnownRecipeFields(pendingApplied),
+    };
+    for (const key of COMMAND_KEYS_459) delete changed[key];
+    Object.assign(merged, changed);
+  }
+
+  // Old auto-empty userInput must not shadow the stored requestPayload direct
+  // command. A newer canonical real command/marked clear beats stale local
+  // text, except for an independently verified pending user edit.
+  const pendingCommand = firstStoredCommand(pendingApplied, pending);
+  const pendingClear = hasProvenManualCommandClear459(pendingApplied, pending);
+  const canonicalClear = hasProvenManualCommandClear459(canonicalApplied);
+  const canonicalCommand = COMMAND_KEYS_459.some((key) =>
+    typeof canonicalApplied?.[key] === 'string' && canonicalApplied[key].trim().length > 0);
+  const localClear = hasProvenManualCommandClear459(localApplied, cached);
   const localCommand = typeof local.userInput === 'string' ? local.userInput.trim() : '';
-  // A nonempty newer local command wins. Otherwise the known original
-  // requestPayload command fills the older synthesized empty placeholder.
-  // An explicit clear is only authoritative with a real clear marker.
-  const localCleared = hasProvenManualCommandClear459(localApplied, cached);
-  const merged: PlainRecord = { ...persisted, ...local };
-  if (localCleared) merged.userInput = '';
+
+  if (pendingClear) merged.userInput = '';
+  else if (pendingCommand) merged.userInput = pendingCommand;
+  else if (canonicalClear || canonicalCommand) merged.userInput = persisted.userInput ?? '';
+  else if (localClear) merged.userInput = '';
   else if (localCommand) merged.userInput = localCommand;
-  // resolveMusicNoteNextSongRecipe already honors command/clear precedence
-  // within each stored layer. Do not re-OR an older requestPayload clear over
-  // a newer canonical nonempty command after that resolution.
   else if (typeof persisted.userInput === 'string') merged.userInput = persisted.userInput;
+
   return merged;
 };

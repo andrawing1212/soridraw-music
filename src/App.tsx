@@ -12794,7 +12794,11 @@ const unlockAllFavorites = async () => {
 
           // Canonical document revision is verified by this read even if a separate
           // RTDB text preview has not settled. Keep its draft marker independent.
-          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          if (cachedSuccessfully && documentVersion > 0) {
+            // Server revision is proven only after durable cache persistence.
+            // If storage failed, leave prior revision/gap for safe next visit.
+            writeRecentSongsLocalVersion(user.uid, documentVersion);
+          }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
           applyRecentSongsState(visibleServerHistory453, { preferredIndex: nextIndex, latestBatchId });

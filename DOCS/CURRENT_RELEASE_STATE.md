@@ -1,3 +1,12 @@
+## CURRENT — app435 original-recipe and Recent cache durability correction (2026-10-20 KST)
+
+- App434 remains deployed; base preview `11f46242f3c08fc9076dd10abe90be0008aac098`. app435 PR #282 `fix/app435-integrated-parity` stays draft/unmerged pending full exact SHA CI and independent audit. Previous head `4eb6bc17f9c4453a48c77988304a84b12d11f271` failed source audit on stale canonical recipe precedence and acknowledged Recent cache-write failure.
+- Explicit next-song click: exact owned canonical original wins over stale local cached genre/tempo/vocal and explicit cleared null/[]; truly missing old fields may be recovered. Only verified, source-version-compatible durable pending Music Note Detail updates override, and historical stored direct input / newest proven manual clear remain protected. No extra server reads apart from existing explicit one-document hydration.
+- Closed-device Recent A/B: after bounded canonical B aggregate read, document version advances ONLY if local recovered cache is durably persisted. Storage failure retains old revision and unverified retained gap for next-visit retry; unsettled A text and settled B saved/public/media protection remain separate. No new poll/listener/full scan/write.
+- Stage416 OFF (1/4, 25%). Speed 5/5 100% historical and not remeasured. app435 code candidate 3/4 75% until independent audit. Shared user data and Worker/Functions/Rules/TEST/PRODUCTION unchanged; PREVIEW app434. PC/mobile actual QA and 100k billing still unverified.
+
+---
+
 ## CURRENT — app435 FAIL-correction candidate (2026-10-20 KST)
 
 - Base `preview` remains `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). Work candidate PR #282 branch `fix/app435-integrated-parity`; previous exact source `4d9c24c15b02c644fd21e672f271de6e62c532f6` independently FAIL on two boundary cases. Current patch is **developer correction only, requires exact new SHA CI + separate read-only audit before merge/deploy**.

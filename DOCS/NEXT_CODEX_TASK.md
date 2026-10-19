@@ -1,3 +1,12 @@
+## NEXT — app435 independent exact-SHA audit after two P0 source corrections (2026-10-20 KST)
+
+- Target final draft PR #282 HEAD against preview `11f46242f3c08fc9076dd10abe90be0008aac098`, full CI must PASS first. Do not merge/deploy on CI alone.
+- Test click Next Song old cached genre/tempo/vocal and command vs confirmed exact original, explicit canonical null and [], absent-only fallback, compatible pending draft winner, original legacy command, newest proven clear, and exact one-document owned hydration with no collection scan. Inspect FavoritesPage getSongGenreValues downstream.
+- Test offline A retained edit-preview masking B canonical; failed saveRecentSongsCache MUST NOT advance local canonical version, mark gap verified, or ACK pending. Successful stored B can advance revision while A text remains unsettled; same warm revisit R0 and genuinely newer B2 rechecks.
+- Preserve app434 publication/feed/title, app410/421 likes/follows, app349 Studio heart +30s, Music Note 60s/Recent 150s, media and UI. Stage416 OFF. No shared user data changes, migration, Worker, Functions, Rules, main/TEST/PRODUCTION, or PREVIEW deployment until separate independent audit PASS. Physical PC/mobile parity and 100k billed read/write unverified.
+
+---
+
 ## NEXT — app435 two independently identified boundary failures: re-audit exact new SHA (2026-10-20 KST)
 
 - Patch only exact previous FAILs: click legacy command-vs-older-clear precedence in `musicNoteNextSongRecipe.ts`, and confirmed B aggregate revision vs unsettled A text preview in `App.tsx`; add tests 454 and 451. No functional change to publication/likes/follows/save hearts/visuals.

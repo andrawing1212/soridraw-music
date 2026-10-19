@@ -73,8 +73,23 @@ assert.match(rtdb, /if \(initialRetained\) rememberRecentSongsRetainedDraftGap46
 assert.match(app, /const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460\(/);
 assert.match(app, /const needsServerRead = unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/);
 assert.match(app, /if \(cachedSuccessfully && retainedGapAtRead > 0\) \{\s*verifyRecentSongsRetainedDraftGap460\(user\.uid, retainedGapAtRead\)/);
-assert.match(app, /if \(documentVersion > 0\) writeRecentSongsLocalVersion\(user\.uid, documentVersion\)/,
- 'settled B revision must survive while unrelated A text preview remains unsettled');
+const versionGuardSource = app.match(/if \(cachedSuccessfully && documentVersion > 0\) \{[\s\S]{0,700}writeRecentSongsLocalVersion\(user\.uid, documentVersion\);[\s\S]{0,15}\}/)?.[0];
+assert.ok(versionGuardSource, 'must persist recovered B before recording canonical version');
+const versionWrite = new Function('cachedSuccessfully','documentVersion','user',
+  'writeRecentSongsLocalVersion',versionGuardSource);
+const recorded = [];
+const capture = (uid,version) => recorded.push([uid,version]);
+versionWrite(false,11,{uid:'phone'},capture);
+assert.equal(recorded.length,0,'device cache write failure must not ACK version 11');
+versionWrite(true,11,{uid:'phone'},capture);
+assert.equal(recorded.length,1,'durable recovered B records version 11 once');
+assert.equal(recorded[0][1],11);
+versionWrite(true,0,{uid:'phone'},capture);
+assert.equal(recorded.length,1,'unknown/absent canonical revision must not advance');
+assert.equal(needsRead({...baseline,profileVersion:11,localDocumentVersion:10})
+  || needsGap(4000,0),true,'failed durable write retains recovery opportunity');
+assert.equal(needsRead({...baseline,profileVersion:11,localDocumentVersion:11})
+  || needsGap(4000,4000),false,'persisted B and verified retained gap reopen with R0');
 assert.match(app, /if \(cachedSuccessfully && readSignalVersion > 0\) \{/,
  'confirmed signal pending at this read can ACK independently of an unrelated draft');
 assert.match(app, /if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/);

@@ -69,6 +69,47 @@ const verifiedOriginalClear = mergeOnClick(
 assert.equal(verifiedOriginalClear.userInput,'',
  'verified newest original clear must still beat the old stored command');
 
+// A server-verified original wins over stale local card settings, except for
+// a durable explicitly compatible pending edit.
+const staleLocal = {appliedKeywords:{
+ genre:['STALE'],subGenre:['OLD_SUB'],tempo:85,vocalType:'male',
+ userInput:'OLD_CACHED_COMMAND',mood:['old-mood'],
+}};
+const canonicalLatest = {appliedKeywords:{
+ genre:['CURRENT'],subGenre:['CURRENT_SUB'],tempo:123,vocalType:'female',
+ userInput:'CURRENT_COMMAND',mood:['new-mood'],
+}};
+const correct = mergeOnClick(staleLocal,canonicalLatest);
+assert.equal(correct.genre[0],'CURRENT');
+assert.equal(correct.subGenre[0],'CURRENT_SUB');
+assert.equal(correct.tempo,123);
+assert.equal(correct.vocalType,'female');
+assert.equal(correct.userInput,'CURRENT_COMMAND');
+assert.equal(correct.mood[0],'new-mood');
+const pendingCorrect = mergeOnClick(staleLocal,canonicalLatest,{
+ appliedKeywords:{genre:['PENDING_NEW'],tempo:140,userInput:'PENDING_COMMAND'},
+});
+assert.equal(pendingCorrect.genre[0],'PENDING_NEW');
+assert.equal(pendingCorrect.tempo,140);
+assert.equal(pendingCorrect.vocalType,'female');
+assert.equal(pendingCorrect.userInput,'PENDING_COMMAND');
+assert.equal(mergeOnClick(staleLocal,canonicalLatest,{
+ appliedKeywords:{userInput:''},
+}).userInput,'CURRENT_COMMAND','default empty pending field cannot erase genuine stored command');
+const explicitServerEmpty = mergeOnClick(
+ {appliedKeywords:{tempo:130,genre:['old']}},
+ {appliedKeywords:{tempo:null,genre:[]}},
+);
+assert.equal(explicitServerEmpty.tempo,null,'null is a deliberate canonical clear');
+assert.equal(explicitServerEmpty.genre.length,0,'empty canonical array must not restore stale genre');
+assert.equal(mergeOnClick(
+ {appliedKeywords:{genre:['old'],instrumentSound:['legacy-only']}},
+ {appliedKeywords:{genre:['current']}},
+).instrumentSound[0],'legacy-only','only truly absent old fields may fill historical gaps');
+const originalLegacyCommand = {appliedKeywords:{genre:['current'],userInput:''},
+ requestPayload:{appliedKeywords:{commandInput:'GENUINE HISTORICAL COMMAND'}}};
+assert.equal(mergeOnClick({appliedKeywords:{genre:['stale']}},originalLegacyCommand).userInput,
+ 'GENUINE HISTORICAL COMMAND');
 const explicitEmpty = mergeOnClick({
   ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'', manualCommandClearedAt:123456 },
 },exactHistoricalDocument);
@@ -98,6 +139,12 @@ assert.ok(favorite.includes(': getOrLoadMusicNoteDetail({'),
  'ordinary Detail retains normal cache-first behavior');
 assert.match(favorite,/hydrateCatalogFavorite\(song, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
 assert.match(favorite,/hydrateCatalogFavorite\(selectedSong, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
+assert.match(favorite,/const pendingDraft = await readMusicNoteDetailDraft\(user\.uid, sourceId\)/);
+assert.match(favorite,/originalVersion > 0 && pendingBase > 0 && pendingBase >= originalVersion/,
+ 'a version-compatible durable draft is required to override original');
+assert.match(favorite,/mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/);
+assert.ok(source.includes('mergeAbsentOnlyClick462(persisted, local)'),
+ 'confirmed original must outrank older cached genre, tempo and explicit clear');
 assert.doesNotMatch(favorite,/getDocs\(collection\(db, 'favorites'/,'no collection scan');
 
 const detailCacheSource=fs.readFileSync('src/lib/musicNoteDetailCache.ts','utf8');

@@ -113,10 +113,11 @@ assert.match(app,/history: visibleServerHistory453/);
 assert.match(app,/applyRecentSongsState\(visibleServerHistory453/);
 assert.match(app,/!protectedRecent453\.hasUnsettledPreview\) \{\s*acknowledgeRecentGeneratedSongs/);
 assert.match(app,/cachedSuccessfully && readSignalVersion > 0 && !protectedRecent453\.hasUnsettledPreview/);
-assert.match(app,/if \(isEditPreview\) \{[\s\S]{0,600}return;/);
+assert.ok(app.includes('if (isEditPreview) {'), 'live preview handler exists');
+assert.match(app,/if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/);
 assert.doesNotMatch(sync,/if \(initialRetained\) rememberRecentSongsPendingSignalVersion\(uid, signal.version\)/,
   'RTDB draft must never become canonical revision before Firestore batch');
 console.log('APP453_REMOTE_UNSETTLED_TITLE_LYRICS_DO_NOT_ROLL_BACK=PASS');
 console.log('APP453_OTHER_CANONICAL_SONGS_STILL_RECOVER=PASS');
 console.log('APP453_SIGNAL_ACK_WAIT_UNTIL_CANONICAL_SETTLED=PASS');
-console.log('APP453_DRAFT_PREVIEW_READ_ZERO=PASS');
+console.log('APP453_LIVE_DRAFT_PREVIEW_R0_RETAINED_GAP_BOUNDED=PASS');

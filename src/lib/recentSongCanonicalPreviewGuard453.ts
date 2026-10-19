@@ -97,3 +97,18 @@ export const protectRecentCanonicalSnapshotFromPreview453 = <T extends Record<st
   }
   return { songs, hasUnsettledPreview };
 };
+
+
+// RTDB edit-preview can contain nullable favorite IDs and other old metadata.
+// It is NOT an authoritative save-heart, publication, lock or Suno mutation.
+// Whitelist only live text fields before composing it into the on-screen row.
+export const pickRecentSongLiveTextPreview457 = (
+  incoming: Record<string, any>,
+): Record<string, any> => {
+  const result: Record<string, any> = {};
+  for (const key of ['title', 'koreanTitle', 'englishTitle', 'prompt', 'lyrics', 'updatedAtMs']) {
+    if (Object.prototype.hasOwnProperty.call(incoming, key)) result[key] = incoming[key];
+  }
+  result.__recentSongEditPreview = true;
+  return result;
+};

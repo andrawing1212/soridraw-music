@@ -52,6 +52,13 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install pinned root verification dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          node -e "require.resolve('typescript');require.resolve('tsx');console.log('PREVIEW_WORKER_ROOT_VERIFY_DEPS=PASS')"
+
       - name: Install pinned Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false

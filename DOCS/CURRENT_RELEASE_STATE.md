@@ -1,3 +1,12 @@
+## CURRENT — app434 Worker release blocked by missing root CI TypeScript dependency (2026-10-19 KST)
+
+- **PREVIEW-only Worker request:** PR #260 merge `3f7de76c5df3a31e2eb87fbd6873a9aff239ff57` triggered Run [39276384675](https://github.com/andrawing1212/soridraw-music/actions/runs/39276384675), overall **FAIL BEFORE WORKER DEPLOY**.
+- **Precisely logged cause:** `Verify existing like and action regressions` called `scripts/verify-192-cross-account-public-like-live.mjs`, which imports `typescript` from the project root. Existing Worker release workflow installed only Worker tooling in its subdirectory; root `node_modules/typescript` was missing (`ERR_MODULE_NOT_FOUND`). Product code/Worker source fault not found.
+- **Isolated release-system correction:** add `npm ci --ignore-scripts --no-audit --no-fund` in root, with `require.resolve('typescript')` and `require.resolve('tsx')` guard **before** the unchanged Worker regression suite. No bypass/skip of any existing tests, D1 preflight, SHA256 verification, or rollback. No product/Worker bytes changed.
+- **Deployment status:** prior Function is created and shown green in user Cloud Run screenshots; missing Artifact Registry cleanup policy still unresolved; Function exact postflight inventory unverified. PREVIEW Worker has NOT been deployed (steps `One-shot preflight`, `Snapshot protected Worker versions`, `Deploy canonical PREVIEW Worker once` all skipped). Shared Rules and Hosting remain app421 / not deployed. TEST/PRODUCTION untouched.
+- **NEXT:** CI for release-workflow correction, compare diff narrowly, then independently verify/reapprove and change `.deploy/preview-worker-release.trigger` in a new one-time PR for retry. No Worker trigger edit in this correction PR. If Worker release gate fails again, stop without Hosting.
+
+---
 ## CURRENT — app434 Candidate Function CREATED; Firebase cleanup-policy postdeploy FAILED (2026-10-19 KST)
 
 - **Trigger:** PR #258 merged to `preview` SHA `734b9e807b3732417a80c05a4b46e5f59a0ae66e`; one-function release Run [39272527661](https://github.com/andrawing1212/soridraw-music/actions/runs/39272527661) has overall GitHub Actions **FAIL**, but this is **not a Function creation failure**.

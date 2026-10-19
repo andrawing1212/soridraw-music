@@ -15,6 +15,7 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal } from './lib/recentSongsSyncGate';
+import { protectRecentCanonicalSnapshotFromPreview453 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 import {
@@ -12756,7 +12757,15 @@ const unlockAllFavorites = async () => {
             console.warn('Unconfirmed recent song preserved locally; server is still missing it.');
             return;
           }
-          acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
+          const protectedRecent453 = protectRecentCanonicalSnapshotFromPreview453(
+            firestoreSongs,
+            currentCache?.history || [],
+            getLiveSoridrawSongId,
+          );
+          const visibleServerHistory453 = protectedRecent453.songs;
+          if (!protectedRecent453.hasUnsettledPreview) {
+            acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
+          }
           // A PC-generated song can be visible locally before its background
           // save reaches Firestore. Preserve it if there is no canonical doc.
           if (!snap.exists() && Array.isArray(currentCache?.history) && currentCache.history.length > 0) {
@@ -12769,19 +12778,19 @@ const unlockAllFavorites = async () => {
           const nextIndex = firestoreSongs.length ? preferredIndex : -1;
           const latestBatchId = (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
           const cachedSuccessfully = saveRecentSongsCache(user.uid, {
-            history: firestoreSongs,
+            history: visibleServerHistory453,
             historyIndex: nextIndex,
             latestGenerationBatchId: latestBatchId,
           });
 
-          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          if (documentVersion > 0 && !protectedRecent453.hasUnsettledPreview) writeRecentSongsLocalVersion(user.uid, documentVersion);
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState(firestoreSongs, { preferredIndex: nextIndex, latestBatchId });
+          applyRecentSongsState(visibleServerHistory453, { preferredIndex: nextIndex, latestBatchId });
           recentSongsReadyToCacheRef.current = true;
           recentSongsSessionVerifiedUids.add(user.uid);
 
-          if (cachedSuccessfully && readSignalVersion > 0) {
+          if (cachedSuccessfully && readSignalVersion > 0 && !protectedRecent453.hasUnsettledPreview) {
             acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion);
           }
         })
@@ -12894,6 +12903,11 @@ const unlockAllFavorites = async () => {
           : currentSong.lyrics,
         appliedKeywords: mergedAppliedKeywords,
       } as SongResult) as SongResult;
+      // A settled canonical changed-item signal clears the transient draft
+      // marker. A live edit-preview retains it until canonical has caught up.
+      if (incoming.__recentSongEditPreview !== true && incoming.__recentSongPartial !== true) {
+        delete (merged as any).__recentSongEditPreview;
+      }
       const nextHistory = currentHistory.map((song, index) => index === targetIndex ? merged : song);
       historyRef.current = nextHistory;
       setHistory(nextHistory);
@@ -12936,7 +12950,8 @@ const unlockAllFavorites = async () => {
         // retains only its latest row. The 451 gate reads a canonical snapshot
         // only when that initial changed signal has not yet been ACKed. Existing
         // local drafts/outbox still outrank older server data.
-        if (detail.initialRetained === true) runRecentSongsServerSyncIfNeeded();
+        // A preview cannot establish canonical freshness. Wait for the
+        // authoritative mutation signal; do not read stale Firestore here.
         return;
       }
 

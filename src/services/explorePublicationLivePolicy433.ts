@@ -48,3 +48,20 @@ export const isExplorePublicationPublicResponseCurrent433 = (
     && current.at === expected.at,
   );
 };
+
+
+// app435: Publication live-cards describe title/visibility/metadata, NOT an
+// authoritative public like-count change. Like counts have their own 192
+// changed-card settlement channel, and a same-UID private optimistic overlay.
+// A delayed publication snapshot must never roll back either one.
+export const mergeExplorePublicationCardPreservingLikeCount435 = <T extends { likeCount?: unknown }>(
+  existing: T,
+  publication: Partial<T>,
+): T => {
+  const merged = { ...existing, ...publication };
+  if (typeof existing.likeCount === 'number'
+      && Number.isSafeInteger(existing.likeCount) && existing.likeCount >= 0) {
+    merged.likeCount = existing.likeCount;
+  }
+  return merged;
+};

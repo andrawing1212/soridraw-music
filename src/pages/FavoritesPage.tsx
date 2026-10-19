@@ -98,7 +98,7 @@ import {
   type ExplorePublicationSyncSignal,
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
-import { resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
+import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455 } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
@@ -6299,24 +6299,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         // Keep newer per-device visible data and explicitly stored commands;
         // fill missing historical recipe fields from the original, never from
         // generated prompt/lyrics.
-        const sourceRecipe = resolveMusicNoteNextSongRecipe(detail);
-        const localRecipe = resolveMusicNoteNextSongRecipe(song);
-        const localApplied = song?.appliedKeywords && typeof song.appliedKeywords === 'object'
-          ? song.appliedKeywords as Record<string, unknown> : {};
-        const commandKeys = ['userInput', 'commandInput', 'directInput', 'customPrompt'];
-        const explicitLocalCommand = commandKeys.some((key) =>
-          Object.prototype.hasOwnProperty.call(localApplied, key)
-          || (typeof song?.[key] === 'string' && song[key].trim().length > 0),
-        );
-        // Historical local cards sometimes have a synthesized top-level
-        // userInput:'' despite an older nonempty requestPayload command. Only
-        // that placeholder yields to the true persisted source; an explicit
-        // appliedKeywords.userInput:'' remains the user's newest choice.
-        const mergedRecipe = { ...sourceRecipe, ...localRecipe };
-        if (!explicitLocalCommand && !String(localRecipe.userInput || '').trim()
-          && String(sourceRecipe.userInput || '').trim()) {
-          mergedRecipe.userInput = sourceRecipe.userInput;
-        }
+        const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail);
         return {
           ...song,
           appliedKeywords: mergedRecipe,

@@ -42,13 +42,13 @@ assert.ok(!resolve({prompt:'Generated prompt only'}).userInput,'no hallucinated 
 const favorite=fs.readFileSync('src/pages/FavoritesPage.tsx','utf8');
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
 assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,1000}mergeMusicNoteNextSongClickRecipe455\(song, detail\)/);
-assert.match(favorite,/getDocFromServer\\(doc\\(db, 'favorites', sourceId\\)\\)/,
+assert.ok(favorite.includes("getDocFromServer(doc(db, 'favorites', sourceId))"),
  'explicit Next Song must read its one exact original, not stale same-version cache');
-assert.match(favorite,/if \\(ownerUid && ownerUid !== user\\.uid\\) return null/,
+assert.ok(favorite.includes('if (ownerUid && ownerUid !== user.uid) return null'),
  'explicit source verification must block mismatched ownership');
-assert.match(favorite,/getOrLoadMusicNoteOriginalRecipe456\\(\\{/,
+assert.ok(favorite.includes('getOrLoadMusicNoteOriginalRecipe456({'),
  'explicit next-song uses special action-scoped source loader');
-assert.match(favorite,/\\: getOrLoadMusicNoteDetail\\(\\{/,
+assert.ok(favorite.includes(': getOrLoadMusicNoteDetail({'),
  'ordinary Detail retains normal cache-first behavior');
 assert.match(favorite,/hydrateCatalogFavorite\(song, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
 assert.match(favorite,/hydrateCatalogFavorite\(selectedSong, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);

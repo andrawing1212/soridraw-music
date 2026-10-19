@@ -98,6 +98,8 @@ on:
       - 'scripts/verify-434-publication-signal-version-order.mjs'
       - 'scripts/verify-435-preview-worker-release-artifact.mjs'
       - 'scripts/verify-451-recent-retained-signal-recovery.mjs'
+      - 'scripts/verify-452-music-note-media-fallback.mjs'
+      - 'src/lib/musicNoteCompactMediaSync452.ts'
       - 'src/lib/recentSongsSyncGate.ts'
       - 'src/services/userDomainSyncService.ts'
       - 'src/App.tsx'
@@ -309,6 +311,7 @@ jobs:
           node scripts/verify-433-publication-audit-fixes.mjs
           node scripts/verify-434-publication-signal-version-order.mjs
           node scripts/verify-451-recent-retained-signal-recovery.mjs
+          node scripts/verify-452-music-note-media-fallback.mjs
           node scripts/verify-435-preview-worker-release-artifact.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior

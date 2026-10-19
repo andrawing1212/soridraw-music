@@ -47,6 +47,16 @@ assert.equal(needsGap(4000,4000),false,'verified same retained draft costs R0 on
 assert.equal(needsRead(baseline) || needsGap(4000,4000),false,
  'unchanged warm revisit requires no Firestore read');
 assert.equal(needsGap(4001,4000),true,'a newly retained signal can trigger a new bounded check');
+// Once the aggregate containing settled B N+1 is verified, the canonical
+// document revision can advance even while A is still a separate text draft.
+// Otherwise each route revisit sees stale local N and repeatedly reads B.
+const recoveredBWhileADraftPending = {
+  ...baseline, profileVersion:11, localDocumentVersion:11,
+};
+assert.equal(needsRead(recoveredBWhileADraftPending) || needsGap(4000,4000), false,
+ 'verified B revision plus separate unsettled A draft must reopen at R0');
+assert.equal(needsRead({ ...recoveredBWhileADraftPending, profileVersion:12 }), true,
+ 'genuinely newer canonical B2 revision must still trigger catch-up');
 assert.equal(needsGap(0,0),false,'no retained signal means no read');
 assert.equal(canAck({ itemApplied:true,itemPartial:false,signalVersion:4000,initialRetained:true }),
  false,'retained draft may never ACK complete song history');
@@ -63,6 +73,10 @@ assert.match(rtdb, /if \(initialRetained\) rememberRecentSongsRetainedDraftGap46
 assert.match(app, /const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460\(/);
 assert.match(app, /const needsServerRead = unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/);
 assert.match(app, /if \(cachedSuccessfully && retainedGapAtRead > 0\) \{\s*verifyRecentSongsRetainedDraftGap460\(user\.uid, retainedGapAtRead\)/);
+assert.match(app, /if \(documentVersion > 0\) writeRecentSongsLocalVersion\(user\.uid, documentVersion\)/,
+ 'settled B revision must survive while unrelated A text preview remains unsettled');
+assert.match(app, /if \(cachedSuccessfully && readSignalVersion > 0\) \{/,
+ 'confirmed signal pending at this read can ACK independently of an unrelated draft');
 assert.match(app, /if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/);
 assert.ok(app.includes('if (isEditPreview) {'), 'preview-only consumer remains active');
 

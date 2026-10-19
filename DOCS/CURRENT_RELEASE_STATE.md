@@ -1,3 +1,12 @@
+## CURRENT — app435 FAIL-correction candidate (2026-10-20 KST)
+
+- Base `preview` remains `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). Work candidate PR #282 branch `fix/app435-integrated-parity`; previous exact source `4d9c24c15b02c644fd21e672f271de6e62c532f6` independently FAIL on two boundary cases. Current patch is **developer correction only, requires exact new SHA CI + separate read-only audit before merge/deploy**.
+- Legacy click recipe 455: preserve layer-resolved newest canonical command vs older requestPayload deletion marker; protect latest proven clear. Test 454 adds actual click merge conflict fixtures.
+- Recent retained draft: after guarded canonical gap read caches settled B, advance the verified canonical document version even while A text preview is unsettled; acknowledge only confirmed pending signals, not draft; 451 adds warm re-entry R0 and newer B2 revision read fixtures. Keep RTDB live draft R0 and local draft text protection.
+- Stage416 OFF 1/4 (25%), speed prior 5/5 (100%, not newly measured), app435 implementation candidate 3/4 (75%, audit pending). No user data, Worker/Functions/Rules/D1, main/test/prod, or deployed PREVIEW changes. Real PC/mobile and 100k billing **unverified**.
+
+---
+
 ## CURRENT — app435 retained-preview gap + old direct-input collision corrected (2026-10-20 KST)
 
 - **Current branch:** `fix/app435-integrated-parity`; PREVIEW `preview` baseline `11f46242f3c08fc9076dd10abe90be0008aac098` **UNCHANGED**, app434 Hosting/Worker remains active. PR #282 draft/unmerged; TEST/PRODUCTION unchanged.

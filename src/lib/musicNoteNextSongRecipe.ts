@@ -139,21 +139,16 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
   const cached = parseRecord(cachedRow) || {};
   const localApplied = parseRecord(cached.appliedKeywords) || {};
   const localCommand = typeof local.userInput === 'string' ? local.userInput.trim() : '';
-  const persistedCommand = typeof persisted.userInput === 'string' ? persisted.userInput.trim() : '';
   // A nonempty newer local command wins. Otherwise the known original
   // requestPayload command fills the older synthesized empty placeholder.
   // An explicit clear is only authoritative with a real clear marker.
   const localCleared = hasProvenManualCommandClear459(localApplied, cached);
-  const stored = parseRecord(originalDocument) || {};
-  const storedRequest = parseRecord(stored.requestPayload);
-  const storedRequestApplied = parseRecord(storedRequest?.appliedKeywords);
-  const persistedCleared = hasProvenManualCommandClear459(
-    parseRecord(stored.appliedKeywords), storedRequestApplied, storedRequest, stored,
-  );
   const merged: PlainRecord = { ...persisted, ...local };
   if (localCleared) merged.userInput = '';
   else if (localCommand) merged.userInput = localCommand;
-  else if (persistedCleared) merged.userInput = '';
-  else if (persistedCommand) merged.userInput = persistedCommand;
+  // resolveMusicNoteNextSongRecipe already honors command/clear precedence
+  // within each stored layer. Do not re-OR an older requestPayload clear over
+  // a newer canonical nonempty command after that resolution.
+  else if (typeof persisted.userInput === 'string') merged.userInput = persisted.userInput;
   return merged;
 };

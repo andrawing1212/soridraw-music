@@ -53,6 +53,22 @@ assert.equal(mergeOnClick({
 assert.equal(resolve({appliedKeywords:{userInput:'NEW'},requestPayload:{manualCommandClearedAt:100}}).userInput,
  'NEW','a lower-precedence clear must not erase a newer nonempty direct command');
 
+// A genuinely newer canonical command must not be cleared by a lower-priority
+// old requestPayload deletion record when the clicked local card has no text.
+const canonicalWinsOlderClear = mergeOnClick(
+  {id:'old-one', appliedKeywords:{genre:['indie']}},
+  {appliedKeywords:{genre:['indie'], userInput:'LATEST REAL COMMAND'},
+    requestPayload:{commandInput:'OLD COMMAND',manualCommandClearedAt:100}},
+);
+assert.equal(canonicalWinsOlderClear.userInput,'LATEST REAL COMMAND',
+ 'click merge must preserve new canonical command above old requestPayload clear');
+const verifiedOriginalClear = mergeOnClick(
+  {id:'old-one',appliedKeywords:{genre:['indie']}},
+  {appliedKeywords:{userInput:'',manualCommandClearedAt:300},requestPayload:{commandInput:'OLD COMMAND'}},
+);
+assert.equal(verifiedOriginalClear.userInput,'',
+ 'verified newest original clear must still beat the old stored command');
+
 const explicitEmpty = mergeOnClick({
   ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'', manualCommandClearedAt:123456 },
 },exactHistoricalDocument);

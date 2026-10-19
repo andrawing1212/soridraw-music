@@ -12792,7 +12792,9 @@ const unlockAllFavorites = async () => {
             latestGenerationBatchId: latestBatchId,
           });
 
-          if (documentVersion > 0 && !protectedRecent453.hasUnsettledPreview) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          // Canonical document revision is verified by this read even if a separate
+          // RTDB text preview has not settled. Keep its draft marker independent.
+          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
           applyRecentSongsState(visibleServerHistory453, { preferredIndex: nextIndex, latestBatchId });
@@ -12805,7 +12807,9 @@ const unlockAllFavorites = async () => {
           recentSongsReadyToCacheRef.current = true;
           recentSongsSessionVerifiedUids.add(user.uid);
 
-          if (cachedSuccessfully && readSignalVersion > 0 && !protectedRecent453.hasUnsettledPreview) {
+          // Only confirmed-change pending signals are acknowledged here. The
+          // retained edit-preview has its own gap token and is never ACKed.
+          if (cachedSuccessfully && readSignalVersion > 0) {
             acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion);
           }
         })

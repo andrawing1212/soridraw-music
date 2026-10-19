@@ -1,3 +1,11 @@
+## NEXT — app435 two independently identified boundary failures: re-audit exact new SHA (2026-10-20 KST)
+
+- Patch only exact previous FAILs: click legacy command-vs-older-clear precedence in `musicNoteNextSongRecipe.ts`, and confirmed B aggregate revision vs unsettled A text preview in `App.tsx`; add tests 454 and 451. No functional change to publication/likes/follows/save hearts/visuals.
+- Independent auditor must run NEW exact SHA CI and check real helpers/consumer; specifically newer canonical command beats older requestPayload clear, newest explicit clear still wins, verified B doc version N+1 persists despite A preview, same-signal reload R0, genuine newer B2 still reads, and pending canonical ACK separated from RTDB draft. If FAIL no merge.
+- No hosting/worker/Functions/Rules/shared data deployment or branch promotion until separate independent PASS. After PASS developer may merge into preview and follow existing guarded Hosting release. PC/mobile #237/#277 and historical Next Song #229 actual QA and 100k costs remain unverified; TEST/PRODUCTION BLOCK.
+
+---
+
 ## NEXT — app435 PR #282 new SHA independent Work audit, then gated PREVIEW release (2026-10-20 KST)
 
 **No more feature implementation until independent audit** unless new exact-SHA CI fails or specific audit blocker appears. Compare actual latest draft PR #282 HEAD against PREVIEW `11f46242f3c08fc9076dd10abe90be0008aac098`. app434 remains deployed and public/private/Explore title/live improvements must remain intact.

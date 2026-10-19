@@ -1,3 +1,12 @@
+## CURRENT — app434 Worker PREVIEW deployed PASS; safe shared Rules release rebase prepared (2026-10-19 KST)
+
+- **Worker Run [39292729273](https://github.com/andrawing1212/soridraw-music/actions/runs/39292729273): SUCCESS**, commit `ad96e2d658f2123d19dc4e0712e7afc4411aeda8`; exact audited app434 source `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`; preflight/Cloudflare Worker deploy/smoke/protected TEST/PRODUCTION checks PASS. Hosting remains previous app421; Rules app434 publication nodes not deployed.
+- **Shared RTDB Rules safety:** user-data RTDB common across environments. Existing live Stage416 server-only roots MUST NOT be removed. Original app434 local `database.rules.json` lacks those roots, so raw PUT is forbidden. Earlier safe fix PR #265 (Run 39287822644 SUCCESS) could not be merged cleanly on latest PREVIEW due diverged docs. Exact audited four non-doc file blobs from #265 reapplied unchanged onto latest PREVIEW in this branch: Hosting workflow only changes Rules path to exact additive derived candidate; quality workflow adds targeted checks; verifier192 enforces this policy; verifier434 independently checks current Rules and Stage416 preservation. No release trigger touched and no Rules write initiated.
+- **Stop gates:** independent review + CI on this new branch; then guarded app434 Hosting trigger (Rules=true). The workflow must verify live Rules are exactly base+Stage416 missing only two publication nodes before PUT; no user data copy/migration/backfill. After deploy verify remote app434 build and no TEST/PRODUCTION change.
+- **Function:** publicationRelease431Candidate created successfully, Cloud Run showed healthy, but cleanup-policy post-create error leaves exact Function inventory read-only postflight unverified. No re-create allowed.
+
+---
+
 ## CURRENT — app434 Worker Run 39291805942 predeploy VM test environment failure (2026-10-19 KST)
 
 - **Release PR #271 merge `f0e19d2df15c78e807e83fdeb753c03083dac352`** triggered [Run 39291805942](https://github.com/andrawing1212/soridraw-music/actions/runs/39291805942). **FAIL BEFORE WORKER DEPLOY** at `Pin audited app427-compatible verifier`; Worker preflight, snapshots, Cloudflare deploy, Rules, Hosting all SKIPPED.

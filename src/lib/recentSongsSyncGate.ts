@@ -23,3 +23,21 @@ export type RecentSongsRecheck = {
 export const needsRecentSongsSignalRecheck = (gate: RecentSongsRecheck): boolean =>
   gate.newestSignalVersion > gate.signalVersionAtRead
   && gate.newestSignalVersion > gate.acknowledgedSignalVersion;
+
+
+// A retained RTDB node is only the latest changed song, not an aggregate
+// membership snapshot. Applying that one row does not prove all older
+// mutations were received while this origin was closed/offline.
+export type RecentSongsInlineAckGate = {
+  itemApplied: boolean;
+  itemPartial: boolean;
+  signalVersion: number;
+  initialRetained: boolean;
+};
+
+export const canAcknowledgeRecentSongsInlineSignal = (gate: RecentSongsInlineAckGate): boolean =>
+  gate.itemApplied
+  && !gate.itemPartial
+  && Number.isFinite(gate.signalVersion)
+  && gate.signalVersion > 0
+  && !gate.initialRetained;

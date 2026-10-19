@@ -58,6 +58,13 @@ assert.match(releaseWorkflow,/ref: \$\{\{ steps\.source\.outputs\.sha \}\}/);
 assert.match(releaseWorkflow,/test "\$\(git rev-parse HEAD\)" = "\$\{\{ steps\.source\.outputs\.sha \}\}"/);
 assert.match(releaseWorkflow,/--only "functions:\$FUNCTION_NAME"/);
 assert.match(releaseWorkflow,/431_ONLY_APPROVED_FUNCTION_CHANGED=PASS/);
+assert.match(releaseWorkflow,/Build isolated exact Candidate Function package/);
+assert.match(releaseWorkflow,/explorePublicationReleaseEndpoint431 explorePublicationRelease431/);
+assert.match(releaseWorkflow,/cmp "functions\/lib\/\$module\.js" "\$stage_dir\/lib\/\$module\.js"/);
+assert.match(releaseWorkflow,/431_EXACT_AUDITED_FUNCTION_ISOLATION=PASS/);
+assert.match(releaseWorkflow,/431_UNRELATED_STAGE420_SECRETS_EXCLUDED=PASS/);
+assert.match(releaseWorkflow,/--config preview\.publication431\.firebase\.json/);
+assert.doesNotMatch(releaseWorkflow,/--config firebase\.json\s+--only "functions:/);
 
 // Execute the pure HMAC/Admin-RTDB core with per-path in-memory transactions.
 const transpiled=ts.transpileModule(coreTs,{

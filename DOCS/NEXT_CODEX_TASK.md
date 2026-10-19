@@ -1,3 +1,12 @@
+## NEXT — independently audit isolated app434 Candidate Function release path (2026-10-19 KST)
+
+- Confirm latest PR changes only existing Function release workflow, the existing `verify-431-server-publication-signal` guard, and current status/next-task docs. No product source, canonical Worker, Rules, D1, release trigger or shared data edit.
+- Confirm staged package copies compiled audited endpoint and core byte-for-byte, initializes shared RTDB exactly as audited source, exports only `publicationRelease431Candidate`, preserves `SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET`, region `asia-northeast3`, and leaves source function behavior unchanged.
+- Confirm Firebase CLI uses `preview.publication431.firebase.json` with an isolated source folder; unrelated absent `SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET`/Stage420 functions not discoverable. Only one Function deploy authorized; existing inventory and main/production guards unchanged.
+- Require CI Functions Build, TypeScript, Build and frozen like/publication contracts PASS. No deployment or trigger edits before independent audit PASS.
+- After audit PASS, recheck Function non-existence/possible partial creation from Run `39257665533` before a new one-time trigger. Block Worker/Rules/Hosting until Function ACTIVE and secret binding pass.
+
+---
 ## NEXT — app434 PREVIEW Function Workflow push-trigger independent audit (2026-10-19 KST)
 
 - Audit latest `preview` workflow/docs-only SHA versus app434 audited release `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`.

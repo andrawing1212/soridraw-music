@@ -1,3 +1,12 @@
+## CURRENT — app434 Function 403: missing unrelated Stage420 secret; isolated-package release fix prepared (2026-10-19 KST)
+
+- **Confirmed user Cloud Console:** project ID `soridraw-app-866a5`. Secret Manager shows only `SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET`. The `SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET` required by unrelated Stage420 exports is absent. Do not create a placeholder secret or add broad IAM access.
+- **Actual failure:** Function Run `39257665533` failed while firebase-tools analyzed every export from `functions/lib/securedIndex.js` even though `--only functions:publicationRelease431Candidate` was specified. No active Function creation was verified. Worker/Rules/Hosting deployment requests remain 0.
+- **Safe fix prepared on dedicated branch:** build exact audited app434 Function TS into compiled JS as normal, byte-copy `explorePublicationReleaseEndpoint431.js` and `explorePublicationRelease431.js` into a temporary isolated Functions package with only `publicationRelease431Candidate` export and identical shared RTDB Admin initialization. Pin dependency versions from audited functions lockfile. Deploy with separate temporary Firebase config so CLI never sees unrelated Stage420 functions/secrets.
+- **No product change or deployment:** app434 source stays audited SHA `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`; canonical Worker SHA256 stays `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`. No trigger modification in fix; no IAM, Secret Manager, Rules, shared user data or D1 changes.
+- **Gate:** CI → separate independent audit of isolated Function release path → verify live Function inventory after the previous failed attempt → fresh audited trigger for one Function only → ACTIVE and secret binding → only then Worker → Rules → Hosting app434. Never rerun the failing workflow blindly.
+
+---
 ## CURRENT — app434 PREVIEW Function initial deploy FAIL: Secret Manager metadata permission (2026-10-19 KST)
 
 - **baseline:** `preview` PR #255 merge `5591e9343e04743aac9c06b6eb633b3dd00ae9e0`; exact independent product/release artifact remains `8eb3264f1c7abaf36a59026248a61c6700e3b9a0` (Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`).

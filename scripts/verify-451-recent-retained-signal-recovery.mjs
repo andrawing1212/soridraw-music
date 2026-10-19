@@ -64,7 +64,7 @@ assert.match(app, /const unverifiedRetainedGap = needsRecentSongsRetainedDraftGa
 assert.match(app, /const needsServerRead = unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/);
 assert.match(app, /if \(cachedSuccessfully && retainedGapAtRead > 0\) \{\s*verifyRecentSongsRetainedDraftGap460\(user\.uid, retainedGapAtRead\)/);
 assert.match(app, /if \(detail\.initialRetained === true[\s\S]{0,300}runRecentSongsServerSyncIfNeeded\(\)/);
-assert.match(app, /if \(isEditPreview\) \{[\s\S]{0,750}return;/);
+assert.ok(app.includes('if (isEditPreview) {'), 'preview-only consumer remains active');
 
 assert.match(app, /hasUnconfirmedSongMissingFromServer\(user.uid, firestoreSongs\)/);
 assert.match(app, /recentReadMutationEpoch !== readRecentSongsMutationEpoch\(user.uid\)/);

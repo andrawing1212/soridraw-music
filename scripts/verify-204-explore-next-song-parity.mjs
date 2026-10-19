@@ -33,8 +33,19 @@ function functionRange(source, name) {
 }
 
 const bundle = functionRange(worker, 'buildMusicNoteShareBundle015');
-assert.match(bundle, /SORIDRAW_PUBLIC_NEXT_SONG_COMMAND_PARITY_204_20260926/, 'canonical Worker must carry the 204 next-song contract');
-assert.match(bundle, /applied\.userInput \?\? note\?\.userInput/, 'public share bundle must copy the original command input');
+// app427 supersedes the app204 inline bundle shape while retaining its
+// command/legacy/no-generated-prompt contract. Audit the actual runtime, not
+// an obsolete source marker or direct note fallback removed by patch100.
+assert.match(bundle, /SORIDRAW_MUSIC_NOTE_LEGACY_NEXT_SONG_PARITY_427_20261018/,
+  'canonical Worker must contain the audited app427 legacy next-song replacement');
+assert.match(bundle, /const requestApplied = parseRecord\(requestPayload\?\.appliedKeywords\)/,
+  'legacy requestPayload.appliedKeywords must be read');
+assert.match(bundle, /applied = mergeMissing\(applied, pick\(requestApplied\)\)/,
+  'persisted legacy fields must fill missing canonical fields');
+assert.match(bundle, /const storedCommand = firstCommand\(canonicalApplied, requestApplied, requestPayload, parseRecord\(note\)\)/,
+  'command precedence must use stored originals, not generated prompt');
+assert.match(bundle, /const userInput = shareText015\(applied\.userInput, 4000\)/,
+  'public share bundle must copy only the persisted original command');
 assert.match(bundle, /nextSong\.userInput = userInput/, 'command input must be part of nextSong');
 for (const field of ['rapMode', 'lyricWritingStyle', 'tempoSource', 'isRandomTempo']) {
   assert.ok(bundle.includes(field), `public nextSong must preserve ${field}`);

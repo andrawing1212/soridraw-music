@@ -2,6 +2,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
 import { projectCatalogItemForSync, rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
+import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -240,7 +241,7 @@ const projectMusicNoteItemForSignal = (
 
   // Extreme fallback. The canonical Firestore document is untouched; this only
   // bounds the transient changed-item signal and keeps receiver Firestore reads at 0.
-  return {
+  return appendBoundedMusicNoteMediaFallback452({
     __catalogSummary: true,
     __musicNoteCompactActiveSync: true,
     id,
@@ -265,7 +266,7 @@ const projectMusicNoteItemForSignal = (
     saved: true,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
-  };
+  }, projected);
 };
 
 const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null => {

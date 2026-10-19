@@ -1,3 +1,10 @@
+## CURRENT — app435 canonical null/empty and genre/subgenre precedence safety (2026-10-20 KST)
+
+- PR #282 fixed-SHA candidate after previous boundary repair `8c4d4fe4080dfc2459f55a0aa3ff355ec60df087` had GitHub CI 39324552584 PASS. Additional exact-original click gate protects explicit canonical `null`/empty array from legacy requestPayload and stale local subgenre, including verified pending genre changes. 454 targeted executable tests strengthened. **New commit still requires exact CI + separate independent audit before merge/deploy**.
+- Preview baseline remains `11f46242f3c08fc9076dd10abe90be0008aac098` / app434 deployed; Stage416 OFF, TEST/PRODUCTION unchanged. Shared user data untouched, no Worker/Functions/Rules changes. Current app435 candidate 3/4 75% pending audit and live PC/mobile parity.
+
+---
+
 ## CURRENT — app435 original-recipe and Recent cache durability correction (2026-10-20 KST)
 
 - App434 remains deployed; base preview `11f46242f3c08fc9076dd10abe90be0008aac098`. app435 PR #282 `fix/app435-integrated-parity` stays draft/unmerged pending full exact SHA CI and independent audit. Previous head `4eb6bc17f9c4453a48c77988304a84b12d11f271` failed source audit on stale canonical recipe precedence and acknowledged Recent cache-write failure.

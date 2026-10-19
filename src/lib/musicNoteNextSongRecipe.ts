@@ -154,6 +154,15 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
   const cached = parseRecord(cachedRow) || {};
   const original = parseRecord(originalDocument) || {};
   const canonicalApplied = parseRecord(original.appliedKeywords);
+  // Legacy normalization can treat null as missing and fill an old
+  // requestPayload value. On an explicit click, a present canonical setting
+  // is deliberate: null/[] and its nested clears must remain authoritative.
+  for (const [key, value] of Object.entries(pickKnownRecipeFields(canonicalApplied))) {
+    if ((COMMAND_KEYS_459 as readonly string[]).includes(key)) continue;
+    persisted[key] = isPlainRecord(value) && isPlainRecord(persisted[key])
+      ? mergeAbsentOnlyClick462(value, persisted[key])
+      : value;
+  }
   const localApplied = parseRecord(cached.appliedKeywords);
   const pending = parseRecord(verifiedPendingUpdates);
   const pendingApplied = parseRecord(pending?.appliedKeywords);
@@ -170,6 +179,20 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
     };
     for (const key of COMMAND_KEYS_459) delete changed[key];
     Object.assign(merged, changed);
+  }
+  // A confirmed newer genre cannot inherit a stale cached/requestPayload
+  // subgenre from an older genre. Keep subgenre only when the current
+  // canonical or verified pending edit explicitly supplies one.
+  const hasOwn = (item: PlainRecord | null, key: string): boolean =>
+    Boolean(item && Object.prototype.hasOwnProperty.call(item, key));
+  const canonicalNewGenre = hasOwn(canonicalApplied, 'genre');
+  const pendingNewGenre = hasOwn(pendingApplied, 'genre');
+  const canonicalSubGenre = hasOwn(canonicalApplied, 'subGenre') || hasOwn(canonicalApplied, 'subGenreIds');
+  const pendingSubGenre = hasOwn(pendingApplied, 'subGenre') || hasOwn(pendingApplied, 'subGenreIds');
+  if ((pendingNewGenre && !pendingSubGenre)
+      || (canonicalNewGenre && !canonicalSubGenre && !pendingSubGenre)) {
+    delete merged.subGenre;
+    delete merged.subGenreIds;
   }
 
   // Old auto-empty userInput must not shadow the stored requestPayload direct

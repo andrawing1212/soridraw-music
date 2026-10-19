@@ -98,10 +98,24 @@ assert.equal(mergeOnClick(staleLocal,canonicalLatest,{
 }).userInput,'CURRENT_COMMAND','default empty pending field cannot erase genuine stored command');
 const explicitServerEmpty = mergeOnClick(
  {appliedKeywords:{tempo:130,genre:['old']}},
- {appliedKeywords:{tempo:null,genre:[]}},
+ {appliedKeywords:{tempo:null,genre:[]},requestPayload:{tempo:95,genre:['older-request']}},
 );
 assert.equal(explicitServerEmpty.tempo,null,'null is a deliberate canonical clear');
 assert.equal(explicitServerEmpty.genre.length,0,'empty canonical array must not restore stale genre');
+const staleGenreSub = mergeOnClick(
+ {appliedKeywords:{genre:['OLD_GENRE'],subGenre:['OLD_CACHED_SUB']}},
+ {appliedKeywords:{genre:['CURRENT_GENRE']},requestPayload:{subGenre:['OLD_REQUEST_SUB']}},
+);
+assert.equal(staleGenreSub.genre[0],'CURRENT_GENRE');
+assert.equal(staleGenreSub.subGenre,undefined,
+ 'new canonical genre cannot be replaced on display by old request/local subgenre');
+const pendingChangedGenre = mergeOnClick(
+ {appliedKeywords:{genre:['old'],subGenre:['old sub']}},
+ {appliedKeywords:{genre:['confirmed'],subGenre:['confirmed sub']}},
+ {appliedKeywords:{genre:['pending latest']}},
+);
+assert.equal(pendingChangedGenre.subGenre,undefined,
+ 'newer verified pending genre must not inherit obsolete canonical subgenre');
 assert.equal(mergeOnClick(
  {appliedKeywords:{genre:['old'],instrumentSound:['legacy-only']}},
  {appliedKeywords:{genre:['current']}},

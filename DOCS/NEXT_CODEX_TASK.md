@@ -1,3 +1,10 @@
+## NEXT — app435 re-audit canonical present-null / confirmed genre precedence (2026-10-20 KST)
+
+- Check new PR #282 exact SHA, GitHub CI TypeScript/Build/454. Reproduce canonical appliedKeywords tempo null despite historical requestPayload tempo non-null, canonical genre [] despite legacy genre, canonical current genre vs old cached/request subGenre, verified pending genre vs outdated subGenre. Confirm this additional guard changes only deliberate Next Song click recipe merging.
+- Retest offline Recent B cache write failure and exact ACK/retry guards (451/453), Music Note 60s, Recent 150s, Studio heart +30s, Explore app410/421 like/follow and app434 publication. No merge/PREVIEW until independent PASS; no shared data/TEST/PRODUCTION changes.
+
+---
+
 ## NEXT — app435 independent exact-SHA audit after two P0 source corrections (2026-10-20 KST)
 
 - Target final draft PR #282 HEAD against preview `11f46242f3c08fc9076dd10abe90be0008aac098`, full CI must PASS first. Do not merge/deploy on CI alone.

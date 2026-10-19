@@ -61,19 +61,31 @@ const pickKnownRecipeFields = (source: PlainRecord | null): PlainRecord => {
   return picked;
 };
 
-const firstStoredCommand = (...sources: Array<PlainRecord | null>): string => {
+// Legacy app versions persisted userInput:'' as an ordinary default, even
+// when requestPayload contained a real direct command. A bare empty string is
+// NOT an intentional-clear marker. An explicit later clear can be recognized
+// only when its source carries a trustworthy clear revision/timestamp.
+const COMMAND_KEYS_459 = ['userInput', 'commandInput', 'directInput', 'customPrompt'] as const;
+const hasProvenManualCommandClear459 = (...sources: Array<PlainRecord | null>): boolean =>
+  sources.some((source) => Boolean(source) && (
+    source?.manualCommandCleared === true
+    || (typeof source?.manualCommandClearedAt === 'number' && source.manualCommandClearedAt > 0)
+  ));
+
+const firstStoredCommand = (...sources: Array<PlainRecord | null>): string | undefined => {
+  if (hasProvenManualCommandClear459(...sources)) return '';
   for (const source of sources) {
     if (!source) continue;
-    for (const key of ['userInput', 'commandInput', 'directInput', 'customPrompt']) {
+    for (const key of COMMAND_KEYS_459) {
       if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
-      const value = String(source[key] ?? '').trim();
+      const value = typeof source[key] === 'string' ? source[key].trim() : '';
       if (value) return value;
-      // An explicitly stored empty current field is authoritative and must not
-      // be silently replaced by an older command alias.
-      if (source[key] === '') return '';
     }
   }
-  return '';
+  // No nonempty original command is known: preserve an actual stored blank
+  // without fabricating instructions from generated prompt or lyrics.
+  return sources.some((source) => source && COMMAND_KEYS_459.some((key) =>
+    Object.prototype.hasOwnProperty.call(source, key))) ? '' : undefined;
 };
 
 /**
@@ -100,15 +112,7 @@ export const resolveMusicNoteNextSongRecipe = (rawSource: unknown): PlainRecord 
     requestPayload,
     source,
   );
-  if (userInput || [
-    canonicalApplied,
-    requestApplied,
-    requestPayload,
-    source,
-  ].some((candidate) => candidate && ['userInput', 'commandInput', 'directInput', 'customPrompt']
-    .some((key) => Object.prototype.hasOwnProperty.call(candidate, key)))) {
-    recipe.userInput = userInput;
-  }
+  if (userInput !== undefined) recipe.userInput = userInput;
   delete recipe.commandInput;
   delete recipe.directInput;
   delete recipe.customPrompt;
@@ -131,15 +135,21 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
   const persisted = resolveMusicNoteNextSongRecipe(originalDocument);
   const cached = parseRecord(cachedRow) || {};
   const localApplied = parseRecord(cached.appliedKeywords) || {};
-  const aliases = ['userInput','commandInput','directInput','customPrompt'];
-  const explicitLocalCommand = aliases.some((key) =>
-    Object.prototype.hasOwnProperty.call(localApplied, key)
-    || (typeof cached[key] === 'string' && cached[key].trim().length > 0),
+  const localCommand = typeof local.userInput === 'string' ? local.userInput.trim() : '';
+  const persistedCommand = typeof persisted.userInput === 'string' ? persisted.userInput.trim() : '';
+  // A nonempty newer local command wins. Otherwise the known original
+  // requestPayload command fills the older synthesized empty placeholder.
+  // An explicit clear is only authoritative with a real clear marker.
+  const localCleared = hasProvenManualCommandClear459(localApplied, cached);
+  const stored = parseRecord(originalDocument) || {};
+  const storedRequest = parseRecord(stored.requestPayload);
+  const storedRequestApplied = parseRecord(storedRequest?.appliedKeywords);
+  const persistedCleared = hasProvenManualCommandClear459(
+    parseRecord(stored.appliedKeywords), storedRequestApplied, storedRequest, stored,
   );
   const merged: PlainRecord = { ...persisted, ...local };
-  if (!explicitLocalCommand && !String(local.userInput || '').trim()
-      && String(persisted.userInput || '').trim()) {
-    merged.userInput = persisted.userInput;
-  }
+  if (localCleared || persistedCleared) merged.userInput = '';
+  else if (localCommand) merged.userInput = localCommand;
+  else if (persistedCommand) merged.userInput = persistedCommand;
   return merged;
 };

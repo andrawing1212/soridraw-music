@@ -1,3 +1,16 @@
+## CURRENT — app434 PREVIEW Function initial deploy FAIL: Secret Manager metadata permission (2026-10-19 KST)
+
+- **baseline:** `preview` PR #255 merge `5591e9343e04743aac9c06b6eb633b3dd00ae9e0`; exact independent product/release artifact remains `8eb3264f1c7abaf36a59026248a61c6700e3b9a0` (Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`).
+- **Function release trigger executed:** PR #255 added only `.deploy/publication-signal-preview-release-431.trigger`, requiring `release=app434`, `audit_result=PASS` and exact audit SHA. Workflow Run [39257665533](https://github.com/andrawing1212/soridraw-music/actions/runs/39257665533) **FAIL**.
+- **verified SUCCESS before failure:** exact target checkout, TypeScript/Function source checks, Google auth, `gcloud secrets describe SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET`, full existing Functions inventory, target Function missing preflight.
+- **failure at Firebase discovery before function creation log:** firebase-tools CLI analyzes the entire `default` codebase and tried `secretmanager.secrets.get` for unrelated existing `SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET` (referenced by Stage420 in `functions/src/index.ts`). Google Secret Manager returned HTTP 403 (insufficient metadata permission or secret not found). **Do not change product/function exports or blindly create a new secret.**
+- **deployment hold:** GitHub Action is FAIL; no `431_EXACT_ONE_PREVIEW_FUNCTION_DEPLOY=PASS` and no ACTIVE/inventory postflight. There was no logged create step before the CLI 403, but independent Cloud Functions live inventory after FAIL is **unverified**; do not assert complete no-op. Worker/RTDB Rules/Hosting triggers remain untouched, so none of those releases was requested; PREVIEW Hosting still app421 pending fresh URL check. TEST/PRODUCTION code branches unchanged.
+- **required remediation:** identify the `FIREBASE_SERVICE_ACCOUNT_SORIDRAW` deploy principal, use Cloud Console to verify the Secret exists, and grant only the necessary `secretmanager.secrets.get` metadata permission scoped to that existing secret (or use an audited isolated deployment mechanism). Check current target Function live inventory before any retry. **No IAM/Secret Manager change was executed in this workstream.**
+- **stop-on-failure:** do not re-run this old initial-create workflow automatically, do not create another Function release trigger, do not deploy Worker/RTDB Rules/Hosting until the missing permission and target state are verified and a separate safe retry passes. Shared user data/D1 migration/delete/backfill = 0; 100k-user billing and PC/mobile live test unverified.
+- **state/progress:** P0-1 4/6 67%, P0-2 4/5 80%, P0-3 3/5 60%, Stage416 1/4 25%, app speed 5/5 100%; app434 overall PREVIEW release **BLOCKED** at Function step.
+
+---
+
 ## CURRENT — app434 release audit PASS; isolated PREVIEW Function push-trigger repair (2026-10-19 KST)
 
 - **independent final release artifact audit PASS:** app434 exact release source `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`; Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`; no product changes after product-audit SHA.

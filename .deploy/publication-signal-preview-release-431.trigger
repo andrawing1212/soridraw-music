@@ -1,0 +1,12 @@
+release=app434
+audit_result=PASS
+target_sha=8eb3264f1c7abaf36a59026248a61c6700e3b9a0
+scope=preview_publicationRelease431Candidate_only
+independent_function_path_audit=17bf3ef812cb50f4b3197db25401d85bb0a43e26
+worker_deploy=false
+hosting_deploy=false
+shared_rtdb_rules_deploy=false
+shared_d1_migration=false
+shared_user_data_change=false
+test_production_change=false
+release_order=1_function_only

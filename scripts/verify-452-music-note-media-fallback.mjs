@@ -30,6 +30,11 @@ assert.equal(result.sunoShareUrlUpdatedAt, 123456);
 assert.equal(result.sunoLinks, undefined, 'never send oversized whole media object');
 assert.ok(JSON.stringify(result).length <= 24000);
 assert.equal(base.sunoShareUrl, undefined, 'source data untouched');
+assert.equal(result.firestoreId, 'fav-id', 'exact song identity must not change');
+assert.equal(project.sunoLinks[0].hugeHistoricalMetadata.length, 30000,
+  'large user-owned data must not be truncated or mutated');
+assert.equal(result.title, 'Legacy long song', 'non-media fields remain intact');
+
 
 const existing = f(base, { ...project, sunoLinks: [] });
 assert.equal(Array.isArray(existing.sunoLinks), true,

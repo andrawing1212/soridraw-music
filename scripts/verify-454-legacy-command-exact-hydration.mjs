@@ -25,17 +25,24 @@ const placeholderOldCard = { ...existingFullCard, userInput: '' };
 const restored = mergeOnClick(placeholderOldCard, exactHistoricalDocument);
 assert.equal(restored.userInput,'Recorded original manual command; do not invent.',
  'historical card empty top-level placeholder must not hide the stored direct command');
-const explicitEmpty = mergeOnClick({
+const legacyAutoEmpty = mergeOnClick({
   ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'' },
 },exactHistoricalDocument);
+assert.equal(legacyAutoEmpty.userInput,'Recorded original manual command; do not invent.',
+ 'a legacy auto-empty appliedKeywords.userInput cannot suppress a persisted command');
+const explicitEmpty = mergeOnClick({
+  ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'', manualCommandClearedAt:123456 },
+},exactHistoricalDocument);
 assert.equal(explicitEmpty.userInput,'',
- 'explicit newest appliedKeywords blank must remain authoritative');
+ 'a verified explicit clear marker must keep an intentionally removed command');
 assert.equal(mergeOnClick({ id:'old-one', userInput:'' },{ id:'old-one',prompt:'AI GENERATED TEXT' }).userInput,'',
  'must not fabricate a direct command from a generated prompt');
 
 assert.equal(merged.genre[0],'indie');
-assert.equal(resolve({appliedKeywords:{userInput:''},requestPayload:{commandInput:'older command'}}).userInput,'',
- 'a deliberately blank newest command cannot be overwritten by an old value');
+assert.equal(resolve({appliedKeywords:{userInput:''},requestPayload:{commandInput:'older command'}}).userInput,'older command',
+ 'empty automatic appliedKeywords field cannot erase a stored legacy direct command');
+assert.equal(resolve({appliedKeywords:{userInput:'',manualCommandClearedAt:1234},requestPayload:{commandInput:'older command'}}).userInput,'',
+ 'a proven later manual clear wins');
 assert.equal(resolve({requestPayload:{directInput:'genuine direct instructions'}}).userInput,'genuine direct instructions');
 assert.ok(!resolve({prompt:'Generated prompt only'}).userInput,'no hallucinated manual command from generated prompt');
 
@@ -86,5 +93,5 @@ assert.equal(afterOffline.requestPayload.directInput,'original text');
 assert.equal(failures,2,'offline is not cached as verified no-command');
 
 console.log('APP454_LEGACY_NEXT_SONG_COMMAND_AND_ID_EXACT_DOCUMENT=PASS');
-console.log('APP454_OLD_LOCAL_SONG_CAN_FILL_MISSING_COMMAND=PASS');
+console.log('APP454_OLD_LOCAL_SONG_AND_AUTO_EMPTY_FIELDS_FILL_KNOWN_COMMAND=PASS');
 console.log('APP454_NO_GENERATED_PROMPT_INVENTED=PASS');

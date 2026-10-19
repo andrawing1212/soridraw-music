@@ -17,7 +17,7 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460 } from './lib/recentSongsSyncGate';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -12709,8 +12709,10 @@ const unlockAllFavorites = async () => {
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
       const retainedGapVersion = readRecentSongsRetainedDraftGap460(user.uid);
-      const unverifiedRetainedGap = retainedGapVersion >
-        readRecentSongsVerifiedRetainedDraftGap460(user.uid);
+      const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460(
+        retainedGapVersion,
+        readRecentSongsVerifiedRetainedDraftGap460(user.uid),
+      );
       const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
         hasLocalCache: Boolean(latestCache),
         profileVersion: remoteVersion,
@@ -12975,8 +12977,10 @@ const unlockAllFavorites = async () => {
         // older settled edits to other songs on an offline device; verify that
         // gap at most once using the existing guarded canonical aggregate read.
         if (detail.initialRetained === true
-          && readRecentSongsRetainedDraftGap460(user.uid) >
-            readRecentSongsVerifiedRetainedDraftGap460(user.uid)) {
+          && needsRecentSongsRetainedDraftGapRead460(
+            readRecentSongsRetainedDraftGap460(user.uid),
+            readRecentSongsVerifiedRetainedDraftGap460(user.uid),
+          )) {
           runRecentSongsServerSyncIfNeeded();
         }
         return;

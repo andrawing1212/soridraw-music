@@ -28,12 +28,17 @@ test_production_unchanged_required=true
 quality_run=39168027033
 approval=user_explicit_preview_deploy_2026_10_19
 
-requested_at=2026-10-19T17:06:00+09:00
-release_purpose=preview_app434_pinned_two_actual_runtime_verifiers_and_worker
-retry_attempt=6
+requested_at=2026-10-19T17:15:00+09:00
+release_purpose=app434_worker_after_verified_vm_test_fix
+retry_attempt=7
 retry_from_failed_worker_run=39290235396
 verifier204_blob=4a760c8b7d007ee5d9d55ebb1c4f1869485d2e67
 verifier427_blob=1ef8ead0419426860e7fc13b34be688744ed992e
 verification_fix_pr=270
 only_exact_audited_worker_source=true
 NO_SHARED_D1_WRITE=true
+
+retry_from_failed_worker_run=39291805942
+vm_verifier_fix_pr=272
+vm_verifier_blob=7c80e7e52d92e0ac81f102b6ceae75d42a3b2eaf
+qa_vm_verifier_run=39292125635

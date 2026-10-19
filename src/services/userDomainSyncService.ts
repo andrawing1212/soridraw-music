@@ -862,7 +862,9 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   // may have overwritten older canonical RTDB notifications, so preserve an
   // unresolved catch-up fence only for that initial replay.
   if (signal.operation === 'edit-preview') {
-    if (initialRetained) rememberRecentSongsPendingSignalVersion(uid, signal.version);
+    // A draft cannot certify the Firestore document version or trigger an
+    // aggregate read: the canonical data can legitimately lag up to 150s.
+    // It is still delivered as an immediate exact changed-item UI preview.
   } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
     // A live ACK of our own confirmed write is safe. A retained old own-device
     // signal is not proof of complete membership after offline changes.

@@ -41,3 +41,17 @@ export const canAcknowledgeRecentSongsInlineSignal = (gate: RecentSongsInlineAck
   && Number.isFinite(gate.signalVersion)
   && gate.signalVersion > 0
   && !gate.initialRetained;
+
+/**
+ * One-time read-only gap verification, separate from canonical version/ACK.
+ * The last retained RTDB text draft can mask unrelated settled song changes
+ * while this device was offline. A successfully read snapshot marks only this
+ * signal version verified; repeated same-signal cold starts cost R0.
+ */
+export const needsRecentSongsRetainedDraftGapRead460 = (
+  retainedDraftVersion: number,
+  verifiedDraftVersion: number,
+): boolean =>
+  Number.isFinite(retainedDraftVersion)
+  && retainedDraftVersion > 0
+  && retainedDraftVersion > Math.max(0, Number(verifiedDraftVersion) || 0);

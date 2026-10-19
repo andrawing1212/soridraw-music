@@ -1,3 +1,14 @@
+## CURRENT — app434 release audit PASS; isolated PREVIEW Function push-trigger repair (2026-10-19 KST)
+
+- **independent final release artifact audit PASS:** app434 exact release source `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`; Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`; no product changes after product-audit SHA.
+- **discovered release block:** the `publication-signal-preview-release-431.yml` `workflow_dispatch` lives only in `preview`; GitHub default `main` does not have it, so manual dispatch cannot execute.
+- **minimal release-system edit:** the same existing PREVIEW Function workflow now additionally supports a `preview` branch push of the dedicated `.deploy/publication-signal-preview-release-431.trigger` path. For app434 push it requires `release=app434`, `audit_result=PASS` and exact pre-audited SHA above; source is checked out by SHA before preflight/one-Function-only deploy. Manual mode retained but cannot be invoked until default branch includes the workflow.
+- **this commit is NOT a release trigger:** no `.deploy/*` trigger files added/changed. Product code, audited Worker bytes, Functions implementation, shared RTDB Rules, D1, UI/CSS, TEST/PRODUCTION and user data are unchanged.
+- **status:** PREVIEW live remains app421; Function, Worker, Rules and Hosting deployment all 0. Independent focused audit of the workflow change is still required before creating any Function trigger.
+- **next:** separate workflow-only independent audit → explicit PREVIEW Function trigger referencing `8eb3264f...` → verify ACTIVE and exact binding → Worker release → shared read-only Rules and Hosting app434, all with stop-on-failure.
+- **progress unchanged:** Stage416 1/4 25% · app speed 5/5 100% · P0-1 4/6 67% · P0-2 4/5 80% · P0-3 3/5 60%. Release-system fix: workflow change prepared, audit/deploy pending.
+
+---
 ## CURRENT — app434 product audit PASS; PREVIEW release artifact materialized; focused release audit pending (2026-10-19 KST)
 
 - **product audit PASS:** GPT-6 independently passed app434 source `8b793206c67277dbe78b97426a340bcb2a613cdb` for the same-timestamp publication receive/ACK ordering fix.

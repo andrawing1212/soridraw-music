@@ -1,3 +1,12 @@
+## NEXT — app434 PREVIEW Function Workflow push-trigger independent audit (2026-10-19 KST)
+
+- Audit latest `preview` workflow/docs-only SHA versus app434 audited release `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`.
+- `publication-signal-preview-release-431.yml`: `workflow_dispatch` remains, `push` is constrained to `preview` and `.deploy/publication-signal-preview-release-431.trigger` only; workflow source edits alone must not trigger deployment.
+- Push manifest must require `release=app434`, `audit_result=PASS`, exact target SHA `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`; error/missing trigger fails closed. Exact checkout, one Function-only preflight, unrelated Functions/main/production protection preserved.
+- Verify no `.deploy/*` trigger modified, no product/Worker/Function source/Rules/data change; do not deploy on this audit.
+- Only after PASS create the Function-only release trigger; wait for `publicationRelease431Candidate` ACTIVE, then Worker, then guarded shared Rules + Hosting app434. Avoid a half release.
+
+---
 ## NEXT — app434 PREVIEW release artifact: GPT-6 FOCUSED AUDIT ONLY (2026-10-19 KST)
 
 - **Audit latest `preview` HEAD after this docs-only merge.** Product behavior underneath was already independently PASS at `8b793206c67277dbe78b97426a340bcb2a613cdb`; release artifact preparation is PR #252 merge `7f1a4031974547b0884d747bbc502303d74a9555`.

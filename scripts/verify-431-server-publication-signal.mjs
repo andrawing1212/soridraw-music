@@ -46,7 +46,16 @@ assert.equal(wrangler?.vars?.SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT,
 assert.match(releaseRuntime,/publicationRelease431Test/);
 assert.match(releaseRuntime,/publicationRelease431Production/);
 assert.match(releaseWorkflow,/audit_result/);
-assert.match(releaseWorkflow,/test "\$\{\{ inputs\.audit_result \}\}" = PASS/);
+assert.match(releaseWorkflow,/workflow_dispatch:/);
+assert.match(releaseWorkflow,/push:\s*\n\s*branches:\s*\[preview\]\s*\n\s*paths:\s*\n\s*- '\.deploy\/publication-signal-preview-release-431\.trigger'/);
+assert.match(releaseWorkflow,/MANUAL_TARGET_SHA: \$\{\{ inputs\.target_sha \}\}/);
+assert.match(releaseWorkflow,/MANUAL_AUDIT_RESULT: \$\{\{ inputs\.audit_result \}\}/);
+assert.match(releaseWorkflow,/test "\$GITHUB_EVENT_NAME" = 'workflow_dispatch'/);
+assert.match(releaseWorkflow,/test "\$audit" = PASS/);
+assert.match(releaseWorkflow,/test "\$release" = 'app434'/);
+assert.match(releaseWorkflow,/test "\$target" = '8eb3264f1c7abaf36a59026248a61c6700e3b9a0'/);
+assert.match(releaseWorkflow,/ref: \$\{\{ steps\.source\.outputs\.sha \}\}/);
+assert.match(releaseWorkflow,/test "\$\(git rev-parse HEAD\)" = "\$\{\{ steps\.source\.outputs\.sha \}\}"/);
 assert.match(releaseWorkflow,/--only "functions:\$FUNCTION_NAME"/);
 assert.match(releaseWorkflow,/431_ONLY_APPROVED_FUNCTION_CHANGED=PASS/);
 

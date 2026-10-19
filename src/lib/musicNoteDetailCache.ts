@@ -272,3 +272,35 @@ export const patchMusicNoteDetailCache = async ({
   remember(record);
   await writePersistent(record);
 };
+
+
+// Explicit "Next Song" must not trust an older IndexedDB/memory detail entry:
+// an old same-version record may omit requestPayload/commandInput even though
+// the unchanged original favorites document contains the manual command.
+// This action-scoped, per-song memo reads the original once per sourceVersion
+// within this browser session; normal page/view hydration remains cache-first.
+const originalRecipeLoads456 = new Map<string, Promise<any | null>>();
+export const getOrLoadMusicNoteOriginalRecipe456 = (
+  args: MusicNoteDetailLoadArgs,
+): Promise<any | null> => {
+  const safeUid = String(args.uid || '').trim();
+  const safeSourceId = String(args.sourceId || '').trim();
+  if (!safeUid || !safeSourceId) return Promise.resolve(null);
+  const version = Math.max(0, Math.floor(Number(args.sourceVersion || 0)));
+  const key = `${cacheKey(safeUid, safeSourceId)}:${version}:next-song-original-456`;
+  const existing = originalRecipeLoads456.get(key);
+  if (existing) return existing;
+  const task = Promise.resolve().then(args.loader).catch((error) => {
+    // Failed read is never cached as successful verification: the next
+    // deliberate click may retry after network/Auth recovery.
+    originalRecipeLoads456.delete(key);
+    throw error;
+  });
+  originalRecipeLoads456.set(key, task);
+  while (originalRecipeLoads456.size > 100) {
+    const oldest = originalRecipeLoads456.keys().next().value;
+    if (!oldest) break;
+    originalRecipeLoads456.delete(oldest);
+  }
+  return task;
+};

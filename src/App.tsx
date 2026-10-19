@@ -7,6 +7,9 @@ import {
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
+  readRecentSongsRetainedDraftGap460,
+  readRecentSongsVerifiedRetainedDraftGap460,
+  verifyRecentSongsRetainedDraftGap460,
   rememberRecentSongsPendingSignalVersion,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
@@ -12705,7 +12708,10 @@ const unlockAllFavorites = async () => {
       const localVersion = readRecentSongsLocalVersion(user.uid);
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
-      const needsServerRead = needsRecentSongsServerRead({
+      const retainedGapVersion = readRecentSongsRetainedDraftGap460(user.uid);
+      const unverifiedRetainedGap = retainedGapVersion >
+        readRecentSongsVerifiedRetainedDraftGap460(user.uid);
+      const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
         hasLocalCache: Boolean(latestCache),
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
@@ -12725,6 +12731,7 @@ const unlockAllFavorites = async () => {
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
       const readSignalVersion = pendingSignalVersion;
+      const retainedGapAtRead = unverifiedRetainedGap ? retainedGapVersion : 0;
 
       void getDocFromServer(ref)
         .then((snap) => {
@@ -12787,6 +12794,12 @@ const unlockAllFavorites = async () => {
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
           applyRecentSongsState(visibleServerHistory453, { preferredIndex: nextIndex, latestBatchId });
+          // The one canonical aggregate read has recovered all *settled*
+          // earlier songs that may be obscured by the retained draft. This is
+          // NOT an ACK of the draft itself or a 150s commit.
+          if (cachedSuccessfully && retainedGapAtRead > 0) {
+            verifyRecentSongsRetainedDraftGap460(user.uid, retainedGapAtRead);
+          }
           recentSongsReadyToCacheRef.current = true;
           recentSongsSessionVerifiedUids.add(user.uid);
 
@@ -12958,8 +12971,14 @@ const unlockAllFavorites = async () => {
         // retains only its latest row. The 451 gate reads a canonical snapshot
         // only when that initial changed signal has not yet been ACKed. Existing
         // local drafts/outbox still outrank older server data.
-        // A preview cannot establish canonical freshness. Wait for the
-        // authoritative mutation signal; do not read stale Firestore here.
+        // Live text stays RTDB-only. A *new* first retained draft may hide
+        // older settled edits to other songs on an offline device; verify that
+        // gap at most once using the existing guarded canonical aggregate read.
+        if (detail.initialRetained === true
+          && readRecentSongsRetainedDraftGap460(user.uid) >
+            readRecentSongsVerifiedRetainedDraftGap460(user.uid)) {
+          runRecentSongsServerSyncIfNeeded();
+        }
         return;
       }
 

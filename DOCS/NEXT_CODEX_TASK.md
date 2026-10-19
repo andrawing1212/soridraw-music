@@ -1,3 +1,14 @@
+## NEXT — app435 PR #282 new SHA independent Work audit, then gated PREVIEW release (2026-10-20 KST)
+
+**No more feature implementation until independent audit** unless new exact-SHA CI fails or specific audit blocker appears. Compare actual latest draft PR #282 HEAD against PREVIEW `11f46242f3c08fc9076dd10abe90be0008aac098`. app434 remains deployed and public/private/Explore title/live improvements must remain intact.
+
+1. **Recent missed B audit:** PC persists B while mobile closed, then sends A text `edit-preview`, so RTDB first retained node is only A and cached profile version is stale. Read code `src/services/userDomainSyncService.ts`, `src/lib/recentSongsSyncGate.ts`, `src/App.tsx`. Verify initial retained draft produces persistent gap marker but NEVER ACKs canonical; one guarded `user_recent_songs/{uid}` read recovers B while local newer A text remains; on same signal reopen R0. Verify unread/failed read retries, new signal while read inflight, pending on sender, no unconditional data wipe, no repeated R on live drafts or stable warm reopen. Execute regression 451/453 independently.
+2. **Original legacy Next Song audit:** `src/lib/musicNoteNextSongRecipe.ts` must recover literal old stored `requestPayload.appliedKeywords.commandInput` even if canonical `appliedKeywords.userInput:''` and local `userInput:''` are generated empty defaults. Explicit proven later clear wins; *older* clear must not erase newer actual nonempty command. `FavoritesPage.tsx` list and modal button exact user-owned favorite 1-document click hydration; same-version cache bypass, owner check, session memo 456 and Studio `pendingAppliedKeywords`+userInput. No default prompt-as-original, no full collection scan. Explicit uncertainty for old clear without provenance; physical historical user sample QA required.
+3. Check app434 publication, app410/421 likes/follows, Studio 30s save-heart, Music Note 60s, Recent 150s, Suno exact playback/media, responsive UI, worker/Functions/rules nonchanges and 100k read/write cost. Use real QA after code-only independent audit.
+4. Latest GitHub full CI exact head TypeScript/Build/regression must be PASS; frozen SHA stays fixed throughout separate GPT-6/Work read-only audit. If FAIL stop and return to developer. **Do not merge, change shared user data, invalidate healthy cache, or deploy TEST/PRODUCTION without approval.** PREVIEW release only after audit PASS and guarded existing Hosting trigger, then human PC/mobile acceptance.
+
+---
+
 ## NEXT — finalize app435 #282 corrected exact code audit, NO MERGE before PASS (2026-10-20 KST)
 
 **Source of truth:** PR #282 `fix/app435-integrated-parity` to `preview` baseline `11f46242f3c08fc9076dd10abe90be0008aac098`, current app deployed app434. Previous Work independent audit `eeda037...` FAIL, and extra read-only check `4cd053...` FAIL. Current product fix before doc commit `dfc2edb3b8a851189df20c687aa60335de56e486`. Use latest actual PR SHA after doc updates.

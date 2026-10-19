@@ -1,3 +1,12 @@
+## CORRECTION — shared RTDB Stage416 roots currently DORMANT; app434 adds ONLY publication roots (2026-10-19 KST)
+
+- Direct live read-only Run 39286876529 recorded `418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS additive-server-only-416-without-public-publication-429`. The mode means **Stage416 server-only RTDB roots are ABSENT**, as are the two public publication roots. Prior statement that Stage416 private roots were already installed was incorrect; correct it here.
+- Initial PR #265 safety helper refused the live RTDB rules before any write (`434_SHARED_RTDB_UNEXPECTED_DRIFT_STOP_NO_PUT`), proving fail-closed behavior. This is not permission failure or corruption; helper incorrectly required inactive Stage416 private roots to exist.
+- The corrected PR #265 helper explicitly supports only TWO expected shared-Rules baselines: (a) exact current Stage416 dormant source, or (b) exact Stage416 server-only roots already installed, and changes **only** `publicSync.explorePublication` + `publicSync.explorePublicationProfiles`. It never adds/removes Stage416 private roots and rejects mixed/unknown drifts. Existing live Stage416 status is preserved. Any permission not part of the two approved new public roots must stay exact.
+- Require fresh CI read-only live Rules comparison PASS, no deploy until Worker and independent audit PASS. Do not run bulk RTDB Rules overwrite.
+
+---
+
 ## CURRENT — app434 PREVIEW Worker queued; shared RTDB publication Rules additive-only fix prepared (2026-10-19 KST)
 
 - **Immutable app434 product:** audited release `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`, canonical Worker SHA256 `916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88`. PR #263 successfully corrected obsolete release-regression text checks without weakening original-input/legacy tests, merge `19b484e45f28254710b0e47a4cfa5286afb51e91`.

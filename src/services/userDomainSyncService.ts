@@ -805,7 +805,7 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   };
 };
 
-const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomainSyncSignal): void => {
+const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomainSyncSignal, initialRetained = false): void => {
   if (typeof window === 'undefined') return;
 
   if (kind === 'musicNote') {
@@ -871,6 +871,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
       originDeviceId: signal.originDeviceId,
       operation: signal.operation,
       itemJson: signal.itemJson || '',
+      initialRetained,
     },
   }));
 };
@@ -903,9 +904,14 @@ const startDomainSubscriptions = (uid: string) => {
     console.warn('Music Note RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });
 
+  // A new subscriber receives only the latest retained RTDB item. It cannot
+  // prove that other songs changed while this origin was offline or closed.
+  let firstRecentSnapshot = true;
   unsubscribeRecentSongs = onValue(ref(realtimeDb, `userSync/${safeUid}/recentSongs`), (snapshot) => {
+    const initialRetained = firstRecentSnapshot;
+    firstRecentSnapshot = false;
     const signal = normalizeSignal(snapshot.val());
-    if (signal) dispatchSignal(safeUid, 'recentSongs', signal);
+    if (signal) dispatchSignal(safeUid, 'recentSongs', signal, initialRetained);
   }, (error) => {
     console.warn('Recent-song RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });

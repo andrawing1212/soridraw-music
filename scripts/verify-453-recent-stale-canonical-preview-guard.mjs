@@ -13,6 +13,22 @@ vm.runInNewContext(transpiled,sandbox);
 const protect=sandbox.exports.protectRecentCanonicalSnapshotFromPreview453;
 assert.equal(typeof protect,'function');
 const songId=(s)=>s.id;
+
+const pickLive=sandbox.exports.pickRecentSongLiveTextPreview457;
+assert.equal(typeof pickLive,'function');
+const picked=pickLive({
+ title:'new title',lyrics:{korean:'new lyrics'},updatedAtMs:1000,
+ favoriteFirestoreId:null,musicNoteFavoriteId:null,isPublic:false,isLocked:false,
+ audioUrl:null,sunoCoverUrl:null,ownerUid:'outdated-user',
+});
+assert.equal(picked.title,'new title');
+assert.equal(picked.lyrics.korean,'new lyrics');
+assert.equal(picked.__recentSongEditPreview,true);
+for(const key of ['favoriteFirestoreId','musicNoteFavoriteId','isPublic','isLocked','audioUrl','sunoCoverUrl','ownerUid']) {
+ assert.equal(Object.prototype.hasOwnProperty.call(picked,key),false,
+  'live preview may not propagate old '+key);
+}
+
 const oldA={id:'A',title:'Old A',lyrics:{korean:'old lyrics'},appliedKeywords:{lyricsByLanguage:{ko:'old lyrics'}}};
 const newestA={...oldA,title:'Edited A',lyrics:{korean:'new lyrics'},appliedKeywords:{lyricsByLanguage:{ko:'new lyrics'}},__recentSongEditPreview:true};
 const changedB={id:'B',title:'New B',lyrics:{korean:'B'}};
@@ -79,6 +95,7 @@ assert.equal(ordinary.hasUnsettledPreview,false,'warm healthy cache must remain 
 const app=fs.readFileSync('src/App.tsx','utf8');
 const sync=fs.readFileSync('src/services/userDomainSyncService.ts','utf8');
 assert.match(app,/protectRecentCanonicalSnapshotFromPreview453\([\s\S]{0,180}currentCache\?\.history/);
+assert.match(app,/incoming\.__recentSongEditPreview === true[\s\S]{0,90}pickRecentSongLiveTextPreview457\(incoming\)/);
 assert.match(app,/history: visibleServerHistory453/);
 assert.match(app,/applyRecentSongsState\(visibleServerHistory453/);
 assert.match(app,/!protectedRecent453\.hasUnsettledPreview\) \{\s*acknowledgeRecentGeneratedSongs/);

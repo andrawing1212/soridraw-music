@@ -30,6 +30,29 @@ const legacyAutoEmpty = mergeOnClick({
 },exactHistoricalDocument);
 assert.equal(legacyAutoEmpty.userInput,'Recorded original manual command; do not invent.',
  'a legacy auto-empty appliedKeywords.userInput cannot suppress a persisted command');
+
+const historicalAutoEmptyOriginal = {
+  ...exactHistoricalDocument,
+  appliedKeywords:{genre:['indie'],userInput:''},
+  userInput:'',
+};
+assert.equal(resolve(historicalAutoEmptyOriginal).userInput,
+ 'Recorded original manual command; do not invent.',
+ 'even the original favorite may include default empty userInput while storing a real old direct command');
+assert.equal(mergeOnClick({
+  ...existingFullCard,
+  appliedKeywords:{genre:['indie'],userInput:''},
+  userInput:'',
+},historicalAutoEmptyOriginal).userInput,
+ 'Recorded original manual command; do not invent.',
+ 'two automatic blank layers may not shadow a historical original direct command');
+assert.equal(mergeOnClick({
+ ...existingFullCard,appliedKeywords:{genre:['indie'],userInput:'RECENT NEW COMMAND'},
+}, {requestPayload:{appliedKeywords:{commandInput:'OLD COMMAND',manualCommandClearedAt:100}}}).userInput,
+ 'RECENT NEW COMMAND','a newer real command outranks an older clear record');
+assert.equal(resolve({appliedKeywords:{userInput:'NEW'},requestPayload:{manualCommandClearedAt:100}}).userInput,
+ 'NEW','a lower-precedence clear must not erase a newer nonempty direct command');
+
 const explicitEmpty = mergeOnClick({
   ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'', manualCommandClearedAt:123456 },
 },exactHistoricalDocument);

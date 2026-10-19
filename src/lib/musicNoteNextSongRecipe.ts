@@ -114,3 +114,32 @@ export const resolveMusicNoteNextSongRecipe = (rawSource: unknown): PlainRecord 
   delete recipe.customPrompt;
   return recipe;
 };
+
+
+/**
+ * Explicit user click only. Some old fully-rendered Music Note cards carry an
+ * empty fallback userInput even though their exact persisted requestPayload
+ * contains the original direct command. A synthesized empty *top-level* card
+ * value cannot suppress that genuine stored command, but an explicit newest
+ * appliedKeywords empty command can.
+ */
+export const mergeMusicNoteNextSongClickRecipe455 = (
+  cachedRow: unknown,
+  originalDocument: unknown,
+): PlainRecord => {
+  const local = resolveMusicNoteNextSongRecipe(cachedRow);
+  const persisted = resolveMusicNoteNextSongRecipe(originalDocument);
+  const cached = parseRecord(cachedRow) || {};
+  const localApplied = parseRecord(cached.appliedKeywords) || {};
+  const aliases = ['userInput','commandInput','directInput','customPrompt'];
+  const explicitLocalCommand = aliases.some((key) =>
+    Object.prototype.hasOwnProperty.call(localApplied, key)
+    || (typeof cached[key] === 'string' && cached[key].trim().length > 0),
+  );
+  const merged: PlainRecord = { ...persisted, ...local };
+  if (!explicitLocalCommand && !String(local.userInput || '').trim()
+      && String(persisted.userInput || '').trim()) {
+    merged.userInput = persisted.userInput;
+  }
+  return merged;
+};

@@ -1,3 +1,12 @@
+## NEXT — app434 PREVIEW user acceptance and separate release-engine quality work (2026-10-19 KST)
+
+- Immutable app434 PREVIEW Worker + guarded shared Rules + Firebase Hosting **deployed SUCCESS**: Worker Run 39292729273, Hosting/Rules Run 39294242410. Preserve `preview` release commit `7e0032fbdd607ee54a09c3aaba16497d9f018f57` and app434 audited source `8eb3264f1c7abaf36a59026248a61c6700e3b9a0` until user acceptance.
+- User PC/mobile functional validation only: public/unpublic song, signal to Explore feed and public profile, like/unlike and follow, state on warm cache and across devices. Do not claim cross-device/time/cost PASS until real measured. Do not deploy TEST or PROD without authorization.
+- Separately, after accepted release, review release workflow for repeated old verifier drift, duplicated checks, slow CI and post-create Artifact Registry policy signaling. Design a stable fast release engine with no bypass of safety gates, no UI/product changes. Exact Function inventory and Registry cleanup policy remain operational follow-ups requiring risk review.
+- Keep Stage416 5-minute path OFF, no shared D1 migration, no background rewrite or user-data copy. 
+
+---
+
 ## NEXT — independently audit isolated app434 Candidate Function release path (2026-10-19 KST)
 
 - Confirm latest PR changes only existing Function release workflow, the existing `verify-431-server-publication-signal` guard, and current status/next-task docs. No product source, canonical Worker, Rules, D1, release trigger or shared data edit.

@@ -16,6 +16,17 @@ const songId=(s)=>s.id;
 
 const pickLive=sandbox.exports.pickRecentSongLiveTextPreview457;
 assert.equal(typeof pickLive,'function');
+const pickApplied=sandbox.exports.pickRecentSongLiveAppliedKeywords457;
+assert.equal(typeof pickApplied,'function');
+const safeApplied=pickApplied({
+ generationBatchId:null,generationIndex:null,genre:['wrong'],secondaryLanguage:'en',
+ titlesByLanguage:{ko:'Latest'},editedInStudio:true,editedInStudioAt:2000,
+});
+assert.equal(Object.prototype.hasOwnProperty.call(safeApplied,'generationBatchId'),false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeApplied,'generationIndex'),false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeApplied,'genre'),false);
+assert.equal(safeApplied.editedInStudio,true);
+assert.equal(safeApplied.titlesByLanguage.ko,'Latest');
 const picked=pickLive({
  title:'new title',lyrics:{korean:'new lyrics'},updatedAtMs:1000,
  favoriteFirestoreId:null,musicNoteFavoriteId:null,isPublic:false,isLocked:false,
@@ -96,6 +107,8 @@ const app=fs.readFileSync('src/App.tsx','utf8');
 const sync=fs.readFileSync('src/services/userDomainSyncService.ts','utf8');
 assert.match(app,/protectRecentCanonicalSnapshotFromPreview453\([\s\S]{0,180}currentCache\?\.history/);
 assert.match(app,/incoming\.__recentSongEditPreview === true[\s\S]{0,90}pickRecentSongLiveTextPreview457\(incoming\)/);
+assert.ok(app.includes('pickRecentSongLiveAppliedKeywords457(incomingApplied)'));
+
 assert.match(app,/history: visibleServerHistory453/);
 assert.match(app,/applyRecentSongsState\(visibleServerHistory453/);
 assert.match(app,/!protectedRecent453\.hasUnsettledPreview\) \{\s*acknowledgeRecentGeneratedSongs/);

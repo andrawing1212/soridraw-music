@@ -55,5 +55,36 @@ export const patchExactRecentTextRow436 = (
     .filter((index) => index >= 0);
   // Deleted/ambiguous canonical identity cannot be silently recreated.
   if (matches.length !== 1) return null;
-  return canonical.map((song, index) => index === matches[0] ? editedSong : song);
+  const original = canonical[matches[0]];
+  const currentEditAt = Math.max(
+    Number(original.updatedAtMs || 0), Number(original.appliedKeywords?.editedInStudioAt || 0));
+  const incomingEditAt = Math.max(
+    Number(editedSong.updatedAtMs || 0), Number(editedSong.appliedKeywords?.editedInStudioAt || 0));
+  if (currentEditAt > 0 && incomingEditAt > 0 && currentEditAt > incomingEditAt) return null;
+
+  // The pending operation is TEXT ONLY: preserve the canonical save-heart,
+  // public/locked flags, owner, generation IDs, Suno media and all other
+  // per-track metadata which may have changed on another device.
+  const merged: RecentRecoverySong = { ...original };
+  for (const key of ['title', 'koreanTitle', 'englishTitle', 'prompt', 'updatedAtMs']) {
+    if (Object.prototype.hasOwnProperty.call(editedSong, key)) merged[key] = editedSong[key];
+  }
+  if (editedSong.lyrics && typeof editedSong.lyrics === 'object' && !Array.isArray(editedSong.lyrics)) {
+    merged.lyrics = { ...(original.lyrics || {}), ...editedSong.lyrics };
+  }
+  if (editedSong.appliedKeywords && typeof editedSong.appliedKeywords === 'object') {
+    const oldApplied = original.appliedKeywords || {};
+    const nextApplied: RecentRecoverySong = { ...oldApplied };
+    for (const key of ['secondaryLanguage', 'titleLanguages', 'titlesByLanguage',
+      'lyricsByLanguage', 'editedInStudio', 'editedInStudioAt']) {
+      if (!Object.prototype.hasOwnProperty.call(editedSong.appliedKeywords, key)) continue;
+      if (key === 'lyricsByLanguage' || key === 'titlesByLanguage') {
+        nextApplied[key] = { ...(oldApplied[key] || {}), ...(editedSong.appliedKeywords[key] || {}) };
+      } else {
+        nextApplied[key] = editedSong.appliedKeywords[key];
+      }
+    }
+    merged.appliedKeywords = nextApplied;
+  }
+  return canonical.map((song, index) => index === matches[0] ? merged : song);
 };

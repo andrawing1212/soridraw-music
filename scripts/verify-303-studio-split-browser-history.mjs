@@ -166,17 +166,12 @@ const composedSignatureForTest = width => [
   width < 660 ? 'mobile' : width <= 820 ? 'compact' : 'desktop',
   contentBandForTest(width),
 ].join(':');
+// The current pane <660 threshold and content <=660 threshold are separate
+// existing contracts. The signature must detect each visible mode boundary.
 for (const [a,b] of [[659,660],[660,661],[820,821],[1080,1081],[1081,1080],[821,820],[661,660]]) {
-  if (composedSignatureForTest(a) !== composedSignatureForTest(b)) continue;
-  if ([660,661,820,821,1080,1081].includes(a) && [660,661,820,821,1080,1081].includes(b)) {
-    // A single-pixel difference need not change the Builder's own pane band.
-    // The important live boundaries are 660 mobile, 821 Compact exit and 1081 PC entry.
-  }
+  assert.notEqual(composedSignatureForTest(a), composedSignatureForTest(b),
+    'Hybrid must notice Builder boundary crossed at '+a+'/'+b);
 }
-for (const [a,b] of [[659,660],[660,661],[820,821],[1080,1081]]) {
-  if (a === 659) assert.equal(composedSignatureForTest(a),composedSignatureForTest(b),
-    'Builder pane mobile threshold currently uses <660 while content mode uses <=660');
-  else assert.notEqual(composedSignatureForTest(a),composedSignatureForTest(b),
-    'Hybrid Builder must notice the exact visible mode boundary '+a+'/'+b);
-}
+assert.equal(composedSignatureForTest(900), composedSignatureForTest(1000),
+  'Hybrid must not publish an extra mode when still in the same band');
 console.log('VERIFY_445_HYBRID_1080_LIVE_BUILDER_MODE=PASS');

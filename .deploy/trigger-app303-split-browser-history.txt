@@ -12,3 +12,6 @@ app443_isolation_guard_fix_and_split_recheck=2026-10-21
 
 app444_restore_app442_css_scope_check=2026-10-21
 product_sha=3b138fb24076c65e95efd25b68f92df59e7176ef
+
+app445_builder_content_1080_live_boundary_qa=2026-10-21
+product_sha=dafbe902edf579feb880b36d369d5ba9da99ef14

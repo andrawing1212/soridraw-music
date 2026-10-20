@@ -64,8 +64,8 @@ try{
   assert.match(wrangler,/publicationRelease431Candidate/);
 
   const appVersion=JSON.parse(readFileSync('public/app-version.json','utf8'));
-  assert.ok([434, 435, 436, 437, 438].includes(Number(appVersion.version)),
-    'frozen app434 Worker contract remains exact while Hosting advances through app438');
+  assert.ok([434, 435, 436, 437, 438, 439].includes(Number(appVersion.version)),
+    'frozen app434 Worker contract remains exact while Hosting advances through app439');
 } finally {
   rmSync(temp,{recursive:true,force:true});
 }
@@ -73,4 +73,4 @@ try{
 console.log('APP434_WORKER_PATCH100_101_EXACT_MATERIALIZATION=PASS');
 console.log('APP434_WORKER_CANONICAL_SHA256=PASS');
 console.log('APP434_PUBLICATION_FUNCTION_ENDPOINT_BINDING=PASS');
-console.log('APP434_WORKER_APP438_HOSTING_VERSION_COMPATIBLE=PASS');
+console.log('APP434_WORKER_APP439_HOSTING_VERSION_COMPATIBLE=PASS');

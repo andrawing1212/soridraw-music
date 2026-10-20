@@ -119,14 +119,14 @@ const gutterStart = studioLayout.indexOf('/* 1030 —');
 const gutterEnd = studioLayout.indexOf('/* 1032 —', gutterStart);
 assert.ok(gutterStart >= 0 && gutterEnd > gutterStart, 'missing scoped split gutter rules');
 const gutterRules = studioLayout.slice(gutterStart, gutterEnd);
-assert.match(studioPageFrame, /data-workspace-view=\\{workspaceView\\}/,
+assert.match(studioPageFrame, /data-workspace-view=\{workspaceView\}/,
   'the current Studio page must own the workspace view on its DOM frame');
-assert.match(gutterRules, /\\.soridraw-studio-page-frame\\[data-workspace-view="recent"\\]/,
+assert.match(gutterRules, /\.soridraw-studio-page-frame\[data-workspace-view="recent"\]/,
   'Recent right-pane approved gutters must follow the real page frame');
-assert.match(gutterRules, /\\.soridraw-studio-page-frame:is\\([\\s\\S]*?\\[data-workspace-view="recent"\\][\\s\\S]*?\\[data-workspace-view="music-note"\\][\\s\\S]*?\\[data-workspace-view="library"\\]/,
+assert.match(gutterRules, /\.soridraw-studio-page-frame:is\([\s\S]*?\[data-workspace-view="recent"\][\s\S]*?\[data-workspace-view="music-note"\][\s\S]*?\[data-workspace-view="library"\]/,
   'the three Builder gutters must use the same real rendered page frame');
 assert.doesNotMatch(gutterRules, /data-soridraw-lite-workspace/,
   'split gutter CSS must not rely on a document-level effect marker');
-assert.match(gutterRules, /width: min\\(calc\\(100% - 24px\\)/,
+assert.match(gutterRules, /width: min\(calc\(100% - 24px\)/,
   'user-approved 12px per-side split Builder gutter must stay unchanged');
 console.log('VERIFY_442_SPLIT_GUTTER_LOCAL_FRAME_OWNER=PASS');

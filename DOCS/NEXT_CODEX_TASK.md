@@ -1,3 +1,13 @@
+## NEXT — app442 deployed: physical same-X gutter check BEFORE further split optimization (2026-10-21 KST)
+
+PREVIEW app442 Hosting success: source 945c28668c7502f2de84419d251eedd6f1ca4c95; deployed version 442; release Actions #39502963638 SUCCESS; TEST and PRODUCTION unchanged. The exact 24px split Builder card width drift observed across Pure Pane / Hybrid and page navigation is targeted by CSS 1030/1031 selectors using local StudioPageFrame data-workspace-view instead of global effect-maintained document dataset. This fix is **NOT yet physically accepted**.
+
+Next: user manually compare at same splitter X after switching Pure Pane vs Pure Pane Hybrid; navigate Recent, Music Note, Library back/forth; verify width consistency. Check long hand drag smoothness, boundary transitions, pointer-up snap, scroll/collapse, first-frame UI and mobile. If user reports FAIL, compare exact failure against two uploaded videos and inspect ONLY the proven owner; do not touch unrelated filtering, sorting, backend, save batches, generation bar or existing accepted visuals. The extra Hybrid responsive-boundary/tablet fastpath overhead is a separate candidate ONLY if width parity is now stable but physical Hybrid drag remains worse. Do not ask the user to repeat old synthetic PERF screenshots.
+
+No unrequested deployment, no promotion to TEST/PRODUCTION; user must accept actual PREVIEW result. Product PR #317; QA PR #318 plus split-specific CI #39502637664 PASS; release PR #319 plus Firebase Preview #39502963638 PASS. Preserve Stage416 OFF and all legacy normal functionality.
+
+---
+
 ## NEXT — app441 Music Note split drag: historic breakthrough confirmed, physical jank unresolved (2026-10-21 KST)
 
 User has already provided PREVIEW/TEST Master synthetic PERF screenshots, and specifically says previous repeated synthetic testing never found the real fault. **Do not ask for the same screenshots/benchmark again.** The user wants an actual minimal PREVIEW performance repair and live hand acceptance **when the cause is proved**.

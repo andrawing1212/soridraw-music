@@ -1,3 +1,17 @@
+## CURRENT — app442 PREVIEW RELEASED, split gutter 24px physical QA pending (2026-10-21 KST)
+
+- User explicitly approved PREVIEW release on 2026-10-20 21:32 UTC. Physical video comparing Pure Pane vs Pure Pane Hybrid and Recent/Music Note/Library navigation showed 12px-per-side / 24px-total Builder card width drift at the same splitter position. This proves visible layout-state drift, not its complete performance cause.
+- app442 fixes ONLY Studio Black CSS 1030 (Recent right padding) and 1031 (Builder gutter for Recent, Music Note, Library), selecting the existing rendered StudioPageFrame data-workspace-view rather than the effect-maintained global html data-soridraw-lite-workspace. Agreed 12px-per-side dimensions and divider geometry are unchanged. Production Pure Pane Hybrid remains default. No engine or backend change.
+- Source product PR #317, merged preview 5b8db3f13809af78ea174f06a606459d67b4c581; app version 442. Existing script verify-303-studio-split-browser-history.mjs extended to assert local frame owner. Frozen Worker source byte check remains exact; its allowed Hosting version set expanded from 441 to 442 (prior CI failed only this stale gate).
+- Product CI https://github.com/andrawing1212/soridraw-music/actions/runs/39502143965 PASS (TypeScript, Build, regressions). Split-specific PR #318, source addae5bb4b71c44c0a5c9cee13507198645bc4fc, existing split-browser-history run https://github.com/andrawing1212/soridraw-music/actions/runs/39502637664 PASS (app442 gutter guard, routing, TypeScript, Build).
+- PREVIEW Firebase Hosting-only PR #319 source 945c28668c7502f2de84419d251eedd6f1ca4c95. Release https://github.com/andrawing1212/soridraw-music/actions/runs/39502963638 SUCCESS: pinned SHA, TypeScript, Build, app regression tests, Hosting, exact live HTML and version 442 PASS, TEST/PRODUCTION unchanged PASS.
+- No change to Worker, Functions, Firestore, D1, RTDB Rules, canonical user data, cache resets, data migrations or TEST/main/PRODUCTION. Stage416 remains 1/4 OFF. Independent Work audit not performed.
+- USER REAL-HAND QA PENDING at https://preview.soridraw.com: hold divider at same X while switching Pure Pane / Hybrid and Recent / Music Note / Library and confirm NO 24px Builder width jump. Test fast and slow drag, 660/820/1080/1100 boundaries, pointer-up/no snap, scroll, collapse, Generate bar, PC/mobile. Synthetic speed and source CI do not prove human-feel smoothness.
+- If width is stable but Hybrid still slower than Pure Pane, isolate only the extra hybrid responsive boundary or tablet fastpath work. Never blindly switch engine, change accepted gutters, or redesign CSS. Preserve app441 first-frame navigation, split geometry, current UI, Music Note 60s/Studio heart 30s/Recent 150s batch, cache/data safety and likes.
+- State: app442 PREVIEW released PASS. Physical width and speed acceptance UNVERIFIED; no TEST/PRODUCTION promotion until separate user approval.
+
+---
+
 ## CURRENT — app441 split performance: real screenshot numbers and historic owner reconstruction (2026-10-21 KST)
 
 - **User physical report remains FAIL:** Music Note divider on PREVIEW *feels* like pre-optimization jank, especially after the app438–441 first-frame UI work. The user requests no more blind PERF iterations; find historical speed breakthrough and smallest actual cause, then validated PREVIEW fix/real hand acceptance. This user report is not negated by synthetic FPS.

@@ -1,3 +1,12 @@
+## CURRENT — app435 exact-verified Next Song click round-trip repairs (2026-10-20 KST)
+
+- **Branch** `fix/app435-integrated-parity`, PR #282 draft/unmerged, baseline `preview` `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). Former candidate `e09d55def288b398420574c8199562f47306852d` independent source audit **FAIL** on real FavoritesPage click final resolver and old local direct command/clear outranking exact server legacy original.
+- **Scope:** In `musicNoteNextSongRecipe.ts`, a demonstrably stored nonempty original requestPayload command defeats unverified stale cached command/clear; only version-compatible durable pending command or marked clear can override. In `FavoritesPage.tsx`, exact owned document click hydration sets a transient `__musicNoteNextSongOriginalVerified462` only on success; final click consumes premerged exact recipe rather than re-resolving old `requestPayload`, and explicit empty/null canonical genre skips generated-prompt display fallback. Original list/detail UI unchanged, no new database requests or writes.
+- **Regression:** verify-454 now executes the real extracted FavoritesPage `applyKeywordsToNext` handler with `pendingAppliedKeywords` and mock display-genre inference and checks true exact null tempo / empty genre / historical direct command, stale local clear/command rejection, durable pending edit, and ordinary nonempty genre path. Existing 451/453 retained-edit and Recent persisted-version gates unchanged. Await new exact-SHA CI and **separate independent Work audit**; do not merge, deploy or modify shared data before audit PASS.
+- **Protected:** Stage416 OFF 1/4 (25%); speed improvement historical 5/5 (100% unremeasured); app435 implementation 3/4 (75%, audit pending). 30s Studio save-heart, 60s Music Note, 150s Recent, app410/421 like/follow, app434 Explore publication, media/UI untouched. TEST/PRODUCTION remain unchanged; 100k billed cost and PC/mobile physical parity unverified.
+
+---
+
 ## CURRENT — app435 canonical null/empty and genre/subgenre precedence safety (2026-10-20 KST)
 
 - PR #282 fixed-SHA candidate after previous boundary repair `8c4d4fe4080dfc2459f55a0aa3ff355ec60df087` had GitHub CI 39324552584 PASS. Additional exact-original click gate protects explicit canonical `null`/empty array from legacy requestPayload and stale local subgenre, including verified pending genre changes. 454 targeted executable tests strengthened. **New commit still requires exact CI + separate independent audit before merge/deploy**.

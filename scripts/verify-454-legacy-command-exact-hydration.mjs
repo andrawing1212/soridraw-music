@@ -124,11 +124,30 @@ const originalLegacyCommand = {appliedKeywords:{genre:['current'],userInput:''},
  requestPayload:{appliedKeywords:{commandInput:'GENUINE HISTORICAL COMMAND'}}};
 assert.equal(mergeOnClick({appliedKeywords:{genre:['stale']}},originalLegacyCommand).userInput,
  'GENUINE HISTORICAL COMMAND');
-const explicitEmpty = mergeOnClick({
+assert.equal(mergeOnClick({
+ appliedKeywords:{genre:['old'],userInput:'OUTDATED LOCAL COMMAND'},
+},originalLegacyCommand).userInput,'GENUINE HISTORICAL COMMAND',
+ 'unverified old cached direct text must not overwrite exact server legacy command');
+assert.equal(mergeOnClick({
+ appliedKeywords:{genre:['old'],userInput:'',manualCommandClearedAt:100},
+},originalLegacyCommand).userInput,'GENUINE HISTORICAL COMMAND',
+ 'unverified cached clear marker must not erase an exact server stored command');
+assert.equal(mergeOnClick({
+ appliedKeywords:{genre:['old'],userInput:'OUTDATED LOCAL COMMAND'},
+},originalLegacyCommand,{appliedKeywords:{userInput:'NEW DURABLE DRAFT COMMAND'}}).userInput,
+ 'NEW DURABLE DRAFT COMMAND',
+ 'verified current user edit still wins over old original');
+const oldLocalClear = {
   ...existingFullCard, appliedKeywords: { genre:['indie'], userInput:'', manualCommandClearedAt:123456 },
-},exactHistoricalDocument);
+};
+assert.equal(mergeOnClick(oldLocalClear,exactHistoricalDocument).userInput,
+ 'Recorded original manual command; do not invent.',
+ 'a local-only deletion marker cannot erase a proven exact original direct command');
+const explicitEmpty = mergeOnClick(oldLocalClear,exactHistoricalDocument,{
+ appliedKeywords:{userInput:'',manualCommandClearedAt:123457},
+});
 assert.equal(explicitEmpty.userInput,'',
- 'a verified explicit clear marker must keep an intentionally removed command');
+ 'version-compatible durable explicit pending clear must win over original');
 assert.equal(mergeOnClick({ id:'old-one', userInput:'' },{ id:'old-one',prompt:'AI GENERATED TEXT' }).userInput,'',
  'must not fabricate a direct command from a generated prompt');
 
@@ -141,6 +160,73 @@ assert.equal(resolve({requestPayload:{directInput:'genuine direct instructions'}
 assert.ok(!resolve({prompt:'Generated prompt only'}).userInput,'no hallucinated manual command from generated prompt');
 
 const favorite=fs.readFileSync('src/pages/FavoritesPage.tsx','utf8');
+// Execute the REAL FavoritesPage click consumer, not only the recipe merge.
+// The display-genre stub deliberately falls back to prompt text to verify
+// exact explicitly cleared genre bypasses that display-only fallback.
+const clickStart=favorite.indexOf('  const applyKeywordsToNext = (song: any) => {');
+const clickEnd=favorite.indexOf('\n\n  const FAVORITE_MUSIC_API_LANGUAGE_ORDER:',clickStart);
+assert.ok(clickStart>=0 && clickEnd>clickStart,'real next-song handler must be extractable');
+const realClick=ts.transpileModule(favorite.slice(clickStart,clickEnd),{
+ compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS},
+}).outputText;
+const sent=new Map();
+let displayGenreCalls=0;
+let navigated='';
+const clickContext={
+ exports:{},
+ onHover(){}, onLongPressEnd(){}, setSelectedSong(){}, setActiveFavoriteMenuId(){},
+ document:{activeElement:null}, window:{dispatchEvent(){}},
+ CustomEvent:class {constructor(type){this.type=type;}},
+ sessionStorage:{setItem:(k,v)=>sent.set(k,v)},
+ localStorage:{setItem:(k,v)=>sent.set(k,v)},
+ requestAnimationFrame:(fn)=>fn(), navigate:(route)=>{navigated=route;},
+ resolveMusicNoteNextSongRecipe:resolve,
+ getSongGenreValues:(song)=>{
+   displayGenreCalls++;
+   return song.appliedKeywords.genre?.length ? song.appliedKeywords.genre : ['INFERRED FROM [Genre] PROMPT'];
+ },
+ getSongSubGenreValues:(song)=>song.appliedKeywords.subGenre ?? song.appliedKeywords.subGenreIds ?? [],
+ getSongMoodValues:(song)=>song.appliedKeywords.mood ?? [],
+ getSongThemeValues:(song)=>song.appliedKeywords.theme ?? [],
+ getSongSituationSummary:(song)=>song.appliedKeywords.situationSummary ?? '',
+ getSongStyleValues:(song)=>song.appliedKeywords.style ?? [],
+ getSongInstrumentSoundValues:(song)=>song.appliedKeywords.instrumentSound ?? [],
+};
+vm.runInNewContext(realClick+'\nexports.applyKeywordsToNext=applyKeywordsToNext;',clickContext);
+const clicked=clickContext.exports.applyKeywordsToNext;
+const clearedOriginal={
+ appliedKeywords:{genre:[],tempo:null,userInput:''},
+ requestPayload:{genre:['OLD_REQUEST_GENRE'],tempo:95,commandInput:'REAL LEGACY DIRECT'},
+};
+clicked({
+ prompt:'[Genre] hallucinated genre\\nGenerated prompt',
+ requestPayload:clearedOriginal.requestPayload,
+ appliedKeywords:mergeOnClick(
+  {appliedKeywords:{genre:['OLD_LOCAL_GENRE'],tempo:88,userInput:'OUTDATED COMMAND'}},
+  clearedOriginal),
+ __musicNoteNextSongOriginalVerified462:true,
+});
+const passedToStudio=JSON.parse(sent.get('pendingAppliedKeywords'));
+assert.equal(passedToStudio.tempo,null,'actual click must keep canonical cleared tempo null');
+assert.equal(passedToStudio.genre.length,0,'actual click must not infer prompt genre over cleared original');
+assert.equal(passedToStudio.userInput,'REAL LEGACY DIRECT',
+ 'actual click must apply exact real stored legacy command, not stale local input');
+assert.equal(displayGenreCalls,0,'display-only prompt fallback must not run for proven cleared genre');
+assert.match(navigated,/^\\/studio\\?applyPending=1/);
+clicked({
+ prompt:'[Genre] another inferred genre',
+ appliedKeywords:mergeOnClick(
+  {appliedKeywords:{genre:['local stale'],tempo:85}},
+  {appliedKeywords:{genre:['CONFIRMED_GENRE'],tempo:123,userInput:'CANONICAL'}},
+ ),
+ __musicNoteNextSongOriginalVerified462:true,
+});
+const nonemptyToStudio=JSON.parse(sent.get('pendingAppliedKeywords'));
+assert.equal(nonemptyToStudio.genre[0],'CONFIRMED_GENRE');
+assert.equal(nonemptyToStudio.tempo,123);
+assert.equal(nonemptyToStudio.userInput,'CANONICAL');
+assert.equal(displayGenreCalls,1,'normal nonempty genre display normalization remains available');
+
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
 assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,2300}mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/,
  'click-only exact original must pass a version-verified local pending draft');
@@ -153,6 +239,10 @@ assert.ok(favorite.includes('getOrLoadMusicNoteOriginalRecipe456({'),
 assert.ok(favorite.includes(': getOrLoadMusicNoteDetail({'),
  'ordinary Detail retains normal cache-first behavior');
 assert.match(favorite,/hydrateCatalogFavorite\(song, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
+assert.ok(favorite.includes('__musicNoteNextSongOriginalVerified462: true'),
+ 'only successfully read exact original receives click-only trusted recipe marker');
+assert.ok(favorite.includes('const exactRecipeVerified462 = song?.__musicNoteNextSongOriginalVerified462 === true'),
+ 'final click must not rehydrate confirmed original through loose legacy normalizer');
 assert.match(favorite,/hydrateCatalogFavorite\(selectedSong, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
 assert.match(favorite,/const pendingDraft = await readMusicNoteDetailDraft\(user\.uid, sourceId\)/);
 assert.match(favorite,/originalVersion > 0 && pendingBase > 0 && pendingBase >= originalVersion/,

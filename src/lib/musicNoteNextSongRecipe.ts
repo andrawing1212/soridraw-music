@@ -205,11 +205,17 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
     typeof canonicalApplied?.[key] === 'string' && canonicalApplied[key].trim().length > 0);
   const localClear = hasProvenManualCommandClear459(localApplied, cached);
   const localCommand = typeof local.userInput === 'string' ? local.userInput.trim() : '';
+  const storedOriginalCommand = typeof persisted.userInput === 'string'
+    ? persisted.userInput.trim() : '';
 
   if (pendingClear) merged.userInput = '';
   else if (pendingCommand) merged.userInput = pendingCommand;
-  else if (canonicalClear || canonicalCommand) merged.userInput = persisted.userInput ?? '';
-  else if (localClear) merged.userInput = '';
+  // An exact owned original is authoritative even when its real command only
+  // exists in old requestPayload aliases and canonical userInput is auto-empty.
+  // A stale local command or deletion marker is not a verified newer edit.
+  else if (canonicalClear || canonicalCommand || storedOriginalCommand) {
+    merged.userInput = persisted.userInput ?? '';
+  } else if (localClear) merged.userInput = '';
   else if (localCommand) merged.userInput = localCommand;
   else if (typeof persisted.userInput === 'string') merged.userInput = persisted.userInput;
 

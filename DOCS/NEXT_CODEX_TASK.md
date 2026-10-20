@@ -1,3 +1,12 @@
+## NEXT — app435 final click provenance + end-to-end independent audit (2026-10-20 KST)
+
+- Verify PR #282 latest exact SHA versus `preview` `11f46242f3c08fc9076dd10abe90be0008aac098`. CI must PASS on the new SHA (TypeScript, Build, Functions type build, existing 450–454, like/follow, publication and read-only Rules); no merge/deploy until separate Work audit PASS.
+- Independently execute the *actual* FavoritesPage click consumer into `pendingAppliedKeywords`: original canonical tempo:null with old requestPayload tempo:95 stays null; original genre:[] plus generated prompt `[Genre]` stays []; auto-empty original userInput + requestPayload actual command restores only actual; old cached command/old clear cannot outrank it; compatible actual pending command/clear can. Ensure list and modal click both hydrate exactly owned one-document; failed/offline hydration never fabricates an original.
+- Audit Recent first retained A draft masking B N+1, durable storage failure and retry/read gating, saved heart/public/lock/audio/Suno, R0 unchanged warm reopen. Preserve app434 publication and frozen like/follow. No extra listener, Firestore repeated read, D1 scan, deployment, shared data migration/cache purge, or TEST/PRODUCTION.
+- Stage416 OFF. After exact SHA independent PASS, developer may merge and use guarded Firebase PREVIEW Hosting only, then real PC/mobile and historical-song QA. 100k billing unmeasured.
+
+---
+
 ## NEXT — app435 re-audit canonical present-null / confirmed genre precedence (2026-10-20 KST)
 
 - Check new PR #282 exact SHA, GitHub CI TypeScript/Build/454. Reproduce canonical appliedKeywords tempo null despite historical requestPayload tempo non-null, canonical genre [] despite legacy genre, canonical current genre vs old cached/request subGenre, verified pending genre vs outdated subGenre. Confirm this additional guard changes only deliberate Next Song click recipe merging.

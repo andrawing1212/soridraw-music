@@ -5186,11 +5186,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       // ignore transient UI cleanup failures
     }
 
-    const resolvedRecipe = resolveMusicNoteNextSongRecipe(song);
+    // Click-only exact original was already merged with version-compatible
+    // durable edits. Re-resolving it would refill explicit canonical null/[]
+    // from old requestPayload, silently undoing a user's cleared settings.
+    const exactRecipeVerified462 = song?.__musicNoteNextSongOriginalVerified462 === true
+      && song?.appliedKeywords && typeof song.appliedKeywords === 'object'
+      && !Array.isArray(song.appliedKeywords);
+    const resolvedRecipe = exactRecipeVerified462
+      ? song.appliedKeywords
+      : resolveMusicNoteNextSongRecipe(song);
     const normalizedSong = { ...song, appliedKeywords: resolvedRecipe };
     const pendingKeywords = {
       ...resolvedRecipe,
-      genre: getSongGenreValues(normalizedSong),
+      // The display helper may infer a genre from the generated [Genre]
+      // prompt. On an exact original, an explicit empty/null genre is a
+      // deliberate setting and must not become an inferred new command.
+      genre: exactRecipeVerified462 && (resolvedRecipe.genre === null
+        || (Array.isArray(resolvedRecipe.genre) && resolvedRecipe.genre.length === 0))
+        ? [] : getSongGenreValues(normalizedSong),
       subGenre: getSongSubGenreValues(normalizedSong),
       mood: getSongMoodValues(normalizedSong),
       theme: getSongThemeValues(normalizedSong),
@@ -6327,6 +6340,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail, verifiedPendingUpdates);
         return {
           ...song,
+          __musicNoteNextSongOriginalVerified462: true,
           appliedKeywords: mergedRecipe,
           requestPayload: song?.requestPayload ?? detail.requestPayload,
           id: sourceId,

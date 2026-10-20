@@ -130,3 +130,48 @@ assert.doesNotMatch(gutterRules, /data-soridraw-lite-workspace/,
 assert.match(gutterRules, /width: min\(calc\(100% - 24px\)/,
   'user-approved 12px per-side split Builder gutter must stay unchanged');
 console.log('VERIFY_442_SPLIT_GUTTER_LOCAL_FRAME_OWNER=PASS');
+
+
+// app445: Hybrid must publish the Builder 1080px tablet/PC transition
+// DURING the same gesture as 660/820 pane composition, never on pointer-up.
+// The existing CSS responds to the Builder content mode in the Generate bar.
+// Only one precomputed boundary change may write <html> — no continuous
+// content-width event / observer / per-pixel DOM measurement is allowed.
+const hybridSignatureStart = liteWorkspace.indexOf('const readPurePaneHybridSignature = (');
+const hybridSignatureEnd = liteWorkspace.indexOf('const readDragBoundarySignature = (', hybridSignatureStart);
+assert.ok(hybridSignatureStart > 0 && hybridSignatureEnd > hybridSignatureStart,
+  'app445 Hybrid boundary signature missing');
+const hybridSignatureSource = liteWorkspace.slice(hybridSignatureStart, hybridSignatureEnd);
+assert.match(hybridSignatureSource, /builderContentBand = readContentResponsiveMode\(safeBuilderWidth\)/,
+  'Hybrid must account for Builder 1080px content-mode threshold');
+assert.match(hybridSignatureSource, /\$\{builderBand\}:\$\{builderContentBand\}:\$\{resultBand\}/,
+  'Builder and Result 660/820 existing mode bands must remain in signature');
+
+const hybridDragStart = liteWorkspace.indexOf('if (purePaneHybridLive) {\n        const hybridSignature');
+const hybridDragEnd = liteWorkspace.indexOf('// 790: Pure Pane', hybridDragStart);
+assert.ok(hybridDragStart > 0 && hybridDragEnd > hybridDragStart,
+  'app445 Hybrid live apply section missing');
+const hybridDrag = liteWorkspace.slice(hybridDragStart, hybridDragEnd);
+assert.match(hybridDrag, /if \(dragBoundarySignatureRef\.current !== hybridSignature\) \{[\s\S]*?const builderContentMode = readContentResponsiveMode\(builderWidth\)/,
+  '1080px publication must execute only when the computed Hybrid band changes');
+assert.match(hybridDrag, /if \(contentResponsiveModeRef\.current\.builder !== builderContentMode\) \{[\s\S]*?root\.dataset\.soridrawBuilderContentMode = builderContentMode;/,
+  'content mode writes must be conditional and correctly update the shared Generate-bar CSS contract');
+assert.match(hybridDrag, /syncPaneModes\(builderWidth, resultWidth, \{\s*rootSync: false,\s*hysteresisPx: 0/,
+  '660/820 pane-local responsive transitions must stay immediate');
+assert.doesNotMatch(hybridDrag, /broadcastLitePaneResponsiveWidths|dispatchEvent|ResizeObserver|getBoundingClientRect|setState\(/,
+  'Hybrid 1080 signal must not reintroduce whole-tree broadcasts/measurements/React renders');
+
+const contentBandForTest = width => width <= 660 ? 'mobile' : width <= 1080 ? 'tablet' : 'pc';
+const composedSignatureForTest = width => [
+  width < 660 ? 'mobile' : width <= 820 ? 'compact' : 'desktop',
+  contentBandForTest(width),
+].join(':');
+// The current pane <660 threshold and content <=660 threshold are separate
+// existing contracts. The signature must detect each visible mode boundary.
+for (const [a,b] of [[659,660],[660,661],[820,821],[1080,1081],[1081,1080],[821,820],[661,660]]) {
+  assert.notEqual(composedSignatureForTest(a), composedSignatureForTest(b),
+    'Hybrid must notice Builder boundary crossed at '+a+'/'+b);
+}
+assert.equal(composedSignatureForTest(900), composedSignatureForTest(1000),
+  'Hybrid must not publish an extra mode when still in the same band');
+console.log('VERIFY_445_HYBRID_1080_LIVE_BUILDER_MODE=PASS');

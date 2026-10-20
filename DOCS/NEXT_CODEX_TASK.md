@@ -1,3 +1,13 @@
+## NEXT — app440 PC first-frame and Explore Recent navigation physical QA (2026-10-21 KST)
+
+- Released app440 PREVIEW Hosting exact source `c4d53023773e5aa9c8890297754acc2a8a0a185f` (remote version 440, exact build/TS/Build/TEST-PROD guard PASS [run #39478829206](https://github.com/andrawing1212/soridraw-music/actions/runs/39478829206)). Subsequent verifier-only `preview` head `d11a030b8e7240c393607f6cf7aed09e79e97971`, follow workflow [#39479756655](https://github.com/andrawing1212/soridraw-music/actions/runs/39479756655) PASS. Product PR #307 and verifier PR #309.
+- User app439 FAIL: Music Note/Library→Recent right Result overlaps/jumps in `20261020-1834-56.3831053.mp4`; Explore rail Recent opened Create. Both source paths adjusted in app440; **physical fix unverified**.
+- User previously PASS/FROZEN: app438 Explore first-frame and splitter left/right pane horizontal width/gutters. Preserve app439 Music Note masthead fix and all normal right sidebar/drag/scroll controls. No CSS resize, no backend, no data changes.
+- Next action is **physical** warm-cache PC navigation (1) Explore→Recent actual destination (2) Music Note→Recent and Library→Recent Result first visible frame. If FAIL, investigate exact screenshot/frame before another speculative release; separate route-bounce vs composited paint. Check browser Back/Forward, tablet/phone as follow-up.
+- Separate #293 URL/color and Stage416 unrelated. TEST/PRODUCTION not approved. Stage416 1/4·25% OFF; historic app speed 5/5·100% unremeasured.
+
+---
+
 ## NEXT — app439 PREVIEW physical QA of two still-unverified transitions (2026-10-21 KST)
 
 - app439 exact deployed `preview` source `88985fac941387fe8c5b9fab9e78982fe302b1ea` and live version 439 verified by [Firebase Hosting Action #39475323311](https://github.com/andrawing1212/soridraw-music/actions/runs/39475323311). Source changes in PR #304. CI/Hosting PASS, **not physical UI PASS**.

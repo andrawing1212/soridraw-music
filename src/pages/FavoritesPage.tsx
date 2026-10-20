@@ -2228,14 +2228,16 @@ updates: draft.updates,
   ];
 
   const getFavoriteColorValue = (song: any): string => {
-    // Older Catalog rows can contain one of the existing color aliases instead
-    // of favoriteColorTag/colorTag. Use only recognized palette values, and do
-    // not fabricate a color or overwrite the owner's saved assignment.
-    const candidates = [
-      favoriteColorMap[song?.id], song?.favoriteColorTag, song?.colorTag,
-      song?.favoriteColor, song?.noteColor, song?.color,
-    ];
-    return candidates.find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value)) || 'gray';
+    // Respect an explicit per-device gray reset or a server-side null/gray
+    // assignment. Only consult old aliases when the new fields are absent.
+    const local = favoriteColorMap[song?.id];
+    if (FAVORITE_COLOR_OPTIONS.some(option => option.value === local)) return local;
+    const assigned = [song?.favoriteColorTag, song?.colorTag]
+      .find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value));
+    if (assigned) return assigned;
+    if (song && ('favoriteColorTag' in song || 'colorTag' in song)) return 'gray';
+    return [song?.favoriteColor, song?.noteColor, song?.color]
+      .find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value)) || 'gray';
   };
 
   const getFavoriteColorHex = (songId: string, song?: any) => {

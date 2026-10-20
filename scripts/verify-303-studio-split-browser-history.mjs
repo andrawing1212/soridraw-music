@@ -4,18 +4,26 @@ import { readFileSync } from 'node:fs';
 const app = readFileSync('src/App.tsx', 'utf8');
 const explore = readFileSync('src/components/explore/ExploreShell.tsx', 'utf8');
 const splitEngine = readFileSync('src/components/studio/StudioSplitEngineWorkspace.tsx', 'utf8');
+const liteWorkspace = readFileSync('src/components/studio/LiteStudioSplitWorkspace.tsx', 'utf8');
 
-assert.match(
-  app,
-  /const navigateStudioWorkspaceView = useCallback\(\(view: StudioWorkspaceView\) => \{[\s\S]*?const previousView = studioWorkspaceView;[\s\S]*?selectStudioWorkspaceView\(view\);[\s\S]*?if \(previousView === view\) return;[\s\S]*?location\.pathname !== '\/studio'[\s\S]*?readSoridrawDisplayMode\(\) !== 'studio-black'[\s\S]*?nextParams\.set\('view', view\)[\s\S]*?navigate\(\`\/studio\$\{query \? \`\?\$\{query\}\` : ''\}\`\)/,
-  'split workspace user navigation must push a browser-history entry carrying the exact view',
-);
+// app440: the URL is the sole owner of in-Studio navigation; do not
+// publish an interim Result page while the router still carries an old view.
+const navigationStart = app.indexOf('  const navigateStudioWorkspaceView = useCallback(');
+const historyStart = app.indexOf('  // Browser Back/Forward and external Explore links', navigationStart);
+assert.ok(navigationStart > 0 && historyStart > navigationStart, 'Studio navigation/URL sync must exist');
+const navigationBlock = app.slice(navigationStart, historyStart);
+assert.match(navigationBlock, /if \(location\.pathname !== '\/studio' \|\| readSoridrawDisplayMode\(\) !== 'studio-black'\) \{[\s\S]*?selectStudioWorkspaceView\(view\);[\s\S]*?return;/,
+  'off-route/Classic navigation must retain explicit workspace selection');
+assert.match(navigationBlock, /const nextParams = new URLSearchParams\(location\.search\);[\s\S]*?nextParams\.set\('view', view\);[\s\S]*?navigate\(\`\/studio/,
+  'in-Studio navigation must push the intended view into browser history');
+assert.doesNotMatch(navigationBlock, /const previousView = studioWorkspaceView/,
+  'do not restore a stale previous view during a pending router navigation');
 
-assert.match(
-  app,
-  /useEffect\(\(\) => \{[\s\S]*?location\.pathname !== '\/studio'[\s\S]*?readSoridrawDisplayMode\(\) !== 'studio-black'[\s\S]*?new URLSearchParams\(location\.search\)\.get\('view'\)[\s\S]*?requestedView === 'recent'[\s\S]*?requestedView === 'music-note'[\s\S]*?requestedView === 'library'[\s\S]*?requestedView === 'create'[\s\S]*?selectStudioWorkspaceView\(nextView\)/,
-  'browser Back/Forward must restore the split workspace from the history URL',
-);
+const historyEnd = app.indexOf('  // 951: A Classic Music Note/Library route', historyStart);
+assert.ok(historyEnd > historyStart, 'missing browser Back/Forward synchronization');
+const historyBlock = app.slice(historyStart, historyEnd);
+assert.match(historyBlock, /useLayoutEffect\(\(\) => \{[\s\S]*?new URLSearchParams\(location\.search\)\.get\('view'\)[\s\S]*?selectStudioWorkspaceView\(nextView\)/,
+  'browser Back/Forward and Explore deep links must settle before paint');
 
 assert.match(
   app,
@@ -61,36 +69,20 @@ assert.match(app, /onMusicNote=\{\(\) => navigate\('\/history'\)\}/, 'classic Mu
 console.log('VERIFY_303_STUDIO_SPLIT_BROWSER_HISTORY=PASS');
 
 
-// app381 Recent UI changes are a separate deferred feature. A newer app
-// version alone (e.g. app382 cache hotfix) must NOT imply those UI changes.
-const appVersion = Number(JSON.parse(readFileSync('public/app-version.json', 'utf8')).version);
-assert.ok(appVersion >= 380, 'follow-only app version regressed');
-const hasApp381RecentRoute = explore.includes("onRecentSongs={() => go('/studio?view=recent')}");
-if (hasApp381RecentRoute) {
-
-
-  assert.match(
-    explore,
-    /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
-    'Explore Recent Songs must route to the exact Recent workspace',
-  );
-  assert.doesNotMatch(
-    explore,
-    /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
-    'Explore Recent Songs must not fall back to Create',
-  );
-  assert.match(splitEngine, /useLayoutEffect/, 'workspace switch must reconcile in layout phase');
-  assert.match(splitEngine, /soridraw-studio-frame-resize/, 'workspace switch must reuse the existing Lite frame-resize owner');
-  assert.match(splitEngine, /props\.workspaceRequestId/, 'workspace request id must drive pre-paint reconciliation');
-  assert.match(splitEngine, /props\.workspaceView/, 'workspace view must drive pre-paint reconciliation');
-
-  console.log('VERIFY_381_RECENT_WORKSPACE_TRANSITION=PASS');
-} else {
-  assert.match(explore, /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
-    'pre-app381 Explore Recent routing must remain as deployed app379');
-  assert.doesNotMatch(explore, /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
-    'app381 UI route must not leak into follow-only release');
-  assert.doesNotMatch(splitEngine, /soridraw-studio-frame-resize/,
-    'app381 pre-paint layout hotfix must not leak into follow-only release');
-  console.log('APP382_APP379_STUDIO_UI_PROTECTED=PASS');
-}
+// app440 explicit navigation parity: Explore's Create and Recent must
+// resolve to distinct routes; only the existing Lite owner settles pane layout.
+assert.match(explore, /onCreate=\{\(\) => go\('\/studio'\)\}/,
+  'Explore Create must retain its canonical Studio route');
+assert.match(explore, /onRecentSongs=\{\(\) => go\('\/studio\?view=recent'\)\}/,
+  'Explore Recent must navigate to the exact Recent workspace');
+assert.doesNotMatch(explore, /onRecentSongs=\{\(\) => go\('\/studio'\)\}/,
+  'Explore Recent must not route to Create');
+assert.match(liteWorkspace, /useLayoutEffect\(\(\) => \{[\s\S]*?const nextWorkspace = workspaceView \|\| 'create';[\s\S]*?root\.dataset\.soridrawLiteWorkspace = nextWorkspace/,
+  'split first-frame CSS workspace must settle before paint');
+assert.match(liteWorkspace, /window\.addEventListener\('soridraw-studio-frame-resize'/,
+  'split must preserve existing frame-resize owner');
+assert.match(app, /workspaceRequestId=\{studioWorkspaceLayoutRequestId\}/,
+  'Studio must preserve the workspace layout request id');
+assert.match(splitEngine, /<LiteStudioSplitWorkspace \{\.\.\.props\}/,
+  'Lite split engine must remain the existing pane owner');
+console.log('VERIFY_440_RECENT_EXACT_ROUTE_AND_ATOMIC_STATE=PASS');

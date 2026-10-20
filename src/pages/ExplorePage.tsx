@@ -2594,6 +2594,18 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [profileUid, submittedQuery]);
 
+  // Show already-cached curated cards before first paint on warm Explore entry.
+  // Source remains the account-neutral device cache; no Worker/D1 request here.
+  useLayoutEffect(() => {
+    if (profileUid || submittedQuery) return;
+    const cached = readCachedSoridrawCuratedTracks307();
+    if (!cached.length) return;
+    const cards = cached.map(normalizeTrack).filter((track) => Boolean(track.id));
+    const uid = auth.currentUser?.uid || user?.uid || '';
+    setCuratedTracks307(uid ? overlayExploreLikeDisplayCounts(uid, cards) : cards);
+    setCuratedLoading307(false);
+  }, [profileUid, submittedQuery, user?.uid]);
+
   // app406: curated data may resolve from the shared on-device cache BEFORE
   // Firebase finishes restoring the signed-in user on a mobile page reload.
   // The source list effect above deliberately doesn't refetch on auth changes.
@@ -2936,7 +2948,9 @@ export default function ExplorePage() {
     };
   }, [user?.uid, requestUrl, profileUid, submittedQuery, sort]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Resolve the already-cached home/latest feed before the first visible frame.
+    // The existing network/revision gates below are unchanged.
     // SORIDRAW_EXPLORE_SEARCH_LOCAL_ZERO_REENTRY_340_20261004
     // Exact warm searches are served from the device for two minutes: Worker 0 / D1 R0.
     const feedRequest = isExploreFeedRequest(requestUrl);
@@ -3124,7 +3138,8 @@ export default function ExplorePage() {
   // app304 — Latest and Popular now share the Explore home screen. The Worker
   // R2 first-page contract remains limit=40, while this UI exposes only 20
   // cards per section. Warm re-entry stays session-cache first and D1-free.
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Populate a warm popular rail before paint, without changing its fetch rules.
     if (profileUid || submittedQuery.trim()) return;
 
     const requestUrl304 = EXPLORE_POPULAR_FEED_REQUEST_URL_304;

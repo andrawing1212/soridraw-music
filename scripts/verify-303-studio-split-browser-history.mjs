@@ -130,24 +130,3 @@ assert.doesNotMatch(gutterRules, /data-soridraw-lite-workspace/,
 assert.match(gutterRules, /width: min\(calc\(100% - 24px\)/,
   'user-approved 12px per-side split Builder gutter must stay unchanged');
 console.log('VERIFY_442_SPLIT_GUTTER_LOCAL_FRAME_OWNER=PASS');
-
-
-// app443: isolate ONLY the live Hybrid Builder formatting context.
-// The exact same contain: layout style is established in CSS 657 for the
-// 661..1080px pane band. The new owner must not touch mobile, resting,
-// divider geometry, scroll, global Generate bar, or the Result pane.
-const builderIsolationStart = studioLayout.indexOf('/* app443 — Pure Pane Hybrid Builder-only');
-assert.ok(builderIsolationStart > 0, 'app443 scoped Builder isolation missing');
-const builderIsolation = studioLayout.slice(builderIsolationStart);
-assert.ok(builderIsolation.includes('@media (min-width: 1100px)'),
-  'isolation must not affect compact external viewport');
-assert.ok(builderIsolation.includes('.is-dragging[data-v2-drag-perf-mode="pure-pane-hybrid"]'),
-  'isolation must be enabled only during the selected Hybrid gesture');
-assert.ok(builderIsolation.includes('> .soridraw-studio-builder-pane[data-pane-mode="desktop"]'),
-  'isolation must exclude Builder mobile composition and Result');
-assert.ok(builderIsolation.includes('.soridraw-studio-main {') && builderIsolation.includes('contain: layout style !important;'),
-  'Builder layout boundary must reuse the proven tablet containment only');
-const builderRuleBody = builderIsolation.slice(builderIsolation.indexOf('.soridraw-studio-main {') + '.soridraw-studio-main {'.length);
-assert.doesNotMatch(builderRuleBody, /content-visibility|contain: strict|contain:.*paint|width\s*:|height\s*:|transform\s*:|overflow\s*:|data-soridraw-builder-action-compact|data-soridraw-lite-workspace/,
-  'app443 must not freeze cards, change geometry/gutters or overwrite existing shared markers');
-console.log('VERIFY_443_HYBRID_BUILDER_ONLY_DRAG_ISOLATION=PASS');

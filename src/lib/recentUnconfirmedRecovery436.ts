@@ -13,8 +13,14 @@ export const planRecentUnconfirmedRecovery436 = (
 ): RecentRecoveryPlan | null => {
   if (!Number.isSafeInteger(canonicalVersion) || canonicalVersion <= 0) return null;
   if (!Array.isArray(canonical) || !Array.isArray(local) || !Array.isArray(unconfirmedIds)) return null;
-  if (canonical.length > 10 || local.length > 10 || unconfirmedIds.length > 10) return null;
+  // This release targets ONLY the observed 9 canonical / 10 local,
+  // single unconfirmed newly generated row. Never repair clear/delete or
+  // unrelated shorter catalogs via speculative cache reconciliation.
+  if (canonical.length !== 9 || local.length !== 10 || unconfirmedIds.length > 10) return null;
   const canonicalIds = new Set(canonical.map(getStableId).filter(Boolean));
+  if (canonicalIds.size !== 9) return null;
+  const localIds = new Set(local.map(getStableId).filter(Boolean));
+  if (localIds.size !== 10 || ![...canonicalIds].every((id) => localIds.has(id))) return null;
   const localById = new Map<string, RecentRecoverySong>();
   for (const song of local) {
     const id = getStableId(song);
@@ -25,7 +31,7 @@ export const planRecentUnconfirmedRecovery436 = (
   // existing generation-time durable UID-scoped unconfirmed marker is required.
   const missing = [...new Set(unconfirmedIds)]
     .filter((id) => id && !canonicalIds.has(id));
-  if (!missing.length || canonical.length + missing.length > 10) return null;
+  if (missing.length !== 1 || canonical.length + missing.length !== 10) return null;
   const recovered: RecentRecoverySong[] = [];
   for (const id of missing) {
     const song = localById.get(id);

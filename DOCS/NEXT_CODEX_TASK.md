@@ -1,3 +1,12 @@
+## NEXT — app435 shared like Rules LIVE verified; three physical failures still open (2026-10-20 KST)
+
+- Shared RTDB publisher/rules schema mismatch fixed in live shared Rules (two bounded UID-private fields only); require a single meaningful PC↔mobile user check of `지금 너로, 충분해` and `거기 아직 있어`. Same-account liked heart must converge and retry notification toast must stop; user data and caches untouched. Do not claim physical PASS from static/live Rules comparison.
+- Recent mobile 10 vs PC 9 remains unresolved. PR #285 stable song-ID dedupe candidate was independently found and CI PASS, but cannot prove true missing song recovery. Do not merge/deploy based solely on id-dedupe without confirming actual local/canonical IDs and preserving unconfirmed only copy.
+- Historical Music Note `다음곡에 적용` user direct command still fails: require exact old persisted owned source/alias evidence; never substitute generated prompt/lyrics.
+- Stage416 client OFF; keep current preview version 435; no TEST/PRODUCTION promotion; no repeated full dataset scans/migrations. Source branch refs and proof in CURRENT_RELEASE_STATE.md.
+
+---
+
 ## NEXT — app435 Hosting PREVIEW release and acceptance (2026-10-20 KST)
 
 - Merge Hosting-only release PR based on reviewed app435 source and await `SORIDRAW PREVIEW App Release` Action triggered by changed `.deploy/preview-app-release.trigger`. Check TS/Build/related regressions, exact https://preview.soridraw.com/ served HTML/app-version 435 and unchanged main, production and shared data; deployment only Hosting. If any release gate fails, stop and report.

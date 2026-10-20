@@ -129,6 +129,27 @@ assert.doesNotMatch(app, /localStorage.clear\(\)|indexedDB.deleteDatabase/);
 assert.ok(rtdb.includes("if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);"),
  'initial retained draft carries bounded one-time recovery marker, not a canonical ACK');
 assert.match(app, /if \(isEditPreview\) \{[\s\S]{0,1200}needsRecentSongsRetainedDraftGapRead460\([\s\S]{0,220}runRecentSongsServerSyncIfNeeded\(\);[\s\S]{0,100}return;/);
+
+// app435 real-device 10/9 discrepancy: a changed title must not create a
+// second row for the same stable song. Old songs lacking a stable ID retain
+// the historical fallback, avoiding accidental collapse of legacy batches.
+const identitySource = app.match(/const getRecentSongIdentityKey = \(song: any\): string => \{([\s\S]*?)\n  \};/)?.[1];
+assert.ok(identitySource, 'Studio must use a stable song identity before title-sensitive fallback');
+const recentIdentity = new Function('getLiveSoridrawSongId', 'return (song) => {' + identitySource + '\n};')(
+  song => song?.soridrawSongId || null,
+);
+const beforeRename = { soridrawSongId: 'same-stable-id', id: 'task', createdAt: 1, title: 'OLD' };
+const afterRename = { ...beforeRename, title: 'NEW' };
+assert.equal(recentIdentity(beforeRename), recentIdentity(afterRename),
+  'the same stable song remains one song after a title edit across devices');
+assert.notEqual(recentIdentity({ ...beforeRename, soridrawSongId: 'other-stable-id' }), recentIdentity(afterRename),
+  'two different stable songs remain distinct');
+assert.notEqual(recentIdentity({id:'legacy-task',createdAt:1,title:'A'}), recentIdentity({id:'legacy-task',createdAt:1,title:'B'}),
+  'legacy generated siblings without stable ids are not silently deleted');
+assert.match(app, /const finalKey = getRecentSongIdentityKey\(song\);/);
+assert.match(app, /const key = getRecentSongIdentityKey\(song\);/);
+console.log('APP435_RECENT_STABLE_ID_RENAME_DEDUPE=PASS');
+
 console.log('APP460_RET_INITIAL_DRAFT_A_RECOVERS_SETTLED_B_ONCE=PASS');
 console.log('APP435_RECENT_PREVIEW_NOT_CANONICAL_ACK=PASS');
 console.log('APP435_RECENT_RETAINED_SINGLE_ITEM_GAP_REQUIRES_CATCHUP=PASS');

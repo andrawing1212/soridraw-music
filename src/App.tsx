@@ -7325,6 +7325,18 @@ function App() {
     return Boolean(value.title || value.koreanTitle || value.englishTitle || value.prompt || value.lyrics);
   };
 
+  const getRecentSongIdentityKey = (song: any): string => {
+    // A stable song ID is the identity, even after a PC/mobile title or lyric edit.
+    // Legacy songs without one keep the old compound fallback so two older
+    // generations from the same request are not accidentally collapsed.
+    const stableId = getLiveSoridrawSongId(song);
+    if (stableId) return `stable:${stableId}`;
+    const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]
+      .filter(Boolean)
+      .join('::');
+    return key || JSON.stringify({ title: song.title || song.koreanTitle || song.englishTitle || '', prompt: song.prompt || '', lyrics: song.lyrics || '' }).slice(0, 500);
+  };
+
   const normalizeRecentSongList = (value: any): SongResult[] => {
     const rawList = Array.isArray(value)
       ? value
@@ -7342,11 +7354,7 @@ function App() {
     return rawList
       .filter(isSongLike)
       .filter((song: any) => {
-        const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]
-          .filter(Boolean)
-          .join('::');
-        const fallbackKey = JSON.stringify({ title: song.title || song.koreanTitle || song.englishTitle || '', prompt: song.prompt || '', lyrics: song.lyrics || '' }).slice(0, 500);
-        const finalKey = key || fallbackKey;
+        const finalKey = getRecentSongIdentityKey(song);
         if (seen.has(finalKey)) return false;
         seen.add(finalKey);
         return true;
@@ -7363,9 +7371,7 @@ function App() {
     const seen = new Set<string>();
     const merged: SongResult[] = [];
     lists.flat().filter(isSongLike).forEach((song: any) => {
-      const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]
-        .filter(Boolean)
-        .join('::') || JSON.stringify({ title: song.title || song.koreanTitle || song.englishTitle || '', prompt: song.prompt || '', lyrics: song.lyrics || '' }).slice(0, 500);
+      const key = getRecentSongIdentityKey(song);
       if (seen.has(key)) return;
       seen.add(key);
       merged.push(song as SongResult);

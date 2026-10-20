@@ -12846,12 +12846,16 @@ const unlockAllFavorites = async () => {
         });
     };
 
-    const applyRecentSongSignalItem = (itemJson: string): { applied: boolean; partial: boolean } => {
-      if (!itemJson) return { applied: false, partial: false };
+    const applyRecentSongSignalItem = (itemJson: string): {
+      applied: boolean;
+      cachedSuccessfully: boolean;
+      partial: boolean;
+    } => {
+      if (!itemJson) return { applied: false, cachedSuccessfully: false, partial: false };
       let incoming: any = null;
       try { incoming = JSON.parse(itemJson); } catch {}
       if (!incoming || incoming.__recentSongSync !== true || Array.isArray(incoming)) {
-        return { applied: false, partial: false };
+        return { applied: false, cachedSuccessfully: false, partial: false };
       }
 
       const localPending = recentSongTextWritePendingRef.current;
@@ -12863,12 +12867,12 @@ const unlockAllFavorites = async () => {
         // Preserve the newest local draft/outbox. Remote preview/canonical state
         // can reconcile after this pending local edit commits; it must not replace
         // the durable cache that crash recovery depends on.
-        return { applied: false, partial: incoming.__recentSongPartial === true };
+        return { applied: false, cachedSuccessfully: false, partial: incoming.__recentSongPartial === true };
       }
 
       const currentHistory = historyRef.current;
       const targetIndex = currentHistory.findIndex((song) => isSameRecentSongSyncItem(song, incoming));
-      if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
+      if (targetIndex < 0) return { applied: false, cachedSuccessfully: false, partial: incoming.__recentSongPartial === true };
 
       const currentSong = currentHistory[targetIndex] as any;
       const incomingApplied = incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
@@ -12943,7 +12947,7 @@ const unlockAllFavorites = async () => {
       historyRef.current = nextHistory;
       setHistory(nextHistory);
       recentSongsReadyToCacheRef.current = true;
-      saveRecentSongsCache(user.uid, {
+      const cachedSuccessfully = saveRecentSongsCache(user.uid, {
         history: nextHistory,
         historyIndex: historyIndexRef.current,
         latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
@@ -12953,7 +12957,8 @@ const unlockAllFavorites = async () => {
         setResult(merged);
       }
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
-      return { applied: true, partial: incoming.__recentSongPartial === true };
+      // Paint live UI regardless; only a durable local cache write may ACK.
+      return { applied: true, cachedSuccessfully, partial: incoming.__recentSongPartial === true };
     };
 
     const handleRecentSongsVersionSignal = (event: Event) => {
@@ -12996,6 +13001,7 @@ const unlockAllFavorites = async () => {
 
       if (canAcknowledgeRecentSongsInlineSignal({
         itemApplied: itemResult.applied,
+        itemPersisted: itemResult.cachedSuccessfully,
         itemPartial: itemResult.partial,
         signalVersion: signaledVersion,
         initialRetained: detail.initialRetained === true,

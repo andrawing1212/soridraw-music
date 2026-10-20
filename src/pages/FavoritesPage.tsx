@@ -6290,9 +6290,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         !String(song?.prompt || '').trim()
         || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
       );
+    if (requireStoredRecipe && !user?.uid && !isMusicNoteSharedView) return null;
     if ((!requireStoredRecipe && !song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
-    if (!sourceId) return song;
+    if (!sourceId) return requireStoredRecipe ? null : song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
       const detail = await (requireStoredRecipe
@@ -6320,7 +6321,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               return snapshot.exists() ? (snapshot.data() || {}) : null;
             },
           }));
-      if (!detail) return song;
+      if (!detail) return requireStoredRecipe ? null : song;
       if (requireStoredRecipe) {
         // Old rows can be shown as full local cards while their persisted
         // requestPayload command exists only in the original one-song document.
@@ -6357,8 +6358,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       };
     } catch (error) {
       console.warn('music note detail hydration failed:', error);
-      return song;
+      return requireStoredRecipe ? null : song;
     }
+  };
+
+  // Owned Music Note actions must not silently apply stale cache on offline,
+  // missing or mismatched canonical original. Shared views are explicitly
+  // different: they only have their already shared recipe and no owned doc.
+  const applyStoredRecipeToNext = async (song: any) => {
+    if (isMusicNoteSharedView) {
+      applyKeywordsToNext(song);
+      return;
+    }
+    const hydrated = await hydrateCatalogFavorite(song, true);
+    if (hydrated?.__musicNoteNextSongOriginalVerified462 !== true) {
+      showFavoriteToast('원본 설정을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해주세요.');
+      return;
+    }
+    applyKeywordsToNext(hydrated);
   };
 
   const openFavoriteDetail = async (song: any) => {
@@ -6519,7 +6536,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'apply') {
-      void hydrateCatalogFavorite(song, true).then((hydrated) => applyKeywordsToNext(hydrated));
+      void applyStoredRecipeToNext(song);
       return;
     }
 
@@ -9168,7 +9185,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       <div className="-mt-1 flex shrink-0 items-center gap-2">
                       {!isEditing && (
                         <button
-                          onClick={() => { void hydrateCatalogFavorite(selectedSong, true).then((hydrated) => applyKeywordsToNext(hydrated)); }}
+                          onClick={() => { void applyStoredRecipeToNext(selectedSong); }}
                           onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}

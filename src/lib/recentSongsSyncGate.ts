@@ -30,6 +30,7 @@ export const needsRecentSongsSignalRecheck = (gate: RecentSongsRecheck): boolean
 // mutations were received while this origin was closed/offline.
 export type RecentSongsInlineAckGate = {
   itemApplied: boolean;
+  itemPersisted: boolean;
   itemPartial: boolean;
   signalVersion: number;
   initialRetained: boolean;
@@ -37,6 +38,7 @@ export type RecentSongsInlineAckGate = {
 
 export const canAcknowledgeRecentSongsInlineSignal = (gate: RecentSongsInlineAckGate): boolean =>
   gate.itemApplied
+  && gate.itemPersisted
   && !gate.itemPartial
   && Number.isFinite(gate.signalVersion)
   && gate.signalVersion > 0

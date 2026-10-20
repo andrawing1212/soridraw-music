@@ -180,6 +180,25 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
     for (const key of COMMAND_KEYS_459) delete changed[key];
     Object.assign(merged, changed);
   }
+
+  // A tempo revision (including explicit null) invalidates older manual
+  // BPM ranges/random flags. Only fields explicitly present in the same
+  // authoritative source layer or verified newer draft may survive.
+  const ownsTempo = (source: PlainRecord | null): boolean =>
+    Boolean(source && Object.prototype.hasOwnProperty.call(source, 'tempo'));
+  const pendingTempoChanged = ownsTempo(pendingApplied) || ownsTempo(pending);
+  if (pendingTempoChanged || ownsTempo(canonicalApplied)) {
+    const currentSources = pendingTempoChanged
+      ? [pendingApplied, pending]
+      : [pendingApplied, pending, canonicalApplied];
+    for (const field of ['tempoConfig', 'tempoSource', 'isRandomTempo'] as const) {
+      if (!currentSources.some((source) =>
+        source && Object.prototype.hasOwnProperty.call(source, field))) {
+        delete merged[field];
+      }
+    }
+  }
+
   // A confirmed newer genre cannot inherit a stale cached/requestPayload
   // subgenre from an older genre. Keep subgenre only when the current
   // canonical or verified pending edit explicitly supplies one.

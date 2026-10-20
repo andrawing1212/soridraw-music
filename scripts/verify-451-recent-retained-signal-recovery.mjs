@@ -175,6 +175,42 @@ assert.match(app,/transaction\.set\(recentRef, sanitizeForFirestore\(/,
 assert.match(app,/acknowledgeRecentGeneratedSongs\(uid, recovered\.songs\)/,
   'only a committed recovery can remove local pending marker');
 assert.doesNotMatch(recoverySource436,/localStorage\.clear|indexedDB\.deleteDatabase|collection\(/);
+
+// If phone repairs the 10th row while PC is waiting out its 150s title edit,
+// PC's later canonical write must preserve the newly recovered row and never
+// roll back the target's confirmed heart/lock/media fields.
+const textPatch436 = recoverySandbox436.exports.patchExactRecentTextRow436;
+assert.equal(typeof textPatch436, 'function');
+const canonicalTen436 = full436.map((song,i) => i === 1
+  ? {...song,title:'old-title',updatedAtMs:200,liked:true,isPublic:true,
+     isLocked:true,coverUrl:'new-cover',appliedKeywords:{genre:['pop'],editedInStudioAt:200}}
+  : song);
+const stalePCEdit436 = {...canonicalTen436[1],title:'PC edited title',updatedAtMs:260,
+  liked:false,isPublic:false,isLocked:false,coverUrl:'old-cover',
+  appliedKeywords:{genre:['wrong-stale'],editedInStudioAt:260,lyricsByLanguage:{ko:'new lyrics'}}};
+const patched436 = textPatch436(canonicalTen436,stalePCEdit436,sid436);
+assert.equal(patched436.length,10,'9-row PC text snapshot cannot evict mobile recovered tenth');
+assert.equal(patched436[0].soridrawSongId,'sid-new','recovered only-copy must remain');
+assert.equal(patched436[1].title,'PC edited title');
+assert.equal(patched436[1].liked,true,'older PC heart must not overwrite canonical membership');
+assert.equal(patched436[1].isPublic,true,'older PC publication state must not override canonical');
+assert.equal(patched436[1].isLocked,true,'older PC lock must not override canonical');
+assert.equal(patched436[1].coverUrl,'new-cover','older PC media must not override canonical');
+assert.equal(patched436[1].appliedKeywords.genre[0],'pop','old PC generation recipe must not override canonical');
+assert.equal(patched436[1].appliedKeywords.lyricsByLanguage.ko,'new lyrics',
+  'text language patch stays scoped to edited song');
+assert.equal(textPatch436(canonicalTen436,{...stalePCEdit436,updatedAtMs:100,
+  appliedKeywords:{...stalePCEdit436.appliedKeywords,editedInStudioAt:100}},sid436),null,
+ 'stale edit must not outrank a newer canonical revision');
+assert.equal(textPatch436(canonicalTen436,{...stalePCEdit436,soridrawSongId:'missing'},sid436),null,
+ 'unknown exact song cannot recreate deleted rows');
+assert.equal(textPatch436([canonicalTen436[1],canonicalTen436[1]],stalePCEdit436,sid436),null,
+ 'duplicate canonical identity fails closed');
+assert.match(app, /persistRecentSongsDocument\(ref, pending\.songs, pending\.mutationEpoch, pending\.syncItem\)/);
+assert.match(app, /const merged = patchExactRecentTextRow436\(/);
+console.log('APP436_STALE_150S_PC_EDIT_CANNOT_ERASE_RECOVERED_TENTH=PASS');
+console.log('APP436_TEXT_PATCH_PRESERVES_PUBLIC_HEART_LOCK_MEDIA=PASS');
+
 console.log('APP436_RECENT_ONLY_COPY_REPAIR_9_TO_10_EXECUTABLE=PASS');
 console.log('APP436_RECENT_DELETE_OR_STALE_MARKER_NEVER_RESURRECTS=PASS');
 console.log('APP436_HEALTHY_STUDIO_REVISIT_EXTRA_FIRESTORE_READ_ZERO=PASS');

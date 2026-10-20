@@ -1,3 +1,11 @@
+## NEXT — app442 PREVIEW splitter speed user-PASS: freeze; do not optimize further without new defect (2026-10-21 KST)
+
+User hand-test statement (2026-10-20 22:04 UTC) says PREVIEW-only sluggishness improved to TEST/PRODUCTION-like smoothness after app442. Treat this **specific real-hand performance complaint as provisionally PASS**, not complete physical regression-matrix approval. Prior videos' 24px gutter shift hypothesized the change; app442 release `945c28668c7502f2de84419d251eedd6f1ca4c95` is already deployed PREVIEW, tests and exact Hosting verified in #39502963638. Do not change split Pure Pane Hybrid/engine, CSS 1030/1031, or UI simply to pursue synthetic FPS. No new code task or deployment is approved. Keep shared user data and backend untouched.
+
+If future concrete FAIL emerges, inspect only the reported screen and state: Recent ↔ Music Note ↔ Library, same splitter X across Pure Pane/Hybrid, responsive edge crossings, fast/slow drag, pointer-up/scroll/collapse, PC/mobile. Do not presume exact gutter parity was separately confirmed by this speed feedback, and do not request repeat old automatic benchmark screenshots. User confirmation is limited to practical speed recovery. TEST and PRODUCTION remain unchanged pending explicit later requests.
+
+---
+
 ## NEXT — app442 deployed: physical same-X gutter check BEFORE further split optimization (2026-10-21 KST)
 
 PREVIEW app442 Hosting success: source 945c28668c7502f2de84419d251eedd6f1ca4c95; deployed version 442; release Actions #39502963638 SUCCESS; TEST and PRODUCTION unchanged. The exact 24px split Builder card width drift observed across Pure Pane / Hybrid and page navigation is targeted by CSS 1030/1031 selectors using local StudioPageFrame data-workspace-view instead of global effect-maintained document dataset. This fix is **NOT yet physically accepted**.

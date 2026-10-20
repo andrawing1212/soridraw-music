@@ -1,3 +1,13 @@
+## CURRENT — app442 PREVIEW user physical PASS for splitter speed recovery (2026-10-21 KST)
+
+- **User's own actual-hand result at 2026-10-20 22:04 UTC:** "개선됐어. 프리뷰만 느리던 증상이 일단 테스트나 정식앱 수준으로 돌아왔어." This supersedes app441 physical slow-drag FAIL **for the reported PREVIEW-specific sluggishness**. Label: **PASS (user physical perception, provisional)**, not a new quantitative FPS/latency measurement or a blanket full-device QA acceptance.
+- The preceding app442 minimal CSS 1030/1031 change routes 12px/side Recent/Music Note/Library split gutters through rendered StudioPageFrame view state instead of an effect-maintained html marker. This is consistent with the 24px-width-change hypothesis, but neither the exact root-cause mechanism nor every 24px state parity across all transitions is independently proven by this reply.
+- **Freeze recovered behavior:** PREVIEW app442 released pinned SHA `945c28668c7502f2de84419d251eedd6f1ca4c95`, deployed via successful Firebase run #39502963638. Keep Pure Pane Hybrid default, 12px gutters, live divider+pane synchronized geometry, 660/820/1080 responsive boundaries, navigation/first-frame app441 acceptance, and existing save/caching/sync protections unchanged. No further speculative engine tuning or screen restructuring.
+- **Remaining verification:** exact same-divider-X 24px gutter parity, lengthy/fast/slow drag, responsive edge crossings, collapse/scroll, PC/mobile device matrix and independent Work audit were not specifically confirmed by this short user feedback. Do not ask for old synthetic screenshots or reopen resolved real-hand speed issue without new concrete failing evidence.
+- **Environment/changes at this turn:** GitHub release records only; no new product code changes, no Firebase/Worker/Functions/Rules, no user data changes, no deploy, no TEST/main or PRODUCTION promotion. Stage416 remains OFF. NEXT action only on further specific user instruction; focus on preserving this confirmed speed recovery.
+
+---
+
 ## CURRENT — app442 PREVIEW RELEASED, split gutter 24px physical QA pending (2026-10-21 KST)
 
 - User explicitly approved PREVIEW release on 2026-10-20 21:32 UTC. Physical video comparing Pure Pane vs Pure Pane Hybrid and Recent/Music Note/Library navigation showed 12px-per-side / 24px-total Builder card width drift at the same splitter position. This proves visible layout-state drift, not its complete performance cause.

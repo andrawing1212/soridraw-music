@@ -1,3 +1,12 @@
+## CURRENT — app444 PREVIEW restored, user physical PASS (2026-10-21 KST)
+
+- User confirmed on 2026-10-20 23:05 UTC that the app444 PREVIEW rollback worked (원상복구 됐어). The restored split behavior is physically accepted for this rollback; not an instrumented speed measurement or exhaustive device audit.
+- app444 PREVIEW Hosting pinned SHA `ae4324bb36fc8c81bfe4b2deabae7370434797ff`. CSS and split regression are byte-identical to the user-accepted app442 baseline. app443 Builder-only experiment is discontinued because physical testing found no meaningful gain.
+- Freeze Pure Pane Hybrid default, live Builder UI transitions, app442 12px gutters and local-frame owner, divider and Generate bar alignment, scrolling and shared user-data safety. No new optimization unless specifically requested.
+- Docs-only update; no code, app hosting, Worker, Functions, Rules or canonical user data changes. TEST and PRODUCTION unchanged. Independent Work audit remains unperformed.
+
+---
+
 ## CURRENT — app444 PREVIEW rollback to user-approved app442 Hybrid CSS (2026-10-21 KST)
 
 - User real-hand A/B of app443 reported approximately no discernible improvement over original Pure Pane Hybrid, subjectively perhaps 2-3% slower; no instrumented measurement and **do not claim a measured performance regression**. Product decision: priority-1 desktop Builder contain/layout style experiment is **NOT ACCEPTED** for lack of benefit. No next speculative optimization.

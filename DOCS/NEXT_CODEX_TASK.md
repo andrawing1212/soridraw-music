@@ -1,3 +1,13 @@
+## NEXT — app443 PREVIEW released; user physical A/B before any new split change (2026-10-21 KST)
+
+User-approved priority #1 Hybrid Builder scope optimization is now **Firebase PREVIEW app443** source `83a1c59acc3752b198c2706ff6efc40562e10841` (release Actions #39509226119 SUCCESS; product CI #39508398837 PASS; scoped split QA #39508917855 PASS). One drag-only CSS rule adds `contain: layout style` to Builder Studio main during Pure Pane Hybrid desktop-pane mode, based on already-existing 657 tablet-band containment. No JS geometry or responsive-state change, no shared user data/backend change, TEST/PRODUCTION unchanged. app442 recovered physical speed remains the protected control.
+
+**Acceptance PENDING:** User real-hand testing on preview.soridraw.com for (1) Pure Pane Hybrid versus app442 perceived drag smoothness, (2) Builder 660/820 card composition switching DURING mouse movement (not on pointer-up), (3) 1080/1100 boundaries and fast reverse, (4) no card height/gutter/layout/scroll/Generate bar jump, (5) Recent, Music Note, Library on PC and tablet/mobile as available. Source/Build/CI cannot prove feel. If regression occurs, revert only the new app443 CSS isolation while keeping app442 local gutter fix; no further speculative rewrites.
+
+First split QA FAIL was only a test regex matching `min-width:` in a legal media query; PR #324 corrected it. Full final QA/Follow success is recorded above. No additional fix or deployment without concrete feedback. TEST and PROD release approvals separate.
+
+---
+
 ## NEXT — app442 PREVIEW splitter speed user-PASS: freeze; do not optimize further without new defect (2026-10-21 KST)
 
 User hand-test statement (2026-10-20 22:04 UTC) says PREVIEW-only sluggishness improved to TEST/PRODUCTION-like smoothness after app442. Treat this **specific real-hand performance complaint as provisionally PASS**, not complete physical regression-matrix approval. Prior videos' 24px gutter shift hypothesized the change; app442 release `945c28668c7502f2de84419d251eedd6f1ca4c95` is already deployed PREVIEW, tests and exact Hosting verified in #39502963638. Do not change split Pure Pane Hybrid/engine, CSS 1030/1031, or UI simply to pursue synthetic FPS. No new code task or deployment is approved. Keep shared user data and backend untouched.

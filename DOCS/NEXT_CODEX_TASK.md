@@ -1,3 +1,11 @@
+## NEXT — app436 physical duplicate diagnosis, do not force 9→10 (2026-10-20 KST)
+
+- Live app version 436 verified by user screenshot; PC Recent 9, mobile Recent 10, mobile rows #2/#3 reported identical; #3 original generation ID/time not yet shown. Treat 436 acceptance FAIL.
+- Collect one mobile #3 screenshot showing title + created timestamp. Compare with photographed #2 ('내가 꿈 꿨던 어른', 2026-10-19 06:49). Classify genuine sibling vs stale alias duplicate without deleting originals; no guessing from title alone. Use same-account owner-local identities and exact generationBatchId/index or verified stable source links if needed.
+- Inspect single-key `getRecentSongIdentityKey` and `normalizeRecentSongList`, generation insertion and full Firestore merge. Add fail-closed test for same actual song with batch ID missing on one copy, separate gen index siblings, same title but distinct original songs, no added cost/read/writes for healthy caches; verify currently frozen Explore likes and media. Do not deploy a blind merge/migration. Old command restore remains separate.
+
+---
+
 ## NEXT — app436 guarded Recent local-only song recovery safety check (2026-10-20 KST)
 
 - User passed Explore like/unlike same-account PC/mobile after shared RTDB two-field fix; **freeze this behavior**. app436 Recent local-only marker recovery is a separate change; no like/Worker/RTDB/shared Rules touches.

@@ -1,3 +1,11 @@
+## NEXT — app444 PREVIEW restored verified app442 Studio CSS; freeze further drag optimization (2026-10-21 KST)
+
+User's app443 Hybrid Builder isolation A/B feedback on 2026-10-20 22:49 UTC: negligible difference, perhaps subjectively 2-3% slower (NOT measured). Decline and roll back priority-1 experiment rather than compound complexity. app444 PREVIEW Hosting at https://preview.soridraw.com deployed pinned SHA ae4324bb36fc8c81bfe4b2deabae7370434797ff with exact live version/build, TEST/PRODUCTION unchanged; release run #39511665081 SUCCESS. Source PR #327, product CI #39511092855 PASS; split regression #39511423160 PASS; release PR #329. CSS and split history verifier blobs are exactly the app442 user-confirmed baseline; only Hosting version/Worker verifier version guard advanced to 444. Protect Pure Pane Hybrid live UI switch at 660/820, 1080 content thresholds, 24px consistent gutter fix, split UI/scroll/bar and data/Backend.
+
+No outstanding code task or further performance tuning is authorized. Only potential next validation is user hand-test on restored PREVIEW app444 against previous app442 feel; do not require synthetic benchmarks or assert measured speed. If new concrete failure is reported, investigate its exact viewport and reproduce before proposing changes. No TEST/main/PRODUCTION promotion unless explicitly authorized. Work independent audit not run.
+
+---
+
 ## NEXT — app443 PREVIEW released; user physical A/B before any new split change (2026-10-21 KST)
 
 User-approved priority #1 Hybrid Builder scope optimization is now **Firebase PREVIEW app443** source `83a1c59acc3752b198c2706ff6efc40562e10841` (release Actions #39509226119 SUCCESS; product CI #39508398837 PASS; scoped split QA #39508917855 PASS). One drag-only CSS rule adds `contain: layout style` to Builder Studio main during Pure Pane Hybrid desktop-pane mode, based on already-existing 657 tablet-band containment. No JS geometry or responsive-state change, no shared user data/backend change, TEST/PRODUCTION unchanged. app442 recovered physical speed remains the protected control.

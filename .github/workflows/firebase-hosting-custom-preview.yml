@@ -151,7 +151,9 @@ jobs:
           python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
           # Stage418: live Rules are shared by all 3 apps. Refuse to overwrite
           # even one unrelated ACL with the checked-in snapshot. This verifies
-          # the ONLY permitted change is the optional canonicalSettled417 bool.
+          # the ONLY permitted changes are the exact approved additive fields/nodes.
+          # app435 adds two bounded UID-private like result fields only in a
+          # separately approved shared-Rules release; never loosen parent ACLs.
           node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-rules-before.json"
           node scripts/verify-434-publication-rtdb-additive.mjs --self-test
           node scripts/verify-434-publication-rtdb-additive.mjs \
@@ -171,7 +173,7 @@ jobs:
           cmp "$RUNNER_TEMP/rtdb-rules-434-mode.txt" "$RUNNER_TEMP/rtdb-rules-434-preput-mode.txt"
           cmp "$RUNNER_TEMP/rtdb-rules-434-candidate.json" "$RUNNER_TEMP/rtdb-rules-434-preput-candidate.json"
           mode="$(cat "$RUNNER_TEMP/rtdb-rules-434-mode.txt")"
-          if [ "$mode" = 'ADD_ONLY_TWO_PUBLICATION_NODES' ]; then
+          if [ "$mode" = 'ADD_ONLY_TWO_PUBLICATION_NODES' ] || [ "$mode" = 'ADD_ONLY_TWO_PRIVATE_LIKE_FIELDS_435' ]; then
             code="$(curl -sS --max-time 30 -X PUT \
               -H 'Content-Type: application/json' \
               --data-binary @"$RUNNER_TEMP/rtdb-rules-434-candidate.json" \
@@ -208,6 +210,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
+          if curl -fsSL "$trigger_url" | grep -Fxq 'deploy_hosting=false'; then
+            echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=SKIPPED_RULES_ONLY'
+            exit 0
+          fi
           npx --yes firebase-tools@latest deploy \
             --only hosting \
             --project "$FIREBASE_PROJECT" \
@@ -219,6 +226,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
+          if curl -fsSL "$trigger_url" | grep -Fxq 'deploy_hosting=false'; then
+            echo 'PREVIEW_EXACT_BUILD=SKIPPED_UNCHANGED_HOSTING'
+            exit 0
+          fi
           local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
           ok=''
           for attempt in 1 2 3 4 5; do

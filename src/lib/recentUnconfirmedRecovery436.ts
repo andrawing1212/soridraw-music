@@ -39,3 +39,21 @@ export const planRecentUnconfirmedRecovery436 = (
   if (finalSongs.length > 10) return null;
   return { songs: finalSongs, recovered };
 };
+
+// Apply one settled Recent text edit to its exact canonical row, never to an
+// older aggregate copied from a different device. No added/removed memberships.
+export const patchExactRecentTextRow436 = (
+  canonical: readonly RecentRecoverySong[],
+  editedSong: RecentRecoverySong,
+  getStableId: (song: RecentRecoverySong) => string | null,
+): RecentRecoverySong[] | null => {
+  if (!Array.isArray(canonical) || canonical.length === 0 || canonical.length > 10) return null;
+  const targetId = getStableId(editedSong);
+  if (!targetId) return null;
+  const matches = canonical
+    .map((song, index) => getStableId(song) === targetId ? index : -1)
+    .filter((index) => index >= 0);
+  // Deleted/ambiguous canonical identity cannot be silently recreated.
+  if (matches.length !== 1) return null;
+  return canonical.map((song, index) => index === matches[0] ? editedSong : song);
+};

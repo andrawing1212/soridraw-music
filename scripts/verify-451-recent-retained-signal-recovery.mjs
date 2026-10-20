@@ -129,6 +129,125 @@ assert.doesNotMatch(app, /localStorage.clear\(\)|indexedDB.deleteDatabase/);
 assert.ok(rtdb.includes("if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);"),
  'initial retained draft carries bounded one-time recovery marker, not a canonical ACK');
 assert.match(app, /if \(isEditPreview\) \{[\s\S]{0,1200}needsRecentSongsRetainedDraftGapRead460\([\s\S]{0,220}runRecentSongsServerSyncIfNeeded\(\);[\s\S]{0,100}return;/);
+
+// app436 executable bounded recovery: NEVER recreate a deleted/ambiguous
+// local-only track, yet allow one provably newer generated row to fill 9 -> 10.
+const recoverySource436 = fs.readFileSync('src/lib/recentUnconfirmedRecovery436.ts', 'utf8');
+const recoveryCompiled436 = ts.transpileModule(recoverySource436, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+});
+const recoverySandbox436 = { exports: {} };
+vm.runInNewContext(recoveryCompiled436.outputText, recoverySandbox436);
+const plan436 = recoverySandbox436.exports.planRecentUnconfirmedRecovery436;
+assert.equal(typeof plan436, 'function');
+const sid436 = item => item?.soridrawSongId || null;
+const remote436 = Array.from({length:9},(_,i)=>({soridrawSongId:'sid-'+i, title:'old-'+i, createdAt:100+i}));
+const new436 = {soridrawSongId:'sid-new',title:'new-only-local',createdAt:250};
+const full436 = [new436,...remote436];
+const planned436 = plan436(remote436,full436,['sid-new'],200,sid436);
+assert.ok(planned436,'9 canonical + one known new generated item should be recoverable');
+assert.equal(planned436.songs.length,10);
+assert.equal(planned436.recovered.length,1);
+assert.equal(planned436.songs[0].soridrawSongId,'sid-new');
+assert.equal(plan436(remote436,full436,[],200,sid436),null,
+  'a cache-only song without generation-time marker is NOT proof of authorization');
+assert.equal(plan436(remote436,full436,['sid-new'],300,sid436),null,
+  'newer canonical revision might represent deliberate delete: never resurrect');
+assert.equal(plan436(remote436,remote436,['sid-new'],200,sid436),null,
+  'marker without the actual local only-copy is not eligible');
+assert.equal(plan436([...remote436,new436],full436,['sid-new'],200,sid436),null,
+  'server already contains exact generated song: no second write');
+assert.equal(plan436(remote436,[{...new436,createdAt:0},...remote436],['sid-new'],200,sid436),null,
+  'missing generated timestamp is not trusted');
+assert.equal(plan436([...remote436,{soridrawSongId:'extra',createdAt:150}],
+ full436,['sid-new'],200,sid436),null,'never evict the tenth canonical row');
+assert.equal(plan436(remote436,[{...new436,soridrawSongId:'wrong'},...remote436],
+ ['sid-new'],200,sid436),null,'mismatched UID-local identity is not sufficient');
+assert.equal(plan436([],full436,['sid-new'],200,sid436),null,
+ 'a deliberate canonical clear cannot be revived by a stale generated marker');
+assert.equal(plan436(remote436.slice(1),full436,['sid-new'],200,sid436),null,
+ 'a shorter canonical catalog must never be repopulated without proof');
+assert.equal(plan436(remote436,full436.slice(1),['sid-new'],200,sid436),null,
+ 'incomplete local cache cannot authorize automatic recovery');
+assert.equal(plan436(remote436,[new436,...remote436.slice(1),{soridrawSongId:'different',createdAt:100}],
+ ['sid-new'],200,sid436),null,'a missing canonical row cannot be silently evicted');
+assert.equal(plan436(remote436,full436,['sid-new'],0,sid436),null,
+  'absent canonical revision is not deletion-safe');
+assert.match(app,/if \(!unconfirmedIds\.length\) return;/,
+  'healthy Studio cache must not start a transaction');
+assert.match(app,/recentUnconfirmedRecoveryAttemptedUids436\.add\(uid\)/,
+  'pending-only recovery must be bounded once per session');
+assert.match(app,/planRecentUnconfirmedRecovery436\(/);
+assert.match(app,/transaction\.set\(recentRef, sanitizeForFirestore\(/,
+  'a verified plan must be atomically committed');
+assert.match(app,/acknowledgeRecentGeneratedSongs\(uid, recovered\.songs\)/,
+  'only a committed recovery can remove local pending marker');
+assert.doesNotMatch(recoverySource436,/localStorage\.clear|indexedDB\.deleteDatabase|collection\(/);
+
+// If phone repairs the 10th row while PC is waiting out its 150s title edit,
+// PC's later canonical write must preserve the newly recovered row and never
+// roll back the target's confirmed heart/lock/media fields.
+const textPatch436 = recoverySandbox436.exports.patchExactRecentTextRow436;
+assert.equal(typeof textPatch436, 'function');
+const canonicalTen436 = full436.map((song,i) => i === 1
+  ? {...song,title:'old-title',updatedAtMs:200,liked:true,isPublic:true,
+     isLocked:true,coverUrl:'new-cover',appliedKeywords:{genre:['pop'],editedInStudioAt:200}}
+  : song);
+const stalePCEdit436 = {...canonicalTen436[1],title:'PC edited title',updatedAtMs:260,
+  liked:false,isPublic:false,isLocked:false,coverUrl:'old-cover',
+  appliedKeywords:{genre:['wrong-stale'],editedInStudioAt:260,lyricsByLanguage:{ko:'new lyrics'}}};
+const patched436 = textPatch436(canonicalTen436,stalePCEdit436,sid436);
+assert.equal(patched436.length,10,'9-row PC text snapshot cannot evict mobile recovered tenth');
+assert.equal(patched436[0].soridrawSongId,'sid-new','recovered only-copy must remain');
+assert.equal(patched436[1].title,'PC edited title');
+assert.equal(patched436[1].liked,true,'older PC heart must not overwrite canonical membership');
+assert.equal(patched436[1].isPublic,true,'older PC publication state must not override canonical');
+assert.equal(patched436[1].isLocked,true,'older PC lock must not override canonical');
+assert.equal(patched436[1].coverUrl,'new-cover','older PC media must not override canonical');
+assert.equal(patched436[1].appliedKeywords.genre[0],'pop','old PC generation recipe must not override canonical');
+const heartUpdated435 = canonicalTen436.map((row,i)=>i===1
+  ? {...row,updatedAtMs:900,appliedKeywords:{genre:['pop']}} : row);
+assert.equal(textPatch436(heartUpdated435,stalePCEdit436,sid436)?.[1]?.title,'PC edited title',
+ 'a newer heart/media timestamp is not proof of newer Studio text');
+assert.equal(patched436[1].appliedKeywords.lyricsByLanguage.ko,'new lyrics',
+  'text language patch stays scoped to edited song');
+assert.equal(textPatch436(canonicalTen436,{...stalePCEdit436,updatedAtMs:100,
+  appliedKeywords:{...stalePCEdit436.appliedKeywords,editedInStudioAt:100}},sid436),null,
+ 'stale edit must not outrank a newer canonical revision');
+assert.equal(textPatch436(canonicalTen436,{...stalePCEdit436,soridrawSongId:'missing'},sid436),null,
+ 'unknown exact song cannot recreate deleted rows');
+assert.equal(textPatch436([canonicalTen436[1],canonicalTen436[1]],stalePCEdit436,sid436),null,
+ 'duplicate canonical identity fails closed');
+assert.match(app, /persistRecentSongsDocument\(ref, pending\.songs, pending\.mutationEpoch, pending\.syncItem\)/);
+assert.match(app, /const merged = patchExactRecentTextRow436\(/);
+
+const identity436 = app.match(/const getRecentSongIdentityKey = \(song: any\): string => \{([\s\S]*?)\n  \};/)?.[1];
+assert.ok(identity436,'stable Recent identity helper must exist');
+assert.ok(identity436.indexOf('getRecentSongGenerationSyncKey(song)') <
+  identity436.indexOf('getLiveSoridrawSongId(song)'),
+  'historical generation batch/index identity must outrank device-assigned ID');
+assert.match(identity436,/if \(generationKey\) return generationKey;/);
+const generationKey436 = row => row.appliedKeywords?.generationBatchId &&
+  row.appliedKeywords?.generationIndex > 0
+  ? 'generation:' + row.appliedKeywords.generationBatchId + ':' + row.appliedKeywords.generationIndex : '';
+const key436 = new Function('getRecentSongGenerationSyncKey','getLiveSoridrawSongId',
+  'return (song) => {' + identity436 + '\n};')(generationKey436,sid436);
+const generatedOld436 = {soridrawSongId:'old-device-id',
+  appliedKeywords:{generationBatchId:'batch-1',generationIndex:1},title:'old'};
+const generatedOther436 = {...generatedOld436,soridrawSongId:'new-device-id',title:'renamed'};
+assert.equal(key436(generatedOld436),key436(generatedOther436),
+ 'one old generated song with different per-device IDs stays a single Recent row');
+assert.notEqual(key436({...generatedOld436,appliedKeywords:{generationBatchId:'batch-1',generationIndex:2}}),
+ key436(generatedOld436),'distinct generated siblings stay distinct');
+console.log('APP436_GENERATION_BATCH_IDENTITY_CROSS_DEVICE_FROZEN=PASS');
+
+console.log('APP436_STALE_150S_PC_EDIT_CANNOT_ERASE_RECOVERED_TENTH=PASS');
+console.log('APP436_TEXT_PATCH_PRESERVES_PUBLIC_HEART_LOCK_MEDIA=PASS');
+
+console.log('APP436_RECENT_ONLY_COPY_REPAIR_9_TO_10_EXECUTABLE=PASS');
+console.log('APP436_RECENT_DELETE_OR_STALE_MARKER_NEVER_RESURRECTS=PASS');
+console.log('APP436_HEALTHY_STUDIO_REVISIT_EXTRA_FIRESTORE_READ_ZERO=PASS');
+
 console.log('APP460_RET_INITIAL_DRAFT_A_RECOVERS_SETTLED_B_ONCE=PASS');
 console.log('APP435_RECENT_PREVIEW_NOT_CANONICAL_ACK=PASS');
 console.log('APP435_RECENT_RETAINED_SINGLE_ITEM_GAP_REQUIRES_CATCHUP=PASS');

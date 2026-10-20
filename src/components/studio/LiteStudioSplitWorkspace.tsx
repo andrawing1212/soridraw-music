@@ -1740,7 +1740,9 @@ export default function LiteStudioSplitWorkspace({
     return () => window.removeEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // CSS for Recent/Music Note/Library gutters reads this root attribute.
+    // Publish it before the first paint of the new workspace, not in useEffect.
     const root = document.documentElement;
     const nextWorkspace = workspaceView || 'create';
     root.dataset.soridrawLiteWorkspace = nextWorkspace;
@@ -1760,8 +1762,9 @@ export default function LiteStudioSplitWorkspace({
     runtimeLayoutModeRef.current = nextLayoutMode;
     benchmarkLayoutModeRef.current = nextLayoutMode;
     if (nextLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
-    const frame = window.requestAnimationFrame(() => refreshMetrics());
-    return () => window.cancelAnimationFrame(frame);
+    // Reconcile the new page's real pane geometry in the same layout commit.
+    // The old rAF allowed one painted frame of the previous page's geometry.
+    refreshMetrics();
   }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeProfile, workspaceView]);
 
   useEffect(() => {
@@ -2246,10 +2249,10 @@ export default function LiteStudioSplitWorkspace({
     };
   }, [clearLiveExternalGeometry, readExternalControls, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(connectTopCardObserver);
+  useLayoutEffect(() => {
+    // Remove stale Recent top-card height before Music Note/Library first paint.
+    connectTopCardObserver();
     return () => {
-      window.cancelAnimationFrame(frame);
       topCardObserverRef.current?.disconnect();
       topCardObserverRef.current = null;
       resultRef.current?.style.removeProperty('--soridraw-studio-top-card-height');

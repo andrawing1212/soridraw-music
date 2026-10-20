@@ -5288,22 +5288,25 @@ function App() {
   // workspace in the URL history only for user navigation while preserving
   // every existing split geometry/query option.
   const navigateStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
-    const previousView = studioWorkspaceView;
-    selectStudioWorkspaceView(view);
-    if (previousView === view) return;
-    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
+    // The URL is the sole owner of in-Studio workspace navigation. Changing the
+    // page state before navigate() let the passive URL-sync effect see the OLD
+    // address and briefly restore the previous Result page, causing overlap.
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') {
+      selectStudioWorkspaceView(view);
+      return;
+    }
 
     const nextParams = new URLSearchParams(location.search);
     if (nextParams.get('view') === view) return;
     nextParams.set('view', view);
     const query = nextParams.toString();
     navigate(`/studio${query ? `?${query}` : ''}`);
-  }, [location.pathname, location.search, navigate, selectStudioWorkspaceView, studioWorkspaceView]);
+  }, [location.pathname, location.search, navigate, selectStudioWorkspaceView]);
 
-  // Browser Back/Forward (including mouse thumb buttons) restores the exact
-  // split workspace represented by that history entry. /studio without an
-  // explicit view remains the canonical Create entry.
-  useEffect(() => {
+  // Browser Back/Forward and external Explore links resolve the URL before the
+  // first visible frame. Avoid a passive effect after paint and never compete
+  // with an in-flight route change from the Studio rail.
+  useLayoutEffect(() => {
     if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return;
     const requestedView = new URLSearchParams(location.search).get('view');
     const nextView: StudioWorkspaceView = requestedView === 'recent'

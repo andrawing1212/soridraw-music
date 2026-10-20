@@ -38,7 +38,7 @@ export type RecentSongsInlineAckGate = {
 
 export const canAcknowledgeRecentSongsInlineSignal = (gate: RecentSongsInlineAckGate): boolean =>
   gate.itemApplied
-  && gate.itemPersisted
+  && gate.itemPersisted === true
   && !gate.itemPartial
   && Number.isFinite(gate.signalVersion)
   && gate.signalVersion > 0

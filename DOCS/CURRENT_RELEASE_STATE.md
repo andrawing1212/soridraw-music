@@ -1,3 +1,14 @@
+## CURRENT — app444 PREVIEW rollback to user-approved app442 Hybrid CSS (2026-10-21 KST)
+
+- User real-hand A/B of app443 reported approximately no discernible improvement over original Pure Pane Hybrid, subjectively perhaps 2-3% slower; no instrumented measurement and **do not claim a measured performance regression**. Product decision: priority-1 desktop Builder contain/layout style experiment is **NOT ACCEPTED** for lack of benefit. No next speculative optimization.
+- Revert ONLY the app443 CSS experiment in src/components/studio/studioLayout.css. Resulting CSS blob is **exact byte-identical to app442 verified source** (fce89748ecd501d96ac0894c23bdf639063c740c). The split browser-history verifier script is also byte-identical to app442 (4626fe65fb562de719e38c575d73a4cf0a91f0ec). Keep app442 1030/1031 local-frame gutters, 660/820/1080 breakpoints, actual direct split geometry, Pure Pane Hybrid default, Generate bar, scroll, app441 first-frame navigation, existing data/cache/save sync protections.
+- App version 444 to identify a new Hosting release while avoiding stale PWA behavior; frozen canonical Worker verifier allows Hosting 444 without changing Worker bytes. Source product PR #327 merged preview 3b138fb24076c65e95efd25b68f92df59e7176ef. Product CI #39511092855 PASS (TypeScript, Build, all present legacy/data regressions). Split verification trigger PR #328 preview SHA 8950304e1e2bf32e08705b398b9a164d208ffd7a; run #39511423160 PASS (app442 gutter, navigation/browser history, TypeScript, Build). Existing Follow-only and additional quality runs also passed on product commit.
+- Firebase PREVIEW Hosting-only rollback release PR #329, deployed exact pinned SHA ae4324bb36fc8c81bfe4b2deabae7370434797ff via Actions #39511665081 SUCCESS. Workflow confirmed TypeScript, Build, Hosting, PREVIEW live exact version/build and TEST and PRODUCTION unchanged.
+- No Worker, Functions, Firestore, D1, RTDB Rules, canonical user data, cache reset, migration, main/TEST or PRODUCTION changes. No additional server reads or writes from this CSS removal. Stage416 OFF. Independent Work audit not performed.
+- Physical status: app442 had user hand-drag speed recovery PASS. app443 optimization had **NO PERCEPTIBLE BENEFIT** user report. app444 restores app442 layout exactly, but after-rollback real-hand recheck is PENDING. Do not imply app444 measured faster than app443. No new optimization or TEST/PRODUCTION promotion without explicit direction.
+
+---
+
 ## CURRENT — app443 PREVIEW Hybrid Builder layout isolation DEPLOYED; user physical A/B pending (2026-10-21 KST)
 
 - User explicit priority-1 task and Preview deployment authorization: 2026-10-20 22:20 UTC. Goal: lighten left Sori Studio while retaining Pure Pane Hybrid's **LIVE** 660/820 Builder responsive UI reflow (Pure Pane delayed reflow until mouse release is unacceptable), while preserving user-accepted app442 Preview real-hand drag speed and 12px gutters.

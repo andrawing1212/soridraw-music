@@ -1,3 +1,14 @@
+## CURRENT — #293 approved implementation: local Emulator prerequisite BLOCKED (2026-10-21)
+
+- Working branch `fix/293-music-note-final-state` fast-forwarded to approved preview `e99643dc835af6ed6b138efd8e5c76b3f18dc39a`. Latest Issue #293 approval read. app420 stash not inspected, restored, or modified.
+- Before application persistence edits, prepared **uncommitted, unverified experiment only**: `scripts/issue293/rules-candidate.mjs` and `verify-compatibility-emulator.mjs`. No change to deployment `firestore.rules` or `firebase.json`. Candidate compares per-field revision protection with protected physical deletes allowed vs denied. Source evidence: ordinary Studio unsave/restore uses updates; explicit permanent delete uses `deleteDoc` in `App.tsx`. Same-document revisions disappear on physical deletion; blanket deny-delete would affect that existing operation. Emulator acceptance remains unverified; no compatibility PASS.
+- **Environment blocker:** installed external firebase-tools 14.27.0, rules-unit-testing 5.0.2, Firebase SDK 12.19.0; Java 21 present. Official Emulator JAR `https://storage.googleapis.com/firebase-preview-drop/emulator/cloud-firestore-emulator-v1.19.8.jar` download failed HTTP 403 `Domain forbidden`. Emulator never started; Rules compilation, conflict tests and actual transaction operation counts were NOT executed.
+- JavaScript syntax and candidate replacement boundaries checked only; not substitutes for Rules tests. No final TypeScript/Build run because no application implementation candidate exists. No code commit/push, live reads/writes, migration, data/cache changes, shared Rules apply or deployment. URL/color product fix still incomplete.
+- Environment configuration **draft saved**, not applied: add only `storage.googleapis.com` to custom network domains, preserve package presets, add external tool installation/start instructions. User must review/save environment settings and publish the cloud environment before blocked validation can resume. This is not a Firebase/Cloudflare release.
+- Progress: Stage416 1/4 (25%) OFF; historical speed 5/5 (100%, not remeasured); #293 product implementation/CI, independent audit, release QA, physical PC/mobile QA remain 0/4. Next: run the prepared Emulator gate; do not repeat prior diagnosis or treat local diagnostics as acceptance.
+
+---
+
 ## CURRENT — #293 old-client URL/color conflict policy APPROVED, code-only preparation (2026-10-21 KST)
 
 - **Explicit user decision:** permit rejecting **conflicting stale URL/color writes from older clients only** to protect newest server-confirmed Music Note URL add/change/**delete** and color set/**clear**. This is **not** approval to ban old clients, break unrelated edits/save-heart/publication/Library, deploy shared Firestore Rules, or change real user data.

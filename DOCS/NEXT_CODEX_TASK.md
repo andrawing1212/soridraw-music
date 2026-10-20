@@ -1,3 +1,15 @@
+## NEXT — #293 resume prepared local compatibility gate (Emulator download blocked)
+
+- Preserve the uncommitted `scripts/issue293/` experiment and current status entries on `fix/293-music-note-final-state`, base `e99643dc835af6ed6b138efd8e5c76b3f18dc39a`; do not touch app420 stash.
+- Environment draft adds `storage.googleapis.com` because official Firestore Emulator JAR download returned HTTP 403 `Domain forbidden`. Review/save/publish environment settings is outstanding. Do not bypass proxy/network policy or use real Firebase instead.
+- Once network configuration is active, use saved environment startup instructions to launch only local Firestore (`demo-soridraw-issue293`, `127.0.0.1:8080`). Run:
+  `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 SORIDRAW_EMULATOR_TOOLS=/workspace/.soridraw-environment/issue293-tools node scripts/issue293/verify-compatibility-emulator.mjs`
+- This script intentionally returns nonzero on the two same-document-only compatibility failures; it is a diagnostic gate, NOT a finished protection implementation. Rules compilation and all assertions remain unexecuted. It compares late/offline legacy writes, revision reset, unrelated fields, ordinary save/unsave, UID isolation, transaction SDK counts and physical delete/recreate.
+- If physical deletion protection needs persistent state outside the deleted favorite, report the exact storage/Rules/old-create compatibility and bounded cost design before widening implementation; do not silently deny existing permanent deletion. No product source fixes have been made yet, including projection/fallback.
+- Implement the approved URL/color policy only after compatibility is resolved; final TS/Build/regressions, safe commit, independent Work audit remain outstanding. No deploy/shared Rules apply/live data modification.
+
+---
+
 ## NEXT — #293 APPROVED narrow compatibility policy, CODE + EMULATOR ONLY (2026-10-21 KST)
 
 - **Decision:** user authorizes refusal of **conflicting stale URL/color writes by older apps** but **not** blanket legacy app denial, disruption of song save/unsave and unrelated fields, migration, any shared Firestore Rules apply/deploy or any environment release. Read latest Issue #293 policy and handoff comments before working.

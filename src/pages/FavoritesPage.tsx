@@ -2228,7 +2228,14 @@ updates: draft.updates,
   ];
 
   const getFavoriteColorValue = (song: any): string => {
-    return favoriteColorMap[song?.id] || song?.favoriteColorTag || song?.colorTag || 'gray';
+    // Older Catalog rows can contain one of the existing color aliases instead
+    // of favoriteColorTag/colorTag. Use only recognized palette values, and do
+    // not fabricate a color or overwrite the owner's saved assignment.
+    const candidates = [
+      favoriteColorMap[song?.id], song?.favoriteColorTag, song?.colorTag,
+      song?.favoriteColor, song?.noteColor, song?.color,
+    ];
+    return candidates.find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value)) || 'gray';
   };
 
   const getFavoriteColorHex = (songId: string, song?: any) => {
@@ -3408,6 +3415,15 @@ updates: draft.updates,
       if (source === 'detail') {
         queueFavoriteDetailPatch(song.id, updates);
         await publishFavoriteSunoMediaDraft(song.id, updates);
+        // A URL Save/Remove is an explicit cross-device action, unlike background
+        // title/lyrics typing. Settle its existing single draft immediately so
+        // another device is not left showing an older canonical Suno link.
+        await flushFavoriteDetailPendingPatch('manual');
+        if (favoriteDetailPendingPatchRef.current?.songId === song.id) {
+          setFavoriteSunoSaveStatus(source, 'idle');
+          setDetailSunoUrlError('수노 URL을 기기에 보관했습니다. 서버 저장이 완료되지 않아 다른 기기에는 아직 보이지 않을 수 있습니다.');
+          return;
+        }
       } else {
         await updateFavorite(song.id, updates);
       }
@@ -3472,6 +3488,15 @@ updates: draft.updates,
       if (source === 'detail') {
         queueFavoriteDetailPatch(song.id, updates);
         await publishFavoriteSunoMediaDraft(song.id, updates);
+        // A URL Save/Remove is an explicit cross-device action, unlike background
+        // title/lyrics typing. Settle its existing single draft immediately so
+        // another device is not left showing an older canonical Suno link.
+        await flushFavoriteDetailPendingPatch('manual');
+        if (favoriteDetailPendingPatchRef.current?.songId === song.id) {
+          setFavoriteSunoSaveStatus(source, 'idle');
+          setDetailSunoUrlError('수노 URL을 기기에 보관했습니다. 서버 저장이 완료되지 않아 다른 기기에는 아직 보이지 않을 수 있습니다.');
+          return;
+        }
       } else {
         await updateFavorite(song.id, updates);
       }

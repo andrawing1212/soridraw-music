@@ -1,3 +1,11 @@
+## NEXT — app445 PREVIEW live 1080 Builder band shipped, physical UI boundary evaluation pending (2026-10-21 KST)
+
+User-provided 74.7s video `20261020-2312-56.6720158.mp4` and user report of inconsistent mobile→tablet→PC Builder UI switching motivated targeted mode-signal correction. app445 PREVIEW Hosting exact source `58a2fe2ff0b1710c802ab857f349569005f71cbf`, release #39515890304 SUCCESS, product CI #39515370616 PASS and scoped split CI #39515657715 PASS. Source PR #332, QA PR #333, release PR #334. The Hybrid signature now includes the Builder's 1080 content band and publishes its mode to the root once at real mode changes. Existing 660/820 composition and Pure Pane Hybrid frame geometry unmodified. No backend/DB/canonical data changes.
+
+**NEXT USER PHYSICAL TEST, NOT YET PASS:** Slowly cross actual Builder pane 660, 820, 1080 in both directions; release at each side; confirm card/UI and Generate bar settle DURING drag and no bounce on pointer-up; then rapid direction reversals and Music Note/Library/Recent roundtrips. Compare to app444 confirmed smoothness. The new app445 correctness candidate may or may not eliminate every reported visual inconsistency; no instrumented browser DOM trace available. If no benefit / new jank, revert app445-only JS and redeploy PREVIEW to the app444 accepted source with version bump. Avoid another broad CSS rewrite. No TEST/PROD promotion without explicit approval. Independent Work audit pending.
+
+---
+
 ## NEXT — app444 rollback user physical PASS; preserve split (2026-10-21 KST)
 
 User confirmed at 2026-10-20 23:05 UTC that the rollback was successful. app444 PREVIEW is back to app442 user-accepted split CSS and behavior; the app443 performance experiment is discarded. Do not pursue additional speculative Pure Pane Hybrid CSS performance patches without a new concrete defect and user direction. No pending deployment or TEST/PRODUCTION promotion. Keep live 660/820 Builder transitions, app442 gutter fix and shared data protections. Work independent audit remains outstanding; user hand confirmation applies only to the rollback.

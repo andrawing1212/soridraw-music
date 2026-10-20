@@ -56,10 +56,15 @@ export const patchExactRecentTextRow436 = (
   // Deleted/ambiguous canonical identity cannot be silently recreated.
   if (matches.length !== 1) return null;
   const original = canonical[matches[0]];
-  const currentEditAt = Math.max(
-    Number(original.updatedAtMs || 0), Number(original.appliedKeywords?.editedInStudioAt || 0));
-  const incomingEditAt = Math.max(
-    Number(editedSong.updatedAtMs || 0), Number(editedSong.appliedKeywords?.editedInStudioAt || 0));
+  // A save-heart or media update can advance a generic updatedAtMs without
+  // editing text. Prefer the dedicated text-edit revision on BOTH sides to
+  // avoid discarding a later genuine title/lyrics edit on another device.
+  const originalTextAt = Number(original.appliedKeywords?.editedInStudioAt || 0);
+  const pendingTextAt = Number(editedSong.appliedKeywords?.editedInStudioAt || 0);
+  const currentEditAt = originalTextAt > 0 && pendingTextAt > 0
+    ? originalTextAt : Number(original.updatedAtMs || 0);
+  const incomingEditAt = originalTextAt > 0 && pendingTextAt > 0
+    ? pendingTextAt : Number(editedSong.updatedAtMs || 0);
   if (currentEditAt > 0 && incomingEditAt > 0 && currentEditAt > incomingEditAt) return null;
 
   // The pending operation is TEXT ONLY: preserve the canonical save-heart,

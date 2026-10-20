@@ -4,3 +4,6 @@ app381_recent_workspace_hotfix=2026-10-08T06:15:00+09:00
 
 app442_gutter_owner_verification=2026-10-21
 product_sha=5b8db3f13809af78ea174f06a606459d67b4c581
+
+app443_hybrid_builder_only_scope_gate=2026-10-21
+product_sha=89587b3ff0089f61b85c904fa07f3dcc0ce07f08

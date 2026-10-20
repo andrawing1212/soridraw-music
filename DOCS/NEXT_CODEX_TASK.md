@@ -1,3 +1,23 @@
+## NEXT — app441 split-drag FPS regression: measure BEFORE patching (2026-10-21 KST)
+
+**Intent:** The user explicitly requests continuing development to isolate and improve sluggish PREVIEW Music Note/Library divider dragging compared with TEST. This is a new performance request, NOT permission to alter the accepted app441 page-entry/navigation visuals or promote TEST/PRODUCTION.
+
+**Frozen baseline:** preview `0d12d30856ce4d5c0fedad38a61ffeab63e28acd`, released app441 source `8091aa4f80721f150df1668cd4f4a1f684eabbfb`; TEST `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, PRODUCTION app377. Follow `AGENTS.md`, `.agents/skills/studio-split-behavior/SKILL.md`, its frozen reference/validation matrix and `DOCS/WORK_AUDIT_CHECKLIST.md`.
+
+**Already confirmed:** PREVIEW/TEST `StudioSplitEngineWorkspace.tsx`, `liteSplitWorkspace.css`, `studioLayout.css`, `splitPerfDiagnostics.ts` blobs are identical. Lite engine differs only in initial width parsing and app438–439 entry/layout/scroll/observer timing (not in the pointermove latest-X/rAF hot path). Pages do differ. `contentResponsive.ts` consumes existing pane-width mode-change signal and avoids separate per-frame observer. Existing CSS 576/585/657/1005 already contains list leaves, regions, menu cards and wide-PC during active dragging. No valid evidence yet that app438 created sustained drag regression. Do not assert a cause from the old 30fps video.
+
+**First work package — bounded quantitative diagnosis (read-only):**
+1. Check normal route and diagnostic URL state: `splitEngine=legacy`, `v2DragPerf` override, `genBarPerf`, MASTER PERF flag, transient overlays. Do not change end-user defaults. Same device, Chrome build, refresh rate, window size, split range, same warm data and displayed Music Note/Library list counts. Treat different cached DOM cardinalities as confounders.
+2. Run existing MASTER split performance panel, not a new logger: 1400×900 automatic 3-set median per Music Note and Library on PREVIEW/TEST; use `뮤직노트↔라이브러리 비교`, `실손 드래그 비교`, `렌더 스캔`, `영역 스캔`, `좌표 A/B` where relevant. Export `종합 진단서 복사`. Compare FPS, P95/max, LoAF browser render/layout/paint, forced style-layout, input-to-commit, layout ACK width, pane/region DOM counts; run slow 660/820/1080 and fast wide drags separately. Also measure OS-window resize separately.
+3. Binary isolate input/rAF vs left Builder vs right Result vs Music Note top controls/list/group vs Library top/list, using existing splitter-only/left-pane-only/right-pane-only and area scans. A faster splitter-only mode does NOT establish a usable product fix. If normal PREVIEW/TEST timing parity is not demonstrated or measurements vary, stop and report evidence needed.
+4. Only after proof of a specific owner, implement a single small reversible rendering improvement, preserving visible behavior. No drag-time setState, new per-frame DOM read/observer, root CSS mutation per pixel, duplicate contain rules, card-height snapshot, fake divider, engine refactor, data/caching/backend/UI changes. Avoid modifying Explore or app441 first-frame routing. Use existing split verifier and independent audit. Final TypeScript/Build/focused tests and real PC/Tablet/Touch same-boundary and scroll QA before any deployment.
+
+**Acceptance:** same visible pane/splitter frame; PREVIEW P95 and lost/long-frame rate measurably better than its prior baseline, without Library regression or abnormal new cost; no release snap, scroll creep, clipped active popups, delayed generation/collapse controls or responsive-boundary misfire; old app441 page-entry physical PASS preserved. Don't promise 165fps for a synthetic 1400×900 tool; report actual hardware refresh rate and observed numbers. User device acceptance is a separate gate. If impact is not measured, do not invent a speedup.
+
+**Status/progress:** 2/4·50%: GitHub state/skill confirmed and PREVIEW-vs-TEST source-difference isolation done; controlled FPS/paint measurement pending, proven smallest implementation and tests pending. Stage416 1/4·25% OFF. Historical app speed 5/5·100% is not a fresh split benchmark. Source edits/commit/push/deploy 0 at this definition step, docs-only tracking permitted. TEST/PRODUCTION not authorized.
+
+---
+
 ## NEXT — app441 UI physical acceptance COMPLETE; await next user instruction (2026-10-21 KST)
 
 - User explicitly confirms **“이번에는 다 정상이야.”** app441 PREVIEW page-entry + left-rail previous-selection flash now user PASS, preserving the already accepted Explore initial layout and Studio split widths/Recent/Music Note/Library navigation.

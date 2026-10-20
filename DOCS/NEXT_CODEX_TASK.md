@@ -1,3 +1,12 @@
+## NEXT — app441 UI physical acceptance COMPLETE; await next user instruction (2026-10-21 KST)
+
+- User explicitly confirms **“이번에는 다 정상이야.”** app441 PREVIEW page-entry + left-rail previous-selection flash now user PASS, preserving the already accepted Explore initial layout and Studio split widths/Recent/Music Note/Library navigation.
+- Frozen released app441 Hosting artifact commit `8091aa4f80721f150df1668cd4f4a1f684eabbfb`; GitHub `preview` may advance through documentation-only commits without modifying that deployed artifact. No unresolved first-frame UI QA request for the reported issue; do not ask the user to repeat prior video/tests.
+- Do not change UI, backend, data, caches, or routes as follow-up “cleanup”. TEST/PRODUCTION remain unchanged and require the user's separate deployment approval. Independent Work audit/cost measurements not implied by user's physical PASS. Stage416 1/4·25% OFF; historic speed 5/5·100% not remeasured.
+- Historical NEXT sections below are superseded for this app441 navigation/UI work.
+
+---
+
 ## NEXT — app441 first-render rail selection only: user physical verification (2026-10-21 KST)
 
 - Live PREVIEW `https://preview.soridraw.com` app441, release SHA `8091aa4f80721f150df1668cd4f4a1f684eabbfb` [Hosting run #39482587973](https://github.com/andrawing1212/soridraw-music/actions/runs/39482587973) exact build PASS; [source PR #311](https://github.com/andrawing1212/soridraw-music/pull/311) and [release PR #312](https://github.com/andrawing1212/soridraw-music/pull/312) merged. App441 ONLY changes selected-left-rail UI from stale App `studioWorkspaceView` to URL-derived destination in split; all previous app440 user-visible fixes PASS and frozen.

@@ -1,3 +1,11 @@
+## NEXT — app441 first-render rail selection only: user physical verification (2026-10-21 KST)
+
+- Live PREVIEW `https://preview.soridraw.com` app441, release SHA `8091aa4f80721f150df1668cd4f4a1f684eabbfb` [Hosting run #39482587973](https://github.com/andrawing1212/soridraw-music/actions/runs/39482587973) exact build PASS; [source PR #311](https://github.com/andrawing1212/soridraw-music/pull/311) and [release PR #312](https://github.com/andrawing1212/soridraw-music/pull/312) merged. App441 ONLY changes selected-left-rail UI from stale App `studioWorkspaceView` to URL-derived destination in split; all previous app440 user-visible fixes PASS and frozen.
+- Ask user to verify **only three paths** with existing warm cache: Create→Explore→Recent, Music Note→Explore→Recent, Library→Explore→Recent. The Recent button must be selected on the FIRST frame, with no previous menu highlight. Classic and browser Back/Forward should retain original behavior. PC physical proof pending; user requests no other changes.
+- If visual FAIL, isolate the rail-only owner in exact video; DO NOT adjust Split Engine CSS/geometry, Explore cached Feed, save-heart, storage, backend, app-wide navigation, or unrelated files. Release code remains only PREVIEW. Stage416 1/4·25% OFF; historical speed 5/5·100% unremeasured.
+
+---
+
 ## NEXT — app440 PC first-frame and Explore Recent navigation physical QA (2026-10-21 KST)
 
 - Released app440 PREVIEW Hosting exact source `c4d53023773e5aa9c8890297754acc2a8a0a185f` (remote version 440, exact build/TS/Build/TEST-PROD guard PASS [run #39478829206](https://github.com/andrawing1212/soridraw-music/actions/runs/39478829206)). Subsequent verifier-only `preview` head `d11a030b8e7240c393607f6cf7aed09e79e97971`, follow workflow [#39479756655](https://github.com/andrawing1212/soridraw-music/actions/runs/39479756655) PASS. Product PR #307 and verifier PR #309.

@@ -1,3 +1,19 @@
+## NEXT — app441 Music Note split drag: historic breakthrough confirmed, physical jank unresolved (2026-10-21 KST)
+
+User has already provided PREVIEW/TEST Master synthetic PERF screenshots, and specifically says previous repeated synthetic testing never found the real fault. **Do not ask for the same screenshots/benchmark again.** The user wants an actual minimal PREVIEW performance repair and live hand acceptance **when the cause is proved**.
+
+**Existing measurements:** PREVIEW app441 Music Note 80.8fps/P95 25.8ms vs TEST app377 71.1fps/P95 27.8ms; Library 119.3/14.5 vs 102.9/16.7. Same screenshot synthetic surface 1400×900, right Library list 602 nodes in both. Preview's *synthetic* render cost is also lower. This is a synthetic/HUMAN contradiction, not grounds to dismiss the latter.
+
+**Historical mechanism, source references:** 591 direct pane geometry `1f90127be8a4`; 607 App root rerender suppression `ce3591169490`, 624 Lite class cover `22f52fab23fd`; 764 Pure Pane `523d74adea3a`; 798 hybrid boundary signature `ce893e7d4faf`; hybrid default `ef6d32c67e2c`; 1001 PC containment `c160b792fc73`; native leaf/region CSS 576/585/657/1005 (current `liteSplitWorkspace.css` and `studioLayout.css`). Never restore abandoned React windowing, frozen live widths, 30fps content, fake divider, or multi-owner height/scroll workaround.
+
+**Fresh targeted engineering path:** (a) diff exact app438/439 initial-paint effects `LiteStudioSplitWorkspace.tsx`, `FavoritesPage.tsx`, `SunoLibraryPage.tsx`; verify `refreshMetrics` and masthead portal/split tree rerenders cannot run during drag or after every frame, not merely pointermove. (b) distinguish first drag after navigation, repeated warm hand drag, responsive boundary crossings, external window resize as separate timelines; correlate long animation frames with actual DOM/CSS invalidation in same real pane. (c) use existing `scripts/verify-394-split-chrome.mjs` isolated Chromium fixture for mechanical no-snap/scroll/PC-tablet checks; DO NOT call fixture speed an authenticated Music Note browser proof. (d) if provable owner isolated, implement only that owner's minimal reversible local fix, preserve first-frame app441 acceptance, render locations, 60s/30s/150s saves, canonical data, and Lite hot path. (e) audited commit then guarded PREVIEW Hosting-only deploy, user physical real-hand QA (not FPS-only). If cause isn't established, do not publish a guessed app442.
+
+**Preserve:** 16px click/1px real divider, actual same-frame pane sync, breakpoints 660/820/1080/1100/1600, tablet min 430px, collapses, bar, pointer-up, scroll, popups, navigation; no dataset/global CSS/React per-pixel loop. TEST/PRODUCTION untouched. TypeScript/Build/QA only when source candidate exists.
+
+**Current status** 2/4·50% historic/static source + screenshots; source remediation and actual human verification pending. Stage416 1/4·25%; earlier app speed 5/5·100% historical only.
+
+---
+
 ## NEXT — app441 split-drag FPS regression: measure BEFORE patching (2026-10-21 KST)
 
 **Intent:** The user explicitly requests continuing development to isolate and improve sluggish PREVIEW Music Note/Library divider dragging compared with TEST. This is a new performance request, NOT permission to alter the accepted app441 page-entry/navigation visuals or promote TEST/PRODUCTION.

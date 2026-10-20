@@ -69,6 +69,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify Music Note explicit URL settlement and color projection
+        run: |
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-281-suno-url-cross-device.mjs
+
       - name: Verify app358 profile and My Likes convergence
         run: npx tsx scripts/verify-368-live-profile-like-convergence.ts
 

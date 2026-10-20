@@ -1,3 +1,12 @@
+## NEXT — app438 PREVIEW first-frame user PC/mobile QA (2026-10-21 KST)
+
+- Exact deployed app438 commit `ac8d9a3829018ee20718c8278314db8d69433a4e`, `https://preview.soridraw.com`, remote version 438 and HTML hash verified via [official Action #39471086276](https://github.com/andrawing1212/soridraw-music/actions/runs/39471086276). Studio first-frame PR #300 and Explore warm-cache first-frame PR #301 are merged and released. TS/Build and existing tests PASS; **physical results and independent Work audit not PASS**.
+- Next user QA: Studio Black split Recent from Music Note/Library, verify original gutters without 1-frame narrow flash, Result geometry stable, Music Note rows do not jump vertically; navigate Explore and confirm no initial rail overlap/rearrangement. Repeat warm entry with intact local cache and at least one mobile/tablet route. Keep UI dimensions and backend untouched.
+- If FAIL: recover exact single-page owner from before/after frame and change only the offending component, not global layout or frozen splitter engine. New source fix requires exact CI and guarded PREVIEW Hosting release, independent audit as feasible. No TEST/PRODUCTION promotion without explicit user instruction. Preserve 30s save-heart, Music Note 60s, Recent 150s, Explore like/follow/publication and R0/W0 normal cached revisits. #293 conflict and URL/color work separate.
+- Stage416 1/4·25% OFF; app speed historic 5/5·100% unremeasured; current first-frame task 3/4·75%, real PC/mobile user acceptance pending.
+
+---
+
 ## NEXT — user-corrected visible FAIL, verify narrow PREVIEW repair before revisiting #293 (2026-10-21 KST)
 
 - Stop mislabeling the screenshot as deleted URL resurrection. **Primary physical FAIL is URL added on MOBILE not appearing on PC** for same account/same song `그날의 나에게`. Also historical Music Note assigned-color filter returns empty. The URL deletion fallback and last-writer protection are separate follow-up risks, not user's screenshot.

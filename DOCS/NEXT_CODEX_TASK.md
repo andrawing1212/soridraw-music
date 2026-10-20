@@ -1,3 +1,89 @@
+## NEXT — app435 3 Work-audit failures fixed in draft: exact SHA CI then independent audit (2026-10-20 KST)
+
+- Target current Draft PR #282 branch HEAD; compare with preview base `11f46242f3c08fc9076dd10abe90be0008aac098`. Run exact commit GitHub full CI, including verify-451 live persisted inline ACK and verify-454 Studio tempo and owned favorite offline guards, TypeScript, Build, Functions build, frozen like/follow/explore and read-only RTDB Rules. Do not call developer CI an independent PASS.
+- Require auditor to reproduce original Work 3 counterexamples: (1) canonical tempo:null + old requestPayload tempoConfig 145–155 must leave Studio clearAll tempo defaults, preserve trusted current config; (2) RTDB live changed-row UI NEW but failed `saveRecentSongsCache` with disk OLD must not advance local version/ACK and should read on safe retry/restart; success keeps live R0; (3) original getDocFromServer offline/missing/wrong owner aborts both Music Note list/modal Apply with user retry toast, verified valid owner succeeds, shared-only view unchanged.
+- Audit other existing `290-recent` comment-text, `290-studio` pre-existing, `427-legacy` clear policy mismatches separately; don't rewrite legacy baseline just to turn checks green. Inspect Recent preview A/B + heart/public/media untouched, page-entry R0 and one explicit next-song single-doc read per click.
+- PR remains Draft unmerged, no PREVIEW/TEST/PRODUCTION deploy or shared data writes. Separate independent Work/GPT-6 audit when user tool availability permits; user reported GPT-6 Astra High cannot be used for more work now. Hold app435 at 3/4·75%, Stage416 OFF 1/4·25%, speed 5/5·100% historic/unremeasured.
+
+---
+
+## NEXT — app435 exact SHA CI + independent Work audit; no merge before PASS (2026-10-20 KST)
+
+- Pin latest draft PR #282 SHA and compare against preview `11f46242f3c08fc9076dd10abe90be0008aac098`. Verify full GitHub Actions TypeScript/Build/451/453/454 and all frozen like/follow/publication/tests; complete only when exact job SUCCESS.
+- Independently inspect `musicNoteNextSongRecipe.ts` canonical/pending genre and customGenreInput provenance and the real `FavoritesPage → pendingAppliedKeywords → App.tsx Studio setSubGenre` path. Confirm exact canonical genre:[] + old cached/request custom input selects none; authoritative canonical/pending current custom input remains. Confirm sourceVersion 0 or stale unchanged card on second sequential deliberate click reads updated owned one-document original, simultaneous click coalesces, error retry works; normal page entry/warm view R0 retained.
+- Recheck Recent retained A edit-preview/B settled snapshot, storage-failure ACK/version gate, media/heart, cost, UID isolation. No backend schema migration, polling, cache reset, modification to frozen likes/Workers/Functions/Rules. Source-only test is not PC/mobile physical parity or billing proof.
+- **Separate read-only independent Work/GPT-6 audit PASS required** before PR merge and PREVIEW Hosting release; then user physical PC/mobile acceptance, TEST by user approval, PRODUCTION explicit approval only. Keep Stage416 OFF.
+
+---
+
+## NEXT — app435 final click provenance + end-to-end independent audit (2026-10-20 KST)
+
+- Verify PR #282 latest exact SHA versus `preview` `11f46242f3c08fc9076dd10abe90be0008aac098`. CI must PASS on the new SHA (TypeScript, Build, Functions type build, existing 450–454, like/follow, publication and read-only Rules); no merge/deploy until separate Work audit PASS.
+- Independently execute the *actual* FavoritesPage click consumer into `pendingAppliedKeywords`: original canonical tempo:null with old requestPayload tempo:95 stays null; original genre:[] plus generated prompt `[Genre]` stays []; auto-empty original userInput + requestPayload actual command restores only actual; old cached command/old clear cannot outrank it; compatible actual pending command/clear can. Ensure list and modal click both hydrate exactly owned one-document; failed/offline hydration never fabricates an original.
+- Audit Recent first retained A draft masking B N+1, durable storage failure and retry/read gating, saved heart/public/lock/audio/Suno, R0 unchanged warm reopen. Preserve app434 publication and frozen like/follow. No extra listener, Firestore repeated read, D1 scan, deployment, shared data migration/cache purge, or TEST/PRODUCTION.
+- Stage416 OFF. After exact SHA independent PASS, developer may merge and use guarded Firebase PREVIEW Hosting only, then real PC/mobile and historical-song QA. 100k billing unmeasured.
+
+---
+
+## NEXT — app435 re-audit canonical present-null / confirmed genre precedence (2026-10-20 KST)
+
+- Check new PR #282 exact SHA, GitHub CI TypeScript/Build/454. Reproduce canonical appliedKeywords tempo null despite historical requestPayload tempo non-null, canonical genre [] despite legacy genre, canonical current genre vs old cached/request subGenre, verified pending genre vs outdated subGenre. Confirm this additional guard changes only deliberate Next Song click recipe merging.
+- Retest offline Recent B cache write failure and exact ACK/retry guards (451/453), Music Note 60s, Recent 150s, Studio heart +30s, Explore app410/421 like/follow and app434 publication. No merge/PREVIEW until independent PASS; no shared data/TEST/PRODUCTION changes.
+
+---
+
+## NEXT — app435 independent exact-SHA audit after two P0 source corrections (2026-10-20 KST)
+
+- Target final draft PR #282 HEAD against preview `11f46242f3c08fc9076dd10abe90be0008aac098`, full CI must PASS first. Do not merge/deploy on CI alone.
+- Test click Next Song old cached genre/tempo/vocal and command vs confirmed exact original, explicit canonical null and [], absent-only fallback, compatible pending draft winner, original legacy command, newest proven clear, and exact one-document owned hydration with no collection scan. Inspect FavoritesPage getSongGenreValues downstream.
+- Test offline A retained edit-preview masking B canonical; failed saveRecentSongsCache MUST NOT advance local canonical version, mark gap verified, or ACK pending. Successful stored B can advance revision while A text remains unsettled; same warm revisit R0 and genuinely newer B2 rechecks.
+- Preserve app434 publication/feed/title, app410/421 likes/follows, app349 Studio heart +30s, Music Note 60s/Recent 150s, media and UI. Stage416 OFF. No shared user data changes, migration, Worker, Functions, Rules, main/TEST/PRODUCTION, or PREVIEW deployment until separate independent audit PASS. Physical PC/mobile parity and 100k billed read/write unverified.
+
+---
+
+## NEXT — app435 two independently identified boundary failures: re-audit exact new SHA (2026-10-20 KST)
+
+- Patch only exact previous FAILs: click legacy command-vs-older-clear precedence in `musicNoteNextSongRecipe.ts`, and confirmed B aggregate revision vs unsettled A text preview in `App.tsx`; add tests 454 and 451. No functional change to publication/likes/follows/save hearts/visuals.
+- Independent auditor must run NEW exact SHA CI and check real helpers/consumer; specifically newer canonical command beats older requestPayload clear, newest explicit clear still wins, verified B doc version N+1 persists despite A preview, same-signal reload R0, genuine newer B2 still reads, and pending canonical ACK separated from RTDB draft. If FAIL no merge.
+- No hosting/worker/Functions/Rules/shared data deployment or branch promotion until separate independent PASS. After PASS developer may merge into preview and follow existing guarded Hosting release. PC/mobile #237/#277 and historical Next Song #229 actual QA and 100k costs remain unverified; TEST/PRODUCTION BLOCK.
+
+---
+
+## NEXT — app435 PR #282 new SHA independent Work audit, then gated PREVIEW release (2026-10-20 KST)
+
+**No more feature implementation until independent audit** unless new exact-SHA CI fails or specific audit blocker appears. Compare actual latest draft PR #282 HEAD against PREVIEW `11f46242f3c08fc9076dd10abe90be0008aac098`. app434 remains deployed and public/private/Explore title/live improvements must remain intact.
+
+1. **Recent missed B audit:** PC persists B while mobile closed, then sends A text `edit-preview`, so RTDB first retained node is only A and cached profile version is stale. Read code `src/services/userDomainSyncService.ts`, `src/lib/recentSongsSyncGate.ts`, `src/App.tsx`. Verify initial retained draft produces persistent gap marker but NEVER ACKs canonical; one guarded `user_recent_songs/{uid}` read recovers B while local newer A text remains; on same signal reopen R0. Verify unread/failed read retries, new signal while read inflight, pending on sender, no unconditional data wipe, no repeated R on live drafts or stable warm reopen. Execute regression 451/453 independently.
+2. **Original legacy Next Song audit:** `src/lib/musicNoteNextSongRecipe.ts` must recover literal old stored `requestPayload.appliedKeywords.commandInput` even if canonical `appliedKeywords.userInput:''` and local `userInput:''` are generated empty defaults. Explicit proven later clear wins; *older* clear must not erase newer actual nonempty command. `FavoritesPage.tsx` list and modal button exact user-owned favorite 1-document click hydration; same-version cache bypass, owner check, session memo 456 and Studio `pendingAppliedKeywords`+userInput. No default prompt-as-original, no full collection scan. Explicit uncertainty for old clear without provenance; physical historical user sample QA required.
+3. Check app434 publication, app410/421 likes/follows, Studio 30s save-heart, Music Note 60s, Recent 150s, Suno exact playback/media, responsive UI, worker/Functions/rules nonchanges and 100k read/write cost. Use real QA after code-only independent audit.
+4. Latest GitHub full CI exact head TypeScript/Build/regression must be PASS; frozen SHA stays fixed throughout separate GPT-6/Work read-only audit. If FAIL stop and return to developer. **Do not merge, change shared user data, invalidate healthy cache, or deploy TEST/PRODUCTION without approval.** PREVIEW release only after audit PASS and guarded existing Hosting trigger, then human PC/mobile acceptance.
+
+---
+
+## NEXT — finalize app435 #282 corrected exact code audit, NO MERGE before PASS (2026-10-20 KST)
+
+**Source of truth:** PR #282 `fix/app435-integrated-parity` to `preview` baseline `11f46242f3c08fc9076dd10abe90be0008aac098`, current app deployed app434. Previous Work independent audit `eeda037...` FAIL, and extra read-only check `4cd053...` FAIL. Current product fix before doc commit `dfc2edb3b8a851189df20c687aa60335de56e486`. Use latest actual PR SHA after doc updates.
+
+1. Check full GitHub run on **latest SHA**: TypeScript, Build, existing 127/191/410 liked/follow/428-434 publication, 450-454 regressions and Rules. If CI fails, halt and fix exact failing assertion/code; do not merge.
+2. Independent audit **in separate Work mode** of original-song Next Song `favorites/{id}` click lookup, stale identical-version detail-cache bypass, one-doc read per song/version, owner UID check, preserve true latest explicit blank and recover persisted legacy direct command. Check both row menu and details, Studio command window `pendingAppliedKeywords`, and no fabricated prompt/lyrics. Historical note with truly missing persisted command cannot be restored by guessing.
+3. Independently execute `recentSongCanonicalPreviewGuard453` and `pickRecentSongLiveTextPreview457`: stale server A old title versus current draft A new, canonical favorite/public/lock/media fields win, canonical B still recovered, no null generation batch/index/genre changes, newer server timestamp outranks draft. Test partial/null preview, same-UID offline→reopen, no premature ACK or repeated gap reads.
+4. Preserve app434 public/private, Recommended/Latest real-time, title, old app410/421 personal like/follow, Studio 30s save heart, Music Note 60s, Recent 150s; no D1/whole Feed query, no new RTDB listener or server write/scan. Measure costs where possible; 100k remains unmeasured.
+5. PR #282 stays draft until independent exact-SHA PASS. Then decide safety of merge + guarded Firebase PREVIEW Hosting release only; no TEST/PRODUCTION, shared D1/Firestore/R2 user data mutation, migration, cache reset or mass repair. User PC/mobile physical acceptance of historic command, Recent IDs/heart/media & Explore hearts/count is still required.
+
+---
+
+## NEXT — PR #282 corrected app435 exact-SHA independent re-audit then PREVIEW only (2026-10-20 KST)
+
+- Read latest `preview` HEAD and `fix/app435-integrated-parity` PR #282 HEAD. Baseline product `preview` app434; former audited candidate `eeda03739b1bbe4888aa517c1747a4a7a24d172c` **Work FAIL and MUST NEVER MERGE**.
+- **First do an independent read-only audit of corrected exact PR SHA:** source `src/App.tsx` + `src/lib/recentSongCanonicalPreviewGuard453.ts` and `src/services/userDomainSyncService.ts` stale canonical vs RTDB draft, lost-item recovery, no early ACK, no Firestore read on edit-preview, 150-second trailing batch and offline/same-UID cases. Pay attention to onValue/first retained signal order, pending local vs remote, and unsettled draft across route change.
+- Verify Music Note `src/lib/musicNoteCompactMediaSync452.ts` retains unchanged complete audio/media URLs within 24k budget, does not invent or truncate large arrays, does not change canonical media. Test 452.
+- Verify historical Music Note direct command: `src/pages/FavoritesPage.tsx` explicit own exact-document hydration (both list/detail), recipe precedence from `src/lib/musicNoteNextSongRecipe.ts` and `requestPayload`, no constructed prompt/lyrics, no page-entry data reads; Test 454 and frozen app427. Check older cache with `__catalogSummary=false` but omitted requestPayload. If original source lacks command, report impossibility instead of fabrication.
+- Then check changed-item Explore public metadata/count isolation 450, other PC/mobile save-heart 349/follow, title, publication, cache and responsive UI, cost no repeat scans. TypeScript/Build/QA exact SHA PASS. **If anything fails, DO NOT merge.**
+- If Work PASS, source exact SHA→preview merge and PREVIEW Hosting only through existing release trigger and exact build verification; re-evaluate before worker/functions involvement. **Actual PC/mobile user QA** must verify Recent IDs/count, own Music Note list/hearts, Suno link/cover/audio, historical direct command in Studio and Explore heart/count/like/unlike without navigation. Until real user QA, mark PENDING and TEST/PRODUCTION BLOCK.
+- Never reset/wipe user caches, use destructive migration or blindly pick one device as canonical. No data copy/overwrite and no Stage416 5-minute activation.
+
+---
+
 ## NEXT — app434 PREVIEW real-device P0 FAIL: restore parity without losing data (2026-10-20 KST)
 
 **Current user direction:** improvements in publication #226 tasks 1/2/3/4/7 seen; #8 likely better. Protect them. **#237 & #277 user acceptance FAIL** must be solved before TEST promotion or release system refactor. Release app434 exact audited product `8eb3264f1c7abaf36a59026248a61c6700e3b9a0`, previous preview HEAD `0b22b95e8903461008538c8a2285d35385084bdb`. No arbitrary PC/mobile truth.

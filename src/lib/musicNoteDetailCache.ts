@@ -272,3 +272,37 @@ export const patchMusicNoteDetailCache = async ({
   remember(record);
   await writePersistent(record);
 };
+
+
+// Explicit "Next Song" must not trust an older IndexedDB/memory detail entry:
+// an old same-version record may omit requestPayload/commandInput even though
+// the unchanged original favorites document contains the manual command.
+// Deliberate Next Song clicks must see cross-device edits even when the local
+// card's sourceVersion is missing/stale. Coalesce concurrent clicks only;
+// NEVER memoize a completed successful original for the browser session.
+// Normal page/view hydration remains independently cache-first.
+const originalRecipeLoads456 = new Map<string, Promise<any | null>>();
+export const getOrLoadMusicNoteOriginalRecipe456 = (
+  args: MusicNoteDetailLoadArgs,
+): Promise<any | null> => {
+  const safeUid = String(args.uid || '').trim();
+  const safeSourceId = String(args.sourceId || '').trim();
+  if (!safeUid || !safeSourceId) return Promise.resolve(null);
+  const version = Math.max(0, Math.floor(Number(args.sourceVersion || 0)));
+  const key = `${cacheKey(safeUid, safeSourceId)}:${version}:next-song-original-456`;
+  const existing = originalRecipeLoads456.get(key);
+  if (existing) return existing;
+  const task = Promise.resolve().then(args.loader).finally(() => {
+    // A completed click is never evidence that another device has not since
+    // changed this exact favorite. Every later deliberate click can recheck.
+    // Keep in-flight coalescing without a new page-entry read or polling.
+    if (originalRecipeLoads456.get(key) === task) originalRecipeLoads456.delete(key);
+  });
+  originalRecipeLoads456.set(key, task);
+  while (originalRecipeLoads456.size > 100) {
+    const oldest = originalRecipeLoads456.keys().next().value;
+    if (!oldest) break;
+    originalRecipeLoads456.delete(oldest);
+  }
+  return task;
+};

@@ -97,6 +97,21 @@ on:
       - 'scripts/verify-433-publication-audit-fixes.mjs'
       - 'scripts/verify-434-publication-signal-version-order.mjs'
       - 'scripts/verify-435-preview-worker-release-artifact.mjs'
+      - 'scripts/verify-451-recent-retained-signal-recovery.mjs'
+      - 'scripts/verify-452-music-note-media-fallback.mjs'
+      - 'scripts/verify-453-recent-stale-canonical-preview-guard.mjs'
+      - 'scripts/verify-454-legacy-command-exact-hydration.mjs'
+      - 'src/lib/recentSongCanonicalPreviewGuard453.ts'
+      - 'src/pages/FavoritesPage.tsx'
+      - 'scripts/verify-450-publication-like-count-isolation.mjs'
+      - 'src/services/explorePublicationLivePolicy433.ts'
+      - 'src/services/exploreSessionCache.ts'
+      - 'src/services/exploreProfileFirstViewService.ts'
+      - 'src/pages/ExplorePage.tsx'
+      - 'src/lib/musicNoteCompactMediaSync452.ts'
+      - 'src/lib/recentSongsSyncGate.ts'
+      - 'src/services/userDomainSyncService.ts'
+      - 'src/App.tsx'
       - 'functions/src/explorePublicationRelease431.ts'
       - 'functions/src/explorePublicationReleaseEndpoint431.ts'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
@@ -304,6 +319,11 @@ jobs:
           node scripts/verify-432-publication-live-delta.mjs
           node scripts/verify-433-publication-audit-fixes.mjs
           node scripts/verify-434-publication-signal-version-order.mjs
+          node scripts/verify-451-recent-retained-signal-recovery.mjs
+          node scripts/verify-452-music-note-media-fallback.mjs
+          node scripts/verify-453-recent-stale-canonical-preview-guard.mjs
+          node scripts/verify-454-legacy-command-exact-hydration.mjs
+          node scripts/verify-450-publication-like-count-isolation.mjs
           node scripts/verify-435-preview-worker-release-artifact.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior

@@ -2,6 +2,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
 import { projectCatalogItemForSync, rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
+import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -46,6 +47,10 @@ const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
 // version. Persist both signal and acknowledgement across Studio navigation.
 const RECENT_PENDING_SIGNAL_BASE = 'soridraw_recent_songs_pending_signal_v3';
 const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_signal_v3';
+// A retained live draft can mask earlier canonical row changes on a closed device.
+// This is a one-time *gap verification* token, never a Firestore document version.
+const RECENT_RETAINED_DRAFT_GAP_BASE_460 = 'soridraw_recent_retained_draft_gap_460';
+const RECENT_RETAINED_DRAFT_VERIFIED_BASE_460 = 'soridraw_recent_retained_draft_verified_460';
 export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
@@ -115,6 +120,22 @@ export const readPendingMusicNoteSyncSignal = (uid: string): UserDomainSyncSigna
   } catch {
     return null;
   }
+};
+
+export const readRecentSongsRetainedDraftGap460 = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_RETAINED_DRAFT_GAP_BASE_460, uid));
+
+export const readRecentSongsVerifiedRetainedDraftGap460 = (uid: string): number =>
+  readLocalNumber(scopedVersionKey(RECENT_RETAINED_DRAFT_VERIFIED_BASE_460, uid));
+
+export const rememberRecentSongsRetainedDraftGap460 = (uid: string, signalVersion: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_RETAINED_DRAFT_GAP_BASE_460, uid), signalVersion);
+};
+
+export const verifyRecentSongsRetainedDraftGap460 = (uid: string, verifiedVersion: number): void => {
+  if (!uid) return;
+  writeLocalNumberMax(scopedVersionKey(RECENT_RETAINED_DRAFT_VERIFIED_BASE_460, uid), verifiedVersion);
 };
 
 export const readRecentSongsPendingSignalVersion = (uid: string): number =>
@@ -240,7 +261,7 @@ const projectMusicNoteItemForSignal = (
 
   // Extreme fallback. The canonical Firestore document is untouched; this only
   // bounds the transient changed-item signal and keeps receiver Firestore reads at 0.
-  return {
+  return appendBoundedMusicNoteMediaFallback452({
     __catalogSummary: true,
     __musicNoteCompactActiveSync: true,
     id,
@@ -265,7 +286,7 @@ const projectMusicNoteItemForSignal = (
     saved: true,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
-  };
+  }, projected);
 };
 
 const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null => {
@@ -805,7 +826,7 @@ const normalizeSignal = (raw: unknown): UserDomainSyncSignal | null => {
   };
 };
 
-const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomainSyncSignal): void => {
+const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomainSyncSignal, initialRetained = false): void => {
   if (typeof window === 'undefined') return;
 
   if (kind === 'musicNote') {
@@ -855,7 +876,19 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     return;
   }
 
-  if (signal.originDeviceId === getDeviceId('recentSongs')) {
+  // 'edit-preview' is a live draft, not a successful Firestore aggregate
+  // mutation. Never publish its timestamp as the canonical document revision
+  // or mark it settled. The first retained draft on a newly attached device
+  // may have overwritten older canonical RTDB notifications, so preserve an
+  // unresolved catch-up fence only for that initial replay.
+  if (signal.operation === 'edit-preview') {
+    // A live edit is always RTDB-only. Only the *first retained* preview
+    // after attaching an origin may hide older canonical changes to other songs.
+    // Save a distinct bounded gap token, not a canonical version or ACK.
+    if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);
+  } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
+    // A live ACK of our own confirmed write is safe. A retained old own-device
+    // signal is not proof of complete membership after offline changes.
     // Recent-song writes save the aggregate document before this mirror fires.
     // Advance the local gate so the existing event consumer does not reread that
     // same document on the device that just wrote it.
@@ -871,6 +904,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
       originDeviceId: signal.originDeviceId,
       operation: signal.operation,
       itemJson: signal.itemJson || '',
+      initialRetained,
     },
   }));
 };
@@ -903,9 +937,14 @@ const startDomainSubscriptions = (uid: string) => {
     console.warn('Music Note RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });
 
+  // A new subscriber receives only the latest retained RTDB item. It cannot
+  // prove that other songs changed while this origin was offline or closed.
+  let firstRecentSnapshot = true;
   unsubscribeRecentSongs = onValue(ref(realtimeDb, `userSync/${safeUid}/recentSongs`), (snapshot) => {
+    const initialRetained = firstRecentSnapshot;
+    firstRecentSnapshot = false;
     const signal = normalizeSignal(snapshot.val());
-    if (signal) dispatchSignal(safeUid, 'recentSongs', signal);
+    if (signal) dispatchSignal(safeUid, 'recentSongs', signal, initialRetained);
   }, (error) => {
     console.warn('Recent-song RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });

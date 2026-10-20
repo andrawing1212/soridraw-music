@@ -75,6 +75,7 @@ import {
 } from '../services/explorePublicPublicationSyncService';
 import {
   isExplorePublicationPublicResponseCurrent433,
+  mergeExplorePublicationCardPreservingLikeCount435,
   recordLatestExplorePublicationSignal433,
   shouldInsertExplorePublicationTrack433,
   type ExplorePublicationLiveSignalState433,
@@ -2749,20 +2750,23 @@ export default function ExplorePage() {
           const index = previous.findIndex((track) => track.id === normalized.id);
           if (index >= 0) {
             const next = [...previous];
-            next[index] = { ...next[index], ...normalized };
+            next[index] = mergeExplorePublicationCardPreservingLikeCount435(next[index], normalized);
             return overlayActorLikeCounts120(next);
           }
           return overlayActorLikeCounts120([normalized, ...previous].slice(0, 40));
         });
         setPopularTracks((previous) => previous.map((track) => (
-          track.id === normalized.id ? { ...track, ...normalized } : track
+          track.id === normalized.id ? mergeExplorePublicationCardPreservingLikeCount435(track, normalized) : track
         )));
       }
 
       if (profileUid === uid) {
         setProfileTracks((previous) => {
           const without = previous.filter((track) => track.id !== normalized.id);
-          const next = [normalized, ...without];
+          const existing = previous.find((track) => track.id === normalized.id);
+          const next = [existing
+            ? mergeExplorePublicationCardPreservingLikeCount435(existing, normalized)
+            : normalized, ...without];
           next.sort(comparePublicProfileTracks);
           return overlayActorLikeCounts120(next.slice(0, 50));
         });
@@ -2816,7 +2820,7 @@ export default function ExplorePage() {
       upsertExplorePublicProfileFirstViewTrack(row432.ownerUid, snapshot432);
 
       const patchExisting432 = (previous: ExploreTrack[]) => previous.map((track) => (
-        track.id === normalized432.id ? { ...track, ...normalized432 } : track
+        track.id === normalized432.id ? mergeExplorePublicationCardPreservingLikeCount435(track, normalized432) : track
       ));
       setPopularTracks(patchExisting432);
       setCuratedTracks307(patchExisting432);
@@ -2828,7 +2832,7 @@ export default function ExplorePage() {
           const index = previous.findIndex((track) => track.id === normalized432.id);
           if (index >= 0) {
             const next = [...previous];
-            next[index] = { ...next[index], ...normalized432 };
+            next[index] = mergeExplorePublicationCardPreservingLikeCount435(next[index], normalized432);
             return overlayActorLikeCounts120(next);
           }
           if (!shouldInsertExplorePublicationTrack433(sort)) return previous;
@@ -2839,7 +2843,10 @@ export default function ExplorePage() {
       if (profileOwner432 === row432.ownerUid) {
         setProfileTracks((previous) => {
           const without432 = previous.filter((track) => track.id !== normalized432.id);
-          const next432 = [normalized432, ...without432];
+          const existing432 = previous.find((track) => track.id === normalized432.id);
+          const next432 = [existing432
+            ? mergeExplorePublicationCardPreservingLikeCount435(existing432, normalized432)
+            : normalized432, ...without432];
           next432.sort(comparePublicProfileTracks);
           return overlayActorLikeCounts120(next432.slice(0, 50));
         });

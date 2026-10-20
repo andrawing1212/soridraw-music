@@ -7,6 +7,9 @@ import {
   readPendingMusicNoteSyncSignal,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
+  readRecentSongsRetainedDraftGap460,
+  readRecentSongsVerifiedRetainedDraftGap460,
+  verifyRecentSongsRetainedDraftGap460,
   rememberRecentSongsPendingSignalVersion,
 } from './services/userDomainSyncService';
 import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
@@ -14,7 +17,8 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460 } from './lib/recentSongsSyncGate';
+import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 import {
@@ -12704,7 +12708,12 @@ const unlockAllFavorites = async () => {
       const localVersion = readRecentSongsLocalVersion(user.uid);
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
-      const needsServerRead = needsRecentSongsServerRead({
+      const retainedGapVersion = readRecentSongsRetainedDraftGap460(user.uid);
+      const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460(
+        retainedGapVersion,
+        readRecentSongsVerifiedRetainedDraftGap460(user.uid),
+      );
+      const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
         hasLocalCache: Boolean(latestCache),
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
@@ -12724,6 +12733,7 @@ const unlockAllFavorites = async () => {
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
       const readSignalVersion = pendingSignalVersion;
+      const retainedGapAtRead = unverifiedRetainedGap ? retainedGapVersion : 0;
 
       void getDocFromServer(ref)
         .then((snap) => {
@@ -12756,7 +12766,15 @@ const unlockAllFavorites = async () => {
             console.warn('Unconfirmed recent song preserved locally; server is still missing it.');
             return;
           }
-          acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
+          const protectedRecent453 = protectRecentCanonicalSnapshotFromPreview453(
+            firestoreSongs,
+            currentCache?.history || [],
+            getLiveSoridrawSongId,
+          );
+          const visibleServerHistory453 = protectedRecent453.songs;
+          if (!protectedRecent453.hasUnsettledPreview) {
+            acknowledgeRecentGeneratedSongs(user.uid, firestoreSongs);
+          }
           // A PC-generated song can be visible locally before its background
           // save reaches Firestore. Preserve it if there is no canonical doc.
           if (!snap.exists() && Array.isArray(currentCache?.history) && currentCache.history.length > 0) {
@@ -12769,18 +12787,32 @@ const unlockAllFavorites = async () => {
           const nextIndex = firestoreSongs.length ? preferredIndex : -1;
           const latestBatchId = (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
           const cachedSuccessfully = saveRecentSongsCache(user.uid, {
-            history: firestoreSongs,
+            history: visibleServerHistory453,
             historyIndex: nextIndex,
             latestGenerationBatchId: latestBatchId,
           });
 
-          if (documentVersion > 0) writeRecentSongsLocalVersion(user.uid, documentVersion);
+          // Canonical document revision is verified by this read even if a separate
+          // RTDB text preview has not settled. Keep its draft marker independent.
+          if (cachedSuccessfully && documentVersion > 0) {
+            // Server revision is proven only after durable cache persistence.
+            // If storage failed, leave prior revision/gap for safe next visit.
+            writeRecentSongsLocalVersion(user.uid, documentVersion);
+          }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState(firestoreSongs, { preferredIndex: nextIndex, latestBatchId });
+          applyRecentSongsState(visibleServerHistory453, { preferredIndex: nextIndex, latestBatchId });
+          // The one canonical aggregate read has recovered all *settled*
+          // earlier songs that may be obscured by the retained draft. This is
+          // NOT an ACK of the draft itself or a 150s commit.
+          if (cachedSuccessfully && retainedGapAtRead > 0) {
+            verifyRecentSongsRetainedDraftGap460(user.uid, retainedGapAtRead);
+          }
           recentSongsReadyToCacheRef.current = true;
           recentSongsSessionVerifiedUids.add(user.uid);
 
+          // Only confirmed-change pending signals are acknowledged here. The
+          // retained edit-preview has its own gap token and is never ACKed.
           if (cachedSuccessfully && readSignalVersion > 0) {
             acknowledgeRecentSongsSignalVersion(user.uid, readSignalVersion);
           }
@@ -12814,12 +12846,16 @@ const unlockAllFavorites = async () => {
         });
     };
 
-    const applyRecentSongSignalItem = (itemJson: string): { applied: boolean; partial: boolean } => {
-      if (!itemJson) return { applied: false, partial: false };
+    const applyRecentSongSignalItem = (itemJson: string): {
+      applied: boolean;
+      cachedSuccessfully: boolean;
+      partial: boolean;
+    } => {
+      if (!itemJson) return { applied: false, cachedSuccessfully: false, partial: false };
       let incoming: any = null;
       try { incoming = JSON.parse(itemJson); } catch {}
       if (!incoming || incoming.__recentSongSync !== true || Array.isArray(incoming)) {
-        return { applied: false, partial: false };
+        return { applied: false, cachedSuccessfully: false, partial: false };
       }
 
       const localPending = recentSongTextWritePendingRef.current;
@@ -12831,19 +12867,22 @@ const unlockAllFavorites = async () => {
         // Preserve the newest local draft/outbox. Remote preview/canonical state
         // can reconcile after this pending local edit commits; it must not replace
         // the durable cache that crash recovery depends on.
-        return { applied: false, partial: incoming.__recentSongPartial === true };
+        return { applied: false, cachedSuccessfully: false, partial: incoming.__recentSongPartial === true };
       }
 
       const currentHistory = historyRef.current;
       const targetIndex = currentHistory.findIndex((song) => isSameRecentSongSyncItem(song, incoming));
-      if (targetIndex < 0) return { applied: false, partial: incoming.__recentSongPartial === true };
+      if (targetIndex < 0) return { applied: false, cachedSuccessfully: false, partial: incoming.__recentSongPartial === true };
 
       const currentSong = currentHistory[targetIndex] as any;
       const incomingApplied = incoming.appliedKeywords && typeof incoming.appliedKeywords === 'object'
         ? incoming.appliedKeywords as Record<string, any>
         : null;
-      let mergedAppliedKeywords = incomingApplied
-        ? { ...(currentSong.appliedKeywords || {}), ...incomingApplied }
+      const safeIncomingApplied = incoming.__recentSongEditPreview === true
+        ? pickRecentSongLiveAppliedKeywords457(incomingApplied)
+        : incomingApplied;
+      let mergedAppliedKeywords = safeIncomingApplied
+        ? { ...(currentSong.appliedKeywords || {}), ...safeIncomingApplied }
         : currentSong.appliedKeywords;
 
       if (
@@ -12886,19 +12925,29 @@ const unlockAllFavorites = async () => {
         };
       }
 
+      const safeIncoming = incoming.__recentSongEditPreview === true
+        ? pickRecentSongLiveTextPreview457(incoming)
+        : incoming;
       const merged = normalizeFavoriteTitleFields({
         ...currentSong,
-        ...incoming,
-        lyrics: incoming.lyrics && typeof incoming.lyrics === 'object'
-          ? { ...(currentSong.lyrics || {}), ...(incoming.lyrics || {}) }
+        // A live text draft cannot edit saved-heart, public/lock state or
+        // media identity. Those only change through their canonical domains.
+        ...safeIncoming,
+        lyrics: safeIncoming.lyrics && typeof safeIncoming.lyrics === 'object'
+          ? { ...(currentSong.lyrics || {}), ...(safeIncoming.lyrics || {}) }
           : currentSong.lyrics,
         appliedKeywords: mergedAppliedKeywords,
       } as SongResult) as SongResult;
+      // A settled canonical changed-item signal clears the transient draft
+      // marker. A live edit-preview retains it until canonical has caught up.
+      if (incoming.__recentSongEditPreview !== true && incoming.__recentSongPartial !== true) {
+        delete (merged as any).__recentSongEditPreview;
+      }
       const nextHistory = currentHistory.map((song, index) => index === targetIndex ? merged : song);
       historyRef.current = nextHistory;
       setHistory(nextHistory);
       recentSongsReadyToCacheRef.current = true;
-      saveRecentSongsCache(user.uid, {
+      const cachedSuccessfully = saveRecentSongsCache(user.uid, {
         history: nextHistory,
         historyIndex: historyIndexRef.current,
         latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
@@ -12908,7 +12957,8 @@ const unlockAllFavorites = async () => {
         setResult(merged);
       }
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 0);
-      return { applied: true, partial: incoming.__recentSongPartial === true };
+      // Paint live UI regardless; only a durable local cache write may ACK.
+      return { applied: true, cachedSuccessfully, partial: incoming.__recentSongPartial === true };
     };
 
     const handleRecentSongsVersionSignal = (event: Event) => {
@@ -12916,6 +12966,7 @@ const unlockAllFavorites = async () => {
         uid?: string;
         version?: number;
         resumeAfterRead?: boolean;
+        initialRetained?: boolean;
         originDeviceId?: string;
         operation?: string;
         itemJson?: string;
@@ -12930,15 +12981,36 @@ const unlockAllFavorites = async () => {
       const itemResult = applyRecentSongSignalItem(String(detail.itemJson || ''));
 
       if (isEditPreview) {
-        // Preview is RTDB-only by design. Whether the item was applied, missing
-        // from this device, or fenced by a newer local draft, it must never fall
-        // through to the canonical Firestore aggregate read path.
+        // A live preview remains RTDB-only. An initial retained preview, however,
+        // may conceal older canonical changes on another device because RTDB
+        // retains only its latest row. The 451 gate reads a canonical snapshot
+        // only when that initial changed signal has not yet been ACKed. Existing
+        // local drafts/outbox still outrank older server data.
+        // Live text stays RTDB-only. A *new* first retained draft may hide
+        // older settled edits to other songs on an offline device; verify that
+        // gap at most once using the existing guarded canonical aggregate read.
+        if (detail.initialRetained === true
+          && needsRecentSongsRetainedDraftGapRead460(
+            readRecentSongsRetainedDraftGap460(user.uid),
+            readRecentSongsVerifiedRetainedDraftGap460(user.uid),
+          )) {
+          runRecentSongsServerSyncIfNeeded();
+        }
         return;
       }
 
-      if (itemResult.applied && !itemResult.partial && Number.isFinite(signaledVersion) && signaledVersion > 0) {
-        // A canonical recent-song mutation carried the changed item itself, so
-        // the receiving device can acknowledge it without rereading the aggregate
+      if (canAcknowledgeRecentSongsInlineSignal({
+        itemApplied: itemResult.applied,
+        itemPersisted: itemResult.cachedSuccessfully,
+        itemPartial: itemResult.partial,
+        signalVersion: signaledVersion,
+        initialRetained: detail.initialRetained === true,
+      })) {
+        // Only a live, non-retained canonical change can be acknowledged by
+        // the exact changed-item update. The first retained change may hide
+        // older songs missed while this device was closed; in that case read the
+        // canonical aggregate once, without clearing local unconfirmed edits.
+        // The receiving device can acknowledge a live edit without rereading the aggregate
         // user_recent_songs document.
         writeRecentSongsLocalVersion(user.uid, signaledVersion);
         acknowledgeRecentSongsSignalVersion(user.uid, signaledVersion);

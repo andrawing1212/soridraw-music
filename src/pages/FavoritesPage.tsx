@@ -98,9 +98,9 @@ import {
   type ExplorePublicationSyncSignal,
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
-import { resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
+import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455 } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
-import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
 import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
@@ -5186,11 +5186,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       // ignore transient UI cleanup failures
     }
 
-    const resolvedRecipe = resolveMusicNoteNextSongRecipe(song);
+    // Click-only exact original was already merged with version-compatible
+    // durable edits. Re-resolving it would refill explicit canonical null/[]
+    // from old requestPayload, silently undoing a user's cleared settings.
+    const exactRecipeVerified462 = song?.__musicNoteNextSongOriginalVerified462 === true
+      && song?.appliedKeywords && typeof song.appliedKeywords === 'object'
+      && !Array.isArray(song.appliedKeywords);
+    const resolvedRecipe = exactRecipeVerified462
+      ? song.appliedKeywords
+      : resolveMusicNoteNextSongRecipe(song);
     const normalizedSong = { ...song, appliedKeywords: resolvedRecipe };
     const pendingKeywords = {
       ...resolvedRecipe,
-      genre: getSongGenreValues(normalizedSong),
+      // The display helper may infer a genre from the generated [Genre]
+      // prompt. On an exact original, an explicit empty/null genre is a
+      // deliberate setting and must not become an inferred new command.
+      genre: exactRecipeVerified462 && (resolvedRecipe.genre === null
+        || (Array.isArray(resolvedRecipe.genre) && resolvedRecipe.genre.length === 0))
+        ? [] : getSongGenreValues(normalizedSong),
       subGenre: getSongSubGenreValues(normalizedSong),
       mood: getSongMoodValues(normalizedSong),
       theme: getSongThemeValues(normalizedSong),
@@ -6263,7 +6276,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const hydrateCatalogFavorite = async (song: any): Promise<any> => {
+  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {
     // app267 — shared-note rows are also compact Catalog summaries. Their full
     // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
     // that one document on explicit detail open. Page entry remains Catalog-only.
@@ -6277,21 +6290,65 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         !String(song?.prompt || '').trim()
         || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
       );
-    if ((!song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
+    if (requireStoredRecipe && !user?.uid && !isMusicNoteSharedView) return null;
+    if ((!requireStoredRecipe && !song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
-    if (!sourceId) return song;
+    if (!sourceId) return requireStoredRecipe ? null : song;
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
-      const detail = await getOrLoadMusicNoteDetail({
-        uid: user.uid,
-        sourceId,
-        sourceVersion,
-        loader: async () => {
-          const snapshot = await getDoc(doc(db, 'favorites', sourceId));
-          return snapshot.exists() ? (snapshot.data() || {}) : null;
-        },
-      });
-      if (!detail) return song;
+      const detail = await (requireStoredRecipe
+        ? getOrLoadMusicNoteOriginalRecipe456({
+            uid: user.uid,
+            sourceId,
+            sourceVersion,
+            // Only an explicit Next Song click verifies this exact owned
+            // original document. Old same-version detail cache is insufficient.
+            loader: async () => {
+              const snapshot = await getDocFromServer(doc(db, 'favorites', sourceId));
+              if (!snapshot.exists()) return null;
+              const original = snapshot.data() || {};
+              const ownerUid = String((original as any).uid || (original as any).ownerUid || '').trim();
+              if (ownerUid && ownerUid !== user.uid) return null;
+              return original;
+            },
+          })
+        : getOrLoadMusicNoteDetail({
+            uid: user.uid,
+            sourceId,
+            sourceVersion,
+            loader: async () => {
+              const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+              return snapshot.exists() ? (snapshot.data() || {}) : null;
+            },
+          }));
+      if (!detail) return requireStoredRecipe ? null : song;
+      if (requireStoredRecipe) {
+        // Old rows can be shown as full local cards while their persisted
+        // requestPayload command exists only in the original one-song document.
+        // Explicit Next Song is the only path that requests this exact detail.
+        // Keep newer per-device visible data and explicitly stored commands;
+        // fill missing historical recipe fields from the original, never from
+        // generated prompt/lyrics.
+        const pendingDraft = await readMusicNoteDetailDraft(user.uid, sourceId);
+        const originalVersion = getMusicNoteDetailSourceVersion(detail);
+        const pendingBase = Number(pendingDraft?.baseVersion || 0);
+        // Only a durable pending edit known to be based on this original can
+        // override it. A stale same-device draft is not proof of newer truth.
+        const verifiedPendingUpdates = pendingDraft?.updates && (
+          (originalVersion > 0 && pendingBase > 0 && pendingBase >= originalVersion)
+          || (originalVersion <= 0 && pendingBase <= 0)
+        ) ? pendingDraft.updates : null;
+        const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail, verifiedPendingUpdates);
+        return {
+          ...song,
+          __musicNoteNextSongOriginalVerified462: true,
+          appliedKeywords: mergedRecipe,
+          requestPayload: song?.requestPayload ?? detail.requestPayload,
+          id: sourceId,
+          firestoreId: sourceId,
+          __catalogSummary: false,
+        };
+      }
       return {
         ...song,
         ...detail,
@@ -6301,8 +6358,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       };
     } catch (error) {
       console.warn('music note detail hydration failed:', error);
-      return song;
+      return requireStoredRecipe ? null : song;
     }
+  };
+
+  // Owned Music Note actions must not silently apply stale cache on offline,
+  // missing or mismatched canonical original. Shared views are explicitly
+  // different: they only have their already shared recipe and no owned doc.
+  const applyStoredRecipeToNext = async (song: any) => {
+    if (isMusicNoteSharedView) {
+      applyKeywordsToNext(song);
+      return;
+    }
+    const hydrated = await hydrateCatalogFavorite(song, true);
+    if (hydrated?.__musicNoteNextSongOriginalVerified462 !== true) {
+      showFavoriteToast('원본 설정을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해주세요.');
+      return;
+    }
+    applyKeywordsToNext(hydrated);
   };
 
   const openFavoriteDetail = async (song: any) => {
@@ -6463,7 +6536,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'apply') {
-      void hydrateCatalogFavorite(song).then((hydrated) => applyKeywordsToNext(hydrated));
+      void applyStoredRecipeToNext(song);
       return;
     }
 
@@ -9112,7 +9185,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       <div className="-mt-1 flex shrink-0 items-center gap-2">
                       {!isEditing && (
                         <button
-                          onClick={() => applyKeywordsToNext(selectedSong)}
+                          onClick={() => { void applyStoredRecipeToNext(selectedSong); }}
                           onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}

@@ -208,6 +208,27 @@ assert.equal(textPatch436([canonicalTen436[1],canonicalTen436[1]],stalePCEdit436
  'duplicate canonical identity fails closed');
 assert.match(app, /persistRecentSongsDocument\(ref, pending\.songs, pending\.mutationEpoch, pending\.syncItem\)/);
 assert.match(app, /const merged = patchExactRecentTextRow436\(/);
+
+const identity436 = app.match(/const getRecentSongIdentityKey = \(song: any\): string => \{([\s\S]*?)\n  \};/)?.[1];
+assert.ok(identity436,'stable Recent identity helper must exist');
+assert.ok(identity436.indexOf('getRecentSongGenerationSyncKey(song)') <
+  identity436.indexOf('getLiveSoridrawSongId(song)'),
+  'historical generation batch/index identity must outrank device-assigned ID');
+assert.match(identity436,/if \(generationKey\) return generationKey;/);
+const generationKey436 = row => row.appliedKeywords?.generationBatchId &&
+  row.appliedKeywords?.generationIndex > 0
+  ? 'generation:' + row.appliedKeywords.generationBatchId + ':' + row.appliedKeywords.generationIndex : '';
+const key436 = new Function('getRecentSongGenerationSyncKey','getLiveSoridrawSongId',
+  'return (song) => {' + identity436 + '\n};')(generationKey436,sid436);
+const generatedOld436 = {soridrawSongId:'old-device-id',
+  appliedKeywords:{generationBatchId:'batch-1',generationIndex:1},title:'old'};
+const generatedOther436 = {...generatedOld436,soridrawSongId:'new-device-id',title:'renamed'};
+assert.equal(key436(generatedOld436),key436(generatedOther436),
+ 'one old generated song with different per-device IDs stays a single Recent row');
+assert.notEqual(key436({...generatedOld436,appliedKeywords:{generationBatchId:'batch-1',generationIndex:2}}),
+ key436(generatedOld436),'distinct generated siblings stay distinct');
+console.log('APP436_GENERATION_BATCH_IDENTITY_CROSS_DEVICE_FROZEN=PASS');
+
 console.log('APP436_STALE_150S_PC_EDIT_CANNOT_ERASE_RECOVERED_TENTH=PASS');
 console.log('APP436_TEXT_PATCH_PRESERVES_PUBLIC_HEART_LOCK_MEDIA=PASS');
 

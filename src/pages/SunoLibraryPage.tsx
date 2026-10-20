@@ -753,7 +753,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Match Music Note: resolve the Library header's split-pane portal before
+    // first paint, so leaving Library never starts from an in-flow header.
     const syncStudioWorkspaceHeroHost = () => {
       const root = document.documentElement;
       // 462: keep the active right-page masthead in the real result-pane

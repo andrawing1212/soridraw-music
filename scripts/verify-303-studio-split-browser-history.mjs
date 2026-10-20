@@ -107,3 +107,26 @@ assert.match(app, /workspaceRequestId=\{studioWorkspaceLayoutRequestId\}/,
 assert.match(splitEngine, /<LiteStudioSplitWorkspace \{\.\.\.props\}/,
   'Lite split engine must remain the existing pane owner');
 console.log('VERIFY_440_RECENT_EXACT_ROUTE_AND_ATOMIC_STATE=PASS');
+
+
+// app442: Recent/Music Note/Library split gutters must follow the actual
+// Studio page being rendered. The document-level Lite workspace marker can be
+// removed by an old workspace effect cleanup during PERF A/B remounts or route
+// transitions; using it for CSS creates a visible 12px-per-side width jump.
+const studioPageFrame = readFileSync('src/components/studio/StudioPageFrame.tsx', 'utf8');
+const studioLayout = readFileSync('src/components/studio/studioLayout.css', 'utf8');
+const gutterStart = studioLayout.indexOf('/* 1030 —');
+const gutterEnd = studioLayout.indexOf('/* 1032 —', gutterStart);
+assert.ok(gutterStart >= 0 && gutterEnd > gutterStart, 'missing scoped split gutter rules');
+const gutterRules = studioLayout.slice(gutterStart, gutterEnd);
+assert.match(studioPageFrame, /data-workspace-view=\\{workspaceView\\}/,
+  'the current Studio page must own the workspace view on its DOM frame');
+assert.match(gutterRules, /\\.soridraw-studio-page-frame\\[data-workspace-view="recent"\\]/,
+  'Recent right-pane approved gutters must follow the real page frame');
+assert.match(gutterRules, /\\.soridraw-studio-page-frame:is\\([\\s\\S]*?\\[data-workspace-view="recent"\\][\\s\\S]*?\\[data-workspace-view="music-note"\\][\\s\\S]*?\\[data-workspace-view="library"\\]/,
+  'the three Builder gutters must use the same real rendered page frame');
+assert.doesNotMatch(gutterRules, /data-soridraw-lite-workspace/,
+  'split gutter CSS must not rely on a document-level effect marker');
+assert.match(gutterRules, /width: min\\(calc\\(100% - 24px\\)/,
+  'user-approved 12px per-side split Builder gutter must stay unchanged');
+console.log('VERIFY_442_SPLIT_GUTTER_LOCAL_FRAME_OWNER=PASS');

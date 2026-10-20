@@ -1,3 +1,21 @@
+## CURRENT — shared Firebase RTDB like alert schema release approval (2026-10-20 KST)
+
+- User explicitly approved deploying ONLY the two additive bounded UID-private fields `acceptedAtPublicClock420` and `basePublicLikeCount420`, subject to an independent safety check. Approval is NOT permission for other backend/schema/user-data writes or TEST/PRODUCTION code promotions.
+- Draft PR #286 changes the exact `userSync/$uid/exploreLike/results/$index` .validate whitelist and two CI gates. The canonical Firebase PREVIEW release pipeline has an exact 435 two-field-only candidate mode and `deploy_hosting=false` Rules-only option; this is NOT a Hosting/Worker/Functions code deploy. It preserves checked live Stage416 server-only roots, public publication nodes, old account UID read/write restrictions, max-50 signal batch, and deny-unknown fields.
+- Before executing: require exact-SHA CI TypeScript/Build/source contract + live read-only preflight success; ensure 434/418 guards reject partial, unexpected, widened changes; inspect the full PR diff for scope violations. On actual trigger require twice-read live rules unchanged, exact PUT 2-field delta (or no-op if already live), post-GET exact candidate equality, main/production refs and Hosting outputs unchanged; stop on ANY failure.
+- Physical same-account PC↔mobile live sync and toast elimination still unverified, app435 user acceptance stays FAIL. Independent Work audit is **not** falsely declared passed. No cache reset/outbox purge, no shared user data migration/backfill, Stage416 OFF. Separate Recent PR #285 remains unmerged. Historical Next Song manual command remains unresolved.
+
+---
+
+## CURRENT — app435 Explore cross-device toast exact publisher/RTDB Rules mismatch candidate (2026-10-20 KST)
+
+- **New user physical QA:** on both PC/mobile, like/unlike shows `좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.`; not limited to one track; at least `지금 너로, 충분해` and `거기 아직 있어` private liked hearts diverge. Original accepted like/outbox/cache is NOT deleted.
+- **Source-determined primary candidate:** `src/services/exploreLikeService.ts` `publishConfirmedLikeSignal127` emits optional `acceptedAtPublicClock420` and `basePublicLikeCount420` for 420/448 delayed public-count protection. Shared `database.rules.json` `userSync/$uid/exploreLike/results/$index/$other=false` does NOT whitelist those fields, rejecting any accepted private RTDB set() containing them; toast dispatched solely on that notification failure. **Live error code / actual live rules exact bytes not independently verified yet**.
+- **Minimal proposed remedy (security REVIEW and shared Rules release approval required):** whitelist only those two optional typed/bounded numeric fields with the original `auth.uid === $uid`, max-50 list, required keys, `$other=false`, canonical status validation, Stage416 OFF, existing sender/receiver code untouched. Extend `scripts/verify-127-atomic-personal-like.mjs` to guard contract parity. No new network IO/RTDB paths or D1/Firestore writes. Rule change is *shared among PREVIEW/TEST/PRODUCTION*, so **DO NOT deploy without independent safety audit and explicit shared Rules approval**. Physical parity and 100k billing pending.
+- **Other open items:** app435 PC Recent 9 vs mobile 10 (PR #285 separate draft only), legacy manual Next Song command un-restored. app435 overall physical acceptance FAIL, Stage416 1/4·25% OFF, historical speed 5/5·100% unremeasured, app435 3/4·75%.
+
+---
+
 ## CURRENT — app435 Firebase PREVIEW release **DEPLOYED PASS** (2026-10-20 KST)
 
 - **PREVIEW Hosting verified release SHA:** `096b5a37e504e7b4c8b956e9176f9e2ab22d1160`, app version **435** at `https://preview.soridraw.com/`. Protected `preview` branch source PR #282 reviewed product `6c7f8a6356e31fcc7e23156eb0e54d622395c0dc`, release PR #283 metadata/version 435. PR #282 & #283 merged. GitHub release Action [39403755287](https://github.com/andrawing1212/soridraw-music/actions/runs/39403755287) **SUCCESS**, logs `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=435`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. App source still matches independent Work scoped PASS. Version-only Worker lock test updated for 434/435 and frozen Worker bytes/hash untouched.

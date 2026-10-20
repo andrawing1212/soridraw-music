@@ -7,6 +7,8 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // 2) the UID-private exploreLikeIntent416 child,
 // 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt,
 // 4) app432 server-only tiny public Feed + owner-profile publication signal nodes.
+// 5) app435 two typed, bounded optional accepted-like count metadata fields.
+// The old live rules may lack BOTH 435 fields; partial/widened additions fail.
 // Every other permission/schema byte must remain equivalent to the live rules.
 const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
 const local = buildStage416ServerRulesCandidate(canonicalBase);
@@ -19,6 +21,12 @@ const publication429 = local?.rules?.publicSync?.explorePublication;
 const publicationProfiles432 = local?.rules?.publicSync?.explorePublicationProfiles;
 
 assert.equal(accepted?.['.validate'], 'newData.isBoolean()');
+const acceptedRow435 = user?.exploreLike?.results?.$index;
+assert.equal(acceptedRow435?.acceptedAtPublicClock420?.['.validate'],
+  'newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991');
+assert.equal(acceptedRow435?.basePublicLikeCount420?.['.validate'],
+  'newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000');
+assert.equal(acceptedRow435?.['$other']?.['.validate'], false);
 assert.equal(user['.read'], 'auth != null && auth.uid === $uid');
 assert.equal(user['.write'], 'auth != null && auth.uid === $uid');
 assert.ok(intent, 'Stage416 private-only node missing');
@@ -72,6 +80,13 @@ const withoutBool = source => {
   delete out.rules.userSync.$uid.exploreLike.results.$index.canonicalSettled417;
   return out;
 };
+const withoutAcceptedLikeMetadata435 = source => {
+  const out = structuredClone(source);
+  const row = out.rules.userSync.$uid.exploreLike.results.$index;
+  delete row.acceptedAtPublicClock420;
+  delete row.basePublicLikeCount420;
+  return out;
+};
 const withoutServer416 = source => {
   const out = structuredClone(source);
   delete out.rules.privateLikeBatch416;
@@ -113,8 +128,12 @@ const expandedVariants = baseVariants.flatMap(([status,candidate]) => [
   [status+'-without-private-optimistic-count-and-public-publication-429',
     withoutPublicPublication429(withoutIntentOptimisticCount(candidate))],
 ]);
+const exact435Variants = expandedVariants.flatMap(([status,candidate]) => [
+  [status, candidate],
+  [status+'-without-both-435-like-count-fields', withoutAcceptedLikeMetadata435(candidate)],
+]);
 const variants = [...new Map(
-  expandedVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+  exact435Variants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
 ).values()];
 const compare = remote => {
   const key = stable(remote);
@@ -128,6 +147,19 @@ if (process.argv.includes('--self-test')) {
     malicious.rules.userSync.$uid['.read'] = 'auth != null';
     assert.equal(compare(malicious), null, 'weakened private permissions must fail');
   }
+  const oldLive435 = withoutAcceptedLikeMetadata435(local);
+  assert.equal(compare(oldLive435), 'already-live-without-both-435-like-count-fields',
+    'existing shared rules without both optional 435 fields remain a safe approved baseline');
+  const partial435 = structuredClone(local);
+  delete partial435.rules.userSync.$uid.exploreLike.results.$index.basePublicLikeCount420;
+  assert.equal(compare(partial435), null, 'partially updated 435 Rules must fail');
+  const widened435 = structuredClone(local);
+  widened435.rules.userSync.$uid.exploreLike.results.$index.basePublicLikeCount420['.validate'] =
+    'newData.isNumber()';
+  assert.equal(compare(widened435), null, 'unbounded 435 count must fail');
+  const writableOthers435 = structuredClone(oldLive435);
+  writableOthers435.rules.userSync.$uid.exploreLike.results.$index.$other['.validate'] = true;
+  assert.equal(compare(writableOthers435), null, 'unknown account-private fields must stay rejected');
   const mutated = structuredClone(local);
   mutated.rules.userSync.$uid.exploreLikeIntent416.results.$index.liked['.validate'] = 'newData.isString()';
   assert.equal(compare(mutated), null, 'private intent validation change must fail');
@@ -151,6 +183,7 @@ if (process.argv.includes('--self-test')) {
   const writableFinal = structuredClone(local);
   writableFinal.rules.privateLikeFinal416.$uid['.write'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(writableFinal), null, 'client-writable final receipt must fail');
+  console.log('435_PRIVATE_LIKE_RESULT_TYPED_RULES_ADDITIVE_SELF_TEST=PASS');
   console.log('418_SHARED_RTDB_ADDITIVE_BOOL_ONLY_SELF_TEST=PASS');
   console.log('416_PRIVATE_RTDB_INTENT_ADDITIVE_ONLY_SELF_TEST=PASS');
   console.log('402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_SELF_TEST=PASS');
@@ -161,7 +194,7 @@ if (process.argv.includes('--self-test')) {
   const remote = JSON.parse(readFileSync(path,'utf8'));
   const status = compare(remote);
   if (!status) throw new Error(
-    'Shared RTDB live/source divergence outside allowed 417/416 additive nodes: STOP before any PUT or PREVIEW Hosting deploy'
+    'Shared RTDB live/source divergence outside allowed 417/416/435 exact additive nodes: STOP before any PUT or PREVIEW Hosting deploy'
   );
   console.log('418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS '+status);
   console.log('416_PRIVATE_RTDB_ADDITIVE_PREFLIGHT=PASS');

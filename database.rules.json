@@ -217,6 +217,12 @@
               },
               "$other": {
                 ".validate": false
+              },
+              "acceptedAtPublicClock420": {
+                ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991"
+              },
+              "basePublicLikeCount420": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
               }
             }
           },

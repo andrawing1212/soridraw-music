@@ -115,7 +115,7 @@ const MUSIC_NOTE_SUMMARY_KEYS = new Set([
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
-  'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'color', 'favoriteColor', 'noteColor', 'favoriteColorTag', 'colorTag', 'folderId', 'folderIds', 'musicNoteFolderIds',
   'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt', 'myNoteFolderId', 'favoriteFolderId',
   'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt', 'sharedNoteFolder', 'noteSharedFolderId',
   'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',

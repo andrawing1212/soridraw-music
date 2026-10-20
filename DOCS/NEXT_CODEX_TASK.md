@@ -1,3 +1,12 @@
+## NEXT — app435 exact SHA CI + independent Work audit; no merge before PASS (2026-10-20 KST)
+
+- Pin latest draft PR #282 SHA and compare against preview `11f46242f3c08fc9076dd10abe90be0008aac098`. Verify full GitHub Actions TypeScript/Build/451/453/454 and all frozen like/follow/publication/tests; complete only when exact job SUCCESS.
+- Independently inspect `musicNoteNextSongRecipe.ts` canonical/pending genre and customGenreInput provenance and the real `FavoritesPage → pendingAppliedKeywords → App.tsx Studio setSubGenre` path. Confirm exact canonical genre:[] + old cached/request custom input selects none; authoritative canonical/pending current custom input remains. Confirm sourceVersion 0 or stale unchanged card on second sequential deliberate click reads updated owned one-document original, simultaneous click coalesces, error retry works; normal page entry/warm view R0 retained.
+- Recheck Recent retained A edit-preview/B settled snapshot, storage-failure ACK/version gate, media/heart, cost, UID isolation. No backend schema migration, polling, cache reset, modification to frozen likes/Workers/Functions/Rules. Source-only test is not PC/mobile physical parity or billing proof.
+- **Separate read-only independent Work/GPT-6 audit PASS required** before PR merge and PREVIEW Hosting release; then user physical PC/mobile acceptance, TEST by user approval, PRODUCTION explicit approval only. Keep Stage416 OFF.
+
+---
+
 ## NEXT — app435 final click provenance + end-to-end independent audit (2026-10-20 KST)
 
 - Verify PR #282 latest exact SHA versus `preview` `11f46242f3c08fc9076dd10abe90be0008aac098`. CI must PASS on the new SHA (TypeScript, Build, Functions type build, existing 450–454, like/follow, publication and read-only Rules); no merge/deploy until separate Work audit PASS.

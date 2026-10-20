@@ -277,8 +277,10 @@ export const patchMusicNoteDetailCache = async ({
 // Explicit "Next Song" must not trust an older IndexedDB/memory detail entry:
 // an old same-version record may omit requestPayload/commandInput even though
 // the unchanged original favorites document contains the manual command.
-// This action-scoped, per-song memo reads the original once per sourceVersion
-// within this browser session; normal page/view hydration remains cache-first.
+// Deliberate Next Song clicks must see cross-device edits even when the local
+// card's sourceVersion is missing/stale. Coalesce concurrent clicks only;
+// NEVER memoize a completed successful original for the browser session.
+// Normal page/view hydration remains independently cache-first.
 const originalRecipeLoads456 = new Map<string, Promise<any | null>>();
 export const getOrLoadMusicNoteOriginalRecipe456 = (
   args: MusicNoteDetailLoadArgs,
@@ -290,15 +292,11 @@ export const getOrLoadMusicNoteOriginalRecipe456 = (
   const key = `${cacheKey(safeUid, safeSourceId)}:${version}:next-song-original-456`;
   const existing = originalRecipeLoads456.get(key);
   if (existing) return existing;
-  const task = Promise.resolve().then(args.loader).then((source) => {
-    // No source, offline or owner mismatch does not prove recipe absence.
-    if (!source) originalRecipeLoads456.delete(key);
-    return source;
-  }).catch((error) => {
-    // Failed read is never cached as successful verification: the next
-    // deliberate click may retry after network/Auth recovery.
-    originalRecipeLoads456.delete(key);
-    throw error;
+  const task = Promise.resolve().then(args.loader).finally(() => {
+    // A completed click is never evidence that another device has not since
+    // changed this exact favorite. Every later deliberate click can recheck.
+    // Keep in-flight coalescing without a new page-entry read or polling.
+    if (originalRecipeLoads456.get(key) === task) originalRecipeLoads456.delete(key);
   });
   originalRecipeLoads456.set(key, task);
   while (originalRecipeLoads456.size > 100) {

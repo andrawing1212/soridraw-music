@@ -1,3 +1,11 @@
+## CURRENT — app435 targeted re-fix: cross-device exact click freshness + custom genre clear (2026-10-20 KST)
+
+- PR #282 draft `fix/app435-integrated-parity`, parent source `58c0ee486ed67505b2fe645fbbbeb4cfd3924ceb`; base `preview` `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). Source review [#282 audit note](https://github.com/andrawing1212/soridraw-music/pull/282#issuecomment-6286160619) failed two edge cases: stale local/request `customGenreInput` resurrected despite exact canonical `genre:[]`, and action memo returned a previously successful original after remote device mutation with unchanged local sourceVersion.
+- **Developer fix candidate (requires exact new SHA CI + separate read-only independent audit)**: one-click merge ignores old `customGenreInput` when canonical or version-confirmed pending edit specifies genre without current custom input; preserves original or pending explicit current custom input. `getOrLoadMusicNoteOriginalRecipe456` now coalesces *in-flight* reads only; each sequential deliberate Next Song click refreshes one exact favorite document (not whole collection, no route-entry read or polling). 454 regression executes final Favorites→Studio genre restore and sequential cross-device changes with sourceVersion=0 plus concurrent dedupe, missing/offline retries, command/clear tests.
+- Protect app410/421 likes/follows, app434 publication, 30s Studio save-heart, 60s Music Note, 150s Recent, Stage416 OFF. No shared Firestore/D1/RTDB original data changes, Worker/Functions/Rules edits, TEST/main/PRODUCTION or PREVIEW deploy. Stage416 1/4 · 25%, speed 5/5 · 100% historical/unmeasured, app435 3/4 · 75% candidate until independent audit. Real PC/mobile and 100k billed costs **unverified**.
+
+---
+
 ## CURRENT — app435 exact-verified Next Song click round-trip repairs (2026-10-20 KST)
 
 - **Branch** `fix/app435-integrated-parity`, PR #282 draft/unmerged, baseline `preview` `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). Former candidate `e09d55def288b398420574c8199562f47306852d` independent source audit **FAIL** on real FavoritesPage click final resolver and old local direct command/clear outranking exact server legacy original.

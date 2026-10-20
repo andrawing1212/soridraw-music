@@ -186,13 +186,26 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
   const hasOwn = (item: PlainRecord | null, key: string): boolean =>
     Boolean(item && Object.prototype.hasOwnProperty.call(item, key));
   const canonicalNewGenre = hasOwn(canonicalApplied, 'genre');
-  const pendingNewGenre = hasOwn(pendingApplied, 'genre');
+  const pendingNewGenre = hasOwn(pendingApplied, 'genre') || hasOwn(pending, 'genre');
   const canonicalSubGenre = hasOwn(canonicalApplied, 'subGenre') || hasOwn(canonicalApplied, 'subGenreIds');
-  const pendingSubGenre = hasOwn(pendingApplied, 'subGenre') || hasOwn(pendingApplied, 'subGenreIds');
+  const pendingSubGenre = hasOwn(pendingApplied, 'subGenre') || hasOwn(pendingApplied, 'subGenreIds')
+    || hasOwn(pending, 'subGenre') || hasOwn(pending, 'subGenreIds');
   if ((pendingNewGenre && !pendingSubGenre)
       || (canonicalNewGenre && !canonicalSubGenre && !pendingSubGenre)) {
     delete merged.subGenre;
     delete merged.subGenreIds;
+  }
+
+  // A stale custom genre string takes precedence over an empty genre array
+  // in Studio's final selection UI. Never inherit it from an old local card
+  // or old requestPayload when the exact original (or a verified pending edit)
+  // explicitly changed/cleared its genre without storing a current custom one.
+  const canonicalCustomGenre = hasOwn(canonicalApplied, 'customGenreInput');
+  const pendingCustomGenre = hasOwn(pendingApplied, 'customGenreInput')
+    || hasOwn(pending, 'customGenreInput');
+  if ((pendingNewGenre && !pendingCustomGenre)
+      || (canonicalNewGenre && !canonicalCustomGenre && !pendingCustomGenre)) {
+    delete merged.customGenreInput;
   }
 
   // Old auto-empty userInput must not shadow the stored requestPayload direct

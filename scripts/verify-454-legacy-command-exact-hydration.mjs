@@ -120,6 +120,41 @@ assert.equal(mergeOnClick(
  {appliedKeywords:{genre:['old'],instrumentSound:['legacy-only']}},
  {appliedKeywords:{genre:['current']}},
 ).instrumentSound[0],'legacy-only','only truly absent old fields may fill historical gaps');
+// A confirmed present genre (even when deliberately empty) invalidates old
+// customGenreInput from either local cache or historical requestPayload.
+const clearedCustomGenre = mergeOnClick(
+ {appliedKeywords:{genre:['OLD'],customGenreInput:'OLD_LOCAL_CUSTOM'}},
+ {appliedKeywords:{genre:[]},requestPayload:{customGenreInput:'OLD_REQUEST_CUSTOM'}},
+);
+assert.equal(clearedCustomGenre.genre.length,0);
+assert.equal(clearedCustomGenre.customGenreInput,undefined,
+ 'confirmed empty genre must suppress stale custom field from both old layers');
+const changedCustomGenre = mergeOnClick(
+ {appliedKeywords:{genre:['OLD'],customGenreInput:'OLD_LOCAL_CUSTOM'}},
+ {appliedKeywords:{genre:['CURRENT_GENRE']},requestPayload:{customGenreInput:'OLD_REQUEST_CUSTOM'}},
+);
+assert.equal(changedCustomGenre.customGenreInput,undefined,
+ 'changed canonical genre must not inherit custom selection from old layers');
+const currentCanonicalCustom = mergeOnClick(
+ {appliedKeywords:{genre:['OLD'],customGenreInput:'OLD_LOCAL_CUSTOM'}},
+ {appliedKeywords:{genre:[],customGenreInput:'LATEST_ORIGINAL_CUSTOM'}},
+);
+assert.equal(currentCanonicalCustom.customGenreInput,'LATEST_ORIGINAL_CUSTOM',
+ 'explicit original custom genre must still be applied');
+const clearedPendingCustom = mergeOnClick(
+ {appliedKeywords:{genre:['OLD'],customGenreInput:'OLD_LOCAL_CUSTOM'}},
+ {appliedKeywords:{genre:['CURRENT'],customGenreInput:'CURRENT_CUSTOM'}},
+ {appliedKeywords:{genre:[]}},
+);
+assert.equal(clearedPendingCustom.customGenreInput,undefined,
+ 'verified pending genre clear must cancel older original custom input');
+const activePendingCustom = mergeOnClick(
+ {appliedKeywords:{genre:['OLD'],customGenreInput:'OLD_LOCAL_CUSTOM'}},
+ {appliedKeywords:{genre:['CURRENT'],customGenreInput:'CURRENT_CUSTOM'}},
+ {appliedKeywords:{genre:[],customGenreInput:'NEW_PENDING_CUSTOM'}},
+);
+assert.equal(activePendingCustom.customGenreInput,'NEW_PENDING_CUSTOM',
+ 'verified pending custom input remains authoritative');
 const originalLegacyCommand = {appliedKeywords:{genre:['current'],userInput:''},
  requestPayload:{appliedKeywords:{commandInput:'GENUINE HISTORICAL COMMAND'}}};
 assert.equal(mergeOnClick({appliedKeywords:{genre:['stale']}},originalLegacyCommand).userInput,
@@ -227,6 +262,55 @@ assert.equal(nonemptyToStudio.tempo,123);
 assert.equal(nonemptyToStudio.userInput,'CANONICAL');
 assert.equal(displayGenreCalls,1,'normal nonempty genre display normalization remains available');
 
+// Assert the actual Studio genre-restoration branch, not only the outbound
+// FavoritesPage handoff: Studio prefers nonempty customGenreInput to genre[].
+const studio=fs.readFileSync('src/App.tsx','utf8');
+const genreStart=studio.indexOf("    const explicitCustomGenreInput = String((appliedKeywords as any).customGenreInput || '').trim();");
+const genreEnd=studio.indexOf('    const rawMoodValues = ',genreStart);
+assert.ok(genreStart>=0 && genreEnd>genreStart,
+ 'real Studio genre restoration must remain extractable');
+const restoreGenreJs=ts.transpileModule(
+  'const appliedKeywords = rawKeywords;\n'+studio.slice(genreStart,genreEnd),
+  {compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}},
+).outputText;
+const applyToStudioGenre=(rawKeywords)=>{
+ let selected;
+ const studioCtx={
+  rawKeywords, isCustomGenreKeyword:()=>false,
+  resolveSelectableGenreId:(v)=>String(v),
+  makeCustomKeywordId:(_prefix,value)=>'custom:'+value,
+  CUSTOM_GENRE_PREFIX:'custom:',
+  limitFusionGenreIds:(ids)=>ids,
+  setSelectedGenres:()=>{}, setSubGenre:(ids)=>{selected=Array.from(ids);},
+ };
+ vm.runInNewContext(restoreGenreJs,studioCtx);
+ return selected;
+};
+clicked({
+ prompt:'[Genre] OBSOLETE PROMPT GENRE',
+ appliedKeywords:clearedCustomGenre,
+ __musicNoteNextSongOriginalVerified462:true,
+});
+const clearedToStudio=JSON.parse(sent.get('pendingAppliedKeywords'));
+assert.equal(clearedToStudio.customGenreInput,undefined,
+ 'outbound handoff must exclude any obsolete custom input');
+assert.deepEqual(applyToStudioGenre(clearedToStudio),[],
+ 'real Studio must select NO custom genre for server-confirmed empty genre');
+clicked({
+ appliedKeywords:currentCanonicalCustom,
+ __musicNoteNextSongOriginalVerified462:true,
+});
+assert.deepEqual(applyToStudioGenre(JSON.parse(sent.get('pendingAppliedKeywords'))),
+ ['custom:LATEST_ORIGINAL_CUSTOM'],
+ 'real Studio must retain a current confirmed original custom genre');
+clicked({
+ appliedKeywords:activePendingCustom,
+ __musicNoteNextSongOriginalVerified462:true,
+});
+assert.deepEqual(applyToStudioGenre(JSON.parse(sent.get('pendingAppliedKeywords'))),
+ ['custom:NEW_PENDING_CUSTOM'],
+ 'real Studio must preserve a verified newly edited custom genre');
+
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
 assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,2300}mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/,
  'click-only exact original must pass a version-verified local pending draft');
@@ -266,12 +350,42 @@ const originalArgs={
  loader:async()=>{reads++;return {requestPayload:{commandInput:'persisted old command'}};},
 };
 const first=await getOriginal(originalArgs);
-const second=await getOriginal({...originalArgs,loader:async()=>{throw Error('same sourceVersion should memoize');}});
 assert.equal(first.requestPayload.commandInput,'persisted old command');
-assert.equal(second.requestPayload.commandInput,first.requestPayload.commandInput);
-assert.equal(reads,1,'one exact user-click source read per song and version/session');
+const second=await getOriginal({...originalArgs,loader:async()=>{
+ reads++;return {requestPayload:{commandInput:'changed on another device'}};
+}});
+assert.equal(second.requestPayload.commandInput,'changed on another device');
+assert.equal(reads,2,'each sequential explicit click must verify fresh canonical even with unchanged cached card version');
+// Legacy versions often never advance the visible cache version.
+const originalUnknownVersion={uid:'same-account',sourceId:'historical-song-version-zero',sourceVersion:0};
+let unknownReads=0;
+const zeroFirst=await getOriginal({...originalUnknownVersion,loader:async()=>{
+ unknownReads++;return {appliedKeywords:{genre:['before remote edit']}};
+}});
+const zeroSecond=await getOriginal({...originalUnknownVersion,loader:async()=>{
+ unknownReads++;return {appliedKeywords:{genre:['updated on another device']}};
+}});
+assert.equal(zeroFirst.appliedKeywords.genre[0],'before remote edit');
+assert.equal(zeroSecond.appliedKeywords.genre[0],'updated on another device');
+assert.equal(unknownReads,2,'version=0 old local card may not pin an old server original for a session');
+// Concurrent explicit clicks share one exact document read and no full scan.
+let concurrentReads=0;
+let releaseConcurrent;
+const waitForServer=new Promise((done)=>{releaseConcurrent=done;});
+const concurrency={uid:'same-account',sourceId:'inflight-dedupe',sourceVersion:0};
+const concurrentOne=getOriginal({...concurrency,loader:async()=>{
+ concurrentReads++;await waitForServer;return {appliedKeywords:{genre:['fresh']}};
+}});
+const concurrentTwo=getOriginal({...concurrency,loader:async()=>{
+ throw Error('concurrent click must share pending read');
+}});
+releaseConcurrent();
+const both=await Promise.all([concurrentOne,concurrentTwo]);
+assert.equal(both[0].appliedKeywords.genre[0],'fresh');
+assert.equal(both[1].appliedKeywords.genre[0],'fresh');
+assert.equal(concurrentReads,1,'concurrent clicks share one bounded exact document read');
 await getOriginal({...originalArgs,sourceVersion:1001});
-assert.equal(reads,2,'new canonical sourceVersion must invalidate old action memo');
+assert.equal(reads,3,'changed sourceVersion remains a separate explicit source read');
 let missingReads=0;
 const missing={uid:'account',sourceId:'not-found',sourceVersion:0,loader:async()=>{missingReads++;return null;}};
 await getOriginal(missing);

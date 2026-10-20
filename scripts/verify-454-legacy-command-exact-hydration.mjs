@@ -212,7 +212,7 @@ assert.equal(passedToStudio.genre.length,0,'actual click must not infer prompt g
 assert.equal(passedToStudio.userInput,'REAL LEGACY DIRECT',
  'actual click must apply exact real stored legacy command, not stale local input');
 assert.equal(displayGenreCalls,0,'display-only prompt fallback must not run for proven cleared genre');
-assert.match(navigated,/^\\/studio\\?applyPending=1/);
+assert.ok(navigated.startsWith('/studio?applyPending=1'), 'verified next-song action must navigate to Studio');
 clicked({
  prompt:'[Genre] another inferred genre',
  appliedKeywords:mergeOnClick(

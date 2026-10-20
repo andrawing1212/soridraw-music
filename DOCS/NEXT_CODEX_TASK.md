@@ -1,3 +1,12 @@
+## NEXT — #293 STOP after measured permanent-delete compatibility FAIL (2026-10-21 KST)
+
+- Existing four files are GitHub-backed at WIP `d9965759cd2f93758b3a57bc9282abd923e99c4b` on `fix/293-music-note-final-state`. Keep app420 stash untouched. Do not merge preview/main or deploy.
+- Official local Emulator ran the existing harness once. Both candidates compile/load; 18 diagnostic groups pass, but acceptance FAIL: deny-delete blocks legitimate permanent deletion; allow-delete permits stale recreation and revision reset. Read `scripts/issue293/COMPATIBILITY_RESULT.md`; do not repeat diagnosis or pretend this is a product fix.
+- No product work until the compatibility policy/design is resolved. A possible next design requires owner/song-scoped revision or tombstone state outside the physically deleted favorite; specify atomic opt-in, old create versus intentional recreation, old permanent-delete behavior, trusted Admin writers, and bounded Rules access/transaction costs before implementation. This is an untested alternative, not authorization to add storage or block legacy create.
+- Independent Work audit remains outstanding. Application TS/Build, URL display/two-slot behavior, color projection/filter, real save-heart/batch timing and PC/mobile QA remain unverified. No live data/Rules/caches touched. Quota last user-reported 49%; no automatic remaining-usage visibility. Stop new work at user-reported 30% and preserve results.
+
+---
+
 ## NEXT — #293 resume prepared local compatibility gate (Emulator download blocked)
 
 - Preserve the uncommitted `scripts/issue293/` experiment and current status entries on `fix/293-music-note-final-state`, base `e99643dc835af6ed6b138efd8e5c76b3f18dc39a`; do not touch app420 stash.

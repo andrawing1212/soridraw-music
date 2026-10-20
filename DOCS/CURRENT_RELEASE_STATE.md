@@ -1,3 +1,13 @@
+## CURRENT — #293 Emulator executed: compatibility FAIL, product implementation STOP (2026-10-21 KST)
+
+- All four prior uncommitted files survived and were preserved unchanged on GitHub working branch `fix/293-music-note-final-state`, WIP `d9965759cd2f93758b3a57bc9282abd923e99c4b`, parent preview `e99643dc835af6ed6b138efd8e5c76b3f18dc39a`. Shell push was blocked by GitHub HTTP 403; the authorized GitHub connector published the identical tree `d4d61fd65beb9daa1caef4bc9f97adc97d3f838f`. Original local WIP `06067379b9a0dedcb86a33734cd2cfcf33d137ad` has different commit metadata but identical files. app420 stash untouched.
+- Network configuration is now enforced. Official Firestore Emulator 1.19.8 downloaded with matching SHA-256 and ran locally at `127.0.0.1:8080`. The original harness ran once: both Rules candidates loaded; 18 diagnostic groups PASS; overall gate **FAIL**, exit 1. See `scripts/issue293/COMPATIBILITY_RESULT.md`.
+- Concrete blockers: denying protected physical deletion rejects the existing `App.tsx` permanent-delete operation; allowing deletion removes the only revision state, after which a legacy create restores stale URL/color with missing revisions. Product implementation stopped per user instruction. No URL/filter/Cloudflare product fixes, deployment Rules edits, or application TS/Build were attempted.
+- PASS is limited to emulator fixtures: legacy initial create, stale URL/color rejection, revision-reset rejection, title/lyrics and save-heart unsave/restore patches, UID isolation, offline queued URL rejection. This is not full app/UI/60s/30s/150s batching or legacy display acceptance. Normal transaction fixture measured one SDK read/one write; billing, contention retries and rollout cost remain unmeasured. Added live server operations from this task: zero.
+- No merge, deployment, shared Rules activation, real-user data change, migration or cache reset. Independent Work audit not performed; #293 remains incomplete, product gates 0/4. Stage416 1/4 (25%) OFF; historical speed 5/5 (100%) unremeasured. User reported quota 49%; live quota/model setting cannot be independently inspected here. Do not start a broader implementation to bypass this FAIL.
+
+---
+
 ## CURRENT — #293 approved implementation: local Emulator prerequisite BLOCKED (2026-10-21)
 
 - Working branch `fix/293-music-note-final-state` fast-forwarded to approved preview `e99643dc835af6ed6b138efd8e5c76b3f18dc39a`. Latest Issue #293 approval read. app420 stash not inspected, restored, or modified.

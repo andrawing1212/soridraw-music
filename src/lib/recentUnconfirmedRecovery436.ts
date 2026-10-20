@@ -61,10 +61,10 @@ export const patchExactRecentTextRow436 = (
   // avoid discarding a later genuine title/lyrics edit on another device.
   const originalTextAt = Number(original.appliedKeywords?.editedInStudioAt || 0);
   const pendingTextAt = Number(editedSong.appliedKeywords?.editedInStudioAt || 0);
-  const currentEditAt = originalTextAt > 0 && pendingTextAt > 0
-    ? originalTextAt : Number(original.updatedAtMs || 0);
-  const incomingEditAt = originalTextAt > 0 && pendingTextAt > 0
-    ? pendingTextAt : Number(editedSong.updatedAtMs || 0);
+  const currentEditAt = originalTextAt > 0 ? originalTextAt
+    : pendingTextAt > 0 ? 0 : Number(original.updatedAtMs || 0);
+  const incomingEditAt = pendingTextAt > 0 ? pendingTextAt
+    : originalTextAt > 0 ? 0 : Number(editedSong.updatedAtMs || 0);
   if (currentEditAt > 0 && incomingEditAt > 0 && currentEditAt > incomingEditAt) return null;
 
   // The pending operation is TEXT ONLY: preserve the canonical save-heart,

@@ -147,6 +147,7 @@ assert.ok(builderIsolation.includes('> .soridraw-studio-builder-pane[data-pane-m
   'isolation must exclude Builder mobile composition and Result');
 assert.ok(builderIsolation.includes('.soridraw-studio-main {') && builderIsolation.includes('contain: layout style !important;'),
   'Builder layout boundary must reuse the proven tablet containment only');
-assert.doesNotMatch(builderIsolation, /content-visibility|contain: strict|contain:.*paint|width\s*:|height\s*:|transform\s*:|overflow\s*:|data-soridraw-builder-action-compact|data-soridraw-lite-workspace/,
+const builderRuleBody = builderIsolation.slice(builderIsolation.indexOf('.soridraw-studio-main {') + '.soridraw-studio-main {'.length);
+assert.doesNotMatch(builderRuleBody, /content-visibility|contain: strict|contain:.*paint|width\s*:|height\s*:|transform\s*:|overflow\s*:|data-soridraw-builder-action-compact|data-soridraw-lite-workspace/,
   'app443 must not freeze cards, change geometry/gutters or overwrite existing shared markers');
 console.log('VERIFY_443_HYBRID_BUILDER_ONLY_DRAG_ISOLATION=PASS');

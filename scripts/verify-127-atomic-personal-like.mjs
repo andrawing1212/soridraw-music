@@ -859,6 +859,50 @@ assert.equal(repairFn410('user', signal410), 0, 'newer private intent must outra
 intents410 = {};
 retry410 = [{trackId:'song-a', liked:false}];
 assert.equal(repairFn410('user', signal410), 0, 'unpublished accepted retry must outrank retained repair');
+
+// app435 physical QA: accepted mutations produced a cross-device retry toast
+// because the accepted 420/448 result metadata was forbidden by the
+// UID-private RTDB results.$index.$other=false validation rule.
+// Verify the *current* publisher shape against its existing account-scoped
+// RTDB validator so static CI cannot turn green while every write is denied.
+const privateLikeRule435 = rules.rules.userSync.$uid.exploreLike;
+const rowRule435 = privateLikeRule435.results.$index;
+assert.equal(rules.rules.userSync.$uid['.write'], 'auth != null && auth.uid === $uid',
+  'account-only write permissions must remain unchanged');
+assert.equal(rowRule435.$other['.validate'], false,
+  'unknown private signal fields must remain forbidden');
+assert.equal(rowRule435.canonicalSettled417['.validate'], 'newData.isBoolean()',
+  'existing canonical status type guard must remain');
+const resultFields435 = ['trackId', 'ownerUid', 'liked', 'likeCount',
+  'canonicalSettled417', 'acceptedAtPublicClock420', 'basePublicLikeCount420'];
+for (const field of resultFields435) {
+  assert.ok(rowRule435[field] && typeof rowRule435[field]['.validate'] === 'string',
+    'published private RTDB row field not whitelisted: '+field);
+}
+const signalPublisher435 = service.slice(
+  service.indexOf('const publishConfirmedLikeSignal127 ='),
+  service.indexOf('let likeSignalRetryListenerInstalled127 ='));
+assert.match(signalPublisher435, /databaseRef\(realtimeDb, `userSync\/\$\{uid\}\/exploreLike`\)/);
+assert.match(signalPublisher435, /acceptedAtPublicClock420.*acceptedAtPublicClock420/s,
+  'the currently published server-clock field must remain supported');
+assert.match(signalPublisher435, /basePublicLikeCount420.*basePublicLikeCount420/s,
+  'the currently published baseline count field must remain supported');
+assert.match(rowRule435.acceptedAtPublicClock420['.validate'],
+  /newData\.isNumber\(\).*newData\.val\(\) > 0.*9007199254740991/,
+  'server clock must be positive, bounded number');
+assert.equal(rowRule435.basePublicLikeCount420['.validate'],
+  rowRule435.likeCount['.validate'],
+  'extra public baseline count must have identical bounded numeric guard');
+const acceptedRow435 = {
+  trackId:'track', ownerUid:'owner', liked:false, likeCount:0,
+  acceptedAtPublicClock420:1780000000000, basePublicLikeCount420:1, canonicalSettled417:true,
+};
+assert.ok(Object.keys(acceptedRow435).every(k=>resultFields435.includes(k)),
+  'fixture contains unsupported field');
+assert.ok(Object.keys(acceptedRow435).every(k=>rowRule435[k]),
+  'accepted 420/448 sender payload must fit the Firebase rule whitelist');
+console.log('APP435_ACCEPTED_LIKE_RTDB_PAYLOAD_RULE_PARITY=PASS');
+
 console.log('410_SAME_VERSION_RETAINED_HEART_REPAIR_LOCAL_ONLY=PASS');
 console.log('410_RETAINED_REPAIR_ZERO_SERVER_IO_AND_PUBLIC_COUNT_UNCHANGED=PASS');
 console.log('414_QUARANTINED_OUTBOX_CANNOT_BLOCK_APP410_RETAINED_REPAIR=PASS');

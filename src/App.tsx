@@ -490,14 +490,15 @@ const persistRecentSongsDocument = async (
       const settledVersion = await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return null;
-        const authoritative = snapshot.data()?.songs;
+        const stored = snapshot.data() as Record<string, any>;
+        const authoritative = stored?.songs;
         if (!Array.isArray(authoritative)) return null;
         if (uid && Number.isFinite(expectedMutationEpoch)
           && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)) return null;
         const merged = patchExactRecentTextRow436(
           authoritative, changedTextSong, getLiveSoridrawSongId);
         if (!merged) return null;
-        const serverVersion = Math.max(0, Number(snapshot.data()?.syncVersion || 0));
+        const serverVersion = Math.max(0, Number(stored?.syncVersion || 0));
         const nextVersion = Math.max(Date.now(), previousVersion + 1, serverVersion + 1);
         transaction.set(ref, sanitizeForFirestore({
           songs: merged, syncVersion: nextVersion,

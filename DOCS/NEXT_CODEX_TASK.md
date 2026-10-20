@@ -1,3 +1,12 @@
+## NEXT — app435 3 Work-audit failures fixed in draft: exact SHA CI then independent audit (2026-10-20 KST)
+
+- Target current Draft PR #282 branch HEAD; compare with preview base `11f46242f3c08fc9076dd10abe90be0008aac098`. Run exact commit GitHub full CI, including verify-451 live persisted inline ACK and verify-454 Studio tempo and owned favorite offline guards, TypeScript, Build, Functions build, frozen like/follow/explore and read-only RTDB Rules. Do not call developer CI an independent PASS.
+- Require auditor to reproduce original Work 3 counterexamples: (1) canonical tempo:null + old requestPayload tempoConfig 145–155 must leave Studio clearAll tempo defaults, preserve trusted current config; (2) RTDB live changed-row UI NEW but failed `saveRecentSongsCache` with disk OLD must not advance local version/ACK and should read on safe retry/restart; success keeps live R0; (3) original getDocFromServer offline/missing/wrong owner aborts both Music Note list/modal Apply with user retry toast, verified valid owner succeeds, shared-only view unchanged.
+- Audit other existing `290-recent` comment-text, `290-studio` pre-existing, `427-legacy` clear policy mismatches separately; don't rewrite legacy baseline just to turn checks green. Inspect Recent preview A/B + heart/public/media untouched, page-entry R0 and one explicit next-song single-doc read per click.
+- PR remains Draft unmerged, no PREVIEW/TEST/PRODUCTION deploy or shared data writes. Separate independent Work/GPT-6 audit when user tool availability permits; user reported GPT-6 Astra High cannot be used for more work now. Hold app435 at 3/4·75%, Stage416 OFF 1/4·25%, speed 5/5·100% historic/unremeasured.
+
+---
+
 ## NEXT — app435 exact SHA CI + independent Work audit; no merge before PASS (2026-10-20 KST)
 
 - Pin latest draft PR #282 SHA and compare against preview `11f46242f3c08fc9076dd10abe90be0008aac098`. Verify full GitHub Actions TypeScript/Build/451/453/454 and all frozen like/follow/publication/tests; complete only when exact job SUCCESS.

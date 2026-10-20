@@ -13,8 +13,12 @@ const { canAcknowledgeRecentSongsInlineSignal: canAck, needsRecentSongsServerRea
   needsRecentSongsRetainedDraftGapRead460: needsGap } = sandbox.exports;
 assert.equal(typeof canAck, 'function');
 
-const live = { itemApplied: true, itemPartial: false, signalVersion: 110, initialRetained: false };
+const live = { itemApplied: true, itemPersisted: true, itemPartial: false, signalVersion: 110, initialRetained: false };
 assert.equal(canAck(live), true, 'active subscribed exact-item edit keeps read-zero path');
+assert.equal(canAck({...live,itemPersisted:false}),false,
+ 'visible inline change cannot ACK if its local cache write failed');
+assert.equal(canAck({...live,itemPersisted:true}),true,
+ 'durable changed-item cache still acknowledges without aggregate read');
 assert.equal(canAck({ ...live, initialRetained: true }), false,
   'last retained item must not ACK missed closed-device mutations');
 assert.equal(canAck({ ...live, itemPartial: true }), false,
@@ -69,6 +73,28 @@ assert.match(rtdb, /dispatchSignal\(safeUid, 'recentSongs', signal, initialRetai
 assert.match(rtdb, /originDeviceId === getDeviceId\('recentSongs'\) && !initialRetained/);
 assert.match(rtdb, /itemJson: signal.itemJson \|\| '',\s*initialRetained/);
 assert.match(app, /canAcknowledgeRecentSongsInlineSignal\(\{[\s\S]{0,230}initialRetained: detail.initialRetained === true/);
+assert.match(app,/const cachedSuccessfully = saveRecentSongsCache\(user\.uid, \{\s*history: nextHistory,/,
+ 'live changed-row receiver must inspect local cache persistence result');
+assert.match(app,/return \{ applied: true, cachedSuccessfully, partial: incoming\.__recentSongPartial === true \};/,
+ 'live UI can update immediately while exposing a separate durable cache bit');
+assert.match(app,/itemPersisted: itemResult\.cachedSuccessfully,/,
+ 'inline gate must use the real cache persistence result');
+const buildAppliedResult=app.match(/return \{ applied: true, cachedSuccessfully, partial: incoming\.__recentSongPartial === true \};/)?.[0];
+assert.ok(buildAppliedResult);
+const returnInline=new Function('cachedSuccessfully','incoming',buildAppliedResult);
+const failedVisible=returnInline(false,{__recentSongPartial:false});
+const durableVisible=returnInline(true,{__recentSongPartial:false});
+assert.equal(failedVisible.applied,true,'incoming text remains immediately visible');
+assert.equal(failedVisible.cachedSuccessfully,false,'a failed disk write must not be disguised as an ACK');
+assert.equal(canAck({...live,itemApplied:failedVisible.applied,itemPersisted:failedVisible.cachedSuccessfully}),false,
+ 'failed saved-title scenario: disk OLD, received NEW, no local version/ACK advance');
+assert.equal(canAck({...live,itemApplied:durableVisible.applied,itemPersisted:durableVisible.cachedSuccessfully}),true,
+ 'when disk NEW is durable, the same RTDB event may ACK without an aggregate read');
+const afterFailedStore={hasLocalCache:true,profileVersion:11,localDocumentVersion:10,
+ pendingSignalVersion:11,acknowledgedSignalVersion:10};
+assert.equal(needsRead(afterFailedStore),true,
+ 'after failed inline cache write, a future app restart must still fetch version 11');
+
 assert.match(rtdb, /if \(initialRetained\) rememberRecentSongsRetainedDraftGap460\(uid, signal\.version\)/);
 assert.match(app, /const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460\(/);
 assert.match(app, /const needsServerRead = unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/);

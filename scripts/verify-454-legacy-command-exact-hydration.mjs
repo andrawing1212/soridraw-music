@@ -155,6 +155,32 @@ const activePendingCustom = mergeOnClick(
 );
 assert.equal(activePendingCustom.customGenreInput,'NEW_PENDING_CUSTOM',
  'verified pending custom input remains authoritative');
+// P1: a confirmed tempo clear must cancel old BPM range/random flags from
+// both old requestPayload and stale device cache, even with tempo:null intact.
+const clearedTempo = mergeOnClick(
+ {appliedKeywords:{tempo:'145-155',tempoConfig:{enabled:true,min:145,max:155},
+   tempoSource:'manual',isRandomTempo:false}},
+ {appliedKeywords:{tempo:null},requestPayload:{
+   tempoConfig:{enabled:true,min:145,max:155},tempoSource:'manual',isRandomTempo:false}},
+);
+assert.equal(clearedTempo.tempo,null);
+assert.equal(clearedTempo.tempoConfig,undefined);
+assert.equal(clearedTempo.tempoSource,undefined);
+assert.equal(clearedTempo.isRandomTempo,undefined);
+const pendingTempoClear=mergeOnClick(
+ {appliedKeywords:{tempo:'old',tempoConfig:{min:145,max:155,enabled:true}}},
+ {appliedKeywords:{tempo:'new',tempoConfig:{min:105,max:115,enabled:true}}},
+ {appliedKeywords:{tempo:null}},
+);
+assert.equal(pendingTempoClear.tempo,null);
+assert.equal(pendingTempoClear.tempoConfig,undefined,
+ 'verified new tempo clear must also remove an older canonical tempoConfig');
+const currentTempoConfig=mergeOnClick(
+ {appliedKeywords:{tempo:'old',tempoConfig:{min:145,max:155,enabled:true}}},
+ {appliedKeywords:{tempo:null,tempoConfig:{min:90,max:110,enabled:false}}},
+);
+assert.equal(currentTempoConfig.tempoConfig.min,90,
+ 'an explicitly stored same-original tempoConfig is not an obsolete fallback');
 const originalLegacyCommand = {appliedKeywords:{genre:['current'],userInput:''},
  requestPayload:{appliedKeywords:{commandInput:'GENUINE HISTORICAL COMMAND'}}};
 assert.equal(mergeOnClick({appliedKeywords:{genre:['stale']}},originalLegacyCommand).userInput,
@@ -311,6 +337,38 @@ assert.deepEqual(applyToStudioGenre(JSON.parse(sent.get('pendingAppliedKeywords'
  ['custom:NEW_PENDING_CUSTOM'],
  'real Studio must preserve a verified newly edited custom genre');
 
+// Execute Studio's actual tempo restore decisions, starting from the normal
+// clearAll default range (90-110) rather than trusting the recipe in isolation.
+const tempoStart=studio.indexOf('    const appliedTempoSource = String((appliedKeywords as any).tempoSource');
+const tempoEnd=studio.indexOf('    setIsLyricMode(false);',tempoStart);
+assert.ok(tempoStart>=0 && tempoEnd>tempoStart);
+const restoreTempoJs=ts.transpileModule('const appliedKeywords = rawKeywords;\n'
+ +studio.slice(tempoStart,tempoEnd),{
+ compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS},
+}).outputText;
+const applyToStudioTempo=(rawKeywords)=>{
+ const state={enabled:true,min:90,max:110};
+ vm.runInNewContext(restoreTempoJs,{
+  rawKeywords,
+  setTempoEnabled:(v)=>{state.enabled=v;},
+  setMinBPM:(v)=>{state.min=v;},
+  setMaxBPM:(v)=>{state.max=v;},
+ });
+ return state;
+};
+clicked({appliedKeywords:clearedTempo,__musicNoteNextSongOriginalVerified462:true});
+const clearedTempoToStudio=JSON.parse(sent.get('pendingAppliedKeywords'));
+assert.equal(clearedTempoToStudio.tempo,null);
+assert.equal(clearedTempoToStudio.tempoConfig,undefined);
+assert.deepEqual(applyToStudioTempo(clearedTempoToStudio),{enabled:true,min:90,max:110},
+ 'cleared tempo cannot set old 145-155 BPM after Studio initialization');
+clicked({appliedKeywords:pendingTempoClear,__musicNoteNextSongOriginalVerified462:true});
+assert.deepEqual(applyToStudioTempo(JSON.parse(sent.get('pendingAppliedKeywords'))),
+ {enabled:true,min:90,max:110},'verified pending cleared tempo must not restore old BPM');
+clicked({appliedKeywords:currentTempoConfig,__musicNoteNextSongOriginalVerified462:true});
+assert.deepEqual(applyToStudioTempo(JSON.parse(sent.get('pendingAppliedKeywords'))),
+ {enabled:false,min:90,max:110},'trusted same-original tempo configuration is preserved');
+
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
 assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,2300}mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/,
  'click-only exact original must pass a version-verified local pending draft');
@@ -322,12 +380,14 @@ assert.ok(favorite.includes('getOrLoadMusicNoteOriginalRecipe456({'),
  'explicit next-song uses special action-scoped source loader');
 assert.ok(favorite.includes(': getOrLoadMusicNoteDetail({'),
  'ordinary Detail retains normal cache-first behavior');
-assert.match(favorite,/hydrateCatalogFavorite\(song, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
+assert.match(favorite,/void applyStoredRecipeToNext\(song\)/,
+ 'catalog Apply action must check exact original verification before Studio');
 assert.ok(favorite.includes('__musicNoteNextSongOriginalVerified462: true'),
  'only successfully read exact original receives click-only trusted recipe marker');
 assert.ok(favorite.includes('const exactRecipeVerified462 = song?.__musicNoteNextSongOriginalVerified462 === true'),
  'final click must not rehydrate confirmed original through loose legacy normalizer');
-assert.match(favorite,/hydrateCatalogFavorite\(selectedSong, true\)\.then\(\(hydrated\) => applyKeywordsToNext\(hydrated\)\)/);
+assert.match(favorite,/void applyStoredRecipeToNext\(selectedSong\)/,
+ 'modal Apply action must enforce the same exact original guard');
 assert.match(favorite,/const pendingDraft = await readMusicNoteDetailDraft\(user\.uid, sourceId\)/);
 assert.match(favorite,/originalVersion > 0 && pendingBase > 0 && pendingBase >= originalVersion/,
  'a version-compatible durable draft is required to override original');
@@ -335,6 +395,60 @@ assert.match(favorite,/mergeMusicNoteNextSongClickRecipe455\(song, detail, verif
 assert.ok(source.includes('mergeAbsentOnlyClick462(persisted, local)'),
  'confirmed original must outrank older cached genre, tempo and explicit clear');
 assert.doesNotMatch(favorite,/getDocs\(collection\(db, 'favorites'/,'no collection scan');
+// P2: run the real source hydrator and guarded click wrapper. Simulated
+// missing/offline/foreign-owner source must never show a success or navigate.
+const hydrateStart=favorite.indexOf('  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {');
+const wrapStart=favorite.indexOf('  const applyStoredRecipeToNext = async (song: any) => {',hydrateStart);
+const wrapEnd=favorite.indexOf('\n\n  const openFavoriteDetail',wrapStart);
+assert.ok(hydrateStart>=0 && wrapStart>hydrateStart && wrapEnd>wrapStart,
+ 'real owned Original hydrator and guarded apply wrapper must remain extractable');
+const verifyClickJs=ts.transpileModule(favorite.slice(hydrateStart,wrapEnd)
+ + '\nexports.applyStoredRecipeToNext=applyStoredRecipeToNext;',
+ {compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
+const guardedCalls={applied:[],toasts:[]};
+let originalReadMode='offline';
+let originalReads=0;
+const verifyCtx={
+ exports:{},user:{uid:'owner'},isMusicNoteSharedView:false,
+ isSharedMusicNoteItem:()=>false,
+ getFavoriteDocumentId:(song)=>song?.id||'',
+ getMusicNoteDetailSourceVersion:()=>0,
+ getOrLoadMusicNoteOriginalRecipe456:async(args)=>args.loader(),
+ getOrLoadMusicNoteDetail:async()=>null,
+ getDocFromServer:async()=>{
+  originalReads++;
+  if(originalReadMode==='offline') throw Error('network offline');
+  if(originalReadMode==='missing')return {exists:()=>false};
+  if(originalReadMode==='foreign')return {exists:()=>true,data:()=>({uid:'other-user',appliedKeywords:{tempo:145}})};
+  return {exists:()=>true,data:()=>({uid:'owner',appliedKeywords:{genre:['LATEST'],tempo:null}})};
+ },
+ doc:(_db,_collection,id)=>id,db:{},
+ readMusicNoteDetailDraft:async()=>null,
+ mergeMusicNoteNextSongClickRecipe455:mergeOnClick,
+ applyKeywordsToNext:(song)=>guardedCalls.applied.push(song),
+ showFavoriteToast:(s)=>guardedCalls.toasts.push(s),
+ console:{warn:()=>{}},
+};
+vm.runInNewContext(verifyClickJs,verifyCtx);
+const applyOwned=verifyCtx.exports.applyStoredRecipeToNext;
+for(const mode of ['offline','missing','foreign']){
+ originalReadMode=mode;
+ await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
+ assert.equal(guardedCalls.applied.length,0,mode+' cannot silently apply stale cache');
+ assert.match(guardedCalls.toasts.at(-1),/다시 시도해주세요/,
+  mode+' must tell user to retry rather than showing Studio success');
+}
+originalReadMode='success';
+await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
+assert.equal(guardedCalls.applied.length,1,'successful exact owned original may apply');
+assert.equal(guardedCalls.applied[0].__musicNoteNextSongOriginalVerified462,true);
+assert.equal(guardedCalls.applied[0].appliedKeywords.tempo,null);
+assert.equal(originalReads,4,'only explicit apply click reads one original per attempt');
+verifyCtx.isMusicNoteSharedView=true;
+await applyOwned({id:'shared-song',appliedKeywords:{tempo:'100-110'}});
+assert.equal(guardedCalls.applied.length,2,'intentional shared-view recipe path remains supported');
+assert.equal(originalReads,4,'shared view cannot read another account-owned original');
+
 
 const detailCacheSource=fs.readFileSync('src/lib/musicNoteDetailCache.ts','utf8');
 const detailJs=ts.transpileModule(detailCacheSource, {

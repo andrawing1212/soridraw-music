@@ -7360,6 +7360,10 @@ function App() {
   };
 
   const getRecentSongIdentityKey = (song: any): string => {
+    // Historical generation IDs may differ between devices; the original
+    // immutable generation batch + index takes precedence over local IDs.
+    const generationKey = getRecentSongGenerationSyncKey(song);
+    if (generationKey) return generationKey;
     const stableId = getLiveSoridrawSongId(song);
     if (stableId) return `stable:${stableId}`;
     const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]

@@ -26,6 +26,15 @@ for (const key of [
 
 assert.match(page, /publishMusicNoteSunoMediaDelta/);
 assert.match(page, /const publishFavoriteSunoMediaDraft = async/);
+assert.match(page, /await flushFavoriteDetailPendingPatch\('manual'\)/,
+  'explicit Suno URL Save/Remove must settle canonical draft for the other device');
+assert.match(page, /서버 저장이 완료되지 않아 다른 기기에는 아직 보이지 않을 수 있습니다/,
+  'failed URL settlement must not claim successful cross-device save');
+const worker = fs.readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
+for (const projectedColor of ["'favoriteColorTag'", "'colorTag'"]) {
+  assert.ok(engine.includes(projectedColor), `client catalog color missing ${projectedColor}`);
+  assert.ok(worker.includes(projectedColor), `Worker/Firestore catalog color missing ${projectedColor}`);
+}
 assert.match(page, /await publishMusicNoteSunoMediaDelta\(user\.uid, safeSongId,/);
 
 const saveStart = page.indexOf('  const saveFavoriteSunoShareUrls = async');

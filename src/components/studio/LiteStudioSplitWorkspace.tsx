@@ -1752,6 +1752,16 @@ export default function LiteStudioSplitWorkspace({
   }, [workspaceView]);
 
   useLayoutEffect(() => {
+    // Reuse the same pane for every Studio result page, but not its previous
+    // page's vertical scroll. Old Music Note/Library scroll anchoring otherwise
+    // persists for a frame when Recent replaces the list with result cards.
+    if (workspaceView === 'recent' || workspaceView === 'music-note' || workspaceView === 'library') {
+      const resultPane = resultRef.current;
+      if (resultPane && resultPane.scrollTop !== 0) resultPane.scrollTop = 0;
+    }
+  }, [workspaceView]);
+
+  useLayoutEffect(() => {
     if (benchmarkRunningRef.current) return;
 
     // 612: workspace/profile changes can alter the geometry owner. Reset the

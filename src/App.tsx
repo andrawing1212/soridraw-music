@@ -18,7 +18,7 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460 } from './lib/recentSongsSyncGate';
-import { planRecentUnconfirmedRecovery436 } from './lib/recentUnconfirmedRecovery436';
+import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -465,6 +465,7 @@ const persistRecentSongsDocument = async (
   ref: any,
   songs: any[],
   expectedMutationEpoch?: number,
+  changedTextSong?: any,
 ): Promise<number | null> => {
   const uid = String(ref?.id || '').trim();
 
@@ -478,9 +479,38 @@ const persistRecentSongsDocument = async (
     }
 
     const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
-    const syncVersion = Math.max(Date.now(), previousVersion + 1);
+    let syncVersion = Math.max(Date.now(), previousVersion + 1);
 
-    await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
+    const editedStableId = changedTextSong ? getLiveSoridrawSongId(changedTextSong) : null;
+    if (editedStableId) {
+      // A settled 150s text edit modifies only its own canonical row. A
+      // different device may have recovered/generated a tenth song while
+      // this device held a 9-song local draft. Never write that stale 9-row
+      // aggregate back over the authoritative ten.
+      const settledVersion = await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return null;
+        const authoritative = snapshot.data()?.songs;
+        if (!Array.isArray(authoritative)) return null;
+        if (uid && Number.isFinite(expectedMutationEpoch)
+          && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)) return null;
+        const merged = patchExactRecentTextRow436(
+          authoritative, changedTextSong, getLiveSoridrawSongId);
+        if (!merged) return null;
+        const serverVersion = Math.max(0, Number(snapshot.data()?.syncVersion || 0));
+        const nextVersion = Math.max(Date.now(), previousVersion + 1, serverVersion + 1);
+        transaction.set(ref, sanitizeForFirestore({
+          songs: merged, syncVersion: nextVersion,
+        }), { merge: true });
+        return nextVersion;
+      });
+      if (!settledVersion) return null; // removed/ambiguous song stays guarded
+      syncVersion = settledVersion;
+    } else {
+      // Legacy no-stable-ID records keep their existing behavior; never
+      // invent or reassign an identity just to force a canonical update.
+      await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
+    }
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
 
     if (!uid) return syncVersion;
@@ -15626,7 +15656,7 @@ ${normalizePromptForDisplay(result.prompt)}
       const ref = doc(db, "user_recent_songs", pending.uid);
       const persistedVersion = await runV1MutationBoundary(
         { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: pending.syncItem },
-        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
+        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch, pending.syncItem),
       );
       if (!persistedVersion) {
         clearPendingIfCurrent();

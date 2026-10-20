@@ -197,6 +197,10 @@ assert.equal(patched436[1].isPublic,true,'older PC publication state must not ov
 assert.equal(patched436[1].isLocked,true,'older PC lock must not override canonical');
 assert.equal(patched436[1].coverUrl,'new-cover','older PC media must not override canonical');
 assert.equal(patched436[1].appliedKeywords.genre[0],'pop','old PC generation recipe must not override canonical');
+const heartUpdated435 = canonicalTen436.map((row,i)=>i===1
+  ? {...row,updatedAtMs:900,appliedKeywords:{genre:['pop']}} : row);
+assert.equal(textPatch436(heartUpdated435,stalePCEdit436,sid436)?.[1]?.title,'PC edited title',
+ 'a newer heart/media timestamp is not proof of newer Studio text');
 assert.equal(patched436[1].appliedKeywords.lyricsByLanguage.ko,'new lyrics',
   'text language patch stays scoped to edited song');
 assert.equal(textPatch436(canonicalTen436,{...stalePCEdit436,updatedAtMs:100,

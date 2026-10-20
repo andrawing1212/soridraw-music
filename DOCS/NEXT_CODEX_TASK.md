@@ -1,3 +1,9 @@
+## NEXT — app444 rollback user physical PASS; preserve split (2026-10-21 KST)
+
+User confirmed at 2026-10-20 23:05 UTC that the rollback was successful. app444 PREVIEW is back to app442 user-accepted split CSS and behavior; the app443 performance experiment is discarded. Do not pursue additional speculative Pure Pane Hybrid CSS performance patches without a new concrete defect and user direction. No pending deployment or TEST/PRODUCTION promotion. Keep live 660/820 Builder transitions, app442 gutter fix and shared data protections. Work independent audit remains outstanding; user hand confirmation applies only to the rollback.
+
+---
+
 ## NEXT — app444 PREVIEW restored verified app442 Studio CSS; freeze further drag optimization (2026-10-21 KST)
 
 User's app443 Hybrid Builder isolation A/B feedback on 2026-10-20 22:49 UTC: negligible difference, perhaps subjectively 2-3% slower (NOT measured). Decline and roll back priority-1 experiment rather than compound complexity. app444 PREVIEW Hosting at https://preview.soridraw.com deployed pinned SHA ae4324bb36fc8c81bfe4b2deabae7370434797ff with exact live version/build, TEST/PRODUCTION unchanged; release run #39511665081 SUCCESS. Source PR #327, product CI #39511092855 PASS; split regression #39511423160 PASS; release PR #329. CSS and split history verifier blobs are exactly the app442 user-confirmed baseline; only Hosting version/Worker verifier version guard advanced to 444. Protect Pure Pane Hybrid live UI switch at 660/820, 1080 content thresholds, 24px consistent gutter fix, split UI/scroll/bar and data/Backend.

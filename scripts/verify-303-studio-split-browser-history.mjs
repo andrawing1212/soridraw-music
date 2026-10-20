@@ -69,6 +69,27 @@ assert.match(app, /onMusicNote=\{\(\) => navigate\('\/history'\)\}/, 'classic Mu
 console.log('VERIFY_303_STUDIO_SPLIT_BROWSER_HISTORY=PASS');
 
 
+// app441: A deep link from Explore must highlight its destination on the
+// FIRST render, even when App still retains a previous Studio workspace.
+const railSelectionStart = app.indexOf('  // app441: After returning from Explore');
+const railSelectionEnd = app.indexOf('  // Browser Back/Forward and external Explore links', railSelectionStart);
+assert.ok(railSelectionStart > 0 && railSelectionEnd > railSelectionStart,
+  'missing first-render split rail destination selection');
+const railSelection = app.slice(railSelectionStart, railSelectionEnd);
+assert.match(railSelection, /location\.pathname !== '\/studio' \|\| readSoridrawDisplayMode\(\) !== 'studio-black'\) return studioWorkspaceView/,
+  'Classic and unrelated routes must retain their existing selection');
+assert.match(railSelection, /new URLSearchParams\(location\.search\)\.get\('view'\)/,
+  'split rail highlight must be read directly from the destination URL');
+assert.match(railSelection, /requestedView === 'recent' \|\| requestedView === 'music-note' \|\| requestedView === 'library'/,
+  'all three valid non-Create views must be preserved');
+assert.match(railSelection, /: 'create'/,
+  'missing or invalid view must retain the canonical Create route');
+assert.match(app, /<StudioPageFrame[\s\S]*?leftRail=\{[\s\S]*?<StudioLeftRail[\s\S]*?activeWorkspace=\{studioRailActiveWorkspace\}/,
+  'split left rail must use the URL-derived value, not stale previous state');
+assert.match(app, /workspaceView=\{studioWorkspaceView\}[\s\S]*?workspaceRequestId=\{studioWorkspaceLayoutRequestId\}/,
+  'existing pane geometry and workspace request owner must be unchanged');
+console.log('VERIFY_441_STUDIO_RAIL_FIRST_FRAME_URL_HIGHLIGHT=PASS');
+
 // app440 explicit navigation parity: Explore's Create and Recent must
 // resolve to distinct routes; only the existing Lite owner settles pane layout.
 assert.match(explore, /onCreate=\{\(\) => go\('\/studio'\)\}/,

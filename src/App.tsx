@@ -5303,6 +5303,18 @@ function App() {
     navigate(`/studio${query ? `?${query}` : ''}`);
   }, [location.pathname, location.search, navigate, selectStudioWorkspaceView]);
 
+  // app441: After returning from Explore, the previous Studio state may still
+  // be present for the first render. The left rail alone must highlight the
+  // requested URL view immediately; the existing layout effect still owns the
+  // actual workspace transition. No pane/CSS/drag geometry is changed.
+  const studioRailActiveWorkspace: StudioWorkspaceView = (() => {
+    if (location.pathname !== '/studio' || readSoridrawDisplayMode() !== 'studio-black') return studioWorkspaceView;
+    const requestedView = new URLSearchParams(location.search).get('view');
+    return requestedView === 'recent' || requestedView === 'music-note' || requestedView === 'library'
+      ? requestedView
+      : 'create';
+  })();
+
   // Browser Back/Forward and external Explore links resolve the URL before the
   // first visible frame. Avoid a passive effect after paint and never compete
   // with an in-flight route change from the Studio rail.
@@ -18703,7 +18715,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             compactMobileLayout={isStudioCompactMobileLayout}
             leftRail={
               <StudioLeftRail
-                activeWorkspace={studioWorkspaceView}
+                activeWorkspace={studioRailActiveWorkspace}
                 onCreate={() => {
                   navigateStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));

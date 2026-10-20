@@ -129,6 +129,56 @@ assert.doesNotMatch(app, /localStorage.clear\(\)|indexedDB.deleteDatabase/);
 assert.ok(rtdb.includes("if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);"),
  'initial retained draft carries bounded one-time recovery marker, not a canonical ACK');
 assert.match(app, /if \(isEditPreview\) \{[\s\S]{0,1200}needsRecentSongsRetainedDraftGapRead460\([\s\S]{0,220}runRecentSongsServerSyncIfNeeded\(\);[\s\S]{0,100}return;/);
+
+// app436 executable bounded recovery: NEVER recreate a deleted/ambiguous
+// local-only track, yet allow one provably newer generated row to fill 9 -> 10.
+const recoverySource436 = fs.readFileSync('src/lib/recentUnconfirmedRecovery436.ts', 'utf8');
+const recoveryCompiled436 = ts.transpileModule(recoverySource436, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+});
+const recoverySandbox436 = { exports: {} };
+vm.runInNewContext(recoveryCompiled436.outputText, recoverySandbox436);
+const plan436 = recoverySandbox436.exports.planRecentUnconfirmedRecovery436;
+assert.equal(typeof plan436, 'function');
+const sid436 = item => item?.soridrawSongId || null;
+const remote436 = Array.from({length:9},(_,i)=>({soridrawSongId:'sid-'+i, title:'old-'+i, createdAt:100+i}));
+const new436 = {soridrawSongId:'sid-new',title:'new-only-local',createdAt:250};
+const full436 = [new436,...remote436];
+const planned436 = plan436(remote436,full436,['sid-new'],200,sid436);
+assert.ok(planned436,'9 canonical + one known new generated item should be recoverable');
+assert.equal(planned436.songs.length,10);
+assert.equal(planned436.recovered.length,1);
+assert.equal(planned436.songs[0].soridrawSongId,'sid-new');
+assert.equal(plan436(remote436,full436,[],200,sid436),null,
+  'a cache-only song without generation-time marker is NOT proof of authorization');
+assert.equal(plan436(remote436,full436,['sid-new'],300,sid436),null,
+  'newer canonical revision might represent deliberate delete: never resurrect');
+assert.equal(plan436(remote436,remote436,['sid-new'],200,sid436),null,
+  'marker without the actual local only-copy is not eligible');
+assert.equal(plan436([...remote436,new436],full436,['sid-new'],200,sid436),null,
+  'server already contains exact generated song: no second write');
+assert.equal(plan436(remote436,[{...new436,createdAt:0},...remote436],['sid-new'],200,sid436),null,
+  'missing generated timestamp is not trusted');
+assert.equal(plan436([...remote436,{soridrawSongId:'extra',createdAt:150}],
+ full436,['sid-new'],200,sid436),null,'never evict the tenth canonical row');
+assert.equal(plan436(remote436,[{...new436,soridrawSongId:'wrong'},...remote436],
+ ['sid-new'],200,sid436),null,'mismatched UID-local identity is not sufficient');
+assert.equal(plan436(remote436,full436,['sid-new'],0,sid436),null,
+  'absent canonical revision is not deletion-safe');
+assert.match(app,/if \(!unconfirmedIds\.length\) return;/,
+  'healthy Studio cache must not start a transaction');
+assert.match(app,/recentUnconfirmedRecoveryAttemptedUids436\.add\(uid\)/,
+  'pending-only recovery must be bounded once per session');
+assert.match(app,/planRecentUnconfirmedRecovery436\(/);
+assert.match(app,/transaction\.set\(recentRef, sanitizeForFirestore\(/,
+  'a verified plan must be atomically committed');
+assert.match(app,/acknowledgeRecentGeneratedSongs\(uid, recovered\.songs\)/,
+  'only a committed recovery can remove local pending marker');
+assert.doesNotMatch(recoverySource436,/localStorage\.clear|indexedDB\.deleteDatabase|collection\(/);
+console.log('APP436_RECENT_ONLY_COPY_REPAIR_9_TO_10_EXECUTABLE=PASS');
+console.log('APP436_RECENT_DELETE_OR_STALE_MARKER_NEVER_RESURRECTS=PASS');
+console.log('APP436_HEALTHY_STUDIO_REVISIT_EXTRA_FIRESTORE_READ_ZERO=PASS');
+
 console.log('APP460_RET_INITIAL_DRAFT_A_RECOVERS_SETTLED_B_ONCE=PASS');
 console.log('APP435_RECENT_PREVIEW_NOT_CANONICAL_ACK=PASS');
 console.log('APP435_RECENT_RETAINED_SINGLE_ITEM_GAP_REQUIRES_CATCHUP=PASS');

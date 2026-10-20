@@ -1,3 +1,14 @@
+## NEXT — app439 PREVIEW physical QA of two still-unverified transitions (2026-10-21 KST)
+
+- app439 exact deployed `preview` source `88985fac941387fe8c5b9fab9e78982fe302b1ea` and live version 439 verified by [Firebase Hosting Action #39475323311](https://github.com/andrawing1212/soridraw-music/actions/runs/39475323311). Source changes in PR #304. CI/Hosting PASS, **not physical UI PASS**.
+- User-confirmed app438 PASS: Explore initial page entry, and Studio split horizontal width/gutters — **FROZEN**.
+- Original remaining FAIL: Library or Music Note→Recent right pane overlaps; Create→Music Note list starts below before moving upward.
+- Request only two user checks on existing cached PC browser after app439: Library→Recent and Music Note→Recent, then Create→Music Note. Observe first 100–300ms, no browser cache reset. If fail, use new recorded frame and isolate only offending page/host/scroll owner; no blanket CSS or backend changes.
+- Protect Music Note 60s batch saving, save-heart 30s, Explore likes cache R0/W0, split geometry/drag/width and app438 Explore first frame. No TEST or PRODUCTION promotion without authorization.
+- Stage416 1/4·25% OFF; historical speed 5/5·100% not remeasured.
+
+---
+
 ## NEXT — app439 verify remaining 2 UI first-frame errors, preserve app438 PASS (2026-10-21 KST)
 
 - app438 physical PASS frozen: Explore page entry and split left/right first-entry width. NEVER alter them for this task.

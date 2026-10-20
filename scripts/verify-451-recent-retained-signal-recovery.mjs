@@ -163,6 +163,14 @@ assert.equal(plan436([...remote436,{soridrawSongId:'extra',createdAt:150}],
  full436,['sid-new'],200,sid436),null,'never evict the tenth canonical row');
 assert.equal(plan436(remote436,[{...new436,soridrawSongId:'wrong'},...remote436],
  ['sid-new'],200,sid436),null,'mismatched UID-local identity is not sufficient');
+assert.equal(plan436([],full436,['sid-new'],200,sid436),null,
+ 'a deliberate canonical clear cannot be revived by a stale generated marker');
+assert.equal(plan436(remote436.slice(1),full436,['sid-new'],200,sid436),null,
+ 'a shorter canonical catalog must never be repopulated without proof');
+assert.equal(plan436(remote436,full436.slice(1),['sid-new'],200,sid436),null,
+ 'incomplete local cache cannot authorize automatic recovery');
+assert.equal(plan436(remote436,[new436,...remote436.slice(1),{soridrawSongId:'different',createdAt:100}],
+ ['sid-new'],200,sid436),null,'a missing canonical row cannot be silently evicted');
 assert.equal(plan436(remote436,full436,['sid-new'],0,sid436),null,
   'absent canonical revision is not deletion-safe');
 assert.match(app,/if \(!unconfirmedIds\.length\) return;/,

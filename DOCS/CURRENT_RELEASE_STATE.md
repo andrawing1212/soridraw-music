@@ -1,3 +1,12 @@
+## CURRENT — app435 reviewed PR #282 merged, protected PREVIEW Hosting-only release request (2026-10-20 KST)
+
+- PR #282 audited exact product SHA `6c7f8a6356e31fcc7e23156eb0e54d622395c0dc` independent Work PASS for prior P1/P1/P2 defects, merged to `preview` at `f4f9c002dcf2c8b596860358055087b272315e74`. Exact quality CI 39396836062 SUCCESS; 451/454, TypeScript/Build, like/follow/publication, live RTDB Rules read-only. App version bump to 435 is release metadata only; no application behavior source changed since Work PASS.
+- New release PR from `release/app435-preview-hosting` changes only `public/app-version.json`, `.deploy/preview-app-release.trigger`, and status docs. Trigger `deploy_shared_rtdb_rules=false` and all Workers/Functions/D1/shared-data deploy flags false. **PREVIEW Hosting deploy not yet confirmed**; verified only when release Action exact HTML/version 435 and TEST/PRODUCTION unchanged checks PASS.
+- Three standalone legacy verification mismatches remain explicitly known: 290-recent outdated comment text, 290-studio preexisting app434 mismatch, 427-legacy command empty-marker policy conflict. Work scoped PASS was not an assertion of all 20 historical tests PASS. No new migration/backfill/cache reset; Stage416 OFF. Real PC/mobile and billed 100k-user cost unverified; PREVIEW app435 acceptance only, no TEST/PRODUCTION authorization.
+- Progress: Stage416 1/4·25% OFF; speed 5/5·100% historical not remeasured; app435 work 3/4·75% until PREVIEW Hosting verify and user QA.
+
+---
+
 ## CURRENT — app435 independent Work FAIL P1/P1/P2 narrow remediation (2026-10-20 KST)
 
 - **Pinned parent FAIL:** `deb7d1b7bdef23d0b0d7fd5f6e8aada1b72f9d55`, PR #282 Draft on `fix/app435-integrated-parity`, baseline preview `11f46242f3c08fc9076dd10abe90be0008aac098` (app434 deployed). The user-provided independent Work audit found P1 historical tempoConfig surviving exact canonical tempo:null, P1 Recent live inline item cache-write failure incorrectly ACKing/version advancing, P2 offline/missing source silently applying stale Music Note next-song settings. GitHub [audit note](https://github.com/andrawing1212/soridraw-music/pull/282#issuecomment-6287002026).

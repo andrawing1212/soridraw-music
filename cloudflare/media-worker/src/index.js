@@ -485,7 +485,7 @@ const MUSIC_NOTE_CATALOG_FIELDS = [
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
-  'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'color', 'favoriteColor', 'noteColor', 'favoriteColorTag', 'colorTag', 'folderId', 'folderIds', 'musicNoteFolderIds',
   'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
   'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',

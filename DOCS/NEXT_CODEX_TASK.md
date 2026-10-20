@@ -1,3 +1,10 @@
+## NEXT — app435 Hosting PREVIEW release and acceptance (2026-10-20 KST)
+
+- Merge Hosting-only release PR based on reviewed app435 source and await `SORIDRAW PREVIEW App Release` Action triggered by changed `.deploy/preview-app-release.trigger`. Check TS/Build/related regressions, exact https://preview.soridraw.com/ served HTML/app-version 435 and unchanged main, production and shared data; deployment only Hosting. If any release gate fails, stop and report.
+- Existing extra 290-recent/290-studio/427-legacy test mismatches remain a clearly separate backlog and are not declared green. User to conduct app435 PC/mobile Music Note old recipe, direct user command/tempo, offline, Recent cross-device scenarios; no TEST/PRODUCTION until separate user approval. Keep Stage416 OFF.
+
+---
+
 ## NEXT — app435 3 Work-audit failures fixed in draft: exact SHA CI then independent audit (2026-10-20 KST)
 
 - Target current Draft PR #282 branch HEAD; compare with preview base `11f46242f3c08fc9076dd10abe90be0008aac098`. Run exact commit GitHub full CI, including verify-451 live persisted inline ACK and verify-454 Studio tempo and owned favorite offline guards, TypeScript, Build, Functions build, frozen like/follow/explore and read-only RTDB Rules. Do not call developer CI an independent PASS.

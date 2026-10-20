@@ -1,3 +1,12 @@
+## NEXT — user-corrected visible FAIL, verify narrow PREVIEW repair before revisiting #293 (2026-10-21 KST)
+
+- Stop mislabeling the screenshot as deleted URL resurrection. **Primary physical FAIL is URL added on MOBILE not appearing on PC** for same account/same song `그날의 나에게`. Also historical Music Note assigned-color filter returns empty. The URL deletion fallback and last-writer protection are separate follow-up risks, not user's screenshot.
+- Narrow independent patch branch `fix/294-mobile-suno-url-pc-color-preview`: explicit Detail Suno URL action attempts existing canonical flush while preserving normal text editing batch, client + Worker catalog projection includes `favoriteColorTag/colorTag`, user-visible color aliases recognized without guessing or reverting explicit clears. Existing verify-031/281 and media save-heart checks are protected. No app-wide restructuring.
+- Check code diff, TS/Build/relevant targeted regressions, then approved PREVIEW deploy and actual URL/color parity from user PC/mobile. Never claim physical PASS before user does. If old R2 summary lacks historic colors, recover only per-song verified source, not full scan/clear/backfill. Normal warm cache R0/W0 remains goal.
+- #293 old-client deletion/recreate revision Emulator acceptance FAIL is explicitly **not part of this visible bug patch**. Keep blocked branch and investigation as separate safety task. Shared Rules activation, migration, data changes, TEST/PRODUCTION prohibited. Codex 13% remaining (user-reported), no new Codex request.
+
+---
+
 ## NEXT — #293 APPROVED narrow compatibility policy, CODE + EMULATOR ONLY (2026-10-21 KST)
 
 - **Decision:** user authorizes refusal of **conflicting stale URL/color writes by older apps** but **not** blanket legacy app denial, disruption of song save/unsave and unrelated fields, migration, any shared Firestore Rules apply/deploy or any environment release. Read latest Issue #293 policy and handoff comments before working.

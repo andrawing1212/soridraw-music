@@ -1,3 +1,13 @@
+## NEXT — app439 verify remaining 2 UI first-frame errors, preserve app438 PASS (2026-10-21 KST)
+
+- app438 physical PASS frozen: Explore page entry and split left/right first-entry width. NEVER alter them for this task.
+- App438 physical FAIL video `20261020-1808-02.1969412.mp4`: Recent Result right content overlaps when coming from Music Note/Library; Create→Music Note list temporarily starts too low then rises.
+- Source: [PR #304](https://github.com/andrawing1212/soridraw-music/pull/304) merged `947f1ca942ff14e37dea28535d604bbee4bebdb2`. Two masthead portal resolutions moved from passive effect to layout effect (`FavoritesPage.tsx` and `SunoLibraryPage.tsx`); one layout-phase reset of inherited Result-pane vertical scroll in `LiteStudioSplitWorkspace.tsx` only on result workspace switch. No CSS/spec, server, synchronization, likes, Worker or data changes.
+- CI TypeScript/Build existing quality PASS run 39474394739, direct first-frame physical PASS unverified. Proceed app439 Hosting-only exact-sha release with tests/remote URL + TEST/PRODUCTION unchanged proof, no shared Rules/migration. Then request **only two** user UI acceptance actions, plus optional PC/mobile.
+- Stage416 1/4·25% OFF; app speed historical 5/5·100% not remeasured; no TEST or PRODUCTION promotion until approved.
+
+---
+
 ## NEXT — app438 PREVIEW first-frame user PC/mobile QA (2026-10-21 KST)
 
 - Exact deployed app438 commit `ac8d9a3829018ee20718c8278314db8d69433a4e`, `https://preview.soridraw.com`, remote version 438 and HTML hash verified via [official Action #39471086276](https://github.com/andrawing1212/soridraw-music/actions/runs/39471086276). Studio first-frame PR #300 and Explore warm-cache first-frame PR #301 are merged and released. TS/Build and existing tests PASS; **physical results and independent Work audit not PASS**.

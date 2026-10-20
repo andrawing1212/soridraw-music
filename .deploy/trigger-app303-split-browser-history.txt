@@ -9,3 +9,6 @@ app443_hybrid_builder_only_scope_gate=2026-10-21
 product_sha=89587b3ff0089f61b85c904fa07f3dcc0ce07f08
 
 app443_isolation_guard_fix_and_split_recheck=2026-10-21
+
+app444_restore_app442_css_scope_check=2026-10-21
+product_sha=3b138fb24076c65e95efd25b68f92df59e7176ef

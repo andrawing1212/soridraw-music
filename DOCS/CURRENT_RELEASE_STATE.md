@@ -1,3 +1,12 @@
+## CURRENT — shared Firebase RTDB like alert schema release approval (2026-10-20 KST)
+
+- User explicitly approved deploying ONLY the two additive bounded UID-private fields `acceptedAtPublicClock420` and `basePublicLikeCount420`, subject to an independent safety check. Approval is NOT permission for other backend/schema/user-data writes or TEST/PRODUCTION code promotions.
+- Draft PR #286 changes the exact `userSync/$uid/exploreLike/results/$index` .validate whitelist and two CI gates. The canonical Firebase PREVIEW release pipeline has an exact 435 two-field-only candidate mode and `deploy_hosting=false` Rules-only option; this is NOT a Hosting/Worker/Functions code deploy. It preserves checked live Stage416 server-only roots, public publication nodes, old account UID read/write restrictions, max-50 signal batch, and deny-unknown fields.
+- Before executing: require exact-SHA CI TypeScript/Build/source contract + live read-only preflight success; ensure 434/418 guards reject partial, unexpected, widened changes; inspect the full PR diff for scope violations. On actual trigger require twice-read live rules unchanged, exact PUT 2-field delta (or no-op if already live), post-GET exact candidate equality, main/production refs and Hosting outputs unchanged; stop on ANY failure.
+- Physical same-account PC↔mobile live sync and toast elimination still unverified, app435 user acceptance stays FAIL. Independent Work audit is **not** falsely declared passed. No cache reset/outbox purge, no shared user data migration/backfill, Stage416 OFF. Separate Recent PR #285 remains unmerged. Historical Next Song manual command remains unresolved.
+
+---
+
 ## CURRENT — app435 Explore cross-device toast exact publisher/RTDB Rules mismatch candidate (2026-10-20 KST)
 
 - **New user physical QA:** on both PC/mobile, like/unlike shows `좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.`; not limited to one track; at least `지금 너로, 충분해` and `거기 아직 있어` private liked hearts diverge. Original accepted like/outbox/cache is NOT deleted.

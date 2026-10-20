@@ -15926,3 +15926,18 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
+/* app443 — Pure Pane Hybrid Builder-only drag layout isolation.
+ * Existing 657 applies this layout/style containment to Studio main when a
+ * pane is 661–1080px wide. Extend it to Builder's desktop band during Hybrid
+ * drag, without invalidating sibling Result/rails on Builder card reflow.
+ * Never freeze width/layout changes, change gutters, or touch Generate-bar
+ * root markers (needed for the floating portal and inline reservation).
+ * Resting and Builder-mobile composition remain unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-hybrid"]
+  > .soridraw-studio-builder-pane[data-pane-mode="desktop"]
+  .soridraw-studio-main {
+    contain: layout style !important;
+  }
+}

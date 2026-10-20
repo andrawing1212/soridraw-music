@@ -199,7 +199,11 @@ const readPurePaneHybridSignature = (
       ? 'compact'
       : 'desktop';
   const resultBand = safeResultWidth < resultMobileBreakpoint ? 'mobile' : 'desktop';
-  return `${builderBand}:${resultBand}`;
+  // app445: Builder content also changes from tablet to PC at 1080px.
+  // Include this *discrete* boundary so Hybrid never leaves the Builder's
+  // content-mode/Generate-bar contract stale until pointer-up.
+  const builderContentBand = readContentResponsiveMode(safeBuilderWidth);
+  return `${builderBand}:${builderContentBand}:${resultBand}`;
 };
 
 const readDragBoundarySignature = (
@@ -1186,6 +1190,21 @@ export default function LiteStudioSplitWorkspace({
         const hybridSignature = readPurePaneHybridSignature(builderWidth, resultWidth, workspaceViewRef.current);
         if (dragBoundarySignatureRef.current !== hybridSignature) {
           dragBoundarySignatureRef.current = hybridSignature;
+
+          // app445: Hybrid used to publish only 660/820 Builder pane modes.
+          // The Builder's separate PC/tablet content threshold is 1080px,
+          // so its root visual mode and Generate bar could remain stale while
+          // the actual card container already crossed that boundary.
+          // Publish only once per real content-mode change. No DOM reads,
+          // React rerenders, extra observers or continuous width broadcasts.
+          const builderContentMode = readContentResponsiveMode(builderWidth);
+          if (contentResponsiveModeRef.current.builder !== builderContentMode) {
+            contentResponsiveModeRef.current.builder = builderContentMode;
+            const root = document.documentElement;
+            if (root.dataset.soridrawBuilderContentMode !== builderContentMode) {
+              root.dataset.soridrawBuilderContentMode = builderContentMode;
+            }
+          }
 
           // Only the pane composition contract changes here. Do not run the
           // continuous content-width broadcast used by Pure Pane Live: 7/5-column

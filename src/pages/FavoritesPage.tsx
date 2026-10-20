@@ -1165,7 +1165,10 @@ export default function FavoritesPage({
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Settle the Music Note masthead portal before first paint.
+    // A passive effect first painted the header inside the list, then moved it
+    // into the result pane host and visibly pulled the whole list upward.
     const syncStudioWorkspaceHeroHost = () => {
       const root = document.documentElement;
       // 462: keep the active right-page masthead in the real result-pane

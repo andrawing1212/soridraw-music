@@ -1,3 +1,11 @@
+## NEXT — app436 guarded Recent local-only song recovery safety check (2026-10-20 KST)
+
+- User passed Explore like/unlike same-account PC/mobile after shared RTDB two-field fix; **freeze this behavior**. app436 Recent local-only marker recovery is a separate change; no like/Worker/RTDB/shared Rules touches.
+- Pin Draft app436 exact SHA after 451 regression. Verify 9 canonical vs 10 local with one valid newer unconfirmed ID produces exactly 10 without losing server rows; explicit delete/newer server revision, stale/missing marker, wrong ID, full canonical 10, same stable ID rename and offline failure must never resurrect/write. Only true pending generated mutation may issue read/transaction; healthy cache reopen W0/R0. Ensure result UI update/local ACK happens ONLY after committed transaction. Check no repeated reads on navigation, no runaway Firestore costs, save-heart/media and title/lyrics edit 150s batch unchanged.
+- Do **not** merge/deploy until CI + independent review PASS. Old Music Note direct manual input restore remains separate known FAIL pending proof of original storage alias. App435 physical QA for Recent still FAIL before actual PC/mobile user check.
+
+---
+
 ## NEXT — app435 shared like Rules LIVE verified; three physical failures still open (2026-10-20 KST)
 
 - Shared RTDB publisher/rules schema mismatch fixed in live shared Rules (two bounded UID-private fields only); require a single meaningful PC↔mobile user check of `지금 너로, 충분해` and `거기 아직 있어`. Same-account liked heart must converge and retry notification toast must stop; user data and caches untouched. Do not claim physical PASS from static/live Rules comparison.

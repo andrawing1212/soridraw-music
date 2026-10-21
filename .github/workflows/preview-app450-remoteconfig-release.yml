@@ -135,11 +135,15 @@ jobs:
           let updated=0;
           for(const prev of before){
             const later=map.get(prev.name);
-            if(!later || later.state!=='ACTIVE')throw Error('451_FUNCTION_MISSING_OR_INACTIVE '+prev.name);
+            // Unrelated Functions may already be in FAILED/UNKNOWN states.
+            // Preserve their exact preflight status and timestamp rather than
+            // requiring every unrelated Function to be ACTIVE.
+            if(!later || later.state!==prev.state)
+              throw Error('451_UNRELATED_FUNCTION_STATE_CHANGED '+prev.name);
             if(String(prev.name).endsWith('/masterSetSplitFrameMode')){
               updated++;
-              if(later.updateTime===prev.updateTime)
-                throw Error('451_EXPECTED_MASTER_FUNCTION_UPDATE_NOT_VISIBLE');
+              if(later.state!=='ACTIVE' || later.updateTime===prev.updateTime)
+                throw Error('451_MASTER_FUNCTION_UPDATE_NOT_ACTIVE');
             } else if(later.updateTime!==prev.updateTime){
               throw Error('451_UNRELATED_FUNCTION_CHANGED '+prev.name);
             }

@@ -1,3 +1,13 @@
+## NEXT — app445 Generate bar left-half release snap: isolate geometry ownership, no speculative styling (2026-10-21 KST)
+
+User physically reports app445 Pure Pane Hybrid ~5–10% faster than app444 (subjective improvement, not benchmark). Do NOT roll back app445 solely for this separate defect. Two videos supplied 2026-10-21 00:23 UTC: `20261021-0015-23.3024558.mp4` (focused bottom bar), `20261021-0018-28.2526046.mp4` (full Studio). Generate bar visually follows divider but appears to resize again when pointer released, especially Builder narrower than half split width. Full→compact control composition transition is intentional, separate from unwanted geometry snap.
+
+Source likely mismatch in `LiteStudioSplitWorkspace.tsx`: `syncGenerationBarGeometry` uses cached drag-start command-anchor insets plus visual `scaleX` and occasional width rebase; `finishDrag` uses `applyPercent(false)` then clears bar inline x/width/scale through `clearLiveExternalGeometry` so resting root/CSS takes over. Probe computed visual rectangle at same stable divider X directly before/after pointerup under and over 660/820/1080 (without full-frame production instrumentation) to verify mismatch and which owner differs. If verified, minimally make live and rest exact geometry contract agree, with zero extra per-pixel measurements and no change to compact/full design/Generate actions. Preserve user-perceived app445 smoothness, app442 gutters, 660/820/1080 immediate Builder reflow, Music Note/Library and data/cache behavior. Do not assume all speed issues caused by release-only snap.
+
+This turn was **investigation plus GitHub documentation only**; user requested videos reviewed, not a new release. PREVIEW still app445 SHA `58a2fe2ff0b1710c802ab857f349569005f71cbf`; no new source changes or Hosting, TEST/PROD unchanged. Work independent audit not completed. Next implementation awaits specific user request.
+
+---
+
 ## NEXT — app445 PREVIEW live 1080 Builder band shipped, physical UI boundary evaluation pending (2026-10-21 KST)
 
 User-provided 74.7s video `20261020-2312-56.6720158.mp4` and user report of inconsistent mobile→tablet→PC Builder UI switching motivated targeted mode-signal correction. app445 PREVIEW Hosting exact source `58a2fe2ff0b1710c802ab857f349569005f71cbf`, release #39515890304 SUCCESS, product CI #39515370616 PASS and scoped split CI #39515657715 PASS. Source PR #332, QA PR #333, release PR #334. The Hybrid signature now includes the Builder's 1080 content band and publishes its mode to the root once at real mode changes. Existing 660/820 composition and Pure Pane Hybrid frame geometry unmodified. No backend/DB/canonical data changes.

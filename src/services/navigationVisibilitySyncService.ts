@@ -1,5 +1,6 @@
 import { onValue, ref, type Unsubscribe } from 'firebase/database';
 import { realtimeDb } from '../firebase';
+import { DEFAULT_SPLIT_FRAME_MODE, getSplitFrameEnvironment, parseSplitFrameMode, type SplitFrameMode } from '../constants/splitFrameGlobal';
 import {
   normalizeNavigationVisibilitySettings,
   type NavigationVisibilitySettings,
@@ -23,6 +24,28 @@ const normalizePayload = (raw: unknown): NavigationVisibilitySyncPayload | null 
   };
 };
 
+
+// Reuse the app's EXISTING navigationVisibility RTDB onValue listener:
+// no second per-user listener, Firestore read, poll or per-drag network request.
+const splitFrameListeners = new Set<(mode: SplitFrameMode) => void>();
+let currentSplitFrameMode: SplitFrameMode = DEFAULT_SPLIT_FRAME_MODE;
+export const readCurrentSplitFrameMode = (): SplitFrameMode => currentSplitFrameMode;
+export const subscribeSplitFrameMode = (listener: (mode: SplitFrameMode) => void): Unsubscribe => {
+  splitFrameListeners.add(listener);
+  listener(currentSplitFrameMode);
+  return () => { splitFrameListeners.delete(listener); };
+};
+const publishSplitFrameMode = (raw: unknown) => {
+  const env = getSplitFrameEnvironment();
+  const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const modes = data.splitFrameModes && typeof data.splitFrameModes === 'object'
+    ? data.splitFrameModes as Record<string, unknown> : {};
+  const mode = env ? parseSplitFrameMode(modes[env]) : DEFAULT_SPLIT_FRAME_MODE;
+  if (mode === currentSplitFrameMode) return;
+  currentSplitFrameMode = mode;
+  splitFrameListeners.forEach((listener) => listener(mode));
+};
+
 // SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
 // One tiny shared RTDB payload. It mirrors only seven menu booleans + revision;
 // it never reads Firestore, song data, Feed, profile, or any user collection.
@@ -31,6 +54,10 @@ export const subscribeNavigationVisibilitySync = (
   onError?: (error: unknown) => void,
 ): Unsubscribe => onValue(
   ref(realtimeDb, 'publicSync/navigationVisibility'),
-  (snapshot) => onPayload(normalizePayload(snapshot.val())),
+  (snapshot) => {
+    const raw = snapshot.val();
+    publishSplitFrameMode(raw);
+    onPayload(normalizePayload(raw));
+  },
   (error) => onError?.(error),
 );

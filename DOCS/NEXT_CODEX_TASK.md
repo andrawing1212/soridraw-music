@@ -1,3 +1,14 @@
+## NEXT — independent Work audit on integrated app450 commit, no Codex or deploy yet (2026-10-22 KST)
+
+- Pin DRAFT PR #386 `515bc8b3e36f37d886bbe42def9846048e125216`; base PREVIEW `53ca74357e344b4648f5d8a93db0e3cbcd6c7e58`. Verify exact combined guest/source/Rules/Function code, not separate historical PRs in isolation. Full `DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md` lives on PR #386, not preview until approval.
+- Inspect successful CI #39674743372 and #39674743324 including Firebase RTDB demo emulator guest leaf allow/parent/private/write deny, runtime `.info/connected` error/visibility/online/offline and cached callback behavior, two Master atomic transaction expectedMode compare+abort, one Function package, existing Stage416/app448 303/214/418/434/450, React TS/Build and Functions TS. Determine what mock/CI does **not** establish. No claim of actual physical SDK success.
+- Inspect DRAFT PR #383 `e365b0512d419ce7b4cda13d897b84c74853e273` (Codex original `781edfcb...`) as a **non-executable blocked** prep only. Emulator `/.settings/rules.json` returned ETag absent/stale If-Match 200, lost concurrent sibling: this cannot prove production atomicity. Do NOT put shared RTDB Rules, reuse old SHA pins, deploy Function or Hosting, or bypass Work because source CI succeeded. A secure exact-endpoint atomic or exclusive writer design is needed, then independent release-gate audit.
+- Check overlapping client+Function expectedMode contract, module export isolation, original Master role check, PREVIEW-only write gate even with retained env var, guest ACL, cache/offline and stale Master UI, old TEST/PRODUCTION compatibility, no new per-drag reads/writes or whole collection changes, and 100k socket-cost unknowns. App448 splitter/Generate/CSS and user original data must remain unchanged.
+- User reports Codex Medium use at 22% remaining: no more Codex unless absolutely essential; High unspent. Keep PREVIEW last-live app448; TEST and PRODUCTION unchanged; Stage416 OFF.
+- **One next action:** run independent Work in separate audit role on fixed PR #386 and #383, no code mutation, commit, push, or deploy. Report PASS/FAIL with P1/P2 evidence; if any P1 unresolved, leave rollout BLOCKED and give precise next edit.
+
+---
+
 ## NEXT — independent audit of app450 source+guest Rules+single-Function package, THEN safe release mechanism (2026-10-22 KST)
 
 - **Fixed audit inputs**: PREVIEW base `b095f5a2e5677a393b2b60cdc837daaad898820b`; source PR #379 `f156ea7a382ffbe992fbeeb331405af49ba3542f`; one-node guest RTDB Rules DRAFT PR #380 `2651575eb452b55d703a8504a67bb3ca2f5b1aaa` (base #379, combined CI run #39665345869 PASS); isolated Function DRAFT PR #381 `a83e8bef059eac29060e90223ccb01e651b5777a` (CI #39666428636 and #39666428842 PASS). None of these feature/rules branches are merged or deployed.

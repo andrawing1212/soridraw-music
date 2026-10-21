@@ -15,6 +15,7 @@ on:
       - 'scripts/verify-450-shared-rtdb-additive.mjs'
       - 'scripts/verify-450-rtdb-release-prepost.mjs'
       - 'scripts/verify-450-guest-emulator.mjs'
+      - 'scripts/verify-450-connectivity-guard.mjs'
       - 'scripts/verify-303-studio-split-browser-history.mjs'
       - '.github/workflows/verify-app450-guest-split-security.yml'
 
@@ -86,6 +87,9 @@ jobs:
             --only database --project demo-soridraw-app450 \
             --config firebase.json \
             'node scripts/verify-450-guest-emulator.mjs'
+
+      - name: Test real source RTDB .info connectivity and no-stale Master Apply
+        run: node scripts/verify-450-connectivity-guard.mjs
 
       - name: React TypeScript
         run: npx tsc --noEmit

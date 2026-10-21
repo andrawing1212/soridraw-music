@@ -773,7 +773,9 @@ export const adminSetNavigationVisibility = onCall(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    await admin.database().ref("publicSync/navigationVisibility").set({
+    // app450: update only menu fields, preserving the independent Master
+    // splitFrameModes child. .set() here would erase the live global mode.
+    await admin.database().ref("publicSync/navigationVisibility").update({
       revision,
       updatedAt: now,
       menuVisibility,
@@ -781,6 +783,44 @@ export const adminSetNavigationVisibility = onCall(
     });
 
     return { ok: true, revision, updatedAt: now };
+  }
+);
+
+// app450: Master-only global split frame mode. The three app environments
+// share canonical user data, but NOT operational frame preferences.
+const SPLIT_FRAME_ALLOWED_450 = ["pure-pane", "local-responsive", "pure-pane-hybrid"] as const;
+const SPLIT_FRAME_ORIGINS_450: Record<string, "preview" | "test" | "production"> = {
+  "https://preview.soridraw.com": "preview",
+  "https://test.soridraw.com": "test",
+  "https://soridraw.com": "production",
+  "https://www.soridraw.com": "production",
+};
+
+export const masterSetSplitFrameMode = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireMasterCaller(request);
+    const origin = String(request.rawRequest.headers.origin || "").replace(/\/$/, "");
+    const environment = SPLIT_FRAME_ORIGINS_450[origin];
+    if (!environment || request.data?.environment !== environment) {
+      throw new HttpsError("permission-denied", "현재 앱 환경과 적용 대상이 일치하지 않습니다.");
+    }
+    const mode: unknown = request.data?.mode;
+    if (typeof mode !== "string" || !SPLIT_FRAME_ALLOWED_450.includes(mode as typeof SPLIT_FRAME_ALLOWED_450[number])) {
+      throw new HttpsError("invalid-argument", "분할바 프레임 선택이 올바르지 않습니다.");
+    }
+    const now = Date.now();
+    // One Firestore source-of-truth write; the merge does not erase menu
+    // settings or split modes belonging to other environments.
+    await db.collection("app_settings").doc("navigation_visibility").set({
+      splitFrameModes: { [environment]: mode },
+      splitFrameUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      splitFrameUpdatedBy: requesterUid,
+    }, { merge: true });
+    // The existing app onValue connection receives this tiny child change.
+    // No new listeners, Firestore reads, D1 access or per-pointer requests.
+    await admin.database().ref("publicSync/navigationVisibility/splitFrameModes/" + environment).set(mode);
+    return { ok: true, environment, mode, updatedAt: now };
   }
 );
 

@@ -29,3 +29,6 @@ Date: 2026-10-22 KST
 
 ## Gate
 Do not merge code or Rules on `preview`, deploy Firebase/Cloudflare, modify canonical user data, enable Stage416, or touch TEST/PRODUCTION until independent Work audit PASS on the exact PR #386 SHA and a separate safe release-gate audit. Even a product-code PASS does not clear the shared Rules atomic deployment blocker.
+
+## CI execution
+Unified candidate reuses the existing app450 guest/Rules and one-Function PR verification workflows as **push-triggered static tests on the dedicated unmerged audit branch only**. No Firebase auth, PUT, deploy, workflow_dispatch or release triggers are involved; source tests must PASS on this candidate's final pinned SHA before any independent Work review. These candidate-only push triggers must be removed/normalized before any future code promotion.

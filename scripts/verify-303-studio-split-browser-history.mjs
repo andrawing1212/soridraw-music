@@ -175,3 +175,39 @@ for (const [a,b] of [[659,660],[660,661],[820,821],[1080,1081],[1081,1080],[821,
 assert.equal(composedSignatureForTest(900), composedSignatureForTest(1000),
   'Hybrid must not publish an extra mode when still in the same band');
 console.log('VERIFY_445_HYBRID_1080_LIVE_BUILDER_MODE=PASS');
+
+
+// app446: the compositor-scaled Generate bar must hand off to current resting
+// command-anchor coordinates BEFORE temporary width/X/scale are removed.
+// A one-shot release read is permitted; none may be added to pointermove/rAF.
+const restingBarStart = liteWorkspace.indexOf('const commitRestingGenerationBarGeometry = useCallback(');
+const restingBarEnd = liteWorkspace.indexOf('const clearLiveExternalGeometry = useCallback(', restingBarStart);
+assert.ok(restingBarStart > 0 && restingBarEnd > restingBarStart,
+  'app446 missing narrow resting Generate bar handoff helper');
+const restingBar = liteWorkspace.slice(restingBarStart, restingBarEnd);
+assert.match(restingBar, /generationBarPerfMode !== 'normal'/,
+  'keep frozen or off Generate-bar diagnostics inert');
+assert.match(restingBar, /floatingActionBar\.dataset\.soridrawPlacement !== 'floating'/,
+  'do not alter the inline or collapsed Generate owner');
+assert.match(restingBar, /actionAnchor\.getBoundingClientRect\(\)/,
+  'measure only the current, final Builder command anchor at release');
+assert.match(restingBar, /getStudioActionFloatingGutter\(window\.innerWidth, modeRef\.current\.builder\)/,
+  'release geometry must respect the existing compact and full gutter');
+assert.match(restingBar, /resolveStudioActionFloatingGeometry\(rect\.left, rect\.width, gutter\)/,
+  'release must use the same shared Generate-bar geometry math');
+assert.match(restingBar, /rootStyle\.setProperty\('--soridraw-action-fixed-left'/,
+  'commit resting left coordinate before clearing compositor variables');
+assert.match(restingBar, /rootStyle\.setProperty\('--soridraw-action-fixed-width'/,
+  'commit resting width before clearing compositor variables');
+const endDragStart = liteWorkspace.indexOf('const finishDrag = useCallback(');
+const endDragEnd = liteWorkspace.indexOf('const handlePointerMove = ', endDragStart);
+assert.ok(endDragStart > 0 && endDragEnd > endDragStart, 'missing finishDrag block');
+const endDrag = liteWorkspace.slice(endDragStart, endDragEnd);
+assert.match(endDrag, /commitRootMeasurements\(builderWidth,[^\n]*\);\s*\/\/[^\n]*\n\s*commitRestingGenerationBarGeometry\(\);\s*clearLiveExternalGeometry\(\);/,
+  'release must seed resting bar coordinates before clearing live transforms');
+const hotPathStart = liteWorkspace.indexOf('const syncGenerationBarGeometry = useCallback(');
+const hotPathEnd = liteWorkspace.indexOf('const syncExternalGeometry = useCallback(', hotPathStart);
+assert.ok(hotPathStart > 0 && hotPathEnd > hotPathStart, 'missing existing live bar writer');
+assert.doesNotMatch(liteWorkspace.slice(hotPathStart, hotPathEnd), /getBoundingClientRect|commitRestingGenerationBarGeometry/,
+  'no extra measurements or release-only geometry in the per-frame drag writer');
+console.log('VERIFY_446_GENERATE_BAR_RELEASE_GEOMETRY_HANDOFF=PASS');

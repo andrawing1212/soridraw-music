@@ -1,3 +1,11 @@
+## NEXT — app451 PREVIEW deployed; user acceptance test for saved Master performance mode (2026-10-22 KST)
+
+- User video exposed app450 stale Remote Config parameter/revision0; fixed in PR #394 source `f9a9ff10701056d70d1c8a5820dc8f7812ddfe96` with existing Master callable read of server truth on App Settings entry, one-time Studio parameter bootstrap, no new socket/RTDB Rules, no data changes and app451 browser version bump.
+- **PREVIEW Firebase Hosting/Function deployment SUCCESS** after protected retry: final run #39695878693 fully PASS, trigger commit `e0c3a4b535c870d48aae5910d9639428eed6a32a`, source QA #39694892169 and overall app quality #39694892170 PASS. Old partial run #39695334775 already changed target Master Function but hit unrelated pre-existing non-ACTIVE Function inventory guard; guard fixed PR #396, final retry #397 safely verified all unrelated Function state+timestamps unchanged.
+- Run user Master PC sequence: choose 성능우선 → Apply → navigate to another page → return to Admin App Settings (must still show 성능우선) → open Studio, compare split mode. Repeat 보통/품질우선. In separate Guest Studio browser, verify global RC update; mouse release update semantics; mobile/tablet visual unchanged.
+- Direct authenticated Master browser functional test remains **UNVERIFIED** by tool (CI mocks + exact Hosting and inventory passed). If actual error remains inspect only specific callable response/RC publish/get and browser fetch, no default/shared RTDB Rules or bulk user data mutation. Keep Stage416 OFF. TEST only by explicit future approval; PROD explicit approval. Codex reserved and not used.
+---
+
 ## NEXT — fix real app450 Master setting persistence via existing RC, version451 (2026-10-22 KST)
 
 - User's VIDEO confirms app450 PREVIEW bug, red stale Master conflict after Apply followed by mode default/reset on navigation. The released app450 bootstrapped Remote Config only once under a prior feature's storage marker; new splitFrame param never fetched on existing clients, leaving revision0.

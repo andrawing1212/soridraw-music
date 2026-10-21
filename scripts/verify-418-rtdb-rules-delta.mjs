@@ -225,6 +225,9 @@ if (process.argv.includes('--self-test')) {
     assert.equal(compare(expanded), null, 'unknown RTDB mode children must stay denied');
     console.log('450_EXACT_SHARED_RTDB_SPLIT_FRAME_ADDITIVE_SELF_TEST=PASS');
   }
+  // Include the separately scoped read-only app450 candidate generator self-test.
+  // This does NOT authorize a rules PUT or weaken the existing 418 live gate.
+  await import('./verify-450-shared-rtdb-additive.mjs');
   console.log('435_PRIVATE_LIKE_RESULT_TYPED_RULES_ADDITIVE_SELF_TEST=PASS');
   console.log('418_SHARED_RTDB_ADDITIVE_BOOL_ONLY_SELF_TEST=PASS');
   console.log('416_PRIVATE_RTDB_INTENT_ADDITIVE_ONLY_SELF_TEST=PASS');

@@ -82,7 +82,11 @@ assert.match(masterFramePanel, /분할바 프레임/);
 assert.match(masterFramePanel, /role="radiogroup"/);
 assert.match(masterFramePanel, /masterSetSplitFrameMode/);
 assert.match(masterFramePanel, /window\.confirm/);
-assert.match(masterFramePanel, /disabled=\{!environment \|\| saving \|\| draft === applied\}/);
+assert.match(masterFramePanel, /disabled=\{!environment \|\| !serverReady \|\| saving \|\| draft === applied\}/);
+assert.match(masterFramePanel, /isSplitFrameServerReady/,
+  'Master must wait for first confirmed backend signal before applying global state');
+assert.match(service, /firstConfirmedSnapshot = !splitFrameServerReady/,
+  'initial fallback Hybrid must not be treated as server-confirmed mode');
 assert.match(functions, /export const masterSetSplitFrameMode = onCall/);
 assert.match(functions, /await requireMasterCaller\(request\)/);
 assert.match(functions, /SPLIT_FRAME_ORIGINS_450\[origin\]/);

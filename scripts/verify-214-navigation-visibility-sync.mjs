@@ -105,12 +105,17 @@ assert.match(isolated450, /requesterSnap\.data\(\)\?\.staffRole !== "master"/);
 assert.match(isolated450, /SPLIT_FRAME_ORIGINS_450\[origin\]/);
 assert.match(isolated450, /request\.data\?\.environment !== environment/);
 assert.match(isolated450, /SORIDRAW_SPLIT_FRAME_ENABLED_ENVIRONMENTS \|\| "preview"/);
-assert.match(isolated450, /ref\("publicSync\/splitFrameModes\/" \+ environment\)\.set\(mode\)/);
+assert.match(isolated450, /ref\("publicSync\/splitFrameModes\/" \+ environment\)/);
+assert.match(isolated450, /\.transaction\(\(stored\) => \{/);
+assert.match(isolated450, /if \(current !== expectedMode\) return;/);
+assert.match(isolated450, /if \(!outcome\.committed\)/);
 assert.doesNotMatch(isolated450,
   /await admin\.firestore\(\)\.collection\([^\n]*\.set\(|splitFrameUpdatedAt|splitFrameModes: \{/,
   'app450 isolated callable must have ONE authoritative RTDB write, no dual-write');
-assert.equal((isolated450.match(/\.set\(/g) || []).length, 1,
-  'app450 isolated callable cannot write to multiple locations');
+assert.equal((isolated450.match(/\.set\(/g) || []).length, 0,
+  'app450 must never bypass the atomic scalar transaction');
+assert.equal((isolated450.match(/\.transaction\(/g) || []).length, 1,
+  'app450 must perform only one atomic scalar transaction');
 
 assert.ok(functions.includes('admin.database().ref("publicSync/navigationVisibility").set('),
   'legacy nav callable must remain compatible with older deployments');

@@ -773,9 +773,7 @@ export const adminSetNavigationVisibility = onCall(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // app450: update only menu fields, preserving the independent Master
-    // splitFrameModes child. .set() here would erase the live global mode.
-    await admin.database().ref("publicSync/navigationVisibility").update({
+    await admin.database().ref("publicSync/navigationVisibility").set({
       revision,
       updatedAt: now,
       menuVisibility,
@@ -817,9 +815,10 @@ export const masterSetSplitFrameMode = onCall(
       splitFrameUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       splitFrameUpdatedBy: requesterUid,
     }, { merge: true });
-    // The existing app onValue connection receives this tiny child change.
+    // The authenticated app uses one small extra RTDB listener. The mode is
+    // isolated from legacy TEST/PRODUCTION navigation .set() functions.
     // No new listeners, Firestore reads, D1 access or per-pointer requests.
-    await admin.database().ref("publicSync/navigationVisibility/splitFrameModes/" + environment).set(mode);
+    await admin.database().ref("publicSync/splitFrameModes/" + environment).set(mode);
     return { ok: true, environment, mode, updatedAt: now };
   }
 );

@@ -794,39 +794,9 @@ const SPLIT_FRAME_ORIGINS_450: Record<string, "preview" | "test" | "production">
   "https://www.soridraw.com": "production",
 };
 
-export const masterSetSplitFrameMode = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    // Auth+Master enforcement itself reads one admin profile; this applies
-    // only after an explicit Master click, never on app start/page/drag.
-    await requireMasterCaller(request);
-    const origin = String(request.rawRequest.headers.origin || "").replace(/\/$/, "");
-    const environment = SPLIT_FRAME_ORIGINS_450[origin];
-    if (!environment || request.data?.environment !== environment) {
-      throw new HttpsError("permission-denied", "현재 앱 환경과 적용 대상이 일치하지 않습니다.");
-    }
-    // Shared Functions can be reached from older TEST/PRODUCTION apps before
-    // those environments are explicitly promoted. Default to PREVIEW ONLY;
-    // release operations must explicitly allow further environments with a
-    // trusted server env var after authorization, not through a client flag.
-    const enabled = String(process.env.SORIDRAW_SPLIT_FRAME_ENABLED_ENVIRONMENTS || "preview")
-      .split(",").map((value) => value.trim());
-    if (!enabled.includes(environment)) {
-      throw new HttpsError("failed-precondition", "이 환경은 아직 분할바 프레임 전체 적용이 승인되지 않았습니다.");
-    }
-    const mode: unknown = request.data?.mode;
-    if (typeof mode !== "string" || !SPLIT_FRAME_ALLOWED_450.includes(mode as typeof SPLIT_FRAME_ALLOWED_450[number])) {
-      throw new HttpsError("invalid-argument", "분할바 프레임 선택이 올바르지 않습니다.");
-    }
-    const now = Date.now();
-    // app450: ONE atomic setting write and ONE source of truth. Two writes to
-    // Firestore + RTDB could partially succeed, report an error and still
-    // change every client's split mode; RTDB is already what they read.
-    // The tiny sibling is isolated from legacy navigation .set() callers.
-    await admin.database().ref("publicSync/splitFrameModes/" + environment).set(mode);
-    return { ok: true, environment, mode, updatedAt: now };
-  }
-);
+// app450: isolated release module preserves this function export by name.
+// All unrelated Admin/Stage416 functions remain completely unchanged.
+export { masterSetSplitFrameMode } from './masterSplitFrameMode450';
 
 export const adminSignalUserControlRevision = onCall(
   { region: "us-central1" },

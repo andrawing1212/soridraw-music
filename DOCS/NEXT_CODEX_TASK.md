@@ -1,3 +1,11 @@
+## NEXT — app446 PREVIEW released, user real-hand Generate bar pointer-up snap check (2026-10-21 KST)
+
+app446 source `2c58878bd8eb39d0d84d842334d697c7a9379be3` is LIVE at preview.soridraw.com (Firebase Hosting Actions #39524355127 SUCCESS, TypeScript/Build/split/follow regressions PASS, exact version 446, TEST/PROD unchanged). Source PR #337; initial split QA failed test-only comment regex; QA PR #339 fixes and reruns split #39524145646 PASS and follow-only #39524145652 PASS; release PR #340. Runtime only adds pointerup one-shot command-anchor read and seeds resting Generate bar root left/width before deleting temporary compositor scale. No change to app445 Hybrid pointermove cost/660/820/1080 composition, app442 gutters, Create, other UI, any backend or shared data.
+
+**USER PHYSICAL TEST NOT YET PASS:** Reproduce uploaded 20261021 Generate-bar videos: split center→left on narrow Builder, release at several widths, verify no second size/position snap; check intended wide vs Compact design remains normal and quick reverse dragging remains app445-like smooth. Some compositor live scale to real flex layout visual difference could remain; do not claim solution based on static CI. If FAIL: identify precise release width and inspect live vs resting visual box/inner panel at pointerup, avoid per-frame DOM reads; revert only app446 change if it worsens performance. No TEST or PRODUCTION approval. Work independent audit outstanding.
+
+---
+
 ## NEXT — app445 Generate bar left-half release snap: isolate geometry ownership, no speculative styling (2026-10-21 KST)
 
 User physically reports app445 Pure Pane Hybrid ~5–10% faster than app444 (subjective improvement, not benchmark). Do NOT roll back app445 solely for this separate defect. Two videos supplied 2026-10-21 00:23 UTC: `20261021-0015-23.3024558.mp4` (focused bottom bar), `20261021-0018-28.2526046.mp4` (full Studio). Generate bar visually follows divider but appears to resize again when pointer released, especially Builder narrower than half split width. Full→compact control composition transition is intentional, separate from unwanted geometry snap.

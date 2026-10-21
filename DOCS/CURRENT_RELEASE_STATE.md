@@ -1,3 +1,15 @@
+## CURRENT — app450 backend audit candidate ready; Firebase deploy not approved by independent Work (2026-10-22 KST)
+
+- User approved continued PREVIEW work. Final UI: 관리자 → 앱 설정, Master-only 분할바 프레임, 성능우선 / 보통 / 품질우선. Existing app448 splitter stays frozen.
+- Source PR #366 and split QA #370 previously PASS. Dual-write risk removed by PR #372 merged de97309c889d03e1d066ab2f363f912f8e3a84fb, CI #39650847101 SUCCESS: Master Apply writes ONE authoritative small RTDB mode per environment, not a second Firestore document; clients subscribe only to their environment scalar (unknown hosts have no new listener).
+- Exact shared ACL guard PR #373 merged abff554f2af981b2dd9b0c75aed58551d62ce190, CI #39651918094 SUCCESS. It includes new strict negative tests, read-only live Rules comparison and candidate builder preserving the actual live tree. Legacy publication/like Rules compatibility PR #374 merged f55bbee6aa2e2812a426d70d027d3bf266ca125b, CI #39652598594 SUCCESS: unrelated Rules releases do not create/delete the Master node.
+- Final shared RTDB Rules draft PR #375 head 5101437eeaf2e18045b52173faebfe5d5b9218db, CI #39653108137 SUCCESS. Exactly one signed-in-read/client-write-denied publicSync/splitFrameModes sibling added. Existing ACL unchanged. Historical draft #367 closed unmerged as superseded by #375.
+- Independent Work audit NOT performed in this conversation. Draft #375 unmerged. Current PREVIEW Hosting remains app448 at release b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31; new Function and shared RTDB Rules NOT deployed. Existing Firebase Hosting pipeline has no targeted Master callable deployment capability.
+- Costs: one Master auth role read + RTDB W1 per Apply, Firestore setting write 0, per-page D1/Firestore read 0; one extra tiny RTDB listener per signed-in app session. Actual 100k listener cost and full real-device matrix unmeasured.
+- NEXT: independent Work fixed-SHA source+PR375 audit using DOCS/WORK_AUDIT_CHECKLIST.md; fail-closed reusable targeted Functions+exact-one-live-RTDB-rule release gate (double live GET, preserve original tree, verify after), then PREVIEW Hosting version450 and actual two-client/PC/tablet/mobile testing. Main/PRODUCTION unchanged, no data migration or Stage416 enablement.
+
+---
+
 ## CURRENT — app450 분할바 프레임 source+QA PASS, PREVIEW backend release SECURITY BLOCKED (2026-10-22 KST)
 
 - **Latest user instruction**: Continue app450 and deploy to PREVIEW, UI located under **관리자 페이지 → 앱 설정**. Title **분할바 프레임**, **성능우선**=pure-pane, **보통**=local-responsive, **품질우선**=pure-pane-hybrid. Only Master sees this card and only Master can Apply; regular Admin retains existing App Settings without frame control. User did not approve any TEST/PRODUCTION release or changes to shared canonical data.

@@ -8,6 +8,7 @@ on:
       - 'functions/src/index.ts'
       - 'scripts/build-450-single-function-package.mjs'
       - 'scripts/verify-214-navigation-visibility-sync.mjs'
+      - 'scripts/verify-450-master-stale-apply.mjs'
       - '.github/workflows/verify-app450-single-function-source.yml'
 
 permissions:
@@ -40,6 +41,9 @@ jobs:
         run: |
           npx tsc --noEmit
           node scripts/verify-303-studio-split-browser-history.mjs
+
+      - name: Reject simultaneous stale Master changes with atomic scalar transaction
+        run: node scripts/verify-450-master-stale-apply.mjs
 
       - name: Compile Firebase Functions
         run: npm --prefix functions run build

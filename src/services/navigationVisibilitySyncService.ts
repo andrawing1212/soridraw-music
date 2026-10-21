@@ -1,6 +1,6 @@
 import { onValue, ref, type Unsubscribe } from 'firebase/database';
 import { realtimeDb } from '../firebase';
-import { DEFAULT_SPLIT_FRAME_MODE, getSplitFrameEnvironment, parseSplitFrameMode, type SplitFrameMode } from '../constants/splitFrameGlobal';
+import type { SplitFrameMode } from '../constants/splitFrameGlobal';
 import {
   normalizeNavigationVisibilitySettings,
   type NavigationVisibilitySettings,
@@ -25,26 +25,32 @@ const normalizePayload = (raw: unknown): NavigationVisibilitySyncPayload | null 
 };
 
 
-// Extend the existing signed-in navigation sync lifecycle with ONE small
-// environment-scoped RTDB scalar listener. No Firestore, polling or drag calls.
-const splitFrameListeners = new Set<(mode: SplitFrameMode) => void>();
-let currentSplitFrameMode: SplitFrameMode = DEFAULT_SPLIT_FRAME_MODE;
-let splitFrameServerReady = false;
-export const readCurrentSplitFrameMode = (): SplitFrameMode => currentSplitFrameMode;
-export const isSplitFrameServerReady = (): boolean => splitFrameServerReady;
+// app450: share the already-running Remote Config realtime connection used
+// by the version signal. No extra RTDB read, SDK connection, or Rules change.
+import {
+  SPLIT_FRAME_REMOTE_EVENT,
+  readSplitFrameRemoteState,
+} from './versionSignalService';
+
+export const readCurrentSplitFrameMode = (): SplitFrameMode => readSplitFrameRemoteState().mode;
+export const readCurrentSplitFrameRevision = (): number => readSplitFrameRemoteState().revision;
+export const isSplitFrameServerReady = (): boolean =>
+  readSplitFrameRemoteState().ready && (typeof navigator === 'undefined' || navigator.onLine);
 export const subscribeSplitFrameMode = (listener: (mode: SplitFrameMode) => void): Unsubscribe => {
-  splitFrameListeners.add(listener);
-  listener(currentSplitFrameMode);
-  return () => { splitFrameListeners.delete(listener); };
-};
-const publishSplitFrameMode = (raw: unknown) => {
-  // Read only the current environment's small scalar, not all three modes.
-  const mode = parseSplitFrameMode(raw);
-  const firstConfirmedSnapshot = !splitFrameServerReady;
-  splitFrameServerReady = true;
-  if (mode === currentSplitFrameMode && !firstConfirmedSnapshot) return;
-  currentSplitFrameMode = mode;
-  splitFrameListeners.forEach((listener) => listener(mode));
+  const onChange = () => listener(readCurrentSplitFrameMode());
+  if (typeof window !== 'undefined') {
+    window.addEventListener(SPLIT_FRAME_REMOTE_EVENT, onChange);
+    window.addEventListener('offline', onChange);
+    window.addEventListener('online', onChange);
+  }
+  onChange();
+  return () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(SPLIT_FRAME_REMOTE_EVENT, onChange);
+      window.removeEventListener('offline', onChange);
+      window.removeEventListener('online', onChange);
+    }
+  };
 };
 
 // SORIDRAW_NAVIGATION_VISIBILITY_SYNC_214_20260927
@@ -62,14 +68,5 @@ export const subscribeNavigationVisibilitySync = (
     (snapshot) => onPayload(normalizePayload(snapshot.val())),
     (error) => onError?.(error),
   );
-  const env = getSplitFrameEnvironment();
-  // Unknown hosts are never entitled to an environment policy. Keep the
-  // frozen Hybrid fallback and do not create an unnecessary database listen.
-  if (!env) return unsubscribeMenu;
-  const unsubscribeFrame = onValue(
-    ref(realtimeDb, 'publicSync/splitFrameModes/' + env),
-    (snapshot) => publishSplitFrameMode(snapshot.val()),
-    (error) => onError?.(error),
-  );
-  return () => { unsubscribeMenu(); unsubscribeFrame(); };
+  return unsubscribeMenu;
 };

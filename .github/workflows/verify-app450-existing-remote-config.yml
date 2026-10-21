@@ -11,6 +11,7 @@ on:
       - 'functions/src/index.ts'
       - 'scripts/verify-214-navigation-visibility-sync.mjs'
       - 'scripts/verify-450-remote-config-master.mjs'
+      - 'scripts/verify-451-split-mode-client-reentry.mjs'
       - 'scripts/build-450-single-function-package.mjs'
       - '.github/workflows/verify-app450-existing-remote-config.yml'
 
@@ -39,6 +40,7 @@ jobs:
           node scripts/verify-434-publication-rtdb-additive.mjs --self-test
       - name: Verify Master ETag, ABA and shared data protection
         run: node scripts/verify-450-remote-config-master.mjs
+          node scripts/verify-451-split-mode-client-reentry.mjs
       - name: TypeScript React
         run: npx tsc --noEmit
       - name: Build React

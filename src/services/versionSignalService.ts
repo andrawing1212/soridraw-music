@@ -6,6 +6,7 @@ import {
   fetchAndActivate,
   getRemoteConfig,
   getString,
+  getValue,
   isSupported,
   onConfigUpdate,
   type Unsubscribe,
@@ -42,15 +43,27 @@ const publishSplitFrameRemote = (raw: string, ready: boolean) => {
       revision = parsed.revision;
     }
   } catch { /* Unconfigured parameter keeps the safe app448 Hybrid fallback. */ }
+  // Ignore older activated/cached Remote Config values after a newer
+  // confirmed save; never roll the Studio mode back on page navigation.
+  if (revision < splitFrameRemoteState.revision ||
+      (revision === splitFrameRemoteState.revision &&
+       splitFrameRemoteState.ready && mode !== splitFrameRemoteState.mode)) return;
   splitFrameRemoteState = { mode, revision, ready };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(SPLIT_FRAME_REMOTE_EVENT, { detail: { ...splitFrameRemoteState } }));
   }
 };
+// Used only after a successful authenticated Master server Apply response.
+export const publishConfirmedSplitFrameRemote = (mode: SplitFrameRemoteState['mode'], revision: number) => {
+  if (!Number.isSafeInteger(revision) || revision < splitFrameRemoteState.revision) return;
+  publishSplitFrameRemote(JSON.stringify({ mode, revision }), true);
+};
+
 const notifySplitFrameRemote = (remoteConfig: ReturnType<typeof getRemoteConfig>, ready: boolean) => {
   const env = splitFrameEnvironment();
   if (!env) return;
-  publishSplitFrameRemote(getString(remoteConfig, SPLIT_FRAME_REMOTE_PARAMS[env]), ready);
+  const key = SPLIT_FRAME_REMOTE_PARAMS[env];
+  publishSplitFrameRemote(getString(remoteConfig, key), ready && getValue(remoteConfig, key).getSource() === 'remote');
 };
 
 
@@ -143,6 +156,42 @@ export const stopPreviewVersionSignal = () => {
     window.dispatchEvent(new CustomEvent(SPLIT_FRAME_REMOTE_EVENT, { detail: { ...splitFrameRemoteState } }));
   }
   publishDiagnostics({ status: diagnostics.enabled ? 'disabled' : diagnostics.status });
+};
+
+// Only a Studio that actually mounts the split UI needs this once-per-device
+// app450 bootstrap. Avoid fetching on every app update or page navigation;
+// the existing realtime listener handles all subsequent server changes.
+const SPLIT_FRAME_BOOTSTRAP_KEY = 'soridraw_app450_split_frame_remote_bootstrap_v1';
+let splitFrameBootstrapPromise: Promise<void> | null = null;
+export const ensureSplitFrameRemoteBootstrap = (): Promise<void> => {
+  if (splitFrameBootstrapPromise) return splitFrameBootstrapPromise;
+  splitFrameBootstrapPromise = (async () => {
+    const env = splitFrameEnvironment();
+    if (!env || !(await isSupported())) return;
+    await startPreviewVersionSignal();
+    const remoteConfig = getRemoteConfig(getApp());
+    const key = SPLIT_FRAME_REMOTE_PARAMS[env];
+    const value = getValue(remoteConfig, key);
+    // Once remote data is in IndexedDB, use it without a fetch. A new
+    // parameter absent from an old device's cache requires one bootstrap.
+    const hasRemote = value.getSource() === 'remote';
+    let lastAttemptAt = 0;
+    try { lastAttemptAt = Number(localStorage.getItem(SPLIT_FRAME_BOOTSTRAP_KEY) || 0); } catch {}
+    if (!hasRemote && Date.now() - lastAttemptAt > 24 * 60 * 60 * 1000) {
+      const oldInterval = remoteConfig.settings.minimumFetchIntervalMillis;
+      remoteConfig.settings.minimumFetchIntervalMillis = 0;
+      try {
+        await fetchAndActivate(remoteConfig);
+        try { localStorage.setItem(SPLIT_FRAME_BOOTSTRAP_KEY, String(Date.now())); } catch {}
+      } catch (error) {
+        console.warn('[Split Frame] one-time remote config bootstrap unavailable', error);
+      } finally {
+        remoteConfig.settings.minimumFetchIntervalMillis = oldInterval;
+      }
+    }
+    notifySplitFrameRemote(remoteConfig, true);
+  })().finally(() => { splitFrameBootstrapPromise = null; });
+  return splitFrameBootstrapPromise;
 };
 
 export const startPreviewVersionSignal = (): Promise<void> => {

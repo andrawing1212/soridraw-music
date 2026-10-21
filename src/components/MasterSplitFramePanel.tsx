@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Loader2, Save, SlidersHorizontal } from 'lucide-react';
 import { auth, functions } from '../firebase';
@@ -10,6 +10,7 @@ import {
   type SplitFrameMode,
 } from '../constants/splitFrameGlobal';
 import { isSplitFrameServerReady, readCurrentSplitFrameMode, readCurrentSplitFrameRevision, subscribeSplitFrameMode } from '../services/navigationVisibilitySyncService';
+import { publishConfirmedSplitFrameRemote } from '../services/versionSignalService';
 import { cn } from '../lib/utils';
 
 const labelFor = (mode: SplitFrameMode) =>
@@ -42,40 +43,94 @@ export default function MasterSplitFramePanel() {
   const [applied, setApplied] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
   const [draft, setDraft] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
   const [confirmedRevision, setConfirmedRevision] = useState(readCurrentSplitFrameRevision);
-  const [serverReady, setServerReady] = useState(isSplitFrameServerReady);
+  // A cached/default RC value is not proof that the Master has loaded the
+  // saved server setting. Keep Apply blocked until the server confirms it.
+  const [serverReady, setServerReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const appliedRef = useRef<SplitFrameMode>(readCurrentSplitFrameMode());
+  const revisionRef = useRef(-1);
+
+  const receiveConfirmed = useCallback((mode: SplitFrameMode, revision: number) => {
+    if (!Number.isSafeInteger(revision) || revision < 0 || revision < revisionRef.current) return;
+    // Never undo a later server-confirmed revision with an old RC cache event.
+    if (revision === revisionRef.current && mode !== appliedRef.current) return;
+    const previouslyApplied = appliedRef.current;
+    revisionRef.current = revision;
+    appliedRef.current = mode;
+    setApplied(mode);
+    setConfirmedRevision(revision);
+    setDraft((previousDraft) => previousDraft === previouslyApplied ? mode : previousDraft);
+  }, []);
 
   useEffect(() => subscribeSplitFrameMode((mode) => {
-    setServerReady(isSplitFrameServerReady());
-    setApplied(mode);
-    setConfirmedRevision(readCurrentSplitFrameRevision());
-    // Initial and remote changes track server truth until the Master makes
-    // a different unsaved selection. Never persist a mere radio selection.
-    setDraft((previous) => previous === applied ? mode : previous);
-  }), [applied]);
+    if (!isSplitFrameServerReady()) return;
+    receiveConfirmed(mode, readCurrentSplitFrameRevision());
+  }), [receiveConfirmed]);
+
+  const readSavedSetting = useCallback(async () => {
+    if (!environment) return;
+    setServerReady(false);
+    try {
+      const callable = httpsCallable<{ environment: string; action: 'read' },
+        { ok: boolean; environment: string; mode: SplitFrameMode; revision: number }>(
+        functions, 'masterSetSplitFrameMode');
+      const result = await callable({ environment, action: 'read' });
+      const value = result.data;
+      if (!value?.ok || value.environment !== environment || !Number.isSafeInteger(value.revision)) {
+        throw new Error('저장된 서버 설정을 확인하지 못했습니다.');
+      }
+      receiveConfirmed(value.mode, value.revision);
+      setServerReady(true);
+    } catch (error) {
+      setServerReady(false);
+      setMessage({ ok: false, text: error instanceof Error ? error.message : '저장된 설정을 불러오지 못했습니다.' });
+    }
+  }, [environment, receiveConfirmed]);
+
+  useEffect(() => {
+    if (!isMaster || !environment) return;
+    void readSavedSetting();
+    const offline = () => setServerReady(false);
+    const online = () => void readSavedSetting();
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    return () => {
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
+    };
+  }, [isMaster, environment, readSavedSetting]);
 
   const apply = async () => {
-    if (!environment || !serverReady || !isSplitFrameServerReady() || saving || draft === applied) return;
+    if (!environment || !serverReady || saving || draft === applied ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)) return;
     const confirmed = window.confirm(
-      `분할바 프레임을 '${labelFor(draft)}'으로 적용할까요?\n현재 ${environment.toUpperCase()}에 연결된 사용자에게 전달됩니다.`,
+      `분할바 프레임을 '${labelFor(draft)}'으로 적용할까요?\\n현재 ${environment.toUpperCase()}에 연결된 사용자에게 전달됩니다.`,
     );
-    if (!confirmed || !isSplitFrameServerReady()) return;
+    if (!confirmed || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
     setSaving(true);
     setMessage(null);
     try {
-      const callable = httpsCallable<{ environment: string; mode: SplitFrameMode; expectedRevision: number },
-        { ok: boolean; environment: string; mode: SplitFrameMode }>(functions, 'masterSetSplitFrameMode');
-      const result = await callable({ environment, mode: draft, expectedRevision: confirmedRevision });
-      if (!result.data?.ok || result.data.environment !== environment || result.data.mode !== draft) {
+      const callable = httpsCallable<{ environment: string; action: 'apply'; mode: SplitFrameMode; expectedRevision: number },
+        { ok: boolean; environment: string; mode: SplitFrameMode; revision: number }>(functions, 'masterSetSplitFrameMode');
+      const result = await callable({
+        environment, action: 'apply', mode: draft, expectedRevision: confirmedRevision,
+      });
+      if (!result.data?.ok || result.data.environment !== environment ||
+          result.data.mode !== draft || !Number.isSafeInteger(result.data.revision) ||
+          result.data.revision <= confirmedRevision) {
         throw new Error('서버의 적용 확인을 받지 못했습니다.');
       }
-      // The callable response is not proof that the listener has already
-      // received the latest authoritative policy (or another Master did not
-      // change it concurrently). Applied always follows the RTDB snapshot.
-      setMessage({ ok: true, text: `${labelFor(draft)} 서버 적용 요청이 완료됐습니다. 실시간 동기화 신호를 확인합니다.` });
+      // The successful callable is authoritative: update this browser now.
+      // Realtime Remote Config then delivers the same revision to all others.
+      receiveConfirmed(result.data.mode, result.data.revision);
+      publishConfirmedSplitFrameRemote(result.data.mode, result.data.revision);
+      setMessage({ ok: true, text: `${labelFor(result.data.mode)} 설정이 서버에 저장되었습니다.` });
     } catch (error) {
       setMessage({ ok: false, text: error instanceof Error ? error.message : '분할바 프레임 적용에 실패했습니다.' });
+      // Even after a stale Master conflict, reload current truth so the
+      // operator does not need to navigate away to recover.
+      await readSavedSetting();
     } finally {
       setSaving(false);
     }

@@ -48,10 +48,18 @@ export const masterSetSplitFrameMode = onCall({ region: 'us-central1' }, async (
   if (!approved.includes(environment)) {
     throw new HttpsError('failed-precondition', '이 환경의 설정 적용은 아직 승인되지 않았습니다.');
   }
+  // The same strictly Master-only callable supports a READ action when
+  // the control mounts. It retrieves authoritative mode/revision directly,
+  // instead of trusting a browser's old Remote Config bootstrap/cache.
+  const action: unknown = request.data?.action;
+  if (action !== undefined && action !== 'read' && action !== 'apply') {
+    throw new HttpsError('invalid-argument', '요청한 설정 동작이 올바르지 않습니다.');
+  }
+  const readOnly = action === 'read';
   const mode: unknown = request.data?.mode;
   const expectedRevision: unknown = request.data?.expectedRevision;
-  if (!validMode(mode) || !Number.isSafeInteger(expectedRevision) ||
-      (expectedRevision as number) < 0) {
+  if (!readOnly && (!validMode(mode) || !Number.isSafeInteger(expectedRevision) ||
+      (expectedRevision as number) < 0)) {
     throw new HttpsError('invalid-argument', '설정값 또는 확인 번호가 잘못됐습니다.');
   }
 
@@ -71,6 +79,9 @@ export const masterSetSplitFrameMode = onCall({ region: 'us-central1' }, async (
   const previous = normalizeRecord(defaultValue && 'value' in defaultValue ? defaultValue.value : undefined);
   if (currentParam && JSON.stringify(previous) !== String(defaultValue && 'value' in defaultValue ? defaultValue.value : '')) {
     throw new HttpsError('failed-precondition', '기존 분할바 설정이 올바르지 않아 덮어쓰지 않았습니다.');
+  }
+  if (readOnly) {
+    return { ok: true, environment, mode: previous.mode, revision: previous.revision };
   }
   if (previous.revision !== expectedRevision) {
     throw new HttpsError('aborted', '다른 마스터의 변경이 먼저 적용됐습니다. 최신 상태에서 다시 선택해주세요.');

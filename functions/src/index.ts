@@ -803,6 +803,15 @@ export const masterSetSplitFrameMode = onCall(
     if (!environment || request.data?.environment !== environment) {
       throw new HttpsError("permission-denied", "현재 앱 환경과 적용 대상이 일치하지 않습니다.");
     }
+    // Shared Functions can be reached from older TEST/PRODUCTION apps before
+    // those environments are explicitly promoted. Default to PREVIEW ONLY;
+    // release operations must explicitly allow further environments with a
+    // trusted server env var after authorization, not through a client flag.
+    const enabled = String(process.env.SORIDRAW_SPLIT_FRAME_ENABLED_ENVIRONMENTS || "preview")
+      .split(",").map((value) => value.trim());
+    if (!enabled.includes(environment)) {
+      throw new HttpsError("failed-precondition", "이 환경은 아직 분할바 프레임 전체 적용이 승인되지 않았습니다.");
+    }
     const mode: unknown = request.data?.mode;
     if (typeof mode !== "string" || !SPLIT_FRAME_ALLOWED_450.includes(mode as typeof SPLIT_FRAME_ALLOWED_450[number])) {
       throw new HttpsError("invalid-argument", "분할바 프레임 선택이 올바르지 않습니다.");

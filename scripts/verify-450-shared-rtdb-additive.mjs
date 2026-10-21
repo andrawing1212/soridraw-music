@@ -6,12 +6,12 @@ import { spawnSync } from 'node:child_process';
 // ACTUAL live shared RTDB rules tree. Never replay an old local snapshot.
 const validate = "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')";
 const expected = {
-  '.read': 'auth != null',
+  '.read': false,
   '.write': false,
-  preview: { '.validate': validate },
-  test: { '.validate': validate },
-  production: { '.validate': validate },
-  '$other': { '.validate': false },
+  preview: { '.read': true, '.validate': validate },
+  test: { '.read': true, '.validate': validate },
+  production: { '.read': true, '.validate': validate },
+  '$other': { '.read': false, '.validate': false },
 };
 const stable = (value) => Array.isArray(value) ? value.map(stable)
   : value && typeof value === 'object'
@@ -50,6 +50,15 @@ if (process.argv.includes('--self-test')) {
   const badRead = structuredClone(add.candidate);
   badRead.rules.publicSync.splitFrameModes['.read'] = true;
   assert.throws(() => classify(badRead), /450_EXISTING_RULE_NOT_EXACT/);
+  const badParentRead = structuredClone(add.candidate);
+  badParentRead.rules.publicSync.splitFrameModes['.read'] = true;
+  assert.throws(() => classify(badParentRead), /450_EXISTING_RULE_NOT_EXACT/);
+  const badGuestLeaf = structuredClone(add.candidate);
+  badGuestLeaf.rules.publicSync.splitFrameModes.preview['.read'] = 'auth != null';
+  assert.throws(() => classify(badGuestLeaf), /450_EXISTING_RULE_NOT_EXACT/);
+  const badOtherRead = structuredClone(add.candidate);
+  badOtherRead.rules.publicSync.splitFrameModes.$other['.read'] = true;
+  assert.throws(() => classify(badOtherRead), /450_EXISTING_RULE_NOT_EXACT/);
   const badWrite = structuredClone(add.candidate);
   badWrite.rules.publicSync.splitFrameModes['.write'] = 'auth != null';
   assert.throws(() => classify(badWrite), /450_EXISTING_RULE_NOT_EXACT/);

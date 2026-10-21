@@ -1,3 +1,13 @@
+## NEXT — audit pinned unified app450 PR #386; DO NOT deploy (2026-10-22 KST)
+
+- Source inputs: PR #384 `e3956ef67aa559be9fadb7acc59dbfb616476b06`, PR #385 `db015846468b38c05af67dfb07da5ae1e821715a`, Rules PR #380 `2651575eb452b55d703a8504a67bb3ca2f5b1aaa`. PR #386 is the reviewable unified product/Rules candidate. `DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md` records tests, exact inputs and all open risks.
+- Independent Work must inspect actual unified source and GitHub CI, no trust in static checks alone. Verify auth+Guest same RTDB scalar, strict leaf ACL and legacy parent denial, exact Master role, `expectedMode` sent and atomic transaction with conditional abort, PREVIEW-only guard, `.info/connected` recovery/subscribe cleanup/cached callback danger, app448 drag+Generate bar, no per-visit Firestore/D1 read and no Stage416 activation.
+- Historical PR #383 Codex GET/reGET preflight and blocked prepare are read-only. Emulator proved an unsafe stale `If-Match` at Settings Rules; do not infer real CAS or permit live shared full-tree PUT. Real deploy remains P1 BLOCKED even if unified code CI PASS. Source and package must be repinned before any future release.
+- Cost/real device and ABA revision ordering still UNVERIFIED. If audit FAIL, correct only exact issue without burning Codex High/remaining Medium 22% budget.
+- No merge of PR #386, live Rules/Function/Hosting deployment, shared canonical user data write, TEST or PRODUCTION promotion, or Stage416 activation without full audited release gate.
+
+---
+
 ## NEXT — app450 PR #379 guest-mode source and PR #380 draft Rules audit, safe release remains blocked (2026-10-22 KST)
 
 - Current latest work is **Medium-scope direct GitHub implementation**, not a Codex High invocation: source PR #379 and isolated draft Rules PR #380. Preserve both fixed SHAs after final CI. Previous auth-only DRAFT #375 does not support Guest Studio; leave unmerged.

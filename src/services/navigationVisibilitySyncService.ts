@@ -29,7 +29,9 @@ const normalizePayload = (raw: unknown): NavigationVisibilitySyncPayload | null 
 // no second per-user listener, Firestore read, poll or per-drag network request.
 const splitFrameListeners = new Set<(mode: SplitFrameMode) => void>();
 let currentSplitFrameMode: SplitFrameMode = DEFAULT_SPLIT_FRAME_MODE;
+let splitFrameServerReady = false;
 export const readCurrentSplitFrameMode = (): SplitFrameMode => currentSplitFrameMode;
+export const isSplitFrameServerReady = (): boolean => splitFrameServerReady;
 export const subscribeSplitFrameMode = (listener: (mode: SplitFrameMode) => void): Unsubscribe => {
   splitFrameListeners.add(listener);
   listener(currentSplitFrameMode);
@@ -39,7 +41,9 @@ const publishSplitFrameMode = (raw: unknown) => {
   const env = getSplitFrameEnvironment();
   const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
   const mode = env ? parseSplitFrameMode(data[env]) : DEFAULT_SPLIT_FRAME_MODE;
-  if (mode === currentSplitFrameMode) return;
+  const firstConfirmedSnapshot = !splitFrameServerReady;
+  splitFrameServerReady = true;
+  if (mode === currentSplitFrameMode && !firstConfirmedSnapshot) return;
   currentSplitFrameMode = mode;
   splitFrameListeners.forEach((listener) => listener(mode));
 };

@@ -336,6 +336,14 @@
       "$other": {
         ".validate": false
       },
+      "splitFrameModes": {
+        ".read": false,
+        ".write": false,
+        "preview": { ".read": true, ".validate": "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')" },
+        "test": { ".read": true, ".validate": "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')" },
+        "production": { ".read": true, ".validate": "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')" },
+        "$other": { ".read": false, ".validate": false }
+      },
       "navigationVisibility": {
         ".read": "auth != null",
         ".write": false,

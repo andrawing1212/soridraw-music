@@ -13,6 +13,7 @@ on:
       - 'scripts/verify-418-rtdb-rules-delta.mjs'
       - 'scripts/verify-434-publication-rtdb-additive.mjs'
       - 'scripts/verify-450-shared-rtdb-additive.mjs'
+      - 'scripts/verify-450-rtdb-release-prepost.mjs'
       - 'scripts/verify-303-studio-split-browser-history.mjs'
       - '.github/workflows/verify-app450-guest-split-security.yml'
 
@@ -50,6 +51,7 @@ jobs:
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
           node scripts/verify-434-publication-rtdb-additive.mjs --self-test
           node scripts/verify-450-shared-rtdb-additive.mjs --self-test
+          node scripts/verify-450-rtdb-release-prepost.mjs --self-test
 
       - name: Protect frozen app448 split and app450 Master policy
         run: node scripts/verify-303-studio-split-browser-history.mjs

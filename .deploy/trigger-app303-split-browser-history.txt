@@ -23,3 +23,6 @@ app446_release_handoff_order_test_fix=2026-10-21
 
 app447_note_library_mode_tabs_max480_qa=2026-10-21
 product_sha=713fd74552b95e3a86d599aaeacf57555ec68582
+
+app447_compact_generate_button_bounded_compositor_drift=2026-10-21
+candidate_sha=de5b8a3e3dfc74922653619bcf6a14bfaee5baf8

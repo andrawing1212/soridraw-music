@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
+import MasterSplitFramePanel from '../components/MasterSplitFramePanel';
 import ExploreLikeAbuseMasterPanel420 from '../components/ExploreLikeAbuseMasterPanel420';
 import Stage416LikeBatchMasterPanel from '../components/Stage416LikeBatchMasterPanel';
 import { auth, db, functions, httpsCallable } from '../firebase';
@@ -285,6 +286,7 @@ export default function AdminAppSettingsPage() {
       description="상단 메뉴와 페이지 이용 범위를 한 번에 관리합니다."
     >
       <div className="space-y-5">
+        <MasterSplitFramePanel />
         <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 shadow-sm md:p-6">
           <div className="mb-5 flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">

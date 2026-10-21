@@ -26,3 +26,7 @@ product_sha=713fd74552b95e3a86d599aaeacf57555ec68582
 
 app447_compact_generate_button_bounded_compositor_drift=2026-10-21
 candidate_sha=de5b8a3e3dfc74922653619bcf6a14bfaee5baf8
+
+app448_pc_full_generate_button_width_drift_qa=2026-10-21
+product_merge_sha=696312e36b2c031a3846d97b321eb1bca82b3c4e
+source_ci_run=39567328608_PASS

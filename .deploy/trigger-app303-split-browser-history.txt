@@ -20,3 +20,6 @@ app446_generate_bar_pointerup_geometry_qa=2026-10-21
 product_sha=b52c2392ded552788f3f2132825ab03155a814fb
 
 app446_release_handoff_order_test_fix=2026-10-21
+
+app447_note_library_mode_tabs_max480_qa=2026-10-21
+product_sha=713fd74552b95e3a86d599aaeacf57555ec68582

@@ -1,3 +1,15 @@
+## CURRENT — app450 integrated source audit candidate PR #386, backend deployment still BLOCKED (2026-10-22 KST)
+
+- Client/source PR #384 at `e3956ef67aa559be9fadb7acc59dbfb616476b06` introduces Guest/shared RTDB mode subscriber with SDK `.info/connected` + browser offline fail-closed Master readiness. Includes `expectedMode` with explicit Master Apply. Dedicated workflow #39673107054 PASS; not real device acceptance.
+- Function PR #385 at `db015846468b38c05af67dfb07da5ae1e821715a` ensures PREVIEW-only Master server write and one RTDB transaction rejects stale simultaneous Master selection. Dedicated #39673432634 PASS; needs paired PR #384.
+- One unified PR #386 combines these with PR #380 exact-one guest scalar Rule and PR #381 isolated Function package plus older app448/418/434/450 QA. Full auditor notes in `DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md`. Combined final CI and independent Work verification are pending; no PR #386 merge or Firebase deployment.
+- Codex original read-only Rules plan PR #383 at `e365b0512d419ce7b4cda13d897b84c74853e273` passed source checks; **LIVE RTDB Settings Rules conditional PUT/CAS remains unproven, so release stays BLOCKED**. Historical pinned runbook does NOT authorize future combined candidate.
+- PREVIEW last-live Hosting app448, TEST/main and PRODUCTION unchanged, Stage416 OFF, shared user originals unchanged. No additional Codex session consumed. Offline physical/SDK correctness, ABA exact revision sequencing, 100k live billing/connection tests unverified.
+- Next: independent fixed-SHA combined source/Rules/Functions audit then separately vetted safe Rules release mechanism. No deploy or permission widening until both pass.
+- Progress: Stage416 1/4 25% OFF, historic app-speed 5/5 100%, app450 2/5 40% release path (candidate built, audit/release/physical tests remain).
+
+---
+
 ## CURRENT — app450 Medium-first guest source PR #379 + isolated Rules DRAFT #380, independent audit pending (2026-10-22 KST)
 
 - **Read-only release status:** PREVIEW live remains user-accepted app448; app450 still BLOCKED by independent Work FAIL. No Functions/Rules/Hosting deployed, TEST/PRODUCTION unchanged, no canonical user data changed, Stage416 OFF.

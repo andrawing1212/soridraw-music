@@ -1,3 +1,16 @@
+## CURRENT — app450 exact-SHA independent audit handoff #388, no deployment approval (2026-10-22 KST)
+
+- **Actual preview HEAD before this docs-only checkpoint:** `1a7aea39b3b4ebcee7adb627f4335d2ef27bbac5` (latest release-state docs, NO new product code/RTDB Rules live deployment); last confirmed Firebase PREVIEW Hosting is still app448. main/PRODUCTION untouched.
+- **Fixed unified candidate:** DRAFT/unmerged PR #386 exact final source SHA **`7516a826e562a2c18eb9f6614dbf0f99ddd9773c`**, supersedes earlier intermediate `515bc8...` in historical sections. Combined test GitHub Actions `39675950774` and `39675950941` **SUCCESS** at final SHA. Includes guest/auth scalar listener, `.info/connected`/offline readiness, Master `expectedMode` atomic scalar transaction, strict guest leaf RTDB Rules, isolated Function package. App448 splitter/CSS source untouched. Success is CI/mocked/RTDB demo emulator **not** live acceptance or Work independent audit.
+- **Codex release preparation:** DRAFT PR #383 at `e365b0512d419ce7b4cda13d897b84c74853e273`, CI `39670790334` PASS. GET-only fail-closed script deliberately never writes or deploys, and still pins old PR inputs; unsafe to use without repin and independent release verification.
+- **This follow-up:** direct GitHub source/ACL/API docs review completed; compared old and isolated Master permission checks, final PR diff and protected tests. Created **GitHub issue #388** (https://github.com/andrawing1212/soridraw-music/issues/388) for *separate independent Work auditor*, with exact SHAs, pass/fail criteria, costs and STOP reasons. **Issue creation is NOT a Work audit run or Work PASS.**
+- **P1 RELEASE STOP:** official Firebase `/.settings/rules.json` REST PUT replaces full shared RTDB rules. Generic data ETag does NOT prove special Rules Settings endpoint CAS; emulator stale If-Match overwrote an unrelated rule, and no authorized real server writer was invoked. Shared Rules PUT / Functions / Hosting cannot be promoted. The baseline RTDB source has no reusable preexisting publicly readable guest setting leaf.
+- **P2 UNVERIFIED:** mode-only concurrent-Master compare-and-set has ABA possibility; fresh server confirmation vs locally cached snapshot on reconnect, real SDK offline behavior, PC/tablet/mobile and 100k RTDB subscriptions/load/billing require independent and user testing. In-service shared original user data unchanged, Stage416 OFF.
+- **Next exact action:** hand off issue #388 and PR #386/#383 to *separate* Work auditor in read-only mode. Review PASS/FAIL by source/security/cost/release; no mutations or app450 deployment until Work + separate safe Rules release mechanism pass. Codex 22% usage remaining when last reported; no new Codex usage in this work.
+- **Three metrics:** Stage416 1/4·25% OFF; previously accepted speed effort 5/5·100% historical; app450 2/5·40% release milestones (source candidate verified, independent Work and safe deployment outstanding).
+
+---
+
 ## CURRENT — app450 unified audit candidate CI PASS, Work and live release BLOCKED (2026-10-22 KST)
 
 - **Current verified PREVIEW baseline:** `53ca74357e344b4648f5d8a93db0e3cbcd6c7e58`, last confirmed Firebase PREVIEW Hosting app448. No app450 source, shared Rules, or Functions deployed. `preview` changes here are DOCS ONLY. main/PRODUCTION unchanged.

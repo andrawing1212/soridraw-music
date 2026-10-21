@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { buildStage416ServerRulesCandidate } from './build-416-private-server-rules.mjs';
 
 // Read-only shared RTDB gate. The local release candidate may add:
@@ -19,6 +20,21 @@ const batch416 = local?.rules?.privateLikeBatch416;
 const final416 = local?.rules?.privateLikeFinal416;
 const publication429 = local?.rules?.publicSync?.explorePublication;
 const publicationProfiles432 = local?.rules?.publicSync?.explorePublicationProfiles;
+const split450 = local?.rules?.publicSync?.splitFrameModes;
+const split450Validate = "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')";
+const approved450 = {
+  '.read': 'auth != null', '.write': false,
+  preview: { '.validate': split450Validate },
+  test: { '.validate': split450Validate },
+  production: { '.validate': split450Validate },
+  '$other': { '.validate': false },
+};
+// The feature Rules are merged only AFTER a separate audit. The existing
+// base remains valid in the meantime. Once the exact sibling exists in
+// source, LIVE may lack it (before approved additive rollout) or match it.
+if (split450) assert.deepEqual(split450, approved450,
+  '450 splitFrameModes must be precisely the reviewed auth-read-only node');
+
 
 assert.equal(accepted?.['.validate'], 'newData.isBoolean()');
 const acceptedRow435 = user?.exploreLike?.results?.$index;
@@ -99,6 +115,12 @@ const withoutIntentOptimisticCount = source => {
   if (row) delete row.optimisticLikeCount;
   return out;
 };
+const withoutSplitFrame450 = source => {
+  const out = structuredClone(source);
+  delete out.rules.publicSync.splitFrameModes;
+  return out;
+};
+
 const withoutPublicPublication429 = source => {
   const out = structuredClone(source);
   if (out?.rules?.publicSync) {
@@ -132,8 +154,14 @@ const exact435Variants = expandedVariants.flatMap(([status,candidate]) => [
   [status, candidate],
   [status+'-without-both-435-like-count-fields', withoutAcceptedLikeMetadata435(candidate)],
 ]);
+const exact450Variants = split450
+  ? exact435Variants.flatMap(([status,candidate]) => [
+      [status,candidate],
+      [status+'-without-split-frame-450', withoutSplitFrame450(candidate)],
+    ])
+  : exact435Variants;
 const variants = [...new Map(
-  exact435Variants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+  exact450Variants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
 ).values()];
 const compare = remote => {
   const key = stable(remote);
@@ -183,12 +211,38 @@ if (process.argv.includes('--self-test')) {
   const writableFinal = structuredClone(local);
   writableFinal.rules.privateLikeFinal416.$uid['.write'] = 'auth != null && auth.uid === $uid';
   assert.equal(compare(writableFinal), null, 'client-writable final receipt must fail');
+  if (split450) {
+    const uninstalled = withoutSplitFrame450(local);
+    assert.ok(compare(uninstalled)?.includes('without-split-frame-450'),
+      'live without the new node must be accepted ONLY as pre-additive baseline');
+    const exposed = structuredClone(uninstalled);
+    exposed.rules.publicSync.splitFrameModes = { ...approved450, '.read': true };
+    assert.equal(compare(exposed), null, 'publicly readable frame settings are not approved');
+    const writable = structuredClone(uninstalled);
+    writable.rules.publicSync.splitFrameModes = { ...approved450, '.write': 'auth != null' };
+    assert.equal(compare(writable), null, 'client writes to global mode must fail');
+    const expanded = structuredClone(local);
+    expanded.rules.publicSync.splitFrameModes['$other'] = { '.validate': true };
+    assert.equal(compare(expanded), null, 'unknown RTDB mode children must stay denied');
+    console.log('450_EXACT_SHARED_RTDB_SPLIT_FRAME_ADDITIVE_SELF_TEST=PASS');
+  }
+  // Include the separately scoped read-only app450 candidate generator self-test.
+  // This does NOT authorize a rules PUT or weaken the existing 418 live gate.
+  await import('./verify-450-shared-rtdb-additive.mjs');
   console.log('435_PRIVATE_LIKE_RESULT_TYPED_RULES_ADDITIVE_SELF_TEST=PASS');
   console.log('418_SHARED_RTDB_ADDITIVE_BOOL_ONLY_SELF_TEST=PASS');
   console.log('416_PRIVATE_RTDB_INTENT_ADDITIVE_ONLY_SELF_TEST=PASS');
   console.log('402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_SELF_TEST=PASS');
   console.log('416_SERVER_ONLY_RTDB_TWO_NODE_ADDITIVE_SELF_TEST=PASS');
 } else {
+  // Always run exact new-sibling negative permission tests on a read-only
+  // live preflight. A passing older 418 snapshot comparison alone is not
+  // sufficient to authorize app450.
+  const extra = spawnSync(process.execPath,
+    ['scripts/verify-450-shared-rtdb-additive.mjs', '--self-test'],
+    { encoding: 'utf8' });
+  assert.equal(extra.status, 0, extra.stderr || extra.stdout);
+  process.stdout.write(extra.stdout || '');
   const path = process.argv[2];
   if (!path) throw new Error('Live read-only RTDB rules JSON path required');
   const remote = JSON.parse(readFileSync(path,'utf8'));
